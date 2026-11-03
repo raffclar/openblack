@@ -109,7 +109,7 @@ glm::vec2 Moved(glm::vec2 place, glm::vec2 from, glm::vec2 to, float turn)
 std::optional<PlayerNames> gods_ring_map::GodOfSlot(size_t slot)
 {
 	// Each slot has its god. The script of the map names the gods after the seventh PLAYER_8 to PLAYER_32.
-	return player_slots::PlayerOfSlot(slot);
+	return slot < k_Slots ? player_slots::PlayerOfSlot(slot) : std::nullopt;
 }
 
 std::array<Slot, k_Slots> gods_ring_map::LayOutSlots(glm::vec2 middle)

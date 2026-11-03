@@ -33,7 +33,7 @@ TEST(PlayerSlots, TheNeutralPlayerKeepsItsNumberOnEveryLand)
 	EXPECT_EQ(static_cast<size_t>(PlayerNames::NEUTRAL), 7u);
 	EXPECT_EQ(k_LandSlots, 8u);
 	EXPECT_EQ(k_LandGods, 7u);
-	EXPECT_EQ(k_PlayerNumbers, 33u);
+	EXPECT_EQ(k_PlayerNumbers, 34u);
 	EXPECT_FALSE(SlotOfPlayer(PlayerNames::NEUTRAL).has_value());
 }
 
@@ -51,10 +51,27 @@ TEST(PlayerSlots, TheLaterGodsTakeTheNumbersAfterTheNeutralPlayer)
 {
 	EXPECT_EQ(PlayerOfSlot(7), static_cast<PlayerNames>(8));
 	EXPECT_EQ(PlayerOfSlot(31), static_cast<PlayerNames>(32));
-	EXPECT_FALSE(PlayerOfSlot(32).has_value());
+	EXPECT_EQ(PlayerOfSlot(32), static_cast<PlayerNames>(33));
+	EXPECT_FALSE(PlayerOfSlot(33).has_value());
 	EXPECT_EQ(SlotOfPlayer(static_cast<PlayerNames>(8)), 7u);
 	EXPECT_EQ(SlotOfPlayer(static_cast<PlayerNames>(32)), 31u);
-	EXPECT_FALSE(SlotOfPlayer(static_cast<PlayerNames>(33)).has_value());
+	EXPECT_EQ(SlotOfPlayer(static_cast<PlayerNames>(33)), 32u);
+	EXPECT_FALSE(SlotOfPlayer(static_cast<PlayerNames>(34)).has_value());
+}
+
+// The observers are the humans of the god after the last god slot of the land, and at least of player seven
+TEST(PlayerSlots, TheGodOfTheObserversComesAfterTheLastGodSlot)
+{
+	EXPECT_EQ(ObserversGodOf(0), PlayerNames::PLAYER_SEVEN);
+	EXPECT_EQ(ObserversGodOf(2), PlayerNames::PLAYER_SEVEN);
+	EXPECT_EQ(ObserversGodOf(4), PlayerNames::PLAYER_SEVEN);
+	EXPECT_EQ(ObserversGodOf(6), PlayerNames::PLAYER_SEVEN);
+	EXPECT_EQ(ObserversGodOf(7), static_cast<PlayerNames>(8));
+	EXPECT_EQ(ObserversGodOf(31), static_cast<PlayerNames>(32));
+	EXPECT_EQ(ObserversGodOf(32), static_cast<PlayerNames>(33));
+	EXPECT_EQ(ObserversSlotOf(32), k_MaxPlayers);
+	EXPECT_TRUE(IsPlayerNumber(ObserversGodOf(32)));
+	EXPECT_EQ(SlotOfPlayer(ObserversGodOf(32)), k_MaxPlayers);
 }
 
 TEST(PlayerSlots, EachSlotHasItsOwnPlayerAndComesBack)
@@ -77,8 +94,8 @@ TEST(PlayerSlots, OnlyTheNumbersOfALandAreLandPlayers)
 	EXPECT_TRUE(IsLandPlayer(PlayerNames::PLAYER_ONE));
 	EXPECT_TRUE(IsLandPlayer(PlayerNames::NEUTRAL));
 	EXPECT_FALSE(IsLandPlayer(static_cast<PlayerNames>(8)));
-	EXPECT_TRUE(IsPlayerNumber(static_cast<PlayerNames>(32)));
-	EXPECT_FALSE(IsPlayerNumber(static_cast<PlayerNames>(33)));
+	EXPECT_TRUE(IsPlayerNumber(static_cast<PlayerNames>(33)));
+	EXPECT_FALSE(IsPlayerNumber(static_cast<PlayerNames>(34)));
 }
 
 TEST(PlayerColour, ThePlayersOfALandKeepTheirColours)
@@ -165,7 +182,7 @@ TEST(PlayerSlots, TheScriptsNameTheLaterGodsByTheirNumbers)
 		EXPECT_EQ(PlayerOfScriptName(ScriptNameOf(player)), player) << number;
 	}
 	EXPECT_FALSE(PlayerOfScriptName("PLAYER_7").has_value());
-	EXPECT_FALSE(PlayerOfScriptName("PLAYER_33").has_value());
+	EXPECT_FALSE(PlayerOfScriptName("PLAYER_34").has_value());
 	EXPECT_FALSE(PlayerOfScriptName("PLAYER_08").has_value());
 	EXPECT_FALSE(PlayerOfScriptName("PLAYER_").has_value());
 	EXPECT_FALSE(PlayerOfScriptName("PLAYER_9X").has_value());

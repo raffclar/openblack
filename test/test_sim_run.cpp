@@ -190,8 +190,9 @@ TEST(SimRun, ATempleLossNamesOnePlayerOrARangeOfPlayers)
 	EXPECT_EQ(range->player, 4u);
 	EXPECT_EQ(range->lastPlayer, 32u);
 	EXPECT_EQ(range->turn, 500u);
-	// A player after the last god of 32, a range that goes down, or a part with no number does not read
-	EXPECT_FALSE(ParseTempleLoss("33:10").has_value());
+	// A player after the god of the observers of a game of 32 gods, a range that goes down, or a part with no number does
+	// not read
+	EXPECT_FALSE(ParseTempleLoss("34:10").has_value());
 	EXPECT_FALSE(ParseTempleLoss("5-4:10").has_value());
 	EXPECT_FALSE(ParseTempleLoss("-4:10").has_value());
 	EXPECT_FALSE(ParseTempleLoss("4-:10").has_value());

@@ -82,12 +82,14 @@ public:
 		_kept.clear();
 	}
 
-	/// True when the server made the block: the join or the leave of a god
+	/// True when the server made the block: the join or the leave of a god, or of the god of the observers
 	[[nodiscard]] static bool MadeByServer(const turn_codec::StampedBlock& block)
 	{
 		return std::ranges::any_of(block.actions, [](const player_commands::Action& action) {
 			return std::holds_alternative<player_commands::PlayerJoined>(action) ||
-			       std::holds_alternative<player_commands::PlayerLeft>(action);
+			       std::holds_alternative<player_commands::PlayerLeft>(action) ||
+			       std::holds_alternative<player_commands::ObserversJoined>(action) ||
+			       std::holds_alternative<player_commands::ObserversLeft>(action);
 		});
 	}
 

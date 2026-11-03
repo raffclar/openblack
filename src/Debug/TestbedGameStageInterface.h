@@ -28,6 +28,9 @@ class TextDatabase;
 namespace openblack::testbed_scenarios
 {
 
+/// The value of the EndBox command that opens the box that tells that a player left the network game
+inline constexpr size_t k_EndBoxPlayerLeft = 1000;
+
 /// The parts of the game that a scenario stages and that only the game on the player's computer has: the menu and the
 /// boxes of the interface, the chat controls, the mouse, the logo effect and the requests to join, to continue and to
 /// quit. The dedicated server has no stage. A function that stages a part gives the words of the log.
@@ -68,7 +71,8 @@ public:
 	[[nodiscard]] virtual std::string OpenSkirmishMenu(bool askLeave) = 0;
 	/// The skirmish box opens over the game. With selectSecond, the box selects its second land.
 	[[nodiscard]] virtual std::string OpenSkirmishBox(bool selectSecond) = 0;
-	/// The main menu of a network game, the question to leave, or a tab of the end box (see the EndBox command)
+	/// The main menu of a network game, the question to leave, a tab of the end box, or the box that tells that a player
+	/// left (see the EndBox command)
 	[[nodiscard]] virtual std::string OpenEndBox(size_t value) = 0;
 	/// The controls of the custom music: the buttons from 1, the play list from 2
 	[[nodiscard]] virtual std::string ShowCustomMusicControls(size_t value) = 0;

@@ -33,6 +33,7 @@
 #include "ECS/PlayerTowns.h"
 #include "ECS/Registry.h"
 #include "ECS/RegistryContext.h"
+#include "ECS/Systems/GameEndSystemInterface.h"
 #include "ECS/Systems/HelpProfileSystemInterface.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
@@ -423,10 +424,14 @@ statistics::BoxFigures player_statistics::Box()
 	const auto playerNumbers =
 	    Locator::playerSystem::has_value() ? Locator::playerSystem::value().PlayerNumbersInGame() : player_slots::k_LandSlots;
 	const auto places = statistics::BoxPlaces(networkGame, playerNumbers);
+	// The god of the observers has no place in the box, as in the original game
+	const auto observersGod =
+	    Locator::gameEndSystem::has_value() ? Locator::gameEndSystem::value().ObserversGod() : std::nullopt;
 	std::array<bool, player_slots::k_MaxPlayers> plays {};
 	for (size_t place = 0; place < places.size() && place < plays.size(); ++place)
 	{
-		plays.at(place) = Locator::playerSystem::has_value() && Locator::playerSystem::value().PlaysInGame(places.at(place));
+		plays.at(place) = Locator::playerSystem::has_value() && places.at(place) != observersGod &&
+		                  Locator::playerSystem::value().PlaysInGame(places.at(place));
 	}
 	box.playersInGame = statistics::BoxPlayerCount(std::span(plays).first(std::min(places.size(), plays.size())));
 	for (uint32_t place = 0; place < box.playersInGame && place < places.size(); ++place)

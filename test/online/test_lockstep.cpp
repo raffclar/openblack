@@ -63,6 +63,8 @@ struct FakeWorld
 	std::set<PlayerNames> players;
 	/// The taps of the hand that the world did, by the object
 	std::map<uint32_t, uint32_t> taps;
+	/// The commands that bring the god of the observers into the game and take it out, in the order of the turns
+	std::vector<Command> observersGod;
 
 	uint64_t Play(uint32_t turn, const std::vector<Command>& commands)
 	{
@@ -74,6 +76,11 @@ struct FakeWorld
 			if (const auto* tap = std::get_if<HandTap>(&command.action))
 			{
 				++taps[entt::to_integral(tap->object)];
+			}
+			if (std::holds_alternative<ObserversJoined>(command.action) ||
+			    std::holds_alternative<ObserversLeft>(command.action))
+			{
+				observersGod.push_back(command);
 			}
 			hash = (hash ^ (static_cast<uint64_t>(command.player) + 1) * 31 + command.action.index()) * 1099511628211ull;
 		}
@@ -1373,6 +1380,106 @@ TEST_F(LockstepTest, AnObserverThatJoinedTheRunningGameComesBackAfterItsWorldPar
 	EXPECT_EQ(host->Watchers()[1].resumes, 1u);
 }
 
+TEST_F(LockstepTest, AnObserverThatJoinsTheRunningGameGetsTheNamesOfTheGods)
+{
+	MakeHost(1);
+	GiveWorldState();
+	Computer alice(network, now, "god:alice");
+	Frames({&alice}, 30);
+	ASSERT_TRUE(host->Started());
+	Computer carol(network, now, "observer:carol");
+	Frames({&alice, &carol}, 10);
+	// The observer names the god of a slot as the players do, for example when the player of the god leaves
+	ASSERT_TRUE(carol.session.GetStart().has_value());
+	ASSERT_GE(carol.session.GetStart()->names.size(), 1u);
+	EXPECT_EQ(carol.session.GetStart()->names[0], "alice");
+}
+
+// The god of the observers comes into the game with the first observer and goes when the last observer left. Each world
+// gets the same commands from the god of the observers.
+TEST_F(LockstepTest, TheGodOfTheObserversComesWithTheFirstObserverAndGoesWithTheLast)
+{
+	MakeHost(1);
+	GiveWorldState();
+	Computer alice(network, now, "god:alice");
+	Frames({&alice}, 30);
+	ASSERT_TRUE(host->Started());
+	EXPECT_TRUE(serverWorld.observersGod.empty());
+	// The room of the test has 7 god slots, so the god of the observers is the god of the eighth slot
+	const auto god = static_cast<PlayerNames>(8);
+	EXPECT_EQ(host->ObserversGod(), god);
+	Computer carol(network, now, "observer:carol");
+	Computer dave(network, now, "observer:dave");
+	Frames({&alice, &carol, &dave}, 20);
+	ASSERT_EQ(serverWorld.observersGod.size(), 1u);
+	EXPECT_EQ(serverWorld.observersGod[0].player, god);
+	EXPECT_TRUE(std::holds_alternative<ObserversJoined>(serverWorld.observersGod[0].action));
+	EXPECT_TRUE(host->ObserversIn());
+	dave.session.Leave();
+	Frames({&alice, &carol, &dave}, 10);
+	EXPECT_EQ(serverWorld.observersGod.size(), 1u);
+	carol.session.Leave();
+	Frames({&alice, &carol, &dave}, 10);
+	ASSERT_EQ(serverWorld.observersGod.size(), 2u);
+	EXPECT_EQ(serverWorld.observersGod[1].player, god);
+	EXPECT_TRUE(std::holds_alternative<ObserversLeft>(serverWorld.observersGod[1].action));
+	EXPECT_FALSE(host->ObserversIn());
+	EXPECT_EQ(alice.world.observersGod.size(), 2u);
+	EXPECT_EQ(alice.world.hash, serverWorld.hash);
+}
+
+// An observer that loses its socket can come back, so its god stays in the game until its session ends
+TEST_F(LockstepTest, TheGodOfTheObserversWaitsForAnObserverThatCanComeBack)
+{
+	MakeHost(1, 3 * 1'000'000);
+	Computer alice(network, now, "god:alice");
+	auto watcher = std::make_unique<Computer>(network, now, "observer:carol");
+	Frames({&alice, watcher.get()}, 30);
+	ASSERT_EQ(serverWorld.observersGod.size(), 1u);
+	network.Cut(watcher->sockets->Ids().back());
+	watcher.reset();
+	Frames({&alice}, 20);
+	EXPECT_EQ(serverWorld.observersGod.size(), 1u);
+	Frames({&alice}, 30);
+	ASSERT_EQ(serverWorld.observersGod.size(), 2u);
+	EXPECT_TRUE(std::holds_alternative<ObserversLeft>(serverWorld.observersGod[1].action));
+}
+
+// The god of the observers is the god of the slot after the last god slot of the room, and at least player seven
+TEST_F(LockstepTest, TheGodOfTheObserversFollowsTheGodSlotsOfTheRoom)
+{
+	MakeHost(1, 5LL * 60 * 1'000'000, 2);
+	EXPECT_EQ(host->ObserversGod(), PlayerNames::PLAYER_SEVEN);
+	MakeHost(1, 5LL * 60 * 1'000'000, 32);
+	EXPECT_EQ(host->ObserversGod(), static_cast<PlayerNames>(33));
+}
+
+// A server that a snapshot restores knows the names of its observers and whether their god is in the game. So the
+// players still see the name of an observer that leaves after the restart.
+TEST_F(LockstepTest, ARestoredServerTellsTheNameOfAnObserverThatLeaves)
+{
+	MakeHost(2);
+	GiveWorldState();
+	KeepJournal();
+	Computer alice(network, now, "god:alice");
+	Computer bob(network, now, "god:bob");
+	Computer carol(network, now, "observer:carol");
+	Frames({&alice, &bob, &carol}, 30);
+	ASSERT_TRUE(host->Started());
+	const auto room = host->RoomRecord();
+	EXPECT_TRUE(room.observersIn);
+	EXPECT_EQ(room.watcherNames, (std::vector<std::string> {"carol"}));
+	RestartFrom(room, host->TurnsDone(), serverWorld, {&alice, &bob, &carol});
+	EXPECT_TRUE(host->ObserversIn());
+	ASSERT_EQ(host->Watchers().size(), 1u);
+	EXPECT_EQ(host->Watchers()[0].name, "carol");
+	Frames({&alice, &bob, &carol}, 40);
+	EXPECT_EQ(carol.session.Resumes(), 1u);
+	carol.session.Leave();
+	Frames({&alice, &bob, &carol}, 10);
+	EXPECT_EQ(alice.session.TakeObserversLeft(), (std::vector<std::string> {"carol"}));
+}
+
 TEST_F(LockstepTest, AnObserverThatLosesTheSocketComesBackAndGetsTheTurnsThatItMissed)
 {
 	MakeHost(1);
@@ -1420,6 +1527,49 @@ TEST_F(LockstepTest, AnObserverThatDoesNotComeBackInTimeLosesItsSession)
 	ASSERT_EQ(host->Watchers().size(), 1u);
 	Frames({&alice}, 30);
 	EXPECT_TRUE(host->Watchers().empty());
+}
+
+// The other players see that an observer left the game, by its name, as they see any player who leaves
+TEST_F(LockstepTest, ThePlayersSeeTheNameOfAnObserverThatLeavesTheGame)
+{
+	MakeHost(1);
+	Computer alice(network, now, "god:alice");
+	Computer carol(network, now, "observer:carol");
+	Frames({&alice, &carol}, 30);
+	ASSERT_TRUE(host->Started());
+	carol.session.Leave();
+	Frames({&alice, &carol}, 10);
+	EXPECT_EQ(alice.session.TakeObserversLeft(), (std::vector<std::string> {"carol"}));
+	EXPECT_TRUE(alice.session.TakeObserversLeft().empty());
+}
+
+// An observer that loses its socket can come back, so the others see its leave only when its session ends
+TEST_F(LockstepTest, ThePlayersSeeTheLeaveOfAnObserverThatDoesNotComeBackWhenItsSessionEnds)
+{
+	MakeHost(1, 3 * 1'000'000);
+	Computer alice(network, now, "god:alice");
+	auto watcher = std::make_unique<Computer>(network, now, "observer:carol");
+	Frames({&alice, watcher.get()}, 10);
+	ASSERT_TRUE(host->Started());
+	network.Cut(watcher->sockets->Ids().back());
+	watcher.reset();
+	Frames({&alice}, 20);
+	EXPECT_TRUE(alice.session.TakeObserversLeft().empty());
+	Frames({&alice}, 30);
+	EXPECT_EQ(alice.session.TakeObserversLeft(), (std::vector<std::string> {"carol"}));
+}
+
+// Before the start, the room shows who is in it, so no player is told of an observer that leaves
+TEST_F(LockstepTest, NoPlayerIsToldOfAnObserverThatLeavesBeforeTheStart)
+{
+	MakeHost(2);
+	Computer alice(network, now, "god:alice");
+	Computer leaver(network, now, "observer:leaver");
+	Frames({&alice, &leaver}, 5);
+	ASSERT_FALSE(host->Started());
+	leaver.session.Leave();
+	Frames({&alice, &leaver}, 10);
+	EXPECT_TRUE(alice.session.TakeObserversLeft().empty());
 }
 
 TEST_F(LockstepTest, AnObserverThatLeavesOrPartsBeforeTheStartCannotComeBack)

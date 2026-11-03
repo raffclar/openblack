@@ -9,6 +9,7 @@
 
 #include <array>
 #include <map>
+#include <optional>
 #include <span>
 #include <tuple>
 #include <vector>
@@ -72,12 +73,20 @@ public:
 	void RemoveCreature(PlayerNames player) override { gods.at(player).creature = false; }
 	void CountGodDefeated(PlayerNames player) override { ++gods.at(player).godsDefeated; }
 	void StopMind(PlayerNames player) override { gods.at(player).mind = false; }
+	void SwitchOnMind(PlayerNames player) override
+	{
+		auto& god = gods.at(player);
+		god.mind = true;
+		god.human = false;
+		god.computer = true;
+	}
 };
 
 constexpr auto k_One = PlayerNames::PLAYER_ONE;
 constexpr auto k_Two = PlayerNames::PLAYER_TWO;
 constexpr auto k_Three = PlayerNames::PLAYER_THREE;
 constexpr auto k_Five = PlayerNames::PLAYER_FIVE;
+constexpr auto k_Seven = PlayerNames::PLAYER_SEVEN;
 // The gods after the neutral player have the numbers after it: the ninth god of a network game has the number 9
 constexpr auto k_God9 = static_cast<PlayerNames>(9);
 constexpr auto k_God32 = static_cast<PlayerNames>(32);
@@ -627,4 +636,90 @@ TEST(GameEnd, TheLastGodLeftKeepsNoCreatureFile)
 	static_cast<void>(ProcessTurn(world, k_Network, state));
 	ASSERT_TRUE(state.decided);
 	EXPECT_EQ(world.kept, std::vector<PlayerNames> {k_Two});
+}
+
+// The god of the observers has no temple, but it is never out by the temple rule, and the count of the gods that are
+// left does not count it
+TEST(GameEnd, TheGodOfTheObserversNeverLosesByTheTempleRule)
+{
+	auto world = TwoHumans();
+	world.gods[k_Seven] = {.human = true, .temple = false, .creature = false};
+	State state;
+	state.observersGod = k_Seven;
+	EXPECT_TRUE(ProcessTurn(world, k_Network, state).empty());
+	EXPECT_FALSE(world.gods[k_Seven].standing.out);
+	EXPECT_FALSE(state.decided);
+	EXPECT_FALSE(TakesPart(k_Seven, true, state));
+	EXPECT_TRUE(TakesPart(k_One, true, state));
+	// One of the two gods goes out: the other god is the last god left, so the game is decided
+	world.gods[k_Two].temple = false;
+	const auto events = ProcessTurn(world, k_Network, state);
+	ASSERT_EQ(events.size(), 1u);
+	EXPECT_EQ(events[0].kind, Event::Kind::GodOutAndDecided);
+	EXPECT_TRUE(state.decided);
+	// The god of the observers is a human god that is still in, so it saw a god defeated. It is also the last human god
+	// that is still in, in the order of the players, so it takes the place after the god that went out, as in the original
+	// game (vanilla-bugs 794).
+	EXPECT_EQ(world.gods[k_Seven].godsDefeated, 1u);
+	EXPECT_EQ(world.gods[k_Two].standing.place, 1);
+	EXPECT_EQ(world.gods[k_Seven].standing.place, 2);
+	EXPECT_FALSE(world.gods[k_One].standing.place.has_value());
+}
+
+// The last observer leaves: the god of the observers takes the next place, each human god that is still in counts one
+// more god defeated, and a computer mind plays the god. The god is not out.
+TEST(GameEnd, TheLastObserverRanksTheGodOfTheObserversAndAComputerMindPlaysIt)
+{
+	auto world = TwoHumans();
+	world.gods[k_Seven] = {.human = true, .temple = false, .creature = false};
+	State state;
+	state.observersGod = k_Seven;
+	ASSERT_TRUE(ObserversLeft(world, state, k_Network));
+	EXPECT_EQ(world.gods[k_Seven].standing.place, 1);
+	EXPECT_EQ(world.gods[k_Seven].standing.reason, OutReason::Left);
+	EXPECT_FALSE(world.gods[k_Seven].standing.out);
+	EXPECT_TRUE(world.gods[k_Seven].mind);
+	EXPECT_EQ(world.gods[k_One].godsDefeated, 1u);
+	EXPECT_EQ(world.gods[k_Two].godsDefeated, 1u);
+	EXPECT_FALSE(state.decided);
+	// A computer mind plays the god now, so a second leave changes nothing
+	EXPECT_FALSE(ObserversLeft(world, state, k_Network));
+	EXPECT_EQ(world.gods[k_One].godsDefeated, 1u);
+	// The two gods still play the game: the god of the observers does not make one of them the last god left
+	world.gods[k_Two].temple = false;
+	const auto events = ProcessTurn(world, k_Network, state);
+	ASSERT_EQ(events.size(), 1u);
+	EXPECT_EQ(events[0].kind, Event::Kind::GodOutAndDecided);
+}
+
+// No leave of the observers ranks their god once the game is decided, or in a game that had no observer
+TEST(GameEnd, TheLastObserverChangesNothingInADecidedGame)
+{
+	auto world = TwoHumans();
+	world.gods[k_Seven] = {.human = true, .temple = false, .creature = false};
+	State state;
+	EXPECT_FALSE(ObserversLeft(world, state, k_Network));
+	state.observersGod = k_Seven;
+	state.decided = true;
+	EXPECT_FALSE(ObserversLeft(world, state, k_Network));
+	EXPECT_FALSE(world.gods[k_Seven].standing.place.has_value());
+	EXPECT_FALSE(world.gods[k_Seven].mind);
+}
+
+// A human whose god is still in gives the remark and the box; once the game is decided, only the remark. A human whose
+// god was out gives neither. An observer's god is never out.
+TEST(GameEnd, ALeaveGivesTheRemarkAndTheBoxOnlyWhileTheGodIsIn)
+{
+	const auto in = NoticeOf({.god = PlayerNames::PLAYER_TWO, .godOut = false, .decided = false});
+	EXPECT_TRUE(in.remark);
+	EXPECT_TRUE(in.box);
+	const auto decided = NoticeOf({.god = PlayerNames::PLAYER_TWO, .godOut = false, .decided = true});
+	EXPECT_TRUE(decided.remark);
+	EXPECT_FALSE(decided.box);
+	const auto out = NoticeOf({.god = PlayerNames::PLAYER_TWO, .godOut = true, .decided = false});
+	EXPECT_FALSE(out.remark);
+	EXPECT_FALSE(out.box);
+	const auto observer = NoticeOf({.god = std::nullopt, .godOut = false, .decided = false});
+	EXPECT_TRUE(observer.remark);
+	EXPECT_TRUE(observer.box);
 }

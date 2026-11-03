@@ -23,24 +23,25 @@ using ecs::components::WinCondition;
 namespace
 {
 /// The number of gods that take part in the end of the game
-[[nodiscard]] uint32_t GodsThatCanLose(const std::vector<PlayerNames>& gods, bool networkGame)
+[[nodiscard]] uint32_t GodsThatCanLose(const std::vector<PlayerNames>& gods, bool networkGame, const State& state)
 {
 	return static_cast<uint32_t>(
-	    std::ranges::count_if(gods, [networkGame](PlayerNames god) { return CanLose(god, networkGame); }));
+	    std::ranges::count_if(gods, [networkGame, &state](PlayerNames god) { return TakesPart(god, networkGame, state); }));
 }
 
 /// The number of gods that take part in the end of the game and are out
-[[nodiscard]] uint32_t GodsOut(World& world, const std::vector<PlayerNames>& gods, bool networkGame)
+[[nodiscard]] uint32_t GodsOut(World& world, const std::vector<PlayerNames>& gods, bool networkGame, const State& state)
 {
-	return static_cast<uint32_t>(std::ranges::count_if(
-	    gods, [&world, networkGame](PlayerNames god) { return CanLose(god, networkGame) && world.Standing(god).out; }));
+	return static_cast<uint32_t>(std::ranges::count_if(gods, [&world, networkGame, &state](PlayerNames god) {
+		return TakesPart(god, networkGame, state) && world.Standing(god).out;
+	}));
 }
 
 /// Whether so many gods are out that one god at most is left
-[[nodiscard]] bool OneGodLeft(World& world, const std::vector<PlayerNames>& gods, bool networkGame)
+[[nodiscard]] bool OneGodLeft(World& world, const std::vector<PlayerNames>& gods, bool networkGame, const State& state)
 {
 	// The game compares the counts as numbers with no sign
-	return GodsOut(world, gods, networkGame) >= GodsThatCanLose(gods, networkGame) - 1u;
+	return GodsOut(world, gods, networkGame, state) >= GodsThatCanLose(gods, networkGame, state) - 1u;
 }
 
 /// The game is decided: the god with the largest share of the conditions wins, and the others are out, the worst
@@ -212,7 +213,8 @@ void CountOut(World& world, State& state, PlayerNames god, OutReason reason, con
 		standing.reason = reason;
 	}
 	// When one god is left, the last human god that is still in takes the place after that
-	if (GodsOut(world, gods, facts.networkGame) == GodsThatCanLose(gods, facts.networkGame) - 1u && lastHumanIn.has_value())
+	if (GodsOut(world, gods, facts.networkGame, state) == GodsThatCanLose(gods, facts.networkGame, state) - 1u &&
+	    lastHumanIn.has_value())
 	{
 		world.Standing(*lastHumanIn).place = ++state.lastPlace;
 	}
@@ -241,7 +243,7 @@ std::vector<Event> ProcessTurn(World& world, const Facts& facts, State& state)
 		templesLost = false;
 		for (const auto god : gods)
 		{
-			if (!CanLose(god, facts.networkGame))
+			if (!TakesPart(god, facts.networkGame, state))
 			{
 				continue;
 			}
@@ -291,7 +293,7 @@ std::vector<Event> ProcessTurn(World& world, const Facts& facts, State& state)
 	for (const auto god : gods)
 	{
 		auto& standing = world.Standing(god);
-		if (CanLose(god, facts.networkGame) && !HasTempleOrNeedsNone(world, facts, god) && !standing.out)
+		if (TakesPart(god, facts.networkGame, state) && !HasTempleOrNeedsNone(world, facts, god) && !standing.out)
 		{
 			standing.out = true;
 			// The creature of the god of this computer is kept as it is before it goes, for the clan upload
@@ -308,7 +310,7 @@ std::vector<Event> ProcessTurn(World& world, const Facts& facts, State& state)
 			continue;
 		}
 		CountOut(world, state, god, standing.reason, facts);
-		if (OneGodLeft(world, gods, facts.networkGame))
+		if (OneGodLeft(world, gods, facts.networkGame, state))
 		{
 			state.decided = true;
 			events.push_back({.kind = Event::Kind::GodOutAndDecided, .god = god});
@@ -321,6 +323,22 @@ std::vector<Event> ProcessTurn(World& world, const Facts& facts, State& state)
 		world.StopMind(god);
 	}
 	return events;
+}
+
+bool ObserversLeft(World& world, State& state, const Facts& facts)
+{
+	if (!state.observersGod.has_value() || state.decided)
+	{
+		return false;
+	}
+	const auto god = *state.observersGod;
+	if (!world.IsHuman(god) || world.Standing(god).out)
+	{
+		return false;
+	}
+	CountOut(world, state, god, OutReason::Left, facts);
+	world.SwitchOnMind(god);
+	return true;
 }
 
 size_t DecidingEvents(std::span<const Event> events)
