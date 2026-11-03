@@ -68,6 +68,20 @@ TEST(SkyDome, JumpRebuildsTheWholeDome)
 	EXPECT_FLOAT_EQ(follow.Following(), 0.5f);
 }
 
+TEST(SkyDome, ALostPictureIsTheWholeDomeAtTheSkyTypeItFollows)
+{
+	sky_dome::Follow follow(2.0f);
+	(void)follow.Advance(2.0f);
+	// While it follows a new sky type, all the rows come back at the sky type of the band
+	(void)follow.Advance(1.5f);
+	const auto frame = sky_dome::WholeDomeAt(follow);
+	ASSERT_EQ(frame.Get().size(), 1u);
+	EXPECT_EQ(frame.Get()[0], (Rows {.skyType = 1.5f, .first = 0, .count = 256}));
+	// The follow stays as it was
+	EXPECT_FLOAT_EQ(follow.Following(), 1.5f);
+	EXPECT_EQ(follow.RowsDone(), 32u);
+}
+
 TEST(SkyDome, TimePairs)
 {
 	// 0 night, 1 dusk, 2 day

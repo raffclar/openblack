@@ -90,6 +90,13 @@ void Follow::Jump(float skyType)
 	_wholeDome = skyType;
 }
 
+FrameRows WholeDomeAt(const Follow& follow)
+{
+	FrameRows frame;
+	frame.rows.at(frame.count++) = {.skyType = follow.Following(), .first = 0, .count = k_Rows};
+	return frame;
+}
+
 Pair TimePair(float skyType)
 {
 	// Counted from day, as the dome's blend takes it

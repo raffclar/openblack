@@ -2510,6 +2510,19 @@
   "query": "game.scenario"
  },
  {
+  "description": "The graphics device: the renderer, how many times the renderer made the device again and the bytes that it keeps for that. Null when the game has no graphics device",
+  "kind": "object",
+  "parameters": [],
+  "query": "game.device"
+ },
+ {
+  "description": "Makes the graphics device again with all its textures, buffers and shaders, as after a lost device, at the start of a next frame. Poll game.device until restores goes up. Null device when the game has none",
+  "kind": "object",
+  "parameters": [],
+  "query": "game.restore_device",
+  "writes": true
+ },
+ {
   "description": "The testbed scenarios: id, name, facet and what each sets up",
   "kind": "list",
   "parameters": [],

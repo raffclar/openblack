@@ -70,6 +70,11 @@ public:
 	    : _seam(seam)
 	{
 	}
+	[[nodiscard]] inspector::Json GraphicsDevice() const override
+	{
+		return _seam != nullptr ? _seam->GraphicsDevice() : inspector::Json(nullptr);
+	}
+	bool RestoreGraphicsDevice() override { return _seam != nullptr && _seam->RestoreGraphicsDevice(); }
 
 	[[nodiscard]] bool IsPaused() const override { return Locator::time::has_value() && Locator::time::value().IsPaused(); }
 	void SetPaused(bool paused) override
