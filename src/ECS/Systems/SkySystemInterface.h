@@ -32,6 +32,11 @@ public:
 	[[nodiscard]] virtual entt::entity GetDome() const = 0;
 	[[nodiscard]] virtual entt::entity GetSun() const = 0;
 	[[nodiscard]] virtual entt::entity GetMoon() const = 0;
+
+	/// A script hides the sun and its glare, or shows them again. The moon stays. When the player is in the temple, the
+	/// sun shows again after the player comes out, also when a script hid it. A new start of the scripts shows it again.
+	virtual void SetSunHidden(bool hidden) = 0;
+	[[nodiscard]] virtual bool IsSunHidden() const = 0;
 };
 
 } // namespace openblack::ecs::systems

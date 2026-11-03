@@ -82,6 +82,19 @@ bool ScriptMusicSystem::HasMusic() const
 	return audio::WorldHasMusic(soundDevice, networkGame, dedicatedServer);
 }
 
+float ScriptMusicSystem::PlayDistance(audio::MusicType type) const
+{
+	// A type outside the table of banks has no bank. The banks are there only when this computer had a sound device at
+	// the start, also in a network game (see docs/vanilla-bugs.md).
+	const bool soundDevice = Locator::sounds::has_value() && Locator::sounds::value().IsInstalled();
+	if (!soundDevice || type < audio::MusicType::None || type >= audio::MusicType::_COUNT)
+	{
+		return audio::MusicPlayDistance(nullptr);
+	}
+	const auto timing = Timing(type);
+	return audio::MusicPlayDistance(timing.get());
+}
+
 std::shared_ptr<const openblack::audio::MusicTiming> ScriptMusicSystem::Timing(audio::MusicType type) const
 {
 	const auto path = std::string(audio::GetMusicBankPath(type));
