@@ -1640,6 +1640,17 @@ void WorkshopSystem::SiteClosed(entt::entity building)
 	}
 }
 
+void WorkshopSystem::PutLoadedOnSite(entt::entity scaffold, entt::entity building)
+{
+	auto& registry = Entities();
+	if (!registry.Valid(scaffold) || !registry.AllOf<Scaffold>(scaffold) || !registry.Valid(building))
+	{
+		return;
+	}
+	registry.Get<Scaffold>(scaffold).site = building;
+	MakeGhost(scaffold);
+}
+
 entt::entity WorkshopSystem::LeaveDestroyedSite(entt::entity building)
 {
 	auto& registry = Entities();

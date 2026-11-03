@@ -73,6 +73,9 @@ public:
 	virtual void ProcessHeld(entt::entity scaffold) = 0;
 	/// A building site closes: the scaffolds on it go
 	virtual void SiteClosed(entt::entity building) = 0;
+	/// A scaffold of a loaded game is on the site of a building. The scaffold makes the copy that shows the phantom
+	/// building on the site, as the load of the game gives the phantom the model of the building.
+	virtual void PutLoadedOnSite(entt::entity scaffold, entt::entity building) = 0;
 	/// An effect destroyed the unfinished building of a site. The first scaffold on the site leaves the site, and keeps no
 	/// offer. The scaffold stays, thus the caller removes the building next. The scaffold, none when no scaffold is on the
 	/// site.

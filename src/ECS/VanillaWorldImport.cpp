@@ -138,13 +138,17 @@ ImportedWalk WalkOf(const VanillaWorld& world, const VanillaRecord& record)
 
 /// The record types of the buildings of a town that the import takes
 constexpr std::array k_AbodeTypes = {VanillaType::Abode,      VanillaType::Creche, VanillaType::Graveyard,
-                                     VanillaType::StoragePit, VanillaType::Wonder, VanillaType::TownCentre};
+                                     VanillaType::StoragePit, VanillaType::Wonder, VanillaType::TownCentre,
+                                     VanillaType::Workshop};
 
 /// Each tribe has 16 rows of buildings in the same order. The import takes the six abodes, the storage pit, the creche,
-/// the wonder, the graveyard and the town centre.
+/// the workshop, the wonder, the graveyard and the town centre.
 constexpr int32_t k_TribeRows = 16;
 constexpr int32_t k_Tribes = 9;
-constexpr std::array<int32_t, 11> k_ImportedPlaces = {0, 1, 2, 3, 4, 5, 7, 8, 10, 11, 12};
+constexpr std::array<int32_t, 12> k_ImportedPlaces = {0, 1, 2, 3, 4, 5, 7, 8, 9, 10, 11, 12};
+
+/// The word that the file keeps for a scaffold that no script gave a building
+constexpr uint32_t k_NoScriptBuilding = 0xFFFFFFFFU;
 
 /// The record types of the villagers
 constexpr std::array k_VillagerTypes = {VanillaType::Villager, VanillaType::SpecialVillager};
@@ -387,7 +391,92 @@ std::optional<ImportedAbode> ReadAbode(const VanillaWorld& world, const VanillaR
 	{
 		abode.wonderPower = world.Float(record, "wonderPower");
 	}
+	if (record.Is(VanillaType::Workshop))
+	{
+		ImportedWorkshop workshop {.makingTurns = std::bit_cast<int32_t>(world.Word(record, "workshopMakingTurns").value_or(0)),
+		                           .counted = world.Word(record, "workshopCounted").value_or(0),
+		                           .woodPile = world.Ref(record, "workshopWoodPile").value_or(0)};
+		const auto places = world.Raw(record, "workshopPlaces");
+		std::copy_n(places.begin(), std::min(places.size(), workshop.places.size()), workshop.places.begin());
+		const auto scaffolds = world.Refs(record, "workshopScaffolds");
+		workshop.scaffolds.assign(scaffolds.begin(), scaffolds.end());
+		abode.workshop = std::move(workshop);
+	}
 	return abode;
+}
+
+/// The building that a plan of the file offers, nothing for no plan or a plan with no row of the table of buildings
+std::optional<ImportedScaffoldOffer> OfferOf(const VanillaWorld& world, uint32_t number)
+{
+	const auto* record = number != 0 ? world.Record(number) : nullptr;
+	if (record == nullptr)
+	{
+		return std::nullopt;
+	}
+	const auto row = AbodeRowOf(world.Word(*record, "info").value_or(0));
+	if (!row.has_value())
+	{
+		return std::nullopt;
+	}
+	return ImportedScaffoldOffer {.row = *row,
+	                              .heading = world.Float(*record, "heading").value_or(0.0f),
+	                              .scale = world.Float(*record, "scale").value_or(1.0f)};
+}
+
+/// The player whose interface the record with the number is, nothing for none
+std::optional<PlayerNames> PlayerOfInterface(const VanillaWorld& world, uint32_t number)
+{
+	if (number == 0)
+	{
+		return std::nullopt;
+	}
+	for (const auto& record : world.Records())
+	{
+		if (!record.Is(VanillaType::Player))
+		{
+			continue;
+		}
+		const auto interfaces = world.Refs(record, "interfaces");
+		if (std::ranges::find(interfaces, number) == interfaces.end())
+		{
+			continue;
+		}
+		const auto player = world.Byte(record, "number");
+		if (player.has_value() && *player < static_cast<uint8_t>(PlayerNames::_COUNT))
+		{
+			return static_cast<PlayerNames>(*player);
+		}
+	}
+	return std::nullopt;
+}
+
+std::optional<ImportedScaffold> ReadScaffold(const VanillaWorld& world, const VanillaRecord& record, std::string& why)
+{
+	const auto position = PositionOf(world, record);
+	if (!position.has_value())
+	{
+		why = "the scaffold has no place";
+		return std::nullopt;
+	}
+	ImportedScaffold scaffold {.number = record.number,
+	                           .position = *position,
+	                           .heading = world.Float(record, "heading").value_or(0.0f),
+	                           .scale = world.Float(record, "scale").value_or(1.0f),
+	                           .town = world.Ref(record, "scaffoldTown").value_or(0),
+	                           .site = world.Ref(record, "scaffoldSite").value_or(0),
+	                           .offer = OfferOf(world, world.Ref(record, "scaffoldOffer").value_or(0)),
+	                           .nextOffer = OfferOf(world, world.Ref(record, "scaffoldNextOffer").value_or(0)),
+	                           .changeMs = std::bit_cast<int32_t>(world.Word(record, "scaffoldChangeMs").value_or(0)),
+	                           .handPlayer = PlayerOfInterface(world, world.Ref(record, "scaffoldHolder").value_or(0)),
+	                           .phantomAngle = world.Float(record, "scaffoldAngle").value_or(0.0f),
+	                           .phantomScale = world.Float(record, "scaffoldScale").value_or(0.0f),
+	                           .flags = ScaffoldFlagsOf(world.Half(record, "scaffoldFlags").value_or(0))};
+	const auto building = world.Word(record, "scaffoldScriptBuilding").value_or(k_NoScriptBuilding);
+	if (building != k_NoScriptBuilding && building < static_cast<uint32_t>(AbodeNumber::_COUNT))
+	{
+		scaffold.scriptBuilding = static_cast<AbodeNumber>(building);
+	}
+	return scaffold;
 }
 
 std::optional<ImportedVillager> ReadVillager(const VanillaWorld& world, const VanillaRecord& record, std::string& why)
@@ -488,6 +577,20 @@ void PutPiles(const VanillaWorld& world, ImportedTowns& imported)
 		if (auto pile = ReadPile(world, record); pile.has_value())
 		{
 			building->second->piles.push_back(*pile);
+		}
+	}
+	// A workshop keeps the number of its wood pile
+	for (auto& abode : imported.abodes)
+	{
+		if (!abode.workshop.has_value() || abode.workshop->woodPile == 0 ||
+		    std::ranges::any_of(abode.piles,
+		                        [&abode](const ImportedPile& pile) { return pile.number == abode.workshop->woodPile; }))
+		{
+			continue;
+		}
+		if (auto pile = PileNumbered(world, abode.workshop->woodPile); pile.has_value())
+		{
+			abode.piles.push_back(*pile);
 		}
 	}
 	for (auto& site : imported.sites)
@@ -857,6 +960,14 @@ ImportedTowns ReadTowns(const VanillaWorld& world)
 			if (auto site = ReadSite(world, record, why); site.has_value())
 			{
 				imported.sites.push_back(std::move(*site));
+				continue;
+			}
+		}
+		else if (record.Is(VanillaType::Scaffold))
+		{
+			if (auto scaffold = ReadScaffold(world, record, why); scaffold.has_value())
+			{
+				imported.scaffolds.push_back(*scaffold);
 				continue;
 			}
 		}

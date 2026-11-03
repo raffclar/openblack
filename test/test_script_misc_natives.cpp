@@ -79,6 +79,7 @@ public:
 	[[nodiscard]] bool CanMove(entt::entity) const override { return false; }
 	void ProcessHeld(entt::entity) override {}
 	void SiteClosed(entt::entity) override {}
+	void PutLoadedOnSite(entt::entity, entt::entity) override {}
 	entt::entity LeaveDestroyedSite(entt::entity) override { return entt::null; }
 	bool ForceBuild(entt::entity scaffold, std::optional<PlayerNames> player) override
 	{
