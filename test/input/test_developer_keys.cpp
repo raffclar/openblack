@@ -140,6 +140,21 @@ TEST(DeveloperKeys, TheToggleKeysAreNotTheGamesKeys)
 	EXPECT_EQ(platform_keys::EditorToggleKeyName(Platform::Web), "End");
 }
 
+TEST(DeveloperKeys, TheDeviceRestoreKeyIsCtrlShiftWithTheStatisticsKeyAndNotAGameKey)
+{
+	for (const auto platform : k_Platforms)
+	{
+		const auto key = platform_keys::RendererStatisticsKey(platform);
+		EXPECT_TRUE(platform_keys::IsDeviceRestoreKey(platform, key, k_CtrlShift));
+		EXPECT_FALSE(platform_keys::IsDeviceRestoreKey(platform, key, k_None));
+		EXPECT_FALSE(platform_keys::IsDeviceRestoreKey(platform, key, k_Ctrl));
+		EXPECT_FALSE(platform_keys::IsDeviceRestoreKey(platform, key, k_Shift));
+		EXPECT_FALSE(platform_keys::IsDeviceRestoreKey(platform, key, {.shift = true, .ctrl = true, .alt = true}));
+		EXPECT_FALSE(platform_keys::IsDeviceRestoreKey(platform, SDLK_a, k_CtrlShift));
+		EXPECT_FALSE(GameUsesKeyWithAnyModifier(platform, RendererStatisticsScancode(platform)));
+	}
+}
+
 TEST(DeveloperKeys, TheRendererStatisticsScancodeIsTheRendererStatisticsKey)
 {
 	EXPECT_EQ(platform_keys::RendererStatisticsKey(Platform::Desktop),

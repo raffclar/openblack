@@ -187,6 +187,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		("gods-ring-map", "Start on the network map for 32 gods instead of a level, as the game server does with the same switch.")
 		("screenshot-frame", "Request a screenshot of the backbuffer at a certain frame number.", cxxopts::value<uint32_t>())
 		("screenshot-path", "Path of the request a screenshot of the backbuffer.", cxxopts::value<std::filesystem::path>()->default_value("screenshot.png"))
+		("device-restore-frame", "For tests: make the graphics device again at this frame, as after a lost device.", cxxopts::value<uint32_t>())
 		("frame-stats", "Log the average and 95th percentile frame time, the profiler stages and the memory in use every so many frames (0 for never), and each frame of 10 ms or more with its stages.", cxxopts::value<uint32_t>()->default_value("0"))
 		("frame-stats-views", "With --frame-stats, also profile and log the GPU time of each render view.")
 		("ai-times", "Tools: log the mean and longest time of the seen list, the mind and the hand of each computer god each time this many turns go by (0 for never).", cxxopts::value<uint32_t>()->default_value("0"))
@@ -622,6 +623,10 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		{
 			args.requestScreenshot = std::make_pair(result["screenshot-frame"].as<uint32_t>(),
 			                                        result["screenshot-path"].as<std::filesystem::path>());
+		}
+		if (result.count("device-restore-frame") != 0)
+		{
+			args.deviceRestoreFrame = result["device-restore-frame"].as<uint32_t>();
 		}
 
 		args.windowWidth = result["width"].as<uint16_t>();

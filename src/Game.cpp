@@ -791,6 +791,7 @@ Game::Game(Arguments&& args) noexcept
     , _testbedWindow(!args.scenario.has_value() || !args.scenario->hideWindow)
 #endif
     , _requestScreenshot(args.requestScreenshot)
+    , _deviceRestoreFrame(args.deviceRestoreFrame)
     , _turnApiCheck(args.turnApiCheck)
     , _turnBesideDraw(args.turnBesideDraw)
 {
@@ -1311,7 +1312,17 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 				    !input::developer_keys::GameUsesKey(Locator::gameActionSystem::value().GetKeyBindings(), k_Platform,
 				                                        event.key.keysym.scancode, mod))
 				{
-					Locator::rendererInterface::value().SetDebug(!Locator::rendererInterface::value().GetDebug());
+					// With Ctrl and Shift, the key makes the graphics device again, to test the recovery from a lost
+					// device
+					auto& renderer = Locator::rendererInterface::value();
+					if (keys::IsDeviceRestoreKey(k_Platform, key, held))
+					{
+						renderer.RequestDeviceRestore();
+					}
+					else
+					{
+						renderer.SetDebug(!renderer.GetDebug());
+					}
 				}
 				break;
 			}
@@ -5490,6 +5501,10 @@ bool Game::RunFrame() noexcept
 			if (screenshotThisFrame)
 			{
 				Locator::rendererInterface::value().RequestScreenshot(_requestScreenshot->second);
+			}
+			if (_deviceRestoreFrame == _frameCount)
+			{
+				Locator::rendererInterface::value().RequestDeviceRestore();
 			}
 			// A picture without the debug windows: the frame's windows are made as ever but not drawn
 			// nor in a challenge's picture

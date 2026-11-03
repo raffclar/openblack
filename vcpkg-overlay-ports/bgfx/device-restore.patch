@@ -1,0 +1,1270 @@
+diff --git a/bgfx/include/bgfx/bgfx.h b/bgfx/include/bgfx/bgfx.h
+index ff66119..3e260db 100644
+--- a/bgfx/include/bgfx/bgfx.h
++++ b/bgfx/include/bgfx/bgfx.h
+@@ -2689,6 +2689,20 @@ namespace bgfx
+ 	///
+ 	const Stats* getStats();
+ 
++	/// Asks the renderer to make its device again with all its resources, as after a lost device. The renderer
++	/// does it at the start of the next frame that it renders. Each resource keeps its handle and the contents
++	/// that the application gave it. The contents that only the GPU wrote, as in render targets, are lost.
++	///
++	void requestDeviceRestore();
++
++	/// Returns the number of times that the renderer made its device again, after a lost device or a request.
++	///
++	uint32_t getDeviceRestoreCount();
++
++	/// Returns the number of bytes of resource data that the renderer keeps to make its device again.
++	///
++	uint64_t getDeviceRestoreKeptBytes();
++
+ 	/// Allocate buffer to pass to bgfx calls. Data will be freed inside bgfx.
+ 	///
+ 	/// @param[in] _size Size to allocate.
+diff --git a/bgfx/src/bgfx.cpp b/bgfx/src/bgfx.cpp
+index acfb6fe..fa55f8a 100644
+--- a/bgfx/src/bgfx.cpp
++++ b/bgfx/src/bgfx.cpp
+@@ -3432,14 +3432,23 @@ namespace bgfx
+ 					g_caps.supported &= ~BGFX_CAPS_LOW_LATENCY;
+ 				}
+ 
+-				// Something horribly went wrong, fallback to noop renderer.
+-				rendererDestroy(m_renderCtx);
+-
+-				Init init;
+-				init.type = RendererType::Noop;
+-				m_renderCtx = rendererCreate(init);
+-				g_caps.rendererType = RendererType::Noop;
++				// The device is lost: make the renderer again with all its resources
++				restoreDevice(m_renderCtx->getRendererType() );
++			}
++			else if (RendererType::Count != m_restoreType)
++			{
++				// The device could not be made again: try again after a time
++				if (bx::getHPCounter() >= m_restoreRetryAt)
++				{
++					restoreDevice(m_restoreType);
++				}
++			}
++			else if (m_restoreRequested.exchange(false) )
++			{
++				restoreDevice(m_renderCtx->getRendererType() );
+ 			}
++
++			m_restoreKeptBytes.store(m_deviceRestore.keptBytes() );
+ 		}
+ 	}
+ 
+@@ -3634,6 +3643,7 @@ namespace bgfx
+ 				_cmdbuf.read(mem);
+ 
+ 				m_renderCtx->updateTexture(handle, side, mip, rect, zz, depth, pitch, mem);
++				m_deviceRestore.updateTexture(handle, side, mip, rect, zz, depth, pitch, mem);
+ 
+ 				release(mem);
+ 			}
+@@ -3924,6 +3934,50 @@ namespace bgfx
+ 		}
+ 	}
+ 
++	void Context::restoreDevice(RendererType::Enum _type)
++	{
++		rendererDestroy(m_renderCtx);
++
++		// The same renderer on the same window, at the size and with the settings of the last frame
++		Init init = m_init;
++		init.type      = _type;
++		init.fallback  = false;
++		init.swapChain = m_render->m_mainSwapChain;
++		init.reset     = m_render->m_reset;
++
++		RendererContextI* renderCtx = s_rendererCreator[_type].supported
++			? s_rendererCreator[_type].createFn(init)
++			: NULL
++			;
++
++		if (NULL == renderCtx)
++		{
++			// The device cannot be made now, as while the driver resets. The frames go to the noop renderer,
++			// which keeps the resources, and the renderer tries again after one second.
++			BX_TRACE("The %s renderer could not make its device again.", s_rendererCreator[_type].name);
++
++			Init noop;
++			noop.type = RendererType::Noop;
++			m_renderCtx = s_rendererCreator[RendererType::Noop].createFn(noop);
++			g_caps.rendererType = RendererType::Noop;
++			m_restoreType = _type;
++			m_restoreRetryAt = bx::getHPCounter() + bx::getHPFrequency();
++			return;
++		}
++
++		m_renderCtx = renderCtx;
++		g_caps.rendererType = _type;
++		m_restoreType = RendererType::Count;
++
++		m_deviceRestore.restore(m_renderCtx);
++		m_restoreCount.fetch_add(1);
++
++		BX_TRACE("The %s renderer made its device again with %" PRIu64 " kept bytes."
++			, s_rendererCreator[_type].name
++			, m_deviceRestore.keptBytes()
++			);
++	}
++
+ 	void Context::rendererExecCommands(CommandBuffer& _cmdbuf)
+ 	{
+ 		_cmdbuf.reset();
+@@ -3992,6 +4046,7 @@ namespace bgfx
+ 
+ 					rendererDestroy(m_renderCtx);
+ 					m_renderCtx = NULL;
++					m_deviceRestore.clear();
+ 
+ 					m_exit = true;
+ 				}
+@@ -4016,7 +4071,7 @@ namespace bgfx
+ 
+ 					m_renderCtx->createIndexBuffer(handle, mem, flags);
+ 
+-					release(mem);
++					m_deviceRestore.createIndexBuffer(handle, mem, flags);
+ 				}
+ 				break;
+ 
+@@ -4028,6 +4083,7 @@ namespace bgfx
+ 					_cmdbuf.read(handle);
+ 
+ 					m_renderCtx->destroyIndexBuffer(handle);
++					m_deviceRestore.destroyIndexBuffer(handle);
+ 				}
+ 				break;
+ 
+@@ -4042,6 +4098,7 @@ namespace bgfx
+ 					_cmdbuf.read(layout);
+ 
+ 					m_renderCtx->createVertexLayout(handle, layout);
++					m_deviceRestore.createVertexLayout(handle, layout);
+ 				}
+ 				break;
+ 
+@@ -4053,6 +4110,7 @@ namespace bgfx
+ 					_cmdbuf.read(handle);
+ 
+ 					m_renderCtx->destroyVertexLayout(handle);
++					m_deviceRestore.destroyVertexLayout(handle);
+ 				}
+ 				break;
+ 
+@@ -4074,7 +4132,7 @@ namespace bgfx
+ 
+ 					m_renderCtx->createVertexBuffer(handle, mem, layoutHandle, flags);
+ 
+-					release(mem);
++					m_deviceRestore.createVertexBuffer(handle, mem, layoutHandle, flags);
+ 				}
+ 				break;
+ 
+@@ -4086,6 +4144,7 @@ namespace bgfx
+ 					_cmdbuf.read(handle);
+ 
+ 					m_renderCtx->destroyVertexBuffer(handle);
++					m_deviceRestore.destroyVertexBuffer(handle);
+ 				}
+ 				break;
+ 
+@@ -4103,6 +4162,7 @@ namespace bgfx
+ 					_cmdbuf.read(flags);
+ 
+ 					m_renderCtx->createDynamicIndexBuffer(handle, size, flags);
++					m_deviceRestore.createDynamicIndexBuffer(handle, size, flags);
+ 				}
+ 				break;
+ 
+@@ -4123,6 +4183,7 @@ namespace bgfx
+ 					_cmdbuf.read(mem);
+ 
+ 					m_renderCtx->updateDynamicIndexBuffer(handle, offset, size, mem);
++					m_deviceRestore.updateDynamicIndexBuffer(handle, offset, size, mem);
+ 
+ 					release(mem);
+ 				}
+@@ -4136,6 +4197,7 @@ namespace bgfx
+ 					_cmdbuf.read(handle);
+ 
+ 					m_renderCtx->destroyDynamicIndexBuffer(handle);
++					m_deviceRestore.destroyDynamicIndexBuffer(handle);
+ 				}
+ 				break;
+ 
+@@ -4153,6 +4215,7 @@ namespace bgfx
+ 					_cmdbuf.read(flags);
+ 
+ 					m_renderCtx->createDynamicVertexBuffer(handle, size, flags);
++					m_deviceRestore.createDynamicVertexBuffer(handle, size, flags);
+ 				}
+ 				break;
+ 
+@@ -4173,6 +4236,7 @@ namespace bgfx
+ 					_cmdbuf.read(mem);
+ 
+ 					m_renderCtx->updateDynamicVertexBuffer(handle, offset, size, mem);
++					m_deviceRestore.updateDynamicVertexBuffer(handle, offset, size, mem);
+ 
+ 					release(mem);
+ 				}
+@@ -4186,6 +4250,7 @@ namespace bgfx
+ 					_cmdbuf.read(handle);
+ 
+ 					m_renderCtx->destroyDynamicVertexBuffer(handle);
++					m_deviceRestore.destroyDynamicVertexBuffer(handle);
+ 				}
+ 				break;
+ 
+@@ -4201,7 +4266,7 @@ namespace bgfx
+ 
+ 					m_renderCtx->createShader(handle, mem);
+ 
+-					release(mem);
++					m_deviceRestore.createShader(handle, mem);
+ 				}
+ 				break;
+ 
+@@ -4213,6 +4278,7 @@ namespace bgfx
+ 					_cmdbuf.read(handle);
+ 
+ 					m_renderCtx->destroyShader(handle);
++					m_deviceRestore.destroyShader(handle);
+ 				}
+ 				break;
+ 
+@@ -4230,6 +4296,7 @@ namespace bgfx
+ 					_cmdbuf.read(fsh);
+ 
+ 					m_renderCtx->createProgram(handle, vsh, fsh);
++					m_deviceRestore.createProgram(handle, vsh, fsh);
+ 				}
+ 				break;
+ 
+@@ -4241,6 +4308,7 @@ namespace bgfx
+ 					_cmdbuf.read(handle);
+ 
+ 					m_renderCtx->destroyProgram(handle);
++					m_deviceRestore.destroyProgram(handle);
+ 				}
+ 				break;
+ 
+@@ -4270,24 +4338,7 @@ namespace bgfx
+ 						setDirectAccessPtr(handle, ptr);
+ 					}
+ 
+-					bx::MemoryReader reader(mem->data, mem->size);
+-					bx::Error err;
+-
+-					uint32_t magic;
+-					bx::read(&reader, magic, &err);
+-
+-					if (kChunkMagicTex == magic)
+-					{
+-						TextureCreate tc;
+-						bx::read(&reader, tc, &err);
+-
+-						if (NULL != tc.m_mem)
+-						{
+-							release(tc.m_mem);
+-						}
+-					}
+-
+-					release(mem);
++					m_deviceRestore.createTexture(handle, mem, flags, skip, external);
+ 				}
+ 				break;
+ 
+@@ -4411,6 +4462,7 @@ namespace bgfx
+ 					_cmdbuf.read(numLayers);
+ 
+ 					m_renderCtx->resizeTexture(handle, width, height, numMips, numLayers);
++					m_deviceRestore.resizeTexture(handle, width, height, numMips, numLayers);
+ 				}
+ 				break;
+ 
+@@ -4422,6 +4474,7 @@ namespace bgfx
+ 					_cmdbuf.read(handle);
+ 
+ 					m_renderCtx->destroyTexture(handle);
++					m_deviceRestore.destroyTexture(handle);
+ 				}
+ 				break;
+ 
+@@ -4437,7 +4490,9 @@ namespace bgfx
+ 
+ 					if (1 == type) // window (nwh) swap chain
+ 					{
+-						m_renderCtx->createFrameBuffer(handle, readSwapChain(_cmdbuf) );
++						const SwapChain desc = readSwapChain(_cmdbuf);
++						m_renderCtx->createFrameBuffer(handle, desc);
++						m_deviceRestore.createFrameBuffer(handle, desc);
+ 					}
+ 					else
+ 					{
+@@ -4448,6 +4503,7 @@ namespace bgfx
+ 						_cmdbuf.read(attachment, sizeof(Attachment) * num);
+ 
+ 						m_renderCtx->createFrameBuffer(handle, num, attachment);
++						m_deviceRestore.createFrameBuffer(handle, num, attachment);
+ 					}
+ 				}
+ 				break;
+@@ -4459,7 +4515,9 @@ namespace bgfx
+ 					FrameBufferHandle handle;
+ 					_cmdbuf.read(handle);
+ 
+-					m_renderCtx->resizeFrameBuffer(handle, readSwapChain(_cmdbuf) );
++					const SwapChain desc = readSwapChain(_cmdbuf);
++					m_renderCtx->resizeFrameBuffer(handle, desc);
++					m_deviceRestore.createFrameBuffer(handle, desc);
+ 				}
+ 				break;
+ 
+@@ -4471,6 +4529,7 @@ namespace bgfx
+ 					_cmdbuf.read(handle);
+ 
+ 					m_renderCtx->destroyFrameBuffer(handle);
++					m_deviceRestore.destroyFrameBuffer(handle);
+ 				}
+ 				break;
+ 
+@@ -4493,6 +4552,7 @@ namespace bgfx
+ 					const char* name = (const char*)_cmdbuf.skip(len);
+ 
+ 					m_renderCtx->createUniform(handle, type, num, name);
++					m_deviceRestore.createUniform(handle, type, num, name);
+ 				}
+ 				break;
+ 
+@@ -4504,6 +4564,7 @@ namespace bgfx
+ 					_cmdbuf.read(handle);
+ 
+ 					m_renderCtx->destroyUniform(handle);
++					m_deviceRestore.destroyUniform(handle);
+ 				}
+ 				break;
+ 
+@@ -5727,6 +5788,22 @@ namespace bgfx
+ 		return s_ctx->getPerfStats();
+ 	}
+ 
++	void requestDeviceRestore()
++	{
++		BGFX_CHECK_API_THREAD();
++		s_ctx->m_restoreRequested.store(true);
++	}
++
++	uint32_t getDeviceRestoreCount()
++	{
++		return s_ctx->m_restoreCount.load();
++	}
++
++	uint64_t getDeviceRestoreKeptBytes()
++	{
++		return s_ctx->m_restoreKeptBytes.load();
++	}
++
+ 	RendererType::Enum getRendererType()
+ 	{
+ 		return g_caps.rendererType;
+diff --git a/bgfx/src/bgfx_p.h b/bgfx/src/bgfx_p.h
+index 316b49d..98002e1 100644
+--- a/bgfx/src/bgfx_p.h
++++ b/bgfx/src/bgfx_p.h
+@@ -6046,6 +6046,13 @@ namespace bgfx
+ #	define BGFX_API_FUNC(_func) _func
+ #endif // BGFX_CONFIG_DEBUG
+ 
++} // namespace bgfx
++
++#include <atomic>
++#include "device_restore.h"
++
++namespace bgfx
++{
+ 	struct Context
+ 	{
+ 		static constexpr uint32_t kAlignment = 64;
+@@ -8740,6 +8747,7 @@ namespace bgfx
+ 
+ 		// render thread
+ 		void flip();
++		void restoreDevice(RendererType::Enum _type);
+ 		RenderFrame::Enum renderFrame(int32_t _msecs = -1);
+ 		void flushTextureUpdateBatch(CommandBuffer& _cmdbuf);
+ 		void rendererExecCommands(CommandBuffer& _cmdbuf);
+@@ -8986,6 +8994,15 @@ namespace bgfx
+ 
+ 		typedef UpdateBatchT<256> TextureUpdateBatch;
+ 		BX_ALIGN_DECL_CACHE_LINE(TextureUpdateBatch m_textureUpdateBatch);
++
++		// What the render thread keeps to make the device again, the renderer to make again while the device
++		// cannot be made, and when to try again
++		DeviceRestore m_deviceRestore;
++		RendererType::Enum m_restoreType = RendererType::Count;
++		int64_t m_restoreRetryAt = 0;
++		std::atomic<bool> m_restoreRequested {false};
++		std::atomic<uint32_t> m_restoreCount {0};
++		std::atomic<uint64_t> m_restoreKeptBytes {0};
+ 	};
+ 
+ #undef BGFX_API_FUNC
+diff --git a/bgfx/src/device_restore.h b/bgfx/src/device_restore.h
+new file mode 100644
+index 0000000..ce9bebe
+--- /dev/null
++++ b/bgfx/src/device_restore.h
+@@ -0,0 +1,845 @@
++/*
++ * Copyright 2026 openblack developers. All rights reserved.
++ * License: https://github.com/bkaradzic/bgfx/blob/master/LICENSE
++ */
++
++#ifndef BGFX_DEVICE_RESTORE_H_HEADER_GUARD
++#define BGFX_DEVICE_RESTORE_H_HEADER_GUARD
++
++#include <string>
++#include <vector>
++
++namespace bgfx
++{
++	bool isMemoryRef(const Memory* _mem);
++
++	// Keeps what the render thread needs to make each live resource again on a new renderer, after the device
++	// is lost or when the application asks for it. Each resource keeps the data of its create command. The
++	// changes to textures and dynamic buffers go into kept copies. A new renderer then gets the same handles,
++	// thus the application keeps its handles. All functions run on the render thread.
++	class DeviceRestore
++	{
++	public:
++		DeviceRestore()
++			: m_indexBuffers(BGFX_CONFIG_MAX_INDEX_BUFFERS)
++			, m_vertexLayouts(BGFX_CONFIG_MAX_VERTEX_LAYOUTS)
++			, m_vertexBuffers(BGFX_CONFIG_MAX_VERTEX_BUFFERS)
++			, m_dynamicIndexBuffers(BGFX_CONFIG_MAX_INDEX_BUFFERS)
++			, m_dynamicVertexBuffers(BGFX_CONFIG_MAX_VERTEX_BUFFERS)
++			, m_shaders(BGFX_CONFIG_MAX_SHADERS)
++			, m_programs(BGFX_CONFIG_MAX_PROGRAMS)
++			, m_textures(BGFX_CONFIG_MAX_TEXTURES)
++			, m_frameBuffers(BGFX_CONFIG_MAX_FRAME_BUFFERS)
++			, m_uniforms(BGFX_CONFIG_MAX_UNIFORMS)
++		{
++		}
++
++		~DeviceRestore()
++		{
++			clear();
++		}
++
++		// The number of bytes of resource data that are kept
++		uint64_t keptBytes() const
++		{
++			return m_keptBytes;
++		}
++
++		void createIndexBuffer(IndexBufferHandle _handle, const Memory* _mem, uint16_t _flags)
++		{
++			Buffer& buffer = m_indexBuffers[_handle.idx];
++			freeBuffer(buffer);
++			buffer.mem   = own(_mem);
++			buffer.flags = _flags;
++			m_keptBytes += buffer.mem->size;
++		}
++
++		void destroyIndexBuffer(IndexBufferHandle _handle)
++		{
++			freeBuffer(m_indexBuffers[_handle.idx]);
++		}
++
++		void createVertexLayout(VertexLayoutHandle _handle, const VertexLayout& _layout)
++		{
++			m_vertexLayouts[_handle.idx].live   = true;
++			m_vertexLayouts[_handle.idx].layout = _layout;
++		}
++
++		void destroyVertexLayout(VertexLayoutHandle _handle)
++		{
++			m_vertexLayouts[_handle.idx].live = false;
++		}
++
++		void createVertexBuffer(VertexBufferHandle _handle, const Memory* _mem, VertexLayoutHandle _layoutHandle, uint16_t _flags)
++		{
++			Buffer& buffer = m_vertexBuffers[_handle.idx];
++			freeBuffer(buffer);
++			buffer.mem    = own(_mem);
++			buffer.layout = _layoutHandle;
++			buffer.flags  = _flags;
++			m_keptBytes += buffer.mem->size;
++		}
++
++		void destroyVertexBuffer(VertexBufferHandle _handle)
++		{
++			freeBuffer(m_vertexBuffers[_handle.idx]);
++		}
++
++		void createDynamicIndexBuffer(IndexBufferHandle _handle, uint32_t _size, uint16_t _flags)
++		{
++			createDynamic(m_dynamicIndexBuffers[_handle.idx], _size, _flags);
++		}
++
++		void updateDynamicIndexBuffer(IndexBufferHandle _handle, uint32_t _offset, uint32_t _size, const Memory* _mem)
++		{
++			updateDynamic(m_dynamicIndexBuffers[_handle.idx], _offset, _size, _mem);
++		}
++
++		void destroyDynamicIndexBuffer(IndexBufferHandle _handle)
++		{
++			freeDynamic(m_dynamicIndexBuffers[_handle.idx]);
++		}
++
++		void createDynamicVertexBuffer(VertexBufferHandle _handle, uint32_t _size, uint16_t _flags)
++		{
++			createDynamic(m_dynamicVertexBuffers[_handle.idx], _size, _flags);
++		}
++
++		void updateDynamicVertexBuffer(VertexBufferHandle _handle, uint32_t _offset, uint32_t _size, const Memory* _mem)
++		{
++			updateDynamic(m_dynamicVertexBuffers[_handle.idx], _offset, _size, _mem);
++		}
++
++		void destroyDynamicVertexBuffer(VertexBufferHandle _handle)
++		{
++			freeDynamic(m_dynamicVertexBuffers[_handle.idx]);
++		}
++
++		void createShader(ShaderHandle _handle, const Memory* _mem)
++		{
++			Buffer& shader = m_shaders[_handle.idx];
++			freeBuffer(shader);
++			shader.mem = own(_mem);
++			m_keptBytes += shader.mem->size;
++		}
++
++		void destroyShader(ShaderHandle _handle)
++		{
++			freeBuffer(m_shaders[_handle.idx]);
++		}
++
++		void createProgram(ProgramHandle _handle, ShaderHandle _vsh, ShaderHandle _fsh)
++		{
++			Program& program = m_programs[_handle.idx];
++			program.live = true;
++			program.vsh  = _vsh;
++			program.fsh  = _fsh;
++		}
++
++		void destroyProgram(ProgramHandle _handle)
++		{
++			m_programs[_handle.idx].live = false;
++		}
++
++		// Takes the create memory and the texel memory in it. A texture of the application's own native
++		// texture cannot be made again, thus only its memory is released.
++		void createTexture(TextureHandle _handle, const Memory* _mem, uint64_t _flags, uint8_t _skip, uint64_t _external)
++		{
++			Texture& texture = m_textures[_handle.idx];
++			freeTexture(texture);
++			if (0 != _external)
++			{
++				releaseTextureMemory(_mem);
++				return;
++			}
++
++			_mem = own(_mem);
++			uint32_t magic = 0;
++			if (sizeof(uint32_t) + sizeof(TextureCreate) <= _mem->size)
++			{
++				bx::memCopy(&magic, _mem->data, sizeof(uint32_t) );
++			}
++
++			if (kChunkMagicTex == magic)
++			{
++				TextureCreate tc;
++				bx::memCopy(&tc, _mem->data + sizeof(uint32_t), sizeof(TextureCreate) );
++				if (NULL != tc.m_mem)
++				{
++					tc.m_mem = own(tc.m_mem);
++					bx::memCopy(_mem->data + sizeof(uint32_t), &tc, sizeof(TextureCreate) );
++					m_keptBytes += tc.m_mem->size;
++				}
++			}
++
++			texture.mem   = _mem;
++			texture.flags = _flags;
++			texture.skip  = _skip;
++			m_keptBytes += _mem->size;
++		}
++
++		// Copies the texels of an update into the kept copy of the texture. The caller keeps the memory.
++		void updateTexture(TextureHandle _handle, uint8_t _side, uint8_t _mip, const Rect& _rect, uint16_t _z, uint16_t _depth, uint16_t _pitch, const Memory* _mem)
++		{
++			Texture& texture = m_textures[_handle.idx];
++			if (NULL == texture.mem)
++			{
++				return;
++			}
++
++			if (1 == _depth
++			&&  !texture.resized
++			&&  0 == texture.skip
++			&&  copyIntoSlice(texture, _side, _mip, _rect, _z, _pitch, _mem) )
++			{
++				return;
++			}
++
++			// The update cannot go into a slice: it is kept as it is, and replaces the kept updates that it covers
++			for (uint32_t ii = 0; ii < texture.updates.size(); )
++			{
++				const Update& update = texture.updates[ii];
++				if (update.side == _side
++				&&  update.mip  == _mip
++				&&  covers(_rect, update.rect)
++				&&  _z <= update.z
++				&&  update.z + update.depth <= _z + _depth)
++				{
++					m_keptBytes -= update.mem->size;
++					release(update.mem);
++					texture.updates.erase(texture.updates.begin() + ii);
++				}
++				else
++				{
++					++ii;
++				}
++			}
++
++			Update update;
++			update.side  = _side;
++			update.mip   = _mip;
++			update.rect  = _rect;
++			update.z     = _z;
++			update.depth = _depth;
++			update.pitch = _pitch;
++			update.mem   = copy(_mem->data, _mem->size);
++			m_keptBytes += update.mem->size;
++			texture.updates.push_back(update);
++		}
++
++		// The contents of a resized texture are not defined, thus the kept changes go
++		void resizeTexture(TextureHandle _handle, uint16_t _width, uint16_t _height, uint8_t _numMips, uint16_t _numLayers)
++		{
++			Texture& texture = m_textures[_handle.idx];
++			if (NULL == texture.mem)
++			{
++				return;
++			}
++
++			freeChanges(texture);
++			texture.resized   = true;
++			texture.width     = _width;
++			texture.height    = _height;
++			texture.numMips   = _numMips;
++			texture.numLayers = _numLayers;
++		}
++
++		void destroyTexture(TextureHandle _handle)
++		{
++			freeTexture(m_textures[_handle.idx]);
++		}
++
++		void createFrameBuffer(FrameBufferHandle _handle, uint8_t _num, const Attachment* _attachment)
++		{
++			FrameBuffer& frameBuffer = m_frameBuffers[_handle.idx];
++			frameBuffer.live   = true;
++			frameBuffer.window = false;
++			frameBuffer.num    = _num;
++			bx::memCopy(frameBuffer.attachment, _attachment, sizeof(Attachment) * _num);
++		}
++
++		void createFrameBuffer(FrameBufferHandle _handle, const SwapChain& _desc)
++		{
++			FrameBuffer& frameBuffer = m_frameBuffers[_handle.idx];
++			frameBuffer.live   = true;
++			frameBuffer.window = true;
++			frameBuffer.desc   = _desc;
++		}
++
++		void destroyFrameBuffer(FrameBufferHandle _handle)
++		{
++			m_frameBuffers[_handle.idx].live = false;
++		}
++
++		void createUniform(UniformHandle _handle, UniformType::Enum _type, uint16_t _num, const char* _name)
++		{
++			Uniform& uniform = m_uniforms[_handle.idx];
++			uniform.live = true;
++			uniform.type = _type;
++			uniform.num  = _num;
++			uniform.name = _name;
++		}
++
++		void destroyUniform(UniformHandle _handle)
++		{
++			m_uniforms[_handle.idx].live = false;
++		}
++
++		// Makes each kept resource again on a new renderer, with its handle and its last contents. The contents
++		// that only the GPU wrote, as in render targets, are not kept.
++		void restore(RendererContextI* _renderCtx)
++		{
++			for (uint16_t ii = 0; ii < m_uniforms.size(); ++ii)
++			{
++				const Uniform& uniform = m_uniforms[ii];
++				if (uniform.live)
++				{
++					_renderCtx->createUniform({ii}, uniform.type, uniform.num, uniform.name.c_str() );
++				}
++			}
++
++			for (uint16_t ii = 0; ii < m_vertexLayouts.size(); ++ii)
++			{
++				if (m_vertexLayouts[ii].live)
++				{
++					_renderCtx->createVertexLayout({ii}, m_vertexLayouts[ii].layout);
++				}
++			}
++
++			for (uint16_t ii = 0; ii < m_indexBuffers.size(); ++ii)
++			{
++				const Buffer& buffer = m_indexBuffers[ii];
++				if (NULL != buffer.mem)
++				{
++					_renderCtx->createIndexBuffer({ii}, buffer.mem, buffer.flags);
++				}
++			}
++
++			for (uint16_t ii = 0; ii < m_vertexBuffers.size(); ++ii)
++			{
++				const Buffer& buffer = m_vertexBuffers[ii];
++				if (NULL != buffer.mem)
++				{
++					_renderCtx->createVertexBuffer({ii}, buffer.mem, buffer.layout, buffer.flags);
++				}
++			}
++
++			for (uint16_t ii = 0; ii < m_dynamicIndexBuffers.size(); ++ii)
++			{
++				const Dynamic& buffer = m_dynamicIndexBuffers[ii];
++				if (buffer.live)
++				{
++					_renderCtx->createDynamicIndexBuffer({ii}, buffer.size, buffer.flags);
++					if (!buffer.bytes.empty() )
++					{
++						const Memory* mem = copy(buffer.bytes.data(), buffer.size);
++						_renderCtx->updateDynamicIndexBuffer({ii}, 0, buffer.size, mem);
++						release(mem);
++					}
++				}
++			}
++
++			for (uint16_t ii = 0; ii < m_dynamicVertexBuffers.size(); ++ii)
++			{
++				const Dynamic& buffer = m_dynamicVertexBuffers[ii];
++				if (buffer.live)
++				{
++					_renderCtx->createDynamicVertexBuffer({ii}, buffer.size, buffer.flags);
++					if (!buffer.bytes.empty() )
++					{
++						const Memory* mem = copy(buffer.bytes.data(), buffer.size);
++						_renderCtx->updateDynamicVertexBuffer({ii}, 0, buffer.size, mem);
++						release(mem);
++					}
++				}
++			}
++
++			for (uint16_t ii = 0; ii < m_shaders.size(); ++ii)
++			{
++				if (NULL != m_shaders[ii].mem)
++				{
++					_renderCtx->createShader({ii}, m_shaders[ii].mem);
++				}
++			}
++
++			for (uint16_t ii = 0; ii < m_programs.size(); ++ii)
++			{
++				const Program& program = m_programs[ii];
++				if (program.live)
++				{
++					_renderCtx->createProgram({ii}, program.vsh, program.fsh);
++				}
++			}
++
++			for (uint16_t ii = 0; ii < m_textures.size(); ++ii)
++			{
++				const Texture& texture = m_textures[ii];
++				if (NULL == texture.mem)
++				{
++					continue;
++				}
++
++				const TextureHandle handle = {ii};
++				_renderCtx->createTexture(handle, texture.mem, texture.flags, texture.skip, 0);
++				if (texture.resized)
++				{
++					_renderCtx->resizeTexture(handle, texture.width, texture.height, texture.numMips, texture.numLayers);
++				}
++
++				for (const Slice& slice : texture.slices)
++				{
++					if (0 == slice.dirty.m_width)
++					{
++						continue;
++					}
++
++					const uint32_t rowBytes = uint32_t(slice.dirty.m_width) * slice.texelBytes;
++					const Memory* mem = alloc(rowBytes * slice.dirty.m_height);
++					for (uint32_t yy = 0; yy < slice.dirty.m_height; ++yy)
++					{
++						bx::memCopy(
++							  mem->data + yy * rowBytes
++							, slice.bytes.data() + (slice.dirty.m_y + yy) * slice.pitch + slice.dirty.m_x * slice.texelBytes
++							, rowBytes
++							);
++					}
++
++					_renderCtx->updateTexture(handle, slice.side, slice.mip, slice.dirty, slice.z, 1, UINT16_MAX, mem);
++					release(mem);
++				}
++
++				for (const Update& update : texture.updates)
++				{
++					_renderCtx->updateTexture(handle, update.side, update.mip, update.rect, update.z, update.depth, update.pitch, update.mem);
++				}
++			}
++
++			for (uint16_t ii = 0; ii < m_frameBuffers.size(); ++ii)
++			{
++				const FrameBuffer& frameBuffer = m_frameBuffers[ii];
++				if (!frameBuffer.live)
++				{
++					continue;
++				}
++
++				if (frameBuffer.window)
++				{
++					_renderCtx->createFrameBuffer({ii}, frameBuffer.desc);
++				}
++				else
++				{
++					_renderCtx->createFrameBuffer({ii}, frameBuffer.num, frameBuffer.attachment);
++				}
++			}
++		}
++
++		// Releases all kept data, as the renderer stops
++		void clear()
++		{
++			for (Buffer& buffer : m_indexBuffers)
++			{
++				freeBuffer(buffer);
++			}
++
++			for (Buffer& buffer : m_vertexBuffers)
++			{
++				freeBuffer(buffer);
++			}
++
++			for (Buffer& shader : m_shaders)
++			{
++				freeBuffer(shader);
++			}
++
++			for (Dynamic& buffer : m_dynamicIndexBuffers)
++			{
++				freeDynamic(buffer);
++			}
++
++			for (Dynamic& buffer : m_dynamicVertexBuffers)
++			{
++				freeDynamic(buffer);
++			}
++
++			for (Texture& texture : m_textures)
++			{
++				freeTexture(texture);
++			}
++
++			for (VertexLayoutKept& layout : m_vertexLayouts)
++			{
++				layout.live = false;
++			}
++
++			for (Program& program : m_programs)
++			{
++				program.live = false;
++			}
++
++			for (FrameBuffer& frameBuffer : m_frameBuffers)
++			{
++				frameBuffer.live = false;
++			}
++
++			for (Uniform& uniform : m_uniforms)
++			{
++				uniform.live = false;
++			}
++		}
++
++	private:
++		struct Buffer
++		{
++			const Memory* mem = NULL;
++			VertexLayoutHandle layout = BGFX_INVALID_HANDLE;
++			uint16_t flags = 0;
++		};
++
++		struct Dynamic
++		{
++			bool live = false;
++			uint32_t size = 0;
++			uint16_t flags = 0;
++			// The contents, made at the first update
++			std::vector<uint8_t> bytes;
++		};
++
++		struct VertexLayoutKept
++		{
++			bool live = false;
++			VertexLayout layout;
++		};
++
++		struct Program
++		{
++			bool live = false;
++			ShaderHandle vsh = BGFX_INVALID_HANDLE;
++			ShaderHandle fsh = BGFX_INVALID_HANDLE;
++		};
++
++		// The texels of one mip of one side or layer, with the rectangle that updates changed
++		struct Slice
++		{
++			uint8_t side = 0;
++			uint8_t mip = 0;
++			uint16_t z = 0;
++			uint32_t width = 0;
++			uint32_t height = 0;
++			uint32_t texelBytes = 0;
++			uint32_t pitch = 0;
++			Rect dirty;
++			std::vector<uint8_t> bytes;
++		};
++
++		struct Update
++		{
++			uint8_t side = 0;
++			uint8_t mip = 0;
++			Rect rect;
++			uint16_t z = 0;
++			uint16_t depth = 0;
++			uint16_t pitch = 0;
++			const Memory* mem = NULL;
++		};
++
++		struct Texture
++		{
++			const Memory* mem = NULL;
++			uint64_t flags = 0;
++			uint8_t skip = 0;
++			bool resized = false;
++			uint16_t width = 0;
++			uint16_t height = 0;
++			uint8_t numMips = 0;
++			uint16_t numLayers = 0;
++			std::vector<Slice> slices;
++			std::vector<Update> updates;
++		};
++
++		struct FrameBuffer
++		{
++			bool live = false;
++			bool window = false;
++			uint8_t num = 0;
++			Attachment attachment[BGFX_CONFIG_MAX_FRAME_BUFFER_ATTACHMENTS];
++			SwapChain desc;
++		};
++
++		struct Uniform
++		{
++			bool live = false;
++			UniformType::Enum type = UniformType::Count;
++			uint16_t num = 0;
++			std::string name;
++		};
++
++		// Memory that only refers to the data of the application is copied, because the application can
++		// free the data after the release
++		static const Memory* own(const Memory* _mem)
++		{
++			if (!isMemoryRef(_mem) )
++			{
++				return _mem;
++			}
++
++			const Memory* owned = copy(_mem->data, _mem->size);
++			release(_mem);
++			return owned;
++		}
++
++		static bool covers(const Rect& _outer, const Rect& _inner)
++		{
++			return _outer.m_x <= _inner.m_x
++				&& _outer.m_y <= _inner.m_y
++				&& int32_t(_inner.m_x) + _inner.m_width  <= int32_t(_outer.m_x) + _outer.m_width
++				&& int32_t(_inner.m_y) + _inner.m_height <= int32_t(_outer.m_y) + _outer.m_height
++				;
++		}
++
++		static void releaseTextureMemory(const Memory* _mem)
++		{
++			if (sizeof(uint32_t) + sizeof(TextureCreate) <= _mem->size)
++			{
++				uint32_t magic;
++				bx::memCopy(&magic, _mem->data, sizeof(uint32_t) );
++				if (kChunkMagicTex == magic)
++				{
++					TextureCreate tc;
++					bx::memCopy(&tc, _mem->data + sizeof(uint32_t), sizeof(TextureCreate) );
++					if (NULL != tc.m_mem)
++					{
++						release(tc.m_mem);
++					}
++				}
++			}
++
++			release(_mem);
++		}
++
++		// Puts the texels of an update of an uncompressed texture into its slice. False when the texture or the
++		// update does not fit a slice.
++		bool copyIntoSlice(Texture& _texture, uint8_t _side, uint8_t _mip, const Rect& _rect, uint16_t _z, uint16_t _pitch, const Memory* _mem)
++		{
++			Slice* slice = NULL;
++			for (Slice& each : _texture.slices)
++			{
++				if (each.side == _side
++				&&  each.mip  == _mip
++				&&  each.z    == _z)
++				{
++					slice = &each;
++					break;
++				}
++			}
++
++			if (NULL == slice)
++			{
++				slice = makeSlice(_texture, _side, _mip, _z);
++				if (NULL == slice)
++				{
++					return false;
++				}
++			}
++
++			const uint32_t rowBytes = uint32_t(_rect.m_width) * slice->texelBytes;
++			const uint32_t srcPitch = UINT16_MAX == _pitch ? rowBytes : _pitch;
++			if (0 == _rect.m_width
++			||  0 == _rect.m_height
++			||  0 > _rect.m_x
++			||  0 > _rect.m_y
++			||  uint32_t(_rect.m_x) + _rect.m_width  > slice->width
++			||  uint32_t(_rect.m_y) + _rect.m_height > slice->height
++			||  srcPitch < rowBytes
++			||  uint64_t(_rect.m_height - 1) * srcPitch + rowBytes > _mem->size)
++			{
++				return false;
++			}
++
++			for (uint32_t yy = 0; yy < _rect.m_height; ++yy)
++			{
++				bx::memCopy(
++					  slice->bytes.data() + (_rect.m_y + yy) * slice->pitch + _rect.m_x * slice->texelBytes
++					, _mem->data + yy * srcPitch
++					, rowBytes
++					);
++			}
++
++			if (0 == slice->dirty.m_width)
++			{
++				slice->dirty = _rect;
++			}
++			else
++			{
++				const int32_t x0 = bx::min<int32_t>(slice->dirty.m_x, _rect.m_x);
++				const int32_t y0 = bx::min<int32_t>(slice->dirty.m_y, _rect.m_y);
++				const int32_t x1 = bx::max<int32_t>(slice->dirty.m_x + slice->dirty.m_width,  _rect.m_x + _rect.m_width);
++				const int32_t y1 = bx::max<int32_t>(slice->dirty.m_y + slice->dirty.m_height, _rect.m_y + _rect.m_height);
++				slice->dirty.set(int16_t(x0), int16_t(y0), uint16_t(x1 - x0), uint16_t(y1 - y0) );
++			}
++
++			return true;
++		}
++
++		// A slice of an uncompressed 2D, array or cube texture, with the texels of its create memory, or zero
++		Slice* makeSlice(Texture& _texture, uint8_t _side, uint8_t _mip, uint16_t _z)
++		{
++			bimg::ImageContainer container;
++			bx::Error err;
++			if (!bimg::imageParse(container, _texture.mem->data, _texture.mem->size, &err)
++			||  1 < container.m_depth
++			||  _mip >= container.m_numMips)
++			{
++				return NULL;
++			}
++
++			const bimg::ImageBlockInfo& blockInfo = bimg::getBlockInfo(container.m_format);
++			if (1 != blockInfo.blockWidth
++			||  1 != blockInfo.blockHeight
++			||  0 != blockInfo.bitsPerPixel % 8
++			||  0 == blockInfo.bitsPerPixel)
++			{
++				return NULL;
++			}
++
++			const uint16_t sides = container.m_cubeMap ? 6 : 1;
++			if (_side >= sides
++			||  _z >= container.m_numLayers)
++			{
++				return NULL;
++			}
++
++			Slice slice;
++			slice.side       = _side;
++			slice.mip        = _mip;
++			slice.z          = _z;
++			slice.width      = bx::max<uint32_t>(1, container.m_width  >> _mip);
++			slice.height     = bx::max<uint32_t>(1, container.m_height >> _mip);
++			slice.texelBytes = blockInfo.bitsPerPixel / 8;
++			slice.pitch      = slice.width * slice.texelBytes;
++			slice.dirty.clear();
++			slice.bytes.resize(size_t(slice.pitch) * slice.height, 0);
++
++			bimg::ImageMip mip;
++			if (NULL != container.m_data
++			||  UINT32_MAX != container.m_offset)
++			{
++				if (bimg::imageGetRawData(container, uint16_t(_z * sides + _side), _mip, _texture.mem->data, _texture.mem->size, mip)
++				&&  mip.m_size == slice.bytes.size() )
++				{
++					bx::memCopy(slice.bytes.data(), mip.m_data, mip.m_size);
++				}
++			}
++
++			m_keptBytes += slice.bytes.size();
++			_texture.slices.push_back(std::move(slice) );
++			return &_texture.slices.back();
++		}
++
++		void freeBuffer(Buffer& _buffer)
++		{
++			if (NULL != _buffer.mem)
++			{
++				m_keptBytes -= _buffer.mem->size;
++				release(_buffer.mem);
++				_buffer.mem = NULL;
++			}
++		}
++
++		void createDynamic(Dynamic& _buffer, uint32_t _size, uint16_t _flags)
++		{
++			freeDynamic(_buffer);
++			_buffer.live  = true;
++			_buffer.size  = _size;
++			_buffer.flags = _flags;
++		}
++
++		void updateDynamic(Dynamic& _buffer, uint32_t _offset, uint32_t _size, const Memory* _mem)
++		{
++			if (!_buffer.live
++			||  _offset >= _buffer.size)
++			{
++				return;
++			}
++
++			if (_buffer.bytes.empty() )
++			{
++				_buffer.bytes.resize(_buffer.size, 0);
++				m_keptBytes += _buffer.size;
++			}
++
++			const uint32_t size = bx::min(bx::min(_size, _mem->size), _buffer.size - _offset);
++			bx::memCopy(_buffer.bytes.data() + _offset, _mem->data, size);
++		}
++
++		void freeDynamic(Dynamic& _buffer)
++		{
++			if (!_buffer.bytes.empty() )
++			{
++				m_keptBytes -= _buffer.bytes.size();
++			}
++
++			_buffer.live = false;
++			std::vector<uint8_t>().swap(_buffer.bytes);
++		}
++
++		void freeChanges(Texture& _texture)
++		{
++			for (const Slice& slice : _texture.slices)
++			{
++				m_keptBytes -= slice.bytes.size();
++			}
++
++			for (const Update& update : _texture.updates)
++			{
++				m_keptBytes -= update.mem->size;
++				release(update.mem);
++			}
++
++			std::vector<Slice>().swap(_texture.slices);
++			std::vector<Update>().swap(_texture.updates);
++		}
++
++		void freeTexture(Texture& _texture)
++		{
++			if (NULL == _texture.mem)
++			{
++				return;
++			}
++
++			freeChanges(_texture);
++			m_keptBytes -= _texture.mem->size;
++			if (sizeof(uint32_t) + sizeof(TextureCreate) <= _texture.mem->size)
++			{
++				uint32_t magic;
++				bx::memCopy(&magic, _texture.mem->data, sizeof(uint32_t) );
++				if (kChunkMagicTex == magic)
++				{
++					TextureCreate tc;
++					bx::memCopy(&tc, _texture.mem->data + sizeof(uint32_t), sizeof(TextureCreate) );
++					if (NULL != tc.m_mem)
++					{
++						m_keptBytes -= tc.m_mem->size;
++					}
++				}
++			}
++
++			releaseTextureMemory(_texture.mem);
++			_texture = Texture();
++		}
++
++		std::vector<Buffer>           m_indexBuffers;
++		std::vector<VertexLayoutKept> m_vertexLayouts;
++		std::vector<Buffer>           m_vertexBuffers;
++		std::vector<Dynamic>          m_dynamicIndexBuffers;
++		std::vector<Dynamic>          m_dynamicVertexBuffers;
++		std::vector<Buffer>           m_shaders;
++		std::vector<Program>          m_programs;
++		std::vector<Texture>          m_textures;
++		std::vector<FrameBuffer>      m_frameBuffers;
++		std::vector<Uniform>          m_uniforms;
++		uint64_t                      m_keptBytes = 0;
++	};
++
++} // namespace bgfx
++
++#endif // BGFX_DEVICE_RESTORE_H_HEADER_GUARD

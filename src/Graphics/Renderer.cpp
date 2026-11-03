@@ -358,6 +358,13 @@ struct BgfxCallback: public bgfx::CallbackI
 	void fatal(const char* filePath, uint16_t line, bgfx::Fatal::Enum code, const char* str) override
 	{
 		const auto* codeStr = k_CodeLookup.at(code).data();
+		// After a lost device, bgfx makes the device again with all its resources at the start of the next frame
+		if (graphics::device_restore::ContinuesAfter(code))
+		{
+			SPDLOG_LOGGER_ERROR(spdlog::get("graphics"), "bgfx: {}:{}: {}: {}. The renderer makes the device again.", filePath,
+			                    line, codeStr, str);
+			return;
+		}
 		SPDLOG_LOGGER_CRITICAL(spdlog::get("graphics"), "bgfx: {}:{}: FATAL ({}): {}", filePath, line, codeStr, str);
 
 #if SPDLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_CRITICAL
@@ -4975,8 +4982,12 @@ void Renderer::DrawSkyDomePass(const DrawSceneDesc& drawDesc) const
 	const bool lowResolution = Locator::config::value().detail.lowResTextures;
 	// A warm-up makes the target and draws a band of no rows when the dome has none this frame: it changes no texel. The
 	// low resolution dome is made once and stays.
-	const bool lowDomeMade = lowResolution && _skyDomeFrameBuffer && _skyDomeRows == sky_dome::k_LowRows;
-	if (dome == nullptr || (!lowResolution && dome->frameRows.Get().empty() && !_warmingUp) || (lowDomeMade && !_warmingUp))
+	// After a restore of the device the dome's picture is gone, and all of the dome is drawn again.
+	const bool lowDomeMade = lowResolution && _skyDomeFrameBuffer && _skyDomeRows == sky_dome::k_LowRows && !_skyDomeLost;
+	const auto frameRows = dome == nullptr ? sky_dome::FrameRows {}
+	                       : _skyDomeLost  ? sky_dome::WholeDomeAt(dome->follow)
+	                                       : dome->frameRows;
+	if (dome == nullptr || (!lowResolution && frameRows.Get().empty() && !_warmingUp) || (lowDomeMade && !_warmingUp))
 	{
 		return;
 	}
@@ -4985,6 +4996,7 @@ void Renderer::DrawSkyDomePass(const DrawSceneDesc& drawDesc) const
 	{
 		return;
 	}
+	_skyDomeLost = false;
 	constexpr uint16_t k_Alignments = 3;
 	const uint16_t domeRows = lowResolution ? sky_dome::k_LowRows : sky_dome::k_Rows;
 	const glm::u16vec2 size {domeRows, static_cast<uint16_t>(domeRows * k_Alignments)};
@@ -5011,12 +5023,12 @@ void Renderer::DrawSkyDomePass(const DrawSceneDesc& drawDesc) const
 		}
 		return;
 	}
-	if (dome->frameRows.Get().empty())
+	if (frameRows.Get().empty())
 	{
 		program.SetTextureSampler("s_diffuse", 0, *pictures);
 		SubmitLandQuad(viewId, program, {0.0f, 0.0f}, {rowsAcross, 0.0f}, {0.0f, 0.0f}, {1.0f, 0.0f}, BGFX_STATE_WRITE_RGB);
 	}
-	for (const auto& rows : dome->frameRows.Get())
+	for (const auto& rows : frameRows.Get())
 	{
 		const auto times = sky_dome::TimePair(rows.skyType);
 		const auto first = static_cast<float>(rows.first);
@@ -8552,6 +8564,22 @@ uint32_t Renderer::GetPipelinesMade() const noexcept
 	return _bgfxCallback->pipelinesMade.load();
 }
 
+void Renderer::RequestDeviceRestore() noexcept
+{
+	MainThreadQueue::CheckDirect(MainThreadApi::Renderer, "Renderer::RequestDeviceRestore");
+	bgfx::requestDeviceRestore();
+}
+
+uint32_t Renderer::GetDeviceRestores() const noexcept
+{
+	return bgfx::getDeviceRestoreCount();
+}
+
+uint64_t Renderer::GetDeviceRestoreBytes() const noexcept
+{
+	return bgfx::getDeviceRestoreKeptBytes();
+}
+
 uint32_t Renderer::GetDrawsOfLastFrame() const noexcept
 {
 	return bgfx::getStats()->numDraw;
@@ -8604,6 +8632,15 @@ void Renderer::Frame() noexcept
 	}
 	_shaderManager->FrameEnded();
 	_offscreenShots->FrameEnded(frame, _bgfxCallback->failures, _bgfxCallback->pictures);
+	// After a restore of the device, the render targets that keep their pictures from frame to frame are empty. The
+	// next frames draw the sky's dome and the temple's map again.
+	if (_deviceRestores.Saw(bgfx::getDeviceRestoreCount()))
+	{
+		SPDLOG_LOGGER_INFO(spdlog::get("graphics"), "The renderer made the graphics device again ({} restores, {} kept bytes)",
+		                   bgfx::getDeviceRestoreCount(), bgfx::getDeviceRestoreKeptBytes());
+		_skyDomeLost = true;
+		_templeMapVisit.reset();
+	}
 }
 
 void Renderer::RequestScreenshot(const std::filesystem::path& filepath) noexcept
