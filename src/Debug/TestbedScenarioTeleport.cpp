@@ -77,6 +77,35 @@ void testbed_scenarios::AddTeleportScenarios(std::vector<Scenario>& all)
 	                  .byHand = true}},
 	});
 
+	// A fish farm stands fixed over the map's cells, so no stone goes within six metres of it
+	constexpr glm::vec2 k_FishFarm {5.0f, 145.0f};
+	constexpr glm::vec2 k_ByTheFarm {5.0f, 149.0f};
+	constexpr glm::vec2 k_ClearOfTheFarm {5.0f, 155.0f};
+	all.push_back({
+	    .id = "miracles.teleport_kept_off_a_fish_farm",
+	    .name = "A teleport stone kept off a fish farm",
+	    .facet = Facet::Miracles,
+	    .description = "A fish farm by the town. The hand casts a teleport miracle four metres from the farm, then a second "
+	                   "one ten metres from the farm.",
+	    .expected = "The first cast makes no stone and no pool, because the farm is nearer than six metres. The second "
+	                "cast makes a stone with its turning pool of land.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {k_FishFarm, k_ClearOfTheFarm}, .distance = 0.8f},
+	    .objects = {{.type = FishFarmInfo::Normal, .offset = k_FishFarm}},
+	    .miracles = {{.type = MagicType::Teleport,
+	                  .point = k_ByTheFarm,
+	                  .handOffset = k_ByTheFarm,
+	                  .handHeight = 12.0f,
+	                  .delaySeconds = 1.0f,
+	                  .byHand = true},
+	                 {.type = MagicType::Teleport,
+	                  .point = k_ClearOfTheFarm,
+	                  .handOffset = k_ClearOfTheFarm,
+	                  .handHeight = 12.0f,
+	                  .delaySeconds = 4.0f,
+	                  .byHand = true}},
+	});
+
 	all.push_back({
 	    .id = "miracles.teleport_pools_near_and_far",
 	    .name = "Teleport stones near and far, in the map's cells",
