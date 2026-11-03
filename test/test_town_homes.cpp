@@ -18,6 +18,7 @@
 #include <vector>
 
 #include <glm/mat3x3.hpp>
+#include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 #include <gtest/gtest.h>
 
@@ -576,4 +577,82 @@ TEST_F(TwoTownsTest, AMotherLeavingHerTownAliveIsToldFirstWithTheTownSheLeaves)
 	town_homes::MoveInAnyway(registry, homes, hut, mother);
 	EXPECT_EQ(told, (std::vector<std::pair<entt::entity, entt::entity>> {{mother, town}}));
 	EXPECT_EQ(registry.Get<Villager>(mother).town, other);
+}
+
+namespace
+{
+/// The door cell of a building in the tests: the cell of its middle, ten metres to a cell
+glm::ivec2 DoorCellOf(const Registry& registry, entt::entity abode)
+{
+	const auto& position = registry.Get<const Transform>(abode).position;
+	return {static_cast<int>(position.x / 10.0f), static_cast<int>(position.z / 10.0f)};
+}
+} // namespace
+
+TEST_F(TwoTownsTest, AScriptVillagerFindsTheFirstDoorInTheCellOverTheTownsInTheirOrder)
+{
+	const auto doorCell = [this](entt::entity abode) { return DoorCellOf(registry, abode); };
+	const auto elsewhere = MakeAbode(glm::vec3(100.0f, 0.0f, 100.0f), k_Hut);
+	const auto older = MakeOtherAbode(glm::vec3(51.0f, 0.0f, 52.0f), k_Hut);
+	const auto newer = MakeOtherAbode(glm::vec3(58.0f, 0.0f, 59.0f), k_Hut);
+	const std::array towns {town, other};
+
+	// The newer of two buildings in the same cell comes first in its town
+	const auto home = town_homes::FindScriptHome(registry, Rooms(), towns, {5, 5}, doorCell);
+	EXPECT_EQ(home.abode, newer);
+	EXPECT_EQ(home.town, other);
+	EXPECT_NE(home.abode, older);
+	// The town of the first door wins over a later town with a door in the same cell
+	const auto first = MakeAbode(glm::vec3(55.0f, 0.0f, 55.0f), k_Hut);
+	EXPECT_EQ(town_homes::FindScriptHome(registry, Rooms(), towns, {5, 5}, doorCell).abode, first);
+	EXPECT_EQ(town_homes::FindScriptHome(registry, Rooms(), towns, {10, 10}, doorCell).abode, elsewhere);
+	// No door in the cell: no home and no town
+	const auto none = town_homes::FindScriptHome(registry, Rooms(), towns, {1, 1}, doorCell);
+	EXPECT_EQ(none.abode, entt::entity {entt::null});
+	EXPECT_EQ(none.town, entt::entity {entt::null});
+}
+
+TEST_F(TownHomesTest, AScriptVillagerMovesIntoItsBuildingUntilItsPeopleEqualItsPlacesForAdults)
+{
+	const auto doorCell = [this](entt::entity abode) { return DoorCellOf(registry, abode); };
+	const glm::vec3 here(5.0f, 0.0f, 5.0f);
+	// Two places for adults: a child counts as one of its people too
+	const auto home = MakeAbode(here, {.maxAdults = 2, .maxChildren = 2, .functional = true, .built = true});
+	const auto other = MakeAbode(glm::vec3(300.0f, 0.0f, 300.0f), k_Hut);
+	const std::array towns {town};
+	const auto child = MakeVillager(here, Villager::Sex::MALE, Villager::LifeStage::Child);
+	const auto wife = MakeVillager(here, Villager::Sex::FEMALE);
+	const auto husband = MakeVillager(here, Villager::Sex::MALE);
+
+	auto found = town_homes::FindScriptHome(registry, Rooms(), towns, {0, 0}, doorCell);
+	EXPECT_EQ(town_homes::SettleScriptVillager(registry, Rooms(), found, child), town);
+	found = town_homes::FindScriptHome(registry, Rooms(), towns, {0, 0}, doorCell);
+	EXPECT_EQ(town_homes::SettleScriptVillager(registry, Rooms(), found, wife), town);
+	EXPECT_EQ(registry.Get<Abode>(home).inhabitants, (std::vector<entt::entity> {wife, child}));
+
+	// Full: the building gives only its town, and the villager moves into the best building there
+	found = town_homes::FindScriptHome(registry, Rooms(), towns, {0, 0}, doorCell);
+	EXPECT_EQ(found.abode, entt::entity {entt::null});
+	EXPECT_EQ(found.town, town);
+	EXPECT_EQ(town_homes::SettleScriptVillager(registry, Rooms(), found, husband), town);
+	EXPECT_EQ(registry.Get<Villager>(husband).abode, other);
+	EXPECT_TRUE(Homeless().empty());
+}
+
+TEST_F(TownHomesTest, AScriptVillagerWithAFullBuildingAndNoRoomInTheTownIsHomelessAndOneWithNoDoorHasNoTown)
+{
+	const auto doorCell = [this](entt::entity abode) { return DoorCellOf(registry, abode); };
+	const glm::vec3 here(5.0f, 0.0f, 5.0f);
+	MakeAbode(here, {.maxAdults = 0, .functional = true, .built = true});
+	const std::array towns {town};
+	const auto villager = MakeVillager(here, Villager::Sex::FEMALE);
+	const auto found = town_homes::FindScriptHome(registry, Rooms(), towns, {0, 0}, doorCell);
+	EXPECT_EQ(town_homes::SettleScriptVillager(registry, Rooms(), found, villager), town);
+	EXPECT_EQ(Homeless(), std::vector<entt::entity> {villager});
+
+	const auto stray = MakeVillager(here, Villager::Sex::MALE);
+	const auto nowhere = town_homes::FindScriptHome(registry, Rooms(), towns, {9, 9}, doorCell);
+	EXPECT_EQ(town_homes::SettleScriptVillager(registry, Rooms(), nowhere, stray), entt::entity {entt::null});
+	EXPECT_EQ(registry.Get<Villager>(stray).abode, entt::entity {entt::null});
+	EXPECT_EQ(Homeless().size(), 1u);
 }
