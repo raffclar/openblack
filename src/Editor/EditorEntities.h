@@ -49,6 +49,9 @@ struct NameTables
 	std::vector<std::string> mobileStatics;
 	/// By magic type, for the dispensers and bubbles
 	std::vector<std::string> miracles;
+	std::vector<std::string> scriptMarkers;
+	/// By the kind of the scroll or sign
+	std::vector<std::string> highlights;
 
 	/// The tables' names, or none before the game's tables are loaded
 	[[nodiscard]] static std::optional<NameTables> Load();

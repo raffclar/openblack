@@ -2363,3 +2363,4 @@ openblack_setup_and_add_test(
   test_script_natives_rows_3 test_script_natives_rows_3.cpp
 )
 target_link_libraries(test_script_natives_rows_3 PRIVATE ScriptLibrary)
+openblack_setup_and_add_test(test_editor_land_tools test_editor_land_tools.cpp)

@@ -26,6 +26,7 @@
 #include "ECS/Archetypes/FeatureArchetype.h"
 #include "ECS/Archetypes/MobileObjectArchetype.h"
 #include "ECS/Archetypes/MobileStaticArchetype.h"
+#include "ECS/Archetypes/ScriptMarkerArchetype.h"
 #include "ECS/Archetypes/TownArchetype.h"
 #include "ECS/Archetypes/TreeArchetype.h"
 #include "ECS/Archetypes/VillagerArchetype.h"
@@ -40,6 +41,8 @@
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/OneOffSpellSeed.h"
 #include "ECS/Components/Pot.h"
+#include "ECS/Components/ScriptControl.h"
+#include "ECS/Components/ScriptHighlight.h"
 #include "ECS/Components/SpellDispenser.h"
 #include "ECS/Components/StoragePit.h"
 #include "ECS/Components/Town.h"
@@ -53,6 +56,7 @@
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
+#include "ECS/Systems/ScriptHighlightSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
 #include "ECS/WalkerPlacement.h"
 #include "ECS/WorldObjects.h"
@@ -186,6 +190,9 @@ std::optional<NameTables> NameTables::Load()
 	tables.mobileObjects = NamesFrom(info.mobileObject);
 	tables.mobileStatics = NamesFrom(info.mobileStatic);
 	tables.miracles = MiracleNames(info);
+	tables.scriptMarkers = {"Script Marker"};
+	// In the order of the highlights' info table
+	tables.highlights = {"Scroll", "Did You Know Sign", "Silver Scroll", "Gold Scroll"};
 	return tables;
 }
 
@@ -208,6 +215,10 @@ const std::vector<std::string>& NameTables::Of(PlaceKind kind) const
 	case PlaceKind::Dispenser:
 	case PlaceKind::MiracleBubble:
 		return miracles;
+	case PlaceKind::ScriptMarker:
+		return scriptMarkers;
+	case PlaceKind::Highlight:
+		return highlights;
 	case PlaceKind::MobileStatic:
 	default:
 		return mobileStatics;
@@ -335,6 +346,15 @@ std::optional<PlaceItem> ItemOf(const ecs::Registry& registry, entt::entity enti
 	{
 		return PlaceItem {.kind = PlaceKind::MobileObject, .type = static_cast<int32_t>(object->type)};
 	}
+	if (registry.AllOf<ScriptMarker>(entity))
+	{
+		return PlaceItem {.kind = PlaceKind::ScriptMarker, .type = 0};
+	}
+	if (const auto* highlight = registry.TryGet<ScriptHighlight>(entity))
+	{
+		return PlaceItem {
+		    .kind = PlaceKind::Highlight, .type = static_cast<int32_t>(highlight->kind), .challenge = highlight->scriptId};
+	}
 	return std::nullopt;
 }
 
@@ -422,6 +442,10 @@ std::optional<uint32_t> MeshOf(const PlaceItem& item)
 	case PlaceKind::MiracleBubble:
 		// Made by the magic system; no model to show while placing
 		return std::nullopt;
+	case PlaceKind::ScriptMarker:
+	case PlaceKind::Highlight:
+		// A marker has no model; a scroll's model comes from the highlights' system
+		return std::nullopt;
 	}
 	return std::nullopt;
 }
@@ -505,6 +529,12 @@ entt::entity Place(const PlaceItem& item, glm::vec3 position, float yawRadians)
 		return Locator::magicSystem::has_value()
 		           ? Locator::magicSystem::value().CreateOneOffSeedFor(position + glm::vec3(0.0f, k_BubbleHeight, 0.0f),
 		                                                               static_cast<MagicType>(item.type))
+		           : entt::null;
+	case PlaceKind::ScriptMarker:
+		return ScriptMarkerArchetype::Create(position);
+	case PlaceKind::Highlight:
+		return Locator::scriptHighlightSystem::has_value()
+		           ? Locator::scriptHighlightSystem::value().Create(static_cast<uint32_t>(item.type), position, item.challenge)
 		           : entt::null;
 	}
 	return entt::null;

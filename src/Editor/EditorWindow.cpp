@@ -29,6 +29,7 @@
 #include "ECS/Archetypes/CreatureArchetype.h"
 #include "ECS/Components/Hand.h"
 #include "ECS/Components/Mesh.h"
+#include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/EditorSystemInterface.h"
@@ -100,6 +101,7 @@ void EditorWindow::Close() noexcept
 	_drag = Drag::None;
 	_pickAt.reset();
 	_placeAt.reset();
+	_toolAt.reset();
 	if (auto* system = System())
 	{
 		system->SetOpen(false);
@@ -235,6 +237,21 @@ std::optional<entt::entity> EditorWindow::Pick(glm::vec2 screen) const noexcept
 			    nearest = entity;
 		    }
 	    });
+	// The scripts' markers have no model: the editor picks them by a small box where they stand
+	registry.Each<const ecs::components::Transform, const ecs::components::ScriptMarker>(
+	    // A marker keeps no data, so the walk does not give it
+	    [&](entt::entity entity, const ecs::components::Transform&) {
+		    const auto bounds = WorldBoundsOf(registry, entity);
+		    if (!bounds.has_value() || bounds->Contains(origin))
+		    {
+			    return;
+		    }
+		    if (const auto along = RayBox(origin, direction, *bounds); along.has_value() && *along < best)
+		    {
+			    best = *along;
+			    nearest = entity;
+		    }
+	    });
 	return nearest;
 }
 
@@ -287,6 +304,15 @@ void EditorWindow::Update() noexcept
 	{
 		PickAt(*context, *_pickAt);
 		_pickAt.reset();
+	}
+	if (_toolAt.has_value())
+	{
+		_landTools.PressAt(*context, LandAt(*_toolAt), Pick(*_toolAt));
+		_toolAt.reset();
+	}
+	if (_drag == Drag::Land)
+	{
+		_landTools.DragTo(LandAt(MouseOnScreen()));
 	}
 	if (_drag == Drag::Box && _boxTo.has_value())
 	{
@@ -782,6 +808,11 @@ void EditorWindow::ProcessEventOpen(const SDL_Event& event) noexcept
 			{
 				_placeAt = screen;
 			}
+			else if (system->GetTool() == Tool::Land || system->GetTool() == Tool::Paths)
+			{
+				_toolAt = screen;
+				_drag = system->GetTool() == Tool::Land ? Drag::Land : Drag::None;
+			}
 			else
 			{
 				_pickAt = screen;
@@ -995,17 +1026,25 @@ void EditorWindow::DrawToolbar(EditorContext& context) noexcept
 	}
 	separator();
 
-	constexpr std::array<std::pair<const char*, Tool>, 4> k_Tools {{
+	constexpr std::array<std::pair<const char*, Tool>, 6> k_Tools {{
 	    {"Select (W)", Tool::Select},
 	    {"Move (E)", Tool::Move},
 	    {"Rotate (Y)", Tool::Rotate},
 	    {"Hand (D)", Tool::GameHand},
+	    {"Land", Tool::Land},
+	    {"Paths", Tool::Paths},
 	}};
 	for (const auto& [label, tool] : k_Tools)
 	{
 		if (ImGui::RadioButton(label, system.GetTool() == tool))
 		{
 			system.SetTool(tool);
+			// The land tools are set up in their tab
+			if (tool == Tool::Land || tool == Tool::Paths)
+			{
+				_showTab = BottomTab::LandTools;
+				_showBottom = true;
+			}
 		}
 		ImGui::SameLine();
 	}
@@ -1121,6 +1160,11 @@ void EditorWindow::DrawBottom(EditorContext& context) noexcept
 		_landScript.Draw();
 		ImGui::EndTabItem();
 	}
+	if (ImGui::BeginTabItem("Land tools", nullptr, flags(BottomTab::LandTools)))
+	{
+		_landTools.Draw(context);
+		ImGui::EndTabItem();
+	}
 	const auto errors = _log.Errors();
 	const auto logLabel = errors > 0 ? fmt::format("Log ({} errors)###Log", errors) : std::string("Log###Log");
 	if (ImGui::BeginTabItem(logLabel.c_str(), nullptr, flags(BottomTab::Log)))
@@ -1187,6 +1231,7 @@ void EditorWindow::DrawBox(const AxisAlignedBoundingBox& box, uint32_t colour, f
 
 void EditorWindow::DrawOverlays(EditorContext& context) noexcept
 {
+	_landTools.DrawOverlays(context, LandAt(MouseOnScreen()));
 	const auto& selection = context.system.GetSelection();
 	for (const auto entity : selection.All())
 	{

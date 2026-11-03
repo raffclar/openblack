@@ -25,6 +25,7 @@
 #include "EditorEntities.h"
 #include "Panels/InspectorPanel.h"
 #include "Panels/LandScriptPanel.h"
+#include "Panels/LandToolsPanel.h"
 #include "Panels/LogPanel.h"
 #include "Panels/OutlinerPanel.h"
 #include "Panels/PalettePanel.h"
@@ -70,6 +71,8 @@ private:
 		Camera,
 		/// A rectangle on the screen that picks the things in it
 		Box,
+		/// The land brush, which strokes the land as the mouse moves
+		Land,
 	};
 	enum class BottomTab : uint8_t
 	{
@@ -77,6 +80,7 @@ private:
 		Scenarios,
 		Scripts,
 		LandScript,
+		LandTools,
 		Log,
 	};
 
@@ -114,6 +118,7 @@ private:
 	PalettePanel _palette;
 	ScriptsPanel _scripts;
 	LandScriptPanel _landScript;
+	LandToolsPanel _landTools;
 	LogPanel _log;
 
 	bool _showOutliner {true};
@@ -131,6 +136,8 @@ private:
 
 	/// Clicks in the world to act on at the next update, as points of the screen from 0 to 1
 	std::optional<glm::vec2> _pickAt;
+	/// A click in the world for the land or paths tool, to act on at the next update
+	std::optional<glm::vec2> _toolAt;
 	/// The keys held at the click: Ctrl picks or lets go of one more thing, Shift picks one more thing
 	bool _pickToggle {false};
 	bool _pickAdd {false};

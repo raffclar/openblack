@@ -51,6 +51,8 @@ float SpacingOf(PlaceKind kind)
 		return 6.0f;
 	case PlaceKind::Dispenser:
 	case PlaceKind::MiracleBubble:
+	case PlaceKind::ScriptMarker:
+	case PlaceKind::Highlight:
 		return 12.0f;
 	case PlaceKind::MobileStatic:
 	default:
@@ -184,6 +186,11 @@ void PalettePanel::Draw(EditorContext& context) noexcept
 		DrawMiracles(context);
 		ImGui::EndTabItem();
 	}
+	if (ImGui::BeginTabItem("Script"))
+	{
+		DrawScriptThings(context);
+		ImGui::EndTabItem();
+	}
 	ImGui::EndTabBar();
 }
 
@@ -228,6 +235,32 @@ void PalettePanel::DrawMiracles(EditorContext& context) noexcept
 	DrawList(context, _miracleKind == 0 ? PlaceKind::Dispenser : PlaceKind::MiracleBubble, types);
 }
 
+void PalettePanel::DrawScriptThings(EditorContext& context) noexcept
+{
+	// The scripts find a marker by its place, and a scroll starts its challenge by the challenge's number
+	ImGui::RadioButton("Markers", &_scriptKind, 0);
+	ImGui::SameLine();
+	ImGui::RadioButton("Scrolls and signs", &_scriptKind, 1);
+	if (_scriptKind == 0)
+	{
+		DrawList(context, PlaceKind::ScriptMarker, {0});
+		return;
+	}
+	ImGui::SameLine();
+	ImGui::SetNextItemWidth(ImGui::GetFontSize() * 7.0f);
+	if (ImGui::InputInt("Challenge", &_challenge))
+	{
+		_challenge = std::max(_challenge, 0);
+	}
+	ImGui::SetItemTooltip("The challenge that a silver or gold scroll starts, or the text of a tip sign");
+	// The challenge can change while placing
+	if (context.placement.item.has_value() && context.placement.item->kind == PlaceKind::Highlight)
+	{
+		context.placement.item->challenge = static_cast<uint32_t>(_challenge);
+	}
+	DrawList(context, PlaceKind::Highlight, {0, 1, 2, 3});
+}
+
 void PalettePanel::DrawList(EditorContext& context, PlaceKind kind, const std::vector<int32_t>& types) noexcept
 {
 	ImGui::SetNextItemWidth(ImGui::GetFontSize() * 14.0f);
@@ -264,7 +297,8 @@ void PalettePanel::DrawList(EditorContext& context, PlaceKind kind, const std::v
 	{
 		ImGui::TableNextColumn();
 		ImGui::PushID(type);
-		const PlaceItem item {.kind = kind, .type = type};
+		const PlaceItem item {
+		    .kind = kind, .type = type, .challenge = kind == PlaceKind::Highlight ? static_cast<uint32_t>(_challenge) : 0u};
 		const bool picked = context.placement.item == item;
 		if (ImGui::Selectable(std::string(context.names.NameOf(kind, type)).c_str(), picked))
 		{
@@ -298,7 +332,9 @@ void PalettePanel::LayOut(EditorContext& context, PlaceKind kind, const std::vec
 	for (size_t i = 0; i < count; ++i)
 	{
 		const glm::vec2 point {centre.x + points.at(i).x, centre.z + points.at(i).y};
-		const PlaceItem item {.kind = kind, .type = types.at(i)};
+		const PlaceItem item {.kind = kind,
+		                      .type = types.at(i),
+		                      .challenge = kind == PlaceKind::Highlight ? static_cast<uint32_t>(_challenge) : 0u};
 		const auto entity = kind == PlaceKind::Creature ? context.spawner.SpawnAt({point.x, LandHeight(point), point.y}, 0.0f)
 		                                                : Place(item, {point.x, LandHeight(point), point.y}, 0.0f);
 		placed += entity != entt::null ? 1 : 0;
