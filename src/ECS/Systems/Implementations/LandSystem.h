@@ -41,7 +41,12 @@ public:
 	bool LoadSavedLand(const std::filesystem::path& landPath, const std::filesystem::path& landscape,
 	                   const std::function<bool()>& restore, SavedLandUse use) override;
 	void LoadLandscape(const std::filesystem::path& path) override;
-	void SetStartCameraPlace(glm::ivec2 place) override { _startCameraPlace = place; }
+	void SetStartCameraPlace(glm::vec2 focus, glm::ivec2 place) override
+	{
+		_startCameraFocus = focus;
+		_startCameraPlace = place;
+	}
+	void PutCameraAtStartPlace() override;
 	void ShowLandMessage(const land_message::Message& message) override { View().ShowLandMessage(message); }
 
 	[[nodiscard]] bool IsPlaygroundLand(const std::filesystem::path& path) const override;
@@ -96,7 +101,9 @@ private:
 	std::filesystem::path _landscapePath;
 	/// The landscape of the land of a network game whose script runs now, empty for any other land
 	std::vector<uint8_t> _mapLandscape;
-	/// The start place of the camera that the map script of the land gave, in map units
+	/// The start place of the camera that the map script of the land gave, in metres along the two map axes
+	std::optional<glm::vec2> _startCameraFocus;
+	/// The same start place in map units
 	std::optional<glm::ivec2> _startCameraPlace;
 	std::optional<new_game_choice::NewGameStart> _newGameStart;
 	/// The humans of a land of a network game come from the network session

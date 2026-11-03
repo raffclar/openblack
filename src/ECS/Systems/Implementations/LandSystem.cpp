@@ -236,6 +236,7 @@ bool LandSystem::LoadMap(const std::filesystem::path& path, loading::LoadingCloc
 
 	PrepareNewLand(change);
 	// The script of the land gives the start place of the camera again, if it gives one
+	_startCameraFocus.reset();
 	_startCameraPlace.reset();
 	timer.Step("reset");
 	View().ShowLoadingFrame();
@@ -262,6 +263,15 @@ bool LandSystem::LoadMap(const std::filesystem::path& path, loading::LoadingCloc
 	_mapLandscape.clear();
 
 	timer.Step("map script");
+	// A script that loads no landscape leaves no land to lay out
+	if (!Locator::terrainSystem::value().IsLoaded())
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The map script {} loads no landscape", path.generic_string());
+		View().EndLoadingScreen();
+		return false;
+	}
+	// The camera goes to the start place of the script when the whole script has run, on the land that it loaded
+	PutCameraAtStartPlace();
 	// Every land of a network game fills its slots with no human when the land is laid out. Without a network session,
 	// only a land made for network play does.
 	const bool fillsSlots = _humansFromSession || _allComputerGods || online_map_land::IsOnlineMap(path.generic_string());
@@ -286,6 +296,17 @@ bool LandSystem::LoadMap(const std::filesystem::path& path, loading::LoadingCloc
 	timer.Step("start");
 	View().EndLoadingScreen();
 	return true;
+}
+
+void LandSystem::PutCameraAtStartPlace()
+{
+	if (!_startCameraFocus.has_value() || !Locator::camera::has_value() || !Locator::terrainSystem::value().IsLoaded())
+	{
+		return;
+	}
+	const auto focus =
+	    start_camera::FocusOnLand(*_startCameraFocus, Locator::terrainSystem::value().GetHeightAt(*_startCameraFocus));
+	Locator::camera::value().SetFocus(focus).SetOrigin(start_camera::OriginOver(focus));
 }
 
 bool LandSystem::IsPlaygroundLand(const std::filesystem::path& path) const

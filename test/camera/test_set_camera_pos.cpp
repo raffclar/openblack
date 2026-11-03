@@ -11,6 +11,7 @@
 #include <Camera/Camera.h>
 #include <gtest/gtest.h>
 
+#include "ECS/Systems/LandSystemInterface.h"
 #include "Game.h"
 #include "LHScriptX/Script.h"
 #include "Locator.h"
@@ -54,6 +55,8 @@ public:
 		         "CREATE_CITADEL(\"%.02f,%.02f\", 0, \"PLAYER_ONE\", 0, 1000)\n",
 		         cameraPos.x, cameraPos.y, citadelPos.x, citadelPos.y);
 		LoadTestScene(script.data());
+		// A land load puts the camera at the script's place when the whole script has run
+		openblack::Locator::landSystem::value().PutCameraAtStartPlace();
 	}
 
 	void ExpectCameraPos(glm::vec3 expectedPos)

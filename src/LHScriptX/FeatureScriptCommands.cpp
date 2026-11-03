@@ -26,7 +26,6 @@
 #include "3D/MapCoords.h"
 #include "Animals/GrazerRules.h"
 #include "Animals/HunterRules.h"
-#include "Camera/Camera.h"
 #include "Camera/StartCamera.h"
 #include "Camera/ZoomToPlaces.h"
 #include "Common/StringUtils.h"
@@ -896,10 +895,10 @@ void FeatureScriptCommands::CreateArea([[maybe_unused]] glm::vec3 position, floa
 
 void FeatureScriptCommands::StartCameraPos(glm::vec3 focus)
 {
-	auto& camera = Locator::camera::value();
-	camera.SetFocus(focus).SetOrigin(start_camera::OriginOver(focus));
-	// The land keeps the place, because a game that starts at the origin of the map starts at the player's temple
-	Locator::landSystem::value().SetStartCameraPlace({zoom_to::MapCoordOf(focus.x), zoom_to::MapCoordOf(focus.z)});
+	// The line only keeps the place, so it can come before the line that loads the landscape. The camera goes there when
+	// the whole script has run. A game that starts at the origin of the map starts at the player's temple.
+	Locator::landSystem::value().SetStartCameraPlace({focus.x, focus.z},
+	                                                 {zoom_to::MapCoordOf(focus.x), zoom_to::MapCoordOf(focus.z)});
 }
 
 void FeatureScriptCommands::FlyByFile([[maybe_unused]] const std::string& path)
