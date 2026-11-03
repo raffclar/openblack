@@ -35,7 +35,7 @@ void VertexBuffer::Bind(bgfx::Encoder& encoder) const
 	{
 		return;
 	}
-	if (_dynamic)
+	if (_shared)
 	{
 		encoder.setVertexBuffer(0, toBgfx(_dynamicHandle), 0, _vertexCount, toBgfx(_layoutHandle));
 	}
@@ -52,7 +52,7 @@ void VertexBuffer::Bind(uint32_t firstVertex, uint32_t count) const
 	{
 		return;
 	}
-	if (_dynamic)
+	if (_shared)
 	{
 		bgfx::setVertexBuffer(0, toBgfx(_dynamicHandle), firstVertex, count, toBgfx(_layoutHandle));
 	}
@@ -74,7 +74,7 @@ void VertexBuffer::BindStream(bgfx::Encoder& encoder, uint8_t stream, VertexLayo
 	{
 		return;
 	}
-	if (_dynamic)
+	if (_shared)
 	{
 		encoder.setVertexBuffer(stream, toBgfx(_dynamicHandle), 0, _vertexCount, toBgfx(layout));
 	}

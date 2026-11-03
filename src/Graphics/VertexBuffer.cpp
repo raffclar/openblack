@@ -23,7 +23,7 @@
 
 using namespace openblack::graphics;
 
-VertexBuffer::VertexBuffer(std::string name, const void* mem, VertexDecl decl, bool dynamic) noexcept
+VertexBuffer::VertexBuffer(std::string name, const void* mem, VertexDecl decl, bool dynamic, Storage storage) noexcept
     : _name(std::move(name))
     , _vertexCount(0)
     , _vertexDecl(std::move(decl))
@@ -31,6 +31,7 @@ VertexBuffer::VertexBuffer(std::string name, const void* mem, VertexDecl decl, b
     , _handle(InvalidHandle<VertexBufferHandle>())
     , _dynamicHandle(InvalidHandle<DynamicVertexBufferHandle>())
     , _dynamic(dynamic)
+    , _shared(dynamic || storage == Storage::Shared)
     , _layoutHandle(InvalidHandle<VertexLayoutHandle>())
 {
 	// assert(vertices != nullptr);
@@ -60,7 +61,7 @@ VertexBuffer::VertexBuffer(std::string name, const void* mem, VertexDecl decl, b
 	PostToMainThread(MainThreadApi::Graphics, [this, bgfxMem, bytes] {
 		UploadPacer::Pace(bytes);
 		const auto& device = Locator::graphicsDevice::value();
-		if (_dynamic)
+		if (_shared)
 		{
 			_dynamicHandle = device.CreateDynamicVertexBuffer(bgfxMem, _vertexDecl);
 		}
@@ -75,7 +76,7 @@ VertexBuffer::VertexBuffer(std::string name, const void* mem, VertexDecl decl, b
 			SPDLOG_LOGGER_WARN(spdlog::get("graphics"), "{}: out of bgfx buffer handles, not created", _name);
 			return;
 		}
-		if (!_dynamic)
+		if (!_shared)
 		{
 			device.SetName(_handle, _name);
 		}
@@ -116,7 +117,7 @@ uint32_t VertexBuffer::GetSizeInBytes() const noexcept
 
 bool VertexBuffer::IsValid() const noexcept
 {
-	return _dynamic ? IsValidHandle(_dynamicHandle) : IsValidHandle(_handle);
+	return _shared ? IsValidHandle(_dynamicHandle) : IsValidHandle(_handle);
 }
 
 void VertexBuffer::Update(const void* memory) const

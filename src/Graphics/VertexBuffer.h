@@ -79,13 +79,28 @@ using VertexDecl = std::vector<VertexAttrib>;
 class VertexBuffer
 {
 public:
+	/// Where the vertices are on the GPU
+	enum class Storage : uint8_t
+	{
+		/// A buffer of their own
+		Own,
+		/// A part of a large buffer that bgfx shares between many vertex lists. Then a new list does not get new memory
+		/// from the driver. A dynamic buffer is always in this shared buffer.
+		Shared,
+	};
+
 	/// A dynamic buffer's vertices can be changed after, by Update
-	VertexBuffer(std::string name, const void* memory, VertexDecl decl, bool dynamic = false) noexcept;
+	VertexBuffer(std::string name, const void* memory, VertexDecl decl, bool dynamic = false,
+	             Storage storage = Storage::Own) noexcept;
 	~VertexBuffer() noexcept;
 
 	[[nodiscard]] uint32_t GetCount() const noexcept;
 	[[nodiscard]] uint32_t GetStrideBytes() const noexcept;
 	[[nodiscard]] uint32_t GetSizeInBytes() const noexcept;
+	/// Whether Update can change the vertices
+	[[nodiscard]] bool IsDynamic() const noexcept { return _dynamic; }
+	/// Whether the vertices are in the shared buffer of bgfx
+	[[nodiscard]] bool IsShared() const noexcept { return _shared; }
 
 	/// Whether bgfx made the buffer; one it couldn't make isn't drawn
 	[[nodiscard]] bool IsValid() const noexcept;
@@ -93,7 +108,8 @@ public:
 	/// Binds a run of the buffer's vertices
 	void Bind(uint32_t firstVertex, uint32_t count) const;
 	/// Binds the buffer to another stream, its vertices read by a layout of its own: a creature's variant meshes, whose
-	/// positions and normals come in as other attributes than the base mesh's
+	/// positions and normals come in as other attributes than the base mesh's. The layout must have the stride of the
+	/// buffer, because the first vertex of a shared buffer counts in that stride.
 	void BindStream(uint8_t stream, VertexLayoutHandle layout) const;
 	/// The same into the encoder given
 	void Bind(bgfx::Encoder& encoder) const;
@@ -112,6 +128,8 @@ private:
 	VertexBufferHandle _handle;
 	DynamicVertexBufferHandle _dynamicHandle;
 	bool _dynamic;
+	/// The vertices are in the shared buffer of bgfx, through _dynamicHandle
+	bool _shared;
 	VertexLayoutHandle _layoutHandle;
 };
 

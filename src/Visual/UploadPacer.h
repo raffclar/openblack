@@ -27,9 +27,9 @@ public:
 	/// Until the first frame anything goes: there is no frame to keep smooth yet
 	static constexpr size_t k_Unlimited = std::numeric_limits<size_t>::max();
 
-	/// What a frame has room for. The renderer gives every buffer and texture a memory allocation of its own, which
-	/// costs about as much for a small one as for a large one, so a model of many small parts stalls a frame as surely
-	/// as one large texture: both how many are made and how many bytes they hold are limited.
+	/// What a frame has room for. The renderer gives each texture a memory allocation of its own. A small allocation
+	/// costs about as much as a large one. Thus the pacer limits both how many uploads go and how many bytes they hold.
+	/// The buffers of models go in the shared buffers of bgfx and get memory only when a shared buffer is full.
 	struct Allowance
 	{
 		size_t bytes {k_Unlimited};
