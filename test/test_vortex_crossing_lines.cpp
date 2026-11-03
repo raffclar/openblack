@@ -55,6 +55,7 @@ vortex_crossing::World FakeWorld()
 	    .magicName = [](SpellSeedType seed,
 	                    int powerUp) { return fmt::format("MAGIC_{}_{}", static_cast<int>(seed), powerUp); },
 	    .filedAsStatic = [](entt::entity) { return true; },
+	    .filedAsMobileObject = [](entt::entity) { return true; },
 	};
 }
 
@@ -309,6 +310,32 @@ TEST(VortexCrossingLines, StaticsOfAKindJustWhereAnotherStandsAreWrittenWithIt)
 	const auto tree = Thing(registry, {1000.0f, k_Ground, 2000.0f}, glm::mat3(1.0f), 1.0f);
 	registry.Assign<Tree>(tree, Tree {.type = TreeInfo::Oak});
 	EXPECT_TRUE(vortex_crossing::IdenticalStatics(registry, tree, FakeWorld()).empty());
+}
+
+TEST(VortexCrossingLines, LooseObjectsOfAKindJustWhereAnotherStandsAreWrittenWithIt)
+{
+	Registry registry;
+	const auto loose = [&registry](glm::vec3 position, MobileObjectInfo type) {
+		const auto entity = Thing(registry, position, glm::mat3(1.0f), 1.0f);
+		registry.Assign<MobileObject>(entity, type);
+		return entity;
+	};
+	const auto first = loose({1000.0f, k_Ground, 2000.0f}, MobileObjectInfo::EgyptBarrel);
+	const auto twin = loose({1000.0f, k_Ground, 2000.0f}, MobileObjectInfo::EgyptBarrel);
+	// Another kind, a little higher, a little across, or flying, is not the same
+	loose({1000.0f, k_Ground, 2000.0f}, MobileObjectInfo::EgyptCart);
+	loose({1000.0f, k_Ground + 0.5f, 2000.0f}, MobileObjectInfo::EgyptBarrel);
+	loose({1000.5f, k_Ground, 2000.0f}, MobileObjectInfo::EgyptBarrel);
+	registry.Assign<InPhysics>(loose({1000.0f, k_Ground, 2000.0f}, MobileObjectInfo::EgyptBarrel));
+	EXPECT_EQ(vortex_crossing::IdenticalMobileObjects(registry, first, FakeWorld()), std::vector<entt::entity> {twin});
+	// A thing that is not filed among the loose objects is not found there
+	auto world = FakeWorld();
+	world.filedAsMobileObject = [twin](entt::entity entity) { return entity != twin; };
+	EXPECT_TRUE(vortex_crossing::IdenticalMobileObjects(registry, first, world).empty());
+	// A static thing has no loose fellows
+	const auto rock = Thing(registry, {1000.0f, k_Ground, 2000.0f}, glm::mat3(1.0f), 1.0f);
+	registry.Assign<MobileStatic>(rock, MobileStaticInfo::Rock);
+	EXPECT_TRUE(vortex_crossing::IdenticalMobileObjects(registry, rock, FakeWorld()).empty());
 }
 
 TEST(VortexCrossingLines, EveryAnimalIsWrittenWithItsAge)

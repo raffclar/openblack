@@ -244,3 +244,35 @@ std::vector<entt::entity> ecs::vortex_crossing::IdenticalStatics(const Registry&
 	    });
 	return identical;
 }
+
+std::vector<entt::entity> ecs::vortex_crossing::IdenticalMobileObjects(const Registry& registry, entt::entity thing,
+                                                                       const World& world)
+{
+	std::vector<entt::entity> identical;
+	const auto* mobile = registry.Valid(thing) ? registry.TryGet<const MobileObject>(thing) : nullptr;
+	const auto* transform = registry.Valid(thing) ? registry.TryGet<const Transform>(thing) : nullptr;
+	if (mobile == nullptr || transform == nullptr)
+	{
+		return identical;
+	}
+	const auto placeOf = [&world](const glm::vec3& position) {
+		return MapPlace(position, world.ground({position.x, position.z}));
+	};
+	const auto place = placeOf(transform->position);
+	registry.Each<const MobileObject, const Transform>(
+	    [&](entt::entity other, const MobileObject& otherMobile, const Transform& otherTransform) {
+		    // Only those lying on the land are found there: not one flying, held or being taken
+		    if (other == thing || otherMobile.type != mobile->type ||
+		        registry.AnyOf<InPhysics, InHand, CarriedByTornado>(other) || !world.filedAsMobileObject(other))
+		    {
+			    return;
+		    }
+		    const auto otherPlace = placeOf(otherTransform.position);
+		    // The very same place across the land and the very same height above it
+		    if (otherPlace.x == place.x && otherPlace.z == place.z && otherPlace.altitude == place.altitude)
+		    {
+			    identical.push_back(other);
+		    }
+	    });
+	return identical;
+}
