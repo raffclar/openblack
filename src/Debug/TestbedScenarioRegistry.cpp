@@ -15076,7 +15076,8 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::RunHelpMessage || kind == Kind::EndGuidanceWaits || kind == Kind::SetTownBeliefInRival ||
 	       kind == Kind::GiveLandTown || kind == Kind::RecordChallenge || kind == Kind::EnterTemple || kind == Kind::HandTake ||
 	       kind == Kind::HandApply || kind == Kind::HandTakeShownSeed || kind == Kind::RunScript || kind == Kind::ClickScroll ||
-	       kind == Kind::CameraLooksAt || kind == Kind::PlayBoatFilm || kind == Kind::HandPour || kind == Kind::HandRelease ||
+	       kind == Kind::CameraLooksAt || kind == Kind::HandTakeNear || kind == Kind::ClickCreatureNear ||
+	       kind == Kind::TapRewardNear || kind == Kind::PlayBoatFilm || kind == Kind::HandPour || kind == Kind::HandRelease ||
 	       kind == Kind::SetReportLatency || kind == Kind::RemoveObject || kind == Kind::ReadTip ||
 	       kind == Kind::LookAtTempleScroll || kind == Kind::HandGripTotem || kind == Kind::ProfileFolderCheck ||
 	       kind == Kind::PlayCustomMusic || kind == Kind::ShowCustomMusicControls || kind == Kind::OwnTattooPicture ||
@@ -15125,7 +15126,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 219> k_Names {
+	constexpr std::array<std::string_view, 222> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -15345,6 +15346,9 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "put the camera to look at a point",
 	    "join the football of the town",
 	    "a script builds the worship sites",
+	    "take the mobile object nearest a point into the hand",
+	    "click the creature nearest a point",
+	    "tap the reward chest nearest a point",
 	};
 	return k_Names.at(static_cast<size_t>(kind));
 }

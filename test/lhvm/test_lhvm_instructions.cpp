@@ -430,3 +430,33 @@ TEST_F(LhvmInstructions, ATaskCanStopEveryTaskDuringItsRun)
 	_vm.LookIn(ScriptType::All);
 	EXPECT_TRUE(_vm.GetTasks().empty());
 }
+
+namespace
+{
+
+/// One script that adds one to a count in a loop with no wait, as a script that changes a value in steps does
+LHVMFile CountsInALoop()
+{
+	const std::vector<VMInstruction> code {
+	    Make(Opcode::Push, VMValue(k_Runs), DataType::Int, VMMode::Reference),     // 0: runs + 1
+	    Make(Opcode::Push, VMValue(int32_t {1})),                                  // 1
+	    Make(Opcode::Add, VMValue(uint32_t {0})),                                  // 2
+	    Make(Opcode::Pop, VMValue(k_Runs), DataType::Int, VMMode::Reference),      // 3
+	    Make(Opcode::Jmp, VMValue(uint32_t {0}), DataType::Int, VMMode::Backward), // 4: back to 0
+	};
+	const std::vector<VMScript> scripts {VMScript("Counts", "test.txt", ScriptType::Script, 1, {}, 0, 0, 1)};
+	return {LHVMVersion::BlackAndWhite, {"runs"}, code, {1}, scripts, {}};
+}
+
+} // namespace
+
+TEST_F(LhvmInstructions, ALoopWithNoWaitTakesOneStepATurn)
+{
+	ASSERT_EQ(_vm.LoadBinary(CountsInALoop()), EXIT_SUCCESS);
+	// A jump back gives the turn back, so the loop does not finish in one turn
+	for (int32_t turn = 1; turn <= 3; ++turn)
+	{
+		_vm.LookIn(ScriptType::All);
+		EXPECT_EQ(_vm.GetVariables().at(k_Runs).value.intVal, turn);
+	}
+}
