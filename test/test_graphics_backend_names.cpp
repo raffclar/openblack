@@ -37,12 +37,20 @@ TEST(GraphicsBackendNames, ShortNamesInAnyCase)
 	EXPECT_EQ(ParseGraphicsBackend("null"), GraphicsBackend::Noop);
 }
 
+#if defined(__EMSCRIPTEN__)
 TEST(GraphicsBackendNames, WebGpuByItsNames)
 {
 	EXPECT_EQ(ParseGraphicsBackend("WebGPU"), GraphicsBackend::WebGPU);
 	EXPECT_EQ(ParseGraphicsBackend("webgpu"), GraphicsBackend::WebGPU);
 	EXPECT_EQ(ParseGraphicsBackend("WGPU"), GraphicsBackend::WebGPU);
 }
+#else
+TEST(GraphicsBackendNames, TheDesktopHasNoWebGpu)
+{
+	EXPECT_FALSE(ParseGraphicsBackend("WebGPU").has_value());
+	EXPECT_FALSE(ParseGraphicsBackend("WGPU").has_value());
+}
+#endif
 
 TEST(GraphicsBackendNames, UnknownNamesAreRefused)
 {
