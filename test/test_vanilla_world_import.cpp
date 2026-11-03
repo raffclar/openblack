@@ -21,10 +21,13 @@
 #include <map>
 #include <optional>
 #include <set>
+#include <string>
 #include <string_view>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
+#include <DanceFile.h>
 #include <VanillaWorld.h>
 #include <gtest/gtest.h>
 
@@ -451,7 +454,7 @@ TEST(VanillaWorldImport, SavedGamesOfLandOneImportWhole)
 		std::ifstream stream(entry.path(), std::ios::binary);
 		const std::vector<uint8_t> bytes {std::istreambuf_iterator<char>(stream), std::istreambuf_iterator<char>()};
 		const auto read = ReadVanillaWorld(bytes);
-		ASSERT_TRUE(read.world.has_value()) << entry.path();
+		ASSERT_TRUE(read.world.has_value()) << entry.path() << " " << (read.error ? read.error->reason : std::string {});
 		if (read.world->Framing().landscape.find("Land1.lnd") == std::string::npos)
 		{
 			continue;
@@ -545,6 +548,38 @@ TEST(VanillaWorldImport, ReadsTheOrderOfThePlayersTownLists)
 
 namespace
 {
+
+/// Calls the function with each world file of any land in the copy of a Profiles folder that OPENBLACK_VANILLA_SAVES
+/// gives. Gives the number of files, or nothing when there is no such folder.
+template <typename Check>
+std::optional<uint32_t> ForEachSave(Check&& check)
+{
+	const char* saves = std::getenv("OPENBLACK_VANILLA_SAVES"); // NOLINT(concurrency-mt-unsafe)
+	std::error_code error;
+	if (saves == nullptr || !std::filesystem::is_directory(saves, error))
+	{
+		return std::nullopt;
+	}
+	uint32_t files = 0;
+	for (const auto& entry : std::filesystem::recursive_directory_iterator(saves))
+	{
+		const auto name = entry.path().filename().string();
+		if (!entry.is_regular_file() || entry.path().extension() != ".sav" || name.starts_with("Script"))
+		{
+			continue;
+		}
+		std::ifstream stream(entry.path(), std::ios::binary);
+		const std::vector<uint8_t> bytes {std::istreambuf_iterator<char>(stream), std::istreambuf_iterator<char>()};
+		const auto read = ReadVanillaWorld(bytes);
+		EXPECT_TRUE(read.world.has_value()) << entry.path();
+		if (read.world.has_value())
+		{
+			++files;
+			check(entry.path(), *read.world);
+		}
+	}
+	return files;
+}
 
 /// Calls the function with each world file of Land 1 in the copy of a Profiles folder that OPENBLACK_VANILLA_SAVES
 /// gives. Gives the number of files, or nothing when there is no such folder.
@@ -886,7 +921,7 @@ TEST(VanillaWorldImport, SavedGamesOfLandOneKeepWalksAndWork)
 		const auto imported = world_import::ReadTowns(world);
 		for (const auto& villager : imported.villagers)
 		{
-			if (world_import::StartStates(villager.states, villager.moveState) != villager.states)
+			if (world_import::StartStates(villager) != villager.states)
 			{
 				continue;
 			}
@@ -3209,7 +3244,7 @@ TEST(VanillaFootpathImport, SavedGamesOfLandOneKeepTheFootpathWalksOfTheirVillag
 			towardsStart += walk.towardsStart ? 1 : 0;
 			++finals[villager.states[1]];
 			++moveStates[villager.moveState];
-			kept += world_import::StartStates(villager.states, villager.moveState) == villager.states ? 1 : 0;
+			kept += world_import::StartStates(villager) == villager.states ? 1 : 0;
 		}
 		// The walkers of each node: a walker that walks to the node, or a walker that went on and that the game drops
 		// from the list when it next looks at the list
@@ -3388,7 +3423,7 @@ TEST(VanillaWorldImport, SavedGamesOfLandOneHaveNoVillagerThatDecidesAgain)
 			{
 				EXPECT_EQ(villager.discipleType, 0) << path << " " << villager.number;
 			}
-			if (world_import::StartStates(villager.states, villager.moveState) != villager.states)
+			if (world_import::StartStates(villager) != villager.states)
 			{
 				++decideAgain;
 				ADD_FAILURE() << path << " " << villager.number << " decides again in state "
@@ -3444,4 +3479,391 @@ TEST(VanillaWorldImport, SavedGamesOfLandOneHaveNoVillagerThatDecidesAgain)
 	std::cout << "Villagers " << villagers << ", shepherd values " << shepherds << ", script values " << scripts << ", dead "
 	          << dead << ", idle disciples " << idleDisciples << ", disciples " << disciples << ", followers " << followers
 	          << std::endl;
+}
+
+// A dance of the file keeps its groups with their values and dancers, the order in which newcomers try them, and its key
+// frames with their actions
+TEST(VanillaWorldImport, ReadsTheGroupsAndTheKeyFramesOfADance)
+{
+	auto fake = GameAtTurn(100);
+	// 2: the dance, 3 and 4: its groups, 5: a key frame, 6: its action
+	fake.Record(VanillaType::Dance)
+	    .Value<uint32_t>("danceRow", static_cast<uint32_t>(DanceInfo::CitadelDance_1))
+	    .Refs("danceKeyFrames", {5})
+	    .Refs("danceGroups", {3, 4})
+	    .Refs("danceLimitedGroups", {4})
+	    .Refs("danceSharedGroups", {3})
+	    .Value<uint8_t>("danceRound", 1)
+	    .Value<uint32_t>("danceRoundLength", 2);
+	std::array<char, 64> name {};
+	name[0] = 'M';
+	fake.Record(VanillaType::DanceGroup)
+	    .Ref("groupDance", 2)
+	    .Ref("groupBehaviour", 2)
+	    .Refs("groupDancers", {7, 8})
+	    .Value<uint32_t>("groupId", 0)
+	    .Value<uint32_t>("groupFlag", 0)
+	    .Value<uint32_t>("groupFormation", 2)
+	    .Value<uint32_t>("groupShape", 3)
+	    .Value("groupOffset", std::array<float, 2> {1.5f, -2.0f})
+	    .Value<float>("groupRadius", 12.0f)
+	    .Value<float>("groupRotation", 512.0f)
+	    .Value("groupMove", std::array<uint32_t, 4> {11, std::bit_cast<uint32_t>(8.0f), 0, 300})
+	    .Value<float>("groupSpin", 64.5f)
+	    .Ref("groupParent", 0)
+	    .Value<uint8_t>("groupIndexInParent", 0)
+	    .Value<uint32_t>("groupLimitedDancers", 0)
+	    .Value<uint32_t>("groupMoved", 1)
+	    .Value<uint32_t>("groupDanceType", 0)
+	    .Value<uint32_t>("groupInFormation", 1)
+	    .Value("groupName", name)
+	    .Value("groupMembership", std::array<uint32_t, 3> {0, 50, 1})
+	    .Words("groupChildren", {1})
+	    .Value<uint32_t>("groupSexes", 1);
+	fake.Record(VanillaType::DanceGroup)
+	    .Refs("groupDancers", {})
+	    .Value<uint32_t>("groupId", 1)
+	    .Ref("groupParent", 3)
+	    .Value<uint8_t>("groupIndexInParent", 0)
+	    .Value("groupMembership", std::array<uint32_t, 3> {4, 4, 1})
+	    .Words("groupChildren", {})
+	    .Value<uint32_t>("groupSexes", 2);
+	fake.Record(VanillaType::DanceKeyFrame)
+	    .Value<float>("keyFrameTime", 25.0f)
+	    .Refs("keyFrameActions", {6})
+	    .Value<uint32_t>("keyFrameFlags", 1);
+	std::array<uint32_t, 14> arguments {};
+	arguments[0] = 7;
+	fake.Record(VanillaType::DanceKeyAction)
+	    .Words("keyActionGroups", {1, 0})
+	    .Value<uint32_t>("keyActionType", 3)
+	    .Value("keyActionArguments", arguments);
+	const auto world = fake.Make();
+	const auto dance = world_import::ReadDance(world, *world.Record(2));
+	ASSERT_TRUE(dance.has_value());
+	ASSERT_EQ(dance->groups.size(), 2U);
+	const auto& first = dance->groups[0];
+	EXPECT_EQ(first.number, 3U);
+	EXPECT_EQ(first.name, "M");
+	EXPECT_EQ(first.dancers, (std::vector<uint32_t> {7, 8}));
+	EXPECT_FALSE(first.limited);
+	EXPECT_EQ(first.quota, 50U);
+	EXPECT_EQ(first.weight, 1U);
+	EXPECT_EQ(first.sexes, 1U);
+	EXPECT_EQ(first.formation, 2U);
+	EXPECT_EQ(first.inFormation, 1U);
+	EXPECT_FALSE(first.flag);
+	EXPECT_EQ(first.shape, 3U);
+	EXPECT_FLOAT_EQ(first.radius, 12.0f);
+	EXPECT_FLOAT_EQ(first.offset.x, 1.5f);
+	EXPECT_FLOAT_EQ(first.offset.y, -2.0f);
+	EXPECT_FLOAT_EQ(first.rotation, 512.0f);
+	EXPECT_FLOAT_EQ(first.spin, 64.5f);
+	EXPECT_EQ(first.move.action, 11U);
+	EXPECT_EQ(first.move.first, std::bit_cast<uint32_t>(8.0f));
+	EXPECT_EQ(first.move.end, 300U);
+	EXPECT_TRUE(first.moved);
+	EXPECT_EQ(first.parent, 0U);
+	EXPECT_EQ(first.children, (std::vector<uint32_t> {1}));
+	const auto& second = dance->groups[1];
+	EXPECT_EQ(second.id, 1U);
+	EXPECT_TRUE(second.limited);
+	EXPECT_EQ(second.quota, 4U);
+	EXPECT_EQ(second.parent, 3U);
+	EXPECT_EQ(dance->limitedGroups, (std::vector<size_t> {1}));
+	EXPECT_EQ(dance->sharedGroups, (std::vector<size_t> {0}));
+	EXPECT_EQ(dance->round, 1U);
+	EXPECT_EQ(dance->roundLength, 2U);
+	ASSERT_EQ(dance->keyFrames.size(), 1U);
+	EXPECT_FLOAT_EQ(dance->keyFrames[0].time, 25.0f);
+	EXPECT_EQ(dance->keyFrames[0].flags, 1U);
+	ASSERT_EQ(dance->keyFrames[0].actions.size(), 1U);
+	EXPECT_EQ(dance->keyFrames[0].actions[0].groups, (std::vector<uint32_t> {1, 0}));
+	EXPECT_EQ(dance->keyFrames[0].actions[0].type, 3U);
+	EXPECT_EQ(dance->keyFrames[0].actions[0].arguments, arguments);
+}
+
+// A dance takes the groups of the file. A dancer that the import does not keep leaves its group, and the places of the
+// others close up.
+TEST(VanillaWorldImport, ADanceTakesTheGroupsOfTheFile)
+{
+	constexpr auto k_Kept = static_cast<entt::entity>(40);
+	constexpr auto k_Other = static_cast<entt::entity>(41);
+	world_import::ImportedDance file {.round = 1, .roundLength = 3};
+	file.groups.push_back({.number = 3,
+	                       .id = 0,
+	                       .name = "M",
+	                       .dancers = {7, 8},
+	                       .quota = 50,
+	                       .weight = 1,
+	                       .sexes = 1,
+	                       .radius = 12.0f,
+	                       .offset = {1.0f, 2.0f},
+	                       .spin = 10.0f,
+	                       .move = {.action = 1, .first = 0, .second = 0, .end = 200},
+	                       .children = {1}});
+	file.groups.push_back({.number = 4,
+	                       .id = 1,
+	                       .dancers = {9, 10},
+	                       .limited = true,
+	                       .quota = 4,
+	                       .limitedDancers = 2,
+	                       .parent = 3,
+	                       .indexInParent = 0});
+	file.limitedGroups = {1};
+	file.sharedGroups = {0};
+	ecs::components::Dance dance;
+	dance.dancers = 5;
+	const std::unordered_map<uint32_t, entt::entity> kept {{8, k_Kept}, {10, k_Other}};
+	const auto placed = world_import::PutDanceGroups(dance, file, kept);
+
+	ASSERT_EQ(dance.groups.all.size(), 2U);
+	const auto& first = dance.groups.all[0];
+	EXPECT_EQ(first.name, "M");
+	EXPECT_EQ(first.dancers, (std::vector<entt::entity> {k_Kept}));
+	EXPECT_EQ(first.quota, 50U);
+	EXPECT_EQ(first.weight, 1U);
+	EXPECT_EQ(first.sexes, 1U);
+	EXPECT_FLOAT_EQ(first.radius, 12.0f);
+	EXPECT_FLOAT_EQ(first.offset.y, 2.0f);
+	EXPECT_FLOAT_EQ(first.spin, 10.0f);
+	EXPECT_EQ(first.move.end, 200U);
+	// The file keeps no rate of a move
+	EXPECT_FLOAT_EQ(first.spinRate, 0.0f);
+	EXPECT_EQ(first.children, (std::vector<std::size_t> {1}));
+	EXPECT_FALSE(first.parent.has_value());
+	const auto& second = dance.groups.all[1];
+	EXPECT_EQ(second.dancers, (std::vector<entt::entity> {k_Other}));
+	// One of its two dancers left, so it took one dancer
+	EXPECT_EQ(second.limitedDancers, 1U);
+	EXPECT_EQ(second.parent, std::optional<std::size_t> {0});
+	EXPECT_EQ(dance.groups.limited, (std::vector<std::size_t> {1}));
+	EXPECT_EQ(dance.groups.shared, (std::vector<std::size_t> {0}));
+	EXPECT_EQ(dance.groups.round, 1U);
+	EXPECT_EQ(dance.groups.roundLength, 3U);
+	EXPECT_EQ(dance.dancers, 2U);
+	ASSERT_EQ(placed.size(), 2U);
+	EXPECT_EQ(placed[0].dancer, k_Kept);
+	EXPECT_EQ(placed[0].group, 0U);
+	EXPECT_EQ(placed[1].dancer, k_Other);
+	EXPECT_EQ(placed[1].group, 1U);
+}
+
+// The saved game keeps the groups of an action in the order of the dance file
+TEST(VanillaWorldImport, TheKeyFramesOfADanceAreTheKeyFramesOfItsFile)
+{
+	dance::DanceFile file;
+	file.keyFrames.push_back({.time = 0.0f, .flags = 1, .actions = {{.groups = {0, 1}, .type = 6, .arguments = {0, 50}}}});
+	std::vector<world_import::ImportedDanceKeyFrame> saved {
+	    {.time = 0.0f, .flags = 1, .actions = {{.groups = {0, 1}, .type = 6, .arguments = {0, 50}}}}};
+	EXPECT_TRUE(world_import::SameKeyFrames(file, saved));
+	saved[0].actions[0].groups = {1, 0};
+	EXPECT_FALSE(world_import::SameKeyFrames(file, saved));
+	saved[0].actions[0].groups = {0, 1};
+	saved[0].time = 5.0f;
+	EXPECT_FALSE(world_import::SameKeyFrames(file, saved));
+	saved.clear();
+	EXPECT_FALSE(world_import::SameKeyFrames(file, saved));
+}
+
+// A villager keeps a state of a dance only as a dancer of a group that the import makes, and a state of worship only
+// at a site that the import makes
+TEST(VanillaWorldImport, DancersAndWorshippersKeepTheirStatesOnlyInADanceAndASiteOfTheImport)
+{
+	constexpr auto k_Worship = static_cast<uint8_t>(VillagerStates::WorshippingAtWorshipSite);
+	constexpr auto k_ToDancePlace = static_cast<uint8_t>(VillagerStates::MoveToDancePos);
+	constexpr auto k_Hiding = static_cast<uint8_t>(VillagerStates::HidingAtWorshipSite);
+	constexpr auto k_InDance = static_cast<uint8_t>(VillagerStates::InDance);
+	const auto decide = world_import::DecideAgain();
+	world_import::ImportedVillager villager {.states = {k_Worship, k_Worship, 0}, .moveState = 0x01};
+	EXPECT_EQ(world_import::StartStates(villager), decide);
+	villager.importedWorshipper = true;
+	EXPECT_EQ(world_import::StartStates(villager), decide);
+	villager.importedDancer = true;
+	EXPECT_EQ(world_import::StartStates(villager), villager.states);
+	villager.states = {k_ToDancePlace, k_Worship, 0};
+	EXPECT_EQ(world_import::StartStates(villager), villager.states);
+	villager.importedWorshipper = false;
+	EXPECT_EQ(world_import::StartStates(villager), decide);
+	villager.states = {k_InDance, k_InDance, 0};
+	EXPECT_EQ(world_import::StartStates(villager), villager.states);
+	villager.importedDancer = false;
+	EXPECT_EQ(world_import::StartStates(villager), decide);
+	villager.states = {k_Hiding, k_Hiding, 0};
+	EXPECT_EQ(world_import::StartStates(villager), decide);
+	villager.importedWorshipper = true;
+	EXPECT_EQ(world_import::StartStates(villager), villager.states);
+	// A walk that the import cannot keep still decides again
+	villager.moveState = 0x05;
+	EXPECT_EQ(world_import::StartStates(villager), decide);
+}
+
+// The import marks a villager as a dancer when a group of the dance of a site has it and its group is that group
+TEST(VanillaWorldImport, TheImportFindsTheDancersAndTheWorshippersOfASite)
+{
+	auto fake = GameAtTurn(100);
+	// 2: the site, 3: its dance, 4: a group, 5 to 7: villagers
+	fake.Record(VanillaType::WorshipSite)
+	    .Ref("partCitadel", 30)
+	    .Value<uint32_t>("siteTribe", world_import::k_FirstTribeRowNumber - static_cast<uint32_t>(Tribe::NORSE))
+	    .Ref("siteDance", 3)
+	    .Refs("siteWorshippers", {5, 6})
+	    .Value<uint8_t>("sitePlace", 1);
+	fake.Record(VanillaType::Dance)
+	    .Value<uint32_t>("danceRow", static_cast<uint32_t>(DanceInfo::CitadelDance_1))
+	    .Refs("danceGroups", {4});
+	fake.Record(VanillaType::DanceGroup).Refs("groupDancers", {5, 7});
+	for (const uint32_t group : {4U, 0U, 4U})
+	{
+		fake.Record(VanillaType::Villager)
+		    .Position(1, 2)
+		    .Value("info", VillagerRowNumber(VillagerInfo::NorseForesterMale))
+		    .Value("action", std::array<uint8_t, 6> {})
+		    .Ref("danceGroup", group);
+	}
+	const auto imported = world_import::ReadTowns(fake.Make());
+	ASSERT_EQ(imported.villagers.size(), 3U);
+	EXPECT_TRUE(imported.villagers[0].importedDancer);
+	EXPECT_TRUE(imported.villagers[0].importedWorshipper);
+	EXPECT_FALSE(imported.villagers[1].importedDancer);
+	EXPECT_TRUE(imported.villagers[1].importedWorshipper);
+	EXPECT_TRUE(imported.villagers[2].importedDancer);
+	EXPECT_FALSE(imported.villagers[2].importedWorshipper);
+}
+
+// Each group of a dance in the saves belongs to a thing that keeps groups of a dance, and its dancers are living things
+// whose group is that group
+TEST(VanillaWorldImport, SavedGamesHaveGroupsOfDancesWithTheirDancers)
+{
+	std::map<uint32_t, size_t> owners;
+	size_t groups = 0;
+	size_t dancers = 0;
+	const auto files = ForEachSave([&owners, &groups, &dancers](const std::filesystem::path& path, const VanillaWorld& world) {
+		for (const auto* group : world.OfType(VanillaType::DanceGroup))
+		{
+			++groups;
+			const auto dance = world.Ref(*group, "groupDance").value_or(0);
+			EXPECT_EQ(dance, world.Ref(*group, "groupBehaviour").value_or(0)) << path << " " << group->number;
+			const auto* owner = dance != 0 ? world.Record(dance) : nullptr;
+			ASSERT_NE(owner, nullptr) << path << " " << group->number;
+			++owners[owner->type];
+			EXPECT_NE(std::ranges::find(world.Refs(*owner, "danceGroups"), group->number),
+			          world.Refs(*owner, "danceGroups").end())
+			    << path << " " << group->number;
+			for (const auto number : world.Refs(*group, "groupDancers"))
+			{
+				++dancers;
+				const auto* dancer = world.Record(number);
+				ASSERT_NE(dancer, nullptr) << path << " " << number;
+				EXPECT_EQ(world.Ref(*dancer, "danceGroup").value_or(0), group->number) << path << " " << number;
+			}
+		}
+		// The number of each group in its dance is its place in the list of all groups, so the parts of a group and the
+		// actions of the key frames name groups of the dance. Each group is in the list of the limited groups or of the
+		// shared groups.
+		for (const auto* record : world.OfType(VanillaType::Dance))
+		{
+			const auto dance = world_import::ReadDance(world, *record);
+			ASSERT_TRUE(dance.has_value()) << path << " " << record->number;
+			for (size_t place = 0; place < dance->groups.size(); ++place)
+			{
+				const auto& group = dance->groups[place];
+				EXPECT_EQ(group.id, place) << path << " " << group.number;
+				EXPECT_NE(std::ranges::find(dance->limitedGroups, place) != dance->limitedGroups.end(),
+				          std::ranges::find(dance->sharedGroups, place) != dance->sharedGroups.end())
+				    << path << " " << group.number;
+				EXPECT_EQ(group.limited, std::ranges::find(dance->limitedGroups, place) != dance->limitedGroups.end());
+				for (const auto child : group.children)
+				{
+					EXPECT_LT(child, dance->groups.size()) << path << " " << group.number;
+				}
+			}
+			for (const auto& keyFrame : dance->keyFrames)
+			{
+				for (const auto& action : keyFrame.actions)
+				{
+					for (const auto group : action.groups)
+					{
+						EXPECT_LT(group, dance->groups.size()) << path << " " << record->number;
+					}
+				}
+			}
+			std::cout << path << " dance " << record->number << " row " << static_cast<int>(dance->type) << ": "
+			          << dance->groups.size() << " groups, " << dance->limitedGroups.size() << " limited, "
+			          << dance->keyFrames.size() << " key frames, round " << static_cast<int>(dance->round) << " of "
+			          << dance->roundLength << "\n";
+		}
+		// The dance of each worship site comes with the site
+		for (const auto& site : world_import::ReadTowns(world).worshipSites)
+		{
+			EXPECT_EQ(site.danceValues.has_value(), site.dance != 0) << path << " " << site.number;
+			std::cout << path << " worship site " << site.number << " dance " << site.dance << " with "
+			          << (site.danceValues.has_value() ? site.danceValues->groups.size() : 0U) << " groups\n";
+		}
+	});
+	if (!files.has_value())
+	{
+		GTEST_SKIP() << "Set OPENBLACK_VANILLA_SAVES to a copy of a Profiles folder of the game to check its saved games";
+	}
+	std::cout << groups << " groups of dances with " << dancers << " dancers; owners:";
+	for (const auto& [type, count] : owners)
+	{
+		std::cout << " type " << type << " x" << count;
+	}
+	std::cout << "\n";
+}
+
+// A breeder disciple keeps its lover and the place where it draws villagers to it
+TEST(VanillaWorldImport, ABreederKeepsItsLoverAndItsPlace)
+{
+	constexpr auto k_Breeder = static_cast<uint8_t>(VillagerStates::BreederDisciple);
+	EXPECT_TRUE(world_import::CanKeepStateValues(k_Breeder));
+	const std::vector values = {ObjectValue(42), BytesValue({0x00, 0x00, 0x01, 0x00, 0x00, 0x80, 0x02, 0x00})};
+	const auto breeder = world_import::BreederValuesOf(k_Breeder, values);
+	ASSERT_TRUE(breeder.has_value());
+	EXPECT_EQ(breeder->lover, 42U);
+	EXPECT_EQ(breeder->x, 0x10000);
+	EXPECT_EQ(breeder->z, 0x28000);
+	// No lover is the object 0
+	EXPECT_EQ(world_import::BreederValuesOf(k_Breeder, {ObjectValue(0), values[1]})->lover, 0U);
+	// Another state, or values of another size, give nothing
+	EXPECT_FALSE(world_import::BreederValuesOf(static_cast<uint8_t>(VillagerStates::Dead), values).has_value());
+	EXPECT_FALSE(world_import::BreederValuesOf(k_Breeder, {ObjectValue(42), BytesValue({0x01})}).has_value());
+}
+
+// In the saves of the construct land, every villager keeps its states: breeders, and the worship site keeps its dance
+TEST(VanillaWorldImport, SavedGamesOfTheConstructLandHaveNoVillagerThatDecidesAgain)
+{
+	size_t villagers = 0;
+	size_t breeders = 0;
+	const auto files = ForEachSave([&villagers, &breeders](const std::filesystem::path& path, const VanillaWorld& world) {
+		if (world.Framing().landscape.find("construct.lnd") == std::string::npos)
+		{
+			return;
+		}
+		for (const auto& villager : world_import::ReadTowns(world).villagers)
+		{
+			++villagers;
+			EXPECT_EQ(world_import::StartStates(villager), villager.states)
+			    << path << " " << villager.number << " " << static_cast<int>(villager.states[0]) << " "
+			    << static_cast<int>(villager.states[1]);
+			const auto top = world_import::BreederValuesOf(villager.states[0], villager.topValues);
+			const auto next = world_import::BreederValuesOf(villager.states[1], villager.finalValues);
+			if (top.has_value() || next.has_value())
+			{
+				++breeders;
+				const auto& values = top.has_value() ? *top : *next;
+				const auto* lover = values.lover != 0 ? world.Record(values.lover) : nullptr;
+				EXPECT_TRUE(values.lover == 0 || (lover != nullptr && lover->Is(VanillaType::Villager)))
+				    << path << " " << villager.number;
+				std::cout << path << " breeder " << villager.number << " lover " << values.lover << " place " << values.x
+				          << ", " << values.z << "\n";
+			}
+		}
+	});
+	if (!files.has_value())
+	{
+		GTEST_SKIP() << "Set OPENBLACK_VANILLA_SAVES to a copy of a Profiles folder of the game to check its saved games";
+	}
+	std::cout << villagers << " villagers of the construct land, " << breeders << " breeders\n";
 }

@@ -14,8 +14,11 @@
 #include <array>
 #include <optional>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
+#include <entt/entity/entity.hpp>
+#include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
 #include "CreatureRecord.h"
@@ -35,6 +38,11 @@ namespace openblack::ecs::components
 struct Dance;
 struct WorshipIcon;
 } // namespace openblack::ecs::components
+
+namespace openblack::dance
+{
+struct DanceFile;
+} // namespace openblack::dance
 
 // The towns, the buildings of the towns and the villagers of a world file of the game, as values that openblack can
 // make again. The rules here use no service of the game, so that tests can give them a world that they make.
@@ -138,6 +146,19 @@ struct ImportedShepherdValues
 /// The values of a state of a shepherd from the values of the file. Nothing for another state.
 [[nodiscard]] std::optional<ImportedShepherdValues> ShepherdValuesOf(uint8_t state,
                                                                      const std::vector<ImportedStateValue>& values);
+
+/// The values of the state of a breeder disciple: the number of the object of its lover in the file (0 for none), and
+/// the place where it draws villagers of the other sex to it, in whole map units (x, z)
+struct ImportedBreederValues
+{
+	uint32_t lover {0};
+	int32_t x {0};
+	int32_t z {0};
+};
+
+/// The values of the state of a breeder disciple of the file. Nothing for another state or for values of another size.
+[[nodiscard]] std::optional<ImportedBreederValues> BreederValuesOf(uint8_t state,
+                                                                   const std::vector<ImportedStateValue>& values);
 
 /// The reason for the death of a villager in the dead state, from the values of the file. Nothing for another state or
 /// for a reason that the game does not have.
@@ -521,7 +542,18 @@ struct ImportedVillager
 	uint16_t status {0};
 	uint16_t turnsSinceStateChange {0};
 	uint16_t turnsUntilStateChange {0};
+	/// The number of the object of its group of a dance in the file, 0 for none
+	uint32_t danceGroup {0};
+	/// It dances in a group of a dance that the import makes, and it is at worship at a worship site that the import
+	/// makes
+	bool importedDancer {false};
+	bool importedWorshipper {false};
 };
+
+/// The states that a villager of the file starts in after the import. A villager in a state of a dance keeps it only
+/// when it dances in a group of a dance that the import makes. A villager in a state of worship keeps it only when it
+/// is at worship at a site that the import makes, and for the dance of the site also in a group of that dance.
+[[nodiscard]] std::array<uint8_t, 3> StartStates(const ImportedVillager& villager);
 
 /// A building that a town plans to build later
 struct ImportedPlan
@@ -628,7 +660,67 @@ struct ImportedChants
 	bool freeMaintenance {false};
 };
 
-/// A dance of the file. The groups of the dance and their dancers are not in these values.
+/// A move of a group of a dance: the action, its two arguments as whole numbers or floats, and the beat when it ends
+struct ImportedDanceMove
+{
+	uint32_t action {0};
+	uint32_t first {0};
+	uint32_t second {0};
+	uint32_t end {0};
+};
+
+/// A group of a dance of the file
+struct ImportedDanceGroup
+{
+	uint32_t number {0};
+	/// The number of the group in its dance. The parts of a group name their groups by this number.
+	uint32_t id {0};
+	std::string name;
+	/// The numbers of the objects of its dancers in the file, in the order that they joined
+	std::vector<uint32_t> dancers;
+	/// It takes a fixed number of dancers (its quota), else a share of the dancers (its quota in a hundred)
+	bool limited {false};
+	uint32_t quota {100};
+	uint32_t weight {100};
+	uint32_t limitedDancers {0};
+	uint32_t danceType {0};
+	uint32_t sexes {3};
+	uint32_t formation {0};
+	uint32_t inFormation {0};
+	bool flag {true};
+	uint32_t shape {0};
+	float radius {20.0f};
+	glm::vec2 offset {0.0f, 0.0f};
+	float rotation {0.0f};
+	float spin {0.0f};
+	ImportedDanceMove move;
+	bool moved {false};
+	/// The number of the object of its parent group in the file, 0 for none, and its place among the parts of the
+	/// parent
+	uint32_t parent {0};
+	uint8_t indexInParent {0};
+	/// The numbers in the dance of the groups that stand about it as its parts
+	std::vector<uint32_t> children;
+};
+
+/// An action of a key frame of a dance of the file
+struct ImportedDanceAction
+{
+	/// The numbers in the dance of the groups that it changes, in the order of the file
+	std::vector<uint32_t> groups;
+	uint32_t type {0};
+	std::array<uint32_t, 14> arguments {};
+};
+
+/// A key frame of a dance of the file
+struct ImportedDanceKeyFrame
+{
+	float time {0.0f};
+	uint32_t flags {0};
+	std::vector<ImportedDanceAction> actions;
+};
+
+/// A dance of the file
 struct ImportedDance
 {
 	uint32_t number {0};
@@ -657,6 +749,23 @@ struct ImportedDance
 	uint32_t handTurns {0};
 	bool cameraWanted {false};
 	bool cameraMade {false};
+	/// All its groups in the order of the file, then the groups with a fixed number of dancers and the groups that share
+	/// the dancers, each as places in the list of all groups
+	std::vector<ImportedDanceGroup> groups;
+	std::vector<size_t> limitedGroups;
+	std::vector<size_t> sharedGroups;
+	/// The round of the newcomers and the length of a round
+	uint8_t round {0};
+	uint32_t roundLength {0};
+	/// Its key frames, in the order of their beats
+	std::vector<ImportedDanceKeyFrame> keyFrames;
+};
+
+/// A dancer that the import puts in a group of a dance: the villager and the place of its group in the dance
+struct PlacedDancer
+{
+	entt::entity dancer {entt::null};
+	size_t group {0};
 };
 
 /// A spell icon of a worship site of the file
@@ -763,6 +872,16 @@ struct ImportedTowns
 /// the turn of its first dancer and the hand of the player. The hand of a game with one player is the hand of the first
 /// god slot. The dancers stay as the dance has them, as only the villagers that keep their states can dance.
 void PutDanceValues(components::Dance& dance, const ImportedDance& file);
+/// A dance takes the groups of a dance of the file with all their values, and the order in which newcomers try them.
+/// Only the dancers of the file that the import keeps (the map gives the villager for each number of the file) dance
+/// in the groups. The others leave their groups as when they leave the dance, so the places in a group close up and
+/// the counts of the dance and of a group with a fixed number of dancers go down. Gives each dancer that dances with its
+/// group.
+[[nodiscard]] std::vector<PlacedDancer> PutDanceGroups(components::Dance& dance, const ImportedDance& file,
+                                                       const std::unordered_map<uint32_t, entt::entity>& kept);
+/// True when the key frames of a dance of the file are the key frames of the dance file, with the groups of each action
+/// in the same order
+[[nodiscard]] bool SameKeyFrames(const dance::DanceFile& file, const std::vector<ImportedDanceKeyFrame>& keyFrames);
 /// An icon of a worship site takes the charge and the store of an icon of the file. The seeds out from the icon are not
 /// in these values.
 void PutIconValues(components::WorshipIcon& icon, const ImportedWorshipIcon& file);
