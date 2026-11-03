@@ -1,0 +1,208 @@
+diff --git a/bgfx/src/renderer_gl.cpp b/bgfx/src/renderer_gl.cpp
+index 4068789..7b66198 100644
+--- a/bgfx/src/renderer_gl.cpp
++++ b/bgfx/src/renderer_gl.cpp
+@@ -752,6 +752,7 @@ namespace bgfx { namespace gl
+ 
+ 			KHR_debug,
+ 			KHR_no_error,
++			KHR_parallel_shader_compile,
+ 
+ 			MOZ_WEBGL_compressed_texture_s3tc,
+ 			MOZ_WEBGL_depth_texture,
+@@ -988,6 +989,7 @@ namespace bgfx { namespace gl
+ 
+ 		{ "KHR_debug",                                BGFX_CONFIG_RENDERER_OPENGL >= 43,        true  },
+ 		{ "KHR_no_error",                             false,                                    true  },
++		{ "KHR_parallel_shader_compile",              false,                                    true  },
+ 
+ 		{ "MOZ_WEBGL_compressed_texture_s3tc",        false,                                    true  },
+ 		{ "MOZ_WEBGL_depth_texture",                  false,                                    true  },
+@@ -3999,7 +4001,7 @@ namespace bgfx { namespace gl
+ 			GL_CHECK(glDisable(GL_BLEND) );
+ 			GL_CHECK(glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE) );
+ 
+-			ProgramGL& program = m_program[_blitter.m_program.idx];
++			ProgramGL& program = readyProgram(_blitter.m_program);
+ 			setProgram(program.m_id);
+ 			setUniform1i(program.m_sampler[0], 0);
+ 
+@@ -4050,7 +4052,7 @@ namespace bgfx { namespace gl
+ 				IndexBufferGL& ib = m_indexBuffers[_blitter.m_ib->handle.idx];
+ 				GL_CHECK(glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ib.m_id) );
+ 
+-				ProgramGL& program = m_program[_blitter.m_program.idx];
++				ProgramGL& program = readyProgram(_blitter.m_program);
+ 				program.bindAttributesBegin();
+ 				program.bindAttributes(_blitter.m_layout, 0);
+ 				program.bindAttributesEnd();
+@@ -5205,7 +5207,7 @@ namespace bgfx { namespace gl
+ 
+ 				GL_CHECK(glBindBuffer(GL_ARRAY_BUFFER, vb.m_id) );
+ 
+-				ProgramGL& program = m_program[_clearQuad.m_program[numMrt-1].idx];
++				ProgramGL& program = readyProgram(_clearQuad.m_program[numMrt-1]);
+ 				setProgram(program.m_id);
+ 				program.bindAttributesBegin();
+ 				program.bindAttributes(layout, 0);
+@@ -5314,6 +5316,18 @@ namespace bgfx { namespace gl
+ 			}
+ 		}
+ 
++		ProgramGL& readyProgram(ProgramHandle _handle)
++		{
++			ProgramGL& program = m_program[_handle.idx];
++
++			if (program.m_linkPending)
++			{
++				program.finishLink();
++			}
++
++			return program;
++		}
++
+ 		void setProgram(GLuint program)
+ 		{
+ 			m_uniformStateCache.saveCurrentProgram(program);
+@@ -5726,6 +5740,17 @@ namespace bgfx { namespace gl
+ 				}
+ 
+ 				GL_CHECK(glLinkProgram(m_id) );
++
++				if (s_extension[Extension::KHR_parallel_shader_compile].m_supported)
++				{
++					// The link continues in the background. The first use of the program finishes it.
++					m_pendingVsh = _vsh.m_id;
++					m_pendingFsh = _fsh.m_id;
++					m_pendingCacheId = id;
++					m_linkPending = true;
++					return;
++				}
++
+ 				GL_CHECK(glGetProgramiv(m_id, GL_LINK_STATUS, &linked) );
+ 
+ 				if (0 == linked)
+@@ -5764,8 +5789,66 @@ namespace bgfx { namespace gl
+ 		}
+ 	}
+ 
++	static void checkPendingShaderCompile(GLuint _shader)
++	{
++		if (0 == _shader)
++		{
++			return;
++		}
++
++		GLint compiled = 0;
++		GL_CHECK(glGetShaderiv(_shader, GL_COMPILE_STATUS, &compiled) );
++
++		if (0 == compiled)
++		{
++			GLsizei len;
++			char log[1024];
++			GL_CHECK(glGetShaderInfoLog(_shader, sizeof(log), &len, log) );
++			BGFX_FATAL(false, bgfx::Fatal::InvalidShader, "Failed to compile shader. %d: %s", compiled, log);
++		}
++	}
++
++	void ProgramGL::finishLink()
++	{
++		m_linkPending = false;
++
++		GLint linked = 0;
++		GL_CHECK(glGetProgramiv(m_id, GL_LINK_STATUS, &linked) );
++
++		if (0 == linked)
++		{
++			checkPendingShaderCompile(m_pendingVsh);
++			checkPendingShaderCompile(m_pendingFsh);
++
++			char log[1024];
++			GL_CHECK(glGetProgramInfoLog(m_id, sizeof(log), NULL, log) );
++			BX_TRACE("%d: %s", linked, log);
++
++			GL_CHECK(glDeleteProgram(m_id) );
++			m_usedCount = 0;
++			m_id = 0;
++			return;
++		}
++
++		s_renderGL->programCache(m_id, m_pendingCacheId);
++
++		init();
++
++		if (s_renderGL->m_workaround.m_detachShader)
++		{
++			GL_CHECK(glDetachShader(m_id, m_pendingVsh) );
++
++			if (0 != m_pendingFsh)
++			{
++				GL_CHECK(glDetachShader(m_id, m_pendingFsh) );
++			}
++		}
++	}
++
+ 	void ProgramGL::destroy()
+ 	{
++		m_linkPending = false;
++
+ 		if (NULL != m_constantBuffer)
+ 		{
+ 			UniformBuffer::destroy(m_constantBuffer);
+@@ -7639,6 +7722,12 @@ namespace bgfx { namespace gl
+ 
+ 			GL_CHECK(glCompileShader(m_id) );
+ 
++			if (s_extension[Extension::KHR_parallel_shader_compile].m_supported)
++			{
++				// The program reads the compile status when its link fails. A read here makes the renderer wait for the compile.
++				return;
++			}
++
+ 			GLint compiled = 0;
+ 			GL_CHECK(glGetShaderiv(m_id, GL_COMPILE_STATUS, &compiled) );
+ 
+@@ -9247,7 +9336,7 @@ namespace bgfx { namespace gl
+ 					{
+ 						const RenderCompute& compute = renderItem.compute;
+ 
+-						ProgramGL& program = m_program[key.m_program.idx];
++						ProgramGL& program = readyProgram(key.m_program);
+ 						setProgram(program.m_id);
+ 
+ 						GLbitfield barrier = 0;
+@@ -9864,7 +9953,7 @@ namespace bgfx { namespace gl
+ 				if (key.m_program.idx != currentProgram.idx)
+ 				{
+ 					currentProgram = key.m_program;
+-					GLuint id = isValid(currentProgram) ? m_program[currentProgram.idx].m_id : 0;
++					GLuint id = isValid(currentProgram) ? readyProgram(currentProgram).m_id : 0;
+ 
+ 					// Skip rendering if program index is valid, but program is invalid.
+ 					currentProgram = 0 == id ? ProgramHandle{kInvalidHandle} : currentProgram;
+diff --git a/bgfx/src/renderer_gl.h b/bgfx/src/renderer_gl.h
+index 224b883..d6f80ec 100644
+--- a/bgfx/src/renderer_gl.h
++++ b/bgfx/src/renderer_gl.h
+@@ -1631,6 +1631,7 @@ namespace bgfx { namespace gl
+ 		}
+ 
+ 		void create(const ShaderGL& _vsh, const ShaderGL& _fsh);
++		void finishLink();
+ 		void destroy();
+ 		void init();
+ 
+@@ -1657,6 +1658,13 @@ namespace bgfx { namespace gl
+ 		UniformBuffer* m_constantBuffer;
+ 		PredefinedUniform m_predefined[PredefinedUniform::Count];
+ 		uint8_t m_numPredefined;
++
++		// With KHR_parallel_shader_compile the driver links in the background. The program reads the link result
++		// at its first use, thus the render thread does not wait for each link when it makes the program.
++		bool m_linkPending = false;
++		GLuint m_pendingVsh = 0;
++		GLuint m_pendingFsh = 0;
++		uint64_t m_pendingCacheId = 0;
+ 	};
+ 
+ 	struct TimerQueryGL

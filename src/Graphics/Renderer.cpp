@@ -4317,7 +4317,9 @@ void Renderer::DrawSun(RenderPass viewId) const
 	}
 	// The sky of the temple has no sun, and the sea mirrors no sun: only the moon goes into the sea's sky
 	const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
-	if (!_warmingUp && (inTemple || viewId == RenderPass::ReflectionSky))
+	// A script can also hide the sun
+	const bool hidden = inTemple || Locator::skySystem::value().IsSunHidden();
+	if (!_warmingUp && (hidden || viewId == RenderPass::ReflectionSky))
 	{
 		return;
 	}
@@ -4347,8 +4349,9 @@ void Renderer::DrawSunGlare(const Camera& camera) const
 	{
 		return;
 	}
-	// Inside the temple the sun has no glare, and the glare does not change
-	if (!_warmingUp && Locator::temple::has_value() && Locator::temple::value().Active())
+	// Inside the temple, or when a script hides the sun, the sun has no glare, and the glare does not change
+	const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
+	if (!_warmingUp && (inTemple || Locator::skySystem::value().IsSunHidden()))
 	{
 		return;
 	}

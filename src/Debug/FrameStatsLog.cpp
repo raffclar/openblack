@@ -262,6 +262,13 @@ void FrameStatsLog::Report()
 	                   memory.has_value() && memory->own.has_value() ? fmt::format(" ({:.0f} MB its own)", *memory->own) : "",
 	                   Megabytes(stats->textureMemoryUsed), Megabytes(stats->rtMemoryUsed), Megabytes(stats->gpuMemoryUsed),
 	                   Megabytes(stats->gpuMemoryMax));
+	// How many buffers the renderer holds. bgfx has a limit for each kind.
+	const auto* caps = bgfx::getCaps();
+	SPDLOG_LOGGER_INFO(
+	    logger, "Frame stats #{} buffers: vertex {} of {}, index {} of {}, shared vertex {} of {}, shared index {} of {}",
+	    _reports, stats->numVertexBuffers, caps->limits.maxVertexBuffers, stats->numIndexBuffers, caps->limits.maxIndexBuffers,
+	    stats->numDynamicVertexBuffers, caps->limits.maxDynamicVertexBuffers, stats->numDynamicIndexBuffers,
+	    caps->limits.maxDynamicIndexBuffers);
 
 	// The stages that took the longest, nested ones among them
 	std::vector<std::pair<double, size_t>> stages;
