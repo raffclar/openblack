@@ -65,7 +65,20 @@ public:
 	{
 		for (const auto& block : turn.blocks)
 		{
-			if (block.sender == god && !MadeByServer(block))
+			if (block.sender == god && block.observer == 0 && !MadeByServer(block))
+			{
+				Held(block.sequence);
+			}
+		}
+	}
+
+	/// The blocks of the observer of this client that a turn holds. The server makes the blocks of the come and the go of
+	/// an observer itself, so they do not count.
+	void HeldInOfObserver(const turn_codec::TurnBundle& turn, uint8_t observer)
+	{
+		for (const auto& block : turn.blocks)
+		{
+			if (block.observer == observer && !MadeByServer(block))
 			{
 				Held(block.sequence);
 			}
@@ -82,14 +95,16 @@ public:
 		_kept.clear();
 	}
 
-	/// True when the server made the block: the join or the leave of a god, or of the god of the observers
+	/// True when the server made the block: the join or the leave of a god, of the god of the observers or of an observer
 	[[nodiscard]] static bool MadeByServer(const turn_codec::StampedBlock& block)
 	{
 		return std::ranges::any_of(block.actions, [](const player_commands::Action& action) {
 			return std::holds_alternative<player_commands::PlayerJoined>(action) ||
 			       std::holds_alternative<player_commands::PlayerLeft>(action) ||
 			       std::holds_alternative<player_commands::ObserversJoined>(action) ||
-			       std::holds_alternative<player_commands::ObserversLeft>(action);
+			       std::holds_alternative<player_commands::ObserversLeft>(action) ||
+			       std::holds_alternative<player_commands::ObserverIn>(action) ||
+			       std::holds_alternative<player_commands::ObserverOut>(action);
 		});
 	}
 

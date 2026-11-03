@@ -19,15 +19,20 @@
 #include "Common/GameRandom.h"
 #include "ECS/Components/ComputerPlayer.h"
 #include "ECS/Components/LeftGame.h"
+#include "ECS/Components/ObserverInterfaces.h"
 #include "ECS/Components/Player.h"
 #include "ECS/GamePlayers.h"
+#include "ECS/ObserverInterfaceRules.h"
 #include "ECS/PlayerColour.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
+#include "ECS/Systems/GameEndSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/LiquidParticleSystemInterface.h"
+#include "ECS/Systems/NetworkGameSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "Locator.h"
+#include "Online/NetworkSession.h"
 #include "Particles/PlayerSparkles.h"
 
 namespace openblack::ecs::other_player_sparkles
@@ -82,6 +87,24 @@ player_sparkles::Watched WatchedOf(const Registry& registry, const systems::Hand
 	watched.left = Left(registry, name);
 	return watched;
 }
+
+/// The observers of the god of the observers, none when the world has no player of the god or the god has no observer
+const components::ObserverInterfaces* ObserversOf(const Registry& registry, PlayerNames god)
+{
+	if (!Locator::playerSystem::has_value())
+	{
+		return nullptr;
+	}
+	const auto player = Locator::playerSystem::value().FindPlayer(god);
+	return player.has_value() ? registry.TryGet<const components::ObserverInterfaces>(*player) : nullptr;
+}
+
+/// The number of the observer of this computer, none on the computer of a god and on the game server
+std::optional<uint8_t> OwnObserver()
+{
+	const auto* session = Locator::networkGame::has_value() ? Locator::networkGame::value().Session() : nullptr;
+	return session != nullptr ? session->OwnObserver() : std::nullopt;
+}
 } // namespace
 
 void AddAtCameras()
@@ -101,22 +124,41 @@ void AddAtCameras()
 	auto& random = Locator::gameRandom::value();
 	auto& liquids = Locator::liquidParticleSystem::value();
 	const auto land = registry.Context().mapScriptGlobals.landNumber;
+	const auto observersGod =
+	    Locator::gameEndSystem::has_value() ? Locator::gameEndSystem::value().ObserversGod() : std::nullopt;
+	// One sparkle at the camera of an interface of a player, in the colour that the player shows
+	const auto sparkle = [&](liquid_particles::Interface interface, glm::vec3 origin) {
+		const auto tint = random.LocalRand(player_sparkles::k_Tints);
+		const auto shown = player_colour::ShownAs(interface.player, observersGod);
+		const auto colour = player_sparkles::Colour(player_colour::OnLand(shown, land), tint);
+		const auto kind = player_sparkles::KindOf(random.LocalRand(2));
+		liquids.AddForPlayer(interface, origin, glm::vec3(0.0f), player_sparkles::k_Size, colour, kind);
+		liquids.SetPlayerPoint(interface, origin);
+	};
 	for (const auto player : ecs::game_players::All())
 	{
+		const auto watched = WatchedOf(registry, hands, player);
+		// While humans play the god of the observers, each observer is an interface of its own, with a sparkle at its own
+		// camera. The observer of this computer shows none.
+		if (player == observersGod && watched.kind == player_kind::Kind::Human)
+		{
+			if (const auto* observers = ObserversOf(registry, player); observers != nullptr)
+			{
+				for (const auto& observer : observer_interfaces::ShownObservers(*observers, OwnObserver()))
+				{
+					sparkle({.player = player, .observer = observer.number}, observer.camera);
+				}
+			}
+			continue;
+		}
 		if (player == hands.GetOwnPlayer())
 		{
 			continue;
 		}
-		const auto origin = player_sparkles::PlaceOf(WatchedOf(registry, hands, player));
-		if (!origin.has_value())
+		if (const auto origin = player_sparkles::PlaceOf(watched); origin.has_value())
 		{
-			continue;
+			sparkle({.player = player}, *origin);
 		}
-		const auto tint = random.LocalRand(player_sparkles::k_Tints);
-		const auto colour = player_sparkles::Colour(player_colour::OnLand(player, land), tint);
-		const auto kind = player_sparkles::KindOf(random.LocalRand(2));
-		liquids.AddForPlayer(player, *origin, glm::vec3(0.0f), player_sparkles::k_Size, colour, kind);
-		liquids.SetPlayerPoint(player, *origin);
 	}
 }
 

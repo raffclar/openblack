@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <compare>
 #include <cstdint>
 
 #include <span>
@@ -24,6 +25,20 @@ namespace openblack::particles::draw
 struct Frame;
 }
 
+namespace openblack::liquid_particles
+{
+/// The interface of another player of a network game that has a pool of particles on this computer: the player, and
+/// the number of the observer for each observer of the god of the observers. Each interface has its own pool.
+struct Interface
+{
+	PlayerNames player {PlayerNames::PLAYER_ONE};
+	/// The number of the observer, from 1. 0 for the player of a god.
+	uint8_t observer {0};
+
+	[[nodiscard]] auto operator<=>(const Interface&) const = default;
+};
+} // namespace openblack::liquid_particles
+
 namespace openblack::ecs::systems
 {
 
@@ -36,18 +51,20 @@ public:
 	/// Adds a particle at a point with a speed, a full size, a colour (0xAARRGGBB) and a kind. The pool adds nothing when
 	/// it is full.
 	virtual void Add(glm::vec3 position, glm::vec3 velocity, float size, uint32_t argb, liquid_particles::Kind kind) = 0;
-	/// Adds a particle to the pool of another player of a network game, which only shows the world on this computer.
-	/// Each of those pools has its own limit, moves on with the shared pool, and is drawn in one piece at its point (see
-	/// SetPlayerPoint). The world save keeps none of them.
-	virtual void AddForPlayer([[maybe_unused]] PlayerNames player, [[maybe_unused]] glm::vec3 position,
+	/// Adds a particle to the pool of an interface of another player of a network game, which only shows the world on
+	/// this computer. Each of those pools has its own limit, moves on with the shared pool, and is drawn in one piece at
+	/// its point (see SetPlayerPoint). The world save keeps none of them.
+	virtual void AddForPlayer([[maybe_unused]] liquid_particles::Interface interface, [[maybe_unused]] glm::vec3 position,
 	                          [[maybe_unused]] glm::vec3 velocity, [[maybe_unused]] float size, [[maybe_unused]] uint32_t argb,
 	                          [[maybe_unused]] liquid_particles::Kind kind)
 	{
 	}
-	/// The point that the pool of another player is drawn at, for the order of the things that show what is behind them
-	virtual void SetPlayerPoint([[maybe_unused]] PlayerNames player, [[maybe_unused]] glm::vec3 point) {}
-	/// The particles of the pool of another player
-	[[nodiscard]] virtual std::span<const liquid_particles::Particle> PlayerParticles([[maybe_unused]] PlayerNames player) const
+	/// The point that the pool of an interface of another player is drawn at, for the order of the things that show what
+	/// is behind them
+	virtual void SetPlayerPoint([[maybe_unused]] liquid_particles::Interface interface, [[maybe_unused]] glm::vec3 point) {}
+	/// The particles of the pool of an interface of another player
+	[[nodiscard]] virtual std::span<const liquid_particles::Particle>
+	PlayerParticles([[maybe_unused]] liquid_particles::Interface interface) const
 	{
 		return {};
 	}

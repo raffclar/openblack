@@ -14,6 +14,7 @@
 #include <string_view>
 
 #include "ECS/Components/ObjectGlow.h"
+#include "ECS/Components/ObserverInterfaces.h"
 #include "ECS/Components/OneOffSpellSeed.h"
 #include "ECS/Reflection/ComponentReflection.h"
 
@@ -29,6 +30,14 @@ void openblack::ecs::reflection::RegisterFields_Components_o(entt::meta_ctx& con
 	Reflect<components::ObjectGlow>(context)
 	    .Field<&components::ObjectGlow::rgb>("rgb")
 	    .Field<&components::ObjectGlow::turnsUnset>("turnsUnset");
+	Reflect<components::ObserverInterface>(context)
+	    .Field<&components::ObserverInterface::number>("number")
+	    .Field<&components::ObserverInterface::reported>("reported")
+	    .Field<&components::ObserverInterface::handPoint>("handPoint")
+	    .Field<&components::ObserverInterface::camera>("camera");
+	Reflect<components::ObserverInterfaces>(context)
+	    .Field<&components::ObserverInterfaces::observers>("observers")
+	    .Field<&components::ObserverInterfaces::name>("name");
 	Reflect<components::OneOffSpellSeed>(context)
 	    .Field<&components::OneOffSpellSeed::seedType>("seedType")
 	    .Field<&components::OneOffSpellSeed::magicType>("magicType")

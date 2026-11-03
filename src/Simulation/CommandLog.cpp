@@ -62,10 +62,13 @@ std::string LineOf(uint32_t turn, std::span<const player_commands::Command> comm
 	for (const auto& command : commands)
 	{
 		if (bundle.blocks.empty() || bundle.blocks.back().sender != command.player ||
+		    bundle.blocks.back().observer != command.observer ||
 		    bundle.blocks.back().actions.size() >= turn_codec::k_MostBlockCommands)
 		{
-			bundle.blocks.push_back(
-			    {.sender = command.player, .sequence = static_cast<uint16_t>(bundle.blocks.size()), .actions = {}});
+			bundle.blocks.push_back({.sender = command.player,
+			                         .sequence = static_cast<uint16_t>(bundle.blocks.size()),
+			                         .actions = {},
+			                         .observer = command.observer});
 		}
 		bundle.blocks.back().actions.push_back(command.action);
 	}
@@ -121,7 +124,7 @@ std::optional<Turn> ReadLine(std::string_view line)
 	{
 		for (const auto& action : block.actions)
 		{
-			turn.commands.push_back({.player = block.sender, .action = action});
+			turn.commands.push_back({.player = block.sender, .action = action, .observer = block.observer});
 		}
 	}
 	return turn;

@@ -2355,3 +2355,4 @@ openblack_setup_and_add_test(test_lhvm_save_resume lhvm/test_lhvm_save_resume.cp
 target_link_libraries(test_lhvm_save_resume PRIVATE ScriptLibrary)
 openblack_setup_and_add_test(test_gathering_box test_gathering_box.cpp)
 openblack_setup_and_add_test(test_lobby_ping_server online/test_lobby_ping_server.cpp)
+openblack_setup_and_add_test(test_observer_interfaces test_observer_interfaces.cpp)

@@ -46,6 +46,13 @@ inline constexpr std::array<uint32_t, player_slots::k_MaxPlayers - player_slots:
     0xFFDDAABB, 0xFFDD3366, 0xFF99DDFF, 0xFF0099FF, 0xFF8855FF, 0xFF8866BB, 0xFFFFCCAA,
 };
 
+/// The player whose colour a player shows. The god of the observers shows the colour of player seven, the orange of the
+/// observers, also when it is a god after the seventh (deviation 218). Every other player shows its own colour.
+[[nodiscard]] constexpr PlayerNames ShownAs(PlayerNames player, std::optional<PlayerNames> observersGod) noexcept
+{
+	return observersGod == player ? PlayerNames::PLAYER_SEVEN : player;
+}
+
 /// The land colour of a god after the seventh, 0xFFRRGGBB, from `k_LaterGodLandColours` by its god slot (deviation
 /// 164). None for a player of a land, which keeps the colour of the game's tables.
 [[nodiscard]] constexpr std::optional<uint32_t> LaterGodColour(PlayerNames player)

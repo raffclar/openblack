@@ -357,6 +357,14 @@ void WriteAction(Writer& out, const Action& action)
 	               [&out](const FishScare& command) { out.Vector(command.point); },
 	               [](const ObserversJoined& /*command*/) {},
 	               [](const ObserversLeft& /*command*/) {},
+	               [&out](const ObserverIn& command) {
+		               out.Byte(static_cast<uint8_t>(command.name.size()));
+		               for (const auto character : command.name)
+		               {
+			               out.Number(static_cast<uint16_t>(character));
+		               }
+	               },
+	               [](const ObserverOut& /*command*/) {},
 	               [&out](const MusicMood& command) {
 		               out.Entity(command.creature);
 		               out.Number(command.track);
@@ -579,6 +587,29 @@ DecodeError ReadAction(Reader& in, Action& action)
 		return DecodeError::None;
 	case CommandTag::ObserversLeft:
 		action = ObserversLeft {};
+		return DecodeError::None;
+	case CommandTag::ObserverIn:
+	{
+		const auto length = in.Byte();
+		if (length > k_MostObserverNameCharacters)
+		{
+			return DecodeError::Value;
+		}
+		if (in.Left() < size_t {length} * 2)
+		{
+			return DecodeError::Truncated;
+		}
+		ObserverIn observer;
+		observer.name.resize(length);
+		for (auto& character : observer.name)
+		{
+			character = static_cast<char16_t>(in.Number<uint16_t>());
+		}
+		action = std::move(observer);
+		return DecodeError::None;
+	}
+	case CommandTag::ObserverOut:
+		action = ObserverOut {};
 		return DecodeError::None;
 	case CommandTag::MiracleRequest:
 	{
@@ -857,7 +888,8 @@ DecodeError ReadActions(Reader& in, std::vector<Action>& actions)
 	return DecodeError::None;
 }
 
-/// The players of a line of the chat are slots of the game, and the line is not too long
+/// The players of a line of the chat are slots of the game, and a line of the chat or the name of an observer is not too
+/// long
 [[nodiscard]] bool ValidChat(const Action& action)
 {
 	const auto validRecipients = [](const std::vector<PlayerNames>& recipients) {
@@ -872,6 +904,10 @@ DecodeError ReadActions(Reader& in, std::vector<Action>& actions)
 	if (const auto* taunt = std::get_if<ChatTaunt>(&action); taunt != nullptr)
 	{
 		return validRecipients(taunt->recipients);
+	}
+	if (const auto* observer = std::get_if<ObserverIn>(&action); observer != nullptr)
+	{
+		return observer->name.size() <= k_MostObserverNameCharacters;
 	}
 	return true;
 }
@@ -891,7 +927,8 @@ DecodeError ReadActions(Reader& in, std::vector<Action>& actions)
 			                      return false;
 		                      }
 		                      return std::ranges::all_of(turn.blocks, [](const StampedBlock& block) {
-			                      return player_slots::SlotOfPlayer(block.sender).has_value() && ValidActions(block.actions);
+			                      return player_slots::SlotOfPlayer(block.sender).has_value() &&
+			                             block.observer <= k_MostObserverNumber && ValidActions(block.actions);
 		                      });
 	                      },
 	                      [](const TurnChecksum& /*checksum*/) { return true; },
@@ -973,6 +1010,8 @@ CommandTag TagOf(const Action& action) noexcept
 	                      [](const FishScare& /*command*/) { return CommandTag::FishScare; },
 	                      [](const ObserversJoined& /*command*/) { return CommandTag::ObserversJoined; },
 	                      [](const ObserversLeft& /*command*/) { return CommandTag::ObserversLeft; },
+	                      [](const ObserverIn& /*command*/) { return CommandTag::ObserverIn; },
+	                      [](const ObserverOut& /*command*/) { return CommandTag::ObserverOut; },
 	                  },
 	                  action);
 }
@@ -1038,6 +1077,8 @@ size_t SizeOf(const Action& action) noexcept
 	                   [](const FishScare& /*command*/) { return k_Vector; },
 	                   [](const ObserversJoined& /*command*/) { return size_t {0}; },
 	                   [](const ObserversLeft& /*command*/) { return size_t {0}; },
+	                   [](const ObserverIn& command) { return 1 + (2 * command.name.size()); },
+	                   [](const ObserverOut& /*command*/) { return size_t {0}; },
 	               },
 	               action);
 	return 1 + fields;
@@ -1101,6 +1142,7 @@ bool Append(const Frame& frame, std::vector<uint8_t>& out)
 		               for (const auto& block : turn.blocks)
 		               {
 			               writer.Byte(SlotByte(block.sender));
+			               writer.Byte(block.observer);
 			               writer.Number(block.sequence);
 			               writeActions(block.actions);
 		               }
@@ -1222,6 +1264,11 @@ DecodeResult Decode(std::span<const uint8_t> bytes)
 				return Fail(in.Bad() ? DecodeError::Truncated : DecodeError::Value);
 			}
 			block.sender = *sender;
+			block.observer = in.Byte();
+			if (block.observer > k_MostObserverNumber)
+			{
+				return Fail(in.Bad() ? DecodeError::Truncated : DecodeError::Value);
+			}
 			block.sequence = in.Number<uint16_t>();
 			if (const auto error = ReadActions(in, block.actions); error != DecodeError::None)
 			{
