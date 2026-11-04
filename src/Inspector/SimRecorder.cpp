@@ -699,11 +699,6 @@ void SimProvider::HashEnded(uint32_t turn, const synced_state::Hash& hash)
 
 void SimProvider::AddHash(Synced& synced, const synced_state::Hash& hash)
 {
-	Json parts = Json::object();
-	for (const auto& [name, part] : hash.parts)
-	{
-		parts[name] = fmt::format("{:016x}", part);
-	}
 	Json value = {{"hash", fmt::format("{:016x}", hash.hash)}};
 	// A component with no registration is left out of the hash: tell of each name once, and show the names in the record
 	if (!hash.unregistered.empty())
@@ -732,8 +727,14 @@ void SimProvider::AddHash(Synced& synced, const synced_state::Hash& hash)
 		// The checksum that a network game compares each turn
 		value["checksum"] = fmt::format("{:016x}", synced_state::Checksum(stateHash, seed, draws));
 	}
+	// The record keeps the parts of the hash only when the tool asks for them
 	if (_hashParts != sim_run::HashDetail::None)
 	{
+		Json parts = Json::object();
+		for (const auto& [name, part] : hash.parts)
+		{
+			parts[name] = fmt::format("{:016x}", part);
+		}
 		value["parts"] = std::move(parts);
 	}
 	synced.value = std::move(value);

@@ -39,7 +39,16 @@ namespace openblack::ecs
 class Registry
 {
 public:
+	/// Tells if the renderer draws the entities of a registry
+	enum class Drawn : uint8_t
+	{
+		Yes,
+		No,
+	};
+
 	Registry();
+	/// A registry that the renderer does not draw does not mark the draw when its entities change
+	explicit Registry(Drawn drawn);
 	decltype(auto) Create() { return _registry.create(); }
 	template <typename It>
 	void Create(It first, It last)
@@ -237,6 +246,7 @@ private:
 	/// A living that goes leaves its flock. A flock that it leaves with no members goes too.
 	void LivingGone(entt::registry& registry, entt::entity living);
 
+	Drawn _drawn {Drawn::Yes};
 	uint32_t _entitiesMade {0};
 	uint32_t _resets {0};
 	uint64_t _entitiesGone {0};
