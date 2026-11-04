@@ -138,7 +138,8 @@ std::optional<ImportedCamera> ReadCamera(const gamesave::VanillaWorld& world)
 	                       .lens = GlideOf(lens.first<k_GlideBytes>()),
 	                       .belowLand = world.Byte(record, "cameraBelowLand").value_or(0) != 0,
 	                       .mode = *mode,
-	                       .follow = std::nullopt};
+	                       .follow = std::nullopt,
+	                       .free = std::nullopt};
 	if (*mode == Mode::Follow || *mode == Mode::FollowAndTurn)
 	{
 		camera.follow = Follow {
@@ -153,6 +154,17 @@ std::optional<ImportedCamera> ReadCamera(const gamesave::VanillaWorld& world)
 		    .eyeOffset = PointOf(world.Raw(record, "followEyeOffset")),
 		    .target = world.Ref(record, "followTarget").value_or(0),
 		    .autoReposition = world.Word(record, "followAutoReposition").value_or(0) != 0,
+		};
+	}
+	if (*mode == Mode::Free)
+	{
+		const auto keys = world.Word(record, "freeKeys").value_or(0);
+		camera.free = Free {
+		    .speed = world.Float(record, "freeSpeed").value_or(0.0f),
+		    .across = static_cast<int32_t>(world.Word(record, "freeMoveX").value_or(0)),
+		    .along = static_cast<int32_t>(world.Word(record, "freeMoveY").value_or(0)),
+		    .shift = (keys & k_ShiftKey) != 0,
+		    .ctrl = (keys & k_CtrlKey) != 0,
 		};
 	}
 	return camera;

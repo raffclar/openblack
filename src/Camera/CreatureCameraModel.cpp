@@ -28,6 +28,14 @@ CreatureCameraModel::CreatureCameraModel(glm::vec3 cameraOrigin, glm::vec3 camer
 {
 }
 
+CreatureCameraModel::CreatureCameraModel(const creature_follow::Loaded& loaded, glm::vec3 creature, float height)
+    : _view(loaded.view)
+    , _focus(creature_follow::Focus(creature, height))
+    , _timeScale(loaded.timeScale)
+    , _autoReposition(loaded.autoReposition)
+{
+}
+
 void CreatureCameraModel::SetTarget(glm::vec3 position, float height)
 {
 	_focus = creature_follow::Focus(position, height);
@@ -54,7 +62,7 @@ std::optional<CameraModel::CameraInterpolationUpdateInfo> CreatureCameraModel::U
 	const auto seconds = std::chrono::duration<float>(dt).count();
 	// It sets off afresh each frame for where it wants to be, arriving after the ease's time, so it eases after the
 	// creature as it moves
-	const auto ease = creature_follow::EaseSeconds(_seconds);
+	const auto ease = creature_follow::EaseSeconds(_seconds) * _timeScale;
 	_seconds += seconds;
 	_view = creature_follow::Clamped(_view);
 	auto origin = creature_follow::Origin(_focus, _view);
@@ -106,7 +114,7 @@ void CreatureCameraModel::HandleKeys(std::chrono::microseconds dt)
 	Turn(keys, width);
 
 	// Ctrl and Shift held together, with the cursor keys still, swing the camera clear of the land in the way
-	if (keys.shift && keys.ctrl && !keys.Moving() && Locator::terrainSystem::has_value())
+	if (_autoReposition && keys.shift && keys.ctrl && !keys.Moving() && Locator::terrainSystem::has_value())
 	{
 		const auto& land = Locator::terrainSystem::value();
 		ClearView(land.GetNormalAt(glm::xz(_focus)), [&land](glm::vec2 point) { return land.GetHeightAt(point); });

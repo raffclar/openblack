@@ -77,6 +77,15 @@ enum class StartDistance : uint8_t
 	/// Always the creature's viewing distance
 	Viewing,
 };
+/// A follow camera as a saved game of the original game keeps it: its view, the share of its glide time, and whether
+/// Ctrl and Shift together swing it clear
+struct Loaded
+{
+	View view;
+	float timeScale {1.0f};
+	bool autoReposition {true};
+};
+
 /// The view the camera starts with on a creature: as it is turned and tilted now, and the creature's viewing distance
 /// away. With KeepWhenClose, it is as far as it already is when it is close, but no nearer than twice the creature's
 /// height.

@@ -39,6 +39,11 @@
 #error "ECS System implementations should only be included in Locator.cpp"
 #endif
 
+namespace openblack::ecs::vanilla_camera_import
+{
+struct ImportedCamera;
+} // namespace openblack::ecs::vanilla_camera_import
+
 namespace openblack::ecs::systems
 {
 
@@ -178,8 +183,12 @@ private:
 	/// Puts the clock of day and night and the count of things made of the world file into the world
 	void ImportVanillaGameValues(const gamesave::VanillaWorld& world);
 	/// Puts the camera of the world file into the world: the eye, the point that it looks at and the lens, with the glides
-	/// that move them, and a new world camera that takes over from there
-	static void ImportVanillaCamera(const gamesave::VanillaWorld& world);
+	/// that move them, a new world camera that takes over from there, and then the mode of the file on top of it
+	static void ImportVanillaCamera(const gamesave::VanillaWorld& world, const VanillaMade& made);
+	/// The mode of the camera of the file takes the camera from the world camera: a camera that follows a creature, a
+	/// camera that follows a thing and turns with it, or the free camera. The world camera stays for a camera that
+	/// follows a thing that is not there.
+	static void ImportVanillaCameraMode(const ecs::vanilla_camera_import::ImportedCamera& file, const VanillaMade& made);
 	/// The markers, the timers, the highlights and the influences of the scripts replace those of the land. A heart of
 	/// a temple is the temple of the land.
 	void ImportVanillaScriptThings(const gamesave::VanillaWorld& world, VanillaMade& made);

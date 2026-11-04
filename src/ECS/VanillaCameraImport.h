@@ -89,6 +89,22 @@ struct Follow
 	bool autoReposition {false};
 };
 
+/// The values of a free camera
+struct Free
+{
+	float speed {0.0f};
+	/// The counts of the keys of the frame of the save: to the side and along the view
+	int32_t across {0};
+	int32_t along {0};
+	/// The keys that change what the movement keys do
+	bool shift {false};
+	bool ctrl {false};
+};
+
+/// The bits of the keys of a free camera that the file keeps
+inline constexpr uint32_t k_ShiftKey = 0x10;
+inline constexpr uint32_t k_CtrlKey = 0x20;
+
 /// The camera of the file
 struct ImportedCamera
 {
@@ -101,6 +117,8 @@ struct ImportedCamera
 	Mode mode {Mode::World};
 	/// The values of the mode, for the modes that follow a thing
 	std::optional<Follow> follow;
+	/// The values of the free camera
+	std::optional<Free> free;
 };
 
 /// The camera of the file. None when the file has no camera, or when its camera has values that do not read.

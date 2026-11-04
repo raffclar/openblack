@@ -4656,6 +4656,68 @@ TEST(VanillaWorldImport, TheCameraOfTheFileReadsWithTheValuesOfItsMode)
 	EXPECT_FALSE(camera_import::ReadCamera(GameAtTurn(1).Make()).has_value());
 }
 
+namespace
+{
+/// A world whose camera has a mode, with still glides
+FakeWorld WorldWithCameraMode(uint32_t mode)
+{
+	std::array<float, 36> still {};
+	for (size_t axis = 0; axis < 3; ++axis)
+	{
+		std::ranges::copy(GlideNumbers(GlideFrom(1.0f, 1.0f, 0.0f, 0.0f)),
+		                  still.begin() + static_cast<std::ptrdiff_t>(axis * 12));
+	}
+	auto world = GameAtTurn(1);
+	world.Record(VanillaType::Camera)
+	    .Value("cameraFocusGlide", still)
+	    .Value("cameraEyeGlide", still)
+	    .Value("cameraLensGlide", GlideNumbers(GlideFrom(1.0f, 1.0f, 0.0f, 0.0f)))
+	    .Value<uint8_t>("cameraBelowLand", 0)
+	    .Value<uint32_t>("mode", mode);
+	return world;
+}
+} // namespace
+
+TEST(VanillaWorldImport, TheFreeCameraOfTheFileReadsItsSpeedAndItsKeys)
+{
+	auto world = WorldWithCameraMode(0x65);
+	world.Value("freeSpeed", 3.5f)
+	    .Value<int32_t>("freeMoveX", -6)
+	    .Value<int32_t>("freeMoveY", 4)
+	    .Value<uint32_t>("freeKeys", camera_import::k_CtrlKey);
+	const auto camera = camera_import::ReadCamera(world.Make());
+	ASSERT_TRUE(camera.has_value());
+	EXPECT_EQ(camera->mode, camera_import::Mode::Free);
+	EXPECT_FALSE(camera->belowLand);
+	EXPECT_FALSE(camera->follow.has_value());
+	ASSERT_TRUE(camera->free.has_value());
+	EXPECT_EQ(camera->free->speed, 3.5f);
+	EXPECT_EQ(camera->free->across, -6);
+	EXPECT_EQ(camera->free->along, 4);
+	EXPECT_TRUE(camera->free->ctrl);
+	EXPECT_FALSE(camera->free->shift);
+}
+
+TEST(VanillaWorldImport, TheTurningFollowCameraOfTheFileReadsItsTurnAndItsThing)
+{
+	auto world = WorldWithCameraMode(0x48);
+	world.Value("followHeading", 0.75f)
+	    .Value("followPitch", 0.3f)
+	    .Value("followDistance", 60.0f)
+	    .Value("followTurnSpeed", 0.01f)
+	    .Ref("followTarget", 12);
+	const auto camera = camera_import::ReadCamera(world.Make());
+	ASSERT_TRUE(camera.has_value());
+	EXPECT_EQ(camera->mode, camera_import::Mode::FollowAndTurn);
+	EXPECT_FALSE(camera->free.has_value());
+	ASSERT_TRUE(camera->follow.has_value());
+	EXPECT_EQ(camera->follow->heading, 0.75f);
+	EXPECT_EQ(camera->follow->pitch, 0.3f);
+	EXPECT_EQ(camera->follow->distance, 60.0f);
+	EXPECT_EQ(camera->follow->turnSpeed, 0.01f);
+	EXPECT_EQ(camera->follow->target, 12u);
+}
+
 TEST(VanillaWorldImport, SavedGamesHaveACameraWhosePointsGlideTogether)
 {
 	const auto files = ForEachSave([](const std::filesystem::path& path, const VanillaWorld& world) {

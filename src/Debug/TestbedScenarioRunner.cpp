@@ -4844,6 +4844,10 @@ void Runner::Give(const Command& command)
 	case Kind::CameraKeys:
 	case Kind::ClearCameraView:
 	case Kind::LeaveCreatureMode:
+	case Kind::SavedFollowCamera:
+	case Kind::SavedTurningCamera:
+	case Kind::SavedFreeCamera:
+	case Kind::SavedBelowLandCamera:
 	case Kind::OpenCreatureCave:
 	case Kind::ApplyTattoo:
 	case Kind::RemoveTattoo:
@@ -5205,6 +5209,11 @@ std::string Runner::GiveCreatureModeCommand(entt::entity creature, const Command
 	case Kind::LeaveCreatureMode:
 		mode.Leave();
 		return following();
+	case Kind::SavedFollowCamera:
+	case Kind::SavedTurningCamera:
+	case Kind::SavedFreeCamera:
+	case Kind::SavedBelowLandCamera:
+		return GiveSavedCameraCommand(creature, command);
 	case Kind::OpenCreatureCave:
 		cave.Open();
 		cave.GetScreen().page = static_cast<creature_cave::Page>(command.value);

@@ -102,6 +102,32 @@ bool CreatureModeSystem::StillValid() const
 
 bool CreatureModeSystem::Enter(entt::entity creature, creature_follow::StartDistance start)
 {
+	const auto taken = Take(creature, [start](const Camera& camera, glm::vec3 position, float height) {
+		return std::make_unique<CreatureCameraModel>(camera.GetOrigin(), camera.GetFocus(), position, height, start);
+	});
+	if (taken)
+	{
+		// The button that double clicked is still down: only a grip of the land after this one gives the camera back
+		_wasGripping = true;
+	}
+	return taken;
+}
+
+bool CreatureModeSystem::EnterLoaded(entt::entity creature, const creature_follow::Loaded& loaded)
+{
+	const auto taken = Take(creature, [&loaded](const Camera& /*camera*/, glm::vec3 position, float height) {
+		return std::make_unique<CreatureCameraModel>(loaded, position, height);
+	});
+	if (taken)
+	{
+		// No button took the camera
+		_wasGripping = false;
+	}
+	return taken;
+}
+
+bool CreatureModeSystem::Take(entt::entity creature, const MakeModel& make)
+{
 	if (!Locator::camera::has_value() || !Locator::entitiesRegistry::has_value() || TempleActive())
 	{
 		return false;
@@ -129,16 +155,13 @@ bool CreatureModeSystem::Enter(entt::entity creature, creature_follow::StartDist
 	// The camera follows the body where the frame draws it
 	const auto transform = components::DrawnTransform(registry.Get<const components::Transform>(creature),
 	                                                  registry.TryGet<const components::CreatureAnimation>(creature));
-	auto model = std::make_unique<CreatureCameraModel>(camera.GetOrigin(), camera.GetFocus(), transform.position,
-	                                                   creature_mode::CreatureHeight(ShownSize(body)), start);
+	auto model = make(camera, transform.position, creature_mode::CreatureHeight(ShownSize(body)));
 	_model = model.get();
 	_returnOrigin = camera.GetModel().GetTargetOrigin();
 	_returnFocus = camera.GetModel().GetTargetFocus();
 	_playerModel = camera.SetModel(std::move(model));
 	_creature = creature;
 	_leaving = false;
-	// The button that double clicked is still down: only a grip of the land after this one gives the camera back
-	_wasGripping = true;
 	return true;
 }
 

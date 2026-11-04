@@ -481,7 +481,7 @@ void SaveGameSystem::ImportVanillaGameValues(const gamesave::VanillaWorld& world
 	}
 }
 
-void SaveGameSystem::ImportVanillaCamera(const gamesave::VanillaWorld& world)
+void SaveGameSystem::ImportVanillaCamera(const gamesave::VanillaWorld& world, const VanillaMade& made)
 {
 	namespace camera_import = openblack::ecs::vanilla_camera_import;
 	if (!Locator::camera::has_value())
@@ -510,16 +510,13 @@ void SaveGameSystem::ImportVanillaCamera(const gamesave::VanillaWorld& world)
 		camera.SetInterpolatorTime(std::chrono::microseconds::zero());
 	}
 	camera.SetLensGlide(camera_import::LensOf(file->lens));
+	// The world camera of the file can let its eye go below the land
+	camera.SetEyeMayGoBelowLand(file->belowLand);
 	// The load gives the camera a new world camera. It takes over from where the camera is now, and the count of the
 	// camera's time starts again from zero.
 	camera.SetModel(std::make_unique<DefaultWorldCameraModel>(camera.GetOrigin(), camera.GetFocus()));
-	if (file->mode != camera_import::Mode::World)
-	{
-		SPDLOG_LOGGER_WARN(ImportLog(),
-		                   "The camera of the file follows a thing or moves free (mode {}). openblack has no camera for "
-		                   "this mode, so the world camera takes over.",
-		                   static_cast<int>(file->mode));
-	}
+	// The mode of the file goes on top of the world camera
+	ImportVanillaCameraMode(*file, made);
 	SPDLOG_LOGGER_INFO(ImportLog(), "The camera of the game's file looks from ({}, {}, {}) at ({}, {}, {})",
 	                   camera.GetOrigin().x, camera.GetOrigin().y, camera.GetOrigin().z, camera.GetFocus().x,
 	                   camera.GetFocus().y, camera.GetFocus().z);

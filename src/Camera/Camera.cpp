@@ -21,6 +21,7 @@
 #include "3D/TempleInteriorInterface.h"
 #include "CameraLens.h"
 #include "CameraLimits.h"
+#include "DefaultWorldCameraModel.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/PickingSystemInterface.h"
 #include "Input/GameActionMapInterface.h"
@@ -87,7 +88,7 @@ camera_drawn::Pose Camera::DrawnPose(Interpolation interpolation) const
 	if (interpolation == Interpolation::Current && DrawsTheWorld())
 	{
 		pose = camera_drawn::Separate(camera_drawn::WithoutNaN(pose, _lastCorrectPose));
-		if (_model != nullptr && _model->HeldInsideTheWorld() && Locator::terrainSystem::has_value())
+		if (_model != nullptr && _model->DrawnAboveLand() && !_eyeMayGoBelowLand && Locator::terrainSystem::has_value())
 		{
 			pose = camera_drawn::AboveLand(pose, Locator::terrainSystem::value().GetHeightAt(glm::xz(pose.eye)));
 		}
@@ -397,8 +398,18 @@ bool Camera::ProjectWorldToScreen(glm::vec3 worldPosition, glm::vec4 viewport, g
 	return true;
 }
 
+void Camera::ReplaceEndedModel()
+{
+	if (_model != nullptr && !_model->IsStillValid())
+	{
+		// The world camera takes over from where the camera is, and the count of the camera's time starts again
+		SetModel(std::make_unique<DefaultWorldCameraModel>(GetOrigin(), GetFocus()));
+	}
+}
+
 void Camera::Update(std::chrono::microseconds dt)
 {
+	ReplaceEndedModel();
 	CountModelTime(dt);
 	_stepViewCount = 0;
 	const auto updateInfo = _model->Update(dt, *this);
@@ -436,6 +447,7 @@ void Camera::Update(const input_steps::Steps& steps)
 			_model->HandleActions(time);
 		}
 		useStep(i);
+		ReplaceEndedModel();
 		CountModelTime(time);
 		const auto updateInfo = _model->Update(time, *this);
 		ForgetForcedTurnPoint();

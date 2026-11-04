@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <functional>
 #include <memory>
 
 #include <glm/vec3.hpp>
@@ -22,6 +23,7 @@
 namespace openblack
 {
 class CameraModel;
+class Camera;
 class CreatureCameraModel;
 } // namespace openblack
 
@@ -40,6 +42,7 @@ public:
 	bool Press(const creature_mode::Press& press) override;
 	void PressCreatureKey() override;
 	bool Enter(entt::entity creature, creature_follow::StartDistance start) override;
+	bool EnterLoaded(entt::entity creature, const creature_follow::Loaded& loaded) override;
 	void Leave() override;
 	[[nodiscard]] bool IsActive() const override { return _creature.has_value(); }
 	[[nodiscard]] std::optional<entt::entity> GetCreature() const override { return _creature; }
@@ -49,6 +52,11 @@ public:
 	void ClearView() override;
 
 private:
+	/// Makes the camera of the creature from the camera now, the creature's place and its height
+	using MakeModel =
+	    std::function<std::unique_ptr<CreatureCameraModel>(const Camera& camera, glm::vec3 creature, float height)>;
+	/// Locks onto a creature with the camera that the function makes; false when the camera can't be taken now
+	bool Take(entt::entity creature, const MakeModel& make);
 	[[nodiscard]] bool OwnsCamera() const;
 	/// Hands the player's camera back, if the camera is with this mode's
 	void ReleaseCamera();

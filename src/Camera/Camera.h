@@ -223,6 +223,14 @@ public:
 	void SetKeyboardMoveSpeed(float speed);
 	[[nodiscard]] float GetKeyboardMoveSpeed() const { return _keyboardMoveSpeed; }
 
+	/// When true, the world camera can go lower than its floor above the land, and the frame draws from the eye where it
+	/// is, also below the land. Only the import of a saved game of the original game sets it. A new camera has it false.
+	void SetEyeMayGoBelowLand(bool mayGoBelow) { _eyeMayGoBelowLand = mayGoBelow; }
+	[[nodiscard]] bool EyeMayGoBelowLand() const { return _eyeMayGoBelowLand; }
+	/// The last heading of the camera that follows the way a thing faces. All such cameras of the game share it, and it
+	/// stays after the camera stops, so that a new one starts from it while its thing turns too fast.
+	[[nodiscard]] float& HeldFollowHeading() { return _heldFollowHeading; }
+
 protected:
 	/// How far through its movement a clock is, 0 to 1; a movement of no length is over
 	[[nodiscard]] static float ShareOf(std::chrono::microseconds time, std::chrono::microseconds duration)
@@ -234,6 +242,8 @@ protected:
 	void KeepInsideTheWorld();
 	/// The count of the model's time goes on by a frame
 	void CountModelTime(std::chrono::microseconds dt);
+	/// A model that cannot continue gives the camera to a new world camera
+	void ReplaceEndedModel();
 	/// The camera keeps its eye and its view after a step of the input
 	void KeepStepView();
 	/// After a step of the fight view that follows the fighters, the camera has no point to turn about
@@ -291,6 +301,8 @@ protected:
 	[[nodiscard]] View GetDrawnView() const;
 	[[nodiscard]] glm::mat4 GetProjectionMatrix(Projection projection, Interpolation interpolation) const;
 	float _keyboardMoveSpeed = k_KeyboardMoveSpeedDefault;
+	bool _eyeMayGoBelowLand {false};
+	float _heldFollowHeading {0.0f};
 };
 
 } // namespace openblack
