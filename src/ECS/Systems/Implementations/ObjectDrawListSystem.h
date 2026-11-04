@@ -51,6 +51,11 @@ public:
 	void NoteFullFrame(entt::entity entity, bool staysDrawn) override;
 	[[nodiscard]] std::span<const entt::entity> GetList() const override { return _list; }
 	[[nodiscard]] Summary GetSummary() const override;
+	[[nodiscard]] bool BlockInView(const glm::mat4& viewProjection, float nearPlane,
+	                               const object_draw_list::Block& block) override
+	{
+		return _blockViews.InView(viewProjection, nearPlane, block);
+	}
 	void Reset() override;
 
 private:
@@ -86,6 +91,7 @@ private:
 	object_draw_list::Frame _frame {.rebuilt = true, .drawAll = true};
 	std::optional<object_draw_list::View> _view;
 	std::vector<LandBlock> _blocks;
+	object_draw_list::BlockViewMemo _blockViews;
 	object_draw_list::RebuildRequests _requests;
 	std::optional<uint32_t> _madeAt;
 	uint32_t _blocksWalked {0};

@@ -28,6 +28,7 @@
 #include "ECS/Components/Weather.h"
 #include "ECS/DrawnRegistry.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/ObjectDrawListSystemInterface.h"
 #include "Graphics/HandLight.h"
 #include "Graphics/Texture2D.h"
 #include "Locator.h"
@@ -102,6 +103,15 @@ LandShadeSystem::Sources GameSources()
 	    .drawn = []() -> const ecs::Registry* {
 		    return Locator::drawnRegistry::has_value() ? &Locator::drawnRegistry::value() : nullptr;
 	    },
+	    // The draw list keeps the answers of the frame for the land shade, the land detail and the list
+	    .blockInView =
+	        [](const glm::mat4& viewProjection, float nearPlane, const object_draw_list::Block& block) {
+		        if (Locator::objectDrawListSystem::has_value())
+		        {
+			        return Locator::objectDrawListSystem::value().BlockInView(viewProjection, nearPlane, block);
+		        }
+		        return object_draw_list::BlockInView(viewProjection, nearPlane, block);
+	        },
 	};
 }
 } // namespace
@@ -170,7 +180,9 @@ void LandShadeSystem::Shade(const LandShadeFrame& frame)
 		    .highestAltitude = i < _highest.size() ? _highest[i] : uint8_t {0},
 		    .reflected = frame.landReflection,
 		};
-		_land.SetInView(blocks[i], object_draw_list::BlockInView(frame.viewProjection, frame.nearPlane, box));
+		_land.SetInView(blocks[i], _sources.blockInView
+		                               ? _sources.blockInView(frame.viewProjection, frame.nearPlane, box)
+		                               : object_draw_list::BlockInView(frame.viewProjection, frame.nearPlane, box));
 	}
 
 	CastShadows(frame, *registry, _sources.drawn ? _sources.drawn() : nullptr);
