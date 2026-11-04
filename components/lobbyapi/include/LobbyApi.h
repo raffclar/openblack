@@ -318,6 +318,39 @@ struct ServerBanList
 	std::vector<ServerBan> bans;
 };
 
+/// A god in the report of the end of a game
+struct ResultGod
+{
+	/// "account"
+	int64_t account {0};
+	/// "clan": the clan that the god played for. None for a god with no clan.
+	std::optional<int64_t> clan;
+	/// "position": 1 is the winner, and gods with the same position share it
+	int32_t position {1};
+	/// "gods_defeated": the gods that this god defeated, as the end statistics give them
+	std::optional<int32_t> godsDefeated;
+	/// "time_played": the game time that this god played, in seconds (game turns over 10)
+	std::optional<int64_t> timePlayed;
+};
+
+/// POST /api/v1/servers/{id}/results: the end of a game, over mutual TLS and signed with the server's Ed25519 key
+struct ResultReport
+{
+	/// "game": the game server's own id for this game, 64 characters at most
+	std::string game;
+	/// "land"
+	std::string land;
+	/// "gods": 2 to 32 gods
+	std::vector<ResultGod> gods;
+};
+
+/// The answer to POST /api/v1/servers/{id}/results
+struct ResultAnswer
+{
+	/// "result": the id of the result in the lobby
+	int64_t result {0};
+};
+
 /// The roles of a join ticket
 constexpr std::string_view k_GodRole = "god";
 constexpr std::string_view k_ObserverRole = "observer";

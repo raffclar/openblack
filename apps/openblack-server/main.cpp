@@ -116,6 +116,7 @@ int main(int argc, char* argv[])
 		("lobby-api", "The game servers' API of the lobby, such as https://srv.example.org/api/v1. With it, the server reports its room every 5 seconds, so that the lobby lists it.", cxxopts::value<std::string>())
 		("client-cert", "The PEM file of the client certificate that the server shows to the lobby (mutual TLS).", cxxopts::value<std::string>())
 		("client-key", "The PEM file of the key of --client-cert.", cxxopts::value<std::string>())
+		("result-key", "The PEM file of the server's Ed25519 private key. With --lobby-api, the server signs the end of each game with it and sends it to the lobby.", cxxopts::value<std::string>())
 		("room-name", "The name of the room in the list of the lobby.", cxxopts::value<std::string>()->default_value("Game"))
 		("lan", "The room is on the local network with no lobby: the server answers the search of the game on UDP port 2613, and a player joins with the name of the profile. The server then needs no --server-id and no --ticket-keys. Without --tls-cert, the server makes a certificate of its own at each start, and its answers give the SHA-256 of its public key, so each client accepts only that key.")
 		("lan-host", "With --lan, the computer name of the game socket that the answers give, which the TLS certificate names. Without it, each client uses the address of the server.", cxxopts::value<std::string>())
@@ -367,6 +368,10 @@ int main(int argc, char* argv[])
 			if (result.count("client-key") != 0)
 			{
 				network.clientKey = std::filesystem::path(result["client-key"].as<std::string>());
+			}
+			if (result.count("result-key") != 0)
+			{
+				network.resultKey = std::filesystem::path(result["result-key"].as<std::string>());
 			}
 			network.roomName = result["room-name"].as<std::string>();
 			network.lan = result.count("lan") != 0;

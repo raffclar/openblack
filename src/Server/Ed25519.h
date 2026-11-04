@@ -14,11 +14,13 @@
 #include <array>
 #include <optional>
 #include <span>
+#include <string_view>
 
 #include <JoinTicket.h>
 
 /// Ed25519 signatures, from the cryptography library of the desktop. The game server checks the lobby's join tickets
-/// with them. The tests and the test tools also sign with a key that they make.
+/// with them, and signs the results of its games for the lobby. The tests and the test tools also sign with a key that
+/// they make.
 namespace openblack::ed25519
 {
 
@@ -31,5 +33,8 @@ using Seed = std::array<uint8_t, 32>;
 [[nodiscard]] std::optional<join_ticket::Signature> Sign(const Seed& seed, std::span<const uint8_t> bytes);
 /// The public key of the secret seed. None when the library fails.
 [[nodiscard]] std::optional<join_ticket::PublicKey> PublicKeyOf(const Seed& seed);
+/// The secret seed of an Ed25519 private key in PEM text, as OpenSSL writes it ("openssl genpkey -algorithm ed25519").
+/// None when the text is not such a key.
+[[nodiscard]] std::optional<Seed> SeedOfPem(std::string_view pem);
 
 } // namespace openblack::ed25519

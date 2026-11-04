@@ -81,6 +81,9 @@ struct NetworkSettings
 	/// The client certificate and its key (PEM files) that the server shows to the lobby for mutual TLS
 	std::optional<std::filesystem::path> clientCertificate;
 	std::optional<std::filesystem::path> clientKey;
+	/// The PEM file of the server's Ed25519 private key. With it, the server signs the end of each game and sends it to
+	/// the lobby, which ranks the gods from it.
+	std::optional<std::filesystem::path> resultKey;
 	/// The name of the room in the list of the lobby
 	std::string roomName {"Game"};
 	/// The room is on the local network with no lobby (deviation 113): the server answers the search of the clients on the

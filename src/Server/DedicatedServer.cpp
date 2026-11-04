@@ -18,6 +18,7 @@
 #include <chrono>
 #include <filesystem>
 #include <memory>
+#include <random>
 #include <string_view>
 #include <system_error>
 #include <thread>
@@ -39,6 +40,8 @@
 #include "Common/RandomNumberManager.h"
 #include "Debug/ScenarioPlayer.h"
 #include "ECS/ChallengePictures.h"
+#include "ECS/Components/Player.h"
+#include "ECS/Components/PlayerStatistics.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/GameEndConditions.h"
 #include "ECS/Reflection/ComponentReflection.h"
@@ -84,6 +87,7 @@
 #define OPENBLACK_GAME_ROLE 1
 #include "Online/StartRules.h"
 #include "Server/Desktop/GameRole.h"
+#include "Server/LobbyResults.h"
 #include "Server/ServerAdmin.h"
 #if defined(OPENBLACK_INSPECTOR)
 #include "Inspector/ServerProviders.h"
@@ -814,6 +818,48 @@ private:
 	    [](const std::string& name) { SPDLOG_LOGGER_WARN(spdlog::get("game"), "The server did not write {}", name); })};
 };
 
+/// The figures of each god of the decided game, for the report to the lobby. The world does not change.
+std::vector<lobby_results::GodFigures> GodFiguresOfWorld()
+{
+	std::vector<lobby_results::GodFigures> gods;
+	for (const auto& [god, standing] : Locator::gameEndSystem::value().Standings())
+	{
+		gods.push_back({.god = god, .place = standing.place, .godsDefeated = 0});
+	}
+	Locator::entitiesRegistry::value().Each<const ecs::components::Player, const ecs::components::PlayerStatistics>(
+	    [&gods](const ecs::components::Player& player, const ecs::components::PlayerStatistics& statistics) {
+		    if (const auto god = std::ranges::find(gods, player.name, &lobby_results::GodFigures::god); god != gods.end())
+		    {
+			    god->godsDefeated = statistics.godsDefeated;
+		    }
+	    });
+	return gods;
+}
+
+/// The id of the game for the lobby. A server that keeps snapshots keeps the id in their folder, so that the game that
+/// it continues after a restart has the same id. A new game gets a new random id.
+std::string GameIdFor(const NetworkSettings& settings, bool restored)
+{
+	const auto& folder = settings.snapshots.folder;
+	const bool kept = settings.snapshots.everyTurns > 0;
+	if (kept && restored)
+	{
+		if (auto id = lobby_results::ReadGameId(folder); id.has_value())
+		{
+			return std::move(*id);
+		}
+	}
+	std::random_device source;
+	std::array<uint8_t, 16> random {};
+	std::ranges::generate(random, [&source] { return static_cast<uint8_t>(source()); });
+	auto id = lobby_results::GameIdOf(random);
+	if (kept && !lobby_results::WriteGameId(folder, id))
+	{
+		SPDLOG_LOGGER_WARN(spdlog::get("game"), "The id of the game does not write in {}", folder.generic_string());
+	}
+	return id;
+}
+
 /// Starts the game role after the land loaded: the clients start the same land with the same seed. A server that
 /// continues a game from a snapshot restores the room of the game.
 bool StartNetwork(const ServerSettings& settings, ServerWorld& world, std::unique_ptr<GameRole>& network,
@@ -951,8 +997,10 @@ bool StartNetwork(const ServerSettings& settings, ServerWorld& world, std::uniqu
 		}
 		return host.HasTurn(Locator::time::value().GetTurn()) ? ServerWorld::NetworkStep::Play : ServerWorld::NetworkStep::Wait;
 	});
+	// The lobby gets the end of the game one time, with the figures of the turn that decided it
+	const lobby_results::Game game {.id = GameIdFor(*settings.network, restored.has_value()), .land = start.land, .turn = 0};
 	Locator::syncChecksumSystem::value().SetTurnListener(
-	    [&host, onTurn,
+	    [&host, onTurn, role = network.get(), game,
 	     logChecksums = settings.logChecksums](const ecs::systems::SyncChecksumSystemInterface::TurnChecksum& turn) {
 		    if (logChecksums)
 		    {
@@ -964,6 +1012,12 @@ bool StartNetwork(const ServerSettings& settings, ServerWorld& world, std::uniqu
 		    }
 		    // Every client gets the checksum of the server's world
 		    host.TurnChecksum(turn.turn, turn.checksum);
+		    if (role->WantsResult() && Locator::gameEndSystem::has_value() && Locator::gameEndSystem::value().IsDecided())
+		    {
+			    auto decided = game;
+			    decided.turn = turn.turn;
+			    role->ReportResult(decided, GodFiguresOfWorld());
+		    }
 	    });
 #if defined(OPENBLACK_INSPECTOR)
 	// The operator reads the room through the inspector
