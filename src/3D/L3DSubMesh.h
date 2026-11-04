@@ -224,10 +224,18 @@ public:
 	/// A submesh of a dynamic mesh keeps the copy of its vertices on the device.
 	void SetDeviceDataGivenAgain() const;
 	/// Gives the vertices and indices again after a restore of the graphics device, from a new preparation of the same
-	/// file. A submesh that has new faces for the snow keeps the copy of its buffers on the device.
+	/// file. A submesh that has new faces for the snow makes them again from its surface.
 	void GiveDeviceDataAgain(const Prepared& prepared) const;
 
 private:
+	/// The vertices and the indices of the faces for the snow: three corners of its own for each face
+	struct SnowFaces
+	{
+		std::vector<uint8_t> vertices;
+		std::vector<uint16_t> indices;
+	};
+	/// The faces for the snow, from the surface of the submesh
+	[[nodiscard]] SnowFaces MakeSnowFaces() const;
 	/// The bytes of the submesh's packed vertices
 	[[nodiscard]] static size_t PackedSize(const l3d::L3DFile& l3d, uint32_t meshIndex, bool hasLightmapCoordinates);
 	/// Writes the submesh's vertices as they are drawn into the bytes, which have the size that PackedSize gives

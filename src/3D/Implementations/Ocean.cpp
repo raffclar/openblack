@@ -76,4 +76,10 @@ void Ocean::CreateMesh()
 	    new IndexBuffer("Water", k_Indices.data(), static_cast<uint32_t>(k_Indices.size()), IndexBuffer::Type::Uint16);
 
 	_mesh = std::make_unique<Mesh>(vertexBuffer, indexBuffer, graphics::Mesh::Topology::TriangleList);
+	// The mesh gives its fixed data again after a restore of the graphics device, thus the device keeps no copy
+	const auto bytes = [](const auto& values) {
+		const auto* first = reinterpret_cast<const uint8_t*>(values.data());
+		return std::vector<uint8_t>(first, first + (values.size() * sizeof(values[0])));
+	};
+	_mesh->KeepContentsForRestore(bytes(k_Points), bytes(k_Indices));
 }

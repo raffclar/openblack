@@ -146,6 +146,9 @@ private:
 	/// The resolution the blocks' textures are painted at, from the detail level when the land loads
 	block_texture::Resolution _textureResolution {block_texture::Resolution::Full};
 	std::unique_ptr<graphics::Texture2D> _coarsePages;
+	/// The compressed blocks of each layer of the coarse pages. The land gives them to the graphics device again after a
+	/// restore, because the device keeps no copy.
+	std::vector<std::vector<uint8_t>> _coarsePageBlocks;
 	std::vector<glm::vec4> _coarsePageSlots;
 	/// Every block's vertices, a run of them each
 	std::unique_ptr<graphics::VertexBuffer> _blockVertices;

@@ -9,7 +9,11 @@
 
 #include "Mesh.h"
 
+#include "DeviceDataGivers.h"
+#include "GraphicsDeviceInterface.h"
 #include "IndexBuffer.h"
+#include "Locator.h"
+#include "MainThreadWork.h"
 #include "VertexBuffer.h"
 
 using namespace openblack::graphics;
@@ -21,7 +25,36 @@ Mesh::Mesh(VertexBuffer* vertexBuffer, IndexBuffer* indexBuffer, Topology topolo
 {
 }
 
-Mesh::~Mesh() noexcept = default;
+Mesh::~Mesh() noexcept
+{
+	if (_givesContentsAgain && Locator::graphicsDevice::has_value())
+	{
+		Locator::graphicsDevice::value().GetDataGivers().Remove(this);
+	}
+}
+
+void Mesh::KeepContentsForRestore(std::vector<uint8_t> vertices, std::vector<uint8_t> indices)
+{
+	if (!Locator::graphicsDevice::has_value())
+	{
+		return;
+	}
+	_vertexBuffer->SetContentsGivenAgain();
+	if (_indexBuffer != nullptr && !indices.empty())
+	{
+		_indexBuffer->SetContentsGivenAgain();
+	}
+	PostToMainThread(MainThreadApi::Graphics, [this, vertices = std::move(vertices), indices = std::move(indices)] {
+		Locator::graphicsDevice::value().GetDataGivers().Add(this, [this, vertices, indices](const auto&) {
+			_vertexBuffer->GiveContentsAgain(vertices);
+			if (_indexBuffer != nullptr && !indices.empty())
+			{
+				_indexBuffer->GiveContentsAgain(indices);
+			}
+		});
+		_givesContentsAgain = true;
+	});
+}
 
 const VertexBuffer& Mesh::GetVertexBuffer() const
 {

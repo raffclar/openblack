@@ -472,6 +472,23 @@ Texture2DLoader::result_type Texture2DLoader::operator()(FromBufferTag, const st
 	return texture;
 }
 
+Texture2DLoader::result_type Texture2DLoader::operator()(FromMadeTag, const std::string& name, std::vector<uint8_t> data,
+                                                         graphics::texel_depth::Depth depth) const
+{
+	const auto made = std::make_shared<const std::vector<uint8_t>>(data);
+	auto texture = (*this)(FromBufferTag {}, name, std::move(data), depth);
+	if (KeepsDataOnly())
+	{
+		return texture;
+	}
+	// No file holds these bytes, thus the texture keeps them and gives its texels again from them after a restore
+	texture->SetTexelSource([made, depth](Rereads&) {
+		const auto shape = RawShapeOf(made->size());
+		return RawTexels(*made, shape.channels, depth);
+	});
+	return texture;
+}
+
 Texture2DLoader::result_type Texture2DLoader::operator()(FromDiskWithAlphaTag, const std::filesystem::path& rawTexturePath,
                                                          const std::filesystem::path& alphaPath, uint16_t side,
                                                          bool halve) const

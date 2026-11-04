@@ -282,6 +282,18 @@ public:
 	/// Gives the skins and the buffers to the graphics device again, from the file that the mesh loaded
 	void GiveDeviceDataAgain(const l3d::L3DFile& l3d) const;
 
+	/// Gives a mesh its model and its changed skins again. The source calls GiveDeviceDataAgain with the model that the
+	/// mesh has now, and then UpdateSkin for each skin that changed after the load.
+	using ModelSource = std::function<void(L3DMesh&)>;
+	/// Gives the mesh a source of its model, for a mesh that has no file of its own or a dynamic mesh. The graphics
+	/// device then keeps no copy of the skins and buffers of the mesh. After a restore of the device, the source gives
+	/// them again. A call replaces the source. A mesh of data only ignores the source.
+	void SetModelSource(ModelSource source);
+	/// The graphics device keeps no copy of the vertices of the mesh: the mesh is not dynamic, or it has a model source
+	[[nodiscard]] bool GivesVerticesAgain() const { return !_dynamic || _hasModelSource; }
+	/// The mesh gives its data to the graphics device again after a restore: it has a file source or a model source
+	[[nodiscard]] bool GivesDeviceDataAgain() const { return _fileSource != nullptr || _hasModelSource; }
+
 private:
 	l3d::L3DMeshFlags _flags;
 	std::string _debugName;
@@ -289,6 +301,9 @@ private:
 	bool _facesSplit {false};
 	UploadMode _upload;
 	FileSource _fileSource;
+	/// The source of the model, which only the main thread uses
+	ModelSource _modelSource;
+	bool _hasModelSource {false};
 	/// Whether the mesh is one of the owners that give their data to the graphics device again
 	bool _givesDataAgain {false};
 

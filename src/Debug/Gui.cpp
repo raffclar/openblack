@@ -68,6 +68,8 @@
 #include "FileSystem/FileSystemInterface.h"
 #include "Game.h"
 #include "Gestures.h"
+#include "Graphics/DeviceDataGivers.h"
+#include "Graphics/GraphicsDeviceInterface.h"
 #include "Graphics/GraphicsHandleBgfx.h"
 #include "Gui/CreatureCaveScreen.h"
 #include "ImGuiUtils.h"
@@ -209,6 +211,10 @@ Gui::Gui(ImGuiContext* imgui, uint16_t viewId, std::vector<std::unique_ptr<Windo
 
 Gui::~Gui() noexcept
 {
+	if (_givesTexelsAgain && Locator::graphicsDevice::has_value())
+	{
+		Locator::graphicsDevice::value().GetDataGivers().Remove(this);
+	}
 	if (!_headless)
 	{
 		ImGui_ImplSDL2_Shutdown();
@@ -444,7 +450,32 @@ bool Gui::CreateFontsTextureBgfx() noexcept
 	_texture = graphics::fromBgfx(bgfx::createTexture2D(static_cast<uint16_t>(width), static_cast<uint16_t>(height), false, 1,
 	                                                    bgfx::TextureFormat::BGRA8, 0, bgfx::copy(pixels, width * height * 4)));
 
+	// After a restore of the device the GUI gives the texels of the font atlas again, thus the device keeps no copy
+	if (bgfx::isValid(toBgfx(_texture)) && Locator::graphicsDevice::has_value())
+	{
+		bgfx::setDeviceRestoreByApplication(toBgfx(_texture));
+		Locator::graphicsDevice::value().GetDataGivers().Add(this, [this](resources::Rereads&) { GiveFontTexelsAgain(); });
+		_givesTexelsAgain = true;
+	}
+
 	return true;
+}
+
+void Gui::GiveFontTexelsAgain() const
+{
+	auto* const current = ImGui::GetCurrentContext();
+	ImGui::SetCurrentContext(_imgui);
+	unsigned char* pixels = nullptr;
+	int width = 0;
+	int height = 0;
+	ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&pixels, &width, &height);
+	ImGui::SetCurrentContext(current);
+	if (pixels == nullptr)
+	{
+		return;
+	}
+	bgfx::updateTexture2D(toBgfx(_texture), 0, 0, 0, 0, static_cast<uint16_t>(width), static_cast<uint16_t>(height),
+	                      bgfx::copy(pixels, static_cast<uint32_t>(width * height * 4)));
 }
 
 bool Gui::CreateDeviceObjectsBgfx() noexcept
