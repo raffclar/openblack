@@ -336,9 +336,9 @@
 #include "Hand/HandFeel.h"
 #include "Hand/HandGrabRules.h"
 #include "Hand/HandReach.h"
-#include "Hand/HandReportRules.h"
 #include "Hand/HandTrace.h"
 #include "Hand/HandVisibility.h"
+#include "Hand/OwnHandReport.h"
 #include "Hand/ScriptHandState.h"
 #include "Hand/ViewReportRules.h"
 #include "Help/DialogueText.h"
@@ -3322,85 +3322,56 @@ const std::filesystem::path& Game::GetLandscapePath() const noexcept
 
 void Game::ReportHand()
 {
-	// The report goes once a turn, after the turns of a frame that played one, and only when a part of it moved enough
-	const auto turn = Locator::time::value().GetTurn();
-	if (_handReportTurn == turn)
+	// The hand system keeps what this computer last sent of its hand, and decides what goes in this turn
+	auto* reporter = Locator::handSystem::value().GetOwnReporter();
+	if (reporter == nullptr)
 	{
 		return;
 	}
-	_handReportTurn = turn;
 	const auto& registry = Locator::entitiesRegistry::value();
 	const auto hand =
 	    Locator::handSystem::value().GetOwnHands()[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)];
 	const auto* transform = registry.Valid(hand) ? registry.TryGet<const ecs::components::Transform>(hand) : nullptr;
-	if (transform == nullptr)
+	const auto start = reporter->Start(Locator::time::value().GetTurn(), hand,
+	                                   transform != nullptr ? std::optional(transform->position) : std::nullopt);
+	if (!start.has_value())
 	{
 		return;
 	}
-	// A new hand, as on a new land, has no report yet
-	if (hand != _reportedHand)
+	// A new hand, as on a new land, has no view report yet
+	if (start->newHand)
 	{
-		_reportedHand = hand;
-		_lastHandReport = {};
-		_handCollidePoint = glm::vec3(0.0f);
-		_lastHandPick = entt::null;
 		_lastViewReport.reset();
 	}
 	ReportView();
-	// The thing under the cursor goes too, when it changes, so that the turn counts the same time that the hand stays
-	// over the creature at each frame rate and on every computer
+	hand_report::OwnInputs inputs {
+	    .handPoint = start->handPoint,
+	    .spellNeedsReport =
+	        [] { return Locator::magicSystem::has_value() && Locator::magicSystem::value().SpellNeedsHandReportEachTurn(); },
+	};
 	if (Locator::pickingSystem::has_value())
 	{
-		const auto picked = Locator::pickingSystem::value().GetPick().object;
-		const auto object = picked.has_value() && registry.Valid(*picked) ? *picked : entt::entity {entt::null};
-		if (object != _lastHandPick)
-		{
-			_lastHandPick = object;
-			Locator::playerCommandSystem::value().Submit(player_commands::HandPick {.object = object});
-		}
+		const auto& pick = Locator::pickingSystem::value().GetPick();
+		inputs.picked = pick.object.has_value() && registry.Valid(*pick.object) ? *pick.object : entt::entity {entt::null};
+		inputs.pickPoint = pick.point;
 	}
-	// The point that the interface picks under the cursor stays as it was while the cursor picks nothing
-	if (Locator::pickingSystem::has_value())
-	{
-		_handCollidePoint = Locator::pickingSystem::value().GetPick().point.value_or(_handCollidePoint);
-	}
-	// After a send the report waits for some turns. A miracle of this player that follows the hand stops the wait.
 	const auto* session = Locator::networkGame::has_value() ? Locator::networkGame::value().Session() : nullptr;
-	const auto origin = session != nullptr ? std::optional(session->Origin()) : std::nullopt;
-	const bool spellNeedsReport = _handReportWait != 0 && Locator::magicSystem::has_value() &&
-	                              Locator::magicSystem::value().SpellNeedsHandReportEachTurn();
-	if (hand_report::WaitsThisTurn(_handReportWait, spellNeedsReport))
-	{
-		_handReportWait = hand_report::TurnsToWaitAfter(_handReportWait, true, false, origin);
-		return;
-	}
+	inputs.origin = session != nullptr ? std::optional(session->Origin()) : std::nullopt;
 	// The camera is the view that the last frame drew
 	const auto& camera = Locator::camera::value();
-	const player_commands::HandReport now {
-	    .collidePoint = _handCollidePoint,
-	    .handPoint = transform->position,
-	    .camera = camera.GetOrigin(Camera::Interpolation::Drawn),
-	    .focus = camera.GetFocus(Camera::Interpolation::Drawn),
-	};
-	const auto& [lastCollide, lastHand, lastCamera, lastFocus] = _lastHandReport;
-	const player_commands::HandReport last {
-	    .collidePoint = lastCollide,
-	    .handPoint = lastHand,
-	    .camera = lastCamera,
-	    .focus = lastFocus,
-	};
-	// Only a part that moved enough goes. The other part keeps the values that the player last sent.
-	const auto toSend = hand_report::ToSend(last, now);
-	_handReportWait = hand_report::TurnsToWaitAfter(_handReportWait, false, toSend.has_value(), origin);
-	if (!toSend.has_value())
+	inputs.camera = camera.GetOrigin(Camera::Interpolation::Drawn);
+	inputs.focus = camera.GetFocus(Camera::Interpolation::Drawn);
+	const auto sends = reporter->Finish(inputs);
+	if (sends.pick.has_value())
 	{
-		return;
+		Locator::playerCommandSystem::value().Submit(*sends.pick);
 	}
-	const auto& sent = *toSend;
-	_lastHandReport = {sent.collidePoint, sent.handPoint, sent.camera, sent.focus};
-	Locator::playerCommandSystem::value().Submit(sent);
-	// The send time gives the latency of the report at the turn that does it
-	Locator::handSystem::value().ReportSent(sent);
+	if (sends.report.has_value())
+	{
+		Locator::playerCommandSystem::value().Submit(*sends.report);
+		// The send time gives the latency of the report at the turn that does it
+		Locator::handSystem::value().ReportSent(*sends.report);
+	}
 }
 
 void Game::ReportView()

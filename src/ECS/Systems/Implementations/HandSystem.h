@@ -16,6 +16,7 @@
 #include "Commands/PlayerCommands.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "Hand/HandTrace.h"
+#include "Hand/OwnHandReport.h"
 #include "Hand/ThrowLead.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
@@ -60,6 +61,7 @@ public:
 	void ProcessTurn() override;
 	[[nodiscard]] uint32_t GetHandStillTurnsOf(PlayerNames player) const noexcept override;
 	[[nodiscard]] hand_trace::HandTrace* GetTrace() noexcept override { return &_trace; }
+	[[nodiscard]] hand_report::OwnReporter* GetOwnReporter() noexcept override { return &_ownReporter; }
 
 private:
 	/// None on the game server and on an observer's computer
@@ -67,5 +69,7 @@ private:
 	/// The latency of the reports of this computer's hand. It is not part of the world.
 	hand_grab::throw_lead::ReportLatency _reportLatency;
 	hand_trace::HandTrace _trace;
+	/// What this computer last sent of its hand. It is not part of the world.
+	hand_report::OwnReporter _ownReporter;
 };
 } // namespace openblack::ecs::systems
