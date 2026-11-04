@@ -186,4 +186,11 @@ inline Command Fight(Kind kind, size_t creature, size_t value, float delay, floa
 {
 	return {.kind = kind, .creature = creature, .delaySeconds = delay, .value = value, .chargeMs = chargeMs};
 }
+
+// The scenarios of each area, in the file of that area. Build() adds them in its order.
+void AddIdle(std::vector<Scenario>& all);
+void AddExpressions(std::vector<Scenario>& all);
+void AddSenses(std::vector<Scenario>& all);
+void AddNeeds(std::vector<Scenario>& all);
+void AddRestAndHome(std::vector<Scenario>& all);
 } // namespace openblack::testbed_scenarios
