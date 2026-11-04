@@ -126,6 +126,8 @@ public:
 	Camera& SetLens(float radians, float seconds);
 	/// The lens moves on by some seconds of its glide, and the perspective follows it
 	void UpdateLens(float seconds);
+	/// The lens takes a glide as it is, also part of the way through it, and the perspective follows it
+	Camera& SetLensGlide(const camera::Zoomer& lens);
 	/// Where the lens is gliding to, or where it is when still
 	[[nodiscard]] float GetLensDestination() const { return _lens.Destination(); }
 

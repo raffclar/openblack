@@ -1705,6 +1705,8 @@ bool SaveGameSystem::ImportVanillaWorld(uint32_t slot, std::span<const uint8_t> 
 	ImportVanillaScripts(*read.world, made);
 	// The clock of day and night, and the count of things made, which continues after all that the import makes
 	ImportVanillaGameValues(*read.world);
+	// The camera of the file, with the glides that move it
+	ImportVanillaCamera(*read.world);
 	// The game data of the file has the two seeds of the random draws. After the load, the draws continue from them
 	// as the game's draws do. The creatures and the towns are made first, because the creation of a thing can draw.
 	if (data.has_value() && Locator::gameRandom::has_value())
