@@ -215,4 +215,5 @@ void AddVillagerSizeAndReachScenarios(std::vector<Scenario>& all);
 void AddSwayAndFrightScenarios(std::vector<Scenario>& all);
 void AddStoreScenarios(std::vector<Scenario>& all);
 void AddPoisonScenarios(std::vector<Scenario>& all);
+void AddWorkshopScenarios(std::vector<Scenario>& all);
 } // namespace openblack::testbed_scenarios
