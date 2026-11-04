@@ -193,4 +193,7 @@ void AddExpressions(std::vector<Scenario>& all);
 void AddSenses(std::vector<Scenario>& all);
 void AddNeeds(std::vector<Scenario>& all);
 void AddRestAndHome(std::vector<Scenario>& all);
+void AddGrowth(std::vector<Scenario>& all);
+void AddAppearance(std::vector<Scenario>& all);
+void AddLight(std::vector<Scenario>& all);
 } // namespace openblack::testbed_scenarios
