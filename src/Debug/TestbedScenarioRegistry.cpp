@@ -3449,6 +3449,31 @@ void AddAppearance(std::vector<Scenario>& all)
 		    .repeatFrom = 0,
 		});
 	}
+	// The hair of a body with the environment map takes the light of the last usual hair that the game drew. At night
+	// the hand lights the plain ape, and the ape with the map stands in the dark.
+	{
+		auto plain = Content(CreatureType::GiantApe, {-30.0f, 0.0f}, 0.0f, "plain ape");
+		plain.pauseMind = true;
+		auto mapped = Content(CreatureType::GiantApe, {30.0f, 0.0f}, 0.0f, "environment-mapped ape");
+		mapped.pauseMind = true;
+		mapped.environmentMap = 1;
+		all.push_back({
+		    .id = "appearance.creature_environment_hair_light",
+		    .name = "Hair light of a creature with the environment map",
+		    .facet = Facet::Appearance,
+		    .description = "At eleven at night, the clock stopped, two giant apes stand apart. The hand is over the ape on "
+		                   "the left. The mind file of the ape on the right gives its body the environment map. They nod, "
+		                   "shake their heads and do their other gestures.",
+		    .expected = "The hand lights the land under the ape on the left, so its hair is bright. The ape on the right "
+		                "stands in the dark, but its hair is as bright as the hair of the ape on the left. Its hair takes "
+		                "the light of the last usual hair that the game drew, not the light where it stands.",
+		    .environment = {.hour = 23.0f, .clockRuns = false, .dispenserGrid = false, .cursor = glm::vec2(0.3f, 0.5f)},
+		    .framing = {.shot = Shot::Overview, .include = {{-36.0f, -4.0f}, {36.0f, 4.0f}}, .distance = 0.6f},
+		    .creatures = {plain, mapped},
+		    .commands = headMoves,
+		    .repeatFrom = 0,
+		});
+	}
 	// The player's creature mirrored in the lake, beside a creature of no player that the game does not mirror
 	auto mirroredApe = Posed(CreatureType::GiantApe, {k_Lake.x - 15.0f, k_FarShallows}, 0.0f, "player's ape");
 	auto unmirroredCow = Posed(CreatureType::Cow, {k_Lake.x + 15.0f, k_FarShallows}, 0.0f, "cow of no player");
