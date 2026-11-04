@@ -211,4 +211,8 @@ void AddEditor(std::vector<Scenario>& all);
 void AddBenchmark(std::vector<Scenario>& all);
 void AddScriptTaskRelease(std::vector<Scenario>& all);
 void AddLandOneScriptStubScenarios(std::vector<Scenario>& all);
+void AddVillagerSizeAndReachScenarios(std::vector<Scenario>& all);
+void AddSwayAndFrightScenarios(std::vector<Scenario>& all);
+void AddStoreScenarios(std::vector<Scenario>& all);
+void AddPoisonScenarios(std::vector<Scenario>& all);
 } // namespace openblack::testbed_scenarios
