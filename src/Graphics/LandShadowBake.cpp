@@ -15,6 +15,8 @@
 #include <ranges>
 #include <span>
 #include <thread>
+#include <tuple>
+#include <utility>
 
 #include <glm/mat3x3.hpp>
 
@@ -23,6 +25,7 @@
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
 #include "Common/SameBits.h"
+#include "Common/SideThread.h"
 #include "Common/WorkerPool.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Ball.h"
@@ -254,6 +257,8 @@ LandShadowBake::~LandShadowBake()
 
 void LandShadowBake::Reset()
 {
+	// The test of the watched things reads the watched things: it ends before they go
+	std::ignore = TakeWatchedTest();
 	// A bake that still runs reads the kept triangles of the models: it ends before they go
 	if (_bake.valid())
 	{
@@ -419,6 +424,9 @@ void LandShadowBake::MarkBlocksOf(std::span<const uint32_t> cells)
 
 void LandShadowBake::Update(bool rowsFromFarEnd, Casters casters)
 {
+	// The answer of the test that started before this update, when there is one. Nothing changed the world or the
+	// watched things after the test started.
+	const auto testedAhead = TakeWatchedTest();
 	if (!Locator::terrainSystem::has_value() || !Locator::entitiesRegistry::has_value())
 	{
 		return;
@@ -459,7 +467,7 @@ void LandShadowBake::Update(bool rowsFromFarEnd, Casters casters)
 	const auto castersVersion = ecs::LandShadowCastersVersion(Locator::entitiesRegistry::value());
 	const auto meshCount = Locator::resources::value().GetMeshes().Size();
 	if (!_bakeAll && _dirty.empty() && _castersVersion == castersVersion && _meshCount == meshCount &&
-	    WatchedUnchanged(registry))
+	    (testedAhead.has_value() ? *testedAhead : WatchedUnchanged(registry)))
 	{
 		return;
 	}
@@ -710,6 +718,37 @@ bool LandShadowBake::WatchedUnchanged(const ecs::Registry& registry) const
 		}
 		return thing.cells == nullptr || same_bits::SameWords(residents->get(thing.entity).cells, *thing.cells);
 	});
+}
+
+void LandShadowBake::StartWatchedTest()
+{
+	ForgetWatchedTest();
+	if (!Locator::entitiesRegistry::has_value())
+	{
+		return;
+	}
+	if (_watchedTest == nullptr)
+	{
+		_watchedTest = std::make_unique<SideThread>();
+	}
+	_watchedTestStarted = true;
+	_watchedTest->Start(
+	    [this, &registry = std::as_const(Locator::entitiesRegistry::value())] { _watchedAnswer = WatchedUnchanged(registry); });
+}
+
+void LandShadowBake::ForgetWatchedTest()
+{
+	std::ignore = TakeWatchedTest();
+}
+
+std::optional<bool> LandShadowBake::TakeWatchedTest()
+{
+	if (!std::exchange(_watchedTestStarted, false))
+	{
+		return std::nullopt;
+	}
+	_watchedTest->Wait();
+	return std::exchange(_watchedAnswer, std::nullopt);
 }
 
 void LandShadowBake::ApplyFinishedBake()

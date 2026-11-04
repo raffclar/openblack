@@ -27,6 +27,11 @@
 #include "ECS/LandShadowCasters.h"
 #include "Visual/TreeShadows.h"
 
+namespace openblack
+{
+class SideThread;
+}
+
 namespace openblack::graphics
 {
 
@@ -61,6 +66,11 @@ public:
 	void Update(bool rowsFromFarEnd, Casters casters);
 	/// Forgets everything, so the next update bakes the whole island
 	void Reset();
+	/// Starts the test of the watched things on a thread of its own, before the next update needs its answer. The draw
+	/// only reads the world, thus the thread reads it while the draw continues. Call it only in a draw that calls Update.
+	void StartWatchedTest();
+	/// Waits for the test that StartWatchedTest started and forgets its answer. Call it at the end of the draw.
+	void ForgetWatchedTest();
 	/// Bakes the whole island again after a restore of the graphics device, which keeps no copy of the texture. The
 	/// texture shows no shadow until the bake ends.
 	void BakeAgain();
@@ -156,6 +166,8 @@ private:
 
 	/// Whether no watched thing changed what its shadow depends on since the last full look at the casters
 	[[nodiscard]] bool WatchedUnchanged(const ecs::Registry& registry) const;
+	/// Waits for the test that StartWatchedTest started, and gives its answer. No test: no answer.
+	[[nodiscard]] std::optional<bool> TakeWatchedTest();
 	void MarkBlocksOf(std::span<const uint32_t> cells);
 	/// The triangles of a model that cast its shadow, found once
 	std::span<const LeafTriangle> LeavesOf(entt::id_type meshId);
@@ -181,6 +193,11 @@ private:
 	bool _bakeAll {true};
 	/// The bake that runs on other threads
 	std::future<std::vector<BlockShades>> _bake;
+	/// The answer of the test of the watched things that runs on the side thread
+	std::optional<bool> _watchedAnswer;
+	bool _watchedTestStarted {false};
+	/// The last member, so that its thread stops before the other members go
+	std::unique_ptr<SideThread> _watchedTest;
 };
 
 } // namespace openblack::graphics

@@ -6355,6 +6355,24 @@ bool Renderer::WarmUpScene(const DrawSceneDesc& drawDesc, uint32_t part) const n
 void Renderer::DrawScene(const DrawSceneDesc& drawDesc) const noexcept
 {
 	MainThreadQueue::CheckDirect(MainThreadApi::Renderer, "Renderer::DrawScene");
+	// The draw only reads the world. Thus side threads find the changed footprints and test the casters of the shadows
+	// while the draw continues, and the passes that paint them take the results.
+	if (drawDesc.drawIsland)
+	{
+		if (!_landFootprints)
+		{
+			_landFootprints = std::make_unique<LandFootprints>();
+		}
+		_landFootprints->StartSearch();
+		if (drawDesc.drawEntities)
+		{
+			if (!_landShadowBake)
+			{
+				_landShadowBake = std::make_unique<LandShadowBake>();
+			}
+			_landShadowBake->StartWatchedTest();
+		}
+	}
 	SelectDrawnCreatures(drawDesc);
 	// A warm-up gives no creature a skin texture: each creature gets them in its first frame
 	if (!_warmingUp)
@@ -6389,6 +6407,15 @@ void Renderer::DrawScene(const DrawSceneDesc& drawDesc) const noexcept
 	UpdateLandLight();
 	UpdateLandDetail(drawDesc);
 	DrawObjectShadowPass(drawDesc);
+	// The passes above took the results of the side threads
+	if (_landFootprints)
+	{
+		_landFootprints->ForgetSearch();
+	}
+	if (_landShadowBake)
+	{
+		_landShadowBake->ForgetWatchedTest();
+	}
 	DrawTempleMapPass();
 	DrawGroundShadowPass(drawDesc);
 	// Reflection Pass
