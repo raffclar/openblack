@@ -90,6 +90,7 @@ namespace
 
 /// The folder of the profile folder that the editor saves into
 constexpr std::string_view k_SaveFolder = "Editor";
+constexpr const char* k_ConfirmPopup = "Replace land files?";
 /// The points round a circle of the brush that the overlay draws
 constexpr int k_CirclePoints = 48;
 constexpr ImU32 k_InnerCircle = IM_COL32(255, 220, 90, 230);
@@ -638,6 +639,20 @@ std::optional<std::filesystem::path> SaveFolder()
 	return error ? std::nullopt : std::optional(folder);
 }
 
+/// The place of the game's own files, or nothing when the file system is not up
+std::filesystem::path GameFolder()
+{
+	return Locator::filesystem::has_value() ? Locator::filesystem::value().GetGamePath() : std::filesystem::path();
+}
+
+/// The landscape file and the land script that a save writes for the open land. The user must confirm a write over
+/// either of them.
+std::vector<std::filesystem::path> GuardedFiles(const std::filesystem::path& folder)
+{
+	const auto name = LandName();
+	return {folder / land_save::FileName(name, "lnd"), folder / land_save::FileName(name, "txt")};
+}
+
 } // namespace
 
 land_brush::Brush& LandToolsPanel::GetBrush() noexcept
@@ -838,7 +853,26 @@ void LandToolsPanel::FinishPath(EditorContext& context) noexcept
 	_lastHolder.reset();
 }
 
-std::string LandToolsPanel::Save(EditorContext& context) noexcept
+std::vector<std::filesystem::path> LandToolsPanel::FilesToConfirm() const noexcept
+{
+	std::vector<std::filesystem::path> result;
+	const auto folder = SaveFolder();
+	if (!folder.has_value())
+	{
+		return result;
+	}
+	const auto game = GameFolder();
+	for (auto& path : GuardedFiles(*folder))
+	{
+		if (land_save::NeedsConfirmation(path, game))
+		{
+			result.push_back(std::move(path));
+		}
+	}
+	return result;
+}
+
+std::string LandToolsPanel::Save(EditorContext& context, bool confirmed) noexcept
 {
 	namespace writer = lhscriptx::writer;
 	const auto folder = SaveFolder();
@@ -848,6 +882,8 @@ std::string LandToolsPanel::Save(EditorContext& context) noexcept
 	}
 	const auto name = LandName();
 	std::vector<std::string> wrote;
+	// The files that already exist, which the user did not allow the save to replace
+	std::vector<std::string> kept;
 	std::filesystem::path landscape;
 
 	// The land's cells, with their altitudes and countries as they are now, in a landscape file
@@ -863,7 +899,11 @@ std::string LandToolsPanel::Save(EditorContext& context) noexcept
 		}
 		land_save::CopyCells(*data, blocks);
 		const auto path = *folder / land_save::FileName(name, "lnd");
-		if (WriteFile(path, data->LndBytes()))
+		if (!confirmed && land_save::NeedsConfirmation(path, GameFolder()))
+		{
+			kept.push_back(path.filename().string());
+		}
+		else if (WriteFile(path, data->LndBytes()))
 		{
 			wrote.push_back(path.filename().string());
 			landscape = path;
@@ -1046,7 +1086,11 @@ std::string LandToolsPanel::Save(EditorContext& context) noexcept
 		}
 	}
 	const auto scriptPath = *folder / land_save::FileName(name, "txt");
-	if (WriteFile(scriptPath, std::span(reinterpret_cast<const uint8_t*>(script.data()), script.size())))
+	if (!confirmed && land_save::NeedsConfirmation(scriptPath, GameFolder()))
+	{
+		kept.push_back(scriptPath.filename().string());
+	}
+	else if (WriteFile(scriptPath, std::span(reinterpret_cast<const uint8_t*>(script.data()), script.size())))
 	{
 		wrote.push_back(
 		    fmt::format("{} ({} towns, {} buildings, {} streams, {} trees, {} features, {} other things, {} footpaths, {} "
@@ -1225,7 +1269,15 @@ void LandToolsPanel::Draw(EditorContext& context) noexcept
 		ImGui::SeparatorText("Save");
 		if (ImGui::Button("Save land files"))
 		{
-			_status = Save(context);
+			_filesToConfirm = FilesToConfirm();
+			if (_filesToConfirm.empty())
+			{
+				_status = Save(context, false);
+			}
+			else
+			{
+				_askToReplace = true;
+			}
 		}
 		ImGui::SetItemTooltip("A landscape file, a land script of what the editor placed and drew, a footpath file and a "
 		                      "world file");
@@ -1237,10 +1289,49 @@ void LandToolsPanel::Draw(EditorContext& context) noexcept
 		ImGui::TextColored(style::k_Muted, "Into the profile folder's %s folder", std::string(k_SaveFolder).c_str());
 		ImGui::EndTable();
 	}
+	DrawConfirmation(context);
 	if (!_status.empty())
 	{
 		ImGui::TextColored(style::k_Muted, "%s", _status.c_str());
 	}
+}
+
+void LandToolsPanel::DrawConfirmation(EditorContext& context) noexcept
+{
+	if (_askToReplace)
+	{
+		_askToReplace = false;
+		ImGui::OpenPopup(k_ConfirmPopup);
+	}
+	ImGui::SetNextWindowPos(ImGui::GetMainViewport()->GetCenter(), ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+	if (!ImGui::BeginPopupModal(k_ConfirmPopup, nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+	{
+		return;
+	}
+	ImGui::TextUnformatted("These files exist or are in the game's folder. Replace them?");
+	for (const auto& path : _filesToConfirm)
+	{
+		ImGui::BulletText("%s", path.generic_string().c_str());
+	}
+	if (ImGui::Button("Yes"))
+	{
+		_status = Save(context, true);
+		_filesToConfirm.clear();
+		ImGui::CloseCurrentPopup();
+	}
+	ImGui::SameLine();
+	// No is the choice that the keyboard has at first, so that a stray Enter keeps the files
+	if (ImGui::Button("No") || ImGui::IsKeyPressed(ImGuiKey_Escape))
+	{
+		_status = "Nothing saved: the user kept the files";
+		_filesToConfirm.clear();
+		ImGui::CloseCurrentPopup();
+	}
+	if (ImGui::IsWindowAppearing())
+	{
+		ImGui::SetKeyboardFocusHere(-1);
+	}
+	ImGui::EndPopup();
 }
 
 void LandToolsPanel::DrawOverlays(const EditorContext& context, std::optional<glm::vec3> mouseLand) const noexcept

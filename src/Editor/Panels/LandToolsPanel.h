@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <filesystem>
 #include <optional>
 #include <string>
 #include <vector>
@@ -54,13 +55,20 @@ public:
 	/// Saves the land's changed cells as a landscape file, what the editor placed and drew as a land script, the
 	/// footpaths of the world as a footpath file, and the whole world as a world file, into the editor's folder in the
 	/// profile folder. Gives what it wrote.
-	std::string Save(EditorContext& context) noexcept;
+	/// A landscape file or a land script that exists already, or that is in the game's folder, is written only when
+	/// confirmed is true. The others are written always.
+	std::string Save(EditorContext& context, bool confirmed) noexcept;
+	/// The landscape file and the land script that a save would write over, or put in the game's folder. The panel
+	/// asks the user before it saves when there are any.
+	[[nodiscard]] std::vector<std::filesystem::path> FilesToConfirm() const noexcept;
 	/// Loads the world file that Save wrote for the land that is open. The streams and the footpaths of the world that the
 	/// land script of Save makes become the paths that the editor drew again.
 	std::string LoadWorld(EditorContext& context) noexcept;
 
 private:
 	void Stroke(glm::vec2 centre) noexcept;
+	/// The Yes and No dialog that stands before a save over existing files
+	void DrawConfirmation(EditorContext& context) noexcept;
 
 	/// The point of the last stroke of a drag of the brush
 	std::optional<glm::vec2> _lastStroke;
@@ -70,6 +78,8 @@ private:
 	std::optional<entt::entity> _firstHolder;
 	std::optional<entt::entity> _lastHolder;
 	std::string _status;
+	std::vector<std::filesystem::path> _filesToConfirm;
+	bool _askToReplace {false};
 };
 
 } // namespace openblack::editor
