@@ -168,6 +168,8 @@ template <typename Read>
 [[nodiscard]] std::unique_ptr<ProviderInterface> TempleProvider();
 /// The camera's helpers, the editor and the cinematics
 [[nodiscard]] std::unique_ptr<ProviderInterface> ViewProvider(const GameSeamInterface* seam);
+/// The advisors
+[[nodiscard]] std::unique_ptr<ProviderInterface> AdvisorsProvider();
 
 
 } // namespace openblack::inspector::game_providers
