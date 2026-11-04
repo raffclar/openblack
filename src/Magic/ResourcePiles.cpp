@@ -50,6 +50,24 @@ float piles::SunkOffset(float proportion, float height)
 	return (proportion - 1.0f) * height;
 }
 
+float piles::PlaceAltitude(PotType type, ResourceType resource, uint32_t amount, uint32_t fullAmount, float height)
+{
+	if (type != PotType::PileFood && type != PotType::PileWood)
+	{
+		return 0.0f;
+	}
+	return SunkOffset(ProportionRaised(resource, amount, fullAmount), height);
+}
+
+float piles::EdgeRadius(PotType type, uint32_t amount, uint32_t fullAmount, float radius)
+{
+	if (type != PotType::PileFood)
+	{
+		return radius;
+	}
+	return radius * ProportionRaised(ResourceType::Food, amount, fullAmount);
+}
+
 piles::Rise piles::SunkRise(float height)
 {
 	Rise rise;

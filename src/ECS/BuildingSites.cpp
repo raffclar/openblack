@@ -328,7 +328,7 @@ glm::vec2 construction::NearestEdgeToPos(entt::entity building, glm::vec2 place)
 {
 	const auto centre = glm::xz(Entities().Get<const Transform>(building).position);
 	const float angle = gutils::Get3DAngleFromXZ(centre, place);
-	const auto offset = gutils::GetPointFromAngle(angle, BuildingRadius(building));
+	const auto offset = gutils::GetPointFromAngle(angle, systems::object_measures::EdgeRadius(Entities(), building));
 	return centre + glm::vec2(offset.x, offset.z);
 }
 

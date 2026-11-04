@@ -259,6 +259,8 @@ TEST(VillagerScriptRules, StatesHeldByAScriptAreGoneIntoTheSameWay)
 	EXPECT_TRUE(rules::EnterTheSameWay(VillagerStates::ScriptGoAndMoveAlongPath, VillagerStates::InScript));
 	EXPECT_TRUE(rules::EnterTheSameWay(VillagerStates::ScriptPlayAnim, VillagerStates::ScriptPlayAnim));
 	EXPECT_TRUE(rules::EnterTheSameWay(VillagerStates::ScriptWanderAroundPosition, VillagerStates::ScriptWanderAroundPosition));
+	EXPECT_TRUE(rules::EnterTheSameWay(VillagerStates::InDance, VillagerStates::InDance));
+	EXPECT_FALSE(rules::EnterTheSameWay(VillagerStates::InDance, VillagerStates::InScript));
 	// The wander and the clip have entries of their own
 	EXPECT_FALSE(rules::EnterTheSameWay(VillagerStates::ScriptWanderAroundPosition, VillagerStates::InScript));
 	EXPECT_FALSE(rules::EnterTheSameWay(VillagerStates::ScriptPlayAnim, VillagerStates::InScript));

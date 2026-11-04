@@ -95,6 +95,8 @@ public:
 	{
 		entt::entity pile;
 		glm::vec2 edge;
+		/// The height of that point above the land: the height of the pile, which sinks into the land
+		float edgeAltitude {0.0f};
 	};
 	/// The temporary pile in which a town with no storage pit that works keeps a resource. A pile that has gone is made
 	/// again, empty, at a clear place near the town's gathering place. None for a resource with no pile.

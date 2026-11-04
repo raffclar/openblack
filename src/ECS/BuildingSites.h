@@ -74,7 +74,8 @@ namespace openblack::ecs::construction
 /// The wood the town's site still wants to build it
 [[nodiscard]] float WoodNeededToBuild(entt::entity town, entt::entity building);
 
-/// The building's reach across the ground, and its point nearest a place
+/// The building's reach across the ground, and its point nearest a place. The point of a food pile is as far out as
+/// the pile is raised by what it holds.
 [[nodiscard]] float BuildingRadius(entt::entity building);
 [[nodiscard]] glm::vec2 NearestEdgeToPos(entt::entity building, glm::vec2 place);
 

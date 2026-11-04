@@ -17,6 +17,7 @@
 #include <entt/entity/entity.hpp>
 #include <glm/vec2.hpp>
 
+#include "3D/MapCoords.h"
 #include "Enums.h"
 
 namespace openblack::ecs::components
@@ -80,6 +81,18 @@ uint32_t ArrivesAtStoragePitForResource(components::LivingAction& action, Resour
 glm::vec2 ResourceDropoffPos(entt::entity villager, ResourceType type);
 /// The same for the store of a given town, which can be another town than the town of the villager
 glm::vec2 ResourceDropoffPos(entt::entity villager, ResourceType type, entt::entity town);
+/// A place where the villager takes or leaves a resource, and its height above the land
+struct Dropoff
+{
+	glm::vec2 place;
+	/// The height of a temporary pile, which sinks into the land; 0 for the other places
+	float altitude {0.0f};
+
+	/// The place as the goal of a walk, with its height
+	[[nodiscard]] map_coords::MapCoords Goal() const;
+};
+/// The same place as ResourceDropoffPos, with its height above the land
+[[nodiscard]] Dropoff ResourceDropoff(entt::entity villager, ResourceType type);
 
 /// The store that the villager uses as a member of a town: the storage pit of the town, else its own home. The town
 /// can be null or another town than its own.

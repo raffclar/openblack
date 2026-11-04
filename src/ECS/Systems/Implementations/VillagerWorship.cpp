@@ -19,7 +19,9 @@
 #include <glm/geometric.hpp>
 #include <glm/gtx/vec_swizzle.hpp>
 
+#include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
+#include "Common/GUtilsAngle.h"
 #include "Common/GUtilsDistance.h"
 #include "ECS/BuildingSites.h"
 #include "ECS/Components/Abode.h"
@@ -44,6 +46,7 @@
 #include "ECS/VillagerCarry.h"
 #include "ECS/WallHugRules.h"
 #include "ECS/WorldObjects.h"
+#include "ECS/WorshipSites.h"
 #include "ECS/WorshipperRules.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -429,6 +432,39 @@ bool CheckNeededForWorshipSiteBuilding(LivingAction& action)
 	}
 	SetTopState(action, VillagerStates::DecideWhatToDo);
 	return villager_build::TakeUpSite(action, site) == 1;
+}
+
+/// Where a villager gives food to a worship site, with its height above the land. With a food pot it is the point nearest
+/// the villager at which the villager touches the pot: the pot sinks into the land, and so this point has the height of
+/// the pot. With no pot it is the site's food place, which has the height of the site's place above the land there.
+map_coords::MapCoords FoodDropPlace(entt::entity site, entt::entity villager)
+{
+	const auto& registry = Entities();
+	const auto& island = Locator::terrainSystem::value();
+	const auto pot = registry.Get<const WorshipSite>(site).foodPot;
+	if (pot != entt::null && registry.Valid(pot) && registry.AllOf<Transform>(pot))
+	{
+		auto place = map_coords::FromMetres(PositionOf(pot));
+		place.altitude = systems::object_measures::PlaceAltitude(registry, pot);
+		const float angle = gutils::Get3DAngleFromXZ(place, map_coords::FromMetres(PositionOf(villager)));
+		const float reach =
+		    systems::object_measures::EdgeRadius(registry, pot) + systems::object_measures::TwoDRadius(registry, villager);
+		place += gutils::GetPosFromAngle(angle, reach);
+		// The point goes through a world position and back, as the game does
+		return map_coords::FromWorld(island, map_coords::ToWorld(island, place));
+	}
+	const auto& transform = registry.Get<const Transform>(site);
+	const auto food =
+	    worship_site::TurnedPoint(PositionOf(site), registry.Get<const WorshipSite>(site).facing, worship_site::k_FoodPotPoint);
+	return map_coords::FromWorld(island, glm::vec3(food.x, transform.position.y, food.y));
+}
+
+/// Whether the villager is as near to a place as its speed in metres, or nearer
+bool WithinAStep(entt::entity villager, const map_coords::MapCoords& place)
+{
+	const auto* wallHug = Entities().TryGet<const WallHug>(villager);
+	const float step = gutils::ConvertWholeDistanceToMeters(wall_hug::WholeSpeed(wallHug != nullptr ? wallHug->speed : 0.0f));
+	return gutils::GetDistanceInMetres(map_coords::FromMetres(PositionOf(villager)), place) <= step;
 }
 
 /// Where a worshipper eats: the edge of the site's pot nearest it, or the pot's own place
@@ -1091,13 +1127,30 @@ uint32_t villager_worship::ArrivesAtWorshipSiteWithSupplies(LivingAction& action
 	if (const auto site = SiteOfTown(TownOf(villager)); site != entt::null)
 	{
 		const auto held = Entities().Get<const Villager>(villager).foodHeld;
-		if (held != 0 && Locator::resourceStoreSystem::has_value())
+		if (held != 0)
 		{
-			// It puts all it carries into the site's pot
-			auto& stores = Locator::resourceStoreSystem::value();
-			const auto added = stores.AddResource(site, ResourceType::Food, static_cast<uint32_t>(held), std::nullopt);
-			villager_carry::PutDown(Entities().Get<Villager>(villager), ResourceType::Food, static_cast<uint16_t>(added));
-			Sites().RemoveFoodOnTheWay(site, held);
+			// Away from the place where the site takes food, it walks there first and comes back to this state
+			const auto goal = FoodDropPlace(site, villager);
+			if (!WithinAStep(villager, goal))
+			{
+				villager_home::SetupMoveTo(action, goal, FinalOf(action));
+				return 1;
+			}
+			// It puts all it carries into the site's pot. The site counts the food that came off its way: what the pot
+			// took, or all the villager carries when the pot took none.
+			int32_t arrived = held;
+			if (Locator::resourceStoreSystem::has_value())
+			{
+				auto& stores = Locator::resourceStoreSystem::value();
+				const auto added = stores.AddResource(site, ResourceType::Food, static_cast<uint32_t>(held), std::nullopt);
+				if (added != 0)
+				{
+					villager_carry::PutDown(Entities().Get<Villager>(villager), ResourceType::Food,
+					                        static_cast<uint16_t>(added));
+					arrived = static_cast<int32_t>(added);
+				}
+			}
+			Sites().RemoveFoodOnTheWay(site, arrived);
 		}
 	}
 	SetTopState(action, VillagerStates::DecideWhatToDo);

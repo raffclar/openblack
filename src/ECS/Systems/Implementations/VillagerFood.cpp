@@ -310,7 +310,7 @@ bool villager_food::ChangeStateToFindFoodToEat(LivingAction& action)
 	{
 		in.homeFood = stores.GetResource(abode, ResourceType::Food);
 	}
-	std::optional<glm::vec2> dropOff;
+	std::optional<villager_build::Dropoff> dropOff;
 	if (const auto pit = WorkingStoragePit(person); pit.has_value())
 	{
 		in.pitFood = stores.GetResource(*pit, ResourceType::Food);
@@ -318,9 +318,9 @@ bool villager_food::ChangeStateToFindFoodToEat(LivingAction& action)
 	else if (!(in.homeFood.has_value() && in.required <= *in.homeFood) && in.required != 0)
 	{
 		// Without a working pit its town leaves food at its temporary pile, which is made if missing
-		dropOff = villager_build::ResourceDropoffPos(villager, ResourceType::Food);
+		dropOff = villager_build::ResourceDropoff(villager, ResourceType::Food);
 		in.dropOffElsewhere =
-		    gutils::GetDistanceInMetres(*dropOff, glm::xz(Entities().Get<const Transform>(villager).position)) > 0.0f;
+		    gutils::GetDistanceInMetres(dropOff->place, glm::xz(Entities().Get<const Transform>(villager).position)) > 0.0f;
 	}
 	switch (rules::PlanMeal(in))
 	{
@@ -339,7 +339,8 @@ bool villager_food::ChangeStateToFindFoodToEat(LivingAction& action)
 		SetTopState(action, VillagerStates::GotoStoragePitForFood);
 		return true;
 	case rules::MealPlan::GoToDropOff:
-		villager_home::SetupMoveTo(action, *dropOff, VillagerStates::ArrivesAtStoragePitForFood);
+		// The walk keeps the height of a temporary pile, which sinks into the land
+		villager_home::SetupMoveTo(action, dropOff->Goal(), VillagerStates::ArrivesAtStoragePitForFood);
 		return true;
 	}
 	return false;
@@ -415,7 +416,7 @@ uint32_t villager_food::GotoStoragePitForFood(LivingAction& action)
 		return 1;
 	}
 	// Without a working pit it walks to its town's temporary pile of food
-	villager_home::SetupMoveTo(action, villager_build::ResourceDropoffPos(EntityOf(action), ResourceType::Food),
+	villager_home::SetupMoveTo(action, villager_build::ResourceDropoff(EntityOf(action), ResourceType::Food).Goal(),
 	                           VillagerStates::ArrivesAtStoragePitForFood);
 	return 1;
 }

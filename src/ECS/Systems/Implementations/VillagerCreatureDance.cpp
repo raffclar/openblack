@@ -171,8 +171,12 @@ bool villager_creature_dance::SendToPlace(entt::entity villager, entt::entity da
 	const auto& info = InfoOf(registry.Get<const Villager>(villager));
 	const auto run = static_cast<int32_t>(info.speedGroup.speedFleeing) * 2;
 	systems::villager_reactions::SetSpeed(villager, run);
-	// The villager walks the dance's footpaths where it has any, else straight to its place
-	static_cast<void>(villager_footpath::SetupMoveToOnFootpath(*action, dance, *place, VillagerStates::ControlledByCreature));
+	// The villager walks the dance's footpaths where it has any, else straight to its place with the height of the
+	// dance's place above the land
+	const auto goal = villager_dance::SlotGoalOf(villager);
+	const float altitude = goal.has_value() ? goal->altitude : 0.0f;
+	static_cast<void>(
+	    villager_footpath::SetupMoveToOnFootpath(*action, dance, *place, altitude, VillagerStates::ControlledByCreature));
 	// Its new state set its speed: the run is set again
 	systems::villager_reactions::SetSpeed(villager, run);
 	return true;

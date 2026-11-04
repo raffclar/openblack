@@ -23,6 +23,7 @@
 #include "Common/PortableRotations.h"
 #include "ECS/Components/Dance.h"
 #include "ECS/Components/LivingAction.h"
+#include "ECS/Components/ScriptRemind.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/VillagerPose.h"
@@ -35,12 +36,14 @@
 #include "ECS/Systems/DanceSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/VillagerClips.h"
+#include "ECS/VillagerScriptRules.h"
 #include "ECS/WallHugRules.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "VillagerAnimate.h"
 #include "VillagerCreatureDance.h"
 #include "VillagerHome.h"
+#include "VillagerScript.h"
 
 using namespace openblack;
 using namespace openblack::ecs::components;
@@ -331,6 +334,25 @@ void villager_dance::PlayClipAgain(entt::entity villager)
 	}
 }
 
+ecs::VillagerStateEntry villager_dance::EnterInDance(LivingAction& action, VillagerStates from, VillagerStates into)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto villager = registry.ToEntity(action);
+	auto* remind = registry.TryGet<ScriptRemind>(villager);
+	const auto* wallHug = registry.TryGet<const WallHug>(villager);
+	if (remind == nullptr || wallHug == nullptr ||
+	    !ecs::villager_script_rules::GoesBackToKeptWork(from, into, remind->returnTo))
+	{
+		return true;
+	}
+	remind->returnTo = VillagerStates::InvalidState;
+	// It walks to the goal its walk has now, with the height of that goal above the land. The walk takes it on into the
+	// dance state.
+	villager_home::SetupMoveTo(
+	    action, MapCoords {.x = wallHug->goalPlace.x, .z = wallHug->goalPlace.y, .altitude = wallHug->goalHeight}, into);
+	return ecs::VillagerStateEntry::Outcome::SentOn;
+}
+
 bool villager_dance::ExitInDance(LivingAction& action, VillagerStates next)
 {
 	// Into another of the scripts' states it stays in the dance, and may go
@@ -338,11 +360,13 @@ bool villager_dance::ExitInDance(LivingAction& action, VillagerStates next)
 	{
 		return false;
 	}
-	// TODO(opening): it remembers it was dancing, to go back to the script's state after reacting
+	// It keeps in mind that it danced, to go back to the dance state later
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto villager = registry.ToEntity(action);
+	ecs::villager_script::KeepScriptWorkInMind(villager, VillagerStates::InDance);
 	ecs::dances::RemoveDancer(registry, villager);
-	// TODO(opening): its walk round things starts afresh
+	// It stops going round anything it was going round
+	registry.Remove<WallHugObjectReference, WallHugLookahead>(villager);
 	// Having left the dance, it may go only into the states that come and go without changing what it was doing
 	const bool letsGo =
 	    StateInfo(next).isScriptInterruptableState != 0 || next == k_InterfaceState || next == VillagerStates::InDance;

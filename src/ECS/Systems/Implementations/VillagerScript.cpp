@@ -598,6 +598,13 @@ ecs::VillagerStateEntry villager_script::EnterPlayAnim(LivingAction& action, Vil
 	return true;
 }
 
+void villager_script::KeepScriptWorkInMind(entt::entity villager, VillagerStates returnTo)
+{
+	auto& remind = RemindOf(villager);
+	remind.returnTo = returnTo;
+	KeepInMind(villager, remind);
+}
+
 void villager_script::ForgetScriptWork(entt::entity villager)
 {
 	Entities().Remove<ScriptRemind>(villager);
@@ -615,9 +622,7 @@ bool villager_script::ExitInScript(LivingAction& action, VillagerStates next)
 		return false;
 	}
 	// It leaves the script's hands: it keeps in mind the state it worked towards and its place
-	auto& remind = RemindOf(villager);
-	remind.returnTo = FinalStateOf(action);
-	KeepInMind(villager, remind);
+	KeepScriptWorkInMind(villager, FinalStateOf(action));
 	const rules::StateRules nextRules {.isScriptState = info.isScriptState != 0,
 	                                   .isScriptInterruptable = info.isScriptInterruptableState != 0};
 	return !rules::ScriptLetsGo(FinalStateOf(action), next, nextRules);
