@@ -7,6 +7,7 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <array>
 #include <memory>
 #include <optional>
 #include <stdexcept>
@@ -74,8 +75,8 @@ class FlatIsland final: public LandIslandInterface
 public:
 	[[nodiscard]] float GetHeightAt(glm::vec2) const override { return 0.0f; }
 	[[nodiscard]] glm::vec3 GetNormalAt(glm::vec2) const override { return {0.0f, 1.0f, 0.0f}; }
-	[[nodiscard]] const lnd::LNDCell& GetCell(const glm::u16vec2&) const override { return _cell; }
-	[[nodiscard]] const lnd::LNDCell* FindCell(const glm::u16vec2&) const override { return &_cell; }
+	[[nodiscard]] const lnd::LNDCell& GetCell(const glm::u16vec2&) const override { return _cells[0]; }
+	[[nodiscard]] const lnd::LNDCell* FindCell(const glm::u16vec2&) const override { return _cells.data(); }
 	void DumpTextures() const override {}
 	void DumpMaps() const override {}
 	[[nodiscard]] std::vector<LandBlock>& GetBlocks() override { throw std::logic_error("no blocks"); }
@@ -92,7 +93,8 @@ public:
 	uint8_t GetNoise(glm::u8vec2) override { return 0; }
 
 private:
-	lnd::LNDCell _cell {};
+	// The height of a point reads the cell and its three neighbours in the block's 17 by 17 array, so keep that many
+	std::array<lnd::LNDCell, 19> _cells {};
 };
 
 /// One step of a walk: the villager, its top state at the step, and the goal of the walk at the step
