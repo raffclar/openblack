@@ -98,6 +98,12 @@ CALLS = [
     ("get", "/api/v1/servers/{server_id}/bans", None,
      {"bans": ([{"account": (ACCOUNT, True), "reason": (S, False)}], True)}),
     ("put", "/api/v1/servers/{server_id}/map", None, None),
+    # The end of a game (signed with the key of the server)
+    ("post", "/api/v1/servers/{server_id}/results", {
+        "game": (S, True), "land": (S, False),
+        "gods": ([{"account": (I, True), "clan": (None, False), "position": (I, True), "gods_defeated": (I, False),
+                   "time_played": (I, False)}], True),
+    }, {"result": (I, True)}),
     # The Player Details tab (deviation 226)
     ("get", "/api/v1/players/{account}", None, {
         "id": (I, True), "name": (S, True), "points": (N, False), "games_ranked": (I, False),

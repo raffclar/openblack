@@ -58,6 +58,10 @@ With --ban-account the script also starts a fake lobby on 127.0.0.1 (HTTPS with 
 the server from the test authority). The fake lobby takes the status reports of the server and answers its bans with
 that account. Before the other clients, a client with a god's ticket of that account tries to join; the server must
 refuse it with "kicked" while the other clients play in step.
+With --lobby-results the fake lobby also takes the result of the game: the server gets a test Ed25519 key
+(--result-key), and the fake lobby checks the signature of the result as the lobby does. The game must be decided, for
+example with --temple-loss. One signed result must come, with the position, the gods defeated and the time played of
+each god of a client, and the clan that the status answers gave (clan 7 for account 100).
 
 With --restart-server-at N the script stops the game server by its own process id once the server did turn N, as a
 crash does, and starts it again with --resume-snapshot on the same port (deviation 100). The new server loads its newest
@@ -145,6 +149,7 @@ import time
 
 import draw_trace
 
+from cryptography.exceptions import InvalidSignature
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec
@@ -307,15 +312,33 @@ def make_certificates(folder):
     return paths
 
 
-class FakeLobby:
-    """The game servers' API of a lobby on 127.0.0.1, for the test only: status reports and the bans of one account.
-    It asks the game server for its client certificate of the test authority, as the lobby does (mutual TLS)."""
+RESULT_PREFIX = b"bwgame-result-v1\n"
 
-    def __init__(self, certs, banned):
-        self.counts = {"status": 0, "bans": 0, "other": 0}
+
+def make_result_key(folder):
+    """A test Ed25519 key of the game server for its results, as a PEM file (never a key of a lobby)"""
+    key = Ed25519PrivateKey.generate()
+    path = os.path.join(folder, "result.key")
+    with open(path, "wb") as file:
+        file.write(key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8,
+                                     serialization.NoEncryption()))
+    return key.public_key(), path
+
+
+class FakeLobby:
+    """The game servers' API of a lobby on 127.0.0.1, for the test only: status reports, the bans of one account and
+    the results of the games. It asks the game server for its client certificate of the test authority, as the lobby
+    does (mutual TLS). With a result key, it checks the signature of each result as the lobby does, and its status
+    answers say that the first client's account plays for clan 7."""
+
+    def __init__(self, certs, banned, result_key=None):
+        self.counts = {"status": 0, "bans": 0, "results": 0, "other": 0}
+        self.results = []
         lobby = self
-        bans = {"bans": [{"account": {"id": banned, "name": f"Player{banned}"}, "reason": "net_check", "by": "test",
-                          "created": "2026-10-26T00:00:00Z", "expires": None}]}
+        bans = {"bans": [] if banned is None else [
+            {"account": {"id": banned, "name": f"Player{banned}"}, "reason": "net_check", "by": "test",
+             "created": "2026-10-26T00:00:00Z", "expires": None}]}
+        clans = [{"account": 100, "clan": 7}] if result_key is not None else []
 
         class Handler(http.server.BaseHTTPRequestHandler):
             def answer(self, status, body):
@@ -331,10 +354,32 @@ class FakeLobby:
                 self.rfile.read(length)
                 if self.path == f"/api/v1/servers/{SERVER_ID}/status":
                     lobby.counts["status"] += 1
-                    self.answer(200, {"next_status_in": 5, "listed": True, "clans": []})
+                    self.answer(200, {"next_status_in": 5, "listed": True, "clans": clans})
                 else:
                     lobby.counts["other"] += 1
                     self.answer(404, {"code": "not_found"})
+
+            def do_POST(self):
+                length = int(self.headers.get("Content-Length", 0))
+                body = self.rfile.read(length)
+                if self.path != f"/api/v1/servers/{SERVER_ID}/results" or result_key is None:
+                    lobby.counts["other"] += 1
+                    self.answer(404, {"code": "not_found"})
+                    return
+                lobby.counts["results"] += 1
+                signature = self.headers.get("Bwgame-Signature", "")
+                try:
+                    raw = base64.urlsafe_b64decode(signature + "=" * (-len(signature) % 4))
+                    result_key.verify(raw, RESULT_PREFIX + body)
+                    signed = True
+                except (InvalidSignature, ValueError):
+                    signed = False
+                again = any(earlier["body"] == body for earlier in lobby.results)
+                lobby.results.append({"body": body, "signature": signature, "signed": signed, "report": json.loads(body)})
+                if not signed:
+                    self.answer(401, {"code": "bad_signature"})
+                else:
+                    self.answer(200 if again else 201, {"result": 1, "gods": []})
 
             def do_GET(self):
                 if self.path == f"/api/v1/servers/{SERVER_ID}/bans":
@@ -362,6 +407,27 @@ class FakeLobby:
     def close(self):
         self.server.shutdown()
         self.server.server_close()
+
+
+def lobby_results_summary(lobby, clients, server_log, out):
+    """What the fake lobby got of the result of the game. One signed result must come, with each god of a client:
+    accounts 100 and up, positions from 1, the gods defeated, the time played, and clan 7 for account 100 only."""
+    got = [{"signed": each["signed"], "report": each["report"]} for each in lobby.results]
+    # The first result as it came, for a check against a real lobby (body.json, signature.txt, and result.key beside)
+    if lobby.results:
+        with open(os.path.join(out, "body.json"), "wb") as file:
+            file.write(lobby.results[0]["body"])
+        with open(os.path.join(out, "signature.txt"), "w", encoding="ascii") as file:
+            file.write(lobby.results[0]["signature"])
+    report = lobby.results[0]["report"] if lobby.results else {}
+    gods = report.get("gods", [])
+    accounts = sorted(god.get("account") for god in gods)
+    positions = sorted(god.get("position") for god in gods)
+    ok = (len(lobby.results) == 1 and lobby.results[0]["signed"] and accounts == list(range(100, 100 + clients))
+          and positions[:1] == [1] and all("gods_defeated" in god and "time_played" in god for god in gods)
+          and all((god.get("clan") == 7) == (god.get("account") == 100) for god in gods))
+    return {"ok": ok, "requests": dict(lobby.counts), "results": got,
+            "server": lines_with(server_log, ["result of the game", "is decided at turn"])}
 
 
 def start(command, cwd):
@@ -1780,6 +1846,10 @@ def main():
     parser.add_argument("--ban-account", type=int,
                         help="a fake lobby bans this account id; a client of that account must be refused before the "
                              "start (the other clients use the ids 100 and up)")
+    parser.add_argument("--lobby-results", action="store_true",
+                        help="a fake lobby takes the result of the game, signed with a test key of the server; the "
+                             "game must be decided (for example with --temple-loss), and the result must come one time "
+                             "with a good signature, a position, the gods defeated and the time played of each god")
     parser.add_argument("--clients", type=int, choices=(0, 1, 2, 3, 4), default=2,
                         help="the number of clients that play a god (a god slot each)")
     parser.add_argument("--min-gods", type=int,
@@ -1973,10 +2043,14 @@ def main():
     land_kind = {"land": options.land, "testbed": options.testbed, "gods_ring_map": options.gods_ring_map}
     server_command += sim_report.gods_need_no_temple_args(True, **land_kind)
     lobby = None
-    if options.ban_account is not None:
-        if 100 <= options.ban_account < 100 + options.clients:
+    if options.ban_account is not None or options.lobby_results:
+        if options.ban_account is not None and 100 <= options.ban_account < 100 + options.clients:
             parser.error("--ban-account must not be the account of a client that plays")
-        lobby = FakeLobby(certs, options.ban_account)
+        result_key = None
+        if options.lobby_results:
+            result_key, result_key_path = make_result_key(out)
+            server_command += ["--result-key", result_key_path]
+        lobby = FakeLobby(certs, options.ban_account, result_key)
         server_command += ["--lobby-api", lobby.address, "--client-cert", certs["client.pem"],
                            "--client-key", certs["client.key"], "--lobby-test-ca", certs["ca.pem"]]
     banned_result = None
@@ -2019,7 +2093,7 @@ def main():
             time.sleep(options.room_wait)
         if options.leave_room_first and not leave_room(game_exe, options, url, key, kid, certs, out, server_log):
             return 1
-        if lobby is not None:
+        if options.ban_account is not None:
             banned_result = try_banned_join(options, game_exe, url, (key, kid), certs, server_log, server,
                                             os.path.join(out, "banned"), processes)
             if banned_result is None:
@@ -2493,7 +2567,10 @@ def main():
             if not all(got):
                 print(f"the chat line {text!r} of client {client} did not come to every client: {got}")
                 all_same = False
-    if lobby is not None:
+    if options.lobby_results:
+        summary["lobby_results"] = lobby_results_summary(lobby, options.clients, server_log, out)
+        all_same = all_same and summary["lobby_results"]["ok"]
+    if options.ban_account is not None:
         banned_result["lobby_requests"] = dict(lobby.counts)
         # The server reads the bans with each status report
         banned_result["bans_with_each_report"] = lobby.counts["status"] > 0 and lobby.counts["bans"] >= lobby.counts["status"] - 1
