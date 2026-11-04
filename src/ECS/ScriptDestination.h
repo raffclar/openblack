@@ -23,7 +23,7 @@ class Registry;
 
 /// The destination of a living thing as the scripts read it (GET_OBJECT_DESTINATION): a map position with a height
 /// above the land. The game keeps one such place for each living thing:
-/// - A villager: the goal of its walk. openblack keeps no height for this goal, so the height is 0.
+/// - A villager: the goal of its walk, and the height of the goal above the land.
 /// - An animal: the goal of its move, and the height above the land that it wants to have there.
 /// - A creature: the place that its walks set (see CreatureLocomotion::scriptDestination).
 /// Any other thing has no destination.

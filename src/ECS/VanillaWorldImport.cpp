@@ -1682,6 +1682,40 @@ ImportedTowns ReadTowns(const VanillaWorld& world)
 	return imported;
 }
 
+std::vector<SiteListing> PlanSiteListings(std::span<const ImportedTown> towns,
+                                          const std::function<std::optional<std::size_t>(uint32_t)>& ownerOf)
+{
+	// The towns that list each site, in the order of the towns
+	std::unordered_map<uint32_t, std::vector<std::size_t>> listers;
+	for (std::size_t town = 0; town < towns.size(); ++town)
+	{
+		for (const auto site : towns[town].sites)
+		{
+			auto& list = listers[site];
+			if (std::ranges::find(list, town) == list.end())
+			{
+				list.push_back(town);
+			}
+		}
+	}
+	std::unordered_map<uint32_t, std::size_t> openers;
+	for (const auto& [site, list] : listers)
+	{
+		const auto owner = ownerOf(site);
+		const bool ownerLists = owner.has_value() && std::ranges::find(list, *owner) != list.end();
+		openers.emplace(site, ownerLists ? *owner : list.front());
+	}
+	std::vector<SiteListing> listings;
+	for (std::size_t town = 0; town < towns.size(); ++town)
+	{
+		for (const auto site : std::views::reverse(towns[town].sites))
+		{
+			listings.push_back({.town = town, .site = site, .opener = openers.at(site)});
+		}
+	}
+	return listings;
+}
+
 magic::piles::Rise PileRiseOf(std::span<const uint8_t, k_PileRiseBytes> bytes)
 {
 	std::array<float, k_PileRiseBytes / sizeof(float)> values {};

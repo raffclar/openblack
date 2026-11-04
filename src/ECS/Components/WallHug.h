@@ -116,6 +116,9 @@ struct WallHug
 	/// The place the walker walks to, in whole map units (a 65536th of ten metres), as the game holds it. Metres in a
 	/// float cannot hold every such place.
 	glm::ivec2 goalPlace {0, 0};
+	/// The height of the goal above the land, as the game keeps it with the goal. A walk to a thing takes the height of
+	/// the thing. A walk to a point on the land has the height 0.
+	float goalHeight {0.0f};
 	/// The step the walker makes each turn, in whole map units (a 65536th of ten metres); none until the walk is set up
 	glm::ivec2 step {0, 0};
 	/// A third part of the step, a height. Each aim of the step sets it to nothing. A turn round swaps it with the

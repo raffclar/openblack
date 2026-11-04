@@ -69,6 +69,22 @@ uint32_t building_site_list::NumberFor(const BuildingSite& site, entt::entity to
 	return listing != site.sharedWith.end() ? listing->number : 0;
 }
 
+bool building_site_list::SetNumberFor(BuildingSite& site, entt::entity town, uint32_t number)
+{
+	if (site.town == town)
+	{
+		site.number = number;
+		return true;
+	}
+	const auto listing = std::ranges::find(site.sharedWith, town, &BuildingSite::Listing::town);
+	if (listing == site.sharedWith.end())
+	{
+		return false;
+	}
+	listing->number = number;
+	return true;
+}
+
 BuildingSite* building_site_list::TakingBroughtWood(BuildingSites& sites)
 {
 	const auto found = std::ranges::find_if(sites.sites, &BuildingSite::takesBroughtWood);

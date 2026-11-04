@@ -675,6 +675,7 @@ bool TeleportSystem::RouteWorshipper(entt::entity villager, glm::vec3 site)
 	}
 	// On its way to worship, arriving at the site at the end, it turns aside into the stone
 	wallHug->goalPlace = ecs::wall_hug::ToWhole({site.x, site.z});
+	wallHug->goalHeight = 0.0f;
 	auto& living = Locator::livingActionSystem::value();
 	living.VillagerSetState(*action, LivingAction::Index::Final, VillagerStates::ArrivesAtWorshipSiteForWorship, false);
 	living.VillagerSetState(*action, LivingAction::Index::Top, VillagerStates::GotoWorshipSiteForWorship, false);

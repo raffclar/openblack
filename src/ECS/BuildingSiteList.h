@@ -45,6 +45,8 @@ bool Share(components::BuildingSite& site, entt::entity town, uint32_t number);
 /// The place of the site in the list of the sites of a town: a newer site has a higher number. 0 if the town does not
 /// have the site.
 [[nodiscard]] uint32_t NumberFor(const components::BuildingSite& site, entt::entity town);
+/// Sets the place of the site in the list of the sites of a town. False if the town does not have the site.
+bool SetNumberFor(components::BuildingSite& site, entt::entity town, uint32_t number);
 
 /// A town's site closes and is handed back, none if the town had none there. The site that a town removes is the site
 /// that Find gives, so a town that removes a shared site closes the site for all towns. From then on none of the

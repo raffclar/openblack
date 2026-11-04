@@ -321,6 +321,7 @@
 #include "ScriptHeaders/ScriptInterfaceLevels.h"
 #include "ScriptHeaders/ScriptLessonNatives.h"
 #include "ScriptHeaders/ScriptNameLists.h"
+#include "ScriptHeaders/ScriptPlayers.h"
 #include "ScriptHeaders/ScriptPropertyRules.h"
 #include "ScriptHeaders/ScriptRandom.h"
 #include "ScriptHeaders/ScriptRealTime.h"
@@ -572,9 +573,10 @@ help::spirits::AdvisorSpiritController* ScriptAdvisors()
 /// that go by it. A random spirit comes from the random numbers of the help, which no frame draws.
 int32_t ScriptHelpSpirit(int32_t scriptSpirit)
 {
-	const auto alignment = Locator::alignmentSystem::has_value()
-	                           ? Locator::alignmentSystem::value().GetPlayerAlignment(ScriptPlayerName(0))
-	                           : 0.0f;
+	const auto player =
+	    Locator::playerSystem::has_value() ? Locator::playerSystem::value().GetLocalPlayer() : PlayerNames::PLAYER_ONE;
+	const auto alignment =
+	    Locator::alignmentSystem::has_value() ? Locator::alignmentSystem::value().GetPlayerAlignment(player) : 0.0f;
 	return help::script_spirits::HelpSpiritOf(scriptSpirit, help::script_spirits::DiscreteAlignment(alignment), []() {
 		return Locator::helpMessageSystem::has_value() ? Locator::helpMessageSystem::value().HelpRand(100) : 0u;
 	});
@@ -2760,9 +2762,12 @@ void GetPosition() // 023 GET_POSITION
 		         ecs::villager_script_rules::WithinAStepOfGoalPlace(glm::vec2(transform->position.x, transform->position.z),
 		                                                            wallHug->goalPlace, wallHug->speed))
 		{
-			// A walker within a turn's step of where it is walking to is seen there, on the ground
+			// A walker within a turn's step of where it is walking to is seen there, at the height of its goal above the
+			// land. An animal keeps the height of its goal with its move.
 			const auto goal = ecs::wall_hug::ToPoint(wallHug->goalPlace);
-			position = {goal.x, Locator::terrainSystem::value().GetHeightAt(goal), goal.y};
+			const auto* animal = registry.TryGet<const ecs::components::Animal>(object);
+			const float height = animal != nullptr ? animal->goalHeight : wallHug->goalHeight;
+			position = {goal.x, Locator::terrainSystem::value().GetHeightAt(goal) + height, goal.y};
 		}
 		else if (transform != nullptr)
 		{
@@ -9744,7 +9749,7 @@ void CreateRandomVillagerOfTribe() // 353 CREATE_RANDOM_VILLAGER_OF_TRIBE
 
 void ToggleLeash() // 354 TOGGLE_LEASH
 {
-	const auto player = static_cast<PlayerNames>(Pop().intVal);
+	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
 	if (!Locator::leashSystem::has_value())
 	{
 		return;
@@ -10554,14 +10559,10 @@ void GetPlayerAlly() // 398 GET_PLAYER_ALLY
 	Pushf(strength);
 }
 
-/// The player a script names: its 0 is the first player on every computer, the others count from 1
+/// The player a script names: its 0 is the neutral player, the others count from 1
 PlayerNames ScriptPlayerName(int32_t scriptPlayer)
 {
-	if (scriptPlayer != 0)
-	{
-		return static_cast<PlayerNames>(scriptPlayer - 1);
-	}
-	return Locator::playerSystem::has_value() ? Locator::playerSystem::value().GetLocalPlayer() : PlayerNames::PLAYER_ONE;
+	return script::script_players::NameOf(scriptPlayer);
 }
 
 ecs::components::Player* ScriptPlayer(float number)
