@@ -210,10 +210,28 @@ std::string GameText(const GameLine& game)
 	{
 		text += writer::CommandLine("LOAD_LANDSCAPE", "L", std::array<writer::Argument, 1> {writer::Name {game.landscape}});
 	}
+	text += writer::CommandLine("START_CAMERA_POS", "A",
+	                            std::array<writer::Argument, 1> {writer::Place {writer::PlaceText(game.startCamera)}});
+	for (size_t index = 0; index < game.landBalance.size(); ++index)
+	{
+		const float balance = game.landBalance.at(index);
+		if (balance != 1.0f)
+		{
+			text += writer::CommandLine("SET_GLOBAL_LAND_BALANCE", "NF",
+			                            std::array<writer::Argument, 2> {static_cast<int32_t>(index), balance});
+		}
+	}
+	if (!game.flyByFile.empty())
+	{
+		text += writer::CommandLine("FLY_BY_FILE", "L", std::array<writer::Argument, 1> {writer::Name {game.flyByFile}});
+	}
 	text += writer::CommandLine("SET_TOWN_INFLUENCE_MULTIPLIER", "F",
 	                            std::array<writer::Argument, 1> {game.townInfluenceMultiplier});
 	text += writer::CommandLine("SET_PLAYER_INFLUENCE_MULTIPLIER", "F",
 	                            std::array<writer::Argument, 1> {game.playerInfluenceMultiplier});
+	text += writer::CommandLine(
+	    "SET_NIGHTTIME", "FFF",
+	    std::array<writer::Argument, 3> {game.dayCycle.duration, game.dayCycle.night, game.dayCycle.change});
 	return text;
 }
 

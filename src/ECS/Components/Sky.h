@@ -48,6 +48,9 @@ struct SkyDome
 struct DayNightCycle
 {
 	DayNightClock clock;
+	/// The numbers of the cycle that the clock follows, as the last script or land command gave them. A map save writes
+	/// them again.
+	DayCycle cycle {};
 };
 
 /// A body of the sky drawn as a mesh: its mesh, texture and the texture its alpha is taken from

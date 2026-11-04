@@ -11,6 +11,7 @@
 
 #include <cstdint>
 
+#include <array>
 #include <optional>
 #include <span>
 #include <string>
@@ -21,6 +22,7 @@
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
+#include "3D/DayNightClock.h"
 #include "3D/LandData.h"
 
 /// What the editor saves of a land: the land's cells into the data of a landscape file, and the lines of a land script
@@ -257,14 +259,27 @@ struct GameLine
 	int32_t landNumber {0};
 	/// The path of the landscape file that the land loads. With no path, the file gets no landscape line.
 	std::string landscape;
+	/// The start place of the camera in map units. A land with no start place has 0, 0, and the camera then starts at
+	/// the temple of the player.
+	glm::ivec2 startCamera {0, 0};
+	/// The eight balances of the land
+	std::array<float, 8> landBalance {1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f};
+	/// The name of the fly-by file. With no name, the file gets no fly-by line.
+	std::string flyByFile;
 	float townInfluenceMultiplier {1.0f};
 	float playerInfluenceMultiplier {1.0f};
+	/// The cycle of day and night
+	DayCycle dayCycle {};
 };
 
 /// The lines of the whole land, in this order:
 /// 1. The number of the land.
 /// 2. The landscape file that the land loads, when the land has one.
-/// 3. The influence multiplier of the towns, then the influence multiplier of the players.
+/// 3. The start place of the camera.
+/// 4. A line for each balance of the land that is not 1, with the number of the balance.
+/// 5. The fly-by file, when the land has one.
+/// 6. The influence multiplier of the towns, then the influence multiplier of the players.
+/// 7. The cycle of day and night.
 [[nodiscard]] std::string GameText(const GameLine& game);
 
 /// The comment line that the game writes before the towns of a player

@@ -16,6 +16,7 @@
 #include <functional>
 #include <optional>
 #include <span>
+#include <string>
 #include <string_view>
 
 #include <glm/vec2.hpp>
@@ -139,6 +140,14 @@ public:
 	/// The map script of the land gives the start place of the camera: the point it looks at in metres along the two map
 	/// axes, and the same point in map units. The camera goes there when the script has run.
 	virtual void SetStartCameraPlace(glm::vec2 focus, glm::ivec2 place) = 0;
+	/// The start place of the camera in map units that the map script of the land gave. None when the script gave no
+	/// place.
+	[[nodiscard]] virtual std::optional<glm::ivec2> GetStartCameraPlace() const = 0;
+	/// A map script gives the name of a fly-by file. The land keeps the name only for a map save. The name stays until
+	/// the next script that gives a name, also through a load of a land.
+	virtual void SetFlyByFile(std::string path) = 0;
+	/// The name of the fly-by file that a map script gave last, empty when no script gave a name
+	[[nodiscard]] virtual const std::string& GetFlyByFile() const = 0;
 	/// Puts the camera at the start place that the map script gave, on the land that the script loaded. Does nothing when
 	/// the script gave no place. A land load does this when its map script has run.
 	virtual void PutCameraAtStartPlace() = 0;

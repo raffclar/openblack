@@ -29,7 +29,7 @@ SkyArchetype::Entities SkyArchetype::Create()
 	DayNightClock clock;
 	clock.Reset();
 	const auto skyType = clock.SkyType(clock.GetVisualTime());
-	registry.Assign<DayNightCycle>(entities.dome, clock);
+	registry.Assign<DayNightCycle>(entities.dome, DayNightCycle {.clock = clock, .cycle = {}});
 	registry.Assign<SkyDome>(entities.dome, SkyDome {
 	                                            .meshId = k_DomeMeshId.value(),
 	                                            .textureId = k_DomeTextureId.value(),

@@ -46,6 +46,10 @@ public:
 	/// The clock of day and night
 	[[nodiscard]] virtual DayNightClock& GetClock() = 0;
 	[[nodiscard]] virtual const DayNightClock& GetClock() const = 0;
+	/// Sets the cycle of day and night. The system keeps the numbers of the cycle for a map save.
+	virtual void SetCycle(DayCycle cycle) = 0;
+	/// The numbers of the cycle that the last script or land command gave
+	[[nodiscard]] virtual DayCycle GetCycle() const = 0;
 
 	/// The sky's entities: the dome, which holds the clock, the sun and the moon
 	[[nodiscard]] virtual const archetypes::SkyArchetype::Entities& GetEntities() const = 0;

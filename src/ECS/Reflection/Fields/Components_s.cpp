@@ -138,7 +138,9 @@ void openblack::ecs::reflection::RegisterFields_Components_s(entt::meta_ctx& con
 	    .Field<&components::SkyDome::frameRows>("frameRows")
 	    .Field<&components::SkyDome::overcast>("overcast")
 	    .Field<&components::SkyDome::landLight>("landLight");
-	Reflect<components::DayNightCycle>(context).Field<&components::DayNightCycle::clock>("clock");
+	Reflect<components::DayNightCycle>(context)
+	    .Field<&components::DayNightCycle::clock>("clock")
+	    .Field<&components::DayNightCycle::cycle>("cycle");
 	Reflect<components::CelestialBody>(context)
 	    .Field<&components::CelestialBody::meshId>("meshId")
 	    .Field<&components::CelestialBody::textureId>("textureId")

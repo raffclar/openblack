@@ -19,6 +19,7 @@
 #include <spdlog/sinks/null_sink.h>
 #include <spdlog/spdlog.h>
 
+#include "Camera/ZoomToPlaces.h"
 #include "ECS/CreatureFromFile.h"
 #include "ECS/TownDesire.h"
 #include "Editor/EditorHistory.h"
@@ -552,10 +553,71 @@ TEST(EditorLandSave, TheWholeLandIsWrittenAfterTheVersion)
 	                                       .playerInfluenceMultiplier = 0.5f});
 	EXPECT_EQ(text, "SET_LAND_NUMBER(2)\n"
 	                "LOAD_LANDSCAPE(\"C:/Profile/Editor/land2.lnd\")\n"
+	                "START_CAMERA_POS(\"0.00,0.00\")\n"
 	                "SET_TOWN_INFLUENCE_MULTIPLIER(1.500000)\n"
-	                "SET_PLAYER_INFLUENCE_MULTIPLIER(0.500000)\n");
+	                "SET_PLAYER_INFLUENCE_MULTIPLIER(0.500000)\n"
+	                "SET_NIGHTTIME(1700.000000, 0.083000, 0.070000)\n");
 	// A land with no landscape file gets no landscape line
 	EXPECT_EQ(land_save::GameText({}).find("LOAD_LANDSCAPE"), std::string::npos);
+}
+
+TEST(EditorLandSave, TheCameraTheBalancesTheFlyByAndTheNightAreWrittenInTheirOrder)
+{
+	auto balances = std::array<float, 8> {1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f};
+	balances.at(0) = 3.5f;
+	balances.at(6) = 20.0f;
+	const auto text = land_save::GameText({
+	    .landNumber = 3,
+	    .landscape = "land3.lnd",
+	    .startCamera = {65536, 131072},
+	    .landBalance = balances,
+	    .flyByFile = "flyby.txt",
+	    .dayCycle = {.duration = 1000.0f, .night = 0.23f, .change = 0.17f},
+	});
+	EXPECT_EQ(text, "SET_LAND_NUMBER(3)\n"
+	                "LOAD_LANDSCAPE(\"land3.lnd\")\n"
+	                "START_CAMERA_POS(\"10.00,20.00\")\n"
+	                "SET_GLOBAL_LAND_BALANCE(0, 3.500000)\n"
+	                "SET_GLOBAL_LAND_BALANCE(6, 20.000000)\n"
+	                "FLY_BY_FILE(\"flyby.txt\")\n"
+	                "SET_TOWN_INFLUENCE_MULTIPLIER(1.000000)\n"
+	                "SET_PLAYER_INFLUENCE_MULTIPLIER(1.000000)\n"
+	                "SET_NIGHTTIME(1000.000000, 0.230000, 0.170000)\n");
+	// A land with no fly-by file gets no fly-by line, and a balance of 1 gets no line
+	const auto plain = land_save::GameText({});
+	EXPECT_EQ(plain.find("FLY_BY_FILE"), std::string::npos);
+	EXPECT_EQ(plain.find("SET_GLOBAL_LAND_BALANCE"), std::string::npos);
+}
+
+TEST(EditorLandSave, TheWholeLandLinesReadBackToTheSameValues)
+{
+	auto balances = std::array<float, 8> {1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f};
+	balances.at(5) = 3.014706f;
+	const land_save::GameLine game {
+	    .landNumber = 1,
+	    .startCamera = {zoom_to::MapCoordOf(1441.56f), zoom_to::MapCoordOf(2081.76f)},
+	    .landBalance = balances,
+	    .flyByFile = "fly.txt",
+	    .dayCycle = {.duration = 1700.0f, .night = 0.083f, .change = 0.07f},
+	};
+	const auto script = lhscriptx::Script::Read("VERSION(2.300000)\n" + land_save::GameText(game));
+	std::map<std::string, std::vector<lhscriptx::Token>> lines;
+	for (const auto& command : script.commands)
+	{
+		lines[command.name] = command.arguments;
+	}
+	// The place of the camera reads back to the same text that a shipped land gives
+	ASSERT_EQ(lines.at("START_CAMERA_POS").size(), 1u);
+	EXPECT_EQ(lines.at("START_CAMERA_POS").at(0).StringValue(), "1441.56,2081.76");
+	ASSERT_EQ(lines.at("SET_GLOBAL_LAND_BALANCE").size(), 2u);
+	EXPECT_EQ(*lines.at("SET_GLOBAL_LAND_BALANCE").at(0).IntegerValue(), 5);
+	EXPECT_FLOAT_EQ(*lines.at("SET_GLOBAL_LAND_BALANCE").at(1).FloatValue(), 3.014706f);
+	EXPECT_EQ(lines.at("FLY_BY_FILE").at(0).StringValue(), "fly.txt");
+	const auto& night = lines.at("SET_NIGHTTIME");
+	ASSERT_EQ(night.size(), 3u);
+	EXPECT_FLOAT_EQ(*night.at(0).FloatValue(), 1700.0f);
+	EXPECT_FLOAT_EQ(*night.at(1).FloatValue(), 0.083f);
+	EXPECT_FLOAT_EQ(*night.at(2).FloatValue(), 0.07f);
 }
 
 TEST(EditorLandSave, AScriptWithNoLandscapeLineLoadsNoLandscape)

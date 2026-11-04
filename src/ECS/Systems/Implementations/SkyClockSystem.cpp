@@ -95,3 +95,15 @@ const DayNightClock& SkyClockSystem::GetClock() const
 	const auto& registry = Locator::entitiesRegistry::value();
 	return registry.Get<DayNightCycle>(_entities.dome).clock;
 }
+
+void SkyClockSystem::SetCycle(DayCycle cycle)
+{
+	auto& dayNight = Locator::entitiesRegistry::value().Get<DayNightCycle>(_entities.dome);
+	dayNight.cycle = cycle;
+	dayNight.clock.SetCycle(cycle.duration, cycle.night, cycle.change);
+}
+
+DayCycle SkyClockSystem::GetCycle() const
+{
+	return Locator::entitiesRegistry::value().Get<DayNightCycle>(_entities.dome).cycle;
+}

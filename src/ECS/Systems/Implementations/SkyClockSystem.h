@@ -37,6 +37,8 @@ public:
 	[[nodiscard]] DayNightTimes GetDayNightTimes() const override { return GetClock().GetDayNightTimes(); }
 	[[nodiscard]] DayNightClock& GetClock() override;
 	[[nodiscard]] const DayNightClock& GetClock() const override;
+	void SetCycle(DayCycle cycle) override;
+	[[nodiscard]] DayCycle GetCycle() const override;
 	[[nodiscard]] const archetypes::SkyArchetype::Entities& GetEntities() const override { return _entities; }
 
 private:
