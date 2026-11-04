@@ -100,6 +100,10 @@ PlayerNames OwnPlayer();
 /// too. Each computer has the same hands and minds, thus the turns can read this.
 bool IsHumanGod(PlayerNames player);
 
+/// A player's creature for every purpose of the game: the first one they got. Creatures are made as they are got, so
+/// it is the earliest made of theirs. This stands in for the game-wide lookup of a player's creature until there is one.
+std::optional<entt::entity> PrimaryCreatureOf(const ecs::Registry& registry, PlayerNames player);
+
 /// Whether the creature still fights its opponent. The opponent is in the duel, or the opponent left the duel before the
 /// creature and the fight of the opponent has not ended.
 bool FightsOn(const ecs::Registry& registry, entt::entity creature, const CreatureFighting& fighting);
