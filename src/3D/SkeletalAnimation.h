@@ -12,6 +12,7 @@
 #include <cstdint>
 
 #include <array>
+#include <optional>
 #include <span>
 #include <unordered_map>
 #include <vector>
@@ -146,6 +147,14 @@ struct FrameSpan
 [[nodiscard]] std::vector<Pose> SampleCycle(const Animation& animation, const Animation& stand, uint32_t timeMs,
                                             const Skeleton& skeleton, std::span<const uint32_t> mirror = {},
                                             KeyframeTurns* turns = nullptr);
+
+/// The places in the mesh's space of some bones at a time of a cycle, with the same bits as SampleCycle and
+/// ComposeBoneMatrices give them with no mirror. It finds only the poses of these bones and the bones that they hang
+/// from. None for a bone that is not in the skeleton.
+[[nodiscard]] std::vector<std::optional<glm::vec3>> BonePlacesInCycle(const Animation& animation, const Animation& stand,
+                                                                      uint32_t timeMs, const Skeleton& skeleton,
+                                                                      std::span<const uint32_t> bones,
+                                                                      KeyframeTurns* turns = nullptr);
 
 /// Poses reflected across the body's x = 0 plane: each bone bends away from its rest pose as its mirror bone did,
 /// reflected, and stands where its mirror bone stood, reflected. Whatever frames the bones' own rest poses are in, the

@@ -14,6 +14,7 @@
 
 #include <algorithm>
 #include <array>
+#include <iterator>
 #include <optional>
 
 #include <MorphFile.h>
@@ -426,6 +427,101 @@ std::vector<Pose> MirrorPoses(std::span<const Pose> poses, const Skeleton& skele
 	return mirrored;
 }
 
+namespace
+{
+/// Gives the pose of each bone at a time of a cycle, one bone at a time. The pose of a bone does not read the poses of
+/// the other bones. Thus a pose has the same bits when the caller asks only for some bones. The animation must have
+/// frames.
+class CycleSampler
+{
+public:
+	CycleSampler(const Animation& animation, const Animation& stand, uint32_t timeMs, const Skeleton& skeleton,
+	             KeyframeTurns* turns)
+	    : _animation(animation)
+	    , _skeleton(skeleton)
+	    , _standFrame(stand.frames.empty() ? nullptr : &stand.frames.front())
+	    , _standRotated(stand.rotatedJoints, skeleton.parents.size())
+	    , _standTranslated(stand.translatedJoints, skeleton.parents.size())
+	    , _rotated(animation.rotatedJoints, skeleton.parents.size())
+	    , _translated(animation.translatedJoints, skeleton.parents.size())
+	    , _span(FindFrames(animation, timeMs))
+	    , _keyframes(turns, animation, _span.from, _span.to, false)
+	    , _standTurns(turns != nullptr && _standFrame != nullptr ? turns->Of(stand, 0, false) : std::span<const Matrix> {})
+	{
+	}
+
+	/// The pose of a bone. The bone must be in the skeleton.
+	[[nodiscard]] Pose Sample(uint32_t joint) const
+	{
+		Pose pose {.rotation = k_Identity, .translation = glm::vec3(0.0f)};
+		const auto parent = _skeleton.parents[joint];
+
+		Matrix rotation = k_Identity;
+		if (const auto slot = _rotated[joint])
+		{
+			rotation = _keyframes.Blend(*slot, _span.t);
+		}
+		else if (_standFrame != nullptr && _standRotated[joint])
+		{
+			const auto standSlot = *_standRotated[joint];
+			rotation =
+			    standSlot < _standTurns.size() ? _standTurns[standSlot] : RotationYXZ(_standFrame->eulerAngles[standSlot]);
+		}
+		pose.rotation = Multiply(_skeleton.restRotations[joint], rotation);
+		if (joint != 0 && parent != k_NoParent)
+		{
+			pose.rotation = Multiply(pose.rotation, _skeleton.inverseRestRotations[parent]);
+		}
+
+		if (const auto slot = _translated[joint])
+		{
+			const auto& a = _animation.frames[_span.from].translations[*slot];
+			const auto& b = _animation.frames[_span.to].translations[*slot];
+			pose.translation = (b - a) * _span.t + a;
+		}
+		else if (_standFrame != nullptr && _standTranslated[joint])
+		{
+			pose.translation = _standFrame->translations[*_standTranslated[joint]];
+		}
+		return pose;
+	}
+
+private:
+	const Animation& _animation;
+	const Skeleton& _skeleton;
+	const Animation::Frame* _standFrame;
+	JointSlots _standRotated;
+	JointSlots _standTranslated;
+	JointSlots _rotated;
+	JointSlots _translated;
+	FrameSpan _span;
+	FramePairTurns _keyframes;
+	std::span<const Matrix> _standTurns;
+};
+
+/// The matrix of a bone relative to its parent, from its pose
+glm::mat4 LocalMatrix(const Pose& pose)
+{
+	glm::mat4 local(1.0f);
+	for (size_t r = 0; r < 3; ++r)
+	{
+		for (size_t c = 0; c < 3; ++c)
+		{
+			local[static_cast<glm::length_t>(r)][static_cast<glm::length_t>(c)] = pose.rotation.at(r).at(c);
+		}
+	}
+	local[3] = glm::vec4(pose.translation, 1.0f);
+	return local;
+}
+
+/// The parent of a bone that the matrices in the mesh's space use, or none for a bone at the root
+std::optional<uint32_t> ComposedParent(std::span<const uint32_t> parents, size_t bone)
+{
+	const auto parent = bone < parents.size() ? parents[bone] : k_NoParent;
+	return parent != k_NoParent && parent < bone ? std::optional(parent) : std::nullopt;
+}
+} // namespace
+
 std::vector<Pose> SampleCycle(const Animation& animation, const Animation& stand, uint32_t timeMs, const Skeleton& skeleton,
                               std::span<const uint32_t> mirror, KeyframeTurns* turns)
 {
@@ -440,48 +536,59 @@ std::vector<Pose> SampleCycle(const Animation& animation, const Animation& stand
 	{
 		return poses;
 	}
-	const auto* standFrame = stand.frames.empty() ? nullptr : &stand.frames.front();
-	const JointSlots standRotated(stand.rotatedJoints, count);
-	const JointSlots standTranslated(stand.translatedJoints, count);
-	const JointSlots rotated(animation.rotatedJoints, count);
-	const JointSlots translated(animation.translatedJoints, count);
-	const auto [from, to, t] = FindFrames(animation, timeMs);
-	const FramePairTurns keyframes(turns, animation, from, to, false);
-	const auto standTurns = turns != nullptr && standFrame != nullptr ? turns->Of(stand, 0, false) : std::span<const Matrix> {};
-
+	const CycleSampler sampler(animation, stand, timeMs, skeleton, turns);
 	for (uint32_t joint = 0; joint < count; ++joint)
 	{
-		auto& pose = poses[joint];
-		const auto parent = skeleton.parents[joint];
-
-		Matrix rotation = k_Identity;
-		if (const auto slot = rotated[joint])
-		{
-			rotation = keyframes.Blend(*slot, t);
-		}
-		else if (standFrame != nullptr && standRotated[joint])
-		{
-			const auto standSlot = *standRotated[joint];
-			rotation = standSlot < standTurns.size() ? standTurns[standSlot] : RotationYXZ(standFrame->eulerAngles[standSlot]);
-		}
-		pose.rotation = Multiply(skeleton.restRotations[joint], rotation);
-		if (joint != 0 && parent != k_NoParent)
-		{
-			pose.rotation = Multiply(pose.rotation, skeleton.inverseRestRotations[parent]);
-		}
-
-		if (const auto slot = translated[joint])
-		{
-			const auto& a = animation.frames[from].translations[*slot];
-			const auto& b = animation.frames[to].translations[*slot];
-			pose.translation = (b - a) * t + a;
-		}
-		else if (standFrame != nullptr && standTranslated[joint])
-		{
-			pose.translation = standFrame->translations[*standTranslated[joint]];
-		}
+		poses[joint] = sampler.Sample(joint);
 	}
 	return poses;
+}
+
+std::vector<std::optional<glm::vec3>> BonePlacesInCycle(const Animation& animation, const Animation& stand, uint32_t timeMs,
+                                                        const Skeleton& skeleton, std::span<const uint32_t> bones,
+                                                        KeyframeTurns* turns)
+{
+	const auto count = skeleton.parents.size();
+	// The wanted bones and each bone that they hang from. The matrix of a bone reads only these bones.
+	std::vector<bool> needed(count, false);
+	for (const auto bone : bones)
+	{
+		for (size_t joint = bone; joint < count && !needed[joint];)
+		{
+			needed[joint] = true;
+			const auto parent = ComposedParent(skeleton.parents, joint);
+			if (!parent.has_value())
+			{
+				break;
+			}
+			joint = *parent;
+		}
+	}
+	std::optional<CycleSampler> sampler;
+	if (!animation.frames.empty())
+	{
+		sampler.emplace(animation, stand, timeMs, skeleton, turns);
+	}
+	// The same steps as SampleCycle and ComposeBoneMatrices, for the needed bones only
+	std::vector<glm::mat4> matrices(count);
+	for (uint32_t joint = 0; joint < count; ++joint)
+	{
+		if (!needed[joint])
+		{
+			continue;
+		}
+		const auto pose =
+		    sampler.has_value() ? sampler->Sample(joint) : Pose {.rotation = k_Identity, .translation = glm::vec3(0.0f)};
+		const auto local = LocalMatrix(pose);
+		const auto parent = ComposedParent(skeleton.parents, joint);
+		matrices[joint] = parent.has_value() ? matrices[*parent] * local : local;
+	}
+	std::vector<std::optional<glm::vec3>> places;
+	places.reserve(bones.size());
+	std::ranges::transform(bones, std::back_inserter(places), [&](uint32_t bone) {
+		return bone < count ? std::optional(glm::vec3(matrices[bone][3])) : std::nullopt;
+	});
+	return places;
 }
 
 namespace
@@ -781,17 +888,9 @@ void ComposeBoneMatrices(std::span<const Pose> poses, std::span<const uint32_t> 
 	matrices.resize(poses.size());
 	for (size_t i = 0; i < poses.size(); ++i)
 	{
-		glm::mat4 local(1.0f);
-		for (size_t r = 0; r < 3; ++r)
-		{
-			for (size_t c = 0; c < 3; ++c)
-			{
-				local[static_cast<glm::length_t>(r)][static_cast<glm::length_t>(c)] = poses[i].rotation.at(r).at(c);
-			}
-		}
-		local[3] = glm::vec4(poses[i].translation, 1.0f);
-		const auto parent = i < parents.size() ? parents[i] : k_NoParent;
-		matrices[i] = parent != k_NoParent && parent < i ? matrices[parent] * local : local;
+		const auto local = LocalMatrix(poses[i]);
+		const auto parent = ComposedParent(parents, i);
+		matrices[i] = parent.has_value() ? matrices[*parent] * local : local;
 	}
 }
 
