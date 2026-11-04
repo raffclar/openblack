@@ -9,6 +9,7 @@
 
 #include "WebPlatform.h"
 
+#include <cstdint>
 #include <cstdlib>
 
 #include <atomic>
@@ -20,6 +21,7 @@
 #include <optional>
 #include <string>
 #include <system_error>
+#include <vector>
 
 #include <bgfx/bgfx.h>
 #include <emscripten.h>
@@ -390,6 +392,32 @@ void openblack::web::PresentFrame()
 	{
 		emscripten_current_thread_process_queued_calls();
 	}
+}
+
+void openblack::web::OfferDownload(const std::filesystem::path& file)
+{
+	constexpr std::uintmax_t k_LargestOffer = 256ULL * 1024 * 1024;
+	std::error_code error;
+	const auto size = std::filesystem::file_size(file, error);
+	if (error || size == 0 || size > k_LargestOffer)
+	{
+		return;
+	}
+	std::vector<char> bytes(size);
+	std::ifstream stream(file, std::ios::binary);
+	if (!stream.read(bytes.data(), static_cast<std::streamsize>(bytes.size())))
+	{
+		return;
+	}
+	const std::string name = file.filename().string();
+	// The page copies the bytes before this call returns, because the buffer is only valid during the call.
+	// clang-format off
+	MAIN_THREAD_EM_ASM({
+		if (globalThis.openblackOfferDownload) {
+			globalThis.openblackOfferDownload(UTF8ToString($0), HEAPU8.slice($1, $1 + $2));
+		}
+	}, name.c_str(), bytes.data(), bytes.size());
+	// clang-format on
 }
 
 void openblack::web::ShowPageMessage(std::string_view title, std::string_view text)

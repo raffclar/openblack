@@ -100,7 +100,9 @@ list(FILTER OPENBLACK_CLIENT_SOURCES EXCLUDE REGEX
 )
 # The files in the folders of the simulation that only the game uses: they show a message box of the system or open a
 # page in the browser of the system
-set(OPENBLACK_CLIENT_IN_SIM_FOLDERS "Common/FatalMessage" "Online/OpenPage")
+set(OPENBLACK_CLIENT_IN_SIM_FOLDERS "Common/FatalMessage" "Common/DebugDownload"
+                                    "Online/OpenPage"
+)
 list(JOIN OPENBLACK_CLIENT_IN_SIM_FOLDERS "|" OPENBLACK_CLIENT_IN_SIM_FOLDERS)
 set(OPENBLACK_CLIENT_IN_SIM_SOURCES ${OPENBLACK_SOURCES})
 list(FILTER OPENBLACK_CLIENT_IN_SIM_SOURCES INCLUDE REGEX
