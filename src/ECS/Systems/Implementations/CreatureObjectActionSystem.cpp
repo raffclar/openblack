@@ -131,9 +131,6 @@ using namespace openblack::ecs::systems::object_action_detail;
 
 namespace
 {
-/// The meshes look back along their z axis: ahead is -z
-constexpr glm::vec3 k_MeshBack {0.0f, 0.0f, 1.0f};
-
 /// Turning to face what it throws at or points at, it tries this many times
 constexpr uint32_t k_TurnAttempts = 2;
 
@@ -160,12 +157,6 @@ glm::vec3 HeadOf(entt::entity creature, const Transform& transform, const Creatu
 	}
 	const auto pose = creature::TurnPose(animation->newerTurnPose, animation->boneMatrices, PlacementOf(transform));
 	return glm::vec3(creature::PosedBone(points->head, pose.bones, pose.placement)[3]);
-}
-
-/// The hand a creature acts with: the right, or its mirror
-uint32_t HandBone(const CreatureRig::ActionPoints& points, const CreatureAnimation& animation, bool mirrored)
-{
-	return mirrored && points.rightHand < animation.mirror.size() ? animation.mirror[points.rightHand] : points.rightHand;
 }
 
 /// The pose drawn this frame, with the placement that the frame draws the creature at
@@ -473,6 +464,11 @@ float BearingTo(const Transform& transform, const glm::vec3& target)
 	return portable_math::Acos(std::clamp(glm::dot(ahead, glm::normalize(towards)), -1.0f, 1.0f));
 }
 
+uint32_t HandBone(const CreatureRig::ActionPoints& points, const CreatureAnimation& animation, bool mirrored)
+{
+	return mirrored && points.rightHand < animation.mirror.size() ? animation.mirror[points.rightHand] : points.rightHand;
+}
+
 std::optional<glm::vec3> FingerEndsInAnimation(entt::entity creature, uint32_t hand, size_t animation, float timeMs)
 {
 	const auto& registry = Locator::entitiesRegistry::value();
@@ -573,23 +569,6 @@ std::array<float, 2> ThrowWeights(entt::entity creature, const Transform& transf
 	}
 	const auto weight = creature_throw::HighThrowWeight(slope(ToLocal(transform, target)), slope(*flat), slope(*high));
 	return {1.0f - weight, weight};
-}
-
-/// Pointing: the four pointing animations blended by where the point is across and up from the top of the creature.
-/// The arm is chosen as it starts to point, and stays the same until the point ends.
-void SetPointing(CreatureObjectAction& action, const Transform& transform, const Creature& body, const CreatureHeldObject* held,
-                 bool choosesArm)
-{
-	const auto origin = transform.position + glm::vec3(0.0f, creature_pointing::k_OriginHeightPerSize * ShownSize(body), 0.0f);
-	const auto facing = glm::xz(transform.rotation * (-k_MeshBack));
-	const auto aim = creature_pointing::AimAt(origin, facing, action.point);
-	if (choosesArm && action.pointTurned)
-	{
-		action.mirrored =
-		    creature_pointing::PointsWithLeftAfterTurn(aim, held != nullptr ? std::optional(held->mirrored) : std::nullopt);
-	}
-	const auto weights = creature_pointing::Weights(aim, action.mirrored);
-	SetSlots(action, creature_pointing::k_Animations, weights);
 }
 
 /// The point to turn to face so that a target lies in the direction of the middle of the reach. The middle is on the
@@ -1280,81 +1259,6 @@ bool CreatureObjectActionSystem::ThrowAimed(entt::entity creature, const glm::ve
 	CreatureObjectAction action {.kind = Kind::Throw, .point = target};
 	action.givenFlightSeconds = flightSeconds;
 	return Start(creature, std::move(action));
-}
-
-bool CreatureObjectActionSystem::PointAt(entt::entity creature, const glm::vec3& point)
-{
-	return Start(creature, {.kind = Kind::Point, .point = point});
-}
-
-bool CreatureObjectActionSystem::PointAtFor(entt::entity creature, const glm::vec3& point, float seconds,
-                                            std::optional<entt::entity> thing)
-{
-	return Start(creature, {.kind = Kind::Point, .target = thing, .point = point, .pointSeconds = seconds});
-}
-
-bool CreatureObjectActionSystem::PointUntilTold(entt::entity creature, const glm::vec3& point)
-{
-	return Start(creature, {.kind = Kind::Point, .point = point, .pointsUntilTold = true});
-}
-
-void CreatureObjectActionSystem::MovePoint(entt::entity creature, const glm::vec3& point)
-{
-	auto& registry = Locator::entitiesRegistry::value();
-	auto* action = registry.Valid(creature) ? registry.TryGet<CreatureObjectAction>(creature) : nullptr;
-	if (action != nullptr && action->kind == Kind::Point)
-	{
-		action->point = point;
-	}
-}
-
-void CreatureObjectActionSystem::EndPoint(entt::entity creature)
-{
-	auto& registry = Locator::entitiesRegistry::value();
-	auto* action = registry.Valid(creature) ? registry.TryGet<CreatureObjectAction>(creature) : nullptr;
-	if (action == nullptr || action->kind != Kind::Point || action->status != Status::Running)
-	{
-		return;
-	}
-	if (action->phase != Phase::Playing && !action->pointTurned)
-	{
-		// It has not started to point yet: it stops at once
-		action->status = Status::Done;
-		return;
-	}
-	// The arm plays to the end of its animations with no hold. A turn to the point ends first, and then the arm plays
-	// all of its animations.
-	action->holdMs = 0.0f;
-	action->pointEnding = true;
-}
-
-std::optional<glm::vec3> CreatureObjectActionSystem::GetPointingHand(entt::entity creature) const
-{
-	const auto& registry = Locator::entitiesRegistry::value();
-	if (!registry.Valid(creature))
-	{
-		return std::nullopt;
-	}
-	const auto* action = registry.TryGet<const CreatureObjectAction>(creature);
-	const auto* animation = registry.TryGet<const CreatureAnimation>(creature);
-	const auto* transform = registry.TryGet<const Transform>(creature);
-	if (action == nullptr || animation == nullptr || transform == nullptr || action->kind != Kind::Point ||
-	    action->phase != Phase::Playing || action->status != Status::Running || action->pointEnding)
-	{
-		return std::nullopt;
-	}
-	const auto* points = PointsOf(registry.Get<const Creature>(creature));
-	if (points == nullptr || animation->boneMatrices.empty())
-	{
-		return std::nullopt;
-	}
-	const auto hand = HandBone(*points, *animation, action->mirrored);
-	if (hand >= animation->boneMatrices.size())
-	{
-		return std::nullopt;
-	}
-	const auto pose = creature::TurnPose(animation->newerTurnPose, animation->boneMatrices, PlacementOf(*transform));
-	return glm::vec3(creature::PosedBone(hand, pose.bones, pose.placement)[3]);
 }
 
 void CreatureObjectActionSystem::Cancel(entt::entity creature)

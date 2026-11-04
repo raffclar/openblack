@@ -48,6 +48,9 @@ using components::CreatureObjectAction;
 using components::Transform;
 using creature::CreatureRig;
 
+/// The meshes look back along their z axis: ahead is -z
+constexpr glm::vec3 k_MeshBack {0.0f, 0.0f, 1.0f};
+
 const CreatureRig::ActionPoints* PointsOf(const Creature& creature);
 
 glm::mat4 PlacementOf(const Transform& transform);
@@ -57,6 +60,9 @@ glm::vec3 ToLocal(const Transform& transform, const glm::vec3& world);
 
 /// How far round from ahead a point is, along the ground
 float BearingTo(const Transform& transform, const glm::vec3& target);
+
+/// The hand a creature acts with: the right, or its mirror
+uint32_t HandBone(const CreatureRig::ActionPoints& points, const CreatureAnimation& animation, bool mirrored);
 
 /// Where the middle of the finger ends of a hand is in an animation at a time, in the creature's own space at its own
 /// size
@@ -104,6 +110,11 @@ void Fail(CreatureObjectAction& action, std::string reason,
 /// map, and a person or animal is held
 void TakeInHand(ecs::Registry& registry, entt::entity creature, entt::entity object, const CreatureObjectAction& action,
                 const CreatureRig::ActionPoints& points, const CreatureAnimation& animation);
+
+/// Pointing: the four pointing animations blended by where the point is across and up from the top of the creature.
+/// The arm is chosen as it starts to point, and stays the same until the point ends.
+void SetPointing(CreatureObjectAction& action, const Transform& transform, const Creature& body, const CreatureHeldObject* held,
+                 bool choosesArm);
 
 /// Whether a thing lies on the map, where a creature can stomp on it: not held, flying or carried off.
 /// A piece that broke off a building goes into the cells of the map when it comes to rest, as a rock does.
