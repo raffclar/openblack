@@ -22,6 +22,7 @@
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/FollowHeadingThing.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
@@ -80,19 +81,29 @@ void CreatureModeSystem::ReleaseCamera()
 	_held = {};
 }
 
-bool CreatureModeSystem::CreatureThere() const
+std::optional<entt::entity> CreatureModeSystem::GetCreature() const
 {
-	if (!_creature.has_value() || !Locator::entitiesRegistry::has_value())
+	if (!_thing.has_value() || !Locator::entitiesRegistry::has_value())
+	{
+		return std::nullopt;
+	}
+	const auto& registry = Locator::entitiesRegistry::value();
+	return registry.Valid(*_thing) && registry.AllOf<components::Creature>(*_thing) ? _thing : std::nullopt;
+}
+
+bool CreatureModeSystem::ThingThere() const
+{
+	if (!_thing.has_value() || !Locator::entitiesRegistry::has_value())
 	{
 		return false;
 	}
 	const auto& registry = Locator::entitiesRegistry::value();
-	return registry.Valid(*_creature) && registry.AllOf<components::Creature, components::Transform>(*_creature);
+	return registry.Valid(*_thing) && registry.AllOf<components::Transform>(*_thing);
 }
 
 bool CreatureModeSystem::StillValid() const
 {
-	if (!CreatureThere())
+	if (!ThingThere())
 	{
 		return false;
 	}
@@ -102,19 +113,51 @@ bool CreatureModeSystem::StillValid() const
 
 bool CreatureModeSystem::Enter(entt::entity creature, creature_follow::StartDistance start)
 {
+	// The player locks onto creatures only
+	if (!Locator::entitiesRegistry::has_value() || !Locator::entitiesRegistry::value().Valid(creature) ||
+	    !Locator::entitiesRegistry::value().AllOf<components::Creature>(creature))
+	{
+		return false;
+	}
+	const auto taken = Take(creature, [start](const Camera& camera, glm::vec3 position, float height) {
+		return std::make_unique<CreatureCameraModel>(camera.GetOrigin(), camera.GetFocus(), position, height, start);
+	});
+	if (taken)
+	{
+		// The button that double clicked is still down: only a grip of the land after this one gives the camera back
+		_wasGripping = true;
+	}
+	return taken;
+}
+
+bool CreatureModeSystem::EnterLoaded(entt::entity thing, const creature_follow::Loaded& loaded)
+{
+	const auto taken = Take(thing, [&loaded](const Camera& /*camera*/, glm::vec3 position, float height) {
+		return std::make_unique<CreatureCameraModel>(loaded, position, height);
+	});
+	if (taken)
+	{
+		// No button took the camera
+		_wasGripping = false;
+	}
+	return taken;
+}
+
+bool CreatureModeSystem::Take(entt::entity thing, const MakeModel& make)
+{
 	if (!Locator::camera::has_value() || !Locator::entitiesRegistry::has_value() || TempleActive())
 	{
 		return false;
 	}
 	const auto& registry = Locator::entitiesRegistry::value();
-	if (!registry.Valid(creature) || !registry.AllOf<components::Creature, components::Transform>(creature))
+	if (!registry.Valid(thing) || !registry.AllOf<components::Transform>(thing))
 	{
 		return false;
 	}
 	auto& camera = Locator::camera::value();
 	if (OwnsCamera())
 	{
-		// Already locked on, it moves over to the other creature from where the camera is
+		// Already locked on, it moves over to the other thing from where the camera is
 		ReleaseCamera();
 	}
 	// Only the player's own camera and the camera of a dance are taken over. The temple's camera is not, and the editor's
@@ -122,29 +165,25 @@ bool CreatureModeSystem::Enter(entt::entity creature, creature_follow::StartDist
 	if (dynamic_cast<DefaultWorldCameraModel*>(&camera.GetModel()) == nullptr &&
 	    dynamic_cast<DanceCameraModel*>(&camera.GetModel()) == nullptr)
 	{
-		_creature.reset();
+		_thing.reset();
 		return false;
 	}
-	const auto& body = registry.Get<const components::Creature>(creature);
-	// The camera follows the body where the frame draws it
-	const auto transform = components::DrawnTransform(registry.Get<const components::Transform>(creature),
-	                                                  registry.TryGet<const components::CreatureAnimation>(creature));
-	auto model = std::make_unique<CreatureCameraModel>(camera.GetOrigin(), camera.GetFocus(), transform.position,
-	                                                   creature_mode::CreatureHeight(ShownSize(body)), start);
+	// The camera follows the thing where the frame draws it
+	const auto& placed = registry.Get<const components::Transform>(thing);
+	const auto transform = components::DrawnTransform(placed, registry.TryGet<const components::CreatureAnimation>(thing));
+	auto model = make(camera, transform.position, CameraThingHeight(registry, thing, placed));
 	_model = model.get();
 	_returnOrigin = camera.GetModel().GetTargetOrigin();
 	_returnFocus = camera.GetModel().GetTargetFocus();
 	_playerModel = camera.SetModel(std::move(model));
-	_creature = creature;
+	_thing = thing;
 	_leaving = false;
-	// The button that double clicked is still down: only a grip of the land after this one gives the camera back
-	_wasGripping = true;
 	return true;
 }
 
 void CreatureModeSystem::Leave()
 {
-	_creature.reset();
+	_thing.reset();
 	if (_model == nullptr)
 	{
 		return;
@@ -161,7 +200,7 @@ void CreatureModeSystem::Leave()
 void CreatureModeSystem::PressCreatureKey()
 {
 	const auto yours = PlayersCreature();
-	switch (creature_mode::OnCreatureKey(_creature, yours))
+	switch (creature_mode::OnCreatureKey(_thing, yours))
 	{
 	case creature_mode::KeyAction::Enter:
 		Enter(*yours, creature_follow::StartDistance::KeepWhenClose);
@@ -219,7 +258,7 @@ void CreatureModeSystem::Update(std::chrono::microseconds dt, const Frame& frame
 		}
 	}
 
-	if (!_creature.has_value())
+	if (!_thing.has_value())
 	{
 		return;
 	}
@@ -244,9 +283,9 @@ void CreatureModeSystem::Update(std::chrono::microseconds dt, const Frame& frame
 		{
 			_playerModel = std::make_unique<DefaultWorldCameraModel>(camera.GetOrigin(), camera.GetFocus());
 		}
-		// When the creature has gone, the player's camera takes the camera again and flies back to where it was going.
+		// When the thing has gone, the player's camera takes the camera again and flies back to where it was going.
 		// The keys and the grip start the player's camera from where the camera is.
-		const bool gone = !CreatureThere();
+		const bool gone = !ThingThere();
 		const auto returnOrigin = _returnOrigin;
 		const auto returnFocus = _returnFocus;
 		Leave();
@@ -261,10 +300,10 @@ void CreatureModeSystem::Update(std::chrono::microseconds dt, const Frame& frame
 	}
 
 	const auto& registry = Locator::entitiesRegistry::value();
-	const auto& body = registry.Get<const components::Creature>(*_creature);
-	const auto transform = components::DrawnTransform(registry.Get<const components::Transform>(*_creature),
-	                                                  registry.TryGet<const components::CreatureAnimation>(*_creature));
-	_model->SetTarget(transform.position, creature_mode::CreatureHeight(ShownSize(body)));
+	const auto& placed = registry.Get<const components::Transform>(*_thing);
+	const auto transform = components::DrawnTransform(placed, registry.TryGet<const components::CreatureAnimation>(*_thing));
+	_model->SetTarget(transform.position, CameraThingHeight(registry, *_thing, placed),
+	                  CameraThingGameAngle(registry, *_thing));
 
 	if (_held.seconds > 0.0f)
 	{

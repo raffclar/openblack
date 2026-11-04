@@ -50,11 +50,16 @@ public:
 	virtual void PressCreatureKey() = 0;
 	/// Locks onto a creature, any player's; false when the camera can't be taken now
 	virtual bool Enter(entt::entity creature, creature_follow::StartDistance start) = 0;
+	/// Locks onto a thing with the follow camera of a saved game of the original game; false when the camera can't be
+	/// taken now. The thing can be a creature or another thing with a place.
+	virtual bool EnterLoaded(entt::entity thing, const creature_follow::Loaded& loaded) = 0;
 	/// Gives the camera back, as soon as it has it again
 	virtual void Leave() = 0;
 	[[nodiscard]] virtual bool IsActive() const = 0;
-	/// The creature locked onto
+	/// The creature locked onto. None when the camera follows a thing that is not a creature.
 	[[nodiscard]] virtual std::optional<entt::entity> GetCreature() const = 0;
+	/// The thing locked onto, a creature or another thing
+	[[nodiscard]] virtual std::optional<entt::entity> GetThing() const = 0;
 	/// The player's own creature, which C locks onto
 	[[nodiscard]] virtual std::optional<entt::entity> PlayersCreature() const = 0;
 	/// The camera's view of the creature, while it has the camera

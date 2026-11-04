@@ -13,6 +13,7 @@
 
 #include <functional>
 #include <numbers>
+#include <optional>
 
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
@@ -77,6 +78,35 @@ enum class StartDistance : uint8_t
 	/// Always the creature's viewing distance
 	Viewing,
 };
+/// The points of a follow camera as offsets from the place of its thing: the point that it looks at and the eye. While
+/// the camera has offsets, it keeps these two points fixed on the thing, and its heading and pitch have no effect.
+struct Offsets
+{
+	glm::vec3 focus {0.0f};
+	glm::vec3 eye {0.0f};
+};
+
+/// A follow camera as a saved game of the original game keeps it: its view, the share of its glide time, and whether
+/// Ctrl and Shift together swing it clear. A script's camera can also turn the heading with its thing, and can keep the
+/// camera at offsets from the thing.
+struct Loaded
+{
+	View view;
+	float timeScale {1.0f};
+	bool autoReposition {true};
+	bool relativeHeading {false};
+	std::optional<Offsets> offsets;
+};
+
+/// The heading of a camera that turns with its thing, from the heading of the camera and the game angle of the thing
+/// (2048 to the circle). The game takes the angle off the heading, less a quarter turn. Each step rounds to a float.
+[[nodiscard]] float RelativeHeading(float heading, uint16_t gameAngle);
+/// The distance of the camera from the point that it looks at, from its offsets. Each step rounds to a float, z first.
+[[nodiscard]] float OffsetDistance(const Offsets& offsets);
+/// The offsets with the eye moved along its line from the point that the camera looks at, to a distance from it. An
+/// eye on that point stays on it.
+[[nodiscard]] Offsets OffsetsAtDistance(const Offsets& offsets, float distance);
+
 /// The view the camera starts with on a creature: as it is turned and tilted now, and the creature's viewing distance
 /// away. With KeepWhenClose, it is as far as it already is when it is close, but no nearer than twice the creature's
 /// height.
@@ -114,6 +144,10 @@ enum class KeyOutcome : uint8_t
 /// Turns the view by the keys on a screen so many pixels wide. The wheel's zoom is applied twice, before and after the
 /// cursor keys, as the game does.
 [[nodiscard]] KeyOutcome Apply(View& view, const Keys& keys, float screenWidth);
+/// As the other Apply, for a camera that can have offsets. The cursor keys stop the offsets: the view then takes the
+/// heading, the pitch and the distance of the offsets, and the keys turn it. Without the cursor keys, the eye moves
+/// along its line to the distance of the view.
+[[nodiscard]] KeyOutcome Apply(View& view, std::optional<Offsets>& offsets, const Keys& keys, float screenWidth);
 
 /// The height of the land at a point on it, x and z
 using GroundHeight = std::function<float(glm::vec2)>;
