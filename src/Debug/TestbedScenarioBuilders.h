@@ -196,4 +196,6 @@ void AddRestAndHome(std::vector<Scenario>& all);
 void AddGrowth(std::vector<Scenario>& all);
 void AddAppearance(std::vector<Scenario>& all);
 void AddLight(std::vector<Scenario>& all);
+void AddMovement(std::vector<Scenario>& all);
+void AddFootprints(std::vector<Scenario>& all);
 } // namespace openblack::testbed_scenarios
