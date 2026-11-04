@@ -11,6 +11,8 @@
 // it up costs, the people sheltering under it and the creatures walking round it; the forest planted on grass, sand and
 // snow, growing and withering away, and its flocks
 
+#include <cstdint>
+
 #include <array>
 #include <string_view>
 
@@ -31,6 +33,8 @@ constexpr glm::vec2 k_ShieldSpot {0.0f, 40.0f};
 /// On the second land, from the middle of the land: a hut east of the player's first town, and open land south east
 constexpr glm::vec2 k_LandTwoHut {1045.0f, 675.0f};
 constexpr glm::vec2 k_LandTwoDome {1100.0f, 640.0f};
+/// The first town of the player on the second land. The hut is east of it.
+constexpr uint32_t k_LandTwoFirstTown = 0;
 /// The patches of sand and snow, from the middle of the map
 const glm::vec2 k_Sand = flat_land::k_SandPatch.Centre() - flat_land::k_MapMiddle;
 const glm::vec2 k_Snow = flat_land::k_SnowPatch.Centre() - flat_land::k_MapMiddle;
@@ -574,13 +578,22 @@ void AddLandTwoShields(std::vector<Scenario>& all)
 	    .environment = {.land = Land::Story, .storyLand = "Land2.txt", .dispenserGrid = false},
 	    .framing = {.shot = Shot::Overview,
 	                .include = {k_LandTwoHut + glm::vec2(-50.0f, -50.0f), k_LandTwoDome + glm::vec2(30.0f, 30.0f)}},
-	    .objects =
-	        {{.type = AbodeInfo::NorseHut, .offset = k_LandTwoHut},
-	         {.type = VillagerInfo::NorseFarmerMale, .offset = k_LandTwoHut + glm::vec2(-45.0f, 0.0f), .joinTown = true},
-	         {.type = VillagerInfo::NorseForesterMale, .offset = k_LandTwoHut + glm::vec2(25.0f, 5.0f), .joinTown = true},
-	         {.type = VillagerInfo::NorseHousewifeFemale, .offset = k_LandTwoHut + glm::vec2(0.0f, 28.0f), .joinTown = true},
-	         {.type = VillagerInfo::NorseFishermanMale, .offset = k_LandTwoHut + glm::vec2(10.0f, -25.0f), .joinTown = true},
-	         {.type = VillagerInfo::NorseLeaderMale, .offset = k_LandTwoHut + glm::vec2(12.0f, 5.0f), .joinTown = true}},
+	    .objects = {{.type = AbodeInfo::NorseHut, .offset = k_LandTwoHut, .landTown = k_LandTwoFirstTown},
+	                {.type = VillagerInfo::NorseFarmerMale,
+	                 .offset = k_LandTwoHut + glm::vec2(-45.0f, 0.0f),
+	                 .landTown = k_LandTwoFirstTown},
+	                {.type = VillagerInfo::NorseForesterMale,
+	                 .offset = k_LandTwoHut + glm::vec2(25.0f, 5.0f),
+	                 .landTown = k_LandTwoFirstTown},
+	                {.type = VillagerInfo::NorseHousewifeFemale,
+	                 .offset = k_LandTwoHut + glm::vec2(0.0f, 28.0f),
+	                 .landTown = k_LandTwoFirstTown},
+	                {.type = VillagerInfo::NorseFishermanMale,
+	                 .offset = k_LandTwoHut + glm::vec2(10.0f, -25.0f),
+	                 .landTown = k_LandTwoFirstTown},
+	                {.type = VillagerInfo::NorseLeaderMale,
+	                 .offset = k_LandTwoHut + glm::vec2(12.0f, 5.0f),
+	                 .landTown = k_LandTwoFirstTown}},
 	    .miracles = {{.type = MagicType::LightningBolt,
 	                  .point = k_LandTwoHut + glm::vec2(12.0f, 5.0f),
 	                  .handOffset = k_LandTwoHut + glm::vec2(12.0f, -10.0f),

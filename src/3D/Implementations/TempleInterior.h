@@ -16,6 +16,7 @@
 #include <span>
 #include <string_view>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include <SaveSlots.h>
@@ -123,6 +124,8 @@ public:
 	void ActivateAfterFrame(TempleRoom room) override;
 	void TapIntoTemple(TempleRoom room) override;
 	void FrameDrawn() override;
+	void NoteFrameWrite(temple::FrameWrite write) override { _frameWrites.Note(write); }
+	[[nodiscard]] temple::FrameWrites TakeFrameWrites() override { return std::exchange(_frameWrites, {}); }
 	[[nodiscard]] bool GoesInAfterFrame() const override { return _activateAfterFrame.has_value(); }
 	void EnterLockedRoom(TempleRoom room) override;
 	[[nodiscard]] bool TakeGameEnded() override { return _lock.TakeEnded(); }
@@ -184,6 +187,8 @@ private:
 	std::optional<TempleRoom> _activateAfterFrame;
 	/// True when a tap on the entrance did the world part of the entry in its turn, before the player goes in
 	bool _worldPutAway {false};
+	/// The writes of the synced world in the frame steps since the frame write guard last took them
+	temple::FrameWrites _frameWrites;
 	/// The room the player last came into on this visit, whose help was asked for then
 	std::optional<TempleRoom> _enteredRoom;
 	bool _leaveRequested {false};

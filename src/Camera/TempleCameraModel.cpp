@@ -762,6 +762,10 @@ void TempleCameraModel::Step(float dt, const Input& input)
 		{
 			temple_help::GameScripts scripts;
 			temple_help::LeaveScroll(scripts, GetRoom());
+			if (Locator::temple::has_value())
+			{
+				Locator::temple::value().NoteFrameWrite(temple::FrameWrite::ScrollKey);
+			}
 		}
 	}
 	_subMeshZoom = std::clamp(_subMeshZoom + ((_lookingAtSubMesh ? 0.75f : -0.7f) * dt), 0.0f, 1.0f);

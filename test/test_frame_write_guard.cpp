@@ -20,6 +20,7 @@
 #include "Debug/FrameWriteGuard.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "GameFrameOrder.h"
+#include "Temple/TempleFrameWrites.h"
 
 using namespace openblack;
 
@@ -166,4 +167,86 @@ TEST(FrameWriteGuard, TheSyncedHashLeavesOutThePresentationValues)
 	// With no presentation value, the hash looks at each byte
 	EXPECT_NE(frame_write_guard::SyncedHash(before, 0, before.size(), {}),
 	          frame_write_guard::SyncedHash(paced, 0, paced.size(), {}));
+}
+
+TEST(FrameWriteGuard, EachAllowedWriterHasAName)
+{
+	EXPECT_EQ(temple::Name(temple::FrameWrite::Entry), "temple entry by keys or mouse");
+	EXPECT_EQ(temple::Name(temple::FrameWrite::Exit), "temple exit");
+	EXPECT_EQ(temple::Name(temple::FrameWrite::MultiplayerFrontEnd), "multiplayer front end");
+	EXPECT_EQ(temple::Name(temple::FrameWrite::ScrollKey), "scroll key");
+}
+
+TEST(FrameWriteGuard, TheTempleWritersCanChangeOnlyTheHelpAndTheTempleSystems)
+{
+	using temple::FrameWrite;
+	for (const auto write : {FrameWrite::Entry, FrameWrite::Exit, FrameWrite::MultiplayerFrontEnd, FrameWrite::ScrollKey})
+	{
+		EXPECT_TRUE(frame_write_guard::MayChange(write, "system helpText"));
+		EXPECT_TRUE(frame_write_guard::MayChange(write, "system dialogueControl"));
+		EXPECT_TRUE(frame_write_guard::MayChange(write, "system scriptControl"));
+		EXPECT_TRUE(frame_write_guard::MayChange(write, "system cinematicDirector"));
+		EXPECT_FALSE(frame_write_guard::MayChange(write, "system towns"));
+		EXPECT_FALSE(frame_write_guard::MayChange(write, "helpText"));
+		EXPECT_FALSE(frame_write_guard::MayChange(write, "Transform"));
+		EXPECT_FALSE(frame_write_guard::MayChange(write, "entities"));
+		EXPECT_FALSE(frame_write_guard::MayChange(write, frame_write_guard::k_SyncedDrawsPart));
+	}
+	EXPECT_TRUE(frame_write_guard::MayChange(FrameWrite::Entry, "system temple"));
+	EXPECT_TRUE(frame_write_guard::MayChange(FrameWrite::Exit, "system temple"));
+	EXPECT_TRUE(frame_write_guard::MayChange(FrameWrite::MultiplayerFrontEnd, "system temple"));
+	EXPECT_FALSE(frame_write_guard::MayChange(FrameWrite::ScrollKey, "system temple"));
+}
+
+TEST(FrameWriteGuard, AnAllowedWriterTakesItsPartsAndTheOtherPartsTripTheGuard)
+{
+	temple::FrameWrites writers;
+	writers.Note(temple::FrameWrite::Entry);
+	const std::vector<std::string> parts = {"system dialogueControl", "system temple", "system towns", "Transform"};
+	const auto judgement = frame_write_guard::Judge(parts, writers, false);
+	ASSERT_EQ(judgement.allowed.size(), 2);
+	EXPECT_EQ(judgement.allowed.at(0), std::make_pair(temple::FrameWrite::Entry, std::string("system dialogueControl")));
+	EXPECT_EQ(judgement.allowed.at(1), std::make_pair(temple::FrameWrite::Entry, std::string("system temple")));
+	EXPECT_EQ(judgement.tripped, (std::vector<std::string> {"system towns", "Transform"}));
+}
+
+TEST(FrameWriteGuard, AWriteOfTheHelpOutsideATurnWithNoAllowedWriterTripsTheGuard)
+{
+	const std::vector<std::string> parts = {"system helpText", "system temple"};
+	const auto judgement = frame_write_guard::Judge(parts, temple::FrameWrites {}, false);
+	EXPECT_TRUE(judgement.allowed.empty());
+	EXPECT_EQ(judgement.tripped, parts);
+}
+
+TEST(FrameWriteGuard, AScrollKeyDoesNotCoverAChangeOfTheTemple)
+{
+	temple::FrameWrites writers;
+	writers.Note(temple::FrameWrite::ScrollKey);
+	const std::vector<std::string> parts = {"system helpText", "system temple"};
+	const auto judgement = frame_write_guard::Judge(parts, writers, false);
+	ASSERT_EQ(judgement.allowed.size(), 1);
+	EXPECT_EQ(judgement.allowed.at(0).second, "system helpText");
+	EXPECT_EQ(judgement.tripped, std::vector<std::string> {"system temple"});
+}
+
+TEST(FrameWriteGuard, ANetworkGameHasNoAllowedWriters)
+{
+	temple::FrameWrites writers;
+	writers.Note(temple::FrameWrite::Entry);
+	writers.Note(temple::FrameWrite::Exit);
+	const std::vector<std::string> parts = {"system helpText", "system temple"};
+	const auto judgement = frame_write_guard::Judge(parts, writers, true);
+	EXPECT_TRUE(judgement.allowed.empty());
+	EXPECT_EQ(judgement.tripped, parts);
+}
+
+TEST(FrameWriteGuard, TheFrameWritesAreEmptyAfterATake)
+{
+	temple::FrameWrites writes;
+	EXPECT_TRUE(writes.Empty());
+	writes.Note(temple::FrameWrite::Exit);
+	const auto taken = std::exchange(writes, {});
+	EXPECT_TRUE(taken.Contains(temple::FrameWrite::Exit));
+	EXPECT_FALSE(taken.Contains(temple::FrameWrite::Entry));
+	EXPECT_TRUE(writes.Empty());
 }

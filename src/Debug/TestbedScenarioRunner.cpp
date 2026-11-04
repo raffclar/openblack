@@ -365,6 +365,12 @@ uint32_t ScenarioTown(glm::vec2 middle)
 	                                       Tribe::CELTIC);
 	return k_ScenarioTownId;
 }
+
+/// The town of an object of a scenario: the land's own town that the object names, or else the scenario's town
+uint32_t ObjectTown(const ObjectSetup& object, glm::vec2 middle)
+{
+	return object.landTown.has_value() ? *object.landTown : ScenarioTown(middle);
+}
 constexpr uint32_t k_CrowdWood = 2000;
 /// Enough building to finish a worship site at once
 constexpr float k_BuildWholeSite = 1.0e6f;
@@ -1697,16 +1703,11 @@ void Runner::PlaceObjects(const Scenario& scenario, glm::vec2 middle)
 				    constexpr uint32_t k_AdultAge = 30;
 				    const auto villager = ecs::archetypes::VillagerArchetype::Create(position, position, type,
 				                                                                     object.villagerAge.value_or(k_AdultAge));
-				    if (object.landTown.has_value())
-				    {
-					    auto& registry = Locator::entitiesRegistry::value();
-					    registry.Get<ecs::components::Villager>(villager).town = registry.Context().towns.at(*object.landTown);
-				    }
-				    else if (object.joinTown)
+				    if (object.joinTown || object.landTown.has_value())
 				    {
 					    auto& registry = Locator::entitiesRegistry::value();
 					    registry.Get<ecs::components::Villager>(villager).town =
-					        registry.Context().towns.at(ScenarioTown(middle));
+					        registry.Context().towns.at(ObjectTown(object, middle));
 				    }
 				    return villager;
 			    }
@@ -1718,8 +1719,8 @@ void Runner::PlaceObjects(const Scenario& scenario, glm::vec2 middle)
 			    {
 				    if (object.planned)
 				    {
-					    const auto plan = ecs::archetypes::AbodeArchetype::CreatePlan(ScenarioTown(middle), position, type, yaw,
-					                                                                  object.scale);
+					    const auto plan = ecs::archetypes::AbodeArchetype::CreatePlan(ObjectTown(object, middle), position,
+					                                                                  type, yaw, object.scale);
 					    if (auto* planned = Locator::entitiesRegistry::value().TryGet<ecs::components::PlannedAbode>(plan))
 					    {
 						    planned->wasBuilt = object.wasBuilt;
@@ -1734,7 +1735,7 @@ void Runner::PlaceObjects(const Scenario& scenario, glm::vec2 middle)
 				    {
 					    auto& registry = Locator::entitiesRegistry::value();
 					    const auto dispenser = Locator::magicSystem::value().CreateScriptDispenser(
-					        position, type, yaw, object.scale, registry.Context().towns.at(ScenarioTown(middle)));
+					        position, type, yaw, object.scale, registry.Context().towns.at(ObjectTown(object, middle)));
 					    if (auto* data = registry.TryGet<ecs::components::SpellDispenser>(dispenser))
 					    {
 						    data->notPlannedAgain = object.notPlannedAgain;
@@ -1742,9 +1743,8 @@ void Runner::PlaceObjects(const Scenario& scenario, glm::vec2 middle)
 					    return dispenser;
 				    }
 				    const auto abode = ecs::archetypes::AbodeArchetype::Create(
-				        object.landTown.has_value() ? *object.landTown : ScenarioTown(middle), position, type, yaw,
-				        object.scale, object.storedFood.value_or(k_ScenarioTownFood),
-				        object.storedWood.value_or(k_ScenarioTownWood));
+				        ObjectTown(object, middle), position, type, yaw, object.scale,
+				        object.storedFood.value_or(k_ScenarioTownFood), object.storedWood.value_or(k_ScenarioTownWood));
 				    if (object.built.has_value())
 				    {
 					    ecs::construction::SetBuilt(abode, *object.built);
@@ -1794,8 +1794,8 @@ void Runner::PlaceObjects(const Scenario& scenario, glm::vec2 middle)
 				    {
 					    return static_cast<entt::entity>(entt::null);
 				    }
-				    const auto town = object.joinTown
-				                          ? Locator::entitiesRegistry::value().Context().towns.at(ScenarioTown(middle))
+				    const auto town = object.joinTown || object.landTown.has_value()
+				                          ? Locator::entitiesRegistry::value().Context().towns.at(ObjectTown(object, middle))
 				                          : entt::null;
 				    const auto scaffold =
 				        Locator::workshopSystem::value().CreateScaffold(position, town, entt::null, yaw, object.scale);
