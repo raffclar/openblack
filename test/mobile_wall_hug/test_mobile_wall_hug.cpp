@@ -16,6 +16,7 @@
 #include <string>
 #include <tuple>
 
+#include <3D/MapCoords.h>
 #include <Common/GUtilsAngle.h>
 #include <ECS/Components/LivingAction.h>
 #include <ECS/Components/Transform.h>
@@ -23,6 +24,7 @@
 #include <ECS/Components/WallHug.h>
 #include <ECS/Map.h>
 #include <ECS/Registry.h>
+#include <ECS/Systems/Implementations/VillagerHome.h>
 #include <ECS/Systems/LivingActionSystemInterface.h>
 #include <ECS/Systems/PathfindingSystemInterface.h>
 #include <ECS/WallHugRules.h>
@@ -545,7 +547,7 @@ protected:
 		Locator::entitiesMap::value().Sync();
 		registry.Get<Transform>(_walker).position = glm::vec3(from.x, 0.0f, from.y);
 		registry.Get<WallHug>(_walker).position = ecs::wall_hug::ToWhole(from);
-		Locator::livingActionSystem::value().VillagerScriptMoveTo(_walker, goal);
+		Locator::livingActionSystem::value().VillagerScriptMoveTo(_walker, map_coords::FromMetres(goal));
 		// The test land's villagers have no walking pace of their own: two metres a second
 		registry.Get<WallHug>(_walker).speed = 2.0f;
 		Walk walk {.turns = mostTurns, .wentRound = false, .leftCircle = false};
@@ -618,6 +620,29 @@ TEST_F(WalkerToGoal, AScriptsWalkGoesStraightThroughThingsInTheWay)
 	EXPECT_LT(furthestOffLine, 0.05f);
 	// Its 16 m at a fifth of a metre a turn, in a straight line
 	EXPECT_EQ(walk.turns, 80u);
+}
+
+// A script's walk keeps the height of its point above the land as the goal of the walk. A walk to a place on the land
+// that comes after it has no height.
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(WalkerToGoal, AScriptsWalkKeepsTheHeightOfItsPoint)
+{
+	using namespace openblack::ecs::components;
+	Load("goal_beside_circle.txt");
+	auto& registry = Locator::entitiesRegistry::value();
+	Locator::entitiesMap::value().Sync();
+	registry.Get<Transform>(_walker).position = glm::vec3(2149.5f, 0.0f, 2235.0f);
+	registry.Get<WallHug>(_walker).position = ecs::wall_hug::ToWhole({2149.5f, 2235.0f});
+	const map_coords::MapCoords goal {.x = map_coords::ToFixed(2150.0f), .z = map_coords::ToFixed(2251.0f), .altitude = -3.5f};
+
+	Locator::livingActionSystem::value().VillagerScriptMoveTo(_walker, goal);
+	const auto& walk = registry.Get<const WallHug>(_walker);
+	EXPECT_EQ(walk.goalPlace, glm::ivec2(goal.x, goal.z));
+	EXPECT_FLOAT_EQ(walk.goalHeight, -3.5f);
+
+	auto& action = registry.Get<LivingAction>(_walker);
+	ecs::villager_home::SetupMobileMoveTo(action, glm::ivec2(goal.x, goal.z));
+	EXPECT_FLOAT_EQ(registry.Get<const WallHug>(_walker).goalHeight, 0.0f);
 }
 
 // A villager called away mid-walk into a state that doesn't walk it (a kiss) stands where it was, and goes on with the

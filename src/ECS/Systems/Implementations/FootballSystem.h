@@ -14,6 +14,7 @@
 
 #include <glm/vec3.hpp>
 
+#include "3D/MapCoords.h"
 #include "ECS/Systems/FootballSystemInterface.h"
 #include "Enums.h"
 
@@ -69,6 +70,8 @@ private:
 	const std::vector<GoalBox>& Goals();
 	/// A goal's centre on the land, in metres. The centre spot when the goal model has no such goal.
 	glm::vec3 GoalPosition(entt::entity pitch, uint32_t goal);
+	/// The same as a map position, with the height of the centre of the goal above the land
+	map_coords::MapCoords GoalCoords(entt::entity pitch, uint32_t goal);
 	/// A pitch that now works becomes its town's pitch, with a ball
 	void MakeFunctional(entt::entity town, entt::entity pitch);
 	/// One turn of a town's pitch
@@ -90,6 +93,9 @@ private:
 
 	/// A player's own place on the pitch
 	glm::vec3 PlaceOf(entt::entity pitch, entt::entity villager);
+	/// The same as a map position. The height above the land is the difference between the land at the centre spot and
+	/// the land at the place.
+	map_coords::MapCoords PlaceCoordsOf(entt::entity pitch, entt::entity villager);
 	/// A point that a kick aims at moves by a random amount that grows with the distance from the player
 	glm::vec3 Perturb(glm::vec3 target, entt::entity villager);
 	void Kick(entt::entity pitch, entt::entity ball, glm::vec3 target, float speed, bool canScore);

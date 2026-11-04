@@ -23,6 +23,8 @@
 #include <spdlog/spdlog.h>
 
 #include "3D/FieldCrop.h"
+#include "3D/LandIslandInterface.h"
+#include "3D/MapCoords.h"
 #include "Common/GUtilsAngle.h"
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
@@ -129,6 +131,14 @@ entt::entity TownOf(const Villager& villager)
 glm::vec3 PositionOf(entt::entity entity)
 {
 	return Entities().Get<const Transform>(entity).position;
+}
+
+/// A thing's place as the game gives the 3D point of a map position: x and z in metres, and y as the height above the
+/// land
+glm::vec3 MapPointOf(const LandIslandInterface& island, entt::entity entity)
+{
+	const auto coords = map_coords::FromWorld(island, PositionOf(entity));
+	return {map_coords::ToMetres(coords.x), coords.altitude, map_coords::ToMetres(coords.z)};
 }
 
 glm::vec2 GroundOf(entt::entity entity)
@@ -365,12 +375,16 @@ uint32_t SetupGetBuildingSupplies(LivingAction& action, entt::entity building)
 		return ToBuildingSite(action, building);
 	}
 	// A script can tell the builder to walk away from the site and wait for wood. A way to get wood that the villager
-	// finds after this walk takes its place.
+	// finds after this walk takes its place. The game measures the two places with their heights above the land, and
+	// then reads the height of the goal as a height in the world. Thus the goal is below the land by the height of the
+	// land there.
 	if (Entities().Context().scriptBuildersWaitForWood)
 	{
 		const float random = Locator::gameRandom::value().GameFloatRand(2.0f);
-		const auto goal = villager_work::WaitForWoodPosition(PositionOf(villager), PositionOf(building), random);
-		villager_home::SetupMoveTo(action, goal, VillagerStates::WaitForWood);
+		const auto& island = Locator::terrainSystem::value();
+		const auto goal =
+		    villager_work::WaitForWoodPosition(MapPointOf(island, villager), MapPointOf(island, building), random);
+		villager_home::SetupMoveTo(action, map_coords::FromWorld(island, goal), VillagerStates::WaitForWood);
 	}
 	const auto plan = villager_forester::DecideHowToGetWood(villager, true);
 	switch (plan.source)

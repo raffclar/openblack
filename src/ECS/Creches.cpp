@@ -154,7 +154,7 @@ uint32_t PathsOf(entt::entity building)
 	return model != nullptr ? creche::PathsIn(model->GetExtraMetrics().size()) : 0;
 }
 
-std::optional<glm::vec2> PathPoint(entt::entity building, size_t point)
+std::optional<glm::vec3> PathPoint(entt::entity building, size_t point)
 {
 	const auto* model = ModelOf(building);
 	if (model == nullptr || point >= model->GetExtraMetrics().size())
@@ -164,7 +164,7 @@ std::optional<glm::vec2> PathPoint(entt::entity building, size_t point)
 	// The point is the place of the marker in the model, put where the building stands
 	const auto& transform = Entities().Get<const Transform>(building);
 	const glm::vec3 local = model->GetExtraMetrics()[point][3];
-	return glm::xz(transform.position + transform.rotation * (transform.scale * local));
+	return transform.position + transform.rotation * (transform.scale * local);
 }
 
 } // namespace openblack::creches

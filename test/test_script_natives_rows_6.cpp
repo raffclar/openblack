@@ -141,10 +141,11 @@ TEST(ScriptNativesRows6, AWaitForWoodWalkGoesAwayFromTheBuilding)
 	const glm::vec3 villager {103.0f, 5.0f, 104.0f};
 	const auto nearest = ecs::villager_work::WaitForWoodPosition(villager, building, 0.0f);
 	EXPECT_FLOAT_EQ(nearest.x, 103.0f + 3.0f * 0.4f);
-	EXPECT_FLOAT_EQ(nearest.y, 104.0f + 4.0f * 0.4f);
+	EXPECT_FLOAT_EQ(nearest.y, 5.0f);
+	EXPECT_FLOAT_EQ(nearest.z, 104.0f + 4.0f * 0.4f);
 	const auto farthest = ecs::villager_work::WaitForWoodPosition(villager, building, 2.0f);
 	EXPECT_FLOAT_EQ(farthest.x, 103.0f + 3.0f * 0.8f);
-	EXPECT_FLOAT_EQ(farthest.y, 104.0f + 4.0f * 0.8f);
+	EXPECT_FLOAT_EQ(farthest.z, 104.0f + 4.0f * 0.8f);
 }
 
 TEST(ScriptNativesRows6, AWaitForWoodWalkCountsTheHeightInTheDistance)
@@ -153,7 +154,8 @@ TEST(ScriptNativesRows6, AWaitForWoodWalkCountsTheHeightInTheDistance)
 	const glm::vec3 villager {0.0f, 3.0f, 4.0f};
 	const auto goal = ecs::villager_work::WaitForWoodPosition(villager, building, 3.0f);
 	EXPECT_FLOAT_EQ(goal.x, 0.0f);
-	EXPECT_FLOAT_EQ(goal.y, 4.0f + 4.0f);
+	EXPECT_FLOAT_EQ(goal.y, 3.0f + 3.0f);
+	EXPECT_FLOAT_EQ(goal.z, 4.0f + 4.0f);
 }
 
 TEST(ScriptNativesRows6, OnlyWindowsTellsTheButtonsOfTheMouse)

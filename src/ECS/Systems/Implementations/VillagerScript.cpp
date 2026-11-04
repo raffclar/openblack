@@ -154,7 +154,7 @@ void villager_script::SetScriptState(entt::entity villager, VillagerStates state
 	action.turnsUntilStateChange = 0;
 }
 
-void villager_script::MoveTo(entt::entity villager, glm::vec2 goal)
+void villager_script::MoveTo(entt::entity villager, const map_coords::MapCoords& goal)
 {
 	auto& registry = Entities();
 	if (!CanBeDirected(villager) || !registry.AllOf<WallHug, Transform>(villager))
@@ -163,7 +163,7 @@ void villager_script::MoveTo(entt::entity villager, glm::vec2 goal)
 	}
 	// Already within a turn's step of the goal: it waits there for the script
 	const auto here = glm::xz(registry.Get<const Transform>(villager).position);
-	if (rules::WithinAStepOfGoal(here, goal, registry.Get<const WallHug>(villager).speed))
+	if (rules::WithinAStepOfGoalPlace(here, glm::ivec2(goal.x, goal.z), registry.Get<const WallHug>(villager).speed))
 	{
 		SetScriptState(villager, VillagerStates::InScript);
 		return;

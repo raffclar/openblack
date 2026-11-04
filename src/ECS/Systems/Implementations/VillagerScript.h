@@ -27,6 +27,11 @@ struct LivingAction;
 
 /// A villager in a script's hands: standing where the script put it, walking where it sends it and playing the clips it
 /// asks for. The state functions are the living action system's; the rest serves the script natives.
+namespace openblack::map_coords
+{
+struct MapCoords;
+}
+
 namespace openblack::ecs::villager_script
 {
 
@@ -36,8 +41,9 @@ namespace openblack::ecs::villager_script
 /// A script puts the villager straight into a state, which starts its clip from the beginning; a drowning villager is
 /// taken too
 void SetScriptState(entt::entity villager, VillagerStates state);
-/// A script sends the villager to a point, where it stands waiting for the script; one already there waits at once
-void MoveTo(entt::entity villager, glm::vec2 goal);
+/// A script sends the villager to a point, where it stands waiting for the script; one already there waits at once. The
+/// walk keeps the height of the point above the land.
+void MoveTo(entt::entity villager, const map_coords::MapCoords& goal);
 /// The clip the villager plays when a script puts it in the playing state, and how many times
 void SetScriptAnimation(entt::entity villager, AnimId clip, uint32_t plays);
 /// The place a script gives the villager for its script states, on the ground
