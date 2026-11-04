@@ -87,7 +87,7 @@ struct Town
 	bool desiresChangedLastTurn {false};
 	/// The buildings it plans to build later (houses, civic buildings, its player's temple), in the order it planned them
 	std::vector<entt::entity> planned;
-	/// The building sites that it opened so far, which numbers each new one
+	/// The building sites that it opened or that a script gave it so far, which numbers each new one
 	uint32_t sitesOpened {0};
 	/// The game turn one of its villagers last asked it to start a planned building: it is asked at most once a turn
 	std::optional<uint32_t> askedToBuildTurn;

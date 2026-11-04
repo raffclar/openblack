@@ -18,6 +18,7 @@
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
+#include "3D/MapCoords.h"
 #include "Common/GameHeading.h"
 #include "Creature/CreatureHeadLook.h"
 #include "Creature/CreatureLocomotion.h"
@@ -72,6 +73,10 @@ struct CreatureLocomotion
 	creature_locomotion::Ring ring {};
 	/// Whether it walks onto the destination itself, as to a point, rather than to the edge of the ring
 	bool ontoDestination {false};
+	/// The place that the scripts read as its destination, a map position with a height above the land. It starts as
+	/// the place where the creature starts. A walk to a point or a new search for a route sets it to that point. A walk
+	/// to a thing sets it to the place of the thing. It does not change when the creature arrives or stops.
+	map_coords::MapCoords scriptDestination {};
 	/// What it walks round, the searches for its route and the route it follows
 	creature_route::Follower follower;
 	/// The creature as its route search saw it when the walk started. The search finds the things in its way from it.

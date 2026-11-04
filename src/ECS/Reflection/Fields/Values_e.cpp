@@ -16,6 +16,7 @@
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/CarriedByTornado.h"
 #include "ECS/Components/ChimneySmoke.h"
+#include "ECS/Components/Construction.h"
 #include "ECS/Components/CreatureAudio.h"
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureCasting.h"
@@ -113,6 +114,9 @@ void openblack::ecs::reflection::RegisterFields_Values_e(entt::meta_ctx& context
 	Reflect<openblack::ecs::components::Animal::DrawnPlace>(context, ValueOnly {})
 	    .Field<&openblack::ecs::components::Animal::DrawnPlace::position>("position")
 	    .Field<&openblack::ecs::components::Animal::DrawnPlace::rotation>("rotation");
+	Reflect<openblack::ecs::components::BuildingSite::Listing>(context, ValueOnly {})
+	    .Field<&openblack::ecs::components::BuildingSite::Listing::town>("town")
+	    .Field<&openblack::ecs::components::BuildingSite::Listing::number>("number");
 	Reflect<openblack::ecs::components::CarriedByTornado::Drawn>(context, ValueOnly {})
 	    .Field<&openblack::ecs::components::CarriedByTornado::Drawn::position>("position")
 	    .Field<&openblack::ecs::components::CarriedByTornado::Drawn::rotation>("rotation");

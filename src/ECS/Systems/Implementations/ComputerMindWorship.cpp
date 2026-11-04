@@ -27,6 +27,7 @@
 #include "ComputerMindRuleTable.h"
 #include "ComputerMindScaffolds.h"
 #include "ComputerMindTowns.h"
+#include "ECS/BuildingSiteList.h"
 #include "ECS/BuildingSites.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/AtHome.h"
@@ -872,8 +873,9 @@ bool MakeDisciple(RuleContext& context, computer_mind::Mind& mind, uint16_t node
 std::vector<entt::entity> NewestSitesOf(entt::entity town)
 {
 	auto sites = ecs::construction::SitesOfTown(town);
-	std::ranges::stable_sort(sites, std::greater {},
-	                         [town](entt::entity building) { return ecs::construction::SiteOf(town, building)->number; });
+	std::ranges::stable_sort(sites, std::greater {}, [town](entt::entity building) {
+		return ecs::building_site_list::NumberFor(*ecs::construction::SiteOf(town, building), town);
+	});
 	return sites;
 }
 

@@ -1289,10 +1289,13 @@ void TownSystem::RemoveTown(entt::entity town)
 	{
 		Locator::worshipSiteSystem::value().TownRemoved(town);
 	}
-	// Its building sites go
+	// All the building sites in its list go, also the sites that a script shared with it
 	for (const auto building : construction::SitesOfTown(town))
 	{
-		construction::CloseTownsSite(building, town);
+		while (construction::SiteOf(town, building) != nullptr)
+		{
+			construction::CloseTownsSite(building, town);
+		}
 	}
 	// The missionaries that preach in it stop
 	villager_disciple_work::StopMissionariesIn(town);

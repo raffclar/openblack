@@ -204,6 +204,7 @@ void openblack::ecs::reflection::RegisterFields_Components_s(entt::meta_ctx& con
 	    .Field<&components::Spell::castEffect>("castEffect")
 	    .Field<&components::Spell::seed>("seed")
 	    .Field<&components::Spell::target>("target")
+	    .Field<&components::Spell::creator>("creator")
 	    .Field<&components::Spell::closedDown>("closedDown")
 	    .Field<&components::Spell::hasParticleType>("hasParticleType")
 	    .Field<&components::Spell::fromLocalHand>("fromLocalHand")
