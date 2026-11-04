@@ -1,33 +1,39 @@
 # Lists the script API's natives that openblack hasn't written yet, for the editor's Scripts panel.
 #
 # A native is unwritten while its function's body still reports itself as not implemented. The natives are numbered by
-# the order the API binds them in, so the list follows the source as natives get written.
+# the order the API binds them in, so the list follows the source as natives get written. CHLApi.cpp binds the natives,
+# and the files in the CHLApi folder next to it hold most of their functions.
 #
 # Usage: cmake -DSOURCE=<CHLApi.cpp> -DOUTPUT=<header> -P GenerateUnimplementedNatives.cmake
 
 # Run as a script, it gets the policies of this version rather than the oldest, for if (IN_LIST)
 cmake_minimum_required(VERSION 3.18)
 
-file(STRINGS "${SOURCE}" lines)
+get_filename_component(source_dir "${SOURCE}" DIRECTORY)
+file(GLOB area_sources "${source_dir}/CHLApi/*.cpp")
+list(SORT area_sources)
 
 set(stubs "")
-set(current "")
 set(bindings "")
-foreach (line IN LISTS lines)
-  if (line MATCHES "^void ([A-Za-z0-9_]+)\\(\\)")
-    set(current "${CMAKE_MATCH_1}")
-  elseif (line MATCHES "^}")
-    set(current "")
-  elseif (NOT current STREQUAL "" AND line MATCHES "NotImplemented\\(")
-    list(APPEND stubs "${current}")
-    set(current "")
-  endif ()
-  if (line
-      MATCHES
-      "CREATE_FUNCTION_BINDING\\(\"[A-Z0-9_]+\", *-?[0-9]+, *-?[0-9]+, *([A-Za-z0-9_]+)\\)"
-  )
-    list(APPEND bindings "${CMAKE_MATCH_1}")
-  endif ()
+foreach (source IN ITEMS ${SOURCE} ${area_sources})
+  file(STRINGS "${source}" lines)
+  set(current "")
+  foreach (line IN LISTS lines)
+    if (line MATCHES "^void ([A-Za-z0-9_]+)\\(\\)")
+      set(current "${CMAKE_MATCH_1}")
+    elseif (line MATCHES "^}")
+      set(current "")
+    elseif (NOT current STREQUAL "" AND line MATCHES "NotImplemented\\(")
+      list(APPEND stubs "${current}")
+      set(current "")
+    endif ()
+    if (line
+        MATCHES
+        "CREATE_FUNCTION_BINDING\\(\"[A-Z0-9_]+\", *-?[0-9]+, *-?[0-9]+, *([A-Za-z0-9_]+)\\)"
+    )
+      list(APPEND bindings "${CMAKE_MATCH_1}")
+    endif ()
+  endforeach ()
 endforeach ()
 
 set(numbers "")

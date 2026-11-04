@@ -240,13 +240,16 @@ set(OPENBLACK_UNIMPLEMENTED_NATIVES
     ${CMAKE_BINARY_DIR}/include/generated/scripting/UnimplementedNatives.h
 )
 file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/include/generated/scripting)
+file(GLOB OPENBLACK_SCRIPT_NATIVE_SOURCES ${CMAKE_CURRENT_LIST_DIR}/CHLApi.cpp
+     ${CMAKE_CURRENT_LIST_DIR}/CHLApi/*.cpp
+)
 add_custom_command(
   OUTPUT ${OPENBLACK_UNIMPLEMENTED_NATIVES}
   COMMAND
     ${CMAKE_COMMAND} -DSOURCE=${CMAKE_CURRENT_LIST_DIR}/CHLApi.cpp
     -DOUTPUT=${OPENBLACK_UNIMPLEMENTED_NATIVES} -P
     ${CMAKE_SOURCE_DIR}/CMakeModules/GenerateUnimplementedNatives.cmake
-  DEPENDS ${CMAKE_CURRENT_LIST_DIR}/CHLApi.cpp
+  DEPENDS ${OPENBLACK_SCRIPT_NATIVE_SOURCES}
           ${CMAKE_SOURCE_DIR}/CMakeModules/GenerateUnimplementedNatives.cmake
   COMMENT "Listing the script API's unwritten natives"
 )
