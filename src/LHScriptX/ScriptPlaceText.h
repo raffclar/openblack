@@ -30,9 +30,9 @@ struct ScriptPlaceText
 	map_coords::MapCoords onMap {};
 };
 
-/// Reads a place of a land script. The text has two numbers, or three numbers, with a comma between each two. The game
-/// reads an optional third number as the height of the place above the land, rounded to a float. An empty number is 0,
-/// as in the game. A text in a different form is not a place.
+/// Reads a place of a land script. The text has two numbers, or three or more numbers, with a comma between each two.
+/// The game reads an optional third number as the height of the place above the land, rounded to a float, and reads
+/// no number after it. An empty number is 0, as in the game. A text in a different form is not a place.
 [[nodiscard]] inline std::optional<ScriptPlaceText> ReadScriptPlace(const std::string& text)
 {
 	const char* const start = text.c_str();
@@ -54,7 +54,8 @@ struct ScriptPlaceText
 	{
 		const char* const heightStart = after + 1;
 		const double height = std::strtod(heightStart, &after);
-		if (after != end)
+		// Numbers after the third are not read, as in the game
+		if (after != end && *after != ',')
 		{
 			return std::nullopt;
 		}
