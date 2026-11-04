@@ -1251,6 +1251,15 @@ AdvisorModelLoader::result_type AdvisorModelLoader::operator()(FromBufferTag, co
 	{
 		auto mesh = L3DLoader {}(L3DLoader::FromBufferTag {}, debugName, model->file.mesh);
 		model->rig = help::spirits::MakeSpiritRig(mesh->GetBoneParents(), mesh->GetBoneMatrices());
+		// After a restore of the graphics device the mesh reads its part of the advisor's file again
+		mesh->SetFileSource([path = std::filesystem::path(debugName)](Rereads& rereads) {
+			helpdude::HelpDudeFile file;
+			if (helpdude::ReadHelpDudeFile(rereads.File(path), file) != helpdude::HelpDudeResult::Success)
+			{
+				return std::vector<uint8_t> {};
+			}
+			return std::move(file.mesh);
+		});
 		model->mesh = std::move(mesh);
 	}
 	return model;

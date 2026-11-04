@@ -11,6 +11,7 @@
 
 #include <memory>
 #include <span>
+#include <utility>
 #include <vector>
 
 #include <gtest/gtest.h>
@@ -84,4 +85,22 @@ TEST(SharedIndexLists, AnEmptyListMakesNoBuffer)
 	EXPECT_EQ(lists.Get({}, CountingMaker {&made}), nullptr);
 	EXPECT_EQ(made, 0);
 	EXPECT_EQ(lists.Size(), 0u);
+}
+
+TEST(SharedIndexLists, EachListIsVisitedWithItsIndicesAndItsBuffer)
+{
+	// The land gives the indices of each list to its buffer again after a restore of the graphics device
+	openblack::SharedIndexLists<FakeBuffer> lists;
+	int made = 0;
+	const auto* first = lists.Get({4, 5, 6}, CountingMaker {&made});
+	const auto* second = lists.Get({0, 1, 2}, CountingMaker {&made});
+	std::vector<std::pair<std::vector<uint16_t>, const FakeBuffer*>> visited;
+	lists.ForEach([&visited](std::span<const uint16_t> indices, const FakeBuffer& buffer) {
+		visited.emplace_back(std::vector<uint16_t>(indices.begin(), indices.end()), &buffer);
+	});
+	ASSERT_EQ(visited.size(), 2u);
+	EXPECT_EQ(visited[0].first, (std::vector<uint16_t> {0, 1, 2}));
+	EXPECT_EQ(visited[0].second, second);
+	EXPECT_EQ(visited[1].first, (std::vector<uint16_t> {4, 5, 6}));
+	EXPECT_EQ(visited[1].second, first);
 }

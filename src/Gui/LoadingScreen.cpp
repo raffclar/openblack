@@ -138,8 +138,15 @@ LoadingScreen::LoadingScreen(TextDatabase texts, GameFont font, std::vector<uint
 {
 	_atlas->Create(k_AtlasSize, k_AtlasSize, 1, graphics::TextureFormat::RGBA8, graphics::Wrapping::ClampEdge,
 	               graphics::Filter::Linear, bgfx::copy(_atlasPixels.data(), static_cast<uint32_t>(_atlasPixels.size())));
-	_fontTexture = MakeGlyphTexture(_font.GetAtlas(), _font.GetAtlasSize(), "LoadingScreenFont");
-	_fullFontTexture = MakeGlyphTexture(_font.GetFullAtlas(), _font.GetFullAtlasSize(), "LoadingScreenFontFull");
+	// After a restore of the graphics device the textures read their files again or take the kept pixels
+	_atlas->SetTexelSource([this](resources::Rereads&) { return _atlasPixels; });
+	const auto data = Locator::filesystem::value().GetPath<Path::Data>();
+	const auto met = data / (std::string(k_Font) + ".met");
+	const auto fnt = data / (std::string(k_Font) + ".fnt");
+	_fontTexture =
+	    MakeGlyphTexture(_font.GetAtlas(), _font.GetAtlasSize(), "LoadingScreenFont", FontGlyphSource(met, fnt, false));
+	_fullFontTexture = MakeGlyphTexture(_font.GetFullAtlas(), _font.GetFullAtlasSize(), "LoadingScreenFontFull",
+	                                    FontGlyphSource(met, fnt, true));
 	_painter = std::make_unique<DialogPainter>(_canvas, _font, *_atlas, *_fontTexture);
 	_painter->SetFullGlyphs(_fullFontTexture.get());
 }

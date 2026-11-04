@@ -230,6 +230,7 @@ void RenderingSystemTemple::PrepareDrawDescs(bool drawBoundingBox)
 		    .add(bgfx::Attrib::TexCoord3, 4, bgfx::AttribType::Float)
 		    .end();
 		_renderContext.instanceUniformBuffer = graphics::fromBgfx(bgfx::createDynamicVertexBuffer(instanceCount, layout));
+		bgfx::setDeviceRestoreByApplication(toBgfx(_renderContext.instanceUniformBuffer));
 		_renderContext.instanceUniforms.resize(instanceCount);
 		_renderContext.instanceLevels.resize(instanceCount);
 	}

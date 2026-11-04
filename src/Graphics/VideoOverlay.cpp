@@ -17,6 +17,7 @@
 #include <bx/math.h>
 #include <glm/vec4.hpp>
 
+#include "Graphics/GraphicsDeviceInterface.h"
 #include "Graphics/RendererInterface.h"
 #include "Graphics/ShaderManager.h"
 #include "Graphics/ShaderProgram.h"
@@ -71,9 +72,20 @@ VideoOverlay::VideoOverlay()
 	{
 		plane = std::make_unique<Texture2D>("VideoPlane");
 	}
+	// After a restore of the graphics device the next draw gives the planes of the picture again
+	if (Locator::graphicsDevice::has_value())
+	{
+		Locator::graphicsDevice::value().GetDataGivers().Add(this, [this](resources::Rereads&) { _uploadedSerial.reset(); });
+	}
 }
 
-VideoOverlay::~VideoOverlay() = default;
+VideoOverlay::~VideoOverlay()
+{
+	if (Locator::graphicsDevice::has_value())
+	{
+		Locator::graphicsDevice::value().GetDataGivers().Remove(this);
+	}
+}
 
 void VideoOverlay::Upload(const Planes& planes)
 {
@@ -90,6 +102,7 @@ void VideoOverlay::Upload(const Planes& planes)
 		{
 			_planes.at(i)->CreateWithinFrame(size.x, size.y, 1, TextureFormat::R8, Wrapping::ClampEdge, Filter::Nearest,
 			                                 nullptr);
+			_planes.at(i)->SetTexelsGivenAgain();
 			_planeSizes.at(i) = size;
 			_uploadedSerial.reset();
 		}

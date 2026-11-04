@@ -63,6 +63,7 @@
 #include "ECS/Systems/TipBubbleSystemInterface.h"
 #include "ECS/Systems/VideoSystemInterface.h"
 #include "FileSystem/FileSystemInterface.h"
+#include "Graphics/GraphicsDeviceInterface.h"
 #include "Graphics/Texture2D.h"
 #include "Graphics/VideoOverlay.h"
 #include "Graphics/ZSort.h"
@@ -91,6 +92,7 @@
 #include "Input/WindowPointer.h"
 #include "Locator.h"
 #include "Online/NetworkSession.h"
+#include "Resources/Rereads.h"
 #include "Resources/ResourcesInterface.h"
 #include "ScriptHeaders/ScriptPropertyRules.h"
 #include "Sound/GameSoundEffects.h"
@@ -158,25 +160,66 @@ std::optional<GameFont> LoadFont(std::string_view name)
 	return font;
 }
 
+/// The source of the glyphs of a font after a restore of the graphics device, which reads the font's files again
+openblack::graphics::Texture2D::TexelSource FontSource(std::string_view name, bool full)
+{
+	const auto data = Locator::filesystem::value().GetPath<Path::Data>();
+	return openblack::gui::FontGlyphSource(data / (std::string(name) + ".met"), data / (std::string(name) + ".fnt"), full);
+}
+
 /// A font's glyphs, white with their coverage in alpha
 std::unique_ptr<openblack::graphics::Texture2D> MakeFontTexture(const GameFont& font, std::string_view name)
 {
-	return openblack::gui::MakeGlyphTexture(font.GetAtlas(), font.GetAtlasSize(), std::string("Font ") + std::string(name));
+	return openblack::gui::MakeGlyphTexture(font.GetAtlas(), font.GetAtlasSize(), std::string("Font ") + std::string(name),
+	                                        FontSource(name, false));
 }
 } // namespace
 
 namespace
 {
-/// A texture of the game made of a colour file and an alpha file, 256 pixels square. Null when they are missing.
+/// The texels of a texture of the game from a colour file and an alpha file, 256 pixels square, each channel through
+/// the level when there is one. None when the files do not have that size.
+std::vector<uint8_t> TextureTexels(std::span<const uint8_t> colour, std::span<const uint8_t> alpha,
+                                   const std::function<uint8_t(uint8_t)>& level)
+{
+	constexpr size_t k_Pixels = static_cast<size_t>(k_AtlasSize) * k_AtlasSize;
+	if (colour.size() != k_Pixels * 3 || alpha.size() != k_Pixels)
+	{
+		return {};
+	}
+	std::vector<uint8_t> texels(k_Pixels * 4);
+	for (size_t i = 0; i < k_Pixels; ++i)
+	{
+		texels[(i * 4) + 0] = colour[(i * 3) + 0];
+		texels[(i * 4) + 1] = colour[(i * 3) + 1];
+		texels[(i * 4) + 2] = colour[(i * 3) + 2];
+		texels[(i * 4) + 3] = alpha[i];
+		if (level)
+		{
+			for (size_t channel = 0; channel < 4; ++channel)
+			{
+				texels[(i * 4) + channel] = level(texels[(i * 4) + channel]);
+			}
+		}
+	}
+	// Kept four bits a channel, as the game keeps every texture it loads with an alpha
+	openblack::graphics::texel_depth::Reduce(texels, openblack::graphics::texel_depth::Depth::FourBits);
+	return texels;
+}
+
+/// A texture of the game made of a colour file and an alpha file, 256 pixels square. Null when they are missing. The
+/// level and the change must not refer to data that goes before the texture.
 std::unique_ptr<openblack::graphics::Texture2D>
 LoadTexture(const std::string& name, openblack::graphics::Wrapping wrapping = openblack::graphics::Wrapping::ClampEdge,
             const std::function<uint8_t(uint8_t)>& level = {},
             const std::function<void(std::span<uint8_t> colour, std::span<uint8_t> alpha)>& change = {})
 {
 	auto& fileSystem = Locator::filesystem::value();
-	auto colour = ReadIfExists(fileSystem.GetPath<Path::Textures>() / (name + ".raw"));
-	auto alpha = ReadIfExists(fileSystem.GetPath<Path::Textures>() / (name + "a.raw"));
-	constexpr size_t k_Pixels = static_cast<size_t>(k_AtlasSize) * k_AtlasSize;
+	const auto colourPath = fileSystem.GetPath<Path::Textures>() / (name + ".raw");
+	const auto alphaPath = fileSystem.GetPath<Path::Textures>() / (name + "a.raw");
+	auto colour = ReadIfExists(colourPath);
+	auto alpha = ReadIfExists(alphaPath);
+	static constexpr size_t k_Pixels = static_cast<size_t>(k_AtlasSize) * k_AtlasSize;
 	if (colour.size() != k_Pixels * 3 || alpha.size() != k_Pixels)
 	{
 		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "Unable to read the texture {}", name);
@@ -186,27 +229,25 @@ LoadTexture(const std::string& name, openblack::graphics::Wrapping wrapping = op
 	{
 		change(colour, alpha);
 	}
-	const auto* data = bgfx::alloc(static_cast<uint32_t>(k_Pixels * 4));
-	for (size_t i = 0; i < k_Pixels; ++i)
-	{
-		data->data[(i * 4) + 0] = colour[(i * 3) + 0];
-		data->data[(i * 4) + 1] = colour[(i * 3) + 1];
-		data->data[(i * 4) + 2] = colour[(i * 3) + 2];
-		data->data[(i * 4) + 3] = alpha[i];
-		if (level)
-		{
-			for (size_t channel = 0; channel < 4; ++channel)
-			{
-				data->data[(i * 4) + channel] = level(data->data[(i * 4) + channel]);
-			}
-		}
-	}
-	// Kept four bits a channel, as the game keeps every texture it loads with an alpha
-	openblack::graphics::texel_depth::Reduce(std::span(data->data, data->size),
-	                                         openblack::graphics::texel_depth::Depth::FourBits);
+	const auto texels = TextureTexels(colour, alpha, level);
 	auto texture = std::make_unique<openblack::graphics::Texture2D>(name);
 	texture->Create(k_AtlasSize, k_AtlasSize, 1, openblack::graphics::TextureFormat::RGBA8, wrapping,
-	                openblack::graphics::Filter::Linear, data);
+	                openblack::graphics::Filter::Linear,
+	                Locator::graphicsDevice::value().Copy(texels.data(), static_cast<uint32_t>(texels.size())));
+	// After a restore of the graphics device the texture reads its files again and makes the same change
+	texture->SetTexelSource([colourPath, alphaPath, level, change](openblack::resources::Rereads& rereads) {
+		auto colourAgain = rereads.File(colourPath);
+		auto alphaAgain = rereads.File(alphaPath);
+		if (colourAgain.size() != k_Pixels * 3 || alphaAgain.size() != k_Pixels)
+		{
+			return std::vector<uint8_t> {};
+		}
+		if (change)
+		{
+			change(colourAgain, alphaAgain);
+		}
+		return TextureTexels(colourAgain, alphaAgain, level);
+	});
 	return texture;
 }
 
@@ -232,8 +273,10 @@ void PutSymbolPicture(std::span<uint8_t> colour, std::span<uint8_t> alpha, uint3
 /// The symbols the game ships with, each with the player's own picture in its place if they have one
 std::unique_ptr<openblack::graphics::Texture2D> LoadSymbols(const openblack::creature_tattoo::Pictures& pictures)
 {
+	// The change keeps its own copy of the pictures, because the texture uses it again after a restore of the graphics
+	// device
 	return LoadTexture("OriginalChooseSymbol", openblack::graphics::Wrapping::ClampEdge, {},
-	                   [&pictures](std::span<uint8_t> colour, std::span<uint8_t> alpha) {
+	                   [pictures](std::span<uint8_t> colour, std::span<uint8_t> alpha) {
 		                   for (uint32_t design = 0; design < pictures.size(); ++design)
 		                   {
 			                   if (const auto& picture = pictures.at(design); picture.has_value())
@@ -465,7 +508,8 @@ GameInterface::GameInterface(TextDatabase texts, GameFont font, std::unique_ptr<
 	_painter.SetPictures(_symbols.get(), _mice.get());
 	_menuCreaturePainter.SetPictures(_symbols.get(), _mice.get());
 	_multiplayerBoxes->SetThumbnailSource(LoadLandThumbnail);
-	_fullFontTexture = MakeGlyphTexture(_font.GetFullAtlas(), _font.GetFullAtlasSize(), "Font full height");
+	_fullFontTexture =
+	    MakeGlyphTexture(_font.GetFullAtlas(), _font.GetFullAtlasSize(), "Font full height", FontSource(k_Font, true));
 	_painter.SetFullGlyphs(_fullFontTexture.get());
 	_menuCreaturePainter.SetFullGlyphs(_fullFontTexture.get());
 	// The quick chat list has the taunts, the list of people has its headings, and the friend button its labels

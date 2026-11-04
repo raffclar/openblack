@@ -127,7 +127,7 @@ public:
 	void SetBlockTexels(size_t block, std::span<const uint16_t> texels) override;
 	void PaintBlocksTexels(std::span<const size_t> blocks, const PaintTexels& paint, WorkerPool& pool) override;
 	[[nodiscard]] std::vector<RepaintedBlock> TakeRepaintedBlocks() override;
-	void PaintBlockTexturesAgain() override;
+	void GiveDeviceDataAgain() override;
 
 	[[nodiscard]] glm::mat4 GetOrthoView() const override { return _view; }
 	[[nodiscard]] glm::mat4 GetOrthoProj() const override { return _proj; }
