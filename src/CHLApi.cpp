@@ -1133,28 +1133,6 @@ void NotImplemented(std::optional<int32_t> detail)
 	Locator::chlapi::value().NotImplemented(detail);
 }
 
-/// What the player last clicked, kept on their hand; none without a hand. A game on one computer has the click of its
-/// own player, the first player. In a network game the turn writes the clicks, and the scripts read the clicks of the
-/// first player on every computer.
-ecs::components::HandClicked* LocalHandClicked()
-{
-	if (!Locator::handSystem::has_value())
-	{
-		return nullptr;
-	}
-	const auto hand = Locator::handSystem::value().GetPlayerHands()[static_cast<size_t>(HandSystemInterface::Side::Left)];
-	auto& registry = Locator::entitiesRegistry::value();
-	if (hand == entt::null || !registry.Valid(hand))
-	{
-		return nullptr;
-	}
-	if (auto* clicked = registry.TryGet<ecs::components::HandClicked>(hand))
-	{
-		return clicked;
-	}
-	return &registry.Assign<ecs::components::HandClicked>(hand);
-}
-
 /// Make the land's draw list again on the next frame. The commands that move the camera or change the detail of a
 /// thing use this.
 void RemakeDrawList()
@@ -2783,17 +2761,6 @@ void MoveGameThing() // 033 MOVE_GAME_THING
 	NotImplemented();
 }
 
-void GetHandPosition() // 042 GET_HAND_POSITION
-{
-	// The hand's position is given also in the temple, with a message
-	if (PlayerInsideTemple())
-	{
-		ScriptMessage("Hand in citadel");
-	}
-	const auto reported = Locator::handSystem::value().GetPlayerHandPositions()[0];
-	PushVec(reported.value_or(glm::vec3(0.0f)));
-}
-
 /// A thing a script deletes goes at once: a creature leaves the game, a dance's dancers go back to deciding what to do,
 /// a flock's members are in no flock any more
 static void DeleteNow(entt::entity object)
@@ -3657,50 +3624,9 @@ void StopScript() // 155 STOP_SCRIPT
 	});
 }
 
-void ClearClickedObject() // 156 CLEAR_CLICKED_OBJECT
-{
-	if (auto* clicked = LocalHandClicked())
-	{
-		hand_click::ClearThing(*clicked);
-	}
-}
-
-void ClearClickedPosition() // 157 CLEAR_CLICKED_POSITION
-{
-	if (auto* clicked = LocalHandClicked())
-	{
-		hand_click::ClearPlace(*clicked);
-	}
-}
-
-void PositionClicked() // 158 POSITION_CLICKED
-{
-	const auto radius = Popf();
-	const auto position = PopVec();
-	const auto* clicked = LocalHandClicked();
-	// Along the ground: the position's height doesn't count
-	const map_coords::MapCoords at {.x = map_coords::ToFixed(position.x), .z = map_coords::ToFixed(position.z)};
-	Pushb(clicked != nullptr && hand_click::IsPlaceClicked(*clicked, at, radius));
-}
-
 void ReleaseFromScript() // 159 RELEASE_FROM_SCRIPT
 {
 	Locator::scriptObjects::value().ReleaseFromScript(PopObject());
-}
-
-void GetObjectHandIsOver() // 160 GET_OBJECT_HAND_IS_OVER
-{
-	// The thing under the cursor of the player's hand, from the last pick that a turn did. The game warns that a network
-	// game gives each computer the thing under its own hand.
-	if (Locator::time::has_value() && Locator::time::value().IsNetworkGame())
-	{
-		ScriptMessage("This is not multiplayer friendly");
-	}
-	const auto object = Locator::handSystem::has_value()
-	                        ? Locator::handSystem::value().GetReportedPickOf(PlayerNames::PLAYER_ONE)
-	                        : entt::entity {entt::null};
-	const auto& registry = Locator::entitiesRegistry::value();
-	PushObject(object != entt::null && registry.Valid(object) ? object : entt::entity {entt::null});
 }
 
 void SetIdMoveable() // 168 SET_ID_MOVEABLE
@@ -4029,19 +3955,6 @@ void SetAviSequence() // 203 SET_AVI_SEQUENCE
 	}
 }
 
-void PlayGesture() // 204 PLAY_GESTURE
-{
-	// The shape of the gesture shows on the land as if this computer's player drew it: its square, so many metres
-	// across, goes from the point towards the east and the south. No gesture shows for gesture 0.
-	const auto size = Popf();
-	const auto corner = PopVec();
-	const auto gesture = static_cast<GestureType>(Pop().intVal);
-	if (Locator::gestureSystem::has_value())
-	{
-		Locator::gestureSystem::value().ShowGestureOnLand(gesture, corner, size, std::nullopt);
-	}
-}
-
 /// The developer function the GameOver script ends with
 constexpr int32_t k_DevFunctionEnterSaveGameRoom = 12;
 
@@ -4126,20 +4039,6 @@ void DevFunction() // 205 DEV_FUNCTION
 		NotImplemented(func);
 		break;
 	}
-}
-
-void HasMouseWheel() // 206 HAS_MOUSE_WHEEL
-{
-	// The view report of the player tells whether its mouse has a wheel
-	const auto view = ScriptView();
-	Pushb(view.has_value() && view->mouseWheel);
-}
-
-void NumMouseButtons() // 207 NUM_MOUSE_BUTTONS
-{
-	// The view report of the player tells how many buttons its mouse has
-	const auto view = ScriptView();
-	Pushf(view.has_value() ? static_cast<float>(view->mouseButtons) : 0.0f);
 }
 
 void GetArena() // 211 GET_ARENA
@@ -4558,20 +4457,6 @@ void GetObjectFade() // 265 GET_OBJECT_FADE
 	Pushf(mists::FadeDone(mist->fadeElapsed, mist->fadeTurns));
 }
 
-void PlayHandDemo() // 266 PLAY_HAND_DEMO
-{
-	const auto withoutHandModify = Pop().intVal != 0;
-	const auto withPause = Pop().intVal != 0;
-	const auto name = PopString();
-	Locator::handDemoSystem::value().Play(name, CurrentTask(), withPause, withoutHandModify);
-}
-
-void IsPlayingHandDemo() // 267 IS_PLAYING_HAND_DEMO
-{
-	// The scripts' "hand demonstration played": true when none plays
-	Pushb(!Locator::handDemoSystem::value().IsPlaying(0));
-}
-
 void GetInteractionMagnitude() // 270 GET_INTERACTION_MAGNITUDE
 {
 	// How strongly the player last rewarded (above 0) or punished (below 0) the creature
@@ -4852,12 +4737,6 @@ void IsPlayingJcSpecial() // 327 IS_PLAYING_JC_SPECIAL
 	constexpr int32_t k_LiftComeRound = 13;
 	const auto special = Pop().intVal;
 	Pushb(special != k_LiftComeRound || Locator::introSystem::value().HasLiftFinished());
-}
-
-void HandDemoTrigger() // 336 HAND_DEMO_TRIGGER
-{
-	// Whether the demonstration reached a mark; asking lets a demonstration held there go on
-	Pushb(Locator::handDemoSystem::value().TakeTrigger());
 }
 
 void IsLockedInteraction() // 342 IS_LOCKED_INTERACTION
@@ -5158,26 +5037,6 @@ void ResetGameTimeProperties() // 408 RESET_GAME_TIME_PROPERTIES
 	});
 }
 
-void GetHandState() // 413 GET_HAND_STATE
-{
-	hand::script_state::Facts facts;
-	facts.interfaceActive =
-	    !Locator::cinematicDirectorSystem::has_value() || Locator::cinematicDirectorSystem::value().IsInterfaceActive();
-	facts.inTemple = PlayerInsideTemple();
-	// The grip of the land, the other button and the turn of the camera come from the view report of the player
-	if (const auto view = ScriptView(); view.has_value())
-	{
-		facts.gripsLand = view->gripsLand;
-		facts.otherButton = view->otherButton;
-		facts.cameraTurned = view->cameraTurned;
-	}
-	if (Locator::cameraHelpSystem::has_value())
-	{
-		facts.cameraFeatures = Locator::cameraHelpSystem::value().Get().features;
-	}
-	Pushi(static_cast<int32_t>(hand::script_state::StateOf(facts)));
-}
-
 void SetInterfaceCitadel() // 414 SET_INTERFACE_CITADEL
 {
 	// Whether tapping the temple's entrance takes the player inside
@@ -5204,28 +5063,6 @@ void WithinRotation() // 416 WITHIN_ROTATION
 	// The view report of the player tells which camera icons the hand showed or offered
 	const auto view = ScriptView();
 	Pushb(view.has_value() && script::lesson_natives::WithinRotation(view->cameraIcons));
-}
-
-void KeyDown() // 419 KEY_DOWN
-{
-	// The key comes by the game's number of the key. The view report of the player tells the keys held.
-	const auto key = Pop().intVal;
-	const auto view = ScriptView();
-	Pushb(view.has_value() && script::lesson_natives::KeyDown(key, view->keysHeld));
-}
-
-void GetObjectClicked() // 421 GET_OBJECT_CLICKED
-{
-	const auto* clicked = LocalHandClicked();
-	const auto object = clicked != nullptr ? clicked->thing : entt::entity {entt::null};
-	if (object == entt::null || !Locator::entitiesRegistry::value().Valid(object))
-	{
-		Pusho(0);
-		return;
-	}
-	// The thing found takes a place in the scripts' table, the game's own
-	Locator::scriptObjects::value().Register(object, false);
-	Pusho(static_cast<uint32_t>(object));
 }
 
 void StartImmersion() // 429 START_IMMERSION
@@ -5348,12 +5185,6 @@ void GetDeadLiving() // 446 GET_DEAD_LIVING
 	}
 	Locator::scriptObjects::value().Register(found, false);
 	Pusho(static_cast<uint32_t>(found));
-}
-
-void SetHandDemoKeys() // 459 SET_HAND_DEMO_KEYS
-{
-	// The game does nothing with it
-	static_cast<void>(Pop());
 }
 
 void CanSkipTutorial() // 460 CAN_SKIP_TUTORIAL

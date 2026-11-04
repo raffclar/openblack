@@ -120,4 +120,7 @@ void ChangeWeatherThing(entt::entity thing, const std::function<void(ecs::compon
 // In CHLApi/PlayerNatives.cpp
 PlayerNames ScriptPlayerName(int32_t scriptPlayer);
 
+// In CHLApi/HandNatives.cpp
+ecs::components::HandClicked* LocalHandClicked();
+
 } // namespace openblack::chlapi
