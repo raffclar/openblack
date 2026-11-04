@@ -20,6 +20,7 @@
 #include <bx/file.h>
 #include <spdlog/spdlog.h>
 
+#include "Common/DebugDownload.h"
 #include "GraphicsHandleBgfx.h"
 
 namespace openblack::graphics
@@ -191,7 +192,12 @@ std::string WriteScreenshotPng(const std::filesystem::path& path, uint32_t width
 	}
 	std::error_code renameError;
 	std::filesystem::rename(partPath, path, renameError);
-	return renameError ? renameError.message() : std::string {};
+	if (renameError)
+	{
+		return renameError.message();
+	}
+	debug_download::Offer(path);
+	return {};
 }
 
 OffscreenScreenshots::~OffscreenScreenshots()
