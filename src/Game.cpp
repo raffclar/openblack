@@ -2574,7 +2574,8 @@ bool Game::Update() noexcept
 			    return played;
 		    }
 		    // The temple of a game alone writes the synced world in some frame steps, as the original game does. The guard
-		    // knows these writers by name. All other writes in a frame step trip the guard.
+		    // knows these writers by name. All other writes in a frame step trip the guard. The temple can also write after
+		    // the draw, between two frames. The guard gives these changes and their writers to the next step.
 		    const auto frameWrites = [] {
 			    return Locator::temple::has_value() ? Locator::temple::value().TakeFrameWrites() : temple::FrameWrites {};
 		    };
@@ -2582,7 +2583,6 @@ bool Game::Update() noexcept
 			    return Locator::landSystem::has_value() ? Locator::landSystem::value().LandLoads() : 0U;
 		    };
 		    const auto loadsBefore = landLoads();
-		    std::ignore = frameWrites();
 		    _frameGuard->Before();
 		    const bool played = PlayFrameStep(step, frame);
 		    const auto writers = frameWrites();
