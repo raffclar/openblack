@@ -21,6 +21,7 @@
 #include <limits>
 #include <optional>
 #include <span>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -460,21 +461,19 @@ void Renderer::DrawIconSeeds(const DrawSceneDesc& desc) const
 	};
 	std::vector<Icon> icons;
 	const auto& info = Locator::infoConstants::value();
-	// The alignment of each player is found once for all of its icons
-	std::vector<std::pair<PlayerNames, float>> alignments;
+	// The alignment of each player is found once for all of its icons, kept by the number of the player
+	std::array<std::optional<float>, std::numeric_limits<std::underlying_type_t<PlayerNames>>::max() + 1> alignments {};
 	const auto alignmentOf = [&alignments](PlayerNames player) {
 		if (!Locator::alignmentSystem::has_value() || player == PlayerNames::NEUTRAL)
 		{
 			return 0.0f;
 		}
-		if (const auto found = std::ranges::find(alignments, player, &std::pair<PlayerNames, float>::first);
-		    found != alignments.end())
+		auto& kept = alignments.at(static_cast<size_t>(player));
+		if (!kept.has_value())
 		{
-			return found->second;
+			kept = Locator::alignmentSystem::value().GetPlayerAlignment(player);
 		}
-		const float alignment = Locator::alignmentSystem::value().GetPlayerAlignment(player);
-		alignments.emplace_back(player, alignment);
-		return alignment;
+		return *kept;
 	};
 	registry.Each<const IconSeed>([&](entt::entity icon, const IconSeed& shown) {
 		const auto player = ecs::world_objects::IconPlayer(registry, icon);
