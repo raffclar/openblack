@@ -80,6 +80,7 @@ bool IsDirectableVillager(entt::entity object);
 void Pushf(float value);
 void Pushv(float value);
 void Pushi(int32_t value);
+void Pusho(uint32_t value);
 void Pushb(bool value);
 void PushObject(entt::entity object);
 void RemakeDrawList();
@@ -90,8 +91,6 @@ float LivingAngleOf(entt::entity object, const ecs::components::Transform& trans
 void TurnLivingThing(entt::entity object, ecs::components::Transform& transform, float angle);
 void TurnPlacedThing(entt::entity object, const glm::vec3& angles, bool lean);
 float ScriptHeightOf(entt::entity object);
-bool IsScriptContainer(const ecs::Registry& registry, entt::entity thing);
-std::vector<entt::entity> ContainerMembers(const ecs::Registry& registry, entt::entity container);
 PlayerNames ScriptPlayerName(int32_t scriptPlayer);
 
 // In CHLApi/CameraNatives.cpp
@@ -109,5 +108,10 @@ ecs::systems::ScriptMusicSystemInterface* WorldScriptMusic();
 // In CHLApi/CreatureNatives.cpp
 std::optional<entt::entity> CreatureForNative(entt::entity thing);
 void MoveCreatureToStage(entt::entity creature, uint32_t stage);
+
+// In CHLApi/FlockNatives.cpp
+void TakeControlInLoop(ecs::Registry& registry, entt::entity member);
+bool IsScriptContainer(const ecs::Registry& registry, entt::entity thing);
+std::vector<entt::entity> ContainerMembers(const ecs::Registry& registry, entt::entity container);
 
 } // namespace openblack::chlapi
