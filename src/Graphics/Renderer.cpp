@@ -142,6 +142,7 @@
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
 #include "ECS/Systems/LandShadeSystemInterface.h"
+#include "ECS/Systems/ObjectDrawListSystemInterface.h"
 #include "ECS/Systems/PickingSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/RainSystemInterface.h"
@@ -283,6 +284,17 @@ constexpr auto k_BgfxDefaultStateInvertedZ = 0 \
 
 namespace
 {
+/// Whether a land block is in view. The draw list keeps the answers of the frame, so the land shade, the land detail and
+/// the list make the test one time for each block.
+bool SharedBlockInView(const glm::mat4& viewProjection, float nearPlane, const object_draw_list::Block& block)
+{
+	if (Locator::objectDrawListSystem::has_value())
+	{
+		return Locator::objectDrawListSystem::value().BlockInView(viewProjection, nearPlane, block);
+	}
+	return object_draw_list::BlockInView(viewProjection, nearPlane, block);
+}
+
 /// A creature frozen or fizzed this far casts no shadow
 constexpr float k_NoShadowSpellLook = 0.2f;
 /// The moving shadows' data comes in rows of this many texels (see ground_shadow.sh)
@@ -913,10 +925,9 @@ bool CreatureMirrored(entt::entity entity, glm::vec3 position, float fizz)
 		});
 		if (block != blocks.end())
 		{
-			const auto& cells = block->GetLndBlock()->cells;
 			const object_draw_list::Block box {
 			    .corner = block->GetMapPosition(),
-			    .highestAltitude = std::ranges::max(cells, {}, &lnd::LNDCell::altitude).altitude,
+			    .highestAltitude = block->GetHighestAltitudeNow(),
 			    .reflected = Locator::config::value().detail.landReflection,
 			};
 			const auto& camera = Locator::camera::value();
@@ -6230,7 +6241,7 @@ void Renderer::UpdateLandDetail(const DrawSceneDesc& drawDesc) const
 	frame.inView.resize(blocks.size());
 	for (size_t i = 0; i < blocks.size(); ++i)
 	{
-		frame.inView[i] = object_draw_list::BlockInView(
+		frame.inView[i] = SharedBlockInView(
 		    viewProjection, nearPlane,
 		    {.corner = blocks[i].GetMapPosition(), .highestAltitude = blocks[i].GetHighestAltitude(), .reflected = reflected});
 	}

@@ -59,6 +59,37 @@ struct Block
 /// Whether any of a block can be seen: false only when all eight corners of the box over it lie beyond the same side
 /// of the view, or all lie behind the near plane
 [[nodiscard]] bool BlockInView(const glm::mat4& viewProjection, float nearPlane, const Block& block);
+
+/// The answers of BlockInView for one camera, one answer for each block of the map's grid of 32 by 32 blocks. A test with
+/// the same camera and the same box as the kept answer gives that answer. Any other test does BlockInView again and keeps
+/// the new answer. Thus the answer is always the same as the answer of BlockInView.
+class BlockViewMemo
+{
+public:
+	[[nodiscard]] bool InView(const glm::mat4& viewProjection, float nearPlane, const Block& block);
+	/// How many times the memo did BlockInView
+	[[nodiscard]] uint64_t Tests() const { return _tests; }
+
+private:
+	static constexpr int k_BlocksPerSide = 32;
+
+	struct Answer
+	{
+		glm::vec2 corner {0.0f};
+		/// The camera of the answer; zero for no answer
+		uint32_t camera {0};
+		uint8_t highestAltitude {0};
+		bool reflected {false};
+		bool inView {false};
+	};
+
+	glm::mat4 _viewProjection {0.0f};
+	float _nearPlane {0.0f};
+	/// The number of the camera that the memo keeps answers for; zero before the first test
+	uint32_t _camera {0};
+	std::array<Answer, static_cast<size_t>(k_BlocksPerSide* k_BlocksPerSide)> _answers {};
+	uint64_t _tests {0};
+};
 /// How far the eye is from the block's middle: half way up its box, or at the water's level with the reflection drawn
 [[nodiscard]] float BlockDistance(glm::vec3 eye, const Block& block);
 /// Whether the upper side of a land triangle faces the eye and a part of the triangle is in view, as the game tests the

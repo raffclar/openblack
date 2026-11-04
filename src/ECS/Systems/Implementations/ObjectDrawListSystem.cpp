@@ -170,7 +170,7 @@ void ObjectDrawListSystem::Update(uint32_t turn, bool landDrawn)
 	for (auto& block : _blocks)
 	{
 		block.block.reflected = reflected;
-		block.inView = object_draw_list::BlockInView(_view->viewProjection, _view->nearPlane, block.block);
+		block.inView = _blockViews.InView(_view->viewProjection, _view->nearPlane, block.block);
 		if (block.inView)
 		{
 			const bool shows = Shows(block, _view->viewProjection, _view->nearPlane, _view->eye);

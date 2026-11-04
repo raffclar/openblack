@@ -10,9 +10,11 @@
 #include "ObjectDrawList.h"
 
 #include <cmath>
+#include <cstring>
 
 #include <algorithm>
 #include <array>
+#include <bit>
 #include <bitset>
 
 #include <glm/geometric.hpp>
@@ -88,6 +90,43 @@ bool object_draw_list::BlockInView(const glm::mat4& viewProjection, float nearPl
 	}
 	constexpr uint32_t k_All = 0xffu;
 	return behind != k_All && right != k_All && left != k_All && above != k_All && below != k_All;
+}
+
+bool object_draw_list::BlockViewMemo::InView(const glm::mat4& viewProjection, float nearPlane, const Block& block)
+{
+	// The same camera has the same bits, so the memo compares the bits and not the values
+	if (_camera == 0 || std::memcmp(&_viewProjection, &viewProjection, sizeof(glm::mat4)) != 0 ||
+	    std::bit_cast<uint32_t>(_nearPlane) != std::bit_cast<uint32_t>(nearPlane))
+	{
+		_viewProjection = viewProjection;
+		_nearPlane = nearPlane;
+		++_camera;
+		if (_camera == 0)
+		{
+			// The count went back to zero: the old answers must not agree with a new camera
+			_answers.fill({});
+			_camera = 1;
+		}
+	}
+	const auto x = static_cast<int>(std::floor(block.corner.x / k_BlockSize));
+	const auto z = static_cast<int>(std::floor(block.corner.y / k_BlockSize));
+	if (x < 0 || x >= k_BlocksPerSide || z < 0 || z >= k_BlocksPerSide)
+	{
+		++_tests;
+		return BlockInView(viewProjection, nearPlane, block);
+	}
+	auto& answer = _answers.at(static_cast<size_t>(x * k_BlocksPerSide + z));
+	if (answer.camera != _camera || std::bit_cast<uint64_t>(answer.corner) != std::bit_cast<uint64_t>(block.corner) ||
+	    answer.highestAltitude != block.highestAltitude || answer.reflected != block.reflected)
+	{
+		++_tests;
+		answer = {.corner = block.corner,
+		          .camera = _camera,
+		          .highestAltitude = block.highestAltitude,
+		          .reflected = block.reflected,
+		          .inView = BlockInView(viewProjection, nearPlane, block)};
+	}
+	return answer.inView;
 }
 
 float object_draw_list::BlockDistance(glm::vec3 eye, const Block& block)
