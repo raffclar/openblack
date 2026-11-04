@@ -14,11 +14,14 @@
 #include <gtest/gtest.h>
 
 #include "ECS/MobileObjectRecord.h"
+#include "ECS/Registry.h"
+#include "Editor/EditorEntities.h"
 #include "InfoConstants.h"
 
 using namespace openblack;
 using namespace openblack::ecs;
 using namespace openblack::ecs::components;
+using namespace openblack::editor;
 
 namespace
 {
@@ -70,4 +73,29 @@ TEST(MobileObjectRecord, ARowOutsideTheTableMakesNothing)
 	EXPECT_FALSE(mobile_object_record::FromRow(*info, -1).has_value());
 	EXPECT_FALSE(mobile_object_record::FromRow(*info, static_cast<int32_t>(MobileObjectInfo::_COUNT)).has_value());
 	EXPECT_EQ(mobile_object_record::Of(*info, MobileObject {.type = MobileObjectInfo::None}), nullptr);
+}
+
+// The level editor copies a loose object by its row, so that a copy of one with the football's record has that record
+TEST(MobileObjectRecord, TheEditorCopiesALooseObjectByItsRow)
+{
+	Registry registry;
+	const auto football = registry.Create();
+	registry.Assign<MobileObject>(football, MobileObject {.type = MobileObjectInfo::Ball, .footballRecord = true});
+	const auto ball = registry.Create();
+	registry.Assign<MobileObject>(ball, MobileObject {.type = MobileObjectInfo::Ball});
+
+	const auto copy = ItemOf(registry, football);
+	ASSERT_TRUE(copy.has_value());
+	EXPECT_EQ(copy->kind, PlaceKind::MobileObject);
+	EXPECT_EQ(copy->type, mobile_object_record::k_FootballRow);
+	const auto plain = ItemOf(registry, ball);
+	ASSERT_TRUE(plain.has_value());
+	EXPECT_EQ(plain->type, static_cast<int32_t>(MobileObjectInfo::Ball));
+
+	// The row of the copy makes a loose object of the football's record again
+	const auto info = FakeInfo();
+	const auto made = mobile_object_record::FromRow(*info, copy->type);
+	ASSERT_TRUE(made.has_value());
+	EXPECT_TRUE(made->footballRecord);
+	EXPECT_EQ(mobile_object_record::Of(*info, *made), &info->ball);
 }
