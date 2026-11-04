@@ -52,6 +52,31 @@ const CreatureRig::ActionPoints* PointsOf(const Creature& creature);
 
 glm::mat4 PlacementOf(const Transform& transform);
 
+/// A point of the world in the creature's own space, kept at the world's scale
+glm::vec3 ToLocal(const Transform& transform, const glm::vec3& world);
+
+/// How far round from ahead a point is, along the ground
+float BearingTo(const Transform& transform, const glm::vec3& target);
+
+/// Where the middle of the finger ends of a hand is in an animation at a time, in the creature's own space at its own
+/// size
+std::optional<glm::vec3> FingerEndsInAnimation(entt::entity creature, uint32_t hand, size_t animation, float timeMs);
+
+/// The revision of the creature's body shape. A kept measure of the animations is for one revision.
+uint32_t BodyRevision(const ecs::Registry& registry, entt::entity creature);
+
+/// A kept measure of the animations, when it is correct for the body shape now. Else none, and the caller measures again.
+template <typename Kept>
+const Kept* KeptMeasure(const ecs::Registry& registry, entt::entity creature)
+{
+	const auto* kept = registry.TryGet<const Kept>(creature);
+	return kept != nullptr && creature_object_actions::MeasureHolds(kept->bodyRevision, BodyRevision(registry, creature))
+	           ? kept
+	           : nullptr;
+}
+
+float DurationOf(entt::entity creature, size_t animation);
+
 /// Something eaten is gone: out of its home and its town first
 void Consume(ecs::Registry& registry, entt::entity creature, entt::entity food);
 
@@ -70,15 +95,52 @@ void Swallow(entt::entity creature, CreatureObjectAction& action, std::optional<
 void KickAway(entt::entity creature, const Creature& body, const Transform& transform, const CreatureAnimation& animation,
               entt::entity target);
 
+void SetSlots(CreatureObjectAction& action, std::span<const size_t> animations, std::span<const float> weights);
+
 void Fail(CreatureObjectAction& action, std::string reason,
           creature_object_actions::Failure kind = creature_object_actions::Failure::Other);
+
+/// The thing a creature catches is taken into its hand out of the air: it leaves the physics without going back on the
+/// map, and a person or animal is held
+void TakeInHand(ecs::Registry& registry, entt::entity creature, entt::entity object, const CreatureObjectAction& action,
+                const CreatureRig::ActionPoints& points, const CreatureAnimation& animation);
 
 /// Whether a thing lies on the map, where a creature can stomp on it: not held, flying or carried off.
 /// A piece that broke off a building goes into the cells of the map when it comes to rest, as a rock does.
 bool OnTheMap(const ecs::Registry& registry, entt::entity thing);
 
+/// One game turn of walking or turning up to what the creature acts on
+/// Where the creature stands and faces now: the heading its walking last reached, which the drawn body only catches up
+/// with over the turn, so that a catch weighs the thing against the way the creature has finished turning
+Transform AsFacing(const ecs::Registry& registry, entt::entity creature, const Transform& transform);
+
 /// One of the three creaks of a tree a creature pulls from the ground, drawn from the local random numbers
 entt::id_type TreeCreak();
+
+/// The catch starts with the four catching animations, the thing flying across the land fast enough: the creature turns
+/// to face it first when it comes from too far round, and where its hand closes in each animation is measured
+bool StartCatch(entt::entity creature, CreatureObjectAction& action, const CreatureRig::ActionPoints& points);
+
+/// A catch's creature faces back along the thing's flight, turning when it comes from too far round. It is the last thing
+/// the catch's start does, once the body has stopped what else it played and its walking.
+void TurnToCatch(entt::entity creature, const CreatureObjectAction& action);
+
+/// Ready to catch: once it has turned, it waits for the thing, steps across to where it will pass when that is out of
+/// reach, and starts the catch when the thing will arrive as the hand closes; behind it or too late, it gives up. The
+/// step plays to its end whatever the thing does, and the creature is ready again in the frame it ends.
+void UpdateReady(ecs::Registry& registry, entt::entity creature, const Creature& body, const Transform& drawn,
+                 CreatureAnimation& animation, CreatureObjectAction& action, float step);
+
+/// Each frame of a catch: the four animations blended by where the thing is against where the hand closes in each, the
+/// catch played on while reaching or once caught and played back after a miss, the hand closing on it at its moment
+/// unless the blend had to lean too far, and the catch over at either end
+void UpdateCatch(ecs::Registry& registry, entt::entity creature, const Creature& body, const Transform& transform,
+                 CreatureAnimation& animation, CreatureObjectAction& action, float step);
+
+/// Whether the thing refuses a creature's hands. A piece of the beach temple puzzle refuses them only when the puzzle is
+/// solved. The other rules of the puzzle (a base, a covered ring, a puzzle that is not calm or that is gone) stop only
+/// the player's hand.
+bool RefusesCreature(const ecs::Registry& registry, entt::entity object);
 
 /// The spheres round the body of each creature come on and go off as its body actions start. While they are on, each
 /// part that moved far enough since its last check knocks about what it reaches.
