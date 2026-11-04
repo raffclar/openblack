@@ -217,6 +217,25 @@ TEST(ShaderSamplers, FindsSamplersSharingAStage)
 	EXPECT_EQ(collisions.front().second, "s_landAlpha");
 }
 
+TEST(ShaderSamplers, GivesTheStageOfASamplerByName)
+{
+	const std::vector<Sampler> samplers {
+	    {.name = "s_environment", .stage = 5, .dimension = Dimension::Texture2D},
+	    {.name = "s_iceEnvironmentAlpha", .stage = 1, .dimension = Dimension::Texture2D},
+	};
+	EXPECT_EQ(StageOf(samplers, "s_iceEnvironmentAlpha"), 1);
+	EXPECT_EQ(StageOf(samplers, "s_environment"), 5);
+}
+
+TEST(ShaderSamplers, GivesNoStageForASamplerThatTheProgramDoesNotRead)
+{
+	const std::vector<Sampler> samplers {
+	    {.name = "s_diffuse", .stage = 0, .dimension = Dimension::Texture2D},
+	};
+	EXPECT_FALSE(StageOf(samplers, "s_staticAlpha").has_value());
+	EXPECT_FALSE(StageOf({}, "s_diffuse").has_value());
+}
+
 TEST(ShaderSamplers, NoProgramSamplesTwoTexturesAtOneStage)
 {
 	const auto programs = openblack::graphics::ShaderManager::ProgramSamplers();
