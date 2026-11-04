@@ -129,6 +129,13 @@ public:
 	/// The list as it was last made, nearest blocks first
 	[[nodiscard]] virtual std::span<const entt::entity> GetList() const = 0;
 	[[nodiscard]] virtual Summary GetSummary() const = 0;
+	/// Whether a land block is in view (see object_draw_list::BlockInView). The land shade, the land detail and the list
+	/// test the same blocks with the same camera in a frame, so the system keeps the answers until the camera changes.
+	[[nodiscard]] virtual bool BlockInView(const glm::mat4& viewProjection, float nearPlane,
+	                                       const object_draw_list::Block& block)
+	{
+		return object_draw_list::BlockInView(viewProjection, nearPlane, block);
+	}
 
 	/// A new land or scenario: the list is made again on the next frame
 	virtual void Reset() = 0;

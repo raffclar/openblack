@@ -541,3 +541,62 @@ TEST(ObjectDrawList, TheStoresOfAWalkGiveTheFactsOfTheRegistry)
 		}
 	}
 }
+
+TEST(ObjectDrawList, TheMemoOfTheBlockTestGivesTheAnswersOfTheTestAndTestsEachBlockOneTimeForACamera)
+{
+	const auto projection = glm::perspectiveLH_NO(2.0f * std::atan(0.5f), 1.6f, 1.0f, 5000.0f);
+	const auto viewFrom = [&projection](float angle) {
+		const glm::vec3 eye {2560.0f + 900.0f * std::cos(angle), 170.0f, 2560.0f + 900.0f * std::sin(angle)};
+		return projection * glm::lookAtLH(eye, glm::vec3(2560.0f, 0.0f, 2560.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+	};
+	const auto blockAt = [](int x, int z, uint8_t altitude, bool reflected) {
+		return Block {.corner = {static_cast<float>(x) * k_BlockSize, static_cast<float>(z) * k_BlockSize},
+		              .highestAltitude = altitude,
+		              .reflected = reflected};
+	};
+	BlockViewMemo memo;
+	const auto first = viewFrom(0.3f);
+	// Three systems test all blocks with the same camera: the memo tests each block one time
+	for (int pass = 0; pass < 3; ++pass)
+	{
+		for (int x = 0; x < 32; ++x)
+		{
+			for (int z = 0; z < 32; ++z)
+			{
+				const auto block = blockAt(x, z, 40, true);
+				ASSERT_EQ(memo.InView(first, 1.0f, block), BlockInView(first, 1.0f, block)) << x << "," << z;
+			}
+		}
+	}
+	EXPECT_EQ(memo.Tests(), 32u * 32u);
+
+	// Another box, another near plane or another camera makes the test again
+	const auto other = blockAt(10, 12, 41, true);
+	EXPECT_EQ(memo.InView(first, 1.0f, other), BlockInView(first, 1.0f, other));
+	const auto unreflected = blockAt(10, 12, 41, false);
+	EXPECT_EQ(memo.InView(first, 1.0f, unreflected), BlockInView(first, 1.0f, unreflected));
+	EXPECT_EQ(memo.Tests(), 32u * 32u + 2u);
+	EXPECT_EQ(memo.InView(first, 2.0f, unreflected), BlockInView(first, 2.0f, unreflected));
+	EXPECT_EQ(memo.Tests(), 32u * 32u + 3u);
+	size_t changed = 0;
+	const auto second = viewFrom(2.4f);
+	for (int x = 0; x < 32; ++x)
+	{
+		for (int z = 0; z < 32; ++z)
+		{
+			const auto block = blockAt(x, z, 40, true);
+			const bool inView = memo.InView(second, 1.0f, block);
+			ASSERT_EQ(inView, BlockInView(second, 1.0f, block)) << x << "," << z;
+			changed += inView != BlockInView(first, 1.0f, block) ? 1 : 0;
+		}
+	}
+	EXPECT_EQ(memo.Tests(), 2u * 32u * 32u + 3u);
+	// The second camera sees other blocks, so a kept answer of the first camera would be wrong
+	EXPECT_GT(changed, 0u);
+
+	// A block outside the grid is tested each time
+	const Block outside {.corner = {-160.0f, 320.0f}, .highestAltitude = 10, .reflected = false};
+	EXPECT_EQ(memo.InView(second, 1.0f, outside), BlockInView(second, 1.0f, outside));
+	EXPECT_EQ(memo.InView(second, 1.0f, outside), BlockInView(second, 1.0f, outside));
+	EXPECT_EQ(memo.Tests(), 2u * 32u * 32u + 5u);
+}

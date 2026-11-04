@@ -21,6 +21,7 @@
 #include <glm/vec2.hpp>
 
 #include "ECS/Systems/LandShadeSystemInterface.h"
+#include "Scenery/ObjectDrawList.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
 #error "ECS System implementations should only be included in Locator.cpp"
@@ -57,6 +58,8 @@ public:
 		std::function<LaidLand()> lay;
 		std::function<Registry*()> registry;
 		std::function<const Registry*()> drawn;
+		/// Whether a land block is in view; with none, the system makes the test itself
+		std::function<bool(const glm::mat4&, float, const object_draw_list::Block&)> blockInView;
 	};
 
 	/// The system with the game's textures, terrain and registry
