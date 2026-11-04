@@ -21,6 +21,7 @@
 
 #include <glm/vec2.hpp>
 
+#include "ECS/Systems/SavedStateInterface.h"
 #include "Gui/LoadingScreenRules.h"
 #include "LandChange.h"
 #include "LandMessage.h"
@@ -98,8 +99,9 @@ public:
 };
 
 /// The land of the world: it loads a land, the testbed or a saved land, starts the scripts of the challenge and plays
-/// the turns that are due. The game and the dedicated server use it both. The view of a player does its own parts.
-class LandSystemInterface
+/// the turns that are due. The game and the dedicated server use it both. The view of a player does its own parts. A
+/// save keeps the start place of the camera that the map script gave.
+class LandSystemInterface: public SavedStateInterface
 {
 public:
 	virtual ~LandSystemInterface() = default;

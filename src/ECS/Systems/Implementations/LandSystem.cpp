@@ -61,6 +61,7 @@
 #include "ECS/Map.h"
 #include "ECS/ProfileAlignment.h"
 #include "ECS/RealWeatherLand.h"
+#include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
 #include "ECS/Statistics.h"
 #include "ECS/Systems/AdvisorSystemInterface.h"
@@ -330,6 +331,21 @@ void LandSystem::PutCameraAtStartPlace()
 	const auto focus =
 	    start_camera::FocusOnLand(*_startCameraFocus, Locator::terrainSystem::value().GetHeightAt(*_startCameraFocus));
 	Locator::camera::value().SetFocus(focus).SetOrigin(start_camera::OriginOver(focus));
+}
+
+void LandSystem::SaveState(reflection::BinaryWriter& out) const
+{
+	// A save keeps the start place of the camera, as the game does. A map save of the loaded game writes it.
+	reflection::Save(out, _startCameraFocus);
+	reflection::Save(out, _startCameraPlace);
+}
+
+bool LandSystem::LoadState(reflection::BinaryReader& in)
+{
+	// The camera does not go to the start place: the save keeps the camera
+	reflection::Load(in, _startCameraFocus);
+	reflection::Load(in, _startCameraPlace);
+	return true;
 }
 
 bool LandSystem::IsPlaygroundLand(const std::filesystem::path& path) const
@@ -648,6 +664,10 @@ bool LandSystem::LoadSavedLand(const std::filesystem::path& landPath, const std:
 	}
 	PrepareNewLand(land_change::Kind::SavedGame);
 	_landPath = landPath;
+	// The saved world gives the start place of the camera again. A save from an older version does not keep it, so the
+	// land then has no start place. The name of the fly-by file stays, because the save does not keep it.
+	_startCameraFocus.reset();
+	_startCameraPlace.reset();
 	timer.Step("reset");
 	View().ShowLoadingFrame();
 	try

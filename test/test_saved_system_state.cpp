@@ -53,6 +53,7 @@
 #include "ECS/Systems/Implementations/HelpMessageSystem.h"
 #include "ECS/Systems/Implementations/HelpTextSystem.h"
 #include "ECS/Systems/Implementations/InfluenceSystem.h"
+#include "ECS/Systems/Implementations/LandSystem.h"
 #include "ECS/Systems/Implementations/LiquidParticleSystem.h"
 #include "ECS/Systems/Implementations/MagicShieldSystem.h"
 #include "ECS/Systems/Implementations/MagicSystem.h"
@@ -651,4 +652,33 @@ TEST(SavedSystemState, TheCameraOfTheScriptIsAPresentationValue)
 	EXPECT_EQ(out.PresentationRanges().front().second, out.Size());
 	EXPECT_GT(SyncedBytesAfter(control, 0), 0u);
 	EXPECT_EQ(SyncedBytesAfter(control, out.PresentationRanges().front().first), 0u);
+}
+
+TEST(SavedSystemState, TheStartPlaceOfTheCameraComesBack)
+{
+	LandSystem saved;
+	saved.SetStartCameraPlace({1234.5f, 678.25f}, {123450, 67825});
+	LandSystem loaded;
+	LoadInto(loaded, StateOf(saved));
+	ASSERT_TRUE(loaded.GetStartCameraPlace().has_value());
+	EXPECT_EQ(*loaded.GetStartCameraPlace(), glm::ivec2(123450, 67825));
+}
+
+TEST(SavedSystemState, ALandWithNoStartPlaceOfTheCameraHasNoneAfterALoad)
+{
+	const LandSystem saved;
+	LandSystem loaded;
+	loaded.SetStartCameraPlace({10.0f, 20.0f}, {1000, 2000});
+	LoadInto(loaded, StateOf(saved));
+	EXPECT_FALSE(loaded.GetStartCameraPlace().has_value());
+}
+
+// The name of the fly-by file is not in the save, as in the game: a load keeps the name that the land has
+TEST(SavedSystemState, ALoadKeepsTheNameOfTheFlyByFile)
+{
+	const LandSystem saved;
+	LandSystem loaded;
+	loaded.SetFlyByFile("flyby.txt");
+	LoadInto(loaded, StateOf(saved));
+	EXPECT_EQ(loaded.GetFlyByFile(), "flyby.txt");
 }

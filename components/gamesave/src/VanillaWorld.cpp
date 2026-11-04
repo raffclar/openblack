@@ -554,10 +554,13 @@ void ReadCameraExclusions(WorldReader& r)
 
 void ReadGameTail(WorldReader& r)
 {
-	for (int i = 0; i < 5; ++i)
+	for (int i = 0; i < 3; ++i)
 	{
 		r.Word();
 	}
+	// The influence multipliers that the land's script gives the players' citadels and the towns
+	r.Float("playerInfluenceMultiplier");
+	r.Float("townInfluenceMultiplier");
 	r.Float("visualTime");
 	// The cycle of day and night: the seconds of a day, the part of it that changes, the part that is night, and the
 	// rate that the clock runs at
@@ -602,7 +605,8 @@ void ReadGameTail(WorldReader& r)
 	{
 		r.Word();
 	}
-	r.Bytes(32);
+	// The eight land balances
+	r.Bytes(32, "landBalance");
 	ReadHand(r);
 	r.Refs("music");
 	r.Word();
