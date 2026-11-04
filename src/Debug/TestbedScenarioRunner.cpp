@@ -4979,7 +4979,6 @@ void Runner::Give(const Command& command)
 	case Kind::SetHour:
 	case Kind::RestoreDeviceInDomeFollow:
 	case Kind::RestoreDevice:
-	case Kind::RestoreDevice:
 	case Kind::PutLoadedArena:
 	case Kind::HoldSeed:
 	case Kind::DrawGesture:
