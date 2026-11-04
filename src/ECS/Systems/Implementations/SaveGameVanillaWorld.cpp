@@ -32,16 +32,22 @@
 #include "ECS/Archetypes/VillagerArchetype.h"
 #include "ECS/BuildingSites.h"
 #include "ECS/Components/Abode.h"
+#include "ECS/Components/Animal.h"
 #include "ECS/Components/AtHome.h"
 #include "ECS/Components/Breeding.h"
 #include "ECS/Components/ComputerPlayer.h"
 #include "ECS/Components/Construction.h"
+#include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureDance.h"
 #include "ECS/Components/CreatureLeash.h"
 #include "ECS/Components/Dance.h"
 #include "ECS/Components/Disciple.h"
 #include "ECS/Components/Field.h"
+#include "ECS/Components/Fire.h"
 #include "ECS/Components/Footpath.h"
+#include "ECS/Components/LivingReaction.h"
+#include "ECS/Components/MagicForest.h"
+#include "ECS/Components/MagicShield.h"
 #include "ECS/Components/MiracleImpression.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Player.h"
@@ -51,8 +57,10 @@
 #include "ECS/Components/Scaffold.h"
 #include "ECS/Components/ScriptAnimation.h"
 #include "ECS/Components/ScriptStateArguments.h"
+#include "ECS/Components/Spell.h"
 #include "ECS/Components/SpellIcon.h"
 #include "ECS/Components/StoragePit.h"
+#include "ECS/Components/TeleportStone.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/TownArtefact.h"
@@ -74,6 +82,7 @@
 #include "ECS/Systems/ArtefactSystemInterface.h"
 #include "ECS/Systems/DanceSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
+#include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/SpellIconSystemInterface.h"
 #include "ECS/Systems/TempleDestructionSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
@@ -85,6 +94,7 @@
 #include "ECS/TempleConstruction.h"
 #include "ECS/ThingCircles.h"
 #include "ECS/VanillaPlayerImport.h"
+#include "ECS/VanillaReactionImport.h"
 #include "ECS/VanillaScriptImport.h"
 #include "ECS/VanillaWorldImport.h"
 #include "ECS/WallHugRules.h"
@@ -98,6 +108,7 @@ using namespace openblack;
 using namespace openblack::ecs::components;
 using namespace openblack::ecs::systems;
 namespace world_import = openblack::ecs::vanilla_world_import;
+namespace vanilla_reaction_import = openblack::ecs::vanilla_reaction_import;
 using openblack::ecs::systems::vanilla_import::EntityOf;
 using openblack::ecs::systems::vanilla_import::GroundPosition;
 using openblack::ecs::systems::vanilla_import::PutMoveTag;
@@ -1413,13 +1424,6 @@ bool SaveGameSystem::ImportVanillaTowns(const gamesave::VanillaWorld& world, Van
 void SaveGameSystem::ImportVanillaDances(const VanillaDances& dances, VanillaMade& made)
 {
 	auto& registry = Locator::entitiesRegistry::value();
-	for (const auto number : dances.dances.notMade)
-	{
-		SPDLOG_LOGGER_WARN(ImportLog(),
-		                   "The dance {} of the file is for a reaction, which the "
-		                   "import does not make, so the dance is not made",
-		                   number);
-	}
 	if (!Locator::danceSystem::has_value() || !Locator::infoConstants::has_value())
 	{
 		return;
@@ -1656,4 +1660,128 @@ void SaveGameSystem::ImportVanillaPlayers(const gamesave::VanillaWorld& world)
 		SPDLOG_LOGGER_INFO(ImportLog(), "The player {} takes the computer god of the file (switched on {}, started {})",
 		                   static_cast<int>(name), god.switchedOn, god.started);
 	}
+}
+
+namespace
+{
+
+/// The thing that the living react to, as the import made it. None when the import did not make it, or when another
+/// system keeps the reaction of the thing: a fire, a miracle, a shield, a teleport stone or the control of a missionary.
+/// The import makes none of these.
+std::optional<vanilla_reaction_import::Initiator> InitiatorOf(const ecs::Registry& registry, entt::entity entity)
+{
+	if (entity == entt::null || !registry.Valid(entity) ||
+	    registry.AnyOf<Fire, Spell, MagicShield, TeleportStone, MissionaryControl>(entity))
+	{
+		return std::nullopt;
+	}
+	const auto* transform = registry.TryGet<const Transform>(entity);
+	if (transform == nullptr)
+	{
+		return std::nullopt;
+	}
+	// A thing in the world is as impressive as the table row of its kind. A magic tree keeps the value of its miracle. The
+	// reactions of a creature do not have its impressiveness yet, as when a creature makes a reaction.
+	float impressiveValue = 0.0f;
+	if (const auto* tree = registry.TryGet<const MagicTree>(entity))
+	{
+		impressiveValue = tree->impressiveValue;
+	}
+	else if (!registry.AllOf<Creature>(entity))
+	{
+		const auto* info = ecs::world_objects::InfoOf(entity);
+		impressiveValue = info != nullptr ? info->impressiveValue : 0.0f;
+	}
+	return vanilla_reaction_import::Initiator {
+	    .entity = entity, .position = transform->position, .impressiveValue = impressiveValue};
+}
+
+} // namespace
+
+void SaveGameSystem::ImportVanillaReactions(const gamesave::VanillaWorld& world, const VanillaMade& made)
+{
+	if (!Locator::reactionSystem::has_value())
+	{
+		return;
+	}
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto data = world.GameData();
+	const uint32_t turn = data.has_value() ? data->gameTurn : 0;
+	const auto living = [&](uint32_t number) {
+		const auto entity = EntityOf(made, number);
+		return entity != entt::null && registry.Valid(entity) ? entity : entt::null;
+	};
+	// Each living thing that the import made remembers the kinds of reaction that it took up. A living thing that
+	// remembers nothing gets no record.
+	for (const auto& record : world.Records())
+	{
+		const auto entity = living(record.number);
+		auto entries = vanilla_reaction_import::ReadMemory(world, record);
+		if (entity == entt::null || entries.empty())
+		{
+			continue;
+		}
+		if (registry.AllOf<Villager>(entity))
+		{
+			auto* memory = registry.TryGet<VillagerReactionMemory>(entity);
+			if (memory == nullptr)
+			{
+				memory = &registry.Assign<VillagerReactionMemory>(entity);
+			}
+			memory->memory.SetRecords(entries);
+		}
+		else if (registry.AnyOf<Creature, Animal>(entity))
+		{
+			auto* state = registry.TryGet<LivingReaction>(entity);
+			if (state == nullptr)
+			{
+				state = &registry.Assign<LivingReaction>(entity);
+			}
+			state->creatureMemory.SetRecords(entries);
+		}
+	}
+	// Each reaction of the file comes from the thing that the import made for its target
+	const auto files = vanilla_reaction_import::ReadReactions(world);
+	std::vector<ReactionSystemInterface::Restored> restored;
+	std::vector<const vanilla_reaction_import::ImportedReaction*> kept;
+	for (const auto& file : files)
+	{
+		const auto initiator = InitiatorOf(registry, living(file.target));
+		if (file.type >= vanilla_reaction_import::k_ReactionKinds || !initiator.has_value())
+		{
+			SPDLOG_LOGGER_WARN(ImportLog(),
+			                   "The reaction {} of the file is of the kind {} for the thing {}, which the import does not "
+			                   "make, so the reaction is not made",
+			                   file.number, file.type, file.target);
+			// Its dance stops at once, and its dancers decide again
+			if (const auto dance = living(file.dance);
+			    dance != entt::null && registry.AllOf<Dance>(dance) && Locator::danceSystem::has_value())
+			{
+				Locator::danceSystem::value().Destroy(dance);
+			}
+			continue;
+		}
+		ReactionSystemInterface::Restored reaction {.reaction = vanilla_reaction_import::ActiveOf(file, *initiator, turn)};
+		for (const auto number : file.takers)
+		{
+			if (const auto taker = living(number); taker != entt::null)
+			{
+				reaction.takers.push_back(taker);
+			}
+		}
+		restored.push_back(std::move(reaction));
+		kept.push_back(&file);
+	}
+	auto& reactions = Locator::reactionSystem::value();
+	const auto ids = reactions.Restore(restored, turn);
+	// Each reaction takes its dance
+	for (size_t i = 0; i < ids.size() && i < kept.size(); ++i)
+	{
+		if (const auto dance = living(kept[i]->dance); dance != entt::null && registry.AllOf<Dance>(dance))
+		{
+			reactions.SetDance(ids[i], dance);
+		}
+	}
+	SPDLOG_LOGGER_INFO(ImportLog(), "Imported {} reactions of the game's file ({} not made) at turn {}", ids.size(),
+	                   files.size() - ids.size(), turn);
 }
