@@ -371,6 +371,57 @@ def read_save(options, slot):
         return file.read()
 
 
+def load_partings(dialogue, computer_gods):
+    """The rules of the original game by which a run that loads at this turn parts from the run with no load. An empty
+    list: the runs must agree.
+    - help_text: a help text shows and is not read yet. The load shows the kept texts again, and the newest text reads
+      again from the load. A script that waits until the text is read goes on later (vanilla-bugs, Kept).
+    - computer_gods: a computer god plays. The load starts its mind again with only the parts that a saved game keeps."""
+    partings = []
+    dialogue = dialogue or {}
+    if dialogue.get("text") and dialogue.get("started") and not dialogue.get("text_read"):
+        partings.append({"rule": "help_text", "text": dialogue.get("text"), "owner": dialogue.get("owner"),
+                         "start_turn": dialogue.get("start_turn"), "end_turn": dialogue.get("end_turn")})
+    if computer_gods:
+        partings.append({"rule": "computer_gods", "gods": sorted(computer_gods)})
+    return partings
+
+
+def computer_gods_on(game):
+    """The entities of the players whose computer god plays"""
+    try:
+        found = game.call("ecs.entities", {"component": "ComputerPlayer", "limit": 500})
+    except RuntimeError as error:
+        # A land where no player ever had a computer god has no such component at all
+        if "no component" in str(error):
+            return []
+        raise
+    entities = found
+    if isinstance(found, dict):
+        entities = next((value for value in found.values() if isinstance(value, list)), [])
+    gods = []
+    for entity in entities:
+        answer = game.call("ecs.entity", {"id": entity["id"], "components": ["ComputerPlayer"]})
+        if (answer.get("data", {}).get("ComputerPlayer") or {}).get("switchedOn"):
+            gods.append(entity["id"])
+    return gods
+
+
+def partings_at(game):
+    """The load partings of the game at its turn now (see load_partings)"""
+    return load_partings(game.call("help.dialogue"), computer_gods_on(game))
+
+
+def partings_of_run(options, name):
+    """The load partings that the run's driver noted at its load, from its actions file"""
+    try:
+        with open(os.path.join(options.out, f"{name}.actions.json"), encoding="utf-8") as file:
+            actions = json.load(file)
+    except (OSError, ValueError):
+        return []
+    return [parting for action in actions for parting in action.get("partings", [])]
+
+
 def save_and_load(game, options):
     """Saves the game, then loads that save and saves again in the same call: the two saved worlds as bytes"""
     # A scenario can load a land of its own; the save waits until the game is ready again
@@ -419,8 +470,10 @@ def run_once(options, name, fast, until_turn, load_at=None, load=True):
             def load_there(turn):
                 if not load:
                     return {"turn": turn, "did": "stop"}
+                partings = partings_at(game)
                 first, again = save_and_load(game, options)
-                return {"turn": turn, "did": "save and load", "save_differs": save_diff.compare_files(first, again)}
+                return {"turn": turn, "did": "save and load", "save_differs": save_diff.compare_files(first, again),
+                        "partings": partings}
 
             actions = drive_to(game, until_turn, [load_at], load_there)
         elif driven:
@@ -583,8 +636,12 @@ def command_repeat(options):
         result["exit_codes"] = [first[2], other[2]]
         # Information only: some saved fields follow the graphics card's handles, not the game (see the handover)
         result["save_differs"] = compare_exit_saves(first_save, keep_exit_save(options, f"repeat-{index}"))
+        # A load check: the rules of the original game by which this load parts the runs, if any
+        if options.load_at is not None:
+            result["partings"] = partings_of_run(options, f"repeat-{index}")
         results.append(result)
-        shown = ("run", "same", "turn", "differs", "parts", "draws_last", "save_differs", "frame_ms", "draw_every")
+        shown = ("run", "same", "turn", "differs", "parts", "draws_last", "save_differs", "partings", "frame_ms",
+                 "draw_every")
         print(json.dumps({key: result.get(key) for key in shown}), flush=True)
     divergences = [result for result in results if not result["same"]]
     unregistered = sim_report.unregistered_in_files(first[0], first[1], *repeated_files)
@@ -600,7 +657,8 @@ def command_repeat(options):
         "frames": frames,
         "divergences": len(divergences),
         "diverged": [{key: result.get(key) for key in ("run", "turn", "frame", "differs", "seeds", "draws", "hash",
-                                                         "counts", "parts", "draws_last", "first_by_part")}
+                                                         "counts", "parts", "draws_last", "first_by_part",
+                                                         "partings")}
                      for result in divergences],
         "results": results,
     })

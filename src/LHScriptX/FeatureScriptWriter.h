@@ -35,8 +35,8 @@ struct Name
 	std::string text;
 };
 /// One argument of a command, in the order of the command's list of kinds: a place ('A'), a number with a fraction
-/// ('F'), a name ('L') or a whole number ('N')
-using Argument = std::variant<Place, float, Name, int32_t>;
+/// ('F', a float or a double), a name ('L') or a whole number ('N')
+using Argument = std::variant<Place, float, Name, int32_t, double>;
 
 /// The text of a place on the map, given in map units: x and z each times 10, rounded to a float, divided by 65536 and
 /// written with two decimals, separated by a comma and in quotes

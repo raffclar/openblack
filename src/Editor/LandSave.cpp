@@ -63,6 +63,85 @@ std::string FeatureText(const FeatureLine& feature)
 	return writer::CommandLine("CREATE_NEW_FEATURE", "ALNNN", arguments);
 }
 
+std::string MobileStaticText(const MobileStaticLine& thing)
+{
+	const std::array<writer::Argument, 7> arguments {
+	    writer::Place {writer::PlaceText(thing.place)},
+	    thing.row,
+	    thing.altitude,
+	    thing.angles.x,
+	    thing.angles.y,
+	    thing.angles.z,
+	    thing.scale,
+	};
+	return writer::CommandLine("CREATE_MOBILE_STATIC", "ANFFFFF", arguments);
+}
+
+std::string MobileObjectText(const MobileObjectLine& thing)
+{
+	// The game holds 1000 as a float, and each product rounds to a float before it is cut
+	constexpr double k_Thousandths = 1000.0;
+	const std::array<writer::Argument, 4> arguments {
+	    writer::Place {writer::PlaceText(thing.place)},
+	    thing.row,
+	    static_cast<int32_t>(x87::Mul(thing.yAngle, k_Thousandths)),
+	    static_cast<int32_t>(x87::Mul(thing.scale, k_Thousandths)),
+	};
+	return writer::CommandLine("CREATE_MOBILEOBJECT", "ANNN", arguments);
+}
+
+std::string VillagerText(const VillagerLine& villager)
+{
+	const writer::Place place {writer::PlaceText(villager.place)};
+	if (villager.special)
+	{
+		const std::array<writer::Argument, 4> arguments {villager.town, place, villager.row, villager.age};
+		return writer::CommandLine("CREATE_SPECIAL_TOWN_VILLAGER", "NANN", arguments);
+	}
+	if (villager.door.has_value())
+	{
+		const std::array<writer::Argument, 4> arguments {
+		    writer::Place {writer::PlaceText(*villager.door)},
+		    place,
+		    writer::Name {villager.name},
+		    villager.age,
+		};
+		return writer::CommandLine("CREATE_VILLAGER_POS", "AALN", arguments);
+	}
+	// The command takes a place as its third argument, thus the name has no quotes
+	const std::array<writer::Argument, 4> arguments {villager.town, place, writer::Place {villager.name}, villager.age};
+	return writer::CommandLine("CREATE_TOWN_VILLAGER", "NAAN", arguments);
+}
+
+std::string DispenserText(const DispenserLine& dispenser)
+{
+	const std::array<writer::Argument, 7> arguments {
+	    dispenser.town,
+	    writer::Place {writer::PlaceText(dispenser.place)},
+	    writer::Name {dispenser.building},
+	    writer::Name {dispenser.miracle},
+	    dispenser.yAngle,
+	    dispenser.scale,
+	    static_cast<double>(dispenser.period),
+	};
+	return writer::CommandLine("CREATE_SPELL_DISPENSER", "NALLFFF", arguments);
+}
+
+std::string OneShotMiracleText(glm::ivec2 place, std::string_view miracle)
+{
+	const std::array<writer::Argument, 2> arguments {
+	    writer::Place {writer::PlaceText(place)},
+	    writer::Name {std::string(miracle)},
+	};
+	return writer::CommandLine("CREATE_ONE_SHOT_SPELL_PU", "AL", arguments);
+}
+
+std::string CreatureText(glm::ivec2 place, int32_t row, int32_t player)
+{
+	const std::array<writer::Argument, 3> arguments {writer::Place {writer::PlaceText(place)}, row, player};
+	return writer::CommandLine("CREATE_CREATURE", "ANN", arguments);
+}
+
 std::string StreamText(int32_t id, std::span<const glm::ivec2> places)
 {
 	std::string text = writer::CommandLine("CREATE_STREAM", "N", std::array<writer::Argument, 1> {id});
