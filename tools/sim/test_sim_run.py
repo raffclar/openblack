@@ -127,6 +127,21 @@ class LoadReplayTests(unittest.TestCase):
         self.assertEqual(sim_run.repeat_extra(2, ["--x"], "c.jsonl", False, None), ["--x"])
 
 
+class LoadPartingTests(unittest.TestCase):
+    def test_a_help_text_that_is_not_read_parts_the_runs(self):
+        dialogue = {"text": 662, "started": True, "text_read": False, "owner": 70, "start_turn": 169, "end_turn": 217}
+        self.assertEqual(sim_run.load_partings(dialogue, []),
+                         [{"rule": "help_text", "text": 662, "owner": 70, "start_turn": 169, "end_turn": 217}])
+
+    def test_a_read_text_or_an_empty_box_does_not_part_the_runs(self):
+        self.assertEqual(sim_run.load_partings({"text": 662, "started": True, "text_read": True}, []), [])
+        self.assertEqual(sim_run.load_partings({"text": 0, "started": False, "text_read": False}, []), [])
+        self.assertEqual(sim_run.load_partings(None, []), [])
+
+    def test_a_computer_god_that_plays_parts_the_runs(self):
+        self.assertEqual(sim_run.load_partings({}, [6, 5]), [{"rule": "computer_gods", "gods": [5, 6]}])
+
+
 class FramesTests(unittest.TestCase):
     def test_each_item_gives_the_frame_time_and_the_draw_every(self):
         self.assertEqual(sim_run.parse_frames("10, 17,20:1"), [(10, 0), (17, 0), (20, 1)])
