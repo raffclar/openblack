@@ -3458,9 +3458,11 @@ void Trample(ecs::Registry& registry, entt::entity only)
 			               : transform.position;
 		    };
 		    const auto size = ShownSize(body);
-		    if (!(spheres->seen == start))
+		    if (spheres->slapped || !(spheres->seen == start))
 		    {
-			    const auto change = creature_stomp::SwitchFor(start);
+			    // A slap turns the spheres on as its reaction starts, whatever the body action is
+			    const auto change = spheres->slapped ? creature_stomp::Switch::On : creature_stomp::SwitchFor(start);
+			    spheres->slapped = false;
 			    spheres->seen = start;
 			    if (change == creature_stomp::Switch::On)
 			    {

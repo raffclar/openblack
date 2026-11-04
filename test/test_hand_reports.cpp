@@ -31,6 +31,7 @@
 #include "Creature/CreatureLayers.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
+#include "ECS/Components/CreatureDestruction.h"
 #include "ECS/Components/CreatureSpells.h"
 #include "ECS/Components/GodHand.h"
 #include "ECS/Components/Hand.h"
@@ -334,6 +335,32 @@ TEST_F(ReportedHands, TheTurnPlaysTheReactionThatAPlayerSent)
 	Locator::creatureMindSystem::reset();
 }
 
+// In a game alone, a slap that the creature takes turns the spheres of its body on. A stroke does not.
+TEST_F(ReportedHands, ASlapInAGameAloneTurnsTheSpheresOfTheBodyOn)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	ReactingMinds minds;
+	Locator::creatureMindSystem::reset(&minds, [](ecs::systems::CreatureMindSystemInterface* /*unowned*/) {});
+	const auto creature = registry.Create();
+	registry.Assign<ecs::components::Creature>(creature, ecs::components::Creature {.owner = PlayerNames::PLAYER_ONE});
+	registry.Assign<ecs::components::CreatureAnimation>(creature);
+	ecs::systems::CreatureHandSystem creatures;
+	creatures.DoReaction(PlayerNames::PLAYER_ONE,
+	                     CreatureReaction {.creature = creature,
+	                                       .animation = 37,
+	                                       .interruptsAfter = creature_feedback::k_StrokeInterruptsAfter,
+	                                       .slap = false});
+	EXPECT_FALSE(registry.AllOf<ecs::components::CreatureDestruction>(creature));
+	creatures.DoReaction(PlayerNames::PLAYER_ONE, CreatureReaction {.creature = creature,
+	                                                                .animation = 165,
+	                                                                .interruptsAfter = creature_feedback::k_SlapInterruptsAfter,
+	                                                                .slap = true});
+	ASSERT_EQ(minds.forced.size(), 2u);
+	ASSERT_TRUE(registry.AllOf<ecs::components::CreatureDestruction>(creature));
+	EXPECT_TRUE(registry.Get<const ecs::components::CreatureDestruction>(creature).slapped);
+	Locator::creatureMindSystem::reset();
+}
+
 // The hand of this computer strokes the creature: the face shows at once on this computer only, and the world does not
 // have it. A stroke that the body refuses sends nothing.
 TEST_F(ReportedHands, AStrokeShowsItsFaceOnlyHereAndARefusedStrokeSendsNothing)
@@ -351,7 +378,7 @@ TEST_F(ReportedHands, AStrokeShowsItsFaceOnlyHereAndARefusedStrokeSendsNothing)
 	ecs::systems::CreatureHandSystem creatures;
 
 	minds.bodyTakes = false;
-	EXPECT_FALSE(creatures.React(creature, 158, false, grimace, creature_feedback::k_StrokeInterruptsAfter));
+	EXPECT_FALSE(creatures.React(creature, 158, false, grimace, creature_feedback::k_StrokeInterruptsAfter, false));
 	EXPECT_EQ(commands.PendingCount(), 0u);
 	const auto* shown = registry.TryGet<const ecs::components::ShownCreatureFace>(creature);
 	ASSERT_NE(shown, nullptr);
@@ -361,7 +388,7 @@ TEST_F(ReportedHands, AStrokeShowsItsFaceOnlyHereAndARefusedStrokeSendsNothing)
 
 	// The body takes the next stroke: the command has the body action, and the face stays on this computer
 	minds.bodyTakes = true;
-	EXPECT_TRUE(creatures.React(creature, 158, false, grimace, creature_feedback::k_StrokeInterruptsAfter));
+	EXPECT_TRUE(creatures.React(creature, 158, false, grimace, creature_feedback::k_StrokeInterruptsAfter, false));
 	EXPECT_EQ(commands.PendingCount(), 1u);
 	EXPECT_EQ(registry.Get<const ecs::components::CreatureAnimation>(creature).face, creature_layers::FaceLayer {});
 	EXPECT_TRUE(minds.forced.empty());

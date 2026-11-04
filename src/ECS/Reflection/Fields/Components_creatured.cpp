@@ -39,7 +39,8 @@ void openblack::ecs::reflection::RegisterFields_Components_creatured(entt::meta_
 	    .Field<&components::CreatureDestruction::on>("on")
 	    .Field<&components::CreatureDestruction::last>("last")
 	    .Field<&components::CreatureDestruction::radius>("radius")
-	    .Field<&components::CreatureDestruction::seen>("seen");
+	    .Field<&components::CreatureDestruction::seen>("seen")
+	    .Field<&components::CreatureDestruction::slapped>("slapped");
 	Reflect<components::CreatureDrawnFeet>(context)
 	    .Field<&components::CreatureDrawnFeet::right>("right")
 	    .Field<&components::CreatureDrawnFeet::left>("left");

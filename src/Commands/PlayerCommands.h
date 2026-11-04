@@ -246,6 +246,8 @@ struct CreatureReaction
 	bool mirrored;
 	/// The share of the way through what the body plays that the reaction can stop it at
 	double interruptsAfter;
+	/// The reaction is to a slap, not to a stroke
+	bool slap {false};
 };
 
 /// A click of the hand in a network game: the turn writes the click that the scripts read, so that the scripts of

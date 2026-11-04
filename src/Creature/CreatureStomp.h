@@ -184,6 +184,15 @@ struct BodyStart
 /// The spheres come on as the creature lies down to sleep, gets up from sleep, falls in a faint, and starts a fight or
 /// a cast in a fight. They go off as it sleeps, lies in a faint, takes its stance in a fight, or stands.
 [[nodiscard]] Switch SwitchFor(const BodyStart& start);
+/// A slap of the hand that the creature takes also turns the spheres on, but only when one human is in the game. This
+/// is true in a game alone, and in a network game that has one human in it. A stroke never turns them on.
+/// @param networkGame The game is a network game
+/// @param humansInNetworkGame In a network game, the humans in it: the humans of the gods that did not leave, and the
+/// observers
+[[nodiscard]] constexpr bool SlapTurnsSpheresOn(bool networkGame, size_t humansInNetworkGame) noexcept
+{
+	return !networkGame || humansInNetworkGame == 1;
+}
 
 /// A part of the body knocks things only when it moved further than this number of times the size of the creature since
 /// its last check

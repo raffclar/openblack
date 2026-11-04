@@ -58,9 +58,10 @@ public:
 	void DoReaction(PlayerNames player, const player_commands::CreatureReaction& reaction) override;
 	/// The held creature reacts to a stroke or a slap. This computer shows the face of a stroke at once. The body action
 	/// plays at once with no commands, else at a later turn on every computer. A reaction that the creature refuses does
-	/// nothing more. Returns whether the creature takes the reaction now.
+	/// nothing more. Returns whether the creature takes the reaction now. A slap that the creature takes can turn the
+	/// spheres of its body on.
 	bool React(entt::entity creature, size_t animation, bool mirrored, std::optional<creature_face::Request> face,
-	           double interruptsAfter);
+	           double interruptsAfter, bool slap);
 	[[nodiscard]] bool IsHeldByCommand() const override;
 	[[nodiscard]] std::optional<entt::entity> CreatureUnderCursor() const override;
 	[[nodiscard]] float GetFeedbackSum() const override;
