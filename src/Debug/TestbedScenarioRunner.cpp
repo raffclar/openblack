@@ -4257,6 +4257,17 @@ void Runner::Give(const Command& command)
 		Log(fmt::format("{:.1f}s: the graphics device is made again when the dome next follows the sky", _seconds));
 		return;
 	}
+	if (command.kind == Kind::RestoreDevice)
+	{
+		const bool lose = command.value == 1;
+		if (Locator::rendererRequests::has_value())
+		{
+			Locator::rendererRequests::value().RequestDeviceRestore(lose ? graphics::device_restore::Request::Lose
+			                                                             : graphics::device_restore::Request::MakeAgain);
+		}
+		Log(fmt::format("{:.1f}s: the graphics device is {}", _seconds, lose ? "lost and made again" : "made again"));
+		return;
+	}
 	if (command.kind == Kind::SetHour)
 	{
 		if (Locator::skyClockSystem::has_value())
