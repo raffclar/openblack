@@ -158,11 +158,12 @@ TEST(ScriptNativesRows6, AWaitForWoodWalkCountsTheHeightInTheDistance)
 	EXPECT_FLOAT_EQ(goal.z, 4.0f + 4.0f);
 }
 
-TEST(ScriptNativesRows6, OnlyWindowsTellsTheButtonsOfTheMouse)
+TEST(ScriptNativesRows6, OtherSystemsGiveThreeButtonsAndWindowsAsksItsSystem)
 {
 	using platform_mouse::System;
 	EXPECT_EQ(platform_mouse::SystemMouseButtonsFor(System::Windows, 3), 3u);
 	EXPECT_EQ(platform_mouse::SystemMouseButtonsFor(System::Windows, 0), 0u);
 	EXPECT_EQ(platform_mouse::SystemMouseButtonsFor(System::Windows, -1), 0u);
-	EXPECT_EQ(platform_mouse::SystemMouseButtonsFor(System::Other, 5), 0u);
+	EXPECT_EQ(platform_mouse::SystemMouseButtonsFor(System::Other, 5), 3u);
+	EXPECT_EQ(platform_mouse::SystemMouseButtonsFor(System::Other, 0), 3u);
 }

@@ -59,5 +59,16 @@ TEST(ScriptPlaceText, ATextInADifferentFormIsNotAPlace)
 	EXPECT_FALSE(ReadScriptPlace("1").has_value());
 	EXPECT_FALSE(ReadScriptPlace("1,2x").has_value());
 	EXPECT_FALSE(ReadScriptPlace("1,2,3x").has_value());
-	EXPECT_FALSE(ReadScriptPlace("1,2,3,4").has_value());
+}
+
+TEST(ScriptPlaceText, NumbersAfterTheThirdAreNotRead)
+{
+	const auto place = ReadScriptPlace("1,2,3,4");
+	ASSERT_TRUE(place.has_value());
+	EXPECT_EQ(place->metres, glm::vec2(1.0f, 2.0f));
+	EXPECT_EQ(place->onMap.altitude, 3.0f);
+	const auto many = ReadScriptPlace("1,2,3,4,5,6");
+	ASSERT_TRUE(many.has_value());
+	EXPECT_EQ(many->onMap, place->onMap);
+	EXPECT_FALSE(ReadScriptPlace("1,2,3x,4").has_value());
 }
