@@ -105,6 +105,10 @@ glm::vec4 LandTexelsUniform(int blockTexels);
 /// changes; none without snow
 const Texture2D* SnowDepth(std::unique_ptr<Texture2D>& texture, std::optional<uint32_t>& revision);
 
+/// The land's light a creature, its eyes and its hair take: halved in the sea's reflection, as the game halves every
+/// level of the land's light while it draws the reflection
+float CreatureLandLightScale(RenderPass viewId);
+
 /// A view drawing into a target a texel for each of the land's cell corners, in texels, a row for each cell along z,
 /// whichever way up the backend keeps its targets. Its draws are kept in order.
 bgfx::ViewId SetUpLandView(RenderPass pass, const FrameBuffer& frameBuffer, glm::u16vec2 size);
