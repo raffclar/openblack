@@ -23,6 +23,11 @@ namespace openblack::ecs::components
 struct LivingAction;
 }
 
+namespace openblack::map_coords
+{
+struct MapCoords;
+}
+
 /// A villager's day around its home: deciding what to do, going home, staying in and sleeping, sitting about, lying
 /// down in the open when it has no home to go to, gathering in an emergency, and coming out when its home is knocked on
 /// or hurt. Villagers take up what their town wants most that they can serve; at night that is sleep, which sends them
@@ -44,6 +49,9 @@ enum class WalkWay : uint8_t
 bool SetupMoveTo(components::LivingAction& action, glm::vec2 goal, VillagerStates final, WalkWay way = WalkWay::RoundThings);
 /// The same for a goal in whole map units, which the walk keeps as it is
 bool SetupMoveTo(components::LivingAction& action, glm::ivec2 goal, VillagerStates final, WalkWay way = WalkWay::RoundThings);
+/// The same for a goal with a height above the land: the walk keeps the height for the scripts that ask for its goal
+bool SetupMoveTo(components::LivingAction& action, const map_coords::MapCoords& goal, VillagerStates final,
+                 WalkWay way = WalkWay::RoundThings);
 /// Whether the villager is closer to a point than the step its walk makes in a turn, at the speed it walks
 bool AreWeThere(entt::entity villager, glm::vec2 point);
 /// The same for a point in whole map units
@@ -52,6 +60,8 @@ bool AreWeThere(entt::entity villager, glm::ivec2 point);
 void SetupMobileMoveTo(components::LivingAction& action, glm::vec2 goal, WalkWay way = WalkWay::RoundThings);
 /// The same for a goal in whole map units, which the walk keeps as it is
 void SetupMobileMoveTo(components::LivingAction& action, glm::ivec2 goal, WalkWay way = WalkWay::RoundThings);
+/// The same for a goal with a height above the land, which the walk keeps
+void SetupMobileMoveTo(components::LivingAction& action, const map_coords::MapCoords& goal, WalkWay way = WalkWay::RoundThings);
 /// Whether the villager's walk has put it on a goal
 [[nodiscard]] bool WalkIsOverAt(entt::entity villager, glm::vec2 goal);
 /// The same for a goal in whole map units, as the walk keeps it

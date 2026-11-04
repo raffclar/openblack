@@ -22,6 +22,7 @@
 #include <glm/geometric.hpp>
 #include <glm/gtx/vec_swizzle.hpp>
 
+#include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
@@ -318,12 +319,21 @@ void StrollOn(LivingAction& action, entt::entity creche)
 	                                       here == ecs::wall_hug::ToWhole(door), GameInt());
 	person.crechePath = static_cast<int16_t>(leg.stroll.path);
 	person.crecheLeg = static_cast<int16_t>(leg.stroll.leg);
-	glm::vec2 goal = door;
-	if (leg.point.has_value())
+	if (!leg.point.has_value())
 	{
-		goal = creche::Strayed(creches::PathPoint(creche, *leg.point).value_or(door), GameFloat());
+		villager_home::SetupMoveTo(action, door, VillagerStates::ChildAtCreche);
+		return;
 	}
-	villager_home::SetupMoveTo(action, goal, VillagerStates::ChildAtCreche);
+	const auto point = creches::PathPoint(creche, *leg.point);
+	if (!point.has_value())
+	{
+		villager_home::SetupMoveTo(action, creche::Strayed(door, GameFloat()), VillagerStates::ChildAtCreche);
+		return;
+	}
+	// The child strays from the point on the land only. The goal keeps the height of the marker above the land there.
+	const auto goal = creche::Strayed(glm::xz(*point), GameFloat());
+	villager_home::SetupMoveTo(action, map_coords::FromWorld(Locator::terrainSystem::value(), {goal.x, point->y, goal.y}),
+	                           VillagerStates::ChildAtCreche);
 }
 
 /// The sound of children at play at the crèche

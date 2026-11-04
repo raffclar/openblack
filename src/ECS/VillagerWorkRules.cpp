@@ -49,15 +49,16 @@ glm::vec2 villager_work::BigForestArrivePosition(glm::vec2 bigForest, glm::vec2 
 	return TowardsVillager(bigForest, villager, radius * k_BigForestArriveShare);
 }
 
-glm::vec2 villager_work::WaitForWoodPosition(glm::vec3 villager, glm::vec3 building, float random)
+glm::vec3 villager_work::WaitForWoodPosition(glm::vec3 villager, glm::vec3 building, float random)
 {
 	// Each step rounds to a float, in the game's order: the length adds the squares of z, y and x
 	const glm::vec3 away = villager - building;
 	const float length = std::sqrt((away.z * away.z) + (away.y * away.y) + (away.x * away.x));
 	const float scale = (random + 2.0f) / length;
 	const float x = away.x * scale;
+	const float y = away.y * scale;
 	const float z = away.z * scale;
-	return {x + villager.x, z + villager.z};
+	return {x + villager.x, y + villager.y, z + villager.z};
 }
 
 bool villager_work::Touching(float distanceToPoint, float villagerRadius, float speedInMetres)

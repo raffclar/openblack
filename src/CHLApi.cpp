@@ -3229,11 +3229,12 @@ void MoveGameThing() // 033 MOVE_GAME_THING
 	}
 	if (IsDirectableVillager(object))
 	{
-		// One in a hand, in the air or drowning stays where it is
+		// One in a hand, in the air or drowning stays where it is. The goal keeps the height of the script's point above
+		// the land, so a point with no height gives a goal below the land.
 		auto& living = Locator::livingActionSystem::value();
 		if (living.VillagerCanBeDirected(object))
 		{
-			living.VillagerScriptMoveTo(object, glm::vec2(position.x, position.z));
+			living.VillagerScriptMoveTo(object, map_coords::FromWorld(Locator::terrainSystem::value(), position));
 		}
 		return;
 	}

@@ -1663,7 +1663,7 @@ void LivingActionSystem::VillagerSetScriptState(entt::entity villager, VillagerS
 	villager_script::SetScriptState(villager, state);
 }
 
-void LivingActionSystem::VillagerScriptMoveTo(entt::entity villager, glm::vec2 goal) const
+void LivingActionSystem::VillagerScriptMoveTo(entt::entity villager, const map_coords::MapCoords& goal) const
 {
 	villager_script::MoveTo(villager, goal);
 }

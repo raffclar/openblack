@@ -327,13 +327,18 @@ const std::vector<FootballSystem::GoalBox>& FootballSystem::Goals()
 
 glm::vec3 FootballSystem::GoalPosition(entt::entity pitch, uint32_t goal)
 {
+	return WorldOf(GoalCoords(pitch, goal));
+}
+
+map_coords::MapCoords FootballSystem::GoalCoords(entt::entity pitch, uint32_t goal)
+{
 	const auto& goals = Goals();
 	if (goal >= goals.size())
 	{
-		return WorldOf(CoordsOf(pitch));
+		return CoordsOf(pitch);
 	}
 	const auto point = PitchMatrix(pitch) * glm::vec4(goals.at(goal).centre, 1.0f);
-	return WorldOf(CoordsOf(glm::vec3(point)));
+	return CoordsOf(glm::vec3(point));
 }
 
 void FootballSystem::ProcessTown(entt::entity town)
@@ -1084,12 +1089,17 @@ void FootballSystem::StopMatch(entt::entity town, entt::entity pitch, FootballPi
 
 glm::vec3 FootballSystem::PlaceOf(entt::entity pitch, entt::entity villager)
 {
+	return WorldOf(PlaceCoordsOf(pitch, villager));
+}
+
+map_coords::MapCoords FootballSystem::PlaceCoordsOf(entt::entity pitch, entt::entity villager)
+{
 	const auto& football = Entities().Get<const FootballPitch>(pitch);
 	const auto side = SideOf(football, villager);
 	const auto role = RoleOf(Living().VillagerGetFinalState(ActionOf(villager))).value_or(rules::Role::Attacker);
 	if (role == rules::Role::Goalkeeper)
 	{
-		return GoalPosition(pitch, rules::KeptGoal(side));
+		return GoalCoords(pitch, rules::KeptGoal(side));
 	}
 	const auto& player = Entities().Get<const Footballer>(villager);
 	const auto count = static_cast<uint32_t>(football.ranks.at(static_cast<size_t>(side)).size());
@@ -1097,8 +1107,10 @@ glm::vec3 FootballSystem::PlaceOf(entt::entity pitch, entt::entity villager)
 	    role == rules::Role::Attacker ? rules::AttackerPlace(player.number, count) : rules::DefenderPlace(player.number, count);
 	const auto centre = PositionOf(pitch);
 	const auto goal = GoalPosition(pitch, rules::AttackedGoal(side));
-	const auto point = rules::PlacePoint(glm::xz(WorldOf(CoordsOf(centre))), glm::xz(goal), place);
-	return WorldOf(CoordsOf(glm::vec3(point.x, 0.0f, point.y)));
+	const auto spot = WorldOf(CoordsOf(centre));
+	const auto point = rules::PlacePoint(glm::xz(spot), glm::xz(goal), place);
+	// The place has the world height of the centre spot, which the game then measures from the land at the place
+	return CoordsOf(glm::vec3(point.x, spot.y, point.y));
 }
 
 glm::vec3 FootballSystem::Perturb(glm::vec3 target, entt::entity villager)
@@ -1327,7 +1339,7 @@ void FootballSystem::DoTask(entt::entity pitch, entt::entity villager, VillagerS
 		finishKick();
 	};
 	const auto goToPlace = [&]() {
-		ecs::villager_home::SetupMoveTo(action, glm::xz(PlaceOf(pitch, villager)), role);
+		ecs::villager_home::SetupMoveTo(action, PlaceCoordsOf(pitch, villager), role);
 		registry.Get<Footballer>(villager).chooseTask = true;
 	};
 	const auto goalkeeperSave = [&]() {
@@ -1434,7 +1446,7 @@ void FootballSystem::DoTask(entt::entity pitch, entt::entity villager, VillagerS
 			GoToBall(pitch, villager, role);
 			break;
 		case rules::GoalkeeperTask::GoToPlace:
-			ecs::villager_home::SetupMoveTo(action, glm::xz(GoalPosition(pitch, rules::KeptGoal(side))), role);
+			ecs::villager_home::SetupMoveTo(action, GoalCoords(pitch, rules::KeptGoal(side)), role);
 			registry.Get<Footballer>(villager).chooseTask = true;
 			break;
 		}
@@ -1462,8 +1474,7 @@ void FootballSystem::GoToBall(entt::entity pitch, entt::entity villager, Village
 		{
 			const auto& kicked = registry.Get<const Ball>(ball);
 			const auto destination = kicked.destination.value_or(PositionOf(ball));
-			const auto goal = CoordsOf(destination);
-			ecs::villager_home::SetupMoveTo(action, glm::ivec2(goal.x, goal.z), role);
+			ecs::villager_home::SetupMoveTo(action, CoordsOf(destination), role);
 			Living().VillagerSetState(action, LivingAction::Index::Top, VillagerStates::FootballMoveToBall, true);
 			return;
 		}

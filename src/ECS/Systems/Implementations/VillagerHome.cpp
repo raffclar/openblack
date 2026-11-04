@@ -764,6 +764,22 @@ bool villager_home::SetupMoveTo(LivingAction& action, glm::ivec2 goal, VillagerS
 	return true;
 }
 
+bool villager_home::SetupMoveTo(LivingAction& action, const map_coords::MapCoords& goal, VillagerStates final, WalkWay way)
+{
+	if (!SetupMoveTo(action, glm::ivec2(goal.x, goal.z), final, way))
+	{
+		return false;
+	}
+	WorldRegistry().Get<WallHug>(EntityOf(action)).goalHeight = goal.altitude;
+	return true;
+}
+
+void villager_home::SetupMobileMoveTo(LivingAction& action, const map_coords::MapCoords& goal, WalkWay way)
+{
+	SetupMobileMoveTo(action, glm::ivec2(goal.x, goal.z), way);
+	WorldRegistry().Get<WallHug>(EntityOf(action)).goalHeight = goal.altitude;
+}
+
 void villager_home::SetupMobileMoveTo(LivingAction& action, glm::vec2 goal, WalkWay way)
 {
 	SetupMobileMoveTo(action, wall_hug::ToWhole(goal), way);

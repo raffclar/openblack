@@ -11,6 +11,7 @@
 
 #include <glm/gtx/vec_swizzle.hpp>
 
+#include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
 #include "Common/GUtilsDistance.h"
 #include "ECS/Components/Ball.h"
@@ -213,11 +214,12 @@ uint32_t football::MoveToBall(LivingAction& action)
 		return villager_home::DecideWhatToDo(action);
 	}
 	auto& registry = Entities();
-	// The player heads for the new point when the ball's point moved more than a metre
+	// The player heads for the new point when the ball's point moved more than a metre. The goal takes the whole point,
+	// with its height above the land.
 	if (const auto& destination = registry.Get<const Ball>(ball).destination; destination.has_value())
 	{
 		auto& walk = registry.Get<WallHug>(villager);
-		const auto goal = map_coords::FromMetres(glm::xz(*destination));
+		const auto goal = map_coords::FromWorld(Locator::terrainSystem::value(), *destination);
 		const map_coords::MapCoords current {walk.goalPlace.x, walk.goalPlace.y, 0.0f};
 		if (gutils::GetDistanceInMetres(goal, current) > 1.0f)
 		{

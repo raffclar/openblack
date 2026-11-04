@@ -56,7 +56,7 @@ public:
 	[[nodiscard]] bool VillagerIsReadyForNewAnimation(const components::LivingAction& action, uint32_t times) const override;
 	[[nodiscard]] bool VillagerCanBeDirected(entt::entity villager) const override;
 	void VillagerSetScriptState(entt::entity villager, VillagerStates state) const override;
-	void VillagerScriptMoveTo(entt::entity villager, glm::vec2 goal) const override;
+	void VillagerScriptMoveTo(entt::entity villager, const map_coords::MapCoords& goal) const override;
 	void VillagerSetScriptAnimation(entt::entity villager, AnimId clip, uint32_t plays) const override;
 	void VillagerSetScriptPlace(entt::entity villager, glm::vec2 place) const override;
 	void VillagerSetScriptNumber(entt::entity villager, float number) const override;

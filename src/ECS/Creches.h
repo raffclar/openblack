@@ -16,6 +16,7 @@
 
 #include <entt/entity/fwd.hpp>
 #include <glm/vec2.hpp>
+#include <glm/vec3.hpp>
 
 /// Towns' crèches in the world: which building a town sends its children to, and the paths marked out in its model for
 /// them to stroll along. The rules are creche::'s (CrecheRules.h).
@@ -39,7 +40,7 @@ void Lost(entt::entity building);
 /// How many paths the building's model marks out for children to stroll along
 [[nodiscard]] uint32_t PathsOf(entt::entity building);
 
-/// A point of the building's paths on the land, none past its points
-[[nodiscard]] std::optional<glm::vec2> PathPoint(entt::entity building, size_t point);
+/// A point of the building's paths in the world, with the height of its marker, none past its points
+[[nodiscard]] std::optional<glm::vec3> PathPoint(entt::entity building, size_t point);
 
 } // namespace openblack::creches
