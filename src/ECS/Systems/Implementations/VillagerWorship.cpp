@@ -448,7 +448,7 @@ map_coords::MapCoords FoodDropPlace(entt::entity site, entt::entity villager)
 		place.altitude = systems::object_measures::PlaceAltitude(registry, pot);
 		const float angle = gutils::Get3DAngleFromXZ(place, map_coords::FromMetres(PositionOf(villager)));
 		const float reach =
-		    systems::object_measures::EdgeRadius(registry, pot) + systems::object_measures::TwoDRadius(registry, villager);
+		    systems::object_measures::TwoDRadius(registry, pot) + systems::object_measures::TwoDRadius(registry, villager);
 		place += gutils::GetPosFromAngle(angle, reach);
 		// The point goes through a world position and back, as the game does
 		return map_coords::FromWorld(island, map_coords::ToWorld(island, place));

@@ -78,6 +78,7 @@ public:
 	[[nodiscard]] std::optional<glm::vec2> PlaceAt(entt::entity site, SitePlace place) const override;
 	[[nodiscard]] std::optional<glm::vec3> DancePosition(entt::entity site) const override;
 	[[nodiscard]] std::optional<float> StandingHeight(entt::entity site) const override;
+	[[nodiscard]] std::optional<float> GateHeight(entt::entity site) const override;
 	void AddWorshipper(entt::entity site, entt::entity villager) override;
 	void RemoveWorshipper(entt::entity site, entt::entity villager) override;
 	[[nodiscard]] bool IsWorshipper(entt::entity site, entt::entity villager) const override;

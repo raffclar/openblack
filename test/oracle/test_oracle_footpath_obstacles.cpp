@@ -83,8 +83,8 @@ std::optional<std::string> Compare(const Columns& at, bool goRound)
 		    return found ? std::optional(std::vector<glm::ivec2> {}) : std::nullopt;
 	    },
 	    .lookAgain = [](uint32_t /*key*/, bool /*towardsStart*/) {},
-	    .sendOn = [](uint32_t /*gone*/, uint32_t /*back*/, glm::ivec2 /*backPlace*/, uint32_t /*on*/,
-	                 glm::ivec2 /*onPlace*/) {},
+	    .sendOn = [](uint32_t /*gone*/, uint32_t /*back*/, const footpath_planning::PlanNode& /*backNode*/, uint32_t /*on*/,
+	                 const footpath_planning::PlanNode& /*onNode*/) {},
 	    .cutOff = [](uint32_t /*gone*/, uint32_t /*onwardFrom*/, uint32_t /*first*/) {},
 	    .altitude = [](glm::ivec2 /*place*/) { return 0.0f; },
 	};

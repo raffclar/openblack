@@ -14,6 +14,7 @@
 #include <glm/vec2.hpp>
 #include <gtest/gtest.h>
 
+#include "3D/MapCoords.h"
 #include "Creature/CreatureObstacles.h"
 #include "Creature/CreatureRoute.h"
 #include "Creature/CreatureRouteSearch.h"
@@ -223,18 +224,18 @@ TEST(FootpathPlanning, ItsCirclesTakeTheWholeMarginAndNoFire)
 TEST(FootpathPlanning, LaidNodesReplaceThoseBetweenAndKeepTheHiddenOnes)
 {
 	const std::vector<planning::PlanNode> nodes {
-	    {.place = {0, 0}}, {.place = {1, 0}, .planned = true}, {.place = {2, 0}, .hidden = true},
+	    {.place = {0, 0}}, {.place = {1, 0}, .planned = true}, {.place = {2, 0}, .altitude = 0.5f, .hidden = true},
 	    {.place = {3, 0}}, {.place = {4, 0}, .marker = true},  {.place = {5, 0}},
 	    {.place = {6, 0}},
 	};
 	const std::array<glm::ivec2, 2> route {glm::ivec2 {10, 1}, glm::ivec2 {11, 1}};
-	const auto laid = planning::LayBetween(nodes, 0, 5, route, glm::ivec2 {12, 1});
+	const auto laid = planning::LayBetween(nodes, 0, 5, route, map_coords::MapCoords {.x = 12, .z = 1, .altitude = -0.75f});
 	const std::vector<planning::PlanNode> expected {
 	    {.place = {0, 0}},
 	    {.place = {10, 1}, .planned = true},
 	    {.place = {11, 1}, .planned = true},
-	    {.place = {12, 1}, .planned = true, .marker = true},
-	    {.place = {2, 0}, .hidden = true},
+	    {.place = {12, 1}, .altitude = -0.75f, .planned = true, .marker = true},
+	    {.place = {2, 0}, .altitude = 0.5f, .hidden = true},
 	    {.place = {4, 0}, .marker = true},
 	    {.place = {5, 0}},
 	    {.place = {6, 0}},

@@ -139,6 +139,32 @@ public:
 		return PlaceOf(thing);
 	}
 
+	/// The height above the land where a path to a thing ends. The path ends at a dance at the height of the dance's place.
+	/// It ends at a worship site at the height of the site's gate above the land there. It ends at every other thing at the
+	/// height of the thing's place: a building's door and place are on the land.
+	[[nodiscard]] float ArriveAltitude(entt::entity thing) const override
+	{
+		const auto& registry = SharedRegistry();
+		if (const auto* dance = registry.TryGet<const Dance>(thing))
+		{
+			return dance->place.altitude;
+		}
+		if (registry.AllOf<WorshipSite>(thing) && Locator::worshipSiteSystem::has_value())
+		{
+			const auto& sites = Locator::worshipSiteSystem::value();
+			const auto gate = sites.PlaceAt(thing, WorshipSiteSystemInterface::SitePlace::Gate);
+			const auto height = sites.GateHeight(thing);
+			if (gate.has_value() && height.has_value())
+			{
+				// The land height under the gate uses the gate's metres turned to map units in two steps, not in one
+				const glm::ivec2 under {map_coords::FtoL((gate->x * 65536.0f) * 0.1f),
+				                        map_coords::FtoL((gate->y * 65536.0f) * 0.1f)};
+				return *height - AltitudeAt(under);
+			}
+		}
+		return systems::object_measures::PlaceAltitude(registry, thing);
+	}
+
 	/// The first end towards the second as it was, and then the second towards the first as moved
 	[[nodiscard]] std::pair<glm::vec2, glm::vec2> PlannedEnds(entt::entity from, entt::entity to) const override
 	{
@@ -171,6 +197,7 @@ public:
 		if (thing.has_value() && obstacles::MustAvoidWithoutWalker(*thing))
 		{
 			look.radius = systems::object_measures::TwoDRadius(registry, entity);
+			look.altitude = systems::object_measures::PlaceAltitude(registry, entity);
 		}
 		return look;
 	}
@@ -254,11 +281,11 @@ public:
 		}
 	}
 
-	void WalkTo(entt::entity walker, glm::ivec2 place) override
+	void WalkTo(entt::entity walker, glm::ivec2 place, float altitude) override
 	{
 		if (Locator::pathfindingSystem::has_value())
 		{
-			Locator::pathfindingSystem::value().WalkTo(walker, place);
+			Locator::pathfindingSystem::value().WalkTo(walker, place, altitude);
 		}
 	}
 
@@ -435,7 +462,11 @@ std::vector<planning::PlanNode> PlanNodesOf(const Footpath& footpath)
 	std::vector<planning::PlanNode> nodes;
 	nodes.reserve(footpath.nodes.size());
 	std::ranges::transform(footpath.nodes, std::back_inserter(nodes), [](const Footpath::Node& node) {
-		return planning::PlanNode {.place = node.place, .planned = node.planned, .hidden = node.hidden, .marker = node.marker};
+		return planning::PlanNode {.place = node.place,
+		                           .altitude = node.altitude,
+		                           .planned = node.planned,
+		                           .hidden = node.hidden,
+		                           .marker = node.marker};
 	});
 	return nodes;
 }
@@ -506,7 +537,8 @@ std::optional<FootpathObstacleChange> ObstacleOf(const WorldInterface& world, en
 	{
 		return std::nullopt;
 	}
-	return FootpathObstacleChange {.put = put, .radius = *look.radius, .place = wall_hug::ToWhole(glm::xz(position))};
+	return FootpathObstacleChange {
+	    .put = put, .radius = *look.radius, .place = wall_hug::ToWhole(glm::xz(position)), .altitude = look.altitude};
 }
 
 /// A villager on a path that walks towards one of its nodes, by the node's key while the nodes change
@@ -552,20 +584,25 @@ void FootpathSystem::SetNodes(Footpath& footpath, std::span<const planning::Plan
 	for (const auto& node : nodes)
 	{
 		const auto ground = planning::ToPoint(node.place);
-		footpath.nodes.push_back({.position = {ground.x, _world->LandHeightAt(ground), ground.y},
+		// The node is drawn on the land, raised by its height above it
+		footpath.nodes.push_back({.position = {ground.x, _world->LandHeightAt(ground) + node.altitude, ground.y},
 		                          .place = node.place,
+		                          .altitude = node.altitude,
 		                          .planned = node.planned,
 		                          .hidden = node.hidden,
 		                          .marker = node.marker});
 	}
 }
 
-entt::entity FootpathSystem::MakeFootpath(glm::ivec2 first, glm::ivec2 last)
+entt::entity FootpathSystem::MakeFootpath(entt::entity from, entt::entity to)
 {
 	auto& registry = _world->Entities();
 	const auto entity = registry.Create();
 	auto& footpath = registry.Assign<Footpath>(entity);
-	const std::array<planning::PlanNode, 2> ends {planning::PlanNode {.place = first}, planning::PlanNode {.place = last}};
+	// Each end is where the path to its thing ends, at the height there
+	const std::array<planning::PlanNode, 2> ends {
+	    planning::PlanNode {.place = _world->ArrivePlace(from), .altitude = _world->ArriveAltitude(from)},
+	    planning::PlanNode {.place = _world->ArrivePlace(to), .altitude = _world->ArriveAltitude(to)}};
 	SetNodes(footpath, ends);
 	return entity;
 }
@@ -634,7 +671,7 @@ void FootpathSystem::BuildingWorking(entt::entity building)
 	{
 		return;
 	}
-	const auto footpath = MakeFootpath(start, goal);
+	const auto footpath = MakeFootpath(*pit, building);
 	LayRoute(footpath, *route, false);
 	AddFootpath(building, footpath);
 	AddFootpath(*pit, footpath);
@@ -666,8 +703,7 @@ void FootpathSystem::TownJoinedSite(entt::entity site, entt::entity town)
 	}
 	const auto [start, goal] = _world->PlannedEnds(*pit, site);
 	const auto finder = registry.Create();
-	registry.Assign<FootpathFinder>(finder, *pit, site, MakeFootpath(_world->ArrivePlace(*pit), _world->ArrivePlace(site)),
-	                                _world->StartRoute(start, goal));
+	registry.Assign<FootpathFinder>(finder, *pit, site, MakeFootpath(*pit, site), _world->StartRoute(start, goal));
 	ecs::list_order::Join(registry, finder);
 }
 
@@ -699,7 +735,7 @@ void FootpathSystem::DanceMade(entt::entity dance, entt::entity town)
 	{
 		return;
 	}
-	const auto footpath = MakeFootpath(_world->ArrivePlace(dance), _world->ArrivePlace(*pit));
+	const auto footpath = MakeFootpath(dance, *pit);
 	LayRoute(footpath, *route, true);
 	AddFootpath(*pit, footpath);
 	AddFootpath(dance, footpath);
@@ -759,6 +795,7 @@ void FootpathSystem::ThingRemoved(entt::entity thing, glm::vec3 position, bool f
 			return;
 		}
 		change.radius = now->radius;
+		change.altitude = now->altitude;
 	}
 	context.footpathObstacleChanges.push_back(change);
 }
@@ -768,7 +805,7 @@ bool FootpathSystem::Reroute(entt::entity entity, const FootpathObstacleChange& 
 {
 	auto& registry = _world->Entities();
 	const auto& footpath = registry.Get<const Footpath>(entity);
-	const obstacle_rules::Obstacle obstacle {.radius = change.radius, .place = change.place};
+	const obstacle_rules::Obstacle obstacle {.radius = change.radius, .place = change.place, .altitude = change.altitude};
 	// A thing put far from every node of the path leaves the path as it is: most things come nowhere near most paths
 	if (change.put)
 	{
@@ -788,7 +825,11 @@ bool FootpathSystem::Reroute(entt::entity entity, const FootpathObstacleChange& 
 	for (size_t i = 0; i < footpath.nodes.size(); ++i)
 	{
 		const auto& node = footpath.nodes[i];
-		nodes.push_back({.node = {.place = node.place, .planned = node.planned, .hidden = node.hidden, .marker = node.marker},
+		nodes.push_back({.node = {.place = node.place,
+		                          .altitude = node.altitude,
+		                          .planned = node.planned,
+		                          .hidden = node.hidden,
+		                          .marker = node.marker},
 		                 .key = static_cast<uint32_t>(i + 1)});
 	}
 	// The walkers on the path are found only when the rules need them
@@ -814,7 +855,8 @@ bool FootpathSystem::Reroute(entt::entity entity, const FootpathObstacleChange& 
 		        }
 	        },
 	    .sendOn =
-	        [&followers, &world](uint32_t gone, uint32_t back, glm::ivec2 backPlace, uint32_t on, glm::ivec2 onPlace) {
+	        [&followers, &world](uint32_t gone, uint32_t back, const planning::PlanNode& backNode, uint32_t on,
+	                             const planning::PlanNode& onNode) {
 		        for (auto& follower : followers())
 		        {
 			        if (follower.key != gone)
@@ -822,7 +864,8 @@ bool FootpathSystem::Reroute(entt::entity entity, const FootpathObstacleChange& 
 				        continue;
 			        }
 			        follower.key = follower.towardsStart ? back : on;
-			        world.WalkTo(follower.villager, follower.towardsStart ? backPlace : onPlace);
+			        const auto& node = follower.towardsStart ? backNode : onNode;
+			        world.WalkTo(follower.villager, node.place, node.altitude);
 		        }
 	        },
 	    .cutOff =

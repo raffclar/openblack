@@ -48,6 +48,8 @@ struct Calls
 	std::vector<std::pair<glm::ivec2, glm::ivec2>> plans;
 	std::vector<std::pair<uint32_t, bool>> lookAgain;
 	std::vector<std::tuple<uint32_t, uint32_t, uint32_t>> sendOn;
+	/// The heights of the two anchors of each send on: the one before and the one after
+	std::vector<std::pair<float, float>> sendOnAltitudes;
 	std::vector<std::tuple<uint32_t, uint32_t, uint32_t>> cutOff;
 };
 
@@ -60,8 +62,12 @@ obstacle_rules::Hooks FakeHooks(Calls& calls, std::optional<std::vector<glm::ive
 		        return route;
 	        },
 	    .lookAgain = [&calls](uint32_t key, bool towardsStart) { calls.lookAgain.emplace_back(key, towardsStart); },
-	    .sendOn = [&calls](uint32_t gone, uint32_t back, glm::ivec2 /*backPlace*/, uint32_t on,
-	                       glm::ivec2 /*onPlace*/) { calls.sendOn.emplace_back(gone, back, on); },
+	    .sendOn =
+	        [&calls](uint32_t gone, uint32_t back, const planning::PlanNode& backNode, uint32_t on,
+	                 const planning::PlanNode& onNode) {
+		        calls.sendOn.emplace_back(gone, back, on);
+		        calls.sendOnAltitudes.emplace_back(backNode.altitude, onNode.altitude);
+	        },
 	    .cutOff = [&calls](uint32_t gone, uint32_t onwardFrom,
 	                       uint32_t first) { calls.cutOff.emplace_back(gone, onwardFrom, first); },
 	    .altitude = [](glm::ivec2 /*place*/) { return 0.0f; },
@@ -110,6 +116,55 @@ TEST(FootpathObstacles, ANodeUnderTheThingIsHiddenAndTheStretchPlannedRoundIt)
 	EXPECT_EQ(std::get<2>(calls.sendOn[1]), 3u);
 }
 
+TEST(FootpathObstacles, NodesThatTheThingAddsTakeTheHeightsOfTheirPlaces)
+{
+	// The anchors have heights above the land, and the thing stands below the land
+	std::vector<obstacle_rules::KeyedNode> nodes {
+	    {.node = {.place = East(0.0f), .altitude = 1.0f}, .key = 1},
+	    {.node = {.place = East(20.0f), .altitude = 2.0f}, .key = 2},
+	    {.node = {.place = East(40.0f), .altitude = 3.0f}, .key = 3},
+	};
+	Calls calls;
+	const std::vector<glm::ivec2> route {East(15.0f) + glm::ivec2(0, 30000), East(25.0f) + glm::ivec2(0, 30000)};
+	obstacle_rules::GoRound(nodes, {.radius = k_Radius, .place = East(20.0f), .altitude = -0.5f}, FakeHooks(calls, route));
+
+	// The route's nodes are at the height 0, the marker at the height of the thing, and the hidden node keeps its height
+	ASSERT_EQ(nodes.size(), 6u);
+	EXPECT_EQ(nodes[0].node.altitude, 1.0f);
+	EXPECT_EQ(nodes[1].node.altitude, 0.0f);
+	EXPECT_EQ(nodes[2].node.altitude, 0.0f);
+	EXPECT_TRUE(nodes[3].node.marker);
+	EXPECT_EQ(nodes[3].node.altitude, -0.5f);
+	EXPECT_TRUE(nodes[4].node.hidden);
+	EXPECT_EQ(nodes[4].node.altitude, 2.0f);
+	EXPECT_EQ(nodes[5].node.altitude, 3.0f);
+	// The walkers sent on walk to an anchor at its height
+	ASSERT_FALSE(calls.sendOnAltitudes.empty());
+	for (const auto& [back, on] : calls.sendOnAltitudes)
+	{
+		EXPECT_EQ(back, 1.0f);
+		EXPECT_EQ(on, 3.0f);
+	}
+}
+
+TEST(FootpathObstacles, TheCopyOfAHiddenNodeHasItsHeight)
+{
+	// With no way found round the thing, the copy of the hidden node stays on the path
+	std::vector<obstacle_rules::KeyedNode> nodes {
+	    {.node = {.place = East(0.0f)}, .key = 1},
+	    {.node = {.place = East(20.0f), .altitude = 2.0f}, .key = 2},
+	    {.node = {.place = East(40.0f)}, .key = 3},
+	};
+	Calls calls;
+	obstacle_rules::GoRound(nodes, {.radius = k_Radius, .place = East(20.0f) + glm::ivec2(0, 6553)},
+	                        FakeHooks(calls, std::nullopt));
+	const auto copy = std::ranges::find_if(
+	    nodes, [](const auto& node) { return node.key > 3 && node.node.place == East(20.0f) && !node.node.hidden; });
+	ASSERT_NE(copy, nodes.end());
+	EXPECT_TRUE(copy->node.planned);
+	EXPECT_EQ(copy->node.altitude, 2.0f);
+}
+
 TEST(FootpathObstacles, WithNoWayFoundNodesAreSteppedRoundTheCircle)
 {
 	// A path that passes the thing 1 m to one side, with no node near it
@@ -128,6 +183,7 @@ TEST(FootpathObstacles, WithNoWayFoundNodesAreSteppedRoundTheCircle)
 	{
 		EXPECT_TRUE(nodes[i].node.planned);
 		EXPECT_FALSE(nodes[i].node.hidden || nodes[i].node.marker);
+		EXPECT_EQ(nodes[i].node.altitude, 0.0f);
 		const glm::vec2 off {static_cast<float>(nodes[i].node.place.x - East(20.0f).x) / 6553.6f,
 		                     static_cast<float>(nodes[i].node.place.y - East(20.0f).y) / 6553.6f};
 		EXPECT_NEAR(std::sqrt(off.x * off.x + off.y * off.y), k_Radius, 0.01f);

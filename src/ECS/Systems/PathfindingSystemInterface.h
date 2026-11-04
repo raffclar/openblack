@@ -28,9 +28,9 @@ public:
 	/// A walker goes straight on to its goal again, with no side to keep, and looks along its step from where it stands
 	/// for what is in its way
 	virtual void LookAgain(entt::entity walker) = 0;
-	/// A walker starts to walk straight to a new goal (in whole map units), facing it, and looks along its step for what is in
-	/// its way
-	virtual void WalkTo(entt::entity walker, glm::ivec2 goal) = 0;
+	/// A walker starts to walk straight to a new goal (in whole map units, and a height above the land), facing it, and
+	/// looks along its step for what is in its way
+	virtual void WalkTo(entt::entity walker, glm::ivec2 goal, float goalAltitude) = 0;
 	/// A walker that walks in its own turn starts to walk round what is in its way to a new goal (in whole map units).
 	/// It aims at the goal and looks along its step at once, or is there already.
 	virtual void SetupWalkRound(entt::entity walker, glm::ivec2 goal) = 0;

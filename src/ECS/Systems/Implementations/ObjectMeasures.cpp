@@ -139,6 +139,25 @@ std::optional<glm::vec3> HalfExtentsOf(const ecs::Registry& registry, entt::enti
 	const float scale = registry.AllOf<WorshipSiteFlag>(entity) ? 1.0f : transform->scale.x;
 	return (box.maxima - box.minima) * 0.5f * scale;
 }
+
+/// A pot and the game's numbers for its kind
+struct PotAndInfo
+{
+	const Pot* pot {nullptr};
+	const GPotInfo* info {nullptr};
+};
+
+/// The pot and its numbers, none for a thing that is not a pot
+std::optional<PotAndInfo> PotOf(const ecs::Registry& registry, entt::entity entity)
+{
+	const auto* pot = registry.TryGet<const Pot>(entity);
+	if (pot == nullptr || !Locator::infoConstants::has_value())
+	{
+		return std::nullopt;
+	}
+	return PotAndInfo {.pot = pot, .info = &Locator::infoConstants::value().pot.at(static_cast<size_t>(pot->type))};
+}
+
 } // namespace
 
 float object_measures::TwoDRadius(const Registry& registry, entt::entity entity)
@@ -163,7 +182,14 @@ float object_measures::TwoDRadius(const Registry& registry, entt::entity entity)
 		return creature_obstacles::k_TeleportStoneWidth;
 	}
 	const auto half = HalfExtentsOf(registry, MeasuredPart(registry, entity));
-	return half.has_value() ? std::max(half->x, half->z) : 0.0f;
+	const float radius = half.has_value() ? std::max(half->x, half->z) : 0.0f;
+	// A food pile is as wide as it is raised by what it holds
+	const auto pot = PotOf(registry, entity);
+	if (!pot.has_value())
+	{
+		return radius;
+	}
+	return magic::piles::EdgeRadius(pot->info->potType, pot->pot->amount, pot->info->maxAmountInPot, radius);
 }
 
 entt::entity object_measures::MeasuredPart(const Registry& registry, entt::entity entity)
@@ -213,38 +239,6 @@ float object_measures::Height(const Registry& registry, entt::entity entity)
 	}
 	const auto half = HalfExtentsOf(registry, MeasuredPart(registry, entity));
 	return half.has_value() ? 2.0f * half->y : 0.0f;
-}
-
-namespace
-{
-/// A pot and the game's numbers for its kind
-struct PotAndInfo
-{
-	const Pot* pot {nullptr};
-	const GPotInfo* info {nullptr};
-};
-
-/// The pot and its numbers, none for a thing that is not a pot
-std::optional<PotAndInfo> PotOf(const ecs::Registry& registry, entt::entity entity)
-{
-	const auto* pot = registry.TryGet<const Pot>(entity);
-	if (pot == nullptr || !Locator::infoConstants::has_value())
-	{
-		return std::nullopt;
-	}
-	return PotAndInfo {.pot = pot, .info = &Locator::infoConstants::value().pot.at(static_cast<size_t>(pot->type))};
-}
-} // namespace
-
-float object_measures::EdgeRadius(const Registry& registry, entt::entity entity)
-{
-	const float radius = TwoDRadius(registry, entity);
-	const auto pot = PotOf(registry, entity);
-	if (!pot.has_value())
-	{
-		return radius;
-	}
-	return magic::piles::EdgeRadius(pot->info->potType, pot->pot->amount, pot->info->maxAmountInPot, radius);
 }
 
 float object_measures::PlaceAltitude(const Registry& registry, entt::entity entity)
