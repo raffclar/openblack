@@ -112,6 +112,7 @@
 #include "ECS/GameEndConditions.h"
 #include "ECS/Graveyards.h"
 #include "ECS/Map.h"
+#include "ECS/MobileObjectRecord.h"
 #include "ECS/ObjectPhysics.h"
 #include "ECS/PhysicsClasses.h"
 #include "ECS/PlacedTurn.h"
@@ -452,8 +453,8 @@ std::optional<float> WeightOf(const ecs::Registry& registry, entt::entity entity
 	}
 	if (const auto* object = registry.TryGet<const MobileObject>(entity))
 	{
-		const auto kind = static_cast<size_t>(object->type);
-		return kind < info.mobileObject.size() ? std::optional(info.mobileObject.at(kind).weight) : std::nullopt;
+		const auto* record = ecs::mobile_object_record::Of(info, *object);
+		return record != nullptr ? std::optional(record->weight) : std::nullopt;
 	}
 	if (registry.AllOf<Ball>(entity))
 	{

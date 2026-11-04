@@ -73,6 +73,7 @@
 #include "ECS/Creches.h"
 #include "ECS/GameEndConditions.h"
 #include "ECS/Graveyards.h"
+#include "ECS/MobileObjectRecord.h"
 #include "ECS/Registry.h"
 #include "ECS/Statistics.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
@@ -290,9 +291,10 @@ const GObjectInfo* world_objects::InfoOf(entt::entity object)
 	{
 		return Row(info.mobileStatic, still->type);
 	}
+	// A loose object has its row of the loose objects' table, or the record of the football
 	if (const auto* mobile = registry.TryGet<const MobileObject>(object))
 	{
-		return Row(info.mobileObject, mobile->type);
+		return mobile_object_record::Of(info, *mobile);
 	}
 	// The football has a row of its own
 	if (registry.AllOf<Ball>(object))

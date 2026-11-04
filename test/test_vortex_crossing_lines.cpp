@@ -17,6 +17,7 @@
 #include <gtest/gtest.h>
 
 #include "ECS/Components/Animal.h"
+#include "ECS/Components/Ball.h"
 #include "ECS/Components/DeadTree.h"
 #include "ECS/Components/Disciple.h"
 #include "ECS/Components/Mobile.h"
@@ -31,6 +32,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/MobileObjectRecord.h"
 #include "ECS/Registry.h"
 #include "ECS/VillagerAge.h"
 #include "ECS/VortexCrossingLines.h"
@@ -287,6 +289,9 @@ TEST(VortexCrossingLines, TheReaderTakesEveryKindsLine)
 	registry.Assign<DeadTree>(add({1000.0f, k_Ground, 2000.0f}), DeadTree {.type = TreeInfo::Oak});
 	registry.Assign<OneOffSpellSeed>(add({1000.0f, k_Ground, 2000.0f}), OneOffSpellSeed {.seedType = SpellSeedType::Food});
 	registry.Assign<Scaffold>(add({1000.0f, k_Ground, 2000.0f}), Scaffold {.town = town});
+	registry.Assign<Ball>(add({1000.0f, k_Ground, 2000.0f}));
+	registry.Assign<MobileObject>(add({1000.0f, k_Ground, 2000.0f}),
+	                              MobileObject {.type = MobileObjectInfo::Ball, .footballRecord = true});
 	for (const auto thing : things)
 	{
 		const auto text = LineText(registry, thing);
@@ -458,4 +463,36 @@ TEST(VortexCrossingLines, ACarriedChestJoinsTheTownOfTheVortex)
 	EXPECT_EQ(vortex_crossing::CarriedChestTown(registry, notATown), entt::entity {entt::null});
 	registry.Destroy(town);
 	EXPECT_EQ(vortex_crossing::CarriedChestTown(registry, town), entt::entity {entt::null});
+}
+
+// The football has no line of its own. It writes the line of a plain loose object with the row of the football's
+// record, and the reader takes that row back as a number below zero.
+TEST(VortexCrossingLines, TheFootballIsWrittenAsALooseObjectOfTheFootballsRecord)
+{
+	Registry registry;
+	const auto ball = Thing(registry, {1010.0f, k_Ground, 2000.0f}, glm::mat3(1.0f), 1.0f);
+	registry.Assign<Ball>(ball);
+	const auto text = LineText(registry, ball);
+	EXPECT_EQ(text, "CREATE_MOBILEOBJECT(\"10.00,0.00\", -3324, 0, 1000)\n");
+	const auto read = Read(text);
+	ASSERT_TRUE(ReaderTakes(read));
+	ASSERT_EQ(read.values.size(), 4U);
+	EXPECT_EQ(*read.values.at(1).IntegerValue(), mobile_object_record::k_FootballRow);
+}
+
+// A loose object of the football's record writes the same row again, so it crosses the next vortex as it is
+TEST(VortexCrossingLines, ALooseObjectOfTheFootballsRecordKeepsTheRowOfThatRecord)
+{
+	Registry registry;
+	const auto loose = Thing(registry, {1000.0f, k_Ground, 2010.0f}, glm::mat3(1.0f), 0.5f);
+	registry.Assign<MobileObject>(loose, MobileObject {.type = MobileObjectInfo::Ball, .footballRecord = true});
+	EXPECT_EQ(LineText(registry, loose), "CREATE_MOBILEOBJECT(\"0.00,10.00\", -3324, 0, 500)\n");
+	// A loose object of the table's row of the same kind writes its row
+	const auto plain = Thing(registry, {1000.0f, k_Ground, 2010.0f}, glm::mat3(1.0f), 0.5f);
+	registry.Assign<MobileObject>(plain, MobileObjectInfo::Ball);
+	EXPECT_EQ(LineText(registry, plain),
+	          fmt::format("CREATE_MOBILEOBJECT(\"0.00,10.00\", {}, 0, 500)\n", static_cast<int>(MobileObjectInfo::Ball)));
+	// They are of other records, so neither counts as written with the other
+	EXPECT_TRUE(vortex_crossing::IdenticalMobileObjects(registry, loose, FakeWorld()).empty());
+	EXPECT_TRUE(vortex_crossing::IdenticalMobileObjects(registry, plain, FakeWorld()).empty());
 }
