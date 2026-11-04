@@ -31,6 +31,7 @@
 #include <bgfx/bgfx.h>
 #include <spdlog/spdlog.h>
 
+#include "3D/LandIslandInterface.h"
 #include "Audio/AudioManagerInterface.h"
 #include "Audio/MusicPlayer.h"
 #include "Camera/Camera.h"
@@ -795,6 +796,11 @@ bool Game::RenderLoadingFrame(bool drawNow, const std::function<void()>& drawUnd
 
 void Game::FinishLoadingBehindScreen()
 {
+	// A load that stopped before it opened a landscape has no land, so the first frames have nothing to prepare
+	if (!Locator::terrainSystem::has_value() || !Locator::terrainSystem::value().IsLoaded())
+	{
+		return;
+	}
 	auto& resources = Locator::resources::value();
 	// If the game uses a resource before the loading threads load it, the resource loads in the middle of a frame and
 	// makes that frame slow. Thus all the resources load before the first frame of the game, as in the original game.

@@ -76,7 +76,6 @@ void openblack::ecs::reflection::RegisterFields_Values_e(entt::meta_ctx& context
 {
 	Reflect<openblack::ecs::RegistryContext>(context, ValueOnly {})
 	    .Field<&openblack::ecs::RegistryContext::scriptFootpaths>("scriptFootpaths")
-	    .Field<&openblack::ecs::RegistryContext::scriptThingMadeLast>("scriptThingMadeLast")
 	    .Field<&openblack::ecs::RegistryContext::footpathObstacleChanges>("footpathObstacleChanges")
 	    .Field<&openblack::ecs::RegistryContext::footpathObstacles>("footpathObstacles")
 	    .Field<&openblack::ecs::RegistryContext::streams>("streams")

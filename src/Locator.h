@@ -299,9 +299,16 @@ bool InitializeGame(const player_profiles::Store& profiles) noexcept;
 void InitializeLevel(const std::filesystem::path& path);
 /// Starts a level on land that is generated rather than read from a file, as the flat testbed is
 void InitializeLevel(const LandData& land);
-/// Starts a level on the land that is open: the land keeps its blocks, and its cells go back to the altitudes of its
-/// build. Only the blocks that change are made again.
-void InitializeLevelOnOpenLand();
+/// What a level that starts on the land that is open does with the altitudes of the land's cells
+enum class OpenLandAltitudes : uint8_t
+{
+	/// The cells go back to the altitudes of the land's build
+	Built,
+	/// The cells keep the altitudes that they have now
+	Kept,
+};
+/// Starts a level on the land that is open: the land keeps its blocks. Only the blocks that change are made again.
+void InitializeLevelOnOpenLand(OpenLandAltitudes altitudes = OpenLandAltitudes::Built);
 /// The settings of this computer, read from the file when there is one (see computer_settings)
 void InitializeComputerSettings(std::optional<std::filesystem::path> file);
 void ShutDownServices();

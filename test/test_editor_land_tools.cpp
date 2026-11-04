@@ -543,3 +543,60 @@ TEST(EditorLandSave, AWrittenFootpathFileReadsBackWithItsLinksAndPaths)
 	EXPECT_EQ(node.coords.altitude, 0.25f);
 	EXPECT_EQ(node.unknown, 3u);
 }
+
+TEST(EditorLandSave, TheWholeLandIsWrittenAfterTheVersion)
+{
+	const auto text = land_save::GameText({.landNumber = 2,
+	                                       .landscape = "C:/Profile/Editor/land2.lnd",
+	                                       .townInfluenceMultiplier = 1.5f,
+	                                       .playerInfluenceMultiplier = 0.5f});
+	EXPECT_EQ(text, "SET_LAND_NUMBER(2)\n"
+	                "LOAD_LANDSCAPE(\"C:/Profile/Editor/land2.lnd\")\n"
+	                "SET_TOWN_INFLUENCE_MULTIPLIER(1.500000)\n"
+	                "SET_PLAYER_INFLUENCE_MULTIPLIER(0.500000)\n");
+	// A land with no landscape file gets no landscape line
+	EXPECT_EQ(land_save::GameText({}).find("LOAD_LANDSCAPE"), std::string::npos);
+}
+
+TEST(EditorLandSave, AScriptWithNoLandscapeLineLoadsNoLandscape)
+{
+	const auto saved = land_save::GameText({.landNumber = 1, .landscape = "land1.lnd"});
+	EXPECT_TRUE(lhscriptx::LoadsLandscape(lhscriptx::Script::Read("VERSION(2.300000)\n" + saved)));
+	EXPECT_FALSE(lhscriptx::LoadsLandscape(lhscriptx::Script::Read("VERSION(2.300000)\n" + land_save::GameText({}))));
+	// A landscape line after a line that stops the read does not load
+	EXPECT_FALSE(lhscriptx::LoadsLandscape(lhscriptx::Script::Read("VERSION 2.3\nLOAD_LANDSCAPE(\"land1.lnd\")\n")));
+}
+
+TEST(EditorLandSave, AFieldIsWrittenWithItsTownOrWithNone)
+{
+	const glm::ivec2 place {65536, 131072};
+	EXPECT_EQ(land_save::FieldText({.town = 4, .place = place, .row = 1, .yAngle = 0.5f}),
+	          "CREATE_NEW_TOWN_FIELD(4, \"10.00,20.00\", 1, 0.500000)\n");
+	EXPECT_EQ(land_save::FieldText({.town = -1, .place = place, .row = 1, .yAngle = 0.5f}),
+	          "CREATE_FIELD(\"10.00,20.00\", 1)\n");
+}
+
+TEST(EditorLandSave, TheListOfTheThingsMadeReadsBackInItsOrder)
+{
+	const std::vector made {static_cast<entt::entity>(9), static_cast<entt::entity>(0x100004), static_cast<entt::entity>(2)};
+	EXPECT_EQ(land_save::ReadMade(land_save::MadeText(made)), made);
+	// Line ends with a carriage return read, and a line that is not a number is passed over
+	const std::vector expected {static_cast<entt::entity>(7), static_cast<entt::entity>(8)};
+	EXPECT_EQ(land_save::ReadMade("7\r\nseven\n\n8"), expected);
+}
+
+TEST(EditorHistory, TheThingsKeptAtTheNextClearBecomeTheThingsMade)
+{
+	EditorHistory history;
+	const auto old = history.Track(static_cast<entt::entity>(4));
+	history.Push({.label = "Place", .changes = {MakeChange {.ref = old}}});
+	history.KeepMadeAtNextClear({static_cast<entt::entity>(12), static_cast<entt::entity>(5)});
+	history.Clear();
+	ASSERT_EQ(history.MadeRefs().size(), 2u);
+	EXPECT_EQ(history.Resolve(history.MadeRefs()[0]), static_cast<entt::entity>(12));
+	EXPECT_EQ(history.Resolve(history.MadeRefs()[1]), static_cast<entt::entity>(5));
+	EXPECT_FALSE(history.CanUndo());
+	// The list is kept for one clear only
+	history.Clear();
+	EXPECT_TRUE(history.MadeRefs().empty());
+}

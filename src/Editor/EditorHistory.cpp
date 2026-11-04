@@ -102,6 +102,15 @@ void EditorHistory::Clear()
 	_entities.clear();
 	_refs.clear();
 	_made.clear();
+	for (const auto entity : std::exchange(_keepAtNextClear, {}))
+	{
+		_made.push_back(Track(entity));
+	}
+}
+
+void EditorHistory::KeepMadeAtNextClear(std::vector<entt::entity> entities)
+{
+	_keepAtNextClear = std::move(entities);
 }
 
 std::optional<std::string> EditorHistory::UndoLabel() const
