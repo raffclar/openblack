@@ -18,7 +18,6 @@
 #include "Camera/CreatureFollow.h"
 #include "Camera/FollowHeadingCameraModel.h"
 #include "Camera/FreeCameraModel.h"
-#include "ECS/Components/Creature.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/FollowHeadingThing.h"
 #include "ECS/Registry.h"
@@ -62,31 +61,30 @@ void SaveGameSystem::ImportVanillaCameraMode(const camera_import::ImportedCamera
 			SPDLOG_LOGGER_INFO(ImportLog(), "The follow camera of the file has no thing, so the world camera stays");
 			return;
 		}
-		if (!registry.AllOf<Creature>(thing))
+		// A flock has no place of its own in openblack: the game follows the place of its leader
+		if (!registry.AllOf<Transform>(thing))
 		{
 			SPDLOG_LOGGER_WARN(ImportLog(),
-			                   "The follow camera of the file follows a thing that is not a creature (object {}). openblack "
-			                   "follows only creatures, so the world camera stays.",
+			                   "The follow camera of the file follows a thing with no place (object {}), such as a flock. "
+			                   "openblack cannot follow it, so the world camera stays.",
 			                   follow.target);
 			return;
-		}
-		if (follow.relativeHeading || follow.useOffsets)
-		{
-			SPDLOG_LOGGER_WARN(ImportLog(),
-			                   "The follow camera of the file turns with its creature or uses offsets. openblack's follow "
-			                   "camera has neither, so it follows the creature from the heading of the file.");
 		}
 		const creature_follow::Loaded loaded {
 		    .view = {.yaw = follow.heading, .pitch = follow.pitch, .distance = follow.distance},
 		    .timeScale = follow.timeScale,
 		    .autoReposition = follow.autoReposition,
+		    .relativeHeading = follow.relativeHeading,
+		    .offsets = follow.useOffsets
+		                   ? std::optional(creature_follow::Offsets {.focus = follow.focusOffset, .eye = follow.eyeOffset})
+		                   : std::nullopt,
 		};
 		if (!Locator::creatureModeSystem::has_value() || !Locator::creatureModeSystem::value().EnterLoaded(thing, loaded))
 		{
 			SPDLOG_LOGGER_WARN(ImportLog(), "The follow camera of the file cannot take the camera, so the world camera stays");
 			return;
 		}
-		SPDLOG_LOGGER_INFO(ImportLog(), "The camera of the file follows the creature of object {}", follow.target);
+		SPDLOG_LOGGER_INFO(ImportLog(), "The camera of the file follows object {}", follow.target);
 		return;
 	}
 	case camera_import::Mode::FollowAndTurn:

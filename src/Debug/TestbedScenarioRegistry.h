@@ -787,7 +787,8 @@ struct Command
 		/// A camera of a saved game of the original game takes the camera: the follow camera on the creature, the
 		/// follow camera that turns with the creature, or the free camera, which flies forwards at a speed (amount). The
 		/// last lets the world camera go below the land and puts its eye at a depth (amount) below the land in front of
-		/// the creature.
+		/// the creature. The follow camera follows the scenario's object of an index (with) in place of the creature.
+		/// Its heading turns with its thing for the value 1, and it keeps offsets from its thing for the value 2.
 		SavedFollowCamera,
 		SavedTurningCamera,
 		SavedFreeCamera,

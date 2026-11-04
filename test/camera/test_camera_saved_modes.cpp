@@ -8,9 +8,13 @@
  *******************************************************************************/
 
 #include <cmath>
+#include <cstdint>
 
+#include <optional>
 #include <tuple>
 
+#include <Camera/CreatureCameraModel.h>
+#include <Camera/CreatureFollow.h>
 #include <Camera/FollowHeading.h>
 #include <Camera/FreeCamera.h>
 #include <Camera/ScriptCameraModel.h>
@@ -173,4 +177,101 @@ TEST(FreeCamera, ShiftAndTheKeysTiltTheCameraNoFurtherThanThree)
 	                          next.origin, 100.0f, script_camera::HeadingAndPitchFromPoints(now.focus, now.origin).heading,
 	                          free_camera::k_HighestPitch));
 	EXPECT_EQ(state.along, 0);
+}
+
+namespace
+{
+constexpr float k_QuarterTurn = 1.5707963705062866f;
+const creature_follow::Offsets k_Offsets {.focus = {0.0f, 5.0f, 0.0f}, .eye = {30.0f, 20.0f, -30.0f}};
+} // namespace
+
+TEST(SavedFollowCamera, ACreatureWithTheGameAngleZeroTurnsTheHeadingAQuarterTurnOn)
+{
+	EXPECT_EQ(creature_follow::RelativeHeading(0.5f, 0), 0.5f + k_QuarterTurn);
+	// A quarter of the circle cancels the quarter turn, and a half takes it off
+	EXPECT_EQ(creature_follow::RelativeHeading(0.5f, 512), 0.5f);
+	EXPECT_EQ(creature_follow::RelativeHeading(0.5f, 1024), 0.5f - k_QuarterTurn);
+}
+
+TEST(SavedFollowCamera, TheRelativeHeadingRoundsEachStepToAFloat)
+{
+	const uint16_t angle = 777;
+	const float turned = static_cast<float>(angle * 2) * 0.0015339808305725455f;
+	const float facing = turned - k_QuarterTurn;
+	EXPECT_EQ(creature_follow::RelativeHeading(1.25f, angle), 1.25f - facing);
+}
+
+TEST(SavedFollowCamera, TheDistanceOfTheOffsetsIsTheDistanceBetweenTheirPoints)
+{
+	EXPECT_EQ(creature_follow::OffsetDistance(k_Offsets), 45.0f);
+}
+
+TEST(SavedFollowCamera, TheEyeOfTheOffsetsMovesAlongItsLineToADistance)
+{
+	const auto moved = creature_follow::OffsetsAtDistance(k_Offsets, 90.0f);
+	EXPECT_EQ(moved.focus, k_Offsets.focus);
+	EXPECT_NEAR(moved.eye.x, 60.0f, 1e-4f);
+	EXPECT_NEAR(moved.eye.y, 35.0f, 1e-4f);
+	EXPECT_NEAR(moved.eye.z, -60.0f, 1e-4f);
+	// An eye on the point that the camera looks at stays on it
+	const auto still = creature_follow::OffsetsAtDistance({.focus = {1.0f, 2.0f, 3.0f}, .eye = {1.0f, 2.0f, 3.0f}}, 50.0f);
+	EXPECT_EQ(still.eye, glm::vec3(1.0f, 2.0f, 3.0f));
+}
+
+TEST(SavedFollowCamera, WithoutTheCursorKeysTheOffsetsKeepTheirLineAtTheDistanceOfTheView)
+{
+	creature_follow::View view {.yaw = 0.0f, .pitch = 0.5f, .distance = 1200.0f};
+	std::optional<creature_follow::Offsets> offsets = creature_follow::OffsetsAtDistance(k_Offsets, 1200.0f);
+	ASSERT_EQ(creature_follow::Apply(view, offsets, {}, 1000.0f), creature_follow::KeyOutcome::Stay);
+	ASSERT_TRUE(offsets.has_value());
+	// The keys bring the camera no further out than 1000
+	EXPECT_EQ(view.distance, creature_follow::k_MaxKeyDistance);
+	EXPECT_NEAR(creature_follow::OffsetDistance(*offsets), creature_follow::k_MaxKeyDistance, 1e-2f);
+}
+
+TEST(SavedFollowCamera, TheCursorKeysStopTheOffsetsAndTurnFromTheirView)
+{
+	creature_follow::View view {.yaw = 0.0f, .pitch = 0.5f, .distance = 45.0f};
+	std::optional<creature_follow::Offsets> offsets = k_Offsets;
+	auto keys = creature_follow::KeysFor(0, -1, 0.25f);
+	keys.shift = true;
+	ASSERT_EQ(creature_follow::Apply(view, offsets, keys, 1000.0f), creature_follow::KeyOutcome::Stay);
+	EXPECT_FALSE(offsets.has_value());
+	const auto turned = creature_follow::HeadingPitchOf(k_Offsets.eye, k_Offsets.focus);
+	EXPECT_FLOAT_EQ(view.yaw, turned.heading);
+	EXPECT_NEAR(view.pitch, turned.pitch + 0.2f, 1e-5f);
+	EXPECT_FLOAT_EQ(view.distance, 45.0f);
+}
+
+TEST(SavedFollowCamera, TheCameraWithOffsetsStandsAndLooksAtTheirPointsOnTheThing)
+{
+	const creature_follow::Loaded loaded {.view = {.yaw = 1.0f, .pitch = 0.4f, .distance = 60.0f}, .offsets = k_Offsets};
+	CreatureCameraModel model(loaded, k_Point, 10.0f);
+	EXPECT_EQ(model.GetTargetFocus(), k_Point + k_Offsets.focus);
+	EXPECT_EQ(model.GetTargetOrigin(), k_Point + k_Offsets.eye);
+	const glm::vec3 moved = k_Point + glm::vec3(5.0f, 0.0f, 5.0f);
+	model.SetTarget(moved, 10.0f);
+	EXPECT_EQ(model.GetTargetOrigin(), moved + k_Offsets.eye);
+}
+
+TEST(SavedFollowCamera, TheHeadingTurnsOnlyWithAThingThatWalks)
+{
+	const creature_follow::Loaded loaded {.view = {.yaw = 1.0f, .pitch = 0.4f, .distance = 60.0f}, .relativeHeading = true};
+	CreatureCameraModel model(loaded, k_Point, 10.0f);
+	const auto focus = creature_follow::Focus(k_Point, 10.0f);
+	// A thing that does not walk keeps the heading of the file
+	EXPECT_EQ(model.GetTargetOrigin(), creature_follow::Origin(focus, loaded.view));
+	model.SetTarget(k_Point, 10.0f, uint16_t {300});
+	auto turned = loaded.view;
+	turned.yaw = creature_follow::RelativeHeading(1.0f, 300);
+	EXPECT_EQ(model.GetTargetOrigin(), creature_follow::Origin(focus, turned));
+	EXPECT_EQ(model.GetView().yaw, 1.0f);
+}
+
+TEST(SavedFollowCamera, ACameraOfAPlayerDoesNotTurnWithTheThing)
+{
+	CreatureCameraModel model({.view = {.yaw = 1.0f, .pitch = 0.4f, .distance = 60.0f}}, k_Point, 10.0f);
+	model.SetTarget(k_Point, 10.0f, uint16_t {300});
+	EXPECT_EQ(model.GetTargetOrigin(),
+	          creature_follow::Origin(creature_follow::Focus(k_Point, 10.0f), {.yaw = 1.0f, .pitch = 0.4f, .distance = 60.0f}));
 }

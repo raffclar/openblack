@@ -5175,7 +5175,7 @@ std::string Runner::GiveCreatureModeCommand(entt::entity creature, const Command
 	auto& mode = Locator::creatureModeSystem::value();
 	auto& cave = Locator::creatureCaveSystem::value();
 	const auto following = [&mode] {
-		const auto followed = mode.GetCreature();
+		const auto followed = mode.GetThing();
 		return followed.has_value() ? fmt::format("following entity {}", static_cast<uint32_t>(*followed))
 		                            : std::string("the camera is the player's");
 	};
@@ -5213,7 +5213,9 @@ std::string Runner::GiveCreatureModeCommand(entt::entity creature, const Command
 	case Kind::SavedTurningCamera:
 	case Kind::SavedFreeCamera:
 	case Kind::SavedBelowLandCamera:
-		return GiveSavedCameraCommand(creature, command);
+		// The follow camera can follow one of the scenario's objects in place of the creature
+		return GiveSavedCameraCommand(
+		    command.with.has_value() && *command.with < _objects.size() ? _objects[*command.with] : creature, command);
 	case Kind::OpenCreatureCave:
 		cave.Open();
 		cave.GetScreen().page = static_cast<creature_cave::Page>(command.value);

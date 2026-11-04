@@ -13,12 +13,15 @@
 
 #include "3D/L3DMesh.h"
 #include "CHLApi.h"
+#include "Common/GUtilsAngle.h"
 #include "Creature/CreatureMode.h"
 #include "Creature/CreaturePlanner.h"
+#include "ECS/Components/Animal.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/Components/WallHug.h"
 #include "ECS/Registry.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
@@ -34,8 +37,9 @@ using components::CreatureMindState;
 using components::Mesh;
 using components::Transform;
 
-/// The height of a thing as a camera reads it: a creature's body, or the height of the model of anything else
-float HeightOf(const Registry& registry, entt::entity thing, const Transform& transform)
+} // namespace
+
+float CameraThingHeight(const Registry& registry, entt::entity thing, const Transform& transform)
 {
 	if (const auto* creature = registry.TryGet<const Creature>(thing); creature != nullptr)
 	{
@@ -52,7 +56,23 @@ float HeightOf(const Registry& registry, entt::entity thing, const Transform& tr
 	return 0.0f;
 }
 
-} // namespace
+std::optional<uint16_t> CameraThingGameAngle(const Registry& registry, entt::entity thing)
+{
+	// The walk of a creature never changes its game angle, so the angle stays at 0
+	if (registry.AllOf<Creature>(thing))
+	{
+		return uint16_t {0};
+	}
+	if (const auto* walk = registry.TryGet<const components::WallHug>(thing); walk != nullptr)
+	{
+		return walk->gameAngle;
+	}
+	if (const auto* animal = registry.TryGet<const components::Animal>(thing); animal != nullptr)
+	{
+		return static_cast<uint16_t>(gutils::ConvertAngle3DToGame(animal->heading));
+	}
+	return std::nullopt;
+}
 
 FollowHeadingCameraModel::ThingLookup FollowHeadingThing(entt::entity thing)
 {
@@ -71,7 +91,7 @@ FollowHeadingCameraModel::ThingLookup FollowHeadingThing(entt::entity thing)
 		{
 			return std::nullopt;
 		}
-		const float height = HeightOf(registry, thing, *transform);
+		const float height = CameraThingHeight(registry, thing, *transform);
 		bool turnsTooFast = false;
 		if (const auto* mind = registry.TryGet<const CreatureMindState>(thing); mind != nullptr)
 		{

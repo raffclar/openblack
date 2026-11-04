@@ -8,10 +8,13 @@
  *******************************************************************************/
 
 // The testbed's scenarios of the cameras that only a saved game of the original game gives: the follow camera with the
-// values of a file, the follow camera that turns with its thing, the free camera, and the world camera that can go below
-// the land
+// values of a file, on a creature or on another thing, with its heading turned with its thing or with offsets, the follow
+// camera that turns with its thing, the free camera, and the world camera that can go below the land
+
+#include <cstddef>
 
 #include <memory>
+#include <optional>
 #include <string>
 
 #include <fmt/format.h>
@@ -24,6 +27,7 @@
 #include "Camera/DefaultWorldCameraModel.h"
 #include "Camera/FollowHeadingCameraModel.h"
 #include "Camera/FreeCameraModel.h"
+#include "ECS/Components/Creature.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/FollowHeadingThing.h"
 #include "ECS/Registry.h"
@@ -52,6 +56,26 @@ constexpr float k_FreeLookAhead = 100.0f;
 constexpr float k_FreeLookDown = 10.0f;
 /// The eye of the camera that can go below the land starts this far below it
 constexpr float k_BelowLandDepth = 2.0f;
+/// The values of the follow camera for a heading that turns with its thing, and for offsets
+constexpr size_t k_RelativeHeading = 1;
+constexpr size_t k_Offsets = 2;
+/// The offsets of the follow camera: it looks at a point 1 above the place of its thing, from 10 to the side, 6 up and
+/// 10 back
+constexpr glm::vec3 k_FocusOffset {0.0f, 1.0f, 0.0f};
+constexpr glm::vec3 k_EyeOffset {10.0f, 6.0f, -10.0f};
+
+/// The follow cameras on a villager look at it from nearer, so that the villager shows well
+constexpr float k_ThingDistance = 20.0f;
+
+/// A villager that walks between two points, which a follow camera follows
+ObjectSetup Walker()
+{
+	return {.type = VillagerInfo::CelticHousewifeFemale,
+	        .offset = {20.0f, 40.0f},
+	        .walkTo = glm::vec2 {20.0f, 52.0f},
+	        .walkAfterSeconds = 2.0f,
+	        .walkRepeatSeconds = 14.0f};
+}
 
 CreatureSetup Player(glm::vec2 offset)
 {
@@ -70,6 +94,12 @@ Command Walk(glm::vec2 point, float delay)
 Command Saved(Kind kind, float delay, float amount = 0.0f)
 {
 	return {.kind = kind, .creature = 0, .delaySeconds = delay, .amount = amount};
+}
+
+/// The follow camera of a saved game on the scenario's first object, with the values of the follow camera
+Command SavedOnObject(float delay, size_t values)
+{
+	return {.kind = Kind::SavedFollowCamera, .creature = 0, .delaySeconds = delay, .value = values, .with = size_t {0}};
 }
 
 /// The creature walks round a square, so that it turns at each corner
@@ -94,6 +124,63 @@ void testbed_scenarios::AddSavedCameraScenarios(std::vector<Scenario>& all)
 	    .framing = {.shot = Shot::Overview},
 	    .creatures = {Player({0.0f, 40.0f})},
 	    .commands = Square(Saved(Kind::SavedFollowCamera, 1.0f)),
+	});
+
+	all.push_back({
+	    .id = "saves.camera_follow_thing",
+	    .name = "Follow camera of a saved game on a villager",
+	    .facet = Facet::CreatureMode,
+	    .description = "The follow camera of a saved game takes the camera after a second on a villager, not on a creature: "
+	                   "heading 1.8, pitch 0.4, distance 20. The villager walks away and back again.",
+	    .expected = "The camera glides to the villager and looks at the middle of its body from 20 away, then follows it "
+	                "a second behind as it walks. No status panel shows, because the thing is not a creature.",
+	    .framing = {.shot = Shot::Overview},
+	    .creatures = {Player({0.0f, 40.0f})},
+	    .objects = {Walker()},
+	    .commands = {SavedOnObject(1.0f, 0)},
+	});
+
+	all.push_back({
+	    .id = "saves.camera_follow_turns",
+	    .name = "Follow camera of a saved game that turns with its thing",
+	    .facet = Facet::CreatureMode,
+	    .description = "A follow camera of a saved game with the heading that turns with its thing, as a script's camera "
+	                   "is kept, follows a villager that walks away and back again.",
+	    .expected = "The camera stays at the same side of the villager as it walks. When the villager turns round, the "
+	                "camera swings round it, a second behind, to the same side of its new way.",
+	    .framing = {.shot = Shot::Overview},
+	    .creatures = {Player({0.0f, 40.0f})},
+	    .objects = {Walker()},
+	    .commands = {SavedOnObject(1.0f, k_RelativeHeading)},
+	});
+
+	all.push_back({
+	    .id = "saves.camera_follow_creature_turns",
+	    .name = "Follow camera of a saved game that turns with the creature",
+	    .facet = Facet::CreatureMode,
+	    .description = "A follow camera of a saved game with the heading that turns with its thing follows the player's "
+	                   "tiger round a square. The walk of a creature never changes its game angle.",
+	    .expected = "The camera does not turn with the tiger: it looks from a heading a quarter turn on from the heading of "
+	                "the file, the same in the whole walk round the square.",
+	    .framing = {.shot = Shot::Overview},
+	    .creatures = {Player({0.0f, 40.0f})},
+	    .commands =
+	        Square(Command {.kind = Kind::SavedFollowCamera, .creature = 0, .delaySeconds = 1.0f, .value = k_RelativeHeading}),
+	});
+
+	all.push_back({
+	    .id = "saves.camera_follow_offsets",
+	    .name = "Follow camera of a saved game with offsets",
+	    .facet = Facet::CreatureMode,
+	    .description = "A follow camera of a saved game keeps offsets from a villager: it looks at a point 1 above the "
+	                   "villager from 10 to the side, 6 up and 10 back. The villager walks away and back again.",
+	    .expected = "The camera keeps the same place relative to the villager and does not turn when the villager turns. "
+	                "It follows a second behind. The cursor keys with Shift stop the offsets, and the camera then turns "
+	                "round the villager.",
+	    .framing = {.shot = Shot::Overview},
+	    .creatures = {Player({0.0f, 40.0f})},
+	    .objects = {Walker()},
+	    .commands = {SavedOnObject(1.0f, k_Offsets)},
 	});
 
 	all.push_back({
@@ -154,7 +241,7 @@ std::string testbed_scenarios::GiveSavedCameraCommand(entt::entity creature, con
 	const auto* transform = registry.TryGet<const ecs::components::Transform>(creature);
 	if (transform == nullptr)
 	{
-		return "no creature";
+		return "no thing";
 	}
 	switch (command.kind)
 	{
@@ -165,7 +252,16 @@ std::string testbed_scenarios::GiveSavedCameraCommand(entt::entity creature, con
 			return "no creature mode";
 		}
 		const creature_follow::Loaded loaded {
-		    .view = {.yaw = k_Heading, .pitch = k_Pitch, .distance = k_Distance}, .timeScale = 1.0f, .autoReposition = true};
+		    .view = {.yaw = k_Heading,
+		             .pitch = k_Pitch,
+		             .distance = registry.AllOf<ecs::components::Creature>(creature) ? k_Distance : k_ThingDistance},
+		    .timeScale = 1.0f,
+		    .autoReposition = true,
+		    .relativeHeading = (command.value & k_RelativeHeading) != 0,
+		    .offsets = (command.value & k_Offsets) != 0
+		                   ? std::optional(creature_follow::Offsets {.focus = k_FocusOffset, .eye = k_EyeOffset})
+		                   : std::nullopt,
+		};
 		return Locator::creatureModeSystem::value().EnterLoaded(creature, loaded) ? "" : "the camera can't be taken";
 	}
 	case Kind::SavedTurningCamera:
