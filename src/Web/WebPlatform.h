@@ -13,6 +13,7 @@
 #error "The web platform code is only for the web build"
 #endif
 
+#include <filesystem>
 #include <functional>
 #include <string>
 #include <string_view>
@@ -27,6 +28,11 @@ constexpr std::string_view k_GamePath = "/game";
 /// The working folder of the game. Its Profiles folder goes to the private storage of the site in the browser, when the
 /// browser has this storage.
 constexpr std::string_view k_WorkingFolder = "/work";
+
+/// The folder where the game keeps its crash reports: in the private storage of the site when the browser has this
+/// storage, so that the page can give links to download them after the game stops, else in the working folder. Call
+/// after PrepareFileSystem.
+[[nodiscard]] std::filesystem::path CrashReportFolder();
 
 /// Prepare the file system of the game before the game starts:
 /// - Put the user's install that the page gives at k_GamePath. The game only reads it.
@@ -46,7 +52,8 @@ void BeforeFrame();
 
 /// Call after the renderer drew a frame. When a frame of RunFrames draws one frame only, the browser shows it when the
 /// game thread gives control back. All other frames go to the page as images, because the game thread does not give
-/// control back to the browser while it draws them. With a render thread, the render thread shows all frames. After a
+/// control back to the browser while it draws them. After each image the game thread waits for the next display frame,
+/// so that the page can show the image. With a render thread, the render thread shows all frames. After a
 /// frame that the game thread does not give control back for, the game thread takes the input events of the page that
 /// wait for it.
 void PresentFrame();

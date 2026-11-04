@@ -885,6 +885,7 @@ int main(int argc, char* argv[]) noexcept
 	{
 		return EXIT_FAILURE;
 	}
+	openblack::crash_handler::SetReportFolder(openblack::web::CrashReportFolder());
 #endif
 
 	try
@@ -896,6 +897,10 @@ int main(int argc, char* argv[]) noexcept
 			return returnCode;
 		}
 		openblack::crash_handler::SetLogFile(args.logFile);
+#if defined(__EMSCRIPTEN__)
+		// The page gives links to the crash reports that the private storage of the site keeps, also with a log file
+		openblack::crash_handler::SetReportFolder(openblack::web::CrashReportFolder());
+#endif
 		auto game = std::make_unique<openblack::Game>(std::move(args));
 		if (!game->Initialize())
 		{

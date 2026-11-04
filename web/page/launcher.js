@@ -118,17 +118,46 @@ globalThis.openblackLogText = () => logLines.join('\n');
 globalThis.openblackChecksums = (from = 0) => ({ count: checksumLines.length, lines: checksumLines.slice(from) });
 logElement.parentElement.addEventListener('toggle', showLog);
 
-/** Show a message on the page. The game calls this too, for an error that stops it. */
-function showMessage(title, text) {
+/** Show a message on the page. The game calls this too, for an error that stops it. Each file gets a download link. */
+function showMessage(title, text, files = []) {
   const box = document.createElement('div');
   box.className = 'message';
   const heading = document.createElement('strong');
   heading.textContent = title;
   box.append(heading, document.createTextNode(text));
+  if (files.length > 0) {
+    const list = document.createElement('ul');
+    for (const file of files) {
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(file);
+      link.download = file.name;
+      link.textContent = `${file.name} (${new Date(file.lastModified).toLocaleString()})`;
+      const item = document.createElement('li');
+      item.append(link);
+      list.append(item);
+    }
+    box.append(list);
+  }
   element('messages').append(box);
   console.error(`openblack: ${title}: ${text}`);
 }
 globalThis.openblackShowMessage = showMessage;
+
+/** Give the text to the user as a file to download */
+function download(name, text) {
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(new Blob([text], { type: 'text/plain' }));
+  link.download = name;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(link.href), 60000);
+}
+
+/** The time as the start of a file name, such as 2026-11-03_14-05-09 */
+function fileTime(date = new Date()) {
+  const two = (value) => String(value).padStart(2, '0');
+  return `${date.getFullYear()}-${two(date.getMonth() + 1)}-${two(date.getDate())}_` +
+    `${two(date.getHours())}-${two(date.getMinutes())}-${two(date.getSeconds())}`;
+}
 
 /** True when the game reads the file at this path, relative to the install folder. */
 function isGameFile(path) {
@@ -254,6 +283,85 @@ async function storageRoot() {
     return await navigator.storage.getDirectory();
   } catch {
     return undefined;
+  }
+}
+
+// The game keeps its crash reports in this folder of the private storage of the site (src/Web/WebPlatform.cpp). The
+// page also keeps a report there when the game stops on an error of the browser, such as a WebAssembly trap.
+const k_CrashFolder = ['openblack', 'crashes'];
+const k_CrashReportsShown = 5;
+const k_CrashLogLines = 2000;
+
+async function crashFolder(create = false) {
+  let folder = await storageRoot();
+  try {
+    for (const name of k_CrashFolder) {
+      folder = folder && await folder.getDirectoryHandle(name, { create });
+    }
+    return folder;
+  } catch {
+    return undefined;
+  }
+}
+
+/** The crash reports that the private storage keeps, the newest first */
+async function crashReports() {
+  const folder = await crashFolder();
+  const reports = [];
+  if (!folder) {
+    return reports;
+  }
+  try {
+    for await (const [name, handle] of folder.entries()) {
+      if (handle.kind === 'file' && name.endsWith('.txt')) {
+        reports.push(await handle.getFile());
+      }
+    }
+  } catch (error) {
+    log(`The page cannot read the crash reports: ${error}`);
+  }
+  return reports.sort((a, b) => b.lastModified - a.lastModified).slice(0, k_CrashReportsShown);
+}
+
+/** Show the crash reports that the private storage keeps, with links to download them. Gives the count shown. */
+async function showCrashReports(title, text) {
+  const reports = await crashReports();
+  if (reports.length > 0) {
+    showMessage(title, text, reports);
+  }
+  return reports.length;
+}
+
+/** Keep a crash report of the page, with the reason and the last lines of the game log, in the private storage */
+async function keepPageCrashReport(reason) {
+  const version = await buildVersion;
+  const text = [`openblack build ${version.text}`, `The game stopped: ${reason}`, `Browser: ${navigator.userAgent}`, '',
+    'The last lines of the game log:', ...logLines.slice(-k_CrashLogLines)].join('\n');
+  try {
+    const folder = await crashFolder(true);
+    const file = await folder.getFileHandle(`${fileTime()}_page.txt`, { create: true });
+    const writable = await file.createWritable();
+    await writable.write(text);
+    await writable.close();
+    return true;
+  } catch (error) {
+    log(`The page cannot keep the crash report in the private storage: ${error}`);
+    return false;
+  }
+}
+
+// The game stopped on an error of the browser: the page keeps one report, then shows the reports
+let pageCrashKept = false;
+async function gameFailed(reason) {
+  if (pageCrashKept) {
+    return;
+  }
+  pageCrashKept = true;
+  log(`The game stopped on an error: ${reason}`);
+  const kept = await keepPageCrashReport(reason);
+  if (!kept || (await showCrashReports('The game stopped on an error',
+    'The browser keeps the crash reports below. The "Save log" button gives the whole game log.')) === 0) {
+    showMessage('The game stopped on an error', `${reason} The "Save log" button gives the game log.`);
   }
 }
 
@@ -474,8 +582,24 @@ async function start(online = false) {
       folder: { list, files: chosen.map((entry) => entry.file) }, storage, version: version.file, showFrame, setPresent,
       requests,
     },
-    onExit: (code) => log(`The game stopped with the code ${code}.`),
+    onExit: (code) => {
+      log(`The game stopped with the code ${code}.`);
+      if (code !== 0) {
+        // The crash handler of the game writes its report before the game stops with an error code
+        showCrashReports('The game stopped with an error',
+          'The browser keeps the crash reports below. The "Save log" button gives the whole game log.');
+      }
+    },
+    onAbort: (reason) => gameFailed(String(reason)),
   };
+  // An error on a game thread that the game does not catch, such as a WebAssembly trap, comes to the page as an error.
+  // The page ignores the error of the size watch of the browser, which is harmless.
+  window.addEventListener('error', (event) => {
+    const reason = event.message || String(event.error);
+    if (!reason.includes('ResizeObserver')) {
+      gameFailed(reason);
+    }
+  });
   const script = document.createElement('script');
   script.src = 'openblack.js';
   document.body.append(script);
@@ -487,6 +611,12 @@ async function main() {
     log(`openblack build ${version.text}`);
   });
   // While the game plays, the log is a panel over the game, which the badge opens and closes
+  // The whole game log as a file, for a bug report
+  element('log-save').addEventListener('click', (event) => {
+    download(`openblack_log_${fileTime()}.txt`, logLines.join('\n'));
+    // The keys go to the game again, not to the button
+    event.currentTarget.blur();
+  });
   element('log-toggle').addEventListener('click', (event) => {
     const open = document.body.classList.toggle('log-open');
     logElement.parentElement.open = open;
@@ -551,6 +681,8 @@ async function main() {
     }
     await choose(entries, 'the dropped folder');
   });
+
+  showCrashReports('Crash reports', 'The browser keeps these crash reports of earlier games.');
 
   const copy = await keptCopy();
   if (copy) {

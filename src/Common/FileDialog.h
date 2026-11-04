@@ -21,8 +21,8 @@
 
 /// Asks the player for a file to open or a place to save one, with the platform's own dialog: the shell's file dialog
 /// on Windows, zenity or kdialog on Linux and other Unix desktops, and AppleScript's chooser on macOS. Where none of
-/// those is available the caller is told so and can show a file browser of its own. The dialog is modal: it returns
-/// once the player has chosen or cancelled, and the game simply waits for it.
+/// those is available, as in a web browser, the caller is told so and can show a file browser of its own. The dialog
+/// is modal: it returns once the player has chosen or cancelled, and the game simply waits for it.
 namespace openblack::file_dialog
 {
 

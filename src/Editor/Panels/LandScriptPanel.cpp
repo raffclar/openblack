@@ -128,7 +128,7 @@ void LandScriptPanel::DrawLoading() noexcept
 			std::error_code error;
 			return std::filesystem::is_directory(folder, error);
 		};
-		const auto outcome = file_dialog::Show({
+		const file_dialog::Request request {
 		    .mode = file_dialog::Mode::Open,
 		    .title = "Open a land script",
 		    .filters = {{.name = "Land scripts (*.txt)", .patterns = {"*.txt"}},
@@ -136,7 +136,8 @@ void LandScriptPanel::DrawLoading() noexcept
 		                {.name = "All files", .patterns = {"*"}}},
 		    .startFolder = file_dialog::StartFolder(file_dialog::RememberedPath(k_LandScriptFolderKey), scriptsFolder, exists),
 		    .owner = Locator::windowing::has_value() ? Locator::windowing::value().GetNativeHandles().nativeWindow : nullptr,
-		});
+		};
+		const auto outcome = file_dialog::Show(request);
 		switch (outcome.status)
 		{
 		case file_dialog::Status::Chosen:
@@ -145,10 +146,16 @@ void LandScriptPanel::DrawLoading() noexcept
 			break;
 		case file_dialog::Status::Cancelled:
 			break;
-		default:
-			_message = "No file dialog is available here";
+		case file_dialog::Status::Unavailable:
+			// No dialog on this platform, such as in a web browser: the panel shows its own file browser
+			_fileBrowser.Open(request);
 			break;
 		}
+	}
+	if (const auto chosen = _fileBrowser.Draw())
+	{
+		file_dialog::RememberPath(k_LandScriptFolderKey, chosen->parent_path());
+		ReadFile(*chosen);
 	}
 	ImGui::SameLine();
 	ImGui::TextUnformatted(_path.generic_string().c_str());

@@ -46,8 +46,10 @@ const k_PointerScale = 0.8 * pixelRatio;
 // The lock click is in the middle of the window: the page of the check keeps its own mouse there, and Chrome then has
 // no reason to move the locked pointer by itself while it takes screenshots
 const k_LockAt = [640, 512];
+// The game canvas starts below the strip of the page that names the build (--badge-bar in web/page/page.css)
+const k_BadgeBar = 22;
 // The place of the click in the pixels of the game
-const lockPixels = k_LockAt.map((value) => Math.floor(value * pixelRatio));
+const lockPixels = [k_LockAt[0], k_LockAt[1] - k_BadgeBar].map((value) => Math.floor(value * pixelRatio));
 // The OK button of the name box at 1280x1024
 const k_NameBoxOk = [290, 700];
 // Where the picture of the game pointer is when its point is on the OK button: the middle of the picture is a little

@@ -722,6 +722,11 @@ void SetLogFile(std::string_view logFile)
 	state.copyToLog = true;
 }
 
+void SetReportFolder(const std::filesystem::path& folder)
+{
+	State().reportDirectory = folder;
+}
+
 void ReportFatal(CrashKind kind, std::string_view message, std::string_view file, uint32_t line, std::string_view detail)
 {
 	auto& state = State();

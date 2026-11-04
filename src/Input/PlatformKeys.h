@@ -184,6 +184,53 @@ enum class BookmarkMove : uint8_t
 	return platform == Platform::Web ? "End" : "F10";
 }
 
+/// Whether the key, with the modifiers that the player holds, does a command of a web browser. The Controls page of the
+/// web build does not bind these keys, because the browser can do its command before the game gets the key, also when
+/// the page has no pointer lock. On the desktop no key is a browser key. On the web these keys are browser keys:
+/// - F1, F3, F5, F6, F7, F9, F10, F11 and F12, with or without modifiers: help, find, page load, address bar, caret
+///   browsing, reader view, menu, full screen and the developer tools.
+/// - Ctrl with any key that is not a modifier key: the tabs, the page and the text commands of the browser.
+/// - Alt with a digit, F4, Left, Right, Home, D, E or F: the tabs, the window, the history, the address bar and the
+///   menu.
+[[nodiscard]] constexpr bool IsBrowserKey(Platform platform, SDL_Scancode key, Modifiers held) noexcept
+{
+	if (platform != Platform::Web)
+	{
+		return false;
+	}
+	switch (key)
+	{
+	case SDL_SCANCODE_F1:
+	case SDL_SCANCODE_F3:
+	case SDL_SCANCODE_F5:
+	case SDL_SCANCODE_F6:
+	case SDL_SCANCODE_F7:
+	case SDL_SCANCODE_F9:
+	case SDL_SCANCODE_F10:
+	case SDL_SCANCODE_F11:
+	case SDL_SCANCODE_F12:
+		return true;
+	default:
+		break;
+	}
+	// The Ctrl, Shift, Alt and system keys alone do no command
+	if (key >= SDL_SCANCODE_LCTRL && key <= SDL_SCANCODE_RGUI)
+	{
+		return false;
+	}
+	if (held.ctrl)
+	{
+		return true;
+	}
+	if (!held.alt)
+	{
+		return false;
+	}
+	const bool digit = key >= SDL_SCANCODE_1 && key <= SDL_SCANCODE_0;
+	return digit || key == SDL_SCANCODE_F4 || key == SDL_SCANCODE_LEFT || key == SDL_SCANCODE_RIGHT ||
+	       key == SDL_SCANCODE_HOME || key == SDL_SCANCODE_D || key == SDL_SCANCODE_E || key == SDL_SCANCODE_F;
+}
+
 /// What an Escape press does
 enum class EscapeOutcome : uint8_t
 {

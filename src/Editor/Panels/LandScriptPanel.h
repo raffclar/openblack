@@ -16,6 +16,7 @@
 #include <string>
 #include <vector>
 
+#include "Debug/FileBrowser.h"
 #include "Editor/Scripts/LandScriptStepper.h"
 #include "LHScriptX/Script.h"
 
@@ -55,6 +56,8 @@ private:
 	std::vector<size_t> _visible;
 	std::optional<size_t> _selected;
 	std::string _message;
+	/// The file browser of the panel, where the platform has no file dialog
+	debug::gui::FileBrowser _fileBrowser;
 	bool _scrollToNext {false};
 	bool _triedCurrentLand {false};
 };
