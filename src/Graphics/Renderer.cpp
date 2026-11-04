@@ -2759,7 +2759,9 @@ void Renderer::PlanCreatureHairLight(const DrawSceneDesc& drawDesc) const
 			addWorldBody(entity);
 		}
 	}
-	// Then the creature that this computer's hand holds, and then those that the other hands hold
+	// Then the held creatures. A hand that holds a creature sends its body to the depth sorter, which draws the bodies
+	// late in the frame, from far to near. The bodies that the other hands hold come into the sorter before the body
+	// that the hand of this computer holds.
 	std::vector<entt::entity> ownHands;
 	if (Locator::handSystem::has_value())
 	{
@@ -2770,8 +2772,24 @@ void Renderer::PlanCreatureHairLight(const DrawSceneDesc& drawDesc) const
 		const auto* inHand = drawDesc.entities.TryGet<const InHand>(entity);
 		return inHand != nullptr && std::ranges::find(ownHands, inHand->hand) != ownHands.end();
 	};
-	std::ranges::stable_partition(held, ownHeld);
-	std::ranges::for_each(held, addWorldBody);
+	std::ranges::stable_partition(held, [&ownHeld](entt::entity entity) { return !ownHeld(entity); });
+	std::vector<float> keys;
+	keys.reserve(held.size());
+	const auto eye = drawDesc.camera->GetOrigin();
+	for (const auto entity : held)
+	{
+		const auto* transform = drawDesc.entities.TryGet<const Transform>(entity);
+		const auto place =
+		    transform != nullptr
+		        ? ecs::components::DrawnTransform(*transform, drawDesc.entities.TryGet<const CreatureAnimation>(entity))
+		              .position
+		        : eye;
+		keys.push_back(SortKey(place, eye));
+	}
+	for (const auto index : SortedOrder(keys))
+	{
+		addWorldBody(held[index]);
+	}
 	// The copies of creatures in the temple's rooms
 	if (Locator::temple::has_value())
 	{

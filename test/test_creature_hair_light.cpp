@@ -102,3 +102,22 @@ TEST(CreatureHairLight, TheLookOfAMappedHairFollowsItsSource)
 	EXPECT_EQ(LookOf(Source {FromFrameBefore {}}, known, Carried {k_Film}), Look {k_Film});
 	EXPECT_EQ(LookOf(Source {FromFrameBefore {}}, known, Carried {Kept {}}), Look {Kept {}});
 }
+
+TEST(CreatureHairLight, TheSortKeyIsTheSquaredDistanceFromTheEye)
+{
+	EXPECT_EQ(SortKey(glm::vec3(4.0f, 5.0f, 6.0f), glm::vec3(1.0f, 1.0f, 1.0f)), 50.0f);
+	EXPECT_EQ(SortKey(glm::vec3(2.0f), glm::vec3(2.0f)), 0.0f);
+}
+
+TEST(CreatureHairLight, TheSorterDrawsFarBodiesFirst)
+{
+	const std::vector<float> keys {4.0f, 9.0f, 1.0f};
+	EXPECT_EQ(SortedOrder(keys), (std::vector<size_t> {1, 0, 2}));
+	EXPECT_TRUE(SortedOrder({}).empty());
+}
+
+TEST(CreatureHairLight, BodiesWithEqualKeysKeepTheOrderInWhichTheyCameIn)
+{
+	const std::vector<float> keys {4.0f, 9.0f, 4.0f, 9.0f};
+	EXPECT_EQ(SortedOrder(keys), (std::vector<size_t> {1, 3, 0, 2}));
+}
