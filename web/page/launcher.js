@@ -541,9 +541,11 @@ async function start(online = false) {
   if (!chosen) {
     return;
   }
+  // The page finds JSPI by its feature, not by the name of the browser
   if (typeof WebAssembly.Suspending !== 'function') {
     showMessage('The page cannot start the game',
-      'This browser does not have JSPI (WebAssembly JavaScript Promise Integration), which the game needs.');
+      'This browser does not have JSPI (WebAssembly JavaScript Promise Integration), which the game needs. ' +
+      'Use a browser with JSPI support. For Safari, use version 27 or later.');
     return;
   }
   setPlayEnabled(false);
