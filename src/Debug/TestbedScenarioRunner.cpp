@@ -19,15 +19,11 @@
 #include <fstream>
 #include <limits>
 #include <memory>
-#include <numbers>
 #include <ranges>
 #include <string>
 #include <string_view>
 #include <system_error>
-#include <tuple>
-#include <type_traits>
 #include <utility>
-#include <variant>
 #include <vector>
 
 #include <LHVM.h>
@@ -41,7 +37,6 @@
 #include <glm/trigonometric.hpp>
 #include <spdlog/spdlog.h>
 
-#include "3D/DayNightClock.h"
 #include "3D/FlatLand.h"
 #include "3D/L3DMesh.h"
 #include "3D/LandIslandInterface.h"
@@ -49,9 +44,6 @@
 #include "3D/ScreenPick.h"
 #include "3D/SkyDome.h"
 #include "3D/TempleInteriorInterface.h"
-#include "Animals/BirdRules.h"
-#include "Animals/GrazerRules.h"
-#include "Animals/HunterRules.h"
 #include "CHLApi.h"
 #include "Camera/Camera.h"
 #include "Camera/CameraModel.h"
@@ -59,7 +51,6 @@
 #include "Commands/PlayerCommands.h"
 #include "Commands/TurnCodec.h"
 #include "Common/FileDialog.h"
-#include "Common/MachineClock.h"
 #include "Common/PortableMath.h"
 #include "Creature/CaveCreature.h"
 #include "Creature/CreatureActivity.h"
@@ -79,28 +70,15 @@
 #include "Debug/TownMiracles.h"
 #include "DebugGuiInterface.h"
 #include "ECS/Archetypes/AbodeArchetype.h"
-#include "ECS/Archetypes/AnimalArchetype.h"
-#include "ECS/Archetypes/AnimatedStaticArchetype.h"
 #include "ECS/Archetypes/ArenaArchetype.h"
 #include "ECS/Archetypes/CitadelArchetype.h"
 #include "ECS/Archetypes/CreatureArchetype.h"
-#include "ECS/Archetypes/DeadTreeArchetype.h"
 #include "ECS/Archetypes/DrinkWaypointArchetype.h"
-#include "ECS/Archetypes/FeatureArchetype.h"
 #include "ECS/Archetypes/FieldArchetype.h"
-#include "ECS/Archetypes/FishFarmArchetype.h"
-#include "ECS/Archetypes/FlowersArchetype.h"
-#include "ECS/Archetypes/MobileObjectArchetype.h"
-#include "ECS/Archetypes/MobileStaticArchetype.h"
-#include "ECS/Archetypes/PlayerArchetype.h"
-#include "ECS/Archetypes/PotArchetype.h"
 #include "ECS/Archetypes/ScriptMarkerArchetype.h"
 #include "ECS/Archetypes/SharkArchetype.h"
-#include "ECS/Archetypes/StreetLanternArchetype.h"
 #include "ECS/Archetypes/TownArchetype.h"
-#include "ECS/Archetypes/TreeArchetype.h"
 #include "ECS/Archetypes/VillagerArchetype.h"
-#include "ECS/BuildingReplan.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/BuildingDamage.h"
@@ -116,7 +94,6 @@
 #include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureNeeds.h"
-#include "ECS/Components/CreatureTallies.h"
 #include "ECS/Components/Dance.h"
 #include "ECS/Components/Field.h"
 #include "ECS/Components/Fire.h"
@@ -124,7 +101,6 @@
 #include "ECS/Components/Footpath.h"
 #include "ECS/Components/GameStanding.h"
 #include "ECS/Components/HandGrab.h"
-#include "ECS/Components/Indestructible.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/MagicFireBall.h"
 #include "ECS/Components/MagicPile.h"
@@ -134,10 +110,6 @@
 #include "ECS/Components/ObserverInterfaces.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Player.h"
-#include "ECS/Components/PlayerStatistics.h"
-#include "ECS/Components/Poisoned.h"
-#include "ECS/Components/Pot.h"
-#include "ECS/Components/PrayerPower.h"
 #include "ECS/Components/Reward.h"
 #include "ECS/Components/Scaffold.h"
 #include "ECS/Components/ScriptControl.h"
@@ -147,7 +119,6 @@
 #include "ECS/Components/SpellDispenser.h"
 #include "ECS/Components/SpellIcon.h"
 #include "ECS/Components/SpellSeed.h"
-#include "ECS/Components/StreetLantern.h"
 #include "ECS/Components/TeleportStone.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
@@ -155,9 +126,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/VillageTotem.h"
 #include "ECS/Components/Villager.h"
-#include "ECS/Components/VillagerLabel.h"
 #include "ECS/Components/Vortex.h"
-#include "ECS/Components/WallHug.h"
 #include "ECS/Components/Weather.h"
 #include "ECS/Components/Workshop.h"
 #include "ECS/Components/WorshipSite.h"
@@ -204,7 +173,6 @@
 #include "ECS/Systems/FootballSystemInterface.h"
 #include "ECS/Systems/FootpathSystemInterface.h"
 #include "ECS/Systems/FootprintSystemInterface.h"
-#include "ECS/Systems/ForestSystemInterface.h"
 #include "ECS/Systems/GameEndSystemInterface.h"
 #include "ECS/Systems/GestureEventsInterface.h"
 #include "ECS/Systems/GestureSystemInterface.h"
@@ -216,11 +184,9 @@
 #include "ECS/Systems/HelpProfileSystemInterface.h"
 #include "ECS/Systems/HelpSpeechSystemInterface.h"
 #include "ECS/Systems/HelpTextSystemInterface.h"
-#include "ECS/Systems/Implementations/VillagerBreeding.h"
 #include "ECS/Systems/Implementations/VillagerCreatureReactions.h"
 #include "ECS/Systems/Implementations/VillagerDance.h"
 #include "ECS/Systems/Implementations/VillagerDisciples.h"
-#include "ECS/Systems/Implementations/VillagerHome.h"
 #include "ECS/Systems/IncomingMessageSystemInterface.h"
 #include "ECS/Systems/InspectorLoading.h"
 #include "ECS/Systems/InspectorSystemInterface.h"
@@ -243,7 +209,6 @@
 #include "ECS/Systems/ScriptMusicSystemInterface.h"
 #include "ECS/Systems/ScriptObjectsSystemInterface.h"
 #include "ECS/Systems/SkyClockSystemInterface.h"
-#include "ECS/Systems/SnowSystemInterface.h"
 #include "ECS/Systems/SoundTagSystemInterface.h"
 #include "ECS/Systems/SpellIconSystemInterface.h"
 #include "ECS/Systems/TattooEditorSystemInterface.h"
@@ -263,7 +228,6 @@
 #include "FileSystem/FileSystemInterface.h"
 #include "Gestures/GesturePaths.h"
 #include "Gui/GameTexts.h"
-#include "Gui/OnlineMapTexts.h"
 #include "Gui/TextDatabase.h"
 #include "Help/HelpProfileFile.h"
 #include "Help/Spirits.h"
@@ -275,7 +239,6 @@
 #include "Input/PointerSettle.h"
 #include "LHScriptX/FeatureScriptCommands.h"
 #include "LHScriptX/Script.h"
-#include "LandChange.h"
 #include "Locator.h"
 #include "Magic/MagicTables.h"
 #include "Magic/ScriptCast.h"
@@ -292,6 +255,7 @@
 #include "Sound/SoundId.h"
 #include "Sound/SoundRequestInterface.h"
 #include "TestbedDispenserGrid.h"
+#include "TestbedScenarioRunnerParts.h"
 #include "Visual/RendererRequestsInterface.h"
 #include "Windowing/WindowingInterface.h"
 
@@ -299,6 +263,7 @@
 
 using namespace openblack;
 using namespace openblack::testbed_scenarios;
+using namespace openblack::testbed_scenarios::runner_parts;
 using openblack::ecs::archetypes::CreatureArchetype;
 using openblack::ecs::components::Creature;
 using openblack::ecs::components::CreatureAnimation;
@@ -323,90 +288,20 @@ lhvm::DataType ScriptDataTypeOf(ScriptArgument::Kind kind)
 	}
 }
 
-using Kind = Command::Kind;
-using Pace = ecs::systems::CreatureLocomotionSystemInterface::Pace;
-
 /// The lines of the log of commands kept
 constexpr size_t k_LogLines = 8;
 /// A creature follows another this far behind, for a creature of size 1
 constexpr float k_FollowDistance = 25.0f;
-/// Forced weather lasts as long as anyone watches
-constexpr float k_WeatherSeconds = 3600.0f;
-/// The size of a creature whose scenario doesn't give one
-constexpr float k_DefaultSize = 1.0f;
 /// The least the overview takes in either way of the middle of what it frames
 constexpr float k_MinOverviewHalfSize = 25.0f;
 /// The live results of a benchmark are summed up again every so many frames
 constexpr uint32_t k_FramesPerSummary = 30;
 /// What the store of a crowd's town starts with
 constexpr uint32_t k_CrowdFood = 2000;
-/// The town a scenario's buildings and fields belong to, its id kept clear of the crowds' towns, and what its buildings
-/// hold
-constexpr uint32_t k_ScenarioTownId = 900;
-constexpr uint32_t k_ScenarioTownFood = 500;
 /// How high above its hand another god reports its camera, in metres
 constexpr float k_OtherGodCameraAbove = 30.0f;
-constexpr uint32_t k_ScenarioTownWood = 500;
 
-/// The scenario's town, a Celtic town of the player's in the middle of the map, made when first needed
-uint32_t ScenarioTown(glm::vec2 middle)
-{
-	auto& registry = Locator::entitiesRegistry::value();
-	auto& towns = registry.Context().towns;
-	if (const auto found = towns.find(k_ScenarioTownId); found != towns.end())
-	{
-		if (registry.Valid(found->second))
-		{
-			return k_ScenarioTownId;
-		}
-		towns.erase(found);
-	}
-	const glm::vec3 position {middle.x, Locator::terrainSystem::value().GetHeightAt(middle), middle.y};
-	ecs::archetypes::TownArchetype::Create(static_cast<int>(k_ScenarioTownId), position, PlayerNames::PLAYER_ONE,
-	                                       Tribe::CELTIC);
-	return k_ScenarioTownId;
-}
-
-/// The town of an object of a scenario: the land's own town that the object names, or else the scenario's town
-uint32_t ObjectTown(const ObjectSetup& object, glm::vec2 middle)
-{
-	return object.landTown.has_value() ? *object.landTown : ScenarioTown(middle);
-}
 constexpr uint32_t k_CrowdWood = 2000;
-/// Enough building to finish a worship site at once
-constexpr float k_BuildWholeSite = 1.0e6f;
-/// The prayer power the testbed's player has when a scenario doesn't say, as the testbed starts with
-constexpr float k_PlentyOfPrayer = 1.0e6f;
-
-/// The profiler's stages as benchmarks name them: the drawing of the reflection and of the main pass told apart, and
-/// everything from drawing the scene on counted as rendering
-std::vector<benchmark::StageInfo> BenchmarkStages()
-{
-	static const std::vector<std::string> k_Names = [] {
-		std::vector<std::string> names;
-		for (size_t i = 0; i < Profiler::k_StageNames.size(); ++i)
-		{
-			const auto stage = static_cast<Profiler::Stage>(i);
-			std::string name(Profiler::k_StageNames.at(i));
-			if (stage > Profiler::Stage::ReflectionPass && stage <= Profiler::Stage::ReflectionDrawParticles)
-			{
-				name = "Reflection " + name;
-			}
-			else if (stage > Profiler::Stage::MainPass && stage <= Profiler::Stage::MainPassDrawParticles)
-			{
-				name = "Main " + name;
-			}
-			names.push_back(std::move(name));
-		}
-		return names;
-	}();
-	std::vector<benchmark::StageInfo> stages;
-	for (size_t i = 0; i < k_Names.size(); ++i)
-	{
-		stages.push_back({.name = k_Names.at(i), .render = static_cast<Profiler::Stage>(i) >= Profiler::Stage::SceneDraw});
-	}
-	return stages;
-}
 
 double Milliseconds(std::chrono::steady_clock::duration duration)
 {
@@ -418,26 +313,6 @@ constexpr std::string_view k_Build = "optimised";
 #else
 constexpr std::string_view k_Build = "debug";
 #endif
-
-/// The weather of each kind laid over the island, as the weather window's presets have it
-ecs::components::WeatherInfo WeatherOf(Weather weather)
-{
-	switch (weather)
-	{
-	case Weather::Rain:
-		return {.temperature = 12, .rain = 80, .overcast = 90, .windZ = 15};
-	case Weather::Thunderstorm:
-		return {.temperature = 20, .rain = 100, .overcast = 100, .windZ = 30};
-	case Weather::Snow:
-		return {.temperature = -5, .snow = 70, .overcast = 80, .windZ = 5};
-	case Weather::Blizzard:
-		return {.temperature = -15, .snow = 100, .overcast = 100, .windZ = 60};
-	case Weather::Clear:
-	default:
-		// The testbed has no climate of its own, which would leave it at freezing; a clear day is mild
-		return {.temperature = 18};
-	}
-}
 
 std::string_view MoveResultName(ecs::systems::CreatureLocomotionSystemInterface::MoveResult result)
 {
@@ -461,25 +336,11 @@ glm::vec2 AheadOf(const Transform& transform)
 	return {ahead.x, ahead.z};
 }
 
-/// The debug windows leave the mouse alone while a scenario drives it, so that the real pointer resting on one of them
-/// doesn't take the scenario's presses
-void KeepDebugWindowsOffTheMouse(bool off)
-{
-	if (Locator::debugGui::has_value())
-	{
-		Locator::debugGui::value().KeepOffTheMouse(off);
-	}
-}
 /// Whether a command sends its creature somewhere, or has it face, throw or point somewhere
 bool HasPoint(Kind kind)
 {
 	return kind == Kind::WalkTo || kind == Kind::RunTo || kind == Kind::FleeFrom || kind == Kind::TurnToFace ||
 	       kind == Kind::ThrowAt || kind == Kind::PointAt || kind == Kind::TurnToFaceWhenStill;
-}
-
-std::string_view Started(bool started)
-{
-	return started ? "started" : "can't";
 }
 
 /// The camera's fields of view across and up and down, in radians
@@ -499,202 +360,6 @@ std::string RefusedText(const ecs::systems::LeashSystemInterface& leashes)
 /// point first, and a thrown one is let go this long after
 constexpr float k_HandPressWait = 0.2f;
 constexpr float k_HandThrowSeconds = 0.4f;
-/// The hand looks at its point from this high over itself, and at a creature this high over its feet
-constexpr float k_HandEyeHeight = 20.0f;
-constexpr float k_HandAimHeight = 2.0f;
-
-std::string_view HandResultName(ecs::systems::MagicSystemInterface::HandResult result)
-{
-	using HandResult = ecs::systems::MagicSystemInterface::HandResult;
-	switch (result)
-	{
-	case HandResult::None:
-		return "nothing";
-	case HandResult::TookMiracle:
-		return "took a miracle";
-	case HandResult::Readied:
-		return "armed";
-	case HandResult::Cast:
-		return "cast";
-	case HandResult::CastHeld:
-		return "cast, held";
-	case HandResult::NotReady:
-		return "not ready";
-	case HandResult::CantCastThere:
-		return "can't cast there";
-	case HandResult::Released:
-		return "let go";
-	case HandResult::Discarded:
-		return "dropped";
-	case HandResult::NoCircle:
-		return "no circle drawn";
-	case HandResult::PoweredUp:
-		return "powered up";
-	case HandResult::Stored:
-		return "stored";
-	}
-	return "";
-}
-
-/// An animal as the scenario gives it: a living one as a land's script makes it, or one that stays at its position
-entt::entity PlaceAnimal(AnimalInfo type, const ObjectSetup& object, glm::vec3 position, float yaw)
-{
-	if (!Locator::animalSystem::has_value())
-	{
-		return ecs::archetypes::AnimalArchetype::Create(type, position, yaw, object.scale, PlayerNames::NEUTRAL);
-	}
-	auto& animalSystem = Locator::animalSystem::value();
-	const glm::vec2 point {position.x, position.z};
-	entt::entity animal = entt::null;
-	// A script's animal: made and held still as a land's script makes one, and under the script's control from then on
-	if (object.inScript)
-	{
-		animal = animalSystem.CreateScriptAnimal(type, point);
-		if (animal != entt::null)
-		{
-			Locator::entitiesRegistry::value().AssignOrReplace<ecs::components::ScriptControlled>(animal);
-			return animal;
-		}
-	}
-	if (object.living && animals::grazers::IsGrazer(type))
-	{
-		animal = animalSystem.CreateGrazer(type, point, 0, entt::null, entt::null);
-	}
-	else if (object.living && animals::birds::IsLandBird(type))
-	{
-		animal = animalSystem.CreateBird(type, point, 0, entt::null);
-	}
-	else if (object.living && animals::hunters::IsWildHunter(type))
-	{
-		animal = animalSystem.CreateHunter(type, point, 0, entt::null);
-		// A hungry hunter starts with its need to eat full
-		auto& registry = Locator::entitiesRegistry::value();
-		if (auto* hunter = animal != entt::null ? registry.TryGet<ecs::components::Hunter>(animal) : nullptr;
-		    hunter != nullptr && object.hungry)
-		{
-			hunter->needs.hunger =
-			    static_cast<int16_t>(Locator::infoConstants::value().animal.at(static_cast<size_t>(type)).hunger);
-		}
-	}
-	if (animal != entt::null)
-	{
-		return animal;
-	}
-	if (object.living)
-	{
-		SPDLOG_LOGGER_WARN(spdlog::get("game"), "Testbed: animal kind {} cannot live yet, it stays where it is put",
-		                   static_cast<int>(type));
-	}
-	return animalSystem.CreateStillAnimal(type, position, yaw, object.scale);
-}
-
-/// A villager's or animal's life and poison as the scenario gives them
-/// Make the crop of a testbed field ripe: fully sown, at the ripe age of its type, with all the food of its type
-void RipenCrop(entt::entity field, FieldTypeInfo type, bool ripe)
-{
-	auto* state =
-	    ripe && field != entt::null ? Locator::entitiesRegistry::value().TryGet<ecs::components::Field>(field) : nullptr;
-	const auto& types = Locator::infoConstants::value().fieldType;
-	const auto row = static_cast<size_t>(type);
-	if (state == nullptr || row >= types.size())
-	{
-		return;
-	}
-	const auto& info = types.at(row);
-	state->crop = {.timesSown = static_cast<uint8_t>(info.timesToSow), .age = info.ageRecolt, .food = info.totalFoodInField};
-}
-
-void SetLifeAndPoison(entt::entity entity, const ObjectSetup& object)
-{
-	auto& registry = Locator::entitiesRegistry::value();
-	if (entity == entt::null || !registry.Valid(entity))
-	{
-		return;
-	}
-	if (object.life.has_value())
-	{
-		if (auto* villager = registry.TryGet<ecs::components::Villager>(entity))
-		{
-			villager->life = std::clamp(*object.life, 0.0f, 1.0f);
-		}
-		// A street lantern starts with that much life
-		if (registry.AllOf<ecs::components::StreetLantern>(entity))
-		{
-			ecs::world_objects::SetLife(entity, std::clamp(*object.life, 0.0f, 1.0f));
-		}
-		// A building is hurt down to it, as anything that hurts it does, which opens a site for its repair
-		if (registry.AllOf<ecs::components::Abode>(entity))
-		{
-			static_cast<void>(ecs::world_objects::ReduceLife(entity, 1.0f - std::clamp(*object.life, 0.0f, 1.0f)));
-		}
-		if (auto* animal = registry.TryGet<ecs::components::Animal>(entity))
-		{
-			animal->life = std::clamp(*object.life, 0.0f, 1.0f);
-			// One given no life is killed: it falls dead and lies its time
-			if (animal->Dead() && Locator::animalSystem::has_value())
-			{
-				Locator::animalSystem::value().SetDying(entity);
-			}
-		}
-	}
-	if (auto* villager = registry.TryGet<ecs::components::Villager>(entity);
-	    villager != nullptr && (object.woodHeld != 0 || object.foodHeld != 0))
-	{
-		villager->woodHeld = object.woodHeld;
-		villager->foodHeld = object.foodHeld;
-	}
-	if (object.poisoned)
-	{
-		if (auto* pot = registry.TryGet<ecs::components::Pot>(entity); pot != nullptr)
-		{
-			pot->poisoned = true;
-		}
-		else
-		{
-			registry.AssignOrReplace<ecs::components::Poisoned>(entity);
-		}
-	}
-	if (object.indestructible)
-	{
-		registry.AssignOrReplace<ecs::components::Indestructible>(entity);
-	}
-	if (object.cannotBePickedUp)
-	{
-		registry.AssignOrReplace<ecs::components::CannotBePickedUp>(entity);
-	}
-	// A villager given a row of the table of named people takes that name in place of any name that it got when made
-	if (object.nameRow.has_value() && registry.AllOf<ecs::components::Villager>(entity))
-	{
-		auto& used = registry.Context().namedVillagersUsed;
-		if (const auto* named = registry.TryGet<ecs::components::NamedVillager>(entity))
-		{
-			used.at(named->row) = false;
-		}
-		used.at(*object.nameRow) = true;
-		registry.AssignOrReplace<ecs::components::NamedVillager>(entity, *object.nameRow);
-	}
-	if (object.immovable)
-	{
-		registry.AssignOrReplace<ecs::components::Immovable>(entity);
-	}
-	// A building is held by a script as a script holds a thing that one of its variables names
-	if (object.inScript && registry.AnyOf<ecs::components::Abode, ecs::components::SpellDispenser>(entity))
-	{
-		registry.AssignOrReplace<ecs::components::InScript>(entity);
-	}
-	if (object.inScript && registry.AllOf<ecs::components::Villager>(entity) && Locator::livingActionSystem::has_value())
-	{
-		Locator::livingActionSystem::value().VillagerSetScriptState(entity, VillagerStates::InScript);
-	}
-	if (object.scriptControlled && registry.AllOf<ecs::components::Villager>(entity))
-	{
-		registry.AssignOrReplace<ecs::components::ScriptControlled>(entity);
-	}
-	if (object.disciple != VillagerDisciple::None && registry.AllOf<ecs::components::Villager>(entity))
-	{
-		ecs::villager_disciple::SetType(entity, object.disciple);
-	}
-}
 
 /// The player has grey rings of their own for a design, which the tattoo editor puts in the creature's block of
 /// pictures when a tattoo is dropped
@@ -880,6 +545,87 @@ std::string PlayCustomMusic(size_t track)
 	return fmt::format("plays {} (track {:08x}), the creature's mood for it {:.3f}", player->GetSongName(), id, mood);
 }
 } // namespace
+
+namespace openblack::testbed_scenarios::runner_parts
+{
+std::string_view HandResultName(ecs::systems::MagicSystemInterface::HandResult result)
+{
+	using HandResult = ecs::systems::MagicSystemInterface::HandResult;
+	switch (result)
+	{
+	case HandResult::None:
+		return "nothing";
+	case HandResult::TookMiracle:
+		return "took a miracle";
+	case HandResult::Readied:
+		return "armed";
+	case HandResult::Cast:
+		return "cast";
+	case HandResult::CastHeld:
+		return "cast, held";
+	case HandResult::NotReady:
+		return "not ready";
+	case HandResult::CantCastThere:
+		return "can't cast there";
+	case HandResult::Released:
+		return "let go";
+	case HandResult::Discarded:
+		return "dropped";
+	case HandResult::NoCircle:
+		return "no circle drawn";
+	case HandResult::PoweredUp:
+		return "powered up";
+	case HandResult::Stored:
+		return "stored";
+	}
+	return "";
+}
+
+/// The profiler's stages as benchmarks name them: the drawing of the reflection and of the main pass told apart, and
+/// everything from drawing the scene on counted as rendering
+std::vector<benchmark::StageInfo> BenchmarkStages()
+{
+	static const std::vector<std::string> k_Names = [] {
+		std::vector<std::string> names;
+		for (size_t i = 0; i < Profiler::k_StageNames.size(); ++i)
+		{
+			const auto stage = static_cast<Profiler::Stage>(i);
+			std::string name(Profiler::k_StageNames.at(i));
+			if (stage > Profiler::Stage::ReflectionPass && stage <= Profiler::Stage::ReflectionDrawParticles)
+			{
+				name = "Reflection " + name;
+			}
+			else if (stage > Profiler::Stage::MainPass && stage <= Profiler::Stage::MainPassDrawParticles)
+			{
+				name = "Main " + name;
+			}
+			names.push_back(std::move(name));
+		}
+		return names;
+	}();
+	std::vector<benchmark::StageInfo> stages;
+	for (size_t i = 0; i < k_Names.size(); ++i)
+	{
+		stages.push_back({.name = k_Names.at(i), .render = static_cast<Profiler::Stage>(i) >= Profiler::Stage::SceneDraw});
+	}
+	return stages;
+}
+
+/// The debug windows leave the mouse alone while a scenario drives it, so that the real pointer resting on one of them
+/// doesn't take the scenario's presses
+void KeepDebugWindowsOffTheMouse(bool off)
+{
+	if (Locator::debugGui::has_value())
+	{
+		Locator::debugGui::value().KeepOffTheMouse(off);
+	}
+}
+
+std::string_view Started(bool started)
+{
+	return started ? "started" : "can't";
+}
+} // namespace openblack::testbed_scenarios::runner_parts
 
 void Runner::Start(const Scenario& scenario)
 {
@@ -1387,527 +1133,6 @@ void Runner::Stop()
 	Log("Stopped");
 }
 
-void Runner::SetUpDate(const std::optional<RealDate>& date)
-{
-	if (!Locator::time::has_value())
-	{
-		return;
-	}
-	auto& time = Locator::time::value();
-	if (!date.has_value())
-	{
-		if (_pinnedDateBefore.has_value())
-		{
-			time.PinDate(*_pinnedDateBefore);
-			_pinnedDateBefore.reset();
-		}
-		return;
-	}
-	if (!_pinnedDateBefore.has_value())
-	{
-		_pinnedDateBefore = time.GetPinnedDate();
-	}
-	std::tm local {};
-	local.tm_year = date->year - 1900;
-	local.tm_mon = date->month - 1;
-	local.tm_mday = date->day;
-	local.tm_hour = date->hour;
-	local.tm_min = date->minute;
-	// The computer's time zone tells whether summer time applies on that date
-	local.tm_isdst = -1;
-	const auto unixTime = static_cast<int64_t>(std::mktime(&local));
-	time.PinDate(ecs::systems::PinForDateNow(unixTime, time.GetTicks()));
-	Log(fmt::format("Date set to {:04}-{:02}-{:02} {:02}:{:02}", date->year, date->month, date->day, date->hour, date->minute));
-}
-
-void Runner::SetUpEnvironment(const Environment& environment)
-{
-	SetUpDate(environment.realDate);
-	if (environment.nightWhisperChecks.has_value() && Locator::guidanceSystem::has_value())
-	{
-		Locator::guidanceSystem::value().StageNightWhisper(*environment.nightWhisperChecks);
-		Log(fmt::format("The night whisper checks the clock next, after {} checks", *environment.nightWhisperChecks));
-	}
-	// A land of the story keeps its own sky, weather, alignment and prayer power
-	const bool storyLand = environment.land == Land::Story;
-	if (!storyLand && Locator::skyClockSystem::has_value())
-	{
-		auto& sky = Locator::skyClockSystem::value();
-		sky.SetTime(environment.hour);
-		sky.GetClock().SetRunning(environment.clockRuns);
-	}
-	if (!storyLand && Locator::weatherSystem::has_value())
-	{
-		// Only the scenario's weather: the climates breed no storms of their own
-		auto& weather = Locator::weatherSystem::value();
-		weather.ClearStorms();
-		weather.SetStormCreationEnabled(false);
-		const auto thunder = environment.weather == Weather::Thunderstorm;
-		weather.ForceStorm({.effect = WeatherOf(environment.weather),
-		                    .seconds = k_WeatherSeconds,
-		                    .fadeSeconds = 0.5f,
-		                    .thunderWait = thunder ? glm::vec2(3.0f, 15.0f) : glm::vec2(0.0f),
-		                    .boltWait = thunder ? environment.boltSeconds.value_or(glm::vec2(2.0f, 8.0f)) : glm::vec2(0.0f)});
-	}
-	if (environment.snowDepth.has_value() && Locator::snowSystem::has_value())
-	{
-		Locator::snowSystem::value().Cover(*environment.snowDepth);
-	}
-	if (Locator::creaturePhysiologySystem::has_value())
-	{
-		auto& physiology = Locator::creaturePhysiologySystem::value();
-		physiology.SetTimeScale(environment.bodyTimeScale);
-		physiology.SetFaintingEnabled(environment.fainting);
-	}
-	if (Locator::footprintSystem::has_value())
-	{
-		// A scenario starts with no prints from the one before
-		Locator::footprintSystem::value().Reset();
-		Locator::footprintSystem::value().SetAprilFoolsOverride(environment.aprilFools);
-	}
-	if (!storyLand && Locator::alignmentSystem::has_value())
-	{
-		Locator::alignmentSystem::value().SetPlayerAlignment(PlayerNames::PLAYER_ONE,
-		                                                     environment.playerAlignment.value_or(0.0f));
-	}
-	// A scenario starts with the first player as the god of this computer, after a scenario that changed it
-	if (std::exchange(_ownGodChanged, false) && Locator::handSystem::has_value())
-	{
-		Locator::handSystem::value().SetOwnPlayer(PlayerNames::PLAYER_ONE);
-	}
-	// The player's prayer power: as much as the scenario gives, or plenty
-	if (!storyLand && Locator::entitiesRegistry::has_value())
-	{
-		auto& registry = Locator::entitiesRegistry::value();
-		registry.Each<const ecs::components::Player, ecs::components::PrayerPower>(
-		    [&environment](const ecs::components::Player& player, ecs::components::PrayerPower& prayer) {
-			    if (player.name == PlayerNames::PLAYER_ONE)
-			    {
-				    prayer.chants = environment.prayer.value_or(k_PlentyOfPrayer);
-				    prayer.infinite = false;
-			    }
-		    });
-	}
-	// The switch of the Soccer Add-On, which the next land reads again from the settings
-	if (environment.football && Locator::footballSystem::has_value())
-	{
-		Locator::footballSystem::value().StartGame(true, Locator::time::value().IsNetworkGame());
-	}
-	if (environment.pushScrolling && Locator::config::has_value())
-	{
-		Locator::config::value().pushScrolling = true;
-		Locator::config::value().testbedPushScrollInWindow = true;
-	}
-	if (environment.profileSymbol.has_value())
-	{
-		if (_stage != nullptr)
-		{
-			_stage->MakePlayersSymbols(environment.profileSymbol);
-		}
-	}
-	if (environment.drawFootpaths && Locator::config::has_value())
-	{
-		Locator::config::value().drawFootpaths = true;
-	}
-	if (environment.unlockedBonusCreatures.has_value() && Locator::config::has_value())
-	{
-		auto& unlocked = Locator::config::value().unlockedBonusCreatures;
-		if (!_unlockedBefore.has_value())
-		{
-			_unlockedBefore = unlocked;
-		}
-		unlocked = *environment.unlockedBonusCreatures;
-	}
-	if (!environment.cameraZone.empty() && Locator::cameraZoneSystem::has_value())
-	{
-		_cameraZoneSet = true;
-		if (!Locator::cameraZoneSystem::value().SetZones(environment.cameraZone))
-		{
-			Log(fmt::format("The camera zones of {} did not load", environment.cameraZone));
-		}
-	}
-	if (environment.landNumber.has_value() && Locator::entitiesRegistry::has_value())
-	{
-		auto& landNumber = Locator::entitiesRegistry::value().Context().mapScriptGlobals.landNumber;
-		if (!_landNumberBefore.has_value())
-		{
-			_landNumberBefore = landNumber;
-		}
-		landNumber = *environment.landNumber;
-	}
-	if (environment.skirmish && Locator::entitiesRegistry::has_value())
-	{
-		auto& skirmish = Locator::entitiesRegistry::value().Context().skirmish;
-		if (!_skirmishBefore.has_value())
-		{
-			_skirmishBefore = skirmish;
-		}
-		skirmish = true;
-	}
-	if (environment.networkGame && Locator::time::has_value())
-	{
-		auto& clock = Locator::time::value();
-		if (!_networkGameBefore.has_value())
-		{
-			_networkGameBefore = clock.IsNetworkGame();
-		}
-		clock.SetNetworkGame(true);
-	}
-	// The other players that the scenario puts in the game
-	if (Locator::entitiesRegistry::has_value() && Locator::playerSystem::has_value())
-	{
-		for (const auto name : environment.players)
-		{
-			if (!ecs::creature_from_file::PlayerInGame(name))
-			{
-				const auto player = ecs::archetypes::PlayerArchetype::Create(name);
-				Locator::playerSystem::value().AddPlayer(player);
-				_addedPlayers.push_back(player);
-			}
-		}
-	}
-	if (environment.cursor && Locator::windowing::has_value())
-	{
-		const auto size = glm::vec2(Locator::windowing::value().GetSize());
-		_stage->SetMousePosition(glm::ivec2(*environment.cursor * size));
-	}
-}
-
-void Runner::PlaceHighlights(const Scenario& scenario, glm::vec2 middle)
-{
-	if (!Locator::scriptHighlightSystem::has_value())
-	{
-		return;
-	}
-	auto& highlights = Locator::scriptHighlightSystem::value();
-	const auto& land = Locator::terrainSystem::value();
-	for (const auto& setup : scenario.highlights)
-	{
-		const auto point = MapPoint(middle, setup.offset);
-		const auto highlight = highlights.Create(setup.kind, {point.x, land.GetHeightAt(point), point.y}, setup.challenge);
-		if (highlight != entt::null)
-		{
-			if (setup.tip.has_value())
-			{
-				highlights.SetProperties(highlight, setup.tip->first, setup.tip->second);
-			}
-			if (setup.height.has_value())
-			{
-				highlights.SetDrawHeight(highlight, *setup.height);
-			}
-			if (setup.active)
-			{
-				highlights.SetActive(highlight, true);
-			}
-		}
-		_objects.push_back(highlight);
-	}
-}
-
-void Runner::PlaceFootpaths(const Scenario& scenario, glm::vec2 middle)
-{
-	using ecs::components::Footpath;
-	using ecs::components::FootpathLink;
-	auto& registry = Locator::entitiesRegistry::value();
-	const auto& land = Locator::terrainSystem::value();
-	// Where an object stands on the map, in whole map units: a fish farm on its map cell's middle
-	const auto placeOf = [&registry](entt::entity object) {
-		if (const auto* farm = registry.TryGet<const ecs::components::FishFarm>(object))
-		{
-			return farm->place;
-		}
-		const auto& position = registry.Get<const ecs::components::Transform>(object).position;
-		return glm::ivec2(map_coords::ToFixed(position.x), map_coords::ToFixed(position.z));
-	};
-	const auto nodeAt = [&land](glm::ivec2 place) {
-		const glm::vec2 ground {map_coords::ToMetres(place.x), map_coords::ToMetres(place.y)};
-		return Footpath::Node {.position = {ground.x, land.GetHeightAt(ground), ground.y}, .place = place};
-	};
-	for (const auto& setup : scenario.footpaths)
-	{
-		const auto entity = registry.Create();
-		auto& footpath = registry.Assign<Footpath>(entity);
-		if (setup.startsAt.has_value() && *setup.startsAt < _objects.size() && registry.Valid(_objects[*setup.startsAt]))
-		{
-			footpath.nodes.push_back(nodeAt(placeOf(_objects[*setup.startsAt])));
-		}
-		for (const auto offset : setup.nodes)
-		{
-			const auto point = MapPoint(middle, offset);
-			footpath.nodes.push_back(nodeAt({map_coords::ToFixed(point.x), map_coords::ToFixed(point.y)}));
-		}
-		for (const auto index : setup.leadsFrom)
-		{
-			if (index >= _objects.size() || !registry.Valid(_objects[index]))
-			{
-				continue;
-			}
-			const auto object = _objects[index];
-			if (auto* link = registry.TryGet<FootpathLink>(object))
-			{
-				link->footpaths.push_back(static_cast<Footpath::Id>(entity));
-			}
-			else
-			{
-				const auto place = placeOf(object);
-				registry.Assign<FootpathLink>(object, nodeAt(place).position,
-				                              std::vector<Footpath::Id> {static_cast<Footpath::Id>(entity)});
-			}
-		}
-	}
-}
-
-void Runner::PlaceObjects(const Scenario& scenario, glm::vec2 middle)
-{
-	if (!Locator::infoConstants::has_value())
-	{
-		return;
-	}
-	const auto& land = Locator::terrainSystem::value();
-	// A forest the trees are given that the land doesn't have yet is made where its first tree stands, as the land's
-	// script makes its forests before planting them
-	if (Locator::forestSystem::has_value())
-	{
-		auto& forests = Locator::forestSystem::value();
-		for (const auto& object : scenario.objects)
-		{
-			if (std::holds_alternative<TreeInfo>(object.type) && object.forest != 0 && !forests.LandForestOf(object.forest))
-			{
-				const auto point = MapPoint(middle, object.offset);
-				forests.MakeLandForest(object.forest, {point.x, land.GetHeightAt(point), point.y}, entt::null, false);
-			}
-		}
-	}
-	for (const auto& object : scenario.objects)
-	{
-		const auto point = MapPoint(middle, object.offset);
-		const glm::vec3 position {point.x, land.GetHeightAt(point), point.y};
-		const auto yaw = glm::radians(object.yawDegrees);
-		_objects.push_back(std::visit(
-		    [&]<typename T>(T type) {
-			    if constexpr (std::is_same_v<T, MobileObjectInfo>)
-			    {
-				    return ecs::archetypes::MobileObjectArchetype::Create(position, type, yaw, object.scale);
-			    }
-			    else if constexpr (std::is_same_v<T, TreeInfo>)
-			    {
-				    if (object.dead)
-				    {
-					    return ecs::archetypes::DeadTreeArchetype::Create(position, type, glm::radians(object.leanDegrees.x),
-					                                                      yaw, glm::radians(object.leanDegrees.y),
-					                                                      object.scale);
-				    }
-				    return ecs::archetypes::TreeArchetype::Create(object.forest, position, type, true, yaw,
-				                                                  object.fullSize.value_or(object.scale), object.scale);
-			    }
-			    else if constexpr (std::is_same_v<T, VillagerInfo>)
-			    {
-				    constexpr uint32_t k_AdultAge = 30;
-				    const auto villager = ecs::archetypes::VillagerArchetype::Create(position, position, type,
-				                                                                     object.villagerAge.value_or(k_AdultAge));
-				    if (object.joinTown || object.landTown.has_value())
-				    {
-					    auto& registry = Locator::entitiesRegistry::value();
-					    registry.Get<ecs::components::Villager>(villager).town =
-					        registry.Context().towns.at(ObjectTown(object, middle));
-				    }
-				    return villager;
-			    }
-			    else if constexpr (std::is_same_v<T, PotInfo>)
-			    {
-				    return ecs::archetypes::PotArchetype::Create(position, yaw, type, object.amount);
-			    }
-			    else if constexpr (std::is_same_v<T, AbodeInfo>)
-			    {
-				    if (object.planned)
-				    {
-					    const auto plan = ecs::archetypes::AbodeArchetype::CreatePlan(ObjectTown(object, middle), position,
-					                                                                  type, yaw, object.scale);
-					    if (auto* planned = Locator::entitiesRegistry::value().TryGet<ecs::components::PlannedAbode>(plan))
-					    {
-						    planned->wasBuilt = object.wasBuilt;
-					    }
-					    return plan;
-				    }
-				    // A miracle dispenser of the town, as a script makes it: it holds no miracle and is off
-				    const auto& rows = Locator::infoConstants::value().abode;
-				    if (static_cast<size_t>(type) < rows.size() &&
-				        ecs::building_replan::MadeAsDispenser(rows.at(static_cast<size_t>(type)).abodeType) &&
-				        Locator::magicSystem::has_value())
-				    {
-					    auto& registry = Locator::entitiesRegistry::value();
-					    const auto dispenser = Locator::magicSystem::value().CreateScriptDispenser(
-					        position, type, yaw, object.scale, registry.Context().towns.at(ObjectTown(object, middle)));
-					    if (auto* data = registry.TryGet<ecs::components::SpellDispenser>(dispenser))
-					    {
-						    data->notPlannedAgain = object.notPlannedAgain;
-					    }
-					    return dispenser;
-				    }
-				    const auto abode = ecs::archetypes::AbodeArchetype::Create(
-				        ObjectTown(object, middle), position, type, yaw, object.scale,
-				        object.storedFood.value_or(k_ScenarioTownFood), object.storedWood.value_or(k_ScenarioTownWood));
-				    if (object.built.has_value())
-				    {
-					    ecs::construction::SetBuilt(abode, *object.built);
-				    }
-				    auto& building = Locator::entitiesRegistry::value().Get<ecs::components::Abode>(abode);
-				    building.neglect = object.neglect;
-				    building.notPlannedAgain = object.notPlannedAgain;
-				    return abode;
-			    }
-			    else if constexpr (std::is_same_v<T, FieldTypeInfo>)
-			    {
-				    const auto field =
-				        ecs::archetypes::FieldArchetype::Create(static_cast<int>(ScenarioTown(middle)), position, type, yaw);
-				    RipenCrop(field, type, object.ripeCrop);
-				    return field;
-			    }
-			    else if constexpr (std::is_same_v<T, AnimalInfo>)
-			    {
-				    return PlaceAnimal(type, object, position, yaw);
-			    }
-			    else if constexpr (std::is_same_v<T, MobileStaticInfo>)
-			    {
-				    // A lantern is made as the land scripts make it, with its light
-				    if (type == MobileStaticInfo::StreetLantern || type == MobileStaticInfo::CountryLantern)
-				    {
-					    return ecs::archetypes::StreetLanternArchetype::Create(position, type);
-				    }
-				    return ecs::archetypes::MobileStaticArchetype::Create(position, type, 0.0f,
-				                                                          glm::radians(object.leanDegrees.x), yaw,
-				                                                          glm::radians(object.leanDegrees.y), object.scale);
-			    }
-			    else if constexpr (std::is_same_v<T, AnimatedStaticInfo>)
-			    {
-				    return ecs::archetypes::AnimatedStaticArchetype::Create(position, type, yaw, object.scale);
-			    }
-			    else if constexpr (std::is_same_v<T, FishFarmInfo>)
-			    {
-				    return ecs::archetypes::FishFarmArchetype::Create(position);
-			    }
-			    else if constexpr (std::is_same_v<T, FlowersInfo>)
-			    {
-				    return ecs::archetypes::FlowersArchetype::Create(position, type, yaw, object.scale);
-			    }
-			    else if constexpr (std::is_same_v<T, ScaffoldInfo>)
-			    {
-				    if (!Locator::workshopSystem::has_value())
-				    {
-					    return static_cast<entt::entity>(entt::null);
-				    }
-				    const auto town = object.joinTown || object.landTown.has_value()
-				                          ? Locator::entitiesRegistry::value().Context().towns.at(ObjectTown(object, middle))
-				                          : entt::null;
-				    const auto scaffold =
-				        Locator::workshopSystem::value().CreateScaffold(position, town, entt::null, yaw, object.scale);
-				    if (auto* data = Locator::entitiesRegistry::value().TryGet<ecs::components::Scaffold>(scaffold))
-				    {
-					    data->destroysThingsInWay = object.clearsGround;
-				    }
-				    return scaffold;
-			    }
-			    else
-			    {
-				    const auto feature = ecs::archetypes::FeatureArchetype::Create(position, type, yaw, object.scale);
-				    // A feature that is only part built has a site of the scenario's town, which builds it up
-				    if (object.built.has_value())
-				    {
-					    ecs::construction::SetBuilt(feature, *object.built);
-					    static_cast<void>(ecs::construction::OpenSiteForTown(
-					        feature, Locator::entitiesRegistry::value().Context().towns.at(ScenarioTown(middle))));
-				    }
-				    return feature;
-			    }
-		    },
-		    object.type));
-		SetLifeAndPoison(_objects.back(), object);
-		if (object.homeIn.has_value() && *object.homeIn + 1 < _objects.size() && Locator::townSystem::has_value())
-		{
-			// The villager lives in the building as one of its people
-			Locator::townSystem::value().AddVillagerToAbode(_objects.at(*object.homeIn), _objects.back());
-		}
-		if (object.firefly && Locator::fireflySystem::has_value())
-		{
-			const auto& placed = Locator::entitiesRegistry::value().Get<const ecs::components::Transform>(_objects.back());
-			Locator::fireflySystem::value().Create(map_coords::FromWorld(land, placed.position));
-		}
-		if (object.alight && Locator::fireSystem::has_value())
-		{
-			Locator::fireSystem::value().SetOnFire(_objects.back(), 0.0f);
-		}
-		if (object.reaction.has_value() && Locator::reactionSystem::has_value())
-		{
-			const auto& placed = Locator::entitiesRegistry::value().Get<const ecs::components::Transform>(_objects.back());
-			Locator::reactionSystem::value().Create({.initiator = _objects.back(),
-			                                         .type = *object.reaction,
-			                                         .player = PlayerNames::PLAYER_ONE,
-			                                         .position = placed.position});
-		}
-	}
-	// A villager of the town moves into its building, as one born there lives in it
-	for (size_t i = 0; i < scenario.objects.size(); ++i)
-	{
-		const auto& home = scenario.objects[i].livesIn;
-		if (home.has_value() && *home < _objects.size() && Locator::townSystem::has_value())
-		{
-			Locator::townSystem::value().MoveInAnyway(_objects.at(*home), _objects.at(i));
-		}
-	}
-}
-
-void Runner::SetUpStatistics(const Scenario& scenario)
-{
-	auto& registry = Locator::entitiesRegistry::value();
-	if (scenario.playerStatistics)
-	{
-		registry.Each<const ecs::components::Player, ecs::components::PlayerStatistics>(
-		    [&scenario](const ecs::components::Player& player, ecs::components::PlayerStatistics& statistics) {
-			    if (player.name == PlayerNames::PLAYER_ONE)
-			    {
-				    scenario.playerStatistics(statistics);
-			    }
-		    });
-	}
-	if (scenario.creatureTallies.has_value() && Locator::playerSystem::has_value())
-	{
-		const auto creature = Locator::playerSystem::value().GetPrimaryCreature(PlayerNames::PLAYER_ONE);
-		if (creature.has_value() && registry.Valid(*creature))
-		{
-			const auto& wanted = *scenario.creatureTallies;
-			auto& tallies = registry.AssignOrReplace<ecs::components::CreatureTallies>(*creature);
-			tallies.meals.peopleKilled = wanted.peopleKilled;
-			tallies.meals.animalsKilled = wanted.animalsKilled;
-			tallies.meals.creaturesKilled = wanted.creaturesKilled;
-			tallies.poos = wanted.poos;
-			tallies.mushroomsEaten = wanted.mushroomsEaten;
-		}
-	}
-}
-
-void Runner::SetUpWorship(float share)
-{
-	auto& registry = Locator::entitiesRegistry::value();
-	const auto& towns = registry.Context().towns;
-	const auto found = towns.find(k_ScenarioTownId);
-	if (found == towns.end() || !registry.Valid(found->second) || !Locator::worshipSiteSystem::has_value())
-	{
-		return;
-	}
-	const auto town = found->second;
-	const auto site = registry.Get<const ecs::components::Town>(town).worshipSite;
-	if (!registry.Valid(site))
-	{
-		return;
-	}
-	// Put up at once, as a land's script puts down a site already built, then the totem raised to the share
-	Locator::worshipSiteSystem::value().BuildBy(site, 1.0f);
-	if (Locator::villageTotemSystem::has_value())
-	{
-		Locator::villageTotemSystem::value().SetTownShare(town, share);
-	}
-}
-
 void Runner::UpdateComputerActions()
 {
 	if (_scenario == nullptr)
@@ -2037,129 +1262,6 @@ entt::entity Runner::ComputerActionThingOf(const ComputerActionThing& thing, Pla
 	return entt::null;
 }
 
-void Runner::PlaceBirds(const Scenario& scenario, glm::vec2 middle)
-{
-	const auto& land = Locator::terrainSystem::value();
-	for (const auto& setup : scenario.temples)
-	{
-		const auto point = MapPoint(middle, setup.offset);
-		const auto temple = ecs::archetypes::CitadelArchetype::Create({point.x, land.GetHeightAt(point), point.y}, setup.owner,
-		                                                              setup.angle, glm::vec3(1.0f));
-		if (setup.built.has_value())
-		{
-			ecs::construction::SetBuilt(temple, *setup.built);
-		}
-		if (setup.life.has_value())
-		{
-			Locator::entitiesRegistry::value().AssignOrReplace<ecs::components::ObjectLife>(temple, *setup.life);
-		}
-		_temples.push_back(temple);
-	}
-	if (!Locator::animalSystem::has_value())
-	{
-		return;
-	}
-	// As a land script makes them: the flock numbered, then its birds spread about its home
-	auto& animals = Locator::animalSystem::value();
-	constexpr float k_Spread = 8.0f;
-	for (size_t i = 0; i < scenario.birdFlocks.size(); ++i)
-	{
-		const auto& setup = scenario.birdFlocks[i];
-		const auto home = MapPoint(middle, setup.offset);
-		const auto flock = animals.CreateScriptFlock(static_cast<int32_t>(i + 1), home, home, setup.reach, setup.flockDistance);
-		_birdFlocks.push_back(flock);
-		for (uint32_t bird = 0; bird < setup.count; ++bird)
-		{
-			const float angle = 2.0f * std::numbers::pi_v<float> * static_cast<float>(bird) / static_cast<float>(setup.count);
-			const glm::vec2 at = home + glm::vec2(portable_math::Cos(angle), portable_math::Sin(angle)) * k_Spread;
-			animals.CreateBird(setup.kind, at, 0, flock);
-		}
-	}
-}
-
-void Runner::PlaceCreatures(const Scenario& scenario, glm::vec2 middle)
-{
-	const auto& land = Locator::terrainSystem::value();
-	auto& registry = Locator::entitiesRegistry::value();
-	for (const auto& setup : scenario.creatures)
-	{
-		const auto point = MapPoint(middle, setup.offset);
-		const glm::vec3 position {point.x, land.GetHeightAt(point), point.y};
-		auto body = CreatureArchetype::StartBody(setup.species);
-		body.alignment = setup.alignment.value_or(body.alignment);
-		body.fatness = setup.fatness.value_or(body.fatness);
-		body.strength = setup.strength.value_or(body.strength);
-		const auto size = setup.size.value_or(k_DefaultSize);
-		const auto entity =
-		    CreatureArchetype::Create(position, setup.owner, setup.species, 0, glm::radians(setup.facingDegrees), size, body);
-		if (auto* mind = registry.TryGet<CreatureMindState>(entity))
-		{
-			mind->paused = setup.pauseMind;
-			if (setup.phase.has_value())
-			{
-				mind->developmentPhase = *setup.phase;
-			}
-		}
-		if (!setup.mindFile.empty())
-		{
-			LoadMindFile(entity, setup.mindFile);
-		}
-		// The value of a mind file, as the body takes it when it loads one
-		if (setup.environmentMap != 0)
-		{
-			if (auto* creature = registry.TryGet<ecs::components::Creature>(entity))
-			{
-				creature->environmentMap = setup.environmentMap;
-			}
-		}
-		if (Locator::creatureMindSystem::has_value())
-		{
-			for (const auto skill : setup.skills)
-			{
-				Locator::creatureMindSystem::value().SetKnowsAction(entity, CreatureActionLearningType::Normal,
-				                                                    static_cast<uint32_t>(skill), true);
-			}
-		}
-		if (Locator::leashSystem::has_value())
-		{
-			// Made for trying things out, it knows every leash, as creatures made by the original's debug tools do
-			auto& leashes = Locator::leashSystem::value();
-			for (const auto type : creature_leash::k_Types)
-			{
-				leashes.SetKnown(entity, type, true);
-			}
-			if (setup.leashable.has_value())
-			{
-				leashes.SetLeashable(entity, *setup.leashable);
-			}
-		}
-		if (Locator::creatureSkinSystem::has_value())
-		{
-			auto& skins = Locator::creatureSkinSystem::value();
-			// The tattoos go on as the end of a drag in the tattoo editor puts them on
-			if (!setup.tattoos.empty())
-			{
-				creature_tattoo::Slots slots {};
-				std::copy_n(setup.tattoos.begin(), std::min(setup.tattoos.size(), slots.size()), slots.begin());
-				const auto pictures = Locator::tattooEditorSystem::has_value()
-				                          ? Locator::tattooEditorSystem::value().GetPictures()
-				                          : creature_tattoo::Pictures {};
-				skins.PutOnTattoos(entity, slots, pictures);
-			}
-			for (const auto& wound : setup.wounds)
-			{
-				skins.AddWound(entity, wound);
-			}
-			for (const auto& drop : setup.blood)
-			{
-				skins.AddBlood(entity, drop);
-			}
-		}
-		_creatures.push_back(entity);
-		_started.push_back(false);
-	}
-}
-
 void Runner::PointAtBody(entt::entity creature) const
 {
 	const auto& registry = Locator::entitiesRegistry::value();
@@ -2278,44 +1380,6 @@ std::optional<entt::entity> Runner::TotemAt(size_t index) const
 		    }
 	    });
 	return totem;
-}
-
-std::optional<entt::entity> Runner::PieceNearest(entt::entity creature)
-{
-	const auto& registry = Locator::entitiesRegistry::value();
-	const auto* from = registry.TryGet<const ecs::components::Transform>(creature);
-	if (from == nullptr)
-	{
-		return std::nullopt;
-	}
-	std::optional<entt::entity> nearest;
-	float best = std::numeric_limits<float>::max();
-	registry.Each<const ecs::components::BuildingPiece, const ecs::components::Transform>(
-	    [&](entt::entity piece, const ecs::components::BuildingPiece& /*part*/, const ecs::components::Transform& at) {
-		    const float distance = glm::distance(glm::xz(at.position), glm::xz(from->position));
-		    if (distance < best)
-		    {
-			    best = distance;
-			    nearest = piece;
-		    }
-	    });
-	return nearest;
-}
-
-void Runner::BuildWorshipSiteOf(entt::entity centre) const
-{
-	// The scenario does not wait for the villagers to build the worship site: it stands built at once
-	auto& registry = Locator::entitiesRegistry::value();
-	const auto* abode = registry.TryGet<const ecs::components::Abode>(centre);
-	const auto& towns = registry.Context().towns;
-	const auto found = abode != nullptr ? towns.find(abode->townId) : towns.end();
-	const auto* town = found != towns.end() && registry.Valid(found->second)
-	                       ? registry.TryGet<const ecs::components::Town>(found->second)
-	                       : nullptr;
-	if (town != nullptr && registry.Valid(town->worshipSite))
-	{
-		ecs::construction::BuildBy(town->worshipSite, k_BuildWholeSite);
-	}
 }
 
 std::string Runner::GiveObjectCommand(entt::entity creature, const Command& command)
@@ -4081,11 +3145,24 @@ void Runner::Give(const Command& command)
 		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), RecordChallenge(command)));
 		return;
 	}
+	if (GiveFrontEndCommand(command))
+	{
+		return;
+	}
+	if (GiveStoryCommand(command))
+	{
+		return;
+	}
+	GiveCreatureCommand(command);
+}
+
+bool Runner::GiveFrontEndCommand(const Command& command)
+{
 	if (command.kind == Kind::OpenTattooMenu)
 	{
 		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind),
 		                (_stage != nullptr ? _stage->OpenTattooMenu() : "failed: no menu")));
-		return;
+		return true;
 	}
 	if (command.kind == Kind::ShowDemoPing)
 	{
@@ -4096,42 +3173,42 @@ void Runner::Give(const Command& command)
 		}
 		UpdateDemoPing();
 		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), _demoPingSince.has_value() ? "shown" : "gone"));
-		return;
+		return true;
 	}
 	if (command.kind == Kind::TattooEditorAsNetworkGame)
 	{
 		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind),
 		                (_stage != nullptr ? _stage->TattooEditorAsNetworkGame(command.value != 0) : "failed: no interface")));
-		return;
+		return true;
 	}
 	if (command.kind == Kind::OpenControlsBox)
 	{
 		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind),
 		                (_stage != nullptr ? _stage->OpenControlsBox(command.value) : "failed: no menu")));
-		return;
+		return true;
 	}
 	if (command.kind == Kind::JoinOnline)
 	{
 		const bool asked = _stage != nullptr && _stage->RequestJoinOnline();
 		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), asked ? "asked" : "failed: no game"));
-		return;
+		return true;
 	}
 	if (command.kind == Kind::Chat)
 	{
 		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind),
 		                Chat(_stage, command.player, command.value, command.action)));
-		return;
+		return true;
 	}
 	if (command.kind == Kind::AddIncomingMessage)
 	{
 		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), AddIncomingMessage(command.value, command.action)));
-		return;
+		return true;
 	}
 	if (command.kind == Kind::OpenMultiplayerBox)
 	{
 		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind),
 		                (_stage != nullptr ? _stage->OpenMultiplayerBox(command.value) : "failed: no interface")));
-		return;
+		return true;
 	}
 	if (command.kind == Kind::SkirmishBox)
 	{
@@ -4153,17 +3230,17 @@ void Runner::Give(const Command& command)
 			                brought.creature.has_value()
 			                    ? fmt::format("the player's god brings creature {}", entt::to_integral(*brought.creature))
 			                    : fmt::format("no creature, reason {}", static_cast<int>(brought.refusal))));
-			return;
+			return true;
 		}
 		if (_stage == nullptr || !_stage->HasInterface())
 		{
 			Log(fmt::format("{:.1f}s: {}: failed: no interface", _seconds, Name(command.kind)));
-			return;
+			return true;
 		}
 		if (command.value == 1 || command.value == 4)
 		{
 			Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), _stage->OpenSkirmishMenu(command.value == 4)));
-			return;
+			return true;
 		}
 		if (command.value == 3)
 		{
@@ -4173,50 +3250,50 @@ void Runner::Give(const Command& command)
 			lands.ShowLandMessage(
 			    {.kind = land_message::Message::Kind::AddLine, .text = "Battle another god for this realm", .number = 2});
 			Log(fmt::format("{:.1f}s: {}: the land information box shows", _seconds, Name(command.kind)));
-			return;
+			return true;
 		}
 		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), _stage->OpenSkirmishBox(command.value == 2)));
-		return;
+		return true;
 	}
 	if (command.kind == Kind::EndBox)
 	{
 		if (_stage == nullptr || !_stage->HasInterface())
 		{
 			Log(fmt::format("{:.1f}s: {}: failed: no interface", _seconds, Name(command.kind)));
-			return;
+			return true;
 		}
 		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), _stage->OpenEndBox(command.value)));
-		return;
+		return true;
 	}
 	if (command.kind == Kind::OpenMenuPage)
 	{
 		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind),
 		                (_stage != nullptr ? _stage->OpenMenuPage(command.value, command.ctrl) : "failed: no menu")));
-		return;
+		return true;
 	}
 	if (command.kind == Kind::PressMenuKey)
 	{
 		Log(fmt::format(
 		    "{:.1f}s: {}: {}", _seconds, Name(command.kind),
 		    (_stage != nullptr ? _stage->PressMenuKey(command.value, command.ctrl) : "failed: the menu is not open")));
-		return;
+		return true;
 	}
 	if (command.kind == Kind::ShowCustomMusicControls)
 	{
 		if (_stage == nullptr || !_stage->HasInterface())
 		{
 			Log(fmt::format("{:.1f}s: {}: failed: no interface", _seconds, Name(command.kind)));
-			return;
+			return true;
 		}
 		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), _stage->ShowCustomMusicControls(command.value)));
-		return;
+		return true;
 	}
 	if (command.kind == Kind::StartScriptMusic)
 	{
 		if (command.value >= static_cast<size_t>(audio::MusicType::_COUNT))
 		{
 			Log(fmt::format("{:.1f}s: {}: no music type {}", _seconds, Name(command.kind), command.value));
-			return;
+			return true;
 		}
 		const auto type = static_cast<audio::MusicType>(command.value);
 		if (Locator::scriptMusicSystem::has_value())
@@ -4225,27 +3302,32 @@ void Runner::Give(const Command& command)
 			Locator::scriptMusicSystem::value().Start(type);
 		}
 		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), audio::GetMusicTypeName(type)));
-		return;
+		return true;
 	}
 	if (command.kind == Kind::PlayCustomMusic)
 	{
 		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), PlayCustomMusic(command.value)));
-		return;
+		return true;
 	}
 	if (command.kind == Kind::OwnTattooPicture)
 	{
 		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), GiveOwnTattooPicture(command.value)));
-		return;
+		return true;
 	}
 	if (command.kind == Kind::ProfileFolderCheck)
 	{
 		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), CheckProfileFolder()));
-		return;
+		return true;
 	}
+	return false;
+}
+
+bool Runner::GiveStoryCommand(const Command& command)
+{
 	if (command.kind == Kind::PlayBoatFilm)
 	{
 		Log(fmt::format("{:.1f}s: {}", _seconds, PlayBoatFilm(command)));
-		return;
+		return true;
 	}
 	if (command.kind == Kind::EnterTemple)
 	{
@@ -4268,20 +3350,20 @@ void Runner::Give(const Command& command)
 			}
 		}
 		Log(fmt::format("{:.1f}s: the player goes into temple room {}", _seconds, command.value));
-		return;
+		return true;
 	}
 	if (command.kind == Kind::Reframe)
 	{
 		Frame(_scenario->framing.shot, _scenario->framing.creature, _scenario->framing.distance);
 		Log(fmt::format("{:.1f}s: the camera is put back", _seconds));
-		return;
+		return true;
 	}
 	if (command.kind == Kind::RestoreDeviceInDomeFollow)
 	{
 		_deviceRestoreAsked =
 		    command.value == 1 ? graphics::device_restore::Request::Lose : graphics::device_restore::Request::MakeAgain;
 		Log(fmt::format("{:.1f}s: the graphics device is made again when the dome next follows the sky", _seconds));
-		return;
+		return true;
 	}
 	if (command.kind == Kind::RestoreDevice)
 	{
@@ -4292,12 +3374,12 @@ void Runner::Give(const Command& command)
 			                                                             : graphics::device_restore::Request::MakeAgain);
 		}
 		Log(fmt::format("{:.1f}s: the graphics device is {}", _seconds, lose ? "lost and made again" : "made again"));
-		return;
+		return true;
 	}
 	if (command.kind == Kind::PutLoadedArena)
 	{
 		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), PutLoadedArena(command)));
-		return;
+		return true;
 	}
 	if (command.kind == Kind::SetHour)
 	{
@@ -4306,17 +3388,17 @@ void Runner::Give(const Command& command)
 			Locator::skyClockSystem::value().SetTime(command.hour);
 		}
 		Log(fmt::format("{:.1f}s: the hour is {:.1f}", _seconds, command.hour));
-		return;
+		return true;
 	}
 	if (command.kind == Kind::Advisor)
 	{
 		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), GiveAdvisorCommand(command)));
-		return;
+		return true;
 	}
 	if (command.kind == Kind::SetOpenClose || command.kind == Kind::LayGateStone)
 	{
 		GiveSceneryCommand(command);
-		return;
+		return true;
 	}
 	if (command.kind == Kind::SetAlignment)
 	{
@@ -4325,7 +3407,7 @@ void Runner::Give(const Command& command)
 			Locator::alignmentSystem::value().SetPlayerAlignment(command.player, command.alignment);
 		}
 		Log(fmt::format("{:.1f}s: the alignment is {:.2f}", _seconds, command.alignment));
-		return;
+		return true;
 	}
 	if (command.kind == Kind::SaveGame || command.kind == Kind::LoadGame)
 	{
@@ -4339,7 +3421,7 @@ void Runner::Give(const Command& command)
 		}
 		Log(fmt::format("{:.1f}s: {} slot {}: {}", _seconds, saving ? "save into" : "load from", slot,
 		                done ? "done" : "failed"));
-		return;
+		return true;
 	}
 	if (command.kind == Kind::PlayLogoEffect)
 	{
@@ -4348,14 +3430,14 @@ void Runner::Give(const Command& command)
 			_stage->PlayLogoEffect();
 		}
 		Log(fmt::format("{:.1f}s: the logo effect played", _seconds));
-		return;
+		return true;
 	}
 	if (command.kind == Kind::ContinueGame)
 	{
 		const bool loaded = _stage != nullptr && _stage->ContinueFromExitSave();
 		Log(fmt::format("{:.1f}s: continue from the save on exit: {}", _seconds,
 		                loaded ? "loaded, the menu shows" : "a new game"));
-		return;
+		return true;
 	}
 	if (command.kind == Kind::QuickSave)
 	{
@@ -4367,7 +3449,7 @@ void Runner::Give(const Command& command)
 			Locator::playerCommandSystem::value().Submit(player_commands::QuickSave {});
 		}
 		Log(fmt::format("{:.1f}s: quick save: {}", _seconds, sent ? "sent" : "refused"));
-		return;
+		return true;
 	}
 	if (command.kind == Kind::SetTownBeliefInRival)
 	{
@@ -4381,7 +3463,7 @@ void Runner::Give(const Command& command)
 			}
 		}
 		Log(fmt::format("{:.1f}s: the town believes {:.2f} in the second player", _seconds, command.amount));
-		return;
+		return true;
 	}
 	if (command.kind == Kind::GiveLandTown)
 	{
@@ -4404,7 +3486,7 @@ void Runner::Give(const Command& command)
 		}
 		Log(fmt::format("{:.1f}s: the land's town {} believes {:.2f} in the player{}", _seconds, command.value, command.amount,
 		                impression != nullptr ? "" : " (no such town)"));
-		return;
+		return true;
 	}
 	if (command.kind == Kind::EndGuidanceWaits)
 	{
@@ -4413,14 +3495,14 @@ void Runner::Give(const Command& command)
 			Locator::guidanceSystem::value().EndWaits();
 		}
 		Log(fmt::format("{:.1f}s: the guidance's waits are over", _seconds));
-		return;
+		return true;
 	}
 	if (command.kind == Kind::RunHelpMessage)
 	{
 		const bool started =
 		    Locator::helpMessageSystem::has_value() && Locator::helpMessageSystem::value().RunMessageSet(command.value);
 		Log(fmt::format("{:.1f}s: the help message set {} {}", _seconds, command.value, started ? "runs" : "doesn't run"));
-		return;
+		return true;
 	}
 	if (command.kind == Kind::DestroyTemple)
 	{
@@ -4446,7 +3528,7 @@ void Runner::Give(const Command& command)
 			Locator::templeDestructionSystem::value().Start(*temple);
 		}
 		Log(fmt::format("{:.1f}s: temple {} {}", _seconds, command.value, known ? "starts being destroyed" : "isn't there"));
-		return;
+		return true;
 	}
 	if (command.kind == Kind::LookAtTempleScroll)
 	{
@@ -4455,7 +3537,7 @@ void Runner::Give(const Command& command)
 			Locator::temple::value().LookAtScroll(command.value);
 		}
 		Log(fmt::format("{:.1f}s: the temple's camera looks at scroll {}", _seconds, command.value));
-		return;
+		return true;
 	}
 	if (command.kind == Kind::LookAtSaveGamePicture)
 	{
@@ -4464,7 +3546,7 @@ void Runner::Give(const Command& command)
 			Locator::temple::value().LookAtSaveGamePicture(static_cast<uint32_t>(command.value));
 		}
 		Log(fmt::format("{:.1f}s: the temple's camera looks at the picture of save slot {}", _seconds, command.value));
-		return;
+		return true;
 	}
 	if (command.kind == Kind::ReadTip)
 	{
@@ -4481,7 +3563,7 @@ void Runner::Give(const Command& command)
 			highlights.Tap(sign, true);
 		}
 		Log(fmt::format("{:.1f}s: tip {} of category {} {}", _seconds, text, category, read ? "read" : "not read"));
-		return;
+		return true;
 	}
 	if (command.kind == Kind::RunText)
 	{
@@ -4489,7 +3571,7 @@ void Runner::Give(const Command& command)
 		const bool shown = Locator::helpTextSystem::has_value() && Locator::helpTextSystem::value().IsStarted() &&
 		                   Locator::helpTextSystem::value().RunText(false, static_cast<uint32_t>(command.value), 0);
 		Log(fmt::format("{:.1f}s: help text {} {}", _seconds, command.value, shown ? "shown" : "not shown"));
-		return;
+		return true;
 	}
 	if (command.kind == Kind::PlayHandDemo)
 	{
@@ -4498,7 +3580,7 @@ void Runner::Give(const Command& command)
 			Locator::handDemoSystem::value().Play(command.handDemo, 0, false, false);
 		}
 		Log(fmt::format("{:.1f}s: the hand demonstration {} plays", _seconds, command.handDemo));
-		return;
+		return true;
 	}
 	if (command.kind == Kind::FlyToBookmark)
 	{
@@ -4512,7 +3594,7 @@ void Runner::Give(const Command& command)
 		Locator::camera::value().GetModel().SetFlight(origin, focus, camera_fly::k_BookmarkRise);
 		Log(fmt::format("{:.1f}s: the camera flies to bookmark {} at ({:.0f}, {:.0f}, {:.0f})", _seconds, command.value + 1,
 		                focus.x, focus.y, focus.z));
-		return;
+		return true;
 	}
 	if (command.kind == Kind::TabToTown)
 	{
@@ -4521,7 +3603,7 @@ void Runner::Give(const Command& command)
 			Locator::cameraBookmarkSystem::value().FlyToNextTown(std::nullopt);
 		}
 		Log(fmt::format("{:.1f}s: the player presses the Tab key", _seconds));
-		return;
+		return true;
 	}
 	if (command.kind == Kind::SetInterfaceLevel)
 	{
@@ -4539,7 +3621,7 @@ void Runner::Give(const Command& command)
 			Log(fmt::format("{:.1f}s: the interface level is {}{}, the hand reaches {:.0f}", _seconds, command.value,
 			                known ? "" : " (a level the game does not know)", help.handReach));
 		}
-		return;
+		return true;
 	}
 	if (command.kind == Kind::PlayIntroFilm)
 	{
@@ -4550,7 +3632,7 @@ void Runner::Give(const Command& command)
 			videos.ScheduleIntro();
 		}
 		Log(fmt::format("{:.1f}s: the intro film plays", _seconds));
-		return;
+		return true;
 	}
 	if (command.kind == Kind::PlayFallingSpellFilm)
 	{
@@ -4564,7 +3646,7 @@ void Runner::Give(const Command& command)
 			Locator::cinematicDirectorSystem::value().FadeBackToNormal(0);
 		}
 		Log(fmt::format("{:.1f}s: the falling spell's film starts", _seconds));
-		return;
+		return true;
 	}
 	if (command.kind == Kind::WideScreen)
 	{
@@ -4576,7 +3658,7 @@ void Runner::Give(const Command& command)
 			Locator::cinematicDirectorSystem::value().SetWideScreen(command.value != 0, k_ScriptOwner);
 		}
 		Log(fmt::format("{:.1f}s: the cinema bars slide {}", _seconds, command.value != 0 ? "in" : "out"));
-		return;
+		return true;
 	}
 	// With a value of 1, the scenario's object catches fire, with or without a creature. With a value of 2, it catches
 	// at the most heat of its fire, so that it burns for a time.
@@ -4589,8 +3671,13 @@ void Runner::Give(const Command& command)
 		}
 		Log(fmt::format("{:.1f}s: object {} {}", _seconds, command.object,
 		                Locator::fireSystem::has_value() && burning.has_value() ? "alight" : "no fire"));
-		return;
+		return true;
 	}
+	return false;
+}
+
+void Runner::GiveCreatureCommand(const Command& command)
+{
 	const auto entity = CreatureAt(command.creature);
 	if (!entity.has_value() || !Locator::creatureLocomotionSystem::has_value() || !Locator::creatureMindSystem::has_value())
 	{
@@ -6015,100 +5102,6 @@ void Runner::UpdateMiracles(float seconds)
 			miracle.breakAt = _seconds + *setup.breakSeconds;
 		}
 		miracle.nextAt = setup.repeatSeconds.has_value() ? std::optional(*miracle.nextAt + *setup.repeatSeconds) : std::nullopt;
-	}
-}
-
-void Runner::UpdateVillagerWalks()
-{
-	auto& registry = Locator::entitiesRegistry::value();
-	_walks.resize(_objects.size());
-	for (size_t i = 0; i < _objects.size() && i < _scenario->objects.size(); ++i)
-	{
-		const auto& setup = _scenario->objects.at(i);
-		auto& walk = _walks.at(i);
-		const auto entity = _objects.at(i);
-		if (!registry.Valid(entity) || !registry.AllOf<ecs::components::LivingAction, ecs::components::WallHug>(entity))
-		{
-			continue;
-		}
-		if (setup.walkTo.has_value())
-		{
-			if (!walk.nextAt.has_value() && walk.outwards)
-			{
-				walk.nextAt = setup.walkAfterSeconds;
-			}
-			if (walk.nextAt.has_value() && _seconds >= *walk.nextAt)
-			{
-				const auto goal = MapPoint(_middle, walk.outwards ? *setup.walkTo : setup.offset);
-				ecs::villager_home::SetupMoveTo(registry.Get<ecs::components::LivingAction>(entity), goal, setup.walkFinal);
-				Log(fmt::format("Villager {} walks {}", i, walk.outwards ? "out" : "back"));
-				walk.goal = goal;
-				walk.setOffTurn = Locator::time::has_value() ? std::optional(Locator::time::value().GetTurn()) : std::nullopt;
-				walk.outwards = !walk.outwards;
-				walk.nextAt =
-				    setup.walkRepeatSeconds.has_value() ? std::optional(*walk.nextAt + *setup.walkRepeatSeconds) : std::nullopt;
-				if (!setup.walkRepeatSeconds.has_value())
-				{
-					walk.outwards = false;
-				}
-			}
-		}
-		// How long each walk took, in game turns, for comparing walks round things in the way
-		if (walk.setOffTurn.has_value() && Locator::time::has_value() && ecs::villager_home::WalkIsOverAt(entity, walk.goal))
-		{
-			Log(fmt::format("Villager {} got there in {} turns", i, Locator::time::value().GetTurn() - *walk.setOffTurn));
-			walk.setOffTurn.reset();
-		}
-		if (setup.mateWith.has_value() && !walk.dropped && _seconds >= setup.walkAfterSeconds &&
-		    *setup.mateWith < _objects.size() && registry.Valid(_objects.at(*setup.mateWith)))
-		{
-			walk.dropped = true;
-			ecs::villager_breeding::GoAndHaveSexWith(entity, _objects.at(*setup.mateWith));
-			Log(fmt::format("Villager {} goes to make love with object {}", i, *setup.mateWith));
-		}
-		if (setup.worshipAt.has_value() && !walk.dropped && _seconds >= setup.walkAfterSeconds &&
-		    Locator::teleportSystem::has_value() && Locator::terrainSystem::has_value())
-		{
-			walk.dropped = true;
-			// A villager goes through its own player's stones only: one without a town is given one of the player's
-			auto& villager = registry.Get<ecs::components::Villager>(entity);
-			if (villager.town == entt::null || !registry.Valid(villager.town))
-			{
-				villager.town = registry.Context().towns.at(ScenarioTown(_middle));
-			}
-			const auto site = MapPoint(_middle, *setup.worshipAt);
-			const glm::vec3 point {site.x, Locator::terrainSystem::value().GetHeightAt(site), site.y};
-			const bool routed = Locator::teleportSystem::value().RouteWorshipper(entity, point);
-			Log(fmt::format("Villager {} sets off to worship: {}", i, routed ? "through a stone" : "no stone"));
-		}
-		if (setup.dropOnStoneSeconds.has_value() && !walk.dropped && _seconds >= *setup.dropOnStoneSeconds &&
-		    Locator::teleportSystem::has_value())
-		{
-			walk.dropped = true;
-			// The stone nearest the villager
-			const auto here = registry.Get<const ecs::components::Transform>(entity).position;
-			// A villager jumps from its own player's stones only: one without a town is given one of the player's
-			auto& villager = registry.Get<ecs::components::Villager>(entity);
-			if (villager.town == entt::null || !registry.Valid(villager.town))
-			{
-				villager.town = registry.Context().towns.at(ScenarioTown(_middle));
-			}
-			std::optional<entt::entity> nearest;
-			float best = std::numeric_limits<float>::max();
-			registry.Each<const ecs::components::TeleportStone, const ecs::components::Transform>(
-			    [&](entt::entity stone, const auto&, const ecs::components::Transform& transform) {
-				    const float d = glm::distance(transform.position, here);
-				    if (d < best)
-				    {
-					    best = d;
-					    nearest = stone;
-				    }
-			    });
-			// The testbed's hand is the first player's
-			const bool jumped =
-			    nearest.has_value() && Locator::teleportSystem::value().DropOnStone(entity, *nearest, PlayerNames::PLAYER_ONE);
-			Log(fmt::format("Villager {} dropped on a stone: {}", i, jumped ? "jumped" : "stayed"));
-		}
 	}
 }
 
