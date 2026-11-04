@@ -413,6 +413,29 @@ void testbed_scenarios::AddFlockScenarios(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "miracles.flock_trail_follows_hand",
+	    .name = "Flying flock: the hand's trail",
+	    .facet = Facet::Miracles,
+	    .description = "A good player (alignment 0.8) casts the flying flock by hand and sweeps the hand slowly east for "
+	                   "four seconds, longer than the doves take to come out.",
+	    .expected = "Pale blue sparkles stream from the hand and stay on it in each frame as it moves, the sparkles larger "
+	                "when the hand is drawn larger. After the turn that makes the last dove, the trail stops making "
+	                "sparkles, while the hand still sweeps on; the last sparkles shrink and fade out over two seconds.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-40.0f, -10.0f}, {40.0f, 120.0f}}},
+	    .miracles = {{.type = MagicType::FlockFlying,
+	                  .point = k_Spot,
+	                  .handOffset = k_HandFrom,
+	                  .handHeight = 12.0f,
+	                  .throwVelocity = {6.0f, 0.0f, 0.0f},
+	                  .delaySeconds = 1.0f,
+	                  .holdSeconds = k_HoldSeconds,
+	                  .byHand = true,
+	                  .sweepSeconds = 4.0f,
+	                  .casterAlignment = 0.8f}},
+	});
+
+	all.push_back({
 	    .id = "miracles.l2_flock_bats",
 	    .name = "Flying flock: bats at a village of the second land",
 	    .facet = Facet::Miracles,

@@ -92,6 +92,9 @@ struct EffectRequest
 	std::optional<particles::draw::DrawPath> drawPath;
 	/// A save keeps the effect. When false, the owner starts the effect again after a load.
 	bool saved {true};
+	/// The effect steps in each frame at the hand of this computer, with the size that the hand is drawn at. The turn does
+	/// not step it. Use it only for an effect that a save does not keep.
+	bool followsLocalHand {false};
 	/// The running state of the effect in a saved game of the game. The effect continues from that state instead of
 	/// from its start. When the state does not agree with the particle file, no effect starts.
 	std::shared_ptr<const particles::RestoredEffect> restored;

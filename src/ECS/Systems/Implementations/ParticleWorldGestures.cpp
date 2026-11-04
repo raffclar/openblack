@@ -12,6 +12,8 @@
 
 #define LOCATOR_IMPLEMENTATIONS
 
+#include <cstdint>
+
 #include <algorithm>
 #include <functional>
 #include <memory>
@@ -24,8 +26,10 @@
 #include "ECS/Components/HandGlow.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/HandSystemInterface.h"
+#include "ECS/Systems/TimeSystemInterface.h"
 #include "Locator.h"
 #include "ParticleRuleSystem.h"
+#include "Particles/DrawnEffectSteps.h"
 #include "Particles/GestureTrail.h"
 #include "Particles/LightSheet.h"
 
@@ -134,6 +138,7 @@ void ParticleRuleSystem::UpdateFrame(float gameSeconds, const HandFrame& hand)
 		}
 	}
 	StepShowers(gameSeconds);
+	StepLocalHandEffects(hand);
 
 	if (!IsRunning(_gestureChain))
 	{
@@ -164,6 +169,47 @@ void ParticleRuleSystem::UpdateFrame(float gameSeconds, const HandFrame& hand)
 		Forget(FindRunning(_gestureChain));
 	}
 	StepSelectionEffect(gameSeconds, hand);
+}
+
+void ParticleRuleSystem::StepLocalHandEffects(const HandFrame& hand)
+{
+	// The effects that follow this computer's hand step in the frames, no more often than 60 times a second. Each step
+	// takes the game time since the last step in whole milliseconds, at least one also while the game is paused. Each step
+	// has the hand where it is drawn now, and the size of the hand.
+	if (!Locator::time::has_value())
+	{
+		return;
+	}
+	const auto& time = Locator::time::value();
+	const auto step = particles::drawn_steps::StepTime(_localHandPace, time.GetFrameRealTime(), time.GetFrameGameTime(), true);
+	if (!step.has_value())
+	{
+		return;
+	}
+	const float seconds = static_cast<float>(std::max<int64_t>(step->count(), 1)) * 0.001f;
+	std::vector<EffectId> followers;
+	for (const auto& running : _effects)
+	{
+		if (running.atLocalHand)
+		{
+			followers.push_back(running.id);
+		}
+	}
+	// A step may start other effects, so each effect is found again by its number
+	for (const auto id : followers)
+	{
+		const auto it = FindRunning(id);
+		if (it == _effects.end())
+		{
+			continue;
+		}
+		it->effect->SetMagnitude(hand.size);
+		it->effect->SetProcessInfo({.handPosition = hand.position, .power = 1.0f, .enabled = true});
+		if (StepEffect(*it->effect, seconds))
+		{
+			Forget(FindRunning(id));
+		}
+	}
 }
 
 void ParticleRuleSystem::StepSelectionEffect(float gameSeconds, const HandFrame& hand)

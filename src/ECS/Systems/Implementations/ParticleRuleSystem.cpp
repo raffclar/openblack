@@ -1309,6 +1309,11 @@ EffectHandle ParticleRuleSystem::Serve(const EffectRequest& request, EffectHandl
 	{
 		started->saved = false;
 	}
+	if (request.followsLocalHand)
+	{
+		started->everyFrame = true;
+		started->atLocalHand = true;
+	}
 	// A saved spot visual of a particle type keeps its turns left and the thing it follows
 	if (request.restored && request.turns.has_value() && std::holds_alternative<ParticleType>(request.type))
 	{
@@ -1678,6 +1683,7 @@ void ParticleRuleSystem::Reset()
 	_pendingStormBolts.clear();
 	_gestureTrails = k_NoEffect;
 	_gestureChain = k_NoEffect;
+	_localHandPace = {};
 	_selectionEffect = k_NoEffect;
 	_world.Reset();
 	_loadedSynced.reset();
@@ -2554,6 +2560,7 @@ bool ParticleRuleSystem::LoadState(reflection::BinaryReader& in)
 	reflection::Load(in, _beliefWanted);
 	// The effects of this computer come back with their own part of the save. Until then, this computer has none.
 	_gestureChain = k_NoEffect;
+	_localHandPace = {};
 	_selectionEffect = k_NoEffect;
 	_handManaPath = k_NoEffect;
 	_chainScrollPace = {};

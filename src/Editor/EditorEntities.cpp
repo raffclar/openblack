@@ -52,6 +52,7 @@
 #include "ECS/Components/TurnAngles.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Map.h"
+#include "ECS/MobileObjectRecord.h"
 #include "ECS/PlacedTurn.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
@@ -189,6 +190,8 @@ std::optional<NameTables> NameTables::Load()
 	tables.trees = NamesFrom(info.tree);
 	tables.features = NamesFrom(info.feature);
 	tables.mobileObjects = NamesFrom(info.mobileObject);
+	tables.footballRecord = TitleCase(
+	    std::string_view(info.ball.debugString.data(), strnlen(info.ball.debugString.data(), info.ball.debugString.size())));
 	tables.mobileStatics = NamesFrom(info.mobileStatic);
 	tables.miracles = MiracleNames(info);
 	tables.scriptMarkers = {"Script Marker"};
@@ -228,6 +231,10 @@ const std::vector<std::string>& NameTables::Of(PlaceKind kind) const
 
 std::string_view NameTables::NameOf(PlaceKind kind, int32_t type) const
 {
+	if (kind == PlaceKind::MobileObject && type == ecs::mobile_object_record::k_FootballRow)
+	{
+		return footballRecord;
+	}
 	// The creatures' list starts at the first species
 	const auto index = kind == PlaceKind::Creature ? type - 1 : type;
 	const auto& names = Of(kind);
@@ -345,7 +352,8 @@ std::optional<PlaceItem> ItemOf(const ecs::Registry& registry, entt::entity enti
 	}
 	if (const auto* object = registry.TryGet<MobileObject>(entity))
 	{
-		return PlaceItem {.kind = PlaceKind::MobileObject, .type = static_cast<int32_t>(object->type)};
+		// A loose object is copied by its row, so that a copy of one with the football's record has that record too
+		return PlaceItem {.kind = PlaceKind::MobileObject, .type = ecs::mobile_object_record::Row(*object)};
 	}
 	if (registry.AllOf<ScriptMarker>(entity))
 	{
@@ -434,8 +442,11 @@ std::optional<uint32_t> MeshOf(const PlaceItem& item)
 		return index < info.feature.size() ? std::optional(resources::HashIdentifier(info.feature.at(index).meshId))
 		                                   : std::nullopt;
 	case PlaceKind::MobileObject:
-		return index < info.mobileObject.size() ? std::optional(resources::HashIdentifier(info.mobileObject.at(index).meshId))
-		                                        : std::nullopt;
+	{
+		const auto kind = ecs::mobile_object_record::FromRow(info, item.type);
+		const auto* record = kind.has_value() ? ecs::mobile_object_record::Of(info, *kind) : nullptr;
+		return record != nullptr ? std::optional(resources::HashIdentifier(record->meshId)) : std::nullopt;
+	}
 	case PlaceKind::MobileStatic:
 		return index < info.mobileStatic.size() ? std::optional(resources::HashIdentifier(info.mobileStatic.at(index).meshId))
 		                                        : std::nullopt;
@@ -537,7 +548,12 @@ entt::entity Place(const PlaceItem& item, glm::vec3 position, float yawRadians)
 	case PlaceKind::Feature:
 		return FeatureArchetype::Create(position, static_cast<FeatureInfo>(item.type), yawRadians, 1.0f);
 	case PlaceKind::MobileObject:
-		return MobileObjectArchetype::Create(position, static_cast<MobileObjectInfo>(item.type), yawRadians, 1.0f);
+	{
+		const auto kind = Locator::infoConstants::has_value()
+		                      ? ecs::mobile_object_record::FromRow(Locator::infoConstants::value(), item.type)
+		                      : std::nullopt;
+		return kind.has_value() ? MobileObjectArchetype::Create(position, *kind, yawRadians, 1.0f) : entt::null;
+	}
 	case PlaceKind::MobileStatic:
 		return MobileStaticArchetype::Create(position, static_cast<MobileStaticInfo>(item.type), 0.0f, 0.0f, yawRadians, 0.0f,
 		                                     1.0f);

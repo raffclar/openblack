@@ -55,6 +55,9 @@ inline constexpr float k_FullAlpha = 255.0f;
 [[nodiscard]] int NumberToCreate(uint32_t number, float tribalPower);
 /// The flying flock is bats for a caster more evil than the switch, doves otherwise
 [[nodiscard]] bool IsEvil(float alignment, float alignmentSwitch);
+/// The trail of the caster's hand stops in the turn after the turn that made the last animal. The end of the miracle does
+/// not stop it.
+[[nodiscard]] bool TrailStops(int createdBeforeTurn, int number);
 /// How many animals should have been made by the end of a turn
 [[nodiscard]] float EmitAfterTurn(float emitted, float turnSeconds);
 /// How far along the turn's piece of the sweep the animal of a number appears, 0 at its start and 1 at its end
