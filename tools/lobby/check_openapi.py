@@ -98,13 +98,17 @@ CALLS = [
     ("get", "/api/v1/servers/{server_id}/bans", None,
      {"bans": ([{"account": (ACCOUNT, True), "reason": (S, False)}], True)}),
     ("put", "/api/v1/servers/{server_id}/map", None, None),
+    # The Player Details tab (deviation 226)
+    ("get", "/api/v1/players/{account}", None, {
+        "id": (I, True), "name": (S, True), "points": (N, False), "games_ranked": (I, False),
+        "clans": ([{"id": (I, True), "name": (S, True), "points": (N, False)}], False),
+    }),
+    ("get", "/api/v1/players/{account}/details", None,
+     {"lines": ([{"label": (S, True), "value": (S, True)}], True)}),
 ]  # fmt: skip
 
 # Calls of openblack that the document does not have yet. They are listed, not counted as problems.
-NOT_IN_CONTRACT = [
-    ("get", "/api/v1/players/{player_id}"),
-    ("get", "/api/v1/players/{player_id}/details"),
-]
+NOT_IN_CONTRACT: list[tuple[str, str]] = []
 
 
 class Checker:

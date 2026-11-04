@@ -437,14 +437,14 @@ struct PlayerDetailLine
 };
 
 /// GET /api/v1/players/{id}/details?version=<game version>: the lines of the Player Details tab for a player, in the
-/// order of the lobby. The lobby gives all the labels and all the values. Not in the contract of the lobby yet.
+/// order of the lobby. The lobby gives all the labels and all the values (deviation 226).
 struct PlayerDetailLines
 {
 	/// "lines"
 	std::vector<PlayerDetailLine> lines;
 };
 
-/// GET /api/v1/players/{id}. Not in the contract of the lobby yet.
+/// GET /api/v1/players/{id}: the profile of a player.
 struct PlayerDetails
 {
 	/// "id"
