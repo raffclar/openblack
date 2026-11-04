@@ -86,6 +86,11 @@ namespace openblack::ecs::systems::mind_detail
 /// What a creature finds of a thing now, as far as the world here tells it
 [[nodiscard]] std::optional<creature_tree::Belief> BeliefNowOf(const ecs::Registry& registry, entt::entity entity,
                                                                entt::entity self);
+/// The same, for a valid thing of which the caller knows the kind of belief (BeliefKindOf) and the map place
+/// (thing_map_place::Of). The answer is the same, but the function does not find the kind and the place again.
+[[nodiscard]] std::optional<creature_tree::Belief> BeliefNowOf(const ecs::Registry& registry, entt::entity entity,
+                                                               entt::entity self, uint32_t kind,
+                                                               const map_coords::MapCoords& place);
 /// What a creature knows of a thing that it acts on. The temple here is one thing, which stands for its heart when a
 /// creature acts on it.
 [[nodiscard]] std::optional<creature_tree::Belief> ActedOnBeliefOf(const ecs::Registry& registry, entt::entity entity,

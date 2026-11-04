@@ -539,11 +539,12 @@ void CreatureMindSystem::ComeAcrossThing(entt::entity creature, components::Crea
 	{
 		before = beliefs::TestedOf(*known);
 	}
-	const auto added = mind.beliefs.Add(thing, *kind, ecs::thing_map_place::Of(registry, thing));
-	// The belief takes in the attributes of the thing now
+	const auto place = ecs::thing_map_place::Of(registry, thing);
+	const auto added = mind.beliefs.Add(thing, *kind, place);
+	// The belief takes in the attributes of the thing now. The kind and the place of the thing are the same as above.
 	if (added.belief != nullptr)
 	{
-		if (const auto now = mind_detail::BeliefNowOf(registry, thing, creature))
+		if (const auto now = mind_detail::BeliefNowOf(registry, thing, creature, *kind, place))
 		{
 			beliefs::TakeIn(*added.belief, added.isNew, *now);
 		}

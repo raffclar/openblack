@@ -1673,9 +1673,13 @@ std::optional<glm::vec3> CreatureAnimationSystem::BoneInAnimation(entt::entity c
 		return std::nullopt;
 	}
 	const auto time = static_cast<uint32_t>(std::clamp(timeMs, 0.0f, static_cast<float>(std::max(played->duration, 1u) - 1)));
-	const auto poses = skeletal_animation::SampleCycle(
-	    *played, *stand, time, body.skeleton, mirrored ? std::span<const uint32_t>(body.mirror) : std::span<const uint32_t> {},
-	    &_keyframeTurns);
+	// With no mirror, the sample finds only the bone and the bones that it hangs from
+	if (!mirrored)
+	{
+		return skeletal_animation::BonePlacesInCycle(*played, *stand, time, body.skeleton, std::array {bone}, &_keyframeTurns)
+		    .front();
+	}
+	const auto poses = skeletal_animation::SampleCycle(*played, *stand, time, body.skeleton, body.mirror, &_keyframeTurns);
 	const auto matrices = skeletal_animation::ComposeBoneMatrices(poses, body.skeleton.parents);
 	return bone < matrices.size() ? std::optional(glm::vec3(matrices[bone][3])) : std::nullopt;
 }
@@ -1697,9 +1701,14 @@ std::array<std::optional<glm::vec3>, 2> CreatureAnimationSystem::TwoBonesInAnima
 		return {};
 	}
 	const auto time = static_cast<uint32_t>(std::clamp(timeMs, 0.0f, static_cast<float>(std::max(played->duration, 1u) - 1)));
-	const auto poses = skeletal_animation::SampleCycle(
-	    *played, *stand, time, body.skeleton, mirrored ? std::span<const uint32_t>(body.mirror) : std::span<const uint32_t> {},
-	    &_keyframeTurns);
+	// With no mirror, the sample finds only the two bones and the bones that they hang from
+	if (!mirrored)
+	{
+		const auto places = skeletal_animation::BonePlacesInCycle(*played, *stand, time, body.skeleton,
+		                                                          std::array {first, second}, &_keyframeTurns);
+		return {places[0], places[1]};
+	}
+	const auto poses = skeletal_animation::SampleCycle(*played, *stand, time, body.skeleton, body.mirror, &_keyframeTurns);
 	const auto matrices = skeletal_animation::ComposeBoneMatrices(poses, body.skeleton.parents);
 	const auto at = [&](uint32_t bone) {
 		return bone < bones && bone < matrices.size() ? std::optional(glm::vec3(matrices[bone][3])) : std::nullopt;
@@ -1718,16 +1727,16 @@ std::optional<glm::vec3> CreatureAnimationSystem::MiddleOfBonesInAnimation(entt:
 	}
 	const auto& body = Locator::entitiesRegistry::value().Get<CreatureAnimation>(creature);
 	const auto time = static_cast<uint32_t>(std::clamp(timeMs, 0.0f, static_cast<float>(std::max(played->duration, 1u) - 1)));
-	const auto poses = skeletal_animation::SampleCycle(*played, *stand, time, body.skeleton, {}, &_keyframeTurns);
-	const auto matrices = skeletal_animation::ComposeBoneMatrices(poses, body.skeleton.parents);
-	if (std::ranges::any_of(bones, [&matrices](uint32_t bone) { return bone >= matrices.size(); }))
+	// The sample finds only these bones and the bones that they hang from
+	const auto places = skeletal_animation::BonePlacesInCycle(*played, *stand, time, body.skeleton, bones, &_keyframeTurns);
+	if (std::ranges::any_of(places, [](const std::optional<glm::vec3>& place) { return !place.has_value(); }))
 	{
 		return std::nullopt;
 	}
 	glm::vec3 sum(0.0f);
-	for (const auto bone : bones)
+	for (const auto& place : places)
 	{
-		sum += glm::vec3(matrices[bone][3]);
+		sum += *place;
 	}
 	return sum / static_cast<float>(bones.size());
 }
