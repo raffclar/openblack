@@ -10,7 +10,9 @@
 #include "FotFile.h"
 
 #include <algorithm>
+#include <iterator>
 #include <span>
+#include <utility>
 #include <vector>
 
 #include <glm/vec2.hpp>
@@ -175,4 +177,102 @@ void FotFile::Load(const std::filesystem::path& path)
 	}
 	SPDLOG_LOGGER_INFO(spdlog::get("game"), "Footpaths: {} paths, {} links on buildings, {} links with no building",
 	                   footpathEntities.size(), linked, dropped);
+}
+
+namespace
+{
+
+/// Writes the records of a footpath file and keeps the check sum of the bytes: for each value, its first byte and its
+/// size
+class FotWriter
+{
+public:
+	template <typename T>
+	void Put(const T& value)
+	{
+		const auto* first = reinterpret_cast<const uint8_t*>(&value);
+		_bytes.insert(_bytes.end(), first, first + sizeof(T));
+		_sum += static_cast<uint32_t>(*first) + static_cast<uint32_t>(sizeof(T));
+	}
+
+	/// The start of a new record: its number, its kind, its player, the check sum and the two fields of every thing
+	void StartRecord(serializer::GameThingType type)
+	{
+		Put(++_records);
+		Put(type);
+		Put(uint32_t {0});
+		Put(_sum);
+		Put(uint32_t {0});
+		Put(uint8_t {0});
+	}
+
+	/// The number of the record that the writer wrote last
+	[[nodiscard]] uint32_t LastRecord() const { return _records; }
+
+	[[nodiscard]] std::vector<uint8_t> Take() { return std::move(_bytes); }
+
+private:
+	std::vector<uint8_t> _bytes;
+	uint32_t _sum {0};
+	uint32_t _records {0};
+};
+
+serializer::MapCoords CoordsOf(glm::ivec2 place, float altitude)
+{
+	return {.x = static_cast<uint32_t>(place.x), .z = static_cast<uint32_t>(place.y), .altitude = altitude};
+}
+
+/// A footpath, as a full record the first time and as its number after that
+void PutPath(FotWriter& writer, std::span<const fot_file::Path> paths, std::vector<uint32_t>& written, size_t index)
+{
+	if (written.at(index) != 0)
+	{
+		writer.Put(written.at(index));
+		return;
+	}
+	const auto& path = paths[index];
+	writer.StartRecord(serializer::GameThingType::Footpath);
+	written.at(index) = writer.LastRecord();
+	writer.Put(static_cast<uint32_t>(path.nodes.size()));
+	for (const auto& node : path.nodes)
+	{
+		writer.StartRecord(serializer::GameThingType::FootpathNode);
+		writer.Put(CoordsOf(node.place, node.altitude));
+		writer.Put(node.flags);
+	}
+	writer.Put(static_cast<uint32_t>(path.walkable ? 1 : 0));
+}
+
+} // namespace
+
+std::vector<uint8_t> openblack::fot_file::Write(std::span<const LinkSave> links, std::span<const Path> paths)
+{
+	FotWriter writer;
+	std::vector<uint32_t> written(paths.size(), 0);
+	writer.Put(static_cast<uint32_t>(links.size()));
+	for (const auto& link : links)
+	{
+		writer.StartRecord(serializer::GameThingType::FootpathLinkSave);
+		writer.Put(CoordsOf(link.place, link.altitude));
+		// A thing with no link gives the number 0
+		if (!link.paths.has_value())
+		{
+			writer.Put(uint32_t {0});
+			continue;
+		}
+		std::vector<size_t> valid;
+		std::ranges::copy_if(*link.paths, std::back_inserter(valid), [&paths](size_t index) { return index < paths.size(); });
+		writer.StartRecord(serializer::GameThingType::FootpathLink);
+		writer.Put(static_cast<uint32_t>(valid.size()));
+		for (const auto index : valid)
+		{
+			PutPath(writer, paths, written, index);
+		}
+	}
+	writer.Put(static_cast<uint32_t>(paths.size()));
+	for (size_t index = 0; index < paths.size(); ++index)
+	{
+		PutPath(writer, paths, written, index);
+	}
+	return writer.Take();
 }

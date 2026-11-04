@@ -16,12 +16,20 @@
 #include <vector>
 
 #include <gtest/gtest.h>
+#include <spdlog/sinks/null_sink.h>
+#include <spdlog/spdlog.h>
 
+#include "ECS/CreatureFromFile.h"
+#include "ECS/TownDesire.h"
 #include "Editor/EditorHistory.h"
 #include "Editor/EditorPaths.h"
 #include "Editor/LandBrush.h"
 #include "Editor/LandSave.h"
+#include "FileSystem/MemoryStream.h"
 #include "LHScriptX/FeatureScriptWriter.h"
+#include "LHScriptX/Script.h"
+#include "Serializer/FotFile.h"
+#include "Serializer/GameThingSerializer.h"
 
 using namespace openblack;
 using namespace openblack::editor;
@@ -292,6 +300,50 @@ TEST(EditorLandSave, StreamsFootpathsAndTreesAreWrittenAsTheLandScriptMakesThem)
 	EXPECT_EQ(land_save::FileName("", "txt"), "land.txt");
 }
 
+TEST(FeatureScriptWriter, ANumberWithAFractionCanBeADoubleForAWholeNumberAboveTheFloats)
+{
+	const std::array<lhscriptx::writer::Argument, 2> arguments {0.5f, 16777217.0};
+	EXPECT_EQ(lhscriptx::writer::CommandLine("X", "FF", arguments), "X(0.500000, 16777217.000000)\n");
+}
+
+TEST(EditorLandSave, MobileStaticsAndMobileObjectsAreWrittenAsTheGameWritesThem)
+{
+	const glm::ivec2 place {65536, 131072};
+	EXPECT_EQ(land_save::MobileStaticText(
+	              {.place = place, .row = 2, .altitude = 0.5f, .angles = glm::vec3(0.25f, -1.5f, 0.125f), .scale = 0.267f}),
+	          "CREATE_MOBILE_STATIC(\"10.00,20.00\", 2, 0.500000, 0.250000, -1.500000, 0.125000, 0.267000)\n");
+	// Each product rounds to a float before the cut: 0.9 times 1000 is 900, not 899
+	EXPECT_EQ(land_save::MobileObjectText({.place = place, .row = 5, .yAngle = 1.2345f, .scale = 0.9f}),
+	          "CREATE_MOBILEOBJECT(\"10.00,20.00\", 5, 1234, 900)\n");
+}
+
+TEST(EditorLandSave, AVillagerIsWrittenInOneOfThreeLines)
+{
+	land_save::VillagerLine villager {.place = {65536, 131072}, .town = 3, .row = 12, .name = "NORSE_FORESTER", .age = 21};
+	EXPECT_EQ(land_save::VillagerText(villager), "CREATE_TOWN_VILLAGER(3, \"10.00,20.00\", NORSE_FORESTER, 21)\n");
+	villager.door = glm::ivec2(98304, 131072);
+	EXPECT_EQ(land_save::VillagerText(villager),
+	          "CREATE_VILLAGER_POS(\"15.00,20.00\", \"10.00,20.00\", \"NORSE_FORESTER\", 21)\n");
+	villager.special = true;
+	EXPECT_EQ(land_save::VillagerText(villager), "CREATE_SPECIAL_TOWN_VILLAGER(3, \"10.00,20.00\", 12, 21)\n");
+}
+
+TEST(EditorLandSave, DispensersBubblesAndCreaturesAreWrittenAsTheGameWritesThem)
+{
+	const glm::ivec2 place {65536, 131072};
+	EXPECT_EQ(land_save::DispenserText({.town = 0,
+	                                    .place = place,
+	                                    .building = "JAPANESE_ABODE_SPELL_DISPENSER",
+	                                    .miracle = "FIRE",
+	                                    .yAngle = 0.0f,
+	                                    .scale = 1.0f,
+	                                    .period = 300}),
+	          "CREATE_SPELL_DISPENSER(0, \"10.00,20.00\", \"JAPANESE_ABODE_SPELL_DISPENSER\", \"FIRE\", 0.000000, "
+	          "1.000000, 300.000000)\n");
+	EXPECT_EQ(land_save::OneShotMiracleText(place, "HEAL"), "CREATE_ONE_SHOT_SPELL_PU(\"10.00,20.00\", \"HEAL\")\n");
+	EXPECT_EQ(land_save::CreatureText(place, 2, 0), "CREATE_CREATURE(\"10.00,20.00\", 2, 0)\n");
+}
+
 TEST(EditorHistory, TheThingsMadeAreKeptOnceInTheOrderMade)
 {
 	EditorHistory history;
@@ -304,4 +356,190 @@ TEST(EditorHistory, TheThingsMadeAreKeptOnceInTheOrderMade)
 	EXPECT_EQ(history.MadeRefs(), expected);
 	history.Clear();
 	EXPECT_TRUE(history.MadeRefs().empty());
+}
+
+TEST(EditorLandSave, BuildingsAndTownCentresAreWrittenAsTheGameWritesThem)
+{
+	land_save::AbodeLine abode {.town = 4,
+	                            .place = {65536, 131072},
+	                            .name = "NORSE_ABODE_A",
+	                            .yAngle = 1.2345f,
+	                            .scale = 0.9f,
+	                            .food = 100,
+	                            .wood = 25};
+	EXPECT_EQ(land_save::AbodeText(abode), "CREATE_ABODE(4, \"10.00,20.00\", \"NORSE_ABODE_A\", 1234, 900, 100, 25)\n");
+	abode.planned = true;
+	EXPECT_EQ(land_save::AbodeText(abode), "CREATE_PLANNED_ABODE(4, \"10.00,20.00\", \"NORSE_ABODE_A\", 1234, 900, 100, 25)\n");
+	EXPECT_EQ(land_save::TownCentreText({.town = 4,
+	                                     .place = {98304, 131072},
+	                                     .name = "NORSE_ABODE_TOWN_CENTRE",
+	                                     .yAngle = 0.5f,
+	                                     .scale = 1.0f,
+	                                     .worshipShare = 0.3f}),
+	          "CREATE_TOWN_CENTRE(4, \"15.00,20.00\", \"NORSE_ABODE_TOWN_CENTRE\", 500, 1000, 300)\n");
+}
+
+TEST(EditorLandSave, ATownWritesOnlyTheLinesOfWhatIsNotItsDefault)
+{
+	land_save::TownLine town {.id = 4,
+	                          .place = {65536, 131072},
+	                          .player = "PLAYER_ONE",
+	                          .tribe = 7,
+	                          .tribeName = "NORSE",
+	                          .beliefs = {{.player = "PLAYER_ONE", .belief = 0.0f, .cap = 10.0f},
+	                                      {.player = "NEUTRAL", .belief = 0.0f, .cap = 10.0f}},
+	                          .desires = {{.desire = "Food", .boost = 0.0f}}};
+	EXPECT_EQ(land_save::TownText(town), "CREATE_TOWN(4, \"10.00,20.00\", \"PLAYER_ONE\", 7, \"NORSE\")\n");
+	town.miracles = {"FOOD", "HEAL"};
+	town.beliefs.front().belief = 2.5f;
+	town.beliefs.back().cap = 2.0f;
+	town.desires.push_back({.desire = "Abodes", .boost = -0.75f});
+	town.uninhabitable = true;
+	town.balanceBeliefScale = 0.5f;
+	town.congregation = glm::ivec2(98304, 131072);
+	EXPECT_EQ(land_save::TownText(town), "CREATE_TOWN(4, \"10.00,20.00\", \"PLAYER_ONE\", 7, \"NORSE\")\n"
+	                                     "CREATE_NEW_TOWN_SPELL(4, \"FOOD\")\n"
+	                                     "CREATE_NEW_TOWN_SPELL(4, \"HEAL\")\n"
+	                                     "SET_TOWN_BELIEF(4, \"PLAYER_ONE\", 2.500000)\n"
+	                                     "SET_TOWN_BELIEF_CAP(4, \"NEUTRAL\", 2.000000)\n"
+	                                     "TOWN_DESIRE_BOOST(4, \"Abodes\", -0.750000)\n"
+	                                     "SET_TOWN_UNINHABITABLE(4)\n"
+	                                     "SET_TOWN_BALANCE_BELIEF_SCALE(4, 0.500000)\n"
+	                                     "SET_TOWN_CONGREGATION_POS(4, \"15.00,20.00\")\n");
+	// A gathering place at 0, 0 is no place
+	town.congregation = glm::ivec2(0, 0);
+	EXPECT_EQ(land_save::TownText(town).find("SET_TOWN_CONGREGATION_POS"), std::string::npos);
+	EXPECT_EQ(land_save::PlayerHeading("PLAYER_ONE"), "\nrem *********************** PLAYER_ONE ***********************\n");
+	EXPECT_EQ(land_save::TownHeading(4), "rem ---------------- Town: 4 ----------------\n");
+}
+
+TEST(EditorLandSave, ADesireNameReadsBackAsTheSameDesire)
+{
+	for (size_t desire = 0; desire < ecs::town_desire::k_Count; ++desire)
+	{
+		EXPECT_EQ(ecs::town_desire::DesireByName(ecs::town_desire::DesireName(desire)), desire);
+	}
+	EXPECT_TRUE(ecs::town_desire::DesireName(ecs::town_desire::k_Count).empty());
+}
+
+TEST(EditorLandSave, AWrittenLandScriptReadsBackAsTheSameWorld)
+{
+	// Write a town with a building and a centre, a creature, a stream and a footpath, then read the lines back
+	const std::array places {glm::ivec2(65536, 131072), glm::ivec2(98304, 131072)};
+	land_save::TownLine town {.id = 3, .place = places.front(), .player = "PLAYER_TWO", .tribe = 3, .tribeName = "JAPANESE"};
+	town.beliefs = {{.player = "PLAYER_TWO", .belief = 1.5f, .cap = 10.0f}};
+	std::string script = lhscriptx::writer::VersionLine(lhscriptx::writer::k_Version);
+	script += land_save::PlayerHeading("PLAYER_TWO");
+	script += land_save::TownHeading(3);
+	script += land_save::TownText(town);
+	script += land_save::AbodeText(
+	    {.town = 3, .place = places.back(), .name = "JAPANESE_ABODE_A", .yAngle = 0.25f, .scale = 1.0f, .food = 7, .wood = 9});
+	script += land_save::TownCentreText(
+	    {.town = 3, .place = places.front(), .name = "JAPANESE_ABODE_TOWN_CENTRE", .scale = 1.0f, .worshipShare = 0.5f});
+	script += land_save::CreatureText(places.back(), 2, 1);
+	script += land_save::StreamText(0, places);
+	script += land_save::FootpathText(places);
+
+	const auto read = lhscriptx::Script::Read(script);
+	ASSERT_FALSE(read.error.has_value()) << *read.error;
+	std::vector<std::string> names;
+	for (const auto& command : read.commands)
+	{
+		names.push_back(command.name);
+	}
+	const std::vector<std::string> expected {"VERSION",         "CREATE_TOWN",          "SET_TOWN_BELIEF",
+	                                         "CREATE_ABODE",    "CREATE_TOWN_CENTRE",   "CREATE_CREATURE",
+	                                         "CREATE_STREAM",   "CREATE_STREAM_POINT",  "CREATE_STREAM_POINT",
+	                                         "CREATE_FOOTPATH", "CREATE_FOOTPATH_NODE", "CREATE_FOOTPATH_NODE"};
+	EXPECT_EQ(names, expected);
+
+	const auto& townLine = read.commands.at(1).arguments;
+	ASSERT_EQ(townLine.size(), 5u);
+	EXPECT_EQ(*townLine.at(0).IntegerValue(), 3);
+	EXPECT_EQ(townLine.at(1).StringValue(), "10.00,20.00");
+	EXPECT_EQ(townLine.at(2).StringValue(), "PLAYER_TWO");
+	EXPECT_EQ(*townLine.at(3).IntegerValue(), 3);
+	EXPECT_EQ(townLine.at(4).StringValue(), "JAPANESE");
+	const auto& belief = read.commands.at(2).arguments;
+	ASSERT_EQ(belief.size(), 3u);
+	EXPECT_EQ(*belief.at(2).FloatValue(), 1.5f);
+	const auto& abode = read.commands.at(3).arguments;
+	ASSERT_EQ(abode.size(), 7u);
+	EXPECT_EQ(abode.at(2).StringValue(), "JAPANESE_ABODE_A");
+	EXPECT_EQ(*abode.at(3).IntegerValue(), 250);
+	EXPECT_EQ(*abode.at(4).IntegerValue(), 1000);
+	EXPECT_EQ(*abode.at(5).IntegerValue(), 7);
+	EXPECT_EQ(*abode.at(6).IntegerValue(), 9);
+	const auto& centre = read.commands.at(4).arguments;
+	ASSERT_EQ(centre.size(), 6u);
+	EXPECT_EQ(*centre.at(5).IntegerValue(), 500);
+	const auto& creature = read.commands.at(5).arguments;
+	ASSERT_EQ(creature.size(), 3u);
+	EXPECT_EQ(creature.at(0).StringValue(), "15.00,20.00");
+	EXPECT_EQ(*creature.at(1).IntegerValue(), 2);
+	EXPECT_EQ(*creature.at(2).IntegerValue(), 1);
+
+	// The paths read back with the texts of their places in order
+	const auto paths = land_save::ReadSavedPaths(script);
+	const std::vector<std::string> texts {"10.00,20.00", "15.00,20.00"};
+	ASSERT_EQ(paths.streams.size(), 1u);
+	EXPECT_EQ(paths.streams.front(), texts);
+	ASSERT_EQ(paths.footpaths.size(), 1u);
+	EXPECT_EQ(paths.footpaths.front(), texts);
+}
+
+TEST(EditorLandSave, APlainCreatureComesOnlyForAPlayerWithNoCreature)
+{
+	using ecs::creature_from_file::ScriptMakesPlainCreature;
+	EXPECT_TRUE(ScriptMakesPlainCreature(true, true, true, false));
+	EXPECT_FALSE(ScriptMakesPlainCreature(true, true, true, true));
+	EXPECT_FALSE(ScriptMakesPlainCreature(false, true, true, false));
+	EXPECT_FALSE(ScriptMakesPlainCreature(true, false, true, false));
+	EXPECT_FALSE(ScriptMakesPlainCreature(true, true, false, false));
+}
+
+TEST(EditorLandSave, AWrittenFootpathFileReadsBackWithItsLinksAndPaths)
+{
+	// The reader of the file logs to the game logger
+	if (spdlog::get("game") == nullptr)
+	{
+		spdlog::create<spdlog::sinks::null_sink_st>("game");
+	}
+	const std::vector<fot_file::Path> paths {
+	    {.nodes = {{.place = {65536, 131072}, .altitude = 0.0f, .flags = 1},
+	               {.place = {98304, 131072}, .altitude = 0.25f, .flags = 3}},
+	     .walkable = true},
+	    {.nodes = {{.place = {1000, 2000}, .altitude = 0.0f, .flags = 1}}, .walkable = false},
+	};
+	const std::vector<fot_file::LinkSave> links {
+	    {.place = {65536, 131072}, .altitude = 0.5f, .paths = std::vector<size_t> {1, 0}},
+	    {.place = {7, 8}, .altitude = 0.0f, .paths = std::nullopt},
+	    {.place = {98304, 131072}, .altitude = -0.5f, .paths = std::vector<size_t> {0}},
+	};
+	auto bytes = fot_file::Write(links, paths);
+	filesystem::MemoryStream stream(std::move(bytes));
+	serializer::GameThingSerializer reader(stream);
+	const auto saves = reader.DeserializeList<serializer::GameThingSerializer::FootpathLinkSave>();
+	const auto footpaths = reader.DeserializeList<serializer::GameThingSerializer::Footpath>();
+	EXPECT_TRUE(stream.IsEndOfFile());
+
+	// The thing with no link gives no link save
+	ASSERT_EQ(saves.size(), 2u);
+	EXPECT_EQ(saves.at(0).coords.x, 65536u);
+	EXPECT_EQ(saves.at(0).coords.altitude, 0.5f);
+	ASSERT_EQ(saves.at(0).link.footpaths.size(), 2u);
+	EXPECT_EQ(saves.at(0).link.footpaths.at(0).nodes.size(), 1u);
+	EXPECT_EQ(saves.at(0).link.footpaths.at(1).nodes.size(), 2u);
+	ASSERT_EQ(saves.at(1).link.footpaths.size(), 1u);
+	EXPECT_EQ(saves.at(1).link.footpaths.front(), saves.at(0).link.footpaths.at(1));
+
+	ASSERT_EQ(footpaths.size(), 2u);
+	EXPECT_EQ(footpaths.at(0), saves.at(0).link.footpaths.at(1));
+	EXPECT_EQ(footpaths.at(0).unknown, 1u);
+	EXPECT_EQ(footpaths.at(1).unknown, 0u);
+	const auto& node = footpaths.at(0).nodes.at(1);
+	EXPECT_EQ(node.coords.x, 98304u);
+	EXPECT_EQ(node.coords.z, 131072u);
+	EXPECT_EQ(node.coords.altitude, 0.25f);
+	EXPECT_EQ(node.unknown, 3u);
 }

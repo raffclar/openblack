@@ -13,7 +13,9 @@
 #include <array>
 #include <filesystem>
 #include <fstream>
+#include <optional>
 #include <span>
+#include <string>
 #include <system_error>
 #include <utility>
 #include <vector>
@@ -31,6 +33,7 @@
 #include "Common/UserData.h"
 #include "ECS/Archetypes/StreamSegmentArchetype.h"
 #include "ECS/Components/Abode.h"
+#include "ECS/Components/Creature.h"
 #include "ECS/Components/Feature.h"
 #include "ECS/Components/Field.h"
 #include "ECS/Components/FishFarm.h"
@@ -38,18 +41,32 @@
 #include "ECS/Components/Forest.h"
 #include "ECS/Components/Hand.h"
 #include "ECS/Components/HandGrab.h"
+#include "ECS/Components/MiracleImpression.h"
+#include "ECS/Components/Mobile.h"
+#include "ECS/Components/OneOffSpellSeed.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/ScriptControl.h"
+#include "ECS/Components/SpellDispenser.h"
+#include "ECS/Components/SpellIcon.h"
 #include "ECS/Components/Stream.h"
 #include "ECS/Components/Temple.h"
+#include "ECS/Components/Town.h"
+#include "ECS/Components/TownDesire.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
+#include "ECS/Components/VillageTotem.h"
+#include "ECS/Components/Villager.h"
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/PlacedTurn.h"
+#include "ECS/PlayerTowns.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/EditorSystemInterface.h"
+#include "ECS/Systems/Implementations/VillagerHome.h"
 #include "ECS/Systems/LandSystemInterface.h"
+#include "ECS/Systems/ResourceStoreSystemInterface.h"
 #include "ECS/Systems/SaveGameSystemInterface.h"
+#include "ECS/TownDesire.h"
+#include "ECS/VillagerAge.h"
 #include "Editor/EditorEntities.h"
 #include "Editor/EditorStyle.h"
 #include "Editor/LandSave.h"
@@ -57,6 +74,9 @@
 #include "InfoConstants.h"
 #include "LHScriptX/FeatureScriptWriter.h"
 #include "Locator.h"
+#include "Magic/MagicTables.h"
+#include "PlayerSlots.h"
+#include "Serializer/FotFile.h"
 
 namespace openblack::editor
 {
@@ -82,6 +102,425 @@ bool CanHoldLink(const ecs::Registry& registry, entt::entity entity)
 {
 	return registry.Valid(entity) && registry.AllOf<Transform>(entity) &&
 	       registry.AnyOf<Abode, Field, FishFarm, WorshipSite, BigForest, Temple>(entity);
+}
+
+/// A mobile static or a mobile object that the land script makes, as the game compares them: the game writes one line
+/// for all the things of one row at the same place and height
+struct WrittenThing
+{
+	bool object {false};
+	int32_t row {0};
+	glm::ivec2 place {0, 0};
+	float altitude {0.0f};
+
+	friend bool operator==(const WrittenThing&, const WrittenThing&) = default;
+};
+
+/// The height of a thing above the land under its place on the map
+float AltitudeOf(glm::vec3 position, glm::ivec2 place)
+{
+	if (!Locator::terrainSystem::has_value())
+	{
+		return 0.0f;
+	}
+	const glm::vec2 metres {map_coords::ToMetres(place.x), map_coords::ToMetres(place.y)};
+	return position.y - Locator::terrainSystem::value().GetHeightAt(metres);
+}
+
+/// The number of a town, -1 for none
+int32_t TownNumber(const ecs::Registry& registry, entt::entity town)
+{
+	if (town == entt::null || !registry.Valid(town))
+	{
+		return -1;
+	}
+	const auto* found = registry.TryGet<const Town>(town);
+	return found != nullptr ? static_cast<int32_t>(found->id) : -1;
+}
+
+/// The name of the effect of a miracle, empty for none
+std::string MiracleName(const InfoConstants& info, MagicType type)
+{
+	if (type == MagicType::None)
+	{
+		return {};
+	}
+	return magic::GetMagicEffectInfo(info, type).debugString.data();
+}
+
+/// The line that makes a mobile static, a mobile object, a villager, a miracle dispenser, a one-shot miracle or a
+/// creature again. None for a thing of another kind. An empty line for a thing that the game writes no line for:
+/// - A thing in a hand.
+/// - A mobile static or a mobile object of the same row at the same place and height as a thing with a line.
+/// - A miracle dispenser with no town, or a creature with no god.
+std::optional<std::string> ThingText(const ecs::Registry& registry, entt::entity entity, std::vector<WrittenThing>& written)
+{
+	const auto* transform = registry.TryGet<const Transform>(entity);
+	if (transform == nullptr || !Locator::infoConstants::has_value())
+	{
+		return std::nullopt;
+	}
+	const bool knownKind =
+	    registry.AnyOf<MobileStatic, MobileObject, Villager, SpellDispenser, OneOffSpellSeed, Creature>(entity);
+	if (!knownKind)
+	{
+		return std::nullopt;
+	}
+	if (registry.AnyOf<InHand>(entity))
+	{
+		return std::string {};
+	}
+	const auto& info = Locator::infoConstants::value();
+	const auto place = paths::PlaceOf(transform->position);
+	const auto angles = ecs::placed_turn::AnglesOf(registry, entity);
+	const auto scale = transform->scale.x;
+	const auto* mobileStatic = registry.TryGet<const MobileStatic>(entity);
+	const auto* mobileObject = registry.TryGet<const MobileObject>(entity);
+	if (mobileStatic != nullptr || mobileObject != nullptr)
+	{
+		const WrittenThing thing {
+		    .object = mobileObject != nullptr,
+		    .row =
+		        mobileObject != nullptr ? static_cast<int32_t>(mobileObject->type) : static_cast<int32_t>(mobileStatic->type),
+		    .place = place,
+		    .altitude = AltitudeOf(transform->position, place),
+		};
+		if (std::ranges::find(written, thing) != written.end())
+		{
+			return std::string {};
+		}
+		written.push_back(thing);
+		if (thing.object)
+		{
+			return land_save::MobileObjectText({.place = place, .row = thing.row, .yAngle = angles.y, .scale = scale});
+		}
+		return land_save::MobileStaticText(
+		    {.place = place, .row = thing.row, .altitude = thing.altitude, .angles = angles, .scale = scale});
+	}
+	if (const auto* villager = registry.TryGet<const Villager>(entity); villager != nullptr)
+	{
+		const auto row = static_cast<size_t>(villager->kind);
+		if (row >= info.villager.size())
+		{
+			return std::string {};
+		}
+		const auto& kind = info.villager.at(row);
+		land_save::VillagerLine line {
+		    .place = place,
+		    .town = TownNumber(registry, villager->town),
+		    .special = kind.tribeType == Tribe::NONE,
+		    .row = static_cast<int32_t>(row),
+		    .age = static_cast<int32_t>(ecs::villager_age::AgeNow(*villager)),
+		};
+		if (!line.special)
+		{
+			line.name = fmt::format("{}_{}", k_TribeStrs.at(static_cast<size_t>(kind.tribeType)),
+			                        k_VillagerNumberStrs.at(static_cast<size_t>(kind.villagerNumber)));
+			if (villager->abode != entt::null && registry.Valid(villager->abode))
+			{
+				const auto door = ecs::villager_home::DoorPosition(villager->abode);
+				line.door = paths::PlaceOf(glm::vec3(door.x, 0.0f, door.y));
+			}
+		}
+		return land_save::VillagerText(line);
+	}
+	if (const auto* dispenser = registry.TryGet<const SpellDispenser>(entity); dispenser != nullptr)
+	{
+		const auto* tribe = dispenser->town != entt::null && registry.Valid(dispenser->town)
+		                        ? registry.TryGet<const Tribe>(dispenser->town)
+		                        : nullptr;
+		const auto row = static_cast<size_t>(dispenser->building);
+		if (tribe == nullptr || *tribe == Tribe::NONE || row >= info.abode.size())
+		{
+			return std::string {};
+		}
+		return land_save::DispenserText({
+		    .town = TownNumber(registry, dispenser->town),
+		    .place = place,
+		    .building =
+		        fmt::format("{}_{}", k_TribeStrs.at(static_cast<size_t>(*tribe)), info.abode.at(row).debugString.data()),
+		    .miracle = MiracleName(info, dispenser->magicType),
+		    .yAngle = angles.y,
+		    .scale = scale,
+		    .period = dispenser->timer.period,
+		});
+	}
+	if (const auto* seed = registry.TryGet<const OneOffSpellSeed>(entity); seed != nullptr)
+	{
+		if (seed->seedType == SpellSeedType::None)
+		{
+			return std::string {};
+		}
+		const auto type = magic::GetMagicTypeFromPowerUpLevel(magic::GetSpellSeedInfo(info, seed->seedType), seed->powerUp);
+		return land_save::OneShotMiracleText(paths::PlaceOf(seed->position), MiracleName(info, type));
+	}
+	const auto& creature = registry.Get<const Creature>(entity);
+	if (creature.owner == PlayerNames::NEUTRAL)
+	{
+		return std::string {};
+	}
+	return land_save::CreatureText(place, static_cast<int32_t>(creature.species), static_cast<int32_t>(creature.owner));
+}
+
+/// A building and the line that makes it again, with the town that it is in
+struct BuildingEntry
+{
+	entt::entity town {entt::null};
+	std::string text;
+};
+
+/// The food or the wood that a building holds, as a script asks it
+uint32_t ResourceOf(entt::entity entity, const Abode& abode, ResourceType type)
+{
+	if (Locator::resourceStoreSystem::has_value())
+	{
+		return Locator::resourceStoreSystem::value().GetResource(entity, type);
+	}
+	return type == ResourceType::Food ? abode.foodAmount : abode.woodAmount;
+}
+
+/// The worship share that the totem of a town centre was last set to, 0 when the centre has no totem
+float TotemShareOf(const ecs::Registry& registry, entt::entity centre)
+{
+	const auto totem = registry.FindFirst<const VillageTotem>(
+	    [centre](entt::entity, const VillageTotem& found) { return found.townCentre == centre; });
+	return totem.has_value() ? registry.Get<const VillageTotem>(*totem).ease.target : 0.0f;
+}
+
+/// The line that makes a building again, with its town. None for a thing that is not a building of a town. An empty line
+/// for a building that the game writes no line for in this form:
+/// - A building in a hand, or a building of a town that is gone or that has no tribe.
+/// - A field, a citadel or a miracle dispenser, which have other lines or none.
+std::optional<BuildingEntry> BuildingText(const ecs::Registry& registry, entt::entity entity)
+{
+	const auto* abode = registry.TryGet<const Abode>(entity);
+	const auto* transform = registry.TryGet<const Transform>(entity);
+	if (abode == nullptr || transform == nullptr || registry.AnyOf<SpellDispenser>(entity) ||
+	    !Locator::infoConstants::has_value())
+	{
+		return std::nullopt;
+	}
+	const auto& info = Locator::infoConstants::value();
+	const auto row = static_cast<size_t>(abode->info);
+	const auto& towns = registry.Context().towns;
+	const auto town = towns.find(abode->townId);
+	const auto* tribe =
+	    town != towns.end() && registry.Valid(town->second) ? registry.TryGet<const Tribe>(town->second) : nullptr;
+	if (registry.AnyOf<InHand>(entity) || row >= info.abode.size() || tribe == nullptr || *tribe == Tribe::NONE)
+	{
+		return BuildingEntry {};
+	}
+	const auto& abodeInfo = info.abode.at(row);
+	if (abodeInfo.abodeType == AbodeType::Field || abodeInfo.abodeType == AbodeType::Citadel ||
+	    abodeInfo.abodeType == AbodeType::SpellDispenser)
+	{
+		return BuildingEntry {};
+	}
+	const auto place = paths::PlaceOf(transform->position);
+	const auto name = fmt::format("{}_{}", k_TribeStrs.at(static_cast<size_t>(*tribe)), abodeInfo.debugString.data());
+	const auto yAngle = ecs::placed_turn::AnglesOf(registry, entity).y;
+	const auto scale = transform->scale.x;
+	const auto townNumber = static_cast<int32_t>(abode->townId);
+	// A building that is not complete has the line of a plan, also a town centre
+	const bool planned = registry.AnyOf<BuildProgress>(entity);
+	if (abodeInfo.abodeType == AbodeType::TownCentre && !planned)
+	{
+		return BuildingEntry {
+		    .town = town->second,
+		    .text = land_save::TownCentreText({.town = townNumber,
+		                                       .place = place,
+		                                       .name = name,
+		                                       .yAngle = yAngle,
+		                                       .scale = scale,
+		                                       .worshipShare = TotemShareOf(registry, entity)}),
+		};
+	}
+	return BuildingEntry {
+	    .town = town->second,
+	    .text = land_save::AbodeText({.town = townNumber,
+	                                  .place = place,
+	                                  .name = name,
+	                                  .yAngle = yAngle,
+	                                  .scale = scale,
+	                                  .food = ResourceOf(entity, *abode, ResourceType::Food),
+	                                  .wood = ResourceOf(entity, *abode, ResourceType::Wood),
+	                                  .planned = planned}),
+	};
+}
+
+/// A town as the land script makes it again, from what the town keeps now. openblack does not keep the balance belief
+/// scale of a town, so the scale is always 1 and the file gets no line for it.
+land_save::TownLine TownLineOf(const ecs::Registry& registry, entt::entity entity)
+{
+	const auto& town = registry.Get<const Town>(entity);
+	const auto tribe = registry.AnyOf<Tribe>(entity) ? registry.Get<const Tribe>(entity) : Tribe::NONE;
+	land_save::TownLine line {
+	    .id = static_cast<int32_t>(town.id),
+	    .place = paths::PlaceOf(registry.Get<const Transform>(entity).position),
+	    .player = player_slots::ScriptNameOf(town.owner),
+	    .tribe = static_cast<int32_t>(tribe),
+	    .tribeName = tribe != Tribe::NONE ? std::string(k_TribeStrs.at(static_cast<size_t>(tribe))) : std::string {},
+	    .uninhabitable = town.uninhabitable,
+	};
+	if (const auto* magic = registry.TryGet<const TownMagic>(entity); magic != nullptr && Locator::infoConstants::has_value())
+	{
+		for (size_t type = 0; type < magic->held.size(); ++type)
+		{
+			if (magic->held.at(type))
+			{
+				line.miracles.push_back(MiracleName(Locator::infoConstants::value(), static_cast<MagicType>(type)));
+			}
+		}
+	}
+	// The game asks each of the eight players of a land in turn, the neutral player last
+	if (const auto* impression = registry.TryGet<const TownImpression>(entity))
+	{
+		for (size_t player = 0; player < player_slots::k_LandSlots; ++player)
+		{
+			line.beliefs.push_back({.player = std::string(k_PlayerNamesStrs.at(player)),
+			                        .belief = impression->belief.belief.at(player),
+			                        .cap = impression->belief.cap.at(player)});
+		}
+	}
+	if (const auto* desire = registry.TryGet<const TownDesire>(entity))
+	{
+		for (size_t index = 0; index < desire->boost.size(); ++index)
+		{
+			line.desires.push_back(
+			    {.desire = std::string(ecs::town_desire::DesireName(index)), .boost = desire->boost.at(index)});
+		}
+	}
+	if (town.congregationPos.has_value())
+	{
+		line.congregation = paths::PlaceOf(glm::vec3(town.congregationPos->x, 0.0f, town.congregationPos->y));
+	}
+	return line;
+}
+
+/// The streams and the footpaths of the world that a saved land script makes, in the order of the script. A path matches
+/// when the texts of its places are the texts of the places of a path of the script, in the same order. Each path of the
+/// world matches one path of the script at most.
+paths::DrawnPaths DrawnPathsIn(const ecs::Registry& registry, const land_save::SavedPaths& saved)
+{
+	namespace writer = lhscriptx::writer;
+	std::vector<std::pair<int, std::vector<std::string>>> streams;
+	for (const auto& [id, entity] : registry.Context().streams)
+	{
+		if (const auto* stream = registry.TryGet<const Stream>(entity))
+		{
+			std::vector<std::string> texts;
+			for (const auto point : stream->points)
+			{
+				texts.push_back(writer::PlaceText(paths::PlaceOf(point)));
+			}
+			streams.emplace_back(id, std::move(texts));
+		}
+	}
+	std::vector<std::pair<entt::entity, std::vector<std::string>>> footpaths;
+	registry.Each<const Footpath>([&footpaths](entt::entity entity, const Footpath& footpath) {
+		std::vector<std::string> texts;
+		for (const auto& node : footpath.nodes)
+		{
+			texts.push_back(writer::PlaceText(node.place));
+		}
+		footpaths.emplace_back(entity, std::move(texts));
+	});
+	// Each path of the script takes the first path of the world with the same places, which then leaves the list
+	const auto take = [](auto& list, const std::vector<std::string>& texts, auto& into) {
+		const auto found = std::ranges::find(list, texts, [](const auto& entry) -> const auto& { return entry.second; });
+		if (found != list.end())
+		{
+			into.push_back(found->first);
+			list.erase(found);
+		}
+	};
+	paths::DrawnPaths drawn;
+	for (const auto& texts : saved.streams)
+	{
+		take(streams, texts, drawn.streams);
+	}
+	for (const auto& texts : saved.footpaths)
+	{
+		take(footpaths, texts, drawn.footpaths);
+	}
+	return drawn;
+}
+
+/// The height of a point above the land under a place on the map, 0 with no land
+float HeightAbove(float y, glm::ivec2 place)
+{
+	if (!Locator::terrainSystem::has_value())
+	{
+		return 0.0f;
+	}
+	const auto ground = map_coords::ToMetres(map_coords::MapCoords {.x = place.x, .z = place.y, .altitude = 0.0f});
+	return y - Locator::terrainSystem::value().GetHeightAt(ground);
+}
+
+/// The land's footpath file of the world as it is now: a link for each thing that can keep footpaths, then for each plan
+/// of the towns, then all the footpaths
+std::vector<uint8_t> FootpathFileOf(const ecs::Registry& registry)
+{
+	std::vector<fot_file::Path> files;
+	std::vector<Footpath::Id> ids;
+	registry.Each<const Footpath>([&files, &ids](entt::entity entity, const Footpath& footpath) {
+		fot_file::Path path {.walkable = footpath.walkable};
+		for (const auto& node : footpath.nodes)
+		{
+			const auto flags =
+			    static_cast<uint8_t>(1u | (node.planned ? 2u : 0u) | (node.hidden ? 4u : 0u) | (node.marker ? 8u : 0u));
+			path.nodes.push_back({.place = node.place, .altitude = HeightAbove(node.position.y, node.place), .flags = flags});
+		}
+		files.push_back(std::move(path));
+		ids.push_back(static_cast<Footpath::Id>(entity));
+	});
+	std::vector<entt::entity> holders;
+	const auto addAll = [&registry, &holders]<typename Kind>() {
+		registry.Each<const Kind, const Transform>([&holders](entt::entity entity, const Kind&, const Transform&) {
+			if (std::ranges::find(holders, entity) == holders.end())
+			{
+				holders.push_back(entity);
+			}
+		});
+	};
+	addAll.operator()<Abode>();
+	addAll.operator()<Field>();
+	addAll.operator()<FishFarm>();
+	addAll.operator()<WorshipSite>();
+	addAll.operator()<BigForest>();
+	addAll.operator()<Temple>();
+	for (const auto plan : ecs::player_towns::AllPlansInOrder(registry))
+	{
+		if (registry.AllOf<Transform>(plan) && std::ranges::find(holders, plan) == holders.end())
+		{
+			holders.push_back(plan);
+		}
+	}
+	std::vector<fot_file::LinkSave> links;
+	links.reserve(holders.size());
+	for (const auto holder : holders)
+	{
+		const auto& position = registry.Get<const Transform>(holder).position;
+		const auto* farm = registry.TryGet<const FishFarm>(holder);
+		const auto place = farm != nullptr ? farm->place : paths::PlaceOf(position);
+		const auto* link = registry.TryGet<const FootpathLink>(holder);
+		fot_file::LinkSave save {.place = place,
+		                         .altitude = HeightAbove(link != nullptr ? link->position.y : position.y, place)};
+		if (link != nullptr)
+		{
+			std::vector<size_t> indices;
+			for (const auto id : link->footpaths)
+			{
+				if (const auto found = std::ranges::find(ids, id); found != ids.end())
+				{
+					indices.push_back(static_cast<size_t>(std::distance(ids.begin(), found)));
+				}
+			}
+			save.paths = std::move(indices);
+		}
+		links.push_back(std::move(save));
+	}
+	return fot_file::Write(links, files);
 }
 
 /// Where a point of the world is on the screen, in pixels, none behind the camera
@@ -415,6 +854,63 @@ std::string LandToolsPanel::Save(EditorContext& context) noexcept
 	// cells. A thing of a kind that the file does not write is counted.
 	auto& registry = context.registry;
 	std::string script = writer::VersionLine(writer::k_Version);
+	const auto& history = context.system.GetHistory();
+
+	// The game writes the towns of each player first, each town with its buildings. The file holds each town that has a
+	// building that the editor made, so that the buildings have their towns when the file loads.
+	size_t buildings = 0;
+	size_t notWritten = 0;
+	std::vector<std::pair<entt::entity, std::vector<std::string>>> townBuildings;
+	for (const auto ref : history.MadeRefs())
+	{
+		const auto entity = history.Resolve(ref);
+		if (entity == entt::null || !registry.Valid(entity))
+		{
+			continue;
+		}
+		const auto building = BuildingText(registry, entity);
+		if (!building.has_value())
+		{
+			continue;
+		}
+		if (building->text.empty())
+		{
+			++notWritten;
+			continue;
+		}
+		auto found = std::ranges::find(townBuildings, building->town, &decltype(townBuildings)::value_type::first);
+		if (found == townBuildings.end())
+		{
+			townBuildings.emplace_back(building->town, std::vector<std::string> {});
+			found = std::prev(townBuildings.end());
+		}
+		found->second.push_back(building->text);
+		++buildings;
+	}
+	// The players come in their order, and the towns of a player in the order that the player gained them
+	std::ranges::sort(townBuildings, [&registry](const auto& a, const auto& b) {
+		const auto& first = registry.Get<const Town>(a.first);
+		const auto& second = registry.Get<const Town>(b.first);
+		return std::pair(static_cast<uint32_t>(first.owner), first.gained) <
+		       std::pair(static_cast<uint32_t>(second.owner), second.gained);
+	});
+	std::optional<PlayerNames> lastPlayer;
+	for (const auto& [town, lines] : townBuildings)
+	{
+		const auto& townComponent = registry.Get<const Town>(town);
+		if (lastPlayer != townComponent.owner)
+		{
+			script += land_save::PlayerHeading(player_slots::ScriptNameOf(townComponent.owner));
+			lastPlayer = townComponent.owner;
+		}
+		script += land_save::TownHeading(static_cast<int32_t>(townComponent.id));
+		script += land_save::TownText(TownLineOf(registry, town));
+		for (const auto& line : lines)
+		{
+			script += line;
+		}
+	}
+
 	int32_t streamId = 0;
 	for (const auto& [id, entity] : registry.Context().streams)
 	{
@@ -434,12 +930,12 @@ std::string LandToolsPanel::Save(EditorContext& context) noexcept
 	}
 	size_t trees = 0;
 	size_t features = 0;
-	size_t notWritten = 0;
-	const auto& history = context.system.GetHistory();
+	size_t others = 0;
+	std::vector<WrittenThing> written;
 	for (const auto ref : history.MadeRefs())
 	{
 		const auto entity = history.Resolve(ref);
-		if (entity == entt::null || !registry.Valid(entity))
+		if (entity == entt::null || !registry.Valid(entity) || BuildingText(registry, entity).has_value())
 		{
 			continue;
 		}
@@ -458,6 +954,13 @@ std::string LandToolsPanel::Save(EditorContext& context) noexcept
 			    .scale = transform->scale.x,
 			});
 			++features;
+			continue;
+		}
+		if (auto text = ThingText(registry, entity, written); text.has_value())
+		{
+			script += *text;
+			others += text->empty() ? 0 : 1;
+			notWritten += text->empty() ? 1 : 0;
 			continue;
 		}
 		if (tree == nullptr || transform == nullptr)
@@ -495,8 +998,21 @@ std::string LandToolsPanel::Save(EditorContext& context) noexcept
 	const auto scriptPath = *folder / land_save::FileName(name, "txt");
 	if (WriteFile(scriptPath, std::span(reinterpret_cast<const uint8_t*>(script.data()), script.size())))
 	{
-		wrote.push_back(fmt::format("{} ({} streams, {} trees, {} features, {} footpaths, {} other things not in it)",
-		                            scriptPath.filename().string(), streamId, trees, features, footpaths, notWritten));
+		wrote.push_back(
+		    fmt::format("{} ({} towns, {} buildings, {} streams, {} trees, {} features, {} other things, {} footpaths, {} "
+		                "things not in it)",
+		                scriptPath.filename().string(), townBuildings.size(), buildings, streamId, trees, features, others,
+		                footpaths, notWritten));
+	}
+
+	// All the footpaths of the world and the links of the things that keep them, as the land's footpath file
+	{
+		const auto bytes = FootpathFileOf(registry);
+		const auto fotPath = *folder / land_save::FileName(name, "fot");
+		if (WriteFile(fotPath, bytes))
+		{
+			wrote.push_back(fotPath.filename().string());
+		}
 	}
 
 	// The whole world, to load again in the editor
@@ -521,7 +1037,7 @@ std::string LandToolsPanel::Save(EditorContext& context) noexcept
 	return result;
 }
 
-std::string LandToolsPanel::LoadWorld() noexcept
+std::string LandToolsPanel::LoadWorld(EditorContext& context) noexcept
 {
 	const auto folder = SaveFolder();
 	if (!folder.has_value() || !Locator::saveGameSystem::has_value())
@@ -535,8 +1051,18 @@ std::string LandToolsPanel::LoadWorld() noexcept
 		return fmt::format("No world file {}", path.filename().string());
 	}
 	const std::vector<uint8_t> bytes {std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()};
-	return Locator::saveGameSystem::value().LoadWorldState(bytes) ? fmt::format("Loaded {}", path.filename().string())
-	                                                              : fmt::format("Could not load {}", path.filename().string());
+	if (!Locator::saveGameSystem::value().LoadWorldState(bytes))
+	{
+		return fmt::format("Could not load {}", path.filename().string());
+	}
+	// The land script that Save wrote with the world tells which of its paths the editor drew
+	std::ifstream scriptFile(*folder / land_save::FileName(LandName(), "txt"), std::ios::binary);
+	const std::string script {std::istreambuf_iterator<char>(scriptFile), std::istreambuf_iterator<char>()};
+	auto& drawn = context.system.GetDrawnPaths();
+	drawn = DrawnPathsIn(context.registry, land_save::ReadSavedPaths(script));
+	drawn.keepAtNextReset = true;
+	return fmt::format("Loaded {} with {} drawn streams and {} drawn footpaths", path.filename().string(), drawn.streams.size(),
+	                   drawn.footpaths.size());
 }
 
 void LandToolsPanel::Draw(EditorContext& context) noexcept
@@ -627,11 +1153,12 @@ void LandToolsPanel::Draw(EditorContext& context) noexcept
 		{
 			_status = Save(context);
 		}
-		ImGui::SetItemTooltip("A landscape file, a land script of what the editor placed and drew, and a world file");
+		ImGui::SetItemTooltip("A landscape file, a land script of what the editor placed and drew, a footpath file and a "
+		                      "world file");
 		ImGui::SameLine();
 		if (ImGui::Button("Load world file"))
 		{
-			_status = LoadWorld();
+			_status = LoadWorld(context);
 		}
 		ImGui::TextColored(style::k_Muted, "Into the profile folder's %s folder", std::string(k_SaveFolder).c_str());
 		ImGui::EndTable();
