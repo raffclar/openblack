@@ -74,9 +74,15 @@ constexpr std::array k_ShepherdStates = {VillagerStates::ShepherdLookForFlock,
                                          VillagerStates::ShepherdFetchStray,
                                          VillagerStates::ShepherdGotoFlock,
                                          VillagerStates::ShepherdCheckAnimalForSlaughter};
-/// The states of a dance that the import keeps for a dancer of a group that it makes. The two values of these states are
-/// left over from other states: no part of a dance reads them.
-constexpr std::array k_DanceStates = {VillagerStates::InDance, VillagerStates::MoveToDancePos};
+/// The states of a dance that the import keeps for a dancer of a group that it makes: the dance of a worship site, of a
+/// script or of a creature. The two values that some of these states keep are left over from other states: no part of a
+/// dance reads them.
+constexpr std::array k_DanceStates = {VillagerStates::InDance, VillagerStates::MoveToDancePos,
+                                      VillagerStates::WorshippingCreature, VillagerStates::RestartWorshippingCreature,
+                                      VillagerStates::ControlledByCreature};
+/// The state of a dance that a reaction holds. The import does not make the reactions, so a villager in this state
+/// decides again.
+constexpr std::array k_ReactionDanceStates = {VillagerStates::DanceWhileReacting};
 /// The states of worship at a worship site. Each keeps one value: whether the villager asked to go home. Only code
 /// that the game never runs sets it, and no villager asks to go home, so the value changes nothing.
 constexpr std::array k_WorshipStates = {VillagerStates::WorshippingAtWorshipSite, VillagerStates::HidingAtWorshipSite,
@@ -913,6 +919,9 @@ std::optional<ImportedDance> ReadDance(const VanillaWorld& world, const VanillaR
 	ImportedDance dance {
 	    .number = record.number,
 	    .type = static_cast<DanceInfo>(*row),
+	    .place = PositionOf(world, record).value_or(gamesave::MapCoords {}),
+	    .owner = world.Ref(record, "danceOwner").value_or(0),
+	    .madeByScript = world.Word(record, "danceCameraOff").value_or(0) != 0,
 	    .clock = world.Float(record, "danceClock").value_or(0.0f),
 	    .loopLength = world.Word(record, "danceLoopLength").value_or(1),
 	    .speed = world.Float(record, "danceSpeed").value_or(0.0f),
@@ -946,6 +955,62 @@ std::optional<ImportedDance> ReadDance(const VanillaWorld& world, const VanillaR
 	dance.roundLength = world.Word(record, "danceRoundLength").value_or(0);
 	dance.keyFrames = ReadDanceKeyFrames(world, record);
 	return dance;
+}
+
+ImportedDances ReadOtherDances(const VanillaWorld& world)
+{
+	std::unordered_set<uint32_t> ofSites;
+	std::unordered_set<uint32_t> held;
+	for (const auto& record : world.Records())
+	{
+		if (record.Is(VanillaType::WorshipSite))
+		{
+			ofSites.insert(world.Ref(record, "siteDance").value_or(0));
+		}
+		else if (record.Is(VanillaType::Reaction))
+		{
+			held.insert(world.Ref(record, "reactionDance").value_or(0));
+		}
+		else if (record.Is(VanillaType::TownArtifact))
+		{
+			// The artefact refers to its dance, to itself and to its town. Only the dance is a dance.
+			for (const auto& field : record.fields)
+			{
+				if (field.kind == gamesave::VanillaValue::Reference)
+				{
+					held.insert(field.number);
+				}
+			}
+		}
+	}
+	ImportedDances dances;
+	for (const auto& record : world.Records())
+	{
+		if (!record.Is(VanillaType::Dance) || ofSites.contains(record.number))
+		{
+			continue;
+		}
+		if (held.contains(record.number))
+		{
+			dances.notMade.push_back(record.number);
+		}
+		else if (auto dance = ReadDance(world, record); dance.has_value())
+		{
+			dances.made.push_back(std::move(*dance));
+		}
+	}
+	return dances;
+}
+
+dances::DanceSetup SetupOf(const ImportedDance& file, entt::entity owner, bool autostart)
+{
+	return {.type = file.type,
+	        .autostart = autostart,
+	        .place = map_coords::MapCoords {.x = file.place.x, .z = file.place.z, .altitude = file.place.altitude},
+	        .owner = owner,
+	        .duration = file.duration,
+	        .madeByScript = file.madeByScript,
+	        .angle = file.angle};
 }
 
 std::optional<ImportedWorshipIcon> ReadWorshipIcon(const VanillaWorld& world, const VanillaRecord& record)
@@ -1332,6 +1397,10 @@ std::array<uint8_t, 3> StartStates(const ImportedVillager& villager)
 		{
 			return villager.importedDancer;
 		}
+		if (IsOneOf(state, k_ReactionDanceStates))
+		{
+			return false;
+		}
 		return CanKeepStateValues(state);
 	};
 	if (!CanKeepWalk(villager.moveState) || !canKeep(villager.states[0]) || !canKeep(villager.states[1]))
@@ -1390,27 +1459,30 @@ std::optional<ImportedSite> ReadSite(const VanillaWorld& world, const VanillaRec
 
 namespace
 {
-/// Marks each villager that dances in a group of the dance of a worship site of the file, and each villager at worship
-/// at such a site. A dancer is in the list of its group, and its group is its group.
+/// Marks each villager that dances in a group of a dance that the import makes, and each villager at worship at a worship
+/// site of the file. A dancer is in the list of its group, and its group is its group.
 void MarkDancersAndWorshippers(ImportedTowns& imported)
 {
 	std::unordered_set<uint32_t> worshippers;
 	std::unordered_map<uint32_t, uint32_t> groupOf;
-	for (const auto& site : imported.worshipSites)
-	{
-		worshippers.insert(site.worshippers.begin(), site.worshippers.end());
-		if (!site.danceValues.has_value())
-		{
-			continue;
-		}
-		for (const auto& group : site.danceValues->groups)
+	const auto addDancers = [&groupOf](const ImportedDance& dance) {
+		for (const auto& group : dance.groups)
 		{
 			for (const auto dancer : group.dancers)
 			{
 				groupOf.emplace(dancer, group.number);
 			}
 		}
+	};
+	for (const auto& site : imported.worshipSites)
+	{
+		worshippers.insert(site.worshippers.begin(), site.worshippers.end());
+		if (site.danceValues.has_value())
+		{
+			addDancers(*site.danceValues);
+		}
 	}
+	std::ranges::for_each(imported.dances.made, addDancers);
 	for (auto& villager : imported.villagers)
 	{
 		const auto group = groupOf.find(villager.number);
@@ -1547,6 +1619,7 @@ ImportedTowns ReadTowns(const VanillaWorld& world)
 		imported.skipped.push_back(Skip(record, why));
 	}
 	PutPiles(world, imported);
+	imported.dances = ReadOtherDances(world);
 	MarkDancersAndWorshippers(imported);
 	return imported;
 }

@@ -3753,6 +3753,159 @@ TEST(VanillaWorldImport, TheImportFindsTheDancersAndTheWorshippersOfASite)
 	EXPECT_FALSE(imported.villagers[2].importedWorshipper);
 }
 
+// The import makes each dance that is not the dance of a worship site, except a dance that a reaction or an artefact of a
+// town holds
+TEST(VanillaWorldImport, TheImportMakesTheDancesOfCreaturesAndScriptsButNotOfReactionsAndArtefacts)
+{
+	auto fake = GameAtTurn(100);
+	// 2: a site, 3: its dance, 4: a dance of a script, 5: a dance of a reaction, 6: the reaction, 7: a dance of an
+	// artefact, 8: the artefact, 9: a dance of a creature
+	fake.Record(VanillaType::WorshipSite).Ref("siteDance", 3);
+	fake.Record(VanillaType::Dance).Value<uint32_t>("danceRow", static_cast<uint32_t>(DanceInfo::CitadelDance_1));
+	fake.Record(VanillaType::Dance)
+	    .Position(1000, -2000)
+	    .Value<uint32_t>("danceRow", static_cast<uint32_t>(DanceInfo::DanceAroundPerson))
+	    .Ref("danceOwner", 30)
+	    .Value<uint32_t>("danceDuration", 400)
+	    .Value<uint32_t>("danceCameraOff", 1);
+	fake.Record(VanillaType::Dance).Value<uint32_t>("danceRow", static_cast<uint32_t>(DanceInfo::BuildingSmall));
+	fake.Record(VanillaType::Reaction).Ref("", 40).Ref("reactionDance", 5);
+	fake.Record(VanillaType::Dance)
+	    .Value<uint32_t>("danceRow", static_cast<uint32_t>(DanceInfo::DanceAroundObjectDiameterLess_7));
+	fake.Record(VanillaType::TownArtifact).Ref("", 41).Ref("", 42).Ref("", 7);
+	fake.Record(VanillaType::Dance)
+	    .Value<uint32_t>("danceRow", static_cast<uint32_t>(DanceInfo::CreatureDanceToImpressVillagers))
+	    .Ref("danceOwner", 31);
+	const auto dances = world_import::ReadOtherDances(fake.Make());
+	ASSERT_EQ(dances.made.size(), 2U);
+	const auto& script = dances.made[0];
+	EXPECT_EQ(script.number, 4U);
+	EXPECT_EQ(script.type, DanceInfo::DanceAroundPerson);
+	EXPECT_EQ(script.owner, 30U);
+	EXPECT_EQ(script.place.x, 1000);
+	EXPECT_EQ(script.place.z, -2000);
+	EXPECT_EQ(script.duration, 400U);
+	EXPECT_TRUE(script.madeByScript);
+	EXPECT_EQ(dances.made[1].number, 9U);
+	EXPECT_EQ(dances.made[1].owner, 31U);
+	EXPECT_FALSE(dances.made[1].madeByScript);
+	EXPECT_EQ(dances.notMade, (std::vector<uint32_t> {5, 7}));
+}
+
+// A dance that the import makes on its own has the row, the place, the length and the angle of the file, is for the
+// thing that the import made, and keeps whether a script made it
+TEST(VanillaWorldImport, ADanceOfTheFileIsMadeWithItsPlaceItsThingAndItsLength)
+{
+	constexpr auto k_Owner = static_cast<entt::entity>(12);
+	const world_import::ImportedDance file {.type = DanceInfo::DanceAroundPerson,
+	                                        .place = {.x = 3000, .z = 4000, .altitude = 2.5f},
+	                                        .madeByScript = true,
+	                                        .angle = 1.25f,
+	                                        .duration = 600};
+	const auto setup = world_import::SetupOf(file, k_Owner, true);
+	EXPECT_EQ(setup.type, DanceInfo::DanceAroundPerson);
+	EXPECT_TRUE(setup.autostart);
+	EXPECT_EQ(setup.place, (map_coords::MapCoords {.x = 3000, .z = 4000, .altitude = 2.5f}));
+	EXPECT_EQ(setup.owner, k_Owner);
+	EXPECT_EQ(setup.duration, 600U);
+	EXPECT_TRUE(setup.madeByScript);
+	EXPECT_FLOAT_EQ(setup.angle, 1.25f);
+	EXPECT_FALSE(world_import::SetupOf({}, entt::null, false).madeByScript);
+}
+
+// The import marks a villager as a dancer when a group of a dance of a creature or of a script has it and its group is
+// that group
+TEST(VanillaWorldImport, TheImportFindsTheDancersOfADanceOfACreatureOrAScript)
+{
+	auto fake = GameAtTurn(100);
+	// 2: the dance, 3: its group, 4 and 5: villagers, 6: a dance of a reaction, 7: its group, 8: the reaction, 9: a
+	// villager of the reaction
+	fake.Record(VanillaType::Dance)
+	    .Value<uint32_t>("danceRow", static_cast<uint32_t>(DanceInfo::DanceAroundPerson))
+	    .Refs("danceGroups", {3});
+	fake.Record(VanillaType::DanceGroup).Refs("groupDancers", {4});
+	for (const uint32_t group : {3U, 0U})
+	{
+		fake.Record(VanillaType::Villager)
+		    .Position(1, 2)
+		    .Value("info", VillagerRowNumber(VillagerInfo::NorseForesterMale))
+		    .Value("action", std::array<uint8_t, 6> {})
+		    .Ref("danceGroup", group);
+	}
+	fake.Record(VanillaType::Dance)
+	    .Value<uint32_t>("danceRow", static_cast<uint32_t>(DanceInfo::BuildingSmall))
+	    .Refs("danceGroups", {7});
+	fake.Record(VanillaType::DanceGroup).Refs("groupDancers", {9});
+	fake.Record(VanillaType::Reaction).Ref("", 0).Ref("reactionDance", 6);
+	fake.Record(VanillaType::Villager)
+	    .Position(1, 2)
+	    .Value("info", VillagerRowNumber(VillagerInfo::NorseForesterMale))
+	    .Value("action", std::array<uint8_t, 6> {})
+	    .Ref("danceGroup", 7);
+	const auto imported = world_import::ReadTowns(fake.Make());
+	ASSERT_EQ(imported.villagers.size(), 3U);
+	EXPECT_TRUE(imported.villagers[0].importedDancer);
+	EXPECT_FALSE(imported.villagers[1].importedDancer);
+	EXPECT_FALSE(imported.villagers[2].importedDancer);
+	ASSERT_EQ(imported.dances.made.size(), 1U);
+	EXPECT_EQ(imported.dances.made[0].number, 2U);
+	EXPECT_EQ(imported.dances.notMade, (std::vector<uint32_t> {6}));
+}
+
+// A villager in a state of the dance of a creature keeps it only as a dancer of a dance that the import makes. A
+// villager that dances as it reacts decides again, because the import does not make the reactions.
+TEST(VanillaWorldImport, TheStatesOfTheDanceOfACreatureNeedADanceOfTheImport)
+{
+	const auto decide = world_import::DecideAgain();
+	for (const auto state : {VillagerStates::WorshippingCreature, VillagerStates::RestartWorshippingCreature,
+	                         VillagerStates::ControlledByCreature})
+	{
+		const auto value = static_cast<uint8_t>(state);
+		world_import::ImportedVillager villager {.states = {value, value, 0}, .moveState = 0x01};
+		EXPECT_EQ(world_import::StartStates(villager), decide) << static_cast<int>(value);
+		villager.importedDancer = true;
+		EXPECT_EQ(world_import::StartStates(villager), villager.states) << static_cast<int>(value);
+	}
+	constexpr auto k_Reacting = static_cast<uint8_t>(VillagerStates::DanceWhileReacting);
+	world_import::ImportedVillager reacting {.states = {k_Reacting, k_Reacting, 0}, .moveState = 0x01};
+	EXPECT_EQ(world_import::StartStates(reacting), decide);
+	reacting.importedDancer = true;
+	EXPECT_EQ(world_import::StartStates(reacting), decide);
+}
+
+// Each dance of the saves is the dance of a worship site, a dance that the import makes on its own, or a dance that the
+// import does not make. A dance that the import makes is not the dance of a script unless the camera word is set.
+TEST(VanillaWorldImport, SavedGamesTellWhichDancesTheImportMakes)
+{
+	size_t all = 0;
+	size_t ofSites = 0;
+	size_t made = 0;
+	size_t notMade = 0;
+	const auto files =
+	    ForEachSave([&all, &ofSites, &made, &notMade](const std::filesystem::path& path, const VanillaWorld& world) {
+		    const auto imported = world_import::ReadTowns(world);
+		    const auto dances = world.OfType(VanillaType::Dance);
+		    all += dances.size();
+		    ofSites += static_cast<size_t>(std::ranges::count_if(
+		        imported.worshipSites, [](const world_import::ImportedWorshipSite& site) { return site.dance != 0; }));
+		    made += imported.dances.made.size();
+		    notMade += imported.dances.notMade.size();
+		    for (const auto& dance : imported.dances.made)
+		    {
+			    const auto* record = world.Record(dance.number);
+			    ASSERT_NE(record, nullptr) << path << " " << dance.number;
+			    EXPECT_EQ(dance.madeByScript, world.Word(*record, "danceCameraOff").value_or(0) != 0);
+		    }
+	    });
+	if (!files.has_value())
+	{
+		GTEST_SKIP() << "Set OPENBLACK_VANILLA_SAVES to a copy of a Profiles folder of the game to check its saved games";
+	}
+	EXPECT_EQ(all, ofSites + made + notMade);
+	std::cout << "Dances " << all << ", of worship sites " << ofSites << ", made on their own " << made << ", not made "
+	          << notMade << std::endl;
+}
+
 // Each group of a dance in the saves belongs to a thing that keeps groups of a dance, and its dancers are living things
 // whose group is that group
 TEST(VanillaWorldImport, SavedGamesHaveGroupsOfDancesWithTheirDancers)

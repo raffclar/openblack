@@ -120,8 +120,9 @@ using HandsNear = std::bitset<components::k_DanceHandGods>;
                                  std::span<const std::optional<glm::vec3>, components::k_DanceHandGods> hands);
 
 /// The hand of a god was near the dance in this turn, or it was not. A count of more than k_CameraTurns turns in a row
-/// makes the dance want its camera for that god. A turn with the hand away sets the count to 0.
-void CountHand(components::DanceHand& hand, bool near);
+/// makes the dance want its camera for that god, but not a dance that a script made. A turn with the hand away sets the
+/// count to 0.
+void CountHand(components::DanceHand& hand, bool near, bool madeByScript);
 
 /// One game turn of the dance:
 /// - A stopped dance that starts by itself starts again when its dancers have come.

@@ -35,6 +35,7 @@
 #include "ECS/Components/AtHome.h"
 #include "ECS/Components/Breeding.h"
 #include "ECS/Components/Construction.h"
+#include "ECS/Components/CreatureDance.h"
 #include "ECS/Components/CreatureLeash.h"
 #include "ECS/Components/Dance.h"
 #include "ECS/Components/Disciple.h"
@@ -63,8 +64,10 @@
 #include "ECS/Components/Workshop.h"
 #include "ECS/Components/WorshipChants.h"
 #include "ECS/Components/WorshipSite.h"
+#include "ECS/Dances.h"
 #include "ECS/PlayerTowns.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/DanceSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/SpellIconSystemInterface.h"
 #include "ECS/Systems/TempleDestructionSystemInterface.h"
@@ -1162,7 +1165,7 @@ void PutDisciple(ecs::Registry& registry, entt::entity entity, const world_impor
 } // namespace
 
 bool SaveGameSystem::ImportVanillaTowns(const gamesave::VanillaWorld& world, VanillaMade& made, VanillaWorks& works,
-                                        VanillaCircles& circles, VanillaFootpathWalks& footpathWalks)
+                                        VanillaCircles& circles, VanillaFootpathWalks& footpathWalks, VanillaDances& dances)
 {
 	const auto imported = world_import::ReadTowns(world);
 	for (const auto& why : imported.skipped)
@@ -1376,6 +1379,17 @@ bool SaveGameSystem::ImportVanillaTowns(const gamesave::VanillaWorld& world, Van
 		component.abodes = std::move(ordered);
 	}
 	PutWorshipSites(registry, imported, made);
+	// The other dances come when the things that they are for are made. Only a villager that keeps the states of the
+	// file can dance in them.
+	dances.dances = imported.dances;
+	for (const auto& villager : imported.villagers)
+	{
+		if (const auto entity = EntityOf(made, villager.number);
+		    villager.importedDancer && entity != entt::null && world_import::StartStates(villager) == villager.states)
+		{
+			dances.dancers.emplace(villager.number, entity);
+		}
+	}
 	PutDesireFlags(registry, imported, made);
 	PutPlans(registry, imported, made);
 	PutSites(registry, imported, made);
@@ -1387,6 +1401,113 @@ bool SaveGameSystem::ImportVanillaTowns(const gamesave::VanillaWorld& world, Van
 	                   imported.towns.size(), imported.abodes.size(), imported.plans.size(), imported.sites.size(),
 	                   imported.villagers.size(), imported.turn);
 	return true;
+}
+
+void SaveGameSystem::ImportVanillaDances(const VanillaDances& dances, VanillaMade& made)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	for (const auto number : dances.dances.notMade)
+	{
+		SPDLOG_LOGGER_WARN(ImportLog(),
+		                   "The dance {} of the file is for a reaction or an artefact of a town, which the "
+		                   "import does not make, so the dance is not made",
+		                   number);
+	}
+	if (!Locator::danceSystem::has_value() || !Locator::infoConstants::has_value())
+	{
+		return;
+	}
+	auto& system = Locator::danceSystem::value();
+	const auto& table = Locator::infoConstants::value().dance;
+	std::vector<entt::entity> ownerGone;
+	for (const auto& file : dances.dances.made)
+	{
+		const auto row = static_cast<size_t>(file.type);
+		auto danceFile = system.FileOf(file.type);
+		if (danceFile == nullptr || row >= table.size())
+		{
+			SPDLOG_LOGGER_WARN(ImportLog(), "The dance {} of the file has the row {} of the table, which has no dance file",
+			                   file.number, row);
+			continue;
+		}
+		const auto owner = EntityOf(made, file.owner);
+		// The game reads no footpath for the dance here: its link comes with the footpaths of the file
+		const auto dance = ecs::dances::Create(
+		    registry, world_import::SetupOf(file, owner, table.at(row).startsAutomatically != 0), std::move(danceFile));
+		made.emplace(file.number, dance);
+		auto& values = registry.Get<Dance>(dance);
+		world_import::PutDanceValues(values, file);
+		if (values.file != nullptr && !world_import::SameKeyFrames(*values.file, file.keyFrames))
+		{
+			SPDLOG_LOGGER_WARN(ImportLog(), "The key frames of the dance {} are not the key frames of its dance file",
+			                   file.number);
+		}
+		for (const auto& placed : world_import::PutDanceGroups(values, file, dances.dancers))
+		{
+			registry.AssignOrReplace<Dancer>(placed.dancer, Dancer {.dance = dance, .group = placed.group});
+		}
+		// Only the villagers on their way to the dance of a worship site count as on their way
+		values.onTheirWay = 0;
+		if (file.dancers != values.dancers || file.onTheirWay != values.onTheirWay)
+		{
+			SPDLOG_LOGGER_WARN(ImportLog(),
+			                   "The dance {} has {} dancers and {} on their way in the file, and the import keeps {} and {}",
+			                   file.number, file.dancers, file.onTheirWay, values.dancers, values.onTheirWay);
+		}
+		if (file.owner != 0 && owner == entt::null)
+		{
+			SPDLOG_LOGGER_WARN(ImportLog(), "The thing {} that the dance {} is for is not made, so the dance stops", file.owner,
+			                   file.number);
+			ownerGone.push_back(dance);
+		}
+	}
+
+	// Each creature of the file takes its dance and the villagers that it called to dance, the last called first
+	if (_vanilla.has_value())
+	{
+		for (const auto& creature : _vanilla->creatures)
+		{
+			const auto entity = EntityOf(made, creature.number);
+			const auto& file = creature.object.creature;
+			if (entity == entt::null)
+			{
+				continue;
+			}
+			// A creature gets its record of a dance the first time that it needs one
+			auto* record = registry.TryGet<CreatureDance>(entity);
+			if (record == nullptr && (!file.dance.Empty() || !file.dancePartners.empty()))
+			{
+				record = &registry.Assign<CreatureDance>(entity);
+			}
+			if (record == nullptr)
+			{
+				continue;
+			}
+			const auto dance = EntityOf(made, static_cast<uint32_t>(file.dance.key));
+			record->dance = dance != entt::null && registry.AllOf<Dance>(dance) ? dance : entt::null;
+			record->dancers.clear();
+			for (const auto& partner : file.dancePartners)
+			{
+				// Only a villager that keeps its state of the dance stays on the list
+				if (const auto number = static_cast<uint32_t>(partner.key); dances.dancers.contains(number))
+				{
+					record->dancers.push_back(dances.dancers.at(number));
+				}
+			}
+			if (!file.dance.Empty() && record->dance == entt::null)
+			{
+				SPDLOG_LOGGER_WARN(ImportLog(), "The dance {} of the creature {} is not made", file.dance.key, creature.number);
+			}
+		}
+	}
+
+	// A dance whose thing is gone stops at once, as the game stops it, and its dancers decide again
+	for (const auto dance : ownerGone)
+	{
+		system.Destroy(dance);
+	}
+	SPDLOG_LOGGER_INFO(ImportLog(), "Imported {} dances of creatures and scripts of the game's file ({} stopped)",
+	                   dances.dances.made.size() - ownerGone.size(), ownerGone.size());
 }
 
 void SaveGameSystem::ImportVanillaCircles(const VanillaCircles& circles, const VanillaMade& made)

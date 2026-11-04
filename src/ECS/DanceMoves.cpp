@@ -259,7 +259,12 @@ bool dance_moves::ApplyAction(Dance& dance, std::size_t index, uint32_t type, co
 		return false;
 	}
 	case 18:
-		// The dance asks for the camera of each god whose hand stayed near it, and only one time for each god
+		// The dance asks for the camera of each god whose hand stayed near it, and only one time for each god. A dance
+		// that a script made never asks for its camera.
+		if (dance.madeByScript)
+		{
+			return false;
+		}
 		for (auto& hand : dance.hands)
 		{
 			if (hand.cameraWanted && !hand.cameraMade)
