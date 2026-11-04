@@ -290,9 +290,9 @@ namespace
 class GameSeenWorld final: public computer_mind::SeenWorld
 {
 public:
-	[[nodiscard]] std::vector<entt::entity> ThingsIn(glm::ivec2 cell) const override
+	void ThingsIn(glm::ivec2 cell, std::vector<entt::entity>& out) const override
 	{
-		return Locator::entitiesMap::value().GetAllInCell(cell);
+		Locator::entitiesMap::value().AllInCellInto(cell, out);
 	}
 
 	[[nodiscard]] entt::entity SeenAs(entt::entity thing) const override

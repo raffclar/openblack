@@ -121,13 +121,13 @@ const lnd::LNDCell* LandBlock::GetCells() const
 glm::ivec2 LandBlock::GetBlockPosition() const
 {
 	assert(_block);
-	return {_block ? _block->blockX : -1, _block ? _block->blockZ : -1};
+	return _blockPosition;
 }
 
 glm::vec2 LandBlock::GetMapPosition() const
 {
 	assert(_block);
-	return {_block->mapX, _block->mapZ};
+	return _mapPosition;
 }
 
 void LandBlock::SetLndBlock(const lnd::LNDBlock& block)
@@ -135,6 +135,8 @@ void LandBlock::SetLndBlock(const lnd::LNDBlock& block)
 	_block = std::make_unique<lnd::LNDBlock>(block);
 	_triangles.fill(std::nullopt);
 	_highestAltitude = std::ranges::max(_block->cells, {}, &lnd::LNDCell::altitude).altitude;
+	_blockPosition = {static_cast<int>(_block->blockX), static_cast<int>(_block->blockZ)};
+	_mapPosition = {_block->mapX, _block->mapZ};
 }
 
 bool LandBlock::SetCellAltitude(size_t index, uint8_t altitude)

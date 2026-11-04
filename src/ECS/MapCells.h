@@ -136,6 +136,8 @@ public:
 	[[nodiscard]] std::span<const entt::entity> Mobile(uint32_t cell) const;
 	/// Everything in a cell as a search meets it: the things that stay put, then the things that move
 	[[nodiscard]] std::vector<entt::entity> All(uint32_t cell) const;
+	/// Puts everything in a cell into the list, in the same order as All. The list loses what it held before.
+	void AllInto(uint32_t cell, std::vector<entt::entity>& out) const;
 	void Clear();
 
 	[[nodiscard]] uint32_t CellsPerSide() const { return _cellsPerSide; }

@@ -371,8 +371,9 @@ class SeenWorld
 {
 public:
 	virtual ~SeenWorld() = default;
-	/// The things in a cell of the map, in the order that a search finds them
-	[[nodiscard]] virtual std::vector<entt::entity> ThingsIn(glm::ivec2 cell) const = 0;
+	/// Puts the things in a cell of the map into the list, in the order that a search finds them. The list loses what
+	/// it held before.
+	virtual void ThingsIn(glm::ivec2 cell, std::vector<entt::entity>& out) const = 0;
 	/// What the god keeps in its list for a thing: the forest of a tree, or the tree when it has no forest; a seed of a
 	/// miracle. None for another thing.
 	[[nodiscard]] virtual entt::entity SeenAs(entt::entity thing) const = 0;

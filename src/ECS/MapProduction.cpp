@@ -469,6 +469,20 @@ std::vector<entt::entity> MapProduction::GetAllInCell(glm::ivec2 cell) const
 	return index.has_value() ? _lists.All(*index) : std::vector<entt::entity> {};
 }
 
+void MapProduction::AllInCellInto(glm::ivec2 cell, std::vector<entt::entity>& out) const
+{
+	FileMadeBeforeLook();
+	const auto index = _lists.IndexOf(cell);
+	if (index.has_value())
+	{
+		_lists.AllInto(*index, out);
+	}
+	else
+	{
+		out.clear();
+	}
+}
+
 std::span<const entt::entity> MapProduction::GetOnBlock(glm::ivec2 block) const
 {
 	FileMadeBeforeLook();
