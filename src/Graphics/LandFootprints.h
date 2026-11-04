@@ -32,8 +32,9 @@
 
 namespace openblack
 {
+class SideThread;
 class WorkerPool;
-}
+} // namespace openblack
 
 namespace openblack::graphics
 {
@@ -54,6 +55,12 @@ public:
 
 	/// Paints again the blocks whose footprints changed since the last time
 	void Update();
+	/// Starts the search for the changed things on a thread of its own, before the next update needs it. The draw only
+	/// reads the world, thus the thread reads it while the draw continues. Call it only in a draw that calls Update.
+	void StartSearch();
+	/// Waits for the search that StartSearch started. The blocks that it found stay for the next update. Call it at the
+	/// end of the draw.
+	void ForgetSearch();
 	/// The next update paints again each block that has footprints, as after the land painted all of its blocks again
 	void PaintAgain();
 
@@ -93,6 +100,10 @@ private:
 	/// The footprint of a model that FootprintOf found before, none for a model without one or not found before. It
 	/// changes nothing, so the lanes of a pool can ask it at the same time.
 	[[nodiscard]] const L3DMesh::Footprint* FoundFootprintOf(entt::id_type mesh) const;
+	/// Takes the blocks that the land painted again. It gives false when there is no land to paint.
+	[[nodiscard]] bool TakeLandChanges();
+	/// Finds the changes of the rivers and the prints, and paints again the blocks that changed
+	void PaintChanges();
 	/// Finds the things with footprints that changed, and the blocks that take their footprints
 	void FindChangedThings();
 	/// Finds whether the rivers changed, and the blocks that take their footprints
@@ -133,6 +144,19 @@ private:
 	/// The texels of a block that this thread paints alone, kept to use their memory again
 	std::vector<uint16_t> _texels;
 	std::unique_ptr<WorkerPool> _workers;
+	/// The state of the search that StartSearch started
+	enum class Search : uint8_t
+	{
+		/// No search started
+		None,
+		/// The search runs or ended on the side thread
+		Started,
+		/// There was no land to paint, thus no search started
+		NoLand,
+	};
+	Search _search {Search::None};
+	/// The last member, so that its thread stops before the other members go
+	std::unique_ptr<SideThread> _searchThread;
 };
 
 } // namespace openblack::graphics

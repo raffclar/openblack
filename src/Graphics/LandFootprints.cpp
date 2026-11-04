@@ -15,6 +15,7 @@
 #include <initializer_list>
 #include <iterator>
 #include <span>
+#include <utility>
 
 #include <glm/common.hpp>
 #include <spdlog/spdlog.h>
@@ -23,6 +24,7 @@
 #include "3D/LandBlock.h"
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
+#include "Common/SideThread.h"
 #include "Common/WorkerPool.h"
 #include "Common/X87Angle.h"
 #include "ECS/Components/GroundPrint.h"
@@ -398,6 +400,7 @@ void LandFootprints::PaintBlock(size_t block, const BlockPaint& paint, std::span
 
 void LandFootprints::PaintAgain()
 {
+	ForgetSearch();
 	for (size_t block = 0; block < _painted.size(); ++block)
 	{
 		if (_painted[block])
@@ -409,15 +412,60 @@ void LandFootprints::PaintAgain()
 
 void LandFootprints::Update()
 {
+	switch (std::exchange(_search, Search::None))
+	{
+	case Search::Started:
+		// The search found the changed things on the side thread
+		_searchThread->Wait();
+		break;
+	case Search::NoLand:
+		return;
+	case Search::None:
+		if (!TakeLandChanges())
+		{
+			return;
+		}
+		FindChangedThings();
+		break;
+	}
+	PaintChanges();
+}
+
+void LandFootprints::StartSearch()
+{
+	ForgetSearch();
+	if (!TakeLandChanges())
+	{
+		_search = Search::NoLand;
+		return;
+	}
+	if (_searchThread == nullptr)
+	{
+		_searchThread = std::make_unique<SideThread>();
+	}
+	_search = Search::Started;
+	_searchThread->Start([this] { FindChangedThings(); });
+}
+
+void LandFootprints::ForgetSearch()
+{
+	if (std::exchange(_search, Search::None) == Search::Started)
+	{
+		_searchThread->Wait();
+	}
+}
+
+bool LandFootprints::TakeLandChanges()
+{
 	if (!Locator::terrainSystem::has_value() || !Locator::entitiesRegistry::has_value() || !Locator::entitiesMap::has_value() ||
 	    !Locator::resources::has_value())
 	{
-		return;
+		return false;
 	}
 	auto& island = Locator::terrainSystem::value();
 	if (!island.IsLoaded() || island.GetBlocks().empty())
 	{
-		return;
+		return false;
 	}
 	const auto blockCount = island.GetBlocks().size();
 	const auto repainted = island.TakeRepaintedBlocks();
@@ -440,7 +488,13 @@ void LandFootprints::Update()
 		}
 		_dirty.insert(block);
 	}
-	FindChangedThings();
+	return true;
+}
+
+void LandFootprints::PaintChanges()
+{
+	auto& island = Locator::terrainSystem::value();
+	const auto blockCount = island.GetBlocks().size();
 	FindChangedRivers();
 	FindChangedGroundPrints();
 	std::vector<size_t> blocks;

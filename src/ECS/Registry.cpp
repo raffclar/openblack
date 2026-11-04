@@ -38,6 +38,12 @@ Registry::Registry()
 	_registry.on_destroy<components::FlockMember>().connect<&Registry::LivingGone>(*this);
 }
 
+Registry::Registry(Drawn drawn)
+    : Registry()
+{
+	_drawn = drawn;
+}
+
 void Registry::LivingGone(entt::registry& /*registry*/, entt::entity living)
 {
 	script_flocks::RemoveAtDeath(*this, living);
@@ -85,7 +91,7 @@ void Registry::Reset()
 
 void Registry::SetDirty()
 {
-	if (Locator::rendereringSystem::has_value())
+	if (_drawn == Drawn::Yes && Locator::rendereringSystem::has_value())
 	{
 		Locator::rendereringSystem::value().SetDirty();
 	}
@@ -93,7 +99,8 @@ void Registry::SetDirty()
 
 void Registry::SetLayoutDirty()
 {
-	if (Locator::rendereringSystem::has_value())
+	// The draw lists of the renderer do not change when an entity of a registry that it does not draw changes
+	if (_drawn == Drawn::Yes && Locator::rendereringSystem::has_value())
 	{
 		Locator::rendereringSystem::value().SetLayoutDirty();
 	}

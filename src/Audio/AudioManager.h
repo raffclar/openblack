@@ -235,7 +235,8 @@ private:
 	/// Counts the sounds that have an owner of their own
 	uint64_t _ownSoundSerial {0};
 	/// The entities of the sounds, apart from the world's
-	ecs::Registry _emitters;
+	/// The emitters have no model, thus the renderer does not draw them
+	ecs::Registry _emitters {ecs::Registry::Drawn::No};
 };
 
 } // namespace openblack::audio
