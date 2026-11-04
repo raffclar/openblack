@@ -213,6 +213,16 @@ TEST(DiscipleRules, MissionariesPickedUpStopPreaching)
 	EXPECT_EQ(AtPickUp(Farmer), Farmer);
 }
 
+// A disciple that the hand put down keeps its villager-in-hand reaction until its landing clip has played. Another
+// villager ends the reaction in each turn of its landing.
+TEST(DiscipleRules, ADisciplePutDownEndsItsInHandReactionAfterItsLanding)
+{
+	EXPECT_FALSE(EndsInHandReaction(true, false));
+	EXPECT_TRUE(EndsInHandReaction(true, true));
+	EXPECT_TRUE(EndsInHandReaction(false, false));
+	EXPECT_TRUE(EndsInHandReaction(false, true));
+}
+
 TEST(DiscipleRules, KindsAsTheTableHasThem)
 {
 	EXPECT_TRUE(KindOf(Farmer).glows);

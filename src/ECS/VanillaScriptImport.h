@@ -156,6 +156,25 @@ struct ImportedScriptThings
 /// The markers, the timers, the highlights and the influences of the file, in the order of the file
 [[nodiscard]] ImportedScriptThings ReadScriptThings(const gamesave::VanillaWorld& world);
 
+/// An arena of the file, which the land script or a fight made
+struct ImportedArena
+{
+	uint32_t number {0};
+	gamesave::MapCoords position;
+	float radius {0.0f};
+	/// Whether a fight is on in it, and the numbers of the two creatures of the fight, 0 for none
+	bool fightOn {false};
+	std::array<uint32_t, 2> creatures {};
+};
+
+/// The place of the game's list of all the arenas among the lists of the game object
+inline constexpr size_t k_GameArenaList = 30;
+
+/// The arenas of the file, the oldest first. This is the reverse of the order of the game's list of arenas, which has
+/// the newest first. An arena that the list does not have comes after them, in the order of the file. The file does not
+/// keep whether an arena is only for one fight, so after a load each arena stays.
+[[nodiscard]] std::vector<ImportedArena> ReadArenas(const gamesave::VanillaWorld& world);
+
 /// The player of a temple heart of the file: the owner of the temple that has the heart. Nothing for a number that is
 /// not a heart of a temple of a player.
 [[nodiscard]] std::optional<PlayerNames> HeartPlayer(const gamesave::VanillaWorld& world, uint32_t number);

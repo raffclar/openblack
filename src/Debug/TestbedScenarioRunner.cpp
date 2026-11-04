@@ -81,6 +81,7 @@
 #include "ECS/Archetypes/AbodeArchetype.h"
 #include "ECS/Archetypes/AnimalArchetype.h"
 #include "ECS/Archetypes/AnimatedStaticArchetype.h"
+#include "ECS/Archetypes/ArenaArchetype.h"
 #include "ECS/Archetypes/CitadelArchetype.h"
 #include "ECS/Archetypes/CreatureArchetype.h"
 #include "ECS/Archetypes/DeadTreeArchetype.h"
@@ -3376,6 +3377,23 @@ std::string Runner::ClickScroll(const Command& command)
 	return fmt::format("clicked the scroll {} m from the point", best);
 }
 
+std::string Runner::PutLoadedArena(const Command& command)
+{
+	const auto first = CreatureAt(command.creature);
+	const auto second = CreatureAt(command.value);
+	if (!first.has_value() || !second.has_value())
+	{
+		return "no creatures";
+	}
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto middle = (registry.Get<const ecs::components::Transform>(*first).position +
+	                     registry.Get<const ecs::components::Transform>(*second).position) *
+	                    0.5f;
+	const glm::ivec2 place {map_coords::ToFixed(middle.x), map_coords::ToFixed(middle.z)};
+	const auto arena = ecs::archetypes::ArenaArchetype::CreateLoaded(place, command.radius);
+	return fmt::format("arena {} of radius {:.1f}", entt::to_integral(arena), command.radius);
+}
+
 std::string Runner::ClickCreatureAt(const Command& command)
 {
 	if (!Locator::handGrabSystem::has_value())
@@ -4255,6 +4273,11 @@ void Runner::Give(const Command& command)
 		_deviceRestoreAsked =
 		    command.value == 1 ? graphics::device_restore::Request::Lose : graphics::device_restore::Request::MakeAgain;
 		Log(fmt::format("{:.1f}s: the graphics device is made again when the dome next follows the sky", _seconds));
+		return;
+	}
+	if (command.kind == Kind::PutLoadedArena)
+	{
+		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), PutLoadedArena(command)));
 		return;
 	}
 	if (command.kind == Kind::SetHour)

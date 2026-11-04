@@ -209,6 +209,11 @@ VillagerDisciple disciple::AtPickUp(VillagerDisciple current)
 	return current == Missionary ? None : current;
 }
 
+bool disciple::EndsInHandReaction(bool putDownAsDisciple, bool landingPlayed)
+{
+	return !putDownAsDisciple || landingPlayed;
+}
+
 std::optional<VillagerDisciple> disciple::FromScript(int32_t number)
 {
 	if (number < static_cast<int32_t>(VillagerDisciple::None) || number > static_cast<int32_t>(VillagerDisciple::FromVortex))

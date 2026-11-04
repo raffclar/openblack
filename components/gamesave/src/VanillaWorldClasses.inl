@@ -821,11 +821,14 @@ void ReadReaction(WorldReader& r)
 void ReadArena(WorldReader& r)
 {
 	ReadPositioned(r);
-	r.Word();
-	r.Word();
-	r.Word();
-	r.Refs();
-	r.Ref();
+	// A value that the game sets to 1 when it makes an arena. No part of the arena reads it.
+	r.Float("arenaOne");
+	r.Float("arenaRadius");
+	// Whether a fight is on in the arena, and the two creatures of the fight
+	r.Word("arenaFightOn");
+	r.Refs("arenaCreatures");
+	// A reference that the game sets to none when it makes an arena. No part of the arena reads it.
+	r.Ref("arenaNone");
 }
 
 void ReadMist(WorldReader& r)

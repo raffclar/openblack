@@ -607,10 +607,15 @@ std::optional<reflection::WorldLoadReport> world_save::LoadEntities(const entt::
 	TakeDanceFilesAgain(registry.Underlying(), [](DanceInfo type) {
 		return Locator::danceSystem::has_value() ? Locator::danceSystem::value().FileOf(type) : nullptr;
 	});
-	// An arena makes its ring of light again, shown while a fight is on in it
+	// An arena that had a ring of light makes it again, shown while a fight is on in it
 	for (auto&& [entity, arena] : registry.Underlying().view<components::CreatureArena>().each())
 	{
-		arena.ring = archetypes::ArenaArchetype::MakeRing(arena.place, arena.radius);
+		if (arena.ringRgb == 0)
+		{
+			arena.ring = nullptr;
+			continue;
+		}
+		arena.ring = archetypes::ArenaArchetype::MakeRing(arena.place, arena.radius, arena.ringRgb);
 		arena.ring->SetHidden(!arena.fightOn);
 	}
 	if (kind == LoadKind::SavedGame)

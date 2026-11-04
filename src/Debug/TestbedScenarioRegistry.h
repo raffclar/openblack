@@ -1219,6 +1219,9 @@ struct Command
 		/// the sky is part way through a follow of the sky. With value 1, the renderer loses the device first. Needs no
 		/// creature
 		RestoreDeviceInDomeFollow,
+		/// An arena of a loaded file of the game (radius) is put midway between the creature and the other creature
+		/// (value). It has no ring of light and makes no reaction, as an arena after a load of a saved game.
+		PutLoadedArena,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures

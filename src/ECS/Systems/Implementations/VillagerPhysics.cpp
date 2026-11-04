@@ -15,6 +15,7 @@
 
 #include "3D/LandIslandInterface.h"
 #include "Common/GameRandom.h"
+#include "ECS/Components/Disciple.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/Indestructible.h"
 #include "ECS/Components/LivingAction.h"
@@ -26,6 +27,7 @@
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/VillagerDeath.h"
 #include "ECS/CreatureSight.h"
+#include "ECS/DiscipleRules.h"
 #include "ECS/HandPlayer.h"
 #include "ECS/PhysicsEntry.h"
 #include "ECS/Registry.h"
@@ -432,15 +434,18 @@ uint32_t villager_physics::Landed(LivingAction& action)
 {
 	auto& registry = Entities();
 	const auto villager = registry.ToEntity(action);
-	// As it starts to get up it stops calling others to it from the hand; it plays its landing once, and sets about its
-	// work as a disciple or decides what to do
+	// It stops calling others to it from the hand: a disciple that the hand put down when its landing has played, any
+	// other villager at once. It plays its landing once, and sets about its work as a disciple or decides what to do.
 	villager_disciple::TouchDown(action);
-	if (action.turnsSinceStateChange == 0 && Locator::reactionSystem::has_value())
+	const bool putDownAsDisciple =
+	    registry.AllOf<DiscipleHeld>(villager) && villager_disciple::TypeOf(villager) != VillagerDisciple::None;
+	const auto* clip = registry.TryGet<const VillagerClip>(villager);
+	const bool landingPlayed = clip == nullptr || clip->state != VillagerStates::Landed || ClipPlayed(action, clip->clip);
+	if (disciple::EndsInHandReaction(putDownAsDisciple, landingPlayed) && Locator::reactionSystem::has_value())
 	{
 		Locator::reactionSystem::value().RemoveFrom(villager, Reaction::ReactToVillagerInHand);
 	}
-	const auto* clip = registry.TryGet<const VillagerClip>(villager);
-	if (clip != nullptr && clip->state == VillagerStates::Landed && !ClipPlayed(action, clip->clip))
+	if (!landingPlayed)
 	{
 		return 1;
 	}

@@ -10153,6 +10153,23 @@ void AddCombat(std::vector<Scenario>& all)
 	                 {.kind = Kind::LoadGame, .delaySeconds = 3.0f, .value = 0}},
 	});
 
+	all.push_back({
+	    .id = "saves.loaded_arena_ring",
+	    .name = "The arena of a loaded saved game of the original game makes a white ring",
+	    .facet = Facet::Combat,
+	    .description = "An arena of radius 30 m, as an arena after the load of a saved game of the original game, is put "
+	                   "midway between two tigers. It has no ring. 1 second later the two tigers are told to fight, and "
+	                   "both fight by themselves.",
+	    .expected = "Before the fight no ring stands round the arena. When the fight takes the arena, a ring of light "
+	                "appears round it with its sound. The ring is white, not the grey of the ring of an arena that the land "
+	                "or a fight makes. It has the same shape, height and stars.",
+	    .framing = ringside,
+	    .creatures = {red(PlayerNames::PLAYER_ONE, 0.9f, -0.45f), blue(PlayerNames::PLAYER_TWO, 0.3f, -0.45f)},
+	    .commands = {{.kind = Kind::PutLoadedArena, .creature = 0, .delaySeconds = 0.5f, .value = 1, .radius = 30.0f},
+	                 Fight(Kind::StartFight, 0, 1, 1.0f),
+	                 Fight(Kind::FightAuto, 0, 1, 0.2f)},
+	});
+
 	{
 		// A lion against a tiger, so that two species show their heads
 		auto lion = red(PlayerNames::PLAYER_ONE, 0.6f, -0.2f);
@@ -15440,15 +15457,15 @@ std::string_view CommandProblem(const Command& command, std::span<const ObjectSe
 
 bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 {
-	return kind == Kind::SetHour || kind == Kind::RestoreDeviceInDomeFollow || kind == Kind::HoldSeed ||
-	       kind == Kind::DrawGesture || kind == Kind::SummonSeed || kind == Kind::PressKey || kind == Kind::HandTakeFireBall ||
-	       kind == Kind::SetAlignment || kind == Kind::WideScreen || kind == Kind::SetInterfaceLevel ||
-	       kind == Kind::FlyToBookmark || kind == Kind::TabToTown || kind == Kind::SetOpenClose || kind == Kind::LayGateStone ||
-	       kind == Kind::HandTapObject || kind == Kind::Advisor || kind == Kind::RunText || kind == Kind::PlayHandDemo ||
-	       kind == Kind::Reframe || kind == Kind::DestroyTemple || kind == Kind::RunHelpMessage ||
-	       kind == Kind::EndGuidanceWaits || kind == Kind::SetTownBeliefInRival || kind == Kind::GiveLandTown ||
-	       kind == Kind::RecordChallenge || kind == Kind::EnterTemple || kind == Kind::HandTake || kind == Kind::HandApply ||
-	       kind == Kind::HandTakeShownSeed || kind == Kind::RunScript || kind == Kind::ClickScroll ||
+	return kind == Kind::SetHour || kind == Kind::RestoreDeviceInDomeFollow || kind == Kind::PutLoadedArena ||
+	       kind == Kind::HoldSeed || kind == Kind::DrawGesture || kind == Kind::SummonSeed || kind == Kind::PressKey ||
+	       kind == Kind::HandTakeFireBall || kind == Kind::SetAlignment || kind == Kind::WideScreen ||
+	       kind == Kind::SetInterfaceLevel || kind == Kind::FlyToBookmark || kind == Kind::TabToTown ||
+	       kind == Kind::SetOpenClose || kind == Kind::LayGateStone || kind == Kind::HandTapObject || kind == Kind::Advisor ||
+	       kind == Kind::RunText || kind == Kind::PlayHandDemo || kind == Kind::Reframe || kind == Kind::DestroyTemple ||
+	       kind == Kind::RunHelpMessage || kind == Kind::EndGuidanceWaits || kind == Kind::SetTownBeliefInRival ||
+	       kind == Kind::GiveLandTown || kind == Kind::RecordChallenge || kind == Kind::EnterTemple || kind == Kind::HandTake ||
+	       kind == Kind::HandApply || kind == Kind::HandTakeShownSeed || kind == Kind::RunScript || kind == Kind::ClickScroll ||
 	       kind == Kind::ClickCreatureAt || kind == Kind::CameraLooksAt || kind == Kind::HandTakeNear ||
 	       kind == Kind::ClickCreatureNear || kind == Kind::TapRewardNear || kind == Kind::PlayBoatFilm ||
 	       kind == Kind::HandPour || kind == Kind::HandRelease || kind == Kind::SetReportLatency ||
@@ -15500,7 +15517,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 225> k_Names {
+	constexpr std::array<std::string_view, 226> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -15726,6 +15743,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "tap the reward chest nearest a point",
 	    "click a creature",
 	    "make the graphics device again while the dome follows the sky",
+	    "put an arena of a loaded file between two creatures",
 	};
 	return k_Names.at(static_cast<size_t>(kind));
 }

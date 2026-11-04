@@ -15,6 +15,7 @@
 #include <memory>
 #include <optional>
 #include <ranges>
+#include <span>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -26,7 +27,10 @@
 #include <spdlog/spdlog.h>
 
 #include "CHLApi.h"
+#include "Creature/CreatureArena.h"
+#include "ECS/Archetypes/ArenaArchetype.h"
 #include "ECS/Archetypes/ScriptMarkerArchetype.h"
+#include "ECS/Components/CreatureArena.h"
 #include "ECS/Components/Fire.h"
 #include "ECS/Components/Influence.h"
 #include "ECS/Components/Mobile.h"
@@ -48,6 +52,7 @@
 #include "ECS/VanillaScriptImport.h"
 #include "ECS/WorldObjects.h"
 #include "Locator.h"
+#include "Particles/LightSheet.h"
 #include "Particles/ParticleImport.h"
 #include "SaveGameSystem.h"
 #include "SaveGameVanillaPlaces.h"
@@ -72,7 +77,7 @@ constexpr uint16_t k_InScriptFlag = 1U << 9U;
 constexpr uint16_t k_ControlledFlag = 1U << 10U;
 
 /// The game clears the map before it reads the world of a file. The import removes the markers, the timers, the
-/// highlights and the influences of the scripts of the land, before it makes them from the file.
+/// highlights, the influences and the arenas of the land, before it makes them from the file.
 void RemoveScriptThings(ecs::Registry& registry)
 {
 	std::vector<entt::entity> things;
@@ -80,12 +85,35 @@ void RemoveScriptThings(ecs::Registry& registry)
 	registry.Each<const ScriptTimer>([&things](entt::entity entity, const ScriptTimer&) { things.push_back(entity); });
 	registry.Each<const ScriptHighlight>([&things](entt::entity entity, const ScriptHighlight&) { things.push_back(entity); });
 	registry.Each<const InfluenceSource>([&things](entt::entity entity, const InfluenceSource&) { things.push_back(entity); });
+	registry.Each<const CreatureArena>([&things](entt::entity entity, const CreatureArena&) { things.push_back(entity); });
 	for (const auto entity : things)
 	{
 		if (registry.Valid(entity))
 		{
 			ecs::world_objects::Remove(entity);
 		}
+	}
+}
+
+/// The arenas of the file, the oldest first. An arena of a loaded file has no ring, makes no reaction of its own and
+/// stays after its fight. When a fight is on in it, it shows a white ring at once.
+void PutArenas(ecs::Registry& registry, std::span<const script_import::ImportedArena> arenas,
+               std::unordered_map<uint32_t, entt::entity>& made)
+{
+	for (const auto& file : arenas)
+	{
+		const auto entity = ecs::archetypes::ArenaArchetype::CreateLoaded({file.position.x, file.position.z}, file.radius);
+		if (file.fightOn)
+		{
+			auto& arena = registry.Get<CreatureArena>(entity);
+			arena.fightOn = true;
+			arena.first = EntityOf(made, file.creatures[0]);
+			arena.second = EntityOf(made, file.creatures[1]);
+			arena.ringRgb = creature_arena::k_LoadedRingRgb;
+			arena.ring = ecs::archetypes::ArenaArchetype::MakeRing(arena.place, arena.radius, arena.ringRgb);
+			arena.ring->SetHidden(false);
+		}
+		made.emplace(file.number, entity);
 	}
 }
 
@@ -316,6 +344,8 @@ void SaveGameSystem::ImportVanillaScriptThings(const gamesave::VanillaWorld& wor
 		registry.Assign<InfluenceSource>(entity, ring.player, ring.radius, ring.anti, EntityOf(made, ring.follows));
 		made.emplace(ring.number, entity);
 	}
+	const auto arenas = script_import::ReadArenas(world);
+	PutArenas(registry, arenas, made);
 	const auto temples = script_import::ReadTemples(world);
 	const auto containers = PutContainers(world, registry, temples, made);
 	const auto vortices = PutVorticesIn(world, made);
@@ -333,10 +363,10 @@ void SaveGameSystem::ImportVanillaScriptThings(const gamesave::VanillaWorld& wor
 		++hearts;
 	}
 	SPDLOG_LOGGER_INFO(ImportLog(),
-	                   "Made {} markers, {} timers, {} highlights and {} influences of the scripts; {} particle containers, {} "
-	                   "vortices and {} temple hearts",
-	                   things.markers.size(), things.timers.size(), highlights, things.rings.size(), containers.size(),
-	                   vortices, hearts);
+	                   "Made {} markers, {} timers, {} highlights and {} influences of the scripts; {} arenas, {} particle "
+	                   "containers, {} vortices and {} temple hearts",
+	                   things.markers.size(), things.timers.size(), highlights, things.rings.size(), arenas.size(),
+	                   containers.size(), vortices, hearts);
 }
 
 void SaveGameSystem::ImportVanillaScripts(const gamesave::VanillaWorld& world, const VanillaMade& made)
