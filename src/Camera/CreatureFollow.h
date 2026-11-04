@@ -13,10 +13,12 @@
 
 #include <functional>
 #include <numbers>
+#include <optional>
 
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
+#include "3D/MapCoords.h"
 #include "Editor/EditorMath.h"
 
 /// The maths of Creature Mode's camera, which locks onto a creature and follows it, free of the game so it can be tested
@@ -77,6 +79,35 @@ enum class StartDistance : uint8_t
 	/// Always the creature's viewing distance
 	Viewing,
 };
+/// The points of a follow camera as offsets from the place of its thing: the point that it looks at and the eye. While
+/// the camera has offsets, it keeps these two points fixed on the thing, and its heading and pitch have no effect.
+struct Offsets
+{
+	glm::vec3 focus {0.0f};
+	glm::vec3 eye {0.0f};
+};
+
+/// A follow camera as a saved game of the original game keeps it: its view, the share of its glide time, and whether
+/// Ctrl and Shift together swing it clear. A script's camera can also turn the heading with its thing, and can keep the
+/// camera at offsets from the thing.
+struct Loaded
+{
+	View view;
+	float timeScale {1.0f};
+	bool autoReposition {true};
+	bool relativeHeading {false};
+	std::optional<Offsets> offsets;
+};
+
+/// The heading of a camera that turns with its thing, from the heading of the camera and the game angle of the thing
+/// (2048 to the circle). The game takes the angle off the heading, less a quarter turn. Each step rounds to a float.
+[[nodiscard]] float RelativeHeading(float heading, uint16_t gameAngle);
+/// The distance of the camera from the point that it looks at, from its offsets. Each step rounds to a float, z first.
+[[nodiscard]] float OffsetDistance(const Offsets& offsets);
+/// The offsets with the eye moved along its line from the point that the camera looks at, to a distance from it. An
+/// eye on that point stays on it.
+[[nodiscard]] Offsets OffsetsAtDistance(const Offsets& offsets, float distance);
+
 /// The view the camera starts with on a creature: as it is turned and tilted now, and the creature's viewing distance
 /// away. With KeepWhenClose, it is as far as it already is when it is close, but no nearer than twice the creature's
 /// height.
@@ -114,9 +145,37 @@ enum class KeyOutcome : uint8_t
 /// Turns the view by the keys on a screen so many pixels wide. The wheel's zoom is applied twice, before and after the
 /// cursor keys, as the game does.
 [[nodiscard]] KeyOutcome Apply(View& view, const Keys& keys, float screenWidth);
+/// As the other Apply, for a camera that can have offsets. The cursor keys stop the offsets: the view then takes the
+/// heading, the pitch and the distance of the offsets, and the keys turn it. Without the cursor keys, the eye moves
+/// along its line to the distance of the view.
+[[nodiscard]] KeyOutcome Apply(View& view, std::optional<Offsets>& offsets, const Keys& keys, float screenWidth);
 
 /// The height of the land at a point on it, x and z
 using GroundHeight = std::function<float(glm::vec2)>;
+/// The thing of a follow camera, as the camera reads it in a frame: its place, its height (the camera looks at the middle
+/// of it), the game angle of a thing that walks (2048 to the circle) and whether the thing has a model in the world.
+/// Offsets keep the camera on a thing with a model. On a thing with no model, such as a flock, the camera takes only the
+/// distance of its offsets and follows the thing by its heading and pitch.
+struct Target
+{
+	glm::vec3 position {0.0f};
+	float height {0.0f};
+	std::optional<uint16_t> gameAngle;
+	bool hasModel {true};
+};
+
+/// The leader of a flock, as a follow camera reads it: its place in the world and its height
+struct FlockLeader
+{
+	glm::vec3 position {0.0f};
+	float height {0.0f};
+};
+/// The thing of a follow camera on a flock. The camera looks at the map place of the leader (x and z as a map position
+/// holds them, the height of the leader's place), raised by half the height of the leader. A flock with no leader gives
+/// its own place on the land, raised by its altitude. A flock has no model and does not walk.
+[[nodiscard]] Target FlockTarget(const std::optional<FlockLeader>& leader, const map_coords::MapCoords& place,
+                                 const GroundHeight& ground);
+
 /// The distance the camera looks for a clear view at: nearer ones are taken most of the way out to 50 and further ones a
 /// little way in towards 100
 [[nodiscard]] float ClearingDistance(float distance);

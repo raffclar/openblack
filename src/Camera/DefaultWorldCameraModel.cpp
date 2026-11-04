@@ -276,9 +276,10 @@ DefaultWorldCameraModel::LimitsMoved DefaultWorldCameraModel::ApplyLimits(glm::v
 	}
 
 	// Never below the clearance over the ground. Turning the camera about a point recomputes its height with a little
-	// rounding, so a camera resting on the floor is let be within a ten-thousandth of it.
+	// rounding, so a camera resting on the floor is let be within a ten-thousandth of it. A camera that a saved game of
+	// the original game lets go below the land has no floor.
 	constexpr float k_FloorRounding = 1e-4f;
-	if (_targetOrigin.y < groundAtStart + camera_limits::k_Clearance - k_FloorRounding)
+	if (!camera.EyeMayGoBelowLand() && _targetOrigin.y < groundAtStart + camera_limits::k_Clearance - k_FloorRounding)
 	{
 		_targetOrigin.y = groundAtStart + camera_limits::k_Clearance;
 		moved.pushed = true;
