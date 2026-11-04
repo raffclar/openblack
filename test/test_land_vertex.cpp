@@ -56,6 +56,28 @@ TEST(LandBlock, ItsHighestAltitudeIsTheHighestCellWhenItWasLoaded)
 	EXPECT_EQ(block.GetHighestAltitude(), 90);
 }
 
+TEST(LandBlock, ItsHighestAltitudeNowFollowsTheChangesOfTheCells)
+{
+	openblack::lnd::LNDBlock loaded {};
+	loaded.cells.at(5).altitude = 40;
+	loaded.cells.at(200).altitude = 90;
+	openblack::LandBlock block;
+	block.SetLndBlock(loaded);
+	EXPECT_EQ(block.GetHighestAltitudeNow(), 90);
+	// A cell that goes higher than all others is the highest now
+	block.SetCellAltitude(7, 200);
+	EXPECT_EQ(block.GetHighestAltitudeNow(), 200);
+	// A lower cell that goes down does not change it
+	block.SetCellAltitude(5, 10);
+	EXPECT_EQ(block.GetHighestAltitudeNow(), 200);
+	// The highest cell goes down: the next highest cell is the highest now
+	block.SetCellAltitude(7, 50);
+	EXPECT_EQ(block.GetHighestAltitudeNow(), 90);
+	block.SetCellAltitude(200, 0);
+	EXPECT_EQ(block.GetHighestAltitudeNow(), 50);
+	EXPECT_EQ(block.GetHighestAltitude(), 90);
+}
+
 TEST(LandBlock, ItKeepsThePlaceOfTheLoadedBlock)
 {
 	openblack::lnd::LNDBlock loaded {};

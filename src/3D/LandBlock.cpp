@@ -135,6 +135,7 @@ void LandBlock::SetLndBlock(const lnd::LNDBlock& block)
 	_block = std::make_unique<lnd::LNDBlock>(block);
 	_triangles.fill(std::nullopt);
 	_highestAltitude = std::ranges::max(_block->cells, {}, &lnd::LNDCell::altitude).altitude;
+	_highestAltitudeNow = _highestAltitude;
 	_blockPosition = {static_cast<int>(_block->blockX), static_cast<int>(_block->blockZ)};
 	_mapPosition = {_block->mapX, _block->mapZ};
 }
@@ -146,7 +147,17 @@ bool LandBlock::SetCellAltitude(size_t index, uint8_t altitude)
 	{
 		return false;
 	}
+	const auto old = _block->cells.at(index).altitude;
 	_block->cells.at(index).altitude = altitude;
+	if (altitude >= _highestAltitudeNow)
+	{
+		_highestAltitudeNow = altitude;
+	}
+	else if (old == _highestAltitudeNow)
+	{
+		// The highest cell went down, so another cell can be the highest now
+		_highestAltitudeNow = std::ranges::max(_block->cells, {}, &lnd::LNDCell::altitude).altitude;
+	}
 	return true;
 }
 

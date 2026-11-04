@@ -24,12 +24,6 @@ namespace
 {
 /// A land block's side
 constexpr float k_BlockSize = 160.0f;
-
-/// The highest altitude of the cells of a block, as the land had them when it loaded
-uint8_t HighestAltitude(const lnd::LNDBlock& block)
-{
-	return std::ranges::max(block.cells, {}, &lnd::LNDCell::altitude).altitude;
-}
 } // namespace
 
 std::vector<glm::vec2> weather_blocks::InView(const LandIslandInterface& island, const rain::View& view, bool reflected)
@@ -45,7 +39,8 @@ std::vector<glm::vec2> weather_blocks::InView(const LandIslandInterface& island,
 		{
 			continue;
 		}
-		const object_draw_list::Block box {.corner = corner, .highestAltitude = HighestAltitude(*lnd), .reflected = reflected};
+		const object_draw_list::Block box {
+		    .corner = corner, .highestAltitude = block.GetHighestAltitudeNow(), .reflected = reflected};
 		if (object_draw_list::BlockInView(view.viewProjection, view.nearPlane, box) &&
 		    object_draw_list::BlockDistance(view.eye, box) < rain::k_BlockReach)
 		{
