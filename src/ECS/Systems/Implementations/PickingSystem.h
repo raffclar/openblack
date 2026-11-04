@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "ECS/PickShapes.h"
+#include "ECS/PlacedMemo.h"
 #include "ECS/Systems/PickingSystemInterface.h"
 #include "ECS/UndrawnPicks.h"
 
@@ -69,7 +70,12 @@ private:
 	std::vector<undrawn_picks::Shape> _undrawnShapes;
 	std::vector<undrawn_picks::Turn> _testOrder;
 	std::vector<screen_pick::ClipCorner> _corners;
-	std::vector<glm::vec3> _placed;
+	/// The corners of the models that the pick and the hand feel placed, kept while no input of a model changes. The
+	/// hand feel asks in a const call, so the memo is mutable.
+	mutable ecs::placed_memo::Memo _placedMemo;
+	/// The last answers of the pick's test of each model's triangles and of the hand feel's line test
+	ecs::placed_memo::AnswerMemo<std::optional<float>> _distanceMemo;
+	mutable ecs::placed_memo::AnswerMemo<std::optional<screen_pick::MeshHit>> _feelMemo;
 	std::vector<glm::vec2> _uvs;
 	screen_pick::PickScratch _scratch;
 };
