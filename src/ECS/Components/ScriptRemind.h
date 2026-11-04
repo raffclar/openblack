@@ -33,6 +33,8 @@ struct ScriptRemind
 	VillagerStates returnTo {VillagerStates::InvalidState};
 	/// Where its walk was going when it left the script's hands, or where it stood, on the ground in metres
 	glm::vec2 goal {0.0f};
+	/// The height of that goal above the land
+	float goalHeight {0.0f};
 	/// What the script last gave it for its script states, and the clip it was to play
 	ScriptStateArguments arguments;
 	std::optional<ScriptAnimation> animation;

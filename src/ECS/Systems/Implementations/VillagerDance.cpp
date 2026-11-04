@@ -142,6 +142,20 @@ std::optional<glm::vec2> villager_dance::SlotOf(entt::entity villager)
 	return map_coords::ToMetres(MapCoords {.x = whole.x, .z = whole.y});
 }
 
+std::optional<MapCoords> villager_dance::SlotGoalOf(entt::entity villager)
+{
+	const auto placed = PlaceOf(villager);
+	const auto own = SlotOf(villager);
+	if (!placed.has_value() || !own.has_value())
+	{
+		return std::nullopt;
+	}
+	// The walk goal has the height of the dance's place above the land
+	const auto place = moves::SlotPosition(*placed->dance, placed->group, placed->slot, DanceShapes());
+	const auto whole = ecs::wall_hug::ToWhole(*own);
+	return MapCoords {.x = whole.x, .z = whole.y, .altitude = place.altitude};
+}
+
 uint32_t villager_dance::InDance(LivingAction& action)
 {
 	return PerformDance(action, VillagerStates::InDance);
@@ -166,7 +180,7 @@ bool villager_dance::WalkToOwnPlace(LivingAction& action, VillagerStates danceSt
 	auto& living = Locator::livingActionSystem::value();
 	if (living.VillagerSetCurrentAndDestinationState(action, VillagerStates::MoveToPos, danceState))
 	{
-		villager_home::SetupMobileMoveTo(action, *own);
+		villager_home::SetupMobileMoveTo(action, *SlotGoalOf(villager));
 	}
 	return true;
 }
@@ -218,7 +232,9 @@ uint32_t villager_dance::PerformDance(LivingAction& action, VillagerStates dance
 		auto& living = Locator::livingActionSystem::value();
 		if (living.VillagerSetCurrentAndDestinationState(action, VillagerStates::MoveToPos, danceState))
 		{
-			villager_home::SetupMobileMoveTo(action, map_coords::ToMetres(slot));
+			// The goal keeps the height of the dance's place above the land
+			const auto goal = ecs::wall_hug::ToWhole(map_coords::ToMetres(slot));
+			villager_home::SetupMobileMoveTo(action, MapCoords {.x = goal.x, .z = goal.y, .altitude = slot.altitude});
 		}
 		living.VillagerSetState(action, LivingAction::Index::Top, VillagerStates::MoveToDancePos, true);
 		// The dancer takes the first step of this walk in this turn, after the move of the dance

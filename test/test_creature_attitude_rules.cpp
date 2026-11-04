@@ -7,8 +7,18 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <cstdint>
+
+#include <array>
+#include <stdexcept>
+#include <vector>
+
 #include <ECS/CreatureAttitudeRules.h>
+#include <LNDFile.h>
 #include <gtest/gtest.h>
+
+#include "3D/LandIslandInterface.h"
+#include "3D/MapCoords.h"
 
 using namespace openblack;
 namespace attitude = openblack::ecs::creature_attitude;
@@ -17,6 +27,48 @@ using attitude::Attitude;
 namespace
 {
 constexpr uint32_t k_TurnsPerSecond = 10;
+
+/// One block of cells at the corner of the map, with a height at each corner of the first cell
+class SlopedIsland final: public LandIslandInterface
+{
+public:
+	SlopedIsland(uint8_t a00, uint8_t a01, uint8_t a10, uint8_t a11)
+	{
+		_cells.at(0).altitude = a00;
+		_cells.at(1).altitude = a01;
+		_cells.at(17).altitude = a10;
+		_cells.at(18).altitude = a11;
+	}
+
+	[[nodiscard]] float GetHeightAt(glm::vec2) const override { return 0.0f; }
+	[[nodiscard]] glm::vec3 GetNormalAt(glm::vec2) const override { return {0.0f, 1.0f, 0.0f}; }
+	[[nodiscard]] const lnd::LNDCell& GetCell(const glm::u16vec2& coordinates) const override { return *FindCell(coordinates); }
+	[[nodiscard]] const lnd::LNDCell* FindCell(const glm::u16vec2& coordinates) const override
+	{
+		if (coordinates.x >= 16 || coordinates.y >= 16)
+		{
+			return nullptr;
+		}
+		return &_cells.at((coordinates.x * 17u) + coordinates.y);
+	}
+	void DumpTextures() const override {}
+	void DumpMaps() const override {}
+	[[nodiscard]] std::vector<LandBlock>& GetBlocks() override { throw std::logic_error("no blocks"); }
+	[[nodiscard]] const std::vector<LandBlock>& GetBlocks() const override { throw std::logic_error("no blocks"); }
+	[[nodiscard]] const std::vector<lnd::LNDCountry>& GetCountries() const override { throw std::logic_error("no countries"); }
+	[[nodiscard]] const graphics::Texture2D& GetHeightMap() const override { throw std::logic_error("no maps"); }
+	[[nodiscard]] const graphics::Texture2D& GetLuminosityMap() const override { throw std::logic_error("no maps"); }
+	[[nodiscard]] const graphics::Texture2D& GetCellColourMap() const override { throw std::logic_error("no maps"); }
+	[[nodiscard]] const graphics::Texture2D& GetBlockTextures() const override { throw std::logic_error("no maps"); }
+	[[nodiscard]] U16Extent2 GetIndexExtent() const override { return {}; }
+	[[nodiscard]] glm::mat4 GetOrthoView() const override { return glm::mat4(1.0f); }
+	[[nodiscard]] glm::mat4 GetOrthoProj() const override { return glm::mat4(1.0f); }
+	[[nodiscard]] Extent2 GetExtent() const override { return {}; }
+	uint8_t GetNoise(glm::u8vec2) override { return 0; }
+
+private:
+	std::array<lnd::LNDCell, 17 * 17> _cells {};
+};
 
 attitude::Watch TownWatch(Attitude feeling)
 {
@@ -189,4 +241,25 @@ TEST(CreatureAttitudeRules, FleesStraightAwayAndBowsFacingTheCreature)
 	EXPECT_TRUE(attitude::DriftedFrom(1000, 1257));
 	EXPECT_TRUE(attitude::DriftedFrom(2040, 10));
 	EXPECT_EQ(attitude::TurnsIn(1.5f, k_TurnsPerSecond), 15);
+}
+
+TEST(CreatureAttitudeRules, AFleeGoalKeepsTheHeightOfTheVillagerInTheWorld)
+{
+	// The land rises from the villager's corner to the corner ten metres along x
+	const SlopedIsland island(40, 40, 56, 56);
+	const map_coords::MapCoords villager {.x = 0, .z = 0, .altitude = 0.0f};
+	const auto goal = attitude::FleeGoal(island, villager, {10.0f, 0.0f});
+	EXPECT_EQ(goal.x, map_coords::ToFixed(10.0f));
+	EXPECT_EQ(goal.z, 0);
+	// The goal is below the land there by the rise of the land
+	const float here = island.GetAltitude(0, 0);
+	const float there = island.GetAltitude(goal.x, goal.z);
+	EXPECT_LT(here, there);
+	EXPECT_EQ(goal.altitude, here - there);
+	// A villager above the land keeps that height too
+	const auto lifted = attitude::FleeGoal(island, {.x = 0, .z = 0, .altitude = 2.0f}, {10.0f, 0.0f});
+	EXPECT_EQ(lifted.altitude, (here + 2.0f) - there);
+	// On flat land the goal is on the land
+	const SlopedIsland flat(40, 40, 40, 40);
+	EXPECT_EQ(attitude::FleeGoal(flat, villager, {10.0f, 0.0f}).altitude, 0.0f);
 }

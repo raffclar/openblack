@@ -15,6 +15,7 @@
 
 #include <glm/gtx/vec_swizzle.hpp>
 
+#include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
 #include "Common/GUtilsAngle.h"
 #include "Common/GUtilsDistance.h"
@@ -43,6 +44,7 @@
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TownDesireSystemInterface.h"
+#include "ECS/ThingMapPlace.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "ObjectMeasures.h"
@@ -187,6 +189,16 @@ std::optional<float> Wanted(entt::entity villager, entt::entity town)
 void MoveTowards(LivingAction& action, glm::vec2 point, VillagerStates then)
 {
 	if (ecs::villager_home::SetupMoveTo(action, point, then))
+	{
+		Locator::livingActionSystem::value().VillagerSetState(action, LivingAction::Index::Top,
+		                                                      VillagerStates::MoveTowardsCreatureReaction, true);
+	}
+}
+
+/// The same for a goal with a height above the land, which the walk keeps
+void MoveTowards(LivingAction& action, const map_coords::MapCoords& goal, VillagerStates then)
+{
+	if (ecs::villager_home::SetupMoveTo(action, goal, then))
 	{
 		Locator::livingActionSystem::value().VillagerSetState(action, LivingAction::Index::Top,
 		                                                      VillagerStates::MoveTowardsCreatureReaction, true);
@@ -584,7 +596,10 @@ uint32_t villager_creature::FleeingFromCreatureReaction(LivingAction& action)
 			return 0;
 		}
 		villager_reactions::SetSpeed(villager, fleeing / 2);
-		MoveTowards(action, to, VillagerStates::FleeingFromCreatureReaction);
+		// The goal keeps the height of the villager in the world
+		const auto goal =
+		    creature_attitude::FleeGoal(Locator::terrainSystem::value(), ecs::thing_map_place::Of(registry, villager), to);
+		MoveTowards(action, goal, VillagerStates::FleeingFromCreatureReaction);
 		return 0;
 	}
 	// While the creature means to act on nothing, the villager only gets its fleeing speed and does not move. The game

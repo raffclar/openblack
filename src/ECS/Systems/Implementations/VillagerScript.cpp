@@ -312,8 +312,12 @@ void KeepInMind(entt::entity villager, ScriptRemind& remind)
 	const auto* wallHug = registry.TryGet<const WallHug>(villager);
 	const auto* transform = registry.TryGet<const Transform>(villager);
 	const auto goal = wallHug != nullptr ? wall_hug::ToPoint(wallHug->goalPlace) : glm::vec2(0.0f);
+	const float goalHeight = wallHug != nullptr ? wallHug->goalHeight : 0.0f;
 	const auto standing = transform != nullptr ? glm::xz(transform->position) : glm::vec2(0.0f);
-	remind.goal = rules::KeptGoal(goal, standing, remind.returnTo);
+	// The goal keeps its height above the land. A villager that stands on the land has no height.
+	const bool ownPlace = rules::KeepsOwnPlace(goal, goalHeight, remind.returnTo);
+	remind.goal = ownPlace ? standing : goal;
+	remind.goalHeight = ownPlace ? 0.0f : goalHeight;
 	const auto* arguments = registry.TryGet<const ScriptStateArguments>(villager);
 	remind.arguments = arguments != nullptr ? *arguments : ScriptStateArguments {};
 	const auto* animation = registry.TryGet<const ScriptAnimation>(villager);
@@ -327,6 +331,7 @@ void BringBackToMind(entt::entity villager, const ScriptRemind& remind)
 	if (auto* wallHug = registry.TryGet<WallHug>(villager); wallHug != nullptr)
 	{
 		wallHug->goalPlace = wall_hug::ToWhole(remind.goal);
+		wallHug->goalHeight = remind.goalHeight;
 	}
 	registry.AssignOrReplace<ScriptStateArguments>(villager, remind.arguments);
 	if (remind.animation.has_value())
@@ -555,7 +560,10 @@ ecs::VillagerStateEntry villager_script::EnterInScript(LivingAction& action, Vil
 	}
 	else
 	{
-		villager_home::SetupMoveTo(action, kept.goal, into);
+		// The walk keeps the height of the kept place above the land
+		const auto whole = wall_hug::ToWhole(kept.goal);
+		villager_home::SetupMoveTo(action, map_coords::MapCoords {.x = whole.x, .z = whole.y, .altitude = kept.goalHeight},
+		                           into);
 	}
 	return ecs::VillagerStateEntry::Outcome::SentOn;
 }
@@ -572,9 +580,13 @@ ecs::VillagerStateEntry villager_script::EnterPlayAnim(LivingAction& action, Vil
 	BringBackToMind(villager, *remind);
 	remind->returnTo = VillagerStates::InvalidState;
 	// Away from its kept place: it walks back there first, and the walk takes it on into the state
-	if (const auto goal = remind->goal; rules::HasKeptGoal(goal) && !villager_home::AreWeThere(villager, goal))
+	if (const auto goal = remind->goal;
+	    rules::HasKeptGoal(goal, remind->goalHeight) && !villager_home::AreWeThere(villager, goal))
 	{
-		villager_home::SetupMoveTo(action, goal, into);
+		// The walk keeps the height of the kept place above the land
+		const auto whole = wall_hug::ToWhole(goal);
+		villager_home::SetupMoveTo(action, map_coords::MapCoords {.x = whole.x, .z = whole.y, .altitude = remind->goalHeight},
+		                           into);
 		return ecs::VillagerStateEntry::Outcome::SentOn;
 	}
 	// There: the clip a script forced starts again, unless it plays already

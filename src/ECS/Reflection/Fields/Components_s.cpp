@@ -109,6 +109,7 @@ void openblack::ecs::reflection::RegisterFields_Components_s(entt::meta_ctx& con
 	Reflect<components::ScriptRemind>(context)
 	    .Field<&components::ScriptRemind::returnTo>("returnTo")
 	    .Field<&components::ScriptRemind::goal>("goal")
+	    .Field<&components::ScriptRemind::goalHeight>("goalHeight")
 	    .Field<&components::ScriptRemind::arguments>("arguments")
 	    .Field<&components::ScriptRemind::animation>("animation")
 	    .Field<&components::ScriptRemind::clip>("clip");

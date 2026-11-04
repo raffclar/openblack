@@ -162,6 +162,17 @@ bool MoveTo(LivingAction& action, glm::vec2 goal, VillagerStates final)
 	return true;
 }
 
+/// The same for a goal with a height above the land, which the walk keeps
+bool MoveTo(LivingAction& action, const map_coords::MapCoords& goal, VillagerStates final)
+{
+	if (!Locator::livingActionSystem::value().VillagerSetCurrentAndDestinationState(action, VillagerStates::MoveToPos, final))
+	{
+		return false;
+	}
+	villager_home::SetupMobileMoveTo(action, goal);
+	return true;
+}
+
 /// Walks to a point of a site, on its footpaths where there are any
 bool MoveOnPathsTo(LivingAction& action, entt::entity place, glm::vec2 goal, VillagerStates final)
 {
@@ -543,7 +554,8 @@ bool StartWorshippingAtWorshipSite(LivingAction& action)
 	{
 		return false;
 	}
-	const auto slot = villager_dance::SlotOf(villager);
+	// The walk goal keeps the height of the dance's place above the land
+	const auto slot = villager_dance::SlotGoalOf(villager);
 	if (!slot.has_value() || !MoveTo(action, *slot, VillagerStates::WorshippingAtWorshipSite))
 	{
 		return false;

@@ -266,6 +266,13 @@ glm::vec2 creature_attitude::FleePoint(glm::vec2 villager, glm::vec2 creature, f
 	return villager + away * (distance / std::sqrt(away.x * away.x + away.y * away.y));
 }
 
+map_coords::MapCoords creature_attitude::FleeGoal(const LandIslandInterface& island, const map_coords::MapCoords& villager,
+                                                  glm::vec2 point)
+{
+	const float height = map_coords::ToWorld(island, villager).y;
+	return map_coords::FromWorld(island, {point.x, height, point.y});
+}
+
 bool creature_attitude::DriftedFrom(uint16_t facing, uint16_t towardsCreature)
 {
 	return std::abs(static_cast<int32_t>(towardsCreature) - static_cast<int32_t>(facing)) > k_RespectDrift;
