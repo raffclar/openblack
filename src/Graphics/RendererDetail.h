@@ -105,7 +105,7 @@ glm::vec4 LandTexelsUniform(int blockTexels);
 /// changes; none without snow
 const Texture2D* SnowDepth(std::unique_ptr<Texture2D>& texture, std::optional<uint32_t>& revision);
 
-/// The texture of a skin: the mesh's own skin, else the shared texture of that id; none for no skin
+/// The texture of a skin: the skin of the mesh, or the shared texture with that id. No skin id gives no texture.
 const Texture2D* GetTexture(uint32_t skinID, const std::unordered_map<SkinId, std::unique_ptr<graphics::Texture2D>>& meshSkins);
 
 /// The land's light a creature, its eyes and its hair take: halved in the sea's reflection, as the game halves every
