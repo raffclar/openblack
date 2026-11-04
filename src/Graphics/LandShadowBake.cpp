@@ -723,7 +723,15 @@ bool LandShadowBake::WatchedUnchanged(const ecs::Registry& registry) const
 void LandShadowBake::StartWatchedTest()
 {
 	ForgetWatchedTest();
-	if (!Locator::entitiesRegistry::has_value())
+	if (!Locator::entitiesRegistry::has_value() || !Locator::resources::has_value())
+	{
+		return;
+	}
+	// The update tests the watched things only while no caster came or went, as the watched things are then all there.
+	// The test does not start in other cases.
+	auto& registry = Locator::entitiesRegistry::value();
+	if (_bakeAll || !_dirty.empty() || _castersVersion != ecs::LandShadowCastersVersion(registry) ||
+	    _meshCount != Locator::resources::value().GetMeshes().Size())
 	{
 		return;
 	}
@@ -732,8 +740,7 @@ void LandShadowBake::StartWatchedTest()
 		_watchedTest = std::make_unique<SideThread>();
 	}
 	_watchedTestStarted = true;
-	_watchedTest->Start(
-	    [this, &registry = std::as_const(Locator::entitiesRegistry::value())] { _watchedAnswer = WatchedUnchanged(registry); });
+	_watchedTest->Start([this, &registry = std::as_const(registry)] { _watchedAnswer = WatchedUnchanged(registry); });
 }
 
 void LandShadowBake::ForgetWatchedTest()
