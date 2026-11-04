@@ -174,6 +174,16 @@ public:
 	[[nodiscard]] virtual uint32_t CurrentTurn() const { return 0; }
 	/// A new land: none going
 	virtual void Reset() = 0;
+	/// A reaction of a saved game of the original game, with the living things that react to it, the first to join first
+	struct Restored
+	{
+		Active reaction;
+		std::vector<entt::entity> takers;
+	};
+	/// The reactions of a saved game of the original game replace the reactions that go on, the oldest first. The count
+	/// of the turns continues from the turn of the saved game. Each taker holds its reaction again, and keeps what it
+	/// does. Gives the id of each reaction, in the same order.
+	virtual std::vector<uint32_t> Restore(std::span<const Restored> /*reactions*/, uint32_t /*turn*/) { return {}; }
 	/// The next Reset also starts the ids of the reactions again from the first, as each computer of a network game
 	/// starts its land
 	virtual void SetFreshIdsAtNextReset() {}

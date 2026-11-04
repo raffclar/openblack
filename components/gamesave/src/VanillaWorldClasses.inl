@@ -800,16 +800,22 @@ void ReadBaseCollectionModifierData(WorldReader& r)
 
 void ReadReaction(WorldReader& r)
 {
-	r.Ref();
-	r.Refs();
+	// The thing that the living react to, and the living that react to it, the first to join first
+	r.Ref("reactionTarget");
+	r.Refs("reactionTakers");
+	// A word that is always 0. The game does not read it.
 	r.Word();
-	r.Word();
+	r.Word("reactionType");
 	// The dance that the villagers dance as they react, if any
 	r.Ref("reactionDance");
-	r.Word();
-	r.Word();
-	r.Ref();
-	r.Word();
+	// The turn when the first living thing took it up, 0 when none did
+	r.Word("reactionFirstTaken");
+	// Whether it spreads to more living things. A hand that holds the thing can stop it.
+	r.Word("reactionSpreads");
+	// The player that made it, none for no player
+	r.Ref("reactionPlayer");
+	// How far it reaches now
+	r.Float("reactionReach");
 }
 
 void ReadArena(WorldReader& r)

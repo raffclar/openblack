@@ -37,6 +37,7 @@ public:
 	void RemoveFrom(entt::entity initiator, Reaction type) override;
 	void StopSpreadInHand(entt::entity initiator) override;
 	void SpreadAgain(entt::entity initiator) override;
+	std::vector<uint32_t> Restore(std::span<const Restored> reactions, uint32_t turn) override;
 	void Remove(uint32_t id) override;
 	void StopReacting(entt::entity living) override;
 	[[nodiscard]] std::optional<HeldReaction> HeldReactionOf(entt::entity living) const override;
