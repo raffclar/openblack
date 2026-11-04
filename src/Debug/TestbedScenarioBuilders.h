@@ -209,4 +209,6 @@ void AddMind(std::vector<Scenario>& all);
 void AddParticles(std::vector<Scenario>& all);
 void AddEditor(std::vector<Scenario>& all);
 void AddBenchmark(std::vector<Scenario>& all);
+void AddScriptTaskRelease(std::vector<Scenario>& all);
+void AddLandOneScriptStubScenarios(std::vector<Scenario>& all);
 } // namespace openblack::testbed_scenarios
