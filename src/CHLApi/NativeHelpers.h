@@ -86,12 +86,6 @@ void Pushb(bool value);
 void PushObject(entt::entity object);
 void RemakeDrawList();
 std::optional<ecs::systems::HandSystemInterface::ReportedView> ScriptView();
-bool IsWorldObject(entt::entity object);
-bool IsLivingThing(entt::entity object);
-float LivingAngleOf(entt::entity object, const ecs::components::Transform& transform);
-void TurnLivingThing(entt::entity object, ecs::components::Transform& transform, float angle);
-void TurnPlacedThing(entt::entity object, const glm::vec3& angles, bool lean);
-float ScriptHeightOf(entt::entity object);
 
 // In CHLApi/CameraNatives.cpp
 void CountCameraOrder();
@@ -122,5 +116,14 @@ PlayerNames ScriptPlayerName(int32_t scriptPlayer);
 
 // In CHLApi/HandNatives.cpp
 ecs::components::HandClicked* LocalHandClicked();
+
+// In CHLApi/PropertyNatives.cpp
+bool TownCompletelyDestroyed(const ecs::components::Town& town);
+bool IsWorldObject(entt::entity object);
+bool IsLivingThing(entt::entity object);
+float LivingAngleOf(entt::entity object, const ecs::components::Transform& transform);
+void TurnLivingThing(entt::entity object, ecs::components::Transform& transform, float angle);
+void TurnPlacedThing(entt::entity object, const glm::vec3& angles, bool lean);
+float ScriptHeightOf(entt::entity object);
 
 } // namespace openblack::chlapi

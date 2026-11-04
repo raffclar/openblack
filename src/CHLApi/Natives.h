@@ -17,15 +17,6 @@ namespace openblack::chlapi
 // In CHLApi.cpp
 void None();
 void GameThingClicked();
-void SetScriptState();
-void SetScriptStatePos();
-void SetScriptFloat();
-void SetScriptUlong();
-void GetProperty();
-void SetProperty();
-void GetPosition();
-void SetPosition();
-void GetDistance();
 void Call();
 void Create();
 void MoveGameThing();
@@ -499,5 +490,16 @@ void CanSkipTutorial();
 void CanSkipCreatureTraining();
 void IsKeepingOldCreature();
 void CurrentProfileHasCreature();
+
+// In CHLApi/PropertyNatives.cpp: the state, properties and places of objects
+void SetScriptState();
+void SetScriptStatePos();
+void SetScriptFloat();
+void SetScriptUlong();
+void GetProperty();
+void SetProperty();
+void GetPosition();
+void SetPosition();
+void GetDistance();
 
 } // namespace openblack::chlapi
