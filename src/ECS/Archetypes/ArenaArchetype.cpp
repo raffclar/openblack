@@ -31,15 +31,15 @@ using namespace openblack;
 using namespace openblack::ecs::archetypes;
 using namespace openblack::ecs::components;
 
-std::shared_ptr<particles::LightSheet> ArenaArchetype::MakeRing(const glm::ivec2& place, float radius)
+std::shared_ptr<particles::LightSheet> ArenaArchetype::MakeRing(const glm::ivec2& place, float radius, uint32_t rgb)
 {
 	const auto ground = [](glm::vec2 point) {
 		return Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().GetHeightAt(point) : 0.0f;
 	};
 	const glm::vec2 centre {map_coords::ToMetres(place.x), map_coords::ToMetres(place.y)};
 	auto ring = std::make_shared<particles::LightSheet>();
-	ring->Start(creature_arena::RingPoints(centre, radius, ground), creature_arena::k_RingRgb,
-	            radius * creature_arena::k_RingHeightShare, creature_arena::k_RingShiftSeconds);
+	ring->Start(creature_arena::RingPoints(centre, radius, ground), rgb, radius * creature_arena::k_RingHeightShare,
+	            creature_arena::k_RingShiftSeconds);
 	ring->SetSpread(creature_arena::k_RingSpread);
 	ring->SetStrength(creature_arena::k_RingStrength);
 	ring->SetHidden(true);
@@ -50,7 +50,9 @@ std::shared_ptr<particles::LightSheet> ArenaArchetype::MakeRing(const glm::ivec2
 	return ring;
 }
 
-entt::entity ArenaArchetype::Create(const glm::ivec2& place, float radius, bool temporary)
+namespace
+{
+entt::entity MakeArena(const glm::ivec2& place, float radius, bool temporary, uint32_t ringRgb)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto ground = [](glm::vec2 point) {
@@ -60,24 +62,36 @@ entt::entity ArenaArchetype::Create(const glm::ivec2& place, float radius, bool 
 	const auto entity = registry.Create();
 	registry.Assign<Transform>(entity, glm::vec3(centre.x, ground(centre), centre.y), glm::mat3(1.0f), glm::vec3(1.0f));
 	ecs::thing_map_place::Keep(registry, entity, {.x = place.x, .z = place.y});
-
-	auto ring = MakeRing(place, radius);
+	auto ring = ringRgb != 0 ? ArenaArchetype::MakeRing(place, radius, ringRgb) : nullptr;
 	registry.Assign<CreatureArena>(entity, CreatureArena {.place = place,
 	                                                      .radius = radius,
 	                                                      .temporary = temporary,
 	                                                      .fightOn = false,
 	                                                      .first = entt::null,
 	                                                      .second = entt::null,
+	                                                      .ringRgb = ringRgb,
 	                                                      .ring = std::move(ring)});
+	return entity;
+}
+} // namespace
+
+entt::entity ArenaArchetype::Create(const glm::ivec2& place, float radius, bool temporary)
+{
+	const auto entity = MakeArena(place, radius, temporary, creature_arena::k_RingRgb);
 	// Every arena makes a reaction round itself, which villagers heed while a fight is on in it; it belongs to no player
 	if (Locator::reactionSystem::has_value())
 	{
 		Locator::reactionSystem::value().Create({
 		    .initiator = entity,
 		    .type = Reaction::ReactToFight,
-		    .position = registry.Get<const Transform>(entity).position,
+		    .position = Locator::entitiesRegistry::value().Get<const Transform>(entity).position,
 		    .playerless = true,
 		});
 	}
 	return entity;
+}
+
+entt::entity ArenaArchetype::CreateLoaded(const glm::ivec2& place, float radius)
+{
+	return MakeArena(place, radius, false, 0);
 }

@@ -208,6 +208,8 @@ private:
 	/// The player clicks the scroll nearest the command's point
 	[[nodiscard]] std::string ClickScroll(const Command& command);
 	[[nodiscard]] std::string ClickCreatureAt(const Command& command);
+	/// Puts an arena of a loaded file of the game midway between two creatures of the scenario
+	[[nodiscard]] std::string PutLoadedArena(const Command& command);
 	[[nodiscard]] std::string HandTakeNear(const Command& command);
 	[[nodiscard]] std::string ClickCreatureNear(const Command& command);
 	[[nodiscard]] std::string TapRewardNear(const Command& command);

@@ -889,6 +889,12 @@ void StartArenaFight(ecs::Registry& registry, entt::entity entity, entt::entity 
 	taken.fightOn = true;
 	taken.first = first;
 	taken.second = second;
+	// An arena of a loaded file of the game has no ring. Its first fight makes a white ring of its radius now.
+	if (taken.ringRgb == 0)
+	{
+		taken.ringRgb = arena::k_LoadedRingRgb;
+		taken.ring = ecs::archetypes::ArenaArchetype::MakeRing(taken.place, taken.radius, taken.ringRgb);
+	}
 	if (taken.ring != nullptr)
 	{
 		taken.ring->SetHidden(false);

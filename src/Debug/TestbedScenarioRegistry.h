@@ -1225,6 +1225,9 @@ struct Command
 		/// The renderer makes the graphics device again at once, as after a lost device. With value 1, the renderer
 		/// loses the device first. Needs no creature
 		RestoreDevice,
+		/// An arena of a loaded file of the game (radius) is put midway between the creature and the other creature
+		/// (value). It has no ring of light and makes no reaction, as an arena after a load of a saved game.
+		PutLoadedArena,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures

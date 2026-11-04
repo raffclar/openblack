@@ -4513,3 +4513,84 @@ TEST(VanillaWorldImport, SavedGamesHaveReactionsAndMemoriesThatTheImportReads)
 	}
 	std::cout << "Reactions " << reactions << ", living things that remember reactions " << memories << std::endl;
 }
+
+// The arenas come the oldest first, with their places, their radii and their fights. An arena with no radius is left out.
+TEST(VanillaWorldImport, TheArenasComeTheOldestFirstWithTheirFights)
+{
+	auto fake = GameAtTurn(500);
+	for (size_t list = 0; list < world_import::k_GameObjectLists; ++list)
+	{
+		fake.Refs("lists", list == script_import::k_GameArenaList ? std::vector<uint32_t> {3, 2} : std::vector<uint32_t> {});
+	}
+	// 2 and 3: arenas of the list, 4: an arena that the list does not have, 5: an arena with no radius
+	fake.Record(VanillaType::Arena)
+	    .Position(1000, 2000)
+	    .Value<float>("arenaOne", 1.0f)
+	    .Value<float>("arenaRadius", 30.0f)
+	    .Value<uint32_t>("arenaFightOn", 1)
+	    .Refs("arenaCreatures", {40, 41})
+	    .Ref("arenaNone", 0);
+	fake.Record(VanillaType::Arena)
+	    .Position(3000, 4000)
+	    .Value<float>("arenaOne", 1.0f)
+	    .Value<float>("arenaRadius", 45.5f)
+	    .Value<uint32_t>("arenaFightOn", 0)
+	    .Refs("arenaCreatures", {0, 0})
+	    .Ref("arenaNone", 0);
+	fake.Record(VanillaType::Arena)
+	    .Position(5000, 6000)
+	    .Value<float>("arenaOne", 1.0f)
+	    .Value<float>("arenaRadius", 20.0f)
+	    .Value<uint32_t>("arenaFightOn", 0)
+	    .Refs("arenaCreatures", {0, 0})
+	    .Ref("arenaNone", 0);
+	fake.Record(VanillaType::Arena).Position(7000, 8000);
+	const auto arenas = script_import::ReadArenas(fake.Make());
+	ASSERT_EQ(arenas.size(), 3U);
+	EXPECT_EQ(arenas[0].number, 2U);
+	EXPECT_EQ(arenas[1].number, 3U);
+	EXPECT_EQ(arenas[2].number, 4U);
+	EXPECT_EQ(arenas[0].position.x, 1000);
+	EXPECT_EQ(arenas[0].position.z, 2000);
+	EXPECT_FLOAT_EQ(arenas[0].radius, 30.0f);
+	EXPECT_TRUE(arenas[0].fightOn);
+	EXPECT_EQ(arenas[0].creatures, (std::array<uint32_t, 2> {40, 41}));
+	EXPECT_FLOAT_EQ(arenas[1].radius, 45.5f);
+	EXPECT_FALSE(arenas[1].fightOn);
+	EXPECT_EQ(arenas[1].creatures, (std::array<uint32_t, 2> {0, 0}));
+}
+
+// The saved games of the user have arenas that the import reads. Each fight reaction of a save is for an arena.
+TEST(VanillaWorldImport, SavedGamesHaveArenasThatTheImportReads)
+{
+	size_t arenas = 0;
+	const auto files = ForEachSave([&arenas](const std::filesystem::path& path, const VanillaWorld& world) {
+		const auto read = script_import::ReadArenas(world);
+		EXPECT_EQ(read.size(), world.OfType(VanillaType::Arena).size()) << path;
+		for (const auto& arena : read)
+		{
+			const auto* record = world.Record(arena.number);
+			ASSERT_NE(record, nullptr);
+			EXPECT_EQ(world.Float(*record, "arenaOne"), std::optional(1.0f)) << path << " " << arena.number;
+			EXPECT_EQ(world.Ref(*record, "arenaNone"), std::optional(0U)) << path << " " << arena.number;
+			std::cout << path.filename() << " arena " << arena.number << " at " << arena.position.x << " " << arena.position.z
+			          << " radius " << arena.radius << " fight " << arena.fightOn << " creatures " << arena.creatures[0] << " "
+			          << arena.creatures[1] << std::endl;
+		}
+		for (const auto& reaction : reaction_import::ReadReactions(world))
+		{
+			if (reaction.type == static_cast<uint32_t>(Reaction::ReactToFight))
+			{
+				const auto* target = world.Record(reaction.target);
+				ASSERT_NE(target, nullptr) << path << " " << reaction.number;
+				EXPECT_TRUE(target->Is(VanillaType::Arena)) << path << " " << reaction.number;
+			}
+		}
+		arenas += read.size();
+	});
+	if (!files.has_value())
+	{
+		GTEST_SKIP() << "Set OPENBLACK_VANILLA_SAVES to a copy of a Profiles folder of the game to check its saved games";
+	}
+	std::cout << "Arenas " << arenas << std::endl;
+}

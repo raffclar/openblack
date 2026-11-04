@@ -126,6 +126,10 @@ struct Choice
 /// The work a villager is taken to have had as it is picked up: a missionary picked up has given up preaching
 [[nodiscard]] VillagerDisciple AtPickUp(VillagerDisciple current);
 
+/// Whether a villager that lands ends its villager-in-hand reaction in this turn. A disciple that the hand put down ends
+/// it only when its landing clip has played. Any other villager ends it in each turn of its landing.
+[[nodiscard]] bool EndsInHandReaction(bool putDownAsDisciple, bool landingPlayed);
+
 /// What the disciples of each kind are and do once made, as the game's table of disciples has them
 struct Kind
 {

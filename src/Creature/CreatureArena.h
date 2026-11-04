@@ -47,6 +47,9 @@ constexpr float k_ReusePerPace = 10.0f;
 /// every few hundredths of a second
 constexpr uint32_t k_RingPoints = 32;
 constexpr uint32_t k_RingRgb = 0xB4B4B4;
+/// An arena of a loaded file of the game has no ring. When its first fight starts, it makes a ring that is white, with
+/// the same shape.
+constexpr uint32_t k_LoadedRingRgb = 0xFFFFFF;
 constexpr float k_RingHeightShare = 1.0f / 6.0f;
 constexpr float k_RingSpread = 1.01f;
 constexpr float k_RingShiftSeconds = 0.03f;

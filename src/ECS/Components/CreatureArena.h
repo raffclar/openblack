@@ -14,6 +14,8 @@
 #include <entt/entity/entity.hpp>
 #include <glm/vec2.hpp>
 
+#include "Creature/CreatureArena.h"
+
 namespace openblack::particles
 {
 class LightSheet;
@@ -34,6 +36,9 @@ struct CreatureArena
 	bool fightOn {false};
 	entt::entity first {entt::null};
 	entt::entity second {entt::null};
+	/// The colour of its ring of light. It is 0 while the arena has no ring: an arena of a loaded file of the game makes
+	/// its ring when its first fight starts.
+	uint32_t ringRgb {creature_arena::k_RingRgb};
 	/// The ring of light standing round it, shown only while its fight is on
 	std::shared_ptr<particles::LightSheet> ring;
 };

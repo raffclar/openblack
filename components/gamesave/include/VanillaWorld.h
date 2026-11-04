@@ -54,6 +54,7 @@ enum class VanillaType : uint32_t
 	ShowNeedsVisuals = 0x3D,
 	ShowNeeds = 0x3E,
 	ScriptHighlight = 0x3F,
+	Arena = 0x41,
 	InfluenceRing = 0x49,
 	TownDesireFlags = 0x4C,
 	BigForest = 0x4D,

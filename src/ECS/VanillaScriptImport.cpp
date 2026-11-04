@@ -13,6 +13,7 @@
 
 #include <algorithm>
 #include <iterator>
+#include <ranges>
 #include <span>
 #include <string_view>
 
@@ -191,6 +192,53 @@ ImportedScriptThings vanilla_script_import::ReadScriptThings(const gamesave::Van
 		}
 	}
 	return things;
+}
+
+std::vector<ImportedArena> vanilla_script_import::ReadArenas(const gamesave::VanillaWorld& world)
+{
+	using gamesave::VanillaType;
+	std::vector<uint32_t> order;
+	if (!world.Records().empty() && world.Game().Is(VanillaType::Game))
+	{
+		if (const auto lists = world.Fields(world.Game(), "lists"); lists.size() > k_GameArenaList)
+		{
+			// The list has the newest first
+			for (const auto number : world.Refs(*lists.at(k_GameArenaList)) | std::views::reverse)
+			{
+				order.push_back(number);
+			}
+		}
+	}
+	for (const auto* record : world.OfType(VanillaType::Arena))
+	{
+		if (std::ranges::find(order, record->number) == order.end())
+		{
+			order.push_back(record->number);
+		}
+	}
+	std::vector<ImportedArena> arenas;
+	for (const auto number : order)
+	{
+		const auto* record = world.Record(number);
+		if (record == nullptr || !record->Is(VanillaType::Arena))
+		{
+			continue;
+		}
+		const auto position = PositionOf(world, *record);
+		const auto radius = world.Float(*record, "arenaRadius");
+		if (!position.has_value() || !radius.has_value())
+		{
+			continue;
+		}
+		ImportedArena arena {.number = record->number,
+		                     .position = *position,
+		                     .radius = *radius,
+		                     .fightOn = world.Word(*record, "arenaFightOn").value_or(0) != 0};
+		const auto creatures = world.Refs(*record, "arenaCreatures");
+		std::copy_n(creatures.begin(), std::min(creatures.size(), arena.creatures.size()), arena.creatures.begin());
+		arenas.push_back(arena);
+	}
+	return arenas;
 }
 
 std::optional<PlayerNames> vanilla_script_import::HeartPlayer(const gamesave::VanillaWorld& world, uint32_t number)
