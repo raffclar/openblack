@@ -401,4 +401,34 @@ std::string FileName(std::string_view landName, std::string_view extension)
 	return name;
 }
 
+bool NeedsConfirmation(const std::filesystem::path& path, const std::filesystem::path& gameFolder)
+{
+	std::error_code error;
+	if (std::filesystem::exists(path, error) || error)
+	{
+		return true;
+	}
+	if (gameFolder.empty())
+	{
+		return false;
+	}
+	// The weak form needs no file on the disk, so a path that is new in the game's folder is still found
+	const auto folder = std::filesystem::weakly_canonical(gameFolder, error);
+	if (error)
+	{
+		return true;
+	}
+	const auto target = std::filesystem::weakly_canonical(path, error);
+	if (error)
+	{
+		return true;
+	}
+	const auto relative = target.lexically_relative(folder);
+	if (relative.empty())
+	{
+		return false;
+	}
+	return *relative.begin() != "..";
+}
+
 } // namespace openblack::editor::land_save

@@ -12,6 +12,7 @@
 #include <cstdint>
 
 #include <array>
+#include <filesystem>
 #include <optional>
 #include <span>
 #include <string>
@@ -316,5 +317,10 @@ struct SavedPaths
 
 /// The name of a saved file: the land's name with the extension of the file
 [[nodiscard]] std::string FileName(std::string_view landName, std::string_view extension);
+
+/// True when a write to the path must wait for the user to say yes: the path holds a file already, or it lies in the
+/// game's own folder (an empty game folder holds nothing). A path that is new and outside the game's folder needs no
+/// question.
+[[nodiscard]] bool NeedsConfirmation(const std::filesystem::path& path, const std::filesystem::path& gameFolder);
 
 } // namespace openblack::editor::land_save
