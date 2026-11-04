@@ -551,6 +551,8 @@ struct ImportedVillager
 	uint16_t turnsUntilStateChange {0};
 	/// The number of the object of its group of a dance in the file, 0 for none
 	uint32_t danceGroup {0};
+	/// The number of the reaction of the file that it reacts to, 0 for none
+	uint32_t reaction {0};
 	/// It dances in a group of a dance that the import makes, and it is at worship at a worship site that the import
 	/// makes
 	bool importedDancer {false};
@@ -849,12 +851,9 @@ struct ImportedWorshipSite
 /// The dances of the file that are not the dance of a worship site
 struct ImportedDances
 {
-	/// The dances that the import makes on their own, in the order of the file: the dances of the creatures and of the
-	/// scripts, and the dances that nothing holds
+	/// The dances that the import makes on their own, in the order of the file: the dances of the creatures, of the
+	/// reactions, of the artefacts and of the scripts, and the dances that nothing holds
 	std::vector<ImportedDance> made;
-	/// The numbers of the dances that a reaction holds. The import does not make the reactions, so it does not make
-	/// their dances.
-	std::vector<uint32_t> notMade;
 	/// The numbers of the dances in the game's list of dances, the newest first. The game's load keeps this order.
 	std::vector<uint32_t> gameList;
 };
@@ -920,8 +919,8 @@ struct ImportedTowns
 /// The values of a dance record of the file. Nothing for a record that is not a dance or has a row of another table.
 [[nodiscard]] std::optional<ImportedDance> ReadDance(const gamesave::VanillaWorld& world,
                                                      const gamesave::VanillaRecord& record);
-/// The dances of the file that are not the dance of a worship site. A dance that a reaction
-/// holds is not made. Every other dance is made: a creature or a script holds it, or nothing holds it.
+/// The dances of the file that are not the dance of a worship site: the dances of the creatures, of the reactions, of
+/// the artefacts and of the scripts, and the dances that nothing holds. The import makes each of them.
 [[nodiscard]] ImportedDances ReadOtherDances(const gamesave::VanillaWorld& world);
 /// How the import makes a dance of the file on its own: its row, its place, the thing that it is for (the import gives
 /// the thing that it made for the owner of the file), how many turns it lasts, and whether a script made it. The table
