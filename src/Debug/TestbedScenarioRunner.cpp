@@ -1697,7 +1697,12 @@ void Runner::PlaceObjects(const Scenario& scenario, glm::vec2 middle)
 				    constexpr uint32_t k_AdultAge = 30;
 				    const auto villager = ecs::archetypes::VillagerArchetype::Create(position, position, type,
 				                                                                     object.villagerAge.value_or(k_AdultAge));
-				    if (object.joinTown)
+				    if (object.landTown.has_value())
+				    {
+					    auto& registry = Locator::entitiesRegistry::value();
+					    registry.Get<ecs::components::Villager>(villager).town = registry.Context().towns.at(*object.landTown);
+				    }
+				    else if (object.joinTown)
 				    {
 					    auto& registry = Locator::entitiesRegistry::value();
 					    registry.Get<ecs::components::Villager>(villager).town =
@@ -1737,7 +1742,8 @@ void Runner::PlaceObjects(const Scenario& scenario, glm::vec2 middle)
 					    return dispenser;
 				    }
 				    const auto abode = ecs::archetypes::AbodeArchetype::Create(
-				        ScenarioTown(middle), position, type, yaw, object.scale, object.storedFood.value_or(k_ScenarioTownFood),
+				        object.landTown.has_value() ? *object.landTown : ScenarioTown(middle), position, type, yaw,
+				        object.scale, object.storedFood.value_or(k_ScenarioTownFood),
 				        object.storedWood.value_or(k_ScenarioTownWood));
 				    if (object.built.has_value())
 				    {
