@@ -25,7 +25,9 @@
 #include <span>
 #include <string_view>
 #include <system_error>
+#include <unordered_set>
 #include <utility>
+#include <variant>
 #include <vector>
 #define LOCATOR_IMPLEMENTATIONS
 
@@ -78,6 +80,7 @@
 #include "Creature/CreatureEnvironmentMap.h"
 #include "Creature/CreatureFizzLook.h"
 #include "Creature/CreatureHair.h"
+#include "Creature/CreatureHairLight.h"
 #include "Creature/CreatureMorph.h"
 #include "Creature/CreatureSkin.h"
 #include "Creature/CreatureSpells.h"
@@ -123,6 +126,7 @@
 #include "ECS/Components/VillagerPose.h"
 #include "ECS/Components/Vortex.h"
 #include "ECS/Components/Weather.h"
+#include "ECS/DrawnOnScreen.h"
 #include "ECS/DrawnPlace.h"
 #include "ECS/DrawnRegistry.h"
 #include "ECS/MovingShadowCasters.h"
@@ -733,6 +737,7 @@ Renderer::~Renderer() noexcept
 		texture.reset();
 	}
 	_landColourFrameBuffer.reset();
+	_hairLightKept.reset();
 	_skyDomeFrameBuffer.reset();
 	if (_lightningGlowTexture)
 	{
@@ -2504,7 +2509,7 @@ void Renderer::DrawCreatureHair(const DrawSceneDesc& desc, const ecs::components
 
 void Renderer::DrawCreatureHair(const DrawSceneDesc& desc, const ecs::components::CreatureHair& hair, glm::vec3 origin,
                                 RenderPass pass, glm::vec3 eye, std::optional<glm::vec3> ownLight,
-                                std::optional<glm::vec3> ownAdded) const
+                                std::optional<glm::vec3> ownAdded, bool keptColours) const
 {
 	using ecs::components::CreatureHair;
 	const auto& textures = Locator::resources::value().GetTextures();
@@ -2535,8 +2540,11 @@ void Renderer::DrawCreatureHair(const DrawSceneDesc& desc, const ecs::components
 	const glm::vec4 u_hairOrigin {origin, 0.0f};
 	const glm::vec4 u_hairAlphaCutOff {creature_hair::k_AlphaCutOff, 0.0f, 0.0f, 0.0f};
 	const auto u_haze = inTemple ? glm::vec4(0.0f) : _haze[0];
-	// Each strand's colour times the creature's own light over 255, plus its added colour, at most 255
-	const glm::vec4 u_hairLight {ownLight.value_or(glm::vec3(255.0f)), ownLight.has_value() ? 1.0f : 0.0f};
+	// Each strand's colour times the creature's own light over 255, plus its added colour, at most 255. The kept colours
+	// come from the target that keeps them.
+	const bool kept = keptColours && _hairLightKept != nullptr;
+	const float lightSource = kept ? 2.0f : (ownLight.has_value() ? 1.0f : 0.0f);
+	const glm::vec4 u_hairLight {ownLight.value_or(glm::vec3(255.0f)), lightSource};
 	const glm::vec4 u_hairAdded {ownAdded.value_or(glm::vec3(0.0f)), 0.0f};
 	std::vector<creature_hair::RibbonVertex> ribbon;
 	for (const auto& group : hair.groups)
@@ -2611,6 +2619,14 @@ void Renderer::DrawCreatureHair(const DrawSceneDesc& desc, const ecs::components
 		program->SetTextureSampler("s_landLuminosity", 6, GetLandLuminosity());
 		program->SetTextureSampler("s_landLight", 7, GetLandLightTexture());
 		program->SetTextureSampler("s_landColour", 8, GetLandColour());
+		if (kept)
+		{
+			program->SetTextureSampler("s_hairKept", 9, _hairLightKept->GetColorAttachment());
+		}
+		else if (_whiteTexture.has_value())
+		{
+			program->SetTextureSampler("s_hairKept", 9, *_whiteTexture);
+		}
 		program->SetUniformValue("u_islandExtent", &islandExtent);
 		program->SetUniformValue("u_landLight", &u_landLight);
 		program->SetUniformValue("u_hairOrigin", &u_hairOrigin);
@@ -2627,6 +2643,196 @@ void Renderer::DrawCreatureHair(const DrawSceneDesc& desc, const ecs::components
 		               BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_SRC_ALPHA, BGFX_STATE_BLEND_INV_SRC_ALPHA));
 		program->Submit(viewId, zsort::Depth(middle, eye));
 	}
+}
+
+void Renderer::DrawEnvironmentHair(const DrawSceneDesc& desc, entt::entity creature, const ecs::components::CreatureHair& hair,
+                                   glm::vec3 origin) const
+{
+	using namespace creature_hair_light;
+	const auto pass = TranslucentPassOf(desc.viewId);
+	const auto eye = desc.camera->GetOrigin();
+	// A body that the plan does not know of takes the colours of the frame before, as a body before all usual hair
+	const auto found = _environmentHairLooks.find(creature);
+	const auto look =
+	    found != _environmentHairLooks.end() ? found->second : LookOf(Source {FromFrameBefore {}}, {}, _hairLightCarried);
+	if (const auto* colours = std::get_if<Colours>(&look); colours != nullptr)
+	{
+		DrawCreatureHair(desc, hair, origin, pass, eye, colours->light, colours->added);
+	}
+	else if (const auto* place = std::get_if<AtPlace>(&look);
+	         place != nullptr && place->draw < _hairLightSources.size() && _hairLightSources[place->draw].has_value())
+	{
+		// The colours that the earlier hair took at its place in this frame, under the same camera
+		DrawCreatureHair(desc, hair, _hairLightSources[place->draw]->origin, pass, eye);
+	}
+	else
+	{
+		DrawCreatureHair(desc, hair, origin, pass, eye, std::nullopt, std::nullopt, true);
+	}
+}
+
+void Renderer::PlanCreatureHairLight(const DrawSceneDesc& drawDesc) const
+{
+	using namespace creature_hair_light;
+	using ecs::components::Creature;
+	using ecs::components::CreatureAnimation;
+	using ecs::components::CreatureHair;
+	using ecs::components::CreatureSpells;
+	using ecs::components::InHand;
+	using ecs::components::Transform;
+	_environmentHairLooks.clear();
+	_hairLightSources.clear();
+	_hairLightLast.reset();
+	if (drawDesc.camera == nullptr)
+	{
+		return;
+	}
+	const auto view = drawDesc.camera->GetViewMatrix(Camera::Interpolation::Current);
+	const bool hairShown = Locator::creatureHairSystem::has_value() && Locator::creatureHairSystem::value().IsShown();
+	std::vector<BodyDraw> draws;
+	std::vector<entt::entity> mapped;
+	// A body of the world: it draws only when its sphere is on the screen. The usual draw keeps the colours of the hair
+	// that it shows.
+	const auto addWorldBody = [&](entt::entity entity) {
+		const auto& registry = drawDesc.entities;
+		if (!ecs::DrawnOnScreen(registry, entity))
+		{
+			return;
+		}
+		const auto* creature = registry.TryGet<const Creature>(entity);
+		const auto* spells = registry.TryGet<const CreatureSpells>(entity);
+		const auto* hair = registry.TryGet<const CreatureHair>(entity);
+		const auto* transform = registry.TryGet<const Transform>(entity);
+		const bool environmentMapped = creature != nullptr && creature_environment_map::DrawnWithMap(creature->environmentMap);
+		const float fizz = spells != nullptr ? spells->fizz : 0.0f;
+		const float freeze = spells != nullptr ? spells->freeze : 0.0f;
+		const bool keeps = !environmentMapped && hairShown && hair != nullptr && transform != nullptr &&
+		                   creature_fizz_look::HairShown(fizz, freeze);
+		draws.push_back({.environmentMapped = environmentMapped, .keepsHairLight = keeps});
+		mapped.push_back(environmentMapped ? entity : entt::null);
+		if (keeps)
+		{
+			const auto origin =
+			    ecs::components::DrawnTransform(*transform, registry.TryGet<const CreatureAnimation>(entity)).position;
+			_hairLightSources.push_back(HairLightSource {.origin = origin, .view = view, .landLightScale = 1.0f});
+		}
+		else
+		{
+			_hairLightSources.emplace_back(std::nullopt);
+		}
+	};
+
+	// The creatures of the world that the frame draws, and those that a hand holds
+	std::vector<entt::entity> world;
+	std::vector<entt::entity> held;
+	for (const auto& drawn : _drawnCreatures)
+	{
+		if (drawn.posedBy != entt::null)
+		{
+			continue;
+		}
+		(drawDesc.entities.AllOf<InHand>(drawn.entity) ? held : world).push_back(drawn.entity);
+	}
+	// First the creatures of the land's draw list, in the order of the list
+	std::unordered_set<entt::entity> listed;
+	if (Locator::objectDrawListSystem::has_value())
+	{
+		const std::unordered_set<entt::entity> inWorld(world.begin(), world.end());
+		for (const auto entity : Locator::objectDrawListSystem::value().GetList())
+		{
+			if (inWorld.contains(entity) && listed.insert(entity).second)
+			{
+				addWorldBody(entity);
+			}
+		}
+	}
+	// Then the other creatures of the world, which the list does not decide
+	for (const auto entity : world)
+	{
+		if (!listed.contains(entity))
+		{
+			addWorldBody(entity);
+		}
+	}
+	// Then the creature that this computer's hand holds, and then those that the other hands hold
+	std::vector<entt::entity> ownHands;
+	if (Locator::handSystem::has_value())
+	{
+		const auto hands = Locator::handSystem::value().GetOwnHands();
+		ownHands.assign(hands.begin(), hands.end());
+	}
+	const auto ownHeld = [&](entt::entity entity) {
+		const auto* inHand = drawDesc.entities.TryGet<const InHand>(entity);
+		return inHand != nullptr && std::ranges::find(ownHands, inHand->hand) != ownHands.end();
+	};
+	std::ranges::stable_partition(held, ownHeld);
+	std::ranges::for_each(held, addWorldBody);
+	// The copies of creatures in the temple's rooms
+	if (Locator::temple::has_value())
+	{
+		const auto& rooms = Locator::temple::value().GetRooms();
+		for (const auto& drawn : _drawnCreatures)
+		{
+			if (drawn.posedBy == entt::null || !rooms.Valid(drawn.posedBy))
+			{
+				continue;
+			}
+			const auto* hair = rooms.TryGet<const CreatureHair>(drawn.posedBy);
+			const auto* transform = rooms.TryGet<const Transform>(drawn.posedBy);
+			const auto* spells = rooms.TryGet<const CreatureSpells>(drawn.posedBy);
+			const float fizz = spells != nullptr ? spells->fizz : 0.0f;
+			const float freeze = spells != nullptr ? spells->freeze : 0.0f;
+			const bool keeps =
+			    hairShown && hair != nullptr && transform != nullptr && creature_fizz_look::HairShown(fizz, freeze);
+			draws.push_back({.environmentMapped = false, .keepsHairLight = keeps});
+			mapped.push_back(entt::null);
+			if (keeps)
+			{
+				const auto origin = ecs::components::DrawnTransform(
+				                        *transform, drawDesc.entities.TryGet<const CreatureAnimation>(drawn.posedBy))
+				                        .position;
+				_hairLightSources.push_back(HairLightSource {.origin = origin, .view = view, .landLightScale = 1.0f});
+			}
+			else
+			{
+				_hairLightSources.emplace_back(std::nullopt);
+			}
+		}
+	}
+	// The creature of the tattoo editor, seen by the editor's own camera
+	if (_menuCreature.has_value() && Locator::drawnRegistry::has_value())
+	{
+		const auto& drawn = Locator::drawnRegistry::value();
+		const auto* hair = drawn.Valid(_menuCreature->copy) ? drawn.TryGet<const CreatureHair>(_menuCreature->copy) : nullptr;
+		const auto* transform = hair != nullptr ? drawn.TryGet<const Transform>(_menuCreature->copy) : nullptr;
+		const bool keeps = hairShown && transform != nullptr;
+		draws.push_back({.environmentMapped = false, .keepsHairLight = keeps});
+		mapped.push_back(entt::null);
+		if (keeps)
+		{
+			_hairLightSources.push_back(HairLightSource {
+			    .origin = transform->position,
+			    .view = _menuCreature->view,
+			    .landLightScale = CreatureLandLightScale(RenderPass::MenuCreature),
+			});
+		}
+		else
+		{
+			_hairLightSources.emplace_back(std::nullopt);
+		}
+	}
+
+	const auto plan = PlanFrame(draws);
+	// No hair of this frame has colours of its own: each takes the colours at its place
+	const std::vector<std::optional<Colours>> known(draws.size());
+	for (size_t i = 0; i < plan.hair.size(); ++i)
+	{
+		if (plan.hair[i].has_value() && mapped[i] != entt::null)
+		{
+			_environmentHairLooks.insert_or_assign(mapped[i], LookOf(*plan.hair[i], known, _hairLightCarried));
+		}
+	}
+	_hairLightLast = plan.last;
 }
 
 void Renderer::DrawMistDomes(const DrawSceneDesc& desc) const
@@ -4585,6 +4791,68 @@ void SubmitLandQuad(bgfx::ViewId viewId, const ShaderProgram& program, glm::vec2
 }
 } // namespace
 
+void Renderer::KeepCreatureHairLight() const
+{
+	using namespace creature_hair_light;
+	std::optional<HairLightSource> source;
+	if (_hairLightLast.has_value() && *_hairLightLast < _hairLightSources.size())
+	{
+		source = _hairLightSources[*_hairLightLast];
+	}
+	_hairLightLast.reset();
+	// A new target keeps the start colours until a hair gives it others
+	const bool made = _hairLightKept == nullptr;
+	if (made)
+	{
+		_hairLightKept =
+		    std::make_unique<FrameBuffer>("HairLight", 2, 1, TextureFormat::RGBA8, std::nullopt, 1, Wrapping::ClampEdge);
+	}
+	// After a restore of the graphics device, the target keeps the colours of the same hair again
+	if (!source.has_value() && made && std::holds_alternative<Kept>(_hairLightCarried))
+	{
+		source = _hairLightKeptSource;
+	}
+	if ((!source.has_value() && !made) || !Locator::terrainSystem::has_value())
+	{
+		return;
+	}
+	const auto* program = _shaderManager->GetShader("HairLightKept");
+	const auto extent = Locator::terrainSystem::value().GetExtent();
+	const auto islandExtent = glm::vec4(extent.minimum, extent.maximum);
+	const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
+	const bool landLit = !inTemple && _landLightTexture.has_value();
+	const auto scale = source.has_value() ? source->landLightScale : 1.0f;
+	const glm::vec4 u_landLight {landLit ? 1.0f : 0.0f, scale, 0.0f, 0.0f};
+	const glm::vec4 u_hairOrigin {source.has_value() ? source->origin : glm::vec3(0.0f), 0.0f};
+	// Without a hair, the start colours as the colours of a look of its own
+	const glm::vec4 u_hairLight {k_Start.light, source.has_value() ? 0.0f : 1.0f};
+	const glm::vec4 u_hairAdded {k_Start.added, 0.0f};
+	const auto u_haze = inTemple ? glm::vec4(0.0f) : _haze[0];
+	const auto hairView = source.has_value() ? source->view : glm::mat4(1.0f);
+	const auto viewId = SetUpLandView(RenderPass::HairLight, *_hairLightKept, {2, 1});
+	for (const float texel : {0.0f, 1.0f})
+	{
+		program->SetTextureSampler("s_landLuminosity", 6, GetLandLuminosity());
+		program->SetTextureSampler("s_landLight", 7, GetLandLightTexture());
+		program->SetTextureSampler("s_landColour", 8, GetLandColour());
+		program->SetUniformValue("u_islandExtent", &islandExtent);
+		program->SetUniformValue("u_landLight", &u_landLight);
+		program->SetUniformValue("u_hairOrigin", &u_hairOrigin);
+		program->SetUniformValue("u_hairLight", &u_hairLight);
+		program->SetUniformValue("u_hairAdded", &u_hairAdded);
+		program->SetUniformValue("u_hairView", &hairView);
+		program->SetUniformValue("u_haze", &u_haze);
+		program->SetUniformValue("u_hazeColour", &_haze[1]);
+		SubmitLandQuad(viewId, *program, {texel, 0.0f}, {texel + 1.0f, 1.0f}, {texel, 0.0f}, {texel, 0.0f},
+		               BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A);
+	}
+	if (source.has_value())
+	{
+		_hairLightCarried = Kept {};
+		_hairLightKeptSource = source;
+	}
+}
+
 const Texture2D& Renderer::GetLandLuminosity() const
 {
 	if (_landLuminosity.at(_landLuminosityNow))
@@ -6359,6 +6627,7 @@ void Renderer::DrawScene(const DrawSceneDesc& drawDesc) const noexcept
 	// A warm-up gives no creature a skin texture: each creature gets them in its first frame
 	if (!_warmingUp)
 	{
+		PlanCreatureHairLight(drawDesc);
 		UploadCreatureSkins(drawDesc.entities, _creatureSkins);
 		// The copy of the creature in the temple's creature room has a skin of its own
 		if (Locator::temple::has_value())
@@ -6430,6 +6699,8 @@ void Renderer::DrawScene(const DrawSceneDesc& drawDesc) const noexcept
 		auto section = Locator::profiler::value().BeginScoped(Profiler::Stage::MainPass);
 		DrawPass(drawDesc);
 	}
+	// The colours of the last hair for the next frame. A warm-up makes the target that keeps them.
+	KeepCreatureHairLight();
 }
 
 void Renderer::DrawPass(const DrawSceneDesc& desc) const
@@ -7514,11 +7785,19 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				    transform != nullptr && Locator::creatureHairSystem::has_value() &&
 				    Locator::creatureHairSystem::value().IsShown())
 				{
-					// The hair hangs from the body where the frame draws it
-					DrawCreatureHair(desc, *hair,
-					                 ecs::components::DrawnTransform(
-					                     *transform, desc.entities.TryGet<const ecs::components::CreatureAnimation>(poser))
-					                     .position);
+					// The hair hangs from the body where the frame draws it. The hair of a body with the environment map
+					// takes the colours of the last usual hair before it.
+					const auto origin = ecs::components::DrawnTransform(
+					                        *transform, desc.entities.TryGet<const ecs::components::CreatureAnimation>(poser))
+					                        .position;
+					if (creature_environment_map::DrawnWithMap(environmentWord))
+					{
+						DrawEnvironmentHair(desc, entity, *hair, origin);
+					}
+					else
+					{
+						DrawCreatureHair(desc, *hair, origin);
+					}
 				}
 				// The glows on its body, where its pose put them
 				if (const auto* glows = posers.TryGet<const ecs::components::CreatureHandGlows>(poser);
@@ -8729,6 +9008,11 @@ void Renderer::Frame() noexcept
 		                   kept.textures, kept.textureChanges);
 		_skyDomeLost = true;
 		_templeMapVisit.reset();
+		// The next frame keeps the colours of the last hair again
+		if (std::holds_alternative<creature_hair_light::Kept>(_hairLightCarried))
+		{
+			_hairLightKept.reset();
+		}
 		// The graphics device keeps no copy of the textures, the vertices and the triangles of the land's blocks: the
 		// land gives them again, and then the footprints paint the textures
 		if (Locator::terrainSystem::has_value())

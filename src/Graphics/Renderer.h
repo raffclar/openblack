@@ -35,6 +35,7 @@
 #include <glm/vec3.hpp>
 
 #include "3D/SkyDome.h"
+#include "Creature/CreatureHairLight.h"
 #include "Enums.h"
 #include "Graphics/DeviceRestore.h"
 #include "Graphics/DrawEncoder.h"
@@ -506,9 +507,19 @@ private:
 	void DrawCreatureHair(const DrawSceneDesc& desc, const ecs::components::CreatureHair& hair, glm::vec3 origin) const;
 	/// The same, in the given pass, with the ribbons turned to the given eye, for a creature in a view of its own. A
 	/// creature with a look of its own gives its hair its light and added colour (0 to 255) in place of the land's.
+	/// With `keptColours`, the hair takes the colours that the last hair of an earlier frame kept.
 	void DrawCreatureHair(const DrawSceneDesc& desc, const ecs::components::CreatureHair& hair, glm::vec3 origin,
 	                      RenderPass pass, glm::vec3 eye, std::optional<glm::vec3> ownLight = std::nullopt,
-	                      std::optional<glm::vec3> ownAdded = std::nullopt) const;
+	                      std::optional<glm::vec3> ownAdded = std::nullopt, bool keptColours = false) const;
+	/// The hair of a creature body with the environment map, lit with the colours of the last usual hair draw before it
+	/// (see creature_hair_light)
+	void DrawEnvironmentHair(const DrawSceneDesc& desc, entt::entity creature, const ecs::components::CreatureHair& hair,
+	                         glm::vec3 origin) const;
+	/// Find how the hair of each body with the environment map takes its colours, from this frame's bodies in the game's
+	/// order
+	void PlanCreatureHairLight(const DrawSceneDesc& drawDesc) const;
+	/// Keep the colours of this frame's last usual hair draw for the next frame
+	void KeepCreatureHairLight() const;
 	/// Draws the body of a creature that the interface shows: its mesh, its instance among those of the interface's
 	/// creatures, its pose, its shape and its eyes
 	using InterfaceCreatureBody =
@@ -762,6 +773,25 @@ private:
 		std::optional<glm::vec3> light;
 	};
 	mutable std::vector<DrawnCreature> _drawnCreatures;
+	/// A usual hair draw of the frame: the place of its creature, the camera that draws it and how much of the land's
+	/// light it takes
+	struct HairLightSource
+	{
+		glm::vec3 origin {0.0f};
+		glm::mat4 view {1.0f};
+		float landLightScale {1.0f};
+	};
+	/// The usual hair draws of this frame in the game's order, and how the hair of each body with the environment map
+	/// takes its colours
+	mutable std::vector<std::optional<HairLightSource>> _hairLightSources;
+	mutable std::unordered_map<entt::entity, creature_hair_light::Look> _environmentHairLooks;
+	mutable std::optional<size_t> _hairLightLast;
+	/// What the last frame kept for this frame, and the target that keeps the colours on the GPU: the light in the first
+	/// texel and the added colour in the second
+	mutable creature_hair_light::Carried _hairLightCarried {creature_hair_light::k_Start};
+	mutable std::unique_ptr<FrameBuffer> _hairLightKept;
+	/// The hair that gave the kept colours, to keep them again after a restore of the graphics device
+	mutable std::optional<HairLightSource> _hairLightKeptSource;
 	/// The creatures that the interface asked to show, which the next frame of the scene draws, and the instances that
 	/// place them
 	mutable std::optional<interface_creatures::Request> _interfaceCreatures;
