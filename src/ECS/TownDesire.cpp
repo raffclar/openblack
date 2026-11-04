@@ -522,20 +522,32 @@ bool ValidScriptBoost(int32_t desire, float boost)
 	return desire >= 0 && static_cast<size_t>(desire) < k_Count && boost >= -1.0f && boost <= 1.0f;
 }
 
+namespace
+{
+
+/// The names of the desires, in their order, with the game's own spelling
+constexpr std::array<std::string_view, k_Count> k_DesireNames {
+    "Food",           "Wood",         "Playtime", "Protection", "Mercy",   "Abodes",      "Civic_Buildings",
+    "Supply_Worship", "For_Children", "To_Build", "For_Rain",   "For_Sun", "Repair_Town", "Suppy_Workshop",
+    "For_Wonder",     "Relaxation",   "Sleep"};
+
+} // namespace
+
+std::string_view DesireName(size_t desire)
+{
+	return desire < k_DesireNames.size() ? k_DesireNames.at(desire) : std::string_view {};
+}
+
 std::optional<size_t> DesireByName(std::string_view name)
 {
-	static constexpr std::array<std::string_view, k_Count> k_Names {
-	    "Food",           "Wood",         "Playtime", "Protection", "Mercy",   "Abodes",      "Civic_Buildings",
-	    "Supply_Worship", "For_Children", "To_Build", "For_Rain",   "For_Sun", "Repair_Town", "Suppy_Workshop",
-	    "For_Wonder",     "Relaxation",   "Sleep"};
 	const auto lower = [](char c) { return static_cast<char>(std::tolower(static_cast<unsigned char>(c))); };
 	const auto same = [&](std::string_view known) { return std::ranges::equal(known, name, {}, lower, lower); };
-	const auto found = std::ranges::find_if(k_Names, same);
-	if (found == k_Names.end())
+	const auto found = std::ranges::find_if(k_DesireNames, same);
+	if (found == k_DesireNames.end())
 	{
 		return std::nullopt;
 	}
-	return static_cast<size_t>(std::distance(k_Names.begin(), found));
+	return static_cast<size_t>(std::distance(k_DesireNames.begin(), found));
 }
 
 void SortDesires(TownDesire& desire)

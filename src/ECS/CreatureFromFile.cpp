@@ -35,6 +35,7 @@
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Locator.h"
+#include "PlayerSlots.h"
 #include "Resources/ResourcesInterface.h"
 #include "ScriptHeaders/ScriptPropertyRules.h"
 
@@ -260,6 +261,38 @@ Result BringKept(PlayerNames owner, std::shared_ptr<const creaturemind::MindFile
 	// The profile keeps the creature in its files, which the game read when it kept none in memory
 	const bool kept = mind != nullptr;
 	return BringMind(owner, std::move(mind), kept, kept, "the creature that the profile keeps");
+}
+
+std::optional<entt::entity> MakePlain(int32_t row, int32_t playerNumber, glm::vec2 place)
+{
+	// The game reads the row and the player with no check. openblack makes no creature for a row past the creature table
+	// or a number that is not a player of a land (vanilla-bugs row 946).
+	const auto species = row >= 0 ? script::property_rules::CreatureTypeFromScript(static_cast<uint32_t>(row)) : std::nullopt;
+	const bool landPlayer = playerNumber >= 0 && static_cast<size_t>(playerNumber) < player_slots::k_LandSlots;
+	const auto owner = landPlayer ? static_cast<PlayerNames>(playerNumber) : PlayerNames::NEUTRAL;
+	const auto coords = map_coords::FromMetres(place);
+	const bool onMap = map_coords::InBounds(coords) && Locator::terrainSystem::has_value();
+	const bool hasCreature = landPlayer && Locator::playerSystem::has_value() &&
+	                         Locator::playerSystem::value().GetPrimaryCreature(owner).has_value();
+	if (!ScriptMakesPlainCreature(species.has_value(), landPlayer, onMap, hasCreature))
+	{
+		SPDLOG_LOGGER_INFO(spdlog::get("scripting"), "The land script makes no creature of row {} for player {}", row,
+		                   playerNumber);
+		return std::nullopt;
+	}
+	if (owner != PlayerNames::NEUTRAL && Locator::playerSystem::has_value())
+	{
+		Locator::playerSystem::value().EnsurePlayer(owner);
+	}
+	const auto position = map_coords::ToWorld(Locator::terrainSystem::value(), coords);
+	const auto creature = archetypes::CreatureArchetype::Create(position, owner, *species, 0, creature_file_load::k_StartYaw,
+	                                                            archetypes::CreatureArchetype::StartScale(*species),
+	                                                            archetypes::CreatureArchetype::StartBody(*species));
+	if (Locator::playerSystem::has_value())
+	{
+		Locator::playerSystem::value().MakePrimaryCreature(creature);
+	}
+	return creature;
 }
 
 } // namespace openblack::ecs::creature_from_file

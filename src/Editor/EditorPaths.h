@@ -56,6 +56,8 @@ struct DrawnPaths
 	/// The numbers of the streams
 	std::vector<int> streams;
 	std::vector<entt::entity> footpaths;
+	/// The list stays at the next reset of the registry: the editor found the paths again in a world that it loaded
+	bool keepAtNextReset {false};
 };
 
 /// The number for a new stream: one more than the highest number that a stream has, or 0 when there are none

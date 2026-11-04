@@ -108,6 +108,25 @@ void RecordMade(EditorContext& context, entt::entity entity, std::string label)
 	}
 }
 
+void RecordAllMade(EditorContext& context, std::span<const entt::entity> entities, std::string_view action)
+{
+	auto& history = context.system.GetHistory();
+	HistoryStep step {.label = StepLabel(action, entities.size())};
+	for (const auto entity : entities)
+	{
+		if (!context.registry.Valid(entity))
+		{
+			continue;
+		}
+		// A thing that the palette cannot make again goes with no change: undo cannot bring it back
+		if (const auto recipe = RecipeOf(context.registry, entity))
+		{
+			step.changes.emplace_back(MakeChange {.ref = history.Track(entity), .recipe = *recipe});
+		}
+	}
+	history.Push(std::move(step));
+}
+
 std::string UndoStep(EditorContext& context)
 {
 	RegistryWorld world;

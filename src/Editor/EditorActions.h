@@ -41,6 +41,8 @@ void DeletePicked(EditorContext& context);
 void DuplicatePicked(EditorContext& context);
 /// Keeps in the history a thing that the editor made, such as from the palette
 void RecordMade(EditorContext& context, entt::entity entity, std::string label);
+/// Keeps in the history, as one step, all the things that the editor made at one time, such as a layout of the palette
+void RecordAllMade(EditorContext& context, std::span<const entt::entity> entities, std::string_view action);
 /// Undoes the newest step and picks the things that it changed. Gives a line that tells what it did.
 [[nodiscard]] std::string UndoStep(EditorContext& context);
 /// Does again the step that the last undo undid and picks the things that it changed. Gives a line that tells what it
