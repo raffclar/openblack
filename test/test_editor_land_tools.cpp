@@ -10,6 +10,8 @@
 #include <cstdint>
 
 #include <array>
+#include <filesystem>
+#include <fstream>
 #include <map>
 #include <optional>
 #include <string>
@@ -661,4 +663,41 @@ TEST(EditorHistory, TheThingsKeptAtTheNextClearBecomeTheThingsMade)
 	// The list is kept for one clear only
 	history.Clear();
 	EXPECT_TRUE(history.MadeRefs().empty());
+}
+
+TEST(LandSaveGuard, ANewFileOutsideTheGameFolderNeedsNoQuestion)
+{
+	const auto root = std::filesystem::temp_directory_path() / "ob_land_guard_new";
+	std::filesystem::remove_all(root);
+	std::filesystem::create_directories(root / "profile");
+	std::filesystem::create_directories(root / "game");
+	EXPECT_FALSE(land_save::NeedsConfirmation(root / "profile" / "Land.lnd", root / "game"));
+	EXPECT_FALSE(land_save::NeedsConfirmation(root / "profile" / "Land.lnd", {}));
+	std::filesystem::remove_all(root);
+}
+
+TEST(LandSaveGuard, AFileThatExistsNeedsAQuestion)
+{
+	const auto root = std::filesystem::temp_directory_path() / "ob_land_guard_old";
+	std::filesystem::remove_all(root);
+	std::filesystem::create_directories(root / "profile");
+	const auto file = root / "profile" / "Land.lnd";
+	{
+		std::ofstream(file, std::ios::binary) << "x";
+	}
+	EXPECT_TRUE(land_save::NeedsConfirmation(file, {}));
+	EXPECT_TRUE(land_save::NeedsConfirmation(file, root / "game"));
+	std::filesystem::remove_all(root);
+}
+
+TEST(LandSaveGuard, ANewFileInTheGameFolderNeedsAQuestion)
+{
+	const auto root = std::filesystem::temp_directory_path() / "ob_land_guard_game";
+	std::filesystem::remove_all(root);
+	std::filesystem::create_directories(root / "game" / "Data");
+	EXPECT_TRUE(land_save::NeedsConfirmation(root / "game" / "Data" / "New.lnd", root / "game"));
+	EXPECT_TRUE(land_save::NeedsConfirmation(root / "game" / "New.txt", root / "game"));
+	// A folder whose name only starts like the game folder is outside it
+	EXPECT_FALSE(land_save::NeedsConfirmation(root / "game2" / "New.txt", root / "game"));
+	std::filesystem::remove_all(root);
 }
