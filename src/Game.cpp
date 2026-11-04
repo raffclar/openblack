@@ -2914,7 +2914,8 @@ void Game::UpdateOnline()
 				                   online::EndName(session->GetEnd()));
 			}
 			// The OK goes back to the network front end. A join from the command line has no front end: the game stops.
-			if (_interface->TakeConnectionLostOk())
+			// A box with no lost network session (a testbed scenario) only closes.
+			if (_interface->TakeConnectionLostOk() && _connectionLost.Told())
 			{
 				SPDLOG_LOGGER_INFO(spdlog::get("game"), "The player closed the box of the lost connection");
 				if (_joinedFromCommandLine)
