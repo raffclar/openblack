@@ -15,6 +15,7 @@
 #include <array>
 #include <optional>
 #include <span>
+#include <utility>
 #include <vector>
 
 #include <entt/entity/fwd.hpp>
@@ -53,10 +54,44 @@ void Place(const ecs::Registry& registry, entt::entity entity, const graphics::L
 void Place(const ecs::Registry& registry, entt::entity entity, const graphics::L3DMesh& mesh, size_t index,
            const glm::mat4& model, std::span<const glm::mat4> bones, std::vector<glm::vec3>& corners);
 
+/// How a placement moves the corners of a model that follows the land
+enum class LandFollow : uint8_t
+{
+	/// Each corner moves up and down with the land under it, as the draw moves it
+	AsDrawn,
+	/// Each corner moves by the rise that the cursor pick reads for it (see `PickedRiseOffset`)
+	AsPicked,
+	/// The corners stay where the bones and the matrix put them, as the line test of the hand feel uses them
+	Ignore,
+};
+
+/// Whether a placement moves the corners of a model with the land under them
+[[nodiscard]] constexpr bool MovesWithLand(LandFollow landFollow, bool modelFollowsLand)
+{
+	return landFollow != LandFollow::Ignore && modelFollowsLand;
+}
+
+/// The number of corners of a submesh, and whether the cursor pick tests the submesh
+struct SubMeshCorners
+{
+	size_t corners;
+	bool tested;
+};
+
+/// A model that follows the land keeps the rise of each corner in one list, one submesh after the other. The cursor
+/// pick reads this list from the start, but it counts only the corners of the submeshes that it tests. Thus after a
+/// submesh that the pick does not test, each corner gets the rise of a different corner. The return value is the
+/// place in the list where the pick starts to read the rises of the submesh `index`.
+[[nodiscard]] size_t PickedRiseOffset(std::span<const SubMeshCorners> subMeshes, size_t index);
+
+/// The submesh and the corner in that submesh at a place in the list of the rises of all the corners of a model
+[[nodiscard]] std::optional<std::pair<size_t, size_t>> CornerAt(std::span<const SubMeshCorners> subMeshes, size_t place);
+
 /// The same, but the memo gives the corners that it keeps when no input changed since it calculated them. The corners
 /// stay valid until the next call with the same memo.
 [[nodiscard]] placed_memo::Placed Place(placed_memo::Memo& memo, const ecs::Registry& registry, entt::entity entity,
-                                        const graphics::L3DMesh& mesh, size_t index, const glm::mat4& model);
+                                        const graphics::L3DMesh& mesh, size_t index, const glm::mat4& model,
+                                        LandFollow landFollow = LandFollow::AsDrawn);
 
 /// Whether the submesh is drawn at the level of detail and stage the model is drawn at: the nearest level of detail and
 /// the first stage, as openblack draws every model

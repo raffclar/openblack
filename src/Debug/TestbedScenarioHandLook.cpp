@@ -203,6 +203,33 @@ void testbed_scenarios::AddHandLookScenarios(std::vector<Scenario>& all)
 	    .townMiracles = {MagicType::Heal, MagicType::Water},
 	});
 
+	// A building that follows the land, on the bank south of the testbed's lake, where the land climbs to the plane.
+	// The hand feel finds the faces of the model with no rise from the land. The cursor pick and the draw move each
+	// corner with the land.
+	constexpr glm::vec2 k_BankPit {0.0f, 128.0f};
+	constexpr float k_PitRest = 3.0f;
+	all.push_back({
+	    .id = "hand.bent_building_feel",
+	    .name = "The hand over a building that follows the slope of the land",
+	    .facet = Facet::Hand,
+	    .description = "A Celtic storage pit stands on the bank south of the lake, where the land climbs from the shallows "
+	                   "to the plane. The pointer rests on its uphill side, on its middle and on its downhill side, three "
+	                   "seconds at each, then sweeps across it and back.",
+	    .expected = "The building bends with the land: its uphill side is higher and its downhill side is lower than its "
+	                "middle. Over the building the hand rests on the faces of the model as if the land under the model is "
+	                "flat. On the uphill side the hand goes a little into the drawn roof. On the downhill side it rests a "
+	                "little above the drawn roof. The cursor still picks the drawn building, as the tooltip shows.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {55.0f, 22.0f, 128.0f}, .look = {0.0f, 2.0f, 128.0f}},
+	    .objects = {{.type = AbodeInfo::CelticStoragePit, .offset = k_BankPit, .storedFood = 0, .storedWood = 0}},
+	    .commands = {{.kind = Kind::PointerTo, .delaySeconds = 2.0f, .point = {0.5f, 0.42f}},
+	                 {.kind = Kind::PointerTo, .delaySeconds = k_PitRest, .point = {0.5f, 0.5f}},
+	                 {.kind = Kind::PointerTo, .delaySeconds = k_PitRest, .point = {0.5f, 0.58f}},
+	                 {.kind = Kind::PointerSweep, .delaySeconds = k_PitRest, .point = {0.0f, -0.2f}, .amount = 2.0f},
+	                 {.kind = Kind::PointerSweep, .delaySeconds = 2.0f, .point = {0.0f, 0.2f}, .amount = 2.0f}},
+	    .repeatFrom = 0,
+	});
+
 	// At the edge of the screen the empty hand offers to turn the camera and stands up towards where the camera looks
 	all.push_back({
 	    .id = "hand.focus_lean",

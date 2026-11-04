@@ -14,6 +14,9 @@
 #include <algorithm>
 #include <array>
 #include <optional>
+#include <span>
+#include <utility>
+#include <vector>
 
 #include <glm/geometric.hpp>
 
@@ -84,11 +87,12 @@ class VertexPlacer
 public:
 	/// With a reach, the placer adds to it each map point where it reads the land height
 	VertexPlacer(const ecs::Registry& registry, entt::entity entity, const graphics::L3DMesh& mesh, size_t index,
-	             const glm::mat4& model, std::span<const glm::mat4> bones, MapReach* reach = nullptr)
+	             const glm::mat4& model, std::span<const glm::mat4> bones, MapReach* reach = nullptr,
+	             posed_model::LandFollow landFollow = posed_model::LandFollow::AsDrawn)
 	    : _geometry(mesh.GetSubMeshes()[index]->GetBodyGeometry())
 	    , _model(model)
 	    , _bones(bones)
-	    , _followsLand(registry.AllOf<MorphWithTerrain>(entity))
+	    , _followsLand(posed_model::MovesWithLand(landFollow, registry.AllOf<MorphWithTerrain>(entity)))
 	    , _reach(reach)
 	{
 		// The land under the model's origin, its up and its scale are the same for each corner
@@ -98,6 +102,17 @@ public:
 			_originHeight = HeightAt({origin.x, origin.z}, _reach);
 			_up = glm::vec3(_model[1]);
 			_scale = glm::length(glm::vec3(_model[0]));
+			if (landFollow == posed_model::LandFollow::AsPicked)
+			{
+				_mesh = &mesh;
+				_subMeshCorners.reserve(mesh.GetSubMeshes().size());
+				for (const auto& subMesh : mesh.GetSubMeshes())
+				{
+					_subMeshCorners.push_back(
+					    {.corners = subMesh->GetBodyGeometry().positions.size(), .tested = posed_model::IsDrawn(*subMesh)});
+				}
+				_riseOffset = posed_model::PickedRiseOffset(_subMeshCorners, index);
+			}
 		}
 		// A creature's body is its base mesh moved towards the meshes of how evil or good, thin or fat and weak or strong
 		// it is drawn
@@ -130,6 +145,8 @@ public:
 		placed_memo::Append(key, _bones.size());
 		placed_memo::AppendAll(key, _bones);
 		placed_memo::Append(key, _followsLand);
+		placed_memo::Append(key, _mesh != nullptr);
+		placed_memo::Append(key, _riseOffset);
 		placed_memo::Append(key, Locator::terrainSystem::has_value());
 		placed_memo::Append(key, _morphs);
 		placed_memo::Append(key, _morph != nullptr);
@@ -163,8 +180,10 @@ public:
 		auto world = glm::vec3(_model * local);
 		if (_followsLand)
 		{
-			// Each corner moves along the model's up by how much higher the land is under it than under its origin
-			const float rise = HeightAt({world.x, world.z}, _reach) - _originHeight;
+			// Each corner moves along the model's up by how much higher the land is under it than under its origin. For
+			// the cursor pick, the rise can come from a different corner of the model.
+			const auto riseAt = RisePoint(i, world);
+			const float rise = HeightAt({riseAt.x, riseAt.z}, _reach) - _originHeight;
 			if (_up.x == 0.0f && _up.z == 0.0f)
 			{
 				world.y += rise;
@@ -178,6 +197,23 @@ public:
 	}
 
 private:
+	/// The point where the land height gives the rise of the corner `i`, which is at `world`
+	[[nodiscard]] glm::vec3 RisePoint(size_t i, glm::vec3 world) const
+	{
+		if (_mesh == nullptr)
+		{
+			return world;
+		}
+		const auto corner = posed_model::CornerAt(_subMeshCorners, _riseOffset + i);
+		if (!corner.has_value())
+		{
+			return world;
+		}
+		// The model's matrix alone places the corner, as a model that follows the land has no bones
+		const auto& position = _mesh->GetSubMeshes()[corner->first]->GetBodyGeometry().positions[corner->second];
+		return glm::vec3(_model * glm::vec4(position, 1.0f));
+	}
+
 	const graphics::L3DSubMesh::BodyGeometry& _geometry;
 	glm::mat4 _model;
 	std::span<const glm::mat4> _bones;
@@ -188,8 +224,38 @@ private:
 	float _scale {1.0f};
 	std::array<const graphics::L3DSubMesh*, 3> _morphs {};
 	const creature_morph::Morph* _morph {nullptr};
+	/// The model, only when the rises of its corners are read as the cursor pick reads them
+	const graphics::L3DMesh* _mesh {nullptr};
+	std::vector<posed_model::SubMeshCorners> _subMeshCorners;
+	size_t _riseOffset {0};
 };
 } // namespace
+
+size_t posed_model::PickedRiseOffset(std::span<const SubMeshCorners> subMeshes, size_t index)
+{
+	size_t offset = 0;
+	for (const auto& subMesh : subMeshes.first(std::min(index, subMeshes.size())))
+	{
+		if (subMesh.tested)
+		{
+			offset += subMesh.corners;
+		}
+	}
+	return offset;
+}
+
+std::optional<std::pair<size_t, size_t>> posed_model::CornerAt(std::span<const SubMeshCorners> subMeshes, size_t place)
+{
+	for (size_t s = 0; s < subMeshes.size(); ++s)
+	{
+		if (place < subMeshes[s].corners)
+		{
+			return std::pair {s, place};
+		}
+		place -= subMeshes[s].corners;
+	}
+	return std::nullopt;
+}
 
 void posed_model::Place(const ecs::Registry& registry, entt::entity entity, const graphics::L3DMesh& mesh, size_t index,
                         const glm::mat4& model, std::vector<glm::vec3>& corners)
@@ -210,11 +276,13 @@ void posed_model::Place(const ecs::Registry& registry, entt::entity entity, cons
 }
 
 placed_memo::Placed posed_model::Place(placed_memo::Memo& memo, const ecs::Registry& registry, entt::entity entity,
-                                       const graphics::L3DMesh& mesh, size_t index, const glm::mat4& model)
+                                       const graphics::L3DMesh& mesh, size_t index, const glm::mat4& model,
+                                       LandFollow landFollow)
 {
 	// The reach holds the map points where the placer reads the land height
 	MapReach reach;
-	const VertexPlacer placer(registry, entity, mesh, index, model, posed_model::BonesOf(registry, entity, mesh), &reach);
+	const VertexPlacer placer(registry, entity, mesh, index, model, posed_model::BonesOf(registry, entity, mesh), &reach,
+	                          landFollow);
 	auto& key = memo.KeyScratch();
 	key.clear();
 	placer.AppendKey(key);

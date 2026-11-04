@@ -78,6 +78,12 @@ using namespace openblack::ecs::systems;
 
 namespace
 {
+/// The cursor pick reads the rise of each corner of a model that follows the land in its own way
+constexpr auto k_PickedLand = ecs::posed_model::LandFollow::AsPicked;
+/// The line test of the hand feel uses the model as its matrix and bones put it. A model that follows the land does
+/// not move with the land here, but it does in the draw and the cursor pick.
+constexpr auto k_FeltLand = ecs::posed_model::LandFollow::Ignore;
+
 /// The land's corner heights as the game reads them for its line test: the cell's own block holds its far corners
 std::optional<land_line::CellHeights> CornersOf(int32_t x, int32_t z)
 {
@@ -305,6 +311,7 @@ void PickingSystem::PickUnderCursor(const Frame& frame)
 	const auto& view = frame.view;
 	// The memos forget the models that the last two picks and hand feels did not test
 	_placedMemo.EndPass();
+	_feelPlacedMemo.EndPass();
 	_distanceMemo.EndPass();
 	_feelMemo.EndPass();
 
@@ -499,7 +506,7 @@ void PickingSystem::PickUnderCursor(const Frame& frame)
 		ecs::placed_memo::Append(key, _candidateMeshes[i]);
 		ecs::placed_memo::Append(key, throughHoles);
 		const auto stampOf = [&](size_t s) {
-			return ecs::posed_model::Place(_placedMemo, registry, entity, *mesh, s, model).stamp;
+			return ecs::posed_model::Place(_placedMemo, registry, entity, *mesh, s, model, k_PickedLand).stamp;
 		};
 		const auto testTriangles = [&](std::vector<std::pair<size_t, uint64_t>>& used) {
 			std::optional<float> found;
@@ -510,7 +517,7 @@ void PickingSystem::PickUnderCursor(const Frame& frame)
 				{
 					continue;
 				}
-				const auto placed = ecs::posed_model::Place(_placedMemo, registry, entity, *mesh, s, model);
+				const auto placed = ecs::posed_model::Place(_placedMemo, registry, entity, *mesh, s, model, k_PickedLand);
 				used.emplace_back(s, placed.stamp);
 				const auto& geometry = subMesh.GetBodyGeometry();
 				_corners.clear();
@@ -821,7 +828,7 @@ std::optional<screen_pick::MeshHit> PickingSystem::FeelModel(entt::entity object
 	ecs::placed_memo::Append(key, direction);
 	ecs::placed_memo::Append(key, felt->first);
 	const auto stampOf = [&](size_t s) {
-		return ecs::posed_model::Place(_placedMemo, registry, object, *mesh, s, felt->second).stamp;
+		return ecs::posed_model::Place(_feelPlacedMemo, registry, object, *mesh, s, felt->second, k_FeltLand).stamp;
 	};
 	const auto testLine = [&](std::vector<std::pair<size_t, uint64_t>>& used) {
 		std::optional<screen_pick::MeshHit> nearest;
@@ -832,7 +839,7 @@ std::optional<screen_pick::MeshHit> PickingSystem::FeelModel(entt::entity object
 			{
 				continue;
 			}
-			const auto placed = ecs::posed_model::Place(_placedMemo, registry, object, *mesh, s, felt->second);
+			const auto placed = ecs::posed_model::Place(_feelPlacedMemo, registry, object, *mesh, s, felt->second, k_FeltLand);
 			used.emplace_back(s, placed.stamp);
 			const auto hit = screen_pick::NearestIntersection(
 			    placed.corners, mesh->GetSubMeshes()[s]->GetBodyGeometry().indices, origin, direction, false);
