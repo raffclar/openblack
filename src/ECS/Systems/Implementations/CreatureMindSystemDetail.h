@@ -159,6 +159,84 @@ void Satisfied(entt::entity creature, creature_desires::Desires& desires, std::s
 /// Where a creature's head is as posed this frame: its head bone, else its height over its feet
 [[nodiscard]] glm::vec3 HeadPoint(const ecs::Registry& registry, entt::entity creature);
 
+// What the files of the mind system share about the body, the desires and the senses of a creature
+/// Fainting from what its body lacks, the advisor says why first
+void TellFainting(entt::entity creature);
+/// The desires of the body, from the game's table of desires
+[[nodiscard]] std::array<bool, creature_desires::k_DesireCount> BodyDesires();
+/// The desires each stage of growing up brings and takes away, from the game's tables
+[[nodiscard]] std::vector<creature_desires::PhaseDesires> Phases();
+/// One turn of looking about: the head turns to what the creature watches, or ahead
+[[nodiscard]] glm::vec3 LookAbout(const components::Creature& creature, const components::Transform& transform,
+                                  const components::CreatureMindState& mind);
+/// The look of a creature that walks to a place in this turn, or none near the place
+[[nodiscard]] std::optional<glm::vec3> LookWhileGoing(entt::entity entity, const components::Creature& creature,
+                                                      const components::Transform& transform,
+                                                      components::CreatureMindState& mind, const glm::vec3& place);
+/// Running away, the seconds that a creature of a species looks back at what it runs from, and the seconds that it then
+/// looks about
+[[nodiscard]] float RunLookBackSeconds(CreatureType species);
+[[nodiscard]] float RunLookAheadSeconds(CreatureType species);
+[[nodiscard]] std::optional<glm::vec3> GazePoint(const ecs::Registry& registry, entt::entity creature,
+                                                 const creature_mind::Gaze& gaze, bool moving);
+/// The point that the head of a creature in a fight or knocked out looks at, each turn. Before the duel, it looks at the
+/// top of its opponent, but not while it taunts or points at the arena. Then, in the duel and after it, it looks at what
+/// it watches, or ahead. In the duel, the fight stance turns the head to the head of the opponent, and the moves keep the
+/// head straight.
+[[nodiscard]] glm::vec3 FightLook(const ecs::Registry& registry, entt::entity entity, const components::Creature& creature,
+                                  const components::Transform& transform, const components::CreatureMindState& mind);
+/// Where a script has the creature keep its head turned: a thing where it stands, or a point. The focus is let go once
+/// the thing is gone or the script has let the creature go.
+[[nodiscard]] std::optional<glm::vec3> ScriptFocusPoint(const ecs::Registry& registry, entt::entity creature,
+                                                        components::CreatureMindState& mind);
+/// Whether the thing the creature's step waits for is back on the map: out of any hand, flight or tornado. None when the
+/// thing is gone, and when the step waits for nothing.
+[[nodiscard]] std::optional<bool> WaitedForInMap(const ecs::Registry& registry, const creature_mind::IdleMind& idle);
+/// Whether the creature that the creature's step waits to be still is on its way somewhere or turning. A thing that is
+/// gone, or is not a creature, does not move.
+[[nodiscard]] bool WaitedForMoving(const ecs::Registry& registry, const creature_mind::IdleMind& idle);
+/// Whether the creature that a step waits to be free plays an action or moves
+[[nodiscard]] bool WaitedForBusy(const ecs::Registry& registry, const creature_mind::IdleMind& idle);
+/// Whether the thing a step watches fly is still really in the air: in the physics, and moving fast or clear of the land
+/// The villager a step follows to watch, as the creature sees it, while that step is next or under way
+[[nodiscard]] std::optional<creature_mind::Senses::FollowedView>
+FollowedViewOf(const ecs::Registry& registry, const glm::vec3& from, const components::CreatureMindState& mind);
+/// Whether the living object of the step that makes a thing still is in its state of flying
+[[nodiscard]] bool StillObjectFlies(const ecs::Registry& registry, const creature_mind::IdleMind& idle);
+/// A living thing starts to die at once, without the work of a death: a villager or an animal
+void MakeStill(const ecs::Registry& registry, entt::entity thing);
+[[nodiscard]] bool WatchedIsInTheAir(const ecs::Registry& registry, const creature_mind::IdleMind& idle);
+/// Its player's camera as a creature watching it sees it, only while its step watches the camera; none for a creature
+/// without a player
+[[nodiscard]] std::optional<creature_mind::Senses::CameraView>
+CameraViewOf(const ecs::Registry& registry, entt::entity creature, const creature_mind::IdleMind& idle);
+/// The point of focus of the camera of a creature's player, on the land, while its step follows the camera; and whether
+/// the point is less than a sixth of a turn from the way its body faces, or in its own map cell. None for a creature
+/// without a player.
+[[nodiscard]] std::pair<std::optional<glm::vec3>, bool> CameraFocusOf(const ecs::Registry& registry, entt::entity creature,
+                                                                      const creature_mind::IdleMind& idle);
+/// The player's hand as a creature watching it sees it, only while its step watches the hand; none for a creature
+/// without a player
+[[nodiscard]] std::optional<creature_mind::Senses::CameraView> HandViewOf(const ecs::Registry& registry, entt::entity creature,
+                                                                          const creature_mind::IdleMind& idle);
+/// The player's hand as a creature that follows the hand sees it, only while its step follows the hand. If the hand is off
+/// the land, the last position of the hand counts.
+[[nodiscard]] std::optional<creature_player_attention::FollowHandView>
+FollowHandViewOf(const ecs::Registry& registry, entt::entity creature, const components::CreatureMindState& mind,
+                 bool bodyPlaying);
+/// The player as a creature that watches it sees it, only while its step watches the player
+[[nodiscard]] std::optional<creature_player_attention::WatchPlayerView>
+WatchPlayerViewOf(const ecs::Registry& registry, entt::entity creature, const components::CreatureMindState& mind,
+                  bool bodyPlaying);
+/// Lets go of the miracle the creature holds, as it stops what it was doing
+void ReleaseCast(entt::entity creature);
+/// The developer log of the clips notes that the body refused a clip, because it played another action
+void NoteRefused(entt::entity creature, creature_animation_log::Layer layer, size_t clip, size_t playing);
+/// What, besides why, picks the faces the creature pulls
+[[nodiscard]] creature_face::Feelings FeelingsOf(const components::CreatureMindState& mind);
+/// True when the creature has all that its mind needs to think
+[[nodiscard]] bool Thinks(const ecs::Registry& registry, entt::entity creature);
+
 // What the files of the mind system share about the plans of a creature, the things it acts on and what it learns
 /// The advisor may tell the player of what the creature learnt
 void TellHelp(entt::entity creature, const creature_help::Message& message);
