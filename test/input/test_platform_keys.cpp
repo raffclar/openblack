@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <array>
+#include <initializer_list>
 
 #include <SDL_keycode.h>
 #include <SDL_scancode.h>
@@ -107,6 +108,90 @@ TEST(PlatformKeys, WebDefaultsUseNoBrowserKeys)
 		EXPECT_EQ(std::ranges::count(k_BrowserFunctionKeys, binding.key->key), 0);
 	}
 	EXPECT_TRUE(FindConflicts(k_WebDefaultKeyBindings).empty());
+}
+
+TEST(PlatformKeys, DesktopHasNoBrowserKeys)
+{
+	for (const auto key : k_BrowserFunctionKeys)
+	{
+		EXPECT_FALSE(IsBrowserKey(Platform::Desktop, key, k_None));
+	}
+	EXPECT_FALSE(IsBrowserKey(Platform::Desktop, SDL_SCANCODE_S, k_Ctrl));
+	EXPECT_FALSE(IsBrowserKey(Platform::Desktop, SDL_SCANCODE_1, k_Alt));
+}
+
+TEST(PlatformKeys, WebBrowserFunctionKeysWithAnyModifiers)
+{
+	for (const auto key : k_BrowserFunctionKeys)
+	{
+		for (const auto held : {k_None, k_Shift, k_Ctrl, k_Alt, k_CtrlShift})
+		{
+			EXPECT_TRUE(IsBrowserKey(Platform::Web, key, held)) << key;
+		}
+	}
+	// The function keys that the browser leaves to the page
+	for (const auto key : {SDL_SCANCODE_F2, SDL_SCANCODE_F4, SDL_SCANCODE_F8})
+	{
+		EXPECT_FALSE(IsBrowserKey(Platform::Web, key, k_None)) << key;
+	}
+}
+
+TEST(PlatformKeys, WebCtrlChordsAreBrowserKeys)
+{
+	for (const auto key :
+	     {SDL_SCANCODE_S, SDL_SCANCODE_L, SDL_SCANCODE_W, SDL_SCANCODE_T, SDL_SCANCODE_1, SDL_SCANCODE_UP, SDL_SCANCODE_SPACE})
+	{
+		EXPECT_TRUE(IsBrowserKey(Platform::Web, key, k_Ctrl)) << key;
+		EXPECT_TRUE(IsBrowserKey(Platform::Web, key, k_CtrlShift)) << key;
+		EXPECT_TRUE(IsBrowserKey(Platform::Web, key, k_CtrlAlt)) << key;
+		EXPECT_FALSE(IsBrowserKey(Platform::Web, key, k_Shift)) << key;
+	}
+	// A modifier key alone, also as the modifier state holds it, is not a browser key
+	for (const auto key : {SDL_SCANCODE_LCTRL, SDL_SCANCODE_RCTRL, SDL_SCANCODE_LSHIFT, SDL_SCANCODE_RSHIFT, SDL_SCANCODE_LALT,
+	                       SDL_SCANCODE_RALT})
+	{
+		EXPECT_FALSE(IsBrowserKey(Platform::Web, key, k_CtrlAlt)) << key;
+	}
+}
+
+TEST(PlatformKeys, WebAltChordsOfTheBrowser)
+{
+	for (const auto key : {SDL_SCANCODE_1, SDL_SCANCODE_9, SDL_SCANCODE_0, SDL_SCANCODE_F4, SDL_SCANCODE_LEFT,
+	                       SDL_SCANCODE_RIGHT, SDL_SCANCODE_HOME, SDL_SCANCODE_D, SDL_SCANCODE_E, SDL_SCANCODE_F})
+	{
+		EXPECT_TRUE(IsBrowserKey(Platform::Web, key, k_Alt)) << key;
+		EXPECT_FALSE(IsBrowserKey(Platform::Web, key, k_None)) << key;
+	}
+	// Alt with the quick save and quick load keys of the web defaults, and Alt with the speed keys, stay free
+	for (const auto key : {SDL_SCANCODE_S, SDL_SCANCODE_L, SDL_SCANCODE_MINUS, SDL_SCANCODE_EQUALS})
+	{
+		EXPECT_FALSE(IsBrowserKey(Platform::Web, key, k_Alt)) << key;
+	}
+}
+
+TEST(PlatformKeys, WebDefaultKeysAreNotBrowserKeys)
+{
+	for (const auto& binding : k_WebDefaultKeyBindings)
+	{
+		SCOPED_TRACE(binding.name);
+		if (!binding.key.has_value())
+		{
+			continue;
+		}
+		const Modifiers held {.shift = binding.key->modifier == Modifier::Shift,
+		                      .ctrl = binding.key->modifier == Modifier::Ctrl,
+		                      .alt = binding.key->modifier == Modifier::Alt};
+		EXPECT_FALSE(IsBrowserKey(Platform::Web, binding.key->key, held));
+	}
+	// The desktop defaults that the web defaults change are browser keys
+	for (const auto& change : k_WebChanges)
+	{
+		const auto desktop = std::ranges::find(k_DefaultKeyBindings, change.action, &KeyBinding::action);
+		ASSERT_NE(desktop, k_DefaultKeyBindings.end());
+		ASSERT_TRUE(desktop->key.has_value());
+		const Modifiers held {.ctrl = desktop->key->modifier == Modifier::Ctrl};
+		EXPECT_TRUE(IsBrowserKey(Platform::Web, desktop->key->key, held)) << desktop->name;
+	}
 }
 
 TEST(PlatformKeys, WebQuickSaveWinsOverVillagerDetails)

@@ -18,9 +18,11 @@
 
 #include <SDL_keycode.h>
 
+#include "Common/Platform.h"
 #include "ConditionsBox.h"
 #include "GameFont.h"
 #include "Input/KeyRebinding.h"
+#include "Input/PlatformKeys.h"
 #include "StatisticsBox.h"
 #include "TextDatabase.h"
 
@@ -845,7 +847,9 @@ bool GameMenu::CaptureKey(SDL_Scancode key, input::rebinding::HeldModifiers held
 	{
 		return false;
 	}
-	if (!input::rebinding::IsBindable(key))
+	// In a web browser the page does not bind the keys that do a command of the browser
+	if (!input::rebinding::IsBindable(key) ||
+	    input::platform_keys::IsBrowserKey(k_Platform, key, {.shift = held.shift, .ctrl = held.ctrl, .alt = held.alt}))
 	{
 		return true;
 	}

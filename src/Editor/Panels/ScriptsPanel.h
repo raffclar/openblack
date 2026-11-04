@@ -11,12 +11,14 @@
 
 #include <cstdint>
 
+#include <filesystem>
 #include <map>
 #include <memory>
 #include <optional>
 #include <string>
 #include <vector>
 
+#include "Debug/FileBrowser.h"
 #include "Editor/Scripts/ScriptModel.h"
 
 struct MemoryEditor;
@@ -66,6 +68,8 @@ private:
 
 	/// Loading another program, or the game's own again
 	void DrawLoading(lhvm::LHVM& vm) noexcept;
+	/// Loads a compiled script program into the machine in place of the program that it has
+	void LoadProgram(lhvm::LHVM& vm, const std::filesystem::path& path) noexcept;
 	void Refresh(const lhvm::LHVM& vm, const scripts::Program& program) noexcept;
 	void DrawBrowser(const lhvm::LHVM& vm, const scripts::Program& program) noexcept;
 	void DrawCode(lhvm::LHVM& vm, const scripts::Program& program) noexcept;
@@ -106,6 +110,9 @@ private:
 	std::vector<float> _parameters;
 	std::string _lastStart;
 	std::string _loadMessage;
+	/// The file browsers of the panel, where the platform has no file dialog
+	debug::gui::FileBrowser _programBrowser;
+	debug::gui::FileBrowser _sourceBrowser;
 	std::string _globalsFilter;
 	std::optional<uint32_t> _editingGlobal;
 	std::string _editText;

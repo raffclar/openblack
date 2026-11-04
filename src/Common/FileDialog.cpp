@@ -30,8 +30,9 @@
 #include <TargetConditionals.h>
 #endif
 
-// Elsewhere than Windows the dialogs are other programs run through the shell, which iOS does not allow
-#if !defined(_WIN32) && !(defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE)
+// Elsewhere than Windows the dialogs are other programs run through the shell. iOS does not allow this, and a web
+// browser has no shell and no other programs.
+#if !defined(_WIN32) && !defined(__EMSCRIPTEN__) && !(defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE)
 #define OPENBLACK_SHELL_FILE_DIALOGS 1
 #else
 #define OPENBLACK_SHELL_FILE_DIALOGS 0

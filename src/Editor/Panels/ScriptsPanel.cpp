@@ -201,35 +201,24 @@ void ScriptsPanel::DrawLoading(lhvm::LHVM& vm) noexcept
 	}
 	if (ImGui::SmallButton("Open program..."))
 	{
-		const auto outcome = file_dialog::Show({
+		const file_dialog::Request request {
 		    .mode = file_dialog::Mode::Open,
 		    .title = "Open a compiled script program",
 		    .filters = {{.name = "Script programs (*.chl)", .patterns = {"*.chl"}}, {.name = "All files", .patterns = {"*"}}},
 		    .startFolder = file_dialog::StartFolder(file_dialog::RememberedPath(k_ProgramFolderKey), quests, exists),
 		    .owner = Locator::windowing::has_value() ? Locator::windowing::value().GetNativeHandles().nativeWindow : nullptr,
-		});
+		};
+		const auto outcome = file_dialog::Show(request);
 		switch (outcome.status)
 		{
 		case file_dialog::Status::Chosen:
-			file_dialog::RememberPath(k_ProgramFolderKey, outcome.path.parent_path());
-			// The machine reads it as the game reads its own program, stopping every task first. As when the game restarts
-			// its scripts, the old program's objects are let go first: what it made goes, the rest goes back to the game
-			try
-			{
-				Locator::scriptObjects::value().Reset();
-				_loadMessage = vm.LoadBinary(outcome.path) == EXIT_SUCCESS
-				                   ? fmt::format("Loaded {}", outcome.path.filename().string())
-				                   : fmt::format("Couldn't read {}", outcome.path.filename().string());
-			}
-			catch (const std::exception& error)
-			{
-				_loadMessage = fmt::format("Couldn't read {}: {}", outcome.path.filename().string(), error.what());
-			}
+			LoadProgram(vm, outcome.path);
 			break;
 		case file_dialog::Status::Cancelled:
 			break;
 		case file_dialog::Status::Unavailable:
-			_loadMessage = "No file dialog is available here";
+			// No dialog on this platform, such as in a web browser: the panel shows its own file browser
+			_programBrowser.Open(request);
 			break;
 		}
 	}
@@ -256,6 +245,27 @@ void ScriptsPanel::DrawLoading(lhvm::LHVM& vm) noexcept
 	{
 		ImGui::SameLine();
 		ImGui::TextColored(style::k_Muted, "%s", _loadMessage.c_str());
+	}
+	if (const auto chosen = _programBrowser.Draw())
+	{
+		LoadProgram(vm, *chosen);
+	}
+}
+
+void ScriptsPanel::LoadProgram(lhvm::LHVM& vm, const std::filesystem::path& path) noexcept
+{
+	file_dialog::RememberPath(k_ProgramFolderKey, path.parent_path());
+	// The machine reads it as the game reads its own program, stopping every task first. As when the game restarts its
+	// scripts, the old program's objects are let go first: what it made goes, the rest goes back to the game
+	try
+	{
+		Locator::scriptObjects::value().Reset();
+		_loadMessage = vm.LoadBinary(path) == EXIT_SUCCESS ? fmt::format("Loaded {}", path.filename().string())
+		                                                   : fmt::format("Couldn't read {}", path.filename().string());
+	}
+	catch (const std::exception& error)
+	{
+		_loadMessage = fmt::format("Couldn't read {}: {}", path.filename().string(), error.what());
 	}
 }
 
@@ -744,22 +754,33 @@ void ScriptsPanel::DrawOriginal(const Program& program, const VMScript& script, 
 			std::error_code error;
 			return std::filesystem::is_directory(path, error);
 		};
-		const auto outcome = file_dialog::Show({
+		const file_dialog::Request request {
 		    .mode = file_dialog::Mode::Open,
 		    .title = "Pick one of the original source files of the scripts",
 		    .filters = {{.name = "Script source (*.txt)", .patterns = {"*.txt"}}, {.name = "All files", .patterns = {"*"}}},
 		    .startFolder = file_dialog::StartFolder(remembered, quests, exists),
 		    .owner = Locator::windowing::has_value() ? Locator::windowing::value().GetNativeHandles().nativeWindow : nullptr,
-		});
+		};
+		const auto outcome = file_dialog::Show(request);
 		if (outcome.status == file_dialog::Status::Chosen)
 		{
 			file_dialog::RememberPath(k_SourceFolderKey, outcome.path.parent_path());
 			_caches.original.clear();
 		}
+		else if (outcome.status == file_dialog::Status::Unavailable)
+		{
+			// No dialog on this platform, such as in a web browser: the panel shows its own file browser
+			_sourceBrowser.Open(request);
+		}
 	}
 	ImGui::SetItemTooltip("Picks the folder that holds the source files of the scripts, by one file in it");
 	ImGui::SameLine();
 	ImGui::TextColored(style::k_Muted, "%s", script.filename.c_str());
+	if (const auto chosen = _sourceBrowser.Draw())
+	{
+		file_dialog::RememberPath(k_SourceFolderKey, chosen->parent_path());
+		_caches.original.clear();
+	}
 
 	auto cached = _caches.original.find(script.scriptId);
 	if (cached == _caches.original.end())

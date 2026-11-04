@@ -11,6 +11,7 @@
 
 #include <cstdint>
 
+#include <filesystem>
 #include <span>
 #include <string_view>
 
@@ -39,6 +40,10 @@ void Install();
 /// Moves the reports next to the log file and copies them into the log, once the log's destination is known; a log
 /// written to the terminal gets nothing more, since stderr already carries the report
 void SetLogFile(std::string_view logFile);
+
+/// Puts the reports in this folder. The web build keeps them in the private storage of the site, where the page finds
+/// them and gives links to download them.
+void SetReportFolder(const std::filesystem::path& folder);
 
 /// Reports a fatal error the game detected itself, such as the renderer losing its device, and exits
 [[noreturn]] void ReportFatal(crash_report::CrashKind kind, std::string_view message, std::string_view file = {},

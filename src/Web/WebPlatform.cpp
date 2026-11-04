@@ -179,6 +179,15 @@ void SendFrame()
 	SetPresent(Present::Image);
 }
 
+/// Send the frame to the page as an image, then wait for the next display frame of the browser. A start-up screen or a
+/// loading screen draws its frames in a loop of its own. Without the wait the game thread sends a new image before the
+/// page can show the last one, and the browser does not do its work between the images.
+void SendFrameAndWait()
+{
+	SendFrame();
+	openblack_wait_for_display_frame();
+}
+
 /// One frame of RunFrames. Returns false after the last frame.
 bool RunOneFrame(const std::function<bool()>& frame)
 {
@@ -206,6 +215,17 @@ bool RunOneFrame(const std::function<bool()>& frame)
 /// The folder in the private storage of the site where the game keeps its profiles
 constexpr std::string_view k_StorageFolder = "/storage";
 constexpr std::string_view k_StorageProfiles = "/storage/openblack/Profiles";
+/// The folder in the private storage of the site where the game keeps its crash reports. The page reads this folder
+/// (web/page/launcher.js).
+constexpr std::string_view k_StorageCrashes = "/storage/openblack/crashes";
+
+/// True when the Profiles folder is in the private storage of the site. Only the game thread sets it, before the game
+/// starts.
+bool& ProfilesStored()
+{
+	static bool stored = false;
+	return stored;
+}
 
 /// Put the Profiles folder of the working folder in the private storage of the site, so that the profiles and saves
 /// stay after the page closes. Returns false when the browser does not have this storage.
@@ -270,7 +290,8 @@ bool openblack::web::PrepareFileSystem()
 	WritePageVersion();
 
 	const auto profiles = std::filesystem::path(k_WorkingFolder) / user_data::k_ProfileFolderName;
-	if (!LinkStoredProfiles(profiles))
+	ProfilesStored() = LinkStoredProfiles(profiles);
+	if (!ProfilesStored())
 	{
 		std::filesystem::create_directories(profiles, error);
 		ShowPageMessage("Saves are not kept",
@@ -284,6 +305,15 @@ bool openblack::web::PrepareFileSystem()
 		return false;
 	}
 	return true;
+}
+
+std::filesystem::path openblack::web::CrashReportFolder()
+{
+	if (ProfilesStored())
+	{
+		return k_StorageCrashes;
+	}
+	return std::filesystem::path(k_WorkingFolder) / "crashes";
 }
 
 int openblack::web::RunFrames(const std::function<bool()>& frame, const std::function<int()>& end)
@@ -337,7 +367,7 @@ void openblack::web::BeforeFrame()
 	if (state.inRunFrame && state.framesDrawn > 0)
 	{
 		// The next frame replaces the frame that the canvas has, before the browser can show it
-		SendFrame();
+		SendFrameAndWait();
 	}
 }
 
@@ -350,7 +380,7 @@ void openblack::web::PresentFrame()
 	}
 	else if (!GetRenderThread().running.load())
 	{
-		SendFrame();
+		SendFrameAndWait();
 	}
 	// The page sends its input events to the game thread as calls that wait in the queue of the thread. The thread does
 	// these calls when it gives control back to the browser, which it does only between two frames of RunFrames. A
