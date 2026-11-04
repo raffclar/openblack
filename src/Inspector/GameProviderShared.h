@@ -151,6 +151,10 @@ template <typename Read>
 
 [[nodiscard]] Json Listed(const ecs::Registry& registry, entt::entity entity);
 
+// The providers, one for each area of the game's state
+
+/// The engine's services
+[[nodiscard]] std::unique_ptr<ProviderInterface> EngineProvider();
 
 
 } // namespace openblack::inspector::game_providers
