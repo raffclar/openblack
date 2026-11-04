@@ -899,6 +899,7 @@ void Runner::Start(const Scenario& scenario)
 	_creatures.clear();
 	_slotCreatures.clear();
 	_objects.clear();
+	_birdFlocks.clear();
 	_scriptFlock = entt::null;
 	_keptByScript.clear();
 	_madeByNatives.clear();
@@ -2059,6 +2060,7 @@ void Runner::PlaceBirds(const Scenario& scenario, glm::vec2 middle)
 		const auto& setup = scenario.birdFlocks[i];
 		const auto home = MapPoint(middle, setup.offset);
 		const auto flock = animals.CreateScriptFlock(static_cast<int32_t>(i + 1), home, home, setup.reach, setup.flockDistance);
+		_birdFlocks.push_back(flock);
 		for (uint32_t bird = 0; bird < setup.count; ++bird)
 		{
 			const float angle = 2.0f * std::numbers::pi_v<float> * static_cast<float>(bird) / static_cast<float>(setup.count);
@@ -5213,7 +5215,11 @@ std::string Runner::GiveCreatureModeCommand(entt::entity creature, const Command
 	case Kind::SavedTurningCamera:
 	case Kind::SavedFreeCamera:
 	case Kind::SavedBelowLandCamera:
-		// The follow camera can follow one of the scenario's objects in place of the creature
+		// The follow camera can follow one of the scenario's objects or its first flock of birds in place of the creature
+		if (command.kind == Kind::SavedFollowCamera && (command.value & k_SavedCameraOnFlock) != 0)
+		{
+			return _birdFlocks.empty() ? "no flock" : GiveSavedCameraCommand(_birdFlocks.front(), command);
+		}
 		return GiveSavedCameraCommand(
 		    command.with.has_value() && *command.with < _objects.size() ? _objects[*command.with] : creature, command);
 	case Kind::OpenCreatureCave:

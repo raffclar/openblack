@@ -141,6 +141,23 @@ void testbed_scenarios::AddSavedCameraScenarios(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "saves.camera_follow_flock",
+	    .name = "Follow camera of a saved game on a flock",
+	    .facet = Facet::CreatureMode,
+	    .description = "The follow camera of a saved game takes the camera after a second on a flock of ten doves, not on "
+	                   "a thing with a model: heading 1.8, pitch 0.4, distance 20. The leader flies legs about the home of "
+	                   "the flock and the other doves follow it.",
+	    .expected = "The camera glides to the leader of the flock and looks at the middle of its body from 20 away, then "
+	                "follows the leader a second behind as it flies. No status panel shows, because the thing is not a "
+	                "creature.",
+	    .framing = {.shot = Shot::Overview},
+	    .creatures = {Player({0.0f, 40.0f})},
+	    .birdFlocks = {{.kind = AnimalInfo::Dove, .offset = {20.0f, 60.0f}, .count = 10, .reach = 20.0f}},
+	    .commands = {Command {
+	        .kind = Kind::SavedFollowCamera, .creature = 0, .delaySeconds = 1.0f, .value = k_SavedCameraOnFlock}},
+	});
+
+	all.push_back({
 	    .id = "saves.camera_follow_turns",
 	    .name = "Follow camera of a saved game that turns with its thing",
 	    .facet = Facet::CreatureMode,
@@ -238,8 +255,10 @@ std::string testbed_scenarios::GiveSavedCameraCommand(entt::entity creature, con
 	}
 	auto& camera = Locator::camera::value();
 	const auto& registry = Locator::entitiesRegistry::value();
+	// A flock has no place of its own: only the follow camera takes it
 	const auto* transform = registry.TryGet<const ecs::components::Transform>(creature);
-	if (transform == nullptr)
+	if (!ecs::CameraTargetOf(registry, creature).has_value() ||
+	    (transform == nullptr && command.kind != Kind::SavedFollowCamera))
 	{
 		return "no thing";
 	}

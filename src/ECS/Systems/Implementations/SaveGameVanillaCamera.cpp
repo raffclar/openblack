@@ -61,12 +61,12 @@ void SaveGameSystem::ImportVanillaCameraMode(const camera_import::ImportedCamera
 			SPDLOG_LOGGER_INFO(ImportLog(), "The follow camera of the file has no thing, so the world camera stays");
 			return;
 		}
-		// A flock has no place of its own in openblack: the game follows the place of its leader
-		if (!registry.AllOf<Transform>(thing))
+		// A flock is followed at the place of its leader
+		if (!ecs::CameraTargetOf(registry, thing).has_value())
 		{
 			SPDLOG_LOGGER_WARN(ImportLog(),
-			                   "The follow camera of the file follows a thing with no place (object {}), such as a flock. "
-			                   "openblack cannot follow it, so the world camera stays.",
+			                   "The follow camera of the file follows a thing with no place (object {}), so the world "
+			                   "camera stays.",
 			                   follow.target);
 			return;
 		}

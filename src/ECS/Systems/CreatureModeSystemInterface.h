@@ -51,7 +51,7 @@ public:
 	/// Locks onto a creature, any player's; false when the camera can't be taken now
 	virtual bool Enter(entt::entity creature, creature_follow::StartDistance start) = 0;
 	/// Locks onto a thing with the follow camera of a saved game of the original game; false when the camera can't be
-	/// taken now. The thing can be a creature or another thing with a place.
+	/// taken now. The thing can be a creature, another thing with a place, or a flock.
 	virtual bool EnterLoaded(entt::entity thing, const creature_follow::Loaded& loaded) = 0;
 	/// Gives the camera back, as soon as it has it again
 	virtual void Leave() = 0;

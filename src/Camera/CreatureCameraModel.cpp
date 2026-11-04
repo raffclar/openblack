@@ -45,15 +45,32 @@ void CreatureCameraModel::SetTarget(glm::vec3 position, float height, std::optio
 	_focus = creature_follow::Focus(position, height);
 	_position = position;
 	_gameAngle = gameAngle;
+	_thingHasModel = true;
+}
+
+void CreatureCameraModel::SetTarget(const creature_follow::Target& target)
+{
+	SetTarget(target.position, target.height, target.gameAngle);
+	_thingHasModel = target.hasModel;
+}
+
+bool CreatureCameraModel::KeepsOffsets() const
+{
+	return _offsets.has_value() && _thingHasModel;
 }
 
 CreatureCameraModel::Points CreatureCameraModel::Aim() const
 {
-	if (_offsets.has_value())
+	if (KeepsOffsets())
 	{
 		return {.origin = _position + _offsets->eye, .focus = _position + _offsets->focus};
 	}
 	auto view = creature_follow::Clamped(_view);
+	// On a thing with no model, the offsets give the distance after the bounds, and the heading and pitch place the eye
+	if (_offsets.has_value())
+	{
+		view.distance = creature_follow::OffsetDistance(*_offsets);
+	}
 	// Only a thing that walks has a game angle to turn the heading with
 	if (_relativeHeading && _gameAngle.has_value())
 	{
@@ -141,8 +158,8 @@ void CreatureCameraModel::HandleKeys(std::chrono::microseconds dt)
 	Turn(keys, width);
 
 	// Ctrl and Shift held together, with the cursor keys still, swing the camera clear of the land in the way. A camera
-	// that turns with its thing, or that keeps offsets from it, does not swing.
-	if (_autoReposition && !_relativeHeading && !_offsets.has_value() && keys.shift && keys.ctrl && !keys.Moving() &&
+	// that turns with its thing, or that keeps offsets on a thing with a model, does not swing.
+	if (_autoReposition && !_relativeHeading && !KeepsOffsets() && keys.shift && keys.ctrl && !keys.Moving() &&
 	    Locator::terrainSystem::has_value())
 	{
 		const auto& land = Locator::terrainSystem::value();

@@ -275,3 +275,42 @@ TEST(SavedFollowCamera, ACameraOfAPlayerDoesNotTurnWithTheThing)
 	EXPECT_EQ(model.GetTargetOrigin(),
 	          creature_follow::Origin(creature_follow::Focus(k_Point, 10.0f), {.yaw = 1.0f, .pitch = 0.4f, .distance = 60.0f}));
 }
+
+TEST(SavedFollowCamera, AFlockIsFollowedAtTheMapPlaceOfItsLeader)
+{
+	const auto ground = [](glm::vec2 /*point*/) { return 7.0f; };
+	const creature_follow::FlockLeader leader {.position = {1000.00005f, 31.5f, 2000.3f}, .height = 4.0f};
+	const auto target = creature_follow::FlockTarget(leader, {.x = 1, .z = 2, .altitude = 3.0f}, ground);
+	// x and z go through a map position, the height of the leader stays
+	EXPECT_EQ(target.position.x, map_coords::ToMetres(map_coords::ToFixed(1000.00005f)));
+	EXPECT_EQ(target.position.y, 31.5f);
+	EXPECT_EQ(target.position.z, map_coords::ToMetres(map_coords::ToFixed(2000.3f)));
+	EXPECT_EQ(target.height, 4.0f);
+	EXPECT_FALSE(target.gameAngle.has_value());
+	EXPECT_FALSE(target.hasModel);
+}
+
+TEST(SavedFollowCamera, AFlockWithNoLeaderIsFollowedAtItsOwnPlaceOnTheLand)
+{
+	const auto ground = [](glm::vec2 point) { return point.x * 0.01f; };
+	const map_coords::MapCoords place {.x = 0x640000, .z = 0x320000, .altitude = 2.5f};
+	const auto target = creature_follow::FlockTarget(std::nullopt, place, ground);
+	EXPECT_EQ(target.position, glm::vec3(1000.0f, 12.5f, 500.0f));
+	EXPECT_EQ(target.height, 0.0f);
+	EXPECT_FALSE(target.hasModel);
+}
+
+TEST(SavedFollowCamera, OnAThingWithNoModelTheOffsetsGiveOnlyTheDistance)
+{
+	const creature_follow::Loaded loaded {.view = {.yaw = 1.0f, .pitch = 0.4f, .distance = 60.0f}, .offsets = k_Offsets};
+	CreatureCameraModel model(loaded, k_Point, 10.0f);
+	model.SetTarget({.position = k_Point, .height = 10.0f, .gameAngle = std::nullopt, .hasModel = false});
+	const auto focus = creature_follow::Focus(k_Point, 10.0f);
+	auto view = loaded.view;
+	view.distance = creature_follow::OffsetDistance(k_Offsets);
+	EXPECT_EQ(model.GetTargetFocus(), focus);
+	EXPECT_EQ(model.GetTargetOrigin(), creature_follow::Origin(focus, view));
+	// A thing with a model takes the offsets again
+	model.SetTarget({.position = k_Point, .height = 10.0f, .gameAngle = std::nullopt, .hasModel = true});
+	EXPECT_EQ(model.GetTargetOrigin(), k_Point + k_Offsets.eye);
+}

@@ -35,6 +35,8 @@ public:
 	/// Where the thing now is, and how tall it is. A thing that walks also gives its game angle, which a camera that
 	/// turns with its thing reads.
 	void SetTarget(glm::vec3 position, float height, std::optional<uint16_t> gameAngle = std::nullopt);
+	/// Where the thing now is, as the camera reads it. On a thing with no model, the offsets give only the distance.
+	void SetTarget(const creature_follow::Target& target);
 	/// Swings the camera round and tilts it for a clear view of the creature, as Ctrl and Shift do together
 	void ClearView(glm::vec3 landNormal, const creature_follow::GroundHeight& ground);
 	/// Turns it by keys, as if held this frame, on a screen so many pixels wide; returns whether they give the camera
@@ -76,6 +78,8 @@ private:
 	/// Where the camera wants to stand and look: at its offsets from the place of the thing, or else at its view of the
 	/// middle of the thing, with the heading turned with the thing when it must turn
 	[[nodiscard]] Points Aim() const;
+	/// Whether the offsets keep the eye and the point that the camera looks at on the thing
+	[[nodiscard]] bool KeepsOffsets() const;
 
 	creature_follow::View _view;
 	glm::vec3 _focus;
@@ -84,6 +88,8 @@ private:
 	std::optional<uint16_t> _gameAngle;
 	bool _relativeHeading {false};
 	std::optional<creature_follow::Offsets> _offsets;
+	/// Whether the thing has a model in the world, which the offsets keep the camera on
+	bool _thingHasModel {true};
 	float _seconds {0.0f};
 	float _timeScale {1.0f};
 	bool _autoReposition {true};

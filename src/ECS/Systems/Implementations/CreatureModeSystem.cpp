@@ -20,8 +20,6 @@
 #include "Camera/DanceCameraModel.h"
 #include "Camera/DefaultWorldCameraModel.h"
 #include "ECS/Components/Creature.h"
-#include "ECS/Components/CreatureBody.h"
-#include "ECS/Components/Transform.h"
 #include "ECS/FollowHeadingThing.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
@@ -97,8 +95,7 @@ bool CreatureModeSystem::ThingThere() const
 	{
 		return false;
 	}
-	const auto& registry = Locator::entitiesRegistry::value();
-	return registry.Valid(*_thing) && registry.AllOf<components::Transform>(*_thing);
+	return CameraTargetOf(Locator::entitiesRegistry::value(), *_thing).has_value();
 }
 
 bool CreatureModeSystem::StillValid() const
@@ -149,8 +146,8 @@ bool CreatureModeSystem::Take(entt::entity thing, const MakeModel& make)
 	{
 		return false;
 	}
-	const auto& registry = Locator::entitiesRegistry::value();
-	if (!registry.Valid(thing) || !registry.AllOf<components::Transform>(thing))
+	const auto target = CameraTargetOf(Locator::entitiesRegistry::value(), thing);
+	if (!target.has_value())
 	{
 		return false;
 	}
@@ -168,10 +165,8 @@ bool CreatureModeSystem::Take(entt::entity thing, const MakeModel& make)
 		_thing.reset();
 		return false;
 	}
-	// The camera follows the thing where the frame draws it
-	const auto& placed = registry.Get<const components::Transform>(thing);
-	const auto transform = components::DrawnTransform(placed, registry.TryGet<const components::CreatureAnimation>(thing));
-	auto model = make(camera, transform.position, CameraThingHeight(registry, thing, placed));
+	auto model = make(camera, target->position, target->height);
+	model->SetTarget(*target);
 	_model = model.get();
 	_returnOrigin = camera.GetModel().GetTargetOrigin();
 	_returnFocus = camera.GetModel().GetTargetFocus();
@@ -299,11 +294,10 @@ void CreatureModeSystem::Update(std::chrono::microseconds dt, const Frame& frame
 		return;
 	}
 
-	const auto& registry = Locator::entitiesRegistry::value();
-	const auto& placed = registry.Get<const components::Transform>(*_thing);
-	const auto transform = components::DrawnTransform(placed, registry.TryGet<const components::CreatureAnimation>(*_thing));
-	_model->SetTarget(transform.position, CameraThingHeight(registry, *_thing, placed),
-	                  CameraThingGameAngle(registry, *_thing));
+	if (const auto target = CameraTargetOf(Locator::entitiesRegistry::value(), *_thing); target.has_value())
+	{
+		_model->SetTarget(*target);
+	}
 
 	if (_held.seconds > 0.0f)
 	{

@@ -1610,6 +1610,8 @@ void AddFriendActionScenarios(std::vector<Scenario>& all);
 void AddCreatureModeScenarios(std::vector<Scenario>& all);
 /// The cameras that only a saved game of the original game gives
 void AddSavedCameraScenarios(std::vector<Scenario>& all);
+/// The value bit of the follow camera of a saved game that follows the scenario's first flock of birds
+inline constexpr size_t k_SavedCameraOnFlock = 4;
 /// Gives one of the saved cameras' commands, with the creature of the command; returns what happened
 std::string GiveSavedCameraCommand(entt::entity creature, const Command& command);
 /// The gestures drawn with the hand: sizing and powering up miracles, scribbles, and the leash's gestures

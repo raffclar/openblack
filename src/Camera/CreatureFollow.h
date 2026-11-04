@@ -18,6 +18,7 @@
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
+#include "3D/MapCoords.h"
 #include "Editor/EditorMath.h"
 
 /// The maths of Creature Mode's camera, which locks onto a creature and follows it, free of the game so it can be tested
@@ -151,6 +152,30 @@ enum class KeyOutcome : uint8_t
 
 /// The height of the land at a point on it, x and z
 using GroundHeight = std::function<float(glm::vec2)>;
+/// The thing of a follow camera, as the camera reads it in a frame: its place, its height (the camera looks at the middle
+/// of it), the game angle of a thing that walks (2048 to the circle) and whether the thing has a model in the world.
+/// Offsets keep the camera on a thing with a model. On a thing with no model, such as a flock, the camera takes only the
+/// distance of its offsets and follows the thing by its heading and pitch.
+struct Target
+{
+	glm::vec3 position {0.0f};
+	float height {0.0f};
+	std::optional<uint16_t> gameAngle;
+	bool hasModel {true};
+};
+
+/// The leader of a flock, as a follow camera reads it: its place in the world and its height
+struct FlockLeader
+{
+	glm::vec3 position {0.0f};
+	float height {0.0f};
+};
+/// The thing of a follow camera on a flock. The camera looks at the map place of the leader (x and z as a map position
+/// holds them, the height of the leader's place), raised by half the height of the leader. A flock with no leader gives
+/// its own place on the land, raised by its altitude. A flock has no model and does not walk.
+[[nodiscard]] Target FlockTarget(const std::optional<FlockLeader>& leader, const map_coords::MapCoords& place,
+                                 const GroundHeight& ground);
+
 /// The distance the camera looks for a clear view at: nearer ones are taken most of the way out to 50 and further ones a
 /// little way in towards 100
 [[nodiscard]] float ClearingDistance(float distance);

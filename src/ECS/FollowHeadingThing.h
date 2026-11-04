@@ -15,6 +15,7 @@
 
 #include <entt/entity/fwd.hpp>
 
+#include "Camera/CreatureFollow.h"
 #include "Camera/FollowHeadingCameraModel.h"
 
 namespace openblack::ecs::components
@@ -31,6 +32,11 @@ class Registry;
 /// The game angle of a thing that walks (2048 to the circle), as a follow camera that turns with its thing reads it. A
 /// creature always has the angle 0. None for a thing that does not walk.
 [[nodiscard]] std::optional<uint16_t> CameraThingGameAngle(const Registry& registry, entt::entity thing);
+
+/// The thing of a follow camera as the camera reads it in a frame. A thing with a place is where the frame draws it. A
+/// flock is at the map place of its leader, or at its own place with no leader. None for a thing that is gone or has no
+/// place.
+[[nodiscard]] std::optional<creature_follow::Target> CameraTargetOf(const Registry& registry, entt::entity thing);
 
 /// The thing of the camera that follows a thing and turns with it, as the camera reads it in a frame: where it is,
 /// raised by half its height, the way it faces, and whether a creature turns too fast. None once it is gone.

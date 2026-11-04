@@ -53,6 +53,29 @@ constexpr float k_HalfGameAngleToRadians = 0.0015339808305725455f;
 constexpr float k_RelativeQuarterTurn = 1.5707963705062866f;
 } // namespace
 
+Target FlockTarget(const std::optional<FlockLeader>& leader, const map_coords::MapCoords& place, const GroundHeight& ground)
+{
+	if (leader.has_value())
+	{
+		// The leader's place on the map: x and z through a map position, at the height of the place
+		return Target {
+		    .position = {map_coords::Quantise(leader->position.x), leader->position.y,
+		                 map_coords::Quantise(leader->position.z)},
+		    .height = leader->height,
+		    .gameAngle = std::nullopt,
+		    .hasModel = false,
+		};
+	}
+	// The flock's own place on the land, raised by its altitude. A flock with no leader adds no height.
+	const auto xz = map_coords::ToMetres(place);
+	return Target {
+	    .position = {xz.x, ground(xz) + place.altitude, xz.y},
+	    .height = 0.0f,
+	    .gameAngle = std::nullopt,
+	    .hasModel = false,
+	};
+}
+
 glm::vec3 Focus(glm::vec3 position, float height)
 {
 	return position + glm::vec3(0.0f, height * 0.5f, 0.0f);

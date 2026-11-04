@@ -322,6 +322,8 @@ private:
 	uint32_t _startTurn {0};
 	std::vector<bool> _computerActionsDone;
 	std::vector<entt::entity> _objects;
+	/// The scenario's flocks of birds, in the order of the scenario
+	std::vector<entt::entity> _birdFlocks;
 	/// The script flock of the scenario's villagers and animals, after a command gave it
 	entt::entity _scriptFlock {entt::null};
 	/// The objects and creatures that the scenario keeps as script variables keep them

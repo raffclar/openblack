@@ -12,17 +12,21 @@
 #include <cmath>
 
 #include "3D/L3DMesh.h"
+#include "3D/LandIslandInterface.h"
 #include "CHLApi.h"
 #include "Common/GUtilsAngle.h"
 #include "Creature/CreatureMode.h"
 #include "Creature/CreaturePlanner.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/Creature.h"
+#include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureMind.h"
+#include "ECS/Components/Flock.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/WallHug.h"
 #include "ECS/Registry.h"
+#include "ECS/ScriptFlocks.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
 
@@ -72,6 +76,45 @@ std::optional<uint16_t> CameraThingGameAngle(const Registry& registry, entt::ent
 		return static_cast<uint16_t>(gutils::ConvertAngle3DToGame(animal->heading));
 	}
 	return std::nullopt;
+}
+
+std::optional<creature_follow::Target> CameraTargetOf(const Registry& registry, entt::entity thing)
+{
+	if (!registry.Valid(thing))
+	{
+		return std::nullopt;
+	}
+	if (script_flocks::IsFlock(registry, thing))
+	{
+		std::optional<creature_follow::FlockLeader> leader;
+		if (const auto living = script_flocks::Leader(registry, thing); living != entt::null && registry.Valid(living))
+		{
+			if (const auto* transform = registry.TryGet<const Transform>(living); transform != nullptr)
+			{
+				leader = creature_follow::FlockLeader {
+				    .position = transform->position,
+				    .height = CameraThingHeight(registry, living, *transform),
+				};
+			}
+		}
+		const auto ground = [](glm::vec2 point) {
+			return Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().GetHeightAt(point) : 0.0f;
+		};
+		return creature_follow::FlockTarget(leader, registry.Get<const components::Flock>(thing).place, ground);
+	}
+	const auto* placed = registry.TryGet<const Transform>(thing);
+	if (placed == nullptr)
+	{
+		return std::nullopt;
+	}
+	// The camera follows the thing where the frame draws it
+	const auto drawn = components::DrawnTransform(*placed, registry.TryGet<const components::CreatureAnimation>(thing));
+	return creature_follow::Target {
+	    .position = drawn.position,
+	    .height = CameraThingHeight(registry, thing, *placed),
+	    .gameAngle = CameraThingGameAngle(registry, thing),
+	    .hasModel = true,
+	};
 }
 
 FollowHeadingCameraModel::ThingLookup FollowHeadingThing(entt::entity thing)
