@@ -68,6 +68,7 @@ void FightCameraModel::Return(const fight_view::View& from, const fight_view::Vi
 	_started = true;
 	_tracker.Resnap();
 	_landHeld = false;
+	_keysMoved = false;
 	_sinceFlight = 0.0f;
 	Fly(_chase, from, speed, _chase.GetHeld(), fight_view::k_ReturnWayRise);
 }
@@ -113,10 +114,20 @@ std::optional<CameraModel::CameraInterpolationUpdateInfo> FightCameraModel::Upda
 		_landHeld = true;
 		return _playerModel->Update(dt, camera);
 	}
+	// In a step in which the movement keys move the camera to the side or forwards, the view does not follow the
+	// fighters. The player's own camera moves it. The turn and the tilt of the step turn and tilt the view too.
+	if (_asked.keysMove && _playerModel != nullptr)
+	{
+		_tracker.Turn(_input);
+		_input = {};
+		_keysMoved = true;
+		return _playerModel->Update(dt, camera);
+	}
 	// Let go, the view goes on from where the camera is and how fast it moves
-	if (_landHeld)
+	if (_landHeld || _keysMoved)
 	{
 		_landHeld = false;
+		_keysMoved = false;
 		_chase.Resume({.origin = camera.GetOrigin(), .focus = camera.GetFocus()},
 		              {.origin = camera.GetOriginVelocity(), .focus = camera.GetFocusVelocity()});
 	}

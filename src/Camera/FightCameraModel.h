@@ -73,6 +73,9 @@ private:
 	float _sinceFlight {0.0f};
 	/// While the player holds the land, the player's camera moves it; the view then goes on from where it is
 	bool _landHeld {false};
+	/// In a step in which the movement keys move the camera, the player's camera moves it; the view then goes on from
+	/// where it is
+	bool _keysMoved {false};
 	/// The first step starts the flight to the fight from where the camera is
 	bool _started {false};
 	/// The last step followed the fighters

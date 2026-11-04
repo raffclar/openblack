@@ -123,6 +123,9 @@ public:
 		bool zoomedOut;
 	};
 	Step Follow(const Fighter& first, const Fighter& second, const Input& input, float seconds);
+	/// The player turns and tilts the view. A step that follows the fighters does this first. A step in which the
+	/// movement keys move the camera does only this.
+	void Turn(const Input& input);
 
 	[[nodiscard]] float GetScale() const { return _scale; }
 	[[nodiscard]] float GetPitch() const { return _pitch; }

@@ -52,16 +52,18 @@ public:
 	[[nodiscard]] std::optional<glm::vec2> LandAtPixel(glm::u16vec2 /*screenCoord*/) const override { return std::nullopt; }
 };
 
-/// The key that turns the camera to the left, held while asked
+/// The key that turns the camera to the left and the key that moves it to the left, held while asked
 class TurnKeyAction final: public MockAction
 {
 public:
 	[[nodiscard]] bool GetBindable(input::BindableActionMap action) const override
 	{
-		return turnLeft && action == input::BindableActionMap::ROTATE_LEFT;
+		return (turnLeft && action == input::BindableActionMap::ROTATE_LEFT) ||
+		       (moveLeft && action == input::BindableActionMap::MOVE_LEFT);
 	}
 
 	bool turnLeft {false};
+	bool moveLeft {false};
 };
 
 /// A camera that is not the player's camera
@@ -211,5 +213,30 @@ TEST_F(ForcedTurnPoint, TheFightViewRemovesThePointOnceItFollowsTheFighters)
 	view->SetFighters({.position = k_Focus + glm::vec3(-5.0f, 0.0f, 0.0f), .radius = 2.0f, .height = 6.0f},
 	                  {.position = k_Focus + glm::vec3(5.0f, 0.0f, 0.0f), .radius = 2.0f, .height = 6.0f});
 	RunFrames(1);
+	EXPECT_FALSE(_camera.GetForcedTurnPoint().has_value());
+}
+
+TEST_F(ForcedTurnPoint, TheFightViewDoesNotFollowTheFightersWhileTheKeysMoveTheCamera)
+{
+	auto fight = std::make_unique<FightCameraModel>(nullptr, fight_view::View {.origin = k_Origin, .focus = k_Focus});
+	auto* view = fight.get();
+	view->SetPlayerModel(_camera.SetModel(std::move(fight)));
+	view->SetFighters({.position = k_Focus + glm::vec3(-5.0f, 0.0f, 0.0f), .radius = 2.0f, .height = 6.0f},
+	                  {.position = k_Focus + glm::vec3(5.0f, 0.0f, 0.0f), .radius = 2.0f, .height = 6.0f});
+	// The keys of a frame act in the next frame. In the steps that the movement key moves the camera, the view does not
+	// follow the fighters, and the point stays.
+	_action->moveLeft = true;
+	RunFrames(1);
+	_camera.SetForcedTurnPoint(k_Point);
+	const auto originBefore = _camera.GetOrigin(Camera::Interpolation::Target);
+	RunFrames(3);
+	EXPECT_FALSE(_camera.GetModel().EndsForcedTurnPoint());
+	EXPECT_EQ(_camera.GetForcedTurnPoint(), k_Point);
+	// The player's camera moves to the side
+	EXPECT_NE(_camera.GetOrigin(Camera::Interpolation::Target), originBefore);
+	_action->moveLeft = false;
+	// The key is let go: the step after the last key step follows the fighters again and removes the point
+	RunFrames(2);
+	EXPECT_TRUE(_camera.GetModel().EndsForcedTurnPoint());
 	EXPECT_FALSE(_camera.GetForcedTurnPoint().has_value());
 }
