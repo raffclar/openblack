@@ -266,7 +266,7 @@ Result BringKept(PlayerNames owner, std::shared_ptr<const creaturemind::MindFile
 std::optional<entt::entity> MakePlain(int32_t row, int32_t playerNumber, glm::vec2 place)
 {
 	// The game reads the row and the player with no check. openblack makes no creature for a row past the creature table
-	// or a number that is not a player of a land (vanilla-bugs row 946).
+	// or a number that is not a player of a land (vanilla-bugs row 947).
 	const auto species = row >= 0 ? script::property_rules::CreatureTypeFromScript(static_cast<uint32_t>(row)) : std::nullopt;
 	const bool landPlayer = playerNumber >= 0 && static_cast<size_t>(playerNumber) < player_slots::k_LandSlots;
 	const auto owner = landPlayer ? static_cast<PlayerNames>(playerNumber) : PlayerNames::NEUTRAL;
