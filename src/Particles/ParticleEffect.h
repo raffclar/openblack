@@ -1061,6 +1061,9 @@ public:
 	void Walk(float t, DrawWalk& out) const;
 	/// Each shower of sparks of an atom that is drawn, for a frame's time to pass on it
 	void ForEachDrawnShower(const std::function<void(ObjectShower&)>& visit);
+	/// Gives an atom a shower of sparks that rises from an object. Use this function for each new shower, because the
+	/// effect looks for showers only after it gave one.
+	void GiveShower(Atom& atom, entt::entity object);
 	/// Slides the texture of each ribbon that shows, by a drawn frame of this many game milliseconds
 	void ScrollChains(float milliseconds);
 	[[nodiscard]] size_t AtomCount() const { return _atomCount; }
@@ -1131,6 +1134,12 @@ private:
 	int _player {-1};
 	float _globalAlpha {255.0f};
 	bool _hidden {false};
+	/// True after an atom of the effect got a shower of sparks. An effect with no shower does not walk its atoms to
+	/// find one each frame.
+	bool _hadShower {false};
+	/// True when a creator of the effect makes the joints of a ribbon. An effect with no ribbon does not walk its atoms
+	/// to slide the texture of a ribbon.
+	bool _hasChains {false};
 	glm::vec3 _direction {0.0f};
 	std::vector<entt::entity> _targets;
 	std::vector<glm::vec3> _targetPositions;

@@ -501,11 +501,11 @@ namespace
 class FakeSeenWorld final: public SeenWorld
 {
 public:
-	[[nodiscard]] std::vector<entt::entity> ThingsIn(glm::ivec2 cell) const override
+	void ThingsIn(glm::ivec2 cell, std::vector<entt::entity>& out) const override
 	{
 		++looked;
 		const auto found = cells.find({cell.x, cell.y});
-		return found != cells.end() ? found->second : std::vector<entt::entity> {};
+		out = found != cells.end() ? found->second : std::vector<entt::entity> {};
 	}
 	[[nodiscard]] entt::entity SeenAs(entt::entity thing) const override
 	{

@@ -9,6 +9,8 @@
 
 #include <cstdint>
 
+#include <utility>
+
 #include <LNDFile.h>
 #include <gtest/gtest.h>
 
@@ -52,6 +54,23 @@ TEST(LandBlock, ItsHighestAltitudeIsTheHighestCellWhenItWasLoaded)
 	// A cell raised later does not change it, and the view test of the block keeps the box of the land as it was
 	block.SetCellAltitude(7, 200);
 	EXPECT_EQ(block.GetHighestAltitude(), 90);
+}
+
+TEST(LandBlock, ItKeepsThePlaceOfTheLoadedBlock)
+{
+	openblack::lnd::LNDBlock loaded {};
+	loaded.blockX = 3;
+	loaded.blockZ = 7;
+	loaded.mapX = 480.0f;
+	loaded.mapZ = 1120.0f;
+	openblack::LandBlock block;
+	block.SetLndBlock(loaded);
+	EXPECT_EQ(block.GetBlockPosition(), glm::ivec2(3, 7));
+	EXPECT_EQ(block.GetMapPosition(), glm::vec2(480.0f, 1120.0f));
+	// A moved block keeps the place
+	const openblack::LandBlock moved = std::move(block);
+	EXPECT_EQ(moved.GetBlockPosition(), glm::ivec2(3, 7));
+	EXPECT_EQ(moved.GetMapPosition(), glm::vec2(480.0f, 1120.0f));
 }
 
 TEST(LandBlock, ACellThatAlreadyHasTheAltitudeDoesNotChange)
