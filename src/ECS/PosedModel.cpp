@@ -209,8 +209,8 @@ void posed_model::Place(const ecs::Registry& registry, entt::entity entity, cons
 	}
 }
 
-std::span<const glm::vec3> posed_model::Place(placed_memo::Memo& memo, const ecs::Registry& registry, entt::entity entity,
-                                              const graphics::L3DMesh& mesh, size_t index, const glm::mat4& model)
+placed_memo::Placed posed_model::Place(placed_memo::Memo& memo, const ecs::Registry& registry, entt::entity entity,
+                                       const graphics::L3DMesh& mesh, size_t index, const glm::mat4& model)
 {
 	// The reach holds the map points where the placer reads the land height
 	MapReach reach;

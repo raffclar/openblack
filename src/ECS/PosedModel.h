@@ -55,8 +55,8 @@ void Place(const ecs::Registry& registry, entt::entity entity, const graphics::L
 
 /// The same, but the memo gives the corners that it keeps when no input changed since it calculated them. The corners
 /// stay valid until the next call with the same memo.
-[[nodiscard]] std::span<const glm::vec3> Place(placed_memo::Memo& memo, const ecs::Registry& registry, entt::entity entity,
-                                               const graphics::L3DMesh& mesh, size_t index, const glm::mat4& model);
+[[nodiscard]] placed_memo::Placed Place(placed_memo::Memo& memo, const ecs::Registry& registry, entt::entity entity,
+                                        const graphics::L3DMesh& mesh, size_t index, const glm::mat4& model);
 
 /// Whether the submesh is drawn at the level of detail and stage the model is drawn at: the nearest level of detail and
 /// the first stage, as openblack draws every model

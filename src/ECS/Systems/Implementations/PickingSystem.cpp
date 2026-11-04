@@ -303,8 +303,10 @@ std::optional<float> BrokenAlong(const physics::damage::Mesh& mesh, glm::vec3 fr
 void PickingSystem::PickUnderCursor(const Frame& frame)
 {
 	const auto& view = frame.view;
-	// The memo forgets the models that the last two picks and hand feels did not place
+	// The memos forget the models that the last two picks and hand feels did not test
 	_placedMemo.EndPass();
+	_distanceMemo.EndPass();
+	_feelMemo.EndPass();
 
 	// The land or sea under the cursor, counted a little further than it is
 	float landDistance = std::numeric_limits<float>::max();
@@ -490,42 +492,56 @@ void PickingSystem::PickUnderCursor(const Frame& frame)
 		// A tree of a forest is picked through its leaves' holes
 		const auto* info = world_objects::InfoOf(entity);
 		const bool throughHoles = info != nullptr && info->type == ObjectType::ForestTree;
-		std::optional<float> distance;
-		for (size_t s = 0; s < mesh->GetSubMeshes().size() && !distance.has_value(); ++s)
-		{
-			const auto& subMesh = *mesh->GetSubMeshes()[s];
-			if (!ecs::posed_model::IsDrawn(subMesh))
+		// The test of the triangles gives the same answer while the view, the model and its corners do not change
+		auto& key = _distanceMemo.KeyScratch();
+		key.clear();
+		ecs::placed_memo::Append(key, view);
+		ecs::placed_memo::Append(key, _candidateMeshes[i]);
+		ecs::placed_memo::Append(key, throughHoles);
+		const auto stampOf = [&](size_t s) {
+			return ecs::posed_model::Place(_placedMemo, registry, entity, *mesh, s, model).stamp;
+		};
+		const auto testTriangles = [&](std::vector<std::pair<size_t, uint64_t>>& used) {
+			std::optional<float> found;
+			for (size_t s = 0; s < mesh->GetSubMeshes().size() && !found.has_value(); ++s)
 			{
-				continue;
-			}
-			const auto placed = ecs::posed_model::Place(_placedMemo, registry, entity, *mesh, s, model);
-			const auto& geometry = subMesh.GetBodyGeometry();
-			_corners.clear();
-			for (size_t c = 0; c < placed.size(); ++c)
-			{
-				_corners.push_back(
-				    screen_pick::ToClip(view, placed[c], c < geometry.uvs.size() ? geometry.uvs[c] : glm::vec2(0.0f)));
-			}
-			const auto& indices = geometry.indices;
-			for (const auto& primitive : subMesh.GetPrimitives())
-			{
-				if (primitive.indicesOffset + primitive.indicesCount > indices.size())
+				const auto& subMesh = *mesh->GetSubMeshes()[s];
+				if (!ecs::posed_model::IsDrawn(subMesh))
 				{
 					continue;
 				}
-				distance = screen_pick::FirstHit(
-				    view,
-				    {.corners = _corners,
-				     .indices = std::span(indices).subspan(primitive.indicesOffset, primitive.indicesCount),
-				     .twoSided = primitive.twoSided,
-				     .mask = throughHoles ? mesh->GetSkinMask(primitive.skinID) : nullptr},
-				    _scratch);
-				if (distance.has_value())
+				const auto placed = ecs::posed_model::Place(_placedMemo, registry, entity, *mesh, s, model);
+				used.emplace_back(s, placed.stamp);
+				const auto& geometry = subMesh.GetBodyGeometry();
+				_corners.clear();
+				for (size_t c = 0; c < placed.corners.size(); ++c)
 				{
-					break;
+					_corners.push_back(screen_pick::ToClip(view, placed.corners[c],
+					                                       c < geometry.uvs.size() ? geometry.uvs[c] : glm::vec2(0.0f)));
+				}
+				const auto& indices = geometry.indices;
+				for (const auto& primitive : subMesh.GetPrimitives())
+				{
+					if (primitive.indicesOffset + primitive.indicesCount > indices.size())
+					{
+						continue;
+					}
+					found = screen_pick::FirstHit(
+					    view,
+					    {.corners = _corners,
+					     .indices = std::span(indices).subspan(primitive.indicesOffset, primitive.indicesCount),
+					     .twoSided = primitive.twoSided,
+					     .mask = throughHoles ? mesh->GetSkinMask(primitive.skinID) : nullptr},
+					    _scratch);
+					if (found.has_value())
+					{
+						break;
+					}
 				}
 			}
-		}
+			return found;
+		};
+		const auto distance = _distanceMemo.Get(entity, key, stampOf, testTriangles);
 		if (!distance.has_value())
 		{
 			return std::nullopt;
@@ -798,21 +814,34 @@ std::optional<screen_pick::MeshHit> PickingSystem::FeelModel(entt::entity object
 		return std::nullopt;
 	}
 	const auto mesh = meshes.Handle(felt->first);
-	std::optional<screen_pick::MeshHit> nearest;
-	for (size_t s = 0; s < mesh->GetSubMeshes().size(); ++s)
-	{
-		// The submeshes of the nearest level of detail
-		if ((mesh->GetSubMeshes()[s]->GetFlags().lodMask & 1) == 0)
+	// The line test gives the same answer while the line, the model and its corners do not change
+	auto& key = _feelMemo.KeyScratch();
+	key.clear();
+	ecs::placed_memo::Append(key, origin);
+	ecs::placed_memo::Append(key, direction);
+	ecs::placed_memo::Append(key, felt->first);
+	const auto stampOf = [&](size_t s) {
+		return ecs::posed_model::Place(_placedMemo, registry, object, *mesh, s, felt->second).stamp;
+	};
+	const auto testLine = [&](std::vector<std::pair<size_t, uint64_t>>& used) {
+		std::optional<screen_pick::MeshHit> nearest;
+		for (size_t s = 0; s < mesh->GetSubMeshes().size(); ++s)
 		{
-			continue;
+			// The submeshes of the nearest level of detail
+			if ((mesh->GetSubMeshes()[s]->GetFlags().lodMask & 1) == 0)
+			{
+				continue;
+			}
+			const auto placed = ecs::posed_model::Place(_placedMemo, registry, object, *mesh, s, felt->second);
+			used.emplace_back(s, placed.stamp);
+			const auto hit = screen_pick::NearestIntersection(
+			    placed.corners, mesh->GetSubMeshes()[s]->GetBodyGeometry().indices, origin, direction, false);
+			if (hit.has_value() && (!nearest.has_value() || hit->distance < nearest->distance))
+			{
+				nearest = hit;
+			}
 		}
-		const auto placed = ecs::posed_model::Place(_placedMemo, registry, object, *mesh, s, felt->second);
-		const auto hit = screen_pick::NearestIntersection(placed, mesh->GetSubMeshes()[s]->GetBodyGeometry().indices, origin,
-		                                                  direction, false);
-		if (hit.has_value() && (!nearest.has_value() || hit->distance < nearest->distance))
-		{
-			nearest = hit;
-		}
-	}
-	return nearest;
+		return nearest;
+	};
+	return _feelMemo.Get(object, key, stampOf, testLine);
 }

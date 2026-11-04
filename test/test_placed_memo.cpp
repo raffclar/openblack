@@ -13,6 +13,7 @@
 #include <array>
 #include <optional>
 #include <stdexcept>
+#include <utility>
 #include <vector>
 
 #include <LNDFile.h>
@@ -108,9 +109,9 @@ TEST(PlacedMemo, TheSameKeyGivesTheKeptCorners)
 	placed_memo::Memo memo;
 	FakePlace place;
 	const FakeLand land;
-	EXPECT_EQ(memo.Get(k_Slot, Key(1.0f), place, land)[0].y, 1.0f);
+	EXPECT_EQ(memo.Get(k_Slot, Key(1.0f), place, land).corners[0].y, 1.0f);
 	place.height = 2.0f;
-	EXPECT_EQ(memo.Get(k_Slot, Key(1.0f), place, land)[0].y, 1.0f);
+	EXPECT_EQ(memo.Get(k_Slot, Key(1.0f), place, land).corners[0].y, 1.0f);
 	EXPECT_EQ(place.calls, 1);
 	EXPECT_EQ(memo.Hits(), 1u);
 }
@@ -123,7 +124,7 @@ TEST(PlacedMemo, AnyChangedBitCalculatesAgain)
 	(void)memo.Get(k_Slot, Key(0.0f), place, land);
 	place.height = 2.0f;
 	// Minus zero is equal to zero, but its bits are not the same
-	EXPECT_EQ(memo.Get(k_Slot, Key(-0.0f), place, land)[0].y, 2.0f);
+	EXPECT_EQ(memo.Get(k_Slot, Key(-0.0f), place, land).corners[0].y, 2.0f);
 	EXPECT_EQ(place.calls, 2);
 }
 
@@ -150,7 +151,7 @@ TEST(PlacedMemo, ChangedLandCalculatesAgain)
 	EXPECT_EQ(place.calls, 1);
 	land.value = std::byte {1};
 	place.height = 3.0f;
-	EXPECT_EQ(memo.Get(k_Slot, Key(1.0f), place, land)[0].y, 3.0f);
+	EXPECT_EQ(memo.Get(k_Slot, Key(1.0f), place, land).corners[0].y, 3.0f);
 	EXPECT_EQ(place.calls, 2);
 }
 
@@ -215,4 +216,47 @@ TEST(PlacedMemo, AVeryLargeReachIsNotCompared)
 	const OneBlockIsland island;
 	std::vector<std::byte> bytes;
 	EXPECT_FALSE(island.AltitudeInputs({.minX = 0, .minZ = 0, .maxX = 100 * k_Fixed, .maxZ = 100 * k_Fixed}, bytes));
+}
+
+TEST(PlacedMemo, EachCalculationHasANewStamp)
+{
+	placed_memo::Memo memo;
+	FakePlace place;
+	const FakeLand land;
+	const auto first = memo.Get(k_Slot, Key(1.0f), place, land).stamp;
+	EXPECT_EQ(memo.Get(k_Slot, Key(1.0f), place, land).stamp, first);
+	EXPECT_NE(memo.Get(k_Slot, Key(2.0f), place, land).stamp, first);
+}
+
+TEST(PlacedMemo, AnAnswerIsKeptWhileItsCornersAndKeyAreTheSame)
+{
+	placed_memo::AnswerMemo<int> answers;
+	uint64_t stamp = 1;
+	int calls = 0;
+	const auto stampOf = [&stamp](size_t) { return stamp; };
+	const auto calculate = [&](std::vector<std::pair<size_t, uint64_t>>& used) {
+		used.emplace_back(0, stamp);
+		return ++calls;
+	};
+	const auto thing = entt::entity {3};
+	EXPECT_EQ(answers.Get(thing, Key(1.0f), stampOf, calculate), 1);
+	EXPECT_EQ(answers.Get(thing, Key(1.0f), stampOf, calculate), 1);
+	stamp = 2;
+	EXPECT_EQ(answers.Get(thing, Key(1.0f), stampOf, calculate), 2);
+	EXPECT_EQ(answers.Get(thing, Key(-0.0f), stampOf, calculate), 3);
+	EXPECT_EQ(answers.Hits(), 1u);
+}
+
+TEST(PlacedMemo, AnAnswerNotUsedForTwoPassesIsForgotten)
+{
+	placed_memo::AnswerMemo<int> answers;
+	const auto stampOf = [](size_t) { return uint64_t {1}; };
+	const auto calculate = [](std::vector<std::pair<size_t, uint64_t>>&) { return 1; };
+	answers.EndPass();
+	(void)answers.Get(entt::entity {3}, Key(1.0f), stampOf, calculate);
+	answers.EndPass();
+	answers.EndPass();
+	EXPECT_EQ(answers.Size(), 1u);
+	answers.EndPass();
+	EXPECT_EQ(answers.Size(), 0u);
 }
