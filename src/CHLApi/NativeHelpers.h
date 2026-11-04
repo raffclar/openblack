@@ -92,7 +92,6 @@ float LivingAngleOf(entt::entity object, const ecs::components::Transform& trans
 void TurnLivingThing(entt::entity object, ecs::components::Transform& transform, float angle);
 void TurnPlacedThing(entt::entity object, const glm::vec3& angles, bool lean);
 float ScriptHeightOf(entt::entity object);
-PlayerNames ScriptPlayerName(int32_t scriptPlayer);
 
 // In CHLApi/CameraNatives.cpp
 void CountCameraOrder();
@@ -117,5 +116,8 @@ std::vector<entt::entity> ContainerMembers(const ecs::Registry& registry, entt::
 
 // In CHLApi/EffectNatives.cpp
 void ChangeWeatherThing(entt::entity thing, const std::function<void(ecs::components::Storm&)>& change);
+
+// In CHLApi/PlayerNatives.cpp
+PlayerNames ScriptPlayerName(int32_t scriptPlayer);
 
 } // namespace openblack::chlapi
