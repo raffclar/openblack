@@ -11,11 +11,13 @@
 
 #include <limits>
 #include <optional>
+#include <tuple>
 #include <vector>
 
 #include <gtest/gtest.h>
 
 #include "Hand/HandReportRules.h"
+#include "Hand/OwnHandReport.h"
 #include "Hand/ViewReportRules.h"
 #include "Online/GameOrigin.h"
 
@@ -351,4 +353,146 @@ TEST(ViewReportRules, AFieldChangeSendsAReportWithASmallCameraMove)
 	now.focus.x += 0.001f;
 	now.cameraArrived = false;
 	EXPECT_TRUE(view_report::ChangedEnough(last, now));
+}
+
+namespace
+{
+/// The inputs of the pass of a turn with the hand and the camera of Resting
+OwnInputs RestingInputs(OwnStart start)
+{
+	const auto resting = Resting();
+	return {
+	    .handPoint = start.handPoint,
+	    .picked = entt::entity {entt::null},
+	    .pickPoint = resting.collidePoint,
+	    .camera = resting.camera,
+	    .focus = resting.focus,
+	    .spellNeedsReport = [] { return false; },
+	    .origin = std::nullopt,
+	};
+}
+} // namespace
+
+TEST(OwnHandReport, ThePassGoesOnceATurnAndNeedsAHandWithAPlace)
+{
+	OwnReporter reporter;
+	const auto hand = static_cast<entt::entity>(4);
+	// A hand with no place starts no pass, and the turn is done
+	EXPECT_FALSE(reporter.Start(1, hand, std::nullopt).has_value());
+	EXPECT_FALSE(reporter.Start(1, hand, Resting().handPoint).has_value());
+	// The next turn starts the pass with a new hand
+	const auto start = reporter.Start(2, hand, Resting().handPoint);
+	ASSERT_TRUE(start.has_value());
+	EXPECT_TRUE(start->newHand);
+	EXPECT_EQ(start->handPoint, Resting().handPoint);
+	EXPECT_FALSE(reporter.Start(2, hand, Resting().handPoint).has_value());
+	// The same hand is not new at a later turn
+	const auto later = reporter.Start(3, hand, Resting().handPoint);
+	ASSERT_TRUE(later.has_value());
+	EXPECT_FALSE(later->newHand);
+}
+
+TEST(OwnHandReport, TheFirstPassSendsTheFullReportAndThenWaitsOneTurn)
+{
+	OwnReporter reporter;
+	const auto hand = static_cast<entt::entity>(4);
+	auto start = reporter.Start(1, hand, Resting().handPoint);
+	ASSERT_TRUE(start.has_value());
+	const auto first = reporter.Finish(RestingInputs(*start));
+	ASSERT_TRUE(first.report.has_value());
+	EXPECT_EQ(*first.report, Resting());
+	EXPECT_EQ(reporter.TurnsToWait(), 1);
+	// The next turn waits, also when the hand moved, and asks the miracles
+	start = reporter.Start(2, hand, Resting().handPoint + glm::vec3(5.0f, 0.0f, 0.0f));
+	ASSERT_TRUE(start.has_value());
+	auto inputs = RestingInputs(*start);
+	int asked = 0;
+	inputs.spellNeedsReport = [&asked] {
+		++asked;
+		return false;
+	};
+	EXPECT_FALSE(reporter.Finish(inputs).report.has_value());
+	EXPECT_EQ(asked, 1);
+	EXPECT_EQ(reporter.TurnsToWait(), 0);
+	// The turn after that sends only the hand part that moved, and does not ask the miracles
+	start = reporter.Start(3, hand, Resting().handPoint + glm::vec3(5.0f, 0.0f, 0.0f));
+	ASSERT_TRUE(start.has_value());
+	inputs = RestingInputs(*start);
+	inputs.spellNeedsReport = [&asked] {
+		++asked;
+		return false;
+	};
+	const auto moved = reporter.Finish(inputs);
+	ASSERT_TRUE(moved.report.has_value());
+	EXPECT_EQ(moved.report->handPoint, Resting().handPoint + glm::vec3(5.0f, 0.0f, 0.0f));
+	EXPECT_EQ(asked, 1);
+}
+
+TEST(OwnHandReport, AMiracleThatFollowsTheHandStopsTheWait)
+{
+	OwnReporter reporter;
+	const auto hand = static_cast<entt::entity>(4);
+	auto start = reporter.Start(1, hand, Resting().handPoint);
+	ASSERT_TRUE(start.has_value());
+	std::ignore = reporter.Finish(RestingInputs(*start));
+	start = reporter.Start(2, hand, Resting().handPoint + glm::vec3(5.0f, 0.0f, 0.0f));
+	ASSERT_TRUE(start.has_value());
+	auto inputs = RestingInputs(*start);
+	inputs.spellNeedsReport = [] { return true; };
+	EXPECT_TRUE(reporter.Finish(inputs).report.has_value());
+}
+
+TEST(OwnHandReport, TheThingUnderTheCursorGoesOnlyWhenItChanges)
+{
+	OwnReporter reporter;
+	const auto hand = static_cast<entt::entity>(4);
+	const auto creature = static_cast<entt::entity>(9);
+	auto start = reporter.Start(1, hand, Resting().handPoint);
+	ASSERT_TRUE(start.has_value());
+	auto inputs = RestingInputs(*start);
+	// No thing at the first pass is the same as the start: nothing goes
+	EXPECT_FALSE(reporter.Finish(inputs).pick.has_value());
+	start = reporter.Start(2, hand, Resting().handPoint);
+	ASSERT_TRUE(start.has_value());
+	inputs = RestingInputs(*start);
+	inputs.picked = creature;
+	const auto picked = reporter.Finish(inputs);
+	ASSERT_TRUE(picked.pick.has_value());
+	EXPECT_EQ(picked.pick->object, creature);
+	start = reporter.Start(3, hand, Resting().handPoint);
+	ASSERT_TRUE(start.has_value());
+	inputs = RestingInputs(*start);
+	inputs.picked = creature;
+	EXPECT_FALSE(reporter.Finish(inputs).pick.has_value());
+	// With no picks at all, nothing goes
+	start = reporter.Start(4, hand, Resting().handPoint);
+	ASSERT_TRUE(start.has_value());
+	inputs = RestingInputs(*start);
+	inputs.picked.reset();
+	EXPECT_FALSE(reporter.Finish(inputs).pick.has_value());
+}
+
+TEST(OwnHandReport, ANewHandStartsWithNoReport)
+{
+	OwnReporter reporter;
+	auto start = reporter.Start(1, static_cast<entt::entity>(4), Resting().handPoint);
+	ASSERT_TRUE(start.has_value());
+	auto inputs = RestingInputs(*start);
+	inputs.picked = static_cast<entt::entity>(9);
+	std::ignore = reporter.Finish(inputs);
+	// Another hand: the full report and the thing under the cursor go again, after the wait of the old hand
+	start = reporter.Start(2, static_cast<entt::entity>(5), Resting().handPoint);
+	ASSERT_TRUE(start.has_value());
+	EXPECT_TRUE(start->newHand);
+	inputs = RestingInputs(*start);
+	inputs.picked = static_cast<entt::entity>(9);
+	const auto again = reporter.Finish(inputs);
+	EXPECT_TRUE(again.pick.has_value());
+	EXPECT_FALSE(again.report.has_value());
+	EXPECT_EQ(reporter.TurnsToWait(), 0);
+	start = reporter.Start(3, static_cast<entt::entity>(5), Resting().handPoint);
+	ASSERT_TRUE(start.has_value());
+	const auto full = reporter.Finish(RestingInputs(*start));
+	ASSERT_TRUE(full.report.has_value());
+	EXPECT_EQ(*full.report, Resting());
 }

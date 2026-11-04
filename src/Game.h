@@ -868,17 +868,6 @@ private:
 	std::optional<glm::vec3> _cursorWorldPosition;
 	/// Where the hand started, where a tool's run can keep it (sim_run::Settings::stillHand)
 	std::optional<glm::vec3> _stillHandAt;
-	/// The last report of the hand and the camera that this computer sent, its hand and its turn
-	/// The values are as in player_commands::HandReport: the collide point, the hand, the camera and its focus
-	std::array<glm::vec3, 4> _lastHandReport {};
-	/// The point that the interface picked last under the cursor. It stays while the cursor picks nothing.
-	glm::vec3 _handCollidePoint {0.0f};
-	/// The turns that the hand report still waits after its last send
-	uint8_t _handReportWait {0};
-	entt::entity _reportedHand {entt::null};
-	/// The thing under the cursor that the last player_commands::HandPick sent
-	entt::entity _lastHandPick {entt::null};
-	std::optional<uint32_t> _handReportTurn;
 	/// The last report of the view that this computer sent (player_commands::ViewReport), none before the first
 	std::unique_ptr<player_commands::ViewReport> _lastViewReport;
 	/// The turn of the last report of the help that this computer sent

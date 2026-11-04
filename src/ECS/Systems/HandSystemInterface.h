@@ -34,6 +34,11 @@ namespace openblack::hand_trace
 class HandTrace;
 } // namespace openblack::hand_trace
 
+namespace openblack::hand_report
+{
+class OwnReporter;
+} // namespace openblack::hand_report
+
 namespace openblack::ecs::systems
 {
 class HandSystemInterface
@@ -155,6 +160,9 @@ public:
 	}
 	/// At the turn: a player reports where the hand and the camera are (see player_commands::HandReport)
 	virtual void Report([[maybe_unused]] PlayerNames player, [[maybe_unused]] const player_commands::HandReport& report) {}
+	/// The pass of this computer's hand at each turn: it keeps what the computer last sent of its hand (see
+	/// hand_report::OwnReporter). None where the hands send no reports.
+	[[nodiscard]] virtual hand_report::OwnReporter* GetOwnReporter() noexcept { return nullptr; }
 	/// This computer sends a report of its hand (see throw_lead::ReportLatency)
 	virtual void ReportSent([[maybe_unused]] const player_commands::HandReport& report) {}
 	/// The milliseconds from the send of a report of this computer's hand to the turn that did it, from the last report
