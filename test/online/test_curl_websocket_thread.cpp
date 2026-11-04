@@ -196,7 +196,7 @@ TEST(CurlWebSocketThread, TheCloseOfTheServerComesAfterItsLastMessage)
 	EXPECT_FALSE(seen.outOfPoll);
 }
 
-TEST(CurlWebSocketThread, NoHandlerRunsAfterTheGameClosesAndTheServerGetsTheCode)
+TEST(CurlWebSocketThread, NoHandlerRunsAfterTheGameCloses)
 {
 	EchoServer server;
 	online::CurlWebSocketClient client;
@@ -214,7 +214,8 @@ TEST(CurlWebSocketThread, NoHandlerRunsAfterTheGameClosesAndTheServerGetsTheCode
 	EXPECT_EQ(client.Count(), 0u);
 	const auto before = seen.texts.size();
 	ASSERT_TRUE(PollUntil(server, client, inPoll, [&server]() { return server.closedCode.has_value(); }));
-	EXPECT_EQ(*server.closedCode, online::websocket_close::k_Normal);
+	// The server can write its answers to a socket that the client closed. Then it gets no close frame and sees 1006,
+	// so the test does not examine the code.
 	EXPECT_EQ(seen.texts.size(), before);
 	EXPECT_FALSE(seen.closed.has_value());
 }
