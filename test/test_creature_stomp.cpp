@@ -262,6 +262,16 @@ TEST(CreatureStomp, TheSpheresComeOnAndGoOffWithTheBody)
 	EXPECT_EQ(stomp::SwitchFor({.animation = 53}), Switch::Keep);
 }
 
+TEST(CreatureStomp, ASlapTurnsTheSpheresOnOnlyWithOneHumanInTheGame)
+{
+	// A game alone always has one human
+	EXPECT_TRUE(stomp::SlapTurnsSpheresOn(false, 0));
+	// A network game turns them on only while one human is in it
+	EXPECT_TRUE(stomp::SlapTurnsSpheresOn(true, 1));
+	EXPECT_FALSE(stomp::SlapTurnsSpheresOn(true, 2));
+	EXPECT_FALSE(stomp::SlapTurnsSpheresOn(true, 0));
+}
+
 TEST(CreatureStomp, WhatTheSpheresKnockAbout)
 {
 	using stomp::Victim;

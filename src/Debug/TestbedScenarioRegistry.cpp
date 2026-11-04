@@ -11690,6 +11690,40 @@ void AddMind(std::vector<Scenario>& all)
 	    .repeatFrom = 0,
 	});
 
+	{
+		// Villagers and sheep close round a tiger that the hand slaps hard on the head, the waist and the feet
+		std::vector<ObjectSetup> round;
+		for (int i = 0; i < 8; ++i)
+		{
+			const auto angle = static_cast<float>(i) * std::numbers::pi_v<float> / 4.0f;
+			const glm::vec2 at {portable_math::Sin(angle) * 5.0f, portable_math::Cos(angle) * 5.0f};
+			if (i % 2 == 0)
+			{
+				round.push_back({.type = VillagerInfo::CelticFarmerMale, .offset = at});
+			}
+			else
+			{
+				round.push_back({.type = AnimalInfo::Sheep, .offset = at, .living = true});
+			}
+		}
+		all.push_back({
+		    .id = "hand.slap_knocks_things",
+		    .name = "A slap in a game alone knocks things about",
+		    .facet = Facet::Hand,
+		    .description = "A grown tiger faces the camera with villagers and sheep close round it. The hand slaps it hard "
+		                   "on the head, the waist and the feet, then lets go.",
+		    .expected = "Each slap plays its reeling animation. In a game alone, the hands, feet, head and body of the "
+		                "tiger knock the villagers and sheep that they pass near through the air while it reels. When it "
+		                "stands again, it knocks nothing. In a network game with two or more humans, a slap knocks nothing.",
+		    .environment = {.dispenserGrid = false},
+		    .framing = {.shot = Shot::Follow, .distance = 1.3f},
+		    .creatures = {Posed(CreatureType::Tiger, {0.0f, 0.0f})},
+		    .objects = round,
+		    .commands = {Slap(0, 0.85f, false, false, 1.0f), Slap(0, 0.55f, false, true, 2.0f),
+		                 Slap(0, 0.2f, false, false, 2.0f), Act(Kind::HandLetGo, 0, 2.0f, true)},
+		});
+	}
+
 	auto young = Content(CreatureType::Tiger, {0.0f, 0.0f});
 	young.phase = 1;
 	all.push_back({

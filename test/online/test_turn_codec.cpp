@@ -73,7 +73,8 @@ std::vector<Action> EachCommand()
 	    FightGround {.creature = Entity(19), .point = {-1.5f, 2.0f, 3.25f}, .replace = true},
 	    FightMove {.target = Entity(20), .kind = 6, .value = 0x01020304, .replace = false},
 	    FightCharge {.heldMs = 1200},
-	    CreatureReaction {.creature = Entity(21), .animation = 0x0A0B0C0D, .mirrored = true, .interruptsAfter = 0.8},
+	    CreatureReaction {
+	        .creature = Entity(21), .animation = 0x0A0B0C0D, .mirrored = true, .interruptsAfter = 0.8, .slap = true},
 	    HandClick {.thing = Entity(22), .release = true, .hasPlace = true, .placeX = -5, .placeZ = 0x7FFFFFFF},
 	    SeedGesture {.kind = SeedGesture::Kind::PowerUp, .level = -1, .icon = Entity(46)},
 	    HandPick {.object = Entity(23)},
@@ -221,8 +222,11 @@ Action RandomAction(std::mt19937& random)
 	case 17:
 		return FightCharge {.heldMs = bits(random)};
 	case 18:
-		return CreatureReaction {
-		    .creature = entity(), .animation = bits(random), .mirrored = bits(random) % 2 == 0, .interruptsAfter = wide()};
+		return CreatureReaction {.creature = entity(),
+		                         .animation = bits(random),
+		                         .mirrored = bits(random) % 2 == 0,
+		                         .interruptsAfter = wide(),
+		                         .slap = bits(random) % 2 == 0};
 	case 22:
 		return HandPick {.object = entity()};
 	case 20:
@@ -438,7 +442,7 @@ std::vector<Action> BusyCommands()
 TEST(TurnCodec, EachCommandHasItsSize)
 {
 	const std::vector<size_t> sizes {2,  5, 9,  5,  53, 5, 10, 18, 5,  49, 17, 5, 5,  5,  9,  12, 1, 18,
-	                                 11, 5, 18, 15, 7,  5, 1,  2,  1,  61, 5,  2, 1,  13, 10, 18, 1, 58,
+	                                 11, 5, 19, 15, 7,  5, 1,  2,  1,  61, 5,  2, 1,  13, 10, 18, 1, 58,
 	                                 1,  5, 51, 5,  16, 7, 1,  1,  13, 1,  2,  9, 13, 1,  1,  8,  1, 5};
 	const auto commands = EachCommand();
 	ASSERT_EQ(commands.size(), sizes.size());
@@ -682,10 +686,13 @@ TEST(TurnCodec, TheDecoderRefusesABadFrame)
 	move[14] = 6;
 	move.back() = 2;
 	EXPECT_EQ(Decode(move).error, DecodeError::Value);
-	// A reaction is mirrored or not
+	// A reaction is mirrored or not, and is to a slap or not
 	auto reaction = Encode(CommandBlock {.sequence = 0, .turn = 0, .actions = {CreatureReaction {.creature = Entity(1)}}});
 	EXPECT_EQ(Decode(reaction).error, DecodeError::None);
 	reaction[18] = 2;
+	EXPECT_EQ(Decode(reaction).error, DecodeError::Value);
+	reaction[18] = 0;
+	reaction.back() = 2;
 	EXPECT_EQ(Decode(reaction).error, DecodeError::Value);
 	// A press of the hand has no place
 	auto click = Encode(CommandBlock {.sequence = 0, .turn = 0, .actions = {HandClick {.thing = Entity(1)}}});

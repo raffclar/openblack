@@ -257,6 +257,7 @@ void WriteAction(Writer& out, const Action& action)
 		               out.Number(command.animation);
 		               out.Byte(static_cast<uint8_t>(command.mirrored ? 1 : 0));
 		               out.Double(command.interruptsAfter);
+		               out.Byte(static_cast<uint8_t>(command.slap ? 1 : 0));
 	               },
 	               [](const PlayerLeft& /*command*/) {},
 	               [](const PlayerJoined& /*command*/) {},
@@ -570,11 +571,13 @@ DecodeError ReadAction(Reader& in, Action& action)
 		reaction.animation = in.Number<uint32_t>();
 		const auto mirrored = in.Byte();
 		reaction.interruptsAfter = in.Double();
-		if (mirrored > 1)
+		const auto slap = in.Byte();
+		if (mirrored > 1 || slap > 1)
 		{
 			return DecodeError::Value;
 		}
 		reaction.mirrored = mirrored != 0;
+		reaction.slap = slap != 0;
 		action = reaction;
 		return DecodeError::None;
 	}
@@ -1049,7 +1052,7 @@ size_t SizeOf(const Action& action) noexcept
 	                   [](const FightGround& /*command*/) { return k_Entity + k_Vector + 1; },
 	                   [](const FightMove& /*command*/) { return k_Entity + 1 + 4 + 1; },
 	                   [](const FightCharge& /*command*/) { return size_t {4}; },
-	                   [](const CreatureReaction& /*command*/) { return k_Entity + 4 + 1 + 8; },
+	                   [](const CreatureReaction& /*command*/) { return k_Entity + 4 + 1 + 8 + 1; },
 	                   [](const HandClick& /*command*/) { return k_Entity + 2 + 4 + 4; },
 	                   [](const SeedGesture& /*command*/) { return 2 + k_Entity; },
 	                   [](const PlayerLeft& /*command*/) { return size_t {0}; },

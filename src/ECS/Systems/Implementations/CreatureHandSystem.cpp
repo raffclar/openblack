@@ -42,9 +42,11 @@
 #include "Creature/CreatureRig.h"
 #include "Creature/CreatureSentReactions.h"
 #include "Creature/CreatureShownFace.h"
+#include "Creature/CreatureStomp.h"
 #include "Creature/CreatureTouchStep.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
+#include "ECS/Components/CreatureDestruction.h"
 #include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureNeeds.h"
@@ -56,7 +58,10 @@
 #include "ECS/Components/HandLockEndSent.h"
 #include "ECS/Components/HandLockedCreature.h"
 #include "ECS/Components/HandOnCreature.h"
+#include "ECS/Components/LeftGame.h"
 #include "ECS/Components/Mesh.h"
+#include "ECS/Components/ObserverInterfaces.h"
+#include "ECS/Components/Player.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/ShownCreatureFace.h"
 #include "ECS/Components/Transform.h"
@@ -90,6 +95,39 @@ namespace
 PlayerNames OwnPlayer()
 {
 	return Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE;
+}
+
+/// The humans in a network game: one for each human god that did not leave, and one for each observer. The god of the
+/// observers is not a human of its own.
+size_t HumansInNetworkGame(const ecs::Registry& registry)
+{
+	size_t humans = 0;
+	const auto* players = Locator::playerSystem::has_value() ? &Locator::playerSystem::value() : nullptr;
+	registry.Each<const Player>([&](entt::entity entity, const Player& player) {
+		if (const auto* observers = registry.TryGet<const ObserverInterfaces>(entity))
+		{
+			humans += observers->observers.size();
+			return;
+		}
+		if (players != nullptr && players->IsHumanPlayer(player.name) && !registry.AllOf<LeftGame>(entity))
+		{
+			++humans;
+		}
+	});
+	return humans;
+}
+
+/// A slap that the creature took turns the spheres of its body on, when one human is in the game. The check of the
+/// spheres in this turn turns them on.
+void SlapSpheres(ecs::Registry& registry, entt::entity creature)
+{
+	const bool networkGame = Locator::time::has_value() && Locator::time::value().IsNetworkGame();
+	if (!creature_stomp::SlapTurnsSpheresOn(networkGame, networkGame ? HumansInNetworkGame(registry) : 0))
+	{
+		return;
+	}
+	auto* spheres = registry.TryGet<CreatureDestruction>(creature);
+	(spheres != nullptr ? *spheres : registry.Assign<CreatureDestruction>(creature)).slapped = true;
 }
 
 /// Whether the draw of the hand sends the leash tap of a click and the feedback. It does in a game alone with commands.
@@ -725,7 +763,7 @@ void CreatureHandSystem::Bruise(entt::entity creature, const glm::vec3& rayOrigi
 }
 
 bool CreatureHandSystem::React(entt::entity creature, size_t animation, bool mirrored,
-                               std::optional<creature_face::Request> face, double interruptsAfter)
+                               std::optional<creature_face::Request> face, double interruptsAfter, bool slap)
 {
 	// The face of a stroke shows at once, also when the body refuses the stroke. Only this computer shows it.
 	if (face.has_value())
@@ -763,11 +801,17 @@ bool CreatureHandSystem::React(entt::entity creature, size_t animation, bool mir
 		    .animation = static_cast<uint32_t>(animation),
 		    .mirrored = mirrored,
 		    .interruptsAfter = interruptsAfter,
+		    .slap = slap,
 		});
 		return true;
 	}
 	// With no commands, the creature reacts at once
-	return minds.ForceAction(creature, animation, mirrored, interruptsAfter);
+	const bool takes = minds.ForceAction(creature, animation, mirrored, interruptsAfter);
+	if (takes && slap)
+	{
+		SlapSpheres(Locator::entitiesRegistry::value(), creature);
+	}
+	return takes;
 }
 
 void CreatureHandSystem::DoReaction(PlayerNames player, const player_commands::CreatureReaction& reaction)
@@ -789,8 +833,12 @@ void CreatureHandSystem::DoReaction(PlayerNames player, const player_commands::C
 		                   entt::to_integral(reaction.creature), reaction.animation, reaction.mirrored,
 		                   static_cast<int>(player));
 	}
-	Locator::creatureMindSystem::value().ForceAction(reaction.creature, reaction.animation, reaction.mirrored,
-	                                                 reaction.interruptsAfter);
+	const bool takes = Locator::creatureMindSystem::value().ForceAction(reaction.creature, reaction.animation,
+	                                                                    reaction.mirrored, reaction.interruptsAfter);
+	if (takes && reaction.slap)
+	{
+		SlapSpheres(registry, reaction.creature);
+	}
 }
 
 void CreatureHandSystem::DoBruise(PlayerNames player, const player_commands::CreatureBruise& bruise)
@@ -1064,13 +1112,14 @@ bool CreatureHandSystem::Step(HandOnCreature& contact, const StepInput& input)
 	const creature_hand::TouchAnswers answers {
 	    .slap =
 	        [&](const feedback::Slap& slap) {
-		        return React(creatureEntity, slap.animation, slap.mirrored, std::nullopt, feedback::k_SlapInterruptsAfter);
+		        return React(creatureEntity, slap.animation, slap.mirrored, std::nullopt, feedback::k_SlapInterruptsAfter,
+		                     true);
 	        },
 	    .stroke =
 	        [&](feedback::BodyPart part) {
 		        const auto index = static_cast<size_t>(part);
 		        return React(creatureEntity, feedback::k_RewardAnimations.at(index), feedback::k_RewardMirrored.at(index),
-		                     feedback::RewardFace(part), feedback::k_StrokeInterruptsAfter);
+		                     feedback::RewardFace(part), feedback::k_StrokeInterruptsAfter, false);
 	        },
 	    .nearestPart = [&]() -> std::optional<feedback::BodyPart> {
 		    const auto parts = PartsOf(creature, animation, transform);
@@ -1442,6 +1491,7 @@ bool CreatureHandSystem::Slap(entt::entity creature, float heightShare, bool gen
 	{
 		return false;
 	}
+	SlapSpheres(registry, creature);
 	contact->sum = feedback::AfterSlap(contact->sum, slap->gentle);
 	feedback::Touched(contact->clocks);
 	return true;

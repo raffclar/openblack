@@ -29,6 +29,8 @@ struct CreatureDestruction
 	std::array<float, creature_stomp::k_PartCount> radius {};
 	/// The body action at the last frame, to see when a new one starts
 	creature_stomp::BodyStart seen {};
+	/// The creature took a slap that turns the spheres on. The next check turns them on, with each part where it is then.
+	bool slapped {false};
 };
 
 } // namespace openblack::ecs::components
