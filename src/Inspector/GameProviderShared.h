@@ -160,6 +160,8 @@ template <typename Read>
 [[nodiscard]] std::unique_ptr<ProviderInterface> SkyStateProvider(std::unique_ptr<ProviderInterface> sky);
 /// The things living on the land
 [[nodiscard]] std::unique_ptr<ProviderInterface> LivingProvider();
+/// The players, their hands and their input
+[[nodiscard]] std::unique_ptr<ProviderInterface> PlayersProvider();
 
 
 } // namespace openblack::inspector::game_providers
