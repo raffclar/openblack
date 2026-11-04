@@ -257,6 +257,7 @@ void openblack::ecs::reflection::RegisterFields_Values_e(entt::meta_ctx& context
 	Reflect<openblack::ecs::components::Footpath::Node>(context, ValueOnly {})
 	    .Field<&openblack::ecs::components::Footpath::Node::position>("position")
 	    .Field<&openblack::ecs::components::Footpath::Node::place>("place")
+	    .Field<&openblack::ecs::components::Footpath::Node::altitude>("altitude")
 	    .Field<&openblack::ecs::components::Footpath::Node::planned>("planned")
 	    .Field<&openblack::ecs::components::Footpath::Node::hidden>("hidden")
 	    .Field<&openblack::ecs::components::Footpath::Node::marker>("marker");

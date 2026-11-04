@@ -141,10 +141,10 @@ public:
 		return at;
 	}
 
-	/// A new node, planned, before another
-	Iterator InsertPlanned(Iterator before, glm::ivec2 place)
+	/// A new node, planned, before another. The height above the land is 0 unless the caller gives one.
+	Iterator InsertPlanned(Iterator before, glm::ivec2 place, float altitude = 0.0f)
 	{
-		return _nodes.insert(before, {.node = {.place = place, .planned = true}, .key = _nextKey++});
+		return _nodes.insert(before, {.node = {.place = place, .altitude = altitude, .planned = true}, .key = _nextKey++});
 	}
 
 	/// A new node, planned, hidden or a marker as given, before another
@@ -161,15 +161,16 @@ public:
 	{
 		for (auto at = std::next(first); at != last;)
 		{
-			_hooks.sendOn(at->key, first->key, first->node.place, last->key, last->node.place);
+			_hooks.sendOn(at->key, first->key, first->node, last->key, last->node);
 			at = IsPassedBy(*at) ? std::next(at) : _nodes.erase(at);
 		}
 	}
 
 	/// The stretch between two anchors planned again at once. When the route planner finds a way, the walkers heading
 	/// for the two anchors along the stretch look again, the stretch's old nodes go but those hidden and the markers,
-	/// and the route's nodes come after the first anchor, then the marker if one is given. Whether it found a way.
-	bool PlanAgain(Iterator first, Iterator last, std::optional<glm::ivec2> marker)
+	/// and the route's nodes come after the first anchor, then the marker if one is given. The marker has the place and
+	/// the height of the thing. Whether it found a way.
+	bool PlanAgain(Iterator first, Iterator last, const Obstacle* marker)
 	{
 		// The game only plans between two nodes that are there
 		if (first == _nodes.end() || last == _nodes.end())
@@ -189,9 +190,9 @@ public:
 		{
 			InsertPlanned(at, place);
 		}
-		if (marker.has_value())
+		if (marker != nullptr)
 		{
-			InsertNode(at, PlanNode {.place = *marker, .planned = true, .marker = true});
+			InsertNode(at, PlanNode {.place = marker->place, .altitude = marker->altitude, .planned = true, .marker = true});
 		}
 		return true;
 	}
@@ -219,8 +220,9 @@ void HideUnder(Path& path, const Obstacle& obstacle, const Box& box, float reach
 		const float dz = x87::Sub(static_cast<double>(static_cast<uint32_t>(at->node.place.y)), obstacle.place.y);
 		if (dz * dz + dx * dx < reachSq)
 		{
+			// The new node is a copy of the hidden node, at the same place and height
 			at->node.hidden = true;
-			at = path.InsertPlanned(std::next(at), at->node.place);
+			at = path.InsertPlanned(std::next(at), at->node.place, at->node.altitude);
 		}
 	}
 }
@@ -322,7 +324,7 @@ void SendStretchRound(Path& path, const Obstacle& obstacle, const Box& box, floa
 		const auto planAgainFrom = [&](const KeyedNode& end) {
 			if (haveAnchors && end.node.planned)
 			{
-				if (path.PlanAgain(firstAnchor, lastAnchor, obstacle.place))
+				if (path.PlanAgain(firstAnchor, lastAnchor, &obstacle))
 				{
 					return true;
 				}
@@ -369,7 +371,7 @@ void SendStretchRound(Path& path, const Obstacle& obstacle, const Box& box, floa
 		{
 			continue;
 		}
-		if (haveAnchors && path.PlanAgain(firstAnchor, lastAnchor, obstacle.place))
+		if (haveAnchors && path.PlanAgain(firstAnchor, lastAnchor, &obstacle))
 		{
 			return;
 		}
@@ -398,10 +400,10 @@ void SendStretchRound(Path& path, const Obstacle& obstacle, const Box& box, floa
 	return gutils::GetDistanceInMetres(at, centre) < reach;
 }
 
-/// A node as the bend test sees it: metres across the ground and the land's height
-[[nodiscard]] glm::vec3 Point(const Hooks& hooks, glm::ivec2 place)
+/// A node as the bend test sees it: metres across the ground, and the land's height plus the node's height above it
+[[nodiscard]] glm::vec3 Point(const Hooks& hooks, const PlanNode& node)
 {
-	return {map_coords::ToMetres(place.x), hooks.altitude(place) + 0.0f, map_coords::ToMetres(place.y)};
+	return {map_coords::ToMetres(node.place.x), hooks.altitude(node.place) + node.altitude, map_coords::ToMetres(node.place.y)};
 }
 
 /// The anchors and walk state that the three passes of the way back share
@@ -434,7 +436,7 @@ struct ReturnState
 			{
 				scan->node.hidden = false;
 				path.EraseBetween(state.first, scan);
-				path.PlanAgain(state.first, scan, std::nullopt);
+				path.PlanAgain(state.first, scan, nullptr);
 				state.first = scan;
 				++scan;
 				more = scan != path.End();
@@ -448,7 +450,7 @@ struct ReturnState
 		if (changed)
 		{
 			path.EraseBetween(state.first, state.last);
-			path.PlanAgain(state.first, state.last, std::nullopt);
+			path.PlanAgain(state.first, state.last, nullptr);
 			return more;
 		}
 	}
@@ -474,7 +476,7 @@ struct ReturnState
 			{
 				// The game reads the next node from the node it has just deleted; the next node is kept first here
 				at = path.Erase(at);
-				if (path.PlanAgain(state.first, state.last, std::nullopt))
+				if (path.PlanAgain(state.first, state.last, nullptr))
 				{
 					return true;
 				}
@@ -531,7 +533,7 @@ void StraightenBends(Path& path, const Obstacle& obstacle, const Box& box, float
 		}
 		if (state.haveAnchors)
 		{
-			if (path.PlanAgain(state.first, state.last, std::nullopt))
+			if (path.PlanAgain(state.first, state.last, nullptr))
 			{
 				return;
 			}
@@ -539,7 +541,8 @@ void StraightenBends(Path& path, const Obstacle& obstacle, const Box& box, float
 		}
 		// The game looks at this node again for good when its anchors stand at one place, and hangs: the way back
 		// stops here instead
-		if (state.last == path.End() || state.last->node.place == state.first->node.place)
+		if (state.last == path.End() ||
+		    state.last->node.place == state.first->node.place && state.last->node.altitude == state.first->node.altitude)
 		{
 			return;
 		}
@@ -574,15 +577,13 @@ void StraightenBends(Path& path, const Obstacle& obstacle, const Box& box, float
 			continue;
 		}
 		auto cutFrom = start;
-		if (!StraightEnough(Point(hooks, previous->node.place), Point(hooks, cutFrom->node.place),
-		                    Point(hooks, out->node.place)))
+		if (!StraightEnough(Point(hooks, previous->node), Point(hooks, cutFrom->node), Point(hooks, out->node)))
 		{
 			previous = cutFrom;
 			++cutFrom;
 		}
 		if (lastIn != path.End() && cutFrom != out &&
-		    !StraightEnough(Point(hooks, previous->node.place), Point(hooks, lastIn->node.place),
-		                    Point(hooks, out->node.place)))
+		    !StraightEnough(Point(hooks, previous->node), Point(hooks, lastIn->node), Point(hooks, out->node)))
 		{
 			out = lastIn;
 		}

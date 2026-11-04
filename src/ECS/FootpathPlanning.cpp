@@ -133,14 +133,15 @@ std::vector<glm::ivec2> footpath_planning::RoutePlaces(std::span<const creature_
 }
 
 std::vector<PlanNode> footpath_planning::LayBetween(std::span<const PlanNode> nodes, size_t first, size_t last,
-                                                    std::span<const glm::ivec2> route, std::optional<glm::ivec2> marker)
+                                                    std::span<const glm::ivec2> route,
+                                                    std::optional<map_coords::MapCoords> marker)
 {
 	std::vector<PlanNode> laid(nodes.begin(), nodes.begin() + static_cast<std::ptrdiff_t>(first + 1));
 	std::ranges::transform(route, std::back_inserter(laid),
 	                       [](glm::ivec2 place) { return PlanNode {.place = place, .planned = true}; });
 	if (marker.has_value())
 	{
-		laid.push_back({.place = *marker, .planned = true, .marker = true});
+		laid.push_back({.place = {marker->x, marker->z}, .altitude = marker->altitude, .planned = true, .marker = true});
 	}
 	std::ranges::copy_if(nodes.subspan(first + 1, last - first - 1), std::back_inserter(laid),
 	                     [](const PlanNode& node) { return node.hidden || node.marker; });

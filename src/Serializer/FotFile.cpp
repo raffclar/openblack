@@ -139,8 +139,10 @@ void FotFile::Load(const std::filesystem::path& path)
 			const auto ground = map_coords::ToMetres(coords);
 			const glm::vec3 position {ground.x, coords.altitude + island.GetHeightAt(ground), ground.y};
 			// The file's nodes keep whether a plan laid them; none of them is hidden or a marker
-			footpathEntt.nodes.push_back(
-			    {.position = position, .place = {coords.x, coords.z}, .planned = (node.unknown & k_PlannedNode) != 0});
+			footpathEntt.nodes.push_back({.position = position,
+			                              .place = {coords.x, coords.z},
+			                              .altitude = coords.altitude,
+			                              .planned = (node.unknown & k_PlannedNode) != 0});
 		}
 		footpathEntities.push_back(static_cast<ecs::components::Footpath::Id>(entity));
 	}

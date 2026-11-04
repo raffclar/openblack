@@ -30,14 +30,12 @@ namespace openblack::ecs::systems::object_measures
 /// icon on its plinth; every other thing measures as itself.
 [[nodiscard]] entt::entity MeasuredPart(const Registry& registry, entt::entity entity);
 /// A thing's radius on the ground, 0 for one without a model. Fields and teleport stones have fixed radii. A need flag
-/// of a worship site has the radius of its model at its first size.
+/// of a worship site has the radius of its model at its first size. A food pile is as wide as it is raised by what it
+/// holds.
 [[nodiscard]] float TwoDRadius(const Registry& registry, entt::entity entity);
 /// The radius that a creature keeps clear of things by on its walks. In a temple's pen it is the radius of the creature's
 /// own size, not of its shown size. While the creature clears its way, it is the radius of its shown size.
 [[nodiscard]] float NavRadius(const Registry& registry, entt::entity creature);
-/// The radius of a thing's edge on the ground, as the walks to its edge measure it. A food pile is as wide as it is raised
-/// by what it holds. Every other thing has its radius on the ground (TwoDRadius).
-[[nodiscard]] float EdgeRadius(const Registry& registry, entt::entity entity);
 /// How far above the land a thing's place is: a pile of food or wood is as far under the land as it sinks for what it
 /// holds (a negative value). Every other thing stands on the land, at 0.
 [[nodiscard]] float PlaceAltitude(const Registry& registry, entt::entity entity);

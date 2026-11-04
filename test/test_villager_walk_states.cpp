@@ -8,6 +8,7 @@
  *******************************************************************************/
 
 #include <memory>
+#include <optional>
 #include <stdexcept>
 #include <vector>
 
@@ -21,6 +22,7 @@
 #include "3D/MapCoords.h"
 #include "ECS/Components/Dance.h"
 #include "ECS/Components/Fire.h"
+#include "ECS/Components/Footpath.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/ScriptRemind.h"
@@ -131,7 +133,7 @@ public:
 	}
 	void ProcessLookahead() override {}
 	void LookAgain(entt::entity) override {}
-	void WalkTo(entt::entity, glm::ivec2) override {}
+	void WalkTo(entt::entity, glm::ivec2, float) override {}
 	void SetupWalkRound(entt::entity, glm::ivec2) override {}
 	bool WalkOne(entt::entity) override { return false; }
 
@@ -332,6 +334,28 @@ TEST_F(VillagerWalkStates, AFootpathWalkStepsFirst)
 	EXPECT_EQ(_steps->steps.front().top, VillagerStates::MoveOnPath);
 	// With no footpath to walk on, it then goes on into its next state
 	EXPECT_EQ(Top(), k_Next);
+}
+
+// A walk on a footpath continues to the next node at the height of that node above the land
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(VillagerWalkStates, AFootpathWalkGoesToTheNextNodeAtItsHeight)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto here = wall_hug::ToWhole(glm::xz(k_Here));
+	const auto next = wall_hug::ToWhole(glm::xz(k_Here) + glm::vec2(20.0f, 0.0f));
+	const auto path = registry.Create();
+	auto& footpath = registry.Assign<Footpath>(path);
+	footpath.nodes.push_back({.position = k_Here, .place = here, .altitude = 0.5f});
+	footpath.nodes.push_back({.position = k_Here, .place = next, .altitude = 1.5f});
+	registry.Assign<FootpathWalk>(_villager, path, false, std::optional<uint32_t>(0), entt::null);
+	registry.Get<WallHug>(_villager).goalPlace = here;
+	_steps->arrives = true;
+	SetStates(VillagerStates::MoveOnPath, k_Next);
+	villager_footpath::MoveOnPath(Action());
+	const auto& wallHug = registry.Get<const WallHug>(_villager);
+	EXPECT_EQ(Top(), VillagerStates::MoveOnPath);
+	EXPECT_EQ(wallHug.goalPlace, next);
+	EXPECT_EQ(wallHug.goalHeight, 1.5f);
 }
 
 // A walk that can use footpaths but goes straight to its goal keeps the height of the goal above the land

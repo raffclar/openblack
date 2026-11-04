@@ -49,6 +49,8 @@ struct ObstacleLook
 	bool known {false};
 	/// Its radius across the ground in metres. None when the creatures' route rule lets them through it.
 	std::optional<float> radius;
+	/// The height of its place above the land
+	float altitude {0.0f};
 };
 
 class WorldInterface
@@ -63,6 +65,8 @@ public:
 	virtual void SyncMap() = 0;
 	/// Where a path to a thing ends, in whole map units
 	[[nodiscard]] virtual glm::ivec2 ArrivePlace(entt::entity thing) const = 0;
+	/// The height above the land of the place where a path to a thing ends
+	[[nodiscard]] virtual float ArriveAltitude(entt::entity thing) const = 0;
 	/// The two points that a path between two things is planned between: where each is arrived at, moved out of its
 	/// building when it is a building
 	[[nodiscard]] virtual std::pair<glm::vec2, glm::vec2> PlannedEnds(entt::entity from, entt::entity to) const = 0;
@@ -91,8 +95,8 @@ public:
 	[[nodiscard]] virtual float AltitudeAt(glm::ivec2 place) const = 0;
 	/// A walker finds its way again from where it is
 	virtual void LookAgain(entt::entity walker) = 0;
-	/// A walker walks straight on to a place in whole map units
-	virtual void WalkTo(entt::entity walker, glm::ivec2 place) = 0;
+	/// A walker walks straight on to a place in whole map units, at a height above the land
+	virtual void WalkTo(entt::entity walker, glm::ivec2 place, float altitude) = 0;
 	/// While the world keeps what the plans gather, each block that a plan gathers keeps its circles, and the next plan
 	/// that reaches the block gets the same circles with less work. While the world keeps them, the caller does not
 	/// change the land, the things in the map's cells or what they are gone round by. A stop forgets all of them.

@@ -52,10 +52,10 @@ private:
 	/// gives the square that holds all the path's nodes, which a thing put far from it cannot touch.
 	bool Reroute(entt::entity footpath, const components::FootpathObstacleChange& change,
 	             const std::optional<std::pair<glm::ivec2, glm::ivec2>>& nodeSquare);
-	/// The path takes the planned nodes, each on the land
+	/// The path takes the planned nodes, each at its height above the land
 	void SetNodes(components::Footpath& footpath, std::span<const footpath_planning::PlanNode> nodes) const;
-	/// A new path with two nodes, the first where the first thing is arrived at
-	entt::entity MakeFootpath(glm::ivec2 first, glm::ivec2 last);
+	/// A new path with two nodes, the first where the first thing is arrived at. Each node has the height of its end.
+	entt::entity MakeFootpath(entt::entity from, entt::entity to);
 	/// The path's nodes between its two ends are laid along the route
 	void LayRoute(entt::entity footpath, std::span<const glm::ivec2> route, bool settle);
 	/// A thing keeps a path among those that lead from it, the newest first

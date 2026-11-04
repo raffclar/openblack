@@ -123,6 +123,7 @@ components::Footpath::Node NodeOf(const ImportedNode& node, float landHeight)
 	const auto ground = map_coords::ToMetres(coords);
 	return {.position = {ground.x, node.coords.altitude + landHeight, ground.y},
 	        .place = {node.coords.x, node.coords.z},
+	        .altitude = node.coords.altitude,
 	        .planned = (node.flags & k_NodePlanned) != 0,
 	        .hidden = (node.flags & k_NodeHidden) != 0,
 	        .marker = (node.flags & k_NodeMarker) != 0};

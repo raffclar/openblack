@@ -149,6 +149,11 @@ public:
 		}
 		return wall_hug::ToWhole(glm::xz(registry.Get<const Transform>(thing).position));
 	}
+	[[nodiscard]] float ArriveAltitude(entt::entity thing) const override
+	{
+		const auto found = arriveAltitudes.find(thing);
+		return found != arriveAltitudes.end() ? found->second : 0.0f;
+	}
 	[[nodiscard]] std::pair<glm::vec2, glm::vec2> PlannedEnds(entt::entity from, entt::entity to) const override
 	{
 		return {planning::ToPoint(ArrivePlace(from)), planning::ToPoint(ArrivePlace(to))};
@@ -159,6 +164,7 @@ public:
 		if (const auto found = radii.find(thing); found != radii.end())
 		{
 			look.radius = found->second;
+			look.altitude = ArriveAltitude(thing);
 		}
 		return look;
 	}
@@ -210,7 +216,11 @@ public:
 	[[nodiscard]] float LandHeightAt(glm::vec2 /*point*/) const override { return 0.0f; }
 	[[nodiscard]] float AltitudeAt(glm::ivec2 /*place*/) const override { return 0.0f; }
 	void LookAgain(entt::entity walker) override { lookedAgain.push_back(walker); }
-	void WalkTo(entt::entity walker, glm::ivec2 place) override { walkedTo.emplace_back(walker, place); }
+	void WalkTo(entt::entity walker, glm::ivec2 place, float altitude) override
+	{
+		walkedTo.emplace_back(walker, place);
+		walkedToAltitudes.push_back(altitude);
+	}
 
 	[[nodiscard]] static std::array<float, 4> KeyOf(const footpath_world::Plan& plan)
 	{
@@ -249,11 +259,14 @@ public:
 	std::set<entt::entity> filed;
 	std::map<entt::entity, float> radii;
 	std::map<entt::entity, glm::ivec2> arrive;
+	/// The heights above the land where the paths to things end, and of the places of things that the paths go round
+	std::map<entt::entity, float> arriveAltitudes;
 	std::map<entt::entity, entt::entity> towns;
 	std::map<entt::entity, entt::entity> pits;
 	std::set<entt::entity> unbuilt;
 	std::vector<entt::entity> lookedAgain;
 	std::vector<std::pair<entt::entity, glm::ivec2>> walkedTo;
+	std::vector<float> walkedToAltitudes;
 };
 
 class FootpathSystemTest: public ::testing::Test
@@ -351,6 +364,38 @@ TEST_F(FootpathSystemTest, AWorkingBuildingGetsAPathFromThePitRoundWhatCameBefor
 	EXPECT_TRUE(world->registry.Context().footpathObstacleChanges.empty());
 	EXPECT_TRUE(std::ranges::none_of(world->registry.Get<const Footpath>(paths.front()).nodes,
 	                                 [](const Footpath::Node& node) { return node.hidden || node.marker; }));
+}
+
+TEST_F(FootpathSystemTest, ThePathEndsAndTheMarkerOfAThingHaveTheHeightsOfTheirPlaces)
+{
+	const auto house = MakeAbode(k_HousePosition);
+	world->arriveAltitudes[pit] = 0.25f;
+	world->arriveAltitudes[house] = 0.75f;
+	system->BuildingWorking(house);
+	const auto path = PathsOf(house).front();
+	{
+		const auto& nodes = world->registry.Get<const Footpath>(path).nodes;
+		ASSERT_EQ(nodes.size(), 2U);
+		EXPECT_EQ(nodes.front().altitude, 0.25f);
+		EXPECT_EQ(nodes.back().altitude, 0.75f);
+		// A node is drawn above the land by its height
+		EXPECT_EQ(nodes.back().position.y, 0.75f);
+	}
+
+	// A thing below the land put on the path: the marker at its place has its height, the route's nodes the height 0
+	const auto rock = world->Make(k_RockPosition, k_RockRadius);
+	world->arriveAltitudes[rock] = -0.5f;
+	world->SyncMap();
+	system->ProcessObstacleChanges();
+	const auto& nodes = world->registry.Get<const Footpath>(path).nodes;
+	ASSERT_GT(nodes.size(), 2U);
+	EXPECT_EQ(std::ranges::count_if(nodes, &Footpath::Node::marker), 1);
+	EXPECT_EQ(nodes.front().altitude, 0.25f);
+	EXPECT_EQ(nodes.back().altitude, 0.75f);
+	for (size_t i = 1; i + 1 < nodes.size(); ++i)
+	{
+		EXPECT_EQ(nodes[i].altitude, nodes[i].marker ? -0.5f : 0.0f);
+	}
 }
 
 TEST_F(FootpathSystemTest, AMiracleDispenserOfATownGetsAPathFromThePitAsAnAbodeDoes)

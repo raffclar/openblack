@@ -30,11 +30,13 @@
 namespace openblack::ecs::footpath_obstacles
 {
 
-/// A thing put on the map or removed from it: how far it reaches across the ground, in metres, and where it stands
+/// A thing put on the map or removed from it: how far it reaches across the ground, in metres, where it stands, and the
+/// height of its place above the land
 struct Obstacle
 {
 	float radius {0.0f};
 	glm::ivec2 place {0, 0};
+	float altitude {0.0f};
 };
 
 /// A node of a path, with a key that tells the walkers' node apart from the others while the nodes change. Nodes that
@@ -56,8 +58,10 @@ struct Hooks
 	/// they stand, going straight on
 	std::function<void(uint32_t key, bool towardsStart)> lookAgain;
 	/// A node goes: the walkers that walk to it towards the path's start walk to the anchor before it instead, and the
-	/// others to the anchor after it (each anchor by its key and place)
-	std::function<void(uint32_t gone, uint32_t back, glm::ivec2 backPlace, uint32_t on, glm::ivec2 onPlace)> sendOn;
+	/// others to the anchor after it (each anchor by its key and node)
+	std::function<void(uint32_t gone, uint32_t back, const footpath_planning::PlanNode& backNode, uint32_t on,
+	                   const footpath_planning::PlanNode& onNode)>
+	    sendOn;
 	/// A node is removed from the path with no word to its walkers: they walk on to it, then those going away from the
 	/// path's start continue along the path after a node (by its key), and those going towards the start find that the
 	/// path has ended (as at the first node, by its key)

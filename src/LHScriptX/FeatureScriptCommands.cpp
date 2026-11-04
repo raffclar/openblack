@@ -313,7 +313,17 @@ const std::array<const ScriptCommandSignature, 106> FeatureScriptCommands::k_Sig
     CREATE_COMMAND_BINDING("CREATE_WATERFALL", CreateWaterfall),
     CREATE_COMMAND_BINDING("CREATE_ARENA", CreateArena),
     CREATE_COMMAND_BINDING("CREATE_FOOTPATH", CreateFootpath),
-    CREATE_COMMAND_BINDING("CREATE_FOOTPATH_NODE", CreateFootpathNode),
+    {{"CREATE_FOOTPATH_NODE"},
+     [](const ScriptCommandParameters& ctx) {
+	     // The node takes the exact map position that the game reads from the text, with its height
+	     if (ctx.size() >= 2 && ctx[1].GetMapPlace().has_value())
+	     {
+		     AddFootpathNode(ctx[0].GetNumber(), *ctx[1].GetMapPlace());
+		     return;
+	     }
+	     InvokeCallableFromContext(ctx, std::function(CreateFootpathNode));
+     },
+     GetScriptCommandParameters(CreateFootpathNode)},
     CREATE_COMMAND_BINDING("LINK_FOOTPATH", LinkFootpath),
     CREATE_COMMAND_BINDING("CREATE_BONFIRE", CreateBonfire),
     CREATE_COMMAND_BINDING("CREATE_BASE", CreateBase),
@@ -1130,6 +1140,12 @@ void FeatureScriptCommands::CreateFootpath(int32_t)
 
 void FeatureScriptCommands::CreateFootpathNode(int footpathId, glm::vec3 position)
 {
+	AddFootpathNode(footpathId,
+	                map_coords::MapCoords {.x = map_coords::ToFixed(position.x), .z = map_coords::ToFixed(position.z)});
+}
+
+void FeatureScriptCommands::AddFootpathNode(int footpathId, const map_coords::MapCoords& place)
+{
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto& footpaths = registry.Context().scriptFootpaths;
 	const auto index = ecs::footpath_rules::ScriptFootpathIndex(footpaths.size(), footpathId);
@@ -1137,11 +1153,12 @@ void FeatureScriptCommands::CreateFootpathNode(int footpathId, glm::vec3 positio
 	{
 		return;
 	}
-	// The node goes on the land at the given place, as the land's footpath file puts its nodes
-	const auto place = glm::ivec2 {map_coords::ToFixed(position.x), map_coords::ToFixed(position.z)};
-	const auto ground = map_coords::ToMetres(map_coords::MapCoords {.x = place.x, .z = place.y, .altitude = 0.0f});
-	const glm::vec3 onLand {ground.x, Locator::terrainSystem::value().GetHeightAt(ground), ground.y};
-	registry.Get<Footpath>(footpaths[*index]).nodes.push_back({.position = onLand, .place = place});
+	// The node goes at the given place, raised by the place's height above the land, as the land's footpath file puts its
+	// nodes
+	const auto ground = map_coords::ToMetres(place);
+	const glm::vec3 position {ground.x, Locator::terrainSystem::value().GetHeightAt(ground) + place.altitude, ground.y};
+	registry.Get<Footpath>(footpaths[*index])
+	    .nodes.push_back({.position = position, .place = {place.x, place.z}, .altitude = place.altitude});
 }
 
 void FeatureScriptCommands::LinkFootpath(int32_t footpathId)

@@ -18,6 +18,7 @@
 
 #include <glm/vec2.hpp>
 
+#include "3D/MapCoords.h"
 #include "Creature/CreatureRoute.h"
 #include "Creature/CreatureRouteSearch.h"
 
@@ -58,6 +59,8 @@ constexpr float k_OffMiddleStep = 0.01f;
 struct PlanNode
 {
 	glm::ivec2 place {0, 0};
+	/// The height above the land. The nodes of a route have the height 0.
+	float altitude {0.0f};
 	/// Laid by a plan, and may be planned again
 	bool planned {false};
 	/// Under something put down on the path
@@ -70,9 +73,9 @@ struct PlanNode
 
 /// A path with the nodes between two of its nodes laid again along a route: the nodes between that are hidden or are
 /// markers are kept, after the route, and the others go. The place of the thing that the stretch is sent round, if
-/// given, comes right after the route as a marker.
+/// given, comes right after the route as a marker, with the height of that place.
 [[nodiscard]] std::vector<PlanNode> LayBetween(std::span<const PlanNode> nodes, size_t first, size_t last,
-                                               std::span<const glm::ivec2> route, std::optional<glm::ivec2> marker);
+                                               std::span<const glm::ivec2> route, std::optional<map_coords::MapCoords> marker);
 
 /// A path laid between two things is settled: no node of it that walkers use may be planned again
 void Settle(std::span<PlanNode> nodes);

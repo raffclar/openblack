@@ -34,6 +34,8 @@ struct Footpath
 		glm::vec3 position;
 		/// Its place on the map, x and z in whole map units (a 65536th of a ten metre cell), as villagers walk to it
 		glm::ivec2 place {0, 0};
+		/// Its height above the land, as villagers walk to it. A node that a plan lays has the height 0.
+		float altitude {0.0f};
 		/// Laid by a plan made in play, and may be planned again when something is put down on the path
 		bool planned {false};
 		/// Under something put down on the path: walkers pass it by
@@ -99,13 +101,15 @@ struct FootpathFinder
 	std::optional<Plan> plan;
 };
 
-/// A thing that the footpaths go round, put on the map or removed from it: its radius across the ground in metres and its
-/// place in whole map units. At the next change process the footpaths go round it, or stop going round it.
+/// A thing that the footpaths go round, put on the map or removed from it: its radius across the ground in metres, its
+/// place in whole map units and its height above the land. At the next change process the footpaths go round it, or stop
+/// going round it.
 struct FootpathObstacleChange
 {
 	bool put {true};
 	float radius {0.0f};
 	glm::ivec2 place {0, 0};
+	float altitude {0.0f};
 };
 
 } // namespace openblack::ecs::components

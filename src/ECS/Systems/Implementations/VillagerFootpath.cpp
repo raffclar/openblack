@@ -194,12 +194,21 @@ PathsOf FootpathsOf(entt::entity building)
 	return result;
 }
 
-/// A path's nodes as the walk sees them: their places, and which ones walkers pass by
+/// A path's nodes as the walk sees them: their places, their heights above the land, and which ones walkers pass by
 struct PathNodes
 {
 	std::vector<glm::ivec2> places;
+	std::vector<float> altitudes;
 	std::vector<uint8_t> passedBy;
 };
+
+/// The villager walks to a node of a path. The goal has the node's height above the land. The goal moves to one side
+/// only across the land, so the height stays.
+void WalkToNode(LivingAction& action, glm::ivec2 place, float altitude, villager_home::WalkWay way)
+{
+	villager_home::SetupMobileMoveTo(action, ToMetres(place), way);
+	Entities().Get<WallHug>(Entities().ToEntity(action)).goalHeight = altitude;
+}
 
 PathNodes NodesOf(entt::entity footpath)
 {
@@ -213,6 +222,7 @@ PathNodes NodesOf(entt::entity footpath)
 	for (const auto& node : path.nodes)
 	{
 		nodes.places.push_back(node.place);
+		nodes.altitudes.push_back(node.altitude);
 	}
 	nodes.passedBy = PassedByOf(path);
 	return nodes;
@@ -239,7 +249,7 @@ bool SetupMoveOnFootpath(LivingAction& action, entt::entity footpath, bool towar
 	}
 	walk.node = node;
 	// The walk to the first node is laid out before the states change, as the game does
-	villager_home::SetupMobileMoveTo(action, ToMetres(places.at(*node)), villager_home::WalkWay::RoundThings);
+	WalkToNode(action, places.at(*node), nodes.altitudes.at(*node), villager_home::WalkWay::RoundThings);
 	if (!Living().VillagerSetCurrentAndDestinationState(action, VillagerStates::MoveOnPath, final))
 	{
 		return false;
@@ -373,7 +383,7 @@ uint32_t villager_footpath::MoveOnPath(LivingAction& action)
 			const auto drawZ = random.GameRand(2 * footpath_rules::k_Jitter);
 			target = footpath_rules::Jittered(target, drawX, drawZ);
 		}
-		villager_home::SetupMobileMoveTo(action, ToMetres(target), villager_home::WalkWay::StraightThrough);
+		WalkToNode(action, target, nodes.altitudes.at(leg->node), villager_home::WalkWay::StraightThrough);
 		return 1;
 	}
 	// The path has ended: on along the path that follows it, if any, from its end nearer the villager
@@ -386,7 +396,8 @@ uint32_t villager_footpath::MoveOnPath(LivingAction& action)
 		walk->node = footpath_rules::OnwardFirstNode(places, walk->towardsStart, nodes.passedBy);
 		if (walk->node.has_value())
 		{
-			villager_home::SetupMobileMoveTo(action, ToMetres(places.at(*walk->node)), villager_home::WalkWay::StraightThrough);
+			WalkToNode(action, places.at(*walk->node), nodes.altitudes.at(*walk->node),
+			           villager_home::WalkWay::StraightThrough);
 			return 1;
 		}
 	}

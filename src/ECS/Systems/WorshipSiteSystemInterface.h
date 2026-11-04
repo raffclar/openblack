@@ -153,6 +153,9 @@ public:
 	[[nodiscard]] virtual std::optional<glm::vec3> DancePosition(entt::entity /*site*/) const { return std::nullopt; }
 	/// How high above the sea the point where the game holds the site to stand is, none without the site's model
 	[[nodiscard]] virtual std::optional<float> StandingHeight(entt::entity site) const = 0;
+	/// How high above the sea the gate of a site is: the height of the site plus the height of the gate point on the model.
+	/// None without the site's model.
+	[[nodiscard]] virtual std::optional<float> GateHeight(entt::entity /*site*/) const { return std::nullopt; }
 	/// A villager is counted among a site's worshippers, newest first, unless it is already
 	virtual void AddWorshipper(entt::entity site, entt::entity villager) = 0;
 	/// A villager is no longer counted among a site's worshippers

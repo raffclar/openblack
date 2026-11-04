@@ -198,7 +198,8 @@ void openblack::ecs::reflection::RegisterFields_Components_f(entt::meta_ctx& con
 	Reflect<components::FootpathObstacleChange>(context)
 	    .Field<&components::FootpathObstacleChange::put>("put")
 	    .Field<&components::FootpathObstacleChange::radius>("radius")
-	    .Field<&components::FootpathObstacleChange::place>("place");
+	    .Field<&components::FootpathObstacleChange::place>("place")
+	    .Field<&components::FootpathObstacleChange::altitude>("altitude");
 	Reflect<components::BigForest>(context).Field<&components::BigForest::type>("type").Field<&components::BigForest::wood>(
 	    "wood");
 	Reflect<components::Forest>(context).Field<&components::Forest::type>("type");

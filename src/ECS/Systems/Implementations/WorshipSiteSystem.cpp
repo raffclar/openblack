@@ -1116,6 +1116,21 @@ std::optional<float> WorshipSiteSystem::StandingHeight(entt::entity site) const
 	return registry.Get<const Transform>(site).position.y + point->y;
 }
 
+std::optional<float> WorshipSiteSystem::GateHeight(entt::entity site) const
+{
+	auto& registry = _world->Entities();
+	if (!registry.Valid(site) || !registry.AllOf<WorshipSite, Transform>(site))
+	{
+		return std::nullopt;
+	}
+	const auto point = _world->SitePoint(ws::k_GatePoint);
+	if (!point.has_value())
+	{
+		return std::nullopt;
+	}
+	return registry.Get<const Transform>(site).position.y + point->y;
+}
+
 void WorshipSiteSystem::AddWorshipper(entt::entity site, entt::entity villager)
 {
 	auto& registry = _world->Entities();

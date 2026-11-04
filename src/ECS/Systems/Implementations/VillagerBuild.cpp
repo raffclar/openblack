@@ -518,7 +518,7 @@ uint32_t ArrivesAtStoragePitForResource(LivingAction& action, ResourceType type,
 		if (const auto store = TemporaryStoreOf(TownOf(person), GroundOf(villager), type); store.has_value())
 		{
 			const auto centre = glm::xz(Entities().Get<const Transform>(store->pile).position);
-			const float reach = systems::object_measures::EdgeRadius(Entities(), store->pile) +
+			const float reach = systems::object_measures::TwoDRadius(Entities(), store->pile) +
 			                    systems::object_measures::TwoDRadius(Entities(), villager);
 			const auto offset = gutils::GetPointFromAngle(gutils::Get3DAngleFromXZ(centre, GroundOf(villager)), reach);
 			const auto edge = centre + glm::vec2(offset.x, offset.z);

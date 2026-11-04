@@ -109,6 +109,8 @@ public:
 	static void CreateArena(glm::vec3 position, float);
 	static void CreateFootpath(int32_t footpathId);
 	static void CreateFootpathNode(int footpathId, glm::vec3 position);
+	/// A node at the end of a footpath that the script made, at a place on the map and its height above the land
+	static void AddFootpathNode(int footpathId, const map_coords::MapCoords& place);
 	static void LinkFootpath(int32_t footpathId);
 	static void CreateBonfire(glm::vec3 position, float unused, float yRotation, float scale);
 	static void CreateBase(glm::vec3 position, int32_t);
