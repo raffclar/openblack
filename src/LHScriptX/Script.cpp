@@ -40,6 +40,7 @@
 #include "FeatureScriptCommands.h"
 #include "Lexer.h"
 #include "Locator.h"
+#include "ScriptPlaceText.h"
 
 using namespace openblack;
 using namespace openblack::lhscriptx;
@@ -219,29 +220,19 @@ ScriptCommandParameter GetParameter(Token& argument, glm::vec3 origin, const map
 	case Token::Type::String:
 	{
 		const auto& str = argument.StringValue();
-		// Check if it's a vector
-		if (std::count_if(str.cbegin(), str.cend(), [](char c) { return c == ','; }) == 1)
+		if (const auto read = ReadScriptPlace(str); read.has_value())
 		{
-			const auto delim = str.find(',');
-			char* floatEnd;
-			const auto x = std::strtof(str.c_str(), &floatEnd) + origin.x;
-			if (str.c_str() + delim == floatEnd)
-			{
-				const auto z = std::strtof(floatEnd + 1, &floatEnd) + origin.z;
-				if (static_cast<size_t>(floatEnd - str.c_str()) == static_cast<size_t>(str.length()))
-				{
-					// The game keeps a script place as a place on the map, and finds the height of the land there only
-					// when it uses the place. A line before the line that loads the landscape has no land under it yet.
-					const auto& island = Locator::terrainSystem::value();
-					const float ground = island.IsLoaded() ? island.GetHeightAt(glm::vec2(x, z)) : 0.0f;
-					ScriptCommandParameter place {x, ground + origin.y, z};
-					// The game reads the same text to its exact map position, then moves it by the origin's map position
-					const auto onMap = map_coords::ScriptPlace(std::strtod(str.c_str(), nullptr),
-					                                           std::strtod(str.c_str() + delim + 1, nullptr));
-					place.SetMapPlace(onMap + map_coords::MapCoords {.x = originOnMap.x, .z = originOnMap.z});
-					return place;
-				}
-			}
+			const float x = read->metres.x + origin.x;
+			const float z = read->metres.y + origin.z;
+			// The game keeps a script place as a place on the map, and finds the height of the land there only when it
+			// uses the place. A line before the line that loads the landscape has no land under it yet. The place is
+			// above the land by the height of the origin plus the height that the text gives.
+			const auto& island = Locator::terrainSystem::value();
+			const float ground = island.IsLoaded() ? island.GetHeightAt(glm::vec2(x, z)) : 0.0f;
+			ScriptCommandParameter place {x, ground + (origin.y + read->onMap.altitude), z};
+			// The game moves the exact map position by the map position of the origin, and adds the two heights
+			place.SetMapPlace(read->onMap + originOnMap);
+			return place;
 		}
 		return ScriptCommandParameter(str);
 	}

@@ -20,6 +20,7 @@
 
 #include <glm/vec2.hpp>
 
+#include "3D/MapCoords.h"
 #include "Gui/LoadingScreenRules.h"
 #include "LandChange.h"
 #include "LandMessage.h"
@@ -137,8 +138,9 @@ public:
 	/// Loads the landscape that the map script of the land names
 	virtual void LoadLandscape(const std::filesystem::path& path) = 0;
 	/// The map script of the land gives the start place of the camera: the point it looks at in metres along the two map
-	/// axes, and the same point in map units. The camera goes there when the script has run.
-	virtual void SetStartCameraPlace(glm::vec2 focus, glm::ivec2 place) = 0;
+	/// axes, and the same point in map units with its height above the land. The camera goes there when the script has
+	/// run.
+	virtual void SetStartCameraPlace(glm::vec2 focus, const map_coords::MapCoords& place) = 0;
 	/// Puts the camera at the start place that the map script gave, on the land that the script loaded. Does nothing when
 	/// the script gave no place. A land load does this when its map script has run.
 	virtual void PutCameraAtStartPlace() = 0;
