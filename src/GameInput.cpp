@@ -191,6 +191,96 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 		                                                     Locator::playerSystem::value().FindPlayer(LocalInputPlayer()));
 	}
 	const bool mayHold = script::interface_levels::MayHold(interfaceLimits);
+	ProcessActionLetGo(event, rightLetGo, inTemple, handTakesPresses, creatureHand, magic, handGrab, handHoldsThing);
+	ProcessActionPress(event, inTemple, handTakesPresses, creatureHand, fights, magic, handGrab, handHoldsThing,
+	                   interfaceLimits, mayHold);
+	ProcessMovePress(event, middleMouseButton, inTemple, handTakesPresses, creatureHand, fights, magic);
+	// Letting go of the button that pressed charges the blow it queued
+	if (_fightButton.has_value() && fights.IsPressed() &&
+	    ((*_fightButton == creature_fight::Button::Move && !leftMouseButton) ||
+	     (*_fightButton == creature_fight::Button::Action && !rightMouseButton)))
+	{
+		fights.Release(machine_clock::Ticks(), Locator::time::value().GetTurn());
+		_fightButton.reset();
+	}
+	// Letting go of the right button lets go of the creature, also of a hold that a command started. Let go quickly,
+	// having neither stroked nor slapped it, the press was a click, which puts the leash on the player's creature.
+	if (creature_hand::LetsGoOfCreature(rightLetGo,
+	                                    event.type == SDL_MOUSEBUTTONUP && event.button.button == SDL_BUTTON_RIGHT) &&
+	    creatureHand.GetCreature().has_value())
+	{
+		// The click puts the leash on, and then the creature feels how the hand treated it. Both are commands of the
+		// player, which the world does at the start of a later turn. The release sends them in a network game, and the
+		// draw of the hand sends them in a game alone.
+		creatureHand.Release();
+	}
+	const bool onCreature = creatureHand.GetCreature().has_value();
+
+	// A miracle in the hand doesn't stop the hand moving the land; the middle button, or both buttons, turn the camera
+	_handGripping = !inTemple && (middleMouseButton || (leftMouseButton && !onCreature && !fights.IsPressed()));
+	_handRotating = !inTemple && (middleMouseButton || (leftMouseButton && rightMouseButton));
+	_handSelectGrip = !inTemple && leftMouseButton && !onCreature && !fights.IsPressed();
+	_handOtherButton = rightMouseButton;
+
+	auto& window = Locator::windowing::value();
+	auto& camera = Locator::camera::value();
+
+	switch (event.type)
+	{
+	case SDL_QUIT:
+		_closeAsked = true;
+		break;
+	case SDL_WINDOWEVENT:
+		if (event.window.event == SDL_WINDOWEVENT_CLOSE && event.window.windowID == window.GetID())
+		{
+			_closeAsked = true;
+		}
+		// A window resized, maximised or restored is followed by the next frame drawn (FollowWindowSize)
+		break;
+	case SDL_KEYDOWN:
+		// The M key opens the miracle selection, and the R key calls the last miracle again, while no action has the
+		// key. In the temple the keys do other things.
+		if ((event.key.keysym.scancode == SDL_SCANCODE_M || event.key.keysym.scancode == SDL_SCANCODE_R) && !inTemple &&
+		    Locator::gestureSystem::has_value() &&
+		    input::ActionsForKeyDown(Locator::gameActionSystem::value().GetKeyBindings(), event.key.keysym.scancode,
+		                             event.key.keysym.mod) == input::BindableActionMap::NONE)
+		{
+			auto& gestures = Locator::gestureSystem::value();
+			if (event.key.keysym.scancode == SDL_SCANCODE_M)
+			{
+				gestures.OpenSelectionByKey(LocalInputPlayer());
+			}
+			else
+			{
+				gestures.RepeatMiracleByKey(LocalInputPlayer());
+			}
+			break;
+		}
+		if (!ProcessKeyPress(event, window, camera))
+		{
+			return false;
+		}
+		break;
+	case SDL_MOUSEMOTION:
+	{
+		// While the mouse turns the camera the cursor is held where it was, and the pointer isn't followed
+		if (!Locator::gameActionSystem::value().IsCursorFrozen())
+		{
+			_mousePosition = {event.motion.x, event.motion.y};
+			_handPointer.Moved();
+		}
+		break;
+	}
+	}
+
+	return true;
+}
+
+void Game::ProcessActionLetGo(const SDL_Event& event, bool rightLetGo, bool inTemple, bool handTakesPresses,
+                              ecs::systems::CreatureHandSystemInterface& creatureHand,
+                              ecs::systems::MagicSystemInterface& magic, ecs::systems::HandGrabSystemInterface* handGrab,
+                              bool handHoldsThing)
+{
 	// Letting go of the Action button lets go of the tip bubble
 	if (Locator::tipBubbleSystem::has_value() && Locator::tipBubbleSystem::value().IsGripped() &&
 	    (rightLetGo || (event.type == SDL_MOUSEBUTTONUP && event.button.button == SDL_BUTTON_RIGHT)))
@@ -246,6 +336,14 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 			Locator::leashSystem::value().TapThing(LocalInputPlayer(), *tapped);
 		}
 	}
+}
+
+void Game::ProcessActionPress(const SDL_Event& event, bool inTemple, bool handTakesPresses,
+                              ecs::systems::CreatureHandSystemInterface& creatureHand,
+                              ecs::systems::CreatureFightSystemInterface& fights, ecs::systems::MagicSystemInterface& magic,
+                              ecs::systems::HandGrabSystemInterface* handGrab, bool handHoldsThing,
+                              const ecs::components::InterfaceLimits& interfaceLimits, bool mayHold)
+{
 	if (handTakesPresses && !inTemple && event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_RIGHT &&
 	    !Locator::debugGui::value().IsMouseOverWindow())
 	{
@@ -389,6 +487,12 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 			_actionPressTaken = true;
 		}
 	}
+}
+
+void Game::ProcessMovePress(const SDL_Event& event, bool middleMouseButton, bool inTemple, bool handTakesPresses,
+                            ecs::systems::CreatureHandSystemInterface& creatureHand,
+                            ecs::systems::CreatureFightSystemInterface& fights, ecs::systems::MagicSystemInterface& magic)
+{
 	if (handTakesPresses && !magic.IsHandBusy() && !inTemple && event.type == SDL_MOUSEBUTTONDOWN &&
 	    event.button.button == SDL_BUTTON_LEFT && !middleMouseButton)
 	{
@@ -415,227 +519,157 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 			PlayHandGrabSound();
 		}
 	}
-	// Letting go of the button that pressed charges the blow it queued
-	if (_fightButton.has_value() && fights.IsPressed() &&
-	    ((*_fightButton == creature_fight::Button::Move && !leftMouseButton) ||
-	     (*_fightButton == creature_fight::Button::Action && !rightMouseButton)))
-	{
-		fights.Release(machine_clock::Ticks(), Locator::time::value().GetTurn());
-		_fightButton.reset();
-	}
-	// Letting go of the right button lets go of the creature, also of a hold that a command started. Let go quickly,
-	// having neither stroked nor slapped it, the press was a click, which puts the leash on the player's creature.
-	if (creature_hand::LetsGoOfCreature(rightLetGo,
-	                                    event.type == SDL_MOUSEBUTTONUP && event.button.button == SDL_BUTTON_RIGHT) &&
-	    creatureHand.GetCreature().has_value())
-	{
-		// The click puts the leash on, and then the creature feels how the hand treated it. Both are commands of the
-		// player, which the world does at the start of a later turn. The release sends them in a network game, and the
-		// draw of the hand sends them in a game alone.
-		creatureHand.Release();
-	}
-	const bool onCreature = creatureHand.GetCreature().has_value();
+}
 
-	// A miracle in the hand doesn't stop the hand moving the land; the middle button, or both buttons, turn the camera
-	_handGripping = !inTemple && (middleMouseButton || (leftMouseButton && !onCreature && !fights.IsPressed()));
-	_handRotating = !inTemple && (middleMouseButton || (leftMouseButton && rightMouseButton));
-	_handSelectGrip = !inTemple && leftMouseButton && !onCreature && !fights.IsPressed();
-	_handOtherButton = rightMouseButton;
-
-	auto& window = Locator::windowing::value();
-	auto& camera = Locator::camera::value();
-
-	switch (event.type)
+bool Game::ProcessKeyPress(const SDL_Event& event, windowing::WindowingInterface& window, Camera& camera)
+{
+	switch (event.key.keysym.sym)
 	{
-	case SDL_QUIT:
-		_closeAsked = true;
-		break;
-	case SDL_WINDOWEVENT:
-		if (event.window.event == SDL_WINDOWEVENT_CLOSE && event.window.windowID == window.GetID())
+	case SDLK_ESCAPE:
+		// Not while a script has the cinema bars in for its scene
+		if (!Locator::cinematicDirectorSystem::value().IsInterfaceActive())
 		{
-			_closeAsked = true;
-		}
-		// A window resized, maximised or restored is followed by the next frame drawn (FollowWindowSize)
-		break;
-	case SDL_KEYDOWN:
-		// The M key opens the miracle selection, and the R key calls the last miracle again, while no action has the
-		// key. In the temple the keys do other things.
-		if ((event.key.keysym.scancode == SDL_SCANCODE_M || event.key.keysym.scancode == SDL_SCANCODE_R) && !inTemple &&
-		    Locator::gestureSystem::has_value() &&
-		    input::ActionsForKeyDown(Locator::gameActionSystem::value().GetKeyBindings(), event.key.keysym.scancode,
-		                             event.key.keysym.mod) == input::BindableActionMap::NONE)
-		{
-			auto& gestures = Locator::gestureSystem::value();
-			if (event.key.keysym.scancode == SDL_SCANCODE_M)
-			{
-				gestures.OpenSelectionByKey(LocalInputPlayer());
-			}
-			else
-			{
-				gestures.RepeatMiracleByKey(LocalInputPlayer());
-			}
 			break;
 		}
-		switch (event.key.keysym.sym)
+		return false;
+	case SDLK_f:
+		// A key that the player bound to an action of the game stays the game's
+		if (Locator::config::value().background ||
+		    input::developer_keys::GameUsesKey(Locator::gameActionSystem::value().GetKeyBindings(), k_Platform,
+		                                       event.key.keysym.scancode, event.key.keysym.mod))
 		{
-		case SDLK_ESCAPE:
-			// Not while a script has the cinema bars in for its scene
-			if (!Locator::cinematicDirectorSystem::value().IsInterfaceActive())
-			{
-				break;
-			}
-			return false;
-		case SDLK_f:
-			// A key that the player bound to an action of the game stays the game's
-			if (Locator::config::value().background ||
-			    input::developer_keys::GameUsesKey(Locator::gameActionSystem::value().GetKeyBindings(), k_Platform,
-			                                       event.key.keysym.scancode, event.key.keysym.mod))
-			{
-				break;
-			}
-			window.SetDisplayMode(windowing::DisplayMode::Fullscreen);
 			break;
-		case SDLK_p:
-			// The game pauses only with no Shift, Ctrl or Alt held
-			if ((event.key.keysym.mod & (KMOD_SHIFT | KMOD_CTRL | KMOD_ALT)) == 0)
-			{
-				Locator::time::value().SetPlayerPause(!IsPaused());
-			}
-			break;
-		default:
+		}
+		window.SetDisplayMode(windowing::DisplayMode::Fullscreen);
+		break;
+	case SDLK_p:
+		// The game pauses only with no Shift, Ctrl or Alt held
+		if ((event.key.keysym.mod & (KMOD_SHIFT | KMOD_CTRL | KMOD_ALT)) == 0)
 		{
-			namespace keys = input::platform_keys;
-			const auto key = event.key.keysym.sym;
-			const auto mod = event.key.keysym.mod;
-			const keys::Modifiers held {
-			    .shift = (mod & KMOD_SHIFT) != 0,
-			    .ctrl = (mod & KMOD_CTRL) != 0,
-			    .alt = (mod & KMOD_ALT) != 0,
-			};
-			// F1 is the game's Help key, so the renderer's statistics are on another key. It is a debug key: a build
-			// without the developer tools, and a live network game, ignore it. A key that the player bound to an
-			// action of the game stays the game's.
-			if (key == keys::RendererStatisticsKey(k_Platform))
+			Locator::time::value().SetPlayerPause(!IsPaused());
+		}
+		break;
+	default:
+	{
+		namespace keys = input::platform_keys;
+		const auto key = event.key.keysym.sym;
+		const auto mod = event.key.keysym.mod;
+		const keys::Modifiers held {
+		    .shift = (mod & KMOD_SHIFT) != 0,
+		    .ctrl = (mod & KMOD_CTRL) != 0,
+		    .alt = (mod & KMOD_ALT) != 0,
+		};
+		// F1 is the game's Help key, so the renderer's statistics are on another key. It is a debug key: a build
+		// without the developer tools, and a live network game, ignore it. A key that the player bound to an
+		// action of the game stays the game's.
+		if (key == keys::RendererStatisticsKey(k_Platform))
+		{
+			if (developer_tools::Allowed(developer_tools::Action::DebugKey) &&
+			    !input::developer_keys::GameUsesKey(Locator::gameActionSystem::value().GetKeyBindings(), k_Platform,
+			                                        event.key.keysym.scancode, mod))
 			{
-				if (developer_tools::Allowed(developer_tools::Action::DebugKey) &&
-				    !input::developer_keys::GameUsesKey(Locator::gameActionSystem::value().GetKeyBindings(), k_Platform,
-				                                        event.key.keysym.scancode, mod))
+				// With Ctrl and Shift, the key makes the graphics device again, to test the recovery from a lost
+				// device
+				auto& renderer = Locator::rendererInterface::value();
+				if (keys::IsDeviceRestoreKey(k_Platform, key, held))
 				{
-					// With Ctrl and Shift, the key makes the graphics device again, to test the recovery from a lost
-					// device
-					auto& renderer = Locator::rendererInterface::value();
-					if (keys::IsDeviceRestoreKey(k_Platform, key, held))
-					{
-						renderer.RequestDeviceRestore(graphics::device_restore::Request::MakeAgain);
-					}
-					else
-					{
-						renderer.SetDebug(!renderer.GetDebug());
-					}
+					renderer.RequestDeviceRestore(graphics::device_restore::Request::MakeAgain);
 				}
-				break;
+				else
+				{
+					renderer.SetDebug(!renderer.GetDebug());
+				}
 			}
-			// The slower key halves the game's speed, to half of normal at the least. The faster key doubles it, to
-			// twice normal at the most.
-			if (const auto speed = keys::SpeedKeyFor(k_Platform, key, held); speed != keys::SpeedKey::None)
-			{
-				auto& clock = Locator::time::value();
-				clock.SetSpeed(speed == keys::SpeedKey::Slower ? std::max(clock.GetSpeed() * 0.5f, 0.5f)
-				                                               : std::min(clock.GetSpeed() + clock.GetSpeed(), 2.0f));
-				break;
-			}
-			if (key >= SDLK_1 && key <= SDLK_7)
-			{
-				if (!BookmarkKeysAllowed() || !Locator::cameraBookmarkSystem::value().IsEnabled())
-				{
-					break;
-				}
-				auto& bookmarks = Locator::cameraBookmarkSystem::value();
-				const auto slot = static_cast<size_t>(key - SDLK_1);
-				switch (keys::BookmarkKeyFor(k_Platform, held))
-				{
-				case keys::BookmarkKey::Clear:
-					if (bookmarks.IsSet(slot))
-					{
-						bookmarks.ClearBookmark(slot);
-					}
-					break;
-				case keys::BookmarkKey::Set:
-				{
-					// The bookmark keeps the place of the hand, or the thing under the hand
-					const auto left = Locator::handSystem::value().GetDrawnHandPosition();
-					const auto right =
-					    Locator::handSystem::value()
-					        .GetOwnHandPositions()[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Right)];
-					if (left.has_value() || right.has_value())
-					{
-						std::optional<entt::entity> thing;
-						if (Locator::pickingSystem::has_value())
-						{
-							thing = Locator::pickingSystem::value().GetPick().object;
-						}
-						bookmarks.SetBookmark(slot, left.value_or(right.value_or(glm::zero<glm::vec3>())), thing,
-						                      camera.GetOrigin());
-					}
-					break;
-				}
-				case keys::BookmarkKey::ToggleFollow:
-					bookmarks.ToggleFollow(slot);
-					break;
-				case keys::BookmarkKey::Jump:
-					bookmarks.JumpTo(slot);
-					break;
-				case keys::BookmarkKey::None:
-					break;
-				}
-				break;
-			}
-			const auto move = keys::BookmarkMoveFor(k_Platform, key, held);
-			if (move == keys::BookmarkMove::None || !BookmarkKeysAllowed())
+			break;
+		}
+		// The slower key halves the game's speed, to half of normal at the least. The faster key doubles it, to
+		// twice normal at the most.
+		if (const auto speed = keys::SpeedKeyFor(k_Platform, key, held); speed != keys::SpeedKey::None)
+		{
+			auto& clock = Locator::time::value();
+			clock.SetSpeed(speed == keys::SpeedKey::Slower ? std::max(clock.GetSpeed() * 0.5f, 0.5f)
+			                                               : std::min(clock.GetSpeed() + clock.GetSpeed(), 2.0f));
+			break;
+		}
+		if (key >= SDLK_1 && key <= SDLK_7)
+		{
+			if (!BookmarkKeysAllowed() || !Locator::cameraBookmarkSystem::value().IsEnabled())
 			{
 				break;
 			}
 			auto& bookmarks = Locator::cameraBookmarkSystem::value();
-			switch (move)
+			const auto slot = static_cast<size_t>(key - SDLK_1);
+			switch (keys::BookmarkKeyFor(k_Platform, held))
 			{
-			case keys::BookmarkMove::Back:
-				bookmarks.JumpBack();
-				break;
-			case keys::BookmarkMove::Previous:
-				bookmarks.JumpToPrevious();
-				break;
-			case keys::BookmarkMove::Next:
-				bookmarks.JumpToNext();
-				break;
-			case keys::BookmarkMove::NextTown:
-			{
-				std::optional<entt::entity> thing;
-				if (Locator::pickingSystem::has_value())
+			case keys::BookmarkKey::Clear:
+				if (bookmarks.IsSet(slot))
 				{
-					thing = Locator::pickingSystem::value().GetPick().object;
+					bookmarks.ClearBookmark(slot);
 				}
-				bookmarks.FlyToNextTown(thing);
+				break;
+			case keys::BookmarkKey::Set:
+			{
+				// The bookmark keeps the place of the hand, or the thing under the hand
+				const auto left = Locator::handSystem::value().GetDrawnHandPosition();
+				const auto right =
+				    Locator::handSystem::value()
+				        .GetOwnHandPositions()[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Right)];
+				if (left.has_value() || right.has_value())
+				{
+					std::optional<entt::entity> thing;
+					if (Locator::pickingSystem::has_value())
+					{
+						thing = Locator::pickingSystem::value().GetPick().object;
+					}
+					bookmarks.SetBookmark(slot, left.value_or(right.value_or(glm::zero<glm::vec3>())), thing,
+					                      camera.GetOrigin());
+				}
 				break;
 			}
-			case keys::BookmarkMove::None:
+			case keys::BookmarkKey::ToggleFollow:
+				bookmarks.ToggleFollow(slot);
+				break;
+			case keys::BookmarkKey::Jump:
+				bookmarks.JumpTo(slot);
+				break;
+			case keys::BookmarkKey::None:
 				break;
 			}
 			break;
 		}
-		}
-		break;
-	case SDL_MOUSEMOTION:
-	{
-		// While the mouse turns the camera the cursor is held where it was, and the pointer isn't followed
-		if (!Locator::gameActionSystem::value().IsCursorFrozen())
+		const auto move = keys::BookmarkMoveFor(k_Platform, key, held);
+		if (move == keys::BookmarkMove::None || !BookmarkKeysAllowed())
 		{
-			_mousePosition = {event.motion.x, event.motion.y};
-			_handPointer.Moved();
+			break;
+		}
+		auto& bookmarks = Locator::cameraBookmarkSystem::value();
+		switch (move)
+		{
+		case keys::BookmarkMove::Back:
+			bookmarks.JumpBack();
+			break;
+		case keys::BookmarkMove::Previous:
+			bookmarks.JumpToPrevious();
+			break;
+		case keys::BookmarkMove::Next:
+			bookmarks.JumpToNext();
+			break;
+		case keys::BookmarkMove::NextTown:
+		{
+			std::optional<entt::entity> thing;
+			if (Locator::pickingSystem::has_value())
+			{
+				thing = Locator::pickingSystem::value().GetPick().object;
+			}
+			bookmarks.FlyToNextTown(thing);
+			break;
+		}
+		case keys::BookmarkMove::None:
+			break;
 		}
 		break;
 	}
 	}
-
 	return true;
 }
 
