@@ -103,21 +103,22 @@ TEST(CreatureHairLight, TheLookOfAMappedHairFollowsItsSource)
 	EXPECT_EQ(LookOf(Source {FromFrameBefore {}}, known, Carried {Kept {}}), Look {Kept {}});
 }
 
-TEST(CreatureHairLight, TheSortKeyIsTheSquaredDistanceFromTheEye)
+TEST(CreatureHairLight, TheStatisticsBoxKeepsTheWorldColoursOfADrawnBody)
 {
-	EXPECT_EQ(SortKey(glm::vec3(4.0f, 5.0f, 6.0f), glm::vec3(1.0f, 1.0f, 1.0f)), 50.0f);
-	EXPECT_EQ(SortKey(glm::vec3(2.0f), glm::vec3(2.0f)), 0.0f);
+	EXPECT_EQ(StatisticsBoxColours(true), std::nullopt);
+	EXPECT_EQ(StatisticsBoxColours(false), std::optional<Colours> {k_Start});
 }
 
-TEST(CreatureHairLight, TheSorterDrawsFarBodiesFirst)
+TEST(CreatureHairLight, ABodyThatTheWorldDidNotDrawGivesTheStartColoursToTheNextFrame)
 {
-	const std::vector<float> keys {4.0f, 9.0f, 1.0f};
-	EXPECT_EQ(SortedOrder(keys), (std::vector<size_t> {1, 0, 2}));
-	EXPECT_TRUE(SortedOrder({}).empty());
-}
-
-TEST(CreatureHairLight, BodiesWithEqualKeysKeepTheOrderInWhichTheyCameIn)
-{
-	const std::vector<float> keys {4.0f, 9.0f, 4.0f, 9.0f};
-	EXPECT_EQ(SortedOrder(keys), (std::vector<size_t> {1, 3, 0, 2}));
+	// A usual hair in the world, then the statistics box's hair of a body that the world did not draw
+	const std::vector<BodyDraw> draws {k_UsualWithHair, k_UsualWithHair};
+	const auto plan = PlanFrame(draws);
+	ASSERT_EQ(plan.last, std::optional<size_t> {1});
+	std::vector<std::optional<Colours>> known(2);
+	known[1] = StatisticsBoxColours(false);
+	EXPECT_EQ(Carry(plan, known, Carried {Kept {}}), Carried {k_Start});
+	// A body that the world drew: the next frame keeps the colours at its place
+	known[1] = StatisticsBoxColours(true);
+	EXPECT_EQ(Carry(plan, known, Carried {k_Film}), Carried {Kept {}});
 }

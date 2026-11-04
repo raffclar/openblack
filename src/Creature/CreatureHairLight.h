@@ -25,8 +25,9 @@
 // frame. Before the first usual hair draw, the light is white and the added colour is black.
 //
 // The game draws the bodies in this order: the creatures of the land's draw list in the order of the list, then the
-// held creatures, then the interface. A body draws only when its sphere is on the screen. A hand that holds a creature
-// sends the body to the depth sorter. The sorter draws its bodies late in the frame, from far to near.
+// interface. A body draws only when its sphere is on the screen. A hand never holds a creature. The statistics box draws
+// last, with the colours that the world's draw of the frame gave each body: the light and the haze at its place, or a
+// white light and no added colour when the world did not draw it.
 namespace openblack::creature_hair_light
 {
 
@@ -79,14 +80,6 @@ struct Plan
 	std::optional<size_t> last;
 };
 
-/// The key of a body in the depth sorter: the squared distance from the eye to the place of the body. The calculation
-/// adds the squares in the order x, y, z.
-[[nodiscard]] float SortKey(glm::vec3 place, glm::vec3 eye) noexcept;
-
-/// The order in which the depth sorter draws its bodies, as indices into the keys: the largest key first. Bodies with
-/// equal keys keep the order in which they came into the sorter.
-[[nodiscard]] std::vector<size_t> SortedOrder(std::span<const float> keys);
-
 /// Find the source of the hair colours for each body with the environment map, from the frame's draws in the game's
 /// order
 [[nodiscard]] Plan PlanFrame(std::span<const BodyDraw> draws);
@@ -120,5 +113,10 @@ using Carried = std::variant<Colours, Kept>;
 
 /// What a frame keeps for the next frame: the colours of its last usual hair draw, else what the frame before kept
 [[nodiscard]] Carried Carry(const Plan& plan, std::span<const std::optional<Colours>> known, const Carried& before);
+
+/// The colours of the hair that the statistics box draws, when they are colours of its own. A body that the world's draw
+/// of the frame drew has the colours at its place in the world, so the result is empty. Else the body has a white light
+/// and no added colour.
+[[nodiscard]] std::optional<Colours> StatisticsBoxColours(bool drawnByTheWorld) noexcept;
 
 } // namespace openblack::creature_hair_light

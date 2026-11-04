@@ -774,12 +774,13 @@ private:
 	};
 	mutable std::vector<DrawnCreature> _drawnCreatures;
 	/// A usual hair draw of the frame: the place of its creature, the camera that draws it and how much of the land's
-	/// light it takes
+	/// light it takes. A hair with colours of its own does not use the place.
 	struct HairLightSource
 	{
 		glm::vec3 origin {0.0f};
 		glm::mat4 view {1.0f};
 		float landLightScale {1.0f};
+		std::optional<creature_hair_light::Colours> own;
 	};
 	/// The usual hair draws of this frame in the game's order, and how the hair of each body with the environment map
 	/// takes its colours
