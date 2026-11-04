@@ -98,9 +98,15 @@ public:
 	/// Whether where the camera goes is kept within the world's ball round the middle of the map, as for every camera of
 	/// the game
 	[[nodiscard]] virtual bool HeldInsideTheWorld() const { return true; }
+	/// Whether the frame lifts the eye of this camera, with its focus, to stay above the land. The cameras that the world
+	/// holds are lifted, but not the free camera.
+	[[nodiscard]] virtual bool DrawnAboveLand() const { return HeldInsideTheWorld(); }
 	/// Whether another camera can take over from this one, as the world camera does for a jump to a bookmark. Most
 	/// cameras let it.
 	[[nodiscard]] virtual bool CanBeLeft() const { return true; }
+	/// Whether the camera can continue. A camera that follows a thing ends when its thing is gone, and then the world
+	/// camera takes over from where the camera is.
+	[[nodiscard]] virtual bool IsStillValid() const { return true; }
 	/// What the camera does with the mouse, which the hand shows: the hints the cursor's place offers, and what a
 	/// drag of the land has turned into
 	[[nodiscard]] virtual HandCues GetHandCues() const { return {}; }

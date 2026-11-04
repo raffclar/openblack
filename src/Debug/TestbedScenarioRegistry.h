@@ -23,6 +23,7 @@
 #include <variant>
 #include <vector>
 
+#include <entt/entity/fwd.hpp>
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
@@ -786,6 +787,15 @@ struct Command
 		CameraKeys,
 		ClearCameraView,
 		LeaveCreatureMode,
+		/// A camera of a saved game of the original game takes the camera: the follow camera on the creature, the
+		/// follow camera that turns with the creature, or the free camera, which flies forwards at a speed (amount). The
+		/// last lets the world camera go below the land and puts its eye at a depth (amount) below the land in front of
+		/// the creature. The follow camera follows the scenario's object of an index (with) in place of the creature.
+		/// Its heading turns with its thing for the value 1, and it keeps offsets from its thing for the value 2.
+		SavedFollowCamera,
+		SavedTurningCamera,
+		SavedFreeCamera,
+		SavedBelowLandCamera,
 		/// F5 pressed: the Creature Cave opens, on a page (value); a symbol (value) tattooed on a place (body part), or
 		/// the place's symbols taken off
 		OpenCreatureCave,
@@ -1607,6 +1617,12 @@ void AddLastStandScenarios(std::vector<Scenario>& all);
 void AddFriendActionScenarios(std::vector<Scenario>& all);
 /// Creature Mode's and the Creature Cave's scenarios
 void AddCreatureModeScenarios(std::vector<Scenario>& all);
+/// The cameras that only a saved game of the original game gives
+void AddSavedCameraScenarios(std::vector<Scenario>& all);
+/// The value bit of the follow camera of a saved game that follows the scenario's first flock of birds
+inline constexpr size_t k_SavedCameraOnFlock = 4;
+/// Gives one of the saved cameras' commands, with the creature of the command; returns what happened
+std::string GiveSavedCameraCommand(entt::entity creature, const Command& command);
 /// The gestures drawn with the hand: sizing and powering up miracles, scribbles, and the leash's gestures
 void AddGestureScenarios(std::vector<Scenario>& all);
 /// The storm miracles: rain over a village, its fields and a fire, and the powered up storm's lightning

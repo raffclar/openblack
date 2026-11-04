@@ -969,6 +969,8 @@ void LandSystem::PrepareNewLand(land_change::Kind change)
 		{
 			scriptControl.EndCameraControl(Locator::camera::value(), owner);
 		}
+		// Each land starts with a new camera, which keeps its eye above the land
+		Locator::camera::value().SetEyeMayGoBelowLand(false);
 	}
 	scriptControl.Reset();
 	Locator::dialogueControlSystem::value().Reset();

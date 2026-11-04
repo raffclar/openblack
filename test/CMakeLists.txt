@@ -812,6 +812,7 @@ openblack_setup_and_add_test(
   test_town_belief_symbols test_town_belief_symbols.cpp
 )
 openblack_setup_and_add_test(test_camera_place camera/test_camera_place.cpp)
+openblack_setup_and_add_test(test_camera_saved_modes camera/test_camera_saved_modes.cpp)
 openblack_setup_and_add_test(test_control_icons test_control_icons.cpp)
 openblack_setup_and_add_test(test_disciple_rules test_disciple_rules.cpp)
 openblack_setup_and_add_test(

@@ -79,6 +79,7 @@
 #include "Camera/DefaultWorldCameraModel.h"
 #include "Camera/DoubleClickFlight.h"
 #include "Camera/FightCameraModel.h"
+#include "Camera/FreeCameraModel.h"
 #include "Camera/NearClipping.h"
 #include "Camera/ScriptCameraModel.h"
 #include "Commands/PlayerCommands.h"
@@ -3182,6 +3183,13 @@ void Game::UpdateCameraControllers(std::chrono::microseconds deltaTime)
 	{
 		auto creatureMode = profiler.BeginScoped(Profiler::Stage::CreatureModeUpdate);
 		Locator::creatureModeSystem::value().Update(deltaTime, {.handGripping = _handGripping});
+	}
+	// The free camera of a saved game of the original game flies while the hand grips the land
+	if (auto* free =
+	        Locator::camera::has_value() ? dynamic_cast<FreeCameraModel*>(&Locator::camera::value().GetModel()) : nullptr;
+	    free != nullptr)
+	{
+		free->SetLandGrip(_handSelectGrip);
 	}
 	if (Locator::creatureCaveSystem::has_value())
 	{

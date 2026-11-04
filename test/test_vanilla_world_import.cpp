@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <array>
 #include <bit>
+#include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -29,15 +30,18 @@
 
 #include <DanceFile.h>
 #include <VanillaWorld.h>
+#include <glm/vec3.hpp>
 #include <gtest/gtest.h>
 
 #include "3D/MapCoords.h"
 #include "Animals/AnimalMove.h"
 #include "Animals/BirdRules.h"
 #include "Animals/GrazerRules.h"
+#include "Camera/CameraZoomer.h"
 #include "ECS/Components/Dance.h"
 #include "ECS/Components/SpellIcon.h"
 #include "ECS/Systems/Implementations/AnimalSystemDetail.h"
+#include "ECS/VanillaCameraImport.h"
 #include "ECS/VanillaFootpathImport.h"
 #include "ECS/VanillaParticleImport.h"
 #include "ECS/VanillaPlayerImport.h"
@@ -4593,4 +4597,253 @@ TEST(VanillaWorldImport, SavedGamesHaveArenasThatTheImportReads)
 		GTEST_SKIP() << "Set OPENBLACK_VANILLA_SAVES to a copy of a Profiles folder of the game to check its saved games";
 	}
 	std::cout << "Arenas " << arenas << std::endl;
+}
+
+namespace
+{
+namespace camera_import = openblack::ecs::vanilla_camera_import;
+
+/// The 12 numbers that the file keeps for a glide of the game, from a glide of the camera that is part of its way
+std::array<float, 12> GlideNumbers(const camera::Zoomer& zoomer)
+{
+	std::array<float, 12> numbers {};
+	camera::Zoomer::VisitSaved(zoomer, [&numbers](float value, float speed, float destination, float destinationSpeed,
+	                                              float time, float duration, float startValue, float startSpeed, float c1,
+	                                              float c2, float c3) {
+		numbers = {value, destination, destinationSpeed, speed, 0.0f, time, duration, startValue, startSpeed, c1, c2, c3};
+	});
+	return numbers;
+}
+
+camera_import::Glide GlideOfNumbers(const std::array<float, 12>& numbers)
+{
+	std::array<uint8_t, camera_import::k_GlideBytes> bytes {};
+	std::memcpy(bytes.data(), numbers.data(), bytes.size());
+	return camera_import::GlideOf(bytes);
+}
+
+/// A glide from a value to a destination over some seconds, which has gone on for some of them
+camera::Zoomer GlideFrom(float from, float to, float seconds, float elapsed)
+{
+	camera::Zoomer zoomer;
+	zoomer.SetPosition(from);
+	zoomer.SetDestination(to, 0.0f, seconds);
+	zoomer.Update(elapsed);
+	return zoomer;
+}
+} // namespace
+
+TEST(VanillaWorldImport, AGlideOfTheCameraTakesTheNumbersOfTheFileButTheFifth)
+{
+	const auto glide = GlideOfNumbers({1.0f, 2.0f, 3.0f, 4.0f, 99.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f, 11.0f, 12.0f});
+	EXPECT_EQ(glide.value, 1.0f);
+	EXPECT_EQ(glide.target, 2.0f);
+	EXPECT_EQ(glide.targetSpeed, 3.0f);
+	EXPECT_EQ(glide.speed, 4.0f);
+	EXPECT_EQ(glide.elapsed, 6.0f);
+	EXPECT_EQ(glide.duration, 7.0f);
+	EXPECT_EQ(glide.start, 8.0f);
+	EXPECT_EQ(glide.startSpeed, 9.0f);
+	EXPECT_EQ(glide.c2, 10.0f);
+	EXPECT_EQ(glide.c3, 11.0f);
+	EXPECT_EQ(glide.c4, 12.0f);
+}
+
+TEST(VanillaWorldImport, TheCameraModesOfTheFileAreTheModesThatTheGameWrites)
+{
+	EXPECT_EQ(camera_import::ModeOf(0), camera_import::Mode::World);
+	EXPECT_EQ(camera_import::ModeOf(0x46), camera_import::Mode::Follow);
+	EXPECT_EQ(camera_import::ModeOf(0x48), camera_import::Mode::FollowAndTurn);
+	EXPECT_EQ(camera_import::ModeOf(0x65), camera_import::Mode::Free);
+	EXPECT_FALSE(camera_import::ModeOf(0x47).has_value());
+}
+
+TEST(VanillaWorldImport, AGlideOfTheCameraThatTheSaveStoppedContinuesAsTheGlideOfTheGame)
+{
+	// Each coordinate glides over two seconds, and the save stopped it after half a second
+	const std::array<std::pair<float, float>, 6> ways {
+	    {{10.0f, 50.0f}, {5.0f, 8.0f}, {-20.0f, 40.0f}, {100.0f, 60.0f}, {0.0f, 3.0f}, {7.0f, -7.0f}}};
+	std::array<camera::Zoomer, 6> game {};
+	std::array<camera_import::Glide, 6> file {};
+	for (size_t i = 0; i < ways.size(); ++i)
+	{
+		game.at(i) = GlideFrom(ways.at(i).first, ways.at(i).second, 2.0f, 0.5f);
+		file.at(i) = GlideOfNumbers(GlideNumbers(game.at(i)));
+	}
+	const auto motion = camera_import::MotionOf({file[0], file[1], file[2]}, {file[3], file[4], file[5]});
+	ASSERT_TRUE(motion.has_value());
+	EXPECT_EQ(motion->time, std::chrono::milliseconds(500));
+	EXPECT_EQ(motion->duration, std::chrono::seconds(2));
+	EXPECT_EQ(motion->focusTime, std::chrono::milliseconds(500));
+	EXPECT_EQ(motion->focusDuration, std::chrono::seconds(2));
+	// Then it goes on as the glide of the game goes on, to the end, where it stops at the destination
+	for (const float at : {0.5f, 1.2f, 1.9f, 2.0f})
+	{
+		for (size_t i = 0; i < ways.size(); ++i)
+		{
+			auto zoomer = game.at(i);
+			zoomer.Update(at - 0.5f);
+			const auto& interpolator = i < 3 ? motion->origin : motion->focus;
+			EXPECT_NEAR(interpolator.PositionAt(at / 2.0f)[static_cast<glm::length_t>(i % 3)], zoomer.Value(), 1.0e-3f)
+			    << "coordinate " << i << " at " << at;
+		}
+	}
+}
+
+TEST(VanillaWorldImport, ACameraPointWhoseCoordinatesDoNotGlideTogetherHasNoMotion)
+{
+	const auto x = GlideOfNumbers(GlideNumbers(GlideFrom(0.0f, 10.0f, 2.0f, 0.5f)));
+	const auto y = GlideOfNumbers(GlideNumbers(GlideFrom(0.0f, 10.0f, 1.0f, 0.5f)));
+	EXPECT_FALSE(camera_import::MotionOf({x, x, x}, {x, y, x}).has_value());
+	EXPECT_TRUE(camera_import::MotionOf({x, x, x}, {x, x, x}).has_value());
+}
+
+TEST(VanillaWorldImport, TheLensOfTheCameraContinuesItsGlide)
+{
+	const auto game = GlideFrom(1.2f, 0.8f, 0.5f, 0.2f);
+	auto lens = camera_import::LensOf(GlideOfNumbers(GlideNumbers(game)));
+	EXPECT_EQ(lens.Value(), game.Value());
+	EXPECT_EQ(lens.Destination(), game.Destination());
+	auto expected = game;
+	lens.Update(0.1f);
+	expected.Update(0.1f);
+	EXPECT_EQ(lens.Value(), expected.Value());
+	EXPECT_EQ(lens.Speed(), expected.Speed());
+}
+
+TEST(VanillaWorldImport, TheCameraOfTheFileReadsWithTheValuesOfItsMode)
+{
+	std::array<float, 36> eye {};
+	std::array<float, 36> focus {};
+	for (size_t axis = 0; axis < 3; ++axis)
+	{
+		const auto numbers = GlideNumbers(GlideFrom(static_cast<float>(axis), 10.0f, 1.0f, 0.25f));
+		std::ranges::copy(numbers, eye.begin() + static_cast<std::ptrdiff_t>(axis * 12));
+		std::ranges::copy(numbers, focus.begin() + static_cast<std::ptrdiff_t>(axis * 12));
+	}
+	auto world = GameAtTurn(1);
+	world.Record(VanillaType::Camera)
+	    .Value("cameraFocusGlide", focus)
+	    .Value("cameraEyeGlide", eye)
+	    .Value("cameraLensGlide", GlideNumbers(GlideFrom(1.0f, 1.0f, 0.0f, 0.0f)))
+	    .Value<uint8_t>("cameraBelowLand", 1)
+	    .Value<uint32_t>("mode", 0x46)
+	    .Value("followHeading", 0.5f)
+	    .Value("followPitch", 0.25f)
+	    .Value("followDistance", 40.0f)
+	    .Value("followTimeScale", 0.2f)
+	    .Value<uint32_t>("followRelativeHeading", 1)
+	    .Value<uint32_t>("followUseOffsets", 0)
+	    .Value("followFocusOffset", glm::vec3 {1.0f, 2.0f, 3.0f})
+	    .Value("followEyeOffset", glm::vec3 {4.0f, 5.0f, 6.0f})
+	    .Ref("followTarget", 9)
+	    .Value<uint32_t>("followAutoReposition", 1);
+	const auto camera = camera_import::ReadCamera(world.Make());
+	ASSERT_TRUE(camera.has_value());
+	EXPECT_EQ(camera->mode, camera_import::Mode::Follow);
+	EXPECT_TRUE(camera->belowLand);
+	EXPECT_EQ(camera->eye[2].start, 2.0f);
+	EXPECT_EQ(camera->focus[1].elapsed, 0.25f);
+	ASSERT_TRUE(camera->follow.has_value());
+	EXPECT_EQ(camera->follow->heading, 0.5f);
+	EXPECT_EQ(camera->follow->pitch, 0.25f);
+	EXPECT_EQ(camera->follow->distance, 40.0f);
+	EXPECT_EQ(camera->follow->timeScale, 0.2f);
+	EXPECT_TRUE(camera->follow->relativeHeading);
+	EXPECT_FALSE(camera->follow->useOffsets);
+	EXPECT_EQ(camera->follow->focusOffset, glm::vec3(1.0f, 2.0f, 3.0f));
+	EXPECT_EQ(camera->follow->eyeOffset, glm::vec3(4.0f, 5.0f, 6.0f));
+	EXPECT_EQ(camera->follow->target, 9u);
+	EXPECT_TRUE(camera->follow->autoReposition);
+	// A world with no camera has none
+	EXPECT_FALSE(camera_import::ReadCamera(GameAtTurn(1).Make()).has_value());
+}
+
+namespace
+{
+/// A world whose camera has a mode, with still glides
+FakeWorld WorldWithCameraMode(uint32_t mode)
+{
+	std::array<float, 36> still {};
+	for (size_t axis = 0; axis < 3; ++axis)
+	{
+		std::ranges::copy(GlideNumbers(GlideFrom(1.0f, 1.0f, 0.0f, 0.0f)),
+		                  still.begin() + static_cast<std::ptrdiff_t>(axis * 12));
+	}
+	auto world = GameAtTurn(1);
+	world.Record(VanillaType::Camera)
+	    .Value("cameraFocusGlide", still)
+	    .Value("cameraEyeGlide", still)
+	    .Value("cameraLensGlide", GlideNumbers(GlideFrom(1.0f, 1.0f, 0.0f, 0.0f)))
+	    .Value<uint8_t>("cameraBelowLand", 0)
+	    .Value<uint32_t>("mode", mode);
+	return world;
+}
+} // namespace
+
+TEST(VanillaWorldImport, TheFreeCameraOfTheFileReadsItsSpeedAndItsKeys)
+{
+	auto world = WorldWithCameraMode(0x65);
+	world.Value("freeSpeed", 3.5f)
+	    .Value<int32_t>("freeMoveX", -6)
+	    .Value<int32_t>("freeMoveY", 4)
+	    .Value<uint32_t>("freeKeys", camera_import::k_CtrlKey);
+	const auto camera = camera_import::ReadCamera(world.Make());
+	ASSERT_TRUE(camera.has_value());
+	EXPECT_EQ(camera->mode, camera_import::Mode::Free);
+	EXPECT_FALSE(camera->belowLand);
+	EXPECT_FALSE(camera->follow.has_value());
+	ASSERT_TRUE(camera->free.has_value());
+	EXPECT_EQ(camera->free->speed, 3.5f);
+	EXPECT_EQ(camera->free->across, -6);
+	EXPECT_EQ(camera->free->along, 4);
+	EXPECT_TRUE(camera->free->ctrl);
+	EXPECT_FALSE(camera->free->shift);
+}
+
+TEST(VanillaWorldImport, TheTurningFollowCameraOfTheFileReadsItsTurnAndItsThing)
+{
+	auto world = WorldWithCameraMode(0x48);
+	world.Value("followHeading", 0.75f)
+	    .Value("followPitch", 0.3f)
+	    .Value("followDistance", 60.0f)
+	    .Value("followTurnSpeed", 0.01f)
+	    .Ref("followTarget", 12);
+	const auto camera = camera_import::ReadCamera(world.Make());
+	ASSERT_TRUE(camera.has_value());
+	EXPECT_EQ(camera->mode, camera_import::Mode::FollowAndTurn);
+	EXPECT_FALSE(camera->free.has_value());
+	ASSERT_TRUE(camera->follow.has_value());
+	EXPECT_EQ(camera->follow->heading, 0.75f);
+	EXPECT_EQ(camera->follow->pitch, 0.3f);
+	EXPECT_EQ(camera->follow->distance, 60.0f);
+	EXPECT_EQ(camera->follow->turnSpeed, 0.01f);
+	EXPECT_EQ(camera->follow->target, 12u);
+}
+
+TEST(VanillaWorldImport, SavedGamesHaveACameraWhosePointsGlideTogether)
+{
+	const auto files = ForEachSave([](const std::filesystem::path& path, const VanillaWorld& world) {
+		const auto camera = camera_import::ReadCamera(world);
+		ASSERT_TRUE(camera.has_value()) << path;
+		EXPECT_EQ(camera->mode, camera_import::Mode::World) << path;
+		const auto motion = camera_import::MotionOf(camera->eye, camera->focus);
+		ASSERT_TRUE(motion.has_value()) << path;
+		// The motion is where the file has the camera now
+		const auto share = [](std::chrono::microseconds time, std::chrono::microseconds duration) {
+			return duration.count() == 0 ? 1.0f : static_cast<float>(time.count()) / static_cast<float>(duration.count());
+		};
+		const auto eye = motion->origin.PositionAt(share(motion->time, motion->duration));
+		const auto focus = motion->focus.PositionAt(share(motion->focusTime, motion->focusDuration));
+		for (glm::length_t axis = 0; axis < 3; ++axis)
+		{
+			EXPECT_NEAR(eye[axis], camera->eye.at(static_cast<size_t>(axis)).value, 0.01f) << path;
+			EXPECT_NEAR(focus[axis], camera->focus.at(static_cast<size_t>(axis)).value, 0.01f) << path;
+		}
+	});
+	if (!files.has_value())
+	{
+		GTEST_SKIP() << "Set OPENBLACK_VANILLA_SAVES to a copy of a Profiles folder of the game to check its saved games";
+	}
+	EXPECT_GT(*files, 0u);
 }

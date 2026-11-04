@@ -906,6 +906,7 @@ void Runner::Start(const Scenario& scenario)
 	_creatures.clear();
 	_slotCreatures.clear();
 	_objects.clear();
+	_birdFlocks.clear();
 	_scriptFlock = entt::null;
 	_keptByScript.clear();
 	_madeByNatives.clear();
@@ -2066,6 +2067,7 @@ void Runner::PlaceBirds(const Scenario& scenario, glm::vec2 middle)
 		const auto& setup = scenario.birdFlocks[i];
 		const auto home = MapPoint(middle, setup.offset);
 		const auto flock = animals.CreateScriptFlock(static_cast<int32_t>(i + 1), home, home, setup.reach, setup.flockDistance);
+		_birdFlocks.push_back(flock);
 		for (uint32_t bird = 0; bird < setup.count; ++bird)
 		{
 			const float angle = 2.0f * std::numbers::pi_v<float> * static_cast<float>(bird) / static_cast<float>(setup.count);
@@ -4884,6 +4886,10 @@ void Runner::Give(const Command& command)
 	case Kind::CameraKeys:
 	case Kind::ClearCameraView:
 	case Kind::LeaveCreatureMode:
+	case Kind::SavedFollowCamera:
+	case Kind::SavedTurningCamera:
+	case Kind::SavedFreeCamera:
+	case Kind::SavedBelowLandCamera:
 	case Kind::OpenCreatureCave:
 	case Kind::ApplyTattoo:
 	case Kind::RemoveTattoo:
@@ -5213,7 +5219,7 @@ std::string Runner::GiveCreatureModeCommand(entt::entity creature, const Command
 	auto& mode = Locator::creatureModeSystem::value();
 	auto& cave = Locator::creatureCaveSystem::value();
 	const auto following = [&mode] {
-		const auto followed = mode.GetCreature();
+		const auto followed = mode.GetThing();
 		return followed.has_value() ? fmt::format("following entity {}", static_cast<uint32_t>(*followed))
 		                            : std::string("the camera is the player's");
 	};
@@ -5247,6 +5253,17 @@ std::string Runner::GiveCreatureModeCommand(entt::entity creature, const Command
 	case Kind::LeaveCreatureMode:
 		mode.Leave();
 		return following();
+	case Kind::SavedFollowCamera:
+	case Kind::SavedTurningCamera:
+	case Kind::SavedFreeCamera:
+	case Kind::SavedBelowLandCamera:
+		// The follow camera can follow one of the scenario's objects or its first flock of birds in place of the creature
+		if (command.kind == Kind::SavedFollowCamera && (command.value & k_SavedCameraOnFlock) != 0)
+		{
+			return _birdFlocks.empty() ? "no flock" : GiveSavedCameraCommand(_birdFlocks.front(), command);
+		}
+		return GiveSavedCameraCommand(
+		    command.with.has_value() && *command.with < _objects.size() ? _objects[*command.with] : creature, command);
 	case Kind::OpenCreatureCave:
 		cave.Open();
 		cave.GetScreen().page = static_cast<creature_cave::Page>(command.value);

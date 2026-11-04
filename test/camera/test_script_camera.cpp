@@ -329,6 +329,32 @@ TEST(ScriptCamera, ItIsAboutTheThingItLooksAtElseTheOneItFollows)
 	EXPECT_FALSE(model.GetFocusedThing().has_value());
 }
 
+TEST(ScriptCamera, AFlockIsSeenAtItsPlaceRaisedByHalfItsLeaderAndHasNoHeightOrFacing)
+{
+	const auto led = script_camera::FollowedFlock({1000.0f, 7.0f, 1200.0f}, 3.0f);
+	EXPECT_EQ(led.point, glm::vec3(1000.0f, 8.5f, 1200.0f));
+	EXPECT_FALSE(led.gameAngle.has_value());
+	EXPECT_EQ(led.height, script_camera::k_FlockHeight);
+	// A flock with no leader is seen at its place
+	const auto alone = script_camera::FollowedFlock({1000.0f, 7.0f, 1200.0f}, 0.0f);
+	EXPECT_EQ(alone.point, glm::vec3(1000.0f, 7.0f, 1200.0f));
+}
+
+TEST(ScriptCamera, AFollowedFlockIsFollowedFromTheNearestDistanceWithNoTurn)
+{
+	ScriptCameraModel model({990.0f, 20.0f, 990.0f}, {1000.0f, 5.0f, 1000.0f}, FlatLand);
+	const auto flock = script_camera::FollowedFlock({1000.0f, 5.0f, 1000.0f}, 2.0f);
+	model.Follow({.id = 9, .lookup = [flock]() { return std::optional(flock); }}, true);
+	Camera camera;
+	ASSERT_TRUE(model.Update(std::chrono::milliseconds(16), camera).has_value());
+	EXPECT_NEAR(glm::distance(model.GetTargetFocus(), flock.point), 0.0f, 1e-4f);
+	// The flock gives no height, so the distance is held at the nearest
+	EXPECT_NEAR(glm::distance(model.GetTargetOrigin(), flock.point), script_camera::k_FollowNearest, 1e-3f);
+	// The relative heading is 0 and the flock does not walk, so the camera stays at heading 0
+	const auto view = script_camera::HeadingAndPitchFromPoints(model.GetTargetOrigin(), flock.point);
+	EXPECT_NEAR(view.heading, 0.0f, 1e-5f);
+}
+
 TEST(ScriptCamera, ATrackPutsTheCameraWhereItsWaysHaveGotToAtTheFramesTime)
 {
 	Camera camera;
@@ -507,6 +533,34 @@ TEST(ScriptCamera, TheTwoThingCameraFramesBothFromTheSideOfTheLineBetweenThem)
 	const auto unturned =
 	    script_camera::PointFromDistanceHeadingAndPitch(together.focus, 10.0f + 14.0f, same.heading, same.pitch);
 	EXPECT_NEAR(glm::distance(together.origin, unturned), 0.0f, 1e-3f);
+}
+
+TEST(ScriptCamera, TheTwoThingCameraSeesAFlockAtItsPlaceWithNoHeightAndThirtyWide)
+{
+	const auto flock = script_camera::DualFlock({1000.0f, 7.0f, 1200.0f});
+	EXPECT_EQ(flock.position, glm::vec3(1000.0f, 7.0f, 1200.0f));
+	EXPECT_EQ(flock.height, script_camera::k_FlockHeight);
+	EXPECT_EQ(flock.radius, 30.0f);
+	EXPECT_FALSE(flock.point);
+}
+
+TEST(ScriptCamera, TheTwoThingCameraOnAFlockAndAThingAddsOnlyTheHeightOfTheThing)
+{
+	const auto flock = script_camera::DualFlock({0.0f, 0.0f, 0.0f});
+	const script_camera::DualThing thing {.position = {100.0f, 0.0f, 0.0f}, .height = 20.0f, .radius = 6.0f};
+	script_camera::DualSettings settings;
+	const auto view = script_camera::DualView(flock, thing, settings);
+	// The middle is raised by a quarter of the height of the thing only
+	EXPECT_FLOAT_EQ(view.focus.x, 50.0f);
+	EXPECT_FLOAT_EQ(view.focus.y, 5.0f);
+	// As far as they are apart plus 30 and the radius of the thing, then 1.4 times the height of the thing
+	EXPECT_NEAR(glm::distance(view.origin, view.focus), 136.0f + 28.0f, 1e-3f);
+
+	// Two flocks give no height: the camera stands as far back as they are apart plus 60, and looks at their middle
+	script_camera::DualSettings flocks;
+	const auto both = script_camera::DualView(flock, script_camera::DualFlock({0.0f, 4.0f, 40.0f}), flocks);
+	EXPECT_FLOAT_EQ(both.focus.y, 2.0f);
+	EXPECT_NEAR(glm::distance(both.origin, both.focus), 100.0f, 1e-3f);
 }
 
 TEST(ScriptCamera, ATwoThingCameraTakesOverUntilLetGoOrAThingIsGone)

@@ -126,6 +126,12 @@ struct FollowedThing
 	float height {0.0f};
 };
 
+/// A flock is followed with no distance of its own: the game gives a flock no height
+inline constexpr float k_FlockHeight = 0.0f;
+/// What a camera following a flock knows of it. The camera looks at the place of the flock, as a follow camera finds it,
+/// raised by half the height of the leader. The leader height is 0 when the flock has no leader. A flock does not walk.
+[[nodiscard]] FollowedThing FollowedFlock(const glm::vec3& place, float leaderHeight);
+
 /// How a camera follows a thing
 struct FollowSettings
 {
@@ -227,6 +233,10 @@ struct DualSettings
 		visit(self.heading, self.pitch, self.zoom);
 	}
 };
+/// What the two-thing camera knows of a flock. The camera reads the own place of the flock on the land, raised by its
+/// altitude, not the place of its leader. The game gives a flock no height, and a flock has no model, thus it counts as
+/// 30 wide.
+[[nodiscard]] DualThing DualFlock(const glm::vec3& place);
 /// The seconds the two-thing camera's glides take, some seconds after it began
 [[nodiscard]] float DualSeconds(float secondsSinceBegun);
 /// Where the two-thing camera is sent: it looks at the middle of the two things, raised by a quarter of their heights,

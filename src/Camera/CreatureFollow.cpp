@@ -48,7 +48,33 @@ constexpr float k_ClearPitchShare = 0.2f;
 constexpr float k_ClearSlopeShare = 0.1f;
 constexpr float k_ClearMinPitch = std::numbers::pi_v<float> / 8.0f;
 constexpr float k_ClearMaxPitch = std::numbers::pi_v<float> / 3.0f;
+/// The game's float of pi / 2048, which turns a doubled game angle to radians, and its float of a quarter turn
+constexpr float k_HalfGameAngleToRadians = 0.0015339808305725455f;
+constexpr float k_RelativeQuarterTurn = 1.5707963705062866f;
 } // namespace
+
+Target FlockTarget(const std::optional<FlockLeader>& leader, const map_coords::MapCoords& place, const GroundHeight& ground)
+{
+	if (leader.has_value())
+	{
+		// The leader's place on the map: x and z through a map position, at the height of the place
+		return Target {
+		    .position = {map_coords::Quantise(leader->position.x), leader->position.y,
+		                 map_coords::Quantise(leader->position.z)},
+		    .height = leader->height,
+		    .gameAngle = std::nullopt,
+		    .hasModel = false,
+		};
+	}
+	// The flock's own place on the land, raised by its altitude. A flock with no leader adds no height.
+	const auto xz = map_coords::ToMetres(place);
+	return Target {
+	    .position = {xz.x, ground(xz) + place.altitude, xz.y},
+	    .height = 0.0f,
+	    .gameAngle = std::nullopt,
+	    .hasModel = false,
+	};
+}
 
 glm::vec3 Focus(glm::vec3 position, float height)
 {
@@ -117,12 +143,56 @@ Keys KeysFor(int across, int along, float seconds)
 	};
 }
 
+float RelativeHeading(float heading, uint16_t gameAngle)
+{
+	const float turned = static_cast<float>(static_cast<int32_t>(gameAngle) << 1) * k_HalfGameAngleToRadians;
+	const float facing = turned - k_RelativeQuarterTurn;
+	return heading - facing;
+}
+
+float OffsetDistance(const Offsets& offsets)
+{
+	const float dx = offsets.focus.x - offsets.eye.x;
+	const float dy = offsets.focus.y - offsets.eye.y;
+	const float dz = offsets.focus.z - offsets.eye.z;
+	const float squares = (dz * dz) + (dy * dy);
+	return std::sqrt(squares + (dx * dx));
+}
+
+Offsets OffsetsAtDistance(const Offsets& offsets, float distance)
+{
+	glm::vec3 line {offsets.eye.x - offsets.focus.x, offsets.eye.y - offsets.focus.y, offsets.eye.z - offsets.focus.z};
+	if (line.x != 0.0f || line.y != 0.0f || line.z != 0.0f)
+	{
+		const float squares = (line.z * line.z) + (line.y * line.y);
+		const float inverse = 1.0f / std::sqrt(squares + (line.x * line.x));
+		line = {inverse * line.x, inverse * line.y, inverse * line.z};
+	}
+	line = {distance * line.x, distance * line.y, distance * line.z};
+	return {.focus = offsets.focus, .eye = {offsets.focus.x + line.x, offsets.focus.y + line.y, offsets.focus.z + line.z}};
+}
+
 KeyOutcome Apply(View& view, const Keys& keys, float screenWidth)
+{
+	std::optional<Offsets> none;
+	return Apply(view, none, keys, screenWidth);
+}
+
+KeyOutcome Apply(View& view, std::optional<Offsets>& offsets, const Keys& keys, float screenWidth)
 {
 	const auto zoom = ((keys.wheel * k_WheelZoomPerCount) + k_ZoomPixels) * k_ZoomPerPixel;
 	view.distance = std::max(view.distance * zoom, k_MinDistance);
 	if (keys.Moving())
 	{
+		// The cursor keys stop the offsets. The view starts from the heading, the pitch and the distance of the offsets.
+		if (offsets.has_value())
+		{
+			const auto turned = HeadingPitchOf(offsets->eye, offsets->focus);
+			view.yaw = turned.heading;
+			view.pitch = turned.pitch;
+			view.distance = OffsetDistance({.focus = offsets->eye, .eye = offsets->focus});
+			offsets.reset();
+		}
 		const auto turn = keys.across * std::numbers::pi_v<float> / std::max(screenWidth, 1.0f);
 		if (keys.ctrl)
 		{
@@ -141,6 +211,10 @@ KeyOutcome Apply(View& view, const Keys& keys, float screenWidth)
 		view.yaw = editor::WrapAngle(view.yaw);
 	}
 	view.distance = std::clamp(view.distance * zoom, k_MinDistance, k_MaxKeyDistance);
+	if (offsets.has_value())
+	{
+		*offsets = OffsetsAtDistance(*offsets, view.distance);
+	}
 	return KeyOutcome::Stay;
 }
 

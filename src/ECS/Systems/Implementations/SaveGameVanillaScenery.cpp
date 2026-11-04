@@ -12,7 +12,9 @@
 #include <cstdlib>
 
 #include <algorithm>
+#include <chrono>
 #include <map>
+#include <memory>
 #include <ranges>
 #include <utility>
 #include <vector>
@@ -20,6 +22,8 @@
 #include <VanillaWorld.h>
 #include <spdlog/spdlog.h>
 
+#include "Camera/Camera.h"
+#include "Camera/DefaultWorldCameraModel.h"
 #include "ECS/Archetypes/AnimatedStaticArchetype.h"
 #include "ECS/Archetypes/BigForestArchetype.h"
 #include "ECS/Archetypes/DeadTreeArchetype.h"
@@ -48,6 +52,7 @@
 #include "ECS/Systems/ForestSystemInterface.h"
 #include "ECS/Systems/SkyClockSystemInterface.h"
 #include "ECS/ThingMapPlace.h"
+#include "ECS/VanillaCameraImport.h"
 #include "ECS/VanillaSceneryImport.h"
 #include "ECS/WorldObjects.h"
 #include "LHScriptX/FeatureScriptCommands.h"
@@ -487,4 +492,45 @@ void SaveGameSystem::ImportVanillaGameValues(const gamesave::VanillaWorld& world
 			lhscriptx::FeatureScriptCommands::SetGlobalLandBalance(static_cast<int32_t>(index), land->landBalance.at(index));
 		}
 	}
+}
+
+void SaveGameSystem::ImportVanillaCamera(const gamesave::VanillaWorld& world, const VanillaMade& made)
+{
+	namespace camera_import = openblack::ecs::vanilla_camera_import;
+	if (!Locator::camera::has_value())
+	{
+		return;
+	}
+	const auto file = camera_import::ReadCamera(world);
+	if (!file.has_value())
+	{
+		SPDLOG_LOGGER_WARN(ImportLog(), "The game's file has no camera that reads, so the camera stays as it is");
+		return;
+	}
+	auto& camera = Locator::camera::value();
+	// The eye and the point that it looks at continue their glides from where the file has them
+	if (const auto motion = camera_import::MotionOf(file->eye, file->focus); motion.has_value())
+	{
+		camera.SetMotion(*motion);
+	}
+	else
+	{
+		SPDLOG_LOGGER_WARN(ImportLog(),
+		                   "The coordinates of a point of the camera of the file do not glide together, so the camera "
+		                   "stays still where the file has it");
+		camera.SetOrigin(camera_import::ValueOf(file->eye)).SetFocus(camera_import::ValueOf(file->focus));
+		camera.SetInterpolatorDuration(std::chrono::microseconds::zero());
+		camera.SetInterpolatorTime(std::chrono::microseconds::zero());
+	}
+	camera.SetLensGlide(camera_import::LensOf(file->lens));
+	// The world camera of the file can let its eye go below the land
+	camera.SetEyeMayGoBelowLand(file->belowLand);
+	// The load gives the camera a new world camera. It takes over from where the camera is now, and the count of the
+	// camera's time starts again from zero.
+	camera.SetModel(std::make_unique<DefaultWorldCameraModel>(camera.GetOrigin(), camera.GetFocus()));
+	// The mode of the file goes on top of the world camera
+	ImportVanillaCameraMode(*file, made);
+	SPDLOG_LOGGER_INFO(ImportLog(), "The camera of the game's file looks from ({}, {}, {}) at ({}, {}, {})",
+	                   camera.GetOrigin().x, camera.GetOrigin().y, camera.GetOrigin().z, camera.GetFocus().x,
+	                   camera.GetFocus().y, camera.GetFocus().z);
 }

@@ -1139,16 +1139,21 @@ void ReadClimate(WorldReader& r)
 void ReadCamera(WorldReader& r)
 {
 	ReadPositioned(r);
-	r.Bytes(12);
-	for (int i = 0; i < 4; ++i)
-	{
-		r.Word();
-	}
+	// The point of the camera, its clock, the step of its clock, two values that openblack does not use, then eight
+	// bytes that openblack does not use
+	r.Point("cameraPoint");
+	r.Float("cameraTime");
+	r.Float("cameraStep");
+	r.Word("cameraValue");
+	r.Word("cameraChanged");
 	r.Bytes(8);
-	r.Bytes(144);
-	r.Bytes(144);
-	r.Bytes(48);
-	r.Byte();
+	// The glides of the point that the camera looks at and of the eye, each three glides of 48 bytes (x, y and z), then
+	// the glide of the lens
+	r.Bytes(144, "cameraFocusGlide");
+	r.Bytes(144, "cameraEyeGlide");
+	r.Bytes(48, "cameraLensGlide");
+	// When this is not 0, the world camera lets the eye go below the land
+	r.Byte("cameraBelowLand");
 	// The kind of the camera's mode, then the values of the mode
 	const auto mode = r.Word("mode");
 	switch (mode)
@@ -1156,27 +1161,35 @@ void ReadCamera(WorldReader& r)
 	case 0:
 		break;
 	case 0x46:
-		for (int i = 0; i < 6; ++i)
-		{
-			r.Word();
-		}
-		r.Bytes(12);
-		r.Bytes(12);
-		r.Ref();
-		r.Word();
+		// A camera that follows a thing: its heading, pitch and distance, the share of the glide time, whether the
+		// heading turns with the thing, whether it uses the two offsets, the offsets of the focus and the eye, the
+		// thing, and whether it puts itself back behind the thing
+		r.Float("followHeading");
+		r.Float("followPitch");
+		r.Float("followDistance");
+		r.Float("followTimeScale");
+		r.Word("followRelativeHeading");
+		r.Word("followUseOffsets");
+		r.Point("followFocusOffset");
+		r.Point("followEyeOffset");
+		r.Ref("followTarget");
+		r.Word("followAutoReposition");
 		break;
 	case 0x48:
-		for (int i = 0; i < 4; ++i)
-		{
-			r.Word();
-		}
-		r.Ref();
+		// A camera that follows a thing and turns round it: its heading, pitch, distance, the speed of its turn, and
+		// the thing
+		r.Float("followHeading");
+		r.Float("followPitch");
+		r.Float("followDistance");
+		r.Float("followTurnSpeed");
+		r.Ref("followTarget");
 		break;
 	case 0x65:
-		for (int i = 0; i < 4; ++i)
-		{
-			r.Word();
-		}
+		// A free camera: its speed, the two key movements and the keys held with them
+		r.Float("freeSpeed");
+		r.Word("freeMoveX");
+		r.Word("freeMoveY");
+		r.Word("freeKeys");
 		break;
 	default:
 		r.Fail("The camera mode " + std::to_string(mode) + " is not a mode that openblack knows");

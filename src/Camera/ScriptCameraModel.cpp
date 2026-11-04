@@ -139,6 +139,15 @@ float script_camera::FollowSeconds(float secondsSinceBegun, float zoomTimeScale)
 	return seconds * zoomTimeScale;
 }
 
+script_camera::FollowedThing script_camera::FollowedFlock(const glm::vec3& place, float leaderHeight)
+{
+	return {
+	    .point = {place.x, place.y + (leaderHeight * 0.5f), place.z},
+	    .gameAngle = std::nullopt,
+	    .height = k_FlockHeight,
+	};
+}
+
 glm::vec3 script_camera::FollowOrigin(const FollowedThing& thing, FollowSettings& settings)
 {
 	settings.pitch = settings.pitch > k_FollowLowestPitch ? settings.pitch : k_FollowLowestPitch;
@@ -171,6 +180,11 @@ View script_camera::FaceView(const FacedThing& thing, float distance)
 		heading -= k_FullTurn;
 	}
 	return {.origin = PointFromDistanceHeadingAndPitch(focus, distance, heading, k_FacePitch), .focus = focus};
+}
+
+script_camera::DualThing script_camera::DualFlock(const glm::vec3& place)
+{
+	return {.position = place, .height = k_FlockHeight, .radius = k_DualNoModelRadius};
 }
 
 float script_camera::DualSeconds(float secondsSinceBegun)
