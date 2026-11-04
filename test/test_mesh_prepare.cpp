@@ -424,7 +424,7 @@ TEST_F(MeshPrepare, ASharedVertexBufferUsesTheSharedBufferAndStaysFixed)
 	EXPECT_EQ(shared.GetCount(), 3U);
 }
 
-TEST_F(MeshPrepare, AMeshGivesTheBitsOfItsLoadAgainFromItsFile)
+TEST_F(MeshPrepare, AMeshGivesTheSkinOfItsLoadAgainFromItsFile)
 {
 	const auto model = Model();
 	L3DMesh mesh("given again", false, UploadMode::Device);
@@ -432,17 +432,13 @@ TEST_F(MeshPrepare, AMeshGivesTheBitsOfItsLoadAgainFromItsFile)
 	const auto fromLoad = Device().TakeMade();
 	ASSERT_EQ(fromLoad.size(), 3U);
 
-	// The skin, the vertices and the triangles again, with the bytes of the load
+	// The vertices and the triangles are in the shared buffers, which the device keeps. Only the skin goes again,
+	// with the bytes of the load.
 	mesh.GiveDeviceDataAgain(model);
 	const auto given = Device().TakeMade();
-	ASSERT_EQ(given.size(), 3U);
+	ASSERT_EQ(given.size(), 1U);
 	EXPECT_EQ(given[0].kind, FakeDevice::Made::Kind::TextureUpdate);
-	EXPECT_EQ(given[1].kind, FakeDevice::Made::Kind::GivenVertices);
-	EXPECT_EQ(given[2].kind, FakeDevice::Made::Kind::GivenIndices);
-	for (size_t i = 0; i < given.size(); ++i)
-	{
-		EXPECT_EQ(given[i].bytes, fromLoad[i].bytes);
-	}
+	EXPECT_EQ(given[0].bytes, fromLoad[0].bytes);
 }
 
 TEST_F(MeshPrepare, AMeshWithAFileSourceIsAGiverOfTheDeviceUntilItIsDeleted)
@@ -467,19 +463,16 @@ TEST_F(MeshPrepare, AMeshWithAFileSourceIsAGiverOfTheDeviceUntilItIsDeleted)
 	EXPECT_EQ(givers.Count(), 0U);
 }
 
-TEST_F(MeshPrepare, ADynamicMeshGivesOnlyItsTrianglesAgain)
+TEST_F(MeshPrepare, ADynamicMeshGivesNothingAgain)
 {
 	const auto model = Model();
 	L3DMesh mesh("dynamic", true, UploadMode::Device);
 	ASSERT_TRUE(mesh.Load(model));
-	const auto fromLoad = Device().TakeMade();
+	std::ignore = Device().TakeMade();
 
-	// The skin and the vertices of a dynamic mesh change, thus the device keeps them
+	// The skin, the vertices and the triangles of a dynamic mesh change, thus the device keeps them
 	mesh.GiveDeviceDataAgain(model);
-	const auto given = Device().TakeMade();
-	ASSERT_EQ(given.size(), 1U);
-	EXPECT_EQ(given[0].kind, FakeDevice::Made::Kind::GivenIndices);
-	EXPECT_EQ(given[0].bytes, fromLoad.back().bytes);
+	EXPECT_TRUE(Device().TakeMade().empty());
 }
 
 TEST_F(MeshPrepare, AMeshOfDataOnlyIgnoresAFileSource)
