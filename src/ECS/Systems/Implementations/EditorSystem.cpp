@@ -206,7 +206,15 @@ void EditorSystem::Update([[maybe_unused]] std::chrono::microseconds dt)
 		{
 			_selection.Clear();
 			_history.Clear();
-			_drawnPaths = {};
+			// A world that the editor loaded keeps the paths that the editor found in it again
+			if (_drawnPaths.keepAtNextReset)
+			{
+				_drawnPaths.keepAtNextReset = false;
+			}
+			else
+			{
+				_drawnPaths = {};
+			}
 		}
 		_registryResets = resets;
 	}

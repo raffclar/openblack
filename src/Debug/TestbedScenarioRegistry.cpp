@@ -13326,7 +13326,8 @@ void AddEditor(std::vector<Scenario>& all)
 	                   "In the Land tools tab, the Land tool raises or lowers the land in a circle or paints its "
 	                   "country, and the Paths tool draws a footpath or a stream, a click for each point. The Script tab "
 	                   "of the palette places markers, scrolls and the scrolls of challenges. Save land files writes a "
-	                   "landscape file, a land script and a world file into the profile folder's Editor folder.",
+	                   "landscape file, a land script, a footpath file and a world file into the profile folder's Editor "
+	                   "folder.",
 	    .expected = "A stroke of Raise makes a round hill: the full step in the inner circle, less to none at the outer "
 	                "circle. The oaks and the pillar stay on the land. Paint country changes the ground's texture in "
 	                "the outer circle. A footpath from hut to hut shows as a line of nodes in the View menu's "
