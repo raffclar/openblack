@@ -14,12 +14,20 @@
 
 #include "Enums.h"
 
+namespace openblack::ecs::components
+{
+struct MobileObject;
+}
+
 namespace openblack::ecs::archetypes
 {
 class MobileObjectArchetype
 {
 public:
 	static entt::entity Create(const glm::vec3& position, MobileObjectInfo type, float yAngleRadians, float scale);
+	/// A loose object of a kind: a row of the loose objects' table, or the record of the football
+	static entt::entity Create(const glm::vec3& position, const components::MobileObject& kind, float yAngleRadians,
+	                           float scale);
 	MobileObjectArchetype() = delete;
 };
 } // namespace openblack::ecs::archetypes

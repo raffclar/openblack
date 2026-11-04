@@ -62,7 +62,8 @@ struct World
 
 /// The line making the thing again relative to the vortex's place: a villager, an animal, a pot (not one of a storage
 /// pit's piles), a tree, a rock or other static thing, a thing lying about, a dead tree, a globe holding a miracle or a
-/// scaffold that no workshop counts, or a reward chest on the land that is ready to open. None for anything else.
+/// scaffold that no workshop counts, a reward chest on the land that is ready to open, or the football. None for
+/// anything else.
 [[nodiscard]] std::optional<vortex::crossing::Line> LineFor(const Registry& registry, entt::entity thing,
                                                             const map_coords::MapCoords& vortex, const World& world);
 
@@ -70,8 +71,8 @@ struct World
 /// land: once its line is written they count as written too, so a pile of them in one place comes out as one
 [[nodiscard]] std::vector<entt::entity> IdenticalStatics(const Registry& registry, entt::entity thing, const World& world);
 
-/// The other loose objects of the same kind standing exactly where a loose object stands, at the same height above the
-/// land: once its line is written they count as written too
+/// The other loose objects of the same kind and record standing exactly where a loose object stands, at the same height
+/// above the land: once its line is written they count as written too
 [[nodiscard]] std::vector<entt::entity> IdenticalMobileObjects(const Registry& registry, entt::entity thing,
                                                                const World& world);
 

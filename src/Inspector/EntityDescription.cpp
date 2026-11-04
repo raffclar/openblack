@@ -199,7 +199,10 @@ EntityDescription openblack::inspector::Describe(const ecs::Registry& registry, 
 	}
 	else if (const auto* mobileObject = registry.TryGet<MobileObject>(entity); mobileObject != nullptr)
 	{
-		set("MobileObject", "MobileObject: " + TypeName(Table(info, &InfoConstants::mobileObject), mobileObject->type));
+		// A loose object that takes the record of the football says so
+		set("MobileObject", "MobileObject: " + (mobileObject->footballRecord
+		                                            ? std::string("football record")
+		                                            : TypeName(Table(info, &InfoConstants::mobileObject), mobileObject->type)));
 	}
 	else if (const auto* town = registry.TryGet<Town>(entity); town != nullptr)
 	{
