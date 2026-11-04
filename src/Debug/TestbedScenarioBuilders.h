@@ -200,4 +200,5 @@ void AddMovement(std::vector<Scenario>& all);
 void AddFootprints(std::vector<Scenario>& all);
 void AddStory(std::vector<Scenario>& all);
 void AddExplorersBoat(std::vector<Scenario>& all);
+void AddAudio(std::vector<Scenario>& all);
 } // namespace openblack::testbed_scenarios
