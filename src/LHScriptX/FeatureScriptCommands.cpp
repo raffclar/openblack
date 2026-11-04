@@ -769,7 +769,8 @@ void FeatureScriptCommands::CreateNewTree(int32_t forestId, glm::vec3 position, 
 
 void FeatureScriptCommands::CreateField(glm::vec3 position, FieldTypeInfo type)
 {
-	CreateTownField(-1, position, type);
+	// A field with no town
+	LastObject() = FieldArchetype::Create(-1, position, type, 0.0f);
 }
 
 void FeatureScriptCommands::CreateTownField(int32_t townId, glm::vec3 position, FieldTypeInfo type)
@@ -1307,7 +1308,12 @@ void FeatureScriptCommands::FireFlySpellRewardProb(const std::string& spell, flo
 
 void FeatureScriptCommands::CreateNewTownField(int32_t townId, glm::vec3 position, FieldTypeInfo townFieldType, float rotation)
 {
-	// Rotation is in radians and not scaled
+	// The command makes nothing for a town that is not there, and the last object stays as it was. The rotation is in
+	// radians and not scaled.
+	if (TownWithId(townId) == entt::null)
+	{
+		return;
+	}
 	LastObject() = FieldArchetype::Create(townId, position, townFieldType, rotation);
 }
 

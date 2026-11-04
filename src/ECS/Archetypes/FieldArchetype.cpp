@@ -41,8 +41,13 @@ entt::entity FieldArchetype::Create(int townId, const glm::vec3& position, Field
 {
 	auto& registry = Locator::entitiesRegistry::value();
 
-	auto townTribe = registry.Get<Tribe>(registry.Context().towns[townId]);
-	auto abodeInfo = GAbodeInfo::Find(townTribe, AbodeNumber::Field);
+	// A field of a town has the field row of the town's tribe. A field with no town has the Celtic field row, as in the
+	// game.
+	const auto& towns = registry.Context().towns;
+	const auto town = towns.find(static_cast<uint32_t>(townId));
+	const auto abodeInfo = townId >= 0 && town != towns.end() && registry.AllOf<Tribe>(town->second)
+	                           ? GAbodeInfo::Find(registry.Get<Tribe>(town->second), AbodeNumber::Field)
+	                           : AbodeInfo::CelticField;
 
 	auto entity = AbodeArchetype::Create(townId, position, abodeInfo, yAngleRadians, 1.0f, 0, 0);
 	// A new field is bare: the town's farmers sow it
