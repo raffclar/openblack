@@ -417,8 +417,11 @@ void Renderer::DrawFilmCopy(const DrawSceneDesc& desc, const interface_creatures
 	if (const auto* hair = copies.TryGet<const ecs::components::CreatureHair>(shown.copy);
 	    hair != nullptr && Locator::creatureHairSystem::has_value() && Locator::creatureHairSystem::value().IsShown())
 	{
+		const creature_hair_light::Colours colours {.light = shown.colour, .added = glm::round(shown.added * 255.0f)};
 		DrawCreatureHair(desc, *hair, transform->position, RenderPass::FilmCreature, glm::vec3(glm::inverse(shown.view)[3]),
-		                 shown.colour, glm::round(shown.added * 255.0f));
+		                 colours.light, colours.added);
+		// The next hair with the environment map takes these colours
+		_hairLightCarried = colours;
 	}
 	// The glows on its hands
 	if (const auto* glows = copies.TryGet<const ecs::components::CreatureHandGlows>(shown.copy); glows != nullptr)

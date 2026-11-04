@@ -7,13 +7,11 @@ $output v_texcoord0, v_color0
 
 uniform vec4 u_islandExtent;
 #include "land_light.sh"
+#include "hair_light.sh"
 
-// xyz: where the creature stands, which its hair takes the land's light and haze at
-uniform vec4 u_hairOrigin;
-// The colours of the creature's own look, 0 to 255, in place of the land's light and the haze: xyz the light (w 1 when
-// the look is used), and xyz the colour added after it
-uniform vec4 u_hairLight;
-uniform vec4 u_hairAdded;
+// The colours that the last hair of an earlier frame kept: the light in the first texel, the added colour in the
+// second
+SAMPLER2D(s_hairKept, 9);
 
 // A creature's strands of hair, ribbons in the world. A strand's colour, 0 to 255, is its own scaled by the land's
 // light under the creature, faded by the haze, then the land's colour and the haze's are added, at most white. The sun
@@ -21,22 +19,13 @@ uniform vec4 u_hairAdded;
 void main()
 {
 	vec3 origin = u_hairOrigin.xyz;
-	vec3 light = u_hairLight.xyz;
-	vec3 added = u_hairAdded.xyz;
-	if (u_hairLight.w < 0.5f)
+	vec3 light;
+	vec3 added;
+	HairLightAt(origin, mul(u_view, vec4(origin, 1.0f)).z, light, added);
+	if (u_hairLight.w > 1.5f)
 	{
-		light = vec3_splat(255.0f);
-		if (u_landLight.x > 0.0f)
-		{
-			light = min(floor(LandLightAt(origin.xz) * u_landLight.y), vec3_splat(255.0f));
-		}
-		float hazeT = HazeT(mul(u_view, vec4(origin, 1.0f)).z);
-		light = HazeDiffuse(light, HazeFactor(hazeT));
-		added = HazeColour(hazeT);
-		if (u_landLight.x > 0.0f)
-		{
-			added = min(added + LandColourAt(origin.xz), vec3_splat(255.0f));
-		}
+		light = floor(texture2DLod(s_hairKept, vec2(0.25f, 0.5f), 0.0f).rgb * 255.0f + 0.5f);
+		added = floor(texture2DLod(s_hairKept, vec2(0.75f, 0.5f), 0.0f).rgb * 255.0f + 0.5f);
 	}
 	vec3 colour = floor(a_color0.rgb * 255.0f + 0.5f);
 	v_color0 = vec4(min(floor(colour * light / 255.0f) + added, vec3_splat(255.0f)) / 255.0f, a_color0.a);
