@@ -310,27 +310,47 @@ std::optional<ImportedTally> ReadTally(const VanillaWorld& world, const VanillaR
 	                      .woodAtSites = FloatAt(bytes, k_WoodAtSitesAt)};
 }
 
+/// A record of the file with the number and the type, or none
+const VanillaRecord* RecordOf(const VanillaWorld& world, uint32_t number, VanillaType type)
+{
+	const auto* record = number != 0 ? world.Record(number) : nullptr;
+	return record != nullptr && record->Is(type) ? record : nullptr;
+}
+
+/// The player of a player record of the file, none for no player
+std::optional<PlayerNames> PlayerOfRecord(const VanillaWorld& world, uint32_t number)
+{
+	const auto* record = RecordOf(world, number, VanillaType::Player);
+	const auto player = record != nullptr ? world.Byte(*record, "number") : std::nullopt;
+	if (!player.has_value() || *player >= static_cast<uint8_t>(PlayerNames::_COUNT))
+	{
+		return std::nullopt;
+	}
+	return static_cast<PlayerNames>(*player);
+}
+
 std::optional<ImportedTown> ReadTown(const VanillaWorld& world, const VanillaRecord& record, std::string& why)
 {
 	const auto position = PositionOf(world, record);
 	const auto id = world.Word(record, "id");
 	const auto tribe = world.Word(record, "tribe");
-	const auto player = world.Byte(record, "player");
+	// The owner reference gives the player of the town. The town also keeps a player number: the first player of the
+	// town, or the player before the last change of owner. The game does not use that number as the owner.
+	const auto player = PlayerOfRecord(world, world.Ref(record, "owner").value_or(0));
 	if (!position.has_value() || !id.has_value() || !tribe.has_value() || !player.has_value())
 	{
 		why = "the town has no place, number, tribe or player";
 		return std::nullopt;
 	}
-	if (static_cast<int32_t>(*tribe) < 0 || *tribe >= static_cast<uint32_t>(Tribe::_COUNT) ||
-	    *player >= static_cast<uint8_t>(PlayerNames::_COUNT))
+	if (static_cast<int32_t>(*tribe) < 0 || *tribe >= static_cast<uint32_t>(Tribe::_COUNT))
 	{
-		why = "the town has a tribe or a player that the game does not have";
+		why = "the town has a tribe that the game does not have";
 		return std::nullopt;
 	}
 	ImportedTown town {.number = record.number,
 	                   .id = *id,
 	                   .tribe = static_cast<Tribe>(*tribe),
-	                   .owner = static_cast<PlayerNames>(*player),
+	                   .owner = *player,
 	                   .position = *position,
 	                   .cannotBuildWorshipSite = world.Word(record, "cannotBuildWorshipSite").value_or(0) != 0,
 	                   .uninhabitable = world.Word(record, "uninhabitable").value_or(0) != 0,
@@ -487,13 +507,6 @@ std::optional<PlayerNames> PlayerOfHand(const VanillaWorld& world, uint32_t numb
 		return PlayerOfInterface(world, world.Ref(*record, "interface").value_or(0));
 	}
 	return PlayerOfInterface(world, number);
-}
-
-/// A record of the file with the number and the type, or none
-const VanillaRecord* RecordOf(const VanillaWorld& world, uint32_t number, VanillaType type)
-{
-	const auto* record = number != 0 ? world.Record(number) : nullptr;
-	return record != nullptr && record->Is(type) ? record : nullptr;
 }
 
 /// The first word of an array of words of the record, or nothing for an empty array
@@ -1450,18 +1463,6 @@ std::optional<ImportedSite> ReadSite(const VanillaWorld& world, const VanillaRec
 
 namespace
 {
-/// The player of a player record of the file, none for no player
-std::optional<PlayerNames> PlayerOfRecord(const VanillaWorld& world, uint32_t number)
-{
-	const auto* record = RecordOf(world, number, VanillaType::Player);
-	const auto player = record != nullptr ? world.Byte(*record, "number") : std::nullopt;
-	if (!player.has_value() || *player >= static_cast<uint8_t>(PlayerNames::_COUNT))
-	{
-		return std::nullopt;
-	}
-	return static_cast<PlayerNames>(*player);
-}
-
 /// The artefacts of the towns of the file. The artefacts of each town come in the reverse order of the list of the
 /// town, the oldest first. The artefacts that no town lists come after them, in the order of the file.
 std::vector<ImportedTownArtefact> ReadTownArtefacts(const VanillaWorld& world)
