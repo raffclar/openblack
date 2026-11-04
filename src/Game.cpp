@@ -457,46 +457,6 @@ void DrawFilmCreature(const graphics::RendererInterface::DrawSceneDesc& drawDesc
 	               .fanDepth = shown->fanDepth});
 }
 
-/// What the box of the winning conditions shows: the score history and the conditions of each god among the first four
-/// players that plays, and the conditions of the player of this computer. A network game shows every god that plays,
-/// so a game of more than 4 gods shows them 4 at a time (deviation 195).
-gui::conditions_box::Figures ConditionsFigures()
-{
-	gui::conditions_box::Figures figures;
-	if (!Locator::gameEndSystem::has_value() || !Locator::playerSystem::has_value())
-	{
-		return figures;
-	}
-	const auto local =
-	    (Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE);
-	const auto landNumber = Locator::entitiesRegistry::value().Context().mapScriptGlobals.landNumber;
-	const bool networkGame = Locator::time::has_value() && Locator::time::value().IsNetworkGame();
-	for (const auto& [god, standing] : Locator::gameEndSystem::value().Standings())
-	{
-		if (god == local)
-		{
-			for (size_t number = 0; number < standing.conditions.size(); ++number)
-			{
-				if (const auto& condition = standing.conditions.at(number); condition.has_value())
-				{
-					figures.conditions.push_back({.number = number, .target = condition->target});
-				}
-			}
-		}
-		// The god of the observers has no column of its own, as in the original game
-		if (!game_end::CanLose(god, networkGame) || god == Locator::gameEndSystem::value().ObserversGod())
-		{
-			continue;
-		}
-		const auto scores = game_end::ShownScores(standing);
-		figures.gods.push_back({.player = god,
-		                        .colour = gui::statistics_box::PlayerColour(god, landNumber),
-		                        .scores = std::vector<float>(scores.begin(), scores.end()),
-		                        .conditions = standing.conditions});
-	}
-	return figures;
-}
-
 } // namespace
 
 namespace openblack::game_detail
@@ -732,11 +692,6 @@ uint32_t Game::GetTurn() const
 bool Game::IsPaused() const
 {
 	return Locator::time::value().IsPaused();
-}
-
-bool Game::FrontEndBoxShows() const
-{
-	return _interface && (_interface->IsDialogOpen() || _interface->GetTattooEditor().IsOpen());
 }
 
 void Game::ProcessMusicTurn(glm::vec3 cameraPosition, bool inCitadel)
@@ -1323,98 +1278,6 @@ bool Game::Initialize() noexcept
 	return true;
 }
 
-const gui::TextDatabase* Game::MakeInterface()
-{
-	// The game's menu, which greets the player by their profile's name and shows their creature's name and their
-	// symbol; before a first start's player has a profile, by the name they log in with
-	auto [playerName, settings] = simulation::ProfileMenuSettings();
-	auto& audio = Locator::audio::value();
-	const auto kept = gui::ToProfileSettings(settings);
-	const auto& pictures = Locator::tattooEditorSystem::value().GetPictures();
-	_interface = gui::GameInterface::Create(playerName, std::move(settings), pictures);
-	if (_interface)
-	{
-		// The films find the fade through the locator; the interface stays the owner
-		Locator::screenFade::reset(&_interface->GetScreenFade(), [](gui::ScreenFade* /*unowned*/) {});
-	}
-	ApplyPlayerSettings(kept);
-	LoadProfileKeys();
-	RefreshPlayersPage();
-	if (!_interface)
-	{
-		SPDLOG_LOGGER_WARN(spdlog::get("game"), "The game's menu is not available, Escape quits");
-	}
-	else
-	{
-		// The slider of the help's text speed shows only when the game has no sound
-		_interface->GetMenu().SetSoundInstalled(audio.IsInstalled());
-		// Each save and each load shows its box first
-		if (Locator::saveGameSystem::has_value())
-		{
-			Locator::saveGameSystem::value().SetShowBox([this](bool loading, bool darken) { ShowSavingBox(loading, darken); });
-			// A save that did not write its world files completely is told to the player in a box
-			Locator::saveGameSystem::value().SetReportProblem([this]() { _interface->ShowSaveProblem(); });
-		}
-		// The Game Statistics box takes the players' figures as it opens, from the menu and from the end box
-		const auto statistics = [] {
-			const auto local =
-			    Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE;
-			return std::pair(player_statistics::Box(), local);
-		};
-		_interface->GetMenu().SetStatisticsSource(statistics);
-		_interface->GetEndGameBox().SetStatisticsSource(statistics);
-		// The box of the winning conditions takes the gods' standings as it opens
-		_interface->GetMenu().SetConditionsSource(ConditionsFigures);
-		_interface->GetEndGameBox().SetConditionsSource(ConditionsFigures);
-		// Each time the end box shows that the player lost while the game goes on, the advisors can say their one-off
-		// line about it
-		_interface->GetEndGameBox().SetShownHandler([](const gui::EndGameBox::Contents& contents) {
-			if (contents.box.kind == end_game_box::Kind::Lost && Locator::guidanceSystem::has_value())
-			{
-				Locator::guidanceSystem::value().SayOneOff(guidance::OneOff::NotVeryGood);
-			}
-		});
-		if (Locator::temple::has_value())
-		{
-			Locator::temple::value().SetInterface(_interface.get());
-		}
-		if (Locator::creatureCaveSystem::has_value())
-		{
-			Locator::creatureCaveSystem::value().SetInterface(_interface.get());
-		}
-		if (Locator::miracleFxSystem::has_value())
-		{
-			Locator::miracleFxSystem::value().SetInterface(_interface.get());
-		}
-		if (Locator::pauseTextSystem::has_value())
-		{
-			Locator::pauseTextSystem::value().SetInterface(_interface.get());
-		}
-		if (Locator::incomingMessageSystem::has_value())
-		{
-			Locator::incomingMessageSystem::value().SetTexts(&_interface->GetTexts());
-		}
-		if (Locator::chatSystem::has_value())
-		{
-			Locator::chatSystem::value().SetTexts(&_interface->GetTexts());
-		}
-		if (Locator::gatheringBoxSystem::has_value())
-		{
-			auto* controls = &_interface->GetChatControls();
-			Locator::gatheringBoxSystem::value().SetBox({
-			    .people = [controls]() { return &controls->GetPeople(); },
-			    .peopleChanged = [controls]() { controls->PeopleChanged(); },
-			    .open = [controls]() { controls->Open(); },
-			    .setFriendsOn = [controls](bool on) { controls->SetFriendsOn(on); },
-			    .takeChangedFriends = [controls]() { return controls->TakeChangedFriends(); },
-			    .setFriends =
-			        [controls](std::span<const chat::people::FriendRecord> friends) { controls->SetFriends(friends); },
-			});
-		}
-	}
-	return _interface ? &_interface->GetTexts() : nullptr;
-}
-
 void Game::StartupStep(std::string_view step)
 {
 	if (_startupTimer.has_value())
@@ -1576,25 +1439,6 @@ void Game::StartFightTools()
 	{
 		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The fight autopilot cannot start: {}", error);
 	}
-}
-
-void Game::ShowSavingBox(bool loading, bool darken)
-{
-	// A run that draws no frame shows no box
-	if (!_interface || !Locator::windowing::has_value() ||
-	    !sim_run::DrawsFrame(Locator::simulation::value().GetSettings(), _frameCount))
-	{
-		return;
-	}
-	_interface->DrawSavingBox(static_cast<glm::u16vec2>(Locator::windowing::value().GetSize()), loading, darken);
-	// A picture asked for this frame shows the box, as the screen does
-	if (_requestScreenshot.has_value() && _requestScreenshot->first == _frameCount)
-	{
-		Locator::rendererInterface::value().RequestScreenshot(_requestScreenshot->second);
-		_requestScreenshot.reset();
-	}
-	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The {} box shows at frame {}", loading ? "loading" : "saving", _frameCount);
-	Locator::rendererInterface::value().Frame();
 }
 
 const std::filesystem::path& Game::ChallengePath()
@@ -2215,16 +2059,6 @@ void Game::StartLandAudio()
 	_gameMusic->Reset();
 }
 
-void Game::ShowLoadingFrame()
-{
-	RenderLoadingFrame();
-}
-
-bool Game::WithdrawSkipBox()
-{
-	return _interface && _interface->WithdrawSkipBox();
-}
-
 void Game::MakeSymbolSheet()
 {
 	MakePlayersSymbols();
@@ -2238,25 +2072,6 @@ void Game::TestbedLoaded()
 		Locator::debugGui::value().OpenWindow(debug::gui::k_TestbedScenariosWindow);
 	}
 #endif
-}
-
-bool Game::AskStartQuestion(bool hasCreature)
-{
-	if (!_interface)
-	{
-		return false;
-	}
-	// The game waits, paused, for the answer
-	Locator::time::value().SetPlayerPause(true);
-	// The multiplayer front end is in front of the land: the question comes when the player leaves the front end to
-	// the land. A join from the command line loads the server's land, which does not ask the question.
-	if (_interface->GetMultiplayerBoxes().IsActive() || _frontEndOnStart || _networkLandPending)
-	{
-		_startQuestionAfterFrontEnd = hasCreature;
-		return true;
-	}
-	_interface->ShowSkipBox(hasCreature);
-	return true;
 }
 
 std::optional<std::filesystem::path> Game::ChallengeFile()
@@ -2354,183 +2169,6 @@ void Game::FollowPlaygroundTrip()
 	}
 }
 
-void Game::HandleInterfaceAction()
-{
-	using Action = gui::GameMenu::Action;
-	const auto action = _interface->TakeAction();
-
-	// The answer to the start-of-game question tells the story what to skip, and the game goes on
-	if (const auto answer = _interface->TakeSkipBoxAnswer(); answer.has_value())
-	{
-		Locator::tutorialSkipSystem::value().Set(new_game_choice::SkipFor(*answer));
-		Locator::time::value().SetPlayerPause(false);
-	}
-
-	// The edits on the Players page are kept with the profile played, before anything its buttons do
-	if (const auto edits = _interface->GetMenu().TakePlayerEdits(); edits.has_value())
-	{
-		Locator::playerProfileSystem::value().EditCurrentProfile(edits->creatureName, edits->symbol);
-		NameCreatureAfterProfile();
-		SaveHelpRecord();
-	}
-	// A profile made in the new player's box from the Players page is played from now on
-	if (auto& box = _interface->GetNewPlayerBox(); !box.IsActive())
-	{
-		if (const auto answer = box.TakeAnswer(); answer.has_value())
-		{
-			Locator::playerProfileSystem::value().CreateProfile(answer->name, answer->symbol);
-			PlayerProfileChanged();
-		}
-		(void)box.TakeCancelled();
-	}
-
-	// The settings the player changes take effect at once
-	if (_interface->TakeSettingsChanged())
-	{
-		const auto& settings = _interface->GetMenu().GetSettings();
-		auto& audio = Locator::audio::value();
-		audio.SetSfxVolume(settings.sfxVolume);
-		audio.SetMusicVolume(settings.musicVolume);
-		// The detail and the volumes are kept for this computer, as the options show them
-		if (Locator::computerSettingsSystem::has_value())
-		{
-			Locator::computerSettingsSystem::value().Keep({
-			    .detailLevel = static_cast<uint8_t>(settings.detail),
-			    .maxDetailLevel = Locator::config::value().maxDetailLevel,
-			    .effectsVolume = settings.sfxVolume,
-			    .musicVolume = settings.musicVolume,
-			});
-		}
-		const auto kept = gui::ToProfileSettings(settings);
-		ApplyPlayerSettings(kept);
-		// The player's options are kept with their profile
-		Locator::playerProfileSystem::value().SetCurrentSettings(kept);
-		SaveHelpRecord();
-	}
-
-	// A binding changed on the Controls page takes effect at once
-	auto& menu = _interface->GetMenu();
-	if (menu.TakeControlsChanged() && Locator::gameActionSystem::has_value())
-	{
-		Locator::gameActionSystem::value().SetKeyBindings(menu.GetControlBindings());
-	}
-	// The menu reads the bindings from the profile as it opens. Back from the Controls page, and the menu as it
-	// closes, keep the bindings with the profile.
-	if (menu.IsOpen() && !_menuWasOpen)
-	{
-		LoadProfileKeys();
-	}
-	if (menu.TakeControlsToKeep() || (!menu.IsOpen() && _menuWasOpen))
-	{
-		KeepProfileKeys();
-	}
-	_menuWasOpen = menu.IsOpen();
-
-	// The menu pauses the game while it is open
-	if (const auto pause = _menuPause.Follow(_interface->GetMenu().IsOpen()); pause.has_value())
-	{
-		Locator::time::value().SetPlayerPause(*pause);
-		if (!_menuPause.IsHeld())
-		{
-			_menuClosedAt = std::chrono::steady_clock::now();
-		}
-	}
-	// The main menu comes back under each page that the menu shows, and pauses the game again. This is important after
-	// the question of the trip unpaused the game over another page. Inside the temple, the options show alone.
-	if (menu.TakePageShown() && menu.IsOpen() && !menu.IsInsideTemple())
-	{
-		Locator::time::value().SetPlayerPause(true);
-	}
-
-	switch (action)
-	{
-	case Action::Quit:
-		RequestQuit();
-		break;
-	case Action::CreatePlayer:
-		AskForAnotherPlayer(true);
-		break;
-	case Action::PickPlayer:
-		if (const auto picked = _interface->GetMenu().GetPickedPlayer(); picked.has_value())
-		{
-			auto& profiles = Locator::playerProfileSystem::value();
-			const auto& list = profiles.GetProfiles().profiles;
-			if (*picked < list.size())
-			{
-				profiles.SelectProfile(gui::ToUtf16(list.at(*picked).name));
-				PlayerProfileChanged();
-			}
-		}
-		break;
-	case Action::DeletePlayer:
-	{
-		auto& profiles = Locator::playerProfileSystem::value();
-		// The player's folder is emptied first: its saved games, pictures and help record go, but the empty folder stays
-		const auto deleted = _interface->GetMenu().GetPlayerToDelete();
-		if (Locator::profileFolderSystem::has_value())
-		{
-			Locator::profileFolderSystem::value().EmptyPlayerFolder(deleted);
-		}
-		profiles.DeleteProfile(deleted);
-		const auto next = _interface->GetMenu().GetPickedPlayer();
-		const auto& list = profiles.GetProfiles().profiles;
-		if (next.has_value() && *next < list.size())
-		{
-			profiles.SelectProfile(gui::ToUtf16(list.at(*next).name));
-			PlayerProfileChanged();
-		}
-		else
-		{
-			// With no profile left the new player's box asks for one, and can't be cancelled
-			PlayerProfileChanged();
-			AskForAnotherPlayer(false);
-		}
-		break;
-	}
-	case Action::StartNewGame:
-	case Action::Restart:
-		// This game ends. Start a New Game starts a new game on the first land. A restart as the profile picked continues
-		// from the save on exit of that profile, or starts a new game when it has none. The land changes between frames,
-		// not while the game reads the input.
-		_interface->GetMenu().Close();
-		_gameEndAsked = action == Action::StartNewGame ? game_session::End::NewGame : game_session::End::Continue;
-		break;
-	case Action::EditTattoo:
-		// The profile is kept first, then the editor shows the profile's creature over the menu
-		if (Locator::tattooMenuSystem::has_value())
-		{
-			Locator::tattooMenuSystem::value().Open();
-		}
-		break;
-	case Action::JoinOnline:
-		if (!OpenMultiplayerFrontEnd(MakeMultiplayerFrontEnd()))
-		{
-			SPDLOG_LOGGER_WARN(spdlog::get("game"), "The multiplayer front end needs the temple and the interface");
-		}
-		break;
-	case Action::StartSkirmish:
-		// The game ends at once, without a question. The story keeps its save on exit, then the skirmish box shows. The
-		// land changes between frames, not while the game reads the input.
-		_interface->GetMenu().Close();
-		_gameEndAsked = game_session::End::Skirmish;
-		break;
-	case Action::LeaveSkirmish:
-		// Yes to the question ends the skirmish, and the skirmish box shows again. A skirmish keeps no save on exit.
-		_interface->GetMenu().Close();
-		_gameEndAsked = game_session::End::Skirmish;
-		break;
-	case Action::ExitOnlineGame:
-		ExitOnlineGame();
-		break;
-	case Action::AskToLeave:
-		AskToLeaveNetworkGame();
-		break;
-	case Action::Continue:
-	case Action::None:
-		break;
-	}
-}
-
 PlayerNames Game::LocalGodForGameEnd() const
 {
 	// A looker-on of a network game has no god. The original game names it player seven. In a network game every god
@@ -2539,166 +2177,6 @@ PlayerNames Game::LocalGodForGameEnd() const
 	const bool looksOn =
 	    session != nullptr && session->GetJoined().has_value() && session->GetJoined()->role == game_socket::Role::Observer;
 	return looksOn ? PlayerNames::NEUTRAL : LocalInputPlayer();
-}
-
-void Game::UpdateTattooMenu(float milliseconds)
-{
-	if (!Locator::tattooMenuSystem::has_value() || !_interface)
-	{
-		return;
-	}
-	auto& tattooMenu = Locator::tattooMenuSystem::value();
-	auto& menu = _interface->GetMenu();
-	if (menu.IsOpen())
-	{
-		menu.SetTattooAvailable(tattooMenu.IsButtonShown(menu.IsRestartPending()));
-	}
-	else if (tattooMenu.IsOpen())
-	{
-		// The creature goes with the menu
-		tattooMenu.Close();
-	}
-	if (!tattooMenu.IsOpen() || !Locator::windowing::has_value())
-	{
-		return;
-	}
-	// The editor's view is the dialogs' space on the window, as the dialog is laid out
-	const auto size = Locator::windowing::value().GetSize();
-	const auto space = gui::FrontEndSpace(static_cast<int32_t>(size.x), static_cast<int32_t>(size.y));
-	const auto origin = space.ToScreen(glm::vec2(0.0f));
-	const auto corner = space.ToScreen(glm::vec2(gui::DialogPainter::k_Size));
-	const auto pointer = Locator::gameActionSystem::value().GetPointerPosition();
-	tattooMenu.Update(milliseconds, pointer, _interface->IsTattooEditorButtonHeld(), _interface->IsTattooEditorLeftHeld(),
-	                  {.origin = origin, .size = corner - origin});
-}
-
-void Game::ShowTattooMenuCreature() const
-{
-	if (!Locator::tattooMenuSystem::has_value() || !Locator::rendererInterface::has_value())
-	{
-		return;
-	}
-	if (const auto shown = Locator::tattooMenuSystem::value().GetShown(); shown.has_value())
-	{
-		Locator::rendererInterface::value().ShowMenuCreature({.copy = shown->copy,
-		                                                      .view = shown->view,
-		                                                      .projection = shown->projection,
-		                                                      .viewOrigin = shown->viewport.origin,
-		                                                      .viewSize = shown->viewport.size});
-	}
-}
-
-void Game::CloseMenuForNewLand()
-{
-	// The trip to the Gods' Playground closes no box. An open menu keeps its pause, and the land information box stays,
-	// while the land of the Playground loads. The cinema bars of the first lesson close them.
-	if (std::exchange(_boxesStayForTrip, false))
-	{
-		return;
-	}
-	// Each other change of land comes only when the menu is closed. The menu closes before the choices in it that change
-	// the land. This also closes the menu for a land that the debug tools load.
-	if (_interface && _interface->GetMenu().IsOpen())
-	{
-		_interface->GetMenu().Close();
-	}
-	// The end of a game closes every box of the game. The script of the next land shows the land information box
-	// again when the land has one. This also closes the box for a land that the debug tools load.
-	if (_interface && _interface->GetLandInfoBox().IsActive())
-	{
-		_interface->GetLandInfoBox().Close();
-	}
-	// The game gets the pause that it had before the menu opened, before the next land asks for a pause of its own
-	if (const auto pause = _menuPause.Release(); pause.has_value())
-	{
-		Locator::time::value().SetPlayerPause(*pause);
-		_menuClosedAt = std::chrono::steady_clock::now();
-	}
-}
-
-void Game::RefreshPlayersPage()
-{
-	if (!_interface || !Locator::playerProfileSystem::has_value())
-	{
-		return;
-	}
-	const auto& profiles = Locator::playerProfileSystem::value().GetProfiles();
-	std::vector<std::u16string> names;
-	names.reserve(profiles.profiles.size());
-	std::optional<size_t> current;
-	for (const auto& profile : profiles.profiles)
-	{
-		if (profile.name == profiles.current)
-		{
-			current = names.size();
-		}
-		names.push_back(gui::ToUtf16(profile.name));
-	}
-	_interface->GetMenu().SetPlayers(std::move(names), current);
-}
-
-void Game::PlayerProfileChanged()
-{
-	// The help record of the new player comes from their profile. Without their file, the record stays as it is
-	LoadHelpRecord();
-	// The pictures of the new player replace those of the designs that they have pictures for
-	ReadTattooPictures();
-	RefreshPlayersPage();
-	const auto profile = Locator::playerProfileSystem::value().GetCurrentProfile();
-	if (!profile.has_value() || !_interface)
-	{
-		return;
-	}
-	// The page shows the profile's creature's name, symbol and options, which take effect
-	_interface->GetMenu().ShowPlayer(gui::ToUtf16(profile->creatureName), profile->symbol, profile->settings);
-	ApplyPlayerSettings(profile->settings);
-	// The bindings of the new player come from their profile
-	LoadProfileKeys();
-	NameCreatureAfterProfile();
-}
-
-void Game::ReadTattooPictures()
-{
-	// The symbols' picture and the tattoo designs change with the pictures. The game loads them one time only
-	// (vanilla-bugs 182), and openblack fixes this.
-	if (const auto pictures = simulation::ReadTattooPictures(); pictures.has_value() && _interface)
-	{
-		_interface->SetSymbolPictures(*pictures);
-	}
-}
-
-void Game::MakePlayersSymbols(std::optional<uint32_t> symbolInPlace)
-{
-	game_assets::MakePlayersSymbols(symbolInPlace);
-}
-
-void Game::NameCreatureAfterProfile()
-{
-	// In a game alone, the player's creature takes the name its profile gives it
-	const auto profile = Locator::playerProfileSystem::value().GetCurrentProfile();
-	if (!profile.has_value() || !Locator::playerSystem::has_value() ||
-	    !creature_names::ProfileRenamesCreature(Locator::time::value().IsNetworkGame()))
-	{
-		return;
-	}
-	const auto creature = Locator::playerSystem::value().GetPrimaryCreature(PlayerNames::PLAYER_ONE);
-	auto& registry = Locator::entitiesRegistry::value();
-	if (!creature.has_value() || !registry.Valid(*creature))
-	{
-		return;
-	}
-	if (auto* component = registry.TryGet<ecs::components::Creature>(*creature); component != nullptr)
-	{
-		component->name = gui::ToUtf16(profile->creatureName);
-	}
-}
-
-void Game::AskForAnotherPlayer(bool canCancel)
-{
-	auto& profiles = Locator::playerProfileSystem::value();
-	SDL_StartTextInput();
-	_interface->ShowNewPlayerBoxOverGame(canCancel && profiles.GetProfileCount() > 0,
-	                                     [&profiles](std::u16string_view name) { return profiles.CheckNewName(name); });
 }
 
 void Game::EndGame(game_session::End end)
@@ -2836,18 +2314,6 @@ bool Game::SaveAsGameEnds(game_session::End end, bool quitting)
 	return saved;
 }
 
-void Game::TellMenuTheGame()
-{
-	if (!_interface)
-	{
-		return;
-	}
-	auto& menu = _interface->GetMenu();
-	menu.SetNetworkGame(InNetworkGame());
-	// The land of a network game also plays as a skirmish, but its menu is the menu of a network game
-	menu.SetSkirmish(Locator::entitiesRegistry::value().Context().skirmish && !Locator::time::value().IsNetworkGame());
-}
-
 bool Game::ContinueGame()
 {
 	auto& saves = Locator::saveGameSystem::value();
@@ -2873,31 +2339,6 @@ bool Game::ContinueFromExitSave() noexcept
 	}
 	ShowMenuOnStart();
 	return true;
-}
-
-void Game::ShowMenuOnStart()
-{
-	if (!_interface)
-	{
-		return;
-	}
-	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The menu shows over the game that continued");
-	TellMenuTheGame();
-	_interface->OpenMenu();
-	// The menu reads the profile's own pictures again as it opens
-	ReadTattooPictures();
-	// The menu pauses the game while it is open
-	HandleInterfaceAction();
-}
-
-void Game::ApplyPlayerSettings(const player_profiles::Settings& settings)
-{
-	simulation::ApplyPlayerSettings(settings);
-	if (_interface)
-	{
-		constexpr int k_Levels = 4;
-		_interface->GetToolTips().SetLevel(static_cast<gui::ToolTipLevel>(std::clamp(settings.toolTips, 0, k_Levels - 1)));
-	}
 }
 
 void Game::LoadLandscape(const std::filesystem::path& path)
