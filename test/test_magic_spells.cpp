@@ -23,7 +23,6 @@
 #include "Magic/MagicTables.h"
 #include "Magic/MagicWorldInterface.h"
 #include "Magic/SpellBehaviours.h"
-#include "Magic/SpellGrid.h"
 #include "Magic/SpellRules.h"
 #include "Magic/SpellSeedRules.h"
 
@@ -506,25 +505,6 @@ TEST(DispenserRules, TheBubbleFloatsAboveItsDispenserAndFacesTheCamera)
 		EXPECT_NEAR(glm::dot(up, glm::normalize(direction)), 1.0f, k_Epsilon);
 		EXPECT_NEAR(glm::determinant(turn), 1.0f, k_Epsilon);
 	}
-}
-
-// Where miracles have been
-
-TEST(SpellGrid, ASquareFadesAfterAMiracleMarksIt)
-{
-	SpellGrid grid;
-	grid.Mark({100.0f, 100.0f});
-	EXPECT_EQ(grid.At({150.0f, 120.0f}), SpellGrid::k_Full);
-	EXPECT_EQ(grid.At({200.0f, 100.0f}), 0);
-	for (int turn = 0; turn < 7; ++turn)
-	{
-		grid.Fade();
-	}
-	EXPECT_EQ(grid.At({100.0f, 100.0f}), SpellGrid::k_Full - 7 * SpellGrid::k_FadePerTurn);
-	grid.Fade();
-	EXPECT_EQ(grid.At({100.0f, 100.0f}), 0);
-	EXPECT_FALSE(SpellGrid::CellOf({-1.0f, 0.0f}).has_value());
-	EXPECT_FALSE(SpellGrid::CellOf({SpellGrid::k_Side * SpellGrid::k_CellSize, 0.0f}).has_value());
 }
 
 // What the miracles do

@@ -315,6 +315,12 @@ systems::SavedStateInterface* FindLocalParticles()
 	return Locator::particleRuleSystem::value().LocalEffectsState();
 }
 
+/// The section of the miracles in a save from before the grid of recent miracles went out
+systems::SavedStateInterface* FindOldMagic()
+{
+	return Locator::magicSystem::has_value() ? Locator::magicSystem::value().OldSaveState() : nullptr;
+}
+
 /// The one section of the particles in a save from before the split
 systems::SavedStateInterface* FindOldParticles()
 {
@@ -333,14 +339,15 @@ struct SavedSystem
 
 /// The systems that keep running state of their own, by the names of their sections. A load gives each system its state
 /// in this order: the map's lists first, then the systems that use them.
-constexpr std::array<SavedSystem, 44> k_SavedSystems {{
+constexpr std::array<SavedSystem, 45> k_SavedSystems {{
     {"map", &FindSystem<Locator::entitiesMap>},
     {"particles", &FindOldParticles, false},
     {"syncedParticles", &FindSystem<Locator::particleRuleSystem>},
     {"localParticles", &FindLocalParticles},
     {"effectRequests", &FindSystem<Locator::effectRequestSystem>},
     {"towns", &FindSystem<Locator::townSystem>},
-    {"magic", &FindSystem<Locator::magicSystem>},
+    {"magic", &FindOldMagic, false},
+    {"miracles", &FindSystem<Locator::magicSystem>},
     {"magicShield", &FindSystem<Locator::magicShieldSystem>},
     {"miracleFx", &FindSystem<Locator::miracleFxSystem>},
     {"cameraPath", &FindSystem<Locator::cameraPathSystem>},
