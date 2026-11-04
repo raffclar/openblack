@@ -63,12 +63,16 @@ public:
 	explicit FlatIsland(float height)
 	    : _height(height)
 	{
-		_cell.altitude = static_cast<uint8_t>(height / LandIslandInterface::k_HeightUnit);
+		_cells.fill({});
+		for (auto& cell : _cells)
+		{
+			cell.altitude = static_cast<uint8_t>(height / LandIslandInterface::k_HeightUnit);
+		}
 	}
 	[[nodiscard]] float GetHeightAt(glm::vec2) const override { return _height; }
 	[[nodiscard]] glm::vec3 GetNormalAt(glm::vec2) const override { return {0.0f, 1.0f, 0.0f}; }
-	[[nodiscard]] const lnd::LNDCell& GetCell(const glm::u16vec2&) const override { return _cell; }
-	[[nodiscard]] const lnd::LNDCell* FindCell(const glm::u16vec2&) const override { return &_cell; }
+	[[nodiscard]] const lnd::LNDCell& GetCell(const glm::u16vec2&) const override { return _cells[0]; }
+	[[nodiscard]] const lnd::LNDCell* FindCell(const glm::u16vec2&) const override { return _cells.data(); }
 	void DumpTextures() const override {}
 	void DumpMaps() const override {}
 	[[nodiscard]] std::vector<LandBlock>& GetBlocks() override { throw std::logic_error("no blocks"); }
@@ -86,7 +90,8 @@ public:
 
 private:
 	float _height;
-	lnd::LNDCell _cell {};
+	// The height of a point reads the cell and its three neighbours in the block's 17 by 17 array, so keep that many
+	std::array<lnd::LNDCell, 19> _cells {};
 };
 
 constexpr physics::Material k_Stone {
