@@ -13,6 +13,7 @@
 
 #include <algorithm>
 #include <array>
+#include <vector>
 
 #include <bgfx/bgfx.h>
 #include <bx/math.h>
@@ -84,6 +85,8 @@ Canvas::Canvas(RenderPass view, DepthTest depthTest)
 	static constexpr std::array<uint8_t, 4> k_White = {0xFF, 0xFF, 0xFF, 0xFF};
 	_white->Create(1, 1, 1, graphics::TextureFormat::RGBA8, graphics::Wrapping::ClampEdge, graphics::Filter::Nearest,
 	               bgfx::copy(k_White.data(), static_cast<uint32_t>(k_White.size())));
+	// After a restore of the graphics device the texture gets its white texel again, thus the device keeps no copy
+	_white->SetTexelSource([](const auto&) { return std::vector<uint8_t>(k_White.begin(), k_White.end()); });
 }
 
 Canvas::~Canvas() = default;

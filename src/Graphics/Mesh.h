@@ -13,6 +13,7 @@
 
 #include <memory>
 #include <optional>
+#include <vector>
 
 #include "GraphicsHandle.h"
 #include "Visual/RenderPass.h"
@@ -51,6 +52,10 @@ public:
 
 	[[nodiscard]] Topology GetTopology() const noexcept;
 
+	/// For a small mesh of fixed data: the mesh keeps a copy of its vertices and indices, and gives them to the graphics
+	/// device again after a restore. The device then keeps no copy.
+	void KeepContentsForRestore(std::vector<uint8_t> vertices, std::vector<uint8_t> indices = {});
+
 	enum SkipState : uint8_t
 	{
 		SkipNone = 0b00000000,
@@ -83,6 +88,8 @@ protected:
 
 private:
 	Topology _topology;
+	/// Whether the mesh is one of the owners that give their data to the graphics device again
+	bool _givesContentsAgain {false};
 };
 
 } // namespace openblack::graphics

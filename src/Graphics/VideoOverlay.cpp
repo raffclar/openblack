@@ -50,13 +50,11 @@ const bgfx::VertexLayout& Layout()
 	}();
 	return k_Layout;
 }
-} // namespace
 
-VideoOverlay::VideoOverlay()
-    : _colourTables(std::make_unique<Texture2D>("VideoColourTables"))
+/// The texels of the colour tables of the video. The tables are small whole numbers, exact in half floats.
+std::vector<uint8_t> ColourTableTexels()
 {
-	// The tables are small whole numbers, exact in half floats
-	const auto tables = bink::MakeShaderLookup();
+	const auto tables = openblack::bink::MakeShaderLookup();
 	std::vector<uint16_t> halves;
 	halves.reserve(tables.size() * 4);
 	for (const auto& entry : tables)
@@ -66,8 +64,19 @@ VideoOverlay::VideoOverlay()
 			halves.push_back(bx::halfFromFloat(static_cast<float>(value)));
 		}
 	}
+	const auto* first = reinterpret_cast<const uint8_t*>(halves.data());
+	return {first, first + (halves.size() * sizeof(halves[0]))};
+}
+} // namespace
+
+VideoOverlay::VideoOverlay()
+    : _colourTables(std::make_unique<Texture2D>("VideoColourTables"))
+{
+	const auto halves = ColourTableTexels();
 	_colourTables->Create(256, 2, 1, TextureFormat::RGBA16F, Wrapping::ClampEdge, Filter::Nearest,
-	                      bgfx::copy(halves.data(), static_cast<uint32_t>(halves.size() * sizeof(uint16_t))));
+	                      bgfx::copy(halves.data(), static_cast<uint32_t>(halves.size())));
+	// After a restore of the graphics device the texture gets the tables again, thus the device keeps no copy
+	_colourTables->SetTexelSource([](const auto&) { return ColourTableTexels(); });
 	for (auto& plane : _planes)
 	{
 		plane = std::make_unique<Texture2D>("VideoPlane");

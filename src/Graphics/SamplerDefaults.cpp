@@ -10,6 +10,7 @@
 #include "SamplerDefaults.h"
 
 #include <algorithm>
+#include <optional>
 
 #include <bgfx/bgfx.h>
 
@@ -50,6 +51,44 @@ SamplerDefaults::SamplerDefaults()
 	auto& white3D = _textures[static_cast<size_t>(DefaultTexture::White3D)];
 	white3D = fromBgfx(bgfx::createTexture3D(1, 1, 1, false, k_Format, k_Flags, WhiteTexels(1)));
 	bgfx::setName(toBgfx(white3D), "Default White 3D");
+	for (const auto& texture : _textures)
+	{
+		if (bgfx::isValid(toBgfx(texture)))
+		{
+			bgfx::setDeviceRestoreByApplication(toBgfx(texture));
+		}
+	}
+}
+
+void SamplerDefaults::GiveTexelsAgain() const
+{
+	const auto valid = [this](DefaultTexture texture) {
+		const auto handle = toBgfx(_textures.at(static_cast<size_t>(texture)));
+		return bgfx::isValid(handle) ? std::optional(handle) : std::nullopt;
+	};
+	if (const auto white2D = valid(DefaultTexture::White2D))
+	{
+		bgfx::updateTexture2D(*white2D, 0, 0, 0, 0, 1, 1, WhiteTexels(1));
+	}
+	if (const auto white2DArray = valid(DefaultTexture::White2DArray))
+	{
+		for (uint16_t layer = 0; layer < 2; ++layer)
+		{
+			bgfx::updateTexture2D(*white2DArray, layer, 0, 0, 0, 1, 1, WhiteTexels(1));
+		}
+	}
+	if (const auto whiteCube = valid(DefaultTexture::WhiteCube))
+	{
+		constexpr uint8_t k_Sides = 6;
+		for (uint8_t side = 0; side < k_Sides; ++side)
+		{
+			bgfx::updateTextureCube(*whiteCube, 0, side, 0, 0, 0, 1, 1, WhiteTexels(1));
+		}
+	}
+	if (const auto white3D = valid(DefaultTexture::White3D))
+	{
+		bgfx::updateTexture3D(*white3D, 0, 0, 0, 0, 1, 1, 1, WhiteTexels(1));
+	}
 }
 
 SamplerDefaults::~SamplerDefaults()

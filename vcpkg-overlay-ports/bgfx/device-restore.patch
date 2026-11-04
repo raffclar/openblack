@@ -104,10 +104,87 @@ index ff66119..861a5c2 100644
  	///
  	/// @param[in] _size Size to allocate.
 diff --git a/bgfx/src/bgfx.cpp b/bgfx/src/bgfx.cpp
-index acfb6fe..c19c9ea 100644
+index acfb6fe..56cafdc 100644
 --- a/bgfx/src/bgfx.cpp
 +++ b/bgfx/src/bgfx.cpp
-@@ -3432,13 +3432,35 @@ namespace bgfx
+@@ -699,6 +699,33 @@ namespace bgfx
+ 	static constexpr uint32_t kNumBatchVertices = kNumCharsPerBatch*4;
+ 	static constexpr uint32_t kNumBatchIndices  = kNumCharsPerBatch*6;
+ 
++	static constexpr uint16_t kDebugFontWidth  = 2048;
++	static constexpr uint16_t kDebugFontHeight = 24;
++
++	// The texels of the font of the debug text
++	static const Memory* debugFontTexels()
++	{
++		const uint32_t pitch = kDebugFontWidth;
++		const Memory* mem = alloc(pitch*kDebugFontHeight);
++		uint8_t* rgba = mem->data;
++		charsetFillTexture(vga8x8, rgba, 8, pitch, 1);
++		charsetFillTexture(vga8x16, &rgba[8*pitch], 16, pitch, 1);
++		return mem;
++	}
++
++	void TextVideoMemBlitter::giveTexelsAgain(RendererContextI* _renderCtx) const
++	{
++		if (!isValid(m_texture) )
++		{
++			return;
++		}
++
++		const Memory* mem = debugFontTexels();
++		const Rect rect(0, 0, kDebugFontWidth, kDebugFontHeight);
++		_renderCtx->updateTexture(m_texture, 0, 0, rect, 0, 1, UINT16_MAX, mem);
++		release(mem);
++	}
++
+ 	void TextVideoMemBlitter::init()
+ 	{
+ 		BGFX_CHECK_API_THREAD();
+@@ -710,26 +737,18 @@ namespace bgfx
+ 			.add(Attrib::TexCoord0, 2, AttribType::Float)
+ 			.end();
+ 
+-		const uint16_t width  = 2048;
+-		const uint16_t height = 24;
+-		const uint8_t  bpp    = 1;
+-		const uint32_t pitch  = width*bpp;
+-
+-		const Memory* mem;
+-
+-		mem = alloc(pitch*height);
+-		uint8_t* rgba = mem->data;
+-		charsetFillTexture(vga8x8, rgba, 8, pitch, bpp);
+-		charsetFillTexture(vga8x16, &rgba[8*pitch], 16, pitch, bpp);
+-		m_texture = createTexture2D(width, height, false, 1, TextureFormat::R8
++		m_texture = createTexture2D(kDebugFontWidth, kDebugFontHeight, false, 1, TextureFormat::R8
+ 			, BGFX_SAMPLER_MIN_POINT
+ 			| BGFX_SAMPLER_MAG_POINT
+ 			| BGFX_SAMPLER_MIP_POINT
+ 			| BGFX_SAMPLER_U_CLAMP
+ 			| BGFX_SAMPLER_V_CLAMP
+-			, mem
++			, debugFontTexels()
+ 			);
+ 
++		// The render thread makes the texels of the font again after a restore, thus the restore keeps no copy
++		setDeviceRestoreByApplication(m_texture);
++
+ 		ShaderHandle vsh = createEmbeddedShader(s_embeddedShaders, g_caps.rendererType, "vs_debugfont");
+ 		ShaderHandle fsh = createEmbeddedShader(s_embeddedShaders, g_caps.rendererType, "fs_debugfont");
+ 
+@@ -912,6 +931,10 @@ namespace bgfx
+ 	{
+ 	}
+ 
++	void TextVideoMemBlitter::giveTexelsAgain(RendererContextI* /*_renderCtx*/) const
++	{
++	}
++
+ 	void dbgTextSubmit(RendererContextI* /*_renderCtx*/, TextVideoMemBlitter& /*_blitter*/, const TextVideoMem& /*_mem*/)
+ 	{
+ 	}
+@@ -3432,13 +3455,35 @@ namespace bgfx
  					g_caps.supported &= ~BGFX_CAPS_LOW_LATENCY;
  				}
  
@@ -149,7 +226,7 @@ index acfb6fe..c19c9ea 100644
  			}
  		}
  	}
-@@ -3634,6 +3656,7 @@ namespace bgfx
+@@ -3634,6 +3679,7 @@ namespace bgfx
  				_cmdbuf.read(mem);
  
  				m_renderCtx->updateTexture(handle, side, mip, rect, zz, depth, pitch, mem);
@@ -157,7 +234,7 @@ index acfb6fe..c19c9ea 100644
  
  				release(mem);
  			}
-@@ -3924,6 +3947,50 @@ namespace bgfx
+@@ -3924,6 +3970,51 @@ namespace bgfx
  		}
  	}
  
@@ -197,6 +274,7 @@ index acfb6fe..c19c9ea 100644
 +		m_restoreType = RendererType::Count;
 +
 +		m_deviceRestore.restore(m_renderCtx);
++		m_textVideoMemBlitter.giveTexelsAgain(m_renderCtx);
 +		m_restoreCount.fetch_add(1);
 +
 +		BX_TRACE("The %s renderer made its device again with %" PRIu64 " kept bytes."
@@ -208,7 +286,7 @@ index acfb6fe..c19c9ea 100644
  	void Context::rendererExecCommands(CommandBuffer& _cmdbuf)
  	{
  		_cmdbuf.reset();
-@@ -3992,6 +4059,7 @@ namespace bgfx
+@@ -3992,6 +4083,7 @@ namespace bgfx
  
  					rendererDestroy(m_renderCtx);
  					m_renderCtx = NULL;
@@ -216,7 +294,7 @@ index acfb6fe..c19c9ea 100644
  
  					m_exit = true;
  				}
-@@ -4016,7 +4084,7 @@ namespace bgfx
+@@ -4016,7 +4108,7 @@ namespace bgfx
  
  					m_renderCtx->createIndexBuffer(handle, mem, flags);
  
@@ -225,7 +303,7 @@ index acfb6fe..c19c9ea 100644
  				}
  				break;
  
-@@ -4028,6 +4096,7 @@ namespace bgfx
+@@ -4028,6 +4120,7 @@ namespace bgfx
  					_cmdbuf.read(handle);
  
  					m_renderCtx->destroyIndexBuffer(handle);
@@ -233,7 +311,7 @@ index acfb6fe..c19c9ea 100644
  				}
  				break;
  
-@@ -4042,6 +4111,7 @@ namespace bgfx
+@@ -4042,6 +4135,7 @@ namespace bgfx
  					_cmdbuf.read(layout);
  
  					m_renderCtx->createVertexLayout(handle, layout);
@@ -241,7 +319,7 @@ index acfb6fe..c19c9ea 100644
  				}
  				break;
  
-@@ -4053,6 +4123,7 @@ namespace bgfx
+@@ -4053,6 +4147,7 @@ namespace bgfx
  					_cmdbuf.read(handle);
  
  					m_renderCtx->destroyVertexLayout(handle);
@@ -249,7 +327,7 @@ index acfb6fe..c19c9ea 100644
  				}
  				break;
  
-@@ -4074,7 +4145,7 @@ namespace bgfx
+@@ -4074,7 +4169,7 @@ namespace bgfx
  
  					m_renderCtx->createVertexBuffer(handle, mem, layoutHandle, flags);
  
@@ -258,7 +336,7 @@ index acfb6fe..c19c9ea 100644
  				}
  				break;
  
-@@ -4086,6 +4157,7 @@ namespace bgfx
+@@ -4086,6 +4181,7 @@ namespace bgfx
  					_cmdbuf.read(handle);
  
  					m_renderCtx->destroyVertexBuffer(handle);
@@ -266,7 +344,7 @@ index acfb6fe..c19c9ea 100644
  				}
  				break;
  
-@@ -4103,6 +4175,7 @@ namespace bgfx
+@@ -4103,6 +4199,7 @@ namespace bgfx
  					_cmdbuf.read(flags);
  
  					m_renderCtx->createDynamicIndexBuffer(handle, size, flags);
@@ -274,7 +352,7 @@ index acfb6fe..c19c9ea 100644
  				}
  				break;
  
-@@ -4123,6 +4196,7 @@ namespace bgfx
+@@ -4123,6 +4220,7 @@ namespace bgfx
  					_cmdbuf.read(mem);
  
  					m_renderCtx->updateDynamicIndexBuffer(handle, offset, size, mem);
@@ -282,7 +360,7 @@ index acfb6fe..c19c9ea 100644
  
  					release(mem);
  				}
-@@ -4136,6 +4210,7 @@ namespace bgfx
+@@ -4136,6 +4234,7 @@ namespace bgfx
  					_cmdbuf.read(handle);
  
  					m_renderCtx->destroyDynamicIndexBuffer(handle);
@@ -290,7 +368,7 @@ index acfb6fe..c19c9ea 100644
  				}
  				break;
  
-@@ -4153,6 +4228,7 @@ namespace bgfx
+@@ -4153,6 +4252,7 @@ namespace bgfx
  					_cmdbuf.read(flags);
  
  					m_renderCtx->createDynamicVertexBuffer(handle, size, flags);
@@ -298,7 +376,7 @@ index acfb6fe..c19c9ea 100644
  				}
  				break;
  
-@@ -4173,6 +4249,7 @@ namespace bgfx
+@@ -4173,6 +4273,7 @@ namespace bgfx
  					_cmdbuf.read(mem);
  
  					m_renderCtx->updateDynamicVertexBuffer(handle, offset, size, mem);
@@ -306,7 +384,7 @@ index acfb6fe..c19c9ea 100644
  
  					release(mem);
  				}
-@@ -4186,6 +4263,7 @@ namespace bgfx
+@@ -4186,6 +4287,7 @@ namespace bgfx
  					_cmdbuf.read(handle);
  
  					m_renderCtx->destroyDynamicVertexBuffer(handle);
@@ -314,7 +392,7 @@ index acfb6fe..c19c9ea 100644
  				}
  				break;
  
-@@ -4201,7 +4279,7 @@ namespace bgfx
+@@ -4201,7 +4303,7 @@ namespace bgfx
  
  					m_renderCtx->createShader(handle, mem);
  
@@ -323,7 +401,7 @@ index acfb6fe..c19c9ea 100644
  				}
  				break;
  
-@@ -4213,6 +4291,7 @@ namespace bgfx
+@@ -4213,6 +4315,7 @@ namespace bgfx
  					_cmdbuf.read(handle);
  
  					m_renderCtx->destroyShader(handle);
@@ -331,7 +409,7 @@ index acfb6fe..c19c9ea 100644
  				}
  				break;
  
-@@ -4230,6 +4309,7 @@ namespace bgfx
+@@ -4230,6 +4333,7 @@ namespace bgfx
  					_cmdbuf.read(fsh);
  
  					m_renderCtx->createProgram(handle, vsh, fsh);
@@ -339,7 +417,7 @@ index acfb6fe..c19c9ea 100644
  				}
  				break;
  
-@@ -4241,6 +4321,7 @@ namespace bgfx
+@@ -4241,6 +4345,7 @@ namespace bgfx
  					_cmdbuf.read(handle);
  
  					m_renderCtx->destroyProgram(handle);
@@ -347,7 +425,7 @@ index acfb6fe..c19c9ea 100644
  				}
  				break;
  
-@@ -4270,24 +4351,7 @@ namespace bgfx
+@@ -4270,24 +4375,7 @@ namespace bgfx
  						setDirectAccessPtr(handle, ptr);
  					}
  
@@ -373,7 +451,7 @@ index acfb6fe..c19c9ea 100644
  				}
  				break;
  
-@@ -4411,6 +4475,7 @@ namespace bgfx
+@@ -4411,6 +4499,7 @@ namespace bgfx
  					_cmdbuf.read(numLayers);
  
  					m_renderCtx->resizeTexture(handle, width, height, numMips, numLayers);
@@ -381,7 +459,7 @@ index acfb6fe..c19c9ea 100644
  				}
  				break;
  
-@@ -4422,6 +4487,7 @@ namespace bgfx
+@@ -4422,6 +4511,7 @@ namespace bgfx
  					_cmdbuf.read(handle);
  
  					m_renderCtx->destroyTexture(handle);
@@ -389,7 +467,7 @@ index acfb6fe..c19c9ea 100644
  				}
  				break;
  
-@@ -4437,7 +4503,9 @@ namespace bgfx
+@@ -4437,7 +4527,9 @@ namespace bgfx
  
  					if (1 == type) // window (nwh) swap chain
  					{
@@ -400,7 +478,7 @@ index acfb6fe..c19c9ea 100644
  					}
  					else
  					{
-@@ -4448,6 +4516,7 @@ namespace bgfx
+@@ -4448,6 +4540,7 @@ namespace bgfx
  						_cmdbuf.read(attachment, sizeof(Attachment) * num);
  
  						m_renderCtx->createFrameBuffer(handle, num, attachment);
@@ -408,7 +486,7 @@ index acfb6fe..c19c9ea 100644
  					}
  				}
  				break;
-@@ -4459,7 +4528,9 @@ namespace bgfx
+@@ -4459,7 +4552,9 @@ namespace bgfx
  					FrameBufferHandle handle;
  					_cmdbuf.read(handle);
  
@@ -419,7 +497,7 @@ index acfb6fe..c19c9ea 100644
  				}
  				break;
  
-@@ -4471,6 +4542,7 @@ namespace bgfx
+@@ -4471,6 +4566,7 @@ namespace bgfx
  					_cmdbuf.read(handle);
  
  					m_renderCtx->destroyFrameBuffer(handle);
@@ -427,7 +505,7 @@ index acfb6fe..c19c9ea 100644
  				}
  				break;
  
-@@ -4493,6 +4565,7 @@ namespace bgfx
+@@ -4493,6 +4589,7 @@ namespace bgfx
  					const char* name = (const char*)_cmdbuf.skip(len);
  
  					m_renderCtx->createUniform(handle, type, num, name);
@@ -435,7 +513,7 @@ index acfb6fe..c19c9ea 100644
  				}
  				break;
  
-@@ -4504,6 +4577,7 @@ namespace bgfx
+@@ -4504,6 +4601,7 @@ namespace bgfx
  					_cmdbuf.read(handle);
  
  					m_renderCtx->destroyUniform(handle);
@@ -443,7 +521,7 @@ index acfb6fe..c19c9ea 100644
  				}
  				break;
  
-@@ -4553,6 +4627,86 @@ namespace bgfx
+@@ -4553,6 +4651,86 @@ namespace bgfx
  				}
  				break;
  
@@ -530,7 +608,7 @@ index acfb6fe..c19c9ea 100644
  			default:
  				BX_ASSERT(false, "Invalid command: %d", command);
  				break;
-@@ -5727,6 +5881,39 @@ namespace bgfx
+@@ -5727,6 +5905,39 @@ namespace bgfx
  		return s_ctx->getPerfStats();
  	}
  
@@ -570,7 +648,7 @@ index acfb6fe..c19c9ea 100644
  	RendererType::Enum getRendererType()
  	{
  		return g_caps.rendererType;
-@@ -6928,6 +7115,43 @@ namespace bgfx
+@@ -6928,6 +7139,43 @@ namespace bgfx
  		s_ctx->setName(_handle, bx::StringView(_name, _len) );
  	}
  
@@ -615,10 +693,25 @@ index acfb6fe..c19c9ea 100644
  	{
  		return s_ctx->getDirectAccessPtr(_handle);
 diff --git a/bgfx/src/bgfx_p.h b/bgfx/src/bgfx_p.h
-index 316b49d..79a74f6 100644
+index 316b49d..3f498a9 100644
 --- a/bgfx/src/bgfx_p.h
 +++ b/bgfx/src/bgfx_p.h
-@@ -1194,6 +1194,10 @@ namespace bgfx
+@@ -906,10 +906,14 @@ namespace bgfx
+ 		bool m_small;
+ 	};
+ 
++	struct RendererContextI;
++
+ 	struct TextVideoMemBlitter
+ 	{
+ 		void init();
+ 		void shutdown();
++		// Gives the texels of the font to a renderer that made the device again
++		void giveTexelsAgain(RendererContextI* _renderCtx) const;
+ 
+ 		TextureHandle m_texture;
+ 		TransientVertexBuffer* m_vb;
+@@ -1194,6 +1198,10 @@ namespace bgfx
  			UpdateViewName,
  			InvalidateOcclusionQuery,
  			SetName,
@@ -629,7 +722,7 @@ index 316b49d..79a74f6 100644
  			End,
  			RendererShutdownEnd,
  			DestroyVertexLayout,
-@@ -2938,6 +2942,7 @@ namespace bgfx
+@@ -2938,6 +2946,7 @@ namespace bgfx
  			m_size       = 0;
  			m_startIndex = 0;
  			m_flags      = 0;
@@ -637,7 +730,7 @@ index 316b49d..79a74f6 100644
  		}
  
  		IndexBufferHandle m_handle;
-@@ -2945,6 +2950,8 @@ namespace bgfx
+@@ -2945,6 +2954,8 @@ namespace bgfx
  		uint32_t m_size;
  		uint32_t m_startIndex;
  		uint16_t m_flags;
@@ -646,7 +739,7 @@ index 316b49d..79a74f6 100644
  	};
  
  	struct DynamicVertexBuffer
-@@ -2959,6 +2966,7 @@ namespace bgfx
+@@ -2959,6 +2970,7 @@ namespace bgfx
  			m_stride       = 0;
  			m_layoutHandle = BGFX_INVALID_HANDLE;
  			m_flags        = 0;
@@ -654,7 +747,7 @@ index 316b49d..79a74f6 100644
  		}
  
  		VertexBufferHandle m_handle;
-@@ -2969,6 +2977,8 @@ namespace bgfx
+@@ -2969,6 +2981,8 @@ namespace bgfx
  		uint16_t m_stride;
  		VertexLayoutHandle m_layoutHandle = BGFX_INVALID_HANDLE;
  		uint16_t m_flags;
@@ -663,7 +756,7 @@ index 316b49d..79a74f6 100644
  	};
  
  	struct ShaderRef
-@@ -5946,6 +5956,8 @@ namespace bgfx
+@@ -5946,6 +5960,8 @@ namespace bgfx
  		virtual RendererType::Enum getRendererType() const = 0;
  		virtual const char* getRendererName() const = 0;
  		virtual bool isDeviceRemoved() = 0;
@@ -672,7 +765,7 @@ index 316b49d..79a74f6 100644
  		virtual void flip() = 0;
  		virtual void createIndexBuffer(IndexBufferHandle _handle, const Memory* _mem, uint16_t _flags) = 0;
  		virtual void destroyIndexBuffer(IndexBufferHandle _handle) = 0;
-@@ -6046,6 +6058,13 @@ namespace bgfx
+@@ -6046,6 +6062,13 @@ namespace bgfx
  #	define BGFX_API_FUNC(_func) _func
  #endif // BGFX_CONFIG_DEBUG
  
@@ -686,26 +779,24 @@ index 316b49d..79a74f6 100644
  	struct Context
  	{
  		static constexpr uint32_t kAlignment = 64;
-@@ -6731,6 +6750,11 @@ namespace bgfx
+@@ -6730,7 +6753,10 @@ namespace bgfx
+ 
  		void destroyDynamicIndexBufferInternal(DynamicIndexBufferHandle _handle)
  		{
++			// The bytes of the block are no longer kept, also when the application did not give them again
  			DynamicIndexBuffer& dib = m_dynamicIndexBuffers[_handle.idx];
-+			if (dib.m_byApplication)
-+			{
-+				writeDeviceRestoreRange(dib, false);
-+			}
++			writeDeviceRestoreRange(dib, false);
 +
  			destroy(dib);
  			dib.reset();
  			m_dynamicIndexBuffers.release(_handle.idx);
-@@ -6950,6 +6974,11 @@ namespace bgfx
+@@ -6949,7 +6975,10 @@ namespace bgfx
+ 				m_render->free(layoutHandle);
  			}
  
++			// The bytes of the block are no longer kept, also when the application did not give them again
  			DynamicVertexBuffer& dvb = m_dynamicVertexBuffers[_handle.idx];
-+			if (dvb.m_byApplication)
-+			{
-+				writeDeviceRestoreRange(dvb, false);
-+			}
++			writeDeviceRestoreRange(dvb, false);
 +
  			destroy(dvb);
  			dvb.reset();
@@ -858,10 +949,10 @@ index 316b49d..79a74f6 100644
  #undef BGFX_API_FUNC
 diff --git a/bgfx/src/device_restore.h b/bgfx/src/device_restore.h
 new file mode 100644
-index 0000000..3cd4a3b
+index 0000000..9a49852
 --- /dev/null
 +++ b/bgfx/src/device_restore.h
-@@ -0,0 +1,1153 @@
+@@ -0,0 +1,1197 @@
 +/*
 + * Copyright 2026 openblack developers. All rights reserved.
 + * License: https://github.com/bkaradzic/bgfx/blob/master/LICENSE
@@ -1118,7 +1209,7 @@ index 0000000..3cd4a3b
 +			texture.mem   = _mem;
 +			texture.flags = _flags;
 +			texture.skip  = _skip;
-+			m_kept[KeptTextures] += _mem->size;
++			m_kept[KeptTextures] += imageBytes(_mem);
 +		}
 +
 +		// Copies the texels of an update into the kept copy of the texture. The caller keeps the memory.
@@ -1494,7 +1585,8 @@ index 0000000..3cd4a3b
 +		};
 +
 +		// The contents of a dynamic buffer are kept in pages, each made at the first update of a byte in it. A
-+		// page goes when the ranges that the application gives again cover all of it.
++		// page goes when it has no kept byte: each byte is in a range that the application gives again, or in the
++		// block of a buffer that went.
 +		static constexpr uint32_t kDynamicPageSize = 4096;
 +
 +		struct Dynamic
@@ -1502,10 +1594,10 @@ index 0000000..3cd4a3b
 +			bool live = false;
 +			uint32_t size = 0;
 +			uint16_t flags = 0;
-+			// The kept pages, empty where no byte was updated or where the application gives all the bytes
++			// The kept pages, empty where no byte is kept
 +			std::vector<std::vector<uint8_t> > pages;
-+			// The bytes of each page in the ranges that the application gives again
-+			std::vector<uint32_t> appBytes;
++			// For each kept page, one bit for each byte that the page keeps
++			std::vector<std::vector<uint64_t> > keptBits;
 +			// The ranges that the application gives again, by offset, with their size
 +			std::map<uint32_t, uint32_t> byApplication;
 +			// An update of the buffer occurred
@@ -1605,6 +1697,23 @@ index 0000000..3cd4a3b
 +				&& int32_t(_inner.m_x) + _inner.m_width  <= int32_t(_outer.m_x) + _outer.m_width
 +				&& int32_t(_inner.m_y) + _inner.m_height <= int32_t(_outer.m_y) + _outer.m_height
 +				;
++		}
++
++		// The bytes of the image in the create memory of a texture. The description of a texture without an image
++		// file is not data of the texture, thus it does not count.
++		static uint32_t imageBytes(const Memory* _mem)
++		{
++			if (sizeof(uint32_t) + sizeof(TextureCreate) <= _mem->size)
++			{
++				uint32_t magic;
++				bx::memCopy(&magic, _mem->data, sizeof(uint32_t) );
++				if (kChunkMagicTex == magic)
++				{
++					return 0;
++				}
++			}
++
++			return _mem->size;
 +		}
 +
 +		static void releaseTextureMemory(const Memory* _mem)
@@ -1795,7 +1904,7 @@ index 0000000..3cd4a3b
 +			_buffer.flags = _flags;
 +			const uint32_t numPages = (_size + kDynamicPageSize - 1) / kDynamicPageSize;
 +			_buffer.pages.resize(numPages);
-+			_buffer.appBytes.resize(numPages, 0);
++			_buffer.keptBits.resize(numPages);
 +		}
 +
 +		static uint32_t pageLength(const Dynamic& _buffer, uint32_t _page)
@@ -1815,10 +1924,12 @@ index 0000000..3cd4a3b
 +				if (bytes.empty() )
 +				{
 +					bytes.resize(pageLength(_buffer, page), 0);
++					_buffer.keptBits[page].assign(kDynamicPageSize / 64, 0);
 +					m_kept[KeptDynamicBuffers] += bytes.size();
 +				}
 +
 +				bx::memCopy(bytes.data() + start, _data, length);
++				setBits(_buffer.keptBits[page], start, length, true);
 +				_offset += length;
 +				_data   += length;
 +				_size   -= length;
@@ -1870,8 +1981,9 @@ index 0000000..3cd4a3b
 +			}
 +		}
 +
-+		// Adds or removes a range that the application gives again. The kept bytes of a new range become zero, and a
-+		// page that the ranges cover goes.
++		// Adds a range that the application gives again, or removes it when its buffer goes. In both cases the
++		// bytes of the range are no longer kept: the application gives them, or no buffer uses them. A page without
++		// kept bytes goes.
 +		void markDynamic(Dynamic& _buffer, uint32_t _offset, uint32_t _size, bool _on)
 +		{
 +			if (!_buffer.live
@@ -1896,30 +2008,53 @@ index 0000000..3cd4a3b
 +				const uint32_t start = at - page * kDynamicPageSize;
 +				const uint32_t length = bx::min(end - at, pageLength(_buffer, page) - start);
 +				std::vector<uint8_t>& bytes = _buffer.pages[page];
-+				if (_on)
++				if (!bytes.empty() )
 +				{
-+					_buffer.appBytes[page] += length;
-+					if (_buffer.appBytes[page] >= pageLength(_buffer, page) )
++					std::vector<uint64_t>& bits = _buffer.keptBits[page];
++					setBits(bits, start, length, false);
++					if (noBits(bits) )
 +					{
-+						if (!bytes.empty() )
-+						{
-+							m_kept[KeptDynamicBuffers] -= bytes.size();
-+						}
-+
++						m_kept[KeptDynamicBuffers] -= bytes.size();
 +						std::vector<uint8_t>().swap(bytes);
++						std::vector<uint64_t>().swap(bits);
 +					}
-+					else if (!bytes.empty() )
++					else
 +					{
 +						bx::memSet(bytes.data() + start, 0, length);
 +					}
 +				}
-+				else
-+				{
-+					_buffer.appBytes[page] -= bx::min(_buffer.appBytes[page], length);
-+				}
 +
 +				at += length;
 +			}
++		}
++
++		static void setBits(std::vector<uint64_t>& _bits, uint32_t _start, uint32_t _length, bool _on)
++		{
++			for (uint32_t ii = _start, end = _start + _length; ii < end; ++ii)
++			{
++				const uint64_t bit = uint64_t(1) << (ii % 64);
++				if (_on)
++				{
++					_bits[ii / 64] |= bit;
++				}
++				else
++				{
++					_bits[ii / 64] &= ~bit;
++				}
++			}
++		}
++
++		static bool noBits(const std::vector<uint64_t>& _bits)
++		{
++			for (uint64_t word : _bits)
++			{
++				if (0 != word)
++				{
++					return false;
++				}
++			}
++
++			return true;
 +		}
 +
 +		// The contents to give a new buffer: the kept pages, with zeros in the other bytes. NULL when the buffer had
@@ -1979,7 +2114,7 @@ index 0000000..3cd4a3b
 +			}
 +
 +			freeChanges(_texture);
-+			m_kept[KeptTextures] -= _texture.mem->size;
++			m_kept[KeptTextures] -= imageBytes(_texture.mem);
 +			if (sizeof(uint32_t) + sizeof(TextureCreate) <= _texture.mem->size)
 +			{
 +				uint32_t magic;

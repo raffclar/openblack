@@ -652,15 +652,21 @@ Renderer::Renderer(uint32_t bgfxReset, std::unique_ptr<BgfxCallback>&& bgfxCallb
 		_whiteTexture = fromBgfx(bgfx::createTexture2D(1, 1, false, 1, bgfx::TextureFormat::RGBA8, BGFX_SAMPLER_NONE,
 		                                               bgfx::copy(&k_White, sizeof(k_White))));
 		bgfx::setName(toBgfx(*_whiteTexture), "White");
+		// The renderer gives the white texel again after a restore of the device, thus the device keeps no copy
+		bgfx::setDeviceRestoreByApplication(toBgfx(*_whiteTexture));
 	}
 	_readBackTexture =
 	    fromBgfx(bgfx::createTexture2D(1, 1, false, 1, bgfx::TextureFormat::RGBA8, BGFX_TEXTURE_READ_BACK | BGFX_SAMPLER_NONE,
 	                                   bgfx::copy(_readBackTexel.data(), static_cast<uint32_t>(_readBackTexel.size()))));
 	bgfx::setName(toBgfx(*_readBackTexture), "Read Back");
+	// Only the reads of the texture are of use, not its texel, thus the device keeps no copy
+	bgfx::setDeviceRestoreByApplication(toBgfx(*_readBackTexture));
 	// The moving shadows' data, grown as more are cast
 	_groundShadowData = std::make_unique<Texture2D>("Ground Shadow Data");
 	_groundShadowData->Create(k_GroundShadowDataWidth, 1, 1, TextureFormat::RGBA32F, Wrapping::ClampEdge, Filter::Nearest,
 	                          nullptr);
+	// The ground shadow pass fills the texture before its draws, thus the device keeps no copy after a restore
+	_groundShadowData->SetTexelsGivenAgain();
 
 	// give debug names to views
 	// TODO (#749) use std::views::enumerate
@@ -5103,6 +5109,8 @@ void Renderer::DrawLandColourPass(const DrawSceneDesc& drawDesc) const
 		                                                       BGFX_SAMPLER_U_CLAMP | BGFX_SAMPLER_V_CLAMP | BGFX_SAMPLER_POINT,
 		                                                       bgfx::copy(image.data(), static_cast<uint32_t>(image.size()))));
 		bgfx::setName(toBgfx(*_lightningGlowTexture), "Lightning Glow");
+		// The renderer gives the picture again after a restore of the device, thus the device keeps no copy
+		bgfx::setDeviceRestoreByApplication(toBgfx(*_lightningGlowTexture));
 	}
 	// An added stamp brightens the cells to at most white; another keeps the brighter colour
 	const auto stampState = [](land_colour_stamps::Combine combine) {
@@ -5317,6 +5325,8 @@ void Renderer::KeepLightOfFrameBefore() const
 			_before.landLight =
 			    fromBgfx(bgfx::createTexture2D(LandLightTable::k_Size, 1, false, 1, bgfx::TextureFormat::RGBA8, k_Flags));
 			bgfx::setName(toBgfx(*_before.landLight), "Land Light Before");
+			// Each frame fills the texture before it draws, thus the device keeps no copy after a restore
+			bgfx::setDeviceRestoreByApplication(toBgfx(*_before.landLight));
 		}
 		const auto& texels = _landLightTable->GetTexels();
 		bgfx::updateTexture2D(toBgfx(*_before.landLight), 0, 0, 0, 0, LandLightTable::k_Size, 1,
@@ -5374,6 +5384,8 @@ TextureHandle Renderer::UpdateLandLight() const
 		_landLightTexture = fromBgfx(bgfx::createTexture2D(LandLightTable::k_Size, 1, false, 1, bgfx::TextureFormat::RGBA8,
 		                                                   BGFX_SAMPLER_U_CLAMP | BGFX_SAMPLER_V_CLAMP | BGFX_SAMPLER_POINT));
 		bgfx::setName(toBgfx(*_landLightTexture), "Land Light");
+		// Each frame fills the texture before it draws, thus the device keeps no copy after a restore
+		bgfx::setDeviceRestoreByApplication(toBgfx(*_landLightTexture));
 	}
 	const auto* dome =
 	    Locator::skySystem::has_value()
@@ -6112,6 +6124,7 @@ void Renderer::DrawGroundShadowPass(const DrawSceneDesc& drawDesc) const
 		_groundShadowData = std::make_unique<Texture2D>("Ground Shadow Data");
 		_groundShadowData->Create(k_GroundShadowDataWidth, static_cast<uint16_t>(capacity), 1, TextureFormat::RGBA32F,
 		                          Wrapping::ClampEdge, Filter::Nearest, nullptr);
+		_groundShadowData->SetTexelsGivenAgain();
 	}
 	_groundShadowTexels.resize(static_cast<size_t>(_groundShadowData->GetResolution().y) * k_GroundShadowDataWidth,
 	                           glm::vec4(0.0f));
@@ -6304,9 +6317,12 @@ bool Renderer::WarmUpScene(const DrawSceneDesc& drawDesc, uint32_t part) const n
 		    .add(bgfx::Attrib::TexCoord4, 4, bgfx::AttribType::Float)
 		    .add(bgfx::Attrib::TexCoord3, 4, bgfx::AttribType::Float)
 		    .end();
-		const RenderContext::ObjectInstance hidden {.model = glm::mat4(0.0f), .look = glm::vec4(0.0f, 0.0f, 1.0f, 0.0f)};
-		_warmUpInstances = fromBgfx(bgfx::createDynamicVertexBuffer(bgfx::copy(&hidden, sizeof(hidden)), layout));
+		_warmUpInstances = fromBgfx(bgfx::createDynamicVertexBuffer(1, layout));
+		// Each warm-up gives the instance, thus the device keeps no copy after a restore
+		bgfx::setDeviceRestoreByApplication(toBgfx(*_warmUpInstances));
 	}
+	const RenderContext::ObjectInstance hidden {.model = glm::mat4(0.0f), .look = glm::vec4(0.0f, 0.0f, 1.0f, 0.0f)};
+	bgfx::update(toBgfx(*_warmUpInstances), 0, bgfx::copy(&hidden, sizeof(hidden)));
 	// Under Vulkan, one frame with all the draws can use all of the descriptor sets, so each part does some of them
 	constexpr auto k_PartedViews = [] {
 		std::array<uint16_t, warm_up::k_PartedViews.size()> views {};
@@ -8733,6 +8749,20 @@ void Renderer::Frame() noexcept
 		_handSkinStamp.reset();
 		_handFlowTexture.reset();
 		_handFlowLoaded = false;
+		// The renderer's textures of fixed texels get them again
+		if (_whiteTexture)
+		{
+			constexpr uint32_t k_White = 0xFFFFFFFF;
+			bgfx::updateTexture2D(toBgfx(*_whiteTexture), 0, 0, 0, 0, 1, 1, bgfx::copy(&k_White, sizeof(k_White)));
+		}
+		if (_lightningGlowTexture)
+		{
+			const auto image = land_colour_stamps::LightningImage();
+			constexpr auto k_Side = static_cast<uint16_t>(land_colour_stamps::k_LightningSide);
+			bgfx::updateTexture2D(toBgfx(*_lightningGlowTexture), 0, 0, 0, 0, k_Side, k_Side,
+			                      bgfx::copy(image.data(), static_cast<uint32_t>(image.size())));
+		}
+		_shaderManager->GiveDefaultTexelsAgain();
 		// The meshes and textures of the resource caches read their files again and give their data to the device
 		if (Locator::graphicsDevice::has_value() && Locator::filesystem::has_value())
 		{
