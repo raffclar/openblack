@@ -16,6 +16,8 @@
 #include <filesystem>
 #include <map>
 #include <stdexcept>
+#include <type_traits>
+#include <utility>
 
 #include <L3DFile.h>
 #include <glm/gtc/type_ptr.hpp>
@@ -474,9 +476,22 @@ L3DMesh::Prepared L3DMesh::Prepare(const l3d::L3DFile& l3d, const LoadSettings& 
 
 bool L3DMesh::Finish(Prepared prepared) noexcept
 {
+	return FinishFrom(std::move(prepared));
+}
+
+bool L3DMesh::FinishShared(const Prepared& prepared) noexcept
+{
+	return FinishFrom(prepared);
+}
+
+template <typename Given>
+bool L3DMesh::FinishFrom(Given&& prepared) noexcept
+{
+	// The function moves each part of a temporary load and copies each part of a load that stays. Each line uses a
+	// different part, so a part is never used after it moved.
 	assert(prepared.upload == _upload);
 	_flags = prepared.flags;
-	_nameData = std::move(prepared.nameData);
+	_nameData = std::forward<Given>(prepared).nameData;
 	_skinLayout = prepared.skinLayout;
 	_skinSide = prepared.skinSide;
 	for (const auto& skin : prepared.skins)
@@ -497,32 +512,39 @@ bool L3DMesh::Finish(Prepared prepared) noexcept
 			_skins[skin.id]->Update(skin.bytes.data(), size);
 		}
 	}
-	_skinMasks = std::move(prepared.skinMasks);
-	_skinAlpha = std::move(prepared.skinAlpha);
+	_skinMasks = std::forward<Given>(prepared).skinMasks;
+	_skinAlpha = std::forward<Given>(prepared).skinAlpha;
 	_doorPos = prepared.doorPos;
 	_chimneyPos = prepared.chimneyPos;
-	_footprints = std::move(prepared.footprints);
-	_extraMetrics = std::move(prepared.extraMetrics);
-	_effectPoints = std::move(prepared.effectPoints);
+	_footprints = std::forward<Given>(prepared).footprints;
+	_extraMetrics = std::forward<Given>(prepared).extraMetrics;
+	_effectPoints = std::forward<Given>(prepared).effectPoints;
 	_firstBonePoint = prepared.firstBonePoint;
-	_boneFrames = std::move(prepared.boneFrames);
-	_bonesParents = std::move(prepared.bonesParents);
-	_bonesDefaultMatrices = std::move(prepared.bonesDefaultMatrices);
+	_boneFrames = std::forward<Given>(prepared).boneFrames;
+	_bonesParents = std::forward<Given>(prepared).bonesParents;
+	_bonesDefaultMatrices = std::forward<Given>(prepared).bonesDefaultMatrices;
 	for (const auto failed : prepared.failedSubMeshes)
 	{
 		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "Failed to open submesh {} of mesh {}", failed, _debugName);
 	}
 	_subMeshes.reserve(prepared.subMeshes.size());
-	for (auto& subMeshData : prepared.subMeshes)
+	for (auto&& subMeshData : std::forward<Given>(prepared).subMeshes)
 	{
 		auto subMesh = std::make_unique<L3DSubMesh>(*this);
-		subMesh->Finish(std::move(subMeshData));
+		if constexpr (std::is_const_v<std::remove_reference_t<Given>>)
+		{
+			subMesh->FinishShared(subMeshData);
+		}
+		else
+		{
+			subMesh->Finish(std::move(subMeshData));
+		}
 		_subMeshes.emplace_back(std::move(subMesh));
 	}
-	_surfaces = std::move(prepared.surfaces);
-	_physicsTriangles = std::move(prepared.physicsTriangles);
+	_surfaces = std::forward<Given>(prepared).surfaces;
+	_physicsTriangles = std::forward<Given>(prepared).physicsTriangles;
 	_boundingBox = prepared.boundingBox;
-	_volumeLights = std::move(prepared.volumeLights);
+	_volumeLights = std::forward<Given>(prepared).volumeLights;
 	return prepared.failedSubMeshes.empty();
 }
 

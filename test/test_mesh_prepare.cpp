@@ -376,6 +376,49 @@ TEST_F(MeshPrepare, CopiesOfOnePreparationGiveDynamicMeshesOfTheSameBits)
 	EXPECT_EQ(prepared.subMeshes.front().vertices.size(), 6U * 40U);
 }
 
+TEST_F(MeshPrepare, MeshesThatFinishFromOneKeptPreparationHaveTheBitsOfALoadedMesh)
+{
+	const auto model = Model();
+	L3DMesh loaded("loaded", true, UploadMode::Device);
+	ASSERT_TRUE(loaded.Load(model));
+	const auto fromLoad = Device().TakeMade();
+
+	auto prepared = L3DMesh::Prepare(model, k_Device);
+	const auto skinBytes = prepared.skins.front().bytes;
+	const auto vertices = prepared.subMeshes.front().vertices;
+	std::vector<std::unique_ptr<L3DMesh>> meshes;
+	for (int mesh = 0; mesh < 3; ++mesh)
+	{
+		meshes.push_back(std::make_unique<L3DMesh>("shared", true, UploadMode::Device));
+		// The last mesh takes the preparation, the others read it
+		ASSERT_TRUE(mesh < 2 ? meshes.back()->FinishShared(prepared) : meshes.back()->Finish(std::move(prepared)));
+		const auto made = Device().TakeMade();
+		ASSERT_EQ(made.size(), fromLoad.size());
+		for (size_t i = 0; i < fromLoad.size(); ++i)
+		{
+			EXPECT_EQ(made[i].kind, fromLoad[i].kind);
+			EXPECT_EQ(made[i].bytes, fromLoad[i].bytes);
+		}
+		if (mesh < 2)
+		{
+			// The kept preparation stays as it was
+			EXPECT_EQ(prepared.skins.front().bytes, skinBytes);
+			EXPECT_EQ(prepared.subMeshes.front().vertices, vertices);
+		}
+	}
+	for (const auto& mesh : meshes)
+	{
+		ASSERT_EQ(mesh->GetSubMeshes().size(), 1U);
+		EXPECT_EQ(mesh->GetSubMeshes().front()->GetBodyGeometry().positions,
+		          loaded.GetSubMeshes().front()->GetBodyGeometry().positions);
+		EXPECT_EQ(mesh->GetSurfaces().front().positions, loaded.GetSurfaces().front().positions);
+		EXPECT_EQ(mesh->GetSkinOrder(), loaded.GetSkinOrder());
+		ASSERT_NE(mesh->GetSkinAlpha(7), nullptr);
+		EXPECT_EQ(*mesh->GetSkinAlpha(7), *loaded.GetSkinAlpha(7));
+		EXPECT_EQ(mesh->GetBoundingBox().maxima, loaded.GetBoundingBox().maxima);
+	}
+}
+
 TEST_F(MeshPrepare, APreparationForAMeshOfDataOnlyHasNoTexelsAndNoPackedVertices)
 {
 	const auto model = Model();

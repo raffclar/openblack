@@ -273,6 +273,17 @@ L3DLoader::result_type L3DLoader::operator()(FromPreparedDynamicTag, const std::
 	return mesh;
 }
 
+L3DLoader::result_type L3DLoader::operator()(FromSharedPreparedDynamicTag, const std::string& debugName,
+                                             const graphics::PreparedL3DMesh& prepared) const
+{
+	auto mesh = std::make_shared<graphics::L3DMesh>(debugName, true, Uploads());
+	if (!mesh->FinishShared(prepared))
+	{
+		throw std::runtime_error("Unable to load mesh");
+	}
+	return mesh;
+}
+
 L3DLoader::result_type L3DLoader::operator()(FromSharedTag, std::shared_ptr<graphics::L3DMesh> shared) const
 {
 	return shared;
