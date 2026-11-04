@@ -155,6 +155,9 @@ template <typename Read>
 
 /// The engine's services
 [[nodiscard]] std::unique_ptr<ProviderInterface> EngineProvider();
+/// The land, the sea and the weather
+[[nodiscard]] std::unique_ptr<ProviderInterface> LandProvider();
+[[nodiscard]] std::unique_ptr<ProviderInterface> SkyStateProvider(std::unique_ptr<ProviderInterface> sky);
 
 
 } // namespace openblack::inspector::game_providers
