@@ -176,6 +176,8 @@ template <typename Read>
 [[nodiscard]] std::unique_ptr<ProviderInterface> ScriptProvider(ScriptTargetInterface& scripts);
 /// The saved games
 [[nodiscard]] std::unique_ptr<ProviderInterface> SavesProvider();
+/// The help: the advisors and the scripts' dialogue
+[[nodiscard]] std::unique_ptr<ProviderInterface> HelpProvider();
 
 /// The inspector's order to a creature
 [[nodiscard]] CreatureOrderResult GiveCreatureOrder(entt::entity creature, const CreatureOrder& order);

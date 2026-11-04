@@ -9,294 +9,66 @@
 
 #include "GameProviders.h"
 
-#include <cctype>
-#include <cmath>
-
-#include <algorithm>
 #include <array>
 #include <chrono>
-#include <limits>
 #include <optional>
 #include <ranges>
 #include <span>
 #include <string>
 #include <string_view>
-#include <type_traits>
 #include <utility>
 
 #include <Inspector.h>
-#include <InspectorQuery.h>
-#include <L3DFile.h>
-#include <LHVM.h>
-#include <LNDFile.h>
-#include <SaveSlots.h>
 #include <entt/core/hashed_string.hpp>
 #include <fmt/format.h>
-#include <glm/matrix.hpp>
-#include <glm/trigonometric.hpp>
 
 #include "3D/CreatureBody.h"
-#include "3D/DayNightClock.h"
 #include "3D/L3DMesh.h"
-#include "3D/L3DSubMesh.h"
-#include "3D/LandBlock.h"
-#include "3D/LandIslandInterface.h"
-#include "3D/OceanInterface.h"
-#include "3D/TempleInteriorInterface.h"
 #include "CHLApi.h"
 #include "Camera/Camera.h"
 #include "Camera/CameraZones.h"
-#include "Common/EventManager.h"
-#include "Common/GUtilsDistance.h"
-#include "Common/GameHeading.h"
-#include "Common/GameRandom.h"
-#include "Common/MainThreadQueue.h"
-#include "Common/RandomNumberManager.h"
-#include "Creature/BonusCreatures.h"
-#include "Creature/CreatureCastMoves.h"
-#include "Creature/CreatureDesires.h"
-#include "Creature/CreatureFriendAgendas.h"
-#include "Creature/CreatureMorph.h"
-#include "Creature/CreaturePlanActions.h"
 #include "Creature/CreatureRig.h"
-#include "Creature/CreatureRoute.h"
-#include "Creature/CreatureScriptAgendas.h"
 #include "Creature/LeashOrders.h"
-#include "Creature/LeashRules.h"
-#include "Debug/DebugGuiInterface.h"
 #include "Debug/TempleVillagersSurvey.h"
-#include "Debug/TownMiracles.h"
-#include "ECS/ArtefactRules.h"
-#include "ECS/Components/Animal.h"
-#include "ECS/Components/AnimatedStatic.h"
-#include "ECS/Components/AppleBarrel.h"
-#include "ECS/Components/AudioEmitter.h"
-#include "ECS/Components/BoatFilm.h"
-#include "ECS/Components/CameraBookmark.h"
-#include "ECS/Components/ChimneySmoke.h"
-#include "ECS/Components/Cloud.h"
-#include "ECS/Components/ComputerPlayer.h"
 #include "ECS/Components/Creature.h"
-#include "ECS/Components/CreatureBody.h"
-#include "ECS/Components/CreatureCopy.h"
-#include "ECS/Components/CreatureHelp.h"
-#include "ECS/Components/CreatureLeash.h"
-#include "ECS/Components/CreatureLeashRope.h"
-#include "ECS/Components/CreatureLocomotion.h"
-#include "ECS/Components/CreatureSkin.h"
-#include "ECS/Components/Dance.h"
-#include "ECS/Components/Field.h"
-#include "ECS/Components/Firefly.h"
-#include "ECS/Components/FishFarm.h"
-#include "ECS/Components/Flock.h"
-#include "ECS/Components/Football.h"
-#include "ECS/Components/Footpath.h"
-#include "ECS/Components/GameStanding.h"
-#include "ECS/Components/GuidanceHeard.h"
-#include "ECS/Components/HiddenByState.h"
-#include "ECS/Components/HighDetail.h"
-#include "ECS/Components/LivingAction.h"
-#include "ECS/Components/Mist.h"
-#include "ECS/Components/Player.h"
-#include "ECS/Components/PlayerRelations.h"
-#include "ECS/Components/Reward.h"
-#include "ECS/Components/ScriptControl.h"
-#include "ECS/Components/ScriptHighlight.h"
-#include "ECS/Components/Shark.h"
 #include "ECS/Components/Sky.h"
-#include "ECS/Components/SoundTag.h"
-#include "ECS/Components/Temple.h"
-#include "ECS/Components/TempleExterior.h"
-#include "ECS/Components/Town.h"
-#include "ECS/Components/TownArtefact.h"
-#include "ECS/Components/TownDesire.h"
-#include "ECS/Components/Transform.h"
-#include "ECS/Components/Tree.h"
 #include "ECS/Components/VillageLight.h"
-#include "ECS/Components/VillageTotem.h"
-#include "ECS/Components/Vortex.h"
-#include "ECS/Components/WalkPath.h"
-#include "ECS/Components/WallHug.h"
-#include "ECS/Components/Workshop.h"
 #include "ECS/CreatureReactionNotice.h"
 #include "ECS/DrawnRegistry.h"
 #include "ECS/Map.h"
 #include "ECS/PhysicsEntry.h"
-#include "ECS/PlayerRelations.h"
 #include "ECS/Registry.h"
-#include "ECS/Systems/AbodeKnockSystemInterface.h"
-#include "ECS/Systems/AbodeSoundSystemInterface.h"
-#include "ECS/Systems/AdvisorSystemInterface.h"
-#include "ECS/Systems/AdvisorVoiceSystemInterface.h"
-#include "ECS/Systems/AlignmentSystemInterface.h"
-#include "ECS/Systems/AnimalSystemInterface.h"
-#include "ECS/Systems/AnimatedStaticSystemInterface.h"
-#include "ECS/Systems/AppleBarrelSystemInterface.h"
-#include "ECS/Systems/ArtefactSystemInterface.h"
-#include "ECS/Systems/BoatLaunchSystemInterface.h"
-#include "ECS/Systems/BuildingDamageSystemInterface.h"
-#include "ECS/Systems/CameraBookmarkSystemInterface.h"
-#include "ECS/Systems/CameraHelpSystemInterface.h"
-#include "ECS/Systems/CameraPathSystemInterface.h"
-#include "ECS/Systems/CameraZoneSystemInterface.h"
-#include "ECS/Systems/ChatSystemInterface.h"
-#include "ECS/Systems/ChimneySmokeSystemInterface.h"
-#include "ECS/Systems/CinematicDirectorSystemInterface.h"
-#include "ECS/Systems/ClanCreatureSystemInterface.h"
-#include "ECS/Systems/CloudSystemInterface.h"
-#include "ECS/Systems/ComputerSettingsSystemInterface.h"
 #include "ECS/Systems/CreatureAnimationLogSystemInterface.h"
-#include "ECS/Systems/CreatureAnimationSystemInterface.h"
-#include "ECS/Systems/CreatureAudioSystemInterface.h"
-#include "ECS/Systems/CreatureCarryOverSystemInterface.h"
-#include "ECS/Systems/CreatureCaveSystemInterface.h"
-#include "ECS/Systems/CreatureFightSystemInterface.h"
-#include "ECS/Systems/CreatureFizzSystemInterface.h"
-#include "ECS/Systems/CreatureHairSystemInterface.h"
-#include "ECS/Systems/CreatureHandSystemInterface.h"
-#include "ECS/Systems/CreatureHelpSystemInterface.h"
-#include "ECS/Systems/CreatureLocomotionSystemInterface.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
-#include "ECS/Systems/CreatureModeSystemInterface.h"
-#include "ECS/Systems/CreatureObjectActionSystemInterface.h"
-#include "ECS/Systems/CreaturePenSystemInterface.h"
-#include "ECS/Systems/CreaturePhysiologySystemInterface.h"
-#include "ECS/Systems/CreatureSkinSystemInterface.h"
-#include "ECS/Systems/CreatureWebPageSystemInterface.h"
-#include "ECS/Systems/DanceSystemInterface.h"
 #include "ECS/Systems/DesignedWaterfallSystemInterface.h"
-#include "ECS/Systems/DialogueControlSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
-#include "ECS/Systems/EditorSystemInterface.h"
 #include "ECS/Systems/EffectRequestSystemInterface.h"
-#include "ECS/Systems/ExplosionSystemInterface.h"
-#include "ECS/Systems/FieldSystemInterface.h"
-#include "ECS/Systems/FilmCreatureSystemInterface.h"
-#include "ECS/Systems/FireSystemInterface.h"
-#include "ECS/Systems/FireflySystemInterface.h"
-#include "ECS/Systems/FishFarmSystemInterface.h"
-#include "ECS/Systems/FloatingNumberSystemInterface.h"
-#include "ECS/Systems/FootballSystemInterface.h"
-#include "ECS/Systems/FootpathSystemInterface.h"
-#include "ECS/Systems/FootprintSystemInterface.h"
-#include "ECS/Systems/ForestSystemInterface.h"
-#include "ECS/Systems/GameEndSystemInterface.h"
-#include "ECS/Systems/GatheringBoxSystemInterface.h"
 #include "ECS/Systems/GestureEventsInterface.h"
-#include "ECS/Systems/GestureSystemInterface.h"
-#include "ECS/Systems/GuidanceSystemInterface.h"
-#include "ECS/Systems/HandDemoSystemInterface.h"
-#include "ECS/Systems/HandGrabSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
-#include "ECS/Systems/HeartbeatSystemInterface.h"
-#include "ECS/Systems/HelpMessageSystemInterface.h"
-#include "ECS/Systems/HelpProfileSystemInterface.h"
-#include "ECS/Systems/HelpSpeechSystemInterface.h"
-#include "ECS/Systems/HelpTextSystemInterface.h"
-#include "ECS/Systems/HighDetailSystemInterface.h"
-#include "ECS/Systems/IncomingMessageSystemInterface.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
-#include "ECS/Systems/InspectorSystemInterface.h"
-#include "ECS/Systems/IntroSystemInterface.h"
-#include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/LiquidParticleSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
-#include "ECS/Systems/LobbyClientSystemInterface.h"
-#include "ECS/Systems/MagicShieldSystemInterface.h"
-#include "ECS/Systems/MagicSystemInterface.h"
-#include "ECS/Systems/MiracleFxSystemInterface.h"
-#include "ECS/Systems/MistSystemInterface.h"
-#include "ECS/Systems/MusicMoodSystemInterface.h"
-#include "ECS/Systems/NetworkGameSystemInterface.h"
-#include "ECS/Systems/ObjectDrawListSystemInterface.h"
 #include "ECS/Systems/ParticleRuleSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
-#include "ECS/Systems/PathfindingSystemInterface.h"
-#include "ECS/Systems/PauseTextSystemInterface.h"
-#include "ECS/Systems/PickingSystemInterface.h"
-#include "ECS/Systems/PlayerCommandSystemInterface.h"
-#include "ECS/Systems/PlayerProfileSystemInterface.h"
-#include "ECS/Systems/PlayerSystemInterface.h"
-#include "ECS/Systems/PlaygroundTripSystemInterface.h"
-#include "ECS/Systems/ProfileFolderSystemInterface.h"
-#include "ECS/Systems/RainSystemInterface.h"
-#include "ECS/Systems/ReactionSystemInterface.h"
-#include "ECS/Systems/RealWeatherSystemInterface.h"
-#include "ECS/Systems/RenderingSystemInterface.h"
-#include "ECS/Systems/ResourceStoreSystemInterface.h"
-#include "ECS/Systems/RewardSystemInterface.h"
-#include "ECS/Systems/SaveGameSystemInterface.h"
-#include "ECS/Systems/ScriptControlSystemInterface.h"
-#include "ECS/Systems/ScriptHighlightSystemInterface.h"
 #include "ECS/Systems/ScriptMusicSystemInterface.h"
-#include "ECS/Systems/ScriptObjectsSystemInterface.h"
-#include "ECS/Systems/SharkSystemInterface.h"
-#include "ECS/Systems/SkyClockSystemInterface.h"
 #include "ECS/Systems/SkySystemInterface.h"
-#include "ECS/Systems/SnowSystemInterface.h"
-#include "ECS/Systems/SnowfallSystemInterface.h"
-#include "ECS/Systems/SoundTagSystemInterface.h"
-#include "ECS/Systems/SyncChecksumSystemInterface.h"
-#include "ECS/Systems/TattooEditorSystemInterface.h"
-#include "ECS/Systems/TeleportSystemInterface.h"
-#include "ECS/Systems/TempleDestructionSystemInterface.h"
-#include "ECS/Systems/TempleExteriorSystemInterface.h"
-#include "ECS/Systems/ThingsMadeSystemInterface.h"
-#include "ECS/Systems/TimeSystemInterface.h"
-#include "ECS/Systems/TipBubbleSystemInterface.h"
-#include "ECS/Systems/TornadoSystemInterface.h"
-#include "ECS/Systems/TownDesireSystemInterface.h"
-#include "ECS/Systems/TownSystemInterface.h"
-#include "ECS/Systems/TurnCheerSystemInterface.h"
-#include "ECS/Systems/TutorialSkipSystemInterface.h"
-#include "ECS/Systems/VegetationInterface.h"
-#include "ECS/Systems/VideoSystemInterface.h"
-#include "ECS/Systems/VillageLightSystemInterface.h"
-#include "ECS/Systems/VillageTotemSystemInterface.h"
-#include "ECS/Systems/VortexSystemInterface.h"
-#include "ECS/Systems/WalkPathSystemInterface.h"
 #include "ECS/Systems/WaterRingSystemInterface.h"
-#include "ECS/Systems/WeatherSystemInterface.h"
-#include "ECS/Systems/WorkshopSystemInterface.h"
 #include "EditProviders.h"
-#include "Editor/EditorSelection.h"
-#include "EngineConfig.h"
 #include "FightProviders.h"
-#include "FileSystem/FileSystemInterface.h"
 #include "GameControls.h"
 #include "GameProviderShared.h"
 #include "GameSeamInterface.h"
-#include "Gui/ScreenFade.h"
-#include "Gui/ScriptTexts.h"
-#include "Gui/TextDatabase.h"
-#include "Hand/HandTrace.h"
-#include "Help/AdvisorModel.h"
-#include "Help/AdvisorVoices.h"
-#include "Help/DialogueText.h"
-#include "Help/HelpProfile.h"
 #include "Help/Spirits.h"
 #include "InfoConstants.h"
-#include "Input/GameActionMapInterface.h"
 #include "Locator.h"
-#include "Magic/MagicTables.h"
-#include "Nature/Fireflies.h"
-#include "Online/HttpClientInterface.h"
-#include "Online/NetworkSession.h"
-#include "Online/WebSocketInterface.h"
-#include "Particles/LightSheet.h"
-#include "Profiler.h"
 #include "RegistryProviders.h"
 #include "Resources/ResourcesInterface.h"
 #include "RunControl.h"
 #include "Sound/CustomMusicPlayerInterface.h"
 #include "Sound/GameMusic.h"
 #include "Sound/LoadedSound.h"
-#include "Sound/MusicMood.h"
 #include "Sound/SoundRequestInterface.h"
 #include "SystemProviders.h"
-#include "Temple/TemplePeople.h"
-#include "Visual/RendererRequestsInterface.h"
-#include "Windowing/WindowingInterface.h"
 #include "WorldProviders.h"
 
 using namespace openblack;
@@ -540,282 +312,6 @@ std::optional<std::vector<BodyInfo>> Bodies()
 		bodies.push_back(std::move(info));
 	});
 	return bodies;
-}
-
-std::unique_ptr<ProviderInterface> HelpProvider()
-{
-	auto provider = std::make_unique<FunctionProvider>("help");
-	provider->Add(
-	    Query("advisors",
-	          "The good and the evil advisor: what each does, where it hovers, whether it is talking and its mouth's lip sync",
-	          {}, ResultKind::List),
-	    Serve<Locator::advisorSystem>(
-	        "the advisors", [](const ecs::systems::AdvisorSystemInterface& advisors, const QueryContext& /*c*/) -> Json {
-		        if (!advisors.IsLoaded())
-		        {
-			        return Json::array();
-		        }
-		        const auto& controller = advisors.GetController();
-		        const auto* voices =
-		            Locator::advisorVoiceSystem::has_value() ? &Locator::advisorVoiceSystem::value().GetVoices() : nullptr;
-		        Json items = Json::array();
-		        for (int dude = 0; dude < 2; ++dude)
-		        {
-			        const auto& spirit = controller.Dude(dude);
-			        // The mouth: the lip sync's three weights and the mouth clips posed this frame (clip, ms)
-			        Json shapes = Json::array();
-			        for (const auto& layer : spirit.Layers())
-			        {
-				        if (layer.kind == help::spirits::AnimLayer::Kind::Add && layer.clip >= help::spirits::anim::k_VowelE &&
-				            layer.clip < help::spirits::anim::k_VowelE + 3)
-				        {
-					        shapes.push_back({{"clip", layer.clip}, {"ms", layer.milliseconds}});
-				        }
-			        }
-			        Json weights = Json::array();
-			        if (voices != nullptr)
-			        {
-				        for (const float w : voices->GetLipSyncKey(dude).weights)
-				        {
-					        // Not a number after a window of pure silence, as in the game
-					        weights.push_back(std::isfinite(w) ? Json(w) : Json(nullptr));
-				        }
-			        }
-			        items.push_back({{"advisor", dude == 0 ? "good" : "evil"},
-			                         {"mouth", {{"weights", weights}, {"shapes", shapes}}},
-			                         {"tags_left", spirit.TagsLeft()},
-			                         {"control_state", static_cast<int>(controller.State(dude))},
-			                         {"state", spirit.State()},
-			                         {"hover", Point(spirit.Hover())},
-			                         {"position", Point(spirit.Position())},
-			                         {"alpha", spirit.Alpha()},
-			                         {"playing_anim", spirit.IsPlayingAnim()},
-			                         {"given_line", voices != nullptr && voices->IsActive(dude)},
-			                         {"speaking", voices != nullptr && voices->GetSpeaker() == dude}});
-		        }
-		        return items;
-	        }));
-	provider->Add(
-	    Query("dialogue", "The scripts' dialogue: the text shown, whether it is read or waits for a click, who holds the "
-	                      "dialogue and the line being said"),
-	    Serve<Locator::helpTextSystem>(
-	        "the dialogue", [](const ecs::systems::HelpTextSystemInterface& help, const QueryContext& /*c*/) -> Json {
-		        // A computer that shows nothing plays no voices: no speaker and no line
-		        const auto* voices =
-		            Locator::advisorVoiceSystem::has_value() ? &Locator::advisorVoiceSystem::value().GetVoices() : nullptr;
-		        Json result {{"started", help.IsStarted()},
-		                     {"text_read", help.IsTextRead()},
-		                     {"speaker", voices != nullptr ? voices->GetSpeaker() : -1},
-		                     {"sentence", voices != nullptr ? voices->GetSentence() : 0u},
-		                     {"owner", Locator::dialogueControlSystem::has_value()
-		                                   ? Json(Locator::dialogueControlSystem::value().GetOwner())
-		                                   : Json(nullptr)},
-		                     {"speech_banks", Locator::helpSpeechSystem::has_value()
-		                                          ? Json(Locator::helpSpeechSystem::value().GetTable().GetBankCount(
-		                                                audio::SpeechBank::HelpSprites))
-		                                          : Json(nullptr)}};
-		        if (const auto* dialogue = help.GetDialogue(); dialogue != nullptr)
-		        {
-			        result["text"] = dialogue->GetCurrentText();
-			        result["narrator"] = help.GetNarrator(dialogue->GetCurrentText());
-			        result["waiting_for_click"] = dialogue->IsWaitingForClick();
-			        result["end_turn"] = dialogue->GetEndTurn();
-			        result["end_ms"] = dialogue->GetEndMs();
-			        result["start_turn"] = dialogue->GetStartTurn();
-			        result["takes_click"] = dialogue->TakesClick();
-			        result["last_click_turn"] = dialogue->GetLastClickTurn();
-			        result["drawn"] = dialogue->IsDrawn();
-			        result["box_shown"] = dialogue->GetDisplay().IsBoxShown();
-		        }
-		        return result;
-	        }));
-	provider->Add(
-	    Query("profile",
-	          "The help's count of what the player has done: its clock, and each event's total, seconds since "
-	          "and rate, for the events that have happened",
-	          {}, ResultKind::List),
-	    Serve<Locator::helpProfileSystem>(
-	        "the help profile", [](const ecs::systems::HelpProfileSystemInterface& system, const QueryContext& /*c*/) -> Json {
-		        const auto& profile = system.Get();
-		        Json items = Json::array();
-		        for (uint32_t event = 0; event < help::profile::k_EventCount; ++event)
-		        {
-			        // A copy: reading the times may tidy them, and a query changes nothing
-			        auto count = profile.Count(event);
-			        if (count.Total() == 0)
-			        {
-				        continue;
-			        }
-			        items.push_back({{"event", event},
-			                         {"clock", profile.Clock()},
-			                         {"total", count.Total()},
-			                         {"seconds_since", count.SecondsSince(profile.Clock())},
-			                         {"per_second", count.PerSecond(profile.Clock())},
-			                         {"smoothed_rate", count.SmoothedRate()}});
-		        }
-		        return items;
-	        }));
-	provider->Add(Query("creature",
-	                    "The advisor's messages about the player's creature: whether they are on, the ones told lately "
-	                    "(kind, parameter, text, turn), and the creature's waiting ones and prompts",
-	                    {}, ResultKind::Object),
-	              Serve<Locator::creatureHelpSystem>(
-	                  "the creature help",
-	                  [](const ecs::systems::CreatureHelpSystemInterface& system, const QueryContext& /*c*/) -> Json {
-		                  Json told = Json::array();
-		                  for (const auto& message : system.GetTold())
-		                  {
-			                  told.push_back({{"creature", entt::to_integral(message.creature)},
-			                                  {"kind", static_cast<int>(message.kind)},
-			                                  {"parameter", message.parameter},
-			                                  {"text", message.text.has_value() ? Json(*message.text) : Json(nullptr)},
-			                                  {"turn", message.turn}});
-		                  }
-		                  Json creatures = Json::array();
-		                  const auto& registry = Locator::entitiesRegistry::value();
-		                  registry.Each<const CreatureHelpMemory>(
-		                      [&creatures](entt::entity entity, const CreatureHelpMemory& help) {
-			                      Json waiting = Json::array();
-			                      for (size_t kind = 0; kind < help.memory.entries.size(); ++kind)
-			                      {
-				                      for (const auto& entry : help.memory.entries.at(kind))
-				                      {
-					                      if (entry.waiting)
-					                      {
-						                      waiting.push_back({{"kind", kind}, {"parameter", entry.parameter}});
-					                      }
-				                      }
-			                      }
-			                      creatures.push_back({{"creature", entt::to_integral(entity)},
-			                                           {"waiting", waiting},
-			                                           {"hand_over", help.memory.handOver},
-			                                           {"body_problem_turn", help.memory.physicalProblemTurn},
-			                                           {"tutorial_turn", help.memory.tutorialTurn},
-			                                           {"tutorial_done", help.memory.tutorialDone}});
-		                      });
-		                  return Json {{"on", system.IsHelpOn()}, {"told", told}, {"creatures", creatures}};
-	                  }));
-	provider->Add(
-	    Query("messages",
-	          "The help the game starts by itself: the help scripts it started lately (script, texts, a "
-	          "town's need) and how many times each message set has been said",
-	          {}, ResultKind::Object),
-	    Serve<Locator::helpMessageSystem>(
-	        "the help messages", [](const ecs::systems::HelpMessageSystemInterface& system, const QueryContext& /*c*/) -> Json {
-		        Json started = Json::array();
-		        for (const auto& message : system.GetStarted())
-		        {
-			        started.push_back({{"script", message.script},
-			                           {"first", message.first},
-			                           {"last", message.last},
-			                           {"stat_text", message.statText.has_value() ? Json(*message.statText) : Json(nullptr)},
-			                           {"need", message.need.has_value() ? Json(*message.need) : Json(nullptr)},
-			                           {"turn", message.turn}});
-		        }
-		        Json sent = Json::object();
-		        const auto& counts = system.GetSentCounts();
-		        for (size_t set = 0; set < counts.size(); ++set)
-		        {
-			        if (counts.at(set) != 0)
-			        {
-				        sent[std::to_string(set)] = counts.at(set);
-			        }
-		        }
-		        return Json {{"started", started}, {"sets_said", sent}};
-	        }));
-	provider->Add(
-	    Query("guidance",
-	          "The advisors' remarks on what the player does (towns attacked, buildings wrecked, alignment drifting, the "
-	          "moon): the ones asked for lately (kind, text, turn, whether the advisors got to say it), the turns until "
-	          "the moon is looked at again, the player's guidance (each kind's last turn, the alignment's drift, the "
-	          "one-offs said), and the night whisper (the sample of the player's name, the count of real-night checks, "
-	          "the turns to the next check and the volume of the next whisper)",
-	          {}, ResultKind::Object),
-	    Serve<Locator::guidanceSystem>(
-	        "the guidance", [](const ecs::systems::GuidanceSystemInterface& system, const QueryContext& /*c*/) -> Json {
-		        Json remarks = Json::array();
-		        for (const auto& remark : system.GetRemarks())
-		        {
-			        remarks.push_back({{"kind", static_cast<int>(remark.kind)},
-			                           {"text", remark.text},
-			                           {"turn", remark.turn},
-			                           {"started", remark.started}});
-		        }
-		        Json heard = nullptr;
-		        if (Locator::entitiesRegistry::has_value())
-		        {
-			        Locator::entitiesRegistry::value().Each<const ecs::components::GuidanceHeard>(
-			            [&heard](entt::entity entity, const ecs::components::GuidanceHeard& guidance) {
-				            heard = {{"player", entt::to_integral(entity)},
-				                     {"last_turns", guidance.lastTurn},
-				                     {"alignment_drift", guidance.alignmentDrift},
-				                     {"one_offs_said", guidance.oneOffSaid}};
-			            });
-		        }
-		        const auto& whisper = system.GetNightWhisper();
-		        const Json whisperJson {
-		            {"sample", whisper.GetSample().has_value() ? Json(*whisper.GetSample()) : Json(nullptr)},
-		            {"count", whisper.GetCount()},
-		            {"countdown", whisper.GetCountdown()},
-		            {"volume", whisper.GetVolume()}};
-		        return Json {{"remarks", remarks},
-		                     {"moon_wait", system.GetMoonWait()},
-		                     {"heard", heard},
-		                     {"night_whisper", whisperJson}};
-	        }));
-	provider->Add(
-	    Query("bubble", "The tip bubble over the \"did you know\" sign tapped last: the sign, its tip, whether it is up, "
-	                    "its time to show, the point it points at, its scroll and whether the hand is on it or grips it"),
-	    Serve<Locator::tipBubbleSystem>(
-	        "the tip bubble", [](const ecs::systems::TipBubbleSystemInterface& bubble, const QueryContext& /*c*/) -> Json {
-		        const auto& scroll = bubble.GetScroll();
-		        const auto anchor = bubble.GetAnchor();
-		        return Json {
-		            {"sign", bubble.GetSign() == entt::null ? Json(nullptr) : Json(entt::to_integral(bubble.GetSign()))},
-		            {"text", bubble.GetText()},
-		            {"up", bubble.IsUp()},
-		            {"display_time", bubble.GetDisplayTime()},
-		            {"anchor", anchor.has_value() ? Point(*anchor) : Json(nullptr)},
-		            {"scroll_lines", scroll.lines},
-		            {"content_height", scroll.contentHeight},
-		            {"line_height", scroll.lineHeight},
-		            {"more_above", scroll.moreAbove},
-		            {"more_below", scroll.moreBelow},
-		            {"under_hand", bubble.IsUnderHand()},
-		            {"gripped", bubble.IsGripped()}};
-	        }));
-	provider->Add(Query("hand_demo",
-	                    "The tutorial's hand demonstration playing: its name, the script task that started it, the record "
-	                    "the turns are at, whether it holds at a mark, the record the frames are at, and the camera and "
-	                    "hints it has"),
-	              Serve<Locator::handDemoSystem>(
-	                  "the hand demonstrations",
-	                  [](const ecs::systems::HandDemoSystemInterface& demos, const QueryContext& /*c*/) -> Json {
-		                  const auto status = demos.GetStatus();
-		                  if (!status.has_value())
-		                  {
-			                  return Json {{"playing", false}};
-		                  }
-		                  Json result {{"playing", true},
-		                               {"name", status->name},
-		                               {"task", status->task},
-		                               {"record", status->record},
-		                               {"records", status->records},
-		                               {"pause_on_trigger", status->pauseOnTrigger},
-		                               {"trigger_reached", status->triggerReached},
-		                               {"holding", status->holding},
-		                               {"replaying", status->replaying},
-		                               {"replay_record", status->replayRecord},
-		                               {"replay_holding", status->replayHolding},
-		                               {"hints", demos.GetHints()}};
-		                  if (const auto camera = demos.GetCamera(); camera.has_value())
-		                  {
-			                  result["camera_origin"] = Point(camera->origin);
-			                  result["camera_focus"] = Point(camera->focus);
-		                  }
-		                  return result;
-	                  }));
-	return provider;
 }
 
 } // namespace
