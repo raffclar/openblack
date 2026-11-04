@@ -24,6 +24,8 @@ public:
 	/// Starts on a creature, by its middle and height, from where the camera is
 	CreatureCameraModel(glm::vec3 cameraOrigin, glm::vec3 cameraFocus, glm::vec3 creature, float height,
 	                    creature_follow::StartDistance start = creature_follow::StartDistance::KeepWhenClose);
+	/// Starts on a creature with the view and values of a saved game of the original game
+	CreatureCameraModel(const creature_follow::Loaded& loaded, glm::vec3 creature, float height);
 
 	/// Where the creature now is, and how tall it is
 	void SetTarget(glm::vec3 position, float height);
@@ -34,6 +36,10 @@ public:
 	creature_follow::KeyOutcome Turn(const creature_follow::Keys& keys, float screenWidth);
 
 	[[nodiscard]] const creature_follow::View& GetView() const { return _view; }
+	/// The share of the follow's own glide time that the glides take
+	[[nodiscard]] float GetTimeScale() const { return _timeScale; }
+	/// Whether Ctrl and Shift together swing the camera clear
+	[[nodiscard]] bool AutoRepositions() const { return _autoReposition; }
 	[[nodiscard]] float GetSecondsInMode() const { return _seconds; }
 	/// Whether the player has asked for their camera back with the cursor keys
 	[[nodiscard]] bool WantsToLeave() const { return _leaveRequested; }
@@ -55,6 +61,8 @@ private:
 	creature_follow::View _view;
 	glm::vec3 _focus;
 	float _seconds {0.0f};
+	float _timeScale {1.0f};
+	bool _autoReposition {true};
 	bool _leaveRequested {false};
 	bool _stoppedAtFence {false};
 };

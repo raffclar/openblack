@@ -16,6 +16,7 @@
 #include <vector>
 
 #include <LHVMTypes.h>
+#include <entt/entity/fwd.hpp>
 #include <glm/vec3.hpp>
 
 #include "ECS/Systems/SavedStateInterface.h"
@@ -25,6 +26,11 @@
 namespace openblack::audio
 {
 struct SoundEffectOptions;
+}
+
+namespace openblack::ecs::components
+{
+struct Transform;
 }
 
 namespace openblack::chlapi
@@ -111,5 +117,9 @@ private:
 	/// The game's own help level until the player's profile gives one
 	uint32_t _playerHelpLevel {3};
 };
+
+/// The way a thing faces, as a camera reads it: a walker by its game angle, a creature by its body's turn, anything else
+/// along the first heading
+[[nodiscard]] float CameraFacingOf(entt::entity object, const ecs::components::Transform& transform);
 
 } // namespace openblack::chlapi
