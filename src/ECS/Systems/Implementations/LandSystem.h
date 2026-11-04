@@ -52,6 +52,8 @@ public:
 	void SetFlyByFile(std::string path) override { _flyByFile = std::move(path); }
 	[[nodiscard]] const std::string& GetFlyByFile() const override { return _flyByFile; }
 	void PutCameraAtStartPlace() override;
+	void SaveState(reflection::BinaryWriter& out) const override;
+	bool LoadState(reflection::BinaryReader& in) override;
 	void ShowLandMessage(const land_message::Message& message) override { View().ShowLandMessage(message); }
 
 	[[nodiscard]] bool IsPlaygroundLand(const std::filesystem::path& path) const override;

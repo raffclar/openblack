@@ -1351,6 +1351,22 @@ TEST(VanillaWorldImport, TheClockOfDayAndNightComesFromTheGameObject)
 	EXPECT_EQ(cycle->scale, 0.0f);
 }
 
+// The game object keeps the influence multipliers and the eight land balances that the land's script gave and that a
+// script can change after
+TEST(VanillaWorldImport, TheLandValuesComeFromTheGameObject)
+{
+	auto world = GameAtTurn(10);
+	EXPECT_FALSE(world_import::ReadLandValues(world.Make()).has_value());
+	world.Value("playerInfluenceMultiplier", 0.5f)
+	    .Value("townInfluenceMultiplier", 1.25f)
+	    .Value("landBalance", std::array {1.0f, 2.0f, 2.0f, 2.0f, 1.5f, 2.0f, 1.0f, 0.75f});
+	const auto land = world_import::ReadLandValues(world.Make());
+	ASSERT_TRUE(land.has_value());
+	EXPECT_EQ(land->playerInfluenceMultiplier, 0.5f);
+	EXPECT_EQ(land->townInfluenceMultiplier, 1.25f);
+	EXPECT_EQ(land->landBalance, (std::array {1.0f, 2.0f, 2.0f, 2.0f, 1.5f, 2.0f, 1.0f, 0.75f}));
+}
+
 /// Each still thing and loose thing of a saved game of Land 1 has a row of its table, and the clock of each file has the
 /// game's cycle
 TEST(VanillaWorldImport, SavedGamesOfLandOneHaveRowsForTheirStillThings)
@@ -1367,6 +1383,12 @@ TEST(VanillaWorldImport, SavedGamesOfLandOneHaveRowsForTheirStillThings)
 		EXPECT_EQ(cycle->change, 0.07f) << path;
 		EXPECT_GE(cycle->visualTime, 0.0f) << path;
 		EXPECT_LT(cycle->visualTime, 24.0f) << path;
+		// The script of Land 1 gives multipliers of 1 and no balance, and no shipped script changes a balance
+		const auto land = world_import::ReadLandValues(world);
+		ASSERT_TRUE(land.has_value()) << path;
+		EXPECT_EQ(land->playerInfluenceMultiplier, 1.0f) << path;
+		EXPECT_EQ(land->townInfluenceMultiplier, 1.0f) << path;
+		EXPECT_TRUE(std::ranges::all_of(land->landBalance, [](float value) { return value == 1.0f; })) << path;
 	});
 	if (!files.has_value())
 	{

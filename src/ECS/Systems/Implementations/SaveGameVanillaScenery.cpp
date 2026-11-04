@@ -50,6 +50,7 @@
 #include "ECS/ThingMapPlace.h"
 #include "ECS/VanillaSceneryImport.h"
 #include "ECS/WorldObjects.h"
+#include "LHScriptX/FeatureScriptCommands.h"
 #include "Locator.h"
 #include "SaveGameSystem.h"
 #include "SaveGameVanillaPlaces.h"
@@ -474,5 +475,16 @@ void SaveGameSystem::ImportVanillaGameValues(const gamesave::VanillaWorld& world
 		clock.ForceVisualTime(cycle->visualTime);
 		clock.SetScale(cycle->scale);
 		sky.SetCycle({.duration = cycle->duration, .night = cycle->night, .change = cycle->change});
+	}
+	// The influence multipliers and the land balances: a script can change a balance after the land's script ran
+	if (const auto land = world_import::ReadLandValues(world); land.has_value())
+	{
+		auto& globals = registry.Context().mapScriptGlobals;
+		globals.playerInfluenceMultiplier = land->playerInfluenceMultiplier;
+		globals.townInfluenceMultiplier = land->townInfluenceMultiplier;
+		for (size_t index = 0; index < land->landBalance.size(); ++index)
+		{
+			lhscriptx::FeatureScriptCommands::SetGlobalLandBalance(static_cast<int32_t>(index), land->landBalance.at(index));
+		}
 	}
 }

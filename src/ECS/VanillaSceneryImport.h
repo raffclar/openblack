@@ -342,4 +342,17 @@ struct ImportedDayCycle
 /// The clock of day and night of the file, nothing when the game object does not keep it
 [[nodiscard]] std::optional<ImportedDayCycle> ReadDayCycle(const gamesave::VanillaWorld& world);
 
+/// The values of the whole land that the land's script gives and that the scripts can change, as a file keeps them
+struct ImportedLandValues
+{
+	/// The influence multipliers of the players' citadels and of the towns
+	float playerInfluenceMultiplier {1.0f};
+	float townInfluenceMultiplier {1.0f};
+	/// The eight land balances, in the order of their numbers
+	std::array<float, 8> landBalance {1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f};
+};
+
+/// The land values of the file, nothing when the game object does not keep them
+[[nodiscard]] std::optional<ImportedLandValues> ReadLandValues(const gamesave::VanillaWorld& world);
+
 } // namespace openblack::ecs::vanilla_world_import

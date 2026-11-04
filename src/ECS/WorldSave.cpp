@@ -81,6 +81,7 @@
 #include "ECS/Systems/HelpMessageSystemInterface.h"
 #include "ECS/Systems/HelpTextSystemInterface.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
+#include "ECS/Systems/LandSystemInterface.h"
 #include "ECS/Systems/LiquidParticleSystemInterface.h"
 #include "ECS/Systems/MagicShieldSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
@@ -333,7 +334,7 @@ struct SavedSystem
 
 /// The systems that keep running state of their own, by the names of their sections. A load gives each system its state
 /// in this order: the map's lists first, then the systems that use them.
-constexpr std::array<SavedSystem, 44> k_SavedSystems {{
+constexpr std::array<SavedSystem, 45> k_SavedSystems {{
     {"map", &FindSystem<Locator::entitiesMap>},
     {"particles", &FindOldParticles, false},
     {"syncedParticles", &FindSystem<Locator::particleRuleSystem>},
@@ -378,6 +379,7 @@ constexpr std::array<SavedSystem, 44> k_SavedSystems {{
     {"scriptHighlights", &FindSystem<Locator::scriptHighlightSystem>},
     {"cameraBookmarks", &FindSystem<Locator::cameraBookmarkSystem>},
     {"playgroundTrip", &FindSystem<Locator::playgroundTripSystem>},
+    {"land", &FindSystem<Locator::landSystem>},
 }};
 
 gamesave::Chunk SystemsChunk(const entt::meta_ctx& reflection)

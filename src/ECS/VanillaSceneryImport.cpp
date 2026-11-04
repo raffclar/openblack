@@ -580,4 +580,25 @@ std::optional<ImportedDayCycle> ReadDayCycle(const VanillaWorld& world)
 	    .visualTime = *visualTime, .duration = *duration, .night = *night, .change = *change, .scale = *scale};
 }
 
+std::optional<ImportedLandValues> ReadLandValues(const VanillaWorld& world)
+{
+	if (world.Records().empty())
+	{
+		return std::nullopt;
+	}
+	const auto& game = world.Game();
+	const auto player = world.Float(game, "playerInfluenceMultiplier");
+	const auto town = world.Float(game, "townInfluenceMultiplier");
+	ImportedLandValues values;
+	const auto balance = world.Raw(game, "landBalance");
+	if (!player.has_value() || !town.has_value() || balance.size() != sizeof(values.landBalance))
+	{
+		return std::nullopt;
+	}
+	values.playerInfluenceMultiplier = *player;
+	values.townInfluenceMultiplier = *town;
+	std::memcpy(values.landBalance.data(), balance.data(), sizeof(values.landBalance));
+	return values;
+}
+
 } // namespace openblack::ecs::vanilla_world_import
