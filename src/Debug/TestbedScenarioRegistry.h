@@ -1113,7 +1113,9 @@ struct Command
 		/// end box opens the box of one of its tabs (value 1 Multiplayer, 2 Statistics), as a click on the tab does.
 		/// Value 3 opens the main menu as it shows in a network game. A value of 4 or more scrolls the window of gods of the
 		/// open box of a tab on, as the mouse wheel over its god columns does: one notch for each unit over 3. The value
-		/// k_EndBoxPlayerLeft opens the box that tells that the player Carol left the network game. Needs no creature.
+		/// k_EndBoxPlayerLeft opens the box that tells that the player Carol left the network game. The value
+		/// k_EndBoxConnectionLost opens the box that tells that the connection to the network game is lost. Needs no
+		/// creature.
 		EndBox,
 		/// The god of the player (player) brings a creature as it does at the start of a network game. The mind file
 		/// (mindFile) of the creature mind folder of the game takes the place of the creature file of the god's player.

@@ -225,6 +225,12 @@ public:
 	void ShowGodOut(std::u16string_view name);
 	/// The box with OK that tells that a player left the network game
 	void ShowPlayerLeft(std::u16string_view name);
+	/// The connection to the network game is lost: the box tells the player "Connection to network game has been lost.
+	/// Cannot continue." with an OK
+	void ShowConnectionLost();
+	/// The box of the lost connection went since this was last asked: true once. The OK goes back to the network front
+	/// end.
+	[[nodiscard]] bool TakeConnectionLostOk() { return std::exchange(_connectionLostOk, false); }
 	/// The end box takes the mouse while it is open; true when it took the event
 	bool ProcessEndGameBoxEvent(const SDL_Event& event);
 	/// A network game resynchronises this computer's world with the server's: the words "Resynchronising..." show at the
@@ -548,6 +554,8 @@ private:
 	bool _resyncShown {false};
 	/// The out-of-sync box is up and waits for its answer
 	bool _outOfSyncAsked {false};
+	bool _connectionLostShown {false};
+	bool _connectionLostOk {false};
 	std::optional<bool> _outOfSyncAnswer;
 	/// The question of the trip to the Gods' Playground is up and waits for its answer
 	bool _tripAsked {false};

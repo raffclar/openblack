@@ -62,6 +62,7 @@
 #include "LandChange.h"
 #include "LaunchSwitches.h"
 #include "Magic/HandHoldPoser.h"
+#include "Online/ConnectionLostNotice.h"
 #include "Simulation/FrameBody.h"
 #include "Simulation/TurnBody.h"
 #include "Simulation/WorldStart.h"
@@ -751,6 +752,8 @@ private:
 	std::optional<uint64_t> _demoRoundTrip;
 	/// The out-of-sync box was asked; the player answered No to it
 	bool _outOfSyncAsked {false};
+	/// The box that tells that the connection to the network game is lost: it shows once for each network session
+	online::ConnectionLostNotice _connectionLost;
 	bool _leaveNetworkGame {false};
 	/// What the end boxes of this computer keep between turns
 	end_game_box::State _endGameBoxState;
