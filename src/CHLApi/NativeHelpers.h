@@ -69,15 +69,19 @@ void ApplySwitchChanges(const script::switches::SwitchChanges& changes);
 glm::vec3 PopVec();
 void PushVec(const glm::vec3& vec);
 std::string PopString();
+entt::entity CreateScriptObject(script::ObjectType type, uint32_t subtype, const glm::vec3& position, float altitude,
+                                float xAngleRadians, float yAngleRadians, float zAngleRadians, float scale);
 VMValue Pop(DataType& type);
 VMValue Pop();
 float Popf();
+void RegisterCreated(entt::entity object);
 entt::entity PopObject();
 bool IsDirectableVillager(entt::entity object);
 void Pushf(float value);
 void Pushv(float value);
 void Pushi(int32_t value);
 void Pushb(bool value);
+void PushObject(entt::entity object);
 void RemakeDrawList();
 std::optional<ecs::systems::HandSystemInterface::ReportedView> ScriptView();
 bool IsWorldObject(entt::entity object);
@@ -101,5 +105,9 @@ int32_t ScriptHelpSpirit(int32_t scriptSpirit);
 
 // In CHLApi/SoundNatives.cpp
 ecs::systems::ScriptMusicSystemInterface* WorldScriptMusic();
+
+// In CHLApi/CreatureNatives.cpp
+std::optional<entt::entity> CreatureForNative(entt::entity thing);
+void MoveCreatureToStage(entt::entity creature, uint32_t stage);
 
 } // namespace openblack::chlapi
