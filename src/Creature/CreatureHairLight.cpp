@@ -9,28 +9,8 @@
 
 #include "CreatureHairLight.h"
 
-#include <algorithm>
-#include <numeric>
-
 namespace openblack::creature_hair_light
 {
-
-float SortKey(glm::vec3 place, glm::vec3 eye) noexcept
-{
-	const float x = place.x - eye.x;
-	const float y = place.y - eye.y;
-	const float z = place.z - eye.z;
-	const float xy = x * x + y * y;
-	return xy + z * z;
-}
-
-std::vector<size_t> SortedOrder(std::span<const float> keys)
-{
-	std::vector<size_t> order(keys.size());
-	std::iota(order.begin(), order.end(), size_t {0});
-	std::ranges::stable_sort(order, [keys](size_t a, size_t b) { return keys[a] > keys[b]; });
-	return order;
-}
 
 Plan PlanFrame(std::span<const BodyDraw> draws)
 {
@@ -82,6 +62,15 @@ Carried Carry(const Plan& plan, std::span<const std::optional<Colours>> known, c
 		return *known[*plan.last];
 	}
 	return Kept {};
+}
+
+std::optional<Colours> StatisticsBoxColours(bool drawnByTheWorld) noexcept
+{
+	if (drawnByTheWorld)
+	{
+		return std::nullopt;
+	}
+	return k_Start;
 }
 
 } // namespace openblack::creature_hair_light

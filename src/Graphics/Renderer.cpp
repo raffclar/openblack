@@ -2683,7 +2683,6 @@ void Renderer::PlanCreatureHairLight(const DrawSceneDesc& drawDesc) const
 	using ecs::components::CreatureAnimation;
 	using ecs::components::CreatureHair;
 	using ecs::components::CreatureSpells;
-	using ecs::components::InHand;
 	using ecs::components::Transform;
 	_environmentHairLooks.clear();
 	_hairLightSources.clear();
@@ -2727,16 +2726,15 @@ void Renderer::PlanCreatureHairLight(const DrawSceneDesc& drawDesc) const
 		}
 	};
 
-	// The creatures of the world that the frame draws, and those that a hand holds
+	// The creatures of the world that the frame draws. A hand never holds a creature, so no creature body goes to the depth
+	// sorter.
 	std::vector<entt::entity> world;
-	std::vector<entt::entity> held;
 	for (const auto& drawn : _drawnCreatures)
 	{
-		if (drawn.posedBy != entt::null)
+		if (drawn.posedBy == entt::null)
 		{
-			continue;
+			world.push_back(drawn.entity);
 		}
-		(drawDesc.entities.AllOf<InHand>(drawn.entity) ? held : world).push_back(drawn.entity);
 	}
 	// First the creatures of the land's draw list, in the order of the list
 	std::unordered_set<entt::entity> listed;
@@ -2758,37 +2756,6 @@ void Renderer::PlanCreatureHairLight(const DrawSceneDesc& drawDesc) const
 		{
 			addWorldBody(entity);
 		}
-	}
-	// Then the held creatures. A hand that holds a creature sends its body to the depth sorter, which draws the bodies
-	// late in the frame, from far to near. The bodies that the other hands hold come into the sorter before the body
-	// that the hand of this computer holds.
-	std::vector<entt::entity> ownHands;
-	if (Locator::handSystem::has_value())
-	{
-		const auto hands = Locator::handSystem::value().GetOwnHands();
-		ownHands.assign(hands.begin(), hands.end());
-	}
-	const auto ownHeld = [&](entt::entity entity) {
-		const auto* inHand = drawDesc.entities.TryGet<const InHand>(entity);
-		return inHand != nullptr && std::ranges::find(ownHands, inHand->hand) != ownHands.end();
-	};
-	std::ranges::stable_partition(held, [&ownHeld](entt::entity entity) { return !ownHeld(entity); });
-	std::vector<float> keys;
-	keys.reserve(held.size());
-	const auto eye = drawDesc.camera->GetOrigin();
-	for (const auto entity : held)
-	{
-		const auto* transform = drawDesc.entities.TryGet<const Transform>(entity);
-		const auto place =
-		    transform != nullptr
-		        ? ecs::components::DrawnTransform(*transform, drawDesc.entities.TryGet<const CreatureAnimation>(entity))
-		              .position
-		        : eye;
-		keys.push_back(SortKey(place, eye));
-	}
-	for (const auto index : SortedOrder(keys))
-	{
-		addWorldBody(held[index]);
 	}
 	// The copies of creatures in the temple's rooms
 	if (Locator::temple::has_value())
@@ -2845,9 +2812,57 @@ void Renderer::PlanCreatureHairLight(const DrawSceneDesc& drawDesc) const
 		}
 	}
 
+	// Last the creatures of the statistics box, which draws after the front end. The box draws the hair far from its own
+	// camera, so the hair does not show, but each usual hair draw keeps its colours. In the land, each frame first gives
+	// every creature body a white light and no added colour. The world's draw of a creature then gives the body the light
+	// and the haze at its place, also when the body is off the screen. The box uses the colours that the body has.
+	const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
+	if (_interfaceCreatures.has_value() && !inTemple)
+	{
+		const std::unordered_set<entt::entity> drawnInWorld(world.begin(), world.end());
+		const auto& registry = drawDesc.entities;
+		for (const auto& shown : _interfaceCreatures->creatures)
+		{
+			const auto* transform = registry.Valid(shown.creature) ? registry.TryGet<const Transform>(shown.creature) : nullptr;
+			if (transform == nullptr)
+			{
+				continue;
+			}
+			const auto* creature = registry.TryGet<const Creature>(shown.creature);
+			const auto* spells = registry.TryGet<const CreatureSpells>(shown.creature);
+			const bool environmentMapped =
+			    creature != nullptr && creature_environment_map::DrawnWithMap(creature->environmentMap);
+			const float fizz = spells != nullptr ? spells->fizz : 0.0f;
+			const float freeze = spells != nullptr ? spells->freeze : 0.0f;
+			const bool keeps = !environmentMapped && hairShown && registry.AllOf<CreatureHair>(shown.creature) &&
+			                   creature_fizz_look::HairShown(fizz, freeze);
+			draws.push_back({.environmentMapped = environmentMapped, .keepsHairLight = keeps});
+			// The box shows no hair, so the look of the world's hair of this creature stays
+			mapped.push_back(entt::null);
+			if (!keeps)
+			{
+				_hairLightSources.emplace_back(std::nullopt);
+				continue;
+			}
+			const auto origin =
+			    ecs::components::DrawnTransform(*transform, registry.TryGet<const CreatureAnimation>(shown.creature)).position;
+			_hairLightSources.push_back(HairLightSource {.origin = origin,
+			                                             .view = view,
+			                                             .landLightScale = 1.0f,
+			                                             .own = StatisticsBoxColours(drawnInWorld.contains(shown.creature))});
+		}
+	}
+
 	const auto plan = PlanFrame(draws);
-	// No hair of this frame has colours of its own: each takes the colours at its place
-	const std::vector<std::optional<Colours>> known(draws.size());
+	// A hair with colours of its own gives these colours. Each other hair takes the colours at its place.
+	std::vector<std::optional<Colours>> known(draws.size());
+	for (size_t i = 0; i < known.size() && i < _hairLightSources.size(); ++i)
+	{
+		if (_hairLightSources[i].has_value())
+		{
+			known[i] = _hairLightSources[i]->own;
+		}
+	}
 	for (size_t i = 0; i < plan.hair.size(); ++i)
 	{
 		if (plan.hair[i].has_value() && mapped[i] != entt::null)
@@ -4823,6 +4838,12 @@ void Renderer::KeepCreatureHairLight() const
 		source = _hairLightSources[*_hairLightLast];
 	}
 	_hairLightLast.reset();
+	// A hair with colours of its own gives them to the next frame on the CPU
+	if (source.has_value() && source->own.has_value())
+	{
+		_hairLightCarried = *source->own;
+		return;
+	}
 	// A new target keeps the start colours until a hair gives it others
 	const bool made = _hairLightKept == nullptr;
 	if (made)
