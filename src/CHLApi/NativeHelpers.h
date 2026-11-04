@@ -69,6 +69,7 @@ void ApplySwitchChanges(const script::switches::SwitchChanges& changes);
 glm::vec3 PopVec();
 void PushVec(const glm::vec3& vec);
 std::string PopString();
+bool IsScriptObject(const ecs::Registry& registry, entt::entity thing);
 entt::entity CreateScriptObject(script::ObjectType type, uint32_t subtype, const glm::vec3& position, float altitude,
                                 float xAngleRadians, float yAngleRadians, float zAngleRadians, float scale);
 VMValue Pop(DataType& type);
@@ -113,5 +114,8 @@ void MoveCreatureToStage(entt::entity creature, uint32_t stage);
 void TakeControlInLoop(ecs::Registry& registry, entt::entity member);
 bool IsScriptContainer(const ecs::Registry& registry, entt::entity thing);
 std::vector<entt::entity> ContainerMembers(const ecs::Registry& registry, entt::entity container);
+
+// In CHLApi/EffectNatives.cpp
+void ChangeWeatherThing(entt::entity thing, const std::function<void(ecs::components::Storm&)>& change);
 
 } // namespace openblack::chlapi
