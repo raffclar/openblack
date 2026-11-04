@@ -513,7 +513,6 @@ void TempleExteriorSystem::Share(entt::id_type id, entt::id_type source)
 void TempleExteriorSystem::Dress(entt::id_type id, const l3d::L3DFile& blended, std::shared_ptr<l3d::L3DFile> copy,
                                  float alignment, PlayerNames owner, MadeBlends& made)
 {
-	using namespace TempleExteriorMorph;
 	auto& resources = Locator::resources::value();
 	auto& files = resources.GetL3DFiles();
 	auto& temple = *resources.GetMeshes().Handle(id);
@@ -530,7 +529,22 @@ void TempleExteriorSystem::Dress(entt::id_type id, const l3d::L3DFile& blended, 
 	{
 		files.Load(id, resources::L3DFileLoader::FromFileTag {}, blended);
 	}
+	DressSkin(temple, blended, alignment, owner, made);
 
+	// After a restore of the graphics device the mesh gets its shape and its texture again, from the kept shape
+	temple.SetModelSource(
+	    [shape = std::shared_ptr<const l3d::L3DFile>(files.Handle(id).handle()), alignment, owner](graphics::L3DMesh& mesh) {
+		    mesh.GiveDeviceDataAgain(*shape);
+		    MadeBlends again;
+		    DressSkin(mesh, *shape, alignment, owner, again);
+	    });
+}
+
+void TempleExteriorSystem::DressSkin(graphics::L3DMesh& temple, const l3d::L3DFile& blended, float alignment, PlayerNames owner,
+                                     MadeBlends& made)
+{
+	using namespace TempleExteriorMorph;
+	auto& resources = Locator::resources::value();
 	// Its texture, of its player's set, between the two looks about its alignment
 	const auto texture = TextureOf(alignment);
 	const auto set = TextureSetOf(owner);

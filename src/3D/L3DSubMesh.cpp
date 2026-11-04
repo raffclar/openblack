@@ -451,12 +451,13 @@ BlendTexels MakeBlendTexels(std::span<const uint8_t> vertices, uint32_t count, s
 
 void L3DSubMesh::SetDeviceDataGivenAgain() const
 {
-	if (!_mesh || _made || _facesSplit)
+	if (!_mesh || _made)
 	{
 		return;
 	}
-	// The vertices of a dynamic mesh change, thus the device keeps them and the blend source that comes from them
-	if (!_l3dMesh.IsDynamic())
+	// The vertices of a dynamic mesh change. Without a model source, the device keeps them and the blend source that
+	// comes from them.
+	if (_l3dMesh.GivesVerticesAgain())
 	{
 		_mesh->GetVertexBuffer().SetContentsGivenAgain();
 		if (_blendSource)
@@ -472,12 +473,25 @@ void L3DSubMesh::SetDeviceDataGivenAgain() const
 
 void L3DSubMesh::GiveDeviceDataAgain(const Prepared& prepared) const
 {
-	// The buffers of new faces for the snow are not the buffers that the device does not keep
-	if (!_mesh || _made || _facesSplit || prepared.vertices.empty())
+	if (!_mesh || _made)
 	{
 		return;
 	}
-	if (!_l3dMesh.IsDynamic())
+	// The new faces for the snow come again from the surface of the submesh
+	if (_facesSplit)
+	{
+		const auto faces = MakeSnowFaces();
+		_mesh->GetVertexBuffer().GiveContentsAgain(faces.vertices);
+		const auto* first = reinterpret_cast<const uint8_t*>(faces.indices.data());
+		_mesh->GetIndexBuffer().GiveContentsAgain(
+		    std::vector<uint8_t>(first, first + (faces.indices.size() * sizeof(faces.indices[0]))));
+		return;
+	}
+	if (prepared.vertices.empty())
+	{
+		return;
+	}
+	if (_l3dMesh.GivesVerticesAgain())
 	{
 		_mesh->GetVertexBuffer().GiveContentsAgain(prepared.vertices);
 		const auto stride = _data.hasLightmapCoordinates ? sizeof(LightmappedL3DVertex) : sizeof(EnhancedL3DVertex);
@@ -751,24 +765,9 @@ bool L3DSubMesh::SplitFacesForSnow()
 		return false;
 	}
 	auto& device = Locator::graphicsDevice::value();
-	const auto* verticesMem = device.Alloc(static_cast<uint32_t>(sizeof(EnhancedL3DVertex) * corners.size()));
-	auto* vertices = reinterpret_cast<EnhancedL3DVertex*>(device.Bytes(verticesMem).data());
-	std::vector<uint16_t> indices(corners.size());
-	for (size_t face = 0; face < corners.size(); face += 3)
-	{
-		const auto& normals = _data.surface.normals;
-		const auto up = snow_faces::PackUp(
-		    snow_faces::FaceUp(normals[corners[face]], normals[corners[face + 1]], normals[corners[face + 2]]));
-		for (size_t i = face; i < face + 3; ++i)
-		{
-			const auto corner = corners[i];
-			vertices[i] = {.pos = _data.surface.positions[corner],
-			               .uv = _data.surface.uvs[corner],
-			               .norm = normals[corner],
-			               .index = glm::i16vec4(-1, -1, up[0], up[1])};
-			indices[i] = static_cast<uint16_t>(i);
-		}
-	}
+	const auto faces = MakeSnowFaces();
+	const auto* verticesMem = device.Copy(faces.vertices.data(), static_cast<uint32_t>(faces.vertices.size()));
+	const auto& indices = faces.indices;
 	VertexDecl decl;
 	decl.reserve(4);
 	decl.emplace_back(VertexAttrib::Attribute::Position, static_cast<uint8_t>(3), VertexAttrib::Type::Float);
@@ -785,7 +784,36 @@ bool L3DSubMesh::SplitFacesForSnow()
 	// The mesh owns its buffers from here on
 	_mesh = std::make_unique<graphics::Mesh>(vertexBuffer.release(), indexBuffer.release());
 	_facesSplit = true;
+	// A mesh that gives its data again after a restore of the graphics device also gives the new faces again
+	if (_l3dMesh.GivesDeviceDataAgain())
+	{
+		SetDeviceDataGivenAgain();
+	}
 	return true;
+}
+
+L3DSubMesh::SnowFaces L3DSubMesh::MakeSnowFaces() const
+{
+	const auto& corners = _data.surface.indices;
+	const auto& normals = _data.surface.normals;
+	SnowFaces faces {.vertices = std::vector<uint8_t>(sizeof(EnhancedL3DVertex) * corners.size()),
+	                 .indices = std::vector<uint16_t>(corners.size())};
+	auto* vertices = reinterpret_cast<EnhancedL3DVertex*>(faces.vertices.data());
+	for (size_t face = 0; face + 2 < corners.size(); face += 3)
+	{
+		const auto up = snow_faces::PackUp(
+		    snow_faces::FaceUp(normals[corners[face]], normals[corners[face + 1]], normals[corners[face + 2]]));
+		for (size_t i = face; i < face + 3; ++i)
+		{
+			const auto corner = corners[i];
+			vertices[i] = {.pos = _data.surface.positions[corner],
+			               .uv = _data.surface.uvs[corner],
+			               .norm = normals[corner],
+			               .index = glm::i16vec4(-1, -1, up[0], up[1])};
+			faces.indices[i] = static_cast<uint16_t>(i);
+		}
+	}
+	return faces;
 }
 
 Mesh& L3DSubMesh::GetMesh() const

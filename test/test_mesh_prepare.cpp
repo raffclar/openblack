@@ -10,6 +10,7 @@
 #include <cstdint>
 #include <cstring>
 
+#include <algorithm>
 #include <filesystem>
 #include <memory>
 #include <mutex>
@@ -559,6 +560,81 @@ TEST_F(MeshPrepare, ADynamicMeshGivesOnlyItsTrianglesAgain)
 	ASSERT_EQ(given.size(), 1U);
 	EXPECT_EQ(given[0].kind, FakeDevice::Made::Kind::GivenSharedIndices);
 	EXPECT_EQ(given[0].bytes, fromLoad.back().bytes);
+}
+
+TEST_F(MeshPrepare, ADynamicMeshWithAModelSourceGivesItsShapeAndSkinsAgain)
+{
+	const auto model = Model();
+	L3DMesh mesh("dynamic", true, UploadMode::Device);
+	ASSERT_TRUE(mesh.Load(model));
+	const auto fromLoad = Device().TakeMade();
+	std::ignore = Device().TakeMarked();
+	EXPECT_FALSE(mesh.GivesVerticesAgain());
+
+	// With a source, the device keeps no copy of the vertices and the triangles of the dynamic mesh
+	uint32_t firstCalls = 0;
+	uint32_t secondCalls = 0;
+	mesh.SetModelSource([&model, &firstCalls](L3DMesh& given) {
+		++firstCalls;
+		given.GiveDeviceDataAgain(model);
+	});
+	EXPECT_TRUE(mesh.GivesVerticesAgain());
+	using Kind = FakeDevice::Made::Kind;
+	EXPECT_EQ(Device().TakeMarked(), (std::vector<Kind> {Kind::GivenSharedVertices, Kind::GivenSharedIndices}));
+	auto& givers = Locator::graphicsDevice::value().GetDataGivers();
+	ASSERT_EQ(givers.Count(), 1U);
+
+	// A new source replaces the source and adds no giver
+	mesh.SetModelSource([&model, &secondCalls](L3DMesh& given) {
+		++secondCalls;
+		given.GiveDeviceDataAgain(model);
+	});
+	EXPECT_TRUE(Device().TakeMarked().empty());
+	ASSERT_EQ(givers.Count(), 1U);
+
+	resources::Rereads rereads([](const std::filesystem::path&) { return std::vector<uint8_t> {}; });
+	givers.GiveAll(rereads);
+	EXPECT_EQ(firstCalls, 0U);
+	EXPECT_EQ(secondCalls, 1U);
+	const auto bytesOf = [](const std::vector<FakeDevice::Made>& made, Kind kind) {
+		const auto found = std::ranges::find(made, kind, &FakeDevice::Made::kind);
+		return found != made.end() ? found->bytes : std::vector<uint8_t> {};
+	};
+	const auto given = Device().TakeMade();
+	ASSERT_EQ(given.size(), 3U);
+	EXPECT_EQ(given[0].kind, Kind::TextureUpdate);
+	EXPECT_EQ(given[1].kind, Kind::GivenSharedVertices);
+	EXPECT_EQ(given[2].kind, Kind::GivenSharedIndices);
+	EXPECT_EQ(given[0].bytes, bytesOf(fromLoad, Kind::TextureUpdate));
+	EXPECT_EQ(given[1].bytes, bytesOf(fromLoad, Kind::DynamicVertexBuffer));
+	EXPECT_EQ(given[2].bytes, fromLoad.back().bytes);
+}
+
+TEST_F(MeshPrepare, TheFacesForTheSnowOfAMeshThatGivesItsDataAgainAreGivenAgain)
+{
+	const auto model = Model();
+	L3DMesh mesh("snow", false, UploadMode::Device);
+	ASSERT_TRUE(mesh.Load(model));
+	mesh.SetFileSource([](resources::Rereads& rereads) { return rereads.File("mesh.l3d"); });
+	std::ignore = Device().TakeMarked();
+	std::ignore = Device().TakeMade();
+
+	// The new faces go in new buffers, which the device also does not keep
+	mesh.SplitFacesForSnow();
+	const auto split = Device().TakeMade();
+	using Kind = FakeDevice::Made::Kind;
+	ASSERT_EQ(split.size(), 2U);
+	EXPECT_EQ(Device().TakeMarked(), (std::vector<Kind> {Kind::GivenSharedVertices, Kind::GivenSharedIndices}));
+
+	// The faces come again from the surface of the submesh, with the bytes of the split
+	mesh.GiveDeviceDataAgain(model);
+	const auto given = Device().TakeMade();
+	ASSERT_EQ(given.size(), 3U);
+	EXPECT_EQ(given[0].kind, Kind::TextureUpdate);
+	EXPECT_EQ(given[1].kind, Kind::GivenSharedVertices);
+	EXPECT_EQ(given[1].bytes, split[0].bytes);
+	EXPECT_EQ(given[2].kind, Kind::GivenSharedIndices);
+	EXPECT_EQ(given[2].bytes, split[1].bytes);
 }
 
 TEST_F(MeshPrepare, AMeshOfDataOnlyIgnoresAFileSource)

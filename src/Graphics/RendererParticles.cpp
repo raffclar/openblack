@@ -259,6 +259,8 @@ const Texture2D* Renderer::ParticleLightMap(entt::id_type bitmap, int frame) con
 	const auto side = static_cast<uint16_t>(stacked.pitch);
 	texture->CreateWithinFrame(side, side, 1, TextureFormat::RGB8, Wrapping::ClampEdge, Filter::Nearest,
 	                           bgfx::copy(image.data(), static_cast<uint32_t>(image.size())));
+	// The map is small: the texture keeps its texels and gives them again after a restore of the graphics device
+	texture->SetTexelSource([kept = std::vector<uint8_t>(image.begin(), image.end())](const auto&) { return kept; });
 	return _particleLightMaps.emplace(key, std::move(texture)).first->second.get();
 }
 

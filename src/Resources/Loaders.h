@@ -236,6 +236,12 @@ struct Texture2DLoader final: BaseLoader<graphics::Texture2D>
 	{
 	};
 
+	/// The bytes of a square raw file that the game made, as with FromBufferTag. The texture keeps the bytes and gives
+	/// its texels again from them after a restore of the graphics device.
+	struct FromMadeTag
+	{
+	};
+
 	[[nodiscard]] result_type operator()(FromPackTag, const std::string& name, const pack::G3DTexture& g3dTexture) const;
 	[[nodiscard]] result_type operator()(FromBitmapLayersTag, const std::string& name,
 	                                     std::span<const std::filesystem::path> layerPaths, uint16_t side) const;
@@ -247,6 +253,8 @@ struct Texture2DLoader final: BaseLoader<graphics::Texture2D>
 	                                     const std::filesystem::path& alphaPath, uint16_t side, bool halve = false) const;
 	/// The bytes of a square raw file that the game made, as a raw file on the disk with the same name is loaded
 	[[nodiscard]] result_type operator()(FromBufferTag, const std::string& name, std::vector<uint8_t> data,
+	                                     graphics::texel_depth::Depth depth) const;
+	[[nodiscard]] result_type operator()(FromMadeTag, const std::string& name, std::vector<uint8_t> data,
 	                                     graphics::texel_depth::Depth depth) const;
 };
 

@@ -12,6 +12,7 @@
 #include "GameWorshipSiteWorld.h"
 
 #include <algorithm>
+#include <memory>
 #include <optional>
 #include <string>
 
@@ -158,6 +159,17 @@ entt::id_type GameWorshipSiteWorld::SiteMesh(entt::entity temple)
 			primitive.material.skinID = skin;
 		}
 		meshes.Load(id, resources::L3DLoader::FromFileWithSkinsOfTag {}, name, site, templeModel);
+		// After a restore of the graphics device the site's model gives its buffers again from the kept site model
+		meshes.Handle(id)->SetModelSource(
+		    [kept = std::shared_ptr<const l3d::L3DFile>(files.Handle(k_SiteMesh.value()).handle()),
+		     skin](graphics::L3DMesh& mesh) {
+			    auto again = *kept;
+			    for (auto& primitive : again.EditPrimitiveHeaders())
+			    {
+				    primitive.material.skinID = skin;
+			    }
+			    mesh.GiveDeviceDataAgain(again);
+		    });
 		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Worship sites at temple model {} wear its skin", templeMesh->id);
 	}
 	return id;

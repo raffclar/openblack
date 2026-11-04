@@ -65,6 +65,8 @@ public:
 		}
 	}
 
+	/// Gives the texels of the default textures to the graphics device again after a restore
+	void GiveDefaultTexelsAgain() const;
 	/// Drops the textures bound for the next draws, which a run of draws that kept them leaves bound
 	void DiscardBindings() const;
 	/// Where the game's thread draws: bgfx's own encoder
