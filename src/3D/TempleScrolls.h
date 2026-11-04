@@ -128,6 +128,9 @@ public:
 			uint16_t side;
 			std::optional<Drawn> drawn;
 			uint32_t textHeight;
+			/// The count of the restores of the graphics device when the visit ended. After a later restore the texture
+			/// has no texels.
+			uint32_t restores;
 		};
 		/// By the scroll's place in the rooms, none for a place with no texture
 		std::vector<std::optional<Entry>> _entries;
@@ -235,6 +238,11 @@ private:
 	Focus LookAt(size_t index, const Facts& facts);
 	/// Writes the scroll's texture, its text left off while the camera is close to it
 	void Redraw(Scroll& scroll, const Facts& facts);
+	/// Writes the texels of what the scroll's texture shows to the texture. It gives the height of the text, none when the
+	/// scroll has no text.
+	std::optional<uint32_t> Paint(const Scroll& scroll, const Drawn& drawn);
+	/// Writes each texture again after a restore of the graphics device, which keeps no copy of the texels
+	void PaintAgain();
 	/// Whether the camera looks at the scroll and is close enough to put its text in front of it
 	[[nodiscard]] bool IsFocused(const Scroll& scroll) const;
 	/// Whether the texture of the scroll has no text, because the text is in front of the scroll

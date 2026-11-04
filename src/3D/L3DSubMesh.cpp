@@ -426,13 +426,44 @@ void L3DSubMesh::Finish(Prepared prepared) noexcept
 	}
 }
 
+namespace
+{
+/// The texels of the blend source of a submesh: the position of each vertex, and the bone that moves it
+struct BlendTexels
+{
+	std::vector<glm::vec4> texels;
+	/// A vertex blends with a second bone
+	bool hasBlends {false};
+};
+
+BlendTexels MakeBlendTexels(std::span<const uint8_t> vertices, uint32_t count, size_t stride)
+{
+	BlendTexels made {.texels = std::vector<glm::vec4>(count)};
+	for (uint32_t i = 0; i < count; ++i)
+	{
+		const auto& vertex = *reinterpret_cast<const EnhancedL3DVertex*>(vertices.data() + (stride * i));
+		made.texels[i] = glm::vec4(vertex.pos, static_cast<float>(std::max<int16_t>(vertex.index.x, 0)));
+		made.hasBlends = made.hasBlends || vertex.index.y >= 0;
+	}
+	return made;
+}
+} // namespace
+
 void L3DSubMesh::SetDeviceDataGivenAgain() const
 {
 	if (!_mesh || _made || _facesSplit)
 	{
 		return;
 	}
-	_mesh->GetVertexBuffer().SetContentsGivenAgain();
+	// The vertices of a dynamic mesh change, thus the device keeps them and the blend source that comes from them
+	if (!_l3dMesh.IsDynamic())
+	{
+		_mesh->GetVertexBuffer().SetContentsGivenAgain();
+		if (_blendSource)
+		{
+			_blendSource->SetTexelsGivenAgain();
+		}
+	}
 	if (_mesh->IsIndexed())
 	{
 		_mesh->GetIndexBuffer().SetContentsGivenAgain();
@@ -446,7 +477,16 @@ void L3DSubMesh::GiveDeviceDataAgain(const Prepared& prepared) const
 	{
 		return;
 	}
-	_mesh->GetVertexBuffer().GiveContentsAgain(prepared.vertices);
+	if (!_l3dMesh.IsDynamic())
+	{
+		_mesh->GetVertexBuffer().GiveContentsAgain(prepared.vertices);
+		const auto stride = _data.hasLightmapCoordinates ? sizeof(LightmappedL3DVertex) : sizeof(EnhancedL3DVertex);
+		if (_blendSource && prepared.vertices.size() >= _blendSourceWidth * stride)
+		{
+			const auto blend = MakeBlendTexels(prepared.vertices, _blendSourceWidth, stride);
+			_blendSource->Update(blend.texels.data(), static_cast<uint32_t>(blend.texels.size() * sizeof(blend.texels[0])));
+		}
+	}
 	if (_mesh->IsIndexed())
 	{
 		const auto& indices = prepared.data.bodyGeometry.indices;
@@ -669,13 +709,8 @@ void L3DSubMesh::CreateBlendSource(std::span<const uint8_t> vertices, uint32_t c
 		_blendSource.reset();
 		return;
 	}
-	std::vector<glm::vec4> texels(count);
-	for (uint32_t i = 0; i < count; ++i)
-	{
-		const auto& vertex = *reinterpret_cast<const EnhancedL3DVertex*>(vertices.data() + (stride * i));
-		texels[i] = glm::vec4(vertex.pos, static_cast<float>(std::max<int16_t>(vertex.index.x, 0)));
-		_hasBlends = _hasBlends || vertex.index.y >= 0;
-	}
+	const auto [texels, hasBlends] = MakeBlendTexels(vertices, count, stride);
+	_hasBlends = hasBlends;
 	if (!_blendSource || _blendSourceWidth != count)
 	{
 		_blendSource = std::make_unique<Texture2D>(_l3dMesh.GetDebugName() + " blend source");

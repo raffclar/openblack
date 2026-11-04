@@ -45,6 +45,10 @@ private:
 	/// Uploads the instances into the draw lists as they are, when the draw lists can be kept while things only move.
 	/// Returns false when they must be made again first, as they always are by default.
 	virtual bool UploadUniformsKeepingDescs([[maybe_unused]] bool drawBoundingBox) { return false; }
+	/// Forgets what the instance buffers hold, so that the next upload gives all the instances
+	virtual void ForgetUploads() {}
+	/// Whether the system is one of the owners that give their data to the graphics device again
+	bool _givesDataAgain {false};
 
 protected:
 	/// The bones of the villagers placed with the instances, for the vertex shader to read

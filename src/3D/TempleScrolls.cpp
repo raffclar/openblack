@@ -12,6 +12,7 @@
 #include <cmath>
 
 #include <algorithm>
+#include <optional>
 #include <string>
 #include <utility>
 
@@ -140,6 +141,10 @@ TempleScrolls::TempleScrolls(const gui::TextDatabase& texts, const gui::GameFont
 
 TempleScrolls::~TempleScrolls()
 {
+	if (Locator::graphicsDevice::has_value())
+	{
+		Locator::graphicsDevice::value().GetDataGivers().Remove(this);
+	}
 	for (auto& scroll : _scrolls)
 	{
 		if (scroll.texture)
@@ -184,8 +189,11 @@ TempleScrolls::KeptTextures TempleScrolls::TakeTextures()
 		auto& entry = kept._entries.emplace_back();
 		if (scroll.texture.has_value())
 		{
-			entry = KeptTextures::Entry {
-			    .texture = *scroll.texture, .side = side, .drawn = scroll.drawn, .textHeight = scroll.textHeight};
+			entry = KeptTextures::Entry {.texture = *scroll.texture,
+			                             .side = side,
+			                             .drawn = scroll.drawn,
+			                             .textHeight = scroll.textHeight,
+			                             .restores = Locator::graphicsDevice::value().GetDataGivers().Restores()};
 			scroll.texture.reset();
 			scroll.drawn.reset();
 		}
@@ -227,7 +235,11 @@ void TempleScrolls::Create(const Facts& facts, KeptTextures kept)
 		    kept._entries[index]->side == side)
 		{
 			scroll.texture = kept._entries[index]->texture;
-			scroll.drawn = kept._entries[index]->drawn;
+			// After a restore of the graphics device the texture has no texels, thus the scroll writes it again
+			if (kept._entries[index]->restores == Locator::graphicsDevice::value().GetDataGivers().Restores())
+			{
+				scroll.drawn = kept._entries[index]->drawn;
+			}
 			// The height of the text it shows, as the write of that text gave it
 			if (scroll.drawn.has_value() && scroll.drawn->text.has_value())
 			{
@@ -242,12 +254,26 @@ void TempleScrolls::Create(const Facts& facts, KeptTextures kept)
 			scroll.texture =
 			    device.CreateTexture2D(side, side, 1, graphics::TextureFormat::BGRA4, graphics::texture_flags::k_None, nullptr);
 			device.SetName(*scroll.texture, fmt::format("Scroll {}", place.subMesh));
+			// The scrolls write the texels again after a restore of the graphics device, thus the device keeps no copy
+			device.SetTexelsGivenAgain(*scroll.texture);
 		}
 		_scrolls.push_back(scroll);
 	}
 	for (auto& scroll : _scrolls)
 	{
 		Redraw(scroll, facts);
+	}
+	Locator::graphicsDevice::value().GetDataGivers().Add(this, [this](resources::Rereads&) { PaintAgain(); });
+}
+
+void TempleScrolls::PaintAgain()
+{
+	for (const auto& scroll : _scrolls)
+	{
+		if (scroll.texture && scroll.drawn.has_value())
+		{
+			Paint(scroll, *scroll.drawn);
+		}
 	}
 }
 
@@ -279,11 +305,22 @@ void TempleScrolls::Redraw(Scroll& scroll, const Facts& facts)
 	{
 		return;
 	}
+	if (const auto height = Paint(scroll, drawn); height.has_value())
+	{
+		scroll.textHeight = *height;
+	}
+	scroll.drawn = std::move(drawn);
+}
+
+std::optional<uint32_t> TempleScrolls::Paint(const Scroll& scroll, const Drawn& drawn)
+{
+	constexpr uint16_t k_FullSide = TempleScrollTexture::k_Size;
 	std::vector<uint16_t> texels(static_cast<size_t>(k_FullSide) * k_FullSide);
+	std::optional<uint32_t> textHeight;
 	if (const auto& written = drawn.text; written.has_value())
 	{
-		scroll.textHeight = TempleScrollTexture::Draw(texels, _parchment, *written, static_cast<uint32_t>(scroll.position),
-		                                              _font, !textInFront);
+		textHeight = TempleScrollTexture::Draw(texels, _parchment, *written, static_cast<uint32_t>(drawn.position), _font,
+		                                       !drawn.textInFront);
 	}
 	else
 	{
@@ -304,7 +341,7 @@ void TempleScrolls::Redraw(Scroll& scroll, const Facts& facts)
 	const auto& device = Locator::graphicsDevice::value();
 	device.UpdateTexture2D(*scroll.texture, 0, glm::u16vec2(0, 0), glm::u16vec2(side, side),
 	                       device.Copy(texels.data(), static_cast<uint32_t>(texels.size() * sizeof(texels[0]))));
-	scroll.drawn = std::move(drawn);
+	return textHeight;
 }
 
 TempleScrolls::Focus TempleScrolls::LookAt(size_t index, const Facts& facts)

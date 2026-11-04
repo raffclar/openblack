@@ -112,6 +112,11 @@ public:
 	virtual void SetContentsGivenAgain(VertexBufferHandle buffer) const = 0;
 	/// Gives the vertices of a buffer again after a restore of the device
 	virtual void GiveContentsAgain(VertexBufferHandle buffer, const DeviceMemory* vertices) const = 0;
+	/// Tells the device that the game gives the vertices of a buffer, whose vertices can change, again after the device
+	/// is made again. The device then keeps no copy of the vertices, also of the next updates.
+	virtual void SetContentsGivenAgain(DynamicVertexBufferHandle buffer) const = 0;
+	/// Gives all the vertices of a buffer, whose vertices can change, again after a restore of the device
+	virtual void GiveContentsAgain(DynamicVertexBufferHandle buffer, const DeviceMemory* vertices) const = 0;
 	virtual void Destroy(VertexBufferHandle buffer) const = 0;
 	virtual void Destroy(DynamicVertexBufferHandle buffer) const = 0;
 	virtual void Destroy(VertexLayoutHandle layout) const = 0;
@@ -126,6 +131,11 @@ public:
 	virtual void SetContentsGivenAgain(IndexBufferHandle buffer) const = 0;
 	/// Gives the indices of a buffer again after a restore of the device
 	virtual void GiveContentsAgain(IndexBufferHandle buffer, const DeviceMemory* indices) const = 0;
+	/// Tells the device that the game gives the indices of a shared buffer again after the device is made again. The
+	/// device then keeps no copy of the indices, also of the next updates.
+	virtual void SetContentsGivenAgain(DynamicIndexBufferHandle buffer) const = 0;
+	/// Gives all the indices of a shared buffer again after a restore of the device
+	virtual void GiveContentsAgain(DynamicIndexBufferHandle buffer, const DeviceMemory* indices) const = 0;
 	virtual void Destroy(IndexBufferHandle buffer) const = 0;
 	virtual void Destroy(DynamicIndexBufferHandle buffer) const = 0;
 

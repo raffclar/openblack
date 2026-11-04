@@ -1,8 +1,8 @@
 diff --git a/bgfx/include/bgfx/bgfx.h b/bgfx/include/bgfx/bgfx.h
-index ff66119..607b6c7 100644
+index ff66119..861a5c2 100644
 --- a/bgfx/include/bgfx/bgfx.h
 +++ b/bgfx/include/bgfx/bgfx.h
-@@ -2689,6 +2689,82 @@ namespace bgfx
+@@ -2689,6 +2689,100 @@ namespace bgfx
  	///
  	const Stats* getStats();
  
@@ -76,6 +76,24 @@ index ff66119..607b6c7 100644
 +	///
 +	void giveDeviceRestoreContents(IndexBufferHandle _handle, const Memory* _mem);
 +
++	/// Tells the renderer that the application gives the contents of a dynamic vertex buffer again after a
++	/// restore of the device. The renderer then keeps no copy of the contents, also of the next updates. After a
++	/// restore, the buffer contains zeros until the application updates it. A buffer that can be resized is
++	/// ignored.
++	///
++	/// @param[in] _handle Dynamic vertex buffer handle.
++	///
++	void setDeviceRestoreByApplication(DynamicVertexBufferHandle _handle);
++
++	/// Tells the renderer that the application gives the contents of a dynamic index buffer again after a
++	/// restore of the device. The renderer then keeps no copy of the contents, also of the next updates. After a
++	/// restore, the buffer contains zeros until the application updates it. A buffer that can be resized is
++	/// ignored.
++	///
++	/// @param[in] _handle Dynamic index buffer handle.
++	///
++	void setDeviceRestoreByApplication(DynamicIndexBufferHandle _handle);
++
 +	/// Loses the device, to test the recovery from a lost device. The renderer does it at the start of the next
 +	/// frame that it renders, and then makes its device again. Direct3D 12 removes its device. Vulkan has no call
 +	/// for this, thus it acts as if a call gave a lost device. The other renderers make their device again.
@@ -86,7 +104,7 @@ index ff66119..607b6c7 100644
  	///
  	/// @param[in] _size Size to allocate.
 diff --git a/bgfx/src/bgfx.cpp b/bgfx/src/bgfx.cpp
-index acfb6fe..9996899 100644
+index acfb6fe..c19c9ea 100644
 --- a/bgfx/src/bgfx.cpp
 +++ b/bgfx/src/bgfx.cpp
 @@ -3432,13 +3432,35 @@ namespace bgfx
@@ -425,7 +443,7 @@ index acfb6fe..9996899 100644
  				}
  				break;
  
-@@ -4553,6 +4627,58 @@ namespace bgfx
+@@ -4553,6 +4627,86 @@ namespace bgfx
  				}
  				break;
  
@@ -481,10 +499,38 @@ index acfb6fe..9996899 100644
 +				}
 +				break;
 +
++			case CommandBuffer::SetDeviceRestoreByApplicationRange:
++				{
++					uint8_t vertices;
++					_cmdbuf.read(vertices);
++
++					uint16_t idx;
++					_cmdbuf.read(idx);
++
++					uint32_t offset;
++					_cmdbuf.read(offset);
++
++					uint32_t size;
++					_cmdbuf.read(size);
++
++					uint8_t on;
++					_cmdbuf.read(on);
++
++					if (0 != vertices)
++					{
++						m_deviceRestore.restoreByApplication(VertexBufferHandle{idx}, offset, size, 0 != on);
++					}
++					else
++					{
++						m_deviceRestore.restoreByApplication(IndexBufferHandle{idx}, offset, size, 0 != on);
++					}
++				}
++				break;
++
  			default:
  				BX_ASSERT(false, "Invalid command: %d", command);
  				break;
-@@ -5727,6 +5853,39 @@ namespace bgfx
+@@ -5727,6 +5881,39 @@ namespace bgfx
  		return s_ctx->getPerfStats();
  	}
  
@@ -524,7 +570,7 @@ index acfb6fe..9996899 100644
  	RendererType::Enum getRendererType()
  	{
  		return g_caps.rendererType;
-@@ -6928,6 +7087,33 @@ namespace bgfx
+@@ -6928,6 +7115,43 @@ namespace bgfx
  		s_ctx->setName(_handle, bx::StringView(_name, _len) );
  	}
  
@@ -555,24 +601,69 @@ index acfb6fe..9996899 100644
 +		s_ctx->giveDeviceRestoreContents(_handle, _mem);
 +	}
 +
++	void setDeviceRestoreByApplication(DynamicVertexBufferHandle _handle)
++	{
++		s_ctx->setDeviceRestoreByApplication(_handle);
++	}
++
++	void setDeviceRestoreByApplication(DynamicIndexBufferHandle _handle)
++	{
++		s_ctx->setDeviceRestoreByApplication(_handle);
++	}
++
  	void* getDirectAccessPtr(TextureHandle _handle)
  	{
  		return s_ctx->getDirectAccessPtr(_handle);
 diff --git a/bgfx/src/bgfx_p.h b/bgfx/src/bgfx_p.h
-index 316b49d..6167ce2 100644
+index 316b49d..79a74f6 100644
 --- a/bgfx/src/bgfx_p.h
 +++ b/bgfx/src/bgfx_p.h
-@@ -1194,6 +1194,9 @@ namespace bgfx
+@@ -1194,6 +1194,10 @@ namespace bgfx
  			UpdateViewName,
  			InvalidateOcclusionQuery,
  			SetName,
 +			SetDeviceRestoreByApplication,
 +			SetDeviceRestoreByApplicationBuffer,
 +			GiveDeviceRestoreContents,
++			SetDeviceRestoreByApplicationRange,
  			End,
  			RendererShutdownEnd,
  			DestroyVertexLayout,
-@@ -5946,6 +5949,8 @@ namespace bgfx
+@@ -2938,6 +2942,7 @@ namespace bgfx
+ 			m_size       = 0;
+ 			m_startIndex = 0;
+ 			m_flags      = 0;
++			m_byApplication = false;
+ 		}
+ 
+ 		IndexBufferHandle m_handle;
+@@ -2945,6 +2950,8 @@ namespace bgfx
+ 		uint32_t m_size;
+ 		uint32_t m_startIndex;
+ 		uint16_t m_flags;
++		// The application gives the contents again after a restore of the device
++		bool m_byApplication = false;
+ 	};
+ 
+ 	struct DynamicVertexBuffer
+@@ -2959,6 +2966,7 @@ namespace bgfx
+ 			m_stride       = 0;
+ 			m_layoutHandle = BGFX_INVALID_HANDLE;
+ 			m_flags        = 0;
++			m_byApplication = false;
+ 		}
+ 
+ 		VertexBufferHandle m_handle;
+@@ -2969,6 +2977,8 @@ namespace bgfx
+ 		uint16_t m_stride;
+ 		VertexLayoutHandle m_layoutHandle = BGFX_INVALID_HANDLE;
+ 		uint16_t m_flags;
++		// The application gives the contents again after a restore of the device
++		bool m_byApplication = false;
+ 	};
+ 
+ 	struct ShaderRef
+@@ -5946,6 +5956,8 @@ namespace bgfx
  		virtual RendererType::Enum getRendererType() const = 0;
  		virtual const char* getRendererName() const = 0;
  		virtual bool isDeviceRemoved() = 0;
@@ -581,7 +672,7 @@ index 316b49d..6167ce2 100644
  		virtual void flip() = 0;
  		virtual void createIndexBuffer(IndexBufferHandle _handle, const Memory* _mem, uint16_t _flags) = 0;
  		virtual void destroyIndexBuffer(IndexBufferHandle _handle) = 0;
-@@ -6046,6 +6051,13 @@ namespace bgfx
+@@ -6046,6 +6058,13 @@ namespace bgfx
  #	define BGFX_API_FUNC(_func) _func
  #endif // BGFX_CONFIG_DEBUG
  
@@ -595,7 +686,31 @@ index 316b49d..6167ce2 100644
  	struct Context
  	{
  		static constexpr uint32_t kAlignment = 64;
-@@ -7719,6 +7731,60 @@ namespace bgfx
+@@ -6731,6 +6750,11 @@ namespace bgfx
+ 		void destroyDynamicIndexBufferInternal(DynamicIndexBufferHandle _handle)
+ 		{
+ 			DynamicIndexBuffer& dib = m_dynamicIndexBuffers[_handle.idx];
++			if (dib.m_byApplication)
++			{
++				writeDeviceRestoreRange(dib, false);
++			}
++
+ 			destroy(dib);
+ 			dib.reset();
+ 			m_dynamicIndexBuffers.release(_handle.idx);
+@@ -6950,6 +6974,11 @@ namespace bgfx
+ 			}
+ 
+ 			DynamicVertexBuffer& dvb = m_dynamicVertexBuffers[_handle.idx];
++			if (dvb.m_byApplication)
++			{
++				writeDeviceRestoreRange(dvb, false);
++			}
++
+ 			destroy(dvb);
+ 			dvb.reset();
+ 			m_dynamicVertexBuffers.release(_handle.idx);
+@@ -7719,6 +7748,119 @@ namespace bgfx
  			return handle;
  		}
  
@@ -642,6 +757,65 @@ index 316b49d..6167ce2 100644
 +			cmdbuf.write(_mem);
 +		}
 +
++		// Tells the render thread the bytes of a dynamic buffer that the application gives again, or that it gives no
++		// longer because the buffer goes
++		void writeDeviceRestoreRange(bool _vertices, uint16_t _idx, uint32_t _offset, uint32_t _size, bool _on)
++		{
++			CommandBuffer& cmdbuf = getCommandBuffer(CommandBuffer::SetDeviceRestoreByApplicationRange);
++			cmdbuf.write(uint8_t(_vertices ? 1 : 0) );
++			cmdbuf.write(_idx);
++			cmdbuf.write(_offset);
++			cmdbuf.write(_size);
++			cmdbuf.write(uint8_t(_on ? 1 : 0) );
++		}
++
++		// The range is the whole block that the buffer got, as its create computed it, also the bytes after the
++		// contents. Thus the ranges of the buffers next to each other leave no bytes that the renderer keeps.
++		void writeDeviceRestoreRange(const DynamicVertexBuffer& _dvb, bool _on)
++		{
++			const uint32_t size = bx::max(bx::strideAlign<16>(_dvb.m_numVertices*_dvb.m_stride, _dvb.m_stride)+_dvb.m_stride, 16u);
++			writeDeviceRestoreRange(true, _dvb.m_handle.idx, _dvb.m_offset, size, _on);
++		}
++
++		void writeDeviceRestoreRange(const DynamicIndexBuffer& _dib, bool _on)
++		{
++			const uint32_t size = bx::max(bx::alignUp(_dib.m_size, 16), 16u);
++			writeDeviceRestoreRange(false, _dib.m_handle.idx, _dib.m_offset, size, _on);
++		}
++
++		BGFX_API_FUNC(void setDeviceRestoreByApplication(DynamicVertexBufferHandle _handle) )
++		{
++			BGFX_MUTEX_SCOPE(m_resourceApiLock);
++			BGFX_CHECK_HANDLE("setDeviceRestoreByApplication", m_dynamicVertexBufferHandle, _handle);
++
++			// A resize moves the contents to another place, thus the application cannot give them there
++			DynamicVertexBuffer& dvb = m_dynamicVertexBuffers[_handle.idx];
++			if (dvb.m_byApplication
++			||  0 != (dvb.m_flags & BGFX_BUFFER_ALLOW_RESIZE) )
++			{
++				return;
++			}
++
++			dvb.m_byApplication = true;
++			writeDeviceRestoreRange(dvb, true);
++		}
++
++		BGFX_API_FUNC(void setDeviceRestoreByApplication(DynamicIndexBufferHandle _handle) )
++		{
++			BGFX_MUTEX_SCOPE(m_resourceApiLock);
++			BGFX_CHECK_HANDLE("setDeviceRestoreByApplication", m_dynamicIndexBufferHandle, _handle);
++
++			DynamicIndexBuffer& dib = m_dynamicIndexBuffers[_handle.idx];
++			if (dib.m_byApplication
++			||  0 != (dib.m_flags & BGFX_BUFFER_ALLOW_RESIZE) )
++			{
++				return;
++			}
++
++			dib.m_byApplication = true;
++			writeDeviceRestoreRange(dib, true);
++		}
++
 +		BGFX_API_FUNC(void giveDeviceRestoreContents(IndexBufferHandle _handle, const Memory* _mem) )
 +		{
 +			BGFX_MUTEX_SCOPE(m_resourceApiLock);
@@ -656,7 +830,7 @@ index 316b49d..6167ce2 100644
  		BGFX_API_FUNC(void setName(TextureHandle _handle, const bx::StringView& _name) )
  		{
  			BGFX_MUTEX_SCOPE(m_resourceApiLock);
-@@ -8740,6 +8806,7 @@ namespace bgfx
+@@ -8740,6 +8882,7 @@ namespace bgfx
  
  		// render thread
  		void flip();
@@ -664,7 +838,7 @@ index 316b49d..6167ce2 100644
  		RenderFrame::Enum renderFrame(int32_t _msecs = -1);
  		void flushTextureUpdateBatch(CommandBuffer& _cmdbuf);
  		void rendererExecCommands(CommandBuffer& _cmdbuf);
-@@ -8986,6 +9053,17 @@ namespace bgfx
+@@ -8986,6 +9129,17 @@ namespace bgfx
  
  		typedef UpdateBatchT<256> TextureUpdateBatch;
  		BX_ALIGN_DECL_CACHE_LINE(TextureUpdateBatch m_textureUpdateBatch);
@@ -684,10 +858,10 @@ index 316b49d..6167ce2 100644
  #undef BGFX_API_FUNC
 diff --git a/bgfx/src/device_restore.h b/bgfx/src/device_restore.h
 new file mode 100644
-index 0000000..7ef25df
+index 0000000..3cd4a3b
 --- /dev/null
 +++ b/bgfx/src/device_restore.h
-@@ -0,0 +1,1000 @@
+@@ -0,0 +1,1153 @@
 +/*
 + * Copyright 2026 openblack developers. All rights reserved.
 + * License: https://github.com/bkaradzic/bgfx/blob/master/LICENSE
@@ -696,6 +870,7 @@ index 0000000..7ef25df
 +#ifndef BGFX_DEVICE_RESTORE_H_HEADER_GUARD
 +#define BGFX_DEVICE_RESTORE_H_HEADER_GUARD
 +
++#include <map>
 +#include <string>
 +#include <vector>
 +
@@ -854,6 +1029,13 @@ index 0000000..7ef25df
 +			freeDynamic(m_dynamicIndexBuffers[_handle.idx]);
 +		}
 +
++		// The application gives the bytes of a range of the buffer again after a restore, or stops when the range
++		// goes. The kept bytes of the range go.
++		void restoreByApplication(IndexBufferHandle _handle, uint32_t _offset, uint32_t _size, bool _on)
++		{
++			markDynamic(m_dynamicIndexBuffers[_handle.idx], _offset, _size, _on);
++		}
++
 +		void createDynamicVertexBuffer(VertexBufferHandle _handle, uint32_t _size, uint16_t _flags)
 +		{
 +			createDynamic(m_dynamicVertexBuffers[_handle.idx], _size, _flags);
@@ -867,6 +1049,13 @@ index 0000000..7ef25df
 +		void destroyDynamicVertexBuffer(VertexBufferHandle _handle)
 +		{
 +			freeDynamic(m_dynamicVertexBuffers[_handle.idx]);
++		}
++
++		// The application gives the bytes of a range of the buffer again after a restore, or stops when the range
++		// goes. The kept bytes of the range go.
++		void restoreByApplication(VertexBufferHandle _handle, uint32_t _offset, uint32_t _size, bool _on)
++		{
++			markDynamic(m_dynamicVertexBuffers[_handle.idx], _offset, _size, _on);
 +		}
 +
 +		void createShader(ShaderHandle _handle, const Memory* _mem)
@@ -1132,9 +1321,8 @@ index 0000000..7ef25df
 +				if (buffer.live)
 +				{
 +					_renderCtx->createDynamicIndexBuffer({ii}, buffer.size, buffer.flags);
-+					if (!buffer.bytes.empty() )
++					if (const Memory* mem = dynamicContents(buffer) )
 +					{
-+						const Memory* mem = copy(buffer.bytes.data(), buffer.size);
 +						_renderCtx->updateDynamicIndexBuffer({ii}, 0, buffer.size, mem);
 +						release(mem);
 +					}
@@ -1147,9 +1335,8 @@ index 0000000..7ef25df
 +				if (buffer.live)
 +				{
 +					_renderCtx->createDynamicVertexBuffer({ii}, buffer.size, buffer.flags);
-+					if (!buffer.bytes.empty() )
++					if (const Memory* mem = dynamicContents(buffer) )
 +					{
-+						const Memory* mem = copy(buffer.bytes.data(), buffer.size);
 +						_renderCtx->updateDynamicVertexBuffer({ii}, 0, buffer.size, mem);
 +						release(mem);
 +					}
@@ -1306,13 +1493,23 @@ index 0000000..7ef25df
 +			bool byApplication = false;
 +		};
 +
++		// The contents of a dynamic buffer are kept in pages, each made at the first update of a byte in it. A
++		// page goes when the ranges that the application gives again cover all of it.
++		static constexpr uint32_t kDynamicPageSize = 4096;
++
 +		struct Dynamic
 +		{
 +			bool live = false;
 +			uint32_t size = 0;
 +			uint16_t flags = 0;
-+			// The contents, made at the first update
-+			std::vector<uint8_t> bytes;
++			// The kept pages, empty where no byte was updated or where the application gives all the bytes
++			std::vector<std::vector<uint8_t> > pages;
++			// The bytes of each page in the ranges that the application gives again
++			std::vector<uint32_t> appBytes;
++			// The ranges that the application gives again, by offset, with their size
++			std::map<uint32_t, uint32_t> byApplication;
++			// An update of the buffer occurred
++			bool updated = false;
 +		};
 +
 +		struct VertexLayoutKept
@@ -1596,8 +1793,39 @@ index 0000000..7ef25df
 +			_buffer.live  = true;
 +			_buffer.size  = _size;
 +			_buffer.flags = _flags;
++			const uint32_t numPages = (_size + kDynamicPageSize - 1) / kDynamicPageSize;
++			_buffer.pages.resize(numPages);
++			_buffer.appBytes.resize(numPages, 0);
 +		}
 +
++		static uint32_t pageLength(const Dynamic& _buffer, uint32_t _page)
++		{
++			return bx::min(kDynamicPageSize, _buffer.size - _page * kDynamicPageSize);
++		}
++
++		// Copies bytes into the kept pages, and makes the pages that they need
++		void keepDynamic(Dynamic& _buffer, uint32_t _offset, const uint8_t* _data, uint32_t _size)
++		{
++			while (0 < _size)
++			{
++				const uint32_t page = _offset / kDynamicPageSize;
++				const uint32_t start = _offset - page * kDynamicPageSize;
++				const uint32_t length = bx::min(_size, pageLength(_buffer, page) - start);
++				std::vector<uint8_t>& bytes = _buffer.pages[page];
++				if (bytes.empty() )
++				{
++					bytes.resize(pageLength(_buffer, page), 0);
++					m_kept[KeptDynamicBuffers] += bytes.size();
++				}
++
++				bx::memCopy(bytes.data() + start, _data, length);
++				_offset += length;
++				_data   += length;
++				_size   -= length;
++			}
++		}
++
++		// Keeps the bytes of an update that are not in a range that the application gives again
 +		void updateDynamic(Dynamic& _buffer, uint32_t _offset, uint32_t _size, const Memory* _mem)
 +		{
 +			if (!_buffer.live
@@ -1606,25 +1834,124 @@ index 0000000..7ef25df
 +				return;
 +			}
 +
-+			if (_buffer.bytes.empty() )
++			_buffer.updated = true;
++			const uint32_t end = _offset + bx::min(bx::min(_size, _mem->size), _buffer.size - _offset);
++			uint32_t at = _offset;
++			std::map<uint32_t, uint32_t>::const_iterator range = _buffer.byApplication.upper_bound(_offset);
++			if (range != _buffer.byApplication.begin() )
 +			{
-+				_buffer.bytes.resize(_buffer.size, 0);
-+				m_kept[KeptDynamicBuffers] += _buffer.size;
++				--range;
 +			}
 +
-+			const uint32_t size = bx::min(bx::min(_size, _mem->size), _buffer.size - _offset);
-+			bx::memCopy(_buffer.bytes.data() + _offset, _mem->data, size);
++			for (; at < end && range != _buffer.byApplication.end(); ++range)
++			{
++				const uint32_t rangeEnd = range->first + range->second;
++				if (rangeEnd <= at)
++				{
++					continue;
++				}
++
++				if (range->first >= end)
++				{
++					break;
++				}
++
++				if (range->first > at)
++				{
++					keepDynamic(_buffer, at, _mem->data + (at - _offset), range->first - at);
++				}
++
++				at = bx::max(at, rangeEnd);
++			}
++
++			if (at < end)
++			{
++				keepDynamic(_buffer, at, _mem->data + (at - _offset), end - at);
++			}
++		}
++
++		// Adds or removes a range that the application gives again. The kept bytes of a new range become zero, and a
++		// page that the ranges cover goes.
++		void markDynamic(Dynamic& _buffer, uint32_t _offset, uint32_t _size, bool _on)
++		{
++			if (!_buffer.live
++			||  _offset >= _buffer.size)
++			{
++				return;
++			}
++
++			const uint32_t size = bx::min(_size, _buffer.size - _offset);
++			if (_on)
++			{
++				_buffer.byApplication[_offset] = size;
++			}
++			else
++			{
++				_buffer.byApplication.erase(_offset);
++			}
++
++			for (uint32_t at = _offset, end = _offset + size; at < end; )
++			{
++				const uint32_t page = at / kDynamicPageSize;
++				const uint32_t start = at - page * kDynamicPageSize;
++				const uint32_t length = bx::min(end - at, pageLength(_buffer, page) - start);
++				std::vector<uint8_t>& bytes = _buffer.pages[page];
++				if (_on)
++				{
++					_buffer.appBytes[page] += length;
++					if (_buffer.appBytes[page] >= pageLength(_buffer, page) )
++					{
++						if (!bytes.empty() )
++						{
++							m_kept[KeptDynamicBuffers] -= bytes.size();
++						}
++
++						std::vector<uint8_t>().swap(bytes);
++					}
++					else if (!bytes.empty() )
++					{
++						bx::memSet(bytes.data() + start, 0, length);
++					}
++				}
++				else
++				{
++					_buffer.appBytes[page] -= bx::min(_buffer.appBytes[page], length);
++				}
++
++				at += length;
++			}
++		}
++
++		// The contents to give a new buffer: the kept pages, with zeros in the other bytes. NULL when the buffer had
++		// no update.
++		static const Memory* dynamicContents(const Dynamic& _buffer)
++		{
++			if (!_buffer.updated)
++			{
++				return NULL;
++			}
++
++			const Memory* mem = zeroed(_buffer.size);
++			for (uint32_t page = 0; page < _buffer.pages.size(); ++page)
++			{
++				const std::vector<uint8_t>& bytes = _buffer.pages[page];
++				if (!bytes.empty() )
++				{
++					bx::memCopy(mem->data + page * kDynamicPageSize, bytes.data(), bytes.size() );
++				}
++			}
++
++			return mem;
 +		}
 +
 +		void freeDynamic(Dynamic& _buffer)
 +		{
-+			if (!_buffer.bytes.empty() )
++			for (const std::vector<uint8_t>& bytes : _buffer.pages)
 +			{
-+				m_kept[KeptDynamicBuffers] -= _buffer.bytes.size();
++				m_kept[KeptDynamicBuffers] -= bytes.size();
 +			}
 +
-+			_buffer.live = false;
-+			std::vector<uint8_t>().swap(_buffer.bytes);
++			_buffer = Dynamic();
 +		}
 +
 +		void freeChanges(Texture& _texture)

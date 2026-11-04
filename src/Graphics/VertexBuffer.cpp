@@ -87,7 +87,15 @@ VertexBuffer::VertexBuffer(std::string name, const void* mem, VertexDecl decl, b
 void VertexBuffer::SetContentsGivenAgain() const
 {
 	PostToMainThread(MainThreadApi::Graphics, [this] {
-		if (!_dynamic && IsValidHandle(_handle))
+		if (!IsValid())
+		{
+			return;
+		}
+		if (_shared)
+		{
+			Locator::graphicsDevice::value().SetContentsGivenAgain(_dynamicHandle);
+		}
+		else
 		{
 			Locator::graphicsDevice::value().SetContentsGivenAgain(_handle);
 		}
@@ -98,12 +106,20 @@ void VertexBuffer::GiveContentsAgain(std::vector<uint8_t> bytes) const
 {
 	// The device memory is made only for a buffer that takes it, because the device frees its memory only in a call
 	PostToMainThread(MainThreadApi::Graphics, [this, bytes = std::move(bytes)] {
-		if (_dynamic || !IsValidHandle(_handle) || bytes.empty())
+		if (!IsValid() || bytes.empty())
 		{
 			return;
 		}
 		const auto& device = Locator::graphicsDevice::value();
-		device.GiveContentsAgain(_handle, device.Copy(bytes.data(), static_cast<uint32_t>(bytes.size())));
+		const auto* memory = device.Copy(bytes.data(), static_cast<uint32_t>(bytes.size()));
+		if (_shared)
+		{
+			device.GiveContentsAgain(_dynamicHandle, memory);
+		}
+		else
+		{
+			device.GiveContentsAgain(_handle, memory);
+		}
 	});
 }
 
