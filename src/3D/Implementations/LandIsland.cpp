@@ -13,6 +13,7 @@
 #include "LandIsland.h"
 
 #include <cmath>
+#include <cstddef>
 
 #include <algorithm>
 #include <iterator>
@@ -74,6 +75,57 @@ int32_t LandIslandInterface::ToMapCoords(float unit)
 float LandIslandInterface::GetDrawnAltitude(uint8_t altitude)
 {
 	return altitude <= k_SeaLevelAltitude ? 0.0f : static_cast<float>(altitude) * k_HeightUnit;
+}
+
+bool LandIslandInterface::AltitudeInputs(const MapReach& reach, std::vector<std::byte>& bytes) const
+{
+	if (reach.Empty())
+	{
+		return true;
+	}
+	// The cell of a map point, as GetAltitude finds it
+	const auto cellOf = [](int32_t map) {
+		return static_cast<int32_t>(static_cast<int16_t>(static_cast<uint32_t>(map) >> 16));
+	};
+	const auto firstX = cellOf(reach.minX);
+	const auto lastX = cellOf(reach.maxX);
+	const auto firstZ = cellOf(reach.minZ);
+	const auto lastZ = cellOf(reach.maxZ);
+	// A very large reach costs more to compare than to calculate again
+	constexpr int32_t k_MostCells = 4096;
+	if ((lastX - firstX + 1) * (lastZ - firstZ + 1) > k_MostCells)
+	{
+		return false;
+	}
+	// For each cell: a tag, then the four corner altitudes and the split that GetAltitude reads
+	enum class Tag : uint8_t
+	{
+		OffMap,
+		NoBlock,
+		Cell,
+	};
+	for (int32_t x = firstX; x <= lastX; ++x)
+	{
+		for (int32_t z = firstZ; z <= lastZ; ++z)
+		{
+			if (x < 0 || x >= k_MapSize || z < 0 || z >= k_MapSize)
+			{
+				bytes.push_back(static_cast<std::byte>(Tag::OffMap));
+				continue;
+			}
+			const auto* cell = FindCell({static_cast<uint16_t>(x), static_cast<uint16_t>(z)});
+			if (cell == nullptr)
+			{
+				bytes.push_back(static_cast<std::byte>(Tag::NoBlock));
+				continue;
+			}
+			bytes.insert(bytes.end(), {static_cast<std::byte>(Tag::Cell), static_cast<std::byte>(cell[0].altitude),
+			                           static_cast<std::byte>(cell[1].altitude), static_cast<std::byte>(cell[17].altitude),
+			                           static_cast<std::byte>(cell[18].altitude),
+			                           static_cast<std::byte>(cell[0].properties.split != 0 ? 1 : 0)});
+		}
+	}
+	return true;
 }
 
 float LandIslandInterface::GetAltitude(int32_t mapX, int32_t mapZ, bool seaLevelFlat) const
@@ -384,6 +436,11 @@ void LandIsland::Build(const LandData& data)
 float LandIsland::GetHeightAt(glm::vec2 vec) const
 {
 	return GetAltitude(ToMapCoords(vec.x), ToMapCoords(vec.y));
+}
+
+bool LandIsland::HeightInputs(const MapReach& reach, std::vector<std::byte>& bytes) const
+{
+	return AltitudeInputs(reach, bytes);
 }
 
 glm::vec3 LandIsland::GetNormalAt(glm::vec2 vec) const
