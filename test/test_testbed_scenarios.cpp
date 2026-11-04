@@ -506,6 +506,27 @@ TEST(TestbedScenarios, ProblemsAreFound)
 	EXPECT_GE(Problems(broken).size(), 8u);
 }
 
+TEST(TestbedScenarios, OnALandOfTheStoryAnObjectNamesTheTownOfTheLand)
+{
+	Scenario village {
+	    .id = "miracles.village",
+	    .name = "Village",
+	    .facet = Facet::Miracles,
+	    .description = "A villager of the first town of the land",
+	    .expected = "The villager is in the town of the land",
+	    .environment = {.land = Land::Story, .storyLand = "Land2.txt", .dispenserGrid = false},
+	    .objects = {{.type = VillagerInfo::NorseFarmerMale, .landTown = 0}},
+	};
+	EXPECT_TRUE(Problems(village).empty());
+	// The scenario's town is a town of the testbed, not a town of the land
+	village.objects.push_back({.type = VillagerInfo::NorseFarmerMale, .joinTown = true});
+	EXPECT_EQ(Problems(village).size(), 1u);
+	// Only a land of the story has towns of its own
+	village.objects.pop_back();
+	village.environment = {};
+	EXPECT_EQ(Problems(village).size(), 1u);
+}
+
 TEST(TestbedScenarios, AFoodPileWhoseModelIsFarFromItsPointIsAProblem)
 {
 	Scenario piles {

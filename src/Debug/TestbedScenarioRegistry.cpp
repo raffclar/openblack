@@ -16050,6 +16050,17 @@ std::vector<std::string> testbed_scenarios::Problems(const Scenario& scenario)
 		{
 			problems.emplace_back("a food pile of the kind whose model is far from its point");
 		}
+		// On a land of the story, the scenario's town is a town of the testbed, not a town of the land. Name the land's
+		// town with landTown. Only a land of the story has towns of its own.
+		const bool storyLand = scenario.environment.land == Land::Story;
+		if (object.joinTown && storyLand)
+		{
+			problems.emplace_back("an object that joins the scenario's town on a land of the story; use landTown");
+		}
+		if (object.landTown.has_value() && !storyLand)
+		{
+			problems.emplace_back("an object with a town of the land on a land that is not of the story");
+		}
 	}
 	for (const auto& footpath : scenario.footpaths)
 	{

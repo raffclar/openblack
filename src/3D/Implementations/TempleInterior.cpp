@@ -1960,6 +1960,7 @@ void TempleInterior::Activate(TempleRoom room)
 	if (!std::exchange(_worldPutAway, false))
 	{
 		PutAwayWorld();
+		NoteFrameWrite(_multiplayerFrontEnd ? temple::FrameWrite::MultiplayerFrontEnd : temple::FrameWrite::Entry);
 	}
 
 	auto& config = Locator::config::value();
@@ -2086,6 +2087,8 @@ void TempleInterior::Deactivate()
 	{
 		return;
 	}
+	// The exit gives back the dialogue, the scripts and the bars in this frame step, as the original game does
+	NoteFrameWrite(temple::FrameWrite::Exit);
 	// The story history's buttons go with the temple
 	if (_interface != nullptr)
 	{
