@@ -520,6 +520,14 @@ private:
 	void PlanCreatureHairLight(const DrawSceneDesc& drawDesc) const;
 	/// Keep the colours of this frame's last usual hair draw for the next frame
 	void KeepCreatureHairLight() const;
+	/// Keep the colours that the world gave the bodies of the players' creatures in this frame, which the statistics box
+	/// uses in the frames that do not draw the land
+	void KeepWorldBodyColours() const;
+	struct HairLightSource;
+	/// Write the light and the added colour of a hair into a row of a target's two texels, in the pass of the target. With
+	/// no hair, the start colours.
+	void SubmitHairLightTexels(bgfx::ViewId viewId, float row, const HairLightSource* source, bool landLit,
+	                           const std::array<glm::vec4, 2>& haze) const;
 	/// Draws the body of a creature that the interface shows: its mesh, its instance among those of the interface's
 	/// creatures, its pose, its shape and its eyes
 	using InterfaceCreatureBody =
@@ -781,6 +789,9 @@ private:
 		glm::mat4 view {1.0f};
 		float landLightScale {1.0f};
 		std::optional<creature_hair_light::Colours> own;
+		/// The row of the target that keeps the colours that the world gave the body in the last frame that drew the
+		/// land. A hair with this row does not use the place.
+		std::optional<uint16_t> worldRow;
 	};
 	/// The usual hair draws of this frame in the game's order, and how the hair of each body with the environment map
 	/// takes its colours
@@ -793,6 +804,22 @@ private:
 	mutable std::unique_ptr<FrameBuffer> _hairLightKept;
 	/// The hair that gave the kept colours, to keep them again after a restore of the graphics device
 	mutable std::optional<HairLightSource> _hairLightKeptSource;
+	/// The colours that the world gave the bodies of the players' creatures in the last frame that drew the land. A
+	/// frame that does not draw the land, as in the temple, does not change them. A body that is not here has a white
+	/// light and no added colour.
+	struct WorldBodyColours
+	{
+		/// The row of each body in the target, which keeps the light in the first texel and the added colour in the
+		/// second
+		std::unordered_map<entt::entity, uint16_t> rows;
+		/// The place and the camera of each row, and the haze of that frame, to write the rows again after a restore of
+		/// the graphics device
+		std::vector<HairLightSource> sources;
+		std::array<glm::vec4, 2> haze {};
+		bool landLit {false};
+	};
+	mutable WorldBodyColours _worldBodyColours;
+	mutable std::unique_ptr<FrameBuffer> _worldBodyColoursKept;
 	/// The creatures that the interface asked to show, which the next frame of the scene draws, and the instances that
 	/// place them
 	mutable std::optional<interface_creatures::Request> _interfaceCreatures;
