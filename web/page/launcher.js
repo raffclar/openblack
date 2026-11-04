@@ -95,10 +95,16 @@ function showLog() {
 const k_ChecksumTag = 'openblack-checksum ';
 const checksumLines = [];
 
+// The crash handler of the game writes this line before it writes its report to the private storage
+const k_CrashReportTag = 'Crash report written to ';
+
 function log(text) {
   if (text.startsWith(k_ChecksumTag)) {
     checksumLines.push(text.slice(k_ChecksumTag.length));
     return;
+  }
+  if (text.startsWith(k_CrashReportTag)) {
+    gameCrashed(text.slice(k_CrashReportTag.length).split('/').pop());
   }
   logLines.push(text);
   if (logLines.length > 2 * k_LogLines) {
@@ -350,6 +356,25 @@ async function keepPageCrashReport(reason) {
   }
 }
 
+const k_CrashReportWaits = 40;
+const k_CrashReportWaitMs = 250;
+
+// The game crashed and its crash handler writes the report with this name: the page waits until the private storage
+// has the report, then shows the reports. The crash handler stops the game without the exit of the page.
+async function gameCrashed(name) {
+  for (let wait = 0; wait < k_CrashReportWaits; ++wait) {
+    const reports = await crashReports();
+    if (reports.some((report) => report.name === name)) {
+      showMessage('The game stopped after a crash',
+        'The browser keeps the crash reports below. The "Save log" button gives the whole game log.', reports);
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, k_CrashReportWaitMs));
+  }
+  showMessage('The game stopped after a crash',
+    `The private storage of the browser does not have the report ${name}. The "Save log" button gives the game log.`);
+}
+
 // The game stopped on an error of the browser: the page keeps one report, then shows the reports
 let pageCrashKept = false;
 async function gameFailed(reason) {
@@ -582,20 +607,14 @@ async function start(online = false) {
       folder: { list, files: chosen.map((entry) => entry.file) }, storage, version: version.file, showFrame, setPresent,
       requests,
     },
-    onExit: (code) => {
-      log(`The game stopped with the code ${code}.`);
-      if (code !== 0) {
-        // The crash handler of the game writes its report before the game stops with an error code
-        showCrashReports('The game stopped with an error',
-          'The browser keeps the crash reports below. The "Save log" button gives the whole game log.');
-      }
-    },
+    onExit: (code) => log(`The game stopped with the code ${code}.`),
     onAbort: (reason) => gameFailed(String(reason)),
   };
   // An error on a game thread that the game does not catch, such as a WebAssembly trap, comes to the page as an error.
   // The page ignores the error of the size watch of the browser, which is harmless.
   window.addEventListener('error', (event) => {
-    const reason = event.message || String(event.error);
+    // A game thread error comes as an error event, which has the message of the error
+    const reason = (event.error && event.error.message) || event.message || String(event.error);
     if (!reason.includes('ResizeObserver')) {
       gameFailed(reason);
     }
