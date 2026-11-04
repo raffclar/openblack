@@ -294,6 +294,18 @@ TEST(VillagerScriptRules, WithNoGoalAVillagerKeepsWhereItStandsUnlessItPlaysACli
 	EXPECT_TRUE(rules::HasKeptGoal({0.0f, 0.001f}));
 }
 
+TEST(VillagerScriptRules, AGoalWithAHeightIsAGoalToKeep)
+{
+	// A goal at no distance with a height above the land is still a goal
+	EXPECT_TRUE(rules::HasKeptGoal({0.0f, 0.0f}, 1.5f));
+	EXPECT_TRUE(rules::HasKeptGoal({80.0f, 90.0f}, 0.0f));
+	EXPECT_FALSE(rules::HasKeptGoal({0.0f, 0.0f}, 0.0f));
+	EXPECT_FALSE(rules::KeepsOwnPlace({0.0f, 0.0f}, -3.0f, VillagerStates::InScript));
+	EXPECT_TRUE(rules::KeepsOwnPlace({0.0f, 0.0f}, 0.0f, VillagerStates::InScript));
+	EXPECT_FALSE(rules::KeepsOwnPlace({0.0f, 0.0f}, 0.0f, VillagerStates::ScriptPlayAnim));
+	EXPECT_FALSE(rules::KeepsOwnPlace({80.0f, 90.0f}, 0.0f, VillagerStates::InScript));
+}
+
 TEST(VillagerScriptRules, AKeptClipThatIsNotOneOfTheGamesPlaysTheFirstClip)
 {
 	EXPECT_EQ(rules::KeptClipToPlay(53, 441), 53);

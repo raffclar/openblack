@@ -16,6 +16,7 @@
 #include <entt/entity/fwd.hpp>
 #include <glm/vec2.hpp>
 
+#include "3D/MapCoords.h"
 #include "Enums.h"
 
 namespace openblack::ecs::components
@@ -35,6 +36,9 @@ namespace openblack::ecs::villager_dance
 uint32_t InDance(components::LivingAction& action);
 /// Where a dancer's place in its group's shape is now, as walks reach it; none for one in no group
 [[nodiscard]] std::optional<glm::vec2> SlotOf(entt::entity villager);
+/// The goal of a walk to the dancer's place: the place as walks reach it, with the height of the dance's place above the
+/// land; none for one in no group
+[[nodiscard]] std::optional<map_coords::MapCoords> SlotGoalOf(entt::entity villager);
 /// The same in any dance state: walking off, it comes back to that state at its place. A move other than its group's
 /// can be given, by its number in the dance files.
 uint32_t PerformDance(components::LivingAction& action, VillagerStates danceState, std::optional<uint32_t> move = std::nullopt);

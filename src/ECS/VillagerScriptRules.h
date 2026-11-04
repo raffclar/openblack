@@ -190,11 +190,24 @@ constexpr std::array k_ScriptHeldStates = {VillagerStates::InScript, VillagerSta
 	return gutils::ConvertMetersToWholeDistance(goal.x) != 0 || gutils::ConvertMetersToWholeDistance(goal.y) != 0;
 }
 
+/// The same for a goal with a height above the land: a goal of no distance with a height is a goal
+[[nodiscard]] constexpr bool HasKeptGoal(glm::vec2 goal, float goalHeight)
+{
+	return HasKeptGoal(goal) || goalHeight != 0.0f;
+}
+
+/// Whether a villager that leaves a script's hands keeps the place where it stands and not the goal of its walk: its walk
+/// has no goal. A villager that goes back to play a clip keeps its goal.
+[[nodiscard]] constexpr bool KeepsOwnPlace(glm::vec2 goal, float goalHeight, VillagerStates returnTo)
+{
+	return !HasKeptGoal(goal, goalHeight) && returnTo != VillagerStates::ScriptPlayAnim;
+}
+
 /// The place a villager keeps when it leaves a script's hands: the goal of its walk, or where it stands when it has no
 /// goal. A villager that goes back to play a clip keeps no goal.
 [[nodiscard]] constexpr glm::vec2 KeptGoal(glm::vec2 goal, glm::vec2 standing, VillagerStates returnTo)
 {
-	return !HasKeptGoal(goal) && returnTo != VillagerStates::ScriptPlayAnim ? standing : goal;
+	return KeepsOwnPlace(goal, 0.0f, returnTo) ? standing : goal;
 }
 
 /// The clip a villager plays again when it goes back to play a script's clip: the kept clip, or the first clip when the

@@ -15,6 +15,7 @@
 
 #include <glm/vec2.hpp>
 
+#include "3D/MapCoords.h"
 #include "Enums.h"
 
 /// How towns feel about the creatures they have seen, and how their villagers react to a creature. A creature makes a
@@ -168,6 +169,11 @@ inline constexpr uint32_t k_FleeChance = 10;
 
 /// Where a frightened villager runs to: straight away from the creature, so far
 [[nodiscard]] glm::vec2 FleePoint(glm::vec2 villager, glm::vec2 creature, float distance);
+/// The goal of the walk to that point. The goal keeps the height of the villager in the world: the land at the
+/// villager's map position plus its height above the land there. Thus the goal is above or below the land at the point by
+/// the difference of the land at the two places.
+[[nodiscard]] map_coords::MapCoords FleeGoal(const LandIslandInterface& island, const map_coords::MapCoords& villager,
+                                             glm::vec2 point);
 
 /// Whether a villager bowing to a creature, facing a game angle, must turn to face it again: the angle to the creature
 /// differs from its own by more than the drift, the numbers taken as they are, without going round the circle
