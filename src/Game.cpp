@@ -6981,7 +6981,7 @@ void Game::MakePlayersSymbols(std::optional<uint32_t> symbolInPlace)
 		textureManager.Erase(name);
 		try
 		{
-			textureManager.Load(name, resources::Texture2DLoader::FromBufferTag {}, name, std::move(bytes),
+			textureManager.Load(name, resources::Texture2DLoader::FromMadeTag {}, name, std::move(bytes),
 			                    graphics::texel_depth::Depth::FourBits);
 		}
 		catch (std::runtime_error& err)

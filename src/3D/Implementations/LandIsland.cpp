@@ -298,6 +298,7 @@ void LandIsland::Build(const LandData& data)
 	// The coarse texture pages the landscape file keeps, a layer each, and where each block's square of them is. A block
 	// naming a page the file doesn't have takes the first.
 	_coarsePages.reset();
+	_coarsePageBlocks.clear();
 	_coarsePageSlots.assign(_landBlocks.size(), glm::vec4(0.0f));
 	constexpr uint16_t k_CoarsePageSide = 256;
 	std::vector<std::pair<uint32_t, lnd::LNDLowResolutionTexels>> coarsePages;
@@ -320,7 +321,9 @@ void LandIsland::Build(const LandData& data)
 			{
 				const auto& blocks = coarsePages[layer].second.blocks;
 				_coarsePages->UpdateLayer(static_cast<uint16_t>(layer), blocks.data(), static_cast<uint32_t>(blocks.size()));
+				_coarsePageBlocks.emplace_back(blocks.begin(), blocks.end());
 			}
+			_coarsePages->SetTexelsGivenAgain();
 		}
 		else
 		{
@@ -795,6 +798,14 @@ void LandIsland::GiveDeviceDataAgain()
 	_heightMap->GiveTexelsAgain(CreateHeightMap());
 	_luminosityMap->GiveTexelsAgain(CreateLuminosityMap());
 	_cellColourMap->GiveTexelsAgain(CreateCellColourMap());
+	if (_coarsePages != nullptr)
+	{
+		for (size_t layer = 0; layer < _coarsePageBlocks.size(); ++layer)
+		{
+			const auto& blocks = _coarsePageBlocks[layer];
+			_coarsePages->UpdateLayer(static_cast<uint16_t>(layer), blocks.data(), static_cast<uint32_t>(blocks.size()));
+		}
+	}
 	if (_blockVertices != nullptr)
 	{
 		const auto& device = Locator::graphicsDevice::value();

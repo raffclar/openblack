@@ -409,6 +409,14 @@ ShaderManager::~ShaderManager()
 	_mainEncoder.reset();
 }
 
+void ShaderManager::GiveDefaultTexelsAgain() const
+{
+	if (_samplerDefaults)
+	{
+		_samplerDefaults->GiveTexelsAgain();
+	}
+}
+
 void ShaderManager::LoadShaders()
 {
 	_samplerDefaults = std::make_unique<SamplerDefaults>();

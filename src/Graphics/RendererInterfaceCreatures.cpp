@@ -78,6 +78,8 @@ void Renderer::DrawInterfaceCreatures(const DrawSceneDesc& desc, const Interface
 		    .add(bgfx::Attrib::TexCoord3, 4, bgfx::AttribType::Float)
 		    .end();
 		_interfaceCreatureInstances = fromBgfx(bgfx::createDynamicVertexBuffer(k_MostShown, layout));
+		// Each draw gives the instances first, thus the device keeps no copy after a restore
+		bgfx::setDeviceRestoreByApplication(toBgfx(*_interfaceCreatureInstances));
 	}
 
 	// One camera goes round all the creatures, over the interface's space, with the depth cleared before them
@@ -252,6 +254,8 @@ void Renderer::DrawMenuCreature(const DrawSceneDesc& desc, const InterfaceCreatu
 		    .add(bgfx::Attrib::TexCoord3, 4, bgfx::AttribType::Float)
 		    .end();
 		_menuCreatureInstance = fromBgfx(bgfx::createDynamicVertexBuffer(1, layout));
+		// Each draw gives the instances first, thus the device keeps no copy after a restore
+		bgfx::setDeviceRestoreByApplication(toBgfx(*_menuCreatureInstance));
 	}
 	const ecs::systems::RenderContext::ObjectInstance instance {
 	    .model = creature::PlacementMatrix(transform->position, transform->rotation, transform->scale)};
@@ -359,6 +363,8 @@ void Renderer::DrawFilmCopy(const DrawSceneDesc& desc, const interface_creatures
 		    .add(bgfx::Attrib::TexCoord3, 4, bgfx::AttribType::Float)
 		    .end();
 		_filmCreatureInstance = fromBgfx(bgfx::createDynamicVertexBuffer(1, layout));
+		// Each draw gives the instances first, thus the device keeps no copy after a restore
+		bgfx::setDeviceRestoreByApplication(toBgfx(*_filmCreatureInstance));
 	}
 	const ecs::systems::RenderContext::ObjectInstance instance {
 	    .model = creature::PlacementMatrix(transform->position, transform->rotation, transform->scale)};

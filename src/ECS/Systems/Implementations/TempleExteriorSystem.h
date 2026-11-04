@@ -102,6 +102,9 @@ private:
 	/// alignment, of its player's set. The shape is a copy of the blend that the threads made, or nothing for a copy here.
 	static void Dress(entt::id_type id, const l3d::L3DFile& blended, std::shared_ptr<l3d::L3DFile> copy, float alignment,
 	                  PlayerNames owner, MadeBlends& made);
+	/// Gives the temple's mesh the texture between the two looks about its alignment, of its player's set
+	static void DressSkin(graphics::L3DMesh& temple, const l3d::L3DFile& blended, float alignment, PlayerNames owner,
+	                      MadeBlends& made);
 	/// The threads that prepare the meshes, made at the first use
 	[[nodiscard]] WorkerPool& Workers();
 

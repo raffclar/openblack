@@ -126,6 +126,52 @@ void L3DMesh::SetFileSource(FileSource source)
 	});
 }
 
+void L3DMesh::SetModelSource(ModelSource source)
+{
+	if (_upload != UploadMode::Device || !Locator::graphicsDevice::has_value() || !source)
+	{
+		return;
+	}
+	const bool first = !_hasModelSource;
+	_hasModelSource = true;
+	if (first)
+	{
+		if (_skinSource == nullptr)
+		{
+			for (const auto& [id, skin] : _skins)
+			{
+				skin->SetTexelsGivenAgain();
+			}
+		}
+		for (const auto& subMesh : _subMeshes)
+		{
+			subMesh->SetDeviceDataGivenAgain();
+		}
+	}
+	// The main thread runs the givers, thus the source changes there
+	PostToMainThread(MainThreadApi::Graphics, [this, source = std::move(source), first] {
+		_modelSource = source;
+		if (!first)
+		{
+			return;
+		}
+		Locator::graphicsDevice::value().GetDataGivers().Add(this, [this](resources::Rereads&) {
+			try
+			{
+				_modelSource(*this);
+			}
+			catch (const std::exception& error)
+			{
+				if (const auto logger = spdlog::get("graphics"))
+				{
+					logger->error("{}: the mesh cannot be given again: {}", _debugName, error.what());
+				}
+			}
+		});
+		_givesDataAgain = true;
+	});
+}
+
 void L3DMesh::GiveDeviceDataAgain(const l3d::L3DFile& l3d) const
 {
 	// The same settings as the load: the side of the skins tells whether the load halved them
@@ -140,7 +186,7 @@ void L3DMesh::GiveDeviceDataAgain(const l3d::L3DFile& l3d) const
 		}
 		return;
 	}
-	if (!_dynamic && _skinSource == nullptr)
+	if (GivesVerticesAgain() && _skinSource == nullptr)
 	{
 		for (const auto& skin : prepared.skins)
 		{

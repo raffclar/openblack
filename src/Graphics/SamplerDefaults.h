@@ -31,6 +31,8 @@ public:
 	SamplerDefaults& operator=(const SamplerDefaults&) = delete;
 
 	[[nodiscard]] TextureHandle Texture(shader_samplers::DefaultTexture texture) const;
+	/// Gives the white texels to the graphics device again after a restore. The device keeps no copy of them.
+	void GiveTexelsAgain() const;
 
 private:
 	std::array<TextureHandle, 4> _textures;

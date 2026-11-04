@@ -55,6 +55,8 @@ private:
 	/// Whether the debug windows are kept off the mouse, as while the input is locked or the pointer is driven
 	[[nodiscard]] static bool MouseKeptOff() noexcept;
 	bool CreateFontsTextureBgfx() noexcept;
+	/// Gives the texels of the font atlas to the graphics device again after a restore
+	void GiveFontTexelsAgain() const;
 	bool CreateDeviceObjectsBgfx() noexcept;
 	void NewFrame() noexcept;
 	void RenderDrawDataBgfx(ImDrawData* drawData) noexcept;
@@ -78,6 +80,8 @@ private:
 	graphics::ProgramHandle _program;
 	graphics::ProgramHandle _imageProgram;
 	graphics::TextureHandle _texture;
+	/// Whether the GUI is one of the owners that give their data to the graphics device again
+	bool _givesTexelsAgain {false};
 	graphics::UniformHandle _s_tex;
 	graphics::UniformHandle _u_imageLodEnabled;
 	const uint16_t _viewId;

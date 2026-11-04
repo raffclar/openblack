@@ -32,6 +32,9 @@ std::unique_ptr<Mesh> DebugLines::CreateDebugLines(const Vertex* data, uint32_t 
 	bgfx::frame();
 	auto mesh = std::make_unique<Mesh>(vertexBuffer, nullptr, Mesh::Topology::LineList);
 	bgfx::frame();
+	// The mesh gives its lines again after a restore of the graphics device, thus the device keeps no copy
+	const auto* first = reinterpret_cast<const uint8_t*>(data);
+	mesh->KeepContentsForRestore(std::vector<uint8_t>(first, first + (vertexCount * sizeof(data[0]))));
 
 	return mesh;
 }
