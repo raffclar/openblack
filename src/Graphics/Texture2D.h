@@ -12,6 +12,7 @@
 #include <cstdint>
 
 #include <array>
+#include <functional>
 #include <optional>
 #include <span>
 #include <string>
@@ -22,6 +23,11 @@
 
 #include "GraphicsHandle.h"
 #include "Visual/TreeShadows.h"
+
+namespace openblack::resources
+{
+class Rereads;
+}
 
 namespace openblack::graphics
 {
@@ -192,6 +198,13 @@ public:
 	/// Tells the graphics device that the owner of the texture gives its texels again after the device is made again.
 	/// The device then keeps no copy of the texels. Use it for a texture that the game can paint again from its data.
 	void SetTexelsGivenAgain() const;
+	/// Gives the texels of all the layers, read again from the game files
+	using TexelSource = std::function<std::vector<uint8_t>(resources::Rereads&)>;
+	/// Gives the texture a source of its texels. The graphics device then keeps no copy of the texels. After a restore
+	/// of the device, the texture gives its texels again from the source. A texture with no device ignores the source.
+	void SetTexelSource(TexelSource source);
+	/// Gives the texels of all the layers again after a restore of the graphics device
+	void GiveTexelsAgain(std::span<const uint8_t> texels) const;
 
 	[[nodiscard]] const std::string& GetName() const { return _name; }
 	[[nodiscard]] const TextureHandle& GetNativeHandle() const { return _handle; }
@@ -227,6 +240,9 @@ protected:
 	uint32_t _storageSize;
 	std::optional<tree_shadows::AlphaMask> _alphaMask;
 	std::vector<uint8_t> _texels;
+	TexelSource _source;
+	/// Whether the texture is one of the owners that give their data to the graphics device again
+	bool _givesTexelsAgain {false};
 
 	friend FrameBuffer;
 };

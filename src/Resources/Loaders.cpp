@@ -10,9 +10,11 @@
 #include "Resources/Loaders.h"
 
 #include <cmath>
+#include <cstring>
 
 #include <algorithm>
 #include <array>
+#include <functional>
 #include <iostream>
 #include <ranges>
 #include <span>
@@ -55,6 +57,7 @@
 #include "Help/AdvisorModel.h"
 #include "Locator.h"
 #include "Physics/Materials.h"
+#include "Resources/Rereads.h"
 #include "Sound/ClipSounds.h"
 #include "Sound/MusicTimingFile.h"
 #include "Sound/SoundDecoder.h"
@@ -76,6 +79,111 @@ namespace
 {
 	return Uploads() == graphics::UploadMode::DataOnly;
 }
+
+/// The side and the channels of a raw picture, from the number of its bytes
+struct RawShape
+{
+	uint16_t side;
+	size_t channels;
+};
+
+[[nodiscard]] RawShape RawShapeOf(size_t bytes)
+{
+	constexpr std::array<uint16_t, 10> k_Sides = {{1024, 512, 256, 128, 64, 40, 32, 14, 12, 6}};
+
+	const auto side = std::ranges::find_if(k_Sides, [bytes](uint16_t candidate) {
+		const auto pixels = static_cast<size_t>(candidate) * candidate;
+		return bytes == pixels || bytes == 3 * pixels;
+	});
+	if (side == k_Sides.end())
+	{
+		throw std::runtime_error("Unable to load texture: Ambiguous size and format: " + std::to_string(bytes));
+	}
+	return {.side = *side, .channels = bytes / (static_cast<size_t>(*side) * *side)};
+}
+
+/// The texels of a raw picture as its texture keeps them, at the depth of colour that the game gives the picture
+[[nodiscard]] std::vector<uint8_t> RawTexels(std::vector<uint8_t> data, size_t channels, graphics::texel_depth::Depth depth)
+{
+	if (depth == graphics::texel_depth::Depth::FiveBits)
+	{
+		const auto packed = graphics::texel_depth::PackRgb555(data, channels);
+		const auto* first = reinterpret_cast<const uint8_t*>(packed.data());
+		return {first, first + (packed.size() * sizeof(packed[0]))};
+	}
+	graphics::texel_depth::Reduce(data, depth);
+	return data;
+}
+
+/// The texels of a picture and its alpha picture, at half their size when `halve` is true. The side changes to the
+/// side of the texels.
+[[nodiscard]] std::vector<uint8_t> TexelsWithAlpha(std::vector<uint8_t> colourBytes, std::vector<uint8_t> alphaBytes,
+                                                   uint16_t& side, bool halve, const std::filesystem::path& rawTexturePath)
+{
+	// At half its size the picture and its alpha each take every second texel of each second row
+	if (halve)
+	{
+		auto halfColours = low_resolution_textures::Halve(colourBytes, side);
+		auto halfAlpha = low_resolution_textures::Halve(alphaBytes, side);
+		if (!halfColours || !halfAlpha)
+		{
+			throw std::runtime_error("Unexpected size of " + rawTexturePath.string() + " or its alpha");
+		}
+		colourBytes = std::move(*halfColours);
+		alphaBytes = std::move(*halfAlpha);
+		side /= 2;
+	}
+	const auto colours = rawimage::DecodeRgb(colourBytes, side, side);
+	const auto alpha = rawimage::DecodeGrey(alphaBytes, side, side);
+	if (!colours || !alpha)
+	{
+		throw std::runtime_error("Unexpected size of " + rawTexturePath.string() + " or its alpha");
+	}
+	std::vector<uint8_t> texels;
+	texels.reserve(colours->pixels.size() * 4);
+	for (size_t i = 0; i < colours->pixels.size(); ++i)
+	{
+		const auto& rgb = colours->pixels.at(i);
+		texels.insert(texels.end(), {rgb[0], rgb[1], rgb[2], alpha->pixels.at(i)});
+	}
+	graphics::texel_depth::Reduce(texels, graphics::texel_depth::Depth::FourBits);
+	return texels;
+}
+
+/// The texels of the layers of 16-bit bitmaps, each at the given side
+[[nodiscard]] std::vector<uint16_t>
+BitmapLayerTexels(std::span<const std::filesystem::path> layerPaths, uint16_t side,
+                  const std::function<std::vector<uint8_t>(const std::filesystem::path&)>& read)
+{
+	const size_t layerTexels = static_cast<size_t>(side) * side;
+	std::vector<uint16_t> texels(layerTexels * layerPaths.size(), 0);
+	for (size_t layer = 0; layer < layerPaths.size(); ++layer)
+	{
+		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Loading texture layer: {}", layerPaths[layer].generic_string());
+		const auto data = read(layerPaths[layer]);
+		Bitmap16B bitmap(data.data());
+		const auto count = std::min(layerTexels, static_cast<size_t>(bitmap.Width()) * bitmap.Height());
+		std::copy_n(bitmap.Data(), count, texels.begin() + static_cast<std::ptrdiff_t>(layer * layerTexels));
+	}
+	return texels;
+}
+
+/// The bytes of the texels of 16-bit bitmaps as their texture keeps them: as they are, or a byte for each channel on a
+/// device without the 16-bit format
+[[nodiscard]] std::vector<uint8_t> BitmapTextureBytes(const std::vector<uint16_t>& texels, bool deviceHas1555)
+{
+	if (deviceHas1555)
+	{
+		const auto* first = reinterpret_cast<const uint8_t*>(texels.data());
+		return {first, first + (texels.size() * sizeof(texels[0]))};
+	}
+	std::vector<uint8_t> bytes(texels.size() * 4);
+	for (size_t i = 0; i < texels.size(); ++i)
+	{
+		std::ranges::copy(Texel1555Bytes(texels[i]), bytes.begin() + static_cast<std::ptrdiff_t>(i * 4));
+	}
+	return bytes;
+}
 } // namespace
 
 L3DLoader::result_type L3DLoader::operator()(FromBufferTag, const std::string& debugName,
@@ -92,6 +200,18 @@ L3DLoader::result_type L3DLoader::operator()(FromBufferTag, const std::string& d
 
 namespace
 {
+/// The bytes unzipped of the bytes of a .zzz file: its size unzipped, then the zipped data
+std::vector<uint8_t> Unzipped(const std::vector<uint8_t>& file)
+{
+	uint32_t decompressedSize = 0;
+	if (file.size() < sizeof(decompressedSize))
+	{
+		throw std::runtime_error("The zipped file is too small");
+	}
+	std::memcpy(&decompressedSize, file.data(), sizeof(decompressedSize));
+	return zip::Inflate(std::vector<uint8_t>(file.begin() + sizeof(decompressedSize), file.end()), decompressedSize);
+}
+
 /// The bytes of a zipped .zzz file: its size unzipped, then the zipped data
 std::vector<uint8_t> ReadZipped(const std::filesystem::path& path)
 {
@@ -124,6 +244,11 @@ L3DLoader::result_type L3DLoader::operator()(FromDiskTag, const std::filesystem:
 		}
 	}
 
+	// After a restore of the graphics device the mesh reads its file again
+	mesh->SetFileSource([path, zipped = pathExt == ".zzz"](Rereads& rereads) {
+		auto bytes = rereads.File(path);
+		return zipped ? Unzipped(bytes) : bytes;
+	});
 	return mesh;
 }
 
@@ -298,43 +423,39 @@ Texture2DLoader::result_type Texture2DLoader::operator()(FromPackTag, const std:
 Texture2DLoader::result_type Texture2DLoader::operator()(FromDiskTag, const std::filesystem::path& rawTexturePath,
                                                          graphics::texel_depth::Depth depth) const
 {
-	return (*this)(FromBufferTag {}, ("raw" / rawTexturePath.stem()).string(),
-	               Locator::filesystem::value().ReadAll(rawTexturePath), depth);
+	auto texture = (*this)(FromBufferTag {}, ("raw" / rawTexturePath.stem()).string(),
+	                       Locator::filesystem::value().ReadAll(rawTexturePath), depth);
+	// After a restore of the graphics device the texture reads its file again
+	texture->SetTexelSource([rawTexturePath, depth](Rereads& rereads) {
+		auto data = rereads.File(rawTexturePath);
+		const auto shape = RawShapeOf(data.size());
+		return RawTexels(std::move(data), shape.channels, depth);
+	});
+	return texture;
 }
 
 Texture2DLoader::result_type Texture2DLoader::operator()(FromBufferTag, const std::string& name, std::vector<uint8_t> data,
                                                          graphics::texel_depth::Depth depth) const
 {
-	constexpr std::array<uint16_t, 10> k_Sides = {{1024, 512, 256, 128, 64, 40, 32, 14, 12, 6}};
-
-	const auto side = std::ranges::find_if(k_Sides, [&data](uint16_t candidate) {
-		const auto pixels = static_cast<size_t>(candidate) * candidate;
-		return data.size() == pixels || data.size() == 3 * pixels;
-	});
-	if (side == k_Sides.end())
-	{
-		throw std::runtime_error("Unable to load texture: Ambiguous size and format: " + std::to_string(data.size()));
-	}
-	const size_t channels = data.size() / (static_cast<size_t>(*side) * *side);
+	const auto [side, channels] = RawShapeOf(data.size());
 
 	auto texture = std::make_shared<graphics::Texture2D>(name);
 	if (depth == graphics::texel_depth::Depth::FiveBits)
 	{
 		if (KeepsDataOnly())
 		{
-			texture->Describe(*side, *side, 1, graphics::TextureFormat::BGR5A1);
+			texture->Describe(side, side, 1, graphics::TextureFormat::BGR5A1);
 			return texture;
 		}
-		const auto packed = graphics::texel_depth::PackRgb555(data, channels);
-		texture->Create(
-		    *side, *side, 1, graphics::TextureFormat::BGR5A1, graphics::Wrapping::Repeat, graphics::Filter::Linear,
-		    Locator::graphicsDevice::value().Copy(packed.data(), static_cast<uint32_t>(packed.size() * sizeof(packed[0]))));
+		const auto packed = RawTexels(std::move(data), channels, depth);
+		texture->Create(side, side, 1, graphics::TextureFormat::BGR5A1, graphics::Wrapping::Repeat, graphics::Filter::Linear,
+		                Locator::graphicsDevice::value().Copy(packed.data(), static_cast<uint32_t>(packed.size())));
 		return texture;
 	}
 	// The small grey images that the game also reads itself keep their texels as the file has them
 	constexpr uint16_t k_LargestKeptSide = 64;
 	std::vector<uint8_t> kept;
-	if (channels == 1 && *side <= k_LargestKeptSide)
+	if (channels == 1 && side <= k_LargestKeptSide)
 	{
 		kept.assign(data.begin(), data.end());
 	}
@@ -342,12 +463,12 @@ Texture2DLoader::result_type Texture2DLoader::operator()(FromBufferTag, const st
 	const auto format = channels == 3 ? graphics::TextureFormat::RGB8 : graphics::TextureFormat::R8;
 	if (KeepsDataOnly())
 	{
-		texture->Describe(*side, *side, 1, format);
+		texture->Describe(side, side, 1, format);
 		return texture;
 	}
-	graphics::texel_depth::Reduce(data, depth);
-	texture->Create(*side, *side, 1, format, graphics::Wrapping::Repeat, graphics::Filter::Linear,
-	                Locator::graphicsDevice::value().Copy(data.data(), static_cast<uint32_t>(data.size())));
+	const auto texels = RawTexels(std::move(data), channels, depth);
+	texture->Create(side, side, 1, format, graphics::Wrapping::Repeat, graphics::Filter::Linear,
+	                Locator::graphicsDevice::value().Copy(texels.data(), static_cast<uint32_t>(texels.size())));
 	return texture;
 }
 
@@ -356,43 +477,22 @@ Texture2DLoader::result_type Texture2DLoader::operator()(FromDiskWithAlphaTag, c
                                                          bool halve) const
 {
 	auto& fileSystem = Locator::filesystem::value();
-	auto colourBytes = fileSystem.ReadAll(rawTexturePath);
-	auto alphaBytes = fileSystem.ReadAll(alphaPath);
-	// At half its size the picture and its alpha each take every second texel of each second row
-	if (halve)
-	{
-		auto halfColours = low_resolution_textures::Halve(colourBytes, side);
-		auto halfAlpha = low_resolution_textures::Halve(alphaBytes, side);
-		if (!halfColours || !halfAlpha)
-		{
-			throw std::runtime_error("Unexpected size of " + rawTexturePath.string() + " or its alpha");
-		}
-		colourBytes = std::move(*halfColours);
-		alphaBytes = std::move(*halfAlpha);
-		side /= 2;
-	}
-	const auto colours = rawimage::DecodeRgb(colourBytes, side, side);
-	const auto alpha = rawimage::DecodeGrey(alphaBytes, side, side);
-	if (!colours || !alpha)
-	{
-		throw std::runtime_error("Unexpected size of " + rawTexturePath.string() + " or its alpha");
-	}
+	const auto fileSide = side;
+	const auto texels =
+	    TexelsWithAlpha(fileSystem.ReadAll(rawTexturePath), fileSystem.ReadAll(alphaPath), side, halve, rawTexturePath);
 	auto texture = std::make_shared<graphics::Texture2D>(("raw" / rawTexturePath.stem()).string() + "+alpha");
 	if (KeepsDataOnly())
 	{
 		texture->Describe(side, side, 1, graphics::TextureFormat::RGBA8);
 		return texture;
 	}
-	std::vector<uint8_t> texels;
-	texels.reserve(colours->pixels.size() * 4);
-	for (size_t i = 0; i < colours->pixels.size(); ++i)
-	{
-		const auto& rgb = colours->pixels.at(i);
-		texels.insert(texels.end(), {rgb[0], rgb[1], rgb[2], alpha->pixels.at(i)});
-	}
-	graphics::texel_depth::Reduce(texels, graphics::texel_depth::Depth::FourBits);
 	texture->Create(side, side, 1, graphics::TextureFormat::RGBA8, graphics::Wrapping::Repeat, graphics::Filter::Linear,
 	                Locator::graphicsDevice::value().Copy(texels.data(), static_cast<uint32_t>(texels.size())));
+	// After a restore of the graphics device the texture reads its two files again
+	texture->SetTexelSource([rawTexturePath, alphaPath, fileSide, halve](Rereads& rereads) {
+		auto side = fileSide;
+		return TexelsWithAlpha(rereads.File(rawTexturePath), rereads.File(alphaPath), side, halve, rawTexturePath);
+	});
 	return texture;
 }
 
@@ -400,16 +500,8 @@ Texture2DLoader::result_type Texture2DLoader::operator()(FromBitmapLayersTag, co
                                                          std::span<const std::filesystem::path> layerPaths, uint16_t side) const
 {
 	auto& fileSystem = Locator::filesystem::value();
-	const size_t layerTexels = static_cast<size_t>(side) * side;
-	std::vector<uint16_t> texels(layerTexels * layerPaths.size(), 0);
-	for (size_t layer = 0; layer < layerPaths.size(); ++layer)
-	{
-		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Loading texture layer: {}", layerPaths[layer].generic_string());
-		const auto data = fileSystem.ReadAll(layerPaths[layer]);
-		Bitmap16B bitmap(data.data());
-		const auto count = std::min(layerTexels, static_cast<size_t>(bitmap.Width()) * bitmap.Height());
-		std::copy_n(bitmap.Data(), count, texels.begin() + static_cast<std::ptrdiff_t>(layer * layerTexels));
-	}
+	const auto read = [&fileSystem](const std::filesystem::path& path) { return fileSystem.ReadAll(path); };
+	const auto texels = BitmapLayerTexels(layerPaths, side, read);
 	auto texture = std::make_shared<graphics::Texture2D>(name);
 	const auto layers = static_cast<uint16_t>(layerPaths.size());
 	if (KeepsDataOnly())
@@ -417,22 +509,25 @@ Texture2DLoader::result_type Texture2DLoader::operator()(FromBitmapLayersTag, co
 		texture->Describe(side, side, layers, graphics::TextureFormat::BGR5A1);
 		return texture;
 	}
-	if (Locator::graphicsDevice::value().HasTextureFormat(graphics::TextureFormat::BGR5A1, graphics::TextureUse::Texture2D))
+	const bool deviceHas1555 =
+	    Locator::graphicsDevice::value().HasTextureFormat(graphics::TextureFormat::BGR5A1, graphics::TextureUse::Texture2D);
+	if (!deviceHas1555)
 	{
-		texture->Create(
-		    side, side, layers, graphics::TextureFormat::BGR5A1, graphics::Wrapping::ClampEdge, graphics::Filter::Linear,
-		    Locator::graphicsDevice::value().Copy(texels.data(), static_cast<uint32_t>(texels.size() * sizeof(texels[0]))));
-		return texture;
+		// A device without the 16-bit format (WebGL 2) gets a byte for each channel
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The device has no 16-bit texture format: {} keeps a byte for each channel",
+		                   name);
 	}
-	// A device without the 16-bit format (WebGL 2) gets a byte for each channel
-	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The device has no 16-bit texture format: {} keeps a byte for each channel", name);
-	std::vector<uint8_t> bytes(texels.size() * 4);
-	for (size_t i = 0; i < texels.size(); ++i)
-	{
-		std::ranges::copy(Texel1555Bytes(texels[i]), bytes.begin() + static_cast<std::ptrdiff_t>(i * 4));
-	}
-	texture->Create(side, side, layers, graphics::TextureFormat::RGBA8, graphics::Wrapping::ClampEdge, graphics::Filter::Linear,
+	const auto bytes = BitmapTextureBytes(texels, deviceHas1555);
+	texture->Create(side, side, layers, deviceHas1555 ? graphics::TextureFormat::BGR5A1 : graphics::TextureFormat::RGBA8,
+	                graphics::Wrapping::ClampEdge, graphics::Filter::Linear,
 	                Locator::graphicsDevice::value().Copy(bytes.data(), static_cast<uint32_t>(bytes.size())));
+	// After a restore of the graphics device the texture reads its bitmaps again
+	texture->SetTexelSource([paths = std::vector<std::filesystem::path>(layerPaths.begin(), layerPaths.end()), side,
+	                         deviceHas1555](Rereads& rereads) {
+		const auto again =
+		    BitmapLayerTexels(paths, side, [&rereads](const std::filesystem::path& path) { return rereads.File(path); });
+		return BitmapTextureBytes(again, deviceHas1555);
+	});
 	return texture;
 }
 

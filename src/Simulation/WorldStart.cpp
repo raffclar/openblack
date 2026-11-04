@@ -89,12 +89,14 @@
 #include "ECS/Systems/VideoSystemInterface.h"
 #include "EngineConfig.h"
 #include "FileSystem/FileSystemInterface.h"
+#include "Graphics/Texture2D.h"
 #include "Gui/TextDatabase.h"
 #include "Level.h"
 #include "Locator.h"
 #include "Parsers/InfoFile.h"
 #include "Physics/Materials.h"
 #include "Resources/Loaders.h"
+#include "Resources/Rereads.h"
 #include "Resources/ResourcesInterface.h"
 #include "Sound/AnimEffectTable.h"
 #include "Sound/ClipSounds.h"
@@ -365,7 +367,8 @@ bool RegisterWorldData(WorldDataViewInterface& view)
 	// The pack is kept by the loads of its meshes and textures until the last of them has run
 	const auto pack = std::make_shared<pack::PackFile>();
 
-	auto packResult = pack->ReadFile(*fileSystem.GetData(fileSystem.GetPath<Path::Data>() / "AllMeshes.g3d"));
+	const auto packPath = fileSystem.GetPath<Path::Data>() / "AllMeshes.g3d";
+	auto packResult = pack->ReadFile(*fileSystem.GetData(packPath));
 	if (packResult != pack::PackResult::Success)
 	{
 		SPDLOG_LOGGER_CRITICAL(spdlog::get("game"), "Unable to load AllMeshes.g3d: {}", pack::ResultToStr(packResult));
@@ -378,9 +381,15 @@ bool RegisterWorldData(WorldDataViewInterface& view)
 	{
 		meshManager.Register(
 		    static_cast<MeshId>(i),
-		    [pack, i] {
-			    return resources::L3DLoader {}(resources::L3DLoader::FromBufferTag {}, std::string(k_MeshNames.at(i)),
-			                                   pack->GetMesh(i));
+		    [pack, i, packPath] {
+			    auto mesh = resources::L3DLoader {}(resources::L3DLoader::FromBufferTag {}, std::string(k_MeshNames.at(i)),
+			                                        pack->GetMesh(i));
+			    // After a restore of the graphics device the mesh reads the pack again
+			    mesh->SetFileSource([packPath, i](resources::Rereads& rereads) {
+				    const auto* again = rereads.Pack(packPath);
+				    return again != nullptr && i < again->GetMeshes().size() ? again->GetMesh(i) : std::vector<uint8_t> {};
+			    });
+			    return mesh;
 		    },
 		    meshes[i].size());
 	}
@@ -391,11 +400,24 @@ bool RegisterWorldData(WorldDataViewInterface& view)
 	for (const auto& [name, g3dTexture] : pack->GetTextures())
 	{
 		const auto low = pack->GetLowTextures().find(name);
-		const auto* picture = lowTextures && low != pack->GetLowTextures().end() ? &low->second : &g3dTexture;
+		const bool lowPicture = lowTextures && low != pack->GetLowTextures().end();
+		const auto* picture = lowPicture ? &low->second : &g3dTexture;
 		textureManager.Register(
 		    g3dTexture.header.id,
-		    [pack, name, picture] {
-			    return resources::Texture2DLoader {}(resources::Texture2DLoader::FromPackTag {}, name, *picture);
+		    [pack, name, picture, packPath, lowPicture] {
+			    auto texture = resources::Texture2DLoader {}(resources::Texture2DLoader::FromPackTag {}, name, *picture);
+			    // After a restore of the graphics device the texture reads the pack again
+			    texture->SetTexelSource([packPath, name, lowPicture](resources::Rereads& rereads) {
+				    const auto* again = rereads.Pack(packPath);
+				    if (again == nullptr)
+				    {
+					    return std::vector<uint8_t> {};
+				    }
+				    const auto& pictures = lowPicture ? again->GetLowTextures() : again->GetTextures();
+				    const auto it = pictures.find(name);
+				    return it != pictures.end() ? it->second.ddsData : std::vector<uint8_t> {};
+			    });
+			    return texture;
 		    },
 		    picture->ddsData.size());
 	}

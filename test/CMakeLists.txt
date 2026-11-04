@@ -2368,3 +2368,6 @@ openblack_setup_and_add_test(test_script_natives_rows_4 test_script_natives_rows
 openblack_setup_and_add_test(test_script_natives_rows_5 test_script_natives_rows_5.cpp)
 openblack_setup_and_add_test(test_script_natives_rows_6 test_script_natives_rows_6.cpp)
 openblack_setup_and_add_test(test_forced_turn_point camera/test_forced_turn_point.cpp)
+openblack_setup_and_add_test(
+  test_device_data_givers graphics/test_device_data_givers.cpp
+)

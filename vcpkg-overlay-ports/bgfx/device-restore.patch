@@ -1,8 +1,8 @@
 diff --git a/bgfx/include/bgfx/bgfx.h b/bgfx/include/bgfx/bgfx.h
-index ff66119..b2b0ac1 100644
+index ff66119..607b6c7 100644
 --- a/bgfx/include/bgfx/bgfx.h
 +++ b/bgfx/include/bgfx/bgfx.h
-@@ -2689,6 +2689,49 @@ namespace bgfx
+@@ -2689,6 +2689,82 @@ namespace bgfx
  	///
  	const Stats* getStats();
  
@@ -36,12 +36,45 @@ index ff66119..b2b0ac1 100644
 +	DeviceRestoreKept getDeviceRestoreKept();
 +
 +	/// Tells the renderer that the application gives the texels of a texture again after a restore of the device.
-+	/// The renderer then keeps no copy of the updates of the texture. After a restore, the texture has the texels
-+	/// that it was made with, or texels that are not defined, until the application updates it.
++	/// The renderer then keeps no copy of the texels that the texture was made with, and no copy of its updates.
++	/// After a restore, the texels of the texture are not defined until the application updates it. The
++	/// application can update the texture also when it was made with texels. Update it only after a restore.
 +	///
 +	/// @param[in] _handle Texture handle.
 +	///
 +	void setDeviceRestoreByApplication(TextureHandle _handle);
++
++	/// Tells the renderer that the application gives the contents of a vertex buffer again after a restore of the
++	/// device. The renderer then keeps no copy of the contents. After a restore, the buffer has the same size and
++	/// contains zeros, until the application gives the contents with `giveDeviceRestoreContents`.
++	///
++	/// @param[in] _handle Vertex buffer handle.
++	///
++	void setDeviceRestoreByApplication(VertexBufferHandle _handle);
++
++	/// Tells the renderer that the application gives the contents of an index buffer again after a restore of the
++	/// device. The renderer then keeps no copy of the contents. After a restore, the buffer has the same size and
++	/// contains zeros, until the application gives the contents with `giveDeviceRestoreContents`.
++	///
++	/// @param[in] _handle Index buffer handle.
++	///
++	void setDeviceRestoreByApplication(IndexBufferHandle _handle);
++
++	/// Gives the contents of a vertex buffer again after a restore of the device. The renderer makes the buffer
++	/// again with these contents. It does nothing for a buffer that is not given by the application.
++	///
++	/// @param[in] _handle Vertex buffer handle.
++	/// @param[in] _mem The contents of the buffer.
++	///
++	void giveDeviceRestoreContents(VertexBufferHandle _handle, const Memory* _mem);
++
++	/// Gives the contents of an index buffer again after a restore of the device. The renderer makes the buffer
++	/// again with these contents. It does nothing for a buffer that is not given by the application.
++	///
++	/// @param[in] _handle Index buffer handle.
++	/// @param[in] _mem The contents of the buffer.
++	///
++	void giveDeviceRestoreContents(IndexBufferHandle _handle, const Memory* _mem);
 +
 +	/// Loses the device, to test the recovery from a lost device. The renderer does it at the start of the next
 +	/// frame that it renders, and then makes its device again. Direct3D 12 removes its device. Vulkan has no call
@@ -53,7 +86,7 @@ index ff66119..b2b0ac1 100644
  	///
  	/// @param[in] _size Size to allocate.
 diff --git a/bgfx/src/bgfx.cpp b/bgfx/src/bgfx.cpp
-index acfb6fe..40763a0 100644
+index acfb6fe..9996899 100644
 --- a/bgfx/src/bgfx.cpp
 +++ b/bgfx/src/bgfx.cpp
 @@ -3432,13 +3432,35 @@ namespace bgfx
@@ -392,7 +425,7 @@ index acfb6fe..40763a0 100644
  				}
  				break;
  
-@@ -4553,6 +4627,15 @@ namespace bgfx
+@@ -4553,6 +4627,58 @@ namespace bgfx
  				}
  				break;
  
@@ -405,10 +438,53 @@ index acfb6fe..40763a0 100644
 +				}
 +				break;
 +
++			case CommandBuffer::SetDeviceRestoreByApplicationBuffer:
++				{
++					uint8_t vertices;
++					_cmdbuf.read(vertices);
++
++					uint16_t idx;
++					_cmdbuf.read(idx);
++
++					if (0 != vertices)
++					{
++						m_deviceRestore.restoreByApplication(VertexBufferHandle{idx});
++					}
++					else
++					{
++						m_deviceRestore.restoreByApplication(IndexBufferHandle{idx});
++					}
++				}
++				break;
++
++			case CommandBuffer::GiveDeviceRestoreContents:
++				{
++					uint8_t vertices;
++					_cmdbuf.read(vertices);
++
++					uint16_t idx;
++					_cmdbuf.read(idx);
++
++					const Memory* mem;
++					_cmdbuf.read(mem);
++
++					if (0 != vertices)
++					{
++						m_deviceRestore.giveContents(m_renderCtx, VertexBufferHandle{idx}, mem);
++					}
++					else
++					{
++						m_deviceRestore.giveContents(m_renderCtx, IndexBufferHandle{idx}, mem);
++					}
++
++					release(mem);
++				}
++				break;
++
  			default:
  				BX_ASSERT(false, "Invalid command: %d", command);
  				break;
-@@ -5727,6 +5810,39 @@ namespace bgfx
+@@ -5727,6 +5853,39 @@ namespace bgfx
  		return s_ctx->getPerfStats();
  	}
  
@@ -448,7 +524,7 @@ index acfb6fe..40763a0 100644
  	RendererType::Enum getRendererType()
  	{
  		return g_caps.rendererType;
-@@ -6928,6 +7044,11 @@ namespace bgfx
+@@ -6928,6 +7087,33 @@ namespace bgfx
  		s_ctx->setName(_handle, bx::StringView(_name, _len) );
  	}
  
@@ -457,22 +533,46 @@ index acfb6fe..40763a0 100644
 +		s_ctx->setDeviceRestoreByApplication(_handle);
 +	}
 +
++	void setDeviceRestoreByApplication(VertexBufferHandle _handle)
++	{
++		s_ctx->setDeviceRestoreByApplication(_handle);
++	}
++
++	void setDeviceRestoreByApplication(IndexBufferHandle _handle)
++	{
++		s_ctx->setDeviceRestoreByApplication(_handle);
++	}
++
++	void giveDeviceRestoreContents(VertexBufferHandle _handle, const Memory* _mem)
++	{
++		BX_ASSERT(NULL != _mem, "_mem can't be NULL");
++		s_ctx->giveDeviceRestoreContents(_handle, _mem);
++	}
++
++	void giveDeviceRestoreContents(IndexBufferHandle _handle, const Memory* _mem)
++	{
++		BX_ASSERT(NULL != _mem, "_mem can't be NULL");
++		s_ctx->giveDeviceRestoreContents(_handle, _mem);
++	}
++
  	void* getDirectAccessPtr(TextureHandle _handle)
  	{
  		return s_ctx->getDirectAccessPtr(_handle);
 diff --git a/bgfx/src/bgfx_p.h b/bgfx/src/bgfx_p.h
-index 316b49d..b25b919 100644
+index 316b49d..6167ce2 100644
 --- a/bgfx/src/bgfx_p.h
 +++ b/bgfx/src/bgfx_p.h
-@@ -1194,6 +1194,7 @@ namespace bgfx
+@@ -1194,6 +1194,9 @@ namespace bgfx
  			UpdateViewName,
  			InvalidateOcclusionQuery,
  			SetName,
 +			SetDeviceRestoreByApplication,
++			SetDeviceRestoreByApplicationBuffer,
++			GiveDeviceRestoreContents,
  			End,
  			RendererShutdownEnd,
  			DestroyVertexLayout,
-@@ -5946,6 +5947,8 @@ namespace bgfx
+@@ -5946,6 +5949,8 @@ namespace bgfx
  		virtual RendererType::Enum getRendererType() const = 0;
  		virtual const char* getRendererName() const = 0;
  		virtual bool isDeviceRemoved() = 0;
@@ -481,7 +581,7 @@ index 316b49d..b25b919 100644
  		virtual void flip() = 0;
  		virtual void createIndexBuffer(IndexBufferHandle _handle, const Memory* _mem, uint16_t _flags) = 0;
  		virtual void destroyIndexBuffer(IndexBufferHandle _handle) = 0;
-@@ -6046,6 +6049,13 @@ namespace bgfx
+@@ -6046,6 +6051,13 @@ namespace bgfx
  #	define BGFX_API_FUNC(_func) _func
  #endif // BGFX_CONFIG_DEBUG
  
@@ -495,7 +595,7 @@ index 316b49d..b25b919 100644
  	struct Context
  	{
  		static constexpr uint32_t kAlignment = 64;
-@@ -7719,6 +7729,15 @@ namespace bgfx
+@@ -7719,6 +7731,60 @@ namespace bgfx
  			return handle;
  		}
  
@@ -504,14 +604,59 @@ index 316b49d..b25b919 100644
 +			BGFX_MUTEX_SCOPE(m_resourceApiLock);
 +			BGFX_CHECK_HANDLE("setDeviceRestoreByApplication", m_textureHandle, _handle);
 +
++			// The application updates the texture after a restore, also when it was made with texels
++			m_textureRef[_handle.idx].m_immutable = false;
++
 +			CommandBuffer& cmdbuf = getCommandBuffer(CommandBuffer::SetDeviceRestoreByApplication);
 +			cmdbuf.write(_handle);
++		}
++
++		BGFX_API_FUNC(void setDeviceRestoreByApplication(VertexBufferHandle _handle) )
++		{
++			BGFX_MUTEX_SCOPE(m_resourceApiLock);
++			BGFX_CHECK_HANDLE("setDeviceRestoreByApplication", m_vertexBufferHandle, _handle);
++
++			CommandBuffer& cmdbuf = getCommandBuffer(CommandBuffer::SetDeviceRestoreByApplicationBuffer);
++			cmdbuf.write(uint8_t(1) );
++			cmdbuf.write(_handle.idx);
++		}
++
++		BGFX_API_FUNC(void setDeviceRestoreByApplication(IndexBufferHandle _handle) )
++		{
++			BGFX_MUTEX_SCOPE(m_resourceApiLock);
++			BGFX_CHECK_HANDLE("setDeviceRestoreByApplication", m_indexBufferHandle, _handle);
++
++			CommandBuffer& cmdbuf = getCommandBuffer(CommandBuffer::SetDeviceRestoreByApplicationBuffer);
++			cmdbuf.write(uint8_t(0) );
++			cmdbuf.write(_handle.idx);
++		}
++
++		BGFX_API_FUNC(void giveDeviceRestoreContents(VertexBufferHandle _handle, const Memory* _mem) )
++		{
++			BGFX_MUTEX_SCOPE(m_resourceApiLock);
++			BGFX_CHECK_HANDLE("giveDeviceRestoreContents", m_vertexBufferHandle, _handle);
++
++			CommandBuffer& cmdbuf = getCommandBuffer(CommandBuffer::GiveDeviceRestoreContents);
++			cmdbuf.write(uint8_t(1) );
++			cmdbuf.write(_handle.idx);
++			cmdbuf.write(_mem);
++		}
++
++		BGFX_API_FUNC(void giveDeviceRestoreContents(IndexBufferHandle _handle, const Memory* _mem) )
++		{
++			BGFX_MUTEX_SCOPE(m_resourceApiLock);
++			BGFX_CHECK_HANDLE("giveDeviceRestoreContents", m_indexBufferHandle, _handle);
++
++			CommandBuffer& cmdbuf = getCommandBuffer(CommandBuffer::GiveDeviceRestoreContents);
++			cmdbuf.write(uint8_t(0) );
++			cmdbuf.write(_handle.idx);
++			cmdbuf.write(_mem);
 +		}
 +
  		BGFX_API_FUNC(void setName(TextureHandle _handle, const bx::StringView& _name) )
  		{
  			BGFX_MUTEX_SCOPE(m_resourceApiLock);
-@@ -8740,6 +8759,7 @@ namespace bgfx
+@@ -8740,6 +8806,7 @@ namespace bgfx
  
  		// render thread
  		void flip();
@@ -519,7 +664,7 @@ index 316b49d..b25b919 100644
  		RenderFrame::Enum renderFrame(int32_t _msecs = -1);
  		void flushTextureUpdateBatch(CommandBuffer& _cmdbuf);
  		void rendererExecCommands(CommandBuffer& _cmdbuf);
-@@ -8986,6 +9006,17 @@ namespace bgfx
+@@ -8986,6 +9053,17 @@ namespace bgfx
  
  		typedef UpdateBatchT<256> TextureUpdateBatch;
  		BX_ALIGN_DECL_CACHE_LINE(TextureUpdateBatch m_textureUpdateBatch);
@@ -539,10 +684,10 @@ index 316b49d..b25b919 100644
  #undef BGFX_API_FUNC
 diff --git a/bgfx/src/device_restore.h b/bgfx/src/device_restore.h
 new file mode 100644
-index 0000000..5e23188
+index 0000000..7ef25df
 --- /dev/null
 +++ b/bgfx/src/device_restore.h
-@@ -0,0 +1,902 @@
+@@ -0,0 +1,1000 @@
 +/*
 + * Copyright 2026 openblack developers. All rights reserved.
 + * License: https://github.com/bkaradzic/bgfx/blob/master/LICENSE
@@ -619,6 +764,7 @@ index 0000000..5e23188
 +			Buffer& buffer = m_indexBuffers[_handle.idx];
 +			freeBuffer(buffer, KeptBuffers);
 +			buffer.mem   = own(_mem);
++			buffer.size  = buffer.mem->size;
 +			buffer.flags = _flags;
 +			m_kept[KeptBuffers] += buffer.mem->size;
 +		}
@@ -626,6 +772,25 @@ index 0000000..5e23188
 +		void destroyIndexBuffer(IndexBufferHandle _handle)
 +		{
 +			freeBuffer(m_indexBuffers[_handle.idx], KeptBuffers);
++		}
++
++		// The application gives the contents of the buffer again after a restore. The kept contents go.
++		void restoreByApplication(IndexBufferHandle _handle)
++		{
++			giveUpContents(m_indexBuffers[_handle.idx]);
++		}
++
++		// Makes a buffer that the application gives again with the new contents. The caller keeps the memory.
++		void giveContents(RendererContextI* _renderCtx, IndexBufferHandle _handle, const Memory* _mem)
++		{
++			const Buffer& buffer = m_indexBuffers[_handle.idx];
++			if (!buffer.byApplication)
++			{
++				return;
++			}
++
++			_renderCtx->destroyIndexBuffer(_handle);
++			_renderCtx->createIndexBuffer(_handle, _mem, buffer.flags);
 +		}
 +
 +		void createVertexLayout(VertexLayoutHandle _handle, const VertexLayout& _layout)
@@ -644,6 +809,7 @@ index 0000000..5e23188
 +			Buffer& buffer = m_vertexBuffers[_handle.idx];
 +			freeBuffer(buffer, KeptBuffers);
 +			buffer.mem    = own(_mem);
++			buffer.size   = buffer.mem->size;
 +			buffer.layout = _layoutHandle;
 +			buffer.flags  = _flags;
 +			m_kept[KeptBuffers] += buffer.mem->size;
@@ -652,6 +818,25 @@ index 0000000..5e23188
 +		void destroyVertexBuffer(VertexBufferHandle _handle)
 +		{
 +			freeBuffer(m_vertexBuffers[_handle.idx], KeptBuffers);
++		}
++
++		// The application gives the contents of the buffer again after a restore. The kept contents go.
++		void restoreByApplication(VertexBufferHandle _handle)
++		{
++			giveUpContents(m_vertexBuffers[_handle.idx]);
++		}
++
++		// Makes a buffer that the application gives again with the new contents. The caller keeps the memory.
++		void giveContents(RendererContextI* _renderCtx, VertexBufferHandle _handle, const Memory* _mem)
++		{
++			const Buffer& buffer = m_vertexBuffers[_handle.idx];
++			if (!buffer.byApplication)
++			{
++				return;
++			}
++
++			_renderCtx->destroyVertexBuffer(_handle);
++			_renderCtx->createVertexBuffer(_handle, _mem, buffer.layout, buffer.flags);
 +		}
 +
 +		void createDynamicIndexBuffer(IndexBufferHandle _handle, uint32_t _size, uint16_t _flags)
@@ -807,8 +992,27 @@ index 0000000..5e23188
 +				return;
 +			}
 +
++			// The slices can point into the texels of the create memory, thus they go first
 +			freeChanges(texture);
 +			texture.byApplication = true;
++			if (sizeof(uint32_t) + sizeof(TextureCreate) <= texture.mem->size)
++			{
++				uint32_t magic;
++				bx::memCopy(&magic, texture.mem->data, sizeof(uint32_t) );
++				if (kChunkMagicTex == magic)
++				{
++					TextureCreate tc;
++					bx::memCopy(&tc, texture.mem->data + sizeof(uint32_t), sizeof(TextureCreate) );
++					if (NULL != tc.m_mem)
++					{
++						// A restore makes the texture without texels
++						m_kept[KeptTextures] -= tc.m_mem->size;
++						release(tc.m_mem);
++						tc.m_mem = NULL;
++						bx::memCopy(texture.mem->data + sizeof(uint32_t), &tc, sizeof(TextureCreate) );
++					}
++				}
++			}
 +		}
 +
 +		// The contents of a resized texture are not defined, thus the kept changes go
@@ -897,6 +1101,13 @@ index 0000000..5e23188
 +				{
 +					_renderCtx->createIndexBuffer({ii}, buffer.mem, buffer.flags);
 +				}
++				else if (buffer.byApplication)
++				{
++					// Zeros until the application gives the contents again
++					const Memory* zeros = zeroed(buffer.size);
++					_renderCtx->createIndexBuffer({ii}, zeros, buffer.flags);
++					release(zeros);
++				}
 +			}
 +
 +			for (uint16_t ii = 0; ii < m_vertexBuffers.size(); ++ii)
@@ -905,6 +1116,13 @@ index 0000000..5e23188
 +				if (NULL != buffer.mem)
 +				{
 +					_renderCtx->createVertexBuffer({ii}, buffer.mem, buffer.layout, buffer.flags);
++				}
++				else if (buffer.byApplication)
++				{
++					// Zeros until the application gives the contents again
++					const Memory* zeros = zeroed(buffer.size);
++					_renderCtx->createVertexBuffer({ii}, zeros, buffer.layout, buffer.flags);
++					release(zeros);
 +				}
 +			}
 +
@@ -1082,8 +1300,10 @@ index 0000000..5e23188
 +		struct Buffer
 +		{
 +			const Memory* mem = NULL;
++			uint32_t size = 0;
 +			VertexLayoutHandle layout = BGFX_INVALID_HANDLE;
 +			uint16_t flags = 0;
++			bool byApplication = false;
 +		};
 +
 +		struct Dynamic
@@ -1343,8 +1563,31 @@ index 0000000..5e23188
 +			{
 +				m_kept[_kind] -= _buffer.mem->size;
 +				release(_buffer.mem);
-+				_buffer.mem = NULL;
 +			}
++
++			_buffer = Buffer();
++		}
++
++		// The kept contents of a live buffer go; the buffer keeps its size, layout and flags
++		void giveUpContents(Buffer& _buffer)
++		{
++			if (NULL == _buffer.mem)
++			{
++				return;
++			}
++
++			m_kept[KeptBuffers] -= _buffer.mem->size;
++			release(_buffer.mem);
++			_buffer.mem = NULL;
++			_buffer.byApplication = true;
++		}
++
++		// Memory of zeros, at least one byte
++		static const Memory* zeroed(uint32_t _size)
++		{
++			const Memory* mem = alloc(bx::max<uint32_t>(_size, 1) );
++			bx::memSet(mem->data, 0, mem->size);
++			return mem;
 +		}
 +
 +		void createDynamic(Dynamic& _buffer, uint32_t _size, uint16_t _flags)

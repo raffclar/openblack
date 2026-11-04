@@ -16,6 +16,7 @@
 
 #include <glm/ext/vector_uint2_sized.hpp>
 
+#include "DeviceDataGivers.h"
 #include "GraphicsHandle.h"
 #include "Texture2D.h"
 #include "VertexBuffer.h"
@@ -91,7 +92,8 @@ public:
 	virtual void ReadTexture(TextureHandle texture, uint16_t layer, void* texels) const = 0;
 	virtual void SetName(TextureHandle texture, std::string_view name) const = 0;
 	/// Tells the device that the game gives the texels of the texture again after the device is made again. The device
-	/// then keeps no copy of the updates of the texture.
+	/// then keeps no copy of the texels or of the updates of the texture. After a restore, the game can update the
+	/// texture also when it was made with texels.
 	virtual void SetTexelsGivenAgain(TextureHandle texture) const = 0;
 	virtual void Destroy(TextureHandle texture) const = 0;
 
@@ -105,6 +107,11 @@ public:
 	/// Replaces the vertices of a vertex buffer, from the first vertex on
 	virtual void Update(DynamicVertexBufferHandle buffer, uint32_t firstVertex, const DeviceMemory* vertices) const = 0;
 	virtual void SetName(VertexBufferHandle buffer, std::string_view name) const = 0;
+	/// Tells the device that the game gives the vertices again after the device is made again. The device then keeps no
+	/// copy of the vertices.
+	virtual void SetContentsGivenAgain(VertexBufferHandle buffer) const = 0;
+	/// Gives the vertices of a buffer again after a restore of the device
+	virtual void GiveContentsAgain(VertexBufferHandle buffer, const DeviceMemory* vertices) const = 0;
 	virtual void Destroy(VertexBufferHandle buffer) const = 0;
 	virtual void Destroy(DynamicVertexBufferHandle buffer) const = 0;
 	virtual void Destroy(VertexLayoutHandle layout) const = 0;
@@ -114,8 +121,16 @@ public:
 	/// Makes an index buffer in a part of a large buffer, which the device shares between many small buffers
 	[[nodiscard]] virtual DynamicIndexBufferHandle CreateSharedIndexBuffer(const DeviceMemory* indices, bool wide) const = 0;
 	virtual void SetName(IndexBufferHandle buffer, std::string_view name) const = 0;
+	/// Tells the device that the game gives the indices again after the device is made again. The device then keeps no
+	/// copy of the indices.
+	virtual void SetContentsGivenAgain(IndexBufferHandle buffer) const = 0;
+	/// Gives the indices of a buffer again after a restore of the device
+	virtual void GiveContentsAgain(IndexBufferHandle buffer, const DeviceMemory* indices) const = 0;
 	virtual void Destroy(IndexBufferHandle buffer) const = 0;
 	virtual void Destroy(DynamicIndexBufferHandle buffer) const = 0;
+
+	/// The owners that give their data to the device again after a restore of the device
+	[[nodiscard]] virtual DeviceDataGivers& GetDataGivers() const = 0;
 };
 
 } // namespace openblack::graphics

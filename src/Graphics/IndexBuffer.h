@@ -13,6 +13,7 @@
 #include <cstdint>
 
 #include <string>
+#include <vector>
 
 #include "GraphicsHandle.h"
 
@@ -62,6 +63,11 @@ public:
 	void Bind(uint32_t count, uint32_t startIndex = 0) const;
 	/// The same into the encoder given
 	void Bind(bgfx::Encoder& encoder, uint32_t count, uint32_t startIndex = 0) const;
+	/// Tells the graphics device that the game gives the indices again after a restore of the device. A part of the
+	/// shared buffer keeps its copy on the device.
+	void SetContentsGivenAgain() const;
+	/// Gives the bytes of all the indices again after a restore of the device
+	void GiveContentsAgain(std::vector<uint8_t> bytes) const;
 
 private:
 	/// Makes the buffer of the graphics library from bgfx memory, on the main thread
