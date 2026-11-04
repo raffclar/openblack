@@ -39,6 +39,14 @@ using gamesave::VanillaRecord;
 using gamesave::VanillaType;
 using gamesave::VanillaWorld;
 
+/// The reaction of the file that a living thing reacts to, 0 for none or for a record that is not a reaction
+uint32_t ReactionOf(const VanillaWorld& world, const VanillaRecord& record)
+{
+	const auto number = world.Ref(record, "reaction").value_or(0);
+	const auto* reaction = number != 0 ? world.Record(number) : nullptr;
+	return reaction != nullptr && reaction->Is(VanillaType::Reaction) ? number : 0;
+}
+
 /// The flag of a pot whose food is poisoned
 constexpr uint8_t k_PotPoisonedFlag = 0x01;
 
@@ -82,8 +90,8 @@ constexpr std::array k_DanceStates = {VillagerStates::InDance, VillagerStates::M
                                       VillagerStates::ControlledByCreature};
 /// The states of the dance of an artefact of a town. They keep the same values as the other dance states.
 constexpr std::array k_ArtefactDanceStates = {VillagerStates::ArtifactDance, VillagerStates::WaitForArtifactDance};
-/// The state of a dance that a reaction holds. The import does not make the reactions, so a villager in this state
-/// decides again.
+/// The state of the dance of a reaction. A villager keeps it only when it dances in a group of a dance that the import
+/// makes, and it reacts to a reaction of the file.
 constexpr std::array k_ReactionDanceStates = {VillagerStates::DanceWhileReacting};
 /// The states of worship at a worship site. Each keeps one value: whether the villager asked to go home. Only code
 /// that the game never runs sets it, and no villager asks to go home, so the value changes nothing.
@@ -652,7 +660,8 @@ std::optional<ImportedVillager> ReadVillager(const VanillaWorld& world, const Va
 	                           .status = world.Half(record, "status").value_or(0),
 	                           .turnsSinceStateChange = static_cast<uint16_t>(action[4] | (action[5] << 8)),
 	                           .turnsUntilStateChange = world.Half(record, "turnsToStateChange").value_or(0),
-	                           .danceGroup = world.Ref(record, "danceGroup").value_or(0)};
+	                           .danceGroup = world.Ref(record, "danceGroup").value_or(0),
+	                           .reaction = ReactionOf(world, record)};
 	villager.walk = WalkOf(world, record);
 	villager.footpathWalk = {.footpath = world.Ref(record, "walkFootpath").value_or(0),
 	                         .node = world.Ref(record, "walkFootpathNode").value_or(0),
@@ -962,16 +971,11 @@ std::optional<ImportedDance> ReadDance(const VanillaWorld& world, const VanillaR
 ImportedDances ReadOtherDances(const VanillaWorld& world)
 {
 	std::unordered_set<uint32_t> ofSites;
-	std::unordered_set<uint32_t> held;
 	for (const auto& record : world.Records())
 	{
 		if (record.Is(VanillaType::WorshipSite))
 		{
 			ofSites.insert(world.Ref(record, "siteDance").value_or(0));
-		}
-		else if (record.Is(VanillaType::Reaction))
-		{
-			held.insert(world.Ref(record, "reactionDance").value_or(0));
 		}
 	}
 	ImportedDances dances;
@@ -981,11 +985,7 @@ ImportedDances ReadOtherDances(const VanillaWorld& world)
 		{
 			continue;
 		}
-		if (held.contains(record.number))
-		{
-			dances.notMade.push_back(record.number);
-		}
-		else if (auto dance = ReadDance(world, record); dance.has_value())
+		if (auto dance = ReadDance(world, record); dance.has_value())
 		{
 			dances.made.push_back(std::move(*dance));
 		}
@@ -1390,7 +1390,7 @@ std::array<uint8_t, 3> StartStates(const ImportedVillager& villager)
 		}
 		if (IsOneOf(state, k_ReactionDanceStates))
 		{
-			return false;
+			return villager.importedDancer && villager.reaction != 0;
 		}
 		return CanKeepStateValues(state);
 	};

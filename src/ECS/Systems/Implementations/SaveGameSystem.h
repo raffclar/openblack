@@ -185,6 +185,9 @@ private:
 	void ImportVanillaAnimals(const gamesave::VanillaWorld& world, VanillaMade& made, VanillaCircles& circles);
 	/// Each player takes the computer god of the file. A player that the file gives no computer god has no computer god.
 	void ImportVanillaPlayers(const gamesave::VanillaWorld& world);
+	/// The reactions of the file replace the reactions of the land, when all the things of the file are made. Each living
+	/// thing of the file remembers the kinds of reaction that it took up.
+	void ImportVanillaReactions(const gamesave::VanillaWorld& world, const VanillaMade& made);
 	/// The running scripts of the file replace the scripts of the land, with the table of the objects that they hold
 	void ImportVanillaScripts(const gamesave::VanillaWorld& world, const VanillaMade& made);
 	/// The world file in the game's layout of a save of a game that came from such a file

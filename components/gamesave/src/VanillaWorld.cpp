@@ -883,11 +883,12 @@ std::array<uint8_t, 2> ReadLiving(WorldReader& r)
 	r.Byte("flockOrder");
 	r.Ref("danceGroup");
 	r.Byte();
+	// The kinds of reaction that the living thing took up lately and the turn of each, the oldest first
 	const auto pairs = r.Word();
 	for (uint32_t i = 0; i < pairs && !r.Failed(); ++i)
 	{
-		r.Word();
-		r.Word();
+		r.Word("reactionDoneType");
+		r.Word("reactionDoneTurn");
 	}
 	// The state and the next state of the living thing
 	return action.size() >= 2 ? std::array {action[0], action[1]} : std::array<uint8_t, 2> {};
