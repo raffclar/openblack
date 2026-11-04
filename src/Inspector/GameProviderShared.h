@@ -158,6 +158,8 @@ template <typename Read>
 /// The land, the sea and the weather
 [[nodiscard]] std::unique_ptr<ProviderInterface> LandProvider();
 [[nodiscard]] std::unique_ptr<ProviderInterface> SkyStateProvider(std::unique_ptr<ProviderInterface> sky);
+/// The things living on the land
+[[nodiscard]] std::unique_ptr<ProviderInterface> LivingProvider();
 
 
 } // namespace openblack::inspector::game_providers
