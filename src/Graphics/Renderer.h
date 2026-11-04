@@ -465,6 +465,10 @@ private:
 	[[nodiscard]] static bool BindCap(bgfx::Encoder& encoder, const std::vector<partial_build_cap::CapVertex>& cap);
 	/// The views of a scene pass, and what its parts read that DrawPass finds before them
 	struct ScenePass;
+	/// The pose that the draw helper of the entities gives to one draw
+	struct EntityPose;
+	/// The flat colour of a thing that the game mirrors in the sea by itself
+	struct FlatLook;
 	void DrawPass(const DrawSceneDesc& desc) const;
 	/// Draws the sky dome, the sun and the moon into the sky's view
 	void DrawPassSky(const DrawSceneDesc& desc, const ScenePass& pass) const;
@@ -474,8 +478,25 @@ private:
 	void DrawPassLand(const DrawSceneDesc& desc, const ScenePass& pass) const;
 	/// Draws the models: the entities, the vegetation, the lights of the temple and the sprites
 	void DrawPassModels(const DrawSceneDesc& desc, const ScenePass& pass) const;
-	/// Draws the entities: the solid models, the creatures, the animals, the villagers, the things that blend, the effects, the
-	/// hand and the debug lines
+	/// Draws the solid models placed this frame. The threads that encode draws can draw them at the same time.
+	void DrawPassPlacedModels(const DrawSceneDesc& desc, auto& draws) const;
+	/// Draws the creatures, the creatures of the interface and of the menu, and the creatures of the warm-up
+	void DrawPassCreatures(const DrawSceneDesc& desc, const ScenePass& pass, auto& draws) const;
+	/// Draws the animals by model, then each thing that is posed by itself
+	void DrawPassAnimals(const DrawSceneDesc& desc, auto& draws) const;
+	/// Draws what the hand holds, mirrored in the sea
+	void DrawPassMirroredHeld(const DrawSceneDesc& desc, const ScenePass& pass, auto& draws) const;
+	/// Draws the villagers that are posed from the bone palette
+	void DrawPassPaletteVillagers(const DrawSceneDesc& desc, auto& draws) const;
+	/// Draws the things that blend over the solid models
+	void DrawPassTranslucent(const DrawSceneDesc& desc, const ScenePass& pass, auto& draws) const;
+	/// Draws the temple's pool and map, the seeds, the weather, the particles, the mists and the other effects
+	void DrawPassEffects(const DrawSceneDesc& desc) const;
+	/// Draws the hand mirrored in the sea, then the hand
+	void DrawPassHand(const DrawSceneDesc& desc, const ScenePass& pass, auto& draws) const;
+	/// Draws the debug lines of the main view: the bounding boxes, the footpaths and the streams
+	void DrawPassDebugLines(const DrawSceneDesc& desc, auto& draws) const;
+	/// Draws the entities part by part. It gives the parts above `draws`: its state and the draw helpers that they share.
 	void DrawPassEntities(const DrawSceneDesc& desc, const ScenePass& pass) const;
 	/// Draws the trees and the other vegetation
 	void DrawPassVegetation(const DrawSceneDesc& desc, const ScenePass& pass) const;

@@ -217,6 +217,25 @@ glm::vec3 HandGlowColour()
 }
 } // namespace
 
+// A creature is drawn with its own pose, and its body blended from its meshes
+struct Renderer::EntityPose
+{
+	std::span<const glm::mat4> bones;
+	const L3DMeshSubmitDesc::MorphTargets* morphTargets;
+	/// Each instance's bones are read from the bone palette, where its instance says they start
+	bool bonePalette {false};
+	/// The body draws with the first environment map added over every part
+	bool environmentMapped {false};
+};
+
+// A thing that the game mirrors in the sea by itself is drawn in one flat colour with a colour added, and with no
+// light, haze, snow or shadows
+struct Renderer::FlatLook
+{
+	glm::vec3 colour;
+	glm::vec3 added;
+};
+
 struct Renderer::ScenePass
 {
 	RenderPass skyViewId;
@@ -667,6 +686,801 @@ void Renderer::DrawPassModels(const DrawSceneDesc& desc, const ScenePass& pass) 
 	DrawPassSprites(desc, pass);
 }
 
+void Renderer::DrawPassPlacedModels(const DrawSceneDesc& desc, auto& draws) const
+{
+	const auto& meshManager = Locator::resources::value().GetMeshes();
+	auto& submitDesc = draws.submitDesc;
+	auto& renderCtx = draws.renderCtx;
+	auto& drawPlaced = draws.drawPlaced;
+	// The things placed this frame. The things too far away to draw come after them. Each model starts from the
+	// submit desc of the pass, thus the threads can draw the models at the same time. The draws keep the order of
+	// the models. This loop loads the models, thus the threads only read them.
+	struct Placed
+	{
+		entt::id_type meshId;
+		const L3DMesh* mesh;
+		const RenderContext::InstancedDrawDesc* placers;
+	};
+	std::vector<Placed> placed;
+	placed.reserve(renderCtx.instancedDrawDescs.size());
+	for (const auto& [meshId, placers] : renderCtx.instancedDrawDescs)
+	{
+		if (meshId != ecs::components::Hand::k_MeshId && !placers.translucent && !placers.perEntity &&
+		    !(desc.viewId == RenderPass::Reflection && placers.hiddenFromReflection))
+		{
+			placed.push_back({.meshId = meshId, .mesh = &*meshManager.Handle(meshId), .placers = &placers});
+		}
+	}
+	EncodeInOrder(placed.size(), [&](size_t index, DrawEncoder& to) {
+		const auto& [meshId, mesh, placers] = placed[index];
+		L3DMeshSubmitDesc own = {};
+		own.viewId = submitDesc.viewId;
+		own.encoder = &to;
+		own.program = submitDesc.program;
+		own.state = submitDesc.state;
+		drawPlaced(own, meshId, *mesh, *placers, placers->materialBlending);
+	});
+}
+
+void Renderer::DrawPassCreatures(const DrawSceneDesc& desc, const ScenePass& pass, auto& draws) const
+{
+	const auto& meshManager = Locator::resources::value().GetMeshes();
+	const auto translucentViewId = pass.translucentViewId;
+	const auto mirroredViewId = pass.mirroredViewId;
+	const auto cameraOrigin = pass.cameraOrigin;
+	auto& submitDesc = draws.submitDesc;
+	auto& renderCtx = draws.renderCtx;
+	auto& drawingCreatures = draws.drawingCreatures;
+	auto& flatReflection = draws.flatReflection;
+	auto& drawInstances = draws.drawInstances;
+	auto& inSegment = draws.inSegment;
+	// The creatures, each posed and shaped as it is, then its eyes
+	drawingCreatures = true;
+	// A creature fizzing in or out of sight blends with what is behind it, but in its place among the solid
+	// models: after them in this view, before all that blends, the nearest fizzing creature first. First its depth
+	// alone, where the static scrolling over its skin is strong enough, then its body blended over just that
+	// depth. Frozen, the ice is then added over all of its mesh where nothing nearer hides it, and lays no depth.
+	// Returns the sort depth of its last pass.
+	const auto drawFizzing = [&](entt::id_type meshId, const RenderContext::InstancedDrawDesc& placers, uint32_t instance,
+	                             std::optional<graphics::DynamicVertexBufferHandle> instances, const EntityPose& pose,
+	                             uint8_t level, glm::vec2 scroll, uint32_t depth, float freeze) {
+		const auto mainState = submitDesc.state;
+		submitDesc.viewId = translucentViewId;
+		submitDesc.fizz =
+		    L3DMeshSubmitDesc::Fizz {.pass = L3DMeshSubmitDesc::Fizz::Pass::Depth, .level = level, .scroll = scroll};
+		submitDesc.state = BGFX_STATE_WRITE_Z | BGFX_STATE_DEPTH_TEST_GREATER | BGFX_STATE_MSAA;
+		submitDesc.sortDepth = depth;
+		drawInstances(meshId, placers, false, instance, 1, &pose, nullptr, instances);
+		submitDesc.fizz->pass = L3DMeshSubmitDesc::Fizz::Pass::Body;
+		submitDesc.state =
+		    BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A | BGFX_STATE_DEPTH_TEST_EQUAL | BGFX_STATE_BLEND_ALPHA | BGFX_STATE_MSAA;
+		submitDesc.sortDepth = depth > 0 ? depth - 1 : 0;
+		drawInstances(meshId, placers, false, instance, 1, &pose, nullptr, instances);
+		if (creature_spells::IceAlpha(freeze) > 0)
+		{
+			submitDesc.fizz->pass = L3DMeshSubmitDesc::Fizz::Pass::Ice;
+			submitDesc.freeze = freeze;
+			submitDesc.state = BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A | BGFX_STATE_DEPTH_TEST_GEQUAL |
+			                   BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_SRC_ALPHA, BGFX_STATE_BLEND_ONE) | BGFX_STATE_MSAA;
+			submitDesc.sortDepth = submitDesc.sortDepth > 0 ? submitDesc.sortDepth - 1 : 0;
+			drawInstances(meshId, placers, false, instance, 1, &pose, nullptr, instances);
+			submitDesc.freeze = 0.0f;
+		}
+		const auto bodyDepth = submitDesc.sortDepth;
+		submitDesc.fizz.reset();
+		submitDesc.state = mainState;
+		submitDesc.sortDepth = 0;
+		submitDesc.viewId = desc.viewId;
+		return bodyDepth;
+	};
+	for (const auto& drawn : _drawnCreatures)
+	{
+		const auto entity = drawn.entity;
+		const auto instance = drawn.instance;
+		// A copy drawn elsewhere looks as its creature does, in a pose of its own
+		const bool copy = drawn.posedBy != entt::null;
+		const auto poser = copy ? drawn.posedBy : entity;
+		// The copy is a thing of the temple's rooms
+		const auto& posers = copy && Locator::temple::has_value() ? Locator::temple::value().GetRooms() : desc.entities;
+		const auto* mesh = desc.entities.TryGet<const ecs::components::Mesh>(entity);
+		const auto* creature = desc.entities.TryGet<const ecs::components::Creature>(entity);
+		const auto* morph = desc.entities.TryGet<const ecs::components::CreatureMorph>(entity);
+		const auto* animation = posers.Valid(poser) ? posers.TryGet<const ecs::components::CreatureAnimation>(poser) : nullptr;
+		if (mesh == nullptr || !meshManager.Contains(mesh->id) || !posers.Valid(poser))
+		{
+			continue;
+		}
+		const auto placers = renderCtx.instancedDrawDescs.find(mesh->id);
+		if (placers == renderCtx.instancedDrawDescs.end() ||
+		    (desc.viewId == RenderPass::Reflection && placers->second.hiddenFromReflection))
+		{
+			continue;
+		}
+		const auto bodyMesh = meshManager.Handle(mesh->id);
+		std::optional<L3DMeshSubmitDesc::MorphTargets> targets;
+		if (creature != nullptr && morph != nullptr)
+		{
+			const auto ids = creature_morph::MeshesOf(creature->species, morph->drawn,
+			                                          [&meshManager](entt::id_type id) { return meshManager.Contains(id); });
+			targets = L3DMeshSubmitDesc::MorphTargets {
+			    .meshes = {&*meshManager.Handle(ids.evilGood), &*meshManager.Handle(ids.thinFat),
+			               &*meshManager.Handle(ids.weakStrong)},
+			    .weights = glm::abs(glm::vec3(morph->drawn.evilGood, morph->drawn.thinFat, morph->drawn.weakStrong)),
+			    .skins = {},
+			    .blendSeams = Locator::config::value().blendCreatureSeams,
+			};
+			// A copy with a skin of its own, as the Creature Cave's copy has, shows that skin
+			if (const auto own = copy ? _roomCreatureSkins.find(poser) : _roomCreatureSkins.end();
+			    own != _roomCreatureSkins.end())
+			{
+				targets->skins = own->second.drawn;
+			}
+			else if (const auto skins = _creatureSkins.find(entity); skins != _creatureSkins.end())
+			{
+				targets->skins = skins->second.drawn;
+			}
+		}
+		const bool posed = animation != nullptr && animation->boneMatrices.size() == bodyMesh->GetBoneMatrices().size();
+		// The environment map belongs to the creature's own body: a copy drawn elsewhere has its own body, without it
+		const uint32_t environmentWord = creature != nullptr && !copy ? creature->environmentMap : 0;
+		const EntityPose pose {
+		    .bones = posed ? std::span<const glm::mat4>(animation->boneMatrices)
+		                   : std::span<const glm::mat4>(bodyMesh->GetBoneMatrices()),
+		    .morphTargets = targets ? &*targets : nullptr,
+		    .environmentMapped = creature_environment_map::DrawnWithMap(environmentWord),
+		};
+		if (pose.bones.empty())
+		{
+			continue;
+		}
+		// A copy shows none of its creature's frozen or fizzing look, and is lit by a light of its own
+		const auto* spells = posers.TryGet<const ecs::components::CreatureSpells>(poser);
+		const float fizz = spells != nullptr ? spells->fizz : 0.0f;
+		submitDesc.modelLight = drawn.light;
+		if (desc.viewId == RenderPass::Reflection)
+		{
+			// The sea reflects the body of the local player's creature alone, without its eyes or hair, whole.
+			// It does so only while the creature stands low on a near land block in view, and until it has fizzed
+			// a fifth of the way out.
+			const auto position = instance < renderCtx.instanceUniforms.size()
+			                          ? glm::vec3(renderCtx.instanceUniforms.at(instance).model[3])
+			                          : glm::vec3(0.0f);
+			// It shows none of the creature's frozen look. It comes after the hand and what the hand holds.
+			if (!copy && CreatureMirrored(entity, position, fizz))
+			{
+				flatReflection = FlatLook {.colour = creature_reflection::Colour(), .added = creature_reflection::Added()};
+				submitDesc.iceShown = false;
+				submitDesc.viewId = mirroredViewId;
+				submitDesc.sortDepth = hand_reflection::SortKey(hand_reflection::MirroredThing::Creature);
+				drawInstances(mesh->id, placers->second, placers->second.materialBlending, instance, 1, &pose);
+				submitDesc.sortDepth = 0;
+				submitDesc.viewId = desc.viewId;
+				submitDesc.iceShown = true;
+				flatReflection.reset();
+			}
+			submitDesc.modelLight.reset();
+			continue;
+		}
+		uint32_t eyesSortDepth = 0;
+		// The game lights the body as it poses it, with the posed models' rule, also while the body fizzes. The
+		// eyes keep the usual model light.
+		submitDesc.posedModelLight = true;
+		if (creature_environment_map::BodyFizzes(fizz, environmentWord) && instance < renderCtx.instanceUniforms.size())
+		{
+			// A creature in the land's draw list takes its place in the order of the list. Any other creature
+			// takes its place by its distance, after the creatures of the list.
+			const auto position = glm::vec3(renderCtx.instanceUniforms.at(instance).model[3]);
+			const auto rank = copy ? std::nullopt : renderCtx.fizzOrder.RankOf(entity);
+			const auto depth = rank.has_value() ? graphics::fizz_draw_order::CreatureDepth(*rank)
+			                                    : zsort::BeforeSorted(position, cameraOrigin);
+			eyesSortDepth = drawFizzing(mesh->id, placers->second, instance, std::nullopt, pose,
+			                            creature_fizz_look::Level(fizz), spells->staticScroll, depth, spells->freeze);
+		}
+		else if (creature_environment_map::BodyDrawn(fizz, environmentWord))
+		{
+			inSegment(copy ? 0 : renderCtx.fizzOrder.SegmentOf(entity),
+			          [&] { drawInstances(mesh->id, placers->second, placers->second.materialBlending, instance, 1, &pose); });
+		}
+		submitDesc.posedModelLight = false;
+		const float freeze = spells != nullptr ? spells->freeze : 0.0f;
+		if (const auto* eyes = posers.TryGet<const ecs::components::CreatureEyes>(poser); eyes != nullptr)
+		{
+			DrawCreatureEyes(desc, *eyes, submitDesc, fizz, freeze, eyesSortDepth);
+		}
+		submitDesc.modelLight.reset();
+		// The hair is drawn as it is until the creature has fizzed or frozen a fifth of the way, then not at all. With
+		// the environment map, the hair shows at all times. A copy draws the hair of its own, which hangs from its
+		// own pose.
+		const auto* hair = posers.TryGet<const ecs::components::CreatureHair>(poser);
+		const auto* transform = posers.TryGet<const ecs::components::Transform>(poser);
+		if (creature_environment_map::HairShown(fizz, freeze, environmentWord) && hair != nullptr && transform != nullptr &&
+		    Locator::creatureHairSystem::has_value() && Locator::creatureHairSystem::value().IsShown())
+		{
+			// The hair hangs from the body where the frame draws it. The hair of a body with the environment map
+			// takes the colours of the last usual hair before it.
+			const auto origin = ecs::components::DrawnTransform(
+			                        *transform, desc.entities.TryGet<const ecs::components::CreatureAnimation>(poser))
+			                        .position;
+			if (creature_environment_map::DrawnWithMap(environmentWord))
+			{
+				DrawEnvironmentHair(desc, entity, *hair, origin);
+			}
+			else
+			{
+				DrawCreatureHair(desc, *hair, origin);
+			}
+		}
+		// The glows on its body, where its pose put them
+		if (const auto* glows = posers.TryGet<const ecs::components::CreatureHandGlows>(poser);
+		    glows != nullptr && transform != nullptr)
+		{
+			DrawCreatureHandGlows(static_cast<uint16_t>(TranslucentView(desc.viewId)), *glows,
+			                      desc.camera->GetProjectionMatrix(), desc.viewId == RenderPass::Reflection,
+			                      zsort::Depth(transform->position, cameraOrigin));
+		}
+	}
+	// The creatures that the interface shows over itself, each moved for its draw to its place before the
+	// interface's own camera, in a view of their own
+	if (desc.viewId == RenderPass::Main && _interfaceCreatures.has_value())
+	{
+		DrawInterfaceCreatures(desc,
+		                       [&](entt::id_type meshId, uint32_t instance, std::span<const glm::mat4> bones,
+		                           const L3DMeshSubmitDesc::MorphTargets* targets, const ecs::components::CreatureEyes* eyes) {
+			                       const auto placers = renderCtx.instancedDrawDescs.find(meshId);
+			                       if (placers == renderCtx.instancedDrawDescs.end())
+			                       {
+				                       return;
+			                       }
+			                       const EntityPose pose {.bones = bones, .morphTargets = targets};
+			                       submitDesc.viewId = RenderPass::InterfaceCreatures;
+			                       // The body takes the posed models' light, as in the world
+			                       submitDesc.posedModelLight = true;
+			                       drawInstances(meshId, placers->second, placers->second.materialBlending, instance, 1, &pose,
+			                                     nullptr, _interfaceCreatureInstances);
+			                       submitDesc.posedModelLight = false;
+			                       if (eyes != nullptr)
+			                       {
+				                       DrawCreatureEyes(desc, *eyes, submitDesc, 0.0f, 0.0f, 0);
+			                       }
+			                       submitDesc.viewId = desc.viewId;
+		                       });
+	}
+	// The creature that the main menu's tattoo editor shows, in the editor's view of its own. Its mesh can be a
+	// mesh that the scene does not have, so it has an instance of its own.
+	if (desc.viewId == RenderPass::Main && _menuCreature.has_value())
+	{
+		DrawMenuCreature(desc, [&](entt::id_type meshId, uint32_t instance, std::span<const glm::mat4> bones,
+		                           const L3DMeshSubmitDesc::MorphTargets* targets, const ecs::components::CreatureEyes* eyes) {
+			if (!meshManager.Contains(meshId) || !_menuCreatureInstance.has_value())
+			{
+				return;
+			}
+			const RenderContext::InstancedDrawDesc placers {0, 1, false};
+			const EntityPose pose {.bones = bones, .morphTargets = targets};
+			submitDesc.viewId = RenderPass::MenuCreature;
+			// The body takes the posed models' light, as in the world
+			submitDesc.posedModelLight = true;
+			drawInstances(meshId, placers, false, instance, 1, &pose, nullptr, _menuCreatureInstance);
+			submitDesc.posedModelLight = false;
+			if (eyes != nullptr)
+			{
+				DrawCreatureEyes(desc, *eyes, submitDesc, 0.0f, 0.0f, 0);
+			}
+			submitDesc.viewId = desc.viewId;
+		});
+	}
+	// A warm-up draws a body of each species that is loaded, with its eyes and hair, as the first frame of a creature
+	// draws them. They are drawn at no size, and cover no pixel.
+	if (_warmingUp && _warmUpInstances.has_value())
+	{
+		const RenderContext::InstancedDrawDesc placers {0, 1, false};
+		const auto loaded = [&meshManager](entt::id_type id) { return meshManager.Contains(id); };
+		for (int32_t type = static_cast<int32_t>(CreatureType::Cow); type < static_cast<int32_t>(CreatureType::_COUNT); ++type)
+		{
+			const auto ids = creature_morph::MeshesOf(static_cast<CreatureType>(type), creature_morph::Morph {}, loaded);
+			if (!meshManager.Contains(ids.base))
+			{
+				continue;
+			}
+			const auto body = meshManager.Handle(ids.base);
+			const L3DMeshSubmitDesc::MorphTargets targets {
+			    .meshes = {&*meshManager.Handle(ids.evilGood), &*meshManager.Handle(ids.thinFat),
+			               &*meshManager.Handle(ids.weakStrong)},
+			    .weights = glm::vec3(0.0f),
+			    .skins = {},
+			    .blendSeams = Locator::config::value().blendCreatureSeams,
+			};
+			const EntityPose pose {.bones = body->GetBoneMatrices(), .morphTargets = &targets};
+			if (pose.bones.empty())
+			{
+				continue;
+			}
+			// The body takes the posed models' light, as in the world, but not in the reflection
+			submitDesc.posedModelLight = desc.viewId != RenderPass::Reflection;
+			drawInstances(ids.base, placers, false, 0, 1, &pose, nullptr, *_warmUpInstances);
+			// And fizzing, as it comes into sight
+			if (desc.viewId != RenderPass::Reflection)
+			{
+				drawFizzing(ids.base, placers, 0, *_warmUpInstances, pose, creature_fizz_look::Level(warm_up::k_CreatureFizz),
+				            glm::vec2(0.0f), 0, warm_up::k_CreatureFreeze);
+			}
+			submitDesc.posedModelLight = false;
+		}
+		if (desc.viewId != RenderPass::Reflection)
+		{
+			ecs::components::CreatureEyes eyes;
+			eyes.drawn.at(0) = {.eyeball = glm::mat4(0.0f), .eyelid = glm::mat4(0.0f)};
+			DrawCreatureEyes(desc, eyes, submitDesc, 0.0f, 0.0f, 0);
+			DrawCreatureEyes(desc, eyes, submitDesc, warm_up::k_CreatureFizz, 0.0f, 0);
+			ecs::components::CreatureHair hair;
+			hair.groups.push_back({.strands = {{.positions = {glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f)}, .velocities = {}}},
+			                       .colour = glm::ivec3(0),
+			                       .halfWidth = 0.0f,
+			                       .textured = true});
+			DrawCreatureHair(desc, hair, glm::vec3(0.0f));
+		}
+	}
+	drawingCreatures = false;
+}
+
+void Renderer::DrawPassAnimals(const DrawSceneDesc& desc, auto& draws) const
+{
+	auto& submitDesc = draws.submitDesc;
+	auto& renderCtx = draws.renderCtx;
+	auto& drawInstances = draws.drawInstances;
+	auto& inSegment = draws.inSegment;
+	auto& inSegments = draws.inSegments;
+	auto& mirroredWithHand = draws.mirroredWithHand;
+	auto& drawAnimal = draws.drawAnimal;
+	auto& drawVillager = draws.drawVillager;
+	auto& drawPosedStill = draws.drawPosedStill;
+	auto& drawDrawnPosedStills = draws.drawDrawnPosedStills;
+	// The animals of a model drawn at once, in their light: the brightest of the land's, or white
+	for (const auto& [meshId, group] : _animalBoneGroups)
+	{
+		const auto placers = renderCtx.instancedDrawDescs.find(meshId);
+		if (placers == renderCtx.instancedDrawDescs.end() ||
+		    (desc.viewId == RenderPass::Reflection && placers->second.hiddenFromReflection))
+		{
+			continue;
+		}
+		glm::vec3 colour(255.0f);
+		if (group.brightestLand && _landLightTable)
+		{
+			const auto texel = _landLightTable->GetTexels().back();
+			colour = glm::vec3(static_cast<float>(texel & 0xFFu), static_cast<float>((texel >> 8) & 0xFFu),
+			                   static_cast<float>((texel >> 16) & 0xFFu));
+		}
+		// Lit by the land where each stands, as other things are, they take no colour of their own
+		if (!group.landWhereItStands)
+		{
+			submitDesc.objectLook = L3DMeshSubmitDesc::ObjectLook {.colour = colour, .alpha = 1.0f};
+		}
+		inSegments(placers->second, [&](uint32_t first, uint32_t count) {
+			drawInstances(meshId, placers->second, placers->second.materialBlending, first, count, nullptr, nullptr,
+			              std::nullopt, &group);
+		});
+		submitDesc.objectLook.reset();
+		submitDesc.boneTexture = nullptr;
+	}
+	drawDrawnPosedStills(false);
+	for (const auto& [entity, instance] : renderCtx.entityDraws)
+	{
+		if (mirroredWithHand(instance))
+		{
+			continue;
+		}
+		inSegment(renderCtx.fizzOrder.SegmentOf(entity), [&] {
+			drawAnimal(entity, instance, false);
+			drawVillager(entity, instance);
+			drawPosedStill(entity, instance, false);
+		});
+	}
+}
+
+void Renderer::DrawPassMirroredHeld(const DrawSceneDesc& desc, const ScenePass& pass, auto& draws) const
+{
+	const auto mirroredViewId = pass.mirroredViewId;
+	auto& submitDesc = draws.submitDesc;
+	auto& renderCtx = draws.renderCtx;
+	auto& heldReflection = draws.heldReflection;
+	auto& drawInstances = draws.drawInstances;
+	auto& drawAnimal = draws.drawAnimal;
+	auto& drawVillager = draws.drawVillager;
+	auto& drawPosedStill = draws.drawPosedStill;
+	auto& handReflected = draws.handReflected;
+	// The game mirrors what the hand holds just after the hand, flat in the light that it kept
+	if (mirroredViewId != desc.viewId && handReflected)
+	{
+		submitDesc.viewId = mirroredViewId;
+		submitDesc.sortDepth = hand_reflection::SortKey(hand_reflection::MirroredThing::Held);
+		for (const auto& held : renderCtx.inHandDraws)
+		{
+			heldReflection = held.heldLight;
+			const auto posed = std::ranges::find(renderCtx.entityDraws, held.entity, &RenderContext::EntityDraw::entity);
+			if (posed != renderCtx.entityDraws.end())
+			{
+				drawAnimal(held.entity, held.instance, false);
+				drawVillager(held.entity, held.instance);
+				drawPosedStill(held.entity, held.instance, false);
+				continue;
+			}
+			const auto placers = renderCtx.instancedDrawDescs.find(held.mesh);
+			if (placers != renderCtx.instancedDrawDescs.end() && held.instance >= placers->second.offset &&
+			    held.instance < placers->second.offset + placers->second.filled)
+			{
+				drawInstances(held.mesh, placers->second, placers->second.translucent || placers->second.materialBlending,
+				              held.instance, 1);
+			}
+		}
+		heldReflection.reset();
+		submitDesc.sortDepth = 0;
+		submitDesc.viewId = desc.viewId;
+	}
+}
+
+void Renderer::DrawPassPaletteVillagers(const DrawSceneDesc& desc, auto& draws) const
+{
+	auto& renderCtx = draws.renderCtx;
+	auto& drawInstances = draws.drawInstances;
+	auto& inSegments = draws.inSegments;
+	// The villagers, a draw for each of their meshes, each instance posed by its own bones in the bone palette
+	if (renderCtx.bonePaletteTexture)
+	{
+		const EntityPose palettePose {.bones = {}, .morphTargets = nullptr, .bonePalette = true};
+		for (const auto& [meshId, placers] : renderCtx.instancedDrawDescs)
+		{
+			if (placers.bonePalette && placers.filled > 0 &&
+			    !(desc.viewId == RenderPass::Reflection && placers.hiddenFromReflection))
+			{
+				inSegments(placers, [&](uint32_t first, uint32_t count) {
+					drawInstances(meshId, placers, placers.materialBlending, first, count, &palettePose);
+				});
+			}
+		}
+	}
+}
+
+void Renderer::DrawPassTranslucent(const DrawSceneDesc& desc, const ScenePass& pass, auto& draws) const
+{
+	const auto& meshManager = Locator::resources::value().GetMeshes();
+	const auto translucentViewId = pass.translucentViewId;
+	const auto cameraOrigin = pass.cameraOrigin;
+	auto& submitDesc = draws.submitDesc;
+	auto& renderCtx = draws.renderCtx;
+	auto& drawInstances = draws.drawInstances;
+	auto& mirroredWithHand = draws.mirroredWithHand;
+	auto& instanceSeen = draws.instanceSeen;
+	auto& drawPartialBuild = draws.drawPartialBuild;
+	auto& drawAnimal = draws.drawAnimal;
+	auto& drawPosedStill = draws.drawPosedStill;
+	auto& drawDrawnPosedStills = draws.drawDrawnPosedStills;
+	auto& drawHeld = draws.drawHeld;
+	auto& drawRootsPiles = draws.drawRootsPiles;
+	// The translucent meshes blend over the opaque ones, each in its own place in the sort
+	submitDesc.viewId = translucentViewId;
+	// The things fading out in the distance, each blended by its alpha in its own place in the sort: the
+	// villagers posed from the bone palette, the things posed one by one with them
+	{
+		const EntityPose palettePose {.bones = {}, .morphTargets = nullptr, .bonePalette = true};
+		for (const auto& [meshId, placers] : renderCtx.fadingDrawDescs)
+		{
+			if (placers.filled == 0 || (desc.viewId == RenderPass::Reflection && placers.hiddenFromReflection) ||
+			    !meshManager.Contains(meshId) || (placers.bonePalette && !renderCtx.bonePaletteTexture) ||
+			    (placers.perEntity && !placers.bonePalette))
+			{
+				continue;
+			}
+			for (uint32_t instance = placers.offset; instance < placers.offset + placers.filled; ++instance)
+			{
+				if (mirroredWithHand(instance) || !instanceSeen(*meshManager.Handle(meshId), placers, instance))
+				{
+					continue;
+				}
+				const auto position = glm::vec3(renderCtx.instanceUniforms.at(instance).model[3]);
+				submitDesc.sortDepth = zsort::Depth(position, cameraOrigin);
+				if (placers.partsByLevel)
+				{
+					submitDesc.detailLevel = renderCtx.instanceLevels.at(instance);
+				}
+				drawInstances(meshId, placers, false, instance, 1, placers.bonePalette ? &palettePose : nullptr);
+			}
+			submitDesc.detailLevel = 1;
+		}
+		for (const auto& build : renderCtx.partialBuilds)
+		{
+			if (build.fading && build.instance < renderCtx.partialBuildInstances.size())
+			{
+				submitDesc.sortDepth =
+				    zsort::Depth(glm::vec3(renderCtx.partialBuildInstances.at(build.instance).model[3]), cameraOrigin);
+				drawPartialBuild(build);
+			}
+		}
+		drawDrawnPosedStills(true);
+		for (const auto& [entity, instance] : renderCtx.entityDraws)
+		{
+			if (instance < renderCtx.instanceUniforms.size() && !mirroredWithHand(instance))
+			{
+				submitDesc.sortDepth = zsort::Depth(glm::vec3(renderCtx.instanceUniforms.at(instance).model[3]), cameraOrigin);
+				drawPosedStill(entity, instance, true);
+			}
+		}
+	}
+	drawHeld(true);
+	drawRootsPiles(true);
+	// The souls of the dead rising or sinking, each white and see-through, posed by its own clip; the sea doesn't
+	// reflect them
+	if (desc.viewId != RenderPass::Reflection)
+	{
+		for (const auto& soul : renderCtx.soulDraws)
+		{
+			if (!meshManager.Contains(soul.meshId) || soul.instance >= renderCtx.soulInstances.size())
+			{
+				continue;
+			}
+			RenderContext::InstancedDrawDesc placers {soul.instance, 1, false};
+			const EntityPose soulPose {.bones = soul.bones, .morphTargets = nullptr};
+			submitDesc.sortDepth = zsort::Depth(glm::vec3(renderCtx.soulInstances.at(soul.instance).model[3]), cameraOrigin);
+			submitDesc.objectLook = L3DMeshSubmitDesc::ObjectLook {.colour = glm::vec3(255.0f), .alpha = soul.alpha};
+			drawInstances(soul.meshId, placers, true, soul.instance, 1, &soulPose, nullptr, renderCtx.soulInstanceBuffer);
+			submitDesc.objectLook.reset();
+		}
+	}
+	// Each thing that is posed by itself (an animal, a villager or posed scenery) is drawn above, in its own pose.
+	// It is not drawn here, because it would show again in the model's own pose.
+	for (const auto& [meshId, placers] : renderCtx.instancedDrawDescs)
+	{
+		if (graphics::posed_draws::BlendedPassDrawsAllPlaced(
+		        {.translucent = placers.translucent, .perEntity = placers.perEntity}) &&
+		    !(desc.viewId == RenderPass::Reflection && placers.hiddenFromReflection))
+		{
+			for (uint32_t instance = placers.offset; instance < placers.offset + placers.filled; ++instance)
+			{
+				if (mirroredWithHand(instance) || !instanceSeen(*meshManager.Handle(meshId), placers, instance))
+				{
+					continue;
+				}
+				const auto position = glm::vec3(renderCtx.instanceUniforms.at(instance).model[3]);
+				submitDesc.sortDepth = zsort::Depth(position, cameraOrigin);
+				drawInstances(meshId, placers, true, instance, 1);
+			}
+		}
+	}
+	for (const auto& [entity, instance] : renderCtx.entityDraws)
+	{
+		if (instance < renderCtx.instanceUniforms.size() && !mirroredWithHand(instance))
+		{
+			const auto position = glm::vec3(renderCtx.instanceUniforms.at(instance).model[3]);
+			submitDesc.sortDepth = zsort::Depth(position, cameraOrigin);
+			drawAnimal(entity, instance, true);
+		}
+	}
+	// A warm-up draws each model of the land once in each way that the frames draw it: solid as it is placed, blended
+	// by its materials and fading by its alpha. It draws them at no size, and covers no pixel. Thus a model that
+	// comes into sight or fades out later makes no pipeline then.
+	if (_warmingUp && _warmUpInstances.has_value())
+	{
+		const EntityPose palettePose {.bones = {}, .morphTargets = nullptr, .bonePalette = true};
+		const auto warmUpModel = [&](entt::id_type meshId, RenderContext::InstancedDrawDesc placers) {
+			if (meshId == ecs::components::Hand::k_MeshId || !meshManager.Contains(meshId) ||
+			    (desc.viewId == RenderPass::Reflection && placers.hiddenFromReflection))
+			{
+				return;
+			}
+			const auto* pose = placers.bonePalette ? &palettePose : nullptr;
+			placers.instanceAlpha = false;
+			submitDesc.viewId = desc.viewId;
+			drawInstances(meshId, placers, placers.materialBlending, 0, 1, pose, nullptr, *_warmUpInstances);
+			submitDesc.viewId = translucentViewId;
+			drawInstances(meshId, placers, true, 0, 1, pose, nullptr, *_warmUpInstances);
+			placers.instanceAlpha = true;
+			drawInstances(meshId, placers, false, 0, 1, pose, nullptr, *_warmUpInstances);
+		};
+		for (const auto& [meshId, placers] : renderCtx.instancedDrawDescs)
+		{
+			warmUpModel(meshId, placers);
+		}
+		for (const auto& [meshId, placers] : renderCtx.fadingDrawDescs)
+		{
+			warmUpModel(meshId, placers);
+		}
+		// And each building part built, both standing and fading
+		for (auto build : renderCtx.partialBuilds)
+		{
+			for (const bool fading : {false, true})
+			{
+				build.fading = fading;
+				submitDesc.viewId = fading ? translucentViewId : desc.viewId;
+				drawPartialBuild(build, *_warmUpInstances);
+			}
+		}
+	}
+	submitDesc.viewId = desc.viewId;
+	submitDesc.sortDepth = 0;
+}
+
+void Renderer::DrawPassEffects(const DrawSceneDesc& desc) const
+{
+	// The main room's pool, the map over it and its markers, ahead of the hand, whose faded wrist they show
+	// through
+	DrawTemplePool(desc);
+	DrawTempleMap(desc);
+	DrawTempleMapMarkers(desc);
+	DrawCaveTrophies(desc);
+	DrawCaveSeeds(desc);
+	DrawMapSpellSeeds(desc);
+	DrawGroundBlobs(desc);
+	DrawFarVillagerSmudges(desc);
+	DrawVillagerEyes(desc);
+	DrawGlobes(desc);
+	DrawIconSeeds(desc);
+	DrawRewardSeeds(desc);
+	DrawHandMiracleBands(desc);
+	DrawTribalPower(desc);
+	DrawLightColumns(desc);
+	DrawScrollBeams(desc);
+	DrawIconPulses(desc);
+	DrawLeashes(desc);
+	DrawWaterRings(desc);
+	DrawRain(desc);
+	DrawSnowfall(desc);
+	DrawKnockReadout(desc);
+	DrawChimneySmoke(desc);
+	DrawShieldDomes(desc);
+	DrawDestructionGhosts(desc);
+	DrawFilmReflections(desc);
+	DrawParticles(desc);
+	DrawIntroLight(desc);
+	DrawInfluenceBorder(desc);
+	DrawInfluenceRipples(desc);
+	// The mists blend over the rest, the farthest first
+	DrawMists(desc);
+	DrawPauseText(desc);
+}
+
+void Renderer::DrawPassHand(const DrawSceneDesc& desc, const ScenePass& pass, auto& draws) const
+{
+	const auto& meshManager = Locator::resources::value().GetMeshes();
+	const auto translucentViewId = pass.translucentViewId;
+	const auto mirroredViewId = pass.mirroredViewId;
+	const auto cameraOrigin = pass.cameraOrigin;
+	auto& submitDesc = draws.submitDesc;
+	auto& renderCtx = draws.renderCtx;
+	auto& flatReflection = draws.flatReflection;
+	auto& drawInstances = draws.drawInstances;
+	// The game mirrors the hand in the sea while the hand shows, wherever it is: in one flat grey, with no light
+	// and no glow, and only its front faces. Its texture alone gives its alpha.
+	if (const auto hand = renderCtx.instancedDrawDescs.find(ecs::components::Hand::k_MeshId);
+	    mirroredViewId != desc.viewId && desc.drawHand && hand != renderCtx.instancedDrawDescs.end() &&
+	    !hand->second.hiddenFromReflection && hand_reflection::Shown(hand->second.count > 0, meshManager.Contains(hand->first)))
+	{
+		// L3D meshes face clockwise, which the mirrored reflection pass and a mirrored hand each turn around
+		const bool facesTurned = desc.cullBack != renderCtx.handMirrored;
+		const auto opaqueState = submitDesc.state;
+		submitDesc.viewId = mirroredViewId;
+		submitDesc.sortDepth = hand_reflection::SortKey(hand_reflection::MirroredThing::Hand);
+		submitDesc.state = (opaqueState & ~BGFX_STATE_CULL_MASK) | (facesTurned ? BGFX_STATE_CULL_CW : BGFX_STATE_CULL_CCW);
+		auto mirrored = hand->second;
+		mirrored.additiveShare.reset();
+		mirrored.instanceAlpha = false;
+		const auto handMorph = HandMorphTargets();
+		flatReflection = FlatLook {.colour = hand_reflection::Colour(), .added = hand_reflection::Added()};
+		drawInstances(hand->first, mirrored, true, mirrored.offset, mirrored.count, nullptr, handMorph ? &*handMorph : nullptr);
+		flatReflection.reset();
+		submitDesc.state = opaqueState;
+		submitDesc.viewId = desc.viewId;
+		submitDesc.sortDepth = 0;
+	}
+	// The game draws the hand after the rest of the scene, blended by its translucent texture. Its material
+	// shows only the front faces, so the inside of the hand never shows through it.
+	// The game's reflection of the main room has no hand in it
+	if (const auto hand = renderCtx.instancedDrawDescs.find(ecs::components::Hand::k_MeshId);
+	    mirroredViewId == desc.viewId && desc.drawHand && hand != renderCtx.instancedDrawDescs.end() &&
+	    !(desc.viewId == RenderPass::Reflection && hand->second.hiddenFromReflection))
+	{
+		// L3D meshes face clockwise, which the mirrored reflection pass and a mirrored hand each turn around
+		const bool facesTurned = desc.cullBack != renderCtx.handMirrored;
+		// It takes its place in the sort by where it is
+		submitDesc.viewId = translucentViewId;
+		if (hand->second.count > 0)
+		{
+			const auto position = glm::vec3(renderCtx.instanceUniforms.at(hand->second.offset).model[3]);
+			submitDesc.sortDepth = zsort::Depth(position, cameraOrigin);
+		}
+		const auto cullFront = facesTurned ? BGFX_STATE_CULL_CCW : BGFX_STATE_CULL_CW;
+		const auto cullBack = facesTurned ? BGFX_STATE_CULL_CW : BGFX_STATE_CULL_CCW;
+		const auto opaqueState = submitDesc.state;
+		const auto handMorph = HandMorphTargets();
+		const auto* morph = handMorph ? &*handMorph : nullptr;
+
+		// The game lights the hand as it poses it, with the posed models' rule rather than the usual model light
+		submitDesc.posedModelLight = true;
+		const auto outsideState = [opaqueState](uint64_t cull) { return (opaqueState & ~BGFX_STATE_CULL_MASK) | cull; };
+		// The glow is added over the hand without writing depth
+		const auto glowState = [opaqueState](uint64_t cull) {
+			constexpr uint64_t k_Kept = ~(BGFX_STATE_CULL_MASK | BGFX_STATE_WRITE_Z | BGFX_STATE_WRITE_A |
+			                              BGFX_STATE_DEPTH_TEST_MASK | BGFX_STATE_BLEND_MASK);
+			return (opaqueState & k_Kept) | BGFX_STATE_DEPTH_TEST_GEQUAL |
+			       BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_SRC_ALPHA, BGFX_STATE_BLEND_ONE) | cull;
+		};
+		submitDesc.state = outsideState(cullBack);
+		drawInstances(hand->first, hand->second, true, hand->second.offset, hand->second.count, nullptr, morph);
+		// Holding a miracle, the game draws the hand once more over itself: the same hand at the same depth, in the
+		// flow's sheet and its player's colour, shaded as it is posed and added over it without writing depth
+		if (const auto glow = HandGlowOf(desc))
+		{
+			auto glowPlacers = hand->second;
+			glowPlacers.uvOffset = glow->uvOffset;
+			glowPlacers.additiveShare.reset();
+			glowPlacers.instanceAlpha = false;
+			submitDesc.state = glowState(cullBack);
+			// Just after the hand in the sort
+			submitDesc.sortDepth = submitDesc.sortDepth > 0 ? submitDesc.sortDepth - 1 : 0;
+			submitDesc.skinTexture = &glow->flow->GetNativeHandle();
+			submitDesc.uvScale = glow->uvScale;
+			submitDesc.objectLook = L3DMeshSubmitDesc::ObjectLook {.colour = glow->colour, .alpha = glow->alpha};
+			// Nothing of it is left out by its alpha
+			submitDesc.alphaThreshold = 0.0f;
+			drawInstances(hand->first, glowPlacers, false, glowPlacers.offset, glowPlacers.count, nullptr, morph);
+			submitDesc.alphaThreshold.reset();
+			submitDesc.objectLook.reset();
+			submitDesc.uvScale = 1.0f;
+			submitDesc.skinTexture = nullptr;
+		}
+		// A warm-up draws the hand again at no size in each other way that the frames draw it: turned round, as a
+		// mirrored hand is, and glowing with a miracle
+		if (_warmingUp && _warmUpInstances.has_value())
+		{
+			auto hidden = hand->second;
+			hidden.additiveShare.reset();
+			hidden.instanceAlpha = false;
+			for (const auto cull : {cullBack, cullFront})
+			{
+				submitDesc.state = outsideState(cull);
+				drawInstances(hand->first, hidden, true, 0, 1, nullptr, morph, *_warmUpInstances);
+				submitDesc.state = glowState(cull);
+				drawInstances(hand->first, hidden, false, 0, 1, nullptr, morph, *_warmUpInstances);
+			}
+		}
+		submitDesc.posedModelLight = false;
+		submitDesc.state = opaqueState;
+		submitDesc.viewId = desc.viewId;
+		submitDesc.sortDepth = 0;
+	}
+}
+
+void Renderer::DrawPassDebugLines(const DrawSceneDesc& desc, auto& draws) const
+{
+	const auto* debugShader = _shaderManager->GetShader("DebugLine");
+	const auto* debugShaderInstanced = _shaderManager->GetShader("DebugLineInstanced");
+	auto& renderCtx = draws.renderCtx;
+	// Debug
+	if (desc.viewId == graphics::RenderPass::Main)
+	{
+		if (renderCtx.boundingBox)
+		{
+			const auto boundBoxOffset = static_cast<uint32_t>(renderCtx.instanceUniforms.size() / 2);
+			const auto boundBoxCount = static_cast<uint32_t>(renderCtx.instanceUniforms.size() / 2);
+			renderCtx.boundingBox->GetVertexBuffer().Bind();
+			bgfx::setInstanceDataBuffer(toBgfx(renderCtx.instanceUniformBuffer), boundBoxOffset, boundBoxCount);
+			bgfx::setState(k_BgfxDefaultStateInvertedZ | BGFX_STATE_PT_LINES);
+			debugShaderInstanced->Submit(static_cast<bgfx::ViewId>(desc.viewId));
+		}
+		if (renderCtx.footpaths)
+		{
+			renderCtx.footpaths->GetVertexBuffer().Bind();
+			bgfx::setState(k_BgfxDefaultStateInvertedZ | BGFX_STATE_PT_LINES);
+			debugShader->Submit(static_cast<bgfx::ViewId>(desc.viewId));
+		}
+		if (renderCtx.streams)
+		{
+			renderCtx.streams->GetVertexBuffer().Bind();
+			bgfx::setState(k_BgfxDefaultStateInvertedZ | BGFX_STATE_PT_LINES);
+			debugShader->Submit(static_cast<bgfx::ViewId>(desc.viewId));
+		}
+	}
+}
+
 void Renderer::DrawPassEntities(const DrawSceneDesc& desc, const ScenePass& pass) const
 {
 	const auto& meshManager = Locator::resources::value().GetMeshes();
@@ -674,8 +1488,6 @@ void Renderer::DrawPassEntities(const DrawSceneDesc& desc, const ScenePass& pass
 	const auto translucentViewId = pass.translucentViewId;
 	const auto mirroredViewId = pass.mirroredViewId;
 	const auto cameraOrigin = pass.cameraOrigin;
-	const auto* debugShader = _shaderManager->GetShader("DebugLine");
-	const auto* debugShaderInstanced = _shaderManager->GetShader("DebugLineInstanced");
 	const auto* objectShaderInstanced = _shaderManager->GetShader("ObjectInstanced");
 	const auto* objectShaderFewBonesInstanced = _shaderManager->GetShader("ObjectFewBonesInstanced");
 	const auto* objectShaderMorphInstanced = _shaderManager->GetShader("ObjectMorphInstanced");
@@ -722,25 +1534,8 @@ void Renderer::DrawPassEntities(const DrawSceneDesc& desc, const ScenePass& pass
 	const auto& renderCtx = Locator::rendereringSystem::value().GetContext();
 
 	// Instance meshes
-	// A creature is drawn with its own pose, and its body blended from its meshes
-	struct EntityPose
-	{
-		std::span<const glm::mat4> bones;
-		const L3DMeshSubmitDesc::MorphTargets* morphTargets;
-		/// Each instance's bones are read from the bone palette, where its instance says they start
-		bool bonePalette {false};
-		/// The body draws with the first environment map added over every part
-		bool environmentMapped {false};
-	};
 	// The creatures are drawn with a light of their own, at every detail level
 	bool drawingCreatures = false;
-	// A thing that the game mirrors in the sea by itself is drawn in one flat colour with a colour added, and with no
-	// light, haze, snow or shadows
-	struct FlatLook
-	{
-		glm::vec3 colour;
-		glm::vec3 added;
-	};
 	std::optional<FlatLook> flatReflection;
 	// The thing that the hand holds, mirrored in the sea: flat in the land's light, the land's colour and the haze that
 	// it kept the frame before, with nothing of its own added
@@ -1097,34 +1892,6 @@ void Renderer::DrawPassEntities(const DrawSceneDesc& desc, const ScenePass& pass
 			sd.detailLevel = 1;
 		});
 	};
-	// The things placed this frame. The things too far away to draw come after them. Each model starts from the
-	// submit desc of the pass, thus the threads can draw the models at the same time. The draws keep the order of
-	// the models. This loop loads the models, thus the threads only read them.
-	struct Placed
-	{
-		entt::id_type meshId;
-		const L3DMesh* mesh;
-		const RenderContext::InstancedDrawDesc* placers;
-	};
-	std::vector<Placed> placed;
-	placed.reserve(renderCtx.instancedDrawDescs.size());
-	for (const auto& [meshId, placers] : renderCtx.instancedDrawDescs)
-	{
-		if (meshId != ecs::components::Hand::k_MeshId && !placers.translucent && !placers.perEntity &&
-		    !(desc.viewId == RenderPass::Reflection && placers.hiddenFromReflection))
-		{
-			placed.push_back({.meshId = meshId, .mesh = &*meshManager.Handle(meshId), .placers = &placers});
-		}
-	}
-	EncodeInOrder(placed.size(), [&](size_t index, DrawEncoder& to) {
-		const auto& [meshId, mesh, placers] = placed[index];
-		L3DMeshSubmitDesc own = {};
-		own.viewId = submitDesc.viewId;
-		own.encoder = &to;
-		own.program = submitDesc.program;
-		own.state = submitDesc.state;
-		drawPlaced(own, meshId, *mesh, *placers, placers->materialBlending);
-	});
 	// A broken or unfinished building's whole model, as far up as it stands, from both sides and with its inner
 	// walls, and its scaffold sunk into the land or cut down from the top
 	// One fading out in the distance is drawn with the blended things, by its alpha
@@ -1193,300 +1960,6 @@ void Renderer::DrawPassEntities(const DrawSceneDesc& desc, const ScenePass& pass
 			submitDesc.statusesUpTo.reset();
 		}
 	};
-	for (const auto& build : renderCtx.partialBuilds)
-	{
-		if (!build.fading)
-		{
-			inSegment(build.segment, [&] { drawPartialBuild(build); });
-		}
-	}
-	// The creatures, each posed and shaped as it is, then its eyes
-	drawingCreatures = true;
-	// A creature fizzing in or out of sight blends with what is behind it, but in its place among the solid
-	// models: after them in this view, before all that blends, the nearest fizzing creature first. First its depth
-	// alone, where the static scrolling over its skin is strong enough, then its body blended over just that
-	// depth. Frozen, the ice is then added over all of its mesh where nothing nearer hides it, and lays no depth.
-	// Returns the sort depth of its last pass.
-	const auto drawFizzing = [&](entt::id_type meshId, const RenderContext::InstancedDrawDesc& placers, uint32_t instance,
-	                             std::optional<graphics::DynamicVertexBufferHandle> instances, const EntityPose& pose,
-	                             uint8_t level, glm::vec2 scroll, uint32_t depth, float freeze) {
-		const auto mainState = submitDesc.state;
-		submitDesc.viewId = translucentViewId;
-		submitDesc.fizz =
-		    L3DMeshSubmitDesc::Fizz {.pass = L3DMeshSubmitDesc::Fizz::Pass::Depth, .level = level, .scroll = scroll};
-		submitDesc.state = BGFX_STATE_WRITE_Z | BGFX_STATE_DEPTH_TEST_GREATER | BGFX_STATE_MSAA;
-		submitDesc.sortDepth = depth;
-		drawInstances(meshId, placers, false, instance, 1, &pose, nullptr, instances);
-		submitDesc.fizz->pass = L3DMeshSubmitDesc::Fizz::Pass::Body;
-		submitDesc.state =
-		    BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A | BGFX_STATE_DEPTH_TEST_EQUAL | BGFX_STATE_BLEND_ALPHA | BGFX_STATE_MSAA;
-		submitDesc.sortDepth = depth > 0 ? depth - 1 : 0;
-		drawInstances(meshId, placers, false, instance, 1, &pose, nullptr, instances);
-		if (creature_spells::IceAlpha(freeze) > 0)
-		{
-			submitDesc.fizz->pass = L3DMeshSubmitDesc::Fizz::Pass::Ice;
-			submitDesc.freeze = freeze;
-			submitDesc.state = BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A | BGFX_STATE_DEPTH_TEST_GEQUAL |
-			                   BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_SRC_ALPHA, BGFX_STATE_BLEND_ONE) | BGFX_STATE_MSAA;
-			submitDesc.sortDepth = submitDesc.sortDepth > 0 ? submitDesc.sortDepth - 1 : 0;
-			drawInstances(meshId, placers, false, instance, 1, &pose, nullptr, instances);
-			submitDesc.freeze = 0.0f;
-		}
-		const auto bodyDepth = submitDesc.sortDepth;
-		submitDesc.fizz.reset();
-		submitDesc.state = mainState;
-		submitDesc.sortDepth = 0;
-		submitDesc.viewId = desc.viewId;
-		return bodyDepth;
-	};
-	for (const auto& drawn : _drawnCreatures)
-	{
-		const auto entity = drawn.entity;
-		const auto instance = drawn.instance;
-		// A copy drawn elsewhere looks as its creature does, in a pose of its own
-		const bool copy = drawn.posedBy != entt::null;
-		const auto poser = copy ? drawn.posedBy : entity;
-		// The copy is a thing of the temple's rooms
-		const auto& posers = copy && Locator::temple::has_value() ? Locator::temple::value().GetRooms() : desc.entities;
-		const auto* mesh = desc.entities.TryGet<const ecs::components::Mesh>(entity);
-		const auto* creature = desc.entities.TryGet<const ecs::components::Creature>(entity);
-		const auto* morph = desc.entities.TryGet<const ecs::components::CreatureMorph>(entity);
-		const auto* animation = posers.Valid(poser) ? posers.TryGet<const ecs::components::CreatureAnimation>(poser) : nullptr;
-		if (mesh == nullptr || !meshManager.Contains(mesh->id) || !posers.Valid(poser))
-		{
-			continue;
-		}
-		const auto placers = renderCtx.instancedDrawDescs.find(mesh->id);
-		if (placers == renderCtx.instancedDrawDescs.end() ||
-		    (desc.viewId == RenderPass::Reflection && placers->second.hiddenFromReflection))
-		{
-			continue;
-		}
-		const auto bodyMesh = meshManager.Handle(mesh->id);
-		std::optional<L3DMeshSubmitDesc::MorphTargets> targets;
-		if (creature != nullptr && morph != nullptr)
-		{
-			const auto ids = creature_morph::MeshesOf(creature->species, morph->drawn,
-			                                          [&meshManager](entt::id_type id) { return meshManager.Contains(id); });
-			targets = L3DMeshSubmitDesc::MorphTargets {
-			    .meshes = {&*meshManager.Handle(ids.evilGood), &*meshManager.Handle(ids.thinFat),
-			               &*meshManager.Handle(ids.weakStrong)},
-			    .weights = glm::abs(glm::vec3(morph->drawn.evilGood, morph->drawn.thinFat, morph->drawn.weakStrong)),
-			    .skins = {},
-			    .blendSeams = Locator::config::value().blendCreatureSeams,
-			};
-			// A copy with a skin of its own, as the Creature Cave's copy has, shows that skin
-			if (const auto own = copy ? _roomCreatureSkins.find(poser) : _roomCreatureSkins.end();
-			    own != _roomCreatureSkins.end())
-			{
-				targets->skins = own->second.drawn;
-			}
-			else if (const auto skins = _creatureSkins.find(entity); skins != _creatureSkins.end())
-			{
-				targets->skins = skins->second.drawn;
-			}
-		}
-		const bool posed = animation != nullptr && animation->boneMatrices.size() == bodyMesh->GetBoneMatrices().size();
-		// The environment map belongs to the creature's own body: a copy drawn elsewhere has its own body, without it
-		const uint32_t environmentWord = creature != nullptr && !copy ? creature->environmentMap : 0;
-		const EntityPose pose {
-		    .bones = posed ? std::span<const glm::mat4>(animation->boneMatrices)
-		                   : std::span<const glm::mat4>(bodyMesh->GetBoneMatrices()),
-		    .morphTargets = targets ? &*targets : nullptr,
-		    .environmentMapped = creature_environment_map::DrawnWithMap(environmentWord),
-		};
-		if (pose.bones.empty())
-		{
-			continue;
-		}
-		// A copy shows none of its creature's frozen or fizzing look, and is lit by a light of its own
-		const auto* spells = posers.TryGet<const ecs::components::CreatureSpells>(poser);
-		const float fizz = spells != nullptr ? spells->fizz : 0.0f;
-		submitDesc.modelLight = drawn.light;
-		if (desc.viewId == RenderPass::Reflection)
-		{
-			// The sea reflects the body of the local player's creature alone, without its eyes or hair, whole.
-			// It does so only while the creature stands low on a near land block in view, and until it has fizzed
-			// a fifth of the way out.
-			const auto position = instance < renderCtx.instanceUniforms.size()
-			                          ? glm::vec3(renderCtx.instanceUniforms.at(instance).model[3])
-			                          : glm::vec3(0.0f);
-			// It shows none of the creature's frozen look. It comes after the hand and what the hand holds.
-			if (!copy && CreatureMirrored(entity, position, fizz))
-			{
-				flatReflection = FlatLook {.colour = creature_reflection::Colour(), .added = creature_reflection::Added()};
-				submitDesc.iceShown = false;
-				submitDesc.viewId = mirroredViewId;
-				submitDesc.sortDepth = hand_reflection::SortKey(hand_reflection::MirroredThing::Creature);
-				drawInstances(mesh->id, placers->second, placers->second.materialBlending, instance, 1, &pose);
-				submitDesc.sortDepth = 0;
-				submitDesc.viewId = desc.viewId;
-				submitDesc.iceShown = true;
-				flatReflection.reset();
-			}
-			submitDesc.modelLight.reset();
-			continue;
-		}
-		uint32_t eyesSortDepth = 0;
-		// The game lights the body as it poses it, with the posed models' rule, also while the body fizzes. The
-		// eyes keep the usual model light.
-		submitDesc.posedModelLight = true;
-		if (creature_environment_map::BodyFizzes(fizz, environmentWord) && instance < renderCtx.instanceUniforms.size())
-		{
-			// A creature in the land's draw list takes its place in the order of the list. Any other creature
-			// takes its place by its distance, after the creatures of the list.
-			const auto position = glm::vec3(renderCtx.instanceUniforms.at(instance).model[3]);
-			const auto rank = copy ? std::nullopt : renderCtx.fizzOrder.RankOf(entity);
-			const auto depth = rank.has_value() ? graphics::fizz_draw_order::CreatureDepth(*rank)
-			                                    : zsort::BeforeSorted(position, cameraOrigin);
-			eyesSortDepth = drawFizzing(mesh->id, placers->second, instance, std::nullopt, pose,
-			                            creature_fizz_look::Level(fizz), spells->staticScroll, depth, spells->freeze);
-		}
-		else if (creature_environment_map::BodyDrawn(fizz, environmentWord))
-		{
-			inSegment(copy ? 0 : renderCtx.fizzOrder.SegmentOf(entity),
-			          [&] { drawInstances(mesh->id, placers->second, placers->second.materialBlending, instance, 1, &pose); });
-		}
-		submitDesc.posedModelLight = false;
-		const float freeze = spells != nullptr ? spells->freeze : 0.0f;
-		if (const auto* eyes = posers.TryGet<const ecs::components::CreatureEyes>(poser); eyes != nullptr)
-		{
-			DrawCreatureEyes(desc, *eyes, submitDesc, fizz, freeze, eyesSortDepth);
-		}
-		submitDesc.modelLight.reset();
-		// The hair is drawn as it is until the creature has fizzed or frozen a fifth of the way, then not at all. With
-		// the environment map, the hair shows at all times. A copy draws the hair of its own, which hangs from its
-		// own pose.
-		const auto* hair = posers.TryGet<const ecs::components::CreatureHair>(poser);
-		const auto* transform = posers.TryGet<const ecs::components::Transform>(poser);
-		if (creature_environment_map::HairShown(fizz, freeze, environmentWord) && hair != nullptr && transform != nullptr &&
-		    Locator::creatureHairSystem::has_value() && Locator::creatureHairSystem::value().IsShown())
-		{
-			// The hair hangs from the body where the frame draws it. The hair of a body with the environment map
-			// takes the colours of the last usual hair before it.
-			const auto origin = ecs::components::DrawnTransform(
-			                        *transform, desc.entities.TryGet<const ecs::components::CreatureAnimation>(poser))
-			                        .position;
-			if (creature_environment_map::DrawnWithMap(environmentWord))
-			{
-				DrawEnvironmentHair(desc, entity, *hair, origin);
-			}
-			else
-			{
-				DrawCreatureHair(desc, *hair, origin);
-			}
-		}
-		// The glows on its body, where its pose put them
-		if (const auto* glows = posers.TryGet<const ecs::components::CreatureHandGlows>(poser);
-		    glows != nullptr && transform != nullptr)
-		{
-			DrawCreatureHandGlows(static_cast<uint16_t>(TranslucentView(desc.viewId)), *glows,
-			                      desc.camera->GetProjectionMatrix(), desc.viewId == RenderPass::Reflection,
-			                      zsort::Depth(transform->position, cameraOrigin));
-		}
-	}
-	// The creatures that the interface shows over itself, each moved for its draw to its place before the
-	// interface's own camera, in a view of their own
-	if (desc.viewId == RenderPass::Main && _interfaceCreatures.has_value())
-	{
-		DrawInterfaceCreatures(desc,
-		                       [&](entt::id_type meshId, uint32_t instance, std::span<const glm::mat4> bones,
-		                           const L3DMeshSubmitDesc::MorphTargets* targets, const ecs::components::CreatureEyes* eyes) {
-			                       const auto placers = renderCtx.instancedDrawDescs.find(meshId);
-			                       if (placers == renderCtx.instancedDrawDescs.end())
-			                       {
-				                       return;
-			                       }
-			                       const EntityPose pose {.bones = bones, .morphTargets = targets};
-			                       submitDesc.viewId = RenderPass::InterfaceCreatures;
-			                       // The body takes the posed models' light, as in the world
-			                       submitDesc.posedModelLight = true;
-			                       drawInstances(meshId, placers->second, placers->second.materialBlending, instance, 1, &pose,
-			                                     nullptr, _interfaceCreatureInstances);
-			                       submitDesc.posedModelLight = false;
-			                       if (eyes != nullptr)
-			                       {
-				                       DrawCreatureEyes(desc, *eyes, submitDesc, 0.0f, 0.0f, 0);
-			                       }
-			                       submitDesc.viewId = desc.viewId;
-		                       });
-	}
-	// The creature that the main menu's tattoo editor shows, in the editor's view of its own. Its mesh can be a
-	// mesh that the scene does not have, so it has an instance of its own.
-	if (desc.viewId == RenderPass::Main && _menuCreature.has_value())
-	{
-		DrawMenuCreature(desc, [&](entt::id_type meshId, uint32_t instance, std::span<const glm::mat4> bones,
-		                           const L3DMeshSubmitDesc::MorphTargets* targets, const ecs::components::CreatureEyes* eyes) {
-			if (!meshManager.Contains(meshId) || !_menuCreatureInstance.has_value())
-			{
-				return;
-			}
-			const RenderContext::InstancedDrawDesc placers {0, 1, false};
-			const EntityPose pose {.bones = bones, .morphTargets = targets};
-			submitDesc.viewId = RenderPass::MenuCreature;
-			// The body takes the posed models' light, as in the world
-			submitDesc.posedModelLight = true;
-			drawInstances(meshId, placers, false, instance, 1, &pose, nullptr, _menuCreatureInstance);
-			submitDesc.posedModelLight = false;
-			if (eyes != nullptr)
-			{
-				DrawCreatureEyes(desc, *eyes, submitDesc, 0.0f, 0.0f, 0);
-			}
-			submitDesc.viewId = desc.viewId;
-		});
-	}
-	// A warm-up draws a body of each species that is loaded, with its eyes and hair, as the first frame of a creature
-	// draws them. They are drawn at no size, and cover no pixel.
-	if (_warmingUp && _warmUpInstances.has_value())
-	{
-		const RenderContext::InstancedDrawDesc placers {0, 1, false};
-		const auto loaded = [&meshManager](entt::id_type id) { return meshManager.Contains(id); };
-		for (int32_t type = static_cast<int32_t>(CreatureType::Cow); type < static_cast<int32_t>(CreatureType::_COUNT); ++type)
-		{
-			const auto ids = creature_morph::MeshesOf(static_cast<CreatureType>(type), creature_morph::Morph {}, loaded);
-			if (!meshManager.Contains(ids.base))
-			{
-				continue;
-			}
-			const auto body = meshManager.Handle(ids.base);
-			const L3DMeshSubmitDesc::MorphTargets targets {
-			    .meshes = {&*meshManager.Handle(ids.evilGood), &*meshManager.Handle(ids.thinFat),
-			               &*meshManager.Handle(ids.weakStrong)},
-			    .weights = glm::vec3(0.0f),
-			    .skins = {},
-			    .blendSeams = Locator::config::value().blendCreatureSeams,
-			};
-			const EntityPose pose {.bones = body->GetBoneMatrices(), .morphTargets = &targets};
-			if (pose.bones.empty())
-			{
-				continue;
-			}
-			// The body takes the posed models' light, as in the world, but not in the reflection
-			submitDesc.posedModelLight = desc.viewId != RenderPass::Reflection;
-			drawInstances(ids.base, placers, false, 0, 1, &pose, nullptr, *_warmUpInstances);
-			// And fizzing, as it comes into sight
-			if (desc.viewId != RenderPass::Reflection)
-			{
-				drawFizzing(ids.base, placers, 0, *_warmUpInstances, pose, creature_fizz_look::Level(warm_up::k_CreatureFizz),
-				            glm::vec2(0.0f), 0, warm_up::k_CreatureFreeze);
-			}
-			submitDesc.posedModelLight = false;
-		}
-		if (desc.viewId != RenderPass::Reflection)
-		{
-			ecs::components::CreatureEyes eyes;
-			eyes.drawn.at(0) = {.eyeball = glm::mat4(0.0f), .eyelid = glm::mat4(0.0f)};
-			DrawCreatureEyes(desc, eyes, submitDesc, 0.0f, 0.0f, 0);
-			DrawCreatureEyes(desc, eyes, submitDesc, warm_up::k_CreatureFizz, 0.0f, 0);
-			ecs::components::CreatureHair hair;
-			hair.groups.push_back({.strands = {{.positions = {glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f)}, .velocities = {}}},
-			                       .colour = glm::ivec3(0),
-			                       .halfWidth = 0.0f,
-			                       .textured = true});
-			DrawCreatureHair(desc, hair, glm::vec3(0.0f));
-		}
-	}
-	drawingCreatures = false;
 	// The animals, each posed by its own clip and in its own light, as the mesh its distance chose; one fading out,
 	// by itself or in the distance, blends over the rest
 	const auto drawAnimal = [&](entt::entity entity, uint32_t instance, bool translucent) {
@@ -1688,90 +2161,6 @@ void Renderer::DrawPassEntities(const DrawSceneDesc& desc, const ScenePass& pass
 			drawPosedStillOf(drawn, entity, instance, blended);
 		}
 	};
-	// The animals of a model drawn at once, in their light: the brightest of the land's, or white
-	for (const auto& [meshId, group] : _animalBoneGroups)
-	{
-		const auto placers = renderCtx.instancedDrawDescs.find(meshId);
-		if (placers == renderCtx.instancedDrawDescs.end() ||
-		    (desc.viewId == RenderPass::Reflection && placers->second.hiddenFromReflection))
-		{
-			continue;
-		}
-		glm::vec3 colour(255.0f);
-		if (group.brightestLand && _landLightTable)
-		{
-			const auto texel = _landLightTable->GetTexels().back();
-			colour = glm::vec3(static_cast<float>(texel & 0xFFu), static_cast<float>((texel >> 8) & 0xFFu),
-			                   static_cast<float>((texel >> 16) & 0xFFu));
-		}
-		// Lit by the land where each stands, as other things are, they take no colour of their own
-		if (!group.landWhereItStands)
-		{
-			submitDesc.objectLook = L3DMeshSubmitDesc::ObjectLook {.colour = colour, .alpha = 1.0f};
-		}
-		inSegments(placers->second, [&](uint32_t first, uint32_t count) {
-			drawInstances(meshId, placers->second, placers->second.materialBlending, first, count, nullptr, nullptr,
-			              std::nullopt, &group);
-		});
-		submitDesc.objectLook.reset();
-		submitDesc.boneTexture = nullptr;
-	}
-	drawDrawnPosedStills(false);
-	for (const auto& [entity, instance] : renderCtx.entityDraws)
-	{
-		if (mirroredWithHand(instance))
-		{
-			continue;
-		}
-		inSegment(renderCtx.fizzOrder.SegmentOf(entity), [&] {
-			drawAnimal(entity, instance, false);
-			drawVillager(entity, instance);
-			drawPosedStill(entity, instance, false);
-		});
-	}
-	// The game mirrors what the hand holds just after the hand, flat in the light that it kept
-	if (mirroredViewId != desc.viewId && handReflected)
-	{
-		submitDesc.viewId = mirroredViewId;
-		submitDesc.sortDepth = hand_reflection::SortKey(hand_reflection::MirroredThing::Held);
-		for (const auto& held : renderCtx.inHandDraws)
-		{
-			heldReflection = held.heldLight;
-			const auto posed = std::ranges::find(renderCtx.entityDraws, held.entity, &RenderContext::EntityDraw::entity);
-			if (posed != renderCtx.entityDraws.end())
-			{
-				drawAnimal(held.entity, held.instance, false);
-				drawVillager(held.entity, held.instance);
-				drawPosedStill(held.entity, held.instance, false);
-				continue;
-			}
-			const auto placers = renderCtx.instancedDrawDescs.find(held.mesh);
-			if (placers != renderCtx.instancedDrawDescs.end() && held.instance >= placers->second.offset &&
-			    held.instance < placers->second.offset + placers->second.filled)
-			{
-				drawInstances(held.mesh, placers->second, placers->second.translucent || placers->second.materialBlending,
-				              held.instance, 1);
-			}
-		}
-		heldReflection.reset();
-		submitDesc.sortDepth = 0;
-		submitDesc.viewId = desc.viewId;
-	}
-	// The villagers, a draw for each of their meshes, each instance posed by its own bones in the bone palette
-	if (renderCtx.bonePaletteTexture)
-	{
-		const EntityPose palettePose {.bones = {}, .morphTargets = nullptr, .bonePalette = true};
-		for (const auto& [meshId, placers] : renderCtx.instancedDrawDescs)
-		{
-			if (placers.bonePalette && placers.filled > 0 &&
-			    !(desc.viewId == RenderPass::Reflection && placers.hiddenFromReflection))
-			{
-				inSegments(placers, [&](uint32_t first, uint32_t count) {
-					drawInstances(meshId, placers, placers.materialBlending, first, count, &palettePose);
-				});
-			}
-		}
-	}
 	// What the villagers hold in their hands, a draw for each model: the opaque ones here, those fading out with
 	// the blended things. The sea reflects only what the villagers flying in the physics hold.
 	const auto drawHeld = [&](bool fading) {
@@ -1815,310 +2204,71 @@ void Renderer::DrawPassEntities(const DrawSceneDesc& desc, const ScenePass& pass
 			drawInstances(rootsPileMesh, placers, false, instance, 1, nullptr, nullptr, renderCtx.rootsPileInstanceBuffer);
 		}
 	};
+	// The state and the draw helpers that the parts below share
+	struct EntityDraws
+	{
+		decltype(submitDesc)& submitDesc;
+		decltype(renderCtx)& renderCtx;
+		decltype(drawingCreatures)& drawingCreatures;
+		decltype(flatReflection)& flatReflection;
+		decltype(heldReflection)& heldReflection;
+		decltype(drawInstances)& drawInstances;
+		decltype(inSegment)& inSegment;
+		decltype(inSegments)& inSegments;
+		decltype(mirroredWithHand)& mirroredWithHand;
+		decltype(instanceSeen)& instanceSeen;
+		decltype(drawPlaced)& drawPlaced;
+		decltype(drawPartialBuild)& drawPartialBuild;
+		decltype(drawAnimal)& drawAnimal;
+		decltype(drawVillager)& drawVillager;
+		decltype(drawPosedStill)& drawPosedStill;
+		decltype(drawDrawnPosedStills)& drawDrawnPosedStills;
+		decltype(drawHeld)& drawHeld;
+		decltype(drawRootsPiles)& drawRootsPiles;
+		decltype(handReflected)& handReflected;
+	};
+	EntityDraws draws {
+	    .submitDesc = submitDesc,
+	    .renderCtx = renderCtx,
+	    .drawingCreatures = drawingCreatures,
+	    .flatReflection = flatReflection,
+	    .heldReflection = heldReflection,
+	    .drawInstances = drawInstances,
+	    .inSegment = inSegment,
+	    .inSegments = inSegments,
+	    .mirroredWithHand = mirroredWithHand,
+	    .instanceSeen = instanceSeen,
+	    .drawPlaced = drawPlaced,
+	    .drawPartialBuild = drawPartialBuild,
+	    .drawAnimal = drawAnimal,
+	    .drawVillager = drawVillager,
+	    .drawPosedStill = drawPosedStill,
+	    .drawDrawnPosedStills = drawDrawnPosedStills,
+	    .drawHeld = drawHeld,
+	    .drawRootsPiles = drawRootsPiles,
+	    .handReflected = handReflected,
+	};
+	DrawPassPlacedModels(desc, draws);
+	for (const auto& build : renderCtx.partialBuilds)
+	{
+		if (!build.fading)
+		{
+			inSegment(build.segment, [&] { drawPartialBuild(build); });
+		}
+	}
+	DrawPassCreatures(desc, pass, draws);
+	DrawPassAnimals(desc, draws);
+	DrawPassMirroredHeld(desc, pass, draws);
+	DrawPassPaletteVillagers(desc, draws);
 	drawHeld(false);
 	drawRootsPiles(false);
 	DrawTempleUnderside(desc);
-	// The translucent meshes blend over the opaque ones, each in its own place in the sort
-	submitDesc.viewId = translucentViewId;
-	// The things fading out in the distance, each blended by its alpha in its own place in the sort: the
-	// villagers posed from the bone palette, the things posed one by one with them
-	{
-		const EntityPose palettePose {.bones = {}, .morphTargets = nullptr, .bonePalette = true};
-		for (const auto& [meshId, placers] : renderCtx.fadingDrawDescs)
-		{
-			if (placers.filled == 0 || (desc.viewId == RenderPass::Reflection && placers.hiddenFromReflection) ||
-			    !meshManager.Contains(meshId) || (placers.bonePalette && !renderCtx.bonePaletteTexture) ||
-			    (placers.perEntity && !placers.bonePalette))
-			{
-				continue;
-			}
-			for (uint32_t instance = placers.offset; instance < placers.offset + placers.filled; ++instance)
-			{
-				if (mirroredWithHand(instance) || !instanceSeen(*meshManager.Handle(meshId), placers, instance))
-				{
-					continue;
-				}
-				const auto position = glm::vec3(renderCtx.instanceUniforms.at(instance).model[3]);
-				submitDesc.sortDepth = zsort::Depth(position, cameraOrigin);
-				if (placers.partsByLevel)
-				{
-					submitDesc.detailLevel = renderCtx.instanceLevels.at(instance);
-				}
-				drawInstances(meshId, placers, false, instance, 1, placers.bonePalette ? &palettePose : nullptr);
-			}
-			submitDesc.detailLevel = 1;
-		}
-		for (const auto& build : renderCtx.partialBuilds)
-		{
-			if (build.fading && build.instance < renderCtx.partialBuildInstances.size())
-			{
-				submitDesc.sortDepth =
-				    zsort::Depth(glm::vec3(renderCtx.partialBuildInstances.at(build.instance).model[3]), cameraOrigin);
-				drawPartialBuild(build);
-			}
-		}
-		drawDrawnPosedStills(true);
-		for (const auto& [entity, instance] : renderCtx.entityDraws)
-		{
-			if (instance < renderCtx.instanceUniforms.size() && !mirroredWithHand(instance))
-			{
-				submitDesc.sortDepth = zsort::Depth(glm::vec3(renderCtx.instanceUniforms.at(instance).model[3]), cameraOrigin);
-				drawPosedStill(entity, instance, true);
-			}
-		}
-	}
-	drawHeld(true);
-	drawRootsPiles(true);
-	// The souls of the dead rising or sinking, each white and see-through, posed by its own clip; the sea doesn't
-	// reflect them
-	if (desc.viewId != RenderPass::Reflection)
-	{
-		for (const auto& soul : renderCtx.soulDraws)
-		{
-			if (!meshManager.Contains(soul.meshId) || soul.instance >= renderCtx.soulInstances.size())
-			{
-				continue;
-			}
-			RenderContext::InstancedDrawDesc placers {soul.instance, 1, false};
-			const EntityPose soulPose {.bones = soul.bones, .morphTargets = nullptr};
-			submitDesc.sortDepth = zsort::Depth(glm::vec3(renderCtx.soulInstances.at(soul.instance).model[3]), cameraOrigin);
-			submitDesc.objectLook = L3DMeshSubmitDesc::ObjectLook {.colour = glm::vec3(255.0f), .alpha = soul.alpha};
-			drawInstances(soul.meshId, placers, true, soul.instance, 1, &soulPose, nullptr, renderCtx.soulInstanceBuffer);
-			submitDesc.objectLook.reset();
-		}
-	}
-	// Each thing that is posed by itself (an animal, a villager or posed scenery) is drawn above, in its own pose.
-	// It is not drawn here, because it would show again in the model's own pose.
-	for (const auto& [meshId, placers] : renderCtx.instancedDrawDescs)
-	{
-		if (graphics::posed_draws::BlendedPassDrawsAllPlaced(
-		        {.translucent = placers.translucent, .perEntity = placers.perEntity}) &&
-		    !(desc.viewId == RenderPass::Reflection && placers.hiddenFromReflection))
-		{
-			for (uint32_t instance = placers.offset; instance < placers.offset + placers.filled; ++instance)
-			{
-				if (mirroredWithHand(instance) || !instanceSeen(*meshManager.Handle(meshId), placers, instance))
-				{
-					continue;
-				}
-				const auto position = glm::vec3(renderCtx.instanceUniforms.at(instance).model[3]);
-				submitDesc.sortDepth = zsort::Depth(position, cameraOrigin);
-				drawInstances(meshId, placers, true, instance, 1);
-			}
-		}
-	}
-	for (const auto& [entity, instance] : renderCtx.entityDraws)
-	{
-		if (instance < renderCtx.instanceUniforms.size() && !mirroredWithHand(instance))
-		{
-			const auto position = glm::vec3(renderCtx.instanceUniforms.at(instance).model[3]);
-			submitDesc.sortDepth = zsort::Depth(position, cameraOrigin);
-			drawAnimal(entity, instance, true);
-		}
-	}
-	// A warm-up draws each model of the land once in each way that the frames draw it: solid as it is placed, blended
-	// by its materials and fading by its alpha. It draws them at no size, and covers no pixel. Thus a model that
-	// comes into sight or fades out later makes no pipeline then.
-	if (_warmingUp && _warmUpInstances.has_value())
-	{
-		const EntityPose palettePose {.bones = {}, .morphTargets = nullptr, .bonePalette = true};
-		const auto warmUpModel = [&](entt::id_type meshId, RenderContext::InstancedDrawDesc placers) {
-			if (meshId == ecs::components::Hand::k_MeshId || !meshManager.Contains(meshId) ||
-			    (desc.viewId == RenderPass::Reflection && placers.hiddenFromReflection))
-			{
-				return;
-			}
-			const auto* pose = placers.bonePalette ? &palettePose : nullptr;
-			placers.instanceAlpha = false;
-			submitDesc.viewId = desc.viewId;
-			drawInstances(meshId, placers, placers.materialBlending, 0, 1, pose, nullptr, *_warmUpInstances);
-			submitDesc.viewId = translucentViewId;
-			drawInstances(meshId, placers, true, 0, 1, pose, nullptr, *_warmUpInstances);
-			placers.instanceAlpha = true;
-			drawInstances(meshId, placers, false, 0, 1, pose, nullptr, *_warmUpInstances);
-		};
-		for (const auto& [meshId, placers] : renderCtx.instancedDrawDescs)
-		{
-			warmUpModel(meshId, placers);
-		}
-		for (const auto& [meshId, placers] : renderCtx.fadingDrawDescs)
-		{
-			warmUpModel(meshId, placers);
-		}
-		// And each building part built, both standing and fading
-		for (auto build : renderCtx.partialBuilds)
-		{
-			for (const bool fading : {false, true})
-			{
-				build.fading = fading;
-				submitDesc.viewId = fading ? translucentViewId : desc.viewId;
-				drawPartialBuild(build, *_warmUpInstances);
-			}
-		}
-	}
-	submitDesc.viewId = desc.viewId;
-	submitDesc.sortDepth = 0;
-	// The main room's pool, the map over it and its markers, ahead of the hand, whose faded wrist they show
-	// through
-	DrawTemplePool(desc);
-	DrawTempleMap(desc);
-	DrawTempleMapMarkers(desc);
-	DrawCaveTrophies(desc);
-	DrawCaveSeeds(desc);
-	DrawMapSpellSeeds(desc);
-	DrawGroundBlobs(desc);
-	DrawFarVillagerSmudges(desc);
-	DrawVillagerEyes(desc);
-	DrawGlobes(desc);
-	DrawIconSeeds(desc);
-	DrawRewardSeeds(desc);
-	DrawHandMiracleBands(desc);
-	DrawTribalPower(desc);
-	DrawLightColumns(desc);
-	DrawScrollBeams(desc);
-	DrawIconPulses(desc);
-	DrawLeashes(desc);
-	DrawWaterRings(desc);
-	DrawRain(desc);
-	DrawSnowfall(desc);
-	DrawKnockReadout(desc);
-	DrawChimneySmoke(desc);
-	DrawShieldDomes(desc);
-	DrawDestructionGhosts(desc);
-	DrawFilmReflections(desc);
-	DrawParticles(desc);
-	DrawIntroLight(desc);
-	DrawInfluenceBorder(desc);
-	DrawInfluenceRipples(desc);
-	// The mists blend over the rest, the farthest first
-	DrawMists(desc);
-	DrawPauseText(desc);
+	DrawPassTranslucent(desc, pass, draws);
+	DrawPassEffects(desc);
 
-	// The game mirrors the hand in the sea while the hand shows, wherever it is: in one flat grey, with no light
-	// and no glow, and only its front faces. Its texture alone gives its alpha.
-	if (const auto hand = renderCtx.instancedDrawDescs.find(ecs::components::Hand::k_MeshId);
-	    mirroredViewId != desc.viewId && desc.drawHand && hand != renderCtx.instancedDrawDescs.end() &&
-	    !hand->second.hiddenFromReflection && hand_reflection::Shown(hand->second.count > 0, meshManager.Contains(hand->first)))
-	{
-		// L3D meshes face clockwise, which the mirrored reflection pass and a mirrored hand each turn around
-		const bool facesTurned = desc.cullBack != renderCtx.handMirrored;
-		const auto opaqueState = submitDesc.state;
-		submitDesc.viewId = mirroredViewId;
-		submitDesc.sortDepth = hand_reflection::SortKey(hand_reflection::MirroredThing::Hand);
-		submitDesc.state = (opaqueState & ~BGFX_STATE_CULL_MASK) | (facesTurned ? BGFX_STATE_CULL_CW : BGFX_STATE_CULL_CCW);
-		auto mirrored = hand->second;
-		mirrored.additiveShare.reset();
-		mirrored.instanceAlpha = false;
-		const auto handMorph = HandMorphTargets();
-		flatReflection = FlatLook {.colour = hand_reflection::Colour(), .added = hand_reflection::Added()};
-		drawInstances(hand->first, mirrored, true, mirrored.offset, mirrored.count, nullptr, handMorph ? &*handMorph : nullptr);
-		flatReflection.reset();
-		submitDesc.state = opaqueState;
-		submitDesc.viewId = desc.viewId;
-		submitDesc.sortDepth = 0;
-	}
-	// The game draws the hand after the rest of the scene, blended by its translucent texture. Its material
-	// shows only the front faces, so the inside of the hand never shows through it.
-	// The game's reflection of the main room has no hand in it
-	if (const auto hand = renderCtx.instancedDrawDescs.find(ecs::components::Hand::k_MeshId);
-	    mirroredViewId == desc.viewId && desc.drawHand && hand != renderCtx.instancedDrawDescs.end() &&
-	    !(desc.viewId == RenderPass::Reflection && hand->second.hiddenFromReflection))
-	{
-		// L3D meshes face clockwise, which the mirrored reflection pass and a mirrored hand each turn around
-		const bool facesTurned = desc.cullBack != renderCtx.handMirrored;
-		// It takes its place in the sort by where it is
-		submitDesc.viewId = translucentViewId;
-		if (hand->second.count > 0)
-		{
-			const auto position = glm::vec3(renderCtx.instanceUniforms.at(hand->second.offset).model[3]);
-			submitDesc.sortDepth = zsort::Depth(position, cameraOrigin);
-		}
-		const auto cullFront = facesTurned ? BGFX_STATE_CULL_CCW : BGFX_STATE_CULL_CW;
-		const auto cullBack = facesTurned ? BGFX_STATE_CULL_CW : BGFX_STATE_CULL_CCW;
-		const auto opaqueState = submitDesc.state;
-		const auto handMorph = HandMorphTargets();
-		const auto* morph = handMorph ? &*handMorph : nullptr;
+	DrawPassHand(desc, pass, draws);
 
-		// The game lights the hand as it poses it, with the posed models' rule rather than the usual model light
-		submitDesc.posedModelLight = true;
-		const auto outsideState = [opaqueState](uint64_t cull) { return (opaqueState & ~BGFX_STATE_CULL_MASK) | cull; };
-		// The glow is added over the hand without writing depth
-		const auto glowState = [opaqueState](uint64_t cull) {
-			constexpr uint64_t k_Kept = ~(BGFX_STATE_CULL_MASK | BGFX_STATE_WRITE_Z | BGFX_STATE_WRITE_A |
-			                              BGFX_STATE_DEPTH_TEST_MASK | BGFX_STATE_BLEND_MASK);
-			return (opaqueState & k_Kept) | BGFX_STATE_DEPTH_TEST_GEQUAL |
-			       BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_SRC_ALPHA, BGFX_STATE_BLEND_ONE) | cull;
-		};
-		submitDesc.state = outsideState(cullBack);
-		drawInstances(hand->first, hand->second, true, hand->second.offset, hand->second.count, nullptr, morph);
-		// Holding a miracle, the game draws the hand once more over itself: the same hand at the same depth, in the
-		// flow's sheet and its player's colour, shaded as it is posed and added over it without writing depth
-		if (const auto glow = HandGlowOf(desc))
-		{
-			auto glowPlacers = hand->second;
-			glowPlacers.uvOffset = glow->uvOffset;
-			glowPlacers.additiveShare.reset();
-			glowPlacers.instanceAlpha = false;
-			submitDesc.state = glowState(cullBack);
-			// Just after the hand in the sort
-			submitDesc.sortDepth = submitDesc.sortDepth > 0 ? submitDesc.sortDepth - 1 : 0;
-			submitDesc.skinTexture = &glow->flow->GetNativeHandle();
-			submitDesc.uvScale = glow->uvScale;
-			submitDesc.objectLook = L3DMeshSubmitDesc::ObjectLook {.colour = glow->colour, .alpha = glow->alpha};
-			// Nothing of it is left out by its alpha
-			submitDesc.alphaThreshold = 0.0f;
-			drawInstances(hand->first, glowPlacers, false, glowPlacers.offset, glowPlacers.count, nullptr, morph);
-			submitDesc.alphaThreshold.reset();
-			submitDesc.objectLook.reset();
-			submitDesc.uvScale = 1.0f;
-			submitDesc.skinTexture = nullptr;
-		}
-		// A warm-up draws the hand again at no size in each other way that the frames draw it: turned round, as a
-		// mirrored hand is, and glowing with a miracle
-		if (_warmingUp && _warmUpInstances.has_value())
-		{
-			auto hidden = hand->second;
-			hidden.additiveShare.reset();
-			hidden.instanceAlpha = false;
-			for (const auto cull : {cullBack, cullFront})
-			{
-				submitDesc.state = outsideState(cull);
-				drawInstances(hand->first, hidden, true, 0, 1, nullptr, morph, *_warmUpInstances);
-				submitDesc.state = glowState(cull);
-				drawInstances(hand->first, hidden, false, 0, 1, nullptr, morph, *_warmUpInstances);
-			}
-		}
-		submitDesc.posedModelLight = false;
-		submitDesc.state = opaqueState;
-		submitDesc.viewId = desc.viewId;
-		submitDesc.sortDepth = 0;
-	}
-
-	// Debug
-	if (desc.viewId == graphics::RenderPass::Main)
-	{
-		if (renderCtx.boundingBox)
-		{
-			const auto boundBoxOffset = static_cast<uint32_t>(renderCtx.instanceUniforms.size() / 2);
-			const auto boundBoxCount = static_cast<uint32_t>(renderCtx.instanceUniforms.size() / 2);
-			renderCtx.boundingBox->GetVertexBuffer().Bind();
-			bgfx::setInstanceDataBuffer(toBgfx(renderCtx.instanceUniformBuffer), boundBoxOffset, boundBoxCount);
-			bgfx::setState(k_BgfxDefaultStateInvertedZ | BGFX_STATE_PT_LINES);
-			debugShaderInstanced->Submit(static_cast<bgfx::ViewId>(desc.viewId));
-		}
-		if (renderCtx.footpaths)
-		{
-			renderCtx.footpaths->GetVertexBuffer().Bind();
-			bgfx::setState(k_BgfxDefaultStateInvertedZ | BGFX_STATE_PT_LINES);
-			debugShader->Submit(static_cast<bgfx::ViewId>(desc.viewId));
-		}
-		if (renderCtx.streams)
-		{
-			renderCtx.streams->GetVertexBuffer().Bind();
-			bgfx::setState(k_BgfxDefaultStateInvertedZ | BGFX_STATE_PT_LINES);
-			debugShader->Submit(static_cast<bgfx::ViewId>(desc.viewId));
-		}
-	}
+	DrawPassDebugLines(desc, draws);
 }
 
 void Renderer::DrawPassVegetation(const DrawSceneDesc& desc, const ScenePass& pass) const
