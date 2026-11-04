@@ -64,9 +64,21 @@ float BearingTo(const Transform& transform, const glm::vec3& target);
 /// The hand a creature acts with: the right, or its mirror
 uint32_t HandBone(const CreatureRig::ActionPoints& points, const CreatureAnimation& animation, bool mirrored);
 
+/// The pose at the end of the newest game turn, which game rules read
+creature::RulePose TurnPoseOf(const CreatureAnimation& animation, const Transform& transform);
+
+/// Where the middle of the finger ends of a hand is, in a pose of the body. A held thing sits there, and the hand lets go
+/// of it there.
+glm::vec3 FingerEndsOf(uint32_t hand, const CreatureAnimation& animation, const creature::RulePose& pose);
+
 /// Where the middle of the finger ends of a hand is in an animation at a time, in the creature's own space at its own
 /// size
 std::optional<glm::vec3> FingerEndsInAnimation(entt::entity creature, uint32_t hand, size_t animation, float timeMs);
+
+/// Where the middle of the finger ends of the right hand is in an animation at a time, in the creature's own space at
+/// the world's scale
+std::optional<glm::vec3> HandAt(entt::entity creature, const Transform& transform, const CreatureRig::ActionPoints& points,
+                                size_t animation, float timeMs);
 
 /// The revision of the creature's body shape. A kept measure of the animations is for one revision.
 uint32_t BodyRevision(const ecs::Registry& registry, entt::entity creature);
@@ -79,6 +91,80 @@ const Kept* KeptMeasure(const ecs::Registry& registry, entt::entity creature)
 	return kept != nullptr && creature_object_actions::MeasureHolds(kept->bodyRevision, BodyRevision(registry, creature))
 	           ? kept
 	           : nullptr;
+}
+
+/// What a creature reaches with in its reaching animations
+enum class ReachWith : uint8_t
+{
+	/// The middle of the finger ends of the right hand, to pick something up
+	FingerEnds,
+	/// The right foot bone, to strike a blow
+	Foot,
+};
+
+/// Where the part it reaches with gets to in each of four reaching animations
+std::optional<creature_reach::Points> MeasureReach(entt::entity creature, const Transform& transform,
+                                                   const CreatureRig::ActionPoints& points, ReachWith with,
+                                                   const std::array<size_t, creature_reach::k_CornerCount>& animations,
+                                                   float timeMs);
+
+/// Where the hand or foot gets to in the reaching animations, measured in the model's own size the first time it is
+/// wanted, and again the first time it is wanted after the animations follow a new body shape. None before the creature
+/// is posed. A measure is the same whenever it is made for the same body shape. Thus a frame that only reads uses the
+/// kept measure, or makes a new measure and does not keep it, and a turn keeps the new measure.
+template <typename Kept>
+std::optional<creature_reach::Points> KeptReachPoints(entt::entity creature, ReachWith with,
+                                                      const std::array<size_t, creature_reach::k_CornerCount>& animations,
+                                                      ReachKeep keep = ReachKeep::Keep)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(creature))
+	{
+		return std::nullopt;
+	}
+	const auto* transform = registry.TryGet<const Transform>(creature);
+	if (transform == nullptr)
+	{
+		return std::nullopt;
+	}
+	if (const auto* kept = KeptMeasure<Kept>(registry, creature))
+	{
+		return kept->points;
+	}
+	const auto* body = registry.TryGet<const Creature>(creature);
+	const auto* points = body != nullptr ? PointsOf(*body) : nullptr;
+	if (points == nullptr || !Locator::creatureAnimationSystem::has_value())
+	{
+		return std::nullopt;
+	}
+	auto unscaled = *transform;
+	unscaled.scale = glm::vec3(1.0f);
+	const auto timeMs = with == ReachWith::FingerEnds ? points->pickUpMs : points->destroyMs;
+	const auto reach = MeasureReach(creature, unscaled, *points, with, animations, timeMs);
+	if (!reach.has_value())
+	{
+		return std::nullopt;
+	}
+	if (keep == ReachKeep::Keep)
+	{
+		registry.AssignOrReplace<Kept>(creature, Kept {.points = *reach, .bodyRevision = BodyRevision(registry, creature)});
+	}
+	return *reach;
+}
+
+/// How far the hand or foot gets in the reaching animations, scaled as the creature is drawn. None before the creature
+/// is posed.
+template <typename Kept>
+std::optional<float> KeptStraightReach(entt::entity creature, ReachWith with,
+                                       const std::array<size_t, creature_reach::k_CornerCount>& animations,
+                                       ReachKeep keep = ReachKeep::Keep)
+{
+	const auto points = KeptReachPoints<Kept>(creature, with, animations, keep);
+	if (!points.has_value())
+	{
+		return std::nullopt;
+	}
+	return creature_reach::StraightReach(*points, Locator::entitiesRegistry::value().Get<const Transform>(creature).scale.x);
 }
 
 float DurationOf(entt::entity creature, size_t animation);
