@@ -7,8 +7,8 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
-// The testbed runner: sets up the world of a scenario (the date, the weather, the objects, the birds and the creatures) and
-// keeps its villagers walking.
+// The testbed runner: it prepares the world of a scenario (the date, the weather, the objects, the birds and the
+// creatures) and keeps its villagers on their walks.
 
 #include <cmath>
 #include <ctime>
