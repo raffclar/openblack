@@ -5128,11 +5128,20 @@ void GetCountdownTimer() // 092 GET_COUNTDOWN_TIMER
 }
 
 /// One of a two-thing camera's things, as the camera sees it while the thing is there: where the game holds it, its
-/// height and its radius on the ground (a marker or a group counts as 30 wide)
+/// height and its radius on the ground (a marker or a group counts as 30 wide). A flock is at its own place on the land.
 ScriptCameraModel::DualSubject DualSubjectOf(entt::entity thing)
 {
 	return {.id = static_cast<uint32_t>(thing), .lookup = [thing]() -> std::optional<script_camera::DualThing> {
 		        const auto& registry = Locator::entitiesRegistry::value();
+		        if (ecs::script_flocks::IsFlock(registry, thing))
+		        {
+			        if (!Locator::terrainSystem::has_value())
+			        {
+				        return std::nullopt;
+			        }
+			        const auto& place = registry.Get<const ecs::components::Flock>(thing).place;
+			        return script_camera::DualFlock(map_coords::ToWorld(Locator::terrainSystem::value(), place));
+		        }
 		        const auto* transform = registry.Valid(thing) ? registry.TryGet<const Transform>(thing) : nullptr;
 		        if (transform == nullptr)
 		        {

@@ -535,6 +535,34 @@ TEST(ScriptCamera, TheTwoThingCameraFramesBothFromTheSideOfTheLineBetweenThem)
 	EXPECT_NEAR(glm::distance(together.origin, unturned), 0.0f, 1e-3f);
 }
 
+TEST(ScriptCamera, TheTwoThingCameraSeesAFlockAtItsPlaceWithNoHeightAndThirtyWide)
+{
+	const auto flock = script_camera::DualFlock({1000.0f, 7.0f, 1200.0f});
+	EXPECT_EQ(flock.position, glm::vec3(1000.0f, 7.0f, 1200.0f));
+	EXPECT_EQ(flock.height, script_camera::k_FlockHeight);
+	EXPECT_EQ(flock.radius, 30.0f);
+	EXPECT_FALSE(flock.point);
+}
+
+TEST(ScriptCamera, TheTwoThingCameraOnAFlockAndAThingAddsOnlyTheHeightOfTheThing)
+{
+	const auto flock = script_camera::DualFlock({0.0f, 0.0f, 0.0f});
+	const script_camera::DualThing thing {.position = {100.0f, 0.0f, 0.0f}, .height = 20.0f, .radius = 6.0f};
+	script_camera::DualSettings settings;
+	const auto view = script_camera::DualView(flock, thing, settings);
+	// The middle is raised by a quarter of the height of the thing only
+	EXPECT_FLOAT_EQ(view.focus.x, 50.0f);
+	EXPECT_FLOAT_EQ(view.focus.y, 5.0f);
+	// As far as they are apart plus 30 and the radius of the thing, then 1.4 times the height of the thing
+	EXPECT_NEAR(glm::distance(view.origin, view.focus), 136.0f + 28.0f, 1e-3f);
+
+	// Two flocks give no height: the camera stands as far back as they are apart plus 60, and looks at their middle
+	script_camera::DualSettings flocks;
+	const auto both = script_camera::DualView(flock, script_camera::DualFlock({0.0f, 4.0f, 40.0f}), flocks);
+	EXPECT_FLOAT_EQ(both.focus.y, 2.0f);
+	EXPECT_NEAR(glm::distance(both.origin, both.focus), 100.0f, 1e-3f);
+}
+
 TEST(ScriptCamera, ATwoThingCameraTakesOverUntilLetGoOrAThingIsGone)
 {
 	Camera camera;

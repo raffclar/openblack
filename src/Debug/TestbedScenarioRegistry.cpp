@@ -13991,6 +13991,51 @@ void AddLandOneScriptStubScenarios(std::vector<Scenario>& all)
 	                                      {.kind = Argument::Kind::Number, .number = 0.0f}}}},
 	});
 
+	// The two-thing camera of a script keeps a flock of villagers and a tree in view. It reads the flock at the own place
+	// of the flock, not at its leader.
+	all.push_back({
+	    .id = "script.camera_dual_flock",
+	    .name = "The two-thing camera of a script on a flock and a tree",
+	    .facet = Facet::Story,
+	    .description = "Three villagers stand in a row, and an oak stands 30 to the north. After one second, a script "
+	                   "makes a flock of the villagers at the first villager and takes the camera. START_DUAL_CAMERA "
+	                   "gives the camera the flock and the oak. After four seconds, MOVE_GAME_THING sends each villager "
+	                   "20 to the east.",
+	    .expected = "The camera glides in two seconds to the middle between the place of the flock and the oak. It looks "
+	                "from the side of the line between them, from about 83 away. The flock counts as 30 wide and has no "
+	                "height. The camera does not move when the villagers walk to the east, because the place of the flock "
+	                "does not change.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 12.0f, -24.0f}, .look = {0.0f, 1.0f, 0.0f}},
+	    .objects = {{.type = VillagerInfo::CelticHousewifeFemale, .offset = {-4.0f, 0.0f}},
+	                {.type = VillagerInfo::CelticFarmerMale, .offset = {0.0f, 0.0f}},
+	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {4.0f, 0.0f}},
+	                {.type = TreeInfo::Oak, .offset = {0.0f, 30.0f}}},
+	    .commands = {{.kind = Kind::CallNative, .delaySeconds = 1.0f, .script = "START_CAMERA_CONTROL"},
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 0.0f,
+	                  .script = "START_DUAL_CAMERA",
+	                  .scriptArguments = {{.kind = Argument::Kind::Flock}, {.kind = Argument::Kind::Object, .index = 3}}},
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 4.0f,
+	                  .script = "MOVE_GAME_THING",
+	                  .scriptArguments = {{.kind = Argument::Kind::Object, .index = 0, .kept = true},
+	                                      {.kind = Argument::Kind::Position, .point = {16.0f, 0.0f}},
+	                                      {.kind = Argument::Kind::Number, .number = 0.0f}}},
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 0.0f,
+	                  .script = "MOVE_GAME_THING",
+	                  .scriptArguments = {{.kind = Argument::Kind::Object, .index = 1, .kept = true},
+	                                      {.kind = Argument::Kind::Position, .point = {20.0f, 0.0f}},
+	                                      {.kind = Argument::Kind::Number, .number = 0.0f}}},
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 0.0f,
+	                  .script = "MOVE_GAME_THING",
+	                  .scriptArguments = {{.kind = Argument::Kind::Object, .index = 2, .kept = true},
+	                                      {.kind = Argument::Kind::Position, .point = {24.0f, 0.0f}},
+	                                      {.kind = Argument::Kind::Number, .number = 0.0f}}}},
+	});
+
 	// The leans of the three dead trees of Land 1, in degrees about x and z, and one tree with a large lean
 	all.push_back({
 	    .id = "nature.dead_tree_lean",

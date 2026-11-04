@@ -233,6 +233,10 @@ struct DualSettings
 		visit(self.heading, self.pitch, self.zoom);
 	}
 };
+/// What the two-thing camera knows of a flock. The camera reads the own place of the flock on the land, raised by its
+/// altitude, not the place of its leader. The game gives a flock no height, and a flock has no model, thus it counts as
+/// 30 wide.
+[[nodiscard]] DualThing DualFlock(const glm::vec3& place);
 /// The seconds the two-thing camera's glides take, some seconds after it began
 [[nodiscard]] float DualSeconds(float secondsSinceBegun);
 /// Where the two-thing camera is sent: it looks at the middle of the two things, raised by a quarter of their heights,

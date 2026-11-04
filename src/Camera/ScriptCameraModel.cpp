@@ -182,6 +182,11 @@ View script_camera::FaceView(const FacedThing& thing, float distance)
 	return {.origin = PointFromDistanceHeadingAndPitch(focus, distance, heading, k_FacePitch), .focus = focus};
 }
 
+script_camera::DualThing script_camera::DualFlock(const glm::vec3& place)
+{
+	return {.position = place, .height = k_FlockHeight, .radius = k_DualNoModelRadius};
+}
+
 float script_camera::DualSeconds(float secondsSinceBegun)
 {
 	if (secondsSinceBegun > k_DualBlendSeconds)
