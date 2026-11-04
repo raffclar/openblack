@@ -38,8 +38,6 @@ struct RegistryContext
 {
 	/// The footpaths that the land's script made, the newest first, as the script's footpath commands count them
 	std::vector<entt::entity> scriptFootpaths;
-	/// The thing that the land's script made last, if it can keep footpaths. A footpath link command goes to it.
-	entt::entity scriptThingMadeLast {entt::null};
 	/// The things that the footpaths go round, put on the map or removed from it since the footpaths' last turn, in order
 	std::vector<components::FootpathObstacleChange> footpathObstacleChanges;
 	/// Each thing on the map that the footpaths go round, as it was when it was put there

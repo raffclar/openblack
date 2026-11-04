@@ -105,6 +105,26 @@ TEST_F(SkyClockSystemTest, TheSkyGoesOnAsItWasIntoTheNextLand)
 	EXPECT_FLOAT_EQ(_clock->GetDayNightTimes().dayFull, times.dayFull);
 }
 
+// The system keeps the numbers of the cycle that it sets, also into the next land, for a map save
+TEST_F(SkyClockSystemTest, TheNumbersOfTheCycleStayForAMapSave)
+{
+	EXPECT_EQ(_clock->GetCycle().duration, DayNightClock::k_DefaultDuration);
+	EXPECT_EQ(_clock->GetCycle().night, DayNightClock::k_DefaultNight);
+	EXPECT_EQ(_clock->GetCycle().change, DayNightClock::k_DefaultChange);
+
+	_clock->SetCycle({.duration = 1000.0f, .night = 0.23f, .change = 0.17f});
+	DayNightClock expected;
+	expected.SetCycle(1000.0f, 0.23f, 0.17f);
+	EXPECT_EQ(_clock->GetDayNightTimes().duskStart, expected.GetDayNightTimes().duskStart);
+
+	_clock->KeepForNextLand();
+	Entities().Reset();
+	_clock->Initialize();
+	EXPECT_EQ(_clock->GetCycle().duration, 1000.0f);
+	EXPECT_EQ(_clock->GetCycle().night, 0.23f);
+	EXPECT_EQ(_clock->GetCycle().change, 0.17f);
+}
+
 TEST_F(SkyClockSystemTest, ATurnMovesTheClockOn)
 {
 	const auto before = _clock->GetClock().GetVisualTime();

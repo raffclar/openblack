@@ -105,6 +105,21 @@ TEST(DayNightClock, ALandsCycleIsClamped)
 	EXPECT_FLOAT_EQ(times[3], 12.0f);
 }
 
+// A land's script gives the numbers of its cycle: the night is at most the whole day, and the change at most the rest
+TEST(DayNightClock, ALandsCycleNumbersAreClamped)
+{
+	const auto all = DayNightClock::LandCycle({.duration = 1000.0f, .night = 2.0f, .change = 0.5f});
+	EXPECT_EQ(all.duration, 1000.0f);
+	EXPECT_EQ(all.night, 1.0f);
+	EXPECT_EQ(all.change, 0.0f);
+	const auto some = DayNightClock::LandCycle({.duration = 1000.0f, .night = 0.6f, .change = 0.5f});
+	EXPECT_EQ(some.night, 0.6f);
+	EXPECT_EQ(some.change, 1.0f - 0.6f);
+	const auto within = DayNightClock::LandCycle({.duration = 1700.0f, .night = 0.23f, .change = 0.17f});
+	EXPECT_EQ(within.night, 0.23f);
+	EXPECT_EQ(within.change, 0.17f);
+}
+
 // A saved game sets the hour of visual time at once: a move to another hour stops, and an hour past the day wraps
 TEST(DayNightClock, ASavedGameSetsTheVisualHour)
 {

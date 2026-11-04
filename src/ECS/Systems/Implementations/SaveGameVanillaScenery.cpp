@@ -469,9 +469,10 @@ void SaveGameSystem::ImportVanillaGameValues(const gamesave::VanillaWorld& world
 	// The clock of day and night: the hour that shows, the cycle, and whether it runs
 	if (const auto cycle = world_import::ReadDayCycle(world); cycle.has_value() && Locator::skyClockSystem::has_value())
 	{
-		auto& clock = Locator::skyClockSystem::value().GetClock();
+		auto& sky = Locator::skyClockSystem::value();
+		auto& clock = sky.GetClock();
 		clock.ForceVisualTime(cycle->visualTime);
 		clock.SetScale(cycle->scale);
-		clock.SetCycle(cycle->duration, cycle->night, cycle->change);
+		sky.SetCycle({.duration = cycle->duration, .night = cycle->night, .change = cycle->change});
 	}
 }

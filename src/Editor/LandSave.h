@@ -11,15 +11,18 @@
 
 #include <cstdint>
 
+#include <array>
 #include <optional>
 #include <span>
 #include <string>
 #include <string_view>
 #include <vector>
 
+#include <entt/entity/entity.hpp>
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
+#include "3D/DayNightClock.h"
 #include "3D/LandData.h"
 
 /// What the editor saves of a land: the land's cells into the data of a landscape file, and the lines of a land script
@@ -146,6 +149,22 @@ struct DispenserLine
 /// The line that makes a creature again: its place, its row of the creatures' table and the number of its player
 [[nodiscard]] std::string CreatureText(glm::ivec2 place, int32_t row, int32_t player);
 
+/// A field as the land script makes it again
+struct FieldLine
+{
+	/// The number of its town, -1 for none
+	int32_t town {-1};
+	glm::ivec2 place {0, 0};
+	/// Its row of the fields' table
+	int32_t row {0};
+	/// Its turn about the up axis, in radians, as the script gives it
+	float yAngle {0.0f};
+};
+
+/// The line that makes a field again. A field of a town gets the line with the town's number, its row and its turn. A
+/// field with no town gets the line with only its place and its row.
+[[nodiscard]] std::string FieldText(const FieldLine& field);
+
 /// A building as the land script makes it again
 struct AbodeLine
 {
@@ -234,6 +253,35 @@ struct TownLine
 /// 6. A line for the place where its people gather, when it has a place that is not at 0, 0.
 [[nodiscard]] std::string TownText(const TownLine& town);
 
+/// What the land script keeps of the whole land, as the game writes it after the version line
+struct GameLine
+{
+	int32_t landNumber {0};
+	/// The path of the landscape file that the land loads. With no path, the file gets no landscape line.
+	std::string landscape;
+	/// The start place of the camera in map units. A land with no start place has 0, 0, and the camera then starts at
+	/// the temple of the player.
+	glm::ivec2 startCamera {0, 0};
+	/// The eight balances of the land
+	std::array<float, 8> landBalance {1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f};
+	/// The name of the fly-by file. With no name, the file gets no fly-by line.
+	std::string flyByFile;
+	float townInfluenceMultiplier {1.0f};
+	float playerInfluenceMultiplier {1.0f};
+	/// The cycle of day and night
+	DayCycle dayCycle {};
+};
+
+/// The lines of the whole land, in this order:
+/// 1. The number of the land.
+/// 2. The landscape file that the land loads, when the land has one.
+/// 3. The start place of the camera.
+/// 4. A line for each balance of the land that is not 1, with the number of the balance.
+/// 5. The fly-by file, when the land has one.
+/// 6. The influence multiplier of the towns, then the influence multiplier of the players.
+/// 7. The cycle of day and night.
+[[nodiscard]] std::string GameText(const GameLine& game);
+
 /// The comment line that the game writes before the towns of a player
 [[nodiscard]] std::string PlayerHeading(std::string_view player);
 
@@ -258,6 +306,13 @@ struct SavedPaths
 /// Reads the streams and the footpaths that a land script makes, in the order of the script. The read stops where a
 /// load of the script stops.
 [[nodiscard]] SavedPaths ReadSavedPaths(const std::string& script);
+
+/// The text of the list of the things that the editor made, in the order that it made them: the number of each entity on
+/// a line of its own. A world load gives each entity the same number, so the list finds the things again.
+[[nodiscard]] std::string MadeText(std::span<const entt::entity> made);
+
+/// Reads the list of the things that the editor made. A line that is not a number is passed over.
+[[nodiscard]] std::vector<entt::entity> ReadMade(std::string_view text);
 
 /// The name of a saved file: the land's name with the extension of the file
 [[nodiscard]] std::string FileName(std::string_view landName, std::string_view extension);

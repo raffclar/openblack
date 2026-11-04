@@ -16,6 +16,8 @@
 #include <functional>
 #include <optional>
 #include <span>
+#include <string>
+#include <utility>
 #include <vector>
 
 #include "ECS/Systems/LandSystemInterface.h"
@@ -46,6 +48,9 @@ public:
 		_startCameraFocus = focus;
 		_startCameraPlace = place;
 	}
+	[[nodiscard]] std::optional<glm::ivec2> GetStartCameraPlace() const override { return _startCameraPlace; }
+	void SetFlyByFile(std::string path) override { _flyByFile = std::move(path); }
+	[[nodiscard]] const std::string& GetFlyByFile() const override { return _flyByFile; }
 	void PutCameraAtStartPlace() override;
 	void ShowLandMessage(const land_message::Message& message) override { View().ShowLandMessage(message); }
 
@@ -105,6 +110,8 @@ private:
 	std::optional<glm::vec2> _startCameraFocus;
 	/// The same start place in map units
 	std::optional<glm::ivec2> _startCameraPlace;
+	/// The name of the fly-by file that a map script gave last. A load of a land does not clear it.
+	std::string _flyByFile;
 	std::optional<new_game_choice::NewGameStart> _newGameStart;
 	/// The humans of a land of a network game come from the network session
 	bool _humansFromSession {false};

@@ -236,7 +236,28 @@ bool LandSystem::LoadMap(const std::filesystem::path& path, loading::LoadingCloc
 		_mapLandscape = LandscapeBytes(*file);
 	}
 
+	// A script with no landscape line puts the land's things on the landscape that is open. If no landscape is open,
+	// the land cannot load.
+	const bool loadsLandscape = lhscriptx::LoadsLandscape(lhscriptx::Script::Read(source));
+	const bool landOpen = Locator::terrainSystem::value().IsLoaded();
+	if (!loadsLandscape && !landOpen)
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The map script {} loads no landscape, and no landscape is open",
+		                    path.generic_string());
+		View().EndLoadingScreen();
+		return false;
+	}
+
 	PrepareNewLand(change);
+	// The land keeps the landscape that is open, with its altitudes as they are now. The services of the level start
+	// again, because the land's things go away with the last land.
+	if (!loadsLandscape)
+	{
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The map script {} loads no landscape: the land keeps the open landscape",
+		                   path.generic_string());
+		InitializeLevelOnOpenLand(OpenLandAltitudes::Kept);
+		SetUpLandscape();
+	}
 	// The script of the land gives the start place of the camera again, if it gives one
 	_startCameraFocus.reset();
 	_startCameraPlace.reset();
@@ -1208,6 +1229,11 @@ void LandSystem::SetUpLandscape()
 	// A land starts at noon on the game's cycle of day and night, which its script may change, under new clouds
 	auto& sky = Locator::skyClockSystem::value();
 	sky.GetClock().Reset();
+	sky.SetCycle({
+	    .duration = DayNightClock::k_DefaultDuration,
+	    .night = DayNightClock::k_DefaultNight,
+	    .change = DayNightClock::k_DefaultChange,
+	});
 	sky.SetTime(sky.GetClock().GetScriptTime());
 	archetypes::CloudArchetype::CreateSky();
 	if (Locator::cloudSystem::has_value())

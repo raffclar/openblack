@@ -19,6 +19,7 @@
 #include <spdlog/sinks/null_sink.h>
 #include <spdlog/spdlog.h>
 
+#include "Camera/ZoomToPlaces.h"
 #include "ECS/CreatureFromFile.h"
 #include "ECS/TownDesire.h"
 #include "Editor/EditorHistory.h"
@@ -542,4 +543,122 @@ TEST(EditorLandSave, AWrittenFootpathFileReadsBackWithItsLinksAndPaths)
 	EXPECT_EQ(node.coords.z, 131072u);
 	EXPECT_EQ(node.coords.altitude, 0.25f);
 	EXPECT_EQ(node.unknown, 3u);
+}
+
+TEST(EditorLandSave, TheWholeLandIsWrittenAfterTheVersion)
+{
+	const auto text = land_save::GameText({.landNumber = 2,
+	                                       .landscape = "C:/Profile/Editor/land2.lnd",
+	                                       .townInfluenceMultiplier = 1.5f,
+	                                       .playerInfluenceMultiplier = 0.5f});
+	EXPECT_EQ(text, "SET_LAND_NUMBER(2)\n"
+	                "LOAD_LANDSCAPE(\"C:/Profile/Editor/land2.lnd\")\n"
+	                "START_CAMERA_POS(\"0.00,0.00\")\n"
+	                "SET_TOWN_INFLUENCE_MULTIPLIER(1.500000)\n"
+	                "SET_PLAYER_INFLUENCE_MULTIPLIER(0.500000)\n"
+	                "SET_NIGHTTIME(1700.000000, 0.083000, 0.070000)\n");
+	// A land with no landscape file gets no landscape line
+	EXPECT_EQ(land_save::GameText({}).find("LOAD_LANDSCAPE"), std::string::npos);
+}
+
+TEST(EditorLandSave, TheCameraTheBalancesTheFlyByAndTheNightAreWrittenInTheirOrder)
+{
+	auto balances = std::array<float, 8> {1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f};
+	balances.at(0) = 3.5f;
+	balances.at(6) = 20.0f;
+	const auto text = land_save::GameText({
+	    .landNumber = 3,
+	    .landscape = "land3.lnd",
+	    .startCamera = {65536, 131072},
+	    .landBalance = balances,
+	    .flyByFile = "flyby.txt",
+	    .dayCycle = {.duration = 1000.0f, .night = 0.23f, .change = 0.17f},
+	});
+	EXPECT_EQ(text, "SET_LAND_NUMBER(3)\n"
+	                "LOAD_LANDSCAPE(\"land3.lnd\")\n"
+	                "START_CAMERA_POS(\"10.00,20.00\")\n"
+	                "SET_GLOBAL_LAND_BALANCE(0, 3.500000)\n"
+	                "SET_GLOBAL_LAND_BALANCE(6, 20.000000)\n"
+	                "FLY_BY_FILE(\"flyby.txt\")\n"
+	                "SET_TOWN_INFLUENCE_MULTIPLIER(1.000000)\n"
+	                "SET_PLAYER_INFLUENCE_MULTIPLIER(1.000000)\n"
+	                "SET_NIGHTTIME(1000.000000, 0.230000, 0.170000)\n");
+	// A land with no fly-by file gets no fly-by line, and a balance of 1 gets no line
+	const auto plain = land_save::GameText({});
+	EXPECT_EQ(plain.find("FLY_BY_FILE"), std::string::npos);
+	EXPECT_EQ(plain.find("SET_GLOBAL_LAND_BALANCE"), std::string::npos);
+}
+
+TEST(EditorLandSave, TheWholeLandLinesReadBackToTheSameValues)
+{
+	auto balances = std::array<float, 8> {1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f};
+	balances.at(5) = 3.014706f;
+	const land_save::GameLine game {
+	    .landNumber = 1,
+	    .startCamera = {zoom_to::MapCoordOf(1441.56f), zoom_to::MapCoordOf(2081.76f)},
+	    .landBalance = balances,
+	    .flyByFile = "fly.txt",
+	    .dayCycle = {.duration = 1700.0f, .night = 0.083f, .change = 0.07f},
+	};
+	const auto script = lhscriptx::Script::Read("VERSION(2.300000)\n" + land_save::GameText(game));
+	std::map<std::string, std::vector<lhscriptx::Token>> lines;
+	for (const auto& command : script.commands)
+	{
+		lines[command.name] = command.arguments;
+	}
+	// The place of the camera reads back to the same text that a shipped land gives
+	ASSERT_EQ(lines.at("START_CAMERA_POS").size(), 1u);
+	EXPECT_EQ(lines.at("START_CAMERA_POS").at(0).StringValue(), "1441.56,2081.76");
+	ASSERT_EQ(lines.at("SET_GLOBAL_LAND_BALANCE").size(), 2u);
+	EXPECT_EQ(*lines.at("SET_GLOBAL_LAND_BALANCE").at(0).IntegerValue(), 5);
+	EXPECT_FLOAT_EQ(*lines.at("SET_GLOBAL_LAND_BALANCE").at(1).FloatValue(), 3.014706f);
+	EXPECT_EQ(lines.at("FLY_BY_FILE").at(0).StringValue(), "fly.txt");
+	const auto& night = lines.at("SET_NIGHTTIME");
+	ASSERT_EQ(night.size(), 3u);
+	EXPECT_FLOAT_EQ(*night.at(0).FloatValue(), 1700.0f);
+	EXPECT_FLOAT_EQ(*night.at(1).FloatValue(), 0.083f);
+	EXPECT_FLOAT_EQ(*night.at(2).FloatValue(), 0.07f);
+}
+
+TEST(EditorLandSave, AScriptWithNoLandscapeLineLoadsNoLandscape)
+{
+	const auto saved = land_save::GameText({.landNumber = 1, .landscape = "land1.lnd"});
+	EXPECT_TRUE(lhscriptx::LoadsLandscape(lhscriptx::Script::Read("VERSION(2.300000)\n" + saved)));
+	EXPECT_FALSE(lhscriptx::LoadsLandscape(lhscriptx::Script::Read("VERSION(2.300000)\n" + land_save::GameText({}))));
+	// A landscape line after a line that stops the read does not load
+	EXPECT_FALSE(lhscriptx::LoadsLandscape(lhscriptx::Script::Read("VERSION 2.3\nLOAD_LANDSCAPE(\"land1.lnd\")\n")));
+}
+
+TEST(EditorLandSave, AFieldIsWrittenWithItsTownOrWithNone)
+{
+	const glm::ivec2 place {65536, 131072};
+	EXPECT_EQ(land_save::FieldText({.town = 4, .place = place, .row = 1, .yAngle = 0.5f}),
+	          "CREATE_NEW_TOWN_FIELD(4, \"10.00,20.00\", 1, 0.500000)\n");
+	EXPECT_EQ(land_save::FieldText({.town = -1, .place = place, .row = 1, .yAngle = 0.5f}),
+	          "CREATE_FIELD(\"10.00,20.00\", 1)\n");
+}
+
+TEST(EditorLandSave, TheListOfTheThingsMadeReadsBackInItsOrder)
+{
+	const std::vector made {static_cast<entt::entity>(9), static_cast<entt::entity>(0x100004), static_cast<entt::entity>(2)};
+	EXPECT_EQ(land_save::ReadMade(land_save::MadeText(made)), made);
+	// Line ends with a carriage return read, and a line that is not a number is passed over
+	const std::vector expected {static_cast<entt::entity>(7), static_cast<entt::entity>(8)};
+	EXPECT_EQ(land_save::ReadMade("7\r\nseven\n\n8"), expected);
+}
+
+TEST(EditorHistory, TheThingsKeptAtTheNextClearBecomeTheThingsMade)
+{
+	EditorHistory history;
+	const auto old = history.Track(static_cast<entt::entity>(4));
+	history.Push({.label = "Place", .changes = {MakeChange {.ref = old}}});
+	history.KeepMadeAtNextClear({static_cast<entt::entity>(12), static_cast<entt::entity>(5)});
+	history.Clear();
+	ASSERT_EQ(history.MadeRefs().size(), 2u);
+	EXPECT_EQ(history.Resolve(history.MadeRefs()[0]), static_cast<entt::entity>(12));
+	EXPECT_EQ(history.Resolve(history.MadeRefs()[1]), static_cast<entt::entity>(5));
+	EXPECT_FALSE(history.CanUndo());
+	// The list is kept for one clear only
+	history.Clear();
+	EXPECT_TRUE(history.MadeRefs().empty());
 }

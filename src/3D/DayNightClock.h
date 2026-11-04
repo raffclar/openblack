@@ -23,6 +23,18 @@ struct DayNightTimes
 	float dayFull;
 };
 
+/// The numbers that give a cycle of day and night. The default values give the game's cycle: a day of 1700 seconds, with
+/// 8.3% of it at night and 7% of it in change.
+struct DayCycle
+{
+	/// The seconds of game time in a whole day
+	float duration {1700.0f};
+	/// The part of the day at night
+	float night {0.083f};
+	/// The part of the day that changes between night and day
+	float change {0.07f};
+};
+
 /// Black & White's clock of day and night, in hours from 0 to 24.
 ///
 /// The visual time runs evenly, a whole day in a number of seconds of game time, moving on once a turn. The sky turns
@@ -35,9 +47,9 @@ public:
 	/// The hours of the script time the sky turns at: full night, dusk's start and end, full day
 	static constexpr std::array<float, 4> k_ScriptTimes = {3.5f, 7.5f, 8.0f, 8.5f};
 	/// The game's cycle: a day of 1700 seconds, 8.3% of it night and 7% of it changing
-	static constexpr float k_DefaultDuration = 1700.0f;
-	static constexpr float k_DefaultNight = 0.083f;
-	static constexpr float k_DefaultChange = 0.07f;
+	static constexpr float k_DefaultDuration = DayCycle {}.duration;
+	static constexpr float k_DefaultNight = DayCycle {}.night;
+	static constexpr float k_DefaultChange = DayCycle {}.change;
 
 	/// As a land opens: the game's cycle, running, at noon
 	void Reset();
@@ -48,6 +60,8 @@ public:
 	void SetCycle(float duration, float night, float change);
 	/// As a land's script sets it: the night at most the whole day, and the change at most what is left
 	void SetCycleFromLand(float duration, float night, float change);
+	/// The cycle that a land's script gives: the night at most the whole day, and the change at most what is left
+	[[nodiscard]] static DayCycle LandCycle(DayCycle cycle);
 	/// Whether the clock runs
 	void SetRunning(bool running) { _scale = running ? 1.0f : 0.0f; }
 	[[nodiscard]] bool IsRunning() const { return _scale != 0.0f; }
