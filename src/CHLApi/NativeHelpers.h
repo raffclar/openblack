@@ -74,7 +74,9 @@ VMValue Pop();
 float Popf();
 entt::entity PopObject();
 bool IsDirectableVillager(entt::entity object);
+void Pushf(float value);
 void Pushv(float value);
+void Pushi(int32_t value);
 void Pushb(bool value);
 void RemakeDrawList();
 std::optional<ecs::systems::HandSystemInterface::ReportedView> ScriptView();
@@ -86,9 +88,16 @@ void TurnPlacedThing(entt::entity object, const glm::vec3& angles, bool lean);
 float ScriptHeightOf(entt::entity object);
 bool IsScriptContainer(const ecs::Registry& registry, entt::entity thing);
 std::vector<entt::entity> ContainerMembers(const ecs::Registry& registry, entt::entity container);
+ecs::systems::ScriptMusicSystemInterface* WorldScriptMusic();
 PlayerNames ScriptPlayerName(int32_t scriptPlayer);
 
 // In CHLApi/CameraNatives.cpp
 void CountCameraOrder();
+
+// In CHLApi/HelpNatives.cpp
+void StopHelpScripts();
+void ReleaseDialogue(uint32_t task);
+help::spirits::AdvisorSpiritController* ScriptAdvisors();
+int32_t ScriptHelpSpirit(int32_t scriptSpirit);
 
 } // namespace openblack::chlapi
