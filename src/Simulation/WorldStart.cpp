@@ -131,14 +131,10 @@ std::optional<size_t> GameFileBytes(const std::filesystem::path& path)
 	return std::nullopt;
 }
 
-/// The bytes of a raw picture file at half its size, when the lowest detail levels load it so; none otherwise
-std::optional<std::vector<uint8_t>> HalvedAtThisDetail(const std::filesystem::path& path)
+/// Whether the lowest detail levels load the raw picture file at half its size
+bool HalvedAtThisDetail(const std::filesystem::path& path)
 {
-	if (!Locator::config::value().detail.lowResTextures || !low_resolution_textures::HalvedAtLowDetail(path.stem().string()))
-	{
-		return std::nullopt;
-	}
-	return low_resolution_textures::Halve(Locator::filesystem::value().ReadAll(path));
+	return Locator::config::value().detail.lowResTextures && low_resolution_textures::HalvedAtLowDetail(path.stem().string());
 }
 
 /// Loads a raw picture file into the texture cache, at half its size when the lowest detail levels load it so
@@ -146,10 +142,9 @@ template <typename Id>
 void LoadRawTexture(resources::TextureManager& textures, Id id, const std::filesystem::path& path,
                     graphics::texel_depth::Depth depth)
 {
-	if (auto halved = HalvedAtThisDetail(path))
+	if (HalvedAtThisDetail(path))
 	{
-		textures.Load(id, resources::Texture2DLoader::FromBufferTag {}, ("raw" / path.stem()).string(), std::move(*halved),
-		              depth);
+		textures.Load(id, resources::Texture2DLoader::FromDiskHalvedTag {}, path, depth);
 		return;
 	}
 	textures.Load(id, resources::Texture2DLoader::FromDiskTag {}, path, depth);
@@ -905,10 +900,10 @@ bool RegisterWorldData(WorldDataViewInterface& view)
 		{
 			const auto name = fmt::format("raw/{}", f.stem().string());
 			const auto depth = graphics::texel_depth::DepthOf(kind);
-			if (auto halved = HalvedAtThisDetail(f))
+			if (HalvedAtThisDetail(f))
 			{
-				textureManager.RegisterLoad(name, halved->size(), resources::Texture2DLoader::FromBufferTag {}, name,
-				                            std::move(*halved), depth);
+				// At half its size along each side the texture has a quarter of the bytes of the file
+				textureManager.RegisterLoad(name, *bytes / 4, resources::Texture2DLoader::FromDiskHalvedTag {}, f, depth);
 			}
 			else
 			{
