@@ -340,7 +340,7 @@ struct SavedSystem
 
 /// The systems that keep running state of their own, by the names of their sections. A load gives each system its state
 /// in this order: the map's lists first, then the systems that use them.
-constexpr std::array<SavedSystem, 45> k_SavedSystems {{
+constexpr std::array<SavedSystem, 46> k_SavedSystems {{
     {"map", &FindSystem<Locator::entitiesMap>},
     {"particles", &FindOldParticles, false},
     {"syncedParticles", &FindSystem<Locator::particleRuleSystem>},
