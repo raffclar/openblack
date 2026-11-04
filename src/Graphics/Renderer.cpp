@@ -1015,6 +1015,10 @@ void BindBlendSources(DrawEncoder& to, const L3DMesh& mesh, const L3DSubMesh& su
 void BindCreatureSpellLooks(DrawEncoder& to, const ShaderProgram& program)
 {
 	const auto& textures = Locator::resources::value().GetTextures();
+	// The stage is the usual stage of the sampler. A program that reads the sampler at a different stage uses its own.
+	// The program with the environment map reads the alpha of the ice at the stage of the height map. A bind at the
+	// usual stage puts the texture where the program does not read it. Then the program gets its default texture at
+	// its own stage, and bgfx sees the sampler two times in one draw.
 	constexpr std::array<std::pair<const char*, std::pair<uint8_t, entt::hashed_string>>, 3> k_Looks {{
 	    {"s_iceEnvironment", {10, entt::hashed_string("raw/S_IceEnvMap")}},
 	    {"s_iceEnvironmentAlpha", {5, entt::hashed_string("raw/S_IceEnvMapa")}},
@@ -1024,7 +1028,8 @@ void BindCreatureSpellLooks(DrawEncoder& to, const ShaderProgram& program)
 	{
 		if (textures.Contains(binding.second.value()))
 		{
-			program.SetTextureSampler(to, sampler, binding.first, *textures.Handle(binding.second));
+			const auto stage = program.SamplerStage(sampler).value_or(binding.first);
+			program.SetTextureSampler(to, sampler, stage, *textures.Handle(binding.second));
 		}
 	}
 }

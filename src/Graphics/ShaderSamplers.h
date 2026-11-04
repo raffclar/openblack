@@ -14,6 +14,7 @@
 #include <optional>
 #include <span>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -77,6 +78,9 @@ struct Sampler
 
 /// A program's samplers: its vertex shader's, then the fragment shader's that the vertex shader doesn't share by name
 [[nodiscard]] std::vector<Sampler> Merge(std::span<const Sampler> vertex, std::span<const Sampler> fragment);
+
+/// The stage at which the samplers bind the sampler with this name. Nothing when no sampler has the name.
+[[nodiscard]] std::optional<uint8_t> StageOf(std::span<const Sampler> samplers, std::string_view name);
 
 /// The pairs of differently named samplers a program reads at the same stage, where one texture would replace the other
 [[nodiscard]] std::vector<std::pair<std::string, std::string>> StageCollisions(std::span<const Sampler> samplers);

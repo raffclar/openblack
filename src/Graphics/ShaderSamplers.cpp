@@ -298,6 +298,16 @@ std::vector<Sampler> Merge(std::span<const Sampler> vertex, std::span<const Samp
 	return merged;
 }
 
+std::optional<uint8_t> StageOf(std::span<const Sampler> samplers, std::string_view name)
+{
+	const auto found = std::ranges::find(samplers, name, &Sampler::name);
+	if (found == samplers.end())
+	{
+		return std::nullopt;
+	}
+	return found->stage;
+}
+
 std::vector<std::pair<std::string, std::string>> StageCollisions(std::span<const Sampler> samplers)
 {
 	std::vector<std::pair<std::string, std::string>> collisions;
