@@ -451,8 +451,18 @@ BlendTexels MakeBlendTexels(std::span<const uint8_t> vertices, uint32_t count, s
 
 void L3DSubMesh::SetDeviceDataGivenAgain() const
 {
-	if (!_mesh || _made)
+	if (!_mesh)
 	{
+		return;
+	}
+	// A made submesh keeps a copy of its vertices and indices, thus the device keeps none
+	if (_made)
+	{
+		if (!_madeVertices.empty() && !_madeIndices.empty())
+		{
+			_mesh->GetVertexBuffer().SetContentsGivenAgain();
+			_mesh->GetIndexBuffer().SetContentsGivenAgain();
+		}
 		return;
 	}
 	// The vertices of a dynamic mesh change. Without a model source, the device keeps them and the blend source that
@@ -507,6 +517,16 @@ void L3DSubMesh::GiveDeviceDataAgain(const Prepared& prepared) const
 		const auto* first = reinterpret_cast<const uint8_t*>(indices.data());
 		_mesh->GetIndexBuffer().GiveContentsAgain(std::vector<uint8_t>(first, first + (indices.size() * sizeof(indices[0]))));
 	}
+}
+
+void L3DSubMesh::GiveMadeDataAgain() const
+{
+	if (!_mesh || !_made || _madeVertices.empty() || _madeIndices.empty())
+	{
+		return;
+	}
+	_mesh->GetVertexBuffer().GiveContentsAgain(_madeVertices);
+	_mesh->GetIndexBuffer().GiveContentsAgain(_madeIndices);
 }
 
 bool L3DSubMesh::LoadMade(std::span<const MadePrimitive> primitives) noexcept
@@ -582,6 +602,11 @@ bool L3DSubMesh::LoadMade(std::span<const MadePrimitive> primitives) noexcept
 	decl.emplace_back(VertexAttrib::Attribute::Normal, static_cast<uint8_t>(3), VertexAttrib::Type::Float);
 	decl.emplace_back(VertexAttrib::Attribute::Indices, static_cast<uint8_t>(4), VertexAttrib::Type::Int16,
 	                  /*normalized=*/false, /*asInt=*/true);
+	// No file holds the made vertices and indices, thus the submesh keeps a copy to give them again after a restore
+	const auto madeVertices = Locator::graphicsDevice::value().Bytes(verticesMem);
+	const auto madeIndices = Locator::graphicsDevice::value().Bytes(indicesMem);
+	_madeVertices.assign(madeVertices.begin(), madeVertices.end());
+	_madeIndices.assign(madeIndices.begin(), madeIndices.end());
 	auto* vertexBuffer = new VertexBuffer(_l3dMesh.GetDebugName(), verticesMem, decl);
 	auto* indexBuffer = new IndexBuffer(_l3dMesh.GetDebugName(), indicesMem, IndexBuffer::Type::Uint16);
 	_mesh = std::make_unique<graphics::Mesh>(vertexBuffer, indexBuffer);

@@ -236,6 +236,13 @@ struct Texture2DLoader final: BaseLoader<graphics::Texture2D>
 	{
 	};
 
+	/// A square raw file at half its size, as the lowest detail levels load it: the texel at the start of each two by two
+	/// square. A file of another size loads at its full size. After a restore of the graphics device the texture reads
+	/// the file again and halves it again.
+	struct FromDiskHalvedTag
+	{
+	};
+
 	/// The bytes of a square raw file that the game made, as with FromBufferTag. The texture keeps the bytes and gives
 	/// its texels again from them after a restore of the graphics device.
 	struct FromMadeTag
@@ -249,6 +256,8 @@ struct Texture2DLoader final: BaseLoader<graphics::Texture2D>
 	/// @param depth the bits a channel the texture keeps, as the game keeps the file (texel_depth::DepthOf)
 	[[nodiscard]] result_type operator()(FromDiskTag, const std::filesystem::path& rawTexturePath,
 	                                     graphics::texel_depth::Depth depth = graphics::texel_depth::Depth::Full) const;
+	[[nodiscard]] result_type operator()(FromDiskHalvedTag, const std::filesystem::path& rawTexturePath,
+	                                     graphics::texel_depth::Depth depth) const;
 	[[nodiscard]] result_type operator()(FromDiskWithAlphaTag, const std::filesystem::path& rawTexturePath,
 	                                     const std::filesystem::path& alphaPath, uint16_t side, bool halve = false) const;
 	/// The bytes of a square raw file that the game made, as a raw file on the disk with the same name is loaded

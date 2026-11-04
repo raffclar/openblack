@@ -226,6 +226,9 @@ public:
 	/// Gives the vertices and indices again after a restore of the graphics device, from a new preparation of the same
 	/// file. A submesh that has new faces for the snow makes them again from its surface.
 	void GiveDeviceDataAgain(const Prepared& prepared) const;
+	/// Gives the vertices and indices of a made submesh again after a restore of the graphics device, from the copy that
+	/// the submesh keeps. No file holds them.
+	void GiveMadeDataAgain() const;
 
 private:
 	/// The vertices and the indices of the faces for the snow: three corners of its own for each face
@@ -251,6 +254,9 @@ private:
 
 	std::unique_ptr<graphics::Mesh> _mesh;
 	bool _made {false};
+	/// The vertices and the indices of a made submesh as the device got them, kept to give them again after a restore
+	std::vector<uint8_t> _madeVertices;
+	std::vector<uint8_t> _madeIndices;
 	bool _facesSplit {false};
 	bool _hasBlends {false};
 	std::unique_ptr<Texture2D> _blendSource;

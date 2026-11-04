@@ -12,6 +12,8 @@
 
 #include <algorithm>
 #include <filesystem>
+#include <functional>
+#include <map>
 #include <memory>
 #include <mutex>
 #include <span>
@@ -26,6 +28,8 @@
 #include <gtest/gtest.h>
 
 #include "3D/L3DMesh.h"
+#include "3D/LowResolutionTextures.h"
+#include "FileSystem/FileSystemInterface.h"
 #include "Graphics/GraphicsDeviceInterface.h"
 #include "Graphics/IndexBuffer.h"
 #include "Graphics/VertexBuffer.h"
@@ -33,6 +37,7 @@
 #include "Resources/Loaders.h"
 #include "Resources/Rereads.h"
 #include "Resources/ResourcesInterface.h"
+#include "Visual/TexelDepth.h"
 #include "Visual/UploadMode.h"
 
 using namespace openblack;
@@ -205,12 +210,42 @@ private:
 	mutable DeviceDataGivers _givers;
 };
 
+/// Game files in memory, by their path
+class FakeFiles final: public filesystem::FileSystemInterface
+{
+public:
+	[[nodiscard]] std::filesystem::path FindPath(const std::filesystem::path& path) const override { return path; }
+	std::unique_ptr<std::istream> GetData(const std::filesystem::path& /*unused*/) override { return nullptr; }
+	[[nodiscard]] bool IsPathValid(const std::filesystem::path& path) override { return files.contains(path); }
+	std::unique_ptr<filesystem::Stream> Open(const std::filesystem::path& /*unused*/,
+	                                         filesystem::Stream::Mode /*unused*/) override
+	{
+		return nullptr;
+	}
+	[[nodiscard]] bool Exists(const std::filesystem::path& path) const override { return files.contains(path); }
+	void SetGamePath(const std::filesystem::path& path) override { gamePath = path; }
+	[[nodiscard]] const std::filesystem::path& GetGamePath() const override { return gamePath; }
+	void AddAdditionalPath(const std::filesystem::path& /*unused*/) override {}
+	std::vector<uint8_t> ReadAll(const std::filesystem::path& path) override { return files.at(path); }
+	void Iterate(const std::filesystem::path& /*unused*/, bool /*unused*/,
+	             const std::function<void(const std::filesystem::path&)>& /*unused*/) const override
+	{
+	}
+
+	std::map<std::filesystem::path, std::vector<uint8_t>> files;
+	std::filesystem::path gamePath;
+};
+
 /// Puts a fake device in the locator for the life of the test
 class MeshPrepare: public ::testing::Test
 {
 protected:
 	void SetUp() override { Locator::graphicsDevice::emplace<FakeDevice>(); }
-	void TearDown() override { Locator::graphicsDevice::reset(); }
+	void TearDown() override
+	{
+		Locator::filesystem::reset();
+		Locator::graphicsDevice::reset();
+	}
 	[[nodiscard]] static const FakeDevice& Device() { return static_cast<const FakeDevice&>(Locator::graphicsDevice::value()); }
 };
 
@@ -643,4 +678,98 @@ TEST_F(MeshPrepare, AMeshOfDataOnlyIgnoresAFileSource)
 	ASSERT_TRUE(mesh.Load(Model()));
 	mesh.SetFileSource([](resources::Rereads& rereads) { return rereads.File("mesh.l3d"); });
 	EXPECT_EQ(Locator::graphicsDevice::value().GetDataGivers().Count(), 0U);
+}
+
+TEST_F(MeshPrepare, AMadeMeshGivesItsVerticesAndIndicesAgainFromItsCopy)
+{
+	const auto model = Model();
+	L3DMesh source("source", false, UploadMode::Device);
+	ASSERT_TRUE(source.Load(model));
+	std::ignore = Device().TakeMade();
+	std::ignore = Device().TakeMarked();
+
+	using MadePrimitive = L3DSubMesh::MadePrimitive;
+	MadePrimitive made {.source = source.GetSubMeshes().front().get(), .sourcePrimitive = 1, .indices = {0, 1, 2, 2, 1, 3}};
+	made.vertices = {{.position = {0, 0, 0}, .uv = {0, 0}, .normal = {0, 1, 0}},
+	                 {.position = {1, 0, 0}, .uv = {1, 0}, .normal = {0, 1, 0}},
+	                 {.position = {0, 0, 1}, .uv = {0, 1}, .normal = {0, 1, 0}, .back = true},
+	                 {.position = {1, 0, 1}, .uv = {1, 1}, .normal = {0, -1, 0}, .back = true}};
+	const std::vector<std::vector<MadePrimitive>> subMeshes {{made}};
+	L3DMesh mesh("broken", false, UploadMode::Device);
+	ASSERT_TRUE(mesh.LoadMade(source, subMeshes));
+	const auto fromLoad = Device().TakeMade();
+	using Kind = FakeDevice::Made::Kind;
+	ASSERT_EQ(fromLoad.size(), 2U);
+	EXPECT_EQ(fromLoad[0].kind, Kind::VertexBuffer);
+	EXPECT_EQ(fromLoad[1].kind, Kind::IndexBuffer);
+
+	// The device keeps no copy of the vertices and the indices of the made mesh
+	EXPECT_EQ(Device().TakeMarked(), (std::vector<Kind> {Kind::GivenVertices, Kind::GivenIndices}));
+	EXPECT_TRUE(mesh.GivesDeviceDataAgain());
+	auto& givers = Locator::graphicsDevice::value().GetDataGivers();
+	ASSERT_EQ(givers.Count(), 1U);
+
+	// After a restore the mesh gives the bytes of its load again, from its own copy
+	resources::Rereads rereads([](const std::filesystem::path&) { return std::vector<uint8_t> {}; });
+	givers.GiveAll(rereads);
+	const auto given = Device().TakeMade();
+	ASSERT_EQ(given.size(), 2U);
+	EXPECT_EQ(given[0].kind, Kind::GivenVertices);
+	EXPECT_EQ(given[0].bytes, fromLoad[0].bytes);
+	EXPECT_EQ(given[1].kind, Kind::GivenIndices);
+	EXPECT_EQ(given[1].bytes, fromLoad[1].bytes);
+}
+
+TEST_F(MeshPrepare, ARawTextureAtHalfItsSizeReadsItsFileAgainAndHalvesItAgain)
+{
+	auto& files = static_cast<FakeFiles&>(Locator::filesystem::emplace<FakeFiles>());
+	const std::filesystem::path path = "Data/picture.raw";
+	std::vector<uint8_t> picture(static_cast<size_t>(low_resolution_textures::k_FullSide) *
+	                             low_resolution_textures::k_FullSide);
+	for (size_t i = 0; i < picture.size(); ++i)
+	{
+		picture[i] = static_cast<uint8_t>((i * 7U) + (i / low_resolution_textures::k_FullSide));
+	}
+	files.files[path] = picture;
+	const auto half = low_resolution_textures::Halve(picture);
+	ASSERT_TRUE(half.has_value());
+
+	// The texture has the texels of the picture at half its size
+	const auto texture =
+	    resources::Texture2DLoader {}(resources::Texture2DLoader::FromDiskHalvedTag {}, path, texel_depth::Depth::Full);
+	using Kind = FakeDevice::Made::Kind;
+	const auto made = Device().TakeMade();
+	ASSERT_EQ(made.size(), 1U);
+	EXPECT_EQ(made[0].kind, Kind::Texture);
+	EXPECT_EQ(made[0].bytes, *half);
+	EXPECT_EQ(texture->GetResolution().x, low_resolution_textures::k_HalfSide);
+
+	// After a restore the texture reads the file again and halves it again
+	auto& givers = Locator::graphicsDevice::value().GetDataGivers();
+	ASSERT_EQ(givers.Count(), 1U);
+	uint32_t reads = 0;
+	resources::Rereads rereads([&picture, &path, &reads](const std::filesystem::path& read) {
+		++reads;
+		return read == path ? picture : std::vector<uint8_t> {};
+	});
+	givers.GiveAll(rereads);
+	EXPECT_EQ(reads, 1U);
+	const auto given = Device().TakeMade();
+	ASSERT_EQ(given.size(), 1U);
+	EXPECT_EQ(given[0].kind, Kind::TextureUpdate);
+	EXPECT_EQ(given[0].bytes, *half);
+}
+
+TEST_F(MeshPrepare, ARawTextureOfAnotherSizeLoadsAtItsFullSize)
+{
+	auto& files = static_cast<FakeFiles&>(Locator::filesystem::emplace<FakeFiles>());
+	const std::filesystem::path path = "Data/small.raw";
+	const std::vector<uint8_t> picture(static_cast<size_t>(64) * 64, 9);
+	files.files[path] = picture;
+	const auto texture =
+	    resources::Texture2DLoader {}(resources::Texture2DLoader::FromDiskHalvedTag {}, path, texel_depth::Depth::Full);
+	const auto made = Device().TakeMade();
+	ASSERT_EQ(made.size(), 1U);
+	EXPECT_EQ(made[0].bytes, picture);
+	EXPECT_EQ(texture->GetResolution().x, 64U);
 }

@@ -3542,6 +3542,77 @@ void AddAppearance(std::vector<Scenario>& all)
 	                {.type = TreeInfo::Oak, .offset = {15.0f, -45.0f}},
 	                {.type = TreeInfo::Oak, .offset = {25.0f, -30.0f}}},
 	});
+	// The same view at the lowest detail levels, with the graphics device made again after two seconds: the textures
+	// at half their size give their texels again
+	for (const bool lost : {false, true})
+	{
+		all.push_back({
+		    .id =
+		        lost ? "appearance.low_resolution_textures_device_lost" : "appearance.low_resolution_textures_device_restored",
+		    .name = lost ? "Low resolution textures after a lost graphics device"
+		                 : "Low resolution textures after the graphics device is made again",
+		    .facet = Facet::Appearance,
+		    .description = lost ? "The view of the low resolution textures scenario. After two seconds the graphics device "
+		                          "is lost, and the renderer makes it again. Start the game with --detail-level 1 (Low) "
+		                          "or 0 (Minimum)."
+		                        : "The view of the low resolution textures scenario. After two seconds the renderer makes "
+		                          "the graphics device again, as after a lost device. Start the game with --detail-level 1 "
+		                          "(Low) or 0 (Minimum).",
+		    .expected = "The picture does not change when the device is made again. The textures keep their half size: "
+		                "the land, the hut, the oaks, the sea and the sky are as in the low resolution textures "
+		                "scenario. No texture is black, white or missing.",
+		    .environment = {.hour = 12.0f, .clockRuns = false, .dispenserGrid = false},
+		    .framing = {.shot = Shot::Placed, .eye = {0.0f, 40.0f, -90.0f}, .look = {0.0f, 0.0f, 60.0f}},
+		    .objects = {{.type = AbodeInfo::CelticHut, .offset = {-15.0f, -40.0f}},
+		                {.type = TreeInfo::Oak, .offset = {15.0f, -45.0f}},
+		                {.type = TreeInfo::Oak, .offset = {25.0f, -30.0f}}},
+		    .commands = {{.kind = Kind::RestoreDevice, .delaySeconds = 2.0f, .value = lost ? 1U : 0U}},
+		});
+	}
+	// A boulder breaks a hut: the broken model and its pieces are models that the game makes. With the restore, the
+	// graphics device is made again after the hit, and the made models give their vertices again.
+	constexpr glm::vec2 k_BrokenHut {0.0f, 20.0f};
+	constexpr std::array<std::string_view, 3> k_BrokenHutDescriptions {
+	    "At noon, the clock stopped, a hand throws a boulder north at a hut from 30 metres south of it, one second "
+	    "after the start.",
+	    "At noon, the clock stopped, a hand throws a boulder north at a hut from 30 metres south of it, one second "
+	    "after the start. Four seconds after the start the renderer makes the graphics device again, as after a lost "
+	    "device.",
+	    "At noon, the clock stopped, a hand throws a boulder north at a hut from 30 metres south of it, one second "
+	    "after the start. Four seconds after the start the graphics device is lost, and the renderer makes it again.",
+	};
+	for (const auto restore : {0U, 1U, 2U})
+	{
+		const bool lost = restore == 2U;
+		auto& broken = all.emplace_back(Scenario {
+		    .id = restore == 0U ? "physics.boulder_breaks_hut"
+		          : lost        ? "physics.boulder_breaks_hut_device_lost"
+		                        : "physics.boulder_breaks_hut_device_restored",
+		    .name = restore == 0U ? "A boulder breaks a hut"
+		            : lost        ? "A broken hut after a lost graphics device"
+		                          : "A broken hut after the graphics device is made again",
+		    .facet = Facet::Physics,
+		    .description = k_BrokenHutDescriptions.at(restore),
+		    .expected = restore == 0U ? "The boulder hits the hut and breaks it. The hut shows the hole of the hit, and "
+		                                "pieces fall away from it and lie on the land."
+		                              : "The boulder hits the hut and breaks it. The hut shows the hole of the hit, and "
+		                                "pieces fall away from it and lie on the land. The broken hut and its pieces do "
+		                                "not change when the device is made again: no part goes black or missing.",
+		    .environment = {.hour = 12.0f, .clockRuns = false, .dispenserGrid = false},
+		    .framing = {.shot = Shot::Placed, .eye = {-20.0f, 14.0f, -4.0f}, .look = {k_BrokenHut.x, 2.0f, k_BrokenHut.y}},
+		    .objects = {{.type = AbodeInfo::CelticHut, .offset = k_BrokenHut},
+		                {.type = MobileStaticInfo::Boulder1Chalk, .offset = k_BrokenHut - glm::vec2(0.0f, 30.0f)}},
+		    .throws = {{.object = 1,
+		                .from = k_BrokenHut - glm::vec2(0.0f, 30.0f),
+		                .height = 4.0f,
+		                .velocity = {0.0f, 4.0f, 25.0f},
+		                .delaySeconds = 1.0f}},
+		});
+		if (restore != 0U)
+		{
+			broken.commands = {{.kind = Kind::RestoreDevice, .delaySeconds = 4.0f, .value = lost ? 1U : 0U}};
+		}
+	}
 	// The player's lion mirrored in the lake: its one chroma part keeps the alpha of its texture
 	all.push_back({
 	    .id = "appearance.lion_sea_reflection",
@@ -15440,15 +15511,15 @@ std::string_view CommandProblem(const Command& command, std::span<const ObjectSe
 
 bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 {
-	return kind == Kind::SetHour || kind == Kind::RestoreDeviceInDomeFollow || kind == Kind::HoldSeed ||
-	       kind == Kind::DrawGesture || kind == Kind::SummonSeed || kind == Kind::PressKey || kind == Kind::HandTakeFireBall ||
-	       kind == Kind::SetAlignment || kind == Kind::WideScreen || kind == Kind::SetInterfaceLevel ||
-	       kind == Kind::FlyToBookmark || kind == Kind::TabToTown || kind == Kind::SetOpenClose || kind == Kind::LayGateStone ||
-	       kind == Kind::HandTapObject || kind == Kind::Advisor || kind == Kind::RunText || kind == Kind::PlayHandDemo ||
-	       kind == Kind::Reframe || kind == Kind::DestroyTemple || kind == Kind::RunHelpMessage ||
-	       kind == Kind::EndGuidanceWaits || kind == Kind::SetTownBeliefInRival || kind == Kind::GiveLandTown ||
-	       kind == Kind::RecordChallenge || kind == Kind::EnterTemple || kind == Kind::HandTake || kind == Kind::HandApply ||
-	       kind == Kind::HandTakeShownSeed || kind == Kind::RunScript || kind == Kind::ClickScroll ||
+	return kind == Kind::SetHour || kind == Kind::RestoreDeviceInDomeFollow || kind == Kind::RestoreDevice ||
+	       kind == Kind::HoldSeed || kind == Kind::DrawGesture || kind == Kind::SummonSeed || kind == Kind::PressKey ||
+	       kind == Kind::HandTakeFireBall || kind == Kind::SetAlignment || kind == Kind::WideScreen ||
+	       kind == Kind::SetInterfaceLevel || kind == Kind::FlyToBookmark || kind == Kind::TabToTown ||
+	       kind == Kind::SetOpenClose || kind == Kind::LayGateStone || kind == Kind::HandTapObject || kind == Kind::Advisor ||
+	       kind == Kind::RunText || kind == Kind::PlayHandDemo || kind == Kind::Reframe || kind == Kind::DestroyTemple ||
+	       kind == Kind::RunHelpMessage || kind == Kind::EndGuidanceWaits || kind == Kind::SetTownBeliefInRival ||
+	       kind == Kind::GiveLandTown || kind == Kind::RecordChallenge || kind == Kind::EnterTemple || kind == Kind::HandTake ||
+	       kind == Kind::HandApply || kind == Kind::HandTakeShownSeed || kind == Kind::RunScript || kind == Kind::ClickScroll ||
 	       kind == Kind::ClickCreatureAt || kind == Kind::CameraLooksAt || kind == Kind::HandTakeNear ||
 	       kind == Kind::ClickCreatureNear || kind == Kind::TapRewardNear || kind == Kind::PlayBoatFilm ||
 	       kind == Kind::HandPour || kind == Kind::HandRelease || kind == Kind::SetReportLatency ||
@@ -15500,7 +15571,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 225> k_Names {
+	constexpr std::array<std::string_view, 226> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -15726,6 +15797,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "tap the reward chest nearest a point",
 	    "click a creature",
 	    "make the graphics device again while the dome follows the sky",
+	    "make the graphics device again",
 	};
 	return k_Names.at(static_cast<size_t>(kind));
 }

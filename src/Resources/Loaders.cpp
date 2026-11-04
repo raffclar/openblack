@@ -434,6 +434,28 @@ Texture2DLoader::result_type Texture2DLoader::operator()(FromDiskTag, const std:
 	return texture;
 }
 
+Texture2DLoader::result_type Texture2DLoader::operator()(FromDiskHalvedTag, const std::filesystem::path& rawTexturePath,
+                                                         graphics::texel_depth::Depth depth) const
+{
+	auto halved = low_resolution_textures::Halve(Locator::filesystem::value().ReadAll(rawTexturePath));
+	if (!halved)
+	{
+		return (*this)(FromDiskTag {}, rawTexturePath, depth);
+	}
+	auto texture = (*this)(FromBufferTag {}, ("raw" / rawTexturePath.stem()).string(), std::move(*halved), depth);
+	// After a restore of the graphics device the texture reads its file again and halves it again
+	texture->SetTexelSource([rawTexturePath, depth](Rereads& rereads) {
+		auto again = low_resolution_textures::Halve(rereads.File(rawTexturePath));
+		if (!again)
+		{
+			throw std::runtime_error("Unexpected size of " + rawTexturePath.string());
+		}
+		const auto shape = RawShapeOf(again->size());
+		return RawTexels(std::move(*again), shape.channels, depth);
+	});
+	return texture;
+}
+
 Texture2DLoader::result_type Texture2DLoader::operator()(FromBufferTag, const std::string& name, std::vector<uint8_t> data,
                                                          graphics::texel_depth::Depth depth) const
 {
