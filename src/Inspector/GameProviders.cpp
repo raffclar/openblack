@@ -264,6 +264,7 @@
 #include "FightProviders.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "GameControls.h"
+#include "GameProviderShared.h"
 #include "GameSeamInterface.h"
 #include "Gui/ScreenFade.h"
 #include "Gui/ScriptTexts.h"
@@ -298,18 +299,10 @@
 #include "Windowing/WindowingInterface.h"
 #include "WorldProviders.h"
 
-namespace openblack
-{
-/// A heading is written to the inspector as its radians
-void to_json(inspector::Json& json, const GameHeading& heading)
-{
-	json = heading.Radians();
-}
-} // namespace openblack
-
 using namespace openblack;
 using namespace openblack::inspector;
 using namespace openblack::ecs::components;
+using namespace openblack::inspector::game_providers;
 
 namespace
 {
@@ -500,223 +493,6 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"helpSpeechSystem", "help.dialogue"},
     LocatorCoverage {"dialogueControlSystem", "help.dialogue"},
 };
-
-constexpr std::string_view k_NoRegistry = "there is no registry: no land is loaded";
-
-Json Point(const glm::vec3& point)
-{
-	return {point.x, point.y, point.z};
-}
-
-Json Point(const glm::vec2& point)
-{
-	return {point.x, point.y};
-}
-
-Json Id(entt::entity entity)
-{
-	return entity == entt::null ? Json(nullptr) : Json(ToId(entity));
-}
-
-Json Id(const std::optional<entt::entity>& entity)
-{
-	return entity.has_value() ? Id(*entity) : Json(nullptr);
-}
-
-template <typename Value>
-Json Optional(const std::optional<Value>& value)
-{
-	if (!value.has_value())
-	{
-		return nullptr;
-	}
-	if constexpr (std::is_same_v<Value, glm::vec3> || std::is_same_v<Value, glm::vec2>)
-	{
-		return Point(*value);
-	}
-	else
-	{
-		return *value;
-	}
-}
-
-const ecs::Registry* Registry()
-{
-	return Locator::entitiesRegistry::has_value() ? &Locator::entitiesRegistry::value() : nullptr;
-}
-
-/// The things that only the frames make, out of the synced world
-const ecs::Registry* DrawnRegistry()
-{
-	return Locator::drawnRegistry::has_value() ? &Locator::drawnRegistry::value() : nullptr;
-}
-
-const InfoConstants* Info()
-{
-	return Locator::infoConstants::has_value() ? &Locator::infoConstants::value() : nullptr;
-}
-
-WorldSources World()
-{
-	return {.registry = &Registry, .info = &Info};
-}
-
-/// How many entities have a component
-template <typename Component>
-size_t CountOf(const ecs::Registry& registry)
-{
-	const auto* storage = registry.Underlying().storage<Component>();
-	return storage != nullptr ? storage->size() : 0;
-}
-
-QueryDescription Query(std::string name, std::string description, std::vector<ParameterDescription> parameters = {},
-                       ResultKind kind = ResultKind::Object, bool needsNear = false)
-{
-	return {.name = std::move(name),
-	        .description = std::move(description),
-	        .parameters = std::move(parameters),
-	        .kind = kind,
-	        .needsNear = needsNear,
-	        .writes = false};
-}
-
-ParameterDescription IdParameter(std::string description)
-{
-	return {.name = "id", .type = "integer", .description = std::move(description), .required = true};
-}
-
-ParameterDescription PositionParameter()
-{
-	return {.name = "position", .type = "point", .description = "[x, z] or [x, y, z]", .required = true};
-}
-
-/// The entity a request names, if it exists
-std::optional<entt::entity> EntityParam(const Json& params)
-{
-	const auto* registry = Registry();
-	const auto it = params.find("id");
-	const auto entity = it == params.end() ? std::nullopt : FromId(*it);
-	if (registry == nullptr || !entity.has_value() || !registry->Valid(*entity))
-	{
-		return std::nullopt;
-	}
-	return entity;
-}
-
-std::optional<glm::vec3> PositionParam(const Json& params)
-{
-	const auto it = params.find("position");
-	if (it == params.end())
-	{
-		return std::nullopt;
-	}
-	const auto point = ReadPoint(*it);
-	if (!point.has_value())
-	{
-		return std::nullopt;
-	}
-	return glm::vec3(static_cast<float>((*point)[0]), static_cast<float>((*point)[1]), static_cast<float>((*point)[2]));
-}
-
-PlayerNames PlayerParam(const Json& params)
-{
-	const auto number = static_cast<int>(NumberMember(params, "player").value_or(0.0));
-	return static_cast<PlayerNames>(std::clamp(number, 0, static_cast<int>(PlayerNames::NEUTRAL)));
-}
-
-/// The player that a request names, by number (0 to 7) or by name (PLAYER_TWO): none when it names no player
-std::optional<PlayerNames> NamedPlayerParam(const Json& params)
-{
-	const auto it = params.find("player");
-	if (it == params.end())
-	{
-		return std::nullopt;
-	}
-	if (it->is_string())
-	{
-		const auto& text = it->get_ref<const std::string&>();
-		const auto found = std::ranges::find(k_PlayerNamesStrs, std::string_view(text));
-		if (found == k_PlayerNamesStrs.end())
-		{
-			return std::nullopt;
-		}
-		return static_cast<PlayerNames>(found - k_PlayerNamesStrs.begin());
-	}
-	const auto number = NumberMember(params, "player");
-	if (!number.has_value() || *number < 0.0 || *number >= static_cast<double>(PlayerNames::_COUNT))
-	{
-		return std::nullopt;
-	}
-	return static_cast<PlayerNames>(static_cast<int>(*number));
-}
-
-/// The entity of the player, if the land has it
-std::optional<entt::entity> PlayerEntityOf(const ecs::Registry& registry, PlayerNames name)
-{
-	std::optional<entt::entity> found;
-	registry.Each<const Player>([&](entt::entity entity, const Player& player) {
-		if (player.name == name)
-		{
-			found = entity;
-		}
-	});
-	return found;
-}
-
-/// The names that the nodes of every computer mind have in this game: a personality load can change them
-const computer_mind::NodeNames& SharedNodeNames(const ecs::Registry& registry)
-{
-	const computer_mind::NodeNames* names = &computer_mind::FirstNodeNames();
-	registry.Each<const ecs::components::ComputerNodeNames>(
-	    [&names](entt::entity /*entity*/, const ecs::components::ComputerNodeNames& shared) { names = &shared.names; });
-	return *names;
-}
-
-/// A query of one locator service, answered only while the service is there
-template <typename Service, typename Read>
-FunctionProvider::Function Serve(std::string_view name, Read read)
-{
-	return [name, read](const QueryContext& context) -> QueryResult {
-		if (!Service::has_value())
-		{
-			return QueryResult::Error(std::string(name) + " isn't there: no land is loaded, or this mode doesn't make it");
-		}
-		if constexpr (std::is_same_v<std::invoke_result_t<Read, decltype(Service::value()), const QueryContext&>, QueryResult>)
-		{
-			return read(Service::value(), context);
-		}
-		else
-		{
-			return QueryResult::Value(read(Service::value(), context));
-		}
-	};
-}
-
-/// A query of the registry, answered only while there is one
-template <typename Read>
-FunctionProvider::Function ServeRegistry(Read read)
-{
-	return [read](const QueryContext& context) -> QueryResult {
-		const auto* registry = Registry();
-		if (registry == nullptr)
-		{
-			return QueryResult::Error(std::string(k_NoRegistry));
-		}
-		if constexpr (std::is_same_v<std::invoke_result_t<Read, const ecs::Registry&, const QueryContext&>, QueryResult>)
-		{
-			return read(*registry, context);
-		}
-		else
-		{
-			return QueryResult::Value(read(*registry, context));
-		}
-	};
-}
-
-Json Listed(const ecs::Registry& registry, entt::entity entity)
-{
-	return ToListItem(entity, Describe(registry, entity, Info()));
-}
 
 std::string_view KindName(ecs::PhysicsEntry::Kind kind)
 {
