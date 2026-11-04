@@ -206,11 +206,11 @@ void FlockMiracle::Emit(SpellServicesInterface& services, Spell& spell)
 	if (!data.castEffectStarted && !tables.ground && spell.fromLocalHand && Locator::effectRequestSystem::has_value())
 	{
 		data.castEffectStarted = true;
-		// Only the computer of the hand shows the trail, so the particles of this computer give it its number. It steps in
-		// each frame at the hand, and a save does not keep it.
+		// Only the computer of the hand shows the trail, so the particles of this computer give it its number. It starts at
+		// the cast point, then steps in each frame at the hand. A save does not keep it.
 		data.castEffect = Locator::effectRequestSystem::value().StartHere({
 		    .type = data.evil ? ParticleType::FlockFlyingCastEvil : ParticleType::FlockFlyingCastGood,
-		    .position = spell.processInfo.handPosition,
+		    .position = spell.originalCastPosition,
 		    .synced = false,
 		    .player = static_cast<int>(spell.caster.player),
 		    .processInfo = spell.processInfo,
