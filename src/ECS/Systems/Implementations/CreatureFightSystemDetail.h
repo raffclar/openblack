@@ -55,6 +55,11 @@ using components::CreatureFighting;
 using components::CreatureKnockedOut;
 using components::CreatureLocomotion;
 
+constexpr float k_TurnSeconds = std::chrono::duration<float>(TimeSystemInterface::k_TurnDuration).count();
+
+constexpr auto k_TurnMilliseconds =
+    static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::milliseconds>(TimeSystemInterface::k_TurnDuration).count());
+
 /// The milliseconds of a game turn for the creature: a frozen creature has fewer, down to none. Its fight animations,
 /// its cast hold, the tests of its blows and the drips of its blood move on by these.
 int32_t TurnMsOf(const CreatureAnimation* animation);
@@ -87,6 +92,8 @@ glm::vec2 WorldToLocal(glm::vec2 world, GameHeading heading);
 /// Moves a creature where it stands, both where it is drawn from and to this turn
 void Shift(CreatureLocomotion& locomotion, glm::vec2 by);
 
+void SetEyes(ecs::Registry& registry, entt::entity creature, creature_eyes::Mode mode);
+
 /// The creature's mesh and the matrix it is drawn with, if it has a loaded mesh
 std::optional<std::pair<const graphics::L3DMesh*, glm::mat4>> DrawnMeshOf(const ecs::Registry& registry, entt::entity creature);
 
@@ -97,6 +104,12 @@ PlayerNames OwnPlayer();
 /// Whether a human god plays the player: the player has hands and no computer mind plays it. A computer god has hands
 /// too. Each computer has the same hands and minds, thus the turns can read this.
 bool IsHumanGod(PlayerNames player);
+
+/// Sets a creature fizzing out of sight or back in
+void SetFizz(entt::entity creature, float target, float seconds);
+
+/// Carried home and stopped part way, a creature is back in full sight at once
+void StopCarryingHome(entt::entity creature, const CreatureKnockedOut& knockedOut);
 
 /// A player's creature for every purpose of the game: the first one they got. Creatures are made as they are got, so
 /// it is the earliest made of theirs. This stands in for the game-wide lookup of a player's creature until there is one.
