@@ -10,6 +10,7 @@
 // Living things keep their height above the land when the land changes under them, as a villager standing where a
 // vortex levels the ground goes down with it
 
+#include <array>
 #include <stdexcept>
 #include <vector>
 
@@ -42,8 +43,8 @@ public:
 
 	[[nodiscard]] float GetHeightAt(glm::vec2) const override { return height; }
 	[[nodiscard]] glm::vec3 GetNormalAt(glm::vec2) const override { return {0.0f, 1.0f, 0.0f}; }
-	[[nodiscard]] const lnd::LNDCell& GetCell(const glm::u16vec2&) const override { return _cell; }
-	[[nodiscard]] const lnd::LNDCell* FindCell(const glm::u16vec2&) const override { return &_cell; }
+	[[nodiscard]] const lnd::LNDCell& GetCell(const glm::u16vec2&) const override { return _cells[0]; }
+	[[nodiscard]] const lnd::LNDCell* FindCell(const glm::u16vec2&) const override { return _cells.data(); }
 	void DumpTextures() const override {}
 	void DumpMaps() const override {}
 	[[nodiscard]] std::vector<LandBlock>& GetBlocks() override { throw std::logic_error("no blocks"); }
@@ -60,7 +61,8 @@ public:
 	uint8_t GetNoise(glm::u8vec2) override { return 0; }
 
 private:
-	lnd::LNDCell _cell {};
+	// The height of a point reads the cell and its three neighbours in the block's 17 by 17 array, so keep that many
+	std::array<lnd::LNDCell, 19> _cells {};
 };
 
 entt::entity Standing(Registry& registry, glm::vec3 position)
