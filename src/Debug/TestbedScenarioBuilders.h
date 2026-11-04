@@ -204,4 +204,5 @@ void AddAudio(std::vector<Scenario>& all);
 void AddObjects(std::vector<Scenario>& all);
 void AddHand(std::vector<Scenario>& all);
 void AddLeash(std::vector<Scenario>& all);
+void AddCombat(std::vector<Scenario>& all);
 } // namespace openblack::testbed_scenarios
