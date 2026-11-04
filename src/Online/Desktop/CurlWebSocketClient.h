@@ -34,8 +34,10 @@ constexpr size_t k_MostMessageBytes = 16 * 1024 * 1024;
 } // namespace websocket_settings
 
 /// The WSS client of the desktop, with the WebSocket support of libcurl and OpenSSL. It uses the TLS rules of the HTTPS
-/// client. The connections move on in Poll, without a wait, so a connection does not stop a frame. libcurl answers the
-/// pings of the server.
+/// client. A thread of the client does all the work on the sockets: the handshakes, the TLS reads and the TLS writes.
+/// The calls of the game put the commands in a queue for this thread, and Poll takes the events of the thread and runs
+/// the handlers. Thus a socket does not stop a frame. The order of the messages of a connection does not change.
+/// libcurl answers the pings of the server.
 class CurlWebSocketClient final: public WebSocketClientInterface
 {
 public:
@@ -59,18 +61,17 @@ public:
 	struct Connection;
 
 private:
-	struct Multi;
+	struct Worker;
 
 	[[nodiscard]] Connection* Find(WebSocketId id) const;
 	bool Queue(WebSocketId id, std::span<const uint8_t> bytes, unsigned int flags);
-	void MoveHandshakes();
-	void Release(Connection& connection);
+	void TakeEvents();
 	void Dispatch();
 
 	std::optional<std::string> _extraAuthorities;
-	std::unique_ptr<Multi> _multi;
+	/// The thread of the sockets. The client starts it at the first connection, so a game with no lobby has none.
+	std::unique_ptr<Worker> _worker;
 	std::vector<std::unique_ptr<Connection>> _connections;
-	std::vector<uint8_t> _receiveBuffer;
 	WebSocketId _nextId {1};
 };
 

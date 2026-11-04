@@ -12,7 +12,9 @@
 #include <algorithm>
 #include <array>
 #include <deque>
+#include <mutex>
 #include <string>
+#include <thread>
 #include <utility>
 #include <variant>
 
@@ -46,6 +48,9 @@ constexpr long k_SwitchingProtocols = 101;
 constexpr uint16_t k_NoCode = 1005;
 /// The close code when a message is too large
 constexpr uint16_t k_MessageTooBig = 1009;
+/// The longest time that the thread of the sockets waits. A socket, a command or the stop of the client wakes it before.
+/// The thread then also examines the times of the handshakes and of the silence of the servers.
+constexpr int k_MostWaitMs = 100;
 
 struct Opened
 {
@@ -77,30 +82,8 @@ WebSocketEnd EndOf(HttpError error)
 	return WebSocketEnd::Network;
 }
 
-} // namespace
-
-struct CurlWebSocketClient::Multi
-{
-	CURLM* handle {nullptr};
-
-	Multi()
-	    : handle(curl_multi_init())
-	{
-	}
-	~Multi()
-	{
-		if (handle != nullptr)
-		{
-			curl_multi_cleanup(handle);
-		}
-	}
-	Multi(const Multi&) = delete;
-	Multi& operator=(const Multi&) = delete;
-	Multi(Multi&&) = delete;
-	Multi& operator=(Multi&&) = delete;
-};
-
-struct CurlWebSocketClient::Connection
+/// The part of a connection that the thread of the sockets keeps. Only that thread uses it.
+struct Link
 {
 	struct Outgoing
 	{
@@ -110,24 +93,22 @@ struct CurlWebSocketClient::Connection
 	};
 
 	WebSocketId id {0};
-	WebSocketHandlers handlers;
 	std::unique_ptr<CURL, EasyDeleter> easy;
 	std::unique_ptr<curl_slist, ListDeleter> headers;
 	WebSocketState state {WebSocketState::Connecting};
 	/// The easy handle is in the multi handle. After the handshake it stays there, because libcurl keeps the connection
 	/// of a connect-only transfer only while the transfer is in its multi handle.
 	bool inMulti {false};
-	/// The connection ended. The client removes it after the handlers ran.
-	bool finished {false};
 	std::deque<Outgoing> outgoing;
-	/// The parts of the data message that the client receives now
+	/// The parts of the data message that the thread receives now
 	std::vector<uint8_t> message;
 	bool messageIsText {false};
-	/// The parts of the control frame that the client receives now
+	/// The parts of the control frame that the thread receives now
 	std::vector<uint8_t> control;
 	Clock::time_point started {Clock::now()};
 	Clock::time_point lastReceived {Clock::now()};
 	Clock::time_point lastPing {Clock::now()};
+	/// The events that the thread did not give to the game yet
 	std::deque<Event> events;
 
 	void End(WebSocketClosed closed)
@@ -161,7 +142,7 @@ struct CurlWebSocketClient::Connection
 			next.sent += sent;
 			if (next.sent < next.bytes.size())
 			{
-				// The socket takes no more now. The rest goes in the next Poll.
+				// The socket takes no more now. The thread sends the rest when the socket can take it.
 				return true;
 			}
 			outgoing.pop_front();
@@ -252,42 +233,353 @@ struct CurlWebSocketClient::Connection
 	}
 };
 
+/// The game gives a new connection to the thread of the sockets
+struct StartCommand
+{
+	std::unique_ptr<Link> link;
+};
+
+struct SendCommand
+{
+	WebSocketId id {0};
+	std::vector<uint8_t> bytes;
+	unsigned int flags {0};
+};
+
+/// The game ends a connection. The thread sends a close frame with the code when the connection is open.
+struct CloseCommand
+{
+	WebSocketId id {0};
+	uint16_t code {websocket_close::k_Normal};
+};
+
+using Command = std::variant<StartCommand, SendCommand, CloseCommand>;
+
+struct TakenEvent
+{
+	WebSocketId id {0};
+	Event event;
+};
+
+} // namespace
+
+/// The part of a connection that the game keeps. Only the thread of the game uses it.
+struct CurlWebSocketClient::Connection
+{
+	WebSocketId id {0};
+	WebSocketHandlers handlers;
+	WebSocketState state {WebSocketState::Connecting};
+	/// The connection ended. The client removes it after the handlers ran.
+	bool finished {false};
+	/// The events that Poll took from the thread of the sockets, and that the handlers did not get yet
+	std::deque<Event> events;
+
+	void End(WebSocketClosed closed)
+	{
+		if (state == WebSocketState::None)
+		{
+			return;
+		}
+		state = WebSocketState::None;
+		events.emplace_back(closed);
+	}
+};
+
+/// The thread of the sockets with its multi handle and its two queues. The mutex keeps the queues and the stop request.
+/// All the other data is for the thread of the sockets only.
+struct CurlWebSocketClient::Worker
+{
+	CURLM* multi {curl_multi_init()};
+	std::mutex mutex;
+	std::vector<Command> commands;
+	std::vector<TakenEvent> events;
+	bool stop {false};
+	std::vector<std::unique_ptr<Link>> links;
+	std::vector<uint8_t> receiveBuffer = std::vector<uint8_t>(k_ReceiveChunk);
+	std::thread thread;
+
+	Worker()
+	{
+		if (multi != nullptr)
+		{
+			thread = std::thread([this]() { Run(); });
+		}
+	}
+
+	~Worker()
+	{
+		if (thread.joinable())
+		{
+			{
+				const std::scoped_lock lock(mutex);
+				stop = true;
+			}
+			curl_multi_wakeup(multi);
+			thread.join();
+		}
+		if (multi != nullptr)
+		{
+			curl_multi_cleanup(multi);
+		}
+	}
+
+	Worker(const Worker&) = delete;
+	Worker& operator=(const Worker&) = delete;
+	Worker(Worker&&) = delete;
+	Worker& operator=(Worker&&) = delete;
+
+	[[nodiscard]] bool Running() const { return thread.joinable(); }
+
+	/// The thread of the game puts a command in the queue and wakes the thread of the sockets
+	void Post(Command command)
+	{
+		{
+			const std::scoped_lock lock(mutex);
+			commands.push_back(std::move(command));
+		}
+		curl_multi_wakeup(multi);
+	}
+
+	/// The thread of the game takes all the events that the thread of the sockets gave, in their order
+	std::vector<TakenEvent> Take()
+	{
+		std::vector<TakenEvent> taken;
+		const std::scoped_lock lock(mutex);
+		taken.swap(events);
+		return taken;
+	}
+
+private:
+	[[nodiscard]] Link* Find(WebSocketId id) const
+	{
+		const auto found = std::ranges::find_if(links, [id](const auto& link) { return link->id == id; });
+		return found != links.end() ? found->get() : nullptr;
+	}
+
+	void Release(Link& link) const
+	{
+		if (link.inMulti)
+		{
+			curl_multi_remove_handle(multi, link.easy.get());
+		}
+		link.inMulti = false;
+		link.easy.reset();
+		link.headers.reset();
+	}
+
+	void Apply(Command& command)
+	{
+		if (auto* start = std::get_if<StartCommand>(&command))
+		{
+			auto& link = *start->link;
+			if (curl_multi_add_handle(multi, link.easy.get()) != CURLM_OK)
+			{
+				link.End({.end = WebSocketEnd::Network, .code = 0, .httpStatus = 0});
+			}
+			else
+			{
+				link.inMulti = true;
+			}
+			links.push_back(std::move(start->link));
+		}
+		else if (auto* send = std::get_if<SendCommand>(&command))
+		{
+			auto* link = Find(send->id);
+			if (link == nullptr || link->state != WebSocketState::Open)
+			{
+				return;
+			}
+			link->outgoing.push_back({.bytes = std::move(send->bytes), .flags = send->flags, .sent = 0});
+			// The message goes at once when the socket takes it
+			if (!link->Flush())
+			{
+				link->End({.end = WebSocketEnd::Network, .code = 0, .httpStatus = 0});
+			}
+		}
+		else
+		{
+			const auto& close = std::get<CloseCommand>(command);
+			auto* link = Find(close.id);
+			if (link == nullptr)
+			{
+				return;
+			}
+			if (link->state == WebSocketState::Open)
+			{
+				link->Flush();
+				link->SendClose(close.code);
+			}
+			Release(*link);
+			std::erase_if(links, [id = close.id](const auto& item) { return item->id == id; });
+		}
+	}
+
+	void MoveHandshakes()
+	{
+		if (std::ranges::none_of(links, [](const auto& link) { return link->state == WebSocketState::Connecting; }))
+		{
+			return;
+		}
+		int running = 0;
+		curl_multi_perform(multi, &running);
+		int queued = 0;
+		while (CURLMsg* done = curl_multi_info_read(multi, &queued))
+		{
+			if (done->msg != CURLMSG_DONE)
+			{
+				continue;
+			}
+			Link* link = nullptr;
+			curl_easy_getinfo(done->easy_handle, CURLINFO_PRIVATE, &link);
+			if (link == nullptr || link->state != WebSocketState::Connecting)
+			{
+				continue;
+			}
+			const auto code = done->data.result;
+			long status = 0;
+			curl_easy_getinfo(done->easy_handle, CURLINFO_RESPONSE_CODE, &status);
+			if (code == CURLE_OK && status == k_SwitchingProtocols)
+			{
+				link->state = WebSocketState::Open;
+				link->lastReceived = Clock::now();
+				link->lastPing = link->lastReceived;
+				link->events.emplace_back(Opened {});
+				continue;
+			}
+			if (status != 0 && status != k_SwitchingProtocols)
+			{
+				link->End({.end = WebSocketEnd::HandshakeRefused, .code = 0, .httpStatus = static_cast<int32_t>(status)});
+			}
+			else
+			{
+				link->End({.end = EndOf(tls_settings::ErrorOf(code)), .code = 0, .httpStatus = 0});
+			}
+			if (const auto logger = spdlog::get("game"))
+			{
+				SPDLOG_LOGGER_DEBUG(logger, "A WSS connection failed: {} (HTTP {})", curl_easy_strerror(code), status);
+			}
+			Release(*link);
+		}
+	}
+
+	void MoveLinks()
+	{
+		const auto now = Clock::now();
+		for (auto& link : links)
+		{
+			if (link->state == WebSocketState::Connecting && now - link->started > websocket_settings::k_HandshakeTimeout)
+			{
+				link->End({.end = WebSocketEnd::Timeout, .code = 0, .httpStatus = 0});
+			}
+			if (link->state == WebSocketState::Open)
+			{
+				link->Receive(receiveBuffer);
+			}
+			if (link->state == WebSocketState::Open)
+			{
+				link->KeepAlive();
+			}
+			if (link->state == WebSocketState::Open && !link->Flush())
+			{
+				link->End({.end = WebSocketEnd::Network, .code = 0, .httpStatus = 0});
+			}
+			if (link->state == WebSocketState::None)
+			{
+				Release(*link);
+			}
+		}
+	}
+
+	/// Gives the new events to the thread of the game, and removes the connections that ended
+	void Publish()
+	{
+		{
+			const std::scoped_lock lock(mutex);
+			for (auto& link : links)
+			{
+				for (auto& event : link->events)
+				{
+					events.push_back({.id = link->id, .event = std::move(event)});
+				}
+				link->events.clear();
+			}
+		}
+		std::erase_if(links, [](const auto& link) { return link->state == WebSocketState::None; });
+	}
+
+	/// Waits until a socket of an open connection can read, or can write when data waits, or until a command comes
+	void Wait()
+	{
+		std::vector<curl_waitfd> sockets;
+		sockets.reserve(links.size());
+		for (const auto& link : links)
+		{
+			if (link->state != WebSocketState::Open)
+			{
+				continue;
+			}
+			curl_socket_t socket = CURL_SOCKET_BAD;
+			if (curl_easy_getinfo(link->easy.get(), CURLINFO_ACTIVESOCKET, &socket) != CURLE_OK || socket == CURL_SOCKET_BAD)
+			{
+				continue;
+			}
+			const auto wanted =
+			    static_cast<short>(link->outgoing.empty() ? CURL_WAIT_POLLIN : CURL_WAIT_POLLIN | CURL_WAIT_POLLOUT);
+			sockets.push_back({.fd = socket, .events = wanted, .revents = 0});
+		}
+		curl_multi_poll(multi, sockets.data(), static_cast<unsigned int>(sockets.size()), k_MostWaitMs, nullptr);
+	}
+
+	void Run()
+	{
+		std::vector<Command> taken;
+		while (true)
+		{
+			{
+				const std::scoped_lock lock(mutex);
+				if (stop)
+				{
+					break;
+				}
+				taken.swap(commands);
+			}
+			for (auto& command : taken)
+			{
+				Apply(command);
+			}
+			taken.clear();
+			MoveHandshakes();
+			MoveLinks();
+			Publish();
+			Wait();
+		}
+		// The game stops: the client tells each server that it goes away
+		for (auto& link : links)
+		{
+			if (link->state == WebSocketState::Open)
+			{
+				link->Flush();
+				link->SendClose(websocket_close::k_GoingAway);
+			}
+			Release(*link);
+		}
+		links.clear();
+	}
+};
+
 CurlWebSocketClient::CurlWebSocketClient(std::optional<std::string> extraAuthorities)
     : _extraAuthorities(std::move(extraAuthorities))
-    , _receiveBuffer(k_ReceiveChunk)
 {
 	tls_settings::StartLibrary();
 }
 
-CurlWebSocketClient::~CurlWebSocketClient()
-{
-	for (auto& connection : _connections)
-	{
-		if (connection->state == WebSocketState::Open)
-		{
-			connection->SendClose(websocket_close::k_GoingAway);
-		}
-		Release(*connection);
-	}
-	_connections.clear();
-}
+CurlWebSocketClient::~CurlWebSocketClient() = default;
 
 CurlWebSocketClient::Connection* CurlWebSocketClient::Find(WebSocketId id) const
 {
 	const auto found = std::ranges::find_if(
 	    _connections, [id](const auto& connection) { return connection->id == id && !connection->finished; });
 	return found != _connections.end() ? found->get() : nullptr;
-}
-
-void CurlWebSocketClient::Release(Connection& connection)
-{
-	if (connection.inMulti && _multi != nullptr)
-	{
-		curl_multi_remove_handle(_multi->handle, connection.easy.get());
-	}
-	connection.inMulti = false;
-	connection.easy.reset();
-	connection.headers.reset();
 }
 
 WebSocketId CurlWebSocketClient::Connect(WebSocketRequest request, WebSocketHandlers handlers)
@@ -303,20 +595,21 @@ WebSocketId CurlWebSocketClient::Connect(WebSocketRequest request, WebSocketHand
 		_connections.push_back(std::move(connection));
 		return id;
 	}
-	if (_multi == nullptr)
+	if (_worker == nullptr)
 	{
-		// The client makes the multi handle at the first connection, so a game with no lobby makes none
-		_multi = std::make_unique<Multi>();
+		_worker = std::make_unique<Worker>();
 	}
-	connection->easy.reset(curl_easy_init());
-	if (!connection->easy || _multi->handle == nullptr)
+	auto link = std::make_unique<Link>();
+	link->id = id;
+	link->easy.reset(curl_easy_init());
+	if (!link->easy || !_worker->Running())
 	{
 		connection->End({.end = WebSocketEnd::Network, .code = 0, .httpStatus = 0});
 		_connections.push_back(std::move(connection));
 		return id;
 	}
 
-	auto* easy = connection->easy.get();
+	auto* easy = link->easy.get();
 	curl_easy_setopt(easy, CURLOPT_URL, request.url.c_str());
 	// WSS only, and no redirection to another address
 	curl_easy_setopt(easy, CURLOPT_PROTOCOLS_STR, "wss");
@@ -334,7 +627,7 @@ WebSocketId CurlWebSocketClient::Connect(WebSocketRequest request, WebSocketHand
 	curl_easy_setopt(easy, CURLOPT_CONNECTTIMEOUT_MS, tls_settings::k_ConnectTimeoutMs);
 	curl_easy_setopt(easy, CURLOPT_NOSIGNAL, 1L);
 	curl_easy_setopt(easy, CURLOPT_USERAGENT, "openblack");
-	curl_easy_setopt(easy, CURLOPT_PRIVATE, connection.get());
+	curl_easy_setopt(easy, CURLOPT_PRIVATE, link.get());
 
 	curl_slist* list = nullptr;
 	for (const auto& [name, value] : request.headers)
@@ -350,34 +643,24 @@ WebSocketId CurlWebSocketClient::Connect(WebSocketRequest request, WebSocketHand
 		}
 		list = curl_slist_append(list, ("Sec-WebSocket-Protocol: " + protocols).c_str());
 	}
-	connection->headers.reset(list);
+	link->headers.reset(list);
 	curl_easy_setopt(easy, CURLOPT_HTTPHEADER, list);
 
-	if (curl_multi_add_handle(_multi->handle, easy) != CURLM_OK)
-	{
-		connection->End({.end = WebSocketEnd::Network, .code = 0, .httpStatus = 0});
-	}
-	else
-	{
-		connection->inMulti = true;
-	}
 	_connections.push_back(std::move(connection));
+	_worker->Post(StartCommand {.link = std::move(link)});
 	return id;
 }
 
 bool CurlWebSocketClient::Queue(WebSocketId id, std::span<const uint8_t> bytes, unsigned int flags)
 {
-	auto* connection = Find(id);
+	const auto* connection = Find(id);
 	if (connection == nullptr || connection->state != WebSocketState::Open)
 	{
 		return false;
 	}
-	connection->outgoing.push_back({.bytes = {bytes.begin(), bytes.end()}, .flags = flags, .sent = 0});
-	// The message goes at once when the socket takes it, so that a command does not wait for the next frame
-	if (!connection->Flush())
-	{
-		connection->End({.end = WebSocketEnd::Network, .code = 0, .httpStatus = 0});
-	}
+	// The thread of the sockets sends the message at once when the socket takes it, so a command does not wait for the
+	// next frame
+	_worker->Post(SendCommand {.id = id, .bytes = {bytes.begin(), bytes.end()}, .flags = flags});
 	return true;
 }
 
@@ -398,101 +681,46 @@ void CurlWebSocketClient::Close(WebSocketId id, uint16_t code)
 	{
 		return;
 	}
-	if (connection->state == WebSocketState::Open)
+	if (_worker != nullptr)
 	{
-		connection->Flush();
-		connection->SendClose(code);
+		// The thread of the sockets sends the messages that wait, then the close frame when the connection is open
+		_worker->Post(CloseCommand {.id = id, .code = code});
 	}
 	// The handlers stay until the client removes the connection, because this call can come from one of them
 	connection->state = WebSocketState::None;
 	connection->finished = true;
 	connection->events.clear();
-	Release(*connection);
 }
 
-void CurlWebSocketClient::MoveHandshakes()
+void CurlWebSocketClient::TakeEvents()
 {
-	if (_multi == nullptr || std::ranges::none_of(_connections, [](const auto& connection) {
-		    return connection->state == WebSocketState::Connecting;
-	    }))
+	if (_worker == nullptr)
 	{
 		return;
 	}
-	int running = 0;
-	curl_multi_perform(_multi->handle, &running);
-	int queued = 0;
-	while (CURLMsg* done = curl_multi_info_read(_multi->handle, &queued))
+	for (auto& [id, event] : _worker->Take())
 	{
-		if (done->msg != CURLMSG_DONE)
+		auto* connection = Find(id);
+		if (connection == nullptr)
 		{
+			// The game closed the connection before the event came
 			continue;
 		}
-		Connection* connection = nullptr;
-		curl_easy_getinfo(done->easy_handle, CURLINFO_PRIVATE, &connection);
-		if (connection == nullptr || connection->state != WebSocketState::Connecting)
-		{
-			continue;
-		}
-		const auto code = done->data.result;
-		long status = 0;
-		curl_easy_getinfo(done->easy_handle, CURLINFO_RESPONSE_CODE, &status);
-		if (code == CURLE_OK && status == k_SwitchingProtocols)
+		if (std::holds_alternative<Opened>(event))
 		{
 			connection->state = WebSocketState::Open;
-			connection->lastReceived = Clock::now();
-			connection->lastPing = connection->lastReceived;
-			connection->events.emplace_back(Opened {});
-			continue;
 		}
-		if (status != 0 && status != k_SwitchingProtocols)
+		else if (std::holds_alternative<WebSocketClosed>(event))
 		{
-			connection->End({.end = WebSocketEnd::HandshakeRefused, .code = 0, .httpStatus = static_cast<int32_t>(status)});
+			connection->state = WebSocketState::None;
 		}
-		else
-		{
-			connection->End({.end = EndOf(tls_settings::ErrorOf(code)), .code = 0, .httpStatus = 0});
-		}
-		if (const auto logger = spdlog::get("game"))
-		{
-			SPDLOG_LOGGER_DEBUG(logger, "A WSS connection failed: {} (HTTP {})", curl_easy_strerror(code), status);
-		}
-		Release(*connection);
+		connection->events.push_back(std::move(event));
 	}
 }
 
 void CurlWebSocketClient::Poll()
 {
-	MoveHandshakes();
-	const auto now = Clock::now();
-	for (auto& connection : _connections)
-	{
-		if (connection->finished)
-		{
-			continue;
-		}
-		if (connection->state == WebSocketState::Connecting &&
-		    now - connection->started > websocket_settings::k_HandshakeTimeout)
-		{
-			connection->End({.end = WebSocketEnd::Timeout, .code = 0, .httpStatus = 0});
-		}
-		if (connection->state != WebSocketState::Open)
-		{
-			continue;
-		}
-		connection->Receive(_receiveBuffer);
-		if (connection->state == WebSocketState::Open)
-		{
-			connection->KeepAlive();
-		}
-		if (connection->state == WebSocketState::Open && !connection->Flush())
-		{
-			connection->End({.end = WebSocketEnd::Network, .code = 0, .httpStatus = 0});
-		}
-		if (connection->state == WebSocketState::None)
-		{
-			Release(*connection);
-		}
-	}
+	TakeEvents();
 	Dispatch();
 }
 
@@ -540,7 +768,6 @@ void CurlWebSocketClient::Dispatch()
 				connection->finished = true;
 				connection->handlers = {};
 				connection->events.clear();
-				Release(*connection);
 				if (closed)
 				{
 					closed(std::get<WebSocketClosed>(event));
