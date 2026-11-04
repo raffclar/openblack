@@ -885,10 +885,12 @@ void FeatureScriptCommands::HeightChange([[maybe_unused]] glm::vec3 position, [[
 #endif
 }
 
-void FeatureScriptCommands::CreateCreature(glm::vec3 position, int32_t param2, int32_t param3)
+void FeatureScriptCommands::CreateCreature(glm::vec3 position, int32_t row, int32_t playerNumber)
 {
-	SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {}({}, {}, {}) not implemented.", __FILE__,
-	                    __LINE__, __func__, glm::to_string(position), param2, param3);
+	// The script makes a creature of the row for the player of the number. The last thing that the script made is the
+	// new creature, or none when the script made none.
+	const auto creature = ecs::creature_from_file::MakePlain(row, playerNumber, glm::vec2(position.x, position.z));
+	Locator::entitiesRegistry::value().Context().mapScriptGlobals.lastObject = creature.value_or(entt::null);
 }
 
 void FeatureScriptCommands::CreateCreatureFromFile(const std::string& playerName, CreatureType creatureType,

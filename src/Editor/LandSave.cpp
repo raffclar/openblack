@@ -9,10 +9,16 @@
 
 #include "LandSave.h"
 
+#include <algorithm>
 #include <array>
+#include <utility>
+#include <vector>
+
+#include <fmt/format.h>
 
 #include "Common/X87.h"
 #include "LHScriptX/FeatureScriptWriter.h"
+#include "LHScriptX/Script.h"
 
 namespace openblack::editor::land_save
 {
@@ -142,6 +148,111 @@ std::string CreatureText(glm::ivec2 place, int32_t row, int32_t player)
 	return writer::CommandLine("CREATE_CREATURE", "ANN", arguments);
 }
 
+namespace
+{
+
+/// A turn, a size or a share as the game writes it in a line: times 1000, rounded to a float and cut to a whole number
+[[nodiscard]] int32_t Thousandths(float value)
+{
+	constexpr double k_Thousandths = 1000.0;
+	return static_cast<int32_t>(x87::Mul(value, k_Thousandths));
+}
+
+} // namespace
+
+std::string AbodeText(const AbodeLine& abode)
+{
+	// The game writes the food and the wood with the form of a signed number
+	const std::array<writer::Argument, 7> arguments {
+	    abode.town,
+	    writer::Place {writer::PlaceText(abode.place)},
+	    writer::Name {abode.name},
+	    Thousandths(abode.yAngle),
+	    Thousandths(abode.scale),
+	    static_cast<int32_t>(abode.food),
+	    static_cast<int32_t>(abode.wood),
+	};
+	return writer::CommandLine(abode.planned ? "CREATE_PLANNED_ABODE" : "CREATE_ABODE", "NALNNNN", arguments);
+}
+
+std::string TownCentreText(const TownCentreLine& centre)
+{
+	const std::array<writer::Argument, 6> arguments {
+	    centre.town,
+	    writer::Place {writer::PlaceText(centre.place)},
+	    writer::Name {centre.name},
+	    Thousandths(centre.yAngle),
+	    Thousandths(centre.scale),
+	    Thousandths(centre.worshipShare),
+	};
+	return writer::CommandLine("CREATE_TOWN_CENTRE", "NALNNN", arguments);
+}
+
+std::string TownText(const TownLine& town)
+{
+	constexpr float k_DefaultCap = 10.0f;
+	std::string text = writer::CommandLine("CREATE_TOWN", "NALNL",
+	                                       std::array<writer::Argument, 5> {
+	                                           town.id,
+	                                           writer::Place {writer::PlaceText(town.place)},
+	                                           writer::Name {town.player},
+	                                           town.tribe,
+	                                           writer::Name {town.tribeName},
+	                                       });
+	for (const auto& miracle : town.miracles)
+	{
+		text += writer::CommandLine("CREATE_NEW_TOWN_SPELL", "NL",
+		                            std::array<writer::Argument, 2> {town.id, writer::Name {miracle}});
+	}
+	for (const auto& belief : town.beliefs)
+	{
+		if (belief.belief != 0.0f)
+		{
+			text += writer::CommandLine("SET_TOWN_BELIEF", "NLF",
+			                            std::array<writer::Argument, 3> {town.id, writer::Name {belief.player}, belief.belief});
+		}
+		if (belief.cap != k_DefaultCap)
+		{
+			text += writer::CommandLine("SET_TOWN_BELIEF_CAP", "NLF",
+			                            std::array<writer::Argument, 3> {town.id, writer::Name {belief.player}, belief.cap});
+		}
+	}
+	for (const auto& desire : town.desires)
+	{
+		if (desire.boost != 0.0f)
+		{
+			text += writer::CommandLine("TOWN_DESIRE_BOOST", "NLF",
+			                            std::array<writer::Argument, 3> {town.id, writer::Name {desire.desire}, desire.boost});
+		}
+	}
+	if (town.uninhabitable)
+	{
+		text += writer::CommandLine("SET_TOWN_UNINHABITABLE", "N", std::array<writer::Argument, 1> {town.id});
+	}
+	if (town.balanceBeliefScale != 1.0f)
+	{
+		text += writer::CommandLine("SET_TOWN_BALANCE_BELIEF_SCALE", "NF",
+		                            std::array<writer::Argument, 2> {town.id, town.balanceBeliefScale});
+	}
+	if (town.congregation.has_value() && *town.congregation != glm::ivec2(0, 0))
+	{
+		text += writer::CommandLine(
+		    "SET_TOWN_CONGREGATION_POS", "NA",
+		    std::array<writer::Argument, 2> {town.id, writer::Place {writer::PlaceText(*town.congregation)}});
+	}
+	return text;
+}
+
+std::string PlayerHeading(std::string_view player)
+{
+	return fmt::format("\nrem *********************** {} ***********************\n", player);
+}
+
+std::string TownHeading(int32_t id)
+{
+	return fmt::format("rem ---------------- Town: {} ----------------\n", id);
+}
+
 std::string StreamText(int32_t id, std::span<const glm::ivec2> places)
 {
 	std::string text = writer::CommandLine("CREATE_STREAM", "N", std::array<writer::Argument, 1> {id});
@@ -163,6 +274,44 @@ std::string FootpathText(std::span<const glm::ivec2> places)
 		                            std::array<writer::Argument, 2> {int32_t {0}, writer::Place {writer::PlaceText(place)}});
 	}
 	return text;
+}
+
+SavedPaths ReadSavedPaths(const std::string& script)
+{
+	SavedPaths paths;
+	std::vector<std::pair<int32_t, size_t>> streamNumbers;
+	for (const auto& command : lhscriptx::Script::Read(script).commands)
+	{
+		const auto& arguments = command.arguments;
+		const bool numbered = !arguments.empty() && arguments.front().GetType() == lhscriptx::Token::Type::Integer;
+		if (command.name == "CREATE_STREAM" && arguments.size() == 1 && numbered)
+		{
+			streamNumbers.emplace_back(*arguments.front().IntegerValue(), paths.streams.size());
+			paths.streams.emplace_back();
+		}
+		else if (command.name == "CREATE_STREAM_POINT" && arguments.size() == 2 && numbered && arguments.back().IsString())
+		{
+			// The point goes to the newest stream of its number
+			const auto number = *arguments.front().IntegerValue();
+			const auto found =
+			    std::ranges::find(streamNumbers.rbegin(), streamNumbers.rend(), number, &std::pair<int32_t, size_t>::first);
+			if (found != streamNumbers.rend())
+			{
+				paths.streams.at(found->second).push_back(arguments.back().StringValue());
+			}
+		}
+		else if (command.name == "CREATE_FOOTPATH")
+		{
+			paths.footpaths.emplace_back();
+		}
+		else if (command.name == "CREATE_FOOTPATH_NODE" && arguments.size() == 2 && arguments.back().IsString() &&
+		         !paths.footpaths.empty())
+		{
+			// A node goes to the newest footpath, which is the script's footpath 0
+			paths.footpaths.back().push_back(arguments.back().StringValue());
+		}
+	}
+	return paths;
 }
 
 std::string FileName(std::string_view landName, std::string_view extension)
