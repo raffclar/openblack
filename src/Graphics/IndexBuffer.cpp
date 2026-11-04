@@ -86,7 +86,15 @@ void IndexBuffer::Make(const void* memory)
 void IndexBuffer::SetContentsGivenAgain() const
 {
 	PostToMainThread(MainThreadApi::Graphics, [this] {
-		if (_storage == Storage::Own && IsValidHandle(_handle))
+		if (!IsValid())
+		{
+			return;
+		}
+		if (_storage == Storage::Shared)
+		{
+			Locator::graphicsDevice::value().SetContentsGivenAgain(_sharedHandle);
+		}
+		else
 		{
 			Locator::graphicsDevice::value().SetContentsGivenAgain(_handle);
 		}
@@ -97,12 +105,20 @@ void IndexBuffer::GiveContentsAgain(std::vector<uint8_t> bytes) const
 {
 	// The device memory is made only for a buffer that takes it, because the device frees its memory only in a call
 	PostToMainThread(MainThreadApi::Graphics, [this, bytes = std::move(bytes)] {
-		if (_storage != Storage::Own || !IsValidHandle(_handle) || bytes.empty())
+		if (!IsValid() || bytes.empty())
 		{
 			return;
 		}
 		const auto& device = Locator::graphicsDevice::value();
-		device.GiveContentsAgain(_handle, device.Copy(bytes.data(), static_cast<uint32_t>(bytes.size())));
+		const auto* memory = device.Copy(bytes.data(), static_cast<uint32_t>(bytes.size()));
+		if (_storage == Storage::Shared)
+		{
+			device.GiveContentsAgain(_sharedHandle, memory);
+		}
+		else
+		{
+			device.GiveContentsAgain(_handle, memory);
+		}
 	});
 }
 

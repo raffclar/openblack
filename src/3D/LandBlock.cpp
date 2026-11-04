@@ -66,8 +66,11 @@ const IndexBuffer* LandBlock::GetTriangles(land_detail::Mesh mesh, uint8_t coars
 			    const auto* memory = Locator::graphicsDevice::value().Copy(
 			        indices.data(), static_cast<uint32_t>(indices.size() * sizeof(uint16_t)));
 			    // The sets come as the camera moves, so they go in the shared buffer and do not make a buffer each
-			    return std::make_unique<IndexBuffer>("LandBlockTriangles", memory, IndexBuffer::Type::Uint16,
-			                                         IndexBuffer::Storage::Shared);
+			    auto buffer = std::make_unique<IndexBuffer>("LandBlockTriangles", memory, IndexBuffer::Type::Uint16,
+			                                                IndexBuffer::Storage::Shared);
+			    // The land gives the indices again after a restore of the device, thus the device keeps no copy
+			    buffer->SetContentsGivenAgain();
+			    return buffer;
 		    });
 	}
 	return *triangles;

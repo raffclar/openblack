@@ -334,6 +334,12 @@ entt::entity DrawnHand()
 
 RenderingSystem::~RenderingSystem() = default;
 
+void RenderingSystem::ForgetUploads()
+{
+	_uploadedInstances.Forget();
+	_uploadedTreeInstances.Forget();
+}
+
 void RenderingSystem::PrepareDrawDescs(bool drawBoundingBox)
 {
 	auto section = Locator::profiler::value().BeginScoped(Profiler::Stage::UpdateEntitiesDescs);
@@ -549,6 +555,7 @@ void RenderingSystem::PrepareDrawDescs(bool drawBoundingBox)
 		    .add(bgfx::Attrib::TexCoord3, 4, bgfx::AttribType::Float)
 		    .end();
 		_renderContext.instanceUniformBuffer = graphics::fromBgfx(bgfx::createDynamicVertexBuffer(instanceCount, layout));
+		bgfx::setDeviceRestoreByApplication(toBgfx(_renderContext.instanceUniformBuffer));
 		_uploadedInstances.Forget();
 		_renderContext.instanceUniforms.resize(instanceCount);
 		_renderContext.instanceLevels.resize(instanceCount);
@@ -670,6 +677,7 @@ void RenderingSystem::PrepareTreeDrawDescs(bool drawBoundingBox)
 		    .end();
 		_renderContext.treeInstanceUniformBuffer =
 		    graphics::fromBgfx(bgfx::createDynamicVertexBuffer(treeInstanceCount, layout));
+		bgfx::setDeviceRestoreByApplication(toBgfx(_renderContext.treeInstanceUniformBuffer));
 		_uploadedTreeInstances.Forget();
 		_renderContext.treeInstanceData.resize(treeInstanceCount);
 	}
@@ -1690,6 +1698,7 @@ void RenderingSystem::UploadSouls()
 		// Room for a few more dying at once without making it again
 		const uint32_t capacity = count + 8;
 		_renderContext.soulInstanceBuffer = graphics::fromBgfx(bgfx::createDynamicVertexBuffer(capacity, layout));
+		bgfx::setDeviceRestoreByApplication(toBgfx(_renderContext.soulInstanceBuffer));
 		_renderContext.soulCapacity = capacity;
 	}
 	bgfx::update(
@@ -1742,6 +1751,7 @@ void RenderingSystem::UploadHeldObjects()
 		// Room to grow, so that a few more villagers picking things up don't make it again
 		const uint32_t capacity = count + (count / 2) + 16;
 		_renderContext.heldInstanceBuffer = graphics::fromBgfx(bgfx::createDynamicVertexBuffer(capacity, layout));
+		bgfx::setDeviceRestoreByApplication(toBgfx(_renderContext.heldInstanceBuffer));
 		_renderContext.heldCapacity = capacity;
 	}
 	bgfx::update(
@@ -1872,6 +1882,7 @@ void RenderingSystem::UploadPartialBuilds()
 		    .add(bgfx::Attrib::TexCoord3, 4, bgfx::AttribType::Float)
 		    .end();
 		_renderContext.partialBuildInstanceBuffer = graphics::fromBgfx(bgfx::createDynamicVertexBuffer(count, layout));
+		bgfx::setDeviceRestoreByApplication(toBgfx(_renderContext.partialBuildInstanceBuffer));
 		_renderContext.partialBuildCapacity = count;
 	}
 	bgfx::update(toBgfx(_renderContext.partialBuildInstanceBuffer), 0,

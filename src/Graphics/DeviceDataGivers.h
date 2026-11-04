@@ -10,6 +10,7 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
 
 #include <functional>
 #include <mutex>
@@ -60,11 +61,20 @@ public:
 		return _givers.size();
 	}
 
-	/// Each owner gives its data again, in the order in which the owners added themselves. A giver must not add or
-	/// remove an owner.
-	void GiveAll(resources::Rereads& rereads) const
+	/// How many times the owners gave their data again. Data that waits in no owner, as a texture kept for a later use,
+	/// compares this number to know if a restore of the device occurred.
+	[[nodiscard]] uint32_t Restores() const
 	{
 		const std::scoped_lock lock(_mutex);
+		return _restores;
+	}
+
+	/// Each owner gives its data again, in the order in which the owners added themselves. A giver must not add or
+	/// remove an owner.
+	void GiveAll(resources::Rereads& rereads)
+	{
+		const std::scoped_lock lock(_mutex);
+		++_restores;
 		for (const auto& [owner, giver] : _givers)
 		{
 			giver(rereads);
@@ -74,6 +84,7 @@ public:
 private:
 	mutable std::mutex _mutex;
 	std::vector<std::pair<const void*, DeviceDataGiver>> _givers;
+	uint32_t _restores {0};
 };
 
 } // namespace openblack::graphics

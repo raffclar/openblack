@@ -47,6 +47,7 @@ private:
 	void PrepareDrawDescs(bool drawBoundingBox) override;
 	void PrepareDrawUploadUniforms(bool drawBoundingBox) override;
 	bool UploadUniformsKeepingDescs(bool drawBoundingBox) override;
+	void ForgetUploads() override;
 	void PrepareTreeDrawDescs(bool drawBoundingBox);
 	/// Each returns false when an instance had no room left in its mesh's draw list, which must then be made again
 	bool UploadInstances(bool drawBoundingBox);

@@ -26,6 +26,7 @@
 
 #include "3D/L3DMesh.h"
 #include "Graphics/GraphicsDeviceInterface.h"
+#include "Graphics/IndexBuffer.h"
 #include "Graphics/VertexBuffer.h"
 #include "Locator.h"
 #include "Resources/Loaders.h"
@@ -55,6 +56,8 @@ public:
 			SharedIndexBuffer,
 			GivenVertices,
 			GivenIndices,
+			GivenSharedVertices,
+			GivenSharedIndices,
 		};
 		Kind kind;
 		std::vector<uint8_t> bytes;
@@ -113,10 +116,15 @@ public:
 	[[nodiscard]] VertexLayoutHandle CreateVertexLayout(const VertexDecl&) const override { return {1}; }
 	void Update(DynamicVertexBufferHandle, uint32_t, const DeviceMemory*) const override {}
 	void SetName(VertexBufferHandle, std::string_view) const override {}
-	void SetContentsGivenAgain(VertexBufferHandle) const override {}
+	void SetContentsGivenAgain(VertexBufferHandle) const override { Mark(Made::Kind::GivenVertices); }
 	void GiveContentsAgain(VertexBufferHandle, const DeviceMemory* vertices) const override
 	{
 		Keep(Made::Kind::GivenVertices, vertices);
+	}
+	void SetContentsGivenAgain(DynamicVertexBufferHandle) const override { Mark(Made::Kind::GivenSharedVertices); }
+	void GiveContentsAgain(DynamicVertexBufferHandle, const DeviceMemory* vertices) const override
+	{
+		Keep(Made::Kind::GivenSharedVertices, vertices);
 	}
 	void Destroy(VertexBufferHandle) const override {}
 	void Destroy(DynamicVertexBufferHandle) const override {}
@@ -132,10 +140,15 @@ public:
 		return {static_cast<uint32_t>(_made.size())};
 	}
 	void SetName(IndexBufferHandle, std::string_view) const override {}
-	void SetContentsGivenAgain(IndexBufferHandle) const override {}
+	void SetContentsGivenAgain(IndexBufferHandle) const override { Mark(Made::Kind::GivenIndices); }
 	void GiveContentsAgain(IndexBufferHandle, const DeviceMemory* indices) const override
 	{
 		Keep(Made::Kind::GivenIndices, indices);
+	}
+	void SetContentsGivenAgain(DynamicIndexBufferHandle) const override { Mark(Made::Kind::GivenSharedIndices); }
+	void GiveContentsAgain(DynamicIndexBufferHandle, const DeviceMemory* indices) const override
+	{
+		Keep(Made::Kind::GivenSharedIndices, indices);
 	}
 	void Destroy(IndexBufferHandle) const override {}
 	void Destroy(DynamicIndexBufferHandle) const override {}
@@ -152,12 +165,23 @@ public:
 		const std::scoped_lock lock(_mutex);
 		return std::exchange(_made, {});
 	}
+	/// The buffers that the game said it gives again, by the kind of their give
+	[[nodiscard]] std::vector<Made::Kind> TakeMarked() const
+	{
+		const std::scoped_lock lock(_mutex);
+		return std::exchange(_marked, {});
+	}
 
 private:
 	void Count() const
 	{
 		const std::scoped_lock lock(_mutex);
 		++_calls;
+	}
+	void Mark(Made::Kind kind) const
+	{
+		const std::scoped_lock lock(_mutex);
+		_marked.push_back(kind);
 	}
 	void Keep(Made::Kind kind, const DeviceMemory* memory) const
 	{
@@ -176,6 +200,7 @@ private:
 	mutable size_t _calls {0};
 	mutable std::vector<std::unique_ptr<std::vector<uint8_t>>> _memories;
 	mutable std::vector<Made> _made;
+	mutable std::vector<Made::Kind> _marked;
 	mutable DeviceDataGivers _givers;
 };
 
@@ -424,7 +449,61 @@ TEST_F(MeshPrepare, ASharedVertexBufferUsesTheSharedBufferAndStaysFixed)
 	EXPECT_EQ(shared.GetCount(), 3U);
 }
 
-TEST_F(MeshPrepare, AMeshGivesTheSkinOfItsLoadAgainFromItsFile)
+TEST_F(MeshPrepare, EachKindOfBufferGivesItsContentsAgainToItsOwnBufferOnTheDevice)
+{
+	const std::vector<uint8_t> bytes(3U * 12U, 0x5AU);
+	const std::vector<uint8_t> again(3U * 12U, 0xA5U);
+	const VertexDecl decl {VertexAttrib(VertexAttrib::Attribute::Position, 3, VertexAttrib::Type::Float)};
+	const auto memory = [&bytes] { return Device().Copy(bytes.data(), static_cast<uint32_t>(bytes.size())); };
+
+	const VertexBuffer own("own", memory(), decl);
+	const VertexBuffer shared("shared", memory(), decl, false, VertexBuffer::Storage::Shared);
+	const VertexBuffer dynamic("dynamic", memory(), decl, true);
+	const IndexBuffer ownIndices("own indices", memory(), IndexBuffer::Type::Uint16);
+	const IndexBuffer sharedIndices("shared indices", memory(), IndexBuffer::Type::Uint16, IndexBuffer::Storage::Shared);
+	std::ignore = Device().TakeMade();
+
+	// A dynamic buffer is also given again when its owner tells the device so
+	for (const auto* buffer : {&own, &shared, &dynamic})
+	{
+		buffer->SetContentsGivenAgain();
+		buffer->GiveContentsAgain(again);
+	}
+	for (const auto* buffer : {&ownIndices, &sharedIndices})
+	{
+		buffer->SetContentsGivenAgain();
+		buffer->GiveContentsAgain(again);
+	}
+	using Kind = FakeDevice::Made::Kind;
+	const std::vector<Kind> kinds {Kind::GivenVertices, Kind::GivenSharedVertices, Kind::GivenSharedVertices,
+	                               Kind::GivenIndices, Kind::GivenSharedIndices};
+	EXPECT_EQ(Device().TakeMarked(), kinds);
+	const auto given = Device().TakeMade();
+	ASSERT_EQ(given.size(), kinds.size());
+	for (size_t i = 0; i < given.size(); ++i)
+	{
+		EXPECT_EQ(given[i].kind, kinds[i]);
+		EXPECT_EQ(given[i].bytes, again);
+	}
+}
+
+TEST_F(MeshPrepare, AMeshTellsTheDeviceWhichBuffersItGivesAgain)
+{
+	L3DMesh still("still", false, UploadMode::Device);
+	ASSERT_TRUE(still.Load(Model()));
+	L3DMesh dynamic("dynamic", true, UploadMode::Device);
+	ASSERT_TRUE(dynamic.Load(Model()));
+	std::ignore = Device().TakeMarked();
+
+	// The vertices of a dynamic mesh change, thus only its triangles are given again
+	using Kind = FakeDevice::Made::Kind;
+	still.SetFileSource([](resources::Rereads& rereads) { return rereads.File("mesh.l3d"); });
+	EXPECT_EQ(Device().TakeMarked(), (std::vector<Kind> {Kind::GivenSharedVertices, Kind::GivenSharedIndices}));
+	dynamic.SetFileSource([](resources::Rereads& rereads) { return rereads.File("mesh.l3d"); });
+	EXPECT_EQ(Device().TakeMarked(), (std::vector<Kind> {Kind::GivenSharedIndices}));
+}
+
+TEST_F(MeshPrepare, AMeshGivesTheBitsOfItsLoadAgainFromItsFile)
 {
 	const auto model = Model();
 	L3DMesh mesh("given again", false, UploadMode::Device);
@@ -432,13 +511,17 @@ TEST_F(MeshPrepare, AMeshGivesTheSkinOfItsLoadAgainFromItsFile)
 	const auto fromLoad = Device().TakeMade();
 	ASSERT_EQ(fromLoad.size(), 3U);
 
-	// The vertices and the triangles are in the shared buffers, which the device keeps. Only the skin goes again,
-	// with the bytes of the load.
+	// The skin, the vertices and the triangles again, with the bytes of the load
 	mesh.GiveDeviceDataAgain(model);
 	const auto given = Device().TakeMade();
-	ASSERT_EQ(given.size(), 1U);
+	ASSERT_EQ(given.size(), 3U);
 	EXPECT_EQ(given[0].kind, FakeDevice::Made::Kind::TextureUpdate);
-	EXPECT_EQ(given[0].bytes, fromLoad[0].bytes);
+	EXPECT_EQ(given[1].kind, FakeDevice::Made::Kind::GivenSharedVertices);
+	EXPECT_EQ(given[2].kind, FakeDevice::Made::Kind::GivenSharedIndices);
+	for (size_t i = 0; i < given.size(); ++i)
+	{
+		EXPECT_EQ(given[i].bytes, fromLoad[i].bytes);
+	}
 }
 
 TEST_F(MeshPrepare, AMeshWithAFileSourceIsAGiverOfTheDeviceUntilItIsDeleted)
@@ -463,16 +546,19 @@ TEST_F(MeshPrepare, AMeshWithAFileSourceIsAGiverOfTheDeviceUntilItIsDeleted)
 	EXPECT_EQ(givers.Count(), 0U);
 }
 
-TEST_F(MeshPrepare, ADynamicMeshGivesNothingAgain)
+TEST_F(MeshPrepare, ADynamicMeshGivesOnlyItsTrianglesAgain)
 {
 	const auto model = Model();
 	L3DMesh mesh("dynamic", true, UploadMode::Device);
 	ASSERT_TRUE(mesh.Load(model));
-	std::ignore = Device().TakeMade();
+	const auto fromLoad = Device().TakeMade();
 
-	// The skin, the vertices and the triangles of a dynamic mesh change, thus the device keeps them
+	// The skin and the vertices of a dynamic mesh change, thus the device keeps them
 	mesh.GiveDeviceDataAgain(model);
-	EXPECT_TRUE(Device().TakeMade().empty());
+	const auto given = Device().TakeMade();
+	ASSERT_EQ(given.size(), 1U);
+	EXPECT_EQ(given[0].kind, FakeDevice::Made::Kind::GivenSharedIndices);
+	EXPECT_EQ(given[0].bytes, fromLoad.back().bytes);
 }
 
 TEST_F(MeshPrepare, AMeshOfDataOnlyIgnoresAFileSource)

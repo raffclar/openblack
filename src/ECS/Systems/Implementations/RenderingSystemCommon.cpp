@@ -37,6 +37,7 @@
 #include "Fire/FireGraphic.h"
 #include "Graphics/BonePalette.h"
 #include "Graphics/DebugLines.h"
+#include "Graphics/GraphicsDeviceInterface.h"
 #include "Graphics/GraphicsHandleBgfx.h"
 #include "Graphics/ShaderManager.h"
 #include "Graphics/Texture2D.h"
@@ -121,7 +122,13 @@ RenderContext::~RenderContext()
 	}
 }
 
-RenderingSystemCommon::~RenderingSystemCommon() = default;
+RenderingSystemCommon::~RenderingSystemCommon()
+{
+	if (_givesDataAgain && Locator::graphicsDevice::has_value())
+	{
+		Locator::graphicsDevice::value().GetDataGivers().Remove(this);
+	}
+}
 
 void RenderingSystemCommon::SetDirty()
 {
@@ -185,6 +192,7 @@ void RenderingSystemCommon::UploadRootsPiles()
 		// Room for a few more piles, so that the next trees pulled free do not make it again
 		const uint32_t capacity = count + 8;
 		_renderContext.rootsPileInstanceBuffer = graphics::fromBgfx(bgfx::createDynamicVertexBuffer(capacity, layout));
+		bgfx::setDeviceRestoreByApplication(toBgfx(_renderContext.rootsPileInstanceBuffer));
 		_renderContext.rootsPileCapacity = capacity;
 	}
 	bgfx::update(toBgfx(_renderContext.rootsPileInstanceBuffer), 0,
@@ -195,6 +203,16 @@ void RenderingSystemCommon::PrepareDraw(bool drawBoundingBox, bool drawFootpaths
 {
 	MainThreadQueue::CheckDirect(MainThreadApi::Renderer, "RenderingSystem::PrepareDraw");
 	const auto& registry = Locator::entitiesRegistry::value();
+	// The graphics device keeps no copy of the instance buffers. After a restore of the device the next draw gives all
+	// the instances again into the draw lists that it has.
+	if (!_givesDataAgain && Locator::graphicsDevice::has_value())
+	{
+		Locator::graphicsDevice::value().GetDataGivers().Add(this, [this](resources::Rereads&) {
+			ForgetUploads();
+			SetDirty();
+		});
+		_givesDataAgain = true;
+	}
 
 	_renderContext.animatedBoneMatrices.clear();
 	_renderContext.handMirrored = false;
@@ -407,6 +425,8 @@ void RenderingSystemCommon::UploadBonePalette()
 		texture->CreateWithinFrame(graphics::bone_palette::k_Width, static_cast<uint16_t>(rows * 2), 1,
 		                           graphics::TextureFormat::RGBA32F, graphics::Wrapping::ClampEdge, graphics::Filter::Nearest,
 		                           nullptr);
+		// Each frame gives all the bones, thus the graphics device keeps no copy
+		texture->SetTexelsGivenAgain();
 	}
 	const auto bytes = static_cast<uint32_t>(texels.size() * sizeof(glm::vec4));
 	bgfx::updateTexture2D(toBgfx(texture->GetNativeHandle()), 0, 0, 0, 0, graphics::bone_palette::k_Width, rows,

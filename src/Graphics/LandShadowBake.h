@@ -61,6 +61,9 @@ public:
 	void Update(bool rowsFromFarEnd, Casters casters);
 	/// Forgets everything, so the next update bakes the whole island
 	void Reset();
+	/// Bakes the whole island again after a restore of the graphics device, which keeps no copy of the texture. The
+	/// texture shows no shadow until the bake ends.
+	void BakeAgain();
 	/// The baked texture, none before the first update with an island
 	[[nodiscard]] const Texture2D* GetTexture() const { return _texture.get(); }
 

@@ -183,6 +183,17 @@ void BgfxGraphicsDevice::GiveContentsAgain(VertexBufferHandle buffer, const Devi
 	bgfx::giveDeviceRestoreContents(toBgfx(buffer), ToBgfx(vertices));
 }
 
+void BgfxGraphicsDevice::SetContentsGivenAgain(DynamicVertexBufferHandle buffer) const
+{
+	bgfx::setDeviceRestoreByApplication(toBgfx(buffer));
+}
+
+void BgfxGraphicsDevice::GiveContentsAgain(DynamicVertexBufferHandle buffer, const DeviceMemory* vertices) const
+{
+	// The device keeps no copy of an update of the buffer
+	bgfx::update(toBgfx(buffer), 0, ToBgfx(vertices));
+}
+
 void BgfxGraphicsDevice::Destroy(VertexBufferHandle buffer) const
 {
 	bgfx::destroy(toBgfx(buffer));
@@ -221,6 +232,17 @@ void BgfxGraphicsDevice::SetContentsGivenAgain(IndexBufferHandle buffer) const
 void BgfxGraphicsDevice::GiveContentsAgain(IndexBufferHandle buffer, const DeviceMemory* indices) const
 {
 	bgfx::giveDeviceRestoreContents(toBgfx(buffer), ToBgfx(indices));
+}
+
+void BgfxGraphicsDevice::SetContentsGivenAgain(DynamicIndexBufferHandle buffer) const
+{
+	bgfx::setDeviceRestoreByApplication(toBgfx(buffer));
+}
+
+void BgfxGraphicsDevice::GiveContentsAgain(DynamicIndexBufferHandle buffer, const DeviceMemory* indices) const
+{
+	// The device keeps no copy of an update of the buffer
+	bgfx::update(toBgfx(buffer), 0, ToBgfx(indices));
 }
 
 void BgfxGraphicsDevice::Destroy(IndexBufferHandle buffer) const

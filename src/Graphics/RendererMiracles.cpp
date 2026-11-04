@@ -618,6 +618,8 @@ const Texture2D* Renderer::HandFlowTexture() const
 				_handFlowTexture = std::make_unique<Texture2D>("HandFlow");
 				_handFlowTexture->CreateWithinFrame(k_Size, k_Size, 1, TextureFormat::RGBA8, Wrapping::Repeat, Filter::Linear,
 				                                    memory);
+				// After a restore of the graphics device the renderer reads the files again and makes a new texture
+				_handFlowTexture->SetTexelsGivenAgain();
 			}
 		}
 	}

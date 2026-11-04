@@ -79,6 +79,18 @@ TEST(DeviceDataGivers, AnOwnerHasOneGiverAndARemovedOwnerGivesNothing)
 	EXPECT_EQ(order, (std::vector<int> {2}));
 }
 
+TEST(DeviceDataGivers, EachGiveOfAllCountsOneRestore)
+{
+	// Data that no owner holds, as a texture kept for a later use, compares the count to know of a restore
+	graphics::DeviceDataGivers givers;
+	EXPECT_EQ(givers.Restores(), 0U);
+	FakeFiles files;
+	resources::Rereads rereads([&files](const std::filesystem::path& path) { return files.Read(path); });
+	givers.GiveAll(rereads);
+	givers.GiveAll(rereads);
+	EXPECT_EQ(givers.Restores(), 2U);
+}
+
 TEST(Rereads, AFileIsReadEachTimeAndAPackThatCannotBeReadIsReadOneTime)
 {
 	FakeFiles files;

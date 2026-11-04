@@ -43,6 +43,8 @@ public:
 	void SetName(VertexBufferHandle buffer, std::string_view name) const override;
 	void SetContentsGivenAgain(VertexBufferHandle buffer) const override;
 	void GiveContentsAgain(VertexBufferHandle buffer, const DeviceMemory* vertices) const override;
+	void SetContentsGivenAgain(DynamicVertexBufferHandle buffer) const override;
+	void GiveContentsAgain(DynamicVertexBufferHandle buffer, const DeviceMemory* vertices) const override;
 	void Destroy(VertexBufferHandle buffer) const override;
 	void Destroy(DynamicVertexBufferHandle buffer) const override;
 	void Destroy(VertexLayoutHandle layout) const override;
@@ -52,6 +54,8 @@ public:
 	void SetName(IndexBufferHandle buffer, std::string_view name) const override;
 	void SetContentsGivenAgain(IndexBufferHandle buffer) const override;
 	void GiveContentsAgain(IndexBufferHandle buffer, const DeviceMemory* indices) const override;
+	void SetContentsGivenAgain(DynamicIndexBufferHandle buffer) const override;
+	void GiveContentsAgain(DynamicIndexBufferHandle buffer, const DeviceMemory* indices) const override;
 	void Destroy(IndexBufferHandle buffer) const override;
 	void Destroy(DynamicIndexBufferHandle buffer) const override;
 
