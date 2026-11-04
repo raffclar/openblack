@@ -25,7 +25,8 @@
 // frame. Before the first usual hair draw, the light is white and the added colour is black.
 //
 // The game draws the bodies in this order: the creatures of the land's draw list in the order of the list, then the
-// held creatures, then the interface. A body draws only when its sphere is on the screen.
+// held creatures, then the interface. A body draws only when its sphere is on the screen. A hand that holds a creature
+// sends the body to the depth sorter. The sorter draws its bodies late in the frame, from far to near.
 namespace openblack::creature_hair_light
 {
 
@@ -77,6 +78,14 @@ struct Plan
 	/// colours.
 	std::optional<size_t> last;
 };
+
+/// The key of a body in the depth sorter: the squared distance from the eye to the place of the body. The calculation
+/// adds the squares in the order x, y, z.
+[[nodiscard]] float SortKey(glm::vec3 place, glm::vec3 eye) noexcept;
+
+/// The order in which the depth sorter draws its bodies, as indices into the keys: the largest key first. Bodies with
+/// equal keys keep the order in which they came into the sorter.
+[[nodiscard]] std::vector<size_t> SortedOrder(std::span<const float> keys);
 
 /// Find the source of the hair colours for each body with the environment map, from the frame's draws in the game's
 /// order
