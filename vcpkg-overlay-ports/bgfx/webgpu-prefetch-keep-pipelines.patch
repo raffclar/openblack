@@ -1,0 +1,88 @@
+diff --git a/bgfx/src/renderer_webgpu.cpp b/bgfx/src/renderer_webgpu.cpp
+index f68e18c..7e47b87 100644
+--- a/bgfx/src/renderer_webgpu.cpp
++++ b/bgfx/src/renderer_webgpu.cpp
+@@ -3891,35 +3891,63 @@ WGPU_IMPORT
+ 
+ 			if (_prefetch)
+ 			{
+-				// The device makes the pipeline in the background and keeps it in its own cache while the renderer
+-				// holds it. A later make of the same pipeline then gets it from that cache.
++				// The device makes the pipeline in the background. When it is ready, the renderer keeps it in its
++				// pipeline cache with the bind group layout of its pipeline layout, thus a later draw with the same
++				// states uses it and does not make it again. Some browsers compile a pipeline again when the
++				// same descriptor comes again. The renderer also holds one more reference until it stops, so that a
++				// device that keeps pipelines in its own cache keeps it after the renderer cache lets it go.
+ 				m_prefetchHashes.insert(hash);
+ 				bx::atomicFetchAndAdd<int32_t>(&m_prefetchPending, 1);
+ 
++				PrefetchRequest* request = BX_NEW(g_allocator, PrefetchRequest);
++				request->hash            = hash;
++				request->bindGroupLayout = bindGroupLayout;
++
+ 				const WGPUCreateRenderPipelineAsyncCallbackInfo callbackInfo =
+ 				{
+ 					.nextInChain = NULL,
+ 					.mode        = WGPUCallbackMode_AllowProcessEvents,
+-					.callback    = [](WGPUCreatePipelineAsyncStatus _status, WGPURenderPipeline _pipeline, WGPUStringView /*_message*/, void* _userdata1, void* /*_userdata2*/)
++					.callback    = [](WGPUCreatePipelineAsyncStatus _status, WGPURenderPipeline _pipeline, WGPUStringView /*_message*/, void* _userdata1, void* _userdata2)
+ 					{
+ 						RendererContextWGPU* context = static_cast<RendererContextWGPU*>(_userdata1);
++						PrefetchRequest* request = static_cast<PrefetchRequest*>(_userdata2);
+ 
+ 						if (WGPUCreatePipelineAsyncStatus_Success == _status
+ 						&&  NULL != _pipeline)
+ 						{
+ 							context->m_prefetched.push_back(_pipeline);
++
++							// A draw that came before this callback can have made the same pipeline already
++							if (NULL == context->m_renderPipelineCache.find(request->hash) )
++							{
++								wgpuRenderPipelineAddRef(_pipeline);
++								context->m_renderPipelineCache.add(
++									  request->hash
++									, {
++										.bindGroupLayout = request->bindGroupLayout,
++										.pipeline        = _pipeline,
++									}
++									, 0
++									);
++								request->bindGroupLayout = NULL;
++							}
+ 						}
+ 
++						if (NULL != request->bindGroupLayout)
++						{
++							wgpuRelease(request->bindGroupLayout);
++						}
++
++						BX_DELETE(g_allocator, request);
+ 						bx::atomicFetchAndAdd<int32_t>(&context->m_prefetchPending, -1);
+ 					},
+ 					.userdata1   = this,
+-					.userdata2   = NULL,
++					.userdata2   = request,
+ 				};
+ 
+ 				wgpuDeviceCreateRenderPipelineAsync(m_device, &renderPipelineDesc, callbackInfo);
+ 
+ 				wgpuRelease(pipelineLayout);
+-				wgpuRelease(bindGroupLayout);
+ 				return NULL;
+ 			}
+ 
+@@ -4372,6 +4400,14 @@ WGPU_IMPORT
+ 		StateCacheLru<ComputePipeline, 1024> m_computePipelineCache;
+ 		StateCacheLru<RenderPipeline, 1024>  m_renderPipelineCache;
+ 
++		// A pipeline that a prefetch started: its key in the pipeline cache and the bind group layout of its
++		// pipeline layout
++		struct PrefetchRequest
++		{
++			uint32_t            hash;
++			WGPUBindGroupLayout bindGroupLayout;
++		};
++
+ 		// The pipelines that a prefetch started, the ones that are ready and the number that are not ready
+ 		stl::unordered_set<uint32_t>   m_prefetchHashes;
+ 		stl::vector<WGPURenderPipeline> m_prefetched;

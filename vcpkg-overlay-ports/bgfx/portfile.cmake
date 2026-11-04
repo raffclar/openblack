@@ -37,6 +37,9 @@ vcpkg_download_distfile(
 #   When the same pipelines are made again later, the device gives the ready ones from its cache. The game uses it
 #   behind the loading screen, so that the first visit does not make each pipeline one at a time. The call and
 #   getPipelinePrefetchPending are in the API of all renderers; the other renderers ignore them.
+# - webgpu-prefetch-keep-pipelines: a pipeline that the prefetch made goes into the pipeline cache of the renderer
+#   with its bind group layout. Thus the later draws use that pipeline and do not make it again. Safari compiles a
+#   pipeline again when the same descriptor comes again, and this made the first frames about 45 s slower.
 # - webgpu-instance-stream-layout: the list of vertex buffer layouts of a render pipeline has a place for the
 #   instance data after the most vertex streams. Before, a draw with four vertex streams and instance data, as a
 #   creature with its three variant meshes, wrote the instance layout after the end of the list, into other values
@@ -99,6 +102,7 @@ vcpkg_extract_source_archive(
     device-restore.patch
     webgpu-pipeline-prefetch.patch
     webgpu-instance-stream-layout.patch
+    webgpu-prefetch-keep-pipelines.patch
     gl-parallel-link.patch
 )
 
