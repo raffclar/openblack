@@ -182,6 +182,8 @@ void ProcessDesire(components::TownDesire& desire, const DesireContext& c, size_
 /// The desire that a land script names, the case of the letters not counted, none for a name that is not a desire. The
 /// names are the game's own, with its spelling ("Suppy_Workshop").
 [[nodiscard]] std::optional<size_t> DesireByName(std::string_view name);
+/// The name of a desire as the game writes it in a land script, empty for a number that is not a desire
+[[nodiscard]] std::string_view DesireName(size_t desire);
 /// The game's C runtime quicksort, most first, which is not stable
 void MsvcQsort(std::array<components::DesireSort, k_Count>& entries);
 void SortDesires(components::TownDesire& desire);

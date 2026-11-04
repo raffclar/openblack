@@ -51,11 +51,13 @@ public:
 	void SetPathKind(paths::Kind kind) noexcept;
 	[[nodiscard]] const paths::Draft& GetDraft() const noexcept { return _draft; }
 
-	/// Saves the land's changed cells as a landscape file, what the editor placed and drew as a land script, and the
-	/// whole world as a world file, into the editor's folder in the profile folder. Gives what it wrote.
+	/// Saves the land's changed cells as a landscape file, what the editor placed and drew as a land script, the
+	/// footpaths of the world as a footpath file, and the whole world as a world file, into the editor's folder in the
+	/// profile folder. Gives what it wrote.
 	std::string Save(EditorContext& context) noexcept;
-	/// Loads the world file that Save wrote for the land that is open
-	std::string LoadWorld() noexcept;
+	/// Loads the world file that Save wrote for the land that is open. The streams and the footpaths of the world that the
+	/// land script of Save makes become the paths that the editor drew again.
+	std::string LoadWorld(EditorContext& context) noexcept;
 
 private:
 	void Stroke(glm::vec2 centre) noexcept;

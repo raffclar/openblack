@@ -10,6 +10,7 @@
 #include "PalettePanel.h"
 
 #include <algorithm>
+#include <vector>
 
 #include <fmt/format.h>
 #include <imgui.h>
@@ -19,6 +20,7 @@
 #include "Debug/CreatureSpawner.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/EditorSystemInterface.h"
+#include "Editor/EditorActions.h"
 #include "Editor/EditorContext.h"
 #include "Editor/EditorEntities.h"
 #include "Editor/EditorOutline.h"
@@ -328,7 +330,8 @@ void PalettePanel::LayOut(EditorContext& context, PlaceKind kind, const std::vec
 	const auto centre = hit.has_value() ? hit->position : camera.GetFocus();
 	const auto count = std::min(types.size(), k_MaxLayout);
 	const auto points = GridLayout(count, SpacingOf(kind));
-	size_t placed = 0;
+	std::vector<entt::entity> placed;
+	placed.reserve(count);
 	for (size_t i = 0; i < count; ++i)
 	{
 		const glm::vec2 point {centre.x + points.at(i).x, centre.z + points.at(i).y};
@@ -337,9 +340,14 @@ void PalettePanel::LayOut(EditorContext& context, PlaceKind kind, const std::vec
 		                      .challenge = kind == PlaceKind::Highlight ? static_cast<uint32_t>(_challenge) : 0u};
 		const auto entity = kind == PlaceKind::Creature ? context.spawner.SpawnAt({point.x, LandHeight(point), point.y}, 0.0f)
 		                                                : Place(item, {point.x, LandHeight(point), point.y}, 0.0f);
-		placed += entity != entt::null ? 1 : 0;
+		if (entity != entt::null)
+		{
+			placed.push_back(entity);
+		}
 	}
-	_lastLayout = fmt::format("Laid out {} of {}", placed, types.size());
+	// The layout is one step of the history, so the land script can write the things that it made
+	RecordAllMade(context, placed, "Lay out");
+	_lastLayout = fmt::format("Laid out {} of {}", placed.size(), types.size());
 }
 
 } // namespace openblack::editor

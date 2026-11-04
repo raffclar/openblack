@@ -82,7 +82,7 @@ public:
 	static void CreateScaffold(int32_t, glm::vec3, int32_t, int32_t, int32_t);
 	static void CountryChange(glm::vec3 position, int32_t);
 	static void HeightChange(glm::vec3 position, int32_t);
-	static void CreateCreature(glm::vec3 position, int32_t, int32_t);
+	static void CreateCreature(glm::vec3 position, int32_t row, int32_t playerNumber);
 	static void CreateCreatureFromFile(const std::string& playerName, CreatureType creatureType,
 	                                   const std::string& creatureMind, glm::vec3 position);
 	static void CreateFlock(int32_t, glm::vec3, glm::vec3, int32_t, int32_t, int32_t);

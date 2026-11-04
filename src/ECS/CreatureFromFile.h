@@ -77,4 +77,16 @@ Result BringClanOrder(PlayerNames owner, const clan_creature_order::Order& order
 /// creature already brings no creature.
 Result BringKept(PlayerNames owner, std::shared_ptr<const creaturemind::MindFileData> mind);
 
+/// Whether a land script that makes a creature with no mind file makes one: the row is a row of the creature table, the
+/// player is one of the players of a land, the place is on the map and the player has no creature yet
+[[nodiscard]] constexpr bool ScriptMakesPlainCreature(bool knownRow, bool landPlayer, bool onMap, bool hasCreature)
+{
+	return knownRow && landPlayer && onMap && !hasCreature;
+}
+
+/// A land script makes a creature of a row of the creature table for the player of a number, at a place in metres. The
+/// creature has no mind file, and it becomes the creature of its player. Gives the creature, none when the script makes
+/// none (see ScriptMakesPlainCreature).
+std::optional<entt::entity> MakePlain(int32_t row, int32_t playerNumber, glm::vec2 place);
+
 } // namespace openblack::ecs::creature_from_file
