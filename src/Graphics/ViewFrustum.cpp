@@ -66,6 +66,17 @@ bool SeesBox(const Frustum& frustum, const glm::mat4& model, glm::vec3 minima, g
 	});
 }
 
+bool SeesWorldBox(const Frustum& frustum, glm::vec3 minima, glm::vec3 maxima) noexcept
+{
+	// Each product and each sum of the test keeps the order of its inputs. Thus the corner with the largest products
+	// gives the largest result of all the corners, and the test of this corner gives the answer for all of them.
+	return std::ranges::none_of(frustum.sides, [&minima, &maxima](const glm::vec4& side) {
+		const glm::vec3 corner {side.x >= 0.0f ? maxima.x : minima.x, side.y >= 0.0f ? maxima.y : minima.y,
+		                        side.z >= 0.0f ? maxima.z : minima.z};
+		return glm::dot(glm::vec3(side), corner) + side.w < -k_BoxMargin;
+	});
+}
+
 bool SeesSweptBox(const Frustum& frustum, const glm::mat4& model, glm::vec3 minima, glm::vec3 maxima, glm::vec3 sweep) noexcept
 {
 	std::array<glm::vec3, 16> corners {};

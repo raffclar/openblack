@@ -3472,8 +3472,9 @@ void Renderer::DrawGroundBlobs(const DrawSceneDesc& desc) const
 	const auto seenBy = view_frustum::FromViewProjection(desc.camera->GetProjectionMatrix() *
 	                                                     desc.camera->GetViewMatrix(Camera::Interpolation::Current));
 	const auto seesColumn = [&seenBy](const glm::vec3& centre, float reach, float lift) {
-		return view_frustum::SeesBox(seenBy, glm::mat4(1.0f), glm::vec3(centre.x - reach, -reach, centre.z - reach),
-		                             glm::vec3(centre.x + reach, view_frustum::k_HighestLand + lift + reach, centre.z + reach));
+		return view_frustum::SeesWorldBox(
+		    seenBy, glm::vec3(centre.x - reach, -reach, centre.z - reach),
+		    glm::vec3(centre.x + reach, view_frustum::k_HighestLand + lift + reach, centre.z + reach));
 	};
 	desc.entities.Each<const ecs::components::Villager, const ecs::components::Transform, const ecs::components::Mesh>(
 	    [&](entt::entity entity, const ecs::components::Villager& /*villager*/, const ecs::components::Transform& placed,
