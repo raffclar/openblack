@@ -9,6 +9,10 @@
 
 #include "GroundBlobs.h"
 
+#include <cmath>
+
+#include <algorithm>
+
 #include <glm/geometric.hpp>
 
 namespace openblack::graphics::ground_blobs
@@ -80,6 +84,29 @@ std::array<Quad, 2> Far(const glm::vec3& foot, float scale)
 {
 	const auto quad = MakeQuad(foot, Fall(glm::vec3(0.0f, 1.0f, 0.0f), scale), k_Across * k_FarWidening);
 	return {quad, quad};
+}
+
+float FeetReach(float firstReach, float secondReach, float scale)
+{
+	// The fall is not longer than the light's offset, for a normal no longer than the square root of 2. Each blob leans
+	// by half the distance between the feet. A corner is at most the whole lean and the half width from its foot.
+	const float lean = (glm::length(k_Offset) * std::abs(scale)) + ((firstReach + secondReach) * 0.5f);
+	return std::max(firstReach, secondReach) + lean + glm::length(k_Across);
+}
+
+float FarReach(float scale)
+{
+	return (glm::length(k_Offset) * std::abs(scale)) + (glm::length(k_Across) * k_FarWidening);
+}
+
+std::optional<float> BoneReach(const glm::mat4& bone, const glm::vec3& scale)
+{
+	if (bone[3].w != 1.0f)
+	{
+		return std::nullopt;
+	}
+	const float largest = std::max({std::abs(scale.x), std::abs(scale.y), std::abs(scale.z)});
+	return glm::length(glm::vec3(bone[3])) * largest;
 }
 
 std::array<glm::vec3, 4> SmudgeCorners(const glm::vec3& position, float scale, float smudgeScale, const glm::vec3& right,
