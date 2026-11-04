@@ -192,6 +192,14 @@ private:
 	/// The needs and desires go on once the body and mind have started, and every frame for those that hold them
 	void ApplyStates();
 	void Give(const Command& command);
+	/// Gives a command of the front end: the menus, the boxes, the chat, the music and the profile. Returns false
+	/// when the command is of a different kind.
+	bool GiveFrontEndCommand(const Command& command);
+	/// Gives a command of the story and the world: the films, the temple, the help, the saves and the towns.
+	/// Returns false when the command is of a different kind.
+	bool GiveStoryCommand(const Command& command);
+	/// Gives a command to the creature of the command
+	void GiveCreatureCommand(const Command& command);
 	/// The commands on things, of the player's hand and of the leashes; each returns what came of it
 	std::string GiveObjectCommand(entt::entity creature, const Command& command);
 	std::string GiveHandCommand(entt::entity creature, const Command& command);
