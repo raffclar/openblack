@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include <cstdint>
+
 #include <optional>
 #include <vector>
 
@@ -16,12 +18,14 @@
 
 #include "ECS/Components/Construction.h"
 
-/// A building's sites, one for each town building it, as the towns open and close them: a town's builders work only at
-/// their own town's site, while wood brought by a hand or a creature goes onto the newest site
+/// A building's sites, one for each town building it, as the towns open and close them: a town's builders work at their
+/// own town's site, or at a site that a script shared with their town. Wood brought by a hand or a creature goes onto
+/// the newest site.
 namespace openblack::ecs::building_site_list
 {
 
-/// A town's site at the building, none if the town has none there (the newest, should it have more)
+/// A town's site at the building, none if the town has none there. The town's own site comes first (the newest, should
+/// it have more), then a site that another town shared with it.
 [[nodiscard]] components::BuildingSite* Find(components::BuildingSites& sites, entt::entity town);
 [[nodiscard]] const components::BuildingSite* Find(const components::BuildingSites& sites, entt::entity town);
 
@@ -33,8 +37,20 @@ namespace openblack::ecs::building_site_list
 /// building goes onto it from now on
 components::BuildingSite& Open(components::BuildingSites& sites, entt::entity town);
 
-/// A town's site closes and is handed back, none if the town had none there. From then on none of the building's sites
-/// takes brought wood, whichever of them it was, until another site opens.
+/// Whether another town shared the site with the town
+[[nodiscard]] bool IsSharedWith(const components::BuildingSite& site, entt::entity town);
+/// Gives the site to another town as well, at this place in the list of the sites of that town. False if the site is
+/// the town's own site, or if the town has it already.
+bool Share(components::BuildingSite& site, entt::entity town, uint32_t number);
+/// The place of the site in the list of the sites of a town: a newer site has a higher number. 0 if the town does not
+/// have the site.
+[[nodiscard]] uint32_t NumberFor(const components::BuildingSite& site, entt::entity town);
+/// Sets the place of the site in the list of the sites of a town. False if the town does not have the site.
+bool SetNumberFor(components::BuildingSite& site, entt::entity town, uint32_t number);
+
+/// A town's site closes and is handed back, none if the town had none there. The site that a town removes is the site
+/// that Find gives, so a town that removes a shared site closes the site for all towns. From then on none of the
+/// building's sites takes brought wood, whichever of them it was, until another site opens.
 std::optional<components::BuildingSite> Close(components::BuildingSites& sites, entt::entity town);
 
 /// The towns whose sites close, in turn, when the building is finished or goes: the site taking brought wood first, then

@@ -62,6 +62,10 @@ void OpenSite(entt::entity building, float desire);
 /// A town gets a site at a building, if it has none there, wanting builders no more than for its other building; its
 /// builders' places are worked out round its model. Whether the town has a site there.
 bool OpenSiteForTown(entt::entity building, entt::entity town);
+/// A town gets the site of a building as one of its own sites, as a script can do it: the building's newest site, which
+/// stays the site of its own town. Nothing changes if the town has the site already. False if the building has no site
+/// or the town is not a town.
+bool ShareSite(entt::entity building, entt::entity town);
 
 /// A town asked to build a worship site going up gets a site of its own there, if it has none, which wants builders by a
 /// desire

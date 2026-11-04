@@ -244,6 +244,7 @@ uint32_t villager_dance::MoveToDancePos(LivingAction& action)
 		if (auto* wallHug = registry.TryGet<WallHug>(villager); wallHug != nullptr)
 		{
 			wallHug->goalPlace = {slot.x, slot.z};
+			wallHug->goalHeight = slot.altitude;
 			// A dancer that goes round a circle notes a new leave distance to its new place, so it can leave the circle
 			if (auto* circle = registry.TryGet<WallHugObjectReference>(villager); circle != nullptr)
 			{

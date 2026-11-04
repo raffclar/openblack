@@ -16,16 +16,73 @@ using namespace openblack::ecs;
 using components::BuildingSite;
 using components::BuildingSites;
 
+namespace
+{
+
+/// The town's own site first, else a site that another town shared with it
+template <typename Sites>
+auto FindIn(Sites& sites, entt::entity town) -> decltype(&*sites.begin())
+{
+	if (const auto own = std::ranges::find(sites, town, &BuildingSite::town); own != sites.end())
+	{
+		return &*own;
+	}
+	const auto shared =
+	    std::ranges::find_if(sites, [town](const BuildingSite& site) { return building_site_list::IsSharedWith(site, town); });
+	return shared != sites.end() ? &*shared : nullptr;
+}
+
+} // namespace
+
 BuildingSite* building_site_list::Find(BuildingSites& sites, entt::entity town)
 {
-	const auto found = std::ranges::find(sites.sites, town, &BuildingSite::town);
-	return found != sites.sites.end() ? &*found : nullptr;
+	return FindIn(sites.sites, town);
 }
 
 const BuildingSite* building_site_list::Find(const BuildingSites& sites, entt::entity town)
 {
-	const auto found = std::ranges::find(sites.sites, town, &BuildingSite::town);
-	return found != sites.sites.end() ? &*found : nullptr;
+	return FindIn(sites.sites, town);
+}
+
+bool building_site_list::IsSharedWith(const BuildingSite& site, entt::entity town)
+{
+	return std::ranges::find(site.sharedWith, town, &BuildingSite::Listing::town) != site.sharedWith.end();
+}
+
+bool building_site_list::Share(BuildingSite& site, entt::entity town, uint32_t number)
+{
+	if (site.town == town || IsSharedWith(site, town))
+	{
+		return false;
+	}
+	site.sharedWith.push_back({.town = town, .number = number});
+	return true;
+}
+
+uint32_t building_site_list::NumberFor(const BuildingSite& site, entt::entity town)
+{
+	if (site.town == town)
+	{
+		return site.number;
+	}
+	const auto listing = std::ranges::find(site.sharedWith, town, &BuildingSite::Listing::town);
+	return listing != site.sharedWith.end() ? listing->number : 0;
+}
+
+bool building_site_list::SetNumberFor(BuildingSite& site, entt::entity town, uint32_t number)
+{
+	if (site.town == town)
+	{
+		site.number = number;
+		return true;
+	}
+	const auto listing = std::ranges::find(site.sharedWith, town, &BuildingSite::Listing::town);
+	if (listing == site.sharedWith.end())
+	{
+		return false;
+	}
+	listing->number = number;
+	return true;
 }
 
 BuildingSite* building_site_list::TakingBroughtWood(BuildingSites& sites)
@@ -51,11 +108,12 @@ BuildingSite& building_site_list::Open(BuildingSites& sites, entt::entity town)
 
 std::optional<BuildingSite> building_site_list::Close(BuildingSites& sites, entt::entity town)
 {
-	const auto found = std::ranges::find(sites.sites, town, &BuildingSite::town);
-	if (found == sites.sites.end())
+	const auto* removed = Find(sites, town);
+	if (removed == nullptr)
 	{
 		return std::nullopt;
 	}
+	const auto found = sites.sites.begin() + (removed - sites.sites.data());
 	auto closed = std::move(*found);
 	sites.sites.erase(found);
 	for (auto& site : sites.sites)

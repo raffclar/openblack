@@ -89,6 +89,7 @@
 #include "ECS/Map.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
+#include "ECS/ScriptDestination.h"
 #include "ECS/ShownCreatureFaces.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/AnimatedStaticSystemInterface.h"
@@ -1154,6 +1155,7 @@ CreatureLocomotionSystem::MoveResult CreatureLocomotionSystem::StartMove(entt::e
 	self.ring = locomotion::MoveRing(distance, minDistance, maxDistance);
 	self.ontoDestination = ontoDestination;
 	self.destination = point;
+	self.scriptDestination = ecs::script_destination::OfPoint(point);
 	self.fidgetMs = locomotion::k_FidgetMs;
 	self.fidgeted = false;
 	// The head looks ahead along the new search at once
@@ -1185,6 +1187,8 @@ CreatureLocomotionSystem::MoveResult CreatureLocomotionSystem::MoveTo(entt::enti
 	const auto fractions = FractionsOf(body->species);
 	const auto fraction = PaceFraction(pace, self->fraction, fractions);
 	BreatheForWalk(creature, *body, fraction, fractions);
+	// The scripts read the point as its destination also when the walk does not start
+	self->scriptDestination = ecs::script_destination::OfPoint(point);
 	return StartMove(creature, *self, point, fraction, minDistance, maxDistance, true);
 }
 
@@ -1224,6 +1228,12 @@ CreatureLocomotionSystem::MoveResult CreatureLocomotionSystem::MoveToObject(entt
 	const auto fractions = FractionsOf(body->species);
 	const auto fraction = PaceFraction(pace, self->fraction, fractions);
 	BreatheForWalk(creature, *body, fraction, fractions);
+	// The scripts read the place of the thing as its destination, with the height of the thing above the land. A new
+	// search for a route then changes it to the point of the search.
+	if (Locator::terrainSystem::has_value())
+	{
+		self->scriptDestination = map_coords::FromWorld(Locator::terrainSystem::value(), at->position);
+	}
 	return StartMove(creature, *self, glm::xz(at->position), fraction, ring.min, ring.max, false);
 }
 
@@ -1619,6 +1629,7 @@ void CreatureLocomotionSystem::CreatureTurn(entt::entity entity)
 		if (!self.started)
 		{
 			self.started = true;
+			self.scriptDestination = ecs::script_destination::OfPoint(glm::xz(transform.position));
 			self.heading = HeadingOfRotation(transform.rotation);
 			self.toPosition = transform.position;
 			self.toHeading = self.heading;

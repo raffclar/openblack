@@ -2372,3 +2372,5 @@ openblack_setup_and_add_test(
   test_device_data_givers graphics/test_device_data_givers.cpp
 )
 openblack_setup_and_add_test(test_glyph_texels gui/test_glyph_texels.cpp)
+openblack_setup_and_add_test(test_script_natives_rows_7 test_script_natives_rows_7.cpp)
+openblack_setup_and_add_test(test_script_natives_rows_8 test_script_natives_rows_8.cpp)

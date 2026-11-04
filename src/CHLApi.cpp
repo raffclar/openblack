@@ -179,6 +179,7 @@
 #include "ECS/ScriptContainerWalk.h"
 #include "ECS/ScriptCreatureCounts.h"
 #include "ECS/ScriptDelete.h"
+#include "ECS/ScriptDestination.h"
 #include "ECS/ScriptFind.h"
 #include "ECS/ScriptFlocks.h"
 #include "ECS/ScriptObject.h"
@@ -186,6 +187,7 @@
 #include "ECS/ScriptPopulate.h"
 #include "ECS/ScriptSpotVisuals.h"
 #include "ECS/ScriptWeatherRules.h"
+#include "ECS/SpellCreator.h"
 #include "ECS/Systems/AdvisorSystemInterface.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
@@ -217,6 +219,7 @@
 #include "ECS/Systems/FightTranscriptSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/FootballSystemInterface.h"
+#include "ECS/Systems/GestureSystemInterface.h"
 #include "ECS/Systems/HandDemoSystemInterface.h"
 #include "ECS/Systems/HandGrabSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
@@ -317,6 +320,7 @@
 #include "ScriptHeaders/ScriptInterfaceLevels.h"
 #include "ScriptHeaders/ScriptLessonNatives.h"
 #include "ScriptHeaders/ScriptNameLists.h"
+#include "ScriptHeaders/ScriptPlayers.h"
 #include "ScriptHeaders/ScriptPropertyRules.h"
 #include "ScriptHeaders/ScriptRandom.h"
 #include "ScriptHeaders/ScriptRealTime.h"
@@ -559,9 +563,10 @@ help::spirits::AdvisorSpiritController* ScriptAdvisors()
 /// that go by it. A random spirit comes from the random numbers of the help, which no frame draws.
 int32_t ScriptHelpSpirit(int32_t scriptSpirit)
 {
-	const auto alignment = Locator::alignmentSystem::has_value()
-	                           ? Locator::alignmentSystem::value().GetPlayerAlignment(ScriptPlayerName(0))
-	                           : 0.0f;
+	const auto player =
+	    Locator::playerSystem::has_value() ? Locator::playerSystem::value().GetLocalPlayer() : PlayerNames::PLAYER_ONE;
+	const auto alignment =
+	    Locator::alignmentSystem::has_value() ? Locator::alignmentSystem::value().GetPlayerAlignment(player) : 0.0f;
 	return help::script_spirits::HelpSpiritOf(scriptSpirit, help::script_spirits::DiscreteAlignment(alignment), []() {
 		return Locator::helpMessageSystem::has_value() ? Locator::helpMessageSystem::value().HelpRand(100) : 0u;
 	});
@@ -2747,9 +2752,12 @@ void GetPosition() // 023 GET_POSITION
 		         ecs::villager_script_rules::WithinAStepOfGoalPlace(glm::vec2(transform->position.x, transform->position.z),
 		                                                            wallHug->goalPlace, wallHug->speed))
 		{
-			// A walker within a turn's step of where it is walking to is seen there, on the ground
+			// A walker within a turn's step of where it is walking to is seen there, at the height of its goal above the
+			// land. An animal keeps the height of its goal with its move.
 			const auto goal = ecs::wall_hug::ToPoint(wallHug->goalPlace);
-			position = {goal.x, Locator::terrainSystem::value().GetHeightAt(goal), goal.y};
+			const auto* animal = registry.TryGet<const ecs::components::Animal>(object);
+			const float height = animal != nullptr ? animal->goalHeight : wallHug->goalHeight;
+			position = {goal.x, Locator::terrainSystem::value().GetHeightAt(goal) + height, goal.y};
 		}
 		else if (transform != nullptr)
 		{
@@ -5269,12 +5277,15 @@ void LookGameThing() // 100 LOOK_GAME_THING
 
 void GetObjectDestination() // 101 GET_OBJECT_DESTINATION
 {
-	// const auto obj = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushv(0.0f); // x
-	Pushv(0.0f); // y
-	Pushv(0.0f); // z
+	// The place where a living thing goes, with the land under it. A thing that does not live gives 0, 0, 0.
+	const auto object = PopObject();
+	const auto destination = ecs::script_destination::Of(Locator::entitiesRegistry::value(), object);
+	if (!destination.has_value() || !Locator::terrainSystem::has_value())
+	{
+		PushVec(glm::vec3(0.0f));
+		return;
+	}
+	PushVec(map_coords::ToWorld(Locator::terrainSystem::value(), *destination));
 }
 
 void CreatureForceFinish() // 102 CREATURE_FORCE_FINISH
@@ -7011,13 +7022,15 @@ void SetAviSequence() // 203 SET_AVI_SEQUENCE
 
 void PlayGesture() // 204 PLAY_GESTURE
 {
-	// const auto unk4 = Pop().intVal;
-	// const auto unk3 = Pop().intVal;
-	// const auto unk2 = Pop().intVal;
-	// const auto unk1 = Pop().intVal;
-	// const auto unk0 = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// The shape of the gesture shows on the land as if this computer's player drew it: its square, so many metres
+	// across, goes from the point towards the east and the south. No gesture shows for gesture 0.
+	const auto size = Popf();
+	const auto corner = PopVec();
+	const auto gesture = static_cast<GestureType>(Pop().intVal);
+	if (Locator::gestureSystem::has_value())
+	{
+		Locator::gestureSystem::value().ShowGestureOnLand(gesture, corner, size, std::nullopt);
+	}
 }
 
 /// The story moves a creature to a stage of growing up
@@ -8236,11 +8249,25 @@ void PlayedPercentage() // 260 PLAYED_PERCENTAGE
 
 void ObjectCastByObject() // 261 OBJECT_CAST_BY_OBJECT
 {
-	// const auto caster = Pop().uintVal;
-	// const auto spellInstance = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushb(false);
+	// Whether the thing made the miracle. With no thing, the game gives the same message as for a thing that is not a
+	// miracle.
+	const auto caster = PopObject();
+	const auto spellObject = PopObject();
+	const auto& registry = Locator::entitiesRegistry::value();
+	if (spellObject == entt::null || !registry.Valid(spellObject))
+	{
+		ScriptMessage("Spell Object does not exist");
+		Pushb(false);
+		return;
+	}
+	const auto* spell = registry.TryGet<const ecs::components::Spell>(spellObject);
+	if (spell == nullptr || caster == entt::null)
+	{
+		ScriptMessage("Object should be a spell");
+		Pushb(false);
+		return;
+	}
+	Pushb(ecs::spell_creator::CastBy(*spell, caster));
 }
 
 void IsWindMagicAtPos() // 262 IS_WIND_MAGIC_AT_POS
@@ -9703,7 +9730,7 @@ void CreateRandomVillagerOfTribe() // 353 CREATE_RANDOM_VILLAGER_OF_TRIBE
 
 void ToggleLeash() // 354 TOGGLE_LEASH
 {
-	const auto player = static_cast<PlayerNames>(Pop().intVal);
+	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
 	if (!Locator::leashSystem::has_value())
 	{
 		return;
@@ -10513,14 +10540,10 @@ void GetPlayerAlly() // 398 GET_PLAYER_ALLY
 	Pushf(strength);
 }
 
-/// The player a script names: its 0 is the first player on every computer, the others count from 1
+/// The player a script names: its 0 is the neutral player, the others count from 1
 PlayerNames ScriptPlayerName(int32_t scriptPlayer)
 {
-	if (scriptPlayer != 0)
-	{
-		return static_cast<PlayerNames>(scriptPlayer - 1);
-	}
-	return Locator::playerSystem::has_value() ? Locator::playerSystem::value().GetLocalPlayer() : PlayerNames::PLAYER_ONE;
+	return script::script_players::NameOf(scriptPlayer);
 }
 
 ecs::components::Player* ScriptPlayer(float number)
@@ -11065,10 +11088,16 @@ void GetTownAndVillagerHealthTotal() // 443 GET_TOWN_AND_VILLAGER_HEALTH_TOTAL
 
 void GameAddForBuilding() // 444 GAME_ADD_FOR_BUILDING
 {
-	// const auto unk1 = Pop().intVal;
-	// const auto unk0 = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// The town gets the building site of the thing as one of its own sites, so its builders work at it too. The site
+	// stays the site of the town of the building.
+	const auto town = PopObject();
+	const auto building = PopObject();
+	const auto& registry = Locator::entitiesRegistry::value();
+	const bool isTown = town != entt::null && registry.Valid(town) && registry.AllOf<ecs::components::Town>(town);
+	if (building == entt::null || !isTown || !ecs::construction::ShareSite(building, town))
+	{
+		ScriptMessage("Invalid objects");
+	}
 }
 
 void EnableDisableAlignmentMusic() // 445 ENABLE_DISABLE_ALIGNMENT_MUSIC

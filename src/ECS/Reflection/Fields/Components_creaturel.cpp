@@ -70,6 +70,7 @@ void openblack::ecs::reflection::RegisterFields_Components_creaturel(entt::meta_
 	    .Field<&components::CreatureLocomotion::destination>("destination")
 	    .Field<&components::CreatureLocomotion::ring>("ring")
 	    .Field<&components::CreatureLocomotion::ontoDestination>("ontoDestination")
+	    .Field<&components::CreatureLocomotion::scriptDestination>("scriptDestination")
 	    .Field<&components::CreatureLocomotion::follower>("follower")
 	    .Field<&components::CreatureLocomotion::routeWalker>("routeWalker")
 	    .Field<&components::CreatureLocomotion::firstSearchTurn>("firstSearchTurn")
