@@ -975,3 +975,45 @@ TEST(KeyframeTurns, PosesHaveTheSameBitsWithTheStore)
 		}
 	}
 }
+
+TEST(SkeletalAnimation, BonePlacesHaveTheBitsOfTheWholeSample)
+{
+	for (const uint32_t seed : {1u, 2u, 3u, 4u})
+	{
+		const TurnsFixture fixture(seed);
+		skeletal_animation::KeyframeTurns turns;
+		const std::array<uint32_t, 5> bones {3, 2, 0, 3, 9};
+		for (uint32_t time = 0; time < 1000; time += 37)
+		{
+			const auto poses = skeletal_animation::SampleCycle(fixture.animation, fixture.stand, time, fixture.skeleton);
+			const auto matrices = skeletal_animation::ComposeBoneMatrices(poses, fixture.skeleton.parents);
+			const auto places =
+			    skeletal_animation::BonePlacesInCycle(fixture.animation, fixture.stand, time, fixture.skeleton, bones, &turns);
+			ASSERT_EQ(places.size(), bones.size());
+			for (size_t i = 0; i < bones.size(); ++i)
+			{
+				if (bones.at(i) >= matrices.size())
+				{
+					EXPECT_FALSE(places[i].has_value()) << seed << " " << time;
+					continue;
+				}
+				ASSERT_TRUE(places[i].has_value()) << seed << " " << time;
+				const auto whole = glm::vec3(matrices[bones.at(i)][3]);
+				EXPECT_EQ(std::memcmp(&*places[i], &whole, sizeof(whole)), 0) << seed << " " << time << " " << bones.at(i);
+			}
+		}
+	}
+}
+
+TEST(SkeletalAnimation, BonePlacesOfAnAnimationWithNoFramesAreTheRest)
+{
+	const TurnsFixture fixture(6);
+	const Animation empty {.duration = 100, .looping = true, .rotatedJoints = {}, .translatedJoints = {}, .frames = {}};
+	const auto matrices = skeletal_animation::ComposeBoneMatrices(
+	    skeletal_animation::SampleCycle(empty, fixture.stand, 0, fixture.skeleton), fixture.skeleton.parents);
+	const std::array<uint32_t, 1> bone {3};
+	const auto places = skeletal_animation::BonePlacesInCycle(empty, fixture.stand, 0, fixture.skeleton, bone);
+	ASSERT_TRUE(places.front().has_value());
+	const auto whole = glm::vec3(matrices[3][3]);
+	EXPECT_EQ(std::memcmp(&*places.front(), &whole, sizeof(whole)), 0);
+}

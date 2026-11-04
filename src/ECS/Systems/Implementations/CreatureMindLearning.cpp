@@ -1147,19 +1147,27 @@ std::optional<creature_tree::Belief> mind_detail::BeliefNowOf(const ecs::Registr
 	{
 		return std::nullopt;
 	}
-	if (const auto* heart = registry.TryGet<const TempleHeart>(entity))
-	{
-		return HeartBeliefOf(registry, heart->temple, entity, self);
-	}
+	// A temple's heart has a kind of belief, thus the search below gives it to the function that finds the heart
 	const auto type = BeliefKindOf(registry, entity);
 	if (!type.has_value())
 	{
 		return std::nullopt;
 	}
+	return BeliefNowOf(registry, entity, self, *type, ecs::thing_map_place::Of(registry, entity));
+}
+
+std::optional<creature_tree::Belief> mind_detail::BeliefNowOf(const ecs::Registry& registry, entt::entity entity,
+                                                              entt::entity self, uint32_t kind,
+                                                              const map_coords::MapCoords& place)
+{
+	if (const auto* heart = registry.TryGet<const TempleHeart>(entity))
+	{
+		return HeartBeliefOf(registry, heart->temple, entity, self);
+	}
 	const auto* me = registry.TryGet<const Creature>(self);
 	const auto* creature = registry.TryGet<const Creature>(entity);
 	auto belief = creature_tree::CommonBelief({
-	    .type = *type,
+	    .type = kind,
 	    .origin = OriginOf(registry, entity),
 	    .animate = registry.AnyOf<Villager, Animal, Creature>(entity),
 	    .player = BeliefPlayerOf(registry, entity),
@@ -1168,7 +1176,6 @@ std::optional<creature_tree::Belief> mind_detail::BeliefNowOf(const ecs::Registr
 	    .creatureType = creature != nullptr ? static_cast<uint32_t>(creature::InfoRow(creature->species)) : 0,
 	});
 	SetKindAttributes(registry, entity, me, belief);
-	const auto place = ecs::thing_map_place::Of(registry, entity);
 	belief.x = place.x;
 	belief.z = place.z;
 	return belief;
