@@ -2565,14 +2565,27 @@ bool Game::Update() noexcept
 			    {
 				    _frameGuard->Forget();
 			    }
-			    return PlayFrameStep(step, frame);
+			    const bool played = PlayFrameStep(step, frame);
+			    // The guard looks only at the frame writes of the steps that it looks at
+			    if (_frameGuard && Locator::temple::has_value())
+			    {
+				    std::ignore = Locator::temple::value().TakeFrameWrites();
+			    }
+			    return played;
 		    }
+		    // The temple of a game alone writes the synced world in some frame steps, as the original game does. The guard
+		    // knows these writers by name. All other writes in a frame step trip the guard. The temple can also write after
+		    // the draw, between two frames. The guard gives these changes and their writers to the next step.
+		    const auto frameWrites = [] {
+			    return Locator::temple::has_value() ? Locator::temple::value().TakeFrameWrites() : temple::FrameWrites {};
+		    };
 		    const auto landLoads = [] {
 			    return Locator::landSystem::has_value() ? Locator::landSystem::value().LandLoads() : 0U;
 		    };
 		    const auto loadsBefore = landLoads();
 		    _frameGuard->Before();
 		    const bool played = PlayFrameStep(step, frame);
+		    const auto writers = frameWrites();
 		    if (!frame_write_guard::LooksAtStep(loadsBefore, landLoads()))
 		    {
 			    // The step loaded a land, which makes a new synced world: the next step takes a new sample
@@ -2585,7 +2598,8 @@ bool Game::Update() noexcept
 		    }
 		    else
 		    {
-			    _frameGuard->After(game_frame::Name(step), Locator::time::value().GetTurn());
+			    _frameGuard->After(game_frame::Name(step), Locator::time::value().GetTurn(), writers,
+			                       Locator::time::value().IsNetworkGame());
 		    }
 		    return played;
 	    }))

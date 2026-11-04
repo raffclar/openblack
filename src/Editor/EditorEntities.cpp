@@ -24,6 +24,7 @@
 #include "ECS/Archetypes/AbodeArchetype.h"
 #include "ECS/Archetypes/CreatureArchetype.h"
 #include "ECS/Archetypes/FeatureArchetype.h"
+#include "ECS/Archetypes/FieldArchetype.h"
 #include "ECS/Archetypes/MobileObjectArchetype.h"
 #include "ECS/Archetypes/MobileStaticArchetype.h"
 #include "ECS/Archetypes/ScriptMarkerArchetype.h"
@@ -509,8 +510,27 @@ entt::entity Place(const PlaceItem& item, glm::vec3 position, float yawRadians)
 	case PlaceKind::Building:
 	{
 		const auto type = static_cast<AbodeInfo>(item.type);
+		const auto townId = TownFor(position, type);
+		// As the game does, a building row of the field kind makes a field of the second row of the fields' table, and a
+		// row of the dispenser kind makes a miracle dispenser with no miracle. A row of the citadel kind is a plain building.
+		const auto row = static_cast<size_t>(type);
+		const auto& rows = Locator::infoConstants::value().abode;
+		const auto abodeType = row < rows.size() ? rows.at(row).abodeType : AbodeType::General;
+		if (abodeType == AbodeType::Field)
+		{
+			return FieldArchetype::Create(static_cast<int>(townId), position, FieldTypeInfo::WheatWithFence, yawRadians);
+		}
+		if (abodeType == AbodeType::SpellDispenser)
+		{
+			const auto& towns = Locator::entitiesRegistry::value().Context().towns;
+			const auto town = towns.find(townId);
+			return Locator::magicSystem::has_value()
+			           ? Locator::magicSystem::value().CreateScriptDispenser(position, type, yawRadians, 1.0f,
+			                                                                 town != towns.end() ? town->second : entt::null)
+			           : entt::null;
+		}
 		constexpr uint32_t k_Store = 100;
-		return AbodeArchetype::Create(TownFor(position, type), position, type, yawRadians, 1.0f, k_Store, k_Store);
+		return AbodeArchetype::Create(townId, position, type, yawRadians, 1.0f, k_Store, k_Store);
 	}
 	case PlaceKind::Tree:
 		return TreeArchetype::Create(0, position, static_cast<TreeInfo>(item.type), true, yawRadians, 1.0f, 1.0f);

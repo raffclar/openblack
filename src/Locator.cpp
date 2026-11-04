@@ -937,9 +937,14 @@ void openblack::InitializeLevel(const LandData& land)
 	InitializeLevelWith([&land] { Locator::terrainSystem::emplace<LandIsland>(land); });
 }
 
-void openblack::InitializeLevelOnOpenLand()
+void openblack::InitializeLevelOnOpenLand(OpenLandAltitudes altitudes)
 {
-	InitializeLevelWith([] {
+	InitializeLevelWith([altitudes] {
+		if (altitudes == OpenLandAltitudes::Kept)
+		{
+			SPDLOG_LOGGER_INFO(spdlog::get("game"), "The level keeps its land with the altitudes that it has now");
+			return;
+		}
 		const auto restored = Locator::terrainSystem::value().RestoreBuiltAltitudes();
 		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The level keeps its land: {} cells went back to their built altitude",
 		                   restored);

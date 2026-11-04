@@ -39,6 +39,10 @@ struct ReadCommands
 	std::optional<std::string> error;
 };
 
+/// Whether the commands of a map script load a landscape. A script with no landscape line puts its land on the
+/// landscape that is open, as the game does.
+[[nodiscard]] bool LoadsLandscape(const ReadCommands& read);
+
 class Script
 {
 public:

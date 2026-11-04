@@ -30,6 +30,7 @@
 #include "ECS/Systems/SavedStateInterface.h"
 #include "Enums.h"
 #include "Temple/ScrollPictureLine.h"
+#include "Temple/TempleFrameWrites.h"
 
 namespace openblack
 {
@@ -248,6 +249,10 @@ public:
 	virtual void FrameDrawn() = 0;
 	/// The player goes into the temple when the frame that is drawn now ends
 	[[nodiscard]] virtual bool GoesInAfterFrame() const = 0;
+	/// Records a write of the synced world that the temple does in a frame step, as the original game does
+	virtual void NoteFrameWrite(temple::FrameWrite write) = 0;
+	/// The frame writes since the last call. The frame write guard knows them as allowed writers.
+	[[nodiscard]] virtual temple::FrameWrites TakeFrameWrites() = 0;
 	/// Takes the player to a room of the temple, from outside or from another room, and keeps them there, as the game
 	/// does with the save game room once the game is over: going to another room or out of the temple ends the game
 	virtual void EnterLockedRoom(TempleRoom room) = 0;

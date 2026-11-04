@@ -23,9 +23,11 @@ that step, but it tells each turn at which the step changed the synced world. Th
 next steps. The summary shows these map changes apart, as the known testbed runner class: they are not writes of the game.
 
 In a game alone the temple is entered and left from the frame by the keys, the mouse, the multiplayer front end, the way
-out and a key in the creature cave, as the original game does (deviation 81; the user's answer TE-1). These steps change
-the saved state of the help text, the dialogue, the script and film owners and the temple. The summary shows them apart,
-as the known temple frame class. A network land never shows them in this class.
+out and a key on a scroll (for example in the creature cave), as the original game does (deviation 81; the user's
+answer TE-1). These writers change the saved state of the help text, the dialogue, the script and film owners and the
+temple. The game names each of them as an allowed writer of its frame step, and logs their changes on lines of their own.
+The summary shows these lines apart, as the known temple frame class. Any other change in the same step and part stays a
+change. A network game has no allowed writers.
 
 The kinds: rows (a frame step made or removed an entity), order (it added, removed or moved a row of a component, which
 the value hash does not see), value (it changed the values of a component), field (with --fields: the field that
@@ -64,6 +66,8 @@ LANDS = {
                   "--sim-all-computer-gods", "--sim-ai-seed", "1"],
     "ring32": ["--gods-ring-map", "--sim-network-game", "--sim-all-computer-gods", "--sim-ai-seed", "1"],
 }
+ALLOWED_LINE = re.compile(r"Frame write guard: the allowed writer (.+?) changed the synced part (.+?) in the frame step "
+                          r"(\S+) at turn (\d+)\s*$")
 TOOL_LINE = re.compile(r"Frame write guard: the tool step (\S+) changed the synced world at turn (\d+)\s*$")
 # The parts that the map changes when it files a thing: after the testbed runner made or moved things, these changes are
 # the runner's, not the game's
@@ -71,10 +75,6 @@ MAP_FILING = {"FixedOutline", "MapCellResident", "MapCellMover", "map"}
 # A change of the map files the runner's things in the same turn or in the turn after it
 RUNNER_TURNS = 1
 LAND_PREFIX = "land:"
-# The known temple frame class: the frame steps that enter or leave the temple in a game alone, and the systems that they
-# change, as the original game does from the frame (deviation 81)
-TEMPLE_FRAME_STEPS = {"Camera", "FrameClock", "Interface", "Temple"}
-TEMPLE_FRAME_SYSTEMS = {"helpText", "dialogueControl", "scriptControl", "cinematicDirector", "temple"}
 SCENARIO_ID = re.compile(r"^[a-z0-9_]+[.][a-z0-9_.]+$")
 # The launch switches of the game: the game finds them anywhere on its command line after a "-" or a "/"
 SWITCH_IN_PATH = re.compile(r"[-/\\](skirmish|newgame|multiplayer|land|convert|version|editor|noloadmusic|"
@@ -108,6 +108,18 @@ def parse_log(lines):
                         "turn": int(match.group(3)), "entity": int(match.group(4)) if match.group(4) else None,
                         "values": match.group(5)})
     return changes
+
+
+def parse_allowed(lines):
+    """The changes of the allowed writers of the game (the temple of a game alone) in the lines of a game log"""
+    allowed = []
+    for line in lines:
+        match = ALLOWED_LINE.search(line)
+        if match:
+            kind, component = kind_of(match.group(2))
+            allowed.append({"writer": match.group(1), "part": match.group(2), "kind": kind, "component": component,
+                            "step": match.group(3), "turn": int(match.group(4))})
+    return allowed
 
 
 def parse_tool_turns(lines):
@@ -229,13 +241,15 @@ def run(options):
             code = process.wait()
         changes = []
         tool_turns = []
+        allowed = []
         if os.path.exists(log):
             with open(log, encoding="utf-8", errors="replace") as file:
                 lines = file.readlines()
             changes = parse_log(lines)
             tool_turns = parse_tool_turns(lines)
+            allowed = parse_allowed(lines)
         record = {"item": item, "code": code, "timeout": timed_out, "seconds": round(time.monotonic() - started, 1),
-                  "changes": changes, "toolTurns": tool_turns}
+                  "changes": changes, "toolTurns": tool_turns, "allowed": allowed}
         with open(done, "w", encoding="utf-8") as file:
             json.dump(record, file)
         with open(records, "a", encoding="utf-8") as file:
@@ -261,17 +275,12 @@ def read_records(out):
     return list(records.values())
 
 
-def from_temple_frame(item, change):
-    """Whether a change is the temple entry or exit of a game alone, which the original game does from the frame"""
-    return (not item.startswith(LAND_PREFIX) and change["kind"] == "system" and change["step"] in TEMPLE_FRAME_STEPS
-            and change["component"] in TEMPLE_FRAME_SYSTEMS)
-
-
 def summarise(records, systems=False, runner=None, temple=None):
     """The lines of the summary: one for each scenario, step, component and kind, the first turn and the fields; the
     bad exits; and the count of the scenarios of each step, component and kind. The changes of the known testbed
-    runner class go into the list runner, when it is given, and not into the lines. The changes of the known temple frame
-    class go into the list temple, when it is given, and not into the lines."""
+    runner class go into the list runner, when it is given, and not into the lines. The changes of the allowed writers of
+    the game (the known temple frame class) go into the list temple, when it is given. The game logs them apart, so they
+    are never in the lines."""
     lines = []
     totals = defaultdict(list)
     bad = []
@@ -281,12 +290,13 @@ def summarise(records, systems=False, runner=None, temple=None):
         grouped = {}
         tool_turns = record.get("toolTurns", [])
         runner_keys = set()
+        if temple is not None:
+            for change in record.get("allowed", []):
+                if change["kind"] != "system" or systems:
+                    temple.append(f"{record['item']}  {change['step']}  {change['component']}  {change['kind']}"
+                                  f"  turn {change['turn']}  by {change['writer']}")
         for change in record["changes"]:
             if change["kind"] == "system" and not systems:
-                continue
-            if from_temple_frame(record["item"], change):
-                if temple is not None:
-                    temple.append(f"{record['item']}  {change['step']}  {change['component']}  system  turn {change['turn']}")
                 continue
             if from_runner(change, tool_turns):
                 component = change["component"].split(".")[0]
@@ -345,8 +355,8 @@ def summary(options):
             for line in runner:
                 print("  " + line)
         if temple:
-            print("known temple frame class (a game alone enters or leaves the temple from the frame, as the original game"
-                  " does; deviation 81):")
+            print("known temple frame class (the allowed writers of a game alone: the temple entry and exit, the"
+                  " multiplayer front end and a scroll key write from the frame, as the original game does; deviation 81):")
             for line in temple:
                 print("  " + line)
     return 1 if options.fail and (lines or bad) else 0
@@ -391,26 +401,34 @@ def self_test():
     assert lines == ["e.f  Entities  Transform  value  turn 5", "e.f  Hand  MapCellMover  value  turn 9"], lines
     assert runner == ["e.f  Entities  MapCellResident  value  turn 6", "e.f  Entities  FixedOutline  order  turn 5",
                       "e.f  Entities  MapCellResident  field  turn 5"], runner
-    # The temple of a game alone writes its systems from the frame, as the original game does; a network land does not
+    # The temple of a game alone writes its systems from the frame, as the original game does. The game names these
+    # writers. Any other write stays a change, also a write of the same system in the same step.
     temple_log = [
-        "[game] [warning] Frame write guard: the frame step Temple changed the synced part system helpText at turn 21"
-        " (values 2)",
-        "[game] [warning] Frame write guard: the frame step Interface changed the synced part system temple at turn 15",
+        "[game] [info] Frame write guard: the allowed writer temple exit changed the synced part system helpText in the"
+        " frame step Temple at turn 21",
+        "[game] [info] Frame write guard: the allowed writer multiplayer front end changed the synced part system temple"
+        " in the frame step Interface at turn 15",
         "[game] [warning] Frame write guard: the frame step Hand changed the synced part system helpText at turn 4",
         "[game] [warning] Frame write guard: the frame step Temple changed the synced part Transform at turn 21",
+        "[game] [warning] Frame write guard: the frame step Camera changed the synced part system dialogueControl at"
+        " turn 10 (values 0)",
     ]
     temple_changes = parse_log(temple_log)
+    temple_allowed = parse_allowed(temple_log)
+    assert [c["writer"] for c in temple_allowed] == ["temple exit", "multiplayer front end"], temple_allowed
+    assert not any(c["component"] == "temple" and c["step"] == "Interface" for c in temple_changes), temple_changes
     temple = []
     lines, _, _ = summarise([{"item": "temple.visit_again", "code": 0, "timeout": False, "seconds": 1.0,
-                              "changes": temple_changes}], systems=True, temple=temple)
-    assert temple == ["temple.visit_again  Temple  helpText  system  turn 21",
-                      "temple.visit_again  Interface  temple  system  turn 15"], temple
-    assert lines == ["temple.visit_again  Hand  helpText  system  turn 4",
+                              "changes": temple_changes, "allowed": temple_allowed}], systems=True, temple=temple)
+    assert temple == ["temple.visit_again  Temple  helpText  system  turn 21  by temple exit",
+                      "temple.visit_again  Interface  temple  system  turn 15  by multiplayer front end"], temple
+    assert lines == ["temple.visit_again  Camera  dialogueControl  system  turn 10 (values 0)",
+                     "temple.visit_again  Hand  helpText  system  turn 4",
                      "temple.visit_again  Temple  Transform  value  turn 21"], lines
     temple = []
-    lines, _, _ = summarise([{"item": "land:twogods", "code": 0, "timeout": False, "seconds": 1.0,
-                              "changes": temple_changes}], systems=True, temple=temple)
-    assert temple == [] and len(lines) == 4, (temple, lines)
+    lines, _, _ = summarise([{"item": "temple.visit_again", "code": 0, "timeout": False, "seconds": 1.0,
+                              "changes": temple_changes, "allowed": temple_allowed}], temple=temple)
+    assert temple == [] and len(lines) == 1, (temple, lines)
     assert SWITCH_IN_PATH.search("/x/multiplayer.page") and SWITCH_IN_PATH.search("E:\\b\\-Land2")
     assert not SWITCH_IN_PATH.search("E:/openblack/builds/mp-guard-sweep-2/bin/openblack")
     print("self-test passed")

@@ -10,6 +10,7 @@
 #include "FrameWriteGuard.h"
 
 #include <algorithm>
+#include <array>
 #include <span>
 #include <string>
 #include <unordered_map>
@@ -145,6 +146,44 @@ std::vector<size_t> ChangedValues(const Sample& before, const Sample& after, con
 	return changed;
 }
 
+bool MayChange(temple::FrameWrite write, std::string_view part)
+{
+	if (!part.starts_with(k_SystemPart))
+	{
+		return false;
+	}
+	static constexpr std::array<std::string_view, 4> k_HelpSystems = {"helpText", "dialogueControl", "scriptControl",
+	                                                                  "cinematicDirector"};
+	const auto system = part.substr(k_SystemPart.size());
+	if (std::ranges::find(k_HelpSystems, system) != k_HelpSystems.end())
+	{
+		return true;
+	}
+	return system == "temple" && write != temple::FrameWrite::ScrollKey;
+}
+
+Judgement Judge(std::span<const std::string> parts, const temple::FrameWrites& writers, bool networkGame)
+{
+	static constexpr std::array k_Writers = {temple::FrameWrite::Entry, temple::FrameWrite::Exit,
+	                                         temple::FrameWrite::MultiplayerFrontEnd, temple::FrameWrite::ScrollKey};
+	Judgement judgement;
+	for (const auto& part : parts)
+	{
+		const auto writer = std::ranges::find_if(k_Writers, [&](temple::FrameWrite write) {
+			return !networkGame && writers.Contains(write) && MayChange(write, part);
+		});
+		if (writer != k_Writers.end())
+		{
+			judgement.allowed.emplace_back(*writer, part);
+		}
+		else
+		{
+			judgement.tripped.push_back(part);
+		}
+	}
+	return judgement;
+}
+
 Guard::Guard(bool byField, bool systems)
     : _context(std::make_unique<entt::meta_ctx>())
     , _byField(byField)
@@ -220,7 +259,7 @@ void Guard::Before()
 	_last.reset();
 }
 
-void Guard::After(std::string_view step, uint32_t turn)
+void Guard::After(std::string_view step, uint32_t turn, const temple::FrameWrites& writers, bool networkGame)
 {
 	_last = Take();
 	const auto& after = *_last;
@@ -229,7 +268,20 @@ void Guard::After(std::string_view step, uint32_t turn)
 	{
 		return;
 	}
-	for (auto& part : ChangedParts(_before, after))
+	auto judgement = Judge(ChangedParts(_before, after), writers, networkGame);
+	for (auto& [writer, part] : judgement.allowed)
+	{
+		auto key = std::make_pair(std::string(temple::Name(writer)), std::move(part));
+		if (!_allowed.contains(key))
+		{
+			SPDLOG_LOGGER_INFO(
+			    spdlog::get("game"),
+			    "Frame write guard: the allowed writer {} changed the synced part {} in the frame step {} at turn {}",
+			    key.first, key.second, step, turn);
+			_allowed.insert(std::move(key));
+		}
+	}
+	for (auto& part : judgement.tripped)
 	{
 		auto key = std::make_pair(std::string(step), std::move(part));
 		if (!_found.contains(key))

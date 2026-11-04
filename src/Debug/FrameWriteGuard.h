@@ -25,6 +25,7 @@
 #include <entt/meta/fwd.hpp>
 
 #include "ECS/SyncedState.h"
+#include "Temple/TempleFrameWrites.h"
 
 namespace openblack::frame_write_guard
 {
@@ -68,6 +69,25 @@ inline constexpr std::string_view k_SystemPart = "system ";
 /// changed. A part that only one sample has also differs.
 [[nodiscard]] std::vector<std::string> ChangedParts(const Sample& before, const Sample& after);
 
+/// Whether a frame write of the temple can change a part of the synced world. The temple of a game alone writes only the
+/// saved state of these systems from the frame: the help text, the dialogue, the scripts, the bars and the temple. A
+/// key on a scroll does not change the temple.
+[[nodiscard]] bool MayChange(temple::FrameWrite write, std::string_view part);
+
+/// The changed parts of a frame step, in two lists
+struct Judgement
+{
+	/// Each part that an allowed writer of the step can change, with the first writer that can change it
+	std::vector<std::pair<temple::FrameWrite, std::string>> allowed;
+	/// Each other part. These parts trip the guard.
+	std::vector<std::string> tripped;
+};
+
+/// Puts each changed part of a frame step into a list. A part goes to an allowed writer that wrote in the step and that
+/// can change the part. All other parts trip the guard. A network game has no allowed writers, because its temple does not
+/// stop the world.
+[[nodiscard]] Judgement Judge(std::span<const std::string> parts, const temple::FrameWrites& writers, bool networkGame);
+
 /// Whether the guard tells the changes of a frame step. A step that loads a land makes a new synced world. That is not a
 /// frame step that writes in the world of a game, so the guard does not look at it.
 [[nodiscard]] constexpr bool LooksAtStep(uint32_t landLoadsBefore, uint32_t landLoadsAfter)
@@ -94,8 +114,9 @@ public:
 	void Before();
 	/// A step that the guard does not look at ran: the next step takes a new sample before it
 	void Forget() { _last.reset(); }
-	/// Takes the sample after the frame step and tells the parts that the step changed for the first time
-	void After(std::string_view step, uint32_t turn);
+	/// Takes the sample after the frame step and tells the parts that the step changed for the first time. The guard tells
+	/// the parts of the allowed writers of the step apart from the other parts.
+	void After(std::string_view step, uint32_t turn, const temple::FrameWrites& writers = {}, bool networkGame = false);
 	/// Takes the sample after a step of the tools, which can change the synced world, as the testbed runner does in the
 	/// debug windows. The guard does not tell the parts. It tells only the turn of the change, once for each turn, so
 	/// that a tool can know the changes that the next steps make from it.
@@ -103,6 +124,8 @@ public:
 
 	/// Each step and each part that the step changed, as the guard found them
 	[[nodiscard]] const std::set<std::pair<std::string, std::string>>& Found() const { return _found; }
+	/// Each allowed writer and each part that it changed, as the guard found them
+	[[nodiscard]] const std::set<std::pair<std::string, std::string>>& Allowed() const { return _allowed; }
 
 private:
 	[[nodiscard]] Sample Take() const;
@@ -113,6 +136,7 @@ private:
 	Sample _before;
 	std::optional<Sample> _last;
 	std::set<std::pair<std::string, std::string>> _found;
+	std::set<std::pair<std::string, std::string>> _allowed;
 	/// The turns at which a step of the tools changed the synced world
 	std::set<uint32_t> _toolTurns;
 };
