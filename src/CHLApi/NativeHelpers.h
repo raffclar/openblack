@@ -70,8 +70,6 @@ glm::vec3 PopVec();
 void PushVec(const glm::vec3& vec);
 std::string PopString();
 bool IsScriptObject(const ecs::Registry& registry, entt::entity thing);
-entt::entity CreateScriptObject(script::ObjectType type, uint32_t subtype, const glm::vec3& position, float altitude,
-                                float xAngleRadians, float yAngleRadians, float zAngleRadians, float scale);
 VMValue Pop(DataType& type);
 VMValue Pop();
 float Popf();
@@ -125,5 +123,9 @@ float LivingAngleOf(entt::entity object, const ecs::components::Transform& trans
 void TurnLivingThing(entt::entity object, ecs::components::Transform& transform, float angle);
 void TurnPlacedThing(entt::entity object, const glm::vec3& angles, bool lean);
 float ScriptHeightOf(entt::entity object);
+
+// In CHLApi/ObjectNatives.cpp
+entt::entity CreateScriptObject(script::ObjectType type, uint32_t subtype, const glm::vec3& position, float altitude,
+                                float xAngleRadians, float yAngleRadians, float zAngleRadians, float scale);
 
 } // namespace openblack::chlapi
