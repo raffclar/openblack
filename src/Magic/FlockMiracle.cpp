@@ -159,6 +159,10 @@ void FlockMiracle::ProcessTurn(SpellServicesInterface& services, Spell& spell)
 	{
 		spell.position = registry.Get<const ecs::components::Transform>(leader).position;
 	}
+	// The hand's trail closes down in the turn after the last animal was made, also after the miracle is over
+	const bool trailStops =
+	    flock::TrailStops(data->created, flock::NumberToCreate(TablesOf(services.Info(), spell.magicType).numberToCreate,
+	                                                           services.TribalPower(spell)));
 	// The animals are made along the sweep until they all are, even once the miracle is over
 	Emit(services, spell);
 	if (!spell.closedDown)
@@ -174,16 +178,11 @@ void FlockMiracle::ProcessTurn(SpellServicesInterface& services, Spell& spell)
 			animals.StartFading(animal);
 		}
 	}
-	// The hand's trail follows the hand while the animals are being made, and closes once they all are
-	if (data->castEffect != 0 && Locator::effectRequestSystem::has_value())
+	// The frames move the trail with the hand. The turn only closes it down.
+	if (trailStops && data->castEffect != 0 && Locator::effectRequestSystem::has_value())
 	{
-		auto& effects = Locator::effectRequestSystem::value();
-		effects.SetProcessInfo(data->castEffect, spell.processInfo);
-		if (!FollowsHand(services, spell))
-		{
-			effects.Stop(data->castEffect);
-			data->castEffect = 0;
-		}
+		Locator::effectRequestSystem::value().Stop(data->castEffect);
+		data->castEffect = 0;
 	}
 	// The leader wanders about wherever it is now
 	if (const auto leader = animals.LeaderOf(data->flock); leader != entt::null)
@@ -207,13 +206,16 @@ void FlockMiracle::Emit(SpellServicesInterface& services, Spell& spell)
 	if (!data.castEffectStarted && !tables.ground && spell.fromLocalHand && Locator::effectRequestSystem::has_value())
 	{
 		data.castEffectStarted = true;
-		// Only the computer of the hand shows the trail, so the particles of this computer give it its number
+		// Only the computer of the hand shows the trail, so the particles of this computer give it its number. It steps in
+		// each frame at the hand, and a save does not keep it.
 		data.castEffect = Locator::effectRequestSystem::value().StartHere({
 		    .type = data.evil ? ParticleType::FlockFlyingCastEvil : ParticleType::FlockFlyingCastGood,
 		    .position = spell.processInfo.handPosition,
 		    .synced = false,
 		    .player = static_cast<int>(spell.caster.player),
 		    .processInfo = spell.processInfo,
+		    .saved = false,
+		    .followsLocalHand = true,
 		});
 	}
 	if (data.created >= number)

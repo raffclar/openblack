@@ -133,7 +133,9 @@ void openblack::ecs::reflection::RegisterFields_Components_m(entt::meta_ctx& con
 	    .Field<&components::MistDome::colour>("colour");
 	Reflect<components::Mobile>(context).Field<&components::Mobile::dummy>("dummy");
 	Reflect<components::MobileStatic>(context).Field<&components::MobileStatic::type>("type");
-	Reflect<components::MobileObject>(context).Field<&components::MobileObject::type>("type");
+	Reflect<components::MobileObject>(context)
+	    .Field<&components::MobileObject::type>("type")
+	    .Field<&components::MobileObject::footballRecord>("footballRecord");
 	Reflect<components::PlacedHeight>(context)
 	    .Field<&components::PlacedHeight::height>("height")
 	    .Field<&components::PlacedHeight::position>("position");

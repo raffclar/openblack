@@ -29,6 +29,10 @@ struct MobileStatic
 struct MobileObject
 {
 	MobileObjectInfo type; ///< This is 32 bits but could be 8 bits if stored in uint8_t
+	/// The thing takes its values from the record of the football, not from its row of the loose objects' table. Its type
+	/// is then the loose kind of that record. Only a football that went through a vortex comes out like this. It has the
+	/// look and the weight of the football, but it is not a football.
+	bool footballRecord {false};
 };
 
 /// A static thing's height above the land as it was put down, kept once the land under it has been changed (it doesn't

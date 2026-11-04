@@ -62,6 +62,7 @@
 #include "ECS/CreatureFromFile.h"
 #include "ECS/FootpathRules.h"
 #include "ECS/GamePlayers.h"
+#include "ECS/MobileObjectRecord.h"
 #include "ECS/PlayerTowns.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
@@ -825,7 +826,10 @@ void FeatureScriptCommands::CreateTownTemporaryPots(int32_t, int32_t, int32_t)
 
 void FeatureScriptCommands::CreateMobileObject(glm::vec3 position, MobileObjectInfo type, int32_t rotation, int32_t scale)
 {
-	LastObject() = MobileObjectArchetype::Create(position, type, rotation * 0.001f, scale * 0.001f);
+	// The row of the football's record makes a loose object of that record, not a football
+	const auto kind = ecs::mobile_object_record::FromRow(Locator::infoConstants::value(), static_cast<int32_t>(type))
+	                      .value_or(ecs::components::MobileObject {.type = type});
+	LastObject() = MobileObjectArchetype::Create(position, kind, rotation * 0.001f, scale * 0.001f);
 }
 
 void FeatureScriptCommands::CreateMobileStatic(glm::vec3 position, MobileStaticInfo type, float yRotation, float scale)

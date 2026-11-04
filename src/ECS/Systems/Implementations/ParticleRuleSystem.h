@@ -31,6 +31,7 @@
 #include <entt/signal/sigh.hpp>
 
 #include "3D/WaterRings.h"
+#include "Common/FramePace.h"
 #include "ECS/Systems/ParticleRuleSystemInterface.h"
 #include "ParticleObjectEffects.h"
 #include "Particles/ParticleClassRegistry.h"
@@ -390,6 +391,8 @@ private:
 	/// all the time, started again whenever they end
 	EffectId _gestureTrails {k_NoEffect};
 	EffectId _gestureChain {k_NoEffect};
+	/// When the effects that follow this computer's hand take their next step
+	frame_pace::Pace _localHandPace;
 	/// The effect round the hand while the miracle selection or the leash picker is open
 	EffectId _selectionEffect {k_NoEffect};
 	struct Running
@@ -401,6 +404,8 @@ private:
 		bool ownedBySpell {false};
 		/// Stepped every frame, not by ProcessTurn
 		bool everyFrame {false};
+		/// Stepped every frame at this computer's hand, with the size of the hand. A save does not keep it.
+		bool atLocalHand {false};
 		/// One of the temple's rooms' effects, drawn only while the player is in the temple
 		bool inTemple {false};
 		/// Drawn only by itself, never with the world's or the temple's effects
@@ -438,6 +443,8 @@ private:
 	void AddSheetNames(const particles::Effect& effect);
 	/// The gesture trails' effect, started when it isn't running
 	void KeepGestureTrails();
+	/// Steps the effects that follow this computer's hand, in a frame where they are due
+	void StepLocalHandEffects(const HandFrame& hand);
 	/// The sparks showers over objects move on by a frame's game time
 	void StepShowers(float gameSeconds);
 

@@ -19,6 +19,7 @@
 
 #include "Common/PortableMath.h"
 #include "ECS/Components/Animal.h"
+#include "ECS/Components/Ball.h"
 #include "ECS/Components/CarriedByTornado.h"
 #include "ECS/Components/DeadTree.h"
 #include "ECS/Components/Flock.h"
@@ -36,6 +37,7 @@
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/LandFollowers.h"
+#include "ECS/MobileObjectRecord.h"
 #include "ECS/Registry.h"
 #include "ECS/VillagerAge.h"
 #include "ECS/WorkshopRules.h"
@@ -196,7 +198,15 @@ std::optional<Line> ecs::vortex_crossing::LineFor(const Registry& registry, entt
 	if (const auto* mobile = registry.TryGet<const MobileObject>(thing))
 	{
 		return MobileObjectLine {.offset = offset,
-		                         .row = static_cast<int32_t>(mobile->type),
+		                         .row = mobile_object_record::Row(*mobile),
+		                         .yAngle = YAngleOf(transform->rotation),
+		                         .scale = scale};
+	}
+	// The football writes the line of a plain loose object, with the row of the football's record
+	if (registry.AllOf<Ball>(thing))
+	{
+		return MobileObjectLine {.offset = offset,
+		                         .row = mobile_object_record::k_FootballRow,
 		                         .yAngle = YAngleOf(transform->rotation),
 		                         .scale = scale};
 	}
@@ -275,7 +285,7 @@ std::vector<entt::entity> ecs::vortex_crossing::IdenticalMobileObjects(const Reg
 	registry.Each<const MobileObject, const Transform>(
 	    [&](entt::entity other, const MobileObject& otherMobile, const Transform& otherTransform) {
 		    // Only those lying on the land are found there: not one flying, held or being taken
-		    if (other == thing || otherMobile.type != mobile->type ||
+		    if (other == thing || otherMobile.type != mobile->type || otherMobile.footballRecord != mobile->footballRecord ||
 		        registry.AnyOf<InPhysics, InHand, CarriedByTornado>(other) || !world.filedAsMobileObject(other))
 		    {
 			    return;

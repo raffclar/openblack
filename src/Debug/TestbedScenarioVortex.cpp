@@ -515,6 +515,32 @@ void testbed_scenarios::AddVortexScenarios(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "story.vortex_throws_out_a_football",
+	    .name = "A vortex into the land throws out a football that crossed",
+	    .facet = Facet::Miracles,
+	    .description = "A vortex into a land opens on the flat plane after a second, as Land 2's opens when the player "
+	                   "arrives, with a crossing file that holds the line of a football that the old land's vortex took: "
+	                   "a plain loose object line with the row of the football's record (-3324), and a cow.",
+	    .expected = "A thing with the football's model comes out first, thrown out of the vortex about 16 m from its "
+	                "middle, tumbling, and lands. It has the size and the weight of the football, but it is a plain loose "
+	                "object, not a football: no town plays with it and the inspector calls it a MobileObject of the "
+	                "football record. This is the game's own result (vanilla-bugs 925, kept). Then the cow comes out, "
+	                "then new villagers until 30 have come out.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_OnThePlane.x - 40.0f, 50.0f, k_OnThePlane.y - 70.0f},
+	                .look = {k_OnThePlane.x, 0.0f, k_OnThePlane.y}},
+	    .vortices = {{.type = VortexType::Out,
+	                  .offset = k_OnThePlane,
+	                  .delaySeconds = 1.0f,
+	                  .crossingLines = {"CREATE_MOBILEOBJECT(\"-20.46,0.00\", -3324, 500, 1000)",
+	                                    "CREATE_NEW_ANIMAL(\"12.00,-6.00\", 8, -1, -1, 6)"},
+	                  .gatheringOffset = k_OnThePlane + glm::vec2(0.0f, -30.0f),
+	                  .flockDistance = 27.0f,
+	                  .flockRadius = 48.0f}},
+	});
+
+	all.push_back({
 	    .id = "story.vortex_creature_keeps_clear",
 	    .name = "The creature walks round a vortex out of the land",
 	    .facet = Facet::Miracles,

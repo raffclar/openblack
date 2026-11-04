@@ -46,6 +46,8 @@ struct NameTables
 	std::vector<std::string> trees;
 	std::vector<std::string> features;
 	std::vector<std::string> mobileObjects;
+	/// The name of a loose object that takes its values from the record of the football
+	std::string footballRecord;
 	std::vector<std::string> mobileStatics;
 	/// By magic type, for the dispensers and bubbles
 	std::vector<std::string> miracles;

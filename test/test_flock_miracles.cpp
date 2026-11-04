@@ -53,6 +53,15 @@ TEST(FlockMiracleRules, BatsOnlyBelowTheSwitch)
 	EXPECT_FALSE(flock::IsEvil(0.5f, -0.2f));
 }
 
+TEST(FlockMiracleRules, TheTrailStopsInTheTurnAfterTheLastAnimal)
+{
+	// The turn that makes the last animal keeps the trail; the next turn closes it down
+	EXPECT_FALSE(flock::TrailStops(11, 12));
+	EXPECT_TRUE(flock::TrailStops(12, 12));
+	// A miracle that makes no animals closes its trail down in its first turn
+	EXPECT_TRUE(flock::TrailStops(0, 0));
+}
+
 TEST(FlockMiracleRules, TwelveASecondAlongTheSweep)
 {
 	float emitted = 0.0f;

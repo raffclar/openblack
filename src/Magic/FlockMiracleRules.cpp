@@ -33,6 +33,11 @@ bool flock::IsEvil(float alignment, float alignmentSwitch)
 	return alignment < alignmentSwitch;
 }
 
+bool flock::TrailStops(int createdBeforeTurn, int number)
+{
+	return createdBeforeTurn >= number;
+}
+
 float flock::EmitAfterTurn(float emitted, float turnSeconds)
 {
 	return emitted + (k_EmitPerSecond * turnSeconds);
