@@ -300,7 +300,12 @@ private:
 
 std::span<const Matrix> KeyframeTurns::Of(const Animation& animation, size_t frame, bool mirrored)
 {
-	auto& frames = _animations[&animation];
+	// The calls for the frames of one animation come one after another, thus the store keeps the last place that it found
+	if (_last.animation != &animation)
+	{
+		_last = {.animation = &animation, .frames = &_animations[&animation]};
+	}
+	auto& frames = *_last.frames;
 	if (frames.size() != animation.frames.size())
 	{
 		frames.assign(animation.frames.size(), {});
@@ -333,6 +338,7 @@ void KeyframeTurns::Trim()
 	if (_animations.size() > k_MostAnimations)
 	{
 		_animations.clear();
+		_last = {};
 	}
 }
 

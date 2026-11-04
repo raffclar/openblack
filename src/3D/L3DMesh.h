@@ -123,7 +123,8 @@ public:
 	bool LoadFromFile(const std::filesystem::path& path) noexcept;
 	bool LoadFromBuffer(const std::vector<uint8_t>& data) noexcept;
 	/// A model made while the game runs from the triangles of another, whose skins it is drawn with (which must outlive
-	/// it): one submesh for each group of primitives
+	/// it): one submesh for each group of primitives. The mesh keeps a copy of its vertices and indices and gives them to
+	/// the graphics device again after a restore.
 	bool LoadMade(const L3DMesh& skinSource, std::span<const std::vector<L3DSubMesh::MadePrimitive>> subMeshes) noexcept;
 	/// A model of a file drawn with the skins of another (which must outlive it), as they change
 	bool LoadWithSkinsOf(const l3d::L3DFile& l3d, const L3DMesh& skinSource) noexcept;
