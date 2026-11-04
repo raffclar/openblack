@@ -15,7 +15,9 @@
 #include <iterator>
 #include <memory>
 #include <set>
+#include <span>
 #include <stdexcept>
+#include <string>
 #include <thread>
 #include <utility>
 #include <vector>
@@ -36,6 +38,7 @@
 #include "Server/Ed25519.h"
 #include "Server/LanRoom.h"
 #include "Server/LobbyBans.h"
+#include "Server/LobbyResults.h"
 #include "Server/LobbyStatus.h"
 #include "Server/TicketCheck.h"
 
@@ -104,6 +107,20 @@ struct GameRole::Parts
 	std::chrono::steady_clock::time_point nextMapSend {};
 	bool mapSending {false};
 	bool mapSent {false};
+	/// The end of the game for the lobby, signed with the key of the server
+	std::optional<ed25519::Seed> resultSeed;
+	std::string resultsAddress;
+	/// The gods of the room that play for a clan, from the lobby's last answer to a status report
+	std::vector<lobby_api::ServerStatusClan> clans;
+	/// The body of the report and its signature. The server sends the same bytes each time, so that the lobby knows the
+	/// report again.
+	std::string resultBody;
+	std::string resultSignature;
+	bool resultMade {false};
+	bool resultSending {false};
+	bool resultDone {false};
+	uint32_t resultSends {0};
+	std::chrono::steady_clock::time_point nextResultSend {};
 	/// The answers to the search of the clients on the local network
 	std::unique_ptr<online::LanResponder> lan;
 	std::string lanHost;
@@ -145,6 +162,47 @@ struct GameRole::Parts
 		});
 	}
 
+	void SendResult()
+	{
+		if (!lobby || !resultMade || resultDone || resultSending || resultSends >= lobby_results::k_MostSends ||
+		    std::chrono::steady_clock::now() < nextResultSend)
+		{
+			return;
+		}
+		resultSending = true;
+		++resultSends;
+		online::HttpRequest request {
+		    .method = online::HttpMethod::Post,
+		    .url = resultsAddress,
+		    .headers = {{"Content-Type", "application/json"}, {std::string(lobby_results::k_SignatureHeader), resultSignature}},
+		    .body = std::vector<uint8_t>(resultBody.begin(), resultBody.end())};
+		lobby->Send(std::move(request), [this](online::HttpResponse&& response) {
+			resultSending = false;
+			switch (lobby_results::NextAfter(response.status))
+			{
+			case lobby_results::Next::Done:
+			{
+				resultDone = true;
+				const auto answer = lobby_api::ParseResultAnswer(response.Text());
+				SPDLOG_LOGGER_INFO(spdlog::get("game"), "The lobby took the result of the game (result {})",
+				                   answer.has_value() ? std::to_string(answer->result) : std::string("not known"));
+				break;
+			}
+			case lobby_results::Next::Stop:
+				resultDone = true;
+				SPDLOG_LOGGER_WARN(spdlog::get("game"), "The lobby refused the result of the game (status {}): {}",
+				                   response.status, response.Text().substr(0, 200));
+				break;
+			case lobby_results::Next::SendAgain:
+				nextResultSend = std::chrono::steady_clock::now() + lobby_results::k_SendAgainAfter;
+				SPDLOG_LOGGER_WARN(spdlog::get("game"),
+				                   "The lobby did not take the result of the game (status {}), send {} of {}", response.status,
+				                   resultSends, lobby_results::k_MostSends);
+				break;
+			}
+		});
+	}
+
 	void Report(lobby_status::Phase phase)
 	{
 		if (!lobby || reporting || !host)
@@ -170,6 +228,7 @@ struct GameRole::Parts
 			if (reply.has_value())
 			{
 				nextReport = sentAt + std::chrono::seconds(reply->nextStatusIn);
+				clans = reply->clans;
 			}
 			const bool ok = reply.has_value() && reply->listed;
 			if (ok != listed)
@@ -331,6 +390,10 @@ std::optional<std::string> GameRole::Start(const NetworkSettings& settings, game
 		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The game server answers the search of the local network on UDP port {}",
 		                   online::lan_discovery::k_Port);
 	}
+	if (settings.resultKey.has_value() && settings.lobbyApi.empty())
+	{
+		return "the result key (--result-key) needs the address of the lobby (--lobby-api)";
+	}
 	if (!settings.lobbyApi.empty())
 	{
 		if (!IsAddress(settings.lobbyApi) || !settings.clientCertificate.has_value() || !settings.clientKey.has_value())
@@ -347,6 +410,17 @@ std::optional<std::string> GameRole::Start(const NetworkSettings& settings, game
 			base.pop_back();
 		}
 		parts.statusAddress = base + "/servers/" + settings.serverId + "/status";
+		if (settings.resultKey.has_value())
+		{
+			std::ifstream file(*settings.resultKey, std::ios::binary);
+			const std::string pem((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+			parts.resultSeed = ed25519::SeedOfPem(pem);
+			if (!parts.resultSeed.has_value())
+			{
+				return "the file of the result key is not an Ed25519 private key in PEM: " + settings.resultKey->string();
+			}
+			parts.resultsAddress = lobby_results::ResultsAddress(base, settings.serverId);
+		}
 		if (customMap.has_value())
 		{
 			parts.mapAddress = lobby_status::MapAddress(base, settings.serverId, *customMap);
@@ -401,8 +475,45 @@ void GameRole::Update()
 			parts.Report(lobby_status::PhaseOf(parts.host && parts.host->Started(), false));
 		}
 		parts.SendMap();
+		parts.SendResult();
 		parts.lobby->Poll();
 	}
+}
+
+bool GameRole::WantsResult() const
+{
+	const auto& parts = *_parts;
+	return parts.lobby && parts.resultSeed.has_value() && parts.host && !parts.resultMade;
+}
+
+void GameRole::ReportResult(const lobby_results::Game& game, std::span<const lobby_results::GodFigures> gods)
+{
+	auto& parts = *_parts;
+	if (!WantsResult())
+	{
+		return;
+	}
+	parts.resultMade = true;
+	const auto report = lobby_results::MakeReport(game, gods, parts.host->Seats(), parts.clans);
+	if (!report.has_value())
+	{
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The game {} has fewer than 2 gods with an account: no result for the lobby",
+		                   game.id);
+		parts.resultDone = true;
+		return;
+	}
+	parts.resultBody = lobby_api::ToJson(*report);
+	const auto signature = ed25519::Sign(*parts.resultSeed, lobby_results::SignedBytes(parts.resultBody));
+	if (!signature.has_value())
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The server cannot sign the result of the game {}", game.id);
+		parts.resultDone = true;
+		return;
+	}
+	parts.resultSignature = join_ticket::EncodeBase64Url(*signature);
+	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The game {} is decided at turn {}: the server sends the result of {} gods",
+	                   game.id, game.turn, report->gods.size());
+	parts.SendResult();
 }
 
 void GameRole::Close()
@@ -415,7 +526,7 @@ void GameRole::Close()
 	// The last report goes after the report that did not come back yet
 	const auto until = std::chrono::steady_clock::now() + k_LastReportLimit;
 	const auto wait = [&parts, until] {
-		while (parts.reporting && std::chrono::steady_clock::now() < until)
+		while ((parts.reporting || parts.resultSending) && std::chrono::steady_clock::now() < until)
 		{
 			parts.lobby->Poll();
 			std::this_thread::sleep_for(std::chrono::milliseconds(10));

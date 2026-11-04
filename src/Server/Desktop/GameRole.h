@@ -13,11 +13,13 @@
 
 #include <memory>
 #include <optional>
+#include <span>
 #include <string>
 
 #include <GameSocket.h>
 
 #include "Server/DedicatedServer.h"
+#include "Server/LobbyResults.h"
 #include "Server/LobbyStatus.h"
 #include "Server/LockstepHost.h"
 
@@ -43,6 +45,11 @@ public:
 	                                               std::optional<lobby_status::CustomMap> customMap);
 	/// Once a frame, before the turns: the sockets, the joins, the start and the defeat of the gods that did not come back
 	void Update();
+	/// True while the server has a lobby and a key for the results, and did not make the report of the game yet
+	[[nodiscard]] bool WantsResult() const;
+	/// Sends the end of the decided game to the lobby, signed with the key of the server. The server makes the report one
+	/// time and sends it again while the lobby does not answer. Nothing when the server does not want a result.
+	void ReportResult(const lobby_results::Game& game, std::span<const lobby_results::GodFigures> gods);
 	/// Tells the lobby that the server stops, and waits a short time for the answer
 	void Close();
 	[[nodiscard]] LockstepHost& Host();

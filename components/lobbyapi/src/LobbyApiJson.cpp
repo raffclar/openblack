@@ -16,6 +16,7 @@
 #include <limits>
 #include <string>
 #include <system_error>
+#include <utility>
 
 #include <fmt/format.h>
 #include <nlohmann/json.hpp>
@@ -616,6 +617,40 @@ std::string ToJson(const ServerStatus& status)
 	    {"gamever", status.gamever},
 	    {"players", players},
 	});
+}
+
+std::string ToJson(const ResultReport& report)
+{
+	auto gods = Json::array();
+	for (const auto& god : report.gods)
+	{
+		auto object = Json {
+		    {"account", god.account},
+		    {"clan", god.clan.has_value() ? Json(*god.clan) : Json(nullptr)},
+		    {"position", god.position},
+		};
+		// The lobby takes a figure that is not known as a figure that is not there
+		if (god.godsDefeated.has_value())
+		{
+			object["gods_defeated"] = *god.godsDefeated;
+		}
+		if (god.timePlayed.has_value())
+		{
+			object["time_played"] = *god.timePlayed;
+		}
+		gods.push_back(std::move(object));
+	}
+	return Dump(Json {
+	    {"game", report.game},
+	    {"land", report.land},
+	    {"gods", gods},
+	});
+}
+
+std::optional<ResultAnswer> ParseResultAnswer(std::string_view text)
+{
+	return ParseWith<ResultAnswer>(
+	    text, [](const Json& object, ResultAnswer& out) { return ReadInteger(object, "result", out.result); });
 }
 
 std::optional<ServerStatusReply> ParseServerStatusReply(std::string_view text)

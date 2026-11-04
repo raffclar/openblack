@@ -11,7 +11,9 @@
 
 #include <memory>
 
+#include <openssl/bio.h>
 #include <openssl/evp.h>
+#include <openssl/pem.h>
 
 namespace openblack::ed25519
 {
@@ -21,6 +23,10 @@ namespace
 struct KeyDeleter
 {
 	void operator()(EVP_PKEY* key) const { EVP_PKEY_free(key); }
+};
+struct TextDeleter
+{
+	void operator()(BIO* text) const { BIO_free(text); }
 };
 struct ContextDeleter
 {
@@ -75,6 +81,27 @@ std::optional<join_ticket::PublicKey> PublicKeyOf(const Seed& seed)
 		return std::nullopt;
 	}
 	return publicKey;
+}
+
+std::optional<Seed> SeedOfPem(std::string_view pem)
+{
+	const std::unique_ptr<BIO, TextDeleter> text(BIO_new_mem_buf(pem.data(), static_cast<int>(pem.size())));
+	if (!text)
+	{
+		return std::nullopt;
+	}
+	const Key key(PEM_read_bio_PrivateKey(text.get(), nullptr, nullptr, nullptr));
+	if (!key || EVP_PKEY_id(key.get()) != EVP_PKEY_ED25519)
+	{
+		return std::nullopt;
+	}
+	Seed seed {};
+	size_t length = seed.size();
+	if (EVP_PKEY_get_raw_private_key(key.get(), seed.data(), &length) != 1 || length != seed.size())
+	{
+		return std::nullopt;
+	}
+	return seed;
 }
 
 } // namespace openblack::ed25519
