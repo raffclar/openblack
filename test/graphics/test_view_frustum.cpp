@@ -7,6 +7,9 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <cmath>
+#include <cstdint>
+
 #include <glm/gtc/matrix_transform.hpp>
 #include <gtest/gtest.h>
 
@@ -171,4 +174,32 @@ TEST(ViewFrustum, TheRadiusOfASquareIsItsFarthestCornerAfterTheModel)
 	glm::mat3 skewed(1.0f);
 	skewed[1] = {1.0f, 1.0f, 0.0f};
 	EXPECT_FLOAT_EQ(view_frustum::QuadRadius(skewed), glm::sqrt(5.0f));
+}
+
+TEST(ViewFrustum, AWorldBoxHasTheAnswerOfABoxWithNoModel)
+{
+	// Many boxes round a camera that looks down at a slant, and round the straight camera
+	const auto slanted = view_frustum::FromViewProjection(
+	    glm::perspective(glm::radians(60.0f), 1.6f, 1.0f, 5000.0f) *
+	    glm::lookAt(glm::vec3(100.0f, 300.0f, -50.0f), glm::vec3(400.0f, 0.0f, 250.0f), glm::vec3(0.0f, 1.0f, 0.0f)));
+	uint32_t state = 12345;
+	const auto next = [&state](float range) {
+		state = (state * 1664525u) + 1013904223u;
+		return (static_cast<float>(state >> 8u) / static_cast<float>(1u << 24u) * 2.0f - 1.0f) * range;
+	};
+	int seen = 0;
+	for (const auto& frustum : {slanted, Camera(false)})
+	{
+		for (int i = 0; i < 4000; ++i)
+		{
+			const glm::vec3 centre {next(1500.0f), next(400.0f), next(1500.0f)};
+			const glm::vec3 half {std::abs(next(20.0f)), std::abs(next(200.0f)), std::abs(next(20.0f))};
+			const bool expected = view_frustum::SeesBox(frustum, glm::mat4(1.0f), centre - half, centre + half);
+			EXPECT_EQ(view_frustum::SeesWorldBox(frustum, centre - half, centre + half), expected);
+			seen += expected ? 1 : 0;
+		}
+	}
+	// The boxes are both in and out of the view
+	EXPECT_GT(seen, 100);
+	EXPECT_LT(seen, 7900);
 }

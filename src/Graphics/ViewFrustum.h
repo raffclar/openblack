@@ -50,6 +50,10 @@ struct Frustum
 /// so a box that touches the screen is always in view.
 [[nodiscard]] bool SeesBox(const Frustum& frustum, const glm::mat4& model, glm::vec3 minima, glm::vec3 maxima) noexcept;
 
+/// Whether any of a box with sides along the world axes can be inside the view. The answer is the answer of SeesBox with
+/// no model matrix, but the function tests only the corner of the box that is farthest into the view for each side.
+[[nodiscard]] bool SeesWorldBox(const Frustum& frustum, glm::vec3 minima, glm::vec3 maxima) noexcept;
+
 /// Whether any of a box, which a model matrix puts in the world and which can then move along `sweep` by any amount from
 /// minus one to one times it, can be inside the view. The test is the same as SeesBox, with sixteen corners: the eight
 /// corners moved to each end of the sweep.

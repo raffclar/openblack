@@ -13,6 +13,7 @@
 #include <cstdint>
 
 #include <array>
+#include <optional>
 #include <span>
 
 #include <glm/mat4x4.hpp>
@@ -87,5 +88,15 @@ inline constexpr std::array<glm::vec2, 4> k_SmudgeUvs = {glm::vec2(0.0f, 0.0f), 
 /// The smudge's corners, top left first, round to the bottom left: `right` and `up` are the view's
 [[nodiscard]] std::array<glm::vec3, 4> SmudgeCorners(const glm::vec3& position, float scale, float smudgeScale,
                                                      const glm::vec3& right, const glm::vec3& up);
+
+/// The largest distance from a point to a corner of the blobs of a pair of feet. Each foot is no farther from the point
+/// than its reach. The thing that casts the blobs has the scale `scale` (Fall). A fall on a slope is not longer than the
+/// fall on flat land, so the result is correct on all land.
+[[nodiscard]] float FeetReach(float firstReach, float secondReach, float scale);
+/// The largest distance from the foot of a villager too far away to be drawn to a corner of its blob (Far)
+[[nodiscard]] float FarReach(float scale);
+/// The largest distance from the origin of a model to a foot at the origin of a bone. The model matrix moves, turns and
+/// then scales by `scale`. None when the bone changes the fourth coordinate of a point.
+[[nodiscard]] std::optional<float> BoneReach(const glm::mat4& bone, const glm::vec3& scale);
 
 } // namespace openblack::graphics::ground_blobs

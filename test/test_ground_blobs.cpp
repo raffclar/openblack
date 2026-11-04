@@ -7,6 +7,7 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <array>
 #include <vector>
 
 #include <glm/geometric.hpp>
@@ -148,4 +149,77 @@ TEST(GroundBlobs, AnimalWithOnePairLeavesTheOtherQuadsEmpty)
 		ExpectNear(quads[3].corners.at(c), glm::vec3(0.0f));
 	}
 	ExpectNear(quads[0].corners[0], ground_blobs::MakeQuad(feet[0], {0.0f, 0.0f, 1.0f}).corners[0]);
+}
+
+TEST(GroundBlobs, NoCornerOfThePairOfBlobsIsFartherThanTheFeetReach)
+{
+	// Feet at the edges of their reaches, on flat land and on slopes, for a few scales
+	const std::array<glm::vec3, 3> normals {glm::vec3(0.0f, 1.0f, 0.0f), glm::normalize(glm::vec3(0.6f, 0.8f, 0.0f)),
+	                                        glm::normalize(glm::vec3(-0.7f, 0.3f, 0.65f))};
+	const std::array<glm::vec3, 4> ways {glm::vec3(1.0f, 0.0f, 0.0f), glm::vec3(-1.0f, 0.0f, 0.0f),
+	                                     glm::normalize(glm::vec3(1.0f, 0.5f, -1.0f)), glm::vec3(0.0f, -1.0f, 0.0f)};
+	for (const float scale : {0.5f, 1.0f, 2.5f})
+	{
+		for (const auto& normal : normals)
+		{
+			for (const auto& firstWay : ways)
+			{
+				for (const auto& secondWay : ways)
+				{
+					const float firstReach = 1.5f;
+					const float secondReach = 0.75f;
+					const auto first = firstWay * firstReach;
+					const auto second = secondWay * secondReach;
+					const float reach = ground_blobs::FeetReach(firstReach, secondReach, scale);
+					for (const auto& quad : ground_blobs::Feet(first, second, ground_blobs::Fall(normal, scale)))
+					{
+						for (const auto& corner : quad.corners)
+						{
+							EXPECT_LE(glm::length(corner), reach + 1e-4f);
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+TEST(GroundBlobs, NoCornerOfAFarBlobIsFartherThanTheFarReach)
+{
+	for (const float scale : {0.5f, 1.0f, 2.5f})
+	{
+		const glm::vec3 foot {10.0f, 3.0f, -4.0f};
+		for (const auto& quad : ground_blobs::Far(foot, scale))
+		{
+			for (const auto& corner : quad.corners)
+			{
+				EXPECT_LE(glm::length(corner - foot), ground_blobs::FarReach(scale) + 1e-4f);
+			}
+		}
+	}
+}
+
+TEST(GroundBlobs, AFootIsNoFartherFromTheModelOriginThanTheBoneReach)
+{
+	const auto bone =
+	    glm::rotate(glm::translate(glm::mat4(1.0f), glm::vec3(0.3f, -1.2f, 0.4f)), 0.7f, glm::vec3(0.0f, 0.0f, 1.0f));
+	const glm::vec3 scale {1.5f, 0.8f, 1.2f};
+	const auto reach = ground_blobs::BoneReach(bone, scale);
+	ASSERT_TRUE(reach.has_value());
+	const glm::vec3 origin {50.0f, 20.0f, -30.0f};
+	for (const float heading : {0.0f, 1.0f, 2.5f, 4.0f})
+	{
+		const auto model = glm::translate(glm::mat4(1.0f), origin) *
+		                   glm::rotate(glm::mat4(1.0f), heading, glm::vec3(0.0f, 1.0f, 0.0f)) *
+		                   glm::scale(glm::mat4(1.0f), scale);
+		const auto foot = glm::vec3(model * bone * glm::vec4(0.0f, 0.0f, 0.0f, 1.0f));
+		EXPECT_LE(glm::length(foot - origin), *reach + 1e-4f);
+	}
+}
+
+TEST(GroundBlobs, ABoneThatChangesTheFourthCoordinateHasNoReach)
+{
+	auto bone = glm::mat4(1.0f);
+	bone[3].w = 0.5f;
+	EXPECT_FALSE(ground_blobs::BoneReach(bone, glm::vec3(1.0f)).has_value());
 }

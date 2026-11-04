@@ -3710,6 +3710,16 @@ void Renderer::DrawGroundBlobs(const DrawSceneDesc& desc) const
 	// to be drawn a wider one from where it stands, as if the land there were flat
 	// A villager a script draws in high detail casts none: it lays its shadow on the land instead (GroundShadow)
 	const ecs::drawn_place::DrawnPlaces drawnPlaces(desc.entities);
+	// A blob out of the view of the pass puts no pixel on the screen, so the function does not make it. Each foot is on
+	// the land, lifted, so the test uses a column from the lowest land to the highest land. The column is wider and taller
+	// than that by the largest distance from the point to a corner.
+	const auto seenBy = view_frustum::FromViewProjection(desc.camera->GetProjectionMatrix() *
+	                                                     desc.camera->GetViewMatrix(Camera::Interpolation::Current));
+	const auto seesColumn = [&seenBy](const glm::vec3& centre, float reach, float lift) {
+		return view_frustum::SeesWorldBox(
+		    seenBy, glm::vec3(centre.x - reach, -reach, centre.z - reach),
+		    glm::vec3(centre.x + reach, view_frustum::k_HighestLand + lift + reach, centre.z + reach));
+	};
 	desc.entities.Each<const ecs::components::Villager, const ecs::components::Transform, const ecs::components::Mesh>(
 	    [&](entt::entity entity, const ecs::components::Villager& /*villager*/, const ecs::components::Transform& placed,
 	        const ecs::components::Mesh& mesh) {
@@ -3725,6 +3735,15 @@ void Renderer::DrawGroundBlobs(const DrawSceneDesc& desc) const
 		    const auto bones = ground_blobs::FootBones(
 		        pose != nullptr ? std::span<const glm::mat4>(pose->bones) : std::span<const glm::mat4> {}, rest);
 		    if (std::ranges::any_of(ground_blobs::k_FootBones, [&bones](size_t bone) { return bone >= bones.size(); }))
+		    {
+			    return;
+		    }
+		    // The feet are no farther from where the body is drawn than the origins of their bones, at the largest scale
+		    const auto firstReach = ground_blobs::BoneReach(bones[ground_blobs::k_FootBones[0]], transform.scale);
+		    const auto secondReach = ground_blobs::BoneReach(bones[ground_blobs::k_FootBones[1]], transform.scale);
+		    if (firstReach.has_value() && secondReach.has_value() &&
+		        !seesColumn(ecs::components::DrawnPosition(transform.position, pose),
+		                    ground_blobs::FeetReach(*firstReach, *secondReach, transform.scale.x), ground_blobs::k_Lift))
 		    {
 			    return;
 		    }
@@ -3781,6 +3800,10 @@ void Renderer::DrawGroundBlobs(const DrawSceneDesc& desc) const
 	}
 	for (const auto& far : farVillagers)
 	{
+		if (!seesColumn(far.position, ground_blobs::FarReach(far.scale), ground_blobs::k_FarLift))
+		{
+			continue;
+		}
 		auto foot = far.position;
 		foot.y = island.GetHeightAt(glm::vec2(foot.x, foot.z)) + ground_blobs::k_FarLift;
 		for (const auto& quad : ground_blobs::Far(foot, far.scale))
