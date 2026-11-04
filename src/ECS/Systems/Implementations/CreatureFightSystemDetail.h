@@ -90,8 +90,6 @@ void Shift(CreatureLocomotion& locomotion, glm::vec2 by);
 /// The creature's mesh and the matrix it is drawn with, if it has a loaded mesh
 std::optional<std::pair<const graphics::L3DMesh*, glm::mat4>> DrawnMeshOf(const ecs::Registry& registry, entt::entity creature);
 
-/// Whether the hand of the player holds nothing: no thing and no miracle. A hand that only starts to take a thing holds
-/// nothing yet.
 /// The player whose hand this computer moves. The fight view, the sparkles, the presses, the help and the music
 /// follow the creature of this player. The turns use the sender of each command.
 PlayerNames OwnPlayer();
@@ -103,6 +101,9 @@ bool IsHumanGod(PlayerNames player);
 /// A player's creature for every purpose of the game: the first one they got. Creatures are made as they are got, so
 /// it is the earliest made of theirs. This stands in for the game-wide lookup of a player's creature until there is one.
 std::optional<entt::entity> PrimaryCreatureOf(const ecs::Registry& registry, PlayerNames player);
+
+/// Who is in a duel with whom, both of them still at it
+bool InDuel(const ecs::Registry& registry, entt::entity creature);
 
 /// Whether the creature still fights its opponent. The opponent is in the duel, or the opponent left the duel before the
 /// creature and the fight of the opponent has not ended.
