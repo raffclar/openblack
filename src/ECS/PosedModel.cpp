@@ -9,8 +9,11 @@
 
 #include "PosedModel.h"
 
+#include <cstddef>
+
 #include <algorithm>
 #include <array>
+#include <optional>
 
 #include <glm/geometric.hpp>
 
@@ -34,9 +37,17 @@ using namespace openblack::ecs::components;
 
 namespace
 {
-float HeightAt(glm::vec2 point)
+float HeightAt(glm::vec2 point, MapReach* reach = nullptr)
 {
-	return Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().GetHeightAt(point) : 0.0f;
+	if (!Locator::terrainSystem::has_value())
+	{
+		return 0.0f;
+	}
+	if (reach != nullptr)
+	{
+		reach->Add(LandIslandInterface::ToMapCoords(point.x), LandIslandInterface::ToMapCoords(point.y));
+	}
+	return Locator::terrainSystem::value().GetHeightAt(point);
 }
 } // namespace
 
@@ -71,18 +82,20 @@ namespace
 class VertexPlacer
 {
 public:
+	/// With a reach, the placer adds to it each map point where it reads the land height
 	VertexPlacer(const ecs::Registry& registry, entt::entity entity, const graphics::L3DMesh& mesh, size_t index,
-	             const glm::mat4& model, std::span<const glm::mat4> bones)
+	             const glm::mat4& model, std::span<const glm::mat4> bones, MapReach* reach = nullptr)
 	    : _geometry(mesh.GetSubMeshes()[index]->GetBodyGeometry())
 	    , _model(model)
 	    , _bones(bones)
 	    , _followsLand(registry.AllOf<MorphWithTerrain>(entity))
+	    , _reach(reach)
 	{
 		// The land under the model's origin, its up and its scale are the same for each corner
 		if (_followsLand)
 		{
 			const glm::vec3 origin(_model[3]);
-			_originHeight = HeightAt({origin.x, origin.z});
+			_originHeight = HeightAt({origin.x, origin.z}, _reach);
 			_up = glm::vec3(_model[1]);
 			_scale = glm::length(glm::vec3(_model[0]));
 		}
@@ -107,6 +120,28 @@ public:
 
 	[[nodiscard]] size_t Count() const { return _geometry.positions.size(); }
 
+	/// Adds the bits of each input of the placement to the key, except the land heights. The geometry of a loaded
+	/// mesh does not change, so its address stands for it.
+	void AppendKey(std::vector<std::byte>& key) const
+	{
+		placed_memo::Append(key, _geometry.positions.data());
+		placed_memo::Append(key, _geometry.positions.size());
+		placed_memo::Append(key, _model);
+		placed_memo::Append(key, _bones.size());
+		placed_memo::AppendAll(key, _bones);
+		placed_memo::Append(key, _followsLand);
+		placed_memo::Append(key, Locator::terrainSystem::has_value());
+		placed_memo::Append(key, _morphs);
+		placed_memo::Append(key, _morph != nullptr);
+		if (_morph != nullptr)
+		{
+			placed_memo::Append(key, *_morph);
+		}
+	}
+
+	/// Whether the placement reads the land height
+	[[nodiscard]] bool ReadsLand() const { return _followsLand && Locator::terrainSystem::has_value(); }
+
 	[[nodiscard]] glm::vec3 operator()(size_t i) const
 	{
 		const auto& positions = _geometry.positions;
@@ -129,7 +164,7 @@ public:
 		if (_followsLand)
 		{
 			// Each corner moves along the model's up by how much higher the land is under it than under its origin
-			const float rise = HeightAt({world.x, world.z}) - _originHeight;
+			const float rise = HeightAt({world.x, world.z}, _reach) - _originHeight;
 			if (_up.x == 0.0f && _up.z == 0.0f)
 			{
 				world.y += rise;
@@ -147,6 +182,7 @@ private:
 	glm::mat4 _model;
 	std::span<const glm::mat4> _bones;
 	bool _followsLand;
+	MapReach* _reach;
 	float _originHeight {0.0f};
 	glm::vec3 _up {0.0f};
 	float _scale {1.0f};
@@ -171,6 +207,30 @@ void posed_model::Place(const ecs::Registry& registry, entt::entity entity, cons
 	{
 		corners.push_back(place(i));
 	}
+}
+
+std::span<const glm::vec3> posed_model::Place(placed_memo::Memo& memo, const ecs::Registry& registry, entt::entity entity,
+                                              const graphics::L3DMesh& mesh, size_t index, const glm::mat4& model)
+{
+	// The reach holds the map points where the placer reads the land height
+	MapReach reach;
+	const VertexPlacer placer(registry, entity, mesh, index, model, posed_model::BonesOf(registry, entity, mesh), &reach);
+	auto& key = memo.KeyScratch();
+	key.clear();
+	placer.AppendKey(key);
+	const auto place = [&](std::vector<glm::vec3>& corners) -> std::optional<MapReach> {
+		corners.clear();
+		corners.reserve(placer.Count());
+		for (size_t i = 0; i < placer.Count(); ++i)
+		{
+			corners.push_back(placer(i));
+		}
+		return placer.ReadsLand() ? std::optional(reach) : std::nullopt;
+	};
+	const auto readLand = [](const MapReach& within, std::vector<std::byte>& bytes) {
+		return Locator::terrainSystem::value().HeightInputs(within, bytes);
+	};
+	return memo.Get({.entity = entity, .geometry = &mesh.GetSubMeshes()[index]->GetBodyGeometry()}, key, place, readLand);
 }
 
 std::optional<glm::vec3> posed_model::PointOnSkin(const ecs::Registry& registry, entt::entity entity,

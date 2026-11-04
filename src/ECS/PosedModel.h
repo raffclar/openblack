@@ -23,6 +23,7 @@
 #include <glm/vec3.hpp>
 
 #include "3D/ScreenPick.h"
+#include "ECS/PlacedMemo.h"
 
 namespace openblack::graphics
 {
@@ -51,6 +52,11 @@ void Place(const ecs::Registry& registry, entt::entity entity, const graphics::L
 /// The same, posed by other bones than the model's own, as a copy of a creature drawn elsewhere in a pose of its own
 void Place(const ecs::Registry& registry, entt::entity entity, const graphics::L3DMesh& mesh, size_t index,
            const glm::mat4& model, std::span<const glm::mat4> bones, std::vector<glm::vec3>& corners);
+
+/// The same, but the memo gives the corners that it keeps when no input changed since it calculated them. The corners
+/// stay valid until the next call with the same memo.
+[[nodiscard]] std::span<const glm::vec3> Place(placed_memo::Memo& memo, const ecs::Registry& registry, entt::entity entity,
+                                               const graphics::L3DMesh& mesh, size_t index, const glm::mat4& model);
 
 /// Whether the submesh is drawn at the level of detail and stage the model is drawn at: the nearest level of detail and
 /// the first stage, as openblack draws every model

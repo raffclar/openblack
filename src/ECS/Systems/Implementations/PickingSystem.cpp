@@ -303,6 +303,8 @@ std::optional<float> BrokenAlong(const physics::damage::Mesh& mesh, glm::vec3 fr
 void PickingSystem::PickUnderCursor(const Frame& frame)
 {
 	const auto& view = frame.view;
+	// The memo forgets the models that the last two picks and hand feels did not place
+	_placedMemo.EndPass();
 
 	// The land or sea under the cursor, counted a little further than it is
 	float landDistance = std::numeric_limits<float>::max();
@@ -496,13 +498,13 @@ void PickingSystem::PickUnderCursor(const Frame& frame)
 			{
 				continue;
 			}
-			ecs::posed_model::Place(registry, entity, *mesh, s, model, _placed);
+			const auto placed = ecs::posed_model::Place(_placedMemo, registry, entity, *mesh, s, model);
 			const auto& geometry = subMesh.GetBodyGeometry();
 			_corners.clear();
-			for (size_t c = 0; c < _placed.size(); ++c)
+			for (size_t c = 0; c < placed.size(); ++c)
 			{
 				_corners.push_back(
-				    screen_pick::ToClip(view, _placed[c], c < geometry.uvs.size() ? geometry.uvs[c] : glm::vec2(0.0f)));
+				    screen_pick::ToClip(view, placed[c], c < geometry.uvs.size() ? geometry.uvs[c] : glm::vec2(0.0f)));
 			}
 			const auto& indices = geometry.indices;
 			for (const auto& primitive : subMesh.GetPrimitives())
@@ -797,7 +799,6 @@ std::optional<screen_pick::MeshHit> PickingSystem::FeelModel(entt::entity object
 	}
 	const auto mesh = meshes.Handle(felt->first);
 	std::optional<screen_pick::MeshHit> nearest;
-	std::vector<glm::vec3> placed;
 	for (size_t s = 0; s < mesh->GetSubMeshes().size(); ++s)
 	{
 		// The submeshes of the nearest level of detail
@@ -805,7 +806,7 @@ std::optional<screen_pick::MeshHit> PickingSystem::FeelModel(entt::entity object
 		{
 			continue;
 		}
-		ecs::posed_model::Place(registry, object, *mesh, s, felt->second, placed);
+		const auto placed = ecs::posed_model::Place(_placedMemo, registry, object, *mesh, s, felt->second);
 		const auto hit = screen_pick::NearestIntersection(placed, mesh->GetSubMeshes()[s]->GetBodyGeometry().indices, origin,
 		                                                  direction, false);
 		if (hit.has_value() && (!nearest.has_value() || hit->distance < nearest->distance))
