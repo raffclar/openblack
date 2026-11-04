@@ -139,6 +139,15 @@ float script_camera::FollowSeconds(float secondsSinceBegun, float zoomTimeScale)
 	return seconds * zoomTimeScale;
 }
 
+script_camera::FollowedThing script_camera::FollowedFlock(const glm::vec3& place, float leaderHeight)
+{
+	return {
+	    .point = {place.x, place.y + (leaderHeight * 0.5f), place.z},
+	    .gameAngle = std::nullopt,
+	    .height = k_FlockHeight,
+	};
+}
+
 glm::vec3 script_camera::FollowOrigin(const FollowedThing& thing, FollowSettings& settings)
 {
 	settings.pitch = settings.pitch > k_FollowLowestPitch ? settings.pitch : k_FollowLowestPitch;

@@ -126,6 +126,12 @@ struct FollowedThing
 	float height {0.0f};
 };
 
+/// A flock is followed with no distance of its own: the game gives a flock no height
+inline constexpr float k_FlockHeight = 0.0f;
+/// What a camera following a flock knows of it. The camera looks at the place of the flock, as a follow camera finds it,
+/// raised by half the height of the leader. The leader height is 0 when the flock has no leader. A flock does not walk.
+[[nodiscard]] FollowedThing FollowedFlock(const glm::vec3& place, float leaderHeight);
+
 /// How a camera follows a thing
 struct FollowSettings
 {

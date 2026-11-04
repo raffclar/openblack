@@ -329,6 +329,32 @@ TEST(ScriptCamera, ItIsAboutTheThingItLooksAtElseTheOneItFollows)
 	EXPECT_FALSE(model.GetFocusedThing().has_value());
 }
 
+TEST(ScriptCamera, AFlockIsSeenAtItsPlaceRaisedByHalfItsLeaderAndHasNoHeightOrFacing)
+{
+	const auto led = script_camera::FollowedFlock({1000.0f, 7.0f, 1200.0f}, 3.0f);
+	EXPECT_EQ(led.point, glm::vec3(1000.0f, 8.5f, 1200.0f));
+	EXPECT_FALSE(led.gameAngle.has_value());
+	EXPECT_EQ(led.height, script_camera::k_FlockHeight);
+	// A flock with no leader is seen at its place
+	const auto alone = script_camera::FollowedFlock({1000.0f, 7.0f, 1200.0f}, 0.0f);
+	EXPECT_EQ(alone.point, glm::vec3(1000.0f, 7.0f, 1200.0f));
+}
+
+TEST(ScriptCamera, AFollowedFlockIsFollowedFromTheNearestDistanceWithNoTurn)
+{
+	ScriptCameraModel model({990.0f, 20.0f, 990.0f}, {1000.0f, 5.0f, 1000.0f}, FlatLand);
+	const auto flock = script_camera::FollowedFlock({1000.0f, 5.0f, 1000.0f}, 2.0f);
+	model.Follow({.id = 9, .lookup = [flock]() { return std::optional(flock); }}, true);
+	Camera camera;
+	ASSERT_TRUE(model.Update(std::chrono::milliseconds(16), camera).has_value());
+	EXPECT_NEAR(glm::distance(model.GetTargetFocus(), flock.point), 0.0f, 1e-4f);
+	// The flock gives no height, so the distance is held at the nearest
+	EXPECT_NEAR(glm::distance(model.GetTargetOrigin(), flock.point), script_camera::k_FollowNearest, 1e-3f);
+	// The relative heading is 0 and the flock does not walk, so the camera stays at heading 0
+	const auto view = script_camera::HeadingAndPitchFromPoints(model.GetTargetOrigin(), flock.point);
+	EXPECT_NEAR(view.heading, 0.0f, 1e-5f);
+}
+
 TEST(ScriptCamera, ATrackPutsTheCameraWhereItsWaysHaveGotToAtTheFramesTime)
 {
 	Camera camera;
