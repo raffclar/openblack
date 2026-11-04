@@ -65,6 +65,14 @@ glm::vec2 Flat(const glm::vec3& point);
 
 float GroundAt(glm::vec2 point);
 
+std::string_view Name(CreatureFighting::Stage stage);
+
+std::string_view Name(CreatureKnockedOut::Stage stage);
+
+/// The levels of a creature for the fight transcript: its fight health and stamina while it fights, its life, its
+/// strength, its exhaustion and its energy
+fight_transcript::Fields Levels(const ecs::Registry& registry, entt::entity creature);
+
 /// A change of one level of a creature for the fight transcript, with what caused it
 fight_transcript::Fields LevelChange(entt::entity creature, std::string_view level, float before, float after,
                                      std::string_view why);
