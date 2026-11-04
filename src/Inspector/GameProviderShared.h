@@ -172,6 +172,8 @@ template <typename Read>
 [[nodiscard]] std::unique_ptr<ProviderInterface> AdvisorsProvider();
 /// The creatures' other systems
 [[nodiscard]] std::unique_ptr<ProviderInterface> CreaturesProvider();
+/// The scripts
+[[nodiscard]] std::unique_ptr<ProviderInterface> ScriptProvider(ScriptTargetInterface& scripts);
 
 /// The inspector's order to a creature
 [[nodiscard]] CreatureOrderResult GiveCreatureOrder(entt::entity creature, const CreatureOrder& order);
