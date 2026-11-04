@@ -2374,3 +2374,4 @@ openblack_setup_and_add_test(
 openblack_setup_and_add_test(test_glyph_texels gui/test_glyph_texels.cpp)
 openblack_setup_and_add_test(test_placed_memo test_placed_memo.cpp)
 target_link_libraries(test_placed_memo PRIVATE lnd)
+openblack_setup_and_add_test(test_turn_step_times test_turn_step_times.cpp)

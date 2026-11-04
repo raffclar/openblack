@@ -12,6 +12,7 @@
 #include <cstdint>
 
 #include <algorithm>
+#include <chrono>
 #include <optional>
 #include <span>
 #include <vector>
@@ -128,9 +129,11 @@
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "ECS/ThingMapPlace.h"
 #include "ECS/VillagerAfterDeath.h"
+#include "EngineConfig.h"
 #include "LivingTurnOrder.h"
 #include "Locator.h"
 #include "Profiler.h"
+#include "TurnStepTimes.h"
 
 namespace openblack::simulation
 {
@@ -1133,18 +1136,33 @@ void PlayTurn(TurnViewInterface& view)
 	const bool decided = Locator::gameEndSystem::has_value() && Locator::gameEndSystem::value().IsDecided();
 	// The queue of the main thread knows the step, so that the check of the turn's calls can name it
 	auto* queue = Locator::mainThreadQueue::has_value() ? &Locator::mainThreadQueue::value() : nullptr;
+	// A developer switch logs the time of each step of a turn that takes a long time
+	const auto stepTimesFrom = Locator::config::has_value() ? Locator::config::value().turnStepTimesMs : std::nullopt;
+	TurnStepTimes stepTimes;
 	game_turn::PlayTurn(
-	    [&view, queue](game_turn::Step step) {
+	    [&view, queue, &stepTimesFrom, &stepTimes](game_turn::Step step) {
 		    if (queue != nullptr)
 		    {
 			    queue->SetTurnStep(static_cast<uint32_t>(step));
 		    }
+		    const auto start =
+		        stepTimesFrom.has_value() ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point {};
 		    PlayTurnStep(step, view);
 		    FileNewInMap();
 		    // What the step put down or took away changes the paths before the next step
 		    FootpathsCatchUp();
+		    if (stepTimesFrom.has_value())
+		    {
+			    stepTimes.Add(step, std::chrono::duration<float, std::milli>(std::chrono::steady_clock::now() - start).count());
+		    }
 	    },
 	    decided);
+	if (stepTimesFrom.has_value() && stepTimes.Total() >= *stepTimesFrom)
+	{
+		SPDLOG_LOGGER_INFO(spdlog::get("game"),
+		                   "Turn {} took {:.2f} ms. Steps (number in game_turn::Step) of 0.1 ms or more: {}",
+		                   Locator::time::value().GetTurn(), stepTimes.Total(), stepTimes.Report(0.1f));
+	}
 	if (queue != nullptr)
 	{
 		queue->SetTurnStep(std::nullopt);

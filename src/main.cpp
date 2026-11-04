@@ -211,6 +211,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		("frame-stats", "Log the average and 95th percentile frame time, the profiler stages and the memory in use every so many frames (0 for never), and each frame of 10 ms or more with its stages.", cxxopts::value<uint32_t>()->default_value("0"))
 		("frame-stats-views", "With --frame-stats, also profile and log the GPU time of each render view.")
 		("ai-times", "Tools: log the mean and longest time of the seen list, the mind and the hand of each computer god each time this many turns go by (0 for never).", cxxopts::value<uint32_t>()->default_value("0"))
+		("turn-step-times", "Tools: log the time of each step of each turn that takes this many milliseconds or more.", cxxopts::value<float>())
 		("frame-stats-out", "With --frame-stats, write each frame of the run (its time, its time on the processor and the game turn) into this CSV file when the game ends.", cxxopts::value<std::string>())
 		("no-first-frame-warm-up", "Do not draw the first frame of a land behind the loading screen. Then the first frames of the game make the renderer's pipelines and render targets.")
 		("parallel-draw-encode", "Developer: let worker threads encode some of the draws at the same time as the game's thread, in the same order and with the same picture. By default the game's thread encodes all draws.")
@@ -679,6 +680,10 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		args.frameStatsInterval = result["frame-stats"].as<uint32_t>();
 		args.frameStatsViews = result.count("frame-stats-views") != 0;
 		args.aiTimesEvery = result["ai-times"].as<uint32_t>();
+		if (result.count("turn-step-times") != 0)
+		{
+			args.turnStepTimesMs = result["turn-step-times"].as<float>();
+		}
 		if (result.count("frame-stats-out") != 0)
 		{
 			args.frameStatsOut = result["frame-stats-out"].as<std::string>();
