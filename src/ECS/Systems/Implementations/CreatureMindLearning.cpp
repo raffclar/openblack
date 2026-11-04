@@ -1731,10 +1731,11 @@ bool LeftAreaFor(const ecs::Registry& registry, entt::entity creature, const Cre
 }
 
 /// Where the creature believes that a thing is: where it last came across the thing, else where the thing is now
-std::optional<map_coords::MapCoords> BelievedPlaceOf(const ecs::Registry& registry, const CreatureMindState& mind,
-                                                     entt::entity thing)
+/// The belief is the belief of the creature about the thing, or null when it has none.
+std::optional<map_coords::MapCoords> BelievedPlaceOf(const ecs::Registry& registry,
+                                                     const creature_object_beliefs::Belief* belief, entt::entity thing)
 {
-	if (const auto* belief = mind.beliefs.Find(thing))
+	if (belief != nullptr)
 	{
 		return belief->place;
 	}
@@ -1745,7 +1746,15 @@ std::optional<map_coords::MapCoords> BelievedPlaceOf(const ecs::Registry& regist
 	return std::nullopt;
 }
 
+std::optional<map_coords::MapCoords> BelievedPlaceOf(const ecs::Registry& registry, const CreatureMindState& mind,
+                                                     entt::entity thing)
+{
+	return BelievedPlaceOf(registry, mind.beliefs.Find(thing), thing);
+}
+
 bool NoWayLately(const ecs::Registry& registry, const CreatureMindState& mind, entt::entity thing);
+bool NoWayLately(const ecs::Registry& registry, const CreatureMindState& mind, const creature_object_beliefs::Belief* belief,
+                 entt::entity thing);
 bool LetsCreatureAct(const ecs::Registry& registry, entt::entity thing);
 
 /// The thing that a creature acts on for a belief: the temple for the belief about the temple's heart, else the thing of
@@ -2379,7 +2388,13 @@ const GTotemStatueInfo* TotemStatueInfo(const ecs::Registry& registry, entt::ent
 /// Whether the creature found no way to a thing lately. The creature waits longer for a thing with the fixed mark.
 bool NoWayLately(const ecs::Registry& registry, const CreatureMindState& mind, entt::entity thing)
 {
-	const auto* belief = mind.beliefs.Find(thing);
+	return NoWayLately(registry, mind, mind.beliefs.Find(thing), thing);
+}
+
+/// The belief is the belief of the creature about the thing, or null when it has none.
+bool NoWayLately(const ecs::Registry& registry, const CreatureMindState& mind, const creature_object_beliefs::Belief* belief,
+                 entt::entity thing)
+{
 	// Only a creature that found no way to the thing asks if the thing is fixed in the land
 	if (belief == nullptr || !belief->blockedTurn.has_value())
 	{
@@ -2805,12 +2820,18 @@ bool CreatureMindSystem::SuitsDesireOfKind(entt::entity creature, CreatureMindSt
 	const auto& registry = Locator::entitiesRegistry::value();
 	// The test of the kind comes first because it costs less. The other tests only read the world and the beliefs, but
 	// the test for hunger can change the beliefs. Any kind can suit hunger, thus that test stays in its sequence.
-	if (!creature_activity::KindMaySuit(desire, kind) || NoWayLately(registry, mind, thing))
+	if (!creature_activity::KindMaySuit(desire, kind))
+	{
+		return false;
+	}
+	// The two tests below read the same belief, and nothing between them changes the beliefs
+	const auto* belief = mind.beliefs.Find(thing);
+	if (NoWayLately(registry, mind, belief, thing))
 	{
 		return false;
 	}
 	// Kept within an area, it does not choose a thing that it believes is outside the area
-	if (const auto place = BelievedPlaceOf(registry, mind, thing);
+	if (const auto place = BelievedPlaceOf(registry, belief, thing);
 	    place.has_value() && OutsideConfinedArea(registry, creature, *place))
 	{
 		return false;
@@ -2880,6 +2901,7 @@ CreatureMindSystem::BelievedThingsToActOn(entt::entity creature, CreatureMindSta
 	// The tests can come across things and change the beliefs. Thus the code takes the things to examine first.
 	const auto held = mind.beliefs.HeldInListOrder();
 	kept.things.clear();
+	kept.things.reserve(held.size());
 	std::ranges::transform(held, std::back_inserter(kept.things), &creature_object_beliefs::Belief::thing);
 	kept.suiting.reserve(kept.things.size());
 	const KindStores kinds(registry);

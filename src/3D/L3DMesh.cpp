@@ -217,7 +217,19 @@ bool L3DMesh::LoadMade(const L3DMesh& skinSource, std::span<const std::vector<L3
 		_boundingBox.maxima = glm::max(_boundingBox.maxima, bb.maxima);
 		_subMeshes.emplace_back(std::move(subMesh));
 	}
-	return !_subMeshes.empty();
+	if (_subMeshes.empty())
+	{
+		return false;
+	}
+	// After a restore of the graphics device each made submesh gives its vertices and indices again from its copy. The
+	// skins come from the source mesh, which gives them again itself.
+	SetModelSource([](L3DMesh& mesh) {
+		for (const auto& subMesh : mesh.GetSubMeshes())
+		{
+			subMesh->GiveMadeDataAgain();
+		}
+	});
+	return true;
 }
 
 L3DMesh::LoadSettings L3DMesh::SettingsNow(UploadMode upload)

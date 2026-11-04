@@ -50,6 +50,7 @@ public:
 
 	[[nodiscard]] float GetHeightAt(glm::vec2) const override;
 	[[nodiscard]] glm::vec3 GetNormalAt(glm::vec2) const override;
+	[[nodiscard]] bool HeightInputs(const MapReach& reach, std::vector<std::byte>& bytes) const override;
 	[[nodiscard]] const LandBlock* GetBlock(const glm::u8vec2& coordinates) const;
 	[[nodiscard]] const lnd::LNDCell& GetCell(const glm::u16vec2& coordinates) const override;
 	[[nodiscard]] const lnd::LNDCell* FindCell(const glm::u16vec2& coordinates) const override;

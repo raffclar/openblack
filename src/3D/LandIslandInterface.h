@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 
 #include <filesystem>
@@ -23,6 +24,7 @@
 
 #include "Extent.h"
 #include "LandReuse.h"
+#include "MapReach.h"
 
 namespace openblack
 {
@@ -55,6 +57,13 @@ public:
 	/// The height of the land at a world position, as the game works it out
 	[[nodiscard]] virtual float GetHeightAt(glm::vec2) const = 0;
 	[[nodiscard]] virtual glm::vec3 GetNormalAt(glm::vec2) const = 0;
+	/// Adds to the bytes the cell data that GetHeightAt reads for all the points in the reach. Two equal byte lists
+	/// give equal heights at each point of the reach. Returns false when the land cannot give them; the default land
+	/// cannot.
+	[[nodiscard]] virtual bool HeightInputs(const MapReach& /*reach*/, std::vector<std::byte>& /*bytes*/) const
+	{
+		return false;
+	}
 	[[nodiscard]] virtual const lnd::LNDCell& GetCell(const glm::u16vec2& coordinates) const = 0;
 	/// The cell at the given coordinates in the 17x17 cell array of its block, so the neighbours at +1 (z + 1),
 	/// +17 (x + 1) and +18 are also valid. Null outside the map or where there is no block.
@@ -153,6 +162,9 @@ public:
 	/// over the triangle of the cell the position is in, the way the land is drawn, with land at sea level flat unless
 	/// told otherwise (as the game only does to find a fish farm's open sea).
 	[[nodiscard]] float GetAltitude(int32_t mapX, int32_t mapZ, bool seaLevelFlat = true) const;
+	/// Adds to the bytes the cell data that GetAltitude reads for all the map points in the reach. Two equal byte lists
+	/// give equal altitudes at each point of the reach. Returns false when the reach is too large to compare quickly.
+	[[nodiscard]] bool AltitudeInputs(const MapReach& reach, std::vector<std::byte>& bytes) const;
 	/// A world coordinate in 1/65536 of a cell (map_coords::ToFixed)
 	[[nodiscard]] static int32_t ToMapCoords(float unit);
 	/// The height the game draws land of a cell altitude at: land at or below sea level is drawn flat at height 0

@@ -1229,6 +1229,9 @@ struct Command
 		/// the sky is part way through a follow of the sky. With value 1, the renderer loses the device first. Needs no
 		/// creature
 		RestoreDeviceInDomeFollow,
+		/// The renderer makes the graphics device again at once, as after a lost device. With value 1, the renderer
+		/// loses the device first. Needs no creature
+		RestoreDevice,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures
