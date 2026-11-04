@@ -32,8 +32,6 @@
 #include <GameSocket.h>
 #include <LHVM.h>
 #include <LNDFile.h>
-#include <MorphFile.h>
-#include <PackFile.h>
 #include <SDL.h>
 #include <SaveSlots.h>
 #include <bgfx/bgfx.h>
@@ -61,10 +59,8 @@
 #include "3D/LandIslandInterface.h"
 #include "3D/LandLightFrame.h"
 #include "3D/LandLightTable.h"
-#include "3D/LowResolutionTextures.h"
 #include "3D/MapCoords.h"
 #include "3D/OceanInterface.h"
-#include "3D/PlayersSymbols.h"
 #include "3D/SeaTexture.h"
 #include "3D/SkyDome.h"
 #include "3D/SnowCover.h"
@@ -111,7 +107,6 @@
 #include "Creature/CreatureRig.h"
 #include "Creature/CreatureSkin.h"
 #include "Creature/LeashOrders.h"
-#include "Creature/TattooPictures.h"
 #include "Debug/DebugGuiInterface.h"
 #include "Debug/FightAutopilotInterface.h"
 #include "Debug/FrameStatsLog.h"
@@ -133,7 +128,6 @@
 #include "ECS/Components/DeadTree.h"
 #include "ECS/Components/FloatingNumber.h"
 #include "ECS/Components/Hand.h"
-#include "ECS/Components/HandMorph.h"
 #include "ECS/Components/Influence.h"
 #include "ECS/Components/InterfaceLimits.h"
 #include "ECS/Components/LearningMarker.h"
@@ -179,7 +173,6 @@
 #include "ECS/Systems/CameraBookmarkSystemInterface.h"
 #include "ECS/Systems/CameraHelpSystemInterface.h"
 #include "ECS/Systems/CameraPathSystemInterface.h"
-#include "ECS/Systems/CameraZoneSystemInterface.h"
 #include "ECS/Systems/ChatSystemInterface.h"
 #include "ECS/Systems/ChimneySmokeSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
@@ -339,9 +332,7 @@
 #include "Hand/HandReach.h"
 #include "Hand/HandTrace.h"
 #include "Hand/HandVisibility.h"
-#include "Hand/OwnHandReport.h"
 #include "Hand/ScriptHandState.h"
-#include "Hand/ViewReportRules.h"
 #include "Help/DialogueText.h"
 #include "Help/HelpProfile.h"
 #include "Help/SingAlong.h"
@@ -353,7 +344,6 @@
 #include "Input/KeyRebinding.h"
 #include "Input/LandGrip.h"
 #include "Input/LocalPlayer.h"
-#include "Input/MouseWheel.h"
 #include "Input/PlatformKeys.h"
 #include "LHScriptX/MapScript.h"
 #include "LHScriptX/Script.h"
@@ -377,10 +367,10 @@
 #include "Physics/Materials.h"
 #include "PlayerSlots.h"
 #include "Profiler.h"
+#include "Resources/GameAssets.h"
 #include "Resources/Loaders.h"
 #include "Resources/ResourcesInterface.h"
 #include "ScriptHeaders/ScriptInterfaceLevels.h"
-#include "ScriptHeaders/ScriptLessonNatives.h"
 #include "Serializer/FotFile.h"
 #include "Simulation/ChecksumLog.h"
 #include "Simulation/CommandLog.h"
@@ -391,7 +381,6 @@
 #include "Temple/TempleHelp.h"
 #include "Video/VideoRules.h"
 #include "Visual/DetailLevel.h"
-#include "Visual/TexelDepth.h"
 
 #ifdef __ANDROID__
 #include <spdlog/sinks/android_sink.h>
@@ -435,36 +424,6 @@ constexpr bool k_Browser = true;
 constexpr bool k_Browser = false;
 #endif
 
-/// The version file next to the game. The web build has it in its working folder, where the page puts it.
-std::filesystem::path BuildVersionPath()
-{
-#if defined(__EMSCRIPTEN__)
-	return std::filesystem::path(web::k_WorkingFolder) / build_version::k_FileName;
-#else
-	const std::unique_ptr<char, decltype(&SDL_free)> base(SDL_GetBasePath(), SDL_free);
-	return (base ? std::filesystem::path(base.get()) : std::filesystem::current_path()) / build_version::k_FileName;
-#endif
-}
-
-/// The openblack commit of this build. A build without the version file has an unknown version.
-build_version::BuildVersion ReadBuildVersion(filesystem::FileSystemInterface& fileSystem)
-{
-	const auto path = BuildVersionPath();
-	if (!fileSystem.Exists(path))
-	{
-		return {};
-	}
-	try
-	{
-		const auto bytes = fileSystem.ReadAll(path);
-		return build_version::Parse(std::string_view(reinterpret_cast<const char*>(bytes.data()), bytes.size()));
-	}
-	catch (const std::exception&)
-	{
-		return {};
-	}
-}
-
 /// Notes in the hand's debugging trace that a part of the frame put the hand at a position (see hand_trace::HandTrace)
 void TraceHand(std::string_view writer, const glm::vec3& position)
 {
@@ -475,65 +434,6 @@ void TraceHand(std::string_view writer, const glm::vec3& position)
 }
 /// The hand's splash, its sound and the scare it gives the fish are this high over the sea
 constexpr float k_HandSplashHeight = 0.2f;
-
-/// The meshes the hand is pulled towards as its player turns evil or good, the first two of its morph file's variants,
-/// and the files of the base and those two for their skins. Black & White would also blend the hand's bones and
-/// animations towards theirs, but its own meshes share the base's bones and the morph file has no animations for
-/// them, so that changes nothing; a warning says when other data would.
-void LoadHandLooks(const morph::MorphFile& morphFile)
-{
-	using ecs::components::HandMorph;
-	auto& fileSystem = Locator::filesystem::value();
-	auto& resources = Locator::resources::value();
-	auto& meshes = resources.GetMeshes();
-	auto& files = resources.GetL3DFiles();
-	const auto& header = morphFile.GetHeader();
-	const auto pathOf = [&fileSystem](const std::array<char, 0x20>& name) {
-		return fileSystem.GetPath<filesystem::Path::CreatureMesh>() / (std::string(name.data()) + ".l3d");
-	};
-	const auto load = [&files](entt::id_type id, const std::filesystem::path& path) {
-		try
-		{
-			files.Load(id, resources::L3DFileLoader::FromDiskTag {}, path);
-		}
-		catch (std::exception& err)
-		{
-			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "Can't read the hand's skins from {}: {}", path.string(), err.what());
-		}
-	};
-	load(HandMorph::k_SkinFileIds[0], pathOf(header.baseMeshName));
-	const auto base = meshes.Handle(ecs::components::Hand::k_MeshId);
-	for (size_t look = 0; look < HandMorph::k_LookMeshIds.size(); ++look)
-	{
-		const auto& name = header.variantMeshNames.at(look);
-		if (name[0] == '\0')
-		{
-			continue;
-		}
-		const auto path = pathOf(name);
-		try
-		{
-			meshes.Load(HandMorph::k_LookMeshIds.at(look), resources::L3DLoader::FromDiskTag {}, path);
-		}
-		catch (std::exception& err)
-		{
-			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "Can't load the hand mesh {}: {}", path.string(), err.what());
-			continue;
-		}
-		load(HandMorph::k_SkinFileIds.at(look + 1), path);
-		const auto variant = meshes.Handle(HandMorph::k_LookMeshIds.at(look));
-		if (base && variant->GetBoneMatrices() != base->GetBoneMatrices())
-		{
-			SPDLOG_LOGGER_WARN(spdlog::get("game"), "The bones of {} differ from the hand's: they are not blended",
-			                   path.string());
-		}
-		if (!morphFile.GetVariantAnimationSet(static_cast<uint32_t>(look)).empty())
-		{
-			SPDLOG_LOGGER_WARN(spdlog::get("game"), "The animations of {} in the hand's morph file are not blended",
-			                   path.string());
-		}
-	}
-}
 
 /// Whether the hand turns to the face of a model it rests on: not a tree's, a dead tree's, a totem statue's, a seed's or
 /// a shield's, whose faces leave the hand turned to the land
@@ -3357,154 +3257,6 @@ const std::filesystem::path& Game::GetLandscapePath() const noexcept
 	return Locator::landSystem::value().GetLandscapePath();
 }
 
-void Game::ReportHand()
-{
-	// The hand system keeps what this computer last sent of its hand, and decides what goes in this turn
-	auto* reporter = Locator::handSystem::value().GetOwnReporter();
-	if (reporter == nullptr)
-	{
-		return;
-	}
-	const auto& registry = Locator::entitiesRegistry::value();
-	const auto hand =
-	    Locator::handSystem::value().GetOwnHands()[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)];
-	const auto* transform = registry.Valid(hand) ? registry.TryGet<const ecs::components::Transform>(hand) : nullptr;
-	const auto start = reporter->Start(Locator::time::value().GetTurn(), hand,
-	                                   transform != nullptr ? std::optional(transform->position) : std::nullopt);
-	if (!start.has_value())
-	{
-		return;
-	}
-	// A new hand, as on a new land, has no view report yet
-	if (start->newHand)
-	{
-		_lastViewReport.reset();
-	}
-	ReportView();
-	hand_report::OwnInputs inputs {
-	    .handPoint = start->handPoint,
-	    .spellNeedsReport =
-	        [] { return Locator::magicSystem::has_value() && Locator::magicSystem::value().SpellNeedsHandReportEachTurn(); },
-	};
-	if (Locator::pickingSystem::has_value())
-	{
-		const auto& pick = Locator::pickingSystem::value().GetPick();
-		inputs.picked = pick.object.has_value() && registry.Valid(*pick.object) ? *pick.object : entt::entity {entt::null};
-		inputs.pickPoint = pick.point;
-	}
-	const auto* session = Locator::networkGame::has_value() ? Locator::networkGame::value().Session() : nullptr;
-	inputs.origin = session != nullptr ? std::optional(session->Origin()) : std::nullopt;
-	// The camera is the view that the last frame drew
-	const auto& camera = Locator::camera::value();
-	inputs.camera = camera.GetOrigin(Camera::Interpolation::Drawn);
-	inputs.focus = camera.GetFocus(Camera::Interpolation::Drawn);
-	const auto sends = reporter->Finish(inputs);
-	if (sends.pick.has_value())
-	{
-		Locator::playerCommandSystem::value().Submit(*sends.pick);
-	}
-	if (sends.report.has_value())
-	{
-		Locator::playerCommandSystem::value().Submit(*sends.report);
-		// The send time gives the latency of the report at the turn that does it
-		Locator::handSystem::value().ReportSent(*sends.report);
-	}
-}
-
-void Game::ReportView()
-{
-	// What the scripts and the advisors' remarks read of the view: the camera as the frame draws it, the window it draws
-	// into, its arrival, the distance from the fence of the camera zones, and the grip of the hand on the land
-	auto& camera = Locator::camera::value();
-	const auto pose = camera.DrawnPose(Camera::Interpolation::Current);
-	const auto window = Locator::windowing::has_value() ? Locator::windowing::value().GetSize() : glm::ivec2(0);
-	const auto pixels = [](int size) {
-		return static_cast<uint16_t>(std::clamp(size, 0, static_cast<int>(std::numeric_limits<uint16_t>::max())));
-	};
-	// The grip of the land starts with a drag of the land and continues until the Move button is let go. Both buttons
-	// together stop the drag but not the grip, so the scripts see the zoom with the land gripped.
-	const bool bothButtons = Locator::gameActionSystem::has_value() &&
-	                         Locator::gameActionSystem::value().Get(input::UnbindableActionMap::TWO_BUTTON_CLICK);
-	const bool moveHeld = bothButtons || (Locator::gameActionSystem::has_value() &&
-	                                      Locator::gameActionSystem::value().Get(input::BindableActionMap::MOVE));
-	const auto cues = camera.GetModel().GetHandCues();
-	_reportLandGrip = input::land_grip::GripsLand(cues.dragging, _reportLandGrip, moveHeld);
-	// The turn of the camera counts for the whole game turn, so that the scripts see it at all frame rates
-	const auto turn = Locator::time::value().GetTurn();
-	_reportCameraTurned =
-	    view_report::CameraTurnedInTurn(_reportCameraTurned, _reportCameraTurnTurn == turn, cues.controlsTurned);
-	_reportCameraTurnTurn = turn;
-	player_commands::ViewReport report {
-	    .eye = pose.eye,
-	    .focus = pose.focus,
-	    .lens = camera.GetLens(),
-	    .nearClip = camera.GetNearClip(),
-	    .screenWidth = pixels(window.x),
-	    .screenHeight = pixels(window.y),
-	    .aspect = camera.GetAspect(),
-	    .inclusionDistance =
-	        Locator::cameraZoneSystem::has_value() ? Locator::cameraZoneSystem::value().GetInclusionDistance() : 0.0f,
-	    .cameraOrders = Locator::entitiesRegistry::value().Context().scriptCameraOrders,
-	    .cameraArrived = false,
-	    .gripsLand = _reportLandGrip,
-	    .otherButton = bothButtons,
-	    .mouseWheel = script::lesson_natives::MouseHasWheel(platform_mouse::SystemSaysWheel(),
-	                                                        Locator::gameActionSystem::has_value() &&
-	                                                            Locator::gameActionSystem::value().WheelTurned()),
-	    .cameraTurned = _reportCameraTurned,
-	    // The icons that the last draw kept, or the world camera's own when the draw did not run
-	    .cameraIcons =
-	        static_cast<uint16_t>((_interface ? _interface->GetDrawnCameraIcons() : std::nullopt).value_or(_cameraIcons)),
-	    .mouseButtons = platform_mouse::SystemMouseButtons(),
-	};
-	// The keys held, by the game's number of each key
-	if (Locator::gameActionSystem::has_value())
-	{
-		const auto& actions = Locator::gameActionSystem::value();
-		for (uint32_t code = 0; code < report.keysHeld.size(); ++code)
-		{
-			const auto key = input::rebinding::KeyOfGameCode(code);
-			report.keysHeld.set(code, key.has_value() && actions.IsKeyHeld(static_cast<int>(*key)));
-		}
-	}
-	if (const auto* script = Locator::scriptControlSystem::value().GetScriptCamera(camera); script != nullptr)
-	{
-		report.cameraArrived = script->Arrived();
-	}
-	else
-	{
-		report.cameraArrived =
-		    script_camera::PlayerCameraArrived(camera.GetOrigin(), camera.GetOrigin(Camera::Interpolation::Target),
-		                                       camera.GetFocus(), camera.GetFocus(Camera::Interpolation::Target));
-	}
-	// The report goes only when the view changed enough since the last report that went
-	if (_lastViewReport != nullptr && !view_report::ChangedEnough(*_lastViewReport, report))
-	{
-		return;
-	}
-	_lastViewReport = std::make_unique<player_commands::ViewReport>(report);
-	Locator::playerCommandSystem::value().Submit(report);
-}
-
-void Game::ReportHelp()
-{
-	// The report goes once a turn, after the turns of a frame that played one, and only when something in it changed
-	const auto turn = Locator::time::value().GetTurn();
-	if (_helpReportTurn == turn || !Locator::helpProfileSystem::has_value())
-	{
-		return;
-	}
-	_helpReportTurn = turn;
-	const bool cursorOnPoint =
-	    Locator::pickingSystem::has_value() && Locator::pickingSystem::value().GetPick().point.has_value();
-	if (const auto report =
-	        Locator::helpProfileSystem::value().MakeReport(FrontEndBoxShows(), HelpWorldCameraView(), cursorOnPoint);
-	    report.has_value())
-	{
-		Locator::playerCommandSystem::value().Submit(*report);
-	}
-}
-
 void Game::ReportTurnApiCheck() const
 {
 	if (!Locator::mainThreadQueue::has_value() || _turnApiCheck == TurnApiCheck::Off)
@@ -4618,34 +4370,6 @@ void Game::UpdateCameraKeys(std::chrono::microseconds deltaTime)
 	}
 }
 
-namespace
-{
-
-/// The language of the install from Country.txt in the game folder, or UK English when the game can not read the file
-GameLanguage ReadGameLanguage(filesystem::FileSystemInterface& fileSystem)
-{
-	std::optional<std::vector<uint8_t>> contents;
-	if (const auto path =
-	        filesystem::FileSystemInterface::FindIgnoringCase(fileSystem.GetGamePath(), game_language::k_CountryFile);
-	    path.has_value())
-	{
-		try
-		{
-			contents = fileSystem.ReadAll(*path);
-		}
-		catch (const std::exception& error)
-		{
-			SPDLOG_LOGGER_WARN(spdlog::get("game"), "Could not read {}: {}", game_language::k_CountryFile, error.what());
-		}
-	}
-	const auto language = contents.has_value() ? game_language::FromCountryFile(std::span<const uint8_t>(*contents))
-	                                           : game_language::FromCountryFile(std::nullopt);
-	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The language of the install is \"{}\"", game_language::Code(language));
-	return language;
-}
-
-} // namespace
-
 bool Game::Initialize() noexcept
 {
 	auto& config = Locator::config::value();
@@ -4688,7 +4412,7 @@ bool Game::Initialize() noexcept
 	}
 	_startupTimer->Step("window, renderer and audio device");
 	auto& fileSystem = Locator::filesystem::value();
-	_buildVersion = ReadBuildVersion(fileSystem);
+	_buildVersion = game_assets::ReadBuildVersion(fileSystem);
 	SPDLOG_LOGGER_INFO(spdlog::get("game"), "openblack build {}", _buildVersion.Text());
 	auto& events = Locator::events::value();
 
@@ -4780,7 +4504,7 @@ bool Game::Initialize() noexcept
 	fileSystem.SetGamePath(_gamePath);
 
 	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "The GamePath is \"{}\".", fileSystem.GetGamePath().generic_string());
-	Locator::config::value().language = ReadGameLanguage(fileSystem);
+	Locator::config::value().language = game_assets::ReadGameLanguage(fileSystem);
 
 	if (std::filesystem::path(_startMap).is_absolute())
 	{
@@ -6927,92 +6651,7 @@ void Game::ReadTattooPictures()
 
 void Game::MakePlayersSymbols(std::optional<uint32_t> symbolInPlace)
 {
-	using filesystem::Path;
-	if (!Locator::filesystem::has_value() || !Locator::playerProfileSystem::has_value())
-	{
-		return;
-	}
-	auto& fileSystem = Locator::filesystem::value();
-	const auto textures = fileSystem.GetPath<Path::Textures>();
-	const auto read = [&fileSystem](const std::filesystem::path& path) -> std::vector<uint8_t> {
-		try
-		{
-			return fileSystem.ReadAll(path);
-		}
-		catch (std::runtime_error& err)
-		{
-			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "{}", err.what());
-			return {};
-		}
-	};
-	players_symbols::Sheet file {.colours = read(textures / "PlayersSymbols.raw"),
-	                             .alpha = read(textures / "PlayersSymbolsa.raw")};
-	const players_symbols::Sheet designs {.colours = read(textures / "OriginalChooseSymbol.raw"),
-	                                      .alpha = read(textures / "OriginalChooseSymbola.raw")};
-	if (!file.Whole() || !designs.Whole())
-	{
-		return;
-	}
-	const auto profile = Locator::playerProfileSystem::value().GetCurrentProfile();
-	const auto symbol =
-	    players_symbols::ChosenSymbol(profile.has_value() ? std::optional(profile->symbol) : std::nullopt, symbolInPlace);
-	std::optional<std::span<const uint8_t>> ownPicture;
-	std::optional<creature_tattoo::Picture> picture;
-	if (symbol.has_value() && Locator::tattooEditorSystem::has_value() && *symbol < creature_tattoo::k_DesignCount)
-	{
-		picture = Locator::tattooEditorSystem::value().GetPictures().at(*symbol);
-		if (picture.has_value())
-		{
-			ownPicture = std::span<const uint8_t>(*picture);
-		}
-	}
-	const auto localPlayer =
-	    Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE;
-	// A game with more player numbers than the squares of the file has a square for each player number
-	auto wide = players_symbols::Widen(std::move(file), players_symbols::SquaresInARowFor(ecs::game_players::Count()));
-	auto players = players_symbols::MakeSheet(std::move(wide), designs, symbol, static_cast<uint32_t>(localPlayer), ownPicture);
-	// The lowest detail levels keep the sheet at half its size: each symbol takes every second texel of its full one
-	const bool halve = Locator::config::value().detail.lowResTextures;
-	if (halve)
-	{
-		for (auto* bytes : {&players.colours, &players.alpha})
-		{
-			if (auto halved = low_resolution_textures::Halve(*bytes))
-			{
-				*bytes = std::move(*halved);
-			}
-		}
-	}
-	// The square of each computer player takes the picture of its god. At the low detail levels the picture comes from
-	// the god's file of half size. A computer god after the seventh takes the last picture (deviation 222).
-	const auto landNumber = Locator::entitiesRegistry::value().Context().mapScriptGlobals.landNumber;
-	for (const auto player : ecs::game_players::Gods())
-	{
-		if (!Locator::playerSystem::has_value() || !Locator::playerSystem::value().IsComputerPlayer(player))
-		{
-			continue;
-		}
-		const auto number = static_cast<uint32_t>(player);
-		const auto god = players_symbols::k_GodPictures.at(players_symbols::GodPictureOf(number, landNumber));
-		const auto name = fmt::format("{}{}.cps", god, halve ? players_symbols::k_LowDetailLetter : "");
-		players_symbols::PutPicture(players, read(textures / name), number);
-	}
-	// The sheet takes the place of the file's, kept as the game keeps a texture with an alpha
-	auto& textureManager = Locator::resources::value().GetTextures();
-	const auto replace = [&textureManager](const std::string& name, std::vector<uint8_t> bytes) {
-		textureManager.Erase(name);
-		try
-		{
-			textureManager.Load(name, resources::Texture2DLoader::FromMadeTag {}, name, std::move(bytes),
-			                    graphics::texel_depth::Depth::FourBits);
-		}
-		catch (std::runtime_error& err)
-		{
-			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "{}", err.what());
-		}
-	};
-	replace("raw/PlayersSymbols", std::move(players.colours));
-	replace("raw/PlayersSymbolsa", std::move(players.alpha));
+	game_assets::MakePlayersSymbols(symbolInPlace);
 }
 
 void Game::NameCreatureAfterProfile()
@@ -7387,44 +7026,10 @@ void Game::RequestScreenshot(const std::filesystem::path& path, bool hideDebugGu
 
 void Game::LoadHandAnimation()
 {
-	auto& fileSystem = Locator::filesystem::value();
-	const auto path = fileSystem.GetPath<filesystem::Path::Data>() / "CTR" / "hh.hbn";
-	const auto specPath = fileSystem.GetPath<filesystem::Path::Data>() / "hndspec5.txt";
-	if (!fileSystem.Exists(path) || !fileSystem.Exists(specPath))
+	if (auto animation = game_assets::LoadHandAnimation(); animation != nullptr)
 	{
-		SPDLOG_LOGGER_WARN(spdlog::get("game"), "The hand is not animated: {} or {} is missing", path.string(),
-		                   specPath.string());
-		return;
+		_handAnimation = std::move(animation);
 	}
-
-	pack::PackFile pack;
-	const auto packResult = pack.ReadFile(*fileSystem.GetData(path));
-	if (packResult != pack::PackResult::Success || !pack.HasBlock("Hand"))
-	{
-		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "Unable to read the Hand block of {}: {}", path.string(),
-		                    pack::ResultToStr(packResult));
-		return;
-	}
-	morph::MorphFile morphFile;
-	const auto morphResult = morphFile.Open(pack.GetBlock("Hand"), fileSystem.FindPath(specPath).parent_path());
-	if (morphResult != morph::MorphResult::Success)
-	{
-		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "Unable to read the hand animations of {}: {}", path.string(),
-		                    morph::ResultToStr(morphResult));
-		return;
-	}
-
-	LoadHandLooks(morphFile);
-
-	const auto mesh = Locator::resources::value().GetMeshes().Handle(entt::hashed_string("hand"));
-	auto animation = std::make_unique<HandAnimation>();
-	if (!mesh || !animation->Load(morphFile, mesh->GetBoneParents(), mesh->GetBoneMatrices()))
-	{
-		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The hand animations of {} do not fit the hand mesh", path.string());
-		return;
-	}
-	_handAnimation = std::move(animation);
-	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Loaded the hand animations of {}", path.string());
 }
 
 void Game::PlaceHand(ecs::components::Transform& handTransform, float deltaSeconds)
