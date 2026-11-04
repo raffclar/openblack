@@ -105,6 +105,9 @@ glm::vec4 LandTexelsUniform(int blockTexels);
 /// changes; none without snow
 const Texture2D* SnowDepth(std::unique_ptr<Texture2D>& texture, std::optional<uint32_t>& revision);
 
+/// The texture of a skin: the mesh's own skin, else the shared texture of that id; none for no skin
+const Texture2D* GetTexture(uint32_t skinID, const std::unordered_map<SkinId, std::unique_ptr<graphics::Texture2D>>& meshSkins);
+
 /// The land's light a creature, its eyes and its hair take: halved in the sea's reflection, as the game halves every
 /// level of the land's light while it draws the reflection
 float CreatureLandLightScale(RenderPass viewId);
@@ -116,5 +119,15 @@ bgfx::ViewId SetUpLandView(RenderPass pass, const FrameBuffer& frameBuffer, glm:
 /// samplers and uniforms are set before
 void SubmitLandQuad(bgfx::ViewId viewId, const ShaderProgram& program, glm::vec2 from, glm::vec2 to, glm::vec2 uvFrom,
                     glm::vec2 uvTo, uint64_t state);
+
+/// The mesh whose instances hold an instance, its draw, and whether that is among the things fading out in the
+/// distance: a thing drawn in less detail further off is among the instances of the mesh its distance chose
+struct InstanceHolder
+{
+	entt::id_type mesh;
+	const ecs::systems::RenderContext::InstancedDrawDesc* placers;
+	bool fading;
+};
+std::optional<InstanceHolder> HolderOf(const ecs::systems::RenderContext& context, uint32_t instance);
 } // namespace detail
 } // namespace openblack::graphics
