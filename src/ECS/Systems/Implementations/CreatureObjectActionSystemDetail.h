@@ -48,6 +48,10 @@ using components::CreatureObjectAction;
 using components::Transform;
 using creature::CreatureRig;
 
+const CreatureRig::ActionPoints* PointsOf(const Creature& creature);
+
+glm::mat4 PlacementOf(const Transform& transform);
+
 /// Something eaten is gone: out of its home and its town first
 void Consume(ecs::Registry& registry, entt::entity creature, entt::entity food);
 
@@ -58,6 +62,25 @@ float TakeInFood(entt::entity creature, std::optional<float> value);
 /// the creature keeps it down or brings it up.
 void Swallow(entt::entity creature, CreatureObjectAction& action, std::optional<float> value);
 
+/// The foot meets what the creature kicks. The order of the rules is:
+/// 1. A building breaks with two blows when it is fully built and not on fire.
+/// 2. A thing that can fly flies off ahead of the creature. A thing in the air takes the new speed. A thing on the land
+///    goes into the air from where it lies, from the player of the creature.
+/// 3. Another creature takes a tenth of a hit, and more as the kicker is tall for it.
+void KickAway(entt::entity creature, const Creature& body, const Transform& transform, const CreatureAnimation& animation,
+              entt::entity target);
+
 void Fail(CreatureObjectAction& action, std::string reason,
           creature_object_actions::Failure kind = creature_object_actions::Failure::Other);
+
+/// Whether a thing lies on the map, where a creature can stomp on it: not held, flying or carried off.
+/// A piece that broke off a building goes into the cells of the map when it comes to rest, as a rock does.
+bool OnTheMap(const ecs::Registry& registry, entt::entity thing);
+
+/// One of the three creaks of a tree a creature pulls from the ground, drawn from the local random numbers
+entt::id_type TreeCreak();
+
+/// The spheres round the body of each creature come on and go off as its body actions start. While they are on, each
+/// part that moved far enough since its last check knocks about what it reaches.
+void Trample(ecs::Registry& registry, entt::entity only);
 } // namespace openblack::ecs::systems::object_action_detail
