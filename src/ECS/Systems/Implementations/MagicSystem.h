@@ -31,7 +31,6 @@
 #include "Magic/MagicTables.h"
 #include "Magic/MagicWorldInterface.h"
 #include "Magic/SpellBehaviours.h"
-#include "Magic/SpellGrid.h"
 #include "Magic/SpellSeedRules.h"
 #include "PlayerSlots.h"
 
@@ -249,6 +248,7 @@ public:
 	void Reset() override;
 	void SaveState(reflection::BinaryWriter& out) const override;
 	bool LoadState(reflection::BinaryReader& in) override;
+	[[nodiscard]] SavedStateInterface* OldSaveState() override { return &_oldPart; }
 
 	void SetIgnoreInfluence(bool ignore) override { _ignoreInfluence = ignore; }
 	void SetTribalPower(PlayerNames player, Tribe tribe, float power) override;
@@ -476,6 +476,24 @@ private:
 		MagicSystem& _magic;
 		std::optional<PlayerNames> _before;
 	};
+	/// The section of the miracles in a save from before the grid of recent miracles went out. A save does not write it.
+	class OldPart final: public SavedStateInterface
+	{
+	public:
+		explicit OldPart(MagicSystem& magic)
+		    : _magic(&magic)
+		{
+		}
+		bool LoadState(reflection::BinaryReader& in) override { return _magic->LoadOldState(in); }
+
+	private:
+		MagicSystem* _magic;
+	};
+	/// The squares on each side of the grid of recent miracles that an older save keeps
+	static constexpr size_t k_OldSpellGridSide = 64;
+	bool LoadOldState(reflection::BinaryReader& in);
+	/// Reads the running state. hasSpellGrid tells if the save keeps the grid of recent miracles.
+	bool LoadBody(reflection::BinaryReader& in, bool hasSpellGrid);
 	/// The player whose hand the input and the frames of this computer move
 	[[nodiscard]] static PlayerNames OwnPlayer();
 	/// The player whose hand the miracles of the hand act on now: the player of the command, else the player of this
@@ -500,7 +518,6 @@ private:
 
 	GameMagicWorld _world;
 	magic::FlockMiracle _flocks;
-	magic::SpellGrid _grid;
 	/// The miracles, newest first, as they are processed
 	std::deque<entt::entity> _spells;
 	std::unordered_map<entt::entity, std::unique_ptr<SpellLink>> _links;
@@ -578,6 +595,7 @@ private:
 	bool _ignoreInfluence {false};
 	/// The hand as a testbed scenario puts it, in place of the mouse
 	std::optional<HandFrame> _driven;
+	OldPart _oldPart {*this};
 };
 
 } // namespace openblack::ecs::systems

@@ -58,6 +58,9 @@ class ObjectDrawListSystemInterface;
 class MagicSystemInterface: public SavedStateInterface
 {
 public:
+	/// The section of the miracles in a save from before the grid of recent miracles went out. A save does not write it.
+	[[nodiscard]] virtual SavedStateInterface* OldSaveState() { return nullptr; }
+
 	/// What a frame tells the miracles about the player's hand
 	struct HandFrame
 	{

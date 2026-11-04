@@ -1548,7 +1548,6 @@ void MagicSystem::Maintain(entt::entity entity, Spell& spell)
 	{
 		const float strength = magic::spells::StrengthOf(*this, spell);
 		magic::PayForOneTurn(spell.chants, magic::spells::RulesOf(*this, spell), CasterOf(spell));
-		_grid.Mark({spell.position.x, spell.position.z});
 		spell.processInfo.power = strength;
 	}
 	else
@@ -1699,7 +1698,6 @@ void MagicSystem::ProcessTurn()
 	}
 	++_turn;
 	_world.ProcessTurn();
-	_grid.Fade();
 	ProcessDispensers();
 	ProcessCreatureSpells();
 	KeepCreatureBeams();
@@ -1852,7 +1850,6 @@ void MagicSystem::Reset()
 	_handScale = 1.0f;
 	_lastHandResult = HandResult::None;
 	_world.Reset();
-	_grid.Clear();
 	_creatureCasts.clear();
 }
 
@@ -4014,7 +4011,6 @@ void MagicSystem::SaveState(reflection::BinaryWriter& out) const
 	reflection::Save(out, _creatureCasts);
 	reflection::Save(out, _creatureBeams);
 	reflection::Save(out, _world.PuttingOutFire());
-	reflection::Save(out, _grid);
 	// The movement of this computer's hand and the place of its effect: only the frames change them, and only the hand's
 	// own effect and the casts that the hand sends read them
 	out.BeginPresentation();
@@ -4049,6 +4045,16 @@ void MagicSystem::SaveState(reflection::BinaryWriter& out) const
 
 bool MagicSystem::LoadState(reflection::BinaryReader& in)
 {
+	return LoadBody(in, false);
+}
+
+bool MagicSystem::LoadOldState(reflection::BinaryReader& in)
+{
+	return LoadBody(in, true);
+}
+
+bool MagicSystem::LoadBody(reflection::BinaryReader& in, bool hasSpellGrid)
+{
 	std::vector<entt::entity> spells;
 	reflection::Load(in, spells);
 	reflection::Load(in, _creatureCasts);
@@ -4056,7 +4062,12 @@ bool MagicSystem::LoadState(reflection::BinaryReader& in)
 	std::unordered_map<entt::entity, uint32_t> watchers;
 	reflection::Load(in, watchers);
 	_world.RestorePuttingOutFire(std::move(watchers));
-	reflection::Load(in, _grid);
+	if (hasSpellGrid)
+	{
+		// An older save kept a grid of where miracles ran lately. Nothing reads it, so the load reads past it.
+		std::array<std::array<uint8_t, k_OldSpellGridSide>, k_OldSpellGridSide> grid {};
+		reflection::Load(in, grid);
+	}
 	reflection::Load(in, _handVelocity);
 	reflection::Load(in, _lastHandPosition);
 	in.ReadRaw(_handSpin);

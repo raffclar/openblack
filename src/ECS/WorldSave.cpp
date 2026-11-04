@@ -316,6 +316,12 @@ systems::SavedStateInterface* FindLocalParticles()
 	return Locator::particleRuleSystem::value().LocalEffectsState();
 }
 
+/// The section of the miracles in a save from before the grid of recent miracles went out
+systems::SavedStateInterface* FindOldMagic()
+{
+	return Locator::magicSystem::has_value() ? Locator::magicSystem::value().OldSaveState() : nullptr;
+}
+
 /// The one section of the particles in a save from before the split
 systems::SavedStateInterface* FindOldParticles()
 {
@@ -341,7 +347,8 @@ constexpr std::array<SavedSystem, 45> k_SavedSystems {{
     {"localParticles", &FindLocalParticles},
     {"effectRequests", &FindSystem<Locator::effectRequestSystem>},
     {"towns", &FindSystem<Locator::townSystem>},
-    {"magic", &FindSystem<Locator::magicSystem>},
+    {"magic", &FindOldMagic, false},
+    {"miracles", &FindSystem<Locator::magicSystem>},
     {"magicShield", &FindSystem<Locator::magicShieldSystem>},
     {"miracleFx", &FindSystem<Locator::miracleFxSystem>},
     {"cameraPath", &FindSystem<Locator::cameraPathSystem>},
