@@ -2953,91 +2953,6 @@ void CallIn() // 055 CALL_IN
 	Pusho(0);
 }
 
-/// What a script gave for a challenge's record, taken off its stack: every value, however many arguments it gave its
-/// reminder script, so that nothing is left behind for the script's next calls
-script::challenge_snapshots::Snapshot PopChallengeSnapshot(script::challenge_snapshots::Call call)
-{
-	auto& lhvm = Locator::vm::value();
-	const auto snapshot =
-	    script::challenge_snapshots::Read(call, {
-	                                                .pop =
-	                                                    [&lhvm]() {
-		                                                    script::challenge_snapshots::Value value;
-		                                                    value.value = lhvm.Pop(value.type);
-		                                                    return value;
-	                                                    },
-	                                                .text = [&lhvm](uint32_t offset) { return lhvm.GetString(offset); },
-	                                            });
-	if (snapshot.tooManyArguments)
-	{
-		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Too many arguments for a challenge's reminder script: {}",
-		                    snapshot.arguments.size());
-	}
-	return snapshot;
-}
-
-/// The player's record of a challenge is kept up to date from a script's snapshot, and a snapshot of a challenge already
-/// recorded moves the first player's alignment
-void KeepChallengeRecord(const script::challenge_snapshots::Snapshot& snapshot, script::challenge_snapshots::Call call)
-{
-	auto& registry = Locator::entitiesRegistry::value();
-	const auto turn = Locator::time::has_value() ? Locator::time::value().GetTurn() : 0;
-	const ecs::challenge_records::References references {
-	    .add =
-	        [](entt::entity thing) {
-		        if (Locator::scriptObjects::has_value())
-		        {
-			        Locator::scriptObjects::value().AddReference(thing);
-		        }
-	        },
-	    .remove =
-	        [](entt::entity thing) {
-		        if (Locator::scriptObjects::has_value())
-		        {
-			        Locator::scriptObjects::value().RemoveReference(thing);
-		        }
-	        },
-	};
-	const auto outcome = ecs::challenge_records::Record(registry, snapshot, call, turn, references);
-	if (outcome.takesPicture && Locator::rendererRequests::has_value())
-	{
-		// The picture is of the screen as the player sees it now
-		auto* picture = registry.TryGet<ecs::components::ChallengePicture>(outcome.record);
-		if (picture == nullptr)
-		{
-			picture = &registry.Assign<ecs::components::ChallengePicture>(outcome.record);
-		}
-		// The renderer takes the picture at the end of a draw, so the request goes to the main thread
-		PostToMainThread(MainThreadApi::Renderer, [name = ecs::challenge_pictures::Ask(*picture, outcome.record)] {
-			Locator::rendererRequests::value().RequestScreenPicture(name, &ecs::challenge_pictures::Take);
-		});
-	}
-	if (!outcome.alignment.has_value() || !Locator::alignmentSystem::has_value() || !Locator::infoConstants::has_value())
-	{
-		return;
-	}
-	const auto player =
-	    Locator::playerSystem::has_value() ? Locator::playerSystem::value().GetLocalPlayer() : PlayerNames::PLAYER_ONE;
-	auto& alignment = Locator::alignmentSystem::value();
-	const auto change =
-	    ecs::challenge_records::AlignmentChange(alignment.GetPlayerAlignment(player), *outcome.alignment,
-	                                            Locator::infoConstants::value().player.maxScriptAlignmentChange);
-	// The totals of the alignment changes count the change before the alignment takes it
-	alignment.AddToHistory(player, ecs::components::AlignmentCause::Script, change);
-	alignment.AddPlayerAlignment(player, change);
-}
-
-void CHLApi::RecordChallenge(const script::challenge_snapshots::Snapshot& snapshot, script::challenge_snapshots::Call call)
-{
-	KeepChallengeRecord(snapshot, call);
-}
-
-void Snapshot() // 057 SNAPSHOT
-{
-	KeepChallengeRecord(PopChallengeSnapshot(script::challenge_snapshots::Call::Start),
-	                    script::challenge_snapshots::Call::Start);
-}
-
 void SetInterfaceInteraction() // 063 SET_INTERFACE_INTERACTION
 {
 	const auto level = Pop().intVal;
@@ -4518,60 +4433,6 @@ void GetTotalEvents() // 237 GET_TOTAL_EVENTS
 	Pushf(count != nullptr ? static_cast<float>(count->Total()) : 0.0f);
 }
 
-void UpdateSnapshot() // 238 UPDATE_SNAPSHOT
-{
-	KeepChallengeRecord(PopChallengeSnapshot(script::challenge_snapshots::Call::Update),
-	                    script::challenge_snapshots::Call::Update);
-}
-
-/// The kinds of reward a script can give are numbered 1 to 60
-constexpr int32_t k_LastRewardType = 60;
-
-/// A reward chest of a kind for the first player, given to a town or none: on the land, or from the sky
-uint32_t GiveReward(int32_t type, glm::vec3 position, entt::entity town, bool fromSky)
-{
-	if (type < 1 || type > k_LastRewardType)
-	{
-		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "CREATE_REWARD: invalid type {}", type);
-		return 0;
-	}
-	if (!Locator::rewardSystem::has_value())
-	{
-		return 0;
-	}
-	const auto player =
-	    Locator::playerSystem::has_value() ? std::optional(Locator::playerSystem::value().GetLocalPlayer()) : std::nullopt;
-	const auto chest =
-	    Locator::rewardSystem::value().Create(position, static_cast<RewardObjectInfo>(type), player, town, fromSky);
-	RegisterCreated(chest);
-	return static_cast<uint32_t>(chest);
-}
-
-void CreateReward() // 239 CREATE_REWARD
-{
-	const auto fromSky = Pop().intVal != 0;
-	const auto position = PopVec();
-	const auto type = Pop().intVal;
-	Pusho(GiveReward(type, position, entt::null, fromSky));
-}
-
-void CreateRewardInTown() // 240 CREATE_REWARD_IN_TOWN
-{
-	const auto fromSky = Pop().intVal != 0;
-	const auto position = PopVec();
-	const auto town = PopObject();
-	const auto type = Pop().intVal;
-	// The town must be one
-	if (!Locator::entitiesRegistry::value().Valid(town) ||
-	    !Locator::entitiesRegistry::value().AllOf<ecs::components::Town>(town))
-	{
-		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "CREATE_REWARD_IN_TOWN: not a town");
-		Pusho(0);
-		return;
-	}
-	Pusho(GiveReward(type, position, town, fromSky));
-}
-
 void CreateWithAngleAndScale() // 252 CREATE_WITH_ANGLE_AND_SCALE
 {
 	// The angle is given in degrees
@@ -4720,23 +4581,6 @@ void GetInteractionMagnitude() // 270 GET_INTERACTION_MAGNITUDE
 	          : 0.0f);
 }
 
-void CreateHighlight() // 272 CREATE_HIGHLIGHT
-{
-	const auto challenge = Pop().uintVal;
-	const auto position = PopVec();
-	const auto kind = Pop().uintVal;
-	// A kind past the info table makes none (the game reads past its table)
-	const auto highlight = Locator::scriptHighlightSystem::value().Create(kind, position, challenge);
-	if (highlight == entt::null)
-	{
-		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Highlight not created");
-		PushObject(entt::null);
-		return;
-	}
-	RegisterCreated(highlight);
-	PushObject(highlight);
-}
-
 void GetObjectHeld273() // 273 GET_OBJECT_HELD
 {
 	// What a creature holds in its hand, if anything
@@ -4878,12 +4722,6 @@ void ImmersionExists() // 304 IMMERSION_EXISTS
 	Pushb(false);
 }
 
-void SetDrawHighlight() // 306 SET_DRAW_HIGHLIGHT
-{
-	// The challenge scrolls show or hide; the signs always show
-	Locator::chlapi::value().SetHighlightDrawOn(Pop().intVal != 0);
-}
-
 void SetOpenClose() // 307 SET_OPEN_CLOSE
 {
 	const auto object = PopObject();
@@ -5016,19 +4854,6 @@ void IsPlayingJcSpecial() // 327 IS_PLAYING_JC_SPECIAL
 	Pushb(special != k_LiftComeRound || Locator::introSystem::value().HasLiftFinished());
 }
 
-void HighlightProperties() // 334 HIGHLIGHT_PROPERTIES
-{
-	const auto category = Pop().uintVal;
-	const auto text = Pop().uintVal;
-	const auto object = PopObject();
-	if (object == entt::null || !Locator::entitiesRegistry::value().AllOf<ecs::components::ScriptHighlight>(object))
-	{
-		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Thing not valid");
-		return;
-	}
-	Locator::scriptHighlightSystem::value().SetProperties(object, text, category);
-}
-
 void HandDemoTrigger() // 336 HAND_DEMO_TRIGGER
 {
 	// Whether the demonstration reached a mark; asking lets a demonstration held there go on
@@ -5108,12 +4933,6 @@ void ThingJcSpecial() // 349 THING_JC_SPECIAL
 		// Given to one drawn in high detail, the opening's light, its hand and its chasing camera all go
 		Locator::introSystem::value().ReleaseAll();
 	}
-}
-
-void UpdateSnapshotPicture() // 351 UPDATE_SNAPSHOT_PICTURE
-{
-	KeepChallengeRecord(PopChallengeSnapshot(script::challenge_snapshots::Call::Picture),
-	                    script::challenge_snapshots::Call::Picture);
 }
 
 void StopScriptsInFilesExcluding() // 352 STOP_SCRIPTS_IN_FILES_EXCLUDING
