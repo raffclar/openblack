@@ -118,6 +118,11 @@ public:
 	void Update(const void* memory) const;
 	/// Replaces a dynamic buffer's vertices from one on, with bgfx memory
 	void Update(uint32_t firstVertex, const void* memory) const;
+	/// Tells the graphics device that the game gives the vertices again after a restore of the device. A dynamic buffer
+	/// keeps its copy on the device.
+	void SetContentsGivenAgain() const;
+	/// Gives the bytes of all the vertices again after a restore of the device
+	void GiveContentsAgain(std::vector<uint8_t> bytes) const;
 
 private:
 	std::string _name;

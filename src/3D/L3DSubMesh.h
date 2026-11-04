@@ -220,6 +220,12 @@ public:
 	[[nodiscard]] static std::optional<Prepared> Prepare(const l3d::L3DFile& l3d, uint32_t meshIndex, bool packVertices);
 	/// Keeps the prepared data and makes the objects on the graphics device, when the mesh makes them
 	void Finish(Prepared prepared) noexcept;
+	/// Tells the graphics device that the submesh gives its vertices and indices again after a restore of the device.
+	/// A submesh of a dynamic mesh keeps the copy of its vertices on the device.
+	void SetDeviceDataGivenAgain() const;
+	/// Gives the vertices and indices again after a restore of the graphics device, from a new preparation of the same
+	/// file. A submesh that has new faces for the snow keeps the copy of its buffers on the device.
+	void GiveDeviceDataAgain(const Prepared& prepared) const;
 
 private:
 	/// The bytes of the submesh's packed vertices

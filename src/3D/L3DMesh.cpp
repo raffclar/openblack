@@ -12,6 +12,7 @@
 #include <cassert>
 
 #include <algorithm>
+#include <exception>
 #include <filesystem>
 #include <map>
 #include <stdexcept>
@@ -23,12 +24,15 @@
 #include <spdlog/spdlog.h>
 
 #include "3D/L3DSubMesh.h"
+#include "Common/MainThreadQueue.h"
 #include "EngineConfig.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Graphics/GraphicsDeviceInterface.h"
 #include "Graphics/Texture2D.h"
 #include "Graphics/VertexBuffer.h"
 #include "Locator.h"
+#include "MainThreadWork.h"
+#include "Resources/Rereads.h"
 
 using namespace openblack;
 using namespace openblack::graphics;
@@ -59,7 +63,98 @@ L3DMesh::L3DMesh(std::string debugName, bool dynamic, UploadMode upload) noexcep
 {
 }
 
-L3DMesh::~L3DMesh() noexcept = default;
+L3DMesh::~L3DMesh() noexcept
+{
+	if (_givesDataAgain && Locator::graphicsDevice::has_value())
+	{
+		Locator::graphicsDevice::value().GetDataGivers().Remove(this);
+	}
+}
+
+void L3DMesh::SetFileSource(FileSource source)
+{
+	if (_upload != UploadMode::Device || !Locator::graphicsDevice::has_value() || !source)
+	{
+		return;
+	}
+	_fileSource = std::move(source);
+	// The skins of a dynamic mesh change, thus the device keeps them
+	if (!_dynamic && _skinSource == nullptr)
+	{
+		for (const auto& [id, skin] : _skins)
+		{
+			skin->SetTexelsGivenAgain();
+		}
+	}
+	for (const auto& subMesh : _subMeshes)
+	{
+		subMesh->SetDeviceDataGivenAgain();
+	}
+	PostToMainThread(MainThreadApi::Graphics, [this] {
+		Locator::graphicsDevice::value().GetDataGivers().Add(this, [this](resources::Rereads& rereads) {
+			try
+			{
+				const auto bytes = _fileSource(rereads);
+				if (bytes.empty())
+				{
+					if (const auto logger = spdlog::get("graphics"))
+					{
+						logger->error("{}: the file of the mesh cannot be read again", _debugName);
+					}
+					return;
+				}
+				l3d::L3DFile l3d;
+				if (const auto result = l3d.Open(bytes); result != l3d::L3DResult::Success)
+				{
+					if (const auto logger = spdlog::get("graphics"))
+					{
+						logger->error("{}: the mesh cannot be read again: {}", _debugName, l3d::ResultToStr(result));
+					}
+					return;
+				}
+				GiveDeviceDataAgain(l3d);
+			}
+			catch (const std::exception& error)
+			{
+				if (const auto logger = spdlog::get("graphics"))
+				{
+					logger->error("{}: the mesh cannot be read again: {}", _debugName, error.what());
+				}
+			}
+		});
+		_givesDataAgain = true;
+	});
+}
+
+void L3DMesh::GiveDeviceDataAgain(const l3d::L3DFile& l3d) const
+{
+	// The same settings as the load: the side of the skins tells whether the load halved them
+	auto settings = SettingsNow(UploadMode::Device);
+	settings.lowResolution = _skinSide != l3d::L3DTexture::k_Width;
+	const auto prepared = Prepare(l3d, settings);
+	if (prepared.skinLayout != _skinLayout || prepared.skinSide != _skinSide || prepared.subMeshes.size() != _subMeshes.size())
+	{
+		if (const auto logger = spdlog::get("graphics"))
+		{
+			logger->error("{}: the mesh read again is not the mesh that was loaded", _debugName);
+		}
+		return;
+	}
+	if (!_dynamic && _skinSource == nullptr)
+	{
+		for (const auto& skin : prepared.skins)
+		{
+			if (const auto it = _skins.find(skin.id); it != _skins.end())
+			{
+				it->second->GiveTexelsAgain(skin.bytes);
+			}
+		}
+	}
+	for (size_t i = 0; i < _subMeshes.size(); ++i)
+	{
+		_subMeshes[i]->GiveDeviceDataAgain(prepared.subMeshes[i]);
+	}
+}
 
 bool L3DMesh::LoadMade(const L3DMesh& skinSource, std::span<const std::vector<L3DSubMesh::MadePrimitive>> subMeshes) noexcept
 {

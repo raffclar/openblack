@@ -173,6 +173,16 @@ void BgfxGraphicsDevice::SetName(VertexBufferHandle buffer, std::string_view nam
 	bgfx::setName(toBgfx(buffer), name.data(), static_cast<int32_t>(name.size()));
 }
 
+void BgfxGraphicsDevice::SetContentsGivenAgain(VertexBufferHandle buffer) const
+{
+	bgfx::setDeviceRestoreByApplication(toBgfx(buffer));
+}
+
+void BgfxGraphicsDevice::GiveContentsAgain(VertexBufferHandle buffer, const DeviceMemory* vertices) const
+{
+	bgfx::giveDeviceRestoreContents(toBgfx(buffer), ToBgfx(vertices));
+}
+
 void BgfxGraphicsDevice::Destroy(VertexBufferHandle buffer) const
 {
 	bgfx::destroy(toBgfx(buffer));
@@ -201,6 +211,16 @@ DynamicIndexBufferHandle BgfxGraphicsDevice::CreateSharedIndexBuffer(const Devic
 void BgfxGraphicsDevice::SetName(IndexBufferHandle buffer, std::string_view name) const
 {
 	bgfx::setName(toBgfx(buffer), name.data(), static_cast<int32_t>(name.size()));
+}
+
+void BgfxGraphicsDevice::SetContentsGivenAgain(IndexBufferHandle buffer) const
+{
+	bgfx::setDeviceRestoreByApplication(toBgfx(buffer));
+}
+
+void BgfxGraphicsDevice::GiveContentsAgain(IndexBufferHandle buffer, const DeviceMemory* indices) const
+{
+	bgfx::giveDeviceRestoreContents(toBgfx(buffer), ToBgfx(indices));
 }
 
 void BgfxGraphicsDevice::Destroy(IndexBufferHandle buffer) const

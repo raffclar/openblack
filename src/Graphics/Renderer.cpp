@@ -165,6 +165,7 @@
 #include "Graphics/DrawWindow.h"
 #include "Graphics/FizzDrawOrder.h"
 #include "Graphics/FrameBuffer.h"
+#include "Graphics/GraphicsDeviceInterface.h"
 #include "Graphics/GraphicsHandleBgfx.h"
 #include "Graphics/GroundBlobs.h"
 #include "Graphics/HandLight.h"
@@ -201,6 +202,7 @@
 #include "Magic/VortexRules.h"
 #include "Profiler.h"
 #include "Renderer.h"
+#include "Resources/Rereads.h"
 #include "Resources/ResourceManager.h"
 #include "Resources/ResourcesInterface.h"
 #include "Scenery/ObjectDrawList.h"
@@ -8699,6 +8701,16 @@ void Renderer::Frame() noexcept
 		if (_landFootprints)
 		{
 			_landFootprints->PaintAgain();
+		}
+		// The meshes and textures of the resource caches read their files again and give their data to the device
+		if (Locator::graphicsDevice::has_value() && Locator::filesystem::has_value())
+		{
+			resources::Rereads rereads(
+			    [](const std::filesystem::path& path) { return Locator::filesystem::value().ReadAll(path); });
+			const auto& givers = Locator::graphicsDevice::value().GetDataGivers();
+			givers.GiveAll(rereads);
+			SPDLOG_LOGGER_INFO(spdlog::get("graphics"), "{} meshes and textures gave their data again from {} files",
+			                   givers.Count(), rereads.ReadCount());
 		}
 	}
 }

@@ -11,7 +11,10 @@
 
 #include <cassert>
 
+#include <exception>
+#include <span>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include <glm/ext/vector_uint2_sized.hpp>
@@ -22,6 +25,7 @@
 #include "GraphicsDeviceInterface.h"
 #include "Locator.h"
 #include "MainThreadWork.h"
+#include "Resources/Rereads.h"
 #include "TextureSize.h"
 #include "Visual/UploadPacer.h"
 
@@ -37,6 +41,10 @@ Texture2D::Texture2D(std::string name)
 Texture2D::~Texture2D()
 {
 	MainThreadQueue::CheckDirect(MainThreadApi::Graphics, "Texture2D::~Texture2D");
+	if (_givesTexelsAgain)
+	{
+		Locator::graphicsDevice::value().GetDataGivers().Remove(this);
+	}
 	if (IsValidHandle(_handle))
 	{
 		Locator::graphicsDevice::value().Destroy(_handle);
@@ -128,6 +136,55 @@ void Texture2D::SetTexelsGivenAgain() const
 			Locator::graphicsDevice::value().SetTexelsGivenAgain(_handle);
 		}
 	});
+}
+
+void Texture2D::SetTexelSource(TexelSource source)
+{
+	if (!Locator::graphicsDevice::has_value() || !source)
+	{
+		return;
+	}
+	_source = std::move(source);
+	PostToMainThread(MainThreadApi::Graphics, [this] {
+		// A texture of data only, or one that the device could not make, has no texels on the device
+		if (!IsValidHandle(_handle))
+		{
+			return;
+		}
+		auto& device = Locator::graphicsDevice::value();
+		device.SetTexelsGivenAgain(_handle);
+		device.GetDataGivers().Add(this, [this](resources::Rereads& rereads) {
+			try
+			{
+				GiveTexelsAgain(_source(rereads));
+			}
+			catch (const std::exception& error)
+			{
+				if (const auto logger = spdlog::get("graphics"))
+				{
+					logger->error("{}: the texels cannot be read again: {}", _name, error.what());
+				}
+			}
+		});
+		_givesTexelsAgain = true;
+	});
+}
+
+void Texture2D::GiveTexelsAgain(std::span<const uint8_t> texels) const
+{
+	if (_numLayers == 0 || texels.size() < _storageSize)
+	{
+		if (const auto logger = spdlog::get("graphics"))
+		{
+			logger->error("{}: {} bytes of texels read again, {} bytes expected", _name, texels.size(), _storageSize);
+		}
+		return;
+	}
+	const auto layerBytes = static_cast<uint32_t>(texels.size() / _numLayers);
+	for (uint16_t layer = 0; layer < _numLayers; ++layer)
+	{
+		UpdateLayer(layer, texels.data() + (static_cast<size_t>(layer) * layerBytes), layerBytes);
+	}
 }
 
 void Texture2D::UpdateLayer(uint16_t layer, const void* data, uint32_t size) const
