@@ -21,6 +21,7 @@
 
 #include "3D/LandIslandInterface.h"
 #include "ECS/PlacedMemo.h"
+#include "ECS/PosedModel.h"
 
 using namespace openblack;
 using namespace openblack::ecs;
@@ -259,4 +260,61 @@ TEST(PlacedMemo, AnAnswerNotUsedForTwoPassesIsForgotten)
 	EXPECT_EQ(answers.Size(), 1u);
 	answers.EndPass();
 	EXPECT_EQ(answers.Size(), 0u);
+}
+
+TEST(PlacedMemo, TheDrawAndThePickMoveOnlyAModelThatFollowsTheLand)
+{
+	using posed_model::LandFollow;
+	EXPECT_TRUE(posed_model::MovesWithLand(LandFollow::AsDrawn, true));
+	EXPECT_FALSE(posed_model::MovesWithLand(LandFollow::AsDrawn, false));
+	EXPECT_TRUE(posed_model::MovesWithLand(LandFollow::AsPicked, true));
+	EXPECT_FALSE(posed_model::MovesWithLand(LandFollow::AsPicked, false));
+}
+
+TEST(PlacedMemo, ThePickCountsOnlyTheCornersOfTheSubmeshesThatItTests)
+{
+	// A building as a creche: a later stage, the physics shape, the built model and a window
+	const std::array<posed_model::SubMeshCorners, 4> subMeshes {{
+	    {.corners = 30, .tested = false},
+	    {.corners = 8, .tested = false},
+	    {.corners = 50, .tested = true},
+	    {.corners = 4, .tested = false},
+	}};
+	EXPECT_EQ(posed_model::PickedRiseOffset(subMeshes, 0), 0u);
+	// The built model reads the rises of the first submesh's corners, not of its own
+	EXPECT_EQ(posed_model::PickedRiseOffset(subMeshes, 2), 0u);
+	EXPECT_EQ(posed_model::PickedRiseOffset(subMeshes, 3), 50u);
+	EXPECT_EQ(posed_model::PickedRiseOffset(subMeshes, 9), 50u);
+}
+
+TEST(PlacedMemo, ThePickReadsItsOwnRisesWhenNoSubmeshBeforeItIsLeftOut)
+{
+	const std::array<posed_model::SubMeshCorners, 3> subMeshes {{
+	    {.corners = 12, .tested = true},
+	    {.corners = 6, .tested = true},
+	    {.corners = 8, .tested = false},
+	}};
+	EXPECT_EQ(posed_model::PickedRiseOffset(subMeshes, 1), 12u);
+}
+
+TEST(PlacedMemo, APlaceInTheListOfRisesFindsItsSubmeshAndCorner)
+{
+	const std::array<posed_model::SubMeshCorners, 3> subMeshes {{
+	    {.corners = 30, .tested = false},
+	    {.corners = 0, .tested = false},
+	    {.corners = 50, .tested = true},
+	}};
+	EXPECT_EQ(posed_model::CornerAt(subMeshes, 0), std::optional(std::pair<size_t, size_t> {0, 0}));
+	EXPECT_EQ(posed_model::CornerAt(subMeshes, 29), std::optional(std::pair<size_t, size_t> {0, 29}));
+	EXPECT_EQ(posed_model::CornerAt(subMeshes, 30), std::optional(std::pair<size_t, size_t> {2, 0}));
+	EXPECT_EQ(posed_model::CornerAt(subMeshes, 79), std::optional(std::pair<size_t, size_t> {2, 49}));
+	EXPECT_EQ(posed_model::CornerAt(subMeshes, 80), std::nullopt);
+}
+
+TEST(PlacedMemo, TheHandFeelNeverMovesAModelWithTheLand)
+{
+	// The line test of the hand feel uses the model as its matrix puts it, also a model that follows the land
+	using posed_model::LandFollow;
+	EXPECT_FALSE(posed_model::MovesWithLand(LandFollow::Ignore, true));
+	EXPECT_FALSE(posed_model::MovesWithLand(LandFollow::Ignore, false));
 }

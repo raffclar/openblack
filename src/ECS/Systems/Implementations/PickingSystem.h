@@ -70,9 +70,11 @@ private:
 	std::vector<undrawn_picks::Shape> _undrawnShapes;
 	std::vector<undrawn_picks::Turn> _testOrder;
 	std::vector<screen_pick::ClipCorner> _corners;
-	/// The corners of the models that the pick and the hand feel placed, kept while no input of a model changes. The
-	/// hand feel asks in a const call, so the memo is mutable.
-	mutable ecs::placed_memo::Memo _placedMemo;
+	/// The corners of the models that the pick placed, kept while no input of a model changes
+	ecs::placed_memo::Memo _placedMemo;
+	/// The corners of the models that the hand feel placed. The hand feel does not move a model that follows the land
+	/// with the land, so it keeps its own corners. It asks in a const call, so the memo is mutable.
+	mutable ecs::placed_memo::Memo _feelPlacedMemo;
 	/// The last answers of the pick's test of each model's triangles and of the hand feel's line test
 	ecs::placed_memo::AnswerMemo<std::optional<float>> _distanceMemo;
 	mutable ecs::placed_memo::AnswerMemo<std::optional<screen_pick::MeshHit>> _feelMemo;
