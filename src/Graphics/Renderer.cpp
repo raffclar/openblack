@@ -310,6 +310,8 @@ const Texture2D* SnowDepth(std::unique_ptr<Texture2D>& texture, std::optional<ui
 		texture = std::make_unique<Texture2D>("SnowDepth");
 		texture->Create(snow_cover::k_GridSize, snow_cover::k_GridSize, 1, TextureFormat::R32F, Wrapping::ClampEdge,
 		                Filter::Nearest, nullptr);
+		// After a restore of the graphics device the depths go to the texture again
+		texture->SetTexelsGivenAgain();
 		revision.reset();
 	}
 	if (revision != snow.GetRevision())
@@ -4656,6 +4658,8 @@ void Renderer::DrawLandLuminosityPass(const DrawSceneDesc& drawDesc) const
 		{
 			texture = std::make_unique<Texture2D>("LandLuminosity");
 			texture->CreateWithinFrame(map.size.x, map.size.y, 1, TextureFormat::R8, Wrapping::Repeat, Filter::Linear, nullptr);
+			// After a restore of the graphics device both textures are made again from the map
+			texture->SetTexelsGivenAgain();
 			texture->Update(map.texels.data(), static_cast<uint32_t>(map.texels.size()));
 		}
 		_landLuminosityNow = 0;
@@ -4777,6 +4781,8 @@ std::unique_ptr<Texture2D> Renderer::MakeCreatureSkinTexture(uint16_t side)
 	{
 		return nullptr;
 	}
+	// After a restore of the graphics device the creatures' painted skins go to their textures again
+	texture->SetTexelsGivenAgain();
 	return texture;
 }
 
@@ -4897,6 +4903,8 @@ void Renderer::UploadAnimalBones(const DrawSceneDesc& drawDesc) const
 		_animalBoneTexture = std::make_unique<Texture2D>("Animal Bones");
 		_animalBoneTexture->CreateWithinFrame(static_cast<uint16_t>(k_BoneTextureWidth), static_cast<uint16_t>(height), 1,
 		                                      TextureFormat::RGBA32F, Wrapping::ClampEdge, Filter::Nearest, nullptr);
+		// Each frame gives all the matrices, thus the graphics device keeps no copy
+		_animalBoneTexture->SetTexelsGivenAgain();
 	}
 	const auto resolution = _animalBoneTexture->GetResolution();
 	_animalBones.resize(static_cast<size_t>(resolution.x) * resolution.y / 4);
@@ -4944,6 +4952,8 @@ void Renderer::UploadHandSkins() const
 			const auto side = l3d_skin::SideOf(skin.texels.size());
 			texture = std::make_unique<Texture2D>("Hand Skin");
 			texture->CreateWithinFrame(side, side, 1, TextureFormat::BGRA4, Wrapping::Repeat, Filter::Linear, nullptr);
+			// After a restore of the graphics device the skins go to their textures again
+			texture->SetTexelsGivenAgain();
 		}
 		texture->Update(skin.texels.data(), static_cast<uint32_t>(skin.texels.size() * sizeof(skin.texels[0])));
 		_handSkins.emplace_back(skin.id, texture.get());
@@ -8689,22 +8699,43 @@ void Renderer::Frame() noexcept
 		                   kept.textures, kept.textureChanges);
 		_skyDomeLost = true;
 		_templeMapVisit.reset();
-		// The graphics device keeps no copy of the textures of the land's blocks: the land paints them again, and then
-		// the footprints on them
+		// The graphics device keeps no copy of the textures, the vertices and the triangles of the land's blocks: the
+		// land gives them again, and then the footprints paint the textures
 		if (Locator::terrainSystem::has_value())
 		{
-			Locator::terrainSystem::value().PaintBlockTexturesAgain();
+			Locator::terrainSystem::value().GiveDeviceDataAgain();
 		}
 		if (_landFootprints)
 		{
 			_landFootprints->PaintAgain();
 		}
+		// The renderer's own textures that it fills from the world get their texels again: the land's shadows are baked
+		// again, and the textures of the land's light, the snow and the painted skins are filled again in the next frame
+		if (_landShadowBake)
+		{
+			_landShadowBake->BakeAgain();
+		}
+		for (auto& texture : _landLuminosity)
+		{
+			texture.reset();
+		}
+		_snowRevision.reset();
+		for (auto* skins : {&_creatureSkins, &_roomCreatureSkins, &_drawnCreatureSkins})
+		{
+			for (auto& [entity, entry] : *skins)
+			{
+				entry.stamp.reset();
+			}
+		}
+		_handSkinStamp.reset();
+		_handFlowTexture.reset();
+		_handFlowLoaded = false;
 		// The meshes and textures of the resource caches read their files again and give their data to the device
 		if (Locator::graphicsDevice::has_value() && Locator::filesystem::has_value())
 		{
 			resources::Rereads rereads(
 			    [](const std::filesystem::path& path) { return Locator::filesystem::value().ReadAll(path); });
-			const auto& givers = Locator::graphicsDevice::value().GetDataGivers();
+			auto& givers = Locator::graphicsDevice::value().GetDataGivers();
 			givers.GiveAll(rereads);
 			SPDLOG_LOGGER_INFO(spdlog::get("graphics"), "{} meshes and textures gave their data again from {} files",
 			                   givers.Count(), rereads.ReadCount());

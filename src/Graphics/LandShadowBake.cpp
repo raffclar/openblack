@@ -271,6 +271,18 @@ void LandShadowBake::Reset()
 	_bakeAll = true;
 }
 
+void LandShadowBake::BakeAgain()
+{
+	if (_texture == nullptr)
+	{
+		return;
+	}
+	// The blocks with no land are not baked: they show no shadow
+	const std::vector<uint8_t> unshaded(static_cast<size_t>(_texels.x) * _texels.y, 255);
+	_texture->Update(unshaded.data(), static_cast<uint32_t>(unshaded.size()));
+	_bakeAll = true;
+}
+
 std::span<const LandShadowBake::LeafTriangle> LandShadowBake::LeavesOf(entt::id_type meshId)
 {
 	if (const auto found = _leaves.find(meshId); found != _leaves.end())
@@ -434,6 +446,8 @@ void LandShadowBake::Update(bool rowsFromFarEnd, Casters casters)
 		_casters = casters;
 		_texture = std::make_unique<Texture2D>("Land Shadows");
 		_texture->CreateWithinFrame(texels.x, texels.y, 1, TextureFormat::R8, Wrapping::ClampEdge, Filter::Nearest, nullptr);
+		// The bake gives the texels again after a restore of the graphics device, thus the device keeps no copy
+		_texture->SetTexelsGivenAgain();
 		const std::vector<uint8_t> unshaded(static_cast<size_t>(texels.x) * texels.y, 255);
 		_texture->Update(unshaded.data(), static_cast<uint32_t>(unshaded.size()));
 	}

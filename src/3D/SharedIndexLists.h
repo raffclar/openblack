@@ -48,6 +48,16 @@ public:
 	/// How many different lists have been made
 	[[nodiscard]] size_t Size() const { return _lists.size(); }
 
+	/// Calls visit(indices, buffer) for each list, in the order of the lists
+	template <typename Visit>
+	void ForEach(Visit&& visit) const
+	{
+		for (const auto& [indices, buffer] : _lists)
+		{
+			visit(std::span<const uint16_t>(indices), *buffer);
+		}
+	}
+
 private:
 	std::map<std::vector<uint16_t>, std::unique_ptr<Buffer>> _lists;
 };

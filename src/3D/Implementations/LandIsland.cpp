@@ -232,6 +232,13 @@ void LandIsland::Build(const LandData& data)
 		_cellColourMap->Create(
 		    mapWidth, mapHeight, 1, graphics::TextureFormat::RGBA8, Wrapping::ClampEdge, Filter::Nearest,
 		    Locator::graphicsDevice::value().Copy(cellColourMapData.data(), static_cast<uint32_t>(cellColourMapData.size())));
+
+		// The land makes the maps again from its cells after a restore of the graphics device, thus the device keeps no
+		// copy
+		for (const auto* map : {_heightMap.get(), _luminosityMap.get(), _cellColourMap.get()})
+		{
+			map->SetTexelsGivenAgain();
+		}
 	}
 	else
 	{
@@ -349,6 +356,8 @@ void LandIsland::Build(const LandData& data)
 		// The altitudes the corner morphs towards on the half and the quarter mesh
 		decl.emplace_back(VertexAttrib::Attribute::TexCoord1, static_cast<uint8_t>(2), VertexAttrib::Type::Float);
 		_blockVertices = std::make_unique<VertexBuffer>("LandBlocks", vertexMemory, decl, true);
+		// The land builds the vertices again after a restore of the graphics device, thus the device keeps no copy
+		_blockVertices->SetContentsGivenAgain();
 	}
 	_changedCells.assign(_landBlocks.size(), {});
 	_changedCorners = {};
@@ -776,13 +785,36 @@ void LandIsland::PaintBlockTextures(const block_texture::Sources& sources)
 	}
 }
 
-void LandIsland::PaintBlockTexturesAgain()
+void LandIsland::GiveDeviceDataAgain()
 {
 	if (_uploads == graphics::UploadMode::DataOnly || _blockTextures == nullptr || _landBlocks.empty())
 	{
 		return;
 	}
 	PaintBlockTextures(TextureSources());
+	_heightMap->GiveTexelsAgain(CreateHeightMap());
+	_luminosityMap->GiveTexelsAgain(CreateLuminosityMap());
+	_cellColourMap->GiveTexelsAgain(CreateCellColourMap());
+	if (_blockVertices != nullptr)
+	{
+		const auto& device = Locator::graphicsDevice::value();
+		const auto vertexCount = _landBlocks.size() * LandBlock::k_VertexCount;
+		const auto* vertexMemory = device.Alloc(static_cast<uint32_t>(vertexCount * sizeof(LandVertex)));
+		const auto vertices = std::span(reinterpret_cast<LandVertex*>(device.Bytes(vertexMemory).data()), vertexCount);
+		for (size_t i = 0; i < _landBlocks.size(); ++i)
+		{
+			_landBlocks[i].BuildMesh(*this, vertices.subspan(i * LandBlock::k_VertexCount, LandBlock::k_VertexCount));
+		}
+		_blockVertices->Update(vertexMemory);
+	}
+	if (_blockTriangles != nullptr)
+	{
+		_blockTriangles->ForEach([](std::span<const uint16_t> indices, const IndexBuffer& buffer) {
+			const auto bytes = std::as_bytes(indices);
+			const auto* first = reinterpret_cast<const uint8_t*>(bytes.data());
+			buffer.GiveContentsAgain(std::vector<uint8_t>(first, first + bytes.size()));
+		});
+	}
 }
 
 block_texture::Sources LandIsland::TextureSources() const

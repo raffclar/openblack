@@ -138,9 +138,10 @@ public:
 	/// The blocks whose textures the land painted again with no footprints since the last call, in the order it painted
 	/// them: each block after a land loads, and the cells of the blocks that change height
 	[[nodiscard]] virtual std::vector<RepaintedBlock> TakeRepaintedBlocks() { return {}; }
-	/// Paints the texture of each block again from the land, as the land does when it loads. The graphics device keeps
-	/// no copy of these textures, thus the renderer calls this after it makes the device again.
-	virtual void PaintBlockTexturesAgain() {}
+	/// Gives the graphics data of the land again after a restore of the device: it paints the texture of each block as
+	/// the land does when it loads, and gives the vertices and the triangles of the blocks. The graphics device keeps no
+	/// copy of these, thus the renderer calls this after it makes the device again.
+	virtual void GiveDeviceDataAgain() {}
 
 	[[nodiscard]] virtual U16Extent2 GetIndexExtent() const = 0;
 	[[nodiscard]] virtual glm::mat4 GetOrthoView() const = 0;
