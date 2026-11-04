@@ -2648,7 +2648,7 @@ bool Game::Update() noexcept
 		}
 	}
 	if (_joinedFromCommandLine && Locator::networkGame::has_value() && !Locator::networkGame::value().InGame() &&
-	    !_outOfSyncAsked)
+	    !_outOfSyncAsked && !_connectionLost.Told())
 	{
 		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The network game ended: the game stops");
 		return false;
@@ -2913,6 +2913,34 @@ void Game::UpdateOnline()
 				else
 				{
 					_leaveNetworkGame = true;
+				}
+			}
+			// After the last try to come back, the box tells the player that the connection to the game is lost
+			if (_connectionLost.Update({
+			        .hasSession = session != nullptr,
+			        .started = session != nullptr && session->GetStart().has_value(),
+			        .state = session != nullptr ? session->GetState() : online::NetworkSession::State::Idle,
+			        .end = session != nullptr ? session->GetEnd() : online::NetworkSession::End::None,
+			        .toolRun = toolRun,
+			    }))
+			{
+				_interface->ShowConnectionLost();
+				SPDLOG_LOGGER_INFO(spdlog::get("game"),
+				                   "The connection to the network game is lost ({}): the box tells the player",
+				                   online::EndName(session->GetEnd()));
+			}
+			// The OK goes back to the network front end. A join from the command line has no front end: the game stops.
+			// A box with no lost network session (a testbed scenario) only closes.
+			if (_interface->TakeConnectionLostOk() && _connectionLost.Told())
+			{
+				SPDLOG_LOGGER_INFO(spdlog::get("game"), "The player closed the box of the lost connection");
+				if (_joinedFromCommandLine)
+				{
+					_leaveNetworkGame = true;
+				}
+				else
+				{
+					_gameEndAsked = game_session::End::Online;
 				}
 			}
 		}

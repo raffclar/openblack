@@ -115,6 +115,8 @@ constexpr std::string_view k_OutOfSyncText = "HELP_TEXT_SINGING_STONE_CURSE_03";
 constexpr std::string_view k_GodOutText = "HELP_TEXT_WIN_GAME_03";
 // "%s has left game."
 constexpr std::string_view k_PlayerLeftText = "HELP_TEXT_DIALOG_ADDITION_09";
+// "Connection to network game has been lost. Cannot continue."
+constexpr std::string_view k_ConnectionLostText = "HELP_TEXT_CONNECTION_LOST";
 /// The words of a resynchronisation (user decision MI-4). The game has no text for them.
 constexpr std::u16string_view k_ResyncText = u"Resynchronising...";
 /// The words stand in the middle of the top of the dialog space, in the dialogs' middle text size
@@ -709,6 +711,12 @@ void GameInterface::ShowPlayerLeft(std::u16string_view name)
 {
 	const std::array words {name};
 	_saveGameBoxes->Tell(end_game_box::Format(_texts.Get(k_PlayerLeftText), words));
+}
+
+void GameInterface::ShowConnectionLost()
+{
+	_saveGameBoxes->Tell(std::u16string(_texts.Get(k_ConnectionLostText)));
+	_connectionLostShown = true;
 }
 
 bool GameInterface::ProcessEndGameBoxEvent(const SDL_Event& event)
@@ -1801,6 +1809,12 @@ void GameInterface::Update(float deltaSeconds)
 	if (_saveGameBoxes->TakeMessageAnswered() && Locator::gameActionSystem::has_value())
 	{
 		Locator::gameActionSystem::value().BoxAnswered();
+	}
+	// The OK of the box of the lost connection. The box also goes when another box takes it away.
+	if (_connectionLostShown && !_saveGameBoxes->IsActive())
+	{
+		_connectionLostShown = false;
+		_connectionLostOk = true;
 	}
 	// The answer to the out-of-sync box: Yes plays on, No leaves the game
 	if (_outOfSyncAsked && !_saveGameBoxes->IsActive())

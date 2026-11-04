@@ -29,6 +29,7 @@
 
 #include "Commands/TurnCodec.h"
 #include "LoopbackSockets.h"
+#include "Online/ConnectionLostNotice.h"
 #include "Online/NetworkSession.h"
 #include "Online/StartRules.h"
 #include "Server/Desktop/Sha256SessionHasher.h"
@@ -2504,4 +2505,47 @@ TEST_F(LockstepTest, TheStartGivesTheAccountOfEachGodWhoseTicketHasOne)
 	// A subject that is not an account id gives no account
 	EXPECT_EQ(gods[0].account, std::optional<int64_t>(100));
 	EXPECT_EQ(gods[1].account, std::nullopt);
+}
+
+TEST_F(LockstepTest, AClientThatCannotComeBackInTimeShowsTheBoxOfTheLostConnectionOnce)
+{
+	MakeHost(2);
+	Computer alice(network, now, "god:alice");
+	Computer bob(network, now, "god:bob");
+	Frames({&alice, &bob}, 30);
+	ASSERT_TRUE(host->Started());
+	online::ConnectionLostNotice notice;
+	const auto facts = [&alice] {
+		return online::ConnectionLostFacts {.hasSession = true,
+		                                    .started = alice.session.GetStart().has_value(),
+		                                    .state = alice.session.GetState(),
+		                                    .end = alice.session.GetEnd(),
+		                                    .toolRun = false};
+	};
+
+	// The network to the server goes: each try to come back gets no connection
+	int told = 0;
+	int64_t toldAt = 0;
+	const auto lostAt = now;
+	for (int frame = 0; frame < 3100; ++frame)
+	{
+		now += k_Turn;
+		network.Cut(alice.sockets->Ids().back());
+		network.Poll();
+		alice.Frame();
+		if (notice.Update(facts()))
+		{
+			++told;
+			toldAt = now;
+		}
+		// The box waits while the client tries to come back
+		if (now - lostAt < 5LL * 60 * 1'000'000)
+		{
+			ASSERT_EQ(told, 0);
+			ASSERT_NE(alice.session.GetState(), NetworkSession::State::Ended);
+		}
+	}
+	EXPECT_EQ(alice.session.GetEnd(), NetworkSession::End::Lost);
+	EXPECT_EQ(told, 1);
+	EXPECT_GT(toldAt - lostAt, 5LL * 60 * 1'000'000);
 }

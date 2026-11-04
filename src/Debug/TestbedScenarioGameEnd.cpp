@@ -170,6 +170,21 @@ void testbed_scenarios::AddGameEndScenarios(std::vector<Scenario>& all)
 	    .commands = {{.kind = Kind::EndBox, .delaySeconds = 1.0f, .value = k_EndBoxPlayerLeft}},
 	});
 	all.push_back({
+	    .id = "game_end.connection_lost",
+	    .name = "The box that tells the player that the connection to the network game is lost",
+	    .facet = Facet::Multiplayer,
+	    .description = "A skirmish of two gods: the player and the computer god of player two, each with a temple. One "
+	                   "second in, the box opens that a network game shows when the connection to the game server is "
+	                   "lost and the tries to come back did not get through.",
+	    .expected = "The white box with OK says \"Connection to network game has been lost. Cannot continue.\" in front "
+	                "of a dimmed box. OK closes the box. In a network game the OK goes back to the network front end.",
+	    .environment = {.dispenserGrid = false, .players = {PlayerNames::PLAYER_TWO}, .skirmish = true},
+	    .framing = k_Overview,
+	    .temples = {{.offset = k_OwnTemple}, {.offset = k_SecondTemple, .owner = PlayerNames::PLAYER_TWO}},
+	    .landScript = k_TwoComputerGods,
+	    .commands = {{.kind = Kind::EndBox, .delaySeconds = 1.0f, .value = k_EndBoxConnectionLost}},
+	});
+	all.push_back({
 	    .id = "game_end.conditions",
 	    .name = "The Multiplayer tab of the end box",
 	    .facet = Facet::Multiplayer,
