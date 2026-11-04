@@ -146,6 +146,7 @@
 #include "Magic/SpellSeedRules.h"
 #include "Magic/WaterRules.h"
 #include "MagicLiving.h"
+#include "MagicSpellLinks.h"
 #include "Particles/DrawnEffectSteps.h"
 #include "Particles/ParticleEffect.h"
 #include "Particles/ParticleMiracleMaths.h"
@@ -239,125 +240,6 @@ float HeightOfMesh(entt::id_type mesh, float scale)
 	return meshes.Contains(mesh) ? meshes.Handle(mesh)->GetBoundingBox().Size().y * scale : 0.0f;
 }
 } // namespace
-
-// The links between a miracle and its effect
-
-/// What a miracle's particle effect tells it, and asks of it
-class MagicSystem::SpellLink final: public particles::SpellSink
-{
-public:
-	SpellLink(MagicSystem& system, entt::entity spell)
-	    : _system(system)
-	    , _spell(spell)
-	{
-	}
-	bool SpellEvent(const particles::SpellEventInfo& event) override { return _system.OnSpellEvent(_spell, event); }
-	[[nodiscard]] int PowerUpLevel() const override
-	{
-		const auto* spell = EntityRegistry().TryGet<const components::Spell>(_spell);
-		return spell != nullptr ? magic::GetPowerUpLevel(Locator::infoConstants::value(), spell->magicType)
-		                        : magic::k_BasePowerUpLevel;
-	}
-	[[nodiscard]] bool IsMyInterfaceCasting() const override
-	{
-		const auto* spell = EntityRegistry().TryGet<const components::Spell>(_spell);
-		return spell != nullptr && spell->fromLocalHand;
-	}
-	[[nodiscard]] bool IsHumanPlayerCasting() const override
-	{
-		const auto* spell = EntityRegistry().TryGet<const components::Spell>(_spell);
-		return spell != nullptr && spell->humanCasting;
-	}
-	[[nodiscard]] bool IsCreatureCasting() const override
-	{
-		const auto* spell = EntityRegistry().TryGet<const components::Spell>(_spell);
-		return spell != nullptr && spell->caster.kind == components::SpellCaster::Kind::Creature;
-	}
-	[[nodiscard]] bool IsScriptCasting() const override
-	{
-		// The neutral player casts by script
-		const auto* spell = EntityRegistry().TryGet<const components::Spell>(_spell);
-		return spell != nullptr && spell->caster.kind == components::SpellCaster::Kind::Player &&
-		       spell->caster.player == PlayerNames::NEUTRAL;
-	}
-	[[nodiscard]] int CreatureSpellKind() const override
-	{
-		const auto* spell = EntityRegistry().TryGet<const components::Spell>(_spell);
-		const auto* info =
-		    spell != nullptr ? magic::GetMagicInfoAs<GMagicCreatureSpellInfo>(Locator::infoConstants::value(), spell->magicType)
-		                     : nullptr;
-		return info != nullptr ? static_cast<int>(info->creatureReceiveSpellType) : -1;
-	}
-	[[nodiscard]] entt::entity Spell() const override { return _spell; }
-	[[nodiscard]] float TribalPower() const override
-	{
-		const auto* spell = EntityRegistry().TryGet<const components::Spell>(_spell);
-		return spell != nullptr ? _system.TribalPower(*spell) : 1.0f;
-	}
-	[[nodiscard]] std::optional<float> RainAmount() const override
-	{
-		const auto* spell = EntityRegistry().TryGet<const components::Spell>(_spell);
-		if (spell == nullptr)
-		{
-			return std::nullopt;
-		}
-		const auto* storm = magic::GetMagicInfoAs<GMagicStormAndTornadoInfo>(Locator::infoConstants::value(), spell->magicType);
-		return storm != nullptr ? std::optional(storm->rainAmount) : std::nullopt;
-	}
-	[[nodiscard]] std::optional<float> MaxDirectionChange() const override
-	{
-		const auto* spell = EntityRegistry().TryGet<const components::Spell>(_spell);
-		const auto* info =
-		    spell != nullptr ? magic::GetMagicInfoAs<GMagicCreatureSpellInfo>(Locator::infoConstants::value(), spell->magicType)
-		                     : nullptr;
-		return info != nullptr ? std::optional(info->maxDirnChangeWhenCtrCasting) : std::nullopt;
-	}
-	void CloseDown() override { _system.CloseDown(_spell); }
-	void MoveTo(glm::vec3 position) override
-	{
-		if (auto* spell = EntityRegistry().TryGet<components::Spell>(_spell))
-		{
-			spell->position = position;
-		}
-	}
-	[[nodiscard]] float EffectRadius() const override
-	{
-		const auto* spell = EntityRegistry().TryGet<const components::Spell>(_spell);
-		return spell != nullptr ? magic::GetMagicEffectInfo(Locator::infoConstants::value(), spell->magicType).radius
-		                        : particles::SpellSink::EffectRadius();
-	}
-
-private:
-	MagicSystem& _system;
-	entt::entity _spell;
-};
-
-/// The held miracle's in-hand effect: this computer's player holds it, and it sends nothing back
-class MagicSystem::HandEffectLink final: public particles::SpellSink
-{
-public:
-	explicit HandEffectLink(const MagicSystem& system)
-	    : _system(system)
-	{
-	}
-	bool SpellEvent(const particles::SpellEventInfo& /*event*/) override { return false; }
-	[[nodiscard]] int PowerUpLevel() const override
-	{
-		if (const auto held = _system.GetHeldSeed())
-		{
-			if (const auto* seed = EntityRegistry().TryGet<const SpellSeed>(*held))
-			{
-				return seed->powerUp;
-			}
-		}
-		return magic::k_BasePowerUpLevel;
-	}
-	[[nodiscard]] bool IsMyInterfaceCasting() const override { return true; }
-	[[nodiscard]] bool IsHumanPlayerCasting() const override { return true; }
-
-private:
-	const MagicSystem& _system;
-};
 
 // The system
 
