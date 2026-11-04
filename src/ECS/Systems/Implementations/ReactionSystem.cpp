@@ -2142,6 +2142,44 @@ void ReactionSystem::Reset()
 	_gainShown = {};
 }
 
+std::vector<uint32_t> ReactionSystem::Restore(std::span<const Restored> reactions, uint32_t turn)
+{
+	// The reactions of the land stop, as the game deletes them before it reads the saved game
+	for (const auto id : Ids())
+	{
+		ShutDown(id);
+	}
+	// No reaction spread last, so the newest spreads first
+	_cursor = 0;
+	_turn = turn;
+	auto& registry = Locator::entitiesRegistry::value();
+	std::vector<uint32_t> ids;
+	ids.reserve(reactions.size());
+	for (const auto& restored : reactions)
+	{
+		auto& reaction = _reactions.emplace_back(restored.reaction);
+		reaction.id = _nextId++;
+		ids.push_back(reaction.id);
+		for (const auto living : restored.takers)
+		{
+			if (!registry.Valid(living))
+			{
+				continue;
+			}
+			auto* state = registry.TryGet<LivingReaction>(living);
+			if (state == nullptr)
+			{
+				state = &registry.Assign<LivingReaction>(living);
+			}
+			state->reaction = reaction.id;
+			state->type = reaction.source.type;
+			state->startTurn = turn;
+			state->joined = ++_joins;
+		}
+	}
+	return ids;
+}
+
 void ReactionSystem::TownGainsTurn(uint32_t turn)
 {
 	_gainShown = {};

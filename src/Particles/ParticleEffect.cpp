@@ -220,6 +220,10 @@ Effect::Effect(std::shared_ptr<const psys::ParticleFile> file, EffectServices se
 			_modifiers.push_back(std::move(modifier));
 		}
 	}
+	// Only the creators of the file make ribbons
+	_hasChains = std::ranges::any_of(_creators | std::views::values, [](const std::unique_ptr<Creator>& creator) {
+		return creator != nullptr && creator->kind == Creator::Kind::Chain;
+	});
 
 	// The groups made at the start, at the origin
 	const auto initially = _file->header.IntArray("InitiallyCreated");
@@ -914,9 +918,15 @@ void Effect::Collect(float t, std::vector<DrawAtom>& out, Creator::Kind kind) co
 	                     [kind](const DrawAtom& atom) { return atom.creator != nullptr && atom.creator->kind == kind; });
 }
 
+void Effect::GiveShower(Atom& atom, entt::entity object)
+{
+	atom.shower = std::make_shared<ObjectShower>(ObjectShower {.object = object});
+	_hadShower = true;
+}
+
 void Effect::ForEachDrawnShower(const std::function<void(ObjectShower&)>& visit)
 {
-	if (_hidden)
+	if (_hidden || !_hadShower)
 	{
 		return;
 	}
@@ -941,7 +951,7 @@ void Effect::ForEachDrawnShower(const std::function<void(ObjectShower&)>& visit)
 
 void Effect::ScrollChains(float milliseconds)
 {
-	if (_hidden)
+	if (_hidden || !_hasChains)
 	{
 		return;
 	}
@@ -1428,6 +1438,8 @@ bool Effect::Adopt(const RestoredEffect& saved)
 		roots.push_back(std::move(collection));
 	}
 	_roots = std::move(roots);
+	// A restored atom can have a shower of sparks
+	_hadShower = true;
 	_origin = saved.origin;
 	_magnitude = saved.magnitude;
 	_age = saved.age;
@@ -1869,6 +1881,7 @@ std::unique_ptr<Collection> Effect::LoadStructure(EffectReader& in, Atom* parent
 		if (has)
 		{
 			atom.shower = std::make_shared<ObjectShower>();
+			_hadShower = true;
 			in.ReadValue(atom.shower->object);
 			in.ReadValue(has);
 			if (has)

@@ -39,6 +39,14 @@ using gamesave::VanillaRecord;
 using gamesave::VanillaType;
 using gamesave::VanillaWorld;
 
+/// The reaction of the file that a living thing reacts to, 0 for none or for a record that is not a reaction
+uint32_t ReactionOf(const VanillaWorld& world, const VanillaRecord& record)
+{
+	const auto number = world.Ref(record, "reaction").value_or(0);
+	const auto* reaction = number != 0 ? world.Record(number) : nullptr;
+	return reaction != nullptr && reaction->Is(VanillaType::Reaction) ? number : 0;
+}
+
 /// The flag of a pot whose food is poisoned
 constexpr uint8_t k_PotPoisonedFlag = 0x01;
 
@@ -82,8 +90,8 @@ constexpr std::array k_DanceStates = {VillagerStates::InDance, VillagerStates::M
                                       VillagerStates::ControlledByCreature};
 /// The states of the dance of an artefact of a town. They keep the same values as the other dance states.
 constexpr std::array k_ArtefactDanceStates = {VillagerStates::ArtifactDance, VillagerStates::WaitForArtifactDance};
-/// The state of a dance that a reaction holds. The import does not make the reactions, so a villager in this state
-/// decides again.
+/// The state of the dance of a reaction. A villager keeps it only when it dances in a group of a dance that the import
+/// makes, and it reacts to a reaction of the file.
 constexpr std::array k_ReactionDanceStates = {VillagerStates::DanceWhileReacting};
 /// The states of worship at a worship site. Each keeps one value: whether the villager asked to go home. Only code
 /// that the game never runs sets it, and no villager asks to go home, so the value changes nothing.
@@ -302,27 +310,47 @@ std::optional<ImportedTally> ReadTally(const VanillaWorld& world, const VanillaR
 	                      .woodAtSites = FloatAt(bytes, k_WoodAtSitesAt)};
 }
 
+/// A record of the file with the number and the type, or none
+const VanillaRecord* RecordOf(const VanillaWorld& world, uint32_t number, VanillaType type)
+{
+	const auto* record = number != 0 ? world.Record(number) : nullptr;
+	return record != nullptr && record->Is(type) ? record : nullptr;
+}
+
+/// The player of a player record of the file, none for no player
+std::optional<PlayerNames> PlayerOfRecord(const VanillaWorld& world, uint32_t number)
+{
+	const auto* record = RecordOf(world, number, VanillaType::Player);
+	const auto player = record != nullptr ? world.Byte(*record, "number") : std::nullopt;
+	if (!player.has_value() || *player >= static_cast<uint8_t>(PlayerNames::_COUNT))
+	{
+		return std::nullopt;
+	}
+	return static_cast<PlayerNames>(*player);
+}
+
 std::optional<ImportedTown> ReadTown(const VanillaWorld& world, const VanillaRecord& record, std::string& why)
 {
 	const auto position = PositionOf(world, record);
 	const auto id = world.Word(record, "id");
 	const auto tribe = world.Word(record, "tribe");
-	const auto player = world.Byte(record, "player");
+	// The owner reference gives the player of the town. The town also keeps a player number: the first player of the
+	// town, or the player before the last change of owner. The game does not use that number as the owner.
+	const auto player = PlayerOfRecord(world, world.Ref(record, "owner").value_or(0));
 	if (!position.has_value() || !id.has_value() || !tribe.has_value() || !player.has_value())
 	{
 		why = "the town has no place, number, tribe or player";
 		return std::nullopt;
 	}
-	if (static_cast<int32_t>(*tribe) < 0 || *tribe >= static_cast<uint32_t>(Tribe::_COUNT) ||
-	    *player >= static_cast<uint8_t>(PlayerNames::_COUNT))
+	if (static_cast<int32_t>(*tribe) < 0 || *tribe >= static_cast<uint32_t>(Tribe::_COUNT))
 	{
-		why = "the town has a tribe or a player that the game does not have";
+		why = "the town has a tribe that the game does not have";
 		return std::nullopt;
 	}
 	ImportedTown town {.number = record.number,
 	                   .id = *id,
 	                   .tribe = static_cast<Tribe>(*tribe),
-	                   .owner = static_cast<PlayerNames>(*player),
+	                   .owner = *player,
 	                   .position = *position,
 	                   .cannotBuildWorshipSite = world.Word(record, "cannotBuildWorshipSite").value_or(0) != 0,
 	                   .uninhabitable = world.Word(record, "uninhabitable").value_or(0) != 0,
@@ -479,13 +507,6 @@ std::optional<PlayerNames> PlayerOfHand(const VanillaWorld& world, uint32_t numb
 		return PlayerOfInterface(world, world.Ref(*record, "interface").value_or(0));
 	}
 	return PlayerOfInterface(world, number);
-}
-
-/// A record of the file with the number and the type, or none
-const VanillaRecord* RecordOf(const VanillaWorld& world, uint32_t number, VanillaType type)
-{
-	const auto* record = number != 0 ? world.Record(number) : nullptr;
-	return record != nullptr && record->Is(type) ? record : nullptr;
 }
 
 /// The first word of an array of words of the record, or nothing for an empty array
@@ -652,7 +673,8 @@ std::optional<ImportedVillager> ReadVillager(const VanillaWorld& world, const Va
 	                           .status = world.Half(record, "status").value_or(0),
 	                           .turnsSinceStateChange = static_cast<uint16_t>(action[4] | (action[5] << 8)),
 	                           .turnsUntilStateChange = world.Half(record, "turnsToStateChange").value_or(0),
-	                           .danceGroup = world.Ref(record, "danceGroup").value_or(0)};
+	                           .danceGroup = world.Ref(record, "danceGroup").value_or(0),
+	                           .reaction = ReactionOf(world, record)};
 	villager.walk = WalkOf(world, record);
 	villager.footpathWalk = {.footpath = world.Ref(record, "walkFootpath").value_or(0),
 	                         .node = world.Ref(record, "walkFootpathNode").value_or(0),
@@ -962,16 +984,11 @@ std::optional<ImportedDance> ReadDance(const VanillaWorld& world, const VanillaR
 ImportedDances ReadOtherDances(const VanillaWorld& world)
 {
 	std::unordered_set<uint32_t> ofSites;
-	std::unordered_set<uint32_t> held;
 	for (const auto& record : world.Records())
 	{
 		if (record.Is(VanillaType::WorshipSite))
 		{
 			ofSites.insert(world.Ref(record, "siteDance").value_or(0));
-		}
-		else if (record.Is(VanillaType::Reaction))
-		{
-			held.insert(world.Ref(record, "reactionDance").value_or(0));
 		}
 	}
 	ImportedDances dances;
@@ -981,11 +998,7 @@ ImportedDances ReadOtherDances(const VanillaWorld& world)
 		{
 			continue;
 		}
-		if (held.contains(record.number))
-		{
-			dances.notMade.push_back(record.number);
-		}
-		else if (auto dance = ReadDance(world, record); dance.has_value())
+		if (auto dance = ReadDance(world, record); dance.has_value())
 		{
 			dances.made.push_back(std::move(*dance));
 		}
@@ -1390,7 +1403,7 @@ std::array<uint8_t, 3> StartStates(const ImportedVillager& villager)
 		}
 		if (IsOneOf(state, k_ReactionDanceStates))
 		{
-			return false;
+			return villager.importedDancer && villager.reaction != 0;
 		}
 		return CanKeepStateValues(state);
 	};
@@ -1450,18 +1463,6 @@ std::optional<ImportedSite> ReadSite(const VanillaWorld& world, const VanillaRec
 
 namespace
 {
-/// The player of a player record of the file, none for no player
-std::optional<PlayerNames> PlayerOfRecord(const VanillaWorld& world, uint32_t number)
-{
-	const auto* record = RecordOf(world, number, VanillaType::Player);
-	const auto player = record != nullptr ? world.Byte(*record, "number") : std::nullopt;
-	if (!player.has_value() || *player >= static_cast<uint8_t>(PlayerNames::_COUNT))
-	{
-		return std::nullopt;
-	}
-	return static_cast<PlayerNames>(*player);
-}
-
 /// The artefacts of the towns of the file. The artefacts of each town come in the reverse order of the list of the
 /// town, the oldest first. The artefacts that no town lists come after them, in the order of the file.
 std::vector<ImportedTownArtefact> ReadTownArtefacts(const VanillaWorld& world)

@@ -64,7 +64,7 @@ public:
 			// It may be drawn as a shower of sparks rising from its object instead of its creator's look
 			if (_doShower)
 			{
-				atom.shower = std::make_shared<ObjectShower>(ObjectShower {.object = *target});
+				effect.GiveShower(atom, *target);
 			}
 		}
 		for (auto& atom : collection.atoms)

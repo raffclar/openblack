@@ -109,6 +109,10 @@ private:
 	SharedIndexLists<graphics::IndexBuffer>* _triangleSets {nullptr};
 	const graphics::VertexBuffer* _vertices {nullptr};
 	uint32_t _firstVertex {0};
+	/// The place of the block on the grid of blocks and on the map. The block keeps a copy, so the checks of each frame
+	/// do not read the cells of the block.
+	glm::ivec2 _blockPosition {-1};
+	glm::vec2 _mapPosition {0.0f};
 	uint8_t _highestAltitude {0};
 
 	void BuildVertexList(std::span<LandVertex> vertices, LandIslandInterface& island);

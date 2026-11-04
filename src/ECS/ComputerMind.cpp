@@ -460,6 +460,8 @@ void openblack::computer_mind::SeeNearHand(std::vector<SeenThing>& seen, const m
 	// The god looks at the cells in a spiral out from its hand. It stops at the first cell on the map that is too far.
 	auto coords = hand;
 	map_coords::Spiral spiral;
+	// One list for the things of all the cells
+	std::vector<entt::entity> things;
 	for (int32_t cells = k_SeenMostCells; cells != 0; --cells)
 	{
 		if (const glm::ivec2 cell = map_coords::Cell(coords); map_coords::InBounds(cell))
@@ -468,7 +470,8 @@ void openblack::computer_mind::SeeNearHand(std::vector<SeenThing>& seen, const m
 			{
 				return;
 			}
-			for (const auto object : world.ThingsIn(cell))
+			world.ThingsIn(cell, things);
+			for (const auto object : things)
 			{
 				if (!world.Available(object))
 				{

@@ -2495,3 +2495,48 @@ TEST_F(Reactions, AScaffoldOnASiteImpressesAsMuchAsTheTownWantsTheBuilding)
 	EXPECT_FLOAT_EQ(registry.Get<const TownImpression>(_town).belief.pending.at(static_cast<size_t>(PlayerNames::PLAYER_ONE)),
 	                3.0f * share);
 }
+
+// The reactions of a saved game of the original game replace the reactions of the land. They keep their order, the
+// oldest first. Each taker holds its reaction again in the order that it joined, and the count of the turns continues
+// from the turn of the saved game.
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(Reactions, TheReactionsOfASavedGameReplaceTheReactionsOfTheLand)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto old = _reactions.Create(Miracle());
+	ASSERT_NE(registry.TryGet<const LivingReaction>(_villagers[0]), nullptr);
+	ASSERT_EQ(registry.Get<const LivingReaction>(_villagers[0]).reaction, old);
+	const auto thing = registry.Create();
+	registry.Assign<Transform>(thing, k_Here, glm::mat3(1.0f), glm::vec3(1.0f));
+	using Restored = ecs::systems::ReactionSystemInterface::Restored;
+	auto source = Miracle(Reaction::LookAtObject);
+	source.initiator = thing;
+	std::vector<Restored> restored {
+	    {.reaction = {.source = source, .age = 30, .reach = 12.0f, .firstTaken = 0}, .takers = {_villagers[1], _villagers[0]}},
+	    {.reaction = {.source = source, .reach = 20.0f, .spreads = false}, .takers = {}},
+	};
+	const auto ids = _reactions.Restore(restored, 5000);
+	ASSERT_EQ(ids.size(), 2U);
+	EXPECT_GT(ids[0], old);
+	EXPECT_GT(ids[1], ids[0]);
+	EXPECT_FALSE(_reactions.IsActive(old));
+	EXPECT_EQ(_reactions.CurrentTurn(), 5000U);
+	const auto reactions = _reactions.GetReactions();
+	ASSERT_EQ(reactions.size(), 2U);
+	EXPECT_EQ(reactions[0].id, ids[0]);
+	EXPECT_EQ(reactions[0].age, 30U);
+	EXPECT_FLOAT_EQ(reactions[0].reach, 12.0f);
+	EXPECT_EQ(reactions[0].firstTaken, std::optional<uint32_t>(0));
+	EXPECT_FALSE(reactions[1].spreads);
+	// The first taker of the file joined first, so the last to join is first in the order of the takers
+	const auto& first = registry.Get<const LivingReaction>(_villagers[1]);
+	const auto& second = registry.Get<const LivingReaction>(_villagers[0]);
+	EXPECT_EQ(first.reaction, ids[0]);
+	EXPECT_EQ(second.reaction, ids[0]);
+	EXPECT_EQ(first.type, Reaction::LookAtObject);
+	EXPECT_LT(first.joined, second.joined);
+	EXPECT_EQ(first.startTurn, 5000U);
+	// The restore gives nothing a reaction that it does not name
+	const auto* third = registry.TryGet<const LivingReaction>(_villagers[2]);
+	EXPECT_TRUE(third == nullptr || third->reaction == 0);
+}

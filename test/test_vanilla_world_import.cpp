@@ -41,6 +41,7 @@
 #include "ECS/VanillaFootpathImport.h"
 #include "ECS/VanillaParticleImport.h"
 #include "ECS/VanillaPlayerImport.h"
+#include "ECS/VanillaReactionImport.h"
 #include "ECS/VanillaSceneryImport.h"
 #include "ECS/VanillaScriptImport.h"
 #include "ECS/VanillaWorldImport.h"
@@ -110,12 +111,63 @@ public:
 		return *this;
 	}
 
-	[[nodiscard]] VanillaWorld Make() const { return {_bytes, VanillaFraming {}, _records, _numbers}; }
+	/// Gives the record an owner that refers to the player record of the player. Make() uses the player record with
+	/// that number, or adds one at the end.
+	FakeWorld& OwnedBy(int player)
+	{
+		Ref("owner", 0);
+		_owners.push_back({.record = _records.size() - 1,
+		                   .field = _records.back().fields.size() - 1,
+		                   .player = static_cast<uint8_t>(player)});
+		return *this;
+	}
+
+	[[nodiscard]] VanillaWorld Make() const
+	{
+		auto copy = *this;
+		copy.ResolveOwners();
+		return {copy._bytes, VanillaFraming {}, copy._records, copy._numbers};
+	}
 
 private:
+	struct Owner
+	{
+		size_t record;
+		size_t field;
+		uint8_t player;
+	};
+
+	[[nodiscard]] std::optional<uint32_t> PlayerRecord(uint8_t player) const
+	{
+		const auto found = std::ranges::find_if(_records, [&](const VanillaRecord& record) {
+			return record.type == static_cast<uint32_t>(VanillaType::Player) &&
+			       std::ranges::any_of(record.fields, [&](const VanillaField& field) {
+				       return field.name == "number" && field.kind == VanillaValue::Bytes && field.size == 1 &&
+				              _bytes.at(field.at) == player;
+			       });
+		});
+		return found != _records.end() ? std::optional(found->number) : std::nullopt;
+	}
+
+	void ResolveOwners()
+	{
+		for (const auto& owner : _owners)
+		{
+			auto number = PlayerRecord(owner.player);
+			if (!number.has_value())
+			{
+				Record(VanillaType::Player).Value<uint8_t>("number", owner.player);
+				number = _records.back().number;
+			}
+			_records.at(owner.record).fields.at(owner.field).number = *number;
+		}
+		_owners.clear();
+	}
+
 	std::vector<uint8_t> _bytes;
 	std::vector<VanillaRecord> _records;
 	std::vector<uint32_t> _numbers;
+	std::vector<Owner> _owners;
 };
 
 /// A game object with the turn in its game data
@@ -305,7 +357,7 @@ TEST(VanillaWorldImport, ReadsTheTownsBuildingsAndVillagersOfTheFile)
 	    .Position(12226462, 17309630)
 	    .Value<uint32_t>("id", 0)
 	    .Value<uint32_t>("tribe", static_cast<uint32_t>(Tribe::NORSE))
-	    .Value<uint8_t>("player", 0)
+	    .OwnedBy(0)
 	    .Value<uint32_t>("cannotBuildWorshipSite", 1)
 	    .Value<uint32_t>("uninhabitable", 0)
 	    .Refs("abodes", {3, 4})
@@ -506,7 +558,7 @@ TEST(VanillaWorldImport, ReadsTheGamesListOfAllTowns)
 		    .Position(1000 * (id + 1), 1000)
 		    .Value<uint32_t>("id", id)
 		    .Value<uint32_t>("tribe", static_cast<uint32_t>(Tribe::NORSE))
-		    .Value<uint8_t>("player", 0);
+		    .OwnedBy(0);
 	}
 	const auto imported = world_import::ReadTowns(fake.Make());
 	EXPECT_EQ(imported.gameTownList, (std::vector<uint32_t> {4, 2, 3}));
@@ -520,7 +572,7 @@ TEST(VanillaWorldImport, AWorldWithoutTheGamesListsHasNoListOfAllTowns)
 	    .Position(1000, 1000)
 	    .Value<uint32_t>("id", 0)
 	    .Value<uint32_t>("tribe", static_cast<uint32_t>(Tribe::NORSE))
-	    .Value<uint8_t>("player", 0);
+	    .OwnedBy(0);
 	EXPECT_TRUE(world_import::ReadTowns(fake.Make()).gameTownList.empty());
 }
 
@@ -534,7 +586,7 @@ TEST(VanillaWorldImport, ReadsTheOrderOfThePlayersTownLists)
 		    .Position(1000 * (id + 1), 1000)
 		    .Value<uint32_t>("id", id)
 		    .Value<uint32_t>("tribe", static_cast<uint32_t>(Tribe::NORSE))
-		    .Value<uint8_t>("player", id == 2 ? 1 : 0);
+		    .OwnedBy(id == 2 ? 1 : 0);
 	}
 	// 5 and 6: the players. The first player got the town with the higher number first.
 	fake.Record(VanillaType::Player).Value<uint8_t>("number", 0).Refs("towns", {3, 2});
@@ -545,6 +597,32 @@ TEST(VanillaWorldImport, ReadsTheOrderOfThePlayersTownLists)
 	EXPECT_TRUE(imported.skipped.empty());
 	EXPECT_EQ(imported.towns.size(), 3U);
 	EXPECT_EQ(imported.townLists, (std::vector<uint32_t> {3, 2, 4}));
+}
+
+// A town keeps the number of the player that it had before it last changed hands. The owner of the town is the player
+// that its owner reference gives.
+TEST(VanillaWorldImport, TheOwnerOfATownIsThePlayerOfItsOwnerReference)
+{
+	auto fake = GameAtTurn(100);
+	// 2: a town that went from the first player to the neutral player, 3: the neutral player
+	fake.Record(VanillaType::Town)
+	    .Position(1000, 1000)
+	    .Value<uint32_t>("id", 0)
+	    .Value<uint32_t>("tribe", static_cast<uint32_t>(Tribe::NORSE))
+	    .Value<uint8_t>("player", 0)
+	    .Ref("owner", 3);
+	fake.Record(VanillaType::Player).Value<uint8_t>("number", static_cast<uint8_t>(PlayerNames::NEUTRAL));
+	// 4: a town with no owner is not taken
+	fake.Record(VanillaType::Town)
+	    .Position(2000, 1000)
+	    .Value<uint32_t>("id", 1)
+	    .Value<uint32_t>("tribe", static_cast<uint32_t>(Tribe::NORSE))
+	    .Value<uint8_t>("player", 0);
+
+	const auto imported = world_import::ReadTowns(fake.Make());
+	ASSERT_EQ(imported.towns.size(), 1U);
+	EXPECT_EQ(imported.towns[0].owner, PlayerNames::NEUTRAL);
+	ASSERT_EQ(imported.skipped.size(), 1U);
 }
 
 namespace
@@ -1074,7 +1152,7 @@ TEST(VanillaWorldImport, ReadsThePlansAndTheBuildingSitesOfTheTowns)
 	    .Position(0, 0)
 	    .Value<uint32_t>("id", 0)
 	    .Value<uint32_t>("tribe", static_cast<uint32_t>(Tribe::AZTEC))
-	    .Value<uint8_t>("player", 0)
+	    .OwnedBy(0)
 	    .Refs("planned", {3})
 	    .Refs("buildingSites", {5});
 	fake.Record(VanillaType::PlannedAbode)
@@ -1130,7 +1208,7 @@ TEST(VanillaWorldImport, ReadsTheFlagsOfTheDesiresOfTheTowns)
 	    .Position(0, 0)
 	    .Value<uint32_t>("id", 0)
 	    .Value<uint32_t>("tribe", static_cast<uint32_t>(Tribe::AZTEC))
-	    .Value<uint8_t>("player", 0);
+	    .OwnedBy(0);
 	fake.Record(VanillaType::TownDesireFlags).Ref("flagTown", 2).Value<uint32_t>("flagType", 3).Value("flagLevel", 0.75f);
 	fake.Record(VanillaType::TownDesireFlags)
 	    .Ref("flagTown", 2)
@@ -1738,7 +1816,7 @@ TEST(VanillaWorldImport, ReadsThePowerOfEachWonderAndTheTribalPowersOfEachPlayer
 	    .Position(1000, 1000)
 	    .Value<uint32_t>("id", 0)
 	    .Value<uint32_t>("tribe", static_cast<uint32_t>(Tribe::GREEK))
-	    .Value<uint8_t>("player", 1);
+	    .OwnedBy(1);
 	fake.Record(VanillaType::Wonder)
 	    .Position(1200, 1000)
 	    .Value<uint32_t>("info", AbodeRowNumber(AbodeInfo::GreekWonder))
@@ -3754,9 +3832,9 @@ TEST(VanillaWorldImport, TheImportFindsTheDancersAndTheWorshippersOfASite)
 	EXPECT_FALSE(imported.villagers[2].importedWorshipper);
 }
 
-// The import makes each dance that is not the dance of a worship site, except a dance that a reaction or an artefact of a
-// town holds
-TEST(VanillaWorldImport, TheImportMakesTheDancesOfCreaturesArtefactsAndScriptsButNotOfReactions)
+// The import makes each dance that is not the dance of a worship site: the dances of the scripts, the reactions, the
+// artefacts of the towns and the creatures
+TEST(VanillaWorldImport, TheImportMakesTheDancesOfCreaturesReactionsArtefactsAndScripts)
 {
 	auto fake = GameAtTurn(100);
 	// 2: a site, 3: its dance, 4: a dance of a script, 5: a dance of a reaction, 6: the reaction, 7: a dance of an
@@ -3778,7 +3856,7 @@ TEST(VanillaWorldImport, TheImportMakesTheDancesOfCreaturesArtefactsAndScriptsBu
 	    .Value<uint32_t>("danceRow", static_cast<uint32_t>(DanceInfo::CreatureDanceToImpressVillagers))
 	    .Ref("danceOwner", 31);
 	const auto dances = world_import::ReadOtherDances(fake.Make());
-	ASSERT_EQ(dances.made.size(), 3U);
+	ASSERT_EQ(dances.made.size(), 4U);
 	const auto& script = dances.made[0];
 	EXPECT_EQ(script.number, 4U);
 	EXPECT_EQ(script.type, DanceInfo::DanceAroundPerson);
@@ -3787,12 +3865,12 @@ TEST(VanillaWorldImport, TheImportMakesTheDancesOfCreaturesArtefactsAndScriptsBu
 	EXPECT_EQ(script.place.z, -2000);
 	EXPECT_EQ(script.duration, 400U);
 	EXPECT_TRUE(script.madeByScript);
-	// The dance of the artefact is made with the artefact
-	EXPECT_EQ(dances.made[1].number, 7U);
-	EXPECT_EQ(dances.made[2].number, 9U);
-	EXPECT_EQ(dances.made[2].owner, 31U);
-	EXPECT_FALSE(dances.made[2].madeByScript);
-	EXPECT_EQ(dances.notMade, (std::vector<uint32_t> {5}));
+	// The dance of the reaction and the dance of the artefact are made with them
+	EXPECT_EQ(dances.made[1].number, 5U);
+	EXPECT_EQ(dances.made[2].number, 7U);
+	EXPECT_EQ(dances.made[3].number, 9U);
+	EXPECT_EQ(dances.made[3].owner, 31U);
+	EXPECT_FALSE(dances.made[3].madeByScript);
 }
 
 // A dance that the import makes on its own has the row, the place, the length and the angle of the file, is for the
@@ -3844,19 +3922,23 @@ TEST(VanillaWorldImport, TheImportFindsTheDancersOfADanceOfACreatureOrAScript)
 	    .Position(1, 2)
 	    .Value("info", VillagerRowNumber(VillagerInfo::NorseForesterMale))
 	    .Value("action", std::array<uint8_t, 6> {})
+	    .Ref("reaction", 8)
 	    .Ref("danceGroup", 7);
 	const auto imported = world_import::ReadTowns(fake.Make());
 	ASSERT_EQ(imported.villagers.size(), 3U);
 	EXPECT_TRUE(imported.villagers[0].importedDancer);
 	EXPECT_FALSE(imported.villagers[1].importedDancer);
-	EXPECT_FALSE(imported.villagers[2].importedDancer);
-	ASSERT_EQ(imported.dances.made.size(), 1U);
+	// A dancer of the dance of a reaction is a dancer too
+	EXPECT_TRUE(imported.villagers[2].importedDancer);
+	EXPECT_EQ(imported.villagers[0].reaction, 0U);
+	EXPECT_EQ(imported.villagers[2].reaction, 8U);
+	ASSERT_EQ(imported.dances.made.size(), 2U);
 	EXPECT_EQ(imported.dances.made[0].number, 2U);
-	EXPECT_EQ(imported.dances.notMade, (std::vector<uint32_t> {6}));
+	EXPECT_EQ(imported.dances.made[1].number, 6U);
 }
 
 // A villager in a state of the dance of a creature keeps it only as a dancer of a dance that the import makes. A
-// villager that dances as it reacts decides again, because the import does not make the reactions.
+// villager that dances as it reacts keeps its state only as a dancer that reacts to a reaction of the file.
 TEST(VanillaWorldImport, TheStatesOfTheDanceOfACreatureNeedADanceOfTheImport)
 {
 	const auto decide = world_import::DecideAgain();
@@ -3874,39 +3956,39 @@ TEST(VanillaWorldImport, TheStatesOfTheDanceOfACreatureNeedADanceOfTheImport)
 	EXPECT_EQ(world_import::StartStates(reacting), decide);
 	reacting.importedDancer = true;
 	EXPECT_EQ(world_import::StartStates(reacting), decide);
+	reacting.reaction = 8;
+	EXPECT_EQ(world_import::StartStates(reacting), reacting.states);
+	reacting.importedDancer = false;
+	EXPECT_EQ(world_import::StartStates(reacting), decide);
 }
 
-// Each dance of the saves is the dance of a worship site, a dance that the import makes on its own, or a dance that the
-// import does not make. A dance that the import makes is not the dance of a script unless the camera word is set.
+// Each dance of the saves is the dance of a worship site or a dance that the import makes on its own. A dance that the
+// import makes is not the dance of a script unless the camera word is set.
 TEST(VanillaWorldImport, SavedGamesTellWhichDancesTheImportMakes)
 {
 	size_t all = 0;
 	size_t ofSites = 0;
 	size_t made = 0;
-	size_t notMade = 0;
-	const auto files =
-	    ForEachSave([&all, &ofSites, &made, &notMade](const std::filesystem::path& path, const VanillaWorld& world) {
-		    const auto imported = world_import::ReadTowns(world);
-		    const auto dances = world.OfType(VanillaType::Dance);
-		    all += dances.size();
-		    ofSites += static_cast<size_t>(std::ranges::count_if(
-		        imported.worshipSites, [](const world_import::ImportedWorshipSite& site) { return site.dance != 0; }));
-		    made += imported.dances.made.size();
-		    notMade += imported.dances.notMade.size();
-		    for (const auto& dance : imported.dances.made)
-		    {
-			    const auto* record = world.Record(dance.number);
-			    ASSERT_NE(record, nullptr) << path << " " << dance.number;
-			    EXPECT_EQ(dance.madeByScript, world.Word(*record, "danceCameraOff").value_or(0) != 0);
-		    }
-	    });
+	const auto files = ForEachSave([&all, &ofSites, &made](const std::filesystem::path& path, const VanillaWorld& world) {
+		const auto imported = world_import::ReadTowns(world);
+		const auto dances = world.OfType(VanillaType::Dance);
+		all += dances.size();
+		ofSites += static_cast<size_t>(std::ranges::count_if(
+		    imported.worshipSites, [](const world_import::ImportedWorshipSite& site) { return site.dance != 0; }));
+		made += imported.dances.made.size();
+		for (const auto& dance : imported.dances.made)
+		{
+			const auto* record = world.Record(dance.number);
+			ASSERT_NE(record, nullptr) << path << " " << dance.number;
+			EXPECT_EQ(dance.madeByScript, world.Word(*record, "danceCameraOff").value_or(0) != 0);
+		}
+	});
 	if (!files.has_value())
 	{
 		GTEST_SKIP() << "Set OPENBLACK_VANILLA_SAVES to a copy of a Profiles folder of the game to check its saved games";
 	}
-	EXPECT_EQ(all, ofSites + made + notMade);
-	std::cout << "Dances " << all << ", of worship sites " << ofSites << ", made on their own " << made << ", not made "
-	          << notMade << std::endl;
+	EXPECT_EQ(all, ofSites + made);
+	std::cout << "Dances " << all << ", of worship sites " << ofSites << ", made on their own " << made << std::endl;
 }
 
 // Each group of a dance in the saves belongs to a thing that keeps groups of a dance, and its dancers are living things
@@ -4266,4 +4348,146 @@ TEST(VanillaWorldImport, TheStatesOfTheDanceOfAnArtefactNeedADanceOfTheImport)
 		villager.importedDancer = false;
 		EXPECT_NE(world_import::StartStates(villager), villager.states);
 	}
+}
+
+namespace reaction_import = openblack::ecs::vanilla_reaction_import;
+
+// The reader names every value of a reaction. The reactions come the oldest first: the reverse of the game's list of the
+// reactions, then the reactions that the list does not have, in the order of the file.
+TEST(VanillaWorldImport, TheReactionsComeTheOldestFirstWithEveryValueOfTheFile)
+{
+	auto fake = GameAtTurn(500);
+	for (size_t list = 0; list < world_import::k_GameObjectLists; ++list)
+	{
+		fake.Refs("lists",
+		          list == reaction_import::k_GameReactionList ? std::vector<uint32_t> {3, 2} : std::vector<uint32_t> {});
+	}
+	// 2 and 3: reactions of the list, 4: a reaction that the list does not have, 5: the player
+	fake.Record(VanillaType::Reaction)
+	    .Ref("reactionTarget", 40)
+	    .Refs("reactionTakers", {41, 42})
+	    .Value<uint32_t>("", 0)
+	    .Value<uint32_t>("reactionType", static_cast<uint32_t>(Reaction::ReactToTownCelebration))
+	    .Ref("reactionDance", 43)
+	    .Value<uint32_t>("reactionFirstTaken", 450)
+	    .Value<uint32_t>("reactionSpreads", 0)
+	    .Ref("reactionPlayer", 5)
+	    .Value<float>("reactionReach", 35.5f);
+	fake.Record(VanillaType::Reaction)
+	    .Ref("reactionTarget", 44)
+	    .Refs("reactionTakers", {})
+	    .Value<uint32_t>("reactionType", static_cast<uint32_t>(Reaction::LookAtObject))
+	    .Ref("reactionDance", 0)
+	    .Value<uint32_t>("reactionFirstTaken", 0)
+	    .Value<uint32_t>("reactionSpreads", 1)
+	    .Ref("reactionPlayer", 0)
+	    .Value<float>("reactionReach", 1.0f);
+	fake.Record(VanillaType::Reaction).Ref("reactionTarget", 45);
+	fake.Record(VanillaType::Player).Value<uint8_t>("number", 1);
+	const auto reactions = reaction_import::ReadReactions(fake.Make());
+	ASSERT_EQ(reactions.size(), 3U);
+	EXPECT_EQ(reactions[0].number, 2U);
+	EXPECT_EQ(reactions[1].number, 3U);
+	EXPECT_EQ(reactions[2].number, 4U);
+	const auto& celebration = reactions[0];
+	EXPECT_EQ(celebration.target, 40U);
+	EXPECT_EQ(celebration.takers, (std::vector<uint32_t> {41, 42}));
+	EXPECT_EQ(celebration.type, static_cast<uint32_t>(Reaction::ReactToTownCelebration));
+	EXPECT_EQ(celebration.dance, 43U);
+	EXPECT_EQ(celebration.firstTaken, std::optional<uint32_t>(450));
+	EXPECT_FALSE(celebration.spreads);
+	EXPECT_EQ(celebration.player, PlayerNames::PLAYER_TWO);
+	EXPECT_FLOAT_EQ(celebration.reach, 35.5f);
+	// No first taker and no player
+	EXPECT_EQ(reactions[1].firstTaken, std::nullopt);
+	EXPECT_EQ(reactions[1].player, std::nullopt);
+	EXPECT_TRUE(reactions[1].spreads);
+}
+
+// A reaction of the file goes on from the thing that the import made, with the time, the reach and the spread of the
+// file. A reaction of no player impresses no one.
+TEST(VanillaWorldImport, AReactionOfTheFileGoesOnFromTheThingThatTheImportMade)
+{
+	constexpr auto k_Thing = static_cast<entt::entity>(9);
+	const reaction_import::Initiator thing {.entity = k_Thing, .position = {10.0f, 2.0f, 30.0f}, .impressiveValue = 3.5f};
+	const reaction_import::ImportedReaction file {.type = static_cast<uint32_t>(Reaction::ReactToNewBuilding),
+	                                              .firstTaken = 940,
+	                                              .spreads = false,
+	                                              .player = PlayerNames::PLAYER_ONE,
+	                                              .reach = 42.0f};
+	const auto taken = reaction_import::ActiveOf(file, thing, 1000);
+	EXPECT_EQ(taken.source.initiator, k_Thing);
+	EXPECT_EQ(taken.source.type, Reaction::ReactToNewBuilding);
+	EXPECT_EQ(taken.source.player, PlayerNames::PLAYER_ONE);
+	EXPECT_FALSE(taken.source.playerless);
+	EXPECT_EQ(taken.source.position, glm::vec3(10.0f, 2.0f, 30.0f));
+	EXPECT_FLOAT_EQ(taken.source.impressiveValue, 3.5f);
+	EXPECT_FLOAT_EQ(taken.source.power, 1.0f);
+	EXPECT_FLOAT_EQ(taken.source.strength, 1.0f);
+	EXPECT_EQ(taken.source.magicType, MagicType::None);
+	EXPECT_TRUE(taken.source.casterCreature == entt::null);
+	EXPECT_EQ(taken.source.reach, std::nullopt);
+	EXPECT_FLOAT_EQ(taken.reach, 42.0f);
+	EXPECT_FALSE(taken.spreads);
+	// Its time started 60 turns before the turn of the file
+	EXPECT_EQ(taken.age, 60U);
+	EXPECT_EQ(taken.firstTaken, std::optional<uint32_t>(0));
+	// No living thing took it up, and no player made it
+	const auto waiting = reaction_import::ActiveOf({.type = 1, .reach = 5.0f}, thing, 1000);
+	EXPECT_EQ(waiting.age, 0U);
+	EXPECT_EQ(waiting.firstTaken, std::nullopt);
+	EXPECT_EQ(waiting.source.player, PlayerNames::NEUTRAL);
+	EXPECT_TRUE(waiting.source.playerless);
+	EXPECT_TRUE(waiting.spreads);
+}
+
+// A living thing remembers the kinds of reaction of the file, the oldest first. The game keeps only the newest three.
+TEST(VanillaWorldImport, ALivingThingRemembersTheNewestThreeKindsOfReaction)
+{
+	auto fake = GameAtTurn(100);
+	fake.Record(VanillaType::Villager);
+	for (const auto& [type, turn] : std::array<std::pair<uint32_t, uint32_t>, 4> {{{7, 10}, {12, 20}, {1, 30}, {9, 40}}})
+	{
+		fake.Value<uint32_t>("reactionDoneType", type).Value<uint32_t>("reactionDoneTurn", turn);
+	}
+	fake.Record(VanillaType::Villager);
+	const auto world = fake.Make();
+	const auto memory = reaction_import::ReadMemory(world, world.Records()[1]);
+	ASSERT_EQ(memory.size(), 3U);
+	EXPECT_EQ(memory[0].type, 12U);
+	EXPECT_EQ(memory[0].turn, 20U);
+	EXPECT_EQ(memory[2].type, 9U);
+	EXPECT_EQ(memory[2].turn, 40U);
+	EXPECT_TRUE(reaction_import::ReadMemory(world, world.Records()[2]).empty());
+}
+
+// The saves have no reaction of a kind that the reaction table does not have, and the memory of each living thing has
+// at most three kinds of reaction
+TEST(VanillaWorldImport, SavedGamesHaveReactionsAndMemoriesThatTheImportReads)
+{
+	size_t reactions = 0;
+	size_t memories = 0;
+	const auto files = ForEachSave([&reactions, &memories](const std::filesystem::path& path, const VanillaWorld& world) {
+		const auto read = reaction_import::ReadReactions(world);
+		for (const auto& reaction : read)
+		{
+			EXPECT_LT(reaction.type, reaction_import::k_ReactionKinds) << path << " " << reaction.number;
+			const auto* target = world.Record(reaction.target);
+			std::cout << path.filename() << " reaction " << reaction.number << " kind " << reaction.type << " target "
+			          << reaction.target << " of type " << (target != nullptr ? target->type : 0) << " takers "
+			          << reaction.takers.size() << " first taken " << reaction.firstTaken.value_or(0) << std::endl;
+		}
+		reactions += read.size();
+		for (const auto& record : world.Records())
+		{
+			const auto memory = reaction_import::ReadMemory(world, record);
+			EXPECT_EQ(memory.size(), world.Fields(record, "reactionDoneType").size()) << path << " " << record.number;
+			memories += memory.empty() ? 0 : 1;
+		}
+	});
+	if (!files.has_value())
+	{
+		GTEST_SKIP() << "Set OPENBLACK_VANILLA_SAVES to a copy of a Profiles folder of the game to check its saved games";
+	}
+	std::cout << "Reactions " << reactions << ", living things that remember reactions " << memories << std::endl;
 }

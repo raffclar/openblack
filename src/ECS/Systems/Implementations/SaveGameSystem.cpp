@@ -1691,6 +1691,8 @@ bool SaveGameSystem::ImportVanillaWorld(uint32_t slot, std::span<const uint8_t> 
 	ImportVanillaScriptThings(*read.world, made);
 	// The dances of the creatures and of the scripts, when the things that they are for are made
 	ImportVanillaDances(dances, made);
+	// The reactions of the file and their dances, when the things that they come from are made
+	ImportVanillaReactions(*read.world, made);
 	// The walkers take the circles of their walks when all the things of the file are made
 	ImportVanillaCircles(circles, made);
 	// The footpaths of the file replace all the footpaths, when all the things of the file are made. The game's load

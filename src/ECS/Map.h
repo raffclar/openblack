@@ -58,6 +58,9 @@ public:
 	}
 	/// Everything in a cell as a search meets it, none for a cell off the map
 	[[nodiscard]] virtual std::vector<entt::entity> GetAllInCell(glm::ivec2 cell) const = 0;
+	/// Puts everything in a cell into the list, as GetAllInCell gives it. The list loses what it held before. A caller
+	/// that looks at many cells uses one list for all of them.
+	virtual void AllInCellInto(glm::ivec2 cell, std::vector<entt::entity>& out) const { out = GetAllInCell(cell); }
 	/// What stands on a land block (by its column and row), in the order the game keeps it for drawing; none for a
 	/// block the land hasn't
 	[[nodiscard]] virtual std::span<const entt::entity> GetOnBlock(glm::ivec2 block) const = 0;
