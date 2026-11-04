@@ -54,6 +54,8 @@ struct CameraState
 	std::string drag {"none"};
 	/// A script has taken the camera (a cinematic) and moves it itself: putting it somewhere would last a frame at most
 	bool heldByScript {false};
+	/// The point that a script gave the player's camera to turn about and look at, if any
+	std::optional<glm::vec3> turnPoint;
 };
 
 /// Where a camera is put: where it is and what it looks at

@@ -54,6 +54,7 @@
 #include "Animals/AnimalMove.h"
 #include "Blast/CameraShake.h"
 #include "Camera/Camera.h"
+#include "Camera/ForcedTurnPoint.h"
 #include "Camera/ScriptCameraModel.h"
 #include "ECS/GamePlayers.h"
 #include "Sound/GameMusic.h"
@@ -7148,12 +7149,20 @@ void SetCreatureDevStage() // 208 SET_CREATURE_DEV_STAGE
 
 void SetFixedCamRotation() // 209 SET_FIXED_CAM_ROTATION
 {
-	// const auto unk3 = Pop().intVal;
-	// const auto unk2 = Pop().intVal;
-	// const auto unk1 = Pop().intVal;
-	// const auto unk0 = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// Any value other than 0 gives the player's camera the point to turn about and look at. The value 0 removes the point.
+	const auto point = PopVec();
+	const bool fixed = Pop().uintVal != 0;
+	if (!Locator::camera::has_value())
+	{
+		return;
+	}
+	auto& camera = Locator::camera::value();
+	if (!forced_turn::TakesPoint(camera.GetModel()))
+	{
+		ScriptMessage("Wrong camera mode");
+		return;
+	}
+	camera.SetForcedTurnPoint(fixed ? std::optional(point) : std::nullopt);
 }
 
 void SwapCreature() // 210 SWAP_CREATURE

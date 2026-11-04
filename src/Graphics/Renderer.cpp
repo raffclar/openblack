@@ -4430,15 +4430,18 @@ void Renderer::DrawSunGlare(const Camera& camera) const
 		alpha = sun::GlareAlpha(_sunGlare, placement->alpha, dome != nullptr ? dome->overcast : 0.0f,
 		                        Locator::config::value().detail.fog);
 	}
-	DrawCelestialMesh(RenderPass::Main, {
-	                                        .meshId = body->meshId,
-	                                        .textureId = body->textureId,
-	                                        .alphaTextureId = body->alphaTextureId,
-	                                        .model = model * glm::scale(glm::vec3(sun::k_GlareScale)),
-	                                        .colour = {0xA0 / 255.0f, 0x6A / 255.0f, 0x35 / 255.0f, alpha / 255.0f},
-	                                        .celestial = glm::vec4(0.0f),
-	                                        .state = k_AdditiveState,
-	                                    });
+	// The game draws the glare when the frame ends, after all the things that blend, such as the clouds. Thus it goes
+	// in the pass of the things that blend, with the smallest sort key, which puts it last in that pass.
+	DrawCelestialMesh(TranslucentView(RenderPass::Main),
+	                  {
+	                      .meshId = body->meshId,
+	                      .textureId = body->textureId,
+	                      .alphaTextureId = body->alphaTextureId,
+	                      .model = model * glm::scale(glm::vec3(sun::k_GlareScale)),
+	                      .colour = {0xA0 / 255.0f, 0x6A / 255.0f, 0x35 / 255.0f, alpha / 255.0f},
+	                      .celestial = glm::vec4(0.0f),
+	                      .state = k_AdditiveState,
+	                  });
 }
 
 void Renderer::AskGlareSampleDrawn(const Camera& camera, bgfx::OcclusionQueryHandle query, glm::vec2 topLeft,

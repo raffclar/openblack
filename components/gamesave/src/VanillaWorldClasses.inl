@@ -227,7 +227,8 @@ void ReadPlayerActionState(WorldReader& r)
 
 void ReadComputerAttitude(WorldReader& r)
 {
-	r.Word();
+	// The value that the god keeps for the player: twice the value that a script gives
+	r.Float("attitude");
 }
 
 void ReadGameStats(WorldReader& r)
@@ -803,7 +804,8 @@ void ReadReaction(WorldReader& r)
 	r.Refs();
 	r.Word();
 	r.Word();
-	r.Ref();
+	// The dance that the villagers dance as they react, if any
+	r.Ref("reactionDance");
 	r.Word();
 	r.Word();
 	r.Ref();
@@ -1039,10 +1041,10 @@ void ReadGroupBehaviour(WorldReader& r)
 	r.Float("danceDancingRate");
 	r.Refs();
 	r.Float("danceAngle");
-	// The hand stayed near long enough, a word that only the makers write, the dance made its camera, and the dance is
-	// deleted
+	// The hand stayed near long enough, a word that only a dance of a script sets, the dance made its camera, and the
+	// dance is deleted
 	r.Word("danceCameraWanted");
-	r.Word();
+	r.Word("danceCameraOff");
 	r.Word("danceCameraMade");
 	r.Word();
 	r.Word();
@@ -2295,14 +2297,17 @@ void ReadAudio(WorldReader& r)
 // No save file of the tests has this type. This layout comes only from the game's save code.
 void ReadTownArtifact(WorldReader& r)
 {
-	r.Ref();
-	r.Ref();
-	r.Ref();
-	r.Word();
-	r.Ref();
-	r.Ref();
-	r.Word();
-	r.Word();
+	// The object that is the artefact, its town and the player that owns it
+	r.Ref("artefactObject");
+	r.Ref("artefactTown");
+	r.Ref("artefactPlayer");
+	r.Float("artefactValue");
+	r.Ref("artefactDance");
+	// The glow over the artefact
+	r.Ref("artefactEffect");
+	// The town saw the dance start, at this turn
+	r.Word("artefactDancing");
+	r.Word("artefactDanceStarted");
 }
 
 // No save file of the tests has this type. This layout comes only from the game's save code.

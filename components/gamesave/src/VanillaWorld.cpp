@@ -687,24 +687,29 @@ void ReadComputerPlayer(WorldReader& r)
 	ReadPositioned(r);
 	r.Ref("player");
 	r.Ref("actionState");
-	r.Refs();
-	r.Refs();
-	r.Refs();
-	for (int i = 0; i < 5; ++i)
-	{
-		r.Word();
-	}
-	r.Array(4);
-	for (int i = 0; i < 4; ++i)
-	{
-		r.Word();
-	}
+	// The miracles that the god cast, the things that it saw and the actions in its queue
+	r.Refs("casts");
+	r.Refs("seen");
+	r.Refs("queue");
+	r.Float("handSpeed");
+	r.Word();
+	r.Word();
+	r.Word("started");
+	// A value that all the computer players share. Each computer player writes it.
+	r.Word();
+	// How many times the god wanted each miracle
+	r.Array(4, "castRequests");
+	r.Word();
+	r.Word("switchedOn");
+	r.Word("paused");
+	r.Word("scriptHold");
 	r.Byte();
-	r.Refs();
-	// The decision tree of the computer player
+	// What the god thinks of each player, one object for each player
+	r.Refs("attitudes");
+	// The decision tree of the computer player: the suppression and the weight of each node
 	for (size_t i = 0; i < k_ComputerPlayerTreeWords; ++i)
 	{
-		r.Word();
+		r.Word("tree");
 	}
 }
 

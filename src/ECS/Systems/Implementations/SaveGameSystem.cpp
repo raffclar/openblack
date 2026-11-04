@@ -1677,7 +1677,8 @@ bool SaveGameSystem::ImportVanillaWorld(uint32_t slot, std::span<const uint8_t> 
 	VanillaWorks works;
 	VanillaCircles circles;
 	VanillaFootpathWalks footpathWalks;
-	ImportVanillaTowns(*read.world, made, works, circles, footpathWalks);
+	VanillaDances dances;
+	ImportVanillaTowns(*read.world, made, works, circles, footpathWalks, dances);
 	// The forests, the big forests and the trees of the file replace those of the land
 	ImportVanillaForests(*read.world, made);
 	// The fields and the fish farms of the file replace those of the land
@@ -1688,11 +1689,15 @@ bool SaveGameSystem::ImportVanillaWorld(uint32_t slot, std::span<const uint8_t> 
 	ImportVanillaAnimals(*read.world, made, circles);
 	// The markers, the timers, the highlights and the influences of the scripts replace those of the land
 	ImportVanillaScriptThings(*read.world, made);
+	// The dances of the creatures and of the scripts, when the things that they are for are made
+	ImportVanillaDances(dances, made);
 	// The walkers take the circles of their walks when all the things of the file are made
 	ImportVanillaCircles(circles, made);
 	// The footpaths of the file replace all the footpaths, when all the things of the file are made. The game's load
 	// sends no footpath round a thing that it makes.
 	ImportVanillaFootpaths(*read.world, made, footpathWalks);
+	// The game deletes the computer gods of the land before the load, so each player has only the computer god of the file
+	ImportVanillaPlayers(*read.world);
 	// The running scripts of the file, with the objects that they hold, replace the scripts of the land. The game loads
 	// them after all the objects of the file.
 	ImportVanillaScripts(*read.world, made);

@@ -161,6 +161,7 @@ Json StateJson(const CameraState& state)
 	     }},
 	    {"drag", state.drag},
 	    {"held_by_script", state.heldByScript},
+	    {"turn_point", state.turnPoint.has_value() ? Point(*state.turnPoint) : Json(nullptr)},
 	};
 }
 
@@ -327,7 +328,9 @@ std::unique_ptr<ProviderInterface> openblack::inspector::MakeCameraProvider(Came
 	provider->Add({.name = "state",
 	               .description = "Where the camera is, what it looks at, its yaw, pitch (degrees below the horizon) and "
 	                              "distance, its field of view, what moves it, whether a camera path holds it, the mouse "
-	                              "hints (rotate, pitch, top) the cursor's place offers and what a drag has turned into",
+	                              "hints (rotate, pitch, top) the cursor's place offers and what a drag has turned into, and "
+	                              "the point a script gave the camera to turn about and look at (turn_point, null "
+	                              "when none)",
 	               .parameters = {},
 	               .kind = ResultKind::Object,
 	               .needsNear = false},

@@ -44,6 +44,7 @@ enum class VanillaType : uint32_t
 	LandscapeVortexIn = 0x1B,
 	MagicWood = 0x1F,
 	StoragePit = 0x08,
+	Reaction = 0x26,
 	Dance = 0x27,
 	Town = 0x28,
 	Field = 0x32,
@@ -112,7 +113,9 @@ enum class VanillaType : uint32_t
 	BaseOnly = 0xF6,
 	Climate = 0xFC,
 	StreetLantern = 0xFE,
+	TownArtifact = 0x103,
 	VortexCrossingWriter = 0x106,
+	ComputerAttitude = 0x10D,
 };
 
 /// How a named value of a record is kept in the file

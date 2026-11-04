@@ -391,6 +391,7 @@ void Camera::Update(std::chrono::microseconds dt)
 	CountModelTime(dt);
 	_stepViewCount = 0;
 	const auto updateInfo = _model->Update(dt, *this);
+	ForgetForcedTurnPoint();
 	if (updateInfo)
 	{
 		SetOff(*updateInfo);
@@ -425,7 +426,9 @@ void Camera::Update(const input_steps::Steps& steps)
 		}
 		useStep(i);
 		CountModelTime(time);
-		if (const auto updateInfo = _model->Update(time, *this))
+		const auto updateInfo = _model->Update(time, *this);
+		ForgetForcedTurnPoint();
+		if (updateInfo)
 		{
 			SetOff(*updateInfo);
 		}
@@ -434,6 +437,14 @@ void Camera::Update(const input_steps::Steps& steps)
 		KeepStepView();
 	}
 	useStep(std::nullopt);
+}
+
+void Camera::ForgetForcedTurnPoint()
+{
+	if (_model->EndsForcedTurnPoint())
+	{
+		_forcedTurnPoint.reset();
+	}
 }
 
 void Camera::KeepStepView()

@@ -23,6 +23,7 @@
 #include <glm/vec3.hpp>
 
 #include "CreatureRecord.h"
+#include "ECS/Dances.h"
 #include "ECS/VanillaFootpathImport.h"
 #include "ECS/WallHugRules.h"
 #include "Enums.h"
@@ -581,6 +582,8 @@ inline constexpr size_t k_ImportedSitePlaces = 128;
 inline constexpr size_t k_GameObjectLists = 44;
 /// The place of the game's list of all the towns among the lists of the game object
 inline constexpr size_t k_GameTownList = 31;
+/// The place of the game's list of all the dances among the lists of the game object
+inline constexpr size_t k_GameDanceList = 8;
 
 /// The site of a town at a building that goes up or that its builders mend
 struct ImportedSite
@@ -732,6 +735,12 @@ struct ImportedDance
 	uint32_t number {0};
 	/// The row of the table of the dances
 	DanceInfo type {DanceInfo::None};
+	/// The place that it is danced about, in whole map units
+	gamesave::MapCoords place {};
+	/// The number of the object that it is danced for or about in the file, 0 for none
+	uint32_t owner {0};
+	/// A script made it
+	bool madeByScript {false};
 	/// The clock of the dance and how many lengths of the clock it takes before it starts again
 	float clock {0.0f};
 	uint32_t loopLength {1};
@@ -837,6 +846,38 @@ struct ImportedWorshipSite
 	std::vector<ImportedWorshipIcon> iconValues;
 };
 
+/// The dances of the file that are not the dance of a worship site
+struct ImportedDances
+{
+	/// The dances that the import makes on their own, in the order of the file: the dances of the creatures and of the
+	/// scripts, and the dances that nothing holds
+	std::vector<ImportedDance> made;
+	/// The numbers of the dances that a reaction holds. The import does not make the reactions, so it does not make
+	/// their dances.
+	std::vector<uint32_t> notMade;
+	/// The numbers of the dances in the game's list of dances, the newest first. The game's load keeps this order.
+	std::vector<uint32_t> gameList;
+};
+
+/// An artefact of a town
+struct ImportedTownArtefact
+{
+	uint32_t number {0};
+	/// The numbers of the objects of the thing that is the artefact, its town and its dance in the file, 0 for none
+	uint32_t object {0};
+	uint32_t town {0};
+	uint32_t dance {0};
+	/// The player that owns the artefact, none for no player
+	std::optional<PlayerNames> player;
+	/// The worth of the artefact
+	float value {0.0f};
+	/// The town saw the dance of the artefact start, at this game turn
+	bool dancing {false};
+	uint32_t danceStarted {0};
+	/// The artefact is in the list of artefacts of its town
+	bool inTown {false};
+};
+
 /// The towns, buildings and villagers of a world file, in the order of the file
 struct ImportedTowns
 {
@@ -863,6 +904,11 @@ struct ImportedTowns
 	std::vector<ImportedDesireFlag> desireFlags;
 	/// The worship sites, in the order of the file
 	std::vector<ImportedWorshipSite> worshipSites;
+	/// The dances that are not the dance of a worship site
+	ImportedDances dances;
+	/// The artefacts of the towns, the oldest first: an artefact that is in a town comes after the artefacts that are
+	/// later in the list of its town. Thus each town takes its artefacts in the order of its list, the newest first.
+	std::vector<ImportedTownArtefact> artefacts;
 	/// Each record that the import does not take, and why
 	std::vector<std::string> skipped;
 };
@@ -874,6 +920,13 @@ struct ImportedTowns
 /// The values of a dance record of the file. Nothing for a record that is not a dance or has a row of another table.
 [[nodiscard]] std::optional<ImportedDance> ReadDance(const gamesave::VanillaWorld& world,
                                                      const gamesave::VanillaRecord& record);
+/// The dances of the file that are not the dance of a worship site. A dance that a reaction
+/// holds is not made. Every other dance is made: a creature or a script holds it, or nothing holds it.
+[[nodiscard]] ImportedDances ReadOtherDances(const gamesave::VanillaWorld& world);
+/// How the import makes a dance of the file on its own: its row, its place, the thing that it is for (the import gives
+/// the thing that it made for the owner of the file), how many turns it lasts, and whether a script made it. The table
+/// of the dances tells whether the dance starts by itself.
+[[nodiscard]] dances::DanceSetup SetupOf(const ImportedDance& file, entt::entity owner, bool autostart);
 /// A dance takes the values of a dance of the file: its clock, its speed and rates, its state, its duration, its start,
 /// the turn of its first dancer and the hand of the player. The hand of a game with one player is the hand of the first
 /// god slot. The dancers stay as the dance has them, as only the villagers that keep their states can dance.
@@ -885,6 +938,12 @@ void PutDanceValues(components::Dance& dance, const ImportedDance& file);
 /// group.
 [[nodiscard]] std::vector<PlacedDancer> PutDanceGroups(components::Dance& dance, const ImportedDance& file,
                                                        const std::unordered_map<uint32_t, entt::entity>& kept);
+/// The dances that the import made, in the order that they join the list of dances again: the oldest first. Thus the
+/// list has the order of the game's list of the file, the newest first. A number that the import did not make as a dance
+/// is not in the order.
+[[nodiscard]] std::vector<entt::entity> DancesToJoin(std::span<const uint32_t> gameList,
+                                                     const std::unordered_map<uint32_t, entt::entity>& made,
+                                                     std::span<const entt::entity> dances);
 /// True when the key frames of a dance of the file are the key frames of the dance file, with the groups of each action
 /// in the same order
 [[nodiscard]] bool SameKeyFrames(const dance::DanceFile& file, const std::vector<ImportedDanceKeyFrame>& keyFrames);
