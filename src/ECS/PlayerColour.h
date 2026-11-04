@@ -79,9 +79,10 @@ inline constexpr std::array<uint32_t, player_slots::k_MaxPlayers - player_slots:
 	{
 		return *later;
 	}
-	const auto& colours = ecs::components::Player::k_Colours;
-	static_assert((colours.size() & (colours.size() - 1)) == 0, "The mask of the colour table needs a power of two");
-	return colours.at(static_cast<size_t>(player) & (colours.size() - 1));
+	using ecs::components::Player;
+	static_assert((Player::k_Colours.size() & (Player::k_Colours.size() - 1)) == 0,
+	              "The mask of the colour table needs a power of two");
+	return Player::k_Colours.at(static_cast<size_t>(player) & (Player::k_Colours.size() - 1));
 }
 
 /// The colour of a player, 0xRRGGBB, from a table of the colours of the players of a land: a god after the seventh has
@@ -119,8 +120,8 @@ inline constexpr std::array<uint32_t, player_slots::k_MaxPlayers - player_slots:
 	{
 		index = k_Blue;
 	}
-	const auto& colours = ecs::components::Player::k_Colours;
-	return colours.at(std::min(index, colours.size() - 1)) | 0xFF000000u;
+	using ecs::components::Player;
+	return Player::k_Colours.at(std::min(index, Player::k_Colours.size() - 1)) | 0xFF000000u;
 }
 
 } // namespace openblack::player_colour
