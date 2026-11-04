@@ -177,6 +177,9 @@ private:
 	void ImportVanillaStatics(const gamesave::VanillaWorld& world, VanillaMade& made);
 	/// Puts the clock of day and night and the count of things made of the world file into the world
 	void ImportVanillaGameValues(const gamesave::VanillaWorld& world);
+	/// Puts the camera of the world file into the world: the eye, the point that it looks at and the lens, with the glides
+	/// that move them, and a new world camera that takes over from there
+	static void ImportVanillaCamera(const gamesave::VanillaWorld& world);
 	/// The markers, the timers, the highlights and the influences of the scripts replace those of the land. A heart of
 	/// a temple is the temple of the land.
 	void ImportVanillaScriptThings(const gamesave::VanillaWorld& world, VanillaMade& made);

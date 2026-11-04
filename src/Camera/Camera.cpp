@@ -232,6 +232,17 @@ void Camera::UpdateLens(float seconds)
 	}
 }
 
+Camera& Camera::SetLensGlide(const camera::Zoomer& lens)
+{
+	_lens = lens;
+	if (_lens.Value() != _xFov)
+	{
+		_xFov = _lens.Value();
+		SetNearClip(_nearClip);
+	}
+	return *this;
+}
+
 Camera& Camera::SetNearClip(float nearClip)
 {
 	_nearClip = nearClip;
