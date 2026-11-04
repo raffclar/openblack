@@ -463,7 +463,26 @@ private:
 	                                   const glm::mat4& placement) const;
 	/// Binds a cap's corners as the vertices of the next draw; false when there is no room for them this frame
 	[[nodiscard]] static bool BindCap(bgfx::Encoder& encoder, const std::vector<partial_build_cap::CapVertex>& cap);
+	/// The views of a scene pass, and what its parts read that DrawPass finds before them
+	struct ScenePass;
 	void DrawPass(const DrawSceneDesc& desc) const;
+	/// Draws the sky dome, the sun and the moon into the sky's view
+	void DrawPassSky(const DrawSceneDesc& desc, const ScenePass& pass) const;
+	/// Draws the sea into the sky's view, then the depth walls of a vortex
+	void DrawPassWater(const DrawSceneDesc& desc, const ScenePass& pass) const;
+	/// Draws the land in its own view, then the creature footprints on it
+	void DrawPassLand(const DrawSceneDesc& desc, const ScenePass& pass) const;
+	/// Draws the models: the entities, the vegetation, the lights of the temple and the sprites
+	void DrawPassModels(const DrawSceneDesc& desc, const ScenePass& pass) const;
+	/// Draws the entities: the solid models, the creatures, the animals, the villagers, the things that blend, the effects, the
+	/// hand and the debug lines
+	void DrawPassEntities(const DrawSceneDesc& desc, const ScenePass& pass) const;
+	/// Draws the trees and the other vegetation
+	void DrawPassVegetation(const DrawSceneDesc& desc, const ScenePass& pass) const;
+	/// Draws the sprites
+	void DrawPassSprites(const DrawSceneDesc& desc, const ScenePass& pass) const;
+	/// Sets the debug mode of bgfx: the stats, the debug text and the wireframe
+	void SetPassDebugMode(const DrawSceneDesc& desc) const;
 	/// Draws `count` things that do not depend on each other, `draw(index, encoder)` drawing the thing at the index into
 	/// the encoder. Each thing starts from an encoder with nothing bound and no state, also when the game's thread draws
 	/// them all, and the encoder is clean again after the last. When the switch to encode on many threads is on, the
