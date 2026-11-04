@@ -40,6 +40,7 @@
 #include "ECS/Systems/Implementations/AnimalSystemDetail.h"
 #include "ECS/VanillaFootpathImport.h"
 #include "ECS/VanillaParticleImport.h"
+#include "ECS/VanillaPlayerImport.h"
 #include "ECS/VanillaSceneryImport.h"
 #include "ECS/VanillaScriptImport.h"
 #include "ECS/VanillaWorldImport.h"
@@ -3755,7 +3756,7 @@ TEST(VanillaWorldImport, TheImportFindsTheDancersAndTheWorshippersOfASite)
 
 // The import makes each dance that is not the dance of a worship site, except a dance that a reaction or an artefact of a
 // town holds
-TEST(VanillaWorldImport, TheImportMakesTheDancesOfCreaturesAndScriptsButNotOfReactionsAndArtefacts)
+TEST(VanillaWorldImport, TheImportMakesTheDancesOfCreaturesArtefactsAndScriptsButNotOfReactions)
 {
 	auto fake = GameAtTurn(100);
 	// 2: a site, 3: its dance, 4: a dance of a script, 5: a dance of a reaction, 6: the reaction, 7: a dance of an
@@ -3772,12 +3773,12 @@ TEST(VanillaWorldImport, TheImportMakesTheDancesOfCreaturesAndScriptsButNotOfRea
 	fake.Record(VanillaType::Reaction).Ref("", 40).Ref("reactionDance", 5);
 	fake.Record(VanillaType::Dance)
 	    .Value<uint32_t>("danceRow", static_cast<uint32_t>(DanceInfo::DanceAroundObjectDiameterLess_7));
-	fake.Record(VanillaType::TownArtifact).Ref("", 41).Ref("", 42).Ref("", 7);
+	fake.Record(VanillaType::TownArtifact).Ref("artefactObject", 41).Ref("artefactTown", 42).Ref("artefactDance", 7);
 	fake.Record(VanillaType::Dance)
 	    .Value<uint32_t>("danceRow", static_cast<uint32_t>(DanceInfo::CreatureDanceToImpressVillagers))
 	    .Ref("danceOwner", 31);
 	const auto dances = world_import::ReadOtherDances(fake.Make());
-	ASSERT_EQ(dances.made.size(), 2U);
+	ASSERT_EQ(dances.made.size(), 3U);
 	const auto& script = dances.made[0];
 	EXPECT_EQ(script.number, 4U);
 	EXPECT_EQ(script.type, DanceInfo::DanceAroundPerson);
@@ -3786,10 +3787,12 @@ TEST(VanillaWorldImport, TheImportMakesTheDancesOfCreaturesAndScriptsButNotOfRea
 	EXPECT_EQ(script.place.z, -2000);
 	EXPECT_EQ(script.duration, 400U);
 	EXPECT_TRUE(script.madeByScript);
-	EXPECT_EQ(dances.made[1].number, 9U);
-	EXPECT_EQ(dances.made[1].owner, 31U);
-	EXPECT_FALSE(dances.made[1].madeByScript);
-	EXPECT_EQ(dances.notMade, (std::vector<uint32_t> {5, 7}));
+	// The dance of the artefact is made with the artefact
+	EXPECT_EQ(dances.made[1].number, 7U);
+	EXPECT_EQ(dances.made[2].number, 9U);
+	EXPECT_EQ(dances.made[2].owner, 31U);
+	EXPECT_FALSE(dances.made[2].madeByScript);
+	EXPECT_EQ(dances.notMade, (std::vector<uint32_t> {5}));
 }
 
 // A dance that the import makes on its own has the row, the place, the length and the angle of the file, is for the
@@ -4041,4 +4044,226 @@ TEST(VanillaWorldImport, SavedGamesOfTheConstructLandHaveNoVillagerThatDecidesAg
 		GTEST_SKIP() << "Set OPENBLACK_VANILLA_SAVES to a copy of a Profiles folder of the game to check its saved games";
 	}
 	std::cout << villagers << " villagers of the construct land, " << breeders << " breeders\n";
+}
+
+namespace
+{
+
+/// A game object, a human player with no computer god, and a computer player whose god has two nodes and two attitudes
+VanillaWorld WorldWithComputerGod()
+{
+	auto fake = GameAtTurn(100);
+	// Record 2: the human player, with no computer god
+	fake.Record(VanillaType::Player).Value<uint8_t>("number", 0).Value<uint32_t>("type", 1).Ref("computer", 0);
+	// Record 3: the computer player, whose god is record 4
+	fake.Record(VanillaType::Player).Value<uint8_t>("number", 1).Value<uint32_t>("type", 2).Ref("computer", 4);
+	fake.Record(VanillaType::ComputerPlayer)
+	    .Value("position", MapCoords {.x = 0x10000, .z = 0x20000, .altitude = 3.0f})
+	    .Refs("casts", {})
+	    .Refs("seen", {})
+	    .Refs("queue", {})
+	    .Value("handSpeed", 45.0f)
+	    .Value<uint32_t>("started", 1)
+	    .Words("castRequests", {0, 7, 2})
+	    .Value<uint32_t>("switchedOn", 1)
+	    .Value<uint32_t>("paused", 0)
+	    .Value<uint32_t>("scriptHold", 1)
+	    .Refs("attitudes", {5, 6})
+	    .Value("tree", 0.5f)
+	    .Value("tree", 2.0f)
+	    .Value("tree", 0.25f)
+	    .Value("tree", 3.0f);
+	fake.Record(VanillaType::ComputerAttitude).Value("attitude", 4.0f);
+	fake.Record(VanillaType::ComputerAttitude).Value("attitude", -1.0f);
+	return fake.Make();
+}
+
+} // namespace
+
+TEST(VanillaPlayerImport, EachPlayerOfTheFileHasTheComputerGodOfTheFile)
+{
+	const auto players = ecs::vanilla_player_import::ReadPlayers(WorldWithComputerGod());
+	ASSERT_EQ(players.size(), 2U);
+	EXPECT_EQ(players[0].player, PlayerNames::PLAYER_ONE);
+	EXPECT_FALSE(players[0].computerType);
+	EXPECT_FALSE(players[0].computer.has_value());
+	EXPECT_EQ(players[1].player, PlayerNames::PLAYER_TWO);
+	EXPECT_TRUE(players[1].computerType);
+	ASSERT_TRUE(players[1].computer.has_value());
+	const auto& god = *players[1].computer;
+	EXPECT_TRUE(god.switchedOn);
+	EXPECT_FALSE(god.paused);
+	EXPECT_TRUE(god.scriptHold);
+	EXPECT_TRUE(god.started);
+	EXPECT_EQ(god.handSpeed, 45.0f);
+	EXPECT_EQ(god.hand.x, 0x10000);
+	EXPECT_EQ(god.hand.z, 0x20000);
+	EXPECT_EQ(god.castRequests[1], 7U);
+	EXPECT_EQ(god.castRequests[2], 2U);
+	EXPECT_EQ(god.castRequests[3], 0U);
+	EXPECT_EQ(god.nodes, (std::vector<std::pair<float, float>> {{0.5f, 2.0f}, {0.25f, 3.0f}}));
+	EXPECT_EQ(god.attitudes, (std::vector<float> {4.0f, -1.0f}));
+}
+
+TEST(VanillaPlayerImport, TheComputerGodOfTheFileStartsAgainAsAfterALoad)
+{
+	const auto players = ecs::vanilla_player_import::ReadPlayers(WorldWithComputerGod());
+	ASSERT_EQ(players.size(), 2U);
+	const auto computer = ecs::vanilla_player_import::ComputerOf(players[1], *players[1].computer, 10.0f);
+	EXPECT_TRUE(computer.switchedOn);
+	EXPECT_TRUE(computer.marked);
+	EXPECT_TRUE(computer.started);
+	EXPECT_FALSE(computer.creatureLike.has_value());
+	EXPECT_EQ(computer.speed, 45.0f);
+	EXPECT_EQ(computer.hand.speed, 45.0f);
+	EXPECT_FALSE(computer.hand.locked);
+	EXPECT_TRUE(computer.hand.steps.empty());
+	EXPECT_EQ(computer.hand.coords.x, 0x10000);
+	EXPECT_EQ(computer.hand.coords.z, 0x20000);
+	EXPECT_EQ(computer.hand.hand, glm::vec3(map_coords::ToMetres(0x10000), 13.0f, map_coords::ToMetres(0x20000)));
+	EXPECT_EQ(computer.hand.camera, computer.hand.hand);
+	// The tree is a new tree with the suppression and the weight of the file in the first nodes
+	const auto fresh = computer_mind::MakeMind();
+	ASSERT_EQ(computer.mind.nodes.size(), fresh.nodes.size());
+	EXPECT_EQ(computer.mind.nodes[0].suppression, 0.5f);
+	EXPECT_EQ(computer.mind.nodes[0].weight, 2.0f);
+	EXPECT_EQ(computer.mind.nodes[1].suppression, 0.25f);
+	EXPECT_EQ(computer.mind.nodes[1].weight, 3.0f);
+	EXPECT_EQ(computer.mind.nodes[2].weight, fresh.nodes[2].weight);
+	EXPECT_FALSE(computer.mind.paused);
+	EXPECT_TRUE(computer.mind.scriptHold);
+	EXPECT_TRUE(computer.mind.wasBusy);
+	EXPECT_EQ(computer.mind.castRequested[1], 7U);
+	EXPECT_TRUE(computer.casts.empty());
+	EXPECT_TRUE(computer.seen.empty());
+	EXPECT_TRUE(computer.mind.queue.empty());
+	// A god that played is not unused, and a new god is unused
+	EXPECT_FALSE(ecs::vanilla_player_import::IsUnusedGod(players[1], *players[1].computer));
+	ecs::vanilla_player_import::ImportedComputerGod unused;
+	for (const auto& node : fresh.nodes)
+	{
+		unused.nodes.emplace_back(node.suppression, node.weight);
+	}
+	EXPECT_TRUE(ecs::vanilla_player_import::IsUnusedGod(players[0], unused));
+	unused.castRequests[3] = 1;
+	EXPECT_FALSE(ecs::vanilla_player_import::IsUnusedGod(players[0], unused));
+	// A god of a player that is not of the computer type keeps no mark
+	EXPECT_FALSE(ecs::vanilla_player_import::ComputerOf(players[0], *players[1].computer, 0.0f).marked);
+}
+
+TEST(VanillaPlayerImport, TheMindTakesTheAttitudesOfTheFile)
+{
+	const auto players = ecs::vanilla_player_import::ReadPlayers(WorldWithComputerGod());
+	ASSERT_EQ(players.size(), 2U);
+	ecs::components::ComputerAttitudes attitudes;
+	ecs::vanilla_player_import::PutAttitudes(attitudes, *players[1].computer);
+	EXPECT_EQ(attitudes.kept[0], 4.0f);
+	EXPECT_EQ(attitudes.kept[1], -1.0f);
+	EXPECT_EQ(attitudes.kept[2], ecs::components::ComputerAttitudes::k_StartValue);
+}
+
+// The game's load keeps the order of the dance list of the file, the newest first. The dances join again from the oldest.
+TEST(VanillaWorldImport, TheDancesJoinTheListInTheOrderOfTheFile)
+{
+	const auto first = static_cast<entt::entity>(10);
+	const auto second = static_cast<entt::entity>(11);
+	const auto third = static_cast<entt::entity>(12);
+	const std::unordered_map<uint32_t, entt::entity> made {{5, first}, {6, second}, {7, third}, {8, entt::null}};
+	const std::vector<entt::entity> dances {first, second, third};
+	// The file lists 7, then 5, then 6: 6 is the oldest
+	EXPECT_EQ(world_import::DancesToJoin(std::vector<uint32_t> {7, 5, 6}, made, dances),
+	          (std::vector<entt::entity> {second, first, third}));
+	// A number that the import did not make as a dance is not in the order
+	EXPECT_EQ(world_import::DancesToJoin(std::vector<uint32_t> {9, 8, 5}, made, dances), (std::vector<entt::entity> {first}));
+	// A dance that stopped is not in the order
+	EXPECT_EQ(world_import::DancesToJoin(std::vector<uint32_t> {5, 6}, made, std::vector<entt::entity> {second}),
+	          (std::vector<entt::entity> {second}));
+}
+
+// The saves give each player and its computer god, and the dance list of each save has each dance of the save
+TEST(VanillaPlayerImport, SavedGamesGiveEachPlayerItsComputerGod)
+{
+	const auto files = ForEachSave([](const std::filesystem::path& path, const VanillaWorld& world) {
+		const auto players = ecs::vanilla_player_import::ReadPlayers(world);
+		EXPECT_EQ(players.size(), world.OfType(VanillaType::Player).size()) << path;
+		for (const auto& player : players)
+		{
+			std::cout << path.parent_path().filename() << "/" << path.filename() << " player "
+			          << static_cast<int>(player.player) << " computer type " << player.computerType;
+			if (player.computer.has_value())
+			{
+				const auto& god = *player.computer;
+				EXPECT_EQ(god.nodes.size(), k_ComputerPlayerTreeWords / 2) << path;
+				std::cout << " unused " << ecs::vanilla_player_import::IsUnusedGod(player, god);
+				std::cout << " god: on " << god.switchedOn << " paused " << god.paused << " hold " << god.scriptHold
+				          << " started " << god.started << " speed " << god.handSpeed << " attitudes " << god.attitudes.size()
+				          << " lists " << god.casts << "/" << god.seen << "/" << god.queue;
+			}
+			std::cout << "\n";
+		}
+		const auto imported = world_import::ReadTowns(world);
+		EXPECT_EQ(imported.dances.gameList.size(), world.OfType(VanillaType::Dance).size()) << path;
+		std::cout << " dances in the list:";
+		for (const auto number : imported.dances.gameList)
+		{
+			std::cout << " " << number;
+		}
+		std::cout << "\n";
+	});
+	if (!files.has_value())
+	{
+		GTEST_SKIP() << "Set OPENBLACK_VANILLA_SAVES to a copy of a Profiles folder of the game to check its saved games";
+	}
+}
+
+// The artefacts of the towns come with their values. Each town takes its artefacts in the order of its list, the newest
+// first, so the artefacts of a town come in the reverse order of its list.
+TEST(VanillaWorldImport, TheArtefactsOfTheTownsComeWithTheirValuesInTheOrderOfTheirTown)
+{
+	auto fake = GameAtTurn(100);
+	// 2: a player, 3: a town that lists 5 then 4, 4 and 5: its artefacts, 6: an artefact that no town lists
+	fake.Record(VanillaType::Player).Value<uint8_t>("number", 1);
+	fake.Record(VanillaType::Town).Refs("artifacts", {5, 4});
+	fake.Record(VanillaType::TownArtifact)
+	    .Ref("artefactObject", 20)
+	    .Ref("artefactTown", 3)
+	    .Ref("artefactPlayer", 2)
+	    .Value("artefactValue", 1.5f)
+	    .Ref("artefactDance", 30)
+	    .Ref("artefactEffect", 0)
+	    .Value<uint32_t>("artefactDancing", 1)
+	    .Value<uint32_t>("artefactDanceStarted", 90);
+	fake.Record(VanillaType::TownArtifact).Ref("artefactObject", 21).Ref("artefactTown", 3).Ref("artefactPlayer", 0);
+	fake.Record(VanillaType::TownArtifact).Ref("artefactObject", 22).Ref("artefactTown", 3);
+	const auto artefacts = world_import::ReadTowns(fake.Make()).artefacts;
+	ASSERT_EQ(artefacts.size(), 3U);
+	EXPECT_EQ(artefacts[0].number, 4U);
+	EXPECT_EQ(artefacts[0].object, 20U);
+	EXPECT_EQ(artefacts[0].town, 3U);
+	EXPECT_EQ(artefacts[0].player, PlayerNames::PLAYER_TWO);
+	EXPECT_EQ(artefacts[0].value, 1.5f);
+	EXPECT_EQ(artefacts[0].dance, 30U);
+	EXPECT_TRUE(artefacts[0].dancing);
+	EXPECT_EQ(artefacts[0].danceStarted, 90U);
+	EXPECT_TRUE(artefacts[0].inTown);
+	EXPECT_EQ(artefacts[1].number, 5U);
+	EXPECT_FALSE(artefacts[1].player.has_value());
+	EXPECT_TRUE(artefacts[1].inTown);
+	// An artefact that its town does not list is not in its town
+	EXPECT_EQ(artefacts[2].number, 6U);
+	EXPECT_FALSE(artefacts[2].inTown);
+}
+
+// A dancer of the dance of an artefact keeps its state when the import makes its group, as the dancers of other dances
+TEST(VanillaWorldImport, TheStatesOfTheDanceOfAnArtefactNeedADanceOfTheImport)
+{
+	world_import::ImportedVillager villager;
+	for (const auto state : {VillagerStates::ArtifactDance, VillagerStates::WaitForArtifactDance})
+	{
+		villager.states = {static_cast<uint8_t>(state), static_cast<uint8_t>(VillagerStates::DecideWhatToDo), 0};
+		villager.importedDancer = true;
+		EXPECT_EQ(world_import::StartStates(villager), villager.states);
+		villager.importedDancer = false;
+		EXPECT_NE(world_import::StartStates(villager), villager.states);
+	}
 }

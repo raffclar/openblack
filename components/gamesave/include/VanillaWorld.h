@@ -115,6 +115,7 @@ enum class VanillaType : uint32_t
 	StreetLantern = 0xFE,
 	TownArtifact = 0x103,
 	VortexCrossingWriter = 0x106,
+	ComputerAttitude = 0x10D,
 };
 
 /// How a named value of a record is kept in the file

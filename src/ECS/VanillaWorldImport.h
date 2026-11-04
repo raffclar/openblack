@@ -582,6 +582,8 @@ inline constexpr size_t k_ImportedSitePlaces = 128;
 inline constexpr size_t k_GameObjectLists = 44;
 /// The place of the game's list of all the towns among the lists of the game object
 inline constexpr size_t k_GameTownList = 31;
+/// The place of the game's list of all the dances among the lists of the game object
+inline constexpr size_t k_GameDanceList = 8;
 
 /// The site of a town at a building that goes up or that its builders mend
 struct ImportedSite
@@ -850,9 +852,30 @@ struct ImportedDances
 	/// The dances that the import makes on their own, in the order of the file: the dances of the creatures and of the
 	/// scripts, and the dances that nothing holds
 	std::vector<ImportedDance> made;
-	/// The numbers of the dances that a reaction or an artefact of a town holds. The import does not make the
-	/// reactions and the artefacts of the towns, so it does not make their dances.
+	/// The numbers of the dances that a reaction holds. The import does not make the reactions, so it does not make
+	/// their dances.
 	std::vector<uint32_t> notMade;
+	/// The numbers of the dances in the game's list of dances, the newest first. The game's load keeps this order.
+	std::vector<uint32_t> gameList;
+};
+
+/// An artefact of a town
+struct ImportedTownArtefact
+{
+	uint32_t number {0};
+	/// The numbers of the objects of the thing that is the artefact, its town and its dance in the file, 0 for none
+	uint32_t object {0};
+	uint32_t town {0};
+	uint32_t dance {0};
+	/// The player that owns the artefact, none for no player
+	std::optional<PlayerNames> player;
+	/// The worth of the artefact
+	float value {0.0f};
+	/// The town saw the dance of the artefact start, at this game turn
+	bool dancing {false};
+	uint32_t danceStarted {0};
+	/// The artefact is in the list of artefacts of its town
+	bool inTown {false};
 };
 
 /// The towns, buildings and villagers of a world file, in the order of the file
@@ -883,6 +906,9 @@ struct ImportedTowns
 	std::vector<ImportedWorshipSite> worshipSites;
 	/// The dances that are not the dance of a worship site
 	ImportedDances dances;
+	/// The artefacts of the towns, the oldest first: an artefact that is in a town comes after the artefacts that are
+	/// later in the list of its town. Thus each town takes its artefacts in the order of its list, the newest first.
+	std::vector<ImportedTownArtefact> artefacts;
 	/// Each record that the import does not take, and why
 	std::vector<std::string> skipped;
 };
@@ -894,7 +920,7 @@ struct ImportedTowns
 /// The values of a dance record of the file. Nothing for a record that is not a dance or has a row of another table.
 [[nodiscard]] std::optional<ImportedDance> ReadDance(const gamesave::VanillaWorld& world,
                                                      const gamesave::VanillaRecord& record);
-/// The dances of the file that are not the dance of a worship site. A dance that a reaction or an artefact of a town
+/// The dances of the file that are not the dance of a worship site. A dance that a reaction
 /// holds is not made. Every other dance is made: a creature or a script holds it, or nothing holds it.
 [[nodiscard]] ImportedDances ReadOtherDances(const gamesave::VanillaWorld& world);
 /// How the import makes a dance of the file on its own: its row, its place, the thing that it is for (the import gives
@@ -912,6 +938,12 @@ void PutDanceValues(components::Dance& dance, const ImportedDance& file);
 /// group.
 [[nodiscard]] std::vector<PlacedDancer> PutDanceGroups(components::Dance& dance, const ImportedDance& file,
                                                        const std::unordered_map<uint32_t, entt::entity>& kept);
+/// The dances that the import made, in the order that they join the list of dances again: the oldest first. Thus the
+/// list has the order of the game's list of the file, the newest first. A number that the import did not make as a dance
+/// is not in the order.
+[[nodiscard]] std::vector<entt::entity> DancesToJoin(std::span<const uint32_t> gameList,
+                                                     const std::unordered_map<uint32_t, entt::entity>& made,
+                                                     std::span<const entt::entity> dances);
 /// True when the key frames of a dance of the file are the key frames of the dance file, with the groups of each action
 /// in the same order
 [[nodiscard]] bool SameKeyFrames(const dance::DanceFile& file, const std::vector<ImportedDanceKeyFrame>& keyFrames);

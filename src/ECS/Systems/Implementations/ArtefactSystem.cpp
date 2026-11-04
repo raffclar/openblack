@@ -154,6 +154,20 @@ void ArtefactSystem::AddToTown(entt::entity object, entt::entity town, PlayerNam
 	}
 }
 
+void ArtefactSystem::Restore(entt::entity object, const TownArtefact& artefact)
+{
+	auto& registry = Entities();
+	auto& restored = registry.AssignOrReplace<TownArtefact>(object, artefact);
+	restored.effect = 0;
+	restored.symbol = false;
+	restored.symbolMilliseconds = 0.0f;
+	if (restored.inTown)
+	{
+		restored.joined = ++_joined;
+	}
+	CreateEffectIfNecessary(object, restored);
+}
+
 void ArtefactSystem::AddToSite(entt::entity object, entt::entity site, PlayerNames player)
 {
 	auto& registry = Entities();

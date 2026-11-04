@@ -1696,6 +1696,8 @@ bool SaveGameSystem::ImportVanillaWorld(uint32_t slot, std::span<const uint8_t> 
 	// The footpaths of the file replace all the footpaths, when all the things of the file are made. The game's load
 	// sends no footpath round a thing that it makes.
 	ImportVanillaFootpaths(*read.world, made, footpathWalks);
+	// The game deletes the computer gods of the land before the load, so each player has only the computer god of the file
+	ImportVanillaPlayers(*read.world);
 	// The running scripts of the file, with the objects that they hold, replace the scripts of the land. The game loads
 	// them after all the objects of the file.
 	ImportVanillaScripts(*read.world, made);
