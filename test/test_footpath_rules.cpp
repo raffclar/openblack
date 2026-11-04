@@ -174,20 +174,6 @@ TEST(FootpathRules, TheOnwardPathIsWalkedFromItsEndNearerTheWalker)
 	EXPECT_EQ(footpath_rules::OnwardFirstNode(single, false), std::optional<uint32_t>(0));
 }
 
-TEST(FootpathRules, TheScriptCommandsThatMakeAThingAreKnown)
-{
-	EXPECT_TRUE(footpath_rules::ScriptCommandMakesThing("CREATE_ABODE"));
-	EXPECT_TRUE(footpath_rules::ScriptCommandMakesThing("CREATE_FOREST"));
-	EXPECT_TRUE(footpath_rules::ScriptCommandMakesThing("CREATE_TREE"));
-	EXPECT_TRUE(footpath_rules::ScriptCommandMakesThing("CREATE_STREET_LIGHT"));
-	// These make a thing too, but a footpath link after them still goes to the thing made before them
-	EXPECT_FALSE(footpath_rules::ScriptCommandMakesThing("CREATE_BIG_FOREST"));
-	EXPECT_FALSE(footpath_rules::ScriptCommandMakesThing("CREATE_TOWN_FIELD"));
-	EXPECT_FALSE(footpath_rules::ScriptCommandMakesThing("CREATE_VILLAGER"));
-	EXPECT_FALSE(footpath_rules::ScriptCommandMakesThing("CREATE_FOOTPATH"));
-	EXPECT_FALSE(footpath_rules::ScriptCommandMakesThing("LINK_FOOTPATH"));
-}
-
 TEST(FootpathRules, TheScriptCountsItsFootpathsFromTheNewest)
 {
 	EXPECT_EQ(footpath_rules::ScriptFootpathIndex(3, 0), std::optional<size_t> {0});

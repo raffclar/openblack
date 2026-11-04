@@ -9,8 +9,12 @@
 
 #include "LandSave.h"
 
+#include <charconv>
+
 #include <algorithm>
 #include <array>
+#include <system_error>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -160,6 +164,17 @@ namespace
 
 } // namespace
 
+std::string FieldText(const FieldLine& field)
+{
+	const writer::Place place {writer::PlaceText(field.place)};
+	if (field.town == -1)
+	{
+		return writer::CommandLine("CREATE_FIELD", "AN", std::array<writer::Argument, 2> {place, field.row});
+	}
+	return writer::CommandLine("CREATE_NEW_TOWN_FIELD", "NANF",
+	                           std::array<writer::Argument, 4> {field.town, place, field.row, field.yAngle});
+}
+
 std::string AbodeText(const AbodeLine& abode)
 {
 	// The game writes the food and the wood with the form of a signed number
@@ -186,6 +201,20 @@ std::string TownCentreText(const TownCentreLine& centre)
 	    Thousandths(centre.worshipShare),
 	};
 	return writer::CommandLine("CREATE_TOWN_CENTRE", "NALNNN", arguments);
+}
+
+std::string GameText(const GameLine& game)
+{
+	std::string text = writer::CommandLine("SET_LAND_NUMBER", "N", std::array<writer::Argument, 1> {game.landNumber});
+	if (!game.landscape.empty())
+	{
+		text += writer::CommandLine("LOAD_LANDSCAPE", "L", std::array<writer::Argument, 1> {writer::Name {game.landscape}});
+	}
+	text += writer::CommandLine("SET_TOWN_INFLUENCE_MULTIPLIER", "F",
+	                            std::array<writer::Argument, 1> {game.townInfluenceMultiplier});
+	text += writer::CommandLine("SET_PLAYER_INFLUENCE_MULTIPLIER", "F",
+	                            std::array<writer::Argument, 1> {game.playerInfluenceMultiplier});
+	return text;
 }
 
 std::string TownText(const TownLine& town)
@@ -312,6 +341,38 @@ SavedPaths ReadSavedPaths(const std::string& script)
 		}
 	}
 	return paths;
+}
+
+std::string MadeText(std::span<const entt::entity> made)
+{
+	std::string text;
+	for (const auto entity : made)
+	{
+		text += fmt::format("{}\n", entt::to_integral(entity));
+	}
+	return text;
+}
+
+std::vector<entt::entity> ReadMade(std::string_view text)
+{
+	std::vector<entt::entity> made;
+	while (!text.empty())
+	{
+		const auto end = text.find('\n');
+		auto line = text.substr(0, end);
+		text = end == std::string_view::npos ? std::string_view {} : text.substr(end + 1);
+		if (!line.empty() && line.back() == '\r')
+		{
+			line.remove_suffix(1);
+		}
+		std::underlying_type_t<entt::entity> number {};
+		const auto [last, error] = std::from_chars(line.data(), line.data() + line.size(), number);
+		if (error == std::errc {} && last == line.data() + line.size() && !line.empty())
+		{
+			made.push_back(static_cast<entt::entity>(number));
+		}
+	}
+	return made;
 }
 
 std::string FileName(std::string_view landName, std::string_view extension)

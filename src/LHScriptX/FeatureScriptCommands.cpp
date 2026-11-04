@@ -51,13 +51,24 @@
 #include "ECS/Archetypes/TreeArchetype.h"
 #include "ECS/Archetypes/VillagerArchetype.h"
 #include "ECS/Components/Abode.h"
+#include "ECS/Components/AnimatedStatic.h"
+#include "ECS/Components/DeadTree.h"
+#include "ECS/Components/Feature.h"
+#include "ECS/Components/Field.h"
+#include "ECS/Components/FishFarm.h"
+#include "ECS/Components/Flowers.h"
 #include "ECS/Components/Footpath.h"
+#include "ECS/Components/Forest.h"
 #include "ECS/Components/Influence.h"
+#include "ECS/Components/LandForest.h"
 #include "ECS/Components/MiracleImpression.h"
+#include "ECS/Components/Mobile.h"
 #include "ECS/Components/SpellDispenser.h"
 #include "ECS/Components/Stream.h"
+#include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/Components/WorshipSite.h"
 #include "ECS/ComputerPlayerStart.h"
 #include "ECS/CreatureFromFile.h"
 #include "ECS/FootpathRules.h"
@@ -179,6 +190,14 @@ void StartHandsAtCitadel(const ScriptCommandParameters& parameters)
 entt::entity& LastObject()
 {
 	return Locator::entitiesRegistry::value().Context().mapScriptGlobals.lastObject;
+}
+
+/// Whether a thing can keep the footpaths that a footpath link command gives it: the buildings, the fields and fish
+/// farms, the worship sites, the features and statics, and the forests
+bool KeepsFootpaths(const ecs::Registry& registry, entt::entity thing)
+{
+	return registry.AnyOf<Abode, Field, FishFarm, WorshipSite, Feature, Flowers, AnimatedStatic, MobileStatic, LandForest,
+	                      BigForest, DeadTree, Temple>(thing);
 }
 
 /// The town a land script numbers, none for none
@@ -348,7 +367,7 @@ void FeatureScriptCommands::SetATownInfluenceMultiplier(int32_t townId, float mu
 
 void FeatureScriptCommands::CreateMist(glm::vec3 position, float altitude, int32_t colour, float size, float edgeShrink)
 {
-	MistArchetype::Create(position, altitude, static_cast<uint32_t>(colour), size, edgeShrink);
+	LastObject() = MistArchetype::Create(position, altitude, static_cast<uint32_t>(colour), size, edgeShrink);
 }
 
 void FeatureScriptCommands::CreatePath(int32_t param1, int32_t param2, int32_t param3, int32_t param4)
@@ -373,7 +392,7 @@ void FeatureScriptCommands::CreateTown(int32_t townId, glm::vec3 position, const
 		std::throw_with_nested(std::runtime_error("Could not recognize village tribe"));
 	}
 
-	TownArchetype::Create(townId, position, GetPlayerName(playerOwner), tribe);
+	LastObject() = TownArchetype::Create(townId, position, GetPlayerName(playerOwner), tribe);
 }
 
 void FeatureScriptCommands::SetTownBelief(int32_t townId, const std::string& playerOwner, float belief)
@@ -453,8 +472,8 @@ void FeatureScriptCommands::CreateAbode(int32_t townId, glm::vec3 position, cons
 	{
 		return; // the game has no check (see GAbodeInfo::Find)
 	}
-	AbodeArchetype::Create(townId, position, type, rotation * 0.001f, size * 0.001f, static_cast<uint32_t>(foodAmount),
-	                       static_cast<uint32_t>(woodAmount));
+	LastObject() = AbodeArchetype::Create(townId, position, type, rotation * 0.001f, size * 0.001f,
+	                                      static_cast<uint32_t>(foodAmount), static_cast<uint32_t>(woodAmount));
 }
 
 void FeatureScriptCommands::CreatePlannedAbode(int32_t townId, glm::vec3 position, const std::string& abodeInfo,
@@ -466,7 +485,7 @@ void FeatureScriptCommands::CreatePlannedAbode(int32_t townId, glm::vec3 positio
 	{
 		return;
 	}
-	AbodeArchetype::CreatePlan(townId, position, type, rotation * 0.001f, size * 0.001f);
+	LastObject() = AbodeArchetype::CreatePlan(townId, position, type, rotation * 0.001f, size * 0.001f);
 }
 
 void FeatureScriptCommands::CreateTownCentre(int32_t townId, glm::vec3 position, const std::string& abodeInfo, int32_t rotation,
@@ -479,6 +498,7 @@ void FeatureScriptCommands::CreateTownCentre(int32_t townId, glm::vec3 position,
 	}
 	const auto centre = AbodeArchetype::Create(townId, position, type, rotation * 0.001f, size * 0.001f,
 	                                           static_cast<uint32_t>(0), static_cast<uint32_t>(0));
+	LastObject() = centre;
 	if (centre == entt::null || !Locator::villageTotemSystem::has_value())
 	{
 		return;
@@ -562,6 +582,8 @@ void FeatureScriptCommands::CreateVillager(glm::vec3 param1, glm::vec3 param2, c
 {
 	SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {}({}, {}, {}) not implemented.", __FILE__,
 	                    __LINE__, __func__, glm::to_string(param1), glm::to_string(param2), param3);
+	// The game makes a villager here that openblack does not make, so the script has no last object
+	LastObject() = entt::null;
 }
 
 void FeatureScriptCommands::CreateTownVillager(int32_t townId, glm::vec3 position, const std::string& villagerType, int32_t age)
@@ -621,17 +643,20 @@ void FeatureScriptCommands::CreateVillagerAtHome(const map_coords::MapCoords& ho
 void FeatureScriptCommands::CreateCitadel(glm::vec3 position, int32_t, const std::string& playerOwner, int32_t rotation,
                                           int32_t size)
 {
-	CitadelArchetype::Create(position, GetPlayerName(playerOwner), GetYAngle(rotation), GetSize(size));
+	LastObject() = CitadelArchetype::Create(position, GetPlayerName(playerOwner), GetYAngle(rotation), GetSize(size));
 }
 
 void FeatureScriptCommands::CreatePlannedCitadel(int32_t townId, glm::vec3 position, int32_t, const std::string& playerOwner,
                                                  int32_t rotation, int32_t size)
 {
-	CitadelArchetype::CreatePlan(townId, position, GetPlayerName(playerOwner), GetYAngle(rotation), GetSize(size));
+	LastObject() =
+	    CitadelArchetype::CreatePlan(townId, position, GetPlayerName(playerOwner), GetYAngle(rotation), GetSize(size));
 }
 
 void FeatureScriptCommands::CreateCreaturePen([[maybe_unused]] glm::vec3 position, int32_t, int32_t, int32_t, int32_t, int32_t)
 {
+	// The game makes a thing here that openblack does not have, so the script has no last object
+	LastObject() = entt::null;
 	// SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {} not implemented.", __FILE__, __LINE__,
 	// __func__);
 }
@@ -648,7 +673,7 @@ void FeatureScriptCommands::CreateWorshipSite(glm::vec3 /*position*/, int32_t /*
 	}
 	if (Locator::worshipSiteSystem::has_value())
 	{
-		Locator::worshipSiteSystem::value().MakeBuiltSite(GetPlayerName(playerOwner), tribe->second);
+		LastObject() = Locator::worshipSiteSystem::value().MakeBuiltSite(GetPlayerName(playerOwner), tribe->second);
 	}
 }
 
@@ -707,7 +732,9 @@ void FeatureScriptCommands::CreateForest(int32_t forestId, glm::vec3 position)
 {
 	if (Locator::forestSystem::has_value())
 	{
-		Locator::forestSystem::value().MakeLandForest(static_cast<uint32_t>(forestId), position, entt::null, false);
+		auto& forests = Locator::forestSystem::value();
+		const auto id = forests.MakeLandForest(static_cast<uint32_t>(forestId), position, entt::null, false);
+		LastObject() = forests.LandForestOf(id).value_or(entt::null);
 	}
 }
 
@@ -753,7 +780,7 @@ void FeatureScriptCommands::CreateTownField(int32_t townId, glm::vec3 position, 
 void FeatureScriptCommands::CreateFishFarm(glm::vec3 position, [[maybe_unused]] int32_t type)
 {
 	// The fish farms' table has a single row
-	FishFarmArchetype::Create(position);
+	LastObject() = FishFarmArchetype::Create(position);
 }
 
 void FeatureScriptCommands::CreateTownFishFarm(int32_t townId, glm::vec3 position, [[maybe_unused]] int32_t type)
@@ -764,7 +791,7 @@ void FeatureScriptCommands::CreateTownFishFarm(int32_t townId, glm::vec3 positio
 	{
 		return;
 	}
-	FishFarmArchetype::Create(position);
+	LastObject() = FishFarmArchetype::Create(position);
 }
 
 void FeatureScriptCommands::CreateFeature(glm::vec3 position, FeatureInfo type, int32_t rotation, int32_t scale, int32_t)
@@ -774,7 +801,7 @@ void FeatureScriptCommands::CreateFeature(glm::vec3 position, FeatureInfo type, 
 
 void FeatureScriptCommands::CreateFlowers(glm::vec3 position, FlowersInfo type, float rotation, float scale)
 {
-	FlowersArchetype::Create(position, type, rotation, scale);
+	LastObject() = FlowersArchetype::Create(position, type, rotation, scale);
 }
 
 void FeatureScriptCommands::CreateWallSection([[maybe_unused]] glm::vec3 position, int32_t, int32_t, int32_t, int32_t)
@@ -922,6 +949,7 @@ void FeatureScriptCommands::CreateFlock(int32_t id, glm::vec3 position, glm::vec
 		const auto flock = animals.CreateScriptFlock(id, glm::vec2(position.x, position.z), glm::vec2(home.x, home.z),
 		                                             static_cast<float>(reach), static_cast<float>(flockDistance));
 		animals.SetFlockTown(flock, TownWithId(townId));
+		LastObject() = flock;
 	}
 }
 
@@ -937,8 +965,8 @@ void FeatureScriptCommands::Version([[maybe_unused]] float version)
 
 void FeatureScriptCommands::CreateArea([[maybe_unused]] glm::vec3 position, float)
 {
-	// SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {} not implemented.", __FILE__, __LINE__,
-	// __func__);
+	// The game clears the last object of the script after it makes an area
+	LastObject() = entt::null;
 }
 
 void FeatureScriptCommands::StartCameraPos(glm::vec3 focus)
@@ -975,7 +1003,7 @@ void FeatureScriptCommands::CreateBigForest(glm::vec3 position, BigForestInfo ty
 void FeatureScriptCommands::CreateNewBigForest(glm::vec3 position, BigForestInfo type, int32_t unknown, float rotation,
                                                float scale)
 {
-	BigForestArchetype::Create(position, type, unknown, rotation, scale);
+	LastObject() = BigForestArchetype::Create(position, type, unknown, rotation, scale);
 }
 
 void FeatureScriptCommands::CreateInfluenceRing(glm::vec3 position, int32_t player, float radius, int32_t anti)
@@ -996,6 +1024,8 @@ void FeatureScriptCommands::CreateInfluenceRing(glm::vec3 position, int32_t play
 void FeatureScriptCommands::CreateWeatherClimate(int32_t index, int32_t type, glm::vec3 position, float radius1, float radius2)
 {
 	Locator::weatherSystem::value().CreateClimate(index, static_cast<uint32_t>(type), glm::xz(position), radius1, radius2);
+	// The game clears the last object of the script after it makes a climate
+	LastObject() = entt::null;
 }
 
 void FeatureScriptCommands::CreateWeatherClimateRain(int32_t index, float desire, int32_t dryDays, int32_t rainingDays,
@@ -1026,6 +1056,8 @@ void FeatureScriptCommands::CreateWeatherStorm(int32_t climateIndex, glm::vec3 p
 	storm.speed = speed;
 	storm.cloudCount = cloudCount;
 	Locator::weatherSystem::value().AddLandStorm(climateIndex, storm);
+	// The game clears the last object of the script after it makes a storm
+	LastObject() = entt::null;
 }
 
 void FeatureScriptCommands::BrushSize([[maybe_unused]] float inner, [[maybe_unused]] float outer)
@@ -1064,6 +1096,8 @@ void FeatureScriptCommands::CreateStreamPoint(int32_t streamId, glm::vec3 positi
 
 void FeatureScriptCommands::CreateWaterfall([[maybe_unused]] glm::vec3 position)
 {
+	// The game makes a thing here that openblack does not have, so the script has no last object
+	LastObject() = entt::null;
 	// SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {} not implemented.", __FILE__, __LINE__,
 	// __func__);
 }
@@ -1071,7 +1105,7 @@ void FeatureScriptCommands::CreateWaterfall([[maybe_unused]] glm::vec3 position)
 void FeatureScriptCommands::CreateArena(glm::vec3 position, float radius)
 {
 	// The land's own arenas stay for good
-	ArenaArchetype::Create({map_coords::ToFixed(position.x), map_coords::ToFixed(position.z)}, radius, false);
+	LastObject() = ArenaArchetype::Create({map_coords::ToFixed(position.x), map_coords::ToFixed(position.z)}, radius, false);
 }
 
 void FeatureScriptCommands::CreateFootpath(int32_t)
@@ -1107,13 +1141,13 @@ void FeatureScriptCommands::CreateFootpathNode(int footpathId, glm::vec3 positio
 
 void FeatureScriptCommands::LinkFootpath(int32_t footpathId)
 {
-	// The footpath goes to the thing that the script made last, if that thing can keep footpaths. The newest link comes
-	// first, and a footpath linked twice is kept twice.
+	// The footpath goes to the last object of the script, if that thing can keep footpaths. The newest link comes first,
+	// and a footpath linked twice is kept twice.
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto& context = registry.Context();
-	const auto thing = context.scriptThingMadeLast;
+	const auto thing = LastObject();
 	const auto index = ecs::footpath_rules::ScriptFootpathIndex(context.scriptFootpaths.size(), footpathId);
-	if (thing == entt::null || !registry.Valid(thing) || !index)
+	if (thing == entt::null || !registry.Valid(thing) || !KeepsFootpaths(registry, thing) || !index)
 	{
 		return;
 	}
@@ -1135,6 +1169,8 @@ void FeatureScriptCommands::CreateBonfire(glm::vec3 position, [[maybe_unused]] f
 
 void FeatureScriptCommands::CreateBase([[maybe_unused]] glm::vec3 position, int32_t)
 {
+	// The game makes a thing here that openblack does not have, so the script has no last object
+	LastObject() = entt::null;
 	// SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {} not implemented.", __FILE__, __LINE__,
 	// __func__);
 }
@@ -1147,7 +1183,7 @@ void FeatureScriptCommands::CreateNewFeature(glm::vec3 position, const std::stri
 	{
 		return; // the game has no check (see GFeatureInfo::Find)
 	}
-	FeatureArchetype::Create(position, info, rotation * 0.001f, scale * 0.001f);
+	LastObject() = FeatureArchetype::Create(position, info, rotation * 0.001f, scale * 0.001f);
 }
 
 void FeatureScriptCommands::SetInteractDesire(float)
@@ -1185,12 +1221,12 @@ void FeatureScriptCommands::MultiplayerDebug(int32_t, int32_t)
 void FeatureScriptCommands::CreateStreetLantern(glm::vec3 position, int32_t type)
 {
 	// Any kind other than the street lantern makes a country lantern on a campfire, not a bonfire
-	StreetLanternArchetype::Create(position, static_cast<MobileStaticInfo>(type));
+	LastObject() = StreetLanternArchetype::Create(position, static_cast<MobileStaticInfo>(type));
 }
 
 void FeatureScriptCommands::CreateStreetLight(glm::vec3 position)
 {
-	StreetLanternArchetype::Create(position, MobileStaticInfo::StreetLantern);
+	LastObject() = StreetLanternArchetype::Create(position, MobileStaticInfo::StreetLantern);
 }
 
 void FeatureScriptCommands::SetLandNumber(int32_t number)
@@ -1206,7 +1242,7 @@ void FeatureScriptCommands::CreateOneShotSpell(glm::vec3 position, const std::st
 	{
 		return;
 	}
-	Locator::magicSystem::value().CreateOneOffSeed(position, *seed, magic::k_BasePowerUpLevel, 1.0f);
+	LastObject() = Locator::magicSystem::value().CreateOneOffSeed(position, *seed, magic::k_BasePowerUpLevel, 1.0f);
 }
 
 void FeatureScriptCommands::CreateOneShotSpellPu(glm::vec3 position, const std::string& magicName)
@@ -1224,7 +1260,7 @@ void FeatureScriptCommands::CreateOneShotSpellPu(glm::vec3 position, const std::
 		return;
 	}
 	const auto powerUp = magic::GetPowerUpFromMagicType(magic::GetSpellSeedInfo(info, *seed), *type);
-	Locator::magicSystem::value().CreateOneOffSeed(position, *seed, powerUp, 1.0f);
+	LastObject() = Locator::magicSystem::value().CreateOneOffSeed(position, *seed, powerUp, 1.0f);
 }
 
 void FeatureScriptCommands::CreateFireFly(glm::vec3 position)
@@ -1257,7 +1293,7 @@ void FeatureScriptCommands::CreateAnimatedStatic(glm::vec3 position, const std::
 	{
 		return; // the game has no check (see GAnimatedStaticInfo::Find)
 	}
-	AnimatedStaticArchetype::Create(position, animatedStaticType, rotation * 0.001f, scale * 0.001f);
+	LastObject() = AnimatedStaticArchetype::Create(position, animatedStaticType, rotation * 0.001f, scale * 0.001f);
 }
 
 void FeatureScriptCommands::FireFlySpellRewardProb(const std::string& spell, float probability)
@@ -1272,7 +1308,7 @@ void FeatureScriptCommands::FireFlySpellRewardProb(const std::string& spell, flo
 void FeatureScriptCommands::CreateNewTownField(int32_t townId, glm::vec3 position, FieldTypeInfo townFieldType, float rotation)
 {
 	// Rotation is in radians and not scaled
-	FieldArchetype::Create(townId, position, townFieldType, rotation);
+	LastObject() = FieldArchetype::Create(townId, position, townFieldType, rotation);
 }
 
 void FeatureScriptCommands::CreateSpellDispenser(int32_t townId, glm::vec3 position, const std::string& building,
@@ -1293,6 +1329,7 @@ void FeatureScriptCommands::CreateSpellDispenser(int32_t townId, glm::vec3 posit
 		town = NearestTownAnywhere(position);
 	}
 	const auto dispenser = magicSystem.CreateScriptDispenser(position, type, rotation, scale, town);
+	LastObject() = dispenser;
 	if (dispenser == entt::null)
 	{
 		return;
@@ -1358,7 +1395,7 @@ void FeatureScriptCommands::SetLandBalance(const std::string&, int32_t, float)
 
 void FeatureScriptCommands::CreateDrinkWaypoint(glm::vec3 position)
 {
-	DrinkWaypointArchetype::Create(position);
+	LastObject() = DrinkWaypointArchetype::Create(position);
 }
 
 void FeatureScriptCommands::SetTownInfluenceMultiplier(float multiplier)
@@ -1371,10 +1408,19 @@ void FeatureScriptCommands::SetPlayerInfluenceMultiplier(float multiplier)
 	Locator::entitiesRegistry::value().Context().mapScriptGlobals.playerInfluenceMultiplier = multiplier;
 }
 
-void FeatureScriptCommands::SetTownBalanceBeliefScale([[maybe_unused]] int32_t townId, [[maybe_unused]] float scale)
+void FeatureScriptCommands::SetTownBalanceBeliefScale(int32_t townId, float scale)
 {
-	// SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {} not implemented.", __FILE__, __LINE__,
-	// __func__);
+	// The town with the number scales the belief that it gives to each player at its turn. A number with no town does
+	// nothing.
+	const auto town = TownWithId(townId);
+	if (town == entt::null)
+	{
+		return;
+	}
+	auto& registry = Locator::entitiesRegistry::value();
+	auto& impression =
+	    registry.AnyOf<TownImpression>(town) ? registry.Get<TownImpression>(town) : registry.Assign<TownImpression>(town);
+	impression.belief.scale = scale;
 }
 
 void FeatureScriptCommands::StartGameMessage(const std::string& message, int32_t landNumber)

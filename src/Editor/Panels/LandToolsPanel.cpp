@@ -138,14 +138,11 @@ int32_t TownNumber(const ecs::Registry& registry, entt::entity town)
 	return found != nullptr ? static_cast<int32_t>(found->id) : -1;
 }
 
-/// The name of the effect of a miracle, empty for none
+/// The name of the effect of the row of a miracle in the magic table
 std::string MiracleName(const InfoConstants& info, MagicType type)
 {
-	if (type == MagicType::None)
-	{
-		return {};
-	}
-	return magic::GetMagicEffectInfo(info, type).debugString.data();
+	// The game writes the name of the effect of the miracle's row, also for a dispenser with no miracle
+	return magic::GetMagicEffectInfo(info, magic::GetMagicInfo(info, type).magicType).debugString.data();
 }
 
 /// The line that makes a mobile static, a mobile object, a villager, a miracle dispenser, a one-shot miracle or a
@@ -267,6 +264,9 @@ struct BuildingEntry
 {
 	entt::entity town {entt::null};
 	std::string text;
+	/// The game makes a field, not a building, from a building row of the field kind. The field's line comes with the
+	/// fields, after the towns.
+	bool field {false};
 };
 
 /// The food or the wood that a building holds, as a script asks it
@@ -293,16 +293,37 @@ float TotemShareOf(const ecs::Registry& registry, entt::entity centre)
 /// - A field, a citadel or a miracle dispenser, which have other lines or none.
 std::optional<BuildingEntry> BuildingText(const ecs::Registry& registry, entt::entity entity)
 {
-	const auto* abode = registry.TryGet<const Abode>(entity);
 	const auto* transform = registry.TryGet<const Transform>(entity);
-	if (abode == nullptr || transform == nullptr || registry.AnyOf<SpellDispenser>(entity) ||
-	    !Locator::infoConstants::has_value())
+	if (transform == nullptr || !Locator::infoConstants::has_value())
+	{
+		return std::nullopt;
+	}
+	const auto& towns = registry.Context().towns;
+	// A field gets its line with the fields, after the towns, and its town gets its lines with the towns
+	if (const auto* field = registry.TryGet<const Field>(entity); field != nullptr)
+	{
+		const auto town = towns.find(static_cast<uint32_t>(field->town));
+		if (registry.AnyOf<InHand>(entity))
+		{
+			return BuildingEntry {};
+		}
+		const auto hasTown = field->town != -1 && town != towns.end() && registry.Valid(town->second);
+		return BuildingEntry {
+		    .town = hasTown ? town->second : entt::null,
+		    .text = land_save::FieldText({.town = hasTown ? field->town : -1,
+		                                  .place = paths::PlaceOf(transform->position),
+		                                  .row = static_cast<int32_t>(field->type),
+		                                  .yAngle = ecs::placed_turn::AnglesOf(registry, entity).y}),
+		    .field = true,
+		};
+	}
+	const auto* abode = registry.TryGet<const Abode>(entity);
+	if (abode == nullptr || registry.AnyOf<SpellDispenser>(entity))
 	{
 		return std::nullopt;
 	}
 	const auto& info = Locator::infoConstants::value();
 	const auto row = static_cast<size_t>(abode->info);
-	const auto& towns = registry.Context().towns;
 	const auto town = towns.find(abode->townId);
 	const auto* tribe =
 	    town != towns.end() && registry.Valid(town->second) ? registry.TryGet<const Tribe>(town->second) : nullptr;
@@ -310,12 +331,8 @@ std::optional<BuildingEntry> BuildingText(const ecs::Registry& registry, entt::e
 	{
 		return BuildingEntry {};
 	}
+	// A building row of the citadel kind is a plain building, as the game makes it
 	const auto& abodeInfo = info.abode.at(row);
-	if (abodeInfo.abodeType == AbodeType::Field || abodeInfo.abodeType == AbodeType::Citadel ||
-	    abodeInfo.abodeType == AbodeType::SpellDispenser)
-	{
-		return BuildingEntry {};
-	}
 	const auto place = paths::PlaceOf(transform->position);
 	const auto name = fmt::format("{}_{}", k_TribeStrs.at(static_cast<size_t>(*tribe)), abodeInfo.debugString.data());
 	const auto yAngle = ecs::placed_turn::AnglesOf(registry, entity).y;
@@ -348,8 +365,7 @@ std::optional<BuildingEntry> BuildingText(const ecs::Registry& registry, entt::e
 	};
 }
 
-/// A town as the land script makes it again, from what the town keeps now. openblack does not keep the balance belief
-/// scale of a town, so the scale is always 1 and the file gets no line for it.
+/// A town as the land script makes it again, from what the town keeps now
 land_save::TownLine TownLineOf(const ecs::Registry& registry, entt::entity entity)
 {
 	const auto& town = registry.Get<const Town>(entity);
@@ -375,6 +391,7 @@ land_save::TownLine TownLineOf(const ecs::Registry& registry, entt::entity entit
 	// The game asks each of the eight players of a land in turn, the neutral player last
 	if (const auto* impression = registry.TryGet<const TownImpression>(entity))
 	{
+		line.balanceBeliefScale = impression->belief.scale;
 		for (size_t player = 0; player < player_slots::k_LandSlots; ++player)
 		{
 			line.beliefs.push_back({.player = std::string(k_PlayerNamesStrs.at(player)),
@@ -830,6 +847,7 @@ std::string LandToolsPanel::Save(EditorContext& context) noexcept
 	}
 	const auto name = LandName();
 	std::vector<std::string> wrote;
+	std::filesystem::path landscape;
 
 	// The land's cells, with their altitudes and countries as they are now, in a landscape file
 	if (auto data = SourceLand())
@@ -847,6 +865,7 @@ std::string LandToolsPanel::Save(EditorContext& context) noexcept
 		if (WriteFile(path, data->LndBytes()))
 		{
 			wrote.push_back(path.filename().string());
+			landscape = path;
 		}
 	}
 
@@ -854,6 +873,15 @@ std::string LandToolsPanel::Save(EditorContext& context) noexcept
 	// cells. A thing of a kind that the file does not write is counted.
 	auto& registry = context.registry;
 	std::string script = writer::VersionLine(writer::k_Version);
+	// The land loads the landscape file that the editor wrote beside the script, so that the land keeps its altitudes
+	// and countries. The game writes the file name of the open landscape at this place.
+	const auto& globals = registry.Context().mapScriptGlobals;
+	script += land_save::GameText({
+	    .landNumber = globals.landNumber,
+	    .landscape = landscape.empty() ? std::string {} : landscape.generic_string(),
+	    .townInfluenceMultiplier = globals.townInfluenceMultiplier,
+	    .playerInfluenceMultiplier = globals.playerInfluenceMultiplier,
+	});
 	const auto& history = context.system.GetHistory();
 
 	// The game writes the towns of each player first, each town with its buildings. The file holds each town that has a
@@ -861,6 +889,7 @@ std::string LandToolsPanel::Save(EditorContext& context) noexcept
 	size_t buildings = 0;
 	size_t notWritten = 0;
 	std::vector<std::pair<entt::entity, std::vector<std::string>>> townBuildings;
+	std::string fields;
 	for (const auto ref : history.MadeRefs())
 	{
 		const auto entity = history.Resolve(ref);
@@ -878,14 +907,26 @@ std::string LandToolsPanel::Save(EditorContext& context) noexcept
 			++notWritten;
 			continue;
 		}
+		++buildings;
+		if (building->field)
+		{
+			fields += building->text;
+		}
+		if (building->town == entt::null)
+		{
+			continue;
+		}
+		// A field's town comes in the file with the towns, so that the field has its town when the file loads
 		auto found = std::ranges::find(townBuildings, building->town, &decltype(townBuildings)::value_type::first);
 		if (found == townBuildings.end())
 		{
 			townBuildings.emplace_back(building->town, std::vector<std::string> {});
 			found = std::prev(townBuildings.end());
 		}
-		found->second.push_back(building->text);
-		++buildings;
+		if (!building->field)
+		{
+			found->second.push_back(building->text);
+		}
 	}
 	// The players come in their order, and the towns of a player in the order that the player gained them
 	std::ranges::sort(townBuildings, [&registry](const auto& a, const auto& b) {
@@ -910,6 +951,9 @@ std::string LandToolsPanel::Save(EditorContext& context) noexcept
 			script += line;
 		}
 	}
+
+	// The game writes the fields after the towns and before the streams
+	script += fields;
 
 	int32_t streamId = 0;
 	for (const auto& [id, entity] : registry.Context().streams)
@@ -1023,6 +1067,22 @@ std::string LandToolsPanel::Save(EditorContext& context) noexcept
 		if (!bytes.empty() && WriteFile(worldPath, bytes))
 		{
 			wrote.push_back(worldPath.filename().string());
+			// The list of the things that the editor made goes beside the world, so that a save after a load of the
+			// world writes them again
+			std::vector<entt::entity> made;
+			for (const auto ref : history.MadeRefs())
+			{
+				if (const auto entity = history.Resolve(ref); entity != entt::null && registry.Valid(entity))
+				{
+					made.push_back(entity);
+				}
+			}
+			const auto madeText = land_save::MadeText(made);
+			const auto madePath = *folder / land_save::FileName(name, "made");
+			if (WriteFile(madePath, std::span(reinterpret_cast<const uint8_t*>(madeText.data()), madeText.size())))
+			{
+				wrote.push_back(madePath.filename().string());
+			}
 		}
 	}
 	if (wrote.empty())
@@ -1061,8 +1121,16 @@ std::string LandToolsPanel::LoadWorld(EditorContext& context) noexcept
 	auto& drawn = context.system.GetDrawnPaths();
 	drawn = DrawnPathsIn(context.registry, land_save::ReadSavedPaths(script));
 	drawn.keepAtNextReset = true;
-	return fmt::format("Loaded {} with {} drawn streams and {} drawn footpaths", path.filename().string(), drawn.streams.size(),
-	                   drawn.footpaths.size());
+	// The load gives each entity the number that it had, so the list that Save wrote finds the things that the editor
+	// made. The history keeps them when it clears for the new world.
+	std::ifstream madeFile(*folder / land_save::FileName(LandName(), "made"), std::ios::binary);
+	const std::string madeText {std::istreambuf_iterator<char>(madeFile), std::istreambuf_iterator<char>()};
+	auto made = land_save::ReadMade(madeText);
+	std::erase_if(made, [&context](entt::entity entity) { return !context.registry.Valid(entity); });
+	const auto madeCount = made.size();
+	context.system.GetHistory().KeepMadeAtNextClear(std::move(made));
+	return fmt::format("Loaded {} with {} drawn streams, {} drawn footpaths and {} things that the editor made",
+	                   path.filename().string(), drawn.streams.size(), drawn.footpaths.size(), madeCount);
 }
 
 void LandToolsPanel::Draw(EditorContext& context) noexcept

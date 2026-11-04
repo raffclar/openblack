@@ -140,8 +140,12 @@ public:
 	std::optional<HistoryResult> Undo(EditorWorld& world);
 	/// Does again the step that the last undo undid, if there is one
 	std::optional<HistoryResult> Redo(EditorWorld& world);
-	/// Forgets all the steps and the numbers of the things, as when the land loads again
+	/// Forgets all the steps and the numbers of the things, as when the land loads again. The things that the history
+	/// must keep at this clear then get new numbers and become the things that the editor made.
 	void Clear();
+	/// Keeps things as the things that the editor made, in this order, through the next clear. A world that the editor
+	/// loads gives back the things that the editor made before it saved the world. The history has no step for them.
+	void KeepMadeAtNextClear(std::vector<entt::entity> entities);
 
 	[[nodiscard]] bool CanUndo() const { return !_undo.empty(); }
 	[[nodiscard]] bool CanRedo() const { return !_redo.empty(); }
@@ -172,6 +176,7 @@ private:
 	std::unordered_map<entt::entity, HistoryRef> _refs;
 	HistoryRef _nextRef {1};
 	std::vector<HistoryRef> _made;
+	std::vector<entt::entity> _keepAtNextClear;
 };
 
 } // namespace openblack::editor
