@@ -1674,7 +1674,8 @@ std::optional<glm::vec3> CreatureAnimationSystem::BoneInAnimation(entt::entity c
 	}
 	const auto time = static_cast<uint32_t>(std::clamp(timeMs, 0.0f, static_cast<float>(std::max(played->duration, 1u) - 1)));
 	const auto poses = skeletal_animation::SampleCycle(
-	    *played, *stand, time, body.skeleton, mirrored ? std::span<const uint32_t>(body.mirror) : std::span<const uint32_t> {});
+	    *played, *stand, time, body.skeleton, mirrored ? std::span<const uint32_t>(body.mirror) : std::span<const uint32_t> {},
+	    &_keyframeTurns);
 	const auto matrices = skeletal_animation::ComposeBoneMatrices(poses, body.skeleton.parents);
 	return bone < matrices.size() ? std::optional(glm::vec3(matrices[bone][3])) : std::nullopt;
 }
@@ -1697,7 +1698,8 @@ std::array<std::optional<glm::vec3>, 2> CreatureAnimationSystem::TwoBonesInAnima
 	}
 	const auto time = static_cast<uint32_t>(std::clamp(timeMs, 0.0f, static_cast<float>(std::max(played->duration, 1u) - 1)));
 	const auto poses = skeletal_animation::SampleCycle(
-	    *played, *stand, time, body.skeleton, mirrored ? std::span<const uint32_t>(body.mirror) : std::span<const uint32_t> {});
+	    *played, *stand, time, body.skeleton, mirrored ? std::span<const uint32_t>(body.mirror) : std::span<const uint32_t> {},
+	    &_keyframeTurns);
 	const auto matrices = skeletal_animation::ComposeBoneMatrices(poses, body.skeleton.parents);
 	const auto at = [&](uint32_t bone) {
 		return bone < bones && bone < matrices.size() ? std::optional(glm::vec3(matrices[bone][3])) : std::nullopt;
@@ -1716,7 +1718,7 @@ std::optional<glm::vec3> CreatureAnimationSystem::MiddleOfBonesInAnimation(entt:
 	}
 	const auto& body = Locator::entitiesRegistry::value().Get<CreatureAnimation>(creature);
 	const auto time = static_cast<uint32_t>(std::clamp(timeMs, 0.0f, static_cast<float>(std::max(played->duration, 1u) - 1)));
-	const auto poses = skeletal_animation::SampleCycle(*played, *stand, time, body.skeleton, {});
+	const auto poses = skeletal_animation::SampleCycle(*played, *stand, time, body.skeleton, {}, &_keyframeTurns);
 	const auto matrices = skeletal_animation::ComposeBoneMatrices(poses, body.skeleton.parents);
 	if (std::ranges::any_of(bones, [&matrices](uint32_t bone) { return bone >= matrices.size(); }))
 	{

@@ -896,6 +896,48 @@ TEST(KeyframeTurns, TrimRemovesTheTurnsOnlyAboveTheLimit)
 	EXPECT_EQ(turns.Size(), 0u);
 }
 
+TEST(KeyframeTurns, CallsForTwoAnimationsInTurnGiveTheTurnsOfEach)
+{
+	const TurnsFixture fixture(5);
+	const auto& first = fixture.animation;
+	const auto& second = fixture.stand;
+	const auto made = [](const Animation& animation, size_t frame) {
+		return skeletal_animation::RotationYXZ(animation.frames[frame].eulerAngles[0]);
+	};
+	skeletal_animation::KeyframeTurns turns;
+	for (size_t round = 0; round < 3; ++round)
+	{
+		const auto a = turns.Of(first, 1, false)[0];
+		const auto b = turns.Of(second, 1, false)[0];
+		const auto c = turns.Of(first, 0, false)[0];
+		const auto aMade = made(first, 1);
+		EXPECT_EQ(std::memcmp(&a, &aMade, sizeof(a)), 0) << round;
+		const auto bMade = made(second, 1);
+		EXPECT_EQ(std::memcmp(&b, &bMade, sizeof(b)), 0) << round;
+		const auto cMade = made(first, 0);
+		EXPECT_EQ(std::memcmp(&c, &cMade, sizeof(c)), 0) << round;
+	}
+	EXPECT_EQ(turns.Size(), 2u);
+}
+
+TEST(KeyframeTurns, TheStoreGivesTheTurnsAfterTrimRemovesThem)
+{
+	const TurnsFixture fixture(9);
+	std::vector<Animation> copies(skeletal_animation::KeyframeTurns::k_MostAnimations + 1, fixture.animation);
+	skeletal_animation::KeyframeTurns turns;
+	for (const auto& copy : copies)
+	{
+		static_cast<void>(turns.Of(copy, 0, false));
+	}
+	turns.Trim();
+	ASSERT_EQ(turns.Size(), 0u);
+	// The last animation before the trim gets its turns again
+	const auto kept = turns.Of(copies.back(), 3, false)[1];
+	const auto made = skeletal_animation::RotationYXZ(fixture.animation.frames[3].eulerAngles[1]);
+	EXPECT_EQ(std::memcmp(&kept, &made, sizeof(made)), 0);
+	EXPECT_EQ(turns.Size(), 1u);
+}
+
 TEST(KeyframeTurns, PosesHaveTheSameBitsWithTheStore)
 {
 	for (const uint32_t seed : {1u, 2u, 3u, 4u})

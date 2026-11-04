@@ -116,6 +116,13 @@ private:
 		std::vector<Matrix> mirroredTurns;
 	};
 	std::unordered_map<const Animation*, std::vector<FrameTurns>> _animations;
+	/// The animation of the last call and its frames in the store
+	struct Last
+	{
+		const Animation* animation {nullptr};
+		std::vector<FrameTurns>* frames {nullptr};
+	};
+	Last _last;
 };
 
 /// The two keyframes around a time and how far between them it is. Cycles wrap from their last frame to the first,
