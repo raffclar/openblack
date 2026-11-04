@@ -10621,13 +10621,16 @@ void SetGameTimeProperties() // 407 SET_GAME_TIME_PROPERTIES
 	const auto percentageChange = Popf();
 	const auto percentageNight = Popf();
 	const auto duration = Popf();
-	Locator::skyClockSystem::value().GetClock().SetCycle(duration, percentageNight, percentageChange);
+	Locator::skyClockSystem::value().SetCycle({.duration = duration, .night = percentageNight, .change = percentageChange});
 }
 
 void ResetGameTimeProperties() // 408 RESET_GAME_TIME_PROPERTIES
 {
-	Locator::skyClockSystem::value().GetClock().SetCycle(DayNightClock::k_DefaultDuration, DayNightClock::k_DefaultNight,
-	                                                     DayNightClock::k_DefaultChange);
+	Locator::skyClockSystem::value().SetCycle({
+	    .duration = DayNightClock::k_DefaultDuration,
+	    .night = DayNightClock::k_DefaultNight,
+	    .change = DayNightClock::k_DefaultChange,
+	});
 }
 
 void SoundExists() // 409 SOUND_EXISTS

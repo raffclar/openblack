@@ -65,6 +65,7 @@
 #include "ECS/Systems/LandSystemInterface.h"
 #include "ECS/Systems/ResourceStoreSystemInterface.h"
 #include "ECS/Systems/SaveGameSystemInterface.h"
+#include "ECS/Systems/SkyClockSystemInterface.h"
 #include "ECS/TownDesire.h"
 #include "ECS/VillagerAge.h"
 #include "Editor/EditorEntities.h"
@@ -876,11 +877,16 @@ std::string LandToolsPanel::Save(EditorContext& context) noexcept
 	// The land loads the landscape file that the editor wrote beside the script, so that the land keeps its altitudes
 	// and countries. The game writes the file name of the open landscape at this place.
 	const auto& globals = registry.Context().mapScriptGlobals;
+	const auto* land = Locator::landSystem::has_value() ? &Locator::landSystem::value() : nullptr;
 	script += land_save::GameText({
 	    .landNumber = globals.landNumber,
 	    .landscape = landscape.empty() ? std::string {} : landscape.generic_string(),
+	    .startCamera = land != nullptr ? land->GetStartCameraPlace().value_or(glm::ivec2 {0, 0}) : glm::ivec2 {0, 0},
+	    .landBalance = globals.landBalance,
+	    .flyByFile = land != nullptr ? land->GetFlyByFile() : std::string {},
 	    .townInfluenceMultiplier = globals.townInfluenceMultiplier,
 	    .playerInfluenceMultiplier = globals.playerInfluenceMultiplier,
+	    .dayCycle = Locator::skyClockSystem::has_value() ? Locator::skyClockSystem::value().GetCycle() : DayCycle {},
 	});
 	const auto& history = context.system.GetHistory();
 

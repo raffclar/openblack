@@ -1229,6 +1229,11 @@ void LandSystem::SetUpLandscape()
 	// A land starts at noon on the game's cycle of day and night, which its script may change, under new clouds
 	auto& sky = Locator::skyClockSystem::value();
 	sky.GetClock().Reset();
+	sky.SetCycle({
+	    .duration = DayNightClock::k_DefaultDuration,
+	    .night = DayNightClock::k_DefaultNight,
+	    .change = DayNightClock::k_DefaultChange,
+	});
 	sky.SetTime(sky.GetClock().GetScriptTime());
 	archetypes::CloudArchetype::CreateSky();
 	if (Locator::cloudSystem::has_value())

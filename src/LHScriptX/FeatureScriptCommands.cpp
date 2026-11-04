@@ -978,10 +978,10 @@ void FeatureScriptCommands::StartCameraPos(glm::vec3 focus)
 	                                                 {zoom_to::MapCoordOf(focus.x), zoom_to::MapCoordOf(focus.z)});
 }
 
-void FeatureScriptCommands::FlyByFile([[maybe_unused]] const std::string& path)
+void FeatureScriptCommands::FlyByFile(const std::string& path)
 {
-	// SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {} not implemented.", __FILE__, __LINE__,
-	// __func__);
+	// The game keeps only the name, for a map save. Nothing reads the file.
+	Locator::landSystem::value().SetFlyByFile(path);
 }
 
 void FeatureScriptCommands::TownNeedsPos([[maybe_unused]] int32_t townId, [[maybe_unused]] glm::vec3 position)
@@ -1451,7 +1451,8 @@ void FeatureScriptCommands::EditLevel()
 
 void FeatureScriptCommands::SetNighttime(float duration, float night, float change)
 {
-	Locator::skyClockSystem::value().GetClock().SetCycleFromLand(duration, night, change);
+	Locator::skyClockSystem::value().SetCycle(
+	    DayNightClock::LandCycle({.duration = duration, .night = night, .change = change}));
 }
 
 void FeatureScriptCommands::MakeLastObjectArtifact(int32_t townId, const std::string& player, float worth)

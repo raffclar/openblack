@@ -91,11 +91,17 @@ void DayNightClock::SetCycle(float duration, float night, float change)
 	_times = {nightEnd - turning, turning + nightEnd, changeEnd - turning, changeEnd + turning};
 }
 
+DayCycle DayNightClock::LandCycle(DayCycle cycle)
+{
+	cycle.night = std::min(cycle.night, 1.0f);
+	cycle.change = std::min(cycle.change, 1.0f - cycle.night);
+	return cycle;
+}
+
 void DayNightClock::SetCycleFromLand(float duration, float night, float change)
 {
-	night = std::min(night, 1.0f);
-	change = std::min(change, 1.0f - night);
-	SetCycle(duration, night, change);
+	const auto cycle = LandCycle({.duration = duration, .night = night, .change = change});
+	SetCycle(cycle.duration, cycle.night, cycle.change);
 }
 
 void DayNightClock::SetScriptTime(float hour)
