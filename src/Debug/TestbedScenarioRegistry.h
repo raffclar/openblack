@@ -344,6 +344,9 @@ struct ObjectSetup
 	VillagerStates walkFinal {VillagerStates::DecideWhatToDo};
 	/// A villager or a scaffold belongs to the scenario's town of the player, rather than to none
 	bool joinTown {false};
+	/// On a land of the story, a villager or a building belongs to the land's own town with this number. The scenario's
+	/// town of the player does not get it.
+	std::optional<uint32_t> landTown;
 	/// A scaffold clears its ground when a hand lets it go, as when a script marks it to destroy the things in its way
 	bool clearsGround {false};
 	/// A villager is made at this age, rather than as a grown up of 30

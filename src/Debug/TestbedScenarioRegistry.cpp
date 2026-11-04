@@ -15271,6 +15271,52 @@ void AddWorkshopScenarios(std::vector<Scenario>& all)
 	                                      {.kind = ScriptArgument::Kind::Made, .index = 0}}}},
 	    .townBeliefInPlayer = 1000.0f,
 	});
+
+	// The Workshop of the second land with a home town of more than 40 grown ups. The quest's script counts at most 40
+	// of them when it finds the share of homeless grown ups. The places are the script's, from the middle of the land.
+	constexpr glm::vec2 k_LandTwoMiddle {2240.0f, 2720.0f};
+	const auto onLandTwo = [k_LandTwoMiddle](float x, float z) { return glm::vec2(x, z) - k_LandTwoMiddle; };
+	constexpr uint32_t k_HomeTown = 0;
+	const auto homeWorkshop = onLandTwo(3252.0894f, 3341.0461f);
+	std::vector<ObjectSetup> homeTown {
+	    {.type = AbodeInfo::NorseWorkshop,
+	     .offset = homeWorkshop,
+	     .yawDegrees = 160.0f,
+	     .landTown = k_HomeTown,
+	     .storedWood = 0},
+	    {.type = AbodeInfo::NorseTempleX, .offset = onLandTwo(3190.0f, 3440.0f), .landTown = k_HomeTown},
+	    {.type = AbodeInfo::NorseTempleX, .offset = onLandTwo(3215.0f, 3445.0f), .landTown = k_HomeTown},
+	    {.type = AbodeInfo::NorseTempleX, .offset = onLandTwo(3170.0f, 3420.0f), .landTown = k_HomeTown},
+	    {.type = AbodeInfo::NorseTempleX, .offset = onLandTwo(3240.0f, 3450.0f), .landTown = k_HomeTown}};
+	constexpr size_t k_GrownUps = 45;
+	for (size_t i = 0; i < k_GrownUps; ++i)
+	{
+		homeTown.push_back(
+		    {.type = i % 2 == 0 ? VillagerInfo::NorseHousewifeFemale : VillagerInfo::NorseFarmerMale,
+		     .offset = onLandTwo(3226.0f + static_cast<float>(i % 6) * 2.0f, 3405.0f + static_cast<float>(i / 6) * 2.0f),
+		     .landTown = k_HomeTown});
+	}
+	all.push_back({
+	    .id = "story.workshop_homeless_cap",
+	    .name = "Story: The Workshop with a home town of more than 40 grown ups",
+	    .facet = Facet::Story,
+	    .description = "The second land of the story. The player's first town gets a workshop at the place of the "
+	                   "quest, four houses and 45 grown ups. It then has more than 40 grown ups and room for 20 of "
+	                   "them. The quest's script for the finished workshop runs. Play the quest by hand: click the "
+	                   "scroll, give wood to the workshop, put its scaffold down as a house and build the house.",
+	    .expected = "In the housing step the quest counts 40 grown ups, not more. With room for 20, half of the 40 have "
+	                "no home and the step waits. When the room is 25 or more, fewer than 40 in 100 have no home and the "
+	                "step ends: the second scroll appears at the workshop. With no limit of 40 the step would wait "
+	                "until the room is 30.",
+	    .environment = {.land = Land::Story, .storyLand = "Land2.txt", .dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview,
+	                .include = {homeWorkshop + glm::vec2(-60.0f, -20.0f), homeWorkshop + glm::vec2(30.0f, 110.0f)}},
+	    .objects = homeTown,
+	    .commands = {{.kind = Kind::RunScript,
+	                  .delaySeconds = 1.0f,
+	                  .script = "TheWorkshopComplete",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Object, .index = 0}}}},
+	});
 }
 
 std::vector<Scenario> Build()

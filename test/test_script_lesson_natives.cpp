@@ -12,6 +12,7 @@
 #include <cmath>
 #include <cstdint>
 
+#include <algorithm>
 #include <array>
 #include <limits>
 #include <memory>
@@ -363,6 +364,54 @@ TEST_F(ScriptLessonNatives, AdultSizeAndCapacityOfATownOrABuilding)
 	// A villager is neither a town nor a building, and nothing is not alive
 	EXPECT_EQ(CallForFloat(k_IdAdultSize, {Object(man)}), 0.0f);
 	EXPECT_EQ(CallForFloat(k_ObjectAdultCapacity, {Object(entt::null)}), 0.0f);
+	EXPECT_EQ(_api.GetStubCalls().Total(), 0u);
+}
+
+// A town of more than 40 adults gives all of them. The Workshop's script then counts only 40 for its share of homeless
+// adults, so room for 25 ends its housing step.
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(ScriptLessonNatives, TheWorkshopCountsAtMostFortyAdultsOfALargeTown)
+{
+	auto info = std::make_unique<InfoConstants>();
+	auto& row = info->abode.at(0);
+	row.abodeNumber = AbodeNumber::A;
+	row.tribeType = Tribe::NORSE;
+	row.maxVillagersInAbode = 5;
+	row.maxChildrenInAbode = 0;
+	Locator::infoConstants::emplace(*info);
+
+	auto& registry = Registry();
+	constexpr uint32_t k_TownId = 0;
+	std::vector<entt::entity> houses;
+	constexpr size_t k_Houses = 5;
+	for (size_t i = 0; i < k_Houses; ++i)
+	{
+		houses.push_back(MakeAbode({}));
+		registry.Get<Abode>(houses.back()).townId = k_TownId;
+	}
+	const auto town = MakeTown(houses, {});
+	registry.Get<Town>(town).id = k_TownId;
+	registry.Assign<Tribe>(town, Tribe::NORSE);
+	constexpr size_t k_Adults = 47;
+	for (size_t i = 0; i < k_Adults; ++i)
+	{
+		registry.Get<Villager>(MakeVillager(Villager::LifeStage::Adult)).town = town;
+	}
+	registry.Get<Villager>(MakeVillager(Villager::LifeStage::Child)).town = town;
+
+	// The game gives the whole count, with no limit
+	const float adults = CallForFloat(k_IdAdultSize, {Object(town)});
+	const float room = CallForFloat(k_ObjectAdultCapacity, {Object(town)});
+	EXPECT_EQ(adults, 47.0f);
+	EXPECT_EQ(room, 25.0f);
+
+	// The share of homeless adults, as the quest's script finds it every 4 seconds. The step ends below 40.
+	constexpr float k_MostAdults = 40.0f;
+	const auto share = [room](float counted) { return (counted - room) / counted * 100.0f; };
+	EXPECT_EQ(share(std::min(adults, k_MostAdults)), 37.5f);
+	EXPECT_LT(share(std::min(adults, k_MostAdults)), 40.0f);
+	// With the whole count, the share stays above 40 and the step continues
+	EXPECT_GT(share(adults), 40.0f);
 	EXPECT_EQ(_api.GetStubCalls().Total(), 0u);
 }
 
