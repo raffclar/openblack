@@ -37,6 +37,11 @@ vcpkg_download_distfile(
 #   When the same pipelines are made again later, the device gives the ready ones from its cache. The game uses it
 #   behind the loading screen, so that the first visit does not make each pipeline one at a time. The call and
 #   getPipelinePrefetchPending are in the API of all renderers; the other renderers ignore them.
+# - webgpu-instance-stream-layout: the list of vertex buffer layouts of a render pipeline has a place for the
+#   instance data after the most vertex streams. Before, a draw with four vertex streams and instance data, as a
+#   creature with its three variant meshes, wrote the instance layout after the end of the list, into other values
+#   of the function. The pipeline then got an incorrect instance layout, or the pipeline cache got an incorrect key
+#   and later stopped the program with a memory fault.
 # A change to shaderc's ESSL output (the WebGL 2 shaders). It does not change the SPIR-V, WGSL, Metal or Direct3D
 # shaders:
 # - essl-no-inline: the ESSL shaders do not get the passes that inline functions. The inline of a function that
@@ -93,6 +98,7 @@ vcpkg_extract_source_archive(
     submit-order.patch
     device-restore.patch
     webgpu-pipeline-prefetch.patch
+    webgpu-instance-stream-layout.patch
     gl-parallel-link.patch
 )
 
