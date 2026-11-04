@@ -85,6 +85,7 @@ std::optional<CameraModel::CameraInterpolationUpdateInfo> FightCameraModel::Upda
 	// The fight's own easing uses the whole step; the camera's curves move by at most a tenth of a second a step
 	const auto milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(dt).count();
 	const auto step = std::min(static_cast<float>(milliseconds) * 0.001f, k_LongestStep);
+	_followedFighters = false;
 	// It flies to the fight first from where the camera is, and follows the fighters once there
 	if (!_started)
 	{
@@ -128,6 +129,7 @@ std::optional<CameraModel::CameraInterpolationUpdateInfo> FightCameraModel::Upda
 		_view = followed.view;
 		_zoomedOut = followed.zoomedOut;
 		wanted = _view;
+		_followedFighters = true;
 	}
 	_input = {};
 	const bool flying = _chase.Flying();

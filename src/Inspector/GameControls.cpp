@@ -239,6 +239,7 @@ std::optional<CameraState> GameCamera::State() const
 	                   .idle = (cues.tricons & camera_drag::tricon::k_Idle) != 0},
 	    .drag = drag(),
 	    .heldByScript = ScriptHoldsCamera(camera),
+	    .turnPoint = camera.GetForcedTurnPoint(),
 	};
 }
 

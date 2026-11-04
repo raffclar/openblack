@@ -56,6 +56,9 @@ public:
 	void SetFlight(glm::vec3 origin, glm::vec3 focus, float rise) override;
 	[[nodiscard]] glm::vec3 GetTargetOrigin() const override { return _view.origin; }
 	[[nodiscard]] glm::vec3 GetTargetFocus() const override { return _view.focus; }
+	/// A step that follows the fighters removes the point that a script gave the player's camera to turn about. A step
+	/// while the player holds the land does not.
+	[[nodiscard]] bool EndsForcedTurnPoint() const override { return _followedFighters; }
 
 private:
 	std::unique_ptr<CameraModel> _playerModel;
@@ -72,6 +75,8 @@ private:
 	bool _landHeld {false};
 	/// The first step starts the flight to the fight from where the camera is
 	bool _started {false};
+	/// The last step followed the fighters
+	bool _followedFighters {false};
 	/// A flight asked for before the first step, which the first step starts in place of the flight to the fight
 	struct FirstFlight
 	{

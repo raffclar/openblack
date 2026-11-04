@@ -125,6 +125,9 @@ public:
 		float dragTilt {0.0f};
 	};
 	[[nodiscard]] virtual Asked GetAsked() const { return {}; }
+	/// Whether the last step removes the point that a script gave the player's camera to turn about. Only a step of the
+	/// fight view that follows the fighters removes it.
+	[[nodiscard]] virtual bool EndsForcedTurnPoint() const { return false; }
 };
 
 } // namespace openblack

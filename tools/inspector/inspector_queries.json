@@ -897,7 +897,7 @@
   "query": "influence.state"
  },
  {
-  "description": "Where the camera is, what it looks at, its yaw, pitch (degrees below the horizon) and distance, its field of view, what moves it, whether a camera path holds it, the mouse hints (rotate, pitch, top) the cursor's place offers and what a drag has turned into",
+  "description": "Where the camera is, what it looks at, its yaw, pitch (degrees below the horizon) and distance, its field of view, what moves it, whether a camera path holds it, the mouse hints (rotate, pitch, top) the cursor's place offers and what a drag has turned into, and the point a script gave the camera to turn about and look at (turn_point, null when none)",
   "kind": "object",
   "parameters": [],
   "query": "camera.state"
