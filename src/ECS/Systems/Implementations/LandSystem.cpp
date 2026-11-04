@@ -329,7 +329,8 @@ void LandSystem::PutCameraAtStartPlace()
 		return;
 	}
 	const auto focus =
-	    start_camera::FocusOnLand(*_startCameraFocus, Locator::terrainSystem::value().GetHeightAt(*_startCameraFocus));
+	    start_camera::FocusOnLand(*_startCameraFocus, Locator::terrainSystem::value().GetHeightAt(*_startCameraFocus),
+	                              _startCameraPlace.has_value() ? _startCameraPlace->altitude : 0.0f);
 	Locator::camera::value().SetFocus(focus).SetOrigin(start_camera::OriginOver(focus));
 }
 

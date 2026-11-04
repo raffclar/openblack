@@ -9,6 +9,7 @@
 
 #include <3D/LandIslandInterface.h>
 #include <ECS/Components/Abode.h>
+#include <ECS/Components/Footpath.h>
 #include <ECS/Components/MiracleImpression.h>
 #include <ECS/Components/Mobile.h>
 #include <ECS/Components/Temple.h>
@@ -235,4 +236,25 @@ CREATE_BONFIRE("1425.03,2331.89", 24.700001, 0.000000, 1.000000)
 		    ++bonfires;
 	    });
 	EXPECT_EQ(bonfires, 1u);
+}
+
+TEST_F(LoadScene, a_footpath_node_with_a_third_number_is_above_the_land_by_that_height)
+{
+	LoadTestScene(R""""(
+VERSION(2.300000)
+LOAD_LANDSCAPE(".\Data\Landscape\Land1.lnd")
+CREATE_FOOTPATH(0)
+CREATE_FOOTPATH_NODE(0, "1280.04,1280.04,7.5")
+CREATE_FOOTPATH_NODE(0, "1290.00,1280.04")
+)"""");
+	auto& registry = openblack::Locator::entitiesRegistry::value();
+	const auto& footpaths = registry.Context().scriptFootpaths;
+	ASSERT_EQ(footpaths.size(), 1u);
+	const auto& nodes = registry.Get<openblack::ecs::components::Footpath>(footpaths.front()).nodes;
+	ASSERT_EQ(nodes.size(), 2u);
+	const auto& terrain = openblack::Locator::terrainSystem::value();
+	const auto raised = openblack::map_coords::MapCoords {.x = 8388870, .z = 8388870};
+	EXPECT_EQ(nodes[0].altitude, 7.5f);
+	EXPECT_EQ(nodes[0].position.y, terrain.GetHeightAt(openblack::map_coords::ToMetres(raised)) + 7.5f);
+	EXPECT_EQ(nodes[1].altitude, 0.0f);
 }

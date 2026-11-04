@@ -19,6 +19,7 @@
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
+#include "3D/MapCoords.h"
 #include "LandChange.h"
 
 // Where the camera is when a game starts on a land. The land's script can give a start place for the camera. A new
@@ -45,11 +46,11 @@ inline constexpr glm::vec2 k_OriginAngles {glm::radians(12.8571f), glm::radians(
 	return focus + (k_OriginDistance * glm::euclidean(k_OriginAngles));
 }
 
-/// The point that the camera looks at from the script's place (in metres along the two map axes), on the land of the
-/// given height there
-[[nodiscard]] constexpr glm::vec3 FocusOnLand(glm::vec2 scriptFocus, float landHeight)
+/// The point that the camera looks at from the script's place (in metres along the two map axes). The point is above the
+/// land of the given height there by the altitude of the script's place.
+[[nodiscard]] constexpr glm::vec3 FocusOnLand(glm::vec2 scriptFocus, float landHeight, float altitude)
 {
-	return {scriptFocus.x, landHeight, scriptFocus.y};
+	return {scriptFocus.x, landHeight + altitude, scriptFocus.y};
 }
 
 /// How a land starts
@@ -59,8 +60,9 @@ struct LandStart
 	land_change::Kind change;
 	/// The land starts a network game
 	bool networkGame;
-	/// The start place of the camera that the script of the land gave, in map units. None when the script gave no place.
-	std::optional<glm::ivec2> scriptPlace;
+	/// The start place of the camera that the script of the land gave, in map units with its height above the land. None
+	/// when the script gave no place.
+	std::optional<map_coords::MapCoords> scriptPlace;
 };
 
 /// Whether the camera starts at the temple of the player and flies to it, when the player has a temple
@@ -76,7 +78,8 @@ struct LandStart
 	{
 		return true;
 	}
-	return !start.scriptPlace.has_value() || (start.scriptPlace->x == 0 && start.scriptPlace->y == 0);
+	// Only the place at the origin of the map with no height above the land is the same as no place
+	return !start.scriptPlace.has_value() || *start.scriptPlace == map_coords::MapCoords {};
 }
 
 } // namespace openblack::start_camera

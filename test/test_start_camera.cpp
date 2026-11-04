@@ -14,6 +14,7 @@
 #include "Camera/StartCamera.h"
 
 using openblack::land_change::Kind;
+using openblack::map_coords::MapCoords;
 using openblack::start_camera::LandStart;
 using openblack::start_camera::StartsAtTemple;
 
@@ -25,19 +26,26 @@ TEST(StartCamera, ANewGameWithNoPlaceFromTheScriptStartsAtTheTemple)
 
 TEST(StartCamera, APlaceAtTheOriginOfTheMapStartsAtTheTemple)
 {
-	EXPECT_TRUE(StartsAtTemple({.change = Kind::Skirmish, .networkGame = false, .scriptPlace = glm::ivec2(0, 0)}));
+	EXPECT_TRUE(StartsAtTemple({.change = Kind::Skirmish, .networkGame = false, .scriptPlace = MapCoords {.x = 0, .z = 0}}));
+}
+
+TEST(StartCamera, APlaceAtTheOriginOfTheMapWithAHeightKeepsTheCameraThere)
+{
+	EXPECT_FALSE(StartsAtTemple({.change = Kind::NewGame, .networkGame = false, .scriptPlace = MapCoords {.altitude = 5.0f}}));
 }
 
 TEST(StartCamera, APlaceAwayFromTheOriginKeepsTheCameraThere)
 {
-	EXPECT_FALSE(StartsAtTemple({.change = Kind::NewGame, .networkGame = false, .scriptPlace = glm::ivec2(1, 0)}));
-	EXPECT_FALSE(StartsAtTemple({.change = Kind::Skirmish, .networkGame = false, .scriptPlace = glm::ivec2(0, -1)}));
-	EXPECT_FALSE(StartsAtTemple({.change = Kind::NewGame, .networkGame = false, .scriptPlace = glm::ivec2(1432, 1517)}));
+	EXPECT_FALSE(StartsAtTemple({.change = Kind::NewGame, .networkGame = false, .scriptPlace = MapCoords {.x = 1, .z = 0}}));
+	EXPECT_FALSE(StartsAtTemple({.change = Kind::Skirmish, .networkGame = false, .scriptPlace = MapCoords {.x = 0, .z = -1}}));
+	EXPECT_FALSE(
+	    StartsAtTemple({.change = Kind::NewGame, .networkGame = false, .scriptPlace = MapCoords {.x = 1432, .z = 1517}}));
 }
 
 TEST(StartCamera, ANetworkGameAlwaysStartsAtTheTemple)
 {
-	EXPECT_TRUE(StartsAtTemple({.change = Kind::NewGame, .networkGame = true, .scriptPlace = glm::ivec2(1432, 1517)}));
+	EXPECT_TRUE(
+	    StartsAtTemple({.change = Kind::NewGame, .networkGame = true, .scriptPlace = MapCoords {.x = 1432, .z = 1517}}));
 	EXPECT_TRUE(StartsAtTemple({.change = Kind::NewGame, .networkGame = true, .scriptPlace = std::nullopt}));
 }
 
@@ -59,6 +67,12 @@ TEST(StartCamera, TheCameraLooksAtThePointFromTheStartDistance)
 
 TEST(StartCamera, TheScriptPlaceLooksAtTheLandUnderIt)
 {
-	const auto focus = openblack::start_camera::FocusOnLand({3237.21f, 3157.85f}, 42.5f);
+	const auto focus = openblack::start_camera::FocusOnLand({3237.21f, 3157.85f}, 42.5f, 0.0f);
 	EXPECT_EQ(focus, glm::vec3(3237.21f, 42.5f, 3157.85f));
+}
+
+TEST(StartCamera, TheScriptPlaceWithAHeightLooksAtThePointAboveTheLand)
+{
+	const auto focus = openblack::start_camera::FocusOnLand({3237.21f, 3157.85f}, 42.5f, 7.25f);
+	EXPECT_EQ(focus, glm::vec3(3237.21f, 49.75f, 3157.85f));
 }

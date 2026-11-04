@@ -295,7 +295,21 @@ const std::array<const ScriptCommandSignature, 106> FeatureScriptCommands::k_Sig
     CREATE_COMMAND_BINDING("LOAD_LANDSCAPE", LoadLandscape),
     CREATE_COMMAND_BINDING("VERSION", Version),
     CREATE_COMMAND_BINDING("CREATE_AREA", CreateArea),
-    CREATE_COMMAND_BINDING("START_CAMERA_POS", StartCameraPos),
+    {{"START_CAMERA_POS"},
+     [](const ScriptCommandParameters& ctx) {
+	     // The camera looks at the exact map position that the game reads from the text, at its height above the land
+	     if (!ctx.empty() && ctx[0].GetMapPlace().has_value())
+	     {
+		     float x = 0.0f;
+		     float y = 0.0f;
+		     float z = 0.0f;
+		     ctx[0].GetVector(x, y, z);
+		     Locator::landSystem::value().SetStartCameraPlace({x, z}, *ctx[0].GetMapPlace());
+		     return;
+	     }
+	     InvokeCallableFromContext(ctx, std::function(StartCameraPos));
+     },
+     GetScriptCommandParameters(StartCameraPos)},
     CREATE_COMMAND_BINDING("FLY_BY_FILE", FlyByFile),
     CREATE_COMMAND_BINDING("TOWN_NEEDS_POS", TownNeedsPos),
     CREATE_COMMAND_BINDING("CREATE_FURNITURE", CreateFurniture),
@@ -988,8 +1002,8 @@ void FeatureScriptCommands::StartCameraPos(glm::vec3 focus)
 {
 	// The line only keeps the place, so it can come before the line that loads the landscape. The camera goes there when
 	// the whole script has run. A game that starts at the origin of the map starts at the player's temple.
-	Locator::landSystem::value().SetStartCameraPlace({focus.x, focus.z},
-	                                                 {zoom_to::MapCoordOf(focus.x), zoom_to::MapCoordOf(focus.z)});
+	Locator::landSystem::value().SetStartCameraPlace(
+	    {focus.x, focus.z}, map_coords::MapCoords {.x = zoom_to::MapCoordOf(focus.x), .z = zoom_to::MapCoordOf(focus.z)});
 }
 
 void FeatureScriptCommands::FlyByFile(const std::string& path)
