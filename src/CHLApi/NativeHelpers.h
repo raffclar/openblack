@@ -88,7 +88,6 @@ void TurnPlacedThing(entt::entity object, const glm::vec3& angles, bool lean);
 float ScriptHeightOf(entt::entity object);
 bool IsScriptContainer(const ecs::Registry& registry, entt::entity thing);
 std::vector<entt::entity> ContainerMembers(const ecs::Registry& registry, entt::entity container);
-ecs::systems::ScriptMusicSystemInterface* WorldScriptMusic();
 PlayerNames ScriptPlayerName(int32_t scriptPlayer);
 
 // In CHLApi/CameraNatives.cpp
@@ -99,5 +98,8 @@ void StopHelpScripts();
 void ReleaseDialogue(uint32_t task);
 help::spirits::AdvisorSpiritController* ScriptAdvisors();
 int32_t ScriptHelpSpirit(int32_t scriptSpirit);
+
+// In CHLApi/SoundNatives.cpp
+ecs::systems::ScriptMusicSystemInterface* WorldScriptMusic();
 
 } // namespace openblack::chlapi
