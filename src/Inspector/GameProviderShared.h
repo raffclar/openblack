@@ -164,6 +164,8 @@ template <typename Read>
 [[nodiscard]] std::unique_ptr<ProviderInterface> PlayersProvider();
 /// Miracles, fire and what reacts to them
 [[nodiscard]] std::unique_ptr<ProviderInterface> MagicProvider();
+/// The temple
+[[nodiscard]] std::unique_ptr<ProviderInterface> TempleProvider();
 
 
 } // namespace openblack::inspector::game_providers
