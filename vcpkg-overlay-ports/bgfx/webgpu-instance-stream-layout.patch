@@ -1,0 +1,12 @@
+--- a/bgfx/src/renderer_webgpu.cpp
++++ b/bgfx/src/renderer_webgpu.cpp
+@@ -3686,7 +3686,8 @@
+ 				return NULL;
+ 			}
+ 
+-			WGPUVertexBufferLayout vertexBufferLayout[BGFX_CONFIG_MAX_VERTEX_STREAMS];
++			// One layout for each vertex stream, and one more for the instance data that comes after the streams
++			WGPUVertexBufferLayout vertexBufferLayout[BGFX_CONFIG_MAX_VERTEX_STREAMS + 1];
+ 			WGPUVertexAttribute vertexAttribute[Attrib::Count+1+BGFX_CONFIG_MAX_INSTANCE_DATA_COUNT];
+ 
+ 			uint8_t numStreams = 0;
