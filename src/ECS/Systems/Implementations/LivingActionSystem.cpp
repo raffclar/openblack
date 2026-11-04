@@ -257,6 +257,7 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
     /* IN_DANCE */
     VillagerStateTableEntry {
         .state = &villager_dance::InDance,
+        .entryState = &villager_dance::EnterInDance,
         .exitState = &villager_dance::ExitInDance,
     },
     /* FLEEING_FROM_OBJECT_REACTION */

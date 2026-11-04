@@ -17,6 +17,7 @@
 #include <glm/vec2.hpp>
 
 #include "3D/MapCoords.h"
+#include "ECS/VillagerStateEntry.h"
 #include "Enums.h"
 
 namespace openblack::ecs::components
@@ -51,8 +52,12 @@ uint32_t MoveToDancePos(components::LivingAction& action);
 [[nodiscard]] int32_t DanceClip(entt::entity villager, int32_t walkClip);
 /// A dancer whose group starts a move plays its clip again
 void PlayClipAgain(entt::entity villager);
-/// Leaving the dance for a state of its own: it leaves the dance, and may go only into a state that comes and goes
-/// without changing what it was doing. Into another script state it stays in the dance and may go. True refuses.
+/// Coming into the dance state: a villager that goes back to the dance it kept in mind walks first to the goal its walk
+/// has now, and the walk takes it on into the dance state
+ecs::VillagerStateEntry EnterInDance(components::LivingAction& action, VillagerStates from, VillagerStates into);
+/// Leaving the dance for a state of its own: it keeps in mind that it danced and leaves the dance, and may go only into a state
+/// that comes and goes without changing what it was doing. Into another script state it stays in the dance and may go. True
+/// refuses.
 bool ExitInDance(components::LivingAction& action, VillagerStates next);
 
 } // namespace openblack::ecs::villager_dance

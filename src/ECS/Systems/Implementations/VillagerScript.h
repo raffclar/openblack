@@ -94,6 +94,9 @@ ecs::VillagerStateEntry EnterInScript(components::LivingAction& action, Villager
 /// Coming into the state that plays a script's clip: a villager that goes back into it walks back to its kept place
 /// first, unless it is there; there, it plays the clip a script forced again
 ecs::VillagerStateEntry EnterPlayAnim(components::LivingAction& action, VillagerStates from, VillagerStates into);
+/// The villager keeps in mind its script's work: the script state `returnTo` that it goes back to later, the goal of its
+/// walk (or where it stands) and what its script gave it
+void KeepScriptWorkInMind(entt::entity villager, VillagerStates returnTo);
 /// A script lets go of what the villager keeps in mind of its work
 void ForgetScriptWork(entt::entity villager);
 

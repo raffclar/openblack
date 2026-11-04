@@ -35,6 +35,12 @@ namespace openblack::ecs::systems::object_measures
 /// The radius that a creature keeps clear of things by on its walks. In a temple's pen it is the radius of the creature's
 /// own size, not of its shown size. While the creature clears its way, it is the radius of its shown size.
 [[nodiscard]] float NavRadius(const Registry& registry, entt::entity creature);
+/// The radius of a thing's edge on the ground, as the walks to its edge measure it. A food pile is as wide as it is raised
+/// by what it holds. Every other thing has its radius on the ground (TwoDRadius).
+[[nodiscard]] float EdgeRadius(const Registry& registry, entt::entity entity);
+/// How far above the land a thing's place is: a pile of food or wood is as far under the land as it sinks for what it
+/// holds (a negative value). Every other thing stands on the land, at 0.
+[[nodiscard]] float PlaceAltitude(const Registry& registry, entt::entity entity);
 /// A thing's height, 0 for one without a model
 [[nodiscard]] float Height(const Registry& registry, entt::entity entity);
 /// What a creature walking up to the thing keeps clear of: the thing's radius less a share of the creature's radius on

@@ -43,6 +43,14 @@ inline constexpr float k_LeastShown = 0.05f;
 /// How far under the ground a pile sits for the share of its height it shows
 [[nodiscard]] float SunkOffset(float proportion, float height);
 
+/// The height of a pile's place above the land, from what it holds and its model's height: as far under the land as it
+/// sinks (a negative value). Only food and wood piles sink; any other pot stands on the land, at 0.
+[[nodiscard]] float PlaceAltitude(PotType type, ResourceType resource, uint32_t amount, uint32_t fullAmount, float height);
+
+/// The radius of a pot's edge on the ground from its model's radius: a food pile is as wide as it is raised by what it
+/// holds; any other pot has its model's radius
+[[nodiscard]] float EdgeRadius(PotType type, uint32_t amount, uint32_t fullAmount, float radius);
+
 /// A pile easing to how far under the ground it sits, from where and how fast it was, over a second of game time: its
 /// offset follows a polynomial in time that ends at the target, still and without acceleration
 struct Rise

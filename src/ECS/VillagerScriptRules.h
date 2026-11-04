@@ -163,7 +163,7 @@ constexpr std::array k_ScriptHeldStates = {VillagerStates::InScript, VillagerSta
 }
 
 /// Whether a villager goes into two states the same way: both held by a script, both wandering round a script's place,
-/// or both playing a script's clip
+/// both playing a script's clip, or both dancing in a script's dance
 [[nodiscard]] constexpr bool EnterTheSameWay(VillagerStates a, VillagerStates b)
 {
 	const auto held = [](VillagerStates state) {
@@ -173,7 +173,8 @@ constexpr std::array k_ScriptHeldStates = {VillagerStates::InScript, VillagerSta
 	{
 		return true;
 	}
-	return a == b && (a == VillagerStates::ScriptWanderAroundPosition || a == VillagerStates::ScriptPlayAnim);
+	return a == b && (a == VillagerStates::ScriptWanderAroundPosition || a == VillagerStates::ScriptPlayAnim ||
+	                  a == VillagerStates::InDance);
 }
 
 /// Whether a villager that goes into a script state goes back to the work it kept when something took it out of the

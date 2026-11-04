@@ -8,17 +8,22 @@
  *******************************************************************************/
 
 #include <memory>
+#include <stdexcept>
 #include <vector>
 
+#include <LNDFile.h>
 #include <glm/gtx/vec_swizzle.hpp>
 #include <gtest/gtest.h>
 #include <spdlog/sinks/null_sink.h>
 #include <spdlog/spdlog.h>
 
+#include "3D/LandIslandInterface.h"
+#include "3D/MapCoords.h"
 #include "ECS/Components/Dance.h"
 #include "ECS/Components/Fire.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/LivingAction.h"
+#include "ECS/Components/ScriptRemind.h"
 #include "ECS/Components/TeleportStone.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
@@ -30,6 +35,7 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/PathfindingSystemInterface.h"
 #include "ECS/WallHugRules.h"
+#include "ECS/WorshipSites.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 
@@ -59,6 +65,33 @@ namespace
 constexpr glm::vec3 k_Here {1000.0f, 0.0f, 1000.0f};
 /// The state that the walks of the tests go into when they end
 constexpr auto k_Next = VillagerStates::WaitForAnimation;
+
+/// Land of one cell kept everywhere
+class FlatIsland final: public LandIslandInterface
+{
+public:
+	[[nodiscard]] float GetHeightAt(glm::vec2) const override { return 0.0f; }
+	[[nodiscard]] glm::vec3 GetNormalAt(glm::vec2) const override { return {0.0f, 1.0f, 0.0f}; }
+	[[nodiscard]] const lnd::LNDCell& GetCell(const glm::u16vec2&) const override { return _cell; }
+	[[nodiscard]] const lnd::LNDCell* FindCell(const glm::u16vec2&) const override { return &_cell; }
+	void DumpTextures() const override {}
+	void DumpMaps() const override {}
+	[[nodiscard]] std::vector<LandBlock>& GetBlocks() override { throw std::logic_error("no blocks"); }
+	[[nodiscard]] const std::vector<LandBlock>& GetBlocks() const override { throw std::logic_error("no blocks"); }
+	[[nodiscard]] const std::vector<lnd::LNDCountry>& GetCountries() const override { throw std::logic_error("no countries"); }
+	[[nodiscard]] const graphics::Texture2D& GetHeightMap() const override { throw std::logic_error("no maps"); }
+	[[nodiscard]] const graphics::Texture2D& GetLuminosityMap() const override { throw std::logic_error("no maps"); }
+	[[nodiscard]] const graphics::Texture2D& GetCellColourMap() const override { throw std::logic_error("no maps"); }
+	[[nodiscard]] const graphics::Texture2D& GetBlockTextures() const override { throw std::logic_error("no maps"); }
+	[[nodiscard]] U16Extent2 GetIndexExtent() const override { return {}; }
+	[[nodiscard]] glm::mat4 GetOrthoView() const override { return glm::mat4(1.0f); }
+	[[nodiscard]] glm::mat4 GetOrthoProj() const override { return glm::mat4(1.0f); }
+	[[nodiscard]] Extent2 GetExtent() const override { return {}; }
+	uint8_t GetNoise(glm::u8vec2) override { return 0; }
+
+private:
+	lnd::LNDCell _cell {};
+};
 
 /// One step of a walk: the villager, its top state at the step, and the goal of the walk at the step
 struct Step
@@ -160,6 +193,7 @@ protected:
 	}
 	void TearDown() override
 	{
+		Locator::terrainSystem::reset();
 		Locator::infoConstants::reset();
 		Locator::pathfindingSystem::reset();
 		Locator::livingActionSystem::reset();
@@ -298,6 +332,99 @@ TEST_F(VillagerWalkStates, AFootpathWalkStepsFirst)
 	EXPECT_EQ(_steps->steps.front().top, VillagerStates::MoveOnPath);
 	// With no footpath to walk on, it then goes on into its next state
 	EXPECT_EQ(Top(), k_Next);
+}
+
+// A walk that can use footpaths but goes straight to its goal keeps the height of the goal above the land
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(VillagerWalkStates, AStraightWalkForAFootpathKeepsTheHeightOfItsGoal)
+{
+	const auto goal = glm::xz(k_Here) + glm::vec2(40.0f, 10.0f);
+	EXPECT_TRUE(villager_footpath::SetupMoveToOnFootpath(Action(), entt::null, goal, -1.25f, k_Next));
+	const auto& wallHug = Locator::entitiesRegistry::value().Get<const WallHug>(_villager);
+	EXPECT_EQ(wallHug.goalPlace, wall_hug::ToWhole(goal));
+	EXPECT_EQ(wallHug.goalHeight, -1.25f);
+	EXPECT_EQ(Final(), k_Next);
+	// With no height given, the goal is on the land
+	EXPECT_TRUE(villager_footpath::SetupMoveToOnFootpath(Action(), entt::null, goal, k_Next));
+	EXPECT_EQ(Locator::entitiesRegistry::value().Get<const WallHug>(_villager).goalHeight, 0.0f);
+}
+
+// A villager with food for its worship site that is away from the site's food place walks there first, with the
+// height of the site's place above the land there, and keeps its food. The walk takes it back into the same state.
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(VillagerWalkStates, AVillagerWithFoodForTheSiteWalksToTheFoodPlaceFirst)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto& island = Locator::terrainSystem::emplace<FlatIsland>();
+	const auto site = registry.Create();
+	constexpr glm::vec3 k_SiteAt {k_Here.x + 100.0f, 4.0f, k_Here.z};
+	registry.Assign<Transform>(site, k_SiteAt, glm::mat3(1.0f), glm::vec3(1.0f));
+	registry.Assign<WorshipSite>(site).facing = 0.5f;
+	const auto town = registry.Create();
+	registry.Assign<Town>(town).worshipSite = site;
+	auto& person = registry.Get<Villager>(_villager);
+	person.town = town;
+	person.foodHeld = 5;
+	SetStates(VillagerStates::ArrivesAtWorshipSiteWithSupplies, VillagerStates::ArrivesAtWorshipSiteWithSupplies);
+
+	EXPECT_EQ(villager_worship::ArrivesAtWorshipSiteWithSupplies(Action()), 1u);
+	const auto food = worship_site::TurnedPoint(glm::xz(k_SiteAt), 0.5f, worship_site::k_FoodPotPoint);
+	const auto expected = map_coords::FromWorld(island, glm::vec3(food.x, k_SiteAt.y, food.y));
+	const auto& wallHug = registry.Get<const WallHug>(_villager);
+	EXPECT_EQ(wallHug.goalPlace, glm::ivec2(expected.x, expected.z));
+	// The height of the site's place less the land at the food place
+	EXPECT_EQ(wallHug.goalHeight, k_SiteAt.y - island.GetAltitude(expected.x, expected.z));
+	EXPECT_EQ(wallHug.goalHeight, expected.altitude);
+	EXPECT_EQ(Final(), VillagerStates::ArrivesAtWorshipSiteWithSupplies);
+	EXPECT_EQ(registry.Get<const Villager>(_villager).foodHeld, 5);
+}
+
+// A dancer that leaves a script's dance for a state of its own keeps the dance in mind and leaves the dance. Into another
+// script state it stays in the dance and keeps nothing.
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(VillagerWalkStates, ADancerThatLeavesTheDanceKeepsItInMind)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	JoinDance();
+	// The state of a script that holds the villager, as in the game's data
+	_info->villagerStateTable.at(static_cast<size_t>(VillagerStates::InScript)).isScriptState = 1;
+	Locator::infoConstants::emplace(*_info);
+	SetStates(VillagerStates::InDance, VillagerStates::InDance);
+	villager_dance::ExitInDance(Action(), VillagerStates::InScript);
+	EXPECT_FALSE(registry.AllOf<ScriptRemind>(_villager));
+	EXPECT_TRUE(registry.AllOf<Dancer>(_villager));
+	villager_dance::ExitInDance(Action(), VillagerStates::FleeingFromObjectReaction);
+	ASSERT_TRUE(registry.AllOf<ScriptRemind>(_villager));
+	EXPECT_EQ(registry.Get<const ScriptRemind>(_villager).returnTo, VillagerStates::InDance);
+	EXPECT_FALSE(registry.AllOf<Dancer>(_villager));
+}
+
+// A dancer that goes back to the dance it kept in mind walks to the goal its walk has now, with that goal's height, and
+// the walk takes it on into the dance. From the dance itself it does not walk.
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(VillagerWalkStates, ADancerBackToItsKeptDanceWalksToItsGoalWithItsHeight)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto& wallHug = registry.Get<WallHug>(_villager);
+	const auto goal = wallHug.goalPlace;
+	wallHug.goalHeight = 2.5f;
+	registry.Assign<ScriptRemind>(_villager).returnTo = VillagerStates::InDance;
+	// From the dance state: the same entry, so no walk
+	EXPECT_FALSE(villager_dance::EnterInDance(Action(), VillagerStates::InDance, VillagerStates::InDance).SentOn());
+	EXPECT_EQ(registry.Get<const ScriptRemind>(_villager).returnTo, VillagerStates::InDance);
+	// Back from a reaction: the walk to its goal
+	const auto entry =
+	    villager_dance::EnterInDance(Action(), VillagerStates::FleeingFromObjectReaction, VillagerStates::InDance);
+	EXPECT_TRUE(entry.SentOn());
+	EXPECT_EQ(registry.Get<const ScriptRemind>(_villager).returnTo, VillagerStates::InvalidState);
+	EXPECT_EQ(registry.Get<const WallHug>(_villager).goalPlace, goal);
+	EXPECT_EQ(registry.Get<const WallHug>(_villager).goalHeight, 2.5f);
+	EXPECT_EQ(Final(), VillagerStates::InDance);
+	// Nothing kept: the state takes it with no walk
+	const auto again =
+	    villager_dance::EnterInDance(Action(), VillagerStates::FleeingFromObjectReaction, VillagerStates::InDance);
+	EXPECT_FALSE(again.SentOn());
+	EXPECT_FALSE(again.Refused());
 }
 
 // A dancer away from its place starts its walk to the place and takes the first step in the same turn

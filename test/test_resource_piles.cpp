@@ -46,6 +46,35 @@ TEST(ResourcePiles, WoodRisesEvenlyUpToFull)
 	EXPECT_NEAR(SunkOffset(0.25f, 4.0f), -3.0f, k_Epsilon);
 }
 
+// A pile's place is as far under the land as the pile sinks for what it holds: a full pile stands on the land. A pot
+// that is not a pile does not sink.
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST(ResourcePiles, APilesPlaceIsAsFarUnderTheLandAsItSinks)
+{
+	// A food pile holding 30 of 100 shows 1 - (1 - (0.95 x 0.3 + 0.05))^2 of its height of 2 m
+	const float shown = 1.0f - (1.0f - (((1.0f - 0.05f) * 0.3f) + 0.05f)) * (1.0f - (((1.0f - 0.05f) * 0.3f) + 0.05f));
+	EXPECT_EQ(PlaceAltitude(PotType::PileFood, ResourceType::Food, 30, 100, 2.0f), (shown - 1.0f) * 2.0f);
+	EXPECT_LT(PlaceAltitude(PotType::PileFood, ResourceType::Food, 30, 100, 2.0f), 0.0f);
+	// Wood shows its share evenly
+	EXPECT_EQ(PlaceAltitude(PotType::PileWood, ResourceType::Wood, 50, 100, 3.0f),
+	          (((1.0f - 0.05f) * 0.5f + 0.05f) - 1.0f) * 3.0f);
+	EXPECT_EQ(PlaceAltitude(PotType::PileFood, ResourceType::Food, 100, 100, 2.0f), 0.0f);
+	EXPECT_EQ(PlaceAltitude(PotType::Pot, ResourceType::Food, 30, 100, 2.0f), 0.0f);
+	// An empty pile is wholly under the land
+	EXPECT_EQ(PlaceAltitude(PotType::PileWood, ResourceType::Wood, 0, 100, 3.0f), -3.0f);
+}
+
+// A food pile's edge is as far out as the pile is raised; a wood pile and a pot keep their model's radius
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST(ResourcePiles, AFoodPilesEdgeIsAsFarOutAsThePileIsRaised)
+{
+	EXPECT_EQ(EdgeRadius(PotType::PileFood, 30, 100, 4.0f), 4.0f * ProportionRaised(ResourceType::Food, 30, 100));
+	EXPECT_LT(EdgeRadius(PotType::PileFood, 30, 100, 4.0f), 4.0f);
+	EXPECT_EQ(EdgeRadius(PotType::PileFood, 0, 100, 4.0f), 0.0f);
+	EXPECT_EQ(EdgeRadius(PotType::PileWood, 30, 100, 4.0f), 4.0f);
+	EXPECT_EQ(EdgeRadius(PotType::Pot, 30, 100, 4.0f), 4.0f);
+}
+
 TEST(ResourcePiles, APileRisesOverASecondAndEndsStill)
 {
 	auto rise = SunkRise(2.0f);

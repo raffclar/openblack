@@ -32,6 +32,10 @@ namespace openblack::ecs::villager_footpath
 /// The villager sets off for a building, to a point of it, ending in a state: along the building's footpaths where one
 /// leads its way, otherwise straight there. Whether it went.
 bool SetupMoveToOnFootpath(components::LivingAction& action, entt::entity building, glm::vec2 goal, VillagerStates final);
+/// The same for a goal with a height above the land. A straight walk keeps that height; a walk along a footpath ends at
+/// the last node of the path.
+bool SetupMoveToOnFootpath(components::LivingAction& action, entt::entity building, glm::vec2 goal, float goalAltitude,
+                           VillagerStates final);
 
 /// Walking a footpath: on reaching each node it heads for the next, until the path ends and it goes into the state it
 /// was heading for

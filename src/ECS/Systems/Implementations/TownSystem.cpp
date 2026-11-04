@@ -101,6 +101,7 @@
 #include "Magic/AreaEffect.h"
 #include "Magic/ResourcePiles.h"
 #include "Magic/TownBelief.h"
+#include "ObjectMeasures.h"
 #include "Particles/DrawnEffectSteps.h"
 #include "Sound/GameSoundEffects.h"
 #include "Sound/SoundId.h"
@@ -521,7 +522,9 @@ std::optional<TownSystemInterface::TemporaryStore> TownSystem::TemporaryStorePil
 		registry.Assign<MagicPile>(pile, type, PlayerNames::NEUTRAL);
 		registry.Get<Town>(town).temporaryStores.at(*slot) = pile;
 	}
-	return TemporaryStore {.pile = pile, .edge = construction::NearestEdgeToPos(pile, from)};
+	return TemporaryStore {.pile = pile,
+	                       .edge = construction::NearestEdgeToPos(pile, from),
+	                       .edgeAltitude = object_measures::PlaceAltitude(registry, pile)};
 }
 
 void TownSystem::SetStoragePit(entt::entity town)

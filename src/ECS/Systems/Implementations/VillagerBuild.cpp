@@ -166,6 +166,15 @@ void MoveTo(LivingAction& action, glm::vec2 goal, VillagerStates final)
 	}
 }
 
+/// The same to a point with a height above the land
+void MoveTo(LivingAction& action, const map_coords::MapCoords& goal, VillagerStates final)
+{
+	if (Locator::livingActionSystem::value().VillagerSetCurrentAndDestinationState(action, VillagerStates::MoveToPos, final))
+	{
+		villager_home::SetupMobileMoveTo(action, goal);
+	}
+}
+
 /// The same along the town's paths
 void MoveOnPathsTo(LivingAction& action, entt::entity building, glm::vec2 goal, VillagerStates final)
 {
@@ -213,6 +222,19 @@ std::optional<systems::TownSystemInterface::TemporaryStore> TemporaryStoreOf(ent
 		return std::nullopt;
 	}
 	return Locator::townSystem::value().TemporaryStorePile(town, from, type);
+}
+
+villager_build::Dropoff DropoffOf(entt::entity villager, ResourceType type, entt::entity town)
+{
+	const auto pit = villager_build::StoreOf(Entities().Get<const Villager>(villager), town);
+	if (IsFunctional(pit))
+	{
+		return {.place = villager_home::ArrivePosition(*pit)};
+	}
+	const auto here = GroundOf(villager);
+	const auto store = TemporaryStoreOf(town, here, type);
+	return store.has_value() ? villager_build::Dropoff {.place = store->edge, .altitude = store->edgeAltitude}
+	                         : villager_build::Dropoff {.place = here};
 }
 
 /// How good or evil the land is where the villager stands: each player's influence there times their alignment
@@ -330,6 +352,7 @@ uint32_t GotoStoragePitForBuildingMaterials(LivingAction& action, entt::entity b
 	}
 	const auto pit = StoragePitOf(person);
 	std::optional<glm::vec2> target;
+	float targetAltitude = 0.0f;
 	if (IsFunctional(pit))
 	{
 		// A storage pit's wood is taken at its door
@@ -337,7 +360,9 @@ uint32_t GotoStoragePitForBuildingMaterials(LivingAction& action, entt::entity b
 	}
 	else
 	{
-		target = villager_build::ResourceDropoffPos(EntityOf(action), ResourceType::Wood);
+		const auto dropoff = DropoffOf(EntityOf(action), ResourceType::Wood, TownOf(person));
+		target = dropoff.place;
+		targetAltitude = dropoff.altitude;
 	}
 	if (!IsWorker(town, building, villager))
 	{
@@ -352,11 +377,15 @@ uint32_t GotoStoragePitForBuildingMaterials(LivingAction& action, entt::entity b
 	}
 	if (pit.has_value())
 	{
-		MoveOnPathsTo(action, *pit, *target, VillagerStates::ArrivesAtStoragePitForBuildingMaterials);
+		villager_footpath::SetupMoveToOnFootpath(action, *pit, *target, targetAltitude,
+		                                         VillagerStates::ArrivesAtStoragePitForBuildingMaterials);
 	}
 	else
 	{
-		MoveTo(action, *target, VillagerStates::ArrivesAtStoragePitForBuildingMaterials);
+		// The walk keeps the height of a temporary pile, which sinks into the land
+		const auto whole = wall_hug::ToWhole(*target);
+		MoveTo(action, map_coords::MapCoords {.x = whole.x, .z = whole.y, .altitude = targetAltitude},
+		       VillagerStates::ArrivesAtStoragePitForBuildingMaterials);
 	}
 	return 1;
 }
@@ -489,7 +518,7 @@ uint32_t ArrivesAtStoragePitForResource(LivingAction& action, ResourceType type,
 		if (const auto store = TemporaryStoreOf(TownOf(person), GroundOf(villager), type); store.has_value())
 		{
 			const auto centre = glm::xz(Entities().Get<const Transform>(store->pile).position);
-			const float reach = systems::object_measures::TwoDRadius(Entities(), store->pile) +
+			const float reach = systems::object_measures::EdgeRadius(Entities(), store->pile) +
 			                    systems::object_measures::TwoDRadius(Entities(), villager);
 			const auto offset = gutils::GetPointFromAngle(gutils::Get3DAngleFromXZ(centre, GroundOf(villager)), reach);
 			const auto edge = centre + glm::vec2(offset.x, offset.z);
@@ -507,7 +536,10 @@ uint32_t ArrivesAtStoragePitForResource(LivingAction& action, ResourceType type,
 				SetTopState(action, fail);
 				return 0;
 			}
-			MoveTo(action, edge, FinalState(action));
+			// The walk keeps the height of the pile, which sinks into the land
+			const auto whole = wall_hug::ToWhole(edge);
+			MoveTo(action, map_coords::MapCoords {.x = whole.x, .z = whole.y, .altitude = store->edgeAltitude},
+			       FinalState(action));
 			return k_StillBusy;
 		}
 	}
@@ -912,7 +944,7 @@ uint32_t villager_build::GotoStoragePitForDropOff(LivingAction& action)
 	if (held == ResourceType::Food || held == ResourceType::Wood)
 	{
 		// Without a storage pit that works the load goes to where its town leaves it
-		villager_home::SetupMoveTo(action, villager_build::ResourceDropoffPos(EntityOf(action), held),
+		villager_home::SetupMoveTo(action, villager_build::ResourceDropoff(EntityOf(action), held).Goal(),
 		                           VillagerStates::ArrivesAtStoragePitForDropOff);
 		return 1;
 	}
@@ -965,7 +997,11 @@ uint32_t villager_build::DropOffAtStoragePit(LivingAction& action, entt::entity 
 		{
 			if (!villager_home::AreWeThere(villager, store->edge))
 			{
-				villager_home::SetupMoveTo(action, store->edge, FinalState(action));
+				// The walk keeps the height of the pile, which sinks into the land
+				const auto whole = wall_hug::ToWhole(store->edge);
+				villager_home::SetupMoveTo(action,
+				                           map_coords::MapCoords {.x = whole.x, .z = whole.y, .altitude = store->edgeAltitude},
+				                           FinalState(action));
 				return 1;
 			}
 			Locator::resourceStoreSystem::value().AddResource(store->pile, type,
@@ -988,14 +1024,18 @@ glm::vec2 villager_build::ResourceDropoffPos(entt::entity villager, ResourceType
 
 glm::vec2 villager_build::ResourceDropoffPos(entt::entity villager, ResourceType type, entt::entity town)
 {
-	const auto pit = StoreOf(Entities().Get<const Villager>(villager), town);
-	if (IsFunctional(pit))
-	{
-		return villager_home::ArrivePosition(*pit);
-	}
-	const auto here = GroundOf(villager);
-	const auto store = TemporaryStoreOf(town, here, type);
-	return store.has_value() ? store->edge : here;
+	return DropoffOf(villager, type, town).place;
+}
+
+villager_build::Dropoff villager_build::ResourceDropoff(entt::entity villager, ResourceType type)
+{
+	return DropoffOf(villager, type, TownOf(Entities().Get<const Villager>(villager)));
+}
+
+map_coords::MapCoords villager_build::Dropoff::Goal() const
+{
+	const auto whole = wall_hug::ToWhole(place);
+	return {.x = whole.x, .z = whole.y, .altitude = altitude};
 }
 
 std::optional<entt::entity> villager_build::StoreOf(const Villager& villager, entt::entity town)

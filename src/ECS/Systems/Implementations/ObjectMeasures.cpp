@@ -31,6 +31,7 @@
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/OneOffSpellSeed.h"
+#include "ECS/Components/Pot.h"
 #include "ECS/Components/TeleportStone.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Transform.h"
@@ -40,7 +41,9 @@
 #include "ECS/Registry.h"
 #include "ECS/ThingModel.h"
 #include "ECS/WorshipSites.h"
+#include "InfoConstants.h"
 #include "Locator.h"
+#include "Magic/ResourcePiles.h"
 #include "Resources/ResourcesInterface.h"
 
 using namespace openblack;
@@ -210,6 +213,49 @@ float object_measures::Height(const Registry& registry, entt::entity entity)
 	}
 	const auto half = HalfExtentsOf(registry, MeasuredPart(registry, entity));
 	return half.has_value() ? 2.0f * half->y : 0.0f;
+}
+
+namespace
+{
+/// A pot and the game's numbers for its kind
+struct PotAndInfo
+{
+	const Pot* pot {nullptr};
+	const GPotInfo* info {nullptr};
+};
+
+/// The pot and its numbers, none for a thing that is not a pot
+std::optional<PotAndInfo> PotOf(const ecs::Registry& registry, entt::entity entity)
+{
+	const auto* pot = registry.TryGet<const Pot>(entity);
+	if (pot == nullptr || !Locator::infoConstants::has_value())
+	{
+		return std::nullopt;
+	}
+	return PotAndInfo {.pot = pot, .info = &Locator::infoConstants::value().pot.at(static_cast<size_t>(pot->type))};
+}
+} // namespace
+
+float object_measures::EdgeRadius(const Registry& registry, entt::entity entity)
+{
+	const float radius = TwoDRadius(registry, entity);
+	const auto pot = PotOf(registry, entity);
+	if (!pot.has_value())
+	{
+		return radius;
+	}
+	return magic::piles::EdgeRadius(pot->info->potType, pot->pot->amount, pot->info->maxAmountInPot, radius);
+}
+
+float object_measures::PlaceAltitude(const Registry& registry, entt::entity entity)
+{
+	const auto pot = PotOf(registry, entity);
+	if (!pot.has_value())
+	{
+		return 0.0f;
+	}
+	return magic::piles::PlaceAltitude(pot->info->potType, pot->info->resourceType, pot->pot->amount, pot->info->maxAmountInPot,
+	                                   Height(registry, entity));
 }
 
 float object_measures::RoutePlanRadius(const Registry& registry, entt::entity entity, entt::entity creature)
