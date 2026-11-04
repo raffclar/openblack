@@ -292,6 +292,50 @@ TEST(EditorLandSave, StreamsFootpathsAndTreesAreWrittenAsTheLandScriptMakesThem)
 	EXPECT_EQ(land_save::FileName("", "txt"), "land.txt");
 }
 
+TEST(FeatureScriptWriter, ANumberWithAFractionCanBeADoubleForAWholeNumberAboveTheFloats)
+{
+	const std::array<lhscriptx::writer::Argument, 2> arguments {0.5f, 16777217.0};
+	EXPECT_EQ(lhscriptx::writer::CommandLine("X", "FF", arguments), "X(0.500000, 16777217.000000)\n");
+}
+
+TEST(EditorLandSave, MobileStaticsAndMobileObjectsAreWrittenAsTheGameWritesThem)
+{
+	const glm::ivec2 place {65536, 131072};
+	EXPECT_EQ(land_save::MobileStaticText(
+	              {.place = place, .row = 2, .altitude = 0.5f, .angles = glm::vec3(0.25f, -1.5f, 0.125f), .scale = 0.267f}),
+	          "CREATE_MOBILE_STATIC(\"10.00,20.00\", 2, 0.500000, 0.250000, -1.500000, 0.125000, 0.267000)\n");
+	// Each product rounds to a float before the cut: 0.9 times 1000 is 900, not 899
+	EXPECT_EQ(land_save::MobileObjectText({.place = place, .row = 5, .yAngle = 1.2345f, .scale = 0.9f}),
+	          "CREATE_MOBILEOBJECT(\"10.00,20.00\", 5, 1234, 900)\n");
+}
+
+TEST(EditorLandSave, AVillagerIsWrittenInOneOfThreeLines)
+{
+	land_save::VillagerLine villager {.place = {65536, 131072}, .town = 3, .row = 12, .name = "NORSE_FORESTER", .age = 21};
+	EXPECT_EQ(land_save::VillagerText(villager), "CREATE_TOWN_VILLAGER(3, \"10.00,20.00\", NORSE_FORESTER, 21)\n");
+	villager.door = glm::ivec2(98304, 131072);
+	EXPECT_EQ(land_save::VillagerText(villager),
+	          "CREATE_VILLAGER_POS(\"15.00,20.00\", \"10.00,20.00\", \"NORSE_FORESTER\", 21)\n");
+	villager.special = true;
+	EXPECT_EQ(land_save::VillagerText(villager), "CREATE_SPECIAL_TOWN_VILLAGER(3, \"10.00,20.00\", 12, 21)\n");
+}
+
+TEST(EditorLandSave, DispensersBubblesAndCreaturesAreWrittenAsTheGameWritesThem)
+{
+	const glm::ivec2 place {65536, 131072};
+	EXPECT_EQ(land_save::DispenserText({.town = 0,
+	                                    .place = place,
+	                                    .building = "JAPANESE_ABODE_SPELL_DISPENSER",
+	                                    .miracle = "FIRE",
+	                                    .yAngle = 0.0f,
+	                                    .scale = 1.0f,
+	                                    .period = 300}),
+	          "CREATE_SPELL_DISPENSER(0, \"10.00,20.00\", \"JAPANESE_ABODE_SPELL_DISPENSER\", \"FIRE\", 0.000000, "
+	          "1.000000, 300.000000)\n");
+	EXPECT_EQ(land_save::OneShotMiracleText(place, "HEAL"), "CREATE_ONE_SHOT_SPELL_PU(\"10.00,20.00\", \"HEAL\")\n");
+	EXPECT_EQ(land_save::CreatureText(place, 2, 0), "CREATE_CREATURE(\"10.00,20.00\", 2, 0)\n");
+}
+
 TEST(EditorHistory, TheThingsMadeAreKeptOnceInTheOrderMade)
 {
 	EditorHistory history;

@@ -58,11 +58,16 @@ std::string CommandLine(std::string_view name, std::string_view kinds, std::span
 			line += fmt::format("{}, ", std::get<Place>(argument).text);
 			break;
 		case 'F':
-			if (!std::holds_alternative<float>(argument))
+			if (const auto* single = std::get_if<float>(&argument); single != nullptr)
+			{
+				line += fmt::format("{:f}, ", static_cast<double>(*single));
+				break;
+			}
+			if (!std::holds_alternative<double>(argument))
 			{
 				return {};
 			}
-			line += fmt::format("{:f}, ", static_cast<double>(std::get<float>(argument)));
+			line += fmt::format("{:f}, ", std::get<double>(argument));
 			break;
 		case 'L':
 			if (!std::holds_alternative<Name>(argument))
