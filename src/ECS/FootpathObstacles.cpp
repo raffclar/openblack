@@ -542,7 +542,7 @@ void StraightenBends(Path& path, const Obstacle& obstacle, const Box& box, float
 		// The game looks at this node again for good when its anchors stand at one place, and hangs: the way back
 		// stops here instead
 		if (state.last == path.End() ||
-		    state.last->node.place == state.first->node.place && state.last->node.altitude == state.first->node.altitude)
+		    (state.last->node.place == state.first->node.place && state.last->node.altitude == state.first->node.altitude))
 		{
 			return;
 		}
