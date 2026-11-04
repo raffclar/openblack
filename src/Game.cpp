@@ -811,6 +811,7 @@ Game::Game(Arguments&& args) noexcept
 	config.frameStatsInterval = args.frameStatsInterval;
 	config.frameStatsViews = args.frameStatsViews;
 	config.aiTimesEvery = args.aiTimesEvery;
+	config.turnStepTimesMs = args.turnStepTimesMs;
 	config.frameStatsOut = args.frameStatsOut;
 	config.warmUpFirstFrame = args.warmUpFirstFrame;
 	config.parallelDrawEncode = args.parallelDrawEncode;

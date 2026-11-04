@@ -72,6 +72,7 @@
 #include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/CreatureHelpSystemInterface.h"
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
+#include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/CreatureSkinSystemInterface.h"
 #include "ECS/Systems/DialogueControlSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
@@ -621,6 +622,12 @@ bool RegisterWorldData(WorldDataViewInterface& view)
 			return false;
 		}
 		Locator::infoConstants::reset(result.release());
+	}
+	// The tables of the creatures' minds come only from the info tables. The game makes them here, so that the first
+	// creature of the first turn of a land does not make them.
+	if (Locator::creatureMindSystem::has_value())
+	{
+		std::ignore = Locator::creatureMindSystem::value().GetTables();
 	}
 
 	view.StartupStep("info tables");

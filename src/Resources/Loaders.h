@@ -153,6 +153,12 @@ struct L3DLoader final: BaseLoader<graphics::L3DMesh>
 	};
 	[[nodiscard]] result_type operator()(FromPreparedDynamicTag, const std::string& debugName,
 	                                     graphics::PreparedL3DMesh prepared) const;
+	/// As FromPreparedDynamicTag, but the prepared load stays as it is, so that more meshes can load from it
+	struct FromSharedPreparedDynamicTag
+	{
+	};
+	[[nodiscard]] result_type operator()(FromSharedPreparedDynamicTag, const std::string& debugName,
+	                                     const graphics::PreparedL3DMesh& prepared) const;
 	/// A mesh that the cache keeps already under another id, which the two ids share. No new object is made.
 	struct FromSharedTag
 	{

@@ -20,6 +20,7 @@
 #include <mutex>
 #include <ranges>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include <L3DFile.h>
@@ -337,13 +338,8 @@ void TempleExteriorSystem::FinishMorphs(MadeBlends& made)
 	const auto kept = TempleExteriorMorph::MeshesToKeep(changes, groups.size(), others);
 
 	// The work on the processor for the groups that get a new mesh: the mesh of each blended shape one time, then a copy
-	// of the mesh and of the shape for each group. Each job reads only the shapes and the meshes of the shapes, and
-	// writes only its own result.
-	struct Prepared
-	{
-		graphics::PreparedL3DMesh mesh;
-		std::shared_ptr<l3d::L3DFile> copy;
-	};
+	// of the shape for each group. The groups of a shape load their meshes from the one prepared mesh of the shape. Each
+	// job reads only the shapes and writes only its own result.
 	std::vector<size_t> fresh;
 	for (size_t group = 0; group < groups.size(); ++group)
 	{
@@ -364,8 +360,18 @@ void TempleExteriorSystem::FinishMorphs(MadeBlends& made)
 			shapes.push_back(groups[fresh[i]].shape);
 		}
 	}
+	// The last new mesh of each shape takes the prepared mesh of the shape, because no other mesh loads from it after that
+	std::vector<bool> lastOfShape(fresh.size(), false);
+	{
+		std::vector<bool> shapeSeen(shapes.size(), false);
+		for (size_t index = fresh.size(); index-- > 0;)
+		{
+			lastOfShape[index] = !shapeSeen[shapeOf[index]];
+			shapeSeen[shapeOf[index]] = true;
+		}
+	}
 	std::vector<graphics::PreparedL3DMesh> shapeMeshes(shapes.size());
-	std::vector<Prepared> prepared(fresh.size());
+	std::vector<std::shared_ptr<l3d::L3DFile>> copies(fresh.size());
 	// Each copy is ready when its job ends. All of them stop when the work stops with an exception.
 	std::vector<bool> ready(fresh.size(), false);
 	bool failed = false;
@@ -393,8 +399,7 @@ void TempleExteriorSystem::FinishMorphs(MadeBlends& made)
 	};
 	const auto copyForGroup = [&](size_t index, size_t) {
 		const MarkReady mark {.ready = ready, .index = index, .mutex = readyMutex, .changed = readyChanged};
-		prepared[index].mesh = shapeMeshes[shapeOf[index]];
-		prepared[index].copy = std::make_shared<l3d::L3DFile>(made.shapes[groups[fresh[index]].shape].second);
+		copies[index] = std::make_shared<l3d::L3DFile>(made.shapes[groups[fresh[index]].shape].second);
 	};
 	// One shape gives the threads no work to share, so this thread does it and does not wait for threads to start
 	std::future<void> jobs;
@@ -460,8 +465,17 @@ void TempleExteriorSystem::FinishMorphs(MadeBlends& made)
 			}
 			source = first.id;
 			Unbind(source);
-			meshes.Load(source, resources::L3DLoader::FromPreparedDynamicTag {}, first.name, std::move(prepared[index].mesh));
-			Dress(source, shape, std::move(prepared[index].copy), first.alignment, first.owner, made);
+			auto& shapeMesh = shapeMeshes[shapeOf[index]];
+			if (lastOfShape[index])
+			{
+				meshes.Load(source, resources::L3DLoader::FromPreparedDynamicTag {}, first.name, std::move(shapeMesh));
+			}
+			else
+			{
+				meshes.Load(source, resources::L3DLoader::FromSharedPreparedDynamicTag {}, first.name,
+				            std::as_const(shapeMesh));
+			}
+			Dress(source, shape, std::move(copies[index]), first.alignment, first.owner, made);
 		}
 		for (const auto i : temples)
 		{

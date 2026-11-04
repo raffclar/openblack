@@ -273,6 +273,9 @@ public:
 	/// Keeps a prepared load and makes the skins and buffers on the graphics device, when the mesh makes them. The
 	/// prepared load must have the upload mode of the mesh. The result tells whether all the submeshes opened.
 	bool Finish(Prepared prepared) noexcept;
+	/// As Finish, but the prepared load stays as it is, so that more meshes can finish from it. The mesh keeps a copy
+	/// of the parts that it keeps, and reads the skins and the vertices from the prepared load.
+	bool FinishShared(const Prepared& prepared) noexcept;
 
 	/// Gives the bytes of the file of the mesh, read again from the game files
 	using FileSource = std::function<std::vector<uint8_t>(resources::Rereads&)>;
@@ -296,6 +299,11 @@ public:
 	[[nodiscard]] bool GivesDeviceDataAgain() const { return _fileSource != nullptr || _hasModelSource; }
 
 private:
+	/// The work of Finish and FinishShared: it moves the parts of a prepared load that it gets as a temporary, and copies
+	/// the parts of a prepared load that stays
+	template <typename Given>
+	bool FinishFrom(Given&& prepared) noexcept;
+
 	l3d::L3DMeshFlags _flags;
 	std::string _debugName;
 	bool _dynamic;

@@ -378,15 +378,26 @@ std::optional<L3DSubMesh::Prepared> L3DSubMesh::Prepare(const l3d::L3DFile& l3d,
 void L3DSubMesh::Finish(Prepared prepared) noexcept
 {
 	_data = std::move(prepared.data);
-	if (_l3dMesh.GetUploadMode() != UploadMode::Device || prepared.vertices.empty())
+	MakeDeviceObjects(prepared.vertices);
+}
+
+void L3DSubMesh::FinishShared(const Prepared& prepared) noexcept
+{
+	_data = prepared.data;
+	MakeDeviceObjects(prepared.vertices);
+}
+
+void L3DSubMesh::MakeDeviceObjects(std::span<const uint8_t> vertices) noexcept
+{
+	if (_l3dMesh.GetUploadMode() != UploadMode::Device || vertices.empty())
 	{
 		return;
 	}
 	const auto stride = _data.hasLightmapCoordinates ? sizeof(LightmappedL3DVertex) : sizeof(EnhancedL3DVertex);
-	const auto vertexCount = static_cast<uint32_t>(prepared.vertices.size() / stride);
+	const auto vertexCount = static_cast<uint32_t>(vertices.size() / stride);
 	if (_data.flags.hasBones)
 	{
-		CreateBlendSource(prepared.vertices, vertexCount);
+		CreateBlendSource(vertices, vertexCount);
 	}
 
 	VertexDecl decl;
@@ -408,7 +419,7 @@ void L3DSubMesh::Finish(Prepared prepared) noexcept
 	// The buffers on the graphics device take copies of the packed vertices and of the triangles
 	const auto& device = Locator::graphicsDevice::value();
 	const auto& indices = _data.bodyGeometry.indices;
-	const auto* verticesMem = device.Copy(prepared.vertices.data(), static_cast<uint32_t>(prepared.vertices.size()));
+	const auto* verticesMem = device.Copy(vertices.data(), static_cast<uint32_t>(vertices.size()));
 	const auto* indicesMem = device.Copy(indices.data(), static_cast<uint32_t>(indices.size() * sizeof(indices[0])));
 	// The buffers go in the shared buffers of bgfx. A model that the game makes during play, such as a creature or a
 	// temple, then gets no new memory from the driver for each part, and the next frame does not wait for that memory.
