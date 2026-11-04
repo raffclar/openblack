@@ -111,12 +111,63 @@ public:
 		return *this;
 	}
 
-	[[nodiscard]] VanillaWorld Make() const { return {_bytes, VanillaFraming {}, _records, _numbers}; }
+	/// Gives the record an owner that refers to the player record of the player. Make() uses the player record with
+	/// that number, or adds one at the end.
+	FakeWorld& OwnedBy(int player)
+	{
+		Ref("owner", 0);
+		_owners.push_back({.record = _records.size() - 1,
+		                   .field = _records.back().fields.size() - 1,
+		                   .player = static_cast<uint8_t>(player)});
+		return *this;
+	}
+
+	[[nodiscard]] VanillaWorld Make() const
+	{
+		auto copy = *this;
+		copy.ResolveOwners();
+		return {copy._bytes, VanillaFraming {}, copy._records, copy._numbers};
+	}
 
 private:
+	struct Owner
+	{
+		size_t record;
+		size_t field;
+		uint8_t player;
+	};
+
+	[[nodiscard]] std::optional<uint32_t> PlayerRecord(uint8_t player) const
+	{
+		const auto found = std::ranges::find_if(_records, [&](const VanillaRecord& record) {
+			return record.type == static_cast<uint32_t>(VanillaType::Player) &&
+			       std::ranges::any_of(record.fields, [&](const VanillaField& field) {
+				       return field.name == "number" && field.kind == VanillaValue::Bytes && field.size == 1 &&
+				              _bytes.at(field.at) == player;
+			       });
+		});
+		return found != _records.end() ? std::optional(found->number) : std::nullopt;
+	}
+
+	void ResolveOwners()
+	{
+		for (const auto& owner : _owners)
+		{
+			auto number = PlayerRecord(owner.player);
+			if (!number.has_value())
+			{
+				Record(VanillaType::Player).Value<uint8_t>("number", owner.player);
+				number = _records.back().number;
+			}
+			_records.at(owner.record).fields.at(owner.field).number = *number;
+		}
+		_owners.clear();
+	}
+
 	std::vector<uint8_t> _bytes;
 	std::vector<VanillaRecord> _records;
 	std::vector<uint32_t> _numbers;
+	std::vector<Owner> _owners;
 };
 
 /// A game object with the turn in its game data
@@ -306,7 +357,7 @@ TEST(VanillaWorldImport, ReadsTheTownsBuildingsAndVillagersOfTheFile)
 	    .Position(12226462, 17309630)
 	    .Value<uint32_t>("id", 0)
 	    .Value<uint32_t>("tribe", static_cast<uint32_t>(Tribe::NORSE))
-	    .Value<uint8_t>("player", 0)
+	    .OwnedBy(0)
 	    .Value<uint32_t>("cannotBuildWorshipSite", 1)
 	    .Value<uint32_t>("uninhabitable", 0)
 	    .Refs("abodes", {3, 4})
@@ -507,7 +558,7 @@ TEST(VanillaWorldImport, ReadsTheGamesListOfAllTowns)
 		    .Position(1000 * (id + 1), 1000)
 		    .Value<uint32_t>("id", id)
 		    .Value<uint32_t>("tribe", static_cast<uint32_t>(Tribe::NORSE))
-		    .Value<uint8_t>("player", 0);
+		    .OwnedBy(0);
 	}
 	const auto imported = world_import::ReadTowns(fake.Make());
 	EXPECT_EQ(imported.gameTownList, (std::vector<uint32_t> {4, 2, 3}));
@@ -521,7 +572,7 @@ TEST(VanillaWorldImport, AWorldWithoutTheGamesListsHasNoListOfAllTowns)
 	    .Position(1000, 1000)
 	    .Value<uint32_t>("id", 0)
 	    .Value<uint32_t>("tribe", static_cast<uint32_t>(Tribe::NORSE))
-	    .Value<uint8_t>("player", 0);
+	    .OwnedBy(0);
 	EXPECT_TRUE(world_import::ReadTowns(fake.Make()).gameTownList.empty());
 }
 
@@ -535,7 +586,7 @@ TEST(VanillaWorldImport, ReadsTheOrderOfThePlayersTownLists)
 		    .Position(1000 * (id + 1), 1000)
 		    .Value<uint32_t>("id", id)
 		    .Value<uint32_t>("tribe", static_cast<uint32_t>(Tribe::NORSE))
-		    .Value<uint8_t>("player", id == 2 ? 1 : 0);
+		    .OwnedBy(id == 2 ? 1 : 0);
 	}
 	// 5 and 6: the players. The first player got the town with the higher number first.
 	fake.Record(VanillaType::Player).Value<uint8_t>("number", 0).Refs("towns", {3, 2});
@@ -546,6 +597,32 @@ TEST(VanillaWorldImport, ReadsTheOrderOfThePlayersTownLists)
 	EXPECT_TRUE(imported.skipped.empty());
 	EXPECT_EQ(imported.towns.size(), 3U);
 	EXPECT_EQ(imported.townLists, (std::vector<uint32_t> {3, 2, 4}));
+}
+
+// A town keeps the number of the player that it had before it last changed hands. The owner of the town is the player
+// that its owner reference gives.
+TEST(VanillaWorldImport, TheOwnerOfATownIsThePlayerOfItsOwnerReference)
+{
+	auto fake = GameAtTurn(100);
+	// 2: a town that went from the first player to the neutral player, 3: the neutral player
+	fake.Record(VanillaType::Town)
+	    .Position(1000, 1000)
+	    .Value<uint32_t>("id", 0)
+	    .Value<uint32_t>("tribe", static_cast<uint32_t>(Tribe::NORSE))
+	    .Value<uint8_t>("player", 0)
+	    .Ref("owner", 3);
+	fake.Record(VanillaType::Player).Value<uint8_t>("number", static_cast<uint8_t>(PlayerNames::NEUTRAL));
+	// 4: a town with no owner is not taken
+	fake.Record(VanillaType::Town)
+	    .Position(2000, 1000)
+	    .Value<uint32_t>("id", 1)
+	    .Value<uint32_t>("tribe", static_cast<uint32_t>(Tribe::NORSE))
+	    .Value<uint8_t>("player", 0);
+
+	const auto imported = world_import::ReadTowns(fake.Make());
+	ASSERT_EQ(imported.towns.size(), 1U);
+	EXPECT_EQ(imported.towns[0].owner, PlayerNames::NEUTRAL);
+	ASSERT_EQ(imported.skipped.size(), 1U);
 }
 
 namespace
@@ -1075,7 +1152,7 @@ TEST(VanillaWorldImport, ReadsThePlansAndTheBuildingSitesOfTheTowns)
 	    .Position(0, 0)
 	    .Value<uint32_t>("id", 0)
 	    .Value<uint32_t>("tribe", static_cast<uint32_t>(Tribe::AZTEC))
-	    .Value<uint8_t>("player", 0)
+	    .OwnedBy(0)
 	    .Refs("planned", {3})
 	    .Refs("buildingSites", {5});
 	fake.Record(VanillaType::PlannedAbode)
@@ -1131,7 +1208,7 @@ TEST(VanillaWorldImport, ReadsTheFlagsOfTheDesiresOfTheTowns)
 	    .Position(0, 0)
 	    .Value<uint32_t>("id", 0)
 	    .Value<uint32_t>("tribe", static_cast<uint32_t>(Tribe::AZTEC))
-	    .Value<uint8_t>("player", 0);
+	    .OwnedBy(0);
 	fake.Record(VanillaType::TownDesireFlags).Ref("flagTown", 2).Value<uint32_t>("flagType", 3).Value("flagLevel", 0.75f);
 	fake.Record(VanillaType::TownDesireFlags)
 	    .Ref("flagTown", 2)
@@ -1739,7 +1816,7 @@ TEST(VanillaWorldImport, ReadsThePowerOfEachWonderAndTheTribalPowersOfEachPlayer
 	    .Position(1000, 1000)
 	    .Value<uint32_t>("id", 0)
 	    .Value<uint32_t>("tribe", static_cast<uint32_t>(Tribe::GREEK))
-	    .Value<uint8_t>("player", 1);
+	    .OwnedBy(1);
 	fake.Record(VanillaType::Wonder)
 	    .Position(1200, 1000)
 	    .Value<uint32_t>("info", AbodeRowNumber(AbodeInfo::GreekWonder))
