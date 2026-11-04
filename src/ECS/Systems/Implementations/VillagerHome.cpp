@@ -775,6 +775,7 @@ void villager_home::SetupMobileMoveTo(LivingAction& action, glm::ivec2 goal, Wal
 	const auto villager = EntityOf(action);
 	auto& wallHug = registry.Get<WallHug>(villager);
 	wallHug.goalPlace = goal;
+	wallHug.goalHeight = 0.0f;
 	// A fresh step is worked out on the next pathfinding turn
 	wallHug.step = {0, 0};
 	wallHug.stepAltitude = 0.0f;

@@ -31,6 +31,7 @@
 #include "ECS/Archetypes/PotArchetype.h"
 #include "ECS/Archetypes/TownArchetype.h"
 #include "ECS/Archetypes/VillagerArchetype.h"
+#include "ECS/BuildingSiteList.h"
 #include "ECS/BuildingSites.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/AtHome.h"
@@ -239,91 +240,165 @@ void PutSites(ecs::Registry& registry, const world_import::ImportedTowns& import
 	{
 		sites.emplace(site.number, &site);
 	}
+	std::vector<entt::entity> towns;
+	towns.reserve(imported.towns.size());
 	for (const auto& town : imported.towns)
 	{
-		const auto townEntity = EntityOf(made, town.number);
-		for (const auto number : std::views::reverse(town.sites))
+		towns.push_back(EntityOf(made, town.number));
+	}
+	const auto buildingOf = [&sites, &made](uint32_t number) {
+		const auto site = sites.find(number);
+		return site != sites.end() ? EntityOf(made, site->second->building) : entt::null;
+	};
+	// The town of a site is the town of its building
+	const auto ownerOf = [&towns, &buildingOf](uint32_t number) -> std::optional<std::size_t> {
+		const auto building = buildingOf(number);
+		if (building == entt::null)
 		{
-			const auto site = sites.find(number);
-			if (site == sites.end())
+			return std::nullopt;
+		}
+		const auto found = std::ranges::find(towns, ecs::construction::TownOfSite(building));
+		return found != towns.end() ? std::optional(static_cast<std::size_t>(found - towns.begin())) : std::nullopt;
+	};
+	const auto listings = world_import::PlanSiteListings(imported.towns, ownerOf);
+	// The sites that each town had before the load. The towns number the sites of their lists after them.
+	std::vector<uint32_t> numbers(towns.size(), 0);
+	for (std::size_t i = 0; i < towns.size(); ++i)
+	{
+		if (const auto* town = registry.Valid(towns[i]) ? registry.TryGet<Town>(towns[i]) : nullptr)
+		{
+			numbers[i] = town->sitesOpened;
+		}
+	}
+	// The listings that gave a town a site it did not have before
+	std::vector<bool> added(listings.size(), false);
+	// First each site opens for one town and takes the values of the file
+	for (std::size_t index = 0; index < listings.size(); ++index)
+	{
+		const auto& listing = listings[index];
+		const auto site = sites.find(listing.site);
+		if (listing.town != listing.opener || site == sites.end())
+		{
+			continue;
+		}
+		const auto townEntity = towns[listing.town];
+		const auto& file = *site->second;
+		const auto building = EntityOf(made, file.building);
+		const bool had = building != entt::null && ecs::construction::SiteOf(townEntity, building) != nullptr;
+		if (building == entt::null || !ecs::construction::OpenSiteForTown(building, townEntity))
+		{
+			continue;
+		}
+		added[index] = !had;
+		auto* opened = ecs::construction::SiteOf(townEntity, building);
+		opened->desire = file.desire;
+		// A worship site that goes up has the town among the towns asked to build it, the newest first
+		if (auto* worship = registry.TryGet<WorshipSite>(building);
+		    worship != nullptr && registry.AllOf<BuildProgress>(building))
+		{
+			auto& requests = worship->buildRequests;
+			if (std::ranges::none_of(requests, [townEntity](const auto& asked) { return asked.town == townEntity; }))
 			{
-				continue;
+				requests.insert(requests.begin(), {.town = townEntity, .desireBoost = file.desire});
 			}
-			const auto& file = *site->second;
-			const auto building = EntityOf(made, file.building);
-			if (building == entt::null || !ecs::construction::OpenSiteForTown(building, townEntity))
+		}
+		opened->places = file.places;
+		opened->workerCount = file.workerCount;
+		opened->workers.clear();
+		for (const auto worker : file.workers)
+		{
+			if (const auto villager = EntityOf(made, worker); villager != entt::null)
 			{
-				continue;
+				opened->workers.push_back(villager);
 			}
-			auto* opened = ecs::construction::SiteOf(townEntity, building);
-			opened->desire = file.desire;
-			// A worship site that goes up has the town among the towns asked to build it, the newest first
-			if (auto* worship = registry.TryGet<WorshipSite>(building);
-			    worship != nullptr && registry.AllOf<BuildProgress>(building))
+		}
+		// The site keeps the piles that it made, and each takes the values of the pile of the file in its place. A
+		// pile of the file that the site did not make yet (a site makes its pile when the first wood comes) is made at
+		// the place of the file.
+		const auto put = [&registry, &made](entt::entity& own, const std::optional<world_import::ImportedPile>& values) {
+			if (!values.has_value())
 			{
-				auto& requests = worship->buildRequests;
-				if (std::ranges::none_of(requests, [townEntity](const auto& asked) { return asked.town == townEntity; }))
-				{
-					requests.insert(requests.begin(), {.town = townEntity, .desireBoost = file.desire});
-				}
+				return;
 			}
-			opened->places = file.places;
-			opened->workerCount = file.workerCount;
-			opened->workers.clear();
-			for (const auto worker : file.workers)
+			if (!registry.Valid(own) || !registry.AllOf<Pot>(own))
 			{
-				if (const auto villager = EntityOf(made, worker); villager != entt::null)
-				{
-					opened->workers.push_back(villager);
-				}
-			}
-			// The site keeps the piles that it made, and each takes the values of the pile of the file in its place. A
-			// pile of the file that the site did not make yet (a site makes its pile when the first wood comes) is made at
-			// the place of the file.
-			const auto put = [&registry, &made](entt::entity& own, const std::optional<world_import::ImportedPile>& values) {
-				if (!values.has_value())
+				own =
+				    ecs::archetypes::PotArchetype::CreateEmpty(GroundPosition(values->position), values->heading, values->row);
+				if (own == entt::null)
 				{
 					return;
 				}
-				if (!registry.Valid(own) || !registry.AllOf<Pot>(own))
-				{
-					own = ecs::archetypes::PotArchetype::CreateEmpty(GroundPosition(values->position), values->heading,
-					                                                 values->row);
-					if (own == entt::null)
-					{
-						return;
-					}
-					registry.Assign<SitePile>(own);
-				}
-				PutPileValues(registry, own, *values, made);
-			};
-			if (!file.temple)
-			{
-				put(opened->piles.front(), file.woodPileValues);
-				continue;
+				registry.Assign<SitePile>(own);
 			}
-			// A pile that the file does not have is not on the site after the load. The site makes its piles again
-			// only when wood comes and no pile is left.
-			const auto count = std::min({file.piles.size(), file.pileValues.size(), opened->piles.size()});
-			for (size_t i = 0; i < count; ++i)
+			PutPileValues(registry, own, *values, made);
+		};
+		if (!file.temple)
+		{
+			put(opened->piles.front(), file.woodPileValues);
+			continue;
+		}
+		// A pile that the file does not have is not on the site after the load. The site makes its piles again
+		// only when wood comes and no pile is left.
+		const auto count = std::min({file.piles.size(), file.pileValues.size(), opened->piles.size()});
+		for (size_t i = 0; i < count; ++i)
+		{
+			auto& own = opened->piles.at(i);
+			switch (world_import::SitePileAfterLoad(file.piles[i], file.pileValues[i].has_value()))
 			{
-				auto& own = opened->piles.at(i);
-				switch (world_import::SitePileAfterLoad(file.piles[i], file.pileValues[i].has_value()))
+			case world_import::SitePileLoad::Remove:
+				if (registry.Valid(own) && registry.AllOf<Pot>(own))
 				{
-				case world_import::SitePileLoad::Remove:
-					if (registry.Valid(own) && registry.AllOf<Pot>(own))
-					{
-						ecs::world_objects::Remove(own);
-					}
-					own = entt::null;
-					break;
-				case world_import::SitePileLoad::TakeValues:
-					put(own, file.pileValues[i]);
-					break;
-				case world_import::SitePileLoad::Keep:
-					break;
+					ecs::world_objects::Remove(own);
 				}
+				own = entt::null;
+				break;
+			case world_import::SitePileLoad::TakeValues:
+				put(own, file.pileValues[i]);
+				break;
+			case world_import::SitePileLoad::Keep:
+				break;
 			}
+		}
+	}
+	// Then each other town that lists a site gets the same site
+	for (std::size_t index = 0; index < listings.size(); ++index)
+	{
+		const auto& listing = listings[index];
+		const auto building = buildingOf(listing.site);
+		if (listing.town == listing.opener || building == entt::null)
+		{
+			continue;
+		}
+		auto* site = ecs::construction::SiteOf(towns[listing.opener], building);
+		if (site == nullptr || !registry.Valid(towns[listing.town]) || !registry.AllOf<Town>(towns[listing.town]) ||
+		    !ecs::building_site_list::Share(*site, towns[listing.town], 0))
+		{
+			continue;
+		}
+		added[index] = true;
+		// A site added to a town changes what it wants
+		if (Locator::townSystem::has_value())
+		{
+			Locator::townSystem::value().MarkDesiresChanged(towns[listing.town]);
+		}
+	}
+	// Last each town numbers the sites of its list, the oldest first
+	for (std::size_t index = 0; index < listings.size(); ++index)
+	{
+		const auto& listing = listings[index];
+		const auto building = buildingOf(listing.site);
+		auto* site =
+		    added[index] && building != entt::null ? ecs::construction::SiteOf(towns[listing.opener], building) : nullptr;
+		if (site != nullptr)
+		{
+			ecs::building_site_list::SetNumberFor(*site, towns[listing.town], ++numbers[listing.town]);
+		}
+	}
+	for (std::size_t i = 0; i < towns.size(); ++i)
+	{
+		if (auto* town = registry.Valid(towns[i]) ? registry.TryGet<Town>(towns[i]) : nullptr)
+		{
+			town->sitesOpened = numbers[i];
 		}
 	}
 }
@@ -444,6 +519,7 @@ void PutWalk(ecs::Registry& registry, entt::entity entity, const world_import::I
 	const auto& walk = villager.walk;
 	auto& wallHug = registry.Get<WallHug>(entity);
 	wallHug.goalPlace = goal;
+	wallHug.goalHeight = walk.goal.altitude;
 	wallHug.step = {walk.stepX, walk.stepZ};
 	wallHug.stepAltitude = walk.stepAltitude;
 	wallHug.yAngle = villager.heading;

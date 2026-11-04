@@ -296,6 +296,7 @@ void script_flocks::MoveTo(Registry& registry, entt::entity flock, const MapCoor
 	if (auto* wallHug = leader != entt::null && registry.Valid(leader) ? registry.TryGet<WallHug>(leader) : nullptr)
 	{
 		wallHug->goalPlace = {place.x, place.z};
+		wallHug->goalHeight = place.altitude;
 	}
 	registry.Get<Flock>(flock).place = place;
 }

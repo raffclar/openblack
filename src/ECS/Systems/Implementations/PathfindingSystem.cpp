@@ -975,6 +975,7 @@ void PathfindingSystem::WalkTo(entt::entity walker, glm::ivec2 goal)
 	}
 	HeldPosition(registry, walker, *wallHug, *transform);
 	wallHug->goalPlace = goal;
+	wallHug->goalHeight = 0.0f;
 	auto walking = WalkerOf(registry, walker, *wallHug, *transform);
 	walking.goal = goal;
 	walking.state = MoveState::Linear;
@@ -995,6 +996,7 @@ void PathfindingSystem::SetupWalkRound(entt::entity walker, glm::ivec2 goal)
 	}
 	HeldPosition(registry, walker, *wallHug, *transform);
 	wallHug->goalPlace = goal;
+	wallHug->goalHeight = 0.0f;
 	auto walking = WalkerOf(registry, walker, *wallHug, *transform);
 	walking.goal = goal;
 	walking.clockwise = MoveStateClockwise::Undefined;

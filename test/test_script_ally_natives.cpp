@@ -157,12 +157,12 @@ TEST_F(ScriptAllyNatives, AScriptResetsAnAllianceToZero)
 }
 
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
-TEST_F(ScriptAllyNatives, ScriptPlayerZeroIsTheFirstPlayer)
+TEST_F(ScriptAllyNatives, ScriptPlayerZeroIsTheNeutralPlayer)
 {
 	SetAlly(0.0f, 3.0f, 0.5f);
 	ASSERT_EQ(Allies().set.size(), 1u);
 	EXPECT_EQ(Allies().set[0].player, PlayerNames::PLAYER_THREE);
-	EXPECT_EQ(Allies().set[0].other, PlayerNames::PLAYER_ONE);
+	EXPECT_EQ(Allies().set[0].other, PlayerNames::NEUTRAL);
 	EXPECT_EQ(GetAlly(0.0f, 3.0f), 0.5f);
 }
 

@@ -12,7 +12,9 @@
 #include <cstdint>
 
 #include <array>
+#include <functional>
 #include <optional>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -588,6 +590,25 @@ enum class SitePileLoad
 	}
 	return hasValues ? SitePileLoad::TakeValues : SitePileLoad::Keep;
 }
+
+/// A town that has a building site of the file in its list of sites
+struct SiteListing
+{
+	/// The town, by its place among the towns of the file
+	std::size_t town {0};
+	/// The number of the object of the site in the file
+	uint32_t site {0};
+	/// The town that opens the site, by its place among the towns of the file. The other towns that list the site get
+	/// the same site from this town.
+	std::size_t opener {0};
+};
+
+/// The places of the sites of the file in the lists of the towns. The listings come in the order of the towns, and each
+/// town's list comes with its oldest site first, which is the order that numbers them. A site in the lists of two or
+/// more towns is one site. The town of its building opens it if that town lists it, else the first town that lists it.
+/// ownerOf gives the town of the building of a site by its place among the towns, none if there is no such town.
+[[nodiscard]] std::vector<SiteListing> PlanSiteListings(std::span<const ImportedTown> towns,
+                                                        const std::function<std::optional<std::size_t>(uint32_t)>& ownerOf);
 
 /// The flag of a desire of a town: it flies as high as the town wants the thing
 struct ImportedDesireFlag

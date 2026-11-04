@@ -222,6 +222,7 @@ uint32_t football::MoveToBall(LivingAction& action)
 		if (gutils::GetDistanceInMetres(goal, current) > 1.0f)
 		{
 			walk.goalPlace = {goal.x, goal.z};
+			walk.goalHeight = goal.altitude;
 		}
 	}
 	return villager_home::MoveToPos(action);

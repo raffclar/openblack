@@ -34,7 +34,7 @@ std::optional<map_coords::MapCoords> ecs::script_destination::Of(const Registry&
 	}
 	if (const auto* walk = registry.TryGet<const WallHug>(thing); walk != nullptr && registry.AllOf<Villager>(thing))
 	{
-		return map_coords::MapCoords {.x = walk->goalPlace.x, .z = walk->goalPlace.y, .altitude = 0.0f};
+		return map_coords::MapCoords {.x = walk->goalPlace.x, .z = walk->goalPlace.y, .altitude = walk->goalHeight};
 	}
 	return std::nullopt;
 }
