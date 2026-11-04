@@ -72,6 +72,12 @@ public:
 	{
 		return _uniforms.Find(uniformName);
 	}
+	/// The stage at which the shaders of this program read the sampler with this name. Nothing when the program does not
+	/// read the sampler, or when the shaders do not give their samplers.
+	[[nodiscard]] std::optional<uint8_t> SamplerStage(std::string_view samplerName) const
+	{
+		return shader_samplers::StageOf(_samplers, samplerName);
+	}
 	/// The same as by name, with a handle of this program's from FindUniform
 	void SetTextureSampler(UniformHandle sampler, uint8_t bindPoint, const Texture2D& texture) const
 	{
