@@ -46,7 +46,8 @@ public:
 	/// The real time, which the wait for the answer is measured by
 	using Clock = std::function<std::chrono::steady_clock::time_point()>;
 
-	/// The game reads the countries one time, as the system starts
+	/// The game reads the countries one time, as the system starts. When turnedOn is false, the system never asks the
+	/// lobby. The lobby account decides if the real weather is on.
 	RealWeatherSystem(bool turnedOn, LobbyClientSystemInterface& lobby, ReadPresets readPresets, Today today, Clock clock,
 	                  const ReadCountries& readCountries = {}, WriteDays writeDays = {}, Tell tell = {});
 

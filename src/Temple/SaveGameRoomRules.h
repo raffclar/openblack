@@ -16,6 +16,8 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
+#include <vector>
 
 #include <glm/vec3.hpp>
 
@@ -50,6 +52,33 @@ struct SavedGamesStamp
 /// Whether the room reads its list and its small pictures again: at the first read, and when the saved games changed
 /// after the last read
 [[nodiscard]] bool ReadsSavedGamesAgain(const std::optional<SavedGamesStamp>& lastRead, const SavedGamesStamp& now);
+
+/// The list of saved games that the rooms' scrolls show. The list comes from the last read of the player's folder. The
+/// game reads the folder again only when the saved games changed after that read, or after Forget. The scrolls ask for
+/// the list in each frame, and a read of the folder in each frame makes the frames slow.
+template <typename Entry>
+class KeptSavedGames
+{
+public:
+	/// The list. When the saved games changed after the last read, read gives the list again.
+	template <typename Read>
+	[[nodiscard]] const std::vector<Entry>& Get(const SavedGamesStamp& now, Read&& read)
+	{
+		if (ReadsSavedGamesAgain(_lastRead, now))
+		{
+			_entries = std::forward<Read>(read)();
+			_lastRead = now;
+		}
+		return _entries;
+	}
+
+	/// The next Get reads the list again
+	void Forget() { _lastRead.reset(); }
+
+private:
+	std::optional<SavedGamesStamp> _lastRead;
+	std::vector<Entry> _entries;
+};
 
 /// The parts of the room's mesh that are controls
 enum class Part : uint8_t

@@ -440,6 +440,27 @@ void testbed_scenarios::AddAudio(std::vector<Scenario>& all)
 	                 {.kind = Kind::EnterTemple, .delaySeconds = 0.5f, .value = 6}},
 	});
 
+	// The scrolls ask for the list of saved games in each frame, and the list comes from the last read of the folder
+	all.push_back({
+	    .id = "temple.save_room_frame_time",
+	    .name = "The temple's save game room with many saved games keeps its frame time",
+	    .facet = Facet::Story,
+	    .description = "The game is saved into slots 1 to 6. Then the player goes through the temple's main room into "
+	                   "the save game room and stays there. Start the game with --frame-stats 200, also in the browser.",
+	    .expected = "The scroll lists the six saved games. The frame stats show the same work for each frame in the room "
+	                "as in the main room: the game reads the folder of the saved games only after a save or a delete and "
+	                "at each visit, not in each frame. No frame in the room takes 10 ms or more.",
+	    .framing = {.shot = Shot::Overview},
+	    .commands = {{.kind = Kind::SaveGame, .delaySeconds = 1.0f, .value = 1},
+	                 {.kind = Kind::SaveGame, .delaySeconds = 0.5f, .value = 2},
+	                 {.kind = Kind::SaveGame, .delaySeconds = 0.5f, .value = 3},
+	                 {.kind = Kind::SaveGame, .delaySeconds = 0.5f, .value = 4},
+	                 {.kind = Kind::SaveGame, .delaySeconds = 0.5f, .value = 5},
+	                 {.kind = Kind::SaveGame, .delaySeconds = 0.5f, .value = 6},
+	                 {.kind = Kind::EnterTemple, .delaySeconds = 1.0f, .value = 3},
+	                 {.kind = Kind::EnterTemple, .delaySeconds = 0.5f, .value = 6}},
+	});
+
 	all.push_back({
 	    .id = "temple.save_room_picture_after_save",
 	    .name = "The temple's save game room shows a new save's picture at once",

@@ -53,12 +53,38 @@ void AddAlliedCreatureHold(std::vector<Scenario>& all)
 	                 Act(Kind::HandLetGo, 1, 3.0f)},
 	});
 }
+/// The player's tiger and a rival god's tiger, with different needs: the status panel shows only for a creature that a
+/// hand holds
+void AddStatusPanelOtherCreature(std::vector<Scenario>& all)
+{
+	auto own = Content(CreatureType::Tiger, {-15.0f, 0.0f}, 90.0f, "player's");
+	own.needs = {.energy = 0.595f, .exhaustion = 0.325f, .life = 0.745f};
+	auto rival = Content(CreatureType::Tiger, {15.0f, 0.0f}, 270.0f, "rival's");
+	rival.owner = PlayerNames::PLAYER_TWO;
+	rival.needs = {.energy = 0.9f, .exhaustion = 0.1f, .life = 0.5f};
+	all.push_back({
+	    .id = "hand.status_panel_other_creature",
+	    .name = "No status panel over a creature that no hand holds",
+	    .facet = Facet::Hand,
+	    .description = "The player's tiger (25% damage, 40% hunger, 32% tiredness) and the tiger of a rival god (50% "
+	                   "damage, 10% hunger, 10% tiredness) stand 30 apart. The hand strokes the player's tiger and lets "
+	                   "go. Then move the hand over each tiger.",
+	    .expected = "While the hand holds the player's tiger, the panel shows Damage 25%, Hunger 40% and Tiredness 32%. "
+	                "When the tiger is still after the release, the panel goes. Over the rival's tiger and over the "
+	                "player's tiger, no panel shows, because no hand holds them.",
+	    .environment = {.dispenserGrid = false, .players = {PlayerNames::PLAYER_TWO}},
+	    .framing = {.shot = Shot::Overview, .distance = 0.5f},
+	    .creatures = {own, rival},
+	    .commands = {Stroke(0, creature_feedback::BodyPart::Head, 1.0f), Act(Kind::HandLetGo, 0, 1.0f)},
+	});
+}
 } // namespace
 
 void testbed_scenarios::AddHand(std::vector<Scenario>& all)
 {
 	using creature_feedback::BodyPart;
 	AddAlliedCreatureHold(all);
+	AddStatusPanelOtherCreature(all);
 	// Every part of the body, the head first
 	std::vector<Command> strokes;
 	for (size_t part = 0; part < creature_feedback::k_BodyPartCount; ++part)
@@ -430,7 +456,8 @@ void testbed_scenarios::AddHand(std::vector<Scenario>& all)
 	                   "three times, slaps it once gently and once hard, and lets go.",
 	    .expected = "While the hand is on it the panel at the left shows Damage 25%, Hunger 40% and Tiredness 32% in "
 	                "yellow bars, and the reward going from No Reward 0% to Good Boy! 30% in green, then down past the "
-	                "middle to Bad Boy! in red. Hovering the hand over it shows the panel with the last reward.",
+	                "middle to Bad Boy! in red. After the release the panel shows until the tiger is still. Then "
+	                "the hand over the tiger shows no panel.",
 	    .framing = {.shot = Shot::Follow, .distance = 1.0f},
 	    .creatures = {worn},
 	    .commands = {Stroke(0, BodyPart::Head, 1.0f), Stroke(0, BodyPart::Belly, 1.0f), Stroke(0, BodyPart::RightHand, 1.0f),

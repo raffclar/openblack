@@ -18,31 +18,27 @@
 #include <string>
 #include <string_view>
 
+#include <entt/entity/entity.hpp>
 #include <glm/vec2.hpp>
 #include <glm/vec4.hpp>
 
 #include "Creature/CreaturePhysiology.h"
 
-/// The creature's status panel: while the hand is over a creature, any player's, the left of the screen shows how
-/// damaged, hungry and tired it is as bars, and below them the reward the hand has given it so far, from a slap to a
-/// stroke. While the camera follows a creature the panel shows the first three near the top of the screen instead.
-/// It is drawn afresh every frame it is wanted, without fading. Everything here is pure: the values, their words and
-/// the panel's layout in screen pixels.
+/// The creature's status panel: while the hand holds a creature, the left of the screen shows how damaged, hungry and
+/// tired it is as bars. Below them it shows the reward the hand has given so far, from a slap to a stroke. While the
+/// camera follows a creature the panel shows the first three near the top of the screen instead. The game draws it
+/// again in each frame that it shows, without a fade. Everything here is pure: the values, their words and the panel's
+/// layout in screen pixels.
 namespace openblack::creature_panel
 {
 
-/// What brings the panel up over a creature: the game shows it whenever the hand is over one, but it can be made to
-/// need the right button held as well
-enum class Trigger : uint8_t
+/// The creature that the panel shows with all four rows, if there is one. The hand points at the creature that it
+/// holds, or else at the creature under it. The panel shows only while a hand holds that creature, any player's hand.
+/// A hand holds the creature from the turn that locks it until the creature is still after the release. Thus a
+/// creature that no hand holds shows no panel, also when it is the player's creature.
+[[nodiscard]] constexpr std::optional<entt::entity> HandPanelCreature(std::optional<entt::entity> pointed, bool heldByAHand)
 {
-	Hover,
-	RightButtonHeld,
-};
-constexpr Trigger k_Trigger = Trigger::Hover;
-/// Whether the panel shows for a creature under the hand, with the right button held or not
-[[nodiscard]] constexpr bool Triggered(bool rightButtonHeld)
-{
-	return k_Trigger == Trigger::Hover || rightButtonHeld;
+	return heldByAHand ? pointed : std::nullopt;
 }
 
 /// The panel's rows, top to bottom

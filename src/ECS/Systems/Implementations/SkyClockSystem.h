@@ -29,6 +29,7 @@ public:
 
 	void Initialize() override;
 	void KeepForNextLand() override;
+	void KeepShownDome() override;
 	void FindAfterLoad() override;
 	void ProcessTurn() override;
 	void SetTime(float time) override;
@@ -51,8 +52,16 @@ private:
 		components::Moon moon;
 	};
 
+	/// How far the shown dome's picture follows the sky, kept through the load of a saved world
+	struct ShownDome
+	{
+		sky_dome::Follow follow;
+		sky_dome::FrameRows frameRows;
+	};
+
 	archetypes::SkyArchetype::Entities _entities;
 	std::optional<Kept> _kept;
+	std::optional<ShownDome> _shownDome;
 };
 
 } // namespace openblack::ecs::systems

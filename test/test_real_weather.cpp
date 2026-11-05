@@ -154,12 +154,13 @@ public:
 		callback(LobbyResult<lobby_api::RealWeather> {.value = std::move(value), .error = {}});
 	}
 
-	void Fail(LobbyErrorKind kind)
+	void Fail(LobbyErrorKind kind, int32_t status = 0, std::string code = {})
 	{
 		ASSERT_TRUE(weather);
 		auto callback = std::move(weather);
 		weather = nullptr;
-		callback(LobbyResult<lobby_api::RealWeather> {.value = std::nullopt, .error = {.kind = kind}});
+		callback(LobbyResult<lobby_api::RealWeather> {.value = std::nullopt,
+		                                              .error = {.kind = kind, .status = status, .code = std::move(code)}});
 	}
 
 	bool configured {true};
@@ -366,7 +367,7 @@ TEST(RealWeatherRules, PicturesAndPlaces)
 	EXPECT_EQ(real_weather::PlaceText("Oslo", "(null)", "Norway"), "Oslo (Norway)");
 }
 
-TEST(RealWeatherSystem, OffByDefaultItAsksNothing)
+TEST(RealWeatherSystem, TheDeveloperSwitchOffAsksNothing)
 {
 	FakeLobby lobby;
 	FakeLand land;
@@ -688,6 +689,69 @@ TEST(RealWeatherSystem, WithNoConnectionTheLandKeepsItsOwnWeather)
 	EXPECT_EQ(land.background.rain, before.rain);
 	// The system writes no days file without an answer
 	EXPECT_TRUE(written.empty());
+}
+
+TEST(RealWeatherSystem, AnAccountWithOnlineWeatherOffKeepsTheLandsOwnWeather)
+{
+	FakeLobby lobby;
+	FakeLand land;
+	land.background = {.temperature = 3, .rain = 1};
+	const auto before = land.background;
+	std::vector<std::vector<uint8_t>> written;
+	auto system = MakeSystemWithFiles(lobby, written);
+	system.StartGame(land);
+	// The account setting is off by default, and then the lobby refuses the question
+	lobby.Fail(LobbyErrorKind::Refused, 404, std::string(RealWeatherSystemInterface::k_AccountWeatherOff));
+	system.ProcessTurn(land);
+	system.ProcessTurn(land);
+	EXPECT_FALSE(system.IsApplied());
+	EXPECT_FALSE(system.GetWeather().has_value());
+	EXPECT_FALSE(land.storm.has_value());
+	EXPECT_EQ(land.background.temperature, before.temperature);
+	EXPECT_EQ(land.background.rain, before.rain);
+	EXPECT_TRUE(written.empty());
+	// The game asks one time only, also when the setting is off
+	EXPECT_FALSE(lobby.weather);
+}
+
+TEST(RealWeatherSystem, AnAccountWithOnlineWeatherOnChangesTheLand)
+{
+	FakeLobby lobby;
+	FakeLand land;
+	auto system = MakeSystem(lobby);
+	system.StartGame(land);
+	lobby.Answer(Weather(4, 9));
+	system.ProcessTurn(land);
+	EXPECT_TRUE(system.IsApplied());
+	EXPECT_EQ(land.background.temperature, 9);
+}
+
+TEST(RealWeatherSystem, NotSignedInItKeepsTheLandsOwnWeather)
+{
+	FakeLobby lobby;
+	FakeLand land;
+	lobby.state = LobbySessionState::LoggedOut;
+	auto system = MakeSystem(lobby);
+	system.StartGame(land);
+	ASSERT_TRUE(lobby.resume);
+	// No stored sign-in: the session does not resume, so the game does not ask for the weather
+	lobby.resume(LobbyResult<lobby_api::AccountRef> {.value = std::nullopt, .error = {.kind = LobbyErrorKind::NotLoggedIn}});
+	EXPECT_FALSE(lobby.askedFor.has_value());
+	system.ProcessTurn(land);
+	EXPECT_FALSE(system.IsApplied());
+	EXPECT_EQ(land.background.temperature, 0);
+}
+
+TEST(RealWeatherSystem, WithoutALobbyItAsksNothing)
+{
+	FakeLobby lobby;
+	FakeLand land;
+	lobby.configured = false;
+	auto system = MakeSystem(lobby);
+	system.StartGame(land);
+	EXPECT_FALSE(lobby.weather);
+	EXPECT_FALSE(lobby.resume);
+	EXPECT_FALSE(system.IsApplied());
 }
 
 TEST(RealWeatherSystem, ALateAnswerWritesNoDaysFile)
