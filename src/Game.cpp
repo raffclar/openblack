@@ -1944,7 +1944,7 @@ void Game::ProcessHandToolTipTurn()
 		if (const auto amount = Locator::handGrabSystem::value().TakeAmountToolTip(); amount.has_value())
 		{
 			const auto held = gui::world_tooltip::HeldAmount(*amount);
-			toolTips.SubmitNumbered(held.index, gui::ToolTipAction::None, held.first, std::nullopt, true);
+			toolTips.Force(held.index, static_cast<float>(held.first));
 		}
 	}
 	const auto pointed = Locator::pickingSystem::has_value() ? Locator::pickingSystem::value().GetPick().object : std::nullopt;

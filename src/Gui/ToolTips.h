@@ -101,6 +101,8 @@ public:
 	static constexpr float k_TurnsPerSecond = 25.0f;
 	/// The most seconds a tooltip ever takes to fade in
 	static constexpr uint32_t k_MaxTimesShown = 80;
+	/// The tooltips whose words show the forced number: Focus Creature, Got Belief, Amount and People Worshipping
+	static constexpr std::array<uint32_t, 4> k_ForcedNumberTexts {47, 110, 119, 120};
 
 	explicit ToolTips(std::span<const ToolTipInfo, k_Count> info);
 
@@ -109,9 +111,12 @@ public:
 
 	/// The tooltip of an index for this turn. A forced one shows at once, even over one still being shown.
 	void Submit(uint32_t index, ToolTipAction action, uint32_t arrows, bool force = false);
-	/// A tooltip forced to show at once, with a number written into its words (as the share of a town's people
-	/// worshipping): a tooltip that has one shows the latest number given
+	/// A tooltip forced to show at once, with a number. The number goes into the one forced number, also when the
+	/// tooltip does not show. Only the tooltips in k_ForcedNumberTexts write the forced number into their words.
 	void Force(uint32_t index, float number);
+	/// Whether the words of a tooltip show the forced number (Got Belief, Amount, People Worshipping and Focus
+	/// Creature). The other tooltips show only the numbers of the thing under the hand.
+	[[nodiscard]] static bool TakesForcedNumber(uint32_t index);
 	/// A tooltip with a number or two written into its words, by the mouse button it shows; forced to show at once or
 	/// submitted as any other. Only the tooltip being shown keeps its numbers: one turned away leaves the shown one's
 	/// numbers as they are.
@@ -191,6 +196,8 @@ private:
 		bool chargeAfterWords {false};
 	};
 	std::optional<Numbered> _number;
+	/// The latest number of a forced tooltip. A forced tooltip that another tooltip keeps off also changes it.
+	float _forcedNumber {0.0f};
 };
 
 } // namespace openblack::gui

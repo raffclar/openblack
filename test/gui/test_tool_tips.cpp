@@ -376,3 +376,71 @@ TEST(ToolTips, AChargeComesAfterTheWordsOfAForcedTooltip)
 	EXPECT_FALSE(shown->chargeAfterWords);
 	EXPECT_FALSE(shown->number.has_value());
 }
+
+namespace
+{
+constexpr uint32_t k_GotBelief = 110;
+constexpr uint32_t k_HeldAmount = 119;
+constexpr uint32_t k_Stored = 134;
+
+/// The priorities of the store, the amount in the hand and the belief that the towns got, as the game's info gives them
+std::array<ToolTipInfo, ToolTips::k_Count> AmountInfo()
+{
+	auto info = Info();
+	info.at(k_GotBelief) = {.priority = 0.5f, .displayTime = 2.0f, .displayTimeAfterFocus = 1.0f};
+	info.at(k_HeldAmount) = {.priority = 0.925f, .displayTime = 1.0f, .displayTimeAfterFocus = 0.5f};
+	info.at(k_Stored) = {.priority = 0.9f, .displayTime = 1.0f, .displayTimeAfterFocus = 0.0f};
+	return info;
+}
+} // namespace
+
+TEST(ToolTips, AForcedTooltipThatDoesNotShowKeepsTheNumbersOfTheStore)
+{
+	ToolTips toolTips(AmountInfo());
+	toolTips.SubmitNumbered(k_Stored, ToolTipAction::None, 5.0, 120.0);
+	toolTips.ProcessTurn();
+	toolTips.Update(0.1f);
+	// The belief that the towns got has a lower priority, so it does not show
+	toolTips.Force(k_GotBelief, 12.0f);
+	toolTips.ForceWithCharge(k_Move, 45.0f);
+	toolTips.Update(0.1f);
+	const auto shown = toolTips.GetShown();
+	ASSERT_TRUE(shown.has_value());
+	EXPECT_EQ(shown->index, k_Stored);
+	ASSERT_TRUE(shown->number.has_value());
+	EXPECT_EQ(*shown->number, 5.0);
+	ASSERT_TRUE(shown->second.has_value());
+	EXPECT_EQ(*shown->second, 120.0);
+	EXPECT_FALSE(shown->chargeAfterWords);
+}
+
+TEST(ToolTips, TheAmountShowsTheLatestForcedNumber)
+{
+	ToolTips toolTips(AmountInfo());
+	toolTips.Force(k_HeldAmount, 41.0f);
+	toolTips.ProcessTurn();
+	toolTips.Update(0.1f);
+	auto shown = toolTips.GetShown();
+	ASSERT_TRUE(shown.has_value());
+	EXPECT_EQ(shown->index, k_HeldAmount);
+	ASSERT_TRUE(shown->number.has_value());
+	EXPECT_EQ(*shown->number, 41.0);
+	// The forced number of the belief changes the one number of all the forced tooltips, also when it does not show
+	toolTips.Force(k_GotBelief, 12.0f);
+	shown = toolTips.GetShown();
+	ASSERT_TRUE(shown.has_value());
+	EXPECT_EQ(shown->index, k_HeldAmount);
+	ASSERT_TRUE(shown->number.has_value());
+	EXPECT_EQ(*shown->number, 12.0);
+}
+
+TEST(ToolTips, OnlyTheForcedTooltipsOfTheGameTakeTheForcedNumber)
+{
+	EXPECT_TRUE(ToolTips::TakesForcedNumber(47));
+	EXPECT_TRUE(ToolTips::TakesForcedNumber(k_GotBelief));
+	EXPECT_TRUE(ToolTips::TakesForcedNumber(k_HeldAmount));
+	EXPECT_TRUE(ToolTips::TakesForcedNumber(120));
+	EXPECT_FALSE(ToolTips::TakesForcedNumber(k_Stored));
+	EXPECT_FALSE(ToolTips::TakesForcedNumber(138));
+	EXPECT_FALSE(ToolTips::TakesForcedNumber(139));
+}

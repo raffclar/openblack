@@ -149,9 +149,15 @@ void ToolTips::Update(float seconds)
 
 void ToolTips::Force(uint32_t index, float number)
 {
-	// Words only, with no mouse; the number is kept even when the tooltip isn't taken up
+	// Words only, with no mouse. The forced number changes also when the tooltip does not show. The numbers of the
+	// tooltip that shows do not change.
 	Submit(index, ToolTipAction::None, ToolTipArrows::k_None, true);
-	_number = Numbered {.index = index, .number = number, .second = std::nullopt, .words = std::nullopt};
+	_forcedNumber = number;
+}
+
+bool ToolTips::TakesForcedNumber(uint32_t index)
+{
+	return std::ranges::find(k_ForcedNumberTexts, index) != k_ForcedNumberTexts.end();
 }
 
 void ToolTips::SubmitInWords(uint32_t index, uint32_t words, float number)
@@ -166,6 +172,12 @@ void ToolTips::SubmitInWords(uint32_t index, uint32_t words, float number)
 void ToolTips::ForceWithCharge(uint32_t index, std::optional<float> charge)
 {
 	Submit(index, ToolTipAction::None, ToolTipArrows::k_None, true);
+	// Only the tooltip that shows keeps its charge. A charge of a tooltip that does not show does not change the
+	// numbers of the tooltip that shows.
+	if (_current != index)
+	{
+		return;
+	}
 	if (charge.has_value())
 	{
 		_number = Numbered {
@@ -196,12 +208,24 @@ std::optional<ToolTips::Shown> ToolTips::GetShown() const
 		return std::nullopt;
 	}
 	const float alpha = _icon->current <= 0.0f ? 0.0f : std::min(_icon->current, 1.0f);
-	const bool numbered = _number.has_value() && _number->index == _icon->index;
+	// A tooltip of the forced number always shows the latest forced number. Each other tooltip shows only the numbers
+	// given to it.
+	const bool forced = TakesForcedNumber(_icon->index);
+	const bool numbered = !forced && _number.has_value() && _number->index == _icon->index;
+	std::optional<double> number;
+	if (forced)
+	{
+		number = static_cast<double>(_forcedNumber);
+	}
+	else if (numbered)
+	{
+		number = _number->number;
+	}
 	return Shown {.index = _icon->index,
 	              .action = _icon->action,
 	              .arrows = _icon->arrows,
 	              .alpha = alpha,
-	              .number = numbered ? std::optional(_number->number) : std::nullopt,
+	              .number = number,
 	              .second = numbered ? _number->second : std::nullopt,
 	              .words = numbered ? _number->words : std::nullopt,
 	              .chargeAfterWords = numbered && _number->chargeAfterWords};

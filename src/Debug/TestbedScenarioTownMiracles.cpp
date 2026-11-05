@@ -510,6 +510,32 @@ void openblack::testbed_scenarios::AddTownMiracleScenarios(std::vector<Scenario>
 	    .townBeliefInPlayer = k_TownBelief,
 	});
 	all.push_back({
+	    .id = "hand.tooltips_store_amounts_keep_numbers",
+	    .name = "The store tooltip keeps its numbers when the towns get belief",
+	    .facet = Facet::Miracles,
+	    .description = "The town and temple of town.miracle_debug_given, with a Norse storage pit by the centre that holds "
+	                   "35 food and 7 wood. The hand moves over the storage pit. After one second the hand pours 300 "
+	                   "wood into the storage pit, and the town gains belief in the player for the gift. Keep the hand "
+	                   "over the storage pit.",
+	    .expected = "The tooltip \"Stored - Food:  35 Wood:   7\" shows, then \"Stored - Food:  35 Wood: 307\". At the "
+	                "tenth turn after the gift, the tooltip of the belief does not show, because the store tooltip "
+	                "is more important. The store tooltip always shows whole numbers. It never shows its words with "
+	                "\"%3.0f\" in them.",
+	    .environment = {.dispenserGrid = false, .landNumber = k_FirstLand},
+	    .framing = {.shot = Shot::Placed, .eye = {-25.0f, 30.0f, 0.0f}, .look = {10.0f, 2.0f, 35.0f}},
+	    .objects =
+	        [] {
+		        auto objects = Town();
+		        objects.push_back(
+		            {.type = AbodeInfo::NorseStoragePit, .offset = k_Centre + k_StoragePit, .storedFood = 35, .storedWood = 7});
+		        return objects;
+	        }(),
+	    .temples = {{.offset = k_Temple}},
+	    .commands = {{.kind = Kind::PointerOnObject, .delaySeconds = 2.0f, .object = Town().size(), .amount = 2.0f},
+	                 {.kind = Kind::HandPour, .delaySeconds = 1.0f, .point = k_Centre + k_StoragePit, .value = 300}},
+	    .townBeliefInPlayer = k_TownBelief,
+	});
+	all.push_back({
 	    .id = "miracles.scribble_stops_icon_charge",
 	    .name = "A scribble of the empty hand stops the charge of a worship site's icon",
 	    .facet = Facet::Miracles,
