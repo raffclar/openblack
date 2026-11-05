@@ -7,8 +7,8 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
-#include <chrono>
 #include <algorithm>
+#include <chrono>
 #include <optional>
 #include <ranges>
 #include <string>
@@ -29,7 +29,7 @@
 #include "ECS/Systems/ChatSystemInterface.h"
 #include "ECS/Systems/CreatureModeSystemInterface.h"
 #include "ECS/Systems/GameEndSystemInterface.h"
-#include "ECS/Systems/GameKeysInterface.h"
+#include "ECS/Systems/GameKeysSystemInterface.h"
 #include "ECS/Systems/GestureEventsInterface.h"
 #include "ECS/Systems/GestureSystemInterface.h"
 #include "ECS/Systems/HandGrabSystemInterface.h"
