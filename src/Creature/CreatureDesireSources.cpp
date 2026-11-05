@@ -139,6 +139,11 @@ void creature_desire_sources::UpdateInterest(PlayerInterest& interest, float now
 	interest.value = now > interest.value ? now : interest.value + (now - interest.value) * 0.5f;
 }
 
+float creature_desire_sources::ManifestState(float desireSum)
+{
+	return Clamp01(desireSum * k_ManifestPart);
+}
+
 std::optional<float> creature_desire_sources::Read(uint32_t type, const State& state)
 {
 	switch (type)
@@ -247,6 +252,30 @@ void creature_desire_sources::Write(uint32_t type, float value, const Written& w
 		if (written.attention != nullptr)
 		{
 			written.attention->turnsSinceInteraction = TurnsForSource(value, k_UninterestedSeconds, written.turnsPerSecond);
+		}
+		break;
+	case types::k_HungerFromLowEnergy:
+		if (written.needs != nullptr)
+		{
+			written.needs->energy = Clamp01(1.0f - value);
+		}
+		break;
+	case types::k_PooFromAmountOfPoo:
+		if (written.needs != nullptr)
+		{
+			written.needs->poo = value;
+		}
+		break;
+	case types::k_TirednessFromExhaustion:
+		if (written.needs != nullptr)
+		{
+			written.needs->exhaustion = value;
+		}
+		break;
+	case types::k_WaterFromDehydration:
+		if (written.needs != nullptr)
+		{
+			written.needs->dehydration = value;
 		}
 		break;
 	case types::k_GetHigh:

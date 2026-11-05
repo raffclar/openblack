@@ -183,6 +183,8 @@ public:
 	virtual void NoteLeashOrder(entt::entity /*creature*/) {}
 	/// Every source of a type in the creature's desires goes up or down by an amount
 	virtual void ChangeDesireSource(entt::entity /*creature*/, uint32_t /*type*/, float /*amount*/) {}
+	/// The traits, counts and body values behind the sources that were set take the new values at once
+	virtual void TakeWrittenSources(entt::entity /*creature*/) {}
 	/// Plays an action at once, as stroking and slapping make it, unless the body is less than a share of the way through
 	/// what it plays. The action plays to its end and leaves the mind's plan as it was. Returns whether it played.
 	virtual bool ForceAction(entt::entity creature, size_t animation, bool mirrored, double interruptsAfter) = 0;

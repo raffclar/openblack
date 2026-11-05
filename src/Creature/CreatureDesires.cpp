@@ -180,7 +180,7 @@ void creature_desires::UpdateSources(Desires& desires, const SourceReader& read)
 	}
 }
 
-void creature_desires::UpdateDesires(Desires& desires, float turnsPerSecond)
+void creature_desires::UpdateDesires(Desires& desires, float turnsPerSecond, float floor)
 {
 	desires.sum = 0.0f;
 	for (size_t i = 0; i < k_DesireCount; ++i)
@@ -204,7 +204,15 @@ void creature_desires::UpdateDesires(Desires& desires, float turnsPerSecond)
 			--desire.suppressedTurns;
 		}
 		desire.value = increase > 0.0f && desire.suppressedTurns == 0 ? desire.value + increase : desire.value * desire.decay;
-		desire.value = std::clamp(desire.value, 0.0f, std::max(desire.max, 0.0f));
+		// The game tests the floor first, so a script's maximum below the floor still holds
+		if (desire.value < floor)
+		{
+			desire.value = floor;
+		}
+		else if (desire.max < desire.value)
+		{
+			desire.value = desire.max;
+		}
 		desires.sum += desire.value;
 	}
 }

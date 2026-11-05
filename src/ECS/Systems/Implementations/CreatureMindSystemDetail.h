@@ -139,6 +139,8 @@ void Lessen(entt::entity creature, creature_desires::Desires& desires, std::stri
 /// The least a creature's desires are lessened to by its actions, or wanted while another is made dominant, by its
 /// species
 [[nodiscard]] float DesireFloorOf(entt::entity creature);
+/// The traits, counts and body values behind the sources that a script or a spell set take the new values at once
+void TakeWrittenSources(entt::entity entity, components::CreatureMindState& mind);
 /// Having done an action, its body pays for it
 void BodyPaysFor(entt::entity creature, std::string_view action);
 /// Both, as a step that takes effect at once does

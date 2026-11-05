@@ -142,6 +142,19 @@ TEST(CreatureDesires, ADesireWithoutDriveFades)
 	EXPECT_NEAR(desires[Desire::Play].value, 0.9f, k_Tolerance);
 }
 
+TEST(CreatureDesires, AFadedDesireStopsAtTheFloorBeforeItsMaximum)
+{
+	auto desires = OneDesire(Desire::Play, 0.0f, 0.5f, 5.0f);
+	desires[Desire::Play].value = 0.2f;
+	creature_desires::UpdateDesires(desires, k_TurnsPerSecond, 0.19f);
+	EXPECT_FLOAT_EQ(desires[Desire::Play].value, 0.19f);
+	// The floor test comes first: a maximum below the floor holds a value above the floor
+	desires[Desire::Play].max = -0.5f;
+	desires[Desire::Play].value = 1.0f;
+	creature_desires::UpdateDesires(desires, k_TurnsPerSecond, 0.0f);
+	EXPECT_FLOAT_EQ(desires[Desire::Play].value, -0.5f);
+}
+
 TEST(CreatureDesires, ASuppressedDesireOnlyFades)
 {
 	auto desires = OneDesire(Desire::Anger, 1.0f, 0.0f, 1.0f);
