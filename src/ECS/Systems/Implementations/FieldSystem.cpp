@@ -202,3 +202,11 @@ uint32_t FieldSystem::RemoveFood(entt::entity field, float amount)
 	}
 	return harvest.given;
 }
+
+void FieldSystem::BurnFood(entt::entity field, float damage)
+{
+	const auto& data = Entities().Get<const Field>(field);
+	const auto& info = Locator::infoConstants::value().fieldType.at(static_cast<size_t>(data.type));
+	// The fire takes the food by the same rules as a farmer or the hand, but nobody gets the food
+	static_cast<void>(RemoveFood(field, damage * info.totalFoodInField));
+}
