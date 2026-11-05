@@ -533,9 +533,9 @@ void testbed_scenarios::AddAudio(std::vector<Scenario>& all)
 	                   "4.1 seconds.",
 	    .expected = "The light added to the room goes slowly through red, green and blue. Each colour is at its top a "
 	                "third of a pulse after the colour before it.",
-	    .environment = {.playerAlignment = 1.0f},
-	    .framing = {.shot = Shot::Overview},
-	    .commands = {{.kind = Kind::EnterTemple, .delaySeconds = 1.0f, .value = static_cast<size_t>(TempleRoom::Main)}},
+	    .environment = {.playerAlignment = 1.0f, .temple = glm::vec2(0.0f)},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 40.0f, -80.0f}, .look = {0.0f, 10.0f, 0.0f}},
+	    .commands = {{.kind = Kind::EnterTemple, .delaySeconds = 4.0f, .value = static_cast<size_t>(TempleRoom::Main)}},
 	});
 
 	all.push_back({
