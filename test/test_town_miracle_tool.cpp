@@ -58,15 +58,12 @@ TEST(TownMiracleTool, TheReasonsComeInTheOrderTheGameChecks)
 	checks.neutral = false;
 	EXPECT_EQ(WhyNoSite(checks), NoSite::NoTemple);
 	checks.hasTemple = true;
-	EXPECT_EQ(WhyNoSite(checks), NoSite::TempleNotBuilt);
-	checks.templeBuilt = true;
 	EXPECT_EQ(WhyNoSite(checks), NoSite::NoPlace);
 }
 
 TEST(TownMiracleTool, EachReasonHasAText)
 {
-	for (const auto reason : {NoSite::Neutral, NoSite::NoTemple, NoSite::TempleNotBuilt, NoSite::LandWithoutSites,
-	                          NoSite::NoPeople, NoSite::NoPlace})
+	for (const auto reason : {NoSite::Neutral, NoSite::NoTemple, NoSite::LandWithoutSites, NoSite::NoPeople, NoSite::NoPlace})
 	{
 		EXPECT_FALSE(Describe(reason).empty());
 	}

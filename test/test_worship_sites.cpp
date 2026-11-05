@@ -516,7 +516,7 @@ TEST(WorshipSiteSystem, OnTheSecondLandTheNorseSiteTakesTheFirstPlaceAndTheIndia
 	EXPECT_NEAR(altar.z, 3220.2014f, 0.01f);
 }
 
-TEST(WorshipSiteSystem, NoSitesOnTheFirstLandNorForEmptyTownsNorForATempleStillToBeBuilt)
+TEST(WorshipSiteSystem, NoSitesOnTheFirstLandNorForEmptyTowns)
 {
 	{
 		Fixture f;
@@ -541,9 +541,40 @@ TEST(WorshipSiteSystem, NoSitesOnTheFirstLandNorForEmptyTownsNorForATempleStillT
 		const auto temple = f.Temple(PlayerNames::PLAYER_ONE);
 		f.system->AddTemple(temple, 0.0f, false);
 		f.system->LandLaidOut();
-		EXPECT_TRUE(f.registry.Get<const components::Town>(town).worshipSite == entt::null);
-		f.system->TempleBuilt(temple);
 		EXPECT_TRUE(f.registry.Get<const components::Town>(town).worshipSite != entt::null);
+	}
+}
+
+// A temple that is not yet built makes the sites of its towns, as a temple that stands does. The town gets its site at
+// once and the request to build it.
+TEST(WorshipSiteSystem, ATempleStillToBeBuiltMakesTheSitesOfItsTowns)
+{
+	{
+		Fixture f;
+		const auto town = f.Town(0, PlayerNames::PLAYER_ONE, Tribe::NORSE, {0.0f, 0.0f, -50.0f}, 0);
+		const auto temple = f.Temple(PlayerNames::PLAYER_ONE);
+		f.system->AddTemple(temple, 0.0f, false);
+		f.world->population[town] = 1;
+		f.system->PersonJoinedTown(town);
+		const auto site = f.registry.Get<const components::Town>(town).worshipSite;
+		ASSERT_TRUE(site != entt::null);
+		EXPECT_EQ(f.registry.Get<const WorshipSite>(site).buildRequests.size(), 1u);
+		EXPECT_EQ(f.world->openedSites.size(), 1u);
+		// When the temple is built, the town keeps the same site, and the temple asks it again to build the site
+		f.system->TempleBuilt(temple);
+		EXPECT_EQ(f.registry.Get<const components::Town>(town).worshipSite, site);
+		EXPECT_EQ(f.registry.Get<const WorshipSite>(site).buildRequests.size(), 1u);
+		EXPECT_EQ(f.world->openedSites.size(), 2u);
+	}
+	{
+		// A script that stops the temple stops its sites also before the temple is built
+		Fixture f;
+		const auto town = f.Town(0, PlayerNames::PLAYER_ONE, Tribe::NORSE, {0.0f, 0.0f, -50.0f});
+		const auto temple = f.Temple(PlayerNames::PLAYER_ONE);
+		f.system->AddTemple(temple, 0.0f, false);
+		f.system->SetCanHaveSites(temple, false);
+		f.system->LandLaidOut();
+		EXPECT_TRUE(f.registry.Get<const components::Town>(town).worshipSite == entt::null);
 	}
 }
 
@@ -582,9 +613,6 @@ TEST(WorshipSiteSystem, TheLandScriptsBuiltSiteIsMadeAlsoForATempleThatIsNotYetB
 	const auto town = f.Town(0, PlayerNames::PLAYER_TWO, Tribe::NORSE, {0.0f, 0.0f, -50.0f});
 	const auto temple = f.Temple(PlayerNames::PLAYER_TWO);
 	f.system->AddTemple(temple, 0.0f, false);
-	// The town gets no site from a temple that is not yet built
-	f.system->LandLaidOut();
-	EXPECT_TRUE(f.registry.Get<const components::Town>(town).worshipSite == entt::null);
 	// The land script makes the site, joins the town to it and builds it
 	const auto site = f.system->MakeBuiltSite(PlayerNames::PLAYER_TWO, Tribe::NORSE);
 	ASSERT_TRUE(site != entt::null);

@@ -40,8 +40,6 @@ enum class NoSite : uint8_t
 	Neutral,
 	/// The town's player has no temple
 	NoTemple,
-	/// The town's player's temple is not built yet
-	TempleNotBuilt,
 	/// The land is the first land, which has no worship sites
 	LandWithoutSites,
 	/// The town has no people
@@ -56,7 +54,6 @@ struct SiteChecks
 	bool hasSite {false};
 	bool neutral {false};
 	bool hasTemple {false};
-	bool templeBuilt {false};
 	bool landWithoutSites {false};
 	/// The tool lets the land without worship sites have one
 	bool anyLand {false};
