@@ -1184,6 +1184,7 @@ openblack_setup_and_add_test(
 )
 target_link_libraries(test_l3d_effect_points PRIVATE l3d)
 openblack_setup_and_add_test(test_effect_receivers test_effect_receivers.cpp)
+openblack_setup_and_add_test(test_field_burn test_field_burn.cpp)
 openblack_setup_and_add_test(
   test_computer_player_start test_computer_player_start.cpp
 )

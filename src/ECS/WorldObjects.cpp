@@ -657,15 +657,10 @@ float world_objects::ReduceLife(entt::entity object, float damage, std::optional
 	{
 		return ReduceLife(totem->townCentre, damage, by, byCreature);
 	}
-	// A field burns its food and keeps its life
-	if (auto* field = registry.TryGet<Field>(object))
+	// A field keeps its life and its food. Only a fire takes food from it (see the fire system).
+	if (registry.AllOf<Field>(object))
 	{
-		if (const auto* info = Row(Locator::infoConstants::value().fieldType, field->type))
-		{
-			const auto& type = static_cast<const GFieldTypeInfo&>(*info);
-			field->crop.food = std::max(field->crop.food - damage * type.totalFoodInField, 0.0f);
-		}
-		return 1.0f;
+		return LifeOf(object);
 	}
 	// A pile loses what it holds rather than life: burnt or blasted away, and gone once a pile on its own has nothing left
 	if (const auto* pile = PileOf(object))
