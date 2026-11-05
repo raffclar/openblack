@@ -11,6 +11,7 @@
 
 #include <cstdint>
 
+#include <array>
 #include <memory>
 #include <optional>
 #include <span>
@@ -18,6 +19,7 @@
 
 #include <GameSocket.h>
 
+#include "ECS/GatheringBoxRules.h"
 #include "Server/DedicatedServer.h"
 #include "Server/LobbyResults.h"
 #include "Server/LobbyStatus.h"
@@ -45,6 +47,14 @@ public:
 	                                               std::optional<lobby_status::CustomMap> customMap);
 	/// Once a frame, before the turns: the sockets, the joins, the start and the defeat of the gods that did not come back
 	void Update();
+	/// The winning conditions in the report of the host
+	using HostConditions =
+	    std::array<std::optional<gathering_box::host_report::Condition>, gathering_box::host_report::k_ConditionCount>;
+	/// True each 20 seconds while a started game has a lobby. The first check after the start is always true.
+	[[nodiscard]] bool HostReportDue();
+	/// Sends the report of the host to the lobby: the god teams, the game turn and the winning conditions. The server
+	/// sends the report of the decided game one time only. Nothing when the server has no lobby.
+	void SendHostReport(uint32_t turn, bool decided, const HostConditions& conditions);
 	/// True while the server has a lobby and a key for the results, and did not make the report of the game yet
 	[[nodiscard]] bool WantsResult() const;
 	/// Sends the end of the decided game to the lobby, signed with the key of the server. The server makes the report one

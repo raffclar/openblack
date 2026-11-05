@@ -67,6 +67,8 @@ public:
 	/// The winning conditions of a network game that the host picked. The game server sets them at the start, and every
 	/// computer gives them to the gods at the same turn. With none set, the conditions are those of a test switch.
 	virtual void SetConditions(std::vector<game_end::ConditionPick> picks) = 0;
+	/// The winning conditions of the network game: those of the game server, else those of a test switch, else none
+	[[nodiscard]] virtual std::vector<game_end::ConditionPick> GetConditions() const = 0;
 	/// At the first turn of a network game, after the humans joined: each god gets the winning conditions of the game. A
 	/// later turn, or a game with no conditions, gives nothing.
 	virtual void GiveConditions() = 0;
