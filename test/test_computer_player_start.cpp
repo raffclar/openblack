@@ -9,6 +9,7 @@
 
 #include <cstdint>
 
+#include <bit>
 #include <map>
 #include <optional>
 #include <string>
@@ -140,6 +141,9 @@ TEST(ComputerPlayerStart, TheCreatureIsNinetyToOneHundredAndTwentyPercentOfThePe
 {
 	EXPECT_FLOAT_EQ(SizeLike(2.0f, 0.0f), 1.8f);
 	EXPECT_FLOAT_EQ(SizeLike(2.0f, 0.3f), 2.4f);
+	// The sum rounds to a float before the multiplication. One rounding of the exact result gives the next float up.
+	EXPECT_EQ(std::bit_cast<uint32_t>(SizeLike(std::bit_cast<float>(0x400CDBFFu), std::bit_cast<float>(0x3E1D3B4Au))),
+	          0x401466E1u);
 	FakeWorld world;
 	world.creatures = {{PlayerNames::PLAYER_ONE, k_Person}, {PlayerNames::PLAYER_TWO, k_GodsCreature}};
 	world.sizes = {{k_Person, 1.5f}, {k_GodsCreature, 0.4f}};
