@@ -541,7 +541,7 @@ TEST(OnlineMapStore, ANameOfADeviceOfWindowsIsNotAMapFile)
 	}
 	EXPECT_TRUE(online::IsStoreFileName("console.map"));
 	EXPECT_TRUE(online::IsStoreFileName("com10.map"));
-	EXPECT_TRUE(online::IsStoreFileName("obt_dl_2p_1.map"));
+	EXPECT_TRUE(online::IsStoreFileName("obt_dl_3p_1.map"));
 }
 
 TEST(MapDownload, AMapWithANameThatTheStoreCannotKeepFailsAndLeavesNoFile)
@@ -599,10 +599,10 @@ TEST(DownloadTestMap, TheLandHasItsOwnNameAndTheLandscapeOfTheTemplate)
 	const auto source = onlinemap::Parse(std::as_bytes(std::span(templateMap)));
 	ASSERT_TRUE(parsed.has_value() && source.has_value());
 	EXPECT_EQ(parsed->script, "rem openblack: the land of the map download test\r\nVERSION(2.300000)\r\nSET_LAND_NUMBER(0)\r\n"
-	                          "LOAD_LANDSCAPE(\".\\Online Maps\\OBT_DL_2P_1.lnd\")\r\nEND\r\n");
+	                          "LOAD_LANDSCAPE(\".\\Online Maps\\OBT_DL_3P_1.lnd\")\r\nEND\r\n");
 	EXPECT_TRUE(std::ranges::equal(parsed->landscape, source->landscape));
 	EXPECT_TRUE(
-	    online_map_land::IsOwnLandscape("Online Maps/" + download_test_map::FileName(), ".\\Online Maps\\OBT_DL_2P_1.lnd"));
+	    online_map_land::IsOwnLandscape("Online Maps/" + download_test_map::FileName(), ".\\Online Maps\\OBT_DL_3P_1.lnd"));
 	EXPECT_TRUE(online::IsStoreFileName(download_test_map::FileName()));
 	// The same template gives the same bytes, so every tool run gives the same land
 	EXPECT_EQ(download_test_map::Make(templateMap), made);
