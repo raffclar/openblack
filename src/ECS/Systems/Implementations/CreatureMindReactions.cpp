@@ -495,7 +495,7 @@ bool CreatureMindSystem::ForceDesireAbout(entt::entity creature, CreatureMindSta
 	creature_learning::MakeFullyDominant(*mind.desires, desire, mind_detail::DesireFloorOf(creature));
 	mind.leash.actOn = {entt::to_integral(thing)};
 	mind.plannedTurn = mind.turn + 1;
-	PlanCreature(creature, mind, false, desire);
+	PlanCreature(creature, mind, desire);
 	mind.leash.actOn.clear();
 	return mind.planActive && mind.planner.current.has_value() && mind.planner.current->desire == desire;
 }

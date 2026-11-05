@@ -707,8 +707,8 @@ void CreatureMindSystem::DesiresTurn(entt::entity entity)
 		creature_mind::Plan(mind.idle, creature_mind::Activity::Faint, creature_mind::Faint(ShownSize(creature)));
 		needs->faint.reset();
 	}
-	// When the creature is free to choose, it weighs the plans of every desire. When no plan is ready, it does
-	// nothing.
+	// When the creature is free to choose, it plans the desires of the round for this turn. When no plan is ready, it
+	// does nothing.
 	if (!scripted && !demobilised && !mind.planActive && mind.idle.step >= mind.idle.agenda.size() &&
 	    !(needs != nullptr && needs->faint.has_value()))
 	{
@@ -716,7 +716,7 @@ void CreatureMindSystem::DesiresTurn(entt::entity entity)
 		ShowFizzle(entity, mind);
 		if (mind.idle.step >= mind.idle.agenda.size())
 		{
-			PlanCreature(entity, mind, true);
+			PlanCreature(entity, mind);
 		}
 		// It counts the times it thinks and still has no plan, from the start of its last agenda
 		if (mind.thinksWithoutPlanSerial != mind.idle.serial)
