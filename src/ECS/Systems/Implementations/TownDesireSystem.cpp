@@ -159,14 +159,6 @@ town_desire::DesireInputs GatherInputs(entt::entity townEntity, const Town& town
 				stats.childRoom += static_cast<int32_t>(info->maxChildrenInAbode) - static_cast<int32_t>(household.children);
 			}
 		}
-		// Each abode as worn as it is, by how much its kind wants mending
-		in.abodes.push_back({
-		    .life = ecs::world_objects::LifeOf(entity),
-		    .livingQuarters = info != nullptr &&
-		                      (static_cast<uint32_t>(info->abodeType) & static_cast<uint32_t>(AbodeType::LivingQuarters)) != 0,
-		    .inhabitants = static_cast<uint32_t>(abode.inhabitants.size()),
-		    .desireToBeRepaired = info != nullptr ? info->desireToBeRepaired : 0.0f,
-		});
 		if (abode.type == AbodeNumber::StoragePit)
 		{
 			in.storageFood = abode.foodAmount;
@@ -185,7 +177,7 @@ town_desire::DesireInputs GatherInputs(entt::entity townEntity, const Town& town
 			in.populationWhenNeeded.at(i) = info->populationWhenNeeded;
 		}
 	}
-	// Its miracle dispensers are among its buildings that want mending, each as worn as it is. Nobody lives in one.
+	// Its miracle dispensers count among its buildings
 	registry.Each<const SpellDispenser>([&](entt::entity entity, const SpellDispenser& dispenser) {
 		if (dispenser.town != townEntity)
 		{
@@ -195,13 +187,37 @@ town_desire::DesireInputs GatherInputs(entt::entity townEntity, const Town& town
 		// It is always built, thus it counts among the town's buildings, by its number, and among its civic buildings
 		ecs::town_desire::CountBuiltBuilding(in, info != nullptr ? info->abodeNumber : AbodeNumber::SpellDispenser,
 		                                     info != nullptr ? info->abodeType : AbodeType::SpellDispenser);
-		in.abodes.push_back({
-		    .life = ecs::world_objects::LifeOf(entity),
-		    .livingQuarters = false,
-		    .inhabitants = 0,
-		    .desireToBeRepaired = info != nullptr ? info->desireToBeRepaired : 0.0f,
-		});
 	});
+	// Each of its buildings as worn as it is, by how much its kind wants mending, in the order of the town's own list
+	// (the newest first), so that the sum of their wants rounds as in the game. Nobody lives in a miracle dispenser.
+	for (const auto building : town.abodes)
+	{
+		if (!registry.Valid(building))
+		{
+			continue;
+		}
+		if (const auto* abode = registry.TryGet<const Abode>(building); abode != nullptr)
+		{
+			const auto* info = FindAbodeInfo(tribe, abode->type);
+			in.abodes.push_back({
+			    .life = ecs::world_objects::LifeOf(building),
+			    .livingQuarters = info != nullptr && (static_cast<uint32_t>(info->abodeType) &
+			                                          static_cast<uint32_t>(AbodeType::LivingQuarters)) != 0,
+			    .inhabitants = static_cast<uint32_t>(abode->inhabitants.size()),
+			    .desireToBeRepaired = info != nullptr ? info->desireToBeRepaired : 0.0f,
+			});
+		}
+		else if (registry.AllOf<SpellDispenser>(building))
+		{
+			const auto* info = ecs::world_objects::AbodeInfoOf(building);
+			in.abodes.push_back({
+			    .life = ecs::world_objects::LifeOf(building),
+			    .livingQuarters = false,
+			    .inhabitants = 0,
+			    .desireToBeRepaired = info != nullptr ? info->desireToBeRepaired : 0.0f,
+			});
+		}
+	}
 	// Its plans, those of finished buildings that went wanting repair
 	for (const auto plan : town.planned)
 	{
