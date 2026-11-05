@@ -403,6 +403,10 @@ TEST(HandGrab, AThrowIsFastAcrossTheGround)
 	EXPECT_TRUE(IsFastRelease({1.0f, 0.1f, 0.0f}));
 	EXPECT_TRUE(PotPours({2.0f, 1.0f, 0.0f}));
 	EXPECT_FALSE(PotPours({2.0f, 1.0f, 0.1f}));
+	// Added from x to z, the squares of this speed give 5. Added from z to x as the game does, they give more than 5.
+	const glm::vec3 edge {std::bit_cast<float>(0x3FAAF1A1u), std::bit_cast<float>(0x3F9E3444u),
+	                      std::bit_cast<float>(0x3FA6578Au)};
+	EXPECT_FALSE(PotPours(edge));
 }
 
 // A hand that holds a thing has no spin: each part of the spin is a positive zero, also where the inertia has a

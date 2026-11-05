@@ -163,6 +163,7 @@ namespace
 {
 constexpr float k_TurnSeconds = std::chrono::duration<float>(TimeSystemInterface::k_TurnDuration).count();
 constexpr float k_TurnsPerSecond = 1.0f / k_TurnSeconds;
+constexpr auto k_TurnMilliseconds = static_cast<uint32_t>(TimeSystemInterface::k_TurnDuration.count());
 constexpr float k_TwoPi = 2.0f * std::numbers::pi_v<float>;
 
 /// The hand's speed is smoothed over about this many seconds
@@ -1664,7 +1665,8 @@ void MagicSystem::HeldSeedTurn()
 	}
 	++seed.turnsInHand;
 	const bool wasReady = seed.ready;
-	seed.ready = seed.ready || magic::SeedReadyAfter(seed.turnsInHand, k_TurnSeconds, Info().spellSystem.delayBeforeSeedActive);
+	seed.ready =
+	    seed.ready || magic::SeedReadyAfter(seed.turnsInHand, k_TurnMilliseconds, Info().spellSystem.delayBeforeSeedActive);
 	// Becoming ready calls off a press made too early
 	if (own && seed.ready && !wasReady)
 	{
