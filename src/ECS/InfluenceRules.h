@@ -45,4 +45,37 @@ struct ReachingTown
 	return sum;
 }
 
+/// One building of a town, as its influence uses it: the part of it that stands built, its scale, its life, the
+/// influence of its row in the buildings' table, and how many people live in it
+struct BuildingInfluence
+{
+	float built {1.0f};
+	float scale {1.0f};
+	float life {1.0f};
+	float influence {0.0f};
+	uint32_t people {0};
+};
+
+/// The influence that one building adds to its town. Its size is its scale times its built part, then times its life,
+/// then times the influence of its row. The building adds this size once for itself and once for each person in it.
+/// Each step rounds, thus the order of the steps is part of the answer.
+[[nodiscard]] inline float OfBuilding(const BuildingInfluence& building)
+{
+	const float share = building.scale * building.built;
+	const float size = (building.life * share) * building.influence;
+	return (static_cast<float>(building.people) + 1.0f) * size;
+}
+
+/// The town adds the influence of each building to the sum that it has, one building at a time
+[[nodiscard]] constexpr float AddBuilding(float sum, float building)
+{
+	return building + sum;
+}
+
+/// The town's influence at the end of the pass over its buildings: the land's multiplier times the sum
+[[nodiscard]] constexpr float TimesMultiplier(float sum, float multiplier)
+{
+	return multiplier * sum;
+}
+
 } // namespace openblack::influence_rules

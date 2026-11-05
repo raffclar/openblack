@@ -29,6 +29,8 @@ class Registry;
 namespace openblack::ecs::systems
 {
 
+class InfluenceSystemInterface;
+
 class TownSystem final: public TownSystemInterface
 {
 public:
@@ -80,6 +82,8 @@ public:
 	bool LoadState(reflection::BinaryReader& in) override;
 
 private:
+	/// Each building of the town takes its turn, in the order of the town's list, and then adds its influence
+	void PassOverBuildings(entt::entity town, InfluenceSystemInterface* influence);
 	/// A building or a person gone from the world leaves its town's lists
 	void OnAbodeGone(entt::registry& registry, entt::entity abode);
 	void OnFieldGone(entt::registry& registry, entt::entity field);

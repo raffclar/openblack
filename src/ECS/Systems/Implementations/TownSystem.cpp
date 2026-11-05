@@ -945,10 +945,7 @@ void TownSystem::ProcessPlayerTowns(PlayerNames player)
 		}
 		// First it removes its building sites that have no use
 		construction::PruneSites(town);
-		if (Locator::influenceSystem::has_value())
-		{
-			Locator::influenceSystem::value().ProcessTownInfluence(town);
-		}
+		// Its pass over its buildings also sums its influence
 		ProcessTownBuildings(town);
 		if (Locator::townDesireSystem::has_value())
 		{
@@ -986,12 +983,36 @@ void TownSystem::ProcessTownBuildings(entt::entity townEntity)
 	{
 		return;
 	}
-	const auto turn = Locator::time::has_value() ? Locator::time::value().GetTurn() : 0;
-	// Every so many turns it passes over its buildings, which age by it; a football pitch never ages
-	if (!statistics::TownPassesItsBuildings(turn, Locator::infoConstants::value().town.processAbodeEvery))
+	auto* influence = Locator::influenceSystem::has_value() ? &Locator::influenceSystem::value() : nullptr;
+	// The town's influence starts again from its base influence
+	if (influence != nullptr)
 	{
-		return;
+		influence->StartTownInfluence(townEntity);
 	}
+	const auto turn = Locator::time::has_value() ? Locator::time::value().GetTurn() : 0;
+	// Every so many turns it passes over its buildings, which age by it; a football pitch never ages. On the other turns
+	// the town has only its base influence.
+	if (statistics::TownPassesItsBuildings(turn, Locator::infoConstants::value().town.processAbodeEvery))
+	{
+		PassOverBuildings(townEntity, influence);
+	}
+	// The land's multiplier multiplies the sum
+	if (influence != nullptr && registry.Valid(townEntity))
+	{
+		influence->FinishTownInfluence(townEntity);
+	}
+}
+
+void TownSystem::PassOverBuildings(entt::entity townEntity, InfluenceSystemInterface* influence)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	// After its turn, each building that is still there adds its influence, in the order of the town's list
+	const auto addInfluence = [&](entt::entity building) {
+		if (influence != nullptr && registry.Valid(townEntity) && registry.Valid(building))
+		{
+			influence->AddBuildingInfluence(townEntity, building);
+		}
+	};
 	const auto abodes = registry.Get<const Town>(townEntity).abodes;
 	for (const auto abode : abodes)
 	{
@@ -999,10 +1020,17 @@ void TownSystem::ProcessTownBuildings(entt::entity townEntity)
 		if (auto* dispenser = registry.Valid(abode) ? registry.TryGet<SpellDispenser>(abode) : nullptr; dispenser != nullptr)
 		{
 			dispenser->age = statistics::AgedOnePass(dispenser->age);
+			addInfluence(abode);
 			continue;
 		}
-		if (const auto* data = registry.TryGet<const Abode>(abode); data == nullptr || data->type == AbodeNumber::FootballPitch)
+		const auto* kind = registry.Valid(abode) ? registry.TryGet<const Abode>(abode) : nullptr;
+		if (kind == nullptr)
 		{
+			continue;
+		}
+		if (kind->type == AbodeNumber::FootballPitch)
+		{
+			addInfluence(abode);
 			continue;
 		}
 		// A workshop makes its scaffolds before it ages as any other building does
@@ -1015,6 +1043,7 @@ void TownSystem::ProcessTownBuildings(entt::entity townEntity)
 		if (auto* data = registry.Valid(abode) ? registry.TryGet<Abode>(abode) : nullptr)
 		{
 			data->age = statistics::AgedOnePass(data->age);
+			addInfluence(abode);
 		}
 	}
 }
