@@ -6,8 +6,9 @@ The script runs on this computer only, with test accounts and test certificates 
 2. The land of the map download test (openblack-server --write-download-test-map): a land of a network game that no
    game folder has.
 3. openblack-server with --custom-map: it plays the land and sends it to the lobby (PUT /api/v1/servers/{id}/map).
-4. Desktop clients, each with an empty profile folder, so with an empty "Online Maps" folder. The script drives the
-   multiplayer front end of each through the inspector: the Internet, the log-in, the first game, Join, Next, Ready.
+4. Desktop clients, each in a new working folder, so with an empty "Online Maps" folder in the developer profile.
+   The script drives the multiplayer front end of each through the inspector: the Internet, the log-in, the first
+   game, Join, Next, Ready.
    Each client gets the land when its ticket comes, checks its start checksum and its SHA-256, and keeps it.
 5. Optionally a web client in headless Chrome (--web-dir), through web/scripts/cdp-run.mjs.
 6. The checks: each client keeps a file with the SHA-256 of the lobby's list, the game starts, and each client
@@ -242,7 +243,7 @@ def start_desktop(options, out, name, ports, processes, frames):
     env["ALSOFT_CONF"] = options.alsoft_conf
     process = processes.start(name, [
         os.path.join(options.bin, "openblack.exe"), "-g", options.game_path, "--background", "--inspect-port", "0",
-        "--skip-logos", "-n", str(frames), "--profile-folder", os.path.join(work, "profile"), "-MULTIPLAYER",
+        "--skip-logos", "-n", str(frames), "-MULTIPLAYER",
         "--lobby", f"https://127.0.0.1:{ports['front']}", "--lobby-test-ca", os.path.join(out, "certs", "ca.pem"),
         "-l", log], cwd=work, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     return process, log
@@ -329,6 +330,11 @@ class Driver:
 
     def started(self, seconds):
         self.wait(lambda w: not w.get("open"), seconds, "the start of the game")
+
+
+def profile_of(work):
+    """A developer's run (-n) plays as the developer profile in the Profiles folder of its working folder"""
+    return os.path.join(work, "Profiles", "developer")
 
 
 def kept_map(profile):
@@ -495,7 +501,7 @@ def main():
             counts = wait_for_turns(logs, options.turns, 1800)
             result = {"map_gets": map_gets(os.path.join(out, "front.log"), sha) - gets_before, "clients": {}}
             for (name, _, log), count, driver in zip(desktops, counts, drivers):
-                result["clients"][name] = {"kept": kept_map(os.path.join(out, name, "profile")) == sha,
+                result["clients"][name] = {"kept": kept_map(profile_of(os.path.join(out, name))) == sha,
                                            "counts": count, "pages": driver.pages}
             if web is not None:
                 web.wait(2400)
