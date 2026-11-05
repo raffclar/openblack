@@ -43,7 +43,7 @@ EM_JS(char*, openblack_site_session_take_body, (int id), {
 	if (replies) {
 		replies.delete(id);
 	}
-	return stringToNewUTF8(reply && typeof reply.body === 'string' ? reply.body : '');
+	return stringToNewUTF8(reply && typeof reply.body === 'string' ? reply.body : "");
 });
 
 EM_JS_DEPS(openblack_page_site_session, "$stringToNewUTF8");
