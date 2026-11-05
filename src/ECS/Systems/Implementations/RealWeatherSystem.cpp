@@ -61,7 +61,8 @@ void RealWeatherSystem::StartGame(RealWeatherLandInterface& land)
 		return;
 	}
 	_presets = real_weather::ParsePresets(*bytes);
-	// The game asks only when the player turned the real weather on and has an account
+	// The game asks only when the player has an account. The setting of the account decides if the lobby gives weather.
+	// The developer switch can stop the question.
 	if (!_turnedOn || !_lobby.IsConfigured())
 	{
 		return;
@@ -88,7 +89,14 @@ void RealWeatherSystem::StartGame(RealWeatherLandInterface& land)
 			{
 				if (const auto logger = spdlog::get("game"))
 				{
-					SPDLOG_LOGGER_INFO(logger, "The lobby gave no real weather");
+					if (result.error.code == k_AccountWeatherOff)
+					{
+						SPDLOG_LOGGER_INFO(logger, "The account has online weather off: the land keeps its own weather");
+					}
+					else
+					{
+						SPDLOG_LOGGER_INFO(logger, "The lobby gave no real weather");
+					}
 				}
 				return;
 			}

@@ -205,7 +205,7 @@ struct Arguments
 	/// The https:// origin of the lobby, none for no online services
 	std::optional<std::string> lobbyOrigin;
 	std::optional<std::string> lobbyTestAuthorities;
-	/// The real-world weather changes the weather of a single-player game (on by default)
+	/// The game asks the lobby for the real-world weather. The setting of the lobby account decides if it comes.
 	bool useInternetWeather {true};
 	/// A network game shows the player's own ping (off by default)
 	bool showPing {false};

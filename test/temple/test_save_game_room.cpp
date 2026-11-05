@@ -314,6 +314,40 @@ TEST(SaveGameRoom, TheRoomReadsTheSavedGamesAgainOnlyWhenTheyChanged)
 	EXPECT_TRUE(ReadsSavedGamesAgain(read, {.changes = 3, .player = "players/one", .land = 2}));
 }
 
+// The scrolls ask for the list of saved games in each frame. The list reads the player's folder at the first request,
+// again only after a change of the saved games, and again after Forget (a new visit).
+TEST(SaveGameRoom, TheScrollsReadTheSavedGamesOnlyWhenTheyChanged)
+{
+	using openblack::temple::save_game_room::KeptSavedGames;
+	using openblack::temple::save_game_room::SavedGamesStamp;
+	int reads = 0;
+	std::vector<int> folder {1, 2};
+	const auto read = [&reads, &folder] {
+		++reads;
+		return folder;
+	};
+	KeptSavedGames<int> kept;
+	const SavedGamesStamp first {.changes = 3, .player = "players/one", .land = 1};
+	EXPECT_EQ(kept.Get(first, read), (std::vector<int> {1, 2}));
+	for (int frame = 0; frame < 100; ++frame)
+	{
+		EXPECT_EQ(kept.Get(first, read), (std::vector<int> {1, 2}));
+	}
+	EXPECT_EQ(reads, 1);
+	// A save adds a saved game and changes the stamp
+	folder.push_back(3);
+	const SavedGamesStamp afterSave {.changes = 4, .player = "players/one", .land = 1};
+	EXPECT_EQ(kept.Get(afterSave, read), (std::vector<int> {1, 2, 3}));
+	EXPECT_EQ(kept.Get(afterSave, read), (std::vector<int> {1, 2, 3}));
+	EXPECT_EQ(reads, 2);
+	// A file that comes into the folder from outside the game shows at the next visit
+	folder.push_back(4);
+	EXPECT_EQ(kept.Get(afterSave, read), (std::vector<int> {1, 2, 3}));
+	kept.Forget();
+	EXPECT_EQ(kept.Get(afterSave, read), (std::vector<int> {1, 2, 3, 4}));
+	EXPECT_EQ(reads, 3);
+}
+
 // The text of the scroll moves in front of the scroll one frame after the camera comes past half way. The room then
 // writes it again in each frame, and writes it on the texture again in the frame that the camera is half way or farther.
 TEST(SaveGameRoom, TheScrollTextMovesInFrontOneFrameAfterTheCameraComesPastHalfWay)

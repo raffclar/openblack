@@ -160,3 +160,43 @@ TEST_F(SkySystemTest, SettingTheTimeBuildsTheWholeDomeAgain)
 	EXPECT_FLOAT_EQ(dome.follow.Following(), Clock().GetCurrentSkyType());
 	EXPECT_EQ(dome.follow.RowsDone(), 0);
 }
+
+// A saved world keeps how far the dome of the computer that saved followed the sky, but not the dome's picture. The
+// renderer keeps its picture through the load, so the dome continues as it was before the load.
+TEST_F(SkyClockSystemTest, ALoadKeepsHowFarTheShownDomeFollowsTheSky)
+{
+	auto& shown = Entities().Get<components::SkyDome>(_clock->GetEntities().dome);
+	// The first frame builds all of the dome, then the dome follows the sky down to the night
+	static_cast<void>(shown.follow.Advance(2.0f));
+	static_cast<void>(shown.follow.Advance(0.5f));
+	const auto before = shown.follow;
+	ASSERT_EQ(before.RowsDone(), sky_dome::k_RowsPerFrame);
+
+	_clock->KeepShownDome();
+	Entities().Reset();
+	// The saved dome had all of its picture built for the day
+	const auto loaded = archetypes::SkyArchetype::Create();
+	auto& saved = Entities().Get<components::SkyDome>(loaded.dome);
+	static_cast<void>(saved.follow.Advance(2.0f));
+	_clock->FindAfterLoad();
+
+	const auto& dome = Entities().Get<components::SkyDome>(_clock->GetEntities().dome);
+	EXPECT_FLOAT_EQ(dome.follow.Following(), before.Following());
+	EXPECT_EQ(dome.follow.RowsDone(), before.RowsDone());
+}
+
+// With no dome before the load, the renderer has no picture of it: the dome builds all of its picture again
+TEST_F(SkyClockSystemTest, ALoadWithNoShownDomeBuildsTheWholeDome)
+{
+	Entities().Reset();
+	const auto loaded = archetypes::SkyArchetype::Create();
+	auto& saved = Entities().Get<components::SkyDome>(loaded.dome);
+	static_cast<void>(saved.follow.Advance(2.0f));
+	_clock->FindAfterLoad();
+
+	auto& dome = Entities().Get<components::SkyDome>(_clock->GetEntities().dome);
+	const auto frame = dome.follow.Advance(_clock->GetCurrentSkyType());
+	ASSERT_GE(frame.count, 1);
+	EXPECT_EQ(frame.rows.at(0).first, 0);
+	EXPECT_EQ(frame.rows.at(0).count, sky_dome::k_Rows);
+}

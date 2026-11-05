@@ -299,6 +299,8 @@ private:
 	std::unique_ptr<TempleSaveGameRoom> _saveGameRoom;
 	/// The saved games that the room's list and small pictures were last read from
 	std::optional<temple::save_game_room::SavedGamesStamp> _savedGamesRead;
+	/// The saved games that the rooms' scrolls show, from the last read of the player's folder
+	temple::save_game_room::KeptSavedGames<TempleScrolls::SavedGame> _scrollSavedGames;
 	/// The question the save game room asks the player about a slot, until it is answered
 	struct SaveGameQuestion
 	{
@@ -312,6 +314,8 @@ private:
 	void ListSavedGames();
 	/// Reads the list and the small pictures of the save game room again when the saved games changed after the last read
 	void ReadSavedGamesWhenChanged();
+	/// What the rooms' scrolls tell of the game now
+	[[nodiscard]] TempleScrolls::Facts ScrollFacts();
 	/// Asks the player about a slot, as a click in the save game room asks
 	void AskAboutSlot(temple::save_game_room::Click click, uint32_t slot);
 	/// Acts on the player's answer to the save game room's question
