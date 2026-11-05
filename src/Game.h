@@ -90,7 +90,6 @@ namespace gui
 {
 class MultiplayerFrontEnd;
 class ToolTips;
-class LoadingScreen;
 } // namespace gui
 namespace ecs::components
 {
@@ -513,9 +512,6 @@ public:
 	bool OpenSkirmishBoxOverGame();
 	/// The lands that the skirmish box shows now, in the order of its list
 	[[nodiscard]] const std::vector<gui::skirmish_box::Land>& GetSkirmishLands() const noexcept { return _skirmishLands; }
-	/// The logo effect of the first game of the program, in its own loop with its sound, until it ends, a key or a mouse
-	/// button. Then black frames while a mouse button is held.
-	void PlayLogoEffect();
 
 	void SetTime(float time) noexcept;
 	/// How many times longer a turn takes: 2 is half speed
@@ -603,8 +599,8 @@ public:
 private:
 	static Game* sInstance;
 
-	/// What the game shows as it starts, before it loads the rest: the logo pictures, the pre-intro film on a first run
-	/// and the tips screen fading in, which stays up while the game loads
+	/// What the game shows as it starts, before it loads the rest. The loading screen system shows the screens with the
+	/// choices of the command line.
 	void PlayStartupScreens();
 	/// Once the inspector has started: the folder of the fight transcript and the fight autopilot from the command line
 	void StartFightTools();
@@ -612,12 +608,6 @@ private:
 	void StartInputTools();
 	/// The checksum of each turn and the commands to play of a tool's run, from the command line. These need no inspector.
 	void StartSimulationLogs();
-	/// The logo film's two pictures, each fading in and out, any key or mouse button hurrying them on
-	void PlayLogoScreens();
-	/// The pre-intro film in its own loop with the trailer music, until its last frame or a key
-	void PlayPreIntro();
-	/// Picks the tip of the day and makes its picture; the first time, fades the tips screen in over a second
-	void StartTipOfTheDay();
 	/// The tips screen, or the banner, shows while a land loads, drawn again at the loading's redraw points
 	void BeginLoadingScreen(loading::LoadingClock::Mode look) override;
 	/// A redraw point inside the loading: the tips screen is drawn and shown if it is due, or at once when drawNow is true.
@@ -638,8 +628,6 @@ private:
 	/// Starts in the background the pipelines of the land, the sky and the sea, before the other resources load. The
 	/// pipelines of the land take the longest time to make. Only renderers that make pipelines in the background do it.
 	void StartLandPipelines();
-	/// Draws one frame outside the game's loop over a black screen and shows it
-	void PresentStartupFrame(const std::function<void(glm::u16vec2 resolution)>& draw);
 	/// Draws at the window's size from this frame on if it changed: the back buffer, the views over the whole screen,
 	/// the sea's reflection and the camera's shape follow it, on whichever screen is up
 	void FollowWindowSize();
@@ -687,14 +675,10 @@ private:
 
 	/// When the game was launched
 	const LoadTimer::Clock::time_point _launchTime {LoadTimer::Clock::now()};
-	/// Times the start of the game, from its launch to the first frame drawn on the first land
-	std::optional<LoadTimer> _startupTimer;
 	/// The size drawn at, following the window's
 	windowing::SizeFollower _windowSize;
 	/// The openblack commit of this build, from the version file next to the game
 	build_version::BuildVersion _buildVersion;
-	/// Times the loading of every resource registered at the start, on the loading threads or where first wanted
-	std::optional<LoadTimer> _prefetchTimer;
 
 	/// path to Lionhead Studios Ltd/Black & White folder
 	const std::filesystem::path _gamePath;
@@ -712,12 +696,6 @@ private:
 	/// The switches of the original game's command line
 	launch_switches::Switches _launchSwitches;
 	std::optional<std::filesystem::path> _challengePath;
-	/// The screens drawn as the game starts and while a land loads, none without a window
-	std::unique_ptr<gui::LoadingScreen> _loadingScreen;
-	/// What is drawn at the loading's redraw points, nothing while not loading
-	std::optional<loading::LoadingClock::Mode> _loadingLook;
-	/// The tips screen has faded in once: later loads show it at once
-	bool _tipFadedIn {false};
 	bool _startTestbed {false};
 	bool _startGodsRingMap {false};
 	std::optional<ScenarioRequest> _scenarioRequest;

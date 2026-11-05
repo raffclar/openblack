@@ -201,6 +201,7 @@
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/LiquidParticleSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
+#include "ECS/Systems/LoadingScreenSystemInterface.h"
 #include "ECS/Systems/LobbyClientSystemInterface.h"
 #include "ECS/Systems/MagicShieldSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
@@ -481,6 +482,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"syncChecksumSystem", "players.checksum"},
     LocatorCoverage {"landSystem", "level.current"},
     LocatorCoverage {"videoSystem", "view.video"},
+    LocatorCoverage {"loadingScreenSystem", "view.loading"},
     LocatorCoverage {"screenFade", "view.video"},
     LocatorCoverage {"gameInterface", "gui.windows"},
     LocatorCoverage {"playerProfileSystem", "players.new_game"},
@@ -3149,6 +3151,30 @@ std::unique_ptr<ProviderInterface> ViewProvider(const GameSeamInterface* seam)
 				              }
 			              }
 			              result["film_creature"] = std::move(creature);
+		              }
+		              return QueryResult::Value(std::move(result));
+	              });
+	provider->Add(Query("loading", "The screens of the start and of the loads: whether they have their textures, what a load "
+	                               "draws at its redraw points, whether the tips screen faded in and has a tip, and the "
+	                               "timers of the start"),
+	              [](const QueryContext& /*c*/) {
+		              Json result = {{"present", Locator::loadingScreenSystem::has_value()}};
+		              if (Locator::loadingScreenSystem::has_value())
+		              {
+			              const auto& screens = Locator::loadingScreenSystem::value();
+			              result["has_screen"] = screens.HasScreen();
+			              result["loading"] = screens.IsLoading();
+			              result["look"] = nullptr;
+			              if (const auto look = screens.GetLoadingLook(); look.has_value())
+			              {
+				              using Mode = loading::LoadingClock::Mode;
+				              result["look"] =
+				                  *look == Mode::Tips ? "tips" : (*look == Mode::PleaseWait ? "please_wait" : "none");
+			              }
+			              result["tip_faded_in"] = screens.TipFadedIn();
+			              result["tip_showing"] = screens.TipShowing();
+			              result["times_startup"] = screens.TimesStartup();
+			              result["times_prefetch"] = screens.TimesPrefetch();
 		              }
 		              return QueryResult::Value(std::move(result));
 	              });

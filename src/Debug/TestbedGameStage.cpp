@@ -22,6 +22,7 @@
 #include "Debug/TestbedPingServer.h"
 #include "Debug/TestbedScenarioRegistry.h"
 #include "ECS/Systems/GatheringBoxSystemInterface.h"
+#include "ECS/Systems/LoadingScreenSystemInterface.h"
 #include "ECS/Systems/TattooMenuSystemInterface.h"
 #include "Game.h"
 #include "Gui/GameInterface.h"
@@ -311,9 +312,9 @@ bool TestbedGameStage::RequestJoinOnline()
 
 void TestbedGameStage::PlayLogoEffect()
 {
-	if (auto* game = Game::Instance(); game != nullptr)
+	if (Locator::loadingScreenSystem::has_value())
 	{
-		game->PlayLogoEffect();
+		Locator::loadingScreenSystem::value().PlayLogoEffect();
 	}
 }
 
