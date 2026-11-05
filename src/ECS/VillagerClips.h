@@ -11,11 +11,18 @@
 
 #include <cstdint>
 
+#include <functional>
 #include <optional>
 
+#include <glm/gtc/type_precision.hpp>
 #include <glm/vec3.hpp>
 
 #include "3D/AllMeshes.h"
+
+namespace openblack::lnd
+{
+struct LNDCell;
+}
 
 namespace openblack::ecs::components
 {
@@ -69,7 +76,10 @@ struct DanceMoveClip
 [[nodiscard]] bool ClipPlayed(const components::LivingAction& action, AnimId clip, uint32_t times = 1);
 /// What a villager's clip does when its dance group starts a move, by the clip it has and the turns since its state changed
 [[nodiscard]] DanceMoveClip OnDanceMove(const components::LivingAction& action, AnimId clip);
-/// Whether the land under a point is water, the shallow shore included
+/// Whether the land under a point is water, the shallow shore included. A point off the map, or on a cell with no
+/// land block, is on water. The function findCell gives the land cell, or null where there is no block.
+[[nodiscard]] bool IsWaterAt(glm::vec3 point, const std::function<const lnd::LNDCell*(glm::u16vec2)>& findCell);
+/// IsWaterAt on the island of the game. With no island, it is never water.
 [[nodiscard]] bool IsOnWater(glm::vec3 point);
 
 } // namespace openblack::ecs::villager_clips

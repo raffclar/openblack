@@ -12,11 +12,11 @@
 #include <chrono>
 
 #include <LNDFile.h>
-#include <glm/common.hpp>
 #include <glm/vec2.hpp>
 
 #include "3D/L3DAnim.h"
 #include "3D/LandIslandInterface.h"
+#include "3D/MapCoords.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "Locator.h"
@@ -59,12 +59,24 @@ villager_clips::DanceMoveClip villager_clips::OnDanceMove(const components::Livi
 	                   static_cast<uint32_t>(ClipMilliseconds(clip).value_or(0.0f)));
 }
 
+bool villager_clips::IsWaterAt(glm::vec3 point, const std::function<const lnd::LNDCell*(glm::u16vec2)>& findCell)
+{
+	// Off the map and where the land has no block, the game takes the ground as water
+	const auto cell = map_coords::CellOf(point);
+	if (!map_coords::InBounds(cell))
+	{
+		return true;
+	}
+	const auto* land = findCell(glm::u16vec2(cell));
+	return land == nullptr || land->properties.hasWater != 0;
+}
+
 bool villager_clips::IsOnWater(glm::vec3 point)
 {
-	if (!Locator::terrainSystem::has_value() || point.x < 0.0f || point.z < 0.0f)
+	if (!Locator::terrainSystem::has_value())
 	{
 		return false;
 	}
-	const auto* cell = Locator::terrainSystem::value().FindCell(glm::u16vec2(glm::floor(glm::vec2(point.x, point.z) / 10.0f)));
-	return cell != nullptr && cell->properties.hasWater != 0;
+	const auto& terrain = Locator::terrainSystem::value();
+	return IsWaterAt(point, [&terrain](glm::u16vec2 cell) { return terrain.FindCell(cell); });
 }

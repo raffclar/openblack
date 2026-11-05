@@ -85,6 +85,9 @@ public:
 	}
 	/// The sky at an hour of visual time: 0 at night, 1 at dusk and 2 by day, between them as it turns
 	[[nodiscard]] float SkyType(float visualHour) const;
+	/// The sky at an hour of visual time the other way round: 2 at night, 1 at dusk and 0 by day. The game calculates
+	/// each turn of the sky from this end, thus the value is not always 2 minus SkyType in the last bit
+	[[nodiscard]] float NightSkyType(float visualHour) const;
 	/// Whether the visual time is night, as the game judges it for its houses' windows
 	[[nodiscard]] bool IsVisualNight() const { return SkyType(_visualTime) < 0.8f; }
 

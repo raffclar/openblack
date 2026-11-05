@@ -206,6 +206,29 @@ float DayNightClock::SkyType(float visualHour) const
 	return 2.0f;
 }
 
+float DayNightClock::NightSkyType(float visualHour) const
+{
+	const float hour = visualHour > 12.0f ? 24.0f - visualHour : visualHour;
+	const auto& [nightFull, duskStart, duskEnd, dayFull] = _times;
+	if (hour < nightFull)
+	{
+		return 2.0f;
+	}
+	if (hour < duskStart)
+	{
+		return 2.0f - ((hour - nightFull) / (duskStart - nightFull));
+	}
+	if (hour < duskEnd)
+	{
+		return 1.0f;
+	}
+	if (hour < dayFull)
+	{
+		return 1.0f - ((hour - duskEnd) / (dayFull - duskEnd));
+	}
+	return 0.0f;
+}
+
 float DayNightClock::ScriptToVisual(float hour) const
 {
 	return MapHours(hour, k_ScriptTimes, _times);
