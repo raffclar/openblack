@@ -176,7 +176,13 @@ std::optional<fire::Material> MaterialOf(entt::entity object)
 	{
 		return std::nullopt;
 	}
-	const auto size = world_objects::SizeOf(object);
+	auto size = world_objects::SizeOf(object);
+	// A creature does not burn by its model's box. Its height comes from its shown size, and its radius and the radius of
+	// its fire come from the reach of its body.
+	if (registry.AllOf<Creature>(object))
+	{
+		size = {.radius = object_measures::TwoDRadius(registry, object), .height = object_measures::Height(registry, object)};
+	}
 	// A dead tree's fire reaches by a share of its height rather than by its width; a worship site's by a radius of its
 	// own
 	float fireRadius = registry.AllOf<DeadTree>(object) ? k_DeadTreeFireRadius * size.height : size.radius;

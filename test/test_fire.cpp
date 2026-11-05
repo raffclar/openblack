@@ -189,6 +189,32 @@ TEST(FireModel, SomethingNotBurningCoolsBySurfaceOverCapacityFasterInTheWetAndRa
 	EXPECT_NE(state.flags & k_JustExtinguished, 0);
 }
 
+TEST(FireModel, InWaterABigLightThingCoolsFarBelowTheAirAndStartsAtTheAirNextTurn)
+{
+	// A creature: its table capacity counts as 1, its height is 15 for each unit of size, its radius is its body's reach
+	const Material creature {.combustion = 140.0f, .capacity = 0.0f, .defence = 0.2f, .radius = 5.0f, .height = 15.0f};
+	const float area = 4.0f * 15.0f * 5.0f;
+	State state {.temperature = 300.0f, .previous = 300.0f, .charring = 0.5f};
+	(void)Step(state, creature, {.inWater = true, .life = 0.5f});
+	// Nothing holds the cooling at the air, so one turn in the water takes it far below
+	const float first = 300.0f - (300.0f + 10.0f - k_AmbientTemperature) * area * 0.1f * 50.0f;
+	EXPECT_FLOAT_EQ(state.temperature, first);
+	EXPECT_LT(state.temperature, -100000.0f);
+	EXPECT_NE(state.flags & k_JustExtinguished, 0);
+	// Still charred, the record stays. The next turn puts it back at the air, which is warmer than the turn before, so it
+	// does not cool.
+	state.previous = state.temperature;
+	EXPECT_FALSE(Step(state, creature, {.inWater = true, .life = 0.5f}).gone);
+	EXPECT_FLOAT_EQ(state.temperature, k_AmbientTemperature);
+	// The turn after, it cools from the air to far below it again
+	state.previous = state.temperature;
+	EXPECT_FALSE(Step(state, creature, {.inWater = true, .life = 0.5f}).gone);
+	EXPECT_FLOAT_EQ(state.temperature, k_AmbientTemperature - 10.0f * area * 0.1f * 50.0f);
+	// Clean, the record goes
+	state.charring = 0.0f;
+	EXPECT_TRUE(Step(state, creature, {.inWater = true, .life = 0.5f}).gone);
+}
+
 TEST(FireModel, ItCharsAsItsLifeRunsLowAndGoesOnceColdAndClean)
 {
 	const auto hut = Hut();
