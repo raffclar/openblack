@@ -278,11 +278,11 @@ bool Game::PlayFrameStep(game_frame::Step step, FrameState& frame)
 		break;
 	case Step::ScreenFade:
 		// The colour over the screen fades by the real time of the draw
-		if (_interface)
+		if (Locator::gameInterface::has_value())
 		{
 			const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
-			_interface->GetScreenFade().Update(static_cast<uint32_t>(Locator::time::value().GetFrameRealTime().count()),
-			                                   inTemple);
+			Locator::gameInterface::value().GetScreenFade().Update(
+			    static_cast<uint32_t>(Locator::time::value().GetFrameRealTime().count()), inTemple);
 		}
 		break;
 	case Step::CameraMouse:
@@ -624,7 +624,7 @@ void Game::UpdateLearningMarks(float milliseconds)
 
 void Game::PlaceLearningTexts()
 {
-	if (!_interface)
+	if (!Locator::gameInterface::has_value())
 	{
 		return;
 	}
@@ -641,12 +641,12 @@ void Game::PlaceLearningTexts()
 			    texts.push_back({.screen = *screen, .text = gui::ToUtf16(marker.text), .alpha = look.textAlpha});
 		    }
 	    });
-	_interface->SetLearningTexts(std::move(texts));
+	Locator::gameInterface::value().SetLearningTexts(std::move(texts));
 }
 
 void Game::PlaceScreenLabels()
 {
-	if (!_interface)
+	if (!Locator::gameInterface::has_value())
 	{
 		return;
 	}
@@ -678,7 +678,7 @@ void Game::PlaceScreenLabels()
 	{
 		numbers.push_back(std::move(each.number));
 	}
-	_interface->SetFloatingNumbers(std::move(numbers));
+	Locator::gameInterface::value().SetFloatingNumbers(std::move(numbers));
 
 	if (!Locator::windowing::has_value())
 	{
@@ -687,13 +687,13 @@ void Game::PlaceScreenLabels()
 	// Inside the temple the land's villagers aren't drawn, nor their labels
 	if (Locator::temple::has_value() && Locator::temple::value().Active())
 	{
-		_interface->SetVillagerLabels({});
+		Locator::gameInterface::value().SetVillagerLabels({});
 		return;
 	}
-	_interface->SetVillagerLabels(ecs::villager_label_source::Gather({
+	Locator::gameInterface::value().SetVillagerLabels(ecs::villager_label_source::Gather({
 	    .screen = Locator::windowing::value().GetSize(),
 	    .nameFade = _villagerNameFadeDrawn,
-	    .texts = &_interface->GetTexts(),
+	    .texts = &Locator::gameInterface::value().GetTexts(),
 	}));
 }
 
@@ -719,9 +719,9 @@ void Game::ShowBeliefGained()
 		return;
 	}
 	// The hand shows the belief gained at once, over anything else
-	if (_interface)
+	if (Locator::gameInterface::has_value())
 	{
-		_interface->GetToolTips().Force(gui::world_tooltip::k_GotBelief, *shown);
+		Locator::gameInterface::value().GetToolTips().Force(gui::world_tooltip::k_GotBelief, *shown);
 	}
 	// The number also floats up from the thing under the hand, or else from the point on the land under the hand
 	if (!Locator::pickingSystem::has_value() || !Locator::floatingNumberSystem::has_value())
@@ -818,7 +818,7 @@ void Game::PlayViewStep(game_turn::Step step, glm::vec3 cameraPosition)
 
 void Game::UpdatePauseText()
 {
-	if (!Locator::pauseTextSystem::has_value() || !_interface)
+	if (!Locator::pauseTextSystem::has_value() || !Locator::gameInterface::has_value())
 	{
 		return;
 	}
@@ -835,7 +835,7 @@ void Game::UpdatePauseText()
 	        .scriptHasSpeed = scriptHasSpeed,
 	        .editing = false,
 	        .videoPlaying = Locator::videoSystem::value().IsPlaying(),
-	        .boxWithBackground = _interface->IsBoxWithBackgroundActive(),
+	        .boxWithBackground = Locator::gameInterface::value().IsBoxWithBackgroundActive(),
 	    },
 	    static_cast<uint32_t>(clock.GetFrameRealTime().count()));
 }
@@ -883,15 +883,15 @@ void Game::UpdateInterfaceFrame(std::chrono::microseconds deltaTime)
 			Locator::helpProfileSystem::value().Report(help::profile::k_MouseMoved);
 		}
 	}
-	if (_interface)
+	if (Locator::gameInterface::has_value())
 	{
 		// The fighters' health and stamina while a fight is on, wanted afresh every frame whether or not the hand is out
 		const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
 		const bool scriptHasCamera =
 		    Locator::scriptControlSystem::has_value() && Locator::scriptControlSystem::value().GetCameraOwner() != 0;
-		_interface->SetFightPanel(creature_fight_hud::PanelAllowed(inTemple, scriptHasCamera)
-		                              ? Locator::creatureFightSystem::value().GetPanel()
-		                              : std::nullopt);
+		Locator::gameInterface::value().SetFightPanel(creature_fight_hud::PanelAllowed(inTemple, scriptHasCamera)
+		                                                  ? Locator::creatureFightSystem::value().GetPanel()
+		                                                  : std::nullopt);
 		// The player's own ping, with --show-ping in a network game (deviation 143)
 		std::optional<uint64_t> roundTrip = _demoRoundTrip;
 		if (!roundTrip.has_value() && Locator::config::value().showPing && Locator::networkGame::has_value() &&
@@ -900,8 +900,8 @@ void Game::UpdateInterfaceFrame(std::chrono::microseconds deltaTime)
 			const auto* session = Locator::networkGame::value().Session();
 			roundTrip = session != nullptr ? session->RoundTrip() : std::nullopt;
 		}
-		_interface->SetPingLine(gui::ping_display::Text(roundTrip));
-		_interface->Update(std::chrono::duration_cast<std::chrono::duration<float>>(deltaTime).count());
+		Locator::gameInterface::value().SetPingLine(gui::ping_display::Text(roundTrip));
+		Locator::gameInterface::value().Update(std::chrono::duration_cast<std::chrono::duration<float>>(deltaTime).count());
 		HandleInterfaceAction();
 		FollowPlaygroundTrip();
 		UpdateTattooMenu(std::chrono::duration<float, std::milli>(deltaTime).count());
@@ -994,7 +994,7 @@ void Game::UpdateAdvisors()
 
 void Game::UpdateSingAlong(bool inTemple)
 {
-	if (!_interface)
+	if (!Locator::gameInterface::has_value())
 	{
 		return;
 	}
@@ -1010,26 +1010,26 @@ void Game::UpdateSingAlong(bool inTemple)
 			word = script.GetLyrics().word;
 		}
 	}
-	_interface->SetSingAlong(word, help::sing_along::StepMilliseconds(inTemple,
-	                                                                  static_cast<int32_t>(clock.GetFrameRealTime().count()),
-	                                                                  static_cast<int32_t>(clock.GetFrameGameTime().count())));
+	Locator::gameInterface::value().SetSingAlong(
+	    word, help::sing_along::StepMilliseconds(inTemple, static_cast<int32_t>(clock.GetFrameRealTime().count()),
+	                                             static_cast<int32_t>(clock.GetFrameGameTime().count())));
 }
 
 bool Game::DialogueWordsDrawn() const
 {
-	return _interface && _interface->WereDialogueWordsDrawn();
+	return Locator::gameInterface::has_value() && Locator::gameInterface::value().WereDialogueWordsDrawn();
 }
 
 void Game::CloseMenuForCinema()
 {
-	if (_interface && _interface->GetMenu().IsOpen())
+	if (Locator::gameInterface::has_value() && Locator::gameInterface::value().GetMenu().IsOpen())
 	{
-		_interface->GetMenu().Close();
+		Locator::gameInterface::value().GetMenu().Close();
 	}
 	// The cinema bars close every box of the game, also the land information box
-	if (_interface && _interface->GetLandInfoBox().IsActive())
+	if (Locator::gameInterface::has_value() && Locator::gameInterface::value().GetLandInfoBox().IsActive())
 	{
-		_interface->GetLandInfoBox().Close();
+		Locator::gameInterface::value().GetLandInfoBox().Close();
 	}
 }
 

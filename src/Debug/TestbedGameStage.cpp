@@ -34,13 +34,12 @@ namespace openblack::testbed_scenarios
 
 bool TestbedGameStage::HasInterface() const
 {
-	auto* game = Game::Instance();
-	return game != nullptr && game->GetInterface() != nullptr;
+	return Locator::gameInterface::has_value();
 }
 
 const gui::TextDatabase* TestbedGameStage::GetTexts() const
 {
-	return HasInterface() ? &Game::Instance()->GetInterface()->GetTexts() : nullptr;
+	return HasInterface() ? &Locator::gameInterface::value().GetTexts() : nullptr;
 }
 
 std::string TestbedGameStage::OpenTattooMenu()
@@ -50,7 +49,7 @@ std::string TestbedGameStage::OpenTattooMenu()
 		return "failed: no menu";
 	}
 	// The menu opens on its Players page, and the tattoo editor over it, as the Edit Tattoo button of the page opens it
-	auto& interface = *Game::Instance()->GetInterface();
+	auto& interface = Locator::gameInterface::value();
 	interface.OpenMenu();
 	interface.GetMenu().ShowPage(gui::GameMenu::Page::Players);
 	Locator::tattooMenuSystem::value().Open();
@@ -64,7 +63,7 @@ std::string TestbedGameStage::TattooEditorAsNetworkGame(bool asNetworkGame)
 	{
 		return "failed: no interface";
 	}
-	Game::Instance()->GetInterface()->SetTattooEditorAsNetworkGame(asNetworkGame);
+	Locator::gameInterface::value().SetTattooEditorAsNetworkGame(asNetworkGame);
 	return asNetworkGame ? "OK warns about a change first" : "OK closes the editor";
 }
 
@@ -74,7 +73,7 @@ std::string TestbedGameStage::OpenControlsBox(size_t row)
 	{
 		return "failed: no menu";
 	}
-	auto& interface = *Game::Instance()->GetInterface();
+	auto& interface = Locator::gameInterface::value();
 	interface.OpenMenu();
 	auto& menu = interface.GetMenu();
 	menu.ShowPage(gui::GameMenu::Page::Controls);
@@ -95,14 +94,14 @@ std::string TestbedGameStage::OpenControlsBox(size_t row)
 
 void TestbedGameStage::OpenChat(std::u16string_view line)
 {
-	auto& controls = Game::Instance()->GetInterface()->GetChatControls();
+	auto& controls = Locator::gameInterface::value().GetChatControls();
 	controls.Open();
 	controls.TextInput(std::u16string(line));
 }
 
 std::string TestbedGameStage::OpenChatWithFriends()
 {
-	auto& controls = Game::Instance()->GetInterface()->GetChatControls();
+	auto& controls = Locator::gameInterface::value().GetChatControls();
 	// Carol was seen now and is online. Dave was never seen and is not online. Eve is a person of the staff.
 	constexpr chat::people::UserId k_Carol = 301;
 	constexpr chat::people::UserId k_Dave = 302;
@@ -174,7 +173,7 @@ std::string TestbedGameStage::OpenMenuPage(size_t page, bool noSound)
 	{
 		return "failed: no menu";
 	}
-	auto& interface = *Game::Instance()->GetInterface();
+	auto& interface = Locator::gameInterface::value();
 	interface.OpenMenu();
 	auto& menu = interface.GetMenu();
 	if (noSound)
@@ -187,11 +186,11 @@ std::string TestbedGameStage::OpenMenuPage(size_t page, bool noSound)
 
 std::string TestbedGameStage::PressMenuKey(size_t key, bool shift)
 {
-	if (!HasInterface() || !Game::Instance()->GetInterface()->GetMenu().IsOpen())
+	if (!HasInterface() || !Locator::gameInterface::value().GetMenu().IsOpen())
 	{
 		return "failed: the menu is not open";
 	}
-	auto& menu = Game::Instance()->GetInterface()->GetMenu();
+	auto& menu = Locator::gameInterface::value().GetMenu();
 	const auto action = static_cast<int>(key) == SDLK_ESCAPE ? menu.Escape() : menu.KeyDown(static_cast<int>(key), shift);
 	if (action == gui::GameMenu::Action::Continue)
 	{
@@ -202,7 +201,7 @@ std::string TestbedGameStage::PressMenuKey(size_t key, bool shift)
 
 std::string TestbedGameStage::OpenSkirmishMenu(bool askLeave)
 {
-	auto& interface = *Game::Instance()->GetInterface();
+	auto& interface = Locator::gameInterface::value();
 	auto& menu = interface.GetMenu();
 	menu.SetSkirmish(true);
 	interface.OpenMenu();
@@ -231,7 +230,7 @@ std::string TestbedGameStage::OpenSkirmishBox(bool selectSecond)
 	const bool opened = game->OpenSkirmishBoxOverGame();
 	if (opened && selectSecond)
 	{
-		game->GetInterface()->GetSkirmishBox().Select(1);
+		Locator::gameInterface::value().GetSkirmishBox().Select(1);
 	}
 	return opened ? fmt::format("the box shows {} lands", game->GetSkirmishLands().size()) : "failed";
 }
@@ -241,8 +240,8 @@ std::string TestbedGameStage::OpenEndBox(size_t value)
 	auto* game = Game::Instance();
 	if (value == 3)
 	{
-		game->GetInterface()->GetMenu().SetNetworkGame(true);
-		game->GetInterface()->OpenMenu();
+		Locator::gameInterface::value().GetMenu().SetNetworkGame(true);
+		Locator::gameInterface::value().OpenMenu();
 		return "the main menu of a network game opens";
 	}
 	if (value == 0)
@@ -252,27 +251,27 @@ std::string TestbedGameStage::OpenEndBox(size_t value)
 	}
 	if (value == k_EndBoxPlayerLeft)
 	{
-		game->GetInterface()->ShowPlayerLeft(u"Carol");
+		Locator::gameInterface::value().ShowPlayerLeft(u"Carol");
 		return "the box that tells that Carol left opens";
 	}
 	if (value == k_EndBoxConnectionLost)
 	{
-		game->GetInterface()->ShowConnectionLost();
+		Locator::gameInterface::value().ShowConnectionLost();
 		return "the box that tells that the connection is lost opens";
 	}
 	if (value >= 4)
 	{
 		const auto notches = static_cast<int>(value) - 3;
-		const bool moved = game->GetInterface()->GetEndGameBox().ScrollGodWindow(notches);
+		const bool moved = Locator::gameInterface::value().GetEndGameBox().ScrollGodWindow(notches);
 		return fmt::format("the window of gods {} {} notches on", moved ? "scrolls" : "does not scroll", notches);
 	}
-	const bool opened = game->GetInterface()->GetEndGameBox().OpenTab(value);
+	const bool opened = Locator::gameInterface::value().GetEndGameBox().OpenTab(value);
 	return fmt::format("tab {} {}", value, opened ? "opens its box" : "does not open");
 }
 
 std::string TestbedGameStage::ShowCustomMusicControls(size_t value)
 {
-	auto& controls = Game::Instance()->GetInterface()->GetMusicControls();
+	auto& controls = Locator::gameInterface::value().GetMusicControls();
 	controls.ShowControls(value >= 1, value >= 2);
 	return fmt::format("buttons {}, play list {}, the controls {}", controls.GetPanel().controlsShown ? "shown" : "hidden",
 	                   controls.GetPanel().playListShown ? "shown" : "hidden", controls.IsActive() ? "show" : "hide now");

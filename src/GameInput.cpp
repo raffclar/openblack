@@ -821,7 +821,8 @@ bool Game::UpdateDebugGui()
 		Locator::debugGui::value().SetInputLock(Locator::gameActionSystem::value().IsPlayerInputBlocked(),
 		                                        Locator::gameActionSystem::value().GetScriptedPointer().has_value());
 		// The debug menu bar comes up with the game's menu, or always without it
-		Locator::debugGui::value().SetMenuBarVisible(!_interface || _interface->GetMenu().IsOpen());
+		Locator::debugGui::value().SetMenuBarVisible(!Locator::gameInterface::has_value() ||
+		                                             Locator::gameInterface::value().GetMenu().IsOpen());
 		if (Locator::debugGui::value().Loop())
 		{
 			return false; // Quit event
@@ -938,7 +939,7 @@ void Game::HandleEscapeInPlay(uint16_t keyModifiers)
 		// The game keeps the help record of the player when Escape opens the menu
 		SaveHelpRecord();
 		TellMenuTheGame();
-		_interface->OpenMenu();
+		Locator::gameInterface::value().OpenMenu();
 		// The menu reads the profile's own pictures again as it opens
 		ReadTattooPictures();
 		HandleInterfaceAction();
@@ -946,7 +947,7 @@ void Game::HandleEscapeInPlay(uint16_t keyModifiers)
 	case escape_key::Outcome::AskLeavePlayground:
 		// The game pauses while the question is on the screen
 		Locator::time::value().SetPlayerPause(true);
-		_interface->AskTripQuestion(playground_trip::k_LeaveQuestion);
+		Locator::gameInterface::value().AskTripQuestion(playground_trip::k_LeaveQuestion);
 		_tripQuestion = playground_trip::Question::Leave;
 		break;
 	case escape_key::Outcome::EndPlaygroundLesson:
@@ -969,7 +970,7 @@ void Game::HandleTripKey()
 	    .networkGame = InNetworkGame(),
 	    .inTemple = Locator::temple::has_value() && Locator::temple::value().Active(),
 	    .land = context.mapScriptGlobals.landNumber,
-	    .boxUp = _interface->BoxRefusesTrip(),
+	    .boxUp = Locator::gameInterface::value().BoxRefusesTrip(),
 	    .scriptHoldsCinemaBars = director.IsWideScreenOn() && director.GetWideScreenOwner() != 0,
 	};
 	if (!playground_trip::MayAskToGo(situation))
@@ -979,7 +980,7 @@ void Game::HandleTripKey()
 	}
 	// The game pauses while the question is on the screen
 	Locator::time::value().SetPlayerPause(true);
-	_interface->AskTripQuestion(playground_trip::k_GoQuestion);
+	Locator::gameInterface::value().AskTripQuestion(playground_trip::k_GoQuestion);
 	_tripQuestion = playground_trip::Question::Go;
 }
 
@@ -1010,9 +1011,9 @@ void Game::LoadProfileKeys()
 	{
 		Locator::gameActionSystem::value().SetKeyBindings(bindings);
 	}
-	if (_interface)
+	if (Locator::gameInterface::has_value())
 	{
-		_interface->GetMenu().SetControls(bindings);
+		Locator::gameInterface::value().GetMenu().SetControls(bindings);
 	}
 }
 

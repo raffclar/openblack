@@ -113,9 +113,9 @@ std::string WhyMenuMissesClicks(gui::GameInterface& interface)
 std::vector<WindowInfo> GameGui::Windows() const
 {
 	std::vector<WindowInfo> windows;
-	if (auto* game = Game::Instance(); game != nullptr && game->GetInterface() != nullptr)
+	if (Locator::gameInterface::has_value())
 	{
-		const auto& menu = game->GetInterface()->GetMenu();
+		const auto& menu = Locator::gameInterface::value().GetMenu();
 		WindowInfo info {.name = std::string(k_Menu),
 		                 .kind = "game",
 		                 .open = menu.IsOpen(),
@@ -129,7 +129,7 @@ std::vector<WindowInfo> GameGui::Windows() const
 		windows.push_back(std::move(info));
 
 		// The start-of-game question: OK and its answers' radio buttons, and the answer picked
-		const auto& skipBox = game->GetInterface()->GetSkipBox();
+		const auto& skipBox = Locator::gameInterface::value().GetSkipBox();
 		WindowInfo skip {.name = std::string(k_SkipBox), .kind = "game", .open = skipBox.IsActive()};
 		for (const auto& control : SkipBoxControls(skipBox))
 		{
@@ -138,7 +138,7 @@ std::vector<WindowInfo> GameGui::Windows() const
 		skip.selected = SkipBoxPicked(skipBox);
 		windows.push_back(std::move(skip));
 
-		const auto& tattoo = game->GetInterface()->GetTattooEditor();
+		const auto& tattoo = Locator::gameInterface::value().GetTattooEditor();
 		WindowInfo editor {.name = std::string(k_TattooEditor), .kind = "game", .open = tattoo.IsOpen()};
 		for (const auto& control : DialogControls(tattoo.GetNamedControls()))
 		{
@@ -147,7 +147,7 @@ std::vector<WindowInfo> GameGui::Windows() const
 		windows.push_back(std::move(editor));
 
 		// The custom music controls at the top right of the screen, open while they show
-		const auto& music = game->GetInterface()->GetMusicControls();
+		const auto& music = Locator::gameInterface::value().GetMusicControls();
 		WindowInfo player {.name = std::string(k_MusicPlayer), .kind = "game", .open = music.IsActive()};
 		for (const auto& control : DialogControls(music.GetNamedControls()))
 		{
@@ -156,7 +156,7 @@ std::vector<WindowInfo> GameGui::Windows() const
 		windows.push_back(std::move(player));
 
 		// The end box of a skirmish or a network game: its title, and its controls
-		const auto& endBox = game->GetInterface()->GetEndGameBox();
+		const auto& endBox = Locator::gameInterface::value().GetEndGameBox();
 		WindowInfo end {.name = std::string(k_EndBox), .kind = "game", .open = endBox.IsOpen()};
 		end.page = endBox.ShowsStatistics()   ? "statistics"
 		           : endBox.ShowsConditions() ? "conditions"
@@ -167,7 +167,7 @@ std::vector<WindowInfo> GameGui::Windows() const
 		}
 		windows.push_back(std::move(end));
 		// The skirmish box: its arrows and its lands, and the land picked
-		const auto& skirmish = game->GetInterface()->GetSkirmishBox();
+		const auto& skirmish = Locator::gameInterface::value().GetSkirmishBox();
 		WindowInfo skirmishInfo {.name = std::string(k_SkirmishBox), .kind = "game", .open = skirmish.IsActive()};
 		for (const auto& control : DialogControls(skirmish.GetNamedControls()))
 		{
@@ -183,7 +183,7 @@ std::vector<WindowInfo> GameGui::Windows() const
 		}
 		windows.push_back(std::move(skirmishInfo));
 		// The land information box: its title as the page, its arrows, and the lines of its list
-		const auto& landInfo = game->GetInterface()->GetLandInfoBox();
+		const auto& landInfo = Locator::gameInterface::value().GetLandInfoBox();
 		WindowInfo landInfoWindow {.name = std::string(k_LandInfoBox), .kind = "game", .open = landInfo.IsActive()};
 		landInfoWindow.page = gui::ToUtf8(landInfo.GetTitle().text);
 		for (const auto& control : DialogControls(landInfo.GetNamedControls()))
@@ -196,7 +196,7 @@ std::vector<WindowInfo> GameGui::Windows() const
 		}
 		windows.push_back(std::move(landInfoWindow));
 		// The incoming message at the bottom left of the screen, open while its button shows
-		const auto& incoming = game->GetInterface()->GetIncomingMessages();
+		const auto& incoming = Locator::gameInterface::value().GetIncomingMessages();
 		WindowInfo message {.name = std::string(k_IncomingMessage), .kind = "game", .open = incoming.IsActive()};
 		if (incoming.IsActive())
 		{
@@ -206,7 +206,7 @@ std::vector<WindowInfo> GameGui::Windows() const
 
 		// The chat at the top right of the screen: open while its controls show. The page tells whether the line is
 		// open, and the lines are the last lines that came to this computer.
-		const auto& chatControls = game->GetInterface()->GetChatControls();
+		const auto& chatControls = Locator::gameInterface::value().GetChatControls();
 		WindowInfo chatWindow {.name = std::string(k_Chat), .kind = "game", .open = chatControls.IsActive()};
 		chatWindow.page = chatControls.IsQuickChatOpen() ? "quick chat" : chatControls.IsOpen() ? "open" : "shut";
 		chatWindow.selected = gui::ToUtf8(chatControls.GetLine());
@@ -229,7 +229,7 @@ std::vector<WindowInfo> GameGui::Windows() const
 		windows.push_back(std::move(chatWindow));
 
 		// The multiplayer front end over the temple's future room: its box, and the controls of the box or its message
-		const auto& boxes = game->GetInterface()->GetMultiplayerBoxes();
+		const auto& boxes = Locator::gameInterface::value().GetMultiplayerBoxes();
 		WindowInfo multiplayer {.name = std::string(k_Multiplayer), .kind = "game", .open = boxes.IsActive()};
 		if (const auto* frontEnd = boxes.GetFrontEnd(); frontEnd != nullptr)
 		{
@@ -272,15 +272,15 @@ std::string GameGui::Open(std::string_view window)
 	if (Lower(window) == k_Menu)
 	{
 		auto* game = Game::Instance();
-		if (game == nullptr || game->GetInterface() == nullptr)
+		if (game == nullptr || !Locator::gameInterface::has_value())
 		{
 			return "the game's menu isn't made yet";
 		}
 		// Opened as the player opens it, with the Escape key. When the game does not open the menu on Escape now, the
 		// inspector sends no key and gives the reason.
-		if (!game->GetInterface()->GetMenu().IsOpen())
+		if (!Locator::gameInterface::value().GetMenu().IsOpen())
 		{
-			if (auto why = WhyEscapeKeepsMenuShut(*game, *game->GetInterface()); !why.empty())
+			if (auto why = WhyEscapeKeepsMenuShut(*game, Locator::gameInterface::value()); !why.empty())
 			{
 				return "the game does not open its menu now: " + why;
 			}
@@ -297,8 +297,7 @@ std::string GameGui::Close(std::string_view window)
 {
 	if (Lower(window) == k_Menu)
 	{
-		auto* game = Game::Instance();
-		if (game != nullptr && game->GetInterface() != nullptr && game->GetInterface()->GetMenu().IsOpen())
+		if (Locator::gameInterface::has_value() && Locator::gameInterface::value().GetMenu().IsOpen())
 		{
 			const std::array escape {InputEvent {.kind = InputEvent::Kind::KeyDown, .key = "Escape"},
 			                         InputEvent {.kind = InputEvent::Kind::KeyUp, .key = "Escape"}};
@@ -309,12 +308,11 @@ std::string GameGui::Close(std::string_view window)
 	if (Lower(window) == k_SkipBox)
 	{
 		// The player closes the question only by answering it: OK is pressed, as a click on it, keeping the answer picked
-		auto* game = Game::Instance();
-		if (game == nullptr || game->GetInterface() == nullptr || !game->GetInterface()->GetSkipBox().IsActive())
+		if (!Locator::gameInterface::has_value() || !Locator::gameInterface::value().GetSkipBox().IsActive())
 		{
 			return {};
 		}
-		const auto& interface = *game->GetInterface();
+		const auto& interface = Locator::gameInterface::value();
 		const auto ok = SkipBoxOk(interface.GetSkipBox());
 		if (!ok.has_value())
 		{
@@ -335,9 +333,9 @@ OverlayInfo GameGui::Overlays() const
 	if (auto* game = Game::Instance(); game != nullptr)
 	{
 		info.nameFade = game->GetVillagerNameFade();
-		if (const auto* face = game->GetInterface(); face != nullptr)
+		if (Locator::gameInterface::has_value())
 		{
-			info.labels = face->GetVillagerLabels().size();
+			info.labels = Locator::gameInterface::value().GetVillagerLabels().size();
 		}
 	}
 	return info;
@@ -348,12 +346,11 @@ std::string GameGui::Press(std::string_view window, const std::vector<ButtonPath
 	const auto lower = Lower(window);
 	if (lower == k_IncomingMessage)
 	{
-		auto* game = Game::Instance();
-		if (game == nullptr || game->GetInterface() == nullptr)
+		if (!Locator::gameInterface::has_value())
 		{
 			return "the game's dialogs aren't made yet";
 		}
-		auto& interface = *game->GetInterface();
+		auto& interface = Locator::gameInterface::value();
 		if (!interface.GetIncomingMessages().IsActive())
 		{
 			return "no incoming message shows now (the list is empty, or a dialog, the temple, a video or a cut scene "
@@ -371,12 +368,11 @@ std::string GameGui::Press(std::string_view window, const std::vector<ButtonPath
 	}
 	if (lower == k_Chat)
 	{
-		auto* game = Game::Instance();
-		if (game == nullptr || game->GetInterface() == nullptr)
+		if (!Locator::gameInterface::has_value())
 		{
 			return "the game's dialogs aren't made yet";
 		}
-		auto& interface = *game->GetInterface();
+		auto& interface = Locator::gameInterface::value();
 		if (!interface.GetChatControls().IsActive())
 		{
 			return "the chat doesn't show now (a game of one player with the chat shut, a dialog, a video or the "
@@ -393,12 +389,11 @@ std::string GameGui::Press(std::string_view window, const std::vector<ButtonPath
 	}
 	if (lower == k_MusicPlayer)
 	{
-		auto* game = Game::Instance();
-		if (game == nullptr || game->GetInterface() == nullptr)
+		if (!Locator::gameInterface::has_value())
 		{
 			return "the game's dialogs aren't made yet";
 		}
-		auto& interface = *game->GetInterface();
+		auto& interface = Locator::gameInterface::value();
 		if (!interface.GetMusicControls().IsActive())
 		{
 			return "the custom music controls don't show now (a dialog, the temple, a video or a cut scene hides them)";
@@ -414,12 +409,11 @@ std::string GameGui::Press(std::string_view window, const std::vector<ButtonPath
 	}
 	if (lower == k_EndBox)
 	{
-		auto* game = Game::Instance();
-		if (game == nullptr || game->GetInterface() == nullptr || !game->GetInterface()->GetEndGameBox().IsOpen())
+		if (!Locator::gameInterface::has_value() || !Locator::gameInterface::value().GetEndGameBox().IsOpen())
 		{
 			return "the end box isn't open: it opens when a skirmish or a network game ends for this player";
 		}
-		const auto controls = DialogControls(game->GetInterface()->GetEndGameBox().GetNamedControls());
+		const auto controls = DialogControls(Locator::gameInterface::value().GetEndGameBox().GetNamedControls());
 		const auto found = FindDialogControl(controls, path);
 		if (const auto* why = std::get_if<std::string>(&found); why != nullptr)
 		{
@@ -429,12 +423,11 @@ std::string GameGui::Press(std::string_view window, const std::vector<ButtonPath
 	}
 	if (lower == k_SkirmishBox)
 	{
-		auto* game = Game::Instance();
-		if (game == nullptr || game->GetInterface() == nullptr || !game->GetInterface()->GetSkirmishBox().IsActive())
+		if (!Locator::gameInterface::has_value() || !Locator::gameInterface::value().GetSkirmishBox().IsActive())
 		{
 			return "the skirmish box isn't open: Start Skirmish Game of the menu opens it";
 		}
-		const auto controls = DialogControls(game->GetInterface()->GetSkirmishBox().GetNamedControls());
+		const auto controls = DialogControls(Locator::gameInterface::value().GetSkirmishBox().GetNamedControls());
 		const auto found = FindDialogControl(controls, path);
 		if (const auto* why = std::get_if<std::string>(&found); why != nullptr)
 		{
@@ -444,12 +437,11 @@ std::string GameGui::Press(std::string_view window, const std::vector<ButtonPath
 	}
 	if (lower == k_LandInfoBox)
 	{
-		auto* game = Game::Instance();
-		if (game == nullptr || game->GetInterface() == nullptr || !game->GetInterface()->GetLandInfoBox().IsActive())
+		if (!Locator::gameInterface::has_value() || !Locator::gameInterface::value().GetLandInfoBox().IsActive())
 		{
 			return "the land information box isn't open: the script of a playground land opens it as the land loads";
 		}
-		const auto controls = DialogControls(game->GetInterface()->GetLandInfoBox().GetNamedControls());
+		const auto controls = DialogControls(Locator::gameInterface::value().GetLandInfoBox().GetNamedControls());
 		const auto found = FindDialogControl(controls, path);
 		if (const auto* why = std::get_if<std::string>(&found); why != nullptr)
 		{
@@ -459,12 +451,11 @@ std::string GameGui::Press(std::string_view window, const std::vector<ButtonPath
 	}
 	if (lower == k_Multiplayer)
 	{
-		auto* game = Game::Instance();
-		if (game == nullptr || game->GetInterface() == nullptr || !game->GetInterface()->GetMultiplayerBoxes().IsActive())
+		if (!Locator::gameInterface::has_value() || !Locator::gameInterface::value().GetMultiplayerBoxes().IsActive())
 		{
 			return "the multiplayer front end isn't open: Join Online Game opens it";
 		}
-		const auto controls = DialogControls(game->GetInterface()->GetMultiplayerBoxes().GetNamedControls());
+		const auto controls = DialogControls(Locator::gameInterface::value().GetMultiplayerBoxes().GetNamedControls());
 		const auto found = FindDialogControl(controls, path);
 		if (const auto* why = std::get_if<std::string>(&found); why != nullptr)
 		{
@@ -474,12 +465,11 @@ std::string GameGui::Press(std::string_view window, const std::vector<ButtonPath
 	}
 	if (lower == k_Menu || lower == k_SkipBox || lower == k_TattooEditor)
 	{
-		auto* game = Game::Instance();
-		if (game == nullptr || game->GetInterface() == nullptr)
+		if (!Locator::gameInterface::has_value())
 		{
 			return "the game's dialogs aren't made yet";
 		}
-		auto& interface = *game->GetInterface();
+		auto& interface = Locator::gameInterface::value();
 		std::vector<DialogControl> controls;
 		std::string where;
 		if (lower == k_Menu)

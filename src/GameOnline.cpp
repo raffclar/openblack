@@ -145,10 +145,10 @@ void Game::UpdateOnline()
 		auto& network = Locator::networkGame::value();
 		network.Update();
 		const auto* session = network.Session();
-		if (_interface)
+		if (Locator::gameInterface::has_value())
 		{
 			// The words "Resynchronising..." show while the world resynchronises (user decision MI-4)
-			_interface->ShowResync(session != nullptr && network.InGame() && session->ShowsResync());
+			Locator::gameInterface::value().ShowResync(session != nullptr && network.InGame() && session->ShowsResync());
 			// After the last try the game asks whether the player plays on, as the game asks when the checksums differ
 			// A run of the tools asks nothing: the game stops as its network game ends
 			const bool toolRun = Locator::simulation::value().GetSettings().untilTurn.has_value();
@@ -156,9 +156,9 @@ void Game::UpdateOnline()
 			    !_outOfSyncAsked && !toolRun)
 			{
 				_outOfSyncAsked = true;
-				_interface->AskOutOfSync();
+				Locator::gameInterface::value().AskOutOfSync();
 			}
-			if (const auto answer = _interface->TakeOutOfSyncAnswer(); answer.has_value())
+			if (const auto answer = Locator::gameInterface::value().TakeOutOfSyncAnswer(); answer.has_value())
 			{
 				if (*answer)
 				{
@@ -178,14 +178,14 @@ void Game::UpdateOnline()
 			        .toolRun = toolRun,
 			    }))
 			{
-				_interface->ShowConnectionLost();
+				Locator::gameInterface::value().ShowConnectionLost();
 				SPDLOG_LOGGER_INFO(spdlog::get("game"),
 				                   "The connection to the network game is lost ({}): the box tells the player",
 				                   online::EndName(session->GetEnd()));
 			}
 			// The OK goes back to the network front end. A join from the command line has no front end: the game stops.
 			// A box with no lost network session (a testbed scenario) only closes.
-			if (_interface->TakeConnectionLostOk() && _connectionLost.Told())
+			if (Locator::gameInterface::value().TakeConnectionLostOk() && _connectionLost.Told())
 			{
 				SPDLOG_LOGGER_INFO(spdlog::get("game"), "The player closed the box of the lost connection");
 				if (_joinedFromCommandLine)
@@ -269,7 +269,7 @@ std::unique_ptr<gui::MultiplayerFrontEnd> Game::MakeMultiplayerFrontEnd()
 
 void Game::AnswerJoinOnline()
 {
-	if (!_joinOnlineAsked || !_interface)
+	if (!_joinOnlineAsked || !Locator::gameInterface::has_value())
 	{
 		return;
 	}
@@ -277,12 +277,14 @@ void Game::AnswerJoinOnline()
 	const bool networkGame = _networkLandPending || Locator::time::value().IsNetworkGame() ||
 	                         (Locator::networkGame::has_value() && Locator::networkGame::value().InGame());
 	const auto decision = join_online_entry::Decide({
-	    .frontEndOpen = _interface->GetMultiplayerBoxes().IsActive(),
+	    .frontEndOpen = Locator::gameInterface::value().GetMultiplayerBoxes().IsActive(),
 	    .networkGame = networkGame,
-	    .boxToAnswer = _interface->GetNewPlayerBox().IsActive() || _interface->GetSaveGameBoxes().IsActive() ||
-	                   _interface->GetTattooEditor().IsOpen() || _gameEnding.has_value() || _gameEndAsked.has_value(),
+	    .boxToAnswer = Locator::gameInterface::value().GetNewPlayerBox().IsActive() ||
+	                   Locator::gameInterface::value().GetSaveGameBoxes().IsActive() ||
+	                   Locator::gameInterface::value().GetTattooEditor().IsOpen() || _gameEnding.has_value() ||
+	                   _gameEndAsked.has_value(),
 	    .scriptHoldsCinemaBars = director.IsWideScreenOn() && director.GetWideScreenOwner() != 0,
-	    .startQuestionOpen = _interface->GetSkipBox().IsActive(),
+	    .startQuestionOpen = Locator::gameInterface::value().GetSkipBox().IsActive(),
 	});
 	switch (decision.outcome)
 	{
@@ -300,8 +302,9 @@ void Game::AnswerJoinOnline()
 	std::optional<bool> question;
 	if (decision.askQuestionAfter)
 	{
-		const bool hasCreature = _interface->GetSkipBox().IsOffered(new_game_choice::Choice::KeepOldCreature);
-		if (_interface->WithdrawSkipBox())
+		const bool hasCreature =
+		    Locator::gameInterface::value().GetSkipBox().IsOffered(new_game_choice::Choice::KeepOldCreature);
+		if (Locator::gameInterface::value().WithdrawSkipBox())
 		{
 			question = hasCreature;
 		}
@@ -311,7 +314,7 @@ void Game::AnswerJoinOnline()
 		SPDLOG_LOGGER_WARN(spdlog::get("game"), "The multiplayer front end needs the temple and the interface");
 		if (question.has_value())
 		{
-			_interface->ShowSkipBox(*question);
+			Locator::gameInterface::value().ShowSkipBox(*question);
 		}
 		return;
 	}
@@ -337,9 +340,9 @@ bool Game::OpenFrontEndInPlaceOfMenu()
 	SPDLOG_LOGGER_WARN(spdlog::get("game"), "The multiplayer front end needs the temple and the interface");
 	// The land's start-of-game question waited for the front end, which did not open
 	if (const auto hasCreature = std::exchange(_startQuestionAfterFrontEnd, std::nullopt);
-	    hasCreature.has_value() && _interface)
+	    hasCreature.has_value() && Locator::gameInterface::has_value())
 	{
-		_interface->ShowSkipBox(*hasCreature);
+		Locator::gameInterface::value().ShowSkipBox(*hasCreature);
 	}
 	return false;
 }
@@ -364,13 +367,13 @@ void Game::StartAfterNetworkGame()
 
 void Game::AskToLeaveNetworkGame()
 {
-	if (!_interface)
+	if (!Locator::gameInterface::has_value())
 	{
 		return;
 	}
 	// The end box asks the question to leave, in place of the menu
 	const auto box = end_game_box::AskToLeave(_endGameBoxState);
-	const auto& texts = _interface->GetTexts();
+	const auto& texts = Locator::gameInterface::value().GetTexts();
 	const auto title = end_game_box::Title(
 	    box.kind, false, {},
 	    {.leave = texts.Get("HELP_TEXT_DIALOG_AREYOUSUREQUIT"), .lost = {}, .won = {}, .gameOver = {}, .winnerFormat = {}});
@@ -379,7 +382,7 @@ void Game::AskToLeaveNetworkGame()
 	const bool networkGame = Locator::time::has_value() && Locator::time::value().IsNetworkGame();
 	const auto colour =
 	    end_game_box::LooksOn(local, networkGame) ? glm::vec4(0.0f) : gui::statistics_box::PlayerColour(local, landNumber);
-	_interface->OpenEndGameBox({.box = box, .title = title, .colour = colour});
+	Locator::gameInterface::value().OpenEndGameBox({.box = box, .title = title, .colour = colour});
 	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The end box asks the question to leave the network game");
 }
 
@@ -393,9 +396,9 @@ void Game::ExitOnlineGame()
 		{
 			if (god == local && standing.out)
 			{
-				if (_interface)
+				if (Locator::gameInterface::has_value())
 				{
-					_interface->GetMenu().Close();
+					Locator::gameInterface::value().GetMenu().Close();
 				}
 				LeaveNetworkGame();
 				return;
@@ -459,10 +462,10 @@ void Game::LeaveAsAPlayerDoes()
 	// Escape opens the menu, Exit Online Game asks the question to leave, and Leave Game leaves
 	SPDLOG_LOGGER_INFO(spdlog::get("game"), "Tests: the player leaves the network game at turn {}",
 	                   Locator::time::value().GetTurn());
-	auto& menu = _interface->GetMenu();
+	auto& menu = Locator::gameInterface::value().GetMenu();
 	TellMenuTheGame();
-	_interface->OpenMenu();
-	const auto& texts = _interface->GetTexts();
+	Locator::gameInterface::value().OpenMenu();
+	const auto& texts = Locator::gameInterface::value().GetTexts();
 	if (const auto exit = centreOf(menu.GetNamedControls(), texts.Get("HELP_TEXT_FRONT_END_03")); exit.has_value())
 	{
 		menu.MouseDown(*exit);
@@ -471,7 +474,7 @@ void Game::LeaveAsAPlayerDoes()
 			ExitOnlineGame();
 		}
 	}
-	auto& endBox = _interface->GetEndGameBox();
+	auto& endBox = Locator::gameInterface::value().GetEndGameBox();
 	if (const auto leave = centreOf(endBox.GetNamedControls(), texts.Get("HELP_TEXT_DIALOG_LEAVE_GAME")); leave.has_value())
 	{
 		endBox.MouseDown(*leave);
@@ -481,7 +484,7 @@ void Game::LeaveAsAPlayerDoes()
 
 void Game::TellLeaves()
 {
-	if (!_interface || !Locator::networkGame::has_value())
+	if (!Locator::gameInterface::has_value() || !Locator::networkGame::has_value())
 	{
 		return;
 	}
@@ -527,7 +530,7 @@ void Game::TellLeaves()
 		}
 		if (notice.box)
 		{
-			_interface->ShowPlayerLeft(gui::ToUtf16(name));
+			Locator::gameInterface::value().ShowPlayerLeft(gui::ToUtf16(name));
 		}
 		SPDLOG_LOGGER_INFO(spdlog::get("game"), "{} left the network game{}", name,
 		                   notice.box ? ": the box tells the players" : "");
@@ -536,18 +539,18 @@ void Game::TellLeaves()
 
 bool Game::OpenMultiplayerFrontEnd(std::unique_ptr<gui::MultiplayerFrontEnd> frontEnd)
 {
-	if (!_interface || !Locator::temple::has_value() || frontEnd == nullptr)
+	if (!Locator::gameInterface::has_value() || !Locator::temple::has_value() || frontEnd == nullptr)
 	{
 		return false;
 	}
 	Locator::temple::value().EnterMultiplayerFrontEnd();
-	_interface->OpenMultiplayer(std::move(frontEnd));
+	Locator::gameInterface::value().OpenMultiplayer(std::move(frontEnd));
 	return true;
 }
 
 void Game::UpdateMultiplayerFrontEnd()
 {
-	if (!_interface)
+	if (!Locator::gameInterface::has_value())
 	{
 		return;
 	}
@@ -558,7 +561,7 @@ void Game::UpdateMultiplayerFrontEnd()
 		auto& network = Locator::networkGame::value();
 		if (const auto start = network.TakeStart(); start.has_value())
 		{
-			auto& startBoxes = _interface->GetMultiplayerBoxes();
+			auto& startBoxes = Locator::gameInterface::value().GetMultiplayerBoxes();
 			if (startBoxes.IsActive())
 			{
 				startBoxes.Close();
@@ -586,7 +589,7 @@ void Game::UpdateMultiplayerFrontEnd()
 			return;
 		}
 	}
-	auto& boxes = _interface->GetMultiplayerBoxes();
+	auto& boxes = Locator::gameInterface::value().GetMultiplayerBoxes();
 	if (!boxes.IsActive())
 	{
 		return;
@@ -608,7 +611,7 @@ void Game::UpdateMultiplayerFrontEnd()
 		const auto hasCreature = std::exchange(_startQuestionAfterFrontEnd, std::nullopt);
 		if (hasCreature.has_value())
 		{
-			_interface->ShowSkipBox(*hasCreature);
+			Locator::gameInterface::value().ShowSkipBox(*hasCreature);
 		}
 		// The cut scene that the front end stopped continues. The question keeps the land stopped until its answer.
 		if (std::exchange(_frontEndHoldsLand, false) && !hasCreature.has_value())

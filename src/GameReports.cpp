@@ -33,8 +33,8 @@
 #include "Game.h"
 #include "Gui/GameInterface.h"
 #include "Hand/OwnHandReport.h"
-#include "Help/HelpProfile.h"
 #include "Hand/ViewReportRules.h"
+#include "Help/HelpProfile.h"
 #include "Input/BindableActions.h"
 #include "Input/GameActionMapInterface.h"
 #include "Input/KeyRebinding.h"
@@ -143,8 +143,9 @@ void Game::ReportView()
 	                                                            Locator::gameActionSystem::value().WheelTurned()),
 	    .cameraTurned = _reportCameraTurned,
 	    // The icons that the last draw kept, or the world camera's own when the draw did not run
-	    .cameraIcons =
-	        static_cast<uint16_t>((_interface ? _interface->GetDrawnCameraIcons() : std::nullopt).value_or(_cameraIcons)),
+	    .cameraIcons = static_cast<uint16_t>(
+	        (Locator::gameInterface::has_value() ? Locator::gameInterface::value().GetDrawnCameraIcons() : std::nullopt)
+	            .value_or(_cameraIcons)),
 	    .mouseButtons = platform_mouse::SystemMouseButtons(),
 	};
 	// The keys held, by the game's number of each key

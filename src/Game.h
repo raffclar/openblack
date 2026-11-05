@@ -88,7 +88,6 @@ class Camera;
 class Profiler;
 namespace gui
 {
-class GameInterface;
 class MultiplayerFrontEnd;
 class ToolTips;
 class LoadingScreen;
@@ -577,8 +576,6 @@ public:
 	void HideDebugGuiThisFrame() noexcept { _debugGuiHiddenFrame = _frameCount; }
 	/// Where the inspector keeps pictures, when given on the command line
 	[[nodiscard]] const std::optional<std::filesystem::path>& GetScreenshotRoot() const noexcept { return _screenshotRoot; }
-	/// The game's own interface (its menu), once it is made
-	[[nodiscard]] gui::GameInterface* GetInterface() noexcept { return _interface.get(); }
 	/// For the testbed: the ping line shows this round trip in microseconds, as --show-ping does in a network game.
 	/// None gives the line back to the network game.
 	void SetDemoRoundTrip(std::optional<uint64_t> microseconds) noexcept { _demoRoundTrip = microseconds; }
@@ -1123,8 +1120,6 @@ private:
 	magic::HandHoldPoser _handHold;
 	/// The changes of the hand that start a blend of the drawn hand
 	hand_blend::ChangeTracker _handBlend;
-	/// The game's own interface, null without the game's files for it
-	std::unique_ptr<gui::GameInterface> _interface;
 	/// The search of the local network for game servers, for the multiplayer front end
 	std::unique_ptr<online::LanDiscoveryInterface> _lanDiscovery;
 	/// The pause that the menu holds while it is open

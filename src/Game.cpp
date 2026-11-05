@@ -405,7 +405,7 @@ Game::~Game() noexcept
 		Locator::saveGameSystem::value().SetReportProblem({});
 	}
 	Locator::screenFade::reset();
-	_interface.reset();
+	Locator::gameInterface::reset();
 	_loadingScreen.reset();
 	// What the scripts asked of openblack that it can't do yet, for the natives to write next
 	if (Locator::chlapi::has_value())
@@ -672,7 +672,8 @@ bool Game::Initialize() noexcept
 			// At each key that goes down, a repeat of a held key too, the game finds again whether a box has the keyboard
 			if (event.type == SDL_KEYDOWN)
 			{
-				Locator::gameActionSystem::value().BoxKeyDown(_interface && _interface->BoxTakesKeyboard());
+				Locator::gameActionSystem::value().BoxKeyDown(Locator::gameInterface::has_value() &&
+				                                              Locator::gameInterface::value().BoxTakesKeyboard());
 			}
 			// A full-screen video takes Escape: it fades out, unless Shift or Ctrl is held
 			if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_ESCAPE && event.key.repeat == 0 &&
@@ -682,20 +683,26 @@ bool Game::Initialize() noexcept
 				return;
 			}
 			// The tattoo editor's dialog takes the keyboard and mouse while it is open, Escape and Enter included
-			if (_interface && _interface->GetTattooEditor().IsOpen() && Locator::windowing::has_value() &&
-			    _interface->ProcessEvent(event, static_cast<glm::u16vec2>(Locator::windowing::value().GetSize())))
+			if (Locator::gameInterface::has_value() && Locator::gameInterface::value().GetTattooEditor().IsOpen() &&
+			    Locator::windowing::has_value() &&
+			    Locator::gameInterface::value().ProcessEvent(event,
+			                                                 static_cast<glm::u16vec2>(Locator::windowing::value().GetSize())))
 			{
 				return;
 			}
 			// The multiplayer front end's boxes take the keyboard and the mouse while they are up, Escape too
-			if (_interface && _interface->GetMultiplayerBoxes().IsActive() && Locator::windowing::has_value() &&
-			    _interface->ProcessEvent(event, static_cast<glm::u16vec2>(Locator::windowing::value().GetSize())))
+			if (Locator::gameInterface::has_value() && Locator::gameInterface::value().GetMultiplayerBoxes().IsActive() &&
+			    Locator::windowing::has_value() &&
+			    Locator::gameInterface::value().ProcessEvent(event,
+			                                                 static_cast<glm::u16vec2>(Locator::windowing::value().GetSize())))
 			{
 				return;
 			}
 			// The line of the chat takes the keyboard while it has the focus, Escape and Return too
-			if (_interface && _interface->ChatWantsKeys() && Locator::windowing::has_value() &&
-			    _interface->ProcessEvent(event, static_cast<glm::u16vec2>(Locator::windowing::value().GetSize())))
+			if (Locator::gameInterface::has_value() && Locator::gameInterface::value().ChatWantsKeys() &&
+			    Locator::windowing::has_value() &&
+			    Locator::gameInterface::value().ProcessEvent(event,
+			                                                 static_cast<glm::u16vec2>(Locator::windowing::value().GetSize())))
 			{
 				return;
 			}
@@ -714,21 +721,25 @@ bool Game::Initialize() noexcept
 			}
 			// F2 in play asks the question of the trip to the Gods' Playground. The game takes the key, also when it asks
 			// nothing.
-			if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_F2 && event.key.repeat == 0 && _interface)
+			if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_F2 && event.key.repeat == 0 &&
+			    Locator::gameInterface::has_value())
 			{
 				HandleTripKey();
 				return;
 			}
 			// Escape in play, with no dialog open. The box of a question of the trip takes Escape itself.
-			if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_ESCAPE && _interface && !_interface->IsDialogOpen() &&
-			    !_interface->GetTattooEditor().IsOpen() && !_interface->IsTripQuestionUp())
+			if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_ESCAPE && Locator::gameInterface::has_value() &&
+			    !Locator::gameInterface::value().IsDialogOpen() &&
+			    !Locator::gameInterface::value().GetTattooEditor().IsOpen() &&
+			    !Locator::gameInterface::value().IsTripQuestionUp())
 			{
 				HandleEscapeInPlay(event.key.keysym.mod);
 				return;
 			}
 			// The game's menu takes Escape, and the keyboard and mouse while it is open
-			if (_interface && Locator::windowing::has_value() &&
-			    _interface->ProcessEvent(event, static_cast<glm::u16vec2>(Locator::windowing::value().GetSize())))
+			if (Locator::gameInterface::has_value() && Locator::windowing::has_value() &&
+			    Locator::gameInterface::value().ProcessEvent(event,
+			                                                 static_cast<glm::u16vec2>(Locator::windowing::value().GetSize())))
 			{
 				HandleInterfaceAction();
 				return;
@@ -1190,11 +1201,11 @@ bool Game::RunFrame() noexcept
 		const bool pictureWanted = _requestScreenshot.has_value() && _requestScreenshot->first == _frameCount;
 		const bool drawsFrame =
 		    sim_run::DrawsFrame(Locator::simulation::value().GetSettings(), _frameCount, pictureWanted) && DoesFrameGraphics();
-		if (drawsFrame && _interface && Locator::windowing::has_value())
+		if (drawsFrame && Locator::gameInterface::has_value() && Locator::windowing::has_value())
 		{
 			const auto mouse = Locator::gameActionSystem::value().GetPointerPosition();
-			_interface->Draw(static_cast<glm::u16vec2>(Locator::windowing::value().GetSize()), mouse, machine_clock::Ticks(),
-			                 Locator::debugGui::value().IsMouseOverWindow());
+			Locator::gameInterface::value().Draw(static_cast<glm::u16vec2>(Locator::windowing::value().GetSize()), mouse,
+			                                     machine_clock::Ticks(), Locator::debugGui::value().IsMouseOverWindow());
 			ShowTattooMenuCreature();
 		}
 		if (drawsFrame)
