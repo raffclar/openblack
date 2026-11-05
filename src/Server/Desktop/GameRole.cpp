@@ -128,6 +128,8 @@ struct GameRole::Parts
 	std::string hostReportAddress;
 	gathering_box::PingClock hostReportClock;
 	bool hostReportDecided {false};
+	/// The status of the last answer to a report of the host, so that the log tells each change only one time
+	int32_t hostReportStatus {-1};
 	std::string lanHost;
 	/// The pin of the key of the server's own certificate as hex digits, empty for a certificate file
 	std::string lanKey;
@@ -517,12 +519,19 @@ void GameRole::SendHostReport(uint32_t turn, bool decided, const HostConditions&
 	                             .url = parts.hostReportAddress,
 	                             .headers = {{"Content-Type", "application/json"}},
 	                             .body = std::vector<uint8_t>(body.begin(), body.end())};
-	parts.lobby->Send(std::move(request), [turn](online::HttpResponse&& response) {
-		if (response.status != 204 && response.status != 200)
+	parts.lobby->Send(std::move(request), [&parts, turn](online::HttpResponse&& response) {
+		const bool taken = response.status == 204 || response.status == 200;
+		if (std::exchange(parts.hostReportStatus, response.status) == response.status)
 		{
-			SPDLOG_LOGGER_WARN(spdlog::get("game"), "The lobby did not take the report of the host of turn {} (status {}): {}",
-			                   turn, response.status, response.Text().substr(0, 200));
+			return;
 		}
+		if (taken)
+		{
+			SPDLOG_LOGGER_INFO(spdlog::get("game"), "The lobby takes the reports of the host (turn {})", turn);
+			return;
+		}
+		SPDLOG_LOGGER_WARN(spdlog::get("game"), "The lobby did not take the report of the host of turn {} (status {}): {}",
+		                   turn, response.status, response.Text().substr(0, 200));
 	});
 }
 
