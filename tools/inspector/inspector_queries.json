@@ -1841,6 +1841,18 @@
   "query": "players.input"
  },
  {
+  "description": "The buttons of the mouse, the flags of the hand, the cursor of the hand and the state of the presses on this computer",
+  "kind": "object",
+  "parameters": [],
+  "query": "players.hand_press"
+ },
+ {
+  "description": "The keys of the game on this computer: whether the menu closed, and how long ago",
+  "kind": "object",
+  "parameters": [],
+  "query": "players.game_keys"
+ },
+ {
   "description": "The gesture being drawn and the last recognised",
   "kind": "object",
   "parameters": [],

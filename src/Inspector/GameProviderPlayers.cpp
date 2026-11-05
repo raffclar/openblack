@@ -7,6 +7,7 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <chrono>
 #include <algorithm>
 #include <optional>
 #include <ranges>
@@ -28,9 +29,11 @@
 #include "ECS/Systems/ChatSystemInterface.h"
 #include "ECS/Systems/CreatureModeSystemInterface.h"
 #include "ECS/Systems/GameEndSystemInterface.h"
+#include "ECS/Systems/GameKeysInterface.h"
 #include "ECS/Systems/GestureEventsInterface.h"
 #include "ECS/Systems/GestureSystemInterface.h"
 #include "ECS/Systems/HandGrabSystemInterface.h"
+#include "ECS/Systems/HandPressSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/HeartbeatSystemInterface.h"
 #include "ECS/Systems/HelpTextSystemInterface.h"
@@ -591,6 +594,38 @@ std::unique_ptr<ProviderInterface> PlayersProvider()
 		                               {"scripted_pointer", actions.GetScriptedPointer().has_value()},
 		                               {"cursor_frozen", actions.IsCursorFrozen()}};
 	                  }));
+	provider->Add(
+	    Query("hand_press",
+	          "The buttons of the mouse, the flags of the hand, the cursor of the hand and the state of the presses on this "
+	          "computer"),
+	    Serve<Locator::handPressSystem>(
+	        "the presses of the hand", [](const ecs::systems::HandPressSystemInterface& presses, const QueryContext& /*c*/) {
+		        const auto& buttons = presses.GetPointerButtons();
+		        const auto& hand = presses.GetHandButtons();
+		        const auto mouse = presses.GetMousePosition();
+		        const auto& totem = presses.GetTotemPointer();
+		        return Json {{"buttons", {{"left", buttons.left}, {"middle", buttons.middle}, {"right", buttons.right}}},
+		                     {"gripping", hand.gripping},
+		                     {"rotating", hand.rotating},
+		                     {"selectGrip", hand.selectGrip},
+		                     {"otherButton", hand.otherButton},
+		                     {"mouse", {mouse.x, mouse.y}},
+		                     {"pointerMoved", presses.GetHandPointer().HasMoved()},
+		                     {"totemPointer", totem.has_value() ? Json {totem->x, totem->y} : Json()}};
+	        }));
+	provider->Add(
+	    Query("game_keys", "The keys of the game on this computer: whether the menu closed, and how long ago"),
+	    Serve<Locator::gameKeysSystem>("the keys of the game", [](const ecs::systems::GameKeysSystemInterface& keys,
+	                                                              const QueryContext& /*c*/) {
+		    const auto& closedAt = keys.GetMenuClosedAt();
+		    Json result = {{"menuClosed", closedAt.has_value()}};
+		    if (closedAt.has_value())
+		    {
+			    result["sinceMenuClosedMs"] =
+			        std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - *closedAt).count();
+		    }
+		    return result;
+	    }));
 	provider->Add(Query("gestures", "The gesture being drawn and the last recognised"),
 	              Serve<Locator::gestureSystem>(
 	                  "the gestures", [](const ecs::systems::GestureSystemInterface& gestures, const QueryContext& /*c*/) {

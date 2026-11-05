@@ -22,6 +22,7 @@
 #include "Debug/TestbedPingServer.h"
 #include "Debug/TestbedScenarioRegistry.h"
 #include "ECS/Systems/GatheringBoxSystemInterface.h"
+#include "ECS/Systems/HandPressSystemInterface.h"
 #include "ECS/Systems/LoadingScreenSystemInterface.h"
 #include "ECS/Systems/TattooMenuSystemInterface.h"
 #include "Game.h"
@@ -296,7 +297,7 @@ void TestbedGameStage::SetDemoRoundTrip(std::optional<uint64_t> microseconds)
 
 void TestbedGameStage::SetMousePosition(glm::ivec2 position)
 {
-	Game::Instance()->SetMousePosition(position);
+	Locator::handPressSystem::value().MovePointer(position);
 }
 
 bool TestbedGameStage::RequestJoinOnline()

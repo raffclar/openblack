@@ -37,6 +37,8 @@
 #include "ECS/Systems/Implementations/DesignedWaterfallSystem.h"
 #include "ECS/Systems/Implementations/FloatingNumberSystem.h"
 #include "ECS/Systems/Implementations/GameAudioSystem.h"
+#include "ECS/Systems/Implementations/GameKeysSystem.h"
+#include "ECS/Systems/Implementations/HandPressSystem.h"
 #include "ECS/Systems/Implementations/IncomingMessageSystem.h"
 #include "ECS/Systems/Implementations/LandShadeSystem.h"
 #include "ECS/Systems/Implementations/LiquidParticleSystem.h"
@@ -188,6 +190,9 @@ void openblack::InitializeClient(const player_profiles::Store& profiles)
 		    .island = [] { Locator::rendereringSystem::emplace<RenderingSystem>(); },
 		});
 	}
+	// The buttons, the pointer and the presses of the hand, and the keys of the game
+	Locator::handPressSystem::emplace<ecs::systems::HandPressSystem>();
+	Locator::gameKeysSystem::emplace<ecs::systems::GameKeysSystem>();
 	InitializeOnlineAndTools(profiles);
 }
 

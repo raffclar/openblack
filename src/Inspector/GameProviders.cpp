@@ -247,6 +247,8 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"gameEndSystem", "players.game_end"},
     LocatorCoverage {"playerCommandSystem", "players.commands"},
     LocatorCoverage {"ownReportSystem", "players.own_reports"},
+    LocatorCoverage {"handPressSystem", "players.hand_press"},
+    LocatorCoverage {"gameKeysSystem", "players.game_keys"},
     LocatorCoverage {"syncChecksumSystem", "players.checksum"},
     LocatorCoverage {"landSystem", "level.current"},
     LocatorCoverage {"videoSystem", "view.video"},
