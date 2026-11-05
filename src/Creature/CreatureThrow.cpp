@@ -80,8 +80,9 @@ glm::vec3 creature_throw::ReleaseVelocity(const glm::vec3& target, const glm::ve
 {
 	const auto time = std::max(seconds, k_Tiny);
 	// Gravity takes half g t squared off the height on the way, which the throw makes up
-	const glm::vec3 fall {0.0f, -0.5f * k_Gravity * time * time, 0.0f};
-	return (target - release - fall) / time;
+	const float fall = ((time * time) * 0.5f) * -k_Gravity;
+	const float inverse = 1.0f / time;
+	return {(target.x - release.x) * inverse, ((target.y - release.y) - fall) * inverse, (target.z - release.z) * inverse};
 }
 
 bool creature_throw::FarEnoughToThrow(float groundDistance, float size)
@@ -169,14 +170,16 @@ std::vector<uint32_t> creature_throw::TossPointBones(std::span<const uint32_t> p
 	return ends;
 }
 
-glm::vec3 creature_throw::TossVelocity(const glm::vec3& handVelocity, bool mirrored, const glm::mat3& rotation, float share)
+glm::vec3 creature_throw::TossVelocity(const glm::vec3& handVelocity, bool mirrored, GameHeading heading, float scale,
+                                       float share)
 {
-	auto local = handVelocity * share;
-	if (mirrored)
-	{
-		local.x = -local.x;
-	}
-	return rotation * local;
+	const float side = mirrored ? -(handVelocity.x * share) : handVelocity.x * share;
+	const float across = side * scale;
+	const float up = (handVelocity.y * share) * scale;
+	const float ahead = (handVelocity.z * share) * scale;
+	const float cosine = x87::RoundToFloat(x87::Cos(heading.Radians()));
+	const double sine = x87::Sin(heading.Radians());
+	return {x87::Mul(-sine, ahead) + (cosine * across), up, (cosine * ahead) + x87::Mul(sine, across)};
 }
 
 std::optional<creature_throw::ThrowStand> creature_throw::WhereToThrowFrom(glm::vec2 creature, glm::vec2 target, float height,

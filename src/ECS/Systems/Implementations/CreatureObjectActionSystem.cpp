@@ -418,6 +418,16 @@ bool OnTheMap(const ecs::Registry& registry, entt::entity thing)
 	return ecs::InMapCells(registry, thing) && !registry.AnyOf<InHand, HeldByCreature, InPhysics, CarriedByTornado>(thing);
 }
 
+/// The heading of a creature as the game keeps it: the heading of its walk, else the heading of its drawn turn
+GameHeading FacingHeading(const ecs::Registry& registry, entt::entity creature, const Transform& transform)
+{
+	if (const auto* walking = registry.TryGet<const CreatureLocomotion>(creature); walking != nullptr && walking->started)
+	{
+		return walking->heading;
+	}
+	return GameHeading::FromYaw(portable_math::Atan2(transform.rotation[2][0], transform.rotation[0][0]));
+}
+
 Transform AsFacing(const ecs::Registry& registry, entt::entity creature, const Transform& transform)
 {
 	auto facing = transform;
@@ -1593,10 +1603,11 @@ void CreatureObjectActionSystem::AfterPoseTurn(entt::entity creature)
 			}
 			// The toss away takes the speed of the hand that the creature kept since its first toss
 			const auto hand = TossHand(creature, *points);
-			const auto velocity = hand.has_value()
-			                          ? creature_throw::TossVelocity(*hand * transform.scale, action.mirrored,
-			                                                         transform.rotation, creature_throw::k_DiscardSpeedShare)
-			                          : glm::vec3(0.0f);
+			const auto velocity =
+			    hand.has_value()
+			        ? creature_throw::TossVelocity(*hand, action.mirrored, FacingHeading(registry, creature, transform),
+			                                       transform.scale.x, creature_throw::k_DiscardSpeedShare)
+			        : glm::vec3(0.0f);
 			Release(creature, velocity, ReleaseFrom::LetGo);
 			break;
 		}
