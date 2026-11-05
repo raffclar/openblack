@@ -605,8 +605,8 @@ void Communicated(CreatureMindState& mind)
 	mind.planner.best.at(static_cast<size_t>(Desire::ManifestState)).reset();
 }
 
-/// What a step did to the body. A meal of a plan decreases the desire of the plan only when the plan ends, as all
-/// actions of plans do.
+/// What a step did to the body. A step of a plan does nothing to the desires: when the plan is complete, its end sees
+/// to them. A step of an agenda that no plan gave sees to the desire of its action at once, by the game's action table.
 void TakeEffect(entt::entity creature, const creature_mind::Commands& commands, creature_desires::Desires& desires,
                 bool planned)
 {
@@ -616,28 +616,31 @@ void TakeEffect(entt::entity creature, const creature_mind::Commands& commands, 
 		return;
 	}
 	auto& physiology = Locator::creaturePhysiologySystem::value();
+	const bool seesToNeed = creature_mind::SeesToNeedAtStep(commands.effect, planned);
+	const auto seeTo = [&](std::string_view action) {
+		if (seesToNeed)
+		{
+			Satisfied(creature, desires, action);
+		}
+	};
 	switch (commands.effect)
 	{
 	case Effect::Eat:
-		// The meal decreases the hunger when the creature swallows it. A meal from no plan also decreases the desire by
-		// the value in the action table.
-		if (!planned)
-		{
-			Satisfied(creature, desires, k_EatAction);
-		}
+		// The meal decreases the hunger when the creature swallows it
+		seeTo(k_EatAction);
 		break;
 	case Effect::Examined:
-		Satisfied(creature, desires, k_ExamineAction);
+		seeTo(k_ExamineAction);
 		break;
 	case Effect::ThrewAbout:
-		Satisfied(creature, desires, k_ThrowAboutAction);
+		seeTo(k_ThrowAboutAction);
 		break;
 	case Effect::Hurled:
-		Satisfied(creature, desires, k_HurlAction);
+		seeTo(k_HurlAction);
 		break;
 	case Effect::Drink:
 		physiology.Drink(creature);
-		Satisfied(creature, desires, k_DrinkAction);
+		seeTo(k_DrinkAction);
 		// The creature does not want water for a time, and its fire state cools
 		if (const auto temperature = creature_drink::Drank(desires, k_TurnsPerSecond); Locator::fireSystem::has_value())
 		{
@@ -647,18 +650,18 @@ void TakeEffect(entt::entity creature, const creature_mind::Commands& commands, 
 	case Effect::Poo:
 		// At the end of the squat, the bowels are empty. The lumps dropped during the squat stopped the desire to poo
 		physiology.EmptyBowels(creature);
-		Satisfied(creature, desires, k_PooAction);
+		seeTo(k_PooAction);
 		break;
 	case Effect::Fart:
 		// At the end of the squat, the bowels are empty. The action table sets how much the desire to poo decreases
 		physiology.EmptyBowels(creature);
-		Satisfied(creature, desires, k_FartAction);
+		seeTo(k_FartAction);
 		break;
 	case Effect::Puke:
-		Satisfied(creature, desires, k_PukeAction);
+		seeTo(k_PukeAction);
 		break;
 	case Effect::Slept:
-		Satisfied(creature, desires, k_SleepAction);
+		seeTo(k_SleepAction);
 		break;
 	case Effect::CameRound:
 		physiology.WakeFromFaint(creature);
@@ -676,18 +679,6 @@ void TakeEffect(entt::entity creature, const creature_mind::Commands& commands, 
 	case Effect::None:
 		break;
 	}
-}
-
-/// A step saying the plan's action counts as done there, before the step that finishes it, sees to its desire
-void CountCompleted(entt::entity creature, CreatureMindState& mind, const creature_mind::Commands& commands,
-                    const creature_mind_tables::Tables* tables)
-{
-	if (commands.effect != creature_mind::Effect::Completed || !mind.planActive || !mind.planner.current.has_value() ||
-	    tables == nullptr || !mind.desires.has_value() || mind.planner.current->action >= tables->actions.size())
-	{
-		return;
-	}
-	Satisfied(creature, *mind.desires, tables->actions[mind.planner.current->action].name);
 }
 
 /// The town nearest a point along the ground, of any player or none. The distance is the table distance between map
@@ -1488,20 +1479,16 @@ void CreatureMindSystem::AgendaTurn(entt::entity entity)
 				inspected->inspected = Locator::reactionSystem::value().CurrentTurn();
 			}
 		}
-		CountCompleted(entity, mind, commands, GetTables());
+		// A step that says the plan's action counts as done there sees to the plan's desire as the end of the plan does.
+		// The end of the plan does this again when the agenda gets to its end.
+		if (commands.effect == creature_mind::Effect::Completed)
+		{
+			CompletePlanAction(entity, mind);
+		}
 		if (commands.object.has_value() && mind.planActive && mind.planner.current.has_value())
 		{
 			creature_lost_thing::StopUseBeforeThrowIntoStore(*mind.planner.current, *commands.object,
 			                                                 entt::to_integral(entity));
-		}
-		// Taking in what a thing is does nothing for the desire the plan serves
-		const bool plannedMeal = commands.effect == creature_mind::Effect::Eat && mind.planActive;
-		if (commands.effect != creature_mind::Effect::None && commands.effect != creature_mind::Effect::Observed &&
-		    commands.effect != creature_mind::Effect::Inspected && commands.effect != creature_mind::Effect::TookFromPile &&
-		    commands.effect != creature_mind::Effect::TookFromHand && commands.effect != creature_mind::Effect::Stomped &&
-		    !plannedMeal)
-		{
-			mind.satisfiedByEffect = true;
 		}
 		FollowAgenda(entity, mind);
 		// The turns that the agenda runs steps for
@@ -1710,7 +1697,6 @@ bool CreatureMindSystem::ForceActivity(entt::entity creature, const ForcedActivi
 	mind->planForced = forced.forced && !forced.unforcedPriority.has_value();
 	mind->planSerial = mind->idle.serial;
 	mind->agendaSeen = mind->idle.serial;
-	mind->satisfiedByEffect = false;
 	mind->desireSeenTo = false;
 	// It is remembered for the player's feedback, unless nothing says why it wants what the plan serves
 	auto& desire = (*mind->desires)[forced.desire];

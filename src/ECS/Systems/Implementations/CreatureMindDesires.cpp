@@ -451,21 +451,33 @@ float DesireFloorOf(entt::entity creature)
 	return row < species.size() ? species.at(row).desireFloor : 0.0f;
 }
 
-/// Having done an action, the desire it satisfies is less, by the game's action table
-void Lessen(entt::entity creature, creature_desires::Desires& desires, std::string_view action)
+std::optional<creature_desires::ActionLessening> LesseningOf(std::string_view action)
 {
 	if (!Locator::infoConstants::has_value())
 	{
-		return;
+		return std::nullopt;
 	}
 	const auto& actions = Locator::infoConstants::value().creatureAction;
 	const auto found = std::ranges::find_if(actions, [action](const auto& row) {
 		return std::string_view(row.name.data(), strnlen(row.name.data(), row.name.size())) == action;
 	});
-	if (found != actions.end() && found->desire < creature_desires::k_DesireCount)
+	if (found == actions.end() || found->desire >= creature_desires::k_DesireCount)
 	{
-		creature_desires::LessenAfterAction(desires, static_cast<Desire>(found->desire), found->desireMultiplier,
-		                                    DesireFloorOf(creature));
+		return std::nullopt;
+	}
+	return creature_desires::ActionLessening {
+	    .desire = static_cast<Desire>(found->desire),
+	    .multiplier = found->desireMultiplier,
+	    .always = found->alwaysApplies != 0,
+	};
+}
+
+/// Having done an action, the desire it satisfies is less, by the game's action table
+void Lessen(entt::entity creature, creature_desires::Desires& desires, std::string_view action)
+{
+	if (const auto lessening = LesseningOf(action); lessening.has_value())
+	{
+		creature_desires::LessenAfterAction(desires, lessening->desire, lessening->multiplier, DesireFloorOf(creature));
 	}
 }
 

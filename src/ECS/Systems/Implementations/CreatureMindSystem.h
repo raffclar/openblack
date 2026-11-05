@@ -295,6 +295,11 @@ private:
 	                   creature_plan_actions::Situation& situation);
 	/// The creature carried out an action to its end on this game turn
 	static void NoteDone(components::CreatureMindState& mind, uint32_t action);
+	/// The action of the plan is complete: its body pays for it. When the plan counts for its desire, it counts towards
+	/// the urge of that desire, which can clear its sources and lessen the desire of the action. Then the rule for the
+	/// desire, a heal and the temperature of a full recovery follow. This occurs when the agenda gets to its end, and
+	/// also at a step that says the action counts as done there.
+	void CompletePlanAction(entt::entity creature, components::CreatureMindState& mind);
 	/// An agenda that no plan gave ends: its action was done just now, and the other actions of its desire get older
 	void EndUnderway(components::CreatureMindState& mind);
 	/// Where its home and its player's temple are, and whether another creature is near enough to frighten it
