@@ -186,7 +186,10 @@ EffectOutcome magic::ApplyEffectTo(const EffectValues& values, const EffectRecei
                                    std::span<const GAlignmentInfo> alignmentTable, float alignmentAddition,
                                    float casterAlignment)
 {
-	EffectOutcome outcome {.entity = receiver.entity, .lifeBefore = receiver.life, .lifeAfter = receiver.life};
+	EffectOutcome outcome {.entity = receiver.entity,
+	                       .lifeBefore = receiver.life,
+	                       .lifeAfter = receiver.life,
+	                       .alignmentType = receiver.alignmentType};
 	outcome.damaged = DamageFrom(values, receiver.defence);
 	outcome.healed = HealFrom(values, receiver.defence);
 	const float burn = values[EffectKind::Burn];
@@ -205,16 +208,29 @@ EffectOutcome magic::ApplyEffectTo(const EffectValues& values, const EffectRecei
 			life = std::min(before + outcome.healed, 1.0f);
 			life = std::max(life - outcome.damaged, 0.0f);
 		}
-		outcome.lifeAfter = life;
-		outcome.destroyed = life == 0.0f && before != 0.0f;
-		// Heat takes no life by itself: it heats what it reaches, which then burns. The alignment moves only when the heal
-		// or the harm changed the life, and then heat counts too, by the harm it would do.
-		outcome.alignmentTerms = EffectAlignmentChanges(values, outcome.burnt, receiver.alignmentType, before - life,
-		                                                alignmentTable, alignmentAddition);
-		outcome.alignmentDamped = DampEffectAlignmentChanges(outcome.alignmentTerms, casterAlignment);
-		outcome.alignmentChange = AddEffectAlignmentChanges(0.0f, outcome.alignmentDamped);
+		outcome = WithLifeAfter(outcome, values, life, alignmentTable, alignmentAddition, casterAlignment);
 	}
 	outcome.aggression = values.IsDestructive() && (outcome.damaged + outcome.burnt) > 0.0f;
+	return outcome;
+}
+
+EffectOutcome magic::WithLifeAfter(EffectOutcome outcome, const EffectValues& values, float life,
+                                   std::span<const GAlignmentInfo> alignmentTable, float alignmentAddition,
+                                   float casterAlignment)
+{
+	if (!outcome.lifeBefore.has_value())
+	{
+		return outcome;
+	}
+	const float before = *outcome.lifeBefore;
+	outcome.lifeAfter = life;
+	outcome.destroyed = life == 0.0f && before != 0.0f;
+	// Heat takes no life by itself: it heats what it reaches, which then burns. The alignment moves only when the life
+	// changed, and then heat counts too, by the harm it would do.
+	outcome.alignmentTerms =
+	    EffectAlignmentChanges(values, outcome.burnt, outcome.alignmentType, before - life, alignmentTable, alignmentAddition);
+	outcome.alignmentDamped = DampEffectAlignmentChanges(outcome.alignmentTerms, casterAlignment);
+	outcome.alignmentChange = AddEffectAlignmentChanges(0.0f, outcome.alignmentDamped);
 	return outcome;
 }
 

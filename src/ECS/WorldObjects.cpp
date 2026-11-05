@@ -1117,11 +1117,23 @@ void world_objects::Remove(entt::entity object)
 void world_objects::AttackTown(entt::entity object, float damage, PlayerNames aggressor, const town_aggression::Harm& harm,
                                bool byCreature, std::optional<guidance::TownAttackVoice> cry)
 {
+	if (const auto target = TownAttackTargetOf(object); target.has_value())
+	{
+		AttackTown(*target, damage, aggressor, harm, byCreature, cry);
+	}
+}
+
+std::optional<world_objects::TownAttackTarget> world_objects::TownAttackTargetOf(entt::entity object)
+{
 	if (!Locator::infoConstants::has_value())
 	{
-		return;
+		return std::nullopt;
 	}
 	auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(object))
+	{
+		return std::nullopt;
+	}
 	const auto& info = Locator::infoConstants::value();
 	entt::entity town = entt::null;
 	const GObjectInfo* kind = nullptr;
@@ -1162,8 +1174,21 @@ void world_objects::AttackTown(entt::entity object, float damage, PlayerNames ag
 	}
 	if (town == entt::null || !registry.Valid(town) || kind == nullptr)
 	{
+		return std::nullopt;
+	}
+	return TownAttackTarget {.town = town, .kind = kind};
+}
+
+void world_objects::AttackTown(const TownAttackTarget& target, float damage, PlayerNames aggressor,
+                               const town_aggression::Harm& harm, bool byCreature, std::optional<guidance::TownAttackVoice> cry)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto town = target.town;
+	if (!Locator::infoConstants::has_value() || !registry.Valid(town) || target.kind == nullptr || !registry.AllOf<Town>(town))
+	{
 		return;
 	}
+	const auto& info = Locator::infoConstants::value();
 	if (!ecs::town_aggression::CountsAsAttack(damage))
 	{
 		return;
@@ -1173,7 +1198,7 @@ void world_objects::AttackTown(entt::entity object, float damage, PlayerNames ag
 	{
 		Locator::guidanceSystem::value().TownAttackCry(town, *cry);
 	}
-	const float amount = ecs::town_aggression::AggressionFromDamage(damage, kind->aggressorValue);
+	const float amount = ecs::town_aggression::AggressionFromDamage(damage, target.kind->aggressorValue);
 	auto* aggression = registry.TryGet<TownAggression>(town);
 	if (aggression == nullptr)
 	{
