@@ -26,6 +26,7 @@
 #include "ECS/Systems/LobbyClientSystemInterface.h"
 #include "ECS/Systems/NetworkGameSystemInterface.h"
 #include "ECS/Systems/RenderingSystemInterface.h"
+#include "ECS/Systems/ToolRunSystemInterface.h"
 #include "EngineConfig.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "GameProviderShared.h"
@@ -228,6 +229,17 @@ std::unique_ptr<ProviderInterface> EngineProvider()
 		                                            {"camera_paths", resources.GetCameraPaths().Size()},
 		                                        };
 	                                        }));
+	provider->Add(
+	    Query("tool_run", "Which logs and tools of a tool's run are open: the file of the commands of each turn, the file "
+	                      "of the commands of the testbed scenario, the file of the checksums, the guard of the frame steps "
+	                      "and the fight autopilot"),
+	    Serve<Locator::toolRunSystem>(
+	        "the logs of a tool's run", [](const ecs::systems::ToolRunSystemInterface& toolRun, const QueryContext& /*c*/) {
+		        const auto state = toolRun.GetState();
+		        return Json {{"command_log", state.commandLog},         {"scenario_gives", state.scenarioGives},
+		                     {"checksum_log", state.checksumLog},       {"frame_guard", state.frameGuard},
+		                     {"fight_autopilot", state.fightAutopilot}, {"test_leave_done", state.testLeaveDone}};
+	        }));
 	provider->Add(Query("services", "Which of the engine's services are there, the game's random seeds, the game's path, the "
 	                                "debug windows' focus and the inspector's port"),
 	              [](const QueryContext& /*context*/) {

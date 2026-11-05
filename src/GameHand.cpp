@@ -114,6 +114,7 @@
 #include "ECS/Systems/GestureSystemInterface.h"
 #include "ECS/Systems/HandDemoSystemInterface.h"
 #include "ECS/Systems/HandGrabSystemInterface.h"
+#include "ECS/Systems/HandPressSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/HelpProfileSystemInterface.h"
 #include "ECS/Systems/HelpTextSystemInterface.h"
@@ -205,6 +206,18 @@ void TraceHand(std::string_view writer, const glm::vec3& position)
 	{
 		trace->Note(writer, position);
 	}
+}
+
+/// The cursor that the hand follows, in the pixels of the window
+[[nodiscard]] glm::ivec2 HandCursor()
+{
+	return Locator::handPressSystem::value().GetMousePosition();
+}
+
+/// What the buttons of the mouse do with the hand after the last event
+[[nodiscard]] const input::HandButtons& HandButtons()
+{
+	return Locator::handPressSystem::value().GetHandButtons();
 }
 
 /// The hand's splash, its sound and the scare it gives the fish are this high over the sea
@@ -307,7 +320,7 @@ void Game::UpdateGestures(const Camera& camera, glm::ivec2 screenSize, float del
 	ecs::systems::GestureSystemInterface::Frame frame {
 	    .seconds = deltaSeconds,
 	    .steps = Locator::time::value().GetInputSteps(),
-	    .cursor = static_cast<glm::vec2>(_mousePosition),
+	    .cursor = static_cast<glm::vec2>(HandCursor()),
 	    // Not over a debug window, nor while a cut scene has the screen
 	    .overWorld = !Locator::debugGui::value().StealsFocus() && !Locator::debugGui::value().IsMouseOverWindow() &&
 	                 Locator::cinematicDirectorSystem::value().IsInterfaceActive(),
@@ -367,8 +380,7 @@ void Game::UpdateGestures(const Camera& camera, glm::ivec2 screenSize, float del
 	// A path drawn for the testbed is drawn by the hand, which follows it
 	if (const auto drawing = Locator::gestureSystem::value().GetDrawingPoint())
 	{
-		_mousePosition = glm::ivec2(*drawing * (size.y / gesture::k_ReferenceHeight));
-		_handPointer.Moved();
+		Locator::handPressSystem::value().MovePointer(glm::ivec2(*drawing * (size.y / gesture::k_ReferenceHeight)));
 	}
 }
 
@@ -403,7 +415,7 @@ void Game::PickUnderCursor(float seconds)
 	}
 	const auto& camera = Locator::camera::value();
 	const auto resolution = static_cast<glm::vec2>(screenSize);
-	const auto cursor = static_cast<glm::vec2>(_mousePosition);
+	const auto cursor = static_cast<glm::vec2>(HandCursor());
 	const auto [eye, nearPoint] = camera.OnNearPlane(cursor / resolution);
 	Locator::pickingSystem::value().PickUnderCursor({
 	    .view =
@@ -924,7 +936,7 @@ void Game::UpdateHandFrame(std::chrono::microseconds deltaTime)
 		// TODO(raffclar): what the game picks in the temple, which needs it run under a debugger
 		{
 			const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
-			Locator::handSystem::value().UpdateAlignmentMorph(handPick, _handGripping || inTemple);
+			Locator::handSystem::value().UpdateAlignmentMorph(handPick, HandButtons().gripping || inTemple);
 		}
 
 		// The trees bend away from where the hand now is, and rustle
@@ -948,7 +960,7 @@ void Game::UpdateHandCursor(std::chrono::microseconds deltaTime, Profiler& profi
 	{
 		glm::vec3 rayOrigin;
 		glm::vec3 rayDirection;
-		camera.DeprojectScreenToWorld(static_cast<glm::vec2>(_mousePosition) / static_cast<glm::vec2>(screenSize), rayOrigin,
+		camera.DeprojectScreenToWorld(static_cast<glm::vec2>(HandCursor()) / static_cast<glm::vec2>(screenSize), rayOrigin,
 		                              rayDirection);
 
 		_cursorWorldPosition.reset();
@@ -996,8 +1008,7 @@ void Game::UpdateHandCursor(std::chrono::microseconds deltaTime, Profiler& profi
 			if (!Locator::debugGui::value().StealsFocus())
 			{
 				auto& leashes = Locator::leashSystem::value();
-				leashes.HandleInput(rayOrigin, rayDirection, _actionPressTaken);
-				_actionPressTaken = false;
+				leashes.HandleInput(rayOrigin, rayDirection, Locator::handPressSystem::value().TakeActionPress());
 			}
 			// The gestures drawn with the hand: circles and power-ups for the miracles, the leash's gestures, and
 			// the scribble that shakes off what the hand holds
@@ -1017,7 +1028,7 @@ void Game::UpdateHandCursor(std::chrono::microseconds deltaTime, Profiler& profi
 			// The hand rests over what was picked: before a villager or an animal, on a model it feels the triangles
 			// of, or else on the land, turned to its slope
 			const auto [eye, nearPoint] =
-			    camera.OnNearPlane(static_cast<glm::vec2>(_mousePosition) / static_cast<glm::vec2>(screenSize));
+			    camera.OnNearPlane(static_cast<glm::vec2>(HandCursor()) / static_cast<glm::vec2>(screenSize));
 			const auto cursorDirection =
 			    hand_feel::CursorDirection(eye, nearPoint, hand_feel::HoverLimit(HandHoverInputs(eye)));
 			_handSurfaceUp.reset();
@@ -1149,7 +1160,7 @@ void Game::UpdateDrawnHand(std::chrono::microseconds deltaTime, Profiler& profil
 		UpdateHandKnock(handTransform);
 		if (Locator::temple::has_value() && Locator::temple::value().Active())
 		{
-			if (!_handGripping)
+			if (!HandButtons().gripping)
 			{
 				handTransform.rotation = glm::eulerAngleY(camera.GetRotation().y) * modelRotationCorrection;
 				handTransform.rotation = intersectionTransform.rotation * handTransform.rotation;
@@ -1179,7 +1190,7 @@ void Game::UpdateDrawnHand(std::chrono::microseconds deltaTime, Profiler& profil
 				auto& hands = Locator::creatureHandSystem::value();
 				glm::vec3 rayOrigin;
 				glm::vec3 rayDirection;
-				camera.DeprojectScreenToWorld(static_cast<glm::vec2>(_mousePosition) / static_cast<glm::vec2>(screenSize),
+				camera.DeprojectScreenToWorld(static_cast<glm::vec2>(HandCursor()) / static_cast<glm::vec2>(screenSize),
 				                              rayOrigin, rayDirection);
 				// The hand isn't over the world while it is over a debug window, or in the temple
 				const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
@@ -1189,7 +1200,7 @@ void Game::UpdateDrawnHand(std::chrono::microseconds deltaTime, Profiler& profil
 				}
 				if (hands.GetCreature().has_value())
 				{
-					_handOnCreature = hands.Update(rayOrigin, rayDirection, static_cast<glm::vec2>(_mousePosition),
+					_handOnCreature = hands.Update(rayOrigin, rayDirection, static_cast<glm::vec2>(HandCursor()),
 					                               static_cast<float>(screenSize.x), Locator::time::value().GetInputSteps());
 				}
 				if (_handOnCreature.has_value())
@@ -1233,7 +1244,7 @@ void Game::UpdateDrawnHand(std::chrono::microseconds deltaTime, Profiler& profil
 				// A thing the hand takes or holds lifts it, and makes ready to throw, its spring drags it
 				glm::vec3 rayOrigin;
 				glm::vec3 rayDirection;
-				camera.DeprojectScreenToWorld(static_cast<glm::vec2>(_mousePosition) / static_cast<glm::vec2>(screenSize),
+				camera.DeprojectScreenToWorld(static_cast<glm::vec2>(HandCursor()) / static_cast<glm::vec2>(screenSize),
 				                              rayOrigin, rayDirection);
 				const auto land = _cursorWorldPosition.value_or(handTransform.position);
 				handTransform.position = Locator::handGrabSystem::value().UpdateFrame({
@@ -1265,7 +1276,9 @@ void Game::UpdateDrawnHand(std::chrono::microseconds deltaTime, Profiler& profil
 			const auto screenSize = Locator::windowing::has_value() ? Locator::windowing::value().GetSize() : glm::ivec2(0);
 			// The pointer is put back on the hand every frame, so how far it went from there is how far the mouse
 			// moved
-			const int up = _totemPointer.has_value() ? _totemPointer->y - _mousePosition.y : 0;
+			auto& handPress = Locator::handPressSystem::value();
+			const auto& totemPointer = handPress.GetTotemPointer();
+			const int up = totemPointer.has_value() ? totemPointer->y - handPress.GetMousePosition().y : 0;
 			std::optional<ecs::systems::VillageTotemSystemInterface::HandHold> hold;
 			if (townTotem)
 			{
@@ -1294,13 +1307,12 @@ void Game::UpdateDrawnHand(std::chrono::microseconds deltaTime, Profiler& profil
 					if (at.x >= 0 && at.y >= 0 && at.x < screenSize.x && at.y < screenSize.y)
 					{
 						// Only put when it isn't there already
-						if (at != _mousePosition)
+						if (at != handPress.GetMousePosition())
 						{
 							Locator::gameActionSystem::value().WarpCursor(at);
-							_mousePosition = at;
-							_handPointer.Moved();
+							handPress.MovePointer(at);
 						}
-						_totemPointer = at;
+						handPress.SetTotemPointer(at);
 					}
 				}
 			}
@@ -1332,7 +1344,7 @@ void Game::PoseHeldThing(std::chrono::microseconds deltaTime, const Camera& came
 	{
 		const magic::HandHoldPoser::Frame holdFrame {
 		    .dt = deltaTime,
-		    .cursor = _mousePosition,
+		    .cursor = HandCursor(),
 		    .camera = camera.GetOrigin(),
 		    .heading = _handHeadingAngle,
 		    .modelCorrection = glm::mat3(glm::eulerAngleX(glm::radians(90.0f))),
@@ -1399,7 +1411,7 @@ void Game::AnimateHand(std::chrono::microseconds deltaTime, const Camera& camera
 		if (sideHold != nullptr)
 		{
 			_handAnimation->UpdateHeld(deltaTime, HandCycle::HoldSide,
-			                           ecs::village_totem::GripTimeMs(totemHold->closure, sideHold->duration), _mousePosition);
+			                           ecs::village_totem::GripTimeMs(totemHold->closure, sideHold->duration), HandCursor());
 		}
 		else if (pullClip != nullptr)
 		{
@@ -1407,19 +1419,19 @@ void Game::AnimateHand(std::chrono::microseconds deltaTime, const Camera& camera
 			    magic::hand_hold::DistanceFromView(camera.GetOrigin(), _handPosition, heldThing.has_value()));
 			_handAnimation->UpdateHeld(deltaTime, *pullCycle,
 			                           magic::hand_hold::TugTimeMs(pull->hold, pullClip->duration, pull->reach, handSize),
-			                           _mousePosition);
+			                           HandCursor());
 		}
 		else if (_handKnocking)
 		{
 			// Knocking on a house, the hand plays its tap once through, without leaning
 			const auto* tap = _handAnimation->GetAnimation(static_cast<size_t>(HandCycle::TapHouse));
 			const auto timeMs = _handKnock.Play(deltaTime, tap != nullptr ? tap->duration : 0);
-			_handAnimation->UpdateHeld(deltaTime, HandCycle::TapHouse, timeMs, _mousePosition);
-			_handAnimation->SettleCursor(_mousePosition);
+			_handAnimation->UpdateHeld(deltaTime, HandCycle::TapHouse, timeMs, HandCursor());
+			_handAnimation->SettleCursor(HandCursor());
 		}
 		else if (!holdingSeed)
 		{
-			_handAnimation->Update(deltaTime, state, cycle, _mousePosition, leash_snap::PinchShare(ropeHand));
+			_handAnimation->Update(deltaTime, state, cycle, HandCursor(), leash_snap::PinchShare(ropeHand));
 		}
 
 		const auto handEntity =
@@ -1622,8 +1634,8 @@ void Game::PlaceHand(ecs::components::Transform& handTransform, float deltaSecon
 		{
 			glm::vec3 rayOrigin;
 			glm::vec3 rayDirection;
-			camera.DeprojectScreenToWorld(static_cast<glm::vec2>(_mousePosition) / static_cast<glm::vec2>(screenSize),
-			                              rayOrigin, rayDirection);
+			camera.DeprojectScreenToWorld(static_cast<glm::vec2>(HandCursor()) / static_cast<glm::vec2>(screenSize), rayOrigin,
+			                              rayDirection);
 			if (!glm::any(glm::isnan(rayDirection)))
 			{
 				_handRayDirection = glm::normalize(rayDirection);
@@ -1659,7 +1671,7 @@ void Game::PlaceHand(ecs::components::Transform& handTransform, float deltaSecon
 		const auto size = Locator::windowing::value().GetSize();
 		if (size.x > 0 && size.y > 0)
 		{
-			const auto line = camera.OnNearPlane(static_cast<glm::vec2>(_mousePosition) / static_cast<glm::vec2>(size));
+			const auto line = camera.OnNearPlane(static_cast<glm::vec2>(HandCursor()) / static_cast<glm::vec2>(size));
 			lineEye = line.eye;
 			cursorNearPoint = line.point;
 		}
@@ -1795,7 +1807,7 @@ void Game::UpdateHandNavigation(const ecs::components::Transform& handTransform)
 		cues.tricons = Locator::handDemoSystem::value().GetHints();
 	}
 	// Dragging the land is the hand's camera state; turning the camera with the middle button or both buttons isn't
-	const bool cameraState = _handGripping && !_handRotating;
+	const bool cameraState = HandButtons().gripping && !HandButtons().rotating;
 	auto pose = Pose::Idle;
 	if (cameraState)
 	{
@@ -1909,7 +1921,7 @@ void Game::UpdateHandTricons(bool handDrawn, float seconds, hand_blend::HandMode
 	tricons.hand = {static_cast<int>((clip.x / clip.w + 1.0f) * screen.x * 0.5f),
 	                static_cast<int>((1.0f - clip.y / clip.w) * screen.y * 0.5f)};
 	// They lean towards the cursor the hand follows this frame, after any warp onto the edge's turning ring
-	tricons.cursor = _mousePosition;
+	tricons.cursor = HandCursor();
 	// The same size on the screen at any distance: a part of the focal length across
 	tricons.halfSize = hand_tricons::IconHalfSize(camera.GetProjectionMatrix()[0][0], glm::ivec2(screen));
 	// The mode of the hand decides whether they show
@@ -1930,7 +1942,7 @@ void Game::OrientHand(ecs::components::Transform& handTransform, const glm::mat3
 	{
 		glm::vec3 rayOrigin;
 		glm::vec3 rayDirection;
-		camera.DeprojectScreenToWorld(static_cast<glm::vec2>(_mousePosition) / static_cast<glm::vec2>(screenSize), rayOrigin,
+		camera.DeprojectScreenToWorld(static_cast<glm::vec2>(HandCursor()) / static_cast<glm::vec2>(screenSize), rayOrigin,
 		                              rayDirection);
 		if (!glm::any(glm::isnan(rayDirection)))
 		{
@@ -1949,8 +1961,8 @@ void Game::OrientHand(ecs::components::Transform& handTransform, const glm::mat3
 	// stands up towards where the camera looks instead. Dragging the land it holds its up, or stands straight towards
 	// the camera's focus showing it turns the camera; letting go it stands up straight and eases from there.
 	using hand_navigation_pose::Pose;
-	const bool cursorMovedAcross = _mousePosition.x != _handLastCursorX;
-	_handLastCursorX = _mousePosition.x;
+	const bool cursorMovedAcross = HandCursor().x != _handLastCursorX;
+	_handLastCursorX = HandCursor().x;
 	// A hand that holds a thing keeps the rules of the hand that holds, also while it drags the land
 	const bool holdsSeed = magic::HandHoldPoser::Find().has_value();
 	const bool holds =
@@ -2042,7 +2054,7 @@ void Game::EndHandTrace(const glm::vec3& placed, const ecs::components::Transfor
 	{
 		return;
 	}
-	frame->cursor = glm::vec2(_mousePosition);
+	frame->cursor = glm::vec2(HandCursor());
 	frame->placed = placed;
 	frame->drawn = hand.position;
 	// The hand shows where its fingertips are as posed, which its pose can carry away from its origin
@@ -2103,7 +2115,7 @@ void Game::UpdateMagicHand(const glm::vec3& handPosition, float deltaSeconds)
 	if (screenSize.x > 0 && screenSize.y > 0)
 	{
 		Locator::camera::value().DeprojectScreenToWorld(
-		    static_cast<glm::vec2>(_mousePosition) / static_cast<glm::vec2>(screenSize), frame.rayOrigin, frame.rayDirection);
+		    static_cast<glm::vec2>(HandCursor()) / static_cast<glm::vec2>(screenSize), frame.rayOrigin, frame.rayDirection);
 	}
 	frame.cameraForward = Locator::camera::value().GetForward();
 	const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();

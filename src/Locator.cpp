@@ -177,6 +177,7 @@
 #include "ECS/Systems/IncomingMessageSystemInterface.h"
 #include "ECS/Systems/InspectorSystemInterface.h"
 #include "ECS/Systems/NetworkGameSystemInterface.h"
+#include "ECS/Systems/OwnReportSystemInterface.h"
 #include "ECS/Systems/PlayerCommandSystemInterface.h"
 #include "ECS/Systems/PlayerProfileSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
@@ -1033,6 +1034,8 @@ void openblack::ShutDownServices()
 	Locator::appleBarrelSystem::reset();
 	Locator::weatherSystem::reset();
 	Locator::handGrabSystem::reset();
+	Locator::handPressSystem::reset();
+	Locator::gameKeysSystem::reset();
 	Locator::handSystem::reset();
 	Locator::pathfindingSystem::reset();
 	Locator::creatureLocomotionSystem::reset();
@@ -1145,6 +1148,7 @@ void openblack::ShutDownServices()
 	Locator::skyClockSystem::reset();
 	Locator::cameraHelpSystem::reset();
 	Locator::turnCheerSystem::reset();
+	Locator::ownReportSystem::reset();
 	Locator::cameraPathSystem::reset();
 	Locator::cloudSystem::reset();
 	Locator::mistSystem::reset();
@@ -1179,6 +1183,8 @@ void openblack::ShutDownServices()
 	Locator::rng::reset();
 	// The music and the ambience of the land go last. The sounds are gone, so the music does not stop again.
 	Locator::gameAudioSystem::reset();
+	// The logs of a tool's run go last, because the systems above can write to them until they go
+	Locator::toolRunSystem::reset();
 }
 
 bool openblack::StartInspector([[maybe_unused]] uint16_t port)
