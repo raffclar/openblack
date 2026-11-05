@@ -244,6 +244,7 @@
 #include "ECS/Systems/ThingsMadeSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TipBubbleSystemInterface.h"
+#include "ECS/Systems/ToolRunSystemInterface.h"
 #include "ECS/Systems/TornadoSystemInterface.h"
 #include "ECS/Systems/TownDesireSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
@@ -483,6 +484,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"videoSystem", "view.video"},
     LocatorCoverage {"screenFade", "view.video"},
     LocatorCoverage {"gameInterface", "gui.windows"},
+    LocatorCoverage {"toolRunSystem", "engine.tool_run"},
     LocatorCoverage {"playerProfileSystem", "players.new_game"},
     LocatorCoverage {"profileFolderSystem", "players.profile_folder"},
     LocatorCoverage {"musicMoodSystem", "players.custom_music"},
@@ -912,6 +914,17 @@ std::unique_ptr<ProviderInterface> EngineProvider()
 		                                            {"camera_paths", resources.GetCameraPaths().Size()},
 		                                        };
 	                                        }));
+	provider->Add(
+	    Query("tool_run", "Which logs and tools of a tool's run are open: the file of the commands of each turn, the file "
+	                      "of the commands of the testbed scenario, the file of the checksums, the guard of the frame steps "
+	                      "and the fight autopilot"),
+	    Serve<Locator::toolRunSystem>(
+	        "the logs of a tool's run", [](const ecs::systems::ToolRunSystemInterface& toolRun, const QueryContext& /*c*/) {
+		        const auto state = toolRun.GetState();
+		        return Json {{"command_log", state.commandLog},         {"scenario_gives", state.scenarioGives},
+		                     {"checksum_log", state.checksumLog},       {"frame_guard", state.frameGuard},
+		                     {"fight_autopilot", state.fightAutopilot}, {"test_leave_done", state.testLeaveDone}};
+	        }));
 	provider->Add(Query("services", "Which of the engine's services are there, the game's random seeds, the game's path, the "
 	                                "debug windows' focus and the inspector's port"),
 	              [](const QueryContext& /*context*/) {

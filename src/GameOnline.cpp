@@ -648,7 +648,7 @@ bool Game::StartNetworkLand(const game_socket::Start& start)
 			                   "The land, the seed and the start of the game server win: this computer had another {}",
 			                   differences);
 		}
-		StartInputTools();
+		Locator::toolRunSystem::value().StartInputTools();
 	}
 	// The client starts the land as the game server started it: the same new-game start and the same seed, as a network
 	// game. Each computer reads the date from its own clock, as in the original game. Only a run of a tool keeps its

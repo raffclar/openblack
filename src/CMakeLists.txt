@@ -75,7 +75,7 @@ set(OPENBLACK_ALL_SOURCES ${OPENBLACK_SOURCES})
 # files in these folders that the world uses with no device: they are in the simulation. The list also gives the headers
 # with no source that the simulation uses, such as the interfaces that the client makes and the world calls.
 set(OPENBLACK_CLIENT_STEMS
-    "/src/(Graphics|Gui|Windowing|Input|Video|Editor|Audio|Debug|Inspector|Web)/.*|/src/(Game|GameDetail|GameFlow|GameFrame|GameHand|GameInput|GameMenus|GameOnline|GameReports|GameStartup|GameSession|GameSkirmish|GameView|LaunchSwitches|LocatorClient)|/src/Resources/GameAssets|/src/3D/Implementations/Ocean|/ECS/Systems/Implementations/RenderingSystem[A-Za-z]*"
+    "/src/(Graphics|Gui|Windowing|Input|Video|Editor|Audio|Debug|Inspector|Web)/.*|/src/(Game|GameDetail|GameFlow|GameFrame|GameHand|GameInput|GameMenus|GameOnline|GameReports|GameStartup|GameSession|GameSkirmish|GameView|LaunchSwitches|LocatorClient)|/src/Resources/GameAssets|/src/3D/Implementations/Ocean|/ECS/Systems/Implementations/(RenderingSystem[A-Za-z]*|ToolRunSystem)"
 )
 set(OPENBLACK_CLIENT_SOURCES ${OPENBLACK_SOURCES})
 list(FILTER OPENBLACK_CLIENT_SOURCES INCLUDE REGEX

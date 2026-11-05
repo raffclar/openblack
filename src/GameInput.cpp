@@ -74,7 +74,6 @@
 #include "ECS/Systems/HelpProfileSystemInterface.h"
 #include "ECS/Systems/HelpTextSystemInterface.h"
 #include "ECS/Systems/Implementations/VillagerDisciples.h"
-#include "ECS/Systems/InspectorSystemInterface.h"
 #include "ECS/Systems/IntroSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
@@ -875,23 +874,6 @@ void Game::UpdateCameraKeys(std::chrono::microseconds deltaTime)
 	{
 		Locator::danceSystem::value().ProcessCameraKeys(hand::script_state::StateOf(grip) ==
 		                                                hand::script_state::State::GripLandscape);
-	}
-}
-
-void Game::StartInputTools()
-{
-	// A tool's run can record the input of the hand from the first frame of the next land, for a later run to make again
-	if (_simulation.has_value() && _simulation->recordInputPath.has_value() && Locator::inspector::has_value())
-	{
-		Locator::inspector::value().RecordInputOnLoad(*_simulation->recordInputPath);
-	}
-	// A tool's run can give the hand recorded input from the first frame of the next land
-	if (_simulation.has_value() && _simulation->inputPath.has_value() && Locator::inspector::has_value())
-	{
-		if (const auto error = Locator::inspector::value().ReplayOnLoad(*_simulation->inputPath); error.has_value())
-		{
-			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The recorded input cannot start: {}", *error);
-		}
 	}
 }
 
