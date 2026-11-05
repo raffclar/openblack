@@ -1000,7 +1000,7 @@ static void SetPropertyOf(entt::entity object, script::ObjectPropertyType prop, 
 			const auto& at = transform->position;
 			const float land =
 			    Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().GetHeightAt(glm::vec2(at.x, at.z)) : 0.0f;
-			transform->position.y = land + value;
+			transform->position.y = script::property_rules::HeightAboveLand(land, value);
 		}
 		return;
 	}

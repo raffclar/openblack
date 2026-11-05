@@ -125,6 +125,11 @@ float CreatureHeight(float size)
 	return size * k_CreatureHeightPerSize;
 }
 
+float HeightAboveLand(float land, float value)
+{
+	return land + value;
+}
+
 float CreatureSizeForHeight(float height)
 {
 	return height * k_CreatureSizePerHeight;
