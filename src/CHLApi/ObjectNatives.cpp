@@ -1920,16 +1920,10 @@ void SetIndestructable() // 298 SET_INDESTRUCTABLE
 			registry.Remove<ecs::components::Indestructible>(thing);
 		}
 	};
-	// A town is marked through every villager of it; anything else itself
-	if (registry.AllOf<ecs::components::Town>(object))
+	// A town, a flock or a dance is marked through each of its members, not itself. Anything else is marked itself.
+	if (IsScriptContainer(registry, object))
 	{
-		registry.Each<const ecs::components::Villager>(
-		    [&mark, object](entt::entity villager, const ecs::components::Villager& person) {
-			    if (person.town == object)
-			    {
-				    mark(villager);
-			    }
-		    });
+		std::ranges::for_each(ContainerMembers(registry, object), mark);
 		return;
 	}
 	mark(object);
