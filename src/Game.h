@@ -28,6 +28,7 @@
 #include <glm/vec3.hpp>
 #include <spdlog/common.h>
 
+#include "3D/HandAnimation.h"
 #include "3D/HandCrossFade.h"
 #include "3D/HandNavigationPose.h"
 #include "Common/BuildVersion.h"
@@ -84,7 +85,7 @@ class AtmosAudio;
 class GameMusic;
 } // namespace audio
 class Camera;
-class HandAnimation;
+class Profiler;
 namespace gui
 {
 class GameInterface;
@@ -94,11 +95,18 @@ class LoadingScreen;
 } // namespace gui
 namespace ecs::components
 {
+struct InterfaceLimits;
 struct Transform;
-}
+} // namespace ecs::components
 namespace ecs::systems
 {
+class CreatureFightSystemInterface;
 class HandGrabSystemInterface;
+class MagicSystemInterface;
+} // namespace ecs::systems
+namespace map_coords
+{
+struct MapCoords;
 }
 namespace help::profile
 {
@@ -923,6 +931,45 @@ private:
 	/// The camera's helper icons by the hand while a tutorial demonstration plays, from where the hand is drawn; none
 	/// while the hand is put away
 	void UpdateHandTricons(bool handDrawn, float seconds, hand_blend::HandMode mode);
+	/// The part of the hand's frame that reads what is under the cursor: the gestures, the input of the leash, and the
+	/// place where the hand rests
+	void UpdateHandCursor(std::chrono::microseconds deltaTime, Profiler& profiler, Camera& camera,
+	                      ecs::components::Transform& intersectionTransform, std::optional<map_coords::MapCoords>& handPick);
+	/// The part of the hand's frame that puts the drawn hand at its place, or keeps it away
+	void UpdateDrawnHand(std::chrono::microseconds deltaTime, Profiler& profiler, Camera& camera,
+	                     const std::chrono::duration<float, std::milli>& gameTime,
+	                     const ecs::components::Transform& intersectionTransform);
+	/// The part of the hand's frame that poses the hand with the seed or the thing that it holds
+	void PoseHeldThing(std::chrono::microseconds deltaTime, const Camera& camera, const EngineConfig& config,
+	                   const std::optional<magic::HandHoldPoser::HeldSeed>& heldSeed,
+	                   const std::optional<magic::HandHoldPoser::HeldSeed>& heldThing, bool& holdingSeed);
+	/// The part of the hand's frame that animates the hand and finds what is below it, for the blend of the drawn hand
+	void AnimateHand(std::chrono::microseconds deltaTime, const Camera& camera, const EngineConfig& config,
+	                 const std::optional<magic::HandHoldPoser::HeldSeed>& heldThing, bool holdingSeed,
+	                 HandAnimation::Cycle& handCycle, bool& nothingUnderHand, bool& gripsTotem, bool& pulls);
+	/// The part of the hand's frame that blends the drawn hand when it takes or lets go of a seed, and puts the effect of
+	/// the seed in its fingers
+	void BlendHeldSeed(const Camera& camera, const std::chrono::duration<float, std::milli>& gameTime,
+	                   const std::optional<magic::HandHoldPoser::HeldSeed>& heldSeed,
+	                   const std::optional<magic::HandHoldPoser::HeldSeed>& heldThing, HandAnimation::Cycle handCycle,
+	                   bool nothingUnderHand, hand_blend::HandMode mode);
+	/// The part of the window's events that lets go of what the Action button holds or takes
+	void ProcessActionLetGo(const SDL_Event& event, bool rightLetGo, bool inTemple, bool handTakesPresses,
+	                        ecs::systems::CreatureHandSystemInterface& creatureHand, ecs::systems::MagicSystemInterface& magic,
+	                        ecs::systems::HandGrabSystemInterface* handGrab, bool handHoldsThing);
+	/// The part of the window's events that does a press of the Action button
+	void ProcessActionPress(const SDL_Event& event, bool inTemple, bool handTakesPresses,
+	                        ecs::systems::CreatureHandSystemInterface& creatureHand,
+	                        ecs::systems::CreatureFightSystemInterface& fights, ecs::systems::MagicSystemInterface& magic,
+	                        ecs::systems::HandGrabSystemInterface* handGrab, bool handHoldsThing,
+	                        const ecs::components::InterfaceLimits& interfaceLimits, bool mayHold);
+	/// The part of the window's events that does a press of the Move button
+	void ProcessMovePress(const SDL_Event& event, bool middleMouseButton, bool inTemple, bool handTakesPresses,
+	                      ecs::systems::CreatureHandSystemInterface& creatureHand,
+	                      ecs::systems::CreatureFightSystemInterface& fights, ecs::systems::MagicSystemInterface& magic);
+	/// The part of the window's events that does the keys: Escape, the full screen key, the pause key and the developer
+	/// keys. It gives false when the event must go no further.
+	bool ProcessKeyPress(const SDL_Event& event, windowing::WindowingInterface& window, Camera& camera);
 	/// Places the hand on the line of sight through the cursor the way the game does
 	void PlaceHand(ecs::components::Transform& handTransform, float deltaSeconds);
 	/// What sets how far from the camera the hand may hover this frame, without where it rests
