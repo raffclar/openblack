@@ -320,8 +320,9 @@ TugResult hand_grab::PullAt(Tug& tug, const TugFrame& frame)
 	TugResult result;
 	const auto grip = TugGrip(tug, frame.holdDistance);
 	// The pull is a spring from where the hand grips it to the hand, no stronger than the hand
+	// The game adds the squares of x and z first, then the square of y
 	const auto stretch = frame.hand - grip;
-	const float distance = glm::length(stretch);
+	const float distance = x87::Length<x87::SumOrder::Xzy>(stretch);
 	result.force = k_TugStiffness * distance >= frame.maxForce && distance > 0.0f ? stretch * (frame.maxForce / distance)
 	                                                                              : stretch * k_TugStiffness;
 	// It stretches towards the hand, by how far the hand is from its grip against how far up it is gripped
@@ -330,22 +331,25 @@ TugResult hand_grab::PullAt(Tug& tug, const TugFrame& frame)
 		result.stretchTarget = std::min((distance + frame.holdDistance) / frame.holdDistance, k_TugMaxStretch);
 	}
 	// A tree comes free once the hand is strong enough to lift it and pulls harder than it weighs; anything else at once
-	result.comesFree =
-	    !frame.tree || (frame.weight * physics::k_Gravity <= frame.maxForce && frame.weight < glm::length(result.force));
+	result.comesFree = !frame.tree || (frame.weight * physics::k_Gravity <= frame.maxForce &&
+	                                   frame.weight < x87::Length<x87::SumOrder::Xzy>(result.force));
 
-	// The pull turns it about its base, against its heaviness and a damping that grows with its spin
-	const glm::vec3 torque = frame.leans ? glm::cross(grip - tug.base, result.force) / k_TugTurnInertia : glm::vec3(0.0f);
-	const float damping = glm::length(tug.spin) * k_TugTurnDamping * frame.seconds / k_TugTurnInertia;
+	// The pull turns it about its base, against its heaviness and a damping that grows with its spin. The game
+	// multiplies the turn by one over the heaviness, but divides the damping by the heaviness.
+	constexpr float k_OverInertia = 1.0f / k_TugTurnInertia;
+	const glm::vec3 torque = frame.leans ? glm::cross(grip - tug.base, result.force) * k_OverInertia : glm::vec3(0.0f);
+	const float damping = x87::Length<x87::SumOrder::Xzy>(tug.spin) * k_TugTurnDamping * frame.seconds / k_TugTurnInertia;
 	tug.spin += torque * frame.seconds - tug.spin * damping;
 	const auto halfBefore = tug.base + tug.axes[1] * (0.5f * frame.height);
 	const auto turn = tug.spin * frame.seconds;
 	if (const float angle = glm::length(turn); angle > 0.0f)
 	{
-		tug.axes = glm::mat3(portable_math::Rotate(glm::mat4(1.0f), angle, turn / angle)) * tug.axes;
+		tug.axes = glm::mat3(portable_math::Rotate(glm::mat4(1.0f), angle, turn * (1.0f / angle))) * tug.axes;
 	}
 	// How fast its middle moves as it leans, the speed it has when it comes free
 	const auto halfAfter = tug.base + tug.axes[1] * (0.5f * frame.height);
-	tug.pullVelocity = frame.leans && frame.seconds > 0.0f ? (halfAfter - halfBefore) / frame.seconds : glm::vec3(0.0f);
+	tug.pullVelocity =
+	    frame.leans && frame.seconds > 0.0f ? (halfAfter - halfBefore) * (1.0f / frame.seconds) : glm::vec3(0.0f);
 	return result;
 }
 
