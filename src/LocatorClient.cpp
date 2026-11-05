@@ -35,6 +35,7 @@
 #include "ECS/Systems/Implementations/CreatureHairSystem.h"
 #include "ECS/Systems/Implementations/DesignedWaterfallSystem.h"
 #include "ECS/Systems/Implementations/FloatingNumberSystem.h"
+#include "ECS/Systems/Implementations/GameAudioSystem.h"
 #include "ECS/Systems/Implementations/IncomingMessageSystem.h"
 #include "ECS/Systems/Implementations/LandShadeSystem.h"
 #include "ECS/Systems/Implementations/LiquidParticleSystem.h"
@@ -65,6 +66,7 @@ using openblack::ecs::systems::CloudSystem;
 using openblack::ecs::systems::CreatureHairSystem;
 using openblack::ecs::systems::DesignedWaterfallSystem;
 using openblack::ecs::systems::FloatingNumberSystem;
+using openblack::ecs::systems::GameAudioSystem;
 using openblack::ecs::systems::IncomingMessageSystem;
 using openblack::ecs::systems::LandShadeSystem;
 using openblack::ecs::systems::LiquidParticleSystem;
@@ -162,6 +164,8 @@ void openblack::InitializePresentation()
 	Locator::designedWaterfallSystem::emplace<DesignedWaterfallSystem>();
 	Locator::liquidParticleSystem::emplace<LiquidParticleSystem>();
 	Locator::floatingNumberSystem::emplace<FloatingNumberSystem>();
+	// The music and the ambience of the land. The first land makes them.
+	Locator::gameAudioSystem::emplace<GameAudioSystem>();
 }
 
 void openblack::InitializeClient(const player_profiles::Store& profiles)

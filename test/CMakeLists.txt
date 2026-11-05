@@ -2388,6 +2388,7 @@ openblack_setup_and_add_test(test_curl_websocket_thread online/test_curl_websock
 openblack_setup_and_add_test(test_script_place_text test_script_place_text.cpp)
 openblack_setup_and_add_test(test_debug_download test_debug_download.cpp)
 openblack_setup_and_add_test(test_creature_mind_view test_creature_mind_view.cpp)
+openblack_setup_and_add_test(test_game_music_turn audio/test_game_music_turn.cpp)
 openblack_setup_and_add_test(
   test_oracle_physics_step oracle/test_oracle_physics_step.cpp
 )
