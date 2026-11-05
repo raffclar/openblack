@@ -23,6 +23,7 @@
 
 #include <LNDFile.h>
 #include <OnlineMapFile.h>
+#include <glm/vec2.hpp>
 #include <gtest/gtest.h>
 
 #include "3D/BlockTexture.h"
@@ -79,9 +80,10 @@ LandData SeedLand()
 	return land;
 }
 
-/// Reads a ".map" file as the game reads a downloaded land, then paints each block of the land. Gives true when the
-/// file read as a land. A table place that the land data keeps names only a block that the land has.
-bool ReadAndPaint(const std::vector<uint8_t>& bytes)
+/// Reads a ".map" file as the game reads a downloaded land, then paints a rectangle of 4 by 4 cells of each block. The
+/// run selects the place of the rectangle, so that the runs paint all the cells. Gives true when the file read as a land.
+/// A table place that the land data keeps names only a block that the land has.
+bool ReadAndPaint(const std::vector<uint8_t>& bytes, int run)
 {
 	const auto file = onlinemap::Parse(std::as_bytes(std::span(bytes)));
 	if (!file.has_value())
@@ -115,10 +117,15 @@ bool ReadAndPaint(const std::vector<uint8_t>& bytes)
 	    .noise = land.noise,
 	    .bump = land.bump,
 	};
-	std::vector<uint8_t> rgba(block_texture::k_BlockBytes);
+	constexpr int k_Cells = 4;
+	constexpr int k_Places = block_texture::k_BlockCells - k_Cells + 1;
+	const glm::ivec2 firstCell {run % k_Places, (run / k_Places) % k_Places};
+	const glm::ivec2 cellCount {k_Cells, k_Cells};
+	std::vector<uint8_t> rgba(static_cast<size_t>(k_Cells * block_texture::k_TexelsPerCell) * k_Cells *
+	                          block_texture::k_TexelsPerCell * 4);
 	for (const auto& block : land.blocks)
 	{
-		block_texture::BuildBlock(block.cells, sources, rgba);
+		block_texture::PaintCells(block.cells, sources, firstCell, cellCount, rgba);
 	}
 	return true;
 }
@@ -130,7 +137,7 @@ bool ReadAndPaint(const std::vector<uint8_t>& bytes)
 TEST(MapParserFuzz, ChangedBytesOfALandFileDoNotStopTheReaderOrThePaint)
 {
 	const auto seed = *onlinemap::Write(k_Script, SeedLand().LndBytes());
-	ASSERT_TRUE(ReadAndPaint(seed));
+	ASSERT_TRUE(ReadAndPaint(seed, 0));
 	const size_t landscape = 8 + k_Script.size();
 	std::mt19937 random(20261106);
 	const auto pick = [&random](size_t from, size_t to) { return std::uniform_int_distribution<size_t>(from, to - 1)(random); };
@@ -156,7 +163,7 @@ TEST(MapParserFuzz, ChangedBytesOfALandFileDoNotStopTheReaderOrThePaint)
 		{
 			bytes.resize(pick(0, bytes.size()));
 		}
-		ReadAndPaint(bytes);
+		ReadAndPaint(bytes, run);
 		if (testing::Test::HasFailure())
 		{
 			FAIL() << "run " << run;
@@ -212,7 +219,7 @@ TEST(MapParserFuzz, IndexesPastTheTablesOfALandDoNotReadPastThem)
 			}
 		}
 		const auto bytes = *onlinemap::Write(k_Script, land.LndBytes());
-		ASSERT_TRUE(ReadAndPaint(bytes)) << "run " << run;
+		ASSERT_TRUE(ReadAndPaint(bytes, run)) << "run " << run;
 		if (testing::Test::HasFailure())
 		{
 			FAIL() << "run " << run;
