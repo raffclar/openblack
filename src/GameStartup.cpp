@@ -312,7 +312,8 @@ bool Game::AskForNewPlayer()
 	{
 		return true;
 	}
-	if (!_interface || !Locator::windowing::has_value() || Locator::config::value().graphicsBackend == GraphicsBackend::Noop)
+	if (!Locator::gameInterface::has_value() || !Locator::windowing::has_value() ||
+	    Locator::config::value().graphicsBackend == GraphicsBackend::Noop)
 	{
 		// With no box to ask in, the player gets the profile the game makes for one who gives no name: the account's
 		profiles.CreateProfile(u"", 0);
@@ -322,7 +323,8 @@ bool Game::AskForNewPlayer()
 	const ecs::systems::InspectorLoading asking("new player");
 	SPDLOG_LOGGER_INFO(spdlog::get("game"), "No player has a profile: asking the new player for their name");
 	SDL_StartTextInput();
-	_interface->ShowNewPlayerBox(false, [&profiles](std::u16string_view name) { return profiles.CheckNewName(name); });
+	Locator::gameInterface::value().ShowNewPlayerBox(
+	    false, [&profiles](std::u16string_view name) { return profiles.CheckNewName(name); });
 	gui::menu_backdrop::Fade fade;
 	auto last = Milliseconds();
 	while (!gui::menu_backdrop::FadeOver(fade) && !_quitRequested)
@@ -330,7 +332,7 @@ bool Game::AskForNewPlayer()
 		const auto now = Milliseconds();
 		const auto frame = static_cast<int>(now - last);
 		last = now;
-		auto& box = _interface->GetNewPlayerBox();
+		auto& box = Locator::gameInterface::value().GetNewPlayerBox();
 		const auto resolution = static_cast<glm::u16vec2>(Locator::windowing::value().GetSize());
 		SDL_Event event;
 		while (SDL_PollEvent(&event) != 0)
@@ -343,7 +345,7 @@ bool Game::AskForNewPlayer()
 			}
 			else
 			{
-				_interface->ProcessNewPlayerBoxEvent(event, resolution);
+				Locator::gameInterface::value().ProcessNewPlayerBoxEvent(event, resolution);
 			}
 		}
 		// The profile is made as the box is answered
@@ -353,15 +355,16 @@ bool Game::AskForNewPlayer()
 		}
 		gui::menu_backdrop::StepFade(fade, !box.IsActive(), frame);
 		const auto mouse = input::WindowPointer();
-		PresentStartupFrame([this, mouse, frame, &fade](glm::u16vec2 size) {
-			_interface->DrawNewPlayerScreen(size, mouse, machine_clock::Ticks(), static_cast<float>(frame), fade.alpha);
+		PresentStartupFrame([mouse, frame, &fade](glm::u16vec2 size) {
+			Locator::gameInterface::value().DrawNewPlayerScreen(size, mouse, machine_clock::Ticks(), static_cast<float>(frame),
+			                                                    fade.alpha);
 		});
 	}
 	SDL_StopTextInput();
 	if (const auto profile = profiles.GetCurrentProfile(); profile.has_value())
 	{
-		_interface->SetPlayerProfile(gui::ToUtf16(profile->name), gui::ToUtf16(profile->creatureName), profile->symbol,
-		                             profile->settings);
+		Locator::gameInterface::value().SetPlayerProfile(gui::ToUtf16(profile->name), gui::ToUtf16(profile->creatureName),
+		                                                 profile->symbol, profile->settings);
 		RefreshPlayersPage();
 	}
 	return !_quitRequested;
@@ -369,7 +372,8 @@ bool Game::AskForNewPlayer()
 
 std::optional<std::filesystem::path> Game::AskForSkirmishLand()
 {
-	if (!_interface || !Locator::windowing::has_value() || Locator::config::value().graphicsBackend == GraphicsBackend::Noop)
+	if (!Locator::gameInterface::has_value() || !Locator::windowing::has_value() ||
+	    Locator::config::value().graphicsBackend == GraphicsBackend::Noop)
 	{
 		SPDLOG_LOGGER_WARN(spdlog::get("game"), "The -SKIRMISH switch: there is no window for the skirmish box");
 		return std::nullopt;
@@ -382,9 +386,11 @@ std::optional<std::filesystem::path> Game::AskForSkirmishLand()
 	names.reserve(_skirmishLands.size());
 	for (const auto& land : _skirmishLands)
 	{
-		names.push_back(land.titleText.has_value() ? std::u16string(_interface->GetTexts().Get(*land.titleText)) : land.stem);
+		names.push_back(land.titleText.has_value()
+		                    ? std::u16string(Locator::gameInterface::value().GetTexts().Get(*land.titleText))
+		                    : land.stem);
 	}
-	_interface->ShowSkirmishBox(std::move(names));
+	Locator::gameInterface::value().ShowSkirmishBox(std::move(names));
 	gui::menu_backdrop::Fade fade;
 	auto last = Milliseconds();
 	std::optional<std::filesystem::path> picked;
@@ -403,7 +409,7 @@ std::optional<std::filesystem::path> Game::AskForSkirmishLand()
 		const auto now = Milliseconds();
 		const auto frame = static_cast<int>(now - last);
 		last = now;
-		auto& box = _interface->GetSkirmishBox();
+		auto& box = Locator::gameInterface::value().GetSkirmishBox();
 		const auto resolution = static_cast<glm::u16vec2>(Locator::windowing::value().GetSize());
 		SDL_Event event;
 		while (SDL_PollEvent(&event) != 0)
@@ -416,7 +422,7 @@ std::optional<std::filesystem::path> Game::AskForSkirmishLand()
 			}
 			else
 			{
-				_interface->ProcessSkirmishBoxEvent(event, resolution);
+				Locator::gameInterface::value().ProcessSkirmishBoxEvent(event, resolution);
 			}
 		}
 		if (const auto answer = box.TakeAnswer();
@@ -427,8 +433,9 @@ std::optional<std::filesystem::path> Game::AskForSkirmishLand()
 		}
 		gui::menu_backdrop::StepFade(fade, !box.IsActive(), frame);
 		const auto mouse = input::WindowPointer();
-		PresentStartupFrame([this, mouse, frame, &fade](glm::u16vec2 size) {
-			_interface->DrawNewPlayerScreen(size, mouse, machine_clock::Ticks(), static_cast<float>(frame), fade.alpha);
+		PresentStartupFrame([mouse, frame, &fade](glm::u16vec2 size) {
+			Locator::gameInterface::value().DrawNewPlayerScreen(size, mouse, machine_clock::Ticks(), static_cast<float>(frame),
+			                                                    fade.alpha);
 		});
 	}
 	return _quitRequested ? std::nullopt : picked;
@@ -523,7 +530,8 @@ void Game::PlayLogoScreens()
 
 void Game::PlayLogoEffect()
 {
-	if (!_interface || !Locator::windowing::has_value() || Locator::config::value().graphicsBackend == GraphicsBackend::Noop)
+	if (!Locator::gameInterface::has_value() || !Locator::windowing::has_value() ||
+	    Locator::config::value().graphicsBackend == GraphicsBackend::Noop)
 	{
 		return;
 	}
@@ -571,7 +579,7 @@ void Game::PlayLogoEffect()
 	}
 	const auto words = ProcessorWords();
 	const bool sponsor = words.has_value() && logo_effect::ShowsSponsorLogo(words->first, words->second);
-	_interface->PrepareLogoEffect();
+	Locator::gameInterface::value().PrepareLogoEffect();
 	const auto& camera = Locator::camera::value();
 	const logo_effect::Random random = [](float a, float b) { return Locator::gameRandom::value().CrtRandom(a, b); };
 	// The dots are placed with the game camera's lens as it is now
@@ -615,7 +623,7 @@ void Game::PlayLogoEffect()
 				dots.push_back({.corners = *corners, .argb = dot.colour, .additive = dot.additive});
 			}
 		}
-		const auto* dotTexture = _interface->GetLogoDotTexture();
+		const auto* dotTexture = Locator::gameInterface::value().GetLogoDotTexture();
 		PresentStartupFrame([&](glm::u16vec2 size) {
 			view->Draw({.position = frame.view.position,
 			            .right = frame.view.right,
@@ -631,23 +639,23 @@ void Game::PlayLogoEffect()
 			            .dotUvMin = logo_effect::k_DotUvMin,
 			            .dotUvMax = logo_effect::k_DotUvMax,
 			            .dotTexture = dotTexture});
-			_interface->DrawLogoEffectOverlay({.resolution = resolution,
-			                                   .origin = origin,
-			                                   .screen = screen,
-			                                   .text = picture->text,
-			                                   .tradeMark = picture->lionhead,
-			                                   .sponsor = sponsor,
-			                                   .textAlpha = frame.textAlpha,
-			                                   .logoAlpha = frame.logoAlpha,
-			                                   .fade = frame.fade});
-			_interface->DrawLogoEffectPicture(size, view->GetPicture());
+			Locator::gameInterface::value().DrawLogoEffectOverlay({.resolution = resolution,
+			                                                       .origin = origin,
+			                                                       .screen = screen,
+			                                                       .text = picture->text,
+			                                                       .tradeMark = picture->lionhead,
+			                                                       .sponsor = sponsor,
+			                                                       .textAlpha = frame.textAlpha,
+			                                                       .logoAlpha = frame.logoAlpha,
+			                                                       .fade = frame.fade});
+			Locator::gameInterface::value().DrawLogoEffectPicture(size, view->GetPicture());
 		});
 	}
 	SPDLOG_LOGGER_INFO(
 	    spdlog::get("game"), "The logo effect ends at time {:.3f} ({})", effect.GetTime(),
 	    effect.Ended() ? "its end" : (input.startup.key ? "a key" : (input.startup.mouse ? "a mouse button" : "the window")));
 	view.reset();
-	_interface->ReleaseLogoEffect();
+	Locator::gameInterface::value().ReleaseLogoEffect();
 	// The screen stays black while a mouse button is held
 	while (input.startup.mouse && !_quitRequested)
 	{

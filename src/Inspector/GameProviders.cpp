@@ -249,6 +249,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"landSystem", "level.current"},
     LocatorCoverage {"videoSystem", "view.video"},
     LocatorCoverage {"screenFade", "view.video"},
+    LocatorCoverage {"gameInterface", "gui.windows"},
     LocatorCoverage {"playerProfileSystem", "players.new_game"},
     LocatorCoverage {"profileFolderSystem", "players.profile_folder"},
     LocatorCoverage {"musicMoodSystem", "players.custom_music"},

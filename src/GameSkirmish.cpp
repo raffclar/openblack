@@ -52,7 +52,7 @@ std::vector<gui::skirmish_box::Land> Game::ReadSkirmishLands()
 
 bool Game::OpenSkirmishBoxOverGame()
 {
-	if (!_interface)
+	if (!Locator::gameInterface::has_value())
 	{
 		return false;
 	}
@@ -61,27 +61,30 @@ bool Game::OpenSkirmishBoxOverGame()
 	names.reserve(_skirmishLands.size());
 	for (const auto& land : _skirmishLands)
 	{
-		names.push_back(land.titleText.has_value() ? std::u16string(_interface->GetTexts().Get(*land.titleText)) : land.stem);
+		names.push_back(land.titleText.has_value()
+		                    ? std::u16string(Locator::gameInterface::value().GetTexts().Get(*land.titleText))
+		                    : land.stem);
 	}
 	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The skirmish box shows {} lands", names.size());
 	// The game that ended stays under the box and does not move on
 	Locator::time::value().SetPlayerPause(true);
-	_interface->ShowSkirmishBoxOverGame(std::move(names));
+	Locator::gameInterface::value().ShowSkirmishBoxOverGame(std::move(names));
 	return true;
 }
 
 void Game::FollowSkirmishBox()
 {
-	if (!_interface)
+	if (!Locator::gameInterface::has_value())
 	{
 		return;
 	}
-	if (auto answer = _interface->GetSkirmishBox().TakeAnswer(); answer.choice != gui::SkirmishBox::Choice::None)
+	if (auto answer = Locator::gameInterface::value().GetSkirmishBox().TakeAnswer();
+	    answer.choice != gui::SkirmishBox::Choice::None)
 	{
 		_skirmishAnswer = answer;
 	}
 	// The game acts on the answer once the screen is black after the box
-	if (!_skirmishAnswer.has_value() || _interface->ShowsBoxOverGame())
+	if (!_skirmishAnswer.has_value() || Locator::gameInterface::value().ShowsBoxOverGame())
 	{
 		return;
 	}
@@ -116,24 +119,25 @@ void Game::FollowSkirmishBox()
 
 void Game::ShowLandMessage(const land_message::Message& message)
 {
-	if (!_interface)
+	if (!Locator::gameInterface::has_value())
 	{
 		return;
 	}
 	// A number other than 0 names a help text that the box shows in place of the text of the script line
 	const auto helpText = land_message::HelpTextOf(message.number);
-	auto text = helpText.has_value() ? std::u16string(_interface->GetTexts().Get(*helpText)) : gui::ToUtf16(message.text);
-	_interface->ApplyLandMessage(std::move(text), message.kind == land_message::Message::Kind::Start);
+	auto text = helpText.has_value() ? std::u16string(Locator::gameInterface::value().GetTexts().Get(*helpText))
+	                                 : gui::ToUtf16(message.text);
+	Locator::gameInterface::value().ApplyLandMessage(std::move(text), message.kind == land_message::Message::Kind::Start);
 }
 
 void Game::FollowLandInfoBox()
 {
-	if (!_interface)
+	if (!Locator::gameInterface::has_value())
 	{
 		return;
 	}
 	PressLandInfoBoxBackForTests();
-	switch (_interface->GetLandInfoBox().TakeChoice())
+	switch (Locator::gameInterface::value().GetLandInfoBox().TakeChoice())
 	{
 	case gui::LandInfoBox::Choice::None:
 	case gui::LandInfoBox::Choice::Go:
@@ -167,8 +171,8 @@ void Game::PressLandInfoBoxBackForTests()
 		return;
 	}
 	_testLandInfoBoxBackDone = true;
-	auto& box = _interface->GetLandInfoBox();
-	const auto back = std::u16string(_interface->GetTexts().Get("HELP_TEXT_DIALOG_BACK"));
+	auto& box = Locator::gameInterface::value().GetLandInfoBox();
+	const auto back = std::u16string(Locator::gameInterface::value().GetTexts().Get("HELP_TEXT_DIALOG_BACK"));
 	const auto controls = box.GetNamedControls();
 	const auto found = std::ranges::find(controls, back, &gui::Dialog::NamedControl::name);
 	if (found == controls.end())

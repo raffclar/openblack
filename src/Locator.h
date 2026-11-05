@@ -66,8 +66,9 @@ class WebSocketClientInterface;
 
 namespace gui
 {
+class GameInterface;
 class ScreenFade;
-}
+} // namespace gui
 
 namespace debug::gui
 {
@@ -351,6 +352,9 @@ struct Locator
 	using gameMusic = entt::locator<openblack::audio::GameMusic>;
 	/// The fade of the whole screen, which the game's interface makes and owns. The dedicated server has no fade.
 	using screenFade = entt::locator<openblack::gui::ScreenFade>;
+	/// The game's interface: its menu, its boxes and its texts. The game makes it when the world starts and removes it
+	/// when the game closes. Without the game files for it, the locator has no interface. The dedicated server has none.
+	using gameInterface = entt::locator<openblack::gui::GameInterface>;
 	using camera = entt::locator<Camera>;
 	using gameActionSystem = entt::locator<input::GameActionInterface>;
 	/// The keyboard, the mouse and the event queue of the window system. The dedicated server has no device (see
