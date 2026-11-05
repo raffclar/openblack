@@ -28,6 +28,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/VillagerLabel.h"
+#include "ECS/DrawnPlace.h"
 #include "ECS/PlayerColour.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
@@ -114,6 +115,7 @@ std::vector<labels::Request> Gather(const Frame& frame)
 	                                 .pregnant = texts.GetHelpText(k_PregnantText).text,
 	                                 .poisoned = texts.GetHelpText(k_PoisonedText).text};
 
+	const drawn_place::DrawnPlaces drawnPlaces(registry);
 	registry.Each<const Villager, const Transform, const LivingAction>(
 	    [&](entt::entity entity, const Villager& villager, const Transform& transform, const LivingAction& action) {
 		    const auto* named = registry.TryGet<const NamedVillager>(entity);
@@ -130,8 +132,9 @@ std::vector<labels::Request> Gather(const Frame& frame)
 		    {
 			    return;
 		    }
-		    // The point over its head, in the whole pixel it falls in on the screen
-		    const auto point = transform.position + glm::vec3(0.0f, labels::k_HeadHeight, 0.0f);
+		    // The point over its head, in the whole pixel it falls in on the screen. The head is where the frame draws the
+		    // body, thus the label stays on the body while the villager walks between the turns.
+		    const auto point = drawnPlaces.ModelOriginOf(entity, transform) + glm::vec3(0.0f, labels::k_HeadHeight, 0.0f);
 		    glm::vec3 screen;
 		    if (!camera.ProjectWorldToScreen(point, viewport, screen))
 		    {
