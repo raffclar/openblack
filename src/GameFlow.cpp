@@ -10,6 +10,7 @@
 // The flow of the game: how the game loads lands and scenarios, the end of the game and its save, the trips to the
 // playgrounds, the music of each turn, and the logs and tools of a tool's run
 
+#include <algorithm>
 #include <filesystem>
 #include <memory>
 #include <optional>
@@ -53,7 +54,9 @@
 #include "Debug/FightAutopilotInterface.h"
 #include "Debug/FrameStatsLog.h"
 #include "Debug/FrameWriteGuard.h"
+#include "ECS/Components/Abode.h"
 #include "ECS/Components/Alignment.h"
+#include "ECS/Components/Construction.h"
 #include "ECS/Components/MagicShield.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
@@ -215,12 +218,35 @@ void Game::ProcessMusicTurn(glm::vec3 cameraPosition, bool inCitadel)
 		const auto& context = Locator::entitiesRegistry::value().Context();
 		music.creatureFight = audio::GameMusic::SelectFightType(context.mapScriptGlobals.landNumber, context.skirmish);
 	}
-	Locator::entitiesRegistry::value().Each<const ecs::components::Town, const Tribe, const ecs::components::Transform>(
-	    [&music](const ecs::components::Town& town, const Tribe tribe, const ecs::components::Transform& transform) {
+	// The land without music: the game does not change the music there
+	constexpr int32_t k_LandWithoutMusic = 6;
+	music.landWithoutMusic = Locator::entitiesRegistry::value().Context().mapScriptGlobals.landNumber == k_LandWithoutMusic;
+	auto& registry = Locator::entitiesRegistry::value();
+	// A town has a town centre when one of its buildings is a town centre, or when it plans a town centre
+	const auto hasTownCentre = [&registry](const ecs::components::Town& town) {
+		const auto built = std::ranges::any_of(town.abodes, [&registry](entt::entity abode) {
+			const auto* component = registry.Valid(abode) ? registry.TryGet<const ecs::components::Abode>(abode) : nullptr;
+			return component != nullptr && component->type == AbodeNumber::TownCentre;
+		});
+		if (built || !Locator::infoConstants::has_value())
+		{
+			return built;
+		}
+		const auto& rows = Locator::infoConstants::value().abode;
+		return std::ranges::any_of(town.planned, [&registry, &rows](entt::entity plan) {
+			const auto* planned = registry.Valid(plan) ? registry.TryGet<const ecs::components::PlannedAbode>(plan) : nullptr;
+			const auto row = planned != nullptr ? static_cast<size_t>(planned->info) : rows.size();
+			return row < rows.size() && rows.at(row).abodeNumber == AbodeNumber::TownCentre;
+		});
+	};
+	registry.Each<const ecs::components::Town, const Tribe, const ecs::components::Transform>(
+	    [&music, &hasTownCentre](const ecs::components::Town& town, const Tribe tribe,
+	                             const ecs::components::Transform& transform) {
 		    music.towns.push_back({
 		        .position = transform.position,
 		        .tribe = static_cast<int32_t>(tribe),
 		        .id = town.id,
+		        .hasTownCentre = hasTownCentre(town),
 		    });
 	    });
 	_gameMusic->ProcessTurn(music);
