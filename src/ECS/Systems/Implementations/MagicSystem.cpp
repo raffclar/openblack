@@ -3732,11 +3732,10 @@ MagicSystemInterface::HandCastState MagicSystem::GetHandCastState() const
 	{
 		const auto& seed = EntityRegistry().Get<const SpellSeed>(*Held());
 		state.ready = seed.ready;
-		state.readyIn =
-		    seed.ready
-		        ? 0.0f
-		        : std::max(Info().spellSystem.delayBeforeSeedActive - static_cast<float>(seed.turnsInHand) * k_TurnSeconds,
-		                   0.0f);
+		const float delay = Info().spellSystem.delayBeforeSeedActive;
+		state.readyIn = seed.ready || magic::SeedReadyAfter(seed.turnsInHand, k_TurnMilliseconds, delay)
+		                    ? 0.0f
+		                    : std::max(delay - magic::SeedSecondsInHand(seed.turnsInHand, k_TurnMilliseconds), 0.0f);
 		state.origin = seed.origin;
 		state.powerUp = seed.powerUp;
 		state.chantStore = seed.chantStore;

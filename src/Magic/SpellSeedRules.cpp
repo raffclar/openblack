@@ -49,12 +49,17 @@ float magic::SeedPower(float store, float costToCreate)
 	return costToCreate > 0.0f ? std::min(store / costToCreate, 1.0f) : 1.0f;
 }
 
-bool magic::SeedReadyAfter(uint32_t turnsInHand, uint32_t turnMilliseconds, float delaySeconds)
+float magic::SeedSecondsInHand(uint32_t turnsInHand, uint32_t turnMilliseconds)
 {
 	// The float bits of one thousandth, as the game keeps it
 	constexpr float k_Thousandth = std::bit_cast<float>(0x3A83126Fu);
 	const float milliseconds = static_cast<float>(turnsInHand) * static_cast<float>(turnMilliseconds);
-	return milliseconds * k_Thousandth > delaySeconds;
+	return milliseconds * k_Thousandth;
+}
+
+bool magic::SeedReadyAfter(uint32_t turnsInHand, uint32_t turnMilliseconds, float delaySeconds)
+{
+	return SeedSecondsInHand(turnsInHand, turnMilliseconds) > delaySeconds;
 }
 
 bool magic::ShownWithSpell(const SeedWithSpell& seed)
