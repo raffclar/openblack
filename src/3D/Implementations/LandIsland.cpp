@@ -218,8 +218,11 @@ void LandIsland::LoadFromFile(const std::filesystem::path& path)
 void LandIsland::Build(const LandData& data)
 {
 	_blockIndexLookup = data.blockIndexLookup;
-
+	// A place of the table that names a block that the land does not have holds no block. A damaged or hostile landscape
+	// file thus cannot make a look-up read past the last block.
 	const auto& lndBlocks = data.blocks;
+	std::ranges::replace_if(_blockIndexLookup, [count = lndBlocks.size()](auto index) { return index > count; }, uint16_t {0});
+
 	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "[LandIsland] loading {} blocks", lndBlocks.size());
 	_landBlocks.resize(lndBlocks.size());
 	_blockTriangles = std::make_unique<SharedIndexLists<graphics::IndexBuffer>>();

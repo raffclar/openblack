@@ -16,6 +16,7 @@
 #include <optional>
 #include <string>
 
+#include <emscripten/emscripten.h>
 #include <emscripten/fetch.h>
 
 namespace openblack::web
@@ -34,6 +35,14 @@ struct FetchHttpClient::Transfer
 	std::vector<const char*> headerTexts;
 	emscripten_fetch_t* fetch {nullptr};
 	bool cancelled {false};
+	/// The client stopped the transfer: the answer was over its limit, too slow, or took too long
+	bool stopped {false};
+	/// The time of the start, and of the last stall check, in milliseconds
+	double startMs {0.0};
+	double stallCheckMs {0.0};
+	/// The bytes that came, and the bytes at the last stall check
+	uint64_t bytes {0};
+	uint64_t stallCheckBytes {0};
 	std::optional<HttpResponse> finished;
 };
 
@@ -65,7 +74,12 @@ void Done(emscripten_fetch_t* fetch)
 {
 	auto& transfer = *static_cast<FetchHttpClient::Transfer*>(fetch->userData);
 	HttpResponse response;
-	if (transfer.cancelled)
+	if (transfer.stopped)
+	{
+		// The game keeps no part of an answer that it stopped
+		response.error = HttpError::Network;
+	}
+	else if (transfer.cancelled)
 	{
 		response.error = HttpError::Cancelled;
 	}
@@ -117,6 +131,42 @@ void Done(emscripten_fetch_t* fetch)
 	}
 }
 
+/// Stops a transfer before its end. The close runs the error handler at once, which records the stop.
+void Stop(FetchHttpClient::Transfer& transfer)
+{
+	if (transfer.fetch == nullptr || transfer.finished.has_value())
+	{
+		return;
+	}
+	transfer.stopped = true;
+	transfer.cancelled = true;
+	auto* fetch = transfer.fetch;
+	transfer.fetch = nullptr;
+	emscripten_fetch_close(fetch);
+	if (!transfer.finished.has_value())
+	{
+		transfer.finished = HttpResponse {.error = HttpError::Network};
+	}
+}
+
+[[nodiscard]] uint64_t MostBytesOf(const FetchHttpClient::Transfer& transfer)
+{
+	return online::MostAnswerBytes(transfer.request,
+	                               transfer.request.large ? online::k_MostLargeAnswerBytes : k_MostAnswerBytes);
+}
+
+/// The browser gives the bytes that came so far. An answer over its limit stops at once, so that an answer with no end
+/// cannot fill the memory of the page.
+void Progress(emscripten_fetch_t* fetch)
+{
+	auto& transfer = *static_cast<FetchHttpClient::Transfer*>(fetch->userData);
+	transfer.bytes = fetch->dataOffset + fetch->numBytes;
+	if (transfer.bytes > MostBytesOf(transfer))
+	{
+		Stop(transfer);
+	}
+}
+
 } // namespace
 
 FetchHttpClient::FetchHttpClient() = default;
@@ -160,6 +210,7 @@ online::HttpRequestId FetchHttpClient::Send(online::HttpRequest request, online:
 	attributes.attributes = EMSCRIPTEN_FETCH_LOAD_TO_MEMORY;
 	attributes.onsuccess = Done;
 	attributes.onerror = Done;
+	attributes.onprogress = Progress;
 	attributes.userData = transfer.get();
 	attributes.requestHeaders = transfer->headerTexts.data();
 	if (!transfer->request.body.empty())
@@ -167,9 +218,11 @@ online::HttpRequestId FetchHttpClient::Send(online::HttpRequest request, online:
 		attributes.requestData = reinterpret_cast<const char*>(transfer->request.body.data());
 		attributes.requestDataSize = transfer->request.body.size();
 	}
-	// The browser expands a compressed answer. A large file has no limit on its time.
+	// The browser expands a compressed answer. Poll checks the stall and the full time of a large file.
 	attributes.timeoutMSecs = transfer->request.large ? 0 : 30'000;
 	auto* raw = transfer.get();
+	raw->startMs = emscripten_get_now();
+	raw->stallCheckMs = raw->startMs;
 	_transfers.push_back(std::move(transfer));
 	raw->fetch = emscripten_fetch(&attributes, raw->request.url.c_str());
 	if (raw->fetch == nullptr && !raw->finished.has_value())
@@ -202,6 +255,34 @@ void FetchHttpClient::Cancel(online::HttpRequestId id)
 
 void FetchHttpClient::Poll()
 {
+	// A large transfer stops when too few bytes came in the time of the stall limit, or when it takes longer than its
+	// limit of bytes allows, as on the desktop
+	const double now = emscripten_get_now();
+	for (auto& transfer : _transfers)
+	{
+		if (!transfer->request.large || transfer->fetch == nullptr || transfer->finished.has_value())
+		{
+			continue;
+		}
+		if (now - transfer->startMs > static_cast<double>(online::LargeTransferTimeoutMs(MostBytesOf(*transfer))))
+		{
+			Stop(*transfer);
+			continue;
+		}
+		constexpr double k_StallMs = online::k_LargeStallSeconds * 1000.0;
+		if (now - transfer->stallCheckMs >= k_StallMs)
+		{
+			const auto least = static_cast<uint64_t>(online::k_LargeStallBytesPerSecond) * online::k_LargeStallSeconds;
+			if (transfer->bytes - transfer->stallCheckBytes < least)
+			{
+				Stop(*transfer);
+				continue;
+			}
+			transfer->stallCheckMs = now;
+			transfer->stallCheckBytes = transfer->bytes;
+		}
+	}
+
 	std::vector<std::unique_ptr<Transfer>> done;
 	for (auto& transfer : _transfers)
 	{
