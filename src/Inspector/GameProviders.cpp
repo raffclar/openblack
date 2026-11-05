@@ -39,6 +39,7 @@
 #include "ECS/PhysicsEntry.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureAnimationLogSystemInterface.h"
+#include "ECS/Systems/CreatureMindLogSystemInterface.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/DesignedWaterfallSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
@@ -163,6 +164,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"creatureFightSystem", "creatures.status"},
     LocatorCoverage {"fightTranscript", "fights.transcripts"},
     LocatorCoverage {"creatureAnimationLog", "creature.animation"},
+    LocatorCoverage {"creatureMindLog", "creature.plan"},
     LocatorCoverage {"creatureModeSystem", "creatures.systems"},
     LocatorCoverage {"creatureCaveSystem", "creatures.systems"},
     LocatorCoverage {"cinematicDirectorSystem", "view.cinematic"},
@@ -482,6 +484,16 @@ GameProvider* openblack::inspector::AddGameProviders(Inspector& inspector, const
 		        }
 	        },
 	    .order = &GiveCreatureOrder,
+	    .mindTrace = [](entt::entity creature) -> const creature_mind_view::Trace* {
+		    return Locator::creatureMindLog::has_value() ? Locator::creatureMindLog::value().Find(creature) : nullptr;
+	    },
+	    .recordMind =
+	        [](entt::entity creature, bool record) {
+		        if (Locator::creatureMindLog::has_value())
+		        {
+			        Locator::creatureMindLog::value().Watch(creature, record);
+		        }
+	        },
 	}));
 	inspector.Add(MakeMapProvider({
 	    .world = World(),

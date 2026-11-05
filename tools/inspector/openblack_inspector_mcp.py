@@ -578,10 +578,13 @@ TOOLS = [
     },
     {
         "name": "creature_desires",
-        "description": "A creature's strongest desires (top 5 by default); id may be left out with one creature.",
-        "inputSchema": schema({"id": {"type": "integer"}, "top": {"type": "integer"}}),
+        "description": "A creature's strongest desires (top 5 by default); id may be left out with one creature. "
+                       "Also the active desires with each source's value, threshold, part (drive this turn) and "
+                       "drive, the winner, and the change since the turn before while creature_plan records.",
+        "inputSchema": schema({"id": {"type": "integer"}, "top": {"type": "integer"},
+                               "sources": {"type": "boolean"}}),
         "query": "creature.desires",
-        "params": ["id", "top"],
+        "params": ["id", "top", "sources"],
     },
     {
         "name": "creature_reactions",
@@ -630,10 +633,12 @@ TOOLS = [
     },
     {
         "name": "creature_plan",
-        "description": "A creature's plan (desire, action, object, priority), activity and next agenda steps.",
-        "inputSchema": schema({"id": {"type": "integer"}, **SHAPING}),
+        "description": "A creature's plan (desire, action, object, priority), activity and next agenda steps, the "
+                       "best plan of each desire, and the planner history (plan, outcome, the priority it had to "
+                       "beat). record true starts the read-only record of the mind each turn, false stops it.",
+        "inputSchema": schema({"id": {"type": "integer"}, "record": {"type": "boolean"}, **SHAPING}),
         "query": "creature.plan",
-        "params": ["id"],
+        "params": ["id", "record"],
     },
     {
         "name": "creature_animation",
