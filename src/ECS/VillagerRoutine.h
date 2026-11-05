@@ -142,6 +142,17 @@ constexpr float k_TentSleeperGap = 5.0f;
 /// A spot taken in the open is moved on: the distance is drawn first, then the angle
 [[nodiscard]] glm::vec2 TentRetry(glm::vec2 spot, const FloatRandom& random);
 
+/// The kinds of cell that keep a villager off a spot in the open (to lie down, to gossip, to follow its mother): water,
+/// a fixed thing and the map's edge. The cell test never marks a fixed thing, so a building does not keep a villager off
+/// a spot.
+constexpr uint32_t k_OpenSpotCollide = static_cast<uint32_t>(CollideType::Water) | static_cast<uint32_t>(CollideType::Fixed) |
+                                       static_cast<uint32_t>(CollideType::Edge);
+/// Whether a spot in the open is closed to a villager, from the kinds of its cell
+[[nodiscard]] constexpr bool OpenSpotCollides(uint32_t cellCollision)
+{
+	return (cellCollision & k_OpenSpotCollide) != 0;
+}
+
 /// A tree a villager lies down by is looked for this far off; it lies this far from the tree, on the far side from what
 /// is near it or else from itself
 constexpr float k_TentTreeSearch = 50.0f;

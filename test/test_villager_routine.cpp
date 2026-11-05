@@ -255,3 +255,16 @@ TEST(VillagerRoutine, ASittingVillagerThinksAgainOneTimeInTenElseSitsOn)
 	FakeInts sit {.answers = {9}};
 	EXPECT_EQ(ChillOutTimeUp(false, [] { return false; }, sit.Random()), ChillOut::SitOn);
 }
+
+TEST(VillagerRoutine, ASpotInTheOpenIsClosedOnlyByWaterOrTheEdge)
+{
+	constexpr auto bit = [](CollideType type) { return static_cast<uint32_t>(type); };
+	EXPECT_FALSE(OpenSpotCollides(bit(CollideType::Land)));
+	EXPECT_TRUE(OpenSpotCollides(bit(CollideType::Water)));
+	EXPECT_TRUE(OpenSpotCollides(bit(CollideType::Edge)));
+	// Trees and fields in the cell do not close it
+	EXPECT_FALSE(OpenSpotCollides(bit(CollideType::Land) | bit(CollideType::Tree) | bit(CollideType::Field)));
+	EXPECT_TRUE(OpenSpotCollides(bit(CollideType::Water) | bit(CollideType::Tree)));
+	// The mask asks for a fixed thing too, but the cell test never marks one
+	EXPECT_EQ(k_OpenSpotCollide, 0x19u);
+}
