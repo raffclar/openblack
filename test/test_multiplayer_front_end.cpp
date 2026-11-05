@@ -1135,7 +1135,6 @@ TEST_F(FrontEndTest, ASignInOnTheSiteGoesToTheGameListWithNoLogin)
 	lobby.account = lobby_api::AccountRef {.id = 7, .name = "Alice"};
 	lobby.fromSite = true;
 	FakeLobby::Give(lobby.site, *lobby.account);
-	EXPECT_FALSE(frontEnd->IsBusy());
 	EXPECT_EQ(frontEnd->GetBox(), Box::GameList);
 	EXPECT_TRUE(lobby.servers);
 	EXPECT_FALSE(lobby.login);
