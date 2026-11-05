@@ -14,9 +14,12 @@
 #include <cstddef>
 
 #include <algorithm>
+#include <array>
 #include <string_view>
 
 #include <glm/gtc/matrix_transform.hpp>
+
+#include "Common/X87.h"
 
 namespace openblack::sky_dome
 {
@@ -26,6 +29,9 @@ namespace
 constexpr uint8_t k_Night = 0;
 constexpr uint8_t k_Dusk = 1;
 constexpr uint8_t k_Day = 2;
+/// How fast green and blue of the low resolution colour fall towards night; red falls at 2
+constexpr float k_LowGreen = 1.7f;
+constexpr float k_LowBlue = 1.5f;
 
 /// A fraction of 255, cut to a whole number
 uint8_t Weight(float fraction)
@@ -127,13 +133,11 @@ std::vector<Rows> Picture::Again() const
 
 Pair TimePair(float skyType)
 {
-	// Counted from day, as the dome's blend takes it
-	const float fromDay = 2.0f - skyType;
-	if (fromDay > 1.0f)
+	if (skyType > 1.0f)
 	{
-		return {.lower = k_Dusk, .upper = k_Night, .weight = Weight(fromDay - 1.0f)};
+		return {.lower = k_Dusk, .upper = k_Night, .weight = Weight(skyType - 1.0f)};
 	}
-	return {.lower = k_Day, .upper = k_Dusk, .weight = Weight(fromDay)};
+	return {.lower = k_Day, .upper = k_Dusk, .weight = Weight(skyType)};
 }
 
 Pair AlignmentPair(float alignment)
@@ -172,22 +176,41 @@ float ThroughOvercast(float alpha, float overcast, bool fog)
 	return static_cast<float>(static_cast<int>(static_cast<float>(whole) / ((std::min(overcast, 1.0f) * 8.0f) + 1.0f)));
 }
 
+glm::u8vec3 LowResolutionColour(uint32_t landColour, float skyType)
+{
+	// Half of the sky counted from day: 1 by day, 0 at night. Towards night, blue becomes darker first, then green, then red.
+	const float day = (2.0f - skyType) * 0.5f;
+	const std::array<float, 3> parts {
+	    std::min(1.0f, (day + day) + 0.5f),
+	    std::min(1.0f, x87::Add(x87::Mul(day, k_LowGreen), 0.5f)),
+	    std::min(1.0f, x87::Add(x87::Mul(day, k_LowBlue), 0.5f)),
+	};
+	glm::u8vec3 colour;
+	for (glm::length_t c = 0; c < 3; ++c)
+	{
+		const auto channel = static_cast<float>((landColour >> (16u - (8u * static_cast<uint32_t>(c)))) & 0xFFu);
+		colour[c] = static_cast<uint8_t>(static_cast<int>(channel * parts.at(static_cast<size_t>(c))));
+	}
+	return colour;
+}
+
 Tint TintOf(const TintInputs& inputs)
 {
 	const int overcast = static_cast<int>(std::clamp(inputs.overcast, 0.0f, 1.0f) * 255.0f);
 	// Both colours lose this much of 256 under an evil sky, rounded up
 	const int dark = inputs.weather ? (inputs.darkness * inputs.darkness) / 150 : 0;
 	const int halfFlash = inputs.flash / 2;
+	const auto first = inputs.lowResolution ? LowResolutionColour(inputs.landColour, inputs.skyType) : glm::u8vec3(255);
 	Tint tint;
 	for (glm::length_t c = 0; c < 3; ++c)
 	{
-		int modulate = 255;
+		int modulate = first[c];
 		int add = 0;
 		if (inputs.fog)
 		{
-			// From white towards the haze's colour, and the haze's colour added, by the overcast
+			// From the first colour towards the haze's colour, and the haze's colour added, by the overcast
 			const int haze = static_cast<int>(inputs.hazeColour[c]);
-			modulate = 255 + (((haze - 255) * overcast) >> 8);
+			modulate += ((haze - modulate) * overcast) >> 8;
 			add = (haze * overcast) >> 8;
 		}
 		modulate += (-modulate * dark) >> 8;

@@ -29,7 +29,8 @@ constexpr glm::vec3 k_Temple {-1000.0f, 1000.0f, -500.0f};
 /// The ambient level, of 255
 constexpr float k_Ambient = 90.0f;
 
-/// Where the light is this frame. `skyType` runs from 0 at night to 2 by day: at night the hand carries the light, never
+/// Where the light is this frame. `skyType` is the sky as the game counts it, from 2 at night to 0 by day: above 1.5 the
+/// hand carries the light, never
 /// below 10 over the ground under it. Inside the temple, whose origin is given then, the temple's light takes its place.
 [[nodiscard]] glm::vec3 FrameLight(glm::vec3 hand, float groundUnderHand, const glm::vec3& camera, float skyType,
                                    std::optional<glm::vec3> templeOrigin);

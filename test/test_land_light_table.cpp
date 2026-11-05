@@ -42,13 +42,13 @@ LandLightPalette FakePalette(uint8_t r, uint8_t g, uint8_t b)
 TEST(LandLightTable, OvercastDarkensTheLand)
 {
 	const auto palette = FakePalette(200, 220, 240);
-	EXPECT_EQ(LandLightTable::GetLandColour(palette, 2.0f, 1.0f, 0.0f), 0xC8DCF0u);
+	EXPECT_EQ(LandLightTable::GetLandColour(palette, 0.0f, 1.0f, 0.0f), 0xC8DCF0u);
 	// No channel brighter than 255 - 96 times the overcast
-	EXPECT_EQ(LandLightTable::GetLandColour(palette, 2.0f, 1.0f, 0.5f), 0xC8CFCFu);
-	EXPECT_EQ(LandLightTable::GetLandColour(palette, 2.0f, 1.0f, 1.0f), 0x9F9F9Fu);
+	EXPECT_EQ(LandLightTable::GetLandColour(palette, 0.0f, 1.0f, 0.5f), 0xC8CFCFu);
+	EXPECT_EQ(LandLightTable::GetLandColour(palette, 0.0f, 1.0f, 1.0f), 0x9F9F9Fu);
 
 	LandLightTable table;
-	table.Build(palette, 2.0f, 1.0f, 0.5f);
+	table.Build(palette, 0.0f, 1.0f, 0.5f);
 	EXPECT_EQ(table.GetLandColour(), 0xC8CFCFu);
 }
 
@@ -56,19 +56,19 @@ TEST(LandLightTable, OvercastClosesTheHazeIn)
 {
 	const auto palette = FakePalette(200, 220, 240);
 	LandLightTable table;
-	table.Build(palette, 2.0f, 1.0f, 0.0f);
+	table.Build(palette, 0.0f, 1.0f, 0.0f);
 	EXPECT_EQ(table.GetHaze().colour, glm::vec3(66.0f, 73.0f, 80.0f));
 	EXPECT_FLOAT_EQ(table.GetHaze().k, 233.0f);
 	EXPECT_NEAR(table.GetHaze().nearDistance, 400.0f, 0.01f);
 	EXPECT_NEAR(table.GetHaze().farDistance, 900.0f, 0.01f);
 
 	// Halfway to a storm's haze, from the darkened land's colour
-	table.Build(palette, 2.0f, 1.0f, 0.5f);
+	table.Build(palette, 0.0f, 1.0f, 0.5f);
 	EXPECT_FLOAT_EQ(table.GetHaze().colour.r, 61.5f);
 	EXPECT_FLOAT_EQ(table.GetHaze().k, 131.0f);
 
 	// A full overcast, or more, is a storm's, though more darkens the land further: 139, an eighth and 32
-	table.Build(palette, 2.0f, 1.0f, 1.2f);
+	table.Build(palette, 0.0f, 1.0f, 1.2f);
 	EXPECT_EQ(table.GetHaze().colour, glm::vec3(49.0f));
 	EXPECT_FLOAT_EQ(table.GetHaze().k, 48.0f);
 	EXPECT_NEAR(table.GetHaze().nearDistance, 15.0f, 0.01f);
@@ -126,8 +126,8 @@ TEST(LandLightTable, TheNightIsLitByTheLandRowsNotTheMoonsColour)
 	const LandLightPalette paletteWithOtherMoon(otherMoon);
 	for (const float alignment : {-1.0f, 0.0f, 1.0f})
 	{
-		// Full night, and on into dusk
-		for (const float skyType : {0.0f, 0.5f})
+		// Full night, and on into dusk, as the game counts the sky
+		for (const float skyType : {2.0f, 1.5f})
 		{
 			LandLightTable table;
 			LandLightTable other;
@@ -147,7 +147,7 @@ TEST(LandLightTable, TheOvercastLimitRoundsToAFloat)
 {
 	// 255 - 96 times the overcast is 252.999996, which rounds to 253 as a float; in double precision the limit is 252
 	const auto palette = FakePalette(255, 255, 255);
-	EXPECT_EQ(LandLightTable::GetLandColour(palette, 2.0f, 1.0f, std::bit_cast<float>(0x3CAAAAC0u)), 0xFDFDFDu);
+	EXPECT_EQ(LandLightTable::GetLandColour(palette, 0.0f, 1.0f, std::bit_cast<float>(0x3CAAAAC0u)), 0xFDFDFDu);
 }
 
 TEST(LandLightTable, TheRampDivisorFollowsTheLightBoost)
@@ -178,11 +178,55 @@ TEST(LandLightTable, ABoostOfZeroBuildsTheSameTableAsTheDefaultDivisor)
 	LandLightTable defaulted;
 	LandLightTable boostless;
 	LandLightTable boosted;
-	defaulted.Build(palette, 2.0f, 1.0f, 0.0f);
-	boostless.Build(palette, 2.0f, 1.0f, 0.0f, 0, LandLightTable::RampDivisor(0.0f));
-	boosted.Build(palette, 2.0f, 1.0f, 0.0f, 0, LandLightTable::RampDivisor(0.5f));
+	defaulted.Build(palette, 0.0f, 1.0f, 0.0f);
+	boostless.Build(palette, 0.0f, 1.0f, 0.0f, 0, LandLightTable::RampDivisor(0.0f));
+	boosted.Build(palette, 0.0f, 1.0f, 0.0f, 0, LandLightTable::RampDivisor(0.5f));
 	EXPECT_EQ(defaulted.GetTexels(), boostless.GetTexels());
 	EXPECT_NE(defaulted.GetTexels(), boosted.GetTexels());
 	// The land's colour and the haze do not use the ramps
 	EXPECT_EQ(defaulted.GetLandColour(), boosted.GetLandColour());
+}
+
+TEST(LandLightTable, TheTimeColumnIsTheSkyFromDayTimesSixThenTimesTwoAndAHalf)
+{
+	// Black up to the dusk column 15, white from column 16: the land's colour shows the fraction of 256 between them
+	std::vector<uint8_t> bytes(LandLightPalette::k_Side * LandLightPalette::k_Side * 4, 0);
+	for (size_t row = 0; row < 3; ++row)
+	{
+		for (size_t column = 16; column < LandLightPalette::k_Side; ++column)
+		{
+			const auto at = (row * LandLightPalette::k_Side + column) * 4;
+			bytes[at] = 0xFF;
+			bytes[at + 1] = 0xFF;
+			bytes[at + 2] = 0xFF;
+		}
+	}
+	const LandLightPalette palette(bytes);
+	// The sky a little before dusk, as the game counts it: (2 - 0.990625) x 6 x 2.5 is column 15 and 35 of 256. Times
+	// 15 at once, it would be 36 of 256.
+	const float skyType = std::bit_cast<float>(0x3F7D999Au);
+	EXPECT_EQ(LandLightTable::GetLandColour(palette, skyType, 1.0f, 0.0f), 0x222222u);
+	// At night the column is 0, midnight, and by day 30, noon
+	EXPECT_EQ(LandLightTable::GetLandColour(palette, 2.0f, 1.0f, 0.0f), 0x000000u);
+	EXPECT_EQ(LandLightTable::GetLandColour(palette, 0.0f, 1.0f, 0.0f), 0xFFFFFFu);
+}
+
+TEST(LandLightTable, TheHazeClosesInAtDuskAsTheGameCountsTheSky)
+{
+	const auto palette = FakePalette(200, 220, 240);
+	LandLightTable table;
+	// At dusk, 1, the haze is nearest: 1 / (0.0075 + 0.0025) and 1 / (1 / 7200 + 1 / 900)
+	table.Build(palette, 1.0f, 1.0f, 0.0f);
+	EXPECT_NEAR(table.GetHaze().nearDistance, 100.0f, 0.01f);
+	EXPECT_NEAR(table.GetHaze().farDistance, 800.0f, 0.01f);
+	// Halfway from dusk to night and halfway from dusk to day are the same
+	LandLightTable towardsDay;
+	table.Build(palette, 1.5f, 1.0f, 0.0f);
+	towardsDay.Build(palette, 0.5f, 1.0f, 0.0f);
+	EXPECT_EQ(table.GetHaze().nearDistance, towardsDay.GetHaze().nearDistance);
+	EXPECT_EQ(table.GetHaze().farDistance, towardsDay.GetHaze().farDistance);
+	// At night the haze is as by day
+	table.Build(palette, 2.0f, 1.0f, 0.0f);
+	EXPECT_NEAR(table.GetHaze().nearDistance, 400.0f, 0.01f);
+	EXPECT_NEAR(table.GetHaze().farDistance, 900.0f, 0.01f);
 }

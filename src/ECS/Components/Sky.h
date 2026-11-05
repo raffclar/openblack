@@ -33,7 +33,7 @@ struct SkyDome
 	/// night to day
 	entt::id_type textureId;
 	/// How far the blend of the pictures follows the sky
-	sky_dome::Follow follow {2.0f};
+	sky_dome::Follow follow {0.0f};
 	/// The rows of the dome to blend again this frame
 	sky_dome::FrameRows frameRows {};
 	/// The clouds over the camera this frame, 0 for a clear sky and 1 for a full one, which the sun and moon show
