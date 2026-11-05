@@ -461,6 +461,11 @@ void creature_watching::StrokedWhileMimicking(std::optional<Mimicry>& mimicry, s
 	mimicry->limit = StageLength(rules[mimicry->rule], random);
 }
 
+void creature_watching::SlappedWhileMimicking(std::optional<Mimicry>& mimicry)
+{
+	mimicry.reset();
+}
+
 creature_watching::MimicKind creature_watching::KindToCopy(const MimicFacts& facts)
 {
 	using Class = MimicFacts::Class;
