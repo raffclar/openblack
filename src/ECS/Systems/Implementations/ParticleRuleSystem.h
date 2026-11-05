@@ -201,6 +201,11 @@ private:
 		float wait {0.0f};
 		/// Where the listener hears the sound start: where its particle was when it started the sound
 		glm::vec3 start {0.0f};
+		/// The maximum distance of the sample that plays, and whether the listener was that far away or more when the
+		/// audio last played or stopped the sound (see particles::sound_resume). These values come from the listener of
+		/// this computer.
+		float maxDistance {0.0f};
+		bool far {false};
 	};
 	/// How a save keeps a sound
 	enum class SoundRecord : uint8_t

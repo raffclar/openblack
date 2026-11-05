@@ -71,6 +71,8 @@ struct AnimEffectPlay
 	entt::entity emitter {entt::null};
 	/// The sample the effect picked, none when the bank has no effect for the keys
 	std::optional<int32_t> sample;
+	/// The maximum distance of the sample the effect picked, 0 when the sample is not loaded
+	float maxDistance {0.0f};
 };
 
 /// How a sound effect is played, beyond what its bank header says
