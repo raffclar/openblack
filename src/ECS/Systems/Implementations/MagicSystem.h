@@ -87,7 +87,8 @@ private:
 	void Apply(const magic::EffectValues& values, std::span<const magic::EffectOutcome> outcomes,
 	           const magic::EffectSource& source);
 	/// The waiting alignment of whoever an effect came from takes what the effect did to one object
-	static void AddEffectAlignment(const magic::EffectOutcome& outcome, const magic::EffectSource& source, bool byCreature);
+	static void AddEffectAlignment(const magic::EffectOutcome& outcome, const magic::EffectSource& source,
+	                               entt::entity actingCreature);
 
 	/// A drop of the water by an object: a tree grows, a field is sown and ripens, a fire is watched going out
 	void WaterObject(entt::entity object, const magic::WaterDrop& drop);

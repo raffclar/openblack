@@ -113,7 +113,15 @@ struct EffectOutcome
 	EffectAlignmentTerms alignmentDamped {};
 	/// What was done to it counts as an attack: it burnt, crushed, hit or threw it, and it was hurt
 	bool aggression {false};
+	/// The kind of thing it is for the alignment
+	AlignmentType alignmentType {AlignmentType::Unimportant};
 };
+
+/// The outcome with the life of the object read again: the alignment moves by the change from the life before to this
+/// life. The steps after the harm can change the life, as a creature that cannot die gets all of its life back.
+[[nodiscard]] EffectOutcome WithLifeAfter(EffectOutcome outcome, const EffectValues& values, float life,
+                                          std::span<const GAlignmentInfo> alignmentTable, float alignmentAddition,
+                                          float casterAlignment);
 
 /// An effect's values for one event: its table's, times the strength the event paid for, times the caster's tribal power
 /// once more (the strength already carries it), times the event's own strength

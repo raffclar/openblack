@@ -20,6 +20,7 @@
 #include "Magic/CastInput.h"
 #include "Magic/HandMotion.h"
 #include "Magic/Impressiveness.h"
+#include "Magic/MagicWorldInterface.h"
 #include "Magic/PrayerRules.h"
 #include "Magic/SpellBehaviours.h"
 #include "Magic/SpellLifetime.h"
@@ -478,6 +479,46 @@ TEST(AreaEffect, HurtingVillagersTurnsTheCasterEvilAndHealingGood)
 	// Nothing changed, nothing moves
 	const auto full = ApplyEffectTo(heal, Villager(static_cast<entt::entity>(1), {}, 1.0f), table, 0.75f, 0.0f);
 	EXPECT_FLOAT_EQ(full.alignmentChange, 0.0f);
+}
+
+TEST(AreaEffect, TheAlignmentMovesByTheLifeReadAfterTheDestruction)
+{
+	const auto table = AlignmentTable();
+	EffectValues hit;
+	hit[EffectKind::Hit] = 0.4f;
+	const auto killed = ApplyEffectTo(hit, Villager(static_cast<entt::entity>(1), {}, 0.3f), table, 0.75f, 0.0f);
+	EXPECT_TRUE(killed.destroyed);
+	EXPECT_NEAR(killed.alignmentChange, 0.4f * -0.8f * (0.3f + 0.75f), k_Epsilon);
+	// A thing that gets all of its life again when it is destroyed counts the change from 0.3 to 1
+	const auto revived = WithLifeAfter(killed, hit, 1.0f, table, 0.75f, 0.0f);
+	EXPECT_FALSE(revived.destroyed);
+	EXPECT_FLOAT_EQ(*revived.lifeAfter, 1.0f);
+	EXPECT_NEAR(revived.alignmentChange, 0.4f * -0.8f * (0.7f + 0.75f), k_Epsilon);
+	EXPECT_EQ(revived.alignmentType, AlignmentType::Villager);
+	// The same life again changes nothing
+	const auto same = WithLifeAfter(killed, hit, 0.0f, table, 0.75f, 0.0f);
+	EXPECT_EQ(same.alignmentTerms, killed.alignmentTerms);
+	EXPECT_TRUE(same.destroyed);
+	// A thing with no life before keeps its outcome
+	EffectOutcome lifeless {.entity = static_cast<entt::entity>(2)};
+	const auto kept = WithLifeAfter(lifeless, hit, 1.0f, table, 0.75f, 0.0f);
+	EXPECT_FALSE(kept.lifeAfter.has_value());
+	EXPECT_FLOAT_EQ(kept.alignmentChange, 0.0f);
+}
+
+TEST(AreaEffect, TheApplierIsWhatAppliedTheEffectElseTheCastingCreature)
+{
+	const auto creature = static_cast<entt::entity>(3);
+	const auto rock = static_cast<entt::entity>(4);
+	// A creature's miracle
+	EXPECT_EQ(ApplierOf({.casterCreature = creature}), creature);
+	// A creature that applied the effect with no miracle, as a creature that douses a fire
+	EXPECT_EQ(ApplierOf({.appliedBy = creature, .playerless = true}), creature);
+	// A thrown rock applied it: the rock, not the creature that threw it
+	EXPECT_EQ(ApplierOf({.appliedBy = rock}), rock);
+	// A fall onto the land, and a player's miracle
+	EXPECT_EQ(ApplierOf({.appliedBy = entt::entity {entt::null}}), entt::entity {entt::null});
+	EXPECT_EQ(ApplierOf({.player = PlayerNames::PLAYER_ONE}), entt::entity {entt::null});
 }
 
 TEST(AreaEffect, HeatCountsOnlyWithAChangeOfLifeAndInFull)
