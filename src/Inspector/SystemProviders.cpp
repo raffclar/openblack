@@ -747,7 +747,7 @@ std::unique_ptr<ProviderInterface> openblack::inspector::MakeCreatureProvider(Cr
 	provider->Add(
 	    Query("desires",
 	          "A creature's strongest desires, strongest first. Also the active desires (activated, with a value or a "
-	          "drive more than 0), each with the name, value, threshold, part and drive of its sources, and the winner "
+	          "drive of 0.001 or more), each with the name, value, threshold, part and drive of its sources, and the winner "
 	          "(the desire that the creature shows). The change since the turn before is there while a tool records the "
 	          "mind (creature.plan with record)",
 	          {id, Parameter("top", "integer", "How many desires (5 by default)", false),

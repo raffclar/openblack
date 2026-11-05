@@ -61,6 +61,8 @@ TEST(CreatureMindView, ShowsOnlyActivatedDesiresWithAValueOrADrive)
 	desires[Desire::Hunger] = {.activated = true, .value = 0.4f};
 	// Activated, with no value and no source past its threshold
 	desires[Desire::Fear] = {.activated = true, .value = 0.0f};
+	// Activated, with a value that faded to almost nothing
+	desires[Desire::Play] = {.activated = true, .value = 0.0004f};
 	// Not activated, with a value
 	desires[Desire::Anger] = {.activated = false, .value = 0.9f};
 	// Activated, with no value but a source past its threshold
@@ -68,6 +70,7 @@ TEST(CreatureMindView, ShowsOnlyActivatedDesiresWithAValueOrADrive)
 
 	EXPECT_TRUE(IsActive(desires, static_cast<size_t>(Desire::Hunger)));
 	EXPECT_FALSE(IsActive(desires, static_cast<size_t>(Desire::Fear)));
+	EXPECT_FALSE(IsActive(desires, static_cast<size_t>(Desire::Play)));
 	EXPECT_FALSE(IsActive(desires, static_cast<size_t>(Desire::Anger)));
 	EXPECT_TRUE(IsActive(desires, static_cast<size_t>(Desire::Tiredness)));
 	EXPECT_EQ(ActiveDesires(desires, nullptr, k_TurnsPerSecond).size(), 2u);

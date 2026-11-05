@@ -105,9 +105,11 @@ bool creature_mind_view::IsActive(const creature_desires::Desires& desires, size
 		return false;
 	}
 	const auto& state = desires.desires.at(desire);
-	return state.value > 0.0f || std::ranges::any_of(state.sources, [](const creature_desires::Source& source) {
-		       return creature_desires::Sigmoid(source.threshold, source.value) > 0.0f;
-	       });
+	const auto drive = std::accumulate(state.sources.begin(), state.sources.end(), 0.0f,
+	                                   [](float sum, const creature_desires::Source& source) {
+		                                   return sum + creature_desires::Sigmoid(source.threshold, source.value);
+	                                   });
+	return state.value >= k_ActiveFloor || drive >= k_ActiveFloor;
 }
 
 std::vector<SourcePart> creature_mind_view::SourcesOf(const creature_desires::DesireState& desire)

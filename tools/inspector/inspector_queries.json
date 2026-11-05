@@ -488,7 +488,7 @@
   "query": "creature.list"
  },
  {
-  "description": "A creature's strongest desires, strongest first. Also the active desires (activated, with a value or a drive more than 0), each with the name, value, threshold, part and drive of its sources, and the winner (the desire that the creature shows). The change since the turn before is there while a tool records the mind (creature.plan with record)",
+  "description": "A creature's strongest desires, strongest first. Also the active desires (activated, with a value or a drive of 0.001 or more), each with the name, value, threshold, part and drive of its sources, and the winner (the desire that the creature shows). The change since the turn before is there while a tool records the mind (creature.plan with record)",
   "kind": "object",
   "parameters": [
    {

@@ -63,7 +63,10 @@ struct DesireRow
 	std::vector<SourcePart> sources;
 };
 
-/// Whether the view shows a desire: it is activated, and it has a value or a drive more than zero
+/// A desire value or drive less than this does not make a desire active in the view. Values that fade never get to 0.
+constexpr float k_ActiveFloor = 0.001f;
+
+/// Whether the view shows a desire: it is activated, and its value or its drive is at least k_ActiveFloor
 [[nodiscard]] bool IsActive(const creature_desires::Desires& desires, size_t desire);
 /// The parts of the sources of one desire
 [[nodiscard]] std::vector<SourcePart> SourcesOf(const creature_desires::DesireState& desire);

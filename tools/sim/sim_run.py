@@ -321,9 +321,11 @@ def record_minds(game, recorded):
     run with it must give the same world as a run without it. A game with no mind log answers with an error: the run
     then goes on with no record."""
     try:
-        creatures = game.call("creature.list") or []
+        answer = game.call("creature.list")
     except RuntimeError:
         return
+    # A list query answers with its items, or with an object that holds them
+    creatures = answer.get("items", []) if isinstance(answer, dict) else answer if isinstance(answer, list) else []
     for creature in creatures:
         number = creature.get("id")
         if number is None or number in recorded:
