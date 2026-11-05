@@ -1999,6 +1999,12 @@
   "query": "view.video"
  },
  {
+  "description": "The screens of the start and of the loads: whether they have their textures, what a load draws at its redraw points, whether the tips screen faded in and has a tip, and the timers of the start",
+  "kind": "object",
+  "parameters": [],
+  "query": "view.loading"
+ },
+ {
   "description": "Whether a camera path holds the camera, the camera's help, the advisors' cheers as the camera turns, and the knock readout",
   "kind": "object",
   "parameters": [],

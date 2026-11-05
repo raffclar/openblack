@@ -15,6 +15,7 @@
 #include <memory>
 #include <stdexcept>
 #include <string>
+#include <utility>
 
 #include <spdlog/spdlog.h>
 
@@ -39,6 +40,7 @@
 #include "ECS/Systems/Implementations/IncomingMessageSystem.h"
 #include "ECS/Systems/Implementations/LandShadeSystem.h"
 #include "ECS/Systems/Implementations/LiquidParticleSystem.h"
+#include "ECS/Systems/Implementations/LoadingScreenSystem.h"
 #include "ECS/Systems/Implementations/OwnReportSystem.h"
 #include "ECS/Systems/Implementations/ParticleSystem.h"
 #include "ECS/Systems/Implementations/PauseTextSystem.h"
@@ -71,6 +73,7 @@ using openblack::ecs::systems::GameAudioSystem;
 using openblack::ecs::systems::IncomingMessageSystem;
 using openblack::ecs::systems::LandShadeSystem;
 using openblack::ecs::systems::LiquidParticleSystem;
+using openblack::ecs::systems::LoadingScreenSystem;
 using openblack::ecs::systems::OwnReportSystem;
 using openblack::ecs::systems::ParticleSystem;
 using openblack::ecs::systems::PauseTextSystem;
@@ -197,4 +200,9 @@ bool openblack::InitializeGame(const player_profiles::Store& profiles) noexcept
 	InitializePresentation();
 	InitializeClient(profiles);
 	return true;
+}
+
+void openblack::InitializeLoadingScreens(ecs::systems::LoadingScreenHooks hooks)
+{
+	Locator::loadingScreenSystem::emplace<LoadingScreenSystem>(std::move(hooks));
 }

@@ -181,6 +181,8 @@ class DanceSystemInterface;
 class FootballSystemInterface;
 class SharkSystemInterface;
 class VideoSystemInterface;
+class LoadingScreenSystemInterface;
+struct LoadingScreenHooks;
 class HelpTextSystemInterface;
 class TurnCheerSystemInterface;
 class GameAudioSystemInterface;
@@ -300,6 +302,8 @@ void InitializeOnlineAndTools(const player_profiles::Store& profiles);
 void InitializeClient(const player_profiles::Store& profiles);
 /// The simulation, the systems that show the world, then the services of the game on the player's computer
 bool InitializeGame(const player_profiles::Store& profiles) noexcept;
+/// The screens of the start and of the loads of the game. Only the game's library has this function.
+void InitializeLoadingScreens(ecs::systems::LoadingScreenHooks hooks);
 void InitializeLevel(const std::filesystem::path& path);
 /// Starts a level on land that is generated rather than read from a file, as the flat testbed is
 void InitializeLevel(const LandData& land);
@@ -467,6 +471,9 @@ struct Locator
 	using footballSystem = entt::locator<ecs::systems::FootballSystemInterface>;
 	using sharkSystem = entt::locator<ecs::systems::SharkSystemInterface>;
 	using videoSystem = entt::locator<ecs::systems::VideoSystemInterface>;
+	/// The screens that the game shows as it starts and while a land loads, and the timers of the start. The game makes
+	/// it. The dedicated server has none.
+	using loadingScreenSystem = entt::locator<ecs::systems::LoadingScreenSystemInterface>;
 	using helpTextSystem = entt::locator<ecs::systems::HelpTextSystemInterface>;
 	/// The advisors' voices that this computer plays. The dedicated server does not make them.
 	using advisorVoiceSystem = entt::locator<ecs::systems::AdvisorVoiceSystemInterface>;

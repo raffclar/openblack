@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <filesystem>
 #include <memory>
 #include <optional>
 #include <span>
@@ -75,6 +76,7 @@
 #include "ECS/Systems/HelpTextSystemInterface.h"
 #include "ECS/Systems/Implementations/VillagerDisciples.h"
 #include "ECS/Systems/IncomingMessageSystemInterface.h"
+#include "ECS/Systems/LoadingScreenSystemInterface.h"
 #include "ECS/Systems/MiracleFxSystemInterface.h"
 #include "ECS/Systems/PauseTextSystemInterface.h"
 #include "ECS/Systems/PickingSystemInterface.h"
@@ -273,16 +275,15 @@ void Game::ShowSavingBox(bool loading, bool darken)
 	{
 		return;
 	}
-	Locator::gameInterface::value().DrawSavingBox(static_cast<glm::u16vec2>(Locator::windowing::value().GetSize()), loading,
-	                                              darken);
 	// A picture asked for this frame shows the box, as the screen does
+	std::optional<std::filesystem::path> screenshot;
 	if (_requestScreenshot.has_value() && _requestScreenshot->first == _frameCount)
 	{
-		Locator::rendererInterface::value().RequestScreenshot(_requestScreenshot->second);
+		screenshot = std::move(_requestScreenshot->second);
 		_requestScreenshot.reset();
 	}
-	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The {} box shows at frame {}", loading ? "loading" : "saving", _frameCount);
-	Locator::rendererInterface::value().Frame();
+	Locator::loadingScreenSystem::value().ShowSavingBox(
+	    {.loading = loading, .darken = darken, .frame = _frameCount, .screenshot = std::move(screenshot)});
 }
 
 void Game::HandleInterfaceAction()
@@ -694,5 +695,5 @@ bool Game::WithdrawSkipBox()
 
 void Game::ShowLoadingFrame()
 {
-	RenderLoadingFrame();
+	Locator::loadingScreenSystem::value().RenderLoadingFrame(false, nullptr);
 }
