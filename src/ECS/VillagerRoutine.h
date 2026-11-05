@@ -70,6 +70,35 @@ enum class Idle : uint8_t
 /// their home, five go and sit about their town; each falls through to the next when it can't, ending at home
 [[nodiscard]] Idle NothingToDo(bool hasAbode, bool abodeFunctional, bool hasTown, const IntRandom& random);
 
+/// What a villager does when it arrives at a home that is not built or not repaired
+enum class UnfinishedHome : uint8_t
+{
+	/// It goes in
+	GoIn,
+	/// It lies down outside in a tent
+	LieDownOutside,
+	/// It decides again, but goes in all the same
+	DecideThenGoIn,
+	/// It tries to build or repair the home, and goes in when it cannot
+	TryToBuild,
+};
+/// The choice at a home that is not built or not repaired:
+/// - A hurt villager goes in when the home works, or else lies down outside.
+/// - A hungry villager goes in, and decides again first when the home does not work.
+/// - Any other villager tries to build or repair the home.
+[[nodiscard]] constexpr UnfinishedHome AtUnfinishedHome(bool hurt, bool hungry, bool functional)
+{
+	if (hurt)
+	{
+		return functional ? UnfinishedHome::GoIn : UnfinishedHome::LieDownOutside;
+	}
+	if (hungry)
+	{
+		return functional ? UnfinishedHome::GoIn : UnfinishedHome::DecideThenGoIn;
+	}
+	return UnfinishedHome::TryToBuild;
+}
+
 /// A villager knocked out of its home won't go to bed again for its next decision, unless it is badly hurt
 [[nodiscard]] constexpr bool MaySleep(bool woken, float life, float goHomeLife)
 {
