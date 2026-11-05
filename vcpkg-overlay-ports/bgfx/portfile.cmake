@@ -44,7 +44,7 @@ vcpkg_download_distfile(
 #   bindings that change its bind group layout (formats, view dimensions, the stencil read, an unbound stage), not the
 #   texture and sampler handles. Before, a draw with another texture of the same format made a new pipeline. Each new
 #   pipeline costs 30 to 60 ms in Safari, and the prefetch pipelines did not match the pipelines of the next frames:
-#   Land 1 made about 1600 pipelines in place of about 170, and the first frames took 52 s in Safari 27.
+#   Land 1 made about 1600 pipelines in place of fewer than 200, and the first frames took 52 s in Safari 27.
 # - webgpu-instance-stream-layout: the list of vertex buffer layouts of a render pipeline has a place for the
 #   instance data after the most vertex streams. Before, a draw with four vertex streams and instance data, as a
 #   creature with its three variant meshes, wrote the instance layout after the end of the list, into other values
