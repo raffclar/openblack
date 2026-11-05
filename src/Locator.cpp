@@ -65,6 +65,7 @@
 #include "ECS/Systems/Implementations/CreatureHandSystem.h"
 #include "ECS/Systems/Implementations/CreatureHelpSystem.h"
 #include "ECS/Systems/Implementations/CreatureLocomotionSystem.h"
+#include "ECS/Systems/Implementations/CreatureMindLogSystem.h"
 #include "ECS/Systems/Implementations/CreatureMindSystem.h"
 #include "ECS/Systems/Implementations/CreatureModeSystem.h"
 #include "ECS/Systems/Implementations/CreatureObjectActionSystem.h"
@@ -872,6 +873,8 @@ void openblack::InitializeOnlineAndTools(const player_profiles::Store& profiles)
 #if defined(OPENBLACK_DEVELOPER_TOOLS)
 	// The editor is a developer tool: a build without the developer tools has no editor
 	Locator::editorSystem::emplace<EditorSystem>();
+	// The record of the creature minds that the developer view watches
+	Locator::creatureMindLog::emplace<ecs::systems::CreatureMindLogSystem>();
 #endif
 	Locator::videoSystem::emplace<VideoSystem>();
 }
@@ -1011,6 +1014,7 @@ void openblack::ShutDownServices()
 	Locator::httpClient::reset();
 	Locator::fightTranscript::reset();
 	Locator::creatureAnimationLog::reset();
+	Locator::creatureMindLog::reset();
 	Locator::rendereringSystem::reset();
 	Locator::dynamicsSystem::reset();
 	Locator::templeDestructionSystem::reset();

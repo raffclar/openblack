@@ -61,6 +61,7 @@
 #include "ECS/Systems/CreatureHandSystemInterface.h"
 #include "ECS/Systems/CreatureHelpSystemInterface.h"
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
+#include "ECS/Systems/CreatureMindLogSystemInterface.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/CreatureObjectActionSystemInterface.h"
 #include "ECS/Systems/CreaturePenSystemInterface.h"
@@ -1115,6 +1116,11 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 		// A tool that records the run reads the world as the turn left it. The turn count moved on at the start of the
 		// turn, so the number is the turn after this one.
 		Locator::simulation::value().TurnEnded(clock.GetTurn());
+		// The developer view of the creature minds reads the minds that it watches. It changes nothing in the world.
+		if (Locator::creatureMindLog::has_value())
+		{
+			Locator::creatureMindLog::value().TurnEnded(Locator::entitiesRegistry::value(), clock.GetTurn());
+		}
 		break;
 	case Step::_Count:
 		break;
