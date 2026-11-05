@@ -208,25 +208,28 @@ bool LandSystem::LoadMap(const std::filesystem::path& path, loading::LoadingCloc
 	{
 		return CallOnMainThread(MainThreadApi::Renderer, [this, &path, look, change] { return LoadMap(path, look, change); });
 	}
-	const InspectorLoading loading(path.filename().generic_string());
 	auto& fileSystem = Locator::filesystem::value();
-
 	if (!fileSystem.Exists(path))
 	{
 		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "Could not find script {}", path.generic_string());
 		return false;
 	}
+	return LoadMapBytes(path, fileSystem.ReadAll(path), look, change);
+}
 
+bool LandSystem::LoadMapBytes(const std::filesystem::path& path, std::span<const uint8_t> data,
+                              loading::LoadingClock::Mode look, land_change::Kind change)
+{
+	const InspectorLoading loading(path.filename().generic_string());
 	LoadTimer timer(fmt::format("land {}", path.stem().string()));
 	View().BeginLoadingScreen(look);
-	const auto data = fileSystem.ReadAll(path);
 	auto source = std::string(reinterpret_cast<const char*>(data.data()), data.size());
 	// A land of a network game holds its script and its landscape in one file. Its script loads the landscape that it
 	// holds.
 	_mapLandscape.clear();
 	if (online_map_land::IsOnlineMap(path.generic_string()))
 	{
-		const auto file = onlinemap::Parse(std::as_bytes(std::span(data)));
+		const auto file = onlinemap::Parse(std::as_bytes(data));
 		if (!file.has_value())
 		{
 			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The land {} is not a land of a network game", path.generic_string());
@@ -368,6 +371,31 @@ bool LandSystem::LoadMapWithFreshScripts(const std::filesystem::path& path, land
 		return CallOnMainThread(MainThreadApi::Renderer,
 		                        [this, &path, change] { return LoadMapWithFreshScripts(path, change); });
 	}
+	StartChallengeScriptsAgain();
+	return LoadMap(path, loading::LoadingClock::Mode::Tips, change);
+}
+
+bool LandSystem::LoadNetworkMapFile(const std::filesystem::path& path, std::span<const uint8_t> file, ChallengeScripts scripts)
+{
+	if (InTurnOnOtherThread())
+	{
+		return CallOnMainThread(MainThreadApi::Renderer,
+		                        [this, &path, file, scripts] { return LoadNetworkMapFile(path, file, scripts); });
+	}
+	if (!online_map_land::IsOnlineMap(path.generic_string()))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The land {} is not a land of a network game", path.generic_string());
+		return false;
+	}
+	if (scripts == ChallengeScripts::StartedAgain)
+	{
+		StartChallengeScriptsAgain();
+	}
+	return LoadMapBytes(path, file, loading::LoadingClock::Mode::Tips, land_change::Kind::NewGame);
+}
+
+void LandSystem::StartChallengeScriptsAgain()
+{
 	// Outside the story, a land is loaded with the challenge's scripts started again from scratch: every task of the
 	// last land stops, the scripts' variables are cleared and the challenge's scripts that start by themselves start
 	// again. None of the last land's scripts go on running on the new land.
@@ -396,7 +424,6 @@ bool LandSystem::LoadMapWithFreshScripts(const std::filesystem::path& path, land
 			                    err.what());
 		}
 	}
-	return LoadMap(path, loading::LoadingClock::Mode::Tips, change);
 }
 
 #if defined(OPENBLACK_DEVELOPER_TOOLS)
@@ -695,7 +722,7 @@ bool LandSystem::LoadSavedLand(const std::filesystem::path& landPath, const std:
 		{
 			// The landscape of a land of a network game is in the land's own file, as when its script loaded it
 			const auto data = Locator::filesystem::value().ReadAll(landPath);
-			const auto file = onlinemap::Parse(std::as_bytes(std::span(data)));
+			const auto file = onlinemap::Parse(std::as_bytes(data));
 			if (!file.has_value())
 			{
 				throw std::runtime_error("the land is not a land of a network game");

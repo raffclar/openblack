@@ -69,6 +69,7 @@
 #include "Gui/OnlineMapTexts.h"
 #include "Gui/TextDatabase.h"
 #include "Locator.h"
+#include "Online/DownloadTestMap.h"
 #include "Online/GodsRingMap.h"
 #include "Online/GodsRingMapFile.h"
 #include "Online/NetworkLand.h"
@@ -417,6 +418,16 @@ bool ServerWorld::StartLand()
 	{
 		// A server for players has no testbed
 		if (!land.LoadTestbed())
+		{
+			return false;
+		}
+	}
+	else if (_settings.customMap.has_value())
+	{
+		// A land of a network game from a file outside the game folder. The server loads its bytes as it loads a land of
+		// the game folder, and its players get the same bytes from the lobby.
+		if (!land.LoadNetworkMapFile(_startMap, _settings.customMap->bytes,
+		                             ecs::systems::LandSystemInterface::ChallengeScripts::Kept))
 		{
 			return false;
 		}
@@ -874,7 +885,12 @@ bool StartNetwork(const ServerSettings& settings, ServerWorld& world, std::uniqu
 	const bool scriptLand = !settings.testbed && !settings.godsRingMap;
 	const auto landPath = Locator::landSystem::value().GetLandPath();
 	uint64_t landChecksum = online::start_rules::LandChecksum({});
-	if (scriptLand && fileSystem.Exists(landPath))
+	if (settings.customMap.has_value())
+	{
+		// The clients compare the checksum of the file that they got from the lobby
+		landChecksum = online::start_rules::LandChecksum(settings.customMap->bytes);
+	}
+	else if (scriptLand && fileSystem.Exists(landPath))
 	{
 		landChecksum = online::start_rules::LandChecksum(fileSystem.ReadAll(landPath));
 	}
@@ -943,6 +959,18 @@ bool StartNetwork(const ServerSettings& settings, ServerWorld& world, std::uniqu
 		                                     .name = std::string(gods_ring_map::k_Name),
 		                                     .players = static_cast<int32_t>(gods_ring_map::k_Slots),
 		                                     .bytes = world.GodsRingMapFile()};
+	}
+	else if (settings.customMap.has_value())
+	{
+		// The land of --custom-map has a god for each of its citadels. Its shown name is its file name, or the name of
+		// the land of the map download test.
+		const auto& file = settings.customMap->file;
+		customMap = lobby_status::CustomMap {
+		    .file = file,
+		    .name = file == download_test_map::k_File ? std::string(download_test_map::k_Name) : file,
+		    .players = static_cast<int32_t>(godSlots),
+		    .bytes = settings.customMap->bytes,
+		};
 	}
 	if (const auto error = network->Start(*settings.network, start, landChecksum, godSlots, std::move(customMap));
 	    error.has_value())

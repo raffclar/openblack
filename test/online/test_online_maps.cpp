@@ -12,10 +12,12 @@
 #include <cstddef>
 #include <cstdint>
 
+#include <algorithm>
 #include <fstream>
 #include <functional>
 #include <map>
 #include <optional>
+#include <random>
 #include <span>
 #include <string>
 #include <string_view>
@@ -29,8 +31,11 @@
 #include "3D/GodsRingLand.h"
 #include "3D/LandData.h"
 #include "FileSystem/DefaultFileSystem.h"
+#include "Online/DownloadTestMap.h"
 #include "Online/GodsRingMapFile.h"
+#include "Online/HttpClientInterface.h"
 #include "Online/MapDownload.h"
+#include "Online/OnlineMapLand.h"
 #include "Online/OnlineMapStoreInterface.h"
 #include "Online/Sha256.h"
 #include "Online/StartRules.h"
@@ -384,4 +389,236 @@ TEST(LobbyMaps, TheAddressOfTheServersMap)
 	const server::lobby_status::CustomMap map {.file = "obm_32p_1", .name = "Gods' ring", .players = 32, .bytes = {}};
 	EXPECT_EQ(server::lobby_status::MapAddress("https://lobby.test/api/v1/", "s 1", map),
 	          "https://lobby.test/api/v1/servers/s%201/map?file=obm_32p_1&name=Gods%27%20ring&players=32");
+}
+
+namespace
+{
+
+/// A small land for the tests: a few blocks, a country, a material and a coarse page
+LandData SmallLand()
+{
+	LandData land;
+	for (uint32_t i = 0; i < 3; ++i)
+	{
+		lnd::LNDBlock block {};
+		block.blockX = 10 + i;
+		block.blockZ = 12;
+		block.index = i + 1;
+		land.blocks.push_back(block);
+		land.blockIndexLookup.at(((10 + i) * LandData::k_BlocksPerSide) + 12) = static_cast<uint16_t>(i + 1);
+	}
+	land.countries.resize(1);
+	land.materials.resize(1);
+	lnd::LNDLowResolutionTexture page {};
+	page.texels.assign(64, 7);
+	land.coarsePages.push_back(page);
+	return land;
+}
+
+constexpr std::string_view k_TemplateScript = "VERSION(2.300000)\nLOAD_LANDSCAPE(\".\\Online Maps\\MPM_2P_1.lnd\")\n";
+
+/// The bytes of a land file for the tests, with the small land
+std::vector<uint8_t> SmallMapFile(std::string_view script = k_TemplateScript)
+{
+	return *onlinemap::Write(script, SmallLand().LndBytes());
+}
+
+void PutLength(std::vector<uint8_t>& bytes, size_t at, uint32_t value)
+{
+	for (size_t i = 0; i < 4; ++i)
+	{
+		bytes.at(at + i) = static_cast<uint8_t>((value >> (8 * i)) & 0xFFu);
+	}
+}
+
+} // namespace
+
+TEST(OnlineMapFile, TwoLengthsWhoseSumWrapsRoundAreNotAMap)
+{
+	// On a 32-bit build the sum of these lengths wraps round to the 8 bytes after the lengths
+	std::vector<uint8_t> bytes(16, 0);
+	PutLength(bytes, 0, 0xFFFF'FFFFu);
+	PutLength(bytes, 4, 9);
+	EXPECT_FALSE(onlinemap::Parse(std::as_bytes(std::span(bytes))).has_value());
+}
+
+TEST(LndFile, CountsLargerThanTheFileAreRefusedBeforeTheReaderMakesRoom)
+{
+	const auto good = SmallLand().LndBytes();
+	{
+		lnd::LNDFile file;
+		ASSERT_EQ(file.Open(good), lnd::LNDResult::Success);
+	}
+	// The header fields after the table of 1024 bytes: material count, country count, block size, material size,
+	// country size and coarse page count
+	constexpr size_t k_Materials = 4 + 1024;
+	constexpr size_t k_Countries = k_Materials + 4;
+	constexpr size_t k_Pages = k_Materials + 20;
+	constexpr size_t k_FirstPageSize = sizeof(lnd::LNDHeader) + 16;
+	const auto refused = [&good](size_t at, uint32_t value) {
+		auto bytes = good;
+		PutLength(bytes, at, value);
+		lnd::LNDFile file;
+		return file.Open(bytes) != lnd::LNDResult::Success;
+	};
+	// No blocks, not even the first block that the file does not keep
+	EXPECT_TRUE(refused(0, 0));
+	EXPECT_TRUE(refused(0, 0xFFFF'FFFFu));
+	EXPECT_TRUE(refused(k_Materials, 0xFFFF'FFFFu));
+	EXPECT_TRUE(refused(k_Countries, 0xFFFF'FFFFu));
+	EXPECT_TRUE(refused(k_Pages, 0xFFFF'FFFFu));
+	// A page size that is smaller than its own 4 bytes, and a page size larger than the file
+	EXPECT_TRUE(refused(k_FirstPageSize, 0));
+	EXPECT_TRUE(refused(k_FirstPageSize, 0xFFFF'FFFFu));
+	// A file that stops early does not read
+	for (const size_t size : {size_t {0}, sizeof(lnd::LNDHeader) - 1, sizeof(lnd::LNDHeader) + 10, good.size() / 2})
+	{
+		lnd::LNDFile file;
+		EXPECT_NE(file.Open(std::vector<uint8_t>(good.begin(), good.begin() + static_cast<std::ptrdiff_t>(size))),
+		          lnd::LNDResult::Success);
+	}
+}
+
+TEST(LandDataBytes, ATablePlaceThatNamesAMissingBlockHoldsNoBlock)
+{
+	auto land = SmallLand();
+	land.blockIndexLookup.at(5) = 200;
+	const auto bytes = land.LndBytes();
+	lnd::LNDFile file;
+	ASSERT_EQ(file.Open(bytes), lnd::LNDResult::Success);
+	const auto read = LandData::FromLnd(file);
+	EXPECT_EQ(read.blockIndexLookup.at(5), 0u);
+	EXPECT_EQ(read.blockIndexLookup.at((11 * LandData::k_BlocksPerSide) + 12), 2u);
+}
+
+// A short run of a fuzz test: changed bytes of a land file, in its lengths, its landscape header and in other places,
+// do not stop the reader of the file. A table place that the reader keeps names only a block that the land has.
+TEST(OnlineMapFile, ChangedBytesOfALandFileDoNotStopTheReader)
+{
+	const auto seed = SmallMapFile();
+	const size_t landscape = 8 + k_TemplateScript.size();
+	std::mt19937 random(20261105);
+	const auto pick = [&random](size_t from, size_t to) { return std::uniform_int_distribution<size_t>(from, to - 1)(random); };
+	for (int run = 0; run < 400; ++run)
+	{
+		auto bytes = seed;
+		const auto changes = 1 + pick(0, 8);
+		for (size_t i = 0; i < changes; ++i)
+		{
+			// Most changes go into the lengths and the landscape header, which hold the counts
+			size_t at = landscape + pick(0, 1100);
+			if (pick(0, 4) == 0)
+			{
+				at = pick(0, bytes.size());
+			}
+			else if (pick(0, 8) == 0)
+			{
+				at = pick(0, 8);
+			}
+			bytes.at(at) = static_cast<uint8_t>(pick(0, 256));
+		}
+		if (pick(0, 10) == 0)
+		{
+			bytes.resize(pick(0, bytes.size()));
+		}
+		const auto parts = gods_ring_map_file::Read(bytes);
+		if (parts.has_value())
+		{
+			for (const auto index : parts->land.blockIndexLookup)
+			{
+				ASSERT_LE(index, parts->land.blocks.size());
+			}
+		}
+	}
+}
+
+TEST(OnlineMapStore, ANameOfADeviceOfWindowsIsNotAMapFile)
+{
+	for (const auto* name :
+	     {"CON.map", "con.map", "nul.map", "AUX.map", "prn.map", "COM1.map", "lpt9.map", "CON .map", " obm.map", "obm\x01.map"})
+	{
+		EXPECT_FALSE(online::IsStoreFileName(name)) << name;
+	}
+	EXPECT_TRUE(online::IsStoreFileName("console.map"));
+	EXPECT_TRUE(online::IsStoreFileName("com10.map"));
+	EXPECT_TRUE(online::IsStoreFileName("obt_dl_2p_1.map"));
+}
+
+TEST(MapDownload, AMapWithANameThatTheStoreCannotKeepFailsAndLeavesNoFile)
+{
+	const test::TestTempFolder folder;
+	filesystem::DefaultFileSystem files;
+	std::filesystem::create_directories(folder.Path() / "game");
+	files.SetGamePath(folder.Path() / "game");
+	online::FolderMapStore store(files, folder.Path() / "profile");
+	FakeFetch fetch;
+	online::MapDownload download(store, fetch.Function());
+	auto map = MapOf("land");
+	for (const auto* name : {"CON", "../x", "a/b", "C:x", ".hidden"})
+	{
+		map.file = name;
+		download.Start(map);
+		fetch.Answer(Bytes("land"));
+		EXPECT_EQ(download.GetState(), online::MapDownload::State::Failed) << name;
+	}
+	const auto folderOfMaps = folder.Path() / "profile" / "Online Maps";
+	EXPECT_TRUE(!std::filesystem::exists(folderOfMaps) || std::filesystem::is_empty(folderOfMaps));
+}
+
+TEST(MapDownload, ABadAnswerKeepsNoFileAndAGoodSecondAnswerIsKept)
+{
+	const auto file = SmallMapFile();
+	const auto map = Map(online::start_rules::LandChecksum(file), online::sha256::HexOf(file));
+	// A changed byte, a part of the file and no answer are each a bad answer
+	auto changed = file;
+	changed.at(changed.size() / 2) ^= 0x01u;
+	const std::vector<uint8_t> part(file.begin(), file.begin() + static_cast<std::ptrdiff_t>(file.size() / 2));
+	for (const auto& bad : {std::optional(changed), std::optional(part), std::optional<std::vector<uint8_t>>()})
+	{
+		FakeStore store;
+		FakeFetch fetch;
+		online::MapDownload download(store, fetch.Function());
+		download.Start(map);
+		fetch.Answer(bad);
+		EXPECT_EQ(download.GetState(), online::MapDownload::State::Downloading);
+		EXPECT_TRUE(store.files.empty());
+		fetch.Answer(file);
+		EXPECT_EQ(download.GetState(), online::MapDownload::State::Ready);
+		EXPECT_EQ(store.files.at("obm_32p_1.map"), file);
+	}
+}
+
+TEST(DownloadTestMap, TheLandHasItsOwnNameAndTheLandscapeOfTheTemplate)
+{
+	const auto templateMap = SmallMapFile(
+	    "VERSION(2.300000)\r\nSET_LAND_NUMBER(0)\r\n  load_landscape(\".\\Online Maps\\MPM_2P_1.lnd\")\r\nEND\r\n");
+	const auto made = download_test_map::Make(templateMap);
+	ASSERT_TRUE(made.has_value());
+	EXPECT_NE(online::sha256::HexOf(*made), online::sha256::HexOf(templateMap));
+	const auto parsed = onlinemap::Parse(std::as_bytes(std::span(*made)));
+	const auto source = onlinemap::Parse(std::as_bytes(std::span(templateMap)));
+	ASSERT_TRUE(parsed.has_value() && source.has_value());
+	EXPECT_EQ(parsed->script, "rem openblack: the land of the map download test\r\nVERSION(2.300000)\r\nSET_LAND_NUMBER(0)\r\n"
+	                          "LOAD_LANDSCAPE(\".\\Online Maps\\OBT_DL_2P_1.lnd\")\r\nEND\r\n");
+	EXPECT_TRUE(std::ranges::equal(parsed->landscape, source->landscape));
+	EXPECT_TRUE(
+	    online_map_land::IsOwnLandscape("Online Maps/" + download_test_map::FileName(), ".\\Online Maps\\OBT_DL_2P_1.lnd"));
+	EXPECT_TRUE(online::IsStoreFileName(download_test_map::FileName()));
+	// The same template gives the same bytes, so every tool run gives the same land
+	EXPECT_EQ(download_test_map::Make(templateMap), made);
+}
+
+TEST(DownloadTestMap, ATemplateWithNoLandscapeOrNoMapGivesNothing)
+{
+	EXPECT_FALSE(download_test_map::Make(SmallMapFile("VERSION(2.300000)\n")).has_value());
+	EXPECT_FALSE(download_test_map::Make(Bytes("not a map")).has_value());
+}
+
+TEST(HttpLimits, TheFullTimeOfALargeTransferFollowsItsLimitOfBytes)
+{
+	// The time to connect, one stall, and the bytes at the stall speed
+	EXPECT_EQ(online::LargeTransferTimeoutMs(0), 40'000);
+	EXPECT_EQ(online::LargeTransferTimeoutMs(1024 * 1024), 40'000 + (1024 * 1000));
+	EXPECT_EQ(online::LargeTransferTimeoutMs(online::k_MostLargeAnswerBytes), 40'000 + (64 * 1024 * 1000));
+	EXPECT_EQ(online::LargeTransferTimeoutMs(UINT64_MAX), 0x7FFF'FFFF);
 }

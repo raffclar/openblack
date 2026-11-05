@@ -6469,6 +6469,23 @@ bool Game::StartNetworkLand(const game_socket::Start& start)
 			return false;
 		}
 	}
+	else if (online_map_land::IsOnlineMap(start.land))
+	{
+		// A land of a network game comes from the store of the lands that the player got from the lobby, else from the
+		// game folder. The start check before compared the checksum of these same bytes.
+		const auto* store = Locator::onlineMapStore::has_value() ? &Locator::onlineMapStore::value() : nullptr;
+		const auto file = online::ReadStartLand(start.land, store, Locator::filesystem::value());
+		if (!file.has_value())
+		{
+			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "This computer does not have the land of the game server: {}", start.land);
+			return false;
+		}
+		if (!Locator::landSystem::value().LoadNetworkMapFile(*landPath, *file,
+		                                                     ecs::systems::LandSystemInterface::ChallengeScripts::StartedAgain))
+		{
+			return false;
+		}
+	}
 	else if (!LoadMapWithFreshScripts(*landPath, land_change::Kind::NewGame))
 	{
 		// The server names a land in the Scripts folder of the game, and never a path out of it

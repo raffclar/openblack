@@ -115,6 +115,19 @@ public:
 	virtual bool LoadMap(const std::filesystem::path& path, loading::LoadingClock::Mode look, land_change::Kind change) = 0;
 	/// Starts the scripts of the challenge again from the start, then loads the map script of a land
 	virtual bool LoadMapWithFreshScripts(const std::filesystem::path& path, land_change::Kind change) = 0;
+	/// What a load of a land of a network game does with the scripts of the challenge
+	enum class ChallengeScripts : uint8_t
+	{
+		/// The scripts stay as they are, as LoadMap does
+		Kept,
+		/// The scripts start again from the start, as LoadMapWithFreshScripts does
+		StartedAgain,
+	};
+	/// Loads a land of a network game from the bytes of its file, as LoadMap loads the file at the path. The bytes come
+	/// from the lobby or from the game server's own file, so the game folder does not need the land. Gives false when
+	/// the path or the bytes are not a land of a network game.
+	virtual bool LoadNetworkMapFile(const std::filesystem::path& path, std::span<const uint8_t> file,
+	                                ChallengeScripts scripts) = 0;
 	/// Loads the testbed: a flat land over the whole map with a lake, a dispenser of each miracle and no script. Gives
 	/// false, and loads nothing, in a build without the developer tools.
 	virtual bool LoadTestbed() = 0;

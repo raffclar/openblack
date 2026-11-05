@@ -44,9 +44,9 @@ struct HttpRequest
 	std::vector<HttpHeader> headers;
 	std::vector<uint8_t> body;
 	/// A transfer of a large file, such as a land of a network game. The answer has the larger limit
-	/// k_MostLargeAnswerBytes, and the request has no limit on its full time. The request stops when no bytes come for the
-	/// time of the stall limit. The client asks for the file as it is, with no compression, so that a small compressed
-	/// answer cannot expand to a very large body.
+	/// k_MostLargeAnswerBytes, and the full time of the request follows its limit of bytes (LargeTransferTimeoutMs). The
+	/// request stops when too few bytes come for the time of the stall limit. The desktop client asks for the file as it
+	/// is, with no compression, so that a small compressed answer cannot expand to a very large body.
 	bool large {false};
 	/// A smaller limit of the answer, such as the size of a file that a list gave, so that a larger answer stops at that
 	/// size. 0 keeps the limit of the kind of the request.
@@ -55,6 +55,24 @@ struct HttpRequest
 
 /// The most bytes of the answer to a transfer of a large file. The lobby keeps maps of at most 1 MiB.
 inline constexpr size_t k_MostLargeAnswerBytes = 64 * 1024 * 1024;
+
+/// A large transfer stops when it gets fewer bytes than this in each second for the time of the stall limit. A slow
+/// modem gives more than 4 KiB in each second, so only a server that holds the transfer open stops.
+inline constexpr long k_LargeStallBytesPerSecond = 1024;
+inline constexpr long k_LargeStallSeconds = 30;
+/// The time to connect to the server of a large transfer
+inline constexpr long k_LargeConnectMs = 10'000;
+
+/// The full time of a large transfer of at most this number of bytes: the time to connect, one stall, and the time of
+/// all the bytes at the stall speed. A server that sends just more than the stall speed thus cannot hold the transfer
+/// open for longer.
+[[nodiscard]] constexpr long LargeTransferTimeoutMs(uint64_t mostBytes) noexcept
+{
+	constexpr uint64_t k_Most = 0x7FFF'FFFF;
+	const uint64_t ms = static_cast<uint64_t>(k_LargeConnectMs) + (static_cast<uint64_t>(k_LargeStallSeconds) * 1000) +
+	                    ((mostBytes / static_cast<uint64_t>(k_LargeStallBytesPerSecond)) * 1000);
+	return static_cast<long>(ms < k_Most ? ms : k_Most);
+}
 
 /// The limit of the answer to a request: the smaller limit of the request when it has one, else the limit of its kind
 [[nodiscard]] constexpr size_t MostAnswerBytes(const HttpRequest& request, size_t kindLimit) noexcept

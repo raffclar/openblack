@@ -59,7 +59,8 @@ public:
 constexpr std::string_view k_OnlineMapFolder = "Online Maps";
 
 /// Whether a name is a map file that the store can keep: a plain file name that ends with ".map", with no folder, no
-/// ".." and no character that a file system does not take
+/// ".." and no character that a file system does not take. A name of a device of Windows, such as "CON.map", is not a
+/// map file, because Windows opens the device in place of a file.
 [[nodiscard]] bool IsStoreFileName(std::string_view file) noexcept;
 
 /// The desktop store: the "Online Maps" folder in the profile folder. With no profile folder the store keeps nothing.
