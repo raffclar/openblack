@@ -38,6 +38,7 @@
 #include "ECS/Components/Player.h"
 #include "ECS/Components/PlayerRelations.h"
 #include "ECS/Components/ReportedHand.h"
+#include "ECS/Components/SpellDispenser.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
@@ -59,6 +60,7 @@
 #include "ECS/Systems/SoundTagSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
+#include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "PlayerSlots.h"
@@ -127,21 +129,48 @@ const GAbodeInfo* AbodeInfoOf(const Abode& abode, entt::id_type mesh, Tribe trib
 	return byTribe;
 }
 
-/// A building adds its own influence, by its size, once for itself and once for each of its people
-float AbodeInfluence(entt::entity entity, const Abode& abode, Tribe tribe)
+/// The row of a building in the buildings' table: its own row, else the row that its number, mesh and tribe find
+const GAbodeInfo* BuildingInfoOf(entt::entity entity, AbodeInfo row, const Abode* abode, Tribe tribe)
+{
+	const auto& table = Locator::infoConstants::value().abode;
+	if (row != AbodeInfo::None && static_cast<size_t>(row) < table.size())
+	{
+		return &table.at(static_cast<size_t>(row));
+	}
+	if (abode == nullptr)
+	{
+		return nullptr;
+	}
+	const auto* mesh = Locator::entitiesRegistry::value().TryGet<const Mesh>(entity);
+	return AbodeInfoOf(*abode, mesh != nullptr ? mesh->id : 0, tribe);
+}
+
+/// The influence that a building of a town adds: a building with people or a miracle dispenser, which has no people
+float InfluenceOfBuilding(entt::entity entity, Tribe tribe)
 {
 	const auto& registry = Locator::entitiesRegistry::value();
-	const auto* mesh = registry.TryGet<const Mesh>(entity);
-	const auto* info = AbodeInfoOf(abode, mesh != nullptr ? mesh->id : 0, tribe);
+	const auto* abode = registry.TryGet<const Abode>(entity);
+	const auto* dispenser = registry.TryGet<const SpellDispenser>(entity);
+	const auto row = dispenser != nullptr ? dispenser->building : (abode != nullptr ? abode->info : AbodeInfo::None);
+	const auto* info = BuildingInfoOf(entity, row, abode, tribe);
 	if (info == nullptr)
 	{
 		return 0.0f;
 	}
 	const auto* transform = registry.TryGet<const Transform>(entity);
-	const float scale = transform != nullptr ? transform->scale.x : 1.0f;
-	const auto people = std::ranges::count_if(
-	    abode.inhabitants, [&registry](entt::entity villager) { return registry.AnyOf<Villager>(villager); });
-	return scale * info->influence * static_cast<float>(people + 1);
+	const auto* progress = registry.TryGet<const BuildProgress>(entity);
+	const auto people =
+	    abode != nullptr
+	        ? std::ranges::count_if(abode->inhabitants,
+	                                [&registry](entt::entity villager) { return registry.AnyOf<Villager>(villager); })
+	        : 0;
+	return openblack::influence_rules::OfBuilding({
+	    .built = progress != nullptr ? progress->built : 1.0f,
+	    .scale = transform != nullptr ? transform->scale.x : 1.0f,
+	    .life = ecs::world_objects::LifeOf(entity),
+	    .influence = info->influence,
+	    .people = static_cast<uint32_t>(people),
+	});
 }
 
 /// What a town reaches with no buildings, for the land that is played now
@@ -347,27 +376,48 @@ void InfluenceSystem::NoteReach(float reach, float drawn)
 	}
 }
 
-void InfluenceSystem::ProcessTownInfluence(entt::entity entity)
+void InfluenceSystem::StartTownInfluence(entt::entity entity)
 {
 	auto& registry = Locator::entitiesRegistry::value();
-	if (!registry.Valid(entity) || !registry.AllOf<Town, Tribe>(entity))
+	if (!registry.Valid(entity) || !registry.AllOf<Town>(entity))
 	{
 		return;
 	}
-	const auto& town = registry.Get<const Town>(entity);
-	const auto tribe = registry.Get<const Tribe>(entity);
-	float buildings = 0.0f;
-	registry.Each<const Abode>([&](entt::entity abode, const Abode& data) {
-		if (data.townId == town.id)
-		{
-			buildings += AbodeInfluence(abode, data, tribe);
-		}
-	});
-	// A town that a scaffold founded reaches nothing with no buildings
-	const float base = town.zeroBaseInfluence ? 0.0f : TownBaseInfluence();
+	// A town that a scaffold founded has no base influence
+	const float base = registry.Get<const Town>(entity).zeroBaseInfluence ? 0.0f : TownBaseInfluence();
 	auto& influence =
 	    registry.AnyOf<TownInfluence>(entity) ? registry.Get<TownInfluence>(entity) : registry.Assign<TownInfluence>(entity);
-	influence.radius = (base + buildings) * Globals().townInfluenceMultiplier;
+	influence.radius = base;
+}
+
+void InfluenceSystem::AddBuildingInfluence(entt::entity entity, entt::entity building)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(entity) || !registry.AllOf<Town, TownInfluence>(entity) || !registry.Valid(building))
+	{
+		return;
+	}
+	// The buildings of a town that a scaffold founded add nothing either
+	if (registry.Get<const Town>(entity).zeroBaseInfluence)
+	{
+		return;
+	}
+	const auto* tribe = registry.TryGet<const Tribe>(entity);
+	auto& influence = registry.Get<TownInfluence>(entity);
+	influence.radius = openblack::influence_rules::AddBuilding(
+	    influence.radius, InfluenceOfBuilding(building, tribe != nullptr ? *tribe : Tribe::NONE));
+}
+
+void InfluenceSystem::FinishTownInfluence(entt::entity entity)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(entity) || !registry.AllOf<Town, TownInfluence>(entity))
+	{
+		return;
+	}
+	// Every town has a player, also a town of the neutral player, thus the multiplier always applies
+	auto& influence = registry.Get<TownInfluence>(entity);
+	influence.radius = openblack::influence_rules::TimesMultiplier(influence.radius, Globals().townInfluenceMultiplier);
 }
 
 void InfluenceSystem::MarkTownInfluence(entt::entity entity)
