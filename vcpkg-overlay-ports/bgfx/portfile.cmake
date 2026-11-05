@@ -40,6 +40,10 @@ vcpkg_download_distfile(
 # - webgpu-prefetch-keep-pipelines: a pipeline that the prefetch made goes into the pipeline cache of the renderer
 #   with its bind group layout. Thus the later draws use that pipeline and do not make it again. Safari compiles a
 #   pipeline again when the same descriptor comes again, and this made the first frames about 45 s slower.
+# - webgpu-pipeline-key-by-layout: the key of a render pipeline in the cache has only the values of the texture
+#   bindings that change its bind group layout (formats, view dimensions, the stencil read, an unbound stage), not the
+#   texture and sampler handles. Before, a draw with another texture of the same format made a new pipeline. Each new
+#   pipeline costs 30 to 60 ms in Safari, and the prefetch pipelines did not match the pipelines of the next frames.
 # - webgpu-instance-stream-layout: the list of vertex buffer layouts of a render pipeline has a place for the
 #   instance data after the most vertex streams. Before, a draw with four vertex streams and instance data, as a
 #   creature with its three variant meshes, wrote the instance layout after the end of the list, into other values
@@ -103,6 +107,7 @@ vcpkg_extract_source_archive(
     webgpu-pipeline-prefetch.patch
     webgpu-instance-stream-layout.patch
     webgpu-prefetch-keep-pipelines.patch
+    webgpu-pipeline-key-by-layout.patch
     gl-parallel-link.patch
 )
 
