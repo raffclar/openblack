@@ -2059,7 +2059,7 @@ void LeashSystem::HandleInput(const glm::vec3& rayOrigin, const glm::vec3& rayDi
 	const auto pressed = [&actions](BindableActionMap action) { return actions.GetChanged(action) && actions.Get(action); };
 
 	// The leash shortcuts are commands of the player, which the world does at the start of the next turn (see
-	// Game::SubmitKeyCommands)
+	// GameKeysSystem::SubmitKeyCommands)
 
 	if (actionTaken || !pressed(BindableActionMap::ACTION) || glm::length(rayDirection) <= 0.0f)
 	{

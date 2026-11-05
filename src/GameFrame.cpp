@@ -90,8 +90,10 @@
 #include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/FloatingNumberSystemInterface.h"
 #include "ECS/Systems/GameAudioSystemInterface.h"
+#include "ECS/Systems/GameKeysSystemInterface.h"
 #include "ECS/Systems/GestureSystemInterface.h"
 #include "ECS/Systems/HandGrabSystemInterface.h"
+#include "ECS/Systems/HandPressSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/HelpProfileSystemInterface.h"
 #include "ECS/Systems/HelpTextSystemInterface.h"
@@ -104,6 +106,7 @@
 #include "ECS/Systems/MiracleFxSystemInterface.h"
 #include "ECS/Systems/NetworkGameSystemInterface.h"
 #include "ECS/Systems/ObjectDrawListSystemInterface.h"
+#include "ECS/Systems/OwnReportSystemInterface.h"
 #include "ECS/Systems/ParticleRuleSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/PauseTextSystemInterface.h"
@@ -205,7 +208,7 @@ bool Game::PlayFrameStep(game_frame::Step step, FrameState& frame)
 		UpdateInput();
 		break;
 	case Step::KeyCommands:
-		SubmitKeyCommands();
+		Locator::gameKeysSystem::value().SubmitKeyCommands();
 		break;
 	case Step::ScreenMarks:
 		UpdateScreenMarks();
@@ -238,15 +241,18 @@ bool Game::PlayFrameStep(game_frame::Step step, FrameState& frame)
 			{
 				std::ignore = Locator::helpProfileSystem::value().MakeReport(false, std::nullopt, false);
 			}
-			std::ignore = TakeDialogueClick();
+			std::ignore = Locator::handPressSystem::value().TakeDialogueClick();
 			break;
 		}
 		// A tool's run can keep the camera out of the commands, so that two runs give the same commands
 		if (!_simulation.has_value() || !_simulation->settings.noHandReports)
 		{
-			ReportHand();
+			Locator::ownReportSystem::value().ReportHand(_cameraIcons);
 		}
-		ReportHelp();
+		Locator::ownReportSystem::value().ReportHelp({
+		    .frontEndBoxShows = [this] { return FrontEndBoxShows(); },
+		    .worldCameraView = &Game::HelpWorldCameraView,
+		});
 		SendDialogueClick();
 		Locator::playerCommandSystem::value().SendOpenBlock();
 		break;
@@ -961,7 +967,7 @@ void Game::UpdateAdvisors()
 	Locator::advisorSystem::value().Update({
 	    .camera = &camera,
 	    .screen = static_cast<glm::u16vec2>(screenSize),
-	    .mouse = _mousePosition,
+	    .mouse = Locator::handPressSystem::value().GetMousePosition(),
 	    .frameMs = static_cast<uint32_t>(std::max(realMs, 1)),
 	    .stepMs = std::clamp(inTemple ? realMs : gameMs, 0, 500),
 	    .tickMs = machine_clock::Ticks(),
