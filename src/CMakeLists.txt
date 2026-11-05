@@ -100,7 +100,9 @@ list(FILTER OPENBLACK_CLIENT_SOURCES EXCLUDE REGEX
 )
 # The files in the folders of the simulation that only the game uses: they show a message box of the system or open a
 # page in the browser of the system
-set(OPENBLACK_CLIENT_IN_SIM_FOLDERS "Common/FatalMessage" "Online/OpenPage")
+set(OPENBLACK_CLIENT_IN_SIM_FOLDERS "Common/FatalMessage" "Common/DebugDownload"
+                                    "Online/OpenPage"
+)
 list(JOIN OPENBLACK_CLIENT_IN_SIM_FOLDERS "|" OPENBLACK_CLIENT_IN_SIM_FOLDERS)
 set(OPENBLACK_CLIENT_IN_SIM_SOURCES ${OPENBLACK_SOURCES})
 list(FILTER OPENBLACK_CLIENT_IN_SIM_SOURCES INCLUDE REGEX
@@ -240,13 +242,16 @@ set(OPENBLACK_UNIMPLEMENTED_NATIVES
     ${CMAKE_BINARY_DIR}/include/generated/scripting/UnimplementedNatives.h
 )
 file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/include/generated/scripting)
+file(GLOB OPENBLACK_SCRIPT_NATIVE_SOURCES ${CMAKE_CURRENT_LIST_DIR}/CHLApi.cpp
+     ${CMAKE_CURRENT_LIST_DIR}/CHLApi/*.cpp
+)
 add_custom_command(
   OUTPUT ${OPENBLACK_UNIMPLEMENTED_NATIVES}
   COMMAND
     ${CMAKE_COMMAND} -DSOURCE=${CMAKE_CURRENT_LIST_DIR}/CHLApi.cpp
     -DOUTPUT=${OPENBLACK_UNIMPLEMENTED_NATIVES} -P
     ${CMAKE_SOURCE_DIR}/CMakeModules/GenerateUnimplementedNatives.cmake
-  DEPENDS ${CMAKE_CURRENT_LIST_DIR}/CHLApi.cpp
+  DEPENDS ${OPENBLACK_SCRIPT_NATIVE_SOURCES}
           ${CMAKE_SOURCE_DIR}/CMakeModules/GenerateUnimplementedNatives.cmake
   COMMENT "Listing the script API's unwritten natives"
 )

@@ -149,6 +149,12 @@ function showMessage(title, text, files = []) {
 }
 globalThis.openblackShowMessage = showMessage;
 
+/** A debug file that the game wrote outside the Profiles folder (a screenshot, a saved mind) gets a download link */
+globalThis.openblackOfferDownload = (name, bytes) => {
+  const type = name.toLowerCase().endsWith('.png') ? 'image/png' : 'application/octet-stream';
+  showMessage('The game wrote a file', 'Use the link to download it.', [new File([bytes], name, { type })]);
+};
+
 /** Give the text to the user as a file to download */
 function download(name, text) {
   const link = document.createElement('a');

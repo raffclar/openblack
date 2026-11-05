@@ -17,6 +17,7 @@
 #include <fmt/format.h>
 #include <imgui.h>
 
+#include "Common/DebugDownload.h"
 #include "Common/FileDialog.h"
 #include "Creature/CreatureMindFileBody.h"
 #include "CreatureSpawner.h"
@@ -112,6 +113,10 @@ void CreatureSpawner::UseMindFile(MindFileUse use, const std::filesystem::path& 
 			return;
 		}
 		const auto result = creaturemind::WriteFile(path, *file);
+		if (result == creaturemind::MindResult::Success)
+		{
+			debug_download::Offer(path);
+		}
 		_lastMindFile = fmt::format("Saved to {}: {}", path.generic_string(), creaturemind::ResultToStr(result));
 		return;
 	}
