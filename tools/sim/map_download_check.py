@@ -387,7 +387,7 @@ def web_profile(options, out, state, ports):
                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=NO_WINDOW, timeout=1200)
 
 
-def web_client(options, out, state, ports, account, seconds):
+def web_client(options, out, state, ports, account, seconds, processes):
     """The web client: the front end in headless Chrome through cdp-run.mjs, as a player clicks it"""
     web_out = os.path.join(out, "web")
     os.makedirs(web_out, exist_ok=True)
@@ -443,10 +443,10 @@ def web_client(options, out, state, ports, account, seconds):
     with open(actions, "w", encoding="utf-8") as f:
         json.dump(steps, f)
     url = f"https://127.0.0.1:{ports['front']}/play/index.html?renderer=webgl2&args=" + "--skip-logos%20-MULTIPLAYER"
-    return subprocess.Popen(["node", CDP, CHROME, url, str(int(at + seconds)), web_out, "--game-folder",
-                             options.game_path, "--click", "#play", "--keep-profile", "--trust-spki", state["spki"],
-                             "--actions", actions], stdout=open(os.path.join(web_out, "cdp.out"), "w"),
-                            stderr=subprocess.STDOUT, creationflags=NO_WINDOW)
+    return processes.start("web", ["node", CDP, CHROME, url, str(int(at + seconds)), web_out, "--game-folder",
+                                   options.game_path, "--click", "#play", "--keep-profile", "--trust-spki",
+                                   state["spki"], "--actions", actions],
+                           stdout=open(os.path.join(web_out, "cdp.out"), "w"), stderr=subprocess.STDOUT)
 
 
 def web_lines(out, game):
@@ -466,6 +466,20 @@ def web_lines(out, game):
         if match:
             counts = (int(match.group(1)), int(match.group(2)))
     return {"has_land": any("has the land of the game" in line for line in lines), "counts": counts}
+
+
+def stop_chrome(out):
+    """Stops the Chrome of the web run of this script, found by its own profile folder, when cdp-run.mjs did not"""
+    profile = os.path.join(out, "web", "chrome-profile")
+    if os.name != "nt" or not os.path.isdir(profile):
+        return
+    query = ("Get-CimInstance Win32_Process -Filter \"Name='chrome.exe'\" | Where-Object { $_.CommandLine -like '*"
+             + profile.replace("'", "''") + "*' -and $_.CommandLine -notlike '*--type=*' } | "
+             "ForEach-Object { $_.ProcessId }")
+    found = subprocess.run(["powershell", "-NoProfile", "-Command", query], capture_output=True, text=True,
+                           creationflags=NO_WINDOW).stdout.split()
+    for pid in found:
+        subprocess.run(["taskkill", "/PID", pid, "/T", "/F"], capture_output=True, creationflags=NO_WINDOW)
 
 
 def scrub_web(out):
@@ -507,7 +521,7 @@ def main():
         with open(map_path, "rb") as f:
             sha = hashlib.sha256(f.read()).hexdigest()
         report["map"] = {"file": MAP_FILE, "sha256": sha, "size": os.path.getsize(map_path)}
-        frames = 200000
+        frames = 20000000
         for game in ("first", "second"):
             if game == "second" and options.no_second_game:
                 break
@@ -524,7 +538,8 @@ def main():
             if options.web_dir:
                 if game == "first":
                     web_profile(options, out, state, ports)
-                web = web_client(options, out, state, ports, {"name": "WebGod", **accounts["WebGod"]}, 30)
+                web = web_client(options, out, state, ports, {"name": "WebGod", **accounts["WebGod"]}, 30,
+                                 processes)
             drivers = [Driver(p.pid, n, accounts[n]["password"]) for n, p, _ in desktops]
             for driver in drivers:
                 driver.to_room()
@@ -539,7 +554,12 @@ def main():
                 result["clients"][name] = {"kept": kept_map(profile_of(os.path.join(out, name))) == sha,
                                            "counts": count, "pages": driver.pages}
             if web is not None:
-                web.wait(2400)
+                try:
+                    web.wait(2400)
+                except subprocess.TimeoutExpired:
+                    pass
+                processes.stop("web")
+                stop_chrome(out)
                 result["web"] = {"exit": web.returncode, **web_lines(out, game)}
                 scrub_web(out)
             report[game] = result
@@ -558,6 +578,10 @@ def main():
         report["ok"] = bool(ok_first and ok_second)
     finally:
         processes.stop()
+        if options.web_dir:
+            stop_chrome(out)
+            web_lines(out, "last")
+            scrub_web(out)
         with open(os.path.join(out, "report.json"), "w", encoding="utf-8") as f:
             json.dump(report, f, indent=1)
         print(json.dumps(report, indent=1))
