@@ -83,7 +83,7 @@ void MagicSystem::UpdateHand(const HandFrame& mouseFrame, const input_steps::Ste
 		{
 			constexpr float k_Seconds = input_steps::k_StepSeconds;
 			const auto step = position - *_lastHandPosition;
-			_handVelocity = magic::FilterHandVelocity(_handVelocity, step / k_Seconds, k_Seconds);
+			_handVelocity = magic::FilterHandVelocity(_handVelocity, magic::HandStepVelocity(step, k_Seconds), k_Seconds);
 			// While it holds a miracle, how the way it moves turns is the spin it gives the miracle
 			if (held != entt::null)
 			{

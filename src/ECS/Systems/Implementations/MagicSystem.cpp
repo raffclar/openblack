@@ -469,18 +469,6 @@ particles::ProcessInfo MagicSystem::TurnHandInfo(const particles::ProcessInfo& l
 	return info;
 }
 
-particles::ProcessInfo MagicSystem::HandInfo() const
-{
-	return {
-	    .handPosition = _hand.handPosition,
-	    .cameraForward = _hand.cameraForward,
-	    .direction = _handVelocity,
-	    .power = 1.0f,
-	    .enabled = true,
-	    .spin = _handSpin.spin,
-	};
-}
-
 void MagicSystem::Maintain(entt::entity entity, Spell& spell)
 {
 	if (magic::AgeOneTurn(spell.age, spell.duration, k_TurnSeconds))
