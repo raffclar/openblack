@@ -14,6 +14,7 @@
 #include <utility>
 #include <vector>
 
+#include <Common/DeveloperTools.h>
 #include <Gui/SkipBox.h>
 #include <Gui/TextDatabase.h>
 #include <Story/NewGameChoice.h>
@@ -271,11 +272,33 @@ TEST(NewGameChoice, DevelopersStartNamesTheQuestionsAnswers)
 
 TEST(SkipBox, IsLaidOutAsTheOriginal)
 {
-	EXPECT_EQ(SkipBox::k_Box.min, glm::ivec2(200, 133));
-	EXPECT_EQ(SkipBox::k_Box.max, glm::ivec2(600, 467));
-	EXPECT_EQ(SkipBox::GetRadioRect(0).min, glm::ivec2(250, 203));
-	EXPECT_EQ(SkipBox::GetRadioRect(3).min, glm::ivec2(250, 335));
-	EXPECT_EQ(SkipBox::GetRadioRect(3).max, glm::ivec2(274, 359));
+	EXPECT_EQ(SkipBox::k_Box.min, openblack::gui::skip_box::LayoutFor(openblack::developer_tools::k_Built).box.min);
+	EXPECT_EQ(SkipBox::GetRadioRect(0).min, SkipBox::k_FirstRadio);
+	EXPECT_EQ(SkipBox::GetRadioRect(3).min, SkipBox::k_FirstRadio + glm::ivec2(0, 3 * 44));
+	EXPECT_EQ(SkipBox::GetRadioRect(3).max, SkipBox::k_FirstRadio + glm::ivec2(24, (3 * 44) + 24));
+}
+
+TEST(SkipBox, WithTheFourAnswersOfTheGameTheBoxHasTheLayoutOfTheGame)
+{
+	constexpr auto k_Game = openblack::gui::skip_box::LayoutFor(false);
+	EXPECT_EQ(k_Game.box.min, glm::ivec2(200, 155));
+	EXPECT_EQ(k_Game.box.max, glm::ivec2(600, 445));
+	EXPECT_EQ(k_Game.question.min, glm::ivec2(150, 190));
+	EXPECT_EQ(k_Game.question.max, glm::ivec2(650, 260));
+	EXPECT_EQ(k_Game.buttonPosition, glm::ivec2(220, 400));
+	EXPECT_EQ(k_Game.firstRadio, glm::ivec2(250, 225));
+	EXPECT_EQ(k_Game.firstAnswer, glm::ivec2(290, 225));
+}
+
+TEST(SkipBox, AFifthAnswerMakesTheBoxOneStepTallerInTheMiddle)
+{
+	constexpr auto k_Debug = openblack::gui::skip_box::LayoutFor(true);
+	EXPECT_EQ(k_Debug.box.min, glm::ivec2(200, 133));
+	EXPECT_EQ(k_Debug.box.max, glm::ivec2(600, 467));
+	EXPECT_EQ(k_Debug.question.min, glm::ivec2(150, 168));
+	EXPECT_EQ(k_Debug.buttonPosition, glm::ivec2(220, 422));
+	EXPECT_EQ(k_Debug.firstRadio, glm::ivec2(250, 203));
+	EXPECT_EQ(k_Debug.firstAnswer, glm::ivec2(290, 203));
 }
 
 TEST(SkipBox, StartsNormallyUnlessAnotherAnswerIsPicked)
