@@ -333,4 +333,28 @@ void openblack::testbed_scenarios::AddVillageTotemScenarios(std::vector<Scenario
 	    .townBeliefInPlayer = k_TownBelief,
 	    .townBeliefInRival = k_TownBelief,
 	});
+	all.push_back({
+	    .id = "town.belief_symbols_second_land",
+	    .name = "The symbols of belief of the three gods of the second land over a totem",
+	    .facet = Facet::Objects,
+	    .description = "As on the second land, a land script switches on the computer minds of the second and third "
+	                   "players. A Norse town centre of the player's town believes in the player, in Lethys a little "
+	                   "less and in Khazar less again. The camera is still, a little above the top of the totem.",
+	    .expected = "The player's symbol sits over the totem in red. The picture of Lethys circles it in yellow and the "
+	                "picture of Khazar circles it in blue, as the second land shows these gods everywhere in the world. "
+	                "Each symbol is bright, with a glow of its colour and a white glow that turns.",
+	    .environment = {.dispenserGrid = false,
+	                    .symbolsAfterLandScript = true,
+	                    .landNumber = 2,
+	                    .players = {PlayerNames::PLAYER_TWO, PlayerNames::PLAYER_THREE}},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_Centre.x - 12.7f, 24.0f, k_Centre.y - 27.2f},
+	                .look = {k_Centre.x, 21.0f, k_Centre.y}},
+	    .objects = {{.type = AbodeInfo::NorseTownCentre, .offset = k_Centre}},
+	    .landScript = R"(TOGGLE_COMPUTER_PLAYER("PLAYER_TWO", 1)
+TOGGLE_COMPUTER_PLAYER("PLAYER_THREE", 1)
+)",
+	    .townBeliefInPlayer = k_TownBelief,
+	    .townBeliefInPlayers = {{PlayerNames::PLAYER_TWO, 0.8f}, {PlayerNames::PLAYER_THREE, 0.6f}},
+	});
 }

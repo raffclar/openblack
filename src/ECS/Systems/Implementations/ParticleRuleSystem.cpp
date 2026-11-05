@@ -167,10 +167,10 @@ float GameParticleWorld::LandHeightAtMap(int32_t x, int32_t z) const
 uint32_t GameParticleWorld::PlayerColour(int player) const
 {
 	// A god after the seventh has the land colour of its god slot (deviation 164). The god of the observers shows the
-	// colour of player seven (deviation 218).
+	// colour of player seven (deviation 218). The lands of the story give some players the colours of other players.
 	const auto observersGod =
 	    Locator::gameEndSystem::has_value() ? Locator::gameEndSystem::value().ObserversGod() : std::nullopt;
-	return player_colour::Of(player_colour::ShownAs(static_cast<PlayerNames>(player), observersGod)) & 0xFFFFFFu;
+	return ecs::game_players::Colour(player_colour::ShownAs(static_cast<PlayerNames>(player), observersGod)) & 0xFFFFFFu;
 }
 
 std::optional<particles::TownCentreBelief> GameParticleWorld::TownCentreBeliefOf(entt::entity centre) const

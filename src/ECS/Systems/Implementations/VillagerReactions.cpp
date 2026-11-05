@@ -49,6 +49,7 @@
 #include "ECS/Components/WallHug.h"
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/Dances.h"
+#include "ECS/GamePlayers.h"
 #include "ECS/LivingFacing.h"
 #include "ECS/PlayerColour.h"
 #include "ECS/Registry.h"
@@ -1005,7 +1006,7 @@ void villager_reactions::ShowTownBelief(const glm::vec3& centre, PlayerNames pla
 	{
 		return;
 	}
-	const auto colour = player_colour::FromTable(influence::k_PlayerColours, player);
+	const auto colour = ecs::game_players::Colour(player) & 0xFFFFFFu;
 	Locator::effectRequestSystem::value().AddBeliefSprite({.position = centre, .amount = amount, .colour = colour});
 }
 
@@ -1029,7 +1030,7 @@ void villager_reactions::ShowObjectBelief(entt::entity object, entt::entity town
 		{
 			height = Locator::resources::value().GetMeshes().Handle(mesh->id)->GetBoundingBox().Size().y * transform.scale.y;
 		}
-		const auto colour = player_colour::FromTable(influence::k_PlayerColours, player);
+		const auto colour = ecs::game_players::Colour(player) & 0xFFFFFFu;
 		Locator::effectRequestSystem::value().AddBeliefSprite(
 		    {.position = transform.position + glm::vec3(0.0f, height, 0.0f), .amount = amount, .colour = colour});
 	}

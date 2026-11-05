@@ -113,9 +113,10 @@ using Random = std::function<float(float, float)>;
 [[nodiscard]] bool Inside(const glm::vec3& centre, float radius, const glm::vec3& point);
 /// Where a circle's edge lies between a point inside it and one outside, by halving the way between them
 [[nodiscard]] glm::vec3 CrossingPoint(const glm::vec3& centre, float radius, glm::vec3 inside, glm::vec3 outside);
-/// A ripple where the hand crossed a circle, on the land or the hand's height, whichever is higher
+/// A ripple where the hand crossed a circle, on the land or the hand's height, whichever is higher. The ripple has the
+/// colour that the land gives the circle's player.
 [[nodiscard]] Ripple MakeRipple(const Circle& circle, const glm::vec3& previous, const glm::vec3& hand, const Ground& ground,
-                                const Random& random);
+                                const Random& random, int32_t landNumber);
 /// Moves a ripple on by some milliseconds of game time: its puffs grow, wrap round and fade, and it ages. Returns
 /// whether anything is left of it.
 [[nodiscard]] bool AdvanceRipple(Ripple& ripple, float milliseconds);
