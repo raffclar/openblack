@@ -64,4 +64,13 @@ struct AudioEmitter
 	entt::id_type bank {0};
 	uint16_t group {0};
 };
+
+/// An owner of sounds that the audio made for a system of the game, such as a particle sound (see
+/// SoundRequestInterface::CreateSoundOwner)
+struct SoundOwner
+{
+	/// The audio stopped a sound of this owner because the listener left it: the listener went to the maximum distance
+	/// of the sound or more, or into the temple. The system that owns the sound reads and clears this value.
+	bool listenerLeft {false};
+};
 } // namespace openblack::ecs::components
