@@ -80,6 +80,7 @@ std::vector<snowfall::Tile> SnowfallSystem::TakeTiles(const rain::View& view)
 		float key;
 	};
 	std::vector<Snowed> snowed;
+	bool snowing = false;
 	for (const auto& origin : weather_blocks::InView(island, view, detail.landReflection))
 	{
 		for (const auto& quarter :
@@ -94,6 +95,7 @@ std::vector<snowfall::Tile> SnowfallSystem::TakeTiles(const rain::View& view)
 				const auto point = centre + (offset * k_Around);
 				snowiest = std::max<int32_t>(snowiest, weather.GetWeather(glm::vec3(point.x, 0.0f, point.y)).snow);
 			}
+			snowing = snowing || snowiest > snowfall::k_LeastSnow;
 			if (auto tile = snowfall::TileOf(centre, snowiest, eye))
 			{
 				tile->ground = island.GetHeightAt(tile->corner);
@@ -105,6 +107,7 @@ std::vector<snowfall::Tile> SnowfallSystem::TakeTiles(const rain::View& view)
 	std::ranges::stable_sort(snowed, std::ranges::greater {}, &Snowed::key);
 	tiles.reserve(snowed.size());
 	std::ranges::transform(snowed, std::back_inserter(tiles), &Snowed::tile);
-	_drawn = _drawn || !tiles.empty();
+	// The flakes move on the next frame when a quarter near the eye has snow, also when that quarter shows no flakes
+	_drawn = _drawn || snowing;
 	return tiles;
 }

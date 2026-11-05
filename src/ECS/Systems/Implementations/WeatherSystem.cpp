@@ -32,6 +32,7 @@
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
 #include "ECS/ScriptWeatherRules.h"
+#include "ECS/StormFade.h"
 #include "ECS/Systems/EffectRequestSystemInterface.h"
 #include "ECS/Systems/SkyClockSystemInterface.h"
 #include "ECS/Systems/SnowSystemInterface.h"
@@ -685,17 +686,9 @@ void WeatherSystem::UpdateStorms()
 			return;
 		}
 
-		float fade = 1.0f;
-		if (storm.age < storm.fadeTime)
-		{
-			fade = storm.age / storm.fadeTime;
-		}
-		else if (storm.age > storm.lastsFor - storm.fadeTime)
-		{
-			fade = (storm.lastsFor - storm.age) / storm.fadeTime;
-		}
-		storm.currentStrength = fade * storm.strength;
-		storm.currentInnerRadius = fade * storm.innerRadius;
+		const auto faded = storm_fade::Fade(storm.age, storm.lastsFor, storm.fadeTime, storm.strength, storm.innerRadius);
+		storm.currentStrength = faded.strength;
+		storm.currentInnerRadius = faded.innerRadius;
 
 		storm.currentPosition = storm.position;
 		if (storm.speed != 0.0f)
@@ -1411,11 +1404,10 @@ void WeatherSystem::ComputeCell(WeatherInfo& cell, int x, int z)
 	{
 		ApplyStorm(storm, point, cell);
 	}
-	// The snow lying there
+	// The snow lying there, as half of its depth
 	if (Locator::snowSystem::has_value())
 	{
-		const auto depth = static_cast<int32_t>(Locator::snowSystem::value().GetDepth({point.x, point.z}));
-		cell.snowCover = static_cast<int8_t>(std::clamp(depth, -128, 127));
+		cell.snowCover = storm_fade::SnowCover(Locator::snowSystem::value().GetDepth({point.x, point.z}));
 	}
 	cell.stamp = _stamp;
 }

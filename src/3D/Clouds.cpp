@@ -13,6 +13,7 @@
 
 #include <algorithm>
 #include <array>
+#include <bit>
 
 using namespace openblack;
 
@@ -21,9 +22,10 @@ namespace
 constexpr float k_Speed = 70.0f;
 constexpr float k_FadeStart = 6000.0f;
 constexpr float k_FadeRate = 0.1275f;
-/// The wind blows three eighths of a turn round
-constexpr float k_WindCos = -0.70710678f;
-constexpr float k_WindSin = 0.70710678f;
+/// The wind blows three eighths of a turn round. The game keeps the cosine and the sine of that angle as floats, which
+/// are not equal in size.
+constexpr float k_WindCos = std::bit_cast<float>(0xBF3504F4u);
+constexpr float k_WindSin = std::bit_cast<float>(0x3F3504F2u);
 constexpr float k_Middle = 1280.0f;
 
 /// Each byte of a towards b by f of 256, rounding down
@@ -83,7 +85,8 @@ glm::vec3 clouds::Move(const glm::vec3& track, bool pinned, float milliseconds)
 
 glm::vec3 clouds::WorldPosition(const glm::vec3& track)
 {
-	return {(track.x * k_WindCos) - (track.z * k_WindSin) + k_Middle, track.y,
+	// Across the map, the game adds the middle before it subtracts the part from z
+	return {((track.x * k_WindCos) + k_Middle) - (track.z * k_WindSin), track.y,
 	        (track.x * k_WindSin) + (track.z * k_WindCos) + k_Middle};
 }
 

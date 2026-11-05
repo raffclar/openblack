@@ -44,8 +44,11 @@ ecs::components::Storm SnowStorm(int8_t snow)
 
 TEST(SnowCover, StormsSnowBySnowAndStrength)
 {
-	EXPECT_NEAR(snow_cover::StormSnowPerTurn(100, 1.0f), 0.3f, 1e-6f);
-	EXPECT_NEAR(snow_cover::StormSnowPerTurn(100, 0.5f), 0.15f, 1e-6f);
+	// Each storm lays its snow at 1.2 times its snow, cut to a whole number
+	EXPECT_NEAR(snow_cover::StormSnowPerTurn(100, 1.0f), 0.36f, 1e-6f);
+	EXPECT_NEAR(snow_cover::StormSnowPerTurn(100, 0.5f), 0.18f, 1e-6f);
+	EXPECT_NEAR(snow_cover::StormSnowPerTurn(5, 0.5f), 0.009f, 1e-7f);
+	EXPECT_FLOAT_EQ(snow_cover::StormSnowPerTurn(1, 0.5f), 0.0f);
 	EXPECT_FLOAT_EQ(snow_cover::StormSnowPerTurn(0, 1.0f), 0.0f);
 }
 
@@ -179,7 +182,7 @@ TEST(SnowSystem, StormsThatSnowLayItAndItMelts)
 	const auto revision = snow.GetRevision();
 	const std::vector<ecs::components::Storm> storms {SnowStorm(100), SnowStorm(0)};
 	snow.ProcessTurn(storms);
-	EXPECT_NEAR(snow.GetDepth({400.0f, 400.0f}), 0.3f, 1e-6f);
+	EXPECT_NEAR(snow.GetDepth({400.0f, 400.0f}), 0.36f, 1e-6f);
 	EXPECT_NE(snow.GetRevision(), revision);
 	// A good while later, with no more snow, it has all melted
 	for (int turn = 0; turn < 100; ++turn)
