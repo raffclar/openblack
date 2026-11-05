@@ -452,6 +452,28 @@ void testbed_scenarios::AddLandOneScriptStubScenarios(std::vector<Scenario>& all
 	         {.kind = Kind::PointerRelease, .delaySeconds = 0.5f, .value = 3}},
 	});
 
+	// The hand holds a rock and moves it slowly over the same two rows of small pines
+	all.push_back({
+	    .id = "nature.trees_bend_round_a_held_rock",
+	    .name = "Trees bend smoothly away from a rock in the hand",
+	    .facet = Facet::Nature,
+	    .description = "The hand takes a rock. Then the hand moves slowly along two rows of small pines for 4 seconds, and "
+	                   "back for 4 seconds, with the rock in it.",
+	    .expected = "The pines near the rock lean away from it, more when the rock is near. The lean changes smoothly in "
+	                "each frame as the hand moves. It does not change in small jumps. A pine stands straight again when "
+	                "the rock is out of its reach.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {-34.5f, 9.0f, 4.5f}, .look = {0.0f, 0.0f, 0.0f}},
+	    .objects = bendTrees,
+	    .commands = {// Takes the rock under the middle of the screen
+	                 {.kind = Kind::PointerTo, .delaySeconds = 1.0f, .point = {0.5f, 0.5f}},
+	                 {.kind = Kind::PointerPress, .delaySeconds = 0.5f, .value = 3},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 0.5f, .value = 3},
+	                 // Moves the hand along the rows and back
+	                 {.kind = Kind::PointerSweep, .delaySeconds = 0.5f, .point = {0.0f, -0.12f}, .amount = 4.0f},
+	                 {.kind = Kind::PointerSweep, .delaySeconds = 4.5f, .point = {0.0f, 0.12f}, .amount = 4.0f}},
+	});
+
 	// Two rows of pines with a lane between them. The player's creature walks along the lane and back.
 	std::vector<ObjectSetup> lanePines;
 	for (int row = 0; row < 10; ++row)
