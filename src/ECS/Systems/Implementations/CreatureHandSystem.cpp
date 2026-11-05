@@ -1462,7 +1462,7 @@ bool CreatureHandSystem::Stroke(entt::entity creature, feedback::BodyPart part)
 		return false;
 	}
 	contact->sum = feedback::AfterStroke(contact->sum);
-	feedback::Touched(contact->clocks);
+	feedback::Stroked(contact->clocks);
 	return true;
 }
 

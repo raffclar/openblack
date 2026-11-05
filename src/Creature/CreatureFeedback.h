@@ -77,7 +77,7 @@ struct StrokeClocks
 	float ready {0.0f};
 	/// How long the hand has been on the body, in all, since taking hold or the last slap
 	float contact {0.0f};
-	/// Since taking hold. A slap needs k_SlapReadyMs of it. Strokes and slaps do not start it again.
+	/// Since taking hold or the last stroke that played. A slap needs k_SlapReadyMs of it. A slap does not start it again.
 	float sinceHold {0.0f};
 };
 constexpr float k_ReadyForStrokeMs = 2000.0f;
@@ -109,10 +109,13 @@ constexpr double k_SlapInterruptsAfter = static_cast<double>(0.35f);
 	const auto share = objectActionShare.has_value() ? objectActionShare : bodyShare;
 	return !share.has_value() || !RefusesInterrupt(*share, limit);
 }
-/// A slap needs this long since the hand took hold of the creature. Strokes and slaps do not start this time again.
+/// A slap needs this long since the hand took hold of the creature or since the last stroke that played. A slap does not
+/// start this time again, thus hard slaps can follow each other quickly.
 constexpr float k_SlapReadyMs = 1000.0f;
-/// Set the clocks after a stroke or a slap that plays. The time since the hand took hold does not change.
+/// Set the clocks after a slap that plays. The time for the next slap does not change.
 void Touched(StrokeClocks& clocks);
+/// Set the clocks after a stroke that plays. The time for the next slap also starts again.
+void Stroked(StrokeClocks& clocks);
 /// Whether the hand has held the creature long enough for a slap
 [[nodiscard]] bool SlapReady(const StrokeClocks& clocks);
 
@@ -126,10 +129,10 @@ constexpr size_t k_SlapWaist = 167;
 constexpr size_t k_SlapFeet = 169;
 constexpr size_t k_GentleOffset = 6;
 /// Heights up the creature, as shares of its height, below which a slap is at the feet, then at the waist; above that
-/// at the head, and nothing at or above the last
-constexpr float k_FeetBelow = 0.4f;
-constexpr float k_WaistBelow = 0.7f;
-constexpr float k_SlapAbove = 1.1f;
+/// at the head, and nothing at or above the last. The game keeps these limits as doubles.
+constexpr double k_FeetBelow = 0.4;
+constexpr double k_WaistBelow = 0.7;
+constexpr double k_SlapAbove = 1.1;
 /// The hand slaps when it moves faster than this many of the creature's heights a second, gently below the second
 constexpr float k_SlapSpeed = 5.0f;
 constexpr float k_HardSlapSpeed = 9.0f;
