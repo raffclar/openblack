@@ -373,6 +373,20 @@ def wait_for_turns(logs, turns, seconds):
     return [session_counts(log) for log in logs]
 
 
+def web_profile(options, out, state, ports):
+    """A first web run makes the profile of the player in the private storage of the site (Chrome keeps it)"""
+    web_out = os.path.join(out, "web")
+    os.makedirs(web_out, exist_ok=True)
+    actions = os.path.join(web_out, "actions.json")
+    with open(actions, "w", encoding="utf-8") as f:
+        json.dump([{"at": 0.5, "do": "wait-log", "text": "Load startup:", "seconds": 600},
+                   {"at": 15.5, "do": "shot", "name": "profile"}], f)
+    url = f"https://127.0.0.1:{ports['front']}/play/index.html?renderer=webgl2&args=--skip-logos"
+    subprocess.run(["node", CDP, CHROME, url, "25", web_out, "--game-folder", options.game_path, "--click", "#play",
+                    "--keep-profile", "--trust-spki", state["spki"], "--actions", actions],
+                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=NO_WINDOW, timeout=1200)
+
+
 def web_client(options, out, state, ports, account, seconds):
     """The web client: the front end in headless Chrome through cdp-run.mjs, as a player clicks it"""
     web_out = os.path.join(out, "web")
@@ -435,6 +449,25 @@ def web_client(options, out, state, ports, account, seconds):
                             stderr=subprocess.STDOUT, creationflags=NO_WINDOW)
 
 
+def web_lines(out, game):
+    """The lines of the web console that the check needs, kept before the console log goes"""
+    path = os.path.join(out, "web", "console.log")
+    keep = ("has the land of the game", "turns compared with the server", "starts the game on",
+            "Could not get", "Joined the game server")
+    lines = []
+    if os.path.exists(path):
+        with open(path, encoding="utf-8", errors="replace") as f:
+            lines = [line.rstrip() for line in f if any(k in line for k in keep)]
+    with open(os.path.join(out, f"web-{game}.txt"), "w", encoding="utf-8") as f:
+        f.write("\n".join(lines))
+    counts = None
+    for line in lines:
+        match = SESSION_COUNTS.search(line)
+        if match:
+            counts = (int(match.group(1)), int(match.group(2)))
+    return {"has_land": any("has the land of the game" in line for line in lines), "counts": counts}
+
+
 def scrub_web(out):
     """cdp-run.mjs writes each typed key in its logs: the password of the test account goes"""
     web_out = os.path.join(out, "web")
@@ -479,7 +512,7 @@ def main():
             if game == "second" and options.no_second_game:
                 break
             gets_before = map_gets(os.path.join(out, "front.log"), sha)
-            gods = len(names) if game == "first" else options.clients
+            gods = len(names)
             start_server(options, out, state, ports, map_path, gods, processes, f"server-{game}")
             desktops = []
             for name in names:
@@ -488,8 +521,10 @@ def main():
                 process, log = start_desktop(options, out, name, ports, processes, frames)
                 desktops.append((name, process, log))
             web = None
-            if options.web_dir and game == "first":
-                web = web_client(options, out, state, ports, {"name": "WebGod", **accounts["WebGod"]}, 1800)
+            if options.web_dir:
+                if game == "first":
+                    web_profile(options, out, state, ports)
+                web = web_client(options, out, state, ports, {"name": "WebGod", **accounts["WebGod"]}, 30)
             drivers = [Driver(p.pid, n, accounts[n]["password"]) for n, p, _ in desktops]
             for driver in drivers:
                 driver.to_room()
@@ -505,7 +540,7 @@ def main():
                                            "counts": count, "pages": driver.pages}
             if web is not None:
                 web.wait(2400)
-                result["web"] = {"exit": web.returncode}
+                result["web"] = {"exit": web.returncode, **web_lines(out, game)}
                 scrub_web(out)
             report[game] = result
             processes.stop("server")
@@ -513,8 +548,11 @@ def main():
                 processes.stop(name)
         first = report.get("first", {})
         second = report.get("second")
+        web_ok = all(g is None or "web" not in g or (g["web"]["has_land"] and g["web"]["counts"] and
+                                                     g["web"]["counts"][0] == g["web"]["counts"][1])
+                     for g in (first, second))
         ok_first = all(c["kept"] and c["counts"] and c["counts"][0] >= options.turns and c["counts"][0] == c["counts"][1]
-                       for c in first.get("clients", {}).values()) and first.get("map_gets", 0) >= len(names)
+                       for c in first.get("clients", {}).values()) and first.get("map_gets", 0) >= len(names) and web_ok
         ok_second = second is None or (second["map_gets"] == 0 and all(
             c["counts"] and c["counts"][0] == c["counts"][1] for c in second["clients"].values()))
         report["ok"] = bool(ok_first and ok_second)
