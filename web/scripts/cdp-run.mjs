@@ -67,6 +67,10 @@
 //                            and a leash order. The last step prints the loudness of the sound each second.
 //                            The synth steps send page events to the game canvas. Use them while the pointer is
 //                            locked: headless Chrome gives no movement for its own mouse events then.
+//   --cpu-profile <seconds>  this many seconds after the click, record a CPU profile of the page and of each of its
+//                            workers (the game thread is one of them) for --cpu-profile-seconds (default 10). Each
+//                            profile goes to cpu-<n>.cpuprofile in the output folder, which the Performance panel of
+//                            DevTools opens. A page linked with --profiling-funcs gives the names of the functions.
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { appendFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -127,6 +131,8 @@ if (!target) {
 }
 
 const ws = new WebSocket(target.webSocketDebuggerUrl);
+// The sessions of the workers of the page, for a CPU profile
+const sessions = [];
 let id = 0;
 const pending = new Map();
 const send = (method, params = {}, sessionId = undefined) => new Promise((resolve) => {
@@ -149,6 +155,7 @@ ws.onmessage = (event) => {
     record(`[exception${m.sessionId ? ' worker' : ''}] ${d.text} ${d.exception?.description ?? ''}${frames(d)}`);
   } else if (m.method === 'Target.attachedToTarget') {
     const session = m.params.sessionId;
+    sessions.push({ session, type: m.params.targetInfo?.type, url: m.params.targetInfo?.url });
     send('Runtime.enable', {}, session);
     send('Target.setAutoAttach', { autoAttach: true, waitForDebuggerOnStart: false, flatten: true }, session);
   } else if (m.method === 'Log.entryAdded') {
@@ -483,6 +490,35 @@ const takeChecksums = async () => {
     await evaluate("(globalThis.openblackLogText?.() ?? '').includes('The game stopped with the code')") === true;
 };
 
+// The CPU profile of the page and its workers
+const cpuProfileFrom = option('--cpu-profile');
+const cpuProfileSeconds = Number(option('--cpu-profile-seconds', '10'));
+let cpuProfileState = cpuProfileFrom === undefined ? 'none' : 'waiting';
+const cpuProfileTargets = () => [{ session: undefined, type: 'page', url }, ...sessions];
+const stepCpuProfile = async () => {
+  if (cpuProfileState === 'waiting' && Date.now() >= clicked + Number(cpuProfileFrom) * 1000) {
+    for (const target of cpuProfileTargets()) {
+      await send('Profiler.enable', {}, target.session);
+      await send('Profiler.setSamplingInterval', { interval: 200 }, target.session);
+      await send('Profiler.start', {}, target.session);
+    }
+    record(`[cpu-profile] started on ${cpuProfileTargets().length} targets`);
+    cpuProfileState = 'running';
+  } else if (cpuProfileState === 'running' &&
+             Date.now() >= clicked + (Number(cpuProfileFrom) + cpuProfileSeconds) * 1000) {
+    let n = 0;
+    for (const target of cpuProfileTargets()) {
+      const result = await send('Profiler.stop', {}, target.session);
+      if (result?.profile) {
+        writeFileSync(path.join(out, `cpu-${n}.cpuprofile`), JSON.stringify(result.profile));
+        record(`[cpu-profile] cpu-${n}.cpuprofile: ${target.type} ${target.url ?? ''}`);
+        ++n;
+      }
+    }
+    cpuProfileState = 'done';
+  }
+};
+
 let taken = 0;
 let end = clicked + seconds * 1000;
 let next = clicked + shotsFrom * 1000;
@@ -508,6 +544,9 @@ while (Date.now() < end || taken < Math.min(shots, 1) || (flag('--run-all-steps'
       next += late;
     }
     continue;
+  }
+  if (cpuProfileState === 'waiting' || cpuProfileState === 'running') {
+    await stepCpuProfile();
   }
   if (checksumsFile && Date.now() >= checksumPoll) {
     checksumPoll = Date.now() + 1000;
