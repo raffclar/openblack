@@ -10,6 +10,7 @@
 #include "SpellSeedRules.h"
 
 #include <algorithm>
+#include <bit>
 
 #include <glm/geometric.hpp>
 
@@ -48,9 +49,12 @@ float magic::SeedPower(float store, float costToCreate)
 	return costToCreate > 0.0f ? std::min(store / costToCreate, 1.0f) : 1.0f;
 }
 
-bool magic::SeedReadyAfter(uint32_t turnsInHand, float turnSeconds, float delaySeconds)
+bool magic::SeedReadyAfter(uint32_t turnsInHand, uint32_t turnMilliseconds, float delaySeconds)
 {
-	return static_cast<float>(turnsInHand) * turnSeconds > delaySeconds;
+	// The float bits of one thousandth, as the game keeps it
+	constexpr float k_Thousandth = std::bit_cast<float>(0x3A83126Fu);
+	const float milliseconds = static_cast<float>(turnsInHand) * static_cast<float>(turnMilliseconds);
+	return milliseconds * k_Thousandth > delaySeconds;
 }
 
 bool magic::ShownWithSpell(const SeedWithSpell& seed)

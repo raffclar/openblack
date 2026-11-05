@@ -395,7 +395,8 @@ glm::vec3 hand_grab::SpinMomentum(const std::array<std::array<float, 3>, 3>& ine
 
 bool hand_grab::PotPours(glm::vec3 velocity)
 {
-	return glm::dot(velocity, velocity) <= k_PourSpeedSquared;
+	// The game adds the squares from z to x
+	return x87::DotZyx(velocity, velocity) <= k_PourSpeedSquared;
 }
 
 glm::vec3 hand_grab::ReleaseSpinTorque(float mass, float speed, glm::vec3 handMoved)
