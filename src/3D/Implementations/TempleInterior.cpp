@@ -260,9 +260,20 @@ std::optional<std::vector<uint8_t>> ReadSavedGamePicture(std::string_view fileNa
 	return Locator::saveGameSystem::has_value() ? Locator::saveGameSystem::value().ReadPictureFile(fileName) : std::nullopt;
 }
 
+/// The saved games of the player's folder, as the save game room's scroll lists them
+std::vector<TempleScrolls::SavedGame> ReadScrollSavedGames()
+{
+	std::vector<TempleScrolls::SavedGame> savedGames;
+	for (const auto& saved : Locator::saveGameSystem::value().Slots())
+	{
+		savedGames.push_back({.date = saved.date, .name = saved.name});
+	}
+	return savedGames;
+}
+
 /// What the rooms' scrolls tell of the game: the world's statistics, the time played and the creature, and made up for
 /// the rest
-TempleScrolls::Facts GatherScrollFacts()
+TempleScrolls::Facts GatherScrollFacts(std::span<const TempleScrolls::SavedGame> savedGames)
 {
 	auto facts = TempleScrolls::Facts::Mock();
 	if (Locator::gameActionSystem::has_value())
@@ -303,13 +314,7 @@ TempleScrolls::Facts GatherScrollFacts()
 			facts.loadCount = static_cast<int32_t>(profile->statistics.loads);
 		}
 	}
-	if (Locator::saveGameSystem::has_value())
-	{
-		for (const auto& saved : Locator::saveGameSystem::value().Slots())
-		{
-			facts.savedGames.push_back({.date = saved.date, .name = saved.name});
-		}
-	}
+	facts.savedGames.assign(savedGames.begin(), savedGames.end());
 	// The creature's scrolls tell of the player's own creature, and are blank without one
 	if (Locator::creatureCaveSystem::has_value())
 	{
@@ -385,8 +390,10 @@ void TempleInterior::CreateScrolls()
 		return;
 	}
 	ReadRoomPictures();
+	// Each visit reads the saved games of the player's folder again
+	_scrollSavedGames.Forget();
 	_scrolls = std::make_unique<TempleScrolls>(_interface->GetTexts(), _interface->GetFont(), _roomPictures->parchment);
-	_scrolls->Create(GatherScrollFacts(), std::move(_keptScrolls));
+	_scrolls->Create(ScrollFacts(), std::move(_keptScrolls));
 	_signs = std::make_unique<TempleSigns>(_interface->GetTexts(), _interface->GetFont());
 
 	// The main room finds the buttons of what the map shows as it is set up
@@ -508,7 +515,7 @@ void TempleInterior::PrepareScrolls()
 	}
 	ReadRoomPictures();
 	TempleScrolls scrolls(_interface->GetTexts(), _interface->GetFont(), _roomPictures->parchment);
-	scrolls.Create(GatherScrollFacts(), std::move(_keptScrolls));
+	scrolls.Create(ScrollFacts(), std::move(_keptScrolls));
 	_keptScrolls = scrolls.TakeTextures();
 }
 
@@ -527,6 +534,18 @@ void TempleInterior::ListSavedGames()
 		}
 	}
 	_saveGameRoom->SetSaves(std::move(saves));
+}
+
+TempleScrolls::Facts TempleInterior::ScrollFacts()
+{
+	if (!Locator::saveGameSystem::has_value())
+	{
+		return GatherScrollFacts({});
+	}
+	// The scrolls ask for their facts in each frame. The game reads the saved games of the player's folder only when
+	// they changed.
+	const auto& saveGames = Locator::saveGameSystem::value();
+	return GatherScrollFacts(_scrollSavedGames.Get(saveGames.GetSavedGamesStamp(), ReadScrollSavedGames));
 }
 
 temple::save_game_room::View TempleInterior::SaveGameRoomView() const
@@ -625,7 +644,7 @@ void TempleInterior::UpdateSaveGameRoom()
 		}
 		if (_scrolls != nullptr)
 		{
-			_scrolls->Rewrite(TempleScrolls::Content::SaveGame, GatherScrollFacts());
+			_scrolls->Rewrite(TempleScrolls::Content::SaveGame, ScrollFacts());
 		}
 		if (Locator::saveGameSystem::has_value())
 		{
@@ -640,7 +659,7 @@ void TempleInterior::UpdateSaveGameRoom()
 		ListSavedGames();
 		if (_scrolls != nullptr)
 		{
-			_scrolls->Rewrite(TempleScrolls::Content::SaveGame, GatherScrollFacts());
+			_scrolls->Rewrite(TempleScrolls::Content::SaveGame, ScrollFacts());
 		}
 		return;
 	default:
@@ -669,7 +688,7 @@ void TempleInterior::SaveIntoSlot(uint32_t slot, std::u16string_view name, games
 	_saveGameRoom->ReadPicturesAfterSave(slot, ReadSavedGamePicture);
 	if (_scrolls != nullptr)
 	{
-		_scrolls->Rewrite(TempleScrolls::Content::SaveGame, GatherScrollFacts());
+		_scrolls->Rewrite(TempleScrolls::Content::SaveGame, ScrollFacts());
 	}
 	// A save into an empty slot, or a save before a load, starts the help on loading
 	if (startsLoadHelp)
@@ -688,7 +707,7 @@ bool TempleInterior::HoldControl(bool pressed, float mouseY)
 	if (_scrolls != nullptr)
 	{
 		std::optional<TempleScrolls::Focus> focus;
-		held = _scrolls->Hold(pressed, mouseY, hit, GatherScrollFacts(), focus) || held;
+		held = _scrolls->Hold(pressed, mouseY, hit, ScrollFacts(), focus) || held;
 		if (focus.has_value() && _cameraModel != nullptr)
 		{
 			_cameraModel->LookAtSubMesh(focus->position, focus->lookAt);
@@ -1147,7 +1166,7 @@ void TempleInterior::UpdateCaveTrophies(float gameSeconds)
 	using namespace CreatureCaveTrophies;
 	_caveTrophies.clear();
 	_caveSeeds.clear();
-	const auto facts = GatherScrollFacts();
+	const auto facts = ScrollFacts();
 	const entt::id_type creatureRoom = entt::hashed_string("temple/interior/creature_l3d").value();
 	auto& meshes = Locator::resources::value().GetMeshes();
 	if (!facts.creature.has_value() || !meshes.Contains(creatureRoom))
@@ -1540,7 +1559,7 @@ void TempleInterior::SetCurrentRoom(TempleRoom room)
 			ReadSavedGamesWhenChanged();
 			if (_scrolls != nullptr)
 			{
-				_scrolls->Rewrite(TempleScrolls::Content::SaveGame, GatherScrollFacts());
+				_scrolls->Rewrite(TempleScrolls::Content::SaveGame, ScrollFacts());
 			}
 		}
 		// Coming into the library, the story history shows its newest line first
@@ -1601,7 +1620,7 @@ void TempleInterior::LookAtScroll(size_t place)
 	{
 		return;
 	}
-	if (const auto focus = _scrolls->LookAt(_currentRoom, place, GatherScrollFacts()); focus.has_value())
+	if (const auto focus = _scrolls->LookAt(_currentRoom, place, ScrollFacts()); focus.has_value())
 	{
 		_cameraModel->LookAtSubMesh(focus->position, focus->lookAt);
 	}
@@ -1778,7 +1797,7 @@ void TempleInterior::Update(std::chrono::microseconds dt)
 		_scrollPictures.clear();
 		if (_scrolls != nullptr && _cameraModel != nullptr)
 		{
-			const auto facts = GatherScrollFacts();
+			const auto facts = ScrollFacts();
 			_scrolls->SetFocus(_cameraModel->GetSubMeshZoom(), facts);
 			_scrolls->StepSaveGameRoom(IsRoomDrawn(TempleRoom::SaveGame), _cameraModel->GetSubMeshZoom(), facts);
 			// While the camera is close to the story history, its buttons show, and a press turns its first line

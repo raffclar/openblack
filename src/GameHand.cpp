@@ -436,14 +436,10 @@ void Game::UpdateHandInterface()
 	{
 		return;
 	}
-	// The creature the hand is held to, or else the one it is over, any player's
+	// The creature that the hand holds, or else the creature under the hand, any player's, while a hand holds it
 	const auto& creatureHand = Locator::creatureHandSystem::value();
-	auto creature = creatureHand.GetCreature();
-	const bool rightButtonHeld = (Locator::gameActionSystem::value().GetPointerButtons() & SDL_BUTTON_RMASK) != 0;
-	if (!creature.has_value() && creature_panel::Triggered(rightButtonHeld))
-	{
-		creature = _creatureUnderHand;
-	}
+	const auto pointed = creatureHand.GetCreature().has_value() ? creatureHand.GetCreature() : _creatureUnderHand;
+	auto creature = creature_panel::HandPanelCreature(pointed, pointed.has_value() && creatureHand.IsLocked(*pointed));
 	// Without one, the creature Creature Mode follows shows near the top of the screen, without the reward
 	std::optional<float> reward = creatureHand.GetLastFeedbackSum();
 	if (!creature.has_value() && Locator::creatureModeSystem::has_value())

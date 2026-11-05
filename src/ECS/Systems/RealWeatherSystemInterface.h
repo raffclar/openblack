@@ -12,6 +12,7 @@
 #include <chrono>
 #include <optional>
 #include <string>
+#include <string_view>
 
 #include <LobbyApi.h>
 #include <entt/entity/entity.hpp>
@@ -41,21 +42,24 @@ public:
 	[[nodiscard]] virtual bool IsMultiplayer() const = 0;
 };
 
-/// The real-world weather, as the original game's internet weather. It is on unless the player turns it off. When it
-/// is on, a single-player game asks the lobby for the weather of the place of the player's account as the game starts.
-/// The game does not wait for the answer. At the next turn after the answer the weather changes the background weather
-/// of the land, and its preset can make a storm. An answer that comes too late, or no answer, leaves the land's own
-/// weather.
+/// The real-world weather, as the original game's internet weather. The "Online weather" setting of the player's
+/// lobby account turns it on. The setting is off until the player turns it on at the account page of the lobby.
+/// A single-player game asks the lobby for the weather of the place of the account as the game starts. When the setting
+/// is off, the lobby gives no weather. The game does not wait for the answer. At the next turn after the answer the
+/// weather changes the background weather of the land, and its preset can make a storm. An answer that comes too late,
+/// or no answer, leaves the land's own weather.
 class RealWeatherSystemInterface
 {
 public:
 	/// The longest time from the question to the answer. A later answer is ignored.
 	static constexpr auto k_AnswerTimeout = std::chrono::seconds(10);
+	/// The code of the problem that the lobby gives when the account has online weather off
+	static constexpr std::string_view k_AccountWeatherOff = "weather_off";
 
 	virtual ~RealWeatherSystemInterface() = default;
 
-	/// Once as a game starts: when the real weather is on and the player has a lobby account, the system asks the lobby
-	/// for the weather of today. Nothing happens in a multiplayer game.
+	/// Once as a game starts: when the player has a lobby account, the system asks the lobby for the weather of today.
+	/// Nothing happens in a multiplayer game, or when the developer switch turns the real weather off.
 	virtual void StartGame(RealWeatherLandInterface& land) = 0;
 	/// Once a turn, after the turn of the game: the weather that came changes the weather of the land
 	virtual void ProcessTurn(RealWeatherLandInterface& land) = 0;

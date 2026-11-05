@@ -11,6 +11,8 @@
 
 #include "SkyClockSystem.h"
 
+#include <utility>
+
 #include "ECS/Registry.h"
 #include "ECS/Systems/SkySystemInterface.h"
 #include "Locator.h"
@@ -54,6 +56,18 @@ void SkyClockSystem::KeepForNextLand()
 	};
 }
 
+void SkyClockSystem::KeepShownDome()
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(_entities.dome))
+	{
+		_shownDome.reset();
+		return;
+	}
+	const auto& dome = registry.Get<SkyDome>(_entities.dome);
+	_shownDome = ShownDome {.follow = dome.follow, .frameRows = dome.frameRows};
+}
+
 void SkyClockSystem::FindAfterLoad()
 {
 	auto& registry = Locator::entitiesRegistry::value();
@@ -62,6 +76,24 @@ void SkyClockSystem::FindAfterLoad()
 	registry.Each<const SkyDome>([this](entt::entity entity, const SkyDome& /*dome*/) { _entities.dome = entity; });
 	registry.Each<const Sun>([this](entt::entity entity, const Sun& /*sun*/) { _entities.sun = entity; });
 	registry.Each<const Moon>([this](entt::entity entity, const Moon& /*moon*/) { _entities.moon = entity; });
+
+	// The save keeps how far the dome of the computer that saved followed the sky, but not its picture. The picture
+	// on this computer is the one that it drew before the load. Thus the dome continues as it was before the load.
+	// With no dome before the load, the dome builds all of its picture again for the sky of the loaded clock.
+	const auto shown = std::exchange(_shownDome, std::nullopt);
+	if (!registry.Valid(_entities.dome))
+	{
+		return;
+	}
+	auto& dome = registry.Get<SkyDome>(_entities.dome);
+	if (shown.has_value())
+	{
+		dome.follow = shown->follow;
+		dome.frameRows = shown->frameRows;
+		return;
+	}
+	dome.follow.Jump(GetCurrentSkyType());
+	dome.frameRows = {};
 }
 
 void SkyClockSystem::ProcessTurn()

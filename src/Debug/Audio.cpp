@@ -25,10 +25,10 @@
 #include "ECS/Components/Weather.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
+#include "ECS/Systems/GameAudioSystemInterface.h"
 #include "ECS/Systems/ScriptMusicSystemInterface.h"
 #include "ECS/Systems/SkyClockSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
-#include "Game.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
 #include "Sound/GameMusic.h"
@@ -174,8 +174,8 @@ void Audio::Emitters() noexcept
 void Audio::Music() noexcept
 {
 	// What the game's music has picked and what the music channels are playing
-	const auto* game = Game::Instance();
-	if (const auto* gameMusic = game != nullptr ? game->GetGameMusic() : nullptr)
+	const auto* gameMusic = Locator::gameAudioSystem::has_value() ? Locator::gameAudioSystem::value().GetGameMusic() : nullptr;
+	if (gameMusic != nullptr)
 	{
 		ImGui::Text("Playing: %s", std::string(audio::GetMusicTypeName(gameMusic->GetPlaying())).c_str());
 		ImGui::Text("Land music: %s", std::string(audio::GetMusicTypeName(gameMusic->GetLandType())).c_str());
@@ -205,7 +205,7 @@ void Audio::Music() noexcept
 		            std::array {"evil", "neutral", "good"}.at(
 		                static_cast<size_t>(audio::GameMusic::GetAlignmentIndex(alignment.GetCameraAlignment()))));
 	}
-	if (const auto* gameMusic = game != nullptr ? game->GetGameMusic() : nullptr)
+	if (gameMusic != nullptr)
 	{
 		for (const auto& [group, chunk] : gameMusic->GetResumeChunks())
 		{
@@ -462,8 +462,8 @@ constexpr ImGuiTableFlags k_TableFlags =
 
 void Audio::Atmos() noexcept
 {
-	const auto* game = Game::Instance();
-	const auto* atmosAudio = game != nullptr ? game->GetAtmosAudio() : nullptr;
+	const auto* atmosAudio =
+	    Locator::gameAudioSystem::has_value() ? Locator::gameAudioSystem::value().GetAtmosAudio() : nullptr;
 	const auto* atmos = Locator::audio::value().GetAtmos();
 	if (atmosAudio == nullptr || atmos == nullptr)
 	{

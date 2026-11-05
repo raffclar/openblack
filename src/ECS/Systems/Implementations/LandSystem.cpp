@@ -722,6 +722,8 @@ bool LandSystem::LoadSavedLand(const std::filesystem::path& landPath, const std:
 	// The saved world takes the place of every entity that the land made, the hand and the sky included. The players
 	// that go with them are forgotten.
 	auto& registry = Locator::entitiesRegistry::value();
+	// The renderer keeps the picture of the sky's dome through the load, so the dome keeps how far it follows the sky
+	Locator::skyClockSystem::value().KeepShownDome();
 	registry.Reset();
 	// The things that only the frames make go with the things of the land that they go with. The sky's clouds stay, as
 	// the land laid them out when it loaded: a save does not keep the clouds.
