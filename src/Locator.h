@@ -33,10 +33,15 @@ class Profiler;
 class GameRandomInterface;
 class RandomNumberManagerInterface;
 class TempleInteriorInterface;
+struct FightAutopilotRequest;
 
 namespace player_profiles
 {
 struct Store;
+}
+namespace sim_run
+{
+struct Request;
 }
 
 namespace v120
@@ -124,6 +129,8 @@ class DynamicsSystemInterface;
 class PickingSystemInterface;
 class HandSystemInterface;
 class HandGrabSystemInterface;
+class HandPressSystemInterface;
+class GameKeysSystemInterface;
 class CameraPathSystemInterface;
 class LivingActionSystemInterface;
 class MistSystemInterface;
@@ -181,6 +188,8 @@ class DanceSystemInterface;
 class FootballSystemInterface;
 class SharkSystemInterface;
 class VideoSystemInterface;
+class LoadingScreenSystemInterface;
+struct LoadingScreenHooks;
 class HelpTextSystemInterface;
 class TurnCheerSystemInterface;
 class GameAudioSystemInterface;
@@ -193,6 +202,7 @@ class HelpMessageSystemInterface;
 class TipBubbleSystemInterface;
 class HandDemoSystemInterface;
 class PlayerCommandSystemInterface;
+class OwnReportSystemInterface;
 class SyncChecksumSystemInterface;
 class AdvisorSystemInterface;
 class SoundTagSystemInterface;
@@ -266,6 +276,7 @@ class ScriptObjectsSystemInterface;
 class BuildingDamageSystemInterface;
 class ScriptHighlightSystemInterface;
 class InspectorSystemInterface;
+class ToolRunSystemInterface;
 } // namespace ecs::systems
 
 void InitializeWindow(const std::string& title, int width, int height, windowing::DisplayMode displayMode, uint32_t extraFlags,
@@ -299,6 +310,12 @@ void InitializeOnlineAndTools(const player_profiles::Store& profiles);
 void InitializeClient(const player_profiles::Store& profiles);
 /// The simulation, the systems that show the world, then the services of the game on the player's computer
 bool InitializeGame(const player_profiles::Store& profiles) noexcept;
+/// The screens of the start and of the loads of the game. Only the game's library has this function.
+void InitializeLoadingScreens(ecs::systems::LoadingScreenHooks hooks);
+/// The logs and tools of a tool's run. The caller keeps the request of the run until the services shut down. Only the
+/// game's library has this function.
+void InitializeToolRun(const std::optional<sim_run::Request>& simulation, std::optional<FightAutopilotRequest> fightAutopilot,
+                       std::optional<std::filesystem::path> fightTranscriptFolder);
 void InitializeLevel(const std::filesystem::path& path);
 /// Starts a level on land that is generated rather than read from a file, as the flat testbed is
 void InitializeLevel(const LandData& land);
@@ -358,6 +375,8 @@ struct Locator
 	/// The game's interface: its menu, its boxes and its texts. The game makes it when the world starts and removes it
 	/// when the game closes. Without the game files for it, the locator has no interface. The dedicated server has none.
 	using gameInterface = entt::locator<openblack::gui::GameInterface>;
+	/// The logs and tools of a tool's run on this computer. The game makes it. The dedicated server has none.
+	using toolRunSystem = entt::locator<ecs::systems::ToolRunSystemInterface>;
 	using camera = entt::locator<Camera>;
 	using gameActionSystem = entt::locator<input::GameActionInterface>;
 	/// The keyboard, the mouse and the event queue of the window system. The dedicated server has no device (see
@@ -404,6 +423,11 @@ struct Locator
 	using computerPlayerSystem = entt::locator<ecs::systems::ComputerPlayerSystemInterface>;
 	using handSystem = entt::locator<ecs::systems::HandSystemInterface>;
 	using handGrabSystem = entt::locator<ecs::systems::HandGrabSystemInterface>;
+	/// The buttons of the mouse, the pointer of the hand and the routing of the presses on this computer. Only the client
+	/// makes it.
+	using handPressSystem = entt::locator<ecs::systems::HandPressSystemInterface>;
+	/// The keys of the game on this computer. Only the client makes it.
+	using gameKeysSystem = entt::locator<ecs::systems::GameKeysSystemInterface>;
 	using temple = entt::locator<TempleInteriorInterface>;
 	using time = entt::locator<ecs::systems::TimeSystemInterface>;
 	using simulation = entt::locator<ecs::systems::SimulationSystemInterface>;
@@ -466,6 +490,9 @@ struct Locator
 	using footballSystem = entt::locator<ecs::systems::FootballSystemInterface>;
 	using sharkSystem = entt::locator<ecs::systems::SharkSystemInterface>;
 	using videoSystem = entt::locator<ecs::systems::VideoSystemInterface>;
+	/// The screens that the game shows as it starts and while a land loads, and the timers of the start. The game makes
+	/// it. The dedicated server has none.
+	using loadingScreenSystem = entt::locator<ecs::systems::LoadingScreenSystemInterface>;
 	using helpTextSystem = entt::locator<ecs::systems::HelpTextSystemInterface>;
 	/// The advisors' voices that this computer plays. The dedicated server does not make them.
 	using advisorVoiceSystem = entt::locator<ecs::systems::AdvisorVoiceSystemInterface>;
@@ -477,6 +504,8 @@ struct Locator
 	using tipBubbleSystem = entt::locator<ecs::systems::TipBubbleSystemInterface>;
 	using handDemoSystem = entt::locator<ecs::systems::HandDemoSystemInterface>;
 	using playerCommandSystem = entt::locator<ecs::systems::PlayerCommandSystemInterface>;
+	/// The reports of the hand, the view and the help that this computer sends. Only the client makes it.
+	using ownReportSystem = entt::locator<ecs::systems::OwnReportSystemInterface>;
 	using syncChecksumSystem = entt::locator<ecs::systems::SyncChecksumSystemInterface>;
 	using advisorSystem = entt::locator<ecs::systems::AdvisorSystemInterface>;
 	using soundTagSystem = entt::locator<ecs::systems::SoundTagSystemInterface>;

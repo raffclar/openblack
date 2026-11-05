@@ -1334,6 +1334,12 @@
   "query": "engine.resources"
  },
  {
+  "description": "Which logs and tools of a tool's run are open: the file of the commands of each turn, the file of the commands of the testbed scenario, the file of the checksums, the guard of the frame steps and the fight autopilot",
+  "kind": "object",
+  "parameters": [],
+  "query": "engine.tool_run"
+ },
+ {
   "description": "Which of the engine's services are there, the game's random seeds, the game's path, the debug windows' focus and the inspector's port",
   "kind": "object",
   "parameters": [],
@@ -1755,6 +1761,12 @@
   "query": "players.commands"
  },
  {
+  "description": "The reports that this computer sends once a turn: the grip of the land and the camera turn in the view report, the turn of the last camera turn, whether a view report went since the last new hand, and the turn of the last help report",
+  "kind": "object",
+  "parameters": [],
+  "query": "players.own_reports"
+ },
+ {
   "description": "The checksum of the synced world that a network game sends after each turn: whether it is on, and the turn and checksum of the last turn. With on, it turns it on or off",
   "kind": "object",
   "parameters": [
@@ -1833,6 +1845,18 @@
   "kind": "object",
   "parameters": [],
   "query": "players.input"
+ },
+ {
+  "description": "The buttons of the mouse, the flags of the hand, the cursor of the hand and the state of the presses on this computer",
+  "kind": "object",
+  "parameters": [],
+  "query": "players.hand_press"
+ },
+ {
+  "description": "The keys of the game on this computer: whether the menu closed, and how long ago",
+  "kind": "object",
+  "parameters": [],
+  "query": "players.game_keys"
  },
  {
   "description": "The gesture being drawn and the last recognised",
@@ -1991,6 +2015,12 @@
   "kind": "object",
   "parameters": [],
   "query": "view.video"
+ },
+ {
+  "description": "The screens of the start and of the loads: whether they have their textures, what a load draws at its redraw points, whether the tips screen faded in and has a tip, and the timers of the start",
+  "kind": "object",
+  "parameters": [],
+  "query": "view.loading"
  },
  {
   "description": "Whether a camera path holds the camera, the camera's help, the advisors' cheers as the camera turns, and the knock readout",

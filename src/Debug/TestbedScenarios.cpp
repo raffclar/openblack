@@ -31,6 +31,7 @@
 #include "ECS/Systems/CreaturePhysiologySystemInterface.h"
 #include "ECS/Systems/TattooMenuSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/Systems/ToolRunSystemInterface.h"
 #include "Game.h"
 #include "Gui/GameInterface.h"
 #include "Locator.h"
@@ -219,9 +220,9 @@ void TestbedScenarios::RunRequested() noexcept
 	}
 	// A tool's run keeps each command that the scenario gives, for a dedicated server that gives it with the game
 	_runner.ObserveGives([](uint32_t turn, size_t command) {
-		if (auto* each = Game::Instance(); each != nullptr)
+		if (Locator::toolRunSystem::has_value())
 		{
-			each->RecordScenarioGive(turn, command);
+			Locator::toolRunSystem::value().RecordScenarioGive(turn, command);
 		}
 	});
 	const auto all = All();

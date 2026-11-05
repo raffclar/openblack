@@ -8,6 +8,7 @@
  *******************************************************************************/
 
 #include <algorithm>
+#include <chrono>
 #include <optional>
 #include <ranges>
 #include <string>
@@ -28,14 +29,17 @@
 #include "ECS/Systems/ChatSystemInterface.h"
 #include "ECS/Systems/CreatureModeSystemInterface.h"
 #include "ECS/Systems/GameEndSystemInterface.h"
+#include "ECS/Systems/GameKeysSystemInterface.h"
 #include "ECS/Systems/GestureEventsInterface.h"
 #include "ECS/Systems/GestureSystemInterface.h"
 #include "ECS/Systems/HandGrabSystemInterface.h"
+#include "ECS/Systems/HandPressSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/HeartbeatSystemInterface.h"
 #include "ECS/Systems/HelpTextSystemInterface.h"
 #include "ECS/Systems/IncomingMessageSystemInterface.h"
 #include "ECS/Systems/MusicMoodSystemInterface.h"
+#include "ECS/Systems/OwnReportSystemInterface.h"
 #include "ECS/Systems/PickingSystemInterface.h"
 #include "ECS/Systems/PlayerCommandSystemInterface.h"
 #include "ECS/Systems/PlayerProfileSystemInterface.h"
@@ -334,6 +338,23 @@ std::unique_ptr<ProviderInterface> PlayersProvider()
 	        "the players' commands", [](const ecs::systems::PlayerCommandSystemInterface& commands, const QueryContext& /*c*/) {
 		        return Json {{"sender", static_cast<int>(commands.GetSender())}, {"pending", commands.PendingCount()}};
 	        }));
+	provider->Add(
+	    Query("own_reports",
+	          "The reports that this computer sends once a turn: the grip of the land and the camera turn in the "
+	          "view report, the turn of the last camera turn, whether a view report went since the last new "
+	          "hand, and the turn of the last help report"),
+	    Serve<Locator::ownReportSystem>("the reports of this computer",
+	                                    [](const ecs::systems::OwnReportSystemInterface& reports, const QueryContext& /*c*/) {
+		                                    const auto& state = reports.GetState();
+		                                    const auto turnOrNull = [](std::optional<uint32_t> turn) {
+			                                    return turn.has_value() ? Json(*turn) : Json();
+		                                    };
+		                                    return Json {{"landGrip", state.landGrip},
+		                                                 {"cameraTurned", state.cameraTurned},
+		                                                 {"cameraTurnTurn", turnOrNull(state.cameraTurnTurn)},
+		                                                 {"viewReportSent", state.lastViewReport.has_value()},
+		                                                 {"helpReportTurn", turnOrNull(state.helpReportTurn)}};
+	                                    }));
 	provider->Add({.name = "checksum",
 	               .description = "The checksum of the synced world that a network game sends after each turn: whether it "
 	                              "is on, and the turn and checksum of the last turn. With on, it turns it on or off",
@@ -573,6 +594,38 @@ std::unique_ptr<ProviderInterface> PlayersProvider()
 		                               {"scripted_pointer", actions.GetScriptedPointer().has_value()},
 		                               {"cursor_frozen", actions.IsCursorFrozen()}};
 	                  }));
+	provider->Add(
+	    Query("hand_press",
+	          "The buttons of the mouse, the flags of the hand, the cursor of the hand and the state of the presses on this "
+	          "computer"),
+	    Serve<Locator::handPressSystem>(
+	        "the presses of the hand", [](const ecs::systems::HandPressSystemInterface& presses, const QueryContext& /*c*/) {
+		        const auto& buttons = presses.GetPointerButtons();
+		        const auto& hand = presses.GetHandButtons();
+		        const auto mouse = presses.GetMousePosition();
+		        const auto& totem = presses.GetTotemPointer();
+		        return Json {{"buttons", {{"left", buttons.left}, {"middle", buttons.middle}, {"right", buttons.right}}},
+		                     {"gripping", hand.gripping},
+		                     {"rotating", hand.rotating},
+		                     {"selectGrip", hand.selectGrip},
+		                     {"otherButton", hand.otherButton},
+		                     {"mouse", {mouse.x, mouse.y}},
+		                     {"pointerMoved", presses.GetHandPointer().HasMoved()},
+		                     {"totemPointer", totem.has_value() ? Json {totem->x, totem->y} : Json()}};
+	        }));
+	provider->Add(
+	    Query("game_keys", "The keys of the game on this computer: whether the menu closed, and how long ago"),
+	    Serve<Locator::gameKeysSystem>("the keys of the game", [](const ecs::systems::GameKeysSystemInterface& keys,
+	                                                              const QueryContext& /*c*/) {
+		    const auto& closedAt = keys.GetMenuClosedAt();
+		    Json result = {{"menuClosed", closedAt.has_value()}};
+		    if (closedAt.has_value())
+		    {
+			    result["sinceMenuClosedMs"] =
+			        std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - *closedAt).count();
+		    }
+		    return result;
+	    }));
 	provider->Add(Query("gestures", "The gesture being drawn and the last recognised"),
 	              Serve<Locator::gestureSystem>(
 	                  "the gestures", [](const ecs::systems::GestureSystemInterface& gestures, const QueryContext& /*c*/) {
