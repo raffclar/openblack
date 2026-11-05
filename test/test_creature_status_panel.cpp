@@ -9,6 +9,7 @@
 
 #include <array>
 #include <limits>
+#include <optional>
 #include <string>
 
 #include <gtest/gtest.h>
@@ -209,9 +210,16 @@ TEST(CreatureStatusPanel, LayoutFollowingACreature)
 	EXPECT_FLOAT_EQ(layout.Rows()[2].bar.max.x, 176.0f);
 }
 
-TEST(CreatureStatusPanel, ShowsOnHover)
+TEST(CreatureStatusPanel, ShowsOnlyForAHeldCreature)
 {
-	EXPECT_EQ(k_Trigger, Trigger::Hover);
-	EXPECT_TRUE(Triggered(false));
-	EXPECT_TRUE(Triggered(true));
+	const auto own = static_cast<entt::entity>(1);
+	const auto other = static_cast<entt::entity>(2);
+	// A hand holds the creature that the hand points at, the player's or another god's: the panel is about it
+	EXPECT_EQ(HandPanelCreature(own, true), own);
+	EXPECT_EQ(HandPanelCreature(other, true), other);
+	// No hand holds the creature under the hand, the player's or another god's: no panel
+	EXPECT_EQ(HandPanelCreature(own, false), std::nullopt);
+	EXPECT_EQ(HandPanelCreature(other, false), std::nullopt);
+	// The hand points at no creature: no panel
+	EXPECT_EQ(HandPanelCreature(std::nullopt, false), std::nullopt);
 }
