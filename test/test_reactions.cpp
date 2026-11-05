@@ -570,6 +570,33 @@ TEST(ReactionRules, AFleePointFromAMovingThingGoesBackToMapUnitsAsTheGameDoes)
 	EXPECT_EQ(openblack::map_coords::ToFixed(openblack::map_coords::ToMetres(living.x)), 8388615);
 }
 
+// A villager runs from a fire straight away from it by the fire's own distance. The goal keeps the height of the
+// villager in the world. A villager that runs from its own fire goes to its map position plus a step, and the goal
+// keeps the altitude of the villager above the land
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST(ReactionRules, AFireFleeGoalKeepsTheHeightOfTheVillager)
+{
+	using namespace openblack::magic;
+	using openblack::map_coords::FromMetres;
+	using openblack::map_coords::MapCoords;
+	auto living = FromMetres({100.0f, 50.0f});
+	living.altitude = 0.25f;
+	const auto fire = FromMetres({90.0f, 50.0f});
+	// The ground is 2 m high under the villager and 3 m high at the goal
+	const auto ground = [&living](const MapCoords& place) { return place.x == living.x ? 2.0f : 3.0f; };
+	const auto away = FleePlaceFromStill(living, fire, 7.5f, ground);
+	EXPECT_EQ(away.x, openblack::map_coords::ToFixed(107.5f));
+	EXPECT_EQ(away.z, living.z);
+	// 2.25 m in the world is 0.75 m below the ground at the goal
+	EXPECT_EQ(away.altitude, -0.75f);
+	// From its own fire: the map units add with no change, far from the corner of the map too
+	const MapCoords far {.x = 8090858, .z = 8090858, .altitude = 0.5f};
+	const auto own = far + MapCoords {.x = 1000, .z = -2000, .altitude = 0.0f};
+	EXPECT_EQ(own.x, 8091858);
+	EXPECT_EQ(own.z, 8088858);
+	EXPECT_EQ(own.altitude, 0.5f);
+}
+
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
 TEST(ReactionRules, AFleeGoalOffTheMapIsNotUsed)
 {
