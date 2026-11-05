@@ -653,7 +653,8 @@ uint32_t villager_reactions::Fleeing(LivingAction& action)
 	}
 	const auto here = registry.Get<const Transform>(villager).position;
 	const auto object = reaction->source.position;
-	const float distance = glm::distance(here, object);
+	// The distance is on the land between the two map positions. The height does not change it.
+	const float distance = gutils::GetDistanceInMetres(here, object);
 	if (distance > info->maxDistanceToRunAwayFromObject)
 	{
 		return GiveUp(action);
@@ -666,16 +667,20 @@ uint32_t villager_reactions::Fleeing(LivingAction& action)
 		TurnTowards(villager, object);
 		return 0;
 	}
-	glm::vec3 to = magic::FleePointFromStill(here, object);
+	std::optional<glm::vec2> shift;
 	if (moving && Locator::gameRandom::has_value())
 	{
 		auto& random = Locator::gameRandom::value();
 		const float x = random.GameFloatRand(magic::k_FleeJitter);
 		const float z = random.GameFloatRand(magic::k_FleeJitter);
-		to = magic::FleePointFromMoving(here, object, reaction->velocity, x, z);
+		shift = glm::vec2(x, z);
 	}
-	// It runs there at its speed for fleeing and watching, then watches
-	villager_home::SetupMoveTo(action, glm::xz(to), VillagerStates::FleeingAndLookingAtObjectReaction);
+	// It runs there at its speed for fleeing and watching, then watches. With no point on the map it stays where it is
+	// and tries again on the next turn.
+	if (const auto goal = magic::villager_reaction::FleeGoal(here, object, reaction->velocity, shift); goal.has_value())
+	{
+		villager_home::SetupMoveTo(action, *goal, VillagerStates::FleeingAndLookingAtObjectReaction);
+	}
 	return 0;
 }
 
@@ -751,7 +756,7 @@ uint32_t villager_reactions::Watching(LivingAction& action)
 	}
 	const auto& info = Locator::infoConstants::value().reaction.at(static_cast<size_t>(reaction->source.type));
 	const auto here = registry.Get<const Transform>(villager).position;
-	if (glm::distance(here, reaction->source.position) > info.maxDistanceToRunAwayFromObject)
+	if (gutils::GetDistanceInMetres(here, reaction->source.position) > info.maxDistanceToRunAwayFromObject)
 	{
 		return GiveUp(action);
 	}

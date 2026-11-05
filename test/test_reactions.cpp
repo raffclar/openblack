@@ -520,6 +520,21 @@ TEST(ReactionRules, VillagersFleeAwayOrAcrossTheWay)
 	EXPECT_FALSE(ComingTowards({10.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f}));
 }
 
+TEST(ReactionRules, AFleeGoalOffTheMapIsNotUsed)
+{
+	using openblack::magic::villager_reaction::FleeGoal;
+	// Away from a thing that does not move, on the map
+	const auto away = FleeGoal({100.0f, 0.0f, 50.0f}, {90.0f, 0.0f, 50.0f}, glm::vec3(0.0f), std::nullopt);
+	ASSERT_TRUE(away.has_value());
+	EXPECT_FLOAT_EQ(away->x, 110.0f);
+	EXPECT_FLOAT_EQ(away->y, 50.0f);
+	// At the west edge, running west goes off the map
+	EXPECT_FALSE(FleeGoal({5.0f, 0.0f, 50.0f}, {10.0f, 0.0f, 50.0f}, glm::vec3(0.0f), std::nullopt).has_value());
+	// Across the way of a moving thing, off the map past the east edge
+	EXPECT_FALSE(
+	    FleeGoal({5115.0f, 0.0f, 50.0f}, {5110.0f, 0.0f, 50.0f}, {0.0f, 0.0f, 1.0f}, glm::vec2(4.0f, 4.0f)).has_value());
+}
+
 TEST_F(Reactions, VillagersInReachTakeUpANiceMiracleAndBelieveOnce)
 {
 	_reactions.Create(Miracle());
