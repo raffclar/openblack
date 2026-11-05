@@ -209,7 +209,6 @@ void CreatureMindSystem::TakeOrder(entt::entity partner, entt::entity asker, con
 		mind->planActive = true;
 		mind->planSerial = mind->idle.serial;
 		mind->agendaSeen = mind->idle.serial;
-		mind->satisfiedByEffect = false;
 		mind->desireSeenTo = false;
 		mind->planActions = tables->desireActions.at(static_cast<size_t>(Desire::ObeyCreature));
 		// It is remembered for the player's feedback as an order, unless nothing says why it wants to obey

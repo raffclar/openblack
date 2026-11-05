@@ -226,6 +226,20 @@ void ClearSourcesAfterSatisfying(DesireState& desire);
 /// The desire is lessened after an action that lessens it: an activated desire is multiplied by the action's
 /// multiplier, and kept from the creature's floor for desires to its maximum
 void LessenAfterAction(Desires& desires, Desire desire, float multiplier, float floor);
+/// What the action of a plan does to a desire when the plan is complete, from the game's action table
+struct ActionLessening
+{
+	/// The desire that the action lessens
+	Desire desire;
+	/// The value that the desire is multiplied by
+	float multiplier;
+	/// The action lessens the desire also when no step of the plan saw to it
+	bool always;
+};
+/// A complete plan counts one time towards the urge of the desire that it served. When this satisfies the urge, the
+/// clearable sources of that desire clear. Then the desire of the action is less when the action always lessens it or
+/// a step of the plan saw to the desire. True when the urge is satisfied.
+bool SeeToAfterPlan(Desires& desires, Desire served, const std::optional<ActionLessening>& action, bool seenTo, float floor);
 
 /// Every source of a type, in all the desires, goes up or down by an amount, staying from 0 to 1, as events push them
 void ChangeSource(Desires& desires, uint32_t type, float amount);

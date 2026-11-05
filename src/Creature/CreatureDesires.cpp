@@ -396,3 +396,18 @@ void creature_desires::LessenAfterAction(Desires& desires, Desire which, float m
 		desire.value = desire.max;
 	}
 }
+
+bool creature_desires::SeeToAfterPlan(Desires& desires, Desire served, const std::optional<ActionLessening>& action,
+                                      bool seenTo, float floor)
+{
+	if (!CountTowardsUrge(desires[served]))
+	{
+		return false;
+	}
+	ClearSourcesAfterSatisfying(desires[served]);
+	if (action.has_value() && (action->always || seenTo))
+	{
+		LessenAfterAction(desires, action->desire, action->multiplier, floor);
+	}
+	return true;
+}

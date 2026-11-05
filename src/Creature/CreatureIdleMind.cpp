@@ -228,6 +228,39 @@ std::string_view creature_mind::Name(Activity activity)
 	}
 }
 
+bool creature_mind::SeesToNeedAtStep(Effect effect, bool planned)
+{
+	if (planned)
+	{
+		return false;
+	}
+	switch (effect)
+	{
+	case Effect::Eat:
+	case Effect::Drink:
+	case Effect::Poo:
+	case Effect::Fart:
+	case Effect::Puke:
+	case Effect::Slept:
+	case Effect::Examined:
+	case Effect::ThrewAbout:
+	case Effect::Hurled:
+		return true;
+	case Effect::None:
+	case Effect::CameRound:
+	case Effect::Completed:
+	case Effect::Observed:
+	case Effect::TookFromPile:
+	case Effect::TookFromHand:
+	case Effect::Inspected:
+	case Effect::Stomped:
+	case Effect::Revived:
+	case Effect::RanAway:
+		break;
+	}
+	return false;
+}
+
 std::vector<Step> creature_mind::BeIdle(const Random& random)
 {
 	std::vector<Step> agenda;
