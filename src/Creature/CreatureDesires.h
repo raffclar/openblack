@@ -212,9 +212,9 @@ using SourceReader = std::function<std::optional<float>(uint32_t type, const Des
 /// One game turn of the sources: each that follows the creature's state reads it, then every one is multiplied by its
 /// multiplier
 void UpdateSources(Desires& desires, const SourceReader& read);
-/// One game turn of the desires: each grows by its sources' drive, unless suppressed, else fades; clamped to 0 and its
-/// maximum
-void UpdateDesires(Desires& desires, float turnsPerSecond);
+/// One game turn of the desires: each grows by its sources' drive, unless suppressed, else fades. A value below the
+/// species' floor becomes the floor. Else, a value above the maximum of the desire becomes that maximum.
+void UpdateDesires(Desires& desires, float turnsPerSecond, float floor = 0.0f);
 /// The desire can't grow for some seconds, or longer if it already couldn't
 void Suppress(Desires& desires, Desire desire, float seconds, float turnsPerSecond);
 

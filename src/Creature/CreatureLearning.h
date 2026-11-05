@@ -39,6 +39,9 @@ constexpr float k_MinFeedback = 0.5f;
 /// may go either way
 constexpr float k_MaxStep = 0.1f;
 constexpr float k_DecayStep = 0.001f;
+/// A full lesson moves a weight that can learn by its first weight times a third. The game multiplies by a third. It
+/// does not divide by 3.
+constexpr float k_WeightStepPart = 1.0f / 3.0f;
 constexpr float k_MaxReach = 0.2f;
 /// The bounds of a desire's growing time, in seconds, the highest threshold of a source, and the bounds of a desire's
 /// weight and its maximum
