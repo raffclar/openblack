@@ -105,6 +105,7 @@
 #include "ECS/Systems/MiracleFxSystemInterface.h"
 #include "ECS/Systems/NetworkGameSystemInterface.h"
 #include "ECS/Systems/ObjectDrawListSystemInterface.h"
+#include "ECS/Systems/OwnReportSystemInterface.h"
 #include "ECS/Systems/ParticleRuleSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/PauseTextSystemInterface.h"
@@ -246,9 +247,12 @@ bool Game::PlayFrameStep(game_frame::Step step, FrameState& frame)
 		// A tool's run can keep the camera out of the commands, so that two runs give the same commands
 		if (!_simulation.has_value() || !_simulation->settings.noHandReports)
 		{
-			ReportHand();
+			Locator::ownReportSystem::value().ReportHand(_cameraIcons);
 		}
-		ReportHelp();
+		Locator::ownReportSystem::value().ReportHelp({
+		    .frontEndBoxShows = [this] { return FrontEndBoxShows(); },
+		    .worldCameraView = &Game::HelpWorldCameraView,
+		});
 		SendDialogueClick();
 		Locator::playerCommandSystem::value().SendOpenBlock();
 		break;

@@ -132,10 +132,6 @@ namespace frame_write_guard
 {
 class Guard;
 }
-namespace player_commands
-{
-struct ViewReport;
-}
 
 /// The fight autopilot asked for on the command line, as the command line gives it: its policy, the seed, the lesson stage
 /// to start at and the moves of a sequence
@@ -430,13 +426,6 @@ public:
 	void UpdateScreenMarks();
 	/// The hand goes under the cursor, as the camera of this frame sees it, before the draw
 	void UpdateHandFrame(std::chrono::microseconds deltaTime);
-	/// Once a turn, before the block of commands goes: reports where the hand and the camera are, when they changed
-	void ReportHand();
-	/// With the report of the hand: reports the view that the scripts and the advisors' remarks read, when it changed
-	void ReportView();
-	/// Once a turn, before the block of commands goes: reports the help events of the player's input and the view of the
-	/// world camera, when they changed
-	void ReportHelp();
 	/// Before the block of commands goes: sends the player's click of the dialogue and the key that cuts a text short
 	void SendDialogueClick();
 	/// Whether the player clicked the dialogue since the last call. The click is then used.
@@ -817,11 +806,6 @@ private:
 	/// The hand grips the land for its tooltips: from the start of a drag of the land until the Move button is let go,
 	/// also while the Action button is held too
 	bool _tipsLandGrip {false};
-	/// Whether the view report says that the hand grips the land: from a drag of the land until the Move button is let go
-	bool _reportLandGrip {false};
-	/// The world camera's controls asked for a turn in a frame of the game turn that the view report counts, and that turn
-	bool _reportCameraTurned {false};
-	std::optional<uint32_t> _reportCameraTurnTurn;
 	hand_navigation_pose::Pose _handPose {hand_navigation_pose::Pose::Idle};
 	/// The rotate arrow's turn, kept from frame to frame, which a demonstration's recording sets too
 	float _triconAngle {0.0f};
@@ -873,10 +857,6 @@ private:
 	std::optional<glm::vec3> _cursorWorldPosition;
 	/// Where the hand started, where a tool's run can keep it (sim_run::Settings::stillHand)
 	std::optional<glm::vec3> _stillHandAt;
-	/// The last report of the view that this computer sent (player_commands::ViewReport), none before the first
-	std::unique_ptr<player_commands::ViewReport> _lastViewReport;
-	/// The turn of the last report of the help that this computer sent
-	std::optional<uint32_t> _helpReportTurn;
 	/// The land or sea under the cursor, whatever thing is in front of it
 	std::optional<glm::vec3> _cursorLand;
 	/// Where the hand rests on or before the thing under the cursor, which it hovers at rather than over the land
