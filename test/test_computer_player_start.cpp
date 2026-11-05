@@ -12,6 +12,7 @@
 #include <bit>
 #include <map>
 #include <optional>
+#include <set>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -52,6 +53,7 @@ public:
 	}
 	[[nodiscard]] bool Skirmish() const override { return skirmish; }
 	[[nodiscard]] bool NetworkGame() const override { return network; }
+	[[nodiscard]] bool ScriptControls(entt::entity creature) const override { return scripted.contains(creature); }
 	[[nodiscard]] Player::Miracles Miracles(PlayerNames /*player*/) const override { return miracles; }
 	void MakeCreature(PlayerNames player, CreatureType species, const glm::vec3& position) override
 	{
@@ -91,6 +93,7 @@ public:
 	std::map<PlayerNames, glm::vec3> pens;
 	bool skirmish {true};
 	bool network {false};
+	std::set<entt::entity> scripted;
 	Player::Miracles miracles;
 	std::vector<std::pair<CreatureType, glm::vec3>> made;
 	std::vector<std::pair<entt::entity, MagicType>> taught;
@@ -202,6 +205,19 @@ TEST(ComputerPlayerStart, TheCreatureLearnsThePlayersMiraclesAndHealFoodWoodAndW
 	    {k_GodsCreature, MagicType::Water},    {k_GodsCreature, MagicType::CreatureSpellItchy},
 	};
 	EXPECT_EQ(world.taught, expected);
+}
+
+TEST(ComputerPlayerStart, ACreatureThatAScriptControlsLearnsNoMiracleButTakesItsSize)
+{
+	FakeWorld world;
+	world.creatures = {{PlayerNames::PLAYER_ONE, k_Person}, {PlayerNames::PLAYER_TWO, k_GodsCreature}};
+	world.sizes = {{k_Person, 1.0f}, {k_GodsCreature, 0.4f}};
+	world.temples = {{PlayerNames::PLAYER_TWO, true}};
+	world.scripted = {k_GodsCreature};
+	auto mind = SwitchedOnLikeThePerson();
+	Start(world, PlayerNames::PLAYER_TWO, mind);
+	EXPECT_TRUE(world.taught.empty());
+	EXPECT_FLOAT_EQ(world.sizes.at(k_GodsCreature), 0.9f);
 }
 
 TEST(ComputerPlayerStart, EveryMiracleIsLearntWhenThePlayerCanCastEveryMiracle)

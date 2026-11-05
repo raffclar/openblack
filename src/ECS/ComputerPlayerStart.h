@@ -89,6 +89,8 @@ struct StartFacts
 	bool network {false};
 	/// The local player has a creature
 	bool localCreature {false};
+	/// A script controls the creature of the player
+	bool creatureScripted {false};
 };
 
 /// In a skirmish that is not a network game, a player with a temple and a pen but no creature gets a creature
@@ -96,7 +98,8 @@ struct StartFacts
 /// The creature of a player that is not the local player gets a size from the local player's creature. This occurs
 /// only when a land script named a player for it and the local player has a creature.
 [[nodiscard]] bool TakesSize(const ecs::components::ComputerPlayer& player, const StartFacts& facts);
-/// The creature of a marked computer player that is not the local player learns its player's miracles
+/// The creature of a marked computer player that is not the local player learns its player's miracles. A creature that
+/// a script controls learns none.
 [[nodiscard]] bool LearnsMiracles(const ecs::components::ComputerPlayer& player, const StartFacts& facts);
 
 /// The species of the creature for a random value below k_SpeciesChoices
@@ -132,6 +135,8 @@ public:
 	virtual void MakeCreature(PlayerNames player, CreatureType species, const glm::vec3& position) = 0;
 	/// The creature learns the miracle as a script teaches it
 	virtual void Teach(entt::entity creature, MagicType miracle) = 0;
+	/// A script controls the creature
+	[[nodiscard]] virtual bool ScriptControls(entt::entity /*creature*/) const { return false; }
 	virtual uint32_t GameRand(uint32_t range) = 0;
 	virtual float GameFloatRand(float most) = 0;
 	/// The weight of the need of the mind with this name, as a land script sets it. Tools only: the AI soak sets the
