@@ -31,7 +31,6 @@
 #include "3D/L3DMesh.h"
 #include "3D/TempleInteriorInterface.h"
 #include "3D/WaterRings.h"
-#include "Audio/AtmosAudio.h"
 #include "Audio/AudioManagerInterface.h"
 #include "CHLApi.h"
 #include "Camera/Camera.h"
@@ -40,7 +39,6 @@
 #include "Common/BuildVersion.h"
 #include "Game.h"
 #include "GameDetail.h"
-#include "Sound/GameMusic.h"
 #include "Sound/GameSoundEffects.h"
 #include "Sound/HelpSpeech.h"
 #include "Sound/ScriptSoundEffect.h"
@@ -91,6 +89,7 @@
 #include "ECS/Systems/ExplosionSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/FloatingNumberSystemInterface.h"
+#include "ECS/Systems/GameAudioSystemInterface.h"
 #include "ECS/Systems/GestureSystemInterface.h"
 #include "ECS/Systems/HandGrabSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
@@ -127,7 +126,6 @@
 #include "ECS/Systems/VideoSystemInterface.h"
 #include "ECS/Systems/VillageTotemSystemInterface.h"
 #include "ECS/Systems/VortexSystemInterface.h"
-#include "ECS/Systems/WeatherSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "ECS/TownDesireFlags.h"
 #include "ECS/TreeRoots.h"
@@ -766,7 +764,6 @@ void Game::ProcessTurnCheering()
 void Game::PlayViewStep(game_turn::Step step, glm::vec3 cameraPosition)
 {
 	using game_turn::Step;
-	auto& clock = Locator::time::value();
 	switch (step)
 	{
 	case Step::TurnCheering:
@@ -782,33 +779,16 @@ void Game::PlayViewStep(game_turn::Step step, glm::vec3 cameraPosition)
 		ShowBeliefGained();
 		break;
 	case Step::Ambience:
-		// The ambience follows the weather at the camera
-		if (_atmosAudio)
+		if (Locator::gameAudioSystem::has_value())
 		{
-			ecs::components::WeatherInfo weather {};
-			if (Locator::weatherSystem::has_value())
-			{
-				weather = Locator::weatherSystem::value().GetWeatherSmooth(cameraPosition);
-			}
-			_atmosAudio->SetAlignment(Locator::alignmentSystem::value().GetCameraAlignment());
-			_atmosAudio->EndTurn({
-			    .camera = cameraPosition,
-			    .weather =
-			        {
-			            .rain = weather.rain,
-			            .snow = weather.snow,
-			            .windX = weather.windX,
-			            .windZ = weather.windZ,
-			        },
-			    .paused = false,
-			    .turn = clock.GetTurn(),
-			    .inCitadel = PlayerInTemple(),
-			    .videoPlaying = Locator::videoSystem::value().IsPlaying(),
-			});
+			Locator::gameAudioSystem::value().ProcessAmbienceTurn(cameraPosition, PlayerInTemple());
 		}
 		break;
 	case Step::Music:
-		ProcessMusicTurn(cameraPosition, PlayerInTemple());
+		if (Locator::gameAudioSystem::has_value())
+		{
+			Locator::gameAudioSystem::value().ProcessMusicTurn(cameraPosition, PlayerInTemple());
+		}
 		break;
 	default:
 		// The world does the other steps (see simulation::PlayTurnStep)
@@ -840,14 +820,11 @@ void Game::UpdatePauseText()
 	    static_cast<uint32_t>(clock.GetFrameRealTime().count()));
 }
 
-void Game::ProcessTempleAudioTurn()
+void Game::PlayTempleAudioTurn()
 {
-	// The temple's turns play the citadel's music, while the land's ambience fades out
-	ProcessMusicTurn(Locator::camera::value().GetOrigin(), true);
-	if (_atmosAudio)
+	if (Locator::gameAudioSystem::has_value())
 	{
-		_atmosAudio->ContinueTurn(
-		    {.paused = false, .turn = GetTurn(), .inCitadel = true, .videoPlaying = Locator::videoSystem::value().IsPlaying()});
+		Locator::gameAudioSystem::value().ProcessTempleAudioTurn();
 	}
 }
 

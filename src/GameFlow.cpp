@@ -29,7 +29,6 @@
 #include "3D/L3DMesh.h"
 #include "3D/LandIslandInterface.h"
 #include "3D/SkyDome.h"
-#include "Audio/AtmosAudio.h"
 #include "Audio/AudioManagerInterface.h"
 #include "CHLApi.h"
 #include "Camera/DefaultWorldCameraModel.h"
@@ -40,7 +39,6 @@
 #include "Game.h"
 #include "GameDetail.h"
 #include "Sound/ClipSounds.h"
-#include "Sound/GameMusic.h"
 #include "Sound/GameSoundEffects.h"
 #include "Sound/HelpSpeech.h"
 #include "Sound/ScriptSoundEffect.h"
@@ -55,24 +53,19 @@
 #include "Debug/FrameWriteGuard.h"
 #include "ECS/Components/Alignment.h"
 #include "ECS/Components/MagicShield.h"
-#include "ECS/Components/Town.h"
-#include "ECS/Components/Transform.h"
-#include "ECS/CreatureDanceMusic.h"
 #include "ECS/GamePlayers.h"
 #include "ECS/LearningMarker.h"
 #include "ECS/Registry.h"
 #include "ECS/Statistics.h"
-#include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/BoatLaunchSystemInterface.h"
 #include "ECS/Systems/ChatSystemInterface.h"
-#include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/ClanCreatureSystemInterface.h"
-#include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/CreatureHandSystemInterface.h"
 #include "ECS/Systems/CreatureObjectActionSystemInterface.h"
 #include "ECS/Systems/CreatureSkinSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/FightTranscriptSystemInterface.h"
+#include "ECS/Systems/GameAudioSystemInterface.h"
 #include "ECS/Systems/GameEndSystemInterface.h"
 #include "ECS/Systems/GatheringBoxSystemInterface.h"
 #include "ECS/Systems/GestureEventsInterface.h"
@@ -90,13 +83,11 @@
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/PlaygroundTripSystemInterface.h"
 #include "ECS/Systems/SaveGameSystemInterface.h"
-#include "ECS/Systems/ScriptMusicSystemInterface.h"
 #include "ECS/Systems/SimulationSystemInterface.h"
 #include "ECS/Systems/SkyClockSystemInterface.h"
 #include "ECS/Systems/SyncChecksumSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/VideoSystemInterface.h"
-#include "ECS/WorshipChantMusic.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Gui/Canvas.h"
 #include "Gui/EscapeKeyRules.h"
@@ -152,78 +143,6 @@ void Game::RecordScenarioGive(uint32_t turn, size_t command)
 	{
 		_scenarioGives->Write(turn, command);
 	}
-}
-
-void Game::ProcessMusicTurn(glm::vec3 cameraPosition, bool inCitadel)
-{
-	// The game picks the music for the turn
-	if (!_gameMusic)
-	{
-		return;
-	}
-	const auto& alignment = Locator::alignmentSystem::value();
-	// The land's music waits while a script holds the cinema bars, and while they slide in or out
-	bool cinema = false;
-	if (Locator::cinematicDirectorSystem::has_value())
-	{
-		const auto& director = Locator::cinematicDirectorSystem::value();
-		cinema =
-		    (director.IsWideScreenOn() && director.GetWideScreenOwner() != 0) || !director.IsWideScreenTransitionFinished();
-	}
-	audio::GameMusic::TurnInputs music {
-	    .turn = GetTurn(),
-	    .camera = cameraPosition,
-	    .groundHeight = Locator::terrainSystem::value().GetHeightAt(glm::xz(cameraPosition)),
-	    .inCitadel = inCitadel,
-	    .alignment = alignment.GetCameraAlignment(),
-	    .playerAlignment = alignment.GetPlayerAlignment(
-	        (Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE)),
-	    .cinema = cinema,
-	    .towns = {},
-	    .thingPosition = [](uint32_t thing) -> std::optional<glm::vec3> {
-		    const auto& registry = Locator::entitiesRegistry::value();
-		    const auto entity = static_cast<entt::entity>(thing);
-		    if (!registry.Valid(entity) || !registry.AllOf<ecs::components::Transform>(entity))
-		    {
-			    return std::nullopt;
-		    }
-		    return registry.Get<const ecs::components::Transform>(entity).position;
-	    },
-	};
-	music.worshipChant = ecs::worship_chant_music::Heard(cameraPosition);
-	music.creatureDance = ecs::creature_dance_music::Heard(cameraPosition);
-	// The music heard follows the world's clock of the scripts' music
-	if (Locator::scriptMusicSystem::has_value())
-	{
-		const auto& script = Locator::scriptMusicSystem::value().GetMusic();
-		music.script = {
-		    .type = script.GetType(),
-		    .started = script.IsStarted(),
-		    .playCount = script.GetPlayCount(),
-		    .place = script.GetPlace(),
-		};
-	}
-	music.film = Locator::videoSystem::has_value() && Locator::videoSystem::value().IsPlaying();
-	if (Locator::infoConstants::has_value())
-	{
-		const auto& sound = Locator::infoConstants::value().sound;
-		music.townTriggerDistance = sound.townTriggerDistance;
-		music.townTriggerOffDistance = sound.townTriggerOffDistance;
-	}
-	if (Locator::creatureFightSystem::has_value() && Locator::creatureFightSystem::value().FightMusicHeard(cameraPosition))
-	{
-		const auto& context = Locator::entitiesRegistry::value().Context();
-		music.creatureFight = audio::GameMusic::SelectFightType(context.mapScriptGlobals.landNumber, context.skirmish);
-	}
-	Locator::entitiesRegistry::value().Each<const ecs::components::Town, const Tribe, const ecs::components::Transform>(
-	    [&music](const ecs::components::Town& town, const Tribe tribe, const ecs::components::Transform& transform) {
-		    music.towns.push_back({
-		        .position = transform.position,
-		        .tribe = static_cast<int32_t>(tribe),
-		        .id = town.id,
-		    });
-	    });
-	_gameMusic->ProcessTurn(music);
 }
 
 void Game::FollowGameEnd()
@@ -571,28 +490,7 @@ bool Game::LoadSavedLand(const std::filesystem::path& landPath, const std::files
 
 void Game::StartLandAudio()
 {
-	if (!_atmosAudio)
-	{
-		_atmosAudio = std::make_unique<audio::AtmosAudio>();
-	}
-	_atmosAudio->Init();
-	if (!_gameMusic)
-	{
-		// The -NOLOADMUSIC switch: the game loads none of its music banks, so none of its music plays
-		_gameMusic = std::make_unique<audio::GameMusic>(!_launchSwitches.noLoadMusic);
-		// The script, the saves and the films find the music through the locator; the game stays the owner
-		Locator::gameMusic::reset(_gameMusic.get(), [](audio::GameMusic* /*unowned*/) {});
-		if (Locator::scriptMusicSystem::has_value())
-		{
-			Locator::scriptMusicSystem::value().SetBanksLoaded(!_launchSwitches.noLoadMusic);
-			Locator::scriptMusicSystem::value().RegisterTimings();
-		}
-		if (!_launchSwitches.noLoadMusic)
-		{
-			audio::GameMusic::RegisterBanks();
-		}
-	}
-	_gameMusic->Reset();
+	Locator::gameAudioSystem::value().StartLandAudio(!_launchSwitches.noLoadMusic);
 }
 
 void Game::MakeSymbolSheet()

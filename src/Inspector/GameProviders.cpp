@@ -336,6 +336,7 @@ constexpr std::array k_Coverage {
     // The sound requests keep no state of their own. They go to the audio at once, and audio.state shows the audio.
     LocatorCoverage {"sounds", "audio.state"},
     LocatorCoverage {"gameMusic", "audio.state"},
+    LocatorCoverage {"gameAudioSystem", "audio.state"},
     LocatorCoverage {"camera", "camera.state"},
     LocatorCoverage {"gameActionSystem", "players.input"},
     // The input device keeps no state of the game. The keys and the buttons it gives show in the player input.

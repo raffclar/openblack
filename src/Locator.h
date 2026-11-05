@@ -182,6 +182,7 @@ class SharkSystemInterface;
 class VideoSystemInterface;
 class HelpTextSystemInterface;
 class TurnCheerSystemInterface;
+class GameAudioSystemInterface;
 class AdvisorVoiceSystemInterface;
 class HelpProfileSystemInterface;
 class ComputerSettingsSystemInterface;
@@ -347,8 +348,10 @@ struct Locator
 	using audio = entt::locator<audio::AudioManagerInterface>;
 	/// The sounds that the world asks for. The audio library plays them through the audio manager.
 	using sounds = entt::locator<openblack::audio::SoundRequestInterface>;
-	/// The game's music, which the game makes and owns. The dedicated server has no music.
+	/// The game's music, which the game's audio system makes and owns. The dedicated server has no music.
 	using gameMusic = entt::locator<openblack::audio::GameMusic>;
+	/// The music and the ambience of the land that this computer plays. The dedicated server does not make them.
+	using gameAudioSystem = entt::locator<ecs::systems::GameAudioSystemInterface>;
 	/// The fade of the whole screen, which the game's interface makes and owns. The dedicated server has no fade.
 	using screenFade = entt::locator<openblack::gui::ScreenFade>;
 	/// The game's interface: its menu, its boxes and its texts. The game makes it when the world starts and removes it
