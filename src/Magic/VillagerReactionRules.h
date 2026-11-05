@@ -106,11 +106,6 @@ constexpr float k_FollowDistance = 10.0f;
 /// Each position is first taken as the game keeps it, in map units, and back to metres
 [[nodiscard]] float SpreadDistance(glm::vec2 villager, glm::vec2 reaction);
 
-/// Where a frightened villager runs to. It runs straight away from a thing that does not move. It runs across the way
-/// of a thing that moves, with the two random shifts. A point off the map gives no goal.
-[[nodiscard]] std::optional<glm::vec2> FleeGoal(glm::vec3 villager, glm::vec3 object, glm::vec3 velocity,
-                                                std::optional<glm::vec2> shift);
-
 /// How urgent a reaction is to a villager at a distance, 0 to 255: its kind's priority to the villager, up to half as
 /// much again by its nearness; none beyond its reach or when the villager's kind doesn't react to it
 [[nodiscard]] uint8_t Priority(uint8_t kindPriority, bool kindReacts, const Distance& distance, float at);

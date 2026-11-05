@@ -104,19 +104,6 @@ float villager_reaction::SpreadDistance(glm::vec2 villager, glm::vec2 reaction)
 	return (across + along) * 0.5f;
 }
 
-std::optional<glm::vec2> villager_reaction::FleeGoal(glm::vec3 villager, glm::vec3 object, glm::vec3 velocity,
-                                                     std::optional<glm::vec2> shift)
-{
-	const auto to = shift.has_value() ? FleePointFromMoving(villager, object, velocity, shift->x, shift->y)
-	                                  : FleePointFromStill(villager, object);
-	const glm::vec2 goal(to.x, to.z);
-	if (!map_coords::InBounds(map_coords::FromMetres(goal)))
-	{
-		return std::nullopt;
-	}
-	return goal;
-}
-
 bool villager_reaction::Available(const Availability& facts, openblack::Reaction type)
 {
 	if (!facts.stateLetsItReact || facts.dyingNow || facts.scriptControlled)
