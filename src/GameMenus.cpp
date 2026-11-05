@@ -180,29 +180,30 @@ const gui::TextDatabase* Game::MakeInterface()
 	auto& audio = Locator::audio::value();
 	const auto kept = gui::ToProfileSettings(settings);
 	const auto& pictures = Locator::tattooEditorSystem::value().GetPictures();
-	_interface = gui::GameInterface::Create(playerName, std::move(settings), pictures);
-	if (_interface)
+	// The locator owns the interface. The game removes it when the game closes
+	Locator::gameInterface::reset(gui::GameInterface::Create(playerName, std::move(settings), pictures).release());
+	if (Locator::gameInterface::has_value())
 	{
 		// The films find the fade through the locator; the interface stays the owner
-		Locator::screenFade::reset(&_interface->GetScreenFade(), [](gui::ScreenFade* /*unowned*/) {});
+		Locator::screenFade::reset(&Locator::gameInterface::value().GetScreenFade(), [](gui::ScreenFade* /*unowned*/) {});
 	}
 	ApplyPlayerSettings(kept);
 	LoadProfileKeys();
 	RefreshPlayersPage();
-	if (!_interface)
+	if (!Locator::gameInterface::has_value())
 	{
 		SPDLOG_LOGGER_WARN(spdlog::get("game"), "The game's menu is not available, Escape quits");
 	}
 	else
 	{
 		// The slider of the help's text speed shows only when the game has no sound
-		_interface->GetMenu().SetSoundInstalled(audio.IsInstalled());
+		Locator::gameInterface::value().GetMenu().SetSoundInstalled(audio.IsInstalled());
 		// Each save and each load shows its box first
 		if (Locator::saveGameSystem::has_value())
 		{
 			Locator::saveGameSystem::value().SetShowBox([this](bool loading, bool darken) { ShowSavingBox(loading, darken); });
 			// A save that did not write its world files completely is told to the player in a box
-			Locator::saveGameSystem::value().SetReportProblem([this]() { _interface->ShowSaveProblem(); });
+			Locator::saveGameSystem::value().SetReportProblem([]() { Locator::gameInterface::value().ShowSaveProblem(); });
 		}
 		// The Game Statistics box takes the players' figures as it opens, from the menu and from the end box
 		const auto statistics = [] {
@@ -210,14 +211,14 @@ const gui::TextDatabase* Game::MakeInterface()
 			    Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE;
 			return std::pair(player_statistics::Box(), local);
 		};
-		_interface->GetMenu().SetStatisticsSource(statistics);
-		_interface->GetEndGameBox().SetStatisticsSource(statistics);
+		Locator::gameInterface::value().GetMenu().SetStatisticsSource(statistics);
+		Locator::gameInterface::value().GetEndGameBox().SetStatisticsSource(statistics);
 		// The box of the winning conditions takes the gods' standings as it opens
-		_interface->GetMenu().SetConditionsSource(ConditionsFigures);
-		_interface->GetEndGameBox().SetConditionsSource(ConditionsFigures);
+		Locator::gameInterface::value().GetMenu().SetConditionsSource(ConditionsFigures);
+		Locator::gameInterface::value().GetEndGameBox().SetConditionsSource(ConditionsFigures);
 		// Each time the end box shows that the player lost while the game goes on, the advisors can say their one-off
 		// line about it
-		_interface->GetEndGameBox().SetShownHandler([](const gui::EndGameBox::Contents& contents) {
+		Locator::gameInterface::value().GetEndGameBox().SetShownHandler([](const gui::EndGameBox::Contents& contents) {
 			if (contents.box.kind == end_game_box::Kind::Lost && Locator::guidanceSystem::has_value())
 			{
 				Locator::guidanceSystem::value().SayOneOff(guidance::OneOff::NotVeryGood);
@@ -225,31 +226,31 @@ const gui::TextDatabase* Game::MakeInterface()
 		});
 		if (Locator::temple::has_value())
 		{
-			Locator::temple::value().SetInterface(_interface.get());
+			Locator::temple::value().SetInterface(&Locator::gameInterface::value());
 		}
 		if (Locator::creatureCaveSystem::has_value())
 		{
-			Locator::creatureCaveSystem::value().SetInterface(_interface.get());
+			Locator::creatureCaveSystem::value().SetInterface(&Locator::gameInterface::value());
 		}
 		if (Locator::miracleFxSystem::has_value())
 		{
-			Locator::miracleFxSystem::value().SetInterface(_interface.get());
+			Locator::miracleFxSystem::value().SetInterface(&Locator::gameInterface::value());
 		}
 		if (Locator::pauseTextSystem::has_value())
 		{
-			Locator::pauseTextSystem::value().SetInterface(_interface.get());
+			Locator::pauseTextSystem::value().SetInterface(&Locator::gameInterface::value());
 		}
 		if (Locator::incomingMessageSystem::has_value())
 		{
-			Locator::incomingMessageSystem::value().SetTexts(&_interface->GetTexts());
+			Locator::incomingMessageSystem::value().SetTexts(&Locator::gameInterface::value().GetTexts());
 		}
 		if (Locator::chatSystem::has_value())
 		{
-			Locator::chatSystem::value().SetTexts(&_interface->GetTexts());
+			Locator::chatSystem::value().SetTexts(&Locator::gameInterface::value().GetTexts());
 		}
 		if (Locator::gatheringBoxSystem::has_value())
 		{
-			auto* controls = &_interface->GetChatControls();
+			auto* controls = &Locator::gameInterface::value().GetChatControls();
 			Locator::gatheringBoxSystem::value().SetBox({
 			    .people = [controls]() { return &controls->GetPeople(); },
 			    .peopleChanged = [controls]() { controls->PeopleChanged(); },
@@ -261,18 +262,19 @@ const gui::TextDatabase* Game::MakeInterface()
 			});
 		}
 	}
-	return _interface ? &_interface->GetTexts() : nullptr;
+	return Locator::gameInterface::has_value() ? &Locator::gameInterface::value().GetTexts() : nullptr;
 }
 
 void Game::ShowSavingBox(bool loading, bool darken)
 {
 	// A run that draws no frame shows no box
-	if (!_interface || !Locator::windowing::has_value() ||
+	if (!Locator::gameInterface::has_value() || !Locator::windowing::has_value() ||
 	    !sim_run::DrawsFrame(Locator::simulation::value().GetSettings(), _frameCount))
 	{
 		return;
 	}
-	_interface->DrawSavingBox(static_cast<glm::u16vec2>(Locator::windowing::value().GetSize()), loading, darken);
+	Locator::gameInterface::value().DrawSavingBox(static_cast<glm::u16vec2>(Locator::windowing::value().GetSize()), loading,
+	                                              darken);
 	// A picture asked for this frame shows the box, as the screen does
 	if (_requestScreenshot.has_value() && _requestScreenshot->first == _frameCount)
 	{
@@ -286,24 +288,24 @@ void Game::ShowSavingBox(bool loading, bool darken)
 void Game::HandleInterfaceAction()
 {
 	using Action = gui::GameMenu::Action;
-	const auto action = _interface->TakeAction();
+	const auto action = Locator::gameInterface::value().TakeAction();
 
 	// The answer to the start-of-game question tells the story what to skip, and the game goes on
-	if (const auto answer = _interface->TakeSkipBoxAnswer(); answer.has_value())
+	if (const auto answer = Locator::gameInterface::value().TakeSkipBoxAnswer(); answer.has_value())
 	{
 		Locator::tutorialSkipSystem::value().Set(new_game_choice::SkipFor(*answer));
 		Locator::time::value().SetPlayerPause(false);
 	}
 
 	// The edits on the Players page are kept with the profile played, before anything its buttons do
-	if (const auto edits = _interface->GetMenu().TakePlayerEdits(); edits.has_value())
+	if (const auto edits = Locator::gameInterface::value().GetMenu().TakePlayerEdits(); edits.has_value())
 	{
 		Locator::playerProfileSystem::value().EditCurrentProfile(edits->creatureName, edits->symbol);
 		NameCreatureAfterProfile();
 		SaveHelpRecord();
 	}
 	// A profile made in the new player's box from the Players page is played from now on
-	if (auto& box = _interface->GetNewPlayerBox(); !box.IsActive())
+	if (auto& box = Locator::gameInterface::value().GetNewPlayerBox(); !box.IsActive())
 	{
 		if (const auto answer = box.TakeAnswer(); answer.has_value())
 		{
@@ -314,9 +316,9 @@ void Game::HandleInterfaceAction()
 	}
 
 	// The settings the player changes take effect at once
-	if (_interface->TakeSettingsChanged())
+	if (Locator::gameInterface::value().TakeSettingsChanged())
 	{
-		const auto& settings = _interface->GetMenu().GetSettings();
+		const auto& settings = Locator::gameInterface::value().GetMenu().GetSettings();
 		auto& audio = Locator::audio::value();
 		audio.SetSfxVolume(settings.sfxVolume);
 		audio.SetMusicVolume(settings.musicVolume);
@@ -338,7 +340,7 @@ void Game::HandleInterfaceAction()
 	}
 
 	// A binding changed on the Controls page takes effect at once
-	auto& menu = _interface->GetMenu();
+	auto& menu = Locator::gameInterface::value().GetMenu();
 	if (menu.TakeControlsChanged() && Locator::gameActionSystem::has_value())
 	{
 		Locator::gameActionSystem::value().SetKeyBindings(menu.GetControlBindings());
@@ -356,7 +358,7 @@ void Game::HandleInterfaceAction()
 	_menuWasOpen = menu.IsOpen();
 
 	// The menu pauses the game while it is open
-	if (const auto pause = _menuPause.Follow(_interface->GetMenu().IsOpen()); pause.has_value())
+	if (const auto pause = _menuPause.Follow(Locator::gameInterface::value().GetMenu().IsOpen()); pause.has_value())
 	{
 		Locator::time::value().SetPlayerPause(*pause);
 		if (!_menuPause.IsHeld())
@@ -380,7 +382,7 @@ void Game::HandleInterfaceAction()
 		AskForAnotherPlayer(true);
 		break;
 	case Action::PickPlayer:
-		if (const auto picked = _interface->GetMenu().GetPickedPlayer(); picked.has_value())
+		if (const auto picked = Locator::gameInterface::value().GetMenu().GetPickedPlayer(); picked.has_value())
 		{
 			auto& profiles = Locator::playerProfileSystem::value();
 			const auto& list = profiles.GetProfiles().profiles;
@@ -395,13 +397,13 @@ void Game::HandleInterfaceAction()
 	{
 		auto& profiles = Locator::playerProfileSystem::value();
 		// The player's folder is emptied first: its saved games, pictures and help record go, but the empty folder stays
-		const auto deleted = _interface->GetMenu().GetPlayerToDelete();
+		const auto deleted = Locator::gameInterface::value().GetMenu().GetPlayerToDelete();
 		if (Locator::profileFolderSystem::has_value())
 		{
 			Locator::profileFolderSystem::value().EmptyPlayerFolder(deleted);
 		}
 		profiles.DeleteProfile(deleted);
-		const auto next = _interface->GetMenu().GetPickedPlayer();
+		const auto next = Locator::gameInterface::value().GetMenu().GetPickedPlayer();
 		const auto& list = profiles.GetProfiles().profiles;
 		if (next.has_value() && *next < list.size())
 		{
@@ -421,7 +423,7 @@ void Game::HandleInterfaceAction()
 		// This game ends. Start a New Game starts a new game on the first land. A restart as the profile picked continues
 		// from the save on exit of that profile, or starts a new game when it has none. The land changes between frames,
 		// not while the game reads the input.
-		_interface->GetMenu().Close();
+		Locator::gameInterface::value().GetMenu().Close();
 		_gameEndAsked = action == Action::StartNewGame ? game_session::End::NewGame : game_session::End::Continue;
 		break;
 	case Action::EditTattoo:
@@ -440,12 +442,12 @@ void Game::HandleInterfaceAction()
 	case Action::StartSkirmish:
 		// The game ends at once, without a question. The story keeps its save on exit, then the skirmish box shows. The
 		// land changes between frames, not while the game reads the input.
-		_interface->GetMenu().Close();
+		Locator::gameInterface::value().GetMenu().Close();
 		_gameEndAsked = game_session::End::Skirmish;
 		break;
 	case Action::LeaveSkirmish:
 		// Yes to the question ends the skirmish, and the skirmish box shows again. A skirmish keeps no save on exit.
-		_interface->GetMenu().Close();
+		Locator::gameInterface::value().GetMenu().Close();
 		_gameEndAsked = game_session::End::Skirmish;
 		break;
 	case Action::ExitOnlineGame:
@@ -462,12 +464,12 @@ void Game::HandleInterfaceAction()
 
 void Game::UpdateTattooMenu(float milliseconds)
 {
-	if (!Locator::tattooMenuSystem::has_value() || !_interface)
+	if (!Locator::tattooMenuSystem::has_value() || !Locator::gameInterface::has_value())
 	{
 		return;
 	}
 	auto& tattooMenu = Locator::tattooMenuSystem::value();
-	auto& menu = _interface->GetMenu();
+	auto& menu = Locator::gameInterface::value().GetMenu();
 	if (menu.IsOpen())
 	{
 		menu.SetTattooAvailable(tattooMenu.IsButtonShown(menu.IsRestartPending()));
@@ -487,8 +489,8 @@ void Game::UpdateTattooMenu(float milliseconds)
 	const auto origin = space.ToScreen(glm::vec2(0.0f));
 	const auto corner = space.ToScreen(glm::vec2(gui::DialogPainter::k_Size));
 	const auto pointer = Locator::gameActionSystem::value().GetPointerPosition();
-	tattooMenu.Update(milliseconds, pointer, _interface->IsTattooEditorButtonHeld(), _interface->IsTattooEditorLeftHeld(),
-	                  {.origin = origin, .size = corner - origin});
+	tattooMenu.Update(milliseconds, pointer, Locator::gameInterface::value().IsTattooEditorButtonHeld(),
+	                  Locator::gameInterface::value().IsTattooEditorLeftHeld(), {.origin = origin, .size = corner - origin});
 }
 
 void Game::ShowTattooMenuCreature() const
@@ -517,15 +519,15 @@ void Game::CloseMenuForNewLand()
 	}
 	// Each other change of land comes only when the menu is closed. The menu closes before the choices in it that change
 	// the land. This also closes the menu for a land that the debug tools load.
-	if (_interface && _interface->GetMenu().IsOpen())
+	if (Locator::gameInterface::has_value() && Locator::gameInterface::value().GetMenu().IsOpen())
 	{
-		_interface->GetMenu().Close();
+		Locator::gameInterface::value().GetMenu().Close();
 	}
 	// The end of a game closes every box of the game. The script of the next land shows the land information box
 	// again when the land has one. This also closes the box for a land that the debug tools load.
-	if (_interface && _interface->GetLandInfoBox().IsActive())
+	if (Locator::gameInterface::has_value() && Locator::gameInterface::value().GetLandInfoBox().IsActive())
 	{
-		_interface->GetLandInfoBox().Close();
+		Locator::gameInterface::value().GetLandInfoBox().Close();
 	}
 	// The game gets the pause that it had before the menu opened, before the next land asks for a pause of its own
 	if (const auto pause = _menuPause.Release(); pause.has_value())
@@ -537,7 +539,7 @@ void Game::CloseMenuForNewLand()
 
 void Game::RefreshPlayersPage()
 {
-	if (!_interface || !Locator::playerProfileSystem::has_value())
+	if (!Locator::gameInterface::has_value() || !Locator::playerProfileSystem::has_value())
 	{
 		return;
 	}
@@ -553,7 +555,7 @@ void Game::RefreshPlayersPage()
 		}
 		names.push_back(gui::ToUtf16(profile.name));
 	}
-	_interface->GetMenu().SetPlayers(std::move(names), current);
+	Locator::gameInterface::value().GetMenu().SetPlayers(std::move(names), current);
 }
 
 void Game::PlayerProfileChanged()
@@ -564,12 +566,13 @@ void Game::PlayerProfileChanged()
 	ReadTattooPictures();
 	RefreshPlayersPage();
 	const auto profile = Locator::playerProfileSystem::value().GetCurrentProfile();
-	if (!profile.has_value() || !_interface)
+	if (!profile.has_value() || !Locator::gameInterface::has_value())
 	{
 		return;
 	}
 	// The page shows the profile's creature's name, symbol and options, which take effect
-	_interface->GetMenu().ShowPlayer(gui::ToUtf16(profile->creatureName), profile->symbol, profile->settings);
+	Locator::gameInterface::value().GetMenu().ShowPlayer(gui::ToUtf16(profile->creatureName), profile->symbol,
+	                                                     profile->settings);
 	ApplyPlayerSettings(profile->settings);
 	// The bindings of the new player come from their profile
 	LoadProfileKeys();
@@ -580,9 +583,9 @@ void Game::ReadTattooPictures()
 {
 	// The symbols' picture and the tattoo designs change with the pictures. The game loads them one time only
 	// (vanilla-bugs 182), and openblack fixes this.
-	if (const auto pictures = simulation::ReadTattooPictures(); pictures.has_value() && _interface)
+	if (const auto pictures = simulation::ReadTattooPictures(); pictures.has_value() && Locator::gameInterface::has_value())
 	{
-		_interface->SetSymbolPictures(*pictures);
+		Locator::gameInterface::value().SetSymbolPictures(*pictures);
 	}
 }
 
@@ -616,17 +619,18 @@ void Game::AskForAnotherPlayer(bool canCancel)
 {
 	auto& profiles = Locator::playerProfileSystem::value();
 	SDL_StartTextInput();
-	_interface->ShowNewPlayerBoxOverGame(canCancel && profiles.GetProfileCount() > 0,
-	                                     [&profiles](std::u16string_view name) { return profiles.CheckNewName(name); });
+	Locator::gameInterface::value().ShowNewPlayerBoxOverGame(
+	    canCancel && profiles.GetProfileCount() > 0,
+	    [&profiles](std::u16string_view name) { return profiles.CheckNewName(name); });
 }
 
 void Game::TellMenuTheGame()
 {
-	if (!_interface)
+	if (!Locator::gameInterface::has_value())
 	{
 		return;
 	}
-	auto& menu = _interface->GetMenu();
+	auto& menu = Locator::gameInterface::value().GetMenu();
 	menu.SetNetworkGame(InNetworkGame());
 	// The land of a network game also plays as a skirmish, but its menu is the menu of a network game
 	menu.SetSkirmish(Locator::entitiesRegistry::value().Context().skirmish && !Locator::time::value().IsNetworkGame());
@@ -634,13 +638,13 @@ void Game::TellMenuTheGame()
 
 void Game::ShowMenuOnStart()
 {
-	if (!_interface)
+	if (!Locator::gameInterface::has_value())
 	{
 		return;
 	}
 	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The menu shows over the game that continued");
 	TellMenuTheGame();
-	_interface->OpenMenu();
+	Locator::gameInterface::value().OpenMenu();
 	// The menu reads the profile's own pictures again as it opens
 	ReadTattooPictures();
 	// The menu pauses the game while it is open
@@ -650,21 +654,23 @@ void Game::ShowMenuOnStart()
 void Game::ApplyPlayerSettings(const player_profiles::Settings& settings)
 {
 	simulation::ApplyPlayerSettings(settings);
-	if (_interface)
+	if (Locator::gameInterface::has_value())
 	{
 		constexpr int k_Levels = 4;
-		_interface->GetToolTips().SetLevel(static_cast<gui::ToolTipLevel>(std::clamp(settings.toolTips, 0, k_Levels - 1)));
+		Locator::gameInterface::value().GetToolTips().SetLevel(
+		    static_cast<gui::ToolTipLevel>(std::clamp(settings.toolTips, 0, k_Levels - 1)));
 	}
 }
 
 bool Game::FrontEndBoxShows() const
 {
-	return _interface && (_interface->IsDialogOpen() || _interface->GetTattooEditor().IsOpen());
+	return Locator::gameInterface::has_value() &&
+	       (Locator::gameInterface::value().IsDialogOpen() || Locator::gameInterface::value().GetTattooEditor().IsOpen());
 }
 
 bool Game::AskStartQuestion(bool hasCreature)
 {
-	if (!_interface)
+	if (!Locator::gameInterface::has_value())
 	{
 		return false;
 	}
@@ -672,18 +678,18 @@ bool Game::AskStartQuestion(bool hasCreature)
 	Locator::time::value().SetPlayerPause(true);
 	// The multiplayer front end is in front of the land: the question comes when the player leaves the front end to
 	// the land. A join from the command line loads the server's land, which does not ask the question.
-	if (_interface->GetMultiplayerBoxes().IsActive() || _frontEndOnStart || _networkLandPending)
+	if (Locator::gameInterface::value().GetMultiplayerBoxes().IsActive() || _frontEndOnStart || _networkLandPending)
 	{
 		_startQuestionAfterFrontEnd = hasCreature;
 		return true;
 	}
-	_interface->ShowSkipBox(hasCreature);
+	Locator::gameInterface::value().ShowSkipBox(hasCreature);
 	return true;
 }
 
 bool Game::WithdrawSkipBox()
 {
-	return _interface && _interface->WithdrawSkipBox();
+	return Locator::gameInterface::has_value() && Locator::gameInterface::value().WithdrawSkipBox();
 }
 
 void Game::ShowLoadingFrame()

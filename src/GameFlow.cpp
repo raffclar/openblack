@@ -228,7 +228,7 @@ void Game::ProcessMusicTurn(glm::vec3 cameraPosition, bool inCitadel)
 
 void Game::FollowGameEnd()
 {
-	if (!_interface || !Locator::gameEndSystem::has_value())
+	if (!Locator::gameInterface::has_value() || !Locator::gameEndSystem::has_value())
 	{
 		return;
 	}
@@ -242,13 +242,13 @@ void Game::FollowGameEnd()
 	auto& gameEnd = Locator::gameEndSystem::value();
 	const auto* session = Locator::networkGame::has_value() ? Locator::networkGame::value().Session() : nullptr;
 	// The end box stops to show itself when it closes, or when the box of one of its tabs opens over it
-	if (!_interface->GetEndGameBox().ShowsItself())
+	if (!Locator::gameInterface::value().GetEndGameBox().ShowsItself())
 	{
 		end_game_box::StoppedShowing(_endGameBoxState);
 	}
 	// The player's choice in the end box: Leave Game leaves the network game. In a skirmish it ends the skirmish, and the
 	// skirmish box shows again.
-	if (_interface->GetEndGameBox().TakeAction() == gui::EndGameBox::Action::Leave)
+	if (Locator::gameInterface::value().GetEndGameBox().TakeAction() == gui::EndGameBox::Action::Leave)
 	{
 		if (session != nullptr)
 		{
@@ -289,13 +289,13 @@ void Game::FollowGameEnd()
 	};
 	if (opened.godOut.has_value())
 	{
-		_interface->ShowGodOut(nameOf(*opened.godOut));
+		Locator::gameInterface::value().ShowGodOut(nameOf(*opened.godOut));
 	}
 	if (!opened.endBox.has_value())
 	{
 		return;
 	}
-	const auto& texts = _interface->GetTexts();
+	const auto& texts = Locator::gameInterface::value().GetTexts();
 	const auto winner = gameEnd.LastGodIn();
 	const auto winnerName = winner.has_value() ? nameOf(*winner) : std::u16string();
 	const bool looksOn = end_game_box::LooksOn(local, networkGame);
@@ -309,7 +309,7 @@ void Game::FollowGameEnd()
 	// does not draw its band (vanilla-bugs 470).
 	const auto landNumber = Locator::entitiesRegistry::value().Context().mapScriptGlobals.landNumber;
 	const auto colour = looksOn ? glm::vec4(0.0f) : gui::statistics_box::PlayerColour(local, landNumber);
-	_interface->OpenEndGameBox({.box = *opened.endBox, .title = title, .colour = colour});
+	Locator::gameInterface::value().OpenEndGameBox({.box = *opened.endBox, .title = title, .colour = colour});
 	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The end box opens for player {}: {}", static_cast<int>(local), gui::ToUtf8(title));
 	// In a game on the internet, an end box of a decided game or of a god that is out sends the clan creature of the god
 	// of this computer to the lobby, with the alignment that the god has now
@@ -649,14 +649,14 @@ bool Game::StartNewGame(std::optional<new_game_choice::NewGameStart> start) noex
 
 void Game::FollowPlaygroundTrip()
 {
-	if (!_tripQuestion.has_value() || !_interface)
+	if (!_tripQuestion.has_value() || !Locator::gameInterface::has_value())
 	{
 		return;
 	}
-	auto answer = _interface->TakeTripAnswer();
+	auto answer = Locator::gameInterface::value().TakeTripAnswer();
 	if (!answer.has_value())
 	{
-		if (_interface->IsTripQuestionUp())
+		if (Locator::gameInterface::value().IsTripQuestionUp())
 		{
 			return;
 		}
@@ -669,11 +669,11 @@ void Game::FollowPlaygroundTrip()
 	auto& trip = Locator::playgroundTripSystem::value();
 	// Each answer unpauses the game, but Yes to leave the Playground. The menu then comes back if it is open, and its main
 	// page pauses the game again.
-	auto& menu = _interface->GetMenu();
+	auto& menu = Locator::gameInterface::value().GetMenu();
 	if (question == playground_trip::Question::Go || !*answer)
 	{
 		Locator::time::value().SetPlayerPause(false);
-		if (menu.IsOpen() && playground_trip::PausesWhenBack(_interface->GetTripMenuBox()))
+		if (menu.IsOpen() && playground_trip::PausesWhenBack(Locator::gameInterface::value().GetTripMenuBox()))
 		{
 			Locator::time::value().SetPlayerPause(true);
 		}
@@ -724,9 +724,9 @@ void Game::EndGame(game_session::End end)
 	                                                        : "the game continues as the profile picked");
 	SaveAsGameEnds(end, false);
 	// The next game has no previous profile until the Players page opens again
-	if (_interface)
+	if (Locator::gameInterface::has_value())
 	{
-		_interface->GetMenu().ForgetPreviousProfile();
+		Locator::gameInterface::value().GetMenu().ForgetPreviousProfile();
 	}
 	_gameEnding = end;
 }
@@ -746,10 +746,10 @@ void Game::StartNextGameWhenSaved()
 		profiles.SelectProfile(*picked);
 	}
 	const auto profile = profiles.GetCurrentProfile();
-	if (profile.has_value() && _interface)
+	if (profile.has_value() && Locator::gameInterface::has_value())
 	{
-		_interface->SetPlayerProfile(gui::ToUtf16(profile->name), gui::ToUtf16(profile->creatureName), profile->symbol,
-		                             profile->settings);
+		Locator::gameInterface::value().SetPlayerProfile(gui::ToUtf16(profile->name), gui::ToUtf16(profile->creatureName),
+		                                                 profile->symbol, profile->settings);
 		RefreshPlayersPage();
 	}
 	switch (game_session::NextStart(end).value_or(game_session::Start::NewGame))
@@ -793,9 +793,9 @@ game_session::ExitSave Game::ExitSaveAsGameEnds(game_session::End end) const
 	    .currentProfile = {},
 	    .previousExists = false,
 	};
-	if (_interface)
+	if (Locator::gameInterface::has_value())
 	{
-		facts.previousProfile = _interface->GetMenu().GetPreviousProfile();
+		facts.previousProfile = Locator::gameInterface::value().GetMenu().GetPreviousProfile();
 	}
 	if (Locator::playerProfileSystem::has_value())
 	{
@@ -831,7 +831,7 @@ bool Game::SaveAsGameEnds(game_session::End end, bool quitting)
 	// profile while it saves, and then plays as the profile picked again.
 	auto& profiles = Locator::playerProfileSystem::value();
 	const auto picked = profiles.GetCurrentProfile();
-	const auto previous = _interface->GetMenu().GetPreviousProfile();
+	const auto previous = Locator::gameInterface::value().GetMenu().GetPreviousProfile();
 	if (!picked.has_value() || !previous.has_value() || !profiles.SelectProfile(*previous))
 	{
 		return false;

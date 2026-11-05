@@ -155,8 +155,7 @@ void TestbedScenarios::UpdateAlways() noexcept
 		const auto& time = Locator::time::value();
 		const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
 		const bool tattooMenu = Locator::tattooMenuSystem::has_value() && Locator::tattooMenuSystem::value().IsOpen();
-		auto* game = Game::Instance();
-		const bool menu = game != nullptr && game->GetInterface() != nullptr && game->GetInterface()->GetMenu().IsOpen();
+		const bool menu = Locator::gameInterface::has_value() && Locator::gameInterface::value().GetMenu().IsOpen();
 		seconds = std::chrono::duration<float>(inTemple || tattooMenu || menu
 		                                           ? time.GetFixedFrameTime().value_or(time.GetFrameRealTime())
 		                                           : time.GetFrameGameTime())

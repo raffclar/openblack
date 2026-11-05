@@ -425,11 +425,11 @@ void Game::PickUnderCursor(float seconds)
 
 void Game::UpdateHandInterface()
 {
-	if (!_interface)
+	if (!Locator::gameInterface::has_value())
 	{
 		return;
 	}
-	_interface->SetCreaturePanel(std::nullopt);
+	Locator::gameInterface::value().SetCreaturePanel(std::nullopt);
 	// The temple places the hand's tooltip itself
 	const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
 	if (inTemple)
@@ -465,21 +465,22 @@ void Game::UpdateHandInterface()
 	if (needs != nullptr)
 	{
 		// The reward is the hand's, which it keeps showing after letting go until it takes hold again
-		_interface->SetCreaturePanel(creature_panel::FromNeeds(needs->needs, reward));
+		Locator::gameInterface::value().SetCreaturePanel(creature_panel::FromNeeds(needs->needs, reward));
 	}
 }
 
 void Game::UpdateHandToolTipAnchor()
 {
 	// The temple places the hand's tooltip itself
-	if (!_interface || !Locator::windowing::has_value() || (Locator::temple::has_value() && Locator::temple::value().Active()))
+	if (!Locator::gameInterface::has_value() || !Locator::windowing::has_value() ||
+	    (Locator::temple::has_value() && Locator::temple::value().Active()))
 	{
 		return;
 	}
 	// Not while the pointer is over a debug window
 	if (Locator::debugGui::value().IsMouseOverWindow())
 	{
-		_interface->SetHandOnScreen(std::nullopt);
+		Locator::gameInterface::value().SetHandOnScreen(std::nullopt);
 		return;
 	}
 	const auto handEntity =
@@ -487,23 +488,23 @@ void Game::UpdateHandToolTipAnchor()
 	const auto* handTransform = Locator::entitiesRegistry::value().TryGet<const ecs::components::Transform>(handEntity);
 	if (handTransform == nullptr)
 	{
-		_interface->SetHandOnScreen(std::nullopt);
+		Locator::gameInterface::value().SetHandOnScreen(std::nullopt);
 		return;
 	}
 	// At the hand as drawn this frame, wherever the pointer is
 	const auto& camera = Locator::camera::value();
 	const auto hand = gui::world_tooltip::HandOnScreen(camera.GetViewProjectionMatrix(), camera.GetNearClip(),
 	                                                   handTransform->position, Locator::windowing::value().GetSize());
-	_interface->SetHandOnScreen(hand.has_value() ? std::optional(glm::vec2(*hand)) : std::nullopt);
+	Locator::gameInterface::value().SetHandOnScreen(hand.has_value() ? std::optional(glm::vec2(*hand)) : std::nullopt);
 }
 
 void Game::ProcessHandToolTipTurn()
 {
-	if (!_interface || (Locator::temple::has_value() && Locator::temple::value().Active()))
+	if (!Locator::gameInterface::has_value() || (Locator::temple::has_value() && Locator::temple::value().Active()))
 	{
 		return;
 	}
-	auto& toolTips = _interface->GetToolTips();
+	auto& toolTips = Locator::gameInterface::value().GetToolTips();
 	// The shown tooltip's display time runs down only while the player may turn the camera
 	const bool displayTimeRuns = !Locator::cameraHelpSystem::has_value() ||
 	                             (Locator::cameraHelpSystem::value().Get().features & camera_help::feature::k_Rotate) != 0;
@@ -545,7 +546,8 @@ void Game::ProcessHandToolTipTurn()
 		}
 	}
 	const auto pointed = Locator::pickingSystem::has_value() ? Locator::pickingSystem::value().GetPick().object : std::nullopt;
-	const bool shown = !_interface->IsDialogOpen() && Locator::cinematicDirectorSystem::value().IsInterfaceActive();
+	const bool shown =
+	    !Locator::gameInterface::value().IsDialogOpen() && Locator::cinematicDirectorSystem::value().IsInterfaceActive();
 	if (shown)
 	{
 		SubmitHandToolTips(toolTips, pointed);
@@ -1132,9 +1134,9 @@ void Game::UpdateDrawnHand(std::chrono::microseconds deltaTime, Profiler& profil
 {
 	// Put away, it stays where it was and does nothing until it comes back. The creature's panel is wanted afresh
 	// every frame, so with the hand away (a cut scene, a menu) it isn't left up from before
-	if (!IsHandDrawn() && _interface)
+	if (!IsHandDrawn() && Locator::gameInterface::has_value())
 	{
-		_interface->SetCreaturePanel(std::nullopt);
+		Locator::gameInterface::value().SetCreaturePanel(std::nullopt);
 	}
 	if (IsHandDrawn())
 	{
@@ -1820,11 +1822,11 @@ void Game::UpdateHandNavigation(const ecs::components::Transform& handTransform)
 
 void Game::UpdateHandTricons(bool handDrawn, float seconds, hand_blend::HandMode mode)
 {
-	if (!_interface)
+	if (!Locator::gameInterface::has_value())
 	{
 		return;
 	}
-	_interface->SetHandTricons(std::nullopt);
+	Locator::gameInterface::value().SetHandTricons(std::nullopt);
 	// Shown from the world camera, or from a tutorial demonstration's recording in any camera, out of the temple
 	const auto& camera = Locator::camera::value();
 	const auto cues = camera.GetModel().GetHandCues();
@@ -1918,7 +1920,7 @@ void Game::UpdateHandTricons(bool handDrawn, float seconds, hand_blend::HandMode
 	const bool scoopsLockedThing =
 	    Locator::handGrabSystem::has_value() && Locator::handGrabSystem::value().GetLockedOn().has_value();
 	tricons.handStateShowsIcons = hand_blend::AllowsCameraIcons(mode, scoopsLockedThing);
-	_interface->SetHandTricons(tricons);
+	Locator::gameInterface::value().SetHandTricons(tricons);
 }
 
 void Game::OrientHand(ecs::components::Transform& handTransform, const glm::mat3& facingCamera, glm::vec3 surfaceUp)
@@ -2188,7 +2190,7 @@ void Game::PlayHandGrabSound()
 
 bool Game::IsHandDrawn() const
 {
-	return hand_visibility::IsShown(_interface && _interface->IsDialogOpen(),
+	return hand_visibility::IsShown(Locator::gameInterface::has_value() && Locator::gameInterface::value().IsDialogOpen(),
 	                                Locator::cinematicDirectorSystem::value().IsInterfaceActive(),
 	                                Locator::temple::has_value() && Locator::temple::value().Active());
 }
