@@ -312,7 +312,8 @@ private:
 		}
 		if (objects->IsDryLand(centre))
 		{
-			objects->AddRubbleMark(centre);
+			// The rubble's yaw comes from the effect's own numbers, before the rocks take theirs
+			objects->AddRubbleMark(centre, effect.Random(k_TwoPi));
 		}
 		else
 		{
