@@ -230,6 +230,26 @@ void testbed_scenarios::AddHandLookScenarios(std::vector<Scenario>& all)
 	    .repeatFrom = 0,
 	});
 
+	// In the temple, the hand leans forwards or backwards only while the smoothed cursor is not at the top row
+	constexpr float k_TopRowRest = 12.0f;
+	all.push_back({
+	    .id = "hand.temple_top_row_lean",
+	    .name = "The temple hand at the top row of the window",
+	    .facet = Facet::Hand,
+	    .description = "The player goes into the main room of the temple. The pointer rests in the middle of the window, "
+	                   "then at the top row of the window for twelve seconds, then in the middle again.",
+	    .expected = "When the pointer goes up, the hand leans as it trails the pointer. At the top row, the hand settles "
+	                "in about eight seconds. Then it has no forward or backward lean: its pose changes a small "
+	                "amount and stays. When the pointer goes down again, the forward lean comes back.",
+	    .environment = {.dispenserGrid = false, .cursor = k_Cursor},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 40.0f, 0.0f}, .look = {-100.0f, 65.0f, -100.0f}},
+	    .temples = {{.offset = {-300.0f, 100.0f}, .angle = 36.0f}},
+	    .commands = {{.kind = Kind::EnterTemple, .delaySeconds = 2.0f, .value = 3},
+	                 {.kind = Kind::PointerTo, .delaySeconds = 6.0f, .point = {0.5f, 0.5f}},
+	                 {.kind = Kind::PointerTo, .delaySeconds = 3.0f, .point = {0.5f, 0.0f}},
+	                 {.kind = Kind::PointerTo, .delaySeconds = k_TopRowRest, .point = {0.5f, 0.5f}}},
+	});
+
 	// At the edge of the screen the empty hand offers to turn the camera and stands up towards where the camera looks
 	all.push_back({
 	    .id = "hand.focus_lean",
