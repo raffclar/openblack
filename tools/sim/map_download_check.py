@@ -450,8 +450,8 @@ def web_client(options, out, state, ports, account, seconds, processes):
 
 
 def web_lines(out, game):
-    """The lines of the web console that the check needs, kept before the console log goes"""
-    path = os.path.join(out, "web", "console.log")
+    """The lines of the game log of the web run that the check needs. The next run of cdp-run.mjs writes over the log."""
+    path = os.path.join(out, "web", "page-log.txt")
     keep = ("has the land of the game", "turns compared with the server", "starts the game on",
             "Could not get", "Joined the game server")
     lines = []
