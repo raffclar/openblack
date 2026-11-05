@@ -15,6 +15,7 @@
 #include <glm/geometric.hpp>
 #include <gtest/gtest.h>
 
+#include "ECS/SpellCreator.h"
 #include "InfoConstants.h"
 #include "Magic/AreaEffect.h"
 #include "Magic/CastInput.h"
@@ -519,6 +520,49 @@ TEST(AreaEffect, TheApplierIsWhatAppliedTheEffectElseTheCastingCreature)
 	// A fall onto the land, and a player's miracle
 	EXPECT_EQ(ApplierOf({.appliedBy = entt::entity {entt::null}}), entt::entity {entt::null});
 	EXPECT_EQ(ApplierOf({.player = PlayerNames::PLAYER_ONE}), entt::entity {entt::null});
+}
+
+TEST(SpellSource, AMiracleIsAppliedByTheThingThatMadeItElseByItsPlayer)
+{
+	using ecs::components::Spell;
+	using ecs::components::SpellCaster;
+	using Kind = SpellCaster::Kind;
+	const auto creature = static_cast<entt::entity>(3);
+	const auto icon = static_cast<entt::entity>(5);
+	const auto makeSpell = [](const SpellCaster& caster) {
+		Spell spell {.magicType = MagicType::LightningBolt, .caster = caster};
+		spell.creator = ecs::spell_creator::CreatorOf(caster);
+		return spell;
+	};
+	// A creature's miracle: the creature applies it
+	const auto byCreature =
+	    spells::SourceOf(makeSpell({.kind = Kind::Creature, .player = PlayerNames::PLAYER_ONE, .entity = creature}));
+	EXPECT_EQ(byCreature.appliedBy, std::optional(creature));
+	EXPECT_EQ(ApplierOf(byCreature), creature);
+	EXPECT_FALSE(byCreature.appliedByPlayer);
+	// A seed that a spell icon made: the icon applies it, not the player
+	const auto byIcon = spells::SourceOf(
+	    makeSpell({.kind = Kind::Player, .player = PlayerNames::PLAYER_ONE, .madeBySpellIcon = true, .icon = icon}));
+	EXPECT_EQ(byIcon.appliedBy, std::optional(icon));
+	EXPECT_FALSE(byIcon.appliedByPlayer);
+	EXPECT_FALSE(AppliedByOwnPlayer(byIcon, PlayerNames::PLAYER_ONE));
+	// A seed that no icon made, as from a globe: the player applies it, and no thing does
+	const auto byPlayer =
+	    spells::SourceOf(makeSpell({.kind = Kind::Player, .player = PlayerNames::PLAYER_ONE, .withoutIcon = true}));
+	EXPECT_EQ(byPlayer.appliedBy, std::optional(entt::entity {entt::null}));
+	EXPECT_TRUE(byPlayer.appliedByPlayer);
+	EXPECT_TRUE(AppliedByOwnPlayer(byPlayer, PlayerNames::PLAYER_ONE));
+	EXPECT_FALSE(AppliedByOwnPlayer(byPlayer, PlayerNames::PLAYER_TWO));
+	// A script's miracle for the neutral player
+	EXPECT_TRUE(spells::SourceOf(makeSpell({.kind = Kind::Player})).appliedByPlayer);
+	// The maker gone: nothing applies it, and no creature counts what it destroys
+	auto orphan = makeSpell({.kind = Kind::Creature, .player = PlayerNames::PLAYER_ONE, .entity = creature});
+	orphan.creator = entt::null;
+	const auto byNothing = spells::SourceOf(orphan);
+	EXPECT_EQ(byNothing.appliedBy, std::optional(entt::entity {entt::null}));
+	EXPECT_EQ(ApplierOf(byNothing), entt::entity {entt::null});
+	EXPECT_FALSE(byNothing.appliedByPlayer);
+	EXPECT_EQ(byNothing.player, PlayerNames::PLAYER_ONE);
 }
 
 TEST(AreaEffect, HeatCountsOnlyWithAChangeOfLifeAndInFull)

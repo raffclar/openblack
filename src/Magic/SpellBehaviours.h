@@ -193,7 +193,8 @@ void ProcessTurn(SpellServicesInterface& services, ecs::components::Spell& spell
 /// Whether it is a flock that made fewer animals than its total
 [[nodiscard]] bool MakesAnimals(SpellServicesInterface& services, const ecs::components::Spell& spell);
 
-/// Who its effects come from, whose alignment they move
+/// Who its effects come from, whose alignment they move, and what applies them: the thing that made it, or else its player
+/// when no spell icon made its seed
 [[nodiscard]] EffectSource SourceOf(const ecs::components::Spell& spell);
 
 /// Whether what it has left is enough to cast it again from its seed: food and wood need enough for their first grain,

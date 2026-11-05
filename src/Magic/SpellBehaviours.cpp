@@ -510,9 +510,14 @@ bool spells::MakesAnimals(SpellServicesInterface& services, const Spell& spell)
 
 EffectSource spells::SourceOf(const Spell& spell)
 {
+	using Kind = ecs::components::SpellCaster::Kind;
+	// The thing that made the miracle applies its effects. A player's miracle that no spell icon made has the player as
+	// its maker, which is not a thing.
+	const bool byPlayer = spell.creator == entt::null && spell.caster.kind == Kind::Player && !spell.caster.madeBySpellIcon;
 	return {.player = spell.caster.player,
-	        .casterCreature =
-	            spell.caster.kind == ecs::components::SpellCaster::Kind::Creature ? spell.caster.entity : entt::null,
+	        .casterCreature = spell.caster.kind == Kind::Creature ? spell.caster.entity : entt::null,
+	        .appliedBy = spell.creator,
+	        .appliedByPlayer = byPlayer,
 	        .magicType = spell.magicType};
 }
 

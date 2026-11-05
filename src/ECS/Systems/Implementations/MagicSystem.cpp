@@ -583,28 +583,26 @@ std::vector<magic::EffectReceiver> GameMagicWorld::ReceiversIn(const magic::Cell
 	return receivers;
 }
 
-/// What harmed a town, for the cry of its people: the thing that applied the harm, or else the miracle
+/// What harmed a town, for the cry of its people: the thing that applied the harm. A miracle applies its harm through
+/// the thing that made it. Thus only a lightning bolt miracle that is itself the maker gives the cry of lightning.
 static guidance::Attacker CryAttacker(const ecs::Registry& registry, const magic::EffectSource& source)
 {
-	if (source.appliedBy.has_value())
+	const auto thing = source.appliedBy.value_or(entt::null);
+	if (thing == entt::null || !registry.Valid(thing))
 	{
-		const auto thing = *source.appliedBy;
-		if (thing == entt::null || !registry.Valid(thing))
-		{
-			return guidance::Attacker::Other;
-		}
-		if (registry.AllOf<Creature>(thing))
-		{
-			return guidance::Attacker::Creature;
-		}
-		if (ecs::object_physics::IsRock(thing) || registry.AnyOf<DeadTree, BuildingPiece>(thing))
-		{
-			return guidance::Attacker::Rock;
-		}
 		return guidance::Attacker::Other;
 	}
-	if (source.magicType.has_value() && Locator::infoConstants::has_value() &&
-	    magic::GetMagicInfo(Locator::infoConstants::value(), *source.magicType).spellSeedType == SpellSeedType::LightningBolt)
+	if (registry.AllOf<Creature>(thing))
+	{
+		return guidance::Attacker::Creature;
+	}
+	if (ecs::object_physics::IsRock(thing) || registry.AnyOf<DeadTree, BuildingPiece>(thing))
+	{
+		return guidance::Attacker::Rock;
+	}
+	const auto* spell = registry.TryGet<const Spell>(thing);
+	if (spell != nullptr && Locator::infoConstants::has_value() &&
+	    magic::GetMagicInfo(Locator::infoConstants::value(), spell->magicType).spellSeedType == SpellSeedType::LightningBolt)
 	{
 		return guidance::Attacker::Lightning;
 	}
@@ -626,9 +624,10 @@ void GameMagicWorld::Apply(const magic::EffectValues& values, std::span<const ma
 	{
 		cry = guidance::TownAttackVoice {.fire = *fire, .attacker = CryAttacker(registry, source)};
 	}
-	// What applied the effect, when no miracle did: none for a fall onto the land
-	const bool appliedByNothing =
-	    source.appliedBy.has_value() && (*source.appliedBy == entt::null || !PositionOf(*source.appliedBy).has_value());
+	// No thing that stands somewhere applied the effect: a fall onto the land, a miracle whose maker is gone, or a
+	// miracle that its player applied themself
+	const auto applier = source.appliedBy.value_or(entt::null);
+	const bool appliedByNothing = applier == entt::null || !PositionOf(applier).has_value();
 	ecs::GamePhysicsHooksWorld hooksWorld;
 	for (const auto& outcome : outcomes)
 	{
@@ -701,9 +700,7 @@ void GameMagicWorld::Apply(const magic::EffectValues& values, std::span<const ma
 		// somewhere, else to the thing itself, for the thing's player
 		if (outcome.crushed && Locator::reactionSystem::has_value() && !Locator::reactionSystem::value().HasReaction(entity))
 		{
-			const auto initiator = byCreature                                          ? actingCreature
-			                       : source.appliedBy.has_value() && !appliedByNothing ? *source.appliedBy
-			                                                                           : entity;
+			const auto initiator = byCreature ? actingCreature : !appliedByNothing ? applier : entity;
 			if (const auto position = initiator == entity ? positionBefore : PositionOf(initiator))
 			{
 				Locator::reactionSystem::value().Create({.initiator = initiator,
@@ -714,13 +711,12 @@ void GameMagicWorld::Apply(const magic::EffectValues& values, std::span<const ma
 				                                         .onCast = true});
 			}
 		}
-		// Harm done to a town's people or buildings counts as an attack on the town by whoever did it, when something
-		// applied it. A villager that died and a building that went no longer have a town.
+		// Harm done to a town's people or buildings counts as an attack on the town by whoever did it, when a thing that
+		// stands somewhere applied it. A villager that died and a building that went no longer have a town.
 		if (outcome.aggression && !appliedByNothing)
 		{
 			const auto target = stays ? ecs::world_objects::TownAttackTargetOf(entity) : keptTown;
-			const bool appliedByCreature = source.appliedBy.has_value() && registry.Valid(*source.appliedBy) &&
-			                               registry.AllOf<Creature>(*source.appliedBy);
+			const bool appliedByCreature = registry.AllOf<Creature>(applier);
 			// The town keeps the values of the effect itself, before the defence of what it struck
 			const ecs::town_aggression::Harm harm {.burn = values[magic::EffectKind::Burn],
 			                                       .crush = values[magic::EffectKind::Crush],

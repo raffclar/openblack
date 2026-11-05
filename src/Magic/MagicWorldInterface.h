@@ -31,10 +31,15 @@ struct EffectSource
 	PlayerNames player {PlayerNames::NEUTRAL};
 	/// The creature that cast it, if a creature did: its own alignment moves rather than its player's
 	entt::entity casterCreature {entt::null};
-	/// What applied it when no miracle did, such as the thing a blow came from: none at all for a fall onto the land.
-	/// Without it, the miracle's own rules hold. With it, the people round react to it rather than to what it struck,
-	/// and a town counts an attack only when something applied the harm
+	/// What applied it: the thing a blow came from, or the thing that made the miracle (a creature, an object or the
+	/// spell icon that made the seed). None at all for a fall onto the land, or for a miracle whose maker is gone. With
+	/// it, the people round react to it rather than to what it struck, and a town counts an attack only when a thing
+	/// that stands somewhere applied the harm. Without it, nothing applied the effect.
 	std::optional<entt::entity> appliedBy;
+	/// The effect's player applied it, and no thing did: a miracle from a seed that no spell icon made, or a script's
+	/// miracle with no thing to cast it. Nobody reacts to the player and no town counts an attack. The creature of that
+	/// player is not frightened by it.
+	bool appliedByPlayer {false};
 	/// The effect comes from no player at all, as a fall nobody caused: no player's alignment moves and nobody is
 	/// remembered for the harm
 	bool playerless {false};
@@ -56,6 +61,13 @@ struct EffectSource
 [[nodiscard]] constexpr entt::entity ApplierOf(const EffectSource& source)
 {
 	return source.appliedBy.value_or(source.casterCreature);
+}
+
+/// Whether the player of this creature applied the effect themself: then the creature does not become frightened or
+/// angry, and in a fight a harmless effect still reaches it
+[[nodiscard]] constexpr bool AppliedByOwnPlayer(const EffectSource& source, PlayerNames owner)
+{
+	return source.appliedByPlayer && source.player == owner;
 }
 
 /// A drop of the water miracle's rain

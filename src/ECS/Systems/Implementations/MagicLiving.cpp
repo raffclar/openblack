@@ -312,9 +312,10 @@ void CutAndScarred(entt::entity entity, float damage, const magic::EffectValues&
 		return;
 	}
 	const float harm = std::clamp(damage, 0.0f, 1.0f);
-	// Only a player applying the effect themselves spares their own creature this; a thing that strikes it never does
+	// Only its own player, when the player applied the effect themself, spares the creature this. A thing that applied
+	// it never does, also a spell icon of its own player, and nor does an effect that nothing applied.
 	auto* mind = registry.TryGet<CreatureMindState>(entity);
-	if (mind != nullptr && mind->desires.has_value() && (source.appliedBy.has_value() || source.player != creature->owner))
+	if (mind != nullptr && mind->desires.has_value() && !magic::AppliedByOwnPlayer(source, creature->owner))
 	{
 		creature_desires::ChangeSource(*mind->desires, creature_desires::sources::k_FearFromDamage, harm);
 		creature_desires::ChangeSource(*mind->desires, creature_desires::sources::k_AngerFromDamage, harm);
@@ -371,8 +372,9 @@ bool magic_living::TakesEffectItsOwnWay(entt::entity entity, const magic::Effect
 	}
 	auto* fighting = registry.TryGet<CreatureFighting>(entity);
 	const bool inDuel = fighting != nullptr && fighting->stage == CreatureFighting::Stage::Duel;
-	// In a fight a miracle that does no harm, such as a heal, reaches it only from itself or its own player's hand
-	const bool ownPlayers = source.casterCreature == entt::null && source.player == registry.Get<const Creature>(entity).owner;
+	// In a fight a miracle that does no harm, such as a heal, reaches it only from itself, or from its own player when
+	// the player applied it themself
+	const bool ownPlayers = magic::AppliedByOwnPlayer(source, registry.Get<const Creature>(entity).owner);
 	if (damage <= 0.0f && !self && inDuel && !ownPlayers)
 	{
 		fight_transcript::Note(entity, "miracle_hit", [&] {
