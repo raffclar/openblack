@@ -260,6 +260,7 @@ float storm::CostToMaintain(float plainCost, float radius, float radiusForNormal
 	{
 		return plainCost;
 	}
+	// Square the share first. Then multiply the plain upkeep by the result.
 	const float share = radius / radiusForNormalCost;
-	return plainCost * share * share;
+	return plainCost * (share * share);
 }

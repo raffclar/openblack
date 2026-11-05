@@ -8,7 +8,9 @@
  *******************************************************************************/
 
 #include <cmath>
+#include <cstdint>
 
+#include <bit>
 #include <map>
 #include <memory>
 #include <optional>
@@ -354,6 +356,8 @@ TEST(SpellRules, AShieldsSizeIsClampedAndItsUpkeepGrowsWithItsArea)
 	EXPECT_FLOAT_EQ(ClampShieldRadius(shield, 5000.0f), 1000.0f);
 	EXPECT_FLOAT_EQ(ShieldCostToMaintain(20.0f, 30.0f, 30.0f), 20.0f);
 	EXPECT_FLOAT_EQ(ShieldCostToMaintain(20.0f, 60.0f, 30.0f), 80.0f);
+	// One multiplication by the squared share gives one bit more than 0.4
+	EXPECT_EQ(std::bit_cast<uint32_t>(ShieldCostToMaintain(10.0f, 6.0f, 30.0f)), 0x3ECCCCCEu);
 }
 
 TEST(SpellRules, TheWaterRainsWiderForItsPowerUp)
@@ -689,6 +693,16 @@ TEST(SpellBehaviours, TheHealCanOnlyBeCastWhereThereIsSomeoneToHeal)
 	EXPECT_FALSE(spells::CanCastAt(services, MagicType::Heal, PlayerNames::PLAYER_ONE, {100.0f, 0.0f, 100.0f}, false));
 	services.world.objects[static_cast<entt::entity>(1)] = {100.0f, 0.0f, 100.0f};
 	EXPECT_TRUE(spells::CanCastAt(services, MagicType::Heal, PlayerNames::PLAYER_ONE, {100.0f, 0.0f, 100.0f}, false));
+}
+
+TEST(SpellBehaviours, AHealWhoseTableGivesNoNumberHealsNobody)
+{
+	auto info = MakeTables();
+	info->magicHeal.at(0).dummyVar = 10.0f;
+	info->magicHeal.at(0).maxToHeal = 0;
+	FakeServices services(*info);
+	services.world.objects[static_cast<entt::entity>(1)] = {100.0f, 0.0f, 100.0f};
+	EXPECT_FALSE(spells::CanCastAt(services, MagicType::Heal, PlayerNames::PLAYER_ONE, {100.0f, 0.0f, 100.0f}, false));
 }
 
 TEST(SpellBehaviours, TheCastRulesAskForLandAndInfluence)
