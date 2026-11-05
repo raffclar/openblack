@@ -496,7 +496,6 @@ void CreatureMindSystem::StartPlanAgain(entt::entity creature, CreatureMindState
 	mind.planActive = true;
 	mind.planSerial = mind.idle.serial;
 	mind.agendaSeen = mind.idle.serial;
-	mind.satisfiedByEffect = false;
 	mind.desireSeenTo = false;
 	if (contextRunning)
 	{
@@ -1037,7 +1036,6 @@ void CreatureMindSystem::ForceCatch(entt::entity creature, entt::entity object)
 	mind->planActive = true;
 	mind->planSerial = mind->idle.serial;
 	mind->agendaSeen = mind->idle.serial;
-	mind->satisfiedByEffect = false;
 	mind->desireSeenTo = false;
 	if (!mind->desires.has_value())
 	{
@@ -1115,7 +1113,6 @@ bool CreatureMindSystem::TakeFromHand(entt::entity creature, entt::entity object
 	mind->planForced = true;
 	mind->planSerial = mind->idle.serial;
 	mind->agendaSeen = mind->idle.serial;
-	mind->satisfiedByEffect = false;
 	mind->desireSeenTo = false;
 	creature_learning::SuppressOpposed(*mind->desires, Desire::Curiosity, tables->dependencies, k_TurnsPerSecond);
 	return true;

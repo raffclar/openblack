@@ -80,3 +80,9 @@ void creature_drink::NoPlaceFound(creature_desires::Desires& desires, float turn
 	creature_desires::Suppress(desires, Desire::Water, k_NoPlaceSuppressSeconds, turnsPerSecond);
 	creature_desires::Suppress(desires, Desire::GetColder, k_NoPlaceSuppressSeconds, turnsPerSecond);
 }
+
+float creature_drink::Drank(creature_desires::Desires& desires, float turnsPerSecond)
+{
+	creature_desires::Suppress(desires, creature_desires::Desire::Water, k_DrankSuppressSeconds, turnsPerSecond);
+	return k_DrankTemperature;
+}

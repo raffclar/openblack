@@ -8,8 +8,10 @@
  *******************************************************************************/
 
 #include <cstddef>
+#include <cstdint>
 
 #include <array>
+#include <bit>
 #include <filesystem>
 #include <limits>
 #include <vector>
@@ -193,4 +195,39 @@ TEST(InfluenceRules, OnlyThePathOfTheTestbedIsTheTestbed)
 	EXPECT_FALSE(IsTestbedPath(std::filesystem::path()));
 	EXPECT_FALSE(IsTestbedPath(std::filesystem::path("Scripts/Land1.txt")));
 	EXPECT_FALSE(IsTestbedPath(std::filesystem::path(u8"t\u00e9stbed")));
+}
+
+TEST(InfluenceRules, ABuildingAddsItsSizeOnceForItselfAndOnceForEachPerson)
+{
+	using openblack::influence_rules::OfBuilding;
+	// Half built, twice the scale, three quarters of its life, three people
+	EXPECT_EQ(OfBuilding({.built = 0.5f, .scale = 2.0f, .life = 0.75f, .influence = 25.0f, .people = 3}), 75.0f);
+	// A miracle dispenser has no people: it adds its size once
+	EXPECT_EQ(OfBuilding({.built = 1.0f, .scale = 1.0f, .life = 1.0f, .influence = 25.0f, .people = 0}), 25.0f);
+	// A building with no life left or with nothing built adds nothing
+	EXPECT_EQ(OfBuilding({.built = 1.0f, .scale = 1.0f, .life = 0.0f, .influence = 25.0f, .people = 2}), 0.0f);
+	EXPECT_EQ(OfBuilding({.built = 0.0f, .scale = 1.0f, .life = 1.0f, .influence = 25.0f, .people = 2}), 0.0f);
+}
+
+TEST(InfluenceRules, TheStepsOfTheInfluenceOfABuildingRoundInTheGameOrder)
+{
+	// Scale times built part, then times life, then times the row's influence, then times the people and one. Each
+	// step rounds to a float. Another order gives 0x40DCA4A5.
+	const float influence = openblack::influence_rules::OfBuilding(
+	    {.built = 0.238f, .scale = 1.044f, .life = 0.37f, .influence = 25.0f, .people = 2});
+	EXPECT_EQ(std::bit_cast<uint32_t>(influence), 0x40DCA4A6u);
+}
+
+TEST(InfluenceRules, TheTownAddsItsBuildingsToItsBaseOneAtATimeThenTheMultiplier)
+{
+	using openblack::influence_rules::AddBuilding;
+	using openblack::influence_rules::TimesMultiplier;
+	// The base comes first: a large base swallows each small building alone
+	float sum = 16777216.0f;
+	sum = AddBuilding(sum, 1.0f);
+	sum = AddBuilding(sum, 1.0f);
+	EXPECT_EQ(sum, 16777216.0f);
+	// The buildings first would give more
+	EXPECT_EQ(AddBuilding(AddBuilding(1.0f, 1.0f), 16777216.0f), 16777218.0f);
+	EXPECT_EQ(TimesMultiplier(30.0f, 0.5f), 15.0f);
 }

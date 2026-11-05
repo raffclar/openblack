@@ -49,6 +49,12 @@ void creature_feedback::Touched(StrokeClocks& clocks)
 	clocks.ready = k_ReadyAfterTouchMs;
 }
 
+void creature_feedback::Stroked(StrokeClocks& clocks)
+{
+	Touched(clocks);
+	clocks.sinceHold = 0.0f;
+}
+
 bool creature_feedback::SlapReady(const StrokeClocks& clocks)
 {
 	return clocks.sinceHold > k_SlapReadyMs;
@@ -73,11 +79,13 @@ std::optional<Slap> creature_feedback::ClassifySlap(float handHeight, float spee
 		return std::nullopt;
 	}
 	const auto height = handHeight / creatureHeight;
-	if (height <= 0.0f || height >= k_SlapAbove)
+	if (height <= 0.0f || !x87::Less(height, k_SlapAbove))
 	{
 		return std::nullopt;
 	}
-	const auto band = height < k_FeetBelow ? SlapBand::Feet : height < k_WaistBelow ? SlapBand::Waist : SlapBand::Head;
+	const auto band = x87::Less(height, k_FeetBelow)    ? SlapBand::Feet
+	                  : x87::Less(height, k_WaistBelow) ? SlapBand::Waist
+	                                                    : SlapBand::Head;
 	auto animation = band == SlapBand::Feet ? k_SlapFeet : band == SlapBand::Waist ? k_SlapWaist : k_SlapHead;
 	const bool gentle = speed < k_HardSlapSpeed * creatureHeight;
 	if (gentle)

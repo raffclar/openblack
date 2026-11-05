@@ -174,9 +174,6 @@ constexpr auto k_WholeTurnsPerSecond = static_cast<uint32_t>(1000 / TimeSystemIn
 /// A creature just put in the world takes its first few turns to stand up before it can pass out
 constexpr uint32_t k_TurnsBeforePassingOut = 2;
 
-/// The desire to show how it is grows with all its desires added up, fully at this much
-constexpr float k_ManifestSum = 3.0f;
-
 float Clamp01(float value)
 {
 	return std::clamp(value, 0.0f, 1.0f);
@@ -353,12 +350,15 @@ void TakeWrittenSources(entt::entity entity, CreatureMindState& mind)
 	{
 		return;
 	}
-	auto* body = Locator::entitiesRegistry::value().TryGet<Creature>(entity);
+	auto& registry = Locator::entitiesRegistry::value();
+	auto* body = registry.TryGet<Creature>(entity);
+	auto* needs = registry.TryGet<CreatureNeeds>(entity);
 	const creature_desire_sources::Written written {
 	    .innate = &mind.innate,
 	    .attention = &mind.attention,
 	    .interest = &mind.playerInterest,
 	    .mushroomsEaten = body != nullptr ? &body->magicMushroomsEaten : nullptr,
+	    .needs = needs != nullptr ? &needs->needs : nullptr,
 	    .turnsPerSecond = k_WholeTurnsPerSecond,
 	};
 	for (const auto& [type, value] : std::exchange(mind.desires->written, {}))
@@ -414,7 +414,7 @@ std::optional<float> ReadSource(uint32_t type, const creature_desires::Desires& 
 	switch (type)
 	{
 	case sources::k_ManifestState:
-		return Clamp01(desires.sum / k_ManifestSum);
+		return creature_desire_sources::ManifestState(desires.sum);
 	case sources::k_RunAwayFromPlayer:
 		return Clamp01(-mind.attitudeToPlayer);
 	case sources::k_AngerFromSadness:
@@ -451,21 +451,33 @@ float DesireFloorOf(entt::entity creature)
 	return row < species.size() ? species.at(row).desireFloor : 0.0f;
 }
 
-/// Having done an action, the desire it satisfies is less, by the game's action table
-void Lessen(entt::entity creature, creature_desires::Desires& desires, std::string_view action)
+std::optional<creature_desires::ActionLessening> LesseningOf(std::string_view action)
 {
 	if (!Locator::infoConstants::has_value())
 	{
-		return;
+		return std::nullopt;
 	}
 	const auto& actions = Locator::infoConstants::value().creatureAction;
 	const auto found = std::ranges::find_if(actions, [action](const auto& row) {
 		return std::string_view(row.name.data(), strnlen(row.name.data(), row.name.size())) == action;
 	});
-	if (found != actions.end() && found->desire < creature_desires::k_DesireCount)
+	if (found == actions.end() || found->desire >= creature_desires::k_DesireCount)
 	{
-		creature_desires::LessenAfterAction(desires, static_cast<Desire>(found->desire), found->desireMultiplier,
-		                                    DesireFloorOf(creature));
+		return std::nullopt;
+	}
+	return creature_desires::ActionLessening {
+	    .desire = static_cast<Desire>(found->desire),
+	    .multiplier = found->desireMultiplier,
+	    .always = found->alwaysApplies != 0,
+	};
+}
+
+/// Having done an action, the desire it satisfies is less, by the game's action table
+void Lessen(entt::entity creature, creature_desires::Desires& desires, std::string_view action)
+{
+	if (const auto lessening = LesseningOf(action); lessening.has_value())
+	{
+		creature_desires::LessenAfterAction(desires, lessening->desire, lessening->multiplier, DesireFloorOf(creature));
 	}
 }
 
@@ -532,11 +544,9 @@ void CreatureMindSystem::MindTurn(entt::entity entity)
 	}
 	++mind.turn;
 	// What scripts set its sources to since the last turn lasts: what each source follows takes the value
-	TakeWrittenSources(entity, mind);
+	mind_detail::TakeWrittenSources(entity, mind);
 	// How interesting it finds its player follows the hand, also while the hand holds it
 	creature_desire_sources::UpdateInterest(mind.playerInterest, PlayerInterestNow(creature, mind));
-	// What it thinks its player wants fades
-	creature_perceived_desires::Fade(mind.perceivedDesires);
 	if (mind.learnt.has_value())
 	{
 		creature_learning::Age(mind.learnt->contexts, k_TurnSeconds);
@@ -568,6 +578,8 @@ void CreatureMindSystem::MindTurn(entt::entity entity)
 		{
 			++mind.turnsLookedAt;
 		}
+		// What it thinks its player wants fades, but not while the hand holds it
+		creature_perceived_desires::Fade(mind.perceivedDesires);
 		SweepEyes(entity, creature, mind, animation, transform);
 	}
 	if (mind.feedbackSeconds.has_value())
@@ -636,7 +648,7 @@ void CreatureMindSystem::DesiresTurn(entt::entity entity)
 		                                [&mind, &body, night, &state](uint32_t type, const creature_desires::Desires& desires) {
 			                                return ReadSource(type, desires, mind, body, night, state);
 		                                });
-		creature_desires::UpdateDesires(*mind.desires, k_TurnsPerSecond);
+		creature_desires::UpdateDesires(*mind.desires, k_TurnsPerSecond, DesireFloorOf(entity));
 	}
 
 	// After a knock-out, it takes up reactions again once it lies out cold no more and the agenda it had at the
@@ -732,6 +744,15 @@ void CreatureMindSystem::DesiresTurn(entt::entity entity)
 	_acting.push_back(entity);
 }
 
+void CreatureMindSystem::TakeWrittenSources(entt::entity creature)
+{
+	auto* mind = Locator::entitiesRegistry::value().TryGet<CreatureMindState>(creature);
+	if (mind != nullptr)
+	{
+		mind_detail::TakeWrittenSources(creature, *mind);
+	}
+}
+
 void CreatureMindSystem::ChangeDesireSource(entt::entity creature, uint32_t type, float amount)
 {
 	auto* mind = Locator::entitiesRegistry::value().TryGet<CreatureMindState>(creature);
@@ -769,4 +790,5 @@ void CreatureMindSystem::ChangeDesires(entt::entity creature, const std::functio
 		mind->desiresPhase = mind->developmentPhase;
 	}
 	change(*mind->desires);
+	mind_detail::TakeWrittenSources(creature, *mind);
 }

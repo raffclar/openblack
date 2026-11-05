@@ -149,9 +149,8 @@ struct CreatureMindState
 	creature_planner::PlannerState planner {};
 	/// Which of a town's desires its compassion helps with
 	creature_town_compassion::State townCompassion {};
-	/// The agenda carries out the planner's plan; the step that ends it took down the desire already
+	/// The agenda carries out the planner's plan
 	bool planActive {false};
-	bool satisfiedByEffect {false};
 	/// A step of the plan saw to what its desire wanted, as putting out a fire does once it is out: the desire is less
 	/// when the plan ends, even for an action that doesn't lessen it by itself
 	bool desireSeenTo {false};

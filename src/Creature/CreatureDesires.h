@@ -212,9 +212,9 @@ using SourceReader = std::function<std::optional<float>(uint32_t type, const Des
 /// One game turn of the sources: each that follows the creature's state reads it, then every one is multiplied by its
 /// multiplier
 void UpdateSources(Desires& desires, const SourceReader& read);
-/// One game turn of the desires: each grows by its sources' drive, unless suppressed, else fades; clamped to 0 and its
-/// maximum
-void UpdateDesires(Desires& desires, float turnsPerSecond);
+/// One game turn of the desires: each grows by its sources' drive, unless suppressed, else fades. A value below the
+/// species' floor becomes the floor. Else, a value above the maximum of the desire becomes that maximum.
+void UpdateDesires(Desires& desires, float turnsPerSecond, float floor = 0.0f);
 /// The desire can't grow for some seconds, or longer if it already couldn't
 void Suppress(Desires& desires, Desire desire, float seconds, float turnsPerSecond);
 
@@ -226,6 +226,20 @@ void ClearSourcesAfterSatisfying(DesireState& desire);
 /// The desire is lessened after an action that lessens it: an activated desire is multiplied by the action's
 /// multiplier, and kept from the creature's floor for desires to its maximum
 void LessenAfterAction(Desires& desires, Desire desire, float multiplier, float floor);
+/// What the action of a plan does to a desire when the plan is complete, from the game's action table
+struct ActionLessening
+{
+	/// The desire that the action lessens
+	Desire desire;
+	/// The value that the desire is multiplied by
+	float multiplier;
+	/// The action lessens the desire also when no step of the plan saw to it
+	bool always;
+};
+/// A complete plan counts one time towards the urge of the desire that it served. When this satisfies the urge, the
+/// clearable sources of that desire clear. Then the desire of the action is less when the action always lessens it or
+/// a step of the plan saw to the desire. True when the urge is satisfied.
+bool SeeToAfterPlan(Desires& desires, Desire served, const std::optional<ActionLessening>& action, bool seenTo, float floor);
 
 /// Every source of a type, in all the desires, goes up or down by an amount, staying from 0 to 1, as events push them
 void ChangeSource(Desires& desires, uint32_t type, float amount);

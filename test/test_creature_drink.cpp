@@ -84,3 +84,13 @@ TEST(CreatureDrink, NoPlaceToDrinkStopsTheWantOfWaterAndToGetColder)
 	EXPECT_EQ(desires[Desire::GetColder].suppressedTurns, 300u);
 	EXPECT_EQ(desires[Desire::Hunger].suppressedTurns, 0u);
 }
+
+TEST(CreatureDrink, AfterItDrinksItWantsNoWaterForTwentySecondsAndCools)
+{
+	creature_desires::Desires desires;
+	const float temperature = creature_drink::Drank(desires, 10.0f);
+	using creature_desires::Desire;
+	EXPECT_EQ(desires[Desire::Water].suppressedTurns, 200u);
+	EXPECT_EQ(desires[Desire::GetColder].suppressedTurns, 0u);
+	EXPECT_EQ(temperature, 0.0f);
+}

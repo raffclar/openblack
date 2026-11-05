@@ -120,7 +120,6 @@ void openblack::ecs::reflection::RegisterFields_Components_creaturem(entt::meta_
 	    .Field<&components::CreatureMindState::planner>("planner")
 	    .Field<&components::CreatureMindState::townCompassion>("townCompassion")
 	    .Field<&components::CreatureMindState::planActive>("planActive")
-	    .Field<&components::CreatureMindState::satisfiedByEffect>("satisfiedByEffect")
 	    .Field<&components::CreatureMindState::desireSeenTo>("desireSeenTo")
 	    .Field<&components::CreatureMindState::observedKinds>("observedKinds")
 	    .Field<&components::CreatureMindState::keptPlan>("keptPlan")

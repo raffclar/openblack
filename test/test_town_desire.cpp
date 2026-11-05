@@ -196,6 +196,29 @@ TEST_F(TownDesireTest, PlaytimeOnceAllIsWell)
 	EXPECT_FLOAT_EQ(td::DesireForPlaytime(Context()), 0.0f);
 }
 
+TEST_F(TownDesireTest, RepairAddsTheWornBuildingsInListOrder)
+{
+	// Three worn buildings whose wants give a different float sum in another order
+	_in.abodes = {
+	    {.life = 0.1f, .desireToBeRepaired = 0.1f},
+	    {.life = 0.1f, .desireToBeRepaired = 0.2f},
+	    {.life = 0.1f, .desireToBeRepaired = 0.15f},
+	};
+	float inOrder = 0.0f;
+	for (const auto& abode : _in.abodes)
+	{
+		inOrder = td::AbodeDesireToBeRepaired(abode, _town) + inOrder;
+	}
+	float reversed = 0.0f;
+	for (auto it = _in.abodes.rbegin(); it != _in.abodes.rend(); ++it)
+	{
+		reversed = td::AbodeDesireToBeRepaired(*it, _town) + reversed;
+	}
+	ASSERT_NE(inOrder, reversed);
+	EXPECT_EQ(td::DesireToRepair(Context()), inOrder);
+	EXPECT_EQ(td::DesireToRepair(Context()), 0.4275f);
+}
+
 TEST_F(TownDesireTest, SortedAsTheGameSorts)
 {
 	// The game's unstable quicksort leaves ties in its own order

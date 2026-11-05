@@ -738,9 +738,22 @@ float world_objects::ReduceLife(entt::entity object, float damage, std::optional
 		        script::property_rules::CanSetLife(life, HeldDuringCutscene(object), registry.AllOf<Indestructible>(object)));
 		return LifeOf(object);
 	}
+	// An animal loses life by the same rule
+	if (registry.AllOf<Animal>(object))
+	{
+		const float life = std::max(before - damage, 0.0f);
+		SetLife(object, life,
+		        script::property_rules::CanSetLife(life, HeldDuringCutscene(object), registry.AllOf<Indestructible>(object)));
+		return LifeOf(object);
+	}
 	auto& life = registry.AllOf<ObjectLife>(object) ? registry.Get<ObjectLife>(object)
 	                                                : registry.Assign<ObjectLife>(object, ObjectLife {.life = before});
-	life.life = std::max(life.life - damage, 0.0f);
+	// Anything else, a building too, also loses life as a script sets it
+	if (const float after = std::max(life.life - damage, 0.0f);
+	    script::property_rules::CanSetLife(after, HeldDuringCutscene(object), registry.AllOf<Indestructible>(object)))
+	{
+		life.life = after;
+	}
 	if (registry.AllOf<Abode>(object) && abode_knock::HurtBringsPeopleOut(life.life))
 	{
 		// Its people come out of a building left under its full life, however little it lost
@@ -1104,11 +1117,23 @@ void world_objects::Remove(entt::entity object)
 void world_objects::AttackTown(entt::entity object, float damage, PlayerNames aggressor, const town_aggression::Harm& harm,
                                bool byCreature, std::optional<guidance::TownAttackVoice> cry)
 {
+	if (const auto target = TownAttackTargetOf(object); target.has_value())
+	{
+		AttackTown(*target, damage, aggressor, harm, byCreature, cry);
+	}
+}
+
+std::optional<world_objects::TownAttackTarget> world_objects::TownAttackTargetOf(entt::entity object)
+{
 	if (!Locator::infoConstants::has_value())
 	{
-		return;
+		return std::nullopt;
 	}
 	auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(object))
+	{
+		return std::nullopt;
+	}
 	const auto& info = Locator::infoConstants::value();
 	entt::entity town = entt::null;
 	const GObjectInfo* kind = nullptr;
@@ -1149,8 +1174,21 @@ void world_objects::AttackTown(entt::entity object, float damage, PlayerNames ag
 	}
 	if (town == entt::null || !registry.Valid(town) || kind == nullptr)
 	{
+		return std::nullopt;
+	}
+	return TownAttackTarget {.town = town, .kind = kind};
+}
+
+void world_objects::AttackTown(const TownAttackTarget& target, float damage, PlayerNames aggressor,
+                               const town_aggression::Harm& harm, bool byCreature, std::optional<guidance::TownAttackVoice> cry)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto town = target.town;
+	if (!Locator::infoConstants::has_value() || !registry.Valid(town) || target.kind == nullptr || !registry.AllOf<Town>(town))
+	{
 		return;
 	}
+	const auto& info = Locator::infoConstants::value();
 	if (!ecs::town_aggression::CountsAsAttack(damage))
 	{
 		return;
@@ -1160,7 +1198,7 @@ void world_objects::AttackTown(entt::entity object, float damage, PlayerNames ag
 	{
 		Locator::guidanceSystem::value().TownAttackCry(town, *cry);
 	}
-	const float amount = ecs::town_aggression::AggressionFromDamage(damage, kind->aggressorValue);
+	const float amount = ecs::town_aggression::AggressionFromDamage(damage, target.kind->aggressorValue);
 	auto* aggression = registry.TryGet<TownAggression>(town);
 	if (aggression == nullptr)
 	{
@@ -1214,15 +1252,21 @@ float world_objects::IncreaseLife(entt::entity object, float amount)
 		return IncreaseLife(totem->townCentre, amount);
 	}
 	const float before = LifeOf(object);
-	if (auto* villager = registry.TryGet<Villager>(object))
+	// A villager or an animal gains life as a script sets it
+	if (registry.AnyOf<Villager, Animal>(object))
 	{
-		villager->life = std::min(villager->life + amount, 1.0f);
-		CountInjury(object, before, villager->life);
-		return villager->life;
+		const float life = std::min(before + amount, 1.0f);
+		SetLife(object, life,
+		        script::property_rules::CanSetLife(life, HeldDuringCutscene(object), registry.AllOf<Indestructible>(object)));
+		return LifeOf(object);
 	}
 	auto& life = registry.AllOf<ObjectLife>(object) ? registry.Get<ObjectLife>(object)
 	                                                : registry.Assign<ObjectLife>(object, ObjectLife {.life = before});
-	life.life = std::min(life.life + amount, 1.0f);
+	if (const float after = std::min(life.life + amount, 1.0f);
+	    script::property_rules::CanSetLife(after, HeldDuringCutscene(object), registry.AllOf<Indestructible>(object)))
+	{
+		life.life = after;
+	}
 	// A storage pit that starts to work again stops its piles calling people
 	if (const auto* info = registry.AllOf<Abode>(object) ? world_objects::AbodeInfoOf(object) : nullptr;
 	    info != nullptr && info->abodeType == AbodeType::StoragePit && before <= info->thresholdForStopBeingFunctional &&

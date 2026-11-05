@@ -95,6 +95,7 @@ void CreatureMindSystem::MakeDesireDominant(entt::entity creature, Desire desire
 	spells->cheat = creature_spell_mind::SetCheatDominant(
 	    *mind->desires, desire, {.all = needsToo, .seconds = seconds, .floor = mind_detail::DesireFloorOf(creature)},
 	    k_TurnsPerSecond);
+	mind_detail::TakeWrittenSources(creature, *mind);
 }
 
 void CreatureMindSystem::EndDominantDesire(entt::entity creature)

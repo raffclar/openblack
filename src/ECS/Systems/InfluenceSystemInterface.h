@@ -123,8 +123,13 @@ public:
 	/// Once a game turn for each god, in the input of the players: the hand of the god keeps a share of the god's influence
 	/// past the border. It comes before the players and the computer minds act. The neutral player has no share.
 	virtual void ProcessVirtualInfluence(PlayerNames /*player*/, uint32_t /*turn*/) {}
-	/// A town's turn starts: its influence is its base influence and its buildings', times the land's multiplier
-	virtual void ProcessTownInfluence(entt::entity /*town*/) {}
+	/// A town's turn starts: its influence goes back to its base influence. A town that a scaffold founded has none.
+	virtual void StartTownInfluence(entt::entity /*town*/) {}
+	/// After each building of a town takes its turn, the town adds the influence of that building to its sum. A town
+	/// that a scaffold founded adds nothing.
+	virtual void AddBuildingInfluence(entt::entity /*town*/, entt::entity /*building*/) {}
+	/// The pass over the buildings of a town ends: the land's multiplier multiplies the sum
+	virtual void FinishTownInfluence(entt::entity /*town*/) {}
 	/// A town's turn ends: a change of the influence of a player's town marks the borders to be drawn again
 	virtual void MarkTownInfluence(entt::entity /*town*/) {}
 	/// A town has changed hands: the border is drawn again at its next turn for drawing
