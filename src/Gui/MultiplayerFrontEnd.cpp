@@ -303,6 +303,10 @@ void MultiplayerFrontEnd::Next()
 		{
 			EnterGameList();
 		}
+		else if (_flow.box == Box::Login)
+		{
+			SignInFromSite();
+		}
 		break;
 	case Box::Room:
 		multiplayer::Next(_flow);
@@ -335,6 +339,11 @@ void MultiplayerFrontEnd::Back()
 			_services.lan->Stop();
 		}
 		multiplayer::Back(_flow);
+		// A session of the site needs no login box: the player goes back to the box before it
+		if (_flow.box == Box::Login && _services.lobby != nullptr && _services.lobby->IsSignedInFromSite())
+		{
+			multiplayer::Back(_flow);
+		}
 		break;
 	case Box::Room:
 	case Box::Conditions:
@@ -378,6 +387,37 @@ void MultiplayerFrontEnd::AnswerMessage(Answer answer)
 	default:
 		break;
 	}
+}
+
+void MultiplayerFrontEnd::SignInFromSite()
+{
+	auto* lobby = _services.lobby;
+	if (_flow.kind != LobbyKind::Internet || lobby == nullptr || !lobby->CanSignInFromSite())
+	{
+		return;
+	}
+	_busy = true;
+	const auto generation = ++_generation;
+	lobby->SignInFromSite([this, generation](ecs::systems::LobbyResult<lobby_api::AccountRef>&& result) {
+		if (generation != _generation)
+		{
+			return;
+		}
+		_busy = false;
+		if (!result.Ok())
+		{
+			// Nobody is signed in on the site, or the page cannot ask: the login box stays for a name and a password
+			return;
+		}
+		// The lobby refuses the server list until the account has an email address
+		if (_services.lobby->IsEmailRequired())
+		{
+			Show(Message::EmailRequired);
+			return;
+		}
+		_loggedIn = true;
+		EnterGameList();
+	});
 }
 
 void MultiplayerFrontEnd::Login(std::u16string name, std::u16string password)

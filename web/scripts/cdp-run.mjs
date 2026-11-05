@@ -60,6 +60,12 @@
 //                            the start-up screens moves all the time). Both give the real state of the game, which
 //                            can be behind the page by seconds on a busy computer. Like wait-log, each moves the next
 //                            steps later by the wait.
+//   --frame-url <text>       the game page is in a frame of the page, as on the site's /play/ page: every step, the
+//                            folder input, the click and the expressions use the frame whose address has this text,
+//                            and the mouse positions include the place of the frame
+//   --cookie-file <file.json> tests on this computer only: before the page opens, give Chrome the cookies of this file
+//                            (a list of {"name", "value", "url"}; each is Secure and HttpOnly). The script never prints
+//                            them. Delete the file after the run.
 //   --run-all-steps          do not end the run before the last step is done
 //                            player-run.json beside this script is the run of a new player on a 1280x1024 window,
 //                            with no developer parameters and a new Chrome profile: the name box, the first question
@@ -127,6 +133,8 @@ if (!target) {
 }
 
 const ws = new WebSocket(target.webSocketDebuggerUrl);
+// The scripts of the page and of its frames: the id of each, with the frame that it belongs to
+const contexts = new Map();
 let id = 0;
 const pending = new Map();
 const send = (method, params = {}, sessionId = undefined) => new Promise((resolve) => {
@@ -151,6 +159,12 @@ ws.onmessage = (event) => {
     const session = m.params.sessionId;
     send('Runtime.enable', {}, session);
     send('Target.setAutoAttach', { autoAttach: true, waitForDebuggerOnStart: false, flatten: true }, session);
+  } else if (m.method === 'Runtime.executionContextCreated' && !m.sessionId) {
+    contexts.set(m.params.context.id, m.params.context.auxData ?? {});
+  } else if (m.method === 'Runtime.executionContextDestroyed' && !m.sessionId) {
+    contexts.delete(m.params.executionContextId);
+  } else if (m.method === 'Runtime.executionContextsCleared' && !m.sessionId) {
+    contexts.clear();
   } else if (m.method === 'Log.entryAdded') {
     record(`[log ${m.params.entry.level}] ${m.params.entry.text}`);
   }
@@ -185,10 +199,69 @@ if (!flag('--real-pointer-lock')) {
     };
   })();` });
 }
+const cookieFile = option('--cookie-file');
+if (cookieFile) {
+  await send('Network.enable');
+  for (const cookie of JSON.parse(readFileSync(cookieFile, 'utf8'))) {
+    const result = await send('Network.setCookie', { name: cookie.name, value: cookie.value, url: cookie.url, secure: true,
+      httpOnly: true, sameSite: 'Lax' });
+    console.log(`cookie ${cookie.name} given: ${result.success !== false}`);
+  }
+}
 await send('Page.navigate', { url });
 await sleep(1500);
 
-const evaluate = async (expression) => (await send('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true }))?.result?.value;
+// With --frame-url, the scripts of the steps run in the frame of the game page
+const frameUrl = option('--frame-url');
+let frameContext = null;
+const findFrame = (tree) => {
+  if (tree.frame.url.includes(frameUrl) && tree.frame.parentId) {
+    return tree.frame.id;
+  }
+  for (const child of tree.childFrames ?? []) {
+    const found = findFrame(child);
+    if (found) {
+      return found;
+    }
+  }
+  return null;
+};
+const gameContext = async () => {
+  if (!frameUrl) {
+    return undefined;
+  }
+  if (frameContext !== null && contexts.has(frameContext)) {
+    return frameContext;
+  }
+  frameContext = null;
+  const { frameTree } = await send('Page.getFrameTree');
+  const frameId = frameTree ? findFrame(frameTree) : null;
+  for (const [contextId, aux] of contexts) {
+    if (frameId && aux.frameId === frameId && aux.isDefault) {
+      frameContext = contextId;
+    }
+  }
+  return frameContext ?? -1;
+};
+const evaluate = async (expression) => {
+  const contextId = await gameContext();
+  if (contextId === -1) {
+    return undefined;
+  }
+  return (await send('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true, contextId }))?.result?.value;
+};
+// The place of the frame of the game page in the page, in CSS pixels
+const frameOffset = async () => {
+  if (!frameUrl) {
+    return { x: 0, y: 0 };
+  }
+  const offset = (await send('Runtime.evaluate', { returnByValue: true, expression: `(() => {
+    const frame = [...document.querySelectorAll('iframe')].find((f) => f.src.includes(${JSON.stringify(frameUrl)}));
+    if (!frame) return { x: 0, y: 0 };
+    const r = frame.getBoundingClientRect();
+    return { x: r.left + frame.clientLeft, y: r.top + frame.clientTop }; })()` }))?.result?.value;
+  return offset ?? { x: 0, y: 0 };
+};
 
 const preClick = option('--pre-click');
 if (preClick) {
@@ -200,10 +273,18 @@ if (gameFolder) {
   // yet, so the step asks again until the page has it.
   let result = { error: 'the page has no folder input' };
   for (let i = 0; i < 300 && result.error; ++i) {
-    const { root } = await send('DOM.getDocument', { depth: 0 });
-    const { nodeId } = await send('DOM.querySelector', { nodeId: root.nodeId, selector: '#folder-input' });
-    result = nodeId ? await send('DOM.setFileInputFiles', { nodeId, files: [path.resolve(gameFolder)] })
-      : { error: 'the page has no folder input' };
+    if (frameUrl) {
+      const contextId = await gameContext();
+      const found = contextId === -1 ? null
+        : (await send('Runtime.evaluate', { expression: "document.querySelector('#folder-input')", contextId }))?.result;
+      result = found?.objectId ? await send('DOM.setFileInputFiles', { objectId: found.objectId, files: [path.resolve(gameFolder)] })
+        : { error: 'the page has no folder input' };
+    } else {
+      const { root } = await send('DOM.getDocument', { depth: 0 });
+      const { nodeId } = await send('DOM.querySelector', { nodeId: root.nodeId, selector: '#folder-input' });
+      result = nodeId ? await send('DOM.setFileInputFiles', { nodeId, files: [path.resolve(gameFolder)] })
+        : { error: 'the page has no folder input' };
+    }
     if (result.error) {
       await sleep(200);
     }
@@ -225,6 +306,8 @@ async function clickOn(selector) {
     console.log(`cannot click ${selector}`);
     return false;
   }
+  const offset = await frameOffset();
+  box = { x: box.x + offset.x, y: box.y + offset.y };
   for (const type of ['mouseMoved', 'mousePressed', 'mouseReleased']) {
     await send('Input.dispatchMouseEvent', { type, x: box.x, y: box.y, button: 'left', clickCount: 1 });
   }
@@ -249,8 +332,12 @@ const k_Buttons = { none: 0, left: 1, right: 2, middle: 4 };
 // that took the lock, and moves it by each page movement times the device pixel ratio times its pointer speed (see
 // src/Input/PointerSpeed.h: half of the height of the 4:3 middle of the screen over 600). It stays on the canvas.
 let gamePointer = null;
-const canvasBox = () => evaluate(`(() => { const r = document.getElementById('canvas').getBoundingClientRect();
-  return { left: r.left, top: r.top, width: r.width, height: r.height }; })()`);
+const canvasBox = async () => {
+  const box = await evaluate(`(() => { const r = document.getElementById('canvas').getBoundingClientRect();
+    return { left: r.left, top: r.top, width: r.width, height: r.height }; })()`);
+  const offset = await frameOffset();
+  return box ? { ...box, left: box.left + offset.x, top: box.top + offset.y } : box;
+};
 const pointerScale = (box) => 0.5 * Math.min(box.height * pixelRatio, box.width * pixelRatio * 0.75) / 600;
 const moveGamePointer = (dx, dy, scale, box) => {
   const clamp = (v, high) => Math.min(Math.max(v, 0.5), Math.max(high - 0.5, 0.5));

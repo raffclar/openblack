@@ -242,6 +242,9 @@ private:
 	void KeepUsedClan(std::optional<int64_t> clan);
 	void Show(multiplayer::Message message) noexcept { _message = message; }
 	void EnterGameList();
+	/// In the login box: logs in as the account that is signed in on the lobby site, when the lobby client can. The login
+	/// box stays when nobody is signed in on the site.
+	void SignInFromSite();
 	void LeaveRoom();
 	void HandleEvent(const lobby_api::PushEvent& event);
 	void RequestTicket(const lobby_api::ServerEntry& server, game_socket::Role role, std::u16string password);
