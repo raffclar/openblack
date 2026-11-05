@@ -87,6 +87,7 @@
 #define OPENBLACK_GAME_ROLE 1
 #include "Online/StartRules.h"
 #include "Server/Desktop/GameRole.h"
+#include "Server/LobbyHostReport.h"
 #include "Server/LobbyResults.h"
 #include "Server/ServerAdmin.h"
 #if defined(OPENBLACK_INSPECTOR)
@@ -818,6 +819,26 @@ private:
 	    [](const std::string& name) { SPDLOG_LOGGER_WARN(spdlog::get("game"), "The server did not write {}", name); })};
 };
 
+/// The winning conditions of the game and their state for the first four players, for the report of the host. The world
+/// does not change.
+GameRole::HostConditions HostConditionsOfWorld()
+{
+	if (!Locator::gameEndSystem::has_value())
+	{
+		return {};
+	}
+	const auto& gameEnd = Locator::gameEndSystem::value();
+	lobby_host_report::ReportedStandings standings {};
+	for (const auto& [god, standing] : gameEnd.Standings())
+	{
+		if (const auto number = static_cast<size_t>(god); number < standings.size())
+		{
+			standings.at(number) = standing;
+		}
+	}
+	return lobby_host_report::ConditionsOf(gameEnd.GetConditions(), standings);
+}
+
 /// The figures of each god of the decided game, for the report to the lobby. The world does not change.
 std::vector<lobby_results::GodFigures> GodFiguresOfWorld()
 {
@@ -982,6 +1003,10 @@ bool StartNetwork(const ServerSettings& settings, ServerWorld& world, std::uniqu
 			return ServerWorld::NetworkStep::Replay;
 		}
 		role->Update();
+		if (role->HostReportDue())
+		{
+			role->SendHostReport(Locator::time::value().GetTurn(), false, HostConditionsOfWorld());
+		}
 		if (host.GameOver())
 		{
 			SPDLOG_LOGGER_INFO(spdlog::get("game"), "Every god left the game: the game ends");
@@ -1012,6 +1037,10 @@ bool StartNetwork(const ServerSettings& settings, ServerWorld& world, std::uniqu
 		    }
 		    // Every client gets the checksum of the server's world
 		    host.TurnChecksum(turn.turn, turn.checksum);
+		    if (Locator::gameEndSystem::has_value() && Locator::gameEndSystem::value().IsDecided())
+		    {
+			    role->SendHostReport(turn.turn, true, HostConditionsOfWorld());
+		    }
 		    if (role->WantsResult() && Locator::gameEndSystem::has_value() && Locator::gameEndSystem::value().IsDecided())
 		    {
 			    auto decided = game;
