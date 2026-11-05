@@ -239,7 +239,7 @@ void testbed_scenarios::AddHandLookScenarios(std::vector<Scenario>& all)
 	    .description = "The player goes into the main room of the temple. The pointer rests in the middle of the window, "
 	                   "then at the top row of the window for twelve seconds, then in the middle again.",
 	    .expected = "When the pointer goes up, the hand leans as it trails the pointer. At the top row, the hand settles "
-	                "in about eight seconds. Then it has no forward or backward lean: its pose changes a small "
+	                "in some seconds. Then it has no forward or backward lean: its pose changes a small "
 	                "amount and stays. When the pointer goes down again, the forward lean comes back.",
 	    .environment = {.dispenserGrid = false, .cursor = k_Cursor},
 	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 40.0f, 0.0f}, .look = {-100.0f, 65.0f, -100.0f}},
