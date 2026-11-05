@@ -145,7 +145,8 @@ void creature_physiology::TickTurn(Needs& needs, Shape& shape, const Species& sp
 	// Carrying something heavy about makes it stronger
 	if (turn.carriedWeight.has_value() && turn.moving && species.carryStrengthMinutes > 0.0f)
 	{
-		const auto turnsToStrength = species.carryStrengthMinutes * k_SecondsPerMinute * turn.turnsPerSecond;
+		// The turns in a minute come first, then the minutes, as the game multiplies
+		const auto turnsToStrength = species.carryStrengthMinutes * (k_SecondsPerMinute * turn.turnsPerSecond);
 		ModifyStrength(shape, k_CarryStrength / turnsToStrength * Clamp01(*turn.carriedWeight));
 	}
 

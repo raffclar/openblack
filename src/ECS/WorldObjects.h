@@ -132,6 +132,17 @@ void CountInjury(entt::entity villager, float before, float after);
 /// that the harm gives, if it gives one. The town keeps how much the attack burnt, crushed and hit.
 void AttackTown(entt::entity object, float damage, PlayerNames aggressor, const town_aggression::Harm& harm,
                 bool byCreature = false, std::optional<guidance::TownAttackVoice> cry = std::nullopt);
+/// The town that harm to an object attacks, and the row of the object's kind that sets how much the attack counts
+struct TownAttackTarget
+{
+	entt::entity town {entt::null};
+	const GObjectInfo* kind {nullptr};
+};
+/// The town that harm to the object attacks: none for an object of no town, or of a kind that no town counts
+[[nodiscard]] std::optional<TownAttackTarget> TownAttackTargetOf(entt::entity object);
+/// Harm done to an object of a town that was found before, as AttackTown does it. The object can be gone.
+void AttackTown(const TownAttackTarget& target, float damage, PlayerNames aggressor, const town_aggression::Harm& harm,
+                bool byCreature, std::optional<guidance::TownAttackVoice> cry);
 
 /// Life given back to an object other than a living thing, as a miracle's heal gives it: never above 1. Its life after.
 float IncreaseLife(entt::entity object, float amount);

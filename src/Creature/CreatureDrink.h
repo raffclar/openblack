@@ -33,6 +33,10 @@ constexpr float k_WaterPointRange = 1000.0f;
 constexpr float k_StandSearchReach = 30.0f;
 /// When the creature finds no place to drink, it does not want water or to get colder for this time, in seconds
 constexpr float k_NoPlaceSuppressSeconds = 30.0f;
+/// After it drinks, the creature does not want water for this time, in seconds
+constexpr float k_DrankSuppressSeconds = 20.0f;
+/// After it drinks, the creature gets this temperature if it has a fire state. The water has no source thing.
+constexpr float k_DrankTemperature = 0.0f;
 
 /// Where the creature drinks
 struct Place
@@ -63,5 +67,9 @@ struct Place
 /// The creature found no place to drink, so the action fails. For k_NoPlaceSuppressSeconds it does not want water or to
 /// get colder.
 void NoPlaceFound(creature_desires::Desires& desires, float turnsPerSecond);
+
+/// The creature drank. For k_DrankSuppressSeconds it does not want water. The result is the temperature that the
+/// creature gets, k_DrankTemperature.
+[[nodiscard]] float Drank(creature_desires::Desires& desires, float turnsPerSecond);
 
 } // namespace openblack::creature_drink

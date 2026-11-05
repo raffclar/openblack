@@ -8,6 +8,7 @@
  *******************************************************************************/
 
 #include <ANMFile.h>
+#include <LNDFile.h>
 #include <glm/mat4x4.hpp>
 #include <gtest/gtest.h>
 
@@ -94,4 +95,24 @@ TEST(VillagerClips, AMoveStartedOnFiveTurnsStartsTheClipOverOnce)
 	}
 	EXPECT_EQ(restarts, 1);
 	EXPECT_EQ(turns, 5u);
+}
+
+TEST(VillagerClips, GroundOffTheMapOrWithNoLandBlockIsWater)
+{
+	lnd::LNDCell land {};
+	lnd::LNDCell sea {};
+	sea.properties.hasWater = 1;
+	// Cell 3 has no land block, cell 2 is sea and every other cell is land
+	const auto findCell = [&](glm::u16vec2 cell) -> const lnd::LNDCell* {
+		if (cell.x == 3)
+		{
+			return nullptr;
+		}
+		return cell.x == 2 ? &sea : &land;
+	};
+	EXPECT_FALSE(villager_clips::IsWaterAt({15.0f, 0.0f, 15.0f}, findCell));
+	EXPECT_TRUE(villager_clips::IsWaterAt({25.0f, 0.0f, 15.0f}, findCell));
+	EXPECT_TRUE(villager_clips::IsWaterAt({35.0f, 0.0f, 15.0f}, findCell));
+	EXPECT_TRUE(villager_clips::IsWaterAt({-5.0f, 0.0f, 15.0f}, findCell));
+	EXPECT_TRUE(villager_clips::IsWaterAt({15.0f, 0.0f, 5125.0f}, findCell));
 }

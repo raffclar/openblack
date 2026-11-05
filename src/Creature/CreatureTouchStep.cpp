@@ -71,7 +71,7 @@ bool creature_hand::WeighTouchStep(ecs::components::HandOnCreature& contact, con
 			if (feedback::StrokeDue(clocks, contact.lastPart, *part, contact.sum) && creature.stroke(*part))
 			{
 				contact.lastPart = *part;
-				feedback::Touched(clocks);
+				feedback::Stroked(clocks);
 				contact.sum = feedback::AfterStroke(contact.sum);
 				contact.strokedOrSlapped = true;
 			}

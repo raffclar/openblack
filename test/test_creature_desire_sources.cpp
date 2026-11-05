@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <array>
+#include <bit>
 #include <deque>
 #include <iterator>
 #include <optional>
@@ -261,6 +262,33 @@ TEST(CreatureDesireSources, ASourceSetByAScriptChangesWhatItFollows)
 	EXPECT_FLOAT_EQ(interest.value, 0.0f);
 	Write(types::k_GetHigh, 1.0f, written);
 	EXPECT_EQ(mushrooms, 100u);
+}
+
+TEST(CreatureDesireSources, ASourceSetByAScriptChangesTheBody)
+{
+	creature_physiology::Needs needs {.energy = 0.8f, .poo = 0.1f, .exhaustion = 0.2f, .dehydration = 0.3f};
+	const Written written {.needs = &needs};
+	// Hunger takes the energy that is left: full hunger leaves no energy
+	Write(types::k_HungerFromLowEnergy, 1.0f, written);
+	EXPECT_FLOAT_EQ(needs.energy, 0.0f);
+	Write(types::k_HungerFromLowEnergy, 0.25f, written);
+	EXPECT_FLOAT_EQ(needs.energy, 0.75f);
+	Write(types::k_HungerFromLowEnergy, -1.0f, written);
+	EXPECT_FLOAT_EQ(needs.energy, 1.0f);
+	Write(types::k_PooFromAmountOfPoo, 1.0f, written);
+	EXPECT_FLOAT_EQ(needs.poo, 1.0f);
+	Write(types::k_TirednessFromExhaustion, 1.0f, written);
+	EXPECT_FLOAT_EQ(needs.exhaustion, 1.0f);
+	Write(types::k_WaterFromDehydration, 1.0f, written);
+	EXPECT_FLOAT_EQ(needs.dehydration, 1.0f);
+}
+
+TEST(CreatureDesireSources, TheWishToShowHowItFeelsMultipliesTheSumByAThird)
+{
+	// A product with a third and a quotient by 3 are different in the last bit for this sum
+	EXPECT_EQ(std::bit_cast<uint32_t>(ManifestState(1.3f)), 0x3EDDDDDEu);
+	EXPECT_FLOAT_EQ(ManifestState(-1.0f), 0.0f);
+	EXPECT_FLOAT_EQ(ManifestState(4.0f), 1.0f);
 }
 
 TEST(CreatureDesireSources, NewDesiresSpreadTheirSourcesAndGrowingTimes)

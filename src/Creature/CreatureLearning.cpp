@@ -60,7 +60,7 @@ void creature_learning::LearnDesireLesson(creature_desires::Desires& desires, De
 	state.max = std::clamp(state.max + k_MaxStep * feedback, std::min(lowest, highest), highest);
 	if (rule.learnsWeight)
 	{
-		state.weight = std::clamp(state.weight + rule.initialWeight / 3.0f * feedback, k_MinWeight, k_MaxWeight);
+		state.weight = std::clamp(state.weight + rule.initialWeight * k_WeightStepPart * feedback, k_MinWeight, k_MaxWeight);
 	}
 	state.decay = std::clamp(state.decay + k_DecayStep * feedback, std::min(rule.decayMin, rule.decayMax),
 	                         std::max(rule.decayMin, rule.decayMax));

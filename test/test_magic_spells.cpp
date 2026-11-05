@@ -9,6 +9,7 @@
 
 #include <cmath>
 
+#include <bit>
 #include <map>
 #include <memory>
 #include <optional>
@@ -381,9 +382,14 @@ TEST(SpellSeedRules, ASeedsChargeAndReadiness)
 	EXPECT_FLOAT_EQ(SeedPower(1750.0f, 3500.0f), 0.5f);
 	EXPECT_FLOAT_EQ(SeedPower(9000.0f, 3500.0f), 1.0f);
 	EXPECT_FLOAT_EQ(SeedPower(0.0f, 0.0f), 1.0f);
-	// Held for longer than its delay of a second and a half
-	EXPECT_FALSE(SeedReadyAfter(15, k_TurnSeconds, 1.5f));
-	EXPECT_TRUE(SeedReadyAfter(16, k_TurnSeconds, 1.5f));
+	// The 15th turn of 100 ms gives a little more than its delay of a second and a half, thus the seed is ready
+	EXPECT_FALSE(SeedReadyAfter(14, 100, 1.5f));
+	EXPECT_TRUE(SeedReadyAfter(15, 100, 1.5f));
+	EXPECT_FALSE(SeedReadyAfter(0, 100, 0.0f));
+	EXPECT_TRUE(SeedReadyAfter(1, 100, 0.0f));
+	// The seconds in the hand use the same float steps, thus 15 turns give a little more than 1.5 seconds
+	EXPECT_EQ(std::bit_cast<uint32_t>(SeedSecondsInHand(15, 100)), 0x3FC00001u);
+	EXPECT_EQ(SeedSecondsInHand(0, 100), 0.0f);
 }
 
 // A seed bound to its running miracle counts as taken back, and stays only with enough left for another cast. A seed

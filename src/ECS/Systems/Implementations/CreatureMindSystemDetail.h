@@ -133,15 +133,20 @@ namespace openblack::ecs::systems::mind_detail
 [[nodiscard]] std::optional<std::pair<float, float>> MiracleSightings(const components::CreatureMindState& mind,
                                                                       const creature_mind_tables::Tables& tables,
                                                                       CreatureType species, MagicType magic);
+/// What an action does to a desire when it is complete, by the game's action table; nothing for an action that is not in
+/// the table or lessens no desire
+[[nodiscard]] std::optional<creature_desires::ActionLessening> LesseningOf(std::string_view action);
 /// Having done an action, the desire it satisfies is less, by the game's action table: multiplied by the action's
 /// multiplier, no lower than the species' floor for desires
 void Lessen(entt::entity creature, creature_desires::Desires& desires, std::string_view action);
 /// The least a creature's desires are lessened to by its actions, or wanted while another is made dominant, by its
 /// species
 [[nodiscard]] float DesireFloorOf(entt::entity creature);
+/// The traits, counts and body values behind the sources that a script or a spell set take the new values at once
+void TakeWrittenSources(entt::entity entity, components::CreatureMindState& mind);
 /// Having done an action, its body pays for it
 void BodyPaysFor(entt::entity creature, std::string_view action);
-/// Both, as a step that takes effect at once does
+/// Both, as a step of an agenda that no plan gave does when it takes effect
 void Satisfied(entt::entity creature, creature_desires::Desires& desires, std::string_view action);
 /// The town nearest a point along the ground, of any player or none; none when there are no towns
 [[nodiscard]] entt::entity NearestTown(const ecs::Registry& registry, glm::vec3 point);

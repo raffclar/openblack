@@ -368,6 +368,23 @@ TEST(HandGrab, OnlyATreeTheHandCanLiftIsPulledFree)
 	EXPECT_TRUE(PullAt(tug, frame).comesFree);
 }
 
+// The game adds the squares of the pull's x and z first, then the square of y. With this pull that sum is one bit
+// more than the sum from x to z, so a tree whose weight is the smaller length comes free.
+TEST(HandGrab, ThePullBeatsTheWeightWithTheSquaresInTheOrderOfTheGame)
+{
+	Tug tug {.axes = glm::mat3(1.0f), .base = glm::vec3(0.0f)};
+	const TugFrame frame {.hand = {2.751f, 1.0f + 3.184f, 0.263f},
+	                      .holdDistance = 1.0f,
+	                      .weight = std::bit_cast<float>(0x4583C059u),
+	                      .height = 10.0f,
+	                      .tree = true,
+	                      .seconds = 0.01f};
+	const auto result = PullAt(tug, frame);
+	ASSERT_EQ(result.force, glm::vec3(2751.0f, 3184.0f, 263.0f));
+	EXPECT_EQ(std::bit_cast<uint32_t>(glm::length(result.force)), 0x4583C059u);
+	EXPECT_TRUE(result.comesFree);
+}
+
 TEST(HandGrab, APulledTreeLeansAndStretchesTowardsTheHand)
 {
 	Tug tug {.axes = glm::mat3(1.0f), .base = glm::vec3(0.0f)};
@@ -403,6 +420,10 @@ TEST(HandGrab, AThrowIsFastAcrossTheGround)
 	EXPECT_TRUE(IsFastRelease({1.0f, 0.1f, 0.0f}));
 	EXPECT_TRUE(PotPours({2.0f, 1.0f, 0.0f}));
 	EXPECT_FALSE(PotPours({2.0f, 1.0f, 0.1f}));
+	// Added from x to z, the squares of this speed give 5. Added from z to x as the game does, they give more than 5.
+	const glm::vec3 edge {std::bit_cast<float>(0x3FAAF1A1u), std::bit_cast<float>(0x3F9E3444u),
+	                      std::bit_cast<float>(0x3FA6578Au)};
+	EXPECT_FALSE(PotPours(edge));
 }
 
 // A hand that holds a thing has no spin: each part of the spin is a positive zero, also where the inertia has a

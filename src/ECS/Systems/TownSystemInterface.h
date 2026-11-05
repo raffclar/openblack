@@ -119,7 +119,8 @@ public:
 	/// preaching in each town follow their villagers or stop; a town's mark of changed wants comes down once it has been
 	/// up a whole turn
 	virtual void ProcessTurn() = 0;
-	/// The start of a town's turn: every so many turns it passes over its buildings, which age by it
+	/// The start of a town's turn: its influence goes back to its base. Every so many turns it passes over its buildings,
+	/// which age by it, and each building adds its influence after its turn. Then the land's multiplier multiplies the sum.
 	virtual void ProcessTownBuildings(entt::entity town) = 0;
 	/// The rest of a town's turn, after its desires and its artefacts: it sends worshippers every tenth turn, the attacks
 	/// on it fade, it mends a building, calls or ends an emergency, judges the creatures it watches, its missionaries
