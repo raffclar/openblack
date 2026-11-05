@@ -78,4 +78,29 @@ struct BuildingInfluence
 	return multiplier * sum;
 }
 
+/// The facts of the town centre of a town that a scaffold founded, at the end of the town centre's turn
+struct FoundedTownCentre
+{
+	/// The town centre is not yet fully built
+	bool underConstruction {false};
+	/// A scaffold stands on the site of the town centre
+	bool hasScaffold {false};
+	/// The hand can still take the first scaffold of the site: its workshop keeps it and no part of the site is built
+	bool scaffoldTakeable {false};
+};
+
+/// Whether a town that a scaffold founded gets its base influence and the influence of its buildings again. This occurs
+/// when the town centre is fully built, has no scaffold on its site, or the hand can no longer take its scaffold.
+[[nodiscard]] constexpr bool FoundedTownGetsInfluence(const FoundedTownCentre& centre)
+{
+	return !(centre.underConstruction && centre.hasScaffold && centre.scaffoldTakeable);
+}
+
+/// The reach that the heart of a temple gives to its temple: the size of the heart times the influence of a heart for
+/// the land. The temple has no reach before its heart, thus the heart adds its reach to zero.
+[[nodiscard]] constexpr float HeartReach(float heartScale, float landInfluence)
+{
+	return heartScale * landInfluence;
+}
+
 } // namespace openblack::influence_rules

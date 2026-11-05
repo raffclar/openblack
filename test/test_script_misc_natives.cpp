@@ -81,6 +81,7 @@ public:
 	void SiteClosed(entt::entity) override {}
 	void PutLoadedOnSite(entt::entity, entt::entity) override {}
 	entt::entity LeaveDestroyedSite(entt::entity) override { return entt::null; }
+	[[nodiscard]] entt::entity FirstOnSite(entt::entity) const override { return entt::null; }
 	bool ForceBuild(entt::entity scaffold, std::optional<PlayerNames> player) override
 	{
 		built.emplace_back(scaffold, player);

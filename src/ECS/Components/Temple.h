@@ -66,6 +66,9 @@ struct Temple
 	/// they are fired from, made with the first and let go once it has ended
 	float destructionBeamClock {0.0f};
 	std::optional<uint32_t> destructionBeamSource;
+	/// The size of its heart. A temple that a script makes has a heart of size 1. A temple that goes up on a plan has a
+	/// heart of the size of the plan. The size multiplies the reach of the heart.
+	float heartScale {1.0f};
 };
 
 /// The way into a temple, Entrance.l3d at the temple's place, which the temple makes and its player clicks the Action

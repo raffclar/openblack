@@ -90,7 +90,8 @@ void openblack::ecs::reflection::RegisterFields_Components_t(entt::meta_ctx& con
 	    .Field<&components::Temple::destructionLoops>("destructionLoops")
 	    .Field<&components::Temple::town>("town")
 	    .Field<&components::Temple::destructionBeamClock>("destructionBeamClock")
-	    .Field<&components::Temple::destructionBeamSource>("destructionBeamSource");
+	    .Field<&components::Temple::destructionBeamSource>("destructionBeamSource")
+	    .Field<&components::Temple::heartScale>("heartScale");
 	Reflect<components::TempleEntrance>(context).Field<&components::TempleEntrance::temple>("temple");
 	Reflect<components::TempleHeart>(context).Field<&components::TempleHeart::temple>("temple");
 	Reflect<components::TempleLantern>(context)
