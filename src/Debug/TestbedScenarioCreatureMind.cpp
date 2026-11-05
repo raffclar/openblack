@@ -1744,4 +1744,23 @@ void testbed_scenarios::AddMind(std::vector<Scenario>& all)
 	    .commands = {{.kind = Kind::SwapMinds, .creature = 0, .delaySeconds = 3.0f, .value = 1},
 	                 {.kind = Kind::SwapMinds, .creature = 1, .delaySeconds = 20.0f, .value = 0}},
 	});
+
+	// The developer view of the mind opens on the tiger. A script makes it hungry and playful.
+	all.push_back({
+	    .id = "mind.debug_view",
+	    .name = "The developer view of a creature's mind",
+	    .facet = Facet::Mind,
+	    .description = "A player's tiger stands in the testbed, its mind free, a birch beside it. The Creature Mind "
+	                   "window opens on it. One second in, a script sets its hunger to 0.8 and its desire to play to 0.5.",
+	    .expected = "The window shows the active desires of the tiger, the highest first, with hunger marked as the "
+	                "winner. Open a desire to see its sources: the value, the threshold and the part of each. The plans "
+	                "part shows the plan, the best plan of each desire and the planner steps with the reasons. The "
+	                "timeline shows each desire over the last turns. A label over the tiger shows its top desire and its "
+	                "plan. The view changes nothing in the world.",
+	    .framing = {.shot = Shot::Testbed},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f}, 180.0f)},
+	    .objects = {{.type = TreeInfo::Birch, .offset = {-15.0f, 0.0f}}},
+	    .commands = {setDesire(Desire::Hunger, 0.8f, 1.0f), setDesire(Desire::Play, 0.5f, 1.0f)},
+	    .debugWindow = "Creature Mind",
+	});
 }

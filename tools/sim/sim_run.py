@@ -316,6 +316,25 @@ def set_stage(game, stage):
     return True
 
 
+def record_minds(game, recorded):
+    """Starts the developer record of each creature mind that has no record yet. The record only reads the minds, so a
+    run with it must give the same world as a run without it. A game with no mind log answers with an error: the run
+    then goes on with no record."""
+    try:
+        creatures = game.call("creature.list") or []
+    except RuntimeError:
+        return
+    for creature in creatures:
+        number = creature.get("id")
+        if number is None or number in recorded:
+            continue
+        recorded.add(number)
+        try:
+            game.call("creature.plan", {"id": number, "record": True})
+        except RuntimeError:
+            pass
+
+
 def drive(game, options, until_turn):
     """Steps the game turn by turn group and gives the style's input; the log of what it did"""
     actions = []
@@ -324,7 +343,10 @@ def drive(game, options, until_turn):
     stage = 0 if options.stages else None
     next_stage_turn = 0
     turn = game.call("game.state").get("turn", 0)
+    recorded = set()
     while turn < until_turn:
+        if getattr(options, "record_minds", False):
+            record_minds(game, recorded)
         if stage is not None and turn >= next_stage_turn and stage <= LAST_STAGE:
             if set_stage(game, stage):
                 actions.append({"turn": turn, "did": f"stage {stage}"})
@@ -460,7 +482,8 @@ def run_once(options, name, fast, until_turn, load_at=None, load=True):
     record = os.path.join(options.out, f"{name}.jsonl")
     log = os.path.join(options.out, f"{name}.log")
     exe = options.exe or default_exe(options.config)
-    driven = options.style != "none" or bool(options.stages) or load_at is not None
+    driven = (options.style != "none" or bool(options.stages) or load_at is not None or
+              getattr(options, "record_minds", False))
     game = Game(exe, game_arguments(options, record, log, until_turn, fast, driven), options.out)
     actions = []
     try:
@@ -725,6 +748,9 @@ def parse(argv):
         sub.add_argument("--draw-every", type=int, default=0, help="in the fast mode, draw one frame in this many")
         sub.add_argument("--normal", action="store_true", help="run at the normal speed, drawn, not in the fast mode")
         sub.add_argument("--hash-parts", action="store_true")
+        sub.add_argument("--record-minds", action="store_true",
+                         help="a driven run that starts the developer record of each creature mind (creature.plan with "
+                              "record) as the creature comes; the world must be the same as without it")
         sub.add_argument("--hash-fields", action="store_true",
                          help="as --hash-parts, and the synced hash of each field of each component (large records)")
         sub.add_argument("--limits", default=os.path.join(HERE, "stuck_limits.json"))

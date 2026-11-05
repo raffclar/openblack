@@ -488,7 +488,7 @@
   "query": "creature.list"
  },
  {
-  "description": "A creature's strongest desires, strongest first",
+  "description": "A creature's strongest desires, strongest first. Also the active desires (activated, with a value or a drive more than 0), each with the name, value, threshold, part and drive of its sources, and the winner (the desire that the creature shows). The change since the turn before is there while a tool records the mind (creature.plan with record)",
   "kind": "object",
   "parameters": [
    {
@@ -648,13 +648,18 @@
   "query": "creature.beliefs"
  },
  {
-  "description": "A creature's plan (desire, action, object, priority), activity and next agenda steps",
+  "description": "A creature's plan (desire, action, object, priority), activity and next agenda steps. Also the best plan of each desire, and the planner steps of the last turns (the plan, what became of it and why) while a tool records the mind",
   "kind": "object",
   "parameters": [
    {
     "description": "The creature's entity id; may be left out when there is one creature",
     "name": "id",
     "type": "integer"
+   },
+   {
+    "description": "Start (true) or stop (false) the record of the creature's mind at the end of each turn. The record only reads the mind.",
+    "name": "record",
+    "type": "boolean"
    }
   ],
   "query": "creature.plan"
