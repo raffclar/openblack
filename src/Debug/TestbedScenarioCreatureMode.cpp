@@ -109,8 +109,9 @@ void AddCreatureMode(std::vector<Scenario>& all)
 	    .facet = Facet::CreatureMode,
 	    .description = "Locked onto the player's tiger, Shift and left are held for four seconds, Shift and up for one, "
 	                   "Shift and down for one, then Ctrl and up for one and Ctrl and down for two.",
-	    .expected = "Shift and left swing the camera round the tiger, half a turn in about four seconds on a screen 2560 "
-	                "wide (400 pixels a second, a screen's width a half turn); Shift and up tilt it to look down more "
+	    .expected = "Shift and left swing the camera round the tiger, about 100 degrees in four seconds on a "
+	                "screen 2560 wide (the whole pixels of 400 a second, so 6 a frame at 60 frames a second, and a "
+	                "screen's width a half turn); Shift and up tilt it to look down more "
 	                "steeply, and down back again, no lower than about 14 degrees; Ctrl and up draw it in, Ctrl and down "
 	                "out. The cursor keys alone would give the camera back.",
 	    .framing = {.shot = Shot::Overview},

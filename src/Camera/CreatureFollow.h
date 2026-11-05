@@ -109,9 +109,19 @@ struct Loaded
 /// eye on that point stays on it.
 [[nodiscard]] Offsets OffsetsAtDistance(const Offsets& offsets, float distance);
 
-/// The view the camera starts with on a creature: as it is turned and tilted now, and the creature's viewing distance
-/// away. With KeepWhenClose, it is as far as it already is when it is close, but no nearer than twice the creature's
-/// height.
+/// The points of the camera when a follow starts: the eye now, and the eye and the focus that the camera glides to
+struct StartPoints
+{
+	glm::vec3 origin {0.0f};
+	glm::vec3 targetOrigin {0.0f};
+	glm::vec3 targetFocus {0.0f};
+};
+/// The view the camera starts with on a creature: the heading and the pitch of the points that the camera glides to,
+/// and the creature's viewing distance away. With KeepWhenClose, the camera stays as far as the eye is now when it is
+/// close, but no nearer than twice the creature's height.
+[[nodiscard]] View Start(const StartPoints& camera, glm::vec3 creature, float height,
+                         StartDistance start = StartDistance::KeepWhenClose);
+/// As the other Start, for a camera that does not glide
 [[nodiscard]] View Start(glm::vec3 cameraOrigin, glm::vec3 cameraFocus, glm::vec3 creature, float height,
                          StartDistance start = StartDistance::KeepWhenClose);
 /// The view kept within the follow's bounds: the distance between the least and the most, and no lower than the least
@@ -134,7 +144,7 @@ struct Keys
 
 	[[nodiscard]] bool Moving() const { return across != 0.0f || along != 0.0f; }
 };
-/// The cursor keys' pixels for a frame of some seconds: -1, 0 or 1 a way
+/// The cursor keys' pixels for a frame of some seconds: -1, 0 or 1 a way. Each way keeps only the whole pixels.
 [[nodiscard]] Keys KeysFor(int across, int along, float seconds);
 
 enum class KeyOutcome : uint8_t
@@ -181,7 +191,10 @@ struct FlockLeader
 /// little way in towards 100
 [[nodiscard]] float ClearingDistance(float distance);
 /// The view swung round and tilted for a clear view of the creature, keeping its distance. The camera finds the heading
-/// and the pitch as a double click flight finds them, at the distance for a clear view.
+/// and the pitch as a double click flight finds them, at the distance for a clear view. The search starts from the eye
+/// of the frame. The camera then measures the heading and the pitch again from the point that the search finds.
+[[nodiscard]] View ClearView(View view, glm::vec3 eye, glm::vec3 focus, const camera_limits::Ground& ground);
+/// As the other ClearView, with the eye at the place that the view gives
 [[nodiscard]] View ClearView(View view, glm::vec3 focus, const camera_limits::Ground& ground);
 
 } // namespace openblack::creature_follow

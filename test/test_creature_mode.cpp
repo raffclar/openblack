@@ -19,7 +19,10 @@
 #include <gtest/gtest.h>
 
 #include "3D/MapCoords.h"
+#include "Camera/Camera.h"
+#include "Camera/CreatureCameraModel.h"
 #include "Camera/CreatureFollow.h"
+#include "Camera/ScriptCameraModel.h"
 #include "Creature/CreatureCave.h"
 #include "Creature/CreatureMode.h"
 
@@ -228,9 +231,85 @@ TEST(CreatureFollow, ClearViewTiltsTowardsAFifthOfItsPitchAndATenthOfTheSlope)
 	EXPECT_NEAR(view.pitch, (0.1f * 1.5393804f) + (0.2f * 0.5f) + 0.37699114f, 1e-5f);
 	EXPECT_FLOAT_EQ(view.distance, 60.0f);
 	EXPECT_NEAR(view.yaw, 0.2f, 1e-5f);
-	// The pitch stays between 22.5 and 60 degrees
-	EXPECT_FLOAT_EQ(creature_follow::ClearView(View(0.2f, -5.0f, 60.0f), {}, LevelGround()).pitch, k_Pi / 8.0f);
-	EXPECT_FLOAT_EQ(creature_follow::ClearView(View(0.2f, 5.0f, 60.0f), {}, LevelGround()).pitch, k_Pi / 3.0f);
+	// The pitch stays at 22.5 degrees or more. The search takes the old pitch from the eye, here far below the focus.
+	const glm::vec3 below {10.0f, -50.0f, 0.0f};
+	EXPECT_NEAR(creature_follow::ClearView(View(0.2f, 0.5f, 60.0f), below, {}, LevelGround()).pitch, k_Pi / 8.0f, 1e-6f);
+}
+
+TEST(CreatureFollow, TheFollowMeasuresAnglesWithTheGameMaths)
+{
+	// The angles and the eye come from the same maths as the script camera, to the bit
+	const glm::vec3 focus {100.0f, 10.0f, 200.0f};
+	const glm::vec3 eye {131.5f, 47.25f, 161.75f};
+	const auto turned = creature_follow::HeadingPitchOf(eye, focus);
+	const auto look = script_camera::HeadingAndPitchFromPoints(eye, focus);
+	EXPECT_EQ(std::bit_cast<uint32_t>(turned.heading), std::bit_cast<uint32_t>(look.heading));
+	EXPECT_EQ(std::bit_cast<uint32_t>(turned.pitch), std::bit_cast<uint32_t>(look.pitch));
+	const auto view = View(2.3f, 0.6f, 75.0f);
+	EXPECT_EQ(creature_follow::Origin(focus, view), script_camera::PointFromDistanceHeadingAndPitch(focus, 75.0f, 2.3f, 0.6f));
+}
+
+TEST(CreatureFollow, TheStartTakesTheAnglesFromWhereTheCameraGlidesTo)
+{
+	// The camera glides from the south of the creature to the north of it. The follow takes its heading and pitch from
+	// the end of the glide, and its distance from the eye now.
+	const glm::vec3 creature {0.0f, 0.0f, 0.0f};
+	const creature_follow::StartPoints camera {
+	    .origin = {0.0f, 20.0f, -30.0f},
+	    .targetOrigin = {0.0f, 50.0f, 60.0f},
+	    .targetFocus = {0.0f, 0.0f, 0.0f},
+	};
+	const auto view = creature_follow::Start(camera, creature, 15.0f);
+	const auto turned = creature_follow::HeadingPitchOf(camera.targetOrigin, camera.targetFocus);
+	EXPECT_EQ(view.yaw, turned.heading);
+	EXPECT_EQ(view.pitch, turned.pitch);
+	EXPECT_NEAR(view.distance, glm::distance(camera.origin, creature), 1e-4f);
+}
+
+TEST(CreatureFollow, TheCursorKeysMoveWholePixels)
+{
+	// A frame of a sixtieth of a second gives 6.67 pixels, and the camera keeps the 6 whole pixels each way
+	EXPECT_FLOAT_EQ(creature_follow::KeysFor(1, -1, 1.0f / 60.0f).across, 6.0f);
+	EXPECT_FLOAT_EQ(creature_follow::KeysFor(1, -1, 1.0f / 60.0f).along, -6.0f);
+	// A very short frame gives no whole pixel, so the keys do not move the camera
+	EXPECT_FALSE(creature_follow::KeysFor(1, 1, 0.002f).Moving());
+}
+
+TEST(CreatureFollow, TheKeysTurnTheHeadingPastAHalfTurn)
+{
+	// The heading keeps the turns of the keys and does not wrap round
+	auto view = View(3.0f, 0.5f, 100.0f);
+	auto keys = creature_follow::KeysFor(-1, 0, 1.0f);
+	keys.shift = true;
+	ASSERT_EQ(creature_follow::Apply(view, keys, 1000.0f), creature_follow::KeyOutcome::Stay);
+	EXPECT_FLOAT_EQ(view.yaw, 3.0f + (400.0f * k_Pi / 1000.0f));
+}
+
+TEST(CreatureFollow, TheClearViewSwingTurnsTheEyeOneFrameLater)
+{
+	using namespace std::chrono_literals;
+	// A hill rises to the north (+z) of the creature, and the camera is behind the creature to the north
+	const camera_limits::Ground hill {
+	    .height = [](glm::vec2 point) { return std::max(point.y, 0.0f) * 2.0f; },
+	    .normal = [](glm::vec2 /*point*/) { return glm::vec3(0.0f, 1.0f, 0.0f); },
+	};
+	const Camera camera;
+	CreatureCameraModel model({0.0f, 40.0f, 80.0f}, {0.0f, 0.0f, 0.0f}, glm::vec3(0.0f), 10.0f);
+	const auto before = model.GetView();
+	model.ClearView(hill);
+	// The swing waits for the update
+	EXPECT_EQ(model.GetView().yaw, before.yaw);
+	const auto swing = model.Update(16'000us, camera);
+	ASSERT_TRUE(swing.has_value());
+	const auto after = model.GetView();
+	EXPECT_GT(std::abs(after.yaw - before.yaw), 1.0f);
+	// In the frame of the swing, the eye has the old heading and the new pitch
+	EXPECT_EQ(swing->origin,
+	          script_camera::PointFromDistanceHeadingAndPitch(swing->focus, after.distance, before.yaw, after.pitch));
+	// From the next frame, the eye has the new heading
+	const auto next = model.Update(16'000us, camera);
+	ASSERT_TRUE(next.has_value());
+	EXPECT_EQ(next->origin, creature_follow::Origin(next->focus, after));
 }
 
 // The mode's rules

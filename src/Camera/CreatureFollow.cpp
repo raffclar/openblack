@@ -13,19 +13,15 @@
 
 #include <algorithm>
 
-#include <glm/geometric.hpp>
-
+#include "Common/X87Vector.h"
 #include "DoubleClickFlight.h"
+#include "ScriptCameraModel.h"
 
 namespace openblack::creature_follow
 {
 
 namespace
 {
-/// A point this close to straight above or below the centre has no heading
-constexpr float k_NoHeadingWithin = 0.01f;
-/// Straight above, the game takes the pitch as a little short of a right angle
-constexpr float k_OverheadPitch = 1.5393804f;
 /// The wheel's zoom: each count it moves draws the camera in by this share, about the half-thousandth parts below
 constexpr float k_WheelZoomPerCount = -0.15f;
 /// Shift and the cursor keys tilt the camera this many radians a pixel; Ctrl and the cursor keys, and the wheel, scale
@@ -78,25 +74,27 @@ float ViewingDistance(float height)
 
 HeadingPitch HeadingPitchOf(glm::vec3 point, glm::vec3 centre)
 {
-	const auto offset = point - centre;
-	if (std::abs(offset.x) < k_NoHeadingWithin && std::abs(offset.z) < k_NoHeadingWithin)
-	{
-		return {.heading = 0.0f, .pitch = k_OverheadPitch};
-	}
-	const auto across = std::sqrt((offset.x * offset.x) + (offset.z * offset.z));
-	return {.heading = std::atan2(offset.x, offset.z), .pitch = std::atan2(offset.y, across)};
+	// The follow camera measures the angles with the same maths as the script camera
+	const auto look = script_camera::HeadingAndPitchFromPoints(point, centre);
+	return {.heading = look.heading, .pitch = look.pitch};
 }
 
 View Start(glm::vec3 cameraOrigin, glm::vec3 cameraFocus, glm::vec3 creature, float height, StartDistance start)
 {
-	const auto turned = HeadingPitchOf(cameraOrigin, cameraFocus);
+	return Start({.origin = cameraOrigin, .targetOrigin = cameraOrigin, .targetFocus = cameraFocus}, creature, height, start);
+}
+
+View Start(const StartPoints& camera, glm::vec3 creature, float height, StartDistance start)
+{
+	const auto turned = HeadingPitchOf(camera.targetOrigin, camera.targetFocus);
 	auto distance = ViewingDistance(height);
-	const glm::vec2 across {creature.x - cameraOrigin.x, creature.z - cameraOrigin.z};
-	if (start == StartDistance::KeepWhenClose && glm::length(across) < k_CloseAcross)
+	const float acrossX = creature.x - camera.origin.x;
+	const float acrossZ = creature.z - camera.origin.z;
+	if (start == StartDistance::KeepWhenClose && std::sqrt((acrossZ * acrossZ) + (acrossX * acrossX)) < k_CloseAcross)
 	{
 		// Already close, it stays about as far as it is, but no nearer than twice the creature's height and no further
 		// than it would start
-		const auto now = glm::distance(creature, cameraOrigin);
+		const auto now = x87::Distance<x87::SumOrder::Yxz>(creature, camera.origin);
 		const auto nearest = height * 2.0f;
 		distance = now > nearest ? std::min(now, distance) : nearest;
 	}
@@ -122,14 +120,15 @@ float EaseSeconds(float secondsInMode)
 
 glm::vec3 Origin(glm::vec3 focus, const View& view)
 {
-	return editor::OrbitOrigin(focus, view);
+	return script_camera::PointFromDistanceHeadingAndPitch(focus, view.distance, view.yaw, view.pitch);
 }
 
 Keys KeysFor(int across, int along, float seconds)
 {
+	// Each way keeps only the whole pixels of the frame
 	return {
-	    .across = static_cast<float>(across) * k_KeyPixelsPerSecond * seconds,
-	    .along = static_cast<float>(along) * k_KeyPixelsPerSecond * seconds,
+	    .across = std::trunc(static_cast<float>(across) * k_KeyPixelsPerSecond * seconds),
+	    .along = std::trunc(static_cast<float>(along) * k_KeyPixelsPerSecond * seconds),
 	};
 }
 
@@ -198,7 +197,6 @@ KeyOutcome Apply(View& view, std::optional<Offsets>& offsets, const Keys& keys, 
 		{
 			return KeyOutcome::Leave;
 		}
-		view.yaw = editor::WrapAngle(view.yaw);
 	}
 	view.distance = std::clamp(view.distance * zoom, k_MinDistance, k_MaxKeyDistance);
 	if (offsets.has_value())
@@ -223,11 +221,21 @@ float ClearingDistance(float distance)
 
 View ClearView(View view, glm::vec3 focus, const camera_limits::Ground& ground)
 {
+	return ClearView(view, Origin(focus, view), focus, ground);
+}
+
+View ClearView(View view, glm::vec3 eye, glm::vec3 focus, const camera_limits::Ground& ground)
+{
+	// The search starts from the angles and the distance of the eye that the camera has in this frame
+	const auto look = HeadingPitchOf(eye, focus);
+	const float distance = ClearingDistance(x87::Distance<x87::SumOrder::Zyx>(focus, eye));
 	// The follow camera and the double click flight use the same search for a clear view
-	const auto best =
-	    camera_fly::BestBearing(ground, {.heading = view.yaw, .pitch = view.pitch}, ClearingDistance(view.distance), focus);
-	view.yaw = editor::WrapAngle(best.heading);
-	view.pitch = best.pitch;
+	const auto best = camera_fly::BestBearing(ground, {.heading = look.heading, .pitch = look.pitch}, distance, focus);
+	// The camera measures the new angles again from the point that the search gives
+	const auto point = script_camera::PointFromDistanceHeadingAndPitch(focus, distance, best.heading, best.pitch);
+	const auto turned = HeadingPitchOf(point, focus);
+	view.yaw = turned.heading;
+	view.pitch = turned.pitch;
 	return view;
 }
 

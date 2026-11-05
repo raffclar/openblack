@@ -117,7 +117,13 @@ bool CreatureModeSystem::Enter(entt::entity creature, creature_follow::StartDist
 		return false;
 	}
 	const auto taken = Take(creature, [start](const Camera& camera, glm::vec3 position, float height) {
-		return std::make_unique<CreatureCameraModel>(camera.GetOrigin(), camera.GetFocus(), position, height, start);
+		// The angles come from the points that the camera glides to, and the distance from the eye now
+		const creature_follow::StartPoints points {
+		    .origin = camera.GetOrigin(),
+		    .targetOrigin = camera.GetOrigin(Camera::Interpolation::Target),
+		    .targetFocus = camera.GetFocus(Camera::Interpolation::Target),
+		};
+		return std::make_unique<CreatureCameraModel>(points, position, height, start);
 	});
 	if (taken)
 	{

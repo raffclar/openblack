@@ -29,6 +29,9 @@ public:
 	/// Starts on a creature, by its middle and height, from where the camera is
 	CreatureCameraModel(glm::vec3 cameraOrigin, glm::vec3 cameraFocus, glm::vec3 creature, float height,
 	                    creature_follow::StartDistance start = creature_follow::StartDistance::KeepWhenClose);
+	/// Starts on a creature from a camera that glides: the angles come from the points that it glides to
+	CreatureCameraModel(const creature_follow::StartPoints& camera, glm::vec3 creature, float height,
+	                    creature_follow::StartDistance start);
 	/// Starts on a creature with the view and values of a saved game of the original game
 	CreatureCameraModel(const creature_follow::Loaded& loaded, glm::vec3 creature, float height);
 
@@ -37,7 +40,8 @@ public:
 	void SetTarget(glm::vec3 position, float height, std::optional<uint16_t> gameAngle = std::nullopt);
 	/// Where the thing now is, as the camera reads it. On a thing with no model, the offsets give only the distance.
 	void SetTarget(const creature_follow::Target& target);
-	/// Swings the camera round and tilts it for a clear view of the creature, as Ctrl and Shift do together
+	/// Asks for a swing round and a tilt for a clear view of the creature, as Ctrl and Shift do together. The camera
+	/// swings in its next update.
 	void ClearView(const camera_limits::Ground& ground);
 	/// Turns it by keys, as if held this frame, on a screen so many pixels wide; returns whether they give the camera
 	/// back
@@ -95,6 +99,8 @@ private:
 	bool _autoReposition {true};
 	bool _leaveRequested {false};
 	bool _stoppedAtFence {false};
+	/// The land for the clear view swing that the next update does
+	std::optional<camera_limits::Ground> _clearView;
 };
 
 } // namespace openblack

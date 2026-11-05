@@ -16,6 +16,7 @@
 #include "ECS/Systems/CameraZoneSystemInterface.h"
 #include "Input/GameActionMapInterface.h"
 #include "Locator.h"
+#include "ScriptCameraModel.h"
 #include "Windowing/WindowingInterface.h"
 
 namespace openblack
@@ -24,6 +25,14 @@ namespace openblack
 CreatureCameraModel::CreatureCameraModel(glm::vec3 cameraOrigin, glm::vec3 cameraFocus, glm::vec3 creature, float height,
                                          creature_follow::StartDistance start)
     : _view(creature_follow::Start(cameraOrigin, cameraFocus, creature, height, start))
+    , _focus(creature_follow::Focus(creature, height))
+    , _position(creature)
+{
+}
+
+CreatureCameraModel::CreatureCameraModel(const creature_follow::StartPoints& camera, glm::vec3 creature, float height,
+                                         creature_follow::StartDistance start)
+    : _view(creature_follow::Start(camera, creature, height, start))
     , _focus(creature_follow::Focus(creature, height))
     , _position(creature)
 {
@@ -81,7 +90,7 @@ CreatureCameraModel::Points CreatureCameraModel::Aim() const
 
 void CreatureCameraModel::ClearView(const camera_limits::Ground& ground)
 {
-	_view = creature_follow::Clamped(creature_follow::ClearView(_view, _focus, ground));
+	_clearView = ground;
 }
 
 creature_follow::KeyOutcome CreatureCameraModel::Turn(const creature_follow::Keys& keys, float screenWidth)
@@ -110,6 +119,15 @@ std::optional<CameraModel::CameraInterpolationUpdateInfo> CreatureCameraModel::U
 	}
 	const auto aim = Aim();
 	auto origin = aim.origin;
+	// A clear view swing starts from the eye of this frame. The new pitch moves the eye at once, but the new heading
+	// moves it only from the next frame.
+	if (_clearView.has_value() && !KeepsOffsets())
+	{
+		const float heading = _view.yaw;
+		_view = creature_follow::Clamped(creature_follow::ClearView(_view, aim.origin, aim.focus, *_clearView));
+		origin = script_camera::PointFromDistanceHeadingAndPitch(aim.focus, _view.distance, heading, _view.pitch);
+	}
+	_clearView.reset();
 	// Where it would go outside the fence, it stops where its line of sight crosses the fence, and the player's own
 	// camera takes over from there
 	if (Locator::cameraZoneSystem::has_value())
