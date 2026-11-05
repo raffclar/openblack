@@ -635,14 +635,15 @@ void GameMagicWorld::Apply(const magic::EffectValues& values, std::span<const ma
 		}
 		if (outcome.lifeAfter.has_value())
 		{
-			if (LifeOf(outcome.entity).has_value())
+			if (registry.AllOf<CreatureNeeds>(outcome.entity))
 			{
 				SetLife(outcome.entity, *outcome.lifeAfter);
 			}
 			else
 			{
 				// Anything else living takes the heal, then the harm, as its kind takes it: a building hurt sends its
-				// people out
+				// people out. A thing that a script holds in a cutscene, or an indestructible thing, keeps its life when
+				// a step leaves nearly no life.
 				if (outcome.healed > 0.0f)
 				{
 					ecs::world_objects::IncreaseLife(outcome.entity, outcome.healed);
@@ -655,6 +656,10 @@ void GameMagicWorld::Apply(const magic::EffectValues& values, std::span<const ma
 				}
 			}
 		}
+		// The life is read again after the heal and the harm, as a protected thing or a building not yet built can keep
+		// its life. A thing that went with the harm has none left.
+		const bool destroyed =
+		    outcome.lifeBefore.has_value() && *outcome.lifeBefore != 0.0f && ecs::world_objects::LifeOf(outcome.entity) == 0.0f;
 		magic_living::AfterEffect(outcome.entity, values, source);
 		AddEffectAlignment(outcome, source, byCreature);
 		// The alignment history of the effect's player keeps each kind of change before the damping, also for a creature's
@@ -709,7 +714,6 @@ void GameMagicWorld::Apply(const magic::EffectValues& values, std::span<const ma
 			}
 		}
 		// Brought from some life to none it is destroyed, by the miracle's creature if one cast it
-		const bool destroyed = outcome.destroyed;
 		if (destroyed && byCreature)
 		{
 			registry.Get<Creature>(source.casterCreature).objectsDestroyed += 1.0f;

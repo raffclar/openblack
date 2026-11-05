@@ -169,6 +169,33 @@ TEST_F(EffectReceivers, HarmNeverBringsAnIndestructibleCreatureToNearlyNoLife)
 	EXPECT_FLOAT_EQ(ecs::world_objects::ReduceLife(free, 1.0f), 0.0f);
 }
 
+TEST_F(EffectReceivers, HarmAndHealChangeTheLifeOfAnAnimal)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto cow = Made();
+	registry.Assign<Animal>(cow).type = AnimalInfo::Cow;
+	EXPECT_FLOAT_EQ(ecs::world_objects::ReduceLife(cow, 0.25f), 0.75f);
+	EXPECT_FLOAT_EQ(registry.Get<Animal>(cow).life, 0.75f);
+	EXPECT_FLOAT_EQ(ecs::world_objects::IncreaseLife(cow, 0.5f), 1.0f);
+	EXPECT_FLOAT_EQ(ecs::world_objects::ReduceLife(cow, 1.5f), 0.0f);
+	EXPECT_FLOAT_EQ(ecs::world_objects::LifeOf(cow), 0.0f);
+}
+
+TEST_F(EffectReceivers, HarmNeverBringsAnIndestructibleAnimalOrThingToNearlyNoLife)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto cow = Made();
+	registry.Assign<Animal>(cow).type = AnimalInfo::Cow;
+	registry.Assign<Indestructible>(cow);
+	EXPECT_FLOAT_EQ(ecs::world_objects::ReduceLife(cow, 0.5f), 0.5f);
+	EXPECT_FLOAT_EQ(ecs::world_objects::ReduceLife(cow, 1.0f), 0.5f);
+	const auto firefly = Made();
+	registry.Assign<Firefly>(firefly);
+	registry.Assign<Indestructible>(firefly);
+	EXPECT_FLOAT_EQ(ecs::world_objects::ReduceLife(firefly, 0.25f), 0.75f);
+	EXPECT_FLOAT_EQ(ecs::world_objects::ReduceLife(firefly, 1.5f), 0.75f);
+}
+
 TEST_F(EffectReceivers, ATownsDesireFlagTakesNoEffectEvenWithTheDataOfThePrayerSite)
 {
 	auto& registry = Locator::entitiesRegistry::value();
