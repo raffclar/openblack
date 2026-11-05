@@ -1169,7 +1169,7 @@ glm::vec3 HandGrabSystem::Pull(HandGrab& grab, const Frame& frame)
 		                                               .seconds = frame.seconds,
 		                                           });
 		grab.stretch.SetDestination(result.stretchTarget, hand_grab::k_TugStretchSeconds);
-		grab.stretch.Update(frame.seconds);
+		grab.stretch.UpdateInlineValue(frame.seconds);
 		if (result.comesFree)
 		{
 			// A standing tree pulled out of the ground leaves its roots in a hole. The hole is at the base of the tree,

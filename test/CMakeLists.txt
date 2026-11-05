@@ -2387,3 +2387,11 @@ openblack_setup_and_add_test(test_lobby_results online/test_lobby_results.cpp)
 openblack_setup_and_add_test(test_curl_websocket_thread online/test_curl_websocket_thread.cpp)
 openblack_setup_and_add_test(test_script_place_text test_script_place_text.cpp)
 openblack_setup_and_add_test(test_debug_download test_debug_download.cpp)
+openblack_setup_and_add_test(
+  test_oracle_hand_tug_lean oracle/test_oracle_hand_tug_lean.cpp
+)
+set_tests_properties(
+  test_oracle_hand_tug_lean
+  PROPERTIES ENVIRONMENT
+             "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)
