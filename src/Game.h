@@ -79,11 +79,6 @@ namespace openblack
 {
 enum class TurnApiCheck : uint8_t;
 
-namespace audio
-{
-class AtmosAudio;
-class GameMusic;
-} // namespace audio
 class Camera;
 class Profiler;
 namespace gui
@@ -334,7 +329,7 @@ public:
 	/// The frames each second that the statistics of the game keep
 	[[nodiscard]] int32_t FrameRate() const override { return _statisticsFrameRate.Rate(); }
 	/// The audio of a turn of the temple
-	void PlayTempleAudioTurn() override { ProcessTempleAudioTurn(); }
+	void PlayTempleAudioTurn() override;
 	/// The tools that act before each turn: the testbed scenario of a network game
 	void BeforeTurn() override
 	{
@@ -447,12 +442,8 @@ public:
 	void UpdateEntitiesFrame(std::chrono::microseconds deltaTime);
 	/// The keys of the camera, after the camera moved. They move the camera in the next frame.
 	void UpdateCameraKeys(std::chrono::microseconds deltaTime);
-	/// The game's music, for a turn of the world or of the temple
-	void ProcessMusicTurn(glm::vec3 cameraPosition, bool inCitadel);
 	/// The paused, slower and quicker words at the top of the screen, a frame on by the real time
 	void UpdatePauseText();
-	/// The audio of a turn inside the temple, while the world is paused
-	void ProcessTempleAudioTurn();
 	/// The keys that take the player into the temple's rooms, from outside it or within
 	void ProcessTempleRoomKeys();
 	bool Update() noexcept;
@@ -565,9 +556,6 @@ public:
 		_mousePosition = position;
 		_handPointer.Moved();
 	}
-	[[nodiscard]] const audio::AtmosAudio* GetAtmosAudio() const { return _atmosAudio.get(); }
-	[[nodiscard]] audio::GameMusic* GetGameMusic() { return _gameMusic.get(); }
-	[[nodiscard]] const audio::GameMusic* GetGameMusic() const { return _gameMusic.get(); }
 	[[nodiscard]] const HandAnimation* GetHandAnimation() const { return _handAnimation.get(); }
 
 	/// The frame being made is written to a PNG once drawn, without the debug windows if asked
@@ -1113,8 +1101,6 @@ private:
 	std::optional<float> _nearClipUnderInspector;
 	/// A frame drawn without the debug windows though no picture is taken of it
 	std::optional<uint32_t> _debugGuiHiddenFrame;
-	std::unique_ptr<audio::AtmosAudio> _atmosAudio;
-	std::unique_ptr<audio::GameMusic> _gameMusic;
 	std::unique_ptr<HandAnimation> _handAnimation;
 	/// Poses the hand around the miracle seed it holds
 	magic::HandHoldPoser _handHold;
