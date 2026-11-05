@@ -137,7 +137,8 @@ list(REMOVE_ITEM OPENBLACK_SIM_SOURCES ${OPENBLACK_CLIENT_SOURCES}
 # The MSVC librarian cannot make a static library that is larger than 4 GB, and each object of a Debug build keeps its
 # own debug information. For this reason, the simulation is in more than one static library. The reflection library has
 # the reflection of the components (src/ECS/Reflection). The debug library has the debug tools and the inspector
-# (src/Debug and src/Inspector). These two libraries are parts of the simulation, as the systems library is.
+# (src/Debug and src/Inspector). The creature systems library has the systems of the creatures. These libraries are
+# parts of the simulation, as the systems library is.
 set(OPENBLACK_REFLECTION_SOURCES ${OPENBLACK_SIM_SOURCES})
 list(FILTER OPENBLACK_REFLECTION_SOURCES INCLUDE REGEX "/src/ECS/Reflection/")
 set(OPENBLACK_SIM_DEBUG_SOURCES ${OPENBLACK_SIM_SOURCES})
@@ -145,6 +146,11 @@ list(FILTER OPENBLACK_SIM_DEBUG_SOURCES INCLUDE REGEX "/src/(Debug|Inspector)/")
 list(REMOVE_ITEM OPENBLACK_SIM_SOURCES ${OPENBLACK_REFLECTION_SOURCES}
      ${OPENBLACK_SIM_DEBUG_SOURCES}
 )
+set(OPENBLACK_CREATURE_SYSTEM_SOURCES ${OPENBLACK_SYSTEM_SOURCES})
+list(FILTER OPENBLACK_CREATURE_SYSTEM_SOURCES INCLUDE REGEX
+     "/ECS/Systems/Implementations/Creature[^/]*$"
+)
+list(REMOVE_ITEM OPENBLACK_SYSTEM_SOURCES ${OPENBLACK_CREATURE_SYSTEM_SOURCES})
 
 # No file of the simulation includes a header of the client or of the devices with no hardware. The check reads the
 # includes of all the files of the simulation, also the files that this platform does not build. It runs at each
@@ -540,11 +546,12 @@ target_compile_options(
   PUBLIC "$<IF:$<CXX_COMPILER_ID:MSVC>,/fp:precise,-ffp-contract=off>"
 )
 
-# The simulation libraries (the simulation, its systems, its reflection and its debug tools) are built with the same
-# options as the game's library: they take each build property of that library, so a property added above reaches all of
-# them. They link the same libraries as the game's library, but not the graphics library, the window system (SDL), the
-# debug windows (Dear ImGui), the audio device (OpenAL) or the game's library itself. The simulation libraries use each
-# other's symbols, which static libraries may do; the game's library uses them, and they do not use it.
+# The simulation libraries (the simulation, its systems, its creature systems, its reflection and its debug tools) are
+# built with the same options as the game's library: they take each build property of that library, so a property added
+# above reaches all of them. They link the same libraries as the game's library, but not the graphics library, the
+# window system (SDL), the debug windows (Dear ImGui), the audio device (OpenAL) or the game's library itself. The
+# simulation libraries use each other's symbols, which static libraries may do; the game's library uses them, and they
+# do not use it.
 if (NOT ANDROID)
   # The libraries of the client only, and a pattern for the window system, which the game's library links by a
   # generator expression
@@ -556,8 +563,12 @@ if (NOT ANDROID)
   add_library(openblack_sim STATIC ${OPENBLACK_SIM_SOURCES})
   add_library(openblack_reflection STATIC ${OPENBLACK_REFLECTION_SOURCES})
   add_library(openblack_sim_debug STATIC ${OPENBLACK_SIM_DEBUG_SOURCES})
-  set(OPENBLACK_SIM_LIBRARIES openblack_sim openblack_systems
-                              openblack_reflection openblack_sim_debug
+  add_library(
+    openblack_creature_systems STATIC ${OPENBLACK_CREATURE_SYSTEM_SOURCES}
+  )
+  set(OPENBLACK_SIM_LIBRARIES
+      openblack_sim openblack_systems openblack_creature_systems
+      openblack_reflection openblack_sim_debug
   )
   add_library(openblack_headless STATIC ${OPENBLACK_HEADLESS_SOURCES})
   # The version of the build is a part of the simulation: the server and the game both write it
