@@ -51,6 +51,7 @@
 #include "Common/DeveloperToolsGate.h"
 #include "Console.h"
 #include "Creature/BonusCreatures.h"
+#include "CreatureMindWindow.h"
 #include "CreatureSpawner.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/Transform.h"
@@ -158,6 +159,7 @@ std::unique_ptr<DebugGuiInterface> DebugGuiInterface::Create(graphics::RenderPas
 	debugWindows.emplace_back(std::make_unique<StateHash>());
 	debugWindows.emplace_back(std::make_unique<MemoryUse>());
 	debugWindows.emplace_back(std::make_unique<AlignmentHistory>());
+	debugWindows.emplace_back(std::make_unique<CreatureMindWindow>());
 	debugWindows.emplace_back(new Advisors);
 	debugWindows.emplace_back(std::make_unique<Challenges>());
 	debugWindows.emplace_back(new Magic);

@@ -26,6 +26,7 @@
 
 #include "Creature/CreatureAnimationLog.h"
 #include "Creature/CreatureDecisionTree.h"
+#include "Creature/CreatureMindView.h"
 #include "ECS/Systems/FixedOutlineSystemInterface.h"
 #include "ECS/Systems/LandShadeSystemInterface.h"
 #include "EntityDescription.h"
@@ -168,6 +169,10 @@ struct CreatureSources
 	std::function<void()> clearAnimationLogs;
 	/// Gives a creature an order; none when the inspector may not give orders
 	std::function<CreatureOrderResult(entt::entity creature, const CreatureOrder& order)> order;
+	/// The developer record of a creature's mind over the last turns, or none when no tool records the creature
+	std::function<const creature_mind_view::Trace*(entt::entity creature)> mindTrace;
+	/// Starts or stops the record of a creature's mind; none when the build has no mind log
+	std::function<void(entt::entity creature, bool record)> recordMind;
 };
 
 ///   creature.list                       the creatures, what each does and its strongest desire

@@ -7,22 +7,31 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <cstdint>
+
 #include <array>
 #include <memory>
 #include <optional>
+#include <string>
+#include <string_view>
 
 #include <gtest/gtest.h>
 #include <spdlog/sinks/null_sink.h>
 #include <spdlog/spdlog.h>
 
+#include "3D/InfluenceCircle.h"
+#include "Camera/CameraZones.h"
 #include "ECS/Components/Influence.h"
 #include "ECS/Components/MagicShield.h"
 #include "ECS/Components/Player.h"
+#include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/CameraZoneSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "InfoConstants.h"
 #include "Locator.h"
+#include "Particles/LightSheet.h"
 
 // Enable this define because we use a custom locator
 #define LOCATOR_IMPLEMENTATIONS
@@ -59,6 +68,32 @@ public:
 	entt::entity hand {entt::null};
 };
 
+/// A land's zones with a fence on from 900 to 1100 across, round the middle of the land
+class FenceRoundTheMiddle final: public systems::CameraZoneSystemInterface
+{
+public:
+	FenceRoundTheMiddle()
+	{
+		_zones.fenceOn = true;
+		_zones.fence = {{900.0f, 0.0f, 900.0f}, {1100.0f, 0.0f, 900.0f}, {1100.0f, 0.0f, 1100.0f}, {900.0f, 0.0f, 1100.0f}};
+	}
+	bool SetZones(std::string_view /*fileName*/) override { return true; }
+	void Reset() override {}
+	void ClearZones() override {}
+	[[nodiscard]] const camera_zones::Zones& GetZones() const override { return _zones; }
+	[[nodiscard]] const std::string& GetFileName() const override { return _name; }
+	void FenceHit(const glm::vec3& /*origin*/, const glm::vec3& /*listener*/) override {}
+	[[nodiscard]] const particles::LightSheet& GetForceField() const override { return _sheet; }
+	[[nodiscard]] uint32_t GetFenceHits() const override { return 0; }
+	void SetInclusionDistance(float /*distance*/) override {}
+	[[nodiscard]] float GetInclusionDistance() const override { return 0.0f; }
+
+private:
+	camera_zones::Zones _zones;
+	std::string _name;
+	particles::LightSheet _sheet;
+};
+
 /// The player's own influence reaches 100 m round the middle of the land
 constexpr glm::vec3 k_Middle {1000.0f, 0.0f, 1000.0f};
 constexpr float k_Reach = 100.0f;
@@ -83,12 +118,14 @@ protected:
 		const auto source = registry.Create();
 		registry.Assign<components::Transform>(source, k_Middle, glm::mat3(1.0f), glm::vec3(1.0f));
 		registry.Assign<components::InfluenceSource>(source, PlayerNames::PLAYER_ONE, k_Reach);
+		EmplaceInfluenceTable();
 		_hands->hand = registry.Create();
 		registry.Assign<components::Transform>(_hands->hand, k_Middle, glm::mat3(1.0f), glm::vec3(1.0f));
 	}
 	void TearDown() override
 	{
 		Locator::time::reset();
+		Locator::cameraZoneSystem::reset();
 		Locator::infoConstants::reset();
 		Locator::playerSystem::reset();
 		Locator::handSystem::reset();
@@ -105,6 +142,15 @@ protected:
 		return state;
 	}
 	void MoveHand(glm::vec3 to) { Locator::entitiesRegistry::value().Get<components::Transform>(_hands->hand).position = to; }
+	/// The influence table of the game: whole to 0.4 of the radius, falling over the next 0.2, with a small part of 0.2
+	static void EmplaceInfluenceTable()
+	{
+		// The tables are large: made on the heap
+		auto info = std::make_unique<InfoConstants>();
+		info->influence = {
+		    .percentageFullInfluence = 0.4f, .percentageDistanceForDecreasingGradient = 0.2f, .valueOfSmall = 0.2f};
+		Locator::infoConstants::emplace(*info);
+	}
 
 	FakeHands* _hands {nullptr};
 	entt::entity _player {entt::null};
@@ -182,8 +228,33 @@ TEST_F(VirtualGrant, WithinAScriptsAntiInfluenceThePlayerHasNone)
 	registry.Assign<components::InfluenceSource>(anti, PlayerNames::PLAYER_ONE, 30.0f, true);
 	EXPECT_EQ(_influence.PlayerRawInfluence(PlayerNames::PLAYER_ONE, k_Middle), 0.0f);
 	EXPECT_EQ(_influence.PlayerRawInfluence(PlayerNames::PLAYER_ONE, k_Middle + glm::vec3(29.0f, 0.0f, 0.0f)), 0.0f);
-	// Outside it the player's own influence is whole, and the other players keep theirs
-	EXPECT_EQ(_influence.PlayerRawInfluence(PlayerNames::PLAYER_ONE, k_Middle + glm::vec3(50.0f, 0.0f, 0.0f)), 1.0f);
+	// Outside it the player's own influence is whole where its source is whole, and the other players keep theirs
+	EXPECT_EQ(_influence.PlayerRawInfluence(PlayerNames::PLAYER_ONE, k_Middle + glm::vec3(35.0f, 0.0f, 0.0f)), 1.0f);
+}
+
+TEST_F(VirtualGrant, AScriptsInfluenceIsWholeNearItsMiddleAndFallsToItsEdge)
+{
+	const auto at = [this](float x) {
+		return _influence.PlayerRawInfluence(PlayerNames::PLAYER_ONE, k_Middle + glm::vec3(x, 0.0f, 0.0f));
+	};
+	// Whole to two fifths of the radius. The distance is measured in map units, so the values are near.
+	EXPECT_EQ(at(0.0f), 1.0f);
+	EXPECT_EQ(at(30.0f), 1.0f);
+	// Then from four fifths down to nothing at three fifths
+	EXPECT_NEAR(at(50.0f), 0.4f, 0.002f);
+	// Then from a fifth down to nothing at the edge
+	EXPECT_NEAR(at(80.0f), 0.1f, 0.002f);
+	EXPECT_EQ(at(100.0f), 0.0f);
+}
+
+TEST(InfluenceOnRange, TheLastPartIsAFifthAsADouble)
+{
+	// A fifth as a double and as a float give different products at this distance
+	const float outer = (0.2f + 0.4f) * 100.0f;
+	const float part = 1.0f - (79.0f - outer) / (100.0f - outer);
+	const float expected = static_cast<float>(static_cast<double>(part) * 0.2);
+	EXPECT_NE(expected, part * 0.2f);
+	EXPECT_EQ(influence::OnRange(79.0f, 100.0f, 0.4f, 0.2f, 0.2f), expected);
 }
 
 TEST_F(VirtualGrant, AScriptsInfluenceGoesAboutWithItsObject)
@@ -209,6 +280,7 @@ TEST_F(VirtualGrant, AHeldThingUsedOnTheLandCountsAtTheGameTurnNow)
 	info->citadel.virtualInfluenceMaxDistance = 200.0f;
 	info->citadel.virtualInfluenceMaxGameTicks = 200;
 	info->citadel.virtualInfluenceChantsToDouble = 50.0f;
+	info->influence = Locator::infoConstants::value().influence;
 	Locator::infoConstants::emplace(*info);
 	auto& clock = Locator::time::emplace<systems::TimeSystem>([] { return uint32_t {0}; });
 	// The hand is just past the border, a little way from where it was last inside, at turn 1
@@ -234,4 +306,19 @@ TEST_F(VirtualGrant, AHeldThingUsedOnTheLandCountsAtTheGameTurnNow)
 	const float atTurnNow = expect(now);
 	_influence.HeldThingUsedOnLand(PlayerNames::PLAYER_ONE);
 	EXPECT_EQ(state.fraction, atTurnNow);
+}
+
+TEST_F(VirtualGrant, OutsideTheCameraFenceThePlayerHasNoInfluenceFromATown)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const glm::vec3 townPlace {1300.0f, 0.0f, 1000.0f};
+	const auto town = registry.Create();
+	registry.Assign<components::Transform>(town, townPlace, glm::mat3(1.0f), glm::vec3(1.0f));
+	registry.Assign<components::Town>(town).owner = PlayerNames::PLAYER_ONE;
+	registry.Assign<components::TownInfluence>(town, 100.0f, 100.0f);
+	EXPECT_EQ(_influence.PlayerRawInfluence(PlayerNames::PLAYER_ONE, townPlace), 1.0f);
+	Locator::cameraZoneSystem::emplace<FenceRoundTheMiddle>();
+	EXPECT_EQ(_influence.PlayerRawInfluence(PlayerNames::PLAYER_ONE, townPlace), 0.0f);
+	// Inside the fence the source at the middle still counts
+	EXPECT_EQ(_influence.PlayerRawInfluence(PlayerNames::PLAYER_ONE, k_Middle), 1.0f);
 }
