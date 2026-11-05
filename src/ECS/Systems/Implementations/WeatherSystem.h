@@ -15,6 +15,7 @@
 
 #include <entt/entity/entity.hpp>
 
+#include "ECS/AmbientWind.h"
 #include "ECS/ScriptWeatherRules.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
 
@@ -60,6 +61,7 @@ public:
 	entt::entity AddStandingStorm(const script_weather::LandStorm& storm) override;
 	void SetBackgroundWeather(const components::WeatherInfo& weather) override;
 	[[nodiscard]] components::WeatherInfo GetBackgroundWeather() const override { return _background; }
+	[[nodiscard]] glm::vec2 GetAmbientWind() const override { return _ambientWind; }
 	void ClearStorms() override;
 	void StrikeLightning(bool bolt) override;
 
@@ -133,6 +135,9 @@ private:
 	entt::entity _forcedStorm {entt::null};
 	/// The weather of each place before the storms add to it. It stays from one land to the next.
 	components::WeatherInfo _background {};
+	/// The direction of the background weather's wind at the start of the last turn. A new land and a load keep it, so
+	/// it changes only with the next turn.
+	glm::vec2 _ambientWind {ambient_wind::Start()};
 	std::vector<components::WeatherInfo> _grid;
 	uint8_t _stamp {1};
 };

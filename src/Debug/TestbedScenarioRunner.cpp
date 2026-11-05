@@ -599,6 +599,12 @@ void Runner::Stop()
 		Locator::entitiesRegistry::value().Context().mapScriptGlobals.landNumber = *_landNumberBefore;
 	}
 	_landNumberBefore.reset();
+	// The background weather is as it was
+	if (_backgroundWeatherBefore.has_value() && Locator::weatherSystem::has_value())
+	{
+		Locator::weatherSystem::value().SetBackgroundWeather(*_backgroundWeatherBefore);
+	}
+	_backgroundWeatherBefore.reset();
 	// The camera zones that the scenario set go
 	if (_cameraZoneSet && Locator::cameraZoneSystem::has_value())
 	{

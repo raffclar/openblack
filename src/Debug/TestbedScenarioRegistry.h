@@ -210,6 +210,9 @@ struct Environment
 	std::optional<int32_t> landNumber;
 	/// The snow lies this deep in every cell of the island as the scenario starts, 0 to 255. A testbed set-up step.
 	std::optional<float> snowDepth;
+	/// The background weather's wind along x and z, -128 to 127, as the real-world weather sets it: 1 and 1 for its
+	/// type 10. The runner puts the background weather back when the scenario stops.
+	std::optional<glm::ivec2> backgroundWind;
 	/// The players other than the first that are in the game while the scenario runs, such as a rival god for whom a
 	/// script makes a creature. The runner removes them when the scenario stops.
 	std::vector<PlayerNames> players;

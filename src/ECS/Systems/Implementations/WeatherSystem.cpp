@@ -583,6 +583,9 @@ void WeatherSystem::ProcessStorms(uint32_t turn)
 		}
 		_stamp = 1;
 	}
+	// The ambient wind follows the background weather of the start of the turn. The real-world weather changes the
+	// background weather after the turn, so the next turn sees that change.
+	_ambientWind = ambient_wind::FromBackground(_background.windX, _background.windZ);
 }
 
 void WeatherSystem::ProcessClimates(uint32_t turn)

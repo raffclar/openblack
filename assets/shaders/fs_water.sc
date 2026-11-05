@@ -18,6 +18,9 @@ uniform vec4 u_seaRows;
 uniform vec4 u_seaMode;
 // xyz: the camera's position
 uniform vec4 u_seaCamera;
+// How far the texture drifted with the wind: xy the rows' offset along x and z in units, zw the still sea's offset in
+// repeats of its texture
+uniform vec4 u_seaDrift;
 
 // The point of the sea under the centre of screen pixel (px, py), py counted from the top; w is 0 above the horizon
 vec4 PlanePoint(float px, float py)
@@ -37,8 +40,9 @@ float ViewDepth(vec3 p)
 	return mul(u_view, vec4(p, 1.0f)).z;
 }
 
-// The texture coordinates of row r at pixel column px: where the row meets the sea, moved along the view by its ripple.
-// Each row ripples by its own step of a 16 step sine, fully beyond a depth of 70 and fading out by a depth of 30.
+// The texture coordinates of row r at pixel column px: where the row meets the sea, moved along the view by its ripple
+// and by the wind's drift. Each row ripples by its own step of a 16 step sine, fully beyond a depth of 70 and fading out
+// by a depth of 30.
 vec2 RowUv(float r, float px)
 {
 	vec3 p = PlanePoint(px, u_seaRows.x + 2.0f * r).xyz;
@@ -46,7 +50,7 @@ vec2 RowUv(float r, float px)
 	float step = mod(u_seaParams.y + 2.0f * (r + 1.0f), 16.0f);
 	float s = sin(step * 3.14159265f / 8.0f);
 	float amplitude = inverseDepth < 1.0f / 70.0f ? s : (inverseDepth < 1.0f / 30.0f ? (1.0f / inverseDepth - 30.0f) * 0.025f * s : 0.0f);
-	return (p.xz + u_seaParams.zw * amplitude) / u_seaParams.x;
+	return (u_seaDrift.xy + (p.xz + u_seaParams.zw * amplitude)) / u_seaParams.x;
 }
 
 // The alpha of row r: whole up to a view depth of 7000, falling to 80 of 255 at 14000. A first row that starts inside
@@ -84,14 +88,14 @@ void main()
 	float rowAlpha;
 	if (u_seaMode.x > 0.5f)
 	{
-		// The still sea: the texture repeats 50 times across the 140000 unit square, wholly opaque; beyond it only what
-		// lies under the sea
+		// The still sea: the texture repeats 50 times across the 140000 unit square, moved by the wind's drift, wholly
+		// opaque; beyond it only what lies under the sea
 		if (abs(under.x) > 70000.0f || abs(under.z) > 70000.0f)
 		{
 			gl_FragColor = vec4(texture2D(s_reflection, reflectionUv).rgb, 1.0f);
 			return;
 		}
-		uv = vec2(under.x + 70000.0f, 70000.0f - under.z) / u_seaParams.x;
+		uv = u_seaDrift.zw + vec2(under.x + 70000.0f, 70000.0f - under.z) / u_seaParams.x;
 		rowAlpha = 1.0f;
 	}
 	else
