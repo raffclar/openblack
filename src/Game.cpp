@@ -60,7 +60,6 @@
 #include "Creature/LeashOrders.h"
 #include "Debug/DebugGuiInterface.h"
 #include "Debug/FrameStatsLog.h"
-#include "Debug/FrameWriteGuard.h"
 #include "ECS/ChallengePictures.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/MagicShield.h"
@@ -90,6 +89,7 @@
 #include "ECS/Systems/InspectorLoading.h"
 #include "ECS/Systems/InspectorSystemInterface.h"
 #include "ECS/Systems/LandSystemInterface.h"
+#include "ECS/Systems/LoadingScreenSystemInterface.h"
 #include "ECS/Systems/MiracleFxSystemInterface.h"
 #include "ECS/Systems/MusicMoodSystemInterface.h"
 #include "ECS/Systems/NetworkGameSystemInterface.h"
@@ -116,7 +116,6 @@
 #include "Gui/Canvas.h"
 #include "Gui/GameInterface.h"
 #include "Gui/JoinOnlineEntry.h"
-#include "Gui/LoadingScreen.h"
 #include "Gui/MultiplayerFrontEnd.h"
 #include "Gui/PingDisplay.h"
 #include "Gui/StartupRules.h"
@@ -289,8 +288,6 @@ Game::Game(Arguments&& args) noexcept
     , _startGodsRingMap(args.startGodsRingMap)
     , _scenarioRequest(args.scenario)
     , _inspectPort(args.inspectPort)
-    , _fightAutopilot(args.fightAutopilot)
-    , _fightTranscriptFolder(args.fightTranscriptFolder)
     , _simulation(args.simulation)
     , _profileFolder(args.profileFolder)
     // Any of these is a developer's or a tool's run; the game started plainly, or with only its window's size, mode,
@@ -315,9 +312,17 @@ Game::Game(Arguments&& args) noexcept
     , _turnBesideDraw(args.turnBesideDraw)
 {
 	Locator::camera::emplace(glm::zero<glm::vec3>());
+	// The screens of the start and of the loads, and the timers of the start
+	InitializeLoadingScreens({
+	    .quitRequested = [this]() { return _quitRequested; },
+	    .requestQuit = [this]() { RequestQuit(); },
+	    .followWindowSize = [this]() { FollowWindowSize(); },
+	});
 	// The log of each part of the game
 	simulation::StartLogs(args.logFile, args.logLevels);
 	sInstance = this;
+	// The logs and tools of a tool's run read the request of the run, which the game keeps
+	InitializeToolRun(_simulation, args.fightAutopilot, args.fightTranscriptFolder);
 	for (const auto& ignored : args.ignoredDeveloperOptions)
 	{
 		SPDLOG_LOGGER_WARN(spdlog::get("game"), "This build has no developer tools: it ignores the option {}", ignored);
@@ -404,7 +409,10 @@ Game::~Game() noexcept
 	}
 	Locator::screenFade::reset();
 	Locator::gameInterface::reset();
-	_loadingScreen.reset();
+	if (Locator::loadingScreenSystem::has_value())
+	{
+		Locator::loadingScreenSystem::value().ReleaseScreen();
+	}
 	// What the scripts asked of openblack that it can't do yet, for the natives to write next
 	if (Locator::chlapi::has_value())
 	{
@@ -430,6 +438,8 @@ Game::~Game() noexcept
 	}
 	SDL_Quit(); // todo: move to GameWindow
 	spdlog::shutdown();
+	// The timers of the start that still run stop after the logs, so they write nothing
+	Locator::loadingScreenSystem::reset();
 	// A later game, or a test, must not find this one through the static pointer
 	if (sInstance == this)
 	{
@@ -461,55 +471,9 @@ bool Game::Update() noexcept
 {
 	// The frame's steps go in the game's order, because many systems depend on it (see game_frame::k_Frame)
 	FrameState frame;
-	if (!game_frame::PlayFrame([this, &frame](game_frame::Step step) {
-		    // The guard of a tool's run looks at each step but the turns, which alone may change the synced world. The guard
-		    // does not tell the changes of the debug windows. The timeline of the testbed runner acts in them by the game
-		    // time of the frame. It is a tool for the debug builds and is not part of the game. The guard tells only the
-		    // turns of these changes, because the next steps can file the runner's new things in the map.
-		    if (!_frameGuard || step == game_frame::Step::Turns ||
-		        Locator::time::value().GetTurn() < _simulation->frameGuardFrom)
-		    {
-			    if (_frameGuard)
-			    {
-				    _frameGuard->Forget();
-			    }
-			    const bool played = PlayFrameStep(step, frame);
-			    // The guard looks only at the frame writes of the steps that it looks at
-			    if (_frameGuard && Locator::temple::has_value())
-			    {
-				    std::ignore = Locator::temple::value().TakeFrameWrites();
-			    }
-			    return played;
-		    }
-		    // The temple of a game alone writes the synced world in some frame steps, as the original game does. The guard
-		    // knows these writers by name. All other writes in a frame step trip the guard. The temple can also write after
-		    // the draw, between two frames. The guard gives these changes and their writers to the next step.
-		    const auto frameWrites = [] {
-			    return Locator::temple::has_value() ? Locator::temple::value().TakeFrameWrites() : temple::FrameWrites {};
-		    };
-		    const auto landLoads = [] {
-			    return Locator::landSystem::has_value() ? Locator::landSystem::value().LandLoads() : 0U;
-		    };
-		    const auto loadsBefore = landLoads();
-		    _frameGuard->Before();
-		    const bool played = PlayFrameStep(step, frame);
-		    const auto writers = frameWrites();
-		    if (!frame_write_guard::LooksAtStep(loadsBefore, landLoads()))
-		    {
-			    // The step loaded a land, which makes a new synced world: the next step takes a new sample
-			    _frameGuard->Forget();
-			    return played;
-		    }
-		    if (step == game_frame::Step::DebugGui)
-		    {
-			    _frameGuard->AfterTool(game_frame::Name(step), Locator::time::value().GetTurn());
-		    }
-		    else
-		    {
-			    _frameGuard->After(game_frame::Name(step), Locator::time::value().GetTurn(), writers,
-			                       Locator::time::value().IsNetworkGame());
-		    }
-		    return played;
+	auto& toolRun = Locator::toolRunSystem::value();
+	if (!game_frame::PlayFrame([this, &frame, &toolRun](game_frame::Step step) {
+		    return toolRun.PlayFrameStep(step, [this, &frame, step] { return PlayFrameStep(step, frame); });
 	    }))
 	{
 		return false;
@@ -620,8 +584,7 @@ const std::filesystem::path& Game::GetLandscapePath() const noexcept
 bool Game::Initialize() noexcept
 {
 	auto& config = Locator::config::value();
-	_startupTimer.emplace("startup", _launchTime);
-	_startupTimer->Step("launch");
+	Locator::loadingScreenSystem::value().StartStartupTimer(_launchTime);
 
 	if (config.graphicsBackend != GraphicsBackend::Noop || config.noDraw)
 	{
@@ -657,7 +620,7 @@ bool Game::Initialize() noexcept
 	{
 		_windowSize = windowing::SizeFollower(glm::u16vec2(Locator::windowing::value().GetSize()));
 	}
-	_startupTimer->Step("window, renderer and audio device");
+	Locator::loadingScreenSystem::value().StartupStep("window, renderer and audio device");
 	auto& fileSystem = Locator::filesystem::value();
 	_buildVersion = game_assets::ReadBuildVersion(fileSystem);
 	SPDLOG_LOGGER_INFO(spdlog::get("game"), "openblack build {}", _buildVersion.Text());
@@ -801,7 +764,7 @@ bool Game::Initialize() noexcept
 		SPDLOG_LOGGER_CRITICAL(spdlog::get("game"), "Failed to initialize game services.");
 		return false;
 	}
-	_startupTimer->Step("game services and shaders");
+	Locator::loadingScreenSystem::value().StartupStep("game services and shaders");
 	// The game is the view of the land's loads
 	Locator::landSystem::value().SetView(this);
 	Locator::landSystem::value().SetNewGameStart(_newGameStart);
@@ -859,10 +822,10 @@ bool Game::Initialize() noexcept
 		{
 			loadingData.emplace("game data");
 			Locator::gameActionSystem::value().SetInputLockMode(_inspectInputLock);
-			StartFightTools();
+			Locator::toolRunSystem::value().StartFightTools(_networkLandPending);
 		}
 	}
-	StartSimulationLogs();
+	Locator::toolRunSystem::value().StartSimulationLogs();
 
 	// The logos, the first run's pre-intro and the tips screen, which stays up while the rest loads. Closing the window
 	// meanwhile ends the game at its first frame
@@ -873,15 +836,15 @@ bool Game::Initialize() noexcept
 	{
 		return false;
 	}
-	_prefetchTimer.emplace("of every resource");
+	Locator::loadingScreenSystem::value().StartPrefetchTimer();
 	return true;
 }
 
 void Game::StartupStep(std::string_view step)
 {
-	if (_startupTimer.has_value())
+	if (Locator::loadingScreenSystem::has_value())
 	{
-		_startupTimer->Step(step);
+		Locator::loadingScreenSystem::value().StartupStep(step);
 	}
 }
 
@@ -984,10 +947,7 @@ Game::RunStart Game::StartRun() noexcept
 			return RunStart::Failed;
 		}
 	}
-	if (_startupTimer.has_value())
-	{
-		_startupTimer->Step("first land");
-	}
+	Locator::loadingScreenSystem::value().StartupStep("first land");
 	// The time played that the save game room shows counts from here, by the system clock
 	if (Locator::playerProfileSystem::has_value())
 	{
@@ -1015,10 +975,7 @@ Game::RunStart Game::StartRun() noexcept
 			return RunStart::Failed;
 		}
 	}
-	if (_startupTimer.has_value())
-	{
-		_startupTimer->Step("story scripts");
-	}
+	Locator::loadingScreenSystem::value().StartupStep("story scripts");
 	// The -CONVERT switch: the game loads its first land and then closes before the first frame of play. The logo
 	// effect does not play.
 	if (_launchSwitches.convert && !_startTestbed)
@@ -1112,7 +1069,7 @@ void Game::BeforeFirstFrame(bool continued)
 	// The first game of the program starts with the logo effect and its sound, before the menu shows
 	if (startup::PlaysLogoEffect(_automatedRun, _logoEffectAsked, false))
 	{
-		PlayLogoEffect();
+		Locator::loadingScreenSystem::value().PlayLogoEffect();
 	}
 	// The -MULTIPLAYER switch: the multiplayer front end opens in place of the menu
 	if (std::exchange(_frontEndOnStart, false) && OpenFrontEndInPlaceOfMenu())
@@ -1180,9 +1137,9 @@ bool Game::RunFrame() noexcept
 		// What the loading threads finished goes into the caches, and they're given a little more
 		auto& resources = Locator::resources::value();
 		resources.UpdateLoading(k_FrameLoadBudget, k_FrameUploads);
-		if (_prefetchTimer.has_value() && resources.PendingCount() == 0)
+		if (auto& screens = Locator::loadingScreenSystem::value(); screens.TimesPrefetch() && resources.PendingCount() == 0)
 		{
-			_prefetchTimer.reset();
+			screens.FinishPrefetchTimer();
 		}
 
 		// The time since the loop started, in milliseconds, by the game's clock
@@ -1331,11 +1288,7 @@ bool Game::RunFrame() noexcept
 		_statisticsFrameRate.Frame(std::exchange(_frameLoop->statisticsTicks, std::nullopt).value_or(machine_clock::Ticks()),
 		                           _frameCount);
 		// The game is playable from its first frame drawn
-		if (_startupTimer.has_value())
-		{
-			_startupTimer->Step("first frame");
-			_startupTimer.reset();
-		}
+		Locator::loadingScreenSystem::value().FinishStartupTimer("first frame");
 
 		const auto workEnd = std::chrono::steady_clock::now();
 		// A simulation run at the normal speed waits until the frame took its fixed game time in real time too

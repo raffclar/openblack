@@ -45,6 +45,7 @@
 #include "ECS/Systems/CreatureHandSystemInterface.h"
 #include "ECS/Systems/LandSystemInterface.h"
 #include "ECS/Systems/NetworkGameSystemInterface.h"
+#include "ECS/Systems/ToolRunSystemInterface.h"
 #include "EngineConfig.h"
 #include "GameFrameOrder.h"
 #include "GameSession.h"
@@ -57,9 +58,7 @@
 #include "Gui/SkirmishBoxRules.h"
 #include "Hand/HandFeel.h"
 #include "Hand/HandKnock.h"
-#include "Input/HandPointer.h"
 #include "Input/InputLock.h"
-#include "Input/ShortcutKeys.h"
 #include "LandChange.h"
 #include "LaunchSwitches.h"
 #include "Magic/HandHoldPoser.h"
@@ -85,18 +84,14 @@ namespace gui
 {
 class MultiplayerFrontEnd;
 class ToolTips;
-class LoadingScreen;
 } // namespace gui
 namespace ecs::components
 {
-struct InterfaceLimits;
 struct Transform;
 } // namespace ecs::components
 namespace ecs::systems
 {
-class CreatureFightSystemInterface;
 class HandGrabSystemInterface;
-class MagicSystemInterface;
 } // namespace ecs::systems
 namespace map_coords
 {
@@ -114,33 +109,6 @@ namespace game_socket
 {
 struct Start;
 }
-namespace command_log
-{
-class Writer;
-class GivesWriter;
-} // namespace command_log
-namespace checksum_log
-{
-class Writer;
-}
-namespace frame_write_guard
-{
-class Guard;
-}
-namespace player_commands
-{
-struct ViewReport;
-}
-
-/// The fight autopilot asked for on the command line, as the command line gives it: its policy, the seed, the lesson stage
-/// to start at and the moves of a sequence
-struct FightAutopilotRequest
-{
-	std::string policy;
-	uint32_t seed {1};
-	std::string stage;
-	std::string sequence;
-};
 
 /// A testbed scenario asked for on the command line: its id, and for a benchmark the frames to let settle, the frames to
 /// measure and where to write the results, after which the game quits
@@ -375,8 +343,6 @@ public:
 	void StartFrame(FrameState& frame);
 	/// The keys, the mouse buttons and the pointer of the frame
 	void UpdateInput();
-	/// The shortcut keys of this frame that change the world send their commands
-	void SubmitKeyCommands();
 	/// The debug windows. It returns false when the game must stop.
 	bool UpdateDebugGui();
 	/// The editor's camera, the creature's camera and the creature's cave
@@ -425,17 +391,8 @@ public:
 	void UpdateScreenMarks();
 	/// The hand goes under the cursor, as the camera of this frame sees it, before the draw
 	void UpdateHandFrame(std::chrono::microseconds deltaTime);
-	/// Once a turn, before the block of commands goes: reports where the hand and the camera are, when they changed
-	void ReportHand();
-	/// With the report of the hand: reports the view that the scripts and the advisors' remarks read, when it changed
-	void ReportView();
-	/// Once a turn, before the block of commands goes: reports the help events of the player's input and the view of the
-	/// world camera, when they changed
-	void ReportHelp();
 	/// Before the block of commands goes: sends the player's click of the dialogue and the key that cuts a text short
 	void SendDialogueClick();
-	/// Whether the player clicked the dialogue since the last call. The click is then used.
-	[[nodiscard]] bool TakeDialogueClick();
 	/// Whether the player holds the key that cuts a text short
 	[[nodiscard]] bool DialogueSkipKeyDown() const;
 	/// The things in view are made ready for the draw of this frame
@@ -444,8 +401,6 @@ public:
 	void UpdateCameraKeys(std::chrono::microseconds deltaTime);
 	/// The paused, slower and quicker words at the top of the screen, a frame on by the real time
 	void UpdatePauseText();
-	/// The keys that take the player into the temple's rooms, from outside it or within
-	void ProcessTempleRoomKeys();
 	bool Update() noexcept;
 	bool Initialize() noexcept;
 	/// Runs the game to its end: the start, the frames, and the end
@@ -504,9 +459,6 @@ public:
 	bool OpenSkirmishBoxOverGame();
 	/// The lands that the skirmish box shows now, in the order of its list
 	[[nodiscard]] const std::vector<gui::skirmish_box::Land>& GetSkirmishLands() const noexcept { return _skirmishLands; }
-	/// The logo effect of the first game of the program, in its own loop with its sound, until it ends, a key or a mouse
-	/// button. Then black frames while a mouse button is held.
-	void PlayLogoEffect();
 
 	void SetTime(float time) noexcept;
 	/// How many times longer a turn takes: 2 is half speed
@@ -531,9 +483,6 @@ public:
 	[[nodiscard]] const std::optional<testbed_scenarios::checks::Report>& GetScenarioChecks() const { return _scenarioChecks; }
 #endif
 	[[nodiscard]] std::optional<ScenarioRequest> TakeScenarioRequest() { return std::exchange(_scenarioRequest, std::nullopt); }
-	/// Tools: a run that writes the commands of each turn also writes each command of the testbed scenario that the game
-	/// gives before a turn, so that a dedicated server gives it before the same turn (command_log::GivesPathOf)
-	void RecordScenarioGive(uint32_t turn, size_t command);
 	/// The scenarios' window sets the work that lays out a scenario asked for. The frame does it as the turns step
 	/// starts, so that only a load or a turn changes the world. None: the window is gone.
 	void SetScenarioStager(std::function<void()> stager) { _scenarioStager = std::move(stager); }
@@ -549,13 +498,6 @@ public:
 	/// without the developer tools, and a live network game, refuse it: then the result is false.
 	bool RequestScenario(ScenarioRequest request);
 	[[nodiscard]] std::chrono::duration<float, std::milli> GetDeltaTime() const;
-	[[nodiscard]] const glm::ivec2& GetMousePosition() const { return _mousePosition; }
-	/// Puts the cursor the game works with somewhere in the window, until the mouse next moves
-	void SetMousePosition(glm::ivec2 position)
-	{
-		_mousePosition = position;
-		_handPointer.Moved();
-	}
 	[[nodiscard]] const HandAnimation* GetHandAnimation() const { return _handAnimation.get(); }
 
 	/// The frame being made is written to a PNG once drawn, without the debug windows if asked
@@ -591,21 +533,9 @@ public:
 private:
 	static Game* sInstance;
 
-	/// What the game shows as it starts, before it loads the rest: the logo pictures, the pre-intro film on a first run
-	/// and the tips screen fading in, which stays up while the game loads
+	/// What the game shows as it starts, before it loads the rest. The loading screen system shows the screens with the
+	/// choices of the command line.
 	void PlayStartupScreens();
-	/// Once the inspector has started: the folder of the fight transcript and the fight autopilot from the command line
-	void StartFightTools();
-	/// The recorded input of a tool's run and the record of the input, from the first frame of the next land
-	void StartInputTools();
-	/// The checksum of each turn and the commands to play of a tool's run, from the command line. These need no inspector.
-	void StartSimulationLogs();
-	/// The logo film's two pictures, each fading in and out, any key or mouse button hurrying them on
-	void PlayLogoScreens();
-	/// The pre-intro film in its own loop with the trailer music, until its last frame or a key
-	void PlayPreIntro();
-	/// Picks the tip of the day and makes its picture; the first time, fades the tips screen in over a second
-	void StartTipOfTheDay();
 	/// The tips screen, or the banner, shows while a land loads, drawn again at the loading's redraw points
 	void BeginLoadingScreen(loading::LoadingClock::Mode look) override;
 	/// A redraw point inside the loading: the tips screen is drawn and shown if it is due, or at once when drawNow is true.
@@ -626,8 +556,6 @@ private:
 	/// Starts in the background the pipelines of the land, the sky and the sea, before the other resources load. The
 	/// pipelines of the land take the longest time to make. Only renderers that make pipelines in the background do it.
 	void StartLandPipelines();
-	/// Draws one frame outside the game's loop over a black screen and shows it
-	void PresentStartupFrame(const std::function<void(glm::u16vec2 resolution)>& draw);
 	/// Draws at the window's size from this frame on if it changed: the back buffer, the views over the whole screen,
 	/// the sea's reflection and the camera's shape follow it, on whichever screen is up
 	void FollowWindowSize();
@@ -675,14 +603,10 @@ private:
 
 	/// When the game was launched
 	const LoadTimer::Clock::time_point _launchTime {LoadTimer::Clock::now()};
-	/// Times the start of the game, from its launch to the first frame drawn on the first land
-	std::optional<LoadTimer> _startupTimer;
 	/// The size drawn at, following the window's
 	windowing::SizeFollower _windowSize;
 	/// The openblack commit of this build, from the version file next to the game
 	build_version::BuildVersion _buildVersion;
-	/// Times the loading of every resource registered at the start, on the loading threads or where first wanted
-	std::optional<LoadTimer> _prefetchTimer;
 
 	/// path to Lionhead Studios Ltd/Black & White folder
 	const std::filesystem::path _gamePath;
@@ -700,12 +624,6 @@ private:
 	/// The switches of the original game's command line
 	launch_switches::Switches _launchSwitches;
 	std::optional<std::filesystem::path> _challengePath;
-	/// The screens drawn as the game starts and while a land loads, none without a window
-	std::unique_ptr<gui::LoadingScreen> _loadingScreen;
-	/// What is drawn at the loading's redraw points, nothing while not loading
-	std::optional<loading::LoadingClock::Mode> _loadingLook;
-	/// The tips screen has faded in once: later loads show it at once
-	bool _tipFadedIn {false};
 	bool _startTestbed {false};
 	bool _startGodsRingMap {false};
 	std::optional<ScenarioRequest> _scenarioRequest;
@@ -718,17 +636,8 @@ private:
 	std::function<bool()> _scenarioGaveAll;
 	/// The port the debug inspector is to listen on, if it is to start
 	std::optional<uint16_t> _inspectPort;
-	std::optional<FightAutopilotRequest> _fightAutopilot;
-	std::optional<std::filesystem::path> _fightTranscriptFolder;
+	/// The request of a tool's run. The tool run system reads it until the services shut down.
 	std::optional<sim_run::Request> _simulation;
-	/// The file that a tool's run writes the commands of each turn to
-	std::unique_ptr<command_log::Writer> _commandLog;
-	/// The file that a tool's run writes the commands of the testbed scenario to, with the turn before which each went
-	std::unique_ptr<command_log::GivesWriter> _scenarioGives;
-	/// The file that a tool's run writes the checksum of each turn to
-	std::unique_ptr<checksum_log::Writer> _checksumLog;
-	/// A tool's run that looks for the frame steps that change the synced world
-	std::unique_ptr<frame_write_guard::Guard> _frameGuard;
 	/// Where the players' profiles are kept instead of the game's own folder
 	std::optional<std::filesystem::path> _profileFolder;
 	/// Started by a developer or a tool, which plays as a profile of its own and never sees the new player's box
@@ -752,8 +661,6 @@ private:
 	bool _leaveNetworkGame {false};
 	/// What the end boxes of this computer keep between turns
 	end_game_box::State _endGameBoxState;
-	/// Tests: the player left the network game at the turn that the command line gives
-	bool _testLeaveDone {false};
 	/// Tests: the player pressed Back in the land information box at the turn that the command line gives
 	bool _testLandInfoBoxBackDone {false};
 	/// The -MULTIPLAYER switch opens the multiplayer front end before the first frame
@@ -777,22 +684,6 @@ private:
 	/// The state that the frames of the game loop keep from one frame to the next, from the start of the loop to its end
 	struct FrameLoop;
 	std::unique_ptr<FrameLoop> _frameLoop;
-	glm::ivec2 _mousePosition {0, 0};
-	/// Whether the hand follows the pointer the window reports yet, or until the mouse first moves the game's own
-	input::HandPointer _handPointer;
-	/// The left button went down since the last frame, which may click the dialogue on
-	bool _dialogueClick {false};
-	/// Gripping the land with the mouse, which the hand only does once a button is pressed: it starts out not gripping
-	bool _handGripping {false};
-	/// The select button holds the land, not on a creature and not for a fight, and the other button is held too or not
-	bool _handSelectGrip {false};
-	bool _handOtherButton {false};
-	/// Whether the last press of the Action button went to letting go of a miracle in the hand or to a creature, so it
-	/// taps nothing else for the leash
-	bool _actionPressTaken {false};
-	/// The button whose press directs the player's creature's fight, until it is let go
-	std::optional<creature_fight::Button> _fightButton;
-	bool _handRotating {false};
 	/// The hand sits on the line of sight through the cursor, this far from the camera
 	glm::vec3 _handRayDirection {0.0f, -1.0f, 0.0f};
 	float _handDistance {k_HandMinDistance};
@@ -805,11 +696,6 @@ private:
 	/// The hand grips the land for its tooltips: from the start of a drag of the land until the Move button is let go,
 	/// also while the Action button is held too
 	bool _tipsLandGrip {false};
-	/// Whether the view report says that the hand grips the land: from a drag of the land until the Move button is let go
-	bool _reportLandGrip {false};
-	/// The world camera's controls asked for a turn in a frame of the game turn that the view report counts, and that turn
-	bool _reportCameraTurned {false};
-	std::optional<uint32_t> _reportCameraTurnTurn;
 	hand_navigation_pose::Pose _handPose {hand_navigation_pose::Pose::Idle};
 	/// The rotate arrow's turn, kept from frame to frame, which a demonstration's recording sets too
 	float _triconAngle {0.0f};
@@ -824,8 +710,6 @@ private:
 	HandCrossFade _handCrossFade;
 	/// The hand's tap after it knocked on a house
 	hand_knock::Tap _handKnock;
-	/// Where the pointer was last put on the hand while it holds a town's totem
-	std::optional<glm::ivec2> _totemPointer;
 	/// The hand plays its tap this frame
 	bool _handKnocking {false};
 	/// The way the surface the cursor is on in the temple faces, which the hand turns to
@@ -834,8 +718,6 @@ private:
 	bool _handInTemple {false};
 	/// The hand went into the normal mode, so it ignores the next sparkle of a fight
 	bool _handDropsSparkle {false};
-	/// The options screen's one-press actions: the temple and realm keys, the villagers' names and details
-	input::ShortcutKeys _shortcutKeys;
 	/// Which way the hand faces across the land, and its up, easing to the slope under it
 	glm::vec3 _handHeading {0.0f, 0.0f, 1.0f};
 	/// The same heading as an angle about the up axis, from -z towards +x, which turns the frame of a held thing and the
@@ -861,10 +743,6 @@ private:
 	std::optional<glm::vec3> _cursorWorldPosition;
 	/// Where the hand started, where a tool's run can keep it (sim_run::Settings::stillHand)
 	std::optional<glm::vec3> _stillHandAt;
-	/// The last report of the view that this computer sent (player_commands::ViewReport), none before the first
-	std::unique_ptr<player_commands::ViewReport> _lastViewReport;
-	/// The turn of the last report of the help that this computer sent
-	std::optional<uint32_t> _helpReportTurn;
 	/// The land or sea under the cursor, whatever thing is in front of it
 	std::optional<glm::vec3> _cursorLand;
 	/// Where the hand rests on or before the thing under the cursor, which it hovers at rather than over the land
@@ -938,23 +816,6 @@ private:
 	                   const std::optional<magic::HandHoldPoser::HeldSeed>& heldSeed,
 	                   const std::optional<magic::HandHoldPoser::HeldSeed>& heldThing, HandAnimation::Cycle handCycle,
 	                   bool nothingUnderHand, hand_blend::HandMode mode);
-	/// The part of the window's events that lets go of what the Action button holds or takes
-	void ProcessActionLetGo(const SDL_Event& event, bool rightLetGo, bool inTemple, bool handTakesPresses,
-	                        ecs::systems::CreatureHandSystemInterface& creatureHand, ecs::systems::MagicSystemInterface& magic,
-	                        ecs::systems::HandGrabSystemInterface* handGrab, bool handHoldsThing);
-	/// The part of the window's events that does a press of the Action button
-	void ProcessActionPress(const SDL_Event& event, bool inTemple, bool handTakesPresses,
-	                        ecs::systems::CreatureHandSystemInterface& creatureHand,
-	                        ecs::systems::CreatureFightSystemInterface& fights, ecs::systems::MagicSystemInterface& magic,
-	                        ecs::systems::HandGrabSystemInterface* handGrab, bool handHoldsThing,
-	                        const ecs::components::InterfaceLimits& interfaceLimits, bool mayHold);
-	/// The part of the window's events that does a press of the Move button
-	void ProcessMovePress(const SDL_Event& event, bool middleMouseButton, bool inTemple, bool handTakesPresses,
-	                      ecs::systems::CreatureHandSystemInterface& creatureHand,
-	                      ecs::systems::CreatureFightSystemInterface& fights, ecs::systems::MagicSystemInterface& magic);
-	/// The part of the window's events that does the keys: Escape, the full screen key, the pause key and the developer
-	/// keys. It gives false when the event must go no further.
-	bool ProcessKeyPress(const SDL_Event& event, windowing::WindowingInterface& window, Camera& camera);
 	/// Places the hand on the line of sight through the cursor the way the game does
 	void PlaceHand(ecs::components::Transform& handTransform, float deltaSeconds);
 	/// What sets how far from the camera the hand may hover this frame, without where it rests
@@ -1040,9 +901,6 @@ private:
 	void ShowSavingBox(bool loading, bool darken);
 	/// Whether the hand hovers over a thing: a one-shot bubble, or anything with a model that the cursor picks
 	[[nodiscard]] bool HandOverThing() const;
-	/// Whether the keys of the camera's bookmarks work: not while a script has the cinema bars in, and only while the
-	/// script's interface level gives the player the keys of the camera and of its places
-	[[nodiscard]] static bool BookmarkKeysAllowed();
 	/// Whether a front-end box shows over the game: the game's menu, the question at the start of a new game, or the
 	/// tattoo editor
 	[[nodiscard]] bool FrontEndBoxShows() const;
@@ -1119,8 +977,6 @@ private:
 	/// While the save on exit goes to the previous profile: the profile that the player picked, played again once the
 	/// save is complete
 	std::optional<std::u16string> _profileAfterSave;
-	/// When the menu last closed, on the computer's clock
-	std::optional<std::chrono::steady_clock::time_point> _menuClosedAt;
 	/// The question of the trip to the Gods' Playground that is on the screen
 	std::optional<playground_trip::Question> _tripQuestion;
 	/// Yes to the trip: the menu and the land information box stay as they are while the land of the Playground loads
