@@ -342,8 +342,6 @@ private:
 	std::vector<CreatureSpellSound> _creatureSpellSounds;
 	entt::entity MakeOrb(entt::entity dispenser);
 
-	/// What the hand hands a miracle it casts: where it is, the camera, how it moves
-	[[nodiscard]] particles::ProcessInfo HandInfo() const;
 	/// What a miracle that follows the hand reads at the turn: the hand, the camera and the hand's velocity as the reports
 	/// of the player give them. Before the first report, the last values stay.
 	[[nodiscard]] particles::ProcessInfo TurnHandInfo(const particles::ProcessInfo& last, PlayerNames player) const;

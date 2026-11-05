@@ -14,9 +14,9 @@
 #include <algorithm>
 
 #include <glm/common.hpp>
-#include <glm/geometric.hpp>
 
 #include "Common/PortableMath.h"
+#include "Common/X87Vector.h"
 
 using namespace openblack::magic;
 
@@ -31,6 +31,12 @@ glm::vec3 openblack::magic::FilterHandVelocity(glm::vec3 smoothed, glm::vec3 raw
 	return smoothed + (raw - smoothed) * (1.0f - openblack::portable_math::Exp(-rate * seconds));
 }
 
+glm::vec3 openblack::magic::HandStepVelocity(glm::vec3 step, float seconds)
+{
+	const float perSecond = 1.0f / seconds;
+	return step * perSecond;
+}
+
 void openblack::magic::StepHandSpin(HandSpin& spin, glm::vec3 step, glm::vec3 smoothedVelocity, float seconds)
 {
 	if (!(seconds > 0.0f))
@@ -41,15 +47,16 @@ void openblack::magic::StepHandSpin(HandSpin& spin, glm::vec3 step, glm::vec3 sm
 	spin.lastStep = step;
 	const float perSecond = 1.0f / seconds;
 	// How far it moved sideways to the way it moved the frame before, across the land
-	glm::vec3 side {last.z, 0.0f, -last.x};
+	// The game adds the parts of the sums in its own order, which can change the last bit
+	const glm::vec3 side {last.z, 0.0f, -last.x};
 	float sideways = 0.0f;
 	if (side.x != 0.0f || side.z != 0.0f)
 	{
-		sideways = glm::dot(glm::normalize(side), step);
+		sideways = x87::DotZyx(x87::Scaled<x87::SumOrder::Zxy>(side), step);
 	}
 	const float rate = -10.0f * openblack::portable_math::Log(1.0f - k_HandLateralShare);
 	spin.lateral += (sideways * perSecond * perSecond - spin.lateral) * (1.0f - openblack::portable_math::Exp(-seconds * rate));
-	const float speed = glm::length(smoothedVelocity);
+	const float speed = x87::LengthZyx(smoothedVelocity);
 	spin.spin = speed > k_HandStill ? -spin.lateral / speed : 0.0f;
 }
 

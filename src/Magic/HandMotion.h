@@ -17,6 +17,8 @@
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
+#include "Particles/ParticleSpellLink.h"
+
 // How the hand moves with a miracle in it: its movement smoothed for a throw, and the pour that lifts and tips it while
 // food or wood pours from it. Pure functions, tested on their own.
 
@@ -30,6 +32,22 @@ inline constexpr float k_HandVelocitySeconds = 0.1f;
 
 /// The hand's smoothed movement, a step of some seconds after the last, from how far it really moved over the step
 [[nodiscard]] glm::vec3 FilterHandVelocity(glm::vec3 smoothed, glm::vec3 raw, float seconds);
+
+/// How fast the hand moved over a step of some seconds. The game divides one by the seconds one time, then multiplies
+/// the movement by that value.
+[[nodiscard]] glm::vec3 HandStepVelocity(glm::vec3 step, float seconds);
+
+/// What the effect of a miracle in the hand gets each step: where it sits, at full power. It gets no movement, no spin and
+/// no camera line. Only the miracle that the hand casts gets these.
+[[nodiscard]] constexpr particles::ProcessInfo InHandEffectInfo(glm::vec3 point)
+{
+	return {.handPosition = point,
+	        .cameraForward = glm::vec3(0.0f),
+	        .direction = glm::vec3(0.0f),
+	        .power = 1.0f,
+	        .enabled = true,
+	        .spin = 0.0f};
+}
 
 /// The spin a hand holding a miracle gives it as it lets go: how fast the way the hand moves across the land turns, in
 /// radians a second (its sideways acceleration over its smoothed speed), negative turning from x towards -z. It is
