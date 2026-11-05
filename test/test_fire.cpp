@@ -9,6 +9,8 @@
 
 #include <cmath>
 
+#include <bit>
+
 #include <gtest/gtest.h>
 
 #include "Fire/FireGraphic.h"
@@ -213,6 +215,19 @@ TEST(FireModel, InWaterABigLightThingCoolsFarBelowTheAirAndStartsAtTheAirNextTur
 	// Clean, the record goes
 	state.charring = 0.0f;
 	EXPECT_TRUE(Step(state, creature, {.inWater = true, .life = 0.5f}).gone);
+}
+
+TEST(FireModel, MostThingsFireReachesByTheirRadiusADeadTreesByItsHeightAndAWorshipSitesByFourteen)
+{
+	// A hut and a field: their radius across the ground, whatever their height
+	EXPECT_FLOAT_EQ(DefaultFireRadius(FireReach::Radius, 6.5f, 12.0f), 6.5f);
+	EXPECT_FLOAT_EQ(DefaultFireRadius(FireReach::Radius, 5.0f, 0.4f), 5.0f);
+	// A dead or felled tree: 0.35 of its height, whatever its radius
+	EXPECT_EQ(DefaultFireRadius(FireReach::ShareOfHeight, 3.0f, 20.0f), 20.0f * 0.35f);
+	EXPECT_EQ(k_DeadTreeFireShare, std::bit_cast<float>(0x3EB33333u));
+	// A worship site: always 14
+	EXPECT_EQ(DefaultFireRadius(FireReach::WorshipSite, 40.0f, 30.0f), 14.0f);
+	EXPECT_EQ(DefaultFireRadius(FireReach::WorshipSite, 0.0f, 0.0f), 14.0f);
 }
 
 TEST(FireModel, ItCharsAsItsLifeRunsLowAndGoesOnceColdAndClean)

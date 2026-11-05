@@ -48,6 +48,20 @@ float fire::CoolingArea(const Material& material)
 	return material.height * material.radius * 4.0f;
 }
 
+float fire::DefaultFireRadius(FireReach reach, float radius, float height)
+{
+	switch (reach)
+	{
+	case FireReach::ShareOfHeight:
+		return height * k_DeadTreeFireShare;
+	case FireReach::WorshipSite:
+		return k_WorshipSiteFireRadius;
+	case FireReach::Radius:
+		break;
+	}
+	return radius;
+}
+
 bool fire::IsOnFire(float temperature, const Material& material)
 {
 	return temperature >= CombustionTemperature(material);

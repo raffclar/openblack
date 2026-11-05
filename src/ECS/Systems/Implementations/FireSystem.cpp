@@ -135,8 +135,6 @@ constexpr int k_MostSpiralSteps = 99999;
 constexpr float k_FireBallCapacityScale = 0.0625f;
 /// The weather's wind bytes are this many metres a second
 constexpr float k_WindByteSpeed = 0.125f;
-/// A dead tree's fire reaches this share of its height
-constexpr float k_DeadTreeFireRadius = 0.35f;
 
 ecs::Registry& Entities()
 {
@@ -176,29 +174,24 @@ std::optional<fire::Material> MaterialOf(entt::entity object)
 	{
 		return std::nullopt;
 	}
-	auto size = world_objects::SizeOf(object);
-	// A creature does not burn by its model's box. Its height comes from its shown size, and its radius and the radius of
-	// its fire come from the reach of its body.
-	if (registry.AllOf<Creature>(object))
-	{
-		size = {.radius = object_measures::TwoDRadius(registry, object), .height = object_measures::Height(registry, object)};
-	}
-	// A dead tree's fire reaches by a share of its height rather than by its width; a worship site's by a radius of its
-	// own
-	float fireRadius = registry.AllOf<DeadTree>(object) ? k_DeadTreeFireRadius * size.height : size.radius;
-	if (registry.AllOf<WorshipSite>(object))
-	{
-		fireRadius = worship_site::k_EffectRadius;
-	}
+	// Each kind of thing burns by the height and the radius across the ground that it has for all other measures. A
+	// creature measures by its shown size and the reach of its body. A field and a teleport stone have a fixed radius. A
+	// food pile is as wide as its food raises it. A town centre measures by the icon on its plinth. A thing with no model
+	// has a size of 0.
+	const float radius = object_measures::TwoDRadius(registry, object);
+	const float height = object_measures::Height(registry, object);
+	const auto reach = registry.AllOf<WorshipSite>(object) ? fire::FireReach::WorshipSite
+	                   : registry.AllOf<DeadTree>(object)  ? fire::FireReach::ShareOfHeight
+	                                                       : fire::FireReach::Radius;
 	return fire::Material {
 	    .combustion = info->combustionTemperature,
 	    .capacity = info->heatCapacity,
 	    .defence = info->defenceMultiplierBurn,
 	    .burningPriority = info->burningPriority,
 	    .rainCooling = fire::k_RainCooling,
-	    .radius = size.radius,
-	    .height = size.height,
-	    .fireRadius = fireRadius,
+	    .radius = radius,
+	    .height = height,
+	    .fireRadius = fire::DefaultFireRadius(reach, radius, height),
 	};
 }
 
