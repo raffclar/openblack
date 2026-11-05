@@ -24,8 +24,8 @@ struct FlockSpell
 	entt::entity flock {entt::null};
 	int created {0};
 	float emitted {0.0f};
-	/// The hand's point across the land and its height above the land when the last animals were made
-	glm::vec2 lastSpawn {0.0f};
+	/// The hand's point across the land in map units, and its height above the land, when the last animals were made
+	glm::ivec2 lastSpawn {0};
 	float lastSpawnHeight {0.0f};
 	/// The hand's trail, this computer's caster's alone; 0 for none
 	uint32_t castEffect {0};
