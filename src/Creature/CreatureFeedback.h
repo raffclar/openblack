@@ -15,6 +15,7 @@
 #include <array>
 #include <optional>
 #include <span>
+#include <string_view>
 #include <vector>
 
 #include <glm/mat4x4.hpp>
@@ -196,6 +197,20 @@ constexpr float k_EnjoyingSum = 0.25f;
 [[nodiscard]] float Delivered(float sum);
 /// Feedback this slight only makes the creature look at the player
 constexpr float k_SlightFeedback = 0.01f;
+
+/// The plan that slight feedback gives the creature: it looks at the camera of its player, on itself
+struct SlightFeedbackLook
+{
+	std::string_view action;
+	/// The plan counts as an order of the player
+	bool ordered {false};
+	/// The plan is not forced: the creature can change it for a plan more than two times as pressing
+	bool forced {false};
+	/// The priority of the plan against the plans that the creature finds for itself
+	float priority {0.0f};
+};
+constexpr SlightFeedbackLook k_SlightFeedbackLook {
+    .action = "LookAtCamera", .ordered = true, .forced = false, .priority = 1.0f};
 
 /// The body of the creature at the time that the hand lets go of it
 struct ReleaseBody

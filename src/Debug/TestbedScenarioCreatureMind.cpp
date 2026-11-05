@@ -96,6 +96,22 @@ void testbed_scenarios::AddMind(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "mind.slight_feedback_looks_at_camera",
+	    .name = "Feedback too slight to count: it looks at the camera",
+	    .facet = Facet::Mind,
+	    .description = "A player's tiger stands facing away from the camera, a birch beside it. After two seconds the "
+	                   "hand holds the tiger. The hand lets go after half a second, with no stroke and no slap.",
+	    .expected = "When the hand lets go, the tiger does not turn at once. It turns round to the camera and watches "
+	                "it, curious, as the look that a script orders. The inspector shows the plan LookAtCamera for its "
+	                "desire to idle with the player.",
+	    .framing = {.shot = Shot::Testbed},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f}, 180.0f)},
+	    .objects = {{.type = TreeInfo::Birch, .offset = {-15.0f, 0.0f}}},
+	    .commands = {{.kind = Kind::HandLock, .creature = 0, .delaySeconds = 2.0f},
+	                 {.kind = Kind::HandLetGo, .creature = 0, .delaySeconds = 0.5f}},
+	});
+
+	all.push_back({
 	    .id = "mind.head_look_hand",
 	    .name = "An idle lion watches the hand",
 	    .facet = Facet::Mind,
