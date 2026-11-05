@@ -49,6 +49,7 @@
 #include "ECS/Systems/HelpTextSystemInterface.h"
 #include "ECS/Systems/HighDetailSystemInterface.h"
 #include "ECS/Systems/IncomingMessageSystemInterface.h"
+#include "ECS/Systems/LoadingScreenSystemInterface.h"
 #include "ECS/Systems/MiracleFxSystemInterface.h"
 #include "ECS/Systems/ObjectDrawListSystemInterface.h"
 #include "ECS/Systems/PauseTextSystemInterface.h"
