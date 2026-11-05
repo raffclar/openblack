@@ -194,7 +194,7 @@ void WriteStorage(BinaryWriter& out, const ComponentStorage& component, WorldSav
 
 /// The registered components of a registry, by their names, so that the same world always gives the same bytes. A memo
 /// keeps the name and the type of each storage, so that the next call finds them with no search.
-[[nodiscard]] std::vector<ComponentStorage> RegisteredStorages(const entt::registry& registry, const entt::meta_ctx& context,
+[[nodiscard]] std::vector<ComponentStorage> RegisteredStorages(const RegistryStores& stores, const entt::meta_ctx& context,
                                                                std::vector<std::string>& unregistered, HashMemo* memo = nullptr)
 {
 	if (memo != nullptr && memo->context != &context)
@@ -204,8 +204,9 @@ void WriteStorage(BinaryWriter& out, const ComponentStorage& component, WorldSav
 		memo->context = &context;
 	}
 	std::vector<ComponentStorage> components;
-	for (const auto& [id, storage] : registry.storage())
+	for (const auto& [id, store] : stores)
 	{
+		const auto& storage = *store;
 		const auto& info = StorageType(storage);
 		if (info == entt::type_id<entt::entity>() || storage.empty())
 		{
@@ -239,6 +240,12 @@ void WriteStorage(BinaryWriter& out, const ComponentStorage& component, WorldSav
 	std::ranges::sort(components, {}, &ComponentStorage::name);
 	std::ranges::sort(unregistered);
 	return components;
+}
+
+[[nodiscard]] std::vector<ComponentStorage> RegisteredStorages(const entt::registry& registry, const entt::meta_ctx& context,
+                                                               std::vector<std::string>& unregistered, HashMemo* memo = nullptr)
+{
+	return RegisteredStorages(StoresOf(registry), context, unregistered, memo);
 }
 
 /// The parts of one component that a hash does not include. The hash finds them one time for each component.
@@ -921,11 +928,29 @@ std::vector<std::string> openblack::ecs::reflection::UnregisteredStorages(const 
 	return unregistered;
 }
 
+openblack::ecs::reflection::RegistryStores openblack::ecs::reflection::StoresOf(const entt::registry& registry)
+{
+	RegistryStores stores;
+	for (const auto& [id, storage] : registry.storage())
+	{
+		stores.emplace_back(id, &storage);
+	}
+	return stores;
+}
+
 openblack::ecs::reflection::WorldHashes openblack::ecs::reflection::HashWorld(const entt::registry& registry,
                                                                               const entt::meta_ctx& context,
                                                                               std::span<const HashLeaveOut> leaveOut,
                                                                               bool byField, const RowVisitor& visit,
                                                                               WorkerPool* pool, WorldRows* rows, HashMemo* memo)
+{
+	return HashWorld(registry, StoresOf(registry), context, leaveOut, byField, visit, pool, rows, memo);
+}
+
+openblack::ecs::reflection::WorldHashes
+openblack::ecs::reflection::HashWorld(const entt::registry& registry, const RegistryStores& stores,
+                                      const entt::meta_ctx& context, std::span<const HashLeaveOut> leaveOut, bool byField,
+                                      const RowVisitor& visit, WorkerPool* pool, WorldRows* rows, HashMemo* memo)
 {
 	WorldHashes hashes;
 	{
@@ -941,7 +966,7 @@ openblack::ecs::reflection::WorldHashes openblack::ecs::reflection::HashWorld(co
 		hashes.entities = k_HashOffset;
 		MixBytes(hashes.entities, out.Bytes());
 	}
-	const auto components = RegisteredStorages(registry, context, hashes.unregistered, memo);
+	const auto components = RegisteredStorages(stores, context, hashes.unregistered, memo);
 	std::vector<ComponentHash> results(components.size());
 	std::vector<RowLayout> layouts(components.size());
 	const auto marked = FindMarkedNumbers(leaveOut);
