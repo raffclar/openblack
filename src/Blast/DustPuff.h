@@ -61,6 +61,9 @@ struct Puff
 /// random(a, b) draws a number between them. Without a colour the puff takes its kind's
 [[nodiscard]] Puff Make(const glm::vec3& centre, float size, const std::function<float(float, float)>& random,
                         Kind kind = Kind::Dust, std::optional<uint32_t> colour = std::nullopt);
+/// The puffs take their step of time as the milliseconds of the frame times a thousandth, not divided by a thousand
+constexpr float k_SecondsPerMillisecond = 0.001f;
+[[nodiscard]] float StepSeconds(int32_t milliseconds);
 /// A frame of seconds; false once it has gone
 bool Advance(Puff& puff, float seconds);
 
