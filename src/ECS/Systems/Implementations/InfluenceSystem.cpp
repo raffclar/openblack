@@ -934,15 +934,19 @@ float InfluenceSystem::PlayerRawInfluence(PlayerNames player, const map_coords::
 	{
 		return 0.0f;
 	}
-	// The influence the scripts give (and take away) only counts inside the camera's fence
-	const bool scriptsCount = !Locator::cameraZoneSystem::has_value() || [&position]() {
+	// Outside the camera's fence the player has no influence at all, also from the citadel and the towns
+	const bool insideFence = !Locator::cameraZoneSystem::has_value() || [&position]() {
 		const auto& zones = Locator::cameraZoneSystem::value().GetZones();
 		const auto metres = map_coords::ToMetres(position);
 		return camera_zones::ScriptInfluenceCounts(zones.fence, zones.fenceOn, glm::vec3(metres.x, 0.0f, metres.y));
 	}();
+	if (!insideFence)
+	{
+		return 0.0f;
+	}
 	bool anti = false;
 	registry.Each<const InfluenceSource, const Transform>([&](const InfluenceSource& source, const Transform& transform) {
-		anti = anti || (scriptsCount && source.anti && source.player == player &&
+		anti = anti || (source.anti && source.player == player &&
 		                distanceTo(SourcePosition(registry, source, transform)) <= source.radius);
 	});
 	if (anti)
@@ -971,12 +975,15 @@ float InfluenceSystem::PlayerRawInfluence(PlayerNames player, const map_coords::
 		    }
 	    });
 	sum = openblack::influence_rules::AddReachingTowns(sum, reaching);
-	// And any other source of the player's, where it reaches
+	// And each other source of the player's, by how far into it the place is. The influence table sets the parts of
+	// the radius where the influence is whole and where it falls.
+	const auto range = Locator::infoConstants::has_value() ? Locator::infoConstants::value().influence : GInfluenceInfo {};
 	registry.Each<const InfluenceSource, const Transform>([&](const InfluenceSource& source, const Transform& transform) {
-		if (scriptsCount && source.player == player && !source.anti &&
-		    distanceTo(SourcePosition(registry, source, transform)) < source.radius)
+		if (source.player == player && !source.anti)
 		{
-			sum += source.radius;
+			sum += influence::OnRange(distanceTo(SourcePosition(registry, source, transform)), source.radius,
+			                          range.percentageFullInfluence, range.percentageDistanceForDecreasingGradient,
+			                          range.valueOfSmall);
 		}
 	});
 	return std::clamp(sum, -1.0f, 1.0f);
