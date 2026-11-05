@@ -134,3 +134,13 @@ TEST(DrawnEffectSteps, WithoutACameraOrALandEveryThingComesInItsOwnOrder)
 	const auto order = particles::drawn_steps::DrawOrder(list, things, false, [](entt::entity) { return true; });
 	EXPECT_EQ(order, things);
 }
+
+TEST(DrawnEffectSteps, AnEffectDrawnAtItsLastStepIgnoresTheShareOfTheTurn)
+{
+	// The seed over an icon shows its effect as the last frame step left it, at any time in the turn
+	EXPECT_FLOAT_EQ(particles::drawn_steps::DrawFraction(true, 0.0f), 1.0f);
+	EXPECT_FLOAT_EQ(particles::drawn_steps::DrawFraction(true, 0.37f), 1.0f);
+	// The other effects show the share of the turn that the frame is at
+	EXPECT_FLOAT_EQ(particles::drawn_steps::DrawFraction(false, 0.37f), 0.37f);
+	EXPECT_FLOAT_EQ(particles::drawn_steps::DrawFraction(false, 0.0f), 0.0f);
+}

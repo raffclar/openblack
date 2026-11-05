@@ -1410,6 +1410,14 @@ void ParticleRuleSystem::SetInTemple(EffectId id)
 	}
 }
 
+void ParticleRuleSystem::SetDrawnAtLastStep(EffectId id)
+{
+	if (const auto it = FindRunning(id); it != _effects.end())
+	{
+		it->atLastStep = true;
+	}
+}
+
 void ParticleRuleSystem::SetDrawnAlone(EffectId id)
 {
 	if (const auto it = FindRunning(id); it != _effects.end())
@@ -1748,6 +1756,7 @@ ParticleRuleSystemInterface::DrawnEffect ParticleRuleSystem::Drawn(const Running
 	    .inTemple = running.inTemple,
 	    .drawnAlone = running.drawnAlone,
 	    .shown = running.shown,
+	    .atLastStep = running.atLastStep,
 	};
 }
 

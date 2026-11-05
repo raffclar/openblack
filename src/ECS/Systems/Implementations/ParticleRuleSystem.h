@@ -327,6 +327,7 @@ public:
 	void SetLiveHand(EffectId id, glm::vec3 hand) override;
 	void SetInTemple(EffectId id) override;
 	void SetDrawnAlone(EffectId id) override;
+	void SetDrawnAtLastStep(EffectId id) override;
 	[[nodiscard]] std::shared_ptr<particles::ShieldSphere> FindShield(glm::vec3 point, float margin) const override;
 	[[nodiscard]] size_t GetSoundCount() const override { return _world.SoundCount(); }
 	[[nodiscard]] size_t GetWaitingSoundCount() const override { return _world.WaitingSoundCount(); }
@@ -412,6 +413,8 @@ private:
 		bool drawnAlone {false};
 		/// Drawn in this frame; false while the frame does not draw the thing that draws it
 		bool shown {true};
+		/// Drawn as its last step left it, with no blend from the step before
+		bool atLastStep {false};
 		/// A spot visual's turns left, negative for ever
 		std::optional<int> turnsLeft;
 		/// An object it follows and ends with
