@@ -8,9 +8,11 @@
  *******************************************************************************/
 
 #include <cmath>
+#include <cstdint>
 #include <cstring>
 
 #include <array>
+#include <bit>
 #include <memory>
 #include <numbers>
 #include <optional>
@@ -303,6 +305,21 @@ TEST(CreaturePhysiology, CarryingMakesItStronger)
 	TickTurn(needs, shape, species, turn);
 	// Half its strength in five minutes of carrying its own weight or more
 	EXPECT_NEAR(shape.strength, 0.5f + (0.5f / 3000.0f), k_Tolerance);
+}
+
+TEST(CreaturePhysiology, CarryingCountsTheTurnsOfAMinuteFirst)
+{
+	// For these minutes, the minutes times 60 times 10 rounds to a different float than the minutes times 600
+	auto species = Fake();
+	species.carryStrengthMinutes = std::bit_cast<float>(0x3E0F5C28u);
+	auto needs = Start(species);
+	Shape shape {.fatness = 0.5f, .strength = 0.0f, .size = 1.0f};
+	auto turn = Standing();
+	turn.moving = true;
+	turn.carriedWeight = 1.0f;
+	TickTurn(needs, shape, species, turn);
+	const float expected = (0.5f / (species.carryStrengthMinutes * 600.0f)) * species.strengthDecay;
+	EXPECT_EQ(std::bit_cast<uint32_t>(shape.strength), std::bit_cast<uint32_t>(expected));
 }
 
 TEST(CreaturePhysiology, ActionsCostEnergyAndBuildStrength)

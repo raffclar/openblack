@@ -369,7 +369,8 @@ void testbed_scenarios::AddNeeds(std::vector<Scenario>& all)
 	    .description = "A player's tiger stands north of the middle, short of the testbed's lake, and catches fire. It "
 	                   "does not know the water miracle.",
 	    .expected = "At once it stops what it does and walks to the water point at the lake, then bends down and drinks. "
-	                "A player's creature walks, because it goes back to its walk speed as it stops what it did.",
+	                "A player's creature walks, because it goes back to its walk speed as it stops what it did. When it "
+	                "drinks, the fire on it goes out at once.",
 	    .framing = {.shot = Shot::Overview, .include = LakeInView()},
 	    .creatures = {CreatureSetup {.species = CreatureType::Tiger, .offset = {0.0f, 60.0f}}},
 	    .commands = {{.kind = Kind::SetAlight, .creature = 0, .delaySeconds = 1.0f}},

@@ -44,6 +44,7 @@
 #include "Creature/CreatureDesireSources.h"
 #include "Creature/CreatureDesires.h"
 #include "Creature/CreatureDevelopment.h"
+#include "Creature/CreatureDrink.h"
 #include "Creature/CreatureEmergencies.h"
 #include "Creature/CreatureFace.h"
 #include "Creature/CreatureFeedback.h"
@@ -221,8 +222,6 @@ namespace openblack::ecs::systems::mind_detail
 constexpr float k_TurnSeconds = std::chrono::duration<float>(TimeSystemInterface::k_TurnDuration).count();
 constexpr float k_TurnsPerSecond = 1.0f / k_TurnSeconds;
 
-/// Having drunk, it does not want water for a while
-constexpr float k_WaterSuppressSeconds = 20.0f;
 /// The rows of the game's creature action table that seeing to each need counts as
 constexpr std::string_view k_EatAction = "EatAfterExamining";
 constexpr std::string_view k_DrinkAction = "DrinkFromTheSea";
@@ -639,7 +638,11 @@ void TakeEffect(entt::entity creature, const creature_mind::Commands& commands, 
 	case Effect::Drink:
 		physiology.Drink(creature);
 		Satisfied(creature, desires, k_DrinkAction);
-		creature_desires::Suppress(desires, Desire::Water, k_WaterSuppressSeconds, k_TurnsPerSecond);
+		// The creature does not want water for a time, and its fire state cools
+		if (const auto temperature = creature_drink::Drank(desires, k_TurnsPerSecond); Locator::fireSystem::has_value())
+		{
+			Locator::fireSystem::value().SetTemperature(creature, temperature, entt::null);
+		}
 		break;
 	case Effect::Poo:
 		// At the end of the squat, the bowels are empty. The lumps dropped during the squat stopped the desire to poo
