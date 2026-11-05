@@ -290,6 +290,8 @@ std::unique_ptr<ProviderInterface> ViewProvider(const GameSeamInterface* seam)
 			              const auto& cheer = Locator::turnCheerSystem::value();
 			              const auto& cheering = cheer.GetCheering();
 			              result["turn_cheer"] = {{"turn_speed", cheer.GetTurnSpeed()},
+			                                      {"tilt_speed", cheer.GetTiltSpeed()},
+			                                      {"watches_tilt", cheering.watch == help::turn_cheer::Watch::Tilt},
 			                                      {"on", cheering.on},
 			                                      {"last_cheer_turn", cheering.lastCheerTurn},
 			                                      {"last_best_praise_turn", cheering.lastBestPraiseTurn}};

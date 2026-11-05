@@ -246,6 +246,11 @@ private:
 	bool _heldBack {false};
 	/// The angle the player turned the camera by this frame, in radians, none when the player didn't turn it
 	std::optional<float> _turnedThisFrame;
+	/// The angle the tilt controls (or the camera that tilts itself) tilted the camera by this frame, in radians, none
+	/// when they did not tilt it
+	std::optional<float> _tiltedByControls;
+	/// The angle a drag of the hand tilted the camera by this frame, in radians, none when it did not tilt it
+	std::optional<float> _tiltedByDrag;
 	/// The controls asked for a turn of more than a hundredth this frame, before the features take it away
 	bool _controlsTurned {false};
 	/// What the player did with the controls this frame, as GetAsked gives it

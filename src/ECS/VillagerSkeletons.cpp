@@ -10,6 +10,8 @@
 #include "VillagerSkeletons.h"
 
 #include "3D/AllMeshes.h"
+#include "ECS/Components/Animal.h"
+#include "ECS/Components/Creature.h"
 #include "ECS/Components/DetailMeshes.h"
 #include "ECS/Components/Graveyard.h"
 #include "ECS/Components/Mesh.h"
@@ -25,6 +27,8 @@ namespace openblack::villager_skeleton
 {
 namespace
 {
+using ecs::components::Animal;
+using ecs::components::Creature;
 using ecs::components::DetailMeshes;
 using ecs::components::Mesh;
 using ecs::components::Villager;
@@ -81,8 +85,26 @@ void Set(entt::entity villager, bool skeleton)
 
 void SetByScript(entt::entity villager, bool skeleton)
 {
-	if (!Entities().AllOf<Villager>(villager))
+	auto& registry = Entities();
+	if (!registry.Valid(villager))
 	{
+		return;
+	}
+	// An animal or a creature keeps only the mark and its model does not change. A hunter does not hunt an animal with
+	// the mark.
+	if (!registry.AllOf<Villager>(villager))
+	{
+		if (registry.AnyOf<Animal, Creature>(villager))
+		{
+			if (skeleton)
+			{
+				registry.AssignOrReplace<WalkingSkeleton>(villager);
+			}
+			else
+			{
+				registry.Remove<WalkingSkeleton>(villager);
+			}
+		}
 		return;
 	}
 	Set(villager, skeleton);
