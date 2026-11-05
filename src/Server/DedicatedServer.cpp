@@ -74,6 +74,7 @@
 #include "Online/GodsRingMapFile.h"
 #include "Online/NetworkLand.h"
 #include "Online/OnlineMapLand.h"
+#include "Online/OnlineMapStoreInterface.h"
 #include "PlayerSlots.h"
 #include "Profiler.h"
 #include "Resources/ResourcesInterface.h"
@@ -303,6 +304,20 @@ bool ServerWorld::Initialize()
 	// drawing of the world.
 	InitializePlayerInput();
 	InitializeOnlineAndTools(profiles);
+	if (_settings.customMap.has_value())
+	{
+		// The server keeps the land of --custom-map in a store in memory. A world state of the land, such as a snapshot
+		// that the server continues, then reads the landscape from these bytes and not from the game folder.
+		auto& store = Locator::onlineMapStore::emplace<online::MemoryMapStore>();
+		bool kept = false;
+		store.Write(_settings.customMap->file + std::string(online_map_land::k_Extension), _settings.customMap->bytes,
+		            [&kept](bool written) { kept = written; });
+		if (!kept)
+		{
+			SPDLOG_LOGGER_CRITICAL(spdlog::get("game"), "The server cannot keep the land {}", _settings.customMap->file);
+			return false;
+		}
+	}
 	auto& land = Locator::landSystem::value();
 	land.SetView(&_landView);
 	land.SetNewGameStart(_settings.opening);

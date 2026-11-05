@@ -35,10 +35,15 @@ constexpr uint8_t k_OpenSeaFlag = 0x02;
 
 constexpr size_t k_MapTexels = static_cast<size_t>(k_Side) * k_Side;
 
+/// A texel of a material, or 0 when the land does not have the material. The check compares the material with the
+/// count of materials before the multiplication, so a large index cannot wrap round in a 32-bit size.
 uint16_t MaterialTexel(std::span<const uint16_t> materials, uint32_t material, size_t texelIndex)
 {
-	const size_t index = (material * k_MapTexels) + texelIndex;
-	return index < materials.size() ? materials[index] : uint16_t {0};
+	if (material >= materials.size() / k_MapTexels || texelIndex >= k_MapTexels)
+	{
+		return 0;
+	}
+	return materials[(static_cast<size_t>(material) * k_MapTexels) + texelIndex];
 }
 } // namespace
 

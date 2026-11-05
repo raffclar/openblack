@@ -629,7 +629,7 @@ void MultiplayerFrontEnd::GetLobbyMaps(std::function<void(bool ok)> then)
 	});
 }
 
-void MultiplayerFrontEnd::FetchRoomMap(std::string sha256)
+void MultiplayerFrontEnd::FetchRoomMap(std::string sha256, std::string land)
 {
 	_roomMapHash = sha256;
 	_mapFailed = false;
@@ -641,13 +641,13 @@ void MultiplayerFrontEnd::FetchRoomMap(std::string sha256)
 	{
 		return;
 	}
-	GetLobbyMaps([this, sha256 = std::move(sha256)](bool ok) {
+	GetLobbyMaps([this, sha256 = std::move(sha256), land = std::move(land)](bool ok) {
 		// The player left the room, or the room has a different land now
 		if (_roomMapHash != sha256)
 		{
 			return;
 		}
-		const auto map = ok ? online::MapDownload::MapOfRoom(_lobbyMaps, sha256) : std::nullopt;
+		const auto map = ok ? online::MapDownload::MapOfRoom(_lobbyMaps, sha256, land) : std::nullopt;
 		if (!map.has_value())
 		{
 			_mapFailed = true;
@@ -679,7 +679,7 @@ void MultiplayerFrontEnd::FollowMapDownload()
 	const auto& hash = current != games.end() ? current->map : _room->map;
 	if (!hash.empty() && hash != _roomMapHash)
 	{
-		FetchRoomMap(hash);
+		FetchRoomMap(hash, current != games.end() ? current->land : _room->land);
 	}
 	const bool failed =
 	    _mapFailed || (_mapDownload != nullptr && _mapDownload->GetState() == online::MapDownload::State::Failed);

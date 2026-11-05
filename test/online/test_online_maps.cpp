@@ -225,6 +225,36 @@ TEST(OnlineMapStore, AStoreWithNoProfileFolderKeepsNothing)
 	EXPECT_FALSE(store.Read("obm_32p_1.map").has_value());
 }
 
+// The game server keeps the land of --custom-map in this store, so that a world state of the land finds its landscape
+TEST(OnlineMapStore, TheMemoryStoreKeepsTheBytesOfAPlainMapName)
+{
+	online::MemoryMapStore store;
+	const auto bytes = Bytes("map bytes");
+	const auto checksum = online::start_rules::LandChecksum(bytes);
+	EXPECT_FALSE(store.Read("obt_dl_3p_1.map").has_value());
+
+	std::optional<bool> written;
+	store.Write("obt_dl_3p_1.map", bytes, [&written](bool answer) { written = answer; });
+	EXPECT_EQ(written, true);
+	EXPECT_EQ(store.Read("obt_dl_3p_1.map"), bytes);
+	std::optional<bool> found;
+	store.Find("obt_dl_3p_1.map", checksum, [&found](bool answer) { found = answer; });
+	EXPECT_EQ(found, true);
+	store.Find("obt_dl_3p_1.map", checksum + 1, [&found](bool answer) { found = answer; });
+	EXPECT_EQ(found, false);
+
+	// A second write of the same name replaces the bytes
+	store.Write("obt_dl_3p_1.map", Bytes("new"), [&written](bool answer) { written = answer; });
+	EXPECT_EQ(store.Read("obt_dl_3p_1.map"), Bytes("new"));
+	// The store refuses the names that the folder store refuses
+	for (const std::string_view name : {"../x.map", "CON.map", "x.txt", ""})
+	{
+		store.Write(std::string(name), bytes, [&written](bool answer) { written = answer; });
+		EXPECT_EQ(written, false) << name;
+		EXPECT_FALSE(store.Read(name).has_value()) << name;
+	}
+}
+
 TEST(OnlineMapStore, TheLandOfTheStartComesFromTheStoreFirst)
 {
 	const test::TestTempFolder folder;
@@ -359,6 +389,27 @@ TEST(MapDownload, TheRoomsMapIsFoundByItsHash)
 	ASSERT_TRUE(online::MapDownload::MapOfRoom(maps, k_Hash).has_value());
 	EXPECT_FALSE(online::MapDownload::MapOfRoom(maps, "").has_value());
 	EXPECT_FALSE(online::MapDownload::MapOfRoom(maps, std::string(64, 'f')).has_value());
+}
+
+// Two game servers sent the same bytes with different file names. The room takes the entry with the file name of its
+// own land, so that the store keeps the bytes under the name that the room loads.
+TEST(MapDownload, TheRoomsMapIsTheEntryWithTheHashAndTheFileOfTheRoomsLand)
+{
+	auto other = Map();
+	other.file = "my_ring";
+	other.name = "My ring";
+	const std::vector maps {Map(), other};
+	const auto mine = online::MapDownload::MapOfRoom(maps, k_Hash, "Online Maps/My_Ring.map");
+	ASSERT_TRUE(mine.has_value());
+	EXPECT_EQ(online::MapDownload::FileOf(*mine), "my_ring.map");
+	const auto first = online::MapDownload::MapOfRoom(maps, k_Hash, "Online Maps\\obm_32p_1.map");
+	ASSERT_TRUE(first.has_value());
+	EXPECT_EQ(first->file, "obm_32p_1");
+	// No entry has both the hash and the name of the room's land
+	EXPECT_FALSE(online::MapDownload::MapOfRoom(maps, k_Hash, "Online Maps/other.map").has_value());
+	EXPECT_FALSE(online::MapDownload::MapOfRoom(maps, std::string(64, 'f'), "Online Maps/my_ring.map").has_value());
+	// With no land, the first entry with the hash is the room's map
+	EXPECT_EQ(online::MapDownload::MapOfRoom(maps, k_Hash)->file, "obm_32p_1");
 }
 
 TEST(LobbyMaps, TheListOfMapsAndTheRoomsMap)

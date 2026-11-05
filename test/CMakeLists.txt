@@ -2387,3 +2387,56 @@ openblack_setup_and_add_test(test_lobby_results online/test_lobby_results.cpp)
 openblack_setup_and_add_test(test_curl_websocket_thread online/test_curl_websocket_thread.cpp)
 openblack_setup_and_add_test(test_script_place_text test_script_place_text.cpp)
 openblack_setup_and_add_test(test_debug_download test_debug_download.cpp)
+openblack_setup_and_add_test(
+  test_map_parser_fuzz online/test_map_parser_fuzz.cpp
+)
+target_link_libraries(test_map_parser_fuzz PRIVATE lnd onlinemap)
+
+# The fuzz tests of the land reader in a program of their own, with the address and undefined behaviour sanitizers.
+# The program compiles the sources of the reader itself, so that the sanitizers check each access of the reader. It is
+# small, so it builds quickly and needs little disk, unlike a full build with OPENBLACK_SANITIZE.
+if (OPENBLACK_PARSER_SANITIZERS)
+  if (MSVC)
+    message(FATAL_ERROR "OPENBLACK_PARSER_SANITIZERS needs clang or gcc")
+  endif ()
+  set(OPENBLACK_SANITIZER_FLAGS
+      -fsanitize=address,undefined -fno-sanitize-recover=all
+      -fno-omit-frame-pointer
+  )
+  add_executable(
+    openblack_parser_sanitizer_tests
+    online/test_map_parser_fuzz.cpp
+    ${CMAKE_SOURCE_DIR}/components/lnd/src/LNDFile.cpp
+    ${CMAKE_SOURCE_DIR}/components/onlinemap/src/OnlineMapFile.cpp
+    ${CMAKE_SOURCE_DIR}/src/3D/LandData.cpp
+    ${CMAKE_SOURCE_DIR}/src/3D/BlockTexture.cpp
+    ${CMAKE_SOURCE_DIR}/src/Common/WorkerPool.cpp
+  )
+  target_include_directories(
+    openblack_parser_sanitizer_tests
+    PRIVATE ${CMAKE_SOURCE_DIR}/components/lnd/include
+            ${CMAKE_SOURCE_DIR}/components/onlinemap/include
+            ${CMAKE_SOURCE_DIR}/src
+  )
+  target_link_libraries(
+    openblack_parser_sanitizer_tests PRIVATE GTest::gtest_main glm::glm
+  )
+  target_compile_definitions(
+    openblack_parser_sanitizer_tests
+    PRIVATE GLM_FORCE_LEFT_HANDED GLM_FORCE_RADIANS OPENBLACK_FUZZ_RUNS=20000
+  )
+  target_compile_options(
+    openblack_parser_sanitizer_tests PRIVATE ${OPENBLACK_SANITIZER_FLAGS}
+  )
+  target_link_options(
+    openblack_parser_sanitizer_tests PRIVATE ${OPENBLACK_SANITIZER_FLAGS}
+  )
+  set_property(TARGET openblack_parser_sanitizer_tests PROPERTY FOLDER "tests")
+  add_test(NAME test_map_parser_sanitizers
+           COMMAND openblack_parser_sanitizer_tests
+  )
+  set_tests_properties(
+    test_map_parser_sanitizers PROPERTIES ENVIRONMENT
+                                          "UBSAN_OPTIONS=print_stacktrace=1"
+  )
+endif ()

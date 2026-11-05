@@ -161,6 +161,49 @@ TEST(BlockTexture, BuildBlockLeavesTheSeaClear)
 	EXPECT_EQ(TexelAt(rgba, 100, 100), (std::array<uint8_t, 4> {0, 0, 0, 0}));
 }
 
+// A downloaded land can name a country that its table does not have. The cell then takes the last country of the
+// table, and the paint does not read past the table.
+TEST(BlockTexture, ACellOfACountryPastTheTableTakesTheLastCountry)
+{
+	const std::array countries = {SingleMaterialCountry(0)};
+	const std::vector<uint16_t> materials(k_MapTexels, k_White);
+	const std::vector<uint8_t> noise(k_MapTexels, 0);
+	const std::vector<uint8_t> bump(k_MapTexels, 0x80);
+	const auto cells = FlatCells(10);
+	auto farCells = cells;
+	for (auto& cell : farCells)
+	{
+		cell.properties.country = 15;
+	}
+	std::vector<uint8_t> expected(block_texture::k_BlockBytes, 0);
+	std::vector<uint8_t> painted(block_texture::k_BlockBytes, 0);
+	block_texture::BuildBlock(cells, {countries, materials, noise, bump}, expected);
+	block_texture::BuildBlock(farCells, {countries, materials, noise, bump}, painted);
+	EXPECT_EQ(painted, expected);
+}
+
+// A country of a downloaded land can name a material that the land does not have. Each texel of that material is 0,
+// and the paint does not read past the materials.
+TEST(BlockTexture, AMaterialPastTheTableGivesTexelsOfZero)
+{
+	const std::vector<uint8_t> noise(k_MapTexels, 0);
+	const std::vector<uint8_t> bump(k_MapTexels, 0x80);
+	const auto cells = FlatCells(10);
+	const std::array zeroCountries = {SingleMaterialCountry(0)};
+	const std::vector<uint16_t> zeroMaterials(k_MapTexels, 0);
+	std::vector<uint8_t> expected(block_texture::k_BlockBytes, 0);
+	block_texture::BuildBlock(cells, {zeroCountries, zeroMaterials, noise, bump}, expected);
+
+	const std::vector<uint16_t> materials(k_MapTexels, k_White);
+	for (const uint32_t material : {1u, 0x0001'0000u, 0xFFFF'FFFFu})
+	{
+		const std::array countries = {SingleMaterialCountry(material)};
+		std::vector<uint8_t> painted(block_texture::k_BlockBytes, 0xAA);
+		block_texture::BuildBlock(cells, {countries, materials, noise, bump}, painted);
+		EXPECT_EQ(painted, expected) << material;
+	}
+}
+
 TEST(BlockTexture, PaintCellsPaintsARectangleAsTheWholeBlockWould)
 {
 	const std::array countries = {SingleMaterialCountry(0)};

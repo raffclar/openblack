@@ -78,10 +78,12 @@ public:
 
 	/// The name of the file of a map in the store, for example "obm_32p_1.map"
 	[[nodiscard]] static std::string FileOf(const lobby_api::OnlineMap& map);
-	/// The map of the list that a room plays, by the hash that the room gives. None when the room plays a land of the
-	/// game, or the list has no such map.
-	[[nodiscard]] static std::optional<lobby_api::OnlineMap> MapOfRoom(std::span<const lobby_api::OnlineMap> maps,
-	                                                                   std::string_view roomMap);
+	/// The map of the list that a room plays, by the hash that the room gives. Two servers can send the same bytes with
+	/// different file names, so the list can have the hash two times. With a room land (for example
+	/// "Online Maps/obm_32p_1.map"), the file name of the map must also be the name of the room land, in any case. None
+	/// when the room plays a land of the game, or the list has no such map.
+	[[nodiscard]] static std::optional<lobby_api::OnlineMap>
+	MapOfRoom(std::span<const lobby_api::OnlineMap> maps, std::string_view roomMap, std::string_view roomLand = {});
 
 private:
 	void Download(int tries);

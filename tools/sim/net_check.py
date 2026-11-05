@@ -1841,6 +1841,9 @@ def main():
                              "give the option more times for more arguments")
     parser.add_argument("--stop-second-after", type=float, help="stop the second client after this many seconds")
     parser.add_argument("--come-back-seconds", type=int, default=10)
+    parser.add_argument("--custom-map", metavar="FILE",
+                        help="a land file outside the game folder: the server plays it with --custom-map, and each "
+                        "desktop client has it in the \"Online Maps\" folder of its profile")
     parser.add_argument("--restart-server-at", type=int,
                         help="stop the server by its process id after this turn, and start it again from its snapshots")
     parser.add_argument("--ban-account", type=int,
@@ -1950,6 +1953,12 @@ def main():
         parser.error("--leash web needs --web-client and --web-god")
     # The information box of the land takes the presses until the player closes it. The web god closes it with the Escape
     # key before its first leash key, and the recorded input of a desktop client closes it before its first event.
+    if options.custom_map:
+        if options.gods_ring_map or options.testbed or options.scenario or options.web_client:
+            parser.error("--custom-map does not go with --gods-ring-map, --testbed, --scenario or a web client")
+        options.custom_map = os.path.abspath(options.custom_map)
+        # The server plays the land under its file name in the "Online Maps" folder
+        options.land = "Online Maps/" + os.path.basename(options.custom_map)
     options.web_close_box = not options.testbed and land_shows_info_box(options.game_path, options.land)
     waited_observers = options.observers + (1 if options.web_client else 0)
     if options.all_computer_gods and waited_observers == 0:
@@ -2019,6 +2028,8 @@ def main():
         "--seed", str(options.seed), "-n", str(options.turns + 3000), "-l", server_log, "--log-checksums",
         "--listen", f"127.0.0.1:{free_port() if options.restart_server_at is not None else 0}", "--tls-cert", certs["server.pem"], "--tls-key", certs["server.key"],
         "--server-id", SERVER_ID, "--ticket-keys", keys_file, "--come-back-seconds", str(options.come_back_seconds)]
+    if options.custom_map:
+        server_command.append(f"--custom-map={options.custom_map}")
     # The fewest gods that start the game: each client by default, and in a room of computer gods the observers to wait
     # for. The old name --gods also works on an older server.
     if options.min_gods is not None:
@@ -2119,6 +2130,11 @@ def main():
                 maps_dir = os.path.join(profile, "Online Maps")
                 os.makedirs(maps_dir, exist_ok=True)
                 shutil.copyfile(gods_ring_file, os.path.join(maps_dir, "obm_32p_1.map"))
+            if options.custom_map:
+                # The client has the land of the server as a land that it got from the lobby
+                maps_dir = os.path.join(client_dir, "Profiles", "developer", "Online Maps")
+                os.makedirs(maps_dir, exist_ok=True)
+                shutil.copyfile(options.custom_map, os.path.join(maps_dir, os.path.basename(options.custom_map)))
             for value in options.profile_creature:
                 client, folder = value.split(":", 1)
                 if int(client) == index + 1:

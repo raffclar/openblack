@@ -249,7 +249,7 @@ private:
 	/// Gets the lobby's list of the lands of network games. The function then gets true when the list is current.
 	void GetLobbyMaps(std::function<void(bool ok)> then);
 	/// Starts the download of the room's land, by the hash of its file, when the store does not have it
-	void FetchRoomMap(std::string sha256);
+	void FetchRoomMap(std::string sha256, std::string land);
 	/// Starts the download when the room gets a land of the lobby, and shows the box of a download that failed
 	void FollowMapDownload();
 	/// Follows the session of the network game: the join, a refusal, a loss

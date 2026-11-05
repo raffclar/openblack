@@ -13,6 +13,7 @@
 
 #include <filesystem>
 #include <functional>
+#include <map>
 #include <optional>
 #include <span>
 #include <string>
@@ -78,6 +79,19 @@ private:
 
 	filesystem::FileSystemInterface& _files;
 	std::optional<std::filesystem::path> _folder;
+};
+
+/// A store that keeps its maps in memory only. The game server uses it for the land of --custom-map: the server has no
+/// profile folder, and a world state of the land must read the landscape from the land's own bytes.
+class MemoryMapStore final: public OnlineMapStoreInterface
+{
+public:
+	void Find(std::string file, uint64_t checksum, FoundCallback done) override;
+	[[nodiscard]] std::optional<std::vector<uint8_t>> Read(std::string_view file) const override;
+	void Write(std::string file, std::vector<uint8_t> bytes, WrittenCallback done) override;
+
+private:
+	std::map<std::string, std::vector<uint8_t>, std::less<>> _files;
 };
 
 /// The bytes of the land that a start of the game socket names (network_land::WireName). A map of the "Online Maps"
