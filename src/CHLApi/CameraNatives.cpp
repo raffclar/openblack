@@ -1006,7 +1006,7 @@ ScriptCameraModel* ComputerHandCamera()
 	auto* camera = OrderedScriptCamera();
 	if (camera == nullptr)
 	{
-		ScriptMessage("Script camera has been removed! - Exception happened?");
+		ScriptMessage("Script camera has been removed!");
 		return nullptr;
 	}
 	// While a two-thing camera has taken over, the script's own commands do not reach the camera
