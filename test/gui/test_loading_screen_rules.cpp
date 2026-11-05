@@ -338,6 +338,39 @@ TEST(Startup, PreIntro)
 	EXPECT_FLOAT_EQ(NextTipFade(0.0f, 16), 0.016f);
 }
 
+// A fake clock moves the first fade in of the tips screen by the time between its steps, until the fade is complete
+TEST(Startup, TipFadeInFollowsTheClock)
+{
+	constexpr uint32_t k_Start = 5000;
+	TipFadeIn fadeIn(k_Start);
+	EXPECT_FLOAT_EQ(fadeIn.Fade(), 0.0f);
+	EXPECT_FALSE(fadeIn.Over());
+
+	// The frames of the fake clock: 16 ms, 17 ms, then a slow frame of 500 ms
+	float expected = 0.0f;
+	uint32_t now = k_Start;
+	for (const uint32_t frame : {16u, 17u, 500u})
+	{
+		now += frame;
+		fadeIn.Step(now);
+		expected = NextTipFade(expected, static_cast<int32_t>(frame));
+		EXPECT_EQ(fadeIn.Fade(), expected);
+		EXPECT_FALSE(fadeIn.Over());
+	}
+	// The fade stops after it gets to one
+	fadeIn.Step(now + 600);
+	EXPECT_EQ(fadeIn.Fade(), NextTipFade(expected, 600));
+	EXPECT_TRUE(fadeIn.Over());
+}
+
+// The fake clock can go past the end of its 32-bit count, as the count of milliseconds of the program does
+TEST(Startup, TipFadeInCountsOverTheEndOfTheClock)
+{
+	TipFadeIn fadeIn(0xfffffff0u);
+	fadeIn.Step(0x10u);
+	EXPECT_EQ(fadeIn.Fade(), NextTipFade(0.0f, 32));
+}
+
 TEST(LoadingScreen, PleaseWaitBannerAcrossTheMiddle)
 {
 	const auto banner = PleaseWaitBannerFor(800, 600);

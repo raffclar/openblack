@@ -38,7 +38,9 @@
 #include "ECS/Systems/CreatureCaveSystemInterface.h"
 #include "ECS/Systems/CreatureModeSystemInterface.h"
 #include "ECS/Systems/EditorSystemInterface.h"
+#include "ECS/Systems/GameKeysSystemInterface.h"
 #include "ECS/Systems/HandDemoSystemInterface.h"
+#include "ECS/Systems/HandPressSystemInterface.h"
 #include "ECS/Systems/HelpProfileSystemInterface.h"
 #include "ECS/Systems/Implementations/VillagerDisciples.h"
 #include "ECS/Systems/InspectorSystemInterface.h"
@@ -92,14 +94,15 @@ void Game::UpdateCameraControllers(std::chrono::microseconds deltaTime)
 	if (Locator::creatureModeSystem::has_value())
 	{
 		auto creatureMode = profiler.BeginScoped(Profiler::Stage::CreatureModeUpdate);
-		Locator::creatureModeSystem::value().Update(deltaTime, {.handGripping = _handGripping});
+		Locator::creatureModeSystem::value().Update(
+		    deltaTime, {.handGripping = Locator::handPressSystem::value().GetHandButtons().gripping});
 	}
 	// The free camera of a saved game of the original game flies while the hand grips the land
 	if (auto* free =
 	        Locator::camera::has_value() ? dynamic_cast<FreeCameraModel*>(&Locator::camera::value().GetModel()) : nullptr;
 	    free != nullptr)
 	{
-		free->SetLandGrip(_handSelectGrip);
+		free->SetLandGrip(Locator::handPressSystem::value().GetHandButtons().selectGrip);
 	}
 	if (Locator::creatureCaveSystem::has_value())
 	{
@@ -371,5 +374,5 @@ void Game::RequestScreenshot(const std::filesystem::path& path, bool hideDebugGu
 
 void Game::StartCameraAtTemple()
 {
-	_shortcutKeys.StartAtTemple(LocalInputPlayer());
+	Locator::gameKeysSystem::value().StartShortcutKeysAtTemple(LocalInputPlayer());
 }

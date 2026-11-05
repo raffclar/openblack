@@ -102,4 +102,30 @@ private:
 	return fade + static_cast<float>(milliseconds) * 0.001f;
 }
 
+/// The first fade in of the tips screen, which a clock in milliseconds times. It starts at zero and stops at one or more.
+class TipFadeIn
+{
+public:
+	/// Starts the fade at the time of the clock now
+	explicit constexpr TipFadeIn(uint32_t startMilliseconds) noexcept
+	    : _last(startMilliseconds)
+	{
+	}
+
+	/// The amount of the fade that the next frame draws
+	[[nodiscard]] constexpr float Fade() const noexcept { return _fade; }
+	/// The fade is complete
+	[[nodiscard]] constexpr bool Over() const noexcept { return _fade >= 1.0f; }
+	/// Moves the fade on by the time since the last step, at the time of the clock now
+	constexpr void Step(uint32_t nowMilliseconds) noexcept
+	{
+		_fade = NextTipFade(_fade, static_cast<int32_t>(nowMilliseconds - _last));
+		_last = nowMilliseconds;
+	}
+
+private:
+	float _fade {0.0f};
+	uint32_t _last;
+};
+
 } // namespace openblack::startup
