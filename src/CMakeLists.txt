@@ -75,7 +75,7 @@ set(OPENBLACK_ALL_SOURCES ${OPENBLACK_SOURCES})
 # files in these folders that the world uses with no device: they are in the simulation. The list also gives the headers
 # with no source that the simulation uses, such as the interfaces that the client makes and the world calls.
 set(OPENBLACK_CLIENT_STEMS
-    "/src/(Graphics|Gui|Windowing|Input|Video|Editor|Audio|Debug|Inspector|Web)/.*|/src/(Game|GameDetail|GameFlow|GameFrame|GameHand|GameInput|GameMenus|GameOnline|GameReports|GameStartup|GameSession|GameSkirmish|GameView|LaunchSwitches|LocatorClient)|/src/Resources/GameAssets|/src/3D/Implementations/Ocean|/ECS/Systems/Implementations/RenderingSystem[A-Za-z]*"
+    "/src/(Graphics|Gui|Windowing|Input|Video|Editor|Audio|Debug|Inspector|Web)/.*|/src/(Game|GameDetail|GameFlow|GameFrame|GameHand|GameInput|GameMenus|GameOnline|GameReports|GameStartup|GameSession|GameSkirmish|GameView|LaunchSwitches|LocatorClient)|/src/Resources/GameAssets|/src/3D/Implementations/Ocean|/ECS/Systems/Implementations/(RenderingSystem[A-Za-z]*|HandPressSystem|GameKeysSystem)"
 )
 set(OPENBLACK_CLIENT_SOURCES ${OPENBLACK_SOURCES})
 list(FILTER OPENBLACK_CLIENT_SOURCES INCLUDE REGEX
@@ -88,7 +88,7 @@ set(OPENBLACK_SIM_IN_CLIENT_FOLDERS
     "Editor/(EditorMath|EditorEntities|EditorPalette|EditorSelection|EditorOutline|EditorHistory|EditorPaths|LandBrush|LandSave)"
     "Graphics/(HandLight|InterfaceCreatures|MeshDetail|Moon|Sun|ViewFrustum|Texture2D|VertexBuffer|IndexBuffer|Mesh|TextureSize|GraphicsDeviceInterface|DeviceDataGivers|GraphicsHandle|FilmSurface|ZSort|FizzDrawOrder|HandReflection|ObjectTint|TempleHeartLook)"
     "Gui/(ChatControlsRules|CinemaBars|ConditionsBoxRules|CustomMusicControlsRules|DialogKeyRules|EndGameBoxRules|EscapeKeyRules|GameFont|GameTexts|GodWindowRules|HandToolTipRules|HandToolTips|IncomingMessageStripRules|JoinOnlineEntry|LandThumbnail|LoadingScreenRules|LogoEffect|MenuBackdrop|MenuSettings|MultiplayerFrontEnd|MultiplayerFrontEndRules|OnlineMapTexts|PauseText|PingDisplay|ScreenFade|ScreenFit|ScriptFade|ScriptTexts|SkirmishBoxRules|StartupRules|StatisticsBoxRules|TextDatabase|TextEditRules|TextWrap|ToolTips|VillagerLabels|WorldTextDepth|WorldToolTipRules|WorldToolTips|DialogRect|SavingBoxRules)"
-    "Input/(InjectedInput|InputLock|KeyBindings|KeyRebinding|GameActionMap|CursorFreeze|PointerSpeed|ScriptedMouse|ShortcutKeys|WindowPointer|NoInputDevice|GameActionMapInterface|InputDeviceInterface|BindableActions|LocalPlayer|PointerSettle|BoxKeyboard|MouseMotion|PlatformKeys|DeveloperKeys)"
+    "Input/(InjectedInput|InputLock|KeyBindings|KeyRebinding|GameActionMap|CursorFreeze|PointerSpeed|ScriptedMouse|ShortcutKeys|WindowPointer|NoInputDevice|GameActionMapInterface|InputDeviceInterface|BindableActions|LocalPlayer|PointerSettle|BoxKeyboard|MouseMotion|PlatformKeys|DeveloperKeys|PointerButtons|HandPointer)"
     "Windowing/(WindowFit|WindowPixels|WindowingInterface)"
     "Video/(FilmCreature|FilmEffects|FrameQueue|VideoRules|FallingSpellAudio|StillPicture)"
     "Inspector/(CameraControl|ComponentReflection|EditProviders|EntityDescription|FightAutopilot|FightProviders|GameControls|GameInput|GameProviders|GameWorldEdit|GuiControl|InputControl|LevelControl|RegistryProviders|RunControl|ScriptControl|ServerProviders|SimRecorder|SystemProviders|WorldProviders|GameSeamInterface)"

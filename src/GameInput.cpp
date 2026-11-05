@@ -67,9 +67,11 @@
 #include "ECS/Systems/CreatureObjectActionSystemInterface.h"
 #include "ECS/Systems/CreatureSkinSystemInterface.h"
 #include "ECS/Systems/DanceSystemInterface.h"
+#include "ECS/Systems/GameKeysSystemInterface.h"
 #include "ECS/Systems/GestureSystemInterface.h"
 #include "ECS/Systems/HandDemoSystemInterface.h"
 #include "ECS/Systems/HandGrabSystemInterface.h"
+#include "ECS/Systems/HandPressSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/HelpProfileSystemInterface.h"
 #include "ECS/Systems/HelpTextSystemInterface.h"
@@ -135,95 +137,11 @@ using namespace openblack::game_detail;
 
 bool Game::ProcessEvents(const SDL_Event& event) noexcept
 {
-	static bool leftMouseButton = false;
-	static bool middleMouseButton = false;
-	static bool rightMouseButton = false;
-
-	// Pressed and let go, or as the mouse moving finds them: a press or a let go the menu or the debug windows took would
-	// otherwise leave the hand gripping, as on leaving the temple
-	if ((event.type == SDL_MOUSEBUTTONDOWN || event.type == SDL_MOUSEBUTTONUP) && event.button.button == SDL_BUTTON_LEFT)
-	{
-		leftMouseButton = event.type == SDL_MOUSEBUTTONDOWN;
-	}
-	// A press of the left button may click the dialogue on, whatever else it does
-	if (event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_LEFT &&
-	    !Locator::debugGui::value().IsMouseOverWindow())
-	{
-		_dialogueClick = true;
-	}
-	if ((event.type == SDL_MOUSEBUTTONDOWN || event.type == SDL_MOUSEBUTTONUP) && event.button.button == SDL_BUTTON_MIDDLE)
-	{
-		middleMouseButton = event.type == SDL_MOUSEBUTTONDOWN;
-	}
-	const bool rightLetGo =
-	    rightMouseButton && ((event.type == SDL_MOUSEBUTTONUP && event.button.button == SDL_BUTTON_RIGHT) ||
-	                         (event.type == SDL_MOUSEMOTION && (event.motion.state & SDL_BUTTON_RMASK) == 0));
-	if ((event.type == SDL_MOUSEBUTTONDOWN || event.type == SDL_MOUSEBUTTONUP) && event.button.button == SDL_BUTTON_RIGHT)
-	{
-		rightMouseButton = event.type == SDL_MOUSEBUTTONDOWN;
-	}
-	if (event.type == SDL_MOUSEMOTION)
-	{
-		leftMouseButton = (event.motion.state & SDL_BUTTON_LMASK) != 0;
-		middleMouseButton = (event.motion.state & SDL_BUTTON_MMASK) != 0;
-		rightMouseButton = (event.motion.state & SDL_BUTTON_RMASK) != 0;
-	}
-
 	// The hand grips the land, which the temple has none of: its camera takes the clicks
 	const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
-	// While a script's cinema bars have taken the interface, the buttons' presses don't reach the hand
-	const bool handTakesPresses = hand_visibility::TakesPresses(Locator::cinematicDirectorSystem::value().IsInterfaceActive());
-	// Holding the right button on a creature holds the hand to it to stroke or slap it; clicking it puts the leash on.
-	// While the player's creature fights, clicks on the creatures and the arena's ground direct the fight instead.
-	auto& creatureHand = Locator::creatureHandSystem::value();
-	auto& fights = Locator::creatureFightSystem::value();
-	auto& magic = Locator::magicSystem::value();
-	// The hand holds one thing at a time: a thing it picked up, or a miracle
-	auto* handGrab = Locator::handGrabSystem::has_value() ? &Locator::handGrabSystem::value() : nullptr;
-	const bool handHoldsThing = handGrab != nullptr && handGrab->IsBusy();
-	// The interface level of a lesson can stop the Action button from taking hold of creatures and totems. It can also
-	// stop an empty hand from acting on anything but a highlight that a script made.
-	ecs::components::InterfaceLimits interfaceLimits {};
-	if (Locator::playerSystem::has_value())
-	{
-		// In a network game the input can come before the first turn makes the player of this computer
-		interfaceLimits = script::interface_levels::LimitsOf(Locator::entitiesRegistry::value(),
-		                                                     Locator::playerSystem::value().FindPlayer(LocalInputPlayer()));
-	}
-	const bool mayHold = script::interface_levels::MayHold(interfaceLimits);
-	ProcessActionLetGo(event, rightLetGo, inTemple, handTakesPresses, creatureHand, magic, handGrab, handHoldsThing);
-	ProcessActionPress(event, inTemple, handTakesPresses, creatureHand, fights, magic, handGrab, handHoldsThing,
-	                   interfaceLimits, mayHold);
-	ProcessMovePress(event, middleMouseButton, inTemple, handTakesPresses, creatureHand, fights, magic);
-	// Letting go of the button that pressed charges the blow it queued
-	if (_fightButton.has_value() && fights.IsPressed() &&
-	    ((*_fightButton == creature_fight::Button::Move && !leftMouseButton) ||
-	     (*_fightButton == creature_fight::Button::Action && !rightMouseButton)))
-	{
-		fights.Release(machine_clock::Ticks(), Locator::time::value().GetTurn());
-		_fightButton.reset();
-	}
-	// Letting go of the right button lets go of the creature, also of a hold that a command started. Let go quickly,
-	// having neither stroked nor slapped it, the press was a click, which puts the leash on the player's creature.
-	if (creature_hand::LetsGoOfCreature(rightLetGo,
-	                                    event.type == SDL_MOUSEBUTTONUP && event.button.button == SDL_BUTTON_RIGHT) &&
-	    creatureHand.GetCreature().has_value())
-	{
-		// The click puts the leash on, and then the creature feels how the hand treated it. Both are commands of the
-		// player, which the world does at the start of a later turn. The release sends them in a network game, and the
-		// draw of the hand sends them in a game alone.
-		creatureHand.Release();
-	}
-	const bool onCreature = creatureHand.GetCreature().has_value();
-
-	// A miracle in the hand doesn't stop the hand moving the land; the middle button, or both buttons, turn the camera
-	_handGripping = !inTemple && (middleMouseButton || (leftMouseButton && !onCreature && !fights.IsPressed()));
-	_handRotating = !inTemple && (middleMouseButton || (leftMouseButton && rightMouseButton));
-	_handSelectGrip = !inTemple && leftMouseButton && !onCreature && !fights.IsPressed();
-	_handOtherButton = rightMouseButton;
-
-	auto& window = Locator::windowing::value();
-	auto& camera = Locator::camera::value();
+	// The buttons and the presses of the hand go first, then the work of the event's type
+	auto& handPress = Locator::handPressSystem::value();
+	handPress.Press(event, {.inTemple = inTemple, .playGrabSound = [this] { PlayHandGrabSound(); }});
 
 	switch (event.type)
 	{
@@ -231,32 +149,14 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 		_closeAsked = true;
 		break;
 	case SDL_WINDOWEVENT:
-		if (event.window.event == SDL_WINDOWEVENT_CLOSE && event.window.windowID == window.GetID())
+		if (event.window.event == SDL_WINDOWEVENT_CLOSE && event.window.windowID == Locator::windowing::value().GetID())
 		{
 			_closeAsked = true;
 		}
 		// A window resized, maximised or restored is followed by the next frame drawn (FollowWindowSize)
 		break;
 	case SDL_KEYDOWN:
-		// The M key opens the miracle selection, and the R key calls the last miracle again, while no action has the
-		// key. In the temple the keys do other things.
-		if ((event.key.keysym.scancode == SDL_SCANCODE_M || event.key.keysym.scancode == SDL_SCANCODE_R) && !inTemple &&
-		    Locator::gestureSystem::has_value() &&
-		    input::ActionsForKeyDown(Locator::gameActionSystem::value().GetKeyBindings(), event.key.keysym.scancode,
-		                             event.key.keysym.mod) == input::BindableActionMap::NONE)
-		{
-			auto& gestures = Locator::gestureSystem::value();
-			if (event.key.keysym.scancode == SDL_SCANCODE_M)
-			{
-				gestures.OpenSelectionByKey(LocalInputPlayer());
-			}
-			else
-			{
-				gestures.RepeatMiracleByKey(LocalInputPlayer());
-			}
-			break;
-		}
-		if (!ProcessKeyPress(event, window, camera))
+		if (!Locator::gameKeysSystem::value().KeyDown(event, inTemple))
 		{
 			return false;
 		}
@@ -266,461 +166,13 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 		// While the mouse turns the camera the cursor is held where it was, and the pointer isn't followed
 		if (!Locator::gameActionSystem::value().IsCursorFrozen())
 		{
-			_mousePosition = {event.motion.x, event.motion.y};
-			_handPointer.Moved();
+			handPress.MovePointer({event.motion.x, event.motion.y});
 		}
 		break;
 	}
 	}
 
 	return true;
-}
-
-void Game::ProcessActionLetGo(const SDL_Event& event, bool rightLetGo, bool inTemple, bool handTakesPresses,
-                              ecs::systems::CreatureHandSystemInterface& creatureHand,
-                              ecs::systems::MagicSystemInterface& magic, ecs::systems::HandGrabSystemInterface* handGrab,
-                              bool handHoldsThing)
-{
-	// Letting go of the Action button lets go of the tip bubble
-	if (Locator::tipBubbleSystem::has_value() && Locator::tipBubbleSystem::value().IsGripped() &&
-	    (rightLetGo || (event.type == SDL_MOUSEBUTTONUP && event.button.button == SDL_BUTTON_RIGHT)))
-	{
-		Locator::tipBubbleSystem::value().LetGo();
-	}
-	// Letting go of the Action button lets go of a town's totem, leaving it where it was slid
-	if (Locator::villageTotemSystem::has_value() && Locator::villageTotemSystem::value().GetGripped().has_value() &&
-	    (rightLetGo || (event.type == SDL_MOUSEBUTTONUP && event.button.button == SDL_BUTTON_RIGHT)))
-	{
-		Locator::villageTotemSystem::value().LetGo();
-		_totemPointer.reset();
-	}
-	// It also lets go of a puzzle totem, at the height it was slid to
-	if (Locator::puzzleTotemSystem::has_value() && Locator::puzzleTotemSystem::value().GetGripped().has_value() &&
-	    (rightLetGo || (event.type == SDL_MOUSEBUTTONUP && event.button.button == SDL_BUTTON_RIGHT)))
-	{
-		Locator::puzzleTotemSystem::value().LetGo();
-		_totemPointer.reset();
-	}
-	// Letting go of the Action button lets go of what the hand was taking, or puts down or throws what it holds
-	if (handGrab != nullptr && (rightLetGo || (event.type == SDL_MOUSEBUTTONUP && event.button.button == SDL_BUTTON_RIGHT)))
-	{
-		// TODO(hand): a press too short to take the thing taps it
-		[[maybe_unused]] const auto tapped = handGrab->Release(machine_clock::Ticks(), Locator::time::value().GetTurn());
-		// Let go with an empty hand that did nothing with the press, it clicks the thing or the place under it, for the
-		// scripts; not while the game is paused
-		if (handTakesPresses && !_actionPressTaken && !handHoldsThing && !magic.IsHandBusy() && !inTemple && !IsPaused())
-		{
-			handGrab->ClickReleased();
-		}
-	}
-	// The action button (the right) casts the miracle in the hand, which comes before the creatures: pressed, it arms,
-	// locks on or casts it, and let go it throws an armed one or lets a locked one go. Without a miracle it takes hold
-	// of the creature under the hand; with the leash on, pressed on another creature it ties the leash to that one
-	// instead (see the leash's input).
-	if (rightLetGo || (event.type == SDL_MOUSEBUTTONUP && event.button.button == SDL_BUTTON_RIGHT))
-	{
-		// Letting go of the rope of the tied leash: the leash's length becomes how far the hand is from what it is tied to,
-		// and the creature goes to the place under the hand
-		if (Locator::leashSystem::value().RopeHand(LocalInputPlayer()) == leash_snap::Hand::Holding &&
-		    Locator::pickingSystem::has_value())
-		{
-			Locator::leashSystem::value().LetGoOfRope(LocalInputPlayer(), Locator::pickingSystem::value().GetPick().point);
-		}
-		magic.ReleaseAction();
-		// Let go quickly on a fireball, it is tapped
-		magic.ReleaseFireBall(machine_clock::Ticks(), Locator::time::value().GetTurn());
-		// Let go while a press on a creature waits, the press is a tap. The held leash takes it as an order to act on the
-		// creature.
-		if (const auto tapped = creatureHand.ReleaseWait(); tapped.has_value())
-		{
-			Locator::leashSystem::value().TapThing(LocalInputPlayer(), *tapped);
-		}
-	}
-}
-
-void Game::ProcessActionPress(const SDL_Event& event, bool inTemple, bool handTakesPresses,
-                              ecs::systems::CreatureHandSystemInterface& creatureHand,
-                              ecs::systems::CreatureFightSystemInterface& fights, ecs::systems::MagicSystemInterface& magic,
-                              ecs::systems::HandGrabSystemInterface* handGrab, bool handHoldsThing,
-                              const ecs::components::InterfaceLimits& interfaceLimits, bool mayHold)
-{
-	if (handTakesPresses && !inTemple && event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_RIGHT &&
-	    !Locator::debugGui::value().IsMouseOverWindow())
-	{
-		// After the button let go of a creature, the Action button does nothing until the world ends the lock on it
-		_actionPressTaken = creatureHand.WaitsForLockEnd() || (magic.IsHandBusy() && magic.PressAction());
-		// While the camera shows a duel of the player's creature and the hand is empty, every Action press goes to the
-		// fight and to nothing else
-		const bool fightTakesPress = fights.DirectsFight();
-		// Holding a thing, the hand makes ready to throw it
-		if (!_actionPressTaken && handHoldsThing)
-		{
-			_actionPressTaken = handGrab->Press(machine_clock::Ticks(), Locator::time::value().GetTurn());
-		}
-		// With an empty hand and the leash held, a quick second press near the first is a double tap, which ties the leash
-		// to the thing under the cursor or unties it, before anything else takes it
-		if (!_actionPressTaken && !handHoldsThing && !magic.IsHandBusy())
-		{
-			const auto screenSize = Locator::windowing::value().GetSize();
-			const auto cursor = glm::vec2(event.button.x, event.button.y);
-			glm::vec3 rayOrigin;
-			glm::vec3 rayDirection;
-			Locator::camera::value().DeprojectScreenToWorld(
-			    cursor / static_cast<glm::vec2>(glm::max(screenSize, glm::ivec2(1))), rayOrigin, rayDirection);
-			_actionPressTaken = Locator::leashSystem::value().PressAction(LocalInputPlayer(), rayOrigin, rayDirection, cursor,
-			                                                              machine_clock::Ticks());
-		}
-		// With an empty hand on the tip bubble, the hand grips it and the words follow the hand until the button is let go
-		if (!_actionPressTaken && !fightTakesPress && !handHoldsThing && !magic.IsHandBusy() &&
-		    Locator::tipBubbleSystem::has_value() && Locator::tipBubbleSystem::value().IsUnderHand())
-		{
-			Locator::tipBubbleSystem::value().Grip();
-			_actionPressTaken = true;
-		}
-		// With an empty hand over the rope of the tied leash, the hand takes hold of the rope
-		if (!_actionPressTaken && !fightTakesPress && !handHoldsThing && !magic.IsHandBusy() &&
-		    Locator::leashSystem::value().PressRope(LocalInputPlayer()))
-		{
-			_actionPressTaken = true;
-		}
-		// A lesson can let an empty hand act only on a highlight that a script made. This limit also stops a press on a
-		// fireball, which is not a highlight.
-		std::optional<entt::entity> picked;
-		if (Locator::pickingSystem::has_value())
-		{
-			picked = Locator::pickingSystem::value().GetPick().object;
-		}
-		const bool highlightUnderHand = picked.has_value() && Locator::entitiesRegistry::value().Valid(*picked) &&
-		                                Locator::entitiesRegistry::value().AllOf<ecs::components::ScriptHighlight>(*picked);
-		const bool mayPress = handHoldsThing || script::interface_levels::MayPress(interfaceLimits, highlightUnderHand);
-		// With an empty hand, a fireball under it takes the press. A one-shot globe is taken hold of as any thing is.
-		if (!_actionPressTaken && !fightTakesPress && !handHoldsThing && !magic.IsHandBusy() && mayPress)
-		{
-			_actionPressTaken = magic.PressFireBall(machine_clock::Ticks(), Locator::time::value().GetTurn());
-		}
-		if (!_actionPressTaken)
-		{
-			const auto screenSize = Locator::windowing::value().GetSize();
-			glm::vec3 rayOrigin;
-			glm::vec3 rayDirection;
-			Locator::camera::value().DeprojectScreenToWorld(glm::vec2(event.button.x, event.button.y) /
-			                                                    static_cast<glm::vec2>(glm::max(screenSize, glm::ivec2(1))),
-			                                                rayOrigin, rayDirection);
-			// While the player's creature duels, the Action button adds a move to its queue
-			if (fights.Press(rayOrigin, rayDirection, creature_fight::Button::Action, machine_clock::Ticks(),
-			                 Locator::time::value().GetTurn()))
-			{
-				_actionPressTaken = true;
-				_fightButton = creature_fight::Button::Action;
-			}
-			// A press that the fight refuses does nothing: the hand does not take hold of a creature or a thing then
-			else if (fightTakesPress)
-			{
-				_actionPressTaken = true;
-			}
-			const auto& leashes = Locator::leashSystem::value();
-			const auto own = leashes.PlayersCreature(LocalInputPlayer());
-			const auto under = creatureHand.CreatureUnderCursor();
-			const bool tying =
-			    under.has_value() && own.has_value() &&
-			    creature_hand::PressOn(*under == *own, leashes.IsLeashed(*own)) == creature_hand::CreaturePress::Leash;
-			if (!_actionPressTaken && under.has_value() && !tying && mayHold)
-			{
-				_actionPressTaken = true;
-				if (handGrab != nullptr)
-				{
-					handGrab->ClickThing(*under);
-				}
-				// With the leash of the player's creature held loose (not tied), a press on a creature that the hand may
-				// hold first waits for a tap. A press on a creature that the hand may not hold sends no leash click.
-				const bool leashHeldLoose = own.has_value() && leashes.HolderPoint(*own).has_value();
-				switch (creature_hand::PressStartOn(creatureHand.MayHold(*under), leashHeldLoose))
-				{
-				case creature_hand::PressStart::Hold:
-					creatureHand.Grab();
-					break;
-				case creature_hand::PressStart::WaitForTap:
-					creatureHand.WaitForTap(*under, machine_clock::Ticks(), Locator::time::value().GetTurn());
-					break;
-				case creature_hand::PressStart::TapAtOnce:
-					// The leash takes the tap as an order to act on the creature
-					Locator::leashSystem::value().TapThing(LocalInputPlayer(), *under);
-					break;
-				case creature_hand::PressStart::Nothing:
-					break;
-				}
-			}
-		}
-		// A town's totem under the hand is taken hold of, to slide it up and down
-		if (!_actionPressTaken && !magic.IsHandBusy() && !handHoldsThing && mayHold &&
-		    Locator::villageTotemSystem::has_value() && Locator::pickingSystem::has_value())
-		{
-			auto& totems = Locator::villageTotemSystem::value();
-			if (picked.has_value())
-			{
-				if (const auto totem = totems.TotemOf(*picked); totem.has_value() && totems.Grip(*totem, LocalInputPlayer()))
-				{
-					_actionPressTaken = true;
-					_totemPointer = _mousePosition;
-				}
-			}
-		}
-		// A puzzle totem under the hand is taken hold of, to slide it up out of the land and down into it
-		if (!_actionPressTaken && !magic.IsHandBusy() && !handHoldsThing && mayHold && picked.has_value() &&
-		    Locator::puzzleTotemSystem::has_value() && Locator::pickingSystem::has_value())
-		{
-			const auto point = Locator::pickingSystem::value().GetPick().point;
-			if (point.has_value() && Locator::puzzleTotemSystem::value().Grip(*picked, LocalInputPlayer(), *point))
-			{
-				_actionPressTaken = true;
-				_totemPointer = _mousePosition;
-			}
-		}
-		// Otherwise the hand takes hold of a thing under it, if the lesson lets it
-		if (!_actionPressTaken && !magic.IsHandBusy() && handGrab != nullptr && mayPress)
-		{
-			_actionPressTaken = handGrab->Press(machine_clock::Ticks(), Locator::time::value().GetTurn());
-		}
-		// A press that the lesson refuses does nothing more: the leash gives no order and taps no post
-		if (!_actionPressTaken && !mayPress)
-		{
-			_actionPressTaken = true;
-		}
-	}
-}
-
-void Game::ProcessMovePress(const SDL_Event& event, bool middleMouseButton, bool inTemple, bool handTakesPresses,
-                            ecs::systems::CreatureHandSystemInterface& creatureHand,
-                            ecs::systems::CreatureFightSystemInterface& fights, ecs::systems::MagicSystemInterface& magic)
-{
-	if (handTakesPresses && !magic.IsHandBusy() && !inTemple && event.type == SDL_MOUSEBUTTONDOWN &&
-	    event.button.button == SDL_BUTTON_LEFT && !middleMouseButton)
-	{
-		const auto screenSize = Locator::windowing::value().GetSize();
-		glm::vec3 rayOrigin;
-		glm::vec3 rayDirection;
-		Locator::camera::value().DeprojectScreenToWorld(glm::vec2(event.button.x, event.button.y) /
-		                                                    static_cast<glm::vec2>(glm::max(screenSize, glm::ivec2(1))),
-		                                                rayOrigin, rayDirection);
-		// The second press of a double click on a creature, anyone's, locks the camera onto it
-		const bool doubleClicked =
-		    Locator::creatureModeSystem::has_value() &&
-		    Locator::creatureModeSystem::value().Press({.milliseconds = event.button.timestamp,
-		                                                .screen = glm::vec2(event.button.x, event.button.y),
-		                                                .creature = creatureHand.CreatureUnderCursor()});
-		// While the player's creature duels, the Move button makes a move at once in place of those queued
-		if (!doubleClicked && fights.Press(rayOrigin, rayDirection, creature_fight::Button::Move, machine_clock::Ticks(),
-		                                   Locator::time::value().GetTurn()))
-		{
-			_fightButton = creature_fight::Button::Move;
-		}
-		else if (!doubleClicked)
-		{
-			PlayHandGrabSound();
-		}
-	}
-}
-
-bool Game::ProcessKeyPress(const SDL_Event& event, windowing::WindowingInterface& window, Camera& camera)
-{
-	switch (event.key.keysym.sym)
-	{
-	case SDLK_ESCAPE:
-		// Not while a script has the cinema bars in for its scene
-		if (!Locator::cinematicDirectorSystem::value().IsInterfaceActive())
-		{
-			break;
-		}
-		return false;
-	case SDLK_f:
-		// A key that the player bound to an action of the game stays the game's
-		if (Locator::config::value().background ||
-		    input::developer_keys::GameUsesKey(Locator::gameActionSystem::value().GetKeyBindings(), k_Platform,
-		                                       event.key.keysym.scancode, event.key.keysym.mod))
-		{
-			break;
-		}
-		window.SetDisplayMode(windowing::DisplayMode::Fullscreen);
-		break;
-	case SDLK_p:
-		// The game pauses only with no Shift, Ctrl or Alt held
-		if ((event.key.keysym.mod & (KMOD_SHIFT | KMOD_CTRL | KMOD_ALT)) == 0)
-		{
-			Locator::time::value().SetPlayerPause(!IsPaused());
-		}
-		break;
-	default:
-	{
-		namespace keys = input::platform_keys;
-		const auto key = event.key.keysym.sym;
-		const auto mod = event.key.keysym.mod;
-		const keys::Modifiers held {
-		    .shift = (mod & KMOD_SHIFT) != 0,
-		    .ctrl = (mod & KMOD_CTRL) != 0,
-		    .alt = (mod & KMOD_ALT) != 0,
-		};
-		// F1 is the game's Help key, so the renderer's statistics are on another key. It is a debug key: a build
-		// without the developer tools, and a live network game, ignore it. A key that the player bound to an
-		// action of the game stays the game's.
-		if (key == keys::RendererStatisticsKey(k_Platform))
-		{
-			if (developer_tools::Allowed(developer_tools::Action::DebugKey) &&
-			    !input::developer_keys::GameUsesKey(Locator::gameActionSystem::value().GetKeyBindings(), k_Platform,
-			                                        event.key.keysym.scancode, mod))
-			{
-				// With Ctrl and Shift, the key makes the graphics device again, to test the recovery from a lost
-				// device
-				auto& renderer = Locator::rendererInterface::value();
-				if (keys::IsDeviceRestoreKey(k_Platform, key, held))
-				{
-					renderer.RequestDeviceRestore(graphics::device_restore::Request::MakeAgain);
-				}
-				else
-				{
-					renderer.SetDebug(!renderer.GetDebug());
-				}
-			}
-			break;
-		}
-		// The slower key halves the game's speed, to half of normal at the least. The faster key doubles it, to
-		// twice normal at the most.
-		if (const auto speed = keys::SpeedKeyFor(k_Platform, key, held); speed != keys::SpeedKey::None)
-		{
-			auto& clock = Locator::time::value();
-			clock.SetSpeed(speed == keys::SpeedKey::Slower ? std::max(clock.GetSpeed() * 0.5f, 0.5f)
-			                                               : std::min(clock.GetSpeed() + clock.GetSpeed(), 2.0f));
-			break;
-		}
-		if (key >= SDLK_1 && key <= SDLK_7)
-		{
-			if (!BookmarkKeysAllowed() || !Locator::cameraBookmarkSystem::value().IsEnabled())
-			{
-				break;
-			}
-			auto& bookmarks = Locator::cameraBookmarkSystem::value();
-			const auto slot = static_cast<size_t>(key - SDLK_1);
-			switch (keys::BookmarkKeyFor(k_Platform, held))
-			{
-			case keys::BookmarkKey::Clear:
-				if (bookmarks.IsSet(slot))
-				{
-					bookmarks.ClearBookmark(slot);
-				}
-				break;
-			case keys::BookmarkKey::Set:
-			{
-				// The bookmark keeps the place of the hand, or the thing under the hand
-				const auto left = Locator::handSystem::value().GetDrawnHandPosition();
-				const auto right =
-				    Locator::handSystem::value()
-				        .GetOwnHandPositions()[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Right)];
-				if (left.has_value() || right.has_value())
-				{
-					std::optional<entt::entity> thing;
-					if (Locator::pickingSystem::has_value())
-					{
-						thing = Locator::pickingSystem::value().GetPick().object;
-					}
-					bookmarks.SetBookmark(slot, left.value_or(right.value_or(glm::zero<glm::vec3>())), thing,
-					                      camera.GetOrigin());
-				}
-				break;
-			}
-			case keys::BookmarkKey::ToggleFollow:
-				bookmarks.ToggleFollow(slot);
-				break;
-			case keys::BookmarkKey::Jump:
-				bookmarks.JumpTo(slot);
-				break;
-			case keys::BookmarkKey::None:
-				break;
-			}
-			break;
-		}
-		const auto move = keys::BookmarkMoveFor(k_Platform, key, held);
-		if (move == keys::BookmarkMove::None || !BookmarkKeysAllowed())
-		{
-			break;
-		}
-		auto& bookmarks = Locator::cameraBookmarkSystem::value();
-		switch (move)
-		{
-		case keys::BookmarkMove::Back:
-			bookmarks.JumpBack();
-			break;
-		case keys::BookmarkMove::Previous:
-			bookmarks.JumpToPrevious();
-			break;
-		case keys::BookmarkMove::Next:
-			bookmarks.JumpToNext();
-			break;
-		case keys::BookmarkMove::NextTown:
-		{
-			std::optional<entt::entity> thing;
-			if (Locator::pickingSystem::has_value())
-			{
-				thing = Locator::pickingSystem::value().GetPick().object;
-			}
-			bookmarks.FlyToNextTown(thing);
-			break;
-		}
-		case keys::BookmarkMove::None:
-			break;
-		}
-		break;
-	}
-	}
-	return true;
-}
-
-bool Game::BookmarkKeysAllowed()
-{
-	if (!Locator::cinematicDirectorSystem::value().IsInterfaceActive())
-	{
-		return false;
-	}
-	if (!Locator::cameraHelpSystem::has_value())
-	{
-		return true;
-	}
-	const auto& help = Locator::cameraHelpSystem::value().Get();
-	return help.cameraKeys && help.placeKeys;
-}
-
-void Game::ProcessTempleRoomKeys()
-{
-	if (!Locator::temple::has_value())
-	{
-		return;
-	}
-	// The keys for the temple's rooms take the player into the temple at that room's path in, and inside the temple
-	// they cut to the room
-	constexpr std::array<std::pair<input::BindableActionMap, TempleRoom>, 6> k_RoomKeys {{
-	    {input::BindableActionMap::ZOOM_TO_INSIDE_TEMPLE, TempleRoom::Main},
-	    {input::BindableActionMap::ZOOM_TO_CREATURE_ROOM, TempleRoom::CreatureCave},
-	    {input::BindableActionMap::ZOOM_TO_CHALLENGE_ROOM, TempleRoom::Challenge},
-	    {input::BindableActionMap::ZOOM_TO_SAVE_GAME_ROOM, TempleRoom::SaveGame},
-	    {input::BindableActionMap::ZOOM_TO_OPTIONS_ROOM, TempleRoom::Options},
-	    {input::BindableActionMap::ZOOM_TO_LIBRARY, TempleRoom::Credits},
-	}};
-	const auto& actions = Locator::gameActionSystem::value();
-	auto& temple = Locator::temple::value();
-	for (const auto& [action, room] : k_RoomKeys)
-	{
-		if (!actions.Get(action) || !actions.GetChanged(action))
-		{
-			continue;
-		}
-		if (temple.Active())
-		{
-			temple.GoToRoom(room);
-		}
-		else
-		{
-			temple.ActivateAfterFrame(room);
-		}
-		return;
-	}
 }
 
 void Game::UpdateInput()
@@ -763,46 +215,22 @@ void Game::UpdateInput()
 			Locator::events::value().Create<SDL_Event>(e);
 		}
 		FollowWindowSize();
+		auto& handPress = Locator::handPressSystem::value();
 		if (actions.IsCursorFrozen())
 		{
-			_mousePosition = glm::ivec2(actions.GetMousePosition());
+			handPress.SetMousePosition(glm::ivec2(actions.GetMousePosition()));
 		}
 		if (const auto warp = actions.GetCursorWarp(); warp.has_value())
 		{
-			_mousePosition = *warp;
-			_handPointer.Moved();
+			handPress.MovePointer(*warp);
 		}
 		// The hand is put under the pointer every frame, moving or not: until the mouse first moves, under the pointer
 		// the game keeps, so from a land's first frame it is where the cursor is, or the top left corner while the
 		// cursor has never been over the window
-		_mousePosition = _handPointer.Frame(
-		    _mousePosition, actions.IsPointerKnown() ? std::optional(actions.GetPointerPosition()) : std::nullopt);
-		ProcessTempleRoomKeys();
-		_shortcutKeys.Update();
-	}
-}
-
-void Game::SubmitKeyCommands()
-{
-	// The keys do nothing in the temple. While the debug windows have the keyboard, the controls do not change, so a key
-	// that the player pressed would read as a new press on each frame.
-	const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
-	if (inTemple || Locator::debugGui::value().StealsFocus() || !Locator::gameActionSystem::has_value())
-	{
-		return;
-	}
-	using input::BindableActionMap;
-	const auto& actions = Locator::gameActionSystem::value();
-	auto& commands = Locator::playerCommandSystem::value();
-	// The leash shortcuts
-	for (const auto action :
-	     {BindableActionMap::LEASH_UNLEASH_CREATURE, BindableActionMap::PREVIOUS_LEASH, BindableActionMap::NEXT_LEASH})
-	{
-		if (const auto key = creature_leash::KeyFor(action);
-		    key.has_value() && actions.GetChanged(action) && actions.Get(action))
-		{
-			commands.Submit(player_commands::LeashKey {.key = *key});
-		}
+		handPress.FramePointer(actions.IsPointerKnown() ? std::optional(actions.GetPointerPosition()) : std::nullopt);
+		auto& keys = Locator::gameKeysSystem::value();
+		keys.UpdateTempleRoomKeys();
+		keys.UpdateShortcutKeys();
 	}
 }
 
@@ -850,12 +278,13 @@ void Game::UpdateCameraKeys(std::chrono::microseconds deltaTime)
 	// A miracle's camera path keeps the camera until the player moves it with the movement keys or grips the land,
 	// which hand it straight back; meanwhile the player's other camera controls do nothing
 	auto& cameraPaths = Locator::cameraPathSystem::value();
+	const auto& buttons = Locator::handPressSystem::value().GetHandButtons();
 	const bool pathHeld = cameraPaths.HoldsCamera();
 	cameraPaths.HandlePlayerControl(
 	    {.movementKey = actions.GetAny(input::BindableActionMap::MOVE_LEFT, input::BindableActionMap::MOVE_RIGHT,
 	                                   input::BindableActionMap::MOVE_FORWARDS, input::BindableActionMap::MOVE_BACKWARDS),
 	     .frameMilliseconds = static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::milliseconds>(deltaTime).count()),
-	     .grippingLand = _handGripping && !_handRotating});
+	     .grippingLand = buttons.gripping && !buttons.rotating});
 	// The camera that the path gives back reads the keys from the next frame
 	// The keys go to the last step of the input in this frame. A frame with no step does not read them.
 	if (const auto& steps = Locator::time::value().GetInputSteps(); !pathHeld && steps.count > 0)
@@ -866,7 +295,7 @@ void Game::UpdateCameraKeys(std::chrono::microseconds deltaTime)
 		gameActions.UseInputStep(std::nullopt);
 	}
 	// A grip of the land ends the camera of a dance. A zoom with the land held does not end it.
-	hand::script_state::Facts grip {.gripsLand = _handSelectGrip, .otherButton = _handOtherButton};
+	hand::script_state::Facts grip {.gripsLand = buttons.selectGrip, .otherButton = buttons.otherButton};
 	if (Locator::cameraHelpSystem::has_value())
 	{
 		grip.cameraFeatures = Locator::cameraHelpSystem::value().Get().features;
@@ -911,10 +340,10 @@ escape_key::Situation Game::EscapeSituation(uint16_t keyModifiers) const
 	        Locator::playgroundTripSystem::has_value() && Locator::playgroundTripSystem::value().IsLessonRunning(),
 	    .sinceMenuClosed = std::nullopt,
 	};
-	if (_menuClosedAt.has_value())
+	if (const auto& menuClosedAt = Locator::gameKeysSystem::value().GetMenuClosedAt(); menuClosedAt.has_value())
 	{
 		situation.sinceMenuClosed =
-		    std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - *_menuClosedAt);
+		    std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - *menuClosedAt);
 	}
 	return situation;
 }
@@ -1031,7 +460,7 @@ void Game::SendDialogueClick()
 {
 	// Nor can the player click or key through the advisors' lines while a hand demonstration plays
 	const bool demoPlaying = Locator::handDemoSystem::has_value() && Locator::handDemoSystem::value().IsReplaying();
-	const bool click = TakeDialogueClick() && !demoPlaying;
+	const bool click = Locator::handPressSystem::value().TakeDialogueClick() && !demoPlaying;
 	const bool skipKey = !demoPlaying && DialogueSkipKeyDown();
 	if (!click && !skipKey)
 	{
@@ -1052,11 +481,6 @@ void Game::SendDialogueClick()
 		return;
 	}
 	Locator::playerCommandSystem::value().Submit(player_commands::DialogueClick {.click = click, .skipKey = skipKey});
-}
-
-bool Game::TakeDialogueClick()
-{
-	return std::exchange(_dialogueClick, false);
 }
 
 bool Game::DialogueSkipKeyDown() const

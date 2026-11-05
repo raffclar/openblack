@@ -124,6 +124,8 @@ class DynamicsSystemInterface;
 class PickingSystemInterface;
 class HandSystemInterface;
 class HandGrabSystemInterface;
+class HandPressSystemInterface;
+class GameKeysSystemInterface;
 class CameraPathSystemInterface;
 class LivingActionSystemInterface;
 class MistSystemInterface;
@@ -400,6 +402,11 @@ struct Locator
 	using computerPlayerSystem = entt::locator<ecs::systems::ComputerPlayerSystemInterface>;
 	using handSystem = entt::locator<ecs::systems::HandSystemInterface>;
 	using handGrabSystem = entt::locator<ecs::systems::HandGrabSystemInterface>;
+	/// The buttons of the mouse, the pointer of the hand and the routing of the presses on this computer. Only the client
+	/// makes it.
+	using handPressSystem = entt::locator<ecs::systems::HandPressSystemInterface>;
+	/// The keys of the game on this computer. Only the client makes it.
+	using gameKeysSystem = entt::locator<ecs::systems::GameKeysSystemInterface>;
 	using temple = entt::locator<TempleInteriorInterface>;
 	using time = entt::locator<ecs::systems::TimeSystemInterface>;
 	using simulation = entt::locator<ecs::systems::SimulationSystemInterface>;

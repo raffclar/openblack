@@ -66,6 +66,7 @@
 #include "ECS/Systems/CreatureCaveSystemInterface.h"
 #include "ECS/Systems/CreatureModeSystemInterface.h"
 #include "ECS/Systems/GameEndSystemInterface.h"
+#include "ECS/Systems/GameKeysSystemInterface.h"
 #include "ECS/Systems/GatheringBoxSystemInterface.h"
 #include "ECS/Systems/GestureEventsInterface.h"
 #include "ECS/Systems/GestureSystemInterface.h"
@@ -363,7 +364,7 @@ void Game::HandleInterfaceAction()
 		Locator::time::value().SetPlayerPause(*pause);
 		if (!_menuPause.IsHeld())
 		{
-			_menuClosedAt = std::chrono::steady_clock::now();
+			Locator::gameKeysSystem::value().MenuClosed();
 		}
 	}
 	// The main menu comes back under each page that the menu shows, and pauses the game again. This is important after
@@ -533,7 +534,7 @@ void Game::CloseMenuForNewLand()
 	if (const auto pause = _menuPause.Release(); pause.has_value())
 	{
 		Locator::time::value().SetPlayerPause(*pause);
-		_menuClosedAt = std::chrono::steady_clock::now();
+		Locator::gameKeysSystem::value().MenuClosed();
 	}
 }
 

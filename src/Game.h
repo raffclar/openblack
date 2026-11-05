@@ -57,9 +57,7 @@
 #include "Gui/SkirmishBoxRules.h"
 #include "Hand/HandFeel.h"
 #include "Hand/HandKnock.h"
-#include "Input/HandPointer.h"
 #include "Input/InputLock.h"
-#include "Input/ShortcutKeys.h"
 #include "LandChange.h"
 #include "LaunchSwitches.h"
 #include "Magic/HandHoldPoser.h"
@@ -94,14 +92,11 @@ class LoadingScreen;
 } // namespace gui
 namespace ecs::components
 {
-struct InterfaceLimits;
 struct Transform;
 } // namespace ecs::components
 namespace ecs::systems
 {
-class CreatureFightSystemInterface;
 class HandGrabSystemInterface;
-class MagicSystemInterface;
 } // namespace ecs::systems
 namespace map_coords
 {
@@ -380,8 +375,6 @@ public:
 	void StartFrame(FrameState& frame);
 	/// The keys, the mouse buttons and the pointer of the frame
 	void UpdateInput();
-	/// The shortcut keys of this frame that change the world send their commands
-	void SubmitKeyCommands();
 	/// The debug windows. It returns false when the game must stop.
 	bool UpdateDebugGui();
 	/// The editor's camera, the creature's camera and the creature's cave
@@ -439,8 +432,6 @@ public:
 	void ReportHelp();
 	/// Before the block of commands goes: sends the player's click of the dialogue and the key that cuts a text short
 	void SendDialogueClick();
-	/// Whether the player clicked the dialogue since the last call. The click is then used.
-	[[nodiscard]] bool TakeDialogueClick();
 	/// Whether the player holds the key that cuts a text short
 	[[nodiscard]] bool DialogueSkipKeyDown() const;
 	/// The things in view are made ready for the draw of this frame
@@ -453,8 +444,6 @@ public:
 	void UpdatePauseText();
 	/// The audio of a turn inside the temple, while the world is paused
 	void ProcessTempleAudioTurn();
-	/// The keys that take the player into the temple's rooms, from outside it or within
-	void ProcessTempleRoomKeys();
 	bool Update() noexcept;
 	bool Initialize() noexcept;
 	/// Runs the game to its end: the start, the frames, and the end
@@ -558,13 +547,6 @@ public:
 	/// without the developer tools, and a live network game, refuse it: then the result is false.
 	bool RequestScenario(ScenarioRequest request);
 	[[nodiscard]] std::chrono::duration<float, std::milli> GetDeltaTime() const;
-	[[nodiscard]] const glm::ivec2& GetMousePosition() const { return _mousePosition; }
-	/// Puts the cursor the game works with somewhere in the window, until the mouse next moves
-	void SetMousePosition(glm::ivec2 position)
-	{
-		_mousePosition = position;
-		_handPointer.Moved();
-	}
 	[[nodiscard]] const audio::AtmosAudio* GetAtmosAudio() const { return _atmosAudio.get(); }
 	[[nodiscard]] audio::GameMusic* GetGameMusic() { return _gameMusic.get(); }
 	[[nodiscard]] const audio::GameMusic* GetGameMusic() const { return _gameMusic.get(); }
@@ -789,22 +771,6 @@ private:
 	/// The state that the frames of the game loop keep from one frame to the next, from the start of the loop to its end
 	struct FrameLoop;
 	std::unique_ptr<FrameLoop> _frameLoop;
-	glm::ivec2 _mousePosition {0, 0};
-	/// Whether the hand follows the pointer the window reports yet, or until the mouse first moves the game's own
-	input::HandPointer _handPointer;
-	/// The left button went down since the last frame, which may click the dialogue on
-	bool _dialogueClick {false};
-	/// Gripping the land with the mouse, which the hand only does once a button is pressed: it starts out not gripping
-	bool _handGripping {false};
-	/// The select button holds the land, not on a creature and not for a fight, and the other button is held too or not
-	bool _handSelectGrip {false};
-	bool _handOtherButton {false};
-	/// Whether the last press of the Action button went to letting go of a miracle in the hand or to a creature, so it
-	/// taps nothing else for the leash
-	bool _actionPressTaken {false};
-	/// The button whose press directs the player's creature's fight, until it is let go
-	std::optional<creature_fight::Button> _fightButton;
-	bool _handRotating {false};
 	/// The hand sits on the line of sight through the cursor, this far from the camera
 	glm::vec3 _handRayDirection {0.0f, -1.0f, 0.0f};
 	float _handDistance {k_HandMinDistance};
@@ -836,8 +802,6 @@ private:
 	HandCrossFade _handCrossFade;
 	/// The hand's tap after it knocked on a house
 	hand_knock::Tap _handKnock;
-	/// Where the pointer was last put on the hand while it holds a town's totem
-	std::optional<glm::ivec2> _totemPointer;
 	/// The hand plays its tap this frame
 	bool _handKnocking {false};
 	/// The way the surface the cursor is on in the temple faces, which the hand turns to
@@ -846,8 +810,6 @@ private:
 	bool _handInTemple {false};
 	/// The hand went into the normal mode, so it ignores the next sparkle of a fight
 	bool _handDropsSparkle {false};
-	/// The options screen's one-press actions: the temple and realm keys, the villagers' names and details
-	input::ShortcutKeys _shortcutKeys;
 	/// Which way the hand faces across the land, and its up, easing to the slope under it
 	glm::vec3 _handHeading {0.0f, 0.0f, 1.0f};
 	/// The same heading as an angle about the up axis, from -z towards +x, which turns the frame of a held thing and the
@@ -950,23 +912,6 @@ private:
 	                   const std::optional<magic::HandHoldPoser::HeldSeed>& heldSeed,
 	                   const std::optional<magic::HandHoldPoser::HeldSeed>& heldThing, HandAnimation::Cycle handCycle,
 	                   bool nothingUnderHand, hand_blend::HandMode mode);
-	/// The part of the window's events that lets go of what the Action button holds or takes
-	void ProcessActionLetGo(const SDL_Event& event, bool rightLetGo, bool inTemple, bool handTakesPresses,
-	                        ecs::systems::CreatureHandSystemInterface& creatureHand, ecs::systems::MagicSystemInterface& magic,
-	                        ecs::systems::HandGrabSystemInterface* handGrab, bool handHoldsThing);
-	/// The part of the window's events that does a press of the Action button
-	void ProcessActionPress(const SDL_Event& event, bool inTemple, bool handTakesPresses,
-	                        ecs::systems::CreatureHandSystemInterface& creatureHand,
-	                        ecs::systems::CreatureFightSystemInterface& fights, ecs::systems::MagicSystemInterface& magic,
-	                        ecs::systems::HandGrabSystemInterface* handGrab, bool handHoldsThing,
-	                        const ecs::components::InterfaceLimits& interfaceLimits, bool mayHold);
-	/// The part of the window's events that does a press of the Move button
-	void ProcessMovePress(const SDL_Event& event, bool middleMouseButton, bool inTemple, bool handTakesPresses,
-	                      ecs::systems::CreatureHandSystemInterface& creatureHand,
-	                      ecs::systems::CreatureFightSystemInterface& fights, ecs::systems::MagicSystemInterface& magic);
-	/// The part of the window's events that does the keys: Escape, the full screen key, the pause key and the developer
-	/// keys. It gives false when the event must go no further.
-	bool ProcessKeyPress(const SDL_Event& event, windowing::WindowingInterface& window, Camera& camera);
 	/// Places the hand on the line of sight through the cursor the way the game does
 	void PlaceHand(ecs::components::Transform& handTransform, float deltaSeconds);
 	/// What sets how far from the camera the hand may hover this frame, without where it rests
@@ -1052,9 +997,6 @@ private:
 	void ShowSavingBox(bool loading, bool darken);
 	/// Whether the hand hovers over a thing: a one-shot bubble, or anything with a model that the cursor picks
 	[[nodiscard]] bool HandOverThing() const;
-	/// Whether the keys of the camera's bookmarks work: not while a script has the cinema bars in, and only while the
-	/// script's interface level gives the player the keys of the camera and of its places
-	[[nodiscard]] static bool BookmarkKeysAllowed();
 	/// Whether a front-end box shows over the game: the game's menu, the question at the start of a new game, or the
 	/// tattoo editor
 	[[nodiscard]] bool FrontEndBoxShows() const;
@@ -1133,8 +1075,6 @@ private:
 	/// While the save on exit goes to the previous profile: the profile that the player picked, played again once the
 	/// save is complete
 	std::optional<std::u16string> _profileAfterSave;
-	/// When the menu last closed, on the computer's clock
-	std::optional<std::chrono::steady_clock::time_point> _menuClosedAt;
 	/// The question of the trip to the Gods' Playground that is on the screen
 	std::optional<playground_trip::Question> _tripQuestion;
 	/// Yes to the trip: the menu and the land information box stay as they are while the land of the Playground loads

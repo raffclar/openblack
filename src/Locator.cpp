@@ -1029,6 +1029,8 @@ void openblack::ShutDownServices()
 	Locator::appleBarrelSystem::reset();
 	Locator::weatherSystem::reset();
 	Locator::handGrabSystem::reset();
+	Locator::handPressSystem::reset();
+	Locator::gameKeysSystem::reset();
 	Locator::handSystem::reset();
 	Locator::pathfindingSystem::reset();
 	Locator::creatureLocomotionSystem::reset();
