@@ -1183,6 +1183,8 @@ void openblack::ShutDownServices()
 	Locator::rng::reset();
 	// The music and the ambience of the land go last. The sounds are gone, so the music does not stop again.
 	Locator::gameAudioSystem::reset();
+	// The logs of a tool's run go last, because the systems above can write to them until they go
+	Locator::toolRunSystem::reset();
 }
 
 bool openblack::StartInspector([[maybe_unused]] uint16_t port)

@@ -45,6 +45,7 @@
 #include "ECS/Systems/CreatureHandSystemInterface.h"
 #include "ECS/Systems/LandSystemInterface.h"
 #include "ECS/Systems/NetworkGameSystemInterface.h"
+#include "ECS/Systems/ToolRunSystemInterface.h"
 #include "EngineConfig.h"
 #include "GameFrameOrder.h"
 #include "GameSession.h"
@@ -108,29 +109,6 @@ namespace game_socket
 {
 struct Start;
 }
-namespace command_log
-{
-class Writer;
-class GivesWriter;
-} // namespace command_log
-namespace checksum_log
-{
-class Writer;
-}
-namespace frame_write_guard
-{
-class Guard;
-}
-
-/// The fight autopilot asked for on the command line, as the command line gives it: its policy, the seed, the lesson stage
-/// to start at and the moves of a sequence
-struct FightAutopilotRequest
-{
-	std::string policy;
-	uint32_t seed {1};
-	std::string stage;
-	std::string sequence;
-};
 
 /// A testbed scenario asked for on the command line: its id, and for a benchmark the frames to let settle, the frames to
 /// measure and where to write the results, after which the game quits
@@ -505,9 +483,6 @@ public:
 	[[nodiscard]] const std::optional<testbed_scenarios::checks::Report>& GetScenarioChecks() const { return _scenarioChecks; }
 #endif
 	[[nodiscard]] std::optional<ScenarioRequest> TakeScenarioRequest() { return std::exchange(_scenarioRequest, std::nullopt); }
-	/// Tools: a run that writes the commands of each turn also writes each command of the testbed scenario that the game
-	/// gives before a turn, so that a dedicated server gives it before the same turn (command_log::GivesPathOf)
-	void RecordScenarioGive(uint32_t turn, size_t command);
 	/// The scenarios' window sets the work that lays out a scenario asked for. The frame does it as the turns step
 	/// starts, so that only a load or a turn changes the world. None: the window is gone.
 	void SetScenarioStager(std::function<void()> stager) { _scenarioStager = std::move(stager); }
@@ -561,12 +536,6 @@ private:
 	/// What the game shows as it starts, before it loads the rest. The loading screen system shows the screens with the
 	/// choices of the command line.
 	void PlayStartupScreens();
-	/// Once the inspector has started: the folder of the fight transcript and the fight autopilot from the command line
-	void StartFightTools();
-	/// The recorded input of a tool's run and the record of the input, from the first frame of the next land
-	void StartInputTools();
-	/// The checksum of each turn and the commands to play of a tool's run, from the command line. These need no inspector.
-	void StartSimulationLogs();
 	/// The tips screen, or the banner, shows while a land loads, drawn again at the loading's redraw points
 	void BeginLoadingScreen(loading::LoadingClock::Mode look) override;
 	/// A redraw point inside the loading: the tips screen is drawn and shown if it is due, or at once when drawNow is true.
@@ -667,17 +636,8 @@ private:
 	std::function<bool()> _scenarioGaveAll;
 	/// The port the debug inspector is to listen on, if it is to start
 	std::optional<uint16_t> _inspectPort;
-	std::optional<FightAutopilotRequest> _fightAutopilot;
-	std::optional<std::filesystem::path> _fightTranscriptFolder;
+	/// The request of a tool's run. The tool run system reads it until the services shut down.
 	std::optional<sim_run::Request> _simulation;
-	/// The file that a tool's run writes the commands of each turn to
-	std::unique_ptr<command_log::Writer> _commandLog;
-	/// The file that a tool's run writes the commands of the testbed scenario to, with the turn before which each went
-	std::unique_ptr<command_log::GivesWriter> _scenarioGives;
-	/// The file that a tool's run writes the checksum of each turn to
-	std::unique_ptr<checksum_log::Writer> _checksumLog;
-	/// A tool's run that looks for the frame steps that change the synced world
-	std::unique_ptr<frame_write_guard::Guard> _frameGuard;
 	/// Where the players' profiles are kept instead of the game's own folder
 	std::optional<std::filesystem::path> _profileFolder;
 	/// Started by a developer or a tool, which plays as a profile of its own and never sees the new player's box
@@ -701,8 +661,6 @@ private:
 	bool _leaveNetworkGame {false};
 	/// What the end boxes of this computer keep between turns
 	end_game_box::State _endGameBoxState;
-	/// Tests: the player left the network game at the turn that the command line gives
-	bool _testLeaveDone {false};
 	/// Tests: the player pressed Back in the land information box at the turn that the command line gives
 	bool _testLandInfoBoxBackDone {false};
 	/// The -MULTIPLAYER switch opens the multiplayer front end before the first frame

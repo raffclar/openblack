@@ -1334,6 +1334,12 @@
   "query": "engine.resources"
  },
  {
+  "description": "Which logs and tools of a tool's run are open: the file of the commands of each turn, the file of the commands of the testbed scenario, the file of the checksums, the guard of the frame steps and the fight autopilot",
+  "kind": "object",
+  "parameters": [],
+  "query": "engine.tool_run"
+ },
+ {
   "description": "Which of the engine's services are there, the game's random seeds, the game's path, the debug windows' focus and the inspector's port",
   "kind": "object",
   "parameters": [],

@@ -60,7 +60,6 @@
 #include "Creature/LeashOrders.h"
 #include "Debug/DebugGuiInterface.h"
 #include "Debug/FrameStatsLog.h"
-#include "Debug/FrameWriteGuard.h"
 #include "ECS/ChallengePictures.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/MagicShield.h"
@@ -289,8 +288,6 @@ Game::Game(Arguments&& args) noexcept
     , _startGodsRingMap(args.startGodsRingMap)
     , _scenarioRequest(args.scenario)
     , _inspectPort(args.inspectPort)
-    , _fightAutopilot(args.fightAutopilot)
-    , _fightTranscriptFolder(args.fightTranscriptFolder)
     , _simulation(args.simulation)
     , _profileFolder(args.profileFolder)
     // Any of these is a developer's or a tool's run; the game started plainly, or with only its window's size, mode,
@@ -324,6 +321,8 @@ Game::Game(Arguments&& args) noexcept
 	// The log of each part of the game
 	simulation::StartLogs(args.logFile, args.logLevels);
 	sInstance = this;
+	// The logs and tools of a tool's run read the request of the run, which the game keeps
+	InitializeToolRun(_simulation, args.fightAutopilot, args.fightTranscriptFolder);
 	for (const auto& ignored : args.ignoredDeveloperOptions)
 	{
 		SPDLOG_LOGGER_WARN(spdlog::get("game"), "This build has no developer tools: it ignores the option {}", ignored);
@@ -472,55 +471,9 @@ bool Game::Update() noexcept
 {
 	// The frame's steps go in the game's order, because many systems depend on it (see game_frame::k_Frame)
 	FrameState frame;
-	if (!game_frame::PlayFrame([this, &frame](game_frame::Step step) {
-		    // The guard of a tool's run looks at each step but the turns, which alone may change the synced world. The guard
-		    // does not tell the changes of the debug windows. The timeline of the testbed runner acts in them by the game
-		    // time of the frame. It is a tool for the debug builds and is not part of the game. The guard tells only the
-		    // turns of these changes, because the next steps can file the runner's new things in the map.
-		    if (!_frameGuard || step == game_frame::Step::Turns ||
-		        Locator::time::value().GetTurn() < _simulation->frameGuardFrom)
-		    {
-			    if (_frameGuard)
-			    {
-				    _frameGuard->Forget();
-			    }
-			    const bool played = PlayFrameStep(step, frame);
-			    // The guard looks only at the frame writes of the steps that it looks at
-			    if (_frameGuard && Locator::temple::has_value())
-			    {
-				    std::ignore = Locator::temple::value().TakeFrameWrites();
-			    }
-			    return played;
-		    }
-		    // The temple of a game alone writes the synced world in some frame steps, as the original game does. The guard
-		    // knows these writers by name. All other writes in a frame step trip the guard. The temple can also write after
-		    // the draw, between two frames. The guard gives these changes and their writers to the next step.
-		    const auto frameWrites = [] {
-			    return Locator::temple::has_value() ? Locator::temple::value().TakeFrameWrites() : temple::FrameWrites {};
-		    };
-		    const auto landLoads = [] {
-			    return Locator::landSystem::has_value() ? Locator::landSystem::value().LandLoads() : 0U;
-		    };
-		    const auto loadsBefore = landLoads();
-		    _frameGuard->Before();
-		    const bool played = PlayFrameStep(step, frame);
-		    const auto writers = frameWrites();
-		    if (!frame_write_guard::LooksAtStep(loadsBefore, landLoads()))
-		    {
-			    // The step loaded a land, which makes a new synced world: the next step takes a new sample
-			    _frameGuard->Forget();
-			    return played;
-		    }
-		    if (step == game_frame::Step::DebugGui)
-		    {
-			    _frameGuard->AfterTool(game_frame::Name(step), Locator::time::value().GetTurn());
-		    }
-		    else
-		    {
-			    _frameGuard->After(game_frame::Name(step), Locator::time::value().GetTurn(), writers,
-			                       Locator::time::value().IsNetworkGame());
-		    }
-		    return played;
+	auto& toolRun = Locator::toolRunSystem::value();
+	if (!game_frame::PlayFrame([this, &frame, &toolRun](game_frame::Step step) {
+		    return toolRun.PlayFrameStep(step, [this, &frame, step] { return PlayFrameStep(step, frame); });
 	    }))
 	{
 		return false;
@@ -869,10 +822,10 @@ bool Game::Initialize() noexcept
 		{
 			loadingData.emplace("game data");
 			Locator::gameActionSystem::value().SetInputLockMode(_inspectInputLock);
-			StartFightTools();
+			Locator::toolRunSystem::value().StartFightTools(_networkLandPending);
 		}
 	}
-	StartSimulationLogs();
+	Locator::toolRunSystem::value().StartSimulationLogs();
 
 	// The logos, the first run's pre-intro and the tips screen, which stays up while the rest loads. Closing the window
 	// meanwhile ends the game at its first frame

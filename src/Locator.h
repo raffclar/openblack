@@ -33,10 +33,15 @@ class Profiler;
 class GameRandomInterface;
 class RandomNumberManagerInterface;
 class TempleInteriorInterface;
+struct FightAutopilotRequest;
 
 namespace player_profiles
 {
 struct Store;
+}
+namespace sim_run
+{
+struct Request;
 }
 
 namespace v120
@@ -271,6 +276,7 @@ class ScriptObjectsSystemInterface;
 class BuildingDamageSystemInterface;
 class ScriptHighlightSystemInterface;
 class InspectorSystemInterface;
+class ToolRunSystemInterface;
 } // namespace ecs::systems
 
 void InitializeWindow(const std::string& title, int width, int height, windowing::DisplayMode displayMode, uint32_t extraFlags,
@@ -306,6 +312,10 @@ void InitializeClient(const player_profiles::Store& profiles);
 bool InitializeGame(const player_profiles::Store& profiles) noexcept;
 /// The screens of the start and of the loads of the game. Only the game's library has this function.
 void InitializeLoadingScreens(ecs::systems::LoadingScreenHooks hooks);
+/// The logs and tools of a tool's run. The caller keeps the request of the run until the services shut down. Only the
+/// game's library has this function.
+void InitializeToolRun(const std::optional<sim_run::Request>& simulation, std::optional<FightAutopilotRequest> fightAutopilot,
+                       std::optional<std::filesystem::path> fightTranscriptFolder);
 void InitializeLevel(const std::filesystem::path& path);
 /// Starts a level on land that is generated rather than read from a file, as the flat testbed is
 void InitializeLevel(const LandData& land);
@@ -365,6 +375,8 @@ struct Locator
 	/// The game's interface: its menu, its boxes and its texts. The game makes it when the world starts and removes it
 	/// when the game closes. Without the game files for it, the locator has no interface. The dedicated server has none.
 	using gameInterface = entt::locator<openblack::gui::GameInterface>;
+	/// The logs and tools of a tool's run on this computer. The game makes it. The dedicated server has none.
+	using toolRunSystem = entt::locator<ecs::systems::ToolRunSystemInterface>;
 	using camera = entt::locator<Camera>;
 	using gameActionSystem = entt::locator<input::GameActionInterface>;
 	/// The keyboard, the mouse and the event queue of the window system. The dedicated server has no device (see

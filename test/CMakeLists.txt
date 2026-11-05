@@ -2392,3 +2392,4 @@ openblack_setup_and_add_test(test_game_music_turn audio/test_game_music_turn.cpp
 openblack_setup_and_add_test(test_own_reports test_own_reports.cpp)
 openblack_setup_and_add_test(test_pointer_buttons input/test_pointer_buttons.cpp)
 openblack_setup_and_add_test(test_hand_press hand/test_hand_press.cpp)
+openblack_setup_and_add_test(test_tool_run test_tool_run.cpp)

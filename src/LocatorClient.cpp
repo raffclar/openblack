@@ -30,6 +30,7 @@
 #include "Common/MainThreadQueue.h"
 #include "Common/PlayerProfiles.h"
 #include "Debug/DebugGuiInterface.h"
+#include "Debug/SimRun.h"
 #include "ECS/Systems/Implementations/AbodeSoundSystem.h"
 #include "ECS/Systems/Implementations/AdvisorVoiceSystem.h"
 #include "ECS/Systems/Implementations/CloudSystem.h"
@@ -51,6 +52,7 @@
 #include "ECS/Systems/Implementations/RenderingSystemTemple.h"
 #include "ECS/Systems/Implementations/SkySystem.h"
 #include "ECS/Systems/Implementations/SnowfallSystem.h"
+#include "ECS/Systems/Implementations/ToolRunSystem.h"
 #include "ECS/Systems/Implementations/TurnCheerSystem.h"
 #include "ECS/Systems/Implementations/VillageLightSystem.h"
 #include "ECS/Systems/Implementations/WaterRingSystem.h"
@@ -83,6 +85,7 @@ using openblack::ecs::systems::RainSystem;
 using openblack::ecs::systems::RenderingSystem;
 using openblack::ecs::systems::RenderingSystemTemple;
 using openblack::ecs::systems::SnowfallSystem;
+using openblack::ecs::systems::ToolRunSystem;
 using openblack::ecs::systems::TurnCheerSystem;
 using openblack::ecs::systems::VillageLightSystem;
 using openblack::ecs::systems::WaterRingSystem;
@@ -194,6 +197,13 @@ void openblack::InitializeClient(const player_profiles::Store& profiles)
 	Locator::handPressSystem::emplace<ecs::systems::HandPressSystem>();
 	Locator::gameKeysSystem::emplace<ecs::systems::GameKeysSystem>();
 	InitializeOnlineAndTools(profiles);
+}
+
+void openblack::InitializeToolRun(const std::optional<sim_run::Request>& simulation,
+                                  std::optional<FightAutopilotRequest> fightAutopilot,
+                                  std::optional<std::filesystem::path> fightTranscriptFolder)
+{
+	Locator::toolRunSystem::emplace<ToolRunSystem>(simulation, std::move(fightAutopilot), std::move(fightTranscriptFolder));
 }
 
 bool openblack::InitializeGame(const player_profiles::Store& profiles) noexcept
