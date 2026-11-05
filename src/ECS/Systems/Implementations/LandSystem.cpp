@@ -149,6 +149,7 @@
 #include "Online/GodsRingMap.h"
 #include "Online/GodsRingMapFile.h"
 #include "Online/OnlineMapLand.h"
+#include "Online/OnlineMapStoreInterface.h"
 #include "Profiler.h"
 #include "Resources/ResourcesInterface.h"
 #include "ScriptHeaders/ScriptStart.h"
@@ -720,9 +721,15 @@ bool LandSystem::LoadSavedLand(const std::filesystem::path& landPath, const std:
 		}
 		else if (online_map_land::IsOnlineMap(landPath.generic_string()))
 		{
-			// The landscape of a land of a network game is in the land's own file, as when its script loaded it
-			const auto data = Locator::filesystem::value().ReadAll(landPath);
-			const auto file = onlinemap::Parse(std::as_bytes(data));
+			// The landscape of a land of a network game is in the land's own file, as when its script loaded it. A land
+			// that the player got from the lobby is in the store, else the land is in the game folder.
+			std::optional<std::vector<uint8_t>> kept;
+			if (Locator::onlineMapStore::has_value())
+			{
+				kept = Locator::onlineMapStore::value().Read(landPath.filename().generic_string());
+			}
+			const auto data = kept.has_value() ? std::move(*kept) : Locator::filesystem::value().ReadAll(landPath);
+			const auto file = onlinemap::Parse(std::as_bytes(std::span(data)));
 			if (!file.has_value())
 			{
 				throw std::runtime_error("the land is not a land of a network game");
