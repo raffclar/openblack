@@ -8,9 +8,11 @@
  *******************************************************************************/
 
 #include <cmath>
+#include <cstdint>
 #include <cstdlib>
 
 #include <algorithm>
+#include <bit>
 
 #include <glm/geometric.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -129,15 +131,19 @@ TEST(Moon, ScriptsAreToldHowNewTheMoonIs)
 
 TEST(Moon, MonthFractionCountsWholeDays)
 {
-	EXPECT_DOUBLE_EQ(moon::MonthFraction(k_NewMoonDay * 86400), 0.0);
+	EXPECT_EQ(moon::MonthFraction(k_NewMoonDay * 86400), 0.0f);
 	// Any time of the same day gives the same fraction
-	EXPECT_DOUBLE_EQ(moon::MonthFraction((k_NewMoonDay + 10) * 86400),
-	                 moon::MonthFraction((k_NewMoonDay + 10) * 86400 + 86399));
-	EXPECT_NEAR(moon::MonthFraction((k_NewMoonDay + 10) * 86400), 10.0 * 0.03386318012808897, 1e-12);
-	// The phase is made from the fraction at full precision: many months on, it is still a whole day's step
-	const int64_t later = (k_NewMoonDay + 9773) * 86400;
-	const double fraction = moon::MonthFraction(later);
-	EXPECT_NEAR(moon::Phase(later), static_cast<float>((1.0 - fraction) * 6.2831854820251465), 1e-6f);
+	EXPECT_EQ(moon::MonthFraction((k_NewMoonDay + 10) * 86400), moon::MonthFraction((k_NewMoonDay + 10) * 86400 + 86399));
+	EXPECT_NEAR(moon::MonthFraction((k_NewMoonDay + 10) * 86400), 10.0 * 0.03386318012808897, 1e-6);
+}
+
+TEST(Moon, ThePhaseRoundsTheMonthsToAFloat)
+{
+	// The game rounds the months to a float before it takes the fraction. Many months on, this makes the phase differ
+	// from the phase of the months at full precision.
+	EXPECT_EQ(std::bit_cast<uint32_t>(moon::Phase((k_NewMoonDay + 9773) * 86400)), 0x3EB166DDu);
+	EXPECT_EQ(std::bit_cast<uint32_t>(moon::Phase((k_NewMoonDay + 9800) * 86400)), 0x3F6289CDu);
+	EXPECT_EQ(std::bit_cast<uint32_t>(moon::Phase((k_NewMoonDay + 12345) * 86400)), 0x40C0D3D9u);
 }
 
 TEST(Moon, DateAtFractionFindsTheNearestDay)

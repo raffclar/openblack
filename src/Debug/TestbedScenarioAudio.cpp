@@ -526,6 +526,19 @@ void testbed_scenarios::AddAudio(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "temple.good_light_pulse",
+	    .name = "The rainbow pulse of a good temple's light",
+	    .facet = Facet::Story,
+	    .description = "The player is wholly good and goes into the temple's main room. The light pulses once every "
+	                   "4.1 seconds.",
+	    .expected = "The light added to the room goes slowly through red, green and blue. Each colour is at its top a "
+	                "third of a pulse after the colour before it.",
+	    .environment = {.playerAlignment = 1.0f},
+	    .framing = {.shot = Shot::Overview},
+	    .commands = {{.kind = Kind::EnterTemple, .delaySeconds = 1.0f, .value = static_cast<size_t>(TempleRoom::Main)}},
+	});
+
+	all.push_back({
 	    .id = "temple.pictures_unlit",
 	    .name = "The temple's pictures drawn in one colour with no lightmap",
 	    .facet = Facet::Story,
