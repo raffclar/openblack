@@ -1755,6 +1755,12 @@
   "query": "players.commands"
  },
  {
+  "description": "The reports that this computer sends once a turn: the grip of the land and the camera turn in the view report, the turn of the last camera turn, whether a view report went since the last new hand, and the turn of the last help report",
+  "kind": "object",
+  "parameters": [],
+  "query": "players.own_reports"
+ },
+ {
   "description": "The checksum of the synced world that a network game sends after each turn: whether it is on, and the turn and checksum of the last turn. With on, it turns it on or off",
   "kind": "object",
   "parameters": [

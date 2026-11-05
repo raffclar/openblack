@@ -39,6 +39,7 @@
 #include "ECS/Systems/Implementations/IncomingMessageSystem.h"
 #include "ECS/Systems/Implementations/LandShadeSystem.h"
 #include "ECS/Systems/Implementations/LiquidParticleSystem.h"
+#include "ECS/Systems/Implementations/OwnReportSystem.h"
 #include "ECS/Systems/Implementations/ParticleSystem.h"
 #include "ECS/Systems/Implementations/PauseTextSystem.h"
 #include "ECS/Systems/Implementations/RainSystem.h"
@@ -70,6 +71,7 @@ using openblack::ecs::systems::GameAudioSystem;
 using openblack::ecs::systems::IncomingMessageSystem;
 using openblack::ecs::systems::LandShadeSystem;
 using openblack::ecs::systems::LiquidParticleSystem;
+using openblack::ecs::systems::OwnReportSystem;
 using openblack::ecs::systems::ParticleSystem;
 using openblack::ecs::systems::PauseTextSystem;
 using openblack::ecs::systems::RainSystem;
@@ -172,6 +174,8 @@ void openblack::InitializeClient(const player_profiles::Store& profiles)
 {
 	// The input of the player, the drawing of the world, the editor, the videos and the online services
 	InitializePlayerInput();
+	// The reports of the hand, the view and the help that this computer sends once a turn
+	Locator::ownReportSystem::emplace<OwnReportSystem>();
 	Locator::rendereringSystem::emplace<RenderingSystem>();
 	// The temple makes the draw of its rooms, and the draw of the island again, with these functions
 	if (Locator::temple::has_value())

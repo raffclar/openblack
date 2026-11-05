@@ -193,6 +193,7 @@ class HelpMessageSystemInterface;
 class TipBubbleSystemInterface;
 class HandDemoSystemInterface;
 class PlayerCommandSystemInterface;
+class OwnReportSystemInterface;
 class SyncChecksumSystemInterface;
 class AdvisorSystemInterface;
 class SoundTagSystemInterface;
@@ -477,6 +478,8 @@ struct Locator
 	using tipBubbleSystem = entt::locator<ecs::systems::TipBubbleSystemInterface>;
 	using handDemoSystem = entt::locator<ecs::systems::HandDemoSystemInterface>;
 	using playerCommandSystem = entt::locator<ecs::systems::PlayerCommandSystemInterface>;
+	/// The reports of the hand, the view and the help that this computer sends. Only the client makes it.
+	using ownReportSystem = entt::locator<ecs::systems::OwnReportSystemInterface>;
 	using syncChecksumSystem = entt::locator<ecs::systems::SyncChecksumSystemInterface>;
 	using advisorSystem = entt::locator<ecs::systems::AdvisorSystemInterface>;
 	using soundTagSystem = entt::locator<ecs::systems::SoundTagSystemInterface>;

@@ -36,6 +36,7 @@
 #include "ECS/Systems/HelpTextSystemInterface.h"
 #include "ECS/Systems/IncomingMessageSystemInterface.h"
 #include "ECS/Systems/MusicMoodSystemInterface.h"
+#include "ECS/Systems/OwnReportSystemInterface.h"
 #include "ECS/Systems/PickingSystemInterface.h"
 #include "ECS/Systems/PlayerCommandSystemInterface.h"
 #include "ECS/Systems/PlayerProfileSystemInterface.h"
@@ -334,6 +335,23 @@ std::unique_ptr<ProviderInterface> PlayersProvider()
 	        "the players' commands", [](const ecs::systems::PlayerCommandSystemInterface& commands, const QueryContext& /*c*/) {
 		        return Json {{"sender", static_cast<int>(commands.GetSender())}, {"pending", commands.PendingCount()}};
 	        }));
+	provider->Add(
+	    Query("own_reports",
+	          "The reports that this computer sends once a turn: the grip of the land and the camera turn in the "
+	          "view report, the turn of the last camera turn, whether a view report went since the last new "
+	          "hand, and the turn of the last help report"),
+	    Serve<Locator::ownReportSystem>("the reports of this computer",
+	                                    [](const ecs::systems::OwnReportSystemInterface& reports, const QueryContext& /*c*/) {
+		                                    const auto& state = reports.GetState();
+		                                    const auto turnOrNull = [](std::optional<uint32_t> turn) {
+			                                    return turn.has_value() ? Json(*turn) : Json();
+		                                    };
+		                                    return Json {{"landGrip", state.landGrip},
+		                                                 {"cameraTurned", state.cameraTurned},
+		                                                 {"cameraTurnTurn", turnOrNull(state.cameraTurnTurn)},
+		                                                 {"viewReportSent", state.lastViewReport.has_value()},
+		                                                 {"helpReportTurn", turnOrNull(state.helpReportTurn)}};
+	                                    }));
 	provider->Add({.name = "checksum",
 	               .description = "The checksum of the synced world that a network game sends after each turn: whether it "
 	                              "is on, and the turn and checksum of the last turn. With on, it turns it on or off",

@@ -177,6 +177,7 @@
 #include "ECS/Systems/IncomingMessageSystemInterface.h"
 #include "ECS/Systems/InspectorSystemInterface.h"
 #include "ECS/Systems/NetworkGameSystemInterface.h"
+#include "ECS/Systems/OwnReportSystemInterface.h"
 #include "ECS/Systems/PlayerCommandSystemInterface.h"
 #include "ECS/Systems/PlayerProfileSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
@@ -1145,6 +1146,7 @@ void openblack::ShutDownServices()
 	Locator::skyClockSystem::reset();
 	Locator::cameraHelpSystem::reset();
 	Locator::turnCheerSystem::reset();
+	Locator::ownReportSystem::reset();
 	Locator::cameraPathSystem::reset();
 	Locator::cloudSystem::reset();
 	Locator::mistSystem::reset();
