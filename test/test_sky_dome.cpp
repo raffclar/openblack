@@ -150,13 +150,14 @@ TEST(SkyDome, ChannelsBlendInWholeSteps)
 	EXPECT_EQ(sky_dome::BlendChannel(1, 1, 128), 0);
 }
 
-TEST(SkyDome, DarknessOfAnEvilSky)
+TEST(SkyDome, DarknessOfAGoodSky)
 {
+	// The alignment runs from 0, good, to 2, evil, as the land's light takes it: an evil sky is not dark
 	EXPECT_EQ(sky_dome::Darkness(2.0f), 0);
 	EXPECT_EQ(sky_dome::Darkness(0.8f), 0);
-	// Evil at 0.75 of the way: (0.75 - 0.6) * 225
+	// Good at 0.75 of the way: (0.75 - 0.6) * 225
 	EXPECT_EQ(sky_dome::Darkness(0.5f), 33);
-	// The float 0.6 is a little over it, so even a wholly evil sky only reaches 89
+	// The float 0.6 is a little over it, so even a wholly good sky only reaches 89
 	EXPECT_EQ(sky_dome::Darkness(0.0f), 89);
 	EXPECT_EQ(sky_dome::Darkness(-1.0f), 90);
 	// The product rounds to 87 as a float before the cut; the exact product is a little under 87

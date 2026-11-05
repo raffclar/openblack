@@ -38,7 +38,11 @@ std::optional<sun::Placement> sun::Place(float scriptHour)
 	{
 		return std::nullopt;
 	}
-	const float height = 7500.0f * (std::clamp(std::min(scriptHour, 24.0f - scriptHour), 6.0f, 12.0f) - 6.0f) / 6.0f;
+	// The afternoon mirrors the morning about noon. The game multiplies by its float of a sixth, then by the height at
+	// noon.
+	constexpr float k_Sixth = std::bit_cast<float>(0x3E2AAAABu);
+	const float morning = scriptHour > 12.0f ? 12.0f - (std::min(scriptHour, 18.0f) - 12.0f) : std::max(scriptHour, 6.0f);
+	const float height = ((morning - 6.0f) * k_Sixth) * 7500.0f;
 	return Placement {.position = {-30000.0f, height, -30000.0f}, .alpha = alpha};
 }
 
@@ -47,7 +51,8 @@ std::array<glm::vec3, 5> sun::GlareSamples(glm::vec3 sun, glm::vec3 camera, floa
 	auto towards = sun - camera;
 	if (towards.x != 0.0f || towards.y != 0.0f || towards.z != 0.0f)
 	{
-		towards *= near / std::sqrt(towards.x * towards.x + towards.y * towards.y + towards.z * towards.z);
+		// The game adds the squares from the last axis to the first
+		towards *= near / std::sqrt(((towards.z * towards.z) + (towards.y * towards.y)) + (towards.x * towards.x));
 	}
 	std::array<glm::vec3, 5> samples {};
 	for (size_t i = 0; i < samples.size(); ++i)

@@ -234,7 +234,7 @@ town_desire::DesireInputs GatherInputs(entt::entity townEntity, const Town& town
 	{
 		const auto& clock = Locator::skyClockSystem::value().GetClock();
 		in.visualHour = clock.GetVisualTime();
-		in.skyType = 2.0f - clock.SkyType(in.visualHour);
+		in.skyType = clock.NightSkyType(in.visualHour);
 		in.dayFull = clock.GetVisualTimes()[3];
 	}
 	if (Locator::time::has_value())

@@ -36,9 +36,9 @@ using FloatRandom = std::function<float(float)>;
 inline constexpr uint32_t k_PointsPerPath = 5;
 /// The legs of a stroll along a path: out to its last point and back to its first
 inline constexpr int32_t k_LegsPerStroll = 2 * static_cast<int32_t>(k_PointsPerPath);
-/// The sky at which children stop strolling for the night, on openblack's scale (0 at night, 1 at dusk, 2 by day).
-/// The game keeps its sky the other way up and strolls while its own value is no more than 1.2.
-inline constexpr float k_DaySkyLeast = 0.8f;
+/// The sky at which children stop strolling for the night, as the game counts the sky (2 at night, 1 at dusk, 0 by
+/// day). The game holds the limit as a double, and the children stroll while the sky is no more than it.
+inline constexpr double k_DaySkyMost = 1.2;
 /// How far a child strays from each point of its path, at most half of this either way
 inline constexpr float k_Stray = 1.0f;
 
@@ -72,10 +72,11 @@ struct NextLeg
 /// the land's second axis first
 [[nodiscard]] glm::vec2 Strayed(glm::vec2 point, const FloatRandom& random);
 
-/// Whether the sky is light enough for children to stroll at the crèche
-[[nodiscard]] constexpr bool IsDaytime(float skyType)
+/// Whether the sky is light enough for children to stroll at the crèche. The sky type is as the game counts it, 2 at
+/// night.
+[[nodiscard]] constexpr bool IsDaytime(float nightSkyType)
 {
-	return skyType >= k_DaySkyLeast;
+	return !(static_cast<double>(nightSkyType) > k_DaySkyMost);
 }
 
 /// What a child at the crèche does, once it has seen to its hunger and what its town wants of it

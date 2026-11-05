@@ -156,7 +156,7 @@ void DayNightClock::ProcessTurn()
 	{
 		// The time moves on by day's or night's rate, mixed by how far the sky has turned to night
 		_step = k_DefaultStep;
-		const float towardsNight = 2.0f - SkyType(_visualTime);
+		const float towardsNight = NightSkyType(_visualTime);
 		const float rate = ((_nightRate - _dayRate) * towardsNight * 0.5f) + _dayRate;
 		SetTarget(_visualTime + (rate * _scale * k_TurnSeconds), 0.0f);
 	}
@@ -204,6 +204,36 @@ float DayNightClock::SkyType(float visualHour) const
 		return 1.0f + ((hour - duskEnd) / (dayFull - duskEnd));
 	}
 	return 2.0f;
+}
+
+float DayNightClock::NightSkyType(float visualHour) const
+{
+	const float hour = visualHour > 12.0f ? 24.0f - visualHour : visualHour;
+	const auto& [nightFull, duskStart, duskEnd, dayFull] = _times;
+	if (hour < nightFull)
+	{
+		return 2.0f;
+	}
+	if (hour < duskStart)
+	{
+		return 2.0f - ((hour - nightFull) / (duskStart - nightFull));
+	}
+	if (hour < duskEnd)
+	{
+		return 1.0f;
+	}
+	if (hour < dayFull)
+	{
+		return 1.0f - ((hour - duskEnd) / (dayFull - duskEnd));
+	}
+	return 0.0f;
+}
+
+bool DayNightClock::IsNight(float nightSkyType)
+{
+	// The game holds the limit as a double
+	constexpr double k_NightLeast = 1.2;
+	return static_cast<double>(nightSkyType) > k_NightLeast;
 }
 
 float DayNightClock::ScriptToVisual(float hour) const
