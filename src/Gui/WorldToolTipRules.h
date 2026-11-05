@@ -228,6 +228,53 @@ struct Wording
 /// The tooltip's corner by the hand, kept on the screen by its size
 [[nodiscard]] glm::ivec2 KeptOnScreen(glm::ivec2 hand, glm::ivec2 screen, int size);
 
+/// A box of whole pixels on the screen
+struct PixelBox
+{
+	glm::ivec2 min {0};
+	glm::ivec2 max {0};
+
+	bool operator==(const PixelBox&) const = default;
+};
+
+/// The side of the mouse picture that an arrow of the tooltip points to
+enum class ArrowSide : uint8_t
+{
+	Left,
+	Right,
+	Up,
+	Down,
+};
+
+/// The width of the tooltip's line: the words, the gap after them, the mouse or key cap, and half the line's height
+/// for each arrow at the side of the mouse
+[[nodiscard]] float LineWidth(float textWidth, float iconWidth, int size, bool leftArrow, bool rightArrow, float gap);
+
+/// The whole pixel where the line starts. Right of the hand, the line starts half its height to the left of the hand.
+/// Left of the hand, it ends half its height to the right of the hand, and the start is cut down to a whole pixel.
+[[nodiscard]] int LineStart(int handX, int size, float lineWidth, bool onLeft);
+
+/// The whole pixel where the mouse or key cap starts: after the words and the gap, cut down, then after the left
+/// arrow
+[[nodiscard]] int IconStart(int textX, float textWidth, float gap, int size, bool leftArrow);
+
+/// The distance from the top of the line to the top of the words: half the difference of the two heights, with its
+/// fraction
+[[nodiscard]] float WordsOffset(int size, int textSize);
+
+/// The glow behind the mouse or key cap
+[[nodiscard]] PixelBox IconGlow(int iconX, float iconWidth, int y, int size);
+
+/// The glow behind the words, as high as the words
+[[nodiscard]] PixelBox WordsGlow(int textX, float textWidth, int y, int size, float wordsOffset);
+
+/// The glow behind an arrow: half the line's height long and wide, at the middle of the side of the mouse
+[[nodiscard]] PixelBox ArrowGlow(ArrowSide side, int iconX, float iconWidth, int y, int size);
+
+/// The arrow's picture: its glow box made larger by a ninth of the line's height on each side, cut down to whole
+/// pixels
+[[nodiscard]] PixelBox ArrowPicture(ArrowSide side, int iconX, float iconWidth, int y, int size);
+
 /// "Cast", by the action button, where the miracle held in the hand may be cast on the thing or the land under the
 /// pointer
 constexpr uint32_t k_Cast = 14;
