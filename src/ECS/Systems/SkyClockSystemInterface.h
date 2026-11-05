@@ -29,7 +29,11 @@ public:
 	virtual void Initialize() = 0;
 	/// Keeps the sky as it is while the last land's entities go, for Initialize to make it again
 	virtual void KeepForNextLand() = 0;
-	/// After the load of a saved world: the system finds the sky's entities among the loaded entities
+	/// Before the load of a saved world: keeps how far the shown dome's picture follows the sky. The picture stays
+	/// with the renderer through the load, so the dome must not take this from the save.
+	virtual void KeepShownDome() = 0;
+	/// After the load of a saved world: the system finds the sky's entities among the loaded entities. The dome
+	/// continues from what KeepShownDome kept, or builds all of its picture again when nothing was kept.
 	virtual void FindAfterLoad() = 0;
 
 	/// One turn of game time
