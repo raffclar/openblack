@@ -1,5 +1,5 @@
 diff --git a/bgfx/src/renderer_webgpu.cpp b/bgfx/src/renderer_webgpu.cpp
-index f68e18c..7e47b87 100644
+index f68e18c..b64ae42 100644
 --- a/bgfx/src/renderer_webgpu.cpp
 +++ b/bgfx/src/renderer_webgpu.cpp
 @@ -3891,35 +3891,63 @@ WGPU_IMPORT
@@ -56,7 +56,7 @@ index f68e18c..7e47b87 100644
 +							wgpuRelease(request->bindGroupLayout);
 +						}
 +
-+						BX_DELETE(g_allocator, request);
++						bx::deleteObject(g_allocator, request);
  						bx::atomicFetchAndAdd<int32_t>(&context->m_prefetchPending, -1);
  					},
  					.userdata1   = this,
