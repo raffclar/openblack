@@ -255,6 +255,12 @@ struct MimicConditions
 	/// How pressing what it reacts to now is
 	float reactionPriority {0.0f};
 	bool canSee {true};
+	/// The hand of a player holds the creature to stroke or slap it
+	bool heldByHand {false};
+	/// The creature wears no leash, or wears a leash that works
+	bool leashWorks {true};
+	/// A person, not a computer god, plays the creature's player
+	bool humanPlayer {true};
 };
 /// Starts copying a player's action, if the creature can. Copying nothing, it copies anything that ranks above 0; copying
 /// another deed's action, only a different deed that ranks at least as high; already copying a desire, any deed at all.

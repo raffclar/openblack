@@ -14,6 +14,8 @@
 #include <iterator>
 #include <vector>
 
+#include "Creature/CreatureExplorationMap.h"
+
 using namespace openblack;
 using namespace openblack::creature_planner;
 using creature_desires::Desire;
@@ -388,6 +390,29 @@ std::vector<Desire> creature_planner::NextGoals(PlannerState& state,
 		}
 	}
 	return goals;
+}
+
+bool creature_planner::DesireMayPlan(Desire desire, const DesireState& state)
+{
+	switch (desire)
+	{
+	case Desire::Wanderlust:
+		return creature_exploration::WanderlustAllowed(state.phase, state.exhaustion);
+	case Desire::AttractAttention:
+		return state.turnsIgnored > state.turnsPerSecond * k_AttentionSeconds;
+	case Desire::GetWarmer:
+		return state.warmth <= k_ColdWarmth;
+	case Desire::GetColder:
+		return state.warmth >= k_HotWarmth;
+	case Desire::RunAwayFromPlayer:
+		return state.attitudeToPlayer < 0.0f;
+	case Desire::HangAroundAtHome:
+		return state.homeDistance.has_value() && *state.homeDistance < k_HangAroundHomeDistance;
+	case Desire::FollowPlayerDesire:
+		return state.sawDeed;
+	default:
+		return true;
+	}
 }
 
 std::optional<Plan> creature_planner::Best(const PlannerState& state)

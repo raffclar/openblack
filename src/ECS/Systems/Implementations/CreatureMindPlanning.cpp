@@ -1515,13 +1515,20 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 			                 return ExecutorOf(action) != nullptr;
 		                 });
 	}
-	// The desire to explore has a condition of its own: a young creature, or one that is not too exhausted
-	{
+	// Some desires have a condition of their own. A desire that fails it takes its turn to plan, but it loses its plan.
+	const auto desireState = [&]() {
 		const auto* body = registry.TryGet<const CreatureNeeds>(creature);
-		const float exhaustion = body != nullptr ? body->needs.exhaustion : 0.0f;
-		auto& wander = eligible.at(static_cast<size_t>(Desire::Wanderlust));
-		wander = wander && creature_exploration::WanderlustAllowed(mind.developmentPhase, exhaustion);
-	}
+		return creature_planner::DesireState {
+		    .phase = mind.developmentPhase,
+		    .exhaustion = body != nullptr ? body->needs.exhaustion : 0.0f,
+		    .turnsIgnored = mind.attention.turnsIgnored,
+		    .turnsPerSecond = static_cast<uint32_t>(k_TurnsPerSecond),
+		    .warmth = body != nullptr ? body->needs.warmth : 0.0f,
+		    .attitudeToPlayer = mind.attitudeToPlayer,
+		    .homeDistance = situation.homeDistance,
+		    .sawDeed = mind.observedDeed.has_value(),
+		};
+	}();
 
 	// Something shown on the leash is the only goal there is this turn, for every desire
 	std::optional<entt::entity> leashTarget;
@@ -1565,6 +1572,11 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 	for (const auto desire : goals)
 	{
 		const auto d = static_cast<size_t>(desire);
+		if (!creature_planner::DesireMayPlan(desire, desireState))
+		{
+			mind.planner.best.at(d).reset();
+			continue;
+		}
 		// A desire about something is about a whole thing: a town, a forest, a temple, a flock or a creature. The plan
 		// acts on a part of the whole thing. Without a whole thing, the desire has no plan.
 		std::span<const uint32_t> actions = tables->desireActions.at(d);

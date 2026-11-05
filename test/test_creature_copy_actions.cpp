@@ -52,6 +52,16 @@ TEST(CreatureCopyActions, MayStartIsTheTestOfStart)
 	EXPECT_TRUE(MayStartMimicry(mimicry, 0, rules, grown));
 }
 
+TEST(CreatureCopyActions, NoCopyWhenHeldWithALeashThatDoesNotWorkOrForAComputerGod)
+{
+	const auto rules = Rules();
+	const std::optional<Mimicry> mimicry;
+	EXPECT_TRUE(MayStartMimicry(mimicry, 1, rules, {.phase = 13}));
+	EXPECT_FALSE(MayStartMimicry(mimicry, 1, rules, {.phase = 13, .heldByHand = true}));
+	EXPECT_FALSE(MayStartMimicry(mimicry, 1, rules, {.phase = 13, .leashWorks = false}));
+	EXPECT_FALSE(MayStartMimicry(mimicry, 1, rules, {.phase = 13, .humanPlayer = false}));
+}
+
 TEST(CreatureCopyActions, BeginStartsWithNoTest)
 {
 	const auto rules = Rules();
