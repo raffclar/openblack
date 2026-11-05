@@ -56,7 +56,8 @@ public:
 	/// Paints again the blocks whose footprints changed since the last time
 	void Update();
 	/// Starts the search for the changed things on a thread of its own, before the next update needs it. The draw only
-	/// reads the world, thus the thread reads it while the draw continues. Call it only in a draw that calls Update.
+	/// reads the world, thus the thread reads it while the draw continues. The thread reads only the component stores
+	/// that this thread finds before it starts. Call it only in a draw that calls Update.
 	void StartSearch();
 	/// Waits for the search that StartSearch started. The blocks that it found stay for the next update. Call it at the
 	/// end of the draw.
@@ -88,6 +89,9 @@ private:
 		bool channel {false};
 	};
 
+	/// The component stores that the search and the paint read, found on the game's thread
+	struct ThingStores;
+
 	/// What paints a block: its things and its loose prints in the order that they paint it
 	struct BlockPaint
 	{
@@ -103,9 +107,10 @@ private:
 	/// Takes the blocks that the land painted again. It gives false when there is no land to paint.
 	[[nodiscard]] bool TakeLandChanges();
 	/// Finds the changes of the rivers and the prints, and paints again the blocks that changed
-	void PaintChanges();
-	/// Finds the things with footprints that changed, and the blocks that take their footprints
-	void FindChangedThings();
+	void PaintChanges(const ThingStores& stores);
+	/// Finds the things with footprints that changed, and the blocks that take their footprints. It reads only the given
+	/// stores and the registry's list of entities, thus a side thread can do it while the game's thread draws.
+	void FindChangedThings(const ThingStores& stores);
 	/// Finds whether the rivers changed, and the blocks that take their footprints
 	void FindChangedRivers();
 	/// Finds whether the prints of the things that show only as prints changed, and the blocks that take them
@@ -113,10 +118,10 @@ private:
 	/// Adds the blocks within the bounds of a footprint to the blocks to paint again
 	void MarkBlocks(glm::ivec2 lowBlock, glm::ivec2 highBlock);
 	/// The things and loose prints that paint a block. It changes nothing.
-	[[nodiscard]] BlockPaint FindBlockPaint(size_t block) const;
+	[[nodiscard]] BlockPaint FindBlockPaint(size_t block, const ThingStores& stores) const;
 	/// Paints the block's own texture with its footprints into texels. It changes only the block's own texture that is
 	/// kept, which must already have its place in the kept textures, and texels.
-	void PaintBlock(size_t block, const BlockPaint& paint, std::span<uint16_t> texels);
+	void PaintBlock(size_t block, const BlockPaint& paint, const ThingStores& stores, std::span<uint16_t> texels);
 	/// The threads that share the work of many blocks, made the first time that many blocks change at once
 	[[nodiscard]] WorkerPool& Workers();
 	void Reset(size_t blockCount);

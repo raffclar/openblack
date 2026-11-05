@@ -164,8 +164,11 @@ private:
 	/// Puts the blocks of the bake on the other threads into the texture, if the bake is done
 	void ApplyFinishedBake();
 
-	/// Whether no watched thing changed what its shadow depends on since the last full look at the casters
-	[[nodiscard]] bool WatchedUnchanged(const ecs::Registry& registry) const;
+	/// The component stores that the test of the watched things reads
+	struct WatchedStores;
+	/// Whether no watched thing changed what its shadow depends on since the last full look at the casters. It reads
+	/// only the given stores, thus a side thread can do the test while the game's thread adds stores to the registry.
+	[[nodiscard]] bool WatchedUnchanged(const WatchedStores& stores) const;
 	/// Waits for the test that StartWatchedTest started, and gives its answer. No test: no answer.
 	[[nodiscard]] std::optional<bool> TakeWatchedTest();
 	void MarkBlocksOf(std::span<const uint32_t> cells);

@@ -14,6 +14,7 @@
 
 #include <array>
 #include <limits>
+#include <utility>
 #include <vector>
 
 #include <bgfx/bgfx.h>
@@ -156,8 +157,9 @@ void Renderer::DrawFishPuzzleFloats(const DrawSceneDesc& desc) const
 	}
 	const auto& mesh = *meshes.Handle(ecs::fish_puzzle::k_FloatMeshId.value());
 	const auto* program = _shaderManager->GetShader("Object");
-	Locator::entitiesRegistry::value().Each<const ecs::components::PuzzleGame>(
-	    [this, &mesh, program](const ecs::components::PuzzleGame& game) {
+	// The draw only reads the registry, so that it adds no store while the side threads read the stores
+	std::as_const(Locator::entitiesRegistry::value())
+	    .Each<const ecs::components::PuzzleGame>([this, &mesh, program](const ecs::components::PuzzleGame& game) {
 		    if (!game.fish.has_value())
 		    {
 			    return;

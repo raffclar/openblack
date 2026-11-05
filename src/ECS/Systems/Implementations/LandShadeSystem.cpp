@@ -200,7 +200,7 @@ void LandShadeSystem::Shade(const LandShadeFrame& frame)
 	UpdateMap(both);
 }
 
-void LandShadeSystem::CastShadows(const LandShadeFrame& frame, Registry& registry, const Registry* drawn)
+void LandShadeSystem::CastShadows(const LandShadeFrame& frame, const Registry& registry, const Registry* drawn)
 {
 	_shadows = 0;
 	size_t room = land_shade::k_MostStamps;
@@ -287,7 +287,7 @@ void LandShadeSystem::CastShadows(const LandShadeFrame& frame, Registry& registr
 	}
 }
 
-void LandShadeSystem::CastLights(const LandShadeFrame& frame, Registry& registry)
+void LandShadeSystem::CastLights(const LandShadeFrame& frame, const Registry& registry)
 {
 	_lights = 0;
 	if (!village_lights::IsDark(frame.landColour))
