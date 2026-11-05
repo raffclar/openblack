@@ -196,8 +196,9 @@ struct EngineConfig
 	/// Tests on this computer only: a PEM file of more certificate authorities for a lobby on a loopback address. The
 	/// lobby's web client, its push channel and the game sockets then also trust it.
 	std::optional<std::string> lobbyTestAuthorities;
-	/// The real-world weather of the player's place changes the weather of a single-player game. It is on unless the
-	/// player turns it off.
+	/// The game asks the lobby for the real-world weather of the player's place as a single-player game starts. The
+	/// "Online weather" setting of the lobby account decides if the weather comes. False stops the question (a developer
+	/// switch).
 	bool useInternetWeather {true};
 	/// A network game shows the round trip of this computer's game socket (deviation 143). It is off unless the player
 	/// turns it on.
