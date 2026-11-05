@@ -722,6 +722,35 @@ TEST(SpellBehaviours, ACreatureCastsAForestOnlyOnLandInTheMapWhereTreesCanGrow)
 	EXPECT_TRUE(spells::CanCastAtPointItself(services, MagicType::Fireball, {100.0f, 0.0f, 10.0f}));
 }
 
+TEST(SpellBehaviours, TheKindOfAMiracleDecidesWhereItCanGoWithNoCastRule)
+{
+	auto info = MakeTables();
+	info->magicHeal.at(0).dummyVar = 10.0f;
+	info->magicHeal.at(0).maxToHeal = 20;
+	FakeServices services(*info);
+	services.world.waterBelowZ = 50.0f;
+	const glm::vec3 land {100.0f, 0.0f, 100.0f};
+	const glm::vec3 sea {100.0f, 0.0f, 10.0f};
+	// Food and wood need land
+	EXPECT_TRUE(spells::MeetsKindRuleAt(services, MagicType::Food, land));
+	EXPECT_FALSE(spells::MeetsKindRuleAt(services, MagicType::Food, sea));
+	EXPECT_FALSE(spells::MeetsKindRuleAt(services, MagicType::FoodPowerUpOne, sea));
+	EXPECT_FALSE(spells::MeetsKindRuleOn(services, MagicType::Wood, sea));
+	// A heal needs someone to heal near the point
+	EXPECT_FALSE(spells::MeetsKindRuleOn(services, MagicType::Heal, land));
+	services.world.objects[static_cast<entt::entity>(1)] = land;
+	EXPECT_TRUE(spells::MeetsKindRuleOn(services, MagicType::Heal, land));
+	// A forest goes at a point where trees can grow, but never on a thing
+	EXPECT_TRUE(spells::MeetsKindRuleAt(services, MagicType::Forest, land));
+	EXPECT_FALSE(spells::MeetsKindRuleOn(services, MagicType::Forest, land));
+	// A creature spell never goes at a point. Its cast on a creature has its own test.
+	EXPECT_FALSE(spells::MeetsKindRuleAt(services, MagicType::CreatureSpellBig, land));
+	EXPECT_TRUE(spells::MeetsKindRuleOn(services, MagicType::CreatureSpellBig, land));
+	// The other kinds go to any place, also into the sea
+	EXPECT_TRUE(spells::MeetsKindRuleAt(services, MagicType::Fireball, sea));
+	EXPECT_TRUE(spells::MeetsKindRuleOn(services, MagicType::Water, sea));
+}
+
 TEST(SpellBehaviours, LandForACastRuleIsACellWithoutWaterWhateverItsHeight)
 {
 	auto info = MakeTables();

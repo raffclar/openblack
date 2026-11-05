@@ -151,6 +151,17 @@ namespace spells
 /// forest land)
 [[nodiscard]] bool CanCastAt(SpellServicesInterface& services, MagicType type, PlayerNames player, glm::vec3 point,
                              bool ignoreInfluence);
+/// Whether the kind of a miracle lets it go at a point, with no cast rule and no influence:
+/// - A heal needs someone to heal.
+/// - Food and wood need land.
+/// - A teleport needs a place for its stone.
+/// - A forest needs land in the map where trees can grow.
+/// - A creature spell never goes at a point.
+/// The other kinds go to any place.
+[[nodiscard]] bool MeetsKindRuleAt(SpellServicesInterface& services, MagicType type, glm::vec3 point);
+/// Whether the kind of a miracle lets it go on a thing at the position. A forest never goes on a thing. A creature spell
+/// has the test of its cast on a creature. The other kinds use the test at the position of the thing.
+[[nodiscard]] bool MeetsKindRuleOn(SpellServicesInterface& services, MagicType type, glm::vec3 position);
 /// Whether a miracle can be cast at a point by itself, as a creature casts it, with no influence to hold it back. A heal
 /// needs someone to heal. A forest needs land in the map where trees can grow.
 [[nodiscard]] bool CanCastAtPointItself(SpellServicesInterface& services, MagicType type, glm::vec3 point);

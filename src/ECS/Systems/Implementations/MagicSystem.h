@@ -168,6 +168,7 @@ public:
 		return _world.ApplyEffect(object, values, source);
 	}
 	[[nodiscard]] bool CanCastAt(MagicType type, PlayerNames player, glm::vec3 point) override;
+	[[nodiscard]] bool MeetsKindRule(MagicType type, glm::vec3 point, bool onThing) override;
 	bool SpellEvent(entt::entity spell, const particles::SpellEventInfo& event) override;
 	void PayForSpell(entt::entity spell, float cost) override;
 

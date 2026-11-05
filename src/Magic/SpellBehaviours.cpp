@@ -205,24 +205,45 @@ bool spells::CanCastAt(SpellServicesInterface& services, MagicType type, PlayerN
 	case CastRuleType::Anywhere:
 		break;
 	}
+	return MeetsKindRuleAt(services, type, point);
+}
+
+bool spells::MeetsKindRuleAt(SpellServicesInterface& services, MagicType type, glm::vec3 point)
+{
+	auto& world = services.World();
 	switch (ClassOf(type))
 	{
 	case SpellClass::Heal:
 	{
-		const auto reach = HealReachOf(info, type, 1.0f);
+		const auto reach = HealReachOf(services.Info(), type, 1.0f);
 		return reach.has_value() && !world.HealTargets(point, reach->radius, reach->maximum).empty();
 	}
 	case SpellClass::Resource:
-		return onLand;
+		return world.IsLand(point);
 	case SpellClass::Teleport:
 		// Not where something stands fixed on the land, a building, a field or another stone
 		return services.CanPlaceTeleportStone(point);
 	case SpellClass::Forest:
-		return onLand && services.ForestCanGrowAt(point);
+		return world.InBounds(point) && world.IsLand(point) && services.ForestCanGrowAt(point);
 	case SpellClass::Creature:
 		return false;
 	default:
 		return true;
+	}
+}
+
+bool spells::MeetsKindRuleOn(SpellServicesInterface& services, MagicType type, glm::vec3 position)
+{
+	switch (ClassOf(type))
+	{
+	case SpellClass::Forest:
+		// A forest never goes on a thing
+		return false;
+	case SpellClass::Creature:
+		// The cast on a creature has its own test
+		return true;
+	default:
+		return MeetsKindRuleAt(services, type, position);
 	}
 }
 
