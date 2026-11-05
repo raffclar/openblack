@@ -703,6 +703,20 @@ TEST(CreatureFeedback, SlapsAreClassedByHeightAndSpeed)
 	EXPECT_EQ(head->animation, 165u);
 }
 
+TEST(CreatureFeedback, SlapHeightLimitsAreComparedAsDoubles)
+{
+	// The nearest float to 0.7 is less than 0.7 as a double, thus the slap is at the waist
+	const auto waist = creature_feedback::ClassifySlap(0.7f, 100.0f, 1.0f, false);
+	ASSERT_TRUE(waist.has_value());
+	EXPECT_EQ(waist->band, creature_feedback::SlapBand::Waist);
+	// The nearest float to 0.4 is more than 0.4 as a double, thus the slap is at the waist
+	const auto aboveFeet = creature_feedback::ClassifySlap(0.4f, 100.0f, 1.0f, false);
+	ASSERT_TRUE(aboveFeet.has_value());
+	EXPECT_EQ(aboveFeet->band, creature_feedback::SlapBand::Waist);
+	// The nearest float to 1.1 is more than 1.1 as a double, thus there is no slap
+	EXPECT_FALSE(creature_feedback::ClassifySlap(1.1f, 100.0f, 1.0f, false).has_value());
+}
+
 TEST(CreatureFeedback, StrokesAndSlapsAddUp)
 {
 	auto sum = 0.0f;
