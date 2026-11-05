@@ -958,10 +958,19 @@ void TeleportSystem::UpdateFrame(ObjectDrawListSystemInterface& drawList, std::c
 	};
 	std::vector<entt::entity> stones;
 	registry.Each<const TeleportStone>([&stones](entt::entity stone, const TeleportStone&) { stones.push_back(stone); });
-	std::ranges::for_each(particles::drawn_steps::DrawOrder(
-	                          drawList.GetList(), stones, drawList.GetView().has_value(),
-	                          [&registry, &drawList](entt::entity stone) { return drawList.Decides(registry, stone); }),
-	                      stepPool);
+	const auto order = particles::drawn_steps::DrawOrder(
+	    drawList.GetList(), stones, drawList.GetView().has_value(),
+	    [&registry, &drawList](entt::entity stone) { return drawList.Decides(registry, stone); });
+	std::ranges::for_each(order, stepPool);
+	// A stone that is not on the land's list is not drawn, so its pool does not show with its last step
+	for (const auto stone : particles::drawn_steps::LeftOut(stones, order))
+	{
+		const auto& component = registry.Get<const TeleportStone>(stone);
+		if (component.pool != ParticleRuleSystemInterface::k_NoEffect)
+		{
+			particles.SetShown(component.pool, false);
+		}
+	}
 }
 
 void TeleportSystem::Reset()

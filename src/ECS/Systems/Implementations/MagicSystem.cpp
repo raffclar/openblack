@@ -1816,10 +1816,19 @@ void MagicSystem::UpdateDispenserFrame(const ObjectDrawListSystemInterface& draw
 	std::vector<entt::entity> dispensers;
 	registry.Each<const SpellDispenser>(
 	    [&dispensers](entt::entity entity, const SpellDispenser&) { dispensers.push_back(entity); });
-	std::ranges::for_each(particles::drawn_steps::DrawOrder(
-	                          drawList.GetList(), dispensers, drawList.GetView().has_value(),
-	                          [&registry, &drawList](entt::entity entity) { return drawList.Decides(registry, entity); }),
-	                      stepSwirl);
+	const auto order = particles::drawn_steps::DrawOrder(
+	    drawList.GetList(), dispensers, drawList.GetView().has_value(),
+	    [&registry, &drawList](entt::entity entity) { return drawList.Decides(registry, entity); });
+	std::ranges::for_each(order, stepSwirl);
+	// A dispenser that is not on the land's list is not drawn, so its swirl does not show with its last step
+	for (const auto entity : particles::drawn_steps::LeftOut(dispensers, order))
+	{
+		const auto& dispenser = registry.Get<const SpellDispenser>(entity);
+		if (dispenser.effect != ParticleRuleSystemInterface::k_NoEffect)
+		{
+			particles.SetShown(dispenser.effect, false);
+		}
+	}
 }
 
 void MagicSystem::Reset()
