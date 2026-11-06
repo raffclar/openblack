@@ -15,6 +15,7 @@
 #include <utility>
 
 #include "3D/MapCoords.h"
+#include "Common/X87.h"
 
 using namespace openblack::ecs::systems;
 
@@ -40,9 +41,10 @@ uint32_t WallTicks()
 
 int32_t GameTimer::Milliseconds(uint32_t now) const
 {
-	// The ticks since the base, scaled, plus what was counted by then, as one float sum truncated
-	const auto ticks = static_cast<float>(now - base);
-	return openblack::map_coords::FtoL(ticks * speed + static_cast<float>(elapsed));
+	// The FPU multiplies the exact ticks since the base by the speed and rounds the product one time to a float. Then it
+	// adds the exact count to the base, rounds the sum one time to a float and truncates it.
+	const auto scaled = x87::Mul(static_cast<double>(now - base), speed);
+	return openblack::map_coords::FtoL(x87::Add(scaled, static_cast<double>(elapsed)));
 }
 
 void GameTimer::Stop(uint32_t now)
