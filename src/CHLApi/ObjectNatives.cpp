@@ -77,6 +77,7 @@
 #include "ECS/Archetypes/SharkArchetype.h"
 #include "ECS/Archetypes/TreeArchetype.h"
 #include "ECS/Archetypes/VillagerArchetype.h"
+#include "ECS/BuildingSites.h"
 #include "ECS/ChallengeRecords.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/Ball.h"
@@ -1038,8 +1039,21 @@ void CallIn() // 055 CALL_IN
 		Pusho(0);
 		return;
 	}
-	// TODO(opening): a town's animals and its storage pit
+	// TODO(opening): a town's animals
 	const auto objectType = static_cast<ObjectType>(type);
+	// A store in a town is its main storage pit, of any subtype, also when a script holds it
+	if (registry.AllOf<ecs::components::Town>(container) && objectType == ObjectType::Store)
+	{
+		if (const auto pit = ecs::construction::StoragePitOf(container))
+		{
+			Locator::scriptObjects::value().Register(*pit, false);
+			Pusho(static_cast<uint32_t>(*pit));
+			return;
+		}
+		ScriptMessage("Cannot find in");
+		Pusho(0);
+		return;
+	}
 	if (registry.AllOf<ecs::components::Town>(container) && objectType != ObjectType::Villager &&
 	    objectType != ObjectType::VillagerChild)
 	{
