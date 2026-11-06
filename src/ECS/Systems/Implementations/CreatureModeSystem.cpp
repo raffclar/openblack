@@ -226,8 +226,10 @@ void CreatureModeSystem::ClearView()
 		return;
 	}
 	const auto& land = Locator::terrainSystem::value();
-	const auto focus = _model->GetTargetFocus();
-	_model->ClearView(land.GetNormalAt(glm::xz(focus)), [&land](glm::vec2 point) { return land.GetHeightAt(point); });
+	_model->ClearView({
+	    .height = [&land](glm::vec2 point) { return land.GetHeightAt(point); },
+	    .normal = [&land](glm::vec2 point) { return land.GetNormalAt(point); },
+	});
 }
 
 void CreatureModeSystem::Update(std::chrono::microseconds dt, const Frame& frame)

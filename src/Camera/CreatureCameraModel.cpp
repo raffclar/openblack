@@ -79,9 +79,9 @@ CreatureCameraModel::Points CreatureCameraModel::Aim() const
 	return {.origin = creature_follow::Origin(_focus, view), .focus = _focus};
 }
 
-void CreatureCameraModel::ClearView(glm::vec3 landNormal, const creature_follow::GroundHeight& ground)
+void CreatureCameraModel::ClearView(const camera_limits::Ground& ground)
 {
-	_view = creature_follow::Clamped(creature_follow::ClearView(_view, _focus, landNormal, ground));
+	_view = creature_follow::Clamped(creature_follow::ClearView(_view, _focus, ground));
 }
 
 creature_follow::KeyOutcome CreatureCameraModel::Turn(const creature_follow::Keys& keys, float screenWidth)
@@ -163,7 +163,10 @@ void CreatureCameraModel::HandleKeys(std::chrono::microseconds dt)
 	    Locator::terrainSystem::has_value())
 	{
 		const auto& land = Locator::terrainSystem::value();
-		ClearView(land.GetNormalAt(glm::xz(_focus)), [&land](glm::vec2 point) { return land.GetHeightAt(point); });
+		ClearView({
+		    .height = [&land](glm::vec2 point) { return land.GetHeightAt(point); },
+		    .normal = [&land](glm::vec2 point) { return land.GetNormalAt(point); },
+		});
 	}
 }
 
