@@ -18,11 +18,14 @@ namespace openblack::help::click_cue
 
 namespace
 {
+using control_icons::MouseCell;
+using control_icons::MouseClick;
+
 /// The cue's right edge is this far in from the screen's
 constexpr int k_RightInset = 4;
-/// The gap between the word and the mouse
+/// The gap between the word and the icon
 constexpr float k_Gap = 2.0f;
-/// The glows' strength at full fade, the word's a third of the mouse's
+/// The glows' strength at full fade, the word's a third of the icon's
 constexpr int k_GlowAlpha = 0x80;
 /// The mice picture is 4 by 4
 constexpr float k_Cell = 0.25f;
@@ -30,17 +33,39 @@ constexpr float k_Cell = 0.25f;
 constexpr uint32_t k_BlinkStep = 100;
 constexpr uint32_t k_BlinkSteps = 5;
 constexpr uint32_t k_BlinkLit = 2;
-
-/// The cue's size for a box between two rows: a third of its height
-int CueSize(int top, int bottom)
-{
-	return (bottom - top + 1) / 3;
-}
 } // namespace
 
 bool ButtonLit(uint32_t tickMs)
 {
 	return (tickMs / k_BlinkStep) % k_BlinkSteps < k_BlinkLit;
+}
+
+std::optional<control_icons::ActionPicture> PictureFor(std::span<const input::KeyBinding> bindings,
+                                                       const control_icons::KeyNameFn& keyName)
+{
+	return control_icons::PictureFor(k_Action, bindings, keyName);
+}
+
+MouseCell BlinkCellFor(MouseClick click, int row, uint32_t tickMs)
+{
+	const bool wheel = click == MouseClick::WheelDown || click == MouseClick::WheelUp;
+	if (wheel || ButtonLit(tickMs))
+	{
+		return control_icons::CellFor(click, row, tickMs);
+	}
+	// The first cell of the row, the mouse with no button lit
+	const auto top = static_cast<float>(row) * k_Cell;
+	const auto bottom = top + k_Cell;
+	if (click == MouseClick::LeftButton)
+	{
+		return {.uvMin = {k_Cell, top}, .uvMax = {0.0f, bottom}};
+	}
+	return {.uvMin = {0.0f, top}, .uvMax = {k_Cell, bottom}};
+}
+
+int CueSize(int top, int bottom)
+{
+	return (bottom - top + 1) / 3;
 }
 
 int LabelSize(int top, int bottom, bool biggerText)
@@ -49,8 +74,7 @@ int LabelSize(int top, int bottom, bool biggerText)
 	return biggerText ? (4 * size) / 5 : (2 * size) / 3;
 }
 
-std::optional<Cue> Layout(int screenWidth, int top, int bottom, float share, float labelWidth, bool biggerText, uint32_t tickMs,
-                          int mouseRow)
+std::optional<Cue> Layout(int screenWidth, int top, int bottom, float share, float labelWidth, bool biggerText, float iconWidth)
 {
 	const float fade = std::clamp(share, 0.0f, 1.0f);
 	const int alpha = static_cast<int>(fade * 255.0f);
@@ -66,27 +90,23 @@ std::optional<Cue> Layout(int screenWidth, int top, int bottom, float share, flo
 	const int glowAlpha = static_cast<int>(static_cast<float>(k_GlowAlpha) * fade);
 
 	// Right-aligned, the word on the left
-	const float fullWidth = labelWidth + static_cast<float>(size) + k_Gap;
+	const float fullWidth = labelWidth + iconWidth + k_Gap;
 	const int x = static_cast<int>(static_cast<float>(screenWidth - k_RightInset) - fullWidth);
-	const int mouseX = static_cast<int>(static_cast<float>(x) + labelWidth + k_Gap);
+	const int iconX = static_cast<int>(static_cast<float>(x) + labelWidth + k_Gap);
+	const int iconRight = static_cast<int>(static_cast<float>(iconX) + iconWidth);
 	const int labelX = x;
 	const float pad = static_cast<float>(size - labelSize) * 0.5f;
 
-	const auto sizeF = static_cast<float>(size);
 	const auto yF = static_cast<float>(y);
 	const float alphaF = static_cast<float>(alpha) / 255.0f;
 	Cue cue;
-	cue.mouse = {{static_cast<float>(mouseX), yF}, {static_cast<float>(mouseX) + sizeF, yF + sizeF}};
-	// The left button: the picture with the right one lit, mirrored
-	const float column = ButtonLit(tickMs) ? 1.0f : 0.0f;
-	const float row = static_cast<float>(mouseRow);
-	cue.uvMin = {(column + 1.0f) * k_Cell, row * k_Cell};
-	cue.uvMax = {column * k_Cell, (row + 1.0f) * k_Cell};
-	cue.mouseColour = {1.0f, 1.0f, 1.0f, alphaF};
-	cue.mouseGlow = cue.mouse;
-	cue.mouseGlowColour = {1.0f, 1.0f, 1.0f, static_cast<float>(glowAlpha) / 255.0f};
+	cue.icon = {{static_cast<float>(iconX), yF}, {static_cast<float>(iconRight), static_cast<float>(y + size)}};
+	cue.iconColour = {1.0f, 1.0f, 1.0f, alphaF};
+	cue.size = size;
+	cue.iconGlow = cue.icon;
+	cue.iconGlowColour = {1.0f, 1.0f, 1.0f, static_cast<float>(glowAlpha) / 255.0f};
 	cue.labelGlow = {{static_cast<float>(labelX), std::trunc(yF + pad)},
-	                 {std::trunc(static_cast<float>(labelX) + labelWidth), std::trunc(yF + sizeF - pad)}};
+	                 {std::trunc(static_cast<float>(labelX) + labelWidth), std::trunc(yF + static_cast<float>(size) - pad)}};
 	cue.labelGlowColour = {1.0f, 1.0f, 0.0f, static_cast<float>(glowAlpha / 3) / 255.0f};
 	cue.labelAt = {static_cast<float>(labelX), yF + pad};
 	cue.labelSize = static_cast<float>(labelSize);

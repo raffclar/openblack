@@ -289,23 +289,23 @@ std::string_view CommandProblem(const Command& command, std::span<const ObjectSe
 bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 {
 	return kind == Kind::SetHour || kind == Kind::RestoreDeviceInDomeFollow || kind == Kind::RestoreDevice ||
-	       kind == Kind::PutLoadedArena || kind == Kind::HoldSeed || kind == Kind::DrawGesture || kind == Kind::SummonSeed ||
-	       kind == Kind::PressKey || kind == Kind::HandTakeFireBall || kind == Kind::SetAlignment || kind == Kind::WideScreen ||
-	       kind == Kind::SetInterfaceLevel || kind == Kind::FlyToBookmark || kind == Kind::TabToTown ||
-	       kind == Kind::SetOpenClose || kind == Kind::LayGateStone || kind == Kind::HandTapObject || kind == Kind::Advisor ||
-	       kind == Kind::RunText || kind == Kind::PlayHandDemo || kind == Kind::Reframe || kind == Kind::DestroyTemple ||
-	       kind == Kind::RunHelpMessage || kind == Kind::EndGuidanceWaits || kind == Kind::SetTownBeliefInRival ||
-	       kind == Kind::GiveLandTown || kind == Kind::RecordChallenge || kind == Kind::EnterTemple || kind == Kind::HandTake ||
-	       kind == Kind::HandApply || kind == Kind::HandTakeShownSeed || kind == Kind::RunScript || kind == Kind::ClickScroll ||
-	       kind == Kind::ClickCreatureAt || kind == Kind::CameraLooksAt || kind == Kind::HandTakeNear ||
-	       kind == Kind::ClickCreatureNear || kind == Kind::TapRewardNear || kind == Kind::PlayBoatFilm ||
-	       kind == Kind::HandPour || kind == Kind::HandRelease || kind == Kind::SetReportLatency ||
-	       kind == Kind::RemoveObject || kind == Kind::ReadTip || kind == Kind::LookAtTempleScroll ||
-	       kind == Kind::HandGripTotem || kind == Kind::ProfileFolderCheck || kind == Kind::PlayCustomMusic ||
-	       kind == Kind::ShowCustomMusicControls || kind == Kind::OwnTattooPicture || kind == Kind::OpenTattooMenu ||
-	       kind == Kind::OpenControlsBox || kind == Kind::OpenMenuPage || kind == Kind::PressMenuKey ||
-	       kind == Kind::StopScript || kind == Kind::StartScriptMusic || kind == Kind::SaveGame || kind == Kind::LoadGame ||
-	       kind == Kind::QuickSave || kind == Kind::ContinueGame || kind == Kind::PlayLogoEffect ||
+	       kind == Kind::BindMoveKey || kind == Kind::PutLoadedArena || kind == Kind::HoldSeed || kind == Kind::DrawGesture ||
+	       kind == Kind::SummonSeed || kind == Kind::PressKey || kind == Kind::HandTakeFireBall || kind == Kind::SetAlignment ||
+	       kind == Kind::WideScreen || kind == Kind::SetInterfaceLevel || kind == Kind::FlyToBookmark ||
+	       kind == Kind::TabToTown || kind == Kind::SetOpenClose || kind == Kind::LayGateStone || kind == Kind::HandTapObject ||
+	       kind == Kind::Advisor || kind == Kind::RunText || kind == Kind::PlayHandDemo || kind == Kind::Reframe ||
+	       kind == Kind::DestroyTemple || kind == Kind::RunHelpMessage || kind == Kind::EndGuidanceWaits ||
+	       kind == Kind::SetTownBeliefInRival || kind == Kind::GiveLandTown || kind == Kind::RecordChallenge ||
+	       kind == Kind::EnterTemple || kind == Kind::HandTake || kind == Kind::HandApply || kind == Kind::HandTakeShownSeed ||
+	       kind == Kind::RunScript || kind == Kind::ClickScroll || kind == Kind::ClickCreatureAt ||
+	       kind == Kind::CameraLooksAt || kind == Kind::HandTakeNear || kind == Kind::ClickCreatureNear ||
+	       kind == Kind::TapRewardNear || kind == Kind::PlayBoatFilm || kind == Kind::HandPour || kind == Kind::HandRelease ||
+	       kind == Kind::SetReportLatency || kind == Kind::RemoveObject || kind == Kind::ReadTip ||
+	       kind == Kind::LookAtTempleScroll || kind == Kind::HandGripTotem || kind == Kind::ProfileFolderCheck ||
+	       kind == Kind::PlayCustomMusic || kind == Kind::ShowCustomMusicControls || kind == Kind::OwnTattooPicture ||
+	       kind == Kind::OpenTattooMenu || kind == Kind::OpenControlsBox || kind == Kind::OpenMenuPage ||
+	       kind == Kind::PressMenuKey || kind == Kind::StopScript || kind == Kind::StartScriptMusic || kind == Kind::SaveGame ||
+	       kind == Kind::LoadGame || kind == Kind::QuickSave || kind == Kind::ContinueGame || kind == Kind::PlayLogoEffect ||
 	       kind == Kind::PlayFallingSpellFilm || kind == Kind::PlayIntroFilm || kind == Kind::SayLine ||
 	       kind == Kind::PlayGuidanceVoice || kind == Kind::ScriptRelease || kind == Kind::FillSiteIcons ||
 	       kind == Kind::ChargeIconWithSeedHeld || kind == Kind::TakeIconSeed || kind == Kind::TapSiteIcon ||
@@ -348,7 +348,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 231> k_Names {
+	constexpr std::array<std::string_view, 232> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -580,6 +580,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "make the graphics device again while the dome follows the sky",
 	    "make the graphics device again",
 	    "put an arena of a loaded file between two creatures",
+	    "bind the move action to a key",
 	};
 	return k_Names.at(static_cast<size_t>(kind));
 }

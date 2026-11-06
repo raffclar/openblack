@@ -30,6 +30,25 @@ using namespace openblack::testbed_scenarios;
 void testbed_scenarios::AddAudio(std::vector<Scenario>& all)
 {
 	all.push_back({
+	    .id = "interface.continue_cue_key",
+	    .name = "The Continue cue shows the key of the move action",
+	    .facet = Facet::Interface,
+	    .description = "The move action is put on the Space key, as the Controls page binds it. Then a script runs a "
+	                   "help text that waits for a click. After ten seconds the move action gets its own buttons again.",
+	    .expected = "At the right of the bottom third of the text box, the word Continue in yellow fades in over a "
+	                "second, with a key cap that reads Space to its right in place of the mouse. Both are on soft glows. "
+	                "The key cap does not blink. With the menu open, the cue and its glows do not show.",
+	    .framing = {.shot = Shot::Overview},
+	    .commands = {{.kind = Kind::BindMoveKey, .delaySeconds = 0.5f, .value = static_cast<size_t>(SDL_SCANCODE_SPACE)},
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 0.2f,
+	                  .script = "RUN_TEXT",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Integer, .number = 0.0f},
+	                                      {.kind = ScriptArgument::Kind::Integer, .number = 1250.0f},
+	                                      {.kind = ScriptArgument::Kind::Integer, .number = 1.0f}}},
+	                 {.kind = Kind::BindMoveKey, .delaySeconds = 10.0f, .value = 0}},
+	});
+	all.push_back({
 	    .id = "audio.surfaces",
 	    .name = "Footsteps on grass and in the shallows",
 	    .facet = Facet::Audio,

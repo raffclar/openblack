@@ -1908,10 +1908,7 @@ void GameInterface::Draw(glm::u16vec2 resolution, glm::ivec2 mouse, uint32_t mil
 	DrawChatBubbles(resolution, mouse);
 	// The gestures' hints are drawn with the world too, over all of it
 	DrawGestureHints(resolution);
-	const bool menuOpen = (_menu->IsVisible() && _menu->IsOpen()) || _skipBox->IsActive() || _tattooEditor->IsOpen() ||
-	                      _newPlayerBox->IsActive() || _skirmishBox->IsActive() || _saveGameBoxes->IsActive() ||
-	                      _staffQuestionBox->IsActive() || _multiplayerBoxes->IsActive() || _endGameBox->IsOpen() ||
-	                      _landInfoBox->IsActive();
+	const bool menuOpen = DialogBoxOpen();
 	UpdateChat(menuOpen || _boxOverGameFade.has_value(), resolution);
 	// The custom music controls go while the chat is open
 	UpdateMusicControls(menuOpen || _boxOverGameFade.has_value() || (_chatControls->IsActive() && _chatControls->IsOpen()));
@@ -2183,6 +2180,13 @@ std::pair<const GameFont*, const openblack::graphics::Texture2D*> GameInterface:
 	return {&_font, _fontTexture.get()};
 }
 
+bool GameInterface::DialogBoxOpen() const
+{
+	return (_menu->IsVisible() && _menu->IsOpen()) || _skipBox->IsActive() || _tattooEditor->IsOpen() ||
+	       _newPlayerBox->IsActive() || _skirmishBox->IsActive() || _saveGameBoxes->IsActive() ||
+	       _staffQuestionBox->IsActive() || _multiplayerBoxes->IsActive() || _endGameBox->IsOpen() || _landInfoBox->IsActive();
+}
+
 void GameInterface::DrawDialogue(glm::u16vec2 resolution, int barPixels)
 {
 	// Neither the box nor its words show while a video plays; the texts still move on underneath
@@ -2198,6 +2202,7 @@ void GameInterface::DrawDialogue(glm::u16vec2 resolution, int barPixels)
 		return Locator::helpTextSystem::value().Layout(glm::ivec2(resolution), barPixels, widthOf);
 	}();
 	_dialogueWordsDrawn = frame != nullptr && !frame->runs.empty();
+	bool cueShown = false;
 	if (frame != nullptr)
 	{
 		// The box covers whole pixels, its right and bottom ones included
@@ -2210,15 +2215,29 @@ void GameInterface::DrawDialogue(glm::u16vec2 resolution, int barPixels)
 			                 glm::vec2(1.0f), colour, nullptr);
 		}
 		// Over the box and under the words, the "Continue" cue while the text waits for a click, whether or not the
-		// texts are drawn
+		// texts are drawn. The cue and the control icons are not drawn under a dialog box, but their fades continue.
 		if (const auto* dialogue = Locator::helpTextSystem::value().GetDialogue(); dialogue != nullptr)
 		{
+			const bool underBox = DialogBoxOpen();
 			if (const auto share = dialogue->GetClickCueShare(); share.has_value())
 			{
-				DrawClickCue(frame->box, *share);
+				cueShown = true;
+				KeepClickCuePicture();
+				if (!underBox)
+				{
+					DrawClickCue(frame->box, *share);
+				}
 			}
-			DrawControlIcons(*frame, *dialogue);
+			if (!underBox)
+			{
+				DrawControlIcons(*frame, *dialogue);
+			}
 		}
+	}
+	// The cue reads the input of the move action again the next time that it starts
+	if (!cueShown)
+	{
+		_clickCuePicture.reset();
 	}
 	// The hand's helper icons go over the box and under the words
 	DrawHandTricons(resolution);
@@ -2822,27 +2841,71 @@ void GameInterface::DrawBubbleLine(Canvas& canvas, const help::tip_bubble::Line&
 	}
 }
 
+void GameInterface::KeepClickCuePicture()
+{
+	// The cue keeps the input that the move action had when the cue started. With no input, it tries again each frame.
+	if (_clickCuePicture.has_value() || !Locator::gameActionSystem::has_value())
+	{
+		return;
+	}
+	const auto bindings = Locator::gameActionSystem::value().GetKeyBindings();
+	if (auto picture = help::click_cue::PictureFor(bindings, ControlKeyName()); picture.has_value())
+	{
+		_clickCuePicture = ClickCuePicture {.picture = std::move(*picture), .mouseRow = MouseRow()};
+	}
+}
+
 void GameInterface::DrawClickCue(const help::TextRegion& box, float share)
 {
+	namespace cue_rules = help::click_cue;
+	namespace icons = help::control_icons;
+	if (!_clickCuePicture.has_value())
+	{
+		return;
+	}
+	const auto* keyText = std::get_if<std::u16string>(&_clickCuePicture->picture);
 	// Some languages use a bigger word
 	const bool biggerText = DialogPainter::NeedsBiggerText();
-	const auto& label = _texts.GetHelpText(help::click_cue::k_LabelText).text;
-	const auto labelSize = static_cast<float>(help::click_cue::LabelSize(box.top, box.bottom, biggerText));
+	const auto& label = _texts.GetHelpText(cue_rules::k_LabelText).text;
+	const auto labelSize = static_cast<float>(cue_rules::LabelSize(box.top, box.bottom, biggerText));
+	const int size = cue_rules::CueSize(box.top, box.bottom);
+	const float iconWidth = keyText != nullptr ? icons::KeyCapWidth(size, _font.GetWidth(*keyText, icons::KeyTextSize(size)))
+	                                           : static_cast<float>(size);
 	// Inset from the strip's right end, which is the screen's on 4:3
-	const auto cue = help::click_cue::Layout(box.right, box.top, box.bottom, share, _font.GetWidth(label, labelSize),
-	                                         biggerText, machine_clock::Ticks(), MouseRow());
+	const auto cue =
+	    cue_rules::Layout(box.right, box.top, box.bottom, share, _font.GetWidth(label, labelSize), biggerText, iconWidth);
 	if (!cue.has_value())
 	{
 		return;
 	}
-	DrawGlow(cue->mouseGlow.min, cue->mouseGlow.max, cue->mouseGlowColour);
+	DrawGlow(cue->iconGlow.min, cue->iconGlow.max, cue->iconGlowColour);
 	if (!label.empty())
 	{
 		DrawGlow(cue->labelGlow.min, cue->labelGlow.max, cue->labelGlowColour);
 	}
-	if (_mice != nullptr)
+	if (keyText != nullptr)
 	{
-		_canvas.DrawQuad(cue->mouse.min, cue->mouse.max, cue->uvMin, cue->uvMax, cue->mouseColour, _mice.get());
+		const auto cap = icons::LayoutKeyCap({
+		    .icon = {.min = cue->icon.min, .max = cue->icon.max},
+		    .glowColour = cue->iconGlowColour,
+		    .alpha = cue->iconColour.a,
+		    .size = cue->size,
+		});
+		if (_atmos != nullptr)
+		{
+			for (size_t i = 0; i < cap.slices.size(); ++i)
+			{
+				_canvas.DrawQuad(cap.slices.at(i).min, cap.slices.at(i).max, cap.uvs.at(i).min, cap.uvs.at(i).max,
+				                 cue->iconColour, _atmos.get());
+			}
+		}
+		_painter.DrawString(cap.textAt, *keyText, cap.textSize, cap.textColour);
+	}
+	else if (_mice != nullptr)
+	{
+		const auto cell = cue_rules::BlinkCellFor(std::get<icons::MouseClick>(_clickCuePicture->picture),
+		                                          _clickCuePicture->mouseRow, machine_clock::Ticks());
+		_canvas.DrawQuad(cue->icon.min, cue->icon.max, cell.uvMin, cell.uvMax, cue->iconColour, _mice.get());
 	}
 	_painter.DrawString(cue->labelAt - 1.0f, label, cue->labelSize, cue->shadowColour);
 	_painter.DrawString(cue->labelAt + 1.0f, label, cue->labelSize, cue->shadowColour);
