@@ -247,6 +247,29 @@ void openblack::testbed_scenarios::AddFixedKindScenarios(std::vector<Scenario>& 
 	        {{.object = 2, .from = k_BoulderFrom, .height = 4.0f, .velocity = {0.0f, 3.0f, -20.0f}, .delaySeconds = 3.0f}},
 	});
 
+	std::vector<ObjectSetup> burningSiteTown {
+	    {.type = AbodeInfo::NorseTownCentre, .offset = k_Gathering - k_BuildingGap},
+	    {.type = AbodeInfo::NorseStoragePit, .offset = k_Gathering + k_BuildingGap, .yawDegrees = 180.0f}};
+	all.push_back({
+	    .id = "appearance.worship_site_flames",
+	    .name = "The flames of a burning worship site are three tenths of its height",
+	    .facet = Facet::Appearance,
+	    .description = "A Norse town of the player with a village centre and a storage pit. The town's worship site goes up "
+	                   "by the temple and is built at once. After two seconds the site catches fire at the most heat of "
+	                   "its fire.",
+	    .expected = "The flames on the site are three tenths of its height, as the flames on a creature or on the temple. "
+	                "Before, they were half of its height, as on a hut.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_Altar.x + 30.0f, 20.0f, k_Altar.y + 15.0f},
+	                .look = {k_Altar.x, 2.0f, k_Altar.y - 5.0f}},
+	    .objects = std::move(burningSiteTown),
+	    .temples = {{.offset = k_PileTemple}},
+	    .commands = {{.kind = Kind::BuildWorshipSites, .delaySeconds = 0.5f},
+	                 {.kind = Kind::SetAlight, .delaySeconds = 2.0f, .value = 3}},
+	    .townBeliefInPlayer = 1000.0f,
+	});
+
 	std::vector<ObjectSetup> potTown {
 	    {.type = AbodeInfo::NorseTownCentre, .offset = k_PotDrop + glm::vec2(-30.0f, 15.0f)},
 	    {.type = AbodeInfo::NorseStoragePit, .offset = k_PotDrop + glm::vec2(-30.0f, -15.0f), .yawDegrees = 180.0f},

@@ -55,6 +55,7 @@
 #include "ECS/Components/Spell.h"
 #include "ECS/Components/SpellIcon.h"
 #include "ECS/Components/Temple.h"
+#include "ECS/Components/WorshipSite.h"
 #include "ECS/ComputerPlayerStart.h"
 #include "ECS/CreatureFromFile.h"
 #include "ECS/Dances.h"
@@ -458,6 +459,25 @@ bool Runner::GiveStoryCommand(const Command& command)
 		}
 		Log(fmt::format("{:.1f}s: object {} {}", _seconds, command.object,
 		                Locator::fireSystem::has_value() && burning.has_value() ? "alight" : "no fire"));
+		return true;
+	}
+	// With a value of 3, the first worship site catches fire at the most heat of its fire
+	if (command.kind == Kind::SetAlight && command.value == 3)
+	{
+		auto site = entt::entity {entt::null};
+		Locator::entitiesRegistry::value().Each<const ecs::components::WorshipSite>(
+		    [&site](entt::entity entity, const ecs::components::WorshipSite&) {
+			    if (site == entt::null)
+			    {
+				    site = entity;
+			    }
+		    });
+		const bool alight = Locator::fireSystem::has_value() && site != entt::null;
+		if (alight)
+		{
+			Locator::fireSystem::value().SetOnFire(site, 1.0f);
+		}
+		Log(fmt::format("{:.1f}s: the worship site {}", _seconds, alight ? "alight" : "no fire"));
 		return true;
 	}
 	return false;
