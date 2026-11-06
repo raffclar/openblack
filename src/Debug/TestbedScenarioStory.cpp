@@ -863,7 +863,7 @@ void AddLandHaze(std::vector<Scenario>& all)
 	                "things on it fade into the haze, and at 900 units and more they have the full haze. The colours "
 	                "change smoothly with the distance, with no bands at the edges of the land blocks.",
 	    .environment = {.land = Land::Story, .storyLand = "Land1.txt", .dispenserGrid = false},
-	    .framing = {.shot = Shot::Placed, .eye = {k_Kennels.x, 80.0f, k_Kennels.y}, .look = {k_Far.x, 0.0f, k_Far.y}},
+	    .framing = {.shot = Shot::Placed, .eye = {k_Kennels.x, 250.0f, k_Kennels.y}, .look = {k_Far.x, 0.0f, k_Far.y}},
 	});
 }
 
