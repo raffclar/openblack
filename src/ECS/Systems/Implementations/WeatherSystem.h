@@ -15,6 +15,7 @@
 
 #include <entt/entity/entity.hpp>
 
+#include "ECS/ClimateRules.h"
 #include "ECS/ScriptWeatherRules.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
 
@@ -123,8 +124,8 @@ private:
 	/// Season the climates use, updated when the day changes
 	uint32_t _season {0};
 
-	double _startTurn;
-	float _secondsPerTurn;
+	/// The turn that the calendar starts on, and the seconds of one turn
+	climate_rules::Calendar _calendar {climate_rules::MakeCalendar()};
 
 	/// Live storms as they stood at the start of the turn, newest first
 	std::vector<components::Storm> _activeStorms;
