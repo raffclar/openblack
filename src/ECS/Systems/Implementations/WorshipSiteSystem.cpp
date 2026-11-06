@@ -114,7 +114,6 @@ void WorshipSiteSystem::AddTemple(entt::entity temple, float facing, bool standi
 
 void WorshipSiteSystem::TempleBuilt(entt::entity temple)
 {
-	_world->Entities().Get<CitadelWorship>(temple).standing = true;
 	OpenSites(temple, 0.0f);
 }
 
@@ -765,9 +764,8 @@ void WorshipSiteSystem::OpenSites(entt::entity temple, float desireBoost)
 entt::entity WorshipSiteSystem::FindOrMakeForTown(entt::entity temple, entt::entity town)
 {
 	auto& registry = _world->Entities();
-	// A temple that is not yet built makes no site for a town. Its towns get their sites when the temple is built.
-	const auto& worship = registry.Get<const CitadelWorship>(temple);
-	if (worship.cannotMakeSites || !worship.standing)
+	// A temple that is not yet built also makes a site for a town. Only a script can stop the temple.
+	if (registry.Get<const CitadelWorship>(temple).cannotMakeSites)
 	{
 		return entt::null;
 	}
