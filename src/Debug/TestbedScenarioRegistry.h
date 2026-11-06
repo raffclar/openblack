@@ -1240,6 +1240,9 @@ struct Command
 		/// An arena of a loaded file of the game (radius) is put midway between the creature and the other creature
 		/// (value). It has no ring of light and makes no reaction, as an arena after a load of a saved game.
 		PutLoadedArena,
+		/// The move action takes the key (value, the key's scancode) and loses its mouse button, as the Controls page
+		/// binds it. Value 0 gives back the bindings of the game. Needs no creature
+		BindMoveKey,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures
