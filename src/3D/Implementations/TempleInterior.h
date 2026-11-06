@@ -83,6 +83,7 @@ public:
 	[[nodiscard]] TempleDoors& GetDoors() override { return _doors; }
 	[[nodiscard]] const TempleDoors& GetDoors() const override { return _doors; }
 	[[nodiscard]] std::optional<TempleCursorHit> GetCursorHit() const override;
+	[[nodiscard]] std::optional<temple_press::PressTrace> GetLastCameraPress() const override;
 	void SetInterface(TempleScreenInterface* interface) override;
 	void SetDrawMakers(DrawMakers makers) override;
 	bool HoldControl(bool pressed, float mouseY) override;

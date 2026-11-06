@@ -2413,6 +2413,14 @@ set_tests_properties(
              "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
 )
 openblack_setup_and_add_test(
+  test_oracle_physics_skeleton_touch oracle/test_oracle_physics_skeleton_touch.cpp
+)
+set_tests_properties(
+  test_oracle_physics_skeleton_touch
+  PROPERTIES ENVIRONMENT
+             "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)
+openblack_setup_and_add_test(
   test_oracle_alignment_store oracle/test_oracle_alignment_store.cpp
 )
 set_tests_properties(
@@ -2421,3 +2429,6 @@ set_tests_properties(
              "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
 )
 openblack_setup_and_add_test(test_temple_keys test_temple_keys.cpp)
+openblack_setup_and_add_test(
+  test_computer_mind_hand_take test_computer_mind_hand_take.cpp
+)

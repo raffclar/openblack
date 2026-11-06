@@ -83,7 +83,9 @@ std::unique_ptr<ProviderInterface> TempleProvider()
 	provider->Add(Query("interior", "The temple's inside: whether the player is in it, the room, the visits, the "
 	                                "worshippers walking about it (how many came in, and where those drawn are), the "
 	                                "seeds of the miracles over the map, how the map shows the influence and what the cursor "
-	                                "is over (the room, its submesh and the submesh's name)"),
+	                                "is over (the room, its submesh and the submesh's name), and the last press for the camera "
+	                                "(camera_press: taken_by none, held_from_outside, cinema_bars, control or fade; null "
+	                                "before the first press of the visit)"),
 	              Serve<Locator::temple>("the temple", [](const TempleInteriorInterface& temple, const QueryContext& /*c*/) {
 		              const auto transition = temple.GetTransitionRoom();
 		              Json drawn = Json::array();
@@ -110,7 +112,18 @@ std::unique_ptr<ProviderInterface> TempleProvider()
 			                             {"sub_mesh", hit->subMesh.has_value() ? Json(*hit->subMesh) : Json(nullptr)},
 			                             {"name", TempleSubMeshName(hit->room, hit->subMesh)}};
 		              }
+		              // The last press for the camera, and the rule that kept it from the camera, so that a tool knows why
+		              // a press did not move it
+		              Json press = nullptr;
+		              if (const auto last = temple.GetLastCameraPress(); last.has_value() && last->presses > 0)
+		              {
+			              press = Json {{"taken_by", std::string(temple_press::Name(last->takenBy))},
+			                            {"fade", last->fade},
+			                            {"looking_at_scroll", last->lookingAtScroll},
+			                            {"presses", last->presses}};
+		              }
 		              return Json {
+		                  {"camera_press", std::move(press)},
 		                  {"cursor", std::move(cursor)},
 		                  {"map_spell_seeds", std::move(seeds)},
 		                  {"map_influence", influence.has_value()

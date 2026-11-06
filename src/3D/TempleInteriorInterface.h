@@ -27,6 +27,7 @@
 #include "3D/TempleMap.h"
 #include "3D/TempleMapSpells.h"
 #include "3D/TempleRoom.h"
+#include "Camera/TemplePress.h"
 #include "ECS/Systems/SavedStateInterface.h"
 #include "Enums.h"
 #include "Temple/ScrollPictureLine.h"
@@ -148,6 +149,9 @@ public:
 	[[nodiscard]] virtual const TempleDoors& GetDoors() const = 0;
 	/// Where the cursor last met the room, which the hand is put by in the temple
 	[[nodiscard]] virtual std::optional<TempleCursorHit> GetCursorHit() const = 0;
+	/// The last press that went down for the camera in this visit, and the rule that kept it from the camera, if one
+	/// did; none while the temple has no camera
+	[[nodiscard]] virtual std::optional<temple_press::PressTrace> GetLastCameraPress() const = 0;
 	/// The game's interface, whose text and font the rooms write their scrolls and signs with, whose options the options
 	/// room opens and over which the future room shows its words, or null without one
 	virtual void SetInterface(TempleScreenInterface* interface) = 0;

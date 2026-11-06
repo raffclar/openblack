@@ -1252,7 +1252,8 @@ struct Command
 	/// Seconds after the last command before this one, counted once its creature is free when it waits for that
 	float delaySeconds {0.0f};
 	/// Waits until its creature has stopped moving and its body plays nothing, such as having arrived; for a command
-	/// to the player's hand, until the hand has drawn the whole of the gesture it was drawing
+	/// to the player's hand, until the hand has drawn the whole of the gesture it was drawing; for a look of the
+	/// temple's camera, until no script has the cinema bars in
 	bool waitUntilFree {false};
 	/// The point gone to, fled from or faced, from the middle of the map
 	glm::vec2 point {0.0f};

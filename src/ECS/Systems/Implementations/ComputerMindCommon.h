@@ -53,9 +53,9 @@ struct RuleContext;
 [[nodiscard]] computer_mind_rules::IconFacts FactsOf(entt::entity icon);
 /// The towns of the player, in the order that the player gained them
 [[nodiscard]] std::vector<entt::entity> TownsOf(PlayerNames player);
-/// The storage pit of the town that works, none when it has none
+/// The main storage pit of the town when it is built, none when it has none. A damaged pit stays the main pit.
 [[nodiscard]] std::optional<entt::entity> WorkingPitOf(entt::entity town);
-/// Where the town keeps food or wood: its storage pit that works, else its temporary pile, which is made if missing
+/// Where the town keeps food or wood: its main storage pit, else its temporary pile, which is made if missing
 entt::entity StoreOf(entt::entity town, ResourceType resource);
 /// The left hand of a god, made when the god first needs it. A god holds things in its left hand.
 entt::entity HandOf(PlayerNames player);
@@ -67,6 +67,10 @@ entt::entity HandOf(PlayerNames player);
 /// The god reports where its hand and its camera are, as a player of a network game reports them. Only a god that has
 /// hands reports.
 void ReportHand(PlayerNames player, glm::vec3 hand, glm::vec3 camera);
+
+/// The hand of the god starts to take the thing, at the speed of the god. When a hand holds the thing, the hand does not
+/// take it and the result is false.
+[[nodiscard]] bool TakeUp(RuleContext& context, entt::entity thing);
 
 /// How much the god wants a place: all inside its influence
 [[nodiscard]] float PlacePull(const RuleContext& context, const map_coords::MapCoords& place);

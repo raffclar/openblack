@@ -108,12 +108,6 @@ std::optional<uint16_t> ChosenNode(const computer_mind::Mind& mind, uint16_t nod
 	return chosen.has_value() && *chosen != node ? chosen : std::nullopt;
 }
 
-/// The hand refuses to pick up a thing that a hand holds
-bool HandCanPickUp(entt::entity thing)
-{
-	return !Entities().AllOf<InHand>(thing);
-}
-
 /// How much a town wants houses and civic buildings, and its places for adults
 computer_mind_rules::ScaffoldTownFacts FactsOfTown(entt::entity town)
 {
@@ -235,12 +229,10 @@ bool JoinScaffolds(RuleContext& context, computer_mind::Mind& mind, uint16_t nod
 {
 	const auto held = OwnObject(mind, node);
 	const auto target = LeafThing(mind, node);
-	if (!IsA<Scaffold>(held) || !IsA<Scaffold>(target) || !HandCanPickUp(held))
+	if (!IsA<Scaffold>(held) || !IsA<Scaffold>(target) || !TakeUp(context, held))
 	{
 		return false;
 	}
-	computer_hand::Add(context.state.hand, StepKind::PickUpObject,
-	                   {Argument {.object = held}, Argument {.value = context.state.speed}});
 	computer_hand::Add(context.state.hand, StepKind::DropObjectInHandOnObject, {Argument {.object = target}});
 	return true;
 }
@@ -331,12 +323,10 @@ bool UseScaffold(RuleContext& context, computer_mind::Mind& mind, uint16_t node)
 {
 	const auto scaffold = OwnObject(mind, node);
 	const auto chosen = ChosenNode(mind, node);
-	if (scaffold == entt::null || !Entities().Valid(scaffold) || !chosen.has_value() || !HandCanPickUp(scaffold))
+	if (scaffold == entt::null || !Entities().Valid(scaffold) || !chosen.has_value() || !TakeUp(context, scaffold))
 	{
 		return false;
 	}
-	computer_hand::Add(context.state.hand, StepKind::PickUpObject,
-	                   {Argument {.object = scaffold}, Argument {.value = context.state.speed}});
 	computer_hand::Add(context.state.hand, StepKind::DropObjectInHandAtPos,
 	                   {Argument {.place = mind.nodes[*chosen].place}, Argument {.value = context.state.speed}});
 	return true;
@@ -388,10 +378,9 @@ bool CarryWoodToWorkshop(RuleContext& context, computer_mind::Mind& mind, uint16
 	{
 		return false;
 	}
-	if (HandCanPickUp(thing))
+	// When a hand holds the thing, the action also counts as done
+	if (TakeUp(context, thing))
 	{
-		computer_hand::Add(context.state.hand, StepKind::PickUpObject,
-		                   {Argument {.object = thing}, Argument {.value = context.state.speed}});
 		computer_hand::Add(context.state.hand, StepKind::DropObjectInHandOnObject, {Argument {.object = workshop}});
 	}
 	return true;

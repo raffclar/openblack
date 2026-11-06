@@ -208,6 +208,8 @@ public:
 	[[nodiscard]] bool IsOverWayBack() const { return _overWayBack; }
 	/// Whether the camera looks at a scroll from close by
 	[[nodiscard]] bool IsLookingAtSubMesh() const { return _lookingAtSubMesh; }
+	/// The last press that went down in this visit, and the rule that kept it from the camera, if one did
+	[[nodiscard]] const temple_press::PressTrace& GetLastPress() const { return _pressWatch.Last(); }
 	/// How long the camera has walked to and through the main room's door out of the temple, while it does
 	[[nodiscard]] std::optional<float> GetWayOutSeconds() const
 	{
@@ -354,6 +356,7 @@ private:
 	// The press the mouse is held from
 	bool _wasPressed {false};
 	temple_press::HeldFromOutside _heldFromOutside;
+	temple_press::PressWatch _pressWatch;
 	bool _dialogOpen {false};
 	bool _futureWordsShown {false};
 	bool _overPool {false};

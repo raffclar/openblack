@@ -98,6 +98,7 @@
 #include "ECS/Systems/BoatLaunchSystemInterface.h"
 #include "ECS/Systems/CameraZoneSystemInterface.h"
 #include "ECS/Systems/ChatSystemInterface.h"
+#include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/ComputerPlayerSystemInterface.h"
 #include "ECS/Systems/CreatureAnimationSystemInterface.h"
 #include "ECS/Systems/CreatureCaveSystemInterface.h"
@@ -1109,6 +1110,13 @@ void Runner::Update(float seconds)
 		if (toHand)
 		{
 			return !Locator::gestureSystem::has_value() || !Locator::gestureSystem::value().IsDrawingPath();
+		}
+		// The temple takes no press while a script has the cinema bars in, as when the advisors introduce a room
+		const bool toTemple = command.kind == Kind::LookAtTempleScroll || command.kind == Kind::LookAtSaveGamePicture;
+		if (toTemple)
+		{
+			return !Locator::cinematicDirectorSystem::has_value() ||
+			       !Locator::cinematicDirectorSystem::value().IsWideScreenOn();
 		}
 		return IsFree(command.creature);
 	});

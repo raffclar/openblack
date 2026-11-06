@@ -662,16 +662,20 @@ std::optional<CameraModel::CameraInterpolationUpdateInfo> TempleCameraModel::Upd
 	const bool cinemaBars =
 	    Locator::cinematicDirectorSystem::has_value() && Locator::cinematicDirectorSystem::value().IsWideScreenOn();
 	const auto pressed = static_cast<temple_press::Button>(input.button);
-	input.button =
-	    static_cast<uint8_t>(cinemaBars ? _heldFromOutside.FilterUnderCinemaBars(pressed) : _heldFromOutside.Filter(pressed));
+	const auto afterHeld = cinemaBars ? _heldFromOutside.FilterUnderCinemaBars(pressed) : _heldFromOutside.Filter(pressed);
+	input.button = static_cast<uint8_t>(afterHeld);
 	// A press on one of the room's controls goes to the control, which the room's camera then doesn't see
-	if (Locator::temple::value().HoldControl(input.button != 0, input.mouse.y))
+	const bool control = Locator::temple::value().HoldControl(input.button != 0, input.mouse.y);
+	if (control)
 	{
 		input.button = 0;
 	}
 	// Under the temple's fade the camera doesn't take a held press
-	input.button = static_cast<uint8_t>(
-	    temple_press::UnderFade(static_cast<temple_press::Button>(input.button), Locator::temple::value().GetFadeAmount()));
+	const float fade = Locator::temple::value().GetFadeAmount();
+	const auto afterFade = temple_press::UnderFade(static_cast<temple_press::Button>(input.button), fade);
+	input.button = static_cast<uint8_t>(afterFade);
+	// Tools read what took a press away from the camera
+	_pressWatch.Note(pressed, afterHeld, cinemaBars, control, afterFade, fade, _lookingAtSubMesh);
 	if (Locator::windowing::has_value())
 	{
 		const auto size = glm::vec2(Locator::windowing::value().GetSize());
