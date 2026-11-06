@@ -17,6 +17,8 @@
 #include <glm/gtc/constants.hpp>
 #include <glm/trigonometric.hpp>
 
+#include "Common/X87.h"
+
 using namespace openblack::graphics;
 
 namespace
@@ -46,9 +48,9 @@ void TurnAxes(glm::mat3& m, int i, int j, float c, float s)
 
 glm::vec3 moon::Offset(float scriptHour)
 {
-	// An hour of the day is a twelfth of half a turn
+	// An hour of the day is a twelfth of half a turn. The cosine and the sine stay wide until the multiply rounds them.
 	const float angle = scriptHour * 0.2617993950843811f;
-	return {4000.0f, (1100.0f * std::cos(angle)) - 150.0f, 800.0f * std::sin(angle)};
+	return {4000.0f, x87::Mul(x87::Cos(angle), 1100.0) - 150.0f, x87::Mul(x87::Sin(angle), 800.0)};
 }
 
 std::optional<moon::Placement> moon::Place(float scriptHour)
@@ -161,5 +163,10 @@ moon::Glow moon::SeaGlow(const glm::mat4& view, const glm::mat4& inverseView, co
 
 glm::vec3 moon::GlowColour(const glm::vec3& moonColour)
 {
-	return {moonColour.r / 6.0f, moonColour.g / 5.0f, moonColour.b / 4.0f};
+	// The game divides the whole steps of each channel, and drops the remainder
+	const auto steps = [](float channel, int divisor) {
+		constexpr float k_Steps = 255.0f;
+		return static_cast<float>(static_cast<int>(std::lround(channel * k_Steps)) / divisor) / k_Steps;
+	};
+	return {steps(moonColour.r, 6), steps(moonColour.g, 5), steps(moonColour.b, 4)};
 }

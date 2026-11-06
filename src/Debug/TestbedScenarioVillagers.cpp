@@ -295,6 +295,29 @@ CREATE_ABODE(63, "0.0,-70.0", "CELTIC_ABODE_STORAGE_PIT", 0, 1000, 100, 100)
 		                  .scriptArguments = {{.kind = Argument::Kind::Temple, .index = 0},
 		                                      {.kind = Argument::Kind::Marker, .point = k_ViewPlace, .height = 30.0f}}}},
 		});
+		// The first land's tilting lesson, as the game's own script runs it: the advisors cheer the player's tilting of the
+		// camera, not its turning
+		all.push_back({
+		    .id = "tutorial.teach_pitch",
+		    .name = "The tilting lesson cheers the tilting of the camera",
+		    .facet = Facet::Tutorial,
+		    .description = "The player's temple stands north of the middle. Half a second in, the game's TeachPitch "
+		                   "script runs, as the first land's lesson starts it. Tilt the camera with the keys, or hold the "
+		                   "land and drag to tilt it. Then turn the camera with no tilt.",
+		    .expected = "The advisors tell the player to tilt the camera. While the player tilts the camera fast, the "
+		                "advisors say yes now and then, and a tilt at full speed for long enough earns their best praise. "
+		                "Turning the camera with no tilt gets no cheer. Tilting enough ends the lesson.",
+		    .environment = {.dispenserGrid = false},
+		    .framing = {.shot = Shot::Placed,
+		                .eye = {k_ViewPlace.x, 30.0f, k_ViewPlace.y - 40.0f},
+		                .look = {k_LessonTemple.x, 0.0f, k_LessonTemple.y}},
+		    .temples = {{.offset = k_LessonTemple}},
+		    .commands = {{.kind = Kind::RunScript,
+		                  .delaySeconds = 0.5f,
+		                  .script = "TeachPitch",
+		                  .scriptArguments = {{.kind = Argument::Kind::Temple, .index = 0},
+		                                      {.kind = Argument::Kind::Marker, .point = k_ViewPlace, .height = 30.0f}}}},
+		});
 	}
 }
 

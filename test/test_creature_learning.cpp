@@ -696,6 +696,37 @@ TEST(CreaturePlanner, GoesRoundTheEligibleDesires)
 	EXPECT_EQ(third[0], Desire::Tiredness);
 }
 
+TEST(CreaturePlanner, SomeDesiresPlanOnlyInTheirOwnState)
+{
+	using creature_planner::DesireMayPlan;
+	const creature_planner::DesireState calm {.turnsPerSecond = 10, .homeDistance = 10.0f};
+	// A desire with no condition of its own always plans
+	EXPECT_TRUE(DesireMayPlan(Desire::Hunger, calm));
+	EXPECT_TRUE(DesireMayPlan(Desire::Rest, calm));
+	// The player must not look at it for more than two minutes
+	EXPECT_FALSE(DesireMayPlan(Desire::AttractAttention, {.turnsIgnored = 1200, .turnsPerSecond = 10}));
+	EXPECT_TRUE(DesireMayPlan(Desire::AttractAttention, {.turnsIgnored = 1201, .turnsPerSecond = 10}));
+	// It gets warmer only when cold enough, and colder only when hot enough
+	EXPECT_FALSE(DesireMayPlan(Desire::GetWarmer, {.warmth = -0.29f}));
+	EXPECT_TRUE(DesireMayPlan(Desire::GetWarmer, {.warmth = -0.3f}));
+	EXPECT_FALSE(DesireMayPlan(Desire::GetColder, {.warmth = 0.29f}));
+	EXPECT_TRUE(DesireMayPlan(Desire::GetColder, {.warmth = 0.3f}));
+	// It runs from the player only when it does not like the player
+	EXPECT_FALSE(DesireMayPlan(Desire::RunAwayFromPlayer, {.attitudeToPlayer = 0.0f}));
+	EXPECT_TRUE(DesireMayPlan(Desire::RunAwayFromPlayer, {.attitudeToPlayer = -0.01f}));
+	// It hangs around at home only near its home
+	EXPECT_TRUE(DesireMayPlan(Desire::HangAroundAtHome, {.homeDistance = 59.9f}));
+	EXPECT_FALSE(DesireMayPlan(Desire::HangAroundAtHome, {.homeDistance = 60.0f}));
+	EXPECT_FALSE(DesireMayPlan(Desire::HangAroundAtHome, {}));
+	// It follows the player only after it started to copy a deed
+	EXPECT_FALSE(DesireMayPlan(Desire::FollowPlayerDesire, {}));
+	EXPECT_TRUE(DesireMayPlan(Desire::FollowPlayerDesire, {.sawDeed = true}));
+	// It explores when young, or when not too exhausted
+	EXPECT_TRUE(DesireMayPlan(Desire::Wanderlust, {.phase = 5, .exhaustion = 1.0f}));
+	EXPECT_FALSE(DesireMayPlan(Desire::Wanderlust, {.phase = 6, .exhaustion = 0.8f}));
+	EXPECT_TRUE(DesireMayPlan(Desire::Wanderlust, {.phase = 6, .exhaustion = 0.79f}));
+}
+
 TEST(CreaturePlanner, FewerGoalsWithMoreCreatures)
 {
 	EXPECT_EQ(creature_planner::GoalsPerTurn(0), 2u);
@@ -1332,6 +1363,17 @@ TEST(CreatureWatching, AStrokeWhileCopyingStartsTheActionCopyAgain)
 	EXPECT_EQ(mimicry->done, 0u);
 	EXPECT_EQ(mimicry->limit, 2u);
 	EXPECT_EQ(mimicry->stageStart, 30u);
+}
+
+TEST(CreatureWatching, ASlapStopsTheCopy)
+{
+	std::optional<creature_watching::Mimicry> mimicry = creature_watching::Mimicry {
+	    .rule = 0, .stage = creature_watching::MimicStage::CopyAction, .done = 1, .limit = 2, .stageStart = 30};
+	creature_watching::SlappedWhileMimicking(mimicry);
+	EXPECT_FALSE(mimicry.has_value());
+	// A slap when it does not copy changes nothing
+	creature_watching::SlappedWhileMimicking(mimicry);
+	EXPECT_FALSE(mimicry.has_value());
 }
 
 TEST(CreatureWatching, MimicChanceIsARankNotARoll)

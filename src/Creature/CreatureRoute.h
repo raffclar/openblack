@@ -47,7 +47,7 @@ enum class Ground : uint8_t
 	Open = 0,
 	/// Too steep, or deep sea
 	Blocked = 1,
-	/// Land cut off from the main part of the land
+	/// Land cut off from the main part of the land, and blocked cells away from the side of the main part
 	CutOff = 4,
 	/// Shallow water, waded through on the bottom
 	Water = 6,
@@ -63,9 +63,12 @@ public:
 	using CellWater = std::function<std::optional<bool>(int32_t x, int32_t z)>;
 
 	WalkableLand();
-	/// Sorts every cell: blocked where too steep or deep sea (all four corners at the bottom), then the largest stretch
-	/// of land joined up side by side is open and the rest cut off, and open cells with water in them or none at all
-	/// are water
+	/// Sorts every cell:
+	/// - A cell is blocked where it is too steep or deep sea (all four corners at the bottom).
+	/// - A walk goes side by side from the last cell of the last run of walkable cells in a row that a blocked cell ends.
+	///   The walkable cells that it gets to are open. The blocked cells at their side stay blocked.
+	/// - All other cells are cut off.
+	/// - Open cells with water in them, or with no cell at all, are water.
 	[[nodiscard]] static WalkableLand Build(const CornerHeight& height, const CellWater& water);
 	/// A land with the sorts given cell by cell, row after row of x; any cell not given is open
 	[[nodiscard]] static WalkableLand OfCells(std::vector<Ground> cells);

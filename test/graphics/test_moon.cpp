@@ -72,7 +72,21 @@ TEST(Moon, GlowIsASquareAboutTheMoon)
 	const auto glow = moon::MakeGlow(basis, glm::vec3(0.0f));
 	EXPECT_EQ(glow.corners[0], glm::vec3(-2000.0f, -2000.0f, 0.0f));
 	EXPECT_EQ(glow.corners[3], glm::vec3(2000.0f, 2000.0f, 0.0f));
-	EXPECT_EQ(moon::GlowColour(glm::vec3(0.6f, 0.5f, 0.4f)), glm::vec3(0.1f, 0.1f, 0.1f));
+	EXPECT_EQ(moon::GlowColour(glm::vec3(0.6f, 0.5f, 0.4f)), glm::vec3(25.0f, 25.0f, 25.0f) / 255.0f);
+}
+
+TEST(Moon, TheGlowDropsTheRemainderOfEachChannel)
+{
+	// 200 / 6 is 33, 101 / 5 is 20 and 7 / 4 is 1
+	EXPECT_EQ(moon::GlowColour(glm::vec3(200.0f, 101.0f, 7.0f) / 255.0f), glm::vec3(33.0f, 20.0f, 1.0f) / 255.0f);
+}
+
+TEST(Moon, TheOffsetRoundsTheWideCosineOnce)
+{
+	// The FPU keeps the cosine and the sine wide, and the multiply rounds each one time. A float cosine gives 949.75867.
+	const auto offset = moon::Offset(0.08f);
+	EXPECT_EQ(offset.y, 949.7587890625f);
+	EXPECT_EQ(offset.z, 16.753934860229492f);
 }
 
 TEST(Moon, TheSeaShowsTheGlowOfACopyMirroredThroughSeaLevel)

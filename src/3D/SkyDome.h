@@ -155,18 +155,19 @@ struct TintInputs
 	float overcast;
 	/// A flash of lightning, 0 to 255
 	uint8_t flash;
-	/// How dark an evil sky is, 0 to 90
+	/// How dark a good sky is, 0 to 90
 	uint8_t darkness;
 	/// The fog setting: an overcast turns the dome towards the haze's colour
 	bool fog;
-	/// The weather setting: an evil sky darkens the dome
+	/// The weather setting: a good sky darkens the dome
 	bool weather;
 };
 
-/// How dark the sky is for an alignment from 0, evil, to 2, good: nothing until it is a little evil, 90 at its most
+/// How dark the sky is for the alignment that the land's light uses, from 0, good, to 2, evil. The sky is not dark
+/// until it is a little good, and at most 90 when it is fully good. The game darkens the good sky, not the evil sky.
 [[nodiscard]] uint8_t Darkness(float alignment);
 /// The dome's colours: white with nothing added on a clear day, towards the haze's colour as an overcast comes in, a
-/// little darker under an evil sky and towards white in a flash of lightning, all in whole steps
+/// little darker under a good sky and towards white in a flash of lightning, all in whole steps
 [[nodiscard]] Tint TintOf(const TintInputs& inputs);
 /// How strongly the sun or the moon shows through an overcast: with the fog setting, a full overcast leaves a ninth
 [[nodiscard]] float ThroughOvercast(float alpha, float overcast, bool fog);

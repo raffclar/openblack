@@ -89,7 +89,9 @@ public:
 	/// each turn of the sky from this end, thus the value is not always 2 minus SkyType in the last bit
 	[[nodiscard]] float NightSkyType(float visualHour) const;
 	/// Whether the visual time is night, as the game judges it for its houses' windows
-	[[nodiscard]] bool IsVisualNight() const { return SkyType(_visualTime) < 0.8f; }
+	[[nodiscard]] bool IsVisualNight() const { return IsNight(NightSkyType(_visualTime)); }
+	/// Whether a sky type as the game counts it is night: more than 1.2, compared as a double
+	[[nodiscard]] static bool IsNight(float nightSkyType);
 
 	[[nodiscard]] float ScriptToVisual(float hour) const;
 	[[nodiscard]] float VisualToScript(float hour) const;

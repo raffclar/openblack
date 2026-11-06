@@ -93,9 +93,8 @@ CreatureType SpeciesFor(uint32_t roll)
 
 float SizeLike(float localShownSize, float addedShare)
 {
-	// The game adds and multiplies at double precision and keeps the result as a float
-	return static_cast<float>((static_cast<double>(addedShare) + static_cast<double>(k_SmallestShareOfSize)) *
-	                          static_cast<double>(localShownSize));
+	// The game adds the share first, then multiplies. Each step rounds to a float.
+	return (addedShare + k_SmallestShareOfSize) * localShownSize;
 }
 
 std::vector<MagicType> MiraclesToLearn(const ecs::components::Player::Miracles& miracles, bool temple)

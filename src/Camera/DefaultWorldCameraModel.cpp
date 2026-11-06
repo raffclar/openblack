@@ -980,6 +980,8 @@ void DefaultWorldCameraModel::HandleActions(std::chrono::microseconds dt)
 	                           Locator::gameActionSystem::value().TakeDoubleClick();
 	// A drag of the land given up too far ahead takes every control away until the buttons are let go
 	_turnedThisFrame.reset();
+	_tiltedByControls.reset();
+	_tiltedByDrag.reset();
 	_controlsTurned = false;
 	if (!_dragGivenUp)
 	{
@@ -1028,6 +1030,12 @@ void DefaultWorldCameraModel::HandleActions(std::chrono::microseconds dt)
 	if ((_features & camera_help::feature::k_Pitch) == 0 && !autoTilting)
 	{
 		_rotateAroundDelta.x = 0.0f;
+	}
+	// The tilt that the controls, or the camera that tilts itself, give this frame. The measure of the tilting speed
+	// takes it in before the tilt of a drag of the hand.
+	if (_rotateAroundDelta.x != 0.0f)
+	{
+		_tiltedByControls = k_PitchPerInput * _rotateAroundDelta.x;
 	}
 	// Push scrolling acts only while no button, key or the camera tilting itself holds the camera
 	{
@@ -1098,6 +1106,8 @@ void DefaultWorldCameraModel::HandleActions(std::chrono::microseconds dt)
 			_mode = wheelZoom != 0.0f ? Mode::Polar : Mode::Cartesian;
 			_helpEvents = {};
 			_turnedThisFrame.reset();
+			_tiltedByControls.reset();
+			_tiltedByDrag.reset();
 			_controlsTurned = false;
 		}
 	}
@@ -1141,7 +1151,21 @@ void DefaultWorldCameraModel::HandleActions(std::chrono::microseconds dt)
 	// takes in this step's turn, or slows towards still
 	if (const auto seconds = std::chrono::duration<float>(dt).count(); seconds > 0.0f && Locator::turnCheerSystem::has_value())
 	{
-		Locator::turnCheerSystem::value().MeasureTurn(_turnedThisFrame, seconds);
+		auto& cheer = Locator::turnCheerSystem::value();
+		cheer.MeasureTurn(_turnedThisFrame, seconds);
+		// The measure of how fast the player tilts the camera takes in each tilt of this step in turn, or slows towards
+		// still when nothing tilted it
+		if (!_tiltedByControls.has_value() && !_tiltedByDrag.has_value())
+		{
+			cheer.MeasureTilt(std::nullopt, seconds);
+		}
+		for (const auto& tilted : {_tiltedByControls, _tiltedByDrag})
+		{
+			if (tilted.has_value())
+			{
+				cheer.MeasureTilt(tilted, seconds);
+			}
+		}
 	}
 	UpdateIconFrame(onFight);
 }
@@ -1339,6 +1363,7 @@ DefaultWorldCameraModel::Mode DefaultWorldCameraModel::HandleDrag(bool held)
 		{
 			const auto step = camera_drag::PitchStep(actionSystem.GetMouseDelta().y, screenSize.y, fov);
 			_dragTilt += step;
+			_tiltedByDrag = step;
 			_rotateAroundDelta.x += step / k_PitchPerInput;
 		}
 		return Mode::Polar;

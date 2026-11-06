@@ -34,9 +34,12 @@ creature_follow::View View(float yaw, float pitch, float distance)
 	return {.yaw = yaw, .pitch = pitch, .distance = distance};
 }
 
-float Flat(glm::vec2 /*point*/)
+camera_limits::Ground LevelGround()
 {
-	return 0.0f;
+	return {
+	    .height = [](glm::vec2 /*point*/) { return 0.0f; },
+	    .normal = [](glm::vec2 /*point*/) { return glm::vec3(0.0f, 1.0f, 0.0f); },
+	};
 }
 } // namespace
 
@@ -187,33 +190,47 @@ TEST(CreatureFollow, ClearingDistanceIsDrawnTowardsFiftyToAHundred)
 TEST(CreatureFollow, ClearViewKeepsTheHeadingOnLevelLand)
 {
 	const glm::vec3 focus {0.0f, 7.5f, 0.0f};
-	EXPECT_NEAR(creature_follow::ClearHeading(0.3f, 100.0f, focus, Flat), 0.3f, 1e-5f);
+	const auto view = creature_follow::ClearView(View(0.3f, 0.5f, 100.0f), focus, LevelGround());
+	EXPECT_NEAR(view.yaw, 0.3f, 1e-5f);
 }
 
 TEST(CreatureFollow, ClearViewSwingsAwayFromAHill)
 {
-	// A hill rising to the north (+z) of the creature, the camera behind it to the north
-	const auto hill = [](glm::vec2 point) { return std::max(point.y, 0.0f) * 2.0f; };
+	// A hill rises to the north (+z) of the creature, and the camera is behind the creature to the north
+	const camera_limits::Ground hill {
+	    .height = [](glm::vec2 point) { return std::max(point.y, 0.0f) * 2.0f; },
+	    .normal = [](glm::vec2 /*point*/) { return glm::vec3(0.0f, 1.0f, 0.0f); },
+	};
 	const glm::vec3 focus {0.0f, 7.5f, 0.0f};
-	const auto heading = creature_follow::ClearHeading(0.0f, 100.0f, focus, hill);
-	// It looks for where the land falls away: round to the south, away from the hill
+	const auto heading = creature_follow::ClearView(View(0.0f, 0.5f, 100.0f), focus, hill).yaw;
+	// The camera looks for the land that falls away: round to the south, away from the hill
 	EXPECT_GT(std::abs(heading), k_Pi / 2.0f - 1e-4f);
 	const auto origin = creature_follow::Origin(focus, View(heading, 0.4f, 100.0f));
 	EXPECT_LE(origin.z, 1e-3f);
 }
 
-TEST(CreatureFollow, ClearViewTiltsTowardsTwentyTwoDegrees)
+TEST(CreatureFollow, ClearViewDoesNotSeeTheLandNearTheCreature)
 {
-	// Level land's normal is straight up, which the game takes as a little short of a right angle
-	const auto slope = creature_follow::SlopePitch({0.0f, 1.0f, 0.0f});
-	EXPECT_FLOAT_EQ(slope, 1.5393804f);
-	EXPECT_NEAR(creature_follow::ClearPitch(0.5f, slope), (0.1f * 1.5393804f) + (0.2f * 0.5f) + 0.37699112f, 1e-5f);
-	// Kept between 22.5 and 60 degrees
-	EXPECT_FLOAT_EQ(creature_follow::ClearPitch(-5.0f, 0.0f), k_Pi / 8.0f);
-	EXPECT_FLOAT_EQ(creature_follow::ClearPitch(5.0f, 1.5f), k_Pi / 3.0f);
-	const auto view = creature_follow::ClearView(View(0.2f, 0.5f, 60.0f), {0.0f, 7.5f, 0.0f}, {0.0f, 1.0f, 0.0f}, Flat);
+	// The camera measures the land from three eighths to seven eighths of the distance out. A bank that stops 30 out to
+	// the north is nearer than that, so the camera keeps its heading.
+	const camera_limits::Ground bank {
+	    .height = [](glm::vec2 point) { return point.y > 0.0f && point.y < 30.0f ? 20.0f : 0.0f; },
+	    .normal = [](glm::vec2 /*point*/) { return glm::vec3(0.0f, 1.0f, 0.0f); },
+	};
+	const auto view = creature_follow::ClearView(View(0.0f, 0.5f, 100.0f), {0.0f, 7.5f, 0.0f}, bank);
+	EXPECT_NEAR(view.yaw, 0.0f, 1e-5f);
+}
+
+TEST(CreatureFollow, ClearViewTiltsTowardsAFifthOfItsPitchAndATenthOfTheSlope)
+{
+	// The normal of level land is straight up, and the game takes that as a little less than a right angle
+	const auto view = creature_follow::ClearView(View(0.2f, 0.5f, 60.0f), {0.0f, 7.5f, 0.0f}, LevelGround());
+	EXPECT_NEAR(view.pitch, (0.1f * 1.5393804f) + (0.2f * 0.5f) + 0.37699114f, 1e-5f);
 	EXPECT_FLOAT_EQ(view.distance, 60.0f);
 	EXPECT_NEAR(view.yaw, 0.2f, 1e-5f);
+	// The pitch stays between 22.5 and 60 degrees
+	EXPECT_FLOAT_EQ(creature_follow::ClearView(View(0.2f, -5.0f, 60.0f), {}, LevelGround()).pitch, k_Pi / 8.0f);
+	EXPECT_FLOAT_EQ(creature_follow::ClearView(View(0.2f, 5.0f, 60.0f), {}, LevelGround()).pitch, k_Pi / 3.0f);
 }
 
 // The mode's rules

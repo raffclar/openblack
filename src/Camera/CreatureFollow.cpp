@@ -15,6 +15,8 @@
 
 #include <glm/geometric.hpp>
 
+#include "DoubleClickFlight.h"
+
 namespace openblack::creature_follow
 {
 
@@ -31,23 +33,11 @@ constexpr float k_WheelZoomPerCount = -0.15f;
 constexpr float k_TiltPerPixel = 0.002f;
 constexpr float k_ZoomPixels = 500.0f;
 constexpr float k_ZoomPerPixel = 0.002f;
-/// The clear view looks round at 32 headings, each sampling the land at 8 points out to the distance, and favours the
-/// headings nearest the camera's by this many units of fall
-constexpr int k_ClearHeadings = 32;
-constexpr int k_ClearSamples = 8;
-constexpr float k_ClearHeadingStep = std::numbers::pi_v<float> / 16.0f;
-constexpr float k_ClearFavourCurrent = 50.0f;
 /// The distance it looks at is taken this much of the way towards 50 when nearer, and towards 100 when further
 constexpr float k_ClearNear = 50.0f;
 constexpr float k_ClearNearShare = 0.8f;
 constexpr float k_ClearFar = 100.0f;
 constexpr float k_ClearFarShare = 0.1f;
-/// The clear pitch: a steady part, a share of the camera's pitch and a share of half the slope's
-constexpr float k_ClearPitchBase = 0.37699112f;
-constexpr float k_ClearPitchShare = 0.2f;
-constexpr float k_ClearSlopeShare = 0.1f;
-constexpr float k_ClearMinPitch = std::numbers::pi_v<float> / 8.0f;
-constexpr float k_ClearMaxPitch = std::numbers::pi_v<float> / 3.0f;
 /// The game's float of pi / 2048, which turns a doubled game angle to radians, and its float of a quarter turn
 constexpr float k_HalfGameAngleToRadians = 0.0015339808305725455f;
 constexpr float k_RelativeQuarterTurn = 1.5707963705062866f;
@@ -231,46 +221,13 @@ float ClearingDistance(float distance)
 	return distance;
 }
 
-float ClearHeading(float heading, float distance, glm::vec3 focus, const GroundHeight& ground)
+View ClearView(View view, glm::vec3 focus, const camera_limits::Ground& ground)
 {
-	float best = -1e20f;
-	int bestStep = 0;
-	for (int step = 0; step < k_ClearHeadings; ++step)
-	{
-		const auto turn = static_cast<float>(step) * k_ClearHeadingStep;
-		const glm::vec2 along {std::sin(heading + turn), std::cos(heading + turn)};
-		// The further the land falls away below the creature's middle along the heading, the clearer the view
-		float fall = 0.0f;
-		for (int sample = 0; sample < k_ClearSamples; ++sample)
-		{
-			const auto reach = static_cast<float>(sample) * distance / static_cast<float>(k_ClearSamples);
-			fall += focus.y - ground(glm::vec2(focus.x, focus.z) + (along * reach));
-		}
-		fall += std::cos(turn) * k_ClearFavourCurrent;
-		if (best < fall)
-		{
-			best = fall;
-			bestStep = step;
-		}
-	}
-	return editor::WrapAngle(heading + (static_cast<float>(bestStep) * k_ClearHeadingStep));
-}
-
-float SlopePitch(glm::vec3 normal)
-{
-	return HeadingPitchOf(normal, glm::vec3(0.0f)).pitch;
-}
-
-float ClearPitch(float pitch, float slopePitch)
-{
-	const auto tilted = (slopePitch * k_ClearSlopeShare) + (pitch * k_ClearPitchShare) + k_ClearPitchBase;
-	return std::clamp(tilted, k_ClearMinPitch, k_ClearMaxPitch);
-}
-
-View ClearView(View view, glm::vec3 focus, glm::vec3 landNormal, const GroundHeight& ground)
-{
-	view.yaw = ClearHeading(view.yaw, ClearingDistance(view.distance), focus, ground);
-	view.pitch = ClearPitch(view.pitch, SlopePitch(landNormal));
+	// The follow camera and the double click flight use the same search for a clear view
+	const auto best =
+	    camera_fly::BestBearing(ground, {.heading = view.yaw, .pitch = view.pitch}, ClearingDistance(view.distance), focus);
+	view.yaw = editor::WrapAngle(best.heading);
+	view.pitch = best.pitch;
 	return view;
 }
 

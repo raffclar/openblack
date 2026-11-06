@@ -1874,7 +1874,8 @@ void SetSkeleton() // 291 SET_SKELETON
 		ScriptMessage("Thing not valid");
 		return;
 	}
-	// A group makes each of its villagers a skeleton, or themselves again; anything but a villager is left as it is
+	// A group makes each of its members a skeleton, or themselves again. An animal or a creature gets only the mark;
+	// anything that does not live is left as it is.
 	if (IsScriptContainer(registry, object))
 	{
 		for (const auto member : ContainerMembers(registry, object))
@@ -1896,7 +1897,7 @@ void IsSkeleton() // 292 IS_SKELETON
 		Pushb(false);
 		return;
 	}
-	// Only a villager a script made a skeleton is one; a body lying as bones is not
+	// Only a villager, animal or creature that a script made a skeleton is one; a body lying as bones is not
 	Pushb(villager_skeleton::Is(object));
 }
 
@@ -1920,16 +1921,10 @@ void SetIndestructable() // 298 SET_INDESTRUCTABLE
 			registry.Remove<ecs::components::Indestructible>(thing);
 		}
 	};
-	// A town is marked through every villager of it; anything else itself
-	if (registry.AllOf<ecs::components::Town>(object))
+	// A town, a flock or a dance is marked through each of its members, not itself. Anything else is marked itself.
+	if (IsScriptContainer(registry, object))
 	{
-		registry.Each<const ecs::components::Villager>(
-		    [&mark, object](entt::entity villager, const ecs::components::Villager& person) {
-			    if (person.town == object)
-			    {
-				    mark(villager);
-			    }
-		    });
+		std::ranges::for_each(ContainerMembers(registry, object), mark);
 		return;
 	}
 	mark(object);

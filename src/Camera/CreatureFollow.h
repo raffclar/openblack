@@ -19,6 +19,7 @@
 #include <glm/vec3.hpp>
 
 #include "3D/MapCoords.h"
+#include "CameraLimits.h"
 #include "Editor/EditorMath.h"
 
 /// The maths of Creature Mode's camera, which locks onto a creature and follows it, free of the game so it can be tested
@@ -179,15 +180,8 @@ struct FlockLeader
 /// The distance the camera looks for a clear view at: nearer ones are taken most of the way out to 50 and further ones a
 /// little way in towards 100
 [[nodiscard]] float ClearingDistance(float distance);
-/// The heading, of 32 round the creature, along which the land falls away furthest below the creature's middle out to a
-/// distance, favouring headings near the one the camera has
-[[nodiscard]] float ClearHeading(float heading, float distance, glm::vec3 focus, const GroundHeight& ground);
-/// The pitch of the land's slope under the creature, from its normal; on level land, nearly straight up
-[[nodiscard]] float SlopePitch(glm::vec3 normal);
-/// The pitch the camera tilts to for a clear view: mostly a steady 22 degrees or so, a little of the pitch it had and a
-/// little of the slope, between 22.5 and 60 degrees
-[[nodiscard]] float ClearPitch(float pitch, float slopePitch);
-/// The view swung round and tilted for a clear view of the creature, keeping its distance
-[[nodiscard]] View ClearView(View view, glm::vec3 focus, glm::vec3 landNormal, const GroundHeight& ground);
+/// The view swung round and tilted for a clear view of the creature, keeping its distance. The camera finds the heading
+/// and the pitch as a double click flight finds them, at the distance for a clear view.
+[[nodiscard]] View ClearView(View view, glm::vec3 focus, const camera_limits::Ground& ground);
 
 } // namespace openblack::creature_follow

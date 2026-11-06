@@ -345,6 +345,11 @@ bool creature_watching::MayStartMimicry(const std::optional<Mimicry>& mimicry, s
 		return false;
 	}
 	const auto& wanted = rules[rule];
+	// A creature that the hand holds, that wears a leash that does not work, or that a computer god plays copies nothing
+	if (conditions.heldByHand || !conditions.leashWorks || !conditions.humanPlayer)
+	{
+		return false;
+	}
 	if (conditions.phase < k_MinMimicPhase || (wanted.needsLearningLeash && !conditions.learningLeashInHand) ||
 	    conditions.reactionPriority >= k_MaxReactionPriorityToMimic || !conditions.canSee)
 	{
@@ -459,6 +464,11 @@ void creature_watching::StrokedWhileMimicking(std::optional<Mimicry>& mimicry, s
 	mimicry->stage = MimicStage::CopyAction;
 	mimicry->done = 0;
 	mimicry->limit = StageLength(rules[mimicry->rule], random);
+}
+
+void creature_watching::SlappedWhileMimicking(std::optional<Mimicry>& mimicry)
+{
+	mimicry.reset();
 }
 
 creature_watching::MimicKind creature_watching::KindToCopy(const MimicFacts& facts)

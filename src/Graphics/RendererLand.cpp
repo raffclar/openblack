@@ -719,7 +719,7 @@ TextureHandle Renderer::UpdateLandLight() const
 		    .hazeColour = haze.colour,
 		    .overcast = overcast,
 		    .flash = flash,
-		    .darkness = sky_dome::Darkness(alignment + 1.0f),
+		    .darkness = sky_dome::Darkness(1.0f - alignment),
 		    .fog = detail.fog,
 		    .weather = detail.weather,
 		});

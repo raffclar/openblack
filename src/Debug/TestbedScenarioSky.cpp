@@ -168,4 +168,18 @@ void testbed_scenarios::AddSkyScenarios(std::vector<Scenario>& all)
 	                  .script = "SET_SUN_DRAW",
 	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Integer, .number = 1.0f}}}},
 	});
+
+	all.push_back({
+	    .id = "sky.good_sky_darkness",
+	    .name = "A good sky is darker than an evil sky",
+	    .facet = Facet::Sky,
+	    .description = "The clock stands at noon under a clear sky. The player is fully good, and the camera looks up at "
+	                   "the sky. After 15 seconds the player becomes fully evil, and the sky turns to the evil sky.",
+	    .expected = "With the weather option of the default detail level, the good sky shows about a fifth darker than its "
+	                "picture. As the sky turns to evil, this darkness goes, and the evil sky shows its picture at full "
+	                "brightness.",
+	    .environment = {.hour = 12.0f, .clockRuns = false, .dispenserGrid = false, .playerAlignment = 1.0f},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 40.0f, 0.0f}, .look = {-100.0f, 90.0f, 100.0f}},
+	    .commands = {{.kind = Command::Kind::SetAlignment, .delaySeconds = 15.0f, .alignment = -1.0f}},
+	});
 }

@@ -123,3 +123,34 @@ TEST(LandAltitude, OffTheMapOrOffTheBlocksIsAtSeaLevel)
 	EXPECT_EQ(island.GetAltitude(512 * k_Fixed, 0), 0.0f);
 	EXPECT_EQ(island.GetAltitude(20 * k_Fixed, 0), 0.0f);
 }
+
+TEST(LandAltitude, AScriptGetsTheHeightOfTheLandInMetres)
+{
+	const OneCellIsland island(40, 48, 56, 72, false);
+	// The script's point in metres is the map position that the land interpolates
+	EXPECT_EQ(island.GetScriptLandHeight({7.5f, 99.0f, 2.5f}),
+	          island.GetAltitude(LandIslandInterface::ToMapCoords(7.5f), LandIslandInterface::ToMapCoords(2.5f)));
+	EXPECT_EQ(island.GetScriptLandHeight({0.0f, 0.0f, 0.0f}), Steps(10240));
+}
+
+TEST(LandAltitude, AScriptGetsMinusTenWhereThereIsNoLand)
+{
+	const OneCellIsland island(40, 48, 56, 72, false);
+	// Off the map
+	EXPECT_EQ(island.GetScriptLandHeight({-10.0f, 0.0f, 0.0f}), -10.0f);
+	EXPECT_EQ(island.GetScriptLandHeight({5120.0f, 0.0f, 0.0f}), -10.0f);
+	// A cell with no block
+	EXPECT_EQ(island.GetScriptLandHeight({200.0f, 0.0f, 0.0f}), -10.0f);
+	// A cell whose first corner is at altitude 0, although its other corners are high
+	const OneCellIsland seaBed(0, 48, 56, 72, false);
+	EXPECT_EQ(seaBed.GetScriptLandHeight({5.0f, 0.0f, 5.0f}), -10.0f);
+	EXPECT_NE(seaBed.GetAltitude(LandIslandInterface::ToMapCoords(5.0f), LandIslandInterface::ToMapCoords(5.0f)), 0.0f);
+}
+
+TEST(LandAltitude, AScriptFindsTheCellWithATruncatedTenth)
+{
+	const OneCellIsland island(40, 48, 56, 72, false);
+	// A small negative coordinate truncates to cell 0, so the script gets the height of the land, not minus ten. The
+	// map position is off the map, thus the height is 0.
+	EXPECT_EQ(island.GetScriptLandHeight({-5.0f, 0.0f, 0.0f}), 0.0f);
+}
