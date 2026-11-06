@@ -211,6 +211,10 @@ void ProcessTurn(SpellServicesInterface& services, ecs::components::Spell& spell
 /// a forest trees still to make
 [[nodiscard]] bool HasEnoughForRecast(const InfoConstants& info, const ecs::components::Spell& spell);
 
+/// How many objects a cast again from its seed may make: for a forest, the trees that it has now (or its tables'
+/// number before it is planted), never more than its own limit; -1 (no limit) for every other miracle
+[[nodiscard]] int MaxObjectsToCreate(const InfoConstants& info, const ecs::components::Spell& spell);
+
 /// The heat a fireball of a magic type gives off at full strength
 [[nodiscard]] float FireballTemperature(const InfoConstants& info, MagicType type);
 

@@ -544,13 +544,25 @@ bool spells::HasEnoughForRecast(const InfoConstants& info, const Spell& spell)
 	{
 		return HasEnoughChantsForResourceRecast(*resource, spell.chants.chants);
 	}
-	if (const auto* trees = GetMagicInfoAs<GMagicForestInfo>(info, spell.magicType))
+	if (GetMagicInfoAs<GMagicForestInfo>(info, spell.magicType) != nullptr)
 	{
-		const auto standing =
-		    spell.forestPlanted && spell.objectCount > 0 ? std::optional<uint32_t>(spell.objectCount) : std::nullopt;
-		return forest::MaxObjectsToCreate(spell.maxObjectsToCreate, trees->finalNoTrees, spell.forestPlanted, standing) > 0;
+		return MaxObjectsToCreate(info, spell) > 0;
 	}
 	return true;
+}
+
+int spells::MaxObjectsToCreate(const InfoConstants& info, const Spell& spell)
+{
+	// Only a forest has a limit. A planted forest may make again only the trees that it has now.
+	const auto* trees = GetMagicInfoAs<GMagicForestInfo>(info, spell.magicType);
+	if (trees == nullptr)
+	{
+		return -1;
+	}
+	const auto standing =
+	    spell.forestPlanted && spell.objectCount > 0 ? std::optional<uint32_t>(spell.objectCount) : std::nullopt;
+	return static_cast<int>(
+	    forest::MaxObjectsToCreate(spell.maxObjectsToCreate, trees->finalNoTrees, spell.forestPlanted, standing));
 }
 
 float spells::FireballTemperature(const InfoConstants& info, MagicType type)
