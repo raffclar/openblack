@@ -65,7 +65,8 @@ void Overlap(Circle& circle, Circle& older)
 		return;
 	}
 	const auto apart = circle.centre - older.centre;
-	const float distance = std::sqrt((apart.x * apart.x) + (apart.y * apart.y) + (apart.z * apart.z));
+	// The game adds the squares from the last axis to the first, so the float sum keeps its order
+	const float distance = std::sqrt(((apart.z * apart.z) + (apart.y * apart.y)) + (apart.x * apart.x));
 	if (distance + circle.radius < older.radius)
 	{
 		circle.dead = true;
@@ -152,7 +153,9 @@ bool AdvanceRipple(Ripple& ripple, float milliseconds)
 		{
 			size -= k_PuffWrap * static_cast<float>(static_cast<int32_t>(size * (1.0f / k_PuffWrap)));
 		}
-		ripple.alphas.at(i) = static_cast<uint8_t>(static_cast<int32_t>((1.0f - size / k_PuffWrap) * fade * 255.0f) & 0xFF);
+		// The game multiplies by the float of a fourteenth here, and does not divide by fourteen
+		ripple.alphas.at(i) =
+		    static_cast<uint8_t>(static_cast<int32_t>((1.0f - (size * (1.0f / k_PuffWrap))) * fade * 255.0f) & 0xFF);
 		ripple.sizes.at(i) = std::max(size, k_SmallestPuff);
 	}
 	return true;

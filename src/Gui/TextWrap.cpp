@@ -35,9 +35,10 @@ bool IsBreak(char16_t c)
 class LineWidths
 {
 public:
-	LineWidths(std::u16string_view text, float scale, const text_wrap::AdvanceFn& advance)
+	LineWidths(std::u16string_view text, float size, float unit, const text_wrap::AdvanceFn& advance)
 	    : _text(text)
-	    , _scale(scale)
+	    , _size(size)
+	    , _unit(unit)
 	    , _advance(advance)
 	{
 		_sums.push_back(0.0f);
@@ -45,19 +46,21 @@ public:
 
 	[[nodiscard]] char16_t At(size_t i) const { return i < _text.size() ? _text[i] : u'\0'; }
 
-	/// How wide the first `count` characters are: their advances added up in order, then scaled
+	/// How wide the first `count` characters are: the sum of their advances in order, times the size, then times the
+	/// unit
 	float Width(size_t count)
 	{
 		while (_sums.size() <= count)
 		{
 			_sums.push_back(_sums.back() + _advance(At(_sums.size() - 1)));
 		}
-		return _sums[count] * _scale;
+		return (_sums[count] * _size) * _unit;
 	}
 
 private:
 	std::u16string_view _text;
-	float _scale;
+	float _size;
+	float _unit;
 	const text_wrap::AdvanceFn& _advance;
 	std::vector<float> _sums;
 };
@@ -77,11 +80,17 @@ bool text_wrap::IsSpace(char16_t c)
 std::vector<std::u16string_view> text_wrap::BreakLines(std::u16string_view text, float width, float scale,
                                                        const AdvanceFn& advance)
 {
+	return BreakLines(text, width, scale, 1.0f, advance);
+}
+
+std::vector<std::u16string_view> text_wrap::BreakLines(std::u16string_view text, float width, float size, float unit,
+                                                       const AdvanceFn& advance)
+{
 	text = text.substr(0, text.find(u'\0'));
 	std::vector<std::u16string_view> lines;
 	while (!text.empty())
 	{
-		LineWidths line(text, scale, advance);
+		LineWidths line(text, size, unit, advance);
 
 		// Grow the line a few characters at a time until it is too wide. On a line break the count goes on one
 		// character at a time past it.

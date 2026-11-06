@@ -229,6 +229,24 @@ TEST(GameFont, WrapsAtSpacesHyphensAndLineBreaks)
 	EXPECT_EQ(ToString(font.Wrap(u"WWW", 4.0f, 17.0f)), u"[WW][W]");
 }
 
+TEST(GameFont, MeasuresWithTheFloatOfAnEightieth)
+{
+	// A font 80 rows high, as all the game's fonts are, with one glyph of no pixels that moves the pen by 4
+	FakeFont fake {.height = 80, .glyphs = {}, .met = {}, .fnt = {}};
+	fake.glyphs = {
+	    {.character = u'?', .width = 0, .left = 1.0f, .ink = 2.0f, .right = 1.0f, .rows = std::vector<std::string>(80)}};
+	fake.Build();
+	const auto font = GameFont::Load(fake.met, fake.fnt);
+	ASSERT_TRUE(font.has_value());
+	// The sum of the advances times the size, then times the float of an eightieth. A division by 80 gives another
+	// last bit for this size.
+	const float size = 9.0f;
+	const float sum = 4.0f;
+	EXPECT_EQ(font->WidthUnit(), 0.0125f);
+	EXPECT_EQ(font->GetWidth(u"?", size), (sum * size) * 0.0125f);
+	EXPECT_NE(font->GetWidth(u"?", size), (sum * size) / 80.0f);
+}
+
 TEST(GameFont, RejectsFilesThatDontFit)
 {
 	auto fake = MakeFont();

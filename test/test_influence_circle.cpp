@@ -152,6 +152,26 @@ TEST(InfluenceCircle, RipplesGrowFadeAndGo)
 	EXPECT_FALSE(influence::AdvanceRipple(ripple, 600.0f));
 }
 
+TEST(InfluenceCircle, PuffAlphaMultipliesByAFourteenth)
+{
+	influence::Ripple ripple;
+	ripple.sizes = {0.0001f, 2.0f, 4.0f, 6.0f, 8.0f, 10.0f, 12.0f};
+	// A step of 40 ms takes the fifth puff to 8.4. The float of a fourteenth gives 101, a division by fourteen gives 102.
+	ASSERT_TRUE(influence::AdvanceRipple(ripple, 40.0f));
+	EXPECT_EQ(ripple.alphas[4], 101);
+}
+
+TEST(InfluenceCircle, CircleInsideTestAddsTheSquaresInTheGamesOrder)
+{
+	// The game adds the squares from the last axis to the first. For this gap, that sum puts the new circle just inside
+	// the older circle, and the sum from the first axis puts it on the edge.
+	std::vector<influence::Circle> circles;
+	influence::AddCircle(circles, PlayerNames::PLAYER_ONE, {0.0f, 0.0f, 0.0f}, 0x1.9e6064p+7f, Flat(0.0f));
+	influence::AddCircle(circles, PlayerNames::PLAYER_ONE, {0x1.893e3cp+7f, -0x1.b3d81ap+5f, 0x1.dc1972p+4f}, 1.0f, Flat(0.0f));
+	ASSERT_EQ(circles.size(), 1);
+	EXPECT_EQ(circles[0].radius, 0x1.9e6064p+7f);
+}
+
 TEST(InfluenceCircle, PuffsLieInTheBordersPlane)
 {
 	influence::Ripple ripple;

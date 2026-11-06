@@ -107,6 +107,8 @@ public:
 	[[nodiscard]] float Advance(char16_t c) const;
 	/// How far text of a size moves the pen, as the game measures it: every character's advance, line breaks included
 	[[nodiscard]] float GetWidth(std::u16string_view text, float size) const;
+	/// The unit of a width: the sum of the advances times the size, then times this unit, each step a float
+	[[nodiscard]] float WidthUnit() const;
 	/// The game's line breaking (gui::text_wrap::BreakLines): lines that fit in width at a size
 	[[nodiscard]] std::vector<std::u16string_view> Wrap(std::u16string_view text, float size, float width) const;
 
