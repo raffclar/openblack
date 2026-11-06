@@ -30,6 +30,7 @@
 #include "Camera/CameraZones.h"
 #include "Camera/CreatureCameraModel.h"
 #include "Camera/DoubleClickFlight.h"
+#include "Camera/ScriptCameraModel.h"
 #include "ECS/Systems/CameraZoneSystemInterface.h"
 #include "Locator.h"
 #include "Particles/LightSheet.h"
@@ -129,6 +130,25 @@ TEST(DoubleClickFlight, ARecordedFlightOverFlatLand)
 	EXPECT_NEAR(halfWay.x, 1040.35498f, 0.05f);
 	EXPECT_NEAR(halfWay.y, 37.3544312f, 0.05f);
 	EXPECT_NEAR(halfWay.z, 1086.26038f, 0.05f);
+}
+
+TEST(DoubleClickFlight, TheFlightMeasuresAndPlacesTheCameraWithTheGamesAngleMaths)
+{
+	// The recorded flight: its heading and pitch come from the game's angle maths, and the end of the flight is the
+	// game's point at the distance, the heading and the pitch
+	const glm::vec3 origin {1000.0f, 3.0f, 1120.0f};
+	const glm::vec3 focus {1000.0f, 0.0f, -368.455078f};
+	const glm::vec3 place {1080.70996f, 0.0f, 966.307434f};
+	const auto flight = Plan(Reason::DoubleClick, FlatLand(0.0f), place, origin, focus, {1000.0f, 0.0f, -368.546997f});
+	const auto angles = script_camera::HeadingAndPitchFromPoints(origin, focus);
+	const auto bearing = BearingOf(origin, focus);
+	EXPECT_EQ(std::bit_cast<uint32_t>(bearing.heading), std::bit_cast<uint32_t>(angles.heading));
+	EXPECT_EQ(std::bit_cast<uint32_t>(bearing.pitch), std::bit_cast<uint32_t>(angles.pitch));
+	const auto best = BestBearing(FlatLand(0.0f), bearing, k_FarDistance, place);
+	const auto expected = script_camera::PointFromDistanceHeadingAndPitch(place, k_FarDistance, best.heading, best.pitch);
+	EXPECT_EQ(std::bit_cast<uint32_t>(flight.origin.x), std::bit_cast<uint32_t>(expected.x));
+	EXPECT_EQ(std::bit_cast<uint32_t>(flight.origin.y), std::bit_cast<uint32_t>(expected.y));
+	EXPECT_EQ(std::bit_cast<uint32_t>(flight.origin.z), std::bit_cast<uint32_t>(expected.z));
 }
 
 TEST(DoubleClickFlight, NearerPlacesAreFlownToFromCloserAndPartWayIntoTheEase)
