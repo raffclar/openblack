@@ -130,13 +130,14 @@ constexpr std::array<uint16_t, 6> k_Indices = {0, 1, 3, 1, 2, 3};
 /// The land's height at a point on it, by x and z
 using AltitudeAt = std::function<float(float x, float z)>;
 
-/// How big the side of a print's square is for a creature of a size leaving its species' print
-[[nodiscard]] float Side(float creatureSize, const SpeciesPrint& print);
+/// How big a print is for a creature of a size leaving its species' print: the print's square goes out k_HalfSide times
+/// this from the foot on each side
+[[nodiscard]] float PrintSize(float creatureSize, const SpeciesPrint& print);
 
 /// A print laid under a foot: a square of the print's size about the foot, its picture pointing the way the foot is
 /// turned plus half a turn, each corner on the land beneath it and lifted a little. A left foot's picture is flipped
 /// across its length.
-[[nodiscard]] Footprint MakeFootprint(const glm::vec3& foot, float angle, float side, uint8_t cell, bool left,
+[[nodiscard]] Footprint MakeFootprint(const glm::vec3& foot, float angle, float size, uint8_t cell, bool left,
                                       const AltitudeAt& altitudeAt);
 
 /// The prints laid by every creature and still showing, the oldest first
