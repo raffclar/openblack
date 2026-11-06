@@ -270,7 +270,12 @@ void HelpTextSystem::Update(const Frame& frame)
 	{
 		return;
 	}
-	_dialogue->Update(static_cast<float>(frame.inTemple ? frame.realMs : frame.gameMs));
+	_dialogue->Update(static_cast<float>(help::SlideInMilliseconds({
+	    .gameMs = frame.gameMs,
+	    .realMs = frame.realMs,
+	    .inTemple = frame.inTemple,
+	    .videoPlaying = frame.videoPlaying,
+	})));
 	_dialogue->AdvanceClickCue(static_cast<float>(frame.realMs) * 0.001f);
 	_dialogue->AdvanceControlIcons(static_cast<float>(frame.realMs) * 0.001f);
 }

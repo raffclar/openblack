@@ -321,6 +321,7 @@ void PlayFrameEffects(FrameViewInterface& view)
 		    .gameMs = static_cast<uint32_t>(clock.GetFrameGameTime().count()),
 		    .realMs = static_cast<uint32_t>(clock.GetFrameRealTime().count()),
 		    .inTemple = inTemple,
+		    .videoPlaying = Locator::videoSystem::has_value() && Locator::videoSystem::value().IsPlaying(),
 		});
 		// While a script plays a sung verse, the newest text's word that the song has reached gets the glow
 		view.UpdateSingAlong(inTemple);
