@@ -18,6 +18,7 @@
 
 #include "Body.h"
 #include "Common/X87.h"
+#include "Common/X87Vector.h"
 
 using namespace openblack;
 using namespace openblack::physics;
@@ -64,8 +65,9 @@ water_rings::Ring Ring(glm::vec3 centre, float radius, uint8_t cell)
 
 std::optional<float> turn::Impact(glm::vec3 forceSum)
 {
-	const float squared = glm::dot(forceSum, forceSum);
-	if (squared <= k_LeastForceSquared)
+	// The game adds the squares from z to x. A sum that is not a number gives no impact, as the game's compare does.
+	const float squared = openblack::x87::DotZyx(forceSum, forceSum);
+	if (!(squared > k_LeastForceSquared))
 	{
 		return std::nullopt;
 	}

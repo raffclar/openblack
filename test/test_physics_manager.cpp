@@ -7,6 +7,10 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <cstdint>
+
+#include <bit>
+#include <limits>
 #include <memory>
 
 #include <entt/entity/entity.hpp>
@@ -470,6 +474,15 @@ TEST(PhysicsTurn, ImpactIsTheMeanForceAndIgnoresTheSmallest)
 	EXPECT_FALSE(turn::Impact(glm::vec3(0.01f, 0.0f, 0.0f)).has_value());
 	EXPECT_FLOAT_EQ(turn::Impact(glm::vec3(0.0f, 200.0f, 0.0f)).value_or(0.0f), 10.0f);
 	EXPECT_FLOAT_EQ(turn::GLoad(98.1f, 10.0f), 1.0f);
+}
+
+TEST(PhysicsTurn, ImpactAddsTheSquaresFromZToXAndANaNGivesNoImpact)
+{
+	// The game adds the squares from z to x. Added from x to z, this sum gives the impact one bit lower.
+	const auto impact = turn::Impact(glm::vec3(66.00714111328125f, 34.06111145019531f, -39.326297760009766f));
+	ASSERT_TRUE(impact.has_value());
+	EXPECT_EQ(std::bit_cast<uint32_t>(*impact), 0x40867913u);
+	EXPECT_FALSE(turn::Impact(glm::vec3(std::numeric_limits<float>::quiet_NaN(), 0.0f, 0.0f)).has_value());
 }
 
 TEST(PhysicsTurn, KnocksSoundWhenHitOrHardEnough)
