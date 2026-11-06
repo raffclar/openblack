@@ -35,6 +35,8 @@ struct LandShadeFrame
 	bool landReflection {true};
 	/// The detail level draws the clouds' shadows
 	bool cloudShadows {true};
+	/// The detail level draws the sky's clouds. Without them, the sky's clouds cast no shadow, but the storms' clouds do.
+	bool skyClouds {true};
 	/// The alpha of the sky's clouds, of 255
 	uint32_t skyAlpha {255};
 	/// The land's colour of the frame (0xRRGGBB): the lights come on when it is dark
