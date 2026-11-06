@@ -27,6 +27,7 @@
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/Flock.h"
+#include "ECS/Components/Graveyard.h"
 #include "ECS/Components/Indestructible.h"
 #include "ECS/Components/MiracleImpression.h"
 #include "ECS/Components/Physics.h"
@@ -68,6 +69,8 @@ using Results = std::vector<std::pair<lhvm::VMValue, lhvm::DataType>>;
 using Arguments = std::vector<lhvm::NativeArgument>;
 
 constexpr uint32_t k_GetSlowestSpeed = 198;
+constexpr uint32_t k_SetSkeleton = 291;
+constexpr uint32_t k_IsSkeleton = 292;
 constexpr uint32_t k_PlayerSpellCastTime = 293;
 constexpr uint32_t k_SetIndestructable = 298;
 constexpr uint32_t k_PlayerSpellLastCast = 294;
@@ -309,6 +312,24 @@ TEST_F(ScriptNativesRows3, AContainerIsMadeIndestructibleThroughEachOfItsMembers
 	EXPECT_TRUE(Call(k_SetIndestructable, {Bool(false), Object(flock)}).empty());
 	EXPECT_FALSE(registry.AllOf<ecs::components::Indestructible>(sheep));
 	EXPECT_TRUE(registry.AllOf<ecs::components::Indestructible>(resident));
+}
+
+TEST_F(ScriptNativesRows3, AnAnimalThatAScriptMakesASkeletonKeepsTheMark)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto animal = Animal(0.0f, 0.0f, 100);
+	const auto IsSkeleton = [](entt::entity thing) { return Call(k_IsSkeleton, {Object(thing)})[0].first.intVal != 0; };
+	EXPECT_FALSE(IsSkeleton(animal));
+	EXPECT_TRUE(Call(k_SetSkeleton, {Bool(true), Object(animal)}).empty());
+	EXPECT_TRUE(registry.AllOf<ecs::components::WalkingSkeleton>(animal));
+	EXPECT_TRUE(IsSkeleton(animal));
+	EXPECT_TRUE(Call(k_SetSkeleton, {Bool(false), Object(animal)}).empty());
+	EXPECT_FALSE(IsSkeleton(animal));
+	// A thing that does not live gets no mark
+	const auto stone = registry.Create();
+	registry.Assign<ecs::components::Transform>(stone);
+	EXPECT_TRUE(Call(k_SetSkeleton, {Bool(true), Object(stone)}).empty());
+	EXPECT_FALSE(registry.AllOf<ecs::components::WalkingSkeleton>(stone));
 }
 
 } // namespace

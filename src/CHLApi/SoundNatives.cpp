@@ -322,9 +322,9 @@ void MusicPlayed191() // 191 MUSIC_PLAYED
 	Pushb(!object || gameMusic == nullptr || gameMusic->IsAttachedMusicFinished(*object));
 }
 
-/// The advisors start cheering the player's turning of the camera, the measure of its speed starting again from
-/// still, or stop
-void StartAngleSound(bool enable)
+/// The advisors start cheering the player's turning or tilting of the camera, the measure of its speed starting again
+/// from still, or stop
+void StartAngleSound(bool enable, help::turn_cheer::Watch watch)
 {
 	// Only a computer that shows the world cheers its player on
 	if (!Locator::turnCheerSystem::has_value())
@@ -333,7 +333,7 @@ void StartAngleSound(bool enable)
 	}
 	if (enable)
 	{
-		Locator::turnCheerSystem::value().Start();
+		Locator::turnCheerSystem::value().Start(watch);
 	}
 	else
 	{
@@ -343,7 +343,8 @@ void StartAngleSound(bool enable)
 
 void StartAngleSound285() // 285 START_ANGLE_SOUND
 {
-	StartAngleSound(Pop().uintVal != 0);
+	// The form of the turning lesson: it goes by how fast the player turns the camera
+	StartAngleSound(Pop().uintVal != 0, help::turn_cheer::Watch::Turn);
 }
 
 void SetCreatureSound() // 317 SET_CREATURE_SOUND
@@ -381,7 +382,8 @@ void GamePlaySaySoundEffect() // 340 GAME_PLAY_SAY_SOUND_EFFECT
 
 void StartAngleSound348() // 348 START_ANGLE_SOUND
 {
-	StartAngleSound(Pop().uintVal != 0);
+	// The form of the tilting lesson: it goes by how fast the player tilts the camera
+	StartAngleSound(Pop().uintVal != 0, help::turn_cheer::Watch::Tilt);
 }
 
 void MusicPlayed350() // 350 MUSIC_PLAYED
