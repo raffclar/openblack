@@ -131,6 +131,25 @@ public:
 	[[nodiscard]] static Pose PictureOrbitPose(Room room, float yaw, float lean, float height, glm::vec3 pathEnd);
 	/// The turn a room of pictures' camera starts at, which looks along the end of the room's path
 	[[nodiscard]] static float PictureStartYaw(const Pose& pathEnd);
+	/// The turn, lean and height that a room of pictures' camera goes to
+	struct PictureTargets
+	{
+		float yaw;
+		float lean;
+		float height;
+	};
+	/// The lean and height targets of a room of pictures while its camera looks at a picture from close by: half
+	/// leaning, at the height of the camera's aim
+	[[nodiscard]] static constexpr glm::vec2 PictureLookLeanAndHeight(const Pose& aim) { return {0.5f, aim.origin.y}; }
+	/// A room of pictures' targets when the player sends its camera back from a close look. The room turns to face
+	/// where the camera's aim looked, the camera goes down to the room's lowest height and leans to 0.2.
+	[[nodiscard]] static PictureTargets PictureScrollLeave(const Pose& aim);
+	/// The lean target of a room of pictures after its step that follows the height. The lean target goes to the lean of
+	/// the height target by 1 - e^-dt of the difference. When it levels out, as under a dialog, it goes to 0.
+	[[nodiscard]] static float PictureLeanForHeight(float leanTarget, float heightTarget, float dt, bool levelOut);
+	/// Whether the press that sent a room of pictures' camera back from a close look is still held. Until the player lets
+	/// go of it, that press does not drag the room.
+	[[nodiscard]] static constexpr bool PressFromLookStillHeld(bool wasHeld, bool pressed) { return wasHeld && pressed; }
 	/// The creature's room camera's look from a point, as a heading about the vertical and a pitch up and down
 	[[nodiscard]] static Pose LookPose(glm::vec3 from, float heading, float pitch);
 	/// The heading and pitch of a look at a point, as the game's camera works them out
@@ -398,6 +417,8 @@ private:
 	bool _overWayBack {false};
 	/// How long a room of pictures' camera has turned by itself, which its turn speeds up over
 	float _pictureOrbitTime {0.0f};
+	/// The press that sent a room of pictures' camera back from a close look is still held, so it does not drag the room
+	bool _pressFromPictureLook {false};
 	std::optional<RoomHit> _pressHit;
 	float _lastHitAngle {0.0f};
 	glm::vec2 _lastMouse {0.0f};

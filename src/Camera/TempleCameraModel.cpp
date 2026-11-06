@@ -153,6 +153,8 @@ constexpr float k_PictureHeightEaseTime = 0.15f;
 /// The lean follows the height, from this at the lowest the camera goes, rising by this for each unit up
 constexpr float k_PictureLowLean = 0.2f;
 constexpr float k_PictureLeanPerHeight = 0.0084507046f;
+/// The lean that a room of pictures goes to when the player sends its camera back from a close look
+constexpr float k_PictureLeaveLean = 0.2f;
 /// How fast the arrow keys lean and raise the camera
 constexpr float k_PictureLeanSpeed = 1.85f;
 constexpr float k_PictureRiseSpeed = 30.0f;
@@ -470,6 +472,29 @@ float TempleCameraModel::PictureStartYaw(const Pose& pathEnd)
 	// A quarter turn on from the way the path ends looking, which the orbit's views look along unturned
 	const auto along = pathEnd.focus - pathEnd.origin;
 	return std::atan2(along.z, along.x) + glm::half_pi<float>();
+}
+
+TempleCameraModel::PictureTargets TempleCameraModel::PictureScrollLeave(const Pose& aim)
+{
+	// A quarter turn on from the way the aim looks, as the turn at the start. The quarter turn is a float, and the sum
+	// rounds to a float.
+	const float alongX = aim.focus.x - aim.origin.x;
+	const float alongZ = aim.focus.z - aim.origin.z;
+	constexpr float k_QuarterTurn = 1.57079637f;
+	return {
+	    .yaw = x87::Add(x87::GameAtan2(alongZ, alongX), static_cast<double>(k_QuarterTurn)),
+	    .lean = k_PictureLeaveLean,
+	    .height = k_PictureMinHeight,
+	};
+}
+
+float TempleCameraModel::PictureLeanForHeight(float leanTarget, float heightTarget, float dt, bool levelOut)
+{
+	// The higher the camera, the more it looks down
+	const float leanForHeight =
+	    levelOut ? 0.0f : ((heightTarget - k_PictureMinHeight) * k_PictureLeanPerHeight) + k_PictureLowLean;
+	const float share = 1.0f - x87::Exp(-dt);
+	return ((leanForHeight - leanTarget) * share) + leanTarget;
 }
 
 TempleCameraModel::Pose TempleCameraModel::LookPose(glm::vec3 from, float heading, float pitch)
@@ -845,6 +870,14 @@ void TempleCameraModel::Step(float dt, const Input& input)
 		if (inControl && !InMainRoom())
 		{
 			AimAtSubMesh();
+		}
+		// A room of pictures half leans and goes to the height of the aim while it looks
+		if (inControl && IsPictureRoom(GetRoom()) && _subMeshLook.has_value())
+		{
+			auto& picture = _pictures.at(static_cast<size_t>(GetRoom()));
+			const auto leanAndHeight = PictureLookLeanAndHeight(_target);
+			picture.leanTarget = leanAndHeight.x;
+			picture.heightTarget = leanAndHeight.y;
 		}
 		_subMeshZoom = std::min(_subMeshZoom + (0.75f * dt), 1.0f);
 		if (inControl && InMainRoom())
@@ -1429,12 +1462,8 @@ void TempleCameraModel::UpdatePictureCamera(float dt)
 
 	// The higher the camera, the more it looks down. Under a dialog it levels out, other than in the library, where the
 	// story's history is read in a dialog while the player looks about.
-	float leanForHeight = (picture.heightTarget - k_PictureMinHeight) * k_PictureLeanPerHeight + k_PictureLowLean;
-	if (_dialogOpen && !pictureRoom.aroundPathEnd)
-	{
-		leanForHeight = 0.0f;
-	}
-	picture.leanTarget += (leanForHeight - picture.leanTarget) * (1.0f - std::exp(-dt));
+	picture.leanTarget =
+	    PictureLeanForHeight(picture.leanTarget, picture.heightTarget, dt, _dialogOpen && !pictureRoom.aroundPathEnd);
 }
 
 void TempleCameraModel::UpdatePictureOrbit(float dt, const Input& input)
@@ -1446,9 +1475,10 @@ void TempleCameraModel::UpdatePictureOrbit(float dt, const Input& input)
 	const auto pressKind = KindOf(_pressHit);
 
 	// Dragging the floor or the walls turns the room and raises the camera to keep them under the mouse. A dialog takes
-	// the mouse.
-	if (!_dialogOpen && input.button != 0 && (pressKind == HitKind::Floor || pressKind == HitKind::Wall) &&
-	    input.hit.has_value())
+	// the mouse. The press that sent the camera back from a close look does not drag until the player lets go of it.
+	_pressFromPictureLook = PressFromLookStillHeld(_pressFromPictureLook, input.button != 0);
+	if (!_dialogOpen && input.button != 0 && !_pressFromPictureLook &&
+	    (pressKind == HitKind::Floor || pressKind == HitKind::Wall) && input.hit.has_value())
 	{
 		float turn = _pressHit->angle - input.hit->angle;
 		if (turn < -glm::pi<float>())
@@ -1672,6 +1702,18 @@ void TempleCameraModel::RestartOrbit()
 void TempleCameraModel::LeaveSubMesh(bool byPlayer)
 {
 	_lookingAtSubMesh = false;
+	// A room of pictures turns to face where its camera's aim looked when the player sends the camera back. The press
+	// that did this does not drag the room until the player lets go of it.
+	if (byPlayer && IsPictureRoom(GetRoom()) && _state == State::PictureOrbit && _subMeshLook.has_value())
+	{
+		auto& picture = _pictures.at(static_cast<size_t>(GetRoom()));
+		const auto leave = PictureScrollLeave(_target);
+		picture.yawTarget = leave.yaw;
+		picture.leanTarget = leave.lean;
+		picture.heightTarget = leave.height;
+		_pressFromPictureLook = true;
+		return;
+	}
 	if (!InMainRoom() || _state != State::Orbit)
 	{
 		return;
