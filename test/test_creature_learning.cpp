@@ -1334,6 +1334,17 @@ TEST(CreatureWatching, AStrokeWhileCopyingStartsTheActionCopyAgain)
 	EXPECT_EQ(mimicry->stageStart, 30u);
 }
 
+TEST(CreatureWatching, ASlapStopsTheCopy)
+{
+	std::optional<creature_watching::Mimicry> mimicry = creature_watching::Mimicry {
+	    .rule = 0, .stage = creature_watching::MimicStage::CopyAction, .done = 1, .limit = 2, .stageStart = 30};
+	creature_watching::SlappedWhileMimicking(mimicry);
+	EXPECT_FALSE(mimicry.has_value());
+	// A slap when it does not copy changes nothing
+	creature_watching::SlappedWhileMimicking(mimicry);
+	EXPECT_FALSE(mimicry.has_value());
+}
+
 TEST(CreatureWatching, MimicChanceIsARankNotARoll)
 {
 	const std::vector<creature_watching::MimicRule> rules {

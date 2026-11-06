@@ -23,7 +23,11 @@
 
 #include "Creature/CreatureObstacles.h"
 #include "Creature/CreatureRoute.h"
+#include "ECS/Components/Abode.h"
 #include "ECS/Components/BuildingDamage.h"
+#include "ECS/Components/Construction.h"
+#include "ECS/Components/Physics.h"
+#include "ECS/Components/Scaffold.h"
 #include "ECS/Components/ScriptHighlight.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/CreatureObstacleThings.h"
@@ -240,6 +244,36 @@ TEST(CreatureObstacles, APieceOfABuildingIsWalkedRoundOnlyWhileItBurns)
 	thing->burning = true;
 	EXPECT_TRUE(MustAvoid(*thing, walker));
 	EXPECT_FALSE(MustAvoidWithoutWalker(*thing));
+}
+
+// A building with nothing of it built yet and a site that takes wood is not walked round. A scaffold on its only site
+// makes it solid at once. With a newer site that takes the wood, the scaffold stays on the older site.
+TEST(CreatureObstacles, AScaffoldMakesABuildingJustBegunSolid)
+{
+	using namespace ecs::components;
+	ecs::Registry registry;
+	const auto hut = registry.Create();
+	registry.Assign<Transform>(hut, glm::vec3(0.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+	registry.Assign<Abode>(hut, Abode {.type = AbodeNumber::A, .townId = 7});
+	registry.Assign<BuildProgress>(hut, BuildProgress {.built = 0.0f});
+	auto& sites = registry.Assign<BuildingSites>(hut);
+	sites.sites.push_back(BuildingSite {.takesBroughtWood = true});
+	auto thing = ecs::creature_obstacle_things::ThingOf(registry, hut);
+	ASSERT_TRUE(thing.has_value());
+	EXPECT_EQ(thing->avoidance, Avoidance::Building);
+	EXPECT_TRUE(thing->justBegun);
+
+	const auto scaffold = registry.Create();
+	registry.Assign<Scaffold>(scaffold).site = hut;
+	thing = ecs::creature_obstacle_things::ThingOf(registry, hut);
+	ASSERT_TRUE(thing.has_value());
+	EXPECT_FALSE(thing->justBegun);
+
+	sites.sites.front().takesBroughtWood = false;
+	sites.sites.insert(sites.sites.begin(), BuildingSite {.takesBroughtWood = true});
+	thing = ecs::creature_obstacle_things::ThingOf(registry, hut);
+	ASSERT_TRUE(thing.has_value());
+	EXPECT_TRUE(thing->justBegun);
 }
 
 TEST(CreatureObstacles, OtherCreaturesAndSceneryHaveTheirOwnCircles)

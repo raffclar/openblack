@@ -274,6 +274,8 @@ void MimicActionDone(std::optional<Mimicry>& mimicry);
 /// Stroked while copying, it goes straight to doing the thing itself, with the time of the stage that it was in
 void StrokedWhileMimicking(std::optional<Mimicry>& mimicry, std::span<const MimicRule> rules,
                            const std::function<uint32_t(uint32_t)>& random);
+/// A slap stops the creature when it copies its player
+void SlappedWhileMimicking(std::optional<Mimicry>& mimicry);
 
 /// The most pressing reaction that still leaves the creature free to copy, and the stage of growing up it needs
 constexpr float k_MaxReactionPriorityToMimic = 150.0f;

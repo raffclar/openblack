@@ -37,6 +37,7 @@
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Pot.h"
+#include "ECS/Components/Scaffold.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/ScriptHighlight.h"
 #include "ECS/Components/SpellDispenser.h"
@@ -268,11 +269,18 @@ std::optional<obstacles::Thing> creature_obstacle_things::ThingOf(const Registry
 
 	if (thing.avoidance == obstacles::Avoidance::Building)
 	{
-		// A building only just begun, with a site taking wood brought to it, isn't walked round yet
+		// A building only just begun, with a site taking wood brought to it, is not walked round yet. A scaffold on that
+		// site makes the building solid at once. The scaffold stays on the first site, so the site must be the only site.
 		const auto* progress = registry.TryGet<const BuildProgress>(entity);
 		const auto* sites = registry.TryGet<const BuildingSites>(entity);
 		thing.justBegun = sites != nullptr && ecs::building_site_list::TakingBroughtWood(*sites) != nullptr &&
 		                  progress != nullptr && progress->built <= k_JustBegun;
+		if (thing.justBegun && sites->sites.size() == 1)
+		{
+			const auto scaffold = registry.FindFirst<const Scaffold>(
+			    [entity](entt::entity, const Scaffold& data) { return data.site == entity; });
+			thing.justBegun = !scaffold.has_value();
+		}
 	}
 	return thing;
 }
