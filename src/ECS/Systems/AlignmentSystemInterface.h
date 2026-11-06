@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include <cstdint>
+
 #include <algorithm>
 #include <chrono>
 #include <span>
@@ -50,11 +52,51 @@ struct PlayerAtPlace
 	return alignment;
 }
 
-/// The alignment as the land shows it: taken as a goodness from 0 to 1, held there, and back to -1, evil, to 1, good
-[[nodiscard]] inline float LandAlignment(float alignment)
+/// The value that the land keeps for an alignment, from 0, good, to 2, evil. The alignment becomes a goodness from 0 to
+/// 1, held there. A goodness that is not a number becomes 0. The value is two times the evilness, 1 less the goodness.
+[[nodiscard]] inline float LandValue(float alignment)
 {
-	const float goodness = std::clamp((alignment + 1.0f) * 0.5f, 0.0f, 1.0f);
-	return (goodness * 2.0f) - 1.0f;
+	float goodness = (alignment + 1.0f) * 0.5f;
+	if (!(goodness >= 0.0f))
+	{
+		goodness = 0.0f;
+	}
+	else if (goodness > 1.0f)
+	{
+		goodness = 1.0f;
+	}
+	const float evilness = 1.0f - goodness;
+	return evilness + evilness;
+}
+
+/// The alignment that lights the temple's insides, from the value of the land: 1 less that value
+[[nodiscard]] inline float TempleLightAlignment(float land)
+{
+	return 1.0f - land;
+}
+
+/// The alignment that the music and the ambience follow, from the value of the land: 2 less that value, less 1
+[[nodiscard]] inline float AudioAlignment(float land)
+{
+	return (2.0f - land) - 1.0f;
+}
+
+/// The value of the sky after a frame of game time in whole milliseconds. The sky moves to the value of the land by a
+/// hundredth of each millisecond, times 0.1, and stops at that value.
+[[nodiscard]] inline float SkyLandValue(float sky, float land, int64_t milliseconds)
+{
+	const float time = static_cast<float>(milliseconds) * 0.01f;
+	if (!(land >= sky))
+	{
+		const float moved = sky - (time * 0.1f);
+		return moved >= land ? moved : land;
+	}
+	if (land > sky)
+	{
+		const float moved = (time * 0.1f) + sky;
+		return moved <= land ? moved : land;
+	}
+	return sky;
 }
 
 /// A script can change an alignment only by an amount from -1 to 1. Other amounts, and an amount that is not a number,
@@ -64,15 +106,20 @@ struct PlayerAtPlace
 	return change >= -1.0f && change <= 1.0f;
 }
 
-/// The alignment after an amount is added to it at once, held between -1 and 1. A sum that is not a number becomes -1.
-[[nodiscard]] inline float AddedAlignment(float alignment, float change)
+/// An alignment held between -1 and 1. A value that is not a number becomes -1.
+[[nodiscard]] inline float HeldAlignment(float alignment)
 {
-	const float sum = alignment + change;
-	if (!(sum >= -1.0f))
+	if (!(alignment >= -1.0f))
 	{
 		return -1.0f;
 	}
-	return sum > 1.0f ? 1.0f : sum;
+	return alignment > 1.0f ? 1.0f : alignment;
+}
+
+/// The alignment after an amount is added to it at once, held between -1 and 1. A sum that is not a number becomes -1.
+[[nodiscard]] inline float AddedAlignment(float alignment, float change)
+{
+	return HeldAlignment(alignment + change);
 }
 
 } // namespace alignment
@@ -88,7 +135,7 @@ public:
 
 	/// None for a player who isn't in the game
 	[[nodiscard]] virtual float GetPlayerAlignment(PlayerNames player) const = 0;
-	/// The alignment, held between -1 and 1
+	/// The alignment, held between -1 and 1. A value that is not a number becomes -1.
 	virtual void SetPlayerAlignment(PlayerNames player, float alignment) = 0;
 	/// Added to the alignment, held between -1 and 1, as the script's SET_ALIGNMENT does
 	virtual void AddPlayerAlignment(PlayerNames player, float change) = 0;
@@ -113,11 +160,17 @@ public:
 	/// The sky turns toward the camera's alignment, by game time, none while paused
 	virtual void Update(std::chrono::duration<float, std::milli> gameTime) = 0;
 
-	/// The alignment the camera is in, as of the last turn, from -1, evil, to 1, good, which the temple's insides are lit by
-	/// and the ambience and the land's music follow
-	[[nodiscard]] virtual float GetCameraAlignment() const = 0;
-	/// The alignment the sky shows, from -1, evil, to 1, good
-	[[nodiscard]] virtual float GetSkyAlignment() const = 0;
+	/// The value of the land at the camera, as of the last turn, from 0, good, to 2, evil (alignment::LandValue)
+	[[nodiscard]] virtual float GetCameraLand() const = 0;
+	/// The value of the land that the sky shows, from 0, good, to 2, evil. It moves to the value at the camera.
+	[[nodiscard]] virtual float GetSkyLand() const = 0;
+
+	/// The alignment at the camera that the ambience and the land's music follow, from -1, evil, to 1, good
+	[[nodiscard]] float GetCameraAlignment() const { return alignment::AudioAlignment(GetCameraLand()); }
+	/// The alignment at the camera that lights the temple's insides, from -1, evil, to 1, good
+	[[nodiscard]] float GetTempleLightAlignment() const { return alignment::TempleLightAlignment(GetCameraLand()); }
+	/// The alignment that the sky shows, from -1, evil, to 1, good: 1 less the value of the sky
+	[[nodiscard]] float GetSkyAlignment() const { return 1.0f - GetSkyLand(); }
 };
 
 } // namespace openblack::ecs::systems
