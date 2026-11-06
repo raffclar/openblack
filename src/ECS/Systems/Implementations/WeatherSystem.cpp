@@ -53,17 +53,8 @@ using components::WeatherThing;
 namespace
 {
 // The calendar: a game year is 36000 turns and the calendar starts on 5 May 1998 at 18:05:30
-constexpr float k_TurnsPerYear = 36000.0f;
 constexpr float k_DaysInYear = 365.25f;
-constexpr float k_SecondsInDay = 86400.0f;
-constexpr int32_t k_StartYear = 1998;
-constexpr int32_t k_StartMonth = 5;
-constexpr int32_t k_StartDay = 5;
-constexpr int32_t k_StartHour = 18;
-constexpr int32_t k_StartMinute = 5;
-constexpr int32_t k_StartSecond = 30;
-/// First day of the year after each month
-constexpr std::array<uint16_t, 12> k_MonthEnds = {31, 59, 90, 120, 151, 181, 212, 243, 273, 303, 333, 364};
+using climate_rules::k_MonthEnds;
 /// First day of the year after winter, spring, summer and autumn
 constexpr std::array<uint16_t, 4> k_SeasonStarts = {79, 171, 263, 354};
 
@@ -257,20 +248,6 @@ glm::vec3 CellCentre(const Climate& climate)
 
 WeatherSystem::WeatherSystem()
 {
-	// The turn the calendar starts on
-	const auto turnsPerDay = k_TurnsPerYear / k_DaysInYear;
-	_secondsPerTurn = k_SecondsInDay / turnsPerDay;
-	const auto secondsPerTurn = static_cast<double>(_secondsPerTurn);
-	const auto secondsPerYear = static_cast<double>(k_SecondsInDay * k_DaysInYear);
-	auto start = static_cast<double>(k_StartYear) * secondsPerYear / secondsPerTurn;
-	static_assert(k_StartMonth > 1);
-	start += static_cast<double>(k_MonthEnds[k_StartMonth - 2]) * k_SecondsInDay / secondsPerTurn;
-	start += static_cast<double>(k_StartDay) * k_SecondsInDay / secondsPerTurn;
-	start += static_cast<double>(k_StartHour) * k_SecondsInDay / 24.0 / secondsPerTurn;
-	start += static_cast<double>(k_StartMinute) * k_SecondsInDay / 1440.0 / secondsPerTurn;
-	start += static_cast<double>(k_StartSecond) / secondsPerTurn;
-	_startTurn = start;
-
 	_grid.resize(k_GridSize * k_GridSize);
 }
 
@@ -326,8 +303,9 @@ void WeatherSystem::Reset()
 	_climateSystemEnabled = true;
 	_stormCreationEnabled = true;
 	_forcedStorm = entt::null;
-	_day.reset();
-	_season = GetSeason(0);
+	// A new land starts on day 0 of the month in spring. The first turn that has another day of the month is a new day.
+	_day = 0;
+	_season = 0;
 	_activeStorms.clear();
 	// A new land starts with calm background weather
 	_background = {};
@@ -336,7 +314,7 @@ void WeatherSystem::Reset()
 
 float WeatherSystem::GetDaysFromStart(uint32_t turn) const
 {
-	return static_cast<float>((static_cast<double>(turn) + _startTurn) * _secondsPerTurn / k_SecondsInDay);
+	return climate_rules::DaysFromStart(_calendar, turn);
 }
 
 float WeatherSystem::GetDayOfYear(uint32_t turn) const
@@ -367,9 +345,7 @@ uint32_t WeatherSystem::GetMonth(uint32_t turn) const
 
 float WeatherSystem::GetDayOfMonth(uint32_t turn) const
 {
-	const auto day = GetDayOfYear(turn);
-	const auto month = GetMonth(turn);
-	return month > 1 && day >= static_cast<float>(k_MonthEnds.at(month - 2)) ? day - k_MonthEnds.at(month - 2) : day;
+	return climate_rules::DayOfMonth(GetDayOfYear(turn));
 }
 
 float WeatherSystem::RandomFloat(float max) const
@@ -410,7 +386,7 @@ void WeatherSystem::InitialiseClimate(Climate& climate) const
 	const auto hourFactor = k_TemperatureByHour.at(std::clamp(x87::ToInteger(hour), 0, 23));
 	const auto monthFactor = k_TemperatureByMonth.at(GetMonth(_turn));
 	const auto minimum = TempMin(info, _season);
-	climate.targetTemperature = ((TempMax(info, _season) - minimum) * hourFactor * monthFactor) + minimum;
+	climate.targetTemperature = climate_rules::TargetTemperature(minimum, TempMax(info, _season), hourFactor, monthFactor);
 	climate.temperature = climate.targetTemperature;
 
 	SPDLOG_LOGGER_DEBUG(spdlog::get("game"),
@@ -420,7 +396,7 @@ void WeatherSystem::InitialiseClimate(Climate& climate) const
 	                    climate.rainDesire, climate.rainingDays);
 
 	climate.stormCloudHeight = static_cast<float>(k_StormCloudHeight);
-	climate.stormSpeed = static_cast<float>((WindMax(info, _season) * (1.0 / 30.0)) + 0.5);
+	climate.stormSpeed = climate_rules::StormSpeed(WindMax(info, _season));
 	climate.stormLightning = k_StormLightning;
 	climate.stormOvercast = 0;
 }
@@ -481,7 +457,8 @@ void WeatherSystem::CreateClimate(int32_t index, uint32_t info, glm::vec2 positi
 	climate.cellZ = static_cast<uint16_t>(x87::ToInteger(position.y * 0.1));
 	climate.innerRadius = std::min(radius1, radius2);
 	climate.outerRadius = std::max(radius1, radius2);
-	climate.maxStorms = static_cast<uint32_t>(x87::ToInteger((climate.outerRadius * k_MaxStormsPerUnit) + 1.0f));
+	// The game counts the storms from the second radius that the script gives, also when it is the smaller one
+	climate.maxStorms = static_cast<uint32_t>(x87::ToInteger((radius2 * k_MaxStormsPerUnit) + 1.0f));
 	InitialiseClimate(climate);
 }
 
@@ -854,7 +831,7 @@ void WeatherSystem::ProcessTemperature(Climate& climate) const
 	const auto hourFactor = k_TemperatureByHour.at(std::clamp(x87::ToInteger(hour), 0, 23));
 	const auto monthFactor = k_TemperatureByMonth.at(GetMonth(_turn));
 	const auto minimum = TempMin(info, _season);
-	const auto target = ((TempMax(info, _season) - minimum) * hourFactor * monthFactor) + minimum;
+	const auto target = climate_rules::TargetTemperature(minimum, TempMax(info, _season), hourFactor, monthFactor);
 	climate.targetTemperature = target;
 
 	// The original game always moves by the full step and does not stop at the target. Thus the temperature goes
