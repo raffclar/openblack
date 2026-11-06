@@ -744,23 +744,24 @@ void testbed_scenarios::AddHand(std::vector<Scenario>& all)
 	                 {.kind = Kind::PointerTo, .delaySeconds = 1.0f, .point = {0.5f, 0.7f}}},
 	});
 
-	// The camera looks at a storage pit with wood in all five of its wood piles. The hand scoops from its first wood pile
+	// The camera looks at a storage pit with wood in its first two wood piles. The hand scoops from its second wood pile
 	// for eight seconds.
 	all.push_back({
 	    .id = "hand.scoop_store_pile",
 	    .name = "Scooping from a pile of a storage pit",
 	    .facet = Facet::Hand,
-	    .description = "A Celtic town of the player's with a village centre and a storage pit with 5000 wood. The hand "
-	                   "takes wood from the first wood pile of the storage pit and keeps the button down for eight "
-	                   "seconds. Then it lets go of the button and moves away with the handful.",
-	    .expected = "The hand takes wood for all of the eight seconds, also after the first pile is empty. The wood "
-	                "comes from all of the storage pit: the first pile sinks, then the last wood pile sinks and then the "
-	                "piles before it. The handful holds more than the first pile held.",
+	    .description = "A Celtic town of the player's with a village centre and a storage pit with 6000 wood. The "
+	                   "first wood pile holds 5000 and the second 1000. The hand takes wood from the second wood pile "
+	                   "of the storage pit and keeps the button down for eight seconds. Then it lets go of the button "
+	                   "and moves away with the handful.",
+	    .expected = "The hand takes wood for all of the eight seconds, also after the second pile is empty. The "
+	                "wood comes from all of the storage pit: the second pile sinks, then the first pile becomes "
+	                "smaller. The handful holds much more than 1000.",
 	    .environment = {.dispenserGrid = false},
 	    .framing = {.shot = Shot::Overview, .include = {{-42.0f, 18.0f}, {-18.0f, 42.0f}}},
 	    .objects = {{.type = AbodeInfo::CelticTownCentre, .offset = {0.0f, 50.0f}},
-	                {.type = AbodeInfo::CelticStoragePit, .offset = {-30.0f, 30.0f}, .storedWood = 5000}},
-	    .commands = {{.kind = Kind::PointerOnObject, .delaySeconds = 2.0f, .value = 1, .object = 1, .amount = 0.5f},
+	                {.type = AbodeInfo::CelticStoragePit, .offset = {-30.0f, 30.0f}, .storedWood = 6000}},
+	    .commands = {{.kind = Kind::PointerOnObject, .delaySeconds = 2.0f, .value = 2, .object = 1, .amount = 0.5f},
 	                 {.kind = Kind::PointerPress, .delaySeconds = 1.0f, .value = 3},
 	                 {.kind = Kind::PointerRelease, .delaySeconds = 8.0f, .value = 3},
 	                 {.kind = Kind::PointerTo, .delaySeconds = 1.0f, .point = {0.5f, 0.7f}}},
