@@ -9,10 +9,12 @@
 
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 
 #include <array>
 #include <optional>
+#include <span>
 #include <string_view>
 #include <vector>
 
@@ -217,6 +219,17 @@ struct HandContext
 inline constexpr std::string_view k_HiddenScript = "HiddenScript";
 /// The gestures waited for, in the order they are tried
 [[nodiscard]] std::vector<Request> Requests(const HandContext& context);
+
+/// The request that the hand tries after a fight miracle that did not meet the opponent, from the request at next. The
+/// hand does not try the fight's other gestures: it tries the gestures that follow them.
+[[nodiscard]] size_t AfterFightMiss(std::span<const Request> requests, size_t next);
+
+/// The number of gesture steps in the frame's pass of the interface: one step for each message of the buttons, or one
+/// step when no button sent a message
+[[nodiscard]] constexpr uint32_t StepsOfFramePass(uint32_t buttonMessages) noexcept
+{
+	return buttonMessages > 0 ? buttonMessages : 1;
+}
 /// The event that the help counts when the hand draws the gesture of a request, none for most gestures. A scribble
 /// counts only when it is about a miracle that the hand can power up.
 [[nodiscard]] std::optional<uint32_t> HelpEventOf(const Request& request, const HandContext& context);

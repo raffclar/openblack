@@ -548,6 +548,8 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 		{
 			Locator::handGrabSystem::value().InterfaceTurn(machine_clock::Ticks(), turn);
 		}
+		// Then the gestures of this computer's hand take the places of the pointer that came, and look at the path
+		view.PlayViewStep(step, cameraPosition);
 		// A miracle locked on in the hand sends its cast again while the button stays down
 		if (Locator::magicSystem::has_value())
 		{

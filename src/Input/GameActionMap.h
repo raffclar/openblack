@@ -54,6 +54,8 @@ public:
 	[[nodiscard]] glm::ivec2 GetMouseDelta() const final;
 	[[nodiscard]] glm::ivec2 GetMousePushDelta() const final;
 	[[nodiscard]] uint32_t TakeMouseMoves() final;
+	[[nodiscard]] std::span<const glm::ivec2> TakeInterfacePlaces() final;
+	[[nodiscard]] uint32_t GetButtonMessages() const final;
 	[[nodiscard]] std::span<const glm::ivec2> GetMousePlaces() const final;
 	void DrawnMouseMessage(glm::ivec2 position) final;
 	[[nodiscard]] float GetMouseWheelDelta() const final;
@@ -124,6 +126,8 @@ private:
 	/// The keys that went down in this frame. A key that goes down and up in one frame shows as pressed for the frame,
 	/// and its release waits for the next frame.
 	std::bitset<SDL_NUM_SCANCODES> _keysDownThisFrame;
+	/// Whether the second press of a double click came in this frame
+	bool _doubleClickThisFrame {false};
 	/// The keys a script or the inspector holds down, which the keyboard doesn't
 	std::bitset<SDL_NUM_SCANCODES> _scriptedKeys;
 	std::vector<BindableActionMap> _queuedPresses;
@@ -145,6 +149,8 @@ private:
 	help::MouseMoves _helpMouseMoves;
 	/// The places that the interface got in this frame
 	std::vector<glm::ivec2> _mousePlaces;
+	/// Whether a pass of the interface took the places of the last TakeMouseMoves
+	bool _interfaceTookPlaces {false};
 	float _mouseWheelDelta = 0.0f;
 	/// The mouse's wheel has turned since the game started
 	bool _wheelTurned {false};

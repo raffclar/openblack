@@ -230,3 +230,52 @@ TEST(GestureSystem, TheMoveButtonHeldInAFightWipesThePath)
 	drawn(false, 2);
 	EXPECT_EQ(system.GetPath().Count(), 2u);
 }
+
+TEST(GestureSystem, TheTurnPassSamplesThePlacesThatCameSinceTheLastPass)
+{
+	GestureSystem system;
+	auto turn = Frame(k_FrameSeconds);
+	turn.places = {{100.0f, 100.0f}, {140.0f, 100.0f}};
+	system.InterfaceTurn(turn);
+	ASSERT_EQ(system.GetPath().Count(), 2u);
+	EXPECT_EQ(system.GetPath().At(1).screen, glm::vec2(140.0f, 100.0f));
+	// The frame's pass that follows got no more places: it adds no sample
+	auto frame = Frame(k_FrameSeconds);
+	frame.places.clear();
+	system.Update(frame);
+	EXPECT_EQ(system.GetPath().Count(), 2u);
+}
+
+TEST(GestureSystem, TheTurnPassWipesThePathWhileTheCameraMovedInItsLastUpdate)
+{
+	GestureSystem system;
+	auto still = Frame(k_FrameSeconds);
+	still.view.cameraEye = {0.0f, 50.0f, 0.0f};
+	system.Update(still);
+	// The camera moved before this frame's pass: the pass wipes the path
+	auto moved = Frame(k_FrameSeconds);
+	moved.view.cameraEye = {5.0f, 50.0f, 0.0f};
+	system.Update(moved);
+	EXPECT_TRUE(system.GetPath().Empty());
+	// The turn that follows sees the same camera, which moved in its last update: its samples go too
+	auto turn = Frame(k_FrameSeconds);
+	turn.view.cameraEye = moved.view.cameraEye;
+	system.InterfaceTurn(turn);
+	EXPECT_TRUE(system.GetPath().Empty());
+	// The camera stays still in the next update: the path keeps the samples of the frame and of the turn
+	auto stillAgain = Frame(k_FrameSeconds);
+	stillAgain.view.cameraEye = moved.view.cameraEye;
+	system.Update(stillAgain);
+	system.InterfaceTurn(turn);
+	EXPECT_EQ(system.GetPath().Count(), 2u);
+}
+
+TEST(GestureSystem, TheMessagesOfTheButtonsDoNotSampleThePlacesAgain)
+{
+	GestureSystem system;
+	auto frame = Frame(k_FrameSeconds);
+	frame.places = {{100.0f, 100.0f}, {140.0f, 100.0f}, {180.0f, 100.0f}};
+	frame.buttonMessages = 3;
+	system.Update(frame);
+	EXPECT_EQ(system.GetPath().Count(), 3u);
+}
