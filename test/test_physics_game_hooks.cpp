@@ -13,6 +13,7 @@
 // what the hand threw.
 
 #include <algorithm>
+#include <bit>
 #include <map>
 #include <memory>
 #include <optional>
@@ -25,6 +26,7 @@
 #include <gtest/gtest.h>
 
 #include "3D/ModelSurface.h"
+#include "Common/GUtilsAngle.h"
 #include "Common/GameRandom.h"
 #include "Common/ModelInverseSquareRoot.h"
 #include "Creature/CreatureDeeds.h"
@@ -43,6 +45,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/Vortex.h"
+#include "ECS/Components/WallHug.h"
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/PhysicsEntry.h"
 #include "ECS/PhysicsGameHooks.h"
@@ -681,6 +684,31 @@ TEST(PhysicsGameHooks, AnAnimalTheHandDroppedInTheSeaTeachesTheLocalPlayersCreat
 	EXPECT_EQ(f.world->deeds[0].deed, living::k_DeedThrowInTheSea);
 	EXPECT_EQ(f.world->deeds[0].player, PlayerNames::PLAYER_ONE);
 	EXPECT_EQ(f.world->removed, std::vector<entt::entity> {animal});
+}
+
+TEST(PhysicsGameHooks, ALandedAnimalKeepsTheLandingHeadingAsItIsAndItsWalkFacesTheSameWay)
+{
+	Fixture f;
+	auto& registry = f.world->registry;
+	const auto animal = registry.Create();
+	registry.Assign<Animal>(animal).move.angle = 100;
+	registry.Assign<Transform>(animal, glm::vec3(1.0f, 2.0f, 3.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+	auto& walk = registry.Assign<WallHug>(animal);
+	walk.yAngle = 0.0f;
+	walk.gameAngle = 100;
+	auto& entry = f.dynamics.AddRock(animal, glm::vec3(0.0f), std::nullopt);
+	// The body comes down on its feet, turned by an angle that the way back from its matrix does not give exactly
+	const auto axes = living::HeadingAxes(2.3f);
+	entry.body->SetUpPose({.axes = axes, .origin = glm::vec3(1.0f, 2.0f, 3.0f)});
+	const float heading = living::AnimalLandingHeading(entry.body->Axes());
+	const auto steps = static_cast<uint16_t>(gutils::ConvertAngle3DToGame(heading));
+	EXPECT_EQ(f.hooks->EndPhysics(f.dynamics, &entry, animal, false), animal);
+	const auto& landed = registry.Get<const Animal>(animal);
+	EXPECT_EQ(std::bit_cast<uint32_t>(landed.heading), std::bit_cast<uint32_t>(heading));
+	EXPECT_EQ(std::bit_cast<uint32_t>(landed.previousHeading), std::bit_cast<uint32_t>(heading));
+	EXPECT_EQ(landed.move.angle, steps);
+	EXPECT_EQ(std::bit_cast<uint32_t>(walk.yAngle), std::bit_cast<uint32_t>(heading));
+	EXPECT_EQ(walk.gameAngle, steps);
 }
 
 TEST(PhysicsGameHooks, AnAnimalThatTheHandOfAComputerGodDroppedInTheSeaIsTheDeedOfThatGod)
