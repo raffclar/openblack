@@ -315,31 +315,41 @@ bool DryLandAt(glm::vec3 position)
 	return land != nullptr && land->properties.hasWater == 0;
 }
 
-/// Whether a new house may go up where a plan has it: near enough another town it may at once; elsewhere it needs dry
-/// land and no building standing in its way
-bool TakesNewHouse(entt::entity town, entt::entity plan)
+/// Whether a new building of a town may go up at a place, turned and at a scale. Near enough another town, it may go up
+/// at once. Elsewhere it needs dry land and no building in its way. A building of no town always needs these.
+bool FitsAsTownBuilding(entt::entity town, MeshId mesh, glm::vec3 place, const glm::mat3& rotation, float scale)
 {
-	auto& registry = Entities();
-	const auto& transform = registry.Get<const Transform>(plan);
-	const glm::ivec2 cell(CellOfMetres(transform.position.x), CellOfMetres(transform.position.z));
-	if (planned_building::WithinNearestOtherTown(cell, OtherTowns(town)))
+	const glm::ivec2 cell(CellOfMetres(place.x), CellOfMetres(place.z));
+	if (town != entt::null && planned_building::WithinNearestOtherTown(cell, OtherTowns(town)))
 	{
 		return true;
 	}
-	const auto meshId = resources::HashIdentifier(InfoOf(registry.Get<const PlannedAbode>(plan).info).meshId);
+	if (!Locator::resources::has_value() || !Locator::entitiesMap::has_value())
+	{
+		return true;
+	}
+	const auto meshId = resources::HashIdentifier(mesh);
 	const auto& meshes = Locator::resources::value().GetMeshes();
-	if (!meshes.Contains(meshId) || !Locator::entitiesMap::has_value())
+	if (!meshes.Contains(meshId))
 	{
 		return true;
 	}
 	const auto box = meshes.Handle(meshId)->GetBoundingBox();
 	const auto halfSize = box.Size() * 0.5f;
-	const float scale = transform.scale.x;
 	const float reach = std::max(halfSize.x, halfSize.z) * scale;
-	const auto outline = map_cells::OutlineOfBox(transform.position, transform.rotation, scale, box.Center(), halfSize);
-	const auto nearby = BuildingsInOutline(outline, transform.position);
+	const auto outline = map_cells::OutlineOfBox(place, rotation, scale, box.Center(), halfSize);
+	const auto nearby = BuildingsInOutline(outline, place);
 	const auto footprint = FootprintOf(nearby);
-	return planned_building::IsClearToBuild(footprint, DryLandAt(transform.position), reach);
+	return planned_building::IsClearToBuild(footprint, DryLandAt(place), reach);
+}
+
+/// Whether a new house may go up where a plan has it
+bool TakesNewHouse(entt::entity town, entt::entity plan)
+{
+	auto& registry = Entities();
+	const auto& transform = registry.Get<const Transform>(plan);
+	return FitsAsTownBuilding(town, InfoOf(registry.Get<const PlannedAbode>(plan).info).meshId, transform.position,
+	                          transform.rotation, transform.scale.x);
 }
 
 /// A building of a town goes up at a place, turned, scaled and with a part of it built. A miracle dispenser goes up as a
@@ -649,6 +659,16 @@ bool town_planning::SolidToNewBuilding(const Registry& registry, entt::entity th
 {
 	return registry.AnyOf<Abode, Feature, AnimatedStatic, Flowers, BigForest, SpellDispenser, TeleportStone, WorshipSite,
 	                      WorshipAltar, WorshipIcon, Temple, VillageTotem, FishFarm>(thing);
+}
+
+bool town_planning::FitsInTown(entt::entity town, AbodeInfo info, glm::vec3 place, float yAngle, float scale)
+{
+	return FitsAsTownBuilding(town, InfoOf(info).meshId, place, glm::mat3(portable_math::EulerAngleY(-yAngle)), scale);
+}
+
+bool town_planning::FitsAsFixed(glm::vec3 place, MeshId mesh, float yAngle, float scale)
+{
+	return FitsAsTownBuilding(entt::null, mesh, place, glm::mat3(portable_math::EulerAngleY(-yAngle)), scale);
 }
 
 bool town_planning::FitsForScaffold(glm::vec3 place, MeshId mesh, float yAngle, float scale, entt::entity ignored)

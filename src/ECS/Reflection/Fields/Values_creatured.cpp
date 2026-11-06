@@ -97,6 +97,7 @@ void openblack::ecs::reflection::RegisterFields_Values_creatured(entt::meta_ctx&
 	    .Field<&openblack::creature_desires::DesireState::decay>("decay")
 	    .Field<&openblack::creature_desires::DesireState::increaseSeconds>("increaseSeconds")
 	    .Field<&openblack::creature_desires::DesireState::suppressedTurns>("suppressedTurns")
+	    .Field<&openblack::creature_desires::DesireState::losesPlan>("losesPlan")
 	    .Field<&openblack::creature_desires::DesireState::weight>("weight")
 	    .Field<&openblack::creature_desires::DesireState::carriedOut>("carriedOut")
 	    .Field<&openblack::creature_desires::DesireState::sources>("sources");

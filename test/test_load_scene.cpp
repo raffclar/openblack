@@ -9,6 +9,7 @@
 
 #include <3D/LandIslandInterface.h>
 #include <ECS/Components/Abode.h>
+#include <ECS/Components/Construction.h>
 #include <ECS/Components/Footpath.h>
 #include <ECS/Components/MiracleImpression.h>
 #include <ECS/Components/Mobile.h>
@@ -119,6 +120,78 @@ CREATE_ABODE(0, "1280.04,1280.04", "CELTIC_ABODE_F", 11100, 1095, 0, 0)
 		++abodes;
 	});
 	EXPECT_EQ(abodes, 1u);
+}
+
+TEST_F(LoadScene, a_town_centre_goes_up_only_where_it_fits_in_its_town)
+{
+	// The first centre stands on the house of its town, so the script makes nothing for it. The second has free land.
+	LoadTestScene(R""""(
+VERSION(2.300000)
+LOAD_LANDSCAPE(".\Data\Landscape\Land1.lnd")
+CREATE_TOWN(0, "1300.00,1300.00", "PLAYER_ONE", 0, "CELTIC")
+CREATE_ABODE(0, "1280.04,1280.04", "CELTIC_ABODE_F", 0, 1000, 0, 0)
+CREATE_TOWN_CENTRE(0, "1280.04,1280.04", "CELTIC_ABODE_TOWN_CENTRE", 0, 1000, 300)
+)"""");
+	const auto& registry = openblack::Locator::entitiesRegistry::value();
+	size_t abodes = 0;
+	registry.Each<const openblack::ecs::components::Abode>([&abodes](entt::entity, const auto&) { ++abodes; });
+	EXPECT_EQ(abodes, 1u);
+
+	LoadTestScene(R""""(
+VERSION(2.300000)
+CREATE_TOWN_CENTRE(0, "1320.00,1320.00", "CELTIC_ABODE_TOWN_CENTRE", 0, 1000, 300)
+)"""");
+	abodes = 0;
+	registry.Each<const openblack::ecs::components::Abode>([&abodes](entt::entity, const auto&) { ++abodes; });
+	EXPECT_EQ(abodes, 2u);
+}
+
+TEST_F(LoadScene, a_temple_goes_up_only_where_no_building_stands_in_its_way)
+{
+	// The first temple stands on a house, so the script makes nothing for it. The second has free land.
+	LoadTestScene(R""""(
+VERSION(2.300000)
+LOAD_LANDSCAPE(".\Data\Landscape\Land1.lnd")
+CREATE_TOWN(0, "1300.00,1300.00", "PLAYER_ONE", 0, "CELTIC")
+CREATE_ABODE(0, "1280.04,1280.04", "CELTIC_ABODE_F", 0, 1000, 0, 0)
+CREATE_CITADEL("1280.04,1280.04", 0, "PLAYER_ONE", 0, 1000)
+)"""");
+	const auto& registry = openblack::Locator::entitiesRegistry::value();
+	size_t temples = 0;
+	registry.Each<const openblack::ecs::components::Temple>([&temples](entt::entity, const auto&) { ++temples; });
+	EXPECT_EQ(temples, 0u);
+
+	LoadTestScene(R""""(
+VERSION(2.300000)
+CREATE_CITADEL("1360.00,1360.00", 0, "PLAYER_ONE", 0, 500)
+)"""");
+	registry.Each<const openblack::ecs::components::Temple>([&temples, &registry](entt::entity temple, const auto&) {
+		// The temple has its full size, whatever size the line gives
+		EXPECT_EQ(registry.Get<const openblack::ecs::components::Transform>(temple).scale, glm::vec3(1.0f));
+		++temples;
+	});
+	EXPECT_EQ(temples, 1u);
+}
+
+TEST_F(LoadScene, a_temple_is_planned_only_for_a_town_that_is_there)
+{
+	LoadTestScene(R""""(
+VERSION(2.300000)
+LOAD_LANDSCAPE(".\Data\Landscape\Land1.lnd")
+CREATE_TOWN(0, "1300.00,1300.00", "PLAYER_ONE", 0, "CELTIC")
+CREATE_PLANNED_CITADEL(5, "1360.00,1360.00", 0, "PLAYER_ONE", 0, 1000)
+)"""");
+	const auto& registry = openblack::Locator::entitiesRegistry::value();
+	size_t plans = 0;
+	registry.Each<const openblack::ecs::components::PlannedTemple>([&plans](entt::entity, const auto&) { ++plans; });
+	EXPECT_EQ(plans, 0u);
+
+	LoadTestScene(R""""(
+VERSION(2.300000)
+CREATE_PLANNED_CITADEL(0, "1360.00,1360.00", 0, "PLAYER_ONE", 0, 1000)
+)"""");
+	registry.Each<const openblack::ecs::components::PlannedTemple>([&plans](entt::entity, const auto&) { ++plans; });
+	EXPECT_EQ(plans, 1u);
 }
 
 TEST_F(LoadScene, a_temple_and_its_heart_keep_the_map_position_that_the_game_reads)

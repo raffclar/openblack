@@ -202,6 +202,10 @@ private:
 	/// CreatureFightSystemInterface::CallOffForPlan). The best plan that the creature chooses and a copied deed do this.
 	bool Adopt(entt::entity creature, components::CreatureMindState& mind, const creature_planner::Plan& plan,
 	           const creature_plan_actions::Situation& situation, bool fightBodyEndsAgain);
+	/// Starts the best plan of the desires when it is pressing enough, unless an agenda that the creature was made to do
+	/// continues
+	void ChoosePlan(entt::entity creature, components::CreatureMindState& mind,
+	                const creature_plan_actions::Situation& situation);
 	/// Gives up the plan carried out, if any
 	static void Abandon(components::CreatureMindState& mind);
 	/// A joint action: the asker asks another creature to be its partner, and the two become partners when it agrees;
@@ -254,10 +258,10 @@ private:
 	/// Held by the player's hand, it shows what it wants once its body is free
 	void ShowDesireOnHold(entt::entity creature, components::CreatureMindState& mind, components::CreatureAnimation& animation);
 	/// Plan the desires of one creature for this turn, a maximum of one time each turn. The planner examines the
-	/// desires for this turn, or all the desires, or only one desire. For only one desire, the creature starts the plan
+	/// desires of the round for this turn, or only one desire. For only one desire, the creature starts the plan
 	/// immediately, if there is a plan. When adopt is false, the planner only finds the plans and the creature does not
 	/// start a plan.
-	void PlanCreature(entt::entity creature, components::CreatureMindState& mind, bool everyDesire = false,
+	void PlanCreature(entt::entity creature, components::CreatureMindState& mind,
 	                  std::optional<creature_desires::Desire> only = std::nullopt, bool adopt = true);
 	/// The first desire that has a plan for a thing that the creature holds, found as for a thing on the leash. The
 	/// search uses a copy of the mind, so that the current plan does not change (CreatureMindLearning.cpp)

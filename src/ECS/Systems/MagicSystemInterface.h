@@ -194,6 +194,9 @@ public:
 	}
 	/// Whether a player may cast a magic type at a point
 	[[nodiscard]] virtual bool CanCastAt(MagicType type, PlayerNames player, glm::vec3 point) = 0;
+	/// Whether the kind of a miracle lets it go at a point, or on a thing at the point. This test has no cast rule and no
+	/// influence.
+	[[nodiscard]] virtual bool MeetsKindRule(MagicType type, glm::vec3 point, bool onThing) = 0;
 	/// Something the miracle made acts for it, as its particles would: whether the miracle acted
 	virtual bool SpellEvent(entt::entity spell, const particles::SpellEventInfo& event) = 0;
 	/// The miracle pays prayer power, or is given it back for a negative cost

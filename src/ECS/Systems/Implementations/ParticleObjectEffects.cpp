@@ -14,7 +14,6 @@
 #include <cmath>
 
 #include <algorithm>
-#include <numbers>
 
 #include <LNDFile.h>
 #include <glm/geometric.hpp>
@@ -62,7 +61,6 @@ namespace world_objects = openblack::ecs::world_objects;
 
 namespace
 {
-constexpr float k_TwoPi = 2.0f * std::numbers::pi_v<float>;
 /// The land's cells are this wide; a blast looks this much further than its range for the objects round it
 constexpr float k_CellSize = 10.0f;
 constexpr float k_WaveCellMargin = 20.0f;
@@ -262,11 +260,10 @@ void GameObjectEffects::DestroyByBeam(entt::entity object)
 	world_objects::Destroy(object);
 }
 
-void GameObjectEffects::AddRubbleMark(glm::vec3 centre)
+void GameObjectEffects::AddRubbleMark(glm::vec3 centre, float yaw)
 {
-	if (Locator::explosionSystem::has_value() && Locator::gameRandom::has_value())
+	if (Locator::explosionSystem::has_value())
 	{
-		const float yaw = Locator::gameRandom::value().LocalFloatRand(k_TwoPi);
 		Locator::explosionSystem::value().AddRubble(centre, glm::mat3(glm::eulerAngleY(yaw)), particles::blast::k_RubbleScale);
 	}
 }

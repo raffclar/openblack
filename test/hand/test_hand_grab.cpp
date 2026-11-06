@@ -14,6 +14,7 @@
 #include <array>
 #include <bit>
 #include <chrono>
+#include <limits>
 
 #include <glm/geometric.hpp>
 #include <gtest/gtest.h>
@@ -424,6 +425,14 @@ TEST(HandGrab, AThrowIsFastAcrossTheGround)
 	const glm::vec3 edge {std::bit_cast<float>(0x3FAAF1A1u), std::bit_cast<float>(0x3F9E3444u),
 	                      std::bit_cast<float>(0x3FA6578Au)};
 	EXPECT_FALSE(PotPours(edge));
+}
+
+// The pour adds the squares from z to x. Added from x to z, this speed squared is 5 and would pour.
+TEST(HandGrab, APotPoursByTheSquaresAddedFromZToXAndPoursAtANaN)
+{
+	EXPECT_FALSE(PotPours({1.0f, std::bit_cast<float>(0x3A000001u), 2.0f}));
+	EXPECT_TRUE(PotPours({2.0f, std::bit_cast<float>(0x3A000001u), 1.0f}));
+	EXPECT_TRUE(PotPours({std::numeric_limits<float>::quiet_NaN(), 0.0f, 0.0f}));
 }
 
 // A hand that holds a thing has no spin: each part of the spin is a positive zero, also where the inertia has a
