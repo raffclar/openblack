@@ -1913,7 +1913,7 @@ std::optional<float> ReactionSystem::CreatureImpressiveValue(const Active& react
 	});
 }
 
-void ReactionSystem::Impress(const Active& reaction, entt::entity living, const glm::vec3& at)
+void ReactionSystem::Impress(const Active& reaction, entt::entity living, const glm::vec3& at, bool symbol)
 {
 	const auto* info = InfoOf(reaction.source.type);
 	const auto& source = reaction.source;
@@ -1978,7 +1978,7 @@ void ReactionSystem::Impress(const Active& reaction, entt::entity living, const 
 		const float belief = ignored ? 0.0f : creature.value_or(value(boredom, villager->town)) * share;
 		magic::town_belief::Add(impression->belief, source.player, belief);
 		impression->lastImpression = belief;
-		villager_reactions::ShowBelief(living, source.player, belief, info->alignmentForSFX);
+		villager_reactions::ShowBelief(living, source.player, belief, info->alignmentForSFX, symbol);
 		// Whatever a villager is impressed by moves the player's alignment a little, by how much its town wants what it
 		// shows for those kinds that look to a desire
 		std::optional<float> desire;
@@ -2089,7 +2089,8 @@ void ReactionSystem::Impress(uint32_t id, entt::entity living)
 	{
 		return;
 	}
-	Impress(*found, living, transform->position);
+	// This impression comes from the spread of a scaffold to the near towns, which shows no symbol of the belief
+	Impress(*found, living, transform->position, false);
 }
 
 void ReactionSystem::GiveTownBelief(entt::entity town, PlayerNames player, float amount, entt::entity from,

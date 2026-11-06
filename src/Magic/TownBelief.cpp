@@ -27,6 +27,20 @@ void magic::town_belief::Add(Belief& town, PlayerNames player, float amount)
 	town.recent.at(p) += amount;
 }
 
+std::optional<int32_t> magic::town_belief::SymbolSize(float belief, bool shown)
+{
+	if (!shown)
+	{
+		return std::nullopt;
+	}
+	const auto size = static_cast<int32_t>(belief * k_SymbolScale);
+	if (size < 1)
+	{
+		return std::nullopt;
+	}
+	return size;
+}
+
 std::vector<Gained> magic::town_belief::Turn(Belief& town, float recentDecay)
 {
 	std::vector<Gained> gained;
