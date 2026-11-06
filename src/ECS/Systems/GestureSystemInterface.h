@@ -81,6 +81,8 @@ public:
 		/// Whether the Move button is held while the hand directs the fight of the player's creature. The path is
 		/// forgotten, and nothing is recognised, while it is.
 		bool moveHeldInFight {false};
+		/// Whether the game is paused. The path takes no samples while it is.
+		bool paused {false};
 	};
 
 	/// The last gesture recognised, for the debug window
