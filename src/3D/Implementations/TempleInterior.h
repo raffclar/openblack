@@ -115,6 +115,8 @@ public:
 	void Escape() override;
 	void RequestLeave() override { _leaveRequested = true; }
 	void FadeToWhite() override;
+	void ZoomToCaveTarget(size_t target) override;
+	void TurnBackRisingFade() override;
 	void CoverSkippedFlight() override;
 	[[nodiscard]] float GetFadeAmount() const override;
 	void Update(std::chrono::microseconds dt) override;

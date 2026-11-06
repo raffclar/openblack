@@ -326,6 +326,15 @@ bool Runner::GiveStoryCommand(const Command& command)
 		Log(fmt::format("{:.1f}s: the temple's camera looks at scroll {}", _seconds, command.value));
 		return true;
 	}
+	if (command.kind == Kind::ZoomToTempleCaveTarget)
+	{
+		if (Locator::temple::has_value())
+		{
+			Locator::temple::value().ZoomToCaveTarget(command.value);
+		}
+		Log(fmt::format("{:.1f}s: the temple's camera zooms to target {} of the creature's room", _seconds, command.value));
+		return true;
+	}
 	if (command.kind == Kind::LookAtSaveGamePicture)
 	{
 		if (Locator::temple::has_value())

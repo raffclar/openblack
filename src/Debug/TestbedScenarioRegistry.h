@@ -934,6 +934,9 @@ struct Command
 		/// The temple's camera looks at the picture of a slot of the save game room (value: the slot), as when the
 		/// player presses the picture. Needs no creature
 		LookAtSaveGamePicture,
+		/// In the creature's room, the temple's camera zooms to a target of the room (value: the target's place), as when
+		/// the player clicks the target. Needs no creature
+		ZoomToTempleCaveTarget,
 		/// The creature catches fire, and burns as at the start of a fire. With a value of 1, the scenario's object catches
 		/// fire in place of the creature.
 		SetAlight,

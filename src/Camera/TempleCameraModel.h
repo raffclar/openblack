@@ -12,6 +12,7 @@
 #include <cstdint>
 
 #include <array>
+#include <chrono>
 #include <optional>
 
 #include <entt/resource/resource.hpp>
@@ -134,6 +135,22 @@ public:
 	[[nodiscard]] static Pose LookPose(glm::vec3 from, float heading, float pitch);
 	/// The heading and pitch of a look at a point, as the game's camera works them out
 	[[nodiscard]] static glm::vec2 HeadingAndPitch(const Pose& look);
+	/// The seconds that the rooms' cameras and the doors step by: the whole milliseconds of the step times a thousandth
+	[[nodiscard]] static float StepSeconds(std::chrono::microseconds dt);
+	/// The time that the creature room camera takes to move to its aim, at a zoom to a target from 0 to 1
+	[[nodiscard]] static float CaveLookEaseTime(float zoom);
+	/// The creature room camera's aim at a zoom to a target, and the new heading and pitch of its look when the zoom is
+	/// all the way in
+	struct CaveAim
+	{
+		Pose aim;
+		std::optional<glm::vec2> look;
+	};
+	/// The creature room camera's aim, from its look's pose, the pose that it zooms to and the zoom from 0 to 1. The
+	/// look comes from the given point.
+	[[nodiscard]] static CaveAim CaveZoomAim(const Pose& look, const Pose& zoomed, glm::vec3 from, float zoom);
+	/// Where a room's camera starts its walk back through the door: halfway from a pose to the door, at the door's height
+	[[nodiscard]] static Pose WalkBackStart(const Pose& through, const Pose& from);
 	/// The doors start to close behind the camera once it has come in along the room's path for more than this many
 	/// seconds, at this rate
 	static constexpr float k_IntroDoorCloseTime = 0.4f;
@@ -200,6 +217,8 @@ public:
 	[[nodiscard]] std::optional<CreatureCaveTargets::Target> GetCaveTarget() const { return _caveTarget; }
 	/// Whether the camera is zooming to one of the creature's room's targets, or there
 	[[nodiscard]] bool IsZoomingToCaveTarget() const { return _caveZoomTarget == 1.0f; }
+	/// Zooms the camera to a target of the creature's room
+	void ZoomToCaveTarget(CreatureCaveTargets::Target target);
 	/// The point of the pool the island's map was double clicked at, once, in the camera's space: the player asks to
 	/// leave the temple for that place
 	[[nodiscard]] std::optional<glm::vec3> TakeMapDoubleClick() { return std::exchange(_mapDoubleClick, std::nullopt); }
@@ -252,8 +271,6 @@ private:
 	void UpdateCaveTargets(float dt, const Input& input);
 	/// The place of a point of the creature's room's mesh
 	[[nodiscard]] static std::optional<glm::vec3> CaveMeshPoint(uint32_t index);
-	/// Zooms the camera to a target of the creature's room
-	void ZoomToCaveTarget(CreatureCaveTargets::Target target);
 	/// Leaving the creature in its room closes the tattoo editor open on it
 	void LeaveCaveCreature();
 	/// Zoomed back to no target at once
@@ -263,8 +280,8 @@ private:
 	void UpdatePictureOrbit(float dt, const Input& input);
 	/// As when the temple cuts straight to a room: back to looking along the end of the room's path
 	void ResetPictureCamera(Room room);
-	/// Walks back to the main room through the door of it a room is behind
-	void WalkBackThrough(uint32_t door);
+	/// Walks back to the main room through the door of it a room is behind, from a pose
+	void WalkBackThrough(uint32_t door, const Pose& from);
 	/// The control state of a room's camera
 	[[nodiscard]] State ControlOf(Room room) const;
 	/// Where a room's camera has the player as it takes over, which its path eases into over its last second
@@ -369,6 +386,10 @@ private:
 	Pose _caveLook {};
 	float _caveZoom {0.0f};
 	float _caveZoomTarget {0.0f};
+	/// The time that the creature room camera takes to move to its aim in this step
+	float _caveEaseTime {0.15f};
+	/// The pose of the zoom is the view of the creature in the tattoo editor. The drawn camera moves straight to it.
+	bool _caveLookIsEditors {false};
 	/// Whether the mouse has moved since it was pressed, which makes the press a drag rather than a click
 	bool _pressDragged {false};
 
