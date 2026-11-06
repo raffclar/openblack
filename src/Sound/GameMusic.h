@@ -201,8 +201,8 @@ public:
 	/// The land's music at the camera
 	[[nodiscard]] MusicType SelectLandType(const TurnInputs& inputs);
 	/// The music of a fight of the player's creature: the creature fight music on the first three lands of the story,
-	/// the big fight music on later lands and in a skirmish
-	[[nodiscard]] static MusicType SelectFightType(int32_t landNumber, bool skirmish);
+	/// the big fight music on later lands, in a skirmish and in a network game
+	[[nodiscard]] static MusicType SelectFightType(int32_t landNumber, bool skirmish, bool networkGame);
 	/// The temple's music, in the version of the local player's own alignment
 	[[nodiscard]] static MusicType SelectCitadelType(const TurnInputs& inputs);
 	/// Whether the land's music may play this turn: it is turned on, the game is past its first turns, and no script

@@ -433,12 +433,12 @@ void GameMusic::ProcessMusic(const TurnInputs& inputs)
 	_landType = MusicType::None;
 }
 
-MusicType GameMusic::SelectFightType(int32_t landNumber, bool skirmish)
+MusicType GameMusic::SelectFightType(int32_t landNumber, bool skirmish, bool networkGame)
 {
 	// The land number is compared as an unsigned number, so a negative one counts as a later land
 	constexpr uint32_t k_FirstBigFightLand = 4;
-	return !skirmish && static_cast<uint32_t>(landNumber) < k_FirstBigFightLand ? MusicType::CreatureFight
-	                                                                            : MusicType::CreatureBigFight;
+	return !skirmish && !networkGame && static_cast<uint32_t>(landNumber) < k_FirstBigFightLand ? MusicType::CreatureFight
+	                                                                                            : MusicType::CreatureBigFight;
 }
 
 MusicType GameMusic::SelectCitadelType(const TurnInputs& inputs)

@@ -586,14 +586,21 @@ TEST(Music, AChannelStartsPartWayThroughItsStartChunkWhenAsked)
 
 TEST(GameMusic, FightsOnTheFirstLandsHaveTheirOwnMusicAndLaterOnesTheBigFight)
 {
-	EXPECT_EQ(GameMusic::SelectFightType(0, false), MusicType::CreatureFight);
-	EXPECT_EQ(GameMusic::SelectFightType(1, false), MusicType::CreatureFight);
-	EXPECT_EQ(GameMusic::SelectFightType(3, false), MusicType::CreatureFight);
-	EXPECT_EQ(GameMusic::SelectFightType(4, false), MusicType::CreatureBigFight);
-	EXPECT_EQ(GameMusic::SelectFightType(5, false), MusicType::CreatureBigFight);
+	EXPECT_EQ(GameMusic::SelectFightType(0, false, false), MusicType::CreatureFight);
+	EXPECT_EQ(GameMusic::SelectFightType(1, false, false), MusicType::CreatureFight);
+	EXPECT_EQ(GameMusic::SelectFightType(3, false, false), MusicType::CreatureFight);
+	EXPECT_EQ(GameMusic::SelectFightType(4, false, false), MusicType::CreatureBigFight);
+	EXPECT_EQ(GameMusic::SelectFightType(5, false, false), MusicType::CreatureBigFight);
 	// A negative land number counts as a later land
-	EXPECT_EQ(GameMusic::SelectFightType(-1, false), MusicType::CreatureBigFight);
-	EXPECT_EQ(GameMusic::SelectFightType(1, true), MusicType::CreatureBigFight);
+	EXPECT_EQ(GameMusic::SelectFightType(-1, false, false), MusicType::CreatureBigFight);
+	EXPECT_EQ(GameMusic::SelectFightType(1, true, false), MusicType::CreatureBigFight);
+}
+
+TEST(GameMusic, FightsOfANetworkGameHaveTheBigFightMusicOnEveryLand)
+{
+	EXPECT_EQ(GameMusic::SelectFightType(0, false, true), MusicType::CreatureBigFight);
+	EXPECT_EQ(GameMusic::SelectFightType(3, false, true), MusicType::CreatureBigFight);
+	EXPECT_EQ(GameMusic::SelectFightType(3, true, true), MusicType::CreatureBigFight);
 }
 
 TEST(GameMusic, WithNoBanksLoadedNoMusicHasABank)

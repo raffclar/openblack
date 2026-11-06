@@ -132,7 +132,9 @@ void GameAudioSystem::ProcessMusicTurn(glm::vec3 camera, bool inCitadel)
 	if (Locator::creatureFightSystem::has_value() && Locator::creatureFightSystem::value().FightMusicHeard(camera))
 	{
 		const auto& context = Locator::entitiesRegistry::value().Context();
-		music.creatureFight = audio::GameMusic::SelectFightType(context.mapScriptGlobals.landNumber, context.skirmish);
+		const bool networkGame = Locator::time::has_value() && Locator::time::value().IsNetworkGame();
+		music.creatureFight =
+		    audio::GameMusic::SelectFightType(context.mapScriptGlobals.landNumber, context.skirmish, networkGame);
 	}
 	Locator::entitiesRegistry::value().Each<const components::Town, const Tribe, const components::Transform>(
 	    [&music](const components::Town& town, const Tribe tribe, const components::Transform& transform) {
