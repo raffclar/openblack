@@ -8,6 +8,7 @@
  *******************************************************************************/
 
 #include <cmath>
+#include <cstdint>
 
 #include <bit>
 
@@ -90,4 +91,47 @@ TEST(ClimateRulesTest, CellNearMiddleCutsTowardsZero)
 {
 	EXPECT_EQ(climate_rules::CellNearMiddle(0.0f, 5.5f, 100, 200), glm::ivec2(105, 200));
 	EXPECT_EQ(climate_rules::CellNearMiddle(0.0f, 0.0f, 100, 200), glm::ivec2(100, 200));
+}
+
+// The game multiplies the hour factor by the month factor first, then the range of the season by that
+TEST(ClimateRulesTest, TargetTemperatureMultipliesTheFactorsFirst)
+{
+	EXPECT_EQ(climate_rules::TargetTemperature(-10.0f, -7.0f, 0.9f, 0.7f), -8.11f);
+	EXPECT_NE(climate_rules::TargetTemperature(-10.0f, -7.0f, 0.9f, 0.7f), ((-7.0f - -10.0f) * 0.9f * 0.7f) + -10.0f);
+	EXPECT_EQ(climate_rules::TargetTemperature(5.0f, 15.0f, 1.0f, 1.0f), 15.0f);
+}
+
+// The game rounds the product with the double 1/30 to a float, then adds the double 0.5
+TEST(ClimateRulesTest, StormSpeedRoundsTheProductFirst)
+{
+	EXPECT_EQ(std::bit_cast<uint32_t>(climate_rules::StormSpeed(2.75f)), std::bit_cast<uint32_t>(0.5916666984558105f));
+	EXPECT_EQ(climate_rules::StormSpeed(0.0f), 0.5f);
+}
+
+TEST(ClimateRulesTest, CalendarHasTheSecondsOfATurnAsAFloat)
+{
+	EXPECT_EQ(climate_rules::MakeCalendar().secondsPerTurn, 876.6f);
+}
+
+// The game adds the turn to the start in float precision, thus the days move on in steps of eight turns
+TEST(ClimateRulesTest, DaysFromStartMoveOnInTheFloatStepsOfTheGame)
+{
+	const auto calendar = climate_rules::MakeCalendar();
+	EXPECT_EQ(climate_rules::DaysFromStart(calendar, 0), 729895.3125f);
+	EXPECT_EQ(climate_rules::DaysFromStart(calendar, 9), 729895.375f);
+	EXPECT_EQ(climate_rules::DaysFromStart(calendar, 71), 729895.9375f);
+	EXPECT_EQ(climate_rules::DaysFromStart(calendar, 36000), 730260.5f);
+	EXPECT_EQ(climate_rules::DaysFromStart(calendar, 123456), 731147.875f);
+}
+
+TEST(ClimateRulesTest, DayOfMonthCountsFromTheEndOfTheLastMonth)
+{
+	EXPECT_EQ(climate_rules::DayOfMonth(5.5f), 5.5f);
+	EXPECT_EQ(climate_rules::DayOfMonth(30.75f), 30.75f);
+	EXPECT_EQ(climate_rules::DayOfMonth(31.0f), 0.0f);
+	EXPECT_EQ(climate_rules::DayOfMonth(125.6875f), 5.6875f);
+	EXPECT_EQ(climate_rules::DayOfMonth(363.5f), 30.5f);
+	// After the end of the last month the day counts from that end
+	EXPECT_EQ(climate_rules::DayOfMonth(364.5f), 0.5f);
+	EXPECT_EQ(climate_rules::DayOfMonth(365.0f), 1.0f);
 }

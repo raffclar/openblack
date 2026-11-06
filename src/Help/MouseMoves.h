@@ -12,6 +12,7 @@
 #include <cstdint>
 
 #include <optional>
+#include <span>
 #include <vector>
 
 #include <glm/vec2.hpp>
@@ -76,6 +77,10 @@ public:
 	void Wait(uint32_t milliseconds, glm::ivec2 position, bool stillMessages);
 	/// The interface's frame: the number of places that it got that are not the same as the place before
 	[[nodiscard]] uint32_t TakeMoves();
+	/// The interface's frame: the places that it got since the last frame, in the sequence that they came
+	[[nodiscard]] std::vector<glm::ivec2> TakePlaces();
+	/// The number of places that are not the same as the place before. The last of the places becomes the place before.
+	[[nodiscard]] uint32_t CountMoves(std::span<const glm::ivec2> places);
 
 private:
 	std::optional<uint32_t> _lastMessage;
