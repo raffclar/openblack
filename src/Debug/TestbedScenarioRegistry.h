@@ -417,6 +417,8 @@ struct ObjectSetup
 	bool notPlannedAgain {false};
 	/// The crop of a field is fully sown and ripe, with all the food of its type. If false, the field is not sown.
 	bool ripeCrop {false};
+	/// The crop of a field is fully sown, with no age and no food yet, so it starts to grow at once
+	bool sownCrop {false};
 	/// A firefly hides exactly where the thing stands, as a land's script places one
 	bool firefly {false};
 	/// The thing is set alight as it is made, burning as at the start of a fire

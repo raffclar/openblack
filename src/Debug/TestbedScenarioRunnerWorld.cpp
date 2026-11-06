@@ -269,6 +269,19 @@ void RipenCrop(entt::entity field, FieldTypeInfo type, bool ripe)
 	state->crop = {.timesSown = static_cast<uint8_t>(info.timesToSow), .age = info.ageRecolt, .food = info.totalFoodInField};
 }
 
+void SowCrop(entt::entity field, FieldTypeInfo type, bool sown)
+{
+	auto* state =
+	    sown && field != entt::null ? Locator::entitiesRegistry::value().TryGet<ecs::components::Field>(field) : nullptr;
+	const auto& types = Locator::infoConstants::value().fieldType;
+	const auto row = static_cast<size_t>(type);
+	if (state == nullptr || row >= types.size())
+	{
+		return;
+	}
+	state->crop = {.timesSown = static_cast<uint8_t>(types.at(row).timesToSow)};
+}
+
 void SetLifeAndPoison(entt::entity entity, const ObjectSetup& object)
 {
 	auto& registry = Locator::entitiesRegistry::value();
@@ -758,6 +771,7 @@ void Runner::PlaceObjects(const Scenario& scenario, glm::vec2 middle)
 				    const auto field =
 				        ecs::archetypes::FieldArchetype::Create(static_cast<int>(ScenarioTown(middle)), position, type, yaw);
 				    RipenCrop(field, type, object.ripeCrop);
+				    SowCrop(field, type, object.sownCrop);
 				    return field;
 			    }
 			    else if constexpr (std::is_same_v<T, AnimalInfo>)

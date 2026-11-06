@@ -33,8 +33,11 @@ class FieldSystemInterface
 public:
 	virtual ~FieldSystemInterface() = default;
 
-	/// Once a game turn: each field's crop grows on its own turn in every ten, by the land's alignment and the weather
+	/// Once a game turn: the game passes over all fields. Each field ages, and its crop grows on its own turn in every
+	/// ten, by the land's alignment and the weather.
 	virtual void ProcessTurn(uint32_t turn) = 0;
+	/// One pass over a field: its crop grows on its own turn in every ten. The turn of its town also makes this pass.
+	virtual void ProcessField(entt::entity field, uint32_t turn) = 0;
 	/// Once a frame: the crops that show ease towards the height their food puts them at
 	virtual void Update(std::chrono::duration<float, std::milli> gameTime) = 0;
 

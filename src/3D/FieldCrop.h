@@ -83,6 +83,11 @@ enum class Activity : uint8_t
 /// rate for the weather, and fills with food in step
 void Grow(Crop& crop, const Type& type, float alignment, bool raining);
 
+/// One pass of the game over a field in a turn. On the field's own turn of growth the crop grows, else nothing occurs.
+/// The game makes two passes in each turn over a field of a town: one in the turn of the town and one over all fields.
+/// It makes one pass over a field with no town.
+void Pass(Crop& crop, const Type& type, uint32_t turn, uint32_t growthTurn, float alignment, bool raining);
+
 /// How the crop looks while it shows
 struct Look
 {

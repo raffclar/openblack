@@ -72,6 +72,26 @@ TEST(FieldCrop, StopsOncePastRipe)
 	EXPECT_FLOAT_EQ(crop.age, 204.0f);
 }
 
+TEST(FieldCrop, APassGrowsTheCropOnlyOnTheFieldsTurnOfGrowth)
+{
+	field_crop::Crop crop {.timesSown = 4};
+	// Turn 13 with growth turn 7 is the field's turn of the ten; turn 14 is not
+	field_crop::Pass(crop, k_Type, 14, 7, 0.0f, false);
+	EXPECT_FLOAT_EQ(crop.age, 0.0f);
+	field_crop::Pass(crop, k_Type, 13, 7, 0.0f, false);
+	EXPECT_FLOAT_EQ(crop.age, 2.0f);
+}
+
+TEST(FieldCrop, TheTwoPassesOverATownsFieldGrowItTwiceInItsTurn)
+{
+	// The town's turn and the pass over all fields both reach a field of a town
+	field_crop::Crop crop {.timesSown = 4};
+	field_crop::Pass(crop, k_Type, 20, 0, 0.0f, false);
+	field_crop::Pass(crop, k_Type, 20, 0, 0.0f, false);
+	EXPECT_FLOAT_EQ(crop.age, 4.0f);
+	EXPECT_FLOAT_EQ(crop.food, 20.0f);
+}
+
 TEST(FieldCrop, ShowsOnceGrownALittleWithSomeFood)
 {
 	EXPECT_FALSE(field_crop::LookOf({.timesSown = 4, .age = 24.0f, .food = 500.0f}, k_Type, 10).has_value());

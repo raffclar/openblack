@@ -12,15 +12,18 @@
 #include "FieldSystem.h"
 
 #include <algorithm>
+#include <vector>
 
 #include <glm/gtx/vec_swizzle.hpp>
 
 #include "Common/GUtilsDistance.h"
+#include "ECS/Components/Abode.h"
 #include "ECS/Components/Field.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/GamePlayers.h"
 #include "ECS/Registry.h"
+#include "ECS/StatisticsRules.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
@@ -86,13 +89,31 @@ bool IsRaining(const glm::vec3& position)
 
 void FieldSystem::ProcessTurn(uint32_t turn)
 {
-	Locator::entitiesRegistry::value().Each<Field, const Transform>([turn](Field& field, const Transform& transform) {
-		if ((turn + field.growthTurn) % field_crop::k_TurnsPerGrowth != 0)
+	auto& registry = Entities();
+	std::vector<entt::entity> fields;
+	registry.Each<const Field>([&fields](entt::entity entity, const Field&) { fields.push_back(entity); });
+	for (const auto field : fields)
+	{
+		// The pass over all fields ages each field as the pass of a town ages its buildings
+		if (auto* abode = registry.TryGet<Abode>(field))
 		{
-			return;
+			abode->age = statistics::AgedOnePass(abode->age);
 		}
-		field_crop::Grow(field.crop, TypeOf(field.type), LandAlignment(transform.position), IsRaining(transform.position));
-	});
+		ProcessField(field, turn);
+	}
+}
+
+void FieldSystem::ProcessField(entt::entity field, uint32_t turn)
+{
+	auto& registry = Entities();
+	auto* data = registry.Valid(field) ? registry.TryGet<Field>(field) : nullptr;
+	const auto* transform = data != nullptr ? registry.TryGet<const Transform>(field) : nullptr;
+	if (transform == nullptr)
+	{
+		return;
+	}
+	field_crop::Pass(data->crop, TypeOf(data->type), turn, data->growthTurn, LandAlignment(transform->position),
+	                 IsRaining(transform->position));
 }
 
 void FieldSystem::Update(std::chrono::duration<float, std::milli> gameTime)

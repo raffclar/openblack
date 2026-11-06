@@ -22,6 +22,7 @@ class FieldSystem final: public FieldSystemInterface
 {
 public:
 	void ProcessTurn(uint32_t turn) override;
+	void ProcessField(entt::entity field, uint32_t turn) override;
 	void Update(std::chrono::duration<float, std::milli> gameTime) override;
 	[[nodiscard]] std::optional<field_crop::Look> GetLook(const components::Field& field) const override;
 	[[nodiscard]] field_crop::Activity GetActivity(entt::entity field) const override;

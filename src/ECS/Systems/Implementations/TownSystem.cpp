@@ -66,6 +66,7 @@
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/ArtefactSystemInterface.h"
 #include "ECS/Systems/EffectRequestSystemInterface.h"
+#include "ECS/Systems/FieldSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/FootballSystemInterface.h"
 #include "ECS/Systems/GameEndSystemInterface.h"
@@ -1013,6 +1014,7 @@ void TownSystem::PassOverBuildings(entt::entity townEntity, InfluenceSystemInter
 			influence->AddBuildingInfluence(townEntity, building);
 		}
 	};
+	const auto turn = Locator::time::has_value() ? Locator::time::value().GetTurn() : 0;
 	const auto abodes = registry.Get<const Town>(townEntity).abodes;
 	for (const auto abode : abodes)
 	{
@@ -1043,6 +1045,11 @@ void TownSystem::PassOverBuildings(entt::entity townEntity, InfluenceSystemInter
 		if (auto* data = registry.Valid(abode) ? registry.TryGet<Abode>(abode) : nullptr)
 		{
 			data->age = statistics::AgedOnePass(data->age);
+			// A field of the town also has its pass here. The pass over all fields later in the turn is a second pass.
+			if (registry.AllOf<Field>(abode) && Locator::fieldSystem::has_value())
+			{
+				Locator::fieldSystem::value().ProcessField(abode, turn);
+			}
 			addInfluence(abode);
 		}
 	}
