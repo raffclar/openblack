@@ -98,10 +98,7 @@ void main()
 	vec2 luminosityCell = floor((transformedPosition.xz - extentMin) / 10.0f + 0.5f);
 	float luminosity =
 	    floor(texture2DLod(s9_landLuminosity, (luminosityCell + 0.5f) / luminosityTexels, 0.0f).r * 255.0f + 0.5f);
-	// Each vertex takes the colour of its luminosity, each channel scaled down and rounded down, and the colours are
-	// blended across the land between them
 	vec3 light = texture2DLod(s7_landLight, vec2((luminosity + 0.5f) / 256.0f, 0.5f), 0.0f).rgb;
-	v_lightColour = floor(light * 255.0f * u_skyAndBump.y + 0.001f) / 255.0f;
 
 	v_shadowCoord = vec4_splat(0.0f);
 	v_world = transformedPosition;
@@ -111,12 +108,15 @@ void main()
 	v_shadowCoord.w = aboveWater;
 
 	vec4 cs_position = mul(u_view, vec4(transformedPosition, 1.0f));
-	// The distance haze, per vertex: rgb the haze's colour added, a what the land's light is scaled by
+	// The distance haze, per vertex
 	float hazeT = HazeT(cs_position.z);
+	// Each vertex takes the colour of its luminosity. The game scales each channel at the vertex and rounds it down: first
+	// by the brightness of the land, then by the haze. The land blends the vertex colours between the vertices.
+	v_lightColour = HazeDiffuse(floor(light * 255.0f * u_skyAndBump.y + 0.001f), HazeFactor(hazeT)) / 255.0f;
 	// The haze is added with the colour of the vertex's cell corner, each channel at most white
 	vec3 cellColour =
 	    floor(texture2DLod(s10_landColour, (luminosityCell + 0.5f) / luminosityTexels, 0.0f).rgb * 255.0f + 0.5f);
-	v_haze = vec4(min(HazeColour(hazeT) + cellColour, vec3_splat(255.0f)) / 255.0f, HazeFactor(hazeT) / 256.0f);
+	v_haze = vec4(min(HazeColour(hazeT) + cellColour, vec3_splat(255.0f)) / 255.0f, 1.0f);
 
 	// The small bump detail is drawn over the land near the camera. It is full up to 20 units before a line across the
 	// ground ahead of the camera, and gone 20 units past it. It is never drawn at the water's edge, below altitude 2,
