@@ -10,6 +10,7 @@
 #include <gtest/gtest.h>
 
 #include "Help/ClickCue.h"
+#include "Input/MouseWheel.h"
 
 using namespace openblack::help::click_cue;
 
@@ -25,7 +26,7 @@ TEST(ClickCue, TheButtonBlinksTwoTenthsOfEveryHalfSecond)
 TEST(ClickCue, SitsAtTheRightOfTheBoxsBottomThird)
 {
 	// A box 90 rows tall: the cue a third of it, its word two thirds of that
-	const auto cue = Layout(1280, 600, 689, 1.0f, 50.0f, false, 0);
+	const auto cue = Layout(1280, 600, 689, 1.0f, 50.0f, false, 0, 2);
 	ASSERT_TRUE(cue.has_value());
 	EXPECT_EQ(cue->mouse.min, glm::vec2(1246.0f, 660.0f));
 	EXPECT_EQ(cue->mouse.max, glm::vec2(1276.0f, 690.0f));
@@ -38,11 +39,11 @@ TEST(ClickCue, SitsAtTheRightOfTheBoxsBottomThird)
 
 TEST(ClickCue, TheLeftButtonIsTheRightOneMirrored)
 {
-	const auto lit = Layout(1280, 600, 689, 1.0f, 50.0f, false, 0);
+	const auto lit = Layout(1280, 600, 689, 1.0f, 50.0f, false, 0, 2);
 	ASSERT_TRUE(lit.has_value());
 	EXPECT_EQ(lit->uvMin, glm::vec2(0.5f, 0.5f));
 	EXPECT_EQ(lit->uvMax, glm::vec2(0.25f, 0.75f));
-	const auto dark = Layout(1280, 600, 689, 1.0f, 50.0f, false, 300);
+	const auto dark = Layout(1280, 600, 689, 1.0f, 50.0f, false, 300, 2);
 	ASSERT_TRUE(dark.has_value());
 	EXPECT_EQ(dark->uvMin, glm::vec2(0.25f, 0.5f));
 	EXPECT_EQ(dark->uvMax, glm::vec2(0.0f, 0.75f));
@@ -51,8 +52,8 @@ TEST(ClickCue, TheLeftButtonIsTheRightOneMirrored)
 TEST(ClickCue, FadesInWithItsGlows)
 {
 	// Too faint to draw at first
-	EXPECT_FALSE(Layout(1280, 600, 689, 0.01f, 50.0f, false, 0).has_value());
-	const auto half = Layout(1280, 600, 689, 0.5f, 50.0f, false, 0);
+	EXPECT_FALSE(Layout(1280, 600, 689, 0.01f, 50.0f, false, 0, 2).has_value());
+	const auto half = Layout(1280, 600, 689, 0.5f, 50.0f, false, 0, 2);
 	ASSERT_TRUE(half.has_value());
 	EXPECT_FLOAT_EQ(half->labelColour.a, 127.0f / 255.0f);
 	EXPECT_FLOAT_EQ(half->mouseColour.a, 127.0f / 255.0f);
@@ -60,4 +61,25 @@ TEST(ClickCue, FadesInWithItsGlows)
 	EXPECT_FLOAT_EQ(half->labelGlowColour.a, 21.0f / 255.0f);
 	EXPECT_EQ(half->labelColour, glm::vec4(1.0f, 1.0f, 0.0f, 127.0f / 255.0f));
 	EXPECT_EQ(half->shadowColour, glm::vec4(0.0f, 0.0f, 0.0f, 127.0f / 255.0f));
+}
+
+TEST(ClickCue, TheMouseIsInTheRowOfThePlayersMouse)
+{
+	using openblack::platform_mouse::MousePictureRow;
+	// A wheel mouse, a mouse with more than two buttons, and a two-button mouse
+	EXPECT_EQ(MousePictureRow(true, 2), 2);
+	EXPECT_EQ(MousePictureRow(true, 0), 2);
+	EXPECT_EQ(MousePictureRow(false, 3), 1);
+	EXPECT_EQ(MousePictureRow(false, 5), 1);
+	EXPECT_EQ(MousePictureRow(false, 2), 0);
+	EXPECT_EQ(MousePictureRow(false, 0), 0);
+
+	const auto twoButtons = Layout(1280, 600, 689, 1.0f, 50.0f, false, 300, MousePictureRow(false, 2));
+	ASSERT_TRUE(twoButtons.has_value());
+	EXPECT_EQ(twoButtons->uvMin, glm::vec2(0.25f, 0.0f));
+	EXPECT_EQ(twoButtons->uvMax, glm::vec2(0.0f, 0.25f));
+	const auto threeButtons = Layout(1280, 600, 689, 1.0f, 50.0f, false, 300, MousePictureRow(false, 3));
+	ASSERT_TRUE(threeButtons.has_value());
+	EXPECT_EQ(threeButtons->uvMin, glm::vec2(0.25f, 0.25f));
+	EXPECT_EQ(threeButtons->uvMax, glm::vec2(0.0f, 0.5f));
 }

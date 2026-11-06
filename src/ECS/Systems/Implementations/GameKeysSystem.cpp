@@ -50,12 +50,16 @@ using openblack::game_detail::LocalInputPlayer;
 
 bool GameKeysSystem::KeyDown(const SDL_Event& event, bool inTemple)
 {
-	// The M key opens the miracle selection, and the R key calls the last miracle again, while no action has the
-	// key. In the temple the keys do other things.
+	// Out of the temple, an action of the options screen that has the key and its modifier comes first. In the temple
+	// the keys do other things.
+	const auto binding = inTemple ? input::KeyDownBinding::None : BindingOfKeyDown(event);
+	if (binding == input::KeyDownBinding::TakesKey)
+	{
+		return true;
+	}
+	// The M key opens the miracle selection, and the R key calls the last miracle again
 	if ((event.key.keysym.scancode == SDL_SCANCODE_M || event.key.keysym.scancode == SDL_SCANCODE_R) && !inTemple &&
-	    Locator::gestureSystem::has_value() &&
-	    input::ActionsForKeyDown(Locator::gameActionSystem::value().GetKeyBindings(), event.key.keysym.scancode,
-	                             event.key.keysym.mod) == input::BindableActionMap::NONE)
+	    Locator::gestureSystem::has_value())
 	{
 		auto& gestures = Locator::gestureSystem::value();
 		if (event.key.keysym.scancode == SDL_SCANCODE_M)
@@ -68,10 +72,25 @@ bool GameKeysSystem::KeyDown(const SDL_Event& event, bool inTemple)
 		}
 		return true;
 	}
-	return ProcessKeyPress(event);
+	return ProcessKeyPress(event, binding);
 }
 
-bool GameKeysSystem::ProcessKeyPress(const SDL_Event& event)
+input::KeyDownBinding GameKeysSystem::BindingOfKeyDown(const SDL_Event& event)
+{
+	// Escape does its work before the actions get the key
+	if (event.key.keysym.sym == SDLK_ESCAPE || !Locator::gameActionSystem::has_value())
+	{
+		return input::KeyDownBinding::None;
+	}
+	const auto blocked = Locator::cameraHelpSystem::has_value() ? Locator::cameraHelpSystem::value().Get().BlockedActions()
+	                                                            : input::BindableActionMap::NONE;
+	const bool scriptHoldsScreen =
+	    Locator::cinematicDirectorSystem::has_value() && !Locator::cinematicDirectorSystem::value().IsInterfaceActive();
+	return input::KeyDownBindingFor(Locator::gameActionSystem::value().GetKeyBindings(), event.key.keysym.scancode,
+	                                event.key.keysym.mod, blocked, scriptHoldsScreen);
+}
+
+bool GameKeysSystem::ProcessKeyPress(const SDL_Event& event, input::KeyDownBinding binding)
 {
 	auto& window = Locator::windowing::value();
 	auto& camera = Locator::camera::value();
@@ -135,8 +154,9 @@ bool GameKeysSystem::ProcessKeyPress(const SDL_Event& event)
 			break;
 		}
 		// The slower key halves the game's speed, to half of normal at the least. The faster key doubles it, to
-		// twice normal at the most.
-		if (const auto speed = keys::SpeedKeyFor(k_Platform, key, held); speed != keys::SpeedKey::None)
+		// twice normal at the most. These keys do not act when an action has the key.
+		if (const auto speed = keys::SpeedKeyFor(k_Platform, key, held);
+		    speed != keys::SpeedKey::None && binding == input::KeyDownBinding::None)
 		{
 			auto& clock = Locator::time::value();
 			clock.SetSpeed(speed == keys::SpeedKey::Slower ? std::max(clock.GetSpeed() * 0.5f, 0.5f)

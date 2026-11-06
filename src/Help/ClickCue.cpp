@@ -49,7 +49,8 @@ int LabelSize(int top, int bottom, bool biggerText)
 	return biggerText ? (4 * size) / 5 : (2 * size) / 3;
 }
 
-std::optional<Cue> Layout(int screenWidth, int top, int bottom, float share, float labelWidth, bool biggerText, uint32_t tickMs)
+std::optional<Cue> Layout(int screenWidth, int top, int bottom, float share, float labelWidth, bool biggerText, uint32_t tickMs,
+                          int mouseRow)
 {
 	const float fade = std::clamp(share, 0.0f, 1.0f);
 	const int alpha = static_cast<int>(fade * 255.0f);
@@ -78,7 +79,7 @@ std::optional<Cue> Layout(int screenWidth, int top, int bottom, float share, flo
 	cue.mouse = {{static_cast<float>(mouseX), yF}, {static_cast<float>(mouseX) + sizeF, yF + sizeF}};
 	// The left button: the picture with the right one lit, mirrored
 	const float column = ButtonLit(tickMs) ? 1.0f : 0.0f;
-	const float row = static_cast<float>(k_WheelMouseRow);
+	const float row = static_cast<float>(mouseRow);
 	cue.uvMin = {(column + 1.0f) * k_Cell, row * k_Cell};
 	cue.uvMax = {column * k_Cell, (row + 1.0f) * k_Cell};
 	cue.mouseColour = {1.0f, 1.0f, 1.0f, alphaF};

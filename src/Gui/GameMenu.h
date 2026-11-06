@@ -26,6 +26,7 @@
 #include "ECS/StatisticsRules.h"
 #include "Input/KeyBindings.h"
 #include "Input/KeyRebinding.h"
+#include "Input/MouseWheel.h"
 #include "MenuSettings.h"
 
 namespace openblack::gui
@@ -140,6 +141,8 @@ public:
 	[[nodiscard]] bool IsSkirmish() const noexcept { return _skirmish; }
 
 	void Update(float deltaSeconds);
+	/// The row of the mice picture for the player's mouse, which the Controls page shows its mice in
+	void SetMouseRow(int row);
 
 	// Input at points of the dialog space
 	void MouseMove(glm::ivec2 point);
@@ -399,6 +402,8 @@ private:
 	std::optional<PlayerEdits> _playerEdits;
 	/// The wheel's mice on the Controls page turn over
 	std::vector<std::pair<size_t, bool>> _wheelMice;
+	/// The row of the mice picture that the Controls page shows its mice in
+	int _mouseRow {platform_mouse::k_WheelMouseRow};
 	float _wheelTime {0.0f};
 
 	Page _page {Page::Main};
