@@ -16,6 +16,7 @@
 #include <glm/geometric.hpp>
 #include <gtest/gtest.h>
 
+#include "3D/MapCoords.h"
 #include "Camera/CameraZoomer.h"
 #include "ECS/TownAggression.h"
 #include "InfoConstants.h"
@@ -90,6 +91,21 @@ TEST(ShieldRules, TheDomeIsHiddenThenGrowsSpinsDownAndBobs)
 	EXPECT_TRUE(shield::StepDome(shape, state, 10.0f, k_Turn).drawn);
 	EXPECT_NEAR(state.angle - before, 0.15f * k_Turn, k_Epsilon);
 	EXPECT_FLOAT_EQ(shield::Ease(1.0f), 1.0f);
+}
+
+TEST(ShieldRules, TheDomeEaseAndAgeRoundAsTheGameDoes)
+{
+	// ((1 - x) x + 1) x, each step rounded: one float under the x + x^2 - x^3 form at this point
+	EXPECT_EQ(std::bit_cast<uint32_t>(shield::Ease(std::bit_cast<float>(0x3E088889u))), 0x3E184F7Eu);
+	EXPECT_EQ(std::bit_cast<uint32_t>(shield::Ease(std::bit_cast<float>(0x3F5DDDDFu))), 0x3F77812Eu);
+	// Seven turns are seven times a turn: a sum of seven turns is a float more
+	EXPECT_EQ(shield::DomeAge(7, 0.1f), 7.0f * 0.1f);
+	float sum = 0.0f;
+	for (int i = 0; i < 7; ++i)
+	{
+		sum += 0.1f;
+	}
+	EXPECT_NE(shield::DomeAge(7, 0.1f), sum);
 }
 
 TEST(ShieldRules, ADyingDomeFadesOverASecondAndAHalfAndGoesAtTwoAndAQuarter)
@@ -179,18 +195,32 @@ TEST(ShieldRules, AThingCrossesTheDomeOnlyMovingAgainstAFace)
 
 TEST(ShieldRules, VillagersShelterWellInsideOnTheirOwnSide)
 {
-	EXPECT_TRUE(shield::NeedsShelter(25.0f, 30.0f));
-	EXPECT_FALSE(shield::NeedsShelter(23.0f, 30.0f));
-	// With no turn, no random distance, it goes straight towards the middle to 0.8 of the radius
-	const auto place = shield::ShelterAt({0.0f, 0.0f}, {100.0f, 0.0f}, 30.0f, shield::k_ShelterTurnRange * 0.5f, 0.0f,
-	                                     shield::k_ShelterTurnRange * 0.5f);
-	EXPECT_NEAR(place.point.x, 24.0f, k_Epsilon);
-	EXPECT_NEAR(place.point.y, 0.0f, k_Epsilon);
-	EXPECT_NEAR(place.faceTowards.x, 25.0f, k_Epsilon);
+	// The edge is drawn in by a fifth of the radius
+	EXPECT_FLOAT_EQ(shield::ShelterMargin(30.0f), 6.0f);
+	EXPECT_TRUE(shield::IsUnder({23.0f, 0.0f}, {0.0f, 0.0f}, 30.0f, shield::ShelterMargin(30.0f)));
+	EXPECT_FALSE(shield::IsUnder({25.0f, 0.0f}, {0.0f, 0.0f}, 30.0f, shield::ShelterMargin(30.0f)));
+	// With no turn, no random distance, it goes straight towards the middle to the radius less the margin, in whole map
+	// units
+	const auto place = shield::ShelterAt({0.0f, 0.0f}, {100.0f, 0.0f}, 30.0f, shield::k_ShelterTurnRange * 0.5f, 0.0f);
+	EXPECT_FLOAT_EQ(place.x, map_coords::ToMetres(map_coords::ToFixedGUtils(24.0f)));
+	EXPECT_FLOAT_EQ(place.y, 0.0f);
 	// The whole random cube brings it to the middle
-	EXPECT_NEAR(glm::length(shield::ShelterAt({0.0f, 0.0f}, {100.0f, 0.0f}, 30.0f, 0.0f, 1.0f, 0.0f).point), 0.0f, k_Epsilon);
+	EXPECT_NEAR(glm::length(shield::ShelterAt({0.0f, 0.0f}, {100.0f, 0.0f}, 30.0f, 0.0f, 1.0f)), 0.0f, k_Epsilon);
 	EXPECT_TRUE(shield::IsUnder({10.0f, 0.0f}, {0.0f, 0.0f}, 30.0f, 0.0f));
 	EXPECT_FALSE(shield::IsUnder({10.0f, 0.0f}, {0.0f, 0.0f}, 30.0f, 25.0f));
+}
+
+TEST(ShieldRules, TheShelterDirectionIsTheGameAngleBetweenTheMapPositions)
+{
+	// The game angle has 2048 steps, so a villager a little off the line from the middle still goes straight in
+	const auto place = shield::ShelterAt({0.0f, 0.0f}, {100.0f, 0.1f}, 30.0f, shield::k_ShelterTurnRange * 0.5f, 0.0f);
+	EXPECT_FLOAT_EQ(place.y, 0.0f);
+	const auto look = shield::LookOut({0.0f, 0.0f}, {10.0f, 0.01f}, shield::k_ShelterTurnRange * 0.5f);
+	EXPECT_FLOAT_EQ(look.y, map_coords::ToMetres(map_coords::ToFixed(0.01f)));
+	// One with nowhere to hide from a fallen shield runs on away from its middle, the run cut to whole map units
+	const auto run = shield::AwayFrom({0.0f, 0.0f}, {10.0f, 0.0f}, shield::k_ShelterTurnRange * 0.5f, 12.5f);
+	EXPECT_FLOAT_EQ(run.x, map_coords::ToMetres(map_coords::ToFixed(10.0f) + map_coords::ToFixedGUtils(12.5f)));
+	EXPECT_FLOAT_EQ(run.y, 0.0f);
 }
 
 TEST(ShieldRules, ASheltersClipPlaysTwentyToThirtySecondsBeforeANewOne)

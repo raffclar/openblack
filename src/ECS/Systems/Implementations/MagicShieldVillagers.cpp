@@ -69,9 +69,6 @@ namespace
 /// A villager switches to a more urgent reaction once it has been at its last kind this many seconds
 constexpr uint32_t k_SwitchSeconds = 10;
 constexpr uint32_t k_TurnsPerSecond = 10;
-/// A shield's villager runs from its fall in a direction away from it, turned by up to an eighth of a half turn either
-/// way
-constexpr float k_FleeTurnRange = std::numbers::pi_v<float> / 4.0f;
 
 ecs::Registry& EntityRegistry()
 {
@@ -606,13 +603,10 @@ void MagicShieldSystem::StartReacting(entt::entity villager, uint32_t id, bool w
 	{
 		// With nowhere to hide it runs from where the shield stood, then looks back there in panic
 		const auto& row = RowOf(reaction.type);
-		const auto away = at - centre;
-		const float angle =
-		    portable_math::Atan2(away.y, away.x) + random.GameFloatRand(k_FleeTurnRange) - (k_FleeTurnRange * 0.5f);
-		const float distance = row.minDistanceToRunAwayFromObject +
-		                       random.GameFloatRand(row.maxDistanceToRunAwayFromObject - row.minDistanceToRunAwayFromObject);
-		ecs::villager_home::SetupMoveTo(action, at + glm::vec2(portable_math::Cos(angle), portable_math::Sin(angle)) * distance,
-		                                VillagerStates::PanicReaction);
+		const float turn = random.GameFloatRand(shield::k_ShelterTurnRange);
+		const float distance = random.GameFloatRand(row.maxDistanceToRunAwayFromObject - row.minDistanceToRunAwayFromObject) +
+		                       row.minDistanceToRunAwayFromObject;
+		ecs::villager_home::SetupMoveTo(action, shield::AwayFrom(centre, at, turn, distance), VillagerStates::PanicReaction);
 		ecs::villager_cover::SetPanicPoint(villager, centre);
 		return;
 	}
@@ -620,12 +614,12 @@ void MagicShieldSystem::StartReacting(entt::entity villager, uint32_t id, bool w
 	// Standing: it shelters under the shield, on its own side, unless it is well inside already
 	living.VillagerSetState(action, LivingAction::Index::Top, VillagerStates::AmazedByMagicShieldReaction, false);
 	const auto& shieldObject = registry.Get<const MagicShield>(reaction.object);
-	if (!shield::IsUnder(at, centre, shieldObject.radius, shieldObject.radius * (1.0f - shield::k_ShelterInside)))
+	if (!shield::IsUnder(at, centre, shieldObject.radius, shield::ShelterMargin(shieldObject.radius)))
 	{
 		const float turn = random.GameFloatRand(shield::k_ShelterTurnRange);
 		const float u = random.GameFloatRand(1.0f);
-		const auto place = shield::ShelterAt(centre, at, shieldObject.radius, turn, u, 0.0f);
-		ecs::villager_home::SetupMoveTo(action, place.point, VillagerStates::AmazedByMagicShieldReaction);
+		const auto place = shield::ShelterAt(centre, at, shieldObject.radius, turn, u);
+		ecs::villager_home::SetupMoveTo(action, place, VillagerStates::AmazedByMagicShieldReaction);
 	}
 	reacting.lookAt = shield::LookOut(centre, at, random.GameFloatRand(shield::k_ShelterTurnRange));
 }
