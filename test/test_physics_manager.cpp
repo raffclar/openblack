@@ -569,6 +569,16 @@ TEST(PhysicsTurn, FastThingsWhooshPastTheCamera)
 	EXPECT_FALSE(turn::PassesCamera(glm::vec3(9.5f, 0, 0), glm::vec3(9.0f, 0, 0), camera, glm::vec3(-30.0f, 0, 0)));
 }
 
+TEST(PhysicsTurn, TheWhooshAddsTheSquaresOfTheDistanceFromZToX)
+{
+	// From z to x the squares of this point add to 100, which is not inside ten metres. From x to z they add to
+	// 99.99999.
+	const glm::vec3 after(std::bit_cast<float>(0xC0B3FAEAu), std::bit_cast<float>(0xBF4ED48Cu),
+	                      std::bit_cast<float>(0x4103A947u));
+	EXPECT_FALSE(turn::PassesCamera(glm::vec3(11.0f, 0, 0), after, glm::vec3(0.0f), glm::vec3(-21.0f, 0, 0)));
+	EXPECT_TRUE(turn::PassesCamera(glm::vec3(11.0f, 0, 0), after * 0.999f, glm::vec3(0.0f), glm::vec3(-21.0f, 0, 0)));
+}
+
 TEST(PhysicsTurn, SinkingAndBobbing)
 {
 	EXPECT_TRUE(turn::NearSeaLevel(false, 0.4f, 1.0f));

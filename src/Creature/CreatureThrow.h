@@ -22,6 +22,7 @@
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
+#include "Common/GameHeading.h"
 #include "CreatureRoute.h"
 
 /// How a creature lets go of what it holds: thrown at something, tossed away, lobbed or put down, and how the thing then
@@ -123,7 +124,9 @@ struct ThrowAim
 /// The creature throws at that last place, and the throw takes the second time.
 [[nodiscard]] ThrowAim AimAt(const glm::vec3& creature, const ThrowTarget& target, const MapAltitude& altitude);
 
-/// The velocity that takes something from where the hand lets go of it to the target in a time, falling as it goes
+/// The velocity that takes something from where the hand lets go of it to the target in a time, falling as it goes.
+/// The game takes the fall as the time squared, times a half, times minus g. It takes the way less the fall on each
+/// axis, and multiplies it by one over the time.
 [[nodiscard]] glm::vec3 ReleaseVelocity(const glm::vec3& target, const glm::vec3& release, float seconds);
 
 /// Whether a target is far enough along the ground to throw at, for a creature of a size
@@ -163,8 +166,10 @@ struct HeldPose
 [[nodiscard]] HeldPose ReleaseStart(const HeldPose& held, const glm::vec3& fingerEnds, bool thrown);
 
 /// The velocity something tossed away leaves with: a share of the hand's own, measured in the creature's space, flipped
-/// to the other side when tossed by the other hand and turned with the creature
-[[nodiscard]] glm::vec3 TossVelocity(const glm::vec3& handVelocity, bool mirrored, const glm::mat3& rotation, float share);
+/// to the other side when tossed by the other hand, made the creature's size and turned by its heading. The game
+/// multiplies by the share before the size. It keeps the cosine of the heading as a float and the sine wide.
+[[nodiscard]] glm::vec3 TossVelocity(const glm::vec3& handVelocity, bool mirrored, GameHeading heading, float scale,
+                                     float share);
 
 /// Going to throw into something, a creature stands no nearer to it than the distance it was given, the thing's radius
 /// and twice its height together. It stands no further than three and a half times its height. When it backs away to
