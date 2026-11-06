@@ -38,7 +38,7 @@ struct Flock
 	/// How far from its place its leader may wander, and its followers from its leader, in whole metres
 	uint16_t domainRadius {k_DefaultDomainRadius};
 	uint16_t flockDistance {k_DefaultFlockDistance};
-	/// How calm it is, as a script set it; nothing reads it
+	/// How calm it is, as a script set it. A flock that is not 0 does not hunt, and its wolves keep their lair
 	int32_t calm {0};
 
 	/// For a flock of animals: the state the followers take once the leader has set off, how (3 for in formation), and

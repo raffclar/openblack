@@ -216,7 +216,8 @@ bool flock::IsPrey(const PreyFacts& prey)
 	{
 		return false;
 	}
-	if (prey.indestructible || !prey.reachable || (prey.scriptControlled && !prey.hunterInScript) || !prey.hunterInFlock)
+	if (prey.indestructible || !prey.reachable || (prey.scriptControlled && !prey.hunterInScript) || !prey.hunterInFlock ||
+	    prey.hunterFlockCalm)
 	{
 		return false;
 	}
