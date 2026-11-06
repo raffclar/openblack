@@ -7,6 +7,11 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <cstdint>
+
+#include <array>
+
+#include <glm/vec2.hpp>
 #include <gtest/gtest.h>
 
 #include "Help/MouseMoves.h"
@@ -164,4 +169,49 @@ TEST(MouseMoves, TwoRunsWithFixedFramesCountTheSameMoves)
 		return total;
 	};
 	EXPECT_EQ(count(1000u, 3u), count(777777u, 41u));
+}
+
+TEST(MouseMoves, TheInterfaceGetsThePlacesInTheSequenceThatTheyCame)
+{
+	MouseMoves moves;
+	moves.Message(0, {1, 1});
+	moves.Message(30, {2, 1});
+	moves.Message(60, {3, 1});
+	const auto places = moves.TakePlaces();
+	ASSERT_EQ(places.size(), 2u);
+	EXPECT_EQ(places.at(0), glm::ivec2(2, 1));
+	EXPECT_EQ(places.at(1), glm::ivec2(3, 1));
+	// Each frame takes what came since the frame before
+	EXPECT_TRUE(moves.TakePlaces().empty());
+	// The count compares each place with the place before it, from the top left corner
+	EXPECT_EQ(moves.CountMoves(places), 2u);
+	const std::array same {places.back()};
+	EXPECT_EQ(moves.CountMoves(same), 0u);
+}
+
+TEST(MouseMoves, AMouseThatMovesAt125MessagesASecondSendsAPlaceEach32Milliseconds)
+{
+	MouseMoves moves;
+	// One second of messages, one each 8 milliseconds
+	for (uint32_t i = 0; i <= 125; ++i)
+	{
+		moves.Message(i * 8, {static_cast<int>(i), 0});
+	}
+	// Four messages make 32 milliseconds, which is more than 28
+	const auto places = moves.TakePlaces();
+	ASSERT_EQ(places.size(), 31u);
+	EXPECT_EQ(places.front(), glm::ivec2(4, 0));
+	EXPECT_EQ(places.at(1), glm::ivec2(8, 0));
+}
+
+TEST(MouseMoves, AStillMouseSendsTwentyFivePlacesASecond)
+{
+	MouseMoves moves;
+	moves.Message(0, {5, 5});
+	// Frames of 16 milliseconds for one second
+	for (uint32_t frame = 1; frame <= 63; ++frame)
+	{
+		moves.Wait(frame * 16, {5, 5}, true);
+	}
+	EXPECT_EQ(moves.TakePlaces().size(), 25u);
 }

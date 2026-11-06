@@ -13,7 +13,7 @@
 
 #include <algorithm>
 
-#include <glm/geometric.hpp>
+#include "Common/X87Vector.h"
 
 using namespace openblack;
 using namespace openblack::dust_puff;
@@ -57,10 +57,15 @@ Puff dust_puff::Make(const glm::vec3& centre, float size, const std::function<fl
 		const float outX = random(-size, size);
 		const glm::vec3 velocity(outX, size, outZ);
 		const float speed = kind == Kind::Smoke ? random(k_SmokeSlowest, k_SmokeFastest) * size : size * k_SpeedScale;
-		const float length = glm::length(velocity);
-		puff.velocities.at(i) = length > 0.0f ? velocity * (speed / length) : glm::vec3(0.0f);
+		// The squares of the way out add from z to x
+		puff.velocities.at(i) = velocity == glm::vec3(0.0f) ? velocity : x87::Scaled<x87::SumOrder::Zyx>(velocity, speed);
 	}
 	return puff;
+}
+
+float dust_puff::StepSeconds(int32_t milliseconds)
+{
+	return static_cast<float>(milliseconds) * k_SecondsPerMillisecond;
 }
 
 bool dust_puff::Advance(Puff& puff, float seconds)

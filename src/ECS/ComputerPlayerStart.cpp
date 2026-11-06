@@ -83,7 +83,7 @@ bool TakesSize(const ecs::components::ComputerPlayer& player, const StartFacts& 
 
 bool LearnsMiracles(const ecs::components::ComputerPlayer& player, const StartFacts& facts)
 {
-	return !facts.local && facts.creature && player.marked;
+	return !facts.local && facts.creature && !facts.creatureScripted && player.marked;
 }
 
 CreatureType SpeciesFor(uint32_t roll)
@@ -121,14 +121,16 @@ namespace
 StartFacts FactsOf(const World& world, PlayerNames player)
 {
 	const auto local = world.LocalPlayer();
+	const auto creature = world.Creature(player);
 	return {
 	    .local = player == local,
 	    .temple = world.HasTemple(player),
 	    .pen = world.Pen(player).has_value(),
-	    .creature = world.Creature(player).has_value(),
+	    .creature = creature.has_value(),
 	    .skirmish = world.Skirmish(),
 	    .network = world.NetworkGame(),
 	    .localCreature = world.Creature(local).has_value(),
+	    .creatureScripted = creature.has_value() && world.ScriptControls(*creature),
 	};
 }
 } // namespace

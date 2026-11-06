@@ -174,6 +174,21 @@ TEST(CreatureDesires, ASuppressedDesireOnlyFades)
 	EXPECT_EQ(desires[Desire::Anger].suppressedTurns, 20u);
 }
 
+TEST(CreatureDesires, ADesireHeldBackForLongerLosesItsPlan)
+{
+	auto desires = OneDesire(Desire::Anger, 1.0f, 0.0f, 1.0f);
+	creature_desires::Suppress(desires, Desire::Anger, 2.0f, k_TurnsPerSecond);
+	EXPECT_TRUE(desires[Desire::Anger].losesPlan);
+	desires[Desire::Anger].losesPlan = false;
+	// A hold that is not longer keeps the plan
+	creature_desires::Suppress(desires, Desire::Anger, 2.0f, k_TurnsPerSecond);
+	creature_desires::Suppress(desires, Desire::Anger, 0.5f, k_TurnsPerSecond);
+	EXPECT_FALSE(desires[Desire::Anger].losesPlan);
+	creature_desires::Suppress(desires, Desire::Anger, 3.0f, k_TurnsPerSecond);
+	EXPECT_TRUE(desires[Desire::Anger].losesPlan);
+	EXPECT_EQ(desires[Desire::Anger].suppressedTurns, 30u);
+}
+
 TEST(CreatureDesires, SourcesReadTheirStateThenFade)
 {
 	auto desires = OneDesire(Desire::Tiredness, 0.4f, 0.5f, 2.0f);

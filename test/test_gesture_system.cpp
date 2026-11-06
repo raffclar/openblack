@@ -9,9 +9,7 @@
 
 #define LOCATOR_IMPLEMENTATIONS
 
-#include <cmath>
-
-#include <algorithm>
+#include <optional>
 
 #include <gtest/gtest.h>
 
@@ -25,18 +23,16 @@ namespace
 {
 GestureSystemInterface::Frame Frame(float seconds)
 {
+	// The interface got one place of the pointer in the frame
 	GestureSystemInterface::Frame frame {
-	    .seconds = seconds, .cursor = {100.0f, 100.0f}, .view = {.screenSize = {1024.0f, 768.0f}}};
-	// The steps of the input that a frame of this length takes, at even parts of the frame
-	frame.steps.count = std::min(static_cast<uint32_t>(std::lround(seconds * 60.0f)), input_steps::k_MostSteps);
-	for (uint32_t i = 0; i < frame.steps.count; ++i)
-	{
-		frame.steps.points.at(i) = static_cast<float>(i + 1) / static_cast<float>(frame.steps.count);
-	}
+	    .seconds = seconds, .places = {{100.0f, 100.0f}}, .view = {.screenSize = {1024.0f, 768.0f}}};
 	// A flat land under the whole screen
 	frame.view.landAt = [](glm::vec2 pixel) { return std::optional<glm::vec3>(glm::vec3(pixel.x, 0.0f, pixel.y)); };
 	return frame;
 }
+
+/// The length of a frame at sixty frames a second
+constexpr float k_FrameSeconds = 1.0f / 60.0f;
 } // namespace
 
 TEST(GestureSystem, HandsOutEachEventOnce)
@@ -55,20 +51,22 @@ TEST(GestureSystem, HandsOutEachEventOnce)
 	EXPECT_TRUE(system.TakeEvents().empty());
 }
 
-TEST(GestureSystem, SamplesTheCursorAtTheGamesPace)
+TEST(GestureSystem, TakesASampleAtEachPlaceOfThePointer)
 {
 	GestureSystem system;
-	// Sixty frames a second for a second: about 34 samples
-	for (int i = 0; i < 60; ++i)
-	{
-		auto frame = Frame(1.0f / 60.0f);
-		frame.cursor = {100.0f + static_cast<float>(i * 10), 100.0f};
-		system.Update(frame);
-	}
-	EXPECT_GE(system.GetPath().Count(), 28u);
-	EXPECT_LE(system.GetPath().Count(), 34u);
-	// On a screen 768 high the path is measured in its pixels
-	EXPECT_LE(system.GetPath().At(0).screen.x, 120.0f);
+	// A frame with three places takes three samples, in the sequence that they came
+	auto frame = Frame(k_FrameSeconds);
+	frame.places = {{100.0f, 100.0f}, {140.0f, 100.0f}, {180.0f, 100.0f}};
+	system.Update(frame);
+	ASSERT_EQ(system.GetPath().Count(), 3u);
+	// On a screen 768 high the path uses its pixels
+	EXPECT_EQ(system.GetPath().At(0).screen, glm::vec2(100.0f, 100.0f));
+	EXPECT_EQ(system.GetPath().At(2).screen, glm::vec2(180.0f, 100.0f));
+	// A frame without a place takes no sample
+	auto empty = Frame(k_FrameSeconds);
+	empty.places.clear();
+	system.Update(empty);
+	EXPECT_EQ(system.GetPath().Count(), 3u);
 
 	// Off the world, the path is forgotten
 	auto away = Frame(0.1f);
@@ -77,18 +75,36 @@ TEST(GestureSystem, SamplesTheCursorAtTheGamesPace)
 	EXPECT_TRUE(system.GetPath().Empty());
 }
 
+TEST(GestureSystem, OnAWindowOfAnotherHeightThePlacesGoToTheScreenThatThePathUses)
+{
+	GestureSystem system;
+	auto frame = Frame(k_FrameSeconds);
+	frame.view.screenSize = {2048.0f, 1536.0f};
+	frame.places = {{400.0f, 300.0f}};
+	system.Update(frame);
+	ASSERT_EQ(system.GetPath().Count(), 1u);
+	EXPECT_EQ(system.GetPath().At(0).screen, glm::vec2(200.0f, 150.0f));
+}
+
 TEST(GestureSystem, AMiraclesFirstTurnInTheHandStartsThePathAgain)
 {
 	GestureSystem system;
 	for (int i = 0; i < 10; ++i)
 	{
-		auto frame = Frame(gesture::k_SampleSeconds);
-		frame.cursor = {100.0f + static_cast<float>(i * 10), 100.0f};
+		auto frame = Frame(k_FrameSeconds);
+		frame.places = {{100.0f + static_cast<float>(i * 10), 100.0f}};
 		system.Update(frame);
 	}
 	ASSERT_FALSE(system.GetPath().Empty());
 	system.SeedFirstTurnInHand();
 	EXPECT_TRUE(system.GetPath().Empty());
+	// The next update takes a sample at the last place of the pointer first, then at the places of its frame
+	auto next = Frame(k_FrameSeconds);
+	next.places = {{300.0f, 120.0f}};
+	system.Update(next);
+	ASSERT_EQ(system.GetPath().Count(), 2u);
+	EXPECT_EQ(system.GetPath().At(0).screen, glm::vec2(190.0f, 100.0f));
+	EXPECT_EQ(system.GetPath().At(1).screen, glm::vec2(300.0f, 120.0f));
 	// With no leash picker open, the hand shows no effect of a selection
 	EXPECT_FALSE(system.IsSelecting());
 }
@@ -101,7 +117,7 @@ TEST(GestureSystem, ADrawnPathIsTakenInPlaceOfTheCursor)
 	EXPECT_TRUE(system.IsDrawingPath());
 	for (size_t i = 0; i < path.size(); ++i)
 	{
-		system.Update(Frame(gesture::k_SampleSeconds));
+		system.Update(Frame(k_FrameSeconds));
 	}
 	EXPECT_FALSE(system.IsDrawingPath());
 	ASSERT_EQ(system.GetPath().Count(), path.size());
@@ -113,7 +129,7 @@ TEST(GestureSystem, ADrawnPathIsTakenInPlaceOfTheCursor)
 TEST(GestureSystem, NothingIsRecordedUntilTheCursorIsOverTheLand)
 {
 	GestureSystem system;
-	auto frame = Frame(gesture::k_SampleSeconds);
+	auto frame = Frame(k_FrameSeconds);
 	frame.view.landAt = [](glm::vec2 /*pixel*/) { return std::optional<glm::vec3>(); };
 	system.Update(frame);
 	EXPECT_TRUE(system.GetPath().Empty());
@@ -126,8 +142,8 @@ TEST(GestureSystem, MovingTheCameraWipesThePathUnlessItShakes)
 	const auto drawn = [&system, &step](glm::vec3 eye, bool shaking, int samples) {
 		for (int i = 0; i < samples; ++i, ++step)
 		{
-			auto frame = Frame(gesture::k_SampleSeconds);
-			frame.cursor = {100.0f + static_cast<float>(step * 20), 100.0f};
+			auto frame = Frame(k_FrameSeconds);
+			frame.places = {{100.0f + static_cast<float>(step * 20), 100.0f}};
 			frame.view.cameraEye = eye;
 			frame.cameraShaking = shaking;
 			system.Update(frame);
@@ -153,8 +169,8 @@ TEST(GestureSystem, ANewLandKeepsThePathUntilTheCameraMoves)
 	const auto drawn = [&system, &step](glm::vec3 eye, int samples) {
 		for (int i = 0; i < samples; ++i, ++step)
 		{
-			auto frame = Frame(gesture::k_SampleSeconds);
-			frame.cursor = {100.0f + static_cast<float>(step * 20), 100.0f};
+			auto frame = Frame(k_FrameSeconds);
+			frame.places = {{100.0f + static_cast<float>(step * 20), 100.0f}};
 			frame.view.cameraEye = eye;
 			system.Update(frame);
 		}
@@ -175,8 +191,8 @@ TEST(GestureSystem, ACameraThatLetsTheHandDrawKeepsThePathAsItMoves)
 	const auto drawn = [&system, &step](glm::vec3 eye, bool letsDraw, int samples) {
 		for (int i = 0; i < samples; ++i, ++step)
 		{
-			auto frame = Frame(gesture::k_SampleSeconds);
-			frame.cursor = {100.0f + static_cast<float>(step * 20), 100.0f};
+			auto frame = Frame(k_FrameSeconds);
+			frame.places = {{100.0f + static_cast<float>(step * 20), 100.0f}};
 			frame.view.cameraEye = eye;
 			frame.cameraLetsHandDraw = letsDraw;
 			system.Update(frame);
@@ -199,8 +215,8 @@ TEST(GestureSystem, TheMoveButtonHeldInAFightWipesThePath)
 	const auto drawn = [&system, &step](bool moveHeld, int samples) {
 		for (int i = 0; i < samples; ++i, ++step)
 		{
-			auto frame = Frame(gesture::k_SampleSeconds);
-			frame.cursor = {100.0f + static_cast<float>(step * 20), 100.0f};
+			auto frame = Frame(k_FrameSeconds);
+			frame.places = {{100.0f + static_cast<float>(step * 20), 100.0f}};
 			frame.moveHeldInFight = moveHeld;
 			system.Update(frame);
 		}

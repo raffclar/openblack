@@ -205,7 +205,9 @@ void ExplosionSystem::Update(float milliseconds)
 		ghost.shown = true;
 		return false;
 	});
-	std::erase_if(_puffs, [seconds](dust_puff::Puff& puff) { return !dust_puff::Advance(puff, seconds); });
+	// The puffs step by the whole milliseconds of the game's frame time
+	const float puffSeconds = dust_puff::StepSeconds(static_cast<int32_t>(milliseconds));
+	std::erase_if(_puffs, [puffSeconds](dust_puff::Puff& puff) { return !dust_puff::Advance(puff, puffSeconds); });
 	// The shakes count down by the real time of the frame, also when the game pauses
 	const auto realMilliseconds = Locator::time::has_value() ? Locator::time::value().GetFrameRealTime().count() : 0;
 	camera_shake::Advance(_shakes, static_cast<int32_t>(realMilliseconds));

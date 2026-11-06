@@ -45,7 +45,7 @@ public:
 	void ExplodeMesh(entt::id_type mesh, const glm::mat4& transform, glm::vec3 origin, float speed) override;
 	[[nodiscard]] std::vector<particles::ExplodeRecord> TakeExplodeRecords(int queue) override;
 	void DestroyByBeam(entt::entity object) override;
-	void AddRubbleMark(glm::vec3 centre) override;
+	void AddRubbleMark(glm::vec3 centre, float yaw) override;
 	void AddWaterRing(glm::vec3 centre, float size) override;
 	void ShakeCamera(glm::vec3 position, float radius, float strength, int32_t milliseconds) override;
 	[[nodiscard]] bool IsDryLand(glm::vec3 point) const override;

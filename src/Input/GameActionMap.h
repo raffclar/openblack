@@ -12,6 +12,7 @@
 #include <array>
 #include <bitset>
 #include <optional>
+#include <span>
 #include <unordered_map>
 #include <vector>
 
@@ -53,6 +54,8 @@ public:
 	[[nodiscard]] glm::ivec2 GetMouseDelta() const final;
 	[[nodiscard]] glm::ivec2 GetMousePushDelta() const final;
 	[[nodiscard]] uint32_t TakeMouseMoves() final;
+	[[nodiscard]] std::span<const glm::ivec2> GetMousePlaces() const final;
+	void DrawnMouseMessage(glm::ivec2 position) final;
 	[[nodiscard]] float GetMouseWheelDelta() const final;
 	[[nodiscard]] std::array<std::optional<glm::vec3>, 2> GetHandPositions() const final;
 	void SplitInput(const input_steps::Steps& steps) final;
@@ -137,8 +140,11 @@ private:
 	MouseMotion _mouseMotion;
 	/// The mouse's own movement this frame, which the screen's sides do not stop
 	glm::ivec2 _pushMotion {0, 0};
-	/// The places of the pointer that the help compares to count the movements of the mouse
+	/// The places of the pointer that the interface gets: the help compares them to count the movements of the mouse,
+	/// and the gestures take a sample at each
 	help::MouseMoves _helpMouseMoves;
+	/// The places that the interface got in this frame
+	std::vector<glm::ivec2> _mousePlaces;
 	float _mouseWheelDelta = 0.0f;
 	/// The mouse's wheel has turned since the game started
 	bool _wheelTurned {false};

@@ -319,8 +319,6 @@ void Game::UpdateGestures(const Camera& camera, glm::ivec2 screenSize, float del
 	};
 	ecs::systems::GestureSystemInterface::Frame frame {
 	    .seconds = deltaSeconds,
-	    .steps = Locator::time::value().GetInputSteps(),
-	    .cursor = static_cast<glm::vec2>(HandCursor()),
 	    // Not over a debug window, nor while a cut scene has the screen
 	    .overWorld = !Locator::debugGui::value().StealsFocus() && !Locator::debugGui::value().IsMouseOverWindow() &&
 	                 Locator::cinematicDirectorSystem::value().IsInterfaceActive(),
@@ -332,6 +330,9 @@ void Game::UpdateGestures(const Camera& camera, glm::ivec2 screenSize, float del
 	             .cameraForward = camera.GetForward()},
 	    .cameraShaking = Locator::explosionSystem::has_value() && Locator::explosionSystem::value().IsShaking(),
 	};
+	// The places of the pointer that the interface got in this frame
+	const auto places = Locator::gameActionSystem::value().GetMousePlaces();
+	frame.places.assign(places.begin(), places.end());
 	// The fight view that shows a fight in its arena, and the camera of Creature Mode, let the hand draw on while they
 	// move
 	const auto& model = camera.GetModel();
@@ -377,10 +378,13 @@ void Game::UpdateGestures(const Camera& camera, glm::ivec2 screenSize, float del
 		return eye + (direction * gesture::k_TrailSkyDistance);
 	};
 	Locator::gestureSystem::value().Update(frame);
-	// A path drawn for the testbed is drawn by the hand, which follows it
+	// A path drawn for the testbed is drawn by the hand, which follows it. The hand moves the mouse, which sends a
+	// message at the place.
 	if (const auto drawing = Locator::gestureSystem::value().GetDrawingPoint())
 	{
-		Locator::handPressSystem::value().MovePointer(glm::ivec2(*drawing * (size.y / gesture::k_ReferenceHeight)));
+		const auto pixel = glm::ivec2(*drawing * (size.y / gesture::k_ReferenceHeight));
+		Locator::handPressSystem::value().MovePointer(pixel);
+		Locator::gameActionSystem::value().DrawnMouseMessage(pixel);
 	}
 }
 

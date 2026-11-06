@@ -187,13 +187,15 @@ void GestureSystem::Reset()
 void GestureSystem::ForgetPath()
 {
 	_recorder.Reset();
-	_sinceSample = 0.0f;
+	_sampleLastPlace = false;
 }
 
 void GestureSystem::SeedFirstTurnInHand()
 {
 	StartPowerUps();
+	// The path starts again from the last place of the pointer
 	ForgetPath();
+	_sampleLastPlace = true;
 	_seedTurnedOnLand = true;
 	// The power-up that the seed has counts as the one asked for: the gesture of the first seed that casts its miracle,
 	// none for a plain miracle
@@ -424,8 +426,13 @@ gesture::HandContext GestureSystem::ContextOf(const Frame& frame)
 void GestureSystem::Update(const Frame& frame)
 {
 	LoadTemplates();
-	const auto lastCursor = _lastCursor.value_or(frame.cursor);
-	_lastCursor = frame.cursor;
+	// A path that a miracle's first turn in the hand started again takes the place that was the last before this frame
+	const auto placeBefore = _lastPlace;
+	// The interface keeps the last place of the pointer, also when the path takes no sample
+	if (!frame.places.empty())
+	{
+		_lastPlace = frame.places.back();
+	}
 	if (frame.view.screenSize.x > 0.0f && frame.view.screenSize.y > 0.0f)
 	{
 		_screenAspect = frame.view.screenSize.x / frame.view.screenSize.y;
@@ -479,27 +486,31 @@ void GestureSystem::Update(const Frame& frame)
 		return;
 	}
 
-	// Sampled at the steps of the input, not at the frames. A sample between two frames takes the cursor at its place
-	// between them.
-	for (const auto part : gesture::SamplePoints(_sinceSample, frame.steps))
+	// A path that a miracle's first turn in the hand started again gets the last place of the pointer first
+	if (_sampleLastPlace && placeBefore.has_value())
 	{
-		SampleCursor(input_steps::Between(lastCursor, frame.cursor, part), frame, context);
+		RecordPoint(ToReference(*placeBefore, frame), frame);
+	}
+	_sampleLastPlace = false;
+	// The path takes a sample at each place of the pointer that the interface got, not at the frames
+	for (const auto place : frame.places)
+	{
+		SampleCursor(place, frame, context);
 	}
 }
 
-void GestureSystem::SampleCursor(glm::vec2 cursor, const Frame& frame, const gesture::HandContext& context)
+glm::vec2 GestureSystem::ToReference(glm::vec2 pixel, const Frame& frame)
 {
-	const auto toReference = frame.view.screenSize.y > 0.0f ? gesture::k_ReferenceHeight / frame.view.screenSize.y : 1.0f;
-	glm::vec2 point = cursor * toReference;
-	if (!_drawing.empty())
-	{
-		point = _drawing.front();
-		_drawing.pop_front();
-	}
+	return pixel * (frame.view.screenSize.y > 0.0f ? gesture::k_ReferenceHeight / frame.view.screenSize.y : 1.0f);
+}
+
+bool GestureSystem::RecordPoint(glm::vec2 point, const Frame& frame)
+{
 	if (_pause > 0.0f)
 	{
-		return;
+		return false;
 	}
+	const auto toReference = ToReference({1.0f, 1.0f}, frame).y;
 	const auto land = frame.view.landAt ? frame.view.landAt(point / toReference) : std::nullopt;
 	if (land.has_value())
 	{
@@ -508,6 +519,21 @@ void GestureSystem::SampleCursor(glm::vec2 cursor, const Frame& frame, const ges
 	else
 	{
 		_recorder.AddPoint(point);
+	}
+	return true;
+}
+
+void GestureSystem::SampleCursor(glm::vec2 cursor, const Frame& frame, const gesture::HandContext& context)
+{
+	glm::vec2 point = ToReference(cursor, frame);
+	if (!_drawing.empty())
+	{
+		point = _drawing.front();
+		_drawing.pop_front();
+	}
+	if (!RecordPoint(point, frame))
+	{
+		return;
 	}
 
 	// The first gesture waited for that the path draws is acted on

@@ -245,6 +245,16 @@ TEST(CreatureThrow, TheReleaseVelocityLandsOnTheTarget)
 	EXPECT_NEAR(reached.z, target.z, 1e-3f);
 }
 
+TEST(CreatureThrow, TheReleaseVelocityTakesTheFallFromTheTimeSquaredAndMultipliesByOneOverTheTime)
+{
+	// The game takes the time squared, times a half, times minus g, and multiplies each axis by one over the time. A
+	// division by the time and a fall of minus half g times the time, times the time, give 0x40EECCCE and 0xC1B66666.
+	const auto velocity = creature_throw::ReleaseVelocity({20.0f, 0.0f, -60.0f}, {1.0f, 12.0f, -3.0f}, 2.5f);
+	EXPECT_EQ(std::bit_cast<uint32_t>(velocity.x), 0x40F33333u);
+	EXPECT_EQ(std::bit_cast<uint32_t>(velocity.y), 0x40EECCCFu);
+	EXPECT_EQ(std::bit_cast<uint32_t>(velocity.z), 0xC1B66667u);
+}
+
 TEST(CreatureThrow, ItThrowsAtNothingTooClose)
 {
 	// Two thirds of its height, 15 units at size 1
@@ -267,16 +277,31 @@ TEST(CreatureThrow, TossingKeepsSomeOfTheHandsSpeed)
 	// The hand moved 1 unit ahead in the last 100 ms: 10 units a second
 	const auto hand = creature_throw::HandVelocity(glm::vec3(0.0f, 0.0f, -2.0f), glm::vec3(0.0f, 0.0f, -1.0f), 100.0f);
 	EXPECT_NEAR(hand.z, -10.0f, k_Tolerance);
-	const auto plain = creature_throw::TossVelocity(glm::vec3(3.0f, 1.0f, -10.0f), false, glm::mat3(1.0f), 0.6f);
+	const auto plain = creature_throw::TossVelocity(glm::vec3(3.0f, 1.0f, -10.0f), false, GameHeading(0.0f), 1.0f, 0.6f);
 	EXPECT_NEAR(plain.x, 1.8f, k_Tolerance);
 	EXPECT_NEAR(plain.z, -6.0f, k_Tolerance);
 	// Tossed with the other hand it goes the other way sideways; turned with the creature
-	const auto mirrored = creature_throw::TossVelocity(glm::vec3(3.0f, 1.0f, -10.0f), true, glm::mat3(1.0f), 0.6f);
+	const auto mirrored = creature_throw::TossVelocity(glm::vec3(3.0f, 1.0f, -10.0f), true, GameHeading(0.0f), 1.0f, 0.6f);
 	EXPECT_NEAR(mirrored.x, -1.8f, k_Tolerance);
-	const auto turned = creature_throw::TossVelocity(glm::vec3(0.0f, 0.0f, -10.0f), false,
-	                                                 glm::mat3(glm::eulerAngleY(glm::half_pi<float>())), 1.0f);
-	EXPECT_NEAR(turned.x, -10.0f, k_Tolerance);
+	// Ahead is -z at a heading of 0 and +x at a quarter turn
+	const auto turned =
+	    creature_throw::TossVelocity(glm::vec3(0.0f, 0.0f, -10.0f), false, GameHeading(glm::half_pi<float>()), 1.0f, 1.0f);
+	EXPECT_NEAR(turned.x, 10.0f, k_Tolerance);
 	EXPECT_NEAR(turned.z, 0.0f, k_Tolerance);
+	// Its size makes it faster
+	const auto bigger = creature_throw::TossVelocity(glm::vec3(3.0f, 1.0f, -10.0f), false, GameHeading(0.0f), 2.0f, 0.6f);
+	EXPECT_NEAR(bigger.z, -12.0f, k_Tolerance);
+}
+
+TEST(CreatureThrow, TheTossTakesTheShareBeforeTheSizeAndTurnsByTheHeadingAsTheGameDoes)
+{
+	// The game multiplies by the share and then the size, keeps the cosine as a float and the sine wide. The size
+	// first and a turn by a float matrix give 0xC0984974 and 0xC10EAEEA.
+	const auto velocity =
+	    creature_throw::TossVelocity(glm::vec3(-10.48f, 1.77f, -5.2f), false, GameHeading(0.62f), 1.44f, 0.6f);
+	EXPECT_EQ(std::bit_cast<uint32_t>(velocity.x), 0xC0984976u);
+	EXPECT_EQ(std::bit_cast<uint32_t>(velocity.y), 0x3FC3BF73u);
+	EXPECT_EQ(std::bit_cast<uint32_t>(velocity.z), 0xC10EAEEBu);
 }
 
 TEST(CreatureThrow, TheTossPointIsTheMiddleOfTheEndsOfTheHandsBranches)
