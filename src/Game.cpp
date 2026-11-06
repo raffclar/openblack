@@ -153,6 +153,7 @@
 #include "Simulation/TurnBody.h"
 #include "Simulation/WorldStart.h"
 #include "Temple/TempleHelp.h"
+#include "Temple/TempleKeys.h"
 #include "Video/VideoRules.h"
 #include "Visual/DetailLevel.h"
 
@@ -667,11 +668,21 @@ bool Game::Initialize() noexcept
 			{
 				return;
 			}
-			// Inside the temple, Escape goes back to its main room and out, as the temple's keys do
+			// Inside the temple, Escape goes back to its main room and out, as the temple's keys do. The temple keeps the
+			// key also when Escape does not act.
 			if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_ESCAPE && event.key.repeat == 0 &&
 			    Locator::temple::has_value() && Locator::temple::value().Active())
 			{
-				Locator::temple::value().Escape();
+				const auto& director = Locator::cinematicDirectorSystem::value();
+				const openblack::temple::keys::EscapeFacts facts {
+				    .modifierHeld = (event.key.keysym.mod & (KMOD_SHIFT | KMOD_CTRL | KMOD_ALT)) != 0,
+				    .scriptBars = director.IsWideScreenOn() && director.GetWideScreenOwner() != 0,
+				    .gameOver = Locator::entitiesRegistry::value().Context().gameOver,
+				};
+				if (openblack::temple::keys::EscapeLeavesRoom(facts))
+				{
+					Locator::temple::value().Escape();
+				}
 				return;
 			}
 			// The Creature Cave shown on its own closes on Escape
