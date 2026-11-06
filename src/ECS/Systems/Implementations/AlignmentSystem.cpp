@@ -42,10 +42,6 @@ using namespace openblack::ecs::components;
 
 namespace
 {
-/// The game moves the sky by a hundredth of a tenth of each millisecond of game time, from 0,
-/// good, to 2, evil: a whole of -1 to 1 a second
-constexpr float k_SkyTurnPerMillisecond = 0.001f;
-
 /// The number of the kinds of thing in the alignment table
 constexpr uint32_t k_AlignmentKinds = 14;
 
@@ -116,7 +112,7 @@ void AlignmentSystem::SetPlayerAlignment(PlayerNames player, float alignment)
 		{
 			component = &registry.Assign<Alignment>(*entity);
 		}
-		component->value = std::clamp(alignment, -1.0f, 1.0f);
+		component->value = alignment::HeldAlignment(alignment);
 	}
 }
 
@@ -219,7 +215,7 @@ void AlignmentSystem::UpdatePlayersTurn()
 			}
 		}
 	}
-	_camera = alignment::LandAlignment(alignment::MostInfluentialAlignment(std::span(players).first(count)));
+	_cameraLand = alignment::LandValue(alignment::MostInfluentialAlignment(std::span(players).first(count)));
 }
 
 void AlignmentSystem::UpdateCreaturesTurn()
@@ -263,6 +259,6 @@ void AlignmentSystem::CreatureTurn(entt::entity entity)
 
 void AlignmentSystem::Update(std::chrono::duration<float, std::milli> gameTime)
 {
-	const float step = gameTime.count() * k_SkyTurnPerMillisecond;
-	_sky = _sky < _camera ? std::min(_sky + step, _camera) : std::max(_sky - step, _camera);
+	// The frame's game time is in whole milliseconds
+	_skyLand = alignment::SkyLandValue(_skyLand, _cameraLand, static_cast<int64_t>(gameTime.count()));
 }

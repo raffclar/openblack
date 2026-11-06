@@ -8,8 +8,10 @@
  *******************************************************************************/
 
 #include <cmath>
+#include <cstdint>
 
 #include <array>
+#include <bit>
 #include <chrono>
 #include <limits>
 #include <memory>
@@ -138,6 +140,9 @@ TEST_F(Alignment, PlayersAreHeldBetweenEvilAndGood)
 	_alignment.AddPlayerAlignment(PlayerNames::PLAYER_ONE, -4.0f);
 	EXPECT_EQ(_alignment.GetPlayerAlignment(PlayerNames::PLAYER_ONE), -1.0f);
 	EXPECT_EQ(_alignment.GetPlayerAlignment(PlayerNames::PLAYER_TWO), 0.0f);
+	// A value that is not a number is wholly evil
+	_alignment.SetPlayerAlignment(PlayerNames::PLAYER_ONE, std::numeric_limits<float>::quiet_NaN());
+	EXPECT_EQ(_alignment.GetPlayerAlignment(PlayerNames::PLAYER_ONE), -1.0f);
 }
 
 TEST_F(Alignment, PlayersNotInTheGameHaveNone)
@@ -228,12 +233,57 @@ TEST(AlignmentRules, AnAmountAddedAtOnceIsHeldBetweenEvilAndGood)
 	EXPECT_EQ(AddedAlignment(std::numeric_limits<float>::quiet_NaN(), 0.5f), -1.0f);
 }
 
-TEST(AlignmentRules, TheLandShowsAnAlignmentHeldBetweenEvilAndGood)
+TEST(AlignmentRules, TheLandKeepsTwiceTheEvilnessHeldBetweenGoodAndEvil)
 {
-	using systems::alignment::LandAlignment;
-	EXPECT_FLOAT_EQ(LandAlignment(0.5f), 0.5f);
-	EXPECT_FLOAT_EQ(LandAlignment(-3.0f), -1.0f);
-	EXPECT_FLOAT_EQ(LandAlignment(2.0f), 1.0f);
+	using systems::alignment::LandValue;
+	EXPECT_EQ(LandValue(1.0f), 0.0f);
+	EXPECT_EQ(LandValue(0.0f), 1.0f);
+	EXPECT_EQ(LandValue(-1.0f), 2.0f);
+	EXPECT_EQ(LandValue(3.0f), 0.0f);
+	EXPECT_EQ(LandValue(-3.0f), 2.0f);
+	// A goodness that is not a number is fully evil
+	EXPECT_EQ(LandValue(std::numeric_limits<float>::quiet_NaN()), 2.0f);
+}
+
+TEST(AlignmentRules, TheTempleAndTheAudioTakeTheirAlignmentFromTheLandValue)
+{
+	using systems::alignment::AudioAlignment;
+	using systems::alignment::LandValue;
+	using systems::alignment::TempleLightAlignment;
+	// The evilness rounds, so the temple's alignment is not two times the goodness less 1. The bits come from the
+	// game's values in test/oracle/data/alignment_store.txt.
+	const auto land = LandValue(std::bit_cast<float>(0xbf66df91u));
+	EXPECT_EQ(std::bit_cast<uint32_t>(land), 0x3ff36fc8u);
+	EXPECT_EQ(std::bit_cast<uint32_t>(TempleLightAlignment(land)), 0xbf66df90u);
+	const auto nearNeutral = LandValue(std::bit_cast<float>(0xbbd1f67au));
+	EXPECT_EQ(std::bit_cast<uint32_t>(nearNeutral), 0x3f80d1f6u);
+	EXPECT_EQ(std::bit_cast<uint32_t>(TempleLightAlignment(nearNeutral)), 0xbbd1f600u);
+	// A goodness of 1e-8 has an evilness of 1
+	const auto almostEvil = LandValue((1e-8f * 2.0f) - 1.0f);
+	EXPECT_EQ(almostEvil, 2.0f);
+	EXPECT_EQ(TempleLightAlignment(almostEvil), -1.0f);
+	EXPECT_EQ(AudioAlignment(almostEvil), -1.0f);
+	EXPECT_EQ(AudioAlignment(LandValue(0.5f)), 0.5f);
+}
+
+TEST(AlignmentRules, TheSkyMovesAHundredthOfATenthEachMillisecondAndStopsAtTheLand)
+{
+	using systems::alignment::SkyLandValue;
+	EXPECT_EQ(SkyLandValue(1.0f, 2.0f, 500), 1.5f);
+	EXPECT_EQ(SkyLandValue(1.0f, 0.0f, 500), 0.5f);
+	EXPECT_EQ(SkyLandValue(1.0f, 1.2f, 500), 1.2f);
+	EXPECT_EQ(SkyLandValue(1.0f, 0.8f, 500), 0.8f);
+	EXPECT_EQ(SkyLandValue(1.0f, 2.0f, 0), 1.0f);
+	// The bits come from the game's sky in test/oracle/data/sky_land.txt
+	EXPECT_EQ(std::bit_cast<uint32_t>(SkyLandValue(std::bit_cast<float>(0x3f2f2939u), std::bit_cast<float>(0x3e92bbfeu), 74)),
+	          0x3f1c378fu);
+}
+
+TEST_F(Alignment, TheCameraAndTheSkyStartNeutral)
+{
+	EXPECT_EQ(_alignment.GetCameraLand(), 1.0f);
+	EXPECT_EQ(_alignment.GetSkyLand(), 1.0f);
+	EXPECT_EQ(_alignment.GetTempleLightAlignment(), 0.0f);
 }
 
 TEST_F(Alignment, TheSkyTurnsAWholeASecondOfGameTime)

@@ -1841,7 +1841,7 @@ void TempleInterior::Update(std::chrono::microseconds dt)
 		}
 		UpdateMapMarkers(milliseconds / 1000.0f);
 		// The temple is lit by the alignment, pulsing with the time
-		_light = TempleLight::At(Locator::alignmentSystem::value().GetCameraAlignment(),
+		_light = TempleLight::At(Locator::alignmentSystem::value().GetTempleLightAlignment(),
 		                         static_cast<uint32_t>(machine_clock::Ticks()));
 		// The room the player is in sets how thick the fog is, and the light its colour
 		_fog = TempleFog::In(_currentRoom == TempleRoom::CreatureCave, _light);
