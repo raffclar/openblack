@@ -117,6 +117,18 @@ LogoStill::LogoStill() noexcept
 	_zoomer.SetDestination(k_FadeIn.destination, 0.0f, k_FadeIn.seconds);
 }
 
+uint8_t LogoStill::Frame(int32_t milliseconds, StartupKeys& keys) noexcept
+{
+	const bool pressed = keys.SkipsLogo();
+	const bool beforeFadeOut = _phase < 2;
+	const auto alpha = Frame(milliseconds, pressed);
+	if (pressed && beforeFadeOut)
+	{
+		keys.Reset();
+	}
+	return alpha;
+}
+
 void LogoStill::NextPhase() noexcept
 {
 	++_phase;

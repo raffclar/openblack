@@ -326,6 +326,52 @@ TEST(Startup, PressingSkipsALogoStill)
 	EXPECT_TRUE(still.Ended());
 }
 
+TEST(Startup, OnlyEscapeAndClicksSkipTheLogoStills)
+{
+	StartupKeys keys;
+	// A key that is not Escape does nothing
+	keys.KeyDown(false);
+	EXPECT_FALSE(keys.SkipsLogo());
+	// Escape counts until any key goes up, or until another key goes down after it
+	keys.KeyDown(true);
+	EXPECT_TRUE(keys.EscapeDown());
+	keys.KeyDown(false);
+	EXPECT_FALSE(keys.EscapeDown());
+	keys.KeyDown(true);
+	keys.KeyUp();
+	EXPECT_FALSE(keys.EscapeDown());
+	// A click stays until the keys are reset
+	keys.Click();
+	keys.KeyUp();
+	EXPECT_TRUE(keys.SkipsLogo());
+	EXPECT_FALSE(keys.EscapeDown());
+	keys.Reset();
+	EXPECT_FALSE(keys.SkipsLogo());
+}
+
+TEST(Startup, AClickDuringTheFadeOutSkipsTheNextStillToo)
+{
+	StartupKeys keys;
+	LogoStill first;
+	first.Frame(100, keys);
+	// A click while it fades in starts the fade out and resets the keys
+	keys.Click();
+	first.Frame(100, keys);
+	EXPECT_FALSE(keys.SkipsLogo());
+	EXPECT_FALSE(first.Ended());
+	// A click while it fades out ends it, and the click stays
+	keys.Click();
+	first.Frame(100, keys);
+	EXPECT_TRUE(first.Ended());
+	EXPECT_TRUE(keys.SkipsLogo());
+	// The next still starts its fade out from opaque on its first frame
+	LogoStill second;
+	EXPECT_EQ(second.Frame(0, keys), 0);
+	EXPECT_FALSE(keys.SkipsLogo());
+	EXPECT_EQ(second.Frame(0, keys), 255);
+	EXPECT_FALSE(second.Ended());
+}
+
 TEST(Startup, PreIntro)
 {
 	EXPECT_TRUE(PlaysPreIntro(true, true));
