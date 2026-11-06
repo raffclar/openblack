@@ -48,6 +48,6 @@ float GameHandMoves::LandHeight(const map_coords::MapCoords& coords) const
 
 float GameHandMoves::InfluenceAt(const map_coords::MapCoords& coords) const
 {
-	// The game has no alliances yet, so the influence of the allies is not in the sum
+	// Where the god has no influence, the first ally that lends its influence there gives its influence
 	return Locator::influenceSystem::has_value() ? Locator::influenceSystem::value().PlayerInfluence(_player, coords) : 0.0f;
 }
