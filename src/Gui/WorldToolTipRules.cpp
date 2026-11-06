@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <array>
+#include <bit>
 
 #include <glm/vec4.hpp>
 
@@ -172,6 +173,113 @@ std::optional<glm::ivec2> HandOnScreen(const glm::mat4& worldToClip, float nearC
 glm::ivec2 KeptOnScreen(glm::ivec2 hand, glm::ivec2 screen, int size)
 {
 	return {std::clamp(hand.x, 0, std::max(screen.x - size, 0)), std::clamp(hand.y, 0, std::max(screen.y - size, 0))};
+}
+
+namespace
+{
+/// A ninth, as the game keeps it in a float
+constexpr float k_Ninth = std::bit_cast<float>(0x3DE38E39U);
+
+[[nodiscard]] int Cut(float value)
+{
+	return static_cast<int>(value);
+}
+
+[[nodiscard]] float AsFloat(int value)
+{
+	return static_cast<float>(value);
+}
+} // namespace
+
+float LineWidth(float textWidth, float iconWidth, int size, bool leftArrow, bool rightArrow, float gap)
+{
+	float icons = iconWidth;
+	if (leftArrow)
+	{
+		icons = AsFloat(size / 2) + icons;
+	}
+	if (rightArrow)
+	{
+		icons = AsFloat(size / 2) + icons;
+	}
+	return textWidth + icons + gap;
+}
+
+int LineStart(int handX, int size, float lineWidth, bool onLeft)
+{
+	if (!onLeft)
+	{
+		return handX - (size / 2);
+	}
+	return Cut(AsFloat(handX + (size / 2)) - lineWidth);
+}
+
+int IconStart(int textX, float textWidth, float gap, int size, bool leftArrow)
+{
+	const int iconX = Cut(AsFloat(textX) + textWidth + gap);
+	return leftArrow ? iconX + (size / 2) : iconX;
+}
+
+float WordsOffset(int size, int textSize)
+{
+	return (AsFloat(size) - AsFloat(textSize)) * 0.5f;
+}
+
+PixelBox IconGlow(int iconX, float iconWidth, int y, int size)
+{
+	return {.min = {iconX, y}, .max = {Cut(AsFloat(iconX) + iconWidth), y + size}};
+}
+
+PixelBox WordsGlow(int textX, float textWidth, int y, int size, float wordsOffset)
+{
+	return {.min = {textX, Cut(AsFloat(y) + wordsOffset)},
+	        .max = {Cut(AsFloat(textX) + textWidth), Cut(AsFloat(y + size) - wordsOffset)}};
+}
+
+PixelBox ArrowGlow(ArrowSide side, int iconX, float iconWidth, int y, int size)
+{
+	const int half = size / 2;
+	const int quarter = size / 4;
+	const int threeQuarters = (size * 3) / 4;
+	switch (side)
+	{
+	case ArrowSide::Left:
+		return {.min = {iconX - half, y + quarter}, .max = {iconX, y + threeQuarters}};
+	case ArrowSide::Right:
+		return {.min = {Cut(AsFloat(iconX) + iconWidth), y + quarter},
+		        .max = {Cut(AsFloat(half) + AsFloat(iconX) + iconWidth), y + threeQuarters}};
+	case ArrowSide::Up:
+		return {.min = {iconX + quarter, y - half}, .max = {iconX + threeQuarters, y}};
+	case ArrowSide::Down:
+	default:
+		return {.min = {iconX + quarter, y + size}, .max = {iconX + threeQuarters, y + half + size}};
+	}
+}
+
+PixelBox ArrowPicture(ArrowSide side, int iconX, float iconWidth, int y, int size)
+{
+	// The step is negative: the low sides add it and the high sides take it away
+	const float step = AsFloat(-size) * k_Ninth;
+	const int half = size / 2;
+	const int quarter = size / 4;
+	const int threeQuarters = (size * 3) / 4;
+	const float x = AsFloat(iconX);
+	switch (side)
+	{
+	case ArrowSide::Left:
+		return {.min = {Cut(AsFloat(iconX - half) + step), Cut(AsFloat(y + quarter) + step)},
+		        .max = {Cut(x - step), Cut(AsFloat(y + threeQuarters) - step)}};
+	case ArrowSide::Right:
+		return {.min = {Cut(x + step + iconWidth), Cut(AsFloat(y + quarter) + step)},
+		        .max = {Cut(x - step + AsFloat(half) + iconWidth), Cut(AsFloat(y + threeQuarters) - step)}};
+	case ArrowSide::Up:
+		return {.min = {Cut(AsFloat(iconX + quarter) + step), Cut(AsFloat(y - half) + step)},
+		        .max = {Cut(x - step + AsFloat(threeQuarters)), Cut(AsFloat(y) - step)}};
+	case ArrowSide::Down:
+	default:
+		return {.min = {Cut(AsFloat(iconX + quarter) + step), Cut(AsFloat(y + size) + step)},
+		        .max = {Cut(x - step + AsFloat(threeQuarters)), Cut(AsFloat(y + half + size) - step)}};
+	}
 }
 
 std::optional<uint32_t> HeldMiracle(magic::HeldCastOffer offer)

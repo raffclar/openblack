@@ -314,14 +314,18 @@ constexpr std::array k_GlowV = {0.25f, 0.328125f, 0.41796875f, 0.49609375f};
 struct ToolTipArrow
 {
 	uint32_t bit;
+	world_tooltip::ArrowSide side;
 	glm::vec2 uvMin;
 	glm::vec2 uvMax;
 };
 constexpr std::array k_ToolTipArrows = {
-    ToolTipArrow {ToolTipArrows::k_Left, {0.7539f, 0.1289f}, {0.8711f, 0.2461f}},
-    ToolTipArrow {ToolTipArrows::k_Right, {0.8789f, 0.0039f}, {0.9961f, 0.1211f}},
-    ToolTipArrow {ToolTipArrows::k_Up, {0.7539f, 0.0039f}, {0.8711f, 0.1211f}},
-    ToolTipArrow {ToolTipArrows::k_Down, {0.8789f, 0.1289f}, {0.9961f, 0.2461f}},
+    ToolTipArrow {
+        ToolTipArrows::k_Left, world_tooltip::ArrowSide::Left, {0.75390625f, 0.12890625f}, {0.87109375f, 0.24609375f}},
+    ToolTipArrow {
+        ToolTipArrows::k_Right, world_tooltip::ArrowSide::Right, {0.87890625f, 0.00390625f}, {0.99609375f, 0.12109375f}},
+    ToolTipArrow {ToolTipArrows::k_Up, world_tooltip::ArrowSide::Up, {0.75390625f, 0.00390625f}, {0.87109375f, 0.12109375f}},
+    ToolTipArrow {
+        ToolTipArrows::k_Down, world_tooltip::ArrowSide::Down, {0.87890625f, 0.12890625f}, {0.99609375f, 0.24609375f}},
 };
 /// The tooltips' mice for a wheel mouse, the third row of mousehelp.raw
 constexpr int k_ToolTipMouseRow = 2;
@@ -3263,13 +3267,12 @@ void GameInterface::DrawToolTip(glm::u16vec2 resolution)
 	}
 	const bool left = (shown->arrows & ToolTipArrows::k_Left) != 0;
 	const bool right = (shown->arrows & ToolTipArrows::k_Right) != 0;
-	const float iconsWidth = iconWidth + static_cast<float>((left ? size / 2 : 0) + (right ? size / 2 : 0));
 	const int textSize = size * 2 / 3;
 	const float textWidth = _font.GetWidth(text, static_cast<float>(textSize));
 	// The gap after the words and the shadows' offset are pixels of the default screen
 	const float pixel = ReferenceScale(width, height);
 	const float gap = 2.0f * pixel;
-	const float total = textWidth + iconsWidth + gap;
+	const float total = world_tooltip::LineWidth(textWidth, iconWidth, size, left, right, gap);
 
 	// Right of the hand, or left of it in the right third of the screen, until it reaches the left third
 	if (handX > width * 2 / 3)
@@ -3280,46 +3283,34 @@ void GameInterface::DrawToolTip(glm::u16vec2 resolution)
 	{
 		_toolTipOnLeft = false;
 	}
-	const float x = _toolTipOnLeft ? static_cast<float>(handX + (size / 2)) - total : static_cast<float>(handX - (size / 2));
-	const float textX = x;
-	const float iconX = std::trunc(x + textWidth + gap) + (left ? static_cast<float>(size / 2) : 0.0f);
+	const int lineX = world_tooltip::LineStart(handX, size, total, _toolTipOnLeft);
+	const int lineIconX = world_tooltip::IconStart(lineX, textWidth, gap, size, left);
+	const auto textX = static_cast<float>(lineX);
+	const auto iconX = static_cast<float>(lineIconX);
 	const auto y = static_cast<float>(handY);
 	const auto sizeF = static_cast<float>(size);
-	const auto textOffset = static_cast<float>((size - textSize) / 2);
+	const float textOffset = world_tooltip::WordsOffset(size, textSize);
+	const auto drawGlow = [this](const world_tooltip::PixelBox& box, glm::vec4 colour) {
+		DrawGlow(glm::vec2(box.min), glm::vec2(box.max), colour);
+	};
 
 	// The glows behind: white behind the mouse, and faint yellow behind the words and arrows
 	const float glowAlpha = std::trunc(128.0f * shown->alpha) / 255.0f;
 	const float faintAlpha = std::trunc(128.0f * shown->alpha / 3.0f) / 255.0f;
 	if (iconWidth != 0.0f)
 	{
-		DrawGlow({iconX, y}, {iconX + iconWidth, y + sizeF}, glm::vec4(1.0f, 1.0f, 1.0f, glowAlpha));
+		drawGlow(world_tooltip::IconGlow(lineIconX, iconWidth, handY, size), glm::vec4(1.0f, 1.0f, 1.0f, glowAlpha));
 	}
 	if (!text.empty())
 	{
-		DrawGlow({textX, y + textOffset}, {textX + textWidth, y + sizeF - textOffset}, glm::vec4(1.0f, 1.0f, 0.0f, faintAlpha));
+		drawGlow(world_tooltip::WordsGlow(lineX, textWidth, handY, size, textOffset), glm::vec4(1.0f, 1.0f, 0.0f, faintAlpha));
 	}
-	const float half = sizeF * 0.5f;
-	const float quarter = sizeF * 0.25f;
-	const auto arrowRect = [&](uint32_t bit) -> std::pair<glm::vec2, glm::vec2> {
-		const float iconRight = iconX + iconWidth;
-		switch (bit)
-		{
-		case ToolTipArrows::k_Left:
-			return {{iconX - half, y + quarter}, {iconX, y + (3.0f * quarter)}};
-		case ToolTipArrows::k_Right:
-			return {{iconRight, y + quarter}, {iconRight + half, y + (3.0f * quarter)}};
-		case ToolTipArrows::k_Up:
-			return {{iconX + quarter, y - half}, {iconX + (3.0f * quarter), y}};
-		default:
-			return {{iconX + quarter, y + sizeF}, {iconX + (3.0f * quarter), y + (1.5f * sizeF)}};
-		}
-	};
 	for (const auto& arrow : k_ToolTipArrows)
 	{
 		if ((shown->arrows & arrow.bit) != 0)
 		{
-			const auto [min, max] = arrowRect(arrow.bit);
-			DrawGlow(min, max, glm::vec4(1.0f, 1.0f, 0.0f, faintAlpha));
+			drawGlow(world_tooltip::ArrowGlow(arrow.side, lineIconX, iconWidth, handY, size),
+			         glm::vec4(1.0f, 1.0f, 0.0f, faintAlpha));
 		}
 	}
 
@@ -3348,13 +3339,12 @@ void GameInterface::DrawToolTip(glm::u16vec2 resolution)
 	}
 	if (_atmos != nullptr)
 	{
-		const float grow = static_cast<float>(size / 9);
 		for (const auto& arrow : k_ToolTipArrows)
 		{
 			if ((shown->arrows & arrow.bit) != 0)
 			{
-				const auto [min, max] = arrowRect(arrow.bit);
-				_canvas.DrawQuad(min - grow, max + grow, arrow.uvMin, arrow.uvMax, white, _atmos.get());
+				const auto box = world_tooltip::ArrowPicture(arrow.side, lineIconX, iconWidth, handY, size);
+				_canvas.DrawQuad(glm::vec2(box.min), glm::vec2(box.max), arrow.uvMin, arrow.uvMax, white, _atmos.get());
 			}
 		}
 	}
