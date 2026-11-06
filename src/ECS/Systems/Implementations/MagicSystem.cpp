@@ -409,6 +409,15 @@ bool MagicSystem::CanCastAt(MagicType type, PlayerNames player, glm::vec3 point)
 	return Locator::infoConstants::has_value() && magic::spells::CanCastAt(*this, type, player, point, _ignoreInfluence);
 }
 
+bool MagicSystem::MeetsKindRule(MagicType type, glm::vec3 point, bool onThing)
+{
+	if (!Locator::infoConstants::has_value())
+	{
+		return false;
+	}
+	return onThing ? magic::spells::MeetsKindRuleOn(*this, type, point) : magic::spells::MeetsKindRuleAt(*this, type, point);
+}
+
 bool MagicSystem::SpellEvent(entt::entity entity, const particles::SpellEventInfo& event)
 {
 	return OnSpellEvent(entity, event);

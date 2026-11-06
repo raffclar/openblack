@@ -192,35 +192,6 @@ Result SetToPlaceDirect(HandAction& action, const World& /*world*/, const Step& 
 	return Result::Next;
 }
 
-Result CountStart(HandAction& action, const World& /*world*/, const Step& /*step*/)
-{
-	action.counter = 0;
-	return Result::Next;
-}
-
-/// The hand waits until the thing is nearer the place than the distance of the second argument, for one minute at most
-Result WaitForNear(HandAction& action, const World& world, const Step& step)
-{
-	++action.counter;
-	const auto most = static_cast<uint32_t>(map_coords::FtoL(static_cast<float>(k_TurnsPerSecond) * k_WaitForNearSeconds));
-	if (action.counter > most)
-	{
-		return Result::Abort;
-	}
-	const auto coords = world.moves.CoordsOf(ArgumentAt(step, 0).object);
-	if (!coords.has_value())
-	{
-		return Result::Abort;
-	}
-	const auto at = PlaceOf(world, *coords);
-	const auto near = ArgumentAt(step, 1);
-	const float dx = at.x - near.place.x;
-	const float dy = at.y - near.place.y;
-	const float dz = at.z - near.place.z;
-	const float distance = std::sqrt(dz * dz + dy * dy + dx * dx);
-	return distance < near.value ? Result::Next : Result::Continue;
-}
-
 } // namespace
 
 void openblack::computer_hand::steps::AddMoveSteps(StepTable& table)
@@ -233,7 +204,6 @@ void openblack::computer_hand::steps::AddMoveSteps(StepTable& table)
 	        {.made = true, .start = MoveToObjectStart, .process = MoveNearObject});
 	AddStep(table, k_Moves, StepKind::MoveHandToPosStopWhenOutOfInfluence,
 	        {.made = true, .start = MoveToPlaceStart, .process = MoveToPlaceInInfluence});
-	AddStep(table, k_Moves, StepKind::WaitForObjectToBeNearPos, {.made = true, .start = CountStart, .process = WaitForNear});
 	AddStep(table, k_Moves, StepKind::SetHandToPos, {.made = true, .process = SetToPlace});
 	AddStep(table, k_Moves, StepKind::MoveHandToPosDirectYInterpolation,
 	        {.made = true, .start = MoveToPlaceStart, .process = MoveDirect});

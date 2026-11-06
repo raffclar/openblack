@@ -230,8 +230,8 @@ struct PlannerState
 {
 	/// The best plan found for each desire, the last time it was planned
 	std::array<std::optional<Plan>, creature_desires::k_DesireCount> best {};
-	/// The desire planned next
-	size_t nextGoal {0};
+	/// The desires that still wait for their turn to plan in this round
+	std::array<bool, creature_desires::k_DesireCount> round {};
 	/// The plan carried out
 	std::optional<Plan> current;
 	/// The thing that the last plan acted on. It stays after the plan stops, until the creature starts a new plan.
@@ -246,10 +246,17 @@ struct PlannerState
 /// The action of the plan carried out, else of the last plan, as scripts and other creatures see it. A creature that
 /// never had a plan shows the first action
 [[nodiscard]] uint32_t ActionInView(const PlannerState& state);
-/// The next desires to plan this turn, going round those that may be planned
-[[nodiscard]] std::vector<creature_desires::Desire> NextGoals(PlannerState& state,
-                                                              const std::array<bool, creature_desires::k_DesireCount>& eligible,
-                                                              size_t count = k_GoalsPerTurn);
+/// The desires that take a turn in a new round: each desire that is on and not held back, also one at 0 or with no
+/// action
+[[nodiscard]] std::array<bool, creature_desires::k_DesireCount> RoundOf(const creature_desires::Desires& desires);
+/// The next desires of the round to plan this turn, the first desire first. When the round ends, this turn plans fewer
+/// desires.
+[[nodiscard]] std::vector<creature_desires::Desire> NextGoals(PlannerState& state, size_t count = k_GoalsPerTurn);
+/// Whether every desire of the round had its turn. Then the creature chooses its plan, and a new round starts.
+[[nodiscard]] bool RoundEnded(const PlannerState& state);
+/// Removes each plan of the desires that uses a thing that is gone: the whole thing that it is about, the thing that it
+/// acts on or the thing that it uses. Returns whether it removed a plan.
+bool DropPlansOfGoneThings(PlannerState& state, const std::function<bool(uint32_t)>& gone);
 
 /// What the creature's state is when some desires get a plan or not. A desire that its state does not let it plan
 /// still takes its turn among the desires to plan, but it loses its plan.

@@ -144,22 +144,19 @@ bool GameHandCasts::CastFrom(MagicType type, entt::entity target, const map_coor
 	{
 		return false;
 	}
-	// A food or wood miracle lands only on land
-	if (type == MagicType::Food || type == MagicType::Wood)
+	const auto at =
+	    glm::vec3(map_coords::ToMetres(targetCoords.x), targetCoords.altitude, map_coords::ToMetres(targetCoords.z));
+	auto& magicSystem = Locator::magicSystem::value();
+	// The kind of the miracle must let it go there. For example, a heal needs someone to heal, and food needs land.
+	if (!magicSystem.MeetsKindRule(type, at, target != entt::null))
 	{
-		const auto* cell = Locator::terrainSystem::value().FindCell(glm::u16vec2(map_coords::Cell(targetCoords)));
-		if (cell == nullptr || cell->properties.hasWater != 0)
-		{
-			return false;
-		}
+		return false;
 	}
 	const auto& info = Locator::infoConstants::value();
 	const auto& effect = magic::GetMagicEffectInfo(info, type);
 	const map_coords::MapCoords handCoords {
 	    .x = map_coords::ToFixed(hand.x), .z = map_coords::ToFixed(hand.z), .altitude = hand.y};
 	const auto from = glm::vec3(map_coords::ToMetres(handCoords.x), handCoords.altitude, map_coords::ToMetres(handCoords.z));
-	const auto at =
-	    glm::vec3(map_coords::ToMetres(targetCoords.x), targetCoords.altitude, map_coords::ToMetres(targetCoords.z));
 	const magic::SpellCastData cast {.magnitude = magnitude,
 	                                 .chants = effect.initialChants,
 	                                 .duration = effect.timerWhenComputerPlayerCasting,
@@ -172,7 +169,6 @@ bool GameHandCasts::CastFrom(MagicType type, entt::entity target, const map_coor
 	                                      .spin = 0.0f};
 	const auto seed = magic::FindFirstSpellSeedForMagicType(info, type);
 	const bool onObject = target != entt::null && seed.has_value() && magic::GetSpellSeedInfo(info, *seed).castOnObject != 0;
-	auto& magicSystem = Locator::magicSystem::value();
 	const auto spell = onObject ? magicSystem.CastOnObject(type, _player, target, cast, process)
 	                            : magicSystem.CastAtPoint(type, _player, at, cast, process);
 	if (spell == entt::null)

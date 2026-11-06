@@ -12,6 +12,7 @@
 
 #include <algorithm>
 #include <array>
+#include <bit>
 #include <filesystem>
 #include <numbers>
 #include <vector>
@@ -19,6 +20,7 @@
 #include <GestureFile.h>
 #include <gtest/gtest.h>
 
+#include "Common/X87.h"
 #include "Gestures/GestureMatcher.h"
 #include "Gestures/GesturePaths.h"
 #include "Gestures/GestureRecorder.h"
@@ -85,6 +87,28 @@ TEST(GestureAngles, HeadingsTurnsAndDirections)
 	EXPECT_EQ(DirectionOf(HeadingOf({0.0f, 1.0f})), 4);
 	EXPECT_EQ(DirectionOf(HeadingOf({-1.0f, 0.0f})), 6);
 	EXPECT_EQ(DirectionOf(HeadingOf({1.0f, -1.0f})), 1);
+}
+
+TEST(GestureAngles, AHalfTurnBackIsAHalfTurnOn)
+{
+	// Exactly half a turn either way is half a turn on, as in the game
+	EXPECT_EQ(TurnBetween(k_Pi, 0.0f), k_Pi);
+	EXPECT_EQ(TurnBetween(0.0f, k_Pi), k_Pi);
+	EXPECT_NEAR(TurnBetween(k_Pi, 0.01f), -k_Pi + 0.01f, 1e-5f);
+}
+
+TEST(GestureAngles, ADirectionMultipliesByTheGamesInverseOfTwoPi)
+{
+	// The game multiplies by its float one over two pi. Dividing by two pi gives 6 for this heading, near the line
+	// between the directions 5 and 6
+	EXPECT_EQ(DirectionOf(std::bit_cast<float>(0x402FEDE0u)), 5);
+}
+
+TEST(GestureAngles, AHeadingRoundsToAFloatOneTime)
+{
+	// Going left, the heading is the float of pi; up the screen it is the float of the wide arctangent plus two pi
+	EXPECT_EQ(HeadingOf({-1.0f, 0.0f}), k_Pi);
+	EXPECT_EQ(HeadingOf({0.0f, -3.0f}), openblack::x87::Add(-std::numbers::pi / 2.0, 2.0f * k_Pi));
 }
 
 TEST(GestureRecorder, AStraightStrokeHasNoCorners)

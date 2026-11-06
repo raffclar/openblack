@@ -38,6 +38,14 @@ CREATE_NEW_TREE(-1, "-80.00,60.00", 5, 1, 0.000000, 1.000000, 1.000000)
 CREATE_NEW_TREE(-1, "-84.00,84.00", 5, 1, 0.000000, 1.000000, 1.000000)
 CREATE_NEW_TREE(-1, "-84.50,84.00", 5, 1, 0.000000, 1.000000, 1.000000))";
 
+/// Lines of a land's script that make a town far from the testbed's town, and two town centres at the same place.
+/// Then they make a temple at that place and a temple 120 m to the north.
+constexpr std::string_view k_CentrePlaceScript = R"(CREATE_TOWN(950, "-120.00,-300.00", "NEUTRAL", 7, "NORSE")
+CREATE_TOWN_CENTRE(950, "-120.00,-270.00", "NORSE_ABODE_TOWN_CENTRE", 0, 1000, 0)
+CREATE_TOWN_CENTRE(950, "-120.00,-270.00", "NORSE_ABODE_TOWN_CENTRE", 0, 1000, 0)
+CREATE_CITADEL("-120.00,-270.00", 0, "PLAYER_TWO", 0, 1000)
+CREATE_CITADEL("-120.00,-150.00", 0, "PLAYER_TWO", 0, 1000))";
+
 /// Lines of a land's script that make a pot in the middle of the field below and a pot 12 m to one side of it
 constexpr std::string_view k_PotOnFieldScript = R"(CREATE_POT("-120.00,20.00", 12, 0, 1000)
 CREATE_POT("-120.00,8.00", 12, 0, 1000))";
@@ -601,6 +609,20 @@ void testbed_scenarios::AddVortexScenarios(std::vector<Scenario>& all)
 	                .look = {k_OnThePlane.x, 0.0f, k_OnThePlane.y - 46.0f}},
 	    .objects = {{.type = FieldTypeInfo::Wheat, .offset = k_OnThePlane + glm::vec2(0.0f, -40.0f)}},
 	    .landScript = k_PotOnFieldScript,
+	});
+
+	all.push_back({
+	    .id = "story.centre_and_temple_need_room",
+	    .name = "A land's script makes a town centre or a temple only where no building is in its way",
+	    .facet = Facet::Story,
+	    .description = "Lines of a land's script make a town on the flat plane, far from the testbed's town. Then they "
+	                   "make two town centres at the same place, a temple at that place and a temple 120 m to the north.",
+	    .expected = "The game makes the first town centre and the temple to the north. The first centre is in the way "
+	                "of the second centre and of the first temple, so the game does not make them. The log has a "
+	                "line for each one that the script does not make.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {-260.0f, 150.0f, -400.0f}, .look = {-170.0f, 0.0f, -210.0f}},
+	    .landScript = k_CentrePlaceScript,
 	});
 
 	// The story's top script ends each land with two calls: all other scripts stop, then the next land loads

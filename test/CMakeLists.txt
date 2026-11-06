@@ -2404,4 +2404,12 @@ set_tests_properties(
   PROPERTIES ENVIRONMENT
              "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
 )
+openblack_setup_and_add_test(
+  test_oracle_physics_touch oracle/test_oracle_physics_touch.cpp
+)
+set_tests_properties(
+  test_oracle_physics_touch
+  PROPERTIES ENVIRONMENT
+             "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)
 openblack_setup_and_add_test(test_main_storage_pit test_main_storage_pit.cpp)

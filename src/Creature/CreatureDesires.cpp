@@ -221,7 +221,11 @@ void creature_desires::Suppress(Desires& desires, Desire desire, float seconds, 
 {
 	auto& state = desires[desire];
 	const auto turns = static_cast<uint32_t>(std::max(seconds * turnsPerSecond, 0.0f));
-	state.suppressedTurns = std::max(state.suppressedTurns, turns);
+	if (turns > state.suppressedTurns)
+	{
+		state.suppressedTurns = turns;
+		state.losesPlan = true;
+	}
 }
 
 void creature_desires::SetSource(Desires& desires, uint32_t type, float value)

@@ -19,6 +19,7 @@
 #include <iterator>
 #include <map>
 #include <memory>
+#include <numbers>
 #include <optional>
 #include <set>
 #include <string>
@@ -136,18 +137,23 @@ public:
 	[[nodiscard]] bool CanBeDestroyedBySpell(entt::entity /*object*/) const override { return false; }
 	[[nodiscard]] bool IsCreature(entt::entity /*object*/) const override { return false; }
 	void ExplodeObject(entt::entity /*object*/, glm::vec3 /*origin*/, float /*speed*/) override {}
-	void ExplodeMesh(entt::id_type /*mesh*/, const glm::mat4& /*transform*/, glm::vec3 /*origin*/, float /*speed*/) override {}
+	void ExplodeMesh(entt::id_type /*mesh*/, const glm::mat4& transform, glm::vec3 /*origin*/, float /*speed*/) override
+	{
+		meshes.push_back(transform);
+	}
 	[[nodiscard]] std::vector<ExplodeRecord> TakeExplodeRecords(int queue) override
 	{
 		return queue == 0 ? std::exchange(records, {}) : std::vector<ExplodeRecord> {};
 	}
 	void DestroyByBeam(entt::entity /*object*/) override {}
-	void AddRubbleMark(glm::vec3 /*centre*/) override {}
+	void AddRubbleMark(glm::vec3 /*centre*/, float yaw) override { rubbleYaws.push_back(yaw); }
 	void AddWaterRing(glm::vec3 /*centre*/, float /*size*/) override {}
 	void ShakeCamera(glm::vec3 /*position*/, float /*radius*/, float /*strength*/, int32_t /*milliseconds*/) override {}
 	[[nodiscard]] bool IsDryLand(glm::vec3 /*point*/) const override { return true; }
 
 	std::vector<ExplodeRecord> records;
+	std::vector<glm::mat4> meshes;
+	std::vector<float> rubbleYaws;
 };
 
 /// The game's generator on seeds of its own
@@ -383,6 +389,27 @@ TEST_F(ParticleEffectTest, ThePiecesOfABrokenModelStartWhiteAndOnlyTheirAlphaFad
 	// A new particle is white, and the piece keeps that colour. Only its alpha fades, to half after a second and a half.
 	EXPECT_EQ(atoms[0].rgb, (std::array<uint8_t, 3> {0xFF, 0xFF, 0xFF}));
 	EXPECT_NEAR(atoms[0].alpha, 127.5f, 1.0f);
+}
+
+TEST_F(ParticleEffectTest, TheRubbleOfABlastTakesItsYawFromTheEffectsNumbersBeforeTheRocks)
+{
+	FakeObjectEffects objects;
+	world.objects = &objects;
+	auto effect =
+	    Make(Header() + Object("UR_Explosion", "UR_Explosion0",
+	                           "PROPERTY Group INTEGER 0\nPROPERTY InitialDelay FLOAT 0\nPROPERTY BeamDelay FLOAT 100\n"
+	                           "PROPERTY SmokeDelay FLOAT 100\n"));
+	// The same numbers drawn by hand: first the yaw of the rubble, then the place across of the first rock
+	FakeRandom expected;
+	expected.SetParticleStream(ParticleRandomStream::Local);
+	const float yaw = expected.ParticleFloatRand(2.0f * std::numbers::pi_v<float>);
+	const float across = expected.ParticleFloatRand(-4.0f, 4.0f);
+	effect->Step(k_Step);
+	effect->Step(k_Step);
+	ASSERT_EQ(objects.rubbleYaws.size(), 1u);
+	EXPECT_EQ(std::bit_cast<uint32_t>(objects.rubbleYaws[0]), std::bit_cast<uint32_t>(yaw));
+	ASSERT_EQ(objects.meshes.size(), 5u);
+	EXPECT_EQ(std::bit_cast<uint32_t>(objects.meshes[0][3].z), std::bit_cast<uint32_t>(across));
 }
 
 TEST_F(ParticleEffectTest, AnEffectToldSoStepsTwiceTheFirstTime)

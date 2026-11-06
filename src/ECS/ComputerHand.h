@@ -165,8 +165,6 @@ constexpr float k_NearPlaceSideStep = 1.4142f;
 constexpr float k_NearObjectSideStep = 1.41421f;
 static_assert(std::bit_cast<uint32_t>(k_NearPlaceSideStep) == 0x3FB50481u);
 static_assert(std::bit_cast<uint32_t>(k_NearObjectSideStep) == 0x3FB504D5u);
-/// The seconds that the hand waits for a thing to come near a place before the action ends badly
-constexpr float k_WaitForNearSeconds = 60.0f;
 /// The flight of a thing that the hand throws: the time in seconds is the square root of the distance times this
 constexpr float k_ThrowTimeScale = 0.101936795f;
 static_assert(std::bit_cast<uint32_t>(k_ThrowTimeScale) == 0x3DD0C43Du);

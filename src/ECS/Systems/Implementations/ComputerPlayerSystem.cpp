@@ -40,6 +40,7 @@
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/HandStart.h"
 #include "ECS/Components/PlayerRelations.h"
+#include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/CreatureFromFile.h"
@@ -197,6 +198,12 @@ public:
 			Locator::creatureMindSystem::value().SetKnowsAction(creature, CreatureActionLearningType::Magic,
 			                                                    static_cast<uint32_t>(miracle), true);
 		}
+	}
+
+	[[nodiscard]] bool ScriptControls(entt::entity creature) const override
+	{
+		const auto& registry = Locator::entitiesRegistry::value();
+		return registry.Valid(creature) && registry.AllOf<ecs::components::ScriptControlled>(creature);
 	}
 
 	uint32_t GameRand(uint32_t range) override { return Locator::gameRandom::value().GameRand(range); }
