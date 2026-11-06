@@ -11,9 +11,11 @@
 
 #include <cmath>
 
+#include <algorithm>
 #include <array>
 #include <chrono>
 #include <numbers>
+#include <optional>
 #include <string_view>
 
 #include <SDL_events.h>
@@ -353,4 +355,76 @@ TEST(GameActionMap, AnAnsweredMessageBoxGivesTheKeyboardBackAtOnce)
 	map.BoxAnswered();
 	EXPECT_FALSE(map.BoxHasKeyboard());
 	EXPECT_TRUE(map.Get(BindableActionMap::MOVE_FORWARDS));
+}
+
+// With a mouse that has no wheel, the zoom rows have no mouse input and the turn around the cursor is on the 0 key
+TEST(KeyBindings, NoWheelDefaultsMatchTheGame)
+{
+	for (size_t i = 0; i < k_KeyBindingCount; ++i)
+	{
+		const auto& withWheel = k_DefaultKeyBindings.at(i);
+		const auto& noWheel = k_NoWheelDefaultKeyBindings.at(i);
+		EXPECT_EQ(noWheel.action, withWheel.action) << i;
+		EXPECT_EQ(noWheel.name, withWheel.name) << i;
+		switch (withWheel.action)
+		{
+		case BindableActionMap::ZOOM_OUT:
+		case BindableActionMap::ZOOM_IN:
+			EXPECT_EQ(noWheel.key, std::nullopt) << i;
+			EXPECT_EQ(noWheel.mouse, MouseInput::None) << i;
+			break;
+		case BindableActionMap::ROTATE_AROUND_MOUSE_ON:
+			EXPECT_EQ(noWheel.key, KeyChord {SDL_SCANCODE_0}) << i;
+			EXPECT_EQ(noWheel.mouse, MouseInput::None) << i;
+			break;
+		default:
+			EXPECT_EQ(noWheel, withWheel) << i;
+			break;
+		}
+	}
+	EXPECT_TRUE(FindConflicts(k_NoWheelDefaultKeyBindings).empty());
+	EXPECT_EQ(ActionsForKeyDown(k_NoWheelDefaultKeyBindings, SDL_SCANCODE_0, KMOD_NONE),
+	          BindableActionMap::ROTATE_AROUND_MOUSE_ON);
+	EXPECT_EQ(ActionsForMouse(k_NoWheelDefaultKeyBindings, MouseInput::MiddleButton), BindableActionMap::NONE);
+}
+
+TEST(KeyBindings, DefaultsFollowTheWheel)
+{
+	EXPECT_EQ(&DefaultKeyBindings(Platform::Desktop, true), &k_DefaultKeyBindings);
+	EXPECT_EQ(&DefaultKeyBindings(Platform::Desktop, false), &k_NoWheelDefaultKeyBindings);
+	EXPECT_EQ(&DefaultKeyBindings(Platform::Web, true), &k_WebDefaultKeyBindings);
+	EXPECT_EQ(&DefaultKeyBindings(Platform::Web, false), &k_WebNoWheelDefaultKeyBindings);
+	EXPECT_EQ(ActionsForKeyDown(k_WebNoWheelDefaultKeyBindings, SDL_SCANCODE_0, KMOD_NONE),
+	          BindableActionMap::ROTATE_AROUND_MOUSE_ON);
+}
+
+// The game starts with the defaults for a mouse with no wheel when the system says so. After the wheel turns, Load
+// Defaults gives the defaults for a mouse with a wheel.
+TEST(GameActionMap, NoWheelDefaultsUntilTheWheelTurns)
+{
+	GameActionMap map(false);
+	EXPECT_EQ(map.GetKeyBindings()[*IndexOf(map.GetKeyBindings(), BindableActionMap::ROTATE_AROUND_MOUSE_ON)].key,
+	          KeyChord {SDL_SCANCODE_0});
+	EXPECT_EQ(&map.GetDefaultKeyBindings(), &DefaultKeyBindings(k_Platform, false));
+	map.Frame();
+	map.ProcessEvent(KeyEvent(SDL_KEYDOWN, SDL_SCANCODE_0));
+	EXPECT_TRUE(Pressed(map, BindableActionMap::ROTATE_AROUND_MOUSE_ON));
+	map.ProcessEvent(KeyEvent(SDL_KEYUP, SDL_SCANCODE_0));
+
+	SDL_Event wheel {};
+	wheel.type = SDL_MOUSEWHEEL;
+	wheel.wheel.y = 1;
+	wheel.wheel.preciseY = 1.0f;
+	map.ProcessEvent(wheel);
+	EXPECT_EQ(&map.GetDefaultKeyBindings(), &DefaultKeyBindings(k_Platform, true));
+	map.ResetKeyBindings();
+	EXPECT_EQ(map.GetKeyBindings()[*IndexOf(map.GetKeyBindings(), BindableActionMap::ROTATE_AROUND_MOUSE_ON)].mouse,
+	          MouseInput::MiddleButton);
+}
+
+TEST(GameActionMap, WheelDefaultsWhenTheSystemSaysWheel)
+{
+	const GameActionMap map;
+	EXPECT_EQ(&map.GetDefaultKeyBindings(), &DefaultKeyBindings());
+	EXPECT_TRUE(std::ranges::equal(map.GetKeyBindings(), DefaultKeyBindings()));
 }

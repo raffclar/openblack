@@ -40,7 +40,8 @@ class GameActionMap final: public GameActionInterface
 {
 
 public:
-	GameActionMap();
+	/// The defaults for a mouse with no wheel apply from the start when the system says that the mouse has no wheel
+	explicit GameActionMap(bool systemSaysWheel = true);
 	GameActionMap(const GameActionMap&) = delete;
 	GameActionMap& operator=(const GameActionMap&) = delete;
 
@@ -64,6 +65,7 @@ public:
 	[[nodiscard]] std::span<const KeyBinding> GetKeyBindings() const final;
 	void SetKeyBinding(BindableActionMap action, std::optional<KeyChord> key) final;
 	void ResetKeyBindings() final;
+	[[nodiscard]] const KeyBindingTable& GetDefaultKeyBindings() const final;
 	void SetKeyBindings(const KeyBindingTable& bindings) final;
 	void QueuePress(BindableActionMap action) final;
 	[[nodiscard]] bool TakeDoubleClick() final;
@@ -118,7 +120,9 @@ private:
 	void ApplyQueuedPresses();
 
 	/// What each of the options screen's actions is bound to, starting as the game's defaults
-	KeyBindingTable _bindings {DefaultKeyBindings()};
+	/// The computer's system says that the mouse has a wheel
+	bool _systemSaysWheel;
+	KeyBindingTable _bindings;
 	/// The keys down, as pressed, so their letting go can be made up when it goes elsewhere
 	std::bitset<SDL_NUM_SCANCODES> _heldKeys;
 	/// The keys that went down in this frame. A key that goes down and up in one frame shows as pressed for the frame,

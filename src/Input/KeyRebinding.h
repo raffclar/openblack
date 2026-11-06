@@ -73,8 +73,9 @@ void AssignMouse(std::span<KeyBinding> bindings, size_t row, MouseInput mouse);
 /// The bindings as the profile keeps them: for each row, its key and modifier by the numbers of the game, and its
 /// mouse input
 [[nodiscard]] std::map<uint32_t, player_profiles::KeptKey> ToKept(std::span<const KeyBinding> bindings);
-/// The bindings from the profile. The game's defaults come first. A row takes the profile's values only when the profile
-/// keeps all three of them.
-[[nodiscard]] KeyBindingTable FromKept(const std::map<uint32_t, player_profiles::KeptKey>& kept);
+/// The bindings from the profile. The defaults come first. A row takes the profile's values only when the profile keeps
+/// all three of them.
+[[nodiscard]] KeyBindingTable FromKept(const std::map<uint32_t, player_profiles::KeptKey>& kept,
+                                       const KeyBindingTable& defaults = DefaultKeyBindings());
 
 } // namespace openblack::input::rebinding

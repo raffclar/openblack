@@ -340,9 +340,9 @@ std::map<uint32_t, player_profiles::KeptKey> ToKept(std::span<const KeyBinding> 
 	return kept;
 }
 
-KeyBindingTable FromKept(const std::map<uint32_t, player_profiles::KeptKey>& kept)
+KeyBindingTable FromKept(const std::map<uint32_t, player_profiles::KeptKey>& kept, const KeyBindingTable& defaults)
 {
-	auto bindings = DefaultKeyBindings();
+	auto bindings = defaults;
 	for (const auto& [row, key] : kept)
 	{
 		if (row >= bindings.size())

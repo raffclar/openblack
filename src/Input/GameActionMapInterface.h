@@ -180,6 +180,9 @@ public:
 	virtual void SetKeyBinding([[maybe_unused]] BindableActionMap action, [[maybe_unused]] std::optional<KeyChord> key) {}
 	/// Puts every binding back to the game's defaults
 	virtual void ResetKeyBindings() {}
+	/// The game's defaults for the mouse as it is now: the defaults for a mouse with no wheel apply when the system says
+	/// that the mouse has no wheel and the wheel has not turned since the game started
+	[[nodiscard]] virtual const KeyBindingTable& GetDefaultKeyBindings() const { return DefaultKeyBindings(); }
 	/// Replaces every binding, the keys and the mouse inputs, as the Controls page or the profile gives them
 	virtual void SetKeyBindings([[maybe_unused]] const KeyBindingTable& bindings) {}
 	/// Presses an action's key for one frame, as if the player had, so its handling can be tried out

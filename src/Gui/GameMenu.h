@@ -123,6 +123,9 @@ public:
 	/// Opens the Game Statistics box with the figures as they are now
 	void OpenStatistics();
 	[[nodiscard]] const StatisticsBox& GetStatistics() const noexcept { return *_statistics; }
+	/// The defaults that Load Defaults of the Controls page puts back, read as the player confirms it
+	using DefaultControlsSource = std::function<input::KeyBindingTable()>;
+	void SetDefaultControlsSource(DefaultControlsSource source) { _defaultControlsSource = std::move(source); }
 	/// What the box of the winning conditions shows as it opens
 	using ConditionsSource = std::function<conditions_box::Figures()>;
 	void SetConditionsSource(ConditionsSource source) { _conditionsSource = std::move(source); }
@@ -344,6 +347,7 @@ private:
 	/// The Game Statistics box, its own page's dialog
 	std::unique_ptr<StatisticsBox> _statistics;
 	StatisticsSource _statisticsSource;
+	DefaultControlsSource _defaultControlsSource;
 	/// The box of the winning conditions, its own page's dialog
 	std::unique_ptr<ConditionsBox> _conditions;
 	ConditionsSource _conditionsSource;

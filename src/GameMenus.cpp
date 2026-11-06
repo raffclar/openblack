@@ -216,6 +216,11 @@ const gui::TextDatabase* Game::MakeInterface()
 		};
 		Locator::gameInterface::value().GetMenu().SetStatisticsSource(statistics);
 		Locator::gameInterface::value().GetEndGameBox().SetStatisticsSource(statistics);
+		// Load Defaults of the Controls page takes the defaults for the mouse as it is at that time
+		Locator::gameInterface::value().GetMenu().SetDefaultControlsSource([] {
+			return Locator::gameActionSystem::has_value() ? Locator::gameActionSystem::value().GetDefaultKeyBindings()
+			                                              : input::DefaultKeyBindings();
+		});
 		// The box of the winning conditions takes the gods' standings as it opens
 		Locator::gameInterface::value().GetMenu().SetConditionsSource(ConditionsFigures);
 		Locator::gameInterface::value().GetEndGameBox().SetConditionsSource(ConditionsFigures);

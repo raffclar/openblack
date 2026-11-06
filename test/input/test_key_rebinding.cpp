@@ -153,3 +153,16 @@ TEST(KeyRebinding, AProfileWithoutBindingsHasTheDefaults)
 	EXPECT_EQ(bindings.at(help).mouse, MouseInput::MiddleButton);
 	EXPECT_EQ(bindings.at(help + 1), k_DefaultKeyBindings.at(help + 1));
 }
+
+// The profile's rows go over the defaults for the mouse as it is: with no wheel, a row the profile does not keep has the
+// defaults for a mouse with no wheel
+TEST(KeyRebinding, AProfileGoesOverTheNoWheelDefaults)
+{
+	EXPECT_EQ(FromKept({}, k_NoWheelDefaultKeyBindings), k_NoWheelDefaultKeyBindings);
+	const auto zoomIn = RowOf(k_DefaultKeyBindings, BindableActionMap::ZOOM_IN);
+	const auto bindings = FromKept({{static_cast<uint32_t>(zoomIn), {.primary = 0, .primaryModifier = 0, .mouseButton = 3}}},
+	                               k_NoWheelDefaultKeyBindings);
+	EXPECT_EQ(bindings.at(zoomIn).mouse, MouseInput::WheelUp);
+	const auto around = RowOf(k_DefaultKeyBindings, BindableActionMap::ROTATE_AROUND_MOUSE_ON);
+	EXPECT_EQ(bindings.at(around).key, KeyChord {SDL_SCANCODE_0});
+}

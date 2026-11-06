@@ -186,10 +186,38 @@ inline constexpr KeyBindingTable k_WebDefaultKeyBindings {{
 }};
 // clang-format on
 
-/// The default key bindings of the platform: the game's defaults on the desktop, and the web defaults in a web browser
-[[nodiscard]] constexpr const KeyBindingTable& DefaultKeyBindings(Platform platform = k_Platform) noexcept
+/// The defaults for a mouse that has no wheel. Zoom In and Zoom Out get no mouse input, and Tilt/Rotate Around Mouse On
+/// gets the 0 key in place of the middle button. All the other rows stay the same.
+[[nodiscard]] constexpr KeyBindingTable WithoutWheel(KeyBindingTable bindings) noexcept
 {
-	return platform == Platform::Web ? k_WebDefaultKeyBindings : k_DefaultKeyBindings;
+	for (auto& binding : bindings)
+	{
+		if (binding.action == BindableActionMap::ZOOM_OUT || binding.action == BindableActionMap::ZOOM_IN)
+		{
+			binding.mouse = MouseInput::None;
+		}
+		else if (binding.action == BindableActionMap::ROTATE_AROUND_MOUSE_ON)
+		{
+			binding.key = KeyChord {SDL_SCANCODE_0};
+			binding.mouse = MouseInput::None;
+		}
+	}
+	return bindings;
+}
+
+inline constexpr KeyBindingTable k_NoWheelDefaultKeyBindings = WithoutWheel(k_DefaultKeyBindings);
+inline constexpr KeyBindingTable k_WebNoWheelDefaultKeyBindings = WithoutWheel(k_WebDefaultKeyBindings);
+
+/// The default key bindings of the platform: the game's defaults on the desktop, and the web defaults in a web browser.
+/// When the mouse has no wheel, the defaults for a mouse with no wheel apply.
+[[nodiscard]] constexpr const KeyBindingTable& DefaultKeyBindings(Platform platform = k_Platform,
+                                                                  bool mouseHasWheel = true) noexcept
+{
+	if (platform == Platform::Web)
+	{
+		return mouseHasWheel ? k_WebDefaultKeyBindings : k_WebNoWheelDefaultKeyBindings;
+	}
+	return mouseHasWheel ? k_DefaultKeyBindings : k_NoWheelDefaultKeyBindings;
 }
 
 /// The key that stands for both sides' modifier keys: the left one for either Ctrl, Shift or Alt
