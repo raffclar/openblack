@@ -15,14 +15,15 @@ using namespace openblack::physics;
 
 namespace
 {
-/// At or below the minimum gives the minimum, at or above the maximum the maximum
+/// At or below the minimum gives the minimum, at or above the maximum the maximum. A value that is not a number gives the
+/// maximum, as in the game.
 float ClampValue(float value, float minimum, float maximum)
 {
 	if (value <= minimum)
 	{
 		return minimum;
 	}
-	if (value >= maximum)
+	if (!(value < maximum))
 	{
 		return maximum;
 	}
