@@ -2290,6 +2290,41 @@ TEST_F(HandGrabSystemWithWorld, AHandfulScoopedFromAPoisonedPileIsPoisoned)
 	EXPECT_TRUE(world->registry.Get<const Pot>(*handful).poisoned);
 }
 
+TEST_F(HandGrabSystemWithWorld, AHandfulThatTakesAllOfAPoisonedPileIsClean)
+{
+	// The last of a pile loses its poison as it is taken, so the food in the hand is clean
+	const auto pile = world->registry.Create();
+	world->registry.Assign<Transform>(pile, glm::vec3(0.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+	world->registry.Assign<Pot>(pile, Pot {.amount = 20, .maxAmount = 2000, .type = PotInfo::FoodPile, .poisoned = true});
+	world->sizes[pile] = {.radius = 2.0f, .height = 3.0f};
+	world->underCursor = pile;
+	EXPECT_TRUE(Press());
+	const auto handful = system->GetHeld();
+	ASSERT_TRUE(handful.has_value());
+	EXPECT_EQ(world->registry.Get<const Pot>(*handful).amount, 20u);
+	EXPECT_FALSE(world->registry.Get<const Pot>(*handful).poisoned);
+}
+
+TEST_F(HandGrabSystemWithWorld, APileThatIsPoisonedWhileItIsScoopedPoisonsTheHandful)
+{
+	const auto pile = world->registry.Create();
+	world->registry.Assign<Transform>(pile, glm::vec3(0.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+	world->registry.Assign<Pot>(pile, Pot {.amount = 1000, .maxAmount = 2000, .type = PotInfo::FoodPile});
+	world->sizes[pile] = {.radius = 2.0f, .height = 3.0f};
+	world->underCursor = pile;
+	EXPECT_TRUE(Press());
+	const auto handful = system->GetHeld();
+	ASSERT_TRUE(handful.has_value());
+	EXPECT_FALSE(world->registry.Get<const Pot>(*handful).poisoned);
+	// Each turn's scoop brings the poison of the pile into the handful, and the handful stays poisoned
+	world->registry.Get<Pot>(pile).poisoned = true;
+	Turn();
+	EXPECT_TRUE(world->registry.Get<const Pot>(*handful).poisoned);
+	world->registry.Get<Pot>(pile).poisoned = false;
+	Turn();
+	EXPECT_TRUE(world->registry.Get<const Pot>(*handful).poisoned);
+}
+
 TEST_F(HandGrabSystemWithWorld, APileIsScoopedIntoAHandfulThatGrowsWhileTheButtonIsHeld)
 {
 	const auto pile = world->registry.Create();

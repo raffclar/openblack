@@ -142,6 +142,17 @@ bool HandGrabSystem::Exists(entt::entity object) const
 	return object != entt::null && _world->Entities().Valid(object);
 }
 
+bool HandGrabSystem::TakenIsPoisoned(entt::entity pile) const
+{
+	// A pile that is not part of a store goes when it gives all of its food. That food is clean.
+	if (!Exists(pile))
+	{
+		return false;
+	}
+	const auto facts = _world->PotFactsOf(pile);
+	return facts.has_value() && facts->poisoned;
+}
+
 HandGrab* HandGrabSystem::Grab()
 {
 	const auto hand = _world->Hand();
@@ -765,8 +776,10 @@ bool HandGrabSystem::StartScoop(HandGrab& grab, entt::entity source)
 	}
 	const auto sourcePosition = _world->PoseOf(source).origin;
 	_world->TakeFromPile(source, first);
+	// After the hand takes the food, the poison of the pile goes into the handful and its stream
+	const bool poisoned = TakenIsPoisoned(source);
 	const auto hand = _world->ReportedHandPlace();
-	const auto handful = _world->MakeHandful(facts->handful, hand, first, facts->poisoned);
+	const auto handful = _world->MakeHandful(facts->handful, hand, first, poisoned);
 	if (!Exists(handful))
 	{
 		return false;
@@ -784,7 +797,7 @@ bool HandGrabSystem::StartScoop(HandGrab& grab, entt::entity source)
 	grab.scoopStreamSeconds = 0.0f;
 	// The cursor is pinned while it scoops
 	_world->PinCursor(true);
-	grab.scoopStream = _world->StartScoopStream(facts->resource, sourcePosition, facts->poisoned);
+	grab.scoopStream = _world->StartScoopStream(facts->resource, sourcePosition, poisoned);
 	return true;
 }
 
@@ -950,8 +963,11 @@ bool HandGrabSystem::Scoop(HandGrab& grab)
 		return false;
 	}
 	const auto took = _world->TakeFromPile(grab.scoopSource, taken);
-	registry.Get<Pot>(grab.object).amount += took;
-	_amountToolTip = registry.Get<Pot>(grab.object).amount;
+	auto& held = registry.Get<Pot>(grab.object);
+	held.amount += took;
+	// Poisoned food poisons the handful, which stays poisoned
+	held.poisoned = held.poisoned || TakenIsPoisoned(grab.scoopSource);
+	_amountToolTip = held.amount;
 	_world->ResizePot(grab.object);
 	// A pile scooped empty stops streaming and sounding; the scoop ends with the next turn
 	if (!Exists(grab.scoopSource))

@@ -1300,11 +1300,15 @@ std::optional<hand_grab::HandGrabWorldInterface::PotFacts> GameHandGrabWorld::Po
 		return std::nullopt;
 	}
 	const auto& kind = info->pot.at(static_cast<size_t>(data->type));
+	// A pile of a store or of a building site gives what its store holds. The hand takes from all the piles of the store.
+	const auto amount = Locator::resourceStoreSystem::has_value()
+	                        ? Locator::resourceStoreSystem::value().GetResource(pot, kind.resourceType)
+	                        : data->amount;
 	// A pile of food is scooped into a handful of food, a pile of wood into one of wood
 	return PotFacts {.potType = kind.potType,
 	                 .resource = kind.resourceType,
 	                 .handful = kind.resourceType == ResourceType::Wood ? PotInfo::HandWood : PotInfo::HandFood,
-	                 .amount = data->amount,
+	                 .amount = amount,
 	                 .poisoned = data->poisoned};
 }
 

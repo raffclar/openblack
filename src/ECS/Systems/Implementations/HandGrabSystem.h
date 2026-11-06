@@ -110,6 +110,9 @@ private:
 	/// What the hand of the acting player scoops from, none when it scoops from nothing
 	[[nodiscard]] std::optional<entt::entity> LockedOnNow() const;
 	[[nodiscard]] bool Exists(entt::entity object) const;
+	/// Whether the food that the hand takes from a pile is poisoned. The pile must be poisoned after the hand takes the
+	/// food. A pile that gives all of its food loses its poison, so that food is clean.
+	[[nodiscard]] bool TakenIsPoisoned(entt::entity pile) const;
 	/// How the hand treats a thing
 	[[nodiscard]] hand_grab::GrabKind KindOf(entt::entity object) const;
 	/// What deciding whether the hand may hold a thing needs to know of it

@@ -68,6 +68,7 @@
 #include "ECS/Components/Spell.h"
 #include "ECS/Components/SpellIcon.h"
 #include "ECS/Components/SpellSeed.h"
+#include "ECS/Components/StoragePit.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
@@ -686,12 +687,22 @@ std::optional<glm::ivec2> Runner::AltarOnScreen(glm::vec2 size, bool foodPot) co
 	return glm::ivec2(glm::round(glm::vec2(screen)));
 }
 
-std::optional<glm::ivec2> Runner::ObjectOnScreen(size_t object, float height, glm::vec2 size) const
+std::optional<glm::ivec2> Runner::ObjectOnScreen(size_t object, float height, glm::vec2 size, size_t pile) const
 {
-	const auto entity = ObjectAt(object);
+	auto entity = ObjectAt(object);
 	if (!entity.has_value() || !Locator::camera::has_value())
 	{
 		return std::nullopt;
+	}
+	// A pile of a storage pit: 1 to 5 are its wood piles, 6 is its food pile
+	if (pile != 0)
+	{
+		const auto* pit = Locator::entitiesRegistry::value().TryGet<const ecs::components::StoragePit>(*entity);
+		if (pit == nullptr || pile > pit->woodPiles.size() + 1)
+		{
+			return std::nullopt;
+		}
+		entity = pile <= pit->woodPiles.size() ? pit->woodPiles.at(pile - 1) : pit->foodPile;
 	}
 	const auto* transform = Locator::entitiesRegistry::value().TryGet<const ecs::components::Transform>(*entity);
 	if (transform == nullptr)
@@ -900,7 +911,7 @@ std::string Runner::GivePointerCommand(const Command& command)
 	}
 	case Kind::PointerOnObject:
 	{
-		const auto to = ObjectOnScreen(command.object, command.amount, size);
+		const auto to = ObjectOnScreen(command.object, command.amount, size, command.value);
 		if (!to.has_value())
 		{
 			return "no object on the screen";
