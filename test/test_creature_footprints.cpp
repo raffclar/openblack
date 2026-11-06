@@ -7,8 +7,13 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <cstdint>
+
+#include <array>
+#include <bit>
 #include <numbers>
 #include <optional>
+#include <utility>
 
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtx/euler_angles.hpp>
@@ -93,11 +98,29 @@ TEST(CreatureFootprints, AprilFoolsSmileyKeepsTheSpeciesSize)
 	EXPECT_FALSE(IsAprilFools(1, 4));
 }
 
-TEST(CreatureFootprints, Side)
+TEST(CreatureFootprints, PrintSize)
 {
-	EXPECT_NEAR(Side(1.0f, PrintOf(CreatureType::Tiger, false)), 2.4f, k_Epsilon);
-	EXPECT_NEAR(Side(1.5f, PrintOf(CreatureType::Cow, false)), 3.6f, k_Epsilon);
-	EXPECT_NEAR(Side(1.0f, PrintOf(CreatureType::GiantApe, false)), 4.8f, k_Epsilon);
+	EXPECT_EQ(PrintSize(1.0f, PrintOf(CreatureType::Tiger, false)), 4.0f);
+	EXPECT_EQ(PrintSize(1.5f, PrintOf(CreatureType::Cow, false)), 6.0f);
+	EXPECT_EQ(PrintSize(1.0f, PrintOf(CreatureType::GiantApe, false)), 8.0f);
+}
+
+TEST(CreatureFootprints, FarCornersRoundAsTheGameTurnsThem)
+{
+	// The game turns the corners with one matrix about the foot. Far from the map's origin, its rounding puts the first
+	// and last corners a little from the foot plus the turned offset.
+	const auto print = MakeFootprint({2503.7f, 0.0f, 3121.3f}, 1.0f, 6.0f, 2, false, [](float, float) { return 0.0f; });
+	constexpr std::array<std::pair<uint32_t, uint32_t>, 4> k_Bits = {{
+	    {0x451C5368u, 0x45430C21u},
+	    {0x451C7287u, 0x45433C99u},
+	    {0x451CA2FFu, 0x45431D79u},
+	    {0x451C83E0u, 0x4542ED01u},
+	}};
+	for (size_t i = 0; i < k_Bits.size(); ++i)
+	{
+		EXPECT_EQ(std::bit_cast<uint32_t>(print.corners.at(i).x), k_Bits.at(i).first) << i;
+		EXPECT_EQ(std::bit_cast<uint32_t>(print.corners.at(i).z), k_Bits.at(i).second) << i;
+	}
 }
 
 TEST(CreatureFootprints, LowerFootGetsThePrint)
@@ -145,7 +168,7 @@ TEST(CreatureFootprints, FootReadFromItsMatrix)
 
 TEST(CreatureFootprints, UnturnedPrint)
 {
-	const auto print = MakeFootprint({10.0f, 0.0f, 20.0f}, 0.0f, 0.6f, 4, false, Slope);
+	const auto print = MakeFootprint({10.0f, 0.0f, 20.0f}, 0.0f, 1.0f, 4, false, Slope);
 	ExpectNear(print.corners[0], {9.7f, Slope(9.7f, 0.0f) + k_Lift, 20.3f});
 	ExpectNear(print.corners[1], {10.3f, Slope(10.3f, 0.0f) + k_Lift, 20.3f});
 	ExpectNear(print.corners[2], {10.3f, Slope(10.3f, 0.0f) + k_Lift, 19.7f});
@@ -160,8 +183,8 @@ TEST(CreatureFootprints, UnturnedPrint)
 
 TEST(CreatureFootprints, TurnedAndSizedPrint)
 {
-	// A quarter turn takes the picture's +x to +z; a side of 2.4 puts the corners 1.2 out
-	const auto print = MakeFootprint({0.0f, 7.0f, 0.0f}, k_Pi / 2.0f, 2.4f, 0, false, [](float, float) { return 3.0f; });
+	// A quarter turn takes the picture's +x to +z; a size of 4 puts the corners 1.2 out
+	const auto print = MakeFootprint({0.0f, 7.0f, 0.0f}, k_Pi / 2.0f, 4.0f, 0, false, [](float, float) { return 3.0f; });
 	ExpectNear(print.corners[0], {-1.2f, 3.15f, -1.2f});
 	ExpectNear(print.corners[1], {-1.2f, 3.15f, 1.2f});
 	ExpectNear(print.corners[2], {1.2f, 3.15f, 1.2f});

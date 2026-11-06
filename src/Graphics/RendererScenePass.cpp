@@ -184,7 +184,7 @@ bool CreatureMirrored(entt::entity entity, glm::vec3 position, float fizz)
 		{
 			const object_draw_list::Block box {
 			    .corner = block->GetMapPosition(),
-			    .highestAltitude = block->GetHighestAltitudeNow(),
+			    .highestAltitude = block->GetHighestAltitude(),
 			    .reflected = Locator::config::value().detail.landReflection,
 			};
 			const auto& camera = Locator::camera::value();
