@@ -512,7 +512,13 @@ void Game::UpdateHandToolTipAnchor()
 
 void Game::ProcessHandToolTipTurn()
 {
-	if (!Locator::gameInterface::has_value() || (Locator::temple::has_value() && Locator::temple::value().Active()))
+	// In a network game the world's turns go on while the player is in the temple, and they step the temple's tooltip
+	if (Locator::temple::has_value() && Locator::temple::value().Active())
+	{
+		Locator::temple::value().ProcessToolTipTurn();
+		return;
+	}
+	if (!Locator::gameInterface::has_value())
 	{
 		return;
 	}

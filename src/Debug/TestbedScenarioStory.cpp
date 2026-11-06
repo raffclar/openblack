@@ -1299,6 +1299,24 @@ void testbed_scenarios::AddStory(std::vector<Scenario>& all)
 	    .commands = {{.kind = Kind::DestroyTemple, .delaySeconds = 2.0f, .value = 0}},
 	});
 	all.push_back({
+	    .id = "temple.game_over_new_game_question",
+	    .name = "Escape asks about a new game once the game is over",
+	    .facet = Facet::Story,
+	    .description = "The player's temple stands west of the middle; two seconds in it starts being destroyed, and the "
+	                   "game's GameOver script plays. Once the script has taken the player into the save game room, press "
+	                   "Escape, then Shift and Escape.",
+	    .expected = "Each Escape, with Shift, Ctrl or Alt too, shows \"Are you sure you want to start a completely new "
+	                "game?\" in the box with a Yes and a No. Escape does not answer it and does not close it, and the "
+	                "player stays in the room. No closes the box. Yes ends the game, and a new game starts on the "
+	                "first land. Under a script's cinema bars, Escape does nothing.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview,
+	                .include = {k_Temple - glm::vec2 {40.0f}, k_Temple + glm::vec2 {40.0f}},
+	                .distance = 1.0f},
+	    .temples = {{.offset = k_Temple, .angle = k_TempleTurn}},
+	    .commands = {{.kind = Kind::DestroyTemple, .delaySeconds = 2.0f, .value = 0}},
+	});
+	all.push_back({
 	    .id = "temple.heart_fade",
 	    .name = "The temple's heart glows and fades out in its destruction",
 	    .facet = Facet::Story,

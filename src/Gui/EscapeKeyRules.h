@@ -43,6 +43,8 @@ struct Situation
 	bool playgroundLessonRunning {false};
 	/// How long ago the menu last closed, nothing if it hasn't since the game started
 	std::optional<std::chrono::milliseconds> sinceMenuClosed;
+	/// The game is over: the temple of the player is in its destruction
+	bool gameOver {false};
 };
 
 enum class Outcome : uint8_t
@@ -53,6 +55,8 @@ enum class Outcome : uint8_t
 	AskLeavePlayground,
 	/// The Playground's lesson ends: its scripts start again with the land's own running control
 	EndPlaygroundLesson,
+	/// "Are you sure you want to start a completely new game?", with a Yes and a No. The game does not pause for it.
+	AskNewGame,
 };
 
 struct Response
@@ -67,7 +71,8 @@ struct Response
 /// Whether the menu may open, given how long ago it last closed
 [[nodiscard]] bool MenuMayOpen(std::optional<std::chrono::milliseconds> sinceMenuClosed) noexcept;
 
-/// What Escape does. While a script has the cinema bars in, nothing: there is no skipping a script's cut scene
+/// What Escape does. While a script has the cinema bars in, nothing: there is no skipping a script's cut scene. Once the
+/// game is over, Escape asks about a new game, with Shift, Ctrl or Alt too, and does nothing else.
 [[nodiscard]] Response Respond(const Situation& situation) noexcept;
 
 /// The reason that Escape does not open the menu in this situation. It is empty when Escape opens the menu.

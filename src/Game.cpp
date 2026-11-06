@@ -683,6 +683,10 @@ bool Game::Initialize() noexcept
 				{
 					Locator::temple::value().Escape();
 				}
+				else if (openblack::temple::keys::EscapeAsksNewGame(facts) && Locator::gameInterface::has_value())
+				{
+					Locator::gameInterface::value().AskNewGameQuestion();
+				}
 				return;
 			}
 			// The Creature Cave shown on its own closes on Escape

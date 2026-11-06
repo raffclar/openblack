@@ -247,6 +247,11 @@ public:
 	[[nodiscard]] bool IsTripQuestionUp() const noexcept { return _tripAsked; }
 	/// The player's answer to the question of the trip, once: true for Yes
 	[[nodiscard]] std::optional<bool> TakeTripAnswer() { return std::exchange(_tripAnswer, std::nullopt); }
+	/// "Are you sure you want to start a completely new game?" in the box with a Yes and a No, which Escape asks once the
+	/// game is over. While the question is up, it stays as it is.
+	void AskNewGameQuestion();
+	/// The player's answer to the question about a new game, once: true for Yes
+	[[nodiscard]] std::optional<bool> TakeNewGameAnswer() { return std::exchange(_newGameAnswer, std::nullopt); }
 	/// The box of the menu that has the input now, for the question of the trip
 	[[nodiscard]] playground_trip::MenuBox GetTripMenuBox() const noexcept;
 	/// Whether a box on the screen stops F2 from asking the question of the trip. Over the open menu, F2 can ask.
@@ -560,6 +565,9 @@ private:
 	/// The question of the trip to the Gods' Playground is up and waits for its answer
 	bool _tripAsked {false};
 	std::optional<bool> _tripAnswer;
+	/// The question about a new game is up and waits for its answer
+	bool _newGameAsked {false};
+	std::optional<bool> _newGameAnswer;
 	std::unique_ptr<MultiplayerBoxes> _multiplayerBoxes;
 	std::u16string _toolTipName;
 	std::unique_ptr<CustomMusicControls> _musicControls;

@@ -70,6 +70,7 @@ public:
 	void SetCurrentRoom(TempleRoom room) override;
 	bool ReleaseOutsideScriptCamera() override;
 	[[nodiscard]] std::optional<OutsideCamera> GetOutsideCamera() const override;
+	void ProcessToolTipTurn() override;
 	[[nodiscard]] std::optional<TempleRoom> GetTransitionRoom() const override { return _transitionRoom; }
 	void SetTransitionRoom(std::optional<TempleRoom> room) override { _transitionRoom = room; }
 	void GoToRoom(TempleRoom room) override;
@@ -337,13 +338,12 @@ private:
 	/// another submesh sets the glow off again, unless a control is being dragged.
 	std::optional<std::pair<TempleRoom, uint32_t>> _hovered;
 	float _hoverGlow {0.0f};
-	/// What the hand shows, which the rooms choose every frame and submit every turn, and how long since the last turn
+	/// What the hand shows, which the rooms choose every frame and the tooltip's turn submits
 	TempleToolTip _toolTip {k_FirstTempleToolTip};
-	float _toolTipTurnTime {0.0f};
 	/// Moves on the options room and the future room, and what the future room draws
 	void UpdateOptionsAndFutureRooms(float milliseconds);
 	/// The tooltip the hand shows, and where on the screen the hand is
-	void UpdateToolTips(float milliseconds);
+	void UpdateToolTips();
 	void StopCreatureCaveSounds();
 	/// Whether a submesh of a room's mesh is one of its controls drawn, and whether a control has the mouse
 	[[nodiscard]] bool IsControl(TempleRoom room, uint32_t subMesh) const;

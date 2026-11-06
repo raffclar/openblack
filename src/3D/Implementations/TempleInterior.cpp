@@ -206,8 +206,6 @@ constexpr float k_MainRoomOpenSwing = 0.01f;
 /// The creature's room slides the waterfall's texture through this much of a slide each millisecond, and the slide
 /// across ten of the texture
 constexpr float k_WaterfallSlidePerMillisecond = 2.1e-5f;
-/// The game has the temple's game turn every 100 milliseconds while the player is inside it
-constexpr float k_ToolTipTurnMilliseconds = 100.0f;
 constexpr float k_WaterfallSlideLength = -10.0f;
 /// The creature's room's sounds: the water at the waterfall's foot, and the fire where the creature stands, the
 /// second place movement.l3d marks
@@ -999,6 +997,21 @@ void TempleInterior::UpdateChallengeRoom()
 	}
 }
 
+void TempleInterior::ProcessToolTipTurn()
+{
+	if (_interface == nullptr)
+	{
+		return;
+	}
+	// The turn submits the tooltip that the rooms chose, or none under a dialog, and the help system keeps it or ends it
+	auto& toolTips = _interface->GetToolTips();
+	if (!_interface->IsMenuOpen() && _toolTip.index.has_value())
+	{
+		toolTips.Submit(*_toolTip.index, _toolTip.action, _toolTip.arrows);
+	}
+	toolTips.ProcessTurn();
+}
+
 std::optional<temple::save_game_room::CloseLookWords> TempleInterior::SaveGameRoomWords() const
 {
 	if (_saveGameRoom == nullptr || _interface == nullptr || _cameraModel == nullptr || !IsRoomDrawn(TempleRoom::SaveGame) ||
@@ -1027,7 +1040,7 @@ std::optional<temple::save_game_room::CloseLookWords> TempleInterior::SaveGameRo
 	return rules::CloseLookWordsOf(*slot, save, land, helpText);
 }
 
-void TempleInterior::UpdateToolTips(float milliseconds)
+void TempleInterior::UpdateToolTips()
 {
 	if (_interface == nullptr || _cameraModel == nullptr)
 	{
@@ -1070,19 +1083,6 @@ void TempleInterior::UpdateToolTips(float milliseconds)
 	if (!savedGameName.empty())
 	{
 		_interface->SetToolTipName(std::move(savedGameName));
-	}
-
-	// Every 100 milliseconds the temple's game turn submits the room's tooltip, or none under a dialog, and the help
-	// system keeps it or ends it
-	auto& toolTips = _interface->GetToolTips();
-	_toolTipTurnTime += milliseconds;
-	for (; _toolTipTurnTime >= k_ToolTipTurnMilliseconds; _toolTipTurnTime -= k_ToolTipTurnMilliseconds)
-	{
-		if (!_interface->IsMenuOpen() && _toolTip.index.has_value())
-		{
-			toolTips.Submit(*_toolTip.index, _toolTip.action, _toolTip.arrows);
-		}
-		toolTips.ProcessTurn();
 	}
 
 	// The tooltip is drawn by the hand, which is where the cursor meets the room
@@ -1836,7 +1836,7 @@ void TempleInterior::Update(std::chrono::microseconds dt)
 
 		UpdateChallengeRoom();
 		UpdateSaveGameRoom();
-		UpdateToolTips(milliseconds);
+		UpdateToolTips();
 
 		// The main room takes the land's heights and brightness for the map every frame the main room is drawn
 		_mapTriangles.clear();
