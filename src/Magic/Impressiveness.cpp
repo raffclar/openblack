@@ -11,18 +11,14 @@
 
 #include <algorithm>
 
+#include "Common/GUtilsDistance.h"
+
+using namespace openblack;
 using namespace openblack::magic;
 
 float openblack::magic::DistanceChangeToBelief(float distance, float maxDistance)
 {
-	// The curve's middle sits nine tenths of the reach in, so it falls steeply near the edge
-	constexpr float k_Shift = 0.9f;
-	constexpr float k_StepsPerUnit = 20.5f;
-	const float x = maxDistance > 0.0f ? std::clamp(-distance / maxDistance, -1.0f, 1.0f) : -1.0f;
-	const float y = std::clamp(x + k_Shift, -1.0f, 1.0f);
-	const auto last = static_cast<int>(k_BeliefSigmoid.size()) - 1;
-	const int index = std::min(static_cast<int>((y + 1.0f) * k_StepsPerUnit), last);
-	return k_BeliefSigmoid.at(static_cast<size_t>(std::max(index, 0)));
+	return gutils::DistanceChangeToBelief(distance, maxDistance);
 }
 
 float openblack::magic::ImpressiveValue(const ImpressionInputs& inputs)

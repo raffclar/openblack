@@ -167,7 +167,8 @@ struct EffectOutcome
                                           float casterAlignment);
 
 /// A turn of an alignment, a player's or a creature's: the change waiting, held between -1 and 1, moves it by that share
-/// of its owner's change a turn, and whatever was waiting is then gone. Returns the alignment, held between -1 and 1.
+/// of its owner's change a turn, and whatever was waiting is then gone. Returns the alignment, held between -1 and 1. A
+/// change or an alignment that is not a number is held at -1.
 [[nodiscard]] float StepPendingAlignment(float alignment, float& pending, float changePerTurn);
 
 } // namespace openblack::magic

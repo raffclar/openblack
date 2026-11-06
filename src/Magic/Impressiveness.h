@@ -11,7 +11,6 @@
 
 #include <cstdint>
 
-#include <array>
 #include <optional>
 
 #include "Enums.h"
@@ -23,14 +22,6 @@
 
 namespace openblack::magic
 {
-
-/// The S curve the distance runs through: 41 steps from nothing to all
-inline constexpr std::array<float, 41> k_BeliefSigmoid {
-    0.0f,        3.6e-9f,     1e-8f,        2.8e-8f,      7.78e-8f,     2.163e-7f,   6.018e-7f,   1.674e-6f,   4.6568e-6f,
-    1.29542e-5f, 3.60351e-5f, 1.002359e-4f, 2.787865e-4f, 7.751431e-4f, 0.00215332f, 0.00596721f, 0.01642494f, 0.04439174f,
-    0.11443728f, 0.26442435f, 0.5f,         0.73557568f,  0.88556272f,  0.95560825f, 0.98357505f, 0.9940328f,  0.99784666f,
-    0.99922484f, 0.99972123f, 0.99989974f,  0.99996394f,  0.99998707f,  0.99999535f, 0.99999833f, 0.9999994f,  0.99999976f,
-    0.99999994f, 1.0f,        1.0f,         1.0f,         1.0f};
 
 /// How much of an impression reaches a watcher at a distance from the miracle, given how far the reaction reaches: all
 /// of it close by, a little over a tenth at the edge, and no less beyond
