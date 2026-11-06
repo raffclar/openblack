@@ -177,7 +177,7 @@ void MagicShieldSystem::Raise(entt::entity spell, const Spell& miracle)
 	// It takes its first two turns at once, so it starts as it would have been made
 	for (int i = 0; i < 2; ++i)
 	{
-		dome.pose = shield::StepDome(dome.shape, dome.state, dome.age, k_TurnSeconds);
+		dome.pose = shield::StepDome(dome.shape, dome.state, shield::DomeAge(dome.turns, k_TurnSeconds), k_TurnSeconds);
 	}
 	dome.previous = dome.pose;
 	dome.solidScale = dome.pose.scale;
@@ -253,9 +253,9 @@ bool MagicShieldSystem::StepDome(entt::entity object)
 	auto& dome = registry.Get<ShieldDome>(object);
 	auto& transform = registry.Get<Transform>(object);
 	const auto& shieldObject = registry.Get<const MagicShield>(object);
-	dome.age += k_TurnSeconds;
+	++dome.turns;
 	dome.previous = dome.pose;
-	dome.pose = shield::StepDome(dome.shape, dome.state, dome.age, k_TurnSeconds);
+	dome.pose = shield::StepDome(dome.shape, dome.state, shield::DomeAge(dome.turns, k_TurnSeconds), k_TurnSeconds);
 	if (dome.pose.gone)
 	{
 		if (Locator::effectRequestSystem::has_value())
@@ -478,8 +478,7 @@ bool MagicShieldSystem::KeepsReactionOff(glm::vec3 watcher, glm::vec3 initiator)
 		    const glm::vec3 shieldOnLand(transform.position.x, LandHeight(transform.position), transform.position.z);
 		    const bool within =
 		        dome != nullptr
-		            ? shield::WithinPhysicalShield(volume, glm::distance(glm::xz(initiator), glm::xz(transform.position)),
-		                                           initiatorAbove)
+		            ? shield::WithinPhysicalShield(volume, glm::xz(initiator) - glm::xz(transform.position), initiatorAbove)
 		            : shield.spell != entt::null && shield::WithinSpiritualShield(shieldOnLand, shield.radius, initiator);
 		    kept = !within;
 	    });

@@ -60,8 +60,8 @@ struct ShieldDome
 	/// This turn's pose and the last, drawn between
 	magic::shield::DomePose pose;
 	magic::shield::DomePose previous;
-	/// Seconds since it was raised
-	float age {0.0f};
+	/// The game turns since the dome came up
+	uint32_t turns {0};
 	/// The size its solid shape is at, which follows the drawn size only in steps
 	float solidScale {0.0f};
 	/// How opaque it is drawn, 0 to 255

@@ -16,6 +16,9 @@
 
 #include <glm/geometric.hpp>
 
+#include "3D/MapCoords.h"
+#include "Common/GUtilsAngle.h"
+#include "Common/GUtilsDistance.h"
 #include "Common/PortableMath.h"
 #include "Common/X87.h"
 #include "Common/X87Vector.h"
@@ -30,6 +33,13 @@ namespace
 constexpr float k_TwoPi = 2.0f * std::numbers::pi_v<float>;
 /// The sheltering villager's turn either side of its own side of the shield
 constexpr float k_ShelterTurnHalf = shield::k_ShelterTurnRange * 0.5f;
+
+/// A point a distance in metres along an angle from another point. The game cuts the step to whole map units, then
+/// adds it to the map position.
+glm::vec2 StepAlong(glm::vec2 from, float angle, float metres)
+{
+	return map_coords::ToMetres(map_coords::FromMetres(from) + gutils::GetPosFromAngle(angle, metres));
+}
 
 float Wrap(float angle)
 {
@@ -91,7 +101,7 @@ shield::DomePose shield::StepDome(const DomeShape& shape, DomeState& state, floa
 	pose.scale = shape.startScale + (shape.finalScale - shape.startScale) * amount;
 	state.bob = Wrap(state.bob + k_DomeBobSpeed * dt);
 	pose.height = (shape.raiseWithScale * shape.finalScale) + shape.shieldHeight +
-	              ((portable_math::Sin(state.bob) + 1.0f) * shape.bobMagnitude * pose.scale * 0.5f);
+	              (x87::Add(x87::Sin(state.bob), 1.0) * shape.bobMagnitude * pose.scale * 0.5f);
 	pose.angle = state.angle;
 	return pose;
 }
@@ -129,13 +139,19 @@ bool shield::WithinSpiritualShield(glm::vec3 shieldOnLand, float radius, glm::ve
 	return radius * radius > x87::DotZyx(d, d);
 }
 
-bool shield::WithinPhysicalShield(const DomeVolume& volume, float distanceAcross, float heightAboveLand)
+bool shield::WithinPhysicalShield(const DomeVolume& volume, glm::vec2 across, float heightAboveLand)
 {
-	if (!(distanceAcross * distanceAcross < volume.radius * volume.radius))
+	const float zSquared = across.y * across.y;
+	const float xSquared = across.x * across.x;
+	const float squares = zSquared + xSquared;
+	if (!(squares < volume.radius * volume.radius))
 	{
 		return false;
 	}
-	return volume.height * (1.0f - distanceAcross / volume.radius) > heightAboveLand;
+	// The height of the cone is the height at the middle less its share of the distance out
+	const float share = x87::Sqrt(squares) / volume.radius;
+	const float drop = volume.height * share;
+	return volume.height - drop > heightAboveLand;
 }
 
 bool shield::InsideDome(const DomeVolume& volume, float distanceAcross, float heightAboveLand)
@@ -205,25 +221,17 @@ std::optional<shield::HullHit> shield::CrossHull(std::span<const std::array<glm:
 
 bool shield::IsUnder(glm::vec2 point, glm::vec2 centre, float radius, float margin)
 {
-	return glm::distance(point, centre) < radius - margin;
+	return gutils::GetDistanceInMetres(point, centre) < radius - margin;
 }
 
-bool shield::NeedsShelter(float distance, float radius)
+glm::vec2 shield::ShelterAt(glm::vec2 centre, glm::vec2 villager, float radius, float turn, float u)
 {
-	return !(distance < radius - (radius * (1.0f - k_ShelterInside)));
-}
-
-shield::Shelter shield::ShelterAt(glm::vec2 centre, glm::vec2 villager, float radius, float turn, float u, float faceTurn)
-{
-	const auto away = villager - centre;
-	const float side = portable_math::Atan2(away.y, away.x);
-	const float angle = side + turn - k_ShelterTurnHalf;
-	const float inner = k_ShelterInside * radius;
-	const float distance = inner - (u * u * u * inner);
-	const glm::vec2 point = centre + glm::vec2(portable_math::Cos(angle), portable_math::Sin(angle)) * distance;
-	const float faceAngle = side + faceTurn - k_ShelterTurnHalf;
-	const glm::vec2 face = centre + glm::vec2(portable_math::Cos(faceAngle), portable_math::Sin(faceAngle)) * (distance + 1.0f);
-	return {.point = point, .faceTowards = face};
+	// The direction gets the turn less half of its spread
+	const float angle = (turn - k_ShelterTurnHalf) + gutils::Get3DAngleFromXZ(centre, villager);
+	const float inner = radius - ShelterMargin(radius);
+	const float cube = u * u * u;
+	const float distance = inner - (cube * inner);
+	return StepAlong(centre, angle, distance);
 }
 
 int32_t shield::AmazedClipTimes(float seconds, int32_t clipMilliseconds, bool pointing)
@@ -274,9 +282,13 @@ uint32_t shield::VillagerAgainTurns(bool hasTown, uint32_t sinceAttacked, uint32
 
 glm::vec2 shield::LookOut(glm::vec2 centre, glm::vec2 villager, float turn)
 {
-	const auto away = villager - centre;
-	const float angle = portable_math::Atan2(away.y, away.x) + turn - k_ShelterTurnHalf;
-	return villager + glm::vec2(portable_math::Cos(angle), portable_math::Sin(angle));
+	return AwayFrom(centre, villager, turn, 1.0f);
+}
+
+glm::vec2 shield::AwayFrom(glm::vec2 centre, glm::vec2 villager, float turn, float metres)
+{
+	const float angle = (turn - k_ShelterTurnHalf) + gutils::Get3DAngleFromXZ(centre, villager);
+	return StepAlong(villager, angle, metres);
 }
 
 bool shield::TownIgnoresShield(Reaction reaction, bool townAttackedByShieldPlayer, bool physical)
