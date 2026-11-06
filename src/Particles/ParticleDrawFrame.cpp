@@ -396,6 +396,8 @@ void AddAtom(Frame& frame, GroupBuilder& builder, const Effect::DrawAtom& atom, 
 		    .size = atom.scale,
 		    .argb = (alpha << 24u) | (static_cast<uint32_t>(atom.rgb[0]) << 16u) | (static_cast<uint32_t>(atom.rgb[1]) << 8u) |
 		            atom.rgb[2],
+		    .specularRgb = (static_cast<uint32_t>(atom.specular[0]) << 16u) | (static_cast<uint32_t>(atom.specular[1]) << 8u) |
+		                   atom.specular[2],
 		    .shape = shape,
 		    .counter = (static_cast<int>(atom.creatorValue.y) + counted) % k_MistCountWrap,
 		});

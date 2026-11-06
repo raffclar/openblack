@@ -127,6 +127,8 @@ struct MistDraw
 	float size;
 	/// The atom's colour, 0xAARRGGBB, which the land's light tints where it is drawn
 	uint32_t argb;
+	/// The light added after the texture, 0xRRGGBB
+	uint32_t specularRgb {0};
 	/// How much wider than tall it is seen level
 	float shape;
 	/// Its animation's counter

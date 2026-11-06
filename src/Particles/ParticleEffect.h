@@ -558,6 +558,8 @@ struct Creator
 	Kind kind {Kind::Point};
 	std::string className;
 	std::array<uint8_t, 4> rgba {255, 255, 255, 255};
+	/// The light that each new atom adds after its texture, 0..255 for each of red, green and blue
+	std::array<uint8_t, 3> specular {0, 0, 0};
 	/// Tinted by the casting player's colour, moved towards white by the blend below 1
 	bool usePlayerColour {false};
 	float playerColourBlend {1.0f};
@@ -708,7 +710,7 @@ struct Atom
 	float ruleScale {1.0f};
 	float stretch {1.0f};
 	std::array<uint8_t, 4> rgba {255, 255, 255, 255};
-	/// Light added to its colour, as a flash of lightning lights a cloud
+	/// Light added after its texture, as a flash of lightning lights a cloud
 	std::array<uint8_t, 3> specular {0, 0, 0};
 	/// When it was made, in seconds of its effect's age
 	float birth {0.0f};
@@ -996,6 +998,8 @@ public:
 		float alpha;
 		float frame;
 		std::array<uint8_t, 3> rgb;
+		/// The light added after the texture (Atom::specular). Sprites and mists add it; the other kinds do not yet.
+		std::array<uint8_t, 3> specular {0, 0, 0};
 		/// Seconds it has lived, at the drawn time
 		float age {0.0f};
 		/// Its creator's values (Atom::creatorValue)
