@@ -629,7 +629,7 @@ std::optional<Renderer::HandGlowLook> Renderer::HandGlowOf(const DrawSceneDesc& 
 {
 	using ecs::components::Hand;
 	using ecs::components::HandMiracleFx;
-	if (!desc.drawHand || desc.viewId == RenderPass::Reflection)
+	if (!desc.drawHand || !desc.drawHandEffects || desc.viewId == RenderPass::Reflection)
 	{
 		return std::nullopt;
 	}
@@ -704,7 +704,7 @@ void Renderer::DrawHandMiracleBands(const DrawSceneDesc& desc) const
 	using ecs::components::Hand;
 	using ecs::components::HandMiracleFx;
 	using ecs::components::OneOffSpellSeed;
-	if (desc.viewId != RenderPass::Main || !desc.drawHand || !Locator::rendereringSystem::has_value())
+	if (desc.viewId != RenderPass::Main || !desc.drawHand || !desc.drawHandEffects || !Locator::rendereringSystem::has_value())
 	{
 		return;
 	}

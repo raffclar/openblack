@@ -82,6 +82,8 @@ public:
 		bool wireframe;
 		/// The hand and its shadow, hidden while a dialog shows its own pointer
 		bool drawHand = true;
+		/// The glow, the bands and the bracelets of the miracle in the hand. The hand does not show them inside the temple.
+		bool drawHandEffects = true;
 	};
 
 	struct L3DMeshSubmitDesc

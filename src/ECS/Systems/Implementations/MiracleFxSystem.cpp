@@ -160,14 +160,18 @@ entt::id_type MiracleFxSystem::BandMesh()
 	return LoadMesh(OneOffSpellSeed::k_RingMeshId.value(), OneOffSpellSeed::k_RingMeshFile);
 }
 
-void MiracleFxSystem::Update(float /*seconds*/, float gameSeconds)
+void MiracleFxSystem::Update(float /*seconds*/, float gameSeconds, bool handShowsEffects)
 {
 	if (!Locator::infoConstants::has_value() || !Locator::entitiesRegistry::has_value())
 	{
 		return;
 	}
-	// The hand's bands and glow keep to the game's time, stopping while it is paused
-	UpdateHand(gameSeconds);
+	// The bands and the glow of the hand move with the time of the game, and stop while the game is paused. They move
+	// only in a frame that shows them.
+	if (handShowsEffects)
+	{
+		UpdateHand(gameSeconds);
+	}
 	UpdatePiles(gameSeconds);
 }
 
