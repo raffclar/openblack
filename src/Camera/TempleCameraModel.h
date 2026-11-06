@@ -102,6 +102,22 @@ public:
 	/// How much the main room leans this step while the player drags the floor or a wall: by the mouse's movement down
 	/// the screen in the step, less towards the screen's sides (the cursor's place across, -1 to 1)
 	[[nodiscard]] static float DragLeanStep(float mouseDown, float dt, float across);
+
+	/// The lean that the main room goes to when the player sends the camera back from a scroll
+	static constexpr float k_ScrollLeaveLean = 1.0f;
+	/// What the main room's orbit does when the camera stops its look at a scroll
+	struct ScrollLeave
+	{
+		/// The lean that the orbit goes to, when the player sent the camera back
+		std::optional<float> leanTarget;
+		/// The orbit starts again from its first turn and lean, when the look was fully in
+		bool restartOrbit;
+	};
+	/// The main room's orbit when its look at a scroll stops, from who stopped it and how far in the look was
+	[[nodiscard]] static constexpr ScrollLeave MainRoomScrollLeave(bool byPlayer, float zoom)
+	{
+		return {.leanTarget = byPlayer ? std::optional<float>(k_ScrollLeaveLean) : std::nullopt, .restartOrbit = zoom == 1.0f};
+	}
 	/// A pose about the main room's centre turned to face one of its doors
 	[[nodiscard]] static Pose TurnToDoor(const Pose& pose, uint32_t door);
 	/// A pose about the main room's centre turned to face one of its doors, as a room other than the main room turns its
@@ -257,6 +273,10 @@ private:
 	[[nodiscard]] Pose PathEnd(Room room) const;
 	void UpdateThroughDoor(float dt, const Input& input);
 	void ChangeState();
+	/// Put the main room's orbit back to its first turn and lean at once
+	void RestartOrbit();
+	/// Stop the look at a scroll; the player or the room's state stopped it
+	void LeaveSubMesh(bool byPlayer);
 	void FollowTemple();
 	[[nodiscard]] Room GetRoom() const;
 	[[nodiscard]] bool InMainRoom() const { return GetRoom() == Room::Main; }

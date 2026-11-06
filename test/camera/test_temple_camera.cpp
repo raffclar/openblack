@@ -312,3 +312,18 @@ TEST(TempleCamera, TheFutureRoomTurnsByItselfWhileItShowsItsWords)
 	EXPECT_FLOAT_EQ(*TempleCameraModel::PictureTurnByItself(time, 0.25f, false, false, true), 0.25f * 0.25f * 0.25f);
 	EXPECT_FLOAT_EQ(time, 0.5f);
 }
+
+TEST(TempleCamera, TheMainRoomsOrbitAfterALookAtAScroll)
+{
+	// The player sends the camera back before the look is fully in: the orbit keeps its turn and leans up to 1
+	const auto early = TempleCameraModel::MainRoomScrollLeave(true, 0.5f);
+	ASSERT_TRUE(early.leanTarget.has_value());
+	EXPECT_EQ(*early.leanTarget, 1.0f);
+	EXPECT_FALSE(early.restartOrbit);
+	// After a look that came fully in, the orbit starts again from its first turn and lean
+	const auto full = TempleCameraModel::MainRoomScrollLeave(true, 1.0f);
+	EXPECT_TRUE(full.restartOrbit);
+	// The room that stops the look does not change the lean
+	EXPECT_FALSE(TempleCameraModel::MainRoomScrollLeave(false, 0.5f).leanTarget.has_value());
+	EXPECT_TRUE(TempleCameraModel::MainRoomScrollLeave(false, 1.0f).restartOrbit);
+}

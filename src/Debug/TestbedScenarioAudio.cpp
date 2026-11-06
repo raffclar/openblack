@@ -1079,6 +1079,23 @@ void testbed_scenarios::AddAudio(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "temple.main_scroll_leave",
+	    .name = "The temple's main room leans up when the player sends the camera back from its scroll early",
+	    .facet = Facet::Story,
+	    .description = "The player goes into the temple's main room. After five seconds the camera looks at the room's "
+	                   "scroll, as a press on it does. After 0.8 seconds, before the camera is fully at the scroll, the "
+	                   "player presses the left button and lets it go.",
+	    .expected = "The press sends the camera back from the scroll and does nothing more. The room's orbit keeps its "
+	                "turn and its lean goes from 0.7 to 1. Thus the camera comes back lower than before the look and "
+	                "looks more up, to the roof.",
+	    .framing = {.shot = Shot::Overview},
+	    .commands = {{.kind = Kind::EnterTemple, .delaySeconds = 1.0f, .value = 3},
+	                 {.kind = Kind::LookAtTempleScroll, .delaySeconds = 5.0f, .value = 0},
+	                 {.kind = Kind::PointerPress, .delaySeconds = 0.8f, .value = 1},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 0.1f, .value = 1}},
+	});
+
+	all.push_back({
 	    .id = "temple.scroll_pictures",
 	    .name = "The pictures of a gesture and of controls on the library's did you know scroll",
 	    .facet = Facet::Story,
