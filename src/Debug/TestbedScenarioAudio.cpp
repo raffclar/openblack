@@ -1144,6 +1144,46 @@ void testbed_scenarios::AddAudio(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "temple.cave_scroll_leave",
+	    .name = "The creature room camera comes back from a scroll after its aim",
+	    .facet = Facet::Story,
+	    .description = "The player's creature is in the temple's creature room, which the player goes into. After ten "
+	                   "seconds the camera looks at the scroll of the creature's attributes, as a press on it does. After "
+	                   "two seconds, when the look is fully in, the player presses the left arrow key for one frame.",
+	    .expected = "The camera goes to the scroll over about a second and a half. The key sends it back over about "
+	                "a second and a half. The camera follows its aim a short time behind it, so it starts back slowly "
+	                "and comes to rest softly.",
+	    .framing = {.shot = Shot::Overview},
+	    .creatures = {Posed(CreatureType::Tiger, {0.0f, 40.0f}, 180.0f, "yours")},
+	    .commands = {{.kind = Kind::EnterTemple, .delaySeconds = 1.0f, .value = static_cast<size_t>(TempleRoom::Main)},
+	                 {.kind = Kind::OpenCreatureCave, .creature = 0, .delaySeconds = 0.5f},
+	                 {.kind = Kind::LookAtTempleScroll, .delaySeconds = 10.0f, .value = 0},
+	                 {.kind = Kind::PressKey,
+	                  .delaySeconds = 2.0f,
+	                  .value = static_cast<size_t>(input::BindableActionMap::MOVE_LEFT)}},
+	});
+
+	all.push_back({
+	    .id = "temple.library_scroll_leave",
+	    .name = "The library camera comes back from a scroll after its aim",
+	    .facet = Facet::Story,
+	    .description = "The player goes through the temple's main room into the library. After four seconds the camera "
+	                   "looks at the did you know scroll, as a press on it does. After two seconds, when the look is "
+	                   "fully in, the player presses the left arrow key for one frame.",
+	    .expected = "The camera goes to the scroll over about a second and a half. The key sends it back over about "
+	                "a second and a half. The camera follows its aim a short time behind it, so it starts back slowly "
+	                "and comes to rest softly.",
+	    .framing = {.shot = Shot::Overview},
+	    // The other rooms open after the temple draws the main room. Thus the player enters through it.
+	    .commands = {{.kind = Kind::EnterTemple, .delaySeconds = 1.0f, .value = 3},
+	                 {.kind = Kind::EnterTemple, .delaySeconds = 0.5f, .value = 2},
+	                 {.kind = Kind::LookAtTempleScroll, .delaySeconds = 4.0f, .value = 5},
+	                 {.kind = Kind::PressKey,
+	                  .delaySeconds = 2.0f,
+	                  .value = static_cast<size_t>(input::BindableActionMap::MOVE_LEFT)}},
+	});
+
+	all.push_back({
 	    .id = "temple.scroll_pictures",
 	    .name = "The pictures of a gesture and of controls on the library's did you know scroll",
 	    .facet = Facet::Story,

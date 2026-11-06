@@ -123,7 +123,7 @@ public:
 	[[nodiscard]] static Pose TurnToDoor(const Pose& pose, uint32_t door);
 	/// A pose about the main room's centre turned to face one of its doors, as a room other than the main room turns its
 	/// way back: the sine of the turn is not stored as a float
-	[[nodiscard]] static Pose TurnToDoorBack(const Pose& pose, uint32_t door);
+	[[nodiscard]] static Pose TurnToDoorBack(const Pose& pose, int32_t door);
 	/// Whether a room is one of the rooms of pictures, which share one kind of camera
 	[[nodiscard]] static bool IsPictureRoom(Room room);
 	/// The view of a room of pictures at a turn about its centre, a lean between looking up, at 0, and
@@ -151,6 +151,32 @@ public:
 	[[nodiscard]] static CaveAim CaveZoomAim(const Pose& look, const Pose& zoomed, glm::vec3 from, float zoom);
 	/// Where a room's camera starts its walk back through the door: halfway from a pose to the door, at the door's height
 	[[nodiscard]] static Pose WalkBackStart(const Pose& through, const Pose& from);
+	/// A room camera's aim moved towards the pose of a close look. The cosine of the look's zoom, from 0 to 1, gives how
+	/// far. At a zoom of 0 or less, the aim does not change.
+	[[nodiscard]] static Pose WithSubMeshLook(const Pose& aim, const Pose& look, float zoom);
+	/// The time that the main room camera takes to move to its aim, at the zoom of a close look
+	[[nodiscard]] static constexpr float MainRoomLookEaseTime(float zoom) { return zoom * 0.2f; }
+	/// The time that a room of pictures' camera takes to move to its aim, at the zoom of a close look: the usual time of
+	/// the rooms' cameras, half a second, times the zoom
+	[[nodiscard]] static constexpr float PictureRoomLookEaseTime(float zoom) { return zoom * 0.5f; }
+	/// The point under the cursor is nearer to the main room's centre than this for a press to walk back from the
+	/// creature room
+	static constexpr float k_CaveWalkPointRadius = 79.0f;
+	/// The camera is nearer than this to the point under the cursor for a held press to walk back from the creature
+	/// room
+	static constexpr float k_CaveHeldWalkReach = 25.0f;
+	/// The door that a press in the creature room walks back through, if the press walks back.
+	/// @param pressed The left button is down after the temple's filters
+	/// @param newPress The press starts in this step
+	/// @param door The door of the main room's ring that the cursor is over, if one
+	/// @param lastDoor The door that the camera last walked back through since the room's camera started, if one
+	/// @param point The point under the cursor in the last drawn frame, about the main room's centre
+	/// @param eye Where the camera was in the last drawn frame
+	/// @return The door, or nothing when the press does not walk back. A held press can walk back over no door after
+	///         no walk back yet; that walk is through the door one before the first.
+	[[nodiscard]] static std::optional<int32_t> CaveWalkBackDoor(bool pressed, bool newPress, std::optional<uint32_t> door,
+	                                                             std::optional<uint32_t> lastDoor,
+	                                                             std::optional<glm::vec3> point, glm::vec3 eye);
 	/// The doors start to close behind the camera once it has come in along the room's path for more than this many
 	/// seconds, at this rate
 	static constexpr float k_IntroDoorCloseTime = 0.4f;
@@ -262,15 +288,23 @@ private:
 		std::array<std::optional<glm::vec2>, CreatureCaveTargets::k_Count> caveTargets;
 		/// The cursor is over the creature's body in its room, which makes the creature the target whatever else is
 		bool overCaveCreature {false};
+		/// The point under the cursor in the frame drawn last, in the creature's room
+		std::optional<glm::vec3> drawnPoint;
+		/// Where the camera was in the frame drawn last
+		glm::vec3 eye {0.0f};
 	};
 
 	void Step(float dt, const Input& input);
 	void UpdateIntro(float dt, const Input& input);
 	void UpdateOrbit(float dt, const Input& input);
 	void UpdateLook(float dt, const Input& input);
+	/// The aim of the room's camera while it looks at a scroll from close by
+	void AimAtSubMesh();
+	/// The creature room camera's aim from its look and its zoom to a target. A zoom fully in turns the look.
+	[[nodiscard]] Pose CaveLookAim();
 	/// The creature's room's targets: a click on one zooms to it, a press anywhere or the arrow keys zoom back,
-	/// and the exit, zoomed to, leaves the temple
-	void UpdateCaveTargets(float dt, const Input& input);
+	/// and the exit, zoomed to, leaves the temple. In the steps that look at a scroll, only the exit's fade changes.
+	void UpdateCaveTargets(float dt, const Input& input, bool scrollStep);
 	/// The place of a point of the creature's room's mesh
 	[[nodiscard]] static std::optional<glm::vec3> CaveMeshPoint(uint32_t index);
 	/// Leaving the creature in its room closes the tattoo editor open on it
@@ -283,7 +317,7 @@ private:
 	/// As when the temple cuts straight to a room: back to looking along the end of the room's path
 	void ResetPictureCamera(Room room);
 	/// Walks back to the main room through the door of it a room is behind, from a pose
-	void WalkBackThrough(uint32_t door, const Pose& from);
+	void WalkBackThrough(int32_t door, const Pose& from);
 	/// The control state of a room's camera
 	[[nodiscard]] State ControlOf(Room room) const;
 	/// Where a room's camera has the player as it takes over, which its path eases into over its last second
@@ -395,6 +429,11 @@ private:
 	bool _caveLookIsEditors {false};
 	/// Whether the mouse has moved since it was pressed, which makes the press a drag rather than a click
 	bool _pressDragged {false};
+	/// Whether the cursor was over the creature's body in its room in the last step
+	bool _wasOverCaveCreature {false};
+	/// The door that the creature room camera last walked back through in this visit to the temple, none before the
+	/// first walk back
+	std::optional<uint32_t> _caveWalkDoor;
 
 	// Through a door
 	float _doorTime {0.0f};
