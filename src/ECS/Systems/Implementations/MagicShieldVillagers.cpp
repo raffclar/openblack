@@ -339,7 +339,8 @@ uint8_t MagicShieldSystem::PriorityFor(entt::entity villager, const ShieldReacti
 		const bool amazed =
 		    action != nullptr && Locator::livingActionSystem::value().VillagerGetState(*action, LivingAction::Index::Top) ==
 		                             VillagerStates::AmazedByMagicShieldReaction;
-		if (current == nullptr || !amazed || current->lookAt == PositionOf(reaction.object))
+		if (current == nullptr || !amazed ||
+		    current->lookAt == map_coords::WholeXZ(map_coords::FromMetres(PositionOf(reaction.object))))
 		{
 			return 0;
 		}
@@ -569,7 +570,7 @@ void MagicShieldSystem::StartReacting(entt::entity villager, uint32_t id, bool w
 		}
 		current->reaction = shieldObject.reaction;
 		current->type = Reaction::ReactToMagicShield;
-		current->lookAt = centre;
+		current->lookAt = map_coords::WholeXZ(map_coords::FromMetres(centre));
 		_reactions.at(shieldObject.reaction).reacting.push_back(villager);
 		return;
 	}
@@ -596,7 +597,10 @@ void MagicShieldSystem::StartReacting(entt::entity villager, uint32_t id, bool w
 		watched = current->shield;
 	}
 	auto& reacting = registry.AssignOrReplace<VillagerShieldReaction>(
-	    villager, VillagerShieldReaction {.reaction = id, .type = reaction.type, .shield = watched, .lookAt = at});
+	    villager, VillagerShieldReaction {.reaction = id,
+	                                      .type = reaction.type,
+	                                      .shield = watched,
+	                                      .lookAt = map_coords::WholeXZ(map_coords::FromMetres(at))});
 	reaction.reacting.push_back(villager);
 
 	if (reaction.type == Reaction::ReactToMagicShieldDestroyed)
