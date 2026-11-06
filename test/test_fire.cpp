@@ -9,6 +9,7 @@
 
 #include <cmath>
 
+#include <glm/vec3.hpp>
 #include <gtest/gtest.h>
 
 #include "Fire/FireGraphic.h"
@@ -228,6 +229,18 @@ TEST(FireGraphic, FlamesBySizeAndCellsByAge)
 	EXPECT_EQ(graphic::GlowColour(500.0f, 0.5f, 1.0f), (53u << 16u) | (17u << 8u));
 	EXPECT_EQ(graphic::GlowColour(-10.0f, 0.0f, 0.0f), 0u);
 	EXPECT_NEAR(graphic::LightStrength(1.0f, 0.5f, 1.0f), 0.6f * 1.2f * 0.5f, k_Epsilon);
+}
+
+TEST(FireGraphic, AFlamesFirstNumberGoesToTheSecondCornerAndItsSecondToTheThird)
+{
+	const glm::vec3 first(0.0f);
+	const glm::vec3 second(10.0f, 0.0f, 0.0f);
+	const glm::vec3 third(0.0f, 0.0f, 10.0f);
+	EXPECT_EQ(graphic::PointOnTriangle(first, second, third, 0.25f, 0.5f), glm::vec3(2.5f, 0.0f, 5.0f));
+	// Two numbers with a sum over 1 are both taken from 1
+	EXPECT_EQ(graphic::PointOnTriangle(first, second, third, 0.75f, 0.5f), glm::vec3(2.5f, 0.0f, 5.0f));
+	// A sum of exactly 1 stays on the far edge
+	EXPECT_EQ(graphic::PointOnTriangle(first, second, third, 0.75f, 0.25f), glm::vec3(7.5f, 0.0f, 2.5f));
 }
 
 TEST(FireGraphic, FlamesGrowInByTheFireAndFadeOver4Seconds)

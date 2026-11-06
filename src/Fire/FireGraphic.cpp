@@ -186,6 +186,16 @@ void UpdateSmoke(Graphic& graphic, const Inputs& inputs, float seconds, const Sa
 }
 } // namespace
 
+glm::vec3 graphic::PointOnTriangle(glm::vec3 first, glm::vec3 second, glm::vec3 third, float along, float across)
+{
+	if (along + across > 1.0f)
+	{
+		along = 1.0f - along;
+		across = 1.0f - across;
+	}
+	return first + (second - first) * along + (third - first) * across;
+}
+
 int graphic::MaxFlames(bool tree, float radius, float height)
 {
 	if (tree)

@@ -110,6 +110,11 @@ struct Graphic
 	float drawnFraction {0.0f};
 };
 
+/// A flame's point on a triangle of a model, from two random numbers from 0 to 1. Two numbers with a sum over 1 are both
+/// taken from 1, so that the point stays in the triangle. The first number goes along the edge from the first corner to
+/// the second corner, the second number along the edge from the first corner to the third corner.
+[[nodiscard]] glm::vec3 PointOnTriangle(glm::vec3 first, glm::vec3 second, glm::vec3 third, float along, float across);
+
 /// The most flames an object keeps: two on a tree, else two on something small and seven on something 3 m or bigger
 [[nodiscard]] int MaxFlames(bool tree, float radius, float height);
 /// What an object's flames are sized for: a tree; a model built of many jointed parts (a creature's body, a temple);

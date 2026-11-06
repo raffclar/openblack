@@ -379,13 +379,8 @@ std::optional<fire::graphic::Anchor> RandomPointOn(entt::entity object)
 		return fire::graphic::Anchor {.point = mesh->GetBoundingBox().Center()};
 	}
 	auto pick = static_cast<size_t>(random.LocalRand(static_cast<int32_t>(triangles)));
-	float a = random.LocalFloatRand(1.0f);
-	float b = random.LocalFloatRand(1.0f);
-	if (a + b > 1.0f)
-	{
-		a = 1.0f - a;
-		b = 1.0f - b;
-	}
+	const float along = random.LocalFloatRand(1.0f);
+	const float across = random.LocalFloatRand(1.0f);
 	for (const auto& subMesh : mesh->GetSubMeshes())
 	{
 		if (!firstDetail(*subMesh))
@@ -400,7 +395,7 @@ std::optional<fire::graphic::Anchor> RandomPointOn(entt::entity object)
 			continue;
 		}
 		const auto corner = [&](size_t i) { return surface.positions.at(surface.indices.at(pick * 3 + i)); };
-		glm::vec3 point = corner(0) + (corner(1) - corner(0)) * b + (corner(2) - corner(0)) * a;
+		glm::vec3 point = fire::graphic::PointOnTriangle(corner(0), corner(1), corner(2), along, across);
 		if (IsTree(object))
 		{
 			point *= 0.5f;

@@ -18,6 +18,7 @@
 
 #include "3D/MapCoords.h"
 #include "Camera/CameraZoomer.h"
+#include "Common/GUtilsDistance.h"
 #include "ECS/TownAggression.h"
 #include "InfoConstants.h"
 #include "Magic/ForestRules.h"
@@ -309,6 +310,24 @@ TEST(ForestRules, TreesFurtherOutGrowSmaller)
 	EXPECT_FLOAT_EQ(forest::TargetScale(0.0f), 1.0f);
 	EXPECT_NEAR(forest::TargetScale(2.0f), 0.90909f, k_Epsilon);
 	EXPECT_FLOAT_EQ(forest::TargetScale(11.0f), 0.5f);
+}
+
+TEST(ForestRules, ATreeOfTheSpiralStandsAtTheMiddlePlusItsOffsetCutToMapUnits)
+{
+	const auto spot = forest::TreeSpot({100.0f, 200.0f}, {3.3f, -7.7f});
+	EXPECT_EQ(spot.x, map_coords::ToFixed(103.3f));
+	EXPECT_EQ(spot.z, map_coords::ToFixed(192.3f));
+	EXPECT_EQ(spot.altitude, 0.0f);
+}
+
+TEST(ForestRules, ATreesSizeComesFromTheDistanceBetweenTheMapPositions)
+{
+	const auto centre = map_coords::FromMetres({100.0f, 200.0f});
+	const auto spot = forest::TreeSpot({100.0f, 200.0f}, {3.3f, -7.7f});
+	const float inMapUnits = forest::TargetScale(gutils::GetDistanceInMetres(centre, spot));
+	const float inMetres = forest::TargetScale(glm::distance(map_coords::ToMetres(centre), map_coords::ToMetres(spot)));
+	ASSERT_NE(inMapUnits, inMetres);
+	EXPECT_EQ(forest::TargetScaleAt(centre, spot), inMapUnits);
 }
 
 TEST(ForestRules, ItAffordsItsTreesWhileItHasStrength)
