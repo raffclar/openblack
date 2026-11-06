@@ -2047,7 +2047,7 @@
   "query": "view.cinematic"
  },
  {
-  "description": "The land's draw list: the things on the blocks in view within 700 units that are drawn, at most 2999, the nearest blocks first; with an id, whether that thing is in it and drawn",
+  "description": "The land's draw list: the things on the blocks in view within 700 units that are drawn, at most 2999, the nearest blocks first, and how many times the land's blocks were classified for the frames; with an id, whether that thing is in it and drawn",
   "kind": "object",
   "parameters": [
    {

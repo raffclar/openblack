@@ -49,6 +49,7 @@
 #include "ECS/Systems/HelpTextSystemInterface.h"
 #include "ECS/Systems/HighDetailSystemInterface.h"
 #include "ECS/Systems/IncomingMessageSystemInterface.h"
+#include "ECS/Systems/LandDetailSystemInterface.h"
 #include "ECS/Systems/LoadingScreenSystemInterface.h"
 #include "ECS/Systems/MiracleFxSystemInterface.h"
 #include "ECS/Systems/ObjectDrawListSystemInterface.h"
@@ -431,7 +432,8 @@ std::unique_ptr<ProviderInterface> ViewProvider(const GameSeamInterface* seam)
 	provider->Add(
 	    Query("draw_list",
 	          "The land's draw list: the things on the blocks in view within 700 units that are drawn, at most 2999, the "
-	          "nearest blocks first; with an id, whether that thing is in it and drawn",
+	          "nearest blocks first, and how many times the land's blocks were classified for the frames; with an id, "
+	          "whether that thing is in it and drawn",
 	          {{.name = "id", .type = "integer", .description = "A thing to look up in the list", .required = false}}),
 	    Serve<Locator::objectDrawListSystem>(
 	        "the land's draw list",
@@ -448,6 +450,11 @@ std::unique_ptr<ProviderInterface> ViewProvider(const GameSeamInterface* seam)
 		                     {"kept", summary.kept},
 		                     {"full", summary.full},
 		                     {"rebuilds_asked", summary.rebuildsAsked}};
+		        // The list and the land's draw share one classification of the blocks in each frame
+		        if (Locator::landDetailSystem::has_value())
+		        {
+			        result["land_detail_classifications"] = Locator::landDetailSystem::value().Classifications();
+		        }
 		        if (const auto entity = EntityParam(context.params); entity.has_value())
 		        {
 			        result["listed"] = drawList.Listed(*entity);

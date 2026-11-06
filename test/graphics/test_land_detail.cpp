@@ -344,3 +344,111 @@ TEST(LandDetail, TheLowResolutionCoarseTextureSamplesTheSmallerBlockTexture)
 	EXPECT_NEAR(CoarseTexelPosition(0.0f, low), 0.50196f, 1e-5f);
 	EXPECT_NEAR(CoarseTexelPosition(1.0f, low), 31.50196f, 1e-5f);
 }
+
+namespace
+{
+
+/// A camera 30 units before the first block that looks along x, with the lines of detail level 0: the first mesh line at
+/// 300 ahead (x 270), the second at 600 (x 570), each with a band of 25
+FrameInputs LookingAlongX()
+{
+	return {.origin = {-30.0f, 50.0f, 0.0f}, .forward = {1.0f, 0.0f, 0.0f}, .lines = For(0), .coarseLand = false};
+}
+
+/// A row of blocks along x from the camera, one block for each 160 units
+std::vector<BlockPlace> RowAlongX(int count)
+{
+	std::vector<BlockPlace> blocks;
+	for (int i = 0; i < count; ++i)
+	{
+		blocks.push_back({.corner = {static_cast<float>(i) * 160.0f, 0.0f}, .at = {i, 0}});
+	}
+	return blocks;
+}
+
+} // namespace
+
+TEST(LandDetail, AFrameClassifiesEachBlockByTheLinesAcrossTheGround)
+{
+	const auto frame = ClassifyFrame(LookingAlongX(), RowAlongX(5));
+	ASSERT_EQ(frame.blocks.size(), 5u);
+	EXPECT_EQ(frame.blocks[0].mesh, Mesh::Full);
+	EXPECT_EQ(frame.blocks[0].morph, Morph::None);
+	// The first mesh line runs through the second block
+	EXPECT_EQ(frame.blocks[1].mesh, Mesh::Full);
+	EXPECT_EQ(frame.blocks[1].morph, Morph::ToHalf);
+	EXPECT_EQ(frame.blocks[2].mesh, Mesh::Half);
+	EXPECT_EQ(frame.blocks[2].morph, Morph::None);
+	// The second mesh line runs through the fourth block
+	EXPECT_EQ(frame.blocks[3].mesh, Mesh::Half);
+	EXPECT_EQ(frame.blocks[3].morph, Morph::ToQuarter);
+	EXPECT_EQ(frame.blocks[4].mesh, Mesh::Quarter);
+	// A block is stitched only on the side of a coarser neighbour
+	EXPECT_EQ(frame.coarserSides[0], 0);
+	EXPECT_EQ(frame.coarserSides[1], CoarserHighX);
+	EXPECT_EQ(frame.coarserSides[3], CoarserHighX);
+	EXPECT_EQ(frame.coarserSides[4], 0);
+	// The neighbours at x - 1, z - 1, z + 1 and x + 1
+	EXPECT_EQ(frame.neighbours[0], (std::array<int16_t, 4> {-1, -1, -1, 1}));
+	EXPECT_EQ(frame.neighbours[2], (std::array<int16_t, 4> {1, -1, -1, 3}));
+	EXPECT_FLOAT_EQ(frame.meshNear.ahead, 300.0f);
+	EXPECT_FLOAT_EQ(frame.meshFar.ahead, 600.0f);
+}
+
+TEST(LandDetail, AFrameGivesTheSameDetailAsTheClassificationOfEachBlock)
+{
+	const auto inputs = LookingAlongX();
+	const auto blocks = RowAlongX(6);
+	const auto frame = ClassifyFrame(inputs, blocks);
+	for (size_t i = 0; i < blocks.size(); ++i)
+	{
+		const auto low = blocks[i].corner;
+		const std::array<glm::vec2, 4> corners = {low, low + glm::vec2(0.0f, 160.0f), low + glm::vec2(160.0f, 0.0f),
+		                                          low + glm::vec2(160.0f)};
+		CornerOffsets offsets;
+		for (size_t c = 0; c < corners.size(); ++c)
+		{
+			offsets.meshNear.at(c) = Offset(frame.meshNear, corners.at(c));
+			offsets.meshFar.at(c) = Offset(frame.meshFar, corners.at(c));
+			offsets.texture.at(c) = Offset(frame.texture, corners.at(c));
+		}
+		EXPECT_EQ(frame.blocks[i], Classify(offsets, inputs.lines, inputs.coarseLand)) << i;
+	}
+}
+
+TEST(LandDetail, ADrawnCornerMorphsByItsPlaceInTheBandOfTheLine)
+{
+	std::array<uint8_t, k_CornerCount> altitudes {};
+	altitudes.at(0 * 17 + 0) = 10;
+	altitudes.at(1 * 17 + 0) = 40;
+	altitudes.at(2 * 17 + 0) = 20;
+	const auto frame = ClassifyFrame(LookingAlongX(), RowAlongX(1));
+	// A block that does not morph draws each corner at its own altitude
+	EXPECT_EQ(DrawnCornerAltitude(altitudes, 1, 0, Morph::None, frame, {260.0f, 0.0f}), 40);
+	// Well before the line: its own altitude
+	EXPECT_EQ(DrawnCornerAltitude(altitudes, 1, 0, Morph::ToHalf, frame, {0.0f, 0.0f}), 40);
+	// On the line: half way to the average of its neighbours on the half mesh, 15
+	EXPECT_EQ(DrawnCornerAltitude(altitudes, 1, 0, Morph::ToHalf, frame, {260.0f, 0.0f}), (128 * 40 + 128 * 15) >> 8);
+	// Past the band: the average
+	EXPECT_EQ(DrawnCornerAltitude(altitudes, 1, 0, Morph::ToHalf, frame, {320.0f, 0.0f}), 15);
+	// The morph to the quarter mesh goes by the second line; this corner is not a corner of the half mesh
+	EXPECT_EQ(DrawnCornerAltitude(altitudes, 1, 0, Morph::ToQuarter, frame, {620.0f, 0.0f}), 40);
+}
+
+TEST(LandDetail, AFrameIsClassifiedOnceForTheSameCameraAndBlocks)
+{
+	FrameMemo memo;
+	const auto blocks = RowAlongX(4);
+	auto inputs = LookingAlongX();
+	const auto first = memo.For(inputs, blocks).blocks;
+	EXPECT_EQ(memo.Classifications(), 1u);
+	EXPECT_EQ(memo.For(inputs, blocks).blocks, first);
+	EXPECT_EQ(memo.Classifications(), 1u);
+	// The camera moves: the frame is classified again
+	inputs.origin.x = 200.0f;
+	EXPECT_NE(memo.For(inputs, blocks).blocks, first);
+	EXPECT_EQ(memo.Classifications(), 2u);
+	// Other blocks: again
+	EXPECT_EQ(memo.For(inputs, RowAlongX(3)).blocks.size(), 3u);
+	EXPECT_EQ(memo.Classifications(), 3u);
+}
