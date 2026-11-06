@@ -26,6 +26,8 @@
 #include "Common/Platform.h"
 #include "Creature/LeashKeys.h"
 #include "Debug/DebugGuiInterface.h"
+#include "ECS/Components/Physics.h"
+#include "ECS/Registry.h"
 #include "ECS/Systems/CameraBookmarkSystemInterface.h"
 #include "ECS/Systems/CameraHelpSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
@@ -34,6 +36,7 @@
 #include "ECS/Systems/PickingSystemInterface.h"
 #include "ECS/Systems/PlayerCommandSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "EngineConfig.h"
 #include "GameDetail.h"
 #include "Graphics/RendererInterface.h"
@@ -42,6 +45,7 @@
 #include "Input/KeyBindings.h"
 #include "Input/PlatformKeys.h"
 #include "Locator.h"
+#include "Temple/TempleKeys.h"
 #include "Windowing/WindowingInterface.h"
 
 using namespace openblack;
@@ -239,6 +243,35 @@ bool GameKeysSystem::BookmarkKeysAllowed()
 	return help.cameraKeys && help.placeKeys;
 }
 
+namespace
+{
+/// What the keys of the temple's rooms depend on now
+openblack::temple::keys::RoomKeyFacts TempleRoomKeyFacts(bool insideTemple)
+{
+	openblack::temple::keys::RoomKeyFacts facts {.insideTemple = insideTemple};
+	if (Locator::cinematicDirectorSystem::has_value())
+	{
+		const auto& director = Locator::cinematicDirectorSystem::value();
+		facts.scriptBars = director.IsWideScreenOn() && director.GetWideScreenOwner() != 0;
+	}
+	if (Locator::entitiesRegistry::has_value())
+	{
+		const auto& registry = Locator::entitiesRegistry::value();
+		facts.gameOver = registry.Context().gameOver;
+		if (Locator::worshipSiteSystem::has_value())
+		{
+			const auto own = Locator::worshipSiteSystem::value().TempleOf(LocalInputPlayer());
+			if (own != entt::null)
+			{
+				const auto* progress = registry.TryGet<const ecs::components::BuildProgress>(own);
+				facts.templeBuilt = progress == nullptr || progress->built >= 1.0f;
+			}
+		}
+	}
+	return facts;
+}
+} // namespace
+
 void GameKeysSystem::UpdateTempleRoomKeys()
 {
 	if (!Locator::temple::has_value())
@@ -262,6 +295,10 @@ void GameKeysSystem::UpdateTempleRoomKeys()
 		if (!actions.Get(action) || !actions.GetChanged(action))
 		{
 			continue;
+		}
+		if (!openblack::temple::keys::RoomKeyActs(TempleRoomKeyFacts(temple.Active())))
+		{
+			return;
 		}
 		if (temple.Active())
 		{

@@ -1529,7 +1529,13 @@ bool TempleInterior::IsRoomAvailable(TempleRoom room) const
 	}
 	const bool hasCreature =
 	    Locator::creatureModeSystem::has_value() && Locator::creatureModeSystem::value().PlayersCreature().has_value();
-	return temple::IsRoomAvailable(room, {.roomsOpened = _roomsOpened, .hasCreature = hasCreature, .keptIn = _lock.GetRoom()});
+	const bool networkGame = Locator::time::has_value() && Locator::time::value().IsNetworkGame();
+	const bool skirmish = Locator::entitiesRegistry::has_value() && Locator::entitiesRegistry::value().Context().skirmish;
+	return temple::IsRoomAvailable(room, {.roomsOpened = _roomsOpened,
+	                                      .hasCreature = hasCreature,
+	                                      .keptIn = _lock.GetRoom(),
+	                                      .networkGame = networkGame,
+	                                      .skirmish = skirmish});
 }
 
 void TempleInterior::TellRoomNotAvailable()
