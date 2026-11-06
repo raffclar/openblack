@@ -50,6 +50,7 @@
 #include "ECS/Systems/HelpMessageSystemInterface.h"
 #include "ECS/Systems/HelpProfileSystemInterface.h"
 #include "ECS/Systems/HelpTextSystemInterface.h"
+#include "ECS/Systems/Implementations/VillagerHome.h"
 #include "ECS/Systems/PlayerProfileSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/SkyClockSystemInterface.h"
@@ -159,6 +160,28 @@ bool NearPointUnderCursor(entt::entity thing)
 	const auto point = ReportedPointUnderCursor();
 	const auto* at = Locator::entitiesRegistry::value().TryGet<const Transform>(thing);
 	return point.has_value() && at != nullptr && gutils::GetDistanceInMetres(at->position, *point) < k_WarnReach;
+}
+
+/// Whether a town is of the player at this computer
+bool OwnTown(entt::entity town)
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* data = registry.Valid(town) ? registry.TryGet<const Town>(town) : nullptr;
+	return data != nullptr && data->owner == OwnPlayer();
+}
+
+/// Whether the advisors can warn of a need of a town: it has people, its storage pit works and it is near the point
+/// under the cursor
+bool TownNeedCanBeWarned(entt::entity town)
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* stats = registry.TryGet<const TownStats>(town);
+	if (stats == nullptr || stats->adults + stats->children == 0)
+	{
+		return false;
+	}
+	const auto pit = ecs::construction::StoragePitOf(town);
+	return pit.has_value() && ecs::villager_home::IsFunctional(*pit) && NearPointUnderCursor(town);
 }
 
 /// The point under the cursor of the player at this computer, as the last report of a turn tells it (zero until the
@@ -367,6 +390,18 @@ void GuidanceSystem::SayRemark(guidance::Kind kind)
 	const auto& texts = Locator::infoConstants::value().helpSpritesGuidance.at(*row).texts;
 	const auto choices = guidance::RemarkChoices(texts);
 	const auto pick = HelpRand(static_cast<int32_t>(choices));
+	Say(texts.at(pick), kind);
+}
+
+void GuidanceSystem::SayRemarkByValue(guidance::Kind kind, float value)
+{
+	const auto row = guidance::RemarkRow(kind);
+	if (!row.has_value() || !Locator::infoConstants::has_value() || !Locator::helpMessageSystem::has_value())
+	{
+		return;
+	}
+	const auto& texts = Locator::infoConstants::value().helpSpritesGuidance.at(*row).texts;
+	const auto pick = HelpRand(guidance::RemarkChoicesByValue(guidance::RemarkChoices(texts), value));
 	Say(texts.at(pick), kind);
 }
 
@@ -628,6 +663,40 @@ void GuidanceSystem::LowOnPeople(entt::entity town)
 	{
 		SayRemark(guidance::Kind::LowOnPeople);
 	}
+}
+
+void GuidanceSystem::LowOnFood(entt::entity town, float shortage)
+{
+	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Town {}: food shortage {:.3f} when a villager found food",
+	                    entt::to_integral(town), shortage);
+	if (!guidance::WarnsLowOnFood(shortage) || !Locator::entitiesRegistry::has_value())
+	{
+		return;
+	}
+	// Only a town of the player here draws the wait of the warning
+	if (!OwnTown(town) || !RemarkNow(guidance::Kind::LowOnFood) || !TownNeedCanBeWarned(town))
+	{
+		return;
+	}
+	SayRemarkByValue(guidance::Kind::LowOnFood, guidance::LowOnFoodValue(shortage));
+}
+
+void GuidanceSystem::VillagersUnhappy(entt::entity town, float unhappiness)
+{
+	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Town {}: unhappiness {:.3f} (own town {}, can warn {})", entt::to_integral(town),
+	                    unhappiness, OwnTown(town), TownNeedCanBeWarned(town));
+	if (!Locator::entitiesRegistry::has_value() || !Locator::infoConstants::has_value() ||
+	    !guidance::WarnsVillagersUnhappy(unhappiness,
+	                                     Locator::infoConstants::value().town.thresholdForAverageDesiresHelpSprites))
+	{
+		return;
+	}
+	// Only a town of the player here draws the wait of the remark
+	if (!OwnTown(town) || !RemarkNow(guidance::Kind::VillagersUnhappy) || !TownNeedCanBeWarned(town))
+	{
+		return;
+	}
+	SayRemark(guidance::Kind::VillagersUnhappy);
 }
 
 void GuidanceSystem::TownChangedHands(entt::entity town, PlayerNames loser, PlayerNames taker)

@@ -113,6 +113,25 @@ constexpr size_t k_RemarkRows = 22;
 /// How many of a row's texts may be picked: those before its first 0, but never the 34th, which is never said even in a
 /// full row
 [[nodiscard]] size_t RemarkChoices(const RemarkTexts& texts);
+/// The range of the random pick of a remark that a value chooses. The value is held between 0 and 1. A higher value
+/// lets the pick go further along the row.
+[[nodiscard]] int32_t RemarkChoicesByValue(size_t choices, float value);
+
+/// From this food shortage up, a town of the player here makes the advisors warn of low food
+constexpr float k_LowOnFoodShortage = 0.95f;
+/// Whether the food shortage of a town (see town_desire::DesireForFood) is high enough for the warning
+[[nodiscard]] constexpr bool WarnsLowOnFood(float shortage)
+{
+	return shortage >= k_LowOnFoodShortage;
+}
+/// The value that chooses the text of the low food warning: the shortage, at most 2, less 0.9
+[[nodiscard]] float LowOnFoodValue(float shortage);
+/// Whether the unhappiness of a town (see town_desire::Process) is more than the threshold of the town's info, at which
+/// the advisors say that the villagers are unhappy
+[[nodiscard]] constexpr bool WarnsVillagersUnhappy(float unhappiness, float threshold)
+{
+	return unhappiness > threshold;
+}
 
 /// How far the player's alignment is drifting: it keeps 0.95 of the drift so far and adds this turn's change
 [[nodiscard]] constexpr float Drift(float drift, float change)

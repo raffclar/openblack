@@ -38,6 +38,8 @@ struct TownDesireFlag
 	map_coords::MapCoords madeAt {};
 	/// How high its place is over the ground, which it keeps if the ground moves
 	float overGround {0.0f};
+	/// The raw desire of its town as the last turn of the town left it. The frames move the flag toward this value.
+	float turnDesire {0.0f};
 	/// How far up it flies, 0 to 1, and how fast it moves
 	float level {0.0f};
 	float speed {0.0f};
