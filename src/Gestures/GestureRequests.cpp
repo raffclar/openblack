@@ -126,39 +126,53 @@ int gesture::KnownLeashes(const HandContext::Creature& creature)
 	return static_cast<int>(std::ranges::count(creature.knows, true));
 }
 
+namespace
+{
+/// Whether the hand holds a miracle that its gestures can power up
+bool PowersUp(const HandContext& context)
+{
+	const auto& seed = context.seed;
+	return seed.has_value() && seed->ready && !seed->cast && seed->canPowerUp;
+}
+} // namespace
+
 std::vector<Request> gesture::Requests(const HandContext& context)
 {
 	std::vector<Request> requests;
 	const auto& seed = context.seed;
 
-	// While the player's creature duels, the hand waits only for its special move and the fight miracles it knows
-	if (context.creature.has_value() && context.creature->takesFightMoves)
-	{
-		if (context.specialMoveGesture != GestureType::None)
-		{
-			requests.push_back({.gesture = context.specialMoveGesture, .purpose = Purpose::FightSpecialMove});
-		}
-		for (const auto& miracle : context.creature->fightMiracles)
-		{
-			if (miracle.gesture != GestureType::None)
-			{
-				requests.push_back({.gesture = miracle.gesture,
-				                    .purpose = Purpose::FightMiracle,
-				                    .magic = miracle.magic,
-				                    .seed = miracle.seed});
-			}
-		}
-		return requests;
-	}
-
-	// A circle for the storm or shield in the hand, drawn while the Action button is held, until one is remembered
+	// A circle for the storm or shield in the hand, drawn while the Action button is held, until one is remembered. It
+	// is waited for first, also while the hand directs a fight.
 	if (context.actionHeld && seed.has_value() && seed->sizingGesture != GestureType::None && !context.circleRemembered)
 	{
 		requests.push_back({.gesture = seed->sizingGesture, .purpose = Purpose::SizeCircle});
 	}
 
-	const bool poweringUp = seed.has_value() && seed->ready && !seed->cast && seed->canPowerUp;
-	if (poweringUp)
+	const bool poweringUp = PowersUp(context);
+	const bool directsFight = context.creature.has_value() && context.creature->directsFight;
+	if (directsFight)
+	{
+		// While the hand directs the duel of the player's creature, the hand waits for its special move and the fight
+		// miracles it knows, while it takes more moves. The power-ups, the selection and the picker wait for nothing.
+		if (context.creature->takesFightMoves)
+		{
+			if (context.specialMoveGesture != GestureType::None)
+			{
+				requests.push_back({.gesture = context.specialMoveGesture, .purpose = Purpose::FightSpecialMove});
+			}
+			for (const auto& miracle : context.creature->fightMiracles)
+			{
+				if (miracle.gesture != GestureType::None)
+				{
+					requests.push_back({.gesture = miracle.gesture,
+					                    .purpose = Purpose::FightMiracle,
+					                    .magic = miracle.magic,
+					                    .seed = miracle.seed});
+				}
+			}
+		}
+	}
+	else if (poweringUp)
 	{
 		// A scribble calls off the power-up asked for, or drops the seed; each power-up gesture but the one asked for
 		// asks the icon of the seed for its level
@@ -274,16 +288,6 @@ std::vector<Request> gesture::Requests(const HandContext& context)
 	return requests;
 }
 
-namespace
-{
-/// Whether the hand holds a miracle that its gestures can power up
-bool PowersUp(const HandContext& context)
-{
-	const auto& seed = context.seed;
-	return seed.has_value() && seed->ready && !seed->cast && seed->canPowerUp;
-}
-} // namespace
-
 std::optional<uint32_t> gesture::HelpEventOf(const Request& request, const HandContext& context)
 {
 	switch (request.purpose)
@@ -370,15 +374,21 @@ void LeashPicker::Close()
 	seconds = 0.0f;
 }
 
-void LeashPicker::Update(float elapsed, float timeoutSeconds, bool leashed)
+bool LeashPicker::Update(float elapsed, float timeoutSeconds, bool staysOpen)
 {
 	if (!open)
 	{
-		return;
+		return false;
+	}
+	if (!staysOpen)
+	{
+		Close();
+		return false;
 	}
 	seconds += elapsed;
-	if (seconds > timeoutSeconds || !leashed)
+	if (seconds > timeoutSeconds)
 	{
 		Close();
 	}
+	return true;
 }

@@ -163,6 +163,7 @@ void GestureSystem::Reset()
 	_events.clear();
 	_drawing.clear();
 	_picker.Close();
+	_leashPutOnByGesture = false;
 	_seedTurnedOnLand = false;
 	_selection.Close();
 	_circleSeconds = 0.0f;
@@ -378,6 +379,7 @@ gesture::HandContext GestureSystem::ContextOf(const Frame& frame)
 		const auto& registry = Locator::entitiesRegistry::value();
 		const auto* fighting = registry.TryGet<const ecs::components::CreatureFighting>(*fighter);
 		state.fighting = true;
+		state.directsFight = Locator::creatureFightSystem::value().DirectsFight();
 		state.takesFightMoves = fighting != nullptr && fighting->fighter.queue.Size() < creature_fight::MoveQueue::k_Capacity;
 		const auto* mind = registry.TryGet<const ecs::components::CreatureMindState>(*fighter);
 		const auto* knowledge = mind != nullptr && mind->learnt.has_value() ? &mind->learnt->knowledge : nullptr;
@@ -445,16 +447,26 @@ void GestureSystem::Update(const Frame& frame)
 			_lastRecognised.reset();
 		}
 	}
-	_pause = std::max(_pause - frame.seconds, 0.0f);
 	_circleSeconds = std::max(_circleSeconds - frame.seconds, 0.0f);
 
-	// The leash picker closes once the leash is off, or after a while
+	// The leash picker stays open while the player's leash is on the creature, or after the leash gesture put the leash
+	// on. It closes after a while.
 	auto context = ContextOf(frame);
-	const bool leashed = context.creature.has_value() && context.creature->leashed;
+	const bool staysOpen = context.creature.has_value() && (context.creature->leashed || _leashPutOnByGesture);
 	const auto timeout =
 	    Locator::infoConstants::has_value() ? Locator::infoConstants::value().spellSystem.leashSelectionSystemTimeOut : 25.0f;
-	_picker.Update(frame.seconds, timeout, leashed);
-	context.pickerOpen = _picker.open;
+	context.pickerOpen = _picker.Update(frame.seconds, timeout, staysOpen);
+	// While the hand powers up the miracle in it, or directs the duel of the creature, the miracle selection and the
+	// leash picker close
+	const bool directsFight = context.creature.has_value() && context.creature->directsFight;
+	const bool poweringUp = context.seed.has_value() && context.seed->ready && !context.seed->cast && context.seed->canPowerUp;
+	if (directsFight || poweringUp)
+	{
+		_picker.Close();
+		_selection.Close();
+		context.pickerOpen = false;
+		context.selection.reset();
+	}
 	StepSelection(context, frame);
 	_requests = gesture::Requests(context);
 	RefreshHints();
@@ -462,22 +474,6 @@ void GestureSystem::Update(const Frame& frame)
 	// gestures of the open selection. Once a miracle did its first turn in the hand on this land, or the selection
 	// opened on this land, the chain follows the hand while it holds any miracle.
 	_gesturing = _selection.IsOpen() || gesture::ChainFollows(context.seed, _seedTurnedOnLand);
-
-	// Moving the camera wipes the path being drawn, though not while the camera shakes. The fight view that shows a
-	// fight in its arena, and the camera that follows the creature, let the player draw on while they move.
-	const bool cameraMoved = _lastCameraEye.has_value() && *_lastCameraEye != frame.view.cameraEye;
-	_lastCameraEye = frame.view.cameraEye;
-	if (cameraMoved && !frame.cameraShaking && !frame.cameraLetsHandDraw)
-	{
-		_recorder.Reset();
-	}
-
-	// While the hand directs the fight, the held Move button wipes the path, and no gesture is recognised
-	if (frame.moveHeldInFight)
-	{
-		ForgetPath();
-		return;
-	}
 
 	// The hand's path is only drawn over the world; a path drawn for the testbed goes on regardless
 	if (!frame.overWorld && _drawing.empty())
@@ -495,8 +491,30 @@ void GestureSystem::Update(const Frame& frame)
 	// The path takes a sample at each place of the pointer that the interface got, not at the frames
 	for (const auto place : frame.places)
 	{
-		SampleCursor(place, frame, context);
+		SampleCursor(place, frame);
 	}
+
+	// After the places of the frame, the interface looks at the path. Moving the camera wipes the path being drawn,
+	// though not while the camera shakes. The fight view that shows a fight in its arena, and the camera that follows
+	// the creature, let the player draw on while they move.
+	const bool cameraMoved = _lastCameraEye.has_value() && *_lastCameraEye != frame.view.cameraEye;
+	_lastCameraEye = frame.view.cameraEye;
+	if (cameraMoved && !frame.cameraShaking && !frame.cameraLetsHandDraw)
+	{
+		_recorder.Reset();
+	}
+	// The rest after a recognised gesture counts down after the samples of the frame
+	_pause = std::max(_pause - frame.seconds, 0.0f);
+
+	// While the hand directs the fight, the held Move button wipes the path, and no gesture is recognised
+	if (frame.moveHeldInFight)
+	{
+		ForgetPath();
+		return;
+	}
+
+	// The first gesture waited for that the whole path of the frame draws is acted on
+	Recognise(frame, context);
 }
 
 glm::vec2 GestureSystem::ToReference(glm::vec2 pixel, const Frame& frame)
@@ -523,7 +541,7 @@ bool GestureSystem::RecordPoint(glm::vec2 point, const Frame& frame)
 	return true;
 }
 
-void GestureSystem::SampleCursor(glm::vec2 cursor, const Frame& frame, const gesture::HandContext& context)
+void GestureSystem::SampleCursor(glm::vec2 cursor, const Frame& frame)
 {
 	glm::vec2 point = ToReference(cursor, frame);
 	if (!_drawing.empty())
@@ -531,14 +549,13 @@ void GestureSystem::SampleCursor(glm::vec2 cursor, const Frame& frame, const ges
 		point = _drawing.front();
 		_drawing.pop_front();
 	}
-	if (!RecordPoint(point, frame))
-	{
-		return;
-	}
+	RecordPoint(point, frame);
+}
 
-	// The first gesture waited for that the path draws is acted on
+void GestureSystem::Recognise(const Frame& frame, const gesture::HandContext& context)
+{
 	const auto templates = GetTemplates();
-	if (templates.empty() || _requests.empty())
+	if (templates.empty() || _requests.empty() || _recorder.Empty())
 	{
 		return;
 	}
@@ -585,9 +602,7 @@ void GestureSystem::StepSelection(gesture::HandContext& context, const Frame& fr
 	}
 	// The selection does its step only while the hand draws over the world, and not while the creature takes fight
 	// moves or the hand powers up its miracle
-	const bool fightMoves = context.creature.has_value() && context.creature->takesFightMoves;
-	const bool poweringUp = context.seed.has_value() && context.seed->ready && !context.seed->cast && context.seed->canPowerUp;
-	if (frame.moveHeldInFight || (!frame.overWorld && _drawing.empty()) || fightMoves || poweringUp)
+	if (frame.moveHeldInFight || (!frame.overWorld && _drawing.empty()))
 	{
 		return;
 	}
@@ -865,7 +880,8 @@ bool GestureSystem::Act(const gesture::Request& request, const gesture::Match& m
 		{
 			// The leash key command puts the leash on an unleashed creature at the turn. A creature that knows more than one
 			// leash opens the picker at once, so that the player can change the leash.
-			if (!leashes->IsLeashed(*creature))
+			const bool leashed = leashes->IsLeashed(*creature);
+			if (!leashed)
 			{
 				SendRequest(player_commands::LeashKey {.key = creature_leash::LeashKey::Leash});
 			}
@@ -876,6 +892,9 @@ bool GestureSystem::Act(const gesture::Request& request, const gesture::Match& m
 			}
 			if (known > 1)
 			{
+				// The picker stays open until the leash goes on at the turn. It keeps this until the leash gesture opens
+				// the picker on a leashed creature, also when the leash comes off before then.
+				_leashPutOnByGesture = !leashed;
 				_picker.Open();
 			}
 		}

@@ -154,12 +154,12 @@ TEST(GestureSystem, MovingTheCameraWipesThePathUnlessItShakes)
 	// The camera moves while it shakes: the path stays and goes on
 	drawn({1.0f, 50.0f, 0.0f}, true, 1);
 	EXPECT_EQ(system.GetPath().Count(), 6u);
-	// It moves without shaking: the path starts again from this frame's point
+	// It moves without shaking: after the places of the frame, the path is wiped
 	drawn({2.0f, 50.0f, 0.0f}, false, 1);
-	EXPECT_EQ(system.GetPath().Count(), 1u);
+	EXPECT_TRUE(system.GetPath().Empty());
 	// Still, it keeps the path
 	drawn({2.0f, 50.0f, 0.0f}, false, 3);
-	EXPECT_EQ(system.GetPath().Count(), 4u);
+	EXPECT_EQ(system.GetPath().Count(), 3u);
 }
 
 TEST(GestureSystem, ANewLandKeepsThePathUntilTheCameraMoves)
@@ -203,9 +203,9 @@ TEST(GestureSystem, ACameraThatLetsTheHandDrawKeepsThePathAsItMoves)
 	drawn({1.0f, 50.0f, 0.0f}, true, 1);
 	drawn({2.0f, 50.0f, 0.0f}, true, 1);
 	EXPECT_EQ(system.GetPath().Count(), 5u);
-	// Another camera that moves wipes it
+	// Another camera that moves wipes it, after the places of the frame
 	drawn({3.0f, 50.0f, 0.0f}, false, 1);
-	EXPECT_EQ(system.GetPath().Count(), 1u);
+	EXPECT_TRUE(system.GetPath().Empty());
 }
 
 TEST(GestureSystem, TheMoveButtonHeldInAFightWipesThePath)
