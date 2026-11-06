@@ -236,6 +236,8 @@ TEST(FlockMiracleRules, AWolfLeavesAloneWhatItCannotGetToOrKill)
 	EXPECT_FALSE(flock::IsPrey({.isVillager = true, .scriptControlled = true}));
 	EXPECT_TRUE(flock::IsPrey({.isVillager = true, .scriptControlled = true, .hunterInScript = true}));
 	EXPECT_FALSE(flock::IsPrey({.isVillager = true, .hunterInFlock = false}));
+	// A hunter in a flock that a script made calm does not hunt
+	EXPECT_FALSE(flock::IsPrey({.isVillager = true, .hunterFlockCalm = true}));
 }
 
 TEST(FlockMiracleRules, AYoungWolfHuntsOnlyWhatAHunterBroughtDownBefore)

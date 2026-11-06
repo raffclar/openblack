@@ -141,6 +141,8 @@ struct PreyFacts
 	bool hunterInScript {false};
 	/// The hunter is in a flock. A hunter on its own does not hunt
 	bool hunterInFlock {true};
+	/// A script made the flock of the hunter calm. A hunter in a calm flock does not hunt
+	bool hunterFlockCalm {false};
 	/// A young hunter hunts only a thing that a hunter brought down before
 	bool hunterYoung {false};
 	bool broughtDown {false};

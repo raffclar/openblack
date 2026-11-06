@@ -137,8 +137,9 @@ void AnimalSystem::ChooseLair(entt::entity entity, Animal& animal)
 	case physics::living::LandedLair::ForestOfItsKind:
 	{
 		// Tigers and wolves choose a forest. A wolf chooses only when it leads its flock, and it keeps to where it is while
-		// a script holds it. (A flag of the wolf's flock that stops the choice is not known in openblack.)
-		if (animal.type == AnimalInfo::Wolf && !leader)
+		// a script holds it. A wolf in a flock that a script made calm keeps the lair of the flock.
+		if (animal.type == AnimalInfo::Wolf &&
+		    (!leader || hunters::CalmStopsTheHunt(registry.Get<const Flock>(animal.flock).calm)))
 		{
 			break;
 		}
@@ -215,7 +216,11 @@ bool AnimalSystem::ReactToHunterNeeds(entt::entity entity, Animal& animal, Hunte
 		switch (hunters::FirstNeed(hunter.needs, LimitsOf(info), HerdSizeOf(animal)))
 		{
 		case hunters::Need::Hunger:
-			return ReactToFoodNeeds(entity, animal);
+		{
+			// A wolf in a flock that a script made calm does not hunt
+			const auto* flock = registry.TryGet<const Flock>(animal.flock);
+			return (flock == nullptr || !hunters::CalmStopsTheHunt(flock->calm)) && ReactToFoodNeeds(entity, animal);
+		}
 		case hunters::Need::Sleep:
 		{
 			// It sleeps at the home of its pack
@@ -316,8 +321,9 @@ void AnimalSystem::HideInLair(entt::entity entity, Animal& animal, Hunter& hunte
 	{
 		return;
 	}
+	// A pack that a script made calm stays in the lair
 	const auto* own = registry.TryGet<const Flock>(animal.flock);
-	if (own == nullptr)
+	if (own == nullptr || hunters::CalmStopsTheHunt(own->calm))
 	{
 		return;
 	}

@@ -10,6 +10,7 @@
 #include <cstring>
 
 #include <algorithm>
+#include <bit>
 #include <chrono>
 #include <memory>
 #include <optional>
@@ -1678,9 +1679,12 @@ TEST(ShieldRules, WhatIsSurelyWithinAShield)
 	EXPECT_TRUE(WithinSpiritualShield({0.0f, 0.0f, 0.0f}, 10.0f, {6.0f, 0.0f, 7.9f}));
 	EXPECT_FALSE(WithinSpiritualShield({0.0f, 0.0f, 0.0f}, 10.0f, {6.0f, 0.0f, 8.0f}));
 	const DomeVolume dome {.radius = 20.0f, .height = 10.0f};
-	EXPECT_TRUE(WithinPhysicalShield(dome, 10.0f, 4.9f));
-	EXPECT_FALSE(WithinPhysicalShield(dome, 10.0f, 5.0f));
-	EXPECT_FALSE(WithinPhysicalShield(dome, 20.0f, 0.0f));
+	EXPECT_TRUE(WithinPhysicalShield(dome, {0.0f, 10.0f}, 4.9f));
+	EXPECT_FALSE(WithinPhysicalShield(dome, {10.0f, 0.0f}, 5.0f));
+	EXPECT_FALSE(WithinPhysicalShield(dome, {12.0f, 16.0f}, 0.0f));
+	// The cone is the height less its share: at this point the height times one less the share is one float lower
+	const glm::vec2 edge {std::bit_cast<float>(0x3FF0C7DEu), std::bit_cast<float>(0x413DD33Du)};
+	EXPECT_TRUE(WithinPhysicalShield(dome, edge, std::bit_cast<float>(0x407F9B73u)));
 }
 
 // A script makes a thing for the living around it to run from: the villagers near it flee as from a frightening miracle
