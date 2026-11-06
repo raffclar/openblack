@@ -74,6 +74,7 @@ public:
 	}
 	void SetLockMode(std::string_view mode) override { lockMode = mode; }
 	[[nodiscard]] Json LockState() const override { return {{"mode", lockMode}}; }
+	[[nodiscard]] std::optional<uint32_t> InputStepsOfLastFrame() const override { return stepsOfLastFrame; }
 
 	/// What the world looks like after the input: the same input gives the same hash
 	[[nodiscard]] uint64_t Hash() const
@@ -90,6 +91,8 @@ public:
 	std::string lockMode {"auto"};
 	/// The debug window, if one is open, that takes the presses of the left button for itself
 	std::string windowTakingLeft;
+	/// The steps of the input that the last frame took; none for a target that does not count them
+	std::optional<uint32_t> stepsOfLastFrame;
 };
 
 /// The inspector with the input provider, run frame by frame as the game serves it: requests, then the frame's input
@@ -160,6 +163,42 @@ TEST(InspectorInput, AClickIsPressedNowAndLetGoTheNextFrame)
 	ASSERT_EQ(rig.target.made.size(), 2u);
 	EXPECT_EQ(rig.target.made[1].event.kind, InputEvent::Kind::ButtonUp);
 	EXPECT_FALSE(rig.Refused(R"({"query": "input.button", "params": {"button": "fourth"}})").empty());
+}
+
+// At a high frame rate most frames take no step of the input, and the temple's camera reads the input only on steps.
+// A tap or a click is let go of only after a frame with a step, and what comes after it keeps its frames apart.
+TEST(InspectorInput, ATapOrAClickIsLetGoOfOnlyAfterTheGameTookAStep)
+{
+	Rig rig;
+	rig.target.stepsOfLastFrame = 0;
+	rig.Ask(R"({"query": "input.key", "params": {"key": "L"}})");
+	rig.Ask(R"({"query": "input.key", "params": {"action": "Zoom In"}})");
+	ASSERT_EQ(rig.target.made.size(), 1u);
+	// Frames with no step keep the key down
+	for (int i = 0; i < 5; ++i)
+	{
+		rig.Frame();
+	}
+	EXPECT_EQ(rig.target.made.size(), 1u);
+	// After a frame with a step, the key goes up, and the action a frame after that
+	rig.target.stepsOfLastFrame = 1;
+	rig.Frame();
+	rig.target.stepsOfLastFrame = 0;
+	ASSERT_EQ(rig.target.made.size(), 2u);
+	EXPECT_EQ(rig.target.made[1].event.kind, InputEvent::Kind::KeyUp);
+	rig.Frame();
+	ASSERT_EQ(rig.target.made.size(), 3u);
+	EXPECT_EQ(rig.target.made[2].event.kind, InputEvent::Kind::Action);
+	EXPECT_EQ(rig.target.made[2].frame, rig.target.made[1].frame + 1);
+
+	// A click: the button stays down until a frame with a step
+	rig.Ask(R"({"query": "input.button", "params": {"button": "right"}})");
+	rig.Frame();
+	rig.Frame();
+	EXPECT_EQ(rig.target.buttons, 1u << 3);
+	rig.target.stepsOfLastFrame = 2;
+	rig.Frame();
+	EXPECT_EQ(rig.target.buttons, 0u);
 }
 
 // A double click is a click, then a second press and its letting go a frame apart, which count two clicks as the mouse

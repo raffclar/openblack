@@ -1638,6 +1638,15 @@ void TempleInterior::LookAtSaveGamePicture(uint32_t slot)
 	}
 }
 
+std::optional<temple_press::PressTrace> TempleInterior::GetLastCameraPress() const
+{
+	if (!_active || _cameraModel == nullptr)
+	{
+		return std::nullopt;
+	}
+	return _cameraModel->GetLastPress();
+}
+
 std::optional<TempleCursorHit> TempleInterior::GetCursorHit() const
 {
 	if (!_active || _cameraModel == nullptr)
