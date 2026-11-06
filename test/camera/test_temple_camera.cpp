@@ -277,6 +277,48 @@ TEST(TemplePress, TheFadeHoldsPressesBackForTheFirstSecond)
 	EXPECT_EQ(temple_press::UnderFade(Button::None, 0.0f), Button::None);
 }
 
+TEST(TemplePress, TheWatchKeepsTheRuleThatTookTheLastPress)
+{
+	using temple_press::Button;
+	using temple_press::Taker;
+	temple_press::PressWatch watch;
+	EXPECT_EQ(watch.Last().presses, 0u);
+	// A press under the fade: the fade takes it
+	watch.Note(Button::Held, Button::Held, false, false, Button::None, 0.9f, false);
+	EXPECT_EQ(watch.Last().takenBy, Taker::Fade);
+	EXPECT_FLOAT_EQ(watch.Last().fade, 0.9f);
+	EXPECT_EQ(watch.Last().presses, 1u);
+	// The same press held on is no new press
+	watch.Note(Button::Held, Button::Held, false, false, Button::Held, 0.0f, false);
+	EXPECT_EQ(watch.Last().takenBy, Taker::Fade);
+	EXPECT_EQ(watch.Last().presses, 1u);
+	// Let go, then a press on a control
+	watch.Note(Button::None, Button::None, false, false, Button::None, 0.0f, false);
+	watch.Note(Button::Held, Button::Held, false, true, Button::None, 0.0f, false);
+	EXPECT_EQ(watch.Last().takenBy, Taker::Control);
+	EXPECT_EQ(watch.Last().presses, 2u);
+	// A press that reaches the camera while it looks at a scroll
+	watch.Note(Button::None, Button::None, false, false, Button::None, 0.0f, true);
+	watch.Note(Button::Held, Button::Held, false, false, Button::Held, 0.0f, true);
+	EXPECT_EQ(watch.Last().takenBy, Taker::None);
+	EXPECT_TRUE(watch.Last().lookingAtScroll);
+	EXPECT_EQ(watch.Last().presses, 3u);
+}
+
+TEST(TemplePress, TheFirstRuleThatTakesAPressIsNamed)
+{
+	using temple_press::Button;
+	using temple_press::PressWatch;
+	using temple_press::Taker;
+	EXPECT_EQ(PressWatch::FirstTaker(Button::None, false, false, Button::None), Taker::HeldFromOutside);
+	EXPECT_EQ(PressWatch::FirstTaker(Button::None, true, false, Button::None), Taker::CinemaBars);
+	EXPECT_EQ(PressWatch::FirstTaker(Button::Held, false, true, Button::None), Taker::Control);
+	EXPECT_EQ(PressWatch::FirstTaker(Button::Held, false, false, Button::None), Taker::Fade);
+	EXPECT_EQ(PressWatch::FirstTaker(Button::DoubleClick, false, false, Button::DoubleClick), Taker::None);
+	EXPECT_EQ(temple_press::Name(Taker::CinemaBars), "cinema_bars");
+	EXPECT_EQ(temple_press::Name(Taker::None), "none");
+}
+
 TEST(TempleCamera, TheDoorsCloseOnlyAfterTheFirstFourTenthsOfASecondIn)
 {
 	EXPECT_FALSE(TempleCameraModel::IntroClosesDoors(0.0f));

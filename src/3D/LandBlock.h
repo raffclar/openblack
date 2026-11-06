@@ -95,10 +95,8 @@ public:
 	/// Sets the country of one of the block's 17 by 17 cells, [x * 17 + z]. Returns true when the country changed.
 	bool SetCellCountry(size_t index, uint8_t country);
 	/// The highest altitude of the block's cells when the land was loaded. A later change of the cells' altitudes does
-	/// not change it.
+	/// not change it. Every view test of the block uses this box top.
 	[[nodiscard]] uint8_t GetHighestAltitude() const noexcept { return _highestAltitude; }
-	/// The highest altitude of the block's cells now, after all changes of the cells' altitudes
-	[[nodiscard]] uint8_t GetHighestAltitudeNow() const noexcept { return _highestAltitudeNow; }
 
 private:
 	/// Every mesh, coarser sides and open-sea choice
@@ -116,7 +114,6 @@ private:
 	glm::ivec2 _blockPosition {-1};
 	glm::vec2 _mapPosition {0.0f};
 	uint8_t _highestAltitude {0};
-	uint8_t _highestAltitudeNow {0};
 
 	void BuildVertexList(std::span<LandVertex> vertices, LandIslandInterface& island);
 };

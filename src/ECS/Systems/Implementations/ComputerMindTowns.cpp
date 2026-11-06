@@ -200,8 +200,10 @@ bool PickUpForTown(RuleContext& context, computer_mind::Mind& mind, uint16_t nod
 	{
 		return false;
 	}
-	computer_hand::Add(context.state.hand, StepKind::PickUpObject,
-	                   {Argument {.object = thing}, Argument {.value = context.state.speed}});
+	if (!TakeUp(context, thing))
+	{
+		return false;
+	}
 	computer_hand::Add(context.state.hand, StepKind::DropObjectInHandOnObject, {Argument {.object = store}});
 	return true;
 }

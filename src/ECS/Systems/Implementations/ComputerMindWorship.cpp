@@ -288,8 +288,11 @@ bool CarryToSite(RuleContext& context, computer_mind::Mind& mind, uint16_t node)
 	const auto gate = map_coords::FromMetres(*gatePlace);
 	const glm::vec3 place {map_coords::ToMetres(gate.x), context.hand.moves.LandHeight(gate) + gate.altitude,
 	                       map_coords::ToMetres(gate.z)};
-	computer_hand::Add(context.state.hand, StepKind::PickUpObject,
-	                   {Argument {.object = villager}, Argument {.value = context.state.speed}});
+	// When a hand holds the villager, the action also counts as done
+	if (!TakeUp(context, villager))
+	{
+		return true;
+	}
 	computer_hand::Add(context.state.hand, StepKind::MoveHandToPos, {Argument {.place = place}, Argument {.value = 900.0f}});
 	computer_hand::Add(context.state.hand, StepKind::Wait, {Argument {.value = 1.0f}});
 	computer_hand::Add(context.state.hand, StepKind::DropObjectInHandAtPos,
@@ -349,13 +352,16 @@ glm::vec3 PlaceOnLand(const RuleContext& context, const map_coords::MapCoords& c
 	        map_coords::ToMetres(coords.z)};
 }
 
-/// The hand picks up the thing and drops it at a place, at the speed of the god
-void PickUpAndDropAt(RuleContext& context, entt::entity thing, const map_coords::MapCoords& place)
+/// The hand picks up the thing and drops it at a place, at the speed of the god. False when a hand holds the thing.
+bool PickUpAndDropAt(RuleContext& context, entt::entity thing, const map_coords::MapCoords& place)
 {
-	computer_hand::Add(context.state.hand, StepKind::PickUpObject,
-	                   {Argument {.object = thing}, Argument {.value = context.state.speed}});
+	if (!TakeUp(context, thing))
+	{
+		return false;
+	}
 	computer_hand::Add(context.state.hand, StepKind::DropObjectInHandAtPos,
 	                   {Argument {.place = PlaceOnLand(context, place)}, Argument {.value = context.state.speed}});
+	return true;
 }
 
 /// The town of a thing: a town is its own, a villager's is the town it lives in and a building's the town it is of
@@ -540,12 +546,10 @@ bool CarryFoodToSite(RuleContext& context, computer_mind::Mind& mind, uint16_t n
 {
 	const auto thing = BestLeafThing(mind, node);
 	const auto site = FirstObjectFrom(mind, node);
-	if (thing == entt::null || !Entities().Valid(thing) || !IsA<WorshipSite>(site))
+	if (thing == entt::null || !Entities().Valid(thing) || !IsA<WorshipSite>(site) || !TakeUp(context, thing))
 	{
 		return false;
 	}
-	computer_hand::Add(context.state.hand, StepKind::PickUpObject,
-	                   {Argument {.object = thing}, Argument {.value = context.state.speed}});
 	computer_hand::Add(context.state.hand, StepKind::DropObjectInHandOnObject, {Argument {.object = site}});
 	return true;
 }
@@ -662,8 +666,7 @@ bool TakeWorshipperHome(RuleContext& context, computer_mind::Mind& mind, uint16_
 	{
 		place = CoordsOfThing(town).value_or(map_coords::MapCoords {});
 	}
-	PickUpAndDropAt(context, villager, place);
-	return true;
+	return PickUpAndDropAt(context, villager, place);
 }
 
 /// A town of the god with fewer than two breeders, looked for from a town picked at random
@@ -865,8 +868,7 @@ bool MakeDisciple(RuleContext& context, computer_mind::Mind& mind, uint16_t node
 	{
 		return false;
 	}
-	PickUpAndDropAt(context, villager, *coords);
-	return true;
+	return PickUpAndDropAt(context, villager, *coords);
 }
 
 /// The building sites of a town, the newest first
@@ -1012,8 +1014,7 @@ bool CarryWorkerToSite(RuleContext& context, computer_mind::Mind& mind, uint16_t
 	    StandingPlaceOf(context, building), map_coords::MapCoords {},
 	    [distance](float angle) { return gutils::GetPosFromAngle(angle, distance); },
 	    [](const map_coords::MapCoords& point) { return map_coords::InBounds(point); }, WoodInCell);
-	PickUpAndDropAt(context, worker, place);
-	return true;
+	return PickUpAndDropAt(context, worker, place);
 }
 
 /// Where the god puts wood for a building: at a worship site's door, at any other building where it stands
@@ -1040,8 +1041,7 @@ bool CarryWoodToSite(RuleContext& context, computer_mind::Mind& mind, uint16_t n
 	{
 		return false;
 	}
-	PickUpAndDropAt(context, wood, WoodPlaceOf(mind.nodes[*site].object));
-	return true;
+	return PickUpAndDropAt(context, wood, WoodPlaceOf(mind.nodes[*site].object));
 }
 
 /// How much the god wants to cast the food miracle at the worship site above

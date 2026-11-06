@@ -28,6 +28,7 @@
 #include "ECS/Systems/HandGrabSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/PickingSystemInterface.h"
+#include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/VillageTotemSystemInterface.h"
 #include "Editor/EditorEntities.h"
 #include "Gestures/GesturePaths.h"
@@ -469,6 +470,15 @@ void GameInput::SetLockMode(std::string_view mode)
 Json GameInput::LockState() const
 {
 	return InputLockState();
+}
+
+std::optional<uint32_t> GameInput::InputStepsOfLastFrame() const
+{
+	if (!Locator::time::has_value())
+	{
+		return std::nullopt;
+	}
+	return Locator::time::value().GetInputSteps().count;
 }
 
 Json openblack::inspector::InputLockState()

@@ -11,6 +11,8 @@
 
 #include <cstdint>
 
+#include <string_view>
+
 namespace openblack::temple_press
 {
 
@@ -60,5 +62,94 @@ private:
 {
 	return button == Button::Held && fade > k_FadeThatHoldsPresses ? Button::None : button;
 }
+
+/// The rule that kept a press from the temple's camera
+enum class Taker : uint8_t
+{
+	None,            ///< The camera got the press
+	HeldFromOutside, ///< The button was down before the player came in
+	CinemaBars,      ///< A script had the cinema bars in
+	Control,         ///< The press was on one of the room's controls
+	Fade,            ///< The temple's fade covered the screen
+};
+
+/// The name of a rule that kept a press from the temple's camera, as tools show it
+[[nodiscard]] constexpr std::string_view Name(Taker taker) noexcept
+{
+	switch (taker)
+	{
+	case Taker::None:
+		return "none";
+	case Taker::HeldFromOutside:
+		return "held_from_outside";
+	case Taker::CinemaBars:
+		return "cinema_bars";
+	case Taker::Control:
+		return "control";
+	case Taker::Fade:
+		return "fade";
+	}
+	return "none";
+}
+
+/// The last press that went down, and what the temple did with it. Tools read it to know why a press did not move the
+/// camera.
+struct PressTrace
+{
+	Taker takenBy {Taker::None};
+	/// The temple's fade when the press went down
+	float fade {0.0f};
+	/// Whether the camera looked at a scroll when the press went down
+	bool lookingAtScroll {false};
+	/// How many presses went down in this visit
+	uint32_t presses {0};
+};
+
+/// Keeps the last press that went down, from the button before the temple's rules and after each rule
+class PressWatch
+{
+public:
+	/// @param raw The button as the player holds it
+	/// @param afterHeld The button after the rule of a press held from outside, or of the cinema bars
+	/// @param cinemaBars Whether a script had the cinema bars in
+	/// @param control Whether one of the room's controls took the press
+	/// @param afterFade The button after the rule of the fade
+	constexpr void Note(Button raw, Button afterHeld, bool cinemaBars, bool control, Button afterFade, float fade,
+	                    bool lookingAtScroll) noexcept
+	{
+		const bool down = raw != Button::None;
+		if (down && !_wasDown)
+		{
+			_last = PressTrace {
+			    .takenBy = FirstTaker(afterHeld, cinemaBars, control, afterFade),
+			    .fade = fade,
+			    .lookingAtScroll = lookingAtScroll,
+			    .presses = _last.presses + 1,
+			};
+		}
+		_wasDown = down;
+	}
+
+	/// The last press, or a trace with no presses when none went down
+	[[nodiscard]] constexpr const PressTrace& Last() const noexcept { return _last; }
+
+	/// The first rule that took the press away, in the order that the temple uses them
+	[[nodiscard]] static constexpr Taker FirstTaker(Button afterHeld, bool cinemaBars, bool control, Button afterFade) noexcept
+	{
+		if (afterHeld == Button::None)
+		{
+			return cinemaBars ? Taker::CinemaBars : Taker::HeldFromOutside;
+		}
+		if (control)
+		{
+			return Taker::Control;
+		}
+		return afterFade == Button::None ? Taker::Fade : Taker::None;
+	}
+
+private:
+	bool _wasDown {false};
+	PressTrace _last {};
+};
 
 } // namespace openblack::temple_press
