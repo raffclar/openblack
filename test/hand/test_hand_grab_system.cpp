@@ -195,7 +195,7 @@ public:
 	void StopReactionSpreadInHand(entt::entity object) override { spreadStopped.push_back(object); }
 	void SpreadReactionsAgain(entt::entity object) override { spreadAgain.push_back(object); }
 	void FireStartedMoving(entt::entity, bool) override {}
-	void CatchFirefly(entt::entity) override {}
+	void CatchFirefly(entt::entity object) override { fireflyCatches.push_back(object); }
 	void CountHelpEvent(uint32_t event) override { helpEvents.push_back(event); }
 	void ForgetGesturePath() override { ++pathsForgotten; }
 	[[nodiscard]] bool IsLocalHand() const override { return localHand; }
@@ -568,6 +568,7 @@ public:
 	std::vector<uint32_t> helpEvents;
 	int pathsForgotten {0};
 	bool localHand {true};
+	std::vector<entt::entity> fireflyCatches;
 	std::vector<entt::entity> artefactsTaken;
 	std::vector<std::pair<entt::entity, PlayerNames>> globesTaken;
 	std::vector<std::pair<entt::entity, PlayerNames>> scaffoldsTaken;
@@ -1354,6 +1355,21 @@ TEST_F(HandGrabSystemWithWorld, TheGesturePathIsLeftAloneByAHandThatIsNotTheLoca
 	Release();
 	EXPECT_FALSE(system->GetHeld().has_value());
 	EXPECT_EQ(world->pathsForgotten, 0);
+}
+
+// Any player's hand that takes a thing catches a firefly that hides where it stood, the local hand or not
+TEST_F(HandGrabSystemWithWorld, AHandThatIsNotTheLocalOneAlsoCatchesAFirefly)
+{
+	world->localHand = false;
+	const auto rock = world->AddRock({0.0f, 0.0f, 0.0f});
+	world->underCursor = rock;
+	Press();
+	for (int i = 0; i < 20 && !system->GetHeld().has_value(); ++i)
+	{
+		Frame(10);
+	}
+	ASSERT_TRUE(system->GetHeld().has_value());
+	EXPECT_EQ(world->fireflyCatches, std::vector<entt::entity> {rock});
 }
 
 // The help counts only the events of the local hand: the hand of a computer god or of another player takes and lets go

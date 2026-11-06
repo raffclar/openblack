@@ -922,7 +922,7 @@ std::optional<entt::entity> ForestSystem::PlantPineAround(entt::entity bigForest
 	// Its edge at its size now, about its own place
 	const float edge = ecs::world_objects::SizeOf(bigForest).radius;
 	const glm::vec3 from = registry.Get<const Transform>(bigForest).position;
-	auto base = map_coords::FromMetres({from.x, from.z});
+	auto base = ecs::thing_map_place::Of(registry, bigForest);
 	base.altitude = from.y - land.GetHeightAt({from.x, from.z});
 	for (uint32_t attempt = 0; attempt < big_forest::k_PineTries; ++attempt)
 	{
@@ -933,13 +933,12 @@ std::optional<entt::entity> ForestSystem::PlantPineAround(entt::entity bigForest
 		{
 			continue;
 		}
-		// Anything in the spot's cell standing near enough keeps the pine away
-		const auto cell = glm::ivec2(ecs::MapInterface::GetGridCell(point));
-		const auto inCell = map.GetAllInCell(cell);
-		const bool blocked = std::ranges::any_of(inCell, [&registry, point](entt::entity thing) {
-			const auto* at = registry.TryGet<const Transform>(thing);
-			return at != nullptr && big_forest::BlocksPine(glm::distance(glm::xz(at->position), glm::xz(point)),
-			                                               ecs::world_objects::SizeOf(thing).radius);
+		// Anything in the spot's cell standing near enough keeps the pine away. The distance is between the two map
+		// positions, in the map's units
+		const auto inCell = map.GetAllInCell(map_coords::Cell(spot));
+		const bool blocked = std::ranges::any_of(inCell, [&registry, &spot](entt::entity thing) {
+			return registry.AllOf<Transform>(thing) && big_forest::BlocksPine(spot, ecs::thing_map_place::Of(registry, thing),
+			                                                                  ecs::world_objects::SizeOf(thing).radius);
 		});
 		if (blocked)
 		{

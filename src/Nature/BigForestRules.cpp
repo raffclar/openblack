@@ -11,6 +11,8 @@
 
 #include <cmath>
 
+#include "Common/GUtilsDistance.h"
+
 using namespace openblack;
 
 float big_forest::StartWood(float scale, uint32_t kindWood)
@@ -46,4 +48,9 @@ big_forest::WoodTaken big_forest::TakeWood(float life, float wood, float scale, 
 bool big_forest::BlocksPine(float distance, float radius)
 {
 	return distance + radius < k_PineClearance;
+}
+
+bool big_forest::BlocksPine(const map_coords::MapCoords& spot, const map_coords::MapCoords& thing, float radius)
+{
+	return BlocksPine(gutils::GetDistanceInMetres(spot, thing), radius);
 }
