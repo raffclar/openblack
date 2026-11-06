@@ -544,8 +544,9 @@ ENDCLASS
 	const auto cloudLight = [&effect] {
 		std::vector<Effect::DrawAtom> sprites;
 		effect.Collect(1.0f, sprites);
-		return sprites.empty() ? glm::u8vec3(0)
-		                       : glm::u8vec3(sprites.front().rgb[0], sprites.front().rgb[1], sprites.front().rgb[2]);
+		return sprites.empty()
+		           ? glm::u8vec3(0)
+		           : glm::u8vec3(sprites.front().specular[0], sprites.front().specular[1], sprites.front().specular[2]);
 	};
 	effect.Step(k_Step);
 	effect.Step(k_Step);

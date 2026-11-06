@@ -316,7 +316,8 @@ void Renderer::DrawParticleMist(const DrawSceneDesc& desc, const particles::draw
 	glm::vec3 scale {mist.size};
 	scale.y = scale.z = mists::EdgeOnSize(mist.size, mist.shape, mist.position - origin);
 	const auto model = glm::translate(mist.position) * glm::mat4(facing) * glm::scale(scale);
-	const glm::vec4 u_mist {mists::FrameOffset(mists::Frame(mist.counter), true), 0.0f, 0.0f};
+	// z: the light added after the texture, as one whole number red x 65536 + green x 256 + blue
+	const glm::vec4 u_mist {mists::FrameOffset(mists::Frame(mist.counter), true), static_cast<float>(mist.specularRgb), 0.0f};
 	const glm::vec4 u_mistColour {static_cast<float>((colour >> 16u) & 0xFFu) / 255.0f,
 	                              static_cast<float>((colour >> 8u) & 0xFFu) / 255.0f,
 	                              static_cast<float>(colour & 0xFFu) / 255.0f, alpha / 255.0f};

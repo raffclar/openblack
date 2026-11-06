@@ -143,6 +143,10 @@ void openblack::particles::ReadCreatorProperties(const psys::ParticleObject& obj
 	               : object.className == k_PointCreator ? Creator::Kind::Point
 	                                                    : Creator::Kind::Other;
 	creator.rgba = {channel("ColorR"), channel("ColorG"), channel("ColorB"), channel("ColorA")};
+	const auto specular = [&object](std::string_view key) {
+		return static_cast<uint8_t>(std::clamp(object.Int(key, 0), 0, 255));
+	};
+	creator.specular = {specular("SpecColorR"), specular("SpecColorG"), specular("SpecColorB")};
 	creator.usePlayerColour = object.Bool("UsePlayerColor", false);
 	creator.playerColourBlend = object.Float("UsePlayerColorBlend", 1.0f);
 	creator.initialScale = object.Float("InitialScale", 1.0f);
