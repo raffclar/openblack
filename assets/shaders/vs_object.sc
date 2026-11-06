@@ -41,6 +41,9 @@ uniform vec4 u_inset;
 uniform vec4 u_uvOffset;
 // xyz: a colour of the object's own, 0 to 255, in place of the land's light; w: its alpha, 0 for no colour of its own
 uniform vec4 u_objectLook;
+// rgb: a colour the object is drawn in (see fs_object). A w below 0: the colour multiplies the land's light in whole
+// steps where it stands, before the haze, as a particle's model in the land's colour is drawn
+uniform vec4 u_tint;
 // The point a model is fogged at in the temple, in place of its own position: xyz the point, w 1 to use it. The temple's
 // walls without a lightmap are fogged once each, at their first vertex. With w 2, x is the distance that sets the haze.
 uniform vec4 u_fogAt;
@@ -234,6 +237,10 @@ void main()
 	if (u_objectLook.w > 0.0f)
 	{
 		colour = u_objectLook.xyz;
+	}
+	if (u_tint.w < 0.0f)
+	{
+		colour = floor(colour * floor(u_tint.rgb * 255.0f + 0.5f) / 256.0f);
 	}
 #ifdef USE_INSTANCING
 	// An instance's own colour, 0xRRGGBB, multiplies the light in whole steps. A held thing mirrored in the sea takes

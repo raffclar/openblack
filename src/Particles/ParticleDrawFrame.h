@@ -56,8 +56,10 @@ struct ChainVertex
 	glm::vec2 uv;
 	/// Its colour and alpha, as bytes from the lowest: red, green, blue, alpha
 	uint32_t abgr;
+	/// The specular colour of its joint, added after the texture, the same way round
+	uint32_t specularAbgr;
 };
-static_assert(sizeof(ChainVertex) == 24);
+static_assert(sizeof(ChainVertex) == 28);
 
 /// One joint of a ribbon: where it is and half the ribbon's width there
 struct ChainJoint
@@ -86,6 +88,8 @@ struct MeshDraw
 	glm::vec3 position;
 	/// Its colour and alpha, 0..1
 	glm::vec4 colour;
+	/// The atom's specular colour, 0..1, added after the texture
+	glm::vec3 specular {0.0f};
 	/// How far its texture has moved on
 	glm::vec2 uvOffset;
 	/// Nothing of it is drawn below this height, when given
@@ -163,7 +167,7 @@ struct ShellDraw
 	glm::vec2 uvOffset;
 	glm::vec2 textureFraction;
 	/// 0xRRGGBB: the colour added after the texture on each corner on the model, also where the shell does not glow. The
-	/// particles' shells add their atom's, which no rule of theirs sets.
+	/// particles' shells add their atom's.
 	uint32_t specularRgb {0};
 };
 

@@ -388,6 +388,65 @@ TEST(ParticleDraw, RibbonsMatchTheGamesStrip)
 		}
 	}
 	EXPECT_EQ(vertices[0].abgr, (200u << 24u) | (0u << 16u) | (128u << 8u) | 255u);
+	EXPECT_EQ(vertices[0].specularAbgr, 0u);
+}
+
+TEST(ParticleDraw, RibbonCornersAddTheSpecularColourOfTheirJoint)
+{
+	// The temple's beams have a specular colour of 80 grey. Each corner takes its joint's, not faded with the colour.
+	ChainCreator creator;
+	creator.kind = Creator::Kind::Chain;
+	std::vector<Effect::DrawAtom> joints;
+	for (const uint8_t grey : std::array<uint8_t, 2> {80, 40})
+	{
+		joints.push_back({.creator = &creator,
+		                  .position = {static_cast<float>(grey), 0.0f, 0.0f},
+		                  .rotation = glm::mat3(1.0f),
+		                  .scale = 1.0f,
+		                  .stretch = 1.0f,
+		                  .alpha = 100.0f,
+		                  .frame = 0.0f,
+		                  .rgb = {255, 255, 255},
+		                  .specular = {grey, grey, static_cast<uint8_t>(grey / 2)}});
+	}
+	std::vector<ChainVertex> vertices;
+	std::vector<ChainJoint> chainJoints;
+	AppendChain(vertices, chainJoints, creator, joints);
+	ASSERT_EQ(vertices.size(), 4u);
+	EXPECT_EQ(vertices[0].specularAbgr, (40u << 16u) | (80u << 8u) | 80u);
+	EXPECT_EQ(vertices[1].specularAbgr, (40u << 16u) | (80u << 8u) | 80u);
+	EXPECT_EQ(vertices[2].specularAbgr, (20u << 16u) | (40u << 8u) | 40u);
+	EXPECT_EQ(vertices[3].specularAbgr, (20u << 16u) | (40u << 8u) | 40u);
+}
+
+TEST(ParticleDraw, ModelsAndShellsAddTheirAtomsSpecularColour)
+{
+	Frame frame;
+	const Sources sources;
+	MeshCreator mesh;
+	mesh.kind = Creator::Kind::Mesh;
+	mesh.mesh = 7;
+	Effect::DrawWalk walk;
+	walk.atoms.push_back({.creator = &mesh,
+	                      .position = {1.0f, 2.0f, 3.0f},
+	                      .rotation = glm::mat3(1.0f),
+	                      .scale = 1.0f,
+	                      .stretch = 1.0f,
+	                      .alpha = 255.0f,
+	                      .frame = 0.0f,
+	                      .rgb = {255, 255, 255},
+	                      .specular = {51, 102, 255}});
+	// The citadel's glow has a specular colour of 45 grey
+	Effect::DrawAtom glow = walk.atoms.front();
+	glow.specular = {45, 45, 45};
+	glow.objectGlow = ObjectGlow {};
+	walk.atoms.push_back(glow);
+	walk.steps = {{.chain = false, .index = 0}, {.chain = false, .index = 1}};
+	AddEffect(frame, walk, DrawPath::Sorted, glm::vec3(0.0f), 0, sources);
+	ASSERT_EQ(frame.meshes.size(), 1u);
+	ExpectNear(frame.meshes[0].specular, glm::vec3(0.2f, 0.4f, 1.0f));
+	ASSERT_EQ(frame.shells.size(), 1u);
+	EXPECT_EQ(frame.shells[0].specularRgb, 0x2D2D2Du);
 }
 
 TEST(ParticleDraw, RibbonCornersAreTheGamesFloats)
@@ -563,6 +622,24 @@ TEST(ParticleDraw, OnlyTheAnimatedModelsAreLitWhenTheirFilesDoNotSay)
 	EXPECT_FALSE(make("ParticleMeshCreatorAnimTextured").dynamicLighting);
 	EXPECT_TRUE(make("ParticleAnimCreator").dynamicLighting);
 	EXPECT_FALSE(make("ParticleMeshCreator").scriptHighlightPulse);
+}
+
+TEST(ParticleDraw, OnlyThePlainModelsAreDrawnInTheLandsColour)
+{
+	const auto registry = ParticleClassRegistry::WithAllClasses();
+	const auto make = [&registry](std::string_view className) {
+		psys::ParticleObject object {.className = std::string(className), .name = "Creator", .properties = {}};
+		object.properties.insert_or_assign("DrawWithLandscapeColor",
+		                                   psys::Property {.type = psys::Property::Type::Bool, .integer = 1});
+		const auto* factory = registry.FindCreator(className);
+		EXPECT_NE(factory, nullptr);
+		auto creator = (*factory)(object);
+		return *static_cast<const MeshCreator*>(creator.get());
+	};
+	// The wood offered to a god is; the storm's tornado, whose file also asks for it, is not
+	EXPECT_TRUE(make("ParticleMeshCreator").landscapeColour);
+	EXPECT_FALSE(make("ParticleMeshCreatorAnimTextured").landscapeColour);
+	EXPECT_FALSE(make("ParticleAnimCreator").landscapeColour);
 }
 
 TEST(ParticleDraw, AModelThatFacesTheCameraBeatsWithTheScrolls)

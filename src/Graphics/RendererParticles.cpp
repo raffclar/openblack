@@ -109,6 +109,7 @@ bgfx::VertexLayout ChainLayout()
 	    .add(bgfx::Attrib::Position, 3, bgfx::AttribType::Float)
 	    .add(bgfx::Attrib::TexCoord0, 2, bgfx::AttribType::Float)
 	    .add(bgfx::Attrib::Color0, 4, bgfx::AttribType::Uint8, true)
+	    .add(bgfx::Attrib::Color1, 4, bgfx::AttribType::Uint8, true)
 	    .end();
 	return layout;
 }
@@ -424,6 +425,16 @@ void Renderer::DrawParticleMesh(const DrawSceneDesc& desc, const particles::draw
 	// unlit; the others are lit
 	submitDesc.tint =
 	    glm::vec4(glm::vec3(draw.colour), creator.DrawnUnlit() ? std::max(creator.UnlitAlpha(alpha), 1.0f / 255.0f) : 0.0f);
+	// Only a model in the land's colour takes the land's light, the land's colour and the haze where it is. Its atom's
+	// colour then multiplies the land's light in whole steps, and an unlit one is not shaded by the sun (a w below 0).
+	submitDesc.landLightAndHaze = creator.landscapeColour;
+	if (creator.landscapeColour)
+	{
+		submitDesc.unlit = creator.DrawnUnlit();
+		submitDesc.tint.w = creator.DrawnUnlit() ? -submitDesc.tint.w : -1.0f;
+	}
+	// The atom's specular colour is added after the texture
+	submitDesc.lightAdd = draw.specular;
 	DrawMesh(*mesh, submitDesc, std::numeric_limits<uint8_t>::max());
 }
 
