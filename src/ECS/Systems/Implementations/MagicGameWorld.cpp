@@ -33,6 +33,7 @@
 #include "ECS/Components/Ball.h"
 #include "ECS/Components/BuildingDamage.h"
 #include "ECS/Components/Creature.h"
+#include "ECS/Components/CreatureNeeds.h"
 #include "ECS/Components/DeadTree.h"
 #include "ECS/Components/Feature.h"
 #include "ECS/Components/Field.h"
@@ -257,16 +258,22 @@ void DestroyedByEffect(entt::entity entity, const ecs::world_objects::EffectDeat
 	ecs::world_objects::DestroyedByEffect(entity, death);
 }
 
+/// The creature that applied an effect, when a creature did: the creature that cast the miracle, or the creature that
+/// applied it when no miracle did. None when something other than a creature applied it.
+entt::entity ActingCreature(const magic::EffectSource& source)
+{
+	const auto& registry = EntityRegistry();
+	const auto applier = magic::ApplierOf(source);
+	return applier != entt::null && registry.Valid(applier) && registry.AllOf<Creature>(applier) ? applier : entt::null;
+}
+
 /// The alignment of whoever an effect comes from, which damps how far it moves
 float AlignmentOf(const magic::EffectSource& source)
 {
 	const auto& registry = EntityRegistry();
-	if (source.casterCreature != entt::null && registry.Valid(source.casterCreature))
+	if (const auto creature = ActingCreature(source); creature != entt::null)
 	{
-		if (const auto* creature = registry.TryGet<const Creature>(source.casterCreature))
-		{
-			return creature->alignment;
-		}
+		return registry.Get<const Creature>(creature).alignment;
 	}
 	return Locator::alignmentSystem::has_value() ? Locator::alignmentSystem::value().GetPlayerAlignment(source.player) : 0.0f;
 }
@@ -468,95 +475,95 @@ void GameMagicWorld::Apply(const magic::EffectValues& values, std::span<const ma
 {
 	auto& registry = EntityRegistry();
 	const float burn = values[magic::EffectKind::Burn];
-	const bool byCreature = source.casterCreature != entt::null && registry.Valid(source.casterCreature) &&
-	                        registry.AllOf<Creature>(source.casterCreature);
+	// The creature that applied the effect, if a creature did: its alignment moves rather than its player's, and it counts
+	// what the effect destroys
+	const auto actingCreature = ActingCreature(source);
+	const bool byCreature = actingCreature != entt::null;
 	// The cry of a town that the harm attacks: none when nothing burns, crushes, hits or throws
 	std::optional<guidance::TownAttackVoice> cry;
 	if (const auto fire = guidance::FireLeads(values); fire.has_value())
 	{
 		cry = guidance::TownAttackVoice {.fire = *fire, .attacker = CryAttacker(registry, source)};
 	}
+	// What applied the effect, when no miracle did: none for a fall onto the land
+	const bool appliedByNothing =
+	    source.appliedBy.has_value() && (*source.appliedBy == entt::null || !PositionOf(*source.appliedBy).has_value());
 	ecs::GamePhysicsHooksWorld hooksWorld;
 	for (const auto& outcome : outcomes)
 	{
-		if (!registry.Valid(outcome.entity))
+		const auto entity = outcome.entity;
+		if (!registry.Valid(entity))
 		{
 			continue;
 		}
 		// The heat of an effect goes where heat that comes to the object goes: a temple's heart or a worship site asks
 		// the heart, and beams as heat breaks buildings, also when the effect has no heat
-		const auto heatTaker = ecs::temple_heart_pass_on::TakerOf(hooksWorld, outcome.entity, true);
+		const auto heatTaker = ecs::temple_heart_pass_on::TakerOf(hooksWorld, entity, true);
 		// A burn heats what it reaches, which may catch and burn; a negative one, as water's, cools what is hot
 		if (burn != 0.0f && Locator::fireSystem::has_value() && registry.Valid(heatTaker))
 		{
 			Locator::fireSystem::value().ApplyBurn(heatTaker, burn, source.player);
 		}
+		// A creature mends its marks and changes its opinion before it takes the heal and the harm
+		magic_living::AfterEffect(entity, values, source);
 		if (outcome.lifeAfter.has_value())
 		{
-			if (LifeOf(outcome.entity).has_value())
+			if (registry.AllOf<CreatureNeeds>(entity))
 			{
-				SetLife(outcome.entity, *outcome.lifeAfter);
+				SetLife(entity, *outcome.lifeAfter);
 			}
 			else
 			{
 				// Anything else living takes the heal, then the harm, as its kind takes it: a building hurt sends its
-				// people out
+				// people out. A thing that a script holds in a cutscene, or an indestructible thing, keeps its life when
+				// a step leaves nearly no life.
 				if (outcome.healed > 0.0f)
 				{
-					ecs::world_objects::IncreaseLife(outcome.entity, outcome.healed);
+					ecs::world_objects::IncreaseLife(entity, outcome.healed);
 				}
 				if (outcome.damaged > 0.0f)
 				{
-					ecs::world_objects::ReduceLife(outcome.entity, outcome.damaged,
+					ecs::world_objects::ReduceLife(entity, outcome.damaged,
 					                               source.playerless ? std::nullopt : std::optional(source.player),
 					                               source.creatureSmash);
 				}
 			}
 		}
-		magic_living::AfterEffect(outcome.entity, values, source);
-		AddEffectAlignment(outcome, source, byCreature);
-		// The alignment history of the effect's player keeps each kind of change before the damping, also for a creature's
-		// miracle
-		if (!source.playerless && Locator::alignmentSystem::has_value())
+		// The steps after the harm still see a thing that the harm destroys, so read what they need of it first. A
+		// building or a dispenser that goes leaves its town, but a fish farm that goes keeps its town.
+		const bool townBuilding = registry.AnyOf<Abode, SpellDispenser>(entity);
+		const auto ownerBefore = ecs::world_objects::PlayerOf(entity);
+		const auto positionBefore = PositionOf(entity);
+		const auto keptTown = registry.AllOf<FishFarm>(entity) ? ecs::world_objects::TownAttackTargetOf(entity) : std::nullopt;
+		// The life is read again after the heal and the harm, as a protected thing or a building not yet built can keep
+		// its life. A thing that went with the harm has none left.
+		const bool destroyed =
+		    outcome.lifeBefore.has_value() && *outcome.lifeBefore != 0.0f && ecs::world_objects::LifeOf(entity) == 0.0f;
+		// Brought from some life to none, it is destroyed first. The creature that applied the effect counts it.
+		if (destroyed)
 		{
-			for (const float term : outcome.alignmentTerms)
+			if (byCreature)
 			{
-				Locator::alignmentSystem::value().AddToHistory(source.player, AlignmentCause::Effect, term);
+				registry.Get<Creature>(actingCreature).objectsDestroyed += 1.0f;
 			}
+			SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Magic: a miracle took the last of {}'s life", entt::to_integral(entity));
+			DestroyedByEffect(entity, {.killer = source.playerless ? std::nullopt : std::optional(source.player),
+			                           .weight = outcome.lifeBefore.value_or(0.0f)});
 		}
-		// What applied the effect, when no miracle did: none for a fall onto the land
-		const bool appliedByNothing =
-		    source.appliedBy.has_value() && (*source.appliedBy == entt::null || !PositionOf(*source.appliedBy).has_value());
-		// Harm done to a town's people or buildings counts as an attack on the town by whoever did it, when something
-		// applied it
-		if (outcome.aggression && !appliedByNothing)
+		// The player of the thing after the destruction: a dead villager has no town and so no player. A building that
+		// went has no town and is the neutral player's.
+		const bool stays = registry.Valid(entity);
+		const auto owner = stays          ? ecs::world_objects::PlayerOf(entity)
+		                   : townBuilding ? std::optional(PlayerNames::NEUTRAL)
+		                                  : ownerBefore;
+		// The people nearby react to what was crushed, once for each thing: to what applied the blow when it stands
+		// somewhere, else to the thing itself, for the thing's player
+		if (outcome.crushed && Locator::reactionSystem::has_value() && !Locator::reactionSystem::value().HasReaction(entity))
 		{
-			const auto& things = Locator::entitiesRegistry::value();
-			const bool appliedByCreature =
-			    source.appliedBy.has_value() && things.Valid(*source.appliedBy) && things.AllOf<Creature>(*source.appliedBy);
-			// The town keeps the values of the effect itself, before the defence of what it struck
-			const ecs::town_aggression::Harm harm {.burn = values[magic::EffectKind::Burn],
-			                                       .crush = values[magic::EffectKind::Crush],
-			                                       .hit = values[magic::EffectKind::Hit]};
-			ecs::world_objects::AttackTown(outcome.entity, outcome.damaged + outcome.burnt, source.player, harm,
-			                               appliedByCreature, cry);
-		}
-		// A player's miracle, not a creature's, is remembered against them by the player whose object it harmed
-		const auto owner = ecs::world_objects::PlayerOf(outcome.entity);
-		if (!byCreature && !source.playerless && owner.has_value())
-		{
-			AddDamageFrom(*owner, source.player, outcome.damaged + outcome.burnt);
-		}
-		// The people nearby react to what was crushed, once for each thing: to the creature that crushed it if a creature
-		// cast the miracle, else to the thing itself, for the thing's player
-		if (outcome.crushed && Locator::reactionSystem::has_value() &&
-		    !Locator::reactionSystem::value().HasReaction(outcome.entity))
-		{
-			// What applied a blow is what the people react to, when it stands somewhere; else the thing crushed
-			const auto initiator = byCreature                                          ? source.casterCreature
+			const auto initiator = byCreature                                          ? actingCreature
 			                       : source.appliedBy.has_value() && !appliedByNothing ? *source.appliedBy
-			                                                                           : outcome.entity;
-			if (const auto position = PositionOf(initiator))
+			                                                                           : entity;
+			if (const auto position = initiator == entity ? positionBefore : PositionOf(initiator))
 			{
 				Locator::reactionSystem::value().Create({.initiator = initiator,
 				                                         .type = Reaction::ReactToObjectCrushed,
@@ -566,34 +573,59 @@ void GameMagicWorld::Apply(const magic::EffectValues& values, std::span<const ma
 				                                         .onCast = true});
 			}
 		}
-		// Brought from some life to none it is destroyed, by the miracle's creature if one cast it
-		const bool destroyed = outcome.destroyed;
-		if (destroyed && byCreature)
+		// Harm done to a town's people or buildings counts as an attack on the town by whoever did it, when something
+		// applied it. A villager that died and a building that went no longer have a town.
+		if (outcome.aggression && !appliedByNothing)
 		{
-			registry.Get<Creature>(source.casterCreature).objectsDestroyed += 1.0f;
+			const auto target = stays ? ecs::world_objects::TownAttackTargetOf(entity) : keptTown;
+			const bool appliedByCreature = source.appliedBy.has_value() && registry.Valid(*source.appliedBy) &&
+			                               registry.AllOf<Creature>(*source.appliedBy);
+			// The town keeps the values of the effect itself, before the defence of what it struck
+			const ecs::town_aggression::Harm harm {.burn = values[magic::EffectKind::Burn],
+			                                       .crush = values[magic::EffectKind::Crush],
+			                                       .hit = values[magic::EffectKind::Hit]};
+			if (target.has_value())
+			{
+				ecs::world_objects::AttackTown(*target, outcome.damaged + outcome.burnt, source.player, harm, appliedByCreature,
+				                               cry);
+			}
 		}
-		if (destroyed)
+		// A player's effect, not a creature's, is remembered against them by the player whose object it harmed
+		if (!byCreature && !source.playerless && owner.has_value())
 		{
-			SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Magic: a miracle took the last of {}'s life",
-			                    entt::to_integral(outcome.entity));
-			DestroyedByEffect(outcome.entity, {.killer = source.playerless ? std::nullopt : std::optional(source.player),
-			                                   .weight = outcome.lifeBefore.value_or(0.0f)});
+			AddDamageFrom(*owner, source.player, outcome.damaged + outcome.burnt);
+		}
+		// The alignment moves last, by the life read after the destruction. A creature that cannot die has all of its
+		// life again, and an unbuilt building that a script keeps has full life.
+		const auto& info = Locator::infoConstants::value();
+		const auto recounted = magic::WithLifeAfter(outcome, values, ecs::world_objects::LifeOf(entity), info.alignment,
+		                                            info.player.applyEffectAlignmentChangeAddition, AlignmentOf(source));
+		AddEffectAlignment(recounted, source, actingCreature);
+		// The alignment history of the effect's player keeps each kind of change before the damping, also for the effect of
+		// a creature
+		if (!source.playerless && Locator::alignmentSystem::has_value())
+		{
+			for (const float term : recounted.alignmentTerms)
+			{
+				Locator::alignmentSystem::value().AddToHistory(source.player, AlignmentCause::Effect, term);
+			}
 		}
 	}
 }
 
-void GameMagicWorld::AddEffectAlignment(const magic::EffectOutcome& outcome, const magic::EffectSource& source, bool byCreature)
+void GameMagicWorld::AddEffectAlignment(const magic::EffectOutcome& outcome, const magic::EffectSource& source,
+                                        entt::entity actingCreature)
 {
 	// No change of life moves no alignment
 	if (outcome.alignmentTerms == magic::EffectAlignmentTerms {})
 	{
 		return;
 	}
-	// What a creature's miracle did moves its own alignment, what a player's did the player's, over the turns to come.
-	// The waiting alignment takes the change of each kind of effect one at a time, in the order of the outcome.
-	if (byCreature)
+	// What a creature did moves its own alignment, what a player did the player's, over the turns to come. The waiting
+	// alignment takes the change of each kind of effect one at a time, in the order of the outcome.
+	if (actingCreature != entt::null)
 	{
-		auto& pending = EntityRegistry().Get<Creature>(source.casterCreature).pendingAlignment;
+		auto& pending = EntityRegistry().Get<Creature>(actingCreature).pendingAlignment;
 		pending = magic::AddEffectAlignmentChanges(pending, outcome.alignmentDamped);
 	}
 	else if (!source.playerless && source.player != PlayerNames::NEUTRAL && Locator::alignmentSystem::has_value())

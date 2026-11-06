@@ -333,6 +333,10 @@ enum class Effect : uint8_t
 	/// it, the run sees to the desire of the plan.
 	RanAway,
 };
+/// Whether the step with this effect sees to the desire of the effect's action at once. A step of a plan does not: the
+/// end of the plan sees to the desire. Only a step of an agenda that no plan gave sees to it, when its effect satisfies
+/// a need.
+[[nodiscard]] bool SeesToNeedAtStep(Effect effect, bool planned);
 
 /// How the eyes should look
 enum class Eyes : uint8_t

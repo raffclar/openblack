@@ -59,7 +59,7 @@ public:
 };
 
 /// Once the atom is old enough and the condition holds (or without one) it starts its sound, once, stopping its others
-/// first when asked. The camera shake some files ask for with it is not done.
+/// first when asked. When the file asks for it, the camera also shakes as the sound starts.
 class AddSoundToAtom final: public Modifier
 {
 public:

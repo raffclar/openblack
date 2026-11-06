@@ -50,8 +50,11 @@ enum class CastStyle : uint8_t
 /// How charged a seed is: its store over the cost, at most 1; fully charged for a miracle that costs nothing
 [[nodiscard]] float SeedPower(float store, float costToCreate);
 /// Whether a seed held for some turns is ready to cast: a seed from a worship site waits a delay, one that is ready at
-/// once (from a dispenser) is always ready
-[[nodiscard]] bool SeedReadyAfter(uint32_t turnsInHand, float turnSeconds, float delaySeconds);
+/// once (from a dispenser) is always ready. The game multiplies the turns by the milliseconds of a turn, then by a
+/// thousandth, so a seed with a delay of 1.5 seconds is ready after 15 turns.
+[[nodiscard]] bool SeedReadyAfter(uint32_t turnsInHand, uint32_t turnMilliseconds, float delaySeconds);
+/// The seconds that a seed was in the hand, in the same float steps that the ready test uses
+[[nodiscard]] float SeedSecondsInHand(uint32_t turnsInHand, uint32_t turnMilliseconds);
 
 /// A seed out of the hand that stays with the miracle it cast (the storms', the shields' and the forest's)
 struct SeedWithSpell

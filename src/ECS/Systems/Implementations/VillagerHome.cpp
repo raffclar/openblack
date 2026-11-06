@@ -1211,23 +1211,31 @@ uint32_t villager_home::ArrivesHome(LivingAction& action)
 	{
 		const auto& person = WorldRegistry().Get<const Villager>(villager);
 		const auto& info = InfoOf(person);
-		const bool functional = IsFunctional(abode);
-		if (person.life < info.damageThresholdToGoHome && !functional)
+		switch (routine::AtUnfinishedHome(person.life < info.damageThresholdToGoHome, person.food < info.hungryForFood,
+		                                  IsFunctional(abode)))
 		{
-			// Hurt, with a home that doesn't work: it lies down outside, trying again each turn until it finds a spot
-			const auto spot = routine::BrokenHomeTentSearch(PositionOf(abode), PositionOf(villager), FloatRandom());
-			if (const auto tent = GetTentPos(villager, spot); tent.has_value())
+		case routine::UnfinishedHome::GoIn:
+			break;
+		case routine::UnfinishedHome::LieDownOutside:
+			// It tries again each turn until it finds a spot
+			if (const auto tent =
+			        GetTentPos(villager, routine::BrokenHomeTentSearch(PositionOf(abode), PositionOf(villager), FloatRandom()));
+			    tent.has_value())
 			{
 				SetupMoveTo(action, *tent, VillagerStates::SleepInTent);
 			}
 			return 1;
-		}
-		if (person.food < info.hungryForFood && !functional)
-		{
-			// As in the game, the decision is overtaken at once: it goes in all the same
+		case routine::UnfinishedHome::DecideThenGoIn:
+			// As in the game, the villager decides again, but it goes in at once all the same
 			SetTopState(action, VillagerStates::DecideWhatToDo);
+			break;
+		case routine::UnfinishedHome::TryToBuild:
+			if (villager_build::TakeUpSite(action, abode) == 1)
+			{
+				return 1;
+			}
+			break;
 		}
-		// TODO(villagers): otherwise it helps build or repair its home first (the builders, jobs phase)
 	}
 	ArriveHome(villager);
 	SetTopState(action, VillagerStates::AtHome);

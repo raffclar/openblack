@@ -575,6 +575,7 @@ void CreatureMindSystem::ProcessMimicry(entt::entity creature, CreatureMindState
 		spells->cheat = creature_spell_mind::SetCheatDominant(
 		    desires, static_cast<Desire>(rule.desire),
 		    {.all = false, .seconds = k_MimicDesireSeconds, .floor = mind_detail::DesireFloorOf(creature)}, k_TurnsPerSecond);
+		mind_detail::TakeWrittenSources(creature, mind);
 		desires[Desire::FollowPlayerDesire].suppressedTurns = 0;
 		// A creature that stood with nothing to do for too long stops copying, and does not follow the player for a time
 		if (mind.thinksWithoutPlan > k_MostThinksWithoutPlanToCopyDesire)

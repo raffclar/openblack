@@ -255,3 +255,21 @@ TEST(VillagerRoutine, ASittingVillagerThinksAgainOneTimeInTenElseSitsOn)
 	FakeInts sit {.answers = {9}};
 	EXPECT_EQ(ChillOutTimeUp(false, [] { return false; }, sit.Random()), ChillOut::SitOn);
 }
+
+TEST(VillagerRoutine, AtAnUnfinishedHomeAHurtVillagerGoesInOnlyWhenTheHomeWorks)
+{
+	EXPECT_EQ(AtUnfinishedHome(true, false, true), UnfinishedHome::GoIn);
+	EXPECT_EQ(AtUnfinishedHome(true, true, false), UnfinishedHome::LieDownOutside);
+}
+
+TEST(VillagerRoutine, AtAnUnfinishedHomeAHungryVillagerGoesIn)
+{
+	EXPECT_EQ(AtUnfinishedHome(false, true, true), UnfinishedHome::GoIn);
+	EXPECT_EQ(AtUnfinishedHome(false, true, false), UnfinishedHome::DecideThenGoIn);
+}
+
+TEST(VillagerRoutine, AtAnUnfinishedHomeAWellFedVillagerTriesToBuildIt)
+{
+	EXPECT_EQ(AtUnfinishedHome(false, false, true), UnfinishedHome::TryToBuild);
+	EXPECT_EQ(AtUnfinishedHome(false, false, false), UnfinishedHome::TryToBuild);
+}
