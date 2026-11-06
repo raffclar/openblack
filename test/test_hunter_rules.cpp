@@ -93,6 +93,13 @@ TEST(HunterRules, CatsSleepAfterTwentyTwoHoursAndWolvesHuntAfterTwentyThree)
 	EXPECT_FALSE(WolvesHuntAt(3.0f));
 }
 
+TEST(HunterRules, EachCalmValueThatIsNotNoughtStopsTheHunt)
+{
+	EXPECT_FALSE(CalmStopsTheHunt(0));
+	EXPECT_TRUE(CalmStopsTheHunt(1));
+	EXPECT_TRUE(CalmStopsTheHunt(-1));
+}
+
 TEST(HunterRules, ItBreedsFirstThenEatsThenSleeps)
 {
 	const grazers::NeedLimits limits {.hunger = 120, .sleep = 6000, .breed = 3000, .grownUpAge = 0};
