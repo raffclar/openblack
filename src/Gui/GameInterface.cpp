@@ -2189,7 +2189,8 @@ bool GameInterface::DialogBoxOpen() const
 
 void GameInterface::DrawDialogue(glm::u16vec2 resolution, int barPixels)
 {
-	// Neither the box nor its words show while a video plays; the texts still move on underneath
+	// Neither the box nor its words show while a video plays, and the newest text does not slide in. The time to read
+	// the texts goes on.
 	const bool videoPlaying = Locator::videoSystem::has_value() && Locator::videoSystem::value().IsPlaying();
 	const auto* frame = [&]() -> const help::TextFrame* {
 		if (!Locator::helpTextSystem::has_value() || videoPlaying)

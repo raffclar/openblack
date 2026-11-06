@@ -727,3 +727,13 @@ TEST(DialogueText, TheTempleTurnsTakeTheClickOnlyInTheTempleOfAGameAlone)
 	EXPECT_FALSE(TempleTurnsTakeTheClick({.networkGame = true, .inTemple = true}));
 	EXPECT_FALSE(TempleTurnsTakeTheClick({.networkGame = true, .templeGoesIn = true}));
 }
+
+TEST(DialogueText, TheNewestTextStopsSlidingInWhileAVideoPlays)
+{
+	// Outside the temple the slide-in goes by the game's time, inside it by the real time
+	EXPECT_EQ(SlideInMilliseconds({.gameMs = 40, .realMs = 25}), 40u);
+	EXPECT_EQ(SlideInMilliseconds({.gameMs = 40, .realMs = 25, .inTemple = true}), 25u);
+	// The game does not draw the texts while a video plays, and the slide-in moves only as they are drawn
+	EXPECT_EQ(SlideInMilliseconds({.gameMs = 40, .realMs = 25, .videoPlaying = true}), 0u);
+	EXPECT_EQ(SlideInMilliseconds({.gameMs = 40, .realMs = 25, .inTemple = true, .videoPlaying = true}), 0u);
+}
