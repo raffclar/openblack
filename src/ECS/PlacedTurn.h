@@ -30,15 +30,24 @@
 namespace openblack::ecs::placed_turn
 {
 
+/// The stores of the components that tell how a thing turns, found one time. The game's thread can add stores to the
+/// registry while a side thread reads these stores. The side thread must not look in the registry itself at that time.
+using TurnLookups =
+    ComponentLookups<components::Transform, components::TurnAngles, components::MobileStatic, components::MobileObject,
+                     components::Pot, components::DeadTree, components::Ball, components::OneOffSpellSeed,
+                     components::BuildingPiece, components::Reward, components::Vortex, components::TeleportStone>;
+
 /// Whether a thing can lean about x and z as well as turn about the upright axis. These things can lean:
 /// - mobile statics, rocks, dead trees, vortexes, teleport stones and the pieces that break off a building
 /// - mobile objects, pots, footballs, one-shot miracle globes and reward chests
 /// All other things stand upright. Their angles about x and z are always 0.
-[[nodiscard]] inline bool CanLean(const Registry& registry, entt::entity entity)
+/// The source is the registry or the TurnLookups found from it.
+template <typename Source>
+[[nodiscard]] bool CanLean(const Source& source, entt::entity entity)
 {
-	return registry.AnyOf<components::MobileStatic, components::MobileObject, components::Pot, components::DeadTree,
-	                      components::Ball, components::OneOffSpellSeed, components::BuildingPiece, components::Reward,
-	                      components::Vortex, components::TeleportStone>(entity);
+	return source.template AnyOf<components::MobileStatic, components::MobileObject, components::Pot, components::DeadTree,
+	                             components::Ball, components::OneOffSpellSeed, components::BuildingPiece, components::Reward,
+	                             components::Vortex, components::TeleportStone>(entity);
 }
 
 /// The angles that a thing keeps from the given angles. A thing that does not lean keeps only the angle about y.
@@ -91,15 +100,17 @@ struct BodyTurn
 	return KeptAngles(x87::GameTurnMatrixAngles(turn), canLean);
 }
 
-/// The angles of a thing, in radians about x, y and z, as the scripts read them
-[[nodiscard]] inline glm::vec3 AnglesOf(const Registry& registry, entt::entity entity)
+/// The angles of a thing, in radians about x, y and z, as the scripts read them. The source is the registry or the
+/// TurnLookups found from it.
+template <typename Source>
+[[nodiscard]] glm::vec3 AnglesOf(const Source& source, entt::entity entity)
 {
-	const auto* transform = registry.TryGet<const components::Transform>(entity);
+	const auto* transform = source.template TryGet<const components::Transform>(entity);
 	if (transform == nullptr)
 	{
 		return glm::vec3(0.0f);
 	}
-	return AnglesOf(registry.TryGet<const components::TurnAngles>(entity), transform->rotation, CanLean(registry, entity));
+	return AnglesOf(source.template TryGet<const components::TurnAngles>(entity), transform->rotation, CanLean(source, entity));
 }
 
 /// Keep the angles of a thing that has the turn from these angles now. A thing that does not lean keeps only the angle

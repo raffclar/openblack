@@ -146,9 +146,6 @@ struct ResourceEventCost
 /// A shield's upkeep each turn: its plain upkeep times the square of its radius over the radius that costs that much
 [[nodiscard]] float ShieldCostToMaintain(float plainCost, float radius, float radiusForNormalCost);
 
-/// The heal miracle heals no more than this many people when its tables give no number
-inline constexpr uint32_t k_DefaultHealTargets = 20;
-
 /// The water miracle rains within this radius of where it is cast: wider for its power-up
 [[nodiscard]] float RainRadius(MagicType type);
 /// How far from the middle a drop of rain falls, from a random number up to the rain's radius

@@ -90,6 +90,7 @@
 #include "Online/LanDiscoveryInterface.h"
 #include "Online/NetworkLand.h"
 #include "Online/NetworkSession.h"
+#include "Online/OnlineMapLand.h"
 #include "Online/OnlineMapStoreInterface.h"
 #include "Online/OpenPage.h"
 #include "Online/StartRules.h"
@@ -721,6 +722,22 @@ bool Game::StartNetworkLand(const game_socket::Start& start)
 			return false;
 		}
 		if (!lands.LoadGodsRingMapFile(*file))
+		{
+			return false;
+		}
+	}
+	else if (online_map_land::IsOnlineMap(start.land))
+	{
+		// A land of a network game comes from the store of the lands that the player got from the lobby, else from the
+		// game folder. The start check before compared the checksum of these same bytes.
+		const auto* store = Locator::onlineMapStore::has_value() ? &Locator::onlineMapStore::value() : nullptr;
+		const auto file = online::ReadStartLand(start.land, store, Locator::filesystem::value());
+		if (!file.has_value())
+		{
+			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "This computer does not have the land of the game server: {}", start.land);
+			return false;
+		}
+		if (!lands.LoadNetworkMapFile(*landPath, *file, ecs::systems::LandSystemInterface::ChallengeScripts::StartedAgain))
 		{
 			return false;
 		}

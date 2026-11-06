@@ -38,6 +38,7 @@
 #include "Server/Ed25519.h"
 #include "Server/LanRoom.h"
 #include "Server/LobbyBans.h"
+#include "Server/LobbyHostReport.h"
 #include "Server/LobbyResults.h"
 #include "Server/LobbyStatus.h"
 #include "Server/TicketCheck.h"
@@ -123,6 +124,12 @@ struct GameRole::Parts
 	std::chrono::steady_clock::time_point nextResultSend {};
 	/// The answers to the search of the clients on the local network
 	std::unique_ptr<online::LanResponder> lan;
+	/// The report of the host to the lobby: the god teams and the winning conditions
+	std::string hostReportAddress;
+	gathering_box::PingClock hostReportClock;
+	bool hostReportDecided {false};
+	/// The status of the last answer to a report of the host, so that the log tells each change only one time
+	int32_t hostReportStatus {-1};
 	std::string lanHost;
 	/// The pin of the key of the server's own certificate as hex digits, empty for a certificate file
 	std::string lanKey;
@@ -410,6 +417,7 @@ std::optional<std::string> GameRole::Start(const NetworkSettings& settings, game
 			base.pop_back();
 		}
 		parts.statusAddress = base + "/servers/" + settings.serverId + "/status";
+		parts.hostReportAddress = lobby_host_report::HostReportAddress(base, settings.serverId);
 		if (settings.resultKey.has_value())
 		{
 			std::ifstream file(*settings.resultKey, std::ios::binary);
@@ -478,6 +486,53 @@ void GameRole::Update()
 		parts.SendResult();
 		parts.lobby->Poll();
 	}
+}
+
+bool GameRole::HostReportDue()
+{
+	auto& parts = *_parts;
+	if (!parts.lobby || !parts.host || !parts.host->Started())
+	{
+		return false;
+	}
+	// The clock uses the time of the computer in milliseconds, which wraps as the clock of the game wraps
+	const auto now = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch());
+	return parts.hostReportClock.Due(static_cast<uint32_t>(now.count()));
+}
+
+void GameRole::SendHostReport(uint32_t turn, bool decided, const HostConditions& conditions)
+{
+	auto& parts = *_parts;
+	if (!parts.lobby || !parts.host || (decided && parts.hostReportDecided))
+	{
+		return;
+	}
+	parts.hostReportDecided = parts.hostReportDecided || decided;
+	const gathering_box::host_report::Facts facts {
+	    .teams = lobby_host_report::TeamsOf(parts.host->Seats(), parts.clans),
+	    .turn = turn,
+	    .decided = decided,
+	    .conditions = conditions,
+	};
+	const auto body = lobby_host_report::BodyOf(gathering_box::host_report::Encode(facts));
+	online::HttpRequest request {.method = online::HttpMethod::Put,
+	                             .url = parts.hostReportAddress,
+	                             .headers = {{"Content-Type", "application/json"}},
+	                             .body = std::vector<uint8_t>(body.begin(), body.end())};
+	parts.lobby->Send(std::move(request), [&parts, turn](online::HttpResponse&& response) {
+		const bool taken = response.status == 204 || response.status == 200;
+		if (std::exchange(parts.hostReportStatus, response.status) == response.status)
+		{
+			return;
+		}
+		if (taken)
+		{
+			SPDLOG_LOGGER_INFO(spdlog::get("game"), "The lobby takes the reports of the host (turn {})", turn);
+			return;
+		}
+		SPDLOG_LOGGER_WARN(spdlog::get("game"), "The lobby did not take the report of the host of turn {} (status {}): {}",
+		                   turn, response.status, response.Text().substr(0, 200));
+	});
 }
 
 bool GameRole::WantsResult() const

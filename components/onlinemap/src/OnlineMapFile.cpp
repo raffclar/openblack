@@ -40,9 +40,10 @@ std::optional<openblack::onlinemap::OnlineMapFile> openblack::onlinemap::Parse(s
 	{
 		return std::nullopt;
 	}
-	const size_t scriptLength = ReadLength(bytes.first(4));
-	const size_t landscapeLength = ReadLength(bytes.subspan(4, 4));
-	if (bytes.size() - k_HeaderSize != scriptLength + landscapeLength)
+	const auto scriptLength = static_cast<uint64_t>(ReadLength(bytes.first(4)));
+	const auto landscapeLength = static_cast<uint64_t>(ReadLength(bytes.subspan(4, 4)));
+	// The sum is 64 bits wide, so that two large lengths do not wrap round to the size of the bytes on a 32-bit build
+	if (static_cast<uint64_t>(bytes.size() - k_HeaderSize) != scriptLength + landscapeLength)
 	{
 		return std::nullopt;
 	}

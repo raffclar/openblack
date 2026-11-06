@@ -23,9 +23,9 @@
 namespace openblack::web
 {
 
-/// The store of the lands of network games in the web build: the IndexedDB storage of the site, through the fetch of
-/// Emscripten, with the file name as the key. The store keeps a copy in memory of each map that it found or wrote,
-/// because the start of a game reads the map at once.
+/// The store of the lands of network games in the web build: the IndexedDB storage of the site, with the file name as
+/// the key. The store opens its own database in the worker thread of the game. It keeps a copy in memory of each map
+/// that it found or wrote, because the start of a game reads the map at once.
 class IndexedDbMapStore final: public online::OnlineMapStoreInterface
 {
 public:

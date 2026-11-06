@@ -211,7 +211,20 @@ constexpr size_t k_MostRowsInAPart = 64;
 constexpr size_t k_BytesInAPart = 16 * 1024;
 [[nodiscard]] size_t RowsInAPart(size_t lastBytes, size_t lastRows);
 
+/// The component stores of a registry, by their ids, in the order of the registry's list of stores. The registry adds
+/// to that list when it gets the first component of a kind, so a thread must not look in the list while another thread
+/// can add to it. A store stays at the same place while the registry exists, so another thread can read the stores that
+/// the game's thread found.
+using RegistryStores = std::vector<std::pair<entt::id_type, const entt::sparse_set*>>;
+[[nodiscard]] RegistryStores StoresOf(const entt::registry& registry);
+
 [[nodiscard]] WorldHashes HashWorld(const entt::registry& registry, const entt::meta_ctx& context,
+                                    std::span<const HashLeaveOut> leaveOut = {}, bool byField = false,
+                                    const RowVisitor& visit = {}, WorkerPool* pool = nullptr, WorldRows* rows = nullptr,
+                                    HashMemo* memo = nullptr);
+/// The same with the stores that StoresOf found before. It reads the registry only for its entities, not for its list
+/// of stores, so it can run on a thread while the game's thread adds stores.
+[[nodiscard]] WorldHashes HashWorld(const entt::registry& registry, const RegistryStores& stores, const entt::meta_ctx& context,
                                     std::span<const HashLeaveOut> leaveOut = {}, bool byField = false,
                                     const RowVisitor& visit = {}, WorkerPool* pool = nullptr, WorldRows* rows = nullptr,
                                     HashMemo* memo = nullptr);

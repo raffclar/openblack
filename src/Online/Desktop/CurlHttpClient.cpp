@@ -209,9 +209,9 @@ HttpRequestId CurlHttpClient::Send(HttpRequest request, HttpCallback callback)
 	curl_easy_setopt(easy, CURLOPT_CONNECTTIMEOUT_MS, tls_settings::k_ConnectTimeoutMs);
 	if (sent.large)
 	{
-		// A large file has no limit on its full time, only on a stall. The request asks for no compression, so that the
-		// limit of the answer is the limit of the bytes that come.
-		curl_easy_setopt(easy, CURLOPT_TIMEOUT_MS, 0L);
+		// A large file stops on a stall, and its full time follows its limit of bytes. The request asks for no
+		// compression, so that the limit of the answer is the limit of the bytes that come.
+		curl_easy_setopt(easy, CURLOPT_TIMEOUT_MS, LargeTransferTimeoutMs(MostAnswerBytes(sent, k_MostLargeAnswerBytes)));
 		curl_easy_setopt(easy, CURLOPT_LOW_SPEED_LIMIT, tls_settings::k_StallBytesPerSecond);
 		curl_easy_setopt(easy, CURLOPT_LOW_SPEED_TIME, tls_settings::k_StallSeconds);
 	}

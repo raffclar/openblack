@@ -234,6 +234,46 @@ TEST(HandMotion, TheHandsMovementGetsFourFifthsOfTheWayInATenthOfASecond)
 	EXPECT_EQ(FilterHandVelocity(glm::vec3(3.0f), raw, 0.0f), glm::vec3(3.0f));
 }
 
+TEST(HandMotion, TheHandsSpeedOverAStepMultipliesByOneOverTheSeconds)
+{
+	// One divided by a sixtieth of a second, then the movement times that value. A division gives a different last bit.
+	constexpr float k_Step = 1.0f / 60.0f;
+	const float perSecond = 1.0f / k_Step;
+	const glm::vec3 step {0.05f, 0.3f, -0.05f};
+	const auto velocity = HandStepVelocity(step, k_Step);
+	EXPECT_EQ(velocity.x, 0.05f * perSecond);
+	EXPECT_EQ(velocity.y, 0.3f * perSecond);
+	EXPECT_EQ(velocity.z, -0.05f * perSecond);
+	EXPECT_NE(velocity.x, 0.05f / k_Step);
+}
+
+TEST(HandMotion, TheSpinDividesBySpeedWithTheSquaresAddedFromZToX)
+{
+	constexpr float k_Step = 1.0f / 60.0f;
+	HandSpin spin;
+	StepHandSpin(spin, {0.5f, 0.0f, 0.0f}, {30.0f, 0.0f, 0.0f}, k_Step);
+	// The hand turns: the second step goes partly across the first
+	const glm::vec3 velocity {22.5f, 15.4f, -6.9f};
+	StepHandSpin(spin, {0.4f, 0.0f, 0.3f}, velocity, k_Step);
+	const float speed = std::sqrt(((velocity.z * velocity.z) + (velocity.y * velocity.y)) + (velocity.x * velocity.x));
+	EXPECT_NE(spin.lateral, 0.0f);
+	EXPECT_EQ(spin.spin, -spin.lateral / speed);
+	// The sum from x to z gives a different speed for this velocity
+	EXPECT_NE(speed, std::sqrt(((velocity.x * velocity.x) + (velocity.y * velocity.y)) + (velocity.z * velocity.z)));
+}
+
+TEST(HandMotion, TheEffectInTheHandGetsOnlyItsPointAndFullPower)
+{
+	const glm::vec3 point {10.0f, 2.0f, -4.0f};
+	const auto info = InHandEffectInfo(point);
+	EXPECT_EQ(info.handPosition, point);
+	EXPECT_EQ(info.cameraForward, glm::vec3(0.0f));
+	EXPECT_EQ(info.direction, glm::vec3(0.0f));
+	EXPECT_EQ(info.spin, 0.0f);
+	EXPECT_EQ(info.power, 1.0f);
+	EXPECT_TRUE(info.enabled);
+}
+
 TEST(HandMotion, ANaturalSplinePassesThroughItsPointsWithoutBendingAtTheEnds)
 {
 	const CubicSpline curve(k_PourKeyPoints);

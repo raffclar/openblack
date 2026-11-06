@@ -240,23 +240,64 @@ TEST(GatheringBoxRules, PickedFriendsAndOthersNeedAPick)
 TEST(GatheringBoxRules, HostReportWritesOverTheDecidedMark)
 {
 	host_report::Facts facts;
-	facts.game[0] = 0xAB;
 	facts.decided = true;
-	facts.valueIsOne = true;
+	facts.turn = 1;
 	host_report::Condition condition {.aim = 7};
 	condition.players[0] = {.current = 3, .met = false};
 	condition.players[1] = {.current = 9, .met = true};
 	facts.conditions[2] = condition;
 	const auto bytes = host_report::Encode(facts);
 	ASSERT_EQ(bytes.size(), 64u + 4u + 4u + 4u + 16u);
-	EXPECT_EQ(bytes[0], 0xAB);
-	// The mark is 1 from the value of the game, not 2 for the decided game
+	// The mark is 1 on the first turn, not 2 for the decided game
 	EXPECT_EQ(bytes[64], 1);
 	EXPECT_EQ(bytes[68], 1u << 2);
 	EXPECT_EQ(bytes[72], 7);
 	EXPECT_EQ(bytes[76], 3);
 	EXPECT_EQ(bytes[80], 7);
 	EXPECT_EQ(bytes[84], 0);
+}
+
+TEST(GatheringBoxRules, HostReportMarkIsOneOnTheFirstTurnOnly)
+{
+	for (const auto [turn, mark] : {std::pair {0u, 0}, std::pair {1u, 1}, std::pair {2u, 0}, std::pair {601u, 0}})
+	{
+		host_report::Facts facts;
+		facts.turn = turn;
+		facts.decided = true;
+		const auto bytes = host_report::Encode(facts);
+		ASSERT_EQ(bytes.size(), 72u);
+		EXPECT_EQ(bytes[64], mark) << turn;
+		EXPECT_EQ(bytes[68], 0) << turn;
+	}
+}
+
+TEST(GatheringBoxRules, HostReportStartsWithTheMembersOfTheFirstTwoTeams)
+{
+	host_report::Facts facts;
+	facts.teams[0][0] = {.number = 0xE1234567, .clan = 9};
+	facts.teams[0][3] = {.number = 5, .clan = 0};
+	facts.teams[1][1] = {.number = 0x1FFFFFFF, .clan = 0x01020304};
+	// The third and the fourth team are not in the report
+	facts.teams[2][0] = {.number = 77, .clan = 1};
+	facts.teams[3][0] = {.number = 88, .clan = 2};
+	const auto bytes = host_report::Encode(facts);
+	ASSERT_EQ(bytes.size(), 72u);
+	const auto number = [&bytes](size_t at) {
+		return static_cast<uint32_t>(bytes[at]) | static_cast<uint32_t>(bytes[at + 1]) << 8 |
+		       static_cast<uint32_t>(bytes[at + 2]) << 16 | static_cast<uint32_t>(bytes[at + 3]) << 24;
+	};
+	// The number keeps its low 29 bits
+	EXPECT_EQ(number(0), 0x01234567u);
+	EXPECT_EQ(number(4), 9u);
+	EXPECT_EQ(number(8), 0u);
+	EXPECT_EQ(number(24), 5u);
+	EXPECT_EQ(number(32), 0u);
+	EXPECT_EQ(number(40), 0x1FFFFFFFu);
+	EXPECT_EQ(number(44), 0x01020304u);
+	for (size_t at = 48; at < 64; at += 4)
+	{
+		EXPECT_EQ(number(at), 0u) << at;
+	}
 }
 
 TEST(GatheringBoxSystem, NothingWithNoPingServer)

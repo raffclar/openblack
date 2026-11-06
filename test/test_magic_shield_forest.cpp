@@ -8,7 +8,9 @@
  *******************************************************************************/
 
 #include <cmath>
+#include <cstdint>
 
+#include <bit>
 #include <numbers>
 
 #include <glm/geometric.hpp>
@@ -259,6 +261,17 @@ TEST(ForestRules, EighteenTreesSpiralOutFromTwoToEleven)
 	EXPECT_NEAR(step * 180.0f / std::numbers::pi_v<float>, 138.46f, 0.05f);
 	// One tree goes in the middle's ring at its start
 	EXPECT_NEAR(glm::length(forest::SpiralOffset(0, 1)), 2.0f, k_Epsilon);
+}
+
+TEST(ForestRules, TheSpiralFindsItsStepAndTurnOneTimeAndMultipliesTheSineAtFullWidth)
+{
+	// The place is the reciprocal step times the tree's number, and the turn for all trees times that
+	const auto first = forest::SpiralOffset(1, 18);
+	EXPECT_EQ(std::bit_cast<uint32_t>(first.x), 0xC0717FB8u);
+	EXPECT_EQ(std::bit_cast<uint32_t>(first.y), 0x4055F311u);
+	const auto eighth = forest::SpiralOffset(8, 18);
+	EXPECT_EQ(std::bit_cast<uint32_t>(eighth.x), 0x4108818Fu);
+	EXPECT_EQ(std::bit_cast<uint32_t>(eighth.y), 0x408F497Eu);
 }
 
 TEST(ForestRules, TreesFurtherOutGrowSmaller)

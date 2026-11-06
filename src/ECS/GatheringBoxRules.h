@@ -210,8 +210,29 @@ namespace host_report
 constexpr size_t k_ConditionCount = 15;
 /// The report has the values of the first four players
 constexpr size_t k_ReportedPlayers = 4;
-/// The bytes of the game at the start of the report
-constexpr size_t k_GameBytes = 64;
+/// The game has this many god teams, and a god team has at most this many humans
+constexpr size_t k_TeamCount = 4;
+constexpr size_t k_TeamMembers = 4;
+/// The report has the members of the first two god teams
+constexpr size_t k_ReportedTeams = 2;
+/// The bytes of the members of the reported teams at the start of the report
+constexpr size_t k_TeamBytes = k_ReportedTeams * k_TeamMembers * 8;
+/// The report keeps only the low 29 bits of the number of a member
+constexpr uint32_t k_MemberNumberMask = 0x1FFFFFFF;
+/// The mark of the report is 1 on this turn only
+constexpr uint32_t k_MarkTurn = 1;
+
+/// A human in a god team. An empty place has the number 0 and the clan 0.
+struct TeamMember
+{
+	/// The lasting number of the human
+	uint32_t number {0};
+	/// The clan of the team, 0 for no clan
+	uint32_t clan {0};
+};
+
+/// The members of each god team, by team and by place in the team. The game fills the table one time at the start.
+using TeamTable = std::array<std::array<TeamMember, k_TeamMembers>, k_TeamCount>;
 
 /// The state of a condition of the land for one player
 struct PlayerShare
@@ -230,19 +251,19 @@ struct Condition
 
 struct Facts
 {
-	std::array<uint8_t, k_GameBytes> game {};
+	TeamTable teams {};
+	/// The game turn when the host makes the report
+	uint32_t turn {0};
 	/// The game is decided
 	bool decided {false};
-	/// A value of the game is 1. Its meaning is not known.
-	bool valueIsOne {false};
 	/// The conditions that the land uses
 	std::array<std::optional<Condition>, k_ConditionCount> conditions {};
 };
 
 /// The bytes of the report, little endian:
-/// 1. The 64 bytes of the game.
-/// 2. A number that is 1 when the value of the game is 1, else 0. The game first writes 2 there for a decided game, and
-///    then writes over it (vanilla bug), so the report never shows a decided game.
+/// 1. For the first two god teams, for each place in the team: the number of the member (low 29 bits) and the clan.
+/// 2. A number that is 1 on the first game turn, else 0. The game first writes 2 there for a decided game, and then
+///    writes over it (vanilla bug), so the report never shows a decided game.
 /// 3. A number with a bit for each condition that the land uses, from the first condition up.
 /// 4. For each of these conditions: its aim, and for each of the first four players the aim when the player met the
 ///    condition, else the current value.

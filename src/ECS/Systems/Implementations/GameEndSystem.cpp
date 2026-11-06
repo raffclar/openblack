@@ -340,6 +340,20 @@ uint32_t GameEndSystem::GetTimeLimit() const
 	return game_end::k_DefaultTimeLimitMinutes;
 }
 
+std::vector<game_end::ConditionPick> GameEndSystem::GetConditions() const
+{
+	// The conditions of the game server, else those of the test switch of a tool's run
+	if (_conditions.has_value())
+	{
+		return *_conditions;
+	}
+	if (Locator::simulation::has_value())
+	{
+		return Locator::simulation::value().GetSettings().conditions;
+	}
+	return {};
+}
+
 void GameEndSystem::GiveConditions()
 {
 	auto& registry = Locator::entitiesRegistry::value();
@@ -348,16 +362,7 @@ void GameEndSystem::GiveConditions()
 	{
 		return;
 	}
-	// The conditions of the game server, else those of the test switch of a tool's run
-	std::vector<game_end::ConditionPick> picks;
-	if (_conditions.has_value())
-	{
-		picks = *_conditions;
-	}
-	else if (Locator::simulation::has_value())
-	{
-		picks = Locator::simulation::value().GetSettings().conditions;
-	}
+	const auto picks = GetConditions();
 	if (picks.empty())
 	{
 		return;

@@ -18,6 +18,7 @@
 #include <string>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 #include <spdlog/common.h>
 
@@ -113,6 +114,16 @@ struct ServerSettings
 	std::optional<std::string> scenario;
 	/// The network map for 32 gods in place of a land
 	bool godsRingMap {false};
+	/// A land of a network game from a file outside the game folder (--custom-map). The server plays it as the land
+	/// "Online Maps/<file>.map" and sends it to the lobby, so that the players get it.
+	struct CustomMapFile
+	{
+		/// The name of the file with no folder and no extension
+		std::string file;
+		/// The bytes of the ".map" file
+		std::vector<uint8_t> bytes;
+	};
+	std::optional<CustomMapFile> customMap;
 	/// Tools: the modes of the AI soak. Every client takes them from the start of the game.
 	developer_tools::SoakTools soak;
 	/// How the new game on the first land starts, as the game's --skip-opening gives it

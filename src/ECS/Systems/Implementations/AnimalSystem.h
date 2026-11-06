@@ -15,6 +15,9 @@
 #error "ECS System implementations should only be included in Locator.cpp"
 #endif
 
+#include <optional>
+
+#include "3D/MapCoords.h"
 #include "Animals/AnimalMove.h"
 #include "ECS/ClipSoundPlayer.h"
 #include "ECS/Components/Animal.h"
@@ -112,6 +115,9 @@ private:
 	void SetupMoveToFixed(components::Animal& animal, glm::ivec2 goal, float goalHeight, components::AnimalState finalState);
 	/// Off to a goal on the land that it walks to round what is in its way, into a final state once there
 	void SetupMoveRoundTo(entt::entity entity, components::Animal& animal, glm::vec2 goal, components::AnimalState finalState);
+	/// The same with a goal in 16.16 map units
+	void SetupMoveRoundToFixed(entt::entity entity, components::Animal& animal, glm::ivec2 goal,
+	                           components::AnimalState finalState);
 	/// The walk round what is in its way ends: it takes the walk's place and way, and the walk's parts go
 	static void EndWalkRound(entt::entity entity);
 	/// A turn's move towards its goal, climbing or sinking towards its goal's height: whether it arrived
@@ -196,6 +202,10 @@ private:
 	/// How the thing an animal flees moves, in metres a turn: an animal or a walker by its step, a thing in the physics by
 	/// its velocity
 	[[nodiscard]] glm::vec3 FledThingMovement(entt::entity thing) const;
+	/// The map position that an animal flees to from a thing, a step away, across the way of the thing when it moves. It
+	/// takes random numbers only for a thing that moves. A position off the map gives no place
+	[[nodiscard]] static std::optional<map_coords::MapCoords> FleePlace(entt::entity animal, entt::entity thing,
+	                                                                    glm::vec3 movement);
 
 	// The wild hunters
 	void HunterTurn(entt::entity entity, components::Animal& animal, components::Hunter& hunter);

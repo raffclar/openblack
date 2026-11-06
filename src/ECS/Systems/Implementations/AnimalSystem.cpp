@@ -708,15 +708,20 @@ void AnimalSystem::Banked(Animal& animal, const animals::Turn& turn)
 
 void AnimalSystem::SetupMoveRoundTo(entt::entity entity, Animal& animal, glm::vec2 goal, AnimalState finalState)
 {
+	SetupMoveRoundToFixed(entity, animal, Fixed(goal), finalState);
+}
+
+void AnimalSystem::SetupMoveRoundToFixed(entt::entity entity, Animal& animal, glm::ivec2 goal, AnimalState finalState)
+{
 	auto& registry = EntityRegistry();
 	// A bird flies over what is in its way
 	if (IsBird(animal.type) || !Locator::pathfindingSystem::has_value() || !registry.AllOf<Transform>(entity))
 	{
-		SetupMoveToFixed(animal, Fixed(goal), 0.0f, finalState);
+		SetupMoveToFixed(animal, goal, 0.0f, finalState);
 		return;
 	}
 	animal.goalHeight = 0.0f;
-	animal.move.goal = Fixed(goal);
+	animal.move.goal = goal;
 	// The walk goes from where it is, facing as it faces, at its speed, and turns as its kind turns
 	auto& walk = registry.AssignOrReplace<WallHug>(entity);
 	walk.goalPlace = animal.move.goal;
@@ -2285,6 +2290,22 @@ glm::vec3 AnimalSystem::FledThingMovement(entt::entity thing) const
 	return entry != nullptr && entry->body != nullptr ? entry->body->velocity : glm::vec3(0.0f);
 }
 
+std::optional<map_coords::MapCoords> AnimalSystem::FleePlace(entt::entity animal, entt::entity thing, glm::vec3 movement)
+{
+	const auto& registry = EntityRegistry();
+	std::optional<glm::vec2> random;
+	if (magic::Moves(movement))
+	{
+		const float x = Random(magic::k_FleeJitter);
+		const float z = Random(magic::k_FleeJitter);
+		random = glm::vec2(x, z);
+	}
+	const auto& island = Locator::terrainSystem::value();
+	const auto ground = [&island](const map_coords::MapCoords& place) { return map_coords::GroundAt(island, place); };
+	return magic::FleePlace(ecs::thing_map_place::Of(registry, animal), ecs::thing_map_place::Of(registry, thing), movement,
+	                        random, magic::k_FleeStep, ground);
+}
+
 void AnimalSystem::GiveUpReaction(entt::entity entity)
 {
 	if (Locator::reactionSystem::has_value())
@@ -2315,14 +2336,8 @@ void AnimalSystem::FleeFromPredator(entt::entity entity, Animal& animal)
 	}
 	// A step away from it, across its way when it moves
 	const auto movement = FledThingMovement(hunter);
-	auto to = magic::FleePointFromStill(here, at->position);
-	if (glm::length(movement) > 0.0f)
-	{
-		const float x = Random(magic::k_FleeJitter);
-		const float z = Random(magic::k_FleeJitter);
-		to = magic::FleePointFromMoving(here, at->position, movement, x, z);
-	}
-	if (!OnMap(Xz(to)))
+	const auto to = FleePlace(entity, hunter, movement);
+	if (!to.has_value())
 	{
 		return;
 	}
@@ -2337,7 +2352,7 @@ void AnimalSystem::FleeFromPredator(entt::entity entity, Animal& animal)
 	{
 		animal.move.speed = speed;
 	}
-	SetupMoveTo(animal, Xz(to), 0.0f, AnimalState::FleeingFromObject);
+	SetupMoveToFixed(animal, {to->x, to->z}, 0.0f, AnimalState::FleeingFromObject);
 	if (const auto logger = spdlog::get("game"); logger != nullptr)
 	{
 		SPDLOG_LOGGER_DEBUG(logger, "Predator: animal {} runs from hunter {}, {:.1f} m away", static_cast<uint32_t>(entity),
@@ -2603,14 +2618,7 @@ bool AnimalSystem::Flee(entt::entity entity, Animal& animal)
 	case living::FleeStep::Run:
 	{
 		// A step away across the land, across the thing's way when it moves, at its fleeing speed
-		auto to = magic::FleePointFromStill(here, at->position);
-		if (glm::length(velocity) > 0.0f)
-		{
-			const float x = Random(magic::k_FleeJitter);
-			const float z = Random(magic::k_FleeJitter);
-			to = magic::FleePointFromMoving(here, at->position, velocity, x, z);
-		}
-		if (OnMap(Xz(to)))
+		if (const auto to = FleePlace(entity, animal.reactingTo, velocity); to.has_value())
 		{
 			const auto clip = animal.animation;
 			const auto place = animal.clipPlace;
@@ -2618,7 +2626,7 @@ bool AnimalSystem::Flee(entt::entity entity, Animal& animal)
 			const auto& row = Locator::infoConstants::value().villagerStateTable.at(
 			    static_cast<size_t>(VillagerStates::FleeingFromObjectReaction));
 			animal.move.speed = SpeedStateOf(InfoOf(animal.type), std::min<size_t>(row.speedIndex, 5));
-			SetupMoveRoundTo(entity, animal, Xz(to), AnimalState::FleeingAndLookingAtObject);
+			SetupMoveRoundToFixed(entity, animal, {to->x, to->z}, AnimalState::FleeingAndLookingAtObject);
 			// A grazer runs in its moving clip at its fleeing speed; the other animals have no clip of their own for
 			// moving and keep the one they had
 			if (!animals::grazers::IsGrazer(animal.type))
