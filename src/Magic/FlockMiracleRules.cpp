@@ -15,6 +15,7 @@
 
 #include <glm/geometric.hpp>
 
+#include "3D/MapCoords.h"
 #include "Common/PortableMath.h"
 #include "Common/X87.h"
 #include "Common/X87Vector.h"
@@ -49,14 +50,26 @@ float flock::SpawnFraction(int created, float emittedBefore, float emittedAfter)
 	return span > 0.0f ? (static_cast<float>(created) - emittedBefore) / span : 1.0f;
 }
 
-glm::vec2 flock::SpawnPoint(glm::vec2 from, glm::vec2 to, float fraction)
+glm::ivec2 flock::SpawnPoint(glm::ivec2 from, glm::ivec2 to, float fraction)
 {
-	return from + ((to - from) * fraction);
+	const auto along = [fraction](int32_t start, int32_t end) {
+		// The difference wraps as an integer. Its product with the fraction rounds to a float, then to the nearest unit.
+		const auto difference = static_cast<int32_t>(static_cast<uint32_t>(end) - static_cast<uint32_t>(start));
+		const float part = x87::Mul(static_cast<double>(difference), fraction);
+		const auto units = static_cast<int32_t>(std::nearbyint(part));
+		return static_cast<int32_t>(static_cast<uint32_t>(start) + static_cast<uint32_t>(units));
+	};
+	return {along(from.x, to.x), along(from.y, to.y)};
 }
 
-glm::vec2 flock::Jitter(glm::vec2 point, float randomX, float randomZ)
+glm::ivec2 flock::Jitter(glm::ivec2 point, float randomX, float randomZ)
 {
-	return {point.x + randomX - k_SpawnJitter, point.y + randomZ - k_SpawnJitter};
+	const auto moved = [](int32_t units, float random) {
+		// The code subtracts the jitter from the random number, then adds the result to the metres
+		const float metres = map_coords::ToMetres(units) + (random - k_SpawnJitter);
+		return map_coords::ToFixedGUtils(metres);
+	};
+	return {moved(point.x, randomX), moved(point.y, randomZ)};
 }
 
 glm::vec2 flock::Direction(bool humanCaster, glm::vec3 cameraForward, glm::vec3 castPosition, glm::vec3 handPosition)

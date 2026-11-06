@@ -13,6 +13,7 @@
 
 #include <chrono>
 
+#include "3D/MapCoords.h"
 #include "Common/GUtilsAngle.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/FlockSpell.h"
@@ -86,6 +87,17 @@ glm::vec2 Xz(const glm::vec3& point)
 {
 	return {point.x, point.z};
 }
+
+// The sweep keeps the hand's place across the land in map units, each axis cut towards zero
+glm::ivec2 MapUnits(const glm::vec3& point)
+{
+	return {map_coords::ToFixed(point.x), map_coords::ToFixed(point.z)};
+}
+
+glm::vec2 Metres(glm::ivec2 units)
+{
+	return {map_coords::ToMetres(units.x), map_coords::ToMetres(units.y)};
+}
 } // namespace
 
 ParticleType FlockMiracle::ParticleTypeOf(const Spell& spell) const
@@ -107,7 +119,7 @@ void FlockMiracle::Start(SpellServicesInterface& services, Spell& spell)
 	auto& data = registry.AssignOrReplace<FlockSpell>(entity);
 	// The sweep starts where the hand is
 	const auto hand = spell.processInfo.handPosition;
-	data.lastSpawn = Xz(hand);
+	data.lastSpawn = MapUnits(hand);
 	data.lastSpawnHeight = hand.y - services.World().LandHeight(Xz(hand));
 	data.evil = !tables.ground && flock::IsEvil(AlignmentOf(spell.caster.player), tables.alignmentSwitch);
 	if (Locator::animalSystem::has_value())
@@ -229,7 +241,7 @@ void FlockMiracle::Emit(SpellServicesInterface& services, Spell& spell)
 	const auto from = data.lastSpawn;
 	const float fromHeight = data.lastSpawnHeight;
 	const auto hand = spell.processInfo.handPosition;
-	data.lastSpawn = Xz(hand);
+	data.lastSpawn = MapUnits(hand);
 	data.lastSpawnHeight = hand.y - world.LandHeight(Xz(hand));
 	const auto onMap = [&world](glm::vec2 point) { return world.InBounds({point.x, 0.0f, point.y}); };
 	const bool ignoreInfluence = Locator::magicSystem::has_value() && Locator::magicSystem::value().IsIgnoringInfluence();
@@ -242,11 +254,12 @@ void FlockMiracle::Emit(SpellServicesInterface& services, Spell& spell)
 		                  : flock::IsEvil(AlignmentOf(spell.caster.player), tables.alignmentSwitch) ? AnimalInfo::SpellBat
 		                                                                                            : AnimalInfo::SpellDove;
 		const float f = flock::SpawnFraction(data.created, before, data.emitted);
-		const auto spawn = flock::SpawnPoint(from, data.lastSpawn, f);
+		const auto spawnUnits = flock::SpawnPoint(from, data.lastSpawn, f);
+		const auto spawn = Metres(spawnUnits);
 		const float height = tables.ground ? 0.0f : fromHeight + ((data.lastSpawnHeight - fromHeight) * f);
 		const float jitterX = services.GameRandom(2.0f * flock::k_SpawnJitter);
 		const float jitterZ = services.GameRandom(2.0f * flock::k_SpawnJitter);
-		const auto created = flock::Jitter(spawn, jitterX, jitterZ);
+		const auto created = Metres(flock::Jitter(spawnUnits, jitterX, jitterZ));
 		// Off the map, or outside a human caster's influence, nothing appears
 		if (!onMap(created))
 		{
