@@ -14,7 +14,8 @@ uniform vec4 u_seaParams;
 // The screen rows (see sea_rows::Rows): x the first row's screen y, y how many, z one over the first row's view depth,
 // w its step from row to row
 uniform vec4 u_seaRows;
-// x: 1 for the still sea of the lowest detail level, y: 1 when the first row is nearly clear
+// x: 1 for the still sea of the lowest detail level, y: 1 when the first row is nearly clear, z: the part of the row's
+// sea that its texture covers (see sea_rows::RowTextureSpan)
 uniform vec4 u_seaMode;
 // xyz: the camera's position
 uniform vec4 u_seaCamera;
@@ -41,7 +42,8 @@ float ViewDepth(vec3 p)
 // Each row ripples by its own step of a 16 step sine, fully beyond a depth of 70 and fading out by a depth of 30.
 vec2 RowUv(float r, float px)
 {
-	vec3 p = PlanePoint(px, u_seaRows.x + 2.0f * r).xyz;
+	// The texture of a row is a little shorter than the row: column px takes the sea under column px x span
+	vec3 p = PlanePoint(px * u_seaMode.z, u_seaRows.x + 2.0f * r).xyz;
 	float inverseDepth = u_seaRows.z + r * u_seaRows.w;
 	float step = mod(u_seaParams.y + 2.0f * (r + 1.0f), 16.0f);
 	float s = sin(step * 3.14159265f / 8.0f);
