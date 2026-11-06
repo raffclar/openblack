@@ -52,22 +52,6 @@ float TurnAt(const RecordedPoint& a, const RecordedPoint& b, const RecordedPoint
 }
 } // namespace
 
-std::vector<float> openblack::gesture::SamplePoints(float& sinceSample, const input_steps::Steps& steps)
-{
-	std::vector<float> points;
-	for (uint32_t step = 0; step < steps.count; ++step)
-	{
-		sinceSample += input_steps::k_StepSeconds;
-		if (sinceSample < k_SampleSeconds)
-		{
-			continue;
-		}
-		sinceSample = 0.0f;
-		points.push_back(steps.Point(step));
-	}
-	return points;
-}
-
 float openblack::gesture::HeadingOf(glm::vec2 step)
 {
 	// The arctangent stays wide until it is stored or two pi is added to it, so it rounds to a float one time only

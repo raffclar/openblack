@@ -31,11 +31,11 @@
 namespace openblack::ecs::systems
 {
 
-/// The gestures the player draws with the hand. Once a frame the cursor is sampled into the hand's path, the gestures
-/// the hand is waiting for are worked out from what it holds and the player's creature's leash (see gesture::Requests),
-/// and the path is matched against them with the game's templates. A gesture for a miracle becomes a GestureEvent for
-/// the miracles to take; the leash gestures put the leash on, open the leash picker, change the leash and shake it off
-/// through the leash system.
+/// The gestures the player draws with the hand. Once a frame the places of the pointer go into the hand's path, the
+/// gestures the hand is waiting for are worked out from what it holds and the player's creature's leash (see
+/// gesture::Requests), and the path is matched against them with the game's templates. A gesture for a miracle becomes
+/// a GestureEvent for the miracles to take; the leash gestures put the leash on, open the leash picker, change the
+/// leash and shake it off through the leash system.
 class GestureSystemInterface: public GestureEventsInterface
 {
 public:
@@ -63,10 +63,9 @@ public:
 	struct Frame
 	{
 		float seconds {0.0f};
-		/// The steps of the input that the frame takes. The cursor is sampled at these steps.
-		input_steps::Steps steps {input_steps::Steps::One()};
-		/// The cursor, in pixels from the top left
-		glm::vec2 cursor {0.0f};
+		/// The places of the pointer that the interface got in this frame, in pixels from the top left, in the sequence
+		/// that they came. The path takes a sample at each place.
+		std::vector<glm::vec2> places;
 		/// Whether the hand is drawing over the world: not over a debug window, in the temple or in a cut scene. The path
 		/// is forgotten while it isn't.
 		bool overWorld {true};
@@ -103,9 +102,10 @@ public:
 	virtual void Update(const Frame& frame) = 0;
 	/// Loads the game's gesture templates, if they are not loaded. The first update also loads them.
 	virtual void LoadTemplates() {}
-	/// A path drawn as if by the hand, for the testbed: the points, on the screen the path is measured on (768 pixels
-	/// high), are taken one a sample in place of the cursor's, as quickly as a hand would draw them, with the Action
-	/// button held throughout or not
+	/// A path drawn as if by the hand, for the testbed: the points are on the screen that the path uses (768 pixels
+	/// high). Each sample takes the next point in place of the place of the pointer, with the Action button held
+	/// throughout or not. The hand that draws the path moves the mouse, so the places come as quickly as the mouse
+	/// sends them.
 	virtual void DrawPath(std::vector<glm::vec2> path, bool holdingAction) = 0;
 	/// Whether a path given to DrawPath is still being drawn
 	[[nodiscard]] virtual bool IsDrawingPath() const = 0;

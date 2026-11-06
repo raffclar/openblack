@@ -158,6 +158,12 @@ public:
 	/// The movements of the mouse that the help counts in this frame. Each call takes them, so the next call gives the
 	/// ones that came after it.
 	[[nodiscard]] virtual uint32_t TakeMouseMoves() { return 0; }
+	/// The places of the pointer that the interface got with the last call of TakeMouseMoves, in window pixels, in the
+	/// sequence that they came. The gestures take a sample at each of these places.
+	[[nodiscard]] virtual std::span<const glm::ivec2> GetMousePlaces() const { return {}; }
+	/// A message of the mouse from a path that the testbed draws as if with the hand, at the place in window pixels. The
+	/// message comes at the time of the clock that the help reads, as a message of the player's mouse does.
+	virtual void DrawnMouseMessage(glm::ivec2 /*position*/) {}
 	/// Mouse wheel notches turned this frame, positive away from the user
 	[[nodiscard]] virtual float GetMouseWheelDelta() const = 0;
 	[[nodiscard]] virtual std::array<std::optional<glm::vec3>, 2> GetHandPositions() const = 0;
