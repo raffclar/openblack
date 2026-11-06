@@ -57,6 +57,24 @@ using ecs::components::MapCellResident;
 using ecs::components::Transform;
 using MeshComponent = ecs::components::Mesh;
 
+/// The stores are found on the game's thread. The registry keeps its stores in a list that grows when the registry gets
+/// the first component of a kind. Thus a side thread must not look in that list while the game's thread can add to it.
+/// A store stays at the same place while the registry exists, thus the side thread can read the stores found before.
+struct LandShadowBake::WatchedStores
+{
+	explicit WatchedStores(const ecs::Registry& registry)
+	    : transforms(registry.Underlying().storage<Transform>())
+	    , meshes(registry.Underlying().storage<MeshComponent>())
+	    , residents(registry.Underlying().storage<MapCellResident>())
+	    , shadows(registry)
+	{
+	}
+	const entt::storage_for_t<Transform>* transforms;
+	const entt::storage_for_t<MeshComponent>* meshes;
+	const entt::storage_for_t<MapCellResident>* residents;
+	ecs::LandShadowLookup shadows;
+};
+
 namespace
 {
 
@@ -467,7 +485,7 @@ void LandShadowBake::Update(bool rowsFromFarEnd, Casters casters)
 	const auto castersVersion = ecs::LandShadowCastersVersion(Locator::entitiesRegistry::value());
 	const auto meshCount = Locator::resources::value().GetMeshes().Size();
 	if (!_bakeAll && _dirty.empty() && _castersVersion == castersVersion && _meshCount == meshCount &&
-	    (testedAhead.has_value() ? *testedAhead : WatchedUnchanged(registry)))
+	    (testedAhead.has_value() ? *testedAhead : WatchedUnchanged(WatchedStores(registry))))
 	{
 		return;
 	}
@@ -691,18 +709,16 @@ void LandShadowBake::Update(bool rowsFromFarEnd, Casters casters)
 	_bake = std::async(std::launch::async, [job = std::move(job)] { return Bake(job); });
 }
 
-bool LandShadowBake::WatchedUnchanged(const ecs::Registry& registry) const
+bool LandShadowBake::WatchedUnchanged(const WatchedStores& stores) const
 {
-	// Find the component pools one time, not for each thing
-	const auto& pools = registry.Underlying();
-	const auto* transforms = pools.storage<Transform>();
-	const auto* meshes = pools.storage<MeshComponent>();
-	const auto* residents = pools.storage<MapCellResident>();
+	const auto* transforms = stores.transforms;
+	const auto* meshes = stores.meshes;
+	const auto* residents = stores.residents;
 	if (transforms == nullptr || meshes == nullptr || residents == nullptr)
 	{
 		return _watched.empty();
 	}
-	const ecs::LandShadowLookup shadows(registry);
+	const auto& shadows = stores.shadows;
 	return std::ranges::all_of(_watched, [&shadows, transforms, meshes, residents](const Watched& thing) {
 		if (thing.shadowChangesInPlace && shadows.Of(thing.entity) != thing.shadow)
 		{
@@ -740,7 +756,8 @@ void LandShadowBake::StartWatchedTest()
 		_watchedTest = std::make_unique<SideThread>();
 	}
 	_watchedTestStarted = true;
-	_watchedTest->Start([this, &registry = std::as_const(registry)] { _watchedAnswer = WatchedUnchanged(registry); });
+	// The side thread reads only the stores that this thread finds now
+	_watchedTest->Start([this, stores = WatchedStores(std::as_const(registry))] { _watchedAnswer = WatchedUnchanged(stores); });
 }
 
 void LandShadowBake::ForgetWatchedTest()

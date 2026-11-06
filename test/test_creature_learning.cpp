@@ -8,6 +8,7 @@
  *******************************************************************************/
 
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
 
 #include <algorithm>
@@ -676,24 +677,100 @@ TEST(CreaturePlanner, OpinionBreaksTies)
 	EXPECT_EQ(creature_planner::PlanDesire({.desire = Desire::Rest, .strength = 0.5f, .actions = actions})->action, 1u);
 }
 
-TEST(CreaturePlanner, GoesRoundTheEligibleDesires)
+TEST(CreaturePlanner, TheRoundHoldsEveryDesireThatIsOnAndNotHeldBack)
+{
+	auto desires = TwoDesires();
+	// A desire at 0 takes its turn too
+	desires[Desire::Hunger].value = 0.0f;
+	desires[Desire::Rest].activated = true;
+	desires[Desire::Rest].suppressedTurns = 3;
+	const auto round = creature_planner::RoundOf(desires);
+	EXPECT_EQ(std::ranges::count(round, true), 2);
+	EXPECT_TRUE(round.at(static_cast<size_t>(Desire::Hunger)));
+	EXPECT_TRUE(round.at(static_cast<size_t>(Desire::Anger)));
+	EXPECT_FALSE(round.at(static_cast<size_t>(Desire::Rest)));
+	// When every desire is on, the desires that are held back still wait
+	desires.everyDesireActivated = true;
+	const auto everyDesire = creature_planner::RoundOf(desires);
+	EXPECT_EQ(std::ranges::count(everyDesire, true), static_cast<std::ptrdiff_t>(creature_desires::k_DesireCount - 1));
+	EXPECT_FALSE(everyDesire.at(static_cast<size_t>(Desire::Rest)));
+}
+
+TEST(CreaturePlanner, GoesRoundTheDesiresOfTheRoundUntilItEnds)
 {
 	creature_planner::PlannerState state;
-	std::array<bool, creature_desires::k_DesireCount> eligible {};
-	eligible.at(static_cast<size_t>(Desire::Hunger)) = true;
-	eligible.at(static_cast<size_t>(Desire::Tiredness)) = true;
-	eligible.at(static_cast<size_t>(Desire::Rest)) = true;
-	const auto first = creature_planner::NextGoals(state, eligible);
+	EXPECT_TRUE(creature_planner::RoundEnded(state));
+	EXPECT_TRUE(creature_planner::NextGoals(state).empty());
+	state.round.at(static_cast<size_t>(Desire::Hunger)) = true;
+	state.round.at(static_cast<size_t>(Desire::Tiredness)) = true;
+	state.round.at(static_cast<size_t>(Desire::Rest)) = true;
+	ASSERT_LT(static_cast<size_t>(Desire::Hunger), static_cast<size_t>(Desire::Tiredness));
+	ASSERT_LT(static_cast<size_t>(Desire::Tiredness), static_cast<size_t>(Desire::Rest));
+	const auto first = creature_planner::NextGoals(state);
 	ASSERT_EQ(first.size(), 2u);
 	EXPECT_EQ(first[0], Desire::Hunger);
 	EXPECT_EQ(first[1], Desire::Tiredness);
-	const auto second = creature_planner::NextGoals(state, eligible);
+	EXPECT_FALSE(creature_planner::RoundEnded(state));
+	// The round ends before the second goal of the turn: it does not start again in the same turn
+	const auto second = creature_planner::NextGoals(state);
+	ASSERT_EQ(second.size(), 1u);
 	EXPECT_EQ(second[0], Desire::Rest);
-	EXPECT_EQ(second[1], Desire::Hunger);
+	EXPECT_TRUE(creature_planner::RoundEnded(state));
+	EXPECT_TRUE(creature_planner::NextGoals(state).empty());
 	// With three or more creatures in the world each plans one desire a turn
-	const auto third = creature_planner::NextGoals(state, eligible, creature_planner::GoalsPerTurn(3));
+	state.round.at(static_cast<size_t>(Desire::Hunger)) = true;
+	state.round.at(static_cast<size_t>(Desire::Rest)) = true;
+	const auto third = creature_planner::NextGoals(state, creature_planner::GoalsPerTurn(3));
 	ASSERT_EQ(third.size(), 1u);
-	EXPECT_EQ(third[0], Desire::Tiredness);
+	EXPECT_EQ(third[0], Desire::Hunger);
+}
+
+TEST(CreaturePlanner, APlanThatUsesAThingThatIsGoneIsRemoved)
+{
+	creature_planner::PlannerState state;
+	constexpr uint32_t k_Gone = 7;
+	state.best.at(static_cast<size_t>(Desire::Hunger)) = creature_planner::Plan {.desire = Desire::Hunger, .object = k_Gone};
+	state.best.at(static_cast<size_t>(Desire::Anger)) =
+	    creature_planner::Plan {.desire = Desire::Anger, .object = 2, .about = k_Gone};
+	state.best.at(static_cast<size_t>(Desire::Compassion)) =
+	    creature_planner::Plan {.desire = Desire::Compassion, .object = 2, .instrument = k_Gone};
+	state.best.at(static_cast<size_t>(Desire::Rest)) = creature_planner::Plan {.desire = Desire::Rest, .object = 2};
+	const auto gone = [](uint32_t thing) { return thing == k_Gone; };
+	EXPECT_TRUE(creature_planner::DropPlansOfGoneThings(state, gone));
+	EXPECT_EQ(std::ranges::count_if(state.best, [](const auto& plan) { return plan.has_value(); }), 1);
+	EXPECT_TRUE(state.best.at(static_cast<size_t>(Desire::Rest)).has_value());
+	EXPECT_FALSE(creature_planner::DropPlansOfGoneThings(state, gone));
+}
+
+TEST(CreaturePlanner, SomeDesiresPlanOnlyInTheirOwnState)
+{
+	using creature_planner::DesireMayPlan;
+	const creature_planner::DesireState calm {.turnsPerSecond = 10, .homeDistance = 10.0f};
+	// A desire with no condition of its own always plans
+	EXPECT_TRUE(DesireMayPlan(Desire::Hunger, calm));
+	EXPECT_TRUE(DesireMayPlan(Desire::Rest, calm));
+	// The player must not look at it for more than two minutes
+	EXPECT_FALSE(DesireMayPlan(Desire::AttractAttention, {.turnsIgnored = 1200, .turnsPerSecond = 10}));
+	EXPECT_TRUE(DesireMayPlan(Desire::AttractAttention, {.turnsIgnored = 1201, .turnsPerSecond = 10}));
+	// It gets warmer only when cold enough, and colder only when hot enough
+	EXPECT_FALSE(DesireMayPlan(Desire::GetWarmer, {.warmth = -0.29f}));
+	EXPECT_TRUE(DesireMayPlan(Desire::GetWarmer, {.warmth = -0.3f}));
+	EXPECT_FALSE(DesireMayPlan(Desire::GetColder, {.warmth = 0.29f}));
+	EXPECT_TRUE(DesireMayPlan(Desire::GetColder, {.warmth = 0.3f}));
+	// It runs from the player only when it does not like the player
+	EXPECT_FALSE(DesireMayPlan(Desire::RunAwayFromPlayer, {.attitudeToPlayer = 0.0f}));
+	EXPECT_TRUE(DesireMayPlan(Desire::RunAwayFromPlayer, {.attitudeToPlayer = -0.01f}));
+	// It hangs around at home only near its home
+	EXPECT_TRUE(DesireMayPlan(Desire::HangAroundAtHome, {.homeDistance = 59.9f}));
+	EXPECT_FALSE(DesireMayPlan(Desire::HangAroundAtHome, {.homeDistance = 60.0f}));
+	EXPECT_FALSE(DesireMayPlan(Desire::HangAroundAtHome, {}));
+	// It follows the player only after it started to copy a deed
+	EXPECT_FALSE(DesireMayPlan(Desire::FollowPlayerDesire, {}));
+	EXPECT_TRUE(DesireMayPlan(Desire::FollowPlayerDesire, {.sawDeed = true}));
+	// It explores when young, or when not too exhausted
+	EXPECT_TRUE(DesireMayPlan(Desire::Wanderlust, {.phase = 5, .exhaustion = 1.0f}));
+	EXPECT_FALSE(DesireMayPlan(Desire::Wanderlust, {.phase = 6, .exhaustion = 0.8f}));
+	EXPECT_TRUE(DesireMayPlan(Desire::Wanderlust, {.phase = 6, .exhaustion = 0.79f}));
 }
 
 TEST(CreaturePlanner, FewerGoalsWithMoreCreatures)
@@ -717,17 +794,21 @@ TEST(CreaturePlanner, AnyPlanWorthMoreThanNothingIsChosen)
 	EXPECT_FALSE(creature_planner::Choose(state).has_value());
 }
 
-// A plan that a script stopped has no steps and priority 0: the same plan can start again from its first step
-TEST(CreaturePlanner, APlanWithNoStepsCanStartAgain)
+// The plan carried out starts again when its new plan is more than two times as pressing, as any other plan does. A
+// plan that a script stopped has no steps and priority 0, so it can start again from its first step.
+TEST(CreaturePlanner, TheSamePlanStartsAgainWhenPressingEnough)
 {
 	creature_planner::PlannerState state;
 	const auto idle = creature_planner::Plan {.desire = Desire::IdleWithPlayer, .action = 3, .priority = 0.5f};
 	state.best.at(static_cast<size_t>(Desire::IdleWithPlayer)) = idle;
 	state.current = idle;
 	EXPECT_FALSE(creature_planner::Choose(state).has_value());
+	state.best.at(static_cast<size_t>(Desire::IdleWithPlayer))->priority = 1.1f;
+	const auto again = creature_planner::Choose(state);
+	ASSERT_TRUE(again.has_value());
+	EXPECT_EQ(again->action, 3u);
+	state.best.at(static_cast<size_t>(Desire::IdleWithPlayer))->priority = 0.5f;
 	state.current->priority = 0.0f;
-	EXPECT_FALSE(creature_planner::Choose(state).has_value());
-	state.currentHasNoSteps = true;
 	const auto chosen = creature_planner::Choose(state);
 	ASSERT_TRUE(chosen.has_value());
 	EXPECT_EQ(chosen->action, 3u);
@@ -1332,6 +1413,17 @@ TEST(CreatureWatching, AStrokeWhileCopyingStartsTheActionCopyAgain)
 	EXPECT_EQ(mimicry->done, 0u);
 	EXPECT_EQ(mimicry->limit, 2u);
 	EXPECT_EQ(mimicry->stageStart, 30u);
+}
+
+TEST(CreatureWatching, ASlapStopsTheCopy)
+{
+	std::optional<creature_watching::Mimicry> mimicry = creature_watching::Mimicry {
+	    .rule = 0, .stage = creature_watching::MimicStage::CopyAction, .done = 1, .limit = 2, .stageStart = 30};
+	creature_watching::SlappedWhileMimicking(mimicry);
+	EXPECT_FALSE(mimicry.has_value());
+	// A slap when it does not copy changes nothing
+	creature_watching::SlappedWhileMimicking(mimicry);
+	EXPECT_FALSE(mimicry.has_value());
 }
 
 TEST(CreatureWatching, MimicChanceIsARankNotARoll)

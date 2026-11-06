@@ -100,6 +100,7 @@
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "ECS/TownAreaRules.h"
 #include "ECS/TownDesire.h"
+#include "ECS/TownPlanning.h"
 #include "ECS/VillageTotem.h"
 #include "ECS/WorldObjects.h"
 #include "FileSystem/FileSystemInterface.h"
@@ -521,7 +522,25 @@ void FeatureScriptCommands::CreateTownCentre(int32_t townId, glm::vec3 position,
 	{
 		return; // the game has no check (see GAbodeInfo::Find)
 	}
-	const auto centre = AbodeArchetype::Create(townId, position, type, rotation * 0.001f, size * 0.001f,
+	// The centre goes to the town with the number, or else to the nearest town. It goes up only where it fits in that
+	// town, as a new house does. Where it does not fit, the script makes nothing and keeps the last thing made.
+	auto town = TownWithId(townId);
+	if (town == entt::null)
+	{
+		town = NearestTownAnywhere(position);
+	}
+	if (town == entt::null)
+	{
+		return;
+	}
+	if (!ecs::town_planning::FitsInTown(town, type, position, rotation * 0.001f, size * 0.001f))
+	{
+		SPDLOG_LOGGER_WARN(spdlog::get("scripting"), "LHScriptX: CREATE_TOWN_CENTRE: no room for the centre at {}",
+		                   glm::to_string(position));
+		return;
+	}
+	const auto townNumber = Locator::entitiesRegistry::value().Get<const Town>(town).id;
+	const auto centre = AbodeArchetype::Create(townNumber, position, type, rotation * 0.001f, size * 0.001f,
 	                                           static_cast<uint32_t>(0), static_cast<uint32_t>(0));
 	LastObject() = centre;
 	if (centre == entt::null || !Locator::villageTotemSystem::has_value())
@@ -529,12 +548,7 @@ void FeatureScriptCommands::CreateTownCentre(int32_t townId, glm::vec3 position,
 		return;
 	}
 	// The script then sets the town's worship share, in thousandths. A town with no worship site keeps a share of 0.
-	auto& registry = Locator::entitiesRegistry::value();
-	const auto& towns = registry.Context().towns;
-	if (const auto town = towns.find(registry.Get<const Abode>(centre).townId); town != towns.end())
-	{
-		Locator::villageTotemSystem::value().SetTownShare(town->second, ecs::village_totem::ShareFromScript(worshipPercentage));
-	}
+	Locator::villageTotemSystem::value().SetTownShare(town, ecs::village_totem::ShareFromScript(worshipPercentage));
 }
 
 void FeatureScriptCommands::CreateTownSpell(int32_t townId, const std::string& spellName)
@@ -666,14 +680,27 @@ void FeatureScriptCommands::CreateVillagerAtHome(const map_coords::MapCoords& ho
 }
 
 void FeatureScriptCommands::CreateCitadel(glm::vec3 position, int32_t, const std::string& playerOwner, int32_t rotation,
-                                          int32_t size)
+                                          int32_t /*size*/)
 {
-	LastObject() = CitadelArchetype::Create(position, GetPlayerName(playerOwner), GetYAngle(rotation), GetSize(size));
+	// The temple goes up only where the model of its heart fits, not turned and at its full size. Where it does not fit,
+	// the script makes nothing. The temple always has its full size: the game does not use the size of the line.
+	if (!ecs::town_planning::FitsAsFixed(position, Locator::infoConstants::value().citadelHeart.meshType, 0.0f, 1.0f))
+	{
+		SPDLOG_LOGGER_WARN(spdlog::get("scripting"), "LHScriptX: CREATE_CITADEL: no room for the temple at {}",
+		                   glm::to_string(position));
+		return;
+	}
+	LastObject() = CitadelArchetype::Create(position, GetPlayerName(playerOwner), GetYAngle(rotation), glm::vec3(1.0f));
 }
 
 void FeatureScriptCommands::CreatePlannedCitadel(int32_t townId, glm::vec3 position, int32_t, const std::string& playerOwner,
                                                  int32_t rotation, int32_t size)
 {
+	// A temple is planned only for the town with the number. With no such town, the script makes nothing.
+	if (TownWithId(townId) == entt::null)
+	{
+		return;
+	}
 	LastObject() =
 	    CitadelArchetype::CreatePlan(townId, position, GetPlayerName(playerOwner), GetYAngle(rotation), GetSize(size));
 }

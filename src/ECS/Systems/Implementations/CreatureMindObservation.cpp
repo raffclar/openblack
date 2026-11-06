@@ -841,11 +841,16 @@ void CreatureMindSystem::NoticeDeed(size_t deed, const glm::vec3& point, std::op
 		                                                    map_coords::Cell(from) == map_coords::Cell(to));
 		const bool nearEnough = creature_watching::WithinCopyReach(gutils::GetDistanceInMetres(to, from),
 		                                                           creature_object_beliefs::SweepCells(ShownSize(creature)));
+		const auto* leashes = registry.TryGet<const CreatureLeash>(entity);
 		const creature_watching::MimicConditions conditions {
 		    .phase = mind.developmentPhase,
 		    .learningLeashInHand = mind.leash.learningInHand,
 		    .reactionPriority = ReactionPriorityOf(registry, entity),
 		    .canSee = inView && nearEnough,
+		    .heldByHand = Locator::creatureHandSystem::has_value() && Locator::creatureHandSystem::value().IsLocked(entity),
+		    .leashWorks = leashes == nullptr || !leashes->worn.has_value() || leashes->worn->works,
+		    .humanPlayer =
+		        !Locator::playerSystem::has_value() || !Locator::playerSystem::value().IsComputerPlayer(creature.owner),
 		};
 		if (creature_watching::MayStartMimicry(mind.learnt->mimicry, deed, tables->mimics, conditions))
 		{

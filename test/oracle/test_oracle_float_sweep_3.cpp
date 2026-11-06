@@ -23,6 +23,7 @@
 #include "Animals/Zoomer.h"
 #include "Audio/AtmosAudio.h"
 #include "Audio/SoundMap.h"
+#include "ECS/Systems/AlignmentSystemInterface.h"
 #include "OracleData.h"
 #include "Sound/LipSync.h"
 
@@ -186,7 +187,7 @@ TEST(OracleFloatSweep3, TheAmbienceAlignmentIsTheGameValue)
 	Differences differences;
 	for (size_t row = 0; row < pinned.table->Rows(); ++row)
 	{
-		const auto ours = audio::AtmosAudio::CalculateAlignmentValue(pinned.Float(row, 0));
+		const auto ours = ecs::systems::alignment::AudioAlignment(ecs::systems::alignment::LandValue(pinned.Float(row, 0)));
 		if (std::bit_cast<uint32_t>(ours) != pinned.Bits(row, 2))
 		{
 			differences.Add("alignment " + oracle::Hex(pinned.Float(row, 0)) + ": the game gives " +

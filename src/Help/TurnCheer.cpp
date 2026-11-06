@@ -20,9 +20,9 @@ float SmoothSpeed(float speed, float turned, float seconds)
 	return speed + (frameSpeed - speed) * k_SpeedSmoothing;
 }
 
-void Start(Cheering& cheering)
+void Start(Cheering& cheering, Watch watch)
 {
-	cheering = {.on = true, .lastCheerTurn = 0, .lastBestPraiseTurn = 0};
+	cheering = {.on = true, .watch = watch, .lastCheerTurn = 0, .lastBestPraiseTurn = 0};
 }
 
 void Stop(Cheering& cheering)
@@ -38,7 +38,7 @@ std::optional<int32_t> ProcessTurn(Cheering& cheering, float speed, uint32_t gam
 	}
 	// The share of full speed, kept to -1..1: anything that isn't at least -1 (a speed that isn't a number too) counts as
 	// -1, so as flat out
-	float share = speed / k_FullSpeed;
+	float share = speed / FullSpeedOf(cheering.watch);
 	if (!(share >= -1.0f))
 	{
 		share = -1.0f;

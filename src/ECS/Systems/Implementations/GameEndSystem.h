@@ -40,6 +40,7 @@ public:
 	void SetTimeLimit(uint32_t minutes) override { _timeLimitMinutes = minutes; }
 	[[nodiscard]] uint32_t GetTimeLimit() const override;
 	void SetConditions(std::vector<game_end::ConditionPick> picks) override { _conditions = std::move(picks); }
+	[[nodiscard]] std::vector<game_end::ConditionPick> GetConditions() const override;
 	void GiveConditions() override;
 	void AddToCondition(std::optional<PlayerNames> player, game_end::Condition condition, int32_t amount) override;
 	void MeasureConditions(PlayerNames player) override;

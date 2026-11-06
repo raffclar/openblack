@@ -105,7 +105,7 @@ uint32_t OfferToTownDesires(components::LivingAction& action);
 uint32_t CheckNeededForSpecial(components::LivingAction& action);
 /// A spot just outside the villager's home, none without a home
 [[nodiscard]] std::optional<glm::vec2> PosOutsideAbode(entt::entity villager);
-/// Whether a point is somewhere a villager can't stand or lie: off the map's edge, in water or in something fixed
+/// Whether a spot in the open is closed to a villager: off the map, or in water or on no land. Buildings do not close it.
 [[nodiscard]] bool Collides(glm::vec2 point);
 /// What a villager with nothing to do does: goes home, sits outside it, or sits about its town
 uint32_t SetupNothingToDo(components::LivingAction& action);

@@ -8,8 +8,10 @@
  *******************************************************************************/
 
 #include <cmath>
+#include <cstdint>
 
 #include <array>
+#include <bit>
 #include <optional>
 #include <utility>
 #include <vector>
@@ -180,6 +182,30 @@ TEST(DustPuff, FifteenSpritesFlyUpAndOutGrowingAndFadingOverASecondAndAHalf)
 	EXPECT_NEAR(look[0].halfWidth, 1.0f, k_Epsilon);
 	EXPECT_NEAR(look[0].alpha, 0.5f / 0.7f * 255.0f, 0.01f);
 	EXPECT_FALSE(dust_puff::Advance(puff, 0.76f));
+}
+
+TEST(DustPuff, ItsSpeedAddsTheSquaresOfTheWayOutFromZToX)
+{
+	// Each sprite draws its place (z, y, x), its roll, then its way out (z, x); the way up is its size
+	const float outZ = std::bit_cast<float>(0xBEBC8B87u);
+	const float outX = std::bit_cast<float>(0x3F4C8084u);
+	int draw = 0;
+	const auto puff = dust_puff::Make({0.0f, 0.0f, 0.0f}, 1.0f, [&draw, outZ, outX](float, float) {
+		const int which = draw++ % 6;
+		return which == 4 ? outZ : which == 5 ? outX : 0.0f;
+	});
+	// The speed is 1.5 m a second, and the length adds the squares as (z^2 + y^2) + x^2. The order from x to z
+	// gives each part one bit lower.
+	EXPECT_EQ(std::bit_cast<uint32_t>(puff.velocities[0].x), 0x3F665370u);
+	EXPECT_EQ(std::bit_cast<uint32_t>(puff.velocities[0].y), 0x3F9029D9u);
+	EXPECT_EQ(std::bit_cast<uint32_t>(puff.velocities[0].z), 0xBED45A9Cu);
+}
+
+TEST(DustPuff, ItStepsByTheMillisecondsTimesAThousandth)
+{
+	// Ten milliseconds times 0.001 is one bit over a hundredth
+	EXPECT_EQ(std::bit_cast<uint32_t>(dust_puff::StepSeconds(10)), std::bit_cast<uint32_t>(10.0f * 0.001f));
+	EXPECT_NE(std::bit_cast<uint32_t>(dust_puff::StepSeconds(10)), std::bit_cast<uint32_t>(10.0f / 1000.0f));
 }
 
 TEST(DustPuff, ABodysGreySmokeDriftsOffFaintlyOverThreeSeconds)

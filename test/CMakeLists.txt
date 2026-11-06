@@ -857,6 +857,7 @@ openblack_setup_and_add_test(test_creche_rules test_creche_rules.cpp)
 openblack_setup_and_add_test(test_disciple_work test_disciple_work.cpp)
 openblack_setup_and_add_test(test_disciple_symbol test_disciple_symbol.cpp)
 openblack_setup_and_add_test(test_script_weather test_script_weather.cpp)
+openblack_setup_and_add_test(test_climate_rules test_climate_rules.cpp)
 openblack_setup_and_add_test(test_challenge_records test_challenge_records.cpp)
 target_link_libraries(test_challenge_records PRIVATE ScriptLibrary)
 openblack_setup_and_add_test(
@@ -1184,6 +1185,7 @@ openblack_setup_and_add_test(
 )
 target_link_libraries(test_l3d_effect_points PRIVATE l3d)
 openblack_setup_and_add_test(test_effect_receivers test_effect_receivers.cpp)
+openblack_setup_and_add_test(test_field_burn test_field_burn.cpp)
 openblack_setup_and_add_test(
   test_computer_player_start test_computer_player_start.cpp
 )
@@ -2393,3 +2395,29 @@ openblack_setup_and_add_test(test_own_reports test_own_reports.cpp)
 openblack_setup_and_add_test(test_pointer_buttons input/test_pointer_buttons.cpp)
 openblack_setup_and_add_test(test_hand_press hand/test_hand_press.cpp)
 openblack_setup_and_add_test(test_tool_run test_tool_run.cpp)
+openblack_setup_and_add_test(test_lobby_host_report online/test_lobby_host_report.cpp)
+openblack_setup_and_add_test(
+  test_oracle_physics_step oracle/test_oracle_physics_step.cpp
+)
+set_tests_properties(
+  test_oracle_physics_step
+  PROPERTIES ENVIRONMENT
+             "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)
+openblack_setup_and_add_test(
+  test_oracle_physics_touch oracle/test_oracle_physics_touch.cpp
+)
+set_tests_properties(
+  test_oracle_physics_touch
+  PROPERTIES ENVIRONMENT
+             "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)
+openblack_setup_and_add_test(
+  test_oracle_alignment_store oracle/test_oracle_alignment_store.cpp
+)
+set_tests_properties(
+  test_oracle_alignment_store
+  PROPERTIES ENVIRONMENT
+             "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)
+openblack_setup_and_add_test(test_temple_keys test_temple_keys.cpp)

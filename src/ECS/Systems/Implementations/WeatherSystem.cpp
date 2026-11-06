@@ -22,11 +22,12 @@
 #include "3D/LandIslandInterface.h"
 #include "3D/Lightning.h"
 #include "Camera/Camera.h"
+#include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
 #include "Common/MachineClock.h"
-#include "Common/PortableMath.h"
 #include "Common/RandomNumberManager.h"
 #include "Common/X87.h"
+#include "ECS/ClimateRules.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Reflection/BinaryArchive.h"
@@ -52,17 +53,8 @@ using components::WeatherThing;
 namespace
 {
 // The calendar: a game year is 36000 turns and the calendar starts on 5 May 1998 at 18:05:30
-constexpr float k_TurnsPerYear = 36000.0f;
 constexpr float k_DaysInYear = 365.25f;
-constexpr float k_SecondsInDay = 86400.0f;
-constexpr int32_t k_StartYear = 1998;
-constexpr int32_t k_StartMonth = 5;
-constexpr int32_t k_StartDay = 5;
-constexpr int32_t k_StartHour = 18;
-constexpr int32_t k_StartMinute = 5;
-constexpr int32_t k_StartSecond = 30;
-/// First day of the year after each month
-constexpr std::array<uint16_t, 12> k_MonthEnds = {31, 59, 90, 120, 151, 181, 212, 243, 273, 303, 333, 364};
+using climate_rules::k_MonthEnds;
 /// First day of the year after winter, spring, summer and autumn
 constexpr std::array<uint16_t, 4> k_SeasonStarts = {79, 171, 263, 354};
 
@@ -91,7 +83,6 @@ constexpr std::array<float, 5> k_StormLightning = {1.0f, 5.0f, 60.0f, 5.0f, 60.0
 /// The game keeps this factor as a double
 constexpr double k_RainDesireRandom = 0.02;
 constexpr float k_TemperatureStep = 0.1f;
-constexpr float k_WindSpread = 5.0f;
 constexpr float k_StormDrift = 0.01f;
 constexpr uint32_t k_MinStormRadius = 160;
 constexpr uint32_t k_MaxStormRadius = 900;
@@ -243,9 +234,10 @@ void ApplyStorm(const Storm& storm, const glm::vec3& point, WeatherInfo& info)
 	info.windZ = add(info.windZ, storm.effect.windZ);
 }
 
+/// The distance along the ground from a to b, as every climate measures it: the heights are not part of it
 float Distance(const glm::vec3& a, const glm::vec3& b)
 {
-	return glm::distance(a, b);
+	return gutils::GetDistance(a, b);
 }
 
 glm::vec3 CellCentre(const Climate& climate)
@@ -256,20 +248,6 @@ glm::vec3 CellCentre(const Climate& climate)
 
 WeatherSystem::WeatherSystem()
 {
-	// The turn the calendar starts on
-	const auto turnsPerDay = k_TurnsPerYear / k_DaysInYear;
-	_secondsPerTurn = k_SecondsInDay / turnsPerDay;
-	const auto secondsPerTurn = static_cast<double>(_secondsPerTurn);
-	const auto secondsPerYear = static_cast<double>(k_SecondsInDay * k_DaysInYear);
-	auto start = static_cast<double>(k_StartYear) * secondsPerYear / secondsPerTurn;
-	static_assert(k_StartMonth > 1);
-	start += static_cast<double>(k_MonthEnds[k_StartMonth - 2]) * k_SecondsInDay / secondsPerTurn;
-	start += static_cast<double>(k_StartDay) * k_SecondsInDay / secondsPerTurn;
-	start += static_cast<double>(k_StartHour) * k_SecondsInDay / 24.0 / secondsPerTurn;
-	start += static_cast<double>(k_StartMinute) * k_SecondsInDay / 1440.0 / secondsPerTurn;
-	start += static_cast<double>(k_StartSecond) / secondsPerTurn;
-	_startTurn = start;
-
 	_grid.resize(k_GridSize * k_GridSize);
 }
 
@@ -325,8 +303,9 @@ void WeatherSystem::Reset()
 	_climateSystemEnabled = true;
 	_stormCreationEnabled = true;
 	_forcedStorm = entt::null;
-	_day.reset();
-	_season = GetSeason(0);
+	// A new land starts on day 0 of the month in spring. The first turn that has another day of the month is a new day.
+	_day = 0;
+	_season = 0;
 	_activeStorms.clear();
 	// A new land starts with calm background weather
 	_background = {};
@@ -335,7 +314,7 @@ void WeatherSystem::Reset()
 
 float WeatherSystem::GetDaysFromStart(uint32_t turn) const
 {
-	return static_cast<float>((static_cast<double>(turn) + _startTurn) * _secondsPerTurn / k_SecondsInDay);
+	return climate_rules::DaysFromStart(_calendar, turn);
 }
 
 float WeatherSystem::GetDayOfYear(uint32_t turn) const
@@ -366,9 +345,7 @@ uint32_t WeatherSystem::GetMonth(uint32_t turn) const
 
 float WeatherSystem::GetDayOfMonth(uint32_t turn) const
 {
-	const auto day = GetDayOfYear(turn);
-	const auto month = GetMonth(turn);
-	return month > 1 && day >= static_cast<float>(k_MonthEnds.at(month - 2)) ? day - k_MonthEnds.at(month - 2) : day;
+	return climate_rules::DayOfMonth(GetDayOfYear(turn));
 }
 
 float WeatherSystem::RandomFloat(float max) const
@@ -409,7 +386,7 @@ void WeatherSystem::InitialiseClimate(Climate& climate) const
 	const auto hourFactor = k_TemperatureByHour.at(std::clamp(x87::ToInteger(hour), 0, 23));
 	const auto monthFactor = k_TemperatureByMonth.at(GetMonth(_turn));
 	const auto minimum = TempMin(info, _season);
-	climate.targetTemperature = ((TempMax(info, _season) - minimum) * hourFactor * monthFactor) + minimum;
+	climate.targetTemperature = climate_rules::TargetTemperature(minimum, TempMax(info, _season), hourFactor, monthFactor);
 	climate.temperature = climate.targetTemperature;
 
 	SPDLOG_LOGGER_DEBUG(spdlog::get("game"),
@@ -419,7 +396,7 @@ void WeatherSystem::InitialiseClimate(Climate& climate) const
 	                    climate.rainDesire, climate.rainingDays);
 
 	climate.stormCloudHeight = static_cast<float>(k_StormCloudHeight);
-	climate.stormSpeed = static_cast<float>((WindMax(info, _season) * (1.0 / 30.0)) + 0.5);
+	climate.stormSpeed = climate_rules::StormSpeed(WindMax(info, _season));
 	climate.stormLightning = k_StormLightning;
 	climate.stormOvercast = 0;
 }
@@ -480,7 +457,8 @@ void WeatherSystem::CreateClimate(int32_t index, uint32_t info, glm::vec2 positi
 	climate.cellZ = static_cast<uint16_t>(x87::ToInteger(position.y * 0.1));
 	climate.innerRadius = std::min(radius1, radius2);
 	climate.outerRadius = std::max(radius1, radius2);
-	climate.maxStorms = static_cast<uint32_t>(x87::ToInteger((climate.outerRadius * k_MaxStormsPerUnit) + 1.0f));
+	// The game counts the storms from the second radius that the script gives, also when it is the smaller one
+	climate.maxStorms = static_cast<uint32_t>(x87::ToInteger((radius2 * k_MaxStormsPerUnit) + 1.0f));
 	InitialiseClimate(climate);
 }
 
@@ -825,7 +803,7 @@ void WeatherSystem::ProcessClimate(entt::entity entity, bool newDay)
 			}
 
 			// Out of raining days
-			if (RainMax(info, _season) < static_cast<float>(climate.rainingDays) * 0.01f && storm->age < clearing)
+			if (RainMax(info, _season) < climate_rules::RainedFor(climate.rainingDays) && storm->age < clearing)
 			{
 				storm->age = clearing;
 			}
@@ -853,7 +831,7 @@ void WeatherSystem::ProcessTemperature(Climate& climate) const
 	const auto hourFactor = k_TemperatureByHour.at(std::clamp(x87::ToInteger(hour), 0, 23));
 	const auto monthFactor = k_TemperatureByMonth.at(GetMonth(_turn));
 	const auto minimum = TempMin(info, _season);
-	const auto target = ((TempMax(info, _season) - minimum) * hourFactor * monthFactor) + minimum;
+	const auto target = climate_rules::TargetTemperature(minimum, TempMax(info, _season), hourFactor, monthFactor);
 	climate.targetTemperature = target;
 
 	// The original game always moves by the full step and does not stop at the target. Thus the temperature goes
@@ -894,37 +872,45 @@ void WeatherSystem::ProcessRain(Climate& climate)
 void WeatherSystem::ProcessWind(Climate& climate) const
 {
 	const auto& info = GetInfo(climate);
-	const auto minimum = WindMin(info, _season);
-	const auto maximum = WindMax(info, _season);
-	const auto spread = (climate.rainDesire - 0.5) * k_WindSpread;
-	// Only exactly halfway to rain does this reach 1: the wind is otherwise the sum of the season's extremes
-	const auto weight = static_cast<float>(x87::ToInteger(portable_math::Exp(-(spread * spread))));
-
-	const auto blend = [weight](float low, float high) { return high - ((high - low) * weight) + low; };
-	climate.windX = blend(minimum * portable_math::Cos(climate.windAngle), maximum * portable_math::Cos(climate.windAngle));
-	climate.windZ = blend(minimum * portable_math::Sin(climate.windAngle), maximum * portable_math::Sin(climate.windAngle));
+	const auto wind =
+	    climate_rules::Wind(WindMin(info, _season), WindMax(info, _season), climate.windAngle, climate.rainDesire);
+	climate.windX = wind.x;
+	climate.windZ = wind.y;
 }
 
 // A cell for a new storm: near the middle of a local climate, anywhere for the global one
 glm::ivec2 WeatherSystem::FindWhereToCreateStorm(const Climate& climate)
 {
 	auto& island = Locator::terrainSystem::value();
+	auto& registry = Locator::entitiesRegistry::value();
 	glm::ivec2 cell {0, 0};
 	for (int tries = 0; tries < k_StormPlacementTries; ++tries)
 	{
+		bool searching = true;
 		if (!climate.global)
 		{
 			const auto angle = RandomFloat(2.0f * std::numbers::pi_v<float>);
 			const auto random = RandomFloat(1.0f);
 			const auto distance = random * random * climate.innerRadius * 0.1f;
-			cell.x = static_cast<int16_t>(x87::ToInteger((portable_math::Cos(angle) * distance) + climate.cellX));
-			cell.y = static_cast<int16_t>(x87::ToInteger((portable_math::Sin(angle) * distance) + climate.cellZ));
+			const auto near = climate_rules::CellNearMiddle(angle, distance, climate.cellX, climate.cellZ);
+			cell = {static_cast<int16_t>(near.x), static_cast<int16_t>(near.y)};
 		}
 		else
 		{
 			auto& random = Locator::gameRandom::value();
 			cell.x = static_cast<int16_t>(random.GameRand(static_cast<uint32_t>(LandIslandInterface::k_MapCellsPerSide)));
 			cell.y = static_cast<int16_t>(random.GameRand(static_cast<uint32_t>(LandIslandInterface::k_MapCellsPerSide)));
+
+			// The global climate keeps the spot when the middle of a climate is within its reach. Its own middle always
+			// is, so the spot of a global storm does not get the water test.
+			const glm::vec3 point {static_cast<float>(cell.x) * 10.0f, 0.0f, static_cast<float>(cell.y) * 10.0f};
+			registry.Each<const Climate>([&searching, &point, &climate](const Climate& other) {
+				searching = searching && !(Distance(point, CellCentre(other)) < climate.outerRadius);
+			});
+		}
+		if (!searching)
+		{
+			break;
 		}
 
 		// The game's water test reads the cell's water bit, which is never 1: only points off the island retry
@@ -945,7 +931,7 @@ void WeatherSystem::CreateStorm(entt::entity climateEntity)
 	const auto& info = GetInfo(climate);
 	const auto rainMin = RainMin(info, _season);
 	const auto rainMax = RainMax(info, _season);
-	const auto rainedFor = static_cast<float>(climate.rainingDays) * 0.01f;
+	const auto rainedFor = climate_rules::RainedFor(climate.rainingDays);
 
 	const auto resetDesire = [&climate] {
 		climate.rainDesire = 0.0f;
@@ -962,17 +948,12 @@ void WeatherSystem::CreateStorm(entt::entity climateEntity)
 	}
 
 	const auto cell = FindWhereToCreateStorm(climate);
-	auto& island = Locator::terrainSystem::value();
-	const auto groundHeight = [&island](float x, float z) { return island.GetHeightAt({x, z}); };
-
 	uint32_t radius;
 	if (!climate.global)
 	{
-		const glm::vec3 point {cell.x * 10.0f, 0.0f, cell.y * 10.0f};
-		const glm::vec3 centre {climate.cellX * 10.0f, 0.0f, climate.cellZ * 10.0f};
-		const auto distance = Distance({point.x, groundHeight(point.x, point.z), point.z},
-		                               {centre.x, groundHeight(centre.x, centre.z) + climate.height, centre.z});
-		radius = static_cast<uint32_t>(x87::ToInteger(distance));
+		// The radius is the distance along the ground from the storm's cell to the middle of the climate
+		const glm::vec3 point {static_cast<float>(cell.x) * 10.0f, 0.0f, static_cast<float>(cell.y) * 10.0f};
+		radius = static_cast<uint32_t>(x87::ToInteger(Distance(point, CellCentre(climate))));
 	}
 	else
 	{
@@ -988,8 +969,7 @@ void WeatherSystem::CreateStorm(entt::entity climateEntity)
 	lastsFor = std::max(lastsFor, k_MinStormLife);
 
 	const auto temperature = static_cast<int8_t>(x87::ToInteger(climate.temperature));
-	const auto heat = (static_cast<double>(temperature) - 30.0) * (1.0 / 15.0);
-	auto cloud = static_cast<float>(portable_math::Exp(-(heat * heat)));
+	auto cloud = climate_rules::StormCloud(temperature);
 	// Hot or overcast storms bring lightning
 	glm::vec2 thunderWait {0.0f};
 	glm::vec2 boltWait {0.0f};
@@ -1002,7 +982,7 @@ void WeatherSystem::CreateStorm(entt::entity climateEntity)
 
 	WeatherInfo effect;
 	effect.temperature = temperature;
-	effect.overcast = static_cast<int8_t>(x87::ToInteger(cloud * 100.0));
+	effect.overcast = climate_rules::Percent(cloud);
 	if (temperature < 0)
 	{
 		effect.snow = 100;
@@ -1011,8 +991,7 @@ void WeatherSystem::CreateStorm(entt::entity climateEntity)
 	else
 	{
 		// Cold storms snow: the snow share falls away above freezing
-		const auto cold = static_cast<double>(temperature) * 0.2;
-		effect.snow = static_cast<int8_t>(x87::ToInteger(portable_math::Exp(-(cold * cold)) * 100.0));
+		effect.snow = climate_rules::StormSnow(temperature);
 		effect.rain = static_cast<int8_t>(100 - effect.snow);
 	}
 	effect.windX = static_cast<int8_t>(x87::ToInteger(climate.windX));

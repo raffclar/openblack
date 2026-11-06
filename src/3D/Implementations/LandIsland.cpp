@@ -188,6 +188,25 @@ float LandIslandInterface::GetAltitude(int32_t mapX, int32_t mapZ, bool seaLevel
 	return static_cast<float>(height) * k_HeightUnit * k_AltitudeFraction;
 }
 
+float LandIslandInterface::GetScriptLandHeight(glm::vec3 position) const
+{
+	// The script finds the cell with a tenth of each coordinate, truncated. At the edge of a cell, this cell can be
+	// different from the cell of the map position.
+	constexpr float k_CellsPerMetre = 0.1f;
+	const auto cellX = map_coords::FtoL(position.x * k_CellsPerMetre);
+	const auto cellZ = map_coords::FtoL(position.z * k_CellsPerMetre);
+	if (cellX < 0 || cellX >= k_MapSize || cellZ < 0 || cellZ >= k_MapSize)
+	{
+		return k_NoScriptLandHeight;
+	}
+	const auto* cell = FindCell({static_cast<uint16_t>(cellX), static_cast<uint16_t>(cellZ)});
+	if (cell == nullptr || cell->altitude == 0)
+	{
+		return k_NoScriptLandHeight;
+	}
+	return GetAltitude(ToMapCoords(position.x), ToMapCoords(position.z));
+}
+
 LandIsland::LandIsland(const std::filesystem::path& path)
 {
 	LoadFromFile(path);
@@ -218,8 +237,11 @@ void LandIsland::LoadFromFile(const std::filesystem::path& path)
 void LandIsland::Build(const LandData& data)
 {
 	_blockIndexLookup = data.blockIndexLookup;
-
+	// A place of the table that names a block that the land does not have holds no block. A damaged or hostile landscape
+	// file thus cannot make a look-up read past the last block.
 	const auto& lndBlocks = data.blocks;
+	std::ranges::replace_if(_blockIndexLookup, [count = lndBlocks.size()](auto index) { return index > count; }, uint16_t {0});
+
 	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "[LandIsland] loading {} blocks", lndBlocks.size());
 	_landBlocks.resize(lndBlocks.size());
 	_blockTriangles = std::make_unique<SharedIndexLists<graphics::IndexBuffer>>();

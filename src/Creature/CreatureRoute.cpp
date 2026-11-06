@@ -144,8 +144,11 @@ WalkableLand WalkableLand::Build(const CornerHeight& height, const CellWater& wa
 	const auto cornerHeight = [&heights](int32_t x, int32_t z) {
 		return heights[static_cast<size_t>((z * k_CornersPerSide) + x)];
 	};
+	// The walk over the land starts at the last cell of the last run of walkable cells in a row that a blocked cell ends
+	std::array<int32_t, 2> seed {0, 0};
 	for (int32_t z = 0; z < k_CellsPerSide; ++z)
 	{
+		int32_t run = 0;
 		for (int32_t x = 0; x < k_CellsPerSide; ++x)
 		{
 			const std::array corners {cornerHeight(x, z), cornerHeight(x + 1, z), cornerHeight(x, z + 1),
@@ -153,63 +156,71 @@ WalkableLand WalkableLand::Build(const CornerHeight& height, const CellWater& wa
 			const auto low = std::min({corners[0], corners[1], corners[2], corners[3]});
 			const auto high = std::max({corners[0], corners[1], corners[2], corners[3]});
 			const bool deep = high <= 0.0f;
-			land._cells[index(x, z)] = (high - low > k_SteepRise || deep) ? Ground::Blocked : Ground::CutOff;
+			if (high - low > k_SteepRise || deep)
+			{
+				land._cells[index(x, z)] = Ground::Blocked;
+				if (run > 0)
+				{
+					seed = {x - 1, z};
+				}
+				run = 0;
+				continue;
+			}
+			land._cells[index(x, z)] = Ground::CutOff;
+			++run;
 		}
 	}
 
-	// The largest stretch of walkable cells joined side by side is the land; the rest is cut off from it
-	std::vector<int32_t> labels(land._cells.size(), -1);
-	std::vector<size_t> sizes;
-	std::vector<size_t> stack;
-	for (size_t start = 0; start < land._cells.size(); ++start)
-	{
-		if (land._cells[start] == Ground::Blocked || labels[start] >= 0)
-		{
-			continue;
-		}
-		const auto label = static_cast<int32_t>(sizes.size());
-		size_t count = 0;
-		stack.push_back(start);
-		labels[start] = label;
-		while (!stack.empty())
-		{
-			const auto cell = stack.back();
-			stack.pop_back();
-			++count;
-			const auto x = static_cast<int32_t>(cell % k_CellsPerSide);
-			const auto z = static_cast<int32_t>(cell / k_CellsPerSide);
-			for (const auto [dx, dz] : std::array<std::array<int32_t, 2>, 4> {{{1, 0}, {-1, 0}, {0, 1}, {0, -1}}})
-			{
-				const auto nx = x + dx;
-				const auto nz = z + dz;
-				if (nx < 0 || nz < 0 || nx >= k_CellsPerSide || nz >= k_CellsPerSide)
-				{
-					continue;
-				}
-				const auto next = index(nx, nz);
-				if (land._cells[next] != Ground::Blocked && labels[next] < 0)
-				{
-					labels[next] = label;
-					stack.push_back(next);
-				}
-			}
-		}
-		sizes.push_back(count);
-	}
-	if (sizes.empty())
+	// The walk goes from cell to cell side by side. The walkable cells that it gets to are the land. The blocked cells at
+	// the side of the land stay blocked. All other cells are cut off from the land. When the start cell is blocked, no
+	// walk occurs and the cells stay as they are.
+	const auto first = index(seed[0], seed[1]);
+	if (land._cells[first] != Ground::CutOff)
 	{
 		land.FindNear();
 		return land;
 	}
-	const auto largest = static_cast<int32_t>(std::distance(sizes.begin(), std::ranges::max_element(sizes)));
+	std::vector<bool> reached(land._cells.size(), false);
+	std::vector<bool> blockedAtSide(land._cells.size(), false);
+	std::vector<size_t> waiting {first};
+	reached[first] = true;
+	while (!waiting.empty())
+	{
+		const auto cell = waiting.back();
+		waiting.pop_back();
+		const auto x = static_cast<int32_t>(cell % k_CellsPerSide);
+		const auto z = static_cast<int32_t>(cell / k_CellsPerSide);
+		for (const auto [dx, dz] : std::array<std::array<int32_t, 2>, 4> {{{-1, 0}, {0, -1}, {1, 0}, {0, 1}}})
+		{
+			const auto nx = x + dx;
+			const auto nz = z + dz;
+			if (nx < 0 || nz < 0 || nx >= k_CellsPerSide || nz >= k_CellsPerSide)
+			{
+				continue;
+			}
+			const auto next = index(nx, nz);
+			if (land._cells[next] == Ground::Blocked)
+			{
+				blockedAtSide[next] = true;
+			}
+			else if (!reached[next])
+			{
+				reached[next] = true;
+				waiting.push_back(next);
+			}
+		}
+	}
 	for (size_t i = 0; i < land._cells.size(); ++i)
 	{
-		if (labels[i] != largest)
+		if (reached[i])
 		{
-			continue;
+			const auto wet = water(static_cast<int32_t>(i % k_CellsPerSide), static_cast<int32_t>(i / k_CellsPerSide));
+			land._cells[i] = !wet.has_value() || *wet ? Ground::Water : Ground::Open;
 		}
-		const auto wet = water(static_cast<int32_t>(i % k_CellsPerSide), static_cast<int32_t>(i / k_CellsPerSide));
-		land._cells[i] = !wet.has_value() || *wet ? Ground::Water : Ground::Open;
+		else if (!blockedAtSide[i])
+		{
+			land._cells[i] = Ground::CutOff;
+		}
 	}
 	land.FindNear();
 	return land;

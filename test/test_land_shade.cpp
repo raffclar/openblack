@@ -11,6 +11,7 @@
 
 #include <optional>
 #include <span>
+#include <utility>
 #include <vector>
 
 #include <entt/core/hashed_string.hpp>
@@ -23,6 +24,7 @@
 #include "ECS/Components/Mist.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/VillageLight.h"
+#include "ECS/Components/Weather.h"
 #include "ECS/Registry.h"
 
 #define LOCATOR_IMPLEMENTATIONS
@@ -313,4 +315,19 @@ TEST(LandShadeSystem, TheVillagesLightTheLandOnlyAtNight)
 	frame.scriptHour = 12.0f;
 	world.system.Shade(frame);
 	EXPECT_EQ(CellOf(world.system.Land(), {0, 0}, 10, 8), k_Laid);
+}
+
+TEST(LandShadeSystem, TheShadeAddsNoStoreToTheRegistry)
+{
+	// The draw shades the land while side threads read the registry's stores. A new store in the registry moves its list
+	// of stores, so the shade only reads the registry.
+	World world;
+	auto frame = World::Day();
+	world.system.Shade(frame);
+	frame.landColour = 0x202020;
+	frame.scriptHour = 23.0f;
+	world.system.Shade(frame);
+	const auto& registry = std::as_const(world.registry).Underlying();
+	EXPECT_EQ(registry.storage<ecs::components::Storm>(), nullptr);
+	EXPECT_EQ(registry.storage<ecs::components::VillageLight>(), nullptr);
 }

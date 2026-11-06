@@ -26,6 +26,7 @@
 #include <string_view>
 #include <thread>
 #include <typeinfo>
+#include <variant>
 #include <vector>
 
 #include <cxxopts.hpp>
@@ -103,6 +104,8 @@ int main(int argc, char* argv[])
 		("s,start-level", "The script of the land under the game's Scripts folder, or a land of a network game such as Online Maps/mpm_2p_1.map (the default).", cxxopts::value<std::string>()->default_value(std::string(openblack::server::k_ServerDefaultLand)))
 		("gods-ring-map", "The network map for 32 gods in place of a land.")
 		("write-gods-ring-map", "Write the file of the network map for 32 gods, which the players get from the lobby, to this file, then stop.", cxxopts::value<std::string>())
+		("custom-map", "Play the land of a network game in this .map file outside the game folder. The server names it Online Maps/<file>.map and sends it to the lobby, so that the players get it.", cxxopts::value<std::string>())
+		("write-download-test-map", "Write the land of the map download test, which the tool makes from Online Maps/mpm_3p_1.map, to this file, then stop. The game folder does not change.", cxxopts::value<std::string>())
 		("profile-folder", "The folder of the server's own profile. With none, the profile of a tool's run in the working folder.", cxxopts::value<std::string>())
 		("time-limit", "The time limit of the network game in minutes, from 10 to 1440 (24 hours) as the host picks it, in place of the default 30. A build with the developer tools also accepts 1 to 9 minutes for tests. The start sends it to every client.", cxxopts::value<uint32_t>())
 		("conditions", "The winning conditions of the network game, as the host picks them: [LAND:]NAME[=VALUE],... with the names of Online Maps/ConditionTemplate.txt or their numbers from 0. A NAME with no VALUE keeps the first value of the land, as the host's check box does. The values must be in the limits of the land (or of LAND) in that file. The start sends them to every client.", cxxopts::value<std::string>())
@@ -225,6 +228,36 @@ int main(int argc, char* argv[])
 			}
 			std::cout << "openblack-server: wrote the map for 32 gods to " << out.generic_string() << '\n';
 			return EXIT_SUCCESS;
+		}
+		if (result.count("write-download-test-map") != 0)
+		{
+			const std::filesystem::path out(result["write-download-test-map"].as<std::string>());
+			if (const auto error = openblack::server::WriteDownloadTestMap(settings.gamePath, out); error.has_value())
+			{
+				std::cerr << "openblack-server: " << *error << '\n';
+				return EXIT_FAILURE;
+			}
+			std::cout << "openblack-server: wrote the land of the map download test to " << out.generic_string() << '\n';
+			return EXIT_SUCCESS;
+		}
+		if (result.count("custom-map") != 0)
+		{
+			if (settings.godsRingMap || settings.testbed)
+			{
+				std::cerr << "openblack-server: --custom-map takes the place of the land: no --gods-ring-map or --testbed"
+				          << '\n';
+				return EXIT_FAILURE;
+			}
+			auto read = openblack::server::ReadCustomMap(result["custom-map"].as<std::string>());
+			if (const auto* error = std::get_if<std::string>(&read); error != nullptr)
+			{
+				std::cerr << "openblack-server: " << *error << '\n';
+				return EXIT_FAILURE;
+			}
+			auto& map = std::get<openblack::server::CustomMapRead>(read);
+			settings.land = "Online Maps/" + map.file + ".map";
+			settings.customMap =
+			    openblack::server::ServerSettings::CustomMapFile {.file = map.file, .bytes = std::move(map.bytes)};
 		}
 		settings.soak.allComputerGods = result.count("all-computer-gods") != 0;
 		if (result.count("ai-seed") != 0)

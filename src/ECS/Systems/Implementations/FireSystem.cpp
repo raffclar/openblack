@@ -1170,7 +1170,16 @@ void FireSystem::Process(entt::entity object)
 			    fire.state.temperature > 0.0f
 			        ? std::optional(guidance::TownAttackVoice {.fire = true, .attacker = guidance::Attacker::Other})
 			        : std::nullopt;
-			const float life = world_objects::ReduceLife(object, outcome.damage, litBy);
+			// A field loses food to the burn and keeps its full life. Anything else loses life.
+			float life = 1.0f;
+			if (!field)
+			{
+				life = world_objects::ReduceLife(object, outcome.damage, litBy);
+			}
+			else if (Locator::fieldSystem::has_value())
+			{
+				Locator::fieldSystem::value().BurnFood(object, outcome.damage);
+			}
 			// Burning a town's people, buildings or stores is an attack on the town by whoever lit the fire, by nobody's
 			// when no one did
 			if (!field && registry.Valid(object))

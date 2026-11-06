@@ -11,15 +11,16 @@
 
 #include <cstdint>
 
+#include <bit>
 #include <optional>
 
 #include <glm/gtc/constants.hpp>
-#include <glm/gtx/polar_coordinates.hpp>
 #include <glm/trigonometric.hpp>
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
 #include "3D/MapCoords.h"
+#include "Camera/ScriptCameraModel.h"
 #include "LandChange.h"
 
 // Where the camera is when a game starts on a land. The land's script can give a start place for the camera. A new
@@ -36,14 +37,16 @@
 namespace openblack::start_camera
 {
 
-/// The camera that a land's start makes looks at a point from this far, at these angles
+/// The camera that a land's start makes looks at a point from this far, with this heading and this pitch. The game
+/// keeps the heading and the pitch as these floats.
 inline constexpr float k_OriginDistance = 120.0f;
-inline constexpr glm::vec2 k_OriginAngles {glm::radians(12.8571f), glm::radians(157.51f)};
+inline constexpr float k_OriginHeading = std::bit_cast<float>(uint32_t {0x402FEF9Eu});
+inline constexpr float k_OriginPitch = std::bit_cast<float>(uint32_t {0x3E65C8FAu});
 
 /// Where the camera that a land's start makes is, when it looks at a point
 [[nodiscard]] inline glm::vec3 OriginOver(glm::vec3 focus)
 {
-	return focus + (k_OriginDistance * glm::euclidean(k_OriginAngles));
+	return script_camera::PointFromDistanceHeadingAndPitch(focus, k_OriginDistance, k_OriginHeading, k_OriginPitch);
 }
 
 /// The point that the camera looks at from the script's place (in metres along the two map axes). The point is above the

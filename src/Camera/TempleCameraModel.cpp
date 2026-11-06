@@ -549,11 +549,12 @@ void TempleCameraModel::StartIntro(Room room, bool blendFromCurrent)
 
 void TempleCameraModel::GoToRoom(Room room)
 {
-	Locator::temple::value().GetDoors().FastClose();
+	// A key of the room the player is in does nothing, and the doors stay as they are
 	if (room == GetRoom())
 	{
 		return;
 	}
+	Locator::temple::value().GetDoors().FastClose();
 	// Going straight to a room skips its path: the room's camera starts over, takes over from the camera, and
 	// settles where the player has it
 	if (IsPictureRoom(room))

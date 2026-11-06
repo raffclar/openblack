@@ -31,6 +31,7 @@ public:
 	void RemoveFarmer(entt::entity field, entt::entity villager) override;
 	bool PlantCrop(entt::entity field) override;
 	uint32_t RemoveFood(entt::entity field, float amount) override;
+	void BurnFood(entt::entity field, float damage) override;
 };
 
 } // namespace openblack::ecs::systems

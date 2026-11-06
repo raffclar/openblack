@@ -21,7 +21,6 @@
 #include <glm/gtx/vec_swizzle.hpp>
 
 #include "3D/L3DMesh.h"
-#include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
 #include "Common/GUtilsAngle.h"
 #include "Common/GUtilsDistance.h"
@@ -35,7 +34,6 @@
 #include "ECS/Components/Disciple.h"
 #include "ECS/Components/Field.h"
 #include "ECS/Components/FishFarm.h"
-#include "ECS/Components/Fixed.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/Mesh.h"
@@ -78,6 +76,7 @@
 #include "VillagerDisciples.h"
 #include "VillagerFire.h"
 #include "VillagerFisherman.h"
+#include "VillagerFlock.h"
 #include "VillagerFood.h"
 #include "VillagerFootpath.h"
 #include "VillagerForester.h"
@@ -89,6 +88,7 @@ using namespace openblack::ecs::components;
 namespace components = openblack::ecs::components;
 namespace villager_home = openblack::ecs::villager_home;
 namespace routine = openblack::ecs::villager_routine;
+namespace villager_flock = openblack::ecs::villager_flock;
 namespace needs = openblack::ecs::villager_needs;
 namespace villager_age = openblack::ecs::villager_age;
 namespace world_objects = openblack::ecs::world_objects;
@@ -550,26 +550,7 @@ std::optional<glm::vec2> villager_home::PosOutsideAbode(entt::entity villager)
 
 bool villager_home::Collides(glm::vec2 point)
 {
-	if (!map_coords::InBounds(map_coords::CellOf(point)))
-	{
-		return true;
-	}
-	// TODO(villagers): the game reads the cell's own collision of water, the edge and fixed things; openblack tests
-	// the sea and the fixed things' footprints
-	if (Locator::terrainSystem::has_value() && Locator::terrainSystem::value().GetHeightAt(point) <= 0.0f)
-	{
-		return true;
-	}
-	auto& registry = WorldRegistry();
-	for (const auto thing : Locator::entitiesMap::value().GetFixedInGridCell(glm::vec3(point.x, 0.0f, point.y)))
-	{
-		const auto* fixed = registry.TryGet<const Fixed>(thing);
-		if (fixed != nullptr && glm::distance(fixed->boundingCenter, point) < fixed->boundingRadius)
-		{
-			return true;
-		}
-	}
-	return false;
+	return routine::OpenSpotCollides(villager_flock::CellCollision(map_coords::FromMetres(point)));
 }
 
 namespace

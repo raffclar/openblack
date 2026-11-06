@@ -158,7 +158,6 @@ void openblack::ecs::reflection::RegisterFields_Components_w(entt::meta_ctx& con
 	    .Field<&components::CitadelWorship::sites>("sites")
 	    .Field<&components::CitadelWorship::facing>("facing")
 	    .Field<&components::CitadelWorship::cannotMakeSites>("cannotMakeSites")
-	    .Field<&components::CitadelWorship::standing>("standing")
 	    .Field<&components::CitadelWorship::sitesMade>("sitesMade")
 	    .Field<&components::CitadelWorship::strainSound>("strainSound");
 	Reflect<components::WorshipSite>(context)

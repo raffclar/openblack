@@ -747,7 +747,18 @@ glm::ivec2 GameActionMap::GetMousePushDelta() const
 
 uint32_t GameActionMap::TakeMouseMoves()
 {
-	return _helpMouseMoves.TakeMoves();
+	_mousePlaces = _helpMouseMoves.TakePlaces();
+	return _helpMouseMoves.CountMoves(_mousePlaces);
+}
+
+std::span<const glm::ivec2> GameActionMap::GetMousePlaces() const
+{
+	return _mousePlaces;
+}
+
+void GameActionMap::DrawnMouseMessage(glm::ivec2 position)
+{
+	_helpMouseMoves.Message(HelpClockNow(), position);
 }
 
 float GameActionMap::GetMouseWheelDelta() const

@@ -69,6 +69,7 @@
 #include "Gui/OnlineMapTexts.h"
 #include "Gui/TextDatabase.h"
 #include "Locator.h"
+#include "Online/DownloadTestMap.h"
 #include "Online/GodsRingMap.h"
 #include "Online/GodsRingMapFile.h"
 #include "Online/NetworkLand.h"
@@ -87,6 +88,7 @@
 #define OPENBLACK_GAME_ROLE 1
 #include "Online/StartRules.h"
 #include "Server/Desktop/GameRole.h"
+#include "Server/LobbyHostReport.h"
 #include "Server/LobbyResults.h"
 #include "Server/ServerAdmin.h"
 #if defined(OPENBLACK_INSPECTOR)
@@ -417,6 +419,16 @@ bool ServerWorld::StartLand()
 	{
 		// A server for players has no testbed
 		if (!land.LoadTestbed())
+		{
+			return false;
+		}
+	}
+	else if (_settings.customMap.has_value())
+	{
+		// A land of a network game from a file outside the game folder. The server loads its bytes as it loads a land of
+		// the game folder, and its players get the same bytes from the lobby.
+		if (!land.LoadNetworkMapFile(_startMap, _settings.customMap->bytes,
+		                             ecs::systems::LandSystemInterface::ChallengeScripts::Kept))
 		{
 			return false;
 		}
@@ -818,6 +830,26 @@ private:
 	    [](const std::string& name) { SPDLOG_LOGGER_WARN(spdlog::get("game"), "The server did not write {}", name); })};
 };
 
+/// The winning conditions of the game and their state for the first four players, for the report of the host. The world
+/// does not change.
+GameRole::HostConditions HostConditionsOfWorld()
+{
+	if (!Locator::gameEndSystem::has_value())
+	{
+		return {};
+	}
+	const auto& gameEnd = Locator::gameEndSystem::value();
+	lobby_host_report::ReportedStandings standings {};
+	for (const auto& [god, standing] : gameEnd.Standings())
+	{
+		if (const auto number = static_cast<size_t>(god); number < standings.size())
+		{
+			standings.at(number) = standing;
+		}
+	}
+	return lobby_host_report::ConditionsOf(gameEnd.GetConditions(), standings);
+}
+
 /// The figures of each god of the decided game, for the report to the lobby. The world does not change.
 std::vector<lobby_results::GodFigures> GodFiguresOfWorld()
 {
@@ -874,7 +906,12 @@ bool StartNetwork(const ServerSettings& settings, ServerWorld& world, std::uniqu
 	const bool scriptLand = !settings.testbed && !settings.godsRingMap;
 	const auto landPath = Locator::landSystem::value().GetLandPath();
 	uint64_t landChecksum = online::start_rules::LandChecksum({});
-	if (scriptLand && fileSystem.Exists(landPath))
+	if (settings.customMap.has_value())
+	{
+		// The clients compare the checksum of the file that they got from the lobby
+		landChecksum = online::start_rules::LandChecksum(settings.customMap->bytes);
+	}
+	else if (scriptLand && fileSystem.Exists(landPath))
 	{
 		landChecksum = online::start_rules::LandChecksum(fileSystem.ReadAll(landPath));
 	}
@@ -944,6 +981,18 @@ bool StartNetwork(const ServerSettings& settings, ServerWorld& world, std::uniqu
 		                                     .players = static_cast<int32_t>(gods_ring_map::k_Slots),
 		                                     .bytes = world.GodsRingMapFile()};
 	}
+	else if (settings.customMap.has_value())
+	{
+		// The land of --custom-map has a god for each of its citadels. Its shown name is its file name, or the name of
+		// the land of the map download test.
+		const auto& file = settings.customMap->file;
+		customMap = lobby_status::CustomMap {
+		    .file = file,
+		    .name = file == download_test_map::k_File ? std::string(download_test_map::k_Name) : file,
+		    .players = static_cast<int32_t>(godSlots),
+		    .bytes = settings.customMap->bytes,
+		};
+	}
 	if (const auto error = network->Start(*settings.network, start, landChecksum, godSlots, std::move(customMap));
 	    error.has_value())
 	{
@@ -982,6 +1031,10 @@ bool StartNetwork(const ServerSettings& settings, ServerWorld& world, std::uniqu
 			return ServerWorld::NetworkStep::Replay;
 		}
 		role->Update();
+		if (role->HostReportDue())
+		{
+			role->SendHostReport(Locator::time::value().GetTurn(), false, HostConditionsOfWorld());
+		}
 		if (host.GameOver())
 		{
 			SPDLOG_LOGGER_INFO(spdlog::get("game"), "Every god left the game: the game ends");
@@ -1012,6 +1065,10 @@ bool StartNetwork(const ServerSettings& settings, ServerWorld& world, std::uniqu
 		    }
 		    // Every client gets the checksum of the server's world
 		    host.TurnChecksum(turn.turn, turn.checksum);
+		    if (Locator::gameEndSystem::has_value() && Locator::gameEndSystem::value().IsDecided())
+		    {
+			    role->SendHostReport(turn.turn, true, HostConditionsOfWorld());
+		    }
 		    if (role->WantsResult() && Locator::gameEndSystem::has_value() && Locator::gameEndSystem::value().IsDecided())
 		    {
 			    auto decided = game;

@@ -88,6 +88,15 @@ float living::WrapHeading(float radians)
 	return radians;
 }
 
+namespace
+{
+/// The heading of the opposite direction. The game adds the half turn to the wide heading and rounds the sum one time.
+float TurnedAround(glm::vec3 axis)
+{
+	return living::WrapHeading(x87::Add(x87::GameHeadingOf(axis.x, axis.z), k_Pi));
+}
+} // namespace
+
 float living::VillagerLandingHeading(LandingPose pose, const glm::mat3& axes)
 {
 	switch (pose)
@@ -95,15 +104,15 @@ float living::VillagerLandingHeading(LandingPose pose, const glm::mat3& axes)
 	case LandingPose::Front:
 		return HeadingOf(axes[1]);
 	case LandingPose::Back:
-		return WrapHeading(HeadingOf(axes[1]) + k_Pi);
+		return TurnedAround(axes[1]);
 	default:
-		return WrapHeading(HeadingOf(axes[2]) + k_Pi);
+		return TurnedAround(axes[2]);
 	}
 }
 
 float living::AnimalLandingHeading(const glm::mat3& axes)
 {
-	return WrapHeading(HeadingOf(axes[2]) + k_Pi);
+	return TurnedAround(axes[2]);
 }
 
 AnimId living::VillagerThrownClip(bool alive, bool flungFromArrivalVortex)

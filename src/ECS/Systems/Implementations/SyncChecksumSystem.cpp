@@ -158,10 +158,12 @@ void SyncChecksumSystem::StartHashBesideDraw()
 	auto& pool = Pool();
 	_besideStarted = true;
 	// The draw only reads the world, so the threads read it at the same time. The side thread shares the hash with the
-	// threads of the pool, as the main thread does when the hash does not wait.
-	_side->Start([this, &pool, &registry = Locator::entitiesRegistry::value().Underlying()] {
-		_besideHash =
-		    synced_state::HashOf(registry, *_reflection, synced_state::PresentationParts(), false, {}, &pool, nullptr, &_memo);
+	// threads of the pool, as the main thread does when the hash does not wait. The draw can add stores to the registry,
+	// so this thread finds the stores now and the side thread does not look in the registry's list of stores.
+	const auto& registry = std::as_const(Locator::entitiesRegistry::value().Underlying());
+	_side->Start([this, &pool, &registry, stores = ecs::reflection::StoresOf(registry)] {
+		_besideHash = synced_state::HashOf(registry, stores, *_reflection, synced_state::PresentationParts(), false, {}, &pool,
+		                                   nullptr, &_memo);
 	});
 }
 

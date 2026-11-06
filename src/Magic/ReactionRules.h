@@ -14,8 +14,10 @@
 #include <optional>
 #include <vector>
 
+#include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
+#include "3D/MapCoords.h"
 #include "Enums.h"
 
 // How the living take up the reactions spread round them: how urgent a reaction is to each by its kind and distance,
@@ -49,13 +51,49 @@ inline constexpr uint32_t k_ReactSecondsBeforeChangingForHand = 1;
 inline constexpr float k_FleeStep = 10.0f;
 /// Something whose way points within this of a villager is coming towards it, by the cosine
 inline constexpr float k_ComingTowardsCosine = 0.8f;
-/// Where a villager flees to from something standing still: straight away from it, a step across the land
-[[nodiscard]] glm::vec3 FleePointFromStill(glm::vec3 villager, glm::vec3 object);
-/// Where a villager flees to from something moving: a step across its way, to the side the villager is on, each way
-/// across the land shifted by a random number up to 8 less 4
-[[nodiscard]] glm::vec3 FleePointFromMoving(glm::vec3 villager, glm::vec3 object, glm::vec3 velocity, float randomX,
-                                            float randomZ);
+/// Each way across the land, the point of a flight from something moving moves by a random number up to this, less half
 inline constexpr float k_FleeJitter = 8.0f;
+/// Whether a thing moves: the length of its velocity is more than 0. The squares add in the order y, z, x
+[[nodiscard]] bool Moves(glm::vec3 velocity);
+/// The point that a living thing flees to from something that does not move, in metres across the land. The point is the
+/// run distance from the thing, straight away from it. The step is the run distance divided by the length, then times
+/// each axis. When the two map positions are the same, the point is the position of the living thing
+[[nodiscard]] glm::vec2 FleePointFromStill(const map_coords::MapCoords& living, const map_coords::MapCoords& thing, float run);
+/// The map position of that point. The position keeps the height of the living thing in the world: its altitude is the
+/// height of the living thing over the ground there, less the ground at the point. groundAt gives the ground at a map
+/// position
+template <typename GroundAt>
+[[nodiscard]] map_coords::MapCoords FleePlaceFromStill(const map_coords::MapCoords& living, const map_coords::MapCoords& thing,
+                                                       float run, const GroundAt& groundAt)
+{
+	const float height = static_cast<float>(groundAt(living)) + living.altitude;
+	const auto point = FleePointFromStill(living, thing, run);
+	map_coords::MapCoords place {map_coords::ToFixed(point.x), map_coords::ToFixed(point.y), 0.0f};
+	// The height has no change across the land, but the sum with 0 changes a height of -0 to +0
+	place.altitude = (height + 0.0f) - static_cast<float>(groundAt(place));
+	return place;
+}
+/// The map position that a living thing flees to from something that moves: the run distance across the way of the
+/// thing, on the side of the living thing. Each way across the land also moves by its random number less half of
+/// k_FleeJitter. The metres go back to map units by times 65536 and divided by 10. The altitude stays as it is
+[[nodiscard]] map_coords::MapCoords FleePlaceFromMoving(const map_coords::MapCoords& living, const map_coords::MapCoords& thing,
+                                                        glm::vec3 velocity, float run, glm::vec2 random);
+/// The map position that a living thing flees to, the run distance away. It runs across the way of a thing that moves,
+/// with the two random numbers. It runs straight away from a thing that does not move, with no random numbers. The
+/// caller gets random numbers only when Moves is true. A position off the map gives no place
+template <typename GroundAt>
+[[nodiscard]] std::optional<map_coords::MapCoords>
+FleePlace(const map_coords::MapCoords& living, const map_coords::MapCoords& thing, glm::vec3 velocity,
+          std::optional<glm::vec2> random, float run, const GroundAt& groundAt)
+{
+	const auto place = random.has_value() ? FleePlaceFromMoving(living, thing, velocity, run, *random)
+	                                      : FleePlaceFromStill(living, thing, run, groundAt);
+	if (!map_coords::InBounds(place))
+	{
+		return std::nullopt;
+	}
+	return place;
+}
 /// Whether something moving with a velocity comes towards a villager
 [[nodiscard]] bool ComingTowards(glm::vec3 villager, glm::vec3 object, glm::vec3 velocity);
 

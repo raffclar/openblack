@@ -10,6 +10,7 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
 
 #include <string_view>
 
@@ -33,8 +34,8 @@ constexpr std::string_view k_Tls13Ciphers = "TLS_AES_128_GCM_SHA256:TLS_AES_256_
 constexpr long k_ConnectTimeoutMs = 10'000;
 constexpr long k_RequestTimeoutMs = 30'000;
 /// A large transfer stops when it gets fewer bytes than this in each second for the time of the stall limit
-constexpr long k_StallBytesPerSecond = 1;
-constexpr long k_StallSeconds = 30;
+constexpr long k_StallBytesPerSecond = online::k_LargeStallBytesPerSecond;
+constexpr long k_StallSeconds = online::k_LargeStallSeconds;
 /// The largest answer that the client keeps
 constexpr size_t k_MostAnswerBytes = 16 * 1024 * 1024;
 

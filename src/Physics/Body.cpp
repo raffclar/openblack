@@ -22,8 +22,8 @@
 #include <glm/vec2.hpp>
 
 #include "Common/ModelInverseSquareRoot.h"
-#include "Common/PortableRotations.h"
 #include "Common/X87.h"
+#include "Common/X87Matrix.h"
 #include "Common/X87Vector.h"
 #include "Ground.h"
 
@@ -96,30 +96,6 @@ glm::mat3 NormaliseAxes(glm::mat3 axes)
 		axes[i] = NormaliseOrKeep(axes[i]);
 	}
 	return axes;
-}
-
-/// The inverse of a matrix, its determinant kept at least a tiny size so that a body whose points lie in a line, or a
-/// body with none, still gets an inverse (a huge or zero one) as the game gives it
-glm::mat3 ClampedInverse(const glm::mat3& matrix)
-{
-	constexpr float k_SmallestDeterminant = 1e-10f;
-	float determinant = glm::determinant(matrix);
-	if (std::abs(determinant) < k_SmallestDeterminant)
-	{
-		determinant = determinant < 0.0f ? -k_SmallestDeterminant : k_SmallestDeterminant;
-	}
-	const auto& m = matrix;
-	glm::mat3 adjugate;
-	adjugate[0][0] = m[1][1] * m[2][2] - m[2][1] * m[1][2];
-	adjugate[1][0] = -(m[1][0] * m[2][2] - m[2][0] * m[1][2]);
-	adjugate[2][0] = m[1][0] * m[2][1] - m[2][0] * m[1][1];
-	adjugate[0][1] = -(m[0][1] * m[2][2] - m[2][1] * m[0][2]);
-	adjugate[1][1] = m[0][0] * m[2][2] - m[2][0] * m[0][2];
-	adjugate[2][1] = -(m[0][0] * m[2][1] - m[2][0] * m[0][1]);
-	adjugate[0][2] = m[0][1] * m[1][2] - m[1][1] * m[0][2];
-	adjugate[1][2] = -(m[0][0] * m[1][2] - m[1][0] * m[0][2]);
-	adjugate[2][2] = m[0][0] * m[1][1] - m[1][0] * m[0][1];
-	return adjugate / determinant;
 }
 
 glm::vec2 Xz(glm::vec3 v)
@@ -209,20 +185,22 @@ void Body::SetUpInertia()
 			// The game sums x z here where y z belongs, which makes lopsided bodies tumble its own way
 			inertia[1][2] -= x * z * pointMass;
 		}
-		glm::mat3 matrix;
+		// The engine's inverse keeps the determinant at least a tiny size, so a body whose points lie in a line, or a
+		// body with none, still gets an inverse (a huge or zero one)
+		glm::mat3 rows;
 		for (int row = 0; row < 3; ++row)
 		{
 			for (int column = 0; column < 3; ++column)
 			{
-				matrix[column][row] = inertia[row][column];
+				rows[row][column] = inertia[row][column];
 			}
 		}
-		const auto inverse = ClampedInverse(matrix);
+		const auto inverse = openblack::x87::InverseTurn(rows);
 		for (int row = 0; row < 3; ++row)
 		{
 			for (int column = 0; column < 3; ++column)
 			{
-				_inverseInertia[row][column] = inverse[column][row];
+				_inverseInertia[row][column] = inverse[row][column];
 			}
 		}
 		_drag = _radius * _drag * _radius * k_DragRadiusFactor;
@@ -730,7 +708,11 @@ void Body::ApplyContacts()
 			push = stiffness * point.firstDepth +
 			       (point.depth - point.firstDepth) * k_DampingFactor * (point.aheadLength / point.length) * damping;
 		}
-		push = std::max(push, 0.0f);
+		// The game compares with the FPU here: a push below zero, or not a number, becomes zero
+		if (openblack::x87::LessOrUnordered(push, 0.0f))
+		{
+			push = 0.0f;
+		}
 		const float maxFriction = push * friction;
 		point.normal *= push;
 		auto hold = (point.anchor - point.contact) * stiffness;
@@ -756,7 +738,12 @@ void Body::ApplyContacts()
 
 glm::vec3 Body::BodyOmega() const
 {
-	const auto local = glm::transpose(_axes) * angularMomentum;
+	// The spin in the body's axes: the game adds the products of each axis in its own order
+	const auto& axes = _axes;
+	const auto& spin = angularMomentum;
+	const glm::vec3 local((axes[0].y * spin.y + axes[0].z * spin.z) + axes[0].x * spin.x,
+	                      (axes[1].y * spin.y + axes[1].x * spin.x) + axes[1].z * spin.z,
+	                      (axes[2].y * spin.y + axes[2].x * spin.x) + axes[2].z * spin.z);
 	glm::vec3 omega(0.0f);
 	// The game adds the three products of each part from the last row to the first
 	for (int column = 0; column < 3; ++column)
@@ -836,7 +823,8 @@ StepResult Body::Integrate()
 	}
 	const auto worldOmega = TurnedZyx(_axes, omega);
 
-	velocity += _force * (k_StepSeconds / _mass);
+	// The game multiplies the force by one over the mass, then by the step
+	velocity += (_force * (1.0f / _mass)) * k_StepSeconds;
 	_speed = openblack::x87::LengthZyx(velocity);
 	if (k_MaxSpeed < _speed)
 	{
@@ -880,7 +868,10 @@ StepResult Body::Integrate()
 	const float angle = openblack::x87::LengthZyx(step);
 	if (k_MinRotationStep < angle)
 	{
-		_axes = glm::mat3(openblack::portable_math::Rotate(glm::mat4(1.0f), angle, step / angle)) * _axes;
+		// The game turns each axis through the engine's turn about the unit axis. Its spin has the other sign, thus the
+		// axis of the turn has the other sign too.
+		const auto axis = step * (1.0f / angle);
+		_axes = openblack::x87::TurnProduct(_axes, glm::mat3(openblack::x87::TurnAbout(-axis, angle)));
 	}
 	_centre += velocity * k_StepSeconds;
 	return resting ? StepResult::Knocked : StepResult::Moved;

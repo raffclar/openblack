@@ -7,9 +7,14 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#define LOCATOR_IMPLEMENTATIONS
+
 #include <cstdint>
 
+#include <algorithm>
+#include <map>
 #include <optional>
+#include <utility>
 #include <vector>
 
 #include <entt/entity/registry.hpp>
@@ -18,6 +23,9 @@
 
 #include "3D/MapCoords.h"
 #include "Common/GUtilsDistance.h"
+#include "ComputerHandFake.h"
+#include "ECS/Components/ComputerPlayer.h"
+#include "ECS/Components/Player.h"
 #include "ECS/Components/PlayerRelations.h"
 #include "ECS/ComputerMind.h"
 #include "ECS/ComputerMindDomains.h"
@@ -25,7 +33,11 @@
 #include "ECS/PlayerRelations.h"
 #include "ECS/Reflection/ComponentReflection.h"
 #include "ECS/Reflection/WorldArchive.h"
+#include "ECS/Registry.h"
 #include "ECS/SyncedState.h"
+#include "ECS/Systems/Implementations/ComputerMindRuleTable.h"
+#include "ECS/Systems/PlayerSystemInterface.h"
+#include "Locator.h"
 #include "ScriptHeaders/ScriptInfluence.h"
 
 using namespace openblack;
@@ -195,4 +207,67 @@ TEST(ComputerMindAttitudes, RecordsAreInTheSyncedStateAndTheWorldState)
 	EXPECT_EQ(loaded.get<PlayerInfluencePower>(player).average, 90.0f);
 	EXPECT_EQ(synced_state::HashOf(loaded, context, synced_state::PresentationParts(), false).hash,
 	          synced_state::HashOf(registry, context, synced_state::PresentationParts(), false).hash);
+}
+
+namespace
+{
+/// Two players that a computer mind plays, each with its entity
+class FakeRivals final: public openblack::ecs::systems::PlayerSystemInterface
+{
+public:
+	void RegisterPlayers() override {}
+	void AddPlayer(entt::entity /*playerEntity*/) override {}
+	[[nodiscard]] std::optional<entt::entity> FindPlayer(PlayerNames name) const override
+	{
+		const auto found = players.find(name);
+		return found != players.end() ? std::optional(found->second) : std::nullopt;
+	}
+	entt::entity EnsurePlayer(PlayerNames /*name*/) override { return entt::null; }
+	void AddCreature(entt::entity /*creature*/) override {}
+	[[nodiscard]] std::optional<entt::entity> GetPrimaryCreature(PlayerNames /*name*/) const override { return std::nullopt; }
+	void KeepForNextLand() override {}
+	void ForgetKept() override {}
+	[[nodiscard]] bool KeepAlignmentAt(uint32_t /*turn*/) override { return false; }
+	void TakeUpKept(entt::entity /*playerEntity*/) override {}
+	[[nodiscard]] bool IsComputerPlayer(PlayerNames name) const override { return players.contains(name); }
+	[[nodiscard]] bool IsHumanPlayer(PlayerNames /*name*/) const override { return false; }
+
+	std::map<PlayerNames, entt::entity> players;
+};
+} // namespace
+
+// The needs to defeat the player with more miracles or a better creature take the first rival and want it fully. The
+// need to defeat the player with more worshippers compares the god with itself, so it finds no rival and keeps no
+// object
+TEST(ComputerMindAttitudes, TheRivalWithMoreWorshippersIsNeverFound)
+{
+	using namespace openblack::ecs;
+	Locator::entitiesRegistry::emplace<Registry>();
+	auto& rivals = static_cast<FakeRivals&>(Locator::playerSystem::emplace<FakeRivals>());
+	auto& registry = Locator::entitiesRegistry::value();
+	for (const auto name : {PlayerNames::PLAYER_ONE, PlayerNames::PLAYER_TWO})
+	{
+		const auto entity = registry.Create();
+		registry.Assign<components::Player>(entity, name);
+		rivals.players[name] = entity;
+	}
+	components::ComputerPlayer state;
+	state.mind = MakeMind();
+	FakeWorld fake;
+	const computer_hand::World hand {.moves = fake, .objects = fake, .casts = fake, .creature = fake, .totem = fake};
+	systems::computer_world::RuleContext context {.player = PlayerNames::PLAYER_ONE, .state = state, .hand = hand};
+	const auto& rules = systems::computer_world::Rules();
+	const auto wantOf = [&](NodeKind kind) {
+		const auto node =
+		    static_cast<uint16_t>(std::ranges::find(state.mind.nodes, kind, &Node::kind) - state.mind.nodes.begin());
+		state.mind.nodes[node].object = entt::null;
+		const float want = rules.at(static_cast<size_t>(kind)).intensity(context, state.mind, node);
+		return std::pair(want, state.mind.nodes[node].object);
+	};
+	const auto second = rivals.players.at(PlayerNames::PLAYER_TWO);
+	EXPECT_EQ(wantOf(NodeKind::NeedPlayerWithMoreSpells), std::pair(1.0f, second));
+	EXPECT_EQ(wantOf(NodeKind::NeedPlayerWithBetterCreature), std::pair(1.0f, second));
+	EXPECT_EQ(wantOf(NodeKind::NeedPlayerWithMoreWorshippers), std::pair(0.0f, entt::entity {entt::null}));
+	Locator::playerSystem::reset();
+	Locator::entitiesRegistry::reset();
 }

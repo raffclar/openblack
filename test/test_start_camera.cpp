@@ -58,6 +58,15 @@ TEST(StartCamera, OnlyAGameThatStartsOnTheLandMovesTheCamera)
 	}
 }
 
+TEST(StartCamera, TheCameraHasTheHeadingAndPitchOfTheGame)
+{
+	// The heading is about 157.5 degrees and the pitch is about 12.9 degrees, 120 from the point
+	const auto origin = openblack::start_camera::OriginOver(glm::vec3(0.0f));
+	EXPECT_NEAR(origin.x, 44.75914f, 1e-4f);
+	EXPECT_NEAR(origin.y, 26.702513f, 1e-4f);
+	EXPECT_NEAR(origin.z, -108.090675f, 1e-4f);
+}
+
 TEST(StartCamera, TheCameraLooksAtThePointFromTheStartDistance)
 {
 	const glm::vec3 focus {100.0f, 20.0f, 300.0f};

@@ -75,8 +75,10 @@ public:
 
 private:
 	void Lay();
-	void CastShadows(const LandShadeFrame& frame, Registry& registry, const Registry* drawn);
-	void CastLights(const LandShadeFrame& frame, Registry& registry);
+	/// These only read the registry. The draw calls them while side threads read the registry's stores, so they must not
+	/// add a store to the registry.
+	void CastShadows(const LandShadeFrame& frame, const Registry& registry, const Registry* drawn);
+	void CastLights(const LandShadeFrame& frame, const Registry& registry);
 	/// The image of a light at its warm levels, made once
 	[[nodiscard]] std::span<const uint8_t> WarmImage(entt::id_type id);
 	/// Copies the blocks that changed this frame or the last into the map

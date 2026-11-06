@@ -1529,7 +1529,13 @@ bool TempleInterior::IsRoomAvailable(TempleRoom room) const
 	}
 	const bool hasCreature =
 	    Locator::creatureModeSystem::has_value() && Locator::creatureModeSystem::value().PlayersCreature().has_value();
-	return temple::IsRoomAvailable(room, {.roomsOpened = _roomsOpened, .hasCreature = hasCreature, .keptIn = _lock.GetRoom()});
+	const bool networkGame = Locator::time::has_value() && Locator::time::value().IsNetworkGame();
+	const bool skirmish = Locator::entitiesRegistry::has_value() && Locator::entitiesRegistry::value().Context().skirmish;
+	return temple::IsRoomAvailable(room, {.roomsOpened = _roomsOpened,
+	                                      .hasCreature = hasCreature,
+	                                      .keptIn = _lock.GetRoom(),
+	                                      .networkGame = networkGame,
+	                                      .skirmish = skirmish});
 }
 
 void TempleInterior::TellRoomNotAvailable()
@@ -1841,7 +1847,7 @@ void TempleInterior::Update(std::chrono::microseconds dt)
 		}
 		UpdateMapMarkers(milliseconds / 1000.0f);
 		// The temple is lit by the alignment, pulsing with the time
-		_light = TempleLight::At(Locator::alignmentSystem::value().GetCameraAlignment(),
+		_light = TempleLight::At(Locator::alignmentSystem::value().GetTempleLightAlignment(),
 		                         static_cast<uint32_t>(machine_clock::Ticks()));
 		// The room the player is in sets how thick the fog is, and the light its colour
 		_fog = TempleFog::In(_currentRoom == TempleRoom::CreatureCave, _light);

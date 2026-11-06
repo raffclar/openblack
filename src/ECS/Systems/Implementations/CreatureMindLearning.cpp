@@ -296,9 +296,10 @@ void CreatureMindSystem::LearnFromFeedback(entt::entity creature, CreatureMindSt
 		return;
 	}
 
-	// A slap makes it show how it feels when it completes its current work
+	// A slap stops it when it copies its player, and makes it show how it feels when it completes its current work
 	if (feedback < 0.0f)
 	{
+		creature_watching::SlappedWhileMimicking(learnt.mimicry);
 		mind.followUp = creature_follow_up::FollowUp::ShowSlapFeeling;
 	}
 	// With nothing it did lately to credit the feedback to, it learns nothing from it

@@ -37,6 +37,8 @@ public:
 
 	bool LoadMap(const std::filesystem::path& path, loading::LoadingClock::Mode look, land_change::Kind change) override;
 	bool LoadMapWithFreshScripts(const std::filesystem::path& path, land_change::Kind change) override;
+	bool LoadNetworkMapFile(const std::filesystem::path& path, std::span<const uint8_t> file,
+	                        ChallengeScripts scripts) override;
 	bool LoadTestbed() override;
 	bool LoadGodsRingMap() override;
 	bool LoadGodsRingMapFile(std::span<const uint8_t> file) override;
@@ -85,6 +87,11 @@ public:
 	void KeepAlignmentInProfile() override;
 
 private:
+	/// Loads the map script of a land from the bytes of its file. The path names the land.
+	bool LoadMapBytes(const std::filesystem::path& path, std::span<const uint8_t> data, loading::LoadingClock::Mode look,
+	                  land_change::Kind change);
+	/// Starts the scripts of the challenge again from the start
+	void StartChallengeScriptsAgain();
 	/// The view of the player, or a view that does nothing
 	[[nodiscard]] LandViewInterface& View() { return _view != nullptr ? *_view : _noView; }
 

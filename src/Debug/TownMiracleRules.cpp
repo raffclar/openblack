@@ -61,10 +61,6 @@ std::optional<NoSite> WhyNoSite(const SiteChecks& checks)
 	{
 		return NoSite::NoTemple;
 	}
-	if (!checks.templeBuilt)
-	{
-		return NoSite::TempleNotBuilt;
-	}
 	return NoSite::NoPlace;
 }
 
@@ -76,8 +72,6 @@ std::string_view Describe(NoSite reason)
 		return "the town belongs to no player";
 	case NoSite::NoTemple:
 		return "the town's player has no temple";
-	case NoSite::TempleNotBuilt:
-		return "the town's player's temple is not built yet";
 	case NoSite::LandWithoutSites:
 		return "the first land has no worship sites";
 	case NoSite::NoPeople:

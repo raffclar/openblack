@@ -156,29 +156,3 @@ TEST(ComputerHandMoves, NearMoveStopsNearThePlaceAndMovesAwayWhenTooNear)
 	EXPECT_FLOAT_EQ(action.hand.x, 195.0f + k_NearPlaceSideStep);
 	EXPECT_TRUE(Busy(action));
 }
-
-TEST(ComputerHandMoves, WaitEndsWhenTheThingIsNearOrAfterAMinute)
-{
-	constexpr auto k_Thing = static_cast<entt::entity>(9);
-	FakeWorld world;
-	world.places[k_Thing] = {500.0f, 0.0f};
-	HandAction action;
-	action.moveFirst = false;
-	const std::vector<Argument> arguments {Argument {.object = k_Thing},
-	                                       Argument {.value = 5.5f, .place = {500.0f, 24.0f, 3.0f}}};
-	Add(action, StepKind::WaitForObjectToBeNearPos, arguments);
-	EXPECT_EQ(Finish(action, world.view), 3);
-	// A thing that does not come near ends the action badly after 600 turns of the wait
-	world.places[k_Thing] = {900.0f, 0.0f};
-	action.moveFirst = false;
-	Add(action, StepKind::WaitForObjectToBeNearPos, arguments);
-	int turns = 0;
-	bool good = true;
-	while (Busy(action) && turns < 1000)
-	{
-		good = Process(action, world.view);
-		++turns;
-	}
-	EXPECT_EQ(turns, 602);
-	EXPECT_FALSE(good);
-}

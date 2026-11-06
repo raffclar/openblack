@@ -1410,12 +1410,28 @@ bool FightLetsChoose(const ecs::Registry& registry, entt::entity creature, const
 }
 } // namespace
 
-void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& mind, bool everyDesire,
-                                      std::optional<Desire> only, bool adopt)
+void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& mind, std::optional<Desire> only, bool adopt)
 {
 	const auto* tables = GetTables();
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto* transform = registry.TryGet<const Transform>(creature);
+	// A desire that was held back for longer lost its plan. A plan that uses a thing that is gone is removed, and then
+	// a new round of desires starts.
+	if (mind.desires.has_value())
+	{
+		for (size_t d = 0; d < creature_desires::k_DesireCount; ++d)
+		{
+			if (std::exchange(mind.desires->desires.at(d).losesPlan, false))
+			{
+				mind.planner.best.at(d).reset();
+			}
+		}
+		if (creature_planner::DropPlansOfGoneThings(
+		        mind.planner, [&registry](uint32_t thing) { return !registry.Valid(static_cast<entt::entity>(thing)); }))
+		{
+			mind.planner.round = creature_planner::RoundOf(*mind.desires);
+		}
+	}
 	// A partner of a joint action whose mind stands still chooses nothing
 	if (tables == nullptr || transform == nullptr || !mind.desires.has_value() || !mind.learnt.has_value() || mind.paused ||
 	    creature_mind::IsUnconscious(mind.idle) || !FightLetsChoose(registry, creature, mind) ||
@@ -1515,13 +1531,20 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 			                 return ExecutorOf(action) != nullptr;
 		                 });
 	}
-	// The desire to explore has a condition of its own: a young creature, or one that is not too exhausted
-	{
+	// Some desires have a condition of their own. A desire that fails it takes its turn to plan, but it loses its plan.
+	const auto desireState = [&]() {
 		const auto* body = registry.TryGet<const CreatureNeeds>(creature);
-		const float exhaustion = body != nullptr ? body->needs.exhaustion : 0.0f;
-		auto& wander = eligible.at(static_cast<size_t>(Desire::Wanderlust));
-		wander = wander && creature_exploration::WanderlustAllowed(mind.developmentPhase, exhaustion);
-	}
+		return creature_planner::DesireState {
+		    .phase = mind.developmentPhase,
+		    .exhaustion = body != nullptr ? body->needs.exhaustion : 0.0f,
+		    .turnsIgnored = mind.attention.turnsIgnored,
+		    .turnsPerSecond = static_cast<uint32_t>(k_TurnsPerSecond),
+		    .warmth = body != nullptr ? body->needs.warmth : 0.0f,
+		    .attitudeToPlayer = mind.attitudeToPlayer,
+		    .homeDistance = situation.homeDistance,
+		    .sawDeed = mind.observedDeed.has_value(),
+		};
+	}();
 
 	// Something shown on the leash is the only goal there is this turn, for every desire
 	std::optional<entt::entity> leashTarget;
@@ -1530,11 +1553,13 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 		leashTarget = static_cast<entt::entity>(mind.leash.actOn.back());
 		mind.leash.actOn.clear();
 	}
-	auto goals =
-	    leashTarget.has_value() || everyDesire
-	        ? std::vector<Desire> {}
-	        : creature_planner::NextGoals(mind.planner, eligible, creature_planner::GoalsPerTurn(registry.Size<Creature>()));
-	if (leashTarget.has_value() || everyDesire)
+	// Each turn some desires of the round get their turn to plan, also a desire at 0 or with no action. Something shown
+	// on the leash makes every desire that can plan plan this turn, and the round does not move on.
+	const bool roundTurn = !leashTarget.has_value() && !only.has_value();
+	auto goals = roundTurn
+	                 ? creature_planner::NextGoals(mind.planner, creature_planner::GoalsPerTurn(registry.Size<Creature>()))
+	                 : std::vector<Desire> {};
+	if (leashTarget.has_value())
 	{
 		for (size_t d = 0; d < eligible.size(); ++d)
 		{
@@ -1565,6 +1590,11 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 	for (const auto desire : goals)
 	{
 		const auto d = static_cast<size_t>(desire);
+		if (!creature_planner::DesireMayPlan(desire, desireState))
+		{
+			mind.planner.best.at(d).reset();
+			continue;
+		}
 		// A desire about something is about a whole thing: a town, a forest, a temple, a flock or a creature. The plan
 		// acts on a part of the whole thing. Without a whole thing, the desire has no plan.
 		std::span<const uint32_t> actions = tables->desireActions.at(d);
@@ -1717,9 +1747,10 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 			order = desire == Desire::Anger ? creature_planner::PlanOrder::PartThenAction
 			                                : creature_planner::PlanOrder::ActionThenPart;
 		}
+		// A desire of the round plans with its own value, also when it was turned off or held back after the round started
 		auto best = creature_planner::PlanDesire({
 		    .desire = desire,
-		    .strength = strengths.at(d),
+		    .strength = roundTurn ? desires.desires.at(d).value : strengths.at(d),
 		    .order = order,
 		    .actions = candidates,
 		    .activityUsefulness = activity.has_value() ? std::optional(activity->usefulness) : std::nullopt,
@@ -1744,6 +1775,21 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 		}
 		return;
 	}
+	// The creature chooses its plan only when each desire of the round had its turn. Then a new round starts.
+	if (roundTurn && !creature_planner::RoundEnded(mind.planner))
+	{
+		return;
+	}
+	ChoosePlan(creature, mind, situation);
+	if (roundTurn)
+	{
+		mind.planner.round = creature_planner::RoundOf(desires);
+	}
+}
+
+void CreatureMindSystem::ChoosePlan(entt::entity creature, CreatureMindState& mind,
+                                    const creature_plan_actions::Situation& situation)
+{
 	// An agenda that it was made to do continues to its end
 	if (!creature_planner::MayChoose(mind.planActive, mind.idle.step < mind.idle.agenda.size()))
 	{

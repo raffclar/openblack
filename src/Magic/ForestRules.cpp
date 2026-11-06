@@ -14,7 +14,7 @@
 #include <algorithm>
 #include <numbers>
 
-#include "Common/PortableMath.h"
+#include "Common/X87.h"
 
 using namespace openblack;
 using namespace openblack::magic;
@@ -28,12 +28,15 @@ constexpr float k_EdgeShrink = 0.5f;
 
 glm::vec2 forest::SpiralOffset(uint32_t index, uint32_t count)
 {
-	const auto i = static_cast<float>(index);
-	const float t = count > 1 ? i / static_cast<float>(count - 1) : i;
-	const float angle = t * static_cast<float>(count) * k_TurnsPerTree * k_TwoPi;
+	// Calculate the step and the turn between two trees one time for all the trees
+	const float step = count > 1 ? 1.0f / static_cast<float>(count - 1) : 1.0f;
+	const float turn = (static_cast<float>(count) * k_TurnsPerTree) * k_TwoPi;
+	const float t = static_cast<float>(index) * step;
+	const float angle = t * turn;
 	const float out = 1.0f - t;
 	const float radius = k_InnerRadius + ((k_OuterRadius - k_InnerRadius) * std::sqrt(std::max(1.0f - (out * out), 0.0f)));
-	return {radius * portable_math::Cos(angle), radius * portable_math::Sin(angle)};
+	// Round the cosine to a float before it multiplies the radius. The sine multiplies the radius at full width.
+	return {x87::RoundToFloat(x87::Cos(angle)) * radius, x87::Mul(x87::Sin(angle), radius)};
 }
 
 float forest::TargetScale(float distance)

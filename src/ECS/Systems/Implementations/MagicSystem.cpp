@@ -409,6 +409,15 @@ bool MagicSystem::CanCastAt(MagicType type, PlayerNames player, glm::vec3 point)
 	return Locator::infoConstants::has_value() && magic::spells::CanCastAt(*this, type, player, point, _ignoreInfluence);
 }
 
+bool MagicSystem::MeetsKindRule(MagicType type, glm::vec3 point, bool onThing)
+{
+	if (!Locator::infoConstants::has_value())
+	{
+		return false;
+	}
+	return onThing ? magic::spells::MeetsKindRuleOn(*this, type, point) : magic::spells::MeetsKindRuleAt(*this, type, point);
+}
+
 bool MagicSystem::SpellEvent(entt::entity entity, const particles::SpellEventInfo& event)
 {
 	return OnSpellEvent(entity, event);
@@ -468,18 +477,6 @@ particles::ProcessInfo MagicSystem::TurnHandInfo(const particles::ProcessInfo& l
 	info.direction = stillness != nullptr ? stillness->velocity : glm::vec3(0.0f);
 	info.enabled = true;
 	return info;
-}
-
-particles::ProcessInfo MagicSystem::HandInfo() const
-{
-	return {
-	    .handPosition = _hand.handPosition,
-	    .cameraForward = _hand.cameraForward,
-	    .direction = _handVelocity,
-	    .power = 1.0f,
-	    .enabled = true,
-	    .spin = _handSpin.spin,
-	};
 }
 
 void MagicSystem::Maintain(entt::entity entity, Spell& spell)

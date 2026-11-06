@@ -13,6 +13,7 @@
 
 #include <glm/geometric.hpp>
 
+#include "Common/ModelInverseSquareRoot.h"
 #include "Common/X87.h"
 
 using namespace openblack;
@@ -27,12 +28,11 @@ uint32_t LowByte(float value) noexcept
 
 float mists::EdgeOnSize(float size, float edgeShrink, const glm::vec3& toMist)
 {
-	const float lengthSquared = glm::dot(toMist, toMist);
-	if (lengthSquared == 0.0f)
-	{
-		return size;
-	}
-	return size / (1.0f + ((edgeShrink - 1.0f) * (1.0f - (std::abs(toMist.y) / std::sqrt(lengthSquared)))));
+	// The engine's inverse square root of the squared length. Of a zero length it gives a large number, so the up part
+	// is zero and the mist is at its level size.
+	const float lengthSquared = ((toMist.x * toMist.x) + (toMist.y * toMist.y)) + (toMist.z * toMist.z);
+	const float up = std::abs(toMist.y * gutils::ModelInverseSquareRoot(lengthSquared));
+	return size / (((edgeShrink - 1.0f) * (1.0f - up)) + 1.0f);
 }
 
 void mists::Advance(int& counter, float& remainder, float milliseconds) noexcept

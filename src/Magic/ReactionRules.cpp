@@ -64,30 +64,56 @@ bool openblack::magic::ChangesReaction(Reaction current, uint32_t currentPriorit
 	return secondsReacting >= least;
 }
 
-glm::vec3 openblack::magic::FleePointFromStill(glm::vec3 villager, glm::vec3 object)
+bool openblack::magic::Moves(glm::vec3 velocity)
 {
-	glm::vec2 away(villager.x - object.x, villager.z - object.z);
-	if (away != glm::vec2(0.0f))
-	{
-		away = glm::normalize(away) * k_FleeStep;
-	}
-	return {villager.x + away.x, villager.y, villager.z + away.y};
+	const float lengthSquared = (velocity.y * velocity.y + velocity.z * velocity.z) + velocity.x * velocity.x;
+	return std::sqrt(lengthSquared) > 0.0f;
 }
 
-glm::vec3 openblack::magic::FleePointFromMoving(glm::vec3 villager, glm::vec3 object, glm::vec3 velocity, float randomX,
-                                                float randomZ)
+glm::vec2 openblack::magic::FleePointFromStill(const map_coords::MapCoords& living, const map_coords::MapCoords& thing,
+                                               float run)
 {
-	// Across its way, which is the side of it the villager is on
-	glm::vec3 across(-velocity.z, 0.0f, velocity.x);
-	if (across != glm::vec3(0.0f))
+	const auto here = map_coords::ToMetres(living);
+	const auto there = map_coords::ToMetres(thing);
+	float x = here.x - there.x;
+	float z = here.y - there.y;
+	if (x != 0.0f || z != 0.0f)
 	{
-		across = glm::normalize(across);
+		const float scale = run / std::sqrt(z * z + x * x);
+		x = x * scale;
+		z = z * scale;
 	}
-	const float x = across.x * k_FleeStep + randomX - k_FleeJitter * 0.5f;
-	const float z = across.z * k_FleeStep + randomZ - k_FleeJitter * 0.5f;
-	const float side = across.x * (villager.x - object.x) + across.z * (villager.z - object.z);
-	return side < 0.0f ? glm::vec3(villager.x - x, villager.y, villager.z - z)
-	                   : glm::vec3(villager.x + x, villager.y, villager.z + z);
+	return {x + here.x, z + here.y};
+}
+
+openblack::map_coords::MapCoords openblack::magic::FleePlaceFromMoving(const map_coords::MapCoords& living,
+                                                                       const map_coords::MapCoords& thing, glm::vec3 velocity,
+                                                                       float run, glm::vec2 random)
+{
+	const auto here = map_coords::ToMetres(living);
+	const auto there = map_coords::ToMetres(thing);
+	const float awayX = here.x - there.x;
+	const float awayZ = here.y - there.y;
+	// Across the way of the thing. The height of this direction is 0.
+	float acrossX = -velocity.z;
+	float acrossZ = velocity.x;
+	if (acrossX != 0.0f || acrossZ != 0.0f)
+	{
+		const float inverse = 1.0f / std::sqrt((0.0f + acrossX * acrossX) + acrossZ * acrossZ);
+		acrossX = inverse * acrossX;
+		acrossZ = inverse * acrossZ;
+	}
+	const float half = k_FleeJitter * 0.5f;
+	float x = (random.x + acrossX * run) - half;
+	float z = (random.y + acrossZ * run) - half;
+	// The living thing is on the side of the way that the across direction points to, or on the other side
+	if (acrossZ * awayZ + acrossX * awayX < 0.0f)
+	{
+		x = -x;
+		z = -z;
+	}
+	return {
+	    .x = map_coords::ToFixedGUtils(here.x + x), .z = map_coords::ToFixedGUtils(here.y + z), .altitude = living.altitude};
 }
 
 bool openblack::magic::ComingTowards(glm::vec3 villager, glm::vec3 object, glm::vec3 velocity)

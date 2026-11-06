@@ -310,13 +310,17 @@ inline std::optional<AnimId> CommonStateClip(const Animal& animal, AnimalState s
 
 /// The clip of a state: the miracle's doves always flap their clip and its bats theirs; its wolves stand to decide,
 /// leap, settle down to eat and eat, and run otherwise; the land's birds choose a flying clip afresh; the grazers and
-/// the wild hunters take their own
+/// the wild hunters take their own; a vulture keeps the clip that it plays
 inline AnimId ClipFor(const Animal& animal, AnimalState state)
 {
 	const auto type = animal.type;
 	if (const auto clip = CommonStateClip(animal, state))
 	{
 		return *clip;
+	}
+	if (animals::birds::KeepsItsClip(type))
+	{
+		return animal.animation;
 	}
 	if (animals::grazers::IsGrazer(type))
 	{

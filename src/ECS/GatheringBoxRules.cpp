@@ -226,8 +226,18 @@ std::vector<UserId> openblack::gathering_box::PickedFriendsAndOthers(const List&
 
 std::vector<uint8_t> host_report::Encode(const Facts& facts)
 {
-	std::vector<uint8_t> bytes(facts.game.begin(), facts.game.end());
-	AppendNumber(bytes, facts.valueIsOne ? 1 : 0);
+	std::vector<uint8_t> bytes;
+	bytes.reserve(k_TeamBytes + 8 + k_ConditionCount * 4 * (1 + k_ReportedPlayers));
+	for (size_t team = 0; team < k_ReportedTeams; ++team)
+	{
+		for (const auto& member : facts.teams.at(team))
+		{
+			AppendNumber(bytes, member.number & k_MemberNumberMask);
+			AppendNumber(bytes, member.clan);
+		}
+	}
+	// The mark of a decided game does not stay: the turn test writes over it
+	AppendNumber(bytes, facts.turn == k_MarkTurn ? 1 : 0);
 	uint32_t mask = 0;
 	for (size_t i = 0; i < k_ConditionCount; ++i)
 	{

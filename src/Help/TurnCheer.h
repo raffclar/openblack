@@ -21,6 +21,22 @@ namespace openblack::help::turn_cheer
 
 /// How fast the camera turns at full speed, in radians a second: anything faster counts as full speed
 constexpr float k_FullSpeed = 7.0f;
+/// How fast the camera tilts at full speed, in radians a second: anything faster counts as full speed
+constexpr float k_FullTiltSpeed = 5.0f;
+
+/// What the cheering goes by: how fast the player turns the camera (the turning lesson), or how fast the player tilts
+/// it (the tilting lesson)
+enum class Watch : uint8_t
+{
+	Turn,
+	Tilt,
+};
+
+/// The speed that counts as full speed for what the cheering goes by
+[[nodiscard]] constexpr float FullSpeedOf(Watch watch)
+{
+	return watch == Watch::Tilt ? k_FullTiltSpeed : k_FullSpeed;
+}
 /// How much of the way the camera's measured turning speed moves to the speed of the last step, at each step of a
 /// sixtieth of a second (the game did it once a frame at the 60 Hz screen refresh)
 constexpr float k_SpeedSmoothing = 0.4f;
@@ -42,12 +58,13 @@ constexpr int32_t k_Cheers = 14;
 struct Cheering
 {
 	bool on {false};
+	Watch watch {Watch::Turn};
 	uint32_t lastCheerTurn {0};
 	uint32_t lastBestPraiseTurn {0};
 };
 
-/// The cheering starts afresh, its turns forgotten
-void Start(Cheering& cheering);
+/// The cheering starts afresh, its turns forgotten, and goes by the speed of what it watches
+void Start(Cheering& cheering, Watch watch = Watch::Turn);
 void Stop(Cheering& cheering);
 
 /// The random numbers a cheer is decided by: a float from 0 up to a number, and a whole number below a number
@@ -57,9 +74,10 @@ struct Random
 	std::function<uint32_t(int32_t)> below;
 };
 
-/// One game turn of cheering at the camera's turning speed: the line the advisors say, if any. Turning flat out
-/// earns the best praise when it hasn't been given for long enough, and nothing else; slower turning earns a cheer,
-/// once enough turns have gone by, with a chance growing with the speed.
+/// One game turn of cheering at the speed of what the cheering watches (the camera's turning or tilting speed): the line
+/// the advisors say, if any. Moving the camera flat out earns the best praise when it hasn't been given for long enough,
+/// and nothing else; slower movement earns a cheer, once enough turns have gone by, with a chance growing with the
+/// speed.
 [[nodiscard]] std::optional<int32_t> ProcessTurn(Cheering& cheering, float speed, uint32_t gameTurn, const Random& random);
 
 } // namespace openblack::help::turn_cheer

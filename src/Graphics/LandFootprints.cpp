@@ -59,11 +59,11 @@ namespace land_footprints = ecs::land_footprints;
 
 /// Where a placed thing's footprint lies: the game turns the thing by its angles and scales it, and each product rounds
 /// to a float
-[[nodiscard]] footprint_paint::Placement PlacementFor(const ecs::Registry& registry, entt::entity entity,
+[[nodiscard]] footprint_paint::Placement PlacementFor(const ecs::placed_turn::TurnLookups& turns, entt::entity entity,
                                                       const Transform& transform)
 {
-	const bool canLean = ecs::placed_turn::CanLean(registry, entity);
-	const auto angles = ecs::placed_turn::AnglesOf(registry, entity);
+	const bool canLean = ecs::placed_turn::CanLean(turns, entity);
+	const auto angles = ecs::placed_turn::AnglesOf(turns, entity);
 	const float scale = transform.scale.x;
 	const auto turn =
 	    canLean ? x87::GameTurnMatrixScaled(angles.x, angles.y, angles.z, scale) : x87::GameUprightTurnScaled(angles.y, scale);
@@ -88,6 +88,27 @@ void Paint(std::span<uint16_t> texels, glm::ivec2 block, const L3DMesh::Footprin
 /// With fewer blocks to paint than this, this thread paints them all
 constexpr size_t k_LeastBlocksToShare = 2;
 } // namespace
+
+/// The registry keeps its component stores in a list that grows when the registry gets the first component of a kind.
+/// The draw can do that on the game's thread. Thus the search thread must not look in that list while the draw
+/// continues. A store stays at the same place while the registry exists, thus the search reads the stores that the
+/// game's thread found before the search started. A store that did not exist then holds no component during the draw.
+struct LandFootprints::ThingStores
+{
+	explicit ThingStores(const ecs::Registry& source)
+	    : registry(&source)
+	    , filed(source.Underlying().view<const MapCellResident, const MeshComponent, const Transform>())
+	    , things(source)
+	    , turns(source)
+	{
+	}
+	/// Only for the registry's list of entities, which does not change while the draw continues
+	const ecs::Registry* registry;
+	/// The things filed in the map's cells that have a model and a transform
+	decltype(std::declval<const entt::registry&>().view<const MapCellResident, const MeshComponent, const Transform>()) filed;
+	ecs::ComponentLookups<MeshComponent, MapCellResident> things;
+	ecs::placed_turn::TurnLookups turns;
+};
 
 LandFootprints::LandFootprints() = default;
 
@@ -173,9 +194,9 @@ void LandFootprints::MarkBlocks(glm::ivec2 lowBlock, glm::ivec2 highBlock)
 	}
 }
 
-void LandFootprints::FindChangedThings()
+void LandFootprints::FindChangedThings(const ThingStores& stores)
 {
-	const auto& registry = Locator::entitiesRegistry::value();
+	const auto& registry = *stores.registry;
 	// A thing that went while the land was not drawn, as in the temple of a network game where the world goes on, can
 	// leave its number to a new thing. The footprint of the thing that went comes off first.
 	std::vector<entt::entity> gone;
@@ -192,7 +213,7 @@ void LandFootprints::FindChangedThings()
 	// Only a thing filed in the map's cells counts: the game paints a footprint when its thing goes into the cells, and
 	// paints it no more once the thing comes out of them. A known thing that is not in the cells now is not seen, and the
 	// loop after this one removes it.
-	registry.Each<const MapCellResident, const MeshComponent, const Transform>(
+	stores.filed.each(
 	    [&](entt::entity entity, const MapCellResident& resident, const MeshComponent& mesh, const Transform& transform) {
 		    const auto* footprint = FootprintOf(mesh.id);
 		    // The registry can give the number of a removed thing to a new thing. The removed thing is not on the map now,
@@ -217,7 +238,7 @@ void LandFootprints::FindChangedThings()
 		    {
 			    return;
 		    }
-		    const auto placement = PlacementFor(registry, entity, transform);
+		    const auto placement = PlacementFor(stores.turns, entity, transform);
 		    const auto [lowBlock, highBlock] = BlocksOf(land_footprints::GroundBounds(footprint->triangles, placement));
 		    MarkBlocks(lowBlock, highBlock);
 		    _known.emplace(entity, Known {.mesh = mesh.id,
@@ -332,10 +353,9 @@ void LandFootprints::FindChangedGroundPrints()
 	}
 }
 
-LandFootprints::BlockPaint LandFootprints::FindBlockPaint(size_t block) const
+LandFootprints::BlockPaint LandFootprints::FindBlockPaint(size_t block, const ThingStores& stores) const
 {
 	const auto& island = Locator::terrainSystem::value();
-	const auto& registry = Locator::entitiesRegistry::value();
 	const auto& map = Locator::entitiesMap::value();
 	const auto& landBlock = island.GetBlocks().at(block);
 	const auto position = landBlock.GetBlockPosition();
@@ -347,8 +367,8 @@ LandFootprints::BlockPaint LandFootprints::FindBlockPaint(size_t block) const
 	    position, [&map](glm::ivec2 cell) { return map.GetFiledFixedInGridCell(ecs::MapInterface::CellId(cell)); },
 	    [&map](glm::ivec2 cell) { return map.GetFiledMobileInGridCell(ecs::MapInterface::CellId(cell)); },
 	    [&](entt::entity entity) {
-		    const auto* mesh = registry.TryGet<const MeshComponent>(entity);
-		    return mesh != nullptr && registry.AllOf<Transform, MapCellResident>(entity) &&
+		    const auto* mesh = stores.things.TryGet<const MeshComponent>(entity);
+		    return mesh != nullptr && stores.turns.AllOf<Transform>(entity) && stores.things.AllOf<MapCellResident>(entity) &&
 		           FoundFootprintOf(mesh->id) != nullptr;
 	    });
 	// After the things come the loose prints, the newest first: the prints of the things that show only as prints, then
@@ -366,10 +386,9 @@ LandFootprints::BlockPaint LandFootprints::FindBlockPaint(size_t block) const
 	return paint;
 }
 
-void LandFootprints::PaintBlock(size_t block, const BlockPaint& paint, std::span<uint16_t> texels)
+void LandFootprints::PaintBlock(size_t block, const BlockPaint& paint, const ThingStores& stores, std::span<uint16_t> texels)
 {
 	const auto& island = Locator::terrainSystem::value();
-	const auto& registry = Locator::entitiesRegistry::value();
 	const auto position = island.GetBlocks().at(block).GetBlockPosition();
 	const auto side = island.GetBlockTextureSide();
 
@@ -383,12 +402,12 @@ void LandFootprints::PaintBlock(size_t block, const BlockPaint& paint, std::span
 	std::ranges::copy(own, texels.begin());
 	for (const auto entity : paint.things)
 	{
-		const auto& transform = registry.Get<const Transform>(entity);
-		const auto* footprint = FoundFootprintOf(registry.Get<const MeshComponent>(entity).id);
+		const auto& transform = *stores.turns.TryGet<const Transform>(entity);
+		const auto* footprint = FoundFootprintOf(stores.things.TryGet<const MeshComponent>(entity)->id);
 		const auto* known = _known.contains(entity) ? &_known.get(entity) : nullptr;
 		const auto placement = known != nullptr && SameTransform(known->transform, transform)
 		                           ? known->placement
-		                           : PlacementFor(registry, entity, transform);
+		                           : PlacementFor(stores.turns, entity, transform);
 		Paint(texels, position, *footprint, placement, footprint_paint::Mix::Colour, side);
 	}
 	for (const auto* print : paint.loose)
@@ -425,10 +444,11 @@ void LandFootprints::Update()
 		{
 			return;
 		}
-		FindChangedThings();
+		FindChangedThings(ThingStores(Locator::entitiesRegistry::value()));
 		break;
 	}
-	PaintChanges();
+	// The lanes of the pool that paint the blocks read only the stores that this thread finds now
+	PaintChanges(ThingStores(Locator::entitiesRegistry::value()));
 }
 
 void LandFootprints::StartSearch()
@@ -444,7 +464,8 @@ void LandFootprints::StartSearch()
 		_searchThread = std::make_unique<SideThread>();
 	}
 	_search = Search::Started;
-	_searchThread->Start([this] { FindChangedThings(); });
+	// The side thread reads only the stores that this thread finds now
+	_searchThread->Start([this, stores = ThingStores(Locator::entitiesRegistry::value())] { FindChangedThings(stores); });
 }
 
 void LandFootprints::ForgetSearch()
@@ -491,7 +512,7 @@ bool LandFootprints::TakeLandChanges()
 	return true;
 }
 
-void LandFootprints::PaintChanges()
+void LandFootprints::PaintChanges(const ThingStores& stores)
 {
 	auto& island = Locator::terrainSystem::value();
 	const auto blockCount = island.GetBlocks().size();
@@ -516,7 +537,7 @@ void LandFootprints::PaintChanges()
 	std::vector<BlockPaint> paints(blocks.size());
 	std::vector<uint8_t> toPaint(blocks.size(), 0);
 	const auto findOne = [&](size_t i, size_t /*lane*/) {
-		paints[i] = FindBlockPaint(blocks[i]);
+		paints[i] = FindBlockPaint(blocks[i], stores);
 		toPaint[i] = !paints[i].things.empty() || !paints[i].loose.empty() || _painted.at(blocks[i]) ? 1 : 0;
 	};
 	if (blocks.size() < k_LeastBlocksToShare)
@@ -549,7 +570,7 @@ void LandFootprints::PaintChanges()
 		_texels.resize(side * side);
 		for (size_t i = 0; i < painted.size(); ++i)
 		{
-			PaintBlock(painted[i], *paintOf[i], _texels);
+			PaintBlock(painted[i], *paintOf[i], stores, _texels);
 			island.SetBlockTexels(painted[i], _texels);
 		}
 	}
@@ -557,7 +578,9 @@ void LandFootprints::PaintChanges()
 	{
 		island.PaintBlocksTexels(
 		    painted,
-		    [this, &painted, &paintOf](size_t i, std::span<uint16_t> texels) { PaintBlock(painted[i], *paintOf[i], texels); },
+		    [this, &painted, &paintOf, &stores](size_t i, std::span<uint16_t> texels) {
+			    PaintBlock(painted[i], *paintOf[i], stores, texels);
+		    },
 		    Workers());
 	}
 }

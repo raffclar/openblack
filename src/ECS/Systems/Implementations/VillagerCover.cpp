@@ -11,11 +11,13 @@
 
 #include "VillagerCover.h"
 
+#include <optional>
 #include <vector>
 
 #include <glm/gtx/vec_swizzle.hpp>
 #include <spdlog/spdlog.h>
 
+#include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
 #include "Animals/PredatorRules.h"
 #include "Common/GUtilsDistance.h"
@@ -32,6 +34,7 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
+#include "ECS/ThingMapPlace.h"
 #include "ECS/VillagerHidingRules.h"
 #include "ECS/VillagerRoutine.h"
 #include "ECS/WorldObjects.h"
@@ -145,17 +148,23 @@ uint32_t FleeFromObjectIfComingTowardsMe(LivingAction& action, entt::entity thin
 		ecs::systems::villager_reactions::LookAt(villager, there);
 		return 1;
 	}
-	auto to = magic::FleePointFromStill(here, there);
-	if (glm::length(movement) > 0.0f)
+	// The game takes random numbers only for a thing that moves
+	std::optional<glm::vec2> random;
+	if (magic::Moves(movement))
 	{
-		auto& random = Locator::gameRandom::value();
-		const float x = random.GameFloatRand(magic::k_FleeJitter);
-		const float z = random.GameFloatRand(magic::k_FleeJitter);
-		to = magic::FleePointFromMoving(here, there, movement, x, z);
+		auto& gameRandom = Locator::gameRandom::value();
+		const float x = gameRandom.GameFloatRand(magic::k_FleeJitter);
+		const float z = gameRandom.GameFloatRand(magic::k_FleeJitter);
+		random = glm::vec2(x, z);
 	}
-	if (map_coords::InBounds(map_coords::FromMetres(glm::xz(to))))
+	const auto& island = Locator::terrainSystem::value();
+	const auto ground = [&island](const map_coords::MapCoords& place) { return map_coords::GroundAt(island, place); };
+	if (const auto goal =
+	        magic::FleePlace(ecs::thing_map_place::Of(registry, villager), ecs::thing_map_place::Of(registry, thing), movement,
+	                         random, magic::k_FleeStep, ground);
+	    goal.has_value())
 	{
-		ecs::villager_home::SetupMoveTo(action, glm::xz(to), VillagerStates::LookingAtObjectReaction);
+		ecs::villager_home::SetupMoveTo(action, *goal, VillagerStates::LookingAtObjectReaction);
 		ecs::systems::villager_reactions::SetStateSpeed(villager, living.VillagerGetFinalState(action));
 	}
 	return 1;
