@@ -794,10 +794,10 @@ void testbed_scenarios::AddAudio(std::vector<Scenario>& all)
 	    .description = "Bob, the god of the second tiger, says a line in the chat. Then Alice, the god of this computer, "
 	                   "says a line. Then the chat opens with a line in it, and its list of players shows Bob.",
 	    .expected = "A bubble with the line comes over each tiger. The bubble over Bob's tiger has his line in his green, "
-	                "on a box of half of his colour. The bubble of Alice's tiger shows her line without her name. The "
-	                "lines of Bob come into the incoming messages. The speech button at the top right becomes the line "
-	                "of the chat, the quick chat and the send buttons, and the list of players under them. The bubbles "
-	                "fade after some seconds.",
+	                "on a dark sky blue box, as each bubble box is. The bubble of Alice's tiger shows her line without "
+	                "her name. The lines of Bob come into the incoming messages. The speech button at the top right "
+	                "becomes the line of the chat, the quick chat and the send buttons, and the list of players under "
+	                "them. The bubbles fade after some seconds.",
 	    .environment = {.players = {PlayerNames::PLAYER_TWO}},
 	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 40.0f, -60.0f}, .look = {0.0f, 10.0f, 0.0f}},
 	    .creatures = {{.label = "Alice's tiger",
