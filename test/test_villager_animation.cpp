@@ -153,7 +153,19 @@ TEST(VillagerAnimation, BuildersCarryTheToolOfTheirStroke)
 	EXPECT_EQ(choice.clip, AnimId::PSawWood);
 	EXPECT_EQ(choice.tool, CarriedObject::Saw);
 	Rolls none;
-	EXPECT_EQ(BuildingClip(true, AnimId::PSledgehammer, none.Random()).tool, CarriedObject::MalletHeavy);
+	// At the end of each clip into the work, the stroke of that clip follows, with no roll
+	const auto hammer = BuildingClip(true, AnimId::PIntoHammering, none.Random());
+	EXPECT_EQ(hammer.clip, AnimId::PHammering);
+	EXPECT_EQ(hammer.tool, CarriedObject::Hammer);
+	const auto sawing = BuildingClip(true, AnimId::PIntoSawWood, none.Random());
+	EXPECT_EQ(sawing.clip, AnimId::PSawWood);
+	EXPECT_EQ(sawing.tool, CarriedObject::Saw);
+	const auto mallet = BuildingClip(true, AnimId::PIntoSledgehammer, none.Random());
+	EXPECT_EQ(mallet.clip, AnimId::PSledgehammer);
+	EXPECT_EQ(mallet.tool, CarriedObject::MalletHeavy);
+	// A stroke clip that plays as a transition is not a clip into the work: the stroke is random
+	Rolls first {.values = {0}};
+	EXPECT_EQ(BuildingClip(true, AnimId::PSledgehammer, first.Random()).clip, AnimId::PHammering);
 	EXPECT_EQ(TransitionClip(Transition::Building, false, false, false, AnimId::PHammering), AnimId::POutOfHammering);
 	EXPECT_EQ(TransitionClip(Transition::Building, true, false, false, AnimId::PStand), std::nullopt);
 }
