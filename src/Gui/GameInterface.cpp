@@ -2596,8 +2596,8 @@ void GameInterface::DrawChatBubbles(glm::u16vec2 resolution, glm::ivec2 mouse)
 		    world_text::BufferDepth(view.projection, world_text::WordsDepth(boxDepth - 2.0f, view.nearClip));
 		canvas.SetSortDepth(graphics::zsort::Depth(anchor, view.eye));
 		canvas.SetDepth(world_text::BufferDepth(view.projection, boxDepth));
-		// The box has half of the colour of the creature's god
-		const auto boxBits = bubbles::BoxColour(colourOf(body->owner));
+		// The box has half of the default sky blue, also for the creature of a god
+		const auto boxBits = bubbles::BoxColour();
 		const auto boxColour =
 		    glm::vec3(static_cast<float>((boxBits >> 16u) & 0xFFu) / 255.0f,
 		              static_cast<float>((boxBits >> 8u) & 0xFFu) / 255.0f, static_cast<float>(boxBits & 0xFFu) / 255.0f);
