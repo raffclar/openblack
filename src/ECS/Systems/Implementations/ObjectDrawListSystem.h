@@ -15,7 +15,10 @@
 
 #include <cstdint>
 
+#include <array>
 #include <optional>
+#include <span>
+#include <utility>
 #include <vector>
 
 #include <entt/entity/registry.hpp>
@@ -24,6 +27,7 @@
 
 #include "ECS/Systems/ObjectDrawListSystemInterface.h"
 #include "Scenery/ObjectDrawList.h"
+#include "Visual/LandDetail.h"
 
 namespace openblack::ecs::systems
 {
@@ -69,14 +73,22 @@ private:
 		bool inView {false};
 		/// It showed triangles when it was last in view
 		bool shown {false};
-		/// Its triangles at full detail, three corner indices each
-		std::vector<uint16_t> triangles;
+		/// What its triangles need of each of its cells
+		std::array<graphics::land_detail::CellFlags, graphics::land_detail::k_CornerCount> cells {};
+		/// Its triangles for each mesh, set of coarser sides and open-sea rule that the land drew it with, three corner
+		/// indices each, by the number of the set (see TrianglesOf)
+		std::vector<std::pair<uint16_t, std::vector<uint16_t>>> triangleSets;
 	};
 
 	/// The land's blocks as the list sees them, read once a land
 	void LoadBlocks();
-	/// Whether one or more triangles of a block in view show, with its cells at the heights they have now
-	[[nodiscard]] static bool Shows(const LandBlock& block, const glm::mat4& viewProjection, float nearPlane, glm::vec3 eye);
+	/// The triangles of a block for the mesh, coarser sides and open-sea rule that the land draws it with
+	[[nodiscard]] static std::span<const uint16_t> TrianglesOf(LandBlock& block, graphics::land_detail::Mesh mesh,
+	                                                           uint8_t coarserSides, bool dropOpenSea);
+	/// Whether one or more triangles of a block in view show, as the land draws them in the frame: its mesh, its
+	/// stitched sides and its corners at the heights they are drawn at
+	[[nodiscard]] static bool Shows(LandBlock& block, const graphics::land_detail::FrameDetail* detail,
+	                                const glm::mat4& viewProjection, float nearPlane, glm::vec3 eye);
 	void MakeList();
 	/// The parts that the draw of each village totem draws with it
 	void FindParts();

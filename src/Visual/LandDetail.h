@@ -190,6 +190,66 @@ struct MorphTargets
 /// How opaque the coarse texture is over the full one at a corner, 0 to 255: clear before the band, opaque beyond it
 [[nodiscard]] uint8_t CrossFadeAlpha(float offset, float band);
 
+/// Where a block of the land is: its corner of least x and z, and its column and row on the map's 32 by 32 grid
+struct BlockPlace
+{
+	glm::vec2 corner {0.0f};
+	glm::ivec2 at {0};
+
+	bool operator==(const BlockPlace&) const = default;
+};
+
+/// What the detail of the blocks in a frame comes from: the camera and the detail settings
+struct FrameInputs
+{
+	glm::vec3 origin {0.0f};
+	glm::vec3 forward {0.0f, 0.0f, 1.0f};
+	Lines lines;
+	bool coarseLand {false};
+
+	bool operator==(const FrameInputs&) const = default;
+};
+
+/// How each block of the land is drawn in a frame, in the order of the blocks given
+struct FrameDetail
+{
+	Lines lines;
+	ViewLine meshNear;
+	ViewLine meshFar;
+	ViewLine texture;
+	std::vector<BlockDetail> blocks;
+	/// The sides of each block whose neighbour has a coarser mesh (see CoarserSides)
+	std::vector<uint8_t> coarserSides;
+	/// The indices of the blocks at x - 1, z - 1, z + 1 and x + 1 of each block, -1 where there is none
+	std::vector<std::array<int16_t, 4>> neighbours;
+};
+
+/// The mesh, morph, texture and coarser sides of each block in a frame. The lines cross the ground ahead of the camera.
+/// The texture line meets the ground no higher than k_TextureGroundCap.
+[[nodiscard]] FrameDetail ClassifyFrame(const FrameInputs& inputs, std::span<const BlockPlace> blocks);
+
+/// The altitude at which the corner (x, z) of a block is drawn in a frame. This is the corner's own altitude. While the
+/// block morphs, the altitude goes towards the coarser mesh by the corner's place in the band of the morph's line. The
+/// corner altitudes are [x * 17 + z], and blockCorner is the corner of the block with the least x and z.
+[[nodiscard]] uint8_t DrawnCornerAltitude(std::span<const uint8_t, k_CornerCount> altitudes, size_t x, size_t z, Morph morph,
+                                          const FrameDetail& frame, glm::vec2 blockCorner);
+
+/// The detail of the last frame. A frame with the same inputs and the same blocks uses it again. Thus all the users in a
+/// frame share one classification.
+class FrameMemo
+{
+public:
+	[[nodiscard]] const FrameDetail& For(const FrameInputs& inputs, std::span<const BlockPlace> blocks);
+	/// How many times the memo classified a frame
+	[[nodiscard]] uint64_t Classifications() const { return _classifications; }
+
+private:
+	std::optional<FrameInputs> _inputs;
+	std::vector<BlockPlace> _blocks;
+	FrameDetail _frame;
+	uint64_t _classifications {0};
+};
+
 /// How a block's coarse texture takes its texels from the block's texture. The coarse texture is a quarter of the
 /// block's texture along each side. A texel round its edge is shared with the neighbouring blocks, and the game samples
 /// the texels between them from the block's texture.

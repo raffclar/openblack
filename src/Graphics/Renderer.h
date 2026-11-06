@@ -649,15 +649,11 @@ private:
 	mutable std::vector<glm::vec2> _groundShadowBlocks;
 	/// The land's level of detail this frame, from the camera of the view: the lines across the ground, and how each
 	/// block is drawn and which of its sides are stitched to coarser neighbours, by the block's index. The land
-	/// mirrored under the sea is drawn with the same.
+	/// mirrored under the sea is drawn with the same. The draw list tests the triangles of the blocks with the same
+	/// classification (see LandDetailSystemInterface).
 	struct LandDetailFrame
 	{
-		land_detail::Lines lines;
-		land_detail::ViewLine meshNear;
-		land_detail::ViewLine meshFar;
-		land_detail::ViewLine texture;
-		std::vector<land_detail::BlockDetail> blocks;
-		std::vector<uint8_t> coarserSides;
+		land_detail::FrameDetail detail;
 		/// The indices of the blocks at x - 1, z - 1, z + 1 and x + 1, -1 where there is none
 		std::vector<glm::vec4> neighbours;
 		/// Whether a part of the box over the block can be seen from the view's camera. Only those blocks are drawn,

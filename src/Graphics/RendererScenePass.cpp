@@ -476,10 +476,11 @@ void Renderer::DrawPassLand(const DrawSceneDesc& desc, const ScenePass& pass) co
 		// way it faces along the ground; then how far ahead the two mesh lines and the texture line lie, each 0 when
 		// the camera looks straight down, and the bands
 		const auto lineAhead = [](const land_detail::ViewLine& line) { return line.valid ? line.ahead : 0.0f; };
-		const glm::vec4 u_landLine {_landDetail.meshNear.camera, _landDetail.meshNear.forward};
-		const glm::vec4 u_landLineAhead {lineAhead(_landDetail.meshNear), lineAhead(_landDetail.meshFar),
-		                                 lineAhead(_landDetail.texture), _landDetail.meshNear.valid ? 1.0f : 0.0f};
-		const glm::vec4 u_landBands {_landDetail.lines.meshBand, _landDetail.lines.textureBand, 0.0f, 0.0f};
+		const glm::vec4 u_landLine {_landDetail.detail.meshNear.camera, _landDetail.detail.meshNear.forward};
+		const glm::vec4 u_landLineAhead {lineAhead(_landDetail.detail.meshNear), lineAhead(_landDetail.detail.meshFar),
+		                                 lineAhead(_landDetail.detail.texture),
+		                                 _landDetail.detail.meshNear.valid ? 1.0f : 0.0f};
+		const glm::vec4 u_landBands {_landDetail.detail.lines.meshBand, _landDetail.detail.lines.textureBand, 0.0f, 0.0f};
 
 		// The hand's light is in the land's own lighting, so the reflection shows it too
 
@@ -583,8 +584,10 @@ void Renderer::DrawPassLand(const DrawSceneDesc& desc, const ScenePass& pass) co
 		const auto submitBlock = [&](size_t index) {
 			const auto& block = blocks[index];
 			// The block's mesh and texture this frame: y how its corners morph, z its texture
-			const auto detail = index < _landDetail.blocks.size() ? _landDetail.blocks[index] : land_detail::BlockDetail {};
-			const uint8_t coarserSides = index < _landDetail.coarserSides.size() ? _landDetail.coarserSides[index] : 0;
+			const auto detail =
+			    index < _landDetail.detail.blocks.size() ? _landDetail.detail.blocks[index] : land_detail::BlockDetail {};
+			const uint8_t coarserSides =
+			    index < _landDetail.detail.coarserSides.size() ? _landDetail.detail.coarserSides[index] : 0;
 			// The game leaves out open sea only from blocks wholly before the first line
 			const bool dropOpenSea = detail.mesh == land_detail::Mesh::Full && detail.morph == land_detail::Morph::None;
 			// A block of open sea only then has no triangles, and nothing to draw
