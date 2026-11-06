@@ -249,20 +249,22 @@ void openblack::testbed_scenarios::AddFixedKindScenarios(std::vector<Scenario>& 
 
 	std::vector<ObjectSetup> burningSiteTown {
 	    {.type = AbodeInfo::NorseTownCentre, .offset = k_Gathering - k_BuildingGap},
-	    {.type = AbodeInfo::NorseStoragePit, .offset = k_Gathering + k_BuildingGap, .yawDegrees = 180.0f}};
+	    {.type = AbodeInfo::NorseStoragePit, .offset = k_Gathering + k_BuildingGap, .yawDegrees = 180.0f},
+	    {.type = VillagerInfo::NorseForesterMale, .offset = k_Gathering + glm::vec2(0.0f, 15.0f), .joinTown = true}};
 	all.push_back({
 	    .id = "appearance.worship_site_flames",
 	    .name = "The flames of a burning worship site are three tenths of its height",
 	    .facet = Facet::Appearance,
-	    .description = "A Norse town of the player with a village centre and a storage pit. The town's worship site goes up "
-	                   "by the temple and is built at once. After two seconds the site catches fire at the most heat of "
-	                   "its fire.",
+	    .description =
+	        "A Norse town of the player with a village centre, a storage pit and one villager. The town's worship site "
+	        "goes up by the temple and is built at once. After two seconds the site catches fire at the most heat of its "
+	        "fire.",
 	    .expected = "The flames on the site are three tenths of its height, as the flames on a creature or on the temple. "
 	                "Before, they were half of its height, as on a hut.",
 	    .environment = {.dispenserGrid = false},
 	    .framing = {.shot = Shot::Placed,
-	                .eye = {k_Altar.x + 30.0f, 20.0f, k_Altar.y + 15.0f},
-	                .look = {k_Altar.x, 2.0f, k_Altar.y - 5.0f}},
+	                .eye = {k_Altar.x + 60.0f, 40.0f, k_Altar.y + 40.0f},
+	                .look = {k_Altar.x - 5.0f, 2.0f, k_Altar.y - 10.0f}},
 	    .objects = std::move(burningSiteTown),
 	    .temples = {{.offset = k_PileTemple}},
 	    .commands = {{.kind = Kind::BuildWorshipSites, .delaySeconds = 0.5f},
