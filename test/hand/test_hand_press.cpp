@@ -290,6 +290,20 @@ TEST(HandPress, TheLetGoOfTheButtonThatPressedForTheFightChargesTheBlow)
 	EXPECT_FALSE(fixture.system->GetFightButton().has_value());
 }
 
+TEST(HandPress, TheFightGetsTheReleaseOfItsButtonAlsoAfterTheFightEnded)
+{
+	Fixture fixture;
+	fixture.world->fightPressTakes = true;
+	fixture.Press(ButtonEvent(SDL_MOUSEBUTTONDOWN, SDL_BUTTON_RIGHT));
+	ASSERT_TRUE(fixture.system->GetFightButton().has_value());
+	// The fight ends while the player holds the button: the fight forgets the press
+	fixture.world->fightPressed = false;
+	fixture.world->calls.clear();
+	fixture.Press(Motion(0));
+	EXPECT_TRUE(fixture.Called("FightRelease"));
+	EXPECT_FALSE(fixture.system->GetFightButton().has_value());
+}
+
 TEST(HandPress, AnEmptyHandOnACreatureClicksItAndTakesHoldOfIt)
 {
 	Fixture fixture;

@@ -198,6 +198,12 @@ enum class Button : uint8_t
 /// - the camera shows a fight,
 /// - the hand holds no thing and no miracle.
 [[nodiscard]] bool DirectsFight(bool playersCreatureDuels, bool cameraShowsFight, bool handEmpty);
+/// Whether the hand is in the controls of a fight. This is true while the hand directs the fight. It is also true while
+/// the player holds the button of a press on a body that the fight took. That hold continues after the fight ends,
+/// until the player lets go of the button.
+[[nodiscard]] bool InFightControls(bool directsFight, bool bodyPressHeld);
+/// Whether the hand directs the fight for the fight music. A hold of a press on a body does not count.
+[[nodiscard]] bool DirectsFightForMusic(bool directsFight, bool bodyPressHeld);
 /// Whether a point on the land is in the arena. A double click on such a point makes the camera show the fight.
 [[nodiscard]] bool InArena(const Arena& arena, glm::vec2 point);
 /// What the hand offers over a fight: blocking over the player's own creature, attacking over its opponent, and
@@ -918,8 +924,9 @@ constexpr uint32_t k_PointAtArenaTurns = 20;
 
 /// The fight music of the player's creature is heard from this distance to the middle of its arena, in metres
 constexpr float k_FightMusicDistance = 100.0f;
-/// Whether the fight music of the player's creature plays. It plays while the hand directs the fight. It also plays
-/// while the camera is less than the music distance from the middle of an arena where a fight of the creature is on.
+/// Whether the fight music of the player's creature plays. It plays while the hand directs the fight, as
+/// DirectsFightForMusic gives it. It also plays while the camera is less than the music distance from the middle of an
+/// arena where a fight of the creature is on.
 [[nodiscard]] bool FightMusicHeard(bool directsFight, std::span<const glm::vec3> arenasOfItsFights, const glm::vec3& camera);
 /// The hit that a blow that lands gives its victim from the attacker, which changes how nice the victim finds it
 constexpr float k_BlowHitEffect = 0.05f;
