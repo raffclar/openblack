@@ -108,6 +108,29 @@ void AddSecondLandIconScenarios(std::vector<Scenario>& all)
 	    .townMiracles = {MagicType::Heal, MagicType::Water},
 	});
 	all.push_back({
+	    .id = "hand.charge_pulse",
+	    .name = "Bands pulse onto the hand while a worship site icon charges a miracle for it",
+	    .facet = Facet::Miracles,
+	    .description = "The town and temple of town.miracle_debug_given on the second land, with the site built. The "
+	                   "battery of the site gets six tenths of the cost of the heal miracle, and a tap starts the heal "
+	                   "icon. The icon takes the battery, and then it waits for more prayer power.",
+	    .expected = "The first band flies from in front of the camera onto the hand when the charge starts. Then a band "
+	                "comes about every 2.6 seconds. Each band takes about 2 seconds to fly to the hand, faint in "
+	                "the player's colour, and goes. With more charge the bands come more often, fly faster and are "
+	                "brighter.",
+	    .environment = {.dispenserGrid = false, .landNumber = k_SecondLand},
+	    .framing = icons,
+	    .objects = Town(),
+	    .temples = {{.offset = k_Temple}},
+	    .commands = {{.kind = Kind::BuildWorshipSites, .delaySeconds = 3.0f},
+	                 {.kind = Kind::TapSiteIcon,
+	                  .delaySeconds = 1.0f,
+	                  .value = static_cast<size_t>(SpellSeedType::Heal),
+	                  .amount = 0.6f}},
+	    .townBeliefInPlayer = k_TownBelief,
+	    .townMiracles = {MagicType::Heal, MagicType::Water},
+	});
+	all.push_back({
 	    .id = "worship.one_shot_seed_from_icon",
 	    .name = "A one-shot miracle that a script puts in the hand comes from the worship site icon",
 	    .facet = Facet::Miracles,
