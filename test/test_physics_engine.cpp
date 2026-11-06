@@ -10,6 +10,7 @@
 #include <cmath>
 
 #include <algorithm>
+#include <limits>
 #include <numbers>
 #include <sstream>
 #include <tuple>
@@ -145,6 +146,11 @@ TEST(PhysicsMaterials, ClampsEachColumn)
 	EXPECT_FLOAT_EQ(row.spinKeptPerSecond, 0.2f);
 	EXPECT_FLOAT_EQ(row.drag, 4.0f);
 	EXPECT_FLOAT_EQ(MaterialTable::Clamp({.density = 0.0f}).density, 0.05f);
+	// A value that is not a number becomes the maximum of its column
+	const auto notANumber = MaterialTable::Clamp(
+	    {.density = std::numeric_limits<float>::quiet_NaN(), .friction = std::numeric_limits<float>::quiet_NaN()});
+	EXPECT_EQ(notANumber.density, 3.0f);
+	EXPECT_EQ(notANumber.friction, 3.0f);
 }
 
 TEST(PhysicsMaterials, RowsPastTheFileCopyTheFirst)

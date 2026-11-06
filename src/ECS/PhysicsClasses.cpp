@@ -280,9 +280,10 @@ physics_classes::ClassFacts ClassifyKind(const Registry& registry, entt::entity 
 	}
 	if (registry.AllOf<Animal>(entity))
 	{
+		// An animal of a maze puzzle stands in the way of what flies, but it never flies itself
 		return {.body = BodyKind::AnimalBox,
 		        .row = MaterialRow::Animal,
-		        .canBecomePhysicsObject = true,
+		        .canBecomePhysicsObject = !registry.AllOf<PuzzlePiece>(entity),
 		        .interacts = true,
 		        .animated = true,
 		        .dynamic = true};
