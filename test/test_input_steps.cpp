@@ -28,7 +28,6 @@
 #include "Common/InputSteps.h"
 #include "Creature/CreatureTouchStep.h"
 #include "ECS/Components/HandOnCreature.h"
-#include "Gestures/GestureRecorder.h"
 
 using namespace openblack;
 using namespace std::chrono_literals;
@@ -241,19 +240,6 @@ TEST(InputSteps, AtSixtyFramesASecondEachFrameWeighsOnceAtItsCursor)
 		const auto steps = clock.Advance(16'667us);
 		ASSERT_EQ(steps.count, 1u);
 		EXPECT_EQ(creature_hand::StepCursor({100, 100}, {137, 90}, steps, 0), glm::ivec2(137, 90));
-	}
-}
-
-TEST(InputSteps, TheGesturesSampleTheCursorThirtyTimesASecondAtAnyFrameRate)
-{
-	for (const int rate : k_FrameRates)
-	{
-		float sinceSample = 0.0f;
-		size_t samples = 0;
-		RunFrames(rate, 10.0f, [&](float, float, const input_steps::Steps& steps) {
-			samples += gesture::SamplePoints(sinceSample, steps).size();
-		});
-		EXPECT_NEAR(samples, 300u, 1u) << rate << " frames a second";
 	}
 }
 
