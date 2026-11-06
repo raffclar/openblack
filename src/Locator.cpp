@@ -98,6 +98,7 @@
 #include "ECS/Systems/Implementations/HighDetailSystem.h"
 #include "ECS/Systems/Implementations/InfluenceSystem.h"
 #include "ECS/Systems/Implementations/IntroSystem.h"
+#include "ECS/Systems/Implementations/LandDetailSystem.h"
 #include "ECS/Systems/Implementations/LobbyClientSystem.h"
 #include "ECS/Systems/Implementations/NetworkGameSystem.h"
 #include "ECS/Systems/Implementations/ObjectDrawListSystem.h"
@@ -290,6 +291,7 @@ using openblack::ecs::systems::HelpTextSystem;
 using openblack::ecs::systems::HighDetailSystem;
 using openblack::ecs::systems::InfluenceSystem;
 using openblack::ecs::systems::IntroSystem;
+using openblack::ecs::systems::LandDetailSystem;
 using openblack::ecs::systems::LandSystem;
 using openblack::ecs::systems::LeashSystem;
 using openblack::ecs::systems::LivingActionSystem;
@@ -926,6 +928,8 @@ void InitializeLevelWith(MakeLand&& makeLand)
 	makeLand();
 	// The things on the land's blocks that are drawn, near to far
 	Locator::objectDrawListSystem::emplace<ObjectDrawListSystem>();
+	// How the land's blocks are drawn in each frame, for the land's draw and the draw list
+	Locator::landDetailSystem::emplace<LandDetailSystem>();
 	Locator::cameraPathSystem::emplace<CameraPathSystem>();
 }
 } // namespace
@@ -1030,6 +1034,7 @@ void openblack::ShutDownServices()
 	Locator::resourceStoreSystem::reset();
 	Locator::animatedStaticSystem::reset();
 	Locator::objectDrawListSystem::reset();
+	Locator::landDetailSystem::reset();
 	Locator::abodeSoundSystem::reset();
 	Locator::appleBarrelSystem::reset();
 	Locator::weatherSystem::reset();

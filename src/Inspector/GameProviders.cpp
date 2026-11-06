@@ -224,6 +224,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"workshopSystem", "living.workshops"},
     LocatorCoverage {"animatedStaticSystem", "living.animated_statics"},
     LocatorCoverage {"objectDrawListSystem", "view.draw_list"},
+    LocatorCoverage {"landDetailSystem", "view.draw_list"},
     LocatorCoverage {"appleBarrelSystem", "living.apple_barrel"},
     LocatorCoverage {"gestureSystem", "players.gestures"},
     LocatorCoverage {"miracleFxSystem", "magic.state"},
