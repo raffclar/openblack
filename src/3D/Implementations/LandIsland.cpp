@@ -188,6 +188,25 @@ float LandIslandInterface::GetAltitude(int32_t mapX, int32_t mapZ, bool seaLevel
 	return static_cast<float>(height) * k_HeightUnit * k_AltitudeFraction;
 }
 
+float LandIslandInterface::GetScriptLandHeight(glm::vec3 position) const
+{
+	// The script finds the cell with a tenth of each coordinate, truncated. At the edge of a cell, this cell can be
+	// different from the cell of the map position.
+	constexpr float k_CellsPerMetre = 0.1f;
+	const auto cellX = map_coords::FtoL(position.x * k_CellsPerMetre);
+	const auto cellZ = map_coords::FtoL(position.z * k_CellsPerMetre);
+	if (cellX < 0 || cellX >= k_MapSize || cellZ < 0 || cellZ >= k_MapSize)
+	{
+		return k_NoScriptLandHeight;
+	}
+	const auto* cell = FindCell({static_cast<uint16_t>(cellX), static_cast<uint16_t>(cellZ)});
+	if (cell == nullptr || cell->altitude == 0)
+	{
+		return k_NoScriptLandHeight;
+	}
+	return GetAltitude(ToMapCoords(position.x), ToMapCoords(position.z));
+}
+
 LandIsland::LandIsland(const std::filesystem::path& path)
 {
 	LoadFromFile(path);
