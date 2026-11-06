@@ -76,7 +76,8 @@ std::unique_ptr<Creator> MakeMesh(const psys::ParticleObject& object, CreatorRes
 	creator->doubleSided = object.Bool("MaterialSetDoubleSided", true);
 	// The plain kind never draws in its atom's alpha, whatever its file says
 	creator->useGlobalAlpha = creator->type != MeshCreator::Type::Plain && object.Bool("UseGlobalAlpha", animated);
-	creator->landscapeColour = object.Bool("DrawWithLandscapeColor", false);
+	// Only the plain kind is drawn in the land's colour, whatever its file says
+	creator->landscapeColour = creator->type == MeshCreator::Type::Plain && object.Bool("DrawWithLandscapeColor", false);
 	creator->dynamicLighting = object.Bool("UseDynamicLighting", animated);
 	creator->scriptHighlightPulse = object.Bool("UseScriptHightlightPulse", false);
 	creator->drawCutByPlane = object.Bool("DrawCutByPlane", false);

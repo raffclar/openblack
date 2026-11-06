@@ -998,7 +998,7 @@ public:
 		float alpha;
 		float frame;
 		std::array<uint8_t, 3> rgb;
-		/// The light added after the texture (Atom::specular). Sprites and mists add it; the other kinds do not yet.
+		/// The light added after the texture (Atom::specular): sprites, mists, models, ribbons and shells add it
 		std::array<uint8_t, 3> specular {0, 0, 0};
 		/// Seconds it has lived, at the drawn time
 		float age {0.0f};
