@@ -86,6 +86,16 @@ TEST(DayNightClock, TheNightSkyTypeTurnsToDayFromOneDown)
 	EXPECT_GT(differences, 0);
 }
 
+TEST(DayNightClock, NightIsASkyTypeOfMoreThanTheDouble1Point2)
+{
+	EXPECT_FALSE(DayNightClock::IsNight(1.0f));
+	EXPECT_FALSE(DayNightClock::IsNight(1.19999993f));
+	EXPECT_TRUE(DayNightClock::IsNight(1.2f));
+	EXPECT_TRUE(DayNightClock::IsNight(2.0f));
+	// The ramp value 0.8 gives 1.2 as a float, which is night; openblack's old test of less than 0.8 said day
+	EXPECT_TRUE(DayNightClock::IsNight(2.0f - 0.8f));
+}
+
 TEST(DayNightClock, ADayLastsItsDuration)
 {
 	auto clock = ResetClock();
