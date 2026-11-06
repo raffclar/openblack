@@ -39,12 +39,12 @@
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
+#include "ECS/TempleConstruction.h"
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Magic/MagicTables.h"
 #include "Magic/WorshipBattery.h"
-#include "VillagerHome.h"
 
 using namespace openblack;
 using namespace openblack::ecs::components;
@@ -214,8 +214,21 @@ std::vector<entt::entity> computer_world::TownsOf(PlayerNames player)
 
 std::optional<entt::entity> computer_world::WorkingPitOf(entt::entity town)
 {
+	// A pit becomes the main pit when it is built, and it stays the main pit when it is damaged
 	const auto pit = ecs::construction::StoragePitOf(town);
-	return pit.has_value() && ecs::villager_home::IsFunctional(*pit) ? pit : std::nullopt;
+	return pit.has_value() && ecs::construction::IsBuilt(*pit) ? pit : std::nullopt;
+}
+
+bool computer_world::TakeUp(RuleContext& context, entt::entity thing)
+{
+	auto& registry = Entities();
+	if (thing == entt::null || !registry.Valid(thing) || registry.AllOf<InHand>(thing))
+	{
+		return false;
+	}
+	computer_hand::Add(context.state.hand, computer_hand::StepKind::PickUpObject,
+	                   {computer_hand::Argument {.object = thing}, computer_hand::Argument {.value = context.state.speed}});
+	return true;
 }
 
 entt::entity computer_world::StoreOf(entt::entity town, ResourceType resource)

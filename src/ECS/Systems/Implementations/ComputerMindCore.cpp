@@ -68,8 +68,10 @@ bool PickUpAndDrop(RuleContext& context, computer_mind::Mind& mind, uint16_t nod
 	}
 	const glm::vec3 place {map_coords::ToMetres(coords->x), context.hand.moves.LandHeight(*coords) + coords->altitude,
 	                       map_coords::ToMetres(coords->z)};
-	computer_hand::Add(context.state.hand, StepKind::PickUpObject,
-	                   {Argument {.object = thing}, Argument {.value = context.state.speed}});
+	if (!TakeUp(context, thing))
+	{
+		return false;
+	}
 	computer_hand::Add(context.state.hand, StepKind::DropObjectInHandAtPos,
 	                   {Argument {.place = place}, Argument {.value = context.state.speed}});
 	return true;
