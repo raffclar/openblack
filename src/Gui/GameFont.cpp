@@ -298,6 +298,13 @@ float GameFont::Advance(char16_t c) const
 	return glyph != nullptr ? glyph->right + glyph->ink + glyph->left : 0.0f;
 }
 
+float GameFont::WidthUnit() const
+{
+	// The game multiplies by the float of an eightieth, and does not divide by 80. All its fonts are 80 rows high, and
+	// the float of one over 80 is that same float.
+	return 1.0f / static_cast<float>(_height);
+}
+
 float GameFont::GetWidth(std::u16string_view text, float size) const
 {
 	float width = 0.0f;
@@ -305,10 +312,10 @@ float GameFont::GetWidth(std::u16string_view text, float size) const
 	{
 		width += Advance(c);
 	}
-	return width * size / static_cast<float>(_height);
+	return (width * size) * WidthUnit();
 }
 
 std::vector<std::u16string_view> GameFont::Wrap(std::u16string_view text, float size, float width) const
 {
-	return text_wrap::BreakLines(text, width, size / static_cast<float>(_height), [this](char16_t c) { return Advance(c); });
+	return text_wrap::BreakLines(text, width, size, WidthUnit(), [this](char16_t c) { return Advance(c); });
 }
