@@ -145,6 +145,15 @@ TEST(ManaPath, ASparkIsTurnedAlongItsPathAQuarterTurnRound)
 	EXPECT_FLOAT_EQ(Heading(path), std::numbers::pi_v<float>);
 }
 
+TEST(ManaPath, TheHeadingRoundsOnceAfterTheQuarterTurn)
+{
+	// The way along is a unit long, so the heading reads it as it is
+	const Path path {.from = {0.0f, 0.0f, 0.0f}, .to = {-0x1.541f84p-1f, 0.0f, -0x1.7eb386p-1f}, .length = 1.0f};
+	// The wide arctangent plus the quarter turn, rounded one time. A float arctangent rounds two times and gives
+	// -0x1.73ffccp-1.
+	EXPECT_EQ(Heading(path), -0x1.73ffc8p-1f);
+}
+
 TEST(ManaPath, ASteadySparkCrossesItsPathAtItsSpeed)
 {
 	const auto path = MakePath({0.0f, 0.0f, 0.0f}, {80.0f, 0.0f, 0.0f}, k_Steady, k_Draws);

@@ -354,3 +354,14 @@ TEST(GameActionMap, AnAnsweredMessageBoxGivesTheKeyboardBackAtOnce)
 	EXPECT_FALSE(map.BoxHasKeyboard());
 	EXPECT_TRUE(map.Get(BindableActionMap::MOVE_FORWARDS));
 }
+
+TEST(KeyBindings, InTheTempleOnlyAMousePressDoesTheAction)
+{
+	// Outside the temple a press of the keyboard or of the mouse does the action
+	EXPECT_TRUE(PressDoesAction(false, false));
+	EXPECT_TRUE(PressDoesAction(false, true));
+	// Inside the temple the temple takes the keyboard for its rooms, so Ctrl+S does not quick save
+	EXPECT_FALSE(PressDoesAction(true, false));
+	// A mouse button that has the action still does it inside the temple
+	EXPECT_TRUE(PressDoesAction(true, true));
+}

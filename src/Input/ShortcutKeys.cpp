@@ -75,8 +75,8 @@ void ToggleVillagerLabels(bool names, bool details)
 	{
 		return;
 	}
-	const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
-	if (!gui::villager_labels::KeysAct(!Locator::cinematicDirectorSystem::value().IsInterfaceActive(), inTemple))
+	// The caller removed the keyboard presses that the temple takes
+	if (!gui::villager_labels::KeysAct(!Locator::cinematicDirectorSystem::value().IsInterfaceActive(), false))
 	{
 		return;
 	}
@@ -163,10 +163,15 @@ void ShortcutKeys::Update()
 	// TODO(raffclar): Zoom To Creature and the creature's room key belong to the creature mode work, and the leash keys
 	// to the leash work, which read them themselves.
 
+	// Inside the temple, only the presses of a mouse button do the work of the actions below
+	const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
+	const auto acts = [&actions, &pressed, inTemple](BindableActionMap action) {
+		return pressed(action) && PressDoesAction(inTemple, PressedByMouse(actions, action));
+	};
+
 	// The Help key asks the advisors about what is in the hand or under it
 	if (pressed(BindableActionMap::HELP) && Locator::helpMessageSystem::has_value() &&
-	    help_query::HelpPressAsks(Locator::temple::has_value() && Locator::temple::value().Active(),
-	                              PressedByMouse(actions, BindableActionMap::HELP)))
+	    help_query::HelpPressAsks(inTemple, PressedByMouse(actions, BindableActionMap::HELP)))
 	{
 		Locator::helpMessageSystem::value().HelpQuery();
 	}
@@ -176,18 +181,18 @@ void ShortcutKeys::Update()
 	{
 		auto& saves = Locator::saveGameSystem::value();
 		auto& commands = Locator::playerCommandSystem::value();
-		if (pressed(BindableActionMap::QUICK_SAVE) && saves.PressQuickSave())
+		if (acts(BindableActionMap::QUICK_SAVE) && saves.PressQuickSave())
 		{
 			commands.Submit(player_commands::QuickSave {});
 		}
-		if (pressed(BindableActionMap::QUICK_LOAD) && saves.PressQuickLoad())
+		if (acts(BindableActionMap::QUICK_LOAD) && saves.PressQuickLoad())
 		{
 			commands.Submit(player_commands::QuickLoad {});
 		}
 	}
 
 	// The villagers' names and details are toggled, as the game does
-	ToggleVillagerLabels(pressed(BindableActionMap::SHOW_VILLAGER_NAMES), pressed(BindableActionMap::SHOW_VILLAGER_DETAILS));
+	ToggleVillagerLabels(acts(BindableActionMap::SHOW_VILLAGER_NAMES), acts(BindableActionMap::SHOW_VILLAGER_DETAILS));
 
 	const bool temple = pressed(BindableActionMap::ZOOM_TO_TEMPLE);
 	const bool realm = pressed(BindableActionMap::ZOOM_TO_REALM);
@@ -196,8 +201,7 @@ void ShortcutKeys::Update()
 		return;
 	}
 	// The camera isn't the player's while a script has the cinema bars in, nor inside the temple
-	if (!Locator::cinematicDirectorSystem::value().IsInterfaceActive() ||
-	    (Locator::temple::has_value() && Locator::temple::value().Active()))
+	if (!Locator::cinematicDirectorSystem::value().IsInterfaceActive() || inTemple)
 	{
 		return;
 	}

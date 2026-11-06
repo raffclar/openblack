@@ -278,6 +278,21 @@ TEST(OrientedText, EachGlyphIsAQuadDownItsLetters)
 	EXPECT_EQ(vertices[0].colour, 0xFF00FFFFu);
 }
 
+TEST(OrientedText, AGlyphIsReadFromBeforeItsFirstColumnToTheMiddleOfItsLast)
+{
+	gui::GameFont::Glyph glyph {};
+	glyph.width = 40;
+	glyph.atlasMin = {100, 60};
+	glyph.atlasMax = {120, 100};
+	const auto texels = OrientedGlyphTexels(glyph);
+	// One and a half texels left of the first column, then half the width of 40 and one texel more
+	EXPECT_EQ(texels.min.x, 98.5f);
+	EXPECT_EQ(texels.max.x, 119.5f);
+	// From the middle of the first row to the middle of the last of 40 rows
+	EXPECT_EQ(texels.min.y, 60.5f);
+	EXPECT_EQ(texels.max.y, 99.5f);
+}
+
 TEST(TempleSigns, TheMainRoomLightsTheSignOfTheDoorUnderTheCursor)
 {
 	EXPECT_EQ(TempleSigns::MainRoomSignOfDoor(std::nullopt), std::nullopt);
