@@ -104,22 +104,9 @@ void AtmosAudio::Release()
 	_registered = false;
 }
 
-// From the camera's alignment, mapped to 0-1
 void AtmosAudio::SetAlignment(float alignment)
 {
-	_alignment = CalculateAlignmentValue(alignment);
-}
-
-float AtmosAudio::CalculateAlignmentValue(float alignment)
-{
-	const auto goodness = (alignment + 1.0f) * 0.5f;
-	auto clamped = 0.0f;
-	if (goodness >= 0.0f)
-	{
-		clamped = goodness > 1.0f ? 1.0f : goodness;
-	}
-	const auto evilness = (1.0f - clamped) + (1.0f - clamped);
-	return (2.0f - evilness) - 1.0f;
+	_alignment = alignment;
 }
 
 uint32_t AtmosAudio::GetGroup() const

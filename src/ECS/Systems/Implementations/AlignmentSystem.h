@@ -35,15 +35,16 @@ public:
 	void UpdateCreaturesTurn() override;
 	void CreatureTurn(entt::entity creature) override;
 	void Update(std::chrono::duration<float, std::milli> gameTime) override;
-	[[nodiscard]] float GetCameraAlignment() const override { return _camera; }
-	[[nodiscard]] float GetSkyAlignment() const override { return _sky; }
+	[[nodiscard]] float GetCameraLand() const override { return _cameraLand; }
+	[[nodiscard]] float GetSkyLand() const override { return _skyLand; }
 
 private:
 	/// The entity of a player who is in the game
 	[[nodiscard]] static std::optional<entt::entity> FindPlayer(PlayerNames player);
 
-	float _camera {0.0f};
-	float _sky {0.0f};
+	// The land and the sky start neutral
+	float _cameraLand {1.0f};
+	float _skyLand {1.0f};
 };
 
 } // namespace openblack::ecs::systems

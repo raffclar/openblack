@@ -10,6 +10,7 @@
 #include "MouseMoves.h"
 
 #include <algorithm>
+#include <utility>
 
 using namespace openblack::help;
 
@@ -54,11 +55,20 @@ void MouseMoves::Wait(uint32_t milliseconds, glm::ivec2 position, bool stillMess
 
 uint32_t MouseMoves::TakeMoves()
 {
-	const auto moves = std::ranges::count_if(_sent, [this](glm::ivec2 place) {
+	return CountMoves(TakePlaces());
+}
+
+std::vector<glm::ivec2> MouseMoves::TakePlaces()
+{
+	return std::exchange(_sent, {});
+}
+
+uint32_t MouseMoves::CountMoves(std::span<const glm::ivec2> places)
+{
+	const auto moves = std::ranges::count_if(places, [this](glm::ivec2 place) {
 		const bool moved = _lastPlace != place;
 		_lastPlace = place;
 		return moved;
 	});
-	_sent.clear();
 	return static_cast<uint32_t>(moves);
 }

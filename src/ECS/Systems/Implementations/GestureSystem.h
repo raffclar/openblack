@@ -89,8 +89,13 @@ private:
 	bool OpenSelection(GestureType opening, PlayerNames player);
 	/// The miracle selection waits for its gestures this frame, closes when the hand is not ready, and its time passes
 	void StepSelection(gesture::HandContext& context, const Frame& frame);
-	/// One sample of the cursor goes on the path, and the first gesture waited for that the path draws acts
+	/// One sample at a place of the pointer goes on the path, and the first gesture waited for that the path draws acts
 	void SampleCursor(glm::vec2 cursor, const Frame& frame, const gesture::HandContext& context);
+	/// A point on the screen that the path uses (768 pixels high) from a point in window pixels
+	[[nodiscard]] static glm::vec2 ToReference(glm::vec2 pixel, const Frame& frame);
+	/// One point on the screen that the path uses goes on the path, with the land under it. Nothing goes on the path
+	/// while the rest after a gesture continues. Whether the point went on the path.
+	bool RecordPoint(glm::vec2 point, const Frame& frame);
 	/// The recognised gesture's trail on the land, for the particles to show
 	void LayTrail(GestureType gesture, const gesture::Match& match, const Frame& frame) const;
 	/// The hand starts its power-ups for the seed in it: it forgets the circle remembered and the power-up asked for, and
@@ -115,9 +120,10 @@ private:
 	/// Points of a path being drawn for the testbed, taken in place of the cursor
 	std::deque<glm::vec2> _drawing;
 	bool _drawingHoldsAction {false};
-	float _sinceSample {0.0f};
-	/// The cursor of the last frame, from which the cursor of this frame moved
-	std::optional<glm::vec2> _lastCursor;
+	/// The last place of the pointer that the interface got, in window pixels
+	std::optional<glm::vec2> _lastPlace;
+	/// The path started again for a miracle's first turn in the hand: the next update takes a sample at the last place
+	bool _sampleLastPlace {false};
 	/// Where the camera's eye was last frame
 	std::optional<glm::vec3> _lastCameraEye;
 	/// The rest after a gesture, while nothing is recorded

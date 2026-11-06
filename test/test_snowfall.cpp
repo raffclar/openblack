@@ -7,7 +7,10 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <cstdint>
+
 #include <array>
+#include <bit>
 #include <numbers>
 #include <vector>
 
@@ -79,6 +82,21 @@ TEST(Snowfall, FlakesFallDriftAndTurn)
 	EXPECT_NEAR(flakes[0].position.z, 1.5f, 1e-5f);
 	EXPECT_NEAR(flakes[0].position.x, 0.0f, 1e-5f);
 	EXPECT_FLOAT_EQ(flakes[0].spin.z, 1.5f);
+}
+
+// The game rounds the drift of the time step and each product with a sine or a cosine to a float
+TEST(Snowfall, TheDriftRoundsInTheOrderOfTheGame)
+{
+	std::array<snowfall::Flake, 1> flakes {};
+	flakes[0].position = {-3.25f, 50.0f, -17.0f};
+	flakes[0].fall = 7.5f;
+	flakes[0].swaySpeed = 3.5f;
+	flakes[0].heading = 2.0f;
+	flakes[0].sway = 1.2f;
+	snowfall::Step(flakes, 0.0333f, 1.0f, 160.0f, Middle);
+	EXPECT_EQ(std::bit_cast<uint32_t>(flakes[0].position.x), 0xC04A5F8Au);
+	EXPECT_EQ(std::bit_cast<uint32_t>(flakes[0].position.y), 0x4246F365u);
+	EXPECT_EQ(std::bit_cast<uint32_t>(flakes[0].position.z), 0xC1885268u);
 }
 
 TEST(Snowfall, FlakesUnderTheGroundStartAgainAtTheTop)
