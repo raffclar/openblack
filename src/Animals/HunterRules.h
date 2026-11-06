@@ -78,6 +78,12 @@ struct KindClips
 [[nodiscard]] bool CatsSleepAt(float visualHours);
 /// Whether a hungry wolf pack leaves its lair: late in the night, after 23 hours
 [[nodiscard]] bool WolvesHuntAt(float visualHours);
+/// Whether the calm value that a script gave to a flock stops the hunt of the flock. Each value that is not 0 stops the
+/// hunt, and also stops the choice of a new lair for its wolves
+[[nodiscard]] constexpr bool CalmStopsTheHunt(int32_t calm)
+{
+	return calm != 0;
+}
 
 /// What a hunter needs most, in the order that it sees to its needs
 enum class Need : uint8_t

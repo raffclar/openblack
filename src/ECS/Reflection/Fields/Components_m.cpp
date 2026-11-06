@@ -71,7 +71,7 @@ void openblack::ecs::reflection::RegisterFields_Components_m(entt::meta_ctx& con
 	    .Field<&components::ShieldDome::state>("state")
 	    .Field<&components::ShieldDome::pose>("pose")
 	    .Field<&components::ShieldDome::previous>("previous")
-	    .Field<&components::ShieldDome::age>("age")
+	    .Field<&components::ShieldDome::turns>("turns")
 	    .Field<&components::ShieldDome::solidScale>("solidScale")
 	    .Field<&components::ShieldDome::alpha>("alpha")
 	    .Field<&components::ShieldDome::mesh>("mesh")

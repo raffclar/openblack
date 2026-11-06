@@ -1835,7 +1835,9 @@ entt::entity AnimalSystem::FindPrey(entt::entity wolf, const Animal& animal)
 	};
 	// What the hunter itself is
 	const bool hunterInScript = registry.AllOf<InScript>(wolf);
-	const bool hunterInFlock = registry.AllOf<Flock>(animal.flock);
+	const auto* hunterFlock = registry.TryGet<const Flock>(animal.flock);
+	const bool hunterInFlock = hunterFlock != nullptr;
+	const bool hunterFlockCalm = hunterFlock != nullptr && animals::hunters::CalmStopsTheHunt(hunterFlock->calm);
 	const bool hunterYoung = AgeOf(animal) < InfoOf(animal.type).grownUpAge;
 	// The facts that every prey has: whether a script protects or controls it, whether the hunter can get to it, and
 	// whether a hunter brought it down before
@@ -1845,6 +1847,7 @@ entt::entity AnimalSystem::FindPrey(entt::entity wolf, const Animal& animal)
 		prey.scriptControlled = registry.AllOf<ScriptControlled>(entity);
 		prey.hunterInScript = hunterInScript;
 		prey.hunterInFlock = hunterInFlock;
+		prey.hunterFlockCalm = hunterFlockCalm;
 		prey.hunterYoung = hunterYoung;
 		prey.broughtDown = registry.AllOf<BroughtDown>(entity);
 		return prey;

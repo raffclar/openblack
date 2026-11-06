@@ -101,10 +101,19 @@ inline constexpr float k_DomeBobSpeed = 1.3f;
 /// Dying, it fades over this long and is gone after half as long again
 inline constexpr float k_DomeFadeSeconds = 1.5f;
 inline constexpr float k_DomeGoneSeconds = k_DomeFadeSeconds * 1.5f;
-/// The ease the dome grows and slows by: x + x^2 - x^3, which rises from 0 to 1 and overshoots a little on the way
+/// The ease the dome grows and slows by: ((1 - x) x + 1) x, which rises from 0 to 1 and overshoots a little on the way.
+/// The game rounds each step, in this order.
 [[nodiscard]] constexpr float Ease(float x)
 {
-	return x + (x * x) - (x * x * x);
+	const float rest = 1.0f - x;
+	const float part = rest * x;
+	const float sum = part + 1.0f;
+	return sum * x;
+}
+/// The dome's age: its whole turns times the turn's length, not a sum of the turn lengths
+[[nodiscard]] constexpr float DomeAge(uint32_t turns, float turnSeconds)
+{
+	return static_cast<float>(turns) * turnSeconds;
 }
 /// A turn of the dome, `age` seconds after it was raised and `dt` seconds long
 [[nodiscard]] DomePose StepDome(const DomeShape& shape, DomeState& state, float age, float dt);
@@ -131,8 +140,9 @@ struct DomeVolume
 /// between the two points on the land
 [[nodiscard]] bool WithinSpiritualShield(glm::vec3 shieldOnLand, float radius, glm::vec3 pointOnLand);
 /// Whether a point a height above the land is surely within a physical shield's dome: nearer across than its radius,
-/// and below the cone from its height at the middle to nothing at its edge
-[[nodiscard]] bool WithinPhysicalShield(const DomeVolume& volume, float distanceAcross, float heightAboveLand);
+/// and below the cone from its height at the middle to nothing at its edge. `across` is the (x, z) offset of the point
+/// from the middle. The game adds the squares from z to x, and keeps the sum as a float before it finds the root.
+[[nodiscard]] bool WithinPhysicalShield(const DomeVolume& volume, glm::vec2 across, float heightAboveLand);
 /// Whether a point is inside the dome: its distance across the land from the middle and its height above the land
 [[nodiscard]] bool InsideDome(const DomeVolume& volume, float distanceAcross, float heightAboveLand);
 /// The dome's solid shape as it is raised: its model's physics triangles at its full size, at a height above the land of
@@ -157,25 +167,28 @@ inline constexpr float k_ImpactCostScale = 0.0001f;
 	return speed * mass * costPerMomentum * k_ImpactCostScale;
 }
 
-/// Whether a point is under a shield, its edge drawn in by a margin
+/// Whether a point is under a shield, its edge drawn in by a margin. The distance is the map distance between the two
+/// map positions.
 [[nodiscard]] bool IsUnder(glm::vec2 point, glm::vec2 centre, float radius, float margin);
 
-/// A villager reacting to a shield goes under it unless it is already well inside, within this share of its radius
-inline constexpr float k_ShelterInside = 0.8f;
-[[nodiscard]] bool NeedsShelter(float distance, float radius);
-/// Where a villager shelters: on its own side of the shield's middle, turned by up to an eighth of a half turn either
-/// way (`turn`, from a random number up to a quarter turn), at a distance a random cube (`u`, 0 to 1) in from 0.8 of the
-/// radius. It then faces a point a step further out, turned afresh.
-inline constexpr float k_ShelterTurnRange = 0.785398163f;
-struct Shelter
+/// A villager that reacts to a shield goes under it unless it is already well inside. The margin is this share of the
+/// radius.
+inline constexpr float k_ShelterMargin = 0.2f;
+[[nodiscard]] constexpr float ShelterMargin(float radius)
 {
-	glm::vec2 point;
-	glm::vec2 faceTowards;
-};
-[[nodiscard]] Shelter ShelterAt(glm::vec2 centre, glm::vec2 villager, float radius, float turn, float u, float faceTurn);
+	return radius * k_ShelterMargin;
+}
+/// Where a villager shelters: on its own side of the shield's middle, turned by up to an eighth of a half turn either
+/// way (`turn`, from a random number up to a quarter turn), at a distance a random cube (`u`, 0 to 1) in from the
+/// radius less the margin. The direction is the game angle between the two map positions, and the step is in map units.
+inline constexpr float k_ShelterTurnRange = 0.785398163f;
+[[nodiscard]] glm::vec2 ShelterAt(glm::vec2 centre, glm::vec2 villager, float radius, float turn, float u);
 /// Where a sheltering villager looks next: a step on from where it stands, away from the shield's middle, turned by the
 /// same spread
 [[nodiscard]] glm::vec2 LookOut(glm::vec2 centre, glm::vec2 villager, float turn);
+/// A point a distance away from where a villager stands, away from the shield's middle, turned by the same spread. A
+/// villager with nowhere to hide from a fallen shield runs there.
+[[nodiscard]] glm::vec2 AwayFrom(glm::vec2 centre, glm::vec2 villager, float turn, float metres);
 /// After the clip that points up, a sheltering villager talks and points
 inline constexpr uint32_t k_PointingAnimation = 286;
 inline constexpr uint32_t k_TalkingAndPointingAnimation = 395;
@@ -202,8 +215,8 @@ inline constexpr uint32_t k_GiveUpWaitRange = 60;
 /// turns of interest; at once while where it is walking to is not under the shield; otherwise the reaction's own turns
 [[nodiscard]] uint32_t VillagerAgainTurns(bool hasTown, uint32_t sinceAttacked, uint32_t interestedFor, bool goalUnder,
                                           uint32_t standardTurns);
-/// A sheltering villager turns this much of a full turn each game turn to face where it looks
-inline constexpr float k_LookTurnPerTurn = 0x40 / static_cast<float>(0x800);
+/// A sheltering villager turns this many game angles (2048 to the circle) each game turn to face where it looks
+inline constexpr int32_t k_LookStep = 0x40;
 
 /// Whether a creature walks round a shield: any creature of another player than the shield's, unless a script is
 /// moving it

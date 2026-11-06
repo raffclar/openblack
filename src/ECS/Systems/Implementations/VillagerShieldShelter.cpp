@@ -34,6 +34,7 @@
 #include "Locator.h"
 #include "Magic/ShieldRules.h"
 #include "VillagerAnimate.h"
+#include "VillagerBuild.h"
 
 using namespace openblack;
 using namespace openblack::ecs::components;
@@ -41,37 +42,11 @@ namespace villager_shield = openblack::ecs::villager_shield;
 namespace villager_animate = openblack::ecs::villager_animate;
 namespace villager_clips = openblack::ecs::villager_clips;
 namespace shield = openblack::magic::shield;
+namespace villager_build = openblack::ecs::villager_build;
 
 namespace
 {
-constexpr float k_TwoPi = 2.0f * std::numbers::pi_v<float>;
 constexpr size_t k_ForProtection = 3;
-
-/// The way a villager faces, as an angle across the land, from how it is turned: walking turns it by
-/// eulerAngleY(-angle - a quarter turn), so that angle is undone here
-float FacingOf(const Transform& transform)
-{
-	const auto x = transform.rotation * glm::vec3(1.0f, 0.0f, 0.0f);
-	return -portable_math::Atan2(-x.z, x.x) - glm::radians(90.0f);
-}
-
-/// Turns a villager towards a point by at most its turn a game turn; whether it faces it
-bool LookAtPos(entt::entity villager, const Transform& transform, glm::vec2 point)
-{
-	const auto towards = point - glm::xz(transform.position);
-	const float target = portable_math::Atan2(towards.y, towards.x);
-	const float step = shield::k_LookTurnPerTurn * k_TwoPi;
-	const float facing = FacingOf(transform);
-	const float diff = std::remainder(target - facing, k_TwoPi);
-	auto& registry = Locator::entitiesRegistry::value();
-	if (std::abs(diff) < step)
-	{
-		openblack::ecs::living_facing::FaceAngle(registry, villager, target);
-		return true;
-	}
-	openblack::ecs::living_facing::FaceAngle(registry, villager, facing + (diff > 0.0f ? step : -step));
-	return false;
-}
 
 void SetupWaitForCounter(LivingAction& action, uint16_t counter, VillagerStates state)
 {
@@ -113,7 +88,7 @@ uint32_t villager_shield::AmazedByMagicShield(LivingAction& action)
 		auto& transform = registry.Get<Transform>(villager);
 		const auto centre = glm::xz(registry.Get<const Transform>(reacting->shield).position);
 		// It looks out through the shield, now and then somewhere else once it faces where it looked
-		if (LookAtPos(villager, transform, reacting->lookAt) && random.GameRand(4) == 0)
+		if (villager_build::FaceTowards(villager, reacting->lookAt, shield::k_LookStep) && random.GameRand(4) == 0)
 		{
 			reacting->lookAt =
 			    shield::LookOut(centre, glm::xz(transform.position), random.GameFloatRand(shield::k_ShelterTurnRange));
