@@ -145,6 +145,8 @@ struct DesireState
 	float increaseSeconds {1.0f};
 	/// Turns left during which the desire can't grow
 	uint32_t suppressedTurns {0};
+	/// The desire was held back for longer, so it loses its plan. The planner removes the plan before it plans again.
+	bool losesPlan {false};
 	/// How many times plans for the desire must be carried out before its urge is satisfied (its whole part counts),
 	/// which feedback can change
 	float weight {1.0f};
@@ -215,7 +217,8 @@ void UpdateSources(Desires& desires, const SourceReader& read);
 /// One game turn of the desires: each grows by its sources' drive, unless suppressed, else fades. A value below the
 /// species' floor becomes the floor. Else, a value above the maximum of the desire becomes that maximum.
 void UpdateDesires(Desires& desires, float turnsPerSecond, float floor = 0.0f);
-/// The desire can't grow for some seconds, or longer if it already couldn't
+/// The desire can't grow for some seconds, or longer if it already couldn't. When this holds it back for longer, it
+/// loses its plan.
 void Suppress(Desires& desires, Desire desire, float seconds, float turnsPerSecond);
 
 /// A plan for the desire has been carried out: one more towards its urge being satisfied. True when that makes as many
