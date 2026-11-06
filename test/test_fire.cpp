@@ -214,6 +214,7 @@ TEST(FireGraphic, FlamesBySizeAndCellsByAge)
 	EXPECT_EQ(graphic::MaxFlames(false, 1.0f, 3.0f), 7);
 	EXPECT_FLOAT_EQ(graphic::LocalFlameScale(graphic::FlameShape::Tree, 10.0f), 2.0f);
 	EXPECT_FLOAT_EQ(graphic::LocalFlameScale(graphic::FlameShape::Jointed, 10.0f), 3.0f);
+	EXPECT_FLOAT_EQ(graphic::LocalFlameScale(graphic::FlameShape::TemplePart, 10.0f), 3.0f);
 	EXPECT_FLOAT_EQ(graphic::LocalFlameScale(graphic::FlameShape::Plain, 10.0f), 5.0f);
 	EXPECT_EQ(graphic::FlameCell(0.0f), 32);
 	EXPECT_EQ(graphic::FlameCell(0.1f), 29);

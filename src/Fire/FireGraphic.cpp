@@ -28,6 +28,7 @@ constexpr int k_LargeFlames = 7;
 /// The flames' size as a share of the height
 constexpr float k_TreeFlameScale = 0.2f;
 constexpr float k_JointedFlameScale = 0.3f;
+constexpr float k_TemplePartFlameScale = 0.3f;
 constexpr float k_FlameScale = 0.5f;
 /// A puff grows from this share of its size to this one over its life, and drifts towards this share of the wind
 /// at this rate
@@ -203,6 +204,8 @@ float graphic::LocalFlameScale(FlameShape shape, float height)
 		return k_TreeFlameScale * height;
 	case FlameShape::Jointed:
 		return k_JointedFlameScale * height;
+	case FlameShape::TemplePart:
+		return k_TemplePartFlameScale * height;
 	case FlameShape::Plain:
 		break;
 	}
