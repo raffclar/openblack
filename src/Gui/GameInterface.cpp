@@ -89,6 +89,7 @@
 #include "Input/GameActionMapInterface.h"
 #include "Input/KeyBindings.h"
 #include "Input/KeyRebinding.h"
+#include "Input/MouseWheel.h"
 #include "Input/WindowPointer.h"
 #include "Locator.h"
 #include "Online/NetworkSession.h"
@@ -327,8 +328,12 @@ constexpr std::array k_ToolTipArrows = {
     ToolTipArrow {
         ToolTipArrows::k_Down, world_tooltip::ArrowSide::Down, {0.87890625f, 0.12890625f}, {0.99609375f, 0.24609375f}},
 };
-/// The tooltips' mice for a wheel mouse, the third row of mousehelp.raw
-constexpr int k_ToolTipMouseRow = 2;
+/// The row of the mice picture for the player's mouse, which every mouse picture of the interface uses
+[[nodiscard]] int MouseRow()
+{
+	return openblack::platform_mouse::PlayerMousePictureRow(Locator::gameActionSystem::has_value() &&
+	                                                        Locator::gameActionSystem::value().WheelTurned());
+}
 
 /// What the depths of the boxes of words in the world come from: the camera's pitch, near plane and projection
 struct WorldTextView
@@ -1800,6 +1805,7 @@ void GameInterface::Update(float deltaSeconds)
 		_menu->PollCapture((buttons & SDL_BUTTON_LMASK) != 0u, (buttons & SDL_BUTTON_RMASK) != 0u,
 		                   (buttons & SDL_BUTTON_MMASK) != 0u, _painter.ToDialog(mouse));
 	}
+	_menu->SetMouseRow(MouseRow());
 	_menu->Update(deltaSeconds);
 	_skipBox->Update(deltaSeconds);
 	_storyHistoryBox->Update(deltaSeconds);
@@ -2275,7 +2281,7 @@ void GameInterface::DrawHandTricons(glm::u16vec2 resolution)
 	const auto scale = tricons::DemoScale(glm::ivec2(screen));
 	const auto labelSize = static_cast<float>(tricons::DemoLabelSize(biggerText, scale));
 	const auto mouse = tricons::LayoutDemoMouse(centre, _demoMouseOnLeft, _font.GetWidth(label, labelSize), biggerText,
-	                                            in.moveHeld, in.actionHeld, scale);
+	                                            in.moveHeld, in.actionHeld, MouseRow(), scale);
 	DrawGlow(mouse.mouseMin, mouse.mouseMax, mouse.mouseGlow);
 	if (!label.empty())
 	{
@@ -2696,8 +2702,7 @@ void GameInterface::DrawBubbleControl(const help::tip_bubble::ControlIcon& icon,
 		return;
 	}
 	const auto box = help::tip_bubble::PlaceControl(icon, static_cast<float>(icon.size), gap);
-	const auto cell =
-	    icons::CellFor(std::get<icons::MouseClick>(*picture), help::click_cue::k_WheelMouseRow, machine_clock::Ticks());
+	const auto cell = icons::CellFor(std::get<icons::MouseClick>(*picture), MouseRow(), machine_clock::Ticks());
 	_canvas.DrawQuad(box.min, box.max, cell.uvMin, cell.uvMax, colour, _mice.get());
 }
 
@@ -2825,7 +2830,7 @@ void GameInterface::DrawClickCue(const help::TextRegion& box, float share)
 	const auto labelSize = static_cast<float>(help::click_cue::LabelSize(box.top, box.bottom, biggerText));
 	// Inset from the strip's right end, which is the screen's on 4:3
 	const auto cue = help::click_cue::Layout(box.right, box.top, box.bottom, share, _font.GetWidth(label, labelSize),
-	                                         biggerText, machine_clock::Ticks());
+	                                         biggerText, machine_clock::Ticks(), MouseRow());
 	if (!cue.has_value())
 	{
 		return;
@@ -2907,8 +2912,7 @@ void GameInterface::DrawControlIcons(const help::TextFrame& frame, const help::D
 	DrawGlow(placed->icon.min, placed->icon.max, placed->glowColour);
 	if (_mice != nullptr)
 	{
-		const auto cell =
-		    icons::CellFor(std::get<icons::MouseClick>(*picture), help::click_cue::k_WheelMouseRow, machine_clock::Ticks());
+		const auto cell = icons::CellFor(std::get<icons::MouseClick>(*picture), MouseRow(), machine_clock::Ticks());
 		_canvas.DrawQuad(placed->icon.min, placed->icon.max, cell.uvMin, cell.uvMax, glm::vec4(1.0f, 1.0f, 1.0f, placed->alpha),
 		                 _mice.get());
 	}
@@ -3317,7 +3321,7 @@ void GameInterface::DrawToolTip(glm::u16vec2 resolution)
 	// The mouse, its button the action's, or the key cap, and the arrows over the glows
 	if (click != nullptr && iconWidth != 0.0f)
 	{
-		const auto cell = icons::CellFor(*click, k_ToolTipMouseRow, machine_clock::Ticks());
+		const auto cell = icons::CellFor(*click, MouseRow(), machine_clock::Ticks());
 		_canvas.DrawQuad({iconX, y}, {iconX + sizeF, y + sizeF}, cell.uvMin, cell.uvMax, white, _mice.get());
 	}
 	else if (keyText != nullptr)

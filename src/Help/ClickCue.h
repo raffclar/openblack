@@ -25,8 +25,6 @@ namespace openblack::help::click_cue
 constexpr uint32_t k_LabelText = 3705;
 /// It fades in over this long, in seconds of real time
 constexpr float k_FadeSeconds = 1.0f;
-/// The mice picture's rows: two buttons, three buttons, a wheel mouse
-constexpr int k_WheelMouseRow = 2;
 
 /// A rectangle in pixels
 struct Box
@@ -60,9 +58,10 @@ struct Cue
 
 /// The cue for a dialogue box between rows `top` and `bottom` on a screen so wide, `share` of the way through its fade;
 /// `labelWidth` the word's width at the label size, which is two thirds of the cue's (four fifths for the languages
-/// that need bigger text). None when it is too faint to draw.
+/// that need bigger text). The mouse is in `mouseRow` of the mice picture, the row of the player's mouse. None when it
+/// is too faint to draw.
 [[nodiscard]] std::optional<Cue> Layout(int screenWidth, int top, int bottom, float share, float labelWidth, bool biggerText,
-                                        uint32_t tickMs);
+                                        uint32_t tickMs, int mouseRow);
 /// The label's size for a box between two rows
 [[nodiscard]] int LabelSize(int top, int bottom, bool biggerText);
 
