@@ -37,6 +37,9 @@ namespace openblack::animals::birds
 /// doves, pigeons and seagulls flap or glide by an even chance, a swallow flaps or glides calmly or erratically by a
 /// third each, a bat always flaps. `roll(n)` is the game's random whole number below n.
 [[nodiscard]] AnimId FlyingClip(AnimalInfo type, const std::function<uint32_t(uint32_t)>& roll);
+/// Whether a bird keeps the clip that it plays when it changes what it does or how fast it goes. Only the vulture does
+/// this: the game gives it no new clip.
+[[nodiscard]] bool KeepsItsClip(AnimalInfo type);
 /// The clip a land bird lies dead in
 [[nodiscard]] std::optional<AnimId> DeadClip(AnimalInfo type);
 
