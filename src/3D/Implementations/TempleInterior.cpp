@@ -2119,14 +2119,15 @@ void TempleInterior::Deactivate()
 	{
 		_interface->SetStoryHistoryShown(false);
 	}
-	// Leaving the room the player was kept in ends the game: the screen goes black rather than out to the island
+	// Leaving the room the player was kept in ends the game, and the camera does not go out to the island. The temple
+	// closes with the same white fade as for each exit.
 	if (_lock.GetRoom().has_value())
 	{
 		_lock.Left();
 		Close();
 		if (_interface != nullptr)
 		{
-			_interface->GetScreenFade().FadeFrom(1.0f, glm::vec3(0.0f));
+			_interface->GetScreenFade().FadeFrom(1.0f, glm::vec3(1.0f));
 		}
 		BringBackDialogue();
 		temple_help::GameScripts scripts;
