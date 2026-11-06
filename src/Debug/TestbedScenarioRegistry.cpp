@@ -300,27 +300,28 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::ClickCreatureAt || kind == Kind::CameraLooksAt || kind == Kind::HandTakeNear ||
 	       kind == Kind::ClickCreatureNear || kind == Kind::TapRewardNear || kind == Kind::PlayBoatFilm ||
 	       kind == Kind::HandPour || kind == Kind::HandRelease || kind == Kind::SetReportLatency ||
-	       kind == Kind::RemoveObject || kind == Kind::ReadTip || kind == Kind::LookAtTempleScroll ||
-	       kind == Kind::HandGripTotem || kind == Kind::ProfileFolderCheck || kind == Kind::PlayCustomMusic ||
-	       kind == Kind::ShowCustomMusicControls || kind == Kind::OwnTattooPicture || kind == Kind::OpenTattooMenu ||
-	       kind == Kind::OpenControlsBox || kind == Kind::OpenMenuPage || kind == Kind::PressMenuKey ||
-	       kind == Kind::StopScript || kind == Kind::StartScriptMusic || kind == Kind::SaveGame || kind == Kind::LoadGame ||
-	       kind == Kind::QuickSave || kind == Kind::ContinueGame || kind == Kind::PlayLogoEffect ||
-	       kind == Kind::PlayFallingSpellFilm || kind == Kind::PlayIntroFilm || kind == Kind::SayLine ||
-	       kind == Kind::PlayGuidanceVoice || kind == Kind::ScriptRelease || kind == Kind::FillSiteIcons ||
-	       kind == Kind::ChargeIconWithSeedHeld || kind == Kind::TakeIconSeed || kind == Kind::TapSiteIcon ||
-	       kind == Kind::TapTempleEntrance || kind == Kind::FinishBuilding || kind == Kind::FillBuiltAmount ||
-	       kind == Kind::ScaffoldStartsSite || kind == Kind::DestroyScaffoldSite || kind == Kind::ScaffoldClearsGround ||
-	       kind == Kind::CallNative || kind == Kind::PauseGame || kind == Kind::SetGameSpeed ||
-	       kind == Kind::RemoveTeleportStone || kind == Kind::MakeDance || kind == Kind::OpenMultiplayerBox ||
-	       kind == Kind::BuildWorshipSites || kind == Kind::ScriptBuildsWorshipSites || kind == Kind::PressPlainKey ||
-	       kind == Kind::PlainKeyDown || kind == Kind::PlainKeyRepeat || kind == Kind::PlainKeyUp ||
-	       kind == Kind::OtherGodHand || kind == Kind::ObserverCamera || kind == Kind::OwnGod || kind == Kind::JoinOnline ||
-	       kind == Kind::EndBox || kind == Kind::BringCreature || kind == Kind::TattooEditorAsNetworkGame ||
-	       kind == Kind::ShowDemoPing || kind == Kind::AddIncomingMessage || kind == Kind::Chat ||
-	       kind == Kind::ComputerPersonality || kind == Kind::ComputerUntaughtSends || kind == Kind::SkirmishBox ||
-	       kind == Kind::LookAtSaveGamePicture || kind == Kind::HandCastOnDispenser || kind == Kind::HandCastOnCreature ||
-	       kind == Kind::CloseHeldMiracle || kind == Kind::JoinFootball || IsPointerCommand(kind);
+	       kind == Kind::RemoveObject || kind == Kind::GiveMagicTreesToStore || kind == Kind::HandCastAtPoint ||
+	       kind == Kind::ReadTip || kind == Kind::LookAtTempleScroll || kind == Kind::HandGripTotem ||
+	       kind == Kind::ProfileFolderCheck || kind == Kind::PlayCustomMusic || kind == Kind::ShowCustomMusicControls ||
+	       kind == Kind::OwnTattooPicture || kind == Kind::OpenTattooMenu || kind == Kind::OpenControlsBox ||
+	       kind == Kind::OpenMenuPage || kind == Kind::PressMenuKey || kind == Kind::StopScript ||
+	       kind == Kind::StartScriptMusic || kind == Kind::SaveGame || kind == Kind::LoadGame || kind == Kind::QuickSave ||
+	       kind == Kind::ContinueGame || kind == Kind::PlayLogoEffect || kind == Kind::PlayFallingSpellFilm ||
+	       kind == Kind::PlayIntroFilm || kind == Kind::SayLine || kind == Kind::PlayGuidanceVoice ||
+	       kind == Kind::ScriptRelease || kind == Kind::FillSiteIcons || kind == Kind::ChargeIconWithSeedHeld ||
+	       kind == Kind::TakeIconSeed || kind == Kind::TapSiteIcon || kind == Kind::TapTempleEntrance ||
+	       kind == Kind::FinishBuilding || kind == Kind::FillBuiltAmount || kind == Kind::ScaffoldStartsSite ||
+	       kind == Kind::DestroyScaffoldSite || kind == Kind::ScaffoldClearsGround || kind == Kind::CallNative ||
+	       kind == Kind::PauseGame || kind == Kind::SetGameSpeed || kind == Kind::RemoveTeleportStone ||
+	       kind == Kind::MakeDance || kind == Kind::OpenMultiplayerBox || kind == Kind::BuildWorshipSites ||
+	       kind == Kind::ScriptBuildsWorshipSites || kind == Kind::PressPlainKey || kind == Kind::PlainKeyDown ||
+	       kind == Kind::PlainKeyRepeat || kind == Kind::PlainKeyUp || kind == Kind::OtherGodHand ||
+	       kind == Kind::ObserverCamera || kind == Kind::OwnGod || kind == Kind::JoinOnline || kind == Kind::EndBox ||
+	       kind == Kind::BringCreature || kind == Kind::TattooEditorAsNetworkGame || kind == Kind::ShowDemoPing ||
+	       kind == Kind::AddIncomingMessage || kind == Kind::Chat || kind == Kind::ComputerPersonality ||
+	       kind == Kind::ComputerUntaughtSends || kind == Kind::SkirmishBox || kind == Kind::LookAtSaveGamePicture ||
+	       kind == Kind::HandCastOnDispenser || kind == Kind::HandCastOnCreature || kind == Kind::CloseHeldMiracle ||
+	       kind == Kind::JoinFootball || IsPointerCommand(kind);
 }
 
 std::string_view testbed_scenarios::Name(Facet facet)
@@ -348,7 +349,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 231> k_Names {
+	constexpr std::array<std::string_view, 233> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -483,6 +484,8 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "make friends",
 	    "only desire",
 	    "remove object",
+	    "give magic trees to store",
+	    "hand cast at point",
 	    "read tip",
 	    "look at temple scroll",
 	    "look at a save game picture",

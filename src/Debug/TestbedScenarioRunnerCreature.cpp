@@ -976,6 +976,8 @@ void Runner::GiveCreatureCommand(const Command& command)
 	case Kind::TapSiteIcon:
 	case Kind::TapTempleEntrance:
 	case Kind::RemoveObject:
+	case Kind::GiveMagicTreesToStore:
+	case Kind::HandCastAtPoint:
 	case Kind::FinishBuilding:
 	case Kind::FillBuiltAmount:
 	case Kind::ScaffoldStartsSite:
