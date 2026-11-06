@@ -17,6 +17,7 @@
 
 #include <bit>
 #include <limits>
+#include <tuple>
 
 #include <glm/geometric.hpp>
 #include <gtest/gtest.h>
@@ -196,4 +197,26 @@ TEST(ScaffoldPushZero, TheCameraAndTheBobComparesPassWithANaN)
 	EXPECT_FALSE(turn::PassesCamera(glm::vec3(11.0f, 0, 0), glm::vec3(nan), glm::vec3(0.0f), glm::vec3(nan)));
 	EXPECT_TRUE(turn::PassesCamera(glm::vec3(11.0f, 0, 0), glm::vec3(nan), glm::vec3(0.0f), glm::vec3(-21.0f, 0, 0)));
 	EXPECT_TRUE(turn::Bobbed(0.5f, nan));
+}
+
+TEST(ScaffoldPushZero, AContactPushThatIsNotANumberBecomesZero)
+{
+	Body body({.mass = 2.0f, .material = k_Wood}, Cube(0.5f));
+	Body::VisitSaved(body, [](auto&&... fields) {
+		auto all = std::tie(fields...);
+		std::get<25>(all) = 1; // contacts
+		auto& point = std::get<31>(all).front();
+		point.world = {0.0f, 0.0f, 0.0f};
+		point.contact = point.world;
+		point.anchor = point.world;
+		point.normal = {0.0f, 1.0f, 0.0f};
+		point.depth = 0.2f;
+		point.firstDepth = 0.1f;
+		// No length: the share of the length ahead is not a number, thus the push is not a number
+		point.length = 0.0f;
+		point.aheadLength = 0.0f;
+	});
+	body.ApplyContacts();
+	EXPECT_EQ(body.Force(), glm::vec3(0.0f));
+	EXPECT_EQ(Bits(body.Points().front().normal.y), 0u);
 }

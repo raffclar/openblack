@@ -18,6 +18,7 @@
 
 #include "Body.h"
 #include "Common/X87.h"
+#include "Common/X87Vector.h"
 
 using namespace openblack;
 using namespace openblack::physics;
@@ -64,8 +65,9 @@ water_rings::Ring Ring(glm::vec3 centre, float radius, uint8_t cell)
 
 std::optional<float> turn::Impact(glm::vec3 forceSum)
 {
-	const float squared = glm::dot(forceSum, forceSum);
-	if (squared <= k_LeastForceSquared)
+	// The game adds the squares from z to x. A sum that is not a number gives no impact, as the game's compare does.
+	const float squared = openblack::x87::DotZyx(forceSum, forceSum);
+	if (!(squared > k_LeastForceSquared))
 	{
 		return std::nullopt;
 	}
@@ -180,9 +182,10 @@ bool turn::PassesCamera(glm::vec3 before, glm::vec3 after, glm::vec3 camera, glm
 {
 	const auto from = before - camera;
 	const auto to = after - camera;
-	// The game compares the distance after the step with the FPU, so a NaN passes that compare
-	return glm::dot(from, from) > k_WhooshDistanceSquared &&
-	       openblack::x87::LessOrUnordered(glm::dot(to, to), k_WhooshDistanceSquared) &&
+	// The game adds the squares of the distances from z to x and the squares of the speed from x to z. It compares the
+	// distance after the step with the FPU, so a NaN passes that compare.
+	return openblack::x87::DotZyx(from, from) > k_WhooshDistanceSquared &&
+	       openblack::x87::LessOrUnordered(openblack::x87::DotZyx(to, to), k_WhooshDistanceSquared) &&
 	       glm::dot(velocity, velocity) > k_WhooshSpeedSquared;
 }
 

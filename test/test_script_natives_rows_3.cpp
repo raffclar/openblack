@@ -27,6 +27,8 @@
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/Flock.h"
+#include "ECS/Components/Graveyard.h"
+#include "ECS/Components/Indestructible.h"
 #include "ECS/Components/MiracleImpression.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/ScriptControl.h"
@@ -67,7 +69,10 @@ using Results = std::vector<std::pair<lhvm::VMValue, lhvm::DataType>>;
 using Arguments = std::vector<lhvm::NativeArgument>;
 
 constexpr uint32_t k_GetSlowestSpeed = 198;
+constexpr uint32_t k_SetSkeleton = 291;
+constexpr uint32_t k_IsSkeleton = 292;
 constexpr uint32_t k_PlayerSpellCastTime = 293;
+constexpr uint32_t k_SetIndestructable = 298;
 constexpr uint32_t k_PlayerSpellLastCast = 294;
 constexpr uint32_t k_GetLastSpellCastPos = 295;
 constexpr uint32_t k_GetObjectFlock = 324;
@@ -273,6 +278,58 @@ TEST_F(ScriptNativesRows3, TheBeliefScaleOfATown)
 	registry.Assign<ecs::components::TownImpression>(town);
 	EXPECT_TRUE(Call(k_SetObjectBeliefScale, {Object(town), Float(2.5f)}).empty());
 	EXPECT_EQ(registry.Get<ecs::components::TownImpression>(town).belief.scale, 2.5f);
+}
+
+TEST_F(ScriptNativesRows3, AContainerIsMadeIndestructibleThroughEachOfItsMembers)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto flock = ecs::script_flocks::Create(registry, map_coords::MapCoords {});
+	const auto sheep = Animal(0.0f, 0.0f, 0);
+	ecs::script_flocks::AddLiving(registry, flock, sheep);
+
+	const auto town = registry.Create();
+	const auto house = registry.Create();
+	const auto resident = registry.Create();
+	const auto homeless = registry.Create();
+	registry.Assign<ecs::components::Abode>(house).inhabitants = {resident};
+	auto& data = registry.Assign<ecs::components::Town>(town);
+	data.abodes = {house};
+	data.homelessVillagers = {homeless};
+
+	const auto rock = Animal(9.0f, 0.0f, 0);
+
+	EXPECT_TRUE(Call(k_SetIndestructable, {Bool(true), Object(flock)}).empty());
+	EXPECT_TRUE(Call(k_SetIndestructable, {Bool(true), Object(town)}).empty());
+	EXPECT_TRUE(Call(k_SetIndestructable, {Bool(true), Object(rock)}).empty());
+	EXPECT_TRUE(registry.AllOf<ecs::components::Indestructible>(sheep));
+	EXPECT_TRUE(registry.AllOf<ecs::components::Indestructible>(resident));
+	EXPECT_TRUE(registry.AllOf<ecs::components::Indestructible>(homeless));
+	EXPECT_TRUE(registry.AllOf<ecs::components::Indestructible>(rock));
+	// The containers themselves are not marked
+	EXPECT_FALSE(registry.AllOf<ecs::components::Indestructible>(flock));
+	EXPECT_FALSE(registry.AllOf<ecs::components::Indestructible>(town));
+
+	EXPECT_TRUE(Call(k_SetIndestructable, {Bool(false), Object(flock)}).empty());
+	EXPECT_FALSE(registry.AllOf<ecs::components::Indestructible>(sheep));
+	EXPECT_TRUE(registry.AllOf<ecs::components::Indestructible>(resident));
+}
+
+TEST_F(ScriptNativesRows3, AnAnimalThatAScriptMakesASkeletonKeepsTheMark)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto animal = Animal(0.0f, 0.0f, 100);
+	const auto IsSkeleton = [](entt::entity thing) { return Call(k_IsSkeleton, {Object(thing)})[0].first.intVal != 0; };
+	EXPECT_FALSE(IsSkeleton(animal));
+	EXPECT_TRUE(Call(k_SetSkeleton, {Bool(true), Object(animal)}).empty());
+	EXPECT_TRUE(registry.AllOf<ecs::components::WalkingSkeleton>(animal));
+	EXPECT_TRUE(IsSkeleton(animal));
+	EXPECT_TRUE(Call(k_SetSkeleton, {Bool(false), Object(animal)}).empty());
+	EXPECT_FALSE(IsSkeleton(animal));
+	// A thing that does not live gets no mark
+	const auto stone = registry.Create();
+	registry.Assign<ecs::components::Transform>(stone);
+	EXPECT_TRUE(Call(k_SetSkeleton, {Bool(true), Object(stone)}).empty());
+	EXPECT_FALSE(registry.AllOf<ecs::components::WalkingSkeleton>(stone));
 }
 
 } // namespace

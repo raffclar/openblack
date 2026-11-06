@@ -253,6 +253,8 @@ void CreatureMindSystem::SetUpMind(entt::entity creature, const Creature& body, 
 		mind.desires = creature_desires::Create(SetupFor(body.species), _random.GameFloat());
 		// It is born with its species' personality, spread at random
 		mind.innate = creature_desire_sources::SpreadTraits(InnateTraitsOf(body.species), _random.GameFloat());
+		// Its first round of desires to plan starts as it is made
+		mind.planner.round = creature_planner::RoundOf(*mind.desires);
 	}
 	if (!mind.learnt.has_value())
 	{
@@ -370,6 +372,7 @@ void CreatureMindSystem::ApplyLoaded(entt::entity creature, CreatureMindState& m
 	Abandon(mind);
 	mind.planner = {};
 	mind.desires = std::move(loaded.desires);
+	mind.planner.round = creature_planner::RoundOf(*mind.desires);
 	mind.learnt = std::move(loaded.learnt);
 	mind.developmentPhase = std::min(loaded.developmentPhase, CreatureMindState::k_FullyGrownUp);
 	// The file's desires are active as it says, for the stage it gives
@@ -590,6 +593,7 @@ void CreatureMindSystem::ClearLearning(entt::entity creature)
 	mind->desires = creature_desires::Create(SetupFor(body->species), _random.GameFloat());
 	mind->desiresPhase.reset();
 	mind->planner = {};
+	mind->planner.round = creature_planner::RoundOf(*mind->desires);
 	mind->pendingFile.reset();
 	mind->resourceChecked = true;
 	SetUpLearning(creature, *mind);

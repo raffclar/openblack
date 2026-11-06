@@ -410,7 +410,7 @@ std::optional<creature_desires::Desire> CreatureMindSystem::ForcePlanOn(entt::en
 		{
 			_walkContinuesFor = creature;
 		}
-		PlanCreature(creature, *mind, false, desire);
+		PlanCreature(creature, *mind, desire);
 		_orderedPlanFor.reset();
 		_walkContinuesFor.reset();
 		mind->leash.actOn.clear();
@@ -449,7 +449,7 @@ std::optional<Desire> CreatureMindSystem::DesireForThingInHand(entt::entity crea
 		}
 		trial.leash.actOn = {entt::to_integral(thing)};
 		trial.plannedTurn = trial.turn + 1;
-		PlanCreature(creature, trial, false, desire, false);
+		PlanCreature(creature, trial, desire, false);
 		trial.leash.actOn.clear();
 		if (trial.planner.best.at(static_cast<size_t>(*desire)).has_value())
 		{

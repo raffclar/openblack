@@ -13,6 +13,7 @@
 
 #include <array>
 #include <chrono>
+#include <functional>
 #include <map>
 #include <memory>
 #include <optional>
@@ -387,6 +388,27 @@ TEST(GameMusic, TownsNearTheCameraPlayTheirTribesMusic)
 	EXPECT_EQ(music.SelectLandType(inputs), MusicType::GenericNeutral);
 }
 
+TEST(GameMusic, OnlyATownWithATownCentreHasItsMusic)
+{
+	GameMusic music;
+	GameMusic::TurnInputs inputs {
+	    .turn = 100,
+	    .camera = {1000.0f, 100.0f, 1000.0f},
+	    .groundHeight = 0.0f,
+	    .inCitadel = false,
+	    .alignment = 0.0f,
+	    .playerAlignment = 0.0f,
+	    .cinema = false,
+	    .towns = {{.position = {1100.0f, 0.0f, 1000.0f}, .tribe = 3, .id = 1, .hasTownCentre = false}},
+	    .thingPosition = {},
+	};
+	// A town without a town centre near the camera: the player's alignment music plays
+	EXPECT_EQ(music.SelectLandType(inputs), MusicType::GenericNeutral);
+	// A town with a town centre, further away but within 300, has its music
+	inputs.towns.push_back({.position = {1250.0f, 0.0f, 1000.0f}, .tribe = 5, .id = 2, .hasTownCentre = true});
+	EXPECT_EQ(music.SelectLandType(inputs), MusicType::EgyptianTownNeutral);
+}
+
 TEST(GameMusic, TheTownDistancesComeFromTheInfoTable)
 {
 	GameMusic music;
@@ -617,6 +639,7 @@ public:
 	{
 		played.push_back(bankPath);
 		starts.push_back({.chunk = options.startChunk, .frame = options.startFrame});
+		lastFinished = options.onFinished;
 		return true;
 	}
 	[[nodiscard]] std::optional<MusicBankInfo> GetMusicBankInfo(const std::string& /*bankPath*/) override
@@ -625,6 +648,7 @@ public:
 	}
 
 	std::vector<std::string> played;
+	std::function<void()> lastFinished;
 	std::vector<MusicPiecePosition> starts;
 };
 
@@ -735,6 +759,54 @@ TEST(GameMusic, AFilmThatStartsMakesTheLandsMusicStartAgain)
 		music.ProcessTurn(inputs);
 		ASSERT_EQ(audio.played.size(), 1U);
 		music.ForgetPlaying();
+		music.ProcessTurn(inputs);
+		EXPECT_EQ(audio.played.size(), 2U);
+	}
+	openblack::Locator::sounds::reset();
+	openblack::Locator::audio::reset();
+}
+
+TEST(GameMusic, TheLandWithoutMusicDoesNotChangeTheMusic)
+{
+	MakeAudioLog();
+	openblack::Locator::audio::emplace<MusicCountingAudio>();
+	openblack::Locator::sounds::emplace<openblack::audio::GameSoundRequests>();
+	auto& audio = static_cast<MusicCountingAudio&>(openblack::Locator::audio::value());
+	{
+		GameMusic music;
+		auto inputs = QuietLandTurn();
+		inputs.landWithoutMusic = true;
+		inputs.script = {.type = MusicType::ScriptIntro, .started = true, .playCount = 1, .place = MusicPiecePosition {}};
+		music.ProcessTurn(inputs);
+		inputs.inCitadel = true;
+		music.ProcessTurn(inputs);
+		EXPECT_TRUE(audio.played.empty());
+		EXPECT_EQ(music.GetPlaying(), MusicType::None);
+	}
+	openblack::Locator::sounds::reset();
+	openblack::Locator::audio::reset();
+}
+
+TEST(GameMusic, TheLandsMusicThatPlayedToItsEndComesBackOnThe3500thTurnAway)
+{
+	MakeAudioLog();
+	openblack::Locator::audio::emplace<MusicCountingAudio>();
+	openblack::Locator::sounds::emplace<openblack::audio::GameSoundRequests>();
+	auto& audio = static_cast<MusicCountingAudio&>(openblack::Locator::audio::value());
+	{
+		GameMusic music;
+		const auto inputs = QuietLandTurn();
+		music.ProcessTurn(inputs);
+		ASSERT_EQ(audio.played.size(), 1U);
+		ASSERT_TRUE(audio.lastFinished);
+		audio.lastFinished();
+		// The same music waits for 3499 turns
+		for (int turn = 1; turn < 3500; ++turn)
+		{
+			music.ProcessTurn(inputs);
+		}
+		EXPECT_EQ(audio.played.size(), 1U);
+		// On the 3500th turn it plays again
 		music.ProcessTurn(inputs);
 		EXPECT_EQ(audio.played.size(), 2U);
 	}

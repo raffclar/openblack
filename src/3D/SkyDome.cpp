@@ -152,13 +152,13 @@ uint8_t BlendChannel(uint8_t lower, uint8_t upper, uint8_t weight)
 
 uint8_t Darkness(float alignment)
 {
-	const float evil = 1.0f - (alignment * 0.5f);
-	if (!(evil > 0.6f))
+	const float good = 1.0f - (alignment * 0.5f);
+	if (!(good > 0.6f))
 	{
 		return 0;
 	}
 	// The product rounds to a float before it is cut to a whole number
-	const auto darkness = static_cast<int>((evil - 0.6f) * 225.0f);
+	const auto darkness = static_cast<int>((good - 0.6f) * 225.0f);
 	return static_cast<uint8_t>(std::clamp(darkness, 0, 90));
 }
 

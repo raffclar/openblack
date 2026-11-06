@@ -181,7 +181,9 @@ TEST(FlatLand, RoutesWadeTheShallowsButNotTheOpenWater)
 	    [](int32_t x, int32_t z) { return static_cast<float>(flat_land::Altitude(x, z)) * 0.67f; },
 	    [](int32_t x, int32_t z) -> std::optional<bool> { return flat_land::CellAt(x, z).properties.hasWater != 0; });
 	using creature_route::Ground;
-	EXPECT_EQ(land.At(flat_land::k_LakeMinX + 5, flat_land::k_LakeMinZ + 5), Ground::Blocked);
+	// The open water at the side of the land is blocked; further in, it is out of reach
+	EXPECT_EQ(land.At(flat_land::k_LakeMinX, flat_land::k_LakeMinZ + 5), Ground::Blocked);
+	EXPECT_EQ(land.At(flat_land::k_LakeMinX + 5, flat_land::k_LakeMinZ + 5), Ground::CutOff);
 	EXPECT_EQ(land.At(flat_land::k_LakeMinX - 1, flat_land::k_LakeMinZ + 5), Ground::Water);
 	EXPECT_EQ(land.At(flat_land::k_LakeMinX - 2, flat_land::k_LakeMinZ + 5), Ground::Water);
 	EXPECT_EQ(land.At(flat_land::k_LakeMinX - 3, flat_land::k_LakeMinZ + 5), Ground::Open);

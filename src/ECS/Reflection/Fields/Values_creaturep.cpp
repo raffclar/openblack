@@ -108,7 +108,7 @@ void openblack::ecs::reflection::RegisterFields_Values_creaturep(entt::meta_ctx&
 	    .Field<&openblack::creature_planner::Plan::instrument>("instrument");
 	Reflect<openblack::creature_planner::PlannerState>(context, ValueOnly {})
 	    .Field<&openblack::creature_planner::PlannerState::best>("best", {k_CreatureDesiresDesireNames})
-	    .Field<&openblack::creature_planner::PlannerState::nextGoal>("nextGoal")
+	    .Field<&openblack::creature_planner::PlannerState::round>("round", {k_CreatureDesiresDesireNames})
 	    .Field<&openblack::creature_planner::PlannerState::current>("current")
 	    .Field<&openblack::creature_planner::PlannerState::lastObject>("lastObject")
 	    .Field<&openblack::creature_planner::PlannerState::lastAction>("lastAction")

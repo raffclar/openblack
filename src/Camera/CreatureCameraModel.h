@@ -38,7 +38,7 @@ public:
 	/// Where the thing now is, as the camera reads it. On a thing with no model, the offsets give only the distance.
 	void SetTarget(const creature_follow::Target& target);
 	/// Swings the camera round and tilts it for a clear view of the creature, as Ctrl and Shift do together
-	void ClearView(glm::vec3 landNormal, const creature_follow::GroundHeight& ground);
+	void ClearView(const camera_limits::Ground& ground);
 	/// Turns it by keys, as if held this frame, on a screen so many pixels wide; returns whether they give the camera
 	/// back
 	creature_follow::KeyOutcome Turn(const creature_follow::Keys& keys, float screenWidth);

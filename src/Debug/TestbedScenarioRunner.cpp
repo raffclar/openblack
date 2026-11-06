@@ -152,6 +152,7 @@
 #include "Resources/ResourcesInterface.h"
 #include "ScriptHeaders/ScriptInterfaceLevels.h"
 #include "Sound/GameMusic.h"
+#include "TestbedDispenserGrid.h"
 #include "TestbedScenarioRunnerParts.h"
 #include "Visual/RendererRequestsInterface.h"
 
@@ -363,6 +364,12 @@ void Runner::Start(const Scenario& scenario)
 		ecs::archetypes::SharkArchetype::Create({at.x, 0.0f, at.y}, 1.0f);
 	}
 	PlaceHighlights(scenario, _middle);
+	// The testbed's grid of dispensers goes before the land's script, so that it is not in the way of a building that
+	// the script makes
+	if (!KeepsDispenserGrid(scenario))
+	{
+		testbed_dispensers::RemoveGrid();
+	}
 	// As on a land, the things are on the map before the footpaths come, so no footpath goes round them
 	if (Locator::entitiesMap::has_value())
 	{

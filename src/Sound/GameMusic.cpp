@@ -139,7 +139,7 @@ constexpr std::array<MusicType, 9> k_TribeTownMusic = {
 
 // The land's music only starts once the game has been going a little while
 constexpr uint32_t k_LandMusicFirstTurn = 20;
-// The land's music played to its end only comes back after this many turns away
+// The land's music that played to its end comes back on the turn that its count of turns away gets to this number
 constexpr uint32_t k_BlockedTurns = 3500;
 
 // Music attached to an object whose bank says nothing of how far it carries is heard within this of the camera
@@ -404,6 +404,10 @@ void GameMusic::ProcessMusic(const TurnInputs& inputs)
 	{
 		_scriptStarted = false;
 		ForgetPlaying();
+		return;
+	}
+	if (inputs.landWithoutMusic)
+	{
 		return;
 	}
 	if (ProcessCitadel(inputs))
@@ -676,7 +680,7 @@ bool GameMusic::ProcessLand(const TurnInputs& inputs)
 	{
 		return false;
 	}
-	if (type == _blockedType && ++_blockedTurns <= k_BlockedTurns)
+	if (type == _blockedType && ++_blockedTurns < k_BlockedTurns)
 	{
 		return false;
 	}
@@ -716,8 +720,8 @@ bool GameMusic::ProcessLand(const TurnInputs& inputs)
 	return true;
 }
 
-// The music of the nearest town's tribe within 300 of the camera, or of the town last heard while still
-// within 400, otherwise the player's alignment music. Too high above the land there are no towns to hear.
+// The music of the tribe of the nearest town with a town centre within 300 of the camera, or of the town last heard
+// while still within 400, otherwise the player's alignment music. Too high above the land there are no towns to hear.
 MusicType GameMusic::SelectLandType(const TurnInputs& inputs)
 {
 	const auto alignmentIndex = GetAlignmentIndex(inputs.alignment);
@@ -740,7 +744,8 @@ MusicType GameMusic::SelectLandType(const TurnInputs& inputs)
 	for (const auto& town : inputs.towns)
 	{
 		const auto d = distance(town);
-		if (d < nearestDistance)
+		// A town without a town centre, built or planned, has no music
+		if (town.hasTownCentre && d < nearestDistance)
 		{
 			nearest = &town;
 			nearestDistance = d;

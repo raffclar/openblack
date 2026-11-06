@@ -1868,9 +1868,12 @@ entt::entity AnimalSystem::FindPrey(entt::entity wolf, const Animal& animal)
 		{
 			const auto& otherInfo = InfoOf(other.type);
 			const bool food = (eats & static_cast<uint32_t>(otherInfo.foodType)) != 0 && otherInfo.foodValue != 0.0f;
+			// An animal that a script made a skeleton has no meat for it, as a villager skeleton
 			add(entity, t,
-			    withCommonFacts(
-			        entity, {.isOtherAnimal = other.type != animal.type, .hasMeat = food, .helpless = OutOfTheHunt(entity)}));
+			    withCommonFacts(entity, {.isOtherAnimal = other.type != animal.type,
+			                             .hasMeat = food,
+			                             .skeleton = registry.AllOf<WalkingSkeleton>(entity),
+			                             .helpless = OutOfTheHunt(entity)}));
 		}
 	});
 	// So many cells spiralling out from its own, and the first prey met there is its prey

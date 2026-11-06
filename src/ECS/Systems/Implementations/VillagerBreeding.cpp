@@ -616,7 +616,8 @@ uint32_t villager_breeding::ChildAtCreche(LivingAction& action)
 		return 0;
 	}
 	const bool daytime =
-	    Locator::skyClockSystem::has_value() && creche::IsDaytime(Locator::skyClockSystem::value().GetCurrentSkyType());
+	    Locator::skyClockSystem::has_value() && creche::IsDaytime(Locator::skyClockSystem::value().GetClock().NightSkyType(
+	                                                Locator::skyClockSystem::value().GetClock().GetVisualTime()));
 	const auto abode = AbodeOf(child);
 	const bool firstIn = abode != entt::null && FirstOfHomeIsIn(abode);
 	const bool touching = abode == entt::null && AreTouching(child, creche, k_CrecheTouch);

@@ -18,7 +18,6 @@
 #include "ECS/Components/SpellIcon.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Villager.h"
-#include "ECS/Components/WorshipSite.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/SpellIconSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
@@ -88,8 +87,6 @@ struct SeedTypes
 	{
 		const auto temple = Locator::worshipSiteSystem::value().TempleOf(component.owner);
 		checks.hasTemple = temple != entt::null;
-		const auto* worship = checks.hasTemple ? registry.TryGet<const CitadelWorship>(temple) : nullptr;
-		checks.templeBuilt = worship != nullptr && worship->standing;
 	}
 	return checks;
 }

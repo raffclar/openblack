@@ -33,6 +33,9 @@ TEST(Sun, RisesAndSetsWithTheScriptTime)
 
 	// Setting as it rose
 	EXPECT_FLOAT_EQ(sun::Place(15.0f)->position.y, 3750.0f);
+	// The game multiplies by its float of a sixth and then by 7500; a divide by 6 at the end gives 12.500286
+	EXPECT_EQ(sun::Place(6.01f)->position.y, 12.500287055969238f);
+	EXPECT_EQ(sun::Place(24.0f - 6.01f)->position.y, sun::Place(6.01f)->position.y);
 	EXPECT_FLOAT_EQ(sun::Place(19.5f)->alpha, 127.5f);
 }
 
