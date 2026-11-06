@@ -99,6 +99,11 @@ float ClampAlignment(float sum)
 	return std::clamp(sum, -1.0f, 1.0f);
 }
 
+bool GrowsInTurn(uint32_t turn, uint32_t growthTurn, bool burning)
+{
+	return (turn + growthTurn) % k_TurnsPerGrowth == 0 && !burning;
+}
+
 void Grow(Crop& crop, const Type& type, float alignment, bool raining)
 {
 	if (!IsSown(crop, type) || crop.age > type.ageRipe)

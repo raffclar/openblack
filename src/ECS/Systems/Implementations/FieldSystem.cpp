@@ -86,13 +86,16 @@ bool IsRaining(const glm::vec3& position)
 
 void FieldSystem::ProcessTurn(uint32_t turn)
 {
-	Locator::entitiesRegistry::value().Each<Field, const Transform>([turn](Field& field, const Transform& transform) {
-		if ((turn + field.growthTurn) % field_crop::k_TurnsPerGrowth != 0)
-		{
-			return;
-		}
-		field_crop::Grow(field.crop, TypeOf(field.type), LandAlignment(transform.position), IsRaining(transform.position));
-	});
+	Locator::entitiesRegistry::value().Each<Field, const Transform>(
+	    [turn](entt::entity entity, Field& field, const Transform& transform) {
+		    // A field that burns does not grow
+		    const bool burning = Locator::fireSystem::has_value() && Locator::fireSystem::value().IsOnFire(entity);
+		    if (!field_crop::GrowsInTurn(turn, field.growthTurn, burning))
+		    {
+			    return;
+		    }
+		    field_crop::Grow(field.crop, TypeOf(field.type), LandAlignment(transform.position), IsRaining(transform.position));
+	    });
 }
 
 void FieldSystem::Update(std::chrono::duration<float, std::milli> gameTime)
