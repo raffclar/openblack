@@ -131,6 +131,10 @@ private:
 	std::vector<SDL_Event> _queuedReleases;
 	/// The actions without a key pressed for testing, let go of the next frame
 	BindableActionMap _queuedHeld = BindableActionMap::NONE;
+	/// The last frame took no step of the input, so a queued press that it held was not seen by the steps
+	bool _noInputStepLastFrame {false};
+	/// How many frames a queued press has been held for longer, while it waits for a step of the input
+	uint32_t _queuedHoldFrames {0};
 	std::unordered_map<int /*mousebutton*/, BindableActionMap> _mouseBindings;
 	std::unordered_map<int /*mousebutton*/, std::pair<SDL_Keymod, BindableActionMap>> _mouseModBindings;
 	uint8_t _currentMouseButtons = 0;

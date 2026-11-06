@@ -187,6 +187,17 @@ void GameActionMap::ReleaseKeysNoLongerHeld()
 
 void GameActionMap::ApplyQueuedPresses()
 {
+	// A queued press stays held until a step of the input has seen it, as a key that the player presses stays down for
+	// longer than one step. A frame with no step leaves it held for the next frame, up to a limit.
+	constexpr uint32_t k_MostHoldFrames = 2000;
+	const bool noStep = std::exchange(_noInputStepLastFrame, false);
+	const bool holding = !_queuedReleases.empty() || _queuedHeld != BindableActionMap::NONE;
+	if (holding && noStep && _queuedHoldFrames < k_MostHoldFrames)
+	{
+		++_queuedHoldFrames;
+		return;
+	}
+	_queuedHoldFrames = 0;
 	for (const auto& event : std::exchange(_queuedReleases, {}))
 	{
 		ProcessEvent(event);
@@ -769,6 +780,7 @@ float GameActionMap::GetMouseWheelDelta() const
 void GameActionMap::SplitInput(const input_steps::Steps& steps)
 {
 	_inputStep.reset();
+	_noInputStepLastFrame = steps.count == 0;
 	_stepMice = _mouseSplit.Split(
 	    {
 	        .from = _lastFramePosition,

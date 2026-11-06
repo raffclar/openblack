@@ -282,6 +282,36 @@ TEST(GameActionMap, QueuedPressGoesThroughTheKeyPath)
 	}
 }
 
+TEST(GameActionMap, AQueuedPressStaysHeldUntilAStepOfTheInputSeesIt)
+{
+	GameActionMap map;
+	map.Frame();
+	const auto noStep = input_steps::Steps {};
+	const auto oneStep = input_steps::Steps::One();
+	// A key's press and an action without a key both wait for a frame that takes a step of the input
+	for (const auto action : {BindableActionMap::MOVE_LEFT, BindableActionMap::ACTION})
+	{
+		map.QueuePress(action);
+		map.Frame();
+		map.SplitInput(noStep);
+		EXPECT_TRUE(map.Get(action));
+		// The frames with no step keep it held
+		map.Frame();
+		map.SplitInput(noStep);
+		EXPECT_TRUE(map.Get(action));
+		map.Frame();
+		map.SplitInput(oneStep);
+		EXPECT_TRUE(map.Get(action));
+		// The step saw it, so the next frame lets go of it
+		map.Frame();
+		map.SplitInput(noStep);
+		EXPECT_FALSE(map.Get(action));
+		map.Frame();
+		map.SplitInput(oneStep);
+		EXPECT_FALSE(map.HasQueuedPresses());
+	}
+}
+
 TEST(GameActionMap, QueuedChordPressesOnlyTheChordsAction)
 {
 	GameActionMap map;
