@@ -228,4 +228,24 @@ void testbed_scenarios::AddComputerGodWarScenarios(std::vector<Scenario>& all)
 	                         .first = CreatureThing(PlayerNames::PLAYER_ONE),
 	                         .second = FirstObject()}},
 	});
+	all.push_back({
+	    .id = "mind.computer_god_rock_in_player_hand",
+	    .name = "A computer god that does not take a rock from the hand of the player",
+	    .facet = Facet::Mind,
+	    .description = "The scenario of the rock that the god throws at the cow of player one. After 20 seconds, the hand "
+	                   "of the player takes the rock and holds it. After 30 seconds, a testbed tool gives the god the "
+	                   "action ThrowrockatCreature, with the cow and the rock, as a land script does.",
+	    .expected = "The hand of the player keeps the rock. The hand of the god does not move to the rock and does not take "
+	                "it, because a hand holds it. The players.list query shows no steps of the hand for the action.",
+	    .framing = BothTowns(),
+	    .creatures = {CreatureOf("player one's", CreatureType::Cow, PlayerNames::PLAYER_ONE, {140.0f, 0.0f})},
+	    .objects = {{.type = MobileStaticInfo::Rock, .offset = {60.0f, -40.0f}}},
+	    .landScript = k_WarScript,
+	    .commands = {{.kind = Command::Kind::HandTake, .delaySeconds = 20.0f, .object = 0}},
+	    .objectsAfterLandScript = true,
+	    .computerActions = {{.afterTurns = k_Wait,
+	                         .node = "ThrowrockatCreature",
+	                         .first = CreatureThing(PlayerNames::PLAYER_ONE),
+	                         .second = FirstObject()}},
+	});
 }
