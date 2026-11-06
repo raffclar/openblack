@@ -30,6 +30,7 @@
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/Pot.h"
+#include "ECS/Components/PuzzleGame.h"
 #include "ECS/Components/Scaffold.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Tree.h"
@@ -317,6 +318,13 @@ TEST_F(PhysicsClassesTest, LivingThings)
 	_registry.Assign<Animal>(animal);
 	EXPECT_EQ(Classify(animal).body, BodyKind::AnimalBox);
 	EXPECT_EQ(Classify(animal).row, MaterialRow::Animal);
+	EXPECT_TRUE(Classify(animal).canBecomePhysicsObject);
+	// An animal of a maze puzzle is hit, but it never flies
+	_registry.Assign<PuzzlePiece>(animal);
+	const auto piece = Classify(animal);
+	EXPECT_EQ(piece.row, MaterialRow::Animal);
+	EXPECT_TRUE(piece.interacts);
+	EXPECT_FALSE(piece.canBecomePhysicsObject);
 
 	const auto creature = _registry.Create();
 	_registry.Assign<Creature>(creature);
