@@ -43,6 +43,7 @@
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Locator.h"
+#include "MixVolume.h"
 #include "PanPlace.h"
 #include "Resources/Resources.h"
 #include "Sound/EmitterFollow.h"
@@ -267,7 +268,8 @@ void AudioManager::Update()
 
 	// The music thread's work: streams are fed and fade every tick
 	const auto now = std::chrono::steady_clock::now();
-	_musicStreams->SetOutputVolume(_globalVolume * _musicVolume);
+	// The music volume of the options is in each channel's mix
+	_musicStreams->SetOutputVolume(_globalVolume);
 	_musicPlayer->Update(std::chrono::duration_cast<std::chrono::microseconds>(now - _lastMusicUpdate));
 	_lastMusicUpdate = now;
 	_customMusic->Update();
@@ -275,8 +277,32 @@ void AudioManager::Update()
 	// Atmosphere voices are positioned relative to the listener and only follow the volume settings here
 	for (const auto& [handle, voice] : _atmosVoices)
 	{
-		_audioPlayer->SetVolume(voice.source, voice.gain * _globalVolume * _sfxVolume);
+		_audioPlayer->SetVolume(voice.source, voice.gain * _globalVolume);
 	}
+}
+
+void AudioManager::SetSfxVolume(float volume)
+{
+	_sfxVolume = volume;
+	// The effects volume is the master volume of every sample voice, in whole steps. The voices that play take it at
+	// once.
+	_atmos->SetMasterVolume(mix_volume::MasterVolumeOfSlider(volume));
+	_emitters.Each<AudioEmitter>([this](entt::entity, AudioEmitter& emitter) {
+		emitter.gain = _atmos->VolumeToGain(emitter.volume);
+		_audioPlayer->SetVolume(emitter.sourceId, EmitterVolume(emitter));
+	});
+	for (auto& [handle, voice] : _atmosVoices)
+	{
+		voice.gain = _atmos->VolumeToGain(voice.volume);
+		_audioPlayer->SetVolume(voice.source, voice.gain * _globalVolume);
+	}
+}
+
+void AudioManager::SetMusicVolume(float volume)
+{
+	_musicVolume = volume;
+	// The music volume is the master volume of the music channels, in whole steps
+	_musicPlayer->SetMasterVolume(mix_volume::MasterVolumeOfSlider(volume));
 }
 
 void AudioManager::ProcessTurn()
@@ -313,7 +339,8 @@ float AudioManager::EmitterVolume(const AudioEmitter& emitter) const
 	{
 		return 0.0f;
 	}
-	return emitter.gain * _globalVolume * (emitter.music ? _musicVolume : _sfxVolume);
+	// The effects volume is in the gain of a sample voice already
+	return emitter.gain * _globalVolume * (emitter.music ? _musicVolume : 1.0f);
 }
 
 void AudioManager::StopOutOfRangeEmitters()
@@ -1223,11 +1250,11 @@ VoiceBackend::Handle AudioManager::Start(const VoiceStart& start)
 	}
 	const auto source = CreateSource(*sound, start);
 	const auto gain = _atmos->VolumeToGain(start.volume);
-	_audioPlayer->SetVolume(source, gain * _globalVolume * _sfxVolume);
+	_audioPlayer->SetVolume(source, gain * _globalVolume);
 	_audioPlayer->StartSource(source);
 
 	const auto handle = _nextAtmosVoice++;
-	_atmosVoices.emplace(handle, AtmosVoice {.source = source, .gain = gain, .slot = *choice.slot});
+	_atmosVoices.emplace(handle, AtmosVoice {.source = source, .gain = gain, .volume = start.volume, .slot = *choice.slot});
 	BindVoice(*choice.slot, *sound, entt::null, handle);
 	SPDLOG_LOGGER_DEBUG(spdlog::get("audio"), "Atmosphere voice {}: {} volume {} pitch {}% at ({}, {})", handle, stringId,
 	                    start.volume, start.pitchPercent, start.position.x, start.position.y);
@@ -1299,8 +1326,9 @@ void AudioManager::SetVolume(Handle handle, uint32_t volume)
 	{
 		return;
 	}
+	iter->second.volume = volume;
 	iter->second.gain = _atmos->VolumeToGain(volume);
-	_audioPlayer->SetVolume(iter->second.source, iter->second.gain * _globalVolume * _sfxVolume);
+	_audioPlayer->SetVolume(iter->second.source, iter->second.gain * _globalVolume);
 }
 
 void AudioManager::Stop(Handle handle)

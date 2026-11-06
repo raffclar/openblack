@@ -813,3 +813,25 @@ TEST(GameMusic, TheLandsMusicThatPlayedToItsEndComesBackOnThe3500thTurnAway)
 	openblack::Locator::sounds::reset();
 	openblack::Locator::audio::reset();
 }
+
+// The music volume of the options is a master volume of 0 to 127. Each channel mixes it in whole steps, and a channel
+// that plays takes a new master volume at once.
+TEST(MusicPlayer, TheMasterVolumeMixesInWholeSteps)
+{
+	FakeMusicBackend backend;
+	MusicPlayer music(backend);
+	const auto bank = MakeBank(500, 1);
+	bank->bankVolume = 100;
+	music.Play({.bank = bank, .volume = 80});
+	const auto& stream = backend.streams.begin()->second;
+	EXPECT_FLOAT_EQ(stream.volume, 16251.0f / 32767.0f);
+
+	music.SetMasterVolume(63);
+	EXPECT_EQ(music.GetMasterVolume(), 63u);
+	EXPECT_FLOAT_EQ(stream.volume, 8061.0f / 32767.0f);
+
+	// The master volume is at most 127
+	music.SetMasterVolume(500);
+	EXPECT_EQ(music.GetMasterVolume(), 127u);
+	EXPECT_FLOAT_EQ(stream.volume, 16251.0f / 32767.0f);
+}

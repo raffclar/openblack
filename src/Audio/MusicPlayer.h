@@ -187,6 +187,10 @@ public:
 	[[nodiscard]] bool IsActive() const;
 	/// Keeps the streams fed and changes volumes once per tick
 	void Update(std::chrono::microseconds dt);
+	/// The master volume of the music, 0 to 127. Each channel's volume is mixed with it in whole steps, and the
+	/// channels that play take it at once.
+	void SetMasterVolume(uint32_t volume);
+	[[nodiscard]] uint32_t GetMasterVolume() const { return _masterVolume; }
 
 	[[nodiscard]] const std::array<Channel, k_ChannelCount>& GetChannels() const { return _channels; }
 	[[nodiscard]] int GetCurrentChannel() const { return _current; }
@@ -202,6 +206,7 @@ private:
 	std::array<Channel, k_ChannelCount> _channels;
 	int _current {k_NoChannel};
 	std::chrono::microseconds _tickTime {0};
+	uint32_t _masterVolume {static_cast<uint32_t>(k_MaxVolume)};
 };
 
 } // namespace openblack::audio
