@@ -541,18 +541,40 @@ TEST(HandGrab, TheScoopingSoundRisesInPitchWithTheRamp)
 
 TEST(HandGrab, TheCinemaBarsSilenceAGripOfTheLandButNotOfTheSea)
 {
-	EXPECT_EQ(GripFeedbackOf(true, false, false), GripFeedback::Dust);
-	EXPECT_EQ(GripFeedbackOf(true, true, false), GripFeedback::None);
-	EXPECT_EQ(GripFeedbackOf(false, false, false), GripFeedback::Splash);
-	EXPECT_EQ(GripFeedbackOf(false, true, false), GripFeedback::Splash);
+	EXPECT_EQ(GripFeedbackOf({.onLand = true, .cinemaBars = false, .paused = false, .handHoldsThing = false}),
+	          GripFeedback::Dust);
+	EXPECT_EQ(GripFeedbackOf({.onLand = true, .cinemaBars = true, .paused = false, .handHoldsThing = false}),
+	          GripFeedback::None);
+	EXPECT_EQ(GripFeedbackOf({.onLand = false, .cinemaBars = false, .paused = false, .handHoldsThing = false}),
+	          GripFeedback::Splash);
+	EXPECT_EQ(GripFeedbackOf({.onLand = false, .cinemaBars = true, .paused = false, .handHoldsThing = false}),
+	          GripFeedback::Splash);
 }
 
 TEST(HandGrab, WhileTheGameIsPausedAGripOfTheSeaIsSilentButAGripOfTheLandIsNot)
 {
-	EXPECT_EQ(GripFeedbackOf(false, false, true), GripFeedback::None);
-	EXPECT_EQ(GripFeedbackOf(false, true, true), GripFeedback::None);
-	EXPECT_EQ(GripFeedbackOf(true, false, true), GripFeedback::Dust);
-	EXPECT_EQ(GripFeedbackOf(true, true, true), GripFeedback::None);
+	EXPECT_EQ(GripFeedbackOf({.onLand = false, .cinemaBars = false, .paused = true, .handHoldsThing = false}),
+	          GripFeedback::None);
+	EXPECT_EQ(GripFeedbackOf({.onLand = false, .cinemaBars = true, .paused = true, .handHoldsThing = false}),
+	          GripFeedback::None);
+	EXPECT_EQ(GripFeedbackOf({.onLand = true, .cinemaBars = false, .paused = true, .handHoldsThing = false}),
+	          GripFeedback::Dust);
+	EXPECT_EQ(GripFeedbackOf({.onLand = true, .cinemaBars = true, .paused = true, .handHoldsThing = false}),
+	          GripFeedback::None);
+}
+
+TEST(HandGrab, AGripOfTheSeaIsSilentWhileTheHandTakesOrHoldsAThing)
+{
+	// The sea makes no ring and no sound, also with the cinema bars in
+	EXPECT_EQ(GripFeedbackOf({.onLand = false, .cinemaBars = false, .paused = false, .handHoldsThing = true}),
+	          GripFeedback::None);
+	EXPECT_EQ(GripFeedbackOf({.onLand = false, .cinemaBars = true, .paused = false, .handHoldsThing = true}),
+	          GripFeedback::None);
+	// The land still makes its dust and its sound
+	EXPECT_EQ(GripFeedbackOf({.onLand = true, .cinemaBars = false, .paused = false, .handHoldsThing = true}),
+	          GripFeedback::Dust);
+	EXPECT_EQ(GripFeedbackOf({.onLand = true, .cinemaBars = true, .paused = false, .handHoldsThing = true}),
+	          GripFeedback::None);
 }
 
 TEST(HandGrab, APressTapsThePlayersOwnFireBallAndWaitsOnAnothers)

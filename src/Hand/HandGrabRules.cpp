@@ -491,11 +491,11 @@ uint32_t hand_grab::ScoopTaken(uint32_t wanted, uint32_t sourceHas, uint32_t hel
 	return taken;
 }
 
-hand_grab::GripFeedback hand_grab::GripFeedbackOf(bool onLand, bool cinemaBars, bool paused)
+hand_grab::GripFeedback hand_grab::GripFeedbackOf(const GripFacts& facts)
 {
-	if (!onLand)
+	if (!facts.onLand)
 	{
-		return paused ? GripFeedback::None : GripFeedback::Splash;
+		return facts.paused || facts.handHoldsThing ? GripFeedback::None : GripFeedback::Splash;
 	}
-	return cinemaBars ? GripFeedback::None : GripFeedback::Dust;
+	return facts.cinemaBars ? GripFeedback::None : GripFeedback::Dust;
 }
