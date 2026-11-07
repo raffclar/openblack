@@ -166,6 +166,27 @@ TEST(CastInput, AnObjectUnderTheHandComesFirst)
 	EXPECT_TRUE(input.onObject);
 }
 
+TEST(CastInput, OnlyThePressThatArmsAGestureSeedStartsTheGesturePathAgain)
+{
+	CastInput input;
+	auto onObject = k_OverLand;
+	onObject.onValidObject = true;
+	EXPECT_TRUE(Press(input, k_Gesture, k_OverLand).restartGesturePath);
+	EXPECT_FALSE(Release(input).restartGesturePath);
+	EXPECT_TRUE(Press(input, k_Gesture, onObject).restartGesturePath);
+	(void)Release(input);
+	EXPECT_FALSE(Press(input, k_InHand, k_OverLand).restartGesturePath);
+	(void)Release(input);
+	EXPECT_FALSE(Press(input, k_Position, k_OverLand).restartGesturePath);
+	// A press that fails, or one before the seed is ready, keeps the path
+	auto outside = k_OverLand;
+	outside.pointValid = false;
+	EXPECT_FALSE(Press(input, k_Gesture, outside).restartGesturePath);
+	auto early = k_OverLand;
+	early.seedReady = false;
+	EXPECT_FALSE(Press(input, k_Gesture, early).restartGesturePath);
+}
+
 TEST(CastInput, APressBeforeTheSeedIsReadyFails)
 {
 	CastInput input;

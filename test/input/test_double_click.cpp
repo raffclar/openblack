@@ -115,3 +115,44 @@ TEST(DoubleClick, OnlyTheLeftButtonDoubleClicks)
 	EXPECT_FALSE(map.Get(UnbindableActionMap::DOUBLE_CLICK));
 	EXPECT_FALSE(map.TakeDoubleClick());
 }
+
+TEST(DoubleClick, TheReleaseOfTheSecondPressSendsAReleaseMessage)
+{
+	GameActionMap map;
+	map.Frame();
+	map.ProcessEvent(ButtonEvent(true, SDL_BUTTON_LEFT, 1));
+	map.Frame();
+	map.ProcessEvent(ButtonEvent(false, SDL_BUTTON_LEFT, 1));
+	map.Frame();
+	// The second press sends the double click, and its release sends a release message of the button
+	map.ProcessEvent(ButtonEvent(true, SDL_BUTTON_LEFT, 2));
+	EXPECT_EQ(map.GetButtonMessages(), 1u);
+	map.Frame();
+	EXPECT_EQ(map.GetButtonMessages(), 0u);
+	map.ProcessEvent(ButtonEvent(false, SDL_BUTTON_LEFT, 2));
+	EXPECT_EQ(map.GetButtonMessages(), 1u);
+	map.Frame();
+	EXPECT_EQ(map.GetButtonMessages(), 0u);
+}
+
+TEST(DoubleClick, TheSecondPressAndItsReleaseInOneFrameSendTwoMessages)
+{
+	GameActionMap map;
+	map.Frame();
+	map.ProcessEvent(ButtonEvent(true, SDL_BUTTON_LEFT, 1));
+	map.ProcessEvent(ButtonEvent(false, SDL_BUTTON_LEFT, 1));
+	map.Frame();
+	map.ProcessEvent(ButtonEvent(true, SDL_BUTTON_LEFT, 2));
+	map.ProcessEvent(ButtonEvent(false, SDL_BUTTON_LEFT, 2));
+	EXPECT_EQ(map.GetButtonMessages(), 2u);
+}
+
+TEST(DoubleClick, OnlyOneReleaseFollowsTheSecondPress)
+{
+	GameActionMap map;
+	map.Frame();
+	DoubleClick(map, SDL_BUTTON_LEFT);
+	// A release with no press before it in the frame sends no message of the double click again
+	map.ProcessEvent(ButtonEvent(false, SDL_BUTTON_LEFT, 1));
+	EXPECT_EQ(map.GetButtonMessages(), 0u);
+}

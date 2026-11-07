@@ -109,6 +109,32 @@ TEST(GestureSystem, AMiraclesFirstTurnInTheHandStartsThePathAgain)
 	EXPECT_FALSE(system.IsSelecting());
 }
 
+TEST(GestureSystem, ThePressThatArmsAMiracleStartsThePathAgainAfterThePlacesOfTheFramesPass)
+{
+	GestureSystem system;
+	for (int i = 0; i < 10; ++i)
+	{
+		auto frame = Frame(k_FrameSeconds);
+		frame.places = {{100.0f + static_cast<float>(i * 10), 100.0f}};
+		system.Update(frame);
+	}
+	system.RestartPathAtArmedPress();
+	// The turn's pass gets no message of the buttons, so it keeps the path
+	auto turn = Frame(0.0f);
+	turn.places.clear();
+	system.InterfaceTurn(turn);
+	EXPECT_EQ(system.GetPath().Count(), 10u);
+	// The frame's pass takes its places, then the path starts again with one sample at the last place
+	auto next = Frame(k_FrameSeconds);
+	next.places = {{300.0f, 120.0f}, {320.0f, 120.0f}};
+	system.Update(next);
+	ASSERT_EQ(system.GetPath().Count(), 1u);
+	EXPECT_EQ(system.GetPath().At(0).screen, glm::vec2(320.0f, 120.0f));
+	// The pass after it samples as usual
+	system.Update(Frame(k_FrameSeconds));
+	EXPECT_EQ(system.GetPath().Count(), 2u);
+}
+
 TEST(GestureSystem, ADrawnPathIsTakenInPlaceOfTheCursor)
 {
 	GestureSystem system;
@@ -154,12 +180,12 @@ TEST(GestureSystem, MovingTheCameraWipesThePathUnlessItShakes)
 	// The camera moves while it shakes: the path stays and goes on
 	drawn({1.0f, 50.0f, 0.0f}, true, 1);
 	EXPECT_EQ(system.GetPath().Count(), 6u);
-	// It moves without shaking: the path starts again from this frame's point
+	// It moves without shaking: after the places of the frame, the path is wiped
 	drawn({2.0f, 50.0f, 0.0f}, false, 1);
-	EXPECT_EQ(system.GetPath().Count(), 1u);
+	EXPECT_TRUE(system.GetPath().Empty());
 	// Still, it keeps the path
 	drawn({2.0f, 50.0f, 0.0f}, false, 3);
-	EXPECT_EQ(system.GetPath().Count(), 4u);
+	EXPECT_EQ(system.GetPath().Count(), 3u);
 }
 
 TEST(GestureSystem, ANewLandKeepsThePathUntilTheCameraMoves)
@@ -203,9 +229,9 @@ TEST(GestureSystem, ACameraThatLetsTheHandDrawKeepsThePathAsItMoves)
 	drawn({1.0f, 50.0f, 0.0f}, true, 1);
 	drawn({2.0f, 50.0f, 0.0f}, true, 1);
 	EXPECT_EQ(system.GetPath().Count(), 5u);
-	// Another camera that moves wipes it
+	// Another camera that moves wipes it, after the places of the frame
 	drawn({3.0f, 50.0f, 0.0f}, false, 1);
-	EXPECT_EQ(system.GetPath().Count(), 1u);
+	EXPECT_TRUE(system.GetPath().Empty());
 }
 
 TEST(GestureSystem, TheMoveButtonHeldInAFightWipesThePath)
@@ -229,4 +255,53 @@ TEST(GestureSystem, TheMoveButtonHeldInAFightWipesThePath)
 	// Let go, a new path starts
 	drawn(false, 2);
 	EXPECT_EQ(system.GetPath().Count(), 2u);
+}
+
+TEST(GestureSystem, TheTurnPassSamplesThePlacesThatCameSinceTheLastPass)
+{
+	GestureSystem system;
+	auto turn = Frame(k_FrameSeconds);
+	turn.places = {{100.0f, 100.0f}, {140.0f, 100.0f}};
+	system.InterfaceTurn(turn);
+	ASSERT_EQ(system.GetPath().Count(), 2u);
+	EXPECT_EQ(system.GetPath().At(1).screen, glm::vec2(140.0f, 100.0f));
+	// The frame's pass that follows got no more places: it adds no sample
+	auto frame = Frame(k_FrameSeconds);
+	frame.places.clear();
+	system.Update(frame);
+	EXPECT_EQ(system.GetPath().Count(), 2u);
+}
+
+TEST(GestureSystem, TheTurnPassWipesThePathWhileTheCameraMovedInItsLastUpdate)
+{
+	GestureSystem system;
+	auto still = Frame(k_FrameSeconds);
+	still.view.cameraEye = {0.0f, 50.0f, 0.0f};
+	system.Update(still);
+	// The camera moved before this frame's pass: the pass wipes the path
+	auto moved = Frame(k_FrameSeconds);
+	moved.view.cameraEye = {5.0f, 50.0f, 0.0f};
+	system.Update(moved);
+	EXPECT_TRUE(system.GetPath().Empty());
+	// The turn that follows sees the same camera, which moved in its last update: its samples go too
+	auto turn = Frame(k_FrameSeconds);
+	turn.view.cameraEye = moved.view.cameraEye;
+	system.InterfaceTurn(turn);
+	EXPECT_TRUE(system.GetPath().Empty());
+	// The camera stays still in the next update: the path keeps the samples of the frame and of the turn
+	auto stillAgain = Frame(k_FrameSeconds);
+	stillAgain.view.cameraEye = moved.view.cameraEye;
+	system.Update(stillAgain);
+	system.InterfaceTurn(turn);
+	EXPECT_EQ(system.GetPath().Count(), 2u);
+}
+
+TEST(GestureSystem, TheMessagesOfTheButtonsDoNotSampleThePlacesAgain)
+{
+	GestureSystem system;
+	auto frame = Frame(k_FrameSeconds);
+	frame.places = {{100.0f, 100.0f}, {140.0f, 100.0f}, {180.0f, 100.0f}};
+	frame.buttonMessages = 3;
+	system.Update(frame);
+	EXPECT_EQ(system.GetPath().Count(), 3u);
 }

@@ -748,7 +748,25 @@ glm::ivec2 GameActionMap::GetMousePushDelta() const
 uint32_t GameActionMap::TakeMouseMoves()
 {
 	_mousePlaces = _helpMouseMoves.TakePlaces();
+	_interfaceTookPlaces = false;
 	return _helpMouseMoves.CountMoves(_mousePlaces);
+}
+
+uint32_t GameActionMap::GetButtonMessages() const
+{
+	const auto changed = [this](BindableActionMap action) { return GetBindableChanged(action) ? 1u : 0u; };
+	return changed(BindableActionMap::ACTION) + changed(BindableActionMap::MOVE) + (_doubleClickThisFrame ? 1u : 0u) +
+	       (_doubleClickReleaseThisFrame ? 1u : 0u);
+}
+
+std::span<const glm::ivec2> GameActionMap::TakeInterfacePlaces()
+{
+	if (_interfaceTookPlaces)
+	{
+		return {};
+	}
+	_interfaceTookPlaces = true;
+	return _mousePlaces;
 }
 
 std::span<const glm::ivec2> GameActionMap::GetMousePlaces() const
@@ -790,6 +808,8 @@ void GameActionMap::UseInputStep(std::optional<uint32_t> step)
 void GameActionMap::Frame()
 {
 	_keysDownThisFrame.reset();
+	_doubleClickThisFrame = false;
+	_doubleClickReleaseThisFrame = false;
 	_cursorWarp.reset();
 	if constexpr (k_Platform == Platform::Web)
 	{
@@ -951,8 +971,11 @@ void GameActionMap::ProcessEvent(const SDL_Event& event)
 	}
 	// The second press of a double click with the left button marks the double click, and presses none of the button's
 	// actions again. The mark outlasts the press: it stays, through the button's letting go, until the camera takes it.
+	// The second press holds the button until its release, which sends a release message.
 	else if (event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_LEFT && event.button.clicks == 2)
 	{
+		_doubleClickThisFrame = true;
+		_doubleClickHeld = true;
 		_unbindableMap = static_cast<UnbindableActionMap>(static_cast<uint8_t>(_unbindableMap) |
 		                                                  static_cast<uint8_t>(UnbindableActionMap::DOUBLE_CLICK));
 	}
@@ -1052,6 +1075,10 @@ void GameActionMap::ProcessEvent(const SDL_Event& event)
 	else if (event.type == SDL_MOUSEBUTTONUP)
 	{
 		const uint8_t buttonMask = SDL_BUTTON(event.button.button);
+		if (event.button.button == SDL_BUTTON_LEFT && std::exchange(_doubleClickHeld, false))
+		{
+			_doubleClickReleaseThisFrame = true;
+		}
 		if (_mouseBindings.contains(buttonMask))
 		{
 			_bindableMap = static_cast<BindableActionMap>(static_cast<uint64_t>(_bindableMap) &

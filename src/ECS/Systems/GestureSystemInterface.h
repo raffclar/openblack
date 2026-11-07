@@ -81,6 +81,10 @@ public:
 		/// Whether the Move button is held while the hand directs the fight of the player's creature. The path is
 		/// forgotten, and nothing is recognised, while it is.
 		bool moveHeldInFight {false};
+		/// The messages of the mouse buttons in this frame: a press and a release of the Action button, a press and a
+		/// release of the Move button, and a double click of the left button. Each kind sends one message at most. The
+		/// interface does its gesture step once after each message, or once when no button sent a message.
+		uint32_t buttonMessages {0};
 	};
 
 	/// The last gesture recognised, for the debug window
@@ -98,8 +102,12 @@ public:
 		uint32_t number {0};
 	};
 
-	/// Once a frame
+	/// Once a frame: the frame's pass of the interface. It samples the places that came since the last pass, then it does
+	/// the gesture step once for each message of the buttons.
 	virtual void Update(const Frame& frame) = 0;
+	/// Once a turn, before the game logic of the turn: the turn's pass of the interface. It samples the places that came
+	/// since the last pass, then it does the gesture step once. The times of the gestures do not count down in this pass.
+	virtual void InterfaceTurn(const Frame& /*frame*/) {}
 	/// Loads the game's gesture templates, if they are not loaded. The first update also loads them.
 	virtual void LoadTemplates() {}
 	/// A path drawn as if by the hand, for the testbed: the points are on the screen that the path uses (768 pixels
@@ -118,6 +126,10 @@ public:
 	/// seed, with the power-up level of the seed as the one asked for. From then on this land, the chain follows the hand
 	/// while it holds any miracle.
 	virtual void SeedFirstTurnInHand() { ForgetPath(); }
+	/// The Action button armed the miracle in the hand, which the hand casts by its gesture when the button comes up. In
+	/// the pass of this frame, after the samples of the places, the hand forgets its path and takes one sample at the last
+	/// place of the pointer.
+	virtual void RestartPathAtArmedPress() { ForgetPath(); }
 
 	/// The templates the paths are matched against, empty until the game's file is loaded
 	[[nodiscard]] virtual std::span<const gestures::GestureTemplate> GetTemplates() const = 0;

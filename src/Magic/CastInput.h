@@ -80,6 +80,8 @@ struct CastActions
 	bool unlock {false};
 	/// The press came before the seed was ready, and failed
 	bool notReady {false};
+	/// The press armed a gesture-cast seed: the hand's gesture path starts again from the last place of the pointer
+	bool restartGesturePath {false};
 
 	bool operator==(const CastActions&) const = default;
 };

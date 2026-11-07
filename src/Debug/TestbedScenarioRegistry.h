@@ -391,7 +391,8 @@ struct ObjectSetup
 	/// is made as a land's script makes one, and the script controls it. A building is held by a script.
 	bool inScript {false};
 	/// A villager is under the control of a script, as a script controls a villager that it moves: it takes up no
-	/// reaction until the script releases it
+	/// reaction until the script releases it. An animal under the control of a script takes up no reaction, and a hunter
+	/// does not take it as prey.
 	bool scriptControlled {false};
 	/// A villager is the named person of this row in the game's table of named people, whose name the Show Villager
 	/// Names key shows
