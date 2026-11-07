@@ -34,6 +34,7 @@
 #include "Creature/CreatureAudio.h"
 #include "ECS/Archetypes/TreeArchetype.h"
 #include "ECS/Archetypes/Utils.h"
+#include "ECS/BuildingSites.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Field.h"
 #include "ECS/Components/Fixed.h"
@@ -43,7 +44,6 @@
 #include "ECS/Components/MagicForest.h"
 #include "ECS/Components/Player.h"
 #include "ECS/Components/Spell.h"
-#include "ECS/Components/StoragePit.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
@@ -994,17 +994,13 @@ void ForestSystem::AssignForestsToTown(entt::entity townEntity)
 		return;
 	}
 	const float reach = Locator::infoConstants::value().town.maxDistanceForTownForest;
-	const auto& town = registry.Get<const Town>(townEntity);
-	// The distance starts at the storage pit of the town. A town with no storage pit gets its temporary pile for wood
-	// beside its gathering place, and the distance starts at the edge of that pile nearest the town.
+	// The distance starts at the main storage pit of the town. A town with no main storage pit gets its temporary pile
+	// for wood beside its gathering place, and the distance starts at the edge of that pile nearest the town.
 	std::optional<glm::vec3> from;
-	registry.Each<const StoragePit, const Abode, const Transform>(
-	    [&](entt::entity, const StoragePit&, const Abode& abode, const Transform& at) {
-		    if (!from.has_value() && abode.townId == town.id)
-		    {
-			    from = at.position;
-		    }
-	    });
+	if (const auto pit = ecs::construction::StoragePitOf(townEntity); pit.has_value())
+	{
+		from = registry.Get<const Transform>(*pit).position;
+	}
 	if (!from.has_value() && Locator::townSystem::has_value())
 	{
 		const auto& centre = registry.Get<const Transform>(townEntity).position;

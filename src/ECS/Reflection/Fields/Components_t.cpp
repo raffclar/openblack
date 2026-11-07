@@ -136,6 +136,7 @@ void openblack::ecs::reflection::RegisterFields_Components_t(entt::meta_ctx& con
 	    .Field<&components::Town::sitesOpened>("sitesOpened")
 	    .Field<&components::Town::askedToBuildTurn>("askedToBuildTurn")
 	    .Field<&components::Town::emptyTownTimer>("emptyTownTimer")
+	    .Field<&components::Town::storagePit>("storagePit")
 	    .Field<&components::Town::temporaryStores>("temporaryStores")
 	    .Field<&components::Town::area>("area");
 	Reflect<components::TownAggression>(context).Field<&components::TownAggression::record>("record");
@@ -206,6 +207,7 @@ void openblack::ecs::reflection::RegisterFields_Components_t(entt::meta_ctx& con
 	    .Field<&components::TownDesireFlag::place>("place")
 	    .Field<&components::TownDesireFlag::madeAt>("madeAt")
 	    .Field<&components::TownDesireFlag::overGround>("overGround")
+	    .Field<&components::TownDesireFlag::turnDesire>("turnDesire")
 	    .Field<&components::TownDesireFlag::level>("level")
 	    .Field<&components::TownDesireFlag::speed>("speed")
 	    .Field<&components::TownDesireFlag::shown>("shown")

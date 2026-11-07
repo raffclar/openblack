@@ -1478,6 +1478,8 @@ void LandSystem::GameLogicLoop(simulation::TurnViewInterface& view)
 			Locator::cinematicDirectorSystem::value().ProcessTempleTurn();
 			view.PlayTempleAudioTurn();
 			Locator::advisorSystem::value().ProcessTurn();
+			// The tooltip that the hand shows steps with the temple's turn, not with the time of the frames
+			Locator::temple::value().ProcessToolTipTurn();
 			// The help's banter check runs in the temple too. The help's clock stands still there, so the banter starts
 			// only when it is already due.
 			if (Locator::helpMessageSystem::has_value())

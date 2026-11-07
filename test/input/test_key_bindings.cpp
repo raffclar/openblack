@@ -14,6 +14,7 @@
 #include <array>
 #include <chrono>
 #include <numbers>
+#include <optional>
 #include <string_view>
 
 #include <SDL_events.h>
@@ -383,4 +384,93 @@ TEST(GameActionMap, AnAnsweredMessageBoxGivesTheKeyboardBackAtOnce)
 	map.BoxAnswered();
 	EXPECT_FALSE(map.BoxHasKeyboard());
 	EXPECT_TRUE(map.Get(BindableActionMap::MOVE_FORWARDS));
+}
+
+TEST(KeyBindings, KeyDownTakesOneModifierShiftThenCtrlThenAlt)
+{
+	EXPECT_EQ(KeyDownModifier(KMOD_NONE), Modifier::None);
+	EXPECT_EQ(KeyDownModifier(KMOD_LALT | KMOD_RCTRL | KMOD_LSHIFT), Modifier::Shift);
+	EXPECT_EQ(KeyDownModifier(KMOD_LALT | KMOD_LCTRL), Modifier::Ctrl);
+	EXPECT_EQ(KeyDownModifier(KMOD_RALT), Modifier::Alt);
+}
+
+TEST(KeyBindings, KeyDownFindsTheFirstRowWithTheKeyAndItsModifier)
+{
+	const auto none = BindableActionMap::NONE;
+	// S alone is the details, Ctrl+S the quick save, and Shift+S neither
+	EXPECT_EQ(BindingForKeyDown(k_DefaultKeyBindings, SDL_SCANCODE_S, KMOD_NONE, none),
+	          IndexOf(k_DefaultKeyBindings, BindableActionMap::SHOW_VILLAGER_DETAILS));
+	EXPECT_EQ(BindingForKeyDown(k_DefaultKeyBindings, SDL_SCANCODE_S, KMOD_RCTRL, none),
+	          IndexOf(k_DefaultKeyBindings, BindableActionMap::QUICK_SAVE));
+	EXPECT_EQ(BindingForKeyDown(k_DefaultKeyBindings, SDL_SCANCODE_S, KMOD_LSHIFT, none), std::nullopt);
+	// With Shift and Ctrl held, the press's modifier is Shift, so Ctrl+S does not match
+	EXPECT_EQ(BindingForKeyDown(k_DefaultKeyBindings, SDL_SCANCODE_S, KMOD_LSHIFT | KMOD_LCTRL, none), std::nullopt);
+	// Either side's key is the same key
+	EXPECT_EQ(BindingForKeyDown(k_DefaultKeyBindings, SDL_SCANCODE_LSHIFT, KMOD_NONE, none),
+	          IndexOf(k_DefaultKeyBindings, BindableActionMap::ROTATE_ON));
+	EXPECT_EQ(BindingForKeyDown(k_DefaultKeyBindings, SDL_SCANCODE_X, KMOD_NONE, none), std::nullopt);
+}
+
+TEST(KeyBindings, KeyDownStopsAtTheFirstRowWhenItIsBlocked)
+{
+	auto bindings = k_DefaultKeyBindings;
+	// Two rows on the same key: the temple's row is first
+	bindings.at(*IndexOf(bindings, BindableActionMap::ZOOM_TO_TEMPLE)).key = KeyChord {SDL_SCANCODE_1};
+	bindings.at(*IndexOf(bindings, BindableActionMap::SHOW_VILLAGER_NAMES)).key = KeyChord {SDL_SCANCODE_1};
+	EXPECT_EQ(BindingForKeyDown(bindings, SDL_SCANCODE_1, KMOD_NONE, BindableActionMap::NONE),
+	          IndexOf(bindings, BindableActionMap::ZOOM_TO_TEMPLE));
+	// The help blocks the first row, and the key then has no action, also not the second row
+	EXPECT_EQ(BindingForKeyDown(bindings, SDL_SCANCODE_1, KMOD_NONE, BindableActionMap::ZOOM_TO_TEMPLE), std::nullopt);
+}
+
+TEST(KeyBindings, KeyDownBindingTellsWhichOtherKeysAct)
+{
+	auto bindings = k_DefaultKeyBindings;
+	bindings.at(*IndexOf(bindings, BindableActionMap::HELP)).key = KeyChord {SDL_SCANCODE_1};
+	bindings.at(*IndexOf(bindings, BindableActionMap::MOVE_LEFT)).key = KeyChord {SDL_SCANCODE_2, Modifier::Alt};
+	const auto none = BindableActionMap::NONE;
+	// A one-press action takes the key
+	EXPECT_EQ(KeyDownBindingFor(bindings, SDL_SCANCODE_1, KMOD_NONE, none, false), KeyDownBinding::TakesKey);
+	// The same action while a script holds the screen lets the key through
+	EXPECT_EQ(KeyDownBindingFor(bindings, SDL_SCANCODE_1, KMOD_NONE, none, true), KeyDownBinding::LetsKeyThrough);
+	// A held camera action lets the key through
+	EXPECT_EQ(KeyDownBindingFor(bindings, SDL_SCANCODE_2, KMOD_LALT, none, false), KeyDownBinding::LetsKeyThrough);
+	// A blocked action, or no action, leaves the key to the other keys
+	EXPECT_EQ(KeyDownBindingFor(bindings, SDL_SCANCODE_2, KMOD_LALT, BindableActionMap::MOVE_LEFT, false),
+	          KeyDownBinding::None);
+	EXPECT_EQ(KeyDownBindingFor(bindings, SDL_SCANCODE_1, KMOD_LSHIFT, none, false), KeyDownBinding::None);
+	// Talking is not a held action
+	EXPECT_EQ(KeyDownBindingFor(k_DefaultKeyBindings, SDL_SCANCODE_T, KMOD_NONE, none, false), KeyDownBinding::TakesKey);
+}
+
+TEST(KeyBindings, OnePressActionsNeedTheKeyWithItsOneModifier)
+{
+	const auto none = BindableActionMap::NONE;
+	// S with Shift held is neither the details nor the quick save
+	EXPECT_EQ(ActionsPressedByKeyDown(k_DefaultKeyBindings, SDL_SCANCODE_S, KMOD_LSHIFT, none), none);
+	EXPECT_EQ(ActionsPressedByKeyDown(k_DefaultKeyBindings, SDL_SCANCODE_S, KMOD_NONE, none),
+	          BindableActionMap::SHOW_VILLAGER_DETAILS);
+	EXPECT_EQ(ActionsPressedByKeyDown(k_DefaultKeyBindings, SDL_SCANCODE_S, KMOD_LCTRL, none), BindableActionMap::QUICK_SAVE);
+	// The help blocks the temple's key
+	EXPECT_EQ(ActionsPressedByKeyDown(k_DefaultKeyBindings, SDL_SCANCODE_SPACE, KMOD_NONE, BindableActionMap::ZOOM_TO_TEMPLE),
+	          none);
+}
+
+TEST(KeyBindings, HeldActionsStayHeldWithOtherModifiers)
+{
+	const auto none = BindableActionMap::NONE;
+	// The camera's keys move it with Shift or Alt held too
+	EXPECT_EQ(ActionsPressedByKeyDown(k_DefaultKeyBindings, SDL_SCANCODE_LEFT, KMOD_LSHIFT, none),
+	          BindableActionMap::MOVE_LEFT);
+	EXPECT_EQ(ActionsPressedByKeyDown(k_DefaultKeyBindings, SDL_SCANCODE_RCTRL, KMOD_RCTRL, none), BindableActionMap::ZOOM_ON);
+	// A held action and a one-press action on the same key both act
+	auto bindings = k_DefaultKeyBindings;
+	bindings.at(*IndexOf(bindings, BindableActionMap::QUICK_SAVE)).key = KeyChord {SDL_SCANCODE_LEFT, Modifier::Ctrl};
+	EXPECT_EQ(ActionsPressedByKeyDown(bindings, SDL_SCANCODE_LEFT, KMOD_LCTRL, none),
+	          static_cast<BindableActionMap>(static_cast<uint64_t>(BindableActionMap::MOVE_LEFT) |
+	                                         static_cast<uint64_t>(BindableActionMap::QUICK_SAVE)));
+	// A held action with a modifier needs it
+	bindings.at(*IndexOf(bindings, BindableActionMap::TILT_UP)).key = KeyChord {SDL_SCANCODE_A, Modifier::Alt};
+	EXPECT_EQ(ActionsPressedByKeyDown(bindings, SDL_SCANCODE_A, KMOD_NONE, none), none);
+	EXPECT_EQ(ActionsPressedByKeyDown(bindings, SDL_SCANCODE_A, KMOD_LALT | KMOD_LSHIFT, none), BindableActionMap::TILT_UP);
 }

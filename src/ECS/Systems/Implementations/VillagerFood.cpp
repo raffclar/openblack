@@ -37,6 +37,7 @@
 #include "ECS/DiscipleRules.h"
 #include "ECS/Registry.h"
 #include "ECS/Statistics.h"
+#include "ECS/Systems/GuidanceSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
@@ -585,11 +586,19 @@ uint32_t villager_food::ArrivesAtFoodReaction(LivingAction& action)
 			// Where its town leaves food: its working pit's door, or its temporary pile, made if missing
 			const auto dropOff = villager_build::ResourceDropoffPos(villager, ResourceType::Food);
 			const float distance = gutils::GetDistanceInMetres(glm::xz(Position(villager)), dropOff);
-			if (town != entt::null && Locator::townDesireSystem::has_value() &&
-			    rules::CarriesFoodToStore(Locator::townDesireSystem::value().FoodShortage(town), person.foodHeld,
-			                              info.maxFoodCarried, gutils::GetDistanceModifier(distance, info.maxDistCarryFoodPit)))
+			if (town != entt::null && Locator::townDesireSystem::has_value())
 			{
-				return villager_build::GotoStoragePitForDropOff(action);
+				const float shortage = Locator::townDesireSystem::value().FoodShortage(town);
+				// The town that measures a high food shortage can make the advisors warn of low food
+				if (Locator::guidanceSystem::has_value())
+				{
+					Locator::guidanceSystem::value().LowOnFood(town, shortage);
+				}
+				if (rules::CarriesFoodToStore(shortage, person.foodHeld, info.maxFoodCarried,
+				                              gutils::GetDistanceModifier(distance, info.maxDistCarryFoodPit)))
+				{
+					return villager_build::GotoStoragePitForDropOff(action);
+				}
 			}
 		}
 	}

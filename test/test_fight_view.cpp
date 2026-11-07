@@ -53,37 +53,45 @@ TEST(FightView, AnglesWrapWithinHalfATurn)
 	EXPECT_NEAR(Wrapped(3.5f), 3.5f - (2.0f * k_Pi), 1e-5f);
 }
 
-TEST(FightView, OnFlatLandTheBestHeadingIsTheOneGiven)
+TEST(FightView, OnFlatLandTheSuggestedViewKeepsItsHeading)
 {
-	float pitch = 0.4f;
-	const auto heading = BestHeading(1.0f, 40.0f, {0.0f, 0.0f, 0.0f}, pitch, k_Flat, k_Up);
-	EXPECT_FLOAT_EQ(heading, 1.0f);
-	// The pitch eases: a tenth of the flat land's near upright lean, a fifth of what it was, and a little more
-	EXPECT_NEAR(pitch, (1.5393804f * 0.1f) + (0.4f * 0.2f) + 0.37699114f, 1e-5f);
+	const glm::vec3 focus {0.0f, 0.0f, 0.0f};
+	const glm::vec3 from {30.0f, 20.0f, 40.0f};
+	const auto before = HeadingAndPitch(from, focus);
+	const auto view = Suggest(from, focus, k_Flat, k_Up);
+	const auto after = HeadingAndPitch(view.origin, focus);
+	EXPECT_NEAR(Wrapped(after.heading - before.heading), 0.0f, 1e-4f);
+	// The pitch eases: a fifth of what it was, a tenth of the flat land's near upright lean, and a little more
+	EXPECT_NEAR(after.pitch, (before.pitch * 0.2f) + (1.5393804f * 0.1f) + 0.37699114f, 1e-4f);
 }
 
-TEST(FightView, TheBestHeadingLooksOverLowLand)
+TEST(FightView, TheSuggestedViewLooksOverLowLand)
 {
 	// Land falling away towards +z: headings looking from +z, over low land, see the fight best
 	const GroundHeight slope = [](glm::vec2 point) { return -point.y; };
-	float pitch = 0.4f;
-	const auto heading = BestHeading(k_Pi, 40.0f, {0.0f, 0.0f, 0.0f}, pitch, slope, k_Up);
-	EXPECT_NEAR(Wrapped(heading), 0.0f, (2.0f * k_Pi / 32.0f) * 3.0f + 1e-4f);
-	EXPECT_GE(pitch, k_Pi / 8.0f);
-	EXPECT_LE(pitch, k_Pi / 3.0f);
+	const glm::vec3 focus {0.0f, 0.0f, 0.0f};
+	const auto view = Suggest({0.0f, 10.0f, -40.0f}, focus, slope, k_Up);
+	EXPECT_GT(view.origin.z, 0.0f);
+	const auto after = HeadingAndPitch(view.origin, focus);
+	EXPECT_GE(after.pitch, (k_Pi / 8.0f) - 1e-4f);
+	EXPECT_LE(after.pitch, (k_Pi / 3.0f) + 1e-4f);
 }
 
-TEST(FightView, SuggestedViewsAreEasedBetweenTwentyFiveAndFifty)
+TEST(FightView, SuggestedViewsAreEasedBetweenFiftyAndAHundred)
 {
+	// The game's rule for every clear view: nearer than 50 most of the way out to 50, further than 100 a little way in
 	const glm::vec3 focus {0.0f, 0.0f, 0.0f};
 	const auto near = Suggest({10.0f, 0.0f, 0.0f}, focus, k_Flat, k_Up);
-	EXPECT_NEAR(glm::distance(near.origin, focus), 10.0f + (15.0f * 0.8f), 1e-3f);
+	EXPECT_NEAR(glm::distance(near.origin, focus), 10.0f + (40.0f * 0.8f), 1e-3f);
+	const auto between = Suggest({70.0f, 0.0f, 0.0f}, focus, k_Flat, k_Up);
+	EXPECT_NEAR(glm::distance(between.origin, focus), 70.0f, 1e-3f);
 	const auto far = Suggest({150.0f, 0.0f, 0.0f}, focus, k_Flat, k_Up);
-	EXPECT_NEAR(glm::distance(far.origin, focus), 150.0f - (100.0f * 0.1f), 1e-2f);
+	EXPECT_NEAR(glm::distance(far.origin, focus), 150.0f - (50.0f * 0.1f), 1e-2f);
 	const auto start = Start({100.0f, 50.0f}, 30.0f, 5.0f, k_Flat, k_Up);
 	EXPECT_EQ(start.focus, glm::vec3(100.0f, 5.0f, 50.0f));
-	// From the east, the arena's radius out and half up, a little over 33 away
-	EXPECT_NEAR(glm::distance(start.origin, start.focus), std::sqrt((30.0f * 30.0f) + (15.0f * 15.0f)), 1e-3f);
+	// From the east, the arena's radius out and half up, a little over 33 away, so it goes out towards 50
+	const float away = std::sqrt((30.0f * 30.0f) + (15.0f * 15.0f));
+	EXPECT_NEAR(glm::distance(start.origin, start.focus), ((50.0f - away) * 0.8f) + away, 1e-3f);
 }
 
 TEST(FightView, NearnessToTheArena)

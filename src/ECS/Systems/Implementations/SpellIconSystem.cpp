@@ -1193,6 +1193,32 @@ void SpellIconSystem::CancelChargesFor(entt::entity temple, PlayerNames charger)
 	}
 }
 
+std::optional<float> SpellIconSystem::HandChargeShare(PlayerNames charger) const
+{
+	const auto& registry = Entities();
+	std::optional<float> largest;
+	for (const auto site : SitesOf(charger))
+	{
+		const auto* list = registry.TryGet<const SiteIcons>(site);
+		if (list == nullptr)
+		{
+			continue;
+		}
+		for (const auto icon : list->icons)
+		{
+			const auto* component = registry.Valid(icon) ? registry.TryGet<const WorshipIcon>(icon) : nullptr;
+			if (component == nullptr || !component->charging || component->charger != charger)
+			{
+				continue;
+			}
+			// The largest share starts at none
+			const float share = icons::HandPulseShare(ChargeOf(*component, charger), Required(*component));
+			largest = std::max(largest.value_or(0.0f), share);
+		}
+	}
+	return largest;
+}
+
 bool SpellIconSystem::ChargesFor(entt::entity temple, PlayerNames charger) const
 {
 	auto& registry = Entities();

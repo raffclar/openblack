@@ -110,6 +110,9 @@ public:
 	/// It is calm air unless the real-world weather changes it.
 	virtual void SetBackgroundWeather(const components::WeatherInfo& /*weather*/) {}
 	[[nodiscard]] virtual components::WeatherInfo GetBackgroundWeather() const { return {}; }
+	/// The ambient wind: the direction of the background weather's wind along the ground, one unit long, or calm.
+	/// The start of each turn sets it from the background weather (see ambient_wind). The sea's texture drifts with it.
+	[[nodiscard]] virtual glm::vec2 GetAmbientWind() const { return {}; }
 	/// Every storm clears
 	virtual void ClearStorms() = 0;
 	/// Every storm with lightning flashes on its next turn, with a bolt or with thunder
@@ -149,7 +152,8 @@ public:
 	/// A weather thing goes: its storm ends at once. A thing that is no weather thing does not change.
 	virtual void EndWeatherThing(entt::entity thing) = 0;
 
-	/// At the start of a game turn: the storms move on, then every cell of the atmosphere is stale
+	/// At the start of a game turn: the storms move on, then every cell of the atmosphere is stale. Then the ambient wind
+	/// follows the background weather.
 	virtual void ProcessStorms(uint32_t turn) = 0;
 	/// Later in the turn, after the time of day: the weather things follow their storms
 	virtual void ProcessWeatherThings() = 0;

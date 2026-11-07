@@ -956,10 +956,10 @@ void GameActionMap::ProcessEvent(const SDL_Event& event)
 		std::erase_if(_queuedReleases, [key](const SDL_Event& release) {
 			return release.type == SDL_KEYUP && release.key.keysym.scancode == key;
 		});
-		// A binding with a modifier held takes the key from the bindings without one
+		// The held actions of the key, and the one-press action that the key and its modifier find
 		_bindableMap = static_cast<BindableActionMap>(
 		    (static_cast<uint64_t>(_bindableMap) & ~static_cast<uint64_t>(ActionsForKey(_bindings, key))) |
-		    static_cast<uint64_t>(ActionsForKeyDown(_bindings, key, event.key.keysym.mod)));
+		    static_cast<uint64_t>(ActionsPressedByKeyDown(_bindings, key, event.key.keysym.mod, _blocked)));
 	}
 	// The second press of a double click with the left button marks the double click, and presses none of the button's
 	// actions again. The mark outlasts the press: it stays, through the button's letting go, until the camera takes it.

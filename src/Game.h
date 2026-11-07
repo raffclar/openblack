@@ -890,6 +890,8 @@ private:
 	void HandleTripKey();
 	/// Once a frame: the answer to a question of the trip to the Gods' Playground, and what the answer starts
 	void FollowPlaygroundTrip();
+	/// The answer to the question about a new game, which Escape asks once the game is over
+	void FollowNewGameQuestion();
 	/// Once a frame outside the temple: where the hand's tooltip is drawn, and the status panel of the creature the hand
 	/// is held to, or over
 	void UpdateHandInterface();

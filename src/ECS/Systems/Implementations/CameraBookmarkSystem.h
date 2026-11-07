@@ -48,6 +48,8 @@ public:
 	[[nodiscard]] std::optional<size_t> GetFollowed() const override { return _followed; }
 	[[nodiscard]] glm::vec2 GetMarkerHalfSize() const override { return camera_bookmarks::MarkerHalfSize(_pulseClockMs); }
 	void SetEnabled(bool enabled) override { _enabled = enabled; }
+	/// What a new land does to the bookmarks, with no change to their markers
+	void ForgetLand();
 	[[nodiscard]] bool IsEnabled() const override { return _enabled; }
 	void SaveState(reflection::BinaryWriter& out) const override;
 	bool LoadState(reflection::BinaryReader& in) override;

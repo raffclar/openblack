@@ -246,7 +246,7 @@ graphics::RendererInterface::DrawSceneDesc SceneDrawDesc(const EngineConfig& con
 	    .entities = Locator::entitiesRegistry::value(),
 	    .time = time,
 	    .timeOfDay = config.timeOfDay,
-	    .smallBumpMapStrength = config.smallBumpMapStrength,
+	    .smallBumpMapStrength = graphics::detail_level::SmallBumpStrength(config.detail, config.smallBumpMapStrength),
 	    .viewId = graphics::RenderPass::Main,
 	    .drawSky = config.drawSky,
 	    .drawWater = config.drawWater,
@@ -682,6 +682,10 @@ bool Game::Initialize() noexcept
 				if (openblack::temple::keys::EscapeLeavesRoom(facts))
 				{
 					Locator::temple::value().Escape();
+				}
+				else if (openblack::temple::keys::EscapeAsksNewGame(facts) && Locator::gameInterface::has_value())
+				{
+					Locator::gameInterface::value().AskNewGameQuestion();
 				}
 				return;
 			}

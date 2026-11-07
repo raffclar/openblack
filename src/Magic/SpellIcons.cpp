@@ -137,6 +137,17 @@ float Need(const IconCharge& icon)
 	return icon.seedHeld ? icon.required : icon.required - icon.store;
 }
 
+float HandPulseShare(const IconCharge& icon, float cost)
+{
+	// While a hand holds the seed, required is what the seed still needs
+	const float part = icon.seedHeld ? icon.required : icon.store;
+	if (cost == 0.0f)
+	{
+		return part > 0.0f ? 1.0f : 0.0f;
+	}
+	return part / cost;
+}
+
 bool CastStopsCharge(bool charging, float store, bool castByCharger)
 {
 	// An icon that does not charge and holds nothing has no charge to stop

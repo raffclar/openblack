@@ -160,21 +160,20 @@ std::u16string MouseWords(std::u16string_view name)
 	return u"     (" + std::u16string(name) + u")";
 }
 
-/// The Controls page's mice for a wheel mouse: the third row of data/textures/mousehelp.raw, the left button the
-/// mirrored right one. The wheel turns over the fourth row.
-constexpr int k_MouseRow = 2;
-std::optional<std::pair<int, bool>> MouseCell(Mouse mouse)
+/// The Controls page's mice: the row of data/textures/mousehelp.raw for the player's mouse, the left button the
+/// mirrored right one. The wheel turns over the fourth row, for every mouse.
+std::optional<std::pair<int, bool>> MouseCell(Mouse mouse, int mouseRow)
 {
 	switch (mouse)
 	{
 	case Mouse::Left:
-		return std::pair((k_MouseRow * 4) + 1, true);
+		return std::pair((mouseRow * 4) + 1, true);
 	case Mouse::Right:
-		return std::pair((k_MouseRow * 4) + 1, false);
+		return std::pair((mouseRow * 4) + 1, false);
 	case Mouse::Both:
-		return std::pair((k_MouseRow * 4) + 2, false);
+		return std::pair((mouseRow * 4) + 2, false);
 	case Mouse::Middle:
-		return std::pair((k_MouseRow * 4) + 3, false);
+		return std::pair((mouseRow * 4) + 3, false);
 	case Mouse::WheelUp:
 	case Mouse::WheelDown:
 		return std::pair(11, false);
@@ -771,6 +770,19 @@ void GameMenu::BuildControls(const TextDatabase& texts)
 	};
 }
 
+void GameMenu::SetMouseRow(int row)
+{
+	if (row == _mouseRow)
+	{
+		return;
+	}
+	_mouseRow = row;
+	if (_controls != nullptr)
+	{
+		RefreshControls();
+	}
+}
+
 void GameMenu::RefreshControls()
 {
 	// Each binding reads "<action> : <key> <mouse>", the mouse's name after a gap of five spaces for its picture
@@ -785,7 +797,7 @@ void GameMenu::RefreshControls()
 			text += MouseWords(_texts.Get(mouseName));
 		}
 		const auto shown = ShownMouse(_bindings, i);
-		const auto cell = MouseCell(shown);
+		const auto cell = MouseCell(shown, _mouseRow);
 		items.push_back({.text = std::move(text),
 		                 .mouseCell = cell ? std::optional(cell->first) : std::nullopt,
 		                 .mouseMirrored = cell && cell->second});

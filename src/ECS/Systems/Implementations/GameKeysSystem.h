@@ -13,6 +13,7 @@
 #include <optional>
 
 #include "ECS/Systems/GameKeysSystemInterface.h"
+#include "Input/KeyBindings.h"
 #include "Input/ShortcutKeys.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
@@ -37,8 +38,11 @@ public:
 	}
 
 private:
-	/// The key switch of the game: Escape, the full screen, the pause and the other keys. False stops the game.
-	static bool ProcessKeyPress(const SDL_Event& event);
+	/// The key switch of the game: Escape, the full screen, the pause and the other keys. The speed keys act only when no
+	/// action has the key. False stops the game.
+	static bool ProcessKeyPress(const SDL_Event& event, input::KeyDownBinding binding);
+	/// What the action of the key press does to the other keys of the game
+	[[nodiscard]] static input::KeyDownBinding BindingOfKeyDown(const SDL_Event& event);
 	/// The camera's bookmark keys work while no script holds the interface and the help lets the camera move
 	[[nodiscard]] static bool BookmarkKeysAllowed();
 

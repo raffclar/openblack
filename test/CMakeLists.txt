@@ -2432,3 +2432,4 @@ openblack_setup_and_add_test(test_temple_keys test_temple_keys.cpp)
 openblack_setup_and_add_test(
   test_computer_mind_hand_take test_computer_mind_hand_take.cpp
 )
+openblack_setup_and_add_test(test_main_storage_pit test_main_storage_pit.cpp)

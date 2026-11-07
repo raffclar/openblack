@@ -61,4 +61,11 @@ struct EscapeFacts
 	return !facts.modifierHeld && !facts.scriptBars && !facts.gameOver;
 }
 
+/// Whether Escape in the temple asks "Are you sure you want to start a completely new game?". It asks once the game is
+/// over, with Shift, Ctrl or Alt too, but not while a script has the cinema bars in.
+[[nodiscard]] constexpr bool EscapeAsksNewGame(const EscapeFacts& facts) noexcept
+{
+	return facts.gameOver && !facts.scriptBars;
+}
+
 } // namespace openblack::temple::keys

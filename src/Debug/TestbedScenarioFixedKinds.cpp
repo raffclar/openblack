@@ -335,6 +335,39 @@ void openblack::testbed_scenarios::AddFixedKindScenarios(std::vector<Scenario>& 
 	    .townBeliefInPlayer = 1000.0f,
 	});
 
+	// Three builders with much wood at a hut that is only part built: each stroke follows the clip into the work
+	std::vector<ObjectSetup> strokeTown {
+	    {.type = AbodeInfo::NorseTownCentre, .offset = k_DropCentre},
+	    {.type = AbodeInfo::NorseStoragePit, .offset = k_DropPit, .yawDegrees = 180.0f, .storedWood = 3000},
+	    {.type = AbodeInfo::NorseHut, .offset = k_UnbuiltHut, .yawDegrees = 270.0f, .built = 0.1f},
+	    {.type = VillagerInfo::NorseForesterMale, .offset = k_PotDrop, .joinTown = true, .woodHeld = 250},
+	    {.type = VillagerInfo::NorseForesterMale,
+	     .offset = k_PotDrop + glm::vec2(2.0f, 0.0f),
+	     .joinTown = true,
+	     .woodHeld = 250},
+	    {.type = VillagerInfo::NorseForesterMale,
+	     .offset = k_PotDrop + glm::vec2(-2.0f, 0.0f),
+	     .joinTown = true,
+	     .woodHeld = 250}};
+	all.push_back({
+	    .id = "villagers.builder_stroke_after_into_clip",
+	    .name = "A builder does the stroke of the clip that it starts the work with",
+	    .facet = Facet::Hand,
+	    .description = "A Norse town of the player with a village centre, a storage pit with 3000 wood and a hut that is "
+	                   "only part built. Three villagers of the town stand near the hut, and each carries 250 wood.",
+	    .expected = "The villagers take up the site of the hut as builders. Each builder starts its work with a clip into "
+	                "the work: into the hammer, into the saw or into the heavy mallet. At the end of that clip, it does "
+	                "the stroke of the same clip with the same tool: the hammer after the clip into the hammer, the saw "
+	                "after the clip into the saw, the mallet after the clip into the mallet. Before, the stroke after "
+	                "the clip into the work was random, and the tool often changed in the hand of the builder.",
+	    .environment = {.dispenserGrid = false, .cursor = glm::vec2 {0.5f, 0.5f}},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_UnbuiltHut.x - 6.0f, 9.0f, k_UnbuiltHut.y - 14.0f},
+	                .look = {k_UnbuiltHut.x, 0.0f, k_UnbuiltHut.y}},
+	    .objects = std::move(strokeTown),
+	    .townBeliefInPlayer = 1000.0f,
+	});
+
 	std::vector<ObjectSetup> templeTown {
 	    {.type = AbodeInfo::NorseTownCentre, .offset = k_TempleTown + glm::vec2(-30.0f, 0.0f)},
 	    {.type = AbodeInfo::NorseStoragePit, .offset = k_TempleTown + glm::vec2(30.0f, 0.0f), .yawDegrees = 180.0f},

@@ -58,6 +58,7 @@
 #include "ECS/FixedKinds.h"
 #include "ECS/GameEndConditions.h"
 #include "ECS/GamePlayers.h"
+#include "ECS/MainStoragePitRules.h"
 #include "ECS/Map.h"
 #include "ECS/PlayerTowns.h"
 #include "ECS/Reflection/BinaryArchive.h"
@@ -203,25 +204,6 @@ void TownSystem::OnAbodeGone(entt::registry& registry, entt::entity abode)
 	for (const auto town : left)
 	{
 		StructuresChanged(town);
-	}
-	// A storage pit that goes makes its town let go of any temporary piles it keeps
-	const auto* data = registry.try_get<const Abode>(abode);
-	if (data == nullptr || !registry.all_of<StoragePit>(abode))
-	{
-		return;
-	}
-	const auto& towns = _registry->Context().towns;
-	const auto town = towns.find(data->townId);
-	if (town == towns.end() || !registry.valid(town->second))
-	{
-		return;
-	}
-	const auto* component = registry.try_get<const Town>(town->second);
-	if (component != nullptr && std::ranges::any_of(component->temporaryStores, [&registry](entt::entity pile) {
-		    return pile != entt::null && registry.valid(pile);
-	    }))
-	{
-		SetStoragePit(town->second);
 	}
 }
 
@@ -527,7 +509,34 @@ std::optional<TownSystemInterface::TemporaryStore> TownSystem::TemporaryStorePil
 	                       .edgeAltitude = object_measures::PlaceAltitude(registry, pile)};
 }
 
-void TownSystem::SetStoragePit(entt::entity town)
+void TownSystem::StoragePitGone(entt::entity town, entt::entity pit)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto* component = town != entt::null && registry.Valid(town) ? registry.TryGet<const Town>(town) : nullptr;
+	if (component == nullptr || component->storagePit != pit)
+	{
+		return;
+	}
+	// The other buildings of the town, the newest first
+	std::vector<entt::entity> others;
+	std::vector<main_storage_pit::Candidate> candidates;
+	for (const auto abode : component->abodes)
+	{
+		const auto* info = abode != pit && registry.Valid(abode) ? world_objects::AbodeInfoOf(abode) : nullptr;
+		if (info == nullptr)
+		{
+			continue;
+		}
+		others.push_back(abode);
+		candidates.push_back({.type = info->abodeType,
+		                      .functional = villager_home::IsFunctional(abode),
+		                      .storagePit = registry.AllOf<StoragePit>(abode)});
+	}
+	const auto successor = main_storage_pit::Successor(candidates);
+	SetStoragePit(town, successor.has_value() ? others.at(*successor) : entt::null);
+}
+
+void TownSystem::SetStoragePit(entt::entity town, entt::entity pit)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	auto* component = town != entt::null && registry.Valid(town) ? registry.TryGet<Town>(town) : nullptr;
@@ -535,6 +544,7 @@ void TownSystem::SetStoragePit(entt::entity town)
 	{
 		return;
 	}
+	component->storagePit = pit;
 	for (size_t slot = 0; slot < temporary_store::k_Kinds; ++slot)
 	{
 		const auto pile = std::exchange(component->temporaryStores.at(slot), entt::null);
@@ -1084,17 +1094,22 @@ void TownSystem::ProcessTownTurn(entt::entity townEntity)
 	// It puts up at most one of its buildings, or a finished one that went, for mending
 	town_planning::MendBest(townEntity);
 	const bool inEmergency = IsInStateOfEmergency(townEntity);
-	// Out of an emergency, its storage pit or village centre on fire calls one
+	// Out of an emergency, its main storage pit or its village centre on fire calls one. Another storage pit on fire
+	// calls none.
 	bool burning = false;
+	if (const auto pit = construction::StoragePitOf(townEntity); !inEmergency && fire != nullptr && pit.has_value())
+	{
+		burning = fire->IsOnFire(*pit);
+	}
 	for (const auto abode : registry.Get<const Town>(townEntity).abodes)
 	{
 		const auto* data = registry.TryGet<const Abode>(abode);
-		if (inEmergency || fire == nullptr || data == nullptr)
+		if (burning || inEmergency || fire == nullptr || data == nullptr)
 		{
 			continue;
 		}
 		const auto type = infos.at(static_cast<size_t>(data->type)).abodeType;
-		if ((type == AbodeType::StoragePit || type == AbodeType::TownCentre) && fire->IsOnFire(abode))
+		if (type == AbodeType::TownCentre && fire->IsOnFire(abode))
 		{
 			burning = true;
 			break;

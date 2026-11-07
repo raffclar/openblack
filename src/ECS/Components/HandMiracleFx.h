@@ -22,6 +22,8 @@ struct HandMiracleFx
 	/// The glow shows while the hand holds a miracle; its frame runs on all the while
 	bool glowing {false};
 	float glowFrame {0.0f};
+	/// The bands that pulse onto the hand while an icon charges a miracle for it
+	magic::visuals::ChargePulse chargePulse;
 };
 
 } // namespace openblack::ecs::components

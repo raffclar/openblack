@@ -184,6 +184,23 @@ void openblack::testbed_scenarios::AddVillageTotemScenarios(std::vector<Scenario
 	                                      {.kind = ScriptArgument::Kind::Number, .number = 1.0f}}}},
 	    .townBeliefInPlayer = k_TownBelief,
 	});
+	all.push_back({
+	    .id = "town.totem_takes_centre_life",
+	    .name = "A totem takes the life of its hurt town centre",
+	    .facet = Facet::Objects,
+	    .description = "The player's Norse town centre with its totem and the player's temple. The town centre is hurt "
+	                   "down to half of its life. After three seconds the hand tries to take hold of the totem.",
+	    .expected = "The totem has the same life as its town centre, one half (the inspector shows the health of the "
+	                "totem). The hand does not take hold of the totem, because a totem with three quarters of its life or "
+	                "less does not work. When builders mend the town centre, the totem takes each new life of the centre.",
+	    .framing = {.shot = Shot::Overview,
+	                .include = {k_Centre - glm::vec2(15.0f), k_Centre + glm::vec2(15.0f)},
+	                .distance = 0.5f},
+	    .objects = {{.type = AbodeInfo::NorseTownCentre, .offset = k_Centre, .life = 0.5f}},
+	    .temples = {{.offset = k_Temple}},
+	    .commands = {{.kind = Command::Kind::HandGripTotem, .delaySeconds = 3.0f, .object = 0}},
+	    .townBeliefInPlayer = k_TownBelief,
+	});
 	// The camera turns away from the totem and back, so that the land's draw list leaves the totem out for a time
 	const auto turnCamera = [](glm::vec2 focus, float delay) {
 		return Command {

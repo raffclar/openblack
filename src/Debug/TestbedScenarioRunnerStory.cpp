@@ -12,8 +12,10 @@
 
 #include <cmath>
 
+#include <algorithm>
 #include <limits>
 #include <string>
+#include <string_view>
 
 #include <fmt/format.h>
 
@@ -96,6 +98,8 @@
 #include "Gui/GameTexts.h"
 #include "Help/Spirits.h"
 #include "Input/GameActionMapInterface.h"
+#include "Input/InputDeviceInterface.h"
+#include "Input/KeyBindings.h"
 #include "LHScriptX/Script.h"
 #include "Locator.h"
 #include "Magic/TownBelief.h"
@@ -161,6 +165,32 @@ bool Runner::GiveStoryCommand(const Command& command)
 			                                                             : graphics::device_restore::Request::MakeAgain);
 		}
 		Log(fmt::format("{:.1f}s: the graphics device is {}", _seconds, lose ? "lost and made again" : "made again"));
+		return true;
+	}
+	if (command.kind == Kind::BindMoveKey)
+	{
+		if (!Locator::gameActionSystem::has_value())
+		{
+			return true;
+		}
+		auto& actions = Locator::gameActionSystem::value();
+		auto bindings = input::DefaultKeyBindings();
+		const auto key = static_cast<SDL_Scancode>(command.value);
+		if (key != SDL_SCANCODE_UNKNOWN)
+		{
+			std::ranges::copy(actions.GetKeyBindings(), bindings.begin());
+			for (auto& binding : bindings)
+			{
+				if (binding.action == input::BindableActionMap::MOVE)
+				{
+					binding.key = input::KeyChord {.key = key};
+					binding.mouse = input::MouseInput::None;
+				}
+			}
+		}
+		actions.SetKeyBindings(bindings);
+		Log(fmt::format("{:.1f}s: the move action is on {}", _seconds,
+		                key != SDL_SCANCODE_UNKNOWN ? input::Device().ScancodeName(key) : std::string_view("its own buttons")));
 		return true;
 	}
 	if (command.kind == Kind::PutLoadedArena)

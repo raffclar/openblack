@@ -43,6 +43,8 @@ public:
 		uint32_t realMs {0};
 		/// Inside the temple the texts go by real time
 		bool inTemple {false};
+		/// While a video plays the newest text does not slide in
+		bool videoPlaying {false};
 	};
 
 	virtual ~HelpTextSystemInterface() = default;

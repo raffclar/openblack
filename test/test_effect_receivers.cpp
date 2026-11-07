@@ -273,21 +273,40 @@ TEST_F(EffectReceivers, AScriptsUnfinishedBuildingWithASiteGetsAllItsLifeAgain)
 	EXPECT_FLOAT_EQ(ecs::world_objects::LifeOf(hut), 0.0f);
 }
 
-TEST_F(EffectReceivers, AVillageTotemGivesHarmAndLifeToItsTownCentreAndKeepsItsOwnLife)
+TEST_F(EffectReceivers, AVillageTotemGivesHarmAndLifeToItsTownCentreAndTakesTheLifeOfItsTownCentre)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto centre = Made();
+	registry.Assign<Abode>(centre, Abode {.type = AbodeNumber::TownCentre});
 	const auto totem = Made();
 	registry.Assign<VillageTotem>(totem, VillageTotem {.townCentre = centre});
 	EXPECT_FLOAT_EQ(ecs::world_objects::ReduceLife(totem, 0.25f), 0.75f);
 	EXPECT_FLOAT_EQ(ecs::world_objects::LifeOf(centre), 0.75f);
+	EXPECT_FLOAT_EQ(ecs::world_objects::LifeOf(totem), 0.75f);
 	EXPECT_FLOAT_EQ(ecs::world_objects::IncreaseLife(totem, 0.125f), 0.875f);
 	EXPECT_FLOAT_EQ(ecs::world_objects::LifeOf(centre), 0.875f);
-	EXPECT_FLOAT_EQ(ecs::world_objects::LifeOf(totem), 1.0f);
-	// A script can still set the life of the totem itself
-	ecs::world_objects::SetLife(totem, 0.0f);
+	EXPECT_FLOAT_EQ(ecs::world_objects::LifeOf(totem), 0.875f);
+	// Harm to the town centre itself also goes to the totem
+	EXPECT_FLOAT_EQ(ecs::world_objects::ReduceLife(centre, 1.0f), 0.0f);
 	EXPECT_FLOAT_EQ(ecs::world_objects::LifeOf(totem), 0.0f);
-	EXPECT_FLOAT_EQ(ecs::world_objects::LifeOf(centre), 0.875f);
+	// A script can still set the life of the totem itself
+	ecs::world_objects::SetLife(totem, 0.5f);
+	EXPECT_FLOAT_EQ(ecs::world_objects::LifeOf(totem), 0.5f);
+	EXPECT_FLOAT_EQ(ecs::world_objects::LifeOf(centre), 0.0f);
+}
+
+TEST_F(EffectReceivers, ATownCentreWithItsFullLifeGainsNothingAndLeavesItsTotemAsItIs)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto centre = Made();
+	registry.Assign<Abode>(centre, Abode {.type = AbodeNumber::TownCentre});
+	const auto totem = Made();
+	registry.Assign<VillageTotem>(totem, VillageTotem {.townCentre = centre});
+	ecs::world_objects::SetLife(totem, 0.5f);
+	EXPECT_FLOAT_EQ(ecs::world_objects::IncreaseLife(centre, 0.25f), 0.0f);
+	EXPECT_FLOAT_EQ(ecs::world_objects::IncreaseLife(totem, 0.25f), 0.0f);
+	EXPECT_FLOAT_EQ(ecs::world_objects::LifeOf(centre), 1.0f);
+	EXPECT_FLOAT_EQ(ecs::world_objects::LifeOf(totem), 0.5f);
 }
 
 // A football pitch that is built takes no damage, but harm takes away what is built of an unfinished pitch

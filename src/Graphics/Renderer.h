@@ -711,6 +711,8 @@ private:
 	mutable std::unique_ptr<LandLightTable> _landLightTable;
 	/// The sea's ripple, moving on with the frames the sea's rows are drawn in while the game's time goes on
 	mutable sea_rows::Ripple _seaRipple;
+	/// How far the sea's texture drifted with the ambient wind, moving on with the frames the sea is drawn in
+	mutable sea_rows::Drift _seaDrift;
 	/// The land's luminosity of this frame and of the frame before, a copy of the shaded land (see land_shade) sized to
 	/// the land's. Each frame changes the other one and keeps the rows it changed: the next frame changes those too.
 	mutable std::array<std::unique_ptr<Texture2D>, 2> _landLuminosity;

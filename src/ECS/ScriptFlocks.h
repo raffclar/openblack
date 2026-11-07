@@ -13,6 +13,7 @@
 #include <cstdint>
 
 #include <functional>
+#include <vector>
 
 #include <entt/entity/fwd.hpp>
 
@@ -72,6 +73,12 @@ entt::entity SeparateIntoNewFlock(Registry& registry, entt::entity living);
 /// Whether each member of a flock is within the flock's distance of the flock's position, in metres, as the game measures
 /// distance on the map. An empty flock gives true.
 [[nodiscard]] bool AllMembersWithinFlockDistance(const Registry& registry, entt::entity flock);
+
+/// The flocks of a town, the newest first
+[[nodiscard]] std::vector<entt::entity> TownFlocks(const Registry& registry, entt::entity town);
+/// The animals of a town, as a script looks through them: the members of each of its flocks in their line, the
+/// newest flock first. A member that is not an animal is not included.
+[[nodiscard]] std::vector<entt::entity> TownAnimals(const Registry& registry, entt::entity town);
 
 /// The position of a living as the flocks measure it
 [[nodiscard]] map_coords::MapCoords PositionOf(const Registry& registry, entt::entity living);
