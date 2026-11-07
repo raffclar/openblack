@@ -711,16 +711,17 @@ void AnimalSystem::SetupMoveRoundTo(entt::entity entity, Animal& animal, glm::ve
 	SetupMoveRoundToFixed(entity, animal, Fixed(goal), finalState);
 }
 
-void AnimalSystem::SetupMoveRoundToFixed(entt::entity entity, Animal& animal, glm::ivec2 goal, AnimalState finalState)
+void AnimalSystem::SetupMoveRoundToFixed(entt::entity entity, Animal& animal, glm::ivec2 goal, AnimalState finalState,
+                                         float goalHeight)
 {
 	auto& registry = EntityRegistry();
 	// A bird flies over what is in its way
 	if (IsBird(animal.type) || !Locator::pathfindingSystem::has_value() || !registry.AllOf<Transform>(entity))
 	{
-		SetupMoveToFixed(animal, goal, 0.0f, finalState);
+		SetupMoveToFixed(animal, goal, goalHeight, finalState);
 		return;
 	}
-	animal.goalHeight = 0.0f;
+	animal.goalHeight = goalHeight;
 	animal.move.goal = goal;
 	// The walk goes from where it is, facing as it faces, at its speed, and turns as its kind turns
 	auto& walk = registry.AssignOrReplace<WallHug>(entity);
@@ -757,16 +758,33 @@ void AnimalSystem::EndWalkRound(entt::entity entity)
 
 bool AnimalSystem::MoveTo3D(Animal& animal)
 {
-	const auto before = Metres(animal.move.position);
-	const float groundBefore = Ground(before);
-	const float groundAtGoal = Ground(Metres(animal.move.goal));
+	// The game reads the land at the map positions of the animal and of its goal
+	const float groundBefore = Ground(animal.move.position);
+	const float groundAtGoal = Ground(animal.move.goal);
 	const auto result = animals::StepMove(animal.move, TurnAngleOf(animal));
 	if (result.turned)
 	{
 		Banked(animal, result.turn);
 	}
-	animal.height = animals::FlyingHeight(groundBefore, animal.height, Ground(Metres(animal.move.position)), groundAtGoal,
+	// A bird that flies goes to its place again through metres, and the land under that place sets its height
+	if (animals::FliesToGoalHeight(animal.goalHeight))
+	{
+		animal.move.position = animals::FlyingPlace(animal.move.position);
+	}
+	animal.height = animals::FlyingHeight(groundBefore, animal.height, Ground(animal.move.position), groundAtGoal,
 	                                      animal.goalHeight, InfoOf(animal.type).altitudeMovementChange);
+	SyncWorld(animal);
+	return result.arrived;
+}
+
+bool AnimalSystem::MoveToKeepingHeight(Animal& animal)
+{
+	// The move to a place keeps the height of the animal above the land. The height of the goal has no effect
+	const auto result = animals::StepMove(animal.move, TurnAngleOf(animal));
+	if (result.turned)
+	{
+		Banked(animal, result.turn);
+	}
 	SyncWorld(animal);
 	return result.arrived;
 }
@@ -929,7 +947,7 @@ void AnimalSystem::PuzzlePieceTurn(entt::entity entity, Animal& animal)
 	{
 	case AnimalState::MoveToPos:
 		// It goes straight to its place, and there it takes its final state
-		if (MoveTo3D(animal))
+		if (MoveToKeepingHeight(animal))
 		{
 			SetTopState(animal, animal.finalState);
 		}
@@ -1009,7 +1027,7 @@ void AnimalSystem::Bird(entt::entity entity, Animal& animal)
 		break;
 	case AnimalState::MoveToPos:
 		// Its kind's move: there, it takes its final state
-		if (MoveTo3D(animal))
+		if (MoveToKeepingHeight(animal))
 		{
 			SetTopState(animal, animal.finalState);
 		}
@@ -1385,7 +1403,7 @@ void AnimalSystem::WolfMoveToPos(entt::entity entity, Animal& animal)
 {
 	auto& registry = EntityRegistry();
 	const auto& run = registry.Get<const SpellWolf>(entity);
-	if (MoveTo3D(animal))
+	if (MoveToKeepingHeight(animal))
 	{
 		SetTopState(animal, animal.finalState);
 	}
@@ -2308,8 +2326,13 @@ std::optional<map_coords::MapCoords> AnimalSystem::FleePlace(entt::entity animal
 	}
 	const auto& island = Locator::terrainSystem::value();
 	const auto ground = [&island](const map_coords::MapCoords& place) { return map_coords::GroundAt(island, place); };
-	return magic::FleePlace(ecs::thing_map_place::Of(registry, animal), ecs::thing_map_place::Of(registry, thing), movement,
-	                        random, magic::k_FleeStep, ground);
+	// The animal flees from its place at its height above the land
+	auto from = ecs::thing_map_place::Of(registry, animal);
+	if (const auto* data = registry.TryGet<const Animal>(animal); data != nullptr)
+	{
+		from.altitude = data->height;
+	}
+	return magic::FleePlace(from, ecs::thing_map_place::Of(registry, thing), movement, random, magic::k_FleeStep, ground);
 }
 
 void AnimalSystem::GiveUpReaction(entt::entity entity)
@@ -2358,7 +2381,7 @@ void AnimalSystem::FleeFromPredator(entt::entity entity, Animal& animal)
 	{
 		animal.move.speed = speed;
 	}
-	SetupMoveToFixed(animal, {to->x, to->z}, 0.0f, AnimalState::FleeingFromObject);
+	SetupMoveToFixed(animal, {to->x, to->z}, to->altitude, AnimalState::FleeingFromObject);
 	if (const auto logger = spdlog::get("game"); logger != nullptr)
 	{
 		SPDLOG_LOGGER_DEBUG(logger, "Predator: animal {} runs from hunter {}, {:.1f} m away", static_cast<uint32_t>(entity),
@@ -2498,7 +2521,7 @@ bool AnimalSystem::LookOrGoToFood(entt::entity entity, Animal& animal)
 		{
 			return false;
 		}
-		if (animal.walksRound ? GroundMoveTo(entity, animal) : MoveTo3D(animal))
+		if (animal.walksRound ? GroundMoveTo(entity, animal) : MoveToKeepingHeight(animal))
 		{
 			SetTopState(animal, animal.finalState);
 		}
@@ -2583,7 +2606,7 @@ bool AnimalSystem::Flee(entt::entity entity, Animal& animal)
 	// Running to where it flees, it gets there first
 	if (running)
 	{
-		if (animal.walksRound ? GroundMoveTo(entity, animal) : MoveTo3D(animal))
+		if (animal.walksRound ? GroundMoveTo(entity, animal) : MoveToKeepingHeight(animal))
 		{
 			SetState(animal, animal.finalState);
 		}
@@ -2632,7 +2655,7 @@ bool AnimalSystem::Flee(entt::entity entity, Animal& animal)
 			const auto& row = Locator::infoConstants::value().villagerStateTable.at(
 			    static_cast<size_t>(VillagerStates::FleeingFromObjectReaction));
 			animal.move.speed = SpeedStateOf(InfoOf(animal.type), std::min<size_t>(row.speedIndex, 5));
-			SetupMoveRoundToFixed(entity, animal, {to->x, to->z}, AnimalState::FleeingAndLookingAtObject);
+			SetupMoveRoundToFixed(entity, animal, {to->x, to->z}, AnimalState::FleeingAndLookingAtObject, to->altitude);
 			// A grazer runs in its moving clip at its fleeing speed; the other animals have no clip of their own for
 			// moving and keep the one they had
 			if (!animals::grazers::IsGrazer(animal.type))
