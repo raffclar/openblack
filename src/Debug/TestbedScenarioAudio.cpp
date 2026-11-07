@@ -330,6 +330,25 @@ void testbed_scenarios::AddAudio(std::vector<Scenario>& all)
 	                 {.kind = Kind::SetAlignment, .delaySeconds = 12.0f, .alignment = 1.0f}},
 	});
 
+	// An advisor speaks, and a second later the player goes into the temple
+	constexpr size_t k_LongAdvisorLine = 130;
+	all.push_back({
+	    .id = "audio.temple_stops_sounds",
+	    .name = "The first turn in the temple stops the sounds that play",
+	    .facet = Facet::Audio,
+	    .description = "An advisor starts a line. One second later the player goes into the temple. Ten seconds "
+	                   "later the player leaves the temple, the advisor starts the line again, and the player goes "
+	                   "into the temple again.",
+	    .expected = "Each time that the player goes into the temple, the advisor's line stops at once. The temple's "
+	                "music starts, and the music of the land fades out as usual.",
+	    .framing = {.shot = Shot::Overview},
+	    .commands = {{.kind = Kind::PlayGuidanceVoice, .delaySeconds = 1.0f, .value = k_LongAdvisorLine},
+	                 {.kind = Kind::EnterTemple, .delaySeconds = 1.0f, .value = static_cast<size_t>(TempleRoom::Main)},
+	                 {.kind = Kind::EnterTemple, .delaySeconds = 10.0f, .value = static_cast<size_t>(TempleRoom::Unknown)},
+	                 {.kind = Kind::PlayGuidanceVoice, .delaySeconds = 2.0f, .value = k_LongAdvisorLine},
+	                 {.kind = Kind::EnterTemple, .delaySeconds = 1.0f, .value = static_cast<size_t>(TempleRoom::Main)}},
+	});
+
 	// Four challenges recorded with their pictures, each looking at a different place of the land
 	const std::vector<Command> challengeRecords {{.kind = Kind::RecordChallenge,
 	                                              .delaySeconds = 1.0f,
