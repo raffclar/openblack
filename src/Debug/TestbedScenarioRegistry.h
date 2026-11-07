@@ -210,6 +210,9 @@ struct Environment
 	std::optional<int32_t> landNumber;
 	/// The snow lies this deep in every cell of the island as the scenario starts, 0 to 255. A testbed set-up step.
 	std::optional<float> snowDepth;
+	/// The background weather's wind along x and z, -128 to 127, as the real-world weather sets it: 1 and 1 for its
+	/// type 10. The runner puts the background weather back when the scenario stops.
+	std::optional<glm::ivec2> backgroundWind;
 	/// The players other than the first that are in the game while the scenario runs, such as a rival god for whom a
 	/// script makes a creature. The runner removes them when the scenario stops.
 	std::vector<PlayerNames> players;
@@ -934,6 +937,9 @@ struct Command
 		/// The temple's camera looks at the picture of a slot of the save game room (value: the slot), as when the
 		/// player presses the picture. Needs no creature
 		LookAtSaveGamePicture,
+		/// In the creature's room, the temple's camera zooms to a target of the room (value: the target's place), as when
+		/// the player clicks the target. Needs no creature
+		ZoomToTempleCaveTarget,
 		/// The creature catches fire, and burns as at the start of a fire. With a value of 1, the scenario's object catches
 		/// fire in place of the creature.
 		SetAlight,

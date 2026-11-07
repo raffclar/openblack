@@ -132,7 +132,8 @@ struct WalkInputs
 /// The clip a sitting villager sits in, matched to the way it sat down when that clip is playing, else one of two ways
 [[nodiscard]] AnimId SitDownClip(bool transitionPlaying, AnimId current, const IntRandom& random);
 
-/// A builder hammers, saws or swings a mallet, carrying the tool of it
+/// A builder hammers, saws or swings a mallet, and carries the tool of it. At the end of a clip into the work, the
+/// builder does the stroke of that clip. Else it does one of the three strokes at random.
 struct BuildingClipChoice
 {
 	AnimId clip;

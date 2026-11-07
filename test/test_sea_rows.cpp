@@ -8,16 +8,20 @@
  *******************************************************************************/
 
 #include <cmath>
+#include <cstdint>
 
+#include <bit>
 #include <chrono>
 
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/vec4.hpp>
 #include <gtest/gtest.h>
 
+#include "ECS/AmbientWind.h"
 #include "Graphics/SeaRows.h"
 
 namespace sea_rows = openblack::graphics::sea_rows;
+namespace ambient_wind = openblack::ecs::ambient_wind;
 
 namespace
 {
@@ -28,6 +32,17 @@ glm::mat4 ViewProjection(const glm::vec3& eye, const glm::vec3& focus)
 {
 	const auto projection = glm::perspective(glm::radians(60.0f), k_Viewport.x / k_Viewport.y, k_Near, 100000.0f);
 	return projection * glm::lookAt(eye, focus, {0.0f, 1.0f, 0.0f});
+}
+
+uint32_t Bits(float value)
+{
+	return std::bit_cast<uint32_t>(value);
+}
+
+/// The ambient wind of the real-world weather that blows: background wind bytes of 1 along x and z
+glm::vec2 RealWeatherWind()
+{
+	return ambient_wind::FromBackground(1, 1);
 }
 } // namespace
 
@@ -169,6 +184,19 @@ TEST(SeaRows, RowsAreTwoPixelsApart)
 	    sea_rows::MakeRows({.top = 0.0f, .bottom = 719.0f, .inverseDepthTop = 0.001f, .inverseDepthBottom = 0.1f}).softTop);
 }
 
+TEST(SeaRows, ARowsTextureEndsOneColumnShortOfTheRow)
+{
+	// The strip goes to the width, its texture only to the last column
+	constexpr float k_Width = 1024.0f;
+	const float span = sea_rows::RowTextureSpan(k_Width);
+	EXPECT_FLOAT_EQ(span * k_Width, k_Width - 1.0f);
+	// The first column takes the sea under it
+	EXPECT_EQ(0.0f * span, 0.0f);
+	// A screen of one column has a texture of no length, and no screen gives no texture
+	EXPECT_EQ(sea_rows::RowTextureSpan(1.0f), 0.0f);
+	EXPECT_EQ(sea_rows::RowTextureSpan(0.0f), 0.0f);
+}
+
 TEST(SeaRows, TheRippleStepsOnAtTheScreenRefreshWhateverTheFrameRate)
 {
 	using std::chrono::milliseconds;
@@ -215,4 +243,83 @@ TEST(SeaRows, TheRippleStaysWhileTheGamesTimeIsStopped)
 	// And goes round from 15 to 0
 	ripple = sea_rows::AdvanceRipple(ripple, std::chrono::milliseconds(100), true);
 	EXPECT_EQ(ripple.step, 0);
+}
+
+// The expected bits come from the game's maths in float, in the game's order, with its constants and its inverse square
+// root
+
+TEST(AmbientWind, ACalmBackgroundGivesNoWind)
+{
+	const auto wind = ambient_wind::FromBackground(0, 0);
+	EXPECT_EQ(wind, glm::vec2(0.0f));
+}
+
+TEST(AmbientWind, TheBackgroundWindBecomesADirection)
+{
+	const auto wind = RealWeatherWind();
+	EXPECT_EQ(Bits(wind.x), 0x3F3504F3u);
+	EXPECT_EQ(Bits(wind.y), 0x3F3504F3u);
+	// A stronger wind is also about one unit long. The inverse square root of the engine is not exact, so the last bits
+	// change.
+	const auto strong = ambient_wind::FromBackground(100, 100);
+	EXPECT_EQ(Bits(strong.x), 0x3F3504D7u);
+	EXPECT_EQ(Bits(strong.y), 0x3F3504D7u);
+}
+
+TEST(AmbientWind, TheStartWindPointsOneAlongXAndTwoAlongZ)
+{
+	const auto wind = ambient_wind::Start();
+	EXPECT_EQ(Bits(wind.x), 0x3EE4F92Eu);
+	EXPECT_EQ(Bits(wind.y), 0x3F64F92Eu);
+}
+
+TEST(SeaDrift, TheRowsDriftTwoTimesAFrameAgainstTheWind)
+{
+	using std::chrono::milliseconds;
+	const auto once = sea_rows::AdvanceDrift({}, RealWeatherWind(), milliseconds(16), 2000.0f, sea_rows::DriftDraw::NoRows);
+	EXPECT_EQ(Bits(once.rows.x), 0xBD0C6D58u);
+	EXPECT_EQ(Bits(once.rows.y), 0xBD0C6D58u);
+	const auto twice = sea_rows::AdvanceDrift({}, RealWeatherWind(), milliseconds(16), 2000.0f, sea_rows::DriftDraw::Rows);
+	EXPECT_EQ(Bits(twice.rows.x), 0xBD8C6D58u);
+	EXPECT_EQ(Bits(twice.rows.y), 0xBD8C6D58u);
+	// The still sea does not move while the rows are drawn
+	EXPECT_EQ(twice.still, glm::vec2(0.0f));
+}
+
+TEST(SeaDrift, TheRowsGoBackByWholePeriods)
+{
+	const sea_rows::Drift drift {.rows = {-1999.99f, 1999.99f}};
+	const auto moved =
+	    sea_rows::AdvanceDrift(drift, RealWeatherWind(), std::chrono::milliseconds(16), 2000.0f, sea_rows::DriftDraw::NoRows);
+	// Past a whole period it goes back by one; inside a period it stays
+	EXPECT_EQ(Bits(moved.rows.x), 0xBCC70000u);
+	EXPECT_EQ(Bits(moved.rows.y), 0x44F9FE95u);
+}
+
+TEST(SeaDrift, TheStillSeaKeepsTheFractionOfItsRepeats)
+{
+	using std::chrono::milliseconds;
+	const auto first = sea_rows::AdvanceDrift({}, RealWeatherWind(), milliseconds(16), 2000.0f, sea_rows::DriftDraw::Still);
+	EXPECT_EQ(Bits(first.still.x), 0xB80FCC20u);
+	EXPECT_EQ(Bits(first.still.y), 0xB80FCC20u);
+	// The rows' texture drifts one time too
+	EXPECT_EQ(Bits(first.rows.x), 0xBD0C6D58u);
+
+	const sea_rows::Drift drift {.still = {-0.99999f, 0.5f}};
+	const auto moved = sea_rows::AdvanceDrift(drift, RealWeatherWind(), milliseconds(16), 2000.0f, sea_rows::DriftDraw::Still);
+	EXPECT_EQ(Bits(moved.still.x), 0xB7CC0000u);
+	EXPECT_EQ(Bits(moved.still.y), 0x3EFFFB82u);
+}
+
+TEST(SeaDrift, NoGameTimeOrNoWindGivesNoDrift)
+{
+	const sea_rows::Drift drift {.rows = {12.5f, -40.0f}, .still = {0.25f, -0.5f}};
+	const auto paused =
+	    sea_rows::AdvanceDrift(drift, RealWeatherWind(), std::chrono::milliseconds(0), 2000.0f, sea_rows::DriftDraw::Rows);
+	EXPECT_EQ(paused.rows, drift.rows);
+	EXPECT_EQ(paused.still, drift.still);
+	const auto calm =
+	    sea_rows::AdvanceDrift(drift, glm::vec2(0.0f), std::chrono::milliseconds(16), 2000.0f, sea_rows::DriftDraw::Still);
+	EXPECT_EQ(calm.rows, drift.rows);
+	EXPECT_EQ(calm.still, drift.still);
 }

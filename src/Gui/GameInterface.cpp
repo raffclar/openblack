@@ -112,6 +112,8 @@ namespace
 constexpr std::string_view k_SaveProblemText = "HELP_TEXT_DIALOG_ERRORHASOCCURED";
 /// "Warning. The game may not be synchronised on your machine. Continue?" The game's text has this name.
 constexpr std::string_view k_OutOfSyncText = "HELP_TEXT_SINGING_STONE_CURSE_03";
+/// "Are you sure you want to start a completely new game?"
+constexpr std::string_view k_NewGameQuestionText = "HELP_TEXT_DIALOG_AREYOUSURESTART";
 // "%s is out of the game."
 constexpr std::string_view k_GodOutText = "HELP_TEXT_WIN_GAME_03";
 // "%s has left game."
@@ -770,6 +772,17 @@ void GameInterface::AskTripQuestion(std::string_view textName)
 	_saveGameBoxes->Ask(std::u16string(_texts.Get(textName)));
 	_tripAsked = true;
 	_tripAnswer.reset();
+}
+
+void GameInterface::AskNewGameQuestion()
+{
+	if (_newGameAsked)
+	{
+		return;
+	}
+	_saveGameBoxes->Ask(std::u16string(_texts.Get(k_NewGameQuestionText)));
+	_newGameAsked = true;
+	_newGameAnswer.reset();
 }
 
 void GameInterface::OpenMultiplayer(std::unique_ptr<MultiplayerFrontEnd> frontEnd)
@@ -1842,6 +1855,15 @@ void GameInterface::Update(float deltaSeconds)
 		if (const auto answer = _saveGameBoxes->TakeAnswer(); answer.has_value())
 		{
 			_tripAnswer = *answer == SaveGameBoxes::Answer::Yes;
+		}
+	}
+	// The answer to the question about a new game
+	if (_newGameAsked && !_saveGameBoxes->IsActive())
+	{
+		_newGameAsked = false;
+		if (const auto answer = _saveGameBoxes->TakeAnswer(); answer.has_value())
+		{
+			_newGameAnswer = *answer == SaveGameBoxes::Answer::Yes;
 		}
 	}
 	// The question of the trip comes over the land information box as a box of its own: the box fades out until the

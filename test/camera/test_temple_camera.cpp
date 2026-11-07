@@ -7,8 +7,10 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <cstdint>
 #include <cstring>
 
+#include <chrono>
 #include <vector>
 
 #include <glm/geometric.hpp>
@@ -353,4 +355,70 @@ TEST(TempleCamera, TheFutureRoomTurnsByItselfWhileItShowsItsWords)
 	EXPECT_FLOAT_EQ(*TempleCameraModel::PictureTurnByItself(time, 0.25f, false, false, true), 0.0f);
 	EXPECT_FLOAT_EQ(*TempleCameraModel::PictureTurnByItself(time, 0.25f, false, false, true), 0.25f * 0.25f * 0.25f);
 	EXPECT_FLOAT_EQ(time, 0.5f);
+}
+
+TEST(TempleCamera, TheMainRoomsOrbitAfterALookAtAScroll)
+{
+	// The player sends the camera back before the look is fully in: the orbit keeps its turn and leans up to 1
+	const auto early = TempleCameraModel::MainRoomScrollLeave(true, 0.5f);
+	ASSERT_TRUE(early.leanTarget.has_value());
+	EXPECT_EQ(*early.leanTarget, 1.0f);
+	EXPECT_FALSE(early.restartOrbit);
+	// After a look that came fully in, the orbit starts again from its first turn and lean
+	const auto full = TempleCameraModel::MainRoomScrollLeave(true, 1.0f);
+	EXPECT_TRUE(full.restartOrbit);
+	// The room that stops the look does not change the lean
+	EXPECT_FALSE(TempleCameraModel::MainRoomScrollLeave(false, 0.5f).leanTarget.has_value());
+	EXPECT_TRUE(TempleCameraModel::MainRoomScrollLeave(false, 1.0f).restartOrbit);
+}
+
+TEST(TempleCamera, TheRoomsStepByTheWholeMillisecondsTimesAThousandth)
+{
+	// Each step counts its whole milliseconds and multiplies them by the float a thousandth, as the game does
+	for (int64_t milliseconds = 1; milliseconds < 120; ++milliseconds)
+	{
+		const float expected = static_cast<float>(milliseconds) * 0.001f;
+		EXPECT_EQ(TempleCameraModel::StepSeconds(std::chrono::milliseconds(milliseconds)), expected);
+	}
+	// A part of a millisecond does not count
+	EXPECT_EQ(TempleCameraModel::StepSeconds(std::chrono::microseconds(16'900)), 16.0f * 0.001f);
+}
+
+TEST(TempleCamera, TheCreaturesRoomMovesToItsAimMoreSlowlyFurtherIntoAZoom)
+{
+	EXPECT_EQ(TempleCameraModel::CaveLookEaseTime(0.0f), 0.15f);
+	EXPECT_EQ(TempleCameraModel::CaveLookEaseTime(0.5f), (0.5f * 0.1f) + 0.15f);
+	EXPECT_EQ(TempleCameraModel::CaveLookEaseTime(1.0f), (1.0f * 0.1f) + 0.15f);
+}
+
+TEST(TempleCamera, TheCreaturesRoomAimsAPartOfTheWayToItsZoom)
+{
+	const glm::vec3 from {120.0f, 10.0f, -120.0f};
+	const TempleCameraModel::Pose look {from, {121.0f, 9.0f, -110.0f}};
+	const TempleCameraModel::Pose zoomed {{100.0f, 12.0f, -100.0f}, {90.0f, 8.0f, -95.0f}};
+	// With no zoom the aim is the look, and the look does not change
+	const auto none = TempleCameraModel::CaveZoomAim(look, zoomed, from, 0.0f);
+	EXPECT_EQ(none.aim.origin, look.origin);
+	EXPECT_EQ(none.aim.focus, look.focus);
+	EXPECT_FALSE(none.look.has_value());
+	// A part of the way in, each point is the way between times the zoom, then the start added
+	const auto part = TempleCameraModel::CaveZoomAim(look, zoomed, from, 0.25f);
+	EXPECT_EQ(part.aim.origin, ((zoomed.origin - look.origin) * 0.25f) + look.origin);
+	EXPECT_EQ(part.aim.focus, ((zoomed.focus - look.focus) * 0.25f) + look.focus);
+	EXPECT_FALSE(part.look.has_value());
+	// Fully in, the look turns to the point that the camera looks at from the place of the look
+	const auto full = TempleCameraModel::CaveZoomAim(look, zoomed, from, 1.0f);
+	ASSERT_TRUE(full.look.has_value());
+	const auto expected = TempleCameraModel::HeadingAndPitch({from, full.aim.focus});
+	EXPECT_EQ(full.look->x, expected.x);
+	EXPECT_EQ(full.look->y, expected.y);
+}
+
+TEST(TempleCamera, AWalkBackStartsHalfwayToTheDoorAtItsHeight)
+{
+	const TempleCameraModel::Pose through {{40.0f, 16.0f, 0.0f}, {20.0f, 10.0f, 0.0f}};
+	const TempleCameraModel::Pose from {{10.0f, 30.0f, 6.0f}, {0.0f, 4.0f, 2.0f}};
+	const auto start = TempleCameraModel::WalkBackStart(through, from);
+	EXPECT_EQ(start.origin, glm::vec3(25.0f, 16.0f, 3.0f));
+	EXPECT_EQ(start.focus, glm::vec3(10.0f, 7.0f, 1.0f));
 }

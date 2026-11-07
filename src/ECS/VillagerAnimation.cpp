@@ -365,15 +365,16 @@ AnimId villager_animation::SitDownClip(bool transitionPlaying, AnimId current, c
 villager_animation::BuildingClipChoice villager_animation::BuildingClip(bool transitionPlaying, AnimId current,
                                                                         const IntRandom& random)
 {
+	// At the end of the clip into the work, the builder does the stroke of that clip, and no random number is drawn
 	if (transitionPlaying)
 	{
 		switch (current)
 		{
-		case AnimId::PHammering:
+		case AnimId::PIntoHammering:
 			return {.clip = AnimId::PHammering, .tool = CarriedObject::Hammer};
-		case AnimId::PSawWood:
+		case AnimId::PIntoSawWood:
 			return {.clip = AnimId::PSawWood, .tool = CarriedObject::Saw};
-		case AnimId::PSledgehammer:
+		case AnimId::PIntoSledgehammer:
 			return {.clip = AnimId::PSledgehammer, .tool = CarriedObject::MalletHeavy};
 		default:
 			break;

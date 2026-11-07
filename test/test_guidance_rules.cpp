@@ -7,6 +7,7 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <limits>
 #include <numbers>
 
 #include <gtest/gtest.h>
@@ -86,6 +87,35 @@ TEST(GuidanceRules, RemarkChoicesStopAtTheEndOrOneShortOfAFullRow)
 	EXPECT_EQ(RemarkChoices(texts), 4u);
 	texts.fill(2168);
 	EXPECT_EQ(RemarkChoices(texts), 33u);
+}
+
+TEST(GuidanceRules, RemarkChoicesByValueHoldTheValueAndTruncate)
+{
+	// Below 0 or not a number picks the first text only; above 1 counts as 1
+	EXPECT_EQ(RemarkChoicesByValue(10, -0.5f), 0);
+	EXPECT_EQ(RemarkChoicesByValue(10, std::numeric_limits<float>::quiet_NaN()), 0);
+	EXPECT_EQ(RemarkChoicesByValue(10, 3.0f), 10);
+	EXPECT_EQ(RemarkChoicesByValue(10, 0.25f), 2);
+	EXPECT_EQ(RemarkChoicesByValue(33, 0.0999999f), 3);
+	EXPECT_EQ(RemarkChoicesByValue(0, 1.0f), 0);
+}
+
+TEST(GuidanceRules, LowOnFoodWarnsFromItsShortage)
+{
+	EXPECT_FALSE(WarnsLowOnFood(0.9499f));
+	EXPECT_TRUE(WarnsLowOnFood(0.95f));
+	EXPECT_TRUE(WarnsLowOnFood(0.999f));
+	EXPECT_FALSE(WarnsLowOnFood(std::numeric_limits<float>::quiet_NaN()));
+	// The value that picks the text is the shortage less 0.9, with the shortage held at 2
+	EXPECT_FLOAT_EQ(LowOnFoodValue(0.95f), 0.95f - 0.9f);
+	EXPECT_FLOAT_EQ(LowOnFoodValue(5.0f), 2.0f - 0.9f);
+}
+
+TEST(GuidanceRules, VillagersUnhappyOnlyAboveTheThreshold)
+{
+	EXPECT_FALSE(WarnsVillagersUnhappy(0.5f, 0.5f));
+	EXPECT_TRUE(WarnsVillagersUnhappy(0.51f, 0.5f));
+	EXPECT_FALSE(WarnsVillagersUnhappy(std::numeric_limits<float>::quiet_NaN(), 0.5f));
 }
 
 TEST(GuidanceRules, DriftKeepsMostOfThePast)
