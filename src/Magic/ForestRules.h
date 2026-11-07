@@ -12,9 +12,12 @@
 #include <cstddef>
 #include <cstdint>
 
+#include <algorithm>
 #include <array>
 #include <optional>
+#include <span>
 
+#include <entt/entity/entity.hpp>
 #include <glm/vec2.hpp>
 
 #include "Enums.h"
@@ -80,6 +83,15 @@ inline constexpr float k_EvilAlignment = -0.5f;
 [[nodiscard]] constexpr bool BatsFor(float alignment)
 {
 	return alignment < k_EvilAlignment;
+}
+
+/// How many trees a forest has at this moment: the trees of its list that are still in the world. A tree in the hand
+/// stays in the forest. A tree goes from the forest at the moment that it goes from the world, not at the next turn of
+/// the forest.
+template <typename IsInWorld>
+[[nodiscard]] uint32_t StandingTrees(std::span<const entt::entity> trees, IsInWorld isInWorld)
+{
+	return static_cast<uint32_t>(std::ranges::count_if(trees, isInWorld));
 }
 
 } // namespace openblack::magic::forest

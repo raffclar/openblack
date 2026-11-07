@@ -12,6 +12,7 @@
 
 #include <bit>
 #include <numbers>
+#include <vector>
 
 #include <glm/geometric.hpp>
 #include <gtest/gtest.h>
@@ -320,6 +321,16 @@ TEST(ForestRules, ItAffordsItsTreesWhileItHasStrength)
 	EXPECT_EQ(forest::MaxObjectsToCreate(-1, 18, false, std::nullopt), 18u);
 	EXPECT_EQ(forest::MaxObjectsToCreate(-1, 18, true, std::nullopt), 0u);
 	EXPECT_EQ(forest::MaxObjectsToCreate(-1, 18, true, 7u), 7u);
+}
+
+TEST(ForestRules, AForestHasTheTreesThatAreInTheWorldAtThisMoment)
+{
+	const std::vector<entt::entity> trees {entt::entity {1}, entt::entity {2}, entt::entity {3}, entt::entity {4}};
+	// Tree 2 went into a store in this turn, before the forest's own turn removed it from the list. Tree 3 is in the
+	// hand, which keeps it in the world and in the forest.
+	const auto inWorld = [](entt::entity tree) { return tree != entt::entity {2}; };
+	EXPECT_EQ(forest::StandingTrees(trees, inWorld), 3u);
+	EXPECT_EQ(forest::StandingTrees({}, inWorld), 0u);
 }
 
 TEST(ForestRules, TheGroundsKindsOfTreeAreRolledFor)
