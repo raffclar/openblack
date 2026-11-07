@@ -13,6 +13,7 @@
 
 #include <SDL_scancode.h>
 
+#include "3D/CreatureCaveTargets.h"
 #include "3D/TempleInteriorInterface.h"
 #include "Creature/CreatureCave.h"
 #include "Creature/CreatureFace.h"
@@ -20,6 +21,7 @@
 #include "Creature/CreatureFight.h"
 #include "Creature/CreatureLayers.h"
 #include "ECS/IncomingMessageRules.h"
+#include "Input/BindableActions.h"
 #include "Input/PlatformKeys.h"
 #include "TestbedScenarioBuilders.h"
 #include "TestbedScenarioRegistry.h"
@@ -29,6 +31,25 @@ using namespace openblack::testbed_scenarios;
 
 void testbed_scenarios::AddAudio(std::vector<Scenario>& all)
 {
+	all.push_back({
+	    .id = "interface.continue_cue_key",
+	    .name = "The Continue cue shows the key of the move action",
+	    .facet = Facet::Interface,
+	    .description = "The move action is put on the Space key, as the Controls page binds it. Then a script runs a "
+	                   "help text that waits for a click. After ten seconds the move action gets its own buttons again.",
+	    .expected = "At the right of the bottom third of the text box, the word Continue in yellow fades in over a "
+	                "second, with a key cap that reads Space to its right in place of the mouse. Both are on soft glows. "
+	                "The key cap does not blink. With the menu open, the cue and its glows do not show.",
+	    .framing = {.shot = Shot::Overview},
+	    .commands = {{.kind = Kind::BindMoveKey, .delaySeconds = 0.5f, .value = static_cast<size_t>(SDL_SCANCODE_SPACE)},
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 0.2f,
+	                  .script = "RUN_TEXT",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Integer, .number = 0.0f},
+	                                      {.kind = ScriptArgument::Kind::Integer, .number = 1250.0f},
+	                                      {.kind = ScriptArgument::Kind::Integer, .number = 1.0f}}},
+	                 {.kind = Kind::BindMoveKey, .delaySeconds = 10.0f, .value = 0}},
+	});
 	all.push_back({
 	    .id = "audio.surfaces",
 	    .name = "Footsteps on grass and in the shallows",
@@ -440,6 +461,27 @@ void testbed_scenarios::AddAudio(std::vector<Scenario>& all)
 	                 {.kind = Kind::EnterTemple, .delaySeconds = 0.5f, .value = 6}},
 	});
 
+	// The scrolls ask for the list of saved games in each frame, and the list comes from the last read of the folder
+	all.push_back({
+	    .id = "temple.save_room_frame_time",
+	    .name = "The temple's save game room with many saved games keeps its frame time",
+	    .facet = Facet::Story,
+	    .description = "The game is saved into slots 1 to 6. Then the player goes through the temple's main room into "
+	                   "the save game room and stays there. Start the game with --frame-stats 200, also in the browser.",
+	    .expected = "The scroll lists the six saved games. The frame stats show the same work for each frame in the room "
+	                "as in the main room: the game reads the folder of the saved games only after a save or a delete and "
+	                "at each visit, not in each frame. No frame in the room takes 10 ms or more.",
+	    .framing = {.shot = Shot::Overview},
+	    .commands = {{.kind = Kind::SaveGame, .delaySeconds = 1.0f, .value = 1},
+	                 {.kind = Kind::SaveGame, .delaySeconds = 0.5f, .value = 2},
+	                 {.kind = Kind::SaveGame, .delaySeconds = 0.5f, .value = 3},
+	                 {.kind = Kind::SaveGame, .delaySeconds = 0.5f, .value = 4},
+	                 {.kind = Kind::SaveGame, .delaySeconds = 0.5f, .value = 5},
+	                 {.kind = Kind::SaveGame, .delaySeconds = 0.5f, .value = 6},
+	                 {.kind = Kind::EnterTemple, .delaySeconds = 1.0f, .value = 3},
+	                 {.kind = Kind::EnterTemple, .delaySeconds = 0.5f, .value = 6}},
+	});
+
 	all.push_back({
 	    .id = "temple.save_room_picture_after_save",
 	    .name = "The temple's save game room shows a new save's picture at once",
@@ -754,10 +796,10 @@ void testbed_scenarios::AddAudio(std::vector<Scenario>& all)
 	    .description = "Bob, the god of the second tiger, says a line in the chat. Then Alice, the god of this computer, "
 	                   "says a line. Then the chat opens with a line in it, and its list of players shows Bob.",
 	    .expected = "A bubble with the line comes over each tiger. The bubble over Bob's tiger has his line in his green, "
-	                "on a box of half of his colour. The bubble of Alice's tiger shows her line without her name. The "
-	                "lines of Bob come into the incoming messages. The speech button at the top right becomes the line "
-	                "of the chat, the quick chat and the send buttons, and the list of players under them. The bubbles "
-	                "fade after some seconds.",
+	                "on a dark sky blue box, as each bubble box is. The bubble of Alice's tiger shows her line without "
+	                "her name. The lines of Bob come into the incoming messages. The speech button at the top right "
+	                "becomes the line of the chat, the quick chat and the send buttons, and the list of players under "
+	                "them. The bubbles fade after some seconds.",
 	    .environment = {.players = {PlayerNames::PLAYER_TWO}},
 	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 40.0f, -60.0f}, .look = {0.0f, 10.0f, 0.0f}},
 	    .creatures = {{.label = "Alice's tiger",
@@ -1055,6 +1097,71 @@ void testbed_scenarios::AddAudio(std::vector<Scenario>& all)
 	                 {.kind = Kind::EnterTemple, .delaySeconds = 1.0f, .value = 3},
 	                 {.kind = Kind::EnterTemple, .delaySeconds = 0.5f, .value = 2},
 	                 {.kind = Kind::LookAtTempleScroll, .delaySeconds = 4.0f, .value = 6}},
+	});
+
+	all.push_back({
+	    .id = "temple.main_scroll_leave",
+	    .name = "The temple's main room leans up when the player sends the camera back from its scroll early",
+	    .facet = Facet::Story,
+	    .description = "The player goes into the temple's main room. Ten seconds after the advisors introduced the room "
+	                   "and the cinema bars went out, the camera looks at the room's scroll, as a press on it does. After 0.8 "
+	                   "seconds, before the camera is fully at the scroll, the "
+	                   "player presses the left button to the left of the scroll and lets it go.",
+	    .expected = "The press sends the camera back from the scroll and does nothing more. The room's orbit keeps its "
+	                "turn and its lean goes from 0.7 to 1. Thus the camera comes back lower than before the look and "
+	                "looks more up, to the roof.",
+	    .framing = {.shot = Shot::Overview},
+	    .commands = {{.kind = Kind::EnterTemple, .delaySeconds = 1.0f, .value = 3},
+	                 // While a script has the cinema bars in, the temple takes no press
+	                 {.kind = Kind::LookAtTempleScroll, .delaySeconds = 10.0f, .waitUntilFree = true, .value = 0},
+	                 {.kind = Kind::PointerTo, .delaySeconds = 0.4f, .point = {0.15f, 0.5f}},
+	                 {.kind = Kind::PointerPress, .delaySeconds = 0.4f, .value = 1},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 0.1f, .value = 1}},
+	});
+
+	all.push_back({
+	    .id = "temple.cave_zoom_back",
+	    .name = "The creature's room camera keeps the view of a target when it zooms back from it",
+	    .facet = Facet::Story,
+	    .description = "The player's creature is in the temple's creature room, which the player goes into. After ten "
+	                   "seconds the camera zooms to the belts, "
+	                   "as a click on them does. After two seconds, when the zoom is fully in, the player presses the "
+	                   "left arrow key for one frame.",
+	    .expected = "The camera zooms to the belts over a second and comes to rest a quarter of a second later. The key "
+	                "sends it back over half a second. The camera stays looking at the belts as it goes back, and then "
+	                "turns slowly left from there.",
+	    .framing = {.shot = Shot::Overview},
+	    .creatures = {Posed(CreatureType::Tiger, {0.0f, 40.0f}, 180.0f, "yours")},
+	    .commands = {{.kind = Kind::EnterTemple, .delaySeconds = 1.0f, .value = static_cast<size_t>(TempleRoom::Main)},
+	                 {.kind = Kind::OpenCreatureCave, .creature = 0, .delaySeconds = 0.5f},
+	                 {.kind = Kind::ZoomToTempleCaveTarget,
+	                  .delaySeconds = 10.0f,
+	                  .value = static_cast<size_t>(CreatureCaveTargets::Target::Belts)},
+	                 {.kind = Kind::PressKey,
+	                  .delaySeconds = 2.0f,
+	                  .value = static_cast<size_t>(input::BindableActionMap::MOVE_LEFT)}},
+	});
+
+	all.push_back({
+	    .id = "temple.cave_exit_fade_back",
+	    .name = "The white of the creature room's exit fades down when the player stops the zoom early",
+	    .facet = Facet::Story,
+	    .description = "The player's creature is in the temple's creature room, which the player goes into. After ten "
+	                   "seconds the camera zooms to the way "
+	                   "out, as a click on it does, and the screen starts to fade to white. After half a second the "
+	                   "player presses the left arrow key for one frame.",
+	    .expected = "The key sends the camera back from the way out. The white stops at about half and fades down again "
+	                "at once, over about half a second. The player stays in the temple.",
+	    .framing = {.shot = Shot::Overview},
+	    .creatures = {Posed(CreatureType::Tiger, {0.0f, 40.0f}, 180.0f, "yours")},
+	    .commands = {{.kind = Kind::EnterTemple, .delaySeconds = 1.0f, .value = static_cast<size_t>(TempleRoom::Main)},
+	                 {.kind = Kind::OpenCreatureCave, .creature = 0, .delaySeconds = 0.5f},
+	                 {.kind = Kind::ZoomToTempleCaveTarget,
+	                  .delaySeconds = 10.0f,
+	                  .value = static_cast<size_t>(CreatureCaveTargets::Target::Exit)},
+	                 {.kind = Kind::PressKey,
+	                  .delaySeconds = 0.5f,
+	                  .value = static_cast<size_t>(input::BindableActionMap::MOVE_LEFT)}},
 	});
 
 	all.push_back({

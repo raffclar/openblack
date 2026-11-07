@@ -90,6 +90,7 @@ public:
 	void ReactToMusic(entt::entity creature, float mood) override;
 	void NoteLeashOrder(entt::entity creature) override;
 	void ChangeDesireSource(entt::entity creature, uint32_t type, float amount) override;
+	void TakeWrittenSources(entt::entity creature) override;
 	[[nodiscard]] bool CanForceAction(entt::entity creature, size_t animation, bool mirrored,
 	                                  double interruptsAfter) const override;
 	bool ForceAction(entt::entity creature, size_t animation, bool mirrored, double interruptsAfter) override;
@@ -201,6 +202,10 @@ private:
 	/// CreatureFightSystemInterface::CallOffForPlan). The best plan that the creature chooses and a copied deed do this.
 	bool Adopt(entt::entity creature, components::CreatureMindState& mind, const creature_planner::Plan& plan,
 	           const creature_plan_actions::Situation& situation, bool fightBodyEndsAgain);
+	/// Starts the best plan of the desires when it is pressing enough, unless an agenda that the creature was made to do
+	/// continues
+	void ChoosePlan(entt::entity creature, components::CreatureMindState& mind,
+	                const creature_plan_actions::Situation& situation);
 	/// Gives up the plan carried out, if any
 	static void Abandon(components::CreatureMindState& mind);
 	/// A joint action: the asker asks another creature to be its partner, and the two become partners when it agrees;
@@ -253,10 +258,10 @@ private:
 	/// Held by the player's hand, it shows what it wants once its body is free
 	void ShowDesireOnHold(entt::entity creature, components::CreatureMindState& mind, components::CreatureAnimation& animation);
 	/// Plan the desires of one creature for this turn, a maximum of one time each turn. The planner examines the
-	/// desires for this turn, or all the desires, or only one desire. For only one desire, the creature starts the plan
+	/// desires of the round for this turn, or only one desire. For only one desire, the creature starts the plan
 	/// immediately, if there is a plan. When adopt is false, the planner only finds the plans and the creature does not
 	/// start a plan.
-	void PlanCreature(entt::entity creature, components::CreatureMindState& mind, bool everyDesire = false,
+	void PlanCreature(entt::entity creature, components::CreatureMindState& mind,
 	                  std::optional<creature_desires::Desire> only = std::nullopt, bool adopt = true);
 	/// The first desire that has a plan for a thing that the creature holds, found as for a thing on the leash. The
 	/// search uses a copy of the mind, so that the current plan does not change (CreatureMindLearning.cpp)
@@ -294,6 +299,11 @@ private:
 	                   creature_plan_actions::Situation& situation);
 	/// The creature carried out an action to its end on this game turn
 	static void NoteDone(components::CreatureMindState& mind, uint32_t action);
+	/// The action of the plan is complete: its body pays for it. When the plan counts for its desire, it counts towards
+	/// the urge of that desire, which can clear its sources and lessen the desire of the action. Then the rule for the
+	/// desire, a heal and the temperature of a full recovery follow. This occurs when the agenda gets to its end, and
+	/// also at a step that says the action counts as done there.
+	void CompletePlanAction(entt::entity creature, components::CreatureMindState& mind);
 	/// An agenda that no plan gave ends: its action was done just now, and the other actions of its desire get older
 	void EndUnderway(components::CreatureMindState& mind);
 	/// Where its home and its player's temple are, and whether another creature is near enough to frighten it

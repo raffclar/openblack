@@ -87,7 +87,8 @@ struct Glow
 /// The glow's two triangles
 inline constexpr std::array<uint16_t, 6> k_GlowIndices = {0, 1, 3, 3, 2, 0};
 
-/// The glow's colour, a dim copy of the moon's: red a sixth, green a fifth and blue a quarter of it
+/// The glow's colour, a dim copy of the moon's: red a sixth, green a fifth and blue a quarter of it, each in whole steps
+/// of 255 with the remainder dropped
 [[nodiscard]] glm::vec3 GlowColour(const glm::vec3& moonColour);
 
 } // namespace openblack::graphics::moon

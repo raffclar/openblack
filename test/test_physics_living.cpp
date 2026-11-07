@@ -8,7 +8,9 @@
  *******************************************************************************/
 
 #include <cmath>
+#include <cstdint>
 
+#include <bit>
 #include <numbers>
 
 #include <gtest/gtest.h>
@@ -64,6 +66,16 @@ TEST(PhysicsLiving, AVillagerOnItsFrontFacesAlongItsUpAxis)
 	const glm::mat3 axes(glm::vec3(0.0f, -1.0f, 0.0f), glm::vec3(1.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
 	EXPECT_NEAR(VillagerLandingHeading(LandingPose::Front, axes), k_Pi * 0.5f, 1e-5f);
 	EXPECT_NEAR(VillagerLandingHeading(LandingPose::Back, axes), -k_Pi * 0.5f, 1e-5f);
+}
+
+TEST(PhysicsLiving, TheHalfTurnIsAddedToTheWideHeadingAndRoundedOneTime)
+{
+	// The game adds the half turn to the arctangent before it rounds. A heading rounded to a float before the half turn
+	// gives 0xC033056C after the wrap.
+	glm::mat3 axes(1.0f);
+	axes[2] = glm::vec3(std::bit_cast<float>(0x3E4B7CD9u), 0.0f, std::bit_cast<float>(0xBF0DD4ADu));
+	EXPECT_EQ(std::bit_cast<uint32_t>(VillagerLandingHeading(LandingPose::Feet, axes)), 0xC033056Bu);
+	EXPECT_EQ(std::bit_cast<uint32_t>(AnimalLandingHeading(axes)), 0xC033056Bu);
 }
 
 TEST(PhysicsLiving, ThrownAndLandedClips)

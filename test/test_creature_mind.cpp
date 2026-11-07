@@ -142,6 +142,19 @@ TEST(CreatureDesires, ADesireWithoutDriveFades)
 	EXPECT_NEAR(desires[Desire::Play].value, 0.9f, k_Tolerance);
 }
 
+TEST(CreatureDesires, AFadedDesireStopsAtTheFloorBeforeItsMaximum)
+{
+	auto desires = OneDesire(Desire::Play, 0.0f, 0.5f, 5.0f);
+	desires[Desire::Play].value = 0.2f;
+	creature_desires::UpdateDesires(desires, k_TurnsPerSecond, 0.19f);
+	EXPECT_FLOAT_EQ(desires[Desire::Play].value, 0.19f);
+	// The floor test comes first: a maximum below the floor holds a value above the floor
+	desires[Desire::Play].max = -0.5f;
+	desires[Desire::Play].value = 1.0f;
+	creature_desires::UpdateDesires(desires, k_TurnsPerSecond, 0.0f);
+	EXPECT_FLOAT_EQ(desires[Desire::Play].value, -0.5f);
+}
+
 TEST(CreatureDesires, ASuppressedDesireOnlyFades)
 {
 	auto desires = OneDesire(Desire::Anger, 1.0f, 0.0f, 1.0f);
@@ -159,6 +172,21 @@ TEST(CreatureDesires, ASuppressedDesireOnlyFades)
 	creature_desires::Suppress(desires, Desire::Anger, 2.0f, k_TurnsPerSecond);
 	creature_desires::Suppress(desires, Desire::Anger, 0.5f, k_TurnsPerSecond);
 	EXPECT_EQ(desires[Desire::Anger].suppressedTurns, 20u);
+}
+
+TEST(CreatureDesires, ADesireHeldBackForLongerLosesItsPlan)
+{
+	auto desires = OneDesire(Desire::Anger, 1.0f, 0.0f, 1.0f);
+	creature_desires::Suppress(desires, Desire::Anger, 2.0f, k_TurnsPerSecond);
+	EXPECT_TRUE(desires[Desire::Anger].losesPlan);
+	desires[Desire::Anger].losesPlan = false;
+	// A hold that is not longer keeps the plan
+	creature_desires::Suppress(desires, Desire::Anger, 2.0f, k_TurnsPerSecond);
+	creature_desires::Suppress(desires, Desire::Anger, 0.5f, k_TurnsPerSecond);
+	EXPECT_FALSE(desires[Desire::Anger].losesPlan);
+	creature_desires::Suppress(desires, Desire::Anger, 3.0f, k_TurnsPerSecond);
+	EXPECT_TRUE(desires[Desire::Anger].losesPlan);
+	EXPECT_EQ(desires[Desire::Anger].suppressedTurns, 30u);
 }
 
 TEST(CreatureDesires, SourcesReadTheirStateThenFade)
@@ -327,6 +355,67 @@ TEST(CreatureDesires, AnActionLessensItsDesireNoLowerThanTheFloorNorHigherThanIt
 	desires.everyDesireActivated = true;
 	creature_desires::LessenAfterAction(desires, k_Which, 0.5f, 0.1f);
 	EXPECT_FLOAT_EQ(desire.value, 0.5f);
+}
+
+TEST(CreatureDesires, ACompletePlanLessensItsDesireOnlyWhenItsUrgeIsSatisfied)
+{
+	creature_desires::Desires desires;
+	constexpr auto k_Water = creature_desires::Desire::Water;
+	auto& water = desires[k_Water];
+	water.value = 0.8f;
+	water.max = 1.0f;
+	water.weight = 2.0f;
+	water.sources = {{.type = 1, .value = 0.6f, .clearedWhenSatisfied = true}};
+	const creature_desires::ActionLessening drink {.desire = k_Water, .multiplier = 0.05f, .always = true};
+	// The first drink only counts towards the urge
+	EXPECT_FALSE(creature_desires::SeeToAfterPlan(desires, k_Water, drink, false, 0.0f));
+	EXPECT_EQ(water.value, 0.8f);
+	EXPECT_EQ(water.sources[0].value, 0.6f);
+	EXPECT_EQ(water.carriedOut, 1U);
+	// The second satisfies the urge: the sources clear and the desire is less
+	EXPECT_TRUE(creature_desires::SeeToAfterPlan(desires, k_Water, drink, false, 0.0f));
+	EXPECT_EQ(water.sources[0].value, 0.0f);
+	EXPECT_EQ(water.value, 0.8f * 0.05f);
+	EXPECT_EQ(water.carriedOut, 0U);
+}
+
+TEST(CreatureDesires, AnActionThatDoesNotAlwaysLessenItsDesireLessensItWhenAStepSawToIt)
+{
+	creature_desires::Desires desires;
+	constexpr auto k_Served = creature_desires::Desire::Curiosity;
+	auto& served = desires[k_Served];
+	served.value = 0.5f;
+	served.max = 1.0f;
+	served.weight = 1.0f;
+	const creature_desires::ActionLessening action {.desire = k_Served, .multiplier = 0.5f, .always = false};
+	EXPECT_TRUE(creature_desires::SeeToAfterPlan(desires, k_Served, action, false, 0.0f));
+	EXPECT_EQ(served.value, 0.5f);
+	EXPECT_TRUE(creature_desires::SeeToAfterPlan(desires, k_Served, action, true, 0.0f));
+	EXPECT_EQ(served.value, 0.25f);
+	// With no action in the table, the urge still counts and nothing is less
+	EXPECT_TRUE(creature_desires::SeeToAfterPlan(desires, k_Served, std::nullopt, true, 0.0f));
+	EXPECT_EQ(served.value, 0.25f);
+}
+
+TEST(CreatureIdleMind, OnlyAStepOfNoPlanSeesToANeedAtOnce)
+{
+	using creature_mind::Effect;
+	constexpr std::array k_Needs {Effect::Eat,   Effect::Drink,    Effect::Poo,        Effect::Fart,  Effect::Puke,
+	                              Effect::Slept, Effect::Examined, Effect::ThrewAbout, Effect::Hurled};
+	for (const auto effect : k_Needs)
+	{
+		EXPECT_TRUE(creature_mind::SeesToNeedAtStep(effect, false));
+		// Within a plan, the end of the plan sees to the desire
+		EXPECT_FALSE(creature_mind::SeesToNeedAtStep(effect, true));
+	}
+	constexpr std::array k_Others {Effect::None,         Effect::CameRound,    Effect::Completed, Effect::Observed,
+	                               Effect::TookFromPile, Effect::TookFromHand, Effect::Inspected, Effect::Stomped,
+	                               Effect::Revived,      Effect::RanAway};
+	for (const auto effect : k_Others)
+	{
+		EXPECT_FALSE(creature_mind::SeesToNeedAtStep(effect, false));
+		EXPECT_FALSE(creature_mind::SeesToNeedAtStep(effect, true));
+	}
 }
 
 TEST(CreatureIdleMind, BeingIdleIsWaitingThenYawningTwice)

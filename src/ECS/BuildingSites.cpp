@@ -365,22 +365,24 @@ std::optional<entt::entity> construction::StoragePitOf(entt::entity town)
 	{
 		return std::nullopt;
 	}
-	const auto id = registry.Get<const Town>(town).id;
-	// The first storage pit of the town in the order of the walk of the pits
-	return registry.FindFirst<const Abode, const StoragePit>(
-	    [id](entt::entity, const Abode& abode, const StoragePit&) { return abode.townId == id; });
+	// The main storage pit of the town, the pit that last started to work
+	const auto pit = registry.Get<const Town>(town).storagePit;
+	if (pit == entt::null || !registry.Valid(pit) || !registry.AllOf<StoragePit>(pit))
+	{
+		return std::nullopt;
+	}
+	return pit;
 }
 
-std::vector<std::pair<uint32_t, entt::entity>> construction::FirstStoragePits()
+std::vector<std::pair<uint32_t, entt::entity>> construction::MainStoragePits()
 {
 	const auto& registry = Entities();
-	// The walk of the pits in the same order as StoragePitOf, so that the first pit of each town is the same
 	std::vector<std::pair<uint32_t, entt::entity>> pits;
-	for (const auto [entity, abode, pit] : registry.Underlying().view<const Abode, const StoragePit>().each())
+	for (const auto [entity, town] : registry.Underlying().view<const Town>().each())
 	{
-		if (std::ranges::none_of(pits, [id = abode.townId](const auto& kept) { return kept.first == id; }))
+		if (const auto pit = StoragePitOf(entity))
 		{
-			pits.emplace_back(abode.townId, entity);
+			pits.emplace_back(town.id, *pit);
 		}
 	}
 	return pits;

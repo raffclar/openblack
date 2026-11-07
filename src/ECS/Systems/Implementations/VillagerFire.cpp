@@ -57,6 +57,7 @@
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
+#include "ECS/ThingMapPlace.h"
 #include "ECS/VillagerAfterDeath.h"
 #include "ECS/VillagerAnimation.h"
 #include "ECS/VillagerCarry.h"
@@ -71,6 +72,7 @@
 #include "Fire/ViaPoint.h"
 #include "InfoConstants.h"
 #include "Locator.h"
+#include "Magic/ReactionRules.h"
 #include "Resources/ResourceManager.h"
 #include "Resources/ResourcesInterface.h"
 #include "VillagerDisciples.h"
@@ -239,15 +241,15 @@ map_coords::MapCoords PosFromAngle(float angle, float distance)
 	        map_coords::ToFixedGUtils(portable_math::Sin(angle) * distance), 0.0f};
 }
 
-/// The point a distance from an object, on the villager's side of it, straight away from it
-glm::vec2 FleeingPosition(const glm::vec3& villager, const glm::vec3& object, float distance)
+/// The map position a distance from an object, on the villager's side of it, straight away from it. The position keeps
+/// the height of the villager in the world
+map_coords::MapCoords FleeingPlace(entt::entity villager, entt::entity object, float distance)
 {
-	const glm::vec2 away = Across(villager) - Across(object);
-	if (away == glm::vec2(0.0f))
-	{
-		return Across(villager);
-	}
-	return Across(villager) + away * (distance / glm::length(away));
+	const auto& registry = Entities();
+	const auto& island = Locator::terrainSystem::value();
+	const auto ground = [&island](const map_coords::MapCoords& place) { return map_coords::GroundAt(island, place); };
+	return magic::FleePlaceFromStill(ecs::thing_map_place::Of(registry, villager), ecs::thing_map_place::Of(registry, object),
+	                                 distance, ground);
 }
 
 /// The way a villager faces, as an angle across the land, from how walking has turned it
@@ -389,6 +391,12 @@ bool InRange(entt::entity villager, entt::entity fire, float margin)
 /// the state it leaves hears where it is heading, not that it walks: leaving a fire's reaction to walk on with it keeps
 /// the reaction
 void WalkTo(LivingAction& action, glm::vec2 goal, VillagerStates destination)
+{
+	villager_home::SetupMoveTo(action, goal, destination);
+}
+
+/// The same for a map position. The walk keeps the height of the goal above the land
+void WalkTo(LivingAction& action, const map_coords::MapCoords& goal, VillagerStates destination)
 {
 	villager_home::SetupMoveTo(action, goal, destination);
 }
@@ -554,7 +562,7 @@ uint32_t villager_fire::ReactToFire(LivingAction& action)
 		                        ? GameFloatRandom(info.maxDistanceToRunAwayFromObject - info.minDistanceToRunAwayFromObject) +
 		                              info.minDistanceToRunAwayFromObject
 		                        : GameFloatRandom(k_SafeMargin) + reach->safeRadius;
-		WalkTo(action, FleeingPosition(here, reach->position, runTo), VillagerStates::ReactToFire);
+		WalkTo(action, FleeingPlace(villager, object, runTo), VillagerStates::ReactToFire);
 		return 1;
 	}
 	if (IsFireFightingState(FinalState(action)))
@@ -742,7 +750,7 @@ uint32_t villager_fire::OnFire(LivingAction& action)
 	const auto here = PositionOf(villager);
 	const bool burning = fires.IsOnFire(villager);
 	const auto& state = FireStateOf(villager);
-	glm::vec2 goal;
+	map_coords::MapCoords goal;
 	if (state.fire != entt::null && state.fire != villager)
 	{
 		const auto external = fires.GetReach(state.fire);
@@ -764,7 +772,7 @@ uint32_t villager_fire::OnFire(LivingAction& action)
 			}
 			distance = GameFloatRandom(external->maxRadius - external->radius + 1.0f) + external->radius;
 		}
-		goal = FleeingPosition(here, external->position, distance);
+		goal = FleeingPlace(villager, state.fire, distance);
 	}
 	else
 	{
@@ -775,7 +783,8 @@ uint32_t villager_fire::OnFire(LivingAction& action)
 		}
 		const float angle = GameFloatRandom(k_TwoPi);
 		const float distance = GameFloatRandom(k_OnFireRunMore) + k_OnFireRun;
-		goal = CoordsToMetres(ToCoords(Across(here)) + PosFromAngle(angle, distance));
+		// The goal keeps the altitude of the villager above the land
+		goal = ecs::thing_map_place::Of(registry, villager) + PosFromAngle(angle, distance);
 	}
 	WalkTo(action, goal, VillagerStates::OnFire);
 	if (State(action, LivingAction::Index::Previous) == VillagerStates::InvalidState)

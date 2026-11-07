@@ -58,6 +58,7 @@
 #include "ECS/FixedKinds.h"
 #include "ECS/GameEndConditions.h"
 #include "ECS/GamePlayers.h"
+#include "ECS/MainStoragePitRules.h"
 #include "ECS/Map.h"
 #include "ECS/PlayerTowns.h"
 #include "ECS/Reflection/BinaryArchive.h"
@@ -203,25 +204,6 @@ void TownSystem::OnAbodeGone(entt::registry& registry, entt::entity abode)
 	for (const auto town : left)
 	{
 		StructuresChanged(town);
-	}
-	// A storage pit that goes makes its town let go of any temporary piles it keeps
-	const auto* data = registry.try_get<const Abode>(abode);
-	if (data == nullptr || !registry.all_of<StoragePit>(abode))
-	{
-		return;
-	}
-	const auto& towns = _registry->Context().towns;
-	const auto town = towns.find(data->townId);
-	if (town == towns.end() || !registry.valid(town->second))
-	{
-		return;
-	}
-	const auto* component = registry.try_get<const Town>(town->second);
-	if (component != nullptr && std::ranges::any_of(component->temporaryStores, [&registry](entt::entity pile) {
-		    return pile != entt::null && registry.valid(pile);
-	    }))
-	{
-		SetStoragePit(town->second);
 	}
 }
 
@@ -527,7 +509,34 @@ std::optional<TownSystemInterface::TemporaryStore> TownSystem::TemporaryStorePil
 	                       .edgeAltitude = object_measures::PlaceAltitude(registry, pile)};
 }
 
-void TownSystem::SetStoragePit(entt::entity town)
+void TownSystem::StoragePitGone(entt::entity town, entt::entity pit)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto* component = town != entt::null && registry.Valid(town) ? registry.TryGet<const Town>(town) : nullptr;
+	if (component == nullptr || component->storagePit != pit)
+	{
+		return;
+	}
+	// The other buildings of the town, the newest first
+	std::vector<entt::entity> others;
+	std::vector<main_storage_pit::Candidate> candidates;
+	for (const auto abode : component->abodes)
+	{
+		const auto* info = abode != pit && registry.Valid(abode) ? world_objects::AbodeInfoOf(abode) : nullptr;
+		if (info == nullptr)
+		{
+			continue;
+		}
+		others.push_back(abode);
+		candidates.push_back({.type = info->abodeType,
+		                      .functional = villager_home::IsFunctional(abode),
+		                      .storagePit = registry.AllOf<StoragePit>(abode)});
+	}
+	const auto successor = main_storage_pit::Successor(candidates);
+	SetStoragePit(town, successor.has_value() ? others.at(*successor) : entt::null);
+}
+
+void TownSystem::SetStoragePit(entt::entity town, entt::entity pit)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	auto* component = town != entt::null && registry.Valid(town) ? registry.TryGet<Town>(town) : nullptr;
@@ -535,6 +544,7 @@ void TownSystem::SetStoragePit(entt::entity town)
 	{
 		return;
 	}
+	component->storagePit = pit;
 	for (size_t slot = 0; slot < temporary_store::k_Kinds; ++slot)
 	{
 		const auto pile = std::exchange(component->temporaryStores.at(slot), entt::null);
@@ -945,10 +955,7 @@ void TownSystem::ProcessPlayerTowns(PlayerNames player)
 		}
 		// First it removes its building sites that have no use
 		construction::PruneSites(town);
-		if (Locator::influenceSystem::has_value())
-		{
-			Locator::influenceSystem::value().ProcessTownInfluence(town);
-		}
+		// Its pass over its buildings also sums its influence
 		ProcessTownBuildings(town);
 		if (Locator::townDesireSystem::has_value())
 		{
@@ -986,12 +993,36 @@ void TownSystem::ProcessTownBuildings(entt::entity townEntity)
 	{
 		return;
 	}
-	const auto turn = Locator::time::has_value() ? Locator::time::value().GetTurn() : 0;
-	// Every so many turns it passes over its buildings, which age by it; a football pitch never ages
-	if (!statistics::TownPassesItsBuildings(turn, Locator::infoConstants::value().town.processAbodeEvery))
+	auto* influence = Locator::influenceSystem::has_value() ? &Locator::influenceSystem::value() : nullptr;
+	// The town's influence starts again from its base influence
+	if (influence != nullptr)
 	{
-		return;
+		influence->StartTownInfluence(townEntity);
 	}
+	const auto turn = Locator::time::has_value() ? Locator::time::value().GetTurn() : 0;
+	// Every so many turns it passes over its buildings, which age by it; a football pitch never ages. On the other turns
+	// the town has only its base influence.
+	if (statistics::TownPassesItsBuildings(turn, Locator::infoConstants::value().town.processAbodeEvery))
+	{
+		PassOverBuildings(townEntity, influence);
+	}
+	// The land's multiplier multiplies the sum
+	if (influence != nullptr && registry.Valid(townEntity))
+	{
+		influence->FinishTownInfluence(townEntity);
+	}
+}
+
+void TownSystem::PassOverBuildings(entt::entity townEntity, InfluenceSystemInterface* influence)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	// After its turn, each building that is still there adds its influence, in the order of the town's list
+	const auto addInfluence = [&](entt::entity building) {
+		if (influence != nullptr && registry.Valid(townEntity) && registry.Valid(building))
+		{
+			influence->AddBuildingInfluence(townEntity, building);
+		}
+	};
 	const auto abodes = registry.Get<const Town>(townEntity).abodes;
 	for (const auto abode : abodes)
 	{
@@ -999,10 +1030,17 @@ void TownSystem::ProcessTownBuildings(entt::entity townEntity)
 		if (auto* dispenser = registry.Valid(abode) ? registry.TryGet<SpellDispenser>(abode) : nullptr; dispenser != nullptr)
 		{
 			dispenser->age = statistics::AgedOnePass(dispenser->age);
+			addInfluence(abode);
 			continue;
 		}
-		if (const auto* data = registry.TryGet<const Abode>(abode); data == nullptr || data->type == AbodeNumber::FootballPitch)
+		const auto* kind = registry.Valid(abode) ? registry.TryGet<const Abode>(abode) : nullptr;
+		if (kind == nullptr)
 		{
+			continue;
+		}
+		if (kind->type == AbodeNumber::FootballPitch)
+		{
+			addInfluence(abode);
 			continue;
 		}
 		// A workshop makes its scaffolds before it ages as any other building does
@@ -1015,6 +1053,7 @@ void TownSystem::ProcessTownBuildings(entt::entity townEntity)
 		if (auto* data = registry.Valid(abode) ? registry.TryGet<Abode>(abode) : nullptr)
 		{
 			data->age = statistics::AgedOnePass(data->age);
+			addInfluence(abode);
 		}
 	}
 }
@@ -1055,17 +1094,22 @@ void TownSystem::ProcessTownTurn(entt::entity townEntity)
 	// It puts up at most one of its buildings, or a finished one that went, for mending
 	town_planning::MendBest(townEntity);
 	const bool inEmergency = IsInStateOfEmergency(townEntity);
-	// Out of an emergency, its storage pit or village centre on fire calls one
+	// Out of an emergency, its main storage pit or its village centre on fire calls one. Another storage pit on fire
+	// calls none.
 	bool burning = false;
+	if (const auto pit = construction::StoragePitOf(townEntity); !inEmergency && fire != nullptr && pit.has_value())
+	{
+		burning = fire->IsOnFire(*pit);
+	}
 	for (const auto abode : registry.Get<const Town>(townEntity).abodes)
 	{
 		const auto* data = registry.TryGet<const Abode>(abode);
-		if (inEmergency || fire == nullptr || data == nullptr)
+		if (burning || inEmergency || fire == nullptr || data == nullptr)
 		{
 			continue;
 		}
 		const auto type = infos.at(static_cast<size_t>(data->type)).abodeType;
-		if ((type == AbodeType::StoragePit || type == AbodeType::TownCentre) && fire->IsOnFire(abode))
+		if (type == AbodeType::TownCentre && fire->IsOnFire(abode))
 		{
 			burning = true;
 			break;

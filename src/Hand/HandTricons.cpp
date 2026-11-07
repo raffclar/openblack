@@ -36,9 +36,8 @@ constexpr int k_MouseOffset = 32;
 /// The width of the original's default screen, which those sizes are for
 constexpr int k_ReferenceWidth = 800;
 constexpr float k_Gap = 2.0f;
-/// mousehelp.raw is 4 by 4 pictures; the wheel mouse's row
+/// mousehelp.raw is 4 by 4 pictures
 constexpr float k_MouseCell = 0.25f;
-constexpr float k_WheelMouseRow = 2.0f;
 /// The glows: the mouse's at full strength, the word's a third of it
 constexpr int k_GlowAlpha = 255;
 } // namespace
@@ -337,7 +336,7 @@ int DemoLabelSize(bool biggerText, float scale)
 }
 
 DemoMouse LayoutDemoMouse(glm::ivec2 centre, bool labelOnLeft, float labelWidth, bool biggerText, bool moveHeld,
-                          bool actionHeld, float scale)
+                          bool actionHeld, int mouseRow, float scale)
 {
 	const int labelSize = DemoLabelSize(biggerText, scale);
 	const auto size = std::trunc(static_cast<float>(k_MouseSize) * scale);
@@ -375,8 +374,9 @@ DemoMouse LayoutDemoMouse(glm::ivec2 centre, bool labelOnLeft, float labelWidth,
 	DemoMouse mouse;
 	mouse.mouseMin = {mouseX, top};
 	mouse.mouseMax = {mouseX + size, top + size};
-	mouse.uvMin = {(mirrored ? column + 1.0f : column) * k_MouseCell, k_WheelMouseRow * k_MouseCell};
-	mouse.uvMax = {(mirrored ? column : column + 1.0f) * k_MouseCell, (k_WheelMouseRow + 1.0f) * k_MouseCell};
+	const auto row = static_cast<float>(mouseRow);
+	mouse.uvMin = {(mirrored ? column + 1.0f : column) * k_MouseCell, row * k_MouseCell};
+	mouse.uvMax = {(mirrored ? column : column + 1.0f) * k_MouseCell, (row + 1.0f) * k_MouseCell};
 	mouse.mouseGlow = {1.0f, 1.0f, 1.0f, static_cast<float>(k_GlowAlpha) / 255.0f};
 	mouse.labelGlowMin = {labelX, std::trunc(top + pad)};
 	mouse.labelGlowMax = {std::trunc(labelX + labelWidth), std::trunc(top + size - pad)};

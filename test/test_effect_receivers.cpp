@@ -169,6 +169,33 @@ TEST_F(EffectReceivers, HarmNeverBringsAnIndestructibleCreatureToNearlyNoLife)
 	EXPECT_FLOAT_EQ(ecs::world_objects::ReduceLife(free, 1.0f), 0.0f);
 }
 
+TEST_F(EffectReceivers, HarmAndHealChangeTheLifeOfAnAnimal)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto cow = Made();
+	registry.Assign<Animal>(cow).type = AnimalInfo::Cow;
+	EXPECT_FLOAT_EQ(ecs::world_objects::ReduceLife(cow, 0.25f), 0.75f);
+	EXPECT_FLOAT_EQ(registry.Get<Animal>(cow).life, 0.75f);
+	EXPECT_FLOAT_EQ(ecs::world_objects::IncreaseLife(cow, 0.5f), 1.0f);
+	EXPECT_FLOAT_EQ(ecs::world_objects::ReduceLife(cow, 1.5f), 0.0f);
+	EXPECT_FLOAT_EQ(ecs::world_objects::LifeOf(cow), 0.0f);
+}
+
+TEST_F(EffectReceivers, HarmNeverBringsAnIndestructibleAnimalOrThingToNearlyNoLife)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto cow = Made();
+	registry.Assign<Animal>(cow).type = AnimalInfo::Cow;
+	registry.Assign<Indestructible>(cow);
+	EXPECT_FLOAT_EQ(ecs::world_objects::ReduceLife(cow, 0.5f), 0.5f);
+	EXPECT_FLOAT_EQ(ecs::world_objects::ReduceLife(cow, 1.0f), 0.5f);
+	const auto firefly = Made();
+	registry.Assign<Firefly>(firefly);
+	registry.Assign<Indestructible>(firefly);
+	EXPECT_FLOAT_EQ(ecs::world_objects::ReduceLife(firefly, 0.25f), 0.75f);
+	EXPECT_FLOAT_EQ(ecs::world_objects::ReduceLife(firefly, 1.5f), 0.75f);
+}
+
 TEST_F(EffectReceivers, ATownsDesireFlagTakesNoEffectEvenWithTheDataOfThePrayerSite)
 {
 	auto& registry = Locator::entitiesRegistry::value();
@@ -246,21 +273,40 @@ TEST_F(EffectReceivers, AScriptsUnfinishedBuildingWithASiteGetsAllItsLifeAgain)
 	EXPECT_FLOAT_EQ(ecs::world_objects::LifeOf(hut), 0.0f);
 }
 
-TEST_F(EffectReceivers, AVillageTotemGivesHarmAndLifeToItsTownCentreAndKeepsItsOwnLife)
+TEST_F(EffectReceivers, AVillageTotemGivesHarmAndLifeToItsTownCentreAndTakesTheLifeOfItsTownCentre)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto centre = Made();
+	registry.Assign<Abode>(centre, Abode {.type = AbodeNumber::TownCentre});
 	const auto totem = Made();
 	registry.Assign<VillageTotem>(totem, VillageTotem {.townCentre = centre});
 	EXPECT_FLOAT_EQ(ecs::world_objects::ReduceLife(totem, 0.25f), 0.75f);
 	EXPECT_FLOAT_EQ(ecs::world_objects::LifeOf(centre), 0.75f);
+	EXPECT_FLOAT_EQ(ecs::world_objects::LifeOf(totem), 0.75f);
 	EXPECT_FLOAT_EQ(ecs::world_objects::IncreaseLife(totem, 0.125f), 0.875f);
 	EXPECT_FLOAT_EQ(ecs::world_objects::LifeOf(centre), 0.875f);
-	EXPECT_FLOAT_EQ(ecs::world_objects::LifeOf(totem), 1.0f);
-	// A script can still set the life of the totem itself
-	ecs::world_objects::SetLife(totem, 0.0f);
+	EXPECT_FLOAT_EQ(ecs::world_objects::LifeOf(totem), 0.875f);
+	// Harm to the town centre itself also goes to the totem
+	EXPECT_FLOAT_EQ(ecs::world_objects::ReduceLife(centre, 1.0f), 0.0f);
 	EXPECT_FLOAT_EQ(ecs::world_objects::LifeOf(totem), 0.0f);
-	EXPECT_FLOAT_EQ(ecs::world_objects::LifeOf(centre), 0.875f);
+	// A script can still set the life of the totem itself
+	ecs::world_objects::SetLife(totem, 0.5f);
+	EXPECT_FLOAT_EQ(ecs::world_objects::LifeOf(totem), 0.5f);
+	EXPECT_FLOAT_EQ(ecs::world_objects::LifeOf(centre), 0.0f);
+}
+
+TEST_F(EffectReceivers, ATownCentreWithItsFullLifeGainsNothingAndLeavesItsTotemAsItIs)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto centre = Made();
+	registry.Assign<Abode>(centre, Abode {.type = AbodeNumber::TownCentre});
+	const auto totem = Made();
+	registry.Assign<VillageTotem>(totem, VillageTotem {.townCentre = centre});
+	ecs::world_objects::SetLife(totem, 0.5f);
+	EXPECT_FLOAT_EQ(ecs::world_objects::IncreaseLife(centre, 0.25f), 0.0f);
+	EXPECT_FLOAT_EQ(ecs::world_objects::IncreaseLife(totem, 0.25f), 0.0f);
+	EXPECT_FLOAT_EQ(ecs::world_objects::LifeOf(centre), 1.0f);
+	EXPECT_FLOAT_EQ(ecs::world_objects::LifeOf(totem), 0.5f);
 }
 
 // A football pitch that is built takes no damage, but harm takes away what is built of an unfinished pitch

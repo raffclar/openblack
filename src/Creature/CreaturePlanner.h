@@ -230,8 +230,8 @@ struct PlannerState
 {
 	/// The best plan found for each desire, the last time it was planned
 	std::array<std::optional<Plan>, creature_desires::k_DesireCount> best {};
-	/// The desire planned next
-	size_t nextGoal {0};
+	/// The desires that still wait for their turn to plan in this round
+	std::array<bool, creature_desires::k_DesireCount> round {};
 	/// The plan carried out
 	std::optional<Plan> current;
 	/// The thing that the last plan acted on. It stays after the plan stops, until the creature starts a new plan.
@@ -246,10 +246,53 @@ struct PlannerState
 /// The action of the plan carried out, else of the last plan, as scripts and other creatures see it. A creature that
 /// never had a plan shows the first action
 [[nodiscard]] uint32_t ActionInView(const PlannerState& state);
-/// The next desires to plan this turn, going round those that may be planned
-[[nodiscard]] std::vector<creature_desires::Desire> NextGoals(PlannerState& state,
-                                                              const std::array<bool, creature_desires::k_DesireCount>& eligible,
-                                                              size_t count = k_GoalsPerTurn);
+/// The desires that take a turn in a new round: each desire that is on and not held back, also one at 0 or with no
+/// action
+[[nodiscard]] std::array<bool, creature_desires::k_DesireCount> RoundOf(const creature_desires::Desires& desires);
+/// The next desires of the round to plan this turn, the first desire first. When the round ends, this turn plans fewer
+/// desires.
+[[nodiscard]] std::vector<creature_desires::Desire> NextGoals(PlannerState& state, size_t count = k_GoalsPerTurn);
+/// Whether every desire of the round had its turn. Then the creature chooses its plan, and a new round starts.
+[[nodiscard]] bool RoundEnded(const PlannerState& state);
+/// Removes each plan of the desires that uses a thing that is gone: the whole thing that it is about, the thing that it
+/// acts on or the thing that it uses. Returns whether it removed a plan.
+bool DropPlansOfGoneThings(PlannerState& state, const std::function<bool(uint32_t)>& gone);
+
+/// What the creature's state is when some desires get a plan or not. A desire that its state does not let it plan
+/// still takes its turn among the desires to plan, but it loses its plan.
+struct DesireState
+{
+	/// The stage of growing up, and how exhausted it is, for the desire to explore
+	uint32_t phase {0};
+	float exhaustion {0.0f};
+	/// Turns in a row that the camera of its player did not look at it, and the game turns in one second
+	uint32_t turnsIgnored {0};
+	uint32_t turnsPerSecond {10};
+	/// How warm it is, from -1 (cold) to 1 (hot)
+	float warmth {0.0f};
+	/// How it feels about its player
+	float attitudeToPlayer {0.0f};
+	/// The distance in metres to its home, none for a creature with no home
+	std::optional<float> homeDistance;
+	/// Whether it started to copy a deed of its player before
+	bool sawDeed {false};
+};
+/// The seconds that the player must not look at the creature before it can try to get the player's attention
+constexpr uint32_t k_AttentionSeconds = 120;
+/// The creature can try to get warmer at this warmth or colder, and to get colder at this warmth or hotter
+constexpr float k_ColdWarmth = -0.3f;
+constexpr float k_HotWarmth = 0.3f;
+/// The creature can hang around at home only nearer to its home than this, in metres
+constexpr float k_HangAroundHomeDistance = 60.0f;
+/// Whether the creature's state lets it plan the desire. Most desires have no condition:
+/// - to explore: young enough, or not too exhausted
+/// - to get the player's attention: the player did not look at it for more than two minutes
+/// - to get warmer or colder: cold or hot enough
+/// - to run from the player: it does not like the player
+/// - to hang around at home: near its home
+/// - to follow the player: it started to copy a deed of the player before
+[[nodiscard]] bool DesireMayPlan(creature_desires::Desire desire, const DesireState& state);
+
 /// The most pressing plan of all the desires', if any
 [[nodiscard]] std::optional<Plan> Best(const PlannerState& state);
 /// The plan to change to now, if the best is pressing enough against what the creature carries out (nothing counts as 0)

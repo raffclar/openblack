@@ -34,6 +34,7 @@
 #include "GameFont.h"
 #include "GameMenu.h"
 #include "Hand/HandTricons.h"
+#include "Help/ControlIcons.h"
 #include "Help/SingAlong.h"
 #include "IncomingMessageStrip.h"
 #include "Input/BoxKeyboard.h"
@@ -247,6 +248,11 @@ public:
 	[[nodiscard]] bool IsTripQuestionUp() const noexcept { return _tripAsked; }
 	/// The player's answer to the question of the trip, once: true for Yes
 	[[nodiscard]] std::optional<bool> TakeTripAnswer() { return std::exchange(_tripAnswer, std::nullopt); }
+	/// "Are you sure you want to start a completely new game?" in the box with a Yes and a No, which Escape asks once the
+	/// game is over. While the question is up, it stays as it is.
+	void AskNewGameQuestion();
+	/// The player's answer to the question about a new game, once: true for Yes
+	[[nodiscard]] std::optional<bool> TakeNewGameAnswer() { return std::exchange(_newGameAnswer, std::nullopt); }
 	/// The box of the menu that has the input now, for the question of the trip
 	[[nodiscard]] playground_trip::MenuBox GetTripMenuBox() const noexcept;
 	/// Whether a box on the screen stops F2 from asking the question of the trip. Over the open menu, F2 can ask.
@@ -458,6 +464,8 @@ private:
 	void DrawGlow(glm::vec2 min, glm::vec2 max, glm::vec4 colour);
 	/// The scripts' dialogue: its see-through box above the bottom cinema bar with the "Continue" cue, then the hand's
 	/// helper icons, then the dialogue's words
+	/// Whether a dialog box is open over the game: the menu, a question box or another box with a frame
+	[[nodiscard]] bool DialogBoxOpen() const;
 	void DrawDialogue(glm::u16vec2 resolution, int barPixels);
 	/// The words the scripts write across the screen, the newest first
 	void DrawScriptTexts(glm::u16vec2 resolution);
@@ -489,6 +497,8 @@ private:
 	void DrawBubbleControl(const help::tip_bubble::ControlIcon& icon, std::span<const input::KeyBinding> bindings,
 	                       float pixelScale);
 	/// The "Continue" cue at the right of the dialogue box, so far through its fade
+	/// Keep the picture of the "Continue" cue from the input of the move action, if it has none yet
+	void KeepClickCuePicture();
 	void DrawClickCue(const help::TextRegion& box, float share);
 	/// The control icons the newest text asks for at the right of the dialogue box: the camera keys' cap in its top
 	/// third, any other action's mouse or key in its bottom third
@@ -504,6 +514,14 @@ private:
 	std::unique_ptr<graphics::Texture2D> _fullFontTexture;
 	std::unique_ptr<graphics::Texture2D> _symbols;
 	std::unique_ptr<graphics::Texture2D> _mice;
+	/// The picture of the "Continue" cue and the row of the mouse, kept from the moment that the cue starts until the
+	/// text stops its wait for a click
+	struct ClickCuePicture
+	{
+		help::control_icons::ActionPicture picture;
+		int mouseRow {0};
+	};
+	std::optional<ClickCuePicture> _clickCuePicture;
 	/// The atmosphere texture of glows and arrows
 	std::unique_ptr<graphics::Texture2D> _atmos;
 	/// The tip bubble's texture of box corners and tails
@@ -560,6 +578,9 @@ private:
 	/// The question of the trip to the Gods' Playground is up and waits for its answer
 	bool _tripAsked {false};
 	std::optional<bool> _tripAnswer;
+	/// The question about a new game is up and waits for its answer
+	bool _newGameAsked {false};
+	std::optional<bool> _newGameAnswer;
 	std::unique_ptr<MultiplayerBoxes> _multiplayerBoxes;
 	std::u16string _toolTipName;
 	std::unique_ptr<CustomMusicControls> _musicControls;

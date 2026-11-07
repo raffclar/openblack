@@ -144,12 +144,11 @@ bool ThrowFood(RuleContext& context, computer_mind::Mind& mind, uint16_t node)
 {
 	const auto food = LeafObjectOf(mind, node);
 	const auto creature = ObjectOf(mind, node);
-	if (!HasPlace(food) || !IsCreature(creature))
+	if (!HasPlace(food) || !IsCreature(creature) || !TakeUp(context, food))
 	{
 		return false;
 	}
 	auto& hand = context.state.hand;
-	computer_hand::Add(hand, StepKind::PickUpObject, {Argument {.object = food}, Argument {.value = context.state.speed}});
 	const auto at = computer_hand::steps::PlaceOf(context.hand, *CoordsOfThing(creature));
 	computer_hand::Add(hand, StepKind::MoveHandToPos,
 	                   {Argument {.place = computer_mind_rules::ThrowFoodHandPlace(hand.hand, at)}});

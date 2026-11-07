@@ -98,6 +98,7 @@
 #include "ECS/Systems/BoatLaunchSystemInterface.h"
 #include "ECS/Systems/CameraZoneSystemInterface.h"
 #include "ECS/Systems/ChatSystemInterface.h"
+#include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/ComputerPlayerSystemInterface.h"
 #include "ECS/Systems/CreatureAnimationSystemInterface.h"
 #include "ECS/Systems/CreatureCaveSystemInterface.h"
@@ -152,6 +153,7 @@
 #include "Resources/ResourcesInterface.h"
 #include "ScriptHeaders/ScriptInterfaceLevels.h"
 #include "Sound/GameMusic.h"
+#include "TestbedDispenserGrid.h"
 #include "TestbedScenarioRunnerParts.h"
 #include "Visual/RendererRequestsInterface.h"
 
@@ -363,6 +365,12 @@ void Runner::Start(const Scenario& scenario)
 		ecs::archetypes::SharkArchetype::Create({at.x, 0.0f, at.y}, 1.0f);
 	}
 	PlaceHighlights(scenario, _middle);
+	// The testbed's grid of dispensers goes before the land's script, so that it is not in the way of a building that
+	// the script makes
+	if (!KeepsDispenserGrid(scenario))
+	{
+		testbed_dispensers::RemoveGrid();
+	}
 	// As on a land, the things are on the map before the footpaths come, so no footpath goes round them
 	if (Locator::entitiesMap::has_value())
 	{
@@ -599,6 +607,12 @@ void Runner::Stop()
 		Locator::entitiesRegistry::value().Context().mapScriptGlobals.landNumber = *_landNumberBefore;
 	}
 	_landNumberBefore.reset();
+	// The background weather is as it was
+	if (_backgroundWeatherBefore.has_value() && Locator::weatherSystem::has_value())
+	{
+		Locator::weatherSystem::value().SetBackgroundWeather(*_backgroundWeatherBefore);
+	}
+	_backgroundWeatherBefore.reset();
 	// The camera zones that the scenario set go
 	if (_cameraZoneSet && Locator::cameraZoneSystem::has_value())
 	{
@@ -1102,6 +1116,13 @@ void Runner::Update(float seconds)
 		if (toHand)
 		{
 			return !Locator::gestureSystem::has_value() || !Locator::gestureSystem::value().IsDrawingPath();
+		}
+		// The temple takes no press while a script has the cinema bars in, as when the advisors introduce a room
+		const bool toTemple = command.kind == Kind::LookAtTempleScroll || command.kind == Kind::LookAtSaveGamePicture;
+		if (toTemple)
+		{
+			return !Locator::cinematicDirectorSystem::has_value() ||
+			       !Locator::cinematicDirectorSystem::value().IsWideScreenOn();
 		}
 		return IsFree(command.creature);
 	});

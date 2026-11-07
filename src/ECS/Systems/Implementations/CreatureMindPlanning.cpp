@@ -806,6 +806,46 @@ void SettleTemperature(entt::entity creature)
 }
 } // namespace
 
+void CreatureMindSystem::CompletePlanAction(entt::entity creature, CreatureMindState& mind)
+{
+	const auto* tables = GetTables();
+	if (!mind.planActive || !mind.planner.current.has_value() || !mind.desires.has_value() || tables == nullptr ||
+	    mind.planner.current->action >= tables->actions.size())
+	{
+		return;
+	}
+	const auto plan = *mind.planner.current;
+	const auto& action = tables->actions[plan.action];
+	// First its body pays for the action
+	BodyPaysFor(creature, action.name);
+	// A forced plan counts for its desire only when the order that forced it said so
+	auto* needs = Locator::entitiesRegistry::value().TryGet<CreatureNeeds>(creature);
+	const auto completion =
+	    creature_turn_order::CompletionOf(plan.desire, mind.planForced, mind.forcedPlanCounts, action.fullRecovery,
+	                                      needs != nullptr ? needs->needs.life : creature_turn_order::k_FullLife);
+	if (!completion.counts)
+	{
+		return;
+	}
+	// It counts towards satisfying the urge of the desire that it served. Once enough plans have been complete, the
+	// desire's clearable sources are cleared, and the desire of the action is less if the game's table says the action
+	// lessens it or one of its steps saw to the desire.
+	creature_desires::SeeToAfterPlan(*mind.desires, plan.desire, LesseningOf(action.name), mind.desireSeenTo,
+	                                 DesireFloorOf(creature));
+	// After the urge, the desire the plan served changes as the game's rule for that desire says
+	creature_learning::AfterPlanCarriedOut(*mind.desires, plan.desire, DesireFloorOf(creature), k_TurnsPerSecond);
+	// A plan to restore health heals it, and an action that makes it recover fully gives full life and the temperature
+	// of the climate where it stands
+	if (completion.life.has_value() && needs != nullptr)
+	{
+		ecs::world_objects::SetLife(creature, *completion.life);
+	}
+	if (completion.climateTemperature)
+	{
+		SettleTemperature(creature);
+	}
+}
+
 void CreatureMindSystem::FollowAgenda(entt::entity creature, CreatureMindState& mind)
 {
 	if (!mind.learnt.has_value() || !mind.desires.has_value())
@@ -832,19 +872,10 @@ void CreatureMindSystem::FollowAgenda(entt::entity creature, CreatureMindState& 
 	}
 	if (mind.planActive && !keptWithNoSteps && (idle.serial != mind.planSerial || idle.step >= idle.agenda.size()))
 	{
-		// The plan is over. Carried out to its end, its body pays for the action and it counts towards satisfying the
-		// urge of the desire it served, unless one of its steps saw to that already; cut short by something else
-		// (fainting, a fight, a more pressing plan) or given up, it is still wanted. Once enough plans have been carried
-		// out, the desire's clearable sources are cleared, and the desire is less if the game's table says the action
-		// lessens it or one of its steps saw to the desire.
+		// The plan is over. Carried out to its end, its action is complete (see CompletePlanAction). Cut short by
+		// something else (fainting, a fight, a more pressing plan) or given up, it is still wanted.
 		const auto plan = *mind.planner.current;
 		const bool carriedOut = idle.serial == mind.planSerial && !idle.gaveUp;
-		// A forced plan counts for its desire only when the order that forced it said so
-		auto* needs = Locator::entitiesRegistry::value().TryGet<CreatureNeeds>(creature);
-		const auto completion = creature_turn_order::CompletionOf(
-		    plan.desire, mind.planForced, mind.forcedPlanCounts,
-		    tables != nullptr && plan.action < tables->actions.size() && tables->actions[plan.action].fullRecovery,
-		    needs != nullptr ? needs->needs.life : creature_turn_order::k_FullLife);
 		if (carriedOut)
 		{
 			// The newest action it remembers for feedback is done, unless a script controls it
@@ -857,36 +888,7 @@ void CreatureMindSystem::FollowAgenda(entt::entity creature, CreatureMindState& 
 			                                   Locator::entitiesRegistry::value().AllOf<ScriptControlled>(creature));
 			mind.lastActionDone = plan.action;
 			creature_watching::MimicActionDone(mind.learnt->mimicry);
-		}
-		if (carriedOut && !mind.satisfiedByEffect && tables != nullptr && plan.action < tables->actions.size())
-		{
-			const auto& action = tables->actions[plan.action];
-			BodyPaysFor(creature, action.name);
-			auto& served = (*mind.desires)[plan.desire];
-			if (completion.counts && creature_desires::CountTowardsUrge(served))
-			{
-				creature_desires::ClearSourcesAfterSatisfying(served);
-				if (action.alwaysApplies || mind.desireSeenTo)
-				{
-					Lessen(creature, *mind.desires, action.name);
-				}
-			}
-		}
-		// After the urge, the desire the plan served changes as the game's rule for that desire says
-		if (carriedOut && completion.counts)
-		{
-			creature_learning::AfterPlanCarriedOut(*mind.desires, plan.desire, mind_detail::DesireFloorOf(creature),
-			                                       k_TurnsPerSecond);
-		}
-		// A plan to restore health heals it, and an action that makes it recover fully gives full life and the
-		// temperature of the climate where it stands
-		if (carriedOut && completion.life.has_value() && needs != nullptr)
-		{
-			ecs::world_objects::SetLife(creature, *completion.life);
-		}
-		if (carriedOut && completion.climateTemperature)
-		{
-			SettleTemperature(creature);
+			CompletePlanAction(creature, mind);
 		}
 		// An action that ends well on a creature makes the creature find that creature nicer or nastier, as the game's
 		// table says for the action. An action on no thing acts on the creature itself, so it also changes how nice the
@@ -955,7 +957,6 @@ void CreatureMindSystem::FollowAgenda(entt::entity creature, CreatureMindState& 
 		return;
 	}
 	mind.agendaSeen = idle.serial;
-	mind.satisfiedByEffect = false;
 	mind.desireSeenTo = false;
 	if (mind.planActive || tables == nullptr)
 	{
@@ -1220,7 +1221,6 @@ bool CreatureMindSystem::Adopt(entt::entity creature, CreatureMindState& mind, c
 	mind.planActive = true;
 	mind.planSerial = mind.idle.serial;
 	mind.agendaSeen = mind.idle.serial;
-	mind.satisfiedByEffect = false;
 	mind.desireSeenTo = false;
 	mind.planActions = mind.plannedActions.at(static_cast<size_t>(plan.desire));
 	// It is remembered for the player's feedback unless nothing says why it wants what the plan serves, as a forced plan
@@ -1410,12 +1410,28 @@ bool FightLetsChoose(const ecs::Registry& registry, entt::entity creature, const
 }
 } // namespace
 
-void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& mind, bool everyDesire,
-                                      std::optional<Desire> only, bool adopt)
+void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& mind, std::optional<Desire> only, bool adopt)
 {
 	const auto* tables = GetTables();
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto* transform = registry.TryGet<const Transform>(creature);
+	// A desire that was held back for longer lost its plan. A plan that uses a thing that is gone is removed, and then
+	// a new round of desires starts.
+	if (mind.desires.has_value())
+	{
+		for (size_t d = 0; d < creature_desires::k_DesireCount; ++d)
+		{
+			if (std::exchange(mind.desires->desires.at(d).losesPlan, false))
+			{
+				mind.planner.best.at(d).reset();
+			}
+		}
+		if (creature_planner::DropPlansOfGoneThings(
+		        mind.planner, [&registry](uint32_t thing) { return !registry.Valid(static_cast<entt::entity>(thing)); }))
+		{
+			mind.planner.round = creature_planner::RoundOf(*mind.desires);
+		}
+	}
 	// A partner of a joint action whose mind stands still chooses nothing
 	if (tables == nullptr || transform == nullptr || !mind.desires.has_value() || !mind.learnt.has_value() || mind.paused ||
 	    creature_mind::IsUnconscious(mind.idle) || !FightLetsChoose(registry, creature, mind) ||
@@ -1515,13 +1531,20 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 			                 return ExecutorOf(action) != nullptr;
 		                 });
 	}
-	// The desire to explore has a condition of its own: a young creature, or one that is not too exhausted
-	{
+	// Some desires have a condition of their own. A desire that fails it takes its turn to plan, but it loses its plan.
+	const auto desireState = [&]() {
 		const auto* body = registry.TryGet<const CreatureNeeds>(creature);
-		const float exhaustion = body != nullptr ? body->needs.exhaustion : 0.0f;
-		auto& wander = eligible.at(static_cast<size_t>(Desire::Wanderlust));
-		wander = wander && creature_exploration::WanderlustAllowed(mind.developmentPhase, exhaustion);
-	}
+		return creature_planner::DesireState {
+		    .phase = mind.developmentPhase,
+		    .exhaustion = body != nullptr ? body->needs.exhaustion : 0.0f,
+		    .turnsIgnored = mind.attention.turnsIgnored,
+		    .turnsPerSecond = static_cast<uint32_t>(k_TurnsPerSecond),
+		    .warmth = body != nullptr ? body->needs.warmth : 0.0f,
+		    .attitudeToPlayer = mind.attitudeToPlayer,
+		    .homeDistance = situation.homeDistance,
+		    .sawDeed = mind.observedDeed.has_value(),
+		};
+	}();
 
 	// Something shown on the leash is the only goal there is this turn, for every desire
 	std::optional<entt::entity> leashTarget;
@@ -1530,11 +1553,13 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 		leashTarget = static_cast<entt::entity>(mind.leash.actOn.back());
 		mind.leash.actOn.clear();
 	}
-	auto goals =
-	    leashTarget.has_value() || everyDesire
-	        ? std::vector<Desire> {}
-	        : creature_planner::NextGoals(mind.planner, eligible, creature_planner::GoalsPerTurn(registry.Size<Creature>()));
-	if (leashTarget.has_value() || everyDesire)
+	// Each turn some desires of the round get their turn to plan, also a desire at 0 or with no action. Something shown
+	// on the leash makes every desire that can plan plan this turn, and the round does not move on.
+	const bool roundTurn = !leashTarget.has_value() && !only.has_value();
+	auto goals = roundTurn
+	                 ? creature_planner::NextGoals(mind.planner, creature_planner::GoalsPerTurn(registry.Size<Creature>()))
+	                 : std::vector<Desire> {};
+	if (leashTarget.has_value())
 	{
 		for (size_t d = 0; d < eligible.size(); ++d)
 		{
@@ -1565,6 +1590,11 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 	for (const auto desire : goals)
 	{
 		const auto d = static_cast<size_t>(desire);
+		if (!creature_planner::DesireMayPlan(desire, desireState))
+		{
+			mind.planner.best.at(d).reset();
+			continue;
+		}
 		// A desire about something is about a whole thing: a town, a forest, a temple, a flock or a creature. The plan
 		// acts on a part of the whole thing. Without a whole thing, the desire has no plan.
 		std::span<const uint32_t> actions = tables->desireActions.at(d);
@@ -1717,9 +1747,10 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 			order = desire == Desire::Anger ? creature_planner::PlanOrder::PartThenAction
 			                                : creature_planner::PlanOrder::ActionThenPart;
 		}
+		// A desire of the round plans with its own value, also when it was turned off or held back after the round started
 		auto best = creature_planner::PlanDesire({
 		    .desire = desire,
-		    .strength = strengths.at(d),
+		    .strength = roundTurn ? desires.desires.at(d).value : strengths.at(d),
 		    .order = order,
 		    .actions = candidates,
 		    .activityUsefulness = activity.has_value() ? std::optional(activity->usefulness) : std::nullopt,
@@ -1744,6 +1775,21 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 		}
 		return;
 	}
+	// The creature chooses its plan only when each desire of the round had its turn. Then a new round starts.
+	if (roundTurn && !creature_planner::RoundEnded(mind.planner))
+	{
+		return;
+	}
+	ChoosePlan(creature, mind, situation);
+	if (roundTurn)
+	{
+		mind.planner.round = creature_planner::RoundOf(desires);
+	}
+}
+
+void CreatureMindSystem::ChoosePlan(entt::entity creature, CreatureMindState& mind,
+                                    const creature_plan_actions::Situation& situation)
+{
 	// An agenda that it was made to do continues to its end
 	if (!creature_planner::MayChoose(mind.planActive, mind.idle.step < mind.idle.agenda.size()))
 	{

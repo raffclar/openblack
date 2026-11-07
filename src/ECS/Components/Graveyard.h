@@ -30,7 +30,8 @@ struct StandInGraves
 };
 
 /// A villager made into a walking skeleton by a script: it wears the skeleton's model at every distance and goes about
-/// its life as any other villager, but predators pass it by
+/// its life as any other villager, but predators pass it by. An animal or a creature that a script makes a skeleton
+/// gets only this mark: its model does not change, and a hunter does not hunt such an animal.
 struct WalkingSkeleton
 {
 };

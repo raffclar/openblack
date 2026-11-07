@@ -87,6 +87,8 @@ public:
 		/// Tribe, from 0 (celtic) to 8 (tibetan)
 		int32_t tribe;
 		uint32_t id;
+		/// The town has a town centre, built or planned. Only such a town has its music.
+		bool hasTownCentre {true};
 	};
 
 	struct TurnInputs
@@ -126,6 +128,8 @@ public:
 		std::optional<MusicType> creatureFight;
 		/// A full-screen film plays. The music is not changed, and the script's music plays again after the film.
 		bool film {false};
+		/// The land has no music: the game does not change the music that plays there
+		bool landWithoutMusic {false};
 		/// The music that the scripts start, as the world sees it
 		struct ScriptPiece
 		{

@@ -41,6 +41,7 @@
 #include "ECS/Map.h"
 #include "ECS/Registry.h"
 #include "ECS/StatisticsRules.h"
+#include "ECS/Systems/GuidanceSystemInterface.h"
 #include "ECS/Systems/Implementations/VillagerHome.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/SkyClockSystemInterface.h"
@@ -159,14 +160,6 @@ town_desire::DesireInputs GatherInputs(entt::entity townEntity, const Town& town
 				stats.childRoom += static_cast<int32_t>(info->maxChildrenInAbode) - static_cast<int32_t>(household.children);
 			}
 		}
-		// Each abode as worn as it is, by how much its kind wants mending
-		in.abodes.push_back({
-		    .life = ecs::world_objects::LifeOf(entity),
-		    .livingQuarters = info != nullptr &&
-		                      (static_cast<uint32_t>(info->abodeType) & static_cast<uint32_t>(AbodeType::LivingQuarters)) != 0,
-		    .inhabitants = static_cast<uint32_t>(abode.inhabitants.size()),
-		    .desireToBeRepaired = info != nullptr ? info->desireToBeRepaired : 0.0f,
-		});
 		if (abode.type == AbodeNumber::StoragePit)
 		{
 			in.storageFood = abode.foodAmount;
@@ -185,7 +178,7 @@ town_desire::DesireInputs GatherInputs(entt::entity townEntity, const Town& town
 			in.populationWhenNeeded.at(i) = info->populationWhenNeeded;
 		}
 	}
-	// Its miracle dispensers are among its buildings that want mending, each as worn as it is. Nobody lives in one.
+	// Its miracle dispensers count among its buildings
 	registry.Each<const SpellDispenser>([&](entt::entity entity, const SpellDispenser& dispenser) {
 		if (dispenser.town != townEntity)
 		{
@@ -195,13 +188,37 @@ town_desire::DesireInputs GatherInputs(entt::entity townEntity, const Town& town
 		// It is always built, thus it counts among the town's buildings, by its number, and among its civic buildings
 		ecs::town_desire::CountBuiltBuilding(in, info != nullptr ? info->abodeNumber : AbodeNumber::SpellDispenser,
 		                                     info != nullptr ? info->abodeType : AbodeType::SpellDispenser);
-		in.abodes.push_back({
-		    .life = ecs::world_objects::LifeOf(entity),
-		    .livingQuarters = false,
-		    .inhabitants = 0,
-		    .desireToBeRepaired = info != nullptr ? info->desireToBeRepaired : 0.0f,
-		});
 	});
+	// Each of its buildings as worn as it is, by how much its kind wants mending, in the order of the town's own list
+	// (the newest first), so that the sum of their wants rounds as in the game. Nobody lives in a miracle dispenser.
+	for (const auto building : town.abodes)
+	{
+		if (!registry.Valid(building))
+		{
+			continue;
+		}
+		if (const auto* abode = registry.TryGet<const Abode>(building); abode != nullptr)
+		{
+			const auto* info = FindAbodeInfo(tribe, abode->type);
+			in.abodes.push_back({
+			    .life = ecs::world_objects::LifeOf(building),
+			    .livingQuarters = info != nullptr && (static_cast<uint32_t>(info->abodeType) &
+			                                          static_cast<uint32_t>(AbodeType::LivingQuarters)) != 0,
+			    .inhabitants = static_cast<uint32_t>(abode->inhabitants.size()),
+			    .desireToBeRepaired = info != nullptr ? info->desireToBeRepaired : 0.0f,
+			});
+		}
+		else if (registry.AllOf<SpellDispenser>(building))
+		{
+			const auto* info = ecs::world_objects::AbodeInfoOf(building);
+			in.abodes.push_back({
+			    .life = ecs::world_objects::LifeOf(building),
+			    .livingQuarters = false,
+			    .inhabitants = 0,
+			    .desireToBeRepaired = info != nullptr ? info->desireToBeRepaired : 0.0f,
+			});
+		}
+	}
 	// Its plans, those of finished buildings that went wanting repair
 	for (const auto plan : town.planned)
 	{
@@ -234,7 +251,7 @@ town_desire::DesireInputs GatherInputs(entt::entity townEntity, const Town& town
 	{
 		const auto& clock = Locator::skyClockSystem::value().GetClock();
 		in.visualHour = clock.GetVisualTime();
-		in.skyType = 2.0f - clock.SkyType(in.visualHour);
+		in.skyType = clock.NightSkyType(in.visualHour);
 		in.dayFull = clock.GetVisualTimes()[3];
 	}
 	if (Locator::time::has_value())
@@ -283,7 +300,12 @@ void TownDesireSystem::ProcessTown(entt::entity entity)
 	    .farmerMaxFood = farmer.maxFoodCarried,
 	    .farmerMaxWood = farmer.maxWoodCarried,
 	};
-	town_desire::Process(desire, context);
+	// Every 50 turns the unhappiness of the villagers can make the advisors say so
+	const auto unhappiness = town_desire::Process(desire, context);
+	if (unhappiness.has_value() && Locator::guidanceSystem::has_value())
+	{
+		Locator::guidanceSystem::value().VillagersUnhappy(entity, *unhappiness);
+	}
 }
 
 uint32_t TownDesireSystem::OfferVillager(entt::entity town, bool child, float trigger,
@@ -534,6 +556,9 @@ void TownDesireSystem::ProcessFlags()
 			orphans.push_back(entity);
 			return;
 		}
+		// The flag keeps the raw desire that its town has after its turn. A change later in the game turn, as a boost
+		// from a script, shows only after the next turn of the town.
+		flag.turnDesire = GetRawDesire(flag.town, flag.desire);
 		// A new store of the town takes the flag to its place on the store. The flag stays where it is after its store
 		// is gone.
 		const auto store = construction::StoragePitOf(flag.town);
@@ -567,8 +592,8 @@ void TownDesireSystem::UpdateFlags(float seconds)
 	const auto* camera = Locator::camera::has_value() ? &Locator::camera::value() : nullptr;
 	const auto viewProjection = camera != nullptr ? camera->GetViewProjectionMatrix() : glm::mat4(1.0f);
 	const auto eye = camera != nullptr ? camera->GetOrigin() : glm::vec3(0.0f);
-	// The first pit of each town, found one time for all the flags
-	const auto pits = construction::FirstStoragePits();
+	// The main pit of each town, found one time for all the flags
+	const auto pits = construction::MainStoragePits();
 
 	registry.Each<TownDesireFlag>([&](TownDesireFlag& flag) {
 		// The turn removes the flags of a town that has gone
@@ -580,7 +605,7 @@ void TownDesireSystem::UpdateFlags(float seconds)
 		const auto id = registry.Get<const Town>(flag.town).id;
 		const auto store = std::ranges::find(pits, id, &std::pair<uint32_t, entt::entity>::first);
 		const bool working = store != pits.end() && villager_home::IsFunctional(store->second);
-		const float desire = GetRawDesire(flag.town, flag.desire);
+		const float desire = flag.turnDesire;
 		const float showsAfter = info.at(static_cast<size_t>(flag.desire)).showsAfterPercent;
 		const bool shows = town_desire_flags::Shows(working, flag.level, showsAfter);
 		if (shows && flag.shown && camera != nullptr &&

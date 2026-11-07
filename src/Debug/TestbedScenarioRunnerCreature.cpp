@@ -943,6 +943,7 @@ void Runner::GiveCreatureCommand(const Command& command)
 	case Kind::SetHour:
 	case Kind::RestoreDeviceInDomeFollow:
 	case Kind::RestoreDevice:
+	case Kind::BindMoveKey:
 	case Kind::PutLoadedArena:
 	case Kind::HoldSeed:
 	case Kind::DrawGesture:
@@ -1042,6 +1043,7 @@ void Runner::GiveCreatureCommand(const Command& command)
 	case Kind::ReadTip:
 	case Kind::LookAtTempleScroll:
 	case Kind::LookAtSaveGamePicture:
+	case Kind::ZoomToTempleCaveTarget:
 	case Kind::PlayHandDemo:
 	case Kind::Reframe:
 	case Kind::RecordChallenge:

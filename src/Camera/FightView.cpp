@@ -12,13 +12,16 @@
 #include <cmath>
 
 #include <algorithm>
-#include <array>
 
 #include <glm/geometric.hpp>
 
+#include "Camera/CameraLimits.h"
+#include "Camera/CreatureFollow.h"
+#include "Camera/DoubleClickFlight.h"
 #include "Camera/ScriptCameraModel.h"
 #include "Common/X87.h"
 #include "Common/X87Angle.h"
+#include "Common/X87Vector.h"
 
 using namespace openblack;
 using namespace openblack::fight_view;
@@ -27,25 +30,6 @@ namespace
 {
 constexpr float k_Pi = std::numbers::pi_v<float>;
 constexpr float k_TwoPi = 2.0f * k_Pi;
-/// The best heading is looked for among this many round the point, the land sampled at these eighths of the distance
-constexpr int k_Headings = 32;
-constexpr int k_FirstSample = 3;
-constexpr int k_EndSample = 8;
-constexpr float k_SampleShare = 0.125f;
-/// Headings near the one given are favoured by this much, by the cosine of the turn from it
-constexpr float k_FacingWeight = 50.0f;
-/// The pitch eases a fifth of the way from where it was towards a tenth of the land's lean, raised by this
-constexpr float k_PitchKeep = 0.2f;
-constexpr float k_PitchLean = 0.5f * 0.2f;
-constexpr float k_PitchRaise = 0.37699114f;
-constexpr float k_LeastPitch = k_Pi / 8.0f;
-constexpr float k_MostPitch = k_Pi / 3.0f;
-/// A suggested view is eased to between these distances: eight tenths of the way up from nearer, a tenth of the way
-/// down from further
-constexpr float k_NearDistance = 25.0f;
-constexpr float k_FarDistance = 50.0f;
-constexpr float k_NearEase = 0.8f;
-constexpr float k_FarEase = 0.1f;
 /// The fight view starts at the arena's radius from its middle, and half that up
 constexpr float k_StartRise = 0.5f;
 /// Too far from an arena, in radii: the eye, where it looks, and where it looks alone
@@ -108,51 +92,18 @@ HeadingPitch fight_view::HeadingAndPitch(const glm::vec3& origin, const glm::vec
 	return {.heading = view.heading, .pitch = view.pitch};
 }
 
-float fight_view::BestHeading(float heading, float distance, const glm::vec3& focus, float& pitch, const GroundHeight& ground,
-                              const glm::vec3& landNormal)
-{
-	std::array<float, k_Headings> scores {};
-	for (int i = 0; i < k_Headings; ++i)
-	{
-		const auto turned = (static_cast<float>(i) * (k_TwoPi / k_Headings)) + heading;
-		for (int sample = k_FirstSample; sample < k_EndSample; ++sample)
-		{
-			const auto point = PointFrom(focus, static_cast<float>(sample) * distance * k_SampleShare, turned, 0.0f);
-			scores.at(static_cast<size_t>(i)) += focus.y - ground({point.x, point.z});
-		}
-	}
-	float best = -1e20f;
-	int bestIndex = 0;
-	for (int i = 0; i < k_Headings; ++i)
-	{
-		auto& score = scores.at(static_cast<size_t>(i));
-		score += std::cos(static_cast<float>(i) * (k_TwoPi / k_Headings)) * k_FacingWeight;
-		if (best < score)
-		{
-			best = score;
-			bestIndex = i;
-		}
-	}
-	const auto lean = HeadingAndPitch(landNormal + focus, focus).pitch;
-	const auto eased = (lean * k_PitchLean) + (pitch * k_PitchKeep) + k_PitchRaise;
-	pitch = eased <= k_LeastPitch ? k_LeastPitch : (eased >= k_MostPitch ? k_MostPitch : eased);
-	return (static_cast<float>(bestIndex) * (k_TwoPi / k_Headings)) + heading;
-}
-
 View fight_view::Suggest(const glm::vec3& from, const glm::vec3& focus, const GroundHeight& ground, const glm::vec3& landNormal)
 {
-	auto [heading, pitch] = HeadingAndPitch(from, focus);
-	auto distance = glm::distance(focus, from);
-	if (distance < k_NearDistance)
-	{
-		distance = ((k_NearDistance - distance) * k_NearEase) + distance;
-	}
-	if (k_FarDistance < distance)
-	{
-		distance = ((k_FarDistance - distance) * k_FarEase) + distance;
-	}
-	heading = BestHeading(heading, distance, focus, pitch, ground, landNormal);
-	return {.origin = PointFrom(focus, distance, heading, pitch), .focus = focus};
+	// The fight view, the follow camera's clear view and the double click flight use the same distance rule and the
+	// same search for the best heading
+	const auto [heading, pitch] = HeadingAndPitch(from, focus);
+	const auto distance = creature_follow::ClearingDistance(x87::Distance<x87::SumOrder::Zyx>(focus, from));
+	const camera_limits::Ground land {
+	    .height = ground,
+	    .normal = [&landNormal](glm::vec2) { return landNormal; },
+	};
+	const auto best = camera_fly::BestBearing(land, {.heading = heading, .pitch = pitch}, distance, focus);
+	return {.origin = PointFrom(focus, distance, best.heading, best.pitch), .focus = focus};
 }
 
 View fight_view::Start(glm::vec2 arenaCentre, float arenaRadius, float ground, const GroundHeight& groundAt,

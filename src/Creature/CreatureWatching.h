@@ -255,6 +255,12 @@ struct MimicConditions
 	/// How pressing what it reacts to now is
 	float reactionPriority {0.0f};
 	bool canSee {true};
+	/// The hand of a player holds the creature to stroke or slap it
+	bool heldByHand {false};
+	/// The creature wears no leash, or wears a leash that works
+	bool leashWorks {true};
+	/// A person, not a computer god, plays the creature's player
+	bool humanPlayer {true};
 };
 /// Starts copying a player's action, if the creature can. Copying nothing, it copies anything that ranks above 0; copying
 /// another deed's action, only a different deed that ranks at least as high; already copying a desire, any deed at all.
@@ -274,6 +280,8 @@ void MimicActionDone(std::optional<Mimicry>& mimicry);
 /// Stroked while copying, it goes straight to doing the thing itself, with the time of the stage that it was in
 void StrokedWhileMimicking(std::optional<Mimicry>& mimicry, std::span<const MimicRule> rules,
                            const std::function<uint32_t(uint32_t)>& random);
+/// A slap stops the creature when it copies its player
+void SlappedWhileMimicking(std::optional<Mimicry>& mimicry);
 
 /// The most pressing reaction that still leaves the creature free to copy, and the stage of growing up it needs
 constexpr float k_MaxReactionPriorityToMimic = 150.0f;

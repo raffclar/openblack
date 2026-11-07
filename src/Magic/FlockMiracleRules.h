@@ -62,10 +62,12 @@ inline constexpr float k_FullAlpha = 255.0f;
 [[nodiscard]] float EmitAfterTurn(float emitted, float turnSeconds);
 /// How far along the turn's piece of the sweep the animal of a number appears, 0 at its start and 1 at its end
 [[nodiscard]] float SpawnFraction(int created, float emittedBefore, float emittedAfter);
-/// The point of the sweep at a fraction of the way from one end to the other
-[[nodiscard]] glm::vec2 SpawnPoint(glm::vec2 from, glm::vec2 to, float fraction);
-/// A point moved across and along by random numbers between 0 and twice the jitter each
-[[nodiscard]] glm::vec2 Jitter(glm::vec2 point, float randomX, float randomZ);
+/// The point of the sweep at a fraction of the way from one end to the other, in map units. Each axis adds the
+/// difference times the fraction, rounded to the nearest whole unit (a half to the even unit), to the start
+[[nodiscard]] glm::ivec2 SpawnPoint(glm::ivec2 from, glm::ivec2 to, float fraction);
+/// A point in map units moved across and along by random numbers between 0 and twice the jitter each. Each axis goes
+/// to metres, adds its random number less the jitter, and goes back to map units, cut towards zero
+[[nodiscard]] glm::ivec2 Jitter(glm::ivec2 point, float randomX, float randomZ);
 
 /// The way the animals head, across the land: where a human player's camera looks, or from the hand to the cast point
 /// for any other caster; east when that is no way at all
@@ -139,6 +141,8 @@ struct PreyFacts
 	bool hunterInScript {false};
 	/// The hunter is in a flock. A hunter on its own does not hunt
 	bool hunterInFlock {true};
+	/// A script made the flock of the hunter calm. A hunter in a calm flock does not hunt
+	bool hunterFlockCalm {false};
 	/// A young hunter hunts only a thing that a hunter brought down before
 	bool hunterYoung {false};
 	bool broughtDown {false};

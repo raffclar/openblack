@@ -59,6 +59,43 @@ TEST(DayNightClock, TheSkyTurnsAtTheVisualHours)
 	EXPECT_FLOAT_EQ(clock.SkyType(23.5f), 0.0f);
 }
 
+TEST(DayNightClock, TheNightSkyTypeCountsFromTheNight)
+{
+	const auto clock = ResetClock();
+	EXPECT_EQ(clock.NightSkyType(0.5f), 2.0f);
+	EXPECT_EQ(clock.NightSkyType(1.4f), 1.0f);
+	EXPECT_EQ(clock.NightSkyType(12.0f), 0.0f);
+	EXPECT_EQ(clock.NightSkyType(23.5f), 2.0f);
+}
+
+TEST(DayNightClock, TheNightSkyTypeTurnsToDayFromOneDown)
+{
+	// From dusk to day the game subtracts the part of the turn from 1. The value 2 minus SkyType adds it to 1 first,
+	// thus it can round to a different last bit.
+	const auto clock = ResetClock();
+	const auto& times = clock.GetVisualTimes();
+	int differences = 0;
+	constexpr int k_Steps = 1000;
+	for (int i = 0; i < k_Steps; ++i)
+	{
+		const float hour = times[2] + ((times[3] - times[2]) * static_cast<float>(i) / static_cast<float>(k_Steps));
+		const float expected = 1.0f - ((hour - times[2]) / (times[3] - times[2]));
+		EXPECT_EQ(clock.NightSkyType(hour), expected);
+		differences += clock.NightSkyType(hour) != 2.0f - clock.SkyType(hour) ? 1 : 0;
+	}
+	EXPECT_GT(differences, 0);
+}
+
+TEST(DayNightClock, NightIsASkyTypeOfMoreThanTheDouble1Point2)
+{
+	EXPECT_FALSE(DayNightClock::IsNight(1.0f));
+	EXPECT_FALSE(DayNightClock::IsNight(1.19999993f));
+	EXPECT_TRUE(DayNightClock::IsNight(1.2f));
+	EXPECT_TRUE(DayNightClock::IsNight(2.0f));
+	// The ramp value 0.8 gives 1.2 as a float, which is night; openblack's old test of less than 0.8 said day
+	EXPECT_TRUE(DayNightClock::IsNight(2.0f - 0.8f));
+}
+
 TEST(DayNightClock, ADayLastsItsDuration)
 {
 	auto clock = ResetClock();

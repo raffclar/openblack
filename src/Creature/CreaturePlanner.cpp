@@ -11,8 +11,11 @@
 
 #include <algorithm>
 #include <array>
+#include <functional>
 #include <iterator>
 #include <vector>
+
+#include "Creature/CreatureExplorationMap.h"
 
 using namespace openblack;
 using namespace openblack::creature_planner;
@@ -369,25 +372,71 @@ uint32_t creature_planner::ActionInView(const PlannerState& state)
 	return state.current.has_value() ? state.current->action : state.lastAction;
 }
 
-std::vector<Desire> creature_planner::NextGoals(PlannerState& state,
-                                                const std::array<bool, creature_desires::k_DesireCount>& eligible, size_t count)
+std::array<bool, creature_desires::k_DesireCount> creature_planner::RoundOf(const creature_desires::Desires& desires)
+{
+	std::array<bool, creature_desires::k_DesireCount> round {};
+	for (size_t d = 0; d < round.size(); ++d)
+	{
+		round.at(d) = desires.IsActivated(d) && desires.desires.at(d).suppressedTurns == 0;
+	}
+	return round;
+}
+
+std::vector<Desire> creature_planner::NextGoals(PlannerState& state, size_t count)
 {
 	std::vector<Desire> goals;
-	for (size_t tried = 0; tried < eligible.size() && goals.size() < count; ++tried)
+	for (size_t d = 0; d < state.round.size() && goals.size() < count; ++d)
 	{
-		const auto index = state.nextGoal % eligible.size();
-		state.nextGoal = index + 1;
-		if (eligible.at(index))
+		if (state.round.at(d))
 		{
-			goals.push_back(static_cast<Desire>(index));
-		}
-		else
-		{
-			// A desire that can't be planned loses its old plan
-			state.best.at(index).reset();
+			state.round.at(d) = false;
+			goals.push_back(static_cast<Desire>(d));
 		}
 	}
 	return goals;
+}
+
+bool creature_planner::RoundEnded(const PlannerState& state)
+{
+	return std::ranges::none_of(state.round, [](bool waits) { return waits; });
+}
+
+bool creature_planner::DropPlansOfGoneThings(PlannerState& state, const std::function<bool(uint32_t)>& gone)
+{
+	const auto isGone = [&gone](const std::optional<uint32_t>& thing) { return thing.has_value() && gone(*thing); };
+	bool dropped = false;
+	for (auto& plan : state.best)
+	{
+		if (plan.has_value() && (isGone(plan->about) || isGone(plan->object) || isGone(plan->instrument)))
+		{
+			plan.reset();
+			dropped = true;
+		}
+	}
+	return dropped;
+}
+
+bool creature_planner::DesireMayPlan(Desire desire, const DesireState& state)
+{
+	switch (desire)
+	{
+	case Desire::Wanderlust:
+		return creature_exploration::WanderlustAllowed(state.phase, state.exhaustion);
+	case Desire::AttractAttention:
+		return state.turnsIgnored > state.turnsPerSecond * k_AttentionSeconds;
+	case Desire::GetWarmer:
+		return state.warmth <= k_ColdWarmth;
+	case Desire::GetColder:
+		return state.warmth >= k_HotWarmth;
+	case Desire::RunAwayFromPlayer:
+		return state.attitudeToPlayer < 0.0f;
+	case Desire::HangAroundAtHome:
+		return state.homeDistance.has_value() && *state.homeDistance < k_HangAroundHomeDistance;
+	case Desire::FollowPlayerDesire:
+		return state.sawDeed;
+	default:
+		return true;
+	}
 }
 
 std::optional<Plan> creature_planner::Best(const PlannerState& state)
@@ -410,12 +459,7 @@ std::optional<Plan> creature_planner::Choose(const PlannerState& state)
 	{
 		return std::nullopt;
 	}
+	// The plan carried out can start again too, when its new plan is pressing enough
 	const auto current = state.current.has_value() ? state.current->priority : 0.0f;
-	// The same plan again does nothing, but a plan with no steps can start again from its first step
-	if (state.current.has_value() && !state.currentHasNoSteps && state.current->desire == best->desire &&
-	    state.current->action == best->action && state.current->object == best->object)
-	{
-		return std::nullopt;
-	}
 	return ShouldSwitch(best->priority, current) ? best : std::nullopt;
 }

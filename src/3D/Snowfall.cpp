@@ -17,7 +17,7 @@
 #include <glm/gtx/euler_angles.hpp>
 #include <glm/mat4x4.hpp>
 
-#include "Common/PortableMath.h"
+#include "Common/X87.h"
 
 namespace openblack::snowfall
 {
@@ -89,10 +89,12 @@ void Step(std::span<Flake> flakes, float seconds, float fallSpeed, float height,
 				flake.heading += k_TwoPi;
 			}
 		}
-		const float drift = portable_math::Sin(flake.sway) * seconds * k_Drift;
-		flake.position.x += portable_math::Sin(flake.heading) * drift;
-		flake.position.z += portable_math::Cos(flake.heading) * drift;
-		flake.position.y -= portable_math::Cos(flake.sway) * seconds * k_Drift * 0.5f;
+		// The game rounds the drift of the time step and each product with a sine or a cosine to a float
+		const float step = seconds * k_Drift;
+		const float drift = x87::Mul(x87::Sin(flake.sway), step);
+		flake.position.x = x87::Mul(x87::Sin(flake.heading), drift) + flake.position.x;
+		flake.position.z = x87::Mul(x87::Cos(flake.heading), drift) + flake.position.z;
+		flake.position.y -= x87::Mul(x87::Cos(flake.sway), step) * 0.5f;
 		flake.spin += seconds * flake.spinSpeed;
 	}
 }

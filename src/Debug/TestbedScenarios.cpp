@@ -31,6 +31,7 @@
 #include "ECS/Systems/CreaturePhysiologySystemInterface.h"
 #include "ECS/Systems/TattooMenuSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/Systems/ToolRunSystemInterface.h"
 #include "Game.h"
 #include "Gui/GameInterface.h"
 #include "Locator.h"
@@ -155,8 +156,7 @@ void TestbedScenarios::UpdateAlways() noexcept
 		const auto& time = Locator::time::value();
 		const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
 		const bool tattooMenu = Locator::tattooMenuSystem::has_value() && Locator::tattooMenuSystem::value().IsOpen();
-		auto* game = Game::Instance();
-		const bool menu = game != nullptr && game->GetInterface() != nullptr && game->GetInterface()->GetMenu().IsOpen();
+		const bool menu = Locator::gameInterface::has_value() && Locator::gameInterface::value().GetMenu().IsOpen();
 		seconds = std::chrono::duration<float>(inTemple || tattooMenu || menu
 		                                           ? time.GetFixedFrameTime().value_or(time.GetFrameRealTime())
 		                                           : time.GetFrameGameTime())
@@ -220,9 +220,9 @@ void TestbedScenarios::RunRequested() noexcept
 	}
 	// A tool's run keeps each command that the scenario gives, for a dedicated server that gives it with the game
 	_runner.ObserveGives([](uint32_t turn, size_t command) {
-		if (auto* each = Game::Instance(); each != nullptr)
+		if (Locator::toolRunSystem::has_value())
 		{
-			each->RecordScenarioGive(turn, command);
+			Locator::toolRunSystem::value().RecordScenarioGive(turn, command);
 		}
 	});
 	const auto all = All();

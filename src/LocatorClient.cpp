@@ -15,6 +15,7 @@
 #include <memory>
 #include <stdexcept>
 #include <string>
+#include <utility>
 
 #include <spdlog/spdlog.h>
 
@@ -29,15 +30,21 @@
 #include "Common/MainThreadQueue.h"
 #include "Common/PlayerProfiles.h"
 #include "Debug/DebugGuiInterface.h"
+#include "Debug/SimRun.h"
 #include "ECS/Systems/Implementations/AbodeSoundSystem.h"
 #include "ECS/Systems/Implementations/AdvisorVoiceSystem.h"
 #include "ECS/Systems/Implementations/CloudSystem.h"
 #include "ECS/Systems/Implementations/CreatureHairSystem.h"
 #include "ECS/Systems/Implementations/DesignedWaterfallSystem.h"
 #include "ECS/Systems/Implementations/FloatingNumberSystem.h"
+#include "ECS/Systems/Implementations/GameAudioSystem.h"
+#include "ECS/Systems/Implementations/GameKeysSystem.h"
+#include "ECS/Systems/Implementations/HandPressSystem.h"
 #include "ECS/Systems/Implementations/IncomingMessageSystem.h"
 #include "ECS/Systems/Implementations/LandShadeSystem.h"
 #include "ECS/Systems/Implementations/LiquidParticleSystem.h"
+#include "ECS/Systems/Implementations/LoadingScreenSystem.h"
+#include "ECS/Systems/Implementations/OwnReportSystem.h"
 #include "ECS/Systems/Implementations/ParticleSystem.h"
 #include "ECS/Systems/Implementations/PauseTextSystem.h"
 #include "ECS/Systems/Implementations/RainSystem.h"
@@ -45,6 +52,7 @@
 #include "ECS/Systems/Implementations/RenderingSystemTemple.h"
 #include "ECS/Systems/Implementations/SkySystem.h"
 #include "ECS/Systems/Implementations/SnowfallSystem.h"
+#include "ECS/Systems/Implementations/ToolRunSystem.h"
 #include "ECS/Systems/Implementations/TurnCheerSystem.h"
 #include "ECS/Systems/Implementations/VillageLightSystem.h"
 #include "ECS/Systems/Implementations/WaterRingSystem.h"
@@ -65,15 +73,19 @@ using openblack::ecs::systems::CloudSystem;
 using openblack::ecs::systems::CreatureHairSystem;
 using openblack::ecs::systems::DesignedWaterfallSystem;
 using openblack::ecs::systems::FloatingNumberSystem;
+using openblack::ecs::systems::GameAudioSystem;
 using openblack::ecs::systems::IncomingMessageSystem;
 using openblack::ecs::systems::LandShadeSystem;
 using openblack::ecs::systems::LiquidParticleSystem;
+using openblack::ecs::systems::LoadingScreenSystem;
+using openblack::ecs::systems::OwnReportSystem;
 using openblack::ecs::systems::ParticleSystem;
 using openblack::ecs::systems::PauseTextSystem;
 using openblack::ecs::systems::RainSystem;
 using openblack::ecs::systems::RenderingSystem;
 using openblack::ecs::systems::RenderingSystemTemple;
 using openblack::ecs::systems::SnowfallSystem;
+using openblack::ecs::systems::ToolRunSystem;
 using openblack::ecs::systems::TurnCheerSystem;
 using openblack::ecs::systems::VillageLightSystem;
 using openblack::ecs::systems::WaterRingSystem;
@@ -162,12 +174,16 @@ void openblack::InitializePresentation()
 	Locator::designedWaterfallSystem::emplace<DesignedWaterfallSystem>();
 	Locator::liquidParticleSystem::emplace<LiquidParticleSystem>();
 	Locator::floatingNumberSystem::emplace<FloatingNumberSystem>();
+	// The music and the ambience of the land. The first land makes them.
+	Locator::gameAudioSystem::emplace<GameAudioSystem>();
 }
 
 void openblack::InitializeClient(const player_profiles::Store& profiles)
 {
 	// The input of the player, the drawing of the world, the editor, the videos and the online services
 	InitializePlayerInput();
+	// The reports of the hand, the view and the help that this computer sends once a turn
+	Locator::ownReportSystem::emplace<OwnReportSystem>();
 	Locator::rendereringSystem::emplace<RenderingSystem>();
 	// The temple makes the draw of its rooms, and the draw of the island again, with these functions
 	if (Locator::temple::has_value())
@@ -177,7 +193,17 @@ void openblack::InitializeClient(const player_profiles::Store& profiles)
 		    .island = [] { Locator::rendereringSystem::emplace<RenderingSystem>(); },
 		});
 	}
+	// The buttons, the pointer and the presses of the hand, and the keys of the game
+	Locator::handPressSystem::emplace<ecs::systems::HandPressSystem>();
+	Locator::gameKeysSystem::emplace<ecs::systems::GameKeysSystem>();
 	InitializeOnlineAndTools(profiles);
+}
+
+void openblack::InitializeToolRun(const std::optional<sim_run::Request>& simulation,
+                                  std::optional<FightAutopilotRequest> fightAutopilot,
+                                  std::optional<std::filesystem::path> fightTranscriptFolder)
+{
+	Locator::toolRunSystem::emplace<ToolRunSystem>(simulation, std::move(fightAutopilot), std::move(fightTranscriptFolder));
 }
 
 bool openblack::InitializeGame(const player_profiles::Store& profiles) noexcept
@@ -189,4 +215,9 @@ bool openblack::InitializeGame(const player_profiles::Store& profiles) noexcept
 	InitializePresentation();
 	InitializeClient(profiles);
 	return true;
+}
+
+void openblack::InitializeLoadingScreens(ecs::systems::LoadingScreenHooks hooks)
+{
+	Locator::loadingScreenSystem::emplace<LoadingScreenSystem>(std::move(hooks));
 }

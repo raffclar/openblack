@@ -1,4 +1,4 @@
-/******************************************************************************
+/*******************************************************************************
  * Copyright (c) 2018-2026 openblack developers
  *
  * For a complete list of all authors, please refer to contributors.md
@@ -7,13 +7,14 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
-// The reports that this computer sends each turn: the hand, the view and the help
+#define LOCATOR_IMPLEMENTATIONS
+
+#include "OwnReportSystem.h"
 
 #include <cstdint>
 
 #include <algorithm>
 #include <limits>
-#include <memory>
 #include <optional>
 
 #include "Camera/Camera.h"
@@ -30,11 +31,10 @@
 #include "ECS/Systems/PlayerCommandSystemInterface.h"
 #include "ECS/Systems/ScriptControlSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
-#include "Game.h"
 #include "Gui/GameInterface.h"
 #include "Hand/OwnHandReport.h"
-#include "Help/HelpProfile.h"
 #include "Hand/ViewReportRules.h"
+#include "Help/HelpProfile.h"
 #include "Input/BindableActions.h"
 #include "Input/GameActionMapInterface.h"
 #include "Input/KeyRebinding.h"
@@ -46,8 +46,48 @@
 #include "Windowing/WindowingInterface.h"
 
 using namespace openblack;
+using namespace openblack::ecs::systems;
 
-void Game::ReportHand()
+bool OwnReportSystem::StepLandGrip(bool dragging, bool moveHeld)
+{
+	_state.landGrip = input::land_grip::GripsLand(dragging, _state.landGrip, moveHeld);
+	return _state.landGrip;
+}
+
+bool OwnReportSystem::StepCameraTurned(uint32_t turn, bool controlsTurned)
+{
+	_state.cameraTurned = view_report::CameraTurnedInTurn(_state.cameraTurned, _state.cameraTurnTurn == turn, controlsTurned);
+	_state.cameraTurnTurn = turn;
+	return _state.cameraTurned;
+}
+
+void OwnReportSystem::ForgetViewReport()
+{
+	_state.lastViewReport.reset();
+}
+
+bool OwnReportSystem::SendViewReport(const player_commands::ViewReport& report, PlayerCommandSystemInterface& commands)
+{
+	if (_state.lastViewReport.has_value() && !view_report::ChangedEnough(*_state.lastViewReport, report))
+	{
+		return false;
+	}
+	_state.lastViewReport = report;
+	commands.Submit(report);
+	return true;
+}
+
+bool OwnReportSystem::TakeHelpTurn(uint32_t turn, bool helpThere)
+{
+	if (_state.helpReportTurn == turn || !helpThere)
+	{
+		return false;
+	}
+	_state.helpReportTurn = turn;
+	return true;
+}
+
+void OwnReportSystem::ReportHand(uint32_t worldCameraIcons)
 {
 	// The hand system keeps what this computer last sent of its hand, and decides what goes in this turn
 	auto* reporter = Locator::handSystem::value().GetOwnReporter();
@@ -56,8 +96,7 @@ void Game::ReportHand()
 		return;
 	}
 	const auto& registry = Locator::entitiesRegistry::value();
-	const auto hand =
-	    Locator::handSystem::value().GetOwnHands()[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)];
+	const auto hand = Locator::handSystem::value().GetOwnHands()[static_cast<size_t>(HandSystemInterface::Side::Left)];
 	const auto* transform = registry.Valid(hand) ? registry.TryGet<const ecs::components::Transform>(hand) : nullptr;
 	const auto start = reporter->Start(Locator::time::value().GetTurn(), hand,
 	                                   transform != nullptr ? std::optional(transform->position) : std::nullopt);
@@ -65,12 +104,11 @@ void Game::ReportHand()
 	{
 		return;
 	}
-	// A new hand, as on a new land, has no view report yet
 	if (start->newHand)
 	{
-		_lastViewReport.reset();
+		ForgetViewReport();
 	}
-	ReportView();
+	ReportView(worldCameraIcons);
 	hand_report::OwnInputs inputs {
 	    .handPoint = start->handPoint,
 	    .spellNeedsReport =
@@ -101,7 +139,7 @@ void Game::ReportHand()
 	}
 }
 
-void Game::ReportView()
+void OwnReportSystem::ReportView(uint32_t worldCameraIcons)
 {
 	// What the scripts and the advisors' remarks read of the view: the camera as the frame draws it, the window it draws
 	// into, its arrival, the distance from the fence of the camera zones, and the grip of the hand on the land
@@ -118,12 +156,9 @@ void Game::ReportView()
 	const bool moveHeld = bothButtons || (Locator::gameActionSystem::has_value() &&
 	                                      Locator::gameActionSystem::value().Get(input::BindableActionMap::MOVE));
 	const auto cues = camera.GetModel().GetHandCues();
-	_reportLandGrip = input::land_grip::GripsLand(cues.dragging, _reportLandGrip, moveHeld);
+	const bool gripsLand = StepLandGrip(cues.dragging, moveHeld);
 	// The turn of the camera counts for the whole game turn, so that the scripts see it at all frame rates
-	const auto turn = Locator::time::value().GetTurn();
-	_reportCameraTurned =
-	    view_report::CameraTurnedInTurn(_reportCameraTurned, _reportCameraTurnTurn == turn, cues.controlsTurned);
-	_reportCameraTurnTurn = turn;
+	const bool cameraTurned = StepCameraTurned(Locator::time::value().GetTurn(), cues.controlsTurned);
 	player_commands::ViewReport report {
 	    .eye = pose.eye,
 	    .focus = pose.focus,
@@ -136,15 +171,16 @@ void Game::ReportView()
 	        Locator::cameraZoneSystem::has_value() ? Locator::cameraZoneSystem::value().GetInclusionDistance() : 0.0f,
 	    .cameraOrders = Locator::entitiesRegistry::value().Context().scriptCameraOrders,
 	    .cameraArrived = false,
-	    .gripsLand = _reportLandGrip,
+	    .gripsLand = gripsLand,
 	    .otherButton = bothButtons,
 	    .mouseWheel = script::lesson_natives::MouseHasWheel(platform_mouse::SystemSaysWheel(),
 	                                                        Locator::gameActionSystem::has_value() &&
 	                                                            Locator::gameActionSystem::value().WheelTurned()),
-	    .cameraTurned = _reportCameraTurned,
+	    .cameraTurned = cameraTurned,
 	    // The icons that the last draw kept, or the world camera's own when the draw did not run
-	    .cameraIcons =
-	        static_cast<uint16_t>((_interface ? _interface->GetDrawnCameraIcons() : std::nullopt).value_or(_cameraIcons)),
+	    .cameraIcons = static_cast<uint16_t>(
+	        (Locator::gameInterface::has_value() ? Locator::gameInterface::value().GetDrawnCameraIcons() : std::nullopt)
+	            .value_or(worldCameraIcons)),
 	    .mouseButtons = platform_mouse::SystemMouseButtons(),
 	};
 	// The keys held, by the game's number of each key
@@ -168,27 +204,20 @@ void Game::ReportView()
 		                                       camera.GetFocus(), camera.GetFocus(Camera::Interpolation::Target));
 	}
 	// The report goes only when the view changed enough since the last report that went
-	if (_lastViewReport != nullptr && !view_report::ChangedEnough(*_lastViewReport, report))
-	{
-		return;
-	}
-	_lastViewReport = std::make_unique<player_commands::ViewReport>(report);
-	Locator::playerCommandSystem::value().Submit(report);
+	SendViewReport(report, Locator::playerCommandSystem::value());
 }
 
-void Game::ReportHelp()
+void OwnReportSystem::ReportHelp(const HelpInputs& inputs)
 {
 	// The report goes once a turn, after the turns of a frame that played one, and only when something in it changed
-	const auto turn = Locator::time::value().GetTurn();
-	if (_helpReportTurn == turn || !Locator::helpProfileSystem::has_value())
+	if (!TakeHelpTurn(Locator::time::value().GetTurn(), Locator::helpProfileSystem::has_value()))
 	{
 		return;
 	}
-	_helpReportTurn = turn;
 	const bool cursorOnPoint =
 	    Locator::pickingSystem::has_value() && Locator::pickingSystem::value().GetPick().point.has_value();
 	if (const auto report =
-	        Locator::helpProfileSystem::value().MakeReport(FrontEndBoxShows(), HelpWorldCameraView(), cursorOnPoint);
+	        Locator::helpProfileSystem::value().MakeReport(inputs.frontEndBoxShows(), inputs.worldCameraView(), cursorOnPoint);
 	    report.has_value())
 	{
 		Locator::playerCommandSystem::value().Submit(*report);

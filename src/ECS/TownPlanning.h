@@ -77,6 +77,15 @@ void PlanAgain(entt::entity building);
 /// together. An outline that covers no cell fits. The check ignores the building `ignored`, when it is given.
 [[nodiscard]] bool FitsForScaffold(glm::vec3 place, MeshId mesh, float yAngle, float scale, entt::entity ignored = entt::null);
 
+/// Whether a new building of a town fits at a place, turned by an angle and at a scale. Near enough another town, it
+/// fits at once. Elsewhere the land at the place must be dry. Also, no building may stand in the cells of its outline
+/// nearer than their radii together.
+[[nodiscard]] bool FitsInTown(entt::entity town, AbodeInfo info, glm::vec3 place, float yAngle, float scale);
+
+/// Whether a new fixed thing of a model fits at a place, turned by an angle and at a scale. The land at the place must be
+/// dry. Also, no building may stand in the cells of its outline nearer than their radii together.
+[[nodiscard]] bool FitsAsFixed(glm::vec3 place, MeshId mesh, float yAngle, float scale);
+
 /// A town starts a building that a held scaffold offered, at a place on the land, turned by an angle and at a scale. The
 /// building stands with nothing of it built, and its site wants builders. The building, none when it did not go up.
 entt::entity StartForScaffold(entt::entity town, AbodeInfo info, glm::vec3 place, float yAngle, float scale);

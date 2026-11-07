@@ -807,10 +807,12 @@ bool computer_world::CarryNear(RuleContext& context, computer_mind::Mind& mind, 
 	const float distance = computer_mind_rules::CarryDistance(random, object_measures::TwoDRadius(Entities(), target),
 	                                                          object_measures::TwoDRadius(Entities(), thing));
 	const auto place = *targetCoords + gutils::GetPosFromAngle(angle, distance);
-	auto& hand = context.state.hand;
-	computer_hand::Add(hand, StepKind::PickUpObject, {Argument {.object = thing}, Argument {.value = hand.speed}});
-	computer_hand::Add(hand, StepKind::DropObjectInHandAtPos,
-	                   {Argument {.place = PlaceOn(context, place)}, Argument {.value = hand.speed}});
+	if (!TakeUp(context, thing))
+	{
+		return false;
+	}
+	computer_hand::Add(context.state.hand, StepKind::DropObjectInHandAtPos,
+	                   {Argument {.place = PlaceOn(context, place)}, Argument {.value = context.state.speed}});
 	return true;
 }
 

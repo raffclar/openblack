@@ -109,8 +109,8 @@ public:
 	[[nodiscard]] virtual std::vector<ExplodeRecord> TakeExplodeRecords(int queue) = 0;
 	/// A beam destroys the object: a building is left with no life, anything else is removed
 	virtual void DestroyByBeam(entt::entity object) = 0;
-	/// The heap of rubble a blast leaves on the land, with a puff of dust
-	virtual void AddRubbleMark(glm::vec3 centre) = 0;
+	/// The heap of rubble a blast leaves on the land, turned about the vertical by the yaw, with a puff of dust
+	virtual void AddRubbleMark(glm::vec3 centre, float yaw) = 0;
 	/// A ring on the water growing to a size
 	virtual void AddWaterRing(glm::vec3 centre, float size) = 0;
 	/// The camera shakes while it is in a radius of a point. The strength decreases to zero over the whole milliseconds

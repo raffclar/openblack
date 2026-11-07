@@ -19,6 +19,7 @@
 #include <memory>
 #include <optional>
 #include <span>
+#include <vector>
 
 #include <LNDFile.h>
 #include <bgfx/bgfx.h>
@@ -52,6 +53,7 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
+#include "ECS/Systems/LandDetailSystemInterface.h"
 #include "ECS/Systems/LandShadeSystemInterface.h"
 #include "ECS/Systems/ObjectDrawListSystemInterface.h"
 #include "ECS/Systems/RenderingSystemInterface.h"
@@ -59,6 +61,7 @@
 #include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/Systems/SnowSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/Systems/WeatherSystemInterface.h"
 #include "EngineConfig.h"
 #include "Game.h"
 #include "Graphics/BoneBudget.h"
@@ -171,6 +174,7 @@ void Renderer::SetSeaUniforms(const ShaderProgram& waterShader, const Camera& ca
 	glm::vec4 u_seaParams {still ? sea_rows::k_StillPeriod : sea_rows::Period(waterTiling), 0.0f, 0.0f, 0.0f};
 	glm::vec4 u_seaRows {0.0f};
 	glm::vec4 u_seaMode {still ? 1.0f : 0.0f, 0.0f, 0.0f, 0.0f};
+	auto driftDraw = still ? sea_rows::DriftDraw::Still : sea_rows::DriftDraw::NoRows;
 	if (!still)
 	{
 		// The rows ripple along the camera's view across the ground, 0.9 units at most
@@ -184,6 +188,7 @@ void Renderer::SetSeaUniforms(const ShaderProgram& waterShader, const Camera& ca
 		}
 		const auto* stats = bgfx::getStats();
 		const glm::vec2 viewport {stats->width, stats->height};
+		u_seaMode.z = sea_rows::RowTextureSpan(viewport.x);
 		if (const auto range = sea_rows::ComputeScreenRange(camera.GetViewProjectionMatrix(), viewport, config.cameraNearClip))
 		{
 			// The ripple steps on with the frames the game's time moves on in, at the screen refresh's pace
@@ -193,6 +198,7 @@ void Renderer::SetSeaUniforms(const ShaderProgram& waterShader, const Camera& ca
 			{
 				_seaRipple = sea_rows::AdvanceRipple(_seaRipple, time.GetFrameRealTime(), time.GetFrameGameTime().count() != 0);
 			}
+			driftDraw = sea_rows::DriftDraw::Rows;
 			const auto rows = sea_rows::MakeRows(*range);
 			u_seaRows = {static_cast<float>(rows.first), static_cast<float>(rows.count), rows.inverseDepth, rows.inverseStep};
 			u_seaMode.y = rows.softTop ? 1.0f : 0.0f;
@@ -204,6 +210,15 @@ void Renderer::SetSeaUniforms(const ShaderProgram& waterShader, const Camera& ca
 		}
 		u_seaParams.y = static_cast<float>(_seaRipple.step);
 	}
+	// The texture drifts with the ambient wind by the frame's game time. A warm-up does not move it.
+	if (!_warmingUp)
+	{
+		const auto wind =
+		    Locator::weatherSystem::has_value() ? Locator::weatherSystem::value().GetAmbientWind() : glm::vec2(0.0f);
+		_seaDrift = sea_rows::AdvanceDrift(_seaDrift, wind, Locator::time::value().GetFrameGameTime(),
+		                                   sea_rows::Period(waterTiling), driftDraw);
+	}
+	const glm::vec4 u_seaDrift {_seaDrift.rows, _seaDrift.still};
 
 	// The sea is coloured by the land's light at full luminosity
 	glm::vec4 u_seaColour {1.0f};
@@ -222,6 +237,7 @@ void Renderer::SetSeaUniforms(const ShaderProgram& waterShader, const Camera& ca
 	waterShader.SetUniformValue("u_seaMode", &u_seaMode);
 	waterShader.SetUniformValue("u_seaColour", &u_seaColour);
 	waterShader.SetUniformValue("u_seaCamera", &u_seaCamera);
+	waterShader.SetUniformValue("u_seaDrift", &u_seaDrift);
 }
 
 void Renderer::DrawHandWaterGlow(const DrawSceneDesc& desc) const
@@ -719,7 +735,7 @@ TextureHandle Renderer::UpdateLandLight() const
 		    .hazeColour = haze.colour,
 		    .overcast = overcast,
 		    .flash = flash,
-		    .darkness = sky_dome::Darkness(alignment + 1.0f),
+		    .darkness = sky_dome::Darkness(1.0f - alignment),
 		    .fog = detail.fog,
 		    .weather = detail.weather,
 		});
@@ -804,19 +820,27 @@ void Renderer::UpdateLandDetail(const DrawSceneDesc& drawDesc) const
 	}
 	const auto& config = Locator::config::value();
 	auto& frame = _landDetail;
-	frame.lines = config.landDetailLines.value_or(land_detail::For(config.detailLevel));
-	const bool coarseLand = config.detail.coarseLand;
-
-	const auto origin = drawDesc.camera->GetOrigin();
-	const auto forward = drawDesc.camera->GetForward();
-	frame.meshNear = land_detail::LineAcross(origin, forward, frame.lines.meshNear, 0.0f);
-	frame.meshFar = land_detail::LineAcross(origin, forward, frame.lines.meshFar, 0.0f);
-	frame.texture =
-	    land_detail::LineAcross(origin, forward, frame.lines.texture, std::min(origin.y, land_detail::k_TextureGroundCap));
+	// The classification of the frame that the draw list tested the blocks' triangles with, from the same camera
+	if (Locator::landDetailSystem::has_value())
+	{
+		frame.detail = Locator::landDetailSystem::value().For(*drawDesc.camera);
+	}
+	else
+	{
+		std::vector<land_detail::BlockPlace> places;
+		for (const auto& block : Locator::terrainSystem::value().GetBlocks())
+		{
+			places.push_back({.corner = block.GetMapPosition(), .at = block.GetBlockPosition()});
+		}
+		frame.detail =
+		    land_detail::ClassifyFrame({.origin = drawDesc.camera->GetOrigin(),
+		                                .forward = drawDesc.camera->GetForward(),
+		                                .lines = config.landDetailLines.value_or(land_detail::For(config.detailLevel)),
+		                                .coarseLand = config.detail.coarseLand},
+		                               places);
+	}
 
 	const auto& blocks = Locator::terrainSystem::value().GetBlocks();
-	frame.blocks.resize(blocks.size());
-	frame.coarserSides.assign(blocks.size(), 0);
 	// The blocks that the view can see: the same test as the list of the things that are drawn. With the land mirrored
 	// in the sea, the box reaches as far under the water as it stands over it, so it holds the block's reflection too.
 	const auto viewProjection = drawDesc.camera->GetViewProjectionMatrix();
@@ -829,56 +853,10 @@ void Renderer::UpdateLandDetail(const DrawSceneDesc& drawDesc) const
 		    viewProjection, nearPlane,
 		    {.corner = blocks[i].GetMapPosition(), .highestAltitude = blocks[i].GetHighestAltitude(), .reflected = reflected});
 	}
-	// The blocks by where they are on the map's 32 by 32 grid of blocks
-	constexpr int k_BlocksPerSide = 32;
-	std::array<int16_t, static_cast<size_t>(k_BlocksPerSide * k_BlocksPerSide)> grid {};
-	grid.fill(-1);
-	for (size_t i = 0; i < blocks.size(); ++i)
-	{
-		const auto position = blocks[i].GetBlockPosition();
-		if (position.x >= 0 && position.x < k_BlocksPerSide && position.y >= 0 && position.y < k_BlocksPerSide)
-		{
-			grid.at(static_cast<size_t>(position.x * k_BlocksPerSide + position.y)) = static_cast<int16_t>(i);
-		}
-		constexpr float k_BlockSize = 160.0f;
-		const auto low = blocks[i].GetMapPosition();
-		const std::array<glm::vec2, 4> corners = {low, low + glm::vec2(0.0f, k_BlockSize), low + glm::vec2(k_BlockSize, 0.0f),
-		                                          low + glm::vec2(k_BlockSize)};
-		land_detail::CornerOffsets offsets;
-		for (size_t corner = 0; corner < corners.size(); ++corner)
-		{
-			offsets.meshNear.at(corner) = land_detail::Offset(frame.meshNear, corners.at(corner));
-			offsets.meshFar.at(corner) = land_detail::Offset(frame.meshFar, corners.at(corner));
-			offsets.texture.at(corner) = land_detail::Offset(frame.texture, corners.at(corner));
-		}
-		frame.blocks[i] = land_detail::Classify(offsets, frame.lines, coarseLand);
-	}
-	const auto meshAt = [&](glm::ivec2 position) -> std::optional<land_detail::Mesh> {
-		if (position.x < 0 || position.x >= k_BlocksPerSide || position.y < 0 || position.y >= k_BlocksPerSide)
-		{
-			return std::nullopt;
-		}
-		const auto index = grid.at(static_cast<size_t>(position.x * k_BlocksPerSide + position.y));
-		return index < 0 ? std::nullopt : std::optional(frame.blocks[static_cast<size_t>(index)].mesh);
-	};
-	const auto indexAt = [&](glm::ivec2 position) {
-		if (position.x < 0 || position.x >= k_BlocksPerSide || position.y < 0 || position.y >= k_BlocksPerSide)
-		{
-			return -1.0f;
-		}
-		return static_cast<float>(grid.at(static_cast<size_t>(position.x * k_BlocksPerSide + position.y)));
-	};
-	frame.neighbours.resize(blocks.size());
-	for (size_t i = 0; i < blocks.size(); ++i)
-	{
-		const auto position = blocks[i].GetBlockPosition();
-		const std::array<std::optional<land_detail::Mesh>, 4> neighbours = {
-		    meshAt(position - glm::ivec2(1, 0)), meshAt(position - glm::ivec2(0, 1)), meshAt(position + glm::ivec2(0, 1)),
-		    meshAt(position + glm::ivec2(1, 0))};
-		frame.coarserSides[i] = land_detail::CoarserSides(frame.blocks[i].mesh, neighbours);
-		frame.neighbours[i] = {indexAt(position - glm::ivec2(1, 0)), indexAt(position - glm::ivec2(0, 1)),
-		                       indexAt(position + glm::ivec2(0, 1)), indexAt(position + glm::ivec2(1, 0))};
-	}
+	frame.neighbours.resize(frame.detail.neighbours.size());
+	std::ranges::transform(frame.detail.neighbours, frame.neighbours.begin(), [](const std::array<int16_t, 4>& indices) {
+		return glm::vec4(indices[0], indices[1], indices[2], indices[3]);
+	});
 }
 
 void Renderer::BakeLandShadows(bool drawVegetation) const noexcept

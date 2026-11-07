@@ -92,15 +92,22 @@ std::optional<glm::vec3> TownPlace(entt::entity town)
 
 bool CameraBookmarkSystem::Initialize()
 {
-	ResetSlots();
 	_bookmarks = archetypes::CameraBookmarkArchetype::CreateAll();
+	ForgetLand();
+	return true;
+}
+
+void CameraBookmarkSystem::ForgetLand()
+{
+	// Each land clears all the bookmarks, the go-back view and the place of the town key. The current slot goes back to
+	// the first, no bookmark is followed and the Tab key starts from no town. The throb of the markers does not start
+	// again: its clock runs on from land to land.
+	ResetSlots();
 	_back.reset();
 	_townKey.reset();
 	_lastTown.reset();
 	_current = 0;
 	_followed.reset();
-	_pulseClockMs = 0;
-	return true;
 }
 
 void CameraBookmarkSystem::ResetSlots()

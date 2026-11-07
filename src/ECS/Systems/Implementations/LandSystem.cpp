@@ -149,6 +149,7 @@
 #include "Online/GodsRingMap.h"
 #include "Online/GodsRingMapFile.h"
 #include "Online/OnlineMapLand.h"
+#include "Online/OnlineMapStoreInterface.h"
 #include "Profiler.h"
 #include "Resources/ResourcesInterface.h"
 #include "ScriptHeaders/ScriptStart.h"
@@ -208,25 +209,28 @@ bool LandSystem::LoadMap(const std::filesystem::path& path, loading::LoadingCloc
 	{
 		return CallOnMainThread(MainThreadApi::Renderer, [this, &path, look, change] { return LoadMap(path, look, change); });
 	}
-	const InspectorLoading loading(path.filename().generic_string());
 	auto& fileSystem = Locator::filesystem::value();
-
 	if (!fileSystem.Exists(path))
 	{
 		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "Could not find script {}", path.generic_string());
 		return false;
 	}
+	return LoadMapBytes(path, fileSystem.ReadAll(path), look, change);
+}
 
+bool LandSystem::LoadMapBytes(const std::filesystem::path& path, std::span<const uint8_t> data,
+                              loading::LoadingClock::Mode look, land_change::Kind change)
+{
+	const InspectorLoading loading(path.filename().generic_string());
 	LoadTimer timer(fmt::format("land {}", path.stem().string()));
 	View().BeginLoadingScreen(look);
-	const auto data = fileSystem.ReadAll(path);
 	auto source = std::string(reinterpret_cast<const char*>(data.data()), data.size());
 	// A land of a network game holds its script and its landscape in one file. Its script loads the landscape that it
 	// holds.
 	_mapLandscape.clear();
 	if (online_map_land::IsOnlineMap(path.generic_string()))
 	{
-		const auto file = onlinemap::Parse(std::as_bytes(std::span(data)));
+		const auto file = onlinemap::Parse(std::as_bytes(data));
 		if (!file.has_value())
 		{
 			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The land {} is not a land of a network game", path.generic_string());
@@ -368,6 +372,31 @@ bool LandSystem::LoadMapWithFreshScripts(const std::filesystem::path& path, land
 		return CallOnMainThread(MainThreadApi::Renderer,
 		                        [this, &path, change] { return LoadMapWithFreshScripts(path, change); });
 	}
+	StartChallengeScriptsAgain();
+	return LoadMap(path, loading::LoadingClock::Mode::Tips, change);
+}
+
+bool LandSystem::LoadNetworkMapFile(const std::filesystem::path& path, std::span<const uint8_t> file, ChallengeScripts scripts)
+{
+	if (InTurnOnOtherThread())
+	{
+		return CallOnMainThread(MainThreadApi::Renderer,
+		                        [this, &path, file, scripts] { return LoadNetworkMapFile(path, file, scripts); });
+	}
+	if (!online_map_land::IsOnlineMap(path.generic_string()))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The land {} is not a land of a network game", path.generic_string());
+		return false;
+	}
+	if (scripts == ChallengeScripts::StartedAgain)
+	{
+		StartChallengeScriptsAgain();
+	}
+	return LoadMapBytes(path, file, loading::LoadingClock::Mode::Tips, land_change::Kind::NewGame);
+}
+
+void LandSystem::StartChallengeScriptsAgain()
+{
 	// Outside the story, a land is loaded with the challenge's scripts started again from scratch: every task of the
 	// last land stops, the scripts' variables are cleared and the challenge's scripts that start by themselves start
 	// again. None of the last land's scripts go on running on the new land.
@@ -396,7 +425,6 @@ bool LandSystem::LoadMapWithFreshScripts(const std::filesystem::path& path, land
 			                    err.what());
 		}
 	}
-	return LoadMap(path, loading::LoadingClock::Mode::Tips, change);
 }
 
 #if defined(OPENBLACK_DEVELOPER_TOOLS)
@@ -693,8 +721,14 @@ bool LandSystem::LoadSavedLand(const std::filesystem::path& landPath, const std:
 		}
 		else if (online_map_land::IsOnlineMap(landPath.generic_string()))
 		{
-			// The landscape of a land of a network game is in the land's own file, as when its script loaded it
-			const auto data = Locator::filesystem::value().ReadAll(landPath);
+			// The landscape of a land of a network game is in the land's own file, as when its script loaded it. A land
+			// that the player got from the lobby is in the store, else the land is in the game folder.
+			std::optional<std::vector<uint8_t>> kept;
+			if (Locator::onlineMapStore::has_value())
+			{
+				kept = Locator::onlineMapStore::value().Read(landPath.filename().generic_string());
+			}
+			const auto data = kept.has_value() ? std::move(*kept) : Locator::filesystem::value().ReadAll(landPath);
 			const auto file = onlinemap::Parse(std::as_bytes(std::span(data)));
 			if (!file.has_value())
 			{
@@ -722,6 +756,8 @@ bool LandSystem::LoadSavedLand(const std::filesystem::path& landPath, const std:
 	// The saved world takes the place of every entity that the land made, the hand and the sky included. The players
 	// that go with them are forgotten.
 	auto& registry = Locator::entitiesRegistry::value();
+	// The renderer keeps the picture of the sky's dome through the load, so the dome keeps how far it follows the sky
+	Locator::skyClockSystem::value().KeepShownDome();
 	registry.Reset();
 	// The things that only the frames make go with the things of the land that they go with. The sky's clouds stay, as
 	// the land laid them out when it loaded: a save does not keep the clouds.
@@ -1442,6 +1478,8 @@ void LandSystem::GameLogicLoop(simulation::TurnViewInterface& view)
 			Locator::cinematicDirectorSystem::value().ProcessTempleTurn();
 			view.PlayTempleAudioTurn();
 			Locator::advisorSystem::value().ProcessTurn();
+			// The tooltip that the hand shows steps with the temple's turn, not with the time of the frames
+			Locator::temple::value().ProcessToolTipTurn();
 			// The help's banter check runs in the temple too. The help's clock stands still there, so the banter starts
 			// only when it is already due.
 			if (Locator::helpMessageSystem::has_value())

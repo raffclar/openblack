@@ -516,7 +516,6 @@ bool CreatureMindSystem::ForcePlan(entt::entity creature, const ForcedPlan& plan
 	mind->planForced = plan.forced;
 	mind->planSerial = mind->idle.serial;
 	mind->agendaSeen = mind->idle.serial;
-	mind->satisfiedByEffect = false;
 	mind->desireSeenTo = false;
 	mind->planActions = tables->desireActions.at(static_cast<size_t>(plan.desire));
 	// A plan that failed at once is not remembered for the player's feedback, and holds back no desire
@@ -585,7 +584,6 @@ bool CreatureMindSystem::CarryOutForScript(entt::entity creature, std::vector<cr
 	mind->planActive = true;
 	mind->planSerial = mind->idle.serial;
 	mind->agendaSeen = mind->idle.serial;
-	mind->satisfiedByEffect = false;
 	mind->desireSeenTo = false;
 	return true;
 }

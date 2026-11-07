@@ -75,7 +75,7 @@ set(OPENBLACK_ALL_SOURCES ${OPENBLACK_SOURCES})
 # files in these folders that the world uses with no device: they are in the simulation. The list also gives the headers
 # with no source that the simulation uses, such as the interfaces that the client makes and the world calls.
 set(OPENBLACK_CLIENT_STEMS
-    "/src/(Graphics|Gui|Windowing|Input|Video|Editor|Audio|Debug|Inspector|Web)/.*|/src/(Game|GameReports|GameStartup|GameSession|GameSkirmish|LaunchSwitches|LocatorClient)|/src/Resources/GameAssets|/src/3D/Implementations/Ocean|/ECS/Systems/Implementations/RenderingSystem[A-Za-z]*"
+    "/src/(Graphics|Gui|Windowing|Input|Video|Editor|Audio|Debug|Inspector|Web)/.*|/src/(Game|GameDetail|GameFlow|GameFrame|GameHand|GameInput|GameMenus|GameOnline|GameStartup|GameSession|GameSkirmish|GameView|LaunchSwitches|LocatorClient)|/src/Resources/GameAssets|/src/3D/Implementations/Ocean|/ECS/Systems/Implementations/RenderingSystem[A-Za-z]*|/ECS/Systems/Implementations/(GameAudioSystem|LoadingScreenSystem|OwnReportSystem|HandPressSystem|GameKeysSystem|ToolRunSystem)"
 )
 set(OPENBLACK_CLIENT_SOURCES ${OPENBLACK_SOURCES})
 list(FILTER OPENBLACK_CLIENT_SOURCES INCLUDE REGEX
@@ -88,10 +88,10 @@ set(OPENBLACK_SIM_IN_CLIENT_FOLDERS
     "Editor/(EditorMath|EditorEntities|EditorPalette|EditorSelection|EditorOutline|EditorHistory|EditorPaths|LandBrush|LandSave)"
     "Graphics/(HandLight|InterfaceCreatures|MeshDetail|Moon|Sun|ViewFrustum|Texture2D|VertexBuffer|IndexBuffer|Mesh|TextureSize|GraphicsDeviceInterface|DeviceDataGivers|GraphicsHandle|FilmSurface|ZSort|FizzDrawOrder|HandReflection|ObjectTint|TempleHeartLook)"
     "Gui/(ChatControlsRules|CinemaBars|ConditionsBoxRules|CustomMusicControlsRules|DialogKeyRules|EndGameBoxRules|EscapeKeyRules|GameFont|GameTexts|GodWindowRules|HandToolTipRules|HandToolTips|IncomingMessageStripRules|JoinOnlineEntry|LandThumbnail|LoadingScreenRules|LogoEffect|MenuBackdrop|MenuSettings|MultiplayerFrontEnd|MultiplayerFrontEndRules|OnlineMapTexts|PauseText|PingDisplay|ScreenFade|ScreenFit|ScriptFade|ScriptTexts|SkirmishBoxRules|StartupRules|StatisticsBoxRules|TextDatabase|TextEditRules|TextWrap|ToolTips|VillagerLabels|WorldTextDepth|WorldToolTipRules|WorldToolTips|DialogRect|SavingBoxRules)"
-    "Input/(InjectedInput|InputLock|KeyBindings|KeyRebinding|GameActionMap|CursorFreeze|PointerSpeed|ScriptedMouse|ShortcutKeys|WindowPointer|NoInputDevice|GameActionMapInterface|InputDeviceInterface|BindableActions|LocalPlayer|PointerSettle|BoxKeyboard|MouseMotion|PlatformKeys|DeveloperKeys)"
+    "Input/(InjectedInput|InputLock|KeyBindings|KeyRebinding|GameActionMap|CursorFreeze|PointerSpeed|ScriptedMouse|ShortcutKeys|WindowPointer|NoInputDevice|GameActionMapInterface|InputDeviceInterface|BindableActions|LocalPlayer|PointerSettle|BoxKeyboard|MouseMotion|PlatformKeys|DeveloperKeys|PointerButtons|HandPointer)"
     "Windowing/(WindowFit|WindowPixels|WindowingInterface)"
     "Video/(FilmCreature|FilmEffects|FrameQueue|VideoRules|FallingSpellAudio|StillPicture)"
-    "Inspector/(CameraControl|ComponentReflection|EditProviders|EntityDescription|FightAutopilot|FightProviders|GameControls|GameInput|GameProviders|GameWorldEdit|GuiControl|InputControl|LevelControl|RegistryProviders|RunControl|ScriptControl|ServerProviders|SimRecorder|SystemProviders|WorldProviders|GameSeamInterface)"
+    "Inspector/(CameraControl|ComponentReflection|EditProviders|EntityDescription|FightAutopilot|FightProviders|GameControls|GameInput|GameProvider[A-Za-z]*|GameWorldEdit|GuiControl|InputControl|LevelControl|RegistryProviders|RunControl|ScriptControl|ServerProviders|SimRecorder|SystemProviders|WorldProviders|GameSeamInterface)"
     "Web/(WebPointer|FetchHttpClient|BrowserWebSocketClient|IndexedDbMapStore)"
 )
 list(JOIN OPENBLACK_SIM_IN_CLIENT_FOLDERS "|" OPENBLACK_SIM_IN_CLIENT_FOLDERS)
@@ -134,6 +134,23 @@ set(OPENBLACK_SIM_SOURCES ${OPENBLACK_SOURCES})
 list(REMOVE_ITEM OPENBLACK_SIM_SOURCES ${OPENBLACK_CLIENT_SOURCES}
      ${OPENBLACK_SYSTEM_SOURCES} ${OPENBLACK_HEADLESS_SOURCES}
 )
+# The MSVC librarian cannot make a static library that is larger than 4 GB, and each object of a Debug build keeps its
+# own debug information. For this reason, the simulation is in more than one static library. The reflection library has
+# the reflection of the components (src/ECS/Reflection). The debug library has the debug tools and the inspector
+# (src/Debug and src/Inspector). The creature systems library has the systems of the creatures. These libraries are
+# parts of the simulation, as the systems library is.
+set(OPENBLACK_REFLECTION_SOURCES ${OPENBLACK_SIM_SOURCES})
+list(FILTER OPENBLACK_REFLECTION_SOURCES INCLUDE REGEX "/src/ECS/Reflection/")
+set(OPENBLACK_SIM_DEBUG_SOURCES ${OPENBLACK_SIM_SOURCES})
+list(FILTER OPENBLACK_SIM_DEBUG_SOURCES INCLUDE REGEX "/src/(Debug|Inspector)/")
+list(REMOVE_ITEM OPENBLACK_SIM_SOURCES ${OPENBLACK_REFLECTION_SOURCES}
+     ${OPENBLACK_SIM_DEBUG_SOURCES}
+)
+set(OPENBLACK_CREATURE_SYSTEM_SOURCES ${OPENBLACK_SYSTEM_SOURCES})
+list(FILTER OPENBLACK_CREATURE_SYSTEM_SOURCES INCLUDE REGEX
+     "/ECS/Systems/Implementations/Creature[^/]*$"
+)
+list(REMOVE_ITEM OPENBLACK_SYSTEM_SOURCES ${OPENBLACK_CREATURE_SYSTEM_SOURCES})
 
 # No file of the simulation includes a header of the client or of the devices with no hardware. The check reads the
 # includes of all the files of the simulation, also the files that this platform does not build. It runs at each
@@ -529,11 +546,12 @@ target_compile_options(
   PUBLIC "$<IF:$<CXX_COMPILER_ID:MSVC>,/fp:precise,-ffp-contract=off>"
 )
 
-# The simulation and its systems library are built with the same options as the game's library: they take each build
-# property of that library, so a property added above reaches all three. They link the same libraries as the game's
-# library, but not the graphics library, the window system (SDL), the debug windows (Dear ImGui), the audio device
-# (OpenAL) or the game's library itself. The two simulation libraries use each other's symbols, which static libraries may do; the game's library uses
-# both, and they do not use it.
+# The simulation libraries (the simulation, its systems, its creature systems, its reflection and its debug tools) are
+# built with the same options as the game's library: they take each build property of that library, so a property added
+# above reaches all of them. They link the same libraries as the game's library, but not the graphics library, the
+# window system (SDL), the debug windows (Dear ImGui), the audio device (OpenAL) or the game's library itself. The
+# simulation libraries use each other's symbols, which static libraries may do; the game's library uses them, and they
+# do not use it.
 if (NOT ANDROID)
   # The libraries of the client only, and a pattern for the window system, which the game's library links by a
   # generator expression
@@ -543,6 +561,15 @@ if (NOT ANDROID)
   set(OPENBLACK_CLIENT_ONLY_PATTERN "SDL2::")
   add_library(openblack_systems STATIC ${OPENBLACK_SYSTEM_SOURCES})
   add_library(openblack_sim STATIC ${OPENBLACK_SIM_SOURCES})
+  add_library(openblack_reflection STATIC ${OPENBLACK_REFLECTION_SOURCES})
+  add_library(openblack_sim_debug STATIC ${OPENBLACK_SIM_DEBUG_SOURCES})
+  add_library(
+    openblack_creature_systems STATIC ${OPENBLACK_CREATURE_SYSTEM_SOURCES}
+  )
+  set(OPENBLACK_SIM_LIBRARIES
+      openblack_sim openblack_systems openblack_creature_systems
+      openblack_reflection openblack_sim_debug
+  )
   add_library(openblack_headless STATIC ${OPENBLACK_HEADLESS_SOURCES})
   # The version of the build is a part of the simulation: the server and the game both write it
   get_target_property(OPENBLACK_LIB_SOURCES openblack_lib SOURCES)
@@ -550,7 +577,7 @@ if (NOT ANDROID)
   set_property(TARGET openblack_lib PROPERTY SOURCES ${OPENBLACK_LIB_SOURCES})
   target_sources(openblack_sim PRIVATE ${OPENBLACK_BUILD_VERSION_SOURCE})
   add_dependencies(openblack_sim openblack_build_version)
-  foreach (target openblack_systems openblack_sim openblack_headless)
+  foreach (target ${OPENBLACK_SIM_LIBRARIES} openblack_headless)
     foreach (
       property
       COMPILE_DEFINITIONS
@@ -593,23 +620,29 @@ if (NOT ANDROID)
       )
     endif ()
   endforeach ()
-  target_link_libraries(openblack_systems PUBLIC openblack_client_headers)
-  target_link_libraries(openblack_sim PUBLIC openblack_client_headers)
-  target_link_libraries(openblack_headless PUBLIC openblack_client_headers)
+  foreach (target ${OPENBLACK_SIM_LIBRARIES} openblack_headless)
+    target_link_libraries(${target} PUBLIC openblack_client_headers)
+  endforeach ()
   if (APPLE)
     # The folder of the user's data comes from the application support folder of Foundation
     target_link_libraries(openblack_sim PUBLIC "-framework Foundation")
   endif ()
   # The simulation uses no header of the graphics library: it has the include folders of neither the library nor its two
   # parts. The world reaches the device through graphics::GraphicsDeviceInterface, with its own handles and flags.
-  target_link_libraries(openblack_sim PUBLIC openblack_systems)
-  target_link_libraries(openblack_systems PUBLIC openblack_sim)
-  target_link_libraries(openblack_headless PUBLIC openblack_sim openblack_systems)
-  target_link_libraries(openblack_lib PUBLIC openblack_headless openblack_sim openblack_systems)
-  # A linker that reads each static library one time (GNU ld) finds the symbols of the two simulation libraries only if
-  # the link line names them again. MSVC's linker and LLVM's lld look through each library again by themselves.
-  set_property(TARGET openblack_systems openblack_sim
-               PROPERTY LINK_INTERFACE_MULTIPLICITY 4
+  # Each simulation library links all the other simulation libraries, so a target that links one of them links all.
+  foreach (target ${OPENBLACK_SIM_LIBRARIES})
+    set(others ${OPENBLACK_SIM_LIBRARIES})
+    list(REMOVE_ITEM others ${target})
+    target_link_libraries(${target} PUBLIC ${others})
+  endforeach ()
+  target_link_libraries(openblack_headless PUBLIC ${OPENBLACK_SIM_LIBRARIES})
+  target_link_libraries(
+    openblack_lib PUBLIC openblack_headless ${OPENBLACK_SIM_LIBRARIES}
+  )
+  # A linker that reads each static library one time (GNU ld) finds the symbols of the simulation libraries only if the
+  # link line names them again. MSVC's linker and LLVM's lld look through each library again by themselves.
+  set_property(
+    TARGET ${OPENBLACK_SIM_LIBRARIES} PROPERTY LINK_INTERFACE_MULTIPLICITY 4
   )
 endif ()
 

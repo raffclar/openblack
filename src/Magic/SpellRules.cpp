@@ -176,8 +176,9 @@ float magic::ShieldCostToMaintain(float plainCost, float radius, float radiusFor
 	{
 		return plainCost;
 	}
+	// Square the share first. Then multiply the plain upkeep by the result.
 	const float share = radius / radiusForNormalCost;
-	return plainCost * share * share;
+	return plainCost * (share * share);
 }
 
 float magic::RainRadius(MagicType type)

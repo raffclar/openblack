@@ -12,8 +12,10 @@
 #include <gtest/gtest.h>
 
 #include "3D/Mists.h"
+#include "Common/ModelInverseSquareRoot.h"
 
 namespace mists = openblack::mists;
+namespace gutils = openblack::gutils;
 
 TEST(Mists, FramesFollowTheCounter)
 {
@@ -55,10 +57,15 @@ TEST(Mists, AnimationKeepsItsPaceAtAnyFrameRate)
 
 TEST(Mists, ShrinkEdgeOn)
 {
-	// Seen from straight above: the full size; seen level: edgeShrink times smaller
-	EXPECT_FLOAT_EQ(mists::EdgeOnSize(10.0f, 3.0f, {0.0f, -100.0f, 0.0f}), 10.0f);
+	// Seen from straight above: the full size, to the engine's inverse square root; seen level: edgeShrink times smaller
+	EXPECT_NEAR(mists::EdgeOnSize(10.0f, 3.0f, {0.0f, -100.0f, 0.0f}), 10.0f, 1e-3f);
 	EXPECT_FLOAT_EQ(mists::EdgeOnSize(10.0f, 3.0f, {100.0f, 0.0f, 0.0f}), 10.0f / 3.0f);
-	EXPECT_FLOAT_EQ(mists::EdgeOnSize(10.0f, 3.0f, {0.0f, 0.0f, 0.0f}), 10.0f);
+	// At no distance the up part is zero, so the mist has its level size
+	EXPECT_FLOAT_EQ(mists::EdgeOnSize(10.0f, 3.0f, {0.0f, 0.0f, 0.0f}), 10.0f / 3.0f);
+	// The engine's inverse square root, not the exact one, gives the up part
+	const glm::vec3 slant {30.0f, -40.0f, 0.0f};
+	const float up = 40.0f * gutils::ModelInverseSquareRoot(2500.0f);
+	EXPECT_EQ(mists::EdgeOnSize(10.0f, 3.0f, slant), 10.0f / ((2.0f * (1.0f - up)) + 1.0f));
 }
 
 TEST(Mists, AScriptMistTakesTheWholePartsOfItsColour)

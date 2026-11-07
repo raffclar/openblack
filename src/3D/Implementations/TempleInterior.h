@@ -70,6 +70,7 @@ public:
 	void SetCurrentRoom(TempleRoom room) override;
 	bool ReleaseOutsideScriptCamera() override;
 	[[nodiscard]] std::optional<OutsideCamera> GetOutsideCamera() const override;
+	void ProcessToolTipTurn() override;
 	[[nodiscard]] std::optional<TempleRoom> GetTransitionRoom() const override { return _transitionRoom; }
 	void SetTransitionRoom(std::optional<TempleRoom> room) override { _transitionRoom = room; }
 	void GoToRoom(TempleRoom room) override;
@@ -83,6 +84,7 @@ public:
 	[[nodiscard]] TempleDoors& GetDoors() override { return _doors; }
 	[[nodiscard]] const TempleDoors& GetDoors() const override { return _doors; }
 	[[nodiscard]] std::optional<TempleCursorHit> GetCursorHit() const override;
+	[[nodiscard]] std::optional<temple_press::PressTrace> GetLastCameraPress() const override;
 	void SetInterface(TempleScreenInterface* interface) override;
 	void SetDrawMakers(DrawMakers makers) override;
 	bool HoldControl(bool pressed, float mouseY) override;
@@ -115,6 +117,8 @@ public:
 	void Escape() override;
 	void RequestLeave() override { _leaveRequested = true; }
 	void FadeToWhite() override;
+	void ZoomToCaveTarget(size_t target) override;
+	void TurnBackRisingFade() override;
 	void CoverSkippedFlight() override;
 	[[nodiscard]] float GetFadeAmount() const override;
 	void Update(std::chrono::microseconds dt) override;
@@ -299,6 +303,8 @@ private:
 	std::unique_ptr<TempleSaveGameRoom> _saveGameRoom;
 	/// The saved games that the room's list and small pictures were last read from
 	std::optional<temple::save_game_room::SavedGamesStamp> _savedGamesRead;
+	/// The saved games that the rooms' scrolls show, from the last read of the player's folder
+	temple::save_game_room::KeptSavedGames<TempleScrolls::SavedGame> _scrollSavedGames;
 	/// The question the save game room asks the player about a slot, until it is answered
 	struct SaveGameQuestion
 	{
@@ -312,6 +318,8 @@ private:
 	void ListSavedGames();
 	/// Reads the list and the small pictures of the save game room again when the saved games changed after the last read
 	void ReadSavedGamesWhenChanged();
+	/// What the rooms' scrolls tell of the game now
+	[[nodiscard]] TempleScrolls::Facts ScrollFacts();
 	/// Asks the player about a slot, as a click in the save game room asks
 	void AskAboutSlot(temple::save_game_room::Click click, uint32_t slot);
 	/// Acts on the player's answer to the save game room's question
@@ -333,13 +341,12 @@ private:
 	/// another submesh sets the glow off again, unless a control is being dragged.
 	std::optional<std::pair<TempleRoom, uint32_t>> _hovered;
 	float _hoverGlow {0.0f};
-	/// What the hand shows, which the rooms choose every frame and submit every turn, and how long since the last turn
+	/// What the hand shows, which the rooms choose every frame and the tooltip's turn submits
 	TempleToolTip _toolTip {k_FirstTempleToolTip};
-	float _toolTipTurnTime {0.0f};
 	/// Moves on the options room and the future room, and what the future room draws
 	void UpdateOptionsAndFutureRooms(float milliseconds);
 	/// The tooltip the hand shows, and where on the screen the hand is
-	void UpdateToolTips(float milliseconds);
+	void UpdateToolTips();
 	void StopCreatureCaveSounds();
 	/// Whether a submesh of a room's mesh is one of its controls drawn, and whether a control has the mouse
 	[[nodiscard]] bool IsControl(TempleRoom room, uint32_t subMesh) const;

@@ -19,24 +19,21 @@
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
-#include "Common/InputSteps.h"
-
-/// The hand's path as the game records it for its gestures. The cursor is sampled about 34 times a second whether or
-/// not a button is held, into a buffer of the last 80 points. As each point comes in, the path's corners are found: the
-/// point between the last corner and the newest where the path turns most, if it turns enough, merged into the corner
-/// before it when the two are too close. The gesture matcher then compares the turns at those corners with its
-/// templates'. Points are on the screen, x to the right and y down, in pixels of a screen 768 pixels high, whatever the
-/// window's size, so a gesture is drawn the same at any resolution.
+/// The hand's path as the game records it for its gestures. The path takes a sample at each place of the pointer that
+/// the interface gets from the mouse, whether or not a button is held, into a buffer of the last 80 points. As each
+/// point comes in, the path's corners are found: the point between the last corner and the newest where the path turns
+/// most, if it turns enough, merged into the corner before it when the two are too close. The gesture matcher then
+/// compares the turns at those corners with its templates'. Points are on the screen, x to the right and y down, in
+/// pixels of a screen 768 pixels high, whatever the window's size, so a gesture is drawn the same at any resolution.
 namespace openblack::gesture
 {
 
 /// The points kept
 constexpr size_t k_Capacity = 80;
-/// The cursor is sampled once more than this much time has passed since the last sample
-constexpr float k_SampleSeconds = 0.029f;
 /// The height of the screen the path is measured on; the game measured it in the pixels of whatever screen it ran on
 constexpr float k_ReferenceHeight = 768.0f;
-/// The cursor held still for this many samples in a row (about two seconds) forgets the path
+/// The cursor held still for this many samples in a row forgets the path. A still mouse sends a place each 40 ms, so
+/// this is 2.8 seconds.
 constexpr uint32_t k_StillSamples = 70;
 /// Two points this close on both axes are the same place
 constexpr float k_SamePlacePixels = 4.0f;
@@ -48,11 +45,6 @@ constexpr float k_SmallStretchPixels = 50.0f;
 constexpr int k_StretchPoints = 8;
 /// The least turn that makes a corner: three thirty-seconds of a half turn, about 17 degrees
 constexpr float k_CornerTurn = std::numbers::pi_v<float> * 3.0f / 32.0f;
-
-/// The parts of a frame at which the cursor is sampled, from the steps of the input that the frame takes. Each step adds
-/// its time to the time since the last sample. A step that takes it past the sample time takes a sample and starts the
-/// time again from nothing, so at 60 steps a second a sample comes at every second step.
-[[nodiscard]] std::vector<float> SamplePoints(float& sinceSample, const input_steps::Steps& steps);
 
 /// What a recorded point is to the path
 enum class KeyType : uint8_t

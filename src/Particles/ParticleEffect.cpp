@@ -59,12 +59,6 @@ public:
 	[[nodiscard]] bool Unported() const override { return true; }
 };
 
-/// A channel of an atom's colour with the light added to it
-uint8_t Lit(const Atom& atom, size_t channel)
-{
-	return static_cast<uint8_t>(std::min(255, atom.rgba.at(channel) + atom.specular.at(channel)));
-}
-
 /// Whether an atom is drawn: one that has been through its steps (or its first, when its rule asks), seen, and with
 /// something to draw it as
 bool IsDrawn(const Atom& atom)
@@ -408,6 +402,7 @@ Atom& Effect::NewAtom(Collection& collection, const Creator* creator, std::span<
 	if (creator != nullptr)
 	{
 		atom->rgba = creator->rgba;
+		atom->specular = creator->specular;
 		if (creator->usePlayerColour && _player >= 0)
 		{
 			atom->rgba =
@@ -803,7 +798,8 @@ std::optional<Effect::DrawAtom> Effect::Interpolate(const Atom& atom, float t, b
 	    .stretch = a.stretch + (b.stretch - a.stretch) * k,
 	    .alpha = alpha,
 	    .frame = atom.creator != nullptr ? maths::LerpFrame(a.frame, b.frame, t, atom.creator->loopAnim) : 0.0f,
-	    .rgb = {Lit(atom, 0), Lit(atom, 1), Lit(atom, 2)},
+	    .rgb = {atom.rgba[0], atom.rgba[1], atom.rgba[2]},
+	    .specular = atom.specular,
 	    .age = std::max(age, 0.0f),
 	    .creatorValue = atom.creatorValue,
 	    .fraction = k,

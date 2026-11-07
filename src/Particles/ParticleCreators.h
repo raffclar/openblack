@@ -76,7 +76,8 @@ struct MeshCreator final: Creator
 	bool useGlobalAlpha {false};
 	/// Not drawn below the level of its effect's origin, as the shield's surface is cut off at the land it stands on
 	bool drawCutByPlane {false};
-	/// Coloured by the land's light where it is
+	/// Coloured by the land's light where it is, with the land's colour and the haze there added. Without it the model
+	/// takes none of them.
 	bool landscapeColour {false};
 	/// Shaded by the scene's lights; without it the model shows its texture in its atom's colour. Only the animated
 	/// kind is lit when its files do not say.

@@ -256,15 +256,10 @@ float FirstRival(RuleContext& context, computer_mind::Mind& mind, uint16_t node)
 	return 1.0f;
 }
 
-/// The first rival of the god is the node's object, but the god never wants it. The rule compares the share of
-/// worshippers of the god with the same share, so the difference is always 0.
-float RivalWithMoreWorshippers(RuleContext& context, computer_mind::Mind& mind, uint16_t node)
+/// The god never wants the rival with more worshippers. The rule compares the share of worshippers of the god with the
+/// same share, so no rival is better and the node keeps no object.
+float RivalWithMoreWorshippers(RuleContext& /*context*/, computer_mind::Mind& /*mind*/, uint16_t /*node*/)
 {
-	const auto rivals = RivalsOf(context.player, false);
-	if (!rivals.empty())
-	{
-		mind.nodes[node].object = rivals.front().entity;
-	}
 	return 0.0f;
 }
 

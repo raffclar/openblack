@@ -125,6 +125,9 @@ public:
 	virtual void SetLockMode(std::string_view mode) = 0;
 	/// Its mode and whether it keeps the player's input out now
 	[[nodiscard]] virtual Json LockState() const = 0;
+	/// The steps of the player's input that the game took in its last frame, as the hand and the temple's camera read
+	/// the input only on steps; none when the target does not count them
+	[[nodiscard]] virtual std::optional<uint32_t> InputStepsOfLastFrame() const { return std::nullopt; }
 };
 
 /// The input to make at coming frames, and the record of what was made while recording. Each frame, every event due by
@@ -132,8 +135,18 @@ public:
 class InputTimeline
 {
 public:
+	/// When a scheduled event may be made
+	enum class Wait : uint8_t
+	{
+		/// At its frame
+		Frame,
+		/// At its frame, but not before the game has taken a step of its input after the event before it. A key or a
+		/// button let go of a frame after it went down then lasts long enough for what reads the input only on steps,
+		/// as the temple's camera does, at any frame rate. The events after it move on by as many frames as it waits.
+		InputStep,
+	};
 	/// An event to make at a frame; ones at the same frame keep their order
-	void Schedule(uint64_t frame, InputEvent event);
+	void Schedule(uint64_t frame, InputEvent event, Wait wait = Wait::Frame);
 	/// Makes the events due by this frame. Why any failed, if any did
 	std::vector<std::string> Frame(uint64_t frame, InputTargetInterface& target);
 	/// Makes an event at once, as part of a frame; empty when it was made, else why not
@@ -157,8 +170,16 @@ private:
 	{
 		uint64_t frame;
 		InputEvent event;
+		Wait wait {Wait::Frame};
+		/// The steps counted when an event that waits for a step was first due
+		std::optional<uint64_t> stepsWhenDue;
 	};
+	/// An event that waits for a step is made after this many frames without one all the same, so that input never
+	/// stays held
+	static constexpr uint64_t k_MostFramesForAStep = 2000;
 	std::deque<Scheduled> _pending;
+	/// The steps of the input that the game has taken, while the target counts them
+	std::optional<uint64_t> _steps;
 	std::optional<uint64_t> _recordingFrom;
 	std::vector<RecordedInput> _recorded;
 };

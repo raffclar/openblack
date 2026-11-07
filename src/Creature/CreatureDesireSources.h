@@ -17,6 +17,8 @@
 
 #include <glm/vec3.hpp>
 
+#include "CreaturePhysiology.h"
+
 /// The sources of a creature's desires that follow what it is and what happens to it, rather than fading after events
 /// push them: the personality it is born with, how much the player looks at it and plays with it, how far it is from
 /// home and how many magic mushrooms it has eaten. Each new creature's mind is also spread at random from its species'
@@ -31,6 +33,9 @@ using UpTo = std::function<float(float most)>;
 namespace types
 {
 constexpr uint32_t k_ImpressFromSeeingThings = 1;
+constexpr uint32_t k_HungerFromLowEnergy = 14;
+constexpr uint32_t k_PooFromAmountOfPoo = 21;
+constexpr uint32_t k_TirednessFromExhaustion = 22;
 constexpr uint32_t k_InnateKindness = 5;
 constexpr uint32_t k_InnateAggression = 11;
 constexpr uint32_t k_InnateLethargy = 26;
@@ -38,6 +43,8 @@ constexpr uint32_t k_IdleWithPlayer = 27;
 constexpr uint32_t k_InnateFriendliness = 35;
 constexpr uint32_t k_Loneliness = 36;
 constexpr uint32_t k_LackOfInteraction = 37;
+constexpr uint32_t k_WaterFromDehydration = 32;
+constexpr uint32_t k_ManifestState = 38;
 constexpr uint32_t k_InnateCommunicativeness = 39;
 constexpr uint32_t k_GoHome = 49;
 constexpr uint32_t k_GetHigh = 55;
@@ -146,6 +153,11 @@ struct State
 	float impressFromSeeing {0.0f};
 };
 
+/// The wish to show how it feels: the sum of all its active desires times a third, held between 0 and 1. The game
+/// multiplies by a third. It does not divide by 3, so the result can be different in the last bit.
+constexpr float k_ManifestPart = 1.0f / 3.0f;
+[[nodiscard]] float ManifestState(float desireSum);
+
 /// The value of a source these rules read, or none for the others
 [[nodiscard]] std::optional<float> Read(uint32_t type, const State& state);
 
@@ -156,10 +168,13 @@ struct Written
 	Attention* attention {nullptr};
 	PlayerInterest* interest {nullptr};
 	uint32_t* mushroomsEaten {nullptr};
+	creature_physiology::Needs* needs {nullptr};
 	uint32_t turnsPerSecond {10};
 };
 /// A script set a source to a value: the trait or count behind the source follows. Setting the player's interest sets
 /// it to nothing, and setting the source to get high sets a hundred magic mushrooms eaten, whatever the value.
+/// The body follows its sources too: hunger sets the energy to 1 less the value, held between 0 and 1. Poo,
+/// exhaustion and dehydration take the value as it is.
 void Write(uint32_t type, float value, const Written& written);
 
 /// The creature saw a village of another player, or of no player, again: impress from seeing things goes up by a half

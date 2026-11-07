@@ -242,3 +242,14 @@ TEST(ScriptProperties, AThingFacesAPointByTheWayAcrossTheGroundFromTheXAxis)
 	EXPECT_GE(FacingAngle({0.0f, 0.0f}, {1.0f, -0.0001f}), 0.0f);
 	EXPECT_LT(FacingAngle({0.0f, 0.0f}, {1.0f, -0.0001f}), k_WholeTurnRadians);
 }
+
+TEST(ScriptProperties, AHeightPutsTheThingThatHighAboveTheLandUnderIt)
+{
+	// The ally's gifts on the second land go 75 above the land, the guide's globe on the first land 50
+	EXPECT_EQ(HeightAboveLand(48.6902f, 75.0f), 48.6902f + 75.0f);
+	EXPECT_EQ(HeightAboveLand(41.469f, 50.0f), 41.469f + 50.0f);
+	// A height of 0 puts the thing back on the land
+	EXPECT_EQ(HeightAboveLand(48.6902f, 0.0f), 48.6902f);
+	// A negative height puts the thing below the land, as for the sunk statues
+	EXPECT_EQ(HeightAboveLand(10.0f, -20.0f), -10.0f);
+}

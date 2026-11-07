@@ -26,6 +26,8 @@
 
 #include "3D/InfluenceCircle.h"
 #include "3D/L3DMesh.h"
+#include "3D/LandIslandInterface.h"
+#include "3D/MapCoords.h"
 #include "Common/GUtilsAngle.h"
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
@@ -60,6 +62,7 @@
 #include "ECS/Systems/TeleportSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
+#include "ECS/ThingMapPlace.h"
 #include "ECS/TownDesire.h"
 #include "ECS/VillagerAge.h"
 #include "ECS/VillagerMemory.h"
@@ -160,6 +163,20 @@ uint32_t GiveUp(LivingAction& action)
 {
 	villager_reactions::StopReacting(action);
 	return 0;
+}
+
+/// Whether the thing that the villager reacts to is there and available. A thing that the world removed is not
+/// available. A villager that dies is not available
+bool ThingAvailable(const ReactionSystemInterface::Active& reaction)
+{
+	const auto& registry = EntityRegistry();
+	const auto thing = reaction.source.initiator;
+	if (thing == entt::null || !registry.Valid(thing))
+	{
+		return false;
+	}
+	const auto* action = registry.AllOf<Villager>(thing) ? registry.TryGet<const LivingAction>(thing) : nullptr;
+	return action == nullptr || Locator::livingActionSystem::value().VillagerGetFinalState(*action) != VillagerStates::Dying;
 }
 
 /// Whether the villager holds a reaction: one of the reactions going on, or a fire's
@@ -647,18 +664,19 @@ uint32_t villager_reactions::Fleeing(LivingAction& action)
 	const auto* info = reaction.has_value() && Locator::infoConstants::has_value()
 	                       ? &Locator::infoConstants::value().reaction.at(static_cast<size_t>(reaction->source.type))
 	                       : nullptr;
-	if (info == nullptr)
+	// The villager stops when the thing that it flees is not available
+	if (info == nullptr || !ThingAvailable(*reaction))
 	{
 		return GiveUp(action);
 	}
 	const auto here = registry.Get<const Transform>(villager).position;
 	const auto object = reaction->source.position;
-	const float distance = glm::distance(here, object);
+	// The distance is on the land between the two map positions. The height does not change it.
+	const float distance = gutils::GetDistanceInMetres(here, object);
 	if (distance > info->maxDistanceToRunAwayFromObject)
 	{
 		return GiveUp(action);
 	}
-	const bool moving = glm::length(reaction->velocity) > 0.0f;
 	// Far enough from what isn't coming at it, it turns and watches
 	if (distance > info->minDistanceToRunAwayFromObject && !magic::ComingTowards(here, object, reaction->velocity))
 	{
@@ -666,16 +684,26 @@ uint32_t villager_reactions::Fleeing(LivingAction& action)
 		TurnTowards(villager, object);
 		return 0;
 	}
-	glm::vec3 to = magic::FleePointFromStill(here, object);
-	if (moving && Locator::gameRandom::has_value())
+	// The game takes random numbers only for a thing that moves
+	std::optional<glm::vec2> random;
+	if (magic::Moves(reaction->velocity) && Locator::gameRandom::has_value())
 	{
-		auto& random = Locator::gameRandom::value();
-		const float x = random.GameFloatRand(magic::k_FleeJitter);
-		const float z = random.GameFloatRand(magic::k_FleeJitter);
-		to = magic::FleePointFromMoving(here, object, reaction->velocity, x, z);
+		auto& gameRandom = Locator::gameRandom::value();
+		const float x = gameRandom.GameFloatRand(magic::k_FleeJitter);
+		const float z = gameRandom.GameFloatRand(magic::k_FleeJitter);
+		random = glm::vec2(x, z);
 	}
-	// It runs there at its speed for fleeing and watching, then watches
-	villager_home::SetupMoveTo(action, glm::xz(to), VillagerStates::FleeingAndLookingAtObjectReaction);
+	// It runs there at its speed for fleeing and watching, then watches. With no point on the map it stays where it is
+	// and tries again on the next turn.
+	const auto& island = Locator::terrainSystem::value();
+	const auto ground = [&island](const map_coords::MapCoords& place) { return map_coords::GroundAt(island, place); };
+	const auto from = map_coords::FromMetres(glm::vec2(object.x, object.z));
+	if (const auto goal = magic::FleePlace(thing_map_place::Of(registry, villager), from, reaction->velocity, random,
+	                                       magic::k_FleeStep, ground);
+	    goal.has_value())
+	{
+		villager_home::SetupMoveTo(action, *goal, VillagerStates::FleeingAndLookingAtObjectReaction);
+	}
 	return 0;
 }
 
@@ -749,9 +777,14 @@ uint32_t villager_reactions::Watching(LivingAction& action)
 	{
 		return GiveUp(action);
 	}
+	// The villager stops when the thing that it watches is not available
+	if (!ThingAvailable(*reaction))
+	{
+		return GiveUp(action);
+	}
 	const auto& info = Locator::infoConstants::value().reaction.at(static_cast<size_t>(reaction->source.type));
 	const auto here = registry.Get<const Transform>(villager).position;
-	if (glm::distance(here, reaction->source.position) > info.maxDistanceToRunAwayFromObject)
+	if (gutils::GetDistanceInMetres(here, reaction->source.position) > info.maxDistanceToRunAwayFromObject)
 	{
 		return GiveUp(action);
 	}

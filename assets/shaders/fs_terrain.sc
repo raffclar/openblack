@@ -348,7 +348,7 @@ void main()
 		ring = texture2D(s13_vortexRing, vortexUv);
 	}
 
-	col.rgb = col.rgb * v_lightColour * v_haze.a;
+	col.rgb = col.rgb * v_lightColour;
 
 	// The small bump detail is a second layer over the lit land, its colour unlit, blended by its alpha whatever the
 	// coast alpha. The distance haze is added to both. The land is blended over the sea by its coast alpha, and writes
@@ -372,7 +372,7 @@ void main()
 	{
 		// The ring, lit as the land, is blended over all of it by its alpha. The hole texture adds no colour of its own:
 		// outside the hole the land and what shows through its coast alpha are drawn as on any other block.
-		vec3 ringColour = min(ring.rgb * v_lightColour * v_haze.a + v_haze.rgb, vec3_splat(1.0f));
+		vec3 ringColour = min(ring.rgb * v_lightColour + v_haze.rgb, vec3_splat(1.0f));
 		premultiplied = vec4(ringColour * ring.a + premultiplied.rgb * (1.0f - ring.a),
 		                     1.0f - (1.0f - premultiplied.a) * (1.0f - ring.a));
 	}

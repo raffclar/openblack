@@ -89,6 +89,7 @@
 #include "Input/GameActionMapInterface.h"
 #include "Input/KeyBindings.h"
 #include "Input/KeyRebinding.h"
+#include "Input/MouseWheel.h"
 #include "Input/WindowPointer.h"
 #include "Locator.h"
 #include "Online/NetworkSession.h"
@@ -111,6 +112,8 @@ namespace
 constexpr std::string_view k_SaveProblemText = "HELP_TEXT_DIALOG_ERRORHASOCCURED";
 /// "Warning. The game may not be synchronised on your machine. Continue?" The game's text has this name.
 constexpr std::string_view k_OutOfSyncText = "HELP_TEXT_SINGING_STONE_CURSE_03";
+/// "Are you sure you want to start a completely new game?"
+constexpr std::string_view k_NewGameQuestionText = "HELP_TEXT_DIALOG_AREYOUSURESTART";
 // "%s is out of the game."
 constexpr std::string_view k_GodOutText = "HELP_TEXT_WIN_GAME_03";
 // "%s has left game."
@@ -314,17 +317,25 @@ constexpr std::array k_GlowV = {0.25f, 0.328125f, 0.41796875f, 0.49609375f};
 struct ToolTipArrow
 {
 	uint32_t bit;
+	world_tooltip::ArrowSide side;
 	glm::vec2 uvMin;
 	glm::vec2 uvMax;
 };
 constexpr std::array k_ToolTipArrows = {
-    ToolTipArrow {ToolTipArrows::k_Left, {0.7539f, 0.1289f}, {0.8711f, 0.2461f}},
-    ToolTipArrow {ToolTipArrows::k_Right, {0.8789f, 0.0039f}, {0.9961f, 0.1211f}},
-    ToolTipArrow {ToolTipArrows::k_Up, {0.7539f, 0.0039f}, {0.8711f, 0.1211f}},
-    ToolTipArrow {ToolTipArrows::k_Down, {0.8789f, 0.1289f}, {0.9961f, 0.2461f}},
+    ToolTipArrow {
+        ToolTipArrows::k_Left, world_tooltip::ArrowSide::Left, {0.75390625f, 0.12890625f}, {0.87109375f, 0.24609375f}},
+    ToolTipArrow {
+        ToolTipArrows::k_Right, world_tooltip::ArrowSide::Right, {0.87890625f, 0.00390625f}, {0.99609375f, 0.12109375f}},
+    ToolTipArrow {ToolTipArrows::k_Up, world_tooltip::ArrowSide::Up, {0.75390625f, 0.00390625f}, {0.87109375f, 0.12109375f}},
+    ToolTipArrow {
+        ToolTipArrows::k_Down, world_tooltip::ArrowSide::Down, {0.87890625f, 0.12890625f}, {0.99609375f, 0.24609375f}},
 };
-/// The tooltips' mice for a wheel mouse, the third row of mousehelp.raw
-constexpr int k_ToolTipMouseRow = 2;
+/// The row of the mice picture for the player's mouse, which every mouse picture of the interface uses
+[[nodiscard]] int MouseRow()
+{
+	return openblack::platform_mouse::PlayerMousePictureRow(Locator::gameActionSystem::has_value() &&
+	                                                        Locator::gameActionSystem::value().WheelTurned());
+}
 
 /// What the depths of the boxes of words in the world come from: the camera's pitch, near plane and projection
 struct WorldTextView
@@ -761,6 +772,17 @@ void GameInterface::AskTripQuestion(std::string_view textName)
 	_saveGameBoxes->Ask(std::u16string(_texts.Get(textName)));
 	_tripAsked = true;
 	_tripAnswer.reset();
+}
+
+void GameInterface::AskNewGameQuestion()
+{
+	if (_newGameAsked)
+	{
+		return;
+	}
+	_saveGameBoxes->Ask(std::u16string(_texts.Get(k_NewGameQuestionText)));
+	_newGameAsked = true;
+	_newGameAnswer.reset();
 }
 
 void GameInterface::OpenMultiplayer(std::unique_ptr<MultiplayerFrontEnd> frontEnd)
@@ -1796,6 +1818,7 @@ void GameInterface::Update(float deltaSeconds)
 		_menu->PollCapture((buttons & SDL_BUTTON_LMASK) != 0u, (buttons & SDL_BUTTON_RMASK) != 0u,
 		                   (buttons & SDL_BUTTON_MMASK) != 0u, _painter.ToDialog(mouse));
 	}
+	_menu->SetMouseRow(MouseRow());
 	_menu->Update(deltaSeconds);
 	_skipBox->Update(deltaSeconds);
 	_storyHistoryBox->Update(deltaSeconds);
@@ -1832,6 +1855,15 @@ void GameInterface::Update(float deltaSeconds)
 		if (const auto answer = _saveGameBoxes->TakeAnswer(); answer.has_value())
 		{
 			_tripAnswer = *answer == SaveGameBoxes::Answer::Yes;
+		}
+	}
+	// The answer to the question about a new game
+	if (_newGameAsked && !_saveGameBoxes->IsActive())
+	{
+		_newGameAsked = false;
+		if (const auto answer = _saveGameBoxes->TakeAnswer(); answer.has_value())
+		{
+			_newGameAnswer = *answer == SaveGameBoxes::Answer::Yes;
 		}
 	}
 	// The question of the trip comes over the land information box as a box of its own: the box fades out until the
@@ -1898,10 +1930,7 @@ void GameInterface::Draw(glm::u16vec2 resolution, glm::ivec2 mouse, uint32_t mil
 	DrawChatBubbles(resolution, mouse);
 	// The gestures' hints are drawn with the world too, over all of it
 	DrawGestureHints(resolution);
-	const bool menuOpen = (_menu->IsVisible() && _menu->IsOpen()) || _skipBox->IsActive() || _tattooEditor->IsOpen() ||
-	                      _newPlayerBox->IsActive() || _skirmishBox->IsActive() || _saveGameBoxes->IsActive() ||
-	                      _staffQuestionBox->IsActive() || _multiplayerBoxes->IsActive() || _endGameBox->IsOpen() ||
-	                      _landInfoBox->IsActive();
+	const bool menuOpen = DialogBoxOpen();
 	UpdateChat(menuOpen || _boxOverGameFade.has_value(), resolution);
 	// The custom music controls go while the chat is open
 	UpdateMusicControls(menuOpen || _boxOverGameFade.has_value() || (_chatControls->IsActive() && _chatControls->IsOpen()));
@@ -2173,9 +2202,17 @@ std::pair<const GameFont*, const openblack::graphics::Texture2D*> GameInterface:
 	return {&_font, _fontTexture.get()};
 }
 
+bool GameInterface::DialogBoxOpen() const
+{
+	return (_menu->IsVisible() && _menu->IsOpen()) || _skipBox->IsActive() || _tattooEditor->IsOpen() ||
+	       _newPlayerBox->IsActive() || _skirmishBox->IsActive() || _saveGameBoxes->IsActive() ||
+	       _staffQuestionBox->IsActive() || _multiplayerBoxes->IsActive() || _endGameBox->IsOpen() || _landInfoBox->IsActive();
+}
+
 void GameInterface::DrawDialogue(glm::u16vec2 resolution, int barPixels)
 {
-	// Neither the box nor its words show while a video plays; the texts still move on underneath
+	// Neither the box nor its words show while a video plays, and the newest text does not slide in. The time to read
+	// the texts goes on.
 	const bool videoPlaying = Locator::videoSystem::has_value() && Locator::videoSystem::value().IsPlaying();
 	const auto* frame = [&]() -> const help::TextFrame* {
 		if (!Locator::helpTextSystem::has_value() || videoPlaying)
@@ -2188,6 +2225,7 @@ void GameInterface::DrawDialogue(glm::u16vec2 resolution, int barPixels)
 		return Locator::helpTextSystem::value().Layout(glm::ivec2(resolution), barPixels, widthOf);
 	}();
 	_dialogueWordsDrawn = frame != nullptr && !frame->runs.empty();
+	bool cueShown = false;
 	if (frame != nullptr)
 	{
 		// The box covers whole pixels, its right and bottom ones included
@@ -2200,15 +2238,29 @@ void GameInterface::DrawDialogue(glm::u16vec2 resolution, int barPixels)
 			                 glm::vec2(1.0f), colour, nullptr);
 		}
 		// Over the box and under the words, the "Continue" cue while the text waits for a click, whether or not the
-		// texts are drawn
+		// texts are drawn. The cue and the control icons are not drawn under a dialog box, but their fades continue.
 		if (const auto* dialogue = Locator::helpTextSystem::value().GetDialogue(); dialogue != nullptr)
 		{
+			const bool underBox = DialogBoxOpen();
 			if (const auto share = dialogue->GetClickCueShare(); share.has_value())
 			{
-				DrawClickCue(frame->box, *share);
+				cueShown = true;
+				KeepClickCuePicture();
+				if (!underBox)
+				{
+					DrawClickCue(frame->box, *share);
+				}
 			}
-			DrawControlIcons(*frame, *dialogue);
+			if (!underBox)
+			{
+				DrawControlIcons(*frame, *dialogue);
+			}
 		}
+	}
+	// The cue reads the input of the move action again the next time that it starts
+	if (!cueShown)
+	{
+		_clickCuePicture.reset();
 	}
 	// The hand's helper icons go over the box and under the words
 	DrawHandTricons(resolution);
@@ -2271,7 +2323,7 @@ void GameInterface::DrawHandTricons(glm::u16vec2 resolution)
 	const auto scale = tricons::DemoScale(glm::ivec2(screen));
 	const auto labelSize = static_cast<float>(tricons::DemoLabelSize(biggerText, scale));
 	const auto mouse = tricons::LayoutDemoMouse(centre, _demoMouseOnLeft, _font.GetWidth(label, labelSize), biggerText,
-	                                            in.moveHeld, in.actionHeld, scale);
+	                                            in.moveHeld, in.actionHeld, MouseRow(), scale);
 	DrawGlow(mouse.mouseMin, mouse.mouseMax, mouse.mouseGlow);
 	if (!label.empty())
 	{
@@ -2596,8 +2648,8 @@ void GameInterface::DrawChatBubbles(glm::u16vec2 resolution, glm::ivec2 mouse)
 		    world_text::BufferDepth(view.projection, world_text::WordsDepth(boxDepth - 2.0f, view.nearClip));
 		canvas.SetSortDepth(graphics::zsort::Depth(anchor, view.eye));
 		canvas.SetDepth(world_text::BufferDepth(view.projection, boxDepth));
-		// The box has half of the colour of the creature's god
-		const auto boxBits = bubbles::BoxColour(colourOf(body->owner));
+		// The box has half of the default sky blue, also for the creature of a god
+		const auto boxBits = bubbles::BoxColour();
 		const auto boxColour =
 		    glm::vec3(static_cast<float>((boxBits >> 16u) & 0xFFu) / 255.0f,
 		              static_cast<float>((boxBits >> 8u) & 0xFFu) / 255.0f, static_cast<float>(boxBits & 0xFFu) / 255.0f);
@@ -2692,8 +2744,7 @@ void GameInterface::DrawBubbleControl(const help::tip_bubble::ControlIcon& icon,
 		return;
 	}
 	const auto box = help::tip_bubble::PlaceControl(icon, static_cast<float>(icon.size), gap);
-	const auto cell =
-	    icons::CellFor(std::get<icons::MouseClick>(*picture), help::click_cue::k_WheelMouseRow, machine_clock::Ticks());
+	const auto cell = icons::CellFor(std::get<icons::MouseClick>(*picture), MouseRow(), machine_clock::Ticks());
 	_canvas.DrawQuad(box.min, box.max, cell.uvMin, cell.uvMax, colour, _mice.get());
 }
 
@@ -2813,27 +2864,71 @@ void GameInterface::DrawBubbleLine(Canvas& canvas, const help::tip_bubble::Line&
 	}
 }
 
+void GameInterface::KeepClickCuePicture()
+{
+	// The cue keeps the input that the move action had when the cue started. With no input, it tries again each frame.
+	if (_clickCuePicture.has_value() || !Locator::gameActionSystem::has_value())
+	{
+		return;
+	}
+	const auto bindings = Locator::gameActionSystem::value().GetKeyBindings();
+	if (auto picture = help::click_cue::PictureFor(bindings, ControlKeyName()); picture.has_value())
+	{
+		_clickCuePicture = ClickCuePicture {.picture = std::move(*picture), .mouseRow = MouseRow()};
+	}
+}
+
 void GameInterface::DrawClickCue(const help::TextRegion& box, float share)
 {
+	namespace cue_rules = help::click_cue;
+	namespace icons = help::control_icons;
+	if (!_clickCuePicture.has_value())
+	{
+		return;
+	}
+	const auto* keyText = std::get_if<std::u16string>(&_clickCuePicture->picture);
 	// Some languages use a bigger word
 	const bool biggerText = DialogPainter::NeedsBiggerText();
-	const auto& label = _texts.GetHelpText(help::click_cue::k_LabelText).text;
-	const auto labelSize = static_cast<float>(help::click_cue::LabelSize(box.top, box.bottom, biggerText));
+	const auto& label = _texts.GetHelpText(cue_rules::k_LabelText).text;
+	const auto labelSize = static_cast<float>(cue_rules::LabelSize(box.top, box.bottom, biggerText));
+	const int size = cue_rules::CueSize(box.top, box.bottom);
+	const float iconWidth = keyText != nullptr ? icons::KeyCapWidth(size, _font.GetWidth(*keyText, icons::KeyTextSize(size)))
+	                                           : static_cast<float>(size);
 	// Inset from the strip's right end, which is the screen's on 4:3
-	const auto cue = help::click_cue::Layout(box.right, box.top, box.bottom, share, _font.GetWidth(label, labelSize),
-	                                         biggerText, machine_clock::Ticks());
+	const auto cue =
+	    cue_rules::Layout(box.right, box.top, box.bottom, share, _font.GetWidth(label, labelSize), biggerText, iconWidth);
 	if (!cue.has_value())
 	{
 		return;
 	}
-	DrawGlow(cue->mouseGlow.min, cue->mouseGlow.max, cue->mouseGlowColour);
+	DrawGlow(cue->iconGlow.min, cue->iconGlow.max, cue->iconGlowColour);
 	if (!label.empty())
 	{
 		DrawGlow(cue->labelGlow.min, cue->labelGlow.max, cue->labelGlowColour);
 	}
-	if (_mice != nullptr)
+	if (keyText != nullptr)
 	{
-		_canvas.DrawQuad(cue->mouse.min, cue->mouse.max, cue->uvMin, cue->uvMax, cue->mouseColour, _mice.get());
+		const auto cap = icons::LayoutKeyCap({
+		    .icon = {.min = cue->icon.min, .max = cue->icon.max},
+		    .glowColour = cue->iconGlowColour,
+		    .alpha = cue->iconColour.a,
+		    .size = cue->size,
+		});
+		if (_atmos != nullptr)
+		{
+			for (size_t i = 0; i < cap.slices.size(); ++i)
+			{
+				_canvas.DrawQuad(cap.slices.at(i).min, cap.slices.at(i).max, cap.uvs.at(i).min, cap.uvs.at(i).max,
+				                 cue->iconColour, _atmos.get());
+			}
+		}
+		_painter.DrawString(cap.textAt, *keyText, cap.textSize, cap.textColour);
+	}
+	else if (_mice != nullptr)
+	{
+		const auto cell = cue_rules::BlinkCellFor(std::get<icons::MouseClick>(_clickCuePicture->picture),
+		                                          _clickCuePicture->mouseRow, machine_clock::Ticks());
+		_canvas.DrawQuad(cue->icon.min, cue->icon.max, cell.uvMin, cell.uvMax, cue->iconColour, _mice.get());
 	}
 	_painter.DrawString(cue->labelAt - 1.0f, label, cue->labelSize, cue->shadowColour);
 	_painter.DrawString(cue->labelAt + 1.0f, label, cue->labelSize, cue->shadowColour);
@@ -2903,8 +2998,7 @@ void GameInterface::DrawControlIcons(const help::TextFrame& frame, const help::D
 	DrawGlow(placed->icon.min, placed->icon.max, placed->glowColour);
 	if (_mice != nullptr)
 	{
-		const auto cell =
-		    icons::CellFor(std::get<icons::MouseClick>(*picture), help::click_cue::k_WheelMouseRow, machine_clock::Ticks());
+		const auto cell = icons::CellFor(std::get<icons::MouseClick>(*picture), MouseRow(), machine_clock::Ticks());
 		_canvas.DrawQuad(placed->icon.min, placed->icon.max, cell.uvMin, cell.uvMax, glm::vec4(1.0f, 1.0f, 1.0f, placed->alpha),
 		                 _mice.get());
 	}
@@ -3263,13 +3357,12 @@ void GameInterface::DrawToolTip(glm::u16vec2 resolution)
 	}
 	const bool left = (shown->arrows & ToolTipArrows::k_Left) != 0;
 	const bool right = (shown->arrows & ToolTipArrows::k_Right) != 0;
-	const float iconsWidth = iconWidth + static_cast<float>((left ? size / 2 : 0) + (right ? size / 2 : 0));
 	const int textSize = size * 2 / 3;
 	const float textWidth = _font.GetWidth(text, static_cast<float>(textSize));
 	// The gap after the words and the shadows' offset are pixels of the default screen
 	const float pixel = ReferenceScale(width, height);
 	const float gap = 2.0f * pixel;
-	const float total = textWidth + iconsWidth + gap;
+	const float total = world_tooltip::LineWidth(textWidth, iconWidth, size, left, right, gap);
 
 	// Right of the hand, or left of it in the right third of the screen, until it reaches the left third
 	if (handX > width * 2 / 3)
@@ -3280,53 +3373,41 @@ void GameInterface::DrawToolTip(glm::u16vec2 resolution)
 	{
 		_toolTipOnLeft = false;
 	}
-	const float x = _toolTipOnLeft ? static_cast<float>(handX + (size / 2)) - total : static_cast<float>(handX - (size / 2));
-	const float textX = x;
-	const float iconX = std::trunc(x + textWidth + gap) + (left ? static_cast<float>(size / 2) : 0.0f);
+	const int lineX = world_tooltip::LineStart(handX, size, total, _toolTipOnLeft);
+	const int lineIconX = world_tooltip::IconStart(lineX, textWidth, gap, size, left);
+	const auto textX = static_cast<float>(lineX);
+	const auto iconX = static_cast<float>(lineIconX);
 	const auto y = static_cast<float>(handY);
 	const auto sizeF = static_cast<float>(size);
-	const auto textOffset = static_cast<float>((size - textSize) / 2);
+	const float textOffset = world_tooltip::WordsOffset(size, textSize);
+	const auto drawGlow = [this](const world_tooltip::PixelBox& box, glm::vec4 colour) {
+		DrawGlow(glm::vec2(box.min), glm::vec2(box.max), colour);
+	};
 
 	// The glows behind: white behind the mouse, and faint yellow behind the words and arrows
 	const float glowAlpha = std::trunc(128.0f * shown->alpha) / 255.0f;
 	const float faintAlpha = std::trunc(128.0f * shown->alpha / 3.0f) / 255.0f;
 	if (iconWidth != 0.0f)
 	{
-		DrawGlow({iconX, y}, {iconX + iconWidth, y + sizeF}, glm::vec4(1.0f, 1.0f, 1.0f, glowAlpha));
+		drawGlow(world_tooltip::IconGlow(lineIconX, iconWidth, handY, size), glm::vec4(1.0f, 1.0f, 1.0f, glowAlpha));
 	}
 	if (!text.empty())
 	{
-		DrawGlow({textX, y + textOffset}, {textX + textWidth, y + sizeF - textOffset}, glm::vec4(1.0f, 1.0f, 0.0f, faintAlpha));
+		drawGlow(world_tooltip::WordsGlow(lineX, textWidth, handY, size, textOffset), glm::vec4(1.0f, 1.0f, 0.0f, faintAlpha));
 	}
-	const float half = sizeF * 0.5f;
-	const float quarter = sizeF * 0.25f;
-	const auto arrowRect = [&](uint32_t bit) -> std::pair<glm::vec2, glm::vec2> {
-		const float iconRight = iconX + iconWidth;
-		switch (bit)
-		{
-		case ToolTipArrows::k_Left:
-			return {{iconX - half, y + quarter}, {iconX, y + (3.0f * quarter)}};
-		case ToolTipArrows::k_Right:
-			return {{iconRight, y + quarter}, {iconRight + half, y + (3.0f * quarter)}};
-		case ToolTipArrows::k_Up:
-			return {{iconX + quarter, y - half}, {iconX + (3.0f * quarter), y}};
-		default:
-			return {{iconX + quarter, y + sizeF}, {iconX + (3.0f * quarter), y + (1.5f * sizeF)}};
-		}
-	};
 	for (const auto& arrow : k_ToolTipArrows)
 	{
 		if ((shown->arrows & arrow.bit) != 0)
 		{
-			const auto [min, max] = arrowRect(arrow.bit);
-			DrawGlow(min, max, glm::vec4(1.0f, 1.0f, 0.0f, faintAlpha));
+			drawGlow(world_tooltip::ArrowGlow(arrow.side, lineIconX, iconWidth, handY, size),
+			         glm::vec4(1.0f, 1.0f, 0.0f, faintAlpha));
 		}
 	}
 
 	// The mouse, its button the action's, or the key cap, and the arrows over the glows
 	if (click != nullptr && iconWidth != 0.0f)
 	{
-		const auto cell = icons::CellFor(*click, k_ToolTipMouseRow, machine_clock::Ticks());
+		const auto cell = icons::CellFor(*click, MouseRow(), machine_clock::Ticks());
 		_canvas.DrawQuad({iconX, y}, {iconX + sizeF, y + sizeF}, cell.uvMin, cell.uvMax, white, _mice.get());
 	}
 	else if (keyText != nullptr)
@@ -3348,13 +3429,12 @@ void GameInterface::DrawToolTip(glm::u16vec2 resolution)
 	}
 	if (_atmos != nullptr)
 	{
-		const float grow = static_cast<float>(size / 9);
 		for (const auto& arrow : k_ToolTipArrows)
 		{
 			if ((shown->arrows & arrow.bit) != 0)
 			{
-				const auto [min, max] = arrowRect(arrow.bit);
-				_canvas.DrawQuad(min - grow, max + grow, arrow.uvMin, arrow.uvMax, white, _atmos.get());
+				const auto box = world_tooltip::ArrowPicture(arrow.side, lineIconX, iconWidth, handY, size);
+				_canvas.DrawQuad(glm::vec2(box.min), glm::vec2(box.max), arrow.uvMin, arrow.uvMax, white, _atmos.get());
 			}
 		}
 	}

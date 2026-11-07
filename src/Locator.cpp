@@ -65,6 +65,7 @@
 #include "ECS/Systems/Implementations/CreatureHandSystem.h"
 #include "ECS/Systems/Implementations/CreatureHelpSystem.h"
 #include "ECS/Systems/Implementations/CreatureLocomotionSystem.h"
+#include "ECS/Systems/Implementations/CreatureMindLogSystem.h"
 #include "ECS/Systems/Implementations/CreatureMindSystem.h"
 #include "ECS/Systems/Implementations/CreatureModeSystem.h"
 #include "ECS/Systems/Implementations/CreatureObjectActionSystem.h"
@@ -97,6 +98,7 @@
 #include "ECS/Systems/Implementations/HighDetailSystem.h"
 #include "ECS/Systems/Implementations/InfluenceSystem.h"
 #include "ECS/Systems/Implementations/IntroSystem.h"
+#include "ECS/Systems/Implementations/LandDetailSystem.h"
 #include "ECS/Systems/Implementations/LobbyClientSystem.h"
 #include "ECS/Systems/Implementations/NetworkGameSystem.h"
 #include "ECS/Systems/Implementations/ObjectDrawListSystem.h"
@@ -176,6 +178,7 @@
 #include "ECS/Systems/IncomingMessageSystemInterface.h"
 #include "ECS/Systems/InspectorSystemInterface.h"
 #include "ECS/Systems/NetworkGameSystemInterface.h"
+#include "ECS/Systems/OwnReportSystemInterface.h"
 #include "ECS/Systems/PlayerCommandSystemInterface.h"
 #include "ECS/Systems/PlayerProfileSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
@@ -288,6 +291,7 @@ using openblack::ecs::systems::HelpTextSystem;
 using openblack::ecs::systems::HighDetailSystem;
 using openblack::ecs::systems::InfluenceSystem;
 using openblack::ecs::systems::IntroSystem;
+using openblack::ecs::systems::LandDetailSystem;
 using openblack::ecs::systems::LandSystem;
 using openblack::ecs::systems::LeashSystem;
 using openblack::ecs::systems::LivingActionSystem;
@@ -872,6 +876,8 @@ void openblack::InitializeOnlineAndTools(const player_profiles::Store& profiles)
 #if defined(OPENBLACK_DEVELOPER_TOOLS)
 	// The editor is a developer tool: a build without the developer tools has no editor
 	Locator::editorSystem::emplace<EditorSystem>();
+	// The record of the creature minds that the developer view watches
+	Locator::creatureMindLog::emplace<ecs::systems::CreatureMindLogSystem>();
 #endif
 	Locator::videoSystem::emplace<VideoSystem>();
 }
@@ -922,6 +928,8 @@ void InitializeLevelWith(MakeLand&& makeLand)
 	makeLand();
 	// The things on the land's blocks that are drawn, near to far
 	Locator::objectDrawListSystem::emplace<ObjectDrawListSystem>();
+	// How the land's blocks are drawn in each frame, for the land's draw and the draw list
+	Locator::landDetailSystem::emplace<LandDetailSystem>();
 	Locator::cameraPathSystem::emplace<CameraPathSystem>();
 }
 } // namespace
@@ -1011,6 +1019,7 @@ void openblack::ShutDownServices()
 	Locator::httpClient::reset();
 	Locator::fightTranscript::reset();
 	Locator::creatureAnimationLog::reset();
+	Locator::creatureMindLog::reset();
 	Locator::rendereringSystem::reset();
 	Locator::dynamicsSystem::reset();
 	Locator::templeDestructionSystem::reset();
@@ -1025,10 +1034,13 @@ void openblack::ShutDownServices()
 	Locator::resourceStoreSystem::reset();
 	Locator::animatedStaticSystem::reset();
 	Locator::objectDrawListSystem::reset();
+	Locator::landDetailSystem::reset();
 	Locator::abodeSoundSystem::reset();
 	Locator::appleBarrelSystem::reset();
 	Locator::weatherSystem::reset();
 	Locator::handGrabSystem::reset();
+	Locator::handPressSystem::reset();
+	Locator::gameKeysSystem::reset();
 	Locator::handSystem::reset();
 	Locator::pathfindingSystem::reset();
 	Locator::creatureLocomotionSystem::reset();
@@ -1141,6 +1153,7 @@ void openblack::ShutDownServices()
 	Locator::skyClockSystem::reset();
 	Locator::cameraHelpSystem::reset();
 	Locator::turnCheerSystem::reset();
+	Locator::ownReportSystem::reset();
 	Locator::cameraPathSystem::reset();
 	Locator::cloudSystem::reset();
 	Locator::mistSystem::reset();
@@ -1173,6 +1186,10 @@ void openblack::ShutDownServices()
 	Locator::vm::reset();
 	Locator::gameRandom::reset();
 	Locator::rng::reset();
+	// The music and the ambience of the land go last. The sounds are gone, so the music does not stop again.
+	Locator::gameAudioSystem::reset();
+	// The logs of a tool's run go last, because the systems above can write to them until they go
+	Locator::toolRunSystem::reset();
 }
 
 bool openblack::StartInspector([[maybe_unused]] uint16_t port)

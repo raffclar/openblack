@@ -325,3 +325,38 @@ TEST(TempleRoomAccess, TheRoomThePlayerIsKeptInIsOpen)
 	EXPECT_FALSE(
 	    IsRoomAvailable(TempleRoom::Multi, {.roomsOpened = false, .hasCreature = false, .keptIn = TempleRoom::SaveGame}));
 }
+
+TEST(TempleRoomAccess, ANetworkGameOpensTheCreatureOptionsAndCreditsRoomsAndShutsTheChallengeAndSaveGameRooms)
+{
+	using temple::IsRoomAvailable;
+	const temple::RoomAccessFacts network {
+	    .roomsOpened = true, .hasCreature = true, .keptIn = std::nullopt, .networkGame = true};
+	EXPECT_TRUE(IsRoomAvailable(TempleRoom::CreatureCave, network));
+	EXPECT_TRUE(IsRoomAvailable(TempleRoom::Options, network));
+	EXPECT_TRUE(IsRoomAvailable(TempleRoom::Credits, network));
+	EXPECT_TRUE(IsRoomAvailable(TempleRoom::Multi, network));
+	EXPECT_FALSE(IsRoomAvailable(TempleRoom::Challenge, network));
+	EXPECT_FALSE(IsRoomAvailable(TempleRoom::SaveGame, network));
+
+	const temple::RoomAccessFacts first {
+	    .roomsOpened = false, .hasCreature = true, .keptIn = std::nullopt, .networkGame = true};
+	EXPECT_TRUE(IsRoomAvailable(TempleRoom::CreatureCave, first));
+	EXPECT_TRUE(IsRoomAvailable(TempleRoom::Options, first));
+	EXPECT_TRUE(IsRoomAvailable(TempleRoom::Credits, first));
+	EXPECT_FALSE(IsRoomAvailable(TempleRoom::Multi, first));
+}
+
+TEST(TempleRoomAccess, ASkirmishOpensAllButTheChallengeRoomAndKeepsTheSaveGameRoomForLater)
+{
+	using temple::IsRoomAvailable;
+	const temple::RoomAccessFacts skirmish {
+	    .roomsOpened = false, .hasCreature = true, .keptIn = std::nullopt, .networkGame = false, .skirmish = true};
+	EXPECT_TRUE(IsRoomAvailable(TempleRoom::CreatureCave, skirmish));
+	EXPECT_TRUE(IsRoomAvailable(TempleRoom::Options, skirmish));
+	EXPECT_TRUE(IsRoomAvailable(TempleRoom::Credits, skirmish));
+	EXPECT_TRUE(IsRoomAvailable(TempleRoom::Multi, skirmish));
+	EXPECT_FALSE(IsRoomAvailable(TempleRoom::Challenge, skirmish));
+	EXPECT_FALSE(IsRoomAvailable(TempleRoom::SaveGame, skirmish));
+	EXPECT_FALSE(IsRoomAvailable(TempleRoom::CreatureCave,
+	                             {.roomsOpened = false, .hasCreature = false, .keptIn = std::nullopt, .skirmish = true}));
+}

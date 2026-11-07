@@ -680,9 +680,11 @@ bool ThrowThing(RuleContext& context, computer_mind::Mind& mind, uint16_t node)
 	{
 		return false;
 	}
-	auto& hand = context.state.hand;
-	computer_hand::Add(hand, StepKind::PickUpObject, {Argument {.object = thing}, Argument {.value = context.state.speed}});
-	computer_hand::Add(hand, StepKind::ThrowObjectInHandAtPos, {Argument {.place = place}});
+	if (!TakeUp(context, thing))
+	{
+		return false;
+	}
+	computer_hand::Add(context.state.hand, StepKind::ThrowObjectInHandAtPos, {Argument {.place = place}});
 	return true;
 }
 

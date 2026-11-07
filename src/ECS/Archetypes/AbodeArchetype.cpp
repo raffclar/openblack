@@ -249,6 +249,12 @@ entt::entity AbodeArchetype::Create(uint32_t townId, const glm::vec3& position, 
 	{
 	case AbodeType::StoragePit:
 		AddStoragePitComponents(entity, mesh, info, position, yAngleRadians, foodAmount, woodAmount);
+		// A storage pit made built starts to work at once and becomes the main pit of its town
+		if (const auto town = registry.Context().towns.find(townId);
+		    built >= 1.0f && town != registry.Context().towns.end() && Locator::townSystem::has_value())
+		{
+			Locator::townSystem::value().SetStoragePit(town->second, entity);
+		}
 		break;
 	case AbodeType::Workshop:
 		// A workshop makes its wood flag and its empty wood pile. Then it takes its food and its wood as a store does: it

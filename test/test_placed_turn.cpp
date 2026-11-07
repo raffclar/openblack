@@ -9,7 +9,10 @@
 
 #include <cmath>
 
+#include <atomic>
 #include <limits>
+#include <thread>
+#include <utility>
 
 #include <glm/gtx/euler_angles.hpp>
 #include <glm/mat3x3.hpp>
@@ -35,6 +38,20 @@ void ExpectNear(const glm::mat3& a, const glm::mat3& b, float tolerance)
 			EXPECT_NEAR(a[c][r], b[c][r], tolerance) << "column " << c << " row " << r;
 		}
 	}
+}
+
+/// A kind of component that no other test uses, so that each one makes a new store in the registry
+template <size_t N>
+struct Extra
+{
+	int value {0};
+};
+
+/// Makes a store of each extra kind in the registry. The registry's list of stores grows and moves in memory.
+template <size_t... N>
+void AddExtraStores(ecs::Registry& registry, entt::entity entity, std::index_sequence<N...> /*kinds*/)
+{
+	(registry.Assign<Extra<N>>(entity), ...);
 }
 
 } // namespace
@@ -233,4 +250,63 @@ TEST(PlacedTurn, TheUprightTurnIsTheTurnAboutY)
 	// No turn at 0, and no turn when the angle is not a number
 	EXPECT_EQ(x87::GameUprightTurn(0.0f), glm::mat3(1.0f));
 	EXPECT_EQ(x87::GameUprightTurn(std::numeric_limits<float>::quiet_NaN()), glm::mat3(1.0f));
+}
+
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST(PlacedTurn, TurnLookupsAnswerAsTheRegistryAfterNewStores)
+{
+	ecs::Registry registry;
+	const auto rock = registry.Create();
+	registry.Assign<ecs::components::Transform>(rock, glm::vec3(0.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+	registry.Assign<ecs::components::MobileStatic>(rock, MobileStaticInfo::Rock);
+	ecs::placed_turn::SetAngles(registry, rock, glm::vec3(2.0f, 4.0f, -0.5f));
+	const auto feature = registry.Create();
+	registry.Assign<ecs::components::Transform>(feature, glm::vec3(0.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+	registry.Assign<ecs::components::Feature>(feature, FeatureInfo::Ark);
+	ecs::placed_turn::SetAngles(registry, feature, glm::vec3(0.4f, 4.0f, 0.1f));
+	const auto bare = registry.Create();
+
+	const ecs::placed_turn::TurnLookups turns(std::as_const(registry));
+	// The registry gets many new stores after the look-ups found theirs
+	AddExtraStores(registry, bare, std::make_index_sequence<24> {});
+	for (const auto entity : {rock, feature, bare})
+	{
+		EXPECT_EQ(ecs::placed_turn::CanLean(turns, entity), ecs::placed_turn::CanLean(registry, entity));
+		EXPECT_EQ(ecs::placed_turn::AnglesOf(turns, entity), ecs::placed_turn::AnglesOf(registry, entity));
+	}
+	EXPECT_TRUE(ecs::placed_turn::CanLean(turns, rock));
+	EXPECT_EQ(ecs::placed_turn::AnglesOf(turns, rock), glm::vec3(2.0f, 4.0f, -0.5f));
+	EXPECT_EQ(ecs::placed_turn::AnglesOf(turns, feature), glm::vec3(0.0f, 4.0f, 0.0f));
+	EXPECT_EQ(ecs::placed_turn::AnglesOf(turns, bare), glm::vec3(0.0f));
+}
+
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST(PlacedTurn, TurnLookupsReadOnAnotherThreadWhileTheRegistryAddsStores)
+{
+	// The land's footprints search on a side thread with look-ups that the game's thread found, while the draw on the
+	// game's thread can add stores to the registry. The side thread must not look in the registry's list of stores.
+	ecs::Registry registry;
+	const auto rock = registry.Create();
+	registry.Assign<ecs::components::Transform>(rock, glm::vec3(0.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+	registry.Assign<ecs::components::MobileStatic>(rock, MobileStaticInfo::Rock);
+	ecs::placed_turn::SetAngles(registry, rock, glm::vec3(2.0f, 4.0f, -0.5f));
+	const auto bare = registry.Create();
+
+	const ecs::placed_turn::TurnLookups turns(std::as_const(registry));
+	std::atomic<bool> stop {false};
+	std::atomic<int> wrong {0};
+	std::thread reader([&turns, &stop, &wrong, rock] {
+		do
+		{
+			if (!ecs::placed_turn::CanLean(turns, rock) ||
+			    ecs::placed_turn::AnglesOf(turns, rock) != glm::vec3(2.0f, 4.0f, -0.5f))
+			{
+				wrong.fetch_add(1);
+			}
+		} while (!stop.load());
+	});
+	AddExtraStores(registry, bare, std::make_index_sequence<24> {});
+	stop.store(true);
+	reader.join();
+	EXPECT_EQ(wrong.load(), 0);
 }

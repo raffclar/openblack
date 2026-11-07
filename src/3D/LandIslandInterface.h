@@ -162,6 +162,11 @@ public:
 	/// over the triangle of the cell the position is in, the way the land is drawn, with land at sea level flat unless
 	/// told otherwise (as the game only does to find a fish farm's open sea).
 	[[nodiscard]] float GetAltitude(int32_t mapX, int32_t mapZ, bool seaLevelFlat = true) const;
+	/// The script's answer when it asks for the height of the land where there is no land
+	static constexpr float k_NoScriptLandHeight = -10.0f;
+	/// The height of the land at a point that a script asks for, in metres. The script gets k_NoScriptLandHeight when
+	/// the cell of the point is off the map, has no block, or has its first corner at altitude 0.
+	[[nodiscard]] float GetScriptLandHeight(glm::vec3 position) const;
 	/// Adds to the bytes the cell data that GetAltitude reads for all the map points in the reach. Two equal byte lists
 	/// give equal altitudes at each point of the reach. Returns false when the reach is too large to compare quickly.
 	[[nodiscard]] bool AltitudeInputs(const MapReach& reach, std::vector<std::byte>& bytes) const;

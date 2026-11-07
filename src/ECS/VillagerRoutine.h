@@ -70,6 +70,35 @@ enum class Idle : uint8_t
 /// their home, five go and sit about their town; each falls through to the next when it can't, ending at home
 [[nodiscard]] Idle NothingToDo(bool hasAbode, bool abodeFunctional, bool hasTown, const IntRandom& random);
 
+/// What a villager does when it arrives at a home that is not built or not repaired
+enum class UnfinishedHome : uint8_t
+{
+	/// It goes in
+	GoIn,
+	/// It lies down outside in a tent
+	LieDownOutside,
+	/// It decides again, but goes in all the same
+	DecideThenGoIn,
+	/// It tries to build or repair the home, and goes in when it cannot
+	TryToBuild,
+};
+/// The choice at a home that is not built or not repaired:
+/// - A hurt villager goes in when the home works, or else lies down outside.
+/// - A hungry villager goes in, and decides again first when the home does not work.
+/// - Any other villager tries to build or repair the home.
+[[nodiscard]] constexpr UnfinishedHome AtUnfinishedHome(bool hurt, bool hungry, bool functional)
+{
+	if (hurt)
+	{
+		return functional ? UnfinishedHome::GoIn : UnfinishedHome::LieDownOutside;
+	}
+	if (hungry)
+	{
+		return functional ? UnfinishedHome::GoIn : UnfinishedHome::DecideThenGoIn;
+	}
+	return UnfinishedHome::TryToBuild;
+}
+
 /// A villager knocked out of its home won't go to bed again for its next decision, unless it is badly hurt
 [[nodiscard]] constexpr bool MaySleep(bool woken, float life, float goHomeLife)
 {
@@ -141,6 +170,17 @@ constexpr uint32_t k_TentTries = 3;
 constexpr float k_TentSleeperGap = 5.0f;
 /// A spot taken in the open is moved on: the distance is drawn first, then the angle
 [[nodiscard]] glm::vec2 TentRetry(glm::vec2 spot, const FloatRandom& random);
+
+/// The kinds of cell that keep a villager off a spot in the open (to lie down, to gossip, to follow its mother): water,
+/// a fixed thing and the map's edge. The cell test never marks a fixed thing, so a building does not keep a villager off
+/// a spot.
+constexpr uint32_t k_OpenSpotCollide = static_cast<uint32_t>(CollideType::Water) | static_cast<uint32_t>(CollideType::Fixed) |
+                                       static_cast<uint32_t>(CollideType::Edge);
+/// Whether a spot in the open is closed to a villager, from the kinds of its cell
+[[nodiscard]] constexpr bool OpenSpotCollides(uint32_t cellCollision)
+{
+	return (cellCollision & k_OpenSpotCollide) != 0;
+}
 
 /// A tree a villager lies down by is looked for this far off; it lies this far from the tree, on the far side from what
 /// is near it or else from itself

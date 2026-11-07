@@ -51,6 +51,13 @@ struct EffectSource
 	bool creatureSmash {false};
 };
 
+/// The thing that applied an effect: what applied it when no miracle did, else the creature that cast the miracle. None
+/// for a fall onto the land or a miracle that no creature cast.
+[[nodiscard]] constexpr entt::entity ApplierOf(const EffectSource& source)
+{
+	return source.appliedBy.value_or(source.casterCreature);
+}
+
 /// A drop of the water miracle's rain
 struct WaterDrop
 {

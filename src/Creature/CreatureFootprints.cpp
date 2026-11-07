@@ -58,24 +58,32 @@ Foot FootOf(const glm::mat4& world)
 	return {.position = glm::vec3(world[3]), .yaw = x87::RoundToFloat(x87::GameAtan2(-z.x, z.z))};
 }
 
-float Side(float creatureSize, const SpeciesPrint& print)
+float PrintSize(float creatureSize, const SpeciesPrint& print)
 {
-	return 2.0f * k_HalfSide * creatureSize * k_SizePerCreatureSize * print.scale;
+	// The game rounds the size times 4 to a float, then multiplies by the species' scale
+	const float sized = creatureSize * k_SizePerCreatureSize;
+	return sized * print.scale;
 }
 
-Footprint MakeFootprint(const glm::vec3& foot, float angle, float side, uint8_t cell, bool left, const AltitudeAt& altitudeAt)
+Footprint MakeFootprint(const glm::vec3& foot, float angle, float size, uint8_t cell, bool left, const AltitudeAt& altitudeAt)
 {
-	const auto size = side / (2.0f * k_HalfSide);
-	const auto cosine = portable_math::Cos(angle);
-	const auto sine = portable_math::Sin(angle);
+	const float cosine = portable_math::Cos(angle);
+	const float sine = portable_math::Sin(angle);
+	const float negativeSine = -sine;
+	// The game turns each corner about the foot with one matrix: the turn, then a move that keeps the foot in place. The
+	// move is the foot less the turned foot. Each step rounds to a float, so a corner far from the map's origin can be
+	// some thousandths of a unit away from a turn of its offset alone.
+	const float moveX = foot.x + (((cosine * -foot.x) + (negativeSine * -foot.z)) + 0.0f);
+	const float moveZ = foot.z + (((sine * -foot.x) + (cosine * -foot.z)) + 0.0f);
 	const auto origin = glm::vec2(static_cast<float>(cell) / static_cast<float>(k_CellsPerRow), 0.0f);
 	const auto& cellUvs = k_CellUvs.at(left ? 1 : 0);
 	Footprint print;
 	for (size_t i = 0; i < print.corners.size(); ++i)
 	{
-		const auto offset = k_Corners.at(i) * size;
-		const auto x = foot.x + (cosine * offset.x) - (sine * offset.y);
-		const auto z = foot.z + (sine * offset.x) + (cosine * offset.y);
+		const float cornerX = (size * k_Corners.at(i).x) + foot.x;
+		const float cornerZ = (size * k_Corners.at(i).y) + foot.z;
+		const float x = (((cosine * cornerX) + (negativeSine * cornerZ)) + 0.0f) + moveX;
+		const float z = (((cosine * cornerZ) + (sine * cornerX)) + 0.0f) + moveZ;
 		print.corners.at(i) = glm::vec3(x, altitudeAt(x, z) + k_Lift, z);
 		print.uvs.at(i) = origin + (cellUvs.at(i) / static_cast<float>(k_CellsPerRow));
 	}

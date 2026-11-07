@@ -11,7 +11,8 @@ $output v_texcoord0, v_color0, v_haze
 uniform vec4 u_islandExtent;
 #include "land_light.sh"
 
-// xy: where the animation's frame is in the smoke texture
+// xy: where the animation's frame is in the smoke texture. z: the light that a particle's mist adds after the texture,
+// as one whole number red x 65536 + green x 256 + blue (0 for the other mists)
 uniform vec4 u_mist;
 // The mist's colour and alpha
 uniform vec4 u_mistColour;
@@ -42,6 +43,12 @@ void main()
 		colour = HazeDiffuse(colour, HazeFactor(hazeT));
 		v_haze = vec4(min(HazeColour(hazeT) + vec3_splat(u_landLight.w), vec3_splat(255.0f)) / 255.0f, 0.0f);
 	}
+	// A particle's mist adds its own light after the texture, each channel at most white
+	float packed = floor(u_mist.z + 0.5f);
+	float red = floor(packed / 65536.0f);
+	float green = floor((packed - red * 65536.0f) / 256.0f);
+	float blue = packed - red * 65536.0f - green * 256.0f;
+	v_haze.rgb = min(v_haze.rgb + vec3(red, green, blue) / 255.0f, vec3_splat(1.0f));
 	vec3 localLight = ModelLightLocal(mul(u_model[0], vec4(1.0f, 0.0f, 0.0f, 0.0f)).xyz, mul(u_model[0], vec4(0.0f, 1.0f, 0.0f, 0.0f)).xyz,
 	                                  mul(u_model[0], vec4(0.0f, 0.0f, 1.0f, 0.0f)).xyz, origin);
 	v_color0 = vec4(ModelLightColour(colour, ModelLightFactor(a_normal, localLight)), u_mistColour.a);

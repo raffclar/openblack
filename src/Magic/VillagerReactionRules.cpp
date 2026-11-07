@@ -15,6 +15,7 @@
 #include <iterator>
 
 #include "3D/MapCoords.h"
+#include "Magic/ReactionRules.h"
 
 using namespace openblack::magic;
 

@@ -107,3 +107,24 @@ TEST(EscapeKeyRules, GivesAReasonOnlyWhenTheMenuStaysShut)
 	}
 	EXPECT_NE(WhyMenuStaysShut({.scriptHoldsCinemaBars = true}).find("cinema bars"), std::string_view::npos);
 }
+
+TEST(EscapeKeyRules, AsksAboutANewGameOnceTheGameIsOver)
+{
+	const auto response = Respond({.shiftOrCtrl = true, .helpScriptHoldsDialogue = true, .gameOver = true});
+	EXPECT_EQ(response.outcome, Outcome::AskNewGame);
+	EXPECT_FALSE(response.stopHelpScripts);
+	EXPECT_FALSE(response.clearScreenFade);
+	EXPECT_FALSE(WhyMenuStaysShut({.gameOver = true}).empty());
+}
+
+TEST(EscapeKeyRules, AsksAboutANewGameOnTheGodsPlaygroundToo)
+{
+	EXPECT_EQ(Respond({.inGodsPlayground = true, .gameOver = true}).outcome, Outcome::AskNewGame);
+}
+
+TEST(EscapeKeyRules, AsksNothingOnceTheGameIsOverInAScriptsCutScene)
+{
+	const auto response = Respond({.scriptHoldsCinemaBars = true, .helpScriptHoldsDialogue = true, .gameOver = true});
+	EXPECT_EQ(response.outcome, Outcome::Nothing);
+	EXPECT_FALSE(response.stopHelpScripts);
+}

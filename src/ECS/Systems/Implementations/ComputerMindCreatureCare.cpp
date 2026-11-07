@@ -242,12 +242,10 @@ bool TakeToCreature(RuleContext& context, computer_mind::Mind& mind, uint16_t no
 {
 	const auto thing = LeafObjectOf(mind, node);
 	const auto creature = ObjectOf(mind, node);
-	if (!HasPlace(thing) || !HasPlace(creature))
+	if (!HasPlace(thing) || !HasPlace(creature) || !TakeUp(context, thing))
 	{
 		return false;
 	}
-	computer_hand::Add(context.state.hand, StepKind::PickUpObject,
-	                   {Argument {.object = thing}, Argument {.value = context.state.speed}});
 	computer_hand::Add(context.state.hand, give, {Argument {.object = creature}});
 	return true;
 }

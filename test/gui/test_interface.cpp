@@ -944,6 +944,20 @@ TEST(GameMenu, ListsTheControls)
 	EXPECT_EQ(items[29].text, u" : Ctrl + S ");
 }
 
+TEST(GameMenu, ShowsTheControlsMiceInTheRowOfThePlayersMouse)
+{
+	MenuFixture f;
+	// A two-button mouse: the first row of the mice picture
+	f.menu.SetMouseRow(0);
+	const auto& items = f.menu.GetControls().GetItems();
+	EXPECT_EQ(items[1].mouseCell, 1);
+	EXPECT_TRUE(items[1].mouseMirrored);
+	EXPECT_EQ(items[6].mouseCell, 2);
+	// A mouse with more buttons: the second row
+	f.menu.SetMouseRow(1);
+	EXPECT_EQ(f.menu.GetControls().GetItems()[1].mouseCell, 5);
+}
+
 namespace
 {
 /// The middle of a row of the Controls page, as the list shows it

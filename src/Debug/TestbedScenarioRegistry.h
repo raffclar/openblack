@@ -210,6 +210,9 @@ struct Environment
 	std::optional<int32_t> landNumber;
 	/// The snow lies this deep in every cell of the island as the scenario starts, 0 to 255. A testbed set-up step.
 	std::optional<float> snowDepth;
+	/// The background weather's wind along x and z, -128 to 127, as the real-world weather sets it: 1 and 1 for its
+	/// type 10. The runner puts the background weather back when the scenario stops.
+	std::optional<glm::ivec2> backgroundWind;
 	/// The players other than the first that are in the game while the scenario runs, such as a rival god for whom a
 	/// script makes a creature. The runner removes them when the scenario stops.
 	std::vector<PlayerNames> players;
@@ -934,6 +937,9 @@ struct Command
 		/// The temple's camera looks at the picture of a slot of the save game room (value: the slot), as when the
 		/// player presses the picture. Needs no creature
 		LookAtSaveGamePicture,
+		/// In the creature's room, the temple's camera zooms to a target of the room (value: the target's place), as when
+		/// the player clicks the target. Needs no creature
+		ZoomToTempleCaveTarget,
 		/// The creature catches fire, and burns as at the start of a fire. With a value of 1, the scenario's object catches
 		/// fire in place of the creature.
 		SetAlight,
@@ -1240,6 +1246,9 @@ struct Command
 		/// An arena of a loaded file of the game (radius) is put midway between the creature and the other creature
 		/// (value). It has no ring of light and makes no reaction, as an arena after a load of a saved game.
 		PutLoadedArena,
+		/// The move action takes the key (value, the key's scancode) and loses its mouse button, as the Controls page
+		/// binds it. Value 0 gives back the bindings of the game. Needs no creature
+		BindMoveKey,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures
@@ -1249,7 +1258,8 @@ struct Command
 	/// Seconds after the last command before this one, counted once its creature is free when it waits for that
 	float delaySeconds {0.0f};
 	/// Waits until its creature has stopped moving and its body plays nothing, such as having arrived; for a command
-	/// to the player's hand, until the hand has drawn the whole of the gesture it was drawing
+	/// to the player's hand, until the hand has drawn the whole of the gesture it was drawing; for a look of the
+	/// temple's camera, until no script has the cinema bars in
 	bool waitUntilFree {false};
 	/// The point gone to, fled from or faced, from the middle of the map
 	glm::vec2 point {0.0f};

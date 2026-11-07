@@ -183,6 +183,10 @@ constexpr float k_StraightLookPitch = 1.5393804f;
 constexpr float k_HalfTurn = 3.1415927410125732f;
 /// How long the camera takes to catch up with the look
 constexpr float k_LookEaseTime = 0.15f;
+/// The time that the zoom to a target adds to the move of the camera to its aim, for each whole of the zoom
+constexpr float k_CaveEasePerZoom = 0.1f;
+/// The seconds in a millisecond, as the float that the game multiplies by
+constexpr float k_SecondsPerMillisecond = 0.001f;
 
 const PictureRoom* PictureRoomOf(TempleRoom room)
 {
@@ -491,6 +495,40 @@ glm::vec2 TempleCameraModel::HeadingAndPitch(const Pose& look)
 	return {x87::Sub(k_HalfTurn, x87::GameHeadingOf(behind.x, behind.z)), x87::RoundToFloat(x87::GameAtan2(behind.y, across))};
 }
 
+float TempleCameraModel::StepSeconds(std::chrono::microseconds dt)
+{
+	const auto milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(dt).count();
+	return static_cast<float>(milliseconds) * k_SecondsPerMillisecond;
+}
+
+float TempleCameraModel::CaveLookEaseTime(float zoom)
+{
+	return (zoom * k_CaveEasePerZoom) + k_LookEaseTime;
+}
+
+TempleCameraModel::CaveAim TempleCameraModel::CaveZoomAim(const Pose& look, const Pose& zoomed, glm::vec3 from, float zoom)
+{
+	if (zoom == 0.0f)
+	{
+		return {.aim = look, .look = std::nullopt};
+	}
+	const Pose aim {Between(look.origin, zoomed.origin, zoom), Between(look.focus, zoomed.focus, zoom)};
+	// When the zoom is fully in, the look turns to the point that the camera looks at. Thus the look stays there when
+	// the zoom goes back.
+	if (zoom == 1.0f)
+	{
+		return {.aim = aim, .look = HeadingAndPitch({from, aim.focus})};
+	}
+	return {.aim = aim, .look = std::nullopt};
+}
+
+TempleCameraModel::Pose TempleCameraModel::WalkBackStart(const Pose& through, const Pose& from)
+{
+	Pose start {(through.origin + from.origin) * 0.5f, (through.focus + from.focus) * 0.5f};
+	start.origin.y = through.origin.y;
+	return start;
+}
+
 TempleCameraModel::TempleCameraModel(Paths paths, Room room)
     : _paths(std::move(paths))
 {
@@ -549,11 +587,12 @@ void TempleCameraModel::StartIntro(Room room, bool blendFromCurrent)
 
 void TempleCameraModel::GoToRoom(Room room)
 {
-	Locator::temple::value().GetDoors().FastClose();
+	// A key of the room the player is in does nothing, and the doors stay as they are
 	if (room == GetRoom())
 	{
 		return;
 	}
+	Locator::temple::value().GetDoors().FastClose();
 	// Going straight to a room skips its path: the room's camera starts over, takes over from the camera, and
 	// settles where the player has it
 	if (IsPictureRoom(room))
@@ -604,7 +643,7 @@ void TempleCameraModel::HandleActions(std::chrono::microseconds /*dt*/)
 std::optional<CameraModel::CameraInterpolationUpdateInfo> TempleCameraModel::Update(std::chrono::microseconds dt,
                                                                                     const Camera& camera)
 {
-	const float seconds = std::chrono::duration_cast<std::chrono::duration<float>>(dt).count();
+	const float seconds = StepSeconds(dt);
 	const auto& actions = Locator::gameActionSystem::value();
 
 	Input input {};
@@ -623,16 +662,20 @@ std::optional<CameraModel::CameraInterpolationUpdateInfo> TempleCameraModel::Upd
 	const bool cinemaBars =
 	    Locator::cinematicDirectorSystem::has_value() && Locator::cinematicDirectorSystem::value().IsWideScreenOn();
 	const auto pressed = static_cast<temple_press::Button>(input.button);
-	input.button =
-	    static_cast<uint8_t>(cinemaBars ? _heldFromOutside.FilterUnderCinemaBars(pressed) : _heldFromOutside.Filter(pressed));
+	const auto afterHeld = cinemaBars ? _heldFromOutside.FilterUnderCinemaBars(pressed) : _heldFromOutside.Filter(pressed);
+	input.button = static_cast<uint8_t>(afterHeld);
 	// A press on one of the room's controls goes to the control, which the room's camera then doesn't see
-	if (Locator::temple::value().HoldControl(input.button != 0, input.mouse.y))
+	const bool control = Locator::temple::value().HoldControl(input.button != 0, input.mouse.y);
+	if (control)
 	{
 		input.button = 0;
 	}
 	// Under the temple's fade the camera doesn't take a held press
-	input.button = static_cast<uint8_t>(
-	    temple_press::UnderFade(static_cast<temple_press::Button>(input.button), Locator::temple::value().GetFadeAmount()));
+	const float fade = Locator::temple::value().GetFadeAmount();
+	const auto afterFade = temple_press::UnderFade(static_cast<temple_press::Button>(input.button), fade);
+	input.button = static_cast<uint8_t>(afterFade);
+	// Tools read what took a press away from the camera
+	_pressWatch.Note(pressed, afterHeld, cinemaBars, control, afterFade, fade, _lookingAtSubMesh);
 	if (Locator::windowing::has_value())
 	{
 		const auto size = glm::vec2(Locator::windowing::value().GetSize());
@@ -706,8 +749,9 @@ std::optional<CameraModel::CameraInterpolationUpdateInfo> TempleCameraModel::Upd
 
 	auto origin = _origin.GetValue();
 	auto focus = _focus.GetValue();
-	// In the creature's room, it goes over to the target zoomed to in a straight line
-	if (_caveZoom > 0.0f)
+	// When the zoom is to the creature, the camera moves in a straight line to the view of the tattoo editor. For the
+	// other targets, the zoom is in the aim of the camera.
+	if (_caveZoom > 0.0f && _caveLookIsEditors && _state == State::Look)
 	{
 		origin = Between(origin, _caveLook.origin, _caveZoom);
 		focus = Between(focus, _caveLook.focus, _caveZoom);
@@ -747,15 +791,18 @@ void TempleCameraModel::Step(float dt, const Input& input)
 	// Looking at a scroll, the room's camera keeps still, and a press elsewhere or the arrow keys send it back, as in
 	// the creature's room
 	const bool inControl = _state == ControlOf(GetRoom());
+	const bool wasLookingAtSubMesh = _lookingAtSubMesh;
 	if (_lookingAtSubMesh)
 	{
+		// The look comes closer in this step also when the player stops it
+		_subMeshZoom = std::min(_subMeshZoom + (0.75f * dt), 1.0f);
 		const auto& actions = Locator::gameActionSystem::value();
 		const bool turning = actions.GetAny(BindableActionMap::MOVE_LEFT, BindableActionMap::MOVE_RIGHT,
 		                                    BindableActionMap::MOVE_FORWARDS, BindableActionMap::MOVE_BACKWARDS);
 		const bool leftByPlayer = (input.button != 0 && !_wasPressed) || turning;
 		if (leftByPlayer || !inControl)
 		{
-			_lookingAtSubMesh = false;
+			LeaveSubMesh(leftByPlayer);
 		}
 		// The player taking the camera away from the scroll stops the scroll's help
 		if (leftByPlayer)
@@ -768,7 +815,10 @@ void TempleCameraModel::Step(float dt, const Input& input)
 			}
 		}
 	}
-	_subMeshZoom = std::clamp(_subMeshZoom + ((_lookingAtSubMesh ? 0.75f : -0.7f) * dt), 0.0f, 1.0f);
+	else
+	{
+		_subMeshZoom = std::max(_subMeshZoom - (0.7f * dt), 0.0f);
+	}
 	if (!_lookingAtSubMesh && _subMeshZoom <= 0.0f)
 	{
 		_subMeshLook.reset();
@@ -789,7 +839,8 @@ void TempleCameraModel::Step(float dt, const Input& input)
 		UpdateCaveTargets(dt, input);
 	}
 
-	if (!_lookingAtSubMesh)
+	// In the main room, the step that stops the look at a scroll does not also move the orbit or take a door
+	if (!_lookingAtSubMesh && !(wasLookingAtSubMesh && InMainRoom()))
 	{
 		switch (_state)
 		{
@@ -1050,15 +1101,24 @@ void TempleCameraModel::UpdateLook(float dt, const Input& input)
 	}
 	_lookSpeed *= x87::Exp(-k_LookSlowing * dt);
 
-	_target = LookPose(_lookFrom, _look.x, _look.y);
-	_originTime = k_LookEaseTime;
-	_focusTime = k_LookEaseTime;
+	// The aim of the camera is a part of the way to the target of the zoom. The camera moves to its aim more slowly
+	// when the zoom is further in.
+	const auto aim =
+	    CaveZoomAim(LookPose(_lookFrom, _look.x, _look.y), _caveLook, _lookFrom, _caveLookIsEditors ? 0.0f : _caveZoom);
+	_target = aim.aim;
+	if (aim.look.has_value())
+	{
+		_look = *aim.look;
+	}
+	_originTime = _caveEaseTime;
+	_focusTime = _caveEaseTime;
 	// Clicking the room's door walks back through it, from halfway between the camera and the door
 	// TODO(raffclar): the creature's room also lets a press held from the door walk back once it is near, and zooms to
 	//                 the scrolls of the creature's attributes
 	if (input.button != 0 && !_wasPressed && input.doorBack == k_CreatureDoor)
 	{
-		WalkBackThrough(k_CreatureDoor);
+		// In the creature's room, the walk starts from the position of the camera, not from its aim
+		WalkBackThrough(k_CreatureDoor, {_origin.GetValue(), _focus.GetValue()});
 	}
 }
 
@@ -1077,9 +1137,20 @@ std::optional<glm::vec3> TempleCameraModel::CaveMeshPoint(uint32_t index)
 void TempleCameraModel::UpdateCaveTargets(float dt, const Input& input)
 {
 	using namespace CreatureCaveTargets;
-	_caveTarget = !(_state == State::Look && !_lookingAtSubMesh) ? std::nullopt
-	              : input.overCaveCreature                       ? std::optional(Target::Creature)
-	                                                             : TargetAt(input.caveTargets, input.mouse, input.screen.y);
+	// While the zoom is not to the exit, a fade that goes up to a whole for the first time fades down again. Thus the
+	// white of the exit fades down when the player stops the zoom to the exit before the fade is full.
+	if (_caveZoomedTo != Target::Exit && Locator::temple::has_value())
+	{
+		Locator::temple::value().TurnBackRisingFade();
+	}
+	// The targets and the zoom change only while the player looks around the room
+	if (!(_state == State::Look && !_lookingAtSubMesh))
+	{
+		_caveTarget.reset();
+		return;
+	}
+	_caveTarget =
+	    input.overCaveCreature ? std::optional(Target::Creature) : TargetAt(input.caveTargets, input.mouse, input.screen.y);
 
 	// A press anywhere zooms back, but from the creature, and a click on a target, while the camera is all the way back,
 	// zooms to it
@@ -1126,6 +1197,8 @@ void TempleCameraModel::UpdateCaveTargets(float dt, const Input& input)
 		}
 	}
 
+	// The time to move to the aim comes from the zoom before the zoom of this step
+	_caveEaseTime = CaveLookEaseTime(_caveZoom);
 	// It zooms in over a second and back in half that, and zoomed to the exit, the player leaves the temple
 	if (_caveZoom < _caveZoomTarget)
 	{
@@ -1198,6 +1271,7 @@ void TempleCameraModel::ZoomToCaveTarget(CreatureCaveTargets::Target target)
 	}
 	_caveZoomTarget = 1.0f;
 	_caveZoomedTo = target;
+	_caveLookIsEditors = target == Target::Creature;
 }
 
 void TempleCameraModel::LeaveCaveCreature()
@@ -1217,6 +1291,7 @@ void TempleCameraModel::ResetCaveTargets()
 	_caveZoomedTo.reset();
 	_caveZoom = 0.0f;
 	_caveZoomTarget = 0.0f;
+	_caveLookIsEditors = false;
 }
 
 void TempleCameraModel::ResetPictureCamera(Room room)
@@ -1297,7 +1372,7 @@ void TempleCameraModel::UpdatePictureOrbit(float dt, const Input& input)
 	// Clicking the room's door walks back through it, from halfway between the camera and the door
 	if (input.button != 0 && !_wasPressed && input.doorBack == pictureRoom.door)
 	{
-		WalkBackThrough(pictureRoom.door);
+		WalkBackThrough(pictureRoom.door, _target);
 	}
 	// TODO(raffclar): a room of pictures can also look at its pictures
 }
@@ -1347,12 +1422,11 @@ void TempleCameraModel::UpdatePictureKeys(float dt, PictureCamera& picture)
 	picture.leanTarget = tilt * 0.5f + 0.5f;
 }
 
-void TempleCameraModel::WalkBackThrough(uint32_t door)
+void TempleCameraModel::WalkBackThrough(uint32_t door, const Pose& from)
 {
 	// The rooms' cameras head halfway from where they are to the door, at its height, then through it
 	const auto through = TurnToDoorBack(k_DoorBack, door);
-	_doorStart = {(through.origin + _target.origin) * 0.5f, (through.focus + _target.focus) * 0.5f};
-	_doorStart.origin.y = through.origin.y;
+	_doorStart = WalkBackStart(through, from);
 	_doorEnd = through;
 	_doorRoom = Room::Main;
 	_nextState = State::ThroughDoor;
@@ -1439,11 +1513,7 @@ void TempleCameraModel::ChangeState()
 		_blendTime = 0.0f;
 		break;
 	case State::Orbit:
-		// The main room's camera starts the player facing the scroll, leaning a little up
-		_yawTarget = 0.0f;
-		_leanTarget = k_StartLean;
-		_yaw.Reset(0.0f);
-		_lean.Reset(k_StartLean);
+		RestartOrbit();
 		break;
 	case State::Look:
 	{
@@ -1470,6 +1540,35 @@ void TempleCameraModel::ChangeState()
 		break;
 	}
 	_state = _nextState;
+}
+
+void TempleCameraModel::RestartOrbit()
+{
+	// The main room's camera starts the player facing the scroll, leaning a little up
+	_yawTarget = 0.0f;
+	_leanTarget = k_StartLean;
+	_yaw.Reset(0.0f);
+	_lean.Reset(k_StartLean);
+}
+
+void TempleCameraModel::LeaveSubMesh(bool byPlayer)
+{
+	_lookingAtSubMesh = false;
+	if (!InMainRoom() || _state != State::Orbit)
+	{
+		return;
+	}
+	// The main room's orbit leans up when the player sends the camera back. After a look that came fully in, the orbit
+	// starts again from its first turn and lean.
+	const auto leave = MainRoomScrollLeave(byPlayer, _subMeshZoom);
+	if (leave.leanTarget.has_value())
+	{
+		_leanTarget = *leave.leanTarget;
+	}
+	if (leave.restartOrbit)
+	{
+		RestartOrbit();
+	}
 }
 
 void TempleCameraModel::LookAtSubMesh(glm::vec3 position, glm::vec3 lookAt)

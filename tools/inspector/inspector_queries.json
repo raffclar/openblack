@@ -488,7 +488,7 @@
   "query": "creature.list"
  },
  {
-  "description": "A creature's strongest desires, strongest first",
+  "description": "A creature's strongest desires, strongest first. Also the active desires (activated, with a value or a drive of 0.001 or more), each with the name, value, threshold, part and drive of its sources, and the winner (the desire that the creature shows). The change since the turn before is there while a tool records the mind (creature.plan with record)",
   "kind": "object",
   "parameters": [
    {
@@ -648,13 +648,18 @@
   "query": "creature.beliefs"
  },
  {
-  "description": "A creature's plan (desire, action, object, priority), activity and next agenda steps",
+  "description": "A creature's plan (desire, action, object, priority), activity and next agenda steps. Also the best plan of each desire, and the planner steps of the last turns (the plan, what became of it and why) while a tool records the mind",
   "kind": "object",
   "parameters": [
    {
     "description": "The creature's entity id; may be left out when there is one creature",
     "name": "id",
     "type": "integer"
+   },
+   {
+    "description": "Start (true) or stop (false) the record of the creature's mind at the end of each turn. The record only reads the mind.",
+    "name": "record",
+    "type": "boolean"
    }
   ],
   "query": "creature.plan"
@@ -1329,6 +1334,12 @@
   "query": "engine.resources"
  },
  {
+  "description": "Which logs and tools of a tool's run are open: the file of the commands of each turn, the file of the commands of the testbed scenario, the file of the checksums, the guard of the frame steps and the fight autopilot",
+  "kind": "object",
+  "parameters": [],
+  "query": "engine.tool_run"
+ },
+ {
   "description": "Which of the engine's services are there, the game's random seeds, the game's path, the debug windows' focus and the inspector's port",
   "kind": "object",
   "parameters": [],
@@ -1750,6 +1761,12 @@
   "query": "players.commands"
  },
  {
+  "description": "The reports that this computer sends once a turn: the grip of the land and the camera turn in the view report, the turn of the last camera turn, whether a view report went since the last new hand, and the turn of the last help report",
+  "kind": "object",
+  "parameters": [],
+  "query": "players.own_reports"
+ },
+ {
   "description": "The checksum of the synced world that a network game sends after each turn: whether it is on, and the turn and checksum of the last turn. With on, it turns it on or off",
   "kind": "object",
   "parameters": [
@@ -1828,6 +1845,18 @@
   "kind": "object",
   "parameters": [],
   "query": "players.input"
+ },
+ {
+  "description": "The buttons of the mouse, the flags of the hand, the cursor of the hand and the state of the presses on this computer",
+  "kind": "object",
+  "parameters": [],
+  "query": "players.hand_press"
+ },
+ {
+  "description": "The keys of the game on this computer: whether the menu closed, and how long ago",
+  "kind": "object",
+  "parameters": [],
+  "query": "players.game_keys"
  },
  {
   "description": "The gesture being drawn and the last recognised",
@@ -1935,7 +1964,7 @@
   "query": "temple.state"
  },
  {
-  "description": "The temple's inside: whether the player is in it, the room, the visits, the worshippers walking about it (how many came in, and where those drawn are), the seeds of the miracles over the map, how the map shows the influence and what the cursor is over (the room, its submesh and the submesh's name)",
+  "description": "The temple's inside: whether the player is in it, the room, the visits, the worshippers walking about it (how many came in, and where those drawn are), the seeds of the miracles over the map, how the map shows the influence and what the cursor is over (the room, its submesh and the submesh's name), and the last press for the camera (camera_press: taken_by none, held_from_outside, cinema_bars, control or fade; null before the first press of the visit)",
   "kind": "object",
   "parameters": [],
   "query": "temple.interior"
@@ -1988,6 +2017,12 @@
   "query": "view.video"
  },
  {
+  "description": "The screens of the start and of the loads: whether they have their textures, what a load draws at its redraw points, whether the tips screen faded in and has a tip, and the timers of the start",
+  "kind": "object",
+  "parameters": [],
+  "query": "view.loading"
+ },
+ {
   "description": "Whether a camera path holds the camera, the camera's help, the advisors' cheers as the camera turns, and the knock readout",
   "kind": "object",
   "parameters": [],
@@ -2012,7 +2047,7 @@
   "query": "view.cinematic"
  },
  {
-  "description": "The land's draw list: the things on the blocks in view within 700 units that are drawn, at most 2999, the nearest blocks first; with an id, whether that thing is in it and drawn",
+  "description": "The land's draw list: the things on the blocks in view within 700 units that are drawn, at most 2999, the nearest blocks first, and how many times the land's blocks were classified for the frames; with an id, whether that thing is in it and drawn",
   "kind": "object",
   "parameters": [
    {
@@ -2668,7 +2703,7 @@
   "writes": true
  },
  {
-  "description": "A mouse button where the pointer is: press, release, click (pressed now, let go of the next frame) or double_click (a click, then pressed and let go of again as the second click of a double click, a frame apart). A press comes two frames after the pointer last moved, once the game knows what the pointer is over. Like all input, it waits behind input asked for earlier that is still to come",
+  "description": "A mouse button where the pointer is: press, release, click (pressed now, let go of the next frame, or later until the game has read its input with the button down) or double_click (a click, then pressed and let go of again as the second click of a double click, a frame apart). A press comes two frames after the pointer last moved, once the game knows what the pointer is over. Like all input, it waits behind input asked for earlier that is still to come",
   "kind": "object",
   "parameters": [
    {
@@ -2710,7 +2745,7 @@
     "type": "string"
    },
    {
-    "description": "For a key: press, release or tap (the default: down now, up the next frame)",
+    "description": "For a key: press, release or tap (the default: down now, up the next frame, or later until the game has read its input with the key down)",
     "name": "how",
     "type": "string"
    }

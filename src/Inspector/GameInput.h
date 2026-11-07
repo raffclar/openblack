@@ -38,6 +38,7 @@ public:
 	[[nodiscard]] std::string WindowTakingButton(uint8_t button) const override;
 	void SetLockMode(std::string_view mode) override;
 	[[nodiscard]] Json LockState() const override;
+	[[nodiscard]] std::optional<uint32_t> InputStepsOfLastFrame() const override;
 
 	/// The camera whose override, while one is shown, is the view points of the world are found on the screen through
 	void SetCamera(CameraControlInterface& camera) { _camera = &camera; }

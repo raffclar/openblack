@@ -146,12 +146,11 @@ public:
 
 	void AddIncomingMessages(Json& result) const override
 	{
-		auto* game = Game::Instance();
-		if (game == nullptr || game->GetInterface() == nullptr)
+		if (!Locator::gameInterface::has_value())
 		{
 			return;
 		}
-		const auto& strip = game->GetInterface()->GetIncomingMessages();
+		const auto& strip = Locator::gameInterface::value().GetIncomingMessages();
 		result["shown"] = strip.IsActive();
 		if (const auto& look = strip.GetLook(); look.has_value())
 		{
@@ -165,12 +164,11 @@ public:
 
 	void AddChatControls(Json& result) const override
 	{
-		auto* game = Game::Instance();
-		if (game == nullptr || game->GetInterface() == nullptr)
+		if (!Locator::gameInterface::has_value())
 		{
 			return;
 		}
-		const auto& controls = game->GetInterface()->GetChatControls();
+		const auto& controls = Locator::gameInterface::value().GetChatControls();
 		const auto& people = controls.GetPeople();
 		Json players = Json::array();
 		for (const auto& person : people.players.people)
@@ -209,12 +207,11 @@ public:
 
 	void AddToolTip(Json& result) const override
 	{
-		auto* game = Game::Instance();
-		if (game == nullptr || game->GetInterface() == nullptr)
+		if (!Locator::gameInterface::has_value())
 		{
 			return;
 		}
-		const auto shown = game->GetInterface()->GetToolTips().GetShown();
+		const auto shown = Locator::gameInterface::value().GetToolTips().GetShown();
 		if (!shown.has_value())
 		{
 			return;

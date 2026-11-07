@@ -13,14 +13,10 @@
 
 using namespace openblack;
 
-namespace
-{
-/// The ground height at a map position
-float GroundAt(const LandIslandInterface& island, const map_coords::MapCoords& coords)
+float map_coords::GroundAt(const LandIslandInterface& island, const MapCoords& coords)
 {
 	return island.GetAltitude(coords.x, coords.z);
 }
-} // namespace
 
 map_coords::MapCoords map_coords::FromWorld(const LandIslandInterface& island, glm::vec3 point)
 {

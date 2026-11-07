@@ -28,6 +28,7 @@
 #include <Audio/AtmosAudio.h>
 #include <Audio/AtmosPlayer.h>
 #include <Audio/SoundMap.h>
+#include <ECS/Systems/AlignmentSystemInterface.h>
 #include <InfoConstants.h>
 #include <LNDFile.h>
 #include <gtest/gtest.h>
@@ -259,8 +260,9 @@ void RunVolumeScenario(const std::string& name)
 	for (size_t i = 0; i < scenario.at("alignments").size(); ++i)
 	{
 		const auto alignment = FloatFromBits(scenario.at("alignments").at(i));
-		ASSERT_EQ(std::bit_cast<uint32_t>(AtmosAudio::CalculateAlignmentValue(alignment)),
-		          expected.at("alignments").at(i).get<uint32_t>())
+		ASSERT_EQ(
+		    std::bit_cast<uint32_t>(ecs::systems::alignment::AudioAlignment(ecs::systems::alignment::LandValue(alignment))),
+		    expected.at("alignments").at(i).get<uint32_t>())
 		    << "alignment " << alignment;
 	}
 

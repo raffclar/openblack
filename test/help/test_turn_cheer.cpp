@@ -140,7 +140,7 @@ TEST(TurnCheerSystem, AStartMeasuresTheSpeedAgainFromStill)
 	cheer.MeasureTurn(0.1f, 0.1f);
 	EXPECT_FLOAT_EQ(cheer.GetTurnSpeed(), 0.4f);
 	EXPECT_FALSE(cheer.GetCheering().on);
-	cheer.Start();
+	cheer.Start(Watch::Turn);
 	EXPECT_FLOAT_EQ(cheer.GetTurnSpeed(), 0.0f);
 	EXPECT_TRUE(cheer.GetCheering().on);
 	// A step with no turn slows the measure towards still
@@ -157,7 +157,7 @@ TEST(TurnCheerSystem, ATurnCheersAtTheMeasuredSpeed)
 	FixedDraws draws;
 	// Nothing while the cheering is stopped
 	EXPECT_FALSE(cheer.ProcessTurn(1000, draws.Make()).has_value());
-	cheer.Start();
+	cheer.Start(Watch::Turn);
 	// The camera turns by a radian in each tenth of a second: that is faster than flat out
 	for (int step = 0; step < 20; ++step)
 	{
@@ -166,4 +166,43 @@ TEST(TurnCheerSystem, ATurnCheersAtTheMeasuredSpeed)
 	ASSERT_GE(cheer.GetTurnSpeed(), k_FullSpeed);
 	EXPECT_EQ(cheer.ProcessTurn(1000, draws.Make()), k_BestPraise);
 	EXPECT_EQ(cheer.GetCheering().lastBestPraiseTurn, 1000u);
+}
+
+TEST(TurnCheer, TheTiltingLessonTakesFiveRadiansASecondAsFlatOut)
+{
+	Cheering cheering;
+	Start(cheering, Watch::Tilt);
+	FixedDraws draws {.chance = 0.0f, .pick = 2};
+	EXPECT_EQ(FullSpeedOf(Watch::Turn), k_FullSpeed);
+	EXPECT_EQ(FullSpeedOf(Watch::Tilt), k_FullTiltSpeed);
+	EXPECT_EQ(ProcessTurn(cheering, k_FullTiltSpeed, 101, draws.Make()), k_BestPraise);
+	// Half of full tilting speed cheers by chance, as for turning
+	EXPECT_EQ(ProcessTurn(cheering, k_FullTiltSpeed * 0.5f, 122, draws.Make()), k_FirstCheer + 2);
+}
+
+TEST(TurnCheerSystem, TheTiltingLessonGoesByTheTiltingSpeed)
+{
+	TurnCheerSystem cheer;
+	FixedDraws draws;
+	cheer.MeasureTilt(0.1f, 0.1f);
+	cheer.MeasureTurn(0.1f, 0.1f);
+	// A start of the tilting lesson measures only the tilting speed again from still
+	cheer.Start(Watch::Tilt);
+	EXPECT_FLOAT_EQ(cheer.GetTiltSpeed(), 0.0f);
+	EXPECT_FLOAT_EQ(cheer.GetTurnSpeed(), 0.4f);
+	EXPECT_EQ(cheer.GetCheering().watch, Watch::Tilt);
+	// Fast turning does not count for the tilting lesson
+	for (int step = 0; step < 20; ++step)
+	{
+		cheer.MeasureTurn(1.0f, 0.1f);
+	}
+	EXPECT_FALSE(cheer.ProcessTurn(1000, draws.Make()).has_value());
+	// A tilt of a radian in each tenth of a second is faster than flat out. Each tilt of a step counts on its own.
+	for (int step = 0; step < 10; ++step)
+	{
+		cheer.MeasureTilt(1.0f, 0.1f);
+		cheer.MeasureTilt(1.0f, 0.1f);
+	}
+	ASSERT_GE(cheer.GetTiltSpeed(), k_FullTiltSpeed);
+	EXPECT_EQ(cheer.ProcessTurn(1001, draws.Make()), k_BestPraise);
 }

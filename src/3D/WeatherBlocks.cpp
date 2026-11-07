@@ -40,7 +40,7 @@ std::vector<glm::vec2> weather_blocks::InView(const LandIslandInterface& island,
 			continue;
 		}
 		const object_draw_list::Block box {
-		    .corner = corner, .highestAltitude = block.GetHighestAltitudeNow(), .reflected = reflected};
+		    .corner = corner, .highestAltitude = block.GetHighestAltitude(), .reflected = reflected};
 		if (object_draw_list::BlockInView(view.viewProjection, view.nearPlane, box) &&
 		    object_draw_list::BlockDistance(view.eye, box) < rain::k_BlockReach)
 		{

@@ -317,19 +317,42 @@ std::optional<InputEvent> openblack::inspector::InputEventFromJson(const Json& j
 	return event;
 }
 
-void InputTimeline::Schedule(uint64_t frame, InputEvent event)
+void InputTimeline::Schedule(uint64_t frame, InputEvent event, Wait wait)
 {
 	// After every event due by then, so that those at the same frame keep their order
 	const auto at = std::upper_bound(_pending.begin(), _pending.end(), frame,
 	                                 [](uint64_t due, const Scheduled& scheduled) { return due < scheduled.frame; });
-	_pending.insert(at, Scheduled {.frame = frame, .event = std::move(event)});
+	_pending.insert(at, Scheduled {.frame = frame, .event = std::move(event), .wait = wait});
 }
 
 std::vector<std::string> InputTimeline::Frame(uint64_t frame, InputTargetInterface& target)
 {
+	if (const auto steps = target.InputStepsOfLastFrame(); steps.has_value())
+	{
+		_steps = _steps.value_or(0) + *steps;
+	}
 	std::vector<std::string> failures;
 	while (!_pending.empty() && _pending.front().frame <= frame)
 	{
+		auto& next = _pending.front();
+		if (next.wait == Wait::InputStep && _steps.has_value())
+		{
+			// The event waits for a step after the frame at which it was first due
+			if (!next.stepsWhenDue.has_value())
+			{
+				next.stepsWhenDue = _steps;
+			}
+			if (*_steps <= *next.stepsWhenDue && frame - next.frame < k_MostFramesForAStep)
+			{
+				break;
+			}
+			// The events after it keep their frames apart from it
+			const auto waited = frame - next.frame;
+			for (auto& later : _pending)
+			{
+				later.frame += waited;
+			}
+		}
 		const auto scheduled = std::move(_pending.front());
 		_pending.pop_front();
 		if (auto failure = MakeNow(frame, scheduled.event, target); !failure.empty())
@@ -421,8 +444,9 @@ std::vector<QueryDescription> InputProvider::Describe() const
 	          {screen, world, timing}),
 	    Write("button",
 	          "A mouse button where the pointer is: press, release, click (pressed now, let go of the next "
-	          "frame) or double_click (a click, then pressed and let go of again as the second click of a double "
-	          "click, a frame apart). A press comes two frames after the pointer last moved, once the game knows what the "
+	          "frame, or later until the game has read its input with the button down) or double_click (a click, then "
+	          "pressed and let go of again as the second click of a double click, a frame apart). A press comes two frames "
+	          "after the pointer last moved, once the game knows what the "
 	          "pointer is over. Like all input, it waits behind input asked for earlier that is still to come",
 	          {button, Optional("action", "string", "press, release, click (the default) or double_click"), toWindow, timing}),
 	    Write("key",
@@ -430,7 +454,9 @@ std::vector<QueryDescription> InputProvider::Describe() const
 	          "pressed for a frame",
 	          {Optional("key", "string", "The key's name, as SDL names it"),
 	           Optional("action", "string", "The action's name, from input.names; pressed for one frame"),
-	           Optional("how", "string", "For a key: press, release or tap (the default: down now, up the next frame)")}),
+	           Optional("how", "string",
+	                    "For a key: press, release or tap (the default: down now, up the next frame, or later until "
+	                    "the game has read its input with the key down)")}),
 	    Write("text",
 	          "Types letters, as the keyboard gives them to the text box that has the focus (a name or a password). It "
 	          "presses no key. The answer does not repeat the letters",
@@ -699,7 +725,9 @@ QueryResult InputProvider::Run(std::string_view query, const QueryContext& conte
 		}
 		if (action == "click" || action == "double_click")
 		{
-			_timeline.Schedule(start + 1, {.kind = InputEvent::Kind::ButtonUp, .button = *button, .timing = *timing});
+			// The button is let go of after the game has read the input with it down
+			_timeline.Schedule(start + 1, {.kind = InputEvent::Kind::ButtonUp, .button = *button, .timing = *timing},
+			                   InputTimeline::Wait::InputStep);
 		}
 		if (action == "double_click")
 		{
@@ -707,7 +735,8 @@ QueryResult InputProvider::Run(std::string_view query, const QueryContext& conte
 			_timeline.Schedule(start + 2,
 			                   {.kind = InputEvent::Kind::ButtonDown, .button = *button, .clicks = 2, .timing = *timing});
 			_timeline.Schedule(start + 3,
-			                   {.kind = InputEvent::Kind::ButtonUp, .button = *button, .clicks = 2, .timing = *timing});
+			                   {.kind = InputEvent::Kind::ButtonUp, .button = *button, .clicks = 2, .timing = *timing},
+			                   InputTimeline::Wait::InputStep);
 		}
 		auto answer = Answer({{"button", *button}, {"action", action}, {"timing", TimingName(*timing)}}, start);
 		if (action != "release" && StringMember(params, "button").value_or("left") == "left")
@@ -756,7 +785,8 @@ QueryResult InputProvider::Run(std::string_view query, const QueryContext& conte
 		}
 		if (how == "tap")
 		{
-			_timeline.Schedule(start + 1, {.kind = InputEvent::Kind::KeyUp, .key = *key});
+			// The key is let go of after the game has read the input with it down
+			_timeline.Schedule(start + 1, {.kind = InputEvent::Kind::KeyUp, .key = *key}, InputTimeline::Wait::InputStep);
 		}
 		return QueryResult::Value(Answer({{"key", *key}, {"how", how}}, start));
 	}

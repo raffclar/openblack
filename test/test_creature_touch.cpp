@@ -395,17 +395,23 @@ TEST(CreatureTouch, TheReportedHandAndCameraGiveTheSameLookAsTheLineOfSight)
 	EXPECT_FALSE(feedback::ReportedLookPoint(camera, middle, camera, k_Height).has_value());
 }
 
-TEST(CreatureTouch, AStrokeDoesNotHoldBackTheNextSlap)
+TEST(CreatureTouch, AStrokeHoldsBackTheNextSlapButASlapDoesNot)
 {
 	creature_feedback::StrokeClocks clocks;
 	clocks.sinceHold = 900.0f;
 	EXPECT_FALSE(creature_feedback::SlapReady(clocks));
 	clocks.sinceHold = 1100.0f;
+	// After a slap, the next slap can come at once
 	creature_feedback::Touched(clocks);
 	EXPECT_FLOAT_EQ(clocks.sinceTouch, 0.0f);
 	EXPECT_FLOAT_EQ(clocks.ready, creature_feedback::k_ReadyAfterTouchMs);
-	// The time since the hand took hold continues after a stroke or a slap
 	EXPECT_TRUE(creature_feedback::SlapReady(clocks));
+	// After a stroke, the next slap waits a second again
+	creature_feedback::Stroked(clocks);
+	EXPECT_FLOAT_EQ(clocks.sinceTouch, 0.0f);
+	EXPECT_FLOAT_EQ(clocks.ready, creature_feedback::k_ReadyAfterTouchMs);
+	EXPECT_FLOAT_EQ(clocks.sinceHold, 0.0f);
+	EXPECT_FALSE(creature_feedback::SlapReady(clocks));
 }
 
 TEST(CreatureReleaseFeedback, AStillCreatureGetsNoFeedback)

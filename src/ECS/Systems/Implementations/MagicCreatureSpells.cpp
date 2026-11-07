@@ -370,6 +370,11 @@ void MagicSystem::ApplyCreatureSpell(entt::entity entity, const creature_spells:
 			// It wants this above all else, and most else is held down
 			component.cheat = creature_spell_mind::SetCheatDominant(
 			    *desires, *desire, {.all = true, .floor = DesireFloorOf(entity)}, k_TurnsPerSecond);
+			// The body values behind the full sources change at once: a hungry creature has no energy left
+			if (minds != nullptr)
+			{
+				minds->TakeWrittenSources(entity);
+			}
 		}
 		// Nice puts it on the compassion leash, nasty on the aggression leash, if it is on one
 		if ((event.spell == Spell::Nice || event.spell == Spell::Nasty) && leash != nullptr && leash->IsLeashed(entity))
@@ -448,6 +453,10 @@ void MagicSystem::ApplyCreatureSpell(entt::entity entity, const creature_spells:
 			{
 				component.cheat = creature_spell_mind::SetCheatDominant(
 				    *desires, Desire::Scratch, {.all = true, .floor = DesireFloorOf(entity)}, k_TurnsPerSecond);
+				if (minds != nullptr)
+				{
+					minds->TakeWrittenSources(entity);
+				}
 			}
 		}
 		break;

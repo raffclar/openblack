@@ -63,6 +63,8 @@ public:
 	/// Takes food out of a field, for a farmer or the hand: what the taker gets. An emptied field's fire goes out and its
 	/// town looks again at what it wants.
 	virtual uint32_t RemoveFood(entt::entity field, float amount) = 0;
+	/// A fire burns food out of a field: it takes the damage times the food of a full field, as a taker does.
+	virtual void BurnFood(entt::entity field, float damage) = 0;
 };
 
 } // namespace openblack::ecs::systems

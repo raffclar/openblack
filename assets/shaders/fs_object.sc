@@ -22,8 +22,9 @@ uniform vec4 u_skyAlphaThreshold;
 // The temple's controls glow under the cursor: the game adds the colour as the vertices' specular, after the texture
 // stages
 uniform vec4 u_glow;
-// rgb: a colour the object is drawn in, as the game gives it. w: 0 to light it as usual, otherwise to draw
-// it unlit, in that colour alone, with its alpha by w
+// rgb: a colour the object is drawn in, as the game gives it. w: 0 to light it as usual, above 0 to draw it unlit, in
+// that colour alone, with its alpha by w. Below 0, the vertex shader has put the colour in the light already, and the
+// alpha is by -w.
 uniform vec4 u_tint;
 // x: 1 to show only what stands above the height y: in the sea's reflection, which shows only what stands above the sea,
 // and for a mesh cut by a plane. z: 1 to blend by the instance's alpha rather than dissolve the share of it gone. w: 1 to
@@ -87,8 +88,11 @@ void main()
 	vec4 diffuseTex = texture2D(s_diffuse, v_texcoord0.xy);
 	vec3 light = v_color0.rgb;
 	bool tinted = u_tint.w > 0.0f;
-	diffuseTex.rgb = diffuseTex.rgb * (tinted ? vec3_splat(1.0f) : light) * u_tint.rgb;
-	diffuseTex.a = diffuseTex.a * (tinted ? u_tint.w : 1.0f) * (u_objectLook.w > 0.0f ? u_objectLook.w : 1.0f);
+	bool tintInLight = u_tint.w < 0.0f;
+	vec3 tintColour = tintInLight ? vec3_splat(1.0f) : u_tint.rgb;
+	diffuseTex.rgb = diffuseTex.rgb * (tinted ? vec3_splat(1.0f) : light) * tintColour;
+	diffuseTex.a = diffuseTex.a * (tinted ? u_tint.w : (tintInLight ? -u_tint.w : 1.0f)) *
+	               (u_objectLook.w > 0.0f ? u_objectLook.w : 1.0f);
 	bool alphaBeforeTest = u_seaClip.w > 0.5f;
 	if (alphaBeforeTest)
 	{
@@ -137,7 +141,7 @@ void main()
 	float snowLevel = floor(v_snow.z * 255.0f + 0.5f);
 	if (snowLevel > 0.0f && SnowShows(snowLevel, texture2D(s_snowAlpha, v_snow.xy).r))
 	{
-		diffuseTex.rgb = texture2D(s_snow, v_snow.xy).rgb * (tinted ? vec3_splat(1.0f) : v_snowLight) * u_tint.rgb;
+		diffuseTex.rgb = texture2D(s_snow, v_snow.xy).rgb * (tinted ? vec3_splat(1.0f) : v_snowLight) * tintColour;
 	}
 #ifdef USE_ENVIRONMENT
 	// The second texture stage combines the environment map with the colour as the primitive's material says: added,

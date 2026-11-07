@@ -101,9 +101,13 @@ public:
 	/// The temporary pile in which a town with no storage pit that works keeps a resource. A pile that has gone is made
 	/// again, empty, at a clear place near the town's gathering place. None for a resource with no pile.
 	virtual std::optional<TemporaryStore> TemporaryStorePile(entt::entity town, glm::vec2 from, ResourceType type) = 0;
-	/// The town has a new storage pit that works, or has lost its storage pit: it lets go of its temporary piles. An empty
-	/// pile is removed, and a pile that holds something becomes an ordinary pile with its reaction.
-	virtual void SetStoragePit(entt::entity town) = 0;
+	/// The town gets a new main storage pit, or none: it lets go of its temporary piles. A storage pit that starts to
+	/// work becomes the main pit, also when it is made built or it is repaired. An empty pile is removed, and a
+	/// pile that holds something becomes an ordinary pile with its reaction.
+	virtual void SetStoragePit(entt::entity town, entt::entity pit) = 0;
+	/// A storage pit of the town goes. When it is the main pit, the newest civic building of the town that works takes
+	/// its place, but only when that building is a storage pit.
+	virtual void StoragePitGone(entt::entity town, entt::entity pit) = 0;
 	/// A new building standing on a town's gathering place moves it
 	virtual void BuildingCreated(entt::entity town, glm::vec2 position, float radius) = 0;
 	/// A building joined or left a town, or one of its fields went: the town makes the ground it covers again
@@ -119,7 +123,8 @@ public:
 	/// preaching in each town follow their villagers or stop; a town's mark of changed wants comes down once it has been
 	/// up a whole turn
 	virtual void ProcessTurn() = 0;
-	/// The start of a town's turn: every so many turns it passes over its buildings, which age by it
+	/// The start of a town's turn: its influence goes back to its base. Every so many turns it passes over its buildings,
+	/// which age by it, and each building adds its influence after its turn. Then the land's multiplier multiplies the sum.
 	virtual void ProcessTownBuildings(entt::entity town) = 0;
 	/// The rest of a town's turn, after its desires and its artefacts: it sends worshippers every tenth turn, the attacks
 	/// on it fade, it mends a building, calls or ends an emergency, judges the creatures it watches, its missionaries

@@ -8,6 +8,7 @@
  *******************************************************************************/
 
 #include <cmath>
+#include <cstdint>
 
 #include <bit>
 #include <map>
@@ -355,6 +356,8 @@ TEST(SpellRules, AShieldsSizeIsClampedAndItsUpkeepGrowsWithItsArea)
 	EXPECT_FLOAT_EQ(ClampShieldRadius(shield, 5000.0f), 1000.0f);
 	EXPECT_FLOAT_EQ(ShieldCostToMaintain(20.0f, 30.0f, 30.0f), 20.0f);
 	EXPECT_FLOAT_EQ(ShieldCostToMaintain(20.0f, 60.0f, 30.0f), 80.0f);
+	// One multiplication by the squared share gives one bit more than 0.4
+	EXPECT_EQ(std::bit_cast<uint32_t>(ShieldCostToMaintain(10.0f, 6.0f, 30.0f)), 0x3ECCCCCEu);
 }
 
 TEST(SpellRules, TheWaterRainsWiderForItsPowerUp)
@@ -697,6 +700,16 @@ TEST(SpellBehaviours, TheHealCanOnlyBeCastWhereThereIsSomeoneToHeal)
 	EXPECT_TRUE(spells::CanCastAt(services, MagicType::Heal, PlayerNames::PLAYER_ONE, {100.0f, 0.0f, 100.0f}, false));
 }
 
+TEST(SpellBehaviours, AHealWhoseTableGivesNoNumberHealsNobody)
+{
+	auto info = MakeTables();
+	info->magicHeal.at(0).dummyVar = 10.0f;
+	info->magicHeal.at(0).maxToHeal = 0;
+	FakeServices services(*info);
+	services.world.objects[static_cast<entt::entity>(1)] = {100.0f, 0.0f, 100.0f};
+	EXPECT_FALSE(spells::CanCastAt(services, MagicType::Heal, PlayerNames::PLAYER_ONE, {100.0f, 0.0f, 100.0f}, false));
+}
+
 TEST(SpellBehaviours, TheCastRulesAskForLandAndInfluence)
 {
 	auto info = MakeTables();
@@ -726,6 +739,35 @@ TEST(SpellBehaviours, ACreatureCastsAForestOnlyOnLandInTheMapWhereTreesCanGrow)
 	EXPECT_FALSE(spells::CanCastAtPointItself(services, MagicType::Forest, land));
 	// The other miracles that are not a heal go to any place
 	EXPECT_TRUE(spells::CanCastAtPointItself(services, MagicType::Fireball, {100.0f, 0.0f, 10.0f}));
+}
+
+TEST(SpellBehaviours, TheKindOfAMiracleDecidesWhereItCanGoWithNoCastRule)
+{
+	auto info = MakeTables();
+	info->magicHeal.at(0).dummyVar = 10.0f;
+	info->magicHeal.at(0).maxToHeal = 20;
+	FakeServices services(*info);
+	services.world.waterBelowZ = 50.0f;
+	const glm::vec3 land {100.0f, 0.0f, 100.0f};
+	const glm::vec3 sea {100.0f, 0.0f, 10.0f};
+	// Food and wood need land
+	EXPECT_TRUE(spells::MeetsKindRuleAt(services, MagicType::Food, land));
+	EXPECT_FALSE(spells::MeetsKindRuleAt(services, MagicType::Food, sea));
+	EXPECT_FALSE(spells::MeetsKindRuleAt(services, MagicType::FoodPowerUpOne, sea));
+	EXPECT_FALSE(spells::MeetsKindRuleOn(services, MagicType::Wood, sea));
+	// A heal needs someone to heal near the point
+	EXPECT_FALSE(spells::MeetsKindRuleOn(services, MagicType::Heal, land));
+	services.world.objects[static_cast<entt::entity>(1)] = land;
+	EXPECT_TRUE(spells::MeetsKindRuleOn(services, MagicType::Heal, land));
+	// A forest goes at a point where trees can grow, but never on a thing
+	EXPECT_TRUE(spells::MeetsKindRuleAt(services, MagicType::Forest, land));
+	EXPECT_FALSE(spells::MeetsKindRuleOn(services, MagicType::Forest, land));
+	// A creature spell never goes at a point. Its cast on a creature has its own test.
+	EXPECT_FALSE(spells::MeetsKindRuleAt(services, MagicType::CreatureSpellBig, land));
+	EXPECT_TRUE(spells::MeetsKindRuleOn(services, MagicType::CreatureSpellBig, land));
+	// The other kinds go to any place, also into the sea
+	EXPECT_TRUE(spells::MeetsKindRuleAt(services, MagicType::Fireball, sea));
+	EXPECT_TRUE(spells::MeetsKindRuleOn(services, MagicType::Water, sea));
 }
 
 TEST(SpellBehaviours, LandForACastRuleIsACellWithoutWaterWhateverItsHeight)

@@ -10,6 +10,7 @@
 #include <cmath>
 
 #include <array>
+#include <bit>
 #include <numbers>
 #include <vector>
 
@@ -72,11 +73,30 @@ TEST(FlockMiracleRules, TwelveASecondAlongTheSweep)
 	EXPECT_NEAR(emitted, 12.0f, k_Epsilon);
 	// The second animal of a turn from 1.2 to 2.4 appears 2/3 of the way along
 	EXPECT_NEAR(flock::SpawnFraction(2, 1.2f, 2.4f), 0.6667f, 1e-3f);
-	const auto point = flock::SpawnPoint({0.0f, 0.0f}, {30.0f, 0.0f}, 0.5f);
-	EXPECT_NEAR(point.x, 15.0f, k_Epsilon);
-	const auto jittered = flock::Jitter({10.0f, 10.0f}, 0.0f, 0.2f);
-	EXPECT_NEAR(jittered.x, 9.9f, k_Epsilon);
-	EXPECT_NEAR(jittered.y, 10.1f, k_Epsilon);
+}
+
+TEST(FlockMiracleRules, TheSpawnPointIsInWholeMapUnits)
+{
+	// Half way along three cells is one and a half cells
+	EXPECT_EQ(flock::SpawnPoint({0, 0}, {0x30000, 0}, 0.5f), glm::ivec2(0x18000, 0));
+	// A half unit goes to the even unit
+	EXPECT_EQ(flock::SpawnPoint({100, 100}, {103, 105}, 0.5f), glm::ivec2(102, 102));
+	// The product rounds to a float before it rounds to a unit
+	EXPECT_EQ(flock::SpawnPoint({0, 0}, {16777217, 0}, 1.0f), glm::ivec2(16777216, 0));
+	// A sweep back towards the start
+	EXPECT_EQ(flock::SpawnPoint({1000, 0}, {0, 0}, 0.25f), glm::ivec2(750, 0));
+	EXPECT_EQ(flock::SpawnPoint({0, 0}, {1000, 0}, 1.0f / 3.0f), glm::ivec2(333, 0));
+}
+
+TEST(FlockMiracleRules, TheJitterGoesThroughMetresAndBackToMapUnits)
+{
+	// 10 m less 0.1 m, cut towards zero; a random number of 0.1 does not move the point
+	EXPECT_EQ(flock::Jitter({0x10000, 0x10000}, 0.0f, 0.1f), glm::ivec2(64880, 0x10000));
+	EXPECT_EQ(flock::Jitter({0x10000, 0}, 0.2f, 0.0f), glm::ivec2(66191, -655));
+	// The code subtracts the jitter from the random number first. If it adds the random number first, the result is one
+	// unit less.
+	const float random = std::bit_cast<float>(0x3DF222EEU);
+	EXPECT_EQ(flock::Jitter({15351972, 0}, random, 0.1f).x, 15352091);
 }
 
 TEST(FlockMiracleRules, DirectionOfAHumanIsTheCamerasAndEastForNone)
@@ -216,6 +236,8 @@ TEST(FlockMiracleRules, AWolfLeavesAloneWhatItCannotGetToOrKill)
 	EXPECT_FALSE(flock::IsPrey({.isVillager = true, .scriptControlled = true}));
 	EXPECT_TRUE(flock::IsPrey({.isVillager = true, .scriptControlled = true, .hunterInScript = true}));
 	EXPECT_FALSE(flock::IsPrey({.isVillager = true, .hunterInFlock = false}));
+	// A hunter in a flock that a script made calm does not hunt
+	EXPECT_FALSE(flock::IsPrey({.isVillager = true, .hunterFlockCalm = true}));
 }
 
 TEST(FlockMiracleRules, AYoungWolfHuntsOnlyWhatAHunterBroughtDownBefore)

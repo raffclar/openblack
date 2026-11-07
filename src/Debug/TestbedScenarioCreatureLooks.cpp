@@ -323,6 +323,21 @@ void testbed_scenarios::AddAppearance(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "interface.text_waits_under_film",
+	    .name = "The newest text waits under a film",
+	    .facet = Facet::Interface,
+	    .description = "After a second, a script shows a help text that the good advisor says. A tenth of a second later, "
+	                   "the intro film starts and pauses the game. The film plays for 58 seconds, then fades out for two "
+	                   "seconds with the game running again under it.",
+	    .expected = "The film hides the dialogue box and its words. While the film fades out, the text does not move. "
+	                "When the film ends, the advisor's text slides in and fades in at the bottom of the screen.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview},
+	    .commands = {{.kind = Kind::RunText, .delaySeconds = 1.0f, .value = 1009},
+	                 {.kind = Kind::PlayIntroFilm, .delaySeconds = 0.1f}},
+	});
+
+	all.push_back({
 	    .id = "appearance.creature_hand_glows",
 	    .name = "The glows on a creature's hands",
 	    .facet = Facet::Appearance,

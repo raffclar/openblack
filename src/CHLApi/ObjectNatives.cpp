@@ -77,6 +77,7 @@
 #include "ECS/Archetypes/SharkArchetype.h"
 #include "ECS/Archetypes/TreeArchetype.h"
 #include "ECS/Archetypes/VillagerArchetype.h"
+#include "ECS/BuildingSites.h"
 #include "ECS/ChallengeRecords.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/Ball.h"
@@ -1038,18 +1039,34 @@ void CallIn() // 055 CALL_IN
 		Pusho(0);
 		return;
 	}
-	// TODO(opening): a town's animals and its storage pit
 	const auto objectType = static_cast<ObjectType>(type);
-	if (registry.AllOf<ecs::components::Town>(container) && objectType != ObjectType::Villager &&
-	    objectType != ObjectType::VillagerChild)
+	// A store in a town is its main storage pit, of any subtype, also when a script holds it
+	if (registry.AllOf<ecs::components::Town>(container) && objectType == ObjectType::Store)
+	{
+		if (const auto pit = ecs::construction::StoragePitOf(container))
+		{
+			Locator::scriptObjects::value().Register(*pit, false);
+			Pusho(static_cast<uint32_t>(*pit));
+			return;
+		}
+		ScriptMessage("Cannot find in");
+		Pusho(0);
+		return;
+	}
+	const auto town = registry.AllOf<ecs::components::Town>(container);
+	if (town && objectType != ObjectType::Villager && objectType != ObjectType::VillagerChild &&
+	    objectType != ObjectType::Animal)
 	{
 		ScriptMessage("Looking for strange type in Town");
 		ScriptMessage("Cannot find in");
 		Pusho(0);
 		return;
 	}
-	// The first of its things of the type and subtype, passing over those a script holds when asked to
-	for (const auto member : ContainerMembers(registry, container))
+	// The first of its things of the type and subtype, passing over those a script holds when asked to. The animals of
+	// a town are the animals in its flocks.
+	const auto members = town && objectType == ObjectType::Animal ? ecs::script_flocks::TownAnimals(registry, container)
+	                                                              : ContainerMembers(registry, container);
+	for (const auto member : members)
 	{
 		if (!registry.Valid(member) || (excludingScripted && registry.AllOf<ecs::components::InScript>(member)))
 		{
@@ -1874,7 +1891,8 @@ void SetSkeleton() // 291 SET_SKELETON
 		ScriptMessage("Thing not valid");
 		return;
 	}
-	// A group makes each of its villagers a skeleton, or themselves again; anything but a villager is left as it is
+	// A group makes each of its members a skeleton, or themselves again. An animal or a creature gets only the mark;
+	// anything that does not live is left as it is.
 	if (IsScriptContainer(registry, object))
 	{
 		for (const auto member : ContainerMembers(registry, object))
@@ -1896,7 +1914,7 @@ void IsSkeleton() // 292 IS_SKELETON
 		Pushb(false);
 		return;
 	}
-	// Only a villager a script made a skeleton is one; a body lying as bones is not
+	// Only a villager, animal or creature that a script made a skeleton is one; a body lying as bones is not
 	Pushb(villager_skeleton::Is(object));
 }
 
@@ -1920,16 +1938,10 @@ void SetIndestructable() // 298 SET_INDESTRUCTABLE
 			registry.Remove<ecs::components::Indestructible>(thing);
 		}
 	};
-	// A town is marked through every villager of it; anything else itself
-	if (registry.AllOf<ecs::components::Town>(object))
+	// A town, a flock or a dance is marked through each of its members, not itself. Anything else is marked itself.
+	if (IsScriptContainer(registry, object))
 	{
-		registry.Each<const ecs::components::Villager>(
-		    [&mark, object](entt::entity villager, const ecs::components::Villager& person) {
-			    if (person.town == object)
-			    {
-				    mark(villager);
-			    }
-		    });
+		std::ranges::for_each(ContainerMembers(registry, object), mark);
 		return;
 	}
 	mark(object);

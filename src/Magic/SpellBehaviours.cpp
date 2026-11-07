@@ -15,7 +15,7 @@
 #include <numbers>
 
 #include "AreaEffect.h"
-#include "Common/PortableMath.h"
+#include "Common/X87.h"
 #include "ECS/Components/Spell.h"
 #include "ForestRules.h"
 #include "InfoConstants.h"
@@ -53,10 +53,10 @@ std::optional<HealReach> HealReachOf(const InfoConstants& info, MagicType type, 
 	{
 		return std::nullopt;
 	}
-	const auto maximum = heal->maxToHeal != 0 ? heal->maxToHeal : k_DefaultHealTargets;
+	// A table that gives no number heals nobody
 	return HealReach {
 	    .radius = heal->dummyVar * tribalPower,
-	    .maximum = static_cast<size_t>(std::lrint(static_cast<float>(maximum) * tribalPower)),
+	    .maximum = static_cast<size_t>(std::lrint(static_cast<float>(heal->maxToHeal) * tribalPower)),
 	};
 }
 
@@ -205,24 +205,45 @@ bool spells::CanCastAt(SpellServicesInterface& services, MagicType type, PlayerN
 	case CastRuleType::Anywhere:
 		break;
 	}
+	return MeetsKindRuleAt(services, type, point);
+}
+
+bool spells::MeetsKindRuleAt(SpellServicesInterface& services, MagicType type, glm::vec3 point)
+{
+	auto& world = services.World();
 	switch (ClassOf(type))
 	{
 	case SpellClass::Heal:
 	{
-		const auto reach = HealReachOf(info, type, 1.0f);
+		const auto reach = HealReachOf(services.Info(), type, 1.0f);
 		return reach.has_value() && !world.HealTargets(point, reach->radius, reach->maximum).empty();
 	}
 	case SpellClass::Resource:
-		return onLand;
+		return world.IsLand(point);
 	case SpellClass::Teleport:
 		// Not where something stands fixed on the land, a building, a field or another stone
 		return services.CanPlaceTeleportStone(point);
 	case SpellClass::Forest:
-		return onLand && services.ForestCanGrowAt(point);
+		return world.InBounds(point) && world.IsLand(point) && services.ForestCanGrowAt(point);
 	case SpellClass::Creature:
 		return false;
 	default:
 		return true;
+	}
+}
+
+bool spells::MeetsKindRuleOn(SpellServicesInterface& services, MagicType type, glm::vec3 position)
+{
+	switch (ClassOf(type))
+	{
+	case SpellClass::Forest:
+		// A forest never goes on a thing
+		return false;
+	case SpellClass::Creature:
+		// The cast on a creature has its own test
+		return true;
+	default:
+		return MeetsKindRuleAt(services, type, position);
 	}
 }
 
@@ -448,8 +469,9 @@ void spells::ProcessTurn(SpellServicesInterface& services, Spell& spell)
 	auto& world = services.World();
 	const float distance = DropDistance(services.GameRandom(RainRadius(spell.magicType)));
 	const float angle = services.GameRandom(k_TwoPi);
-	glm::vec3 drop(spell.castPosition.x + distance * portable_math::Cos(angle), 0.0f,
-	               spell.castPosition.z + distance * portable_math::Sin(angle));
+	// Round the cosine to a float before it multiplies the distance. The sine multiplies the distance at full width.
+	glm::vec3 drop(spell.castPosition.x + (x87::RoundToFloat(x87::Cos(angle)) * distance), 0.0f,
+	               spell.castPosition.z + x87::Mul(x87::Sin(angle), distance));
 	drop.y = world.LandHeight({drop.x, drop.z}) + k_DropHeight;
 	ApplyDefaultEffect(services, spell,
 	                   {.type = SpellEventInfo::Type::Point,

@@ -48,8 +48,8 @@ public:
 	/// Releases the ambience banks
 	void Release();
 
-	/// Alignment of the most influential player at the camera, -1 (evil) to 1 (good). Updated by the game every
-	/// turn before EndTurn.
+	/// The alignment at the camera that the audio follows, -1 (evil) to 1 (good). The game sets it every turn before
+	/// EndTurn.
 	void SetAlignment(float alignment);
 
 	/// The ambience part of the end of a game turn
@@ -66,8 +66,6 @@ public:
 
 	/// The sky type at a time of day: 0 day, 1 dusk, 2 night
 	[[nodiscard]] static float CalculateSkyType(float time, const DayNightTimes& times);
-	/// The value the game's audio keeps for an alignment, -1 (evil) to 1 (good)
-	[[nodiscard]] static float CalculateAlignmentValue(float alignment);
 	/// One turn of a bank's fade towards its target: the new volume and what is sent to the bank (0-127)
 	[[nodiscard]] static std::pair<float, int32_t> StepBankVolume(float current, float target);
 

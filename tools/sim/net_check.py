@@ -62,6 +62,9 @@ With --lobby-results the fake lobby also takes the result of the game: the serve
 (--result-key), and the fake lobby checks the signature of the result as the lobby does. The game must be decided, for
 example with --temple-loss. One signed result must come, with the position, the gods defeated and the time played of
 each god of a client, and the clan that the status answers gave (clan 7 for account 100).
+The fake lobby also takes the reports of the host (PUT host-report, base64 bytes with the size check of the lobby).
+At least one must come, and the last one must start with the god teams of the first two slots: accounts 100 and 101,
+and clan 7 for account 100.
 
 With --restart-server-at N the script stops the game server by its own process id once the server did turn N, as a
 crash does, and starts it again with --resume-snapshot on the same port (deviation 100). The new server loads its newest
@@ -332,8 +335,10 @@ class FakeLobby:
     answers say that the first client's account plays for clan 7."""
 
     def __init__(self, certs, banned, result_key=None):
-        self.counts = {"status": 0, "bans": 0, "results": 0, "other": 0}
+        self.counts = {"status": 0, "bans": 0, "results": 0, "host_reports": 0, "other": 0}
         self.results = []
+        # The reports of the host as bytes, each with the size check of the lobby
+        self.host_reports = []
         lobby = self
         bans = {"bans": [] if banned is None else [
             {"account": {"id": banned, "name": f"Player{banned}"}, "reason": "net_check", "by": "test",
@@ -351,10 +356,20 @@ class FakeLobby:
 
             def do_PUT(self):
                 length = int(self.headers.get("Content-Length", 0))
-                self.rfile.read(length)
+                body = self.rfile.read(length)
                 if self.path == f"/api/v1/servers/{SERVER_ID}/status":
                     lobby.counts["status"] += 1
                     self.answer(200, {"next_status_in": 5, "listed": True, "clans": clans})
+                elif self.path == f"/api/v1/servers/{SERVER_ID}/host-report":
+                    # The lobby takes 72 bytes, and 20 bytes for each of at most 15 conditions
+                    lobby.counts["host_reports"] += 1
+                    try:
+                        data = base64.b64decode(json.loads(body)["report"], validate=True)
+                    except (ValueError, KeyError, TypeError):
+                        data = b""
+                    valid = 0x48 <= len(data) <= 0x48 + 20 * 15 and (len(data) - 0x48) % 20 == 0
+                    lobby.host_reports.append({"bytes": data, "valid": valid})
+                    self.answer(204 if valid else 422, {})
                 else:
                     lobby.counts["other"] += 1
                     self.answer(404, {"code": "not_found"})
@@ -426,8 +441,27 @@ def lobby_results_summary(lobby, clients, server_log, out):
     ok = (len(lobby.results) == 1 and lobby.results[0]["signed"] and accounts == list(range(100, 100 + clients))
           and positions[:1] == [1] and all("gods_defeated" in god and "time_played" in god for god in gods)
           and all((god.get("clan") == 7) == (god.get("account") == 100) for god in gods))
-    return {"ok": ok, "requests": dict(lobby.counts), "results": got,
-            "server": lines_with(server_log, ["result of the game", "is decided at turn"])}
+    host = host_reports_summary(lobby, clients)
+    return {"ok": ok and host["ok"], "requests": dict(lobby.counts), "results": got, "host_reports": host,
+            "server": lines_with(server_log, ["result of the game", "is decided at turn", "report of the host"])}
+
+
+def host_reports_summary(lobby, clients):
+    """What the fake lobby got of the reports of the host. At least one report must come, each with the size that the
+    lobby takes. The last report starts with the god teams: the god of slot n is team n + 1 with one member, account
+    100 + n, and clan 7 for account 100 only. Only the first two teams are in the report."""
+    reports = lobby.host_reports
+    last = reports[-1]["bytes"] if reports else b""
+    numbers = [int.from_bytes(last[at:at + 4], "little") for at in range(0, min(len(last), 72), 4)]
+    teams = [numbers[team * 8:team * 8 + 8] for team in range(2)] if len(numbers) >= 16 else []
+    expected = []
+    for team in range(2):
+        first = [100 + team, 7 if team == 0 else 0] if team < clients else [0, 0]
+        expected.append(first + [0] * 6)
+    ok = bool(reports) and all(each["valid"] for each in reports) and teams == expected
+    return {"ok": ok, "count": len(reports), "valid": sum(each["valid"] for each in reports),
+            "last_teams": teams, "last_mark": numbers[16] if len(numbers) > 16 else None,
+            "last_conditions": numbers[17] if len(numbers) > 17 else None}
 
 
 def start(command, cwd):

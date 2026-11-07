@@ -192,7 +192,7 @@ TEST(HandTricons, TheDemoMouseChangesSideOnlyInTheOuterThirds)
 
 TEST(HandTricons, TheDemoMouseSitsRightOfTheIconsThenItsWord)
 {
-	const auto mouse = LayoutDemoMouse({400, 300}, false, 40.0f, false, false, false);
+	const auto mouse = LayoutDemoMouse({400, 300}, false, 40.0f, false, false, false, 2);
 	EXPECT_EQ(mouse.mouseMin, glm::vec2(432.0f, 284.0f));
 	EXPECT_EQ(mouse.mouseMax, glm::vec2(464.0f, 316.0f));
 	EXPECT_FLOAT_EQ(mouse.labelSize, 21.0f);
@@ -207,7 +207,7 @@ TEST(HandTricons, TheDemoMouseSitsRightOfTheIconsThenItsWord)
 
 TEST(HandTricons, OnTheLeftTheWordComesFirstEndingThirtyTwoPixelsFromTheIcons)
 {
-	const auto mouse = LayoutDemoMouse({1000, 300}, true, 40.0f, false, false, false);
+	const auto mouse = LayoutDemoMouse({1000, 300}, true, 40.0f, false, false, false, 2);
 	EXPECT_EQ(mouse.labelAt.x, 894.0f);
 	EXPECT_EQ(mouse.mouseMin.x, 936.0f);
 	EXPECT_EQ(mouse.mouseMax.x, 968.0f);
@@ -216,18 +216,18 @@ TEST(HandTricons, OnTheLeftTheWordComesFirstEndingThirtyTwoPixelsFromTheIcons)
 TEST(HandTricons, TheDemoMouseLightsTheButtonsTheRecordingHolds)
 {
 	// None lit
-	auto mouse = LayoutDemoMouse({400, 300}, false, 40.0f, false, false, false);
+	auto mouse = LayoutDemoMouse({400, 300}, false, 40.0f, false, false, false, 2);
 	EXPECT_EQ(mouse.uvMin, glm::vec2(0.0f, 0.5f));
 	EXPECT_EQ(mouse.uvMax, glm::vec2(0.25f, 0.75f));
 	// The move button is the left: the right one's picture mirrored
-	mouse = LayoutDemoMouse({400, 300}, false, 40.0f, false, true, false);
+	mouse = LayoutDemoMouse({400, 300}, false, 40.0f, false, true, false, 2);
 	EXPECT_EQ(mouse.uvMin, glm::vec2(0.5f, 0.5f));
 	EXPECT_EQ(mouse.uvMax, glm::vec2(0.25f, 0.75f));
-	mouse = LayoutDemoMouse({400, 300}, false, 40.0f, false, false, true);
+	mouse = LayoutDemoMouse({400, 300}, false, 40.0f, false, false, true, 2);
 	EXPECT_EQ(mouse.uvMin, glm::vec2(0.25f, 0.5f));
 	EXPECT_EQ(mouse.uvMax, glm::vec2(0.5f, 0.75f));
 	// Both, for zooming
-	mouse = LayoutDemoMouse({400, 300}, false, 40.0f, false, true, true);
+	mouse = LayoutDemoMouse({400, 300}, false, 40.0f, false, true, true, 2);
 	EXPECT_EQ(mouse.uvMin, glm::vec2(0.5f, 0.5f));
 	EXPECT_EQ(mouse.uvMax, glm::vec2(0.75f, 0.75f));
 }
@@ -378,8 +378,8 @@ TEST(HandTricons, TheDemonstrationsMouseIsSizedForTheDefaultScreen)
 	// On the original's 800x600 screen, and any 4:3 one as wide, exactly as it was: a 32 pixel mouse and a 21 pixel word
 	EXPECT_FLOAT_EQ(DemoScale({800, 600}), 1.0f);
 	EXPECT_EQ(DemoLabelSize(false, DemoScale({800, 600})), 21);
-	const auto plain = LayoutDemoMouse({400, 300}, false, 50.0f, false, false, false);
-	const auto scaledOne = LayoutDemoMouse({400, 300}, false, 50.0f, false, false, false, DemoScale({800, 600}));
+	const auto plain = LayoutDemoMouse({400, 300}, false, 50.0f, false, false, false, 2);
+	const auto scaledOne = LayoutDemoMouse({400, 300}, false, 50.0f, false, false, false, 2, DemoScale({800, 600}));
 	EXPECT_EQ(plain.mouseMin, scaledOne.mouseMin);
 	EXPECT_EQ(plain.mouseMax, scaledOne.mouseMax);
 	EXPECT_EQ(plain.labelAt, scaledOne.labelAt);
@@ -392,9 +392,21 @@ TEST(HandTricons, TheDemonstrationsMouseIsSizedForTheDefaultScreen)
 	EXPECT_FLOAT_EQ(DemoScale({2560, 1440}), 2.4f);
 	EXPECT_FLOAT_EQ(DemoScale({3440, 1440}), 2.4f);
 	EXPECT_FLOAT_EQ(DemoScale({1280, 1024}), 1.6f);
-	const auto wide = LayoutDemoMouse({1280, 720}, false, 120.0f, false, false, false, DemoScale({2560, 1440}));
+	const auto wide = LayoutDemoMouse({1280, 720}, false, 120.0f, false, false, false, 2, DemoScale({2560, 1440}));
 	EXPECT_NEAR((wide.mouseMax - wide.mouseMin).x, 32.0f * 2.4f, 1.0f);
 	EXPECT_NEAR(wide.mouseMin.x - 1280.0f, 32.0f * 2.4f, 1.0f);
 	EXPECT_EQ(DemoLabelSize(false, 2.4f), 51);
 	EXPECT_FLOAT_EQ(wide.shadowOffset, 2.4f);
+}
+
+TEST(HandTricons, TheDemoMouseIsInTheRowOfThePlayersMouse)
+{
+	// A mouse with no wheel and three buttons: the second row
+	auto mouse = LayoutDemoMouse({400, 300}, false, 40.0f, false, false, true, 1);
+	EXPECT_EQ(mouse.uvMin, glm::vec2(0.25f, 0.25f));
+	EXPECT_EQ(mouse.uvMax, glm::vec2(0.5f, 0.5f));
+	// A two-button mouse: the first row
+	mouse = LayoutDemoMouse({400, 300}, false, 40.0f, false, false, true, 0);
+	EXPECT_EQ(mouse.uvMin, glm::vec2(0.25f, 0.0f));
+	EXPECT_EQ(mouse.uvMax, glm::vec2(0.5f, 0.25f));
 }

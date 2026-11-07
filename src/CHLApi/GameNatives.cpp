@@ -473,11 +473,7 @@ void GetTimerTimeSinceSet() // 148 GET_TIMER_TIME_SINCE_SET
 void GetLandHeight() // 151 GET_LAND_HEIGHT
 {
 	const auto position = PopVec();
-
-	const auto& island = Locator::terrainSystem::value();
-	const auto elevation = island.GetHeightAt(glm::vec2(position.x, position.z));
-
-	Pushf(elevation);
+	Pushf(Locator::terrainSystem::value().GetScriptLandHeight(position));
 }
 
 void LoadMap() // 152 LOAD_MAP

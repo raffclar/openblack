@@ -84,11 +84,11 @@ namespace openblack::ecs::construction
 void AddWorker(entt::entity town, entt::entity building, entt::entity villager);
 void RemoveWorker(entt::entity town, entt::entity building, entt::entity villager);
 
-/// The town's storage pit, if it has one
+/// The town's main storage pit, if it has one: the pit that last started to work
 [[nodiscard]] std::optional<entt::entity> StoragePitOf(entt::entity town);
 
-/// The first storage pit of each town, by the id of the town, as StoragePitOf finds it. A step that wants the pits of
+/// The main storage pit of each town, by the id of the town, as StoragePitOf finds it. A step that wants the pits of
 /// many towns makes this list one time.
-[[nodiscard]] std::vector<std::pair<uint32_t, entt::entity>> FirstStoragePits();
+[[nodiscard]] std::vector<std::pair<uint32_t, entt::entity>> MainStoragePits();
 
 } // namespace openblack::ecs::construction

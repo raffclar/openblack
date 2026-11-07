@@ -58,6 +58,10 @@ LandData LandData::FromLnd(const lnd::LNDFile& lnd)
 			}
 		}
 	}
+	// A place of the table that names a block that the file does not have holds no block, so that a damaged or hostile
+	// file cannot make a look-up read past the last block
+	std::ranges::replace_if(
+	    data.blockIndexLookup, [count = data.blocks.size()](auto index) { return index > count; }, uint16_t {0});
 	data.countries = lnd.GetCountries();
 	data.materials = lnd.GetMaterials();
 	const auto& extra = lnd.GetExtra();

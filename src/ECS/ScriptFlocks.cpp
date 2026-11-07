@@ -10,7 +10,9 @@
 #include "ScriptFlocks.h"
 
 #include <algorithm>
+#include <iterator>
 #include <optional>
+#include <utility>
 #include <vector>
 
 #include <glm/gtx/vec_swizzle.hpp>
@@ -327,4 +329,31 @@ entt::entity script_flocks::RandomMember(const Registry& registry, entt::entity 
 		}
 	}
 	return entt::null;
+}
+
+std::vector<entt::entity> script_flocks::TownFlocks(const Registry& registry, entt::entity town)
+{
+	std::vector<std::pair<uint32_t, entt::entity>> found;
+	registry.Each<const Flock>([&](entt::entity flock, const Flock& data) {
+		if (data.town == town)
+		{
+			found.emplace_back(data.made, flock);
+		}
+	});
+	std::ranges::sort(found, [](const auto& a, const auto& b) { return a.first > b.first; });
+	std::vector<entt::entity> flocks;
+	flocks.reserve(found.size());
+	std::ranges::transform(found, std::back_inserter(flocks), [](const auto& pair) { return pair.second; });
+	return flocks;
+}
+
+std::vector<entt::entity> script_flocks::TownAnimals(const Registry& registry, entt::entity town)
+{
+	std::vector<entt::entity> animals;
+	for (const auto flock : TownFlocks(registry, town))
+	{
+		std::ranges::copy_if(registry.Get<const Flock>(flock).members, std::back_inserter(animals),
+		                     [&](entt::entity member) { return registry.Valid(member) && registry.AllOf<Animal>(member); });
+	}
+	return animals;
 }

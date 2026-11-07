@@ -94,6 +94,10 @@ constexpr float k_CreatureSizePerHeight = 0.0666666701f;
 [[nodiscard]] float CreatureHeight(float size);
 [[nodiscard]] float CreatureSizeForHeight(float height);
 
+/// The height of a thing that a script lifts: the value goes on top of the land under the thing, at once. Nothing
+/// brings the thing down after this, so a one-shot globe that a script lifts stays in the air.
+[[nodiscard]] float HeightAboveLand(float land, float value);
+
 /// A placed thing's angles in radians: its lean about the across axis, its turn about the upright axis and its lean
 /// about the forward axis. The world's things are placed turned the other way by them.
 struct Angles

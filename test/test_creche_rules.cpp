@@ -142,11 +142,12 @@ TEST(CrecheRules, AChildStraysUpToHalfAMetreEachWayDrawnAlongTheSecondAxisFirst)
 
 TEST(CrecheRules, ChildrenStrollUntilNightFalls)
 {
-	EXPECT_TRUE(IsDaytime(2.0f));
+	EXPECT_TRUE(IsDaytime(0.0f));
 	EXPECT_TRUE(IsDaytime(1.0f));
-	EXPECT_TRUE(IsDaytime(0.8f));
-	EXPECT_FALSE(IsDaytime(0.79f));
-	EXPECT_FALSE(IsDaytime(0.0f));
+	EXPECT_TRUE(IsDaytime(1.19999993f));
+	// The float nearest to 1.2 is a little more than the double 1.2
+	EXPECT_FALSE(IsDaytime(1.2f));
+	EXPECT_FALSE(IsDaytime(2.0f));
 }
 
 TEST(CrecheRules, WhatAChildAtTheCrecheDoes)

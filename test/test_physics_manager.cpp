@@ -7,6 +7,10 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <cstdint>
+
+#include <bit>
+#include <limits>
 #include <memory>
 
 #include <entt/entity/entity.hpp>
@@ -26,6 +30,7 @@
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/Pot.h"
+#include "ECS/Components/PuzzleGame.h"
 #include "ECS/Components/Scaffold.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Tree.h"
@@ -313,6 +318,13 @@ TEST_F(PhysicsClassesTest, LivingThings)
 	_registry.Assign<Animal>(animal);
 	EXPECT_EQ(Classify(animal).body, BodyKind::AnimalBox);
 	EXPECT_EQ(Classify(animal).row, MaterialRow::Animal);
+	EXPECT_TRUE(Classify(animal).canBecomePhysicsObject);
+	// An animal of a maze puzzle is hit, but it never flies
+	_registry.Assign<PuzzlePiece>(animal);
+	const auto piece = Classify(animal);
+	EXPECT_EQ(piece.row, MaterialRow::Animal);
+	EXPECT_TRUE(piece.interacts);
+	EXPECT_FALSE(piece.canBecomePhysicsObject);
 
 	const auto creature = _registry.Create();
 	_registry.Assign<Creature>(creature);
@@ -472,6 +484,15 @@ TEST(PhysicsTurn, ImpactIsTheMeanForceAndIgnoresTheSmallest)
 	EXPECT_FLOAT_EQ(turn::GLoad(98.1f, 10.0f), 1.0f);
 }
 
+TEST(PhysicsTurn, ImpactAddsTheSquaresFromZToXAndANaNGivesNoImpact)
+{
+	// The game adds the squares from z to x. Added from x to z, this sum gives the impact one bit lower.
+	const auto impact = turn::Impact(glm::vec3(66.00714111328125f, 34.06111145019531f, -39.326297760009766f));
+	ASSERT_TRUE(impact.has_value());
+	EXPECT_EQ(std::bit_cast<uint32_t>(*impact), 0x40867913u);
+	EXPECT_FALSE(turn::Impact(glm::vec3(std::numeric_limits<float>::quiet_NaN(), 0.0f, 0.0f)).has_value());
+}
+
 TEST(PhysicsTurn, KnocksSoundWhenHitOrHardEnough)
 {
 	EXPECT_FALSE(turn::WantsCollisionSound(true, true, 1000.0f, 1.0f));
@@ -554,6 +575,16 @@ TEST(PhysicsTurn, FastThingsWhooshPastTheCamera)
 	EXPECT_TRUE(turn::PassesCamera(glm::vec3(11.0f, 0, 0), glm::vec3(9.0f, 0, 0), camera, glm::vec3(-21.0f, 0, 0)));
 	EXPECT_FALSE(turn::PassesCamera(glm::vec3(11.0f, 0, 0), glm::vec3(9.0f, 0, 0), camera, glm::vec3(-19.0f, 0, 0)));
 	EXPECT_FALSE(turn::PassesCamera(glm::vec3(9.5f, 0, 0), glm::vec3(9.0f, 0, 0), camera, glm::vec3(-30.0f, 0, 0)));
+}
+
+TEST(PhysicsTurn, TheWhooshAddsTheSquaresOfTheDistanceFromZToX)
+{
+	// From z to x the squares of this point add to 100, which is not inside ten metres. From x to z they add to
+	// 99.99999.
+	const glm::vec3 after(std::bit_cast<float>(0xC0B3FAEAu), std::bit_cast<float>(0xBF4ED48Cu),
+	                      std::bit_cast<float>(0x4103A947u));
+	EXPECT_FALSE(turn::PassesCamera(glm::vec3(11.0f, 0, 0), after, glm::vec3(0.0f), glm::vec3(-21.0f, 0, 0)));
+	EXPECT_TRUE(turn::PassesCamera(glm::vec3(11.0f, 0, 0), after * 0.999f, glm::vec3(0.0f), glm::vec3(-21.0f, 0, 0)));
 }
 
 TEST(PhysicsTurn, SinkingAndBobbing)

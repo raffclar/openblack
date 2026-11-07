@@ -225,42 +225,65 @@ LNDResult LNDFile::ReadFile(std::istream& stream) noexcept
 		return LNDResult::ErrNonStandardCountrySize;
 	}
 
+	// Each count and size of the file is checked against the bytes that stay, before the reader makes room for them. A
+	// damaged or hostile file thus cannot make the reader ask for more memory than the file has, and no read goes past
+	// the end.
+	const auto remaining = [&stream, fsize]() -> uint64_t {
+		const auto at = stream.good() ? static_cast<int64_t>(stream.tellg()) : int64_t {-1};
+		return at < 0 || static_cast<uint64_t>(at) > fsize ? 0 : fsize - static_cast<uint64_t>(at);
+	};
+	const auto fits = [&remaining](uint64_t count, uint64_t size) { return count <= remaining() / size; };
+
 	// Read low resolution textures
+	if (!fits(_header.lowResolutionCount, sizeof(LNDLowResolutionTextureHeader)))
+	{
+		return LNDResult::ErrFileTooSmall;
+	}
 	_lowResolutionTextures.resize(_header.lowResolutionCount);
 	for (auto& texture : _lowResolutionTextures)
 	{
+		if (!fits(1, sizeof(texture.header)))
+		{
+			return LNDResult::ErrFileTooSmall;
+		}
 		stream.read(reinterpret_cast<char*>(&texture.header), sizeof(texture.header));
+		// The size counts its own 4 bytes and the texels
+		if (texture.header.size < sizeof(texture.header.size) ||
+		    !fits(texture.header.size - sizeof(texture.header.size), sizeof(texture.texels[0])))
+		{
+			return LNDResult::ErrFileTooSmall;
+		}
 		texture.texels.resize(texture.header.size - sizeof(texture.header.size));
 		stream.read(reinterpret_cast<char*>(texture.texels.data()), texture.texels.size() * sizeof(texture.texels[0]));
 	}
 
 	// Read Blocks
-	// take away a block from the count, because it's not in the file?
-	_blocks.resize(_header.blockCount - 1);
-	if (static_cast<std::size_t>(stream.tellg()) + _blocks.size() * sizeof(_blocks[0]) > fsize)
+	// The count includes a first block that the file does not keep
+	if (_header.blockCount == 0 || !fits(_header.blockCount - 1, sizeof(LNDBlock)))
 	{
 		return LNDResult::ErrBadBlockSize;
 	}
+	_blocks.resize(_header.blockCount - 1);
 	stream.read(reinterpret_cast<char*>(_blocks.data()), _blocks.size() * sizeof(_blocks[0]));
 
 	// Read Countries
-	_countries.resize(_header.countryCount);
-	if (static_cast<std::size_t>(stream.tellg()) + _countries.size() * sizeof(_countries[0]) > fsize)
+	if (!fits(_header.countryCount, sizeof(LNDCountry)))
 	{
 		return LNDResult::ErrBadCountrySize;
 	}
+	_countries.resize(_header.countryCount);
 	stream.read(reinterpret_cast<char*>(_countries.data()), _countries.size() * sizeof(_countries[0]));
 
 	// Read Materials
-	_materials.resize(_header.materialCount);
-	if (static_cast<std::size_t>(stream.tellg()) + _materials.size() * sizeof(_materials[0]) > fsize)
+	if (!fits(_header.materialCount, sizeof(LNDMaterial)))
 	{
 		return LNDResult::ErrBadMaterialSize;
 	}
+	_materials.resize(_header.materialCount);
 	stream.read(reinterpret_cast<char*>(_materials.data()), _materials.size() * sizeof(_materials[0]));
 
 	// Read Extra textures (noise and bump map)
-	if (static_cast<std::size_t>(stream.tellg()) + sizeof(_extra) > fsize)
+	if (!fits(1, sizeof(_extra)))
 	{
 		return LNDResult::ErrExtraTextureData;
 	}
@@ -269,7 +292,7 @@ LNDResult LNDFile::ReadFile(std::istream& stream) noexcept
 	// Get all bytes that weren't read
 	if (stream.peek() != EOF)
 	{
-		_unaccounted.resize(static_cast<std::size_t>(fsize - stream.tellg()));
+		_unaccounted.resize(static_cast<std::size_t>(remaining()));
 		stream.read(reinterpret_cast<char*>(_unaccounted.data()), _unaccounted.size() * sizeof(_unaccounted[0]));
 	}
 

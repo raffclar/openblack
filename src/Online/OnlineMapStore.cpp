@@ -24,7 +24,8 @@ namespace openblack::online
 bool IsStoreFileName(std::string_view file) noexcept
 {
 	constexpr size_t k_MostCharacters = 64;
-	if (file.empty() || file.size() > k_MostCharacters || file.starts_with('.') || !online_map_land::IsOnlineMap(file))
+	if (file.empty() || file.size() > k_MostCharacters || file.starts_with('.') || file.starts_with(' ') ||
+	    !online_map_land::IsOnlineMap(file) || !network_land::IsPlainPart(file))
 	{
 		return false;
 	}

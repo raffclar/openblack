@@ -10,6 +10,7 @@
 #include <cstring>
 
 #include <algorithm>
+#include <bit>
 #include <chrono>
 #include <memory>
 #include <optional>
@@ -509,15 +510,114 @@ TEST(ReactionRules, AFightWatcherGoesBackAtOnceWhenTheFightReactionEnds)
 TEST(ReactionRules, VillagersFleeAwayOrAcrossTheWay)
 {
 	using namespace openblack::magic;
-	const auto still = FleePointFromStill({10.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f});
-	EXPECT_FLOAT_EQ(still.x, 20.0f);
-	EXPECT_FLOAT_EQ(still.z, 0.0f);
-	// Something moving north past a villager to its east: the villager goes on east
-	const auto moving = FleePointFromMoving({5.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f}, 4.0f, 4.0f);
-	EXPECT_FLOAT_EQ(moving.x, 5.0f + 10.0f);
-	EXPECT_FLOAT_EQ(moving.z, 0.0f);
+	using openblack::map_coords::MapCoords;
+	const auto flat = [](const MapCoords&) { return 0.0f; };
+	// 10 m east of a still thing: 10 m further east. 6553.6 map units are 1 m
+	const auto still = FleePlaceFromStill({.x = 65536, .z = 0}, {.x = 0, .z = 0}, k_FleeStep, flat);
+	EXPECT_EQ(still.x, 131072);
+	EXPECT_EQ(still.z, 0);
+	// At the same place as the thing, it stays where it is
+	EXPECT_EQ(FleePlaceFromStill({.x = 65536, .z = 7}, {.x = 65536, .z = 7}, k_FleeStep, flat).x, 65536);
+	// Something moving north past a villager 5 m to its east: the villager continues east
+	const auto moving = FleePlaceFromMoving({.x = 32768, .z = 0, .altitude = 2.5f}, {.x = 0, .z = 0}, {0.0f, 0.0f, 1.0f},
+	                                        k_FleeStep, {4.0f, 4.0f});
+	EXPECT_EQ(moving.x, 98304);
+	EXPECT_EQ(moving.z, 0);
+	EXPECT_EQ(moving.altitude, 2.5f);
 	EXPECT_TRUE(ComingTowards({0.0f, 0.0f, 10.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f}));
 	EXPECT_FALSE(ComingTowards({10.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f}));
+}
+
+// A thing moves when its velocity has a length, also a velocity only up or down
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST(ReactionRules, AThingMovesWhenItsVelocityHasALength)
+{
+	using openblack::magic::Moves;
+	EXPECT_FALSE(Moves(glm::vec3(0.0f)));
+	EXPECT_TRUE(Moves({0.0f, -1.0f, 0.0f}));
+	EXPECT_TRUE(Moves({0.0f, 0.0f, 0.5f}));
+}
+
+// From a still thing the step is the run distance divided by the length, then times each axis. The step first made one
+// over the length and then times the run distance puts this goal one map unit to the south
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST(ReactionRules, AFleePointFromAStillThingScalesAsTheGameDoes)
+{
+	using namespace openblack::magic;
+	using openblack::map_coords::MapCoords;
+	const MapCoords living {.x = 9625474, .z = 16270908, .altitude = 0.5f};
+	const MapCoords thing {.x = 9761024, .z = 16312494};
+	// The ground is 1 m high under the villager and 4 m high at the goal
+	const auto ground = [&living](const MapCoords& place) { return place.x == living.x ? 1.0f : 4.0f; };
+	const auto place = FleePlaceFromStill(living, thing, k_FleeStep, ground);
+	EXPECT_EQ(place.x, 9562820);
+	EXPECT_EQ(place.z, 16251688);
+	// The goal keeps the height of the villager in the world: 1.5 m, which is 2.5 m below the ground there
+	EXPECT_EQ(place.altitude, -2.5f);
+}
+
+// From a moving thing the goal goes back to map units by times 65536, then divided by 10. Times 6553.6 gives one unit
+// more at this place
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST(ReactionRules, AFleePointFromAMovingThingGoesBackToMapUnitsAsTheGameDoes)
+{
+	using namespace openblack::magic;
+	using openblack::map_coords::MapCoords;
+	// A thing that moves only up has no way across the land. Random numbers of 4 add nothing
+	const MapCoords living {.x = 8388614, .z = 8388622};
+	const auto place = FleePlaceFromMoving(living, {.x = 0, .z = 0}, {0.0f, 1.0f, 0.0f}, k_FleeStep, {4.0f, 4.0f});
+	EXPECT_EQ(place.x, 8388614);
+	EXPECT_EQ(place.z, 8388622);
+	EXPECT_EQ(openblack::map_coords::ToFixed(openblack::map_coords::ToMetres(living.x)), 8388615);
+}
+
+// A villager runs from a fire straight away from it by the fire's own distance. The goal keeps the height of the
+// villager in the world. A villager that runs from its own fire goes to its map position plus a step, and the goal
+// keeps the altitude of the villager above the land
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST(ReactionRules, AFireFleeGoalKeepsTheHeightOfTheVillager)
+{
+	using namespace openblack::magic;
+	using openblack::map_coords::FromMetres;
+	using openblack::map_coords::MapCoords;
+	auto living = FromMetres({100.0f, 50.0f});
+	living.altitude = 0.25f;
+	const auto fire = FromMetres({90.0f, 50.0f});
+	// The ground is 2 m high under the villager and 3 m high at the goal
+	const auto ground = [&living](const MapCoords& place) { return place.x == living.x ? 2.0f : 3.0f; };
+	const auto away = FleePlaceFromStill(living, fire, 7.5f, ground);
+	EXPECT_EQ(away.x, openblack::map_coords::ToFixed(107.5f));
+	EXPECT_EQ(away.z, living.z);
+	// 2.25 m in the world is 0.75 m below the ground at the goal
+	EXPECT_EQ(away.altitude, -0.75f);
+	// From its own fire: the map units add with no change, far from the corner of the map too
+	const MapCoords far {.x = 8090858, .z = 8090858, .altitude = 0.5f};
+	const auto own = far + MapCoords {.x = 1000, .z = -2000, .altitude = 0.0f};
+	EXPECT_EQ(own.x, 8091858);
+	EXPECT_EQ(own.z, 8088858);
+	EXPECT_EQ(own.altitude, 0.5f);
+}
+
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST(ReactionRules, AFleeGoalOffTheMapIsNotUsed)
+{
+	using namespace openblack::magic;
+	using openblack::map_coords::FromMetres;
+	const auto flat = [](const openblack::map_coords::MapCoords&) { return 0.0f; };
+	// Away from a thing that does not move, on the map
+	const auto away =
+	    FleePlace(FromMetres({100.0f, 50.0f}), FromMetres({90.0f, 50.0f}), glm::vec3(0.0f), std::nullopt, k_FleeStep, flat);
+	ASSERT_TRUE(away.has_value());
+	EXPECT_EQ(away->x, openblack::map_coords::ToFixed(110.0f));
+	EXPECT_EQ(away->z, openblack::map_coords::ToFixed(50.0f));
+	// At the west edge, a flight to the west goes off the map
+	EXPECT_FALSE(
+	    FleePlace(FromMetres({5.0f, 50.0f}), FromMetres({10.0f, 50.0f}), glm::vec3(0.0f), std::nullopt, k_FleeStep, flat)
+	        .has_value());
+	// Across the way of a moving thing, off the map past the east edge
+	EXPECT_FALSE(FleePlace(FromMetres({5115.0f, 50.0f}), FromMetres({5110.0f, 50.0f}), {0.0f, 0.0f, 1.0f},
+	                       glm::vec2(4.0f, 4.0f), k_FleeStep, flat)
+	                 .has_value());
 }
 
 TEST_F(Reactions, VillagersInReachTakeUpANiceMiracleAndBelieveOnce)
@@ -1579,9 +1679,12 @@ TEST(ShieldRules, WhatIsSurelyWithinAShield)
 	EXPECT_TRUE(WithinSpiritualShield({0.0f, 0.0f, 0.0f}, 10.0f, {6.0f, 0.0f, 7.9f}));
 	EXPECT_FALSE(WithinSpiritualShield({0.0f, 0.0f, 0.0f}, 10.0f, {6.0f, 0.0f, 8.0f}));
 	const DomeVolume dome {.radius = 20.0f, .height = 10.0f};
-	EXPECT_TRUE(WithinPhysicalShield(dome, 10.0f, 4.9f));
-	EXPECT_FALSE(WithinPhysicalShield(dome, 10.0f, 5.0f));
-	EXPECT_FALSE(WithinPhysicalShield(dome, 20.0f, 0.0f));
+	EXPECT_TRUE(WithinPhysicalShield(dome, {0.0f, 10.0f}, 4.9f));
+	EXPECT_FALSE(WithinPhysicalShield(dome, {10.0f, 0.0f}, 5.0f));
+	EXPECT_FALSE(WithinPhysicalShield(dome, {12.0f, 16.0f}, 0.0f));
+	// The cone is the height less its share: at this point the height times one less the share is one float lower
+	const glm::vec2 edge {std::bit_cast<float>(0x3FF0C7DEu), std::bit_cast<float>(0x413DD33Du)};
+	EXPECT_TRUE(WithinPhysicalShield(dome, edge, std::bit_cast<float>(0x407F9B73u)));
 }
 
 // A script makes a thing for the living around it to run from: the villagers near it flee as from a frightening miracle

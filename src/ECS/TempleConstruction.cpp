@@ -337,7 +337,8 @@ void StartTownCentre(entt::entity building)
 	}
 }
 
-/// A storage pit of a town that starts working makes the town let go of its temporary piles
+/// A storage pit of a town that starts to work becomes the main pit of the town, and the town lets go of its temporary
+/// piles
 void StoragePitStartsWorking(entt::entity building)
 {
 	const auto& registry = Entities();
@@ -353,7 +354,7 @@ void StoragePitStartsWorking(entt::entity building)
 	const auto& towns = registry.Context().towns;
 	if (const auto town = towns.find(static_cast<uint32_t>(*id)); town != towns.end())
 	{
-		Locator::townSystem::value().SetStoragePit(town->second);
+		Locator::townSystem::value().SetStoragePit(town->second, building);
 	}
 }
 

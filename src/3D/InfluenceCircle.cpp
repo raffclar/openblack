@@ -14,6 +14,7 @@
 #include <algorithm>
 
 #include "Common/PortableMath.h"
+#include "Common/X87.h"
 #include "ECS/PlayerColour.h"
 
 namespace openblack::influence
@@ -256,7 +257,8 @@ float OnRange(float distance, float radius, float fullPart, float fallingPart, f
 	}
 	if (distance < radius)
 	{
-		return (1.0f - (distance - outer) / (radius - outer)) * 0.2f;
+		// The fifth is a double, so the product rounds to a float only once
+		return x87::Mul(1.0f - (distance - outer) / (radius - outer), 0.2);
 	}
 	return 0.0f;
 }

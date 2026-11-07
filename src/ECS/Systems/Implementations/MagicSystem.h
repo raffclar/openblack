@@ -87,7 +87,8 @@ private:
 	void Apply(const magic::EffectValues& values, std::span<const magic::EffectOutcome> outcomes,
 	           const magic::EffectSource& source);
 	/// The waiting alignment of whoever an effect came from takes what the effect did to one object
-	static void AddEffectAlignment(const magic::EffectOutcome& outcome, const magic::EffectSource& source, bool byCreature);
+	static void AddEffectAlignment(const magic::EffectOutcome& outcome, const magic::EffectSource& source,
+	                               entt::entity actingCreature);
 
 	/// A drop of the water by an object: a tree grows, a field is sown and ripens, a fire is watched going out
 	void WaterObject(entt::entity object, const magic::WaterDrop& drop);
@@ -168,6 +169,7 @@ public:
 		return _world.ApplyEffect(object, values, source);
 	}
 	[[nodiscard]] bool CanCastAt(MagicType type, PlayerNames player, glm::vec3 point) override;
+	[[nodiscard]] bool MeetsKindRule(MagicType type, glm::vec3 point, bool onThing) override;
 	bool SpellEvent(entt::entity spell, const particles::SpellEventInfo& event) override;
 	void PayForSpell(entt::entity spell, float cost) override;
 
@@ -341,8 +343,6 @@ private:
 	std::vector<CreatureSpellSound> _creatureSpellSounds;
 	entt::entity MakeOrb(entt::entity dispenser);
 
-	/// What the hand hands a miracle it casts: where it is, the camera, how it moves
-	[[nodiscard]] particles::ProcessInfo HandInfo() const;
 	/// What a miracle that follows the hand reads at the turn: the hand, the camera and the hand's velocity as the reports
 	/// of the player give them. Before the first report, the last values stay.
 	[[nodiscard]] particles::ProcessInfo TurnHandInfo(const particles::ProcessInfo& last, PlayerNames player) const;

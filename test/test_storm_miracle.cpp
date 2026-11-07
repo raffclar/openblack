@@ -234,6 +234,12 @@ TEST(StormMaths, AWiderStormCostsTheSquareOfItsWidth)
 	EXPECT_FLOAT_EQ(storm::CostToMaintain(25.0f, 1000.0f, 40.0f), 15625.0f);
 }
 
+TEST(StormMaths, TheUpkeepSquaresTheShareBeforeItMultipliesThePlainUpkeep)
+{
+	// Two multiplications by the share give 0.4. One multiplication by the squared share gives one bit more.
+	EXPECT_EQ(std::bit_cast<uint32_t>(storm::CostToMaintain(10.0f, 6.0f, 30.0f)), 0x3ECCCCCEu);
+}
+
 // The rules on a fake world
 
 class FakeWorld final: public ParticleWorldInterface
@@ -538,8 +544,9 @@ ENDCLASS
 	const auto cloudLight = [&effect] {
 		std::vector<Effect::DrawAtom> sprites;
 		effect.Collect(1.0f, sprites);
-		return sprites.empty() ? glm::u8vec3(0)
-		                       : glm::u8vec3(sprites.front().rgb[0], sprites.front().rgb[1], sprites.front().rgb[2]);
+		return sprites.empty()
+		           ? glm::u8vec3(0)
+		           : glm::u8vec3(sprites.front().specular[0], sprites.front().specular[1], sprites.front().specular[2]);
 	};
 	effect.Step(k_Step);
 	effect.Step(k_Step);

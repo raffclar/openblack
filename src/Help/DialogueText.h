@@ -75,6 +75,26 @@ struct ClickPlace
 	return !place.networkGame && (place.inTemple || place.templeGoesIn);
 }
 
+/// What a frame gives the slide-in of the newest text
+struct SlideInFrame
+{
+	/// The frame's game time and real time, in milliseconds
+	uint32_t gameMs {0};
+	uint32_t realMs {0};
+	bool inTemple {false};
+	bool videoPlaying {false};
+};
+/// The milliseconds that the newest text slides in by in a frame. The slide-in moves only while the game draws the
+/// texts, so it stops while a video plays. Inside the temple it moves by the real time, else by the game's time.
+[[nodiscard]] constexpr uint32_t SlideInMilliseconds(const SlideInFrame& frame)
+{
+	if (frame.videoPlaying)
+	{
+		return 0;
+	}
+	return frame.inTemple ? frame.realMs : frame.gameMs;
+}
+
 class DialogueText
 {
 public:

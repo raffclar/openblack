@@ -53,6 +53,13 @@ TEST(ObjectTint, PoisonTintsAPotWithNoFire)
 	EXPECT_FALSE(object_tint::PotColours(false, true).has_value());
 }
 
+// A heal's glow shows on the people and animals it heals, but a creature's body does not show it
+TEST(ObjectTint, ACreatureDoesNotShowTheHealGlow)
+{
+	EXPECT_TRUE(object_tint::ShowsHealGlow(false));
+	EXPECT_FALSE(object_tint::ShowsHealGlow(true));
+}
+
 // The poisoned pot in the hand takes the same colours as its mirror in the sea
 TEST(ObjectTint, ThePotInTheHandAndItsMirrorAgree)
 {

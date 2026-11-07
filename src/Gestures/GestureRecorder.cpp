@@ -12,8 +12,11 @@
 #include <cmath>
 
 #include <algorithm>
+#include <bit>
 
 #include <glm/common.hpp>
+
+#include "Common/X87.h"
 
 using namespace openblack::gesture;
 
@@ -21,6 +24,8 @@ namespace
 {
 constexpr float k_Pi = std::numbers::pi_v<float>;
 constexpr float k_TwoPi = 2.0f * k_Pi;
+/// One over two pi, as the game keeps it: it multiplies by this float, it does not divide by two pi
+constexpr float k_InverseTwoPi = std::bit_cast<float>(0x3E22F983u);
 /// A point closer than this to the screen's corner on both axes was never set
 constexpr float k_Unset = 1e-4f;
 
@@ -47,30 +52,15 @@ float TurnAt(const RecordedPoint& a, const RecordedPoint& b, const RecordedPoint
 }
 } // namespace
 
-std::vector<float> openblack::gesture::SamplePoints(float& sinceSample, const input_steps::Steps& steps)
-{
-	std::vector<float> points;
-	for (uint32_t step = 0; step < steps.count; ++step)
-	{
-		sinceSample += input_steps::k_StepSeconds;
-		if (sinceSample < k_SampleSeconds)
-		{
-			continue;
-		}
-		sinceSample = 0.0f;
-		points.push_back(steps.Point(step));
-	}
-	return points;
-}
-
 float openblack::gesture::HeadingOf(glm::vec2 step)
 {
-	auto angle = std::atan2(step.y, step.x);
-	if (angle < 0.0f)
+	// The arctangent stays wide until it is stored or two pi is added to it, so it rounds to a float one time only
+	const auto angle = openblack::x87::Atan2(step.y, step.x);
+	if (angle < 0.0)
 	{
-		angle += k_TwoPi;
+		return openblack::x87::Add(angle, k_TwoPi);
 	}
-	return angle;
+	return openblack::x87::RoundToFloat(angle);
 }
 
 float openblack::gesture::TurnBetween(float from, float to)
@@ -80,7 +70,8 @@ float openblack::gesture::TurnBetween(float from, float to)
 	{
 		return turn - k_TwoPi;
 	}
-	if (turn < -k_Pi)
+	// A turn of exactly half a turn back becomes half a turn on, as in the game
+	if (turn <= -k_Pi)
 	{
 		return turn + k_TwoPi;
 	}
@@ -95,7 +86,7 @@ uint8_t openblack::gesture::DirectionOf(float heading)
 	{
 		angle -= k_TwoPi;
 	}
-	const auto eighths = angle * 8.0f / k_TwoPi;
+	const auto eighths = angle * 8.0f * k_InverseTwoPi;
 	auto rounded = static_cast<int>(eighths);
 	if (eighths - static_cast<float>(rounded) > 0.5f)
 	{

@@ -26,6 +26,7 @@
 #include "Creature/CreatureLearning.h"
 #include "Creature/CreatureMindModel.h"
 #include "Creature/CreatureMindTables.h"
+#include "Creature/CreatureMindView.h"
 #include "Creature/CreaturePlanner.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/AudioEmitter.h"
@@ -399,6 +400,50 @@ Json PlanItem(const creature_planner::Plan& plan, const creature_mind_tables::Ta
 	};
 }
 
+/// The turns in a second, for the growth of a desire in one turn
+constexpr float k_MindTurnsPerSecond = 1000.0f / static_cast<float>(ecs::systems::TimeSystemInterface::k_TurnDuration.count());
+
+Json MindRowJson(const creature_mind_view::DesireRow& row)
+{
+	Json parts = Json::array();
+	for (const auto& source : row.sources)
+	{
+		parts.push_back({
+		    {"type", source.type},
+		    {"name", std::string(creature_mind_view::SourceName(source.type))},
+		    {"value", source.value},
+		    {"threshold", source.threshold},
+		    {"multiplier", source.multiplier},
+		    {"part", source.part},
+		    {"drive", source.drive},
+		});
+	}
+	return {
+	    {"desire", creature_desires::Name(row.desire)},
+	    {"value", row.value},
+	    {"max", row.max},
+	    {"change", row.change.has_value() ? Json(*row.change) : Json(nullptr)},
+	    {"drive", row.drive},
+	    {"growth_per_turn", row.growthPerTurn},
+	    {"suppressed_turns", row.suppressedTurns},
+	    {"winner", row.winner},
+	    {"sources", std::move(parts)},
+	};
+}
+
+Json PlanStepJson(const creature_mind_view::PlanStep& step, const creature_mind_tables::Tables* tables)
+{
+	return {
+	    {"turn", step.turn},
+	    {"desire", creature_desires::Name(step.desire)},
+	    {"plan", step.plan.has_value() ? PlanItem(*step.plan, tables) : Json(nullptr)},
+	    {"outcome", std::string(creature_mind_view::Name(step.outcome))},
+	    {"current_priority", step.current.has_value() ? Json(*step.current) : Json(nullptr)},
+	    {"best_desire", step.best.has_value() ? Json(std::string(creature_desires::Name(*step.best))) : Json(nullptr)},
+	    {"best_priority", step.best.has_value() ? Json(step.bestPriority) : Json(nullptr)},
+	};
+}
+
 // Towns
 
 std::variant<std::pair<entt::entity, const Town*>, std::string> TownParam(const ecs::Registry& registry, const Json& params)
@@ -700,7 +745,11 @@ std::unique_ptr<ProviderInterface> openblack::inspector::MakeCreatureProvider(Cr
 		              return QueryResult::Value(std::move(items));
 	              });
 	provider->Add(
-	    Query("desires", "A creature's strongest desires, strongest first",
+	    Query("desires",
+	          "A creature's strongest desires, strongest first. Also the active desires (activated, with a value or a "
+	          "drive of 0.001 or more), each with the name, value, threshold, part and drive of its sources, and the winner "
+	          "(the desire that the creature shows). The change since the turn before is there while a tool records the "
+	          "mind (creature.plan with record)",
 	          {id, Parameter("top", "integer", "How many desires (5 by default)", false),
 	           Parameter("sources", "boolean",
 	                     "Also write out each desire's sources: kind, value, threshold, multiplier and drive", false)}),
@@ -731,7 +780,33 @@ std::unique_ptr<ProviderInterface> openblack::inspector::MakeCreatureProvider(Cr
 				    item["sources"] = DesireSources(*mind.desires, item["desire"].get<std::string>());
 			    }
 		    }
-		    return QueryResult::Value({{"id", ToId(entity)}, {"sum", mind.desires->sum}, {"desires", std::move(items)}});
+		    // The reading of the developer view: the drive of each desire, the change since the turn before while a tool
+		    // records the mind, and the active desires with the parts of their sources
+		    const auto* trace = sources.mindTrace ? sources.mindTrace(entity) : nullptr;
+		    const auto rows = creature_mind_view::ActiveDesires(*mind.desires, trace != nullptr ? trace->Before() : nullptr,
+		                                                        k_MindTurnsPerSecond);
+		    for (auto& item : items)
+		    {
+			    const auto name = item["desire"].get<std::string>();
+			    const auto row = std::ranges::find_if(rows, [&name](const creature_mind_view::DesireRow& active) {
+				    return creature_desires::Name(active.desire) == name;
+			    });
+			    item["drive"] = row != rows.end() ? row->drive : 0.0f;
+			    item["change"] = row != rows.end() && row->change.has_value() ? Json(*row->change) : Json(nullptr);
+		    }
+		    Json active = Json::array();
+		    for (const auto& row : rows)
+		    {
+			    active.push_back(MindRowJson(row));
+		    }
+		    const auto winner = std::ranges::find_if(rows, &creature_mind_view::DesireRow::winner);
+		    return QueryResult::Value(
+		        {{"id", ToId(entity)},
+		         {"sum", mind.desires->sum},
+		         {"desires", std::move(items)},
+		         {"winner", winner != rows.end() ? Json(std::string(creature_desires::Name(winner->desire))) : Json(nullptr)},
+		         {"active", std::move(active)},
+		         {"recording", trace != nullptr}});
 	    });
 	provider->Add(Query("reactions",
 	                    "Whether a creature takes notice of reactions. A creature that a script makes takes no notice until a "
@@ -1000,7 +1075,14 @@ std::unique_ptr<ProviderInterface> openblack::inspector::MakeCreatureProvider(Cr
 		                               {"beliefs", std::move(beliefs)},
 		                               {"attitudes", std::move(attitudes)}});
 	    });
-	provider->Add(Query("plan", "A creature's plan (desire, action, object, priority), activity and next agenda steps", {id}),
+	provider->Add(Query("plan",
+	                    "A creature's plan (desire, action, object, priority), activity and next agenda steps. Also the best "
+	                    "plan of each desire, and the planner steps of the last turns (the plan, what became of it and why) "
+	                    "while a tool records the mind",
+	                    {id, Parameter("record", "boolean",
+	                                   "Start (true) or stop (false) the record of the creature's mind at the end of each "
+	                                   "turn. The record only reads the mind.",
+	                                   false)}),
 	              [sources](const QueryContext& context) {
 		              const auto* registry = Registry(sources.world);
 		              if (registry == nullptr)
@@ -1013,9 +1095,35 @@ std::unique_ptr<ProviderInterface> openblack::inspector::MakeCreatureProvider(Cr
 			              return QueryResult::Error(*problem);
 		              }
 		              const auto entity = std::get<entt::entity>(creature);
-		              auto plan =
-		                  PlanJson(registry->Get<const CreatureMindState>(entity), sources.tables ? sources.tables() : nullptr);
+		              const auto* tables = sources.tables ? sources.tables() : nullptr;
+		              const auto& mind = registry->Get<const CreatureMindState>(entity);
+		              if (const auto record = BoolMember(context.params, "record"); record.has_value() && sources.recordMind)
+		              {
+			              sources.recordMind(entity, *record);
+		              }
+		              auto plan = PlanJson(mind, tables);
 		              plan["id"] = ToId(entity);
+		              Json best = Json::array();
+		              for (const auto& each : mind.planner.best)
+		              {
+			              if (each.has_value())
+			              {
+				              best.push_back(PlanItem(*each, tables));
+			              }
+		              }
+		              plan["best"] = std::move(best);
+		              plan["plan_forced"] = mind.planForced;
+		              const auto* trace = sources.mindTrace ? sources.mindTrace(entity) : nullptr;
+		              Json history = Json::array();
+		              if (trace != nullptr)
+		              {
+			              for (const auto& step : trace->Steps())
+			              {
+				              history.push_back(PlanStepJson(step, tables));
+			              }
+		              }
+		              plan["recording"] = trace != nullptr;
+		              plan["history"] = std::move(history);
 		              return QueryResult::Value(std::move(plan));
 	              });
 	// The developer log of the clips. Each query finds the creature, then its log.

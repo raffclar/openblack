@@ -645,6 +645,65 @@ void world_objects::SetLife(entt::entity object, float life, bool allowed)
 	}
 }
 
+namespace
+{
+/// The totems that stand on a town centre: none for anything else
+std::vector<entt::entity> TotemsOn(const Registry& registry, entt::entity centre)
+{
+	std::vector<entt::entity> totems;
+	if (!registry.AllOf<Abode>(centre))
+	{
+		return totems;
+	}
+	registry.Each<const VillageTotem>([&](entt::entity totem, const VillageTotem& data) {
+		if (data.townCentre == centre)
+		{
+			totems.push_back(totem);
+		}
+	});
+	return totems;
+}
+
+/// When the life of a town centre changes by harm or by mending, its totems take the same life, as a script sets it. A
+/// totem with no life shows nothing, and a totem with too little life does not work.
+class TotemsTakeCentreLife
+{
+public:
+	TotemsTakeCentreLife(Registry& registry, entt::entity centre)
+	    : _registry(registry)
+	    , _centre(centre)
+	    , _totems(TotemsOn(registry, centre))
+	{
+	}
+	TotemsTakeCentreLife(const TotemsTakeCentreLife&) = delete;
+	TotemsTakeCentreLife& operator=(const TotemsTakeCentreLife&) = delete;
+	TotemsTakeCentreLife(TotemsTakeCentreLife&&) = delete;
+	TotemsTakeCentreLife& operator=(TotemsTakeCentreLife&&) = delete;
+	~TotemsTakeCentreLife()
+	{
+		if (_totems.empty() || !_registry.Valid(_centre))
+		{
+			return;
+		}
+		const float life = world_objects::LifeOf(_centre);
+		for (const auto totem : _totems)
+		{
+			if (_registry.Valid(totem))
+			{
+				world_objects::SetLife(totem, life,
+				                       script::property_rules::CanSetLife(life, world_objects::HeldDuringCutscene(totem),
+				                                                          _registry.AllOf<Indestructible>(totem)));
+			}
+		}
+	}
+
+private:
+	Registry& _registry;
+	entt::entity _centre;
+	std::vector<entt::entity> _totems;
+};
+} // namespace
+
 float world_objects::ReduceLife(entt::entity object, float damage, std::optional<PlayerNames> by, bool byCreature)
 {
 	auto& registry = Locator::entitiesRegistry::value();
@@ -652,20 +711,16 @@ float world_objects::ReduceLife(entt::entity object, float damage, std::optional
 	{
 		return 0.0f;
 	}
-	// A village totem gives the harm to its town centre, and keeps its own life
+	// A village totem gives the harm to its town centre, and then takes the life of its town centre
 	if (const auto* totem = registry.TryGet<const VillageTotem>(object); totem != nullptr && registry.Valid(totem->townCentre))
 	{
 		return ReduceLife(totem->townCentre, damage, by, byCreature);
 	}
-	// A field burns its food and keeps its life
-	if (auto* field = registry.TryGet<Field>(object))
+	const TotemsTakeCentreLife totems(registry, object);
+	// A field keeps its life and its food. Only a fire takes food from it (see the fire system).
+	if (registry.AllOf<Field>(object))
 	{
-		if (const auto* info = Row(Locator::infoConstants::value().fieldType, field->type))
-		{
-			const auto& type = static_cast<const GFieldTypeInfo&>(*info);
-			field->crop.food = std::max(field->crop.food - damage * type.totalFoodInField, 0.0f);
-		}
-		return 1.0f;
+		return LifeOf(object);
 	}
 	// A pile loses what it holds rather than life: burnt or blasted away, and gone once a pile on its own has nothing left
 	if (const auto* pile = PileOf(object))
@@ -738,9 +793,22 @@ float world_objects::ReduceLife(entt::entity object, float damage, std::optional
 		        script::property_rules::CanSetLife(life, HeldDuringCutscene(object), registry.AllOf<Indestructible>(object)));
 		return LifeOf(object);
 	}
+	// An animal loses life by the same rule
+	if (registry.AllOf<Animal>(object))
+	{
+		const float life = std::max(before - damage, 0.0f);
+		SetLife(object, life,
+		        script::property_rules::CanSetLife(life, HeldDuringCutscene(object), registry.AllOf<Indestructible>(object)));
+		return LifeOf(object);
+	}
 	auto& life = registry.AllOf<ObjectLife>(object) ? registry.Get<ObjectLife>(object)
 	                                                : registry.Assign<ObjectLife>(object, ObjectLife {.life = before});
-	life.life = std::max(life.life - damage, 0.0f);
+	// Anything else, a building too, also loses life as a script sets it
+	if (const float after = std::max(life.life - damage, 0.0f);
+	    script::property_rules::CanSetLife(after, HeldDuringCutscene(object), registry.AllOf<Indestructible>(object)))
+	{
+		life.life = after;
+	}
 	if (registry.AllOf<Abode>(object) && abode_knock::HurtBringsPeopleOut(life.life))
 	{
 		// Its people come out of a building left under its full life, however little it lost
@@ -1035,8 +1103,8 @@ void world_objects::Remove(entt::entity object)
 			}
 		}
 	}
-	// A storage pit that goes removes its piles. When it is the storage pit of its town, the town looks for another storage
-	// pit and lets go of its temporary piles.
+	// A storage pit that goes removes its piles. When it is the main storage pit of its town, the town looks for another
+	// main pit and lets go of its temporary piles.
 	if (const auto* pit = registry.TryGet<const StoragePit>(object))
 	{
 		std::vector<entt::entity> piles(pit->woodPiles.begin(), pit->woodPiles.end());
@@ -1044,9 +1112,9 @@ void world_objects::Remove(entt::entity object)
 		const auto& towns = registry.Context().towns;
 		const auto* abode = registry.TryGet<const Abode>(object);
 		if (const auto town = abode != nullptr ? towns.find(abode->townId) : towns.end();
-		    town != towns.end() && construction::StoragePitOf(town->second) == object && Locator::townSystem::has_value())
+		    town != towns.end() && Locator::townSystem::has_value())
 		{
-			Locator::townSystem::value().SetStoragePit(town->second);
+			Locator::townSystem::value().StoragePitGone(town->second, object);
 		}
 		for (const auto pile : piles)
 		{
@@ -1104,11 +1172,23 @@ void world_objects::Remove(entt::entity object)
 void world_objects::AttackTown(entt::entity object, float damage, PlayerNames aggressor, const town_aggression::Harm& harm,
                                bool byCreature, std::optional<guidance::TownAttackVoice> cry)
 {
+	if (const auto target = TownAttackTargetOf(object); target.has_value())
+	{
+		AttackTown(*target, damage, aggressor, harm, byCreature, cry);
+	}
+}
+
+std::optional<world_objects::TownAttackTarget> world_objects::TownAttackTargetOf(entt::entity object)
+{
 	if (!Locator::infoConstants::has_value())
 	{
-		return;
+		return std::nullopt;
 	}
 	auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(object))
+	{
+		return std::nullopt;
+	}
 	const auto& info = Locator::infoConstants::value();
 	entt::entity town = entt::null;
 	const GObjectInfo* kind = nullptr;
@@ -1149,8 +1229,21 @@ void world_objects::AttackTown(entt::entity object, float damage, PlayerNames ag
 	}
 	if (town == entt::null || !registry.Valid(town) || kind == nullptr)
 	{
+		return std::nullopt;
+	}
+	return TownAttackTarget {.town = town, .kind = kind};
+}
+
+void world_objects::AttackTown(const TownAttackTarget& target, float damage, PlayerNames aggressor,
+                               const town_aggression::Harm& harm, bool byCreature, std::optional<guidance::TownAttackVoice> cry)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto town = target.town;
+	if (!Locator::infoConstants::has_value() || !registry.Valid(town) || target.kind == nullptr || !registry.AllOf<Town>(town))
+	{
 		return;
 	}
+	const auto& info = Locator::infoConstants::value();
 	if (!ecs::town_aggression::CountsAsAttack(damage))
 	{
 		return;
@@ -1160,7 +1253,7 @@ void world_objects::AttackTown(entt::entity object, float damage, PlayerNames ag
 	{
 		Locator::guidanceSystem::value().TownAttackCry(town, *cry);
 	}
-	const float amount = ecs::town_aggression::AggressionFromDamage(damage, kind->aggressorValue);
+	const float amount = ecs::town_aggression::AggressionFromDamage(damage, target.kind->aggressorValue);
 	auto* aggression = registry.TryGet<TownAggression>(town);
 	if (aggression == nullptr)
 	{
@@ -1208,21 +1301,33 @@ float world_objects::IncreaseLife(entt::entity object, float amount)
 	{
 		return 0.0f;
 	}
-	// A village totem gives the life to its town centre, and keeps its own life
+	// A village totem gives the life to its town centre, and then takes the life of its town centre
 	if (const auto* totem = registry.TryGet<const VillageTotem>(object); totem != nullptr && registry.Valid(totem->townCentre))
 	{
 		return IncreaseLife(totem->townCentre, amount);
 	}
 	const float before = LifeOf(object);
-	if (auto* villager = registry.TryGet<Villager>(object))
+	// A town centre with its full life gains nothing and gives 0, and its totems keep their life
+	if (before >= 1.0f && !TotemsOn(registry, object).empty())
 	{
-		villager->life = std::min(villager->life + amount, 1.0f);
-		CountInjury(object, before, villager->life);
-		return villager->life;
+		return 0.0f;
+	}
+	const TotemsTakeCentreLife totems(registry, object);
+	// A villager or an animal gains life as a script sets it
+	if (registry.AnyOf<Villager, Animal>(object))
+	{
+		const float life = std::min(before + amount, 1.0f);
+		SetLife(object, life,
+		        script::property_rules::CanSetLife(life, HeldDuringCutscene(object), registry.AllOf<Indestructible>(object)));
+		return LifeOf(object);
 	}
 	auto& life = registry.AllOf<ObjectLife>(object) ? registry.Get<ObjectLife>(object)
 	                                                : registry.Assign<ObjectLife>(object, ObjectLife {.life = before});
-	life.life = std::min(life.life + amount, 1.0f);
+	if (const float after = std::min(life.life + amount, 1.0f);
+	    script::property_rules::CanSetLife(after, HeldDuringCutscene(object), registry.AllOf<Indestructible>(object)))
+	{
+		life.life = after;
+	}
 	// A storage pit that starts to work again stops its piles calling people
 	if (const auto* info = registry.AllOf<Abode>(object) ? world_objects::AbodeInfoOf(object) : nullptr;
 	    info != nullptr && info->abodeType == AbodeType::StoragePit && before <= info->thresholdForStopBeingFunctional &&

@@ -112,8 +112,9 @@ void AddHeal(std::vector<Scenario>& all)
 	    .facet = Facet::Miracles,
 	    .description = "Two hurt creatures: the plain heal pressed by hand at the feet of the left one, and the "
 	                   "power-up at the right one eight seconds later.",
-	    .expected = "The left creature's chakra lights over it at once, it glows and its life fills up, its cuts and "
-	                "scars mending; the right one's comes after the power-up's mushroom, three and a half seconds on.",
+	    .expected = "The left creature's chakra lights over it at once and its life fills up, its cuts and scars "
+	                "mending. The body of a creature does not glow, as in the game. The right one's chakra comes after "
+	                "the power-up's mushroom, three and a half seconds on.",
 	    .environment = {.dispenserGrid = false},
 	    .framing = {.shot = Shot::Overview, .include = {{-20.0f, 30.0f}, {20.0f, 40.0f}}, .distance = 0.8f},
 	    .creatures = {Hurt({-15.0f, 35.0f}, "plain heal", 0.3f), Hurt({15.0f, 35.0f}, "power-up", 0.2f)},

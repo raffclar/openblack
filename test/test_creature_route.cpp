@@ -54,29 +54,42 @@ TEST(CreatureRoute, SortsTheLand)
 {
 	const auto land = WalkableLand::Build(
 	    [](int32_t x, int32_t /*z*/) {
-		    // Deep sea west of x = 100, a steep wall along x = 300, an island cut off beyond x = 400
-		    if (x < 100 || (x >= 300 && x <= 301) || x >= 400)
+		    // Deep sea west of x = 100 and east of x = 420, and a steep wall along x = 300 between two stretches of land
+		    if (x < 100 || x >= 420)
 		    {
-			    return x < 100 || x >= 420 ? 0.0f : (x == 301 ? 60.0f : 5.0f);
+			    return 0.0f;
 		    }
-		    return 5.0f;
+		    return x == 301 ? 60.0f : 5.0f;
 	    },
 	    [](int32_t x, int32_t z) -> std::optional<bool> {
 		    if (z == 0)
 		    {
 			    return std::nullopt;
 		    }
-		    return x >= 150 && x < 160;
+		    return x >= 350 && x < 360;
 	    });
-	EXPECT_EQ(land.At(50, 50), Ground::Blocked);
-	EXPECT_EQ(land.At(200, 50), Ground::Open);
-	EXPECT_EQ(land.At(155, 50), Ground::Water);
+	// The walk starts at the end of the last run in a row that a blocked cell ends: the stretch east of the wall, which
+	// is the smaller stretch
+	EXPECT_EQ(land.At(380, 50), Ground::Open);
+	EXPECT_EQ(land.At(355, 50), Ground::Water);
 	// No cell at all counts as water
-	EXPECT_EQ(land.At(200, 0), Ground::Water);
-	EXPECT_EQ(land.At(300, 50), Ground::Blocked);
-	EXPECT_EQ(land.At(350, 50), Ground::CutOff);
+	EXPECT_EQ(land.At(380, 0), Ground::Water);
+	EXPECT_EQ(land.At(200, 50), Ground::CutOff);
+	// Blocked cells at the side of the land stay blocked; the others are cut off
+	EXPECT_EQ(land.At(301, 50), Ground::Blocked);
+	EXPECT_EQ(land.At(420, 50), Ground::Blocked);
+	EXPECT_EQ(land.At(300, 50), Ground::CutOff);
+	EXPECT_EQ(land.At(50, 50), Ground::CutOff);
 	EXPECT_EQ(land.At(-1, 50), Ground::Blocked);
-	EXPECT_EQ(land.AtPoint({2005.0f, 505.0f}), Ground::Open);
+	EXPECT_EQ(land.AtPoint({3805.0f, 505.0f}), Ground::Open);
+}
+
+TEST(CreatureRoute, NoWalkStartsFromABlockedCell)
+{
+	// Only the first column is deep sea, so no blocked cell ends a run and the walk would start at the blocked corner cell
+	const auto land = WalkableLand::Build([](int32_t x, int32_t /*z*/) { return x <= 1 ? 0.0f : 5.0f; }, Dry);
+	EXPECT_EQ(land.At(0, 50), Ground::Blocked);
+	EXPECT_EQ(land.At(200, 50), Ground::CutOff);
 }
 
 TEST(CreatureRoute, CreaturesStandClearOfBlockedCells)
@@ -149,8 +162,8 @@ TEST(CreatureRoute, ACatchStepIsCheckedAgainstTheBlockOfItsHeight)
 
 TEST(CreatureRoute, AStepBlocksCellsReadARowOn)
 {
-	// Deep sea along the first three rows of cells
-	const auto land = WalkableLand::Build([](int32_t /*x*/, int32_t z) { return z <= 3 ? 0.0f : 5.0f; }, Dry);
+	// Deep sea along the first three rows of cells, and in the last column, where the walk over the land starts
+	const auto land = WalkableLand::Build([](int32_t x, int32_t z) { return z <= 3 || x >= 511 ? 0.0f : 5.0f; }, Dry);
 	ASSERT_EQ(land.At(3, 2), Ground::Blocked);
 	ASSERT_EQ(land.At(3, 3), Ground::Open);
 	const glm::vec2 far {3000.0f, 3000.0f};

@@ -86,6 +86,12 @@ private:
                           std::span<const PresentationPart> presentation, bool byField = false,
                           const ecs::reflection::RowVisitor& visit = {}, WorkerPool* pool = nullptr,
                           ecs::reflection::WorldRows* rows = nullptr, ecs::reflection::HashMemo* memo = nullptr);
+/// The same with the stores that ecs::reflection::StoresOf found before on the game's thread. It does not look in the
+/// registry's list of stores, so a side thread can do it while the draw on the game's thread adds stores.
+[[nodiscard]] Hash HashOf(const entt::registry& registry, const ecs::reflection::RegistryStores& stores,
+                          const entt::meta_ctx& context, std::span<const PresentationPart> presentation, bool byField = false,
+                          const ecs::reflection::RowVisitor& visit = {}, WorkerPool* pool = nullptr,
+                          ecs::reflection::WorldRows* rows = nullptr, ecs::reflection::HashMemo* memo = nullptr);
 
 /// Tools: the hash of the order of the rows of each component that the hash of the synced state keeps values of. The order
 /// includes the rows of the presentation parts. A frame must not change it. The game turns go through the rows in this
