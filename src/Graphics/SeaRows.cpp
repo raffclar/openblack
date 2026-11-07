@@ -18,6 +18,8 @@
 
 #include <glm/vec4.hpp>
 
+#include "Common/X87.h"
+
 using namespace openblack::graphics;
 
 namespace
@@ -328,4 +330,51 @@ sea_rows::Ripple sea_rows::AdvanceRipple(Ripple ripple, std::chrono::millisecond
 		    std::fmod((ripple.sinceStep - Ripple::k_StepInterval).count(), Ripple::k_StepInterval.count()));
 	}
 	return ripple;
+}
+
+namespace
+{
+/// The rows' texture moves on by the frame's wind, and each offset goes back by whole periods towards 0
+glm::vec2 DriftRows(glm::vec2 offset, glm::vec2 wind, int32_t frameMilliseconds, float period)
+{
+	const float step = static_cast<float>(frameMilliseconds) * sea_rows::Drift::k_RowsRate;
+	offset.x = (wind.x * step) + offset.x;
+	offset.y = (step * wind.y) + offset.y;
+	const auto wrap = [period](float value) {
+		const auto periods = openblack::x87::ToInteger(value / period);
+		return value - (static_cast<float>(periods) * period);
+	};
+	return {wrap(offset.x), wrap(offset.y)};
+}
+
+/// The still sea's texture moves on by the frame's wind, and each offset keeps only its fraction
+glm::vec2 DriftStill(glm::vec2 offset, glm::vec2 wind, int32_t frameMilliseconds)
+{
+	const float step = static_cast<float>(frameMilliseconds) * sea_rows::Drift::k_StillRate;
+	offset.x = (wind.x * step) + offset.x;
+	offset.y = (step * wind.y) + offset.y;
+	const auto wrap = [](float value) { return value - static_cast<float>(openblack::x87::ToInteger(value)); };
+	return {wrap(offset.x), wrap(offset.y)};
+}
+} // namespace
+
+sea_rows::Drift sea_rows::AdvanceDrift(Drift drift, glm::vec2 wind, std::chrono::milliseconds frameGameTime, float period,
+                                       DriftDraw draw)
+{
+	const auto milliseconds = static_cast<int32_t>(frameGameTime.count());
+	// The rows' texture drifts before the sea knows how it is drawn
+	drift.rows = DriftRows(drift.rows, wind, milliseconds, period);
+	switch (draw)
+	{
+	case DriftDraw::Rows:
+		// And again once the rows are on the screen
+		drift.rows = DriftRows(drift.rows, wind, milliseconds, period);
+		break;
+	case DriftDraw::Still:
+		drift.still = DriftStill(drift.still, wind, milliseconds);
+		break;
+	case DriftDraw::NoRows:
+		break;
+	}
+	return drift;
 }

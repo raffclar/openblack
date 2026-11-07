@@ -61,6 +61,7 @@
 #include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/Systems/SnowSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/Systems/WeatherSystemInterface.h"
 #include "EngineConfig.h"
 #include "Game.h"
 #include "Graphics/BoneBudget.h"
@@ -173,6 +174,7 @@ void Renderer::SetSeaUniforms(const ShaderProgram& waterShader, const Camera& ca
 	glm::vec4 u_seaParams {still ? sea_rows::k_StillPeriod : sea_rows::Period(waterTiling), 0.0f, 0.0f, 0.0f};
 	glm::vec4 u_seaRows {0.0f};
 	glm::vec4 u_seaMode {still ? 1.0f : 0.0f, 0.0f, 0.0f, 0.0f};
+	auto driftDraw = still ? sea_rows::DriftDraw::Still : sea_rows::DriftDraw::NoRows;
 	if (!still)
 	{
 		// The rows ripple along the camera's view across the ground, 0.9 units at most
@@ -195,6 +197,7 @@ void Renderer::SetSeaUniforms(const ShaderProgram& waterShader, const Camera& ca
 			{
 				_seaRipple = sea_rows::AdvanceRipple(_seaRipple, time.GetFrameRealTime(), time.GetFrameGameTime().count() != 0);
 			}
+			driftDraw = sea_rows::DriftDraw::Rows;
 			const auto rows = sea_rows::MakeRows(*range);
 			u_seaRows = {static_cast<float>(rows.first), static_cast<float>(rows.count), rows.inverseDepth, rows.inverseStep};
 			u_seaMode.y = rows.softTop ? 1.0f : 0.0f;
@@ -206,6 +209,15 @@ void Renderer::SetSeaUniforms(const ShaderProgram& waterShader, const Camera& ca
 		}
 		u_seaParams.y = static_cast<float>(_seaRipple.step);
 	}
+	// The texture drifts with the ambient wind by the frame's game time. A warm-up does not move it.
+	if (!_warmingUp)
+	{
+		const auto wind =
+		    Locator::weatherSystem::has_value() ? Locator::weatherSystem::value().GetAmbientWind() : glm::vec2(0.0f);
+		_seaDrift = sea_rows::AdvanceDrift(_seaDrift, wind, Locator::time::value().GetFrameGameTime(),
+		                                   sea_rows::Period(waterTiling), driftDraw);
+	}
+	const glm::vec4 u_seaDrift {_seaDrift.rows, _seaDrift.still};
 
 	// The sea is coloured by the land's light at full luminosity
 	glm::vec4 u_seaColour {1.0f};
@@ -224,6 +236,7 @@ void Renderer::SetSeaUniforms(const ShaderProgram& waterShader, const Camera& ca
 	waterShader.SetUniformValue("u_seaMode", &u_seaMode);
 	waterShader.SetUniformValue("u_seaColour", &u_seaColour);
 	waterShader.SetUniformValue("u_seaCamera", &u_seaCamera);
+	waterShader.SetUniformValue("u_seaDrift", &u_seaDrift);
 }
 
 void Renderer::DrawHandWaterGlow(const DrawSceneDesc& desc) const

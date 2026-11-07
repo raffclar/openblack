@@ -29,6 +29,7 @@
 #include <glm/vec2.hpp>
 
 #include "BenchmarkRecorder.h"
+#include "ECS/Components/Weather.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "TestbedGameStageInterface.h"
 #include "TestbedScenarioRegistry.h"
@@ -305,6 +306,8 @@ private:
 	/// The debug option's bonus creatures as they were before the scenario took some as unlocked
 	std::optional<creature_swap::Unlocked> _unlockedBefore;
 	std::optional<int32_t> _landNumberBefore;
+	/// The background weather before a scenario set its wind
+	std::optional<ecs::components::WeatherInfo> _backgroundWeatherBefore;
 	/// Whether the scenario set camera zones, which go when it stops
 	bool _cameraZoneSet {false};
 	/// The date that the machine's clock was pinned to (none for the wall clock's) before a scenario set the date

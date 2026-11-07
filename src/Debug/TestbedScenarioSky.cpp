@@ -9,10 +9,11 @@
 
 // The testbed's scenarios of the sky: the moon at night, looked at from low on the land towards the east, where it
 // keeps its place beside the camera, for trying its phases and its path through the night with the moon debug window;
-// and a storm's forked bolts coming down round the camera
+// a storm's forked bolts coming down round the camera; and the sea drifting with the wind of the real-world weather
 
 #include <vector>
 
+#include "TestbedScenarioBuilders.h"
 #include "TestbedScenarioRegistry.h"
 
 using namespace openblack;
@@ -167,6 +168,27 @@ void testbed_scenarios::AddSkyScenarios(std::vector<Scenario>& all)
 	                  .delaySeconds = 5.0f,
 	                  .script = "SET_SUN_DRAW",
 	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Integer, .number = 1.0f}}}},
+	});
+
+	all.push_back({
+	    .id = "sky.sea_wind_drift",
+	    .name = "The sea drifts with the background wind",
+	    .facet = Facet::Sky,
+	    .description = "The background weather's wind is 1 along x and 1 along z, as the real-world weather of type 10 "
+	                   "sets it. The camera looks down on the lake from its southern shore at noon under a clear sky. Two "
+	                   "trees stand on the far shore.",
+	    .expected = "From the next game turn the sea's texture in the lake drifts towards the north east, with the "
+	                "wind, about 6 units a second (4.1 along each of x and z). The ripple of the rows continues as "
+	                "before. While the game is paused the texture stands still. The texture drifts at the same speed at "
+	                "all frame rates. At the lowest detail level the still sea drifts towards the south east, about 8.5 units "
+	                "a second.",
+	    .environment = {.hour = 12.0f, .clockRuns = false, .dispenserGrid = false, .backgroundWind = glm::ivec2(1, 1)},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_Lake.x, 60.0f, k_NearShallows - 40.0f},
+	                .look = {k_Lake.x, 0.0f, k_Lake.y + 10.0f}},
+	    // Trees on the far shore stand still against the drift
+	    .objects = {{.type = TreeInfo::Oak, .offset = {k_Lake.x - 30.0f, k_FarShallows + 25.0f}},
+	                {.type = TreeInfo::Conifer, .offset = {k_Lake.x + 35.0f, k_FarShallows + 20.0f}}},
 	});
 
 	all.push_back({
