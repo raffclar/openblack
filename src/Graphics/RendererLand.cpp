@@ -724,6 +724,9 @@ TextureHandle Renderer::UpdateLandLight() const
 		    .darkness = sky_dome::Darkness(1.0f - alignment),
 		    .fog = detail.fog,
 		    .weather = detail.weather,
+		    .lowResolution = detail.lowResTextures,
+		    .landColour = _landLightTable->GetLandColour(),
+		    .skyType = skyType,
 		});
 		const auto& texels = _landLightTable->GetTexels();
 		bgfx::updateTexture2D(toBgfx(*_landLightTexture), 0, 0, 0, 0, LandLightTable::k_Size, 1,
@@ -749,7 +752,7 @@ glm::vec4 Renderer::GetModelLight() const
 			        : 0.0f;
 			const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
 			light = model_light::FrameLight(transform->position, ground, Locator::camera::value().GetOrigin(),
-			                                Locator::skyClockSystem::value().GetCurrentSkyType(),
+			                                Locator::skyClockSystem::value().GetCurrentNightSkyType(),
 			                                inTemple ? std::optional(Locator::temple::value().GetPosition()) : std::nullopt);
 		}
 	}

@@ -43,6 +43,9 @@ public:
 	virtual void SetTime(float time) = 0;
 	/// The sky of the visual time: 0 at night, 1 at dusk and 2 by day, between them as it turns
 	[[nodiscard]] virtual float GetCurrentSkyType() const = 0;
+	/// The sky of the visual time as the game counts it: 2 at night, 1 at dusk and 0 by day. The drawing of the sky,
+	/// the land's light and the model light use this value.
+	[[nodiscard]] virtual float GetCurrentNightSkyType() const = 0;
 	/// The visual time, between 0 and 24 in hours
 	[[nodiscard]] virtual float GetTime() const = 0;
 	/// The hours of the visual time the sky turns at

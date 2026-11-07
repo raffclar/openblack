@@ -92,7 +92,7 @@ void SkyClockSystem::FindAfterLoad()
 		dome.frameRows = shown->frameRows;
 		return;
 	}
-	dome.follow.Jump(GetCurrentSkyType());
+	dome.follow.Jump(GetCurrentNightSkyType());
 	dome.frameRows = {};
 }
 
@@ -115,6 +115,12 @@ float SkyClockSystem::GetCurrentSkyType() const
 {
 	const auto& clock = GetClock();
 	return clock.SkyType(clock.GetVisualTime());
+}
+
+float SkyClockSystem::GetCurrentNightSkyType() const
+{
+	const auto& clock = GetClock();
+	return clock.NightSkyType(clock.GetVisualTime());
 }
 
 DayNightClock& SkyClockSystem::GetClock()

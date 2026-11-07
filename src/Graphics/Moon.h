@@ -43,7 +43,7 @@ inline constexpr int64_t k_SecondsPerDay = 86400;
 
 /// How far through its moon month the real moon is, by whole days of a seconds since 1970 time: 0 at a new moon and
 /// about 0.5 at a full moon. Before 2000 it counts back from 0, so it is negative.
-[[nodiscard]] double MonthFraction(int64_t unixTime);
+[[nodiscard]] float MonthFraction(int64_t unixTime);
 
 /// The phase of the real moon, 0 to 2 pi, by whole days of a seconds since 1970 time: a whole turn at a new moon and
 /// half a turn at a full moon

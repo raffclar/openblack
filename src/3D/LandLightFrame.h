@@ -23,8 +23,8 @@ namespace openblack
 /// What the land's light of a frame is built from (see LandLightTable::Build)
 struct LandLightInputs
 {
-	/// From 0 at night to 2 by day
-	float skyType {2.0f};
+	/// The sky as the game counts it: from 2 at night through 1 at dusk to 0 by day
+	float skyType {0.0f};
 	/// From -1, evil, to 1, good, as the sky shows it
 	float alignment {0.0f};
 	/// The clouds over the camera, 0 to 1, which darken the land

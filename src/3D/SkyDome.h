@@ -74,7 +74,7 @@ struct FrameRows
 	[[nodiscard]] std::span<const Rows> Get() const { return std::span(rows).first(count); }
 };
 
-/// The dome following the sky type, with sky types from 0 at night to 2 by day
+/// The dome following the sky type, with the sky as the game counts it: from 2 at night through 1 at dusk to 0 by day
 class Follow
 {
 public:
@@ -90,7 +90,7 @@ public:
 	[[nodiscard]] uint16_t RowsDone() const { return _rowsDone; }
 
 private:
-	float _following {2.0f};
+	float _following {0.0f};
 	uint16_t _rowsDone {k_Rows};
 	std::optional<float> _wholeDome;
 
@@ -130,7 +130,8 @@ struct Pair
 	bool operator==(const Pair&) const = default;
 };
 
-/// The pictures of the time of day a sky type blends, as 0 night, 1 dusk and 2 day: day into dusk, or dusk into night
+/// The pictures of the time of day a sky type blends, with the sky as the game counts it (2 at night, 0 by day): day
+/// into dusk up to 1, then dusk into night
 [[nodiscard]] Pair TimePair(float skyType);
 /// The alignments' domes a sky alignment from 0, evil, to 2, good, mixes: the second drawn over the first
 [[nodiscard]] Pair AlignmentPair(float alignment);
@@ -161,13 +162,23 @@ struct TintInputs
 	bool fog;
 	/// The weather setting: a good sky darkens the dome
 	bool weather;
+	/// The low resolution textures: the dome does not blend the times of day, thus its first colour starts from the
+	/// land's colour, darker towards night, instead of from white
+	bool lowResolution {false};
+	/// The land's colour of the frame, 0xRRGGBB
+	uint32_t landColour {0xFFFFFFu};
+	/// The sky as the game counts it, from 2 at night to 0 by day
+	float skyType {0.0f};
 };
 
 /// How dark the sky is for the alignment that the land's light uses, from 0, good, to 2, evil. The sky is not dark
 /// until it is a little good, and at most 90 when it is fully good. The game darkens the good sky, not the evil sky.
 [[nodiscard]] uint8_t Darkness(float alignment);
-/// The dome's colours: white with nothing added on a clear day, towards the haze's colour as an overcast comes in, a
-/// little darker under a good sky and towards white in a flash of lightning, all in whole steps
+/// The first colour at the low resolution textures: each channel of the land's colour times a part that falls towards
+/// night, cut to a whole number
+[[nodiscard]] glm::u8vec3 LowResolutionColour(uint32_t landColour, float skyType);
+/// The dome's colours: white (or the low resolution colour) with nothing added on a clear day, towards the haze's colour as an
+/// overcast comes in, a little darker under a good sky and towards white in a flash of lightning, all in whole steps
 [[nodiscard]] Tint TintOf(const TintInputs& inputs);
 /// How strongly the sun or the moon shows through an overcast: with the fog setting, a full overcast leaves a ninth
 [[nodiscard]] float ThroughOvercast(float alpha, float overcast, bool fog);

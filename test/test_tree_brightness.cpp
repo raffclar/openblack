@@ -34,3 +34,11 @@ TEST(TreeBrightness, ALightOverheadLightsNoMore)
 {
 	EXPECT_EQ(tree_brightness::Factor({0.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 100.0f, 0.0f}), 200);
 }
+
+TEST(TreeBrightness, TheLengthAddsZThenYThenX)
+{
+	// The game adds the squares of z, y and x in that order and multiplies by the inverse of the length. A sum in a
+	// different order, or a division, gives 245 here.
+	EXPECT_EQ(tree_brightness::Factor({4859.0f, 155.0f, 2035.0f}, {0x1.0195c8p-1f, 0x1.a8c3aep-7f, 0x1.0d79e0p-1f}, k_Sun),
+	          244);
+}

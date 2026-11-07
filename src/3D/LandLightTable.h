@@ -50,9 +50,9 @@ class LandLightTable
 public:
 	static constexpr size_t k_Size = 256;
 
-	/// skyType runs from 0 at night to 2 by day, and alignment from -1, evil, to 1, good. The overcast at the camera, 0
-	/// for a clear sky and 1 for a full one, darkens the land's colour and draws the haze in. A flash of lightning, 0 to
-	/// 255, takes every light and the haze towards white.
+	/// skyType is the sky as the game counts it, from 2 at night through 1 at dusk to 0 by day, and alignment from -1, evil, to
+	/// 1, good. The overcast at the camera, 0 for a clear sky and 1 for a full one, darkens the land's colour and draws the
+	/// haze in. A flash of lightning, 0 to 255, takes every light and the haze towards white.
 	void Build(const LandLightPalette& palette, float skyType, float alignment, float overcast, uint8_t flash = 0,
 	           uint32_t rampDivisor = k_RampDivisor) noexcept;
 
@@ -81,7 +81,7 @@ public:
 		glm::vec3 colour {0.0f}; ///< 0 to 255
 	};
 
-	/// The land's colour for the time of day, alignment and overcast, as Build finds it, 0xRRGGBB
+	/// The land's colour for the sky type, alignment and overcast, as Build finds it, 0xRRGGBB
 	[[nodiscard]] static uint32_t GetLandColour(const LandLightPalette& palette, float skyType, float alignment,
 	                                            float overcast) noexcept;
 
