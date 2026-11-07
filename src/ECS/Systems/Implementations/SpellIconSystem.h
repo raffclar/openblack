@@ -71,6 +71,7 @@ public:
 	void EmptyIconStores(entt::entity site) override;
 	void CancelChargesFor(entt::entity temple, PlayerNames charger) override;
 	[[nodiscard]] bool ChargesFor(entt::entity temple, PlayerNames charger) const override;
+	[[nodiscard]] std::optional<float> HandChargeShare(PlayerNames charger) const override;
 	bool CancelLatestChargeFor(entt::entity temple, PlayerNames charger) override;
 	[[nodiscard]] entt::entity IconInTemple(entt::entity temple, SpellSeedType seed) const override;
 	[[nodiscard]] bool AnyIconStores(entt::entity temple, std::optional<MagicType> type) const override;

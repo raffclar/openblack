@@ -33,13 +33,21 @@ struct SpriteInstance
 	glm::vec4 uv;
 	/// Its colour and alpha, 0..1
 	glm::vec4 colour;
-	/// x: 1 lying flat on the ground, 0 facing the screen. y: 1 tinted by the colour of the land under it
+	/// x: 1 lying flat on the ground, 0 facing the screen. y: 1 tinted by the colour of the land under it. z: the light
+	/// added after the texture, as one whole number red x 65536 + green x 256 + blue (see PackedSpecular)
 	glm::vec4 flags;
 };
 static_assert(sizeof(SpriteInstance) == 5 * sizeof(glm::vec4));
 
 /// A drawn sprite is never smaller than this
 constexpr float k_MinimumHalfWidth = 1e-4f;
+
+/// The light added after the texture as one whole number that a float holds exactly: red x 65536 + green x 256 + blue
+[[nodiscard]] constexpr float PackedSpecular(const std::array<uint8_t, 3>& specular)
+{
+	return static_cast<float>((static_cast<uint32_t>(specular[0]) << 16u) | (static_cast<uint32_t>(specular[1]) << 8u) |
+	                          specular[2]);
+}
 
 /// The sprite of a drawn atom
 [[nodiscard]] SpriteInstance InstanceOf(const Effect::DrawAtom& atom);

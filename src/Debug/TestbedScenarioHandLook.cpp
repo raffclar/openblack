@@ -396,4 +396,20 @@ void testbed_scenarios::AddHandLookScenarios(std::vector<Scenario>& all)
 	                 {.kind = Kind::PointerTo, .delaySeconds = 2.0f, .point = {0.5f, 0.9f}},
 	                 {.kind = Kind::HandRelease, .delaySeconds = 2.0f, .velocity = {0.0f, 0.0f, 0.0f}}},
 	});
+
+	all.push_back({
+	    .id = "hand.tooltip_arrows",
+	    .name = "The hand's tooltip and its arrows at both sides of the hand",
+	    .facet = Facet::Hand,
+	    .description = "The empty hand hovers over the land in the right third of the window for four seconds, then in the "
+	                   "left third for four seconds.",
+	    .expected = "The tooltip \"Move\" shows with the mouse and an arrow on each of its four sides, each arrow on a faint "
+	                "yellow glow. At the right of the window the words end at the hand; at the left they start at the hand. "
+	                "Each arrow picture is a ninth of the line's height larger than its glow on each side.",
+	    .environment = {.dispenserGrid = false, .cursor = glm::vec2(0.8f, 0.5f)},
+	    .framing = Close(),
+	    .commands = {{.kind = Kind::PointerTo, .delaySeconds = 4.0f, .point = {0.2f, 0.5f}},
+	                 {.kind = Kind::PointerTo, .delaySeconds = 4.0f, .point = {0.8f, 0.5f}}},
+	    .repeatFrom = 0,
+	});
 }

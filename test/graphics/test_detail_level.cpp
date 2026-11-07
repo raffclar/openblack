@@ -146,3 +146,15 @@ TEST(DetailLevel, TheTempleFloorReflectsAtMaximumWithLightMaps)
 	noLightmaps.templeLightmaps = false;
 	EXPECT_FALSE(detail_level::TempleReflected(noLightmaps));
 }
+
+TEST(DetailLevel, TheCustomLevelCanTurnTheSmallBumpDetailOff)
+{
+	// Every fixed level draws the small bump detail
+	for (uint8_t level = 0; level < detail_level::k_Custom; ++level)
+	{
+		EXPECT_FLOAT_EQ(detail_level::SmallBumpStrength(detail_level::For(level), 0.75f), 0.75f);
+	}
+	auto custom = detail_level::For(detail_level::k_Custom);
+	custom.smallBump = false;
+	EXPECT_FLOAT_EQ(detail_level::SmallBumpStrength(custom, 0.75f), 0.0f);
+}

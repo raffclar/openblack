@@ -114,6 +114,10 @@ public:
 	virtual void CancelChargesFor(entt::entity temple, PlayerNames charger) = 0;
 	/// Whether an icon at the worship sites of a temple charges a miracle for the hand of a player
 	[[nodiscard]] virtual bool ChargesFor(entt::entity /*temple*/, PlayerNames /*charger*/) const { return false; }
+	/// How far the icons at the worship sites of a player charge miracles for the hand of the player, as the hand shows
+	/// it: the largest share of these icons (icons::HandPulseShare), and none less than 0. None when no icon charges for
+	/// the hand.
+	[[nodiscard]] virtual std::optional<float> HandChargeShare(PlayerNames /*charger*/) const { return std::nullopt; }
 	/// A scribble of the empty hand stops one charge for the hand of a player at the worship sites of a temple: the
 	/// charge that started last. Of charges that started in the same turn, the first in the order of the places stops.
 	/// It returns whether a charge stopped.

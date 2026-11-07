@@ -38,6 +38,7 @@
 #include "Particles/ParticleEffect.h"
 #include "Particles/ParticleImport.h"
 #include "Particles/ParticleObjectEffects.h"
+#include "Particles/ParticleSprites.h"
 
 using namespace openblack;
 using namespace openblack::particles;
@@ -547,6 +548,25 @@ TEST_F(ParticleEffectTest, SpritesTakeThePlayersColour)
 	EXPECT_EQ(atoms[0].rgb, (std::array<uint8_t, 3> {254, 0, 0}));
 	// And its creation's sound was asked for
 	EXPECT_EQ(world.sounds, (std::vector<std::string> {"SOUND_POP"}));
+}
+
+TEST_F(ParticleEffectTest, AnAtomTakesItsCreatorsSpecularColourApartFromItsColour)
+{
+	auto effect =
+	    Make(Header() +
+	         Object("ParticleSpriteCreator", "Sprite0",
+	                std::string(k_Sprite) + "PROPERTY SpecColorR INTEGER 30\nPROPERTY SpecColorG INTEGER 40\n"
+	                                        "PROPERTY SpecColorB INTEGER 300\n") +
+	         Object("CreateRuleAnAtom", "Create0", "PROPERTY Group INTEGER 0\nPROPERTY PCreator PERSIS_PNTR Sprite0\n"));
+	effect->Step(k_Step);
+	effect->Step(k_Step);
+	std::vector<Effect::DrawAtom> atoms;
+	effect->Collect(1.0f, atoms);
+	ASSERT_EQ(atoms.size(), 1u);
+	// The light goes to the draw beside the colour (to be added after the texture), clamped to a byte
+	EXPECT_EQ(atoms[0].specular, (std::array<uint8_t, 3> {30, 40, 255}));
+	EXPECT_EQ(atoms[0].rgb, (std::array<uint8_t, 3> {255, 255, 255}));
+	EXPECT_EQ(sprites::InstanceOf(atoms[0]).flags.z, 30.0f * 65536.0f + 40.0f * 256.0f + 255.0f);
 }
 
 TEST_F(ParticleEffectTest, ItIsWalkedNewestFirstWithRibbonsAfterTheirAtomsAndChildrenLast)

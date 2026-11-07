@@ -109,6 +109,7 @@ bgfx::VertexLayout ChainLayout()
 	    .add(bgfx::Attrib::Position, 3, bgfx::AttribType::Float)
 	    .add(bgfx::Attrib::TexCoord0, 2, bgfx::AttribType::Float)
 	    .add(bgfx::Attrib::Color0, 4, bgfx::AttribType::Uint8, true)
+	    .add(bgfx::Attrib::Color1, 4, bgfx::AttribType::Uint8, true)
 	    .end();
 	return layout;
 }
@@ -316,7 +317,8 @@ void Renderer::DrawParticleMist(const DrawSceneDesc& desc, const particles::draw
 	glm::vec3 scale {mist.size};
 	scale.y = scale.z = mists::EdgeOnSize(mist.size, mist.shape, mist.position - origin);
 	const auto model = glm::translate(mist.position) * glm::mat4(facing) * glm::scale(scale);
-	const glm::vec4 u_mist {mists::FrameOffset(mists::Frame(mist.counter), true), 0.0f, 0.0f};
+	// z: the light added after the texture, as one whole number red x 65536 + green x 256 + blue
+	const glm::vec4 u_mist {mists::FrameOffset(mists::Frame(mist.counter), true), static_cast<float>(mist.specularRgb), 0.0f};
 	const glm::vec4 u_mistColour {static_cast<float>((colour >> 16u) & 0xFFu) / 255.0f,
 	                              static_cast<float>((colour >> 8u) & 0xFFu) / 255.0f,
 	                              static_cast<float>(colour & 0xFFu) / 255.0f, alpha / 255.0f};
@@ -423,6 +425,16 @@ void Renderer::DrawParticleMesh(const DrawSceneDesc& desc, const particles::draw
 	// unlit; the others are lit
 	submitDesc.tint =
 	    glm::vec4(glm::vec3(draw.colour), creator.DrawnUnlit() ? std::max(creator.UnlitAlpha(alpha), 1.0f / 255.0f) : 0.0f);
+	// Only a model in the land's colour takes the land's light, the land's colour and the haze where it is. Its atom's
+	// colour then multiplies the land's light in whole steps, and an unlit one is not shaded by the sun (a w below 0).
+	submitDesc.landLightAndHaze = creator.landscapeColour;
+	if (creator.landscapeColour)
+	{
+		submitDesc.unlit = creator.DrawnUnlit();
+		submitDesc.tint.w = creator.DrawnUnlit() ? -submitDesc.tint.w : -1.0f;
+	}
+	// The atom's specular colour is added after the texture
+	submitDesc.lightAdd = draw.specular;
 	DrawMesh(*mesh, submitDesc, std::numeric_limits<uint8_t>::max());
 }
 

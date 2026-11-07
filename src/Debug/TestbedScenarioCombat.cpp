@@ -526,6 +526,20 @@ void testbed_scenarios::AddCombat(std::vector<Scenario>& all)
 		                 Fight(Kind::FightAuto, 1, 1, 0.2f), Fight(Kind::FightView, 0, 0, 1.0f)},
 		});
 		all.push_back({
+		    .id = "combat.view_start_distance",
+		    .name = "The fight view starts as far from the arena as the follow camera's clear view",
+		    .facet = Facet::Combat,
+		    .description = "The player's red tiger and a blue tiger fight by themselves. The camera looks down on the "
+		                   "arena from high above it. The camera shows the fight when the fighters have made their arena.",
+		    .expected = "The camera flies to the side of the arena from the best heading. The flight ends between 40 "
+		                "and 50 from the middle of a small arena: most of the way out to 50. Then the camera follows "
+		                "the duel.",
+		    .framing = {.shot = Shot::Placed, .eye = {0.0f, 320.0f, 30.0f}, .look = {0.0f, 0.0f, 40.0f}},
+		    .creatures = {red(PlayerNames::PLAYER_ONE, 0.6f, -0.2f), blue(PlayerNames::PLAYER_TWO, 0.5f, -0.2f)},
+		    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f), Fight(Kind::FightAuto, 0, 1, 0.2f),
+		                 Fight(Kind::FightAuto, 1, 1, 0.2f), Fight(Kind::FightView, 0, 0, 1.0f)},
+		});
+		all.push_back({
 		    .id = "combat.view_flight_stopped",
 		    .name = "A turn of the wheel stops the flight of the fight view",
 		    .facet = Facet::Combat,

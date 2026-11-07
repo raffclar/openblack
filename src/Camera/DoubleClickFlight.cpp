@@ -20,6 +20,7 @@
 
 #include "Common/X87.h"
 #include "Common/X87Vector.h"
+#include "ScriptCameraModel.h"
 
 using namespace openblack;
 using namespace openblack::camera_fly;
@@ -27,9 +28,6 @@ using namespace openblack::camera_fly;
 namespace
 {
 constexpr float k_Pi = std::numbers::pi_v<float>;
-/// Nearly straight above, a camera looks with no heading and this pitch
-constexpr float k_StraightAbove = 0.01f;
-constexpr float k_NearlyStraightDown = 1.53938043f;
 /// The headings scored, and the points out along each of them
 constexpr int k_Headings = 32;
 constexpr int k_FirstPoint = 3;
@@ -47,19 +45,14 @@ constexpr float k_BestMaxPitch = k_Pi / 3.0f;
 
 Bearing camera_fly::BearingOf(const glm::vec3& origin, const glm::vec3& focus)
 {
-	const auto diff = origin - focus;
-	if (std::abs(diff.x) < k_StraightAbove && std::abs(diff.z) < k_StraightAbove)
-	{
-		return {.heading = 0.0f, .pitch = k_NearlyStraightDown};
-	}
-	return {.heading = k_Pi - std::atan2(diff.x, -diff.z), .pitch = std::atan2(diff.y, std::hypot(diff.x, diff.z))};
+	// The flight uses the game's own angle maths, also for its choice of heading and for the slope of the land
+	const auto angles = script_camera::HeadingAndPitchFromPoints(origin, focus);
+	return {.heading = angles.heading, .pitch = angles.pitch};
 }
 
 glm::vec3 camera_fly::OriginAt(const glm::vec3& focus, float distance, const Bearing& bearing)
 {
-	const float level = std::cos(bearing.pitch);
-	return {std::sin(bearing.heading) * level * distance + focus.x, std::sin(bearing.pitch) * distance + focus.y,
-	        std::cos(bearing.heading) * level * distance + focus.z};
+	return script_camera::PointFromDistanceHeadingAndPitch(focus, distance, bearing.heading, bearing.pitch);
 }
 
 Bearing camera_fly::BestBearing(const camera_limits::Ground& ground, const Bearing& current, float distance,

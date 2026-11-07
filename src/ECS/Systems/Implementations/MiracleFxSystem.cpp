@@ -16,6 +16,7 @@
 #include <algorithm>
 #include <chrono>
 #include <numbers>
+#include <optional>
 #include <vector>
 
 #include <PackFile.h>
@@ -44,6 +45,8 @@
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/ObjectDrawListSystemInterface.h"
 #include "ECS/Systems/ParticleRuleSystemInterface.h"
+#include "ECS/Systems/PlayerSystemInterface.h"
+#include "ECS/Systems/SpellIconSystemInterface.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -386,6 +389,13 @@ void MiracleFxSystem::UpdateHand(float seconds)
 	}
 	fx->glowing = Locator::magicSystem::has_value() && Locator::magicSystem::value().GetHeldSeed().has_value();
 	fx->glowFrame = visuals::StepGlowFrame(fx->glowFrame, seconds);
+	// The icons at the worship sites of the player at this computer that charge for the hand pulse bands onto it
+	std::optional<float> charge;
+	if (Locator::spellIconSystem::has_value() && Locator::playerSystem::has_value())
+	{
+		charge = Locator::spellIconSystem::value().HandChargeShare(Locator::playerSystem::value().GetLocalPlayer());
+	}
+	visuals::StepChargePulse(fx->bands, fx->chargePulse, charge, seconds);
 	visuals::StepBands(fx->bands, seconds);
 }
 

@@ -143,7 +143,8 @@ void openblack::ecs::reflection::RegisterFields_Components_h(entt::meta_ctx& con
 	Reflect<components::HandMiracleFx>(context)
 	    .Field<&components::HandMiracleFx::bands>("bands")
 	    .Field<&components::HandMiracleFx::glowing>("glowing")
-	    .Field<&components::HandMiracleFx::glowFrame>("glowFrame");
+	    .Field<&components::HandMiracleFx::glowFrame>("glowFrame")
+	    .Field<&components::HandMiracleFx::chargePulse>("chargePulse");
 	Reflect<components::HandMorph>(context)
 	    .Field<&components::HandMorph::state>("state")
 	    .Field<&components::HandMorph::point>("point")
