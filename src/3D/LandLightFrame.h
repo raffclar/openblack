@@ -25,8 +25,8 @@ struct LandLightInputs
 {
 	/// The sky as the game counts it: from 2 at night through 1 at dusk to 0 by day
 	float skyType {0.0f};
-	/// From -1, evil, to 1, good, as the sky shows it
-	float alignment {0.0f};
+	/// The value of the land that the sky shows, from 0, good, through 1, neutral, to 2, evil
+	float sky {1.0f};
 	/// The clouds over the camera, 0 to 1, which darken the land
 	float overcast {0.0f};
 	/// A flash of lightning at the camera, 0 to 255

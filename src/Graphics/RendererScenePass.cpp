@@ -371,8 +371,8 @@ void Renderer::DrawPassSky(const DrawSceneDesc& desc, const ScenePass& pass) con
 	if (desc.drawSky && _skyDomeFrameBuffer)
 	{
 		const auto modelMatrix = sky_dome::Placement();
-		// The sky's alignment from 0, evil, to 2, good, mixes two of the alignments' domes
-		const auto alignments = sky_dome::AlignmentPair(Locator::alignmentSystem::value().GetSkyAlignment() + 1.0f);
+		// The value of the land that the sky shows, from 0, good, to 2, evil, mixes two of the alignments' domes
+		const auto alignments = sky_dome::AlignmentPair(Locator::alignmentSystem::value().GetSkyLand());
 		const glm::vec4 u_skyAlignment {alignments.lower, alignments.upper, alignments.weight,
 		                                static_cast<float>(_skyDomeRows)};
 

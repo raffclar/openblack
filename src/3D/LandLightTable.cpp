@@ -84,14 +84,14 @@ uint32_t LandLightTable::Ramp(uint32_t a, uint32_t b, uint32_t t, uint32_t divis
 
 namespace
 {
-/// The palette's colour of each row for the time of day and the alignment
-std::array<uint32_t, k_RowCount> PaletteColours(const LandLightPalette& palette, float skyType, float alignment)
+/// The palette's colour of each row for the time of day and the value of the land that the sky shows
+std::array<uint32_t, k_RowCount> PaletteColours(const LandLightPalette& palette, float skyType, float sky)
 {
 	// The palette's columns: the time of day from midnight to noon, and the alignment from good to evil. The time's
 	// column is the sky counted from day, times 6, then times 2.5. Each step rounds to a float.
 	const float fromDay = 2.0f - std::clamp(skyType, 0.0f, 2.0f);
 	const float timeColumn = (fromDay * k_TimeColumnHours) * k_TimeColumnScale;
-	const float alignmentColumn = std::clamp(1.0f - alignment, 0.0f, 2.0f) * 15.0f;
+	const float alignmentColumn = std::clamp(sky, 0.0f, 2.0f) * 15.0f;
 
 	std::array<uint32_t, k_RowCount> colours {};
 	for (size_t row = 0; row < colours.size(); ++row)
@@ -105,9 +105,9 @@ std::array<uint32_t, k_RowCount> PaletteColours(const LandLightPalette& palette,
 }
 
 /// The land's colour, from good through neutral to evil
-uint32_t LandColour(const std::array<uint32_t, k_RowCount>& colours, float alignment)
+uint32_t LandColour(const std::array<uint32_t, k_RowCount>& colours, float sky)
 {
-	const float evil = std::clamp(1.0f - alignment, 0.0f, 2.0f);
+	const float evil = std::clamp(sky, 0.0f, 2.0f);
 	const auto towardsEvil = static_cast<int32_t>(evil * 255.0f);
 	return evil < 1.0f ? Lerp(colours[k_Good], colours[k_Neutral], static_cast<uint32_t>(towardsEvil))
 	                   : Lerp(colours[k_Neutral], colours[k_Evil], static_cast<uint32_t>(towardsEvil - 256));
@@ -128,21 +128,21 @@ uint32_t Overcast(uint32_t land, float overcast)
 }
 } // namespace
 
-uint32_t LandLightTable::GetLandColour(const LandLightPalette& palette, float skyType, float alignment, float overcast) noexcept
+uint32_t LandLightTable::GetLandColour(const LandLightPalette& palette, float skyType, float sky, float overcast) noexcept
 {
-	return Overcast(LandColour(PaletteColours(palette, skyType, alignment), alignment), overcast) & 0xFFFFFFu;
+	return Overcast(LandColour(PaletteColours(palette, skyType, sky), sky), overcast) & 0xFFFFFFu;
 }
 
-uint32_t LandLightTable::GetMoonColour(const LandLightPalette& palette, float skyType, float alignment) noexcept
+uint32_t LandLightTable::GetMoonColour(const LandLightPalette& palette, float skyType, float sky) noexcept
 {
-	return PaletteColours(palette, skyType, alignment)[k_Moon] & 0xFFFFFFu;
+	return PaletteColours(palette, skyType, sky)[k_Moon] & 0xFFFFFFu;
 }
 
-void LandLightTable::Build(const LandLightPalette& palette, float skyType, float alignment, float overcast, uint8_t flash,
+void LandLightTable::Build(const LandLightPalette& palette, float skyType, float sky, float overcast, uint8_t flash,
                            uint32_t rampDivisor) noexcept
 {
-	const auto colours = PaletteColours(palette, skyType, alignment);
-	const auto land = Overcast(LandColour(colours, alignment), overcast);
+	const auto colours = PaletteColours(palette, skyType, sky);
+	const auto land = Overcast(LandColour(colours, sky), overcast);
 
 	_landColour = land & 0xFFFFFFu;
 	_warmColour = colours[k_Warm] & 0xFFFFFFu;

@@ -53,9 +53,9 @@ using Random = std::function<float(float low, float high)>;
 /// last. Pinned clouds are 192.
 [[nodiscard]] int EdgeAlpha(const glm::vec3& track, bool pinned);
 
-/// The clouds' colour, 0xAARRGGBB, for the sky's alignment (-1 evil to 1 good) and the land's light at full
-/// luminosity (0xRRGGBB): clear and white for good, grey for neutral and dark orange for evil, in that light, each
-/// channel then drawn a little towards 35
-[[nodiscard]] uint32_t Colour(float skyAlignment, uint32_t fullLight);
+/// The clouds' colour, 0xAARRGGBB, for the value of the land that the sky shows (0 good, 1 neutral, 2 evil) and the
+/// land's light at full luminosity (0xRRGGBB): clear and white for good, grey for neutral and dark orange for evil, in
+/// that light, each channel then drawn a little towards 35
+[[nodiscard]] uint32_t Colour(float sky, uint32_t fullLight);
 
 } // namespace openblack::clouds
