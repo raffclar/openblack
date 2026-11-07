@@ -752,15 +752,18 @@ void TempleCameraModel::Step(float dt, const Input& input)
 	// Looking at a scroll, the room's camera keeps still, and a press elsewhere or the arrow keys send it back, as in
 	// the creature's room
 	const bool inControl = _state == ControlOf(GetRoom());
+	const bool wasLookingAtSubMesh = _lookingAtSubMesh;
 	if (_lookingAtSubMesh)
 	{
+		// The look comes closer in this step also when the player stops it
+		_subMeshZoom = std::min(_subMeshZoom + (0.75f * dt), 1.0f);
 		const auto& actions = Locator::gameActionSystem::value();
 		const bool turning = actions.GetAny(BindableActionMap::MOVE_LEFT, BindableActionMap::MOVE_RIGHT,
 		                                    BindableActionMap::MOVE_FORWARDS, BindableActionMap::MOVE_BACKWARDS);
 		const bool leftByPlayer = (input.button != 0 && !_wasPressed) || turning;
 		if (leftByPlayer || !inControl)
 		{
-			_lookingAtSubMesh = false;
+			LeaveSubMesh(leftByPlayer);
 		}
 		// The player taking the camera away from the scroll stops the scroll's help
 		if (leftByPlayer)
@@ -773,7 +776,10 @@ void TempleCameraModel::Step(float dt, const Input& input)
 			}
 		}
 	}
-	_subMeshZoom = std::clamp(_subMeshZoom + ((_lookingAtSubMesh ? 0.75f : -0.7f) * dt), 0.0f, 1.0f);
+	else
+	{
+		_subMeshZoom = std::max(_subMeshZoom - (0.7f * dt), 0.0f);
+	}
 	if (!_lookingAtSubMesh && _subMeshZoom <= 0.0f)
 	{
 		_subMeshLook.reset();
@@ -794,7 +800,8 @@ void TempleCameraModel::Step(float dt, const Input& input)
 		UpdateCaveTargets(dt, input);
 	}
 
-	if (!_lookingAtSubMesh)
+	// In the main room, the step that stops the look at a scroll does not also move the orbit or take a door
+	if (!_lookingAtSubMesh && !(wasLookingAtSubMesh && InMainRoom()))
 	{
 		switch (_state)
 		{
@@ -1444,11 +1451,7 @@ void TempleCameraModel::ChangeState()
 		_blendTime = 0.0f;
 		break;
 	case State::Orbit:
-		// The main room's camera starts the player facing the scroll, leaning a little up
-		_yawTarget = 0.0f;
-		_leanTarget = k_StartLean;
-		_yaw.Reset(0.0f);
-		_lean.Reset(k_StartLean);
+		RestartOrbit();
 		break;
 	case State::Look:
 	{
@@ -1475,6 +1478,35 @@ void TempleCameraModel::ChangeState()
 		break;
 	}
 	_state = _nextState;
+}
+
+void TempleCameraModel::RestartOrbit()
+{
+	// The main room's camera starts the player facing the scroll, leaning a little up
+	_yawTarget = 0.0f;
+	_leanTarget = k_StartLean;
+	_yaw.Reset(0.0f);
+	_lean.Reset(k_StartLean);
+}
+
+void TempleCameraModel::LeaveSubMesh(bool byPlayer)
+{
+	_lookingAtSubMesh = false;
+	if (!InMainRoom() || _state != State::Orbit)
+	{
+		return;
+	}
+	// The main room's orbit leans up when the player sends the camera back. After a look that came fully in, the orbit
+	// starts again from its first turn and lean.
+	const auto leave = MainRoomScrollLeave(byPlayer, _subMeshZoom);
+	if (leave.leanTarget.has_value())
+	{
+		_leanTarget = *leave.leanTarget;
+	}
+	if (leave.restartOrbit)
+	{
+		RestartOrbit();
+	}
 }
 
 void TempleCameraModel::LookAtSubMesh(glm::vec3 position, glm::vec3 lookAt)
