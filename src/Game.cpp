@@ -246,7 +246,7 @@ graphics::RendererInterface::DrawSceneDesc SceneDrawDesc(const EngineConfig& con
 	    .entities = Locator::entitiesRegistry::value(),
 	    .time = time,
 	    .timeOfDay = config.timeOfDay,
-	    .smallBumpMapStrength = config.smallBumpMapStrength,
+	    .smallBumpMapStrength = graphics::detail_level::SmallBumpStrength(config.detail, config.smallBumpMapStrength),
 	    .viewId = graphics::RenderPass::Main,
 	    .drawSky = config.drawSky,
 	    .drawWater = config.drawWater,

@@ -10,6 +10,7 @@
 #include "KeyBindings.h"
 
 #include <algorithm>
+#include <iterator>
 #include <string>
 
 #include <SDL_scancode.h>
@@ -97,6 +98,89 @@ BindableActionMap ActionsForKeyDown(std::span<const KeyBinding> bindings, SDL_Sc
 		}
 	}
 	return withModifier != BindableActionMap::NONE ? withModifier : plain;
+}
+
+bool IsHeldAction(BindableActionMap action) noexcept
+{
+	// The hand and camera actions from moving the hand to turning around the mouse, but talking
+	constexpr auto k_HeldActions =
+	    static_cast<uint64_t>(BindableActionMap::MOVE) | static_cast<uint64_t>(BindableActionMap::ACTION) |
+	    static_cast<uint64_t>(BindableActionMap::ZOOM_OUT) | static_cast<uint64_t>(BindableActionMap::ZOOM_IN) |
+	    static_cast<uint64_t>(BindableActionMap::ZOOM_ON) | static_cast<uint64_t>(BindableActionMap::MOVE_LEFT) |
+	    static_cast<uint64_t>(BindableActionMap::MOVE_RIGHT) | static_cast<uint64_t>(BindableActionMap::MOVE_FORWARDS) |
+	    static_cast<uint64_t>(BindableActionMap::MOVE_BACKWARDS) | static_cast<uint64_t>(BindableActionMap::TILT_UP) |
+	    static_cast<uint64_t>(BindableActionMap::TILT_DOWN) | static_cast<uint64_t>(BindableActionMap::ROTATE_LEFT) |
+	    static_cast<uint64_t>(BindableActionMap::ROTATE_RIGHT) | static_cast<uint64_t>(BindableActionMap::ROTATE_ON) |
+	    static_cast<uint64_t>(BindableActionMap::ROTATE_AROUND_MOUSE_ON);
+	return (static_cast<uint64_t>(action) & k_HeldActions) != 0;
+}
+
+BindableActionMap ActionsPressedByKeyDown(std::span<const KeyBinding> bindings, SDL_Scancode key, uint16_t sdlModifiers,
+                                          BindableActionMap blocked) noexcept
+{
+	auto actions = BindableActionMap::NONE;
+	// An action that acts while it is held is held while its key is, with its modifier when it has one
+	for (const auto& binding : bindings)
+	{
+		if (IsHeldAction(binding.action) && binding.key.has_value() && SameKey(binding.key->key, key) &&
+		    ModifierHeld(binding.key->modifier, sdlModifiers))
+		{
+			actions = Combine(actions, binding.action);
+		}
+	}
+	// A one-press action needs the key with the press's one modifier
+	if (const auto index = BindingForKeyDown(bindings, key, sdlModifiers, blocked);
+	    index.has_value() && !IsHeldAction(bindings[*index].action))
+	{
+		actions = Combine(actions, bindings[*index].action);
+	}
+	return actions;
+}
+
+Modifier KeyDownModifier(uint16_t sdlModifiers) noexcept
+{
+	if ((sdlModifiers & KMOD_SHIFT) != 0)
+	{
+		return Modifier::Shift;
+	}
+	if ((sdlModifiers & KMOD_CTRL) != 0)
+	{
+		return Modifier::Ctrl;
+	}
+	if ((sdlModifiers & KMOD_ALT) != 0)
+	{
+		return Modifier::Alt;
+	}
+	return Modifier::None;
+}
+
+std::optional<size_t> BindingForKeyDown(std::span<const KeyBinding> bindings, SDL_Scancode key, uint16_t sdlModifiers,
+                                        BindableActionMap blocked) noexcept
+{
+	const auto modifier = KeyDownModifier(sdlModifiers);
+	const auto found = std::ranges::find_if(bindings, [key, modifier](const KeyBinding& binding) {
+		return binding.key.has_value() && SameKey(binding.key->key, key) && binding.key->modifier == modifier;
+	});
+	if (found == bindings.end() || (static_cast<uint64_t>(found->action) & static_cast<uint64_t>(blocked)) != 0)
+	{
+		return std::nullopt;
+	}
+	return static_cast<size_t>(std::distance(bindings.begin(), found));
+}
+
+KeyDownBinding KeyDownBindingFor(std::span<const KeyBinding> bindings, SDL_Scancode key, uint16_t sdlModifiers,
+                                 BindableActionMap blocked, bool scriptHoldsScreen) noexcept
+{
+	const auto index = BindingForKeyDown(bindings, key, sdlModifiers, blocked);
+	if (!index.has_value())
+	{
+		return KeyDownBinding::None;
+	}
+	if (scriptHoldsScreen || IsHeldAction(bindings[*index].action))
+	{
+		return KeyDownBinding::LetsKeyThrough;
+	}
+	return KeyDownBinding::TakesKey;
 }
 
 BindableActionMap ActionsForKey(std::span<const KeyBinding> bindings, SDL_Scancode key) noexcept

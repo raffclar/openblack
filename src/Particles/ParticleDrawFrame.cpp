@@ -289,6 +289,8 @@ void AddShell(Frame& frame, const Effect::DrawAtom& atom, const ObjectGlow& glow
 	    .alphaTexture = entt::hashed_string((name + "a").c_str()).value(),
 	    .uvOffset = volume_glow::UvOffset(glow.animSpeed, volume_glow::SinceStarted(sources.gameMilliseconds, glow.startedAt)),
 	    .textureFraction = glow.textureFraction,
+	    .specularRgb = (static_cast<uint32_t>(atom.specular[0]) << 16u) | (static_cast<uint32_t>(atom.specular[1]) << 8u) |
+	                   atom.specular[2],
 	});
 }
 
@@ -371,6 +373,7 @@ void AddAtom(Frame& frame, GroupBuilder& builder, const Effect::DrawAtom& atom, 
 		    .position = atom.position,
 		    .colour = glm::vec4(glm::vec3(atom.rgb[0], atom.rgb[1], atom.rgb[2]) / k_ByteMax,
 		                        std::clamp(atom.alpha / k_ByteMax, 0.0f, 1.0f)),
+		    .specular = glm::vec3(atom.specular[0], atom.specular[1], atom.specular[2]) / k_ByteMax,
 		    .uvOffset = uv,
 		    .cutBelow = mesh.drawCutByPlane ? std::optional<float>(origin.y) : std::nullopt,
 		});
@@ -396,6 +399,8 @@ void AddAtom(Frame& frame, GroupBuilder& builder, const Effect::DrawAtom& atom, 
 		    .size = atom.scale,
 		    .argb = (alpha << 24u) | (static_cast<uint32_t>(atom.rgb[0]) << 16u) | (static_cast<uint32_t>(atom.rgb[1]) << 8u) |
 		            atom.rgb[2],
+		    .specularRgb = (static_cast<uint32_t>(atom.specular[0]) << 16u) | (static_cast<uint32_t>(atom.specular[1]) << 8u) |
+		                   atom.specular[2],
 		    .shape = shape,
 		    .counter = (static_cast<int>(atom.creatorValue.y) + counted) % k_MistCountWrap,
 		});
@@ -546,11 +551,14 @@ void draw::AppendChain(std::vector<ChainVertex>& out, std::vector<ChainJoint>& o
 		const auto uv = chain.SegmentUv(i, segments, textureRepeats, textureScroll);
 		const uint32_t headColour = Abgr(head.rgb, head.alpha);
 		const uint32_t tailColour = Abgr(tail.rgb, tail.alpha);
+		// Each joint also gives its specular colour to its corners, not faded with the colour
+		const uint32_t headSpecular = Abgr(head.specular, 0.0f);
+		const uint32_t tailSpecular = Abgr(tail.specular, 0.0f);
 		// The first joint's two sides, then the next joint's; each pass places them
-		out.push_back({.position = head.position, .uv = uv[0], .abgr = headColour});
-		out.push_back({.position = head.position, .uv = uv[1], .abgr = headColour});
-		out.push_back({.position = tail.position, .uv = uv[2], .abgr = tailColour});
-		out.push_back({.position = tail.position, .uv = uv[3], .abgr = tailColour});
+		out.push_back({.position = head.position, .uv = uv[0], .abgr = headColour, .specularAbgr = headSpecular});
+		out.push_back({.position = head.position, .uv = uv[1], .abgr = headColour, .specularAbgr = headSpecular});
+		out.push_back({.position = tail.position, .uv = uv[2], .abgr = tailColour, .specularAbgr = tailSpecular});
+		out.push_back({.position = tail.position, .uv = uv[3], .abgr = tailColour, .specularAbgr = tailSpecular});
 	}
 }
 

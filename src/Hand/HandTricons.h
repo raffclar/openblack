@@ -204,8 +204,8 @@ constexpr uint32_t k_DemoText = 5127;
 /// The word's size, two thirds of the mouse (four fifths for the languages that need bigger text)
 [[nodiscard]] int DemoLabelSize(bool biggerText, float scale = 1.0f);
 /// The demonstration's mouse beside the icons at `centre`, `labelWidth` the word's width at its size, its sizes and
-/// spacing scaled by `scale`
+/// spacing scaled by `scale`. The mouse is in `mouseRow` of the mice picture, the row of the player's mouse.
 [[nodiscard]] DemoMouse LayoutDemoMouse(glm::ivec2 centre, bool labelOnLeft, float labelWidth, bool biggerText, bool moveHeld,
-                                        bool actionHeld, float scale = 1.0f);
+                                        bool actionHeld, int mouseRow, float scale = 1.0f);
 
 } // namespace openblack::hand_tricons

@@ -169,6 +169,13 @@ inline constexpr std::array<uint8_t, k_Count> k_RainSplashes = {0, 0, 3, 5, 8, 8
 	return settings.templeGlows && (inReflection || settings.templeVolumeLight);
 }
 
+/// The strength of the small bump detail on the land: the strength that the engine sets, or 0 when the detail level turns
+/// the small bump detail off. Only the custom level can turn it off.
+[[nodiscard]] constexpr float SmallBumpStrength(const Settings& settings, float strength)
+{
+	return settings.smallBump ? strength : 0.0f;
+}
+
 [[nodiscard]] constexpr bool Fog(uint8_t level)
 {
 	return For(level).fog;

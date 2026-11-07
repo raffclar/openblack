@@ -1,5 +1,5 @@
 $input a_position, i_data0, i_data1, i_data2, i_data3, i_data4
-$output v_texcoord0, v_color0
+$output v_texcoord0, v_color0, v_haze
 
 #include <bgfx_shader.sh>
 
@@ -37,6 +37,12 @@ void main()
 	}
 	v_texcoord0 = vec4(i_data2.xy + vec2(corner.x * 0.5 + 0.5, 0.5 - corner.y * 0.5) * i_data2.zw, 0.0, 0.0);
 	v_color0 = i_data3;
+	// The light added after the texture, packed as red x 65536 + green x 256 + blue
+	float packed = floor(i_data4.z + 0.5);
+	float red = floor(packed / 65536.0);
+	float green = floor((packed - red * 65536.0) / 256.0);
+	float blue = packed - red * 65536.0 - green * 256.0;
+	v_haze = vec4(red, green, blue, 0.0) / 255.0;
 	if (i_data4.y > 0.5)
 	{
 		// Dust takes the land's light where it is: each byte of its colour and alpha times the light's (whose alpha is

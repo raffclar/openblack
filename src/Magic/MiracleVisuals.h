@@ -143,6 +143,8 @@ enum class BandKind : uint8_t
 	FlyIn,
 	/// Flies from the hand back to the camera, and goes
 	FlyOff,
+	/// Flies from in front of the camera onto the hand while an icon charges a miracle for the hand, and goes
+	Pulse,
 };
 
 struct HandBand
@@ -192,6 +194,24 @@ void AddFlyIn(HandBands& bands, bool delayed);
 void AddFlyOff(HandBands& bands);
 /// The bands age and spin; those that have flown go
 void StepBands(HandBands& bands, float seconds);
+
+/// While an icon at a worship site charges a miracle for the hand, bands pulse onto the hand. The more charge, the more
+/// often they come, the faster they fly and the brighter they are.
+struct ChargePulse
+{
+	/// An icon charged for the hand in the last frame
+	bool charging {false};
+	/// The seconds of game time since the last pulse
+	float sinceLast {0.0f};
+};
+/// The share of the charge that the pulse shows, between none and all. Less than none, or no number, is none.
+[[nodiscard]] float PulseShare(float charge);
+/// One band pulses onto the hand for a share of the charge
+void AddPulse(HandBands& bands, float share);
+/// A frame of the game's time. The charge is the largest share of the icons that charge for the hand, none when no
+/// icon charges for it. The first pulse comes in the frame that the charge starts. Then a pulse comes when more time
+/// than the gap for the charge went by since the last pulse.
+void StepChargePulse(HandBands& bands, ChargePulse& pulse, std::optional<float> charge, float seconds);
 
 /// Where a band is in its flight and how it looks
 struct BandPose

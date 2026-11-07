@@ -1072,12 +1072,13 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 			    }
 		    }
 
-		    // A colour added over it after its texture: the heal's glow on the people it heals, the glow of a fire on it
-		    // and the poison on a pot. A house's positive x is its windows' light, and a house's glow goes above it: 1 plus
-		    // the glow while someone is home.
+		    // A colour added over it after its texture: the heal's glow on the people and animals it heals (not on a
+		    // creature), the glow of a fire on it and the poison on a pot. A house's positive x is its windows' light, and a
+		    // house's glow goes above it: 1 plus the glow while someone is home.
 		    const bool onFire = stores.AllOf<Fire>(entity);
 		    uint32_t added = 0;
-		    if (const auto* glow = stores.TryGet<ObjectGlow>(entity); glow != nullptr && abode == nullptr)
+		    if (const auto* glow = stores.TryGet<ObjectGlow>(entity);
+		        glow != nullptr && abode == nullptr && graphics::object_tint::ShowsHealGlow(creatureOwn != nullptr))
 		    {
 			    added = glow->Packed();
 		    }

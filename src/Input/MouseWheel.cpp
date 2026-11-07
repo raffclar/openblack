@@ -37,4 +37,9 @@ bool SystemSaysWheel()
 #endif
 }
 
+int PlayerMousePictureRow(bool wheelTurned)
+{
+	return MousePictureRow(SystemSaysWheel() || wheelTurned, SystemMouseButtons());
+}
+
 } // namespace openblack::platform_mouse

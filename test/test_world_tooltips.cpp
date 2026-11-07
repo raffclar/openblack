@@ -178,6 +178,48 @@ TEST(WorldToolTips, AHandOffTheScreenKeepsItsTooltipOnTheEdge)
 	EXPECT_EQ(KeptOnScreen({100, 200}, {800, 600}, 24), glm::ivec2(100, 200));
 }
 
+TEST(WorldToolTips, LeftOfTheHandTheLineStartsOnAWholePixel)
+{
+	// The words, the gap, the mouse and half the height for the left arrow
+	EXPECT_FLOAT_EQ(LineWidth(100.25f, 24.0f, 24, true, false, 2.0f), 138.25f);
+	EXPECT_FLOAT_EQ(LineWidth(100.25f, 24.0f, 24, true, true, 2.0f), 150.25f);
+	// Left of the hand the line ends half its height to the right of the hand, its start cut down
+	EXPECT_EQ(LineStart(600, 24, 150.5f, true), 461);
+	// Right of the hand it starts half its height to the left
+	EXPECT_EQ(LineStart(100, 24, 150.5f, false), 88);
+	// The mouse starts after the words and the gap, cut down, then after the left arrow
+	EXPECT_EQ(IconStart(461, 100.25f, 2.0f, 24, true), 575);
+	EXPECT_EQ(IconStart(461, 100.25f, 2.0f, 24, false), 563);
+}
+
+TEST(WorldToolTips, TheWordsAndTheirGlowKeepTheHalfPixelOffset)
+{
+	// At 1920 x 1080 the line is 43 high and the words 28: they start 7.5 below the top
+	EXPECT_FLOAT_EQ(WordsOffset(43, 28), 7.5f);
+	EXPECT_FLOAT_EQ(WordsOffset(24, 16), 4.0f);
+	// The glow behind the words is cut down to whole pixels on both sides
+	EXPECT_EQ(WordsGlow(10, 50.5f, 100, 43, 7.5f), (PixelBox {.min = {10, 107}, .max = {60, 135}}));
+	EXPECT_EQ(IconGlow(60, 30.5f, 100, 43), (PixelBox {.min = {60, 100}, .max = {90, 143}}));
+}
+
+TEST(WorldToolTips, TheArrowGlowsUseWholeHalvesAndQuartersOfTheHeight)
+{
+	// At 1024 x 768 the line is 30 high: half 15, a quarter 7, three quarters 22
+	EXPECT_EQ(ArrowGlow(ArrowSide::Left, 100, 30.0f, 50, 30), (PixelBox {.min = {85, 57}, .max = {100, 72}}));
+	EXPECT_EQ(ArrowGlow(ArrowSide::Right, 100, 30.0f, 50, 30), (PixelBox {.min = {130, 57}, .max = {145, 72}}));
+	EXPECT_EQ(ArrowGlow(ArrowSide::Up, 100, 30.0f, 50, 30), (PixelBox {.min = {107, 35}, .max = {122, 50}}));
+	EXPECT_EQ(ArrowGlow(ArrowSide::Down, 100, 30.0f, 50, 30), (PixelBox {.min = {107, 80}, .max = {122, 95}}));
+}
+
+TEST(WorldToolTips, TheArrowPicturesGrowByANinthOfTheHeightCutDown)
+{
+	// At 800 x 600 the line is 24 high and a ninth of it is 2.67, so the low sides move out 3 and the high sides 2
+	EXPECT_EQ(ArrowPicture(ArrowSide::Left, 112, 24.0f, 100, 24), (PixelBox {.min = {97, 103}, .max = {114, 120}}));
+	EXPECT_EQ(ArrowPicture(ArrowSide::Right, 112, 24.0f, 100, 24), (PixelBox {.min = {133, 103}, .max = {150, 120}}));
+	EXPECT_EQ(ArrowPicture(ArrowSide::Up, 112, 24.0f, 100, 24), (PixelBox {.min = {115, 85}, .max = {132, 102}}));
+	EXPECT_EQ(ArrowPicture(ArrowSide::Down, 112, 24.0f, 100, 24), (PixelBox {.min = {115, 121}, .max = {132, 138}}));
+}
+
 TEST(WorldToolTips, NothingUnderThePointerShowsWithAMiracleInTheHand)
 {
 	// Holding or pouring food beside a wood pile, the pile the pointer crosses says nothing

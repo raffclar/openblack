@@ -54,6 +54,13 @@ struct Colours
 	return sum;
 }
 
+/// Whether the draw of a thing shows the glow that a heal puts on it. Villagers and animals show the glow. A creature
+/// keeps the colour, but the draw of its body does not use it.
+[[nodiscard]] constexpr bool ShowsHealGlow(bool creature) noexcept
+{
+	return !creature;
+}
+
 /// How far the grain of a pile can flow down it, as a share of its texture
 inline constexpr float k_MostGrainFlow = 0.25f;
 
