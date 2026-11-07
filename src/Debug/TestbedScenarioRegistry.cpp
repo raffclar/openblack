@@ -319,8 +319,9 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::EndBox || kind == Kind::BringCreature || kind == Kind::TattooEditorAsNetworkGame ||
 	       kind == Kind::ShowDemoPing || kind == Kind::AddIncomingMessage || kind == Kind::Chat ||
 	       kind == Kind::ComputerPersonality || kind == Kind::ComputerUntaughtSends || kind == Kind::SkirmishBox ||
-	       kind == Kind::LookAtSaveGamePicture || kind == Kind::HandCastOnDispenser || kind == Kind::HandCastOnCreature ||
-	       kind == Kind::CloseHeldMiracle || kind == Kind::JoinFootball || IsPointerCommand(kind);
+	       kind == Kind::LookAtSaveGamePicture || kind == Kind::ZoomToTempleCaveTarget || kind == Kind::HandCastOnDispenser ||
+	       kind == Kind::HandCastOnCreature || kind == Kind::CloseHeldMiracle || kind == Kind::JoinFootball ||
+	       IsPointerCommand(kind);
 }
 
 std::string_view testbed_scenarios::Name(Facet facet)
@@ -486,6 +487,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "read tip",
 	    "look at temple scroll",
 	    "look at a save game picture",
+	    "zoom to a target of the creature room",
 	    "set alight",
 	    "hand grips totem",
 	    "pointer on altar",

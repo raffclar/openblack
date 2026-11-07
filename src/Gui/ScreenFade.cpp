@@ -42,6 +42,14 @@ void ScreenFade::FadeThrough(glm::vec3 colour)
 	_turns = 0;
 }
 
+void ScreenFade::TurnBackFirstRise()
+{
+	if (_turns == 0 && _target == 1.0f)
+	{
+		_target = 0.0f;
+	}
+}
+
 void ScreenFade::Update(uint32_t realMilliseconds, bool inTemple)
 {
 	if (_amount == _target && !inTemple)

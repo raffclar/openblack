@@ -1138,6 +1138,22 @@ void TempleInterior::FadeToWhite()
 	}
 }
 
+void TempleInterior::ZoomToCaveTarget(size_t target)
+{
+	if (_cameraModel != nullptr && _currentRoom == TempleRoom::CreatureCave && target < CreatureCaveTargets::k_Count)
+	{
+		_cameraModel->ZoomToCaveTarget(static_cast<CreatureCaveTargets::Target>(target));
+	}
+}
+
+void TempleInterior::TurnBackRisingFade()
+{
+	if (_interface != nullptr)
+	{
+		_interface->GetScreenFade().TurnBackFirstRise();
+	}
+}
+
 void TempleInterior::CoverSkippedFlight()
 {
 	// The cut is covered from a whole screen, in whatever colour is still fading

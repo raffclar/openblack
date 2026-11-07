@@ -13,6 +13,7 @@
 
 #include <SDL_scancode.h>
 
+#include "3D/CreatureCaveTargets.h"
 #include "3D/TempleInteriorInterface.h"
 #include "Creature/CreatureCave.h"
 #include "Creature/CreatureFace.h"
@@ -20,6 +21,7 @@
 #include "Creature/CreatureFight.h"
 #include "Creature/CreatureLayers.h"
 #include "ECS/IncomingMessageRules.h"
+#include "Input/BindableActions.h"
 #include "Input/PlatformKeys.h"
 #include "TestbedScenarioBuilders.h"
 #include "TestbedScenarioRegistry.h"
@@ -1115,6 +1117,51 @@ void testbed_scenarios::AddAudio(std::vector<Scenario>& all)
 	                 {.kind = Kind::PointerTo, .delaySeconds = 0.4f, .point = {0.15f, 0.5f}},
 	                 {.kind = Kind::PointerPress, .delaySeconds = 0.4f, .value = 1},
 	                 {.kind = Kind::PointerRelease, .delaySeconds = 0.1f, .value = 1}},
+	});
+
+	all.push_back({
+	    .id = "temple.cave_zoom_back",
+	    .name = "The creature's room camera keeps the view of a target when it zooms back from it",
+	    .facet = Facet::Story,
+	    .description = "The player's creature is in the temple's creature room, which the player goes into. After ten "
+	                   "seconds the camera zooms to the belts, "
+	                   "as a click on them does. After two seconds, when the zoom is fully in, the player presses the "
+	                   "left arrow key for one frame.",
+	    .expected = "The camera zooms to the belts over a second and comes to rest a quarter of a second later. The key "
+	                "sends it back over half a second. The camera stays looking at the belts as it goes back, and then "
+	                "turns slowly left from there.",
+	    .framing = {.shot = Shot::Overview},
+	    .creatures = {Posed(CreatureType::Tiger, {0.0f, 40.0f}, 180.0f, "yours")},
+	    .commands = {{.kind = Kind::EnterTemple, .delaySeconds = 1.0f, .value = static_cast<size_t>(TempleRoom::Main)},
+	                 {.kind = Kind::OpenCreatureCave, .creature = 0, .delaySeconds = 0.5f},
+	                 {.kind = Kind::ZoomToTempleCaveTarget,
+	                  .delaySeconds = 10.0f,
+	                  .value = static_cast<size_t>(CreatureCaveTargets::Target::Belts)},
+	                 {.kind = Kind::PressKey,
+	                  .delaySeconds = 2.0f,
+	                  .value = static_cast<size_t>(input::BindableActionMap::MOVE_LEFT)}},
+	});
+
+	all.push_back({
+	    .id = "temple.cave_exit_fade_back",
+	    .name = "The white of the creature room's exit fades down when the player stops the zoom early",
+	    .facet = Facet::Story,
+	    .description = "The player's creature is in the temple's creature room, which the player goes into. After ten "
+	                   "seconds the camera zooms to the way "
+	                   "out, as a click on it does, and the screen starts to fade to white. After half a second the "
+	                   "player presses the left arrow key for one frame.",
+	    .expected = "The key sends the camera back from the way out. The white stops at about half and fades down again "
+	                "at once, over about half a second. The player stays in the temple.",
+	    .framing = {.shot = Shot::Overview},
+	    .creatures = {Posed(CreatureType::Tiger, {0.0f, 40.0f}, 180.0f, "yours")},
+	    .commands = {{.kind = Kind::EnterTemple, .delaySeconds = 1.0f, .value = static_cast<size_t>(TempleRoom::Main)},
+	                 {.kind = Kind::OpenCreatureCave, .creature = 0, .delaySeconds = 0.5f},
+	                 {.kind = Kind::ZoomToTempleCaveTarget,
+	                  .delaySeconds = 10.0f,
+	                  .value = static_cast<size_t>(CreatureCaveTargets::Target::Exit)},
+	                 {.kind = Kind::PressKey,
+	                  .delaySeconds = 0.5f,
+	                  .value = static_cast<size_t>(input::BindableActionMap::MOVE_LEFT)}},
 	});
 
 	all.push_back({
