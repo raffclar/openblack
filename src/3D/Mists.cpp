@@ -35,12 +35,10 @@ float mists::EdgeOnSize(float size, float edgeShrink, const glm::vec3& toMist)
 	return size / (((edgeShrink - 1.0f) * (1.0f - up)) + 1.0f);
 }
 
-void mists::Advance(int& counter, float& remainder, float milliseconds) noexcept
+void mists::Advance(int& counter, std::chrono::milliseconds step) noexcept
 {
-	remainder += milliseconds * k_Rate;
-	const auto step = static_cast<int>(remainder);
-	remainder -= static_cast<float>(step);
-	counter += step;
+	// The whole milliseconds become a float, then one float product, cut towards zero
+	counter += x87::ToInteger(static_cast<float>(step.count()) * k_Rate);
 	// Only once it passes the end
 	if (counter > k_CounterWrap)
 	{

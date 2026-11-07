@@ -24,11 +24,16 @@ using namespace openblack;
 using namespace openblack::ecs::systems;
 using namespace openblack::ecs::components;
 
-void MistSystem::Update(std::chrono::duration<float, std::milli> gameTime)
+void MistSystem::Update(std::chrono::milliseconds frameRealTime, std::chrono::milliseconds frameGameTime)
 {
+	const auto step = frame_pace::Step(_pace, frameRealTime, frameGameTime);
+	if (step <= std::chrono::milliseconds {0})
+	{
+		return;
+	}
 	// The game moves a mist on only while it is in view; every mist moves on here, which looks the same. The mists of the
 	// land move first, then the sky's clouds, which are things of the drawn registry.
-	const auto advance = [gameTime](Mist& mist) { mists::Advance(mist.counter, mist.counterRemainder, gameTime.count()); };
+	const auto advance = [step](Mist& mist) { mists::Advance(mist.counter, step); };
 	Locator::entitiesRegistry::value().Each<Mist>(advance);
 	if (Locator::drawnRegistry::has_value())
 	{

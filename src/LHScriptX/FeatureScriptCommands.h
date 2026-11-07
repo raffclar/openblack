@@ -97,6 +97,9 @@ public:
 	static void CreateNewBigForest(glm::vec3 position, BigForestInfo type, int32_t unknown, float rotation, float scale);
 	static void CreateInfluenceRing(glm::vec3 position, int32_t player, float radius, int32_t anti);
 	static void CreateWeatherClimate(int32_t, int32_t, glm::vec3, float, float);
+	/// A climate around the exact map position that the script gives
+	static void CreateWeatherClimateAt(int32_t index, int32_t type, const map_coords::MapCoords& centre, float radius1,
+	                                   float radius2);
 	static void CreateWeatherClimateRain(int32_t, float, int32_t, int32_t, int32_t);
 	static void CreateWeatherClimateTemp(int32_t, float, float);
 	static void CreateWeatherClimateWind(int32_t, float, float, float);

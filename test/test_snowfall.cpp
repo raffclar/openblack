@@ -161,3 +161,16 @@ TEST(Snowfall, FainterFurtherAway)
 	EXPECT_EQ(tile->flakes, 256);
 	EXPECT_FALSE(snowfall::TileOf(centre, 100, {80.0f + 301.0f, 0.0f}).has_value());
 }
+
+// The game scatters every flake two times when its weather opens, so it draws the numbers of all the flakes two times
+TEST(Snowfall, ScatteredTwoTimesAtOpen)
+{
+	Script once {.values = {1.0f, 2.0f, 3.0f, 5.0f}};
+	std::array<snowfall::Flake, snowfall::k_Flakes> flakes {};
+	snowfall::Scatter(flakes, once.Random(), 100.0f);
+
+	Script twice {.values = {1.0f, 2.0f, 3.0f, 5.0f}};
+	std::array<snowfall::Flake, snowfall::k_Flakes> opened {};
+	snowfall::ScatterAtOpen(opened, twice.Random(), 100.0f);
+	EXPECT_EQ(twice.ranges.size(), 2u * once.ranges.size());
+}

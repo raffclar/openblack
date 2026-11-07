@@ -47,18 +47,18 @@ rain::Random GameRandom()
 }
 } // namespace
 
-RainSystem::RainSystem()
+RainSystem::RainSystem(bool weatherOn)
 {
-	Reset();
+	if (weatherOn)
+	{
+		Open();
+	}
 }
 
-void RainSystem::Reset()
+void RainSystem::Open()
 {
-	const auto random = GameRandom();
-	for (auto& streak : _streaks)
-	{
-		streak = rain::Place(random);
-	}
+	_open = true;
+	rain::PlaceAtOpen(_streaks, GameRandom());
 	_fall = {};
 	_drawn = false;
 	_splashPace = {};
@@ -93,9 +93,9 @@ void RainSystem::Update(float seconds, std::chrono::milliseconds frameRealTime, 
 std::vector<rain::Tile> RainSystem::TakeTiles(const rain::View& view)
 {
 	std::vector<rain::Tile> tiles;
-	// Rain is part of the weather setting
+	// The rain shows only once the weather opened
 	const auto& settings = Locator::config::value().detail;
-	if (!settings.weather || !Locator::terrainSystem::has_value() || !Locator::weatherSystem::has_value())
+	if (!_open || !Locator::terrainSystem::has_value() || !Locator::weatherSystem::has_value())
 	{
 		return tiles;
 	}

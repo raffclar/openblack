@@ -11,6 +11,8 @@
 
 #include <cstdint>
 
+#include <chrono>
+
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
@@ -48,9 +50,10 @@ inline constexpr float k_Rate = 0.255f;
 /// or below, `edgeShrink` times smaller seen level
 [[nodiscard]] float EdgeOnSize(float size, float edgeShrink, const glm::vec3& toMist);
 
-/// Moves the counter on by the milliseconds of game time. The game drops the fraction each frame; it is kept here, so
-/// the animation runs at the same pace however fast the frames come.
-void Advance(int& counter, float& remainder, float milliseconds) noexcept;
+/// Moves the counter on by the whole part of a step's game milliseconds times the rate, as the game does once a frame.
+/// The fraction is dropped. Each step comes from frame_pace, so the animation keeps the game's pace at 60 frames a
+/// second.
+void Advance(int& counter, std::chrono::milliseconds step) noexcept;
 
 /// The colour, 0xAARRGGBB, of a mist that a script makes: each channel the whole part of its number (0 to 255), cut to
 /// its low byte, and the alpha the whole part of 255 times the transparency

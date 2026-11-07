@@ -22,8 +22,9 @@ class MistSystemInterface
 {
 public:
 	virtual ~MistSystemInterface() = default;
-	/// Moves every mist's animation on by the game time that has passed, which stops while the game is paused
-	virtual void Update(std::chrono::duration<float, std::milli> gameTime) = 0;
+	/// Once a frame: moves every mist's animation on by the game time that has passed, which stops while the game is
+	/// paused. The animation steps at most 60 times a second, as the game's frames did (see frame_pace).
+	virtual void Update(std::chrono::milliseconds frameRealTime, std::chrono::milliseconds frameGameTime) = 0;
 	/// Starts a script's fade of a mist: its size goes from `startSize` to `endSize` and its alpha (0 to 255) from
 	/// `startAlpha` to `endAlpha` over `seconds`. It takes the start size and the start alpha at once.
 	virtual void SetFade(entt::entity mist, float startSize, float endSize, float startAlpha, float endAlpha,

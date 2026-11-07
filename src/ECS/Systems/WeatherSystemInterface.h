@@ -19,6 +19,7 @@
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
+#include "3D/MapCoords.h"
 #include "ECS/Components/Weather.h"
 #include "ECS/ScriptWeatherRules.h"
 #include "ECS/Systems/SavedStateInterface.h"
@@ -81,8 +82,10 @@ public:
 	/// Removes every climate and storm, ready for a new island
 	virtual void Reset() = 0;
 
-	// Land script commands (CREATE_WEATHER_CLIMATE*). Index 0 is the global climate.
-	virtual void CreateClimate(int32_t index, uint32_t info, glm::vec2 position, float radius1, float radius2) = 0;
+	// Land script commands (CREATE_WEATHER_CLIMATE*). Index 0 is the global climate. A climate keeps the exact map
+	// position that the script gives as its middle.
+	virtual void CreateClimate(int32_t index, uint32_t info, const map_coords::MapCoords& centre, float radius1,
+	                           float radius2) = 0;
 	virtual void SetClimateRain(int32_t index, float desire, int32_t dryDays, int32_t rainingDays, int32_t raining) = 0;
 	virtual void SetClimateTemperature(int32_t index, float temperature, float targetTemperature) = 0;
 	virtual void SetClimateWind(int32_t index, float windX, float windZ, float angle) = 0;

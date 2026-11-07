@@ -58,6 +58,9 @@ struct Flake
 [[nodiscard]] Flake Place(const Random& random, float height);
 /// The flakes when the snow starts: each at a new place, at a height of its own
 void Scatter(std::span<Flake> flakes, const Random& random, float height);
+/// The flakes when the weather opens: the game scatters all of them, then scatters all of them again, so it draws the
+/// numbers two times
+void ScatterAtOpen(std::span<Flake> flakes, const Random& random, float height);
 /// Moves every flake on by some seconds at the snow's fall speed: one that has fallen through the ground starts again
 void Step(std::span<Flake> flakes, float seconds, float fallSpeed, float height, const Random& random);
 

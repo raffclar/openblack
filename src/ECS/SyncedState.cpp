@@ -95,7 +95,6 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     {.component = "ChimneySmoke", .field = "puffs", .marker = ""},
     {.component = "ChimneySmoke", .field = "state", .marker = ""},
     {.component = "Mist", .field = "counter", .marker = ""},
-    {.component = "Mist", .field = "counterRemainder", .marker = ""},
     {.component = "Mist", .field = "colour", .marker = ""},
     {.component = "Transform", .field = "position", .marker = "Mist"},
     {.component = "Sun", .field = "", .marker = ""},

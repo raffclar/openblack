@@ -21,6 +21,7 @@
 
 #include "3D/LandIslandInterface.h"
 #include "3D/Lightning.h"
+#include "3D/MapCoords.h"
 #include "Camera/Camera.h"
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
@@ -75,7 +76,7 @@ constexpr int8_t k_HighAltitudeCooling = 11;
 
 // Climates and the storms they create
 constexpr float k_GlobalRadius = 5120.0f;
-constexpr uint16_t k_GlobalCentreCell = 256;
+constexpr int32_t k_GlobalCentreCell = 256;
 constexpr uint32_t k_GlobalMaxStorms = 10;
 constexpr float k_MaxStormsPerUnit = 0.001f;
 constexpr uint32_t k_StormCloudHeight = 500;
@@ -240,9 +241,17 @@ float Distance(const glm::vec3& a, const glm::vec3& b)
 	return gutils::GetDistance(a, b);
 }
 
+/// The corner of the cell that holds the middle of the climate, on the ground
 glm::vec3 CellCentre(const Climate& climate)
 {
-	return {static_cast<float>(climate.cellX) * 10.0f, 0.0f, static_cast<float>(climate.cellZ) * 10.0f};
+	return {static_cast<float>(map_coords::CellOf(climate.centre.x)) * 10.0f, 0.0f,
+	        static_cast<float>(map_coords::CellOf(climate.centre.z)) * 10.0f};
+}
+
+/// The exact middle of the climate, with the fraction of its cell, on the ground
+glm::vec3 ExactCentre(const Climate& climate)
+{
+	return {map_coords::ToMetres(climate.centre.x), 0.0f, map_coords::ToMetres(climate.centre.z)};
 }
 } // namespace
 
@@ -416,8 +425,9 @@ entt::entity WeatherSystem::GetGlobalClimate()
 	climate.index = 0;
 	climate.global = true;
 	climate.info = 0;
-	climate.cellX = k_GlobalCentreCell;
-	climate.cellZ = k_GlobalCentreCell;
+	climate.centre = map_coords::MapCoords {.x = k_GlobalCentreCell * map_coords::k_FixedPerCell,
+	                                        .z = k_GlobalCentreCell * map_coords::k_FixedPerCell,
+	                                        .altitude = 0.0f};
 	climate.innerRadius = k_GlobalRadius;
 	climate.outerRadius = k_GlobalRadius;
 	climate.maxStorms = k_GlobalMaxStorms;
@@ -425,7 +435,8 @@ entt::entity WeatherSystem::GetGlobalClimate()
 	return entity;
 }
 
-void WeatherSystem::CreateClimate(int32_t index, uint32_t info, glm::vec2 position, float radius1, float radius2)
+void WeatherSystem::CreateClimate(int32_t index, uint32_t info, const map_coords::MapCoords& centre, float radius1,
+                                  float radius2)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	if (const auto existing = FindClimate(index); existing != entt::null)
@@ -453,8 +464,7 @@ void WeatherSystem::CreateClimate(int32_t index, uint32_t info, glm::vec2 positi
 	climate.index = index;
 	climate.global = false;
 	climate.info = info;
-	climate.cellX = static_cast<uint16_t>(x87::ToInteger(position.x * 0.1));
-	climate.cellZ = static_cast<uint16_t>(x87::ToInteger(position.y * 0.1));
+	climate.centre = centre;
 	climate.innerRadius = std::min(radius1, radius2);
 	climate.outerRadius = std::max(radius1, radius2);
 	// The game counts the storms from the second radius that the script gives, also when it is the smaller one
@@ -624,7 +634,7 @@ script_weather::Wind WeatherSystem::DriftWindAt(const glm::vec3& position)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto toWind = [](const Climate& climate) {
-		const auto centre = CellCentre(climate);
+		const auto centre = ExactCentre(climate);
 		return script_weather::ClimateWind {
 		    .centre = {centre.x, centre.z},
 		    .innerRadius = climate.innerRadius,
@@ -892,7 +902,8 @@ glm::ivec2 WeatherSystem::FindWhereToCreateStorm(const Climate& climate)
 			const auto angle = RandomFloat(2.0f * std::numbers::pi_v<float>);
 			const auto random = RandomFloat(1.0f);
 			const auto distance = random * random * climate.innerRadius * 0.1f;
-			const auto near = climate_rules::CellNearMiddle(angle, distance, climate.cellX, climate.cellZ);
+			const auto near = climate_rules::CellNearMiddle(angle, distance, map_coords::CellOf(climate.centre.x),
+			                                                map_coords::CellOf(climate.centre.z));
 			cell = {static_cast<int16_t>(near.x), static_cast<int16_t>(near.y)};
 		}
 		else
@@ -905,7 +916,7 @@ glm::ivec2 WeatherSystem::FindWhereToCreateStorm(const Climate& climate)
 			// is, so the spot of a global storm does not get the water test.
 			const glm::vec3 point {static_cast<float>(cell.x) * 10.0f, 0.0f, static_cast<float>(cell.y) * 10.0f};
 			registry.Each<const Climate>([&searching, &point, &climate](const Climate& other) {
-				searching = searching && !(Distance(point, CellCentre(other)) < climate.outerRadius);
+				searching = searching && !(Distance(point, ExactCentre(other)) < climate.outerRadius);
 			});
 		}
 		if (!searching)
@@ -951,9 +962,7 @@ void WeatherSystem::CreateStorm(entt::entity climateEntity)
 	uint32_t radius;
 	if (!climate.global)
 	{
-		// The radius is the distance along the ground from the storm's cell to the middle of the climate
-		const glm::vec3 point {static_cast<float>(cell.x) * 10.0f, 0.0f, static_cast<float>(cell.y) * 10.0f};
-		radius = static_cast<uint32_t>(x87::ToInteger(Distance(point, CellCentre(climate))));
+		radius = climate_rules::LocalStormRadius(cell, climate.centre);
 	}
 	else
 	{

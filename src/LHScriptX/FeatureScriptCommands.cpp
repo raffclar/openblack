@@ -317,7 +317,18 @@ const std::array<const ScriptCommandSignature, 106> FeatureScriptCommands::k_Sig
     CREATE_COMMAND_BINDING("CREATE_BIG_FOREST", CreateBigForest),
     CREATE_COMMAND_BINDING("CREATE_NEW_BIG_FOREST", CreateNewBigForest),
     CREATE_COMMAND_BINDING("CREATE_INFLUENCE_RING", CreateInfluenceRing),
-    CREATE_COMMAND_BINDING("CREATE_WEATHER_CLIMATE", CreateWeatherClimate),
+    {{"CREATE_WEATHER_CLIMATE"},
+     [](const ScriptCommandParameters& ctx) {
+	     // The climate keeps the exact map position that the game reads from the text as its middle
+	     if (ctx.size() >= 5 && ctx[2].GetMapPlace().has_value())
+	     {
+		     CreateWeatherClimateAt(ctx[0].GetNumber(), ctx[1].GetNumber(), *ctx[2].GetMapPlace(), ctx[3].GetFloat(),
+		                            ctx[4].GetFloat());
+		     return;
+	     }
+	     InvokeCallableFromContext(ctx, std::function(CreateWeatherClimate));
+     },
+     GetScriptCommandParameters(CreateWeatherClimate)},
     CREATE_COMMAND_BINDING("CREATE_WEATHER_CLIMATE_RAIN", CreateWeatherClimateRain),
     CREATE_COMMAND_BINDING("CREATE_WEATHER_CLIMATE_TEMP", CreateWeatherClimateTemp),
     CREATE_COMMAND_BINDING("CREATE_WEATHER_CLIMATE_WIND", CreateWeatherClimateWind),
@@ -1079,7 +1090,13 @@ void FeatureScriptCommands::CreateInfluenceRing(glm::vec3 position, int32_t play
 
 void FeatureScriptCommands::CreateWeatherClimate(int32_t index, int32_t type, glm::vec3 position, float radius1, float radius2)
 {
-	Locator::weatherSystem::value().CreateClimate(index, static_cast<uint32_t>(type), glm::xz(position), radius1, radius2);
+	CreateWeatherClimateAt(index, type, map_coords::ScriptPlace(position.x, position.z), radius1, radius2);
+}
+
+void FeatureScriptCommands::CreateWeatherClimateAt(int32_t index, int32_t type, const map_coords::MapCoords& centre,
+                                                   float radius1, float radius2)
+{
+	Locator::weatherSystem::value().CreateClimate(index, static_cast<uint32_t>(type), centre, radius1, radius2);
 	// The game clears the last object of the script after it makes a climate
 	LastObject() = entt::null;
 }

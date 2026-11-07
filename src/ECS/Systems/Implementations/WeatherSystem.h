@@ -45,7 +45,8 @@ public:
 	void SaveState(reflection::BinaryWriter& out) const override;
 	bool LoadState(reflection::BinaryReader& in) override;
 
-	void CreateClimate(int32_t index, uint32_t info, glm::vec2 position, float radius1, float radius2) override;
+	void CreateClimate(int32_t index, uint32_t info, const map_coords::MapCoords& centre, float radius1,
+	                   float radius2) override;
 	void SetClimateRain(int32_t index, float desire, int32_t dryDays, int32_t rainingDays, int32_t raining) override;
 	void SetClimateTemperature(int32_t index, float temperature, float targetTemperature) override;
 	void SetClimateWind(int32_t index, float windX, float windZ, float angle) override;

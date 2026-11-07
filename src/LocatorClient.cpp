@@ -141,10 +141,11 @@ bool openblack::InitializeEngine(GraphicsBackend backend, bool vsync) noexcept
 
 void openblack::InitializePresentation()
 {
-	// The snow and the rain that fall in the view. They draw local numbers when they start, so they stay first and in this
-	// order.
-	Locator::snowfallSystem::emplace<SnowfallSystem>();
-	Locator::rainSystem::emplace<RainSystem>();
+	// The snow and the rain that fall in the view. The game reads the weather option once, when it starts: with the option
+	// on, the weather opens and draws local numbers, so the two stay first and in this order.
+	const bool weatherOn = Locator::config::has_value() && Locator::config::value().detail.weather;
+	Locator::snowfallSystem::emplace<SnowfallSystem>(weatherOn);
+	Locator::rainSystem::emplace<RainSystem>(weatherOn);
 	// The hair of the creatures, which swings from their bodies in the frames
 	Locator::creatureHairSystem::emplace<CreatureHairSystem>();
 	// The sounds of the abodes near the camera, the shade of the land, the text of the pause and the strip of messages
