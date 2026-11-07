@@ -41,6 +41,7 @@
 #include "ECS/Map.h"
 #include "ECS/Registry.h"
 #include "ECS/StatisticsRules.h"
+#include "ECS/Systems/GuidanceSystemInterface.h"
 #include "ECS/Systems/Implementations/VillagerHome.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/SkyClockSystemInterface.h"
@@ -299,7 +300,12 @@ void TownDesireSystem::ProcessTown(entt::entity entity)
 	    .farmerMaxFood = farmer.maxFoodCarried,
 	    .farmerMaxWood = farmer.maxWoodCarried,
 	};
-	town_desire::Process(desire, context);
+	// Every 50 turns the unhappiness of the villagers can make the advisors say so
+	const auto unhappiness = town_desire::Process(desire, context);
+	if (unhappiness.has_value() && Locator::guidanceSystem::has_value())
+	{
+		Locator::guidanceSystem::value().VillagersUnhappy(entity, *unhappiness);
+	}
 }
 
 uint32_t TownDesireSystem::OfferVillager(entt::entity town, bool child, float trigger,
@@ -550,6 +556,9 @@ void TownDesireSystem::ProcessFlags()
 			orphans.push_back(entity);
 			return;
 		}
+		// The flag keeps the raw desire that its town has after its turn. A change later in the game turn, as a boost
+		// from a script, shows only after the next turn of the town.
+		flag.turnDesire = GetRawDesire(flag.town, flag.desire);
 		// A new store of the town takes the flag to its place on the store. The flag stays where it is after its store
 		// is gone.
 		const auto store = construction::StoragePitOf(flag.town);
@@ -596,7 +605,7 @@ void TownDesireSystem::UpdateFlags(float seconds)
 		const auto id = registry.Get<const Town>(flag.town).id;
 		const auto store = std::ranges::find(pits, id, &std::pair<uint32_t, entt::entity>::first);
 		const bool working = store != pits.end() && villager_home::IsFunctional(store->second);
-		const float desire = GetRawDesire(flag.town, flag.desire);
+		const float desire = flag.turnDesire;
 		const float showsAfter = info.at(static_cast<size_t>(flag.desire)).showsAfterPercent;
 		const bool shows = town_desire_flags::Shows(working, flag.level, showsAfter);
 		if (shows && flag.shown && camera != nullptr &&

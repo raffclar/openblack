@@ -100,6 +100,14 @@ public:
 	/// A town of the player here has few adults left: the advisors warn of it when the town has people and is near the
 	/// point under the cursor
 	virtual void LowOnPeople(entt::entity town) = 0;
+	/// A villager of a town found food and the town measured its food shortage. When the shortage is high enough (see
+	/// guidance::WarnsLowOnFood) and the town is of the player here, the advisors can warn of low food. The town must
+	/// have people and a working storage pit, and it must be near the point under the cursor.
+	virtual void LowOnFood([[maybe_unused]] entt::entity town, [[maybe_unused]] float shortage) {}
+	/// Every 50 turns a town measures how unhappy its villagers are. When the unhappiness is high enough (see
+	/// guidance::WarnsVillagersUnhappy) and the town is of the player here, the advisors can say so. The town must have
+	/// people and a working storage pit, and it must be near the point under the cursor.
+	virtual void VillagersUnhappy([[maybe_unused]] entt::entity town, [[maybe_unused]] float unhappiness) {}
 	/// The belief of a town gave it to another player. When the player here lost it, the advisors say a bad line. When
 	/// the player here took it, they say a good line. Either line needs the place of the town on screen.
 	virtual void TownChangedHands(entt::entity town, PlayerNames loser, PlayerNames taker) = 0;
