@@ -1774,7 +1774,8 @@ glm::vec3 HandGrabSystem::UpdateOffer(HandGrab& grab, const Frame& frame)
 		return frame.target;
 	}
 	// While the creature reaches, the hand meets its hand at the moment it takes the thing; moved too far from the
-	// creature's hand, the giving is called off
+	// creature's hand, the giving is called off. The hand moves to the creature's hand also in a frame that sends the
+	// call off, because the call off has an effect only at the turn.
 	const auto hand = grab.lastHand.value_or(frame.target);
 	const auto takePoint = _world->TakePointOf(grab.givenTo, hand);
 	if (!takePoint.has_value())
@@ -1789,7 +1790,6 @@ glm::vec3 HandGrabSystem::UpdateOffer(HandGrab& grab, const Frame& frame)
 			grab.callingOff = grab.givenTo;
 			_world->SendCommand(player_commands::GiveCallOff {.creature = grab.givenTo});
 		}
-		return frame.target;
 	}
 	const auto taking = _world->TakingOf(grab.givenTo);
 	if (!taking.has_value() || taking->object != grab.object)

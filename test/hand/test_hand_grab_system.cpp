@@ -2833,6 +2833,29 @@ TEST_F(HandGrabSystemGiving, MovingTheHandFifteenSizesFromTheReachingCreatureCal
 	EXPECT_FALSE(system->GetOfferedCreature().has_value());
 }
 
+TEST_F(HandGrabSystemGiving, AFrameThatCallsTheGiftOffStillMovesTheHandToTheCreaturesHand)
+{
+	const auto rock = HoldRock();
+	const auto creature = AddCreature(creature_giving::Verdict::Give);
+	world->underCursor = creature;
+	Frame(16);
+	Press();
+	Frame(230);
+	world->underCursor.reset();
+	world->takePoint = glm::vec3(0.0f, 0.0f, 0.0f);
+	// The creature takes the thing in 400 ms: the hand goes a fifth of the way from where it should be to the creature's
+	// hand
+	world->taking = hand_grab::HandGrabWorldInterface::Taking {.object = rock, .msFromTake = -400.0f};
+	deferCommands = true;
+	Frame(16, {40.0f, 0.0f, 0.0f});
+	const auto drawn = Frame(16, {40.0f, 0.0f, 0.0f});
+	const auto callOffs = std::ranges::count_if(waiting, [](const player_commands::Action& action) {
+		return std::holds_alternative<player_commands::GiveCallOff>(action);
+	});
+	EXPECT_EQ(callOffs, 1);
+	EXPECT_NEAR(drawn.x, 32.0f, 1e-3f);
+}
+
 TEST_F(HandGrabSystemGiving, TheTurnCallsOffTheGiftThatTheHandSentOneTime)
 {
 	HoldRock();
