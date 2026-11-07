@@ -321,6 +321,7 @@ escape_key::Situation Game::EscapeSituation(uint16_t keyModifiers) const
 	    .playgroundLessonRunning =
 	        Locator::playgroundTripSystem::has_value() && Locator::playgroundTripSystem::value().IsLessonRunning(),
 	    .sinceMenuClosed = std::nullopt,
+	    .gameOver = Locator::entitiesRegistry::value().Context().gameOver,
 	};
 	if (const auto& menuClosedAt = Locator::gameKeysSystem::value().GetMenuClosedAt(); menuClosedAt.has_value())
 	{
@@ -364,6 +365,9 @@ void Game::HandleEscapeInPlay(uint16_t keyModifiers)
 	case escape_key::Outcome::EndPlaygroundLesson:
 		// The lesson ends at the end of the game turn
 		Locator::playgroundTripSystem::value().AskLessonEnd();
+		break;
+	case escape_key::Outcome::AskNewGame:
+		Locator::gameInterface::value().AskNewGameQuestion();
 		break;
 	}
 }

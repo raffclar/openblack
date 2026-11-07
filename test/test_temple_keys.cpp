@@ -11,6 +11,7 @@
 
 #include "Temple/TempleKeys.h"
 
+using openblack::temple::keys::EscapeAsksNewGame;
 using openblack::temple::keys::EscapeFacts;
 using openblack::temple::keys::EscapeLeavesRoom;
 using openblack::temple::keys::RoomKeyActs;
@@ -62,4 +63,16 @@ TEST(TempleKeys, EscapeDoesNothingWhileAScriptHasTheCinemaBarsIn)
 TEST(TempleKeys, EscapeDoesNotLeaveTheRoomOnceTheGameIsOver)
 {
 	EXPECT_FALSE(EscapeLeavesRoom({.gameOver = true}));
+}
+
+TEST(TempleKeys, EscapeAsksAboutANewGameOnceTheGameIsOver)
+{
+	EXPECT_TRUE(EscapeAsksNewGame({.gameOver = true}));
+	EXPECT_TRUE(EscapeAsksNewGame({.modifierHeld = true, .gameOver = true}));
+}
+
+TEST(TempleKeys, EscapeAsksNothingBeforeTheGameIsOverOrUnderTheCinemaBars)
+{
+	EXPECT_FALSE(EscapeAsksNewGame({}));
+	EXPECT_FALSE(EscapeAsksNewGame({.scriptBars = true, .gameOver = true}));
 }

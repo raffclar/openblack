@@ -887,6 +887,7 @@ void Game::UpdateInterfaceFrame(std::chrono::microseconds deltaTime)
 		Locator::gameInterface::value().Update(std::chrono::duration_cast<std::chrono::duration<float>>(deltaTime).count());
 		HandleInterfaceAction();
 		FollowPlaygroundTrip();
+		FollowNewGameQuestion();
 		UpdateTattooMenu(std::chrono::duration<float, std::milli>(deltaTime).count());
 #if defined(__EMSCRIPTEN__)
 		if (web::TakeJoinOnlineRequest())
