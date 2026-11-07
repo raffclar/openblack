@@ -1110,8 +1110,9 @@ void villager_fire::DieByEffect(entt::entity villager, std::optional<DeathCause>
 	// It falls where it is: whatever walk it was on ends
 	walker_placement::Stop(registry, villager);
 	SetTopState(*action, VillagerStates::Dying);
-	// Dying, it leaves its town's worship site, its home, ending the couple it was one of, and its town
-	villager_after_death::LeaveWorship(villager, town);
+	// Dying, it leaves its town's worship: its town no longer counts it on the way to the site or at the site, and it
+	// leaves the site and its dance. Then it leaves its home, ending the couple it was one of, and its town.
+	villager_worship::LeaveTown(villager);
 	if (Locator::townSystem::has_value())
 	{
 		Locator::townSystem::value().RemoveDeadVillager(villager);
