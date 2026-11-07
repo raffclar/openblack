@@ -16,6 +16,7 @@
 #include <cstdint>
 
 #include <algorithm>
+#include <chrono>
 #include <optional>
 #include <string>
 #include <unordered_map>
@@ -616,6 +617,41 @@ TEST(SavedSystemState, BookmarksWithNoGoBackViewAndNoFollowComeBack)
 	LoadInto(bookmarks, StateOf(saved));
 	EXPECT_FALSE(bookmarks.GetFollowed().has_value());
 	EXPECT_TRUE(bookmarks.IsEnabled());
+}
+
+// A new land clears the bookmarks, the current slot, the followed bookmark and the town of the Tab key. The throb of
+// the markers runs on from the last land.
+TEST(SavedSystemState, ANewLandClearsTheBookmarksButNotTheThrobOfTheMarkers)
+{
+	reflection::BinaryWriter out(Context());
+	reflection::Save(out, std::optional(glm::vec3 {100.0f, 5.0f, 200.0f}));
+	reflection::Save(out, std::optional(glm::vec3 {0.0f, 60.0f, -40.0f}));
+	reflection::Save(out, size_t {3});
+	reflection::Save(out, std::optional(size_t {3}));
+	reflection::Save(out, true);
+	reflection::Save(out, std::optional(glm::vec3 {300.0f, 8.0f, 400.0f}));
+	reflection::Save(out, std::optional(glm::vec3 {-24.0f, 28.0f, 47.0f}));
+	for (size_t slot = 0; slot < camera_bookmarks::k_KeySlots; ++slot)
+	{
+		reflection::Save(out, slot == 3);
+		reflection::Save(out, glm::vec3 {static_cast<float>(slot), 1.0f, 2.0f});
+		reflection::Save(out, entt::entity {entt::null});
+		reflection::Save(out, glm::vec3 {0.0f, 50.0f, -80.0f});
+	}
+	CameraBookmarkSystem bookmarks;
+	// A frame that draws the land moves the throb on
+	bookmarks.Update(std::chrono::milliseconds(300), true);
+	const auto throb = bookmarks.GetMarkerHalfSize();
+	ASSERT_NE(throb, camera_bookmarks::MarkerHalfSize(0));
+	LoadInto(bookmarks, out.Bytes());
+
+	bookmarks.ForgetLand();
+
+	EXPECT_FALSE(bookmarks.GetFollowed().has_value());
+	EXPECT_FALSE(bookmarks.IsSet(3));
+	EXPECT_EQ(bookmarks.GetMarkerHalfSize(), throb);
+	// All the rest is as a system that saw no land has it: the current slot is the first, no go-back view, no town key
+	EXPECT_EQ(StateOf(bookmarks), StateOf(CameraBookmarkSystem {}));
 }
 
 // The names of the tribes that spin in the world are of this computer only: all of the save of the miracle effects is a

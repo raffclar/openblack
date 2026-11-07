@@ -46,6 +46,8 @@ public:
 	void ResourceDropped(PlayerNames giver, glm::vec3 at, guidance::Gift gift) override;
 	void LosingVillager(entt::entity villager) override;
 	void LowOnPeople(entt::entity town) override;
+	void LowOnFood(entt::entity town, float shortage) override;
+	void VillagersUnhappy(entt::entity town, float unhappiness) override;
 	void TownChangedHands(entt::entity town, PlayerNames loser, PlayerNames taker) override;
 	void LosingBeliefTurn() override;
 	void EndWaits() override;
@@ -60,6 +62,9 @@ private:
 	components::GuidanceHeard* Heard();
 	/// One of a kind's remarks, picked at random
 	void SayRemark(guidance::Kind kind);
+	/// One of a kind's remarks, picked at random from the first texts of its row that a value chooses (see
+	/// guidance::RemarkChoicesByValue)
+	void SayRemarkByValue(guidance::Kind kind, float value);
 	void Say(uint32_t text, guidance::Kind kind);
 	void LookAtMoon();
 	/// The night whisper of this turn, if there is one. The name of the player is looked up again on each new land.

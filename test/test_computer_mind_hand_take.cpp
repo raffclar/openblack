@@ -118,6 +118,8 @@ TEST_F(ComputerMindHandTake, ADamagedPitStaysTheStorePitOfItsTown)
 	const auto pit = Things().Create();
 	Things().Assign<Abode>(pit, Abode {.townId = 3});
 	Things().Assign<StoragePit>(pit);
+	// The town names the pit as its main pit when the pit starts to work
+	Things().Get<Town>(town).storagePit = pit;
 	// A pit that is not built yet does not count
 	Things().Assign<BuildProgress>(pit, BuildProgress {.built = 0.5f});
 	EXPECT_FALSE(computer_world::WorkingPitOf(town).has_value());

@@ -2433,3 +2433,4 @@ openblack_setup_and_add_test(
   test_computer_mind_hand_take test_computer_mind_hand_take.cpp
 )
 openblack_setup_and_add_test(test_game_firefly_world test_game_firefly_world.cpp)
+openblack_setup_and_add_test(test_main_storage_pit test_main_storage_pit.cpp)

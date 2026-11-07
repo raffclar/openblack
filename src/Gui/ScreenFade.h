@@ -30,6 +30,8 @@ public:
 	void FadeFrom(float amount, glm::vec3 colour);
 	/// Fades a colour over the screen, then back away
 	void FadeThrough(glm::vec3 colour);
+	/// A fade that goes up to a whole and did not turn yet fades down again from its amount
+	void TurnBackFirstRise();
 	/// Moves the fade on by the real milliseconds of the draw. Outside the temple, a fade that is at its amount does not
 	/// move. Inside the temple, it steps each draw: when it is at its amount, it turns again.
 	void Update(uint32_t realMilliseconds, bool inTemple);

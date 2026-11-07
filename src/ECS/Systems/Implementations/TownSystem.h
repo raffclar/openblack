@@ -76,7 +76,8 @@ public:
 	void ClaimTown(entt::entity town, PlayerNames player) override;
 	void BuildingLeft(entt::entity town) override;
 	std::optional<TemporaryStore> TemporaryStorePile(entt::entity town, glm::vec2 from, ResourceType type) override;
-	void SetStoragePit(entt::entity town) override;
+	void SetStoragePit(entt::entity town, entt::entity pit) override;
+	void StoragePitGone(entt::entity town, entt::entity pit) override;
 	void UpdateFrame(std::chrono::milliseconds frameRealTime, bool landDrawn) override;
 	void SaveState(reflection::BinaryWriter& out) const override;
 	bool LoadState(reflection::BinaryReader& in) override;

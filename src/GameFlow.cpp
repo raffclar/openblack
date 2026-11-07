@@ -383,6 +383,32 @@ bool Game::StartNewGame(std::optional<new_game_choice::NewGameStart> start) noex
 	return true;
 }
 
+void Game::FollowNewGameQuestion()
+{
+	if (!Locator::gameInterface::has_value())
+	{
+		return;
+	}
+	const auto answer = Locator::gameInterface::value().TakeNewGameAnswer();
+	if (!answer.has_value())
+	{
+		return;
+	}
+	// The answer gives the keyboard back to the game at once
+	Locator::gameActionSystem::value().BoxAnswered();
+	if (*answer)
+	{
+		// This game ends, and a new game starts on the first land. The land changes between frames.
+		_gameEndAsked = game_session::End::NewGame;
+		return;
+	}
+	// No unpauses the game, but not in the temple
+	if (!Locator::temple::has_value() || !Locator::temple::value().Active())
+	{
+		Locator::time::value().SetPlayerPause(false);
+	}
+}
+
 void Game::FollowPlaygroundTrip()
 {
 	if (!_tripQuestion.has_value() || !Locator::gameInterface::has_value())

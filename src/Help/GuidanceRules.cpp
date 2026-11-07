@@ -125,6 +125,27 @@ size_t guidance::RemarkChoices(const RemarkTexts& texts)
 	return count;
 }
 
+int32_t guidance::RemarkChoicesByValue(size_t choices, float value)
+{
+	// A value below 0 (or not a number) picks the first text; a value above 1 counts as 1
+	if (!(value >= 0.0f))
+	{
+		value = 0.0f;
+	}
+	else if (value > 1.0f)
+	{
+		value = 1.0f;
+	}
+	return static_cast<int32_t>(static_cast<float>(choices) * value);
+}
+
+float guidance::LowOnFoodValue(float shortage)
+{
+	constexpr float k_MostShortage = 2.0f;
+	constexpr float k_ShortageOffset = 0.9f;
+	return (shortage >= k_MostShortage ? k_MostShortage : shortage) - k_ShortageOffset;
+}
+
 std::optional<Kind> guidance::AlignmentRemark(float drift, float alignment, float maxChangePerTurn)
 {
 	if (!(k_DriftTurns * maxChangePerTurn < std::abs(drift)))

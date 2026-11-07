@@ -450,6 +450,21 @@ void Runner::SetUpEnvironment(const Environment& environment)
 	{
 		Locator::snowSystem::value().Cover(*environment.snowDepth);
 	}
+	if (environment.backgroundWind.has_value() && Locator::weatherSystem::has_value())
+	{
+		// The wind of the background weather, as the real-world weather sets it. The next turn gives the ambient wind.
+		auto& weather = Locator::weatherSystem::value();
+		auto background = weather.GetBackgroundWeather();
+		if (!_backgroundWeatherBefore.has_value())
+		{
+			_backgroundWeatherBefore = background;
+		}
+		const auto wind = *environment.backgroundWind;
+		background.windX = static_cast<int8_t>(wind.x);
+		background.windZ = static_cast<int8_t>(wind.y);
+		weather.SetBackgroundWeather(background);
+		Log(fmt::format("Background wind set to {}, {}", wind.x, wind.y));
+	}
 	if (Locator::creaturePhysiologySystem::has_value())
 	{
 		auto& physiology = Locator::creaturePhysiologySystem::value();

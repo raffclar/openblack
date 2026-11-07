@@ -136,18 +136,7 @@ bool JobActive()
 /// The town's flocks, the latest made first
 std::vector<entt::entity> FlocksOf(entt::entity town)
 {
-	std::vector<std::pair<uint32_t, entt::entity>> found;
-	Entities().Each<const Flock>([&](entt::entity flock, const Flock& data) {
-		if (data.town == town)
-		{
-			found.emplace_back(data.made, flock);
-		}
-	});
-	std::ranges::sort(found, [](const auto& a, const auto& b) { return a.first > b.first; });
-	std::vector<entt::entity> flocks;
-	flocks.reserve(found.size());
-	std::ranges::transform(found, std::back_inserter(flocks), [](const auto& pair) { return pair.second; });
-	return flocks;
+	return script_flocks::TownFlocks(Entities(), town);
 }
 
 /// The first of the town's flocks no one herds that has a leader

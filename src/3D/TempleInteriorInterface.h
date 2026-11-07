@@ -118,6 +118,9 @@ public:
 	/// The camera of the world, which stays where the player left it while the player is inside. A save keeps this
 	/// camera. None while the player is outside.
 	[[nodiscard]] virtual std::optional<OutsideCamera> GetOutsideCamera() const = 0;
+	/// One turn of the tooltip that the hand shows in the temple. In a game with one player, the temple's own turn does
+	/// it. In a network game, the turns of the world do it.
+	virtual void ProcessToolTipTurn() = 0;
 	[[nodiscard]] virtual glm::vec3 GetPosition() const = 0;
 	/// The room the player is in. The temple draws it, and the main room when it is another.
 	[[nodiscard]] virtual TempleRoom GetCurrentRoom() const = 0;
@@ -133,6 +136,8 @@ public:
 	virtual void LookAtScroll(size_t place) = 0;
 	/// The camera looks at the picture of a slot in the save game room, as a press on the picture does
 	virtual void LookAtSaveGamePicture(uint32_t slot) = 0;
+	/// In the creature's room, the camera zooms to one of the room's targets, as when the player clicks the target
+	virtual void ZoomToCaveTarget(size_t target) = 0;
 	/// Whether the player can go into a room. The player cannot go to a closed room. Its door tells the player.
 	[[nodiscard]] virtual bool IsRoomAvailable(TempleRoom room) const = 0;
 	/// The player clicked the door of a room that is not open to them: the help that tells them so starts
@@ -232,6 +237,8 @@ public:
 	virtual void RequestLeave() = 0;
 	/// Fades the screen to white over a second, as the temple does before the player leaves it for the island
 	virtual void FadeToWhite() = 0;
+	/// A fade of the temple that goes up to a whole and did not turn yet fades down again from its amount
+	virtual void TurnBackRisingFade() = 0;
 	/// Covers the screen again as the player cuts a room's flight in short, fading away over a second
 	virtual void CoverSkippedFlight() = 0;
 	/// How much the temple's fade covers the screen: above 1 it is wholly covered for that much longer

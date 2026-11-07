@@ -13,6 +13,7 @@
 #include <deque>
 #include <functional>
 #include <numbers>
+#include <utility>
 #include <vector>
 
 #include <glm/vec2.hpp>
@@ -441,4 +442,36 @@ TEST(FlockMembers, AnEmptiedRegistryHasNoFlocksOrLivings)
 	registry.Reset();
 	EXPECT_EQ(registry.Underlying().view<const components::Flock>().size(), 0u);
 	EXPECT_EQ(registry.Underlying().view<const components::Animal>().size(), 0u);
+}
+
+TEST(TownAnimals, TheNewestFlockOfTheTownComesFirstAndOnlyItsAnimalsCount)
+{
+	Registry registry;
+	const auto town = registry.Create();
+	const auto otherTown = registry.Create();
+	const auto flock = [&](entt::entity owner, uint32_t made, std::vector<entt::entity> members) {
+		const auto entity = registry.Create();
+		auto& data = registry.Assign<components::Flock>(entity);
+		data.town = owner;
+		data.made = made;
+		data.members = std::move(members);
+		return entity;
+	};
+	const auto animal = [&]() {
+		const auto entity = registry.Create();
+		registry.Assign<components::Animal>(entity);
+		return entity;
+	};
+	const auto oldSheep = animal();
+	const auto newCow = animal();
+	const auto newPig = animal();
+	const auto villager = registry.Create();
+	const auto stranger = animal();
+	const auto older = flock(town, 1, {oldSheep});
+	const auto newer = flock(town, 4, {newCow, villager, newPig});
+	static_cast<void>(flock(otherTown, 9, {stranger}));
+
+	EXPECT_EQ(script_flocks::TownFlocks(registry, town), (std::vector {newer, older}));
+	EXPECT_EQ(script_flocks::TownAnimals(registry, town), (std::vector {newCow, newPig, oldSheep}));
+	EXPECT_TRUE(script_flocks::TownAnimals(registry, registry.Create()).empty());
 }

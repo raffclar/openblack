@@ -157,3 +157,23 @@ TEST(ScreenFade, StepsByTheMillisecondsInFloats)
 	Step(fade, 33, 1);
 	EXPECT_EQ(fade.GetAmount(), (1.0f - 7.0f * 0.001f) - 33.0f * 0.001f);
 }
+
+TEST(ScreenFade, AFirstRiseToAWholeFadesDownAgainWhenItTurnsBack)
+{
+	ScreenFade fade;
+	fade.FadeThrough(k_White);
+	Step(fade, 300, 1);
+	fade.TurnBackFirstRise();
+	Step(fade, 100, 1);
+	EXPECT_FLOAT_EQ(fade.GetAmount(), 0.2f);
+	EXPECT_EQ(fade.GetTurns(), 0u);
+}
+
+TEST(ScreenFade, AFadeDownDoesNotChangeWhenAFirstRiseTurnsBack)
+{
+	ScreenFade fade;
+	fade.FadeFrom(1.0f, k_White);
+	fade.TurnBackFirstRise();
+	Step(fade, 100, 1);
+	EXPECT_FLOAT_EQ(fade.GetAmount(), 0.9f);
+}

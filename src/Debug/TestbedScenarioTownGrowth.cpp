@@ -1054,6 +1054,29 @@ void openblack::testbed_scenarios::AddTownGrowthScenarios(std::vector<Scenario>&
 	                {.type = VillagerInfo::CelticForesterMale, .offset = {4.0f, 20.0f}, .joinTown = true, .woodHeld = 300}},
 	    .townBeliefInPlayer = 1.0f,
 	});
+	// A town with two storage pits: the newer pit is the main store, and the older pit gets the place when it goes
+	all.push_back({
+	    .id = "town.main_storage_pit",
+	    .name = "A town with two storage pits that uses only its main pit",
+	    .facet = Facet::Objects,
+	    .description = "A Celtic town of the player's with a village centre, a hut and two built storage pits, the "
+	                   "older one at the left. Two foresters of the town each carry 300 wood. After 20 seconds the "
+	                   "newer pit is removed. Best watched at game speed 4.",
+	    .expected = "The newer pit is the main store (the inspector's Town storagePit), as it started to work last. "
+	                "Both foresters take their wood to the newer pit, and the desire flags stand at it. When the newer "
+	                "pit goes, the older pit becomes the main store, as no newer civic building of the town works. "
+	                "The town makes no temporary pile.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {k_Centre, k_Pit, k_Hut}, .distance = 0.6f},
+	    .objects = {{.type = AbodeInfo::CelticTownCentre, .offset = k_Centre},
+	                {.type = AbodeInfo::CelticStoragePit, .offset = k_Pit},
+	                {.type = AbodeInfo::CelticStoragePit, .offset = k_PlannedHuts[2]},
+	                {.type = AbodeInfo::CelticHut, .offset = k_Hut, .yawDegrees = 180.0f},
+	                {.type = VillagerInfo::CelticForesterMale, .offset = {0.0f, 20.0f}, .joinTown = true, .woodHeld = 300},
+	                {.type = VillagerInfo::CelticForesterMale, .offset = {4.0f, 20.0f}, .joinTown = true, .woodHeld = 300}},
+	    .commands = {{.kind = Command::Kind::RemoveObject, .delaySeconds = 20.0f, .object = 2}},
+	    .townBeliefInPlayer = 1.0f,
+	});
 	// A hut that gets all of its built amount but is not finished
 	all.push_back({
 	    .id = "town.hut_all_built_not_finished",

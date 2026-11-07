@@ -21,6 +21,11 @@ bool MenuMayOpen(std::optional<std::chrono::milliseconds> sinceMenuClosed) noexc
 
 Response Respond(const Situation& situation) noexcept
 {
+	// Once the game is over, Escape only asks about a new game, outside a cut scene
+	if (situation.gameOver)
+	{
+		return {.outcome = situation.scriptHoldsCinemaBars ? Outcome::Nothing : Outcome::AskNewGame};
+	}
 	// On the Gods' Playground, Escape never opens the menu nor stops the help scripts. Outside a cut scene and with the
 	// screen clear, it ends a running lesson, or else asks whether to leave
 	if (situation.inGodsPlayground)
@@ -49,6 +54,10 @@ Response Respond(const Situation& situation) noexcept
 
 std::string_view WhyMenuStaysShut(const Situation& situation) noexcept
 {
+	if (situation.gameOver)
+	{
+		return "the game is over, and Escape asks about a new game";
+	}
 	if (situation.inGodsPlayground)
 	{
 		return "on the Gods' Playground, Escape does not open the menu";

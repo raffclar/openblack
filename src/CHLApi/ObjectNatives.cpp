@@ -77,6 +77,7 @@
 #include "ECS/Archetypes/SharkArchetype.h"
 #include "ECS/Archetypes/TreeArchetype.h"
 #include "ECS/Archetypes/VillagerArchetype.h"
+#include "ECS/BuildingSites.h"
 #include "ECS/ChallengeRecords.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/Ball.h"
@@ -1038,18 +1039,34 @@ void CallIn() // 055 CALL_IN
 		Pusho(0);
 		return;
 	}
-	// TODO(opening): a town's animals and its storage pit
 	const auto objectType = static_cast<ObjectType>(type);
-	if (registry.AllOf<ecs::components::Town>(container) && objectType != ObjectType::Villager &&
-	    objectType != ObjectType::VillagerChild)
+	// A store in a town is its main storage pit, of any subtype, also when a script holds it
+	if (registry.AllOf<ecs::components::Town>(container) && objectType == ObjectType::Store)
+	{
+		if (const auto pit = ecs::construction::StoragePitOf(container))
+		{
+			Locator::scriptObjects::value().Register(*pit, false);
+			Pusho(static_cast<uint32_t>(*pit));
+			return;
+		}
+		ScriptMessage("Cannot find in");
+		Pusho(0);
+		return;
+	}
+	const auto town = registry.AllOf<ecs::components::Town>(container);
+	if (town && objectType != ObjectType::Villager && objectType != ObjectType::VillagerChild &&
+	    objectType != ObjectType::Animal)
 	{
 		ScriptMessage("Looking for strange type in Town");
 		ScriptMessage("Cannot find in");
 		Pusho(0);
 		return;
 	}
-	// The first of its things of the type and subtype, passing over those a script holds when asked to
-	for (const auto member : ContainerMembers(registry, container))
+	// The first of its things of the type and subtype, passing over those a script holds when asked to. The animals of
+	// a town are the animals in its flocks.
+	const auto members = town && objectType == ObjectType::Animal ? ecs::script_flocks::TownAnimals(registry, container)
+	                                                              : ContainerMembers(registry, container);
+	for (const auto member : members)
 	{
 		if (!registry.Valid(member) || (excludingScripted && registry.AllOf<ecs::components::InScript>(member)))
 		{
