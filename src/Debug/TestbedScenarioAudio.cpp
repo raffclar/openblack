@@ -1154,7 +1154,8 @@ void testbed_scenarios::AddAudio(std::vector<Scenario>& all)
 	                   "two seconds, when the look is fully in, the player presses the left arrow key for one frame.",
 	    .expected = "The camera goes to the scroll over about a second and a half. The key sends it back over about "
 	                "a second and a half. The camera follows its aim a short time behind it, so it starts back slowly "
-	                "and comes to rest softly.",
+	                "and comes to rest softly. When it comes back, the room turns to face the scroll, and the camera "
+	                "goes down to its lowest height.",
 	    .framing = {.shot = Shot::Overview},
 	    .creatures = {Posed(CreatureType::Tiger, {0.0f, 40.0f}, 180.0f, "yours")},
 	    .commands = {{.kind = Kind::EnterTemple, .delaySeconds = 1.0f, .value = static_cast<size_t>(TempleRoom::Main)},
@@ -1174,7 +1175,8 @@ void testbed_scenarios::AddAudio(std::vector<Scenario>& all)
 	                   "fully in, the player presses the left arrow key for one frame.",
 	    .expected = "The camera goes to the scroll over about a second and a half. The key sends it back over about "
 	                "a second and a half. The camera follows its aim a short time behind it, so it starts back slowly "
-	                "and comes to rest softly.",
+	                "and comes to rest softly. When it comes back, the room turns to face the scroll, and the camera "
+	                "goes down to its lowest height.",
 	    .framing = {.shot = Shot::Overview},
 	    // The other rooms open after the temple draws the main room. Thus the player enters through it.
 	    .commands = {{.kind = Kind::EnterTemple, .delaySeconds = 1.0f, .value = 3},
