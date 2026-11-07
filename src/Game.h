@@ -277,11 +277,7 @@ public:
 	/// The game's limits on how far the hand is from the camera
 	static constexpr float k_HandMinDistance = 2.0f;
 	static constexpr float k_HandMaxDistance = 1800.0f;
-	/// Inside the temple: how far short of the room the hand hangs, its limits on how far it is from the camera, and
-	/// how long it takes to turn to the surface the cursor is on
-	static constexpr float k_HandTempleGap = 3.25f;
-	static constexpr float k_HandTempleMinDistance = 4.0f;
-	static constexpr float k_HandTempleMaxDistance = 300.0f;
+	/// Inside the temple: how long the hand takes to turn to the surface the cursor is on
 	static constexpr float k_HandTempleTurnTime = 0.4f;
 	/// Land lower than this is the sea, which the hand rests on
 	static constexpr float k_HandSeaAltitude = 0.1f;
