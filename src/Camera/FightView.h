@@ -69,18 +69,14 @@ struct HeadingPitch
 
 using GroundHeight = std::function<float(glm::vec2)>;
 
-/// The heading round a point that sees it best: of 32 headings from the one given, the one with the most land below the
-/// point out to the distance, favouring headings near the one given. The pitch eases towards the lean of the land there
-/// and is kept between an eighth and a third of a half turn.
-[[nodiscard]] float BestHeading(float heading, float distance, const glm::vec3& focus, float& pitch, const GroundHeight& ground,
-                                const glm::vec3& landNormal);
 struct View
 {
 	glm::vec3 origin;
 	glm::vec3 focus;
 };
-/// Where the camera should go to look from one point at another: as far as it is, eased to between 25 and 50 away, at
-/// the best heading round the point
+/// Where the camera goes to look from one point at another: nearer than 50 it goes most of the way out to 50, further
+/// than 100 a little way in towards 100. It looks from the best heading round the point, and its pitch eases towards
+/// the lean of the land there
 [[nodiscard]] View Suggest(const glm::vec3& from, const glm::vec3& focus, const GroundHeight& ground,
                            const glm::vec3& landNormal);
 /// Where the camera flies to as the fight view starts: from the side of the arena its radius away and half that up,

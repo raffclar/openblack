@@ -49,4 +49,25 @@ constexpr uint32_t k_OtherSystemMouseButtons = 3;
 /// How many buttons the mouse has, on the system that the game runs on
 [[nodiscard]] uint32_t SystemMouseButtons();
 
+/// The rows of the mice picture, data/textures/mousehelp.raw: a mouse with two buttons, a mouse with more buttons, and a
+/// mouse with a wheel
+constexpr int k_TwoButtonMouseRow = 0;
+constexpr int k_ThreeButtonMouseRow = 1;
+constexpr int k_WheelMouseRow = 2;
+
+/// The row of the mice picture for the player's mouse: the wheel mouse's row when the mouse has a wheel, else the row
+/// with more buttons when it has more than two, else the two-button row
+[[nodiscard]] constexpr int MousePictureRow(bool hasWheel, uint32_t buttons) noexcept
+{
+	if (hasWheel)
+	{
+		return k_WheelMouseRow;
+	}
+	return buttons > 2 ? k_ThreeButtonMouseRow : k_TwoButtonMouseRow;
+}
+
+/// The row of the mice picture for the mouse of the computer. The mouse has a wheel when the system says so, or when
+/// the wheel turned since the game started.
+[[nodiscard]] int PlayerMousePictureRow(bool wheelTurned);
+
 } // namespace openblack::platform_mouse

@@ -847,6 +847,26 @@ void AddGuideStorm(std::vector<Scenario>& all)
 }
 
 /// The stone circle of The Singing Stones, as the first land makes it at its places
+void AddLandHaze(std::vector<Scenario>& all)
+{
+	// The camera looks from above the kennels across the first land, so the far land is in the distance haze
+	constexpr glm::vec2 k_LandOneMiddle {2240.0f, 2640.0f};
+	constexpr glm::vec2 k_Kennels = glm::vec2(1899.27f, 3411.21f) - k_LandOneMiddle;
+	constexpr glm::vec2 k_Far = glm::vec2(2600.0f, 2400.0f) - k_LandOneMiddle;
+	all.push_back({
+	    .id = "light.land_distance_haze",
+	    .name = "The distance haze on the land",
+	    .facet = Facet::Light,
+	    .description = "The first land starts at midday with a clear sky. The camera is high above the kennels and looks "
+	                   "south east across the island. Use --detail-level 3 or more, which has the haze.",
+	    .expected = "The land near the camera shows its own colours. From about 400 units away the land and the "
+	                "things on it fade into the haze, and at 900 units and more they have the full haze. The colours "
+	                "change smoothly with the distance, with no bands at the edges of the land blocks.",
+	    .environment = {.land = Land::Story, .storyLand = "Land1.txt", .dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {k_Kennels.x, 250.0f, k_Kennels.y}, .look = {k_Far.x, 0.0f, k_Far.y}},
+	});
+}
+
 void AddSingingStones(std::vector<Scenario>& all)
 {
 	// The circle's centre on the map, from the middle of the map
@@ -1481,6 +1501,7 @@ CREATE_CITADEL("0.0,0.0", 0, "PLAYER_ONE", 4254, 1000)
 	AddThirdLandThrowBloke(all);
 	AddThirdLandWaterfall(all);
 	AddSingingStones(all);
+	AddLandHaze(all);
 	AddBeachTemplePuzzle(all);
 	AddTreePuzzle(all);
 	AddMazePuzzles(all);

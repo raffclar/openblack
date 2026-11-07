@@ -128,9 +128,9 @@ void Update(Bubble& bubble, float gameMilliseconds) noexcept;
 /// The colour of a line, as 0xAARRGGBB: half of the colour of the sender's god, made light. A god with no colour gives
 /// white.
 [[nodiscard]] uint32_t LineColour(std::optional<uint32_t> godColour) noexcept;
-/// The colour of the box, as 0xAARRGGBB: half of the colour of the creature's god, opaque. With no god colour, the box
-/// has half of the default sky blue.
-[[nodiscard]] uint32_t BoxColour(std::optional<uint32_t> godColour) noexcept;
+/// The colour of the box, as 0xAARRGGBB: half of the default sky blue, opaque. The box of each creature has this
+/// colour. The colour of the god of the creature does not change it.
+[[nodiscard]] uint32_t BoxColour() noexcept;
 
 /// The font of the bubble
 enum class Font : uint8_t

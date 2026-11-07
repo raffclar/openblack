@@ -65,6 +65,16 @@ constexpr uint8_t k_FlyInAlphaTo = 120;
 constexpr uint8_t k_FlyOffAlphaAtCamera = 5;
 constexpr uint8_t k_FlyOffAlphaAtHand = 50;
 constexpr int k_FlyInBands = 5;
+/// The pulses of a charge: their flight and gap with no charge and with a full charge, and their alpha at the camera
+/// and at the hand with no charge and with a full charge
+constexpr float k_PulseDurationEmpty = 3.5f;
+constexpr float k_PulseDurationFull = 1.0f;
+constexpr float k_PulseGapEmpty = 6.0f;
+constexpr float k_PulseGapFull = 0.3f;
+constexpr uint8_t k_PulseAlphaFromEmpty = 3;
+constexpr uint8_t k_PulseAlphaFromFull = 5;
+constexpr uint8_t k_PulseAlphaToEmpty = 15;
+constexpr uint8_t k_PulseAlphaToFull = 50;
 /// A band in front of the camera stays this far beyond the near plane
 constexpr float k_BandNearMargin = 0.2f;
 /// The announcer's power-up voices in the spell dialogue bank, by power-up level
@@ -343,6 +353,50 @@ void visuals::StepBands(HandBands& bands, float seconds)
 	std::erase_if(bands.flying, [](const HandBand& band) { return band.done; });
 	std::ranges::for_each(bands.bracelets, step);
 	std::ranges::for_each(bands.flying, step);
+}
+
+float visuals::PulseShare(float charge)
+{
+	if (!(charge > 0.0f))
+	{
+		return 0.0f;
+	}
+	return charge >= 1.0f ? 1.0f : charge;
+}
+
+void visuals::AddPulse(HandBands& bands, float share)
+{
+	// Each value goes from its value with no charge to its value with a full charge. The alphas drop the fraction.
+	const auto alpha = [share](uint8_t empty, uint8_t full) {
+		const auto from = static_cast<float>(empty);
+		return static_cast<uint8_t>((static_cast<float>(full) - from) * share + from);
+	};
+	bands.flying.push_back({
+	    .kind = BandKind::Pulse,
+	    .index = static_cast<int>(bands.flying.size()),
+	    .delay = 0.0f,
+	    .duration = (k_PulseDurationFull - k_PulseDurationEmpty) * share + k_PulseDurationEmpty,
+	    .alphaFrom = alpha(k_PulseAlphaFromEmpty, k_PulseAlphaFromFull),
+	    .alphaTo = alpha(k_PulseAlphaToEmpty, k_PulseAlphaToFull),
+	});
+}
+
+void visuals::StepChargePulse(HandBands& bands, ChargePulse& pulse, std::optional<float> charge, float seconds)
+{
+	const bool started = !pulse.charging && charge.has_value();
+	pulse.charging = charge.has_value();
+	if (!pulse.charging)
+	{
+		return;
+	}
+	pulse.sinceLast += seconds;
+	const float share = PulseShare(*charge);
+	const float gap = (k_PulseGapFull - k_PulseGapEmpty) * share + k_PulseGapEmpty;
+	if (started || gap < pulse.sinceLast)
+	{
+		pulse.sinceLast = 0.0f;
+		AddPulse(bands, share);
+	}
 }
 
 BandPose visuals::PoseOf(const HandBand& band)

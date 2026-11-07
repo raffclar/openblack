@@ -13,6 +13,7 @@
 
 #include <algorithm>
 #include <array>
+#include <iterator>
 
 #include <LNDFile.h>
 
@@ -27,6 +28,7 @@
 #include "ECS/Components/WalkPath.h"
 #include "ECS/Map.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/LandDetailSystemInterface.h"
 #include "EngineConfig.h"
 #include "Locator.h"
 #include "Visual/DetailLevel.h"
@@ -97,17 +99,15 @@ void ObjectDrawListSystem::LoadBlocks()
 		{
 			continue;
 		}
-		// Its triangles as the game draws a near block: every cell, with the open sea left out
-		std::array<graphics::land_detail::CellFlags, graphics::land_detail::k_CornerCount> flags;
-		std::ranges::transform(lnd->cells, flags.begin(), [](const lnd::LNDCell& cell) {
+		auto& listed = _blocks.emplace_back(
+		    LandBlock {.block = {.corner = block.GetMapPosition(), .highestAltitude = block.GetHighestAltitude()},
+		               .at = block.GetBlockPosition(),
+		               .landIndex = i});
+		// What its triangles need of its cells: the diagonal of each cell, and the open sea
+		std::ranges::transform(lnd->cells, listed.cells.begin(), [](const lnd::LNDCell& cell) {
 			return graphics::land_detail::CellFlags {.split = cell.properties.split != 0,
 			                                         .openSea = (cell.flags & k_OpenSeaFlag) != 0};
 		});
-		_blocks.push_back(
-		    {.block = {.corner = block.GetMapPosition(), .highestAltitude = block.GetHighestAltitude()},
-		     .at = block.GetBlockPosition(),
-		     .landIndex = i,
-		     .triangles = graphics::land_detail::BlockTriangles(graphics::land_detail::Mesh::Full, 0, true, flags)});
 	}
 }
 
@@ -166,6 +166,10 @@ void ObjectDrawListSystem::Update(uint32_t turn, bool landDrawn)
 	// A block in view that starts or stops to show triangles makes the list again. With the land mirrored in the sea,
 	// a block's box reaches as far under the water as it stands over it.
 	const bool reflected = !Locator::config::has_value() || Locator::config::value().detail.landReflection;
+	// The blocks show the triangles that the land draws in this frame: the same classification of the blocks as the
+	// land's draw
+	const graphics::land_detail::FrameDetail* detail =
+	    Locator::landDetailSystem::has_value() ? &Locator::landDetailSystem::value().For(camera) : nullptr;
 	bool changed = false;
 	for (auto& block : _blocks)
 	{
@@ -173,7 +177,7 @@ void ObjectDrawListSystem::Update(uint32_t turn, bool landDrawn)
 		block.inView = _blockViews.InView(_view->viewProjection, _view->nearPlane, block.block);
 		if (block.inView)
 		{
-			const bool shows = Shows(block, _view->viewProjection, _view->nearPlane, _view->eye);
+			const bool shows = Shows(block, detail, _view->viewProjection, _view->nearPlane, _view->eye);
 			changed = object_draw_list::ShowingChanged(shows, block.shown) || changed;
 		}
 	}
@@ -192,24 +196,63 @@ void ObjectDrawListSystem::Update(uint32_t turn, bool landDrawn)
 	}
 }
 
-bool ObjectDrawListSystem::Shows(const LandBlock& block, const glm::mat4& viewProjection, float nearPlane, glm::vec3 eye)
+std::span<const uint16_t> ObjectDrawListSystem::TrianglesOf(LandBlock& block, graphics::land_detail::Mesh mesh,
+                                                            uint8_t coarserSides, bool dropOpenSea)
 {
+	const auto set =
+	    static_cast<uint16_t>((static_cast<unsigned>(mesh) * 16 + (coarserSides & 0xFu)) * 2 + (dropOpenSea ? 1u : 0u));
+	auto found = std::ranges::find(block.triangleSets, set, &std::pair<uint16_t, std::vector<uint16_t>>::first);
+	if (found == block.triangleSets.end())
+	{
+		block.triangleSets.emplace_back(set,
+		                                graphics::land_detail::BlockTriangles(mesh, coarserSides, dropOpenSea, block.cells));
+		found = std::prev(block.triangleSets.end());
+	}
+	return found->second;
+}
+
+bool ObjectDrawListSystem::Shows(LandBlock& block, const graphics::land_detail::FrameDetail* detail,
+                                 const glm::mat4& viewProjection, float nearPlane, glm::vec3 eye)
+{
+	namespace land_detail = graphics::land_detail;
 	const auto& blocks = Locator::terrainSystem::value().GetBlocks();
 	const auto* cells = block.landIndex < blocks.size() ? blocks[block.landIndex].GetCells() : nullptr;
 	if (cells == nullptr)
 	{
 		return false;
 	}
-	// The corners stand at the heights the cells have now
-	const auto cornerAt = [&block, cells](uint16_t corner) {
-		const auto x = static_cast<float>(corner / graphics::land_detail::k_CornersPerSide);
-		const auto z = static_cast<float>(corner % graphics::land_detail::k_CornersPerSide);
-		return glm::vec3(block.block.corner.x + x * LandIslandInterface::k_CellSize,
-		                 static_cast<float>(cells[corner].altitude) * object_draw_list::k_AltitudeUnit,
-		                 block.block.corner.y + z * LandIslandInterface::k_CellSize);
+	// The mesh, the stitched sides and the morph that the land draws the block with in this frame. The land leaves out
+	// the open sea only from a block with the full mesh and no morph.
+	const bool classified =
+	    detail != nullptr && block.landIndex < detail->blocks.size() && block.landIndex < detail->coarserSides.size();
+	const auto drawn = classified ? detail->blocks[block.landIndex] : land_detail::BlockDetail {};
+	const uint8_t coarserSides = classified ? detail->coarserSides[block.landIndex] : 0;
+	const bool dropOpenSea = drawn.mesh == land_detail::Mesh::Full && drawn.morph == land_detail::Morph::None;
+	const auto triangles = TrianglesOf(block, drawn.mesh, coarserSides, dropOpenSea);
+	if (triangles.empty())
+	{
+		return false;
+	}
+	// A block that morphs draws its corners between their own altitudes and those of the coarser mesh
+	std::array<uint8_t, land_detail::k_CornerCount> altitudes {};
+	const bool morphs = classified && drawn.morph != land_detail::Morph::None;
+	if (morphs)
+	{
+		std::transform(cells, cells + land_detail::k_CornerCount, altitudes.begin(),
+		               [](const lnd::LNDCell& cell) { return cell.altitude; });
+	}
+	// The corners stand at the heights that the land draws them at: land at sea level is flat at height 0
+	const auto cornerAt = [&](uint16_t corner) {
+		const size_t x = corner / land_detail::k_CornersPerSide;
+		const size_t z = corner % land_detail::k_CornersPerSide;
+		const uint8_t altitude =
+		    morphs ? land_detail::DrawnCornerAltitude(altitudes, x, z, drawn.morph, *detail, block.block.corner)
+		           : cells[corner].altitude;
+		return glm::vec3(block.block.corner.x + static_cast<float>(x) * LandIslandInterface::k_CellSize,
+		                 LandIslandInterface::GetDrawnAltitude(altitude),
+		                 block.block.corner.y + static_cast<float>(z) * LandIslandInterface::k_CellSize);
 	};
-	return object_draw_list::BlockShowsWith(viewProjection, nearPlane, eye, graphics::land_detail::k_CornerCount, cornerAt,
-	                                        block.triangles);
+	return object_draw_list::BlockShowsWith(viewProjection, nearPlane, eye, land_detail::k_CornerCount, cornerAt, triangles);
 }
 
 void ObjectDrawListSystem::MakeList()

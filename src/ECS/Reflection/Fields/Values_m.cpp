@@ -94,6 +94,9 @@ void openblack::ecs::reflection::RegisterFields_Values_m(entt::meta_ctx& context
 	    .Field<&openblack::magic::town_belief::Belief::scale>("scale")
 	    .Field<&openblack::magic::town_belief::Belief::neutral>("neutral")
 	    .Field<&openblack::magic::town_belief::Belief::desireLevel>("desireLevel");
+	Reflect<openblack::magic::visuals::ChargePulse>(context, ValueOnly {})
+	    .Field<&openblack::magic::visuals::ChargePulse::charging>("charging")
+	    .Field<&openblack::magic::visuals::ChargePulse::sinceLast>("sinceLast");
 	Reflect<openblack::magic::visuals::HandBand>(context, ValueOnly {})
 	    .Field<&openblack::magic::visuals::HandBand::kind>("kind")
 	    .Field<&openblack::magic::visuals::HandBand::index>("index")

@@ -9,6 +9,7 @@
 
 #include <cmath>
 
+#include <limits>
 #include <numbers>
 #include <optional>
 
@@ -312,4 +313,53 @@ TEST(MiracleVisuals, TheSeedModelStandsAboveTheMiddleTurnedAndScaled)
 	const auto through = glm::vec3(placed * glm::vec4(0.0f, 0.0f, 1.0f, 0.0f));
 	EXPECT_NEAR(glm::length(through), 2.0f * 0.6f * 1.25f * 2.0f, k_Epsilon);
 	EXPECT_NEAR(std::abs(through.x), glm::length(through), k_Epsilon);
+}
+
+// While an icon charges for the hand, bands pulse onto it. The first comes in the frame that the charge starts, then
+// one each gap. The gap goes from 6 seconds with no charge to 0.3 seconds with a full charge.
+TEST(MiracleVisuals, BandsPulseOntoTheHandMoreOftenAsTheChargeFills)
+{
+	HandBands bands;
+	ChargePulse pulse;
+	StepChargePulse(bands, pulse, std::nullopt, 0.1f);
+	EXPECT_TRUE(bands.flying.empty());
+	StepChargePulse(bands, pulse, 0.0f, 0.1f);
+	ASSERT_EQ(bands.flying.size(), 1u);
+	EXPECT_EQ(bands.flying[0].kind, BandKind::Pulse);
+	// With no charge the gap is 6 seconds
+	StepChargePulse(bands, pulse, 0.0f, 6.0f);
+	EXPECT_EQ(bands.flying.size(), 1u);
+	StepChargePulse(bands, pulse, 0.0f, 0.01f);
+	EXPECT_EQ(bands.flying.size(), 2u);
+	// With a full charge the gap is 0.3 seconds
+	StepChargePulse(bands, pulse, 1.0f, 0.31f);
+	EXPECT_EQ(bands.flying.size(), 3u);
+	// The charge stops, then starts again: the first pulse comes at once
+	StepChargePulse(bands, pulse, std::nullopt, 0.01f);
+	StepChargePulse(bands, pulse, 0.5f, 0.01f);
+	EXPECT_EQ(bands.flying.size(), 4u);
+}
+
+// A pulse flies from the camera to the hand. With no charge it takes 3.5 seconds and its alpha goes from 3 to 15. With
+// a full charge it takes 1 second and its alpha goes from 5 to 50. The share stays between none and all.
+TEST(MiracleVisuals, APulseFliesFasterAndBrighterWithMoreCharge)
+{
+	HandBands bands;
+	AddPulse(bands, PulseShare(-1.0f));
+	AddPulse(bands, PulseShare(2.0f));
+	AddPulse(bands, PulseShare(0.5f));
+	AddPulse(bands, PulseShare(std::numeric_limits<float>::quiet_NaN()));
+	ASSERT_EQ(bands.flying.size(), 4u);
+	EXPECT_EQ(bands.flying[0].duration, 3.5f);
+	EXPECT_EQ(bands.flying[0].alphaFrom, 3);
+	EXPECT_EQ(bands.flying[0].alphaTo, 15);
+	EXPECT_EQ(bands.flying[1].duration, 1.0f);
+	EXPECT_EQ(bands.flying[1].alphaFrom, 5);
+	EXPECT_EQ(bands.flying[1].alphaTo, 50);
+	EXPECT_EQ(bands.flying[2].duration, 2.25f);
+	EXPECT_EQ(bands.flying[2].alphaFrom, 4);
+	EXPECT_EQ(bands.flying[2].alphaTo, 32);
+	EXPECT_EQ(bands.flying[3].alphaTo, 15);
+	// Each pulse takes the next place along the hand
+	EXPECT_EQ(bands.flying[3].index, 3);
 }

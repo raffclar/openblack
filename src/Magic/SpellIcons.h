@@ -110,6 +110,12 @@ enum class TapResult : uint8_t
 /// What is still needed to charge it full. While a hand holds its seed, this is what that seed still needs.
 [[nodiscard]] float Need(const IconCharge& icon);
 
+/// The share of the charge of an icon that the hand shows while the icon charges for it. With a seed of the icon in a
+/// hand, it is the share of the cost that the seed still needs. Else it is the share of the cost that the icon stores.
+/// The cost is what the miracle at the power-up level of the charge costs. A cost of 0 gives all when something is
+/// needed or stored, else none.
+[[nodiscard]] float HandPulseShare(const IconCharge& icon, float cost);
+
 /// The result of the own turn of a charging icon
 struct IconTurn
 {

@@ -23,6 +23,10 @@ namespace
 
 /// Below this, a component of the line's direction along the ground counts as nothing
 constexpr float k_SmallestDirection = 1e-4f;
+/// The map has 32 by 32 blocks, each 160 units a side and 16 cells of 10 units
+constexpr int k_BlocksPerSide = 32;
+constexpr float k_BlockSize = 160.0f;
+constexpr float k_CellSize = 10.0f;
 
 enum class Place : uint8_t
 {
@@ -350,6 +354,90 @@ float CoarseTexelPosition(float fraction, const CoarseSampling& sampling)
 {
 	// The page's 255th part in from the coarse texture's edge, then across the block
 	return static_cast<float>(sampling.blockTexels) / 255.0f + fraction * sampling.drawnTexels;
+}
+
+FrameDetail ClassifyFrame(const FrameInputs& inputs, std::span<const BlockPlace> blocks)
+{
+	FrameDetail frame;
+	frame.lines = inputs.lines;
+	frame.meshNear = LineAcross(inputs.origin, inputs.forward, inputs.lines.meshNear, 0.0f);
+	frame.meshFar = LineAcross(inputs.origin, inputs.forward, inputs.lines.meshFar, 0.0f);
+	frame.texture =
+	    LineAcross(inputs.origin, inputs.forward, inputs.lines.texture, std::min(inputs.origin.y, k_TextureGroundCap));
+
+	// The blocks by where they are on the map's grid of blocks
+	std::array<int16_t, static_cast<size_t>(k_BlocksPerSide * k_BlocksPerSide)> grid {};
+	grid.fill(-1);
+	const auto onGrid = [](glm::ivec2 at) {
+		return at.x >= 0 && at.x < k_BlocksPerSide && at.y >= 0 && at.y < k_BlocksPerSide;
+	};
+	const auto gridIndex = [](glm::ivec2 at) { return static_cast<size_t>(at.x * k_BlocksPerSide + at.y); };
+
+	frame.blocks.resize(blocks.size());
+	for (size_t i = 0; i < blocks.size(); ++i)
+	{
+		const auto& block = blocks[i];
+		if (onGrid(block.at))
+		{
+			grid.at(gridIndex(block.at)) = static_cast<int16_t>(i);
+		}
+		const std::array<glm::vec2, 4> corners = {block.corner, block.corner + glm::vec2(0.0f, k_BlockSize),
+		                                          block.corner + glm::vec2(k_BlockSize, 0.0f),
+		                                          block.corner + glm::vec2(k_BlockSize)};
+		CornerOffsets offsets;
+		for (size_t corner = 0; corner < corners.size(); ++corner)
+		{
+			offsets.meshNear.at(corner) = Offset(frame.meshNear, corners.at(corner));
+			offsets.meshFar.at(corner) = Offset(frame.meshFar, corners.at(corner));
+			offsets.texture.at(corner) = Offset(frame.texture, corners.at(corner));
+		}
+		frame.blocks[i] = Classify(offsets, inputs.lines, inputs.coarseLand);
+	}
+
+	const auto indexAt = [&](glm::ivec2 at) -> int16_t { return onGrid(at) ? grid.at(gridIndex(at)) : int16_t {-1}; };
+	frame.coarserSides.resize(blocks.size());
+	frame.neighbours.resize(blocks.size());
+	for (size_t i = 0; i < blocks.size(); ++i)
+	{
+		const auto at = blocks[i].at;
+		const std::array<int16_t, 4> neighbours = {indexAt(at - glm::ivec2(1, 0)), indexAt(at - glm::ivec2(0, 1)),
+		                                           indexAt(at + glm::ivec2(0, 1)), indexAt(at + glm::ivec2(1, 0))};
+		std::array<std::optional<Mesh>, 4> meshes;
+		std::ranges::transform(neighbours, meshes.begin(), [&frame](int16_t index) {
+			return index < 0 ? std::nullopt : std::optional(frame.blocks[static_cast<size_t>(index)].mesh);
+		});
+		frame.coarserSides[i] = CoarserSides(frame.blocks[i].mesh, meshes);
+		frame.neighbours[i] = neighbours;
+	}
+	return frame;
+}
+
+uint8_t DrawnCornerAltitude(std::span<const uint8_t, k_CornerCount> altitudes, size_t x, size_t z, Morph morph,
+                            const FrameDetail& frame, glm::vec2 blockCorner)
+{
+	const uint8_t own = altitudes[x * k_CornersPerSide + z];
+	if (morph == Morph::None)
+	{
+		return own;
+	}
+	// The same sum as the land's vertex shader: the block's corner, then the corner's place in the block
+	const glm::vec2 at = blockCorner + glm::vec2(static_cast<float>(x), static_cast<float>(z)) * k_CellSize;
+	const auto targets = TargetsAt(altitudes, x, z);
+	const bool toHalf = morph == Morph::ToHalf;
+	return MorphedAltitude(own, toHalf ? targets.half : targets.quarter, Offset(toHalf ? frame.meshNear : frame.meshFar, at),
+	                       frame.lines.meshBand);
+}
+
+const FrameDetail& FrameMemo::For(const FrameInputs& inputs, std::span<const BlockPlace> blocks)
+{
+	if (_inputs != inputs || !std::ranges::equal(_blocks, blocks))
+	{
+		_frame = ClassifyFrame(inputs, blocks);
+		_inputs = inputs;
+		_blocks.assign(blocks.begin(), blocks.end());
+		++_classifications;
+	}
+	return _frame;
 }
 
 } // namespace openblack::graphics::land_detail

@@ -322,3 +322,15 @@ TEST(SpellIcons, TheCastOfASeedStopsTheChargeOfItsIconForTheCharger)
 	EXPECT_FALSE(CastStopsCharge(true, 500.0f, false));
 	EXPECT_FALSE(CastStopsCharge(false, 500.0f, false));
 }
+
+// While an icon charges for the hand, the hand shows a share of the charge. With no seed of the icon in a hand, it is
+// the share of the cost that the icon stores. With the seed in the hand, it is the share that the seed still needs, so
+// the share falls as the seed charges.
+TEST(SpellIcons, TheHandShowsTheStoreOrWhatTheHeldSeedStillNeeds)
+{
+	EXPECT_EQ(HandPulseShare({.charging = true, .store = 250.0f, .required = 1000.0f}, 1000.0f), 0.25f);
+	EXPECT_EQ(HandPulseShare({.charging = true, .seedHeld = true, .store = 0.0f, .required = 400.0f}, 1000.0f), 0.4f);
+	// A miracle that costs nothing gives all when something is stored, else none
+	EXPECT_EQ(HandPulseShare({.charging = true, .store = 5.0f}, 0.0f), 1.0f);
+	EXPECT_EQ(HandPulseShare({.charging = true}, 0.0f), 0.0f);
+}

@@ -203,6 +203,36 @@ inline constexpr KeyBindingTable k_WebDefaultKeyBindings {{
 /// Ctrl+S quick saves rather than also showing villagers' details.
 [[nodiscard]] BindableActionMap ActionsForKeyDown(std::span<const KeyBinding> bindings, SDL_Scancode key,
                                                   uint16_t sdlModifiers) noexcept;
+/// What an action bound to a pressed key does to the game's other keys
+enum class KeyDownBinding : uint8_t
+{
+	/// No action takes the key, so the speed keys and the other keys of the game act on it
+	None,
+	/// An action that acts while it is held takes the key. The speed keys do not act, but the other keys do.
+	LetsKeyThrough,
+	/// The action takes the key and no other key of the game acts on it
+	TakesKey,
+};
+
+/// Whether the action acts while it is held: the hand and camera actions from moving the hand to turning around the
+/// mouse, but talking. The other actions act once, when their key goes down.
+[[nodiscard]] bool IsHeldAction(BindableActionMap action) noexcept;
+/// The actions that a key press holds. An action that acts while it is held is held with its key, and with its
+/// modifier when it has one; other modifiers held do not stop it. A one-press action is held only when it is the row
+/// that the press finds (BindingForKeyDown).
+[[nodiscard]] BindableActionMap ActionsPressedByKeyDown(std::span<const KeyBinding> bindings, SDL_Scancode key,
+                                                        uint16_t sdlModifiers, BindableActionMap blocked) noexcept;
+/// The one modifier that a key press has, as the game finds it: Shift, then Ctrl, then Alt
+[[nodiscard]] Modifier KeyDownModifier(uint16_t sdlModifiers) noexcept;
+/// The first row whose key and modifier are those of the key press. A plain binding needs no modifier held, and a
+/// binding with a modifier needs that modifier as the press's one modifier. None when no row has them, or when the
+/// first such row is in `blocked`.
+[[nodiscard]] std::optional<size_t> BindingForKeyDown(std::span<const KeyBinding> bindings, SDL_Scancode key,
+                                                      uint16_t sdlModifiers, BindableActionMap blocked) noexcept;
+/// What the action of a key press does to the game's other keys. The hand and camera actions that act while they are
+/// held let the key through, and so does every action while a script holds the screen.
+[[nodiscard]] KeyDownBinding KeyDownBindingFor(std::span<const KeyBinding> bindings, SDL_Scancode key, uint16_t sdlModifiers,
+                                               BindableActionMap blocked, bool scriptHoldsScreen) noexcept;
 /// Every action bound to the key, with or without a modifier, which letting go of it ends
 [[nodiscard]] BindableActionMap ActionsForKey(std::span<const KeyBinding> bindings, SDL_Scancode key) noexcept;
 /// The actions bound to a mouse input

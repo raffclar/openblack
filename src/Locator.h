@@ -231,6 +231,7 @@ class WorshipSiteSystemInterface;
 class ResourceStoreSystemInterface;
 class AnimatedStaticSystemInterface;
 class ObjectDrawListSystemInterface;
+class LandDetailSystemInterface;
 class AppleBarrelSystemInterface;
 class TimeSystemInterface;
 class SimulationSystemInterface;
@@ -399,6 +400,7 @@ struct Locator
 	using resourceStoreSystem = entt::locator<ecs::systems::ResourceStoreSystemInterface>;
 	using animatedStaticSystem = entt::locator<ecs::systems::AnimatedStaticSystemInterface>;
 	using objectDrawListSystem = entt::locator<ecs::systems::ObjectDrawListSystemInterface>;
+	using landDetailSystem = entt::locator<ecs::systems::LandDetailSystemInterface>;
 	using appleBarrelSystem = entt::locator<ecs::systems::AppleBarrelSystemInterface>;
 	using weatherSystem = entt::locator<ecs::systems::WeatherSystemInterface>;
 	using pathfindingSystem = entt::locator<ecs::systems::PathfindingSystemInterface>;
