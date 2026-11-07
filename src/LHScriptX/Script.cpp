@@ -26,6 +26,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/FixedOutlineSystemInterface.h"
+#include "ECS/Systems/LandSystemInterface.h"
 #include "ECS/ThingMapPlace.h"
 #include "FeatureScriptCommands.h"
 #include "Lexer.h"
@@ -371,6 +372,12 @@ void Script::RunCommand(const std::string& identifier, const std::vector<Token>&
 		{
 			throw std::runtime_error("Invalid script argument type");
 		}
+	}
+
+	// The reader keeps the arguments before the command runs, and also for a command that its place refuses
+	if (Locator::landSystem::has_value())
+	{
+		Locator::landSystem::value().GetScriptLineValues().Keep(parameters);
 	}
 
 	if (PlaceRefused(identifier, parameters))
