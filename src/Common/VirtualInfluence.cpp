@@ -79,6 +79,15 @@ void virtual_influence::ProcessTurn(State& state, const TurnInputs& inputs, cons
 	}
 }
 
+void virtual_influence::Switch(State& state, bool on)
+{
+	state.disabled = !on;
+	if (state.disabled)
+	{
+		state.fraction = 0.0f;
+	}
+}
+
 bool virtual_influence::UsesChants(const State& state, bool handShielded, bool handInInfluence)
 {
 	return !state.disabled && !handShielded && !handInInfluence;
