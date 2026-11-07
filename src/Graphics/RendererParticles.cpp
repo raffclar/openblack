@@ -326,6 +326,7 @@ void Renderer::DrawParticleMist(const DrawSceneDesc& desc, const particles::draw
 	const auto texture = textures.Handle(Mist::k_TextureId);
 	const auto alphaTexture = textures.Handle(Mist::k_AlphaTextureId);
 	const auto viewId = static_cast<bgfx::ViewId>(TranslucentView(desc.viewId));
+	const bool reflection = desc.viewId == RenderPass::Reflection;
 	for (const auto& subMesh : mesh->GetSubMeshes())
 	{
 		for (const auto& primitive : subMesh->GetPrimitives())
@@ -348,7 +349,11 @@ void Renderer::DrawParticleMist(const DrawSceneDesc& desc, const particles::draw
 				subMesh->GetMesh().GetIndexBuffer().Bind(primitive.indicesCount, primitive.indicesOffset);
 			}
 			subMesh->GetMesh().GetVertexBuffer().Bind();
-			bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_DEPTH_TEST_GREATER | BGFX_STATE_BLEND_ALPHA | BGFX_STATE_MSAA);
+			// The material of the mesh tells if the back faces show: the dome shows only its outside. L3D meshes face
+			// clockwise; the mirrored reflection sees them from the other side.
+			const uint64_t cull = primitive.twoSided ? 0 : (reflection ? BGFX_STATE_CULL_CW : BGFX_STATE_CULL_CCW);
+			bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_DEPTH_TEST_GREATER | BGFX_STATE_BLEND_ALPHA | BGFX_STATE_MSAA |
+			               cull);
 			program->Submit(viewId, depth);
 		}
 	}
