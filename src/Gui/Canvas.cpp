@@ -93,8 +93,9 @@ Canvas::~Canvas() = default;
 
 void Canvas::StartBatch(const graphics::Texture2D* texture)
 {
+	const auto clip = ClipInPixels();
 	if (_batches.empty() || _batches.back().texture != texture || _batches.back().blend != _blend ||
-	    _batches.back().sortDepth != _sortDepth || _batches.back().clip != _clip ||
+	    _batches.back().sortDepth != _sortDepth || _batches.back().clip != clip ||
 	    _batches.back().vertexCount + 6 > k_MaxBatchVertices)
 	{
 		_batches.push_back({.texture = texture,
@@ -102,7 +103,7 @@ void Canvas::StartBatch(const graphics::Texture2D* texture)
 		                    .firstVertex = static_cast<uint32_t>(_vertices.size()),
 		                    .vertexCount = 0,
 		                    .sortDepth = _sortDepth,
-		                    .clip = _clip});
+		                    .clip = clip});
 	}
 }
 
@@ -115,6 +116,7 @@ void Canvas::Begin(glm::u16vec2 resolution)
 	_depth = 0.0f;
 	_sortDepth = 0;
 	_origin = glm::vec2(0.0f);
+	_corners = screen_pixels::Corners::AsGiven;
 	_clip.reset();
 }
 
@@ -125,18 +127,29 @@ void Canvas::SetClip(std::optional<std::array<glm::vec2, 2>> corners) noexcept
 		_clip.reset();
 		return;
 	}
-	// A pixel shows when its centre is inside the rectangle, as a pixel that a draw covers
-	const auto edge = [](float value, uint16_t most) {
-		return static_cast<uint16_t>(std::clamp(std::round(value), 0.0f, static_cast<float>(most)));
-	};
-	const auto left = edge(corners->at(0).x + _origin.x, _resolution.x);
-	const auto top = edge(corners->at(0).y + _origin.y, _resolution.y);
-	const auto right = edge(corners->at(1).x + _origin.x, _resolution.x);
-	const auto bottom = edge(corners->at(1).y + _origin.y, _resolution.y);
-	_clip = Clip {.x = left,
-	              .y = top,
-	              .width = static_cast<uint16_t>(std::max(right, left) - left),
-	              .height = static_cast<uint16_t>(std::max(bottom, top) - top)};
+	_clip = std::array {corners->at(0) + _origin, corners->at(1) + _origin};
+}
+
+std::optional<Canvas::Clip> Canvas::ClipInPixels() const noexcept
+{
+	if (!_clip.has_value())
+	{
+		return std::nullopt;
+	}
+	using screen_pixels::ClipEdge;
+	const auto left = ClipEdge(_clip->at(0).x, _corners, _resolution.x);
+	const auto top = ClipEdge(_clip->at(0).y, _corners, _resolution.y);
+	const auto right = ClipEdge(_clip->at(1).x, _corners, _resolution.x);
+	const auto bottom = ClipEdge(_clip->at(1).y, _corners, _resolution.y);
+	return Clip {.x = left,
+	             .y = top,
+	             .width = static_cast<uint16_t>(std::max(right, left) - left),
+	             .height = static_cast<uint16_t>(std::max(bottom, top) - top)};
+}
+
+glm::vec2 Canvas::ToTarget(glm::vec2 corner) const noexcept
+{
+	return screen_pixels::ToTarget(corner + _origin, _corners);
 }
 
 void Canvas::DrawQuad(glm::vec2 min, glm::vec2 max, glm::vec2 uvMin, glm::vec2 uvMax, glm::vec4 colour,
@@ -149,8 +162,8 @@ void Canvas::DrawQuad(glm::vec2 min, glm::vec2 max, glm::vec2 uvMin, glm::vec2 u
 	const auto* drawn = texture != nullptr ? texture : _white.get();
 	StartBatch(drawn);
 	const auto abgr = ToAbgr(colour);
-	min += _origin;
-	max += _origin;
+	min = ToTarget(min);
+	max = ToTarget(max);
 	const Vertex topLeft {.x = min.x, .y = min.y, .z = _depth, .u = uvMin.x, .v = uvMin.y, .abgr = abgr};
 	const Vertex topRight {.x = max.x, .y = min.y, .z = _depth, .u = uvMax.x, .v = uvMin.y, .abgr = abgr};
 	const Vertex bottomLeft {.x = min.x, .y = max.y, .z = _depth, .u = uvMin.x, .v = uvMax.y, .abgr = abgr};
@@ -173,12 +186,9 @@ void Canvas::DrawShape(const std::array<glm::vec2, 4>& corners, const std::array
 	std::array<Vertex, 4> vertices {};
 	for (size_t i = 0; i < 4; ++i)
 	{
-		vertices.at(i) = {.x = corners.at(i).x + _origin.x,
-		                  .y = corners.at(i).y + _origin.y,
-		                  .z = _depth,
-		                  .u = uvs.at(i).x,
-		                  .v = uvs.at(i).y,
-		                  .abgr = ToAbgr(colours.at(i))};
+		const auto corner = ToTarget(corners.at(i));
+		vertices.at(i) = {
+		    .x = corner.x, .y = corner.y, .z = _depth, .u = uvs.at(i).x, .v = uvs.at(i).y, .abgr = ToAbgr(colours.at(i))};
 	}
 	_vertices.insert(_vertices.end(), {vertices[0], vertices[1], vertices[2], vertices[0], vertices[2], vertices[3]});
 	_batches.back().vertexCount += 6;
