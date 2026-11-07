@@ -583,8 +583,8 @@ void TownDesireSystem::UpdateFlags(float seconds)
 	const auto* camera = Locator::camera::has_value() ? &Locator::camera::value() : nullptr;
 	const auto viewProjection = camera != nullptr ? camera->GetViewProjectionMatrix() : glm::mat4(1.0f);
 	const auto eye = camera != nullptr ? camera->GetOrigin() : glm::vec3(0.0f);
-	// The first pit of each town, found one time for all the flags
-	const auto pits = construction::FirstStoragePits();
+	// The main pit of each town, found one time for all the flags
+	const auto pits = construction::MainStoragePits();
 
 	registry.Each<TownDesireFlag>([&](TownDesireFlag& flag) {
 		// The turn removes the flags of a town that has gone
