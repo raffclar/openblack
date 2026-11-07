@@ -304,12 +304,12 @@ void StepEase(Ease& ease)
 
 } // namespace
 
-void Game::UpdateGestures(const Camera& camera, glm::ivec2 screenSize, float deltaSeconds)
+namespace
 {
-	if (!Locator::gestureSystem::has_value() || screenSize.x <= 0 || screenSize.y <= 0)
-	{
-		return;
-	}
+
+/// What the gestures get from the frame: the places that came since the last pass, the camera and the input
+ecs::systems::GestureSystemInterface::Frame GestureFrameOf(const Camera& camera, glm::ivec2 screenSize, float deltaSeconds)
+{
 	const auto size = static_cast<glm::vec2>(screenSize);
 	const auto rayAt = [&camera, size](glm::vec2 pixel) {
 		glm::vec3 origin;
@@ -330,8 +330,8 @@ void Game::UpdateGestures(const Camera& camera, glm::ivec2 screenSize, float del
 	             .cameraForward = camera.GetForward()},
 	    .cameraShaking = Locator::explosionSystem::has_value() && Locator::explosionSystem::value().IsShaking(),
 	};
-	// The places of the pointer that the interface got in this frame
-	const auto places = Locator::gameActionSystem::value().GetMousePlaces();
+	// The places of the pointer that came since the last pass of the interface
+	const auto places = Locator::gameActionSystem::value().TakeInterfacePlaces();
 	frame.places.assign(places.begin(), places.end());
 	// The fight view that shows a fight in its arena, and the camera of Creature Mode, let the hand draw on while they
 	// move
@@ -377,7 +377,38 @@ void Game::UpdateGestures(const Camera& camera, glm::ivec2 screenSize, float del
 		}
 		return eye + (direction * gesture::k_TrailSkyDistance);
 	};
+	return frame;
+}
+
+} // namespace
+
+void Game::GestureTurn()
+{
+	if (!Locator::gestureSystem::has_value() || !Locator::windowing::has_value())
+	{
+		return;
+	}
+	// No pass without a screen, or in the temple, where the hand draws no gestures
+	const auto screenSize = Locator::windowing::value().GetSize();
+	if (screenSize.x <= 0 || screenSize.y <= 0 || (Locator::temple::has_value() && Locator::temple::value().Active()))
+	{
+		return;
+	}
+	// The pass of the turn sees the camera as the last frame drew it
+	Locator::gestureSystem::value().InterfaceTurn(GestureFrameOf(Locator::camera::value(), screenSize, 0.0f));
+}
+
+void Game::UpdateGestures(const Camera& camera, glm::ivec2 screenSize, float deltaSeconds)
+{
+	if (!Locator::gestureSystem::has_value() || screenSize.x <= 0 || screenSize.y <= 0)
+	{
+		return;
+	}
+	auto frame = GestureFrameOf(camera, screenSize, deltaSeconds);
+	// Each message of the buttons in this frame does the gesture step again
+	frame.buttonMessages = Locator::gameActionSystem::value().GetButtonMessages();
 	Locator::gestureSystem::value().Update(frame);
+	const auto size = static_cast<glm::vec2>(screenSize);
 	// A path drawn for the testbed is drawn by the hand, which follows it. The hand moves the mouse, which sends a
 	// message at the place.
 	if (const auto drawing = Locator::gestureSystem::value().GetDrawingPoint())

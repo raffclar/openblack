@@ -786,6 +786,9 @@ private:
 	                  const ecs::systems::HandGrabSystemInterface* grab);
 	/// The gestures drawn with the cursor this frame, through the gesture system
 	void UpdateGestures(const Camera& camera, glm::ivec2 screenSize, float deltaSeconds);
+	/// The pass of the interface in the turn: the gestures sample the places that came since the last pass and look at
+	/// the path once
+	void GestureTurn();
 	/// Turns the hand to face along the line of sight through the cursor and stands it on the slope under it. Its up
 	/// eases at the fixed steps of the input.
 	void OrientHand(ecs::components::Transform& handTransform, const glm::mat3& facingCamera, glm::vec3 surfaceUp);
