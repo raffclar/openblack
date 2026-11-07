@@ -128,6 +128,10 @@ private:
 	std::bitset<SDL_NUM_SCANCODES> _keysDownThisFrame;
 	/// Whether the second press of a double click came in this frame
 	bool _doubleClickThisFrame {false};
+	/// Whether the second press of a double click holds the left button, and whether its release came in this frame.
+	/// That release sends a release message of the button, as each release does.
+	bool _doubleClickHeld {false};
+	bool _doubleClickReleaseThisFrame {false};
 	/// The keys a script or the inspector holds down, which the keyboard doesn't
 	std::bitset<SDL_NUM_SCANCODES> _scriptedKeys;
 	std::vector<BindableActionMap> _queuedPresses;

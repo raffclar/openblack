@@ -166,8 +166,8 @@ public:
 	/// frame's pass.
 	[[nodiscard]] virtual std::span<const glm::ivec2> TakeInterfacePlaces() { return GetMousePlaces(); }
 	/// The messages of the mouse buttons that the interface gets in this frame: a press or a release of the Action
-	/// button, a press or a release of the Move button, and a double click of the left button. Each kind sends one message at
-	/// most.
+	/// button, a press or a release of the Move button, a double click of the left button, and the release of the second
+	/// press of that double click. Each kind sends one message at most.
 	[[nodiscard]] virtual uint32_t GetButtonMessages() const { return 0; }
 	/// A message of the mouse from a path that the testbed draws as if with the hand, at the place in window pixels. The
 	/// message comes at the time of the clock that the help reads, as a message of the player's mouse does.
