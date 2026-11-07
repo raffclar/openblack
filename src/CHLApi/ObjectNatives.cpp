@@ -1039,7 +1039,6 @@ void CallIn() // 055 CALL_IN
 		Pusho(0);
 		return;
 	}
-	// TODO(opening): a town's animals
 	const auto objectType = static_cast<ObjectType>(type);
 	// A store in a town is its main storage pit, of any subtype, also when a script holds it
 	if (registry.AllOf<ecs::components::Town>(container) && objectType == ObjectType::Store)
@@ -1054,16 +1053,20 @@ void CallIn() // 055 CALL_IN
 		Pusho(0);
 		return;
 	}
-	if (registry.AllOf<ecs::components::Town>(container) && objectType != ObjectType::Villager &&
-	    objectType != ObjectType::VillagerChild)
+	const auto town = registry.AllOf<ecs::components::Town>(container);
+	if (town && objectType != ObjectType::Villager && objectType != ObjectType::VillagerChild &&
+	    objectType != ObjectType::Animal)
 	{
 		ScriptMessage("Looking for strange type in Town");
 		ScriptMessage("Cannot find in");
 		Pusho(0);
 		return;
 	}
-	// The first of its things of the type and subtype, passing over those a script holds when asked to
-	for (const auto member : ContainerMembers(registry, container))
+	// The first of its things of the type and subtype, passing over those a script holds when asked to. The animals of
+	// a town are the animals in its flocks.
+	const auto members = town && objectType == ObjectType::Animal ? ecs::script_flocks::TownAnimals(registry, container)
+	                                                              : ContainerMembers(registry, container);
+	for (const auto member : members)
 	{
 		if (!registry.Valid(member) || (excludingScripted && registry.AllOf<ecs::components::InScript>(member)))
 		{

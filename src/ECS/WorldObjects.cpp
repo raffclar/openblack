@@ -645,6 +645,65 @@ void world_objects::SetLife(entt::entity object, float life, bool allowed)
 	}
 }
 
+namespace
+{
+/// The totems that stand on a town centre: none for anything else
+std::vector<entt::entity> TotemsOn(const Registry& registry, entt::entity centre)
+{
+	std::vector<entt::entity> totems;
+	if (!registry.AllOf<Abode>(centre))
+	{
+		return totems;
+	}
+	registry.Each<const VillageTotem>([&](entt::entity totem, const VillageTotem& data) {
+		if (data.townCentre == centre)
+		{
+			totems.push_back(totem);
+		}
+	});
+	return totems;
+}
+
+/// When the life of a town centre changes by harm or by mending, its totems take the same life, as a script sets it. A
+/// totem with no life shows nothing, and a totem with too little life does not work.
+class TotemsTakeCentreLife
+{
+public:
+	TotemsTakeCentreLife(Registry& registry, entt::entity centre)
+	    : _registry(registry)
+	    , _centre(centre)
+	    , _totems(TotemsOn(registry, centre))
+	{
+	}
+	TotemsTakeCentreLife(const TotemsTakeCentreLife&) = delete;
+	TotemsTakeCentreLife& operator=(const TotemsTakeCentreLife&) = delete;
+	TotemsTakeCentreLife(TotemsTakeCentreLife&&) = delete;
+	TotemsTakeCentreLife& operator=(TotemsTakeCentreLife&&) = delete;
+	~TotemsTakeCentreLife()
+	{
+		if (_totems.empty() || !_registry.Valid(_centre))
+		{
+			return;
+		}
+		const float life = world_objects::LifeOf(_centre);
+		for (const auto totem : _totems)
+		{
+			if (_registry.Valid(totem))
+			{
+				world_objects::SetLife(totem, life,
+				                       script::property_rules::CanSetLife(life, world_objects::HeldDuringCutscene(totem),
+				                                                          _registry.AllOf<Indestructible>(totem)));
+			}
+		}
+	}
+
+private:
+	Registry& _registry;
+	entt::entity _centre;
+	std::vector<entt::entity> _totems;
+};
+} // namespace
+
 float world_objects::ReduceLife(entt::entity object, float damage, std::optional<PlayerNames> by, bool byCreature)
 {
 	auto& registry = Locator::entitiesRegistry::value();
@@ -652,11 +711,12 @@ float world_objects::ReduceLife(entt::entity object, float damage, std::optional
 	{
 		return 0.0f;
 	}
-	// A village totem gives the harm to its town centre, and keeps its own life
+	// A village totem gives the harm to its town centre, and then takes the life of its town centre
 	if (const auto* totem = registry.TryGet<const VillageTotem>(object); totem != nullptr && registry.Valid(totem->townCentre))
 	{
 		return ReduceLife(totem->townCentre, damage, by, byCreature);
 	}
+	const TotemsTakeCentreLife totems(registry, object);
 	// A field keeps its life and its food. Only a fire takes food from it (see the fire system).
 	if (registry.AllOf<Field>(object))
 	{
@@ -1241,12 +1301,18 @@ float world_objects::IncreaseLife(entt::entity object, float amount)
 	{
 		return 0.0f;
 	}
-	// A village totem gives the life to its town centre, and keeps its own life
+	// A village totem gives the life to its town centre, and then takes the life of its town centre
 	if (const auto* totem = registry.TryGet<const VillageTotem>(object); totem != nullptr && registry.Valid(totem->townCentre))
 	{
 		return IncreaseLife(totem->townCentre, amount);
 	}
 	const float before = LifeOf(object);
+	// A town centre with its full life gains nothing and gives 0, and its totems keep their life
+	if (before >= 1.0f && !TotemsOn(registry, object).empty())
+	{
+		return 0.0f;
+	}
+	const TotemsTakeCentreLife totems(registry, object);
 	// A villager or an animal gains life as a script sets it
 	if (registry.AnyOf<Villager, Animal>(object))
 	{
