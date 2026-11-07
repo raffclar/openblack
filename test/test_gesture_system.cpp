@@ -109,6 +109,26 @@ TEST(GestureSystem, AMiraclesFirstTurnInTheHandStartsThePathAgain)
 	EXPECT_FALSE(system.IsSelecting());
 }
 
+TEST(GestureSystem, WhileTheGameIsPausedThePathTakesNoSamples)
+{
+	GestureSystem system;
+	auto frame = Frame(k_FrameSeconds);
+	frame.places = {{100.0f, 100.0f}, {110.0f, 100.0f}};
+	system.Update(frame);
+	ASSERT_EQ(system.GetPath().Count(), 2u);
+	auto paused = Frame(k_FrameSeconds);
+	paused.paused = true;
+	paused.places = {{120.0f, 100.0f}, {130.0f, 100.0f}};
+	system.Update(paused);
+	EXPECT_EQ(system.GetPath().Count(), 2u);
+	// The path stays, and continues when the game runs again
+	auto running = Frame(k_FrameSeconds);
+	running.places = {{140.0f, 100.0f}};
+	system.Update(running);
+	ASSERT_EQ(system.GetPath().Count(), 3u);
+	EXPECT_EQ(system.GetPath().At(2).screen, glm::vec2(140.0f, 100.0f));
+}
+
 TEST(GestureSystem, ADrawnPathIsTakenInPlaceOfTheCursor)
 {
 	GestureSystem system;

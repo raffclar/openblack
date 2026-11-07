@@ -506,7 +506,8 @@ glm::vec2 GestureSystem::ToReference(glm::vec2 pixel, const Frame& frame)
 
 bool GestureSystem::RecordPoint(glm::vec2 point, const Frame& frame)
 {
-	if (_pause > 0.0f)
+	// No sample while the game is paused, or for a short time after a gesture is recognised
+	if (frame.paused || _pause > 0.0f)
 	{
 		return false;
 	}
@@ -525,6 +526,11 @@ bool GestureSystem::RecordPoint(glm::vec2 point, const Frame& frame)
 
 void GestureSystem::SampleCursor(glm::vec2 cursor, const Frame& frame, const gesture::HandContext& context)
 {
+	// A path drawn for the testbed keeps its next point until the game runs again
+	if (frame.paused)
+	{
+		return;
+	}
 	glm::vec2 point = ToReference(cursor, frame);
 	if (!_drawing.empty())
 	{
