@@ -184,6 +184,19 @@ TEST(SeaRows, RowsAreTwoPixelsApart)
 	    sea_rows::MakeRows({.top = 0.0f, .bottom = 719.0f, .inverseDepthTop = 0.001f, .inverseDepthBottom = 0.1f}).softTop);
 }
 
+TEST(SeaRows, ARowsTextureEndsOneColumnShortOfTheRow)
+{
+	// The strip goes to the width, its texture only to the last column
+	constexpr float k_Width = 1024.0f;
+	const float span = sea_rows::RowTextureSpan(k_Width);
+	EXPECT_FLOAT_EQ(span * k_Width, k_Width - 1.0f);
+	// The first column takes the sea under it
+	EXPECT_EQ(0.0f * span, 0.0f);
+	// A screen of one column has a texture of no length, and no screen gives no texture
+	EXPECT_EQ(sea_rows::RowTextureSpan(1.0f), 0.0f);
+	EXPECT_EQ(sea_rows::RowTextureSpan(0.0f), 0.0f);
+}
+
 TEST(SeaRows, TheRippleStepsOnAtTheScreenRefreshWhateverTheFrameRate)
 {
 	using std::chrono::milliseconds;

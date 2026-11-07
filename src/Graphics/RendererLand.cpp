@@ -188,6 +188,7 @@ void Renderer::SetSeaUniforms(const ShaderProgram& waterShader, const Camera& ca
 		}
 		const auto* stats = bgfx::getStats();
 		const glm::vec2 viewport {stats->width, stats->height};
+		u_seaMode.z = sea_rows::RowTextureSpan(viewport.x);
 		if (const auto range = sea_rows::ComputeScreenRange(camera.GetViewProjectionMatrix(), viewport, config.cameraNearClip))
 		{
 			// The ripple steps on with the frames the game's time moves on in, at the screen refresh's pace

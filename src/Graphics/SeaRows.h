@@ -64,6 +64,15 @@ struct Rows
 };
 [[nodiscard]] Rows MakeRows(const ScreenRange& range);
 
+/// How far along the sea a row's texture goes for each pixel, as a part of the screen's width. Each row is a strip from
+/// the left side of the screen to one pixel past its last column. The game finds the texture at the two ends of the
+/// strip from the first column and the last column. Thus the texture across the strip is (width - 1) / width of the sea
+/// under it.
+[[nodiscard]] constexpr float RowTextureSpan(float viewportWidth)
+{
+	return viewportWidth > 0.0f ? (viewportWidth - 1.0f) / viewportWidth : 0.0f;
+}
+
 /// The rows' ripple: a step of 16 round a sine. The game moves it on by one with each frame it draws the sea while its
 /// time goes on, and its frames came at the screen's refresh: it waits for the vertical sync by default, at the display's
 /// default refresh rate. Here the step moves on at most once a frame and no more often than that refresh, 60 times a
