@@ -18,6 +18,7 @@
 #include <vector>
 
 #include <fmt/format.h>
+#include <glm/geometric.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include <spdlog/spdlog.h>
 
@@ -73,6 +74,7 @@
 #include "ECS/Systems/Implementations/ObjectMeasures.h"
 #include "ECS/Systems/Implementations/VillagerHome.h"
 #include "ECS/Systems/Implementations/VillagerPhysics.h"
+#include "ECS/Systems/ObjectDrawListSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/ResourceStoreSystemInterface.h"
 #include "ECS/Systems/SoundTagSystemInterface.h"
@@ -88,6 +90,7 @@
 #include "ECS/TownTurnOrder.h"
 #include "ECS/WorkshopRules.h"
 #include "ECS/WorldObjects.h"
+#include "ECS/YardCopyRules.h"
 #include "InfoConstants.h"
 #include "Input/LocalPlayer.h"
 #include "Locator.h"
@@ -251,6 +254,17 @@ void WorkshopSystem::ProcessWorkshop(entt::entity workshopEntity)
 	{
 		return;
 	}
+	// Each scaffold of the workshop that is away from its place has a copy that the frames show at the place
+	for (const auto scaffold : std::vector<entt::entity>(data->scaffolds))
+	{
+		const auto* scaffoldData = registry.Valid(scaffold) ? registry.TryGet<const Scaffold>(scaffold) : nullptr;
+		if (scaffoldData != nullptr && !registry.Valid(scaffoldData->yardCopy) &&
+		    data->places.at(scaffoldData->place % data->places.size()) == Workshop::Place::Away)
+		{
+			MakeYardCopy(scaffold);
+		}
+	}
+	data = registry.TryGet<Workshop>(workshopEntity);
 	const auto& info = Locator::infoConstants::value();
 	const uint32_t wood = Locator::resourceStoreSystem::has_value()
 	                          ? Locator::resourceStoreSystem::value().GetResource(workshopEntity, ResourceType::Wood)
@@ -536,6 +550,7 @@ void WorkshopSystem::TakenByHand(entt::entity scaffold, PlayerNames player)
 	if (auto* owner = registry.Valid(data->workshop) ? registry.TryGet<Workshop>(data->workshop) : nullptr)
 	{
 		owner->places.at(data->place % owner->places.size()) = Workshop::Place::Away;
+		MakeYardCopy(scaffold);
 	}
 }
 
@@ -1260,6 +1275,7 @@ bool WorkshopSystem::Tap(entt::entity scaffold, glm::vec3 hand)
 		auto& pieceData = registry.Get<Scaffold>(piece);
 		pieceData.place = place;
 		pieceData.workshop = data.workshop;
+		MakeYardCopy(piece);
 	}
 	auto* dynamics = Locator::dynamicsSystem::has_value() ? &Locator::dynamicsSystem::value() : nullptr;
 	if (dynamics != nullptr)
@@ -1698,9 +1714,84 @@ void WorkshopSystem::MakeGhost(entt::entity scaffold)
 	registry.Get<Scaffold>(scaffold).ghost = ghost;
 }
 
+void WorkshopSystem::MakeYardCopy(entt::entity scaffold)
+{
+	auto& registry = Entities();
+	if (registry.Valid(registry.Get<const Scaffold>(scaffold).yardCopy))
+	{
+		return;
+	}
+	// The copy shows nothing until a frame gives it a model
+	const auto copy = registry.Create();
+	registry.Assign<Transform>(copy, registry.Get<const Transform>(scaffold));
+	registry.Assign<ScaffoldGhost>(copy, ScaffoldGhost {.scaffold = scaffold, .yard = true});
+	registry.Get<Scaffold>(scaffold).yardCopy = copy;
+}
+
+void WorkshopSystem::PlaceYardCopies(int32_t frameMs)
+{
+	auto& registry = Entities();
+	// A copy shows only while its scaffold is away from its place and the frame draws the workshop
+	registry.Each<const Scaffold>([&registry](entt::entity /*unused*/, const Scaffold& data) {
+		if (registry.Valid(data.yardCopy) && registry.AllOf<ScaffoldGhost>(data.yardCopy))
+		{
+			registry.Get<ScaffoldGhost>(data.yardCopy).model.reset();
+		}
+	});
+	// The game draws the yards among the see-through things, the furthest workshop from the camera first
+	const auto* drawList = Locator::objectDrawListSystem::has_value() ? &Locator::objectDrawListSystem::value() : nullptr;
+	const auto eye = Locator::camera::has_value() ? Locator::camera::value().GetOrigin() : glm::vec3(0.0f);
+	std::vector<std::pair<float, entt::entity>> workshops;
+	registry.Each<const Workshop, const Transform>([&registry, &workshops, drawList, eye](entt::entity workshopEntity,
+	                                                                                      const Workshop& /*unused*/,
+	                                                                                      const Transform& transform) {
+		if (drawList == nullptr || drawList->Drawn(registry, workshopEntity))
+		{
+			const auto offset = transform.position - eye;
+			workshops.emplace_back(glm::dot(offset, offset), workshopEntity);
+		}
+	});
+	std::ranges::stable_sort(workshops, std::ranges::greater {}, &std::pair<float, entt::entity>::first);
+	for (const auto& entry : workshops)
+	{
+		const auto workshopEntity = entry.second;
+		// Each workshop that the frame draws moves the one clock of all workshops, also a workshop with no copy
+		_yardClockMs = yard_copy::StepClock(_yardClockMs, frameMs);
+		const auto alpha = yard_copy::Alpha(_yardClockMs);
+		const auto& data = registry.Get<const Workshop>(workshopEntity);
+		for (const auto scaffold : data.scaffolds)
+		{
+			const auto* scaffoldData = registry.Valid(scaffold) ? registry.TryGet<const Scaffold>(scaffold) : nullptr;
+			if (scaffoldData == nullptr || data.places.at(scaffoldData->place % data.places.size()) != Workshop::Place::Away)
+			{
+				continue;
+			}
+			const auto copy = scaffoldData->yardCopy;
+			const auto* mesh = registry.TryGet<const Mesh>(scaffold);
+			const auto special = SpecialPlaceOf(
+			    workshopEntity, workshop::k_PlacePoints.at(scaffoldData->place % workshop::k_PlacePoints.size()));
+			if (!registry.Valid(copy) || !registry.AllOf<ScaffoldGhost, Transform>(copy) || mesh == nullptr ||
+			    !special.has_value())
+			{
+				continue;
+			}
+			// The copy has the model and the size of the scaffold, and stands in the place as a scaffold of the place
+			// stands
+			auto& transform = registry.Get<Transform>(copy);
+			transform.position = OnMap(special->coords);
+			transform.rotation = x87::GameTurnMatrix(special->angles.x, special->angles.y, special->angles.z);
+			transform.scale = registry.Get<const Transform>(scaffold).scale;
+			auto& ghost = registry.Get<ScaffoldGhost>(copy);
+			ghost.alpha = alpha;
+			ghost.model = *mesh;
+		}
+	}
+}
+
 void WorkshopSystem::PlaceGhostsForFrame(std::optional<glm::vec3> drawnHand)
 {
 	auto& registry = Entities();
+	PlaceYardCopies(Locator::time::has_value() ? static_cast<int32_t>(Locator::time::value().GetFrameGameTime().count()) : 0);
 	std::vector<std::pair<entt::entity, entt::entity>> ghosts;
 	registry.Each<const Scaffold>([&registry, &ghosts](entt::entity scaffold, const Scaffold& data) {
 		if (registry.Valid(data.ghost) && registry.AllOf<ScaffoldGhost, Transform>(data.ghost))
@@ -1819,11 +1910,15 @@ void WorkshopSystem::OnScaffoldGone(entt::registry& /*registry*/, entt::entity s
 {
 	// A scaffold that goes from the world stops to count for its workshop
 	ReleaseScaffold(scaffold);
-	// Its phantom goes with it
+	// Its phantom and the copy at its yard place go with it
 	auto& registry = Entities();
 	if (const auto ghost = registry.Get<const Scaffold>(scaffold).ghost; registry.Valid(ghost))
 	{
 		registry.Destroy(ghost);
+	}
+	if (const auto copy = registry.Get<const Scaffold>(scaffold).yardCopy; registry.Valid(copy))
+	{
+		registry.Destroy(copy);
 	}
 }
 

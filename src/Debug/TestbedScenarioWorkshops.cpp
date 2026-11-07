@@ -90,6 +90,25 @@ void testbed_scenarios::AddWorkshopScenarios(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "objects.workshop_yard_copy_pulses",
+	    .name = "A see-through copy of a scaffold pulses at its yard place while the hand holds the scaffold",
+	    .facet = Facet::Objects,
+	    .description = "A Celtic town of the player's with a village centre and a workshop that holds the wood of one "
+	                   "scaffold, its yard towards the camera. The workshop makes the scaffold. Then the hand takes the "
+	                   "scaffold from the first place of the yard and keeps it.",
+	    .expected = "While the hand holds the scaffold, a see-through copy of the scaffold stands in the empty first place "
+	                "of the yard, turned as the place is turned. The copy fades out and in again every two seconds. At "
+	                "its strongest it is a third as strong as a solid scaffold, and it has the colour of the land's light "
+	                "there. The copy goes when the scaffold goes back into the place.",
+	    .environment = {.dispenserGrid = false, .cursor = glm::vec2(0.5f, 0.5f)},
+	    .framing = {.shot = Shot::Overview, .include = {k_Workshop - glm::vec2 {12.0f}, k_Workshop + glm::vec2 {12.0f}}},
+	    .objects = {{.type = AbodeInfo::CelticTownCentre, .offset = {0.0f, 50.0f}},
+	                {.type = AbodeInfo::CelticWorkshop, .offset = k_Workshop, .yawDegrees = 180.0f, .storedWood = 2500}},
+	    .commands = {{.kind = Command::Kind::HandTakeNear, .delaySeconds = 60.0f, .point = k_FirstPlace}},
+	    .townBeliefInPlayer = 1.0f,
+	});
+
+	all.push_back({
 	    .id = "objects.scaffold_tap_breaks",
 	    .name = "A tap breaks one scaffold off a scaffold, and a storage pit takes a scaffold as wood",
 	    .facet = Facet::Objects,
