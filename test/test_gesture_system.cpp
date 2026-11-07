@@ -109,6 +109,32 @@ TEST(GestureSystem, AMiraclesFirstTurnInTheHandStartsThePathAgain)
 	EXPECT_FALSE(system.IsSelecting());
 }
 
+TEST(GestureSystem, ThePressThatArmsAMiracleStartsThePathAgainAfterThePlacesOfTheFramesPass)
+{
+	GestureSystem system;
+	for (int i = 0; i < 10; ++i)
+	{
+		auto frame = Frame(k_FrameSeconds);
+		frame.places = {{100.0f + static_cast<float>(i * 10), 100.0f}};
+		system.Update(frame);
+	}
+	system.RestartPathAtArmedPress();
+	// The turn's pass gets no message of the buttons, so it keeps the path
+	auto turn = Frame(0.0f);
+	turn.places.clear();
+	system.InterfaceTurn(turn);
+	EXPECT_EQ(system.GetPath().Count(), 10u);
+	// The frame's pass takes its places, then the path starts again with one sample at the last place
+	auto next = Frame(k_FrameSeconds);
+	next.places = {{300.0f, 120.0f}, {320.0f, 120.0f}};
+	system.Update(next);
+	ASSERT_EQ(system.GetPath().Count(), 1u);
+	EXPECT_EQ(system.GetPath().At(0).screen, glm::vec2(320.0f, 120.0f));
+	// The pass after it samples as usual
+	system.Update(Frame(k_FrameSeconds));
+	EXPECT_EQ(system.GetPath().Count(), 2u);
+}
+
 TEST(GestureSystem, ADrawnPathIsTakenInPlaceOfTheCursor)
 {
 	GestureSystem system;

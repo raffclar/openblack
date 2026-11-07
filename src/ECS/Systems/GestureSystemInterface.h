@@ -126,6 +126,10 @@ public:
 	/// seed, with the power-up level of the seed as the one asked for. From then on this land, the chain follows the hand
 	/// while it holds any miracle.
 	virtual void SeedFirstTurnInHand() { ForgetPath(); }
+	/// The Action button armed the miracle in the hand, which the hand casts by its gesture when the button comes up. In
+	/// the pass of this frame, after the samples of the places, the hand forgets its path and takes one sample at the last
+	/// place of the pointer.
+	virtual void RestartPathAtArmedPress() { ForgetPath(); }
 
 	/// The templates the paths are matched against, empty until the game's file is loaded
 	[[nodiscard]] virtual std::span<const gestures::GestureTemplate> GetTemplates() const = 0;

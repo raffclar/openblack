@@ -481,6 +481,11 @@ void MagicSystem::Do(const magic::CastActions& actions)
 		StartHoldLoop();
 		_lastHandResult = HandResult::Readied;
 	}
+	// The local hand starts the path of its gesture again from the last place of the pointer
+	if (actions.restartGesturePath && ActsOnOwnHand() && Locator::gestureSystem::has_value())
+	{
+		Locator::gestureSystem::value().RestartPathAtArmedPress();
+	}
 	if (actions.unlock)
 	{
 		SendCastUnlock();

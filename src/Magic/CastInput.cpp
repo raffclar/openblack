@@ -44,6 +44,7 @@ CastActions magic::Press(CastInput& input, const CastProfile& profile, const Pre
 			input.state = CastInput::State::Armed;
 			input.onObject = true;
 			actions.startHoldLoop = true;
+			actions.restartGesturePath = true;
 			break;
 		case SpellCastType::SpellCastInHand:
 			Lock(input, true, context.turn);
@@ -73,6 +74,7 @@ CastActions magic::Press(CastInput& input, const CastProfile& profile, const Pre
 		input.state = CastInput::State::Armed;
 		input.onObject = false;
 		actions.startHoldLoop = true;
+		actions.restartGesturePath = true;
 		break;
 	case SpellCastType::SpellCastInHand:
 		Lock(input, false, context.turn);
