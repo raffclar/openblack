@@ -2856,7 +2856,7 @@ TEST_F(HandGrabSystemGiving, AFrameThatCallsTheGiftOffStillMovesTheHandToTheCrea
 	EXPECT_NEAR(drawn.x, 32.0f, 1e-3f);
 }
 
-TEST_F(HandGrabSystemGiving, TheTurnCallsOffTheGiftThatTheHandSentOneTime)
+TEST_F(HandGrabSystemGiving, TheHandSendsTheCallOffInEachFrameUntilTheTurnCallsItOff)
 {
 	HoldRock();
 	const auto creature = AddCreature(creature_giving::Verdict::Give);
@@ -2870,17 +2870,31 @@ TEST_F(HandGrabSystemGiving, TheTurnCallsOffTheGiftThatTheHandSentOneTime)
 	Frame(16, {40.0f, 0.0f, 0.0f});
 	Frame(16, {40.0f, 0.0f, 0.0f});
 	Frame(16, {40.0f, 0.0f, 0.0f});
-	// The frames send the call off one time, and do not call off the creature or forget the gift
-	const auto callOffs = std::ranges::count_if(waiting, [](const player_commands::Action& action) {
-		return std::holds_alternative<player_commands::GiveCallOff>(action);
-	});
-	EXPECT_EQ(callOffs, 1);
+	const auto callOffs = [this] {
+		return std::ranges::count_if(waiting, [](const player_commands::Action& action) {
+			return std::holds_alternative<player_commands::GiveCallOff>(action);
+		});
+	};
+	// The frames send the call off each time, and do not call off the creature or forget the gift
+	EXPECT_EQ(callOffs(), 2);
 	EXPECT_TRUE(world->calledOff.empty());
 	EXPECT_TRUE(system->GetOfferedCreature().has_value());
-	// The turn calls it off
+	// The turn does each call off, and the hand forgets the gift
 	RunWaiting();
-	EXPECT_EQ(world->calledOff, std::vector<entt::entity> {creature});
+	EXPECT_EQ(world->calledOff, (std::vector<entt::entity> {creature, creature}));
 	EXPECT_FALSE(system->GetOfferedCreature().has_value());
+	// Then the frames send no more
+	Frame(16, {40.0f, 0.0f, 0.0f});
+	EXPECT_EQ(callOffs(), 0);
+}
+
+// A call off stops what the creature does, unless it does nothing or already took the thing
+TEST(CreatureGivingCallOff, TheCallOffStopsOnlyACreatureThatActsAndDidNotTakeTheThing)
+{
+	EXPECT_TRUE(creature_giving::CallOffStops(true, false));
+	EXPECT_FALSE(creature_giving::CallOffStops(true, true));
+	EXPECT_FALSE(creature_giving::CallOffStops(false, false));
+	EXPECT_FALSE(creature_giving::CallOffStops(false, true));
 }
 
 TEST_F(HandGrabSystemGiving, ACreatureThatCantPickItUpSaysSoAndIsNotOffered)

@@ -1784,12 +1784,9 @@ glm::vec3 HandGrabSystem::UpdateOffer(HandGrab& grab, const Frame& frame)
 	}
 	if (creature_giving::CallsOff(hand, *takePoint, _world->CreatureSizeOf(grab.givenTo)))
 	{
-		// The turn calls off the gift on every computer. Until then the hand sends the call off one time only.
-		if (grab.callingOff != grab.givenTo)
-		{
-			grab.callingOff = grab.givenTo;
-			_world->SendCommand(player_commands::GiveCallOff {.creature = grab.givenTo});
-		}
+		// The turn calls off the gift on every computer. Until then the hand sends the call off in each frame. Thus the
+		// call off of the last frame before that turn goes to the next turn too.
+		_world->SendCommand(player_commands::GiveCallOff {.creature = grab.givenTo});
 	}
 	const auto taking = _world->TakingOf(grab.givenTo);
 	if (!taking.has_value() || taking->object != grab.object)
@@ -1843,7 +1840,6 @@ void HandGrabSystem::DoGive(PlayerNames player, entt::entity creature, entt::ent
 	}
 	grab->offeredTo = creature;
 	grab->givenTo = creature;
-	grab->callingOff = entt::null;
 	LogHandDeed(player, "gives", object);
 }
 
@@ -1904,7 +1900,6 @@ void HandGrabSystem::ForgetOffer(HandGrab& grab)
 {
 	grab.offeredTo = entt::null;
 	grab.givenTo = entt::null;
-	grab.callingOff = entt::null;
 	grab.offer = {};
 }
 

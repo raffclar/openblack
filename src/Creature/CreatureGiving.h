@@ -99,6 +99,14 @@ struct GiveFacts
 /// Whether the hand has gone too far from the creature reaching for what it holds
 [[nodiscard]] bool CallsOff(glm::vec3 hand, glm::vec3 target, float creatureSize);
 
+/// Whether the call off of a gift stops what the creature does at the turn. A creature that does nothing does not
+/// change, and a creature that already took the thing from the hand keeps it and goes on. Thus a second call off in
+/// the same turn has no effect, but a call off at a later turn stops the next thing that the creature does.
+[[nodiscard]] constexpr bool CallOffStops(bool acting, bool tookTheThing) noexcept
+{
+	return acting && !tookTheThing;
+}
+
 /// What a creature does with a thing it was given
 enum class Use : uint8_t
 {

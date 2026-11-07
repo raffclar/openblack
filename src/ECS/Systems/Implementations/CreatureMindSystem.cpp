@@ -1118,6 +1118,13 @@ bool CreatureMindSystem::TakeFromHand(entt::entity creature, entt::entity object
 	return true;
 }
 
+bool CreatureMindSystem::IsActing(entt::entity creature) const
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* mind = registry.Valid(creature) ? registry.TryGet<const CreatureMindState>(creature) : nullptr;
+	return mind != nullptr && (mind->planActive || mind->idle.step < mind->idle.agenda.size());
+}
+
 bool CreatureMindSystem::IsTakingFromHand(entt::entity creature) const
 {
 	const auto& registry = Locator::entitiesRegistry::value();
