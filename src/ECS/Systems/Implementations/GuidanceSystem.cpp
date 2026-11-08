@@ -258,6 +258,10 @@ bool GuidanceSystem::LoadState(reflection::BinaryReader& in)
 	reflection::Load(in, _stampsDue);
 	reflection::Load(in, _moonWait);
 	reflection::Load(in, _remarks);
+	// A load starts the guidance again, as a new land does: each kind counts as last heard a random while before the
+	// turn of the load, and the scripts let the advisors talk about the creature
+	_stampsDue = true;
+	_creatureRemarks = true;
 	return !in.Failed();
 }
 
@@ -292,6 +296,7 @@ void GuidanceSystem::Reset()
 	_stampsDue = true;
 	_remarks.clear();
 	_nameDue = true;
+	_creatureRemarks = true;
 }
 
 void GuidanceSystem::ProcessTurn()
@@ -305,7 +310,8 @@ void GuidanceSystem::ProcessTurn()
 			for (size_t kind = 0; kind < guidance::k_KindCount; ++kind)
 			{
 				const auto least = guidance::Rule(static_cast<guidance::Kind>(kind)).leastGap;
-				heard->lastTurn.at(kind) = guidance::FirstStamp(turn, HelpRand(static_cast<int32_t>(least)));
+				heard->lastTurn.at(kind) =
+				    guidance::FirstStamp(turn, [least] { return HelpRand(static_cast<int32_t>(least)); });
 			}
 			heard->oneOffSaid = {};
 			heard->alignmentDrift = 0.0f;
@@ -405,16 +411,24 @@ void GuidanceSystem::SayRemarkByValue(guidance::Kind kind, float value)
 	Say(texts.at(pick), kind);
 }
 
-void GuidanceSystem::TownAttacked(entt::entity town, PlayerNames attacker, bool byCreature)
+void GuidanceSystem::TownAttacked(entt::entity town, PlayerNames attacker, entt::entity creature)
 {
 	const auto here = OwnPlayer();
-	// TODO(guidance-alerts): harm done by the player's creature is the creature's own remark, kept quiet on the first
-	// land
-	if (byCreature || attacker != here || !Locator::entitiesRegistry::has_value())
+	if (!Locator::entitiesRegistry::has_value())
 	{
 		return;
 	}
 	const auto& registry = Locator::entitiesRegistry::value();
+	// Harm that a creature applied is a remark on the creature of the player here, and never a remark on the player
+	if (creature != entt::null)
+	{
+		CreatureAttackedTown(town, creature);
+		return;
+	}
+	if (attacker != here)
+	{
+		return;
+	}
 	const auto* owned = registry.Valid(town) ? registry.TryGet<const Town>(town) : nullptr;
 	if (owned == nullptr || owned->owner == here || !RemarkNow(guidance::Kind::AttackingTown))
 	{
@@ -427,6 +441,30 @@ void GuidanceSystem::TownAttacked(entt::entity town, PlayerNames attacker, bool 
 		return;
 	}
 	SayRemark(guidance::Kind::AttackingTown);
+}
+
+void GuidanceSystem::CreatureAttackedTown(entt::entity town, entt::entity creature)
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* body = registry.Valid(creature) ? registry.TryGet<const Creature>(creature) : nullptr;
+	const auto* owned = registry.Valid(town) ? registry.TryGet<const Town>(town) : nullptr;
+	if (body == nullptr || owned == nullptr)
+	{
+		return;
+	}
+	const auto townOwnersCreature =
+	    Locator::playerSystem::has_value() ? Locator::playerSystem::value().GetPrimaryCreature(owned->owner) : std::nullopt;
+	const guidance::CreatureAttackFacts facts {
+	    .remarksOn = _creatureRemarks,
+	    .creatureOwner = body->owner,
+	    .townOwnersCreature = townOwnersCreature == creature,
+	    .here = OwnPlayer(),
+	};
+	// The remark has no test of the place: the advisors say it wherever the town is
+	if (guidance::CreatureAttackRemarked(facts))
+	{
+		RemarkIfNow(guidance::Kind::OurCreatureAttackingThem);
+	}
 }
 
 void GuidanceSystem::TownAttackCry(entt::entity town, const guidance::TownAttackVoice& voice)
@@ -679,6 +717,20 @@ void GuidanceSystem::LowOnFood(entt::entity town, float shortage)
 		return;
 	}
 	SayRemarkByValue(guidance::Kind::LowOnFood, guidance::LowOnFoodValue(shortage));
+}
+
+void GuidanceSystem::LowOnWood(entt::entity town, float shortage)
+{
+	if (!guidance::WarnsLowOnWood(shortage) || !Locator::entitiesRegistry::has_value())
+	{
+		return;
+	}
+	// Only a town of the player here draws the wait of the warning
+	if (!OwnTown(town) || !RemarkNow(guidance::Kind::LowOnWood) || !TownNeedCanBeWarned(town))
+	{
+		return;
+	}
+	SayRemarkByValue(guidance::Kind::LowOnWood, guidance::LowOnWoodValue(shortage));
 }
 
 void GuidanceSystem::VillagersUnhappy(entt::entity town, float unhappiness)

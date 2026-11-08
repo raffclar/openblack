@@ -308,6 +308,23 @@ TEST_F(TownDesireTest, ProcessesTheTurn)
 	EXPECT_TRUE(td::Process(_desire, Context()).has_value());
 }
 
+TEST_F(TownDesireTest, TheWoodShortageIsNotHeldAtOne)
+{
+	_in.stats.adults = 10;
+	_in.stats.adultPlaces = 12;
+	_in.storageWood = 0;
+	// Repair and building wanted in full: the town wants wood for two of its building desires
+	_desire.raw.at(12) = 1.0f;
+	_desire.raw.at(9) = 1.0f;
+	const float shortage = td::WoodShortage(Context());
+	EXPECT_NEAR(shortage, 1.0f + (0.001f / 10.001f + 2.0f), 1e-5f);
+	// The desire itself is held at one; the advisors read the shortage
+	EXPECT_FLOAT_EQ(td::DesireForWood(Context()), 1.0f);
+	// A full store wants no wood
+	_in.storageWood = 100000;
+	EXPECT_FLOAT_EQ(td::WoodShortage(Context()), 0.0f);
+}
+
 TEST_F(TownDesireTest, NightPutsSleepFirst)
 {
 	_in.stats.adults = 10;
