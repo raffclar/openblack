@@ -63,7 +63,9 @@
 #include "ECS/Systems/LobbyClientSystemInterface.h"
 #include "ECS/Systems/NetworkGameSystemInterface.h"
 #include "ECS/Systems/PlayerProfileSystemInterface.h"
+#include "ECS/Systems/RainSystemInterface.h"
 #include "ECS/Systems/SimulationSystemInterface.h"
+#include "ECS/Systems/SnowfallSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "EngineConfig.h"
 #include "FileSystem/FileSystemInterface.h"
@@ -543,6 +545,13 @@ bool Game::OpenMultiplayerFrontEnd(std::unique_ptr<gui::MultiplayerFrontEnd> fro
 	if (!Locator::gameInterface::has_value() || !Locator::temple::has_value() || frontEnd == nullptr)
 	{
 		return false;
+	}
+	// The game opens the weather again as the front end starts, with the snow and the rain on whatever the weather option
+	// is
+	if (Locator::snowfallSystem::has_value() && Locator::rainSystem::has_value())
+	{
+		Locator::snowfallSystem::value().Open();
+		Locator::rainSystem::value().Open();
 	}
 	Locator::temple::value().EnterMultiplayerFrontEnd();
 	Locator::gameInterface::value().OpenMultiplayer(std::move(frontEnd));

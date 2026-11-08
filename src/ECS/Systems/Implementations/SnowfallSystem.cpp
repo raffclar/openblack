@@ -40,14 +40,18 @@ snowfall::Random GameRandom()
 }
 } // namespace
 
-SnowfallSystem::SnowfallSystem()
+SnowfallSystem::SnowfallSystem(bool weatherOn)
 {
-	Reset();
+	if (weatherOn)
+	{
+		Open();
+	}
 }
 
-void SnowfallSystem::Reset()
+void SnowfallSystem::Open()
 {
-	snowfall::Scatter(_flakes, GameRandom(), k_StartHeight);
+	_open = true;
+	snowfall::ScatterAtOpen(_flakes, GameRandom(), k_StartHeight);
 	_drawn = false;
 }
 
@@ -63,9 +67,9 @@ void SnowfallSystem::Update(float seconds, const rain::Fall& fall)
 std::vector<snowfall::Tile> SnowfallSystem::TakeTiles(const rain::View& view)
 {
 	std::vector<snowfall::Tile> tiles;
-	// Snow is part of the weather setting
+	// The snow shows only once the weather opened
 	const auto& detail = Locator::config::value().detail;
-	if (!detail.weather || !Locator::terrainSystem::has_value() || !Locator::weatherSystem::has_value())
+	if (!_open || !Locator::terrainSystem::has_value() || !Locator::weatherSystem::has_value())
 	{
 		return tiles;
 	}

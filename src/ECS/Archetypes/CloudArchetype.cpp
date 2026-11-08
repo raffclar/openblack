@@ -42,7 +42,6 @@ entt::entity CloudArchetype::Create(const clouds::Layout& layout)
 	                                  .shrinksEdgeOn = true,
 	                                  .edgeShrink = layout.edgeShrink,
 	                                  .counter = mists::StartCounter(Locator::gameRandom::value().CrtRandom(0.0f, 16.0f)),
-	                                  .counterRemainder = 0.0f,
 	                              });
 	return entity;
 }

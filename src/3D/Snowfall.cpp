@@ -63,6 +63,12 @@ void Scatter(std::span<Flake> flakes, const Random& random, float height)
 	}
 }
 
+void ScatterAtOpen(std::span<Flake> flakes, const Random& random, float height)
+{
+	Scatter(flakes, random, height);
+	Scatter(flakes, random, height);
+}
+
 void Step(std::span<Flake> flakes, float seconds, float fallSpeed, float height, const Random& random)
 {
 	for (auto& flake : flakes)

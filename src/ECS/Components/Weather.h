@@ -19,6 +19,7 @@
 #include <glm/vec3.hpp>
 
 #include "3D/Lightning.h"
+#include "3D/MapCoords.h"
 
 namespace openblack::ecs::components
 {
@@ -48,11 +49,9 @@ struct Climate
 	bool global;
 	/// Index into InfoConstants::climate (DETAIL_CLIMATE_INFO)
 	uint32_t info;
-	/// Centre on the map in cells (the high word of the original's 16.16 map coordinates)
-	uint16_t cellX;
-	uint16_t cellZ;
-	/// Height of the centre above the land
-	float height;
+	/// The middle on the map, exactly as the land script gives it, with the fraction of its cell. Its high words are the
+	/// cell that some rules use.
+	map_coords::MapCoords centre;
 	float innerRadius;
 	float outerRadius;
 

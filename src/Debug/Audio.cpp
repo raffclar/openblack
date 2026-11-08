@@ -617,7 +617,8 @@ void Audio::Atmos() noexcept
 				ImGui::TableNextColumn();
 				ImGui::Text("%d%s (type %u)", climate.index, climate.global ? " global" : "", climate.info);
 				ImGui::TableNextColumn();
-				ImGui::Text("(%u, %u) r %.0f", climate.cellX * 10u, climate.cellZ * 10u, climate.outerRadius);
+				ImGui::Text("(%.2f, %.2f) r %.0f", map_coords::ToMetres(climate.centre.x),
+				            map_coords::ToMetres(climate.centre.z), climate.outerRadius);
 				ImGui::TableNextColumn();
 				ImGui::ProgressBar(climate.rainDesire, ImVec2(-1.0f, 0.0f));
 				ImGui::TableNextColumn();

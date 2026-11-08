@@ -26,8 +26,9 @@ class SnowfallSystemInterface
 public:
 	virtual ~SnowfallSystemInterface() = default;
 
-	/// New flakes, scattered as the snow starts
-	virtual void Reset() = 0;
+	/// The weather opens, as when the game starts with the weather option on, or as the multiplayer front end starts. The
+	/// snow shows from now on, with new flakes scattered as the snow starts.
+	virtual void Open() = 0;
 	/// Once a frame: the flakes fall as the rain does, from as high and as fast, if they were drawn
 	virtual void Update(float seconds, const rain::Fall& fall) = 0;
 	/// The snow to draw this frame over the quarters of the land blocks in view near the eye, from the far quarters to

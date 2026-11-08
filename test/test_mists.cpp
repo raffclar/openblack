@@ -9,6 +9,8 @@
 
 #include <cmath>
 
+#include <chrono>
+
 #include <gtest/gtest.h>
 
 #include "3D/Mists.h"
@@ -31,27 +33,35 @@ TEST(Mists, FramesFollowTheCounter)
 	EXPECT_EQ(mists::StartCounter(15.9f), 15);
 }
 
-TEST(Mists, AnimationKeepsItsPaceAtAnyFrameRate)
+TEST(Mists, AnimationDropsTheFractionOfEachStep)
 {
-	// A millisecond at a time moves the counter as far as a whole second does, but for rounding
+	using std::chrono::milliseconds;
+	// A step at 60 frames a second moves the counter on by the whole part of 16 or 17 times the rate: 4 each
 	int counter = 0;
-	float remainder = 0.0f;
-	for (int i = 0; i < 1000; ++i)
+	mists::Advance(counter, milliseconds {16});
+	EXPECT_EQ(counter, 4);
+	mists::Advance(counter, milliseconds {17});
+	EXPECT_EQ(counter, 8);
+	// The fraction is not kept: 60 steps of 17 milliseconds move it on by 240, not by 260
+	counter = 0;
+	for (int i = 0; i < 60; ++i)
 	{
-		mists::Advance(counter, remainder, 1.0f);
+		mists::Advance(counter, milliseconds {17});
 	}
+	EXPECT_EQ(counter, 240);
 	int once = 0;
-	float onceRemainder = 0.0f;
-	mists::Advance(once, onceRemainder, 1000.0f);
-	EXPECT_NEAR(counter, once, 1);
+	mists::Advance(once, milliseconds {1000});
 	EXPECT_EQ(once, 255);
+	// A step under 4 milliseconds does not move it
+	int still = 10;
+	mists::Advance(still, milliseconds {3});
+	EXPECT_EQ(still, 10);
 
 	// It wraps only once it passes 900
 	int full = 900;
-	float none = 0.0f;
-	mists::Advance(full, none, 0.0f);
+	mists::Advance(full, milliseconds {0});
 	EXPECT_EQ(full, 900);
-	mists::Advance(full, none, 4.0f);
+	mists::Advance(full, milliseconds {4});
 	EXPECT_EQ(full, 1);
 }
 
