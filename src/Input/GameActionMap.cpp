@@ -86,7 +86,9 @@ glm::ivec2 WindowPointToPixels(glm::ivec2 point)
 
 } // namespace
 
-GameActionMap::GameActionMap()
+GameActionMap::GameActionMap(bool systemSaysWheel)
+    : _systemSaysWheel(systemSaysWheel)
+    , _bindings(DefaultKeyBindings(k_Platform, systemSaysWheel))
 {
 	ApplyMouseBindings();
 }
@@ -132,8 +134,14 @@ void GameActionMap::SetKeyBinding(BindableActionMap action, std::optional<KeyCho
 
 void GameActionMap::ResetKeyBindings()
 {
-	_bindings = DefaultKeyBindings();
+	_bindings = GetDefaultKeyBindings();
 	ApplyMouseBindings();
+}
+
+const KeyBindingTable& GameActionMap::GetDefaultKeyBindings() const
+{
+	// The mouse has a wheel when the system says so, or when the wheel has turned since the game started
+	return DefaultKeyBindings(k_Platform, _systemSaysWheel || _wheelTurned);
 }
 
 void GameActionMap::SetKeyBindings(const KeyBindingTable& bindings)

@@ -2434,3 +2434,4 @@ openblack_setup_and_add_test(
 )
 openblack_setup_and_add_test(test_main_storage_pit test_main_storage_pit.cpp)
 openblack_setup_and_add_test(test_storm_fade test_storm_fade.cpp)
+openblack_setup_and_add_test(test_mix_volume audio/test_mix_volume.cpp)

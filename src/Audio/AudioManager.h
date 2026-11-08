@@ -109,8 +109,8 @@ public:
 	void EndAnimEffect(const std::string& bankName, std::span<const int32_t> keys, entt::entity owner,
 	                   const glm::vec3& position, AnimEffectEnd end, AnimEffectMeasure measure) override;
 	void SetGlobalVolume(float volume) override { _globalVolume = volume; }
-	void SetSfxVolume(float volume) override { _sfxVolume = volume; }
-	void SetMusicVolume(float volume) override { _musicVolume = volume; }
+	void SetSfxVolume(float volume) override;
+	void SetMusicVolume(float volume) override;
 	[[nodiscard]] float GetGlobalVolume() override { return _globalVolume; }
 	[[nodiscard]] float GetSfxVolume() override { return _sfxVolume; }
 	[[nodiscard]] float GetMusicVolume() override { return _musicVolume; }
@@ -146,6 +146,8 @@ private:
 	{
 		SourceId source;
 		float gain;
+		/// The volume the gain was set from, 0 to 127
+		uint32_t volume;
 		/// The voice of the pool that the sample plays on
 		size_t slot;
 	};

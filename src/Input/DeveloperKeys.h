@@ -161,7 +161,7 @@ enum class EditorKeyAction : uint8_t
 	case SDL_SCANCODE_MINUS:
 	case SDL_SCANCODE_KP_MINUS:
 		return held.ctrl ? std::optional(EditorKeyAction::CameraSlower) : std::nullopt;
-	case SDL_SCANCODE_0:
+	// Only the 0 key of the number pad, because the game's defaults for a mouse with no wheel use the other 0 key
 	case SDL_SCANCODE_KP_0:
 		return held.ctrl ? std::optional(EditorKeyAction::CameraSpeedReset) : std::nullopt;
 	case SDL_SCANCODE_X:

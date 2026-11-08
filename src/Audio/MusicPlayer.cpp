@@ -15,6 +15,8 @@
 
 #include <spdlog/spdlog.h>
 
+#include "MixVolume.h"
+
 using namespace openblack::audio;
 
 MusicPlayer::MusicPlayer(MusicBackend& backend)
@@ -320,6 +322,25 @@ void MusicPlayer::VolumeTick()
 
 void MusicPlayer::ApplyVolume(const Channel& channel)
 {
-	const auto bankVolume = static_cast<float>(channel.bank->bankVolume) / static_cast<float>(k_MaxVolume);
-	_backend.SetVolume(channel.stream, static_cast<float>(channel.volume) / static_cast<float>(k_MaxVolume) * bankVolume);
+	const auto mixed = mix_volume::MusicMixerVolume(static_cast<uint32_t>(std::max(channel.volume, 0)),
+	                                                channel.bank->bankVolume, _masterVolume);
+	_backend.SetVolume(channel.stream, mix_volume::MixerGain(mixed));
+}
+
+void MusicPlayer::SetMasterVolume(uint32_t volume)
+{
+	const auto clamped = std::min(volume, static_cast<uint32_t>(k_MaxVolume));
+	if (clamped == _masterVolume)
+	{
+		return;
+	}
+	_masterVolume = clamped;
+	// The channels that play take the new master volume at once
+	for (const auto& channel : _channels)
+	{
+		if (channel.active && channel.bank != nullptr && channel.stream != MusicBackend::k_InvalidStream)
+		{
+			ApplyVolume(channel);
+		}
+	}
 }

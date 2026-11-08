@@ -60,6 +60,7 @@
 #include "EngineConfig.h"
 #include "Graphics/BgfxGraphicsDevice.h"
 #include "Graphics/RendererInterface.h"
+#include "Input/MouseWheel.h"
 #include "Input/SdlInputDevice.h"
 #include "Locator.h"
 #include "Visual/UploadMode.h"
@@ -181,7 +182,7 @@ void openblack::InitializePresentation()
 void openblack::InitializeClient(const player_profiles::Store& profiles)
 {
 	// The input of the player, the drawing of the world, the editor, the videos and the online services
-	InitializePlayerInput();
+	InitializePlayerInput(platform_mouse::SystemSaysWheel());
 	// The reports of the hand, the view and the help that this computer sends once a turn
 	Locator::ownReportSystem::emplace<OwnReportSystem>();
 	Locator::rendereringSystem::emplace<RenderingSystem>();

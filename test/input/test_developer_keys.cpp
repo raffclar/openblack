@@ -207,7 +207,9 @@ TEST(DeveloperKeys, TheEditorKeysAndTheirActions)
 	EXPECT_EQ(EditorKeyActionFor(SDL_SCANCODE_PERIOD, k_None), Action::StepTurn);
 	EXPECT_EQ(EditorKeyActionFor(SDL_SCANCODE_EQUALS, k_Ctrl), Action::CameraFaster);
 	EXPECT_EQ(EditorKeyActionFor(SDL_SCANCODE_MINUS, k_Ctrl), Action::CameraSlower);
-	EXPECT_EQ(EditorKeyActionFor(SDL_SCANCODE_0, k_Ctrl), Action::CameraSpeedReset);
+	EXPECT_EQ(EditorKeyActionFor(SDL_SCANCODE_KP_0, k_Ctrl), Action::CameraSpeedReset);
+	// The 0 key is a key of the game's defaults for a mouse with no wheel
+	EXPECT_EQ(EditorKeyActionFor(SDL_SCANCODE_0, k_Ctrl), std::nullopt);
 	EXPECT_EQ(EditorKeyActionFor(SDL_SCANCODE_X, k_None), Action::LetGo);
 	EXPECT_EQ(EditorKeyActionFor(SDL_SCANCODE_EQUALS, k_None), std::nullopt);
 	// The old keys that the game uses are not the editor's any more

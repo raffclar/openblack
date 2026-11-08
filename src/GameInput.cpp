@@ -413,13 +413,15 @@ std::chrono::microseconds Game::InputStepTime(std::chrono::microseconds frameTim
 
 void Game::LoadProfileKeys()
 {
-	// A profile that keeps no bindings has the game's defaults
-	input::KeyBindingTable bindings = input::DefaultKeyBindings();
+	// A profile that keeps no bindings has the game's defaults for the mouse as it is now
+	input::KeyBindingTable bindings = Locator::gameActionSystem::has_value()
+	                                      ? Locator::gameActionSystem::value().GetDefaultKeyBindings()
+	                                      : input::DefaultKeyBindings();
 	if (Locator::playerProfileSystem::has_value())
 	{
 		if (const auto profile = Locator::playerProfileSystem::value().GetCurrentProfile(); profile.has_value())
 		{
-			bindings = input::rebinding::FromKept(profile->keys);
+			bindings = input::rebinding::FromKept(profile->keys, bindings);
 		}
 	}
 	if (Locator::gameActionSystem::has_value())
