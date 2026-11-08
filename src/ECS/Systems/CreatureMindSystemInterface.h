@@ -280,6 +280,8 @@ public:
 	}
 	/// Whether the creature is still about taking a thing from the hand: turning to the player or reaching for it
 	[[nodiscard]] virtual bool IsTakingFromHand(entt::entity /*creature*/) const { return false; }
+	/// Whether the creature does something: it carries out a plan or has steps of its agenda left
+	[[nodiscard]] virtual bool IsActing(entt::entity /*creature*/) const { return false; }
 	/// Whether the creature lies dead, knocked out or doing one of the actions of lying dead for now or for good
 	[[nodiscard]] virtual bool IsLyingDead(entt::entity /*creature*/) { return false; }
 	/// Before an action that needs empty hands and that does not come from its mind starts, the creature checks its
