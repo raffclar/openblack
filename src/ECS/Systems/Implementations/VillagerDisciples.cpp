@@ -55,6 +55,7 @@
 #include "ECS/DiscipleRules.h"
 #include "ECS/DiscipleSymbol.h"
 #include "ECS/DiscipleWorkRules.h"
+#include "ECS/DrawnPlace.h"
 #include "ECS/DrawnRegistry.h"
 #include "ECS/FixedKinds.h"
 #include "ECS/GameEndConditions.h"
@@ -1223,26 +1224,30 @@ void villager_disciple::UpdateMarks()
 	}
 
 	// Each glow over its villager's head, the size of the villager, its puffs turning; none while the villager is out of
-	// sight
-	marks.Each<const DiscipleMark, Sprite, Transform>(
-	    [&registry, frame](const DiscipleMark& of, Sprite& sprite, Transform& transform) {
-		    if (of.symbol)
-		    {
-			    return;
-		    }
-		    const auto& body = registry.Get<const Transform>(of.villager);
-		    const float size = std::max(body.scale.x, k_LeastSpriteSize);
-		    const bool hidden = registry.AnyOf<HiddenByState>(of.villager);
-		    transform.position = body.position + glm::vec3(0.0f, body.scale.x, 0.0f);
-		    transform.scale = hidden ? glm::vec3(0.0f) : glm::vec3(size, size, 1.0f);
-		    sprite.uvMin = CellUv(frame);
-	    });
+	// sight. The glow is where the frame draws the body, thus it stays on the body while the villager walks between the
+	// turns.
+	const ecs::drawn_place::DrawnPlaces drawnPlaces(registry);
+	marks.Each<const DiscipleMark, Sprite, Transform>([&registry, &drawnPlaces, frame](const DiscipleMark& of, Sprite& sprite,
+	                                                                                   Transform& transform) {
+		if (of.symbol)
+		{
+			return;
+		}
+		const auto& body = registry.Get<const Transform>(of.villager);
+		const auto origin = drawnPlaces.ModelOriginOf(of.villager, body);
+		const float size = std::max(body.scale.x, k_LeastSpriteSize);
+		const bool hidden = registry.AnyOf<HiddenByState>(of.villager) || ecs::drawn_place::SunkFromView(registry, of.villager);
+		transform.position = origin + glm::vec3(0.0f, body.scale.x, 0.0f);
+		transform.scale = hidden ? glm::vec3(0.0f) : glm::vec3(size, size, 1.0f);
+		sprite.uvMin = CellUv(frame);
+	});
 
-	// The symbol of the disciple in the hand or under it, over its glow
+	// The symbol of the disciple in the hand or under it, over its glow. It stays on the drawn body as the glow does. The
+	// frame does not draw it on a body that the frame does not draw.
 	const auto shown = PersonShown();
 	const auto cell =
 	    shown.has_value() && disciple::KindOf(TypeOf(*shown)).glows ? disciple::SymbolCell(TypeOf(*shown)) : std::nullopt;
-	if (!cell.has_value())
+	if (!cell.has_value() || ecs::drawn_place::SunkFromView(registry, *shown))
 	{
 		if (symbolMark.has_value())
 		{
@@ -1250,10 +1255,11 @@ void villager_disciple::UpdateMarks()
 		}
 		return;
 	}
+	const auto& body = registry.Get<const Transform>(*shown);
+	const auto origin = drawnPlaces.ModelOriginOf(*shown, body);
 	const auto mark = symbolMark.value_or(entt::null) != entt::null ? *symbolMark : MakeMark(marks, *shown, true);
 	auto& transform = marks.Get<Transform>(mark);
-	const auto& body = registry.Get<const Transform>(*shown);
-	transform.position = body.position + glm::vec3(0.0f, body.scale.x + (body.scale.x * k_SymbolRise), 0.0f);
+	transform.position = origin + glm::vec3(0.0f, body.scale.x + (body.scale.x * k_SymbolRise), 0.0f);
 	float size = k_LeastSpriteSize;
 	if (Locator::camera::has_value() && Locator::windowing::has_value())
 	{

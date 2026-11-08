@@ -31,6 +31,7 @@
 #include "ECS/Components/Swayable.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
+#include "ECS/DrawnPlace.h"
 #include "ECS/Map.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
@@ -131,15 +132,19 @@ void VegetationSystem::UpdateBendPoints(bool handShown)
 		});
 	};
 
-	// 1. The thing that the hand holds. The empty hand, or the hand put away, writes nothing: its slot keeps the last
-	// point
+	// The points of the held thing and of the creature are where the frame draws them, thus the trees bend smoothly while
+	// the hand or the creature moves between the turns
+	const ecs::drawn_place::DrawnPlaces drawnPlaces(registry);
+
+	// 1. The thing that the hand holds, at the drawn hand. The empty hand, or the hand put away, writes nothing: its slot
+	// keeps the last point
 	if (handShown && Locator::handGrabSystem::has_value())
 	{
 		if (const auto held = Locator::handGrabSystem::value().GetHeld(); held.has_value() && registry.Valid(*held))
 		{
 			if (const auto* transform = registry.TryGet<const Transform>(*held))
 			{
-				if (const auto source = modelSource(*held, transform->position))
+				if (const auto source = modelSource(*held, drawnPlaces.ModelOriginOf(*held, *transform)))
 				{
 					Mark(*source, nature::tree_bend::k_HandSlot);
 				}
@@ -167,7 +172,8 @@ void VegetationSystem::UpdateBendPoints(bool handShown)
 			}
 		}
 	}
-	// 3. The primary creature of the local player, as far as its body reaches across the ground
+	// 3. The primary creature of the local player, where the frame draws its body, as far as its body reaches across the
+	// ground
 	if (Locator::playerSystem::has_value())
 	{
 		auto& players = Locator::playerSystem::value();
@@ -177,7 +183,8 @@ void VegetationSystem::UpdateBendPoints(bool handShown)
 		{
 			if (const auto* transform = registry.TryGet<const Transform>(*creature))
 			{
-				Mark({.position = transform->position, .radius = object_measures::TwoDRadius(registry, *creature)},
+				Mark({.position = drawnPlaces.ModelOriginOf(*creature, *transform),
+				      .radius = object_measures::TwoDRadius(registry, *creature)},
 				     nature::tree_bend::k_CreatureSlot);
 			}
 		}

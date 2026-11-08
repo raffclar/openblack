@@ -150,4 +150,26 @@ void testbed_scenarios::AddDiscipleScenarios(std::vector<Scenario>& all)
 	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Object, .index = 0},
 	                                      {.kind = ScriptArgument::Kind::Integer, .number = 9.0f}}}},
 	});
+
+	// The glow of a walking disciple stays on its body, because the frame draws both between the last two turns
+	all.push_back({
+	    .id = "villagers.disciple_glow_walk",
+	    .name = "The glow of a walking disciple",
+	    .facet = Facet::Movement,
+	    .description = "A grown villager, a trading disciple, stands 15 m to the left of the middle of the screen. After "
+	                   "a second, it walks 30 m to the right across the screen, and it walks the same path again every "
+	                   "20 seconds. The camera is near the path.",
+	    .expected = "The villager glows orange, its puffs turning. While the villager walks, the glow stays on its head "
+	                "and moves smoothly with its body. The glow does not go in front of the body or fall behind it, and "
+	                "it does not move in small jumps.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 6.0f, -12.0f}, .look = {0.0f, 1.0f, 0.0f}},
+	    .objects = {{.type = VillagerInfo::CelticFarmerMale,
+	                 .offset = {-15.0f, 0.0f},
+	                 .yawDegrees = 90.0f,
+	                 .walkTo = glm::vec2 {15.0f, 0.0f},
+	                 .walkAfterSeconds = 1.0f,
+	                 .walkRepeatSeconds = 20.0f,
+	                 .disciple = VillagerDisciple::Trader}},
+	});
 }
