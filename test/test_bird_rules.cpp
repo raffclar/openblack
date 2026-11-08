@@ -67,6 +67,19 @@ TEST(BirdRules, OnlyAVultureKeepsItsClip)
 	}
 }
 
+TEST(BirdRules, ABirdKeepsItsClipWhenAMoveStarts)
+{
+	for (const auto type : {AnimalInfo::Crow, AnimalInfo::Dove, AnimalInfo::Swallow, AnimalInfo::Pigeon, AnimalInfo::Seagull,
+	                        AnimalInfo::Bat, AnimalInfo::SpellDove, AnimalInfo::SpellBat, AnimalInfo::Vulture})
+	{
+		EXPECT_TRUE(MoveKeepsClip(type));
+	}
+	for (const auto type : {AnimalInfo::Sheep, AnimalInfo::Cow, AnimalInfo::Wolf, AnimalInfo::SpellWolf, AnimalInfo::Lion})
+	{
+		EXPECT_FALSE(MoveKeepsClip(type));
+	}
+}
+
 TEST(BirdRules, MostKindsFlapOnAZeroAndGlideOtherwise)
 {
 	EXPECT_EQ(FlyingClip(AnimalInfo::Crow, Always(0)), AnimId::CrowFlap);
