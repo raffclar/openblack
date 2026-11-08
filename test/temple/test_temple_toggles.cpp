@@ -45,9 +45,11 @@ struct Toggles
 {
 	std::vector<entt::id_type> sounds;
 	std::vector<uint32_t> pitches;
-	TempleToggles toggles {[this](entt::id_type sound, uint32_t pitch) {
+	std::vector<uint32_t> owners;
+	TempleToggles toggles {[this](entt::id_type sound, uint32_t pitch, uint32_t owner) {
 		sounds.push_back(sound);
 		pitches.push_back(pitch);
+		owners.push_back(owner);
 	}};
 	Toggles() { toggles.Find(k_Names); }
 };
@@ -139,4 +141,6 @@ TEST(TempleToggles, EachButtonClicksAtItsOwnPitch)
 		t.toggles.Hold(false, checked + 1);
 	}
 	EXPECT_EQ(t.pitches, (std::vector<uint32_t> {100, 100, 110, 100, 95, 95, 105, 105, 108, 108}));
+	// Only the click of the creature button as it turns the creatures on has an owner, number 110
+	EXPECT_EQ(t.owners, (std::vector<uint32_t> {0, 0, 0, 110, 0, 0, 0, 0, 0, 0}));
 }

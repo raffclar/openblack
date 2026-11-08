@@ -233,12 +233,13 @@ void PlayDoorSound(entt::id_type sound)
 	}
 }
 
-void PlayToggleSound(entt::id_type sound, uint32_t pitchPercent)
+void PlayToggleSound(entt::id_type sound, uint32_t pitchPercent, uint32_t ownerNumber)
 {
 	// The game plays the buttons' sounds without a place
 	if (Locator::sounds::has_value())
 	{
-		audio::StartGameSoundEffect(sound, {.pitchPercent = pitchPercent});
+		audio::StartGameSoundEffect(
+		    sound, {.pitchPercent = pitchPercent, .voiceOwner = audio::VoiceOwner::Number, .ownerNumber = ownerNumber});
 	}
 }
 } // namespace
@@ -701,6 +702,9 @@ bool TempleInterior::HoldControl(bool pressed, float mouseY)
 	const auto hit = GetCursorHit();
 	const auto hoveredMainSubMesh =
 	    hit.has_value() && hit->room == TempleRoom::Main ? hit->subMesh : std::optional<uint32_t> {};
+	// While a question or the name box is up, the save game room's controls take no clicks
+	const bool boxUp = _interface != nullptr && _interface->IsSaveBoxActive();
+	_roomPress.Step(pressed, hit.has_value() && hit->subMesh.has_value() && IsControl(hit->room, *hit->subMesh), boxUp);
 	bool held = _toggles.Hold(pressed, hoveredMainSubMesh);
 	if (_scrolls != nullptr)
 	{
@@ -740,8 +744,6 @@ bool TempleInterior::HoldControl(bool pressed, float mouseY)
 			ReplayChallenge(*outcome.replay);
 		}
 	}
-	// While a question or the name box is up, the save game room's controls take no clicks
-	const bool boxUp = _interface != nullptr && _interface->IsSaveBoxActive();
 	if (_saveGameRoom != nullptr && _cameraModel != nullptr && !boxUp)
 	{
 		const auto hoveredSaveSubMesh =
@@ -1805,9 +1807,9 @@ void TempleInterior::Update(std::chrono::microseconds dt)
 		UpdateOptionsAndFutureRooms(milliseconds);
 
 		// The glow of the control under the cursor runs out each frame, and drawing the room sets it off
-		// again as the cursor moves onto another submesh, while no control is held
+		// again as the cursor moves onto another submesh, while no press is held
 		_hoverGlow = std::max(0.0f, _hoverGlow - std::floor(milliseconds));
-		if (!IsControlHeld())
+		if (_roomPress.FollowsHover() && !IsControlHeld())
 		{
 			const auto hit = GetCursorHit();
 			std::optional<std::pair<TempleRoom, uint32_t>> hovered;

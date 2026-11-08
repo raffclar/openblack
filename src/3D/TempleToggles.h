@@ -42,8 +42,9 @@ public:
 	};
 	static constexpr size_t k_Count = 5;
 
-	/// Plays a click, with its pitch in percent
-	using PlaySound = std::function<void(entt::id_type, uint32_t)>;
+	/// Plays a click, with its pitch in percent and the number of its owner (0 for no owner). A click starts again in
+	/// the voice of the same click of the same owner.
+	using PlaySound = std::function<void(entt::id_type, uint32_t, uint32_t)>;
 	explicit TempleToggles(PlaySound playSound);
 
 	/// Finds the buttons among the main room's submeshes, by their names
