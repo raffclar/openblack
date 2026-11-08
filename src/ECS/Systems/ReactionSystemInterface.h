@@ -154,7 +154,7 @@ public:
 	/// that kind: a villager watching a creature goes to watch the fight the creature went into
 	virtual void TakeUp(uint32_t /*id*/, entt::entity /*living*/) {}
 	/// A villager or a creature is impressed by a reaction at once, but does not take it up. The people of the towns near
-	/// a new building site are impressed in this way by its scaffold.
+	/// a new building site are impressed in this way by its scaffold. No symbol of the belief rises from a villager.
 	virtual void Impress(uint32_t /*id*/, entt::entity /*living*/) {}
 	/// Whether an initiator has a reaction going
 	[[nodiscard]] virtual bool HasReaction(entt::entity initiator) const = 0;

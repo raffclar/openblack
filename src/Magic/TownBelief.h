@@ -84,6 +84,14 @@ void SetInPlayer(Belief& town, PlayerNames player, float value);
 /// The town is given belief in a player
 void Add(Belief& town, PlayerNames player, float amount);
 
+/// The size of a belief symbol is the belief in ten thousandths, cut towards zero
+inline constexpr float k_SymbolScale = 10000.0f;
+
+/// The size of the symbol that rises from a thing that gave a town belief. There is no symbol when the size is less
+/// than one. There is also no symbol when the gift shows none: a scaffold gives belief to the near towns with no
+/// symbol.
+[[nodiscard]] std::optional<int32_t> SymbolSize(float belief, bool shown);
+
 /// Belief gained in a player at a turn
 struct Gained
 {

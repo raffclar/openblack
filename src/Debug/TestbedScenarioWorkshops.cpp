@@ -300,9 +300,9 @@ void testbed_scenarios::AddWorkshopScenarios(std::vector<Scenario>& all)
 	    .description = "The town, the scaffold and the camera of objects.scaffold_starts_building, with a hut of four "
 	                   "villagers of the town beside the village centre. The input tools/sim/hand_inputs/scaffold_build.json "
 	                   "moves the hand: it takes the scaffold, holds it still near the village centre, and puts it down.",
-	    .expected = "When the hand puts the scaffold down, a building site opens. At the same time, symbols of belief in "
-	                "the player rise from the first villagers of the hut: from a part of the town, and from one villager "
-	                "at least. The belief of the town in the player becomes larger.",
+	    .expected = "When the hand puts the scaffold down, a building site opens. At the same time, the scaffold impresses "
+	                "the first villagers of the hut: a part of the town, and one villager at least. No symbol of belief "
+	                "rises from these villagers for this impression. The belief of the town in the player becomes larger.",
 	    .environment = {.dispenserGrid = false},
 	    .framing = {.shot = Shot::Overview, .include = {k_LooseScaffold - glm::vec2 {10.0f}, k_BuildPlace + glm::vec2 {10.0f}}},
 	    .objects = {{.type = AbodeInfo::CelticTownCentre, .offset = {0.0f, 50.0f}},

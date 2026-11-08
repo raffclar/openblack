@@ -13,6 +13,7 @@
 #include <algorithm>
 #include <array>
 #include <bit>
+#include <optional>
 #include <tuple>
 
 #include <gtest/gtest.h>
@@ -290,4 +291,22 @@ TEST(TownBelief, ThreeGodNetworkMapRaisesEachGodsCapInTownThreeToTwo)
 	EXPECT_EQ(CapFromLandScript(1.0f, true, k_ThreeGodMapName, 4, PlayerNames::PLAYER_ONE), 1.0f);
 	EXPECT_EQ(CapFromLandScript(1.0f, true, k_ThreeGodMapName, 3, PlayerNames::NEUTRAL), 1.0f);
 	EXPECT_EQ(CapFromLandScript(1.0f, true, "MPM_3P_1", 3, PlayerNames::PLAYER_ONE), 1.0f);
+}
+
+TEST(TownBelief, SymbolIsTheBeliefInTenThousandthsCutTowardsZero)
+{
+	EXPECT_EQ(SymbolSize(0.00015f, true), 1);
+	EXPECT_EQ(SymbolSize(0.015625f, true), 156);
+	EXPECT_EQ(SymbolSize(0.5f, true), 5000);
+	// Less than one ten thousandth, nothing, or a loss shows no symbol
+	EXPECT_EQ(SymbolSize(0.00009f, true), std::nullopt);
+	EXPECT_EQ(SymbolSize(0.0f, true), std::nullopt);
+	EXPECT_EQ(SymbolSize(-0.5f, true), std::nullopt);
+}
+
+TEST(TownBelief, GiftWithNoSymbolShowsNoneWhateverTheBelief)
+{
+	// The scaffold gives belief to the people of the near towns with no symbol
+	EXPECT_EQ(SymbolSize(0.5f, false), std::nullopt);
+	EXPECT_EQ(SymbolSize(0.0001f, false), std::nullopt);
 }
