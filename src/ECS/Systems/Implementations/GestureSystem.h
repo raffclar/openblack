@@ -62,6 +62,7 @@ public:
 	void ForgetPath() override;
 	void SeedFirstTurnInHand() override;
 	void RestartPathAtArmedPress() override { _restartAtArmedPress = true; }
+	void ForgetPathAtPress() override { _forgetAtPress = true; }
 	[[nodiscard]] std::span<const gestures::GestureTemplate> GetTemplates() const override;
 	[[nodiscard]] const gesture::GestureRecorder& GetPath() const override { return _recorder; }
 	[[nodiscard]] float GetScreenAspect() const override { return _screenAspect; }
@@ -137,6 +138,10 @@ private:
 	/// The second flag holds it for that pass only.
 	bool _restartAtArmedPress {false};
 	bool _restartInThisPass {false};
+	/// A press directed the fight of the creature: the pass of the next frame forgets the path after its places. The
+	/// second flag keeps it for that pass only.
+	bool _forgetAtPress {false};
+	bool _forgetInThisPass {false};
 	/// Where the camera's eye was last frame
 	std::optional<glm::vec3> _lastCameraEye;
 	/// Whether the camera moved in its last update

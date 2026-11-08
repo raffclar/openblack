@@ -135,6 +135,61 @@ TEST(GestureSystem, ThePressThatArmsAMiracleStartsThePathAgainAfterThePlacesOfTh
 	EXPECT_EQ(system.GetPath().Count(), 2u);
 }
 
+TEST(GestureSystem, APressThatDirectsTheFightForgetsThePathAfterThePlacesOfTheFramesPass)
+{
+	GestureSystem system;
+	for (int i = 0; i < 10; ++i)
+	{
+		auto frame = Frame(k_FrameSeconds);
+		frame.places = {{100.0f + static_cast<float>(i * 10), 100.0f}};
+		system.Update(frame);
+	}
+	system.ForgetPathAtPress();
+	// The turn's pass gets no message of the buttons, so it keeps the path
+	auto turn = Frame(0.0f);
+	turn.places.clear();
+	system.InterfaceTurn(turn);
+	EXPECT_EQ(system.GetPath().Count(), 10u);
+	// The frame's pass takes its places, then the hand forgets the path and takes no sample
+	auto next = Frame(k_FrameSeconds);
+	next.places = {{300.0f, 120.0f}, {320.0f, 120.0f}};
+	system.Update(next);
+	EXPECT_TRUE(system.GetPath().Empty());
+	// The pass after it samples as usual
+	system.Update(Frame(k_FrameSeconds));
+	EXPECT_EQ(system.GetPath().Count(), 1u);
+}
+
+TEST(GestureSystem, AHandThatHoldsACreatureOrASourceForgetsThePath)
+{
+	GestureSystem system;
+	system.Update(Frame(k_FrameSeconds));
+	ASSERT_EQ(system.GetPath().Count(), 1u);
+	// While the hand holds a creature, or a field, fish farm or pile that it takes from, the path stays empty
+	auto locked = Frame(k_FrameSeconds);
+	locked.handLocked = true;
+	system.Update(locked);
+	EXPECT_TRUE(system.GetPath().Empty());
+	system.InterfaceTurn(locked);
+	EXPECT_TRUE(system.GetPath().Empty());
+	// When the hand lets go of it, the path takes samples again
+	system.Update(Frame(k_FrameSeconds));
+	EXPECT_EQ(system.GetPath().Count(), 1u);
+}
+
+TEST(GestureSystem, AFrontEndBoxForgetsThePath)
+{
+	GestureSystem system;
+	system.Update(Frame(k_FrameSeconds));
+	ASSERT_EQ(system.GetPath().Count(), 1u);
+	auto box = Frame(k_FrameSeconds);
+	box.frontEndBox = true;
+	system.Update(box);
+	EXPECT_TRUE(system.GetPath().Empty());
+	system.Update(Frame(k_FrameSeconds));
+	EXPECT_EQ(system.GetPath().Count(), 1u);
+}
+
 TEST(GestureSystem, ADrawnPathIsTakenInPlaceOfTheCursor)
 {
 	GestureSystem system;
