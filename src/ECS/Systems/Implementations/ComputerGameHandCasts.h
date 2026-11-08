@@ -36,6 +36,7 @@ public:
 
 	[[nodiscard]] bool IconHasSite(entt::entity icon) const override;
 	[[nodiscard]] bool IconCharging(entt::entity icon) const override;
+	[[nodiscard]] bool MayStartChant(entt::entity icon, MagicType type) const override;
 	bool StartChant(entt::entity icon, MagicType type) override;
 	[[nodiscard]] float ChantNeeded(entt::entity icon) const override;
 	[[nodiscard]] bool Angry(MagicType type) const override;

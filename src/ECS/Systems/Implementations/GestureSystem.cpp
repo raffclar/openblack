@@ -432,8 +432,10 @@ void GestureSystem::Update(const Frame& frame)
 	_lastCameraEye = frame.view.cameraEye;
 	// The messages of the buttons come in the frame's pass only, so the turn's pass does not start the path again
 	_restartInThisPass = std::exchange(_restartAtArmedPress, false);
+	_forgetInThisPass = std::exchange(_forgetAtPress, false);
 	Pass(frame, gesture::StepsOfFramePass(frame.buttonMessages));
 	_restartInThisPass = false;
+	_forgetInThisPass = false;
 }
 
 void GestureSystem::InterfaceTurn(const Frame& frame)
@@ -476,6 +478,17 @@ void GestureSystem::Pass(const Frame& frame, uint32_t steps)
 
 void GestureSystem::Step(const Frame& frame, bool samples, std::optional<glm::vec2> placeBefore)
 {
+	// The step does nothing, and the hand forgets the path, while one of these is true:
+	// - the hand does not draw over the world (a path drawn for the testbed continues),
+	// - the hand holds a creature, or a field, fish farm or pile that it takes from,
+	// - a front-end box shows.
+	// Then no time of the gestures counts down.
+	if ((!frame.overWorld && _drawing.empty()) || frame.handLocked || frame.frontEndBox)
+	{
+		ForgetPath();
+		return;
+	}
+
 	_circleSeconds = std::max(_circleSeconds - frame.seconds, 0.0f);
 
 	// The leash picker stays open while the player's leash is on the creature, or after the leash gesture put the leash
@@ -504,13 +517,6 @@ void GestureSystem::Step(const Frame& frame, bool samples, std::optional<glm::ve
 	// opened on this land, the chain follows the hand while it holds any miracle.
 	_gesturing = _selection.IsOpen() || gesture::ChainFollows(context.seed, _seedTurnedOnLand);
 
-	// The hand's path is only drawn over the world; a path drawn for the testbed goes on regardless
-	if (!frame.overWorld && _drawing.empty())
-	{
-		ForgetPath();
-		return;
-	}
-
 	if (samples)
 	{
 		// A path that a miracle's first turn in the hand started again gets the last place of the pointer first
@@ -523,6 +529,11 @@ void GestureSystem::Step(const Frame& frame, bool samples, std::optional<glm::ve
 		for (const auto place : frame.places)
 		{
 			SampleCursor(place, frame);
+		}
+		// A press that directed the fight came after the places: the hand forgets the path
+		if (std::exchange(_forgetInThisPass, false))
+		{
+			ForgetPath();
 		}
 		// The press that armed a miracle came after the places: the path starts again from the last place of the pointer
 		if (std::exchange(_restartInThisPass, false))

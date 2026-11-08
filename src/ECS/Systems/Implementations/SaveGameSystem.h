@@ -133,6 +133,8 @@ private:
 
 	bool LoadVanilla(uint32_t slot, const std::filesystem::path& slotFolder, const std::filesystem::path& mindFolder,
 	                 const std::vector<uint8_t>& bytes);
+	/// Loads the slot: openblack's world file, or else the game's world file
+	bool LoadSlot(uint32_t slot);
 	/// The entity that each object number of a world file of the game became
 	using VanillaMade = std::unordered_map<uint32_t, entt::entity>;
 	/// Reads the whole world file of the game. Puts its turn, its towns, buildings, villagers, forests, trees, fields, fish

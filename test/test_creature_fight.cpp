@@ -157,6 +157,32 @@ TEST(CreatureFight, ChargeRunsToOnePointTwoSeconds)
 	EXPECT_FLOAT_EQ(BlowSpeed(3000.0f), 1.5f);
 }
 
+TEST(CreatureFight, TheChargeOfABlowMultipliesByTheFloatOfOneTwelveHundredth)
+{
+	// The game multiplies the charge by the float of 1/1200 and then adds 0.5. A division by 1200 gives another float.
+	EXPECT_EQ(std::bit_cast<uint32_t>(k_SpeedPerChargeMs), 0x3A5A740Eu);
+	EXPECT_EQ(std::bit_cast<uint32_t>(BlowSpeed(106.0f)), 0x3F169D04u);
+	EXPECT_EQ(std::bit_cast<uint32_t>(BlowSpeed(1200.0f)), 0x3FC00000u);
+}
+
+TEST(CreatureFight, AnActionKeepsItsSpeedPlusAHalfAndItsAnimationPlaysAtTheFightSpeed)
+{
+	// The kept speed is only for the damage. The computer's blows thus do the damage of speed 1.
+	Fighter fighter;
+	Enter(fighter, State::Action, animations::k_AttackHigh, k_AiBlowSpeed);
+	EXPECT_FLOAT_EQ(fighter.speed, 1.0f);
+	Enter(fighter, State::Action, animations::k_AttackSpecial, 1.5f);
+	EXPECT_FLOAT_EQ(fighter.speed, 2.0f);
+	Enter(fighter, State::Action, animations::k_StepBack);
+	EXPECT_FLOAT_EQ(fighter.speed, 0.5f);
+	// The other states keep the speed of the last action
+	Enter(fighter, State::Stance);
+	EXPECT_FLOAT_EQ(fighter.speed, 0.5f);
+	EXPECT_EQ(std::bit_cast<uint32_t>(PlaybackSpeed(animations::k_AttackHigh)), std::bit_cast<uint32_t>(1.1f * 0.6f));
+	EXPECT_EQ(std::bit_cast<uint32_t>(PlaybackSpeed(animations::k_AttackSpecial)), std::bit_cast<uint32_t>(1.1f * 0.6f));
+	EXPECT_EQ(std::bit_cast<uint32_t>(PlaybackSpeed(animations::k_StepLeft)), std::bit_cast<uint32_t>(1.1f * 0.9f));
+}
+
 TEST(CreatureFight, QueueHoldsTwelveAndAClickReplacesIt)
 {
 	MoveQueue queue;
@@ -382,7 +408,9 @@ TEST(CreatureFight, HealthStaminaAndLife)
 	EXPECT_FLOAT_EQ(StaminaAtStart(0.8f, 0.3f), 0.5f);
 	EXPECT_FLOAT_EQ(StaminaAtStart(0.2f, 0.9f), 0.0f);
 	EXPECT_FLOAT_EQ(RegainStamina(1.0f), 1.0f);
-	EXPECT_NEAR(RegainStamina(0.5f), 0.5f + (1.0f / 600.0f), 1e-6f);
+	EXPECT_EQ(std::bit_cast<uint32_t>(k_StaminaPerTurn), 0x3ADA71D1u);
+	EXPECT_EQ(RegainStamina(0.5f), 0.5f + 0.0016666f);
+	EXPECT_EQ(RegainStamina(0.0f), 0.0016666f);
 	// A knock out costs a quarter of the bar
 	EXPECT_FLOAT_EQ(LifeAfterFight(1.0f, 0.0f), 0.75f);
 	EXPECT_FLOAT_EQ(LifeAfterFight(0.8f, 0.6f), 0.7f);
@@ -601,8 +629,8 @@ TEST(CreatureFight, StatesFollowOneAnother)
 	EXPECT_TRUE(IsBlocking(State::BlockStart, 600.0f, 1000.0f));
 	EXPECT_TRUE(IsBlocking(State::BlockEnd, 400.0f, 1000.0f));
 	EXPECT_FALSE(IsBlocking(State::BlockEnd, 600.0f, 1000.0f));
-	EXPECT_FLOAT_EQ(PlaybackSpeed(animations::k_StepBack, 1.0f), 1.1f * 0.9f);
-	EXPECT_FLOAT_EQ(PlaybackSpeed(animations::k_AttackHigh, 1.5f), 1.1f * 0.6f * 1.5f);
+	EXPECT_FLOAT_EQ(PlaybackSpeed(animations::k_StepBack), 1.1f * 0.9f);
+	EXPECT_FLOAT_EQ(PlaybackSpeed(animations::k_AttackHigh), 1.1f * 0.6f);
 
 	Fighter fighter;
 	Enter(fighter, State::Action, animations::k_AttackSpecial, 1.5f);
@@ -1304,14 +1332,14 @@ TEST(CreatureFight, EnteringAStateEndsTheTurnOfTheStart)
 TEST(CreatureFight, AFightAnimationMovesOnByWholeMillisecondsEachTurn)
 {
 	// Steps play at 0.9 of the fight speed, other moves at 0.6, and the fraction of a millisecond goes
-	EXPECT_EQ(TurnAdvance(PlaybackSpeed(animations::k_StepForward, 1.0f), 100), 99);
-	EXPECT_EQ(TurnAdvance(PlaybackSpeed(animations::k_FirstAttack, 1.0f), 100), 66);
+	EXPECT_EQ(TurnAdvance(PlaybackSpeed(animations::k_StepForward), 100), 99);
+	EXPECT_EQ(TurnAdvance(PlaybackSpeed(animations::k_FirstAttack), 100), 66);
 	EXPECT_EQ(TurnAdvance(0.0f, 100), 0);
 }
 
 TEST(CreatureFight, AnActionMovesTheCreatureByTheTurnsShareOfItsRootTravel)
 {
-	const float speed = PlaybackSpeed(animations::k_FirstAttack, 1.0f);
+	const float speed = PlaybackSpeed(animations::k_FirstAttack);
 	// Facing along the heading 0, ahead is -z
 	const auto ahead = TurnRootMove(glm::vec2(0.0f, -30.0f), speed, 100, 2.0f, 660, 0.0f);
 	EXPECT_NEAR(ahead.x, 0.0f, 1e-6f);
@@ -1325,7 +1353,7 @@ TEST(CreatureFight, AnActionMovesTheCreatureByTheTurnsShareOfItsRootTravel)
 
 TEST(CreatureFight, TheRootMoveRoundsEachStepToAFloatInTheGamesOrder)
 {
-	const float speed = PlaybackSpeed(animations::k_FirstAttack, 1.0f);
+	const float speed = PlaybackSpeed(animations::k_FirstAttack);
 	const float heading = 0.8f;
 	const glm::vec2 travel {3.25f, -47.5f};
 	const auto move = TurnRootMove(travel, speed, 100, 1.37f, 733, heading);
@@ -1349,7 +1377,7 @@ TEST(CreatureFight, AnActionEndsBeforeItMovesOnWhenTheTurnWouldReachItsEnd)
 	EXPECT_TRUE(ActionEnds(901.0f, 99, 1000.0f));
 	EXPECT_TRUE(ActionEnds(950.0f, 99, 1000.0f));
 	// The first turn of a short action is also its last
-	EXPECT_TRUE(ActionEnds(0.0f, TurnAdvance(PlaybackSpeed(animations::k_StepForward, 1.0f), 100), 99.0f));
+	EXPECT_TRUE(ActionEnds(0.0f, TurnAdvance(PlaybackSpeed(animations::k_StepForward), 100), 99.0f));
 	// An action without an animation ends at once
 	EXPECT_TRUE(ActionEnds(0.0f, 99, 0.0f));
 }
@@ -1373,7 +1401,7 @@ TEST(CreatureFight, TheStartPlaysByTheSpanOfTheTurnAndTheFinishTestsByIt)
 	// A creature of size 1 in a turn of 100 ms: a span of 117 ms; the fight's other animations move on 66 ms
 	const auto span = TestSpanMs(100.0f, 1.0f, false);
 	ASSERT_EQ(span, 117);
-	const auto speed = PlaybackSpeed(animations::k_Start, 1.0f);
+	const auto speed = PlaybackSpeed(animations::k_Start);
 	ASSERT_EQ(TurnAdvance(speed, 100), 66);
 	EXPECT_EQ(StateAdvanceMs(State::Start, speed, 100, span), 117);
 	EXPECT_EQ(EndTestMs(State::Start, speed, 100, span), 117);

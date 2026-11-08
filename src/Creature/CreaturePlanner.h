@@ -37,6 +37,9 @@ constexpr float k_HeldPriority = 1.6f;
 /// action's priority is above that cap, so in a plan they all count the same.
 constexpr float k_DefaultUsefulness = 0.1f;
 constexpr float k_MaxActionPriority = 0.01f;
+/// The usefulness of each thing that an action uses. The distance to the thing chooses the thing, but it does not
+/// change this value.
+constexpr float k_UsingUsefulness = 0.1f;
 /// Scales priorities to readable numbers; it doesn't change which plan wins
 constexpr float k_PriorityScale = 1e5f;
 /// How long since an action was done before it is fully new again, in game turns, and the most novelty adds
@@ -49,7 +52,7 @@ constexpr size_t k_CreaturesForFewerGoals = 3;
 [[nodiscard]] size_t GoalsPerTurn(size_t creatureCount);
 
 /// How the distance to a goal weighs against it: 1.6 for something held, else less the further it is, by the desire's
-/// distance weight, up to 200 away
+/// distance weight, up to 200 away. Past 200, the full distance weight applies with no rounding.
 [[nodiscard]] float DistancePriority(bool held, float distance, float distanceWeight);
 /// How much the creature wants to take an action, by its opinion of it from -1 to 1; nothing for an action it can't
 /// take now
@@ -57,7 +60,8 @@ constexpr size_t k_CreaturesForFewerGoals = 3;
 /// A little extra for an action not done for a long time
 [[nodiscard]] float Novelty(uint32_t turnsSinceDone, bool servesFirstDesire);
 /// A plan's priority from its parts: the desire's strength, the goal's usefulness (or none), the action's priority, and
-/// the usefulness of what is acted on and of what is used (or none)
+/// the usefulness of what is acted on and of what is used (or none). The multiplications keep the order of the game, so
+/// that the result has the same bits.
 [[nodiscard]] float Priority(float desire, std::optional<float> goalUsefulness, float actionPriority, float objectUsefulness,
                              std::optional<float> usedUsefulness);
 /// Whether a plan is pressing enough to change to: more than twice the priority of what the creature carries out
@@ -121,11 +125,10 @@ struct Plan
 	std::optional<uint32_t> instrument;
 };
 
-/// The thing that a planned action uses, and its usefulness
+/// The thing that a planned action uses. Each thing used has the usefulness k_UsingUsefulness.
 struct UsedChoice
 {
 	uint32_t id {0};
-	float usefulness {0.0f};
 };
 
 /// The order in which the plan for a desire finds its action and the thing that it acts on

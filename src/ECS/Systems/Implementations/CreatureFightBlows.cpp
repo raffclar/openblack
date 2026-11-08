@@ -698,7 +698,7 @@ std::optional<CreatureFightSystem::ActionStep> CreatureFightSystem::StepAnimatio
 		fighting->fighter.stateMs = 0.0f;
 	}
 	auto duration = DurationOf(entity, fighting->fighter.animation);
-	auto speed = fight::PlaybackSpeed(fighting->fighter.animation, fighting->fighter.speed);
+	auto speed = fight::PlaybackSpeed(fighting->fighter.animation);
 
 	// An action or a reel in a block whose animation reaches its end in this turn ends before it moves on: it makes no
 	// root move. The reel goes back to the block. The action goes back to its stance, also when the fight is called off
@@ -726,7 +726,7 @@ std::optional<CreatureFightSystem::ActionStep> CreatureFightSystem::StepAnimatio
 			return std::nullopt;
 		}
 		duration = DurationOf(entity, fighting->fighter.animation);
-		speed = fight::PlaybackSpeed(fighting->fighter.animation, fighting->fighter.speed);
+		speed = fight::PlaybackSpeed(fighting->fighter.animation);
 	}
 
 	// The start, the finish, and the start and end of a block or a cast test their end before their animation moves on.
@@ -793,7 +793,7 @@ std::optional<CreatureFightSystem::ActionStep> CreatureFightSystem::StepAnimatio
 			}
 			entered = true;
 			duration = DurationOf(entity, fighting->fighter.animation);
-			speed = fight::PlaybackSpeed(fighting->fighter.animation, fighting->fighter.speed);
+			speed = fight::PlaybackSpeed(fighting->fighter.animation);
 		}
 	}
 	auto& fighter = fighting->fighter;

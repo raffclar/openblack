@@ -13,6 +13,7 @@
 
 #include <algorithm>
 #include <array>
+#include <bit>
 #include <functional>
 #include <optional>
 #include <vector>
@@ -301,6 +302,16 @@ TEST(CreaturePlanner, DistancePriority)
 	EXPECT_FLOAT_EQ(creature_planner::DistancePriority(false, 900.0f, 0.4f), 0.6f);
 }
 
+TEST(CreaturePlanner, PastTheFarthestDistanceTheFullWeightAppliesAsItIs)
+{
+	// With this weight, a multiplication by 200 and a division by 200 change the last bit of the result
+	const auto weight = std::bit_cast<float>(0x3DA3DD55u);
+	EXPECT_EQ(std::bit_cast<uint32_t>(creature_planner::DistancePriority(false, 250.0f, weight)), 0x3F6B8455u);
+	EXPECT_EQ(creature_planner::DistancePriority(false, 250.0f, weight), 1.0f - weight);
+	// At the farthest distance and nearer, the weight is multiplied by the distance and divided by the farthest distance
+	EXPECT_EQ(creature_planner::DistancePriority(false, 200.0f, weight), 1.0f - weight * 200.0f / 200.0f);
+}
+
 TEST(CreaturePlanner, ActionPriorityAndNovelty)
 {
 	EXPECT_FLOAT_EQ(creature_planner::ActionPriority(-1.0f), 0.5f);
@@ -325,6 +336,13 @@ TEST(CreaturePlanner, PriorityAndSwitching)
 	EXPECT_TRUE(creature_planner::ShouldSwitch(21.0f, 10.0f));
 	EXPECT_FALSE(creature_planner::ShouldSwitch(20.0f, 10.0f));
 	EXPECT_TRUE(creature_planner::ShouldSwitch(1.0f, 0.0f));
+}
+
+TEST(CreaturePlanner, APlanPriorityHasTheBitsOfTheOrderOfTheGame)
+{
+	// The capped action and the thing acted on, then the desire with its goal, then the thing used and the scale
+	EXPECT_EQ(std::bit_cast<uint32_t>(creature_planner::Priority(0.5f, 0.45f, 0.5f, 0.2f, std::nullopt)), 0x40900001u);
+	EXPECT_EQ(std::bit_cast<uint32_t>(creature_planner::Priority(0.75f, 0.3f, 0.5f, 0.65f, std::nullopt)), 0x4169FFFFu);
 }
 
 TEST(CreaturePlanner, AnAgendaThatNoPlanGaveRunsToItsEndWhateverItsKind)
@@ -500,7 +518,7 @@ TEST(CreaturePlanner, AnActionThatFailsIsNotTriedAgainInAnotherPlace)
 	EXPECT_EQ(asked, 1);
 }
 
-TEST(CreaturePlanner, AnActionThatUsesAThingCountsItsUsefulness)
+TEST(CreaturePlanner, AThingThatAnActionUsesHasTheFixedUsefulness)
 {
 	const std::vector<creature_planner::ActionCandidate> actions {{.action = 15, .needsObject = true, .usesThing = true}};
 	const auto plan = creature_planner::PlanDesire({
@@ -516,17 +534,19 @@ TEST(CreaturePlanner, AnActionThatUsesAThingCountsItsUsefulness)
 	        [](const creature_planner::ActionCandidate&, std::optional<uint32_t> object) {
 		        // The thing used is never the thing acted on
 		        EXPECT_EQ(object, 4u);
-		        return std::optional(creature_planner::UsedChoice {.id = 9, .usefulness = 0.07f});
+		        return std::optional(creature_planner::UsedChoice {.id = 9});
 	        },
 	});
 	ASSERT_TRUE(plan.has_value());
 	EXPECT_EQ(plan->instrument, 9u);
-	EXPECT_FLOAT_EQ(plan->priority, creature_planner::Priority(1.0f, std::nullopt, plan->actionPriority, 0.05f, 0.07f));
+	EXPECT_EQ(plan->priority,
+	          creature_planner::Priority(1.0f, std::nullopt, plan->actionPriority, 0.05f, creature_planner::k_UsingUsefulness));
 }
 
 TEST(CreaturePlanner, ADesireAboutAWholeThingFindsThePartAfterTheAction)
 {
-	// The action that uses the more useful thing wins; the part then counts the default usefulness
+	// Each thing used has the same usefulness, so the last of the equal actions wins; the part then counts the default
+	// usefulness
 	const std::vector<creature_planner::ActionCandidate> actions {
 	    {.action = 7, .needsObject = true, .usesThing = true},
 	    {.action = 8, .needsObject = true, .usesThing = true},
@@ -544,15 +564,17 @@ TEST(CreaturePlanner, ADesireAboutAWholeThingFindsThePartAfterTheAction)
 	        },
 	    .findUsed =
 	        [](const creature_planner::ActionCandidate& action, std::optional<uint32_t>) {
-		        return std::optional(creature_planner::UsedChoice {.id = 9, .usefulness = action.action == 8 ? 0.08f : 0.05f});
+		        return std::optional(creature_planner::UsedChoice {.id = action.action == 8 ? 10u : 9u});
 	        },
 	});
 	// Action 8 wins first, but the whole thing has no part for it: action 7 is tried next
 	ASSERT_TRUE(plan.has_value());
 	EXPECT_EQ(plan->action, 7u);
 	EXPECT_EQ(plan->object, 4u);
-	EXPECT_FLOAT_EQ(plan->priority, creature_planner::Priority(0.5f, 0.09f, plan->actionPriority,
-	                                                           creature_planner::k_DefaultUsefulness, 0.05f));
+	EXPECT_EQ(plan->instrument, 9u);
+	EXPECT_EQ(plan->priority,
+	          creature_planner::Priority(0.5f, 0.09f, plan->actionPriority, creature_planner::k_DefaultUsefulness,
+	                                     creature_planner::k_UsingUsefulness));
 	// Only anger, of the desires about something, counts what it acts on as well
 	EXPECT_TRUE(creature_planner::CountsActedOn(Desire::Anger, true));
 	EXPECT_FALSE(creature_planner::CountsActedOn(Desire::Impress, true));

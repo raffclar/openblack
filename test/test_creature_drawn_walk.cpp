@@ -156,7 +156,7 @@ TEST(CreatureDrawnWalk, AFightActionEndsAtTheSameTurnAtAnyFrameRate)
 	// A fight's animation moves on only in the game turns, by the turn's whole milliseconds. The frames of a turn only
 	// draw the body, so the turn at which the action ends is the same at every frame rate.
 	constexpr float k_DurationMs = 1200.0f;
-	const auto speed = creature_fight::PlaybackSpeed(creature_fight::animations::k_Stance, 1.0f);
+	const auto speed = creature_fight::PlaybackSpeed(creature_fight::animations::k_Stance);
 	std::optional<int> referenceTurn;
 	for (const auto frameMs : k_FrameMs)
 	{

@@ -66,9 +66,15 @@ public:
 		/// The places of the pointer that the interface got in this frame, in pixels from the top left, in the sequence
 		/// that they came. The path takes a sample at each place.
 		std::vector<glm::vec2> places;
-		/// Whether the hand is drawing over the world: not over a debug window, in the temple or in a cut scene. The path
-		/// is forgotten while it isn't.
+		/// Whether the hand draws over the world: not over a debug window, and not in a cut scene. While it does not, the
+		/// hand forgets the path and the gesture step does nothing. In the temple, the hand forgets the path and does no pass.
 		bool overWorld {true};
+		/// Whether the hand of this computer holds a creature, or holds a field, a fish farm or a pile while it takes from
+		/// it. While it does, the hand forgets the path and the gesture step does nothing.
+		bool handLocked {false};
+		/// Whether a front-end box shows: the game's menu, the question at the start of a new game, or the tattoo editor.
+		/// While it shows, the hand forgets the path and the gesture step does nothing.
+		bool frontEndBox {false};
 		/// Whether the Action button is held, which readies a storm or shield to be sized with a circle
 		bool actionHeld {false};
 		PlayerNames player {PlayerNames::PLAYER_ONE};
@@ -132,6 +138,9 @@ public:
 	/// the pass of this frame, after the samples of the places, the hand forgets its path and takes one sample at the last
 	/// place of the pointer.
 	virtual void RestartPathAtArmedPress() { ForgetPath(); }
+	/// A press of a button directs the fight of the player's creature. In the pass of this frame, after the samples of
+	/// the places, the hand forgets its path.
+	virtual void ForgetPathAtPress() { ForgetPath(); }
 
 	/// The templates the paths are matched against, empty until the game's file is loaded
 	[[nodiscard]] virtual std::span<const gestures::GestureTemplate> GetTemplates() const = 0;

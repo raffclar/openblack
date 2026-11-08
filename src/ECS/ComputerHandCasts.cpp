@@ -35,9 +35,14 @@ Result ChantProcess(HandAction& action, const World& world, const Step& step)
 	{
 		return Result::Abort;
 	}
-	// The worshippers already chant at the icon, or they start now
-	if (world.casts.IconCharging(icon) || world.casts.StartChant(icon, type))
+	// The worshippers already chant at the icon, or they start now. When the god may not start the chant, it waits.
+	if (world.casts.IconCharging(icon))
 	{
+		return Result::Next;
+	}
+	if (world.casts.MayStartChant(icon, type))
+	{
+		static_cast<void>(world.casts.StartChant(icon, type));
 		return Result::Next;
 	}
 	if (!world.casts.IconHasSite(icon))

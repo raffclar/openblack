@@ -28,6 +28,9 @@ public:
 	[[nodiscard]] virtual bool IconHasSite(entt::entity icon) const = 0;
 	/// The worshippers chant at the icon now
 	[[nodiscard]] virtual bool IconCharging(entt::entity icon) const = 0;
+	/// The god may start the chant for the miracle at the icon. The icon does not charge, no hand holds its miracle, the
+	/// god may cast the miracle, and the site has prayer power or the icon has a store.
+	[[nodiscard]] virtual bool MayStartChant(entt::entity icon, MagicType type) const = 0;
 	/// The worshippers start to chant for the miracle at the icon. False when the icon cannot start.
 	virtual bool StartChant(entt::entity icon, MagicType type) = 0;
 	/// The prayer power that the miracle of the icon still needs

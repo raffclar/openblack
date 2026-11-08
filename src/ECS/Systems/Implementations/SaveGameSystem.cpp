@@ -88,6 +88,7 @@
 #include "ECS/Systems/CreatureCaveSystemInterface.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
+#include "ECS/Systems/GestureSystemInterface.h"
 #include "ECS/Systems/HelpTextSystemInterface.h"
 #include "ECS/Systems/LandSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
@@ -1193,6 +1194,17 @@ void SaveGameSystem::ReportWriteProblems()
 }
 
 bool SaveGameSystem::Load(uint32_t slot)
+{
+	const bool loaded = LoadSlot(slot);
+	// A game that loads makes the hand forget the path of its gesture
+	if (loaded && Locator::gestureSystem::has_value())
+	{
+		Locator::gestureSystem::value().ForgetPath();
+	}
+	return loaded;
+}
+
+bool SaveGameSystem::LoadSlot(uint32_t slot)
 {
 	FlushWrites();
 	const auto player = PlayerFolder();

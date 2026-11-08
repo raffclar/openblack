@@ -114,6 +114,7 @@
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/EffectRequestSystemInterface.h"
 #include "ECS/Systems/FightTranscriptSystemInterface.h"
+#include "ECS/Systems/GestureSystemInterface.h"
 #include "ECS/Systems/HelpProfileSystemInterface.h"
 #include "ECS/Systems/HighDetailSystemInterface.h"
 #include "ECS/Systems/Implementations/VillagerDisciples.h"
@@ -731,6 +732,13 @@ void DetachObjectLeash() // 187 DETACH_OBJECT_LEASH
 	{
 		Locator::leashSystem::value().TakeOff(creature);
 		return;
+	}
+	// The hand of the creature's player forgets the path of its gesture, as when a leash comes off
+	const auto local =
+	    Locator::playerSystem::has_value() ? Locator::playerSystem::value().GetLocalPlayer() : PlayerNames::PLAYER_ONE;
+	if (body->owner == local && Locator::gestureSystem::has_value())
+	{
+		Locator::gestureSystem::value().ForgetPath();
 	}
 	// It also forgets the actions that the area that held it refused
 	if (auto* mind = registry.TryGet<ecs::components::CreatureMindState>(creature))
