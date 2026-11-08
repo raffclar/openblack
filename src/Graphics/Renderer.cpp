@@ -494,6 +494,7 @@ Renderer::~Renderer() noexcept
 	}
 	_landColourFrameBuffer.reset();
 	_hairLightKept.reset();
+	_worldBodyColoursKept.reset();
 	_skyDomeFrameBuffer.reset();
 	if (_lightningGlowTexture)
 	{
@@ -893,6 +894,8 @@ void Renderer::Frame() noexcept
 		{
 			_hairLightKept.reset();
 		}
+		// The colours that the world gave the bodies are written again from their places
+		_worldBodyColoursKept.reset();
 		// The graphics device keeps no copy of the textures, the vertices and the triangles of the land's blocks: the
 		// land gives them again, and then the footprints paint the textures
 		if (Locator::terrainSystem::has_value())

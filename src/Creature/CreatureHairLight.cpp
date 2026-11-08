@@ -73,4 +73,13 @@ std::optional<Colours> StatisticsBoxColours(bool drawnByTheWorld) noexcept
 	return k_Start;
 }
 
+bool HasWorldColours(bool landFrame, bool drawnByTheWorld, bool hadWorldColours) noexcept
+{
+	if (!landFrame)
+	{
+		return hadWorldColours;
+	}
+	return drawnByTheWorld;
+}
+
 } // namespace openblack::creature_hair_light
