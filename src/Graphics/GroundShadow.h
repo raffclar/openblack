@@ -14,6 +14,7 @@
 #include <array>
 #include <optional>
 #include <span>
+#include <vector>
 
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
@@ -160,6 +161,12 @@ struct GroundShadow
 	[[nodiscard]] static glm::vec4 Receiver(const Footprint& footprint, const Cast& cast);
 	/// Whether a shadow's extent reaches the land block with its lowest corner at `block`, which is shaded by it
 	[[nodiscard]] static bool ReachesBlock(const Footprint& footprint, const glm::vec2& block);
+	/// The shadows that reach each land block, by the lowest corners of the blocks. The shadows of block b are
+	/// shadows[firsts[b]] up to shadows[firsts[b + 1]], in the order of the footprints. The result is the same as a
+	/// test of each shadow against each block with ReachesBlock. A grid of the blocks keeps the tests to the blocks
+	/// near each shadow.
+	static void ShadowsOfBlocks(std::span<const Footprint> footprints, std::span<const glm::vec2> blocks,
+	                            std::vector<uint32_t>& firsts, std::vector<uint32_t>& shadows);
 };
 
 } // namespace openblack::graphics

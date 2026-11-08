@@ -10,6 +10,7 @@
 #include "WorkerPool.h"
 
 #include <algorithm>
+#include <utility>
 
 using namespace openblack;
 
@@ -57,6 +58,43 @@ void WorkerPool::ForEach(size_t count, const Job& job)
 		}
 		return;
 	}
+	Give(count, job);
+	DoJobs(0);
+	Wait(count);
+}
+
+void WorkerPool::Start(size_t count, Job job)
+{
+	_started = std::move(job);
+	_startedCount = count;
+	// With no threads, Finish does all the jobs on the calling thread
+	if (count != 0 && !_threads.empty())
+	{
+		Give(count, _started);
+	}
+}
+
+void WorkerPool::Finish()
+{
+	const auto count = std::exchange(_startedCount, 0);
+	if (count == 0)
+	{
+		return;
+	}
+	if (_threads.empty())
+	{
+		for (size_t index = 0; index < count; ++index)
+		{
+			_started(index, 0);
+		}
+		return;
+	}
+	DoJobs(0);
+	Wait(count);
+}
+
+void WorkerPool::Give(size_t count, const Job& job)
+{
 	{
 		// A thread that woke late for the last call must see that no job is left before the jobs change
 		std::unique_lock lock(_mutex);
@@ -69,7 +107,10 @@ void WorkerPool::ForEach(size_t count, const Job& job)
 		++_generation;
 	}
 	_wake.notify_all();
-	DoJobs(0);
+}
+
+void WorkerPool::Wait(size_t count)
+{
 	// Return when each job is done. A thread that did not wake yet finds no job and does not touch the job.
 	std::unique_lock lock(_mutex);
 	_done.wait(lock, [this, count] { return _finished.load(std::memory_order_acquire) == count; });
