@@ -132,7 +132,9 @@ void VideoOverlay::Upload(const Planes& planes)
 void VideoOverlay::Draw(RenderPass view, glm::u16vec2 resolution, const Planes& planes, video::ScreenRect rect, uint8_t alpha,
                         std::optional<film_surface::Format> surface)
 {
-	if (alpha == 0 || planes.width == 0 || planes.height == 0 || bgfx::getAvailTransientVertexBuffer(6, Layout()) < 6)
+	const auto tiles = video::PictureTiles(rect, planes.width, planes.height);
+	const auto vertexCount = static_cast<uint32_t>(tiles.size() * 6);
+	if (alpha == 0 || tiles.empty() || bgfx::getAvailTransientVertexBuffer(vertexCount, Layout()) < vertexCount)
 	{
 		return;
 	}
@@ -147,22 +149,19 @@ void VideoOverlay::Draw(RenderPass view, glm::u16vec2 resolution, const Planes& 
 	             0.0f, bgfx::getCaps()->homogeneousDepth);
 	bgfx::setViewTransform(viewId, nullptr, projection.data());
 
+	// One quad for each tile of the picture, as the game draws it. The texture coordinates are texels of the picture
 	bgfx::TransientVertexBuffer buffer;
-	bgfx::allocTransientVertexBuffer(&buffer, 6, Layout());
-	const auto x0 = static_cast<float>(rect.x);
-	const auto y0 = static_cast<float>(rect.y);
-	const auto x1 = static_cast<float>(rect.x + rect.width);
-	const auto y1 = static_cast<float>(rect.y + rect.height);
+	bgfx::allocTransientVertexBuffer(&buffer, vertexCount, Layout());
 	const uint32_t abgr = (static_cast<uint32_t>(alpha) << 24) | 0x00FFFFFFu;
-	const std::array<Vertex, 6> vertices = {{
-	    {x0, y0, 0.0f, 0.0f, abgr},
-	    {x1, y0, 1.0f, 0.0f, abgr},
-	    {x1, y1, 1.0f, 1.0f, abgr},
-	    {x0, y0, 0.0f, 0.0f, abgr},
-	    {x1, y1, 1.0f, 1.0f, abgr},
-	    {x0, y1, 0.0f, 1.0f, abgr},
-	}};
-	std::ranges::copy(vertices, reinterpret_cast<Vertex*>(buffer.data));
+	auto* vertex = reinterpret_cast<Vertex*>(buffer.data);
+	for (const auto& tile : tiles)
+	{
+		const Vertex topLeft {tile.min.x, tile.min.y, tile.texelMin.x, tile.texelMin.y, abgr};
+		const Vertex topRight {tile.max.x, tile.min.y, tile.texelMax.x, tile.texelMin.y, abgr};
+		const Vertex bottomRight {tile.max.x, tile.max.y, tile.texelMax.x, tile.texelMax.y, abgr};
+		const Vertex bottomLeft {tile.min.x, tile.max.y, tile.texelMin.x, tile.texelMax.y, abgr};
+		vertex = std::ranges::copy(std::array {topLeft, topRight, bottomRight, topLeft, bottomRight, bottomLeft}, vertex).out;
+	}
 	bgfx::setVertexBuffer(0, &buffer);
 
 	const auto* shaders = Locator::rendererInterface::value().GetShaderManager();

@@ -603,6 +603,8 @@ openblack_setup_and_add_test(test_video_system video/test_video_system.cpp)
 target_include_directories(
   test_video_system PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/bink
 )
+# The sleep of the frame wait, which keeps its time correct over many calls
+openblack_setup_and_add_test(test_sleep_debt test_sleep_debt.cpp)
 # The videos' frames decoded ahead on a thread of their own
 openblack_setup_and_add_test(test_frame_queue video/test_frame_queue.cpp)
 target_include_directories(

@@ -15,6 +15,7 @@
 #include <chrono>
 #include <map>
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include <gtest/gtest.h>
@@ -46,6 +47,9 @@ struct FakeGame
 	std::vector<int32_t> filmTimes;
 	std::vector<std::filesystem::path> closed;
 	std::map<std::filesystem::path, std::shared_ptr<const bink::BinkFile>> files;
+	/// When set, the wait for a frame steps this clock on by the sleep of each step
+	std::optional<Clock::time_point> waitClock;
+	int waitSteps {0};
 
 	VideoSystem::Hooks Hooks()
 	{
@@ -69,6 +73,12 @@ struct FakeGame
 		    .fallingSpellStarted = [this]() { ++filmStarts; },
 		    .fallingSpellFrame = [this](int32_t filmMs, Clock::time_point) { filmTimes.push_back(filmMs); },
 		    .fallingSpellEnded = [this]() { ++filmEnds; },
+		    .waitStep = waitClock.has_value() ? std::function<Clock::time_point()>([this]() {
+			    ++waitSteps;
+			    *waitClock += video::k_FrameWaitSleep;
+			    return *waitClock;
+		    })
+		                                      : nullptr,
 		};
 	}
 };
@@ -180,6 +190,85 @@ TEST(VideoSystem, FramesFollowTheRealClockAndNoneIsSkipped)
 	EXPECT_EQ(videos.GetStatus()->frame, 49);
 	EXPECT_EQ(videos.GetPicture()->serial, 49u);
 	EXPECT_EQ(videos.GetPicture()->y[0], 16 + 48);
+}
+
+TEST(VideoSystem, WhileItCoversTheScreenTheGameWaitsForTheNextFrame)
+{
+	FakeGame game;
+	game.files["a.bik"] = MakeVideo(300, 24);
+	game.waitClock = k_Start + 10ms;
+	VideoSystem videos(game.Hooks(), video::DecodeMode::Inline);
+	videos.Play("a.bik");
+	// The first frame is ready: no wait
+	videos.Update(k_Start);
+	EXPECT_EQ(game.waitSteps, 0);
+	EXPECT_EQ(videos.GetStatus()->frame, 1);
+	// No new frame at 10 ms: the game tries every 500 microseconds until the second frame is due at 41.67 ms. The
+	// try at 42 ms finds it, after 64 sleeps, and the sleep after that try is the last
+	videos.Update(k_Start + 10ms);
+	EXPECT_EQ(game.waitSteps, 65);
+	EXPECT_EQ(videos.GetStatus()->frame, 2);
+	EXPECT_EQ(videos.GetPicture()->serial, 2u);
+}
+
+TEST(VideoSystem, AFrameThatCameBeforeTheUpdateNeedsNoWait)
+{
+	FakeGame game;
+	game.files["a.bik"] = MakeVideo(300, 24);
+	game.waitClock = k_Start;
+	VideoSystem videos(game.Hooks(), video::DecodeMode::Inline);
+	videos.Play("a.bik");
+	videos.Update(k_Start);
+	// The clock of the film counts the second frame earlier in the game's frame
+	videos.CountDueFrames(k_Start + 42ms);
+	videos.Update(k_Start + 43ms);
+	EXPECT_EQ(game.waitSteps, 0);
+	EXPECT_EQ(videos.GetStatus()->frame, 2);
+}
+
+TEST(VideoSystem, AMissingIntroWaitsHalfASecondEachUpdate)
+{
+	FakeGame game;
+	game.waitClock = k_Start;
+	VideoSystem videos(game.Hooks(), video::DecodeMode::Inline);
+	videos.Play("intro.bik");
+	videos.ScheduleIntro();
+	// No frame comes: all 1000 tries, 500 microseconds each
+	videos.Update(k_Start);
+	EXPECT_EQ(game.waitSteps, 1000);
+	EXPECT_EQ(*game.waitClock, k_Start + 500ms);
+	videos.Update(*game.waitClock);
+	EXPECT_EQ(game.waitSteps, 2000);
+	EXPECT_TRUE(videos.CoversScreen());
+	// Escape ends it at once, with no wait
+	EXPECT_TRUE(videos.Escape(false, false));
+	videos.Update(*game.waitClock);
+	EXPECT_EQ(game.waitSteps, 2000);
+}
+
+TEST(VideoSystem, NoWaitWhileTheVideoFades)
+{
+	FakeGame game;
+	// Three frames at one a second: the fade starts before the first frame
+	game.files["a.bik"] = MakeVideo(3, 1);
+	game.waitClock = k_Start;
+	VideoSystem videos(game.Hooks(), video::DecodeMode::Inline);
+	videos.Play("a.bik");
+	videos.Update(k_Start);
+	videos.Update(k_Start + 100ms);
+	EXPECT_EQ(game.waitSteps, 0);
+}
+
+TEST(VideoSystem, TheFallingSpellsFilmDoesNotWait)
+{
+	FakeGame game;
+	game.files["fall.bik"] = MakeVideo(300, 24);
+	game.waitClock = k_Start;
+	VideoSystem videos(game.Hooks(), video::DecodeMode::Inline);
+	videos.StartFallingSpell();
+	videos.Update(k_Start);
+	videos.Update(k_Start + 10ms);
+	EXPECT_EQ(game.waitSteps, 0);
 }
 
 TEST(VideoSystem, FadesOverItsLastFiveSecondsAndGivesThePauseBack)

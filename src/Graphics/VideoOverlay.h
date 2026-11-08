@@ -28,8 +28,9 @@ namespace openblack::graphics
 
 class Texture2D;
 
-/// A decoded Bink picture drawn as one screen quad: its Y, U and V planes as three single-channel textures, turned to
-/// colour in the shader with the game's video library's tables. The planes are uploaded only when the picture changes.
+/// A decoded Bink picture drawn as screen quads, one for each tile of 256 texels as the game draws it. The Y, U and V
+/// planes are three textures with one channel. The shader turns them to colour with the tables of the video library of
+/// the game. The planes go to the card only when the picture changes.
 class VideoOverlay
 {
 public:
