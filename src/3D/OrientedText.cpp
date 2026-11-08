@@ -13,6 +13,24 @@
 
 using namespace openblack;
 
+namespace
+{
+/// The game reads a glyph in the world from one and a half texels left of its first column
+constexpr float k_TexelsBeforeGlyph = 1.5f;
+/// From the middle of the first row, 39 rows down: to the middle of the last of the 40 rows
+constexpr float k_HalfTexel = 0.5f;
+constexpr float k_RowsRead = 39.0f;
+} // namespace
+
+GlyphTexels openblack::OrientedGlyphTexels(const gui::GameFont::Glyph& glyph)
+{
+	const glm::vec2 min {static_cast<float>(glyph.atlasMin.x) - k_TexelsBeforeGlyph,
+	                     static_cast<float>(glyph.atlasMin.y) + k_HalfTexel};
+	// Half the bitmap's width at full height, and one texel more
+	const float across = (static_cast<float>(glyph.width) * 0.5f) + 1.0f;
+	return {.min = min, .max = {min.x + across, min.y + k_RowsRead}};
+}
+
 int openblack::OrientedTextDepthAxis(int across, int down)
 {
 	// The game takes the first axis unless across or down is it, then the second unless either is that too
@@ -55,7 +73,7 @@ void openblack::AppendOrientedText(std::vector<OrientedTextVertex>& vertices, co
 		}
 		if (c == u' ')
 		{
-			pen += unit * (glyph->left + glyph->ink + glyph->right);
+			pen += unit * font.Advance(c);
 			continue;
 		}
 		pen += unit * glyph->left;
@@ -63,8 +81,9 @@ void openblack::AppendOrientedText(std::vector<OrientedTextVertex>& vertices, co
 		const auto bottomLeft = pen + height;
 		const auto topRight = pen + (unit * (glyph->ink + 1.0f));
 		const auto bottomRight = topRight + height;
-		const auto uvMin = glm::vec2(glyph->atlasMin) / atlasSize;
-		const auto uvMax = glm::vec2(glyph->atlasMax) / atlasSize;
+		const auto texels = OrientedGlyphTexels(*glyph);
+		const auto uvMin = texels.min / atlasSize;
+		const auto uvMax = texels.max / atlasSize;
 		vertices.push_back({topLeft, uvMin, packed});
 		vertices.push_back({bottomLeft, {uvMin.x, uvMax.y}, packed});
 		vertices.push_back({topRight, {uvMax.x, uvMin.y}, packed});

@@ -161,6 +161,14 @@ public:
 	/// The places of the pointer that the interface got with the last call of TakeMouseMoves, in window pixels, in the
 	/// sequence that they came. The gestures take a sample at each of these places.
 	[[nodiscard]] virtual std::span<const glm::ivec2> GetMousePlaces() const { return {}; }
+	/// The places of TakeMouseMoves that no pass of the interface took yet. The first pass of the interface after
+	/// TakeMouseMoves takes them all, and a later pass gets none: the turn's pass when the frame does a turn, else the
+	/// frame's pass.
+	[[nodiscard]] virtual std::span<const glm::ivec2> TakeInterfacePlaces() { return GetMousePlaces(); }
+	/// The messages of the mouse buttons that the interface gets in this frame: a press or a release of the Action
+	/// button, a press or a release of the Move button, and a double click of the left button. Each kind sends one message at
+	/// most.
+	[[nodiscard]] virtual uint32_t GetButtonMessages() const { return 0; }
 	/// A message of the mouse from a path that the testbed draws as if with the hand, at the place in window pixels. The
 	/// message comes at the time of the clock that the help reads, as a message of the player's mouse does.
 	virtual void DrawnMouseMessage(glm::ivec2 /*position*/) {}

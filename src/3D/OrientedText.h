@@ -19,12 +19,16 @@
 #include <glm/vec3.hpp>
 #include <glm/vec4.hpp>
 
+#include "Gui/GameFont.h"
+
 namespace openblack
 {
-namespace gui
+/// Where in the font's atlas a glyph of text in the world is read from, in texels
+struct GlyphTexels
 {
-class GameFont;
-}
+	glm::vec2 min {0.0f};
+	glm::vec2 max {0.0f};
+};
 
 /// A corner of a letter of text laid out in the world, in triangles of three
 struct OrientedTextVertex
@@ -50,6 +54,11 @@ struct TextFrame
 void AppendOrientedText(std::vector<OrientedTextVertex>& vertices, const gui::GameFont& font, const TextFrame& frame,
                         int across, int down, std::u16string_view text, glm::vec3 offset, float size, float stretch,
                         glm::u8vec4 colour);
+
+/// The part of the atlas that the game reads a glyph of text in the world from. Across, it starts one and a half
+/// texels left of the glyph's first column and is half the bitmap's width and one texel more, so it ends at the middle
+/// of the glyph's last column. Down, it goes from the middle of the first row to the middle of the last of 40 rows.
+[[nodiscard]] GlyphTexels OrientedGlyphTexels(const gui::GameFont::Glyph& glyph);
 
 /// The axis the game stands text off the page along, for the across and down axes
 [[nodiscard]] int OrientedTextDepthAxis(int across, int down);

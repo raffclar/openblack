@@ -547,3 +547,14 @@ TEST(KeyBindings, HeldActionsStayHeldWithOtherModifiers)
 	EXPECT_EQ(ActionsPressedByKeyDown(bindings, SDL_SCANCODE_A, KMOD_NONE, none), none);
 	EXPECT_EQ(ActionsPressedByKeyDown(bindings, SDL_SCANCODE_A, KMOD_LALT | KMOD_LSHIFT, none), BindableActionMap::TILT_UP);
 }
+
+TEST(KeyBindings, InTheTempleOnlyAMousePressDoesTheAction)
+{
+	// Outside the temple a press of the keyboard or of the mouse does the action
+	EXPECT_TRUE(PressDoesAction(false, false));
+	EXPECT_TRUE(PressDoesAction(false, true));
+	// Inside the temple the temple takes the keyboard for its rooms, so Ctrl+S does not quick save
+	EXPECT_FALSE(PressDoesAction(true, false));
+	// A mouse button that has the action still does it inside the temple
+	EXPECT_TRUE(PressDoesAction(true, true));
+}

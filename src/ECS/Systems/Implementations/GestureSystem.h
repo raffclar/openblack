@@ -50,6 +50,7 @@ public:
 
 	// GestureSystemInterface
 	void Update(const Frame& frame) override;
+	void InterfaceTurn(const Frame& frame) override;
 	/// The game's templates, loaded through the resource caches the first time they are wanted
 	void LoadTemplates() override;
 	void DrawPath(std::vector<glm::vec2> path, bool holdingAction) override;
@@ -91,6 +92,11 @@ private:
 	void StepSelection(gesture::HandContext& context, const Frame& frame);
 	/// Takes a sample at a place of the pointer, or at the next point of a path drawn for the testbed
 	void SampleCursor(glm::vec2 cursor, const Frame& frame);
+	/// A pass of the interface: the samples, then the gesture step so many times
+	void Pass(const Frame& frame, uint32_t steps);
+	/// The gesture step: the times count down, the camera and the Move button can wipe the path, then the step
+	/// recognises the path. The first step of a pass samples the places first.
+	void Step(const Frame& frame, bool samples, std::optional<glm::vec2> placeBefore);
 	/// Acts on the first gesture waited for that the path draws
 	void Recognise(const Frame& frame, const gesture::HandContext& context);
 	/// A point on the screen that the path uses (768 pixels high) from a point in window pixels
@@ -128,6 +134,8 @@ private:
 	bool _sampleLastPlace {false};
 	/// Where the camera's eye was last frame
 	std::optional<glm::vec3> _lastCameraEye;
+	/// Whether the camera moved in its last update
+	bool _cameraMoved {false};
 	/// The rest after a gesture, while nothing is recorded
 	float _pause {0.0f};
 	float _screenAspect {4.0f / 3.0f};

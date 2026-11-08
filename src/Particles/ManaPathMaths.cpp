@@ -17,7 +17,7 @@
 #include <glm/geometric.hpp>
 
 #include "3D/MapCoords.h"
-#include "Common/PortableMath.h"
+#include "Common/X87.h"
 #include "Common/X87Vector.h"
 
 using namespace openblack::particles;
@@ -76,7 +76,8 @@ float mana_path::Heading(const Path& path)
 	const float across = path.length != 0.0f ? 1.0f / path.length : 0.0f;
 	const float dx = (path.to.x - path.from.x) * across;
 	const float dz = (path.to.z - path.from.z) * across;
-	return openblack::portable_math::Atan2(dz, dx) + std::numbers::pi_v<float> / 2.0f;
+	// The arctangent stays wide until the quarter turn is added, and the sum rounds one time
+	return x87::Add(x87::Atan2(dz, dx), std::numbers::pi_v<float> / 2.0f);
 }
 
 float mana_path::Progress(const Path& path, const Settings& settings, float age)
