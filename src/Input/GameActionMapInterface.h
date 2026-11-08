@@ -12,6 +12,7 @@
 #include <cstdint>
 
 #include <array>
+#include <functional>
 #include <optional>
 #include <span>
 #include <variant>
@@ -255,6 +256,12 @@ public:
 	[[nodiscard]] virtual bool WheelTurned() const { return false; }
 	/// True when the press of the action in this frame came from a mouse press that waited for Alt to go up
 	[[nodiscard]] virtual bool WaitedMousePress([[maybe_unused]] BindableActionMap action) const { return false; }
+	/// Keeps a press, a let go or a motion of the mouse for the hand. The hand gets the frame's events at the end of the
+	/// frame. The pointer moves with a kept motion when movesPointer is true.
+	virtual void KeepHandEvent([[maybe_unused]] const SDL_Event& event, [[maybe_unused]] bool movesPointer) {}
+	/// Gives the hand the events of this frame that it can have now, in sequence. While Alt is held, the presses and let
+	/// goes of the hand's buttons wait. The first frame without Alt sends their messages after the motions.
+	virtual void TakeHandEvents([[maybe_unused]] const std::function<void(const SDL_Event&, bool)>& hand) {}
 	/// Puts the cursor, and the pointer, somewhere in the window, as the camera does dragging round the screen's edge
 	virtual void WarpCursor([[maybe_unused]] glm::ivec2 position) {}
 	/// Where the cursor was put this frame, if it was

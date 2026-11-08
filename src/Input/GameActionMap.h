@@ -25,6 +25,7 @@
 #include "BoxKeyboard.h"
 #include "CursorFreeze.h"
 #include "GameActionMapInterface.h"
+#include "HandButtonMessages.h"
 #include "Help/MouseMoves.h"
 #include "MouseMotion.h"
 #include "PlatformKeys.h"
@@ -108,6 +109,8 @@ public:
 	[[nodiscard]] bool IsKeyHeld(int scancode) const final;
 	[[nodiscard]] bool WheelTurned() const final { return _wheelTurned; }
 	[[nodiscard]] bool WaitedMousePress(BindableActionMap action) const final;
+	void KeepHandEvent(const SDL_Event& event, bool movesPointer) final;
+	void TakeHandEvents(const std::function<void(const SDL_Event&, bool)>& hand) final;
 
 private:
 	BindableActionMap _bindableMap = BindableActionMap::NONE;
@@ -183,6 +186,21 @@ private:
 	alt_presses::AltHeldPresses _altPresses;
 	/// The one-press actions that act in this frame from mouse presses that waited for Alt
 	uint64_t _waitedMousePresses {0};
+	/// The rule that holds the messages of the hand's buttons while Alt is held
+	hand_messages::HandButtonMessages _handMessages;
+	/// A mouse event of this frame for the hand
+	struct KeptHandEvent
+	{
+		SDL_Event event;
+		bool movesPointer;
+	};
+	std::vector<KeptHandEvent> _handEvents;
+	/// The last place of the pointer that a kept event told. The messages that waited come at this place.
+	glm::ivec2 _handPointer {0};
+	/// The double click of this frame marked itself when it came
+	bool _doubleClickMarkedThisFrame {false};
+	/// The count of the hand's button messages in this frame, when they came from the rule of the hand's messages
+	std::optional<uint32_t> _handMessagesSent;
 	/// Where the cursor was at the end of the last frame, and whether the game put it somewhere in this frame
 	glm::ivec2 _lastFramePosition {0, 0};
 	bool _cursorJumped {false};

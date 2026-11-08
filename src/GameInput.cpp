@@ -139,9 +139,19 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 {
 	// The hand grips the land, which the temple has none of: its camera takes the clicks
 	const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
-	// The buttons and the presses of the hand go first, then the work of the event's type
+	// The presses, the let goes and the motions of the mouse go to the hand at the end of the frame. The other events go
+	// to the hand first, then the work of the event's type.
 	auto& handPress = Locator::handPressSystem::value();
-	handPress.Press(event, {.inTemple = inTemple, .playGrabSound = [this] { PlayHandGrabSound(); }});
+	if (event.type == SDL_MOUSEBUTTONDOWN || event.type == SDL_MOUSEBUTTONUP || event.type == SDL_MOUSEMOTION)
+	{
+		// While the mouse turns the camera, the cursor stays where it was and the hand does not follow the pointer
+		auto& actions = Locator::gameActionSystem::value();
+		actions.KeepHandEvent(event, event.type == SDL_MOUSEMOTION && !actions.IsCursorFrozen());
+	}
+	else
+	{
+		handPress.Press(event, {.inTemple = inTemple, .playGrabSound = [this] { PlayHandGrabSound(); }});
+	}
 
 	switch (event.type)
 	{
@@ -161,15 +171,6 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 			return false;
 		}
 		break;
-	case SDL_MOUSEMOTION:
-	{
-		// While the mouse turns the camera the cursor is held where it was, and the pointer isn't followed
-		if (!Locator::gameActionSystem::value().IsCursorFrozen())
-		{
-			handPress.MovePointer({event.motion.x, event.motion.y});
-		}
-		break;
-	}
 	}
 
 	return true;
@@ -220,8 +221,18 @@ void Game::UpdateInput()
 			actions.PointPlayerEvent(e);
 			Locator::events::value().Create<SDL_Event>(e);
 		}
-		FollowWindowSize();
+		// The hand gets the frame's mouse events after all of them came. While Alt is held, the presses and the let goes of
+		// the hand's buttons wait.
 		auto& handPress = Locator::handPressSystem::value();
+		const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
+		actions.TakeHandEvents([this, &handPress, inTemple](const SDL_Event& event, bool movesPointer) {
+			handPress.Press(event, {.inTemple = inTemple, .playGrabSound = [this] { PlayHandGrabSound(); }});
+			if (movesPointer)
+			{
+				handPress.MovePointer({event.motion.x, event.motion.y});
+			}
+		});
+		FollowWindowSize();
 		if (actions.IsCursorFrozen())
 		{
 			handPress.SetMousePosition(glm::ivec2(actions.GetMousePosition()));
