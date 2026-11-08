@@ -837,3 +837,109 @@ TEST(PhysicsBody, APredictionHasAtMostFifteenTurns)
 	EXPECT_EQ(PredictFlight(body, land, 40).size(), static_cast<size_t>(k_MostPredictedTurns) + 1);
 	EXPECT_EQ(PredictFlight(body, land, -3).size(), 1U);
 }
+
+namespace
+{
+/// A body of one point of mass 1 at a place, its axes and centre as given and not made unit
+Body OnePointBody(glm::vec3 point, const glm::mat3& axes, glm::vec3 centre, float scale = 1.0f, glm::vec3 centreOfMass = {})
+{
+	Shape shape;
+	shape.points = {point};
+	shape.radius = 3.0f;
+	shape.centreOfMass = centreOfMass;
+	Body body({.scale = scale, .mass = 1.0f, .material = k_Stone, .dynamic = true}, shape);
+	body.SetPoseDirect(axes, centre);
+	return body;
+}
+
+/// The axes times the centre of mass with the game's order of the sums: z, y, x for the first part, z, x, y for the others
+glm::vec3 GameTurnedCentreOfMass(const glm::mat3& a, glm::vec3 c)
+{
+	return {(a[2].x * c.z + a[1].x * c.y) + a[0].x * c.x, (a[2].y * c.z + a[0].y * c.x) + a[1].y * c.y,
+	        (a[2].z * c.z + a[0].z * c.x) + a[1].z * c.y};
+}
+
+// Values where the game's order of the sums gives other bits than the plain matrix product
+const glm::mat3 k_OddAxes {{1.3f, 1.3f, -1.9f}, {-0.41f, -1.9f, 2.71f}, {3.14f, -0.41f, 0.7f}};
+constexpr glm::vec3 k_OddCentreOfMass {-1.9f, 1.1f, -1.9f};
+constexpr glm::vec3 k_OddPlace {0.7f, 3.14f, 1.1f};
+} // namespace
+
+TEST(PhysicsBody, SettlingAddsThePartsOfEachPointInTheGamesOrder)
+{
+	const FakeLand slope(0.0f, 0.5f);
+	const glm::mat3 axes {{3.14f, 0.37f, 0.1f}, {0.9f, 0.3f, 0.2f}, {1.3f, 0.37f, 0.3f}};
+	const glm::vec3 local {-1.9f, 0.37f, 2.3f};
+	const glm::vec3 centre {0.7f, -0.6f, 0.0f};
+	auto body = OnePointBody(local, axes, centre);
+	body.SettleOnLand(slope, false, false);
+
+	// The game adds the parts of the first row from z to x, and those of the second row from y to z
+	const float x = ((axes[2].x * local.z + axes[1].x * local.y) + axes[0].x * local.x) + centre.x;
+	const float y = ((axes[1].y * local.y + axes[0].y * local.x) + axes[2].y * local.z) + centre.y;
+	const float expected = centre.y - (y - slope.HeightAt({x, 0.0f}));
+	const auto plain = axes * local + centre;
+	const float fromPlain = centre.y - (plain.y - slope.HeightAt({plain.x, plain.z}));
+	ASSERT_NE(expected, fromPlain);
+	EXPECT_EQ(body.Centre().y, expected);
+}
+
+TEST(PhysicsBody, ALowestGapThatIsNotANumberIsKeptAsTheGameKeepsIt)
+{
+	class NoNumberLand final: public Ground
+	{
+	public:
+		[[nodiscard]] float HeightAt(glm::vec2) const override { return std::numeric_limits<float>::quiet_NaN(); }
+		[[nodiscard]] glm::vec3 NormalAt(glm::vec2) const override { return {0.0f, 1.0f, 0.0f}; }
+		[[nodiscard]] bool IsSeaCell(glm::vec2) const override { return false; }
+	};
+	auto body = MakeCube(0.5f, {0.0f, 3.0f, 0.0f});
+	body.SettleOnLand(NoNumberLand(), false, false);
+	EXPECT_TRUE(std::isnan(body.Centre().y));
+}
+
+TEST(PhysicsBody, TheObjectPoseTurnsTheCentreOfMassInTheGamesOrder)
+{
+	constexpr float k_Scale = 1.5f;
+	const auto body = OnePointBody({}, k_OddAxes, k_OddPlace, k_Scale, k_OddCentreOfMass);
+	const auto scaled = k_OddAxes * k_Scale;
+	const auto expected = k_OddPlace - GameTurnedCentreOfMass(scaled, k_OddCentreOfMass);
+	ASSERT_NE(expected, k_OddPlace - scaled * k_OddCentreOfMass);
+	const auto pose = body.ObjectPose();
+	EXPECT_EQ(pose.origin.x, expected.x);
+	EXPECT_EQ(pose.origin.y, expected.y);
+	EXPECT_EQ(pose.origin.z, expected.z);
+}
+
+TEST(PhysicsBody, ARestingBodyFollowsItsObjectInTheGamesOrder)
+{
+	constexpr float k_Scale = 1.5f;
+	auto body = OnePointBody({}, k_OddAxes, {}, k_Scale, k_OddCentreOfMass);
+	body.FollowObject(k_OddPlace);
+	// The game turns the centre of mass with the unit axes, then multiplies the result by the scale
+	const auto expected = k_OddPlace + GameTurnedCentreOfMass(k_OddAxes, k_OddCentreOfMass) * k_Scale;
+	ASSERT_NE(expected, k_OddPlace + k_OddAxes * (k_OddCentreOfMass * k_Scale));
+	EXPECT_EQ(body.Centre().x, expected.x);
+	EXPECT_EQ(body.Centre().y, expected.y);
+	EXPECT_EQ(body.Centre().z, expected.z);
+}
+
+TEST(PhysicsBody, TheStartSpinBecomesTheAngularMomentumInTheGamesOrder)
+{
+	const glm::mat3 axes {{0.9f, 1.3f, 0.7f}, {0.3f, -0.2f, 2.71f}, {-0.41f, 0.37f, -1.9f}};
+	auto body = OnePointBody({0.9f, -1.9f, -0.6f}, axes, {});
+	const glm::vec3 omega {2.71f, 0.7f, 0.3f};
+	body.SetAngularVelocityInBodyAxes(omega);
+
+	// The game adds rows 1, 2 and 0 for the first part of the spin in the body, and rows 0, 1 and 2 for the others. It
+	// turns the result into the world from the last axis to the first.
+	const auto& i = body.Inertia();
+	const glm::vec3 local((i[1][0] * omega.y + i[2][0] * omega.z) + i[0][0] * omega.x,
+	                      (i[0][1] * omega.x + i[1][1] * omega.y) + i[2][1] * omega.z,
+	                      (i[0][2] * omega.x + i[1][2] * omega.y) + i[2][2] * omega.z);
+	const auto expected = (axes[2] * local.z + axes[1] * local.y) + axes[0] * local.x;
+	EXPECT_EQ(body.angularMomentum.x, expected.x);
+	EXPECT_EQ(body.angularMomentum.y, expected.y);
+	EXPECT_EQ(body.angularMomentum.z, expected.z);
+	EXPECT_FLOAT_EQ(expected.x, 11.140625f);
+}
