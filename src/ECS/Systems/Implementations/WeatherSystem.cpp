@@ -14,7 +14,10 @@
 #include <cmath>
 
 #include <algorithm>
+#include <functional>
 #include <numbers>
+#include <utility>
+#include <vector>
 
 #include <glm/geometric.hpp>
 #include <spdlog/spdlog.h>
@@ -102,7 +105,6 @@ constexpr float k_TurnDuration = 0.1f;
 constexpr float k_StrikeNearCamera = 300.0f;
 constexpr float k_ArrivalDistance = 0.001f;
 constexpr float k_EffectScale = 256.0f;
-constexpr uint8_t k_DeadStormTurns = 2;
 /// A miracle's storm lives until its miracle takes it away
 constexpr float k_MiracleStormLife = 1e9f;
 
@@ -317,6 +319,7 @@ void WeatherSystem::Reset()
 	_day = 0;
 	_season = 0;
 	_activeStorms.clear();
+	_steppedStorms.clear();
 	// A new land starts with calm background weather
 	_background = {};
 	++_stamp;
@@ -655,105 +658,118 @@ script_weather::Wind WeatherSystem::DriftWindAt(const glm::vec3& position)
 	return script_weather::DriftWind({.x = air.windX, .z = air.windZ}, global, climates, {position.x, position.z});
 }
 
-// Storms age, fade in and out and travel towards their destination; dead ones linger a couple of turns
+// Storms age, fade in and out and travel towards their destination. A dead storm also takes its step, and it goes
+// after a turn or two.
 void WeatherSystem::UpdateStorms()
 {
 	auto& registry = Locator::entitiesRegistry::value();
+	// The storms take their steps in the order of the game's list, the newest first
+	std::vector<std::pair<uint32_t, entt::entity>> order;
+	registry.Each<const Storm>([&order](entt::entity entity, const Storm& storm) { order.emplace_back(storm.serial, entity); });
+	std::ranges::sort(order, std::greater {});
+	_steppedStorms.clear();
 	std::vector<entt::entity> expired;
-	registry.Each<Storm>([&expired](entt::entity entity, Storm& storm) {
-		if (storm.dead)
+	for (const auto& [serial, entity] : order)
+	{
+		auto& storm = registry.Get<Storm>(entity);
+		if (StepStorm(storm))
 		{
-			if (++storm.deadTurns > k_DeadStormTurns)
-			{
-				expired.push_back(entity);
-			}
-			return;
+			_steppedStorms.push_back(storm);
 		}
-
-		storm.age += k_TurnDuration;
-		if (storm.age >= storm.lastsFor)
+		if (storm.dead && storm_fade::DeadStormGoes(storm.deadTurns))
 		{
-			storm.dead = true;
-			return;
+			expired.push_back(entity);
 		}
-
-		const auto faded = storm_fade::Fade(storm.age, storm.lastsFor, storm.fadeTime, storm.strength, storm.innerRadius);
-		storm.currentStrength = faded.strength;
-		storm.currentInnerRadius = faded.innerRadius;
-
-		storm.currentPosition = storm.position;
-		if (storm.speed != 0.0f)
-		{
-			const auto toDestination = storm.destination - storm.currentPosition;
-			const auto distance = std::sqrt((toDestination.x * toDestination.x) + (toDestination.z * toDestination.z));
-			if (distance <= k_ArrivalDistance)
-			{
-				storm.currentPosition = storm.destination;
-				storm.position = storm.destination;
-				storm.arrived = true;
-			}
-			else
-			{
-				const auto step = k_TurnDuration * storm.speed < distance ? k_TurnDuration * storm.speed / distance : 1.0f;
-				storm.currentPosition.x += toDestination.x * step;
-				storm.currentPosition.z += toDestination.z * step;
-				storm.position = storm.currentPosition;
-				storm.arrived = false;
-			}
-		}
-
-		// Once faded in, it flashes now and then, at waits drawn from the game's numbers
-		if (storm.fadeTime < storm.age)
-		{
-			auto& random = Locator::gameRandom::value();
-			auto strikeAt = storm.position;
-			// Each computer of a network game has its own camera, so there the storm strikes at its middle on each computer
-			const bool networkGame = Locator::time::has_value() && Locator::time::value().IsNetworkGame();
-			if (storm.strikesNearCamera && !networkGame && Locator::camera::has_value())
-			{
-				const auto camera = Locator::camera::value().GetOrigin();
-				auto& local = Locator::rng::value();
-				strikeAt.x = camera.x + local.NextValue(-k_StrikeNearCamera, k_StrikeNearCamera);
-				strikeAt.z = camera.z + local.NextValue(-k_StrikeNearCamera, k_StrikeNearCamera);
-			}
-			if (storm.boltWait.y != 0.0f)
-			{
-				storm.boltTimer -= k_TurnDuration;
-				if (storm.boltTimer <= 0.0f)
-				{
-					storm.boltTimer = random.GameFloatRange(storm.boltWait.x, storm.boltWait.y);
-					storm.flash = lightning::Strike(strikeAt, storm.outerRadius, lightning::k_BoltStrength);
-					// Its forked bolt comes down from under the cloud
-					if (Locator::effectRequestSystem::has_value())
-					{
-						const auto ground = Locator::terrainSystem::value().GetHeightAt({strikeAt.x, strikeAt.z});
-						Locator::effectRequestSystem::value().AddStormBolt(
-						    {strikeAt.x, ground + storm.cloudHeight, strikeAt.z});
-					}
-				}
-			}
-			if (storm.thunderWait.y != 0.0f)
-			{
-				storm.thunderTimer -= k_TurnDuration;
-				if (storm.thunderTimer <= 0.0f)
-				{
-					storm.thunderTimer = random.GameFloatRange(storm.thunderWait.x, storm.thunderWait.y);
-					storm.flash = lightning::Strike(strikeAt, storm.outerRadius, lightning::k_ThunderStrength);
-					// Its thunder rolls from the cloud, one of eleven claps that the clock picks, heard once the sound has
-					// travelled to the camera
-					const auto clap = lightning::ThunderClap(machine_clock::Ticks());
-					const auto ground = Locator::terrainSystem::value().GetHeightAt({strikeAt.x, strikeAt.z});
-					Locator::soundTagSystem::value().CreatePointSound(
-					    lightning::ThunderSound(clap), {strikeAt.x, ground + storm.cloudHeight, strikeAt.z}, true);
-				}
-			}
-		}
-		storm.flash = lightning::Advance(storm.flash, k_TurnDuration);
-	});
+	}
 	for (const auto entity : expired)
 	{
 		registry.Destroy(entity);
 	}
+}
+
+// A storm's step in a turn. A storm at the end of its life ends and takes no more of the step. A storm that a script
+// or a miracle ended takes the full step.
+bool WeatherSystem::StepStorm(Storm& storm)
+{
+	storm.age += k_TurnDuration;
+	if (!(storm.age < storm.lastsFor))
+	{
+		storm.dead = true;
+		return false;
+	}
+
+	const auto faded = storm_fade::Fade(storm.age, storm.lastsFor, storm.fadeTime, storm.strength, storm.innerRadius);
+	storm.currentStrength = faded.strength;
+	storm.currentInnerRadius = faded.innerRadius;
+
+	storm.currentPosition = storm.position;
+	if (storm.speed != 0.0f)
+	{
+		const auto toDestination = storm.destination - storm.currentPosition;
+		const auto distance = std::sqrt((toDestination.x * toDestination.x) + (toDestination.z * toDestination.z));
+		if (distance <= k_ArrivalDistance)
+		{
+			storm.currentPosition = storm.destination;
+			storm.position = storm.destination;
+			storm.arrived = true;
+		}
+		else
+		{
+			const auto step = k_TurnDuration * storm.speed < distance ? k_TurnDuration * storm.speed / distance : 1.0f;
+			storm.currentPosition.x += toDestination.x * step;
+			storm.currentPosition.z += toDestination.z * step;
+			storm.position = storm.currentPosition;
+			storm.arrived = false;
+		}
+	}
+
+	// Once faded in, it flashes now and then, at waits drawn from the game's numbers
+	if (storm.fadeTime < storm.age)
+	{
+		auto& random = Locator::gameRandom::value();
+		auto strikeAt = storm.position;
+		// Each computer of a network game has its own camera, so there the storm strikes at its middle on each computer
+		const bool networkGame = Locator::time::has_value() && Locator::time::value().IsNetworkGame();
+		if (storm.strikesNearCamera && !networkGame && Locator::camera::has_value())
+		{
+			const auto camera = Locator::camera::value().GetOrigin();
+			auto& local = Locator::rng::value();
+			strikeAt.x = camera.x + local.NextValue(-k_StrikeNearCamera, k_StrikeNearCamera);
+			strikeAt.z = camera.z + local.NextValue(-k_StrikeNearCamera, k_StrikeNearCamera);
+		}
+		if (storm.boltWait.y != 0.0f)
+		{
+			storm.boltTimer -= k_TurnDuration;
+			if (storm.boltTimer <= 0.0f)
+			{
+				storm.boltTimer = random.GameFloatRange(storm.boltWait.x, storm.boltWait.y);
+				storm.flash = lightning::Strike(strikeAt, storm.outerRadius, lightning::k_BoltStrength);
+				// Its forked bolt comes down from under the cloud
+				if (Locator::effectRequestSystem::has_value())
+				{
+					const auto ground = Locator::terrainSystem::value().GetHeightAt({strikeAt.x, strikeAt.z});
+					Locator::effectRequestSystem::value().AddStormBolt({strikeAt.x, ground + storm.cloudHeight, strikeAt.z});
+				}
+			}
+		}
+		if (storm.thunderWait.y != 0.0f)
+		{
+			storm.thunderTimer -= k_TurnDuration;
+			if (storm.thunderTimer <= 0.0f)
+			{
+				storm.thunderTimer = random.GameFloatRange(storm.thunderWait.x, storm.thunderWait.y);
+				storm.flash = lightning::Strike(strikeAt, storm.outerRadius, lightning::k_ThunderStrength);
+				// Its thunder rolls from the cloud, one of eleven claps that the clock picks, heard once the sound has
+				// travelled to the camera
+				const auto clap = lightning::ThunderClap(machine_clock::Ticks());
+				const auto ground = Locator::terrainSystem::value().GetHeightAt({strikeAt.x, strikeAt.z});
+				Locator::soundTagSystem::value().CreatePointSound(lightning::ThunderSound(clap),
+				                                                  {strikeAt.x, ground + storm.cloudHeight, strikeAt.z}, true);
+			}
+		}
+	}
+	storm.flash = lightning::Advance(storm.flash, k_TurnDuration);
+	return true;
 }
 
 // A climate's turn: its temperature, its storms drifting and clearing, and once a day its rain and wind
@@ -1131,12 +1147,24 @@ bool WeatherSystem::MoveMiracleStorm(entt::entity entity, glm::vec3 centre)
 	return true;
 }
 
+// A storm ends. The cells that the turn works out from now do not get its weather. A cell that the turn worked out
+// before keeps the weather of the storm until the next turn.
+void WeatherSystem::KillStorm(Storm& storm)
+{
+	if (storm.dead)
+	{
+		return;
+	}
+	storm.dead = true;
+	std::erase_if(_activeStorms, [serial = storm.serial](const Storm& active) { return active.serial == serial; });
+}
+
 void WeatherSystem::KillStormsInArea(glm::vec3 position, float radius)
 {
-	Locator::entitiesRegistry::value().Each<Storm>([position, radius](entt::entity, Storm& storm) {
+	Locator::entitiesRegistry::value().Each<Storm>([this, position, radius](entt::entity, Storm& storm) {
 		if (script_weather::InKillArea(storm.currentPosition, storm.outerRadius, position, radius))
 		{
-			storm.dead = true;
+			KillStorm(storm);
 		}
 	});
 }
@@ -1144,23 +1172,13 @@ void WeatherSystem::KillStormsInArea(glm::vec3 position, float radius)
 void WeatherSystem::RemoveMiracleStorm(entt::entity entity)
 {
 	auto& registry = Locator::entitiesRegistry::value();
-	const auto* storm = registry.Valid(entity) ? registry.TryGet<const Storm>(entity) : nullptr;
+	auto* storm = registry.Valid(entity) ? registry.TryGet<Storm>(entity) : nullptr;
 	if (storm == nullptr)
 	{
 		return;
 	}
-	// The weather it brought goes this turn, not at the next
-	const auto serial = storm->serial;
-	registry.Destroy(entity);
-	std::erase_if(_activeStorms, [serial](const Storm& active) { return active.serial == serial; });
-	if (++_stamp == 0)
-	{
-		for (auto& cell : _grid)
-		{
-			cell.stamp = 0;
-		}
-		_stamp = 1;
-	}
+	// The miracle ends its storm, as a script ends a storm
+	KillStorm(*storm);
 }
 
 entt::entity WeatherSystem::CreateWeatherThing(const ScriptStorm& script)
@@ -1275,7 +1293,7 @@ void WeatherSystem::EndWeatherThing(entt::entity thing)
 	if (auto* storm = registry.Valid(weatherThing->storm) ? registry.TryGet<Storm>(weatherThing->storm) : nullptr;
 	    storm != nullptr)
 	{
-		script_weather::EndStorm(*storm);
+		KillStorm(*storm);
 	}
 }
 

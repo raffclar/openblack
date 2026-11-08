@@ -20,6 +20,8 @@ namespace openblack::snow_cover
 namespace
 {
 constexpr float k_InverseCell = 0.025f;
+/// The least width of the edge of a storm's snow, in cells, when the outer radius is not more than the inner one
+constexpr float k_LeastEdge = 0.01f;
 /// A turn's time, and how much of a storm's snow settles in it
 constexpr float k_Turn = 0.1f;
 constexpr float k_Settles = 0.03f;
@@ -61,7 +63,7 @@ void AddStorm(std::span<float> grid, glm::vec2 centre, float innerRadius, float 
 	float outer = outerRadius * k_InverseCell;
 	if (outer <= inner)
 	{
-		outer = inner + 0.02f;
+		outer = inner + k_LeastEdge;
 	}
 	const auto x0 = static_cast<int32_t>(middle.x - outer);
 	const auto z0 = static_cast<int32_t>(middle.y - outer);

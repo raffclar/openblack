@@ -372,11 +372,11 @@ void testbed_scenarios::AddStormScenarios(std::vector<Scenario>& all)
 	                   "set-up script of the third land does. Then KILL_STORMS_IN_AREA ends every storm whose edge is in "
 	                   "a circle of radius 50 round the point.",
 	    .expected =
-	        "Both storms rain under their clouds. At three seconds the west storm ends at once: its rain, its "
-	        "clouds and its shadow go. The east storm is 360 metres from the point, so its edge is not in the "
-	        "circle and it continues to rain. The testbed's clear weather over the whole land also has its edge in the "
-	        "circle, so it ends too; it has no rain and no clouds, so this does not show. The inspector shows the climates "
-	        "stopped and one storm.",
+	        "Both storms rain under their clouds. At three seconds the west storm ends: its rain goes at once. Its "
+	        "clouds and its shadow stay for two more turns (0.2 seconds), then they go. The east storm is 360 metres "
+	        "from the point, so its edge is not in the circle and it continues to rain. The testbed's clear weather "
+	        "over the whole land also has its edge in the circle, so it ends too; it has no rain and no clouds, so this "
+	        "does not show. The inspector shows the climates stopped and one storm.",
 	    .environment = {.dispenserGrid = false},
 	    .framing = {.shot = Shot::Overview, .include = {{-260.0f, -60.0f}, {260.0f, 200.0f}}, .distance = 1.4f},
 	    .landStorms = {{.offset = {-120.0f, 60.0f},

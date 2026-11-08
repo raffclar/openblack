@@ -76,6 +76,21 @@ TEST(SnowCover, StormsTakeSnowAwayNearTheirEdge)
 	EXPECT_FLOAT_EQ(Cell(bare, 15, 13), 0.0f);
 }
 
+TEST(SnowCover, AStormWithNoEdgeTakesAnEdgeOfAHundredthOfACell)
+{
+	auto grid = Grid(255.0f);
+	// The inner radius is 9.995 cells and the outer radius is not more, thus the outer radius becomes 10.005 cells. The
+	// cell 10 across is in the edge, where the storm takes snow away.
+	snow_cover::AddStorm(grid, {400.0f, 400.0f}, 399.8f, 399.8f, 0.1f);
+	const float inner = 399.8f * 0.025f;
+	const float outer = inner + 0.01f;
+	const float laid = (((outer * outer) - 100.0f) - (inner * inner)) * (0.1f / ((outer * outer) - (inner * inner)));
+	EXPECT_FLOAT_EQ(Cell(grid, 20, 10), 255.0f + laid);
+	EXPECT_NEAR(Cell(grid, 20, 10), 205.1f, 0.5f);
+	// A cell within the inner radius takes all of the snow
+	EXPECT_FLOAT_EQ(Cell(grid, 19, 10), 255.0f);
+}
+
 TEST(SnowCover, SnowLiesNoDeeperThanItsMost)
 {
 	auto grid = Grid(254.5f);
