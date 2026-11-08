@@ -69,6 +69,36 @@ void testbed_scenarios::AddVillagerSizeAndReachScenarios(std::vector<Scenario>& 
 	    .framing = {.shot = Shot::Overview, .include = {{-24.0f, -10.0f}, {24.0f, 10.0f}}},
 	    .objects = walkers,
 	});
+	// A child keeps its mother while the hand holds her
+	all.push_back({
+	    .id = "villagers.child_keeps_held_mother",
+	    .name = "A child keeps its mother while the hand holds her",
+	    .facet = Facet::Hand,
+	    .description = "A Norse town of the player with a village centre. A woman of the town stands 25 metres east of "
+	                   "the centre, and her child of five years stands 3 metres east of her. Both walk one metre north, "
+	                   "then decide what to do. After ten seconds the hand takes the woman, and eight seconds later it "
+	                   "puts her down at the same place.",
+	    .expected = "The child follows its mother about. While the hand holds her, the child stays her child and walks to "
+	                "points about 5 metres from the place below the hand. When the hand puts her down, the child follows "
+	                "her again (the inspector's Villager mother of the child stays the woman). Before, the child lost its "
+	                "mother in the first turn that the hand held her, and then it went to its home or looked for one.",
+	    .environment = {.dispenserGrid = false, .cursor = glm::vec2 {0.5f, 0.5f}},
+	    .framing = {.shot = Shot::Placed, .eye = {6.0f, 14.0f, -22.0f}, .look = {2.0f, 0.0f, 0.0f}},
+	    .objects = {{.type = AbodeInfo::NorseTownCentre, .offset = {-25.0f, 0.0f}},
+	                {.type = VillagerInfo::NorseHousewifeFemale,
+	                 .offset = {0.0f, 0.0f},
+	                 .walkTo = glm::vec2(0.0f, 1.0f),
+	                 .joinTown = true},
+	                {.type = VillagerInfo::NorseHousewifeFemale,
+	                 .offset = {3.0f, 0.0f},
+	                 .walkTo = glm::vec2(3.0f, 1.0f),
+	                 .joinTown = true,
+	                 .villagerAge = 5,
+	                 .motherIs = 1}},
+	    .commands = {{.kind = Command::Kind::HandTake, .delaySeconds = 10.0f, .object = 1},
+	                 {.kind = Command::Kind::HandRelease, .delaySeconds = 8.0f}},
+	    .townBeliefInPlayer = 1000.0f,
+	});
 	// A villager that sits at the end of each walk stands up before the next walk starts
 	all.push_back({
 	    .id = "movement.villager_stands_up_then_walks",

@@ -72,6 +72,24 @@ constexpr float k_NearMother = 5.0f;
 [[nodiscard]] bool IsPregnant(bool female, int16_t pregnancy);
 /// A woman is a female who has grown up
 [[nodiscard]] bool IsWoman(bool female, bool child);
+/// Whether a villager can be called on as a mate or a mother: any villager that is not in the dying state. A villager
+/// in the hand, in flight or carried off is about too, and so is a dead one until it goes.
+[[nodiscard]] bool CanBeCalledOn(VillagerStates finalState);
+
+/// What a child knows of its mother
+struct MotherFacts
+{
+	/// She can be called on (CanBeCalledOn)
+	bool available {false};
+	/// She is of the child's tribe
+	bool sameTribe {false};
+	bool female {false};
+	/// Her death has started
+	bool dying {false};
+};
+/// Whether a child still has its mother: one that can be called on, of its tribe, a female, and not dying or dead. A
+/// mother in the hand or in flight stays its mother.
+[[nodiscard]] bool KeepsMother(const MotherFacts& mother);
 
 /// What decides whether a woman conceives at home
 struct HomeConception

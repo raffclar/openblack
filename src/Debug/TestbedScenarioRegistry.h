@@ -363,6 +363,9 @@ struct ObjectSetup
 	/// A villager goes to make love with the scenario's object of this index once the walk delay is up, as a breeder
 	/// sends one: both walk to meet and kiss there
 	std::optional<size_t> mateWith;
+	/// A child has the scenario's villager of this index as its mother, as a child born to her. The mother must come
+	/// before the child in the list.
+	std::optional<size_t> motherIs;
 	/// A villager is put down on the nearest teleport stone after this many seconds, as the hand drops one, and jumps at
 	/// once to the stone nearest where it was walking
 	std::optional<float> dropOnStoneSeconds;

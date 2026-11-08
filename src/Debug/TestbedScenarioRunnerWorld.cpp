@@ -853,6 +853,15 @@ void Runner::PlaceObjects(const Scenario& scenario, glm::vec2 middle)
 			// The villager lives in the building as one of its people
 			Locator::townSystem::value().AddVillagerToAbode(_objects.at(*object.homeIn), _objects.back());
 		}
+		if (object.motherIs.has_value() && *object.motherIs + 1 < _objects.size())
+		{
+			// The child follows its mother about, as one born to her does
+			auto& registry = Locator::entitiesRegistry::value();
+			if (auto* child = registry.TryGet<ecs::components::Villager>(_objects.back()); child != nullptr)
+			{
+				child->mother = _objects.at(*object.motherIs);
+			}
+		}
 		if (object.firefly && Locator::fireflySystem::has_value())
 		{
 			const auto& placed = Locator::entitiesRegistry::value().Get<const ecs::components::Transform>(_objects.back());
