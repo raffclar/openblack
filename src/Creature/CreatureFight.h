@@ -280,15 +280,20 @@ constexpr float k_MaxChargeMs = 1200.0f;
 /// moves and spells are fully charged
 [[nodiscard]] std::optional<float> InitialCharge(Move::Kind kind);
 [[nodiscard]] float ReleasedCharge(float heldMs);
-/// How fast a blow plays by its charge, 0.5 to 1.5
+/// The speed that a blow asks for each millisecond of its charge: 1/1200 as a float
+constexpr float k_SpeedPerChargeMs = 0.000833333354f;
+/// The speed that a blow asks for by its charge, 0.5 to 1.5
 [[nodiscard]] float BlowSpeed(float chargeMs);
 /// How long a press counts as held for its charge: the time it was held, but no more than a tenth of a second for each
 /// game turn since it was pressed, and one more
 constexpr float k_HeldMsPerTurn = 100.0f;
 [[nodiscard]] float HeldMs(float realMs, uint32_t turnsSincePress);
 
-/// The fight's computer opponent hits at this speed
+/// The fight's computer opponent asks for this speed for its blows
 constexpr float k_AiBlowSpeed = 0.5f;
+/// An action keeps the speed that it asks for plus this value. Only the damage of a blow uses the kept speed.
+constexpr float k_ActionSpeedBase = 0.5f;
+[[nodiscard]] float ActionSpeed(float askedSpeed);
 
 struct QueuedMove
 {
@@ -369,8 +374,9 @@ public:
 
 [[nodiscard]] float FightHealthAtStart(float life);
 [[nodiscard]] float StaminaAtStart(float energy, float exhaustion);
-/// Stamina comes back a little every game turn, up to 1. Nothing is known to use it up.
-constexpr float k_StaminaPerTurn = 1.0f / 600.0f;
+/// Stamina comes back a little every game turn, up to 1. A miracle in the fight uses it.
+/// The game keeps 0.0016666 for this value. This float is not the float of 1/600.
+constexpr float k_StaminaPerTurn = 0.0016666f;
 [[nodiscard]] float RegainStamina(float stamina);
 /// A quarter of the fight health lost comes off the real life at the end
 constexpr float k_LifeLostShare = 0.25f;
@@ -521,12 +527,12 @@ using BlowWoundTypes = std::array<int32_t, animations::k_AttackCount>;
 
 // Playing the fight
 
-/// The fight animations play at this speed, steps at 0.9 of it and everything else at 0.6, and an action's own speed
-/// on top
+/// The fight animations play at 0.9 of this speed for steps and at 0.6 of it for all other animations. The speed of
+/// an action does not change how fast its animation plays.
 constexpr float k_FightSpeed = 1.1f;
 constexpr float k_StepSpeedShare = 0.9f;
 constexpr float k_OtherSpeedShare = 0.6f;
-[[nodiscard]] float PlaybackSpeed(size_t animation, float actionSpeed);
+[[nodiscard]] float PlaybackSpeed(size_t animation);
 /// The whole milliseconds that a fight animation moves on in one game turn: the turn's milliseconds at the speed, with
 /// the fraction removed
 [[nodiscard]] int32_t TurnAdvance(float speed, int32_t turnMs);
@@ -649,8 +655,9 @@ struct Fighter
 	/// The lean that the computer chooses its moves by. It does not change during the fight.
 	float tendency {0.0f};
 };
-/// Plays a state, with an action's animation and speed
-void Enter(Fighter& fighter, State state, std::optional<size_t> animation = std::nullopt, float speed = 1.0f);
+/// Plays a state with its animation. An action keeps the speed that it asks for plus the base (ActionSpeed). The other
+/// states keep the speed of the last action.
+void Enter(Fighter& fighter, State state, std::optional<size_t> animation = std::nullopt, float askedSpeed = 0.0f);
 /// The player (or a script) adds a move: a creature the computer was fighting with is given back to the player, and
 /// the computer waits 15 seconds
 bool PlayerMove(Fighter& fighter, const Move& move, bool replace);
