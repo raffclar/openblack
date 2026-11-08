@@ -148,6 +148,8 @@ struct FoodInterest
 	bool available {false};
 	/// The physics moves the food now
 	bool inPhysics {false};
+	/// A player's hand holds the food now
+	bool inHand {false};
 	/// The hunger of the kind of animal at which it looks for food. A kind with 0 never looks for food
 	uint32_t hungerLimit {0};
 	/// How hungry the animal is now
@@ -156,8 +158,8 @@ struct FoodInterest
 	FoodType eats {FoodType::None};
 	FoodType food {FoodType::None};
 };
-/// Whether food interests an animal. The food must be available and out of the physics. The animal must have a hunger
-/// limit, be at that limit or more, and eat a kind of the food
+/// Whether food interests an animal. The food must be available, out of the physics and out of a hand. The animal must
+/// have a hunger limit, be at that limit or more, and eat a kind of the food
 [[nodiscard]] bool InterestedInFood(const FoodInterest& facts);
 
 /// The priority of a reaction to food for an animal: the table priority when the food holds some food, is not farther

@@ -266,7 +266,7 @@ glm::mat3 animals::SlopeLean(float alongX, float alongZ)
 
 bool animals::InterestedInFood(const FoodInterest& facts)
 {
-	if (!facts.available || facts.inPhysics || facts.hungerLimit == 0)
+	if (!facts.available || facts.inPhysics || facts.inHand || facts.hungerLimit == 0)
 	{
 		return false;
 	}

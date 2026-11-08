@@ -22,8 +22,10 @@
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/AtHome.h"
 #include "ECS/Components/Disciple.h"
+#include "ECS/Components/HandGrab.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/LivingReaction.h"
+#include "ECS/Components/Physics.h"
 #include "ECS/Components/Player.h"
 #include "ECS/Components/Poisoned.h"
 #include "ECS/Components/Pot.h"
@@ -496,7 +498,6 @@ bool IsFoodPile(entt::entity thing)
 /// Whether food lying about catches the villager's eye
 bool IsInterestedInFoodObject(entt::entity villager, entt::entity food)
 {
-	// TODO(villager-hunger-health): the game passes over things with two flags of its own whose meaning is unknown
 	auto& registry = Entities();
 	const auto& person = registry.Get<const Villager>(villager);
 	const auto& info = InfoOf(person);
@@ -510,6 +511,8 @@ bool IsInterestedInFoodObject(entt::entity villager, entt::entity food)
 	}
 	const auto& townInfo = Locator::infoConstants::value().townDesire.at(static_cast<size_t>(TownDesireInfo::ForFood));
 	return rules::IsInterestedInFood({
+	    .inHand = registry.AllOf<InHand>(food),
+	    .inPhysics = registry.AllOf<InPhysics>(food),
 	    .desireForFood = needs::DesireForFood(person.food),
 	    .carried = person.foodHeld,
 	    .maxCarried = info.maxFoodCarried,
@@ -518,7 +521,6 @@ bool IsInterestedInFoodObject(entt::entity villager, entt::entity food)
 	    .speedUp = IsSpeedUp(food),
 	    .townFoodDesire = townDesire,
 	    .townTrigger = townInfo.desireTriggersVillagerAction,
-	    // TODO(villager-hunger-health): a land's script may raise every villager's interest; no shipped land does
 	    .interactDesire = 0.0f,
 	});
 }

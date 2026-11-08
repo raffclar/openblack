@@ -2489,10 +2489,10 @@ uint32_t AnimalSystem::ReactToFoodPriority(entt::entity entity, entt::entity foo
 	const auto& info = InfoOf(animal->type);
 	const auto* grazer = registry.TryGet<const Grazer>(entity);
 	const auto* foodInfo = world_objects::InfoOf(food);
-	// TODO(animals): the game also passes over food with a flag of its own whose meaning is unknown
 	const bool interested = animals::InterestedInFood({
 	    .available = true,
 	    .inPhysics = false,
+	    .inHand = registry.AllOf<InHand>(food),
 	    .hungerLimit = info.hunger,
 	    .hunger = grazer != nullptr ? grazer->needs.hunger : static_cast<int16_t>(animal->hunger),
 	    .eats = info.needsFoodTypes,

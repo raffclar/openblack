@@ -141,6 +141,10 @@ uint16_t villager_food_rules::GossipTurns(uint32_t gossipTime, float food)
 
 bool villager_food_rules::IsInterestedInFood(const FoodInterestInputs& in)
 {
+	if (in.inHand || in.inPhysics)
+	{
+		return false;
+	}
 	const float room = static_cast<float>(static_cast<int16_t>(in.maxCarried - in.carried)) / static_cast<float>(in.maxCarried);
 	const float speedUp = in.speedUp ? k_SpeedUpFoodInterest : 1.0f;
 	if (speedUp * room * in.desireForFood * in.stateInterest * in.distanceModifier + in.interactDesire >
