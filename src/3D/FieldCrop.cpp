@@ -118,6 +118,15 @@ void Grow(Crop& crop, const Type& type, float alignment, bool raining)
 	crop.food += rate * type.totalFood / type.ageRipe;
 }
 
+void Pass(Crop& crop, const Type& type, uint32_t turn, uint32_t growthTurn, float alignment, bool raining)
+{
+	if ((turn + growthTurn) % k_TurnsPerGrowth != 0)
+	{
+		return;
+	}
+	Grow(crop, type, alignment, raining);
+}
+
 std::optional<Look> LookOf(const Crop& crop, const Type& type, uint32_t leastFood)
 {
 	if (type.ageGrowth * k_ShowsFrom > crop.age || static_cast<float>(leastFood) > crop.food)

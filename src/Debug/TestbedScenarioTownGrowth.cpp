@@ -207,6 +207,22 @@ void openblack::testbed_scenarios::AddTownGrowthScenarios(std::vector<Scenario>&
 	    .objects = std::move(neglect),
 	});
 
+	// A sown field of the town, which grows in the turn of its town and again in the turn of all fields
+	all.push_back({
+	    .id = "town.field_crop_grows",
+	    .name = "A town's crop that grows twice in its turn",
+	    .facet = Facet::Objects,
+	    .description = "A Celtic town with a village centre and one wheat field, sown at the start with no crop. Nobody "
+	                   "farms it. Best watched at game speed 4.",
+	    .expected = "The crop grows on one turn in ten. On that turn it grows two times: one time in the turn of its "
+	                "town and one time in the turn of all the fields. Thus it shows and ripens in half the turns of one "
+	                "growth a turn.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {k_Centre, k_Hut}, .distance = 0.6f},
+	    .objects = {{.type = AbodeInfo::CelticTownCentre, .offset = k_Centre},
+	                {.type = FieldTypeInfo::Wheat, .offset = k_Hut, .sownCrop = true}},
+	});
+
 	// A town finishing a crèche its people then dance round
 	std::vector<ObjectSetup> finishing {
 	    {.type = AbodeInfo::CelticTownCentre, .offset = k_Centre},
