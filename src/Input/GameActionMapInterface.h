@@ -262,12 +262,18 @@ public:
 	/// Gives the hand the events of this frame that it can have now, in sequence. While Alt is held, the presses and let
 	/// goes of the hand's buttons wait. The first frame without Alt sends their messages after the motions.
 	virtual void TakeHandEvents([[maybe_unused]] const std::function<void(const SDL_Event&, bool)>& hand) {}
+	/// True when the hand has a press of Move or Action and not its let go. While the hand's messages wait, as with Alt
+	/// held, this does not change. When a frame sends the messages that waited, a press in them reads as held for that
+	/// frame, also when its let go comes in the same frame.
+	[[nodiscard]] virtual bool HandButtonsHeld() const { return GetAny(BindableActionMap::MOVE, BindableActionMap::ACTION); }
 	/// Puts the cursor, and the pointer, somewhere in the window, as the camera does dragging round the screen's edge
 	virtual void WarpCursor([[maybe_unused]] glm::ivec2 position) {}
 	/// Where the cursor was put this frame, if it was
 	[[nodiscard]] virtual std::optional<glm::ivec2> GetCursorWarp() const { return std::nullopt; }
 	/// Actions the land's scripts don't allow now, which read as not held
 	virtual void SetBlockedActions([[maybe_unused]] BindableActionMap actions) {}
+	/// Whether a script holds the screen now. Then no press of the mouse does a one-press action.
+	virtual void SetScriptHoldsScreen([[maybe_unused]] bool held) {}
 	/// A key goes down, a repeat of a held key too: whether a box on the screen takes the keyboard now. The answer
 	/// stays until the next key goes down. While a box has the keyboard, every action reads as not held
 	virtual void BoxKeyDown([[maybe_unused]] bool boxWantsKeys) {}

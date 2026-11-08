@@ -12,6 +12,8 @@
 #include "GameActionMap.h"
 
 #include <algorithm>
+#include <array>
+#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -1079,7 +1081,7 @@ void GameActionMap::TakeHandEvents(const std::function<void(const SDL_Event&, bo
 	// The motions tell the buttons as the hand has them before the messages of this frame
 	const bool actionHandDown = _handMessages.HandDown(Button::Action);
 	const bool moveHandDown = _handMessages.HandDown(Button::Move);
-	const auto sent = _handMessages.Frame(inputs, AltHeld(), HelpClockNow());
+	const auto sent = _handMessages.Frame(inputs, AltHeld(), HelpClockNow(), OnePressActionOfFrame());
 	const bool markedThisFrame = std::exchange(_doubleClickMarkedThisFrame, false);
 	_handMessagesSent.reset();
 	if (!sent.has_value())
@@ -1097,6 +1099,7 @@ void GameActionMap::TakeHandEvents(const std::function<void(const SDL_Event&, bo
 		_unbindableMap = static_cast<UnbindableActionMap>(static_cast<uint8_t>(_unbindableMap) &
 		                                                  ~static_cast<uint8_t>(UnbindableActionMap::DOUBLE_CLICK));
 	}
+	_handButtonsHeld = actionHandDown || moveHandDown;
 	for (const auto& kept : events)
 	{
 		const auto& event = kept.event;
@@ -1128,6 +1131,7 @@ void GameActionMap::TakeHandEvents(const std::function<void(const SDL_Event&, bo
 		event.button.x = _handPointer.x;
 		event.button.y = _handPointer.y;
 		hand(event, false);
+		_handButtonsHeld = _handButtonsHeld || message.message != Message::Up;
 		if (message.button == Button::Move && message.message == Message::Double)
 		{
 			_unbindableMap = static_cast<UnbindableActionMap>(static_cast<uint8_t>(_unbindableMap) |
@@ -1135,6 +1139,40 @@ void GameActionMap::TakeHandEvents(const std::function<void(const SDL_Event&, bo
 		}
 	}
 	_handMessagesSent = static_cast<uint32_t>(sent->size());
+	_handButtonsHeld = _handButtonsHeld || _handMessages.HandDown(Button::Action) || _handMessages.HandDown(Button::Move);
+}
+
+bool GameActionMap::HandButtonsHeld() const
+{
+	if (!_handMessagesSent.has_value())
+	{
+		return GetAny(BindableActionMap::MOVE, BindableActionMap::ACTION);
+	}
+	return _handButtonsHeld && !_boxKeyboard.Taken();
+}
+
+std::optional<hand_messages::OnePressAction> GameActionMap::OnePressActionOfFrame() const
+{
+	// The game examines the presses in this sequence, and stops at the first press that acts
+	constexpr std::array<std::tuple<alt_presses::Source, MouseInput, std::optional<hand_messages::Button>>,
+	                     alt_presses::k_SourceCount>
+	    k_Sources {{
+	        {alt_presses::Source::LeftButton, MouseInput::LeftButton, hand_messages::Button::Move},
+	        {alt_presses::Source::RightButton, MouseInput::RightButton, hand_messages::Button::Action},
+	        {alt_presses::Source::MiddleButton, MouseInput::MiddleButton, std::nullopt},
+	        {alt_presses::Source::WheelUp, MouseInput::WheelUp, std::nullopt},
+	        {alt_presses::Source::WheelDown, MouseInput::WheelDown, std::nullopt},
+	    }};
+	const auto acted = _altPresses.ActedThisFrame();
+	for (const auto& [source, mouse, button] : k_Sources)
+	{
+		if ((acted & (1u << static_cast<uint8_t>(source))) != 0 &&
+		    MousePressActs(GetKeyBindings(), mouse, _blocked, _scriptHoldsScreen))
+		{
+			return hand_messages::OnePressAction {.button = button};
+		}
+	}
+	return std::nullopt;
 }
 
 bool GameActionMap::IsKeyHeld(int scancode) const

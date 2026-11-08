@@ -719,7 +719,8 @@ std::optional<CameraModel::CameraInterpolationUpdateInfo> TempleCameraModel::Upd
 	{
 		input.button = 2;
 	}
-	else if (actions.GetAny(BindableActionMap::MOVE, BindableActionMap::ACTION))
+	// The rooms get the presses and the let goes that the hand gets. While Alt is held, these wait.
+	else if (actions.HandButtonsHeld())
 	{
 		input.button = 1;
 	}

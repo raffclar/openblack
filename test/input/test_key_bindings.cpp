@@ -558,3 +558,33 @@ TEST(KeyBindings, InTheTempleOnlyAMousePressDoesTheAction)
 	// A mouse button that has the action still does it inside the temple
 	EXPECT_TRUE(PressDoesAction(true, true));
 }
+
+TEST(KeyBindings, AMousePressActsWhenItsFirstActionIsAOnePressAction)
+{
+	auto bindings = k_DefaultKeyBindings;
+	constexpr auto none = BindableActionMap::NONE;
+	// The left button has Move, which acts while it is held
+	EXPECT_FALSE(MousePressActs(bindings, MouseInput::LeftButton, none, false));
+	EXPECT_FALSE(MousePressActs(bindings, MouseInput::WheelUp, none, false));
+	EXPECT_FALSE(MousePressActs(bindings, MouseInput::MiddleButton, none, false));
+	EXPECT_FALSE(MousePressActs(bindings, MouseInput::None, none, false));
+	// Talk comes after Move in the table, so the press of the left button does Move only
+	bindings.at(*IndexOf(bindings, BindableActionMap::TALK)).mouse = MouseInput::LeftButton;
+	EXPECT_FALSE(MousePressActs(bindings, MouseInput::LeftButton, none, false));
+	// Help comes before Move in the table
+	bindings.at(*IndexOf(bindings, BindableActionMap::HELP)).mouse = MouseInput::LeftButton;
+	EXPECT_TRUE(MousePressActs(bindings, MouseInput::LeftButton, none, false));
+}
+
+TEST(KeyBindings, AMousePressDoesNotActWhenTheScriptsBlockItsActionOrHoldTheScreen)
+{
+	auto bindings = k_DefaultKeyBindings;
+	constexpr auto none = BindableActionMap::NONE;
+	// Rotate Around Mouse On comes first on the middle button, and acts while it is held
+	bindings.at(*IndexOf(bindings, BindableActionMap::ZOOM_TO_TEMPLE)).mouse = MouseInput::MiddleButton;
+	EXPECT_FALSE(MousePressActs(bindings, MouseInput::MiddleButton, none, false));
+	bindings.at(*IndexOf(bindings, BindableActionMap::ROTATE_AROUND_MOUSE_ON)).mouse = MouseInput::None;
+	EXPECT_TRUE(MousePressActs(bindings, MouseInput::MiddleButton, none, false));
+	EXPECT_FALSE(MousePressActs(bindings, MouseInput::MiddleButton, BindableActionMap::ZOOM_TO_TEMPLE, false));
+	EXPECT_FALSE(MousePressActs(bindings, MouseInput::MiddleButton, none, true));
+}

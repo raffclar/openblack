@@ -273,6 +273,13 @@ enum class KeyDownBinding : uint8_t
                                                BindableActionMap blocked, bool scriptHoldsScreen) noexcept;
 /// Every action bound to the key, with or without a modifier, which letting go of it ends
 [[nodiscard]] BindableActionMap ActionsForKey(std::span<const KeyBinding> bindings, SDL_Scancode key) noexcept;
+/// True when a press of the mouse input does a one-press action. The game takes only the first action bound to the
+/// input, in the order of the table. The press acts when all of these are true:
+/// - That action is a one-press action.
+/// - The land's scripts do not block that action.
+/// - No script holds the screen.
+[[nodiscard]] bool MousePressActs(std::span<const KeyBinding> bindings, MouseInput mouse, BindableActionMap blocked,
+                                  bool scriptHoldsScreen) noexcept;
 /// The actions bound to a mouse input
 [[nodiscard]] BindableActionMap ActionsForMouse(std::span<const KeyBinding> bindings, MouseInput mouse) noexcept;
 
