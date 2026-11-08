@@ -434,6 +434,35 @@ TEST_F(GodChargeTest, TheChargeStartsAlsoForAMiracleThatTheGodMayNotCast)
 	EXPECT_FALSE(_system.StartChargeForGod(icon, PlayerNames::PLAYER_TWO));
 }
 
+// The chant of the god asks for more than the charge: the god must be able to cast the miracle, and no hand may hold a
+// seed of the icon
+TEST_F(GodChargeTest, TheGodMayStartTheChantOnlyForAMiracleItMayCastAndNoHeldSeed)
+{
+	auto& registry = Entities();
+	const auto icon = IdleIcon(PlayerNames::PLAYER_TWO, 40.0f);
+	EXPECT_TRUE(_system.MayStartChargeForGod(icon, PlayerNames::PLAYER_TWO, MagicType::Heal));
+
+	registry.Each<Player>(
+	    [](Player& player) { player_miracles::SetMagicTypeEnabled(player.miracles, MagicType::Heal, false); });
+	EXPECT_FALSE(_system.MayStartChargeForGod(icon, PlayerNames::PLAYER_TWO, MagicType::Heal));
+	registry.Each<Player>([](Player& player) { player_miracles::SetMagicTypeEnabled(player.miracles, MagicType::Heal, true); });
+
+	const auto seed = registry.Create();
+	registry.Assign<SpellSeed>(seed, SpellSeed {.seedType = SpellSeedType::Heal, .player = PlayerNames::PLAYER_TWO});
+	registry.Get<WorshipIcon>(icon).seedsOut.push_back(seed);
+	_magic->held = seed;
+	_magic->heldBy = PlayerNames::PLAYER_TWO;
+	EXPECT_FALSE(_system.MayStartChargeForGod(icon, PlayerNames::PLAYER_TWO, MagicType::Heal));
+	_magic->held = std::nullopt;
+
+	// An icon with no store at a site with no prayer power, or an icon that charges, refuses the god
+	registry.Get<WorshipIcon>(icon).store = 0.0f;
+	EXPECT_FALSE(_system.MayStartChargeForGod(icon, PlayerNames::PLAYER_TWO, MagicType::Heal));
+	registry.Get<WorshipIcon>(icon).store = 40.0f;
+	registry.Get<WorshipIcon>(icon).charging = true;
+	EXPECT_FALSE(_system.MayStartChargeForGod(icon, PlayerNames::PLAYER_TWO, MagicType::Heal));
+}
+
 // The cast of a god takes the cost of the miracle from the store of the icon, and never more than the store holds
 TEST_F(GodChargeTest, ACastTakesTheCostButNeverMoreThanTheStore)
 {

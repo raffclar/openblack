@@ -66,6 +66,14 @@ namespace
 	return Locator::entitiesRegistry::value();
 }
 
+/// The site of the icon has prayer power to give this turn
+[[nodiscard]] bool SiteHasPrayer(const WorshipIcon& icon)
+{
+	auto& registry = Entities();
+	const auto* chants = registry.Valid(icon.site) ? registry.TryGet<const WorshipChants>(icon.site) : nullptr;
+	return chants != nullptr && (chants->infinite ? magic::k_InfiniteChants : chants->available) > 0.0f;
+}
+
 /// The player's own entity's record, none for a player the land has none for
 [[nodiscard]] Player* PlayerNamed(PlayerNames name)
 {
@@ -775,6 +783,21 @@ icons::TapResult SpellIconSystem::TapSiteIcon(entt::entity icon, PlayerNames pla
 	return result;
 }
 
+bool SpellIconSystem::MayStartChargeForGod(entt::entity icon, PlayerNames player, MagicType type) const
+{
+	auto& registry = Entities();
+	const auto* component = registry.Valid(icon) ? registry.TryGet<const WorshipIcon>(icon) : nullptr;
+	if (component == nullptr || component->seed == SpellSeedType::None || !Locator::infoConstants::has_value())
+	{
+		return false;
+	}
+	// The god must be able to cast the miracle that the seed of the icon gives at the power-up of the asked miracle
+	const auto& info = Locator::infoConstants::value();
+	const auto given =
+	    magic::GetMagicTypeFromPowerUpLevel(magic::GetSpellSeedInfo(info, component->seed), magic::GetPowerUpLevel(info, type));
+	return icons::MayStartCharge(ChargeOf(*component, player), IsEnabled(player, given), SiteHasPrayer(*component));
+}
+
 bool SpellIconSystem::StartChargeForGod(entt::entity icon, PlayerNames player)
 {
 	auto& registry = Entities();
@@ -786,16 +809,7 @@ bool SpellIconSystem::StartChargeForGod(entt::entity icon, PlayerNames player)
 		return false;
 	}
 	// The site must have prayer power to give this turn, or the icon must have some stored
-	const auto* chants = registry.Valid(component->site) ? registry.TryGet<const WorshipChants>(component->site) : nullptr;
-	if (chants != nullptr)
-	{
-		const float available = chants->infinite ? magic::k_InfiniteChants : chants->available;
-		if (!(available > 0.0f) && component->store == 0.0f)
-		{
-			return false;
-		}
-	}
-	else if (component->store == 0.0f)
+	if (!SiteHasPrayer(*component) && component->store == 0.0f)
 	{
 		return false;
 	}

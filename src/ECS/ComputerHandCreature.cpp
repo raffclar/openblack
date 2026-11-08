@@ -96,8 +96,13 @@ Result JourneyProcess(HandAction& /*action*/, const World& world, const Step& st
 {
 	const auto creature = ArgumentAt(step, 0).object;
 	const auto speeds = world.creature.SpeedsOf(creature);
+	// The action stops when the thing is not a creature
+	if (!speeds.has_value())
+	{
+		return Result::Abort;
+	}
 	const auto coords = world.moves.CoordsOf(creature);
-	if (!speeds.has_value() || !coords.has_value())
+	if (!coords.has_value())
 	{
 		return Result::Next;
 	}

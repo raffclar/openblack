@@ -57,6 +57,7 @@ public:
 
 	void SetMagicTypeEnabled(PlayerNames player, MagicType type, bool enable) override { SetEnabled(player, type, enable); }
 	[[nodiscard]] bool ValidToTap(entt::entity icon, PlayerNames player) const override;
+	[[nodiscard]] bool MayStartChargeForGod(entt::entity icon, PlayerNames player, MagicType type) const override;
 	bool StartChargeForGod(entt::entity icon, PlayerNames player) override;
 	[[nodiscard]] entt::entity IconOfSeed(entt::entity seed) const override;
 	[[nodiscard]] entt::entity BestIconFor(PlayerNames player, SpellSeedType seed) const override;
