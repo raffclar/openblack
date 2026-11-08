@@ -61,7 +61,19 @@ EM_JS(void, openblack_set_present, (int canvas), {
 // The game thread waits for the next display frame of the browser. While it waits, the browser shows the frame that the
 // canvas has, and completes the WebGPU work that waits for it. The program links with JSPI, which keeps the stack of the
 // game thread while it waits.
+// The page counts its display frames in a shared array (web/page/launcher.js). The thread waits until the count
+// changes. The display frames of a worker thread do not always follow the display: in Safari 27 they come about each
+// 20 ms on a 60 Hz display, thus the game ran at 50 frames each second. Without the shared count, the thread waits for
+// its own display frame.
 EM_ASYNC_JS(void, openblack_wait_for_display_frame, (), {
+	const frames = globalThis.openblackWeb && globalThis.openblackWeb.displayFrames;
+	if (frames && typeof Atomics.waitAsync === 'function') {
+		const wait = Atomics.waitAsync(frames, 0, Atomics.load(frames, 0));
+		if (wait.async) {
+			await wait.value;
+		}
+		return;
+	}
 	await new Promise((resolve) => {
 		if (typeof requestAnimationFrame === 'function') {
 			requestAnimationFrame(() => resolve());

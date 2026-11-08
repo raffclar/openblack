@@ -1,0 +1,64 @@
+diff --git a/bgfx/src/renderer_webgpu.cpp b/bgfx/src/renderer_webgpu.cpp
+index b64ae42..d05284d 100644
+--- a/bgfx/src/renderer_webgpu.cpp
++++ b/bgfx/src/renderer_webgpu.cpp
+@@ -3414,6 +3414,41 @@ WGPU_IMPORT
+ 			}
+ 		}
+ 
++		// Adds the values of the bindings that fillBindGroupLayoutEntry reads, other than the formats that
++		// addBindingFormats adds: if a sampler stage has a texture, if the sampler reads the stencil, and the
++		// access of an image.
++		void addBindingLayoutKey(bx::HashMurmur3& _murmur, const ProgramWGPU& _program, const RenderBind& _renderBind) const
++		{
++			for (uint32_t stage = 0; stage < BGFX_CONFIG_MAX_TEXTURE_SAMPLERS; ++stage)
++			{
++				const ShaderBinding& shaderBind = _program.m_shaderBinding[stage];
++
++				if (!isValid(shaderBind.uniformHandle) )
++				{
++					continue;
++				}
++
++				const Binding& bind = _renderBind.m_bind[stage];
++
++				if (ShaderBinding::Type::Image == shaderBind.type)
++				{
++					_murmur.add(bind.m_access);
++				}
++				else if (ShaderBinding::Type::Sampler == shaderBind.type)
++				{
++					const bool unbound = kInvalidHandle == bind.m_idx;
++					const uint32_t resolvedFlags = unbound ? 0
++						: 0 == (BGFX_SAMPLER_INTERNAL_DEFAULT & bind.m_samplerFlags)
++						? bind.m_samplerFlags
++						: uint32_t(m_textures[bind.m_idx].m_flags)
++						;
++
++					_murmur.add(unbound);
++					_murmur.add(0 != (resolvedFlags & BGFX_SAMPLER_SAMPLE_STENCIL) );
++				}
++			}
++		}
++
+ 		static bool hasBgra8Storage(const WGPUBindGroupLayoutEntry* _entries, uint32_t _num)
+ 		{
+ 			for (uint32_t ii = 0; ii < _num; ++ii)
+@@ -3622,14 +3657,9 @@ WGPU_IMPORT
+ 			murmur.add(!!(BGFX_STATE_BLEND_INDEPENDENT & _state) ? _rgba : 0);
+ 			murmur.add(_stencil);
+ 
+-			for (uint32_t stage = 0; stage < BGFX_CONFIG_MAX_TEXTURE_SAMPLERS; ++stage)
+-			{
+-				if (isValid(program.m_shaderBinding[stage].uniformHandle) )
+-				{
+-					murmur.add(&_renderBind.m_bind[stage], sizeof(_renderBind.m_bind[stage]) );
+-				}
+-			}
+-
++			// The key has only the values of the bindings that change the bind group layout, not the textures and
++			// samplers themselves. Thus draws with other textures of the same formats use the same pipeline.
++			addBindingLayoutKey(murmur, program, _renderBind);
+ 			addBindingFormats(murmur, program, _renderBind);
+ 
+ 			murmur.add(program.m_vsh->m_hash);
