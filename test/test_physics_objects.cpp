@@ -12,6 +12,11 @@
 #include <glm/gtx/euler_angles.hpp>
 #include <gtest/gtest.h>
 
+#include "ECS/Components/Abode.h"
+#include "ECS/Components/SpellDispenser.h"
+#include "ECS/Components/Town.h"
+#include "ECS/ObjectPhysics.h"
+#include "ECS/Registry.h"
 #include "Physics/ObjectRules.h"
 
 using namespace openblack::physics::objects;
@@ -148,4 +153,29 @@ TEST(PhysicsObjects, AKickedFootballComesDownAtItsDestination)
 	EXPECT_FLOAT_EQ(velocity.x, 6.0f);
 	EXPECT_FLOAT_EQ(velocity.y, 24.525f);
 	EXPECT_FLOAT_EQ(velocity.z, 8.0f);
+}
+
+TEST(PhysicsObjects, AnArtefactFindsTheTownOfAnAbodeOrOfASpellDispenser)
+{
+	using namespace openblack::ecs;
+	using namespace openblack::ecs::components;
+	Registry registry;
+	const auto town = registry.Create();
+	registry.Assign<Town>(town).id = 7;
+	const auto abode = registry.Create();
+	registry.Assign<Abode>(abode).townId = 7;
+	EXPECT_EQ(object_physics::TownOfBuilding(registry, abode), town);
+
+	// A spell dispenser is a building of its town, so its town takes the artefact
+	const auto dispenser = registry.Create();
+	registry.Assign<SpellDispenser>(dispenser).town = town;
+	EXPECT_EQ(object_physics::TownOfBuilding(registry, dispenser), town);
+
+	// A building with no town takes no artefact
+	const auto lone = registry.Create();
+	registry.Assign<SpellDispenser>(lone);
+	EXPECT_EQ(object_physics::TownOfBuilding(registry, lone), entt::entity {entt::null});
+	const auto lostAbode = registry.Create();
+	registry.Assign<Abode>(lostAbode).townId = 8;
+	EXPECT_EQ(object_physics::TownOfBuilding(registry, lostAbode), entt::entity {entt::null});
 }
