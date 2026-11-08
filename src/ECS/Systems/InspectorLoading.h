@@ -42,4 +42,29 @@ public:
 	InspectorLoading& operator=(InspectorLoading&&) = delete;
 };
 
+/// While a box waits for the player before the first land, the inspector's keys and letters go to the box. Use it inside
+/// an InspectorLoading.
+class InspectorStartupBox
+{
+public:
+	InspectorStartupBox()
+	{
+		if (Locator::inspector::has_value())
+		{
+			Locator::inspector::value().SetStartupBoxShown(true);
+		}
+	}
+	~InspectorStartupBox()
+	{
+		if (Locator::inspector::has_value())
+		{
+			Locator::inspector::value().SetStartupBoxShown(false);
+		}
+	}
+	InspectorStartupBox(const InspectorStartupBox&) = delete;
+	InspectorStartupBox& operator=(const InspectorStartupBox&) = delete;
+	InspectorStartupBox(InspectorStartupBox&&) = delete;
+	InspectorStartupBox& operator=(InspectorStartupBox&&) = delete;
+};
+
 } // namespace openblack::ecs::systems

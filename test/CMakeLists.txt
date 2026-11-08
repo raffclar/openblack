@@ -700,6 +700,11 @@ if (OPENBLACK_INSPECTOR)
     test_inspector_input inspector/test_inspector_input.cpp
   )
   target_link_libraries(test_inspector_input PRIVATE inspector)
+  # input.text and input.key to the new player's name box before the first land
+  openblack_setup_and_add_test(
+    test_startup_box_input inspector/test_startup_box_input.cpp
+  )
+  target_link_libraries(test_startup_box_input PRIVATE inspector)
   openblack_setup_and_add_test(
     test_inspector_control inspector/test_inspector_control.cpp
   )

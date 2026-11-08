@@ -39,6 +39,7 @@
 #include "Input/InputDeviceInterface.h"
 #include "Input/KeyBindings.h"
 #include "Input/ScriptedMouse.h"
+#include "Inspector/StartupBoxInput.h"
 #include "Locator.h"
 #include "Windowing/WindowingInterface.h"
 
@@ -313,22 +314,15 @@ std::string GameInput::Apply(const InputEvent& event)
 	{
 		// The letters go in pieces of at most 30 bytes, each cut between two whole UTF-8 characters. The last byte of
 		// each event marks it as the game's own.
-		constexpr size_t k_MostTextEventBytes = sizeof(SDL_TextInputEvent::text) - 2;
-		std::string_view rest = event.text;
-		while (!rest.empty())
+		static_assert(startup_box::k_MostTextEventBytes == sizeof(SDL_TextInputEvent::text) - 2);
+		for (const auto& piece : startup_box::TextPieces(event.text, startup_box::k_MostTextEventBytes))
 		{
-			auto size = std::min(rest.size(), k_MostTextEventBytes);
-			while (size < rest.size() && size > 0 && (static_cast<unsigned char>(rest[size]) & 0xC0U) == 0x80U)
-			{
-				--size;
-			}
 			SDL_Event text {};
 			text.type = SDL_TEXTINPUT;
 			text.text.windowID = WindowId();
-			std::copy_n(rest.data(), size, text.text.text);
+			std::ranges::copy(piece, text.text.text);
 			input::MarkInjected(text);
 			input::Device().PushEvent(text);
-			rest.remove_prefix(size);
 		}
 		return {};
 	}
