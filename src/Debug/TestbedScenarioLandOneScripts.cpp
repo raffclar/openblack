@@ -63,6 +63,20 @@ void testbed_scenarios::AddScriptTaskRelease(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "interface.world_text_glyphs",
+	    .name = "The letters of the temple's signs, read from the font as the game reads them",
+	    .facet = Facet::Interface,
+	    .description = "The player has a temple and is put in its main room. Look at the signs over the doors.",
+	    .expected = "Each letter of a sign is read from the font from one and a half texels before its first column to "
+	                "the middle of its last column, so the letters sit a little to the right in their quads and their "
+	                "right edges are a little thinner than the left edges.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview},
+	    .temples = {{.offset = {-300.0f, 100.0f}, .angle = 36.0f}},
+	    .commands = {{.kind = Kind::EnterTemple, .delaySeconds = 2.0f, .value = 3}},
+	});
+
+	all.push_back({
 	    .id = "temple.main_room_lean",
 	    .name = "The temple's main room leans at the screen's edge and as the floor is dragged",
 	    .facet = Facet::Story,
