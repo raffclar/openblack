@@ -324,7 +324,8 @@ namespace
 {
 
 /// What the gestures get from the frame: the places that came since the last pass, the camera and the input
-ecs::systems::GestureSystemInterface::Frame GestureFrameOf(const Camera& camera, glm::ivec2 screenSize, float deltaSeconds)
+ecs::systems::GestureSystemInterface::Frame GestureFrameOf(const Camera& camera, glm::ivec2 screenSize, float deltaSeconds,
+                                                           bool frontEndBox)
 {
 	const auto size = static_cast<glm::vec2>(screenSize);
 	const auto rayAt = [&camera, size](glm::vec2 pixel) {
@@ -347,6 +348,12 @@ ecs::systems::GestureSystemInterface::Frame GestureFrameOf(const Camera& camera,
 	    .cameraShaking = Locator::explosionSystem::has_value() && Locator::explosionSystem::value().IsShaking(),
 	    .paused = Locator::time::value().IsPaused(),
 	};
+	// The hand holds a creature, or a field, fish farm or pile that it takes from, from the turn of the lock to the turn
+	// of its end
+	frame.handLocked = (Locator::handGrabSystem::has_value() && Locator::handGrabSystem::value().GetLockedOn().has_value()) ||
+	                   (Locator::creatureHandSystem::has_value() &&
+	                    Locator::creatureHandSystem::value().GetLockedCreature(frame.player).has_value());
+	frame.frontEndBox = frontEndBox;
 	// The places of the pointer that came since the last pass of the interface
 	const auto places = Locator::gameActionSystem::value().TakeInterfacePlaces();
 	frame.places.assign(places.begin(), places.end());
@@ -405,14 +412,21 @@ void Game::GestureTurn()
 	{
 		return;
 	}
-	// No pass without a screen, or in the temple, where the hand draws no gestures
+	// In the temple the hand draws no gestures: it forgets the path
+	if (Locator::temple::has_value() && Locator::temple::value().Active())
+	{
+		Locator::gestureSystem::value().ForgetPath();
+		return;
+	}
+	// No pass without a screen
 	const auto screenSize = Locator::windowing::value().GetSize();
-	if (screenSize.x <= 0 || screenSize.y <= 0 || (Locator::temple::has_value() && Locator::temple::value().Active()))
+	if (screenSize.x <= 0 || screenSize.y <= 0)
 	{
 		return;
 	}
 	// The pass of the turn sees the camera as the last frame drew it
-	Locator::gestureSystem::value().InterfaceTurn(GestureFrameOf(Locator::camera::value(), screenSize, 0.0f));
+	Locator::gestureSystem::value().InterfaceTurn(
+	    GestureFrameOf(Locator::camera::value(), screenSize, 0.0f, FrontEndBoxShows()));
 }
 
 void Game::UpdateGestures(const Camera& camera, glm::ivec2 screenSize, float deltaSeconds)
@@ -421,7 +435,7 @@ void Game::UpdateGestures(const Camera& camera, glm::ivec2 screenSize, float del
 	{
 		return;
 	}
-	auto frame = GestureFrameOf(camera, screenSize, deltaSeconds);
+	auto frame = GestureFrameOf(camera, screenSize, deltaSeconds, FrontEndBoxShows());
 	// Each message of the buttons in this frame does the gesture step again
 	frame.buttonMessages = Locator::gameActionSystem::value().GetButtonMessages();
 	Locator::gestureSystem::value().Update(frame);
@@ -1043,6 +1057,11 @@ void Game::UpdateHandCursor(std::chrono::microseconds deltaTime, Profiler& profi
 		}
 		if (Locator::temple::has_value() && Locator::temple::value().Active())
 		{
+			// In the temple the hand draws no gestures: it forgets the path each frame
+			if (Locator::gestureSystem::has_value())
+			{
+				Locator::gestureSystem::value().ForgetPath();
+			}
 			// In the temple, the hand goes where the cursor meets the room, turning to its surface
 			if (const auto hit = Locator::temple::value().GetCursorHit())
 			{
