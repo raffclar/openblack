@@ -301,6 +301,12 @@ public:
 		}
 		return {.axes = axes, .origin = transform.position};
 	}
+	[[nodiscard]] Pose PullStartPoseOf(entt::entity object) const override
+	{
+		pullStarts.push_back(object);
+		const auto found = pullStartPoses.find(object);
+		return found != pullStartPoses.end() ? found->second : PoseOf(object);
+	}
 	void SetPose(entt::entity object, const Pose& pose) override
 	{
 		auto& transform = registry.Get<Transform>(object);
@@ -591,6 +597,9 @@ public:
 		float scale;
 	};
 	std::vector<HolePlace> holePlaces;
+	/// The things that a pull started from, with the pose that the world gave for each start
+	mutable std::vector<entt::entity> pullStarts;
+	std::map<entt::entity, Pose> pullStartPoses;
 	int drawListsRemade {0};
 	std::vector<uint32_t> drawListFrames;
 	std::vector<entt::entity> poured;
@@ -1762,6 +1771,26 @@ TEST_F(HandGrabSystemWithWorld, InANetworkGameAPulledThingKeepsThePlaceThatTheTu
 	EXPECT_EQ(transform.rotation, walked.rotation);
 	EXPECT_EQ(transform.scale, walked.scale);
 	EXPECT_FALSE(world->registry.AllOf<InHand>(tree));
+}
+
+TEST_F(HandGrabSystemWithWorld, APullStartsFromTheWorldAxesThatTheWorldMakesAgainForTheStart)
+{
+	const auto tree = world->AddTree({0.0f, 0.0f, 0.0f}, 1.0e6f);
+	// The start axes differ from the turn of the thing, as axes that the game makes again from the angle can
+	const glm::mat3 start(glm::vec3(0.0f, 0.0f, 2.0f), glm::vec3(0.0f, 2.0f, 0.0f), glm::vec3(-2.0f, 0.0f, 0.0f));
+	world->pullStartPoses[tree] = {.axes = start, .origin = {0.0f, 0.0f, 0.0f}};
+	world->underCursor = tree;
+	EXPECT_TRUE(Press());
+	for (int i = 0; i < 30; ++i)
+	{
+		Frame(10, {0.0f, 50.0f, 0.0f});
+	}
+	// The pull asks for the start one time only
+	EXPECT_EQ(world->pullStarts, std::vector<entt::entity> {tree});
+	// The drawn tree has the size of the start axes, not the size 1 of its turn
+	const auto* pulled = world->registry.TryGet<const HandPulled>(tree);
+	ASSERT_NE(pulled, nullptr);
+	EXPECT_NEAR(pulled->scale.x, 2.0f, 1.0e-3f);
 }
 
 TEST_F(HandGrabSystemWithWorld, TheRootsHoleHasThePlaceOfTheTreeBeforeThePullNotItsLean)
