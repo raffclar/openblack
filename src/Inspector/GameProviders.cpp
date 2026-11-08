@@ -255,6 +255,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"landSystem", "level.current"},
     LocatorCoverage {"videoSystem", "view.video"},
     LocatorCoverage {"loadingScreenSystem", "view.loading"},
+    LocatorCoverage {"loadFinishSystem", "view.loading"},
     LocatorCoverage {"screenFade", "view.video"},
     LocatorCoverage {"gameInterface", "gui.windows"},
     LocatorCoverage {"playerProfileSystem", "players.new_game"},

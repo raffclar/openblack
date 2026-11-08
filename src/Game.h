@@ -266,9 +266,6 @@ public:
 	/// loading frame to about 6 ms on Vulkan, where some models' hundreds of small parts made it 17 ms
 	static constexpr size_t k_FrameLoadBudget = simulation::k_FrameLoadBudget;
 	static constexpr graphics::UploadPacer::Allowance k_FrameUploads = simulation::k_FrameUploads;
-	/// How many bytes of files the loading threads read at a time while the loading screen shows. No game frame waits
-	/// then, so the threads read as much as they can.
-	static constexpr size_t k_LoadingScreenLoadBudget = simulation::k_LoadingScreenLoadBudget;
 	static constexpr float k_TurnDurationMultiplierSlow = 2.0f;
 	static constexpr float k_TurnDurationMultiplierNormal = 1.0f;
 	static constexpr float k_TurnDurationMultiplierFast = 0.5f;
@@ -539,19 +536,8 @@ private:
 	bool RenderLoadingFrame(bool drawNow = false, const std::function<void()>& drawUnder = nullptr);
 	/// The loading is over: its tip goes before the first frame of the game
 	void EndLoadingScreen() override;
+	/// A load that showed no loading screen ends: the load finish system does the work of the first frames
 	void EndLoadWithoutScreen() override;
-	/// Waits behind the loading screen until the loading threads have loaded all the prefetched resources. Then it does
-	/// the work of the first frame that the game can do before, and draws one more loading frame.
-	void FinishLoadingBehindScreen();
-	/// Does behind the loading screen the work that the first frames of a land do once: the land's shadows, the land
-	/// where creatures can walk, and the particle files
-	void PrepareFirstFrames();
-	/// Draws the first frame of the land under a loading frame, which hides it, so that the renderer makes the
-	/// pipelines and render targets of the scene behind the loading screen. Nothing that the game's frames use changes.
-	void WarmUpFirstFrame();
-	/// Starts in the background the pipelines of the land, the sky and the sea, before the other resources load. The
-	/// pipelines of the land take the longest time to make. Only renderers that make pipelines in the background do it.
-	void StartLandPipelines();
 	/// Draws at the window's size from this frame on if it changed: the back buffer, the views over the whole screen,
 	/// the sea's reflection and the camera's shape follow it, on whichever screen is up
 	void FollowWindowSize();
