@@ -13,10 +13,14 @@
 
 #include "Common/GUtilsAngle.h"
 #include "Common/PortableRotations.h"
+#include "ECS/Components/Animal.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/Components/Villager.h"
 #include "ECS/Components/WallHug.h"
+#include "ECS/PlacedTurn.h"
 #include "ECS/Registry.h"
 #include "ECS/ThingMapPlace.h"
+#include "Physics/Body.h"
 
 namespace openblack::ecs
 {
@@ -70,6 +74,28 @@ void living_facing::FaceAngle(Registry& registry, entt::entity walker, float yAn
 void living_facing::FaceOnly(Registry& registry, entt::entity walker, float yAngle)
 {
 	Turn(registry, walker, yAngle, registry.TryGet<components::WallHug>(walker));
+}
+
+std::optional<float> living_facing::KeptAngleOf(const Registry& registry, entt::entity thing)
+{
+	if (const auto* animal = registry.TryGet<const components::Animal>(thing); animal != nullptr)
+	{
+		return animal->heading;
+	}
+	if (!registry.AllOf<components::Villager>(thing))
+	{
+		return std::nullopt;
+	}
+	if (const auto* walk = registry.TryGet<const components::WallHug>(thing); walk != nullptr)
+	{
+		return walk->yAngle;
+	}
+	return std::nullopt;
+}
+
+glm::mat3 living_facing::WorldAxesOf(float yAngle, float scale)
+{
+	return physics::QuarterTurned(placed_turn::WorldAxesOf(glm::vec3(0.0f, yAngle, 0.0f), scale, false));
 }
 
 } // namespace openblack::ecs

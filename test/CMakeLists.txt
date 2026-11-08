@@ -1523,6 +1523,7 @@ target_link_libraries(test_particle_save PRIVATE psys)
 target_link_libraries(test_saved_system_state PRIVATE psys)
 openblack_setup_and_add_test(test_saving_box test_saving_box.cpp)
 openblack_setup_and_add_test(test_placed_turn test_placed_turn.cpp)
+openblack_setup_and_add_test(test_living_facing test_living_facing.cpp)
 openblack_setup_and_add_test(
   test_oracle_placed_turn oracle/test_oracle_placed_turn.cpp
 )
