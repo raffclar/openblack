@@ -43,5 +43,9 @@ using AdvanceFn = std::function<float(char16_t c)>;
 /// The text ends at its first NUL.
 [[nodiscard]] std::vector<std::u16string_view> BreakLines(std::u16string_view text, float width, float scale,
                                                           const AdvanceFn& advance);
+/// The same lines, for a character `(advance(c) * size) * unit` wide: the game multiplies the sum of the advances by
+/// the size first, then by the unit, and each step rounds to a float.
+[[nodiscard]] std::vector<std::u16string_view> BreakLines(std::u16string_view text, float width, float size, float unit,
+                                                          const AdvanceFn& advance);
 
 } // namespace openblack::gui::text_wrap
