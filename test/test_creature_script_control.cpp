@@ -178,6 +178,7 @@ public:
 	}
 	void CloseDown(entt::entity) override {}
 	[[nodiscard]] bool CanCastAt(MagicType, PlayerNames, glm::vec3) override { return false; }
+	[[nodiscard]] bool MeetsKindRule(MagicType, glm::vec3, bool) override { return false; }
 	bool SpellEvent(entt::entity, const particles::SpellEventInfo&) override { return false; }
 	void PayForSpell(entt::entity, float) override {}
 	entt::entity CreateDispenser(glm::vec3, MagicType, float) override { return entt::null; }
