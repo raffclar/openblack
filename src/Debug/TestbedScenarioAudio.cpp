@@ -106,6 +106,21 @@ void testbed_scenarios::AddAudio(std::vector<Scenario>& all)
 	    .commands = {music(0, 0.5f), Command {.kind = Kind::ShowCustomMusicControls, .delaySeconds = 0.5f, .value = 2}},
 	});
 
+	// The music button hides the controls and shows them again: the play list does not show again
+	all.push_back({
+	    .id = "audio.custom_music_play_list_hides",
+	    .name = "The play list after the music button",
+	    .facet = Facet::Audio,
+	    .description = "Put two MP3 files in the custom_music folder of the profile folder. The first track plays, and "
+	                   "the controls at the top right of the screen open with the play list. After two seconds the music "
+	                   "button hides the controls, and after two more seconds it shows them again.",
+	    .expected = "The controls show again without the play list. The play list button shows the play list again.",
+	    .framing = {.shot = Shot::Overview},
+	    .commands = {music(0, 0.5f), Command {.kind = Kind::ShowCustomMusicControls, .delaySeconds = 0.5f, .value = 2},
+	                 Command {.kind = Kind::ShowCustomMusicControls, .delaySeconds = 2.0f, .value = k_PressMusicButton},
+	                 Command {.kind = Kind::ShowCustomMusicControls, .delaySeconds = 2.0f, .value = k_PressMusicButton}},
+	});
+
 	all.push_back({
 	    .id = "audio.snow",
 	    .name = "Footsteps in snow",
@@ -330,6 +345,25 @@ void testbed_scenarios::AddAudio(std::vector<Scenario>& all)
 	                 {.kind = Kind::SetAlignment, .delaySeconds = 12.0f, .alignment = -1.0f},
 	                 {.kind = Kind::SetAlignment, .delaySeconds = 12.0f, .alignment = 0.0f},
 	                 {.kind = Kind::SetAlignment, .delaySeconds = 12.0f, .alignment = 1.0f}},
+	});
+
+	// An advisor speaks, and a second later the player goes into the temple
+	constexpr size_t k_LongAdvisorLine = 130;
+	all.push_back({
+	    .id = "audio.temple_stops_sounds",
+	    .name = "The first turn in the temple stops the sounds that play",
+	    .facet = Facet::Audio,
+	    .description = "An advisor starts a line. One second later the player goes into the temple. Ten seconds "
+	                   "later the player leaves the temple, the advisor starts the line again, and the player goes "
+	                   "into the temple again.",
+	    .expected = "Each time that the player goes into the temple, the advisor's line stops at once. The temple's "
+	                "music starts, and the music of the land fades out as usual.",
+	    .framing = {.shot = Shot::Overview},
+	    .commands = {{.kind = Kind::PlayGuidanceVoice, .delaySeconds = 1.0f, .value = k_LongAdvisorLine},
+	                 {.kind = Kind::EnterTemple, .delaySeconds = 1.0f, .value = static_cast<size_t>(TempleRoom::Main)},
+	                 {.kind = Kind::EnterTemple, .delaySeconds = 10.0f, .value = static_cast<size_t>(TempleRoom::Unknown)},
+	                 {.kind = Kind::PlayGuidanceVoice, .delaySeconds = 2.0f, .value = k_LongAdvisorLine},
+	                 {.kind = Kind::EnterTemple, .delaySeconds = 1.0f, .value = static_cast<size_t>(TempleRoom::Main)}},
 	});
 
 	// Four challenges recorded with their pictures, each looking at a different place of the land
@@ -1133,6 +1167,25 @@ void testbed_scenarios::AddAudio(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "temple.main_scroll_held_press",
+	    .name = "A press that the player holds in the temple's main room stops a look at the scroll at once",
+	    .facet = Facet::Story,
+	    .description = "The player goes into the temple's main room. Ten seconds after the advisors introduced the room "
+	                   "and the cinema bars went out, the player presses the left button to the left of the scroll and "
+	                   "holds it. While the player holds the button, the camera starts to look at the room's scroll, as "
+	                   "a script does. After one second, the player lets go of the button.",
+	    .expected = "The held press stops the look in the next step, before the camera moves to the scroll. The camera "
+	                "stays in the room's orbit and its lean goes from 0.7 to 1, so the camera looks more up, to the roof.",
+	    .framing = {.shot = Shot::Overview},
+	    .commands = {{.kind = Kind::EnterTemple, .delaySeconds = 1.0f, .value = 3},
+	                 // While a script has the cinema bars in, the temple takes no press
+	                 {.kind = Kind::PointerTo, .delaySeconds = 10.0f, .waitUntilFree = true, .point = {0.15f, 0.5f}},
+	                 {.kind = Kind::PointerPress, .delaySeconds = 0.4f, .value = 1},
+	                 {.kind = Kind::LookAtTempleScroll, .delaySeconds = 0.4f, .value = 0},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 1.0f, .value = 1}},
+	});
+
+	all.push_back({
 	    .id = "temple.cave_zoom_back",
 	    .name = "The creature's room camera keeps the view of a target when it zooms back from it",
 	    .facet = Facet::Story,
@@ -1174,6 +1227,48 @@ void testbed_scenarios::AddAudio(std::vector<Scenario>& all)
 	                  .value = static_cast<size_t>(CreatureCaveTargets::Target::Exit)},
 	                 {.kind = Kind::PressKey,
 	                  .delaySeconds = 0.5f,
+	                  .value = static_cast<size_t>(input::BindableActionMap::MOVE_LEFT)}},
+	});
+
+	all.push_back({
+	    .id = "temple.cave_scroll_leave",
+	    .name = "The creature room camera comes back from a scroll after its aim",
+	    .facet = Facet::Story,
+	    .description = "The player's creature is in the temple's creature room, which the player goes into. After ten "
+	                   "seconds the camera looks at the scroll of the creature's attributes, as a press on it does. After "
+	                   "two seconds, when the look is fully in, the player presses the left arrow key for one frame.",
+	    .expected = "The camera goes to the scroll over about a second and a half. The key sends it back over about "
+	                "a second and a half. The camera follows its aim a short time behind it, so it starts back slowly "
+	                "and comes to rest softly. When it comes back, the room turns to face the scroll, and the camera "
+	                "goes down to its lowest height.",
+	    .framing = {.shot = Shot::Overview},
+	    .creatures = {Posed(CreatureType::Tiger, {0.0f, 40.0f}, 180.0f, "yours")},
+	    .commands = {{.kind = Kind::EnterTemple, .delaySeconds = 1.0f, .value = static_cast<size_t>(TempleRoom::Main)},
+	                 {.kind = Kind::OpenCreatureCave, .creature = 0, .delaySeconds = 0.5f},
+	                 {.kind = Kind::LookAtTempleScroll, .delaySeconds = 10.0f, .value = 0},
+	                 {.kind = Kind::PressKey,
+	                  .delaySeconds = 2.0f,
+	                  .value = static_cast<size_t>(input::BindableActionMap::MOVE_LEFT)}},
+	});
+
+	all.push_back({
+	    .id = "temple.library_scroll_leave",
+	    .name = "The library camera comes back from a scroll after its aim",
+	    .facet = Facet::Story,
+	    .description = "The player goes through the temple's main room into the library. After four seconds the camera "
+	                   "looks at the did you know scroll, as a press on it does. After two seconds, when the look is "
+	                   "fully in, the player presses the left arrow key for one frame.",
+	    .expected = "The camera goes to the scroll over about a second and a half. The key sends it back over about "
+	                "a second and a half. The camera follows its aim a short time behind it, so it starts back slowly "
+	                "and comes to rest softly. When it comes back, the room turns to face the scroll, and the camera "
+	                "goes down to its lowest height.",
+	    .framing = {.shot = Shot::Overview},
+	    // The other rooms open after the temple draws the main room. Thus the player enters through it.
+	    .commands = {{.kind = Kind::EnterTemple, .delaySeconds = 1.0f, .value = 3},
+	                 {.kind = Kind::EnterTemple, .delaySeconds = 0.5f, .value = 2},
+	                 {.kind = Kind::LookAtTempleScroll, .delaySeconds = 4.0f, .value = 5},
+	                 {.kind = Kind::PressKey,
+	                  .delaySeconds = 2.0f,
 	                  .value = static_cast<size_t>(input::BindableActionMap::MOVE_LEFT)}},
 	});
 

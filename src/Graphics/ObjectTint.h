@@ -72,4 +72,23 @@ inline constexpr float k_MostGrainFlow = 0.25f;
 	return -(static_cast<float>(added) + std::clamp(grainFlow, 0.0f, k_MostGrainFlow));
 }
 
+/// The value that the instance of a house carries for its windows and the glow of a fire on it: 1 when its windows
+/// show light, minus the glow (0xRRGGBB) when it burns, 1 plus the glow when both
+[[nodiscard]] constexpr float HouseLight(bool windowsLit, uint32_t glow) noexcept
+{
+	if (glow == 0)
+	{
+		return windowsLit ? 1.0f : 0.0f;
+	}
+	return windowsLit ? 1.0f + static_cast<float>(glow) : -static_cast<float>(glow);
+}
+
+/// The value that the instance of a house shown only up to a share carries, as for HouseLight. The game draws the parts
+/// of such a house with the light of the land only, thus its windows never show light, also at night with someone at
+/// home. The glow of a fire on it stays.
+[[nodiscard]] constexpr float PartialShareLight(uint32_t glow) noexcept
+{
+	return HouseLight(false, glow);
+}
+
 } // namespace openblack::graphics::object_tint

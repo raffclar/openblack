@@ -301,6 +301,12 @@ public:
 		}
 		return {.axes = axes, .origin = transform.position};
 	}
+	[[nodiscard]] Pose PullStartPoseOf(entt::entity object) const override
+	{
+		pullStarts.push_back(object);
+		const auto found = pullStartPoses.find(object);
+		return found != pullStartPoses.end() ? found->second : PoseOf(object);
+	}
 	void SetPose(entt::entity object, const Pose& pose) override
 	{
 		auto& transform = registry.Get<Transform>(object);
@@ -591,6 +597,9 @@ public:
 		float scale;
 	};
 	std::vector<HolePlace> holePlaces;
+	/// The things that a pull started from, with the pose that the world gave for each start
+	mutable std::vector<entt::entity> pullStarts;
+	std::map<entt::entity, Pose> pullStartPoses;
 	int drawListsRemade {0};
 	std::vector<uint32_t> drawListFrames;
 	std::vector<entt::entity> poured;
@@ -1764,6 +1773,26 @@ TEST_F(HandGrabSystemWithWorld, InANetworkGameAPulledThingKeepsThePlaceThatTheTu
 	EXPECT_FALSE(world->registry.AllOf<InHand>(tree));
 }
 
+TEST_F(HandGrabSystemWithWorld, APullStartsFromTheWorldAxesThatTheWorldMakesAgainForTheStart)
+{
+	const auto tree = world->AddTree({0.0f, 0.0f, 0.0f}, 1.0e6f);
+	// The start axes differ from the turn of the thing, as axes that the game makes again from the angle can
+	const glm::mat3 start(glm::vec3(0.0f, 0.0f, 2.0f), glm::vec3(0.0f, 2.0f, 0.0f), glm::vec3(-2.0f, 0.0f, 0.0f));
+	world->pullStartPoses[tree] = {.axes = start, .origin = {0.0f, 0.0f, 0.0f}};
+	world->underCursor = tree;
+	EXPECT_TRUE(Press());
+	for (int i = 0; i < 30; ++i)
+	{
+		Frame(10, {0.0f, 50.0f, 0.0f});
+	}
+	// The pull asks for the start one time only
+	EXPECT_EQ(world->pullStarts, std::vector<entt::entity> {tree});
+	// The drawn tree has the size of the start axes, not the size 1 of its turn
+	const auto* pulled = world->registry.TryGet<const HandPulled>(tree);
+	ASSERT_NE(pulled, nullptr);
+	EXPECT_NEAR(pulled->scale.x, 2.0f, 1.0e-3f);
+}
+
 TEST_F(HandGrabSystemWithWorld, TheRootsHoleHasThePlaceOfTheTreeBeforeThePullNotItsLean)
 {
 	const auto tree = world->AddTree({3.0f, 1.0f, -2.0f}, 1.0e6f);
@@ -2884,7 +2913,30 @@ TEST_F(HandGrabSystemGiving, MovingTheHandFifteenSizesFromTheReachingCreatureCal
 	EXPECT_FALSE(system->GetOfferedCreature().has_value());
 }
 
-TEST_F(HandGrabSystemGiving, TheTurnCallsOffTheGiftThatTheHandSentOneTime)
+TEST_F(HandGrabSystemGiving, AFrameThatCallsTheGiftOffStillMovesTheHandToTheCreaturesHand)
+{
+	const auto rock = HoldRock();
+	const auto creature = AddCreature(creature_giving::Verdict::Give);
+	world->underCursor = creature;
+	Frame(16);
+	Press();
+	Frame(230);
+	world->underCursor.reset();
+	world->takePoint = glm::vec3(0.0f, 0.0f, 0.0f);
+	// The creature takes the thing in 400 ms: the hand goes a fifth of the way from where it should be to the creature's
+	// hand
+	world->taking = hand_grab::HandGrabWorldInterface::Taking {.object = rock, .msFromTake = -400.0f};
+	deferCommands = true;
+	Frame(16, {40.0f, 0.0f, 0.0f});
+	const auto drawn = Frame(16, {40.0f, 0.0f, 0.0f});
+	const auto callOffs = std::ranges::count_if(waiting, [](const player_commands::Action& action) {
+		return std::holds_alternative<player_commands::GiveCallOff>(action);
+	});
+	EXPECT_EQ(callOffs, 1);
+	EXPECT_NEAR(drawn.x, 32.0f, 1e-3f);
+}
+
+TEST_F(HandGrabSystemGiving, TheHandSendsTheCallOffInEachFrameUntilTheTurnCallsItOff)
 {
 	HoldRock();
 	const auto creature = AddCreature(creature_giving::Verdict::Give);
@@ -2898,17 +2950,31 @@ TEST_F(HandGrabSystemGiving, TheTurnCallsOffTheGiftThatTheHandSentOneTime)
 	Frame(16, {40.0f, 0.0f, 0.0f});
 	Frame(16, {40.0f, 0.0f, 0.0f});
 	Frame(16, {40.0f, 0.0f, 0.0f});
-	// The frames send the call off one time, and do not call off the creature or forget the gift
-	const auto callOffs = std::ranges::count_if(waiting, [](const player_commands::Action& action) {
-		return std::holds_alternative<player_commands::GiveCallOff>(action);
-	});
-	EXPECT_EQ(callOffs, 1);
+	const auto callOffs = [this] {
+		return std::ranges::count_if(waiting, [](const player_commands::Action& action) {
+			return std::holds_alternative<player_commands::GiveCallOff>(action);
+		});
+	};
+	// The frames send the call off each time, and do not call off the creature or forget the gift
+	EXPECT_EQ(callOffs(), 2);
 	EXPECT_TRUE(world->calledOff.empty());
 	EXPECT_TRUE(system->GetOfferedCreature().has_value());
-	// The turn calls it off
+	// The turn does each call off, and the hand forgets the gift
 	RunWaiting();
-	EXPECT_EQ(world->calledOff, std::vector<entt::entity> {creature});
+	EXPECT_EQ(world->calledOff, (std::vector<entt::entity> {creature, creature}));
 	EXPECT_FALSE(system->GetOfferedCreature().has_value());
+	// Then the frames send no more
+	Frame(16, {40.0f, 0.0f, 0.0f});
+	EXPECT_EQ(callOffs(), 0);
+}
+
+// A call off stops what the creature does, unless it does nothing or already took the thing
+TEST(CreatureGivingCallOff, TheCallOffStopsOnlyACreatureThatActsAndDidNotTakeTheThing)
+{
+	EXPECT_TRUE(creature_giving::CallOffStops(true, false));
+	EXPECT_FALSE(creature_giving::CallOffStops(true, true));
+	EXPECT_FALSE(creature_giving::CallOffStops(false, false));
+	EXPECT_FALSE(creature_giving::CallOffStops(false, true));
 }
 
 TEST_F(HandGrabSystemGiving, ACreatureThatCantPickItUpSaysSoAndIsNotOffered)

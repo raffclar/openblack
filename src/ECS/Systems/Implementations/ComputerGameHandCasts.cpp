@@ -80,6 +80,11 @@ bool GameHandCasts::IconCharging(entt::entity icon) const
 	return component != nullptr && component->charging;
 }
 
+bool GameHandCasts::MayStartChant(entt::entity icon, MagicType type) const
+{
+	return Locator::spellIconSystem::has_value() && Locator::spellIconSystem::value().MayStartChargeForGod(icon, _player, type);
+}
+
 bool GameHandCasts::StartChant(entt::entity icon, MagicType /*type*/)
 {
 	return Locator::spellIconSystem::has_value() && Locator::spellIconSystem::value().StartChargeForGod(icon, _player);

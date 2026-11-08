@@ -92,3 +92,18 @@ TEST(MapCoords, AHeldThingAtTheGroundHasAPositiveZeroHeight)
 	const auto place = map_coords::HeldPlace({1.0f, -0.0f, 1.0f}, [](const MapCoords&) { return 0.0f; });
 	EXPECT_EQ(std::bit_cast<uint32_t>(place.altitude), 0u);
 }
+
+// The game reads the land under a hand at x times 65536 times 0.1, truncated. The product of 65536 and the float 0.1 is
+// the float 6553.6 with no rounding, thus the result is ToFixed of x for every x on the map.
+TEST(MapCoords, TheLandUnderTheHandIsReadAtTheMapPositionOfToFixed)
+{
+	const auto gameRead = [](float x) { return map_coords::FtoL((x * 65536.0f) * 0.1f); };
+	const auto limit = std::bit_cast<uint32_t>(5120.0f);
+	for (uint32_t bits = 0; bits <= limit; bits += 997)
+	{
+		const float x = std::bit_cast<float>(bits);
+		ASSERT_EQ(gameRead(x), map_coords::ToFixed(x)) << x;
+		ASSERT_EQ(gameRead(-x), map_coords::ToFixed(-x)) << x;
+	}
+	EXPECT_EQ(gameRead(2620.5266f), map_coords::ToFixed(2620.5266f));
+}

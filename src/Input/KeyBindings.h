@@ -220,6 +220,14 @@ inline constexpr KeyBindingTable k_WebNoWheelDefaultKeyBindings = WithoutWheel(k
 	return mouseHasWheel ? k_DefaultKeyBindings : k_NoWheelDefaultKeyBindings;
 }
 
+/// Whether a press of an action does the work of the action. Inside the temple, the temple takes the presses of the
+/// keyboard and uses them only for the keys of its rooms. A press of a mouse button that has the action always does
+/// the work.
+[[nodiscard]] constexpr bool PressDoesAction(bool inTemple, bool byMouse) noexcept
+{
+	return !inTemple || byMouse;
+}
+
 /// The key that stands for both sides' modifier keys: the left one for either Ctrl, Shift or Alt
 [[nodiscard]] SDL_Scancode CanonicalKey(SDL_Scancode key) noexcept;
 /// Whether SDL's modifier state holds the modifier, on either side

@@ -52,6 +52,14 @@ float Fraction(float value)
 }
 } // namespace
 
+void PlaceAtOpen(std::span<Streak> streaks, const Random& random)
+{
+	for (int pass = 0; pass < 2; ++pass)
+	{
+		std::ranges::generate(streaks, [&random] { return Place(random); });
+	}
+}
+
 Streak Place(const Random& random)
 {
 	Streak streak;

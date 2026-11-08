@@ -873,6 +873,30 @@ TEST(SpellBehaviours, TheForestPlantsOnceAsItsSeedLandsAndPaysForEachTree)
 	EXPECT_FALSE(spells::KeptByKind(services, forest));
 }
 
+TEST(SpellBehaviours, AForestCastAgainFromItsSeedMakesOnlyTheTreesThatItHasNow)
+{
+	auto info = MakeTables();
+	info->magicForest.at(0).finalNoTrees = 18;
+	auto forest = MakeSpell(MagicType::Forest, 10000.0f);
+	// Before it is planted it may make all the trees of its table
+	EXPECT_EQ(spells::MaxObjectsToCreate(*info, forest), 18);
+	// Planted, with one tree left of eighteen, the seed keeps one tree and not eighteen
+	forest.forestPlanted = true;
+	forest.objectCount = 1;
+	EXPECT_EQ(spells::MaxObjectsToCreate(*info, forest), 1);
+	EXPECT_TRUE(spells::HasEnoughForRecast(*info, forest));
+	// With no tree left it may make none, and is not cast again
+	forest.objectCount = 0;
+	EXPECT_EQ(spells::MaxObjectsToCreate(*info, forest), 0);
+	EXPECT_FALSE(spells::HasEnoughForRecast(*info, forest));
+	// A limit from an earlier cast stays the most that it makes
+	forest.maxObjectsToCreate = 4;
+	forest.objectCount = 9;
+	EXPECT_EQ(spells::MaxObjectsToCreate(*info, forest), 4);
+	// Every other miracle keeps no limit
+	EXPECT_EQ(spells::MaxObjectsToCreate(*info, MakeSpell(MagicType::Food, 5000.0f)), -1);
+}
+
 TEST(SpellBehaviours, AForestIsCastOnlyWhereATreeMayGrow)
 {
 	auto info = MakeTables();

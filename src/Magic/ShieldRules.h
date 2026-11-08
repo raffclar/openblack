@@ -184,8 +184,8 @@ inline constexpr float k_ShelterMargin = 0.2f;
 inline constexpr float k_ShelterTurnRange = 0.785398163f;
 [[nodiscard]] glm::vec2 ShelterAt(glm::vec2 centre, glm::vec2 villager, float radius, float turn, float u);
 /// Where a sheltering villager looks next: a step on from where it stands, away from the shield's middle, turned by the
-/// same spread
-[[nodiscard]] glm::vec2 LookOut(glm::vec2 centre, glm::vec2 villager, float turn);
+/// same spread. The point is the x and z of a map position, in whole map units.
+[[nodiscard]] glm::ivec2 LookOut(glm::vec2 centre, glm::vec2 villager, float turn);
 /// A point a distance away from where a villager stands, away from the shield's middle, turned by the same spread. A
 /// villager with nowhere to hide from a fallen shield runs there.
 [[nodiscard]] glm::vec2 AwayFrom(glm::vec2 centre, glm::vec2 villager, float turn, float metres);

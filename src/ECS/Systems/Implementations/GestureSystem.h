@@ -50,6 +50,7 @@ public:
 
 	// GestureSystemInterface
 	void Update(const Frame& frame) override;
+	void InterfaceTurn(const Frame& frame) override;
 	/// The game's templates, loaded through the resource caches the first time they are wanted
 	void LoadTemplates() override;
 	void DrawPath(std::vector<glm::vec2> path, bool holdingAction) override;
@@ -60,6 +61,8 @@ public:
 	}
 	void ForgetPath() override;
 	void SeedFirstTurnInHand() override;
+	void RestartPathAtArmedPress() override { _restartAtArmedPress = true; }
+	void ForgetPathAtPress() override { _forgetAtPress = true; }
 	[[nodiscard]] std::span<const gestures::GestureTemplate> GetTemplates() const override;
 	[[nodiscard]] const gesture::GestureRecorder& GetPath() const override { return _recorder; }
 	[[nodiscard]] float GetScreenAspect() const override { return _screenAspect; }
@@ -89,8 +92,15 @@ private:
 	bool OpenSelection(GestureType opening, PlayerNames player);
 	/// The miracle selection waits for its gestures this frame, closes when the hand is not ready, and its time passes
 	void StepSelection(gesture::HandContext& context, const Frame& frame);
-	/// One sample at a place of the pointer goes on the path, and the first gesture waited for that the path draws acts
-	void SampleCursor(glm::vec2 cursor, const Frame& frame, const gesture::HandContext& context);
+	/// Takes a sample at a place of the pointer, or at the next point of a path drawn for the testbed
+	void SampleCursor(glm::vec2 cursor, const Frame& frame);
+	/// A pass of the interface: the samples, then the gesture step so many times
+	void Pass(const Frame& frame, uint32_t steps);
+	/// The gesture step: the times count down, the camera and the Move button can wipe the path, then the step
+	/// recognises the path. The first step of a pass samples the places first.
+	void Step(const Frame& frame, bool samples, std::optional<glm::vec2> placeBefore);
+	/// Acts on the first gesture waited for that the path draws
+	void Recognise(const Frame& frame, const gesture::HandContext& context);
 	/// A point on the screen that the path uses (768 pixels high) from a point in window pixels
 	[[nodiscard]] static glm::vec2 ToReference(glm::vec2 pixel, const Frame& frame);
 	/// One point on the screen that the path uses goes on the path, with the land under it. Nothing goes on the path
@@ -124,8 +134,18 @@ private:
 	std::optional<glm::vec2> _lastPlace;
 	/// The path started again for a miracle's first turn in the hand: the next update takes a sample at the last place
 	bool _sampleLastPlace {false};
+	/// The Action button armed the miracle in the hand: the pass of the next frame starts the path again after its places.
+	/// The second flag holds it for that pass only.
+	bool _restartAtArmedPress {false};
+	bool _restartInThisPass {false};
+	/// A press directed the fight of the creature: the pass of the next frame forgets the path after its places. The
+	/// second flag keeps it for that pass only.
+	bool _forgetAtPress {false};
+	bool _forgetInThisPass {false};
 	/// Where the camera's eye was last frame
 	std::optional<glm::vec3> _lastCameraEye;
+	/// Whether the camera moved in its last update
+	bool _cameraMoved {false};
 	/// The rest after a gesture, while nothing is recorded
 	float _pause {0.0f};
 	float _screenAspect {4.0f / 3.0f};
@@ -133,6 +153,9 @@ private:
 	std::optional<Recognised> _lastRecognised;
 	uint32_t _recognisedCount {0};
 	gesture::LeashPicker _picker;
+	/// The leash gesture put the leash on a creature that knows more than one leash. The picker stays open while this
+	/// is set, also before the leash is on.
+	bool _leashPutOnByGesture {false};
 	/// A miracle did its first turn in the hand on this land, or the miracle selection opened on this land: the chain
 	/// follows the hand while it holds any miracle
 	bool _seedTurnedOnLand {false};

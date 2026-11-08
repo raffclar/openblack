@@ -863,7 +863,8 @@ void Runner::Give(const Command& command)
 	    command.kind == Kind::PressKey || command.kind == Kind::HandTakeFireBall || command.kind == Kind::HandTapObject ||
 	    command.kind == Kind::HandTake || command.kind == Kind::HandApply || command.kind == Kind::HandTakeShownSeed ||
 	    command.kind == Kind::HandPour || command.kind == Kind::HandRelease || command.kind == Kind::SetReportLatency ||
-	    command.kind == Kind::RemoveObject || command.kind == Kind::HandGripTotem ||
+	    command.kind == Kind::RemoveObject || command.kind == Kind::GiveMagicTreesToStore ||
+	    command.kind == Kind::HandCastAtPoint || command.kind == Kind::HandGripTotem ||
 	    command.kind == Kind::AttachObjectScriptSound || command.kind == Kind::SayLine ||
 	    command.kind == Kind::PlayGuidanceVoice || command.kind == Kind::ScriptRelease || command.kind == Kind::FillSiteIcons ||
 	    command.kind == Kind::BuildWorshipSites || command.kind == Kind::ScriptBuildsWorshipSites ||
@@ -1117,8 +1118,10 @@ void Runner::Update(float seconds)
 		{
 			return !Locator::gestureSystem::has_value() || !Locator::gestureSystem::value().IsDrawingPath();
 		}
-		// The temple takes no press while a script has the cinema bars in, as when the advisors introduce a room
-		const bool toTemple = command.kind == Kind::LookAtTempleScroll || command.kind == Kind::LookAtSaveGamePicture;
+		// The temple takes no press while a script has the cinema bars in, as when the advisors introduce a room. A move of
+		// the pointer that waits goes before a press in the temple.
+		const bool toTemple = command.kind == Kind::LookAtTempleScroll || command.kind == Kind::LookAtSaveGamePicture ||
+		                      command.kind == Kind::PointerTo;
 		if (toTemple)
 		{
 			return !Locator::cinematicDirectorSystem::has_value() ||

@@ -207,3 +207,21 @@ TEST(AnimalMove, TheMoveStatesOfTheGameGiveTheStagesOfAMove)
 	EXPECT_FALSE(MoveStageOfGame(0x00).has_value());
 	EXPECT_FALSE(MoveStageOfGame(0x0C).has_value());
 }
+
+// A goal height of 2 m and more takes the rule of a bird that flies. A lower goal height, and no number, takes the low
+// rule.
+TEST(AnimalMove, AGoalHeightOfTwoMetresAndMoreTakesTheFlyingRule)
+{
+	EXPECT_TRUE(FliesToGoalHeight(2.0f));
+	EXPECT_TRUE(FliesToGoalHeight(45.0f));
+	EXPECT_FALSE(FliesToGoalHeight(std::nextafter(2.0f, 0.0f)));
+	EXPECT_FALSE(FliesToGoalHeight(0.0f));
+	EXPECT_FALSE(FliesToGoalHeight(std::nanf("")));
+}
+
+// A bird that flies goes through metres to its place after its step. A map unit far from the corner of the map can go.
+TEST(AnimalMove, ABirdThatFliesCanLoseAMapUnitAtItsPlace)
+{
+	EXPECT_EQ(FlyingPlace({8090858, 0x10000}), glm::ivec2(8090857, 0x10000));
+	EXPECT_EQ(FlyingPlace({0x8000, 123}), glm::ivec2(0x8000, 123));
+}

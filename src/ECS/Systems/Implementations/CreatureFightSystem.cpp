@@ -680,6 +680,7 @@ void CreatureFightSystem::PrepareLand()
 void CreatureFightSystem::Reset()
 {
 	_pressed.reset();
+	_bodyPressHeld = false;
 	_markHeld = false;
 	EndView("new_land");
 	_lookSeconds = 0.0f;

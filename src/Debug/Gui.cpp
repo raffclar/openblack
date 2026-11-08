@@ -864,8 +864,7 @@ bool Gui::ShowMenu() noexcept
 			{
 				alignment.SetPlayerAlignment(PlayerNames::PLAYER_ONE, player);
 			}
-			ImGui::Text("Camera alignment %.3f, sky alignment %.3f", alignment.GetCameraAlignment(),
-			            alignment.GetSkyAlignment());
+			ImGui::Text("Camera alignment %.3f, sky value %.3f", alignment.GetCameraAlignment(), alignment.GetSkyLand());
 
 			ImGui::EndMenu();
 		}

@@ -261,14 +261,64 @@ TEST(CreatureSpells, ASpellStartsTwoSecondsAfterItIsCast)
 	while (spells[Spell::Freeze].phase == Phase::Waiting && turns < 100)
 	{
 		const auto turn = Step(spells, timings, k_TurnsPerSecond);
-		// Nothing happens to the creature while it waits
+		// While it waits, only the step of each turn it counts down comes
 		if (spells[Spell::Freeze].phase == Phase::Waiting)
 		{
-			EXPECT_TRUE(turn.events.empty());
+			ASSERT_EQ(turn.events.size(), 1u);
+			EXPECT_EQ(turn.events.front().event, Event::Hold);
 		}
 		++turns;
 	}
 	EXPECT_EQ(turns, 21);
+}
+
+TEST(CreatureSpells, AnItchySpellTakesHoldWhileItWaits)
+{
+	Spells spells;
+	spells.startDelayTurns = TurnsOf(k_StartDelaySeconds, k_TurnsPerSecond);
+	Receive(spells, Spell::Itchy, 100, k_Miracle);
+	std::array<Timing, k_SpellCount> timings {};
+	const auto turn = Step(spells, timings, k_TurnsPerSecond);
+	EXPECT_EQ(spells[Spell::Itchy].phase, Phase::Waiting);
+	ASSERT_EQ(turn.events.size(), 1u);
+	EXPECT_EQ(turn.events.front().spell, Spell::Itchy);
+	EXPECT_EQ(turn.events.front().event, Event::Hold);
+}
+
+TEST(CreatureSpells, AWaitingSpellLaterInTheOrderCountsDownInTheTurnItStarts)
+{
+	std::array<Timing, k_SpellCount> timings {};
+	// Small eases out and Big waits: Big comes later in the order, so it counts down at once
+	Spells later;
+	later.startDelayTurns = 20;
+	later[Spell::Small] = {.phase = Phase::Finishing, .turnsLeft = 0, .holdTurns = 0, .miracle = k_Miracle, .before = 1.0f};
+	later.waiting.push_back({.spell = Spell::Big, .holdTurns = 50, .miracle = k_Other});
+	static_cast<void>(Step(later, timings, k_TurnsPerSecond));
+	EXPECT_EQ(later[Spell::Big].phase, Phase::Waiting);
+	EXPECT_EQ(later[Spell::Big].turnsLeft, 19);
+	// Big eases out and Small waits: Small comes earlier in the order, so it waits for the next turn
+	Spells earlier;
+	earlier.startDelayTurns = 20;
+	earlier[Spell::Big] = {.phase = Phase::Finishing, .turnsLeft = 0, .holdTurns = 0, .miracle = k_Miracle, .before = 1.0f};
+	earlier.waiting.push_back({.spell = Spell::Small, .holdTurns = 50, .miracle = k_Other});
+	static_cast<void>(Step(earlier, timings, k_TurnsPerSecond));
+	EXPECT_EQ(earlier[Spell::Small].phase, Phase::Waiting);
+	EXPECT_EQ(earlier[Spell::Small].turnsLeft, 20);
+}
+
+TEST(CreatureSpells, WithoutReversionAWaitingSpellOfTheKindDoesNotStart)
+{
+	Spells spells;
+	spells.reversion = false;
+	spells.startDelayTurns = 20;
+	spells[Spell::Small] = {.phase = Phase::Holding, .turnsLeft = 0, .holdTurns = 0, .miracle = k_Miracle, .before = 1.0f};
+	spells.waiting.push_back({.spell = Spell::Big, .holdTurns = 50, .miracle = k_Other});
+	std::array<Timing, k_SpellCount> timings {};
+	const auto turn = Step(spells, timings, k_TurnsPerSecond);
+	EXPECT_FALSE(spells.IsActive(Spell::Small));
+	EXPECT_FALSE(spells.IsActive(Spell::Big));
+	EXPECT_EQ(spells.waiting.size(), 1u);
+	EXPECT_EQ(turn.ended, (std::vector<entt::entity> {k_Miracle}));
 }
 
 TEST(CreatureSpells, WithoutReversionASpellStopsWhereItIs)
@@ -408,4 +458,26 @@ TEST(CreatureSpells, EachNewFreezeAddsItsTimeAndTakesThePlaceOfTheOldMiracle)
 	EXPECT_EQ(spells[Spell::Freeze].phase, Phase::Holding);
 	EXPECT_EQ(spells[Spell::Freeze].turnsLeft, hold + 10 * 2 * hold);
 	EXPECT_EQ(spells[Spell::Freeze].miracle, last);
+}
+
+TEST(CreatureSpells, OnlyFreezeStopsTheActionOfAScriptControlledCreature)
+{
+	// With no script in control, freeze, nice, nasty and itchy stop what the creature does
+	for (const auto spell : {Spell::Freeze, Spell::Nice, Spell::Nasty, Spell::Itchy})
+	{
+		EXPECT_TRUE(StopsAction(spell, false));
+	}
+	// A script in control keeps its action through the moods and the itch, but not through the freeze
+	EXPECT_TRUE(StopsAction(Spell::Freeze, true));
+	for (const auto spell : {Spell::Nice, Spell::Nasty, Spell::Itchy})
+	{
+		EXPECT_FALSE(StopsAction(spell, true));
+	}
+	// The other spells never stop it
+	for (const auto spell : {Spell::Small, Spell::Big, Spell::Weak, Spell::Strong, Spell::Fat, Spell::Thin, Spell::Invisible,
+	                         Spell::Hungry, Spell::Frightened, Spell::Tired, Spell::Ill, Spell::Thirsty})
+	{
+		EXPECT_FALSE(StopsAction(spell, false));
+		EXPECT_FALSE(StopsAction(spell, true));
+	}
 }

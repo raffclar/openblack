@@ -211,7 +211,8 @@ void testbed_scenarios::AddBirdScenarios(std::vector<Scenario>& all)
 	    .birdFlocks = flocks,
 	});
 
-	// One animal of each kind in the table of the game stays at its position. Behind them, grazers and birds live.
+	// One animal of each kind in the table of the game stays at its position. A script controls each of them, so the
+	// hunters beside them do not cause a reaction and they stay in their standing clip. Behind them, grazers and birds live.
 	std::vector<ObjectSetup> animals;
 	constexpr int k_KindCount = static_cast<int>(AnimalInfo::_COUNT);
 	constexpr int k_PerRow = 16;
@@ -220,7 +221,9 @@ void testbed_scenarios::AddBirdScenarios(std::vector<Scenario>& all)
 	{
 		const auto column = static_cast<float>(kind % k_PerRow) - (static_cast<float>(k_PerRow - 1) * 0.5f);
 		const auto row = static_cast<float>(kind / k_PerRow);
-		animals.push_back({.type = static_cast<AnimalInfo>(kind), .offset = {column * k_Spacing, 30.0f + (row * 12.0f)}});
+		animals.push_back({.type = static_cast<AnimalInfo>(kind),
+		                   .offset = {column * k_Spacing, 30.0f + (row * 12.0f)},
+		                   .scriptControlled = true});
 	}
 	constexpr std::array k_Living {AnimalInfo::Sheep, AnimalInfo::Tortoise, AnimalInfo::Cow, AnimalInfo::Horse,
 	                               AnimalInfo::Pig,   AnimalInfo::Crow,     AnimalInfo::Dove};

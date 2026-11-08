@@ -58,7 +58,12 @@ public:
 	}
 	[[nodiscard]] bool IconHasSite(entt::entity icon) const override { return icon == k_Icon; }
 	[[nodiscard]] bool IconCharging(entt::entity /*icon*/) const override { return charging; }
-	bool StartChant(entt::entity /*icon*/, MagicType /*type*/) override { return startWorks; }
+	[[nodiscard]] bool MayStartChant(entt::entity /*icon*/, MagicType /*type*/) const override { return startWorks; }
+	bool StartChant(entt::entity /*icon*/, MagicType /*type*/) override
+	{
+		++chantStarts;
+		return startWorks;
+	}
 	[[nodiscard]] float ChantNeeded(entt::entity /*icon*/) const override { return needed; }
 	[[nodiscard]] bool Angry(MagicType type) const override { return type == MagicType::Fireball; }
 	bool Cast(MagicType type, entt::entity /*target*/, entt::entity /*icon*/, glm::vec3 /*hand*/) override
@@ -228,6 +233,7 @@ public:
 	std::vector<glm::vec3> thrownAt;
 	bool charging {false};
 	bool startWorks {false};
+	int chantStarts {0};
 	float needed {0.0f};
 	bool castWorks {true};
 	std::vector<MagicType> cast;

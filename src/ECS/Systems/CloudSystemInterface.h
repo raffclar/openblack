@@ -57,8 +57,9 @@ public:
 	/// Every storm gathers its own clouds, one a frame up to its count, and they wander over it with the frames drawn;
 	/// those of storms that have gone go with them. The game turns do not read or change these clouds.
 	virtual void UpdateStormClouds(std::chrono::milliseconds frameRealTime) = 0;
-	/// Moves the animation of the mist of each storm cloud on by the game time of the frame, as for every other mist
-	virtual void AnimateStormClouds(std::chrono::duration<float, std::milli> gameTime) = 0;
+	/// Once a frame: moves the animation of the mist of each storm cloud on by the game time that has passed, at most 60
+	/// times a second, as for every other mist
+	virtual void AnimateStormClouds(std::chrono::milliseconds frameRealTime, std::chrono::milliseconds frameGameTime) = 0;
 	/// The clouds of all the storms, for the draw
 	[[nodiscard]] virtual std::span<const StormCloud> GetStormClouds() const = 0;
 };

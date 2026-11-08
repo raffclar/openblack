@@ -8,7 +8,9 @@
  *******************************************************************************/
 
 #include <cmath>
+#include <cstdint>
 
+#include <bit>
 #include <vector>
 
 #include <glm/gtc/constants.hpp>
@@ -114,4 +116,22 @@ TEST(TempleDoors, TurnRoundToCloseFromAsFarOpenAsTheyAre)
 	RunFor(doors, 0.5f);
 	EXPECT_FALSE(doors.GetLeaf().has_value());
 	EXPECT_FLOAT_EQ(TurnOf(doors, 9), 0.0f);
+}
+
+TEST(TempleDoors, TurnByTheGameRoundingOfEachStep)
+{
+	TempleDoors doors([](entt::id_type) {});
+	doors.Open(5, 1.0f, 0.0f);
+	doors.Update(0.0f);
+	// Fully open, the turn is the float of two times the game's double half swing, one step above two times the float
+	// half swing. The leaves keep their up axis exactly.
+	const auto& first = doors.GetJoints()[5];
+	EXPECT_EQ(std::bit_cast<uint32_t>(first[0][0]), 0x3E31D0CFu);
+	EXPECT_EQ(std::bit_cast<uint32_t>(first[2][0]), 0x3F7C1C5Du);
+	EXPECT_EQ(std::bit_cast<uint32_t>(first[0][2]), 0xBF7C1C5Du);
+	EXPECT_EQ(first[1][1], 1.0f);
+	const auto& second = doors.GetJoints()[6];
+	EXPECT_EQ(std::bit_cast<uint32_t>(second[0][0]), 0x3E31D0CFu);
+	EXPECT_EQ(std::bit_cast<uint32_t>(second[2][0]), 0xBF7C1C5Du);
+	EXPECT_EQ(second[1][1], 1.0f);
 }

@@ -205,8 +205,8 @@ public:
 	/// The land's music at the camera
 	[[nodiscard]] MusicType SelectLandType(const TurnInputs& inputs);
 	/// The music of a fight of the player's creature: the creature fight music on the first three lands of the story,
-	/// the big fight music on later lands and in a skirmish
-	[[nodiscard]] static MusicType SelectFightType(int32_t landNumber, bool skirmish);
+	/// the big fight music on later lands, in a skirmish and in a network game
+	[[nodiscard]] static MusicType SelectFightType(int32_t landNumber, bool skirmish, bool networkGame);
 	/// The temple's music, in the version of the local player's own alignment
 	[[nodiscard]] static MusicType SelectCitadelType(const TurnInputs& inputs);
 	/// Whether the land's music may play this turn: it is turned on, the game is past its first turns, and no script
@@ -238,6 +238,9 @@ private:
 	uint32_t _blockedTurns {0};
 	/// The scripts' piece plays in the music heard, and the play count of the world that it follows
 	bool _scriptStarted {false};
+	/// The first turn of the temple's music stopped every sound effect. A turn of the music outside the temple clears
+	/// this. A new land does not clear it.
+	bool _citadelStoppedSounds {false};
 	uint32_t _scriptPlayCount {0};
 	bool _alignmentMusicEnabled {true};
 	bool _banksLoaded {true};

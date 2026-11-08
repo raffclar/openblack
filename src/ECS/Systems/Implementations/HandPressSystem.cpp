@@ -254,10 +254,10 @@ void HandPressSystem::Press(const SDL_Event& event, const PressContext& context)
 	ActionLetGo(event, rightLetGo, inTemple, handTakesPresses, hasGrab, handHoldsThing);
 	ActionPress(event, inTemple, handTakesPresses, hasGrab, handHoldsThing, interfaceLimits, mayHold);
 	MovePress(event, inTemple, handTakesPresses, context);
-	// Letting go of the button that pressed charges the blow it queued
-	if (_fightButton.has_value() && _world->FightPressed() &&
-	    ((*_fightButton == creature_fight::Button::Move && !_buttons.left) ||
-	     (*_fightButton == creature_fight::Button::Action && !_buttons.right)))
+	// When the player releases the button of the press, the blow that the press queued gets its charge. The fight
+	// system also gets the release when the fight ended before it, because the hold of a press on a body continues.
+	if (_fightButton.has_value() && ((*_fightButton == creature_fight::Button::Move && !_buttons.left) ||
+	                                 (*_fightButton == creature_fight::Button::Action && !_buttons.right)))
 	{
 		_world->FightRelease(_world->Ticks(), _world->Turn());
 		_fightButton.reset();

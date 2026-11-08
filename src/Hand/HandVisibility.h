@@ -21,6 +21,14 @@ namespace openblack::hand_visibility
 	return !dialogOpen && (interfaceActive || insideTemple);
 }
 
+/// Whether the player's hand shows the effects of the miracle that it holds: the glow, the bands and the bracelets. Only a
+/// hand that is out shows them, and never inside the temple. The clocks of these effects move only while the hand shows
+/// them. Thus a band in flight stops while the hand is away, and it continues when the hand comes back.
+[[nodiscard]] constexpr bool ShowsMiracleEffects(bool shown, bool insideTemple)
+{
+	return shown && !insideTemple;
+}
+
 /// Whether a press of a mouse button reaches the player's hand. While a script's cinema bars have taken the interface the
 /// hand does nothing: it grips no land (no dust, no grab sound, no splash), takes and casts nothing, and clicks nothing for
 /// the scripts. Letting go of a button still lets go of whatever the hand held.

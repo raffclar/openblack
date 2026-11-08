@@ -112,6 +112,21 @@ Effect creature_spells::EffectOf(Spell spell)
 	return {.desire = desire, .soundAction = k_SoundActions.at(static_cast<size_t>(spell))};
 }
 
+bool creature_spells::StopsAction(Spell spell, bool scriptControlled)
+{
+	switch (spell)
+	{
+	case Spell::Freeze:
+		return true;
+	case Spell::Nice:
+	case Spell::Nasty:
+	case Spell::Itchy:
+		return !scriptControlled;
+	default:
+		return false;
+	}
+}
+
 bool Spells::IsKindActive(Kind kind) const
 {
 	for (size_t i = 0; i < k_SpellCount; ++i)
@@ -218,7 +233,20 @@ float creature_spells::Ratio(const Slot& slot, const Timing& timing, float turns
 TurnResult creature_spells::Step(Spells& spells, std::span<const Timing, k_SpellCount> timings, float turnsPerSecond)
 {
 	TurnResult result;
-	bool anyEnded = false;
+	// A spell that eased out makes way at once for those of its kind waiting. A spell started here that comes later in
+	// the order counts down in this same turn.
+	const auto startWaiting = [&spells]() {
+		for (auto it = spells.waiting.begin(); it != spells.waiting.end();)
+		{
+			if (spells.IsKindActive(KindOf(it->spell)))
+			{
+				++it;
+				continue;
+			}
+			Begin(spells[it->spell], it->holdTurns, it->miracle, spells.startDelayTurns);
+			it = spells.waiting.erase(it);
+		}
+	};
 	for (size_t i = 0; i < k_SpellCount; ++i)
 	{
 		const auto spell = static_cast<Spell>(i);
@@ -239,11 +267,8 @@ TurnResult creature_spells::Step(Spells& spells, std::span<const Timing, k_Spell
 			{
 				result.events.push_back({spell, Event::Ease, Ratio(slot, timing, turnsPerSecond)});
 			}
-			// What it does every turn it is on, while it eases in, holds and eases out, but not while it waits to start
-			if (slot.phase != Phase::Waiting)
-			{
-				result.events.push_back({spell, Event::Hold, Ratio(slot, timing, turnsPerSecond)});
-			}
+			// What it does every turn it counts down, also while it waits to start
+			result.events.push_back({spell, Event::Hold, Ratio(slot, timing, turnsPerSecond)});
 			continue;
 		}
 		switch (slot.phase)
@@ -258,7 +283,8 @@ TurnResult creature_spells::Step(Spells& spells, std::span<const Timing, k_Spell
 			slot.turnsLeft = slot.holdTurns;
 			break;
 		case Phase::Holding:
-			// Without reversion it stops where it is, leaving the creature as it made it
+			// Without reversion it stops where it is, leaving the creature as it made it. The spells of its kind that
+			// wait do not start now.
 			if (!spells.reversion)
 			{
 				slot.phase = Phase::Off;
@@ -267,7 +293,6 @@ TurnResult creature_spells::Step(Spells& spells, std::span<const Timing, k_Spell
 					result.ended.push_back(slot.miracle);
 				}
 				slot.miracle = entt::null;
-				anyEnded = true;
 				break;
 			}
 			slot.phase = Phase::Finishing;
@@ -282,24 +307,10 @@ TurnResult creature_spells::Step(Spells& spells, std::span<const Timing, k_Spell
 				result.ended.push_back(slot.miracle);
 			}
 			slot.miracle = entt::null;
-			anyEnded = true;
+			startWaiting();
 			break;
 		case Phase::Off:
 			break;
-		}
-	}
-	// A spell that ended makes way for those of its kind waiting
-	if (anyEnded)
-	{
-		for (auto it = spells.waiting.begin(); it != spells.waiting.end();)
-		{
-			if (spells.IsKindActive(KindOf(it->spell)))
-			{
-				++it;
-				continue;
-			}
-			Begin(spells[it->spell], it->holdTurns, it->miracle, spells.startDelayTurns);
-			it = spells.waiting.erase(it);
 		}
 	}
 	return result;

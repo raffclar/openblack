@@ -163,6 +163,7 @@ void GestureSystem::Reset()
 	_events.clear();
 	_drawing.clear();
 	_picker.Close();
+	_leashPutOnByGesture = false;
 	_seedTurnedOnLand = false;
 	_selection.Close();
 	_circleSeconds = 0.0f;
@@ -378,6 +379,7 @@ gesture::HandContext GestureSystem::ContextOf(const Frame& frame)
 		const auto& registry = Locator::entitiesRegistry::value();
 		const auto* fighting = registry.TryGet<const ecs::components::CreatureFighting>(*fighter);
 		state.fighting = true;
+		state.directsFight = Locator::creatureFightSystem::value().DirectsFight();
 		state.takesFightMoves = fighting != nullptr && fighting->fighter.queue.Size() < creature_fight::MoveQueue::k_Capacity;
 		const auto* mind = registry.TryGet<const ecs::components::CreatureMindState>(*fighter);
 		const auto* knowledge = mind != nullptr && mind->learnt.has_value() ? &mind->learnt->knowledge : nullptr;
@@ -425,8 +427,29 @@ gesture::HandContext GestureSystem::ContextOf(const Frame& frame)
 
 void GestureSystem::Update(const Frame& frame)
 {
+	// The camera moved in its update after the last frame's pass. The turn's pass that follows sees the same move.
+	_cameraMoved = _lastCameraEye.has_value() && *_lastCameraEye != frame.view.cameraEye;
+	_lastCameraEye = frame.view.cameraEye;
+	// The messages of the buttons come in the frame's pass only, so the turn's pass does not start the path again
+	_restartInThisPass = std::exchange(_restartAtArmedPress, false);
+	_forgetInThisPass = std::exchange(_forgetAtPress, false);
+	Pass(frame, gesture::StepsOfFramePass(frame.buttonMessages));
+	_restartInThisPass = false;
+	_forgetInThisPass = false;
+}
+
+void GestureSystem::InterfaceTurn(const Frame& frame)
+{
+	// The times of the gestures count only in the frame's pass
+	auto turn = frame;
+	turn.seconds = 0.0f;
+	Pass(turn, 1);
+}
+
+void GestureSystem::Pass(const Frame& frame, uint32_t steps)
+{
 	LoadTemplates();
-	// A path that a miracle's first turn in the hand started again takes the place that was the last before this frame
+	// A path that a miracle's first turn in the hand started again takes the place that was the last before this pass
 	const auto placeBefore = _lastPlace;
 	// The interface keeps the last place of the pointer, also when the path takes no sample
 	if (!frame.places.empty())
@@ -445,16 +468,47 @@ void GestureSystem::Update(const Frame& frame)
 			_lastRecognised.reset();
 		}
 	}
-	_pause = std::max(_pause - frame.seconds, 0.0f);
+	// The places of the pass come first. Then each message of a button does the gesture step, and its times count down
+	// again each time.
+	for (uint32_t step = 0; step < steps; ++step)
+	{
+		Step(frame, step == 0, placeBefore);
+	}
+}
+
+void GestureSystem::Step(const Frame& frame, bool samples, std::optional<glm::vec2> placeBefore)
+{
+	// The step does nothing, and the hand forgets the path, while one of these is true:
+	// - the hand does not draw over the world (a path drawn for the testbed continues),
+	// - the hand holds a creature, or a field, fish farm or pile that it takes from,
+	// - a front-end box shows.
+	// Then no time of the gestures counts down.
+	if ((!frame.overWorld && _drawing.empty()) || frame.handLocked || frame.frontEndBox)
+	{
+		ForgetPath();
+		return;
+	}
+
 	_circleSeconds = std::max(_circleSeconds - frame.seconds, 0.0f);
 
-	// The leash picker closes once the leash is off, or after a while
+	// The leash picker stays open while the player's leash is on the creature, or after the leash gesture put the leash
+	// on. It closes after a while.
 	auto context = ContextOf(frame);
-	const bool leashed = context.creature.has_value() && context.creature->leashed;
+	const bool staysOpen = context.creature.has_value() && (context.creature->leashed || _leashPutOnByGesture);
 	const auto timeout =
 	    Locator::infoConstants::has_value() ? Locator::infoConstants::value().spellSystem.leashSelectionSystemTimeOut : 25.0f;
-	_picker.Update(frame.seconds, timeout, leashed);
-	context.pickerOpen = _picker.open;
+	context.pickerOpen = _picker.Update(frame.seconds, timeout, staysOpen);
+	// While the hand powers up the miracle in it, or directs the duel of the creature, the miracle selection and the
+	// leash picker close
+	const bool directsFight = context.creature.has_value() && context.creature->directsFight;
+	const bool poweringUp = context.seed.has_value() && context.seed->ready && !context.seed->cast && context.seed->canPowerUp;
+	if (directsFight || poweringUp)
+	{
+		_picker.Close();
+		_selection.Close();
+		context.pickerOpen = false;
+		context.selection.reset();
+	}
 	StepSelection(context, frame);
 	_requests = gesture::Requests(context);
 	RefreshHints();
@@ -463,14 +517,44 @@ void GestureSystem::Update(const Frame& frame)
 	// opened on this land, the chain follows the hand while it holds any miracle.
 	_gesturing = _selection.IsOpen() || gesture::ChainFollows(context.seed, _seedTurnedOnLand);
 
-	// Moving the camera wipes the path being drawn, though not while the camera shakes. The fight view that shows a
-	// fight in its arena, and the camera that follows the creature, let the player draw on while they move.
-	const bool cameraMoved = _lastCameraEye.has_value() && *_lastCameraEye != frame.view.cameraEye;
-	_lastCameraEye = frame.view.cameraEye;
-	if (cameraMoved && !frame.cameraShaking && !frame.cameraLetsHandDraw)
+	if (samples)
+	{
+		// A path that a miracle's first turn in the hand started again gets the last place of the pointer first
+		if (_sampleLastPlace && placeBefore.has_value())
+		{
+			RecordPoint(ToReference(*placeBefore, frame), frame);
+		}
+		_sampleLastPlace = false;
+		// The path takes a sample at each place of the pointer that the interface got, not at the frames
+		for (const auto place : frame.places)
+		{
+			SampleCursor(place, frame);
+		}
+		// A press that directed the fight came after the places: the hand forgets the path
+		if (std::exchange(_forgetInThisPass, false))
+		{
+			ForgetPath();
+		}
+		// The press that armed a miracle came after the places: the path starts again from the last place of the pointer
+		if (std::exchange(_restartInThisPass, false))
+		{
+			ForgetPath();
+			if (_lastPlace.has_value())
+			{
+				RecordPoint(ToReference(*_lastPlace, frame), frame);
+			}
+		}
+	}
+
+	// After the places, the interface looks at the path. A move of the camera wipes the path that the hand draws, but
+	// not while the camera shakes. The fight view that shows a fight in its arena, and the camera that follows the
+	// creature, let the player draw while they move.
+	if (_cameraMoved && !frame.cameraShaking && !frame.cameraLetsHandDraw)
 	{
 		_recorder.Reset();
 	}
+	// The rest after a recognised gesture counts down after the samples
+	_pause = std::max(_pause - frame.seconds, 0.0f);
 
 	// While the hand directs the fight, the held Move button wipes the path, and no gesture is recognised
 	if (frame.moveHeldInFight)
@@ -479,24 +563,8 @@ void GestureSystem::Update(const Frame& frame)
 		return;
 	}
 
-	// The hand's path is only drawn over the world; a path drawn for the testbed goes on regardless
-	if (!frame.overWorld && _drawing.empty())
-	{
-		ForgetPath();
-		return;
-	}
-
-	// A path that a miracle's first turn in the hand started again gets the last place of the pointer first
-	if (_sampleLastPlace && placeBefore.has_value())
-	{
-		RecordPoint(ToReference(*placeBefore, frame), frame);
-	}
-	_sampleLastPlace = false;
-	// The path takes a sample at each place of the pointer that the interface got, not at the frames
-	for (const auto place : frame.places)
-	{
-		SampleCursor(place, frame, context);
-	}
+	// The first gesture waited for that the whole path draws is acted on
+	Recognise(frame, context);
 }
 
 glm::vec2 GestureSystem::ToReference(glm::vec2 pixel, const Frame& frame)
@@ -506,7 +574,8 @@ glm::vec2 GestureSystem::ToReference(glm::vec2 pixel, const Frame& frame)
 
 bool GestureSystem::RecordPoint(glm::vec2 point, const Frame& frame)
 {
-	if (_pause > 0.0f)
+	// No sample while the game is paused, or for a short time after a gesture is recognised
+	if (frame.paused || _pause > 0.0f)
 	{
 		return false;
 	}
@@ -523,22 +592,26 @@ bool GestureSystem::RecordPoint(glm::vec2 point, const Frame& frame)
 	return true;
 }
 
-void GestureSystem::SampleCursor(glm::vec2 cursor, const Frame& frame, const gesture::HandContext& context)
+void GestureSystem::SampleCursor(glm::vec2 cursor, const Frame& frame)
 {
+	// A path drawn for the testbed keeps its next point until the game runs again
+	if (frame.paused)
+	{
+		return;
+	}
 	glm::vec2 point = ToReference(cursor, frame);
 	if (!_drawing.empty())
 	{
 		point = _drawing.front();
 		_drawing.pop_front();
 	}
-	if (!RecordPoint(point, frame))
-	{
-		return;
-	}
+	RecordPoint(point, frame);
+}
 
-	// The first gesture waited for that the path draws is acted on
+void GestureSystem::Recognise(const Frame& frame, const gesture::HandContext& context)
+{
 	const auto templates = GetTemplates();
-	if (templates.empty() || _requests.empty())
+	if (templates.empty() || _requests.empty() || _recorder.Empty())
 	{
 		return;
 	}
@@ -561,6 +634,13 @@ void GestureSystem::SampleCursor(glm::vec2 cursor, const Frame& frame, const ges
 		if (Act(request, *match, frame))
 		{
 			break;
+		}
+		// A fight miracle that did not meet the opponent stops the fight's gestures. The hand tries the gestures that
+		// follow them.
+		if (request.purpose == Purpose::FightMiracle)
+		{
+			next = gesture::AfterFightMiss(requests, next);
+			continue;
 		}
 		// A gesture of the selection that matched no miracle does nothing. The selection waits for no more of its
 		// gestures this frame, and the hand tries the other gestures as it is now.
@@ -585,9 +665,7 @@ void GestureSystem::StepSelection(gesture::HandContext& context, const Frame& fr
 	}
 	// The selection does its step only while the hand draws over the world, and not while the creature takes fight
 	// moves or the hand powers up its miracle
-	const bool fightMoves = context.creature.has_value() && context.creature->takesFightMoves;
-	const bool poweringUp = context.seed.has_value() && context.seed->ready && !context.seed->cast && context.seed->canPowerUp;
-	if (frame.moveHeldInFight || (!frame.overWorld && _drawing.empty()) || fightMoves || poweringUp)
+	if (frame.moveHeldInFight || (!frame.overWorld && _drawing.empty()))
 	{
 		return;
 	}
@@ -772,6 +850,15 @@ bool GestureSystem::Act(const gesture::Request& request, const gesture::Match& m
 		step = gesture::SelectionStep::Repeated;
 		requested = player_commands::MiracleRepeat {};
 		break;
+	case Purpose::FightMiracle:
+		// The miracle goes into the fight's queue only when the line from the creature to its opponent meets the
+		// opponent's skin. If not, the gesture does nothing: it shows no trail, and the hand keeps its path.
+		if (!Locator::creatureFightSystem::has_value() || !Locator::creatureFightSystem::value().GestureSpell(request.magic))
+		{
+			SPDLOG_LOGGER_INFO(spdlog::get("game"), "Gesture {} did not meet the opponent", gesture::Name(request.gesture));
+			return false;
+		}
+		break;
 	default:
 		break;
 	}
@@ -865,7 +952,8 @@ bool GestureSystem::Act(const gesture::Request& request, const gesture::Match& m
 		{
 			// The leash key command puts the leash on an unleashed creature at the turn. A creature that knows more than one
 			// leash opens the picker at once, so that the player can change the leash.
-			if (!leashes->IsLeashed(*creature))
+			const bool leashed = leashes->IsLeashed(*creature);
+			if (!leashed)
 			{
 				SendRequest(player_commands::LeashKey {.key = creature_leash::LeashKey::Leash});
 			}
@@ -876,6 +964,9 @@ bool GestureSystem::Act(const gesture::Request& request, const gesture::Match& m
 			}
 			if (known > 1)
 			{
+				// The picker stays open until the leash goes on at the turn. It keeps this until the leash gesture opens
+				// the picker on a leashed creature, also when the leash comes off before then.
+				_leashPutOnByGesture = !leashed;
 				_picker.Open();
 			}
 		}
@@ -899,10 +990,7 @@ bool GestureSystem::Act(const gesture::Request& request, const gesture::Match& m
 		}
 		break;
 	case Purpose::FightMiracle:
-		if (Locator::creatureFightSystem::has_value())
-		{
-			Locator::creatureFightSystem::value().GestureSpell(request.magic);
-		}
+		// The miracle went into the fight's queue above
 		break;
 	case Purpose::HiddenScript:
 		// Each square wave starts the script again. The script itself finds the phone box that it made before.

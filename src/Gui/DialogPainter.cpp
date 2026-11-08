@@ -133,6 +133,7 @@ void DialogPainter::SetClip(const std::optional<DialogRect>& rect) const
 
 void DialogPainter::DrawBox(const DialogRect& rect, glm::vec2 uvMin, glm::vec2 uvMax, glm::vec3 tint) const
 {
+	const Canvas::CornersScope corners(_canvas, screen_pixels::Corners::BoxDraw);
 	_canvas.DrawQuad(ToScreen(rect.min), ToScreen(rect.max), uvMin, uvMax, glm::vec4(tint, _alpha), &_atlas);
 }
 
@@ -339,6 +340,8 @@ void DialogPainter::DrawSquare(glm::ivec2 position, int size, bool checked, bool
 
 void DialogPainter::DrawShape(const std::array<glm::vec2, 4>& corners, const std::array<glm::vec4, 4>& colours) const
 {
+	// The game fills these shapes with its box draw
+	const Canvas::CornersScope boxDraw(_canvas, screen_pixels::Corners::BoxDraw);
 	std::array<glm::vec2, 4> screen {};
 	std::array<glm::vec4, 4> faded {};
 	for (size_t i = 0; i < 4; ++i)
@@ -359,6 +362,7 @@ void DialogPainter::DrawSymbol(const DialogRect& rect, int index, glm::vec4 tint
 	const auto column = index % 4;
 	const auto row = index / 4;
 	const auto cell = (glm::vec2(static_cast<float>(column), static_cast<float>(row)) * k_Grid) + k_HalfTexel;
+	const Canvas::CornersScope corners(_canvas, screen_pixels::Corners::BoxDraw);
 	_canvas.DrawQuad(ToScreen(rect.min), ToScreen(rect.max), cell, cell + k_Grid - k_Texel,
 	                 glm::vec4(glm::vec3(tint), tint.a * _alpha), _symbols);
 }
@@ -366,6 +370,7 @@ void DialogPainter::DrawSymbol(const DialogRect& rect, int index, glm::vec4 tint
 void DialogPainter::DrawPicture(const DialogRect& rect, const graphics::Texture2D& texture, glm::vec2 uvMin, glm::vec2 uvMax,
                                 glm::vec4 colour) const
 {
+	const Canvas::CornersScope corners(_canvas, screen_pixels::Corners::BoxDraw);
 	_canvas.DrawQuad(ToScreen(rect.min), ToScreen(rect.max), uvMin, uvMax, glm::vec4(glm::vec3(colour), colour.a * _alpha),
 	                 &texture);
 }
@@ -393,6 +398,7 @@ void DialogPainter::DrawPointer(Canvas& canvas, glm::ivec2 screen, uint32_t mill
 	// A 32 pixel arrow on the default screen, grown with the layout on bigger ones
 	const auto size = 32.0f * std::max(_scale, 1.0f);
 	const auto min = glm::vec2(screen.x - 2, screen.y);
+	const Canvas::CornersScope corners(canvas, screen_pixels::Corners::BoxDraw);
 	canvas.DrawQuad(min, min + size, cell + k_HalfTexel, cell + k_PointerExtent, glm::vec4(1.0f), &_atlas);
 }
 
@@ -478,27 +484,30 @@ void DialogPainter::DrawString(glm::vec2 screen, std::u16string_view text, float
 		DrawGlyphs(screen, text, size, top, false);
 		return;
 	}
-	const auto scale = size / static_cast<float>(_font.GetHeight());
+	const auto level = GameFont::ScreenGlyphLevel(size, false);
 	const auto atlasSize = glm::vec2(_font.GetAtlasSize());
 	const auto topColour = glm::vec4(glm::vec3(top), top.a * _alpha);
 	const auto bottomColour = glm::vec4(glm::vec3(bottom), bottom.a * _alpha);
-	auto pen = glm::floor(screen);
+	const auto start = glm::floor(screen);
+	float pen = 0.0f;
 	for (const auto c : text)
 	{
-		const auto* glyph = _font.Find(c);
-		if (glyph == nullptr)
+		const auto placed = _font.PlaceOnScreen(c, start.x, pen, size, level);
+		if (!placed.has_value())
 		{
 			continue;
 		}
-		const auto uvMin = glm::vec2(glyph->atlasMin) / atlasSize;
-		const auto uvMax = glm::vec2(glyph->atlasMax) / atlasSize;
-		// The half height atlas holds the glyph at half size
-		const auto cellSize = (glm::vec2(glyph->atlasMax) - glm::vec2(glyph->atlasMin)) * 2.0f * scale;
-		const auto min = glm::vec2(pen.x + (glyph->left * scale), pen.y);
-		const auto max = min + cellSize;
+		pen = placed->pen;
+		if (!placed->drawn)
+		{
+			continue;
+		}
+		const auto uvMin = placed->texelMin / atlasSize;
+		const auto uvMax = placed->texelMax / atlasSize;
+		const glm::vec2 min {placed->left, start.y};
+		const glm::vec2 max {placed->right, start.y + size};
 		_canvas.DrawShape({min, {max.x, min.y}, max, {min.x, max.y}}, {uvMin, {uvMax.x, uvMin.y}, uvMax, {uvMin.x, uvMax.y}},
 		                  {topColour, topColour, bottomColour, bottomColour}, &_fontTexture);
-		pen.x += (glyph->left + glyph->ink + glyph->right) * scale;
 	}
 }
 
@@ -512,24 +521,25 @@ bool DialogPainter::UseFullGlyphs(float drawnSize) const noexcept
 
 void DialogPainter::DrawGlyphs(glm::vec2 screen, std::u16string_view text, float size, glm::vec4 colour, bool full) const
 {
-	const auto scale = size / static_cast<float>(_font.GetHeight());
+	const auto level = GameFont::ScreenGlyphLevel(size, full);
 	const auto atlasSize = glm::vec2(full ? _font.GetFullAtlasSize() : _font.GetAtlasSize());
 	const auto* texture = full ? _fullFontTexture : &_fontTexture;
-	auto pen = glm::floor(screen);
+	const auto drawnColour = glm::vec4(glm::vec3(colour), colour.a * _alpha);
+	const auto start = glm::floor(screen);
+	float pen = 0.0f;
 	for (const auto c : text)
 	{
-		const auto* glyph = _font.Find(c);
-		if (glyph == nullptr)
+		const auto placed = _font.PlaceOnScreen(c, start.x, pen, size, level);
+		if (!placed.has_value())
 		{
 			continue;
 		}
-		const auto atlasMin = glm::vec2(full ? glyph->fullMin : glyph->atlasMin);
-		const auto atlasMax = glm::vec2(full ? glyph->fullMax : glyph->atlasMax);
-		// The half height atlas holds the glyph at half size
-		const auto cellSize = (atlasMax - atlasMin) * (full ? 1.0f : 2.0f) * scale;
-		const auto min = glm::vec2(pen.x + (glyph->left * scale), pen.y);
-		_canvas.DrawQuad(min, min + cellSize, atlasMin / atlasSize, atlasMax / atlasSize,
-		                 glm::vec4(glm::vec3(colour), colour.a * _alpha), texture);
-		pen.x += (glyph->left + glyph->ink + glyph->right) * scale;
+		pen = placed->pen;
+		if (!placed->drawn)
+		{
+			continue;
+		}
+		_canvas.DrawQuad({placed->left, start.y}, {placed->right, start.y + size}, placed->texelMin / atlasSize,
+		                 placed->texelMax / atlasSize, drawnColour, texture);
 	}
 }

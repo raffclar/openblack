@@ -28,8 +28,9 @@ class RainSystemInterface
 public:
 	virtual ~RainSystemInterface() = default;
 
-	/// New streaks, falling as in calm air
-	virtual void Reset() = 0;
+	/// The weather opens, as when the game starts with the weather option on, or as the multiplayer front end starts. The
+	/// rain shows from now on, with new streaks that fall as in calm air.
+	virtual void Open() = 0;
 	/// Once a frame: the rain's fall follows the storm nearest the camera, and the streaks move on if they were drawn.
 	/// The real time of the frame tells when the rain makes its next splashes, which it also makes while the game is
 	/// paused.

@@ -339,7 +339,7 @@ void Renderer::DrawMists(const DrawSceneDesc& desc) const
 		const auto texel = _landLightTable->GetTexels().back();
 		fullLight = ((texel & 0xFFu) << 16u) | (texel & 0xFF00u) | ((texel >> 16u) & 0xFFu);
 	}
-	const auto cloudColour = clouds::Colour(Locator::alignmentSystem::value().GetSkyAlignment(), fullLight);
+	const auto cloudColour = clouds::Colour(Locator::alignmentSystem::value().GetSkyLand(), fullLight);
 	// The storms' clouds are tinted from the land's colour this frame
 	const auto landColour = _landLightTable ? _landLightTable->GetLandColour() : 0xFFFFFFu;
 
@@ -363,6 +363,7 @@ void Renderer::DrawMists(const DrawSceneDesc& desc) const
 	    view_frustum::FromViewProjection(camera.GetProjectionMatrix() * camera.GetViewMatrix(Camera::Interpolation::Current));
 	const bool testsView = desc.viewId == RenderPass::Main && !_warmingUp && !mesh->IsBoned();
 	const auto box = mesh->GetBoundingBox();
+	const bool reflection = desc.viewId == RenderPass::Reflection;
 
 	// A storm's cloud is lit by the lightning of its storm
 	const auto drawMist = [&](const Mist& mist, const glm::vec3& position, uint32_t colour,
@@ -418,8 +419,12 @@ void Renderer::DrawMists(const DrawSceneDesc& desc) const
 					subMesh->GetMesh().GetIndexBuffer().Bind(primitive.indicesCount, primitive.indicesOffset);
 				}
 				subMesh->GetMesh().GetVertexBuffer().Bind();
-				// Both sides, blended over what is behind, tested against but not writing depth
-				bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_DEPTH_TEST_GREATER | BGFX_STATE_BLEND_ALPHA | BGFX_STATE_MSAA);
+				// Blended over what is behind, tested against but not writing depth. The material of the mesh tells if the
+				// back faces show: the dome of a mist shows only its outside, so an eye in a cloud sees no inner wall.
+				// L3D meshes face clockwise; the mirrored reflection sees them from the other side.
+				const uint64_t cull = primitive.twoSided ? 0 : (reflection ? BGFX_STATE_CULL_CW : BGFX_STATE_CULL_CCW);
+				bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_DEPTH_TEST_GREATER | BGFX_STATE_BLEND_ALPHA | BGFX_STATE_MSAA |
+				               cull);
 				// In its place among everything that blends, the farthest first
 				program->Submit(static_cast<bgfx::ViewId>(TranslucentView(desc.viewId)), zsort::Depth(position, origin));
 			}

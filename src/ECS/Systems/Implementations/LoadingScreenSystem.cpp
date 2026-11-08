@@ -89,8 +89,9 @@ struct StartupInput
 	bool quit {false};
 };
 
-/// Takes the window's events, which the game's own handlers don't see during these screens
-StartupInput PollStartupInput()
+/// Takes the window's events, which the game's own handlers don't see during these screens. `keys` gets the keys and
+/// the clicks that the logo stills and the pre-intro read
+StartupInput PollStartupInput(startup::StartupKeys* keys)
 {
 	StartupInput input;
 	SDL_Event event;
@@ -105,6 +106,19 @@ StartupInput PollStartupInput()
 		else if (event.type == SDL_KEYDOWN)
 		{
 			input.key = true;
+			if (keys != nullptr)
+			{
+				keys->KeyDown(event.key.keysym.scancode == SDL_SCANCODE_ESCAPE);
+			}
+		}
+		else if (event.type == SDL_KEYUP && keys != nullptr)
+		{
+			keys->KeyUp();
+		}
+		else if (event.type == SDL_MOUSEBUTTONDOWN && keys != nullptr &&
+		         (event.button.button == SDL_BUTTON_LEFT || event.button.button == SDL_BUTTON_RIGHT))
+		{
+			keys->Click();
 		}
 	}
 	const auto buttons = SDL_GetMouseState(nullptr, nullptr);
@@ -113,9 +127,9 @@ StartupInput PollStartupInput()
 }
 
 /// The events, closing the window ending the game once it starts
-StartupInput TakeStartupInput(const LoadingScreenHooks& hooks)
+StartupInput TakeStartupInput(const LoadingScreenHooks& hooks, startup::StartupKeys* keys = nullptr)
 {
-	const auto input = PollStartupInput();
+	const auto input = PollStartupInput(keys);
 	if (input.quit)
 	{
 		hooks.requestQuit();
@@ -339,7 +353,9 @@ void LoadingScreenSystem::PlayLogoScreens()
 	{
 		return;
 	}
+	// The game forgets the earlier keys and clicks before the first still and after the last
 	TakeStartupInput(_hooks);
+	startup::StartupKeys keys;
 	for (int32_t still = 0; still < startup::k_LogoStills && !QuitRequested(); ++still)
 	{
 		const auto picture = video::ReadStill(std::filesystem::path(k_LogoFilm), static_cast<uint32_t>(still));
@@ -348,8 +364,8 @@ void LoadingScreenSystem::PlayLogoScreens()
 		while (!logo.Ended() && !QuitRequested())
 		{
 			const auto now = Milliseconds();
-			const auto input = TakeStartupInput(_hooks);
-			const auto alpha = logo.Frame(static_cast<int32_t>(now - last), input.key || input.mouse);
+			TakeStartupInput(_hooks, &keys);
+			const auto alpha = logo.Frame(static_cast<int32_t>(now - last), keys);
 			last = now;
 			PresentStartupFrame([this, &picture, alpha](glm::u16vec2 resolution) {
 				if (picture)
@@ -518,7 +534,8 @@ void LoadingScreenSystem::PlayPreIntro()
 	const auto start = Clock::now();
 	const auto frameCount = static_cast<int32_t>(film->FrameCount());
 	int32_t shown = 0;
-	bool keyPressed = false;
+	// Only Escape stops the pre-intro, while it is the last key down
+	startup::StartupKeys keys;
 	do
 	{
 		// Each frame waits until it is due by the film's own pace, and is never skipped
@@ -531,7 +548,7 @@ void LoadingScreenSystem::PlayPreIntro()
 			{
 				break;
 			}
-			keyPressed = TakeStartupInput(_hooks).key || keyPressed;
+			TakeStartupInput(_hooks, &keys);
 			std::this_thread::sleep_for(std::chrono::microseconds(500));
 		}
 		film->Decode(static_cast<uint32_t>(shown));
@@ -541,8 +558,8 @@ void LoadingScreenSystem::PlayPreIntro()
 			_loadingScreen->DrawPicture(resolution, film->GetPlanes(),
 			                            gui::FitInside(gui::k_FourByThree, resolution.x, resolution.y), 255);
 		});
-		keyPressed = TakeStartupInput(_hooks).key || keyPressed;
-	} while (startup::PreIntroGoesOn(shown, frameCount, keyPressed) && !QuitRequested());
+		TakeStartupInput(_hooks, &keys);
+	} while (startup::PreIntroGoesOn(shown, frameCount, keys.EscapeDown()) && !QuitRequested());
 
 	// The music is cut off with it
 	audio.MusicStop(false);

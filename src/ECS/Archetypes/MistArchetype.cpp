@@ -45,7 +45,6 @@ entt::entity MistArchetype::Create(const glm::vec3& position, float altitude, ui
 	                                  .shrinksEdgeOn = shrinksEdgeOn,
 	                                  .edgeShrink = shrinksEdgeOn ? edgeShrink : 3.0f,
 	                                  .counter = counter,
-	                                  .counterRemainder = 0.0f,
 	                              });
 	return entity;
 }

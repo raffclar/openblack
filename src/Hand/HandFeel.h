@@ -60,6 +60,11 @@ struct Picked
 /// The line of sight through the cursor, one long: the way to the cursor's point at the hand's furthest distance
 [[nodiscard]] glm::vec3 CursorDirection(glm::vec3 camera, glm::vec3 nearPoint, float furthest);
 
+/// Inside the temple: how far from the camera the hand hangs. The hand goes 5 units short of the point where the line
+/// of sight through the cursor meets the room, but never nearer than 1 unit. The distance to that point on the line is
+/// measured again, and then kept from 4 to 300 units.
+[[nodiscard]] float TempleHandDistance(glm::vec3 camera, glm::vec3 nearPoint, glm::vec3 roomPoint);
+
 /// The cursor's point on the land and how far the hand lifts what it holds above it
 struct RaisedGround
 {

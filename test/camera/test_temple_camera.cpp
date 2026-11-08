@@ -7,10 +7,13 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <cmath>
 #include <cstdint>
 #include <cstring>
 
+#include <algorithm>
 #include <chrono>
+#include <optional>
 #include <vector>
 
 #include <glm/geometric.hpp>
@@ -421,4 +424,160 @@ TEST(TempleCamera, AWalkBackStartsHalfwayToTheDoorAtItsHeight)
 	const auto start = TempleCameraModel::WalkBackStart(through, from);
 	EXPECT_EQ(start.origin, glm::vec3(25.0f, 16.0f, 3.0f));
 	EXPECT_EQ(start.focus, glm::vec3(10.0f, 7.0f, 1.0f));
+}
+
+TEST(TempleCamera, ACloseLookMovesTheAimAlongACosineOfItsZoom)
+{
+	const TempleCameraModel::Pose aim {{0.0f, 10.0f, 0.0f}, {4.0f, 10.0f, 0.0f}};
+	const TempleCameraModel::Pose look {{8.0f, 2.0f, -4.0f}, {12.0f, 0.0f, -4.0f}};
+	// With no zoom, the aim does not change
+	const auto none = TempleCameraModel::WithSubMeshLook(aim, look, 0.0f);
+	EXPECT_EQ(none.origin, aim.origin);
+	EXPECT_EQ(none.focus, aim.focus);
+	// Halfway into the zoom, the aim is halfway to the look
+	const auto half = TempleCameraModel::WithSubMeshLook(aim, look, 0.5f);
+	EXPECT_EQ(half.origin, glm::vec3(4.0f, 6.0f, -2.0f));
+	EXPECT_EQ(half.focus, glm::vec3(8.0f, 5.0f, -2.0f));
+	// Fully in, and past it, the aim is the look
+	for (const float zoom : {1.0f, 1.5f})
+	{
+		const auto full = TempleCameraModel::WithSubMeshLook(aim, look, zoom);
+		EXPECT_EQ(full.origin, look.origin);
+		EXPECT_EQ(full.focus, look.focus);
+	}
+	// A quarter into the zoom, the cosine gives less than a quarter of the way
+	const auto quarter = TempleCameraModel::WithSubMeshLook(aim, look, 0.25f);
+	EXPECT_LT(quarter.origin.x, 2.0f);
+	EXPECT_GT(quarter.origin.x, 1.0f);
+}
+
+TEST(TempleCamera, TheRoomsMoveToACloseLooksAimMoreSlowlyTheNearerItIs)
+{
+	EXPECT_EQ(TempleCameraModel::MainRoomLookEaseTime(0.0f), 0.0f);
+	EXPECT_EQ(TempleCameraModel::MainRoomLookEaseTime(1.0f), 0.2f);
+	EXPECT_EQ(TempleCameraModel::MainRoomLookEaseTime(0.5f), 0.1f);
+	EXPECT_EQ(TempleCameraModel::PictureRoomLookEaseTime(0.0f), 0.0f);
+	EXPECT_EQ(TempleCameraModel::PictureRoomLookEaseTime(1.0f), 0.5f);
+	EXPECT_EQ(TempleCameraModel::PictureRoomLookEaseTime(0.5f), 0.25f);
+}
+
+TEST(TempleCamera, TheCameraComesBackFromACloseLookAfterItsAim)
+{
+	// The aim comes back from the look along the cosine of the zoom, and the camera eases after it. Thus the camera is
+	// behind its aim while the zoom goes out, and arrives at the end.
+	const TempleCameraModel::Pose aim {{0.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f}};
+	const TempleCameraModel::Pose look {{10.0f, 0.0f, 0.0f}, {11.0f, 0.0f, 0.0f}};
+	Zoomer3 camera;
+	camera.Reset(look.origin);
+	float zoom = 1.0f;
+	constexpr float k_Step = 0.016f;
+	bool behind = false;
+	for (int i = 0; i < 200; ++i)
+	{
+		zoom = std::max(zoom - (0.7f * k_Step), 0.0f);
+		const auto target = TempleCameraModel::WithSubMeshLook(aim, look, zoom);
+		camera.SetDestination(target.origin, TempleCameraModel::MainRoomLookEaseTime(zoom));
+		camera.Update(k_Step);
+		behind = behind || camera.GetValue().x > target.origin.x + 0.01f;
+	}
+	EXPECT_TRUE(behind);
+	EXPECT_EQ(zoom, 0.0f);
+	EXPECT_EQ(camera.GetValue(), aim.origin);
+}
+
+TEST(TempleCamera, APressOverTheCreatureRoomsDoorWalksBack)
+{
+	const glm::vec3 eye {60.0f, 15.0f, 0.0f};
+	const glm::vec3 nearPoint {70.0f, 12.0f, 5.0f};
+	const glm::vec3 farPoint {40.0f, 10.0f, 30.0f};
+	// A new press over the door walks back through it, also far from the camera
+	EXPECT_EQ(TempleCameraModel::CaveWalkBackDoor(true, true, 0u, std::nullopt, farPoint, eye), 0);
+	// No press, or a point too far from the main room's centre, does not walk back
+	EXPECT_FALSE(TempleCameraModel::CaveWalkBackDoor(false, true, 0u, std::nullopt, farPoint, eye).has_value());
+	EXPECT_FALSE(
+	    TempleCameraModel::CaveWalkBackDoor(true, true, 0u, std::nullopt, glm::vec3(79.0f, 0.0f, 0.0f), eye).has_value());
+	EXPECT_FALSE(TempleCameraModel::CaveWalkBackDoor(true, true, 0u, std::nullopt, std::nullopt, eye).has_value());
+	// A held press over the door walks back only after a walk back through it, and only near to the camera
+	EXPECT_FALSE(TempleCameraModel::CaveWalkBackDoor(true, false, 0u, std::nullopt, nearPoint, eye).has_value());
+	EXPECT_EQ(TempleCameraModel::CaveWalkBackDoor(true, false, 0u, 0u, nearPoint, eye), 0);
+	EXPECT_FALSE(TempleCameraModel::CaveWalkBackDoor(true, false, 0u, 0u, farPoint, eye).has_value());
+	// Before the first walk back, a press over no door near to the camera walks back through the door before the
+	// first
+	EXPECT_EQ(TempleCameraModel::CaveWalkBackDoor(true, false, std::nullopt, std::nullopt, nearPoint, eye), -1);
+	EXPECT_EQ(TempleCameraModel::CaveWalkBackDoor(true, true, std::nullopt, std::nullopt, nearPoint, eye), -1);
+	EXPECT_FALSE(TempleCameraModel::CaveWalkBackDoor(true, false, std::nullopt, 0u, nearPoint, eye).has_value());
+}
+
+TEST(TempleCamera, ARoomOfPicturesTurnsToTheLookWhenThePlayerLeavesIt)
+{
+	// The room turns a quarter turn on from the way the aim looks, as at its start, and goes low and leans to 0.2
+	const TempleCameraModel::Pose alongX {{10.0f, 20.0f, 5.0f}, {14.0f, 18.0f, 5.0f}};
+	const auto fromX = TempleCameraModel::PictureScrollLeave(alongX);
+	EXPECT_EQ(fromX.yaw, glm::half_pi<float>());
+	EXPECT_EQ(fromX.lean, 0.2f);
+	EXPECT_EQ(fromX.height, 9.0f);
+	const TempleCameraModel::Pose alongZ {{0.0f, 20.0f, 0.0f}, {0.0f, 20.0f, 3.0f}};
+	EXPECT_EQ(TempleCameraModel::PictureScrollLeave(alongZ).yaw, glm::pi<float>());
+	const TempleCameraModel::Pose back {{0.0f, 20.0f, 0.0f}, {-2.0f, 20.0f, -2.0f}};
+	EXPECT_FLOAT_EQ(TempleCameraModel::PictureScrollLeave(back).yaw, -glm::quarter_pi<float>());
+	// The turn is the same as the turn at the start of a look along the same way
+	const TempleCameraModel::Pose slant {{3.0f, 9.0f, -4.0f}, {7.0f, 9.0f, 1.0f}};
+	EXPECT_FLOAT_EQ(TempleCameraModel::PictureScrollLeave(slant).yaw, TempleCameraModel::PictureStartYaw(slant));
+}
+
+TEST(TempleCamera, ARoomOfPicturesHalfLeansAtTheHeightOfTheAimWhileItLooks)
+{
+	const TempleCameraModel::Pose aim {{1.0f, 27.5f, 2.0f}, {0.0f, 0.0f, 0.0f}};
+	EXPECT_EQ(TempleCameraModel::PictureLookLeanAndHeight(aim), glm::vec2(0.5f, 27.5f));
+}
+
+TEST(TempleCamera, TheLeanOfARoomOfPicturesFollowsItsHeight)
+{
+	// At the lowest height the lean goes to 0.2, and higher it goes further down
+	EXPECT_EQ(TempleCameraModel::PictureLeanForHeight(0.7f, 9.0f, 0.0f, false), 0.7f);
+	const float low = TempleCameraModel::PictureLeanForHeight(0.7f, 9.0f, 0.016f, false);
+	EXPECT_LT(low, 0.7f);
+	EXPECT_NEAR(low, 0.7f - (0.5f * (1.0f - std::exp(-0.016f))), 1e-6f);
+	float lean = 0.7f;
+	for (int i = 0; i < 2000; ++i)
+	{
+		lean = TempleCameraModel::PictureLeanForHeight(lean, 80.0f, 0.016f, false);
+	}
+	EXPECT_NEAR(lean, ((80.0f - 9.0f) * 0.0084507046f) + 0.2f, 1e-4f);
+	// When it levels out, the lean goes to 0
+	EXPECT_LT(TempleCameraModel::PictureLeanForHeight(0.7f, 80.0f, 0.016f, true), 0.7f);
+	EXPECT_EQ(TempleCameraModel::PictureLeanForHeight(0.0f, 80.0f, 0.016f, true), 0.0f);
+}
+
+TEST(TempleCamera, ThePressThatLeavesALookDoesNotDragUntilLetGo)
+{
+	// Held from the leave, the press stays held back; once let go, the next press drags
+	EXPECT_TRUE(TempleCameraModel::PressFromLookStillHeld(true, true));
+	EXPECT_FALSE(TempleCameraModel::PressFromLookStillHeld(true, false));
+	EXPECT_FALSE(TempleCameraModel::PressFromLookStillHeld(false, true));
+}
+
+TEST(TemplePress, TheHoldAfterADoubleClickIsNoPressUntilLetGo)
+{
+	using temple_press::Button;
+	temple_press::DoubleClickHold hold;
+	// A first click is a press while the player holds it
+	EXPECT_EQ(hold.Filter(Button::Held), Button::Held);
+	EXPECT_EQ(hold.Filter(Button::None), Button::None);
+	// The second click comes once as a double click, and its hold is not a press
+	EXPECT_EQ(hold.Filter(Button::DoubleClick), Button::DoubleClick);
+	EXPECT_EQ(hold.Filter(Button::Held), Button::None);
+	EXPECT_EQ(hold.Filter(Button::Held), Button::None);
+	// After the player lets go, the next press is a press
+	EXPECT_EQ(hold.Filter(Button::None), Button::None);
+	EXPECT_EQ(hold.Filter(Button::Held), Button::Held);
+}
+
+TEST(TempleCamera, AHeldPressOrADoubleClickStopsACloseLook)
+{
+	// The look stops in each step that the camera gets a press, also a press that started before the look
+	EXPECT_TRUE(TempleCameraModel::LeavesLookOnPress(static_cast<uint8_t>(temple_press::Button::Held)));
+	EXPECT_TRUE(TempleCameraModel::LeavesLookOnPress(static_cast<uint8_t>(temple_press::Button::DoubleClick)));
+	// A press on a control comes to the camera as no press, so the look continues
+	EXPECT_FALSE(TempleCameraModel::LeavesLookOnPress(static_cast<uint8_t>(temple_press::Button::None)));
 }

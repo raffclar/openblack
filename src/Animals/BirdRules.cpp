@@ -68,6 +68,11 @@ bool birds::KeepsItsClip(AnimalInfo type)
 	return type == AnimalInfo::Vulture;
 }
 
+bool birds::MoveKeepsClip(AnimalInfo type)
+{
+	return IsBird(type);
+}
+
 AnimId birds::FlyingClip(AnimalInfo type, const std::function<uint32_t(uint32_t)>& roll)
 {
 	switch (type)

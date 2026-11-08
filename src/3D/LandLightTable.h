@@ -50,10 +50,11 @@ class LandLightTable
 public:
 	static constexpr size_t k_Size = 256;
 
-	/// skyType is the sky as the game counts it, from 2 at night through 1 at dusk to 0 by day, and alignment from -1, evil, to
-	/// 1, good. The overcast at the camera, 0 for a clear sky and 1 for a full one, darkens the land's colour and draws the
-	/// haze in. A flash of lightning, 0 to 255, takes every light and the haze towards white.
-	void Build(const LandLightPalette& palette, float skyType, float alignment, float overcast, uint8_t flash = 0,
+	/// skyType is the sky as the game counts it, from 2 at night through 1 at dusk to 0 by day. sky is the value of the land
+	/// that the sky shows, from 0, good, through 1, neutral, to 2, evil. The overcast at the camera, 0 for a clear sky and 1
+	/// for a full one, darkens the land's colour and draws the haze in. A flash of lightning, 0 to 255, takes every light and
+	/// the haze towards white.
+	void Build(const LandLightPalette& palette, float skyType, float sky, float overcast, uint8_t flash = 0,
 	           uint32_t rampDivisor = k_RampDivisor) noexcept;
 
 	/// What the ramps divide by when the light boost is 0
@@ -81,13 +82,13 @@ public:
 		glm::vec3 colour {0.0f}; ///< 0 to 255
 	};
 
-	/// The land's colour for the sky type, alignment and overcast, as Build finds it, 0xRRGGBB
-	[[nodiscard]] static uint32_t GetLandColour(const LandLightPalette& palette, float skyType, float alignment,
+	/// The land's colour for the sky type, the value of the sky and the overcast, as Build finds it, 0xRRGGBB
+	[[nodiscard]] static uint32_t GetLandColour(const LandLightPalette& palette, float skyType, float sky,
 	                                            float overcast) noexcept;
 
-	/// The moon's colour for the time of day and alignment, 0xRRGGBB: the sky works it out once a frame onto the moon
-	/// (ecs::components::Moon), and the table itself has no use for it
-	[[nodiscard]] static uint32_t GetMoonColour(const LandLightPalette& palette, float skyType, float alignment) noexcept;
+	/// The moon's colour for the time of day and the value of the sky, 0xRRGGBB: the sky works it out once a frame onto the
+	/// moon (ecs::components::Moon), and the table itself has no use for it
+	[[nodiscard]] static uint32_t GetMoonColour(const LandLightPalette& palette, float skyType, float sky) noexcept;
 
 	/// The table as RGBA8 texels
 	[[nodiscard]] const std::array<uint32_t, k_Size>& GetTexels() const noexcept { return _texels; }

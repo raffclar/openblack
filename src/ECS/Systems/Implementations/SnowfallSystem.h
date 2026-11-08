@@ -23,15 +23,18 @@ namespace openblack::ecs::systems
 class SnowfallSystem final: public SnowfallSystemInterface
 {
 public:
-	SnowfallSystem();
+	/// The weather option at the start of the game: when it is off, nothing shows until the weather opens
+	explicit SnowfallSystem(bool weatherOn);
 
-	void Reset() override;
+	void Open() override;
 	void Update(float seconds, const rain::Fall& fall) override;
 	[[nodiscard]] std::vector<snowfall::Tile> TakeTiles(const rain::View& view) override;
 	[[nodiscard]] std::span<const snowfall::Flake> GetFlakes() const override { return _flakes; }
 
 private:
 	std::array<snowfall::Flake, snowfall::k_Flakes> _flakes {};
+	/// Whether the weather opened, which the game does only with the weather option on
+	bool _open {false};
 	/// Whether the flakes were drawn since the last update, which moves them on only then
 	bool _drawn {false};
 };

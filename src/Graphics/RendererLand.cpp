@@ -425,7 +425,8 @@ void Renderer::DrawLandLuminosityPass(const DrawSceneDesc& drawDesc) const
 	    .nearPlane = camera.GetNearClip(),
 	    .landReflection = detail.landReflection,
 	    .cloudShadows = detail.cloudShadows,
-	    .skyAlpha = clouds::Colour(Locator::alignmentSystem::value().GetSkyAlignment(), 0xFFFFFF) >> 24u,
+	    .skyClouds = detail.clouds,
+	    .skyAlpha = clouds::Colour(Locator::alignmentSystem::value().GetSkyLand(), 0xFFFFFF) >> 24u,
 	    .landColour = _landLightTable ? _landLightTable->GetLandColour() : 0xFFFFFFu,
 	    .fullLightGreen =
 	        _landLightTable ? static_cast<uint8_t>((_landLightTable->GetTexels().back() >> 8u) & 0xFFu) : uint8_t {0xFF},
@@ -723,8 +724,8 @@ TextureHandle Renderer::UpdateLandLight() const
 	{
 		// The land's light as the sky worked it out for this frame: the clouds over the camera darken the land, and so
 		// does a flash of lightning
-		const auto [skyType, alignment, overcast, flash] = dome->landLight;
-		_landLightTable->Build(*palettes.Handle(LandLightPalette::k_Id.value()), skyType, alignment, overcast, flash,
+		const auto [skyType, sky, overcast, flash] = dome->landLight;
+		_landLightTable->Build(*palettes.Handle(LandLightPalette::k_Id.value()), skyType, sky, overcast, flash,
 		                       FrameRampDivisor());
 		const auto& haze = _landLightTable->GetHaze();
 		const auto& detail = Locator::config::value().detail;
@@ -735,7 +736,7 @@ TextureHandle Renderer::UpdateLandLight() const
 		    .hazeColour = haze.colour,
 		    .overcast = overcast,
 		    .flash = flash,
-		    .darkness = sky_dome::Darkness(1.0f - alignment),
+		    .darkness = sky_dome::Darkness(sky),
 		    .fog = detail.fog,
 		    .weather = detail.weather,
 		    .lowResolution = detail.lowResTextures,

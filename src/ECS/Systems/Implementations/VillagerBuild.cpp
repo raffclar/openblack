@@ -182,12 +182,13 @@ void MoveOnPathsTo(LivingAction& action, entt::entity building, glm::vec2 goal, 
 }
 
 /// Turns the villager towards a point by at most a step of the game's angles; whether it now faces it
-bool LookAtPos(entt::entity villager, glm::vec2 point, int32_t step)
+bool LookAtPos(entt::entity villager, glm::ivec2 point, int32_t step)
 {
 	auto& transform = Entities().Get<Transform>(villager);
 	const auto x = transform.rotation * glm::vec3(1.0f, 0.0f, 0.0f);
 	const float facingRadians = -portable_math::Atan2(-x.z, x.x) - glm::radians(90.0f);
-	const auto target = static_cast<int32_t>(gutils::GetAngleFromXZ(glm::xz(transform.position), point));
+	const auto from = map_coords::WholeXZ(map_coords::FromMetres(glm::xz(transform.position)));
+	const auto target = static_cast<int32_t>(gutils::GetAngleFromXZ(from, point));
 	const auto facing = static_cast<int32_t>(gutils::ConvertAngle3DToGame(facingRadians));
 	const int32_t difference = target - facing;
 	int32_t angle = target;
@@ -556,6 +557,11 @@ uint32_t villager_build::ArrivesAtStoragePitForResource(LivingAction& action, Re
 
 bool villager_build::FaceTowards(entt::entity villager, glm::vec2 point, int32_t step)
 {
+	return LookAtPos(villager, map_coords::WholeXZ(map_coords::FromMetres(point)), step);
+}
+
+bool villager_build::FaceTowards(entt::entity villager, glm::ivec2 point, int32_t step)
+{
 	return LookAtPos(villager, point, step);
 }
 
@@ -709,7 +715,7 @@ uint32_t villager_build::ArrivesAtBuildingSite(LivingAction& action)
 			MoveTo(action, place, VillagerStates::ArrivesAtBuildingSite);
 			return 1;
 		}
-		if (LookAtPos(villager, GroundOf(building), k_FaceBuildingStep))
+		if (LookAtPos(villager, map_coords::WholeXZ(map_coords::FromMetres(GroundOf(building))), k_FaceBuildingStep))
 		{
 			// It puts all its wood down at the site; what the site doesn't take is lost
 			if (person.woodHeld != 0)

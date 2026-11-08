@@ -13,6 +13,8 @@
 #include <cstdint>
 
 #include <algorithm>
+#include <array>
+#include <bit>
 #include <initializer_list>
 #include <limits>
 #include <memory>
@@ -58,6 +60,7 @@
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/HandMorph.h"
 #include "ECS/Components/Mist.h"
+#include "ECS/Components/PlayerCreatures.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/VillagerPose.h"
 #include "ECS/DrawnOnScreen.h"
@@ -532,12 +535,34 @@ void Renderer::PlanCreatureHairLight(const DrawSceneDesc& drawDesc) const
 	// Last the creatures of the statistics box, which draws after the front end. The box draws the hair far from its own
 	// camera, so the hair does not show, but each usual hair draw keeps its colours. In the land, each frame first gives
 	// every creature body a white light and no added colour. The world's draw of a creature then gives the body the light
-	// and the haze at its place, also when the body is off the screen. The box uses the colours that the body has.
-	const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
-	if (_interfaceCreatures.has_value() && !inTemple)
+	// and the haze at its place, also when the body is off the screen. The box uses the colours that the body has. In the
+	// temple, a frame does not draw the land, so each body keeps the colours that the last frame with the land gave it.
+	const bool landFrame = !(Locator::temple::has_value() && Locator::temple::value().Active());
+	const std::unordered_set<entt::entity> drawnInWorld(world.begin(), world.end());
+	const auto& registry = drawDesc.entities;
+	if (landFrame)
 	{
-		const std::unordered_set<entt::entity> drawnInWorld(world.begin(), world.end());
-		const auto& registry = drawDesc.entities;
+		// Keep the colours of the players' creatures that the world drew, for the frames that do not draw the land
+		_worldBodyColours.rows.clear();
+		_worldBodyColours.sources.clear();
+		registry.Each<const ecs::components::PlayerCreatures>([&](entt::entity,
+		                                                          const ecs::components::PlayerCreatures& creatures) {
+			for (const auto creature : creatures.acquired)
+			{
+				const auto* transform = registry.Valid(creature) ? registry.TryGet<const Transform>(creature) : nullptr;
+				if (transform == nullptr || !drawnInWorld.contains(creature) || _worldBodyColours.rows.contains(creature))
+				{
+					continue;
+				}
+				const auto origin =
+				    ecs::components::DrawnTransform(*transform, registry.TryGet<const CreatureAnimation>(creature)).position;
+				_worldBodyColours.rows.emplace(creature, static_cast<uint16_t>(_worldBodyColours.sources.size()));
+				_worldBodyColours.sources.push_back(HairLightSource {.origin = origin, .view = view, .landLightScale = 1.0f});
+			}
+		});
+	}
+	if (_interfaceCreatures.has_value())
+	{
 		for (const auto& shown : _interfaceCreatures->creatures)
 		{
 			const auto* transform = registry.Valid(shown.creature) ? registry.TryGet<const Transform>(shown.creature) : nullptr;
@@ -561,12 +586,19 @@ void Renderer::PlanCreatureHairLight(const DrawSceneDesc& drawDesc) const
 				_hairLightSources.emplace_back(std::nullopt);
 				continue;
 			}
+			const auto row = _worldBodyColours.rows.find(shown.creature);
+			const bool worldColours =
+			    HasWorldColours(landFrame, drawnInWorld.contains(shown.creature), row != _worldBodyColours.rows.end());
+			const auto own = StatisticsBoxColours(worldColours);
+			if (!landFrame && worldColours)
+			{
+				// The colours that the last frame with the land gave the body, which the target keeps
+				_hairLightSources.push_back(HairLightSource {.worldRow = row->second});
+				continue;
+			}
 			const auto origin =
 			    ecs::components::DrawnTransform(*transform, registry.TryGet<const CreatureAnimation>(shown.creature)).position;
-			_hairLightSources.push_back(HairLightSource {.origin = origin,
-			                                             .view = view,
-			                                             .landLightScale = 1.0f,
-			                                             .own = StatisticsBoxColours(drawnInWorld.contains(shown.creature))});
+			_hairLightSources.push_back(HairLightSource {.origin = origin, .view = view, .landLightScale = 1.0f, .own = own});
 		}
 	}
 
@@ -590,9 +622,106 @@ void Renderer::PlanCreatureHairLight(const DrawSceneDesc& drawDesc) const
 	_hairLightLast = plan.last;
 }
 
+void Renderer::SubmitHairLightTexels(bgfx::ViewId viewId, float row, const HairLightSource* source, bool landLit,
+                                     const std::array<glm::vec4, 2>& haze) const
+{
+	using namespace creature_hair_light;
+	const auto* program = _shaderManager->GetShader("HairLightKept");
+	const auto extent = Locator::terrainSystem::value().GetExtent();
+	const auto islandExtent = glm::vec4(extent.minimum, extent.maximum);
+	const auto scale = source != nullptr ? source->landLightScale : 1.0f;
+	const glm::vec4 u_landLight {landLit ? 1.0f : 0.0f, scale, 0.0f, 0.0f};
+	const glm::vec4 u_hairOrigin {source != nullptr ? source->origin : glm::vec3(0.0f), 0.0f};
+	// Without a hair, the start colours as the colours of a look of its own. A hair with a row of the world's colours
+	// copies the two texels of that row.
+	std::optional<uint16_t> worldRow;
+	if (source != nullptr && _worldBodyColoursKept != nullptr)
+	{
+		worldRow = source->worldRow;
+	}
+	float lightSource = source != nullptr ? 0.0f : 1.0f;
+	float worldRowV = 0.0f;
+	if (worldRow.has_value())
+	{
+		uint16_t width = 0;
+		uint16_t height = 0;
+		_worldBodyColoursKept->GetSize(width, height);
+		lightSource = 2.0f;
+		worldRowV = (static_cast<float>(*worldRow) + 0.5f) / static_cast<float>(std::max<uint16_t>(height, 1));
+	}
+	const glm::vec4 u_hairLight {k_Start.light, lightSource};
+	const glm::vec4 u_hairAdded {k_Start.added, worldRowV};
+	const auto hairView = source != nullptr ? source->view : glm::mat4(1.0f);
+	for (const float texel : {0.0f, 1.0f})
+	{
+		program->SetTextureSampler("s_landLuminosity", 6, GetLandLuminosity());
+		program->SetTextureSampler("s_landLight", 7, GetLandLightTexture());
+		program->SetTextureSampler("s_landColour", 8, GetLandColour());
+		if (worldRow.has_value())
+		{
+			program->SetTextureSampler("s_worldColours", 9, _worldBodyColoursKept->GetColorAttachment());
+		}
+		else if (_whiteTexture.has_value())
+		{
+			program->SetTextureSampler("s_worldColours", 9, *_whiteTexture);
+		}
+		program->SetUniformValue("u_islandExtent", &islandExtent);
+		program->SetUniformValue("u_landLight", &u_landLight);
+		program->SetUniformValue("u_hairOrigin", &u_hairOrigin);
+		program->SetUniformValue("u_hairLight", &u_hairLight);
+		program->SetUniformValue("u_hairAdded", &u_hairAdded);
+		program->SetUniformValue("u_hairView", &hairView);
+		program->SetUniformValue("u_haze", &haze[0]);
+		program->SetUniformValue("u_hazeColour", &haze[1]);
+		SubmitLandQuad(viewId, *program, {texel, row}, {texel + 1.0f, row + 1.0f}, {texel, 0.0f}, {texel, 0.0f},
+		               BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A);
+	}
+}
+
+void Renderer::KeepWorldBodyColours() const
+{
+	const bool landFrame = !(Locator::temple::has_value() && Locator::temple::value().Active());
+	auto& kept = _worldBodyColours;
+	if (landFrame)
+	{
+		kept.haze = _haze;
+		kept.landLit = _landLightTexture.has_value();
+	}
+	else if (_worldBodyColoursKept != nullptr)
+	{
+		// A frame that does not draw the land does not change the colours that the target keeps
+		return;
+	}
+	// After a restore of the graphics device in the temple, the rows are written again from their places
+	if (kept.sources.empty() || !Locator::terrainSystem::has_value())
+	{
+		return;
+	}
+	uint16_t width = 0;
+	uint16_t height = 0;
+	if (_worldBodyColoursKept != nullptr)
+	{
+		_worldBodyColoursKept->GetSize(width, height);
+	}
+	if (_worldBodyColoursKept == nullptr || height < kept.sources.size())
+	{
+		height = static_cast<uint16_t>(std::bit_ceil(kept.sources.size()));
+		_worldBodyColoursKept = std::make_unique<FrameBuffer>("WorldBodyColours", 2, height, TextureFormat::RGBA8, std::nullopt,
+		                                                      1, Wrapping::ClampEdge);
+	}
+	const auto viewId = SetUpLandView(RenderPass::WorldBodyColours, *_worldBodyColoursKept, {2, height});
+	for (size_t row = 0; row < kept.sources.size(); ++row)
+	{
+		auto source = kept.sources[row];
+		source.worldRow.reset();
+		SubmitHairLightTexels(viewId, static_cast<float>(row), &source, kept.landLit, kept.haze);
+	}
+}
+
 void Renderer::KeepCreatureHairLight() const
 {
 	using namespace creature_hair_light;
+	KeepWorldBodyColours();
 	std::optional<HairLightSource> source;
 	if (_hairLightLast.has_value() && *_hairLightLast < _hairLightSources.size())
 	{
@@ -621,36 +750,11 @@ void Renderer::KeepCreatureHairLight() const
 	{
 		return;
 	}
-	const auto* program = _shaderManager->GetShader("HairLightKept");
-	const auto extent = Locator::terrainSystem::value().GetExtent();
-	const auto islandExtent = glm::vec4(extent.minimum, extent.maximum);
 	const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
 	const bool landLit = !inTemple && _landLightTexture.has_value();
-	const auto scale = source.has_value() ? source->landLightScale : 1.0f;
-	const glm::vec4 u_landLight {landLit ? 1.0f : 0.0f, scale, 0.0f, 0.0f};
-	const glm::vec4 u_hairOrigin {source.has_value() ? source->origin : glm::vec3(0.0f), 0.0f};
-	// Without a hair, the start colours as the colours of a look of its own
-	const glm::vec4 u_hairLight {k_Start.light, source.has_value() ? 0.0f : 1.0f};
-	const glm::vec4 u_hairAdded {k_Start.added, 0.0f};
-	const auto u_haze = inTemple ? glm::vec4(0.0f) : _haze[0];
-	const auto hairView = source.has_value() ? source->view : glm::mat4(1.0f);
+	const std::array<glm::vec4, 2> haze {inTemple ? glm::vec4(0.0f) : _haze[0], _haze[1]};
 	const auto viewId = SetUpLandView(RenderPass::HairLight, *_hairLightKept, {2, 1});
-	for (const float texel : {0.0f, 1.0f})
-	{
-		program->SetTextureSampler("s_landLuminosity", 6, GetLandLuminosity());
-		program->SetTextureSampler("s_landLight", 7, GetLandLightTexture());
-		program->SetTextureSampler("s_landColour", 8, GetLandColour());
-		program->SetUniformValue("u_islandExtent", &islandExtent);
-		program->SetUniformValue("u_landLight", &u_landLight);
-		program->SetUniformValue("u_hairOrigin", &u_hairOrigin);
-		program->SetUniformValue("u_hairLight", &u_hairLight);
-		program->SetUniformValue("u_hairAdded", &u_hairAdded);
-		program->SetUniformValue("u_hairView", &hairView);
-		program->SetUniformValue("u_haze", &u_haze);
-		program->SetUniformValue("u_hazeColour", &_haze[1]);
-		SubmitLandQuad(viewId, *program, {texel, 0.0f}, {texel + 1.0f, 1.0f}, {texel, 0.0f}, {texel, 0.0f},
-		               BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A);
-	}
+	SubmitHairLightTexels(viewId, 0.0f, source.has_value() ? &*source : nullptr, landLit, haze);
 	if (source.has_value())
 	{
 		_hairLightCarried = Kept {};

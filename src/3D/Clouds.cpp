@@ -108,10 +108,10 @@ int clouds::EdgeAlpha(const glm::vec3& track, bool pinned)
 	return 255;
 }
 
-uint32_t clouds::Colour(float skyAlignment, uint32_t fullLight)
+uint32_t clouds::Colour(float sky, uint32_t fullLight)
 {
 	constexpr std::array<uint32_t, 3> k_Colours = {0x00FFFFFFu, 0xC8FFFFFFu, 0xFFAAA066u};
-	const float towardsEvil = std::clamp(1.0f - skyAlignment, 0.0f, 2.0f);
+	const float towardsEvil = std::clamp(sky, 0.0f, 2.0f);
 	const auto index = static_cast<size_t>(towardsEvil);
 	const auto fraction = static_cast<int>((towardsEvil - static_cast<float>(index)) * 256.0f);
 	const uint32_t colour = LerpBytes(k_Colours.at(index), k_Colours.at(std::min<size_t>(index + 1, 2)), fraction);

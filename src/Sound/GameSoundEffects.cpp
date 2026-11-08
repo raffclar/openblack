@@ -29,7 +29,7 @@ SoundEffectConditions CurrentSoundEffectConditions()
 	conditions.insideTemple = Locator::temple::has_value() && Locator::temple::value().Active();
 	conditions.gameSoundOn = !Locator::chlapi::has_value() || Locator::chlapi::value().IsGameSoundOn();
 	conditions.creatureFightControl =
-	    Locator::creatureFightSystem::has_value() && Locator::creatureFightSystem::value().DirectsFight();
+	    Locator::creatureFightSystem::has_value() && Locator::creatureFightSystem::value().InFightControls();
 	return conditions;
 }
 

@@ -2001,8 +2001,7 @@ TEST_F(CreatureFightSystemTest, TheStartEndsByTheSpanAndTheStanceMovesOnInTheSam
 	fighter.timeMs = static_cast<float>(1000 - span);
 	fights.ProcessTurn();
 	EXPECT_EQ(fighter.state, fight::State::Stance);
-	EXPECT_EQ(fighter.timeMs,
-	          static_cast<float>(fight::TurnAdvance(fight::PlaybackSpeed(fight::animations::k_Stance, 1.0f), 100)));
+	EXPECT_EQ(fighter.timeMs, static_cast<float>(fight::TurnAdvance(fight::PlaybackSpeed(fight::animations::k_Stance), 100)));
 	Locator::creatureAnimationSystem::reset();
 }
 
@@ -2037,7 +2036,7 @@ TEST_F(CreatureFightSystemTest, TheEndOfACastMovesOnInTheTurnThatThePoseEnds)
 	auto& registry = Locator::entitiesRegistry::value();
 	PutInStates(registry, first, fight::State::CastStart, second);
 	auto& fighter = registry.Get<CreatureFighting>(first).fighter;
-	const auto advance = fight::TurnAdvance(fight::PlaybackSpeed(fight::animations::k_StartCast, 1.0f), 100);
+	const auto advance = fight::TurnAdvance(fight::PlaybackSpeed(fight::animations::k_StartCast), 100);
 	fighter.timeMs = static_cast<float>(1000 - advance);
 	fights.ProcessTurn();
 	// The start of the cast ends; the pose begins and moves on
@@ -2060,7 +2059,7 @@ TEST_F(CreatureFightSystemTest, TheFinishMovesOnAtOnceAndEndsByTheSpan)
 	auto& fighter = registry.Get<CreatureFighting>(first).fighter;
 	fighter.stopping = true;
 	fights.ProcessTurn();
-	const auto advance = fight::TurnAdvance(fight::PlaybackSpeed(fight::animations::k_Finish, 1.0f), 100);
+	const auto advance = fight::TurnAdvance(fight::PlaybackSpeed(fight::animations::k_Finish), 100);
 	EXPECT_EQ(fighter.state, fight::State::Finish);
 	EXPECT_EQ(fighter.timeMs, static_cast<float>(advance));
 	const auto span = fight::TestSpanMs(100.0f, ShownSize(registry.Get<const Creature>(first)), false);
@@ -2083,7 +2082,7 @@ TEST_F(CreatureFightSystemTest, AFrozenFighterMovesOnByItsOwnShorterTurn)
 	fighter.timeMs = 0.0f;
 	other.timeMs = 0.0f;
 	fights.ProcessTurn();
-	const auto speed = fight::PlaybackSpeed(fight::animations::k_Stance, 1.0f);
+	const auto speed = fight::PlaybackSpeed(fight::animations::k_Stance);
 	EXPECT_EQ(fighter.timeMs, static_cast<float>(fight::TurnAdvance(speed, 50)));
 	EXPECT_EQ(other.timeMs, static_cast<float>(fight::TurnAdvance(speed, 100)));
 	// Frozen through, it does not move on at all

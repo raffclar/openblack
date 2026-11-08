@@ -214,6 +214,22 @@ void TraceHand(std::string_view writer, const glm::vec3& position)
 	return Locator::handPressSystem::value().GetMousePosition();
 }
 
+/// The eye and the cursor's point on the near plane, which the hand's line of sight goes through. None when there is
+/// no window.
+[[nodiscard]] std::optional<Camera::NearPlanePoint> HandCursorLine(const Camera& camera)
+{
+	if (!Locator::windowing::has_value())
+	{
+		return std::nullopt;
+	}
+	const auto size = Locator::windowing::value().GetSize();
+	if (size.x <= 0 || size.y <= 0)
+	{
+		return std::nullopt;
+	}
+	return camera.OnNearPlane(static_cast<glm::vec2>(HandCursor()) / static_cast<glm::vec2>(size));
+}
+
 /// What the buttons of the mouse do with the hand after the last event
 [[nodiscard]] const input::HandButtons& HandButtons()
 {
@@ -304,12 +320,13 @@ void StepEase(Ease& ease)
 
 } // namespace
 
-void Game::UpdateGestures(const Camera& camera, glm::ivec2 screenSize, float deltaSeconds)
+namespace
 {
-	if (!Locator::gestureSystem::has_value() || screenSize.x <= 0 || screenSize.y <= 0)
-	{
-		return;
-	}
+
+/// What the gestures get from the frame: the places that came since the last pass, the camera and the input
+ecs::systems::GestureSystemInterface::Frame GestureFrameOf(const Camera& camera, glm::ivec2 screenSize, float deltaSeconds,
+                                                           bool frontEndBox)
+{
 	const auto size = static_cast<glm::vec2>(screenSize);
 	const auto rayAt = [&camera, size](glm::vec2 pixel) {
 		glm::vec3 origin;
@@ -329,9 +346,16 @@ void Game::UpdateGestures(const Camera& camera, glm::ivec2 screenSize, float del
 	             .cameraEye = camera.GetOrigin(),
 	             .cameraForward = camera.GetForward()},
 	    .cameraShaking = Locator::explosionSystem::has_value() && Locator::explosionSystem::value().IsShaking(),
+	    .paused = Locator::time::value().IsPaused(),
 	};
-	// The places of the pointer that the interface got in this frame
-	const auto places = Locator::gameActionSystem::value().GetMousePlaces();
+	// The hand holds a creature, or a field, fish farm or pile that it takes from, from the turn of the lock to the turn
+	// of its end
+	frame.handLocked = (Locator::handGrabSystem::has_value() && Locator::handGrabSystem::value().GetLockedOn().has_value()) ||
+	                   (Locator::creatureHandSystem::has_value() &&
+	                    Locator::creatureHandSystem::value().GetLockedCreature(frame.player).has_value());
+	frame.frontEndBox = frontEndBox;
+	// The places of the pointer that came since the last pass of the interface
+	const auto places = Locator::gameActionSystem::value().TakeInterfacePlaces();
 	frame.places.assign(places.begin(), places.end());
 	// The fight view that shows a fight in its arena, and the camera of Creature Mode, let the hand draw on while they
 	// move
@@ -377,7 +401,45 @@ void Game::UpdateGestures(const Camera& camera, glm::ivec2 screenSize, float del
 		}
 		return eye + (direction * gesture::k_TrailSkyDistance);
 	};
+	return frame;
+}
+
+} // namespace
+
+void Game::GestureTurn()
+{
+	if (!Locator::gestureSystem::has_value() || !Locator::windowing::has_value())
+	{
+		return;
+	}
+	// In the temple the hand draws no gestures: it forgets the path
+	if (Locator::temple::has_value() && Locator::temple::value().Active())
+	{
+		Locator::gestureSystem::value().ForgetPath();
+		return;
+	}
+	// No pass without a screen
+	const auto screenSize = Locator::windowing::value().GetSize();
+	if (screenSize.x <= 0 || screenSize.y <= 0)
+	{
+		return;
+	}
+	// The pass of the turn sees the camera as the last frame drew it
+	Locator::gestureSystem::value().InterfaceTurn(
+	    GestureFrameOf(Locator::camera::value(), screenSize, 0.0f, FrontEndBoxShows()));
+}
+
+void Game::UpdateGestures(const Camera& camera, glm::ivec2 screenSize, float deltaSeconds)
+{
+	if (!Locator::gestureSystem::has_value() || screenSize.x <= 0 || screenSize.y <= 0)
+	{
+		return;
+	}
+	auto frame = GestureFrameOf(camera, screenSize, deltaSeconds, FrontEndBoxShows());
+	// Each message of the buttons in this frame does the gesture step again
+	frame.buttonMessages = Locator::gameActionSystem::value().GetButtonMessages();
 	Locator::gestureSystem::value().Update(frame);
+	const auto size = static_cast<glm::vec2>(screenSize);
 	// A path drawn for the testbed is drawn by the hand, which follows it. The hand moves the mouse, which sends a
 	// message at the place.
 	if (const auto drawing = Locator::gestureSystem::value().GetDrawingPoint())
@@ -995,6 +1057,11 @@ void Game::UpdateHandCursor(std::chrono::microseconds deltaTime, Profiler& profi
 		}
 		if (Locator::temple::has_value() && Locator::temple::value().Active())
 		{
+			// In the temple the hand draws no gestures: it forgets the path each frame
+			if (Locator::gestureSystem::has_value())
+			{
+				Locator::gestureSystem::value().ForgetPath();
+			}
 			// In the temple, the hand goes where the cursor meets the room, turning to its surface
 			if (const auto hit = Locator::temple::value().GetCursorHit())
 			{
@@ -1338,8 +1405,10 @@ void Game::UpdateDrawnHand(std::chrono::microseconds deltaTime, Profiler& profil
 	{
 		// The hand and the piles show their miracles
 		auto miracleFx = profiler.BeginScoped(Profiler::Stage::MiracleFxUpdate);
+		const bool insideTemple = Locator::temple::has_value() && Locator::temple::value().Active();
 		Locator::miracleFxSystem::value().Update(std::chrono::duration_cast<std::chrono::duration<float>>(deltaTime).count(),
-		                                         std::chrono::duration<float>(gameTime).count());
+		                                         std::chrono::duration<float>(gameTime).count(),
+		                                         hand_visibility::ShowsMiracleEffects(IsHandDrawn(), insideTemple));
 	}
 	Locator::entitiesRegistry::value().SetDirty();
 }
@@ -1577,8 +1646,10 @@ void Game::PlaceHand(ecs::components::Transform& handTransform, float deltaSecon
 			{
 				_handRayDirection = toRoom / roomDistance;
 			}
-			const auto target =
-			    glm::clamp(glm::max(roomDistance - k_HandTempleGap, 1.0f), k_HandTempleMinDistance, k_HandTempleMaxDistance);
+			// With no window, the line goes from the camera straight to the room
+			const auto line =
+			    HandCursorLine(camera).value_or(Camera::NearPlanePoint {.eye = eye, .point = *_cursorWorldPosition});
+			const auto target = hand_feel::TempleHandDistance(line.eye, line.point, *_cursorWorldPosition);
 			const auto easeTime = _handHoverZoomer.GetDestination() <= target ? 0.4f : 0.2f;
 			_handHoverZoomer.SetDestination(target, easeTime);
 			StepEase(_handHoverZoomer);
@@ -1676,15 +1747,10 @@ void Game::PlaceHand(ecs::components::Transform& handTransform, float deltaSecon
 	// The cursor's point on the near plane, which the hand's line of sight goes through
 	std::optional<glm::vec3> cursorNearPoint;
 	auto lineEye = eye;
-	if (Locator::windowing::has_value())
+	if (const auto line = HandCursorLine(camera); line.has_value())
 	{
-		const auto size = Locator::windowing::value().GetSize();
-		if (size.x > 0 && size.y > 0)
-		{
-			const auto line = camera.OnNearPlane(static_cast<glm::vec2>(HandCursor()) / static_cast<glm::vec2>(size));
-			lineEye = line.eye;
-			cursorNearPoint = line.point;
-		}
+		lineEye = line->eye;
+		cursorNearPoint = line->point;
 	}
 
 	// The game puts the origin of the hand, by its fingertips, on the line of sight through the cursor, so the hand is
@@ -2161,7 +2227,12 @@ void Game::PlayHandGrabSound()
 		isLand = landCell != nullptr && landCell->properties.hasWater == 0;
 	}
 
-	const auto feedback = hand_grab::GripFeedbackOf(isLand, !Locator::cinematicDirectorSystem::value().IsInterfaceActive());
+	const auto feedback = hand_grab::GripFeedbackOf({
+	    .onLand = isLand,
+	    .cinemaBars = !Locator::cinematicDirectorSystem::value().IsInterfaceActive(),
+	    .paused = Locator::time::value().IsPaused(),
+	    .handHoldsThing = Locator::handGrabSystem::has_value() && Locator::handGrabSystem::value().IsBusy(),
+	});
 	if (feedback == hand_grab::GripFeedback::None)
 	{
 		return;
@@ -2181,23 +2252,20 @@ void Game::PlayHandGrabSound()
 	}
 	else
 	{
-		// While the game runs, the hand splashes where it goes in: a ring on the water, in the land's brightest light
-		if (!Locator::time::value().IsPaused())
+		// The hand splashes where it goes in: a ring on the water, in the land's brightest light
+		const auto angle = Locator::gameRandom::value().CrtRandom(0.0f, glm::two_pi<float>());
+		if (Locator::waterRingSystem::has_value())
 		{
-			const auto angle = Locator::gameRandom::value().CrtRandom(0.0f, glm::two_pi<float>());
-			if (Locator::waterRingSystem::has_value())
-			{
-				Locator::waterRingSystem::value().Add(
-				    water_rings::HandSplash(glm::vec2(position.x, position.z), angle, FrameLandLight(255)));
-			}
-			// The fish near where the hand went in dart away
-			Locator::fishFarmSystem::value().Scare({position.x, k_HandSplashHeight, position.z});
-			// The shoals of the fish puzzle get the scare at the next turn, on each computer of a network game
-			if (Locator::puzzleGameSystem::has_value() && Locator::puzzleGameSystem::value().HasFishPuzzle())
-			{
-				Locator::playerCommandSystem::value().Submit(
-				    player_commands::FishScare {.point = {position.x, k_HandSplashHeight, position.z}});
-			}
+			Locator::waterRingSystem::value().Add(
+			    water_rings::HandSplash(glm::vec2(position.x, position.z), angle, FrameLandLight(255)));
+		}
+		// The fish near where the hand went in dart away
+		Locator::fishFarmSystem::value().Scare({position.x, k_HandSplashHeight, position.z});
+		// The shoals of the fish puzzle get the scare at the next turn, on each computer of a network game
+		if (Locator::puzzleGameSystem::has_value() && Locator::puzzleGameSystem::value().HasFishPuzzle())
+		{
+			Locator::playerCommandSystem::value().Submit(
+			    player_commands::FishScare {.point = {position.x, k_HandSplashHeight, position.z}});
 		}
 		// G_HandInWater_01 to _10 in turn, on the water's surface where the hand went in
 		const auto id = fmt::format("InGame.sad/{}", 99 + _handInWaterSample);

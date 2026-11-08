@@ -9,10 +9,12 @@
 
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 
 #include <array>
 #include <optional>
+#include <span>
 #include <string_view>
 #include <vector>
 
@@ -155,7 +157,11 @@ struct HandContext
 		LeashType worn {LeashType::None};
 		/// The leash the leash gesture is about: the one worn, else the one picked to put on next
 		LeashType current {LeashType::Rope};
-		/// It duels and takes more moves: then the hand waits only for the fight's gestures
+		/// The hand directs its duel: the creature duels, the camera shows the fight and the hand holds nothing. Then
+		/// the hand waits for the fight's gestures and the scribble of the empty hand, and the power-ups, the miracle
+		/// selection and the leash picker wait for nothing.
+		bool directsFight {false};
+		/// Its duel takes more moves: the hand that directs the fight waits for the fight's gestures only then
 		bool takesFightMoves {false};
 		/// The miracles it knows that can be cast in a fight, each with its gesture, in the order of the miracles
 		struct FightMiracle
@@ -213,6 +219,17 @@ struct HandContext
 inline constexpr std::string_view k_HiddenScript = "HiddenScript";
 /// The gestures waited for, in the order they are tried
 [[nodiscard]] std::vector<Request> Requests(const HandContext& context);
+
+/// The request that the hand tries after a fight miracle that did not meet the opponent, from the request at next. The
+/// hand does not try the fight's other gestures: it tries the gestures that follow them.
+[[nodiscard]] size_t AfterFightMiss(std::span<const Request> requests, size_t next);
+
+/// The number of gesture steps in the frame's pass of the interface: one step for each message of the buttons, or one
+/// step when no button sent a message
+[[nodiscard]] constexpr uint32_t StepsOfFramePass(uint32_t buttonMessages) noexcept
+{
+	return buttonMessages > 0 ? buttonMessages : 1;
+}
 /// The event that the help counts when the hand draws the gesture of a request, none for most gestures. A scribble
 /// counts only when it is about a miracle that the hand can power up.
 [[nodiscard]] std::optional<uint32_t> HelpEventOf(const Request& request, const HandContext& context);
@@ -265,8 +282,10 @@ struct LeashPicker
 
 	void Open();
 	void Close();
-	/// Time passes: it closes once open longer than the timeout, or once the leash is off
-	void Update(float elapsed, float timeoutSeconds, bool leashed);
+	/// Time passes. It closes at once when it may not stay open. Else it closes once open longer than the timeout, but
+	/// it still waits for its gestures in the frame that its time runs out. Whether it waits for its gestures in this
+	/// frame.
+	[[nodiscard]] bool Update(float elapsed, float timeoutSeconds, bool staysOpen);
 };
 
 } // namespace openblack::gesture

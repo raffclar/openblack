@@ -47,6 +47,7 @@
 #include "ECS/Systems/CreatureAnimationSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/FightTranscriptNote.h"
+#include "ECS/Systems/GestureSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
@@ -214,6 +215,12 @@ bool CreatureFightSystem::Press(const glm::vec3& rayOrigin, const glm::vec3& ray
 		                      {"hand_empty", HandHoldsNothing(registry)}});
 		return false;
 	}
+	// Each press that directs the fight makes the hand forget the path of its gesture, also a press that the fight
+	// refuses below
+	if (Locator::gestureSystem::has_value())
+	{
+		Locator::gestureSystem::value().ForgetPathAtPress();
+	}
 	auto& fighting = registry.Get<CreatureFighting>(*self);
 	// Nothing more is taken while twelve sparkles show
 	if (fighting.marks.Full())
@@ -292,6 +299,10 @@ bool CreatureFightSystem::Press(const glm::vec3& rayOrigin, const glm::vec3& ray
 	// goes into the queue at the next turn.
 	fighting.marks.Add(mark);
 	_markHeld = mark.anchor != marks::Anchor::Ground;
+	if (_markHeld)
+	{
+		_bodyPressHeld = true;
+	}
 	PlayDirectSound();
 	note("accepted", std::move(target));
 	Send(*command);
@@ -301,6 +312,7 @@ bool CreatureFightSystem::Press(const glm::vec3& rayOrigin, const glm::vec3& ray
 
 void CreatureFightSystem::Release(uint32_t milliseconds, uint32_t turn)
 {
+	_bodyPressHeld = false;
 	if (!_pressed.has_value())
 	{
 		return;

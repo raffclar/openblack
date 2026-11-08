@@ -364,7 +364,7 @@ void SetLifeAndPoison(entt::entity entity, const ObjectSetup& object)
 	{
 		Locator::livingActionSystem::value().VillagerSetScriptState(entity, VillagerStates::InScript);
 	}
-	if (object.scriptControlled && registry.AllOf<ecs::components::Villager>(entity))
+	if (object.scriptControlled && registry.AnyOf<ecs::components::Villager, ecs::components::Animal>(entity))
 	{
 		registry.AssignOrReplace<ecs::components::ScriptControlled>(entity);
 	}

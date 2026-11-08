@@ -10,6 +10,7 @@
 #include <cmath>
 
 #include <array>
+#include <limits>
 #include <numbers>
 
 #include <glm/geometric.hpp>
@@ -164,6 +165,27 @@ TEST(CastInput, AnObjectUnderTheHandComesFirst)
 	EXPECT_EQ(Release(input).cast, CastTarget::Object);
 	EXPECT_EQ(Press(input, k_InHand, onObject).cast, CastTarget::Object);
 	EXPECT_TRUE(input.onObject);
+}
+
+TEST(CastInput, OnlyThePressThatArmsAGestureSeedStartsTheGesturePathAgain)
+{
+	CastInput input;
+	auto onObject = k_OverLand;
+	onObject.onValidObject = true;
+	EXPECT_TRUE(Press(input, k_Gesture, k_OverLand).restartGesturePath);
+	EXPECT_FALSE(Release(input).restartGesturePath);
+	EXPECT_TRUE(Press(input, k_Gesture, onObject).restartGesturePath);
+	(void)Release(input);
+	EXPECT_FALSE(Press(input, k_InHand, k_OverLand).restartGesturePath);
+	(void)Release(input);
+	EXPECT_FALSE(Press(input, k_Position, k_OverLand).restartGesturePath);
+	// A press that fails, or one before the seed is ready, keeps the path
+	auto outside = k_OverLand;
+	outside.pointValid = false;
+	EXPECT_FALSE(Press(input, k_Gesture, outside).restartGesturePath);
+	auto early = k_OverLand;
+	early.seedReady = false;
+	EXPECT_FALSE(Press(input, k_Gesture, early).restartGesturePath);
 }
 
 TEST(CastInput, APressBeforeTheSeedIsReadyFails)
@@ -621,6 +643,11 @@ TEST(AreaEffect, ThePendingAlignmentScalesTheTurnsChangeAndIsThenGone)
 	pending = -5.0f;
 	alignment = StepPendingAlignment(-0.999f, pending, 0.01f);
 	EXPECT_FLOAT_EQ(alignment, -1.0f);
+	// A change that is not a number counts as a whole evil one
+	pending = std::numeric_limits<float>::quiet_NaN();
+	EXPECT_FLOAT_EQ(StepPendingAlignment(0.0f, pending, 0.01f), -0.01f);
+	pending = 0.0f;
+	EXPECT_FLOAT_EQ(StepPendingAlignment(std::numeric_limits<float>::quiet_NaN(), pending, 0.01f), -1.0f);
 }
 
 // Impressiveness

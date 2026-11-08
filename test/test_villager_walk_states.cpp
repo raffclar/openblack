@@ -35,6 +35,7 @@
 #include "ECS/Components/WallHug.h"
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/DanceRules.h"
+#include "ECS/Dances.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/PathfindingSystemInterface.h"
 #include "ECS/WallHugRules.h"
@@ -704,4 +705,72 @@ TEST_F(VillagerWalkStates, AVillagerThatLeavesTheFireIsNoLongerOnItsTownsWayToWo
 	EXPECT_FALSE(villager_fire::ExitPutOutFire(Action(), VillagerStates::GotoWorshipSiteForWorship));
 	EXPECT_TRUE(registry.Get<const Town>(town).onWayToWorship.empty());
 	EXPECT_TRUE(registry.Get<const Worshipper>(_villager).onTheWay);
+}
+
+// A worshipper that reacts to something is still counted at worship by its town. When it dies, its town counts it no
+// longer, neither at the site nor on the way to it.
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(VillagerWalkStates, ADyingWorshipperIsNoLongerCountedByItsTown)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto town = registry.Create();
+	auto& data = registry.Assign<Town>(town);
+	data.worshippers.push_back(_villager);
+	data.onWayToWorship.push_back(_villager);
+	registry.Get<Villager>(_villager).town = town;
+	registry.Assign<Worshipper>(_villager, Worshipper {.atWorship = true, .onTheWay = true});
+	SetStates(VillagerStates::LookAtFlyingObjectReaction, VillagerStates::LookAtFlyingObjectReaction);
+
+	villager_fire::DieByEffect(_villager, std::nullopt);
+
+	EXPECT_TRUE(registry.Get<const Town>(town).worshippers.empty());
+	EXPECT_TRUE(registry.Get<const Town>(town).onWayToWorship.empty());
+	const auto* worshipper = registry.TryGet<const Worshipper>(_villager);
+	EXPECT_TRUE(worshipper == nullptr || !worshipper->atWorship);
+}
+
+namespace
+{
+/// A dance with one shared group that takes any villager
+entt::entity OpenDance()
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto dance = registry.Create();
+	auto& data = registry.Assign<Dance>(dance);
+	data.place = map_coords::FromMetres(glm::xz(k_Here) + glm::vec2(20.0f, 0.0f));
+	data.groups.all.emplace_back();
+	data.groups.shared.push_back(0);
+	data.groups.roundLength = data.groups.all.front().weight;
+	return dance;
+}
+} // namespace
+
+// A villager called to a creature's dance comes under the creature's control and stays in the dance
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(VillagerWalkStates, AVillagerCalledToTheCreaturesDanceJoinsIt)
+{
+	const auto dance = OpenDance();
+
+	EXPECT_TRUE(villager_creature_dance::StartWorshippingCreature(_villager, dance));
+	EXPECT_EQ(dances::DanceOf(Locator::entitiesRegistry::value(), _villager), dance);
+	EXPECT_EQ(Top(), VillagerStates::ControlledByCreature);
+}
+
+// A worshipper that eats at its site leaves its worship when it changes state, and so it leaves the creature's dance
+// that it joined. It goes into the creature's control, but it does not come to the dance.
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(VillagerWalkStates, AWorshipperThatLeavesTheCreaturesDanceAsItStopsEatingDoesNotCome)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto town = registry.Create();
+	registry.Assign<Town>(town).worshippers.push_back(_villager);
+	registry.Get<Villager>(_villager).town = town;
+	registry.Assign<Worshipper>(_villager, Worshipper {.atWorship = true});
+	SetStates(VillagerStates::GetFoodAtWorshipSite, VillagerStates::GetFoodAtWorshipSite);
+	const auto dance = OpenDance();
+
+	EXPECT_FALSE(villager_creature_dance::StartWorshippingCreature(_villager, dance));
+	EXPECT_EQ(dances::DanceOf(registry, _villager), static_cast<entt::entity>(entt::null));
+	EXPECT_EQ(registry.Get<const Dance>(dance).dancers, 0u);
+	EXPECT_EQ(Top(), VillagerStates::ControlledByCreature);
 }

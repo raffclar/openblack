@@ -42,8 +42,9 @@ class MiracleFxSystemInterface: public SavedStateInterface
 public:
 	virtual ~MiracleFxSystemInterface() = default;
 
-	/// The hand some seconds on, and the piles of food and wood some seconds of game time on
-	virtual void Update(float seconds, float gameSeconds) = 0;
+	/// The hand some seconds of game time on, and the piles of food and wood some seconds of game time on. The glow and
+	/// the bands of the hand stay as they are in a frame that does not show them (see hand_visibility::ShowsMiracleEffects).
+	virtual void Update(float seconds, float gameSeconds, bool handShowsEffects) = 0;
 	/// The globes after a frame of this real and game time, once a frame after the hand has placed what it holds: each
 	/// turns to face the camera about its middle, wherever it now is, and its miracle spins inside. The effect in each
 	/// globe steps no more often than 60 times a second, each step by all the game time since the last, and only in a

@@ -391,7 +391,8 @@ struct ObjectSetup
 	/// is made as a land's script makes one, and the script controls it. A building is held by a script.
 	bool inScript {false};
 	/// A villager is under the control of a script, as a script controls a villager that it moves: it takes up no
-	/// reaction until the script releases it
+	/// reaction until the script releases it. An animal under the control of a script takes up no reaction, and a hunter
+	/// does not take it as prey.
 	bool scriptControlled {false};
 	/// A villager is the named person of this row in the game's table of named people, whose name the Show Villager
 	/// Names key shows
@@ -633,6 +634,8 @@ struct ScriptArgument
 
 /// The value of a command that plays custom music that stops the music
 constexpr size_t k_StopCustomMusic = std::numeric_limits<size_t>::max();
+/// The value of a ShowCustomMusicControls command that does what a click on the music button does
+constexpr size_t k_PressMusicButton = 3;
 
 /// The values of an AddIncomingMessage command that give a chat line and an e-mail
 constexpr size_t k_IncomingChat = 100;
@@ -930,6 +933,12 @@ struct Command
 		/// The scenario's object goes from the world at once, as when something other than the creature removes it.
 		/// Needs no creature
 		RemoveObject,
+		/// The player's hand puts the trees of the player's forest miracle into the scenario's object, a storage pit, one
+		/// at a time, as a drop on the pit does, until the forest has a number of trees (value) left. Needs no creature
+		GiveMagicTreesToStore,
+		/// The player's hand casts the miracle that it holds on the land at the point (from the middle of the map), as a
+		/// cast by hand does. Needs no creature
+		HandCastAtPoint,
 		/// The player reads a "did you know" tip (value, by the scripts' number) of a category (amount, rounded) on a
 		/// sign, as when the hand taps the sign. The library lists the tip. Needs no creature
 		ReadTip,
@@ -985,8 +994,8 @@ struct Command
 		/// first. Needs no creature
 		PlayCustomMusic,
 		/// The custom music controls at the top right of the screen show their buttons (value 1), and also the play
-		/// list (value 2), as the music button and the play list button show them. Value 0 hides them. Needs no
-		/// creature
+		/// list (value 2), as the music button and the play list button show them. Value 0 hides them. The value
+		/// k_PressMusicButton does what a click on the music button does. Needs no creature
 		ShowCustomMusicControls,
 		/// The game saves into the slot (value), as the save game room saves into it. Needs no creature
 		SaveGame,
@@ -1229,9 +1238,9 @@ struct Command
 		/// The player clicks the creature nearest a point (point, from the middle of the map), as the Action button
 		/// pressed and let go on the creature does. A script that waits for a click on it goes on. Needs no creature
 		ClickCreatureAt,
-		/// The player's hand takes the mobile object nearest a point (point, from the middle of the map, within 10
-		/// metres) at once, as if picked up from where it lies, such as a pile of dung that a script made. Needs no
-		/// creature
+		/// The player's hand takes the mobile object or the scaffold nearest a point (point, from the middle of the map,
+		/// within 10 metres) at once, as if picked up from where it lies, such as a pile of dung that a script made.
+		/// Needs no creature
 		HandTakeNear,
 		/// The player clicks the creature nearest a point (point, from the middle of the map), as the Action button pressed
 		/// and let go on it does, such as to answer a creature swap offer. Needs no creature of the scenario

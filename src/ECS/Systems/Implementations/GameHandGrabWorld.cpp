@@ -33,6 +33,7 @@
 #include "Common/GameRandom.h"
 #include "Common/X87Angle.h"
 #include "Common/X87Vector.h"
+#include "Creature/CreatureGiving.h"
 #include "Creature/CreatureHelp.h"
 #include "Creature/LeashOwnership.h"
 #include "ECS/AltarOffering.h"
@@ -41,6 +42,7 @@
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/BuildingDamage.h"
 #include "ECS/Components/Creature.h"
+#include "ECS/Components/CreatureFight.h"
 #include "ECS/Components/CreatureLeash.h"
 #include "ECS/Components/Field.h"
 #include "ECS/Components/FishFarm.h"
@@ -70,6 +72,7 @@
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
+#include "ECS/Components/TurnAngles.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/GamePlayers.h"
 #include "ECS/Map.h"
@@ -77,6 +80,7 @@
 #include "ECS/ObjectPhysics.h"
 #include "ECS/PhysicsClasses.h"
 #include "ECS/PhysicsEntry.h"
+#include "ECS/PlacedTurn.h"
 #include "ECS/PlayerMiracles.h"
 #include "ECS/Registry.h"
 #include "ECS/RegistryContext.h"
@@ -86,6 +90,7 @@
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
 #include "ECS/Systems/AnimatedStaticSystemInterface.h"
+#include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/CreatureHandSystemInterface.h"
 #include "ECS/Systems/CreatureHelpSystemInterface.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
@@ -930,23 +935,29 @@ float GameHandGrabWorld::CreatureSizeOf(entt::entity creature) const
 
 void GameHandGrabWorld::CallOffGiving(entt::entity creature)
 {
-	// A creature that took the thing from the hand already keeps it and goes on
-	if (Locator::creatureMindSystem::has_value() && Locator::creatureObjectActionSystem::has_value() &&
-	    Locator::creatureMindSystem::value().IsTakingFromHand(creature) &&
-	    Locator::creatureObjectActionSystem::value().GetHeld(creature).has_value())
+	if (!Locator::creatureMindSystem::has_value())
 	{
 		return;
 	}
-	// It gives up taking as a failure, and its hand closes on nothing if it was already reaching
+	auto& minds = Locator::creatureMindSystem::value();
+	const bool tookTheThing = Locator::creatureObjectActionSystem::has_value() && minds.IsTakingFromHand(creature) &&
+	                          Locator::creatureObjectActionSystem::value().GetHeld(creature).has_value();
+	if (!creature_giving::CallOffStops(minds.IsActing(creature), tookTheThing))
+	{
+		return;
+	}
+	// Its hand closes on nothing if it was already reaching. What the creature does stops as a failure, whatever it is:
+	// a fight stops for both creatures, its walk stops and the pose of its body ends.
 	if (Locator::creatureObjectActionSystem::has_value() &&
 	    Locator::creatureObjectActionSystem::value().GetTakingFromHand(creature).has_value())
 	{
 		Locator::creatureObjectActionSystem::value().Cancel(creature);
 	}
-	if (Locator::creatureMindSystem::has_value())
+	if (Locator::creatureFightSystem::has_value() && Locator::entitiesRegistry::value().AllOf<CreatureFighting>(creature))
 	{
-		Locator::creatureMindSystem::value().GiveUpAction(creature);
+		Locator::creatureFightSystem::value().CallOffForPlan(creature);
 	}
+	minds.FailAction(creature);
 }
 
 bool GameHandGrabWorld::RightHanded() const
@@ -1120,6 +1131,24 @@ hand_grab::HandGrabWorldInterface::Pose GameHandGrabWorld::PoseOf(entt::entity o
 		axes[column] *= transform->scale[column];
 	}
 	return {.axes = axes, .origin = transform->position};
+}
+
+hand_grab::HandGrabWorldInterface::Pose GameHandGrabWorld::PullStartPoseOf(entt::entity object) const
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* transform = registry.TryGet<const Transform>(object);
+	if (transform == nullptr)
+	{
+		return {};
+	}
+	// The game makes the axes again from the angles that the thing keeps. A thing with no kept angles starts from its turn.
+	const auto axes = ecs::placed_turn::KeptWorldAxesOf(registry.TryGet<const components::TurnAngles>(object), *transform,
+	                                                    ecs::placed_turn::CanLean(registry, object));
+	if (!axes.has_value())
+	{
+		return PoseOf(object);
+	}
+	return {.axes = *axes, .origin = transform->position};
 }
 
 void GameHandGrabWorld::SetPose(entt::entity object, const Pose& pose)

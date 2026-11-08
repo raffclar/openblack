@@ -908,6 +908,26 @@ void testbed_scenarios::AddNeeds(std::vector<Scenario>& all)
 	                                      {.kind = ScriptArgument::Kind::Number, .number = 0.0f}}}},
 	});
 
+	// A script sends a flying pigeon to a point: the move to a place keeps its height above the land
+	all.push_back({
+	    .id = "animals.script_move_keeps_bird_height",
+	    .name = "A bird that a script sends keeps its height",
+	    .facet = Facet::Animals,
+	    .description = "A pigeon flies at the usual height of its kind. After one second, MOVE_GAME_THING sends it 40 "
+	                   "metres to the north.",
+	    .expected = "The pigeon flies to its point at the same height above the land, as in the original game. It does "
+	                "not go down to the land on the way.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {-30.0f, 6.0f, 20.0f}, .look = {0.0f, 8.0f, 20.0f}},
+	    .objects = {{.type = AnimalInfo::Pigeon, .offset = {0.0f, 0.0f}, .living = true}},
+	    .commands = {{.kind = Kind::CallNative,
+	                  .delaySeconds = 1.0f,
+	                  .script = "MOVE_GAME_THING",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Object, .index = 0, .kept = true},
+	                                      {.kind = ScriptArgument::Kind::Position, .point = {0.0f, 40.0f}},
+	                                      {.kind = ScriptArgument::Kind::Number, .number = 0.0f}}}},
+	});
+
 	// A script slows a flock of animals and then sends each one, as The Slavers slows its animal flock
 	all.push_back({
 	    .id = "animals.script_slows_flock",

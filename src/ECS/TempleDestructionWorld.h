@@ -95,6 +95,8 @@ public:
 	virtual void RemoveWorshipSites(entt::entity temple) = 0;
 	/// The player's heart is no longer held by their temple's destruction
 	virtual void EndHeartbeatHold(PlayerNames player) = 0;
+	/// The player's hand keeps nothing of their influence past the border from now on, and loses what it has
+	virtual void SwitchOffVirtualInfluence(PlayerNames player) = 0;
 };
 
 } // namespace openblack::ecs::temple_world

@@ -51,6 +51,8 @@ public:
 		/// Where the glyph is at its full height in the full atlas, in pixels
 		glm::u16vec2 fullMin;
 		glm::u16vec2 fullMax;
+		/// Where the small glyph, with its clear column at each side, starts in the atlas, in pixels
+		glm::u16vec2 smallMin;
 		/// Its glyph in GetSmallGlyph's cache
 		uint32_t smallGlyph;
 	};
@@ -92,6 +94,48 @@ public:
 	/// Makes the small glyph of a bitmap of a width from its half height glyph
 	[[nodiscard]] static SmallGlyph MakeSmallGlyph(const HalfGlyph& half, uint16_t width);
 
+	/// The glyphs that text on the screen reads from
+	enum class GlyphLevel : uint8_t
+	{
+		/// The glyphs at half height, for text of 26 pixels or more
+		Half,
+		/// The small glyphs at a quarter of the height, for text under 26 pixels
+		Quarter,
+		/// The glyphs at full height, for text that the layout scales up
+		Full,
+	};
+
+	/// The game draws text smaller than this many pixels from the small glyphs
+	static constexpr float k_SmallTextSize = 26.0f;
+
+	/// Where a glyph of text on the screen goes and what part of its atlas it reads
+	struct ScreenGlyph
+	{
+		/// The left and right of the quad, in pixels. The quad is as high as the text.
+		float left;
+		float right;
+		/// The part of the atlas of the level that the quad reads, in pixels of the atlas
+		glm::vec2 texelMin;
+		glm::vec2 texelMax;
+		/// Where the pen is after the glyph, from the start of the text
+		float pen;
+		/// False for a character that only moves the pen
+		bool drawn;
+	};
+
+	/// The level that text on the screen of a size in pixels reads from. With `full`, text that the half height glyphs
+	/// do not show sharp reads the full height glyphs.
+	[[nodiscard]] static GlyphLevel ScreenGlyphLevel(float size, bool full) noexcept;
+
+	/// Places a character of text on the screen as the game does. The text starts at x, the pen is the distance from x,
+	/// and the text is size pixels high. The quad starts at the pen and the left bearing, and it is the bitmap width
+	/// and two more units wide. It reads from the middle of the clear column before the glyph to the middle of the clear
+	/// column after the glyph, and from the middle of the first row down 39 rows of the half height glyph. The small
+	/// glyph has half the scale. A space moves the pen by its advance. The blank and the line breaks do not move the
+	/// pen. Null when the font has neither the character nor a question mark.
+	[[nodiscard]] std::optional<ScreenGlyph> PlaceOnScreen(char16_t character, float x, float pen, float size,
+	                                                       GlyphLevel level) const;
+
 	/// Null when the files don't fit together
 	static std::optional<GameFont> Load(std::span<const uint8_t> met, std::span<const uint8_t> fnt);
 
@@ -107,6 +151,8 @@ public:
 	[[nodiscard]] float Advance(char16_t c) const;
 	/// How far text of a size moves the pen, as the game measures it: every character's advance, line breaks included
 	[[nodiscard]] float GetWidth(std::u16string_view text, float size) const;
+	/// The unit of a width: the sum of the advances times the size, then times this unit, each step a float
+	[[nodiscard]] float WidthUnit() const;
 	/// The game's line breaking (gui::text_wrap::BreakLines): lines that fit in width at a size
 	[[nodiscard]] std::vector<std::u16string_view> Wrap(std::u16string_view text, float size, float width) const;
 

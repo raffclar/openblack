@@ -95,6 +95,11 @@ struct MoveResult
 /// under it; lower, its height above the land itself does.
 [[nodiscard]] float FlyingHeight(float groundBefore, float heightBefore, float groundAfter, float groundAtGoal,
                                  float goalHeight, float change);
+/// Whether a move to a goal height uses the rule for a bird that flies: a goal height of 2 m and more
+[[nodiscard]] bool FliesToGoalHeight(float goalHeight);
+/// The place of a bird that flies, after its step. The game puts the bird again at the place that it moved to. That
+/// place goes to metres and back to map units, thus each axis can lose one map unit.
+[[nodiscard]] glm::ivec2 FlyingPlace(glm::ivec2 position);
 
 /// The point a hunter makes for to reach its prey: from the prey towards the hunter by both their radii, in metres
 [[nodiscard]] glm::vec2 WorkingPosition(glm::vec2 prey, float preyRadius, glm::vec2 hunter, float hunterRadius);

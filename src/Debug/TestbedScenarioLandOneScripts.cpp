@@ -63,6 +63,46 @@ void testbed_scenarios::AddScriptTaskRelease(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "interface.world_text_glyphs",
+	    .name = "The letters of the temple's signs, read from the font as the game reads them",
+	    .facet = Facet::Interface,
+	    .description = "The player has a temple and is put in its main room. Look at the signs over the doors.",
+	    .expected = "Each letter of a sign is read from the font from one and a half texels before its first column to "
+	                "the middle of its last column, so the letters sit a little to the right in their quads and their "
+	                "right edges are a little thinner than the left edges.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview},
+	    .temples = {{.offset = {-300.0f, 100.0f}, .angle = 36.0f}},
+	    .commands = {{.kind = Kind::EnterTemple, .delaySeconds = 2.0f, .value = 3}},
+	});
+
+	all.push_back({
+	    .id = "interface.screen_text_glyphs",
+	    .name = "The letters of the text in a box on the screen, read from the font as the game reads them",
+	    .facet = Facet::Interface,
+	    .description = "A script shows a help text in the dialogue box. Look at the letters of the text.",
+	    .expected = "Each letter of text under 26 pixels high comes from the small glyphs, a quarter of the full height, "
+	                "so it is softer than before. Each letter is two units wider than its bitmap and starts at its left "
+	                "bearing, so it sits one unit to the right.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview},
+	    .commands = {{.kind = Kind::RunText, .delaySeconds = 0.5f, .value = 1250}},
+	});
+
+	all.push_back({
+	    .id = "interface.screen_quad_pixels",
+	    .name = "The boxes, buttons and text of a box on the screen, on the game's pixel centres",
+	    .facet = Facet::Interface,
+	    .description = "After a second the land information box of Two Gods shows. Look at the edges of its band, its "
+	                   "buttons and its letters.",
+	    .expected = "Each picture of the box reads its texture at the same points as the game. The band, the buttons, "
+	                "the Back arrow and the pointer are one pixel further right and down than before. The letters read "
+	                "half a texel further back, so they are a little softer.",
+	    .framing = {.shot = Shot::Overview},
+	    .commands = {{.kind = Kind::SkirmishBox, .delaySeconds = 1.0f, .value = 3}},
+	});
+
+	all.push_back({
 	    .id = "temple.main_room_lean",
 	    .name = "The temple's main room leans at the screen's edge and as the floor is dragged",
 	    .facet = Facet::Story,
@@ -71,6 +111,21 @@ void testbed_scenarios::AddScriptTaskRelease(std::vector<Scenario>& all)
 	    .expected = "The camera starts to lean when the pointer is more than 0.8 of the way from the middle of the "
 	                "screen to the top or bottom edge, and leans faster nearer the edge. Dragging the floor leans the "
 	                "camera by 0.06 for each pixel and second, less the nearer the pointer is to the sides.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview},
+	    .temples = {{.offset = {-300.0f, 100.0f}, .angle = 36.0f}},
+	    .commands = {{.kind = Kind::EnterTemple, .delaySeconds = 5.0f, .value = 3}},
+	});
+
+	all.push_back({
+	    .id = "hand.temple_wall_gap",
+	    .name = "In the temple the hand hangs 5 units short of the wall under the pointer",
+	    .facet = Facet::Hand,
+	    .description = "The player has a temple and is put in its main room. Move the pointer slowly across the walls "
+	                   "and the floor, near and far.",
+	    .expected = "The hand stays on the line of sight through the pointer, 5 units nearer to the camera than the "
+	                "wall or floor under the pointer. It is never nearer than 4 units to the camera and never further "
+	                "than 300. It eases out slowly over 0.4 seconds and comes in quickly over 0.2 seconds.",
 	    .environment = {.dispenserGrid = false},
 	    .framing = {.shot = Shot::Overview},
 	    .temples = {{.offset = {-300.0f, 100.0f}, .angle = 36.0f}},

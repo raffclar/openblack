@@ -123,6 +123,7 @@
 #include "Hand/HandBlend.h"
 #include "Hand/HandGrabRules.h"
 #include "Hand/HandTrace.h"
+#include "Hand/HandVisibility.h"
 #include "Help/DialogueText.h"
 #include "Help/HelpProfile.h"
 #include "Help/SingAlong.h"
@@ -258,6 +259,8 @@ graphics::RendererInterface::DrawSceneDesc SceneDrawDesc(const EngineConfig& con
 	    .cullBack = false,
 	    .wireframe = config.wireframe,
 	    .drawHand = drawHand,
+	    .drawHandEffects =
+	        hand_visibility::ShowsMiracleEffects(drawHand, Locator::temple::has_value() && Locator::temple::value().Active()),
 	};
 }
 
@@ -637,8 +640,9 @@ bool Game::Initialize() noexcept
 				Locator::gameActionSystem::value().BoxKeyDown(Locator::gameInterface::has_value() &&
 				                                              Locator::gameInterface::value().BoxTakesKeyboard());
 			}
-			// A full-screen video takes Escape: it fades out, unless Shift or Ctrl is held
-			if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_ESCAPE && event.key.repeat == 0 &&
+			// A full-screen video takes Escape: it fades out, unless Shift or Ctrl is held. A held Escape repeats, and the
+			// game counts each repeat: the first repeat during the fade ends the video at once
+			if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_ESCAPE &&
 			    Locator::videoSystem::value().Escape((event.key.keysym.mod & KMOD_SHIFT) != 0,
 			                                         (event.key.keysym.mod & KMOD_CTRL) != 0))
 			{

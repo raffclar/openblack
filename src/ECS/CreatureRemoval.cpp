@@ -32,9 +32,11 @@
 #include "ECS/Systems/CreatureModeSystemInterface.h"
 #include "ECS/Systems/CreatureObjectActionSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
+#include "ECS/Systems/GestureSystemInterface.h"
 #include "ECS/Systems/HandGrabSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
+#include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/WorldObjects.h"
 #include "Locator.h"
@@ -99,6 +101,16 @@ public:
 		if (Locator::leashSystem::has_value())
 		{
 			Locator::leashSystem::value().SetLeashable(creature, false);
+		}
+		// The leash of each hand of the creature's player comes off, also when no leash was on. So the hand of this
+		// computer's player forgets the path of its gesture.
+		const auto* body = Locator::entitiesRegistry::value().TryGet<const Creature>(creature);
+		const auto local =
+		    Locator::playerSystem::has_value() ? Locator::playerSystem::value().GetLocalPlayer() : PlayerNames::PLAYER_ONE;
+		if (body != nullptr && body->owner != PlayerNames::NEUTRAL && body->owner == local &&
+		    Locator::gestureSystem::has_value())
+		{
+			Locator::gestureSystem::value().ForgetPath();
 		}
 	}
 

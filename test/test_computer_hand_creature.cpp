@@ -178,6 +178,20 @@ TEST(ComputerHandCreature, JourneySpeedRunsFarAndDrawsForNear)
 	EXPECT_EQ(world.shortJourneyDraws, 1);
 }
 
+TEST(ComputerHandCreature, JourneyForAThingThatIsNotACreatureEndsTheActionBadly)
+{
+	FakeWorld world;
+	world.places[k_Creature] = {100.0f, 100.0f};
+	HandAction action;
+	action.moveFirst = false;
+	Add(action, StepKind::SetCreatureSpeedForJourney,
+	    {Argument {.object = k_Creature}, Argument {.place = {300.0f, 20.0f, 100.0f}}});
+	EXPECT_TRUE(Process(action, world.view)); // the start
+	EXPECT_FALSE(Process(action, world.view));
+	EXPECT_FALSE(Busy(action));
+	EXPECT_TRUE(world.required.empty());
+}
+
 TEST(ComputerHandCreature, GodPicksTheTypeOfTheLeashOfACreatureWithAPlayer)
 {
 	FakeWorld world;

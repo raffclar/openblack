@@ -118,6 +118,7 @@ public:
 	}
 	void RemoveWorshipSites(entt::entity temple) override { sitesRemoved.emplace_back(turn, temple); }
 	void EndHeartbeatHold(PlayerNames player) override { heartbeatHoldsEnded.push_back(player); }
+	void SwitchOffVirtualInfluence(PlayerNames player) override { virtualInfluenceOff.push_back(player); }
 
 	Registry registry;
 	int turn {0};
@@ -137,6 +138,7 @@ public:
 	/// The turns a temple's worship sites were taken away, and the temple
 	std::vector<std::pair<int, entt::entity>> sitesRemoved;
 	std::vector<PlayerNames> heartbeatHoldsEnded;
+	std::vector<PlayerNames> virtualInfluenceOff;
 	struct Beam
 	{
 		int turn;
@@ -527,6 +529,45 @@ TEST_F(TempleDestructionSystemTest, LosingATempleInASkirmishDoesntEndTheGame)
 	Turn();
 	EXPECT_TRUE(_world->scripts.empty());
 	EXPECT_FALSE(_world->registry.Context().gameOver);
+}
+
+// In a network game, the owner of a temple that goes loses the influence that their hand keeps past the border
+TEST_F(TempleDestructionSystemTest, ANetworkGameSwitchesOffTheVirtualInfluenceOfTheGodWhoseTempleGoes)
+{
+	_world->networkGame = true;
+	const auto temple = MakeTemple(PlayerNames::PLAYER_TWO);
+	MakeTemple(PlayerNames::PLAYER_THREE);
+	_system->Start(temple);
+	EXPECT_TRUE(_world->virtualInfluenceOff.empty());
+	for (int i = 0; i < 400 && _world->registry.Valid(temple); ++i)
+	{
+		Turn();
+	}
+	ASSERT_FALSE(_world->registry.Valid(temple));
+	EXPECT_EQ(_world->virtualInfluenceOff, std::vector<PlayerNames> {PlayerNames::PLAYER_TWO});
+}
+
+// A temple that is taken away at once in a network game also switches it off
+TEST_F(TempleDestructionSystemTest, ATempleRemovedInANetworkGameSwitchesOffTheVirtualInfluence)
+{
+	_world->networkGame = true;
+	_system->Remove(MakeTemple(PlayerNames::PLAYER_ONE));
+	EXPECT_EQ(_world->virtualInfluenceOff, std::vector<PlayerNames> {PlayerNames::PLAYER_ONE});
+}
+
+// Outside a network game, a god keeps the virtual influence when their temple goes
+TEST_F(TempleDestructionSystemTest, OutsideANetworkGameTheVirtualInfluenceStaysOnWhenATempleGoes)
+{
+	_world->registry.Context().skirmish = true;
+	const auto temple = MakeTemple(PlayerNames::PLAYER_TWO);
+	_system->Start(temple);
+	for (int i = 0; i < 400 && _world->registry.Valid(temple); ++i)
+	{
+		Turn();
+	}
+	ASSERT_FALSE(_world->registry.Valid(temple));
+	_system->Remove(MakeTemple(PlayerNames::PLAYER_ONE));
+	EXPECT_TRUE(_world->virtualInfluenceOff.empty());
 }
 
 } // namespace

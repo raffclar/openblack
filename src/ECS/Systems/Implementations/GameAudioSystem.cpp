@@ -135,7 +135,9 @@ void GameAudioSystem::ProcessMusicTurn(glm::vec3 camera, bool inCitadel)
 	if (Locator::creatureFightSystem::has_value() && Locator::creatureFightSystem::value().FightMusicHeard(camera))
 	{
 		const auto& context = Locator::entitiesRegistry::value().Context();
-		music.creatureFight = audio::GameMusic::SelectFightType(context.mapScriptGlobals.landNumber, context.skirmish);
+		const bool networkGame = Locator::time::has_value() && Locator::time::value().IsNetworkGame();
+		music.creatureFight =
+		    audio::GameMusic::SelectFightType(context.mapScriptGlobals.landNumber, context.skirmish, networkGame);
 	}
 	// The land without music: the game does not change the music there
 	constexpr int32_t k_LandWithoutMusic = 6;

@@ -122,3 +122,31 @@ TEST(CreatureHairLight, ABodyThatTheWorldDidNotDrawGivesTheStartColoursToTheNext
 	known[1] = StatisticsBoxColours(true);
 	EXPECT_EQ(Carry(plan, known, Carried {k_Film}), Carried {Kept {}});
 }
+
+TEST(CreatureHairLight, AFrameWithoutTheLandKeepsTheWorldColoursOfABody)
+{
+	// A frame with the land: the world's draw gives the colours, else the body starts white again
+	EXPECT_TRUE(HasWorldColours(true, true, false));
+	EXPECT_FALSE(HasWorldColours(true, false, true));
+	// A frame in the temple does not change the colours of a body
+	EXPECT_TRUE(HasWorldColours(false, false, true));
+	EXPECT_FALSE(HasWorldColours(false, true, false));
+	// In the temple the statistics box uses the colours that the last frame with the land gave the body
+	EXPECT_EQ(StatisticsBoxColours(HasWorldColours(false, false, true)), std::nullopt);
+	EXPECT_EQ(StatisticsBoxColours(HasWorldColours(false, false, false)), std::optional<Colours> {k_Start});
+}
+
+TEST(CreatureHairLight, InTheTempleTheStatisticsBoxHairComesAfterTheRoomCopy)
+{
+	// The copy of the creature in the room, then the statistics box's hair of a body with world colours
+	const std::vector<BodyDraw> draws {k_UsualWithHair, k_UsualWithHair};
+	const auto plan = PlanFrame(draws);
+	ASSERT_EQ(plan.last, std::optional<size_t> {1});
+	std::vector<std::optional<Colours>> known(2);
+	known[1] = StatisticsBoxColours(HasWorldColours(false, false, true));
+	// The next frame keeps the colours of the box's hair on the GPU, not those of the room's copy
+	EXPECT_EQ(Carry(plan, known, Carried {k_Film}), Carried {Kept {}});
+	// A body that no frame with the land drew gives the start colours
+	known[1] = StatisticsBoxColours(HasWorldColours(false, false, false));
+	EXPECT_EQ(Carry(plan, known, Carried {Kept {}}), Carried {k_Start});
+}

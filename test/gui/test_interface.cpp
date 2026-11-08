@@ -229,6 +229,97 @@ TEST(GameFont, WrapsAtSpacesHyphensAndLineBreaks)
 	EXPECT_EQ(ToString(font.Wrap(u"WWW", 4.0f, 17.0f)), u"[WW][W]");
 }
 
+TEST(GameFont, MeasuresWithTheFloatOfAnEightieth)
+{
+	// A font 80 rows high, as all the game's fonts are, with one glyph of no pixels that moves the pen by 4
+	FakeFont fake {.height = 80, .glyphs = {}, .met = {}, .fnt = {}};
+	fake.glyphs = {
+	    {.character = u'?', .width = 0, .left = 1.0f, .ink = 2.0f, .right = 1.0f, .rows = std::vector<std::string>(80)}};
+	fake.Build();
+	const auto font = GameFont::Load(fake.met, fake.fnt);
+	ASSERT_TRUE(font.has_value());
+	// The sum of the advances times the size, then times the float of an eightieth. A division by 80 gives another
+	// last bit for this size.
+	const float size = 9.0f;
+	const float sum = 4.0f;
+	EXPECT_EQ(font->WidthUnit(), 0.0125f);
+	EXPECT_EQ(font->GetWidth(u"?", size), (sum * size) * 0.0125f);
+	EXPECT_NE(font->GetWidth(u"?", size), (sum * size) / 80.0f);
+}
+
+TEST(GameFont, TextUnder26PixelsReadsTheSmallGlyphs)
+{
+	using Level = GameFont::GlyphLevel;
+	EXPECT_EQ(GameFont::ScreenGlyphLevel(25.9f, false), Level::Quarter);
+	EXPECT_EQ(GameFont::ScreenGlyphLevel(26.0f, false), Level::Half);
+	EXPECT_EQ(GameFont::ScreenGlyphLevel(10.0f, true), Level::Full);
+}
+
+TEST(GameFont, AScreenGlyphIsItsBitmapAndTwoUnitsWideFromTheClearColumnBeforeIt)
+{
+	const auto font = LoadFont();
+	const auto* glyph = font.Find(u'A');
+	// Eight pixels high on a font four high: two pixels a unit
+	const auto placed = font.PlaceOnScreen(u'A', 10.0f, 1.0f, 8.0f, GameFont::GlyphLevel::Half);
+	ASSERT_TRUE(placed.has_value());
+	EXPECT_TRUE(placed->drawn);
+	// The left bearing from the pen, then the width of the bitmap and two units
+	EXPECT_FLOAT_EQ(placed->left, 13.0f);
+	EXPECT_FLOAT_EQ(placed->right, 21.0f);
+	// The pen moves on by the ink and the right bearing
+	EXPECT_FLOAT_EQ(placed->pen, 9.0f);
+	// From the middle of the clear column before the glyph and the middle of its first row, across half the width and
+	// one texel, and down 39 rows
+	EXPECT_EQ(placed->texelMin, glm::vec2(glyph->atlasMin.x - 0.5f, glyph->atlasMin.y + 0.5f));
+	EXPECT_EQ(placed->texelMax, placed->texelMin + glm::vec2(2.0f, 39.0f));
+}
+
+TEST(GameFont, AScreenGlyphOfTheSmallLevelReadsHalfAsFarFromItsOwnClearColumn)
+{
+	const auto font = LoadFont();
+	const auto* glyph = font.Find(u'A');
+	const auto placed = font.PlaceOnScreen(u'A', 0.0f, 0.0f, 8.0f, GameFont::GlyphLevel::Quarter);
+	ASSERT_TRUE(placed.has_value());
+	EXPECT_FLOAT_EQ(placed->right - placed->left, 8.0f);
+	EXPECT_EQ(placed->texelMin, glm::vec2(glyph->smallMin) + 0.5f);
+	EXPECT_EQ(placed->texelMax, placed->texelMin + glm::vec2(1.0f, 19.5f));
+
+	// The atlas holds the small glyph with a clear column first, its alpha in four bits
+	const auto at = [&font](int x, int y) {
+		return font.GetAtlas()[(static_cast<size_t>(y) * font.GetAtlasSize().x) + static_cast<size_t>(x)];
+	};
+	const auto& small = font.GetSmallGlyph(*glyph);
+	EXPECT_EQ(at(glyph->smallMin.x, glyph->smallMin.y), 0);
+	EXPECT_EQ(at(glyph->smallMin.x + 1, glyph->smallMin.y), small.At(1, 0) * 17);
+	EXPECT_GT(small.At(1, 0), 0);
+}
+
+TEST(GameFont, AScreenGlyphAtFullHeightReadsTheSamePartAtTwiceTheTexels)
+{
+	const auto font = LoadFont();
+	const auto* glyph = font.Find(u'W');
+	const auto placed = font.PlaceOnScreen(u'W', 0.0f, 0.0f, 80.0f, GameFont::GlyphLevel::Full);
+	ASSERT_TRUE(placed.has_value());
+	EXPECT_EQ(placed->texelMin, glm::vec2(glyph->fullMin.x - 1.0f, glyph->fullMin.y + 1.0f));
+	EXPECT_EQ(placed->texelMax, placed->texelMin + glm::vec2(6.0f, 78.0f));
+}
+
+TEST(GameFont, ASpaceOnTheScreenOnlyMovesThePenAndTheBlankAndLineBreaksDoNot)
+{
+	const auto font = LoadFont();
+	const auto space = font.PlaceOnScreen(u' ', 5.0f, 1.0f, 8.0f, GameFont::GlyphLevel::Half);
+	ASSERT_TRUE(space.has_value());
+	EXPECT_FALSE(space->drawn);
+	EXPECT_FLOAT_EQ(space->pen, 5.0f);
+	for (const auto c : {u'\n', u'\r', u'\xF8FE'})
+	{
+		const auto placed = font.PlaceOnScreen(c, 5.0f, 1.0f, 8.0f, GameFont::GlyphLevel::Half);
+		ASSERT_TRUE(placed.has_value());
+		EXPECT_FALSE(placed->drawn);
+		EXPECT_FLOAT_EQ(placed->pen, 1.0f);
+	}
+}
+
 TEST(GameFont, RejectsFilesThatDontFit)
 {
 	auto fake = MakeFont();

@@ -42,7 +42,7 @@ uint8_t Weight(float fraction)
 
 std::array<std::string, k_Pictures> PictureFiles()
 {
-	constexpr std::array<std::string_view, 3> k_Alignments = {"evil", "Ntrl", "good"};
+	constexpr std::array<std::string_view, 3> k_Alignments = {"good", "Ntrl", "evil"};
 	constexpr std::array<std::string_view, 3> k_Times = {"night", "dusk", "day"};
 	std::array<std::string, k_Pictures> files;
 	size_t index = 0;
@@ -140,13 +140,13 @@ Pair TimePair(float skyType)
 	return {.lower = k_Day, .upper = k_Dusk, .weight = Weight(skyType)};
 }
 
-Pair AlignmentPair(float alignment)
+Pair AlignmentPair(float sky)
 {
-	if (alignment > 1.0f)
+	if (sky > 1.0f)
 	{
-		return {.lower = 1, .upper = 2, .weight = Weight(std::min(alignment, 2.0f) - 1.0f)};
+		return {.lower = 1, .upper = 2, .weight = Weight(std::min(sky, 2.0f) - 1.0f)};
 	}
-	return {.lower = 0, .upper = 1, .weight = Weight(std::max(alignment, 0.0f))};
+	return {.lower = 0, .upper = 1, .weight = Weight(std::max(sky, 0.0f))};
 }
 
 uint8_t BlendChannel(uint8_t lower, uint8_t upper, uint8_t weight)
@@ -154,9 +154,9 @@ uint8_t BlendChannel(uint8_t lower, uint8_t upper, uint8_t weight)
 	return static_cast<uint8_t>(((lower * (255 - weight)) >> 8) + ((upper * weight) >> 8));
 }
 
-uint8_t Darkness(float alignment)
+uint8_t Darkness(float sky)
 {
-	const float good = 1.0f - (alignment * 0.5f);
+	const float good = 1.0f - (sky * 0.5f);
 	if (!(good > 0.6f))
 	{
 		return 0;

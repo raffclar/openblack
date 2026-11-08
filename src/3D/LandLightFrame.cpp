@@ -34,7 +34,7 @@ LandLightInputs FrameLandLightInputs()
 	}
 	if (Locator::alignmentSystem::has_value())
 	{
-		inputs.alignment = Locator::alignmentSystem::value().GetSkyAlignment();
+		inputs.sky = Locator::alignmentSystem::value().GetSkyLand();
 	}
 	if (Locator::weatherSystem::has_value() && Locator::camera::has_value())
 	{
@@ -60,8 +60,8 @@ uint32_t FrameLandLight(uint8_t level)
 	}
 	const auto inputs = FrameLandLightInputs();
 	LandLightTable table;
-	table.Build(*palettes.Handle(LandLightPalette::k_Id.value()), inputs.skyType, inputs.alignment, inputs.overcast,
-	            inputs.flash, FrameRampDivisor());
+	table.Build(*palettes.Handle(LandLightPalette::k_Id.value()), inputs.skyType, inputs.sky, inputs.overcast, inputs.flash,
+	            FrameRampDivisor());
 	// The texels are red, green, blue and alpha bytes
 	const auto texel = table.GetTexels().at(level);
 	return ((texel & 0xFFu) << 16u) | (texel & 0xFF00u) | ((texel >> 16u) & 0xFFu);
@@ -78,8 +78,8 @@ FrameLightTable FrameLandLightTable()
 	}
 	const auto inputs = FrameLandLightInputs();
 	LandLightTable table;
-	table.Build(*palettes.Handle(LandLightPalette::k_Id.value()), inputs.skyType, inputs.alignment, inputs.overcast,
-	            inputs.flash, FrameRampDivisor());
+	table.Build(*palettes.Handle(LandLightPalette::k_Id.value()), inputs.skyType, inputs.sky, inputs.overcast, inputs.flash,
+	            FrameRampDivisor());
 	// The texels are red, green, blue and alpha bytes
 	const auto& texels = table.GetTexels();
 	for (size_t level = 0; level < texels.size(); ++level)

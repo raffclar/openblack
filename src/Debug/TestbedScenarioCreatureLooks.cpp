@@ -1181,6 +1181,23 @@ void testbed_scenarios::AddLight(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "light.cloud_shadows_without_clouds",
+	    .name = "Cloud shadows when the sky's clouds are off",
+	    .facet = Facet::Light,
+	    .description =
+	        "Start the game with --profile-folder on a folder that holds a Profiles.txt and a settings.json "
+	        "with {\"detail_level\": 5, \"custom_detail\": {\"clouds\": false, \"cloud_shadows\": true}}. Rain "
+	        "falls at noon from a storm over a tiger in the middle of the map. The camera looks down from high above. "
+	        "Start again with \"clouds\": true to compare.",
+	    .expected = "With the clouds off, the sky shows no clouds and no shadows of the sky's clouds lie on the land. The "
+	                "storm's shadow stays on the land round the middle of the map. With the clouds on, the sky's clouds "
+	                "move and their shadows move across the land with them.",
+	    .environment = {.hour = 12.0f, .clockRuns = false, .weather = Weather::Rain, .dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 900.0f, -700.0f}, .look = {0.0f, 0.0f, 0.0f}},
+	    .creatures = {Posed(CreatureType::Tiger, {0.0f, 0.0f})},
+	});
+
+	all.push_back({
 	    .id = "light.moving_shadows",
 	    .name = "Shadows of things in flight",
 	    .facet = Facet::Light,

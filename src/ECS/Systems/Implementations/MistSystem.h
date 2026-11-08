@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include "Common/FramePace.h"
 #include "ECS/Systems/MistSystemInterface.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
@@ -21,9 +22,12 @@ namespace openblack::ecs::systems
 class MistSystem final: public MistSystemInterface
 {
 public:
-	void Update(std::chrono::duration<float, std::milli> gameTime) override;
+	void Update(std::chrono::milliseconds frameRealTime, std::chrono::milliseconds frameGameTime) override;
 	void SetFade(entt::entity mist, float startSize, float endSize, float startAlpha, float endAlpha, float seconds) override;
 	void ProcessTurn() override;
+
+private:
+	frame_pace::Pace _pace;
 };
 
 } // namespace openblack::ecs::systems

@@ -100,6 +100,8 @@ struct Dropoff
 
 /// Turns the villager towards a point by at most a step of the game's angles; whether it now faces it
 bool FaceTowards(entt::entity villager, glm::vec2 point, int32_t step);
+/// The same towards a point kept as the x and z of a map position
+bool FaceTowards(entt::entity villager, glm::ivec2 point, int32_t step);
 /// Whether the villager is a builder disciple, offered sites even when no builder is wanted
 [[nodiscard]] bool IsBuilderDisciple(const components::Villager& villager);
 /// The villager walks to a place round a site's building to build there, if it works there already or the site wants

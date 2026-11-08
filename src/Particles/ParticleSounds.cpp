@@ -12,6 +12,8 @@
 #include <algorithm>
 #include <memory>
 
+#include "Common/X87.h"
+
 using namespace openblack::particles;
 
 ParticleSoundLink* openblack::particles::StartAtomSound(Effect& effect, Atom& atom, const ParticleSound& sound)
@@ -73,11 +75,11 @@ void openblack::particles::StopAllAtomSounds(Atom& atom)
 
 int openblack::particles::SoundSizeFromThrow(float share)
 {
-	if (share > k_LargeThrowShare)
+	if (x87::Greater(share, k_LargeThrowShare))
 	{
 		return 1;
 	}
-	return share > k_MediumThrowShare ? 2 : 3;
+	return x87::Greater(share, k_MediumThrowShare) ? 2 : 3;
 }
 
 int openblack::particles::SoundSizeFromImpactSpeed(float speed, float medium, float large)

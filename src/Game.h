@@ -277,11 +277,7 @@ public:
 	/// The game's limits on how far the hand is from the camera
 	static constexpr float k_HandMinDistance = 2.0f;
 	static constexpr float k_HandMaxDistance = 1800.0f;
-	/// Inside the temple: how far short of the room the hand hangs, its limits on how far it is from the camera, and
-	/// how long it takes to turn to the surface the cursor is on
-	static constexpr float k_HandTempleGap = 3.25f;
-	static constexpr float k_HandTempleMinDistance = 4.0f;
-	static constexpr float k_HandTempleMaxDistance = 300.0f;
+	/// Inside the temple: how long the hand takes to turn to the surface the cursor is on
 	static constexpr float k_HandTempleTurnTime = 0.4f;
 	/// Land lower than this is the sea, which the hand rests on
 	static constexpr float k_HandSeaAltitude = 0.1f;
@@ -786,6 +782,9 @@ private:
 	                  const ecs::systems::HandGrabSystemInterface* grab);
 	/// The gestures drawn with the cursor this frame, through the gesture system
 	void UpdateGestures(const Camera& camera, glm::ivec2 screenSize, float deltaSeconds);
+	/// The pass of the interface in the turn: the gestures sample the places that came since the last pass and look at
+	/// the path once
+	void GestureTurn();
 	/// Turns the hand to face along the line of sight through the cursor and stands it on the slope under it. Its up
 	/// eases at the fixed steps of the input.
 	void OrientHand(ecs::components::Transform& handTransform, const glm::mat3& facingCamera, glm::vec3 surfaceUp);

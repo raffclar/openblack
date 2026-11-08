@@ -282,6 +282,28 @@ void testbed_scenarios::AddStormScenarios(std::vector<Scenario>& all)
 	                    .weather = "0,0,8,93,-3,39"}},
 	});
 
+	// The eye in the clouds of a storm, where the domes of its clouds pass over the eye as they wander
+	all.push_back({
+	    .id = "sky.storm_cloud_eye_inside",
+	    .name = "The eye among a storm's clouds",
+	    .facet = Facet::Sky,
+	    .description = "A storm of 16 clouds of shade 0.5, 40 above the land, inner radius 160 and outer 176, that does "
+	                   "not move. The eye is 45 above the land at the middle of the storm, among its clouds, and looks "
+	                   "north over the land.",
+	    .expected = "Soft grey clouds wander around the eye and drift past it. Each cloud shows only its outside. A cloud "
+	                "close in front of the eye can put a grey veil on the view for a moment as the eye goes into it. "
+	                "When the eye is in a cloud, no pale sheet with a straight lower edge covers the screen.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 45.0f, 80.0f}, .look = {0.0f, 30.0f, 300.0f}},
+	    .landStorms = {{.offset = {0.0f, 80.0f},
+	                    .destination = {0.0f, 80.0f},
+	                    .age = 70.0f,
+	                    .cloudCount = 16,
+	                    .shape = "160.00,176.00,10.00,460.00,1.00,1.10",
+	                    .clouds = "0.50,40.00,0.00,0.00,0.00,0.00",
+	                    .weather = "0,0,8,93,0,0"}},
+	});
+
 	// The black storm cloud of the death of Khazar on the second land, which the script deletes at the end of its film
 	all.push_back({
 	    .id = "sky.script_deletes_storm",

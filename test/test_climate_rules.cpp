@@ -93,6 +93,20 @@ TEST(ClimateRulesTest, CellNearMiddleCutsTowardsZero)
 	EXPECT_EQ(climate_rules::CellNearMiddle(0.0f, 0.0f, 100, 200), glm::ivec2(100, 200));
 }
 
+// A local storm measures its radius to the exact middle that the land script gives, not to the corner of its cell
+TEST(ClimateRulesTest, LocalStormRadiusUsesTheExactMiddle)
+{
+	const auto middle = openblack::map_coords::ScriptPlace(1745.5, 3140.0);
+	ASSERT_EQ(openblack::map_coords::CellOf(middle.x), 174);
+	EXPECT_EQ(climate_rules::LocalStormRadius({174, 314}, middle), 5u);
+	EXPECT_EQ(climate_rules::LocalStormRadius({200, 314}, middle), 254u);
+	EXPECT_EQ(climate_rules::LocalStormRadius({174, 340}, middle), 260u);
+
+	// A middle on a cell corner measures the same as the cell
+	const openblack::map_coords::MapCoords corner {.x = 174 * 0x10000, .z = 314 * 0x10000, .altitude = 0.0f};
+	EXPECT_EQ(climate_rules::LocalStormRadius({200, 314}, corner), 260u);
+}
+
 // The game multiplies the hour factor by the month factor first, then the range of the season by that
 TEST(ClimateRulesTest, TargetTemperatureMultipliesTheFactorsFirst)
 {

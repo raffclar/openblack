@@ -73,10 +73,17 @@ public:
 	[[nodiscard]] virtual bool ValidToTap(entt::entity icon, PlayerNames player) const = 0;
 	/// The hand taps an icon: whether the tap counted
 	virtual bool Tap(entt::entity icon, PlayerNames player) = 0;
-	/// A computer god's hand makes the worshippers of an icon's site chant for its miracle. The icon must not charge,
-	/// no hand may hold its seed, the god must be able to cast the miracle, and the site must have prayer power to give
-	/// or the icon some stored. An icon that is full already then gives its miracle to the hand, as a tap does. Only the
-	/// hand of a human player takes it, so a computer god keeps its miracle in the icon. Whether the charge started.
+	/// Whether a computer god's hand may make the worshippers of an icon's site chant for the miracle. The icon must not
+	/// charge, and no hand may hold its seed. The god must be able to cast the type of miracle that the seed of the icon
+	/// gives at the power-up of the miracle. The site must have prayer power to give, or the icon must have a store.
+	[[nodiscard]] virtual bool MayStartChargeForGod(entt::entity /*icon*/, PlayerNames /*player*/, MagicType /*type*/) const
+	{
+		return false;
+	}
+	/// A computer god's hand makes the worshippers of an icon's site chant for its miracle. The icon must not charge, and
+	/// the site must have prayer power to give or the icon some stored. An icon that is full already then gives its
+	/// miracle to the hand, as a tap does. Only the hand of a human player takes it, so a computer god keeps its miracle
+	/// in the icon. Whether the charge started.
 	virtual bool StartChargeForGod(entt::entity /*icon*/, PlayerNames /*player*/) { return false; }
 	/// The worship site icon that made a seed, none for a seed that no icon made or whose icon is gone
 	[[nodiscard]] virtual entt::entity IconOfSeed(entt::entity /*seed*/) const { return entt::null; }

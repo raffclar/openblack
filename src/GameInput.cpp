@@ -108,6 +108,7 @@
 #include "Hand/ScriptHandState.h"
 #include "Help/DialogueText.h"
 #include "Help/Spirits.h"
+#include "Input/CursorFreeze.h"
 #include "Input/DeveloperKeys.h"
 #include "Input/GameActionMapInterface.h"
 #include "Input/KeyBindings.h"
@@ -183,11 +184,17 @@ void Game::UpdateInput()
 		auto sdlInput = profiler.BeginScoped(Profiler::Stage::SdlInput);
 		// The debug windows' presses of the options screen's actions are made by the action map's frame
 		auto& actions = Locator::gameActionSystem::value();
-		// The world's camera is the one turned with the mouse, which holds the cursor and the hand still meanwhile
-		actions.AllowCursorFreeze(
-		    !(Locator::temple::has_value() && Locator::temple::value().Active()) &&
-		    dynamic_cast<DefaultWorldCameraModel*>(&camera.GetModel()) != nullptr &&
-		    (Locator::cameraHelpSystem::value().Get().features & camera_help::feature::k_RotateAroundMouse) != 0);
+		// The world's camera is the one turned with the mouse, which holds the cursor and the hand still meanwhile.
+		// When the camera ignores its controls, at the fence or under a box of the menu, the cursor follows the pointer.
+		const auto* worldCamera = dynamic_cast<DefaultWorldCameraModel*>(&camera.GetModel());
+		actions.AllowCursorFreeze(input::FreezeAllowed({
+		    .inTemple = Locator::temple::has_value() && Locator::temple::value().Active(),
+		    .worldCamera = worldCamera != nullptr,
+		    .rotateAroundMouse =
+		        (Locator::cameraHelpSystem::value().Get().features & camera_help::feature::k_RotateAroundMouse) != 0,
+		    .heldBackAtFence = worldCamera != nullptr && worldCamera->IsHeldBack(),
+		    .frontEndBox = FrontEndBoxShows(),
+		}));
 		// The land's scripts may take the camera's keys away, as the tutorials do
 		actions.SetBlockedActions(Locator::cameraHelpSystem::value().Get().BlockedActions());
 		if (!Locator::debugGui::value().StealsFocus() || actions.HasQueuedPresses())

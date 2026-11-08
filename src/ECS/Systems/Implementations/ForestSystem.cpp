@@ -87,10 +87,8 @@ namespace forest = openblack::magic::forest;
 
 namespace
 {
-/// A town's scenic forest reaches this much further than its forests
+/// A full turn, in radians
 constexpr float k_TwoPi = 2.0f * std::numbers::pi_v<float>;
-/// Positions are kept in 1/6553.6 of a metre, as the map keeps them: the spiral's points are cut down to that
-constexpr float k_MapUnitsPerMetre = 6553.6f;
 /// A tree is added beside another no sooner than this many turns after the last; trying so many turns round it, a
 /// sixteenth of a half turn apart, and so many distances at each, from 5 m
 constexpr uint32_t k_TreeAddingGapTurns = 40;
@@ -344,8 +342,9 @@ uint32_t ForestSystem::Plant(entt::entity spell, Spell& miracle, float tribalPow
 	for (uint32_t i = 0; i < count; ++i)
 	{
 		const auto offset = forest::SpiralOffset(i, count);
-		glm::vec3 point(std::trunc((centre.x + offset.x) * k_MapUnitsPerMetre) / k_MapUnitsPerMetre, 0.0f,
-		                std::trunc((centre.z + offset.y) * k_MapUnitsPerMetre) / k_MapUnitsPerMetre);
+		const auto spot = forest::TreeSpot(glm::xz(centre), offset);
+		const auto xz = map_coords::ToMetres(spot);
+		glm::vec3 point(xz.x, 0.0f, xz.y);
 		// A slot with no room is passed over, never tried again
 		if (!ValidPlaceForTree(point) || planted.size() >= count)
 		{
@@ -354,7 +353,7 @@ uint32_t ForestSystem::Plant(entt::entity spell, Spell& miracle, float tribalPow
 		const auto type = forest::SpeciesFor(kinds.magicTreeTypes, random.GameRand(4));
 		const float yaw = random.GameFloatRand(k_TwoPi);
 		point.y = Locator::terrainSystem::value().GetHeightAt({point.x, point.z});
-		const float target = forest::TargetScale(glm::distance(glm::xz(point), glm::xz(centre)));
+		const float target = forest::TargetScaleAt(map_coords::FromMetres(glm::xz(centre)), spot);
 		// The miracle's trees make a forest of their own, one of the land's forests with the land's next number, made
 		// where its first tree stands
 		if (forestEntity == entt::null)
@@ -362,6 +361,8 @@ uint32_t ForestSystem::Plant(entt::entity spell, Spell& miracle, float tribalPow
 			forestId = MakeLandForest(std::nullopt, point, entt::null, false);
 		}
 		const auto tree = ecs::archetypes::TreeArchetype::Create(forestId, point, type, true, yaw, target, 0.0f);
+		// The tree keeps the exact map position that it was made at
+		ecs::thing_map_place::Keep(registry, tree, spot);
 		if (forestEntity == entt::null)
 		{
 			// The forest stands where its first tree does
@@ -430,6 +431,19 @@ bool ForestSystem::HasTrees(entt::entity spell) const
 	EntityRegistry().Each<const MagicForest>(
 	    [&found, spell](const MagicForest& forest) { found = found || (forest.spell == spell && !forest.trees.empty()); });
 	return found;
+}
+
+uint32_t ForestSystem::StandingTrees(entt::entity spell) const
+{
+	const auto& registry = EntityRegistry();
+	uint32_t standing = 0;
+	registry.Each<const MagicForest>([&standing, &registry, spell](const MagicForest& forest) {
+		if (forest.spell == spell)
+		{
+			standing += forest::StandingTrees(forest.trees, [&registry](entt::entity tree) { return registry.Valid(tree); });
+		}
+	});
+	return standing;
 }
 
 std::optional<float> ForestSystem::TallestTreeOf(entt::entity spell) const

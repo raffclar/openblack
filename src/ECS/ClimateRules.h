@@ -15,6 +15,8 @@
 
 #include <glm/vec2.hpp>
 
+#include "3D/MapCoords.h"
+
 /// The formulas of the climates and of the storms that they make, with the float steps of the game
 namespace openblack::ecs::climate_rules
 {
@@ -37,6 +39,10 @@ namespace openblack::ecs::climate_rules
 
 /// The cell at a distance in cells and an angle in radians from the middle cell of a climate, cut towards zero
 [[nodiscard]] glm::ivec2 CellNearMiddle(float angle, float distance, uint16_t middleX, uint16_t middleZ);
+
+/// The radius of a new storm of a local climate before its limits: the distance along the ground from the corner of the
+/// storm's cell to the exact middle of the climate, with the fraction of its cell, cut towards zero
+[[nodiscard]] uint32_t LocalStormRadius(glm::ivec2 cell, const map_coords::MapCoords& centre);
 
 /// The target temperature of a climate: the range of its season times the hour factor and the month factor. The game
 /// multiplies the two factors first.

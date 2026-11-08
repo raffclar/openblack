@@ -284,6 +284,36 @@ TEST(GameActionMap, QueuedPressGoesThroughTheKeyPath)
 	}
 }
 
+TEST(GameActionMap, AQueuedPressStaysHeldUntilAStepOfTheInputSeesIt)
+{
+	GameActionMap map;
+	map.Frame();
+	const auto noStep = input_steps::Steps {};
+	const auto oneStep = input_steps::Steps::One();
+	// A key's press and an action without a key both wait for a frame that takes a step of the input
+	for (const auto action : {BindableActionMap::MOVE_LEFT, BindableActionMap::ACTION})
+	{
+		map.QueuePress(action);
+		map.Frame();
+		map.SplitInput(noStep);
+		EXPECT_TRUE(map.Get(action));
+		// The frames with no step keep it held
+		map.Frame();
+		map.SplitInput(noStep);
+		EXPECT_TRUE(map.Get(action));
+		map.Frame();
+		map.SplitInput(oneStep);
+		EXPECT_TRUE(map.Get(action));
+		// The step saw it, so the next frame lets go of it
+		map.Frame();
+		map.SplitInput(noStep);
+		EXPECT_FALSE(map.Get(action));
+		map.Frame();
+		map.SplitInput(oneStep);
+		EXPECT_FALSE(map.HasQueuedPresses());
+	}
+}
+
 TEST(GameActionMap, QueuedChordPressesOnlyTheChordsAction)
 {
 	GameActionMap map;
@@ -516,4 +546,15 @@ TEST(KeyBindings, HeldActionsStayHeldWithOtherModifiers)
 	bindings.at(*IndexOf(bindings, BindableActionMap::TILT_UP)).key = KeyChord {SDL_SCANCODE_A, Modifier::Alt};
 	EXPECT_EQ(ActionsPressedByKeyDown(bindings, SDL_SCANCODE_A, KMOD_NONE, none), none);
 	EXPECT_EQ(ActionsPressedByKeyDown(bindings, SDL_SCANCODE_A, KMOD_LALT | KMOD_LSHIFT, none), BindableActionMap::TILT_UP);
+}
+
+TEST(KeyBindings, InTheTempleOnlyAMousePressDoesTheAction)
+{
+	// Outside the temple a press of the keyboard or of the mouse does the action
+	EXPECT_TRUE(PressDoesAction(false, false));
+	EXPECT_TRUE(PressDoesAction(false, true));
+	// Inside the temple the temple takes the keyboard for its rooms, so Ctrl+S does not quick save
+	EXPECT_FALSE(PressDoesAction(true, false));
+	// A mouse button that has the action still does it inside the temple
+	EXPECT_TRUE(PressDoesAction(true, true));
 }

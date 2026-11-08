@@ -437,12 +437,12 @@ void GameMusic::ProcessMusic(const TurnInputs& inputs)
 	_landType = MusicType::None;
 }
 
-MusicType GameMusic::SelectFightType(int32_t landNumber, bool skirmish)
+MusicType GameMusic::SelectFightType(int32_t landNumber, bool skirmish, bool networkGame)
 {
 	// The land number is compared as an unsigned number, so a negative one counts as a later land
 	constexpr uint32_t k_FirstBigFightLand = 4;
-	return !skirmish && static_cast<uint32_t>(landNumber) < k_FirstBigFightLand ? MusicType::CreatureFight
-	                                                                            : MusicType::CreatureBigFight;
+	return !skirmish && !networkGame && static_cast<uint32_t>(landNumber) < k_FirstBigFightLand ? MusicType::CreatureFight
+	                                                                                            : MusicType::CreatureBigFight;
 }
 
 MusicType GameMusic::SelectCitadelType(const TurnInputs& inputs)
@@ -455,17 +455,24 @@ bool GameMusic::LandMusicAllowed(const TurnInputs& inputs) const
 	return !inputs.cinema && _alignmentMusicEnabled && inputs.turn > k_LandMusicFirstTurn;
 }
 
-// Inside the citadel its music plays, of the player's alignment, carrying on from where
-// it was
+// Inside the citadel its music plays, of the player's alignment, and continues from the place where it stopped
 bool GameMusic::ProcessCitadel(const TurnInputs& inputs)
 {
 	if (!inputs.inCitadel)
 	{
+		_citadelStoppedSounds = false;
 		return false;
+	}
+	auto& audio = Locator::sounds::value();
+	// The first turn of the music in the temple stops every sound effect that plays: the speech too, but not the
+	// music and not the atmosphere. It does this also when the temple's music has no bank.
+	if (!_citadelStoppedSounds)
+	{
+		audio.StopAllSoundEffects();
+		_citadelStoppedSounds = true;
 	}
 	const auto type = SelectCitadelType(inputs);
 	const auto path = std::string(BankPath(type));
-	auto& audio = Locator::sounds::value();
 	const auto info = audio.GetMusicBankInfo(path);
 	if (!info)
 	{

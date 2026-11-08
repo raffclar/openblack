@@ -55,6 +55,9 @@ struct Streak
 
 /// A streak at a new place, in the order the game draws its numbers
 [[nodiscard]] Streak Place(const Random& random);
+/// The streaks when the weather opens: the game places all of them, then places all of them again, so it draws the
+/// numbers two times
+void PlaceAtOpen(std::span<Streak> streaks, const Random& random);
 /// Moves every streak on by some seconds: the texture scrolls, and a streak whose life ends starts again elsewhere
 void Step(std::span<Streak> streaks, float seconds, float fallSpeed, const Random& random);
 

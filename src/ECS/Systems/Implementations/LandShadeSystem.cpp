@@ -242,7 +242,7 @@ void LandShadeSystem::CastShadows(const LandShadeFrame& frame, const Registry& r
 		uint32_t alpha;
 	};
 	std::vector<CloudShade> clouds;
-	if (drawn != nullptr)
+	if (drawn != nullptr && frame.skyClouds)
 	{
 		drawn->Each<const ecs::components::Cloud, const ecs::components::Mist, const ecs::components::Transform>(
 		    [&clouds, &frame](const ecs::components::Cloud& /*unused*/, const ecs::components::Mist& mist,

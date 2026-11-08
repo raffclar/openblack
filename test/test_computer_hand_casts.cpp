@@ -54,6 +54,30 @@ TEST(ComputerHand, ChantStopsWhenTheWorshippersCannotStart)
 	}
 	EXPECT_FALSE(Process(action, world.view));
 	EXPECT_FALSE(Busy(action));
+	// When the god may not start the chant, it never tells the icon to start
+	EXPECT_EQ(world.chantStarts, 0);
+}
+
+TEST(ComputerHand, ChantStartsOnlyWhenTheGodMayStartIt)
+{
+	FakeWorld world;
+	world.startWorks = true;
+	HandAction action;
+	Add(action, StepKind::MakeWorshippersChantForSpellNoWait,
+	    {Argument {.number = static_cast<int32_t>(MagicType::Food)}, Argument {.object = k_Icon}});
+	EXPECT_TRUE(Process(action, world.view)); // the start
+	EXPECT_TRUE(Process(action, world.view));
+	EXPECT_EQ(world.chantStarts, 1);
+	EXPECT_EQ(action.part, 2);
+	// An icon that charges already needs no new start
+	world.charging = true;
+	Add(action, StepKind::MakeWorshippersChantForSpellNoWait,
+	    {Argument {.number = static_cast<int32_t>(MagicType::Food)}, Argument {.object = k_Icon}});
+	for (int turn = 0; turn < 4; ++turn)
+	{
+		Process(action, world.view);
+	}
+	EXPECT_EQ(world.chantStarts, 1);
 }
 
 TEST(ComputerHand, ChantWaitsForTheFullCharge)

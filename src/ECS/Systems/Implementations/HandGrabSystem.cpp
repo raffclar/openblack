@@ -1137,7 +1137,7 @@ void HandGrabSystem::StartPull(HandGrab& grab, const Frame& frame)
 	// A new pull starts from the place, the turn and the size of the thing in the world, not from the lean of an
 	// earlier pull
 	_world->ForgetPulledPose(object);
-	const auto pose = _world->PoseOf(object);
+	const auto pose = _world->PullStartPoseOf(object);
 	hand_grab::Tug tug {.axes = pose.axes, .base = pose.origin};
 	// The pull works in the plane of the land under the thing, at the height the hand's drop below the camera reaches
 	// when scaled from the hand's distance across the ground to the base's. The hand is where the cursor puts it.
@@ -1790,7 +1790,8 @@ glm::vec3 HandGrabSystem::UpdateOffer(HandGrab& grab, const Frame& frame)
 		return frame.target;
 	}
 	// While the creature reaches, the hand meets its hand at the moment it takes the thing; moved too far from the
-	// creature's hand, the giving is called off
+	// creature's hand, the giving is called off. The hand moves to the creature's hand also in a frame that sends the
+	// call off, because the call off has an effect only at the turn.
 	const auto hand = grab.lastHand.value_or(frame.target);
 	const auto takePoint = _world->TakePointOf(grab.givenTo, hand);
 	if (!takePoint.has_value())
@@ -1799,13 +1800,9 @@ glm::vec3 HandGrabSystem::UpdateOffer(HandGrab& grab, const Frame& frame)
 	}
 	if (creature_giving::CallsOff(hand, *takePoint, _world->CreatureSizeOf(grab.givenTo)))
 	{
-		// The turn calls off the gift on every computer. Until then the hand sends the call off one time only.
-		if (grab.callingOff != grab.givenTo)
-		{
-			grab.callingOff = grab.givenTo;
-			_world->SendCommand(player_commands::GiveCallOff {.creature = grab.givenTo});
-		}
-		return frame.target;
+		// The turn calls off the gift on every computer. Until then the hand sends the call off in each frame. Thus the
+		// call off of the last frame before that turn goes to the next turn too.
+		_world->SendCommand(player_commands::GiveCallOff {.creature = grab.givenTo});
 	}
 	const auto taking = _world->TakingOf(grab.givenTo);
 	if (!taking.has_value() || taking->object != grab.object)
@@ -1859,7 +1856,6 @@ void HandGrabSystem::DoGive(PlayerNames player, entt::entity creature, entt::ent
 	}
 	grab->offeredTo = creature;
 	grab->givenTo = creature;
-	grab->callingOff = entt::null;
 	LogHandDeed(player, "gives", object);
 }
 
@@ -1920,7 +1916,6 @@ void HandGrabSystem::ForgetOffer(HandGrab& grab)
 {
 	grab.offeredTo = entt::null;
 	grab.givenTo = entt::null;
-	grab.callingOff = entt::null;
 	grab.offer = {};
 }
 

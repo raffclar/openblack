@@ -13,6 +13,9 @@
 #include <bit>
 #include <iterator>
 
+#include <glm/vec3.hpp>
+
+#include "Common/GUtilsDistance.h"
 #include "Common/X87.h"
 
 namespace openblack::ecs::climate_rules
@@ -134,6 +137,15 @@ glm::ivec2 CellNearMiddle(float angle, float distance, uint16_t middleX, uint16_
 	const float x = x87::Mul(x87::Cos(angle), distance) + static_cast<float>(middleX);
 	const float z = x87::Mul(x87::Sin(angle), distance) + static_cast<float>(middleZ);
 	return {x87::ToInteger(x), x87::ToInteger(z)};
+}
+
+uint32_t LocalStormRadius(glm::ivec2 cell, const map_coords::MapCoords& centre)
+{
+	// The cell and the middle become metres with one float product each; the heights are not part of the distance
+	const glm::vec3 point {static_cast<float>(cell.x) * map_coords::k_CellSize, 0.0f,
+	                       static_cast<float>(cell.y) * map_coords::k_CellSize};
+	const glm::vec3 middle {map_coords::ToMetres(centre.x), 0.0f, map_coords::ToMetres(centre.z)};
+	return static_cast<uint32_t>(x87::ToInteger(gutils::GetDistance(point, middle)));
 }
 
 } // namespace openblack::ecs::climate_rules

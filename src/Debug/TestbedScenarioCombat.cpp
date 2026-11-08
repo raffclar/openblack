@@ -1404,6 +1404,22 @@ void testbed_scenarios::AddCombat(std::vector<Scenario>& all)
 		    .repeatFrom = 1,
 		});
 		all.push_back({
+		    .id = "combat.blow_speed",
+		    .name = "A charge makes a blow stronger but not faster",
+		    .facet = Facet::Combat,
+		    .description = "The player's red tiger fights a blue tiger that fights by itself. The red tiger gets a blow "
+		                   "in the middle with no charge. Four seconds later it gets a blow in the middle with the full "
+		                   "charge.",
+		    .expected = "The two blows of the red tiger play at the same speed. The blow with the full charge takes "
+		                "more fight health from the blue tiger. The blows of the blue tiger also play at this speed. "
+		                "The original game does the same.",
+		    .framing = ringside,
+		    .creatures = {red(PlayerNames::PLAYER_ONE, 0.5f, 0.0f), blue(PlayerNames::PLAYER_TWO, 0.5f, 0.3f)},
+		    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f), Fight(Kind::FightBlow, 0, k_Mid, 14.0f, 0.0f),
+		                 Fight(Kind::FightBlow, 0, k_Mid, 4.0f, 1200.0f)},
+		    .repeatFrom = 1,
+		});
+		all.push_back({
 		    .id = "combat.own_end_tests",
 		    .name = "The next fight state plays in the turn that the last one ends",
 		    .facet = Facet::Combat,

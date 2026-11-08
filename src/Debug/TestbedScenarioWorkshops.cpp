@@ -90,6 +90,25 @@ void testbed_scenarios::AddWorkshopScenarios(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "objects.workshop_yard_copy_pulses",
+	    .name = "A see-through copy of a scaffold pulses at its yard place while the hand holds the scaffold",
+	    .facet = Facet::Objects,
+	    .description = "A Celtic town of the player's with a village centre and a workshop that holds the wood of one "
+	                   "scaffold, its yard towards the camera. The workshop makes the scaffold. Then the hand takes the "
+	                   "scaffold from the first place of the yard and keeps it.",
+	    .expected = "While the hand holds the scaffold, a see-through copy of the scaffold stands in the empty first place "
+	                "of the yard, turned as the place is turned. The copy fades out and in again every two seconds. At "
+	                "its strongest it is a third as strong as a solid scaffold, and it has the colour of the land's light "
+	                "there. The copy goes when the scaffold goes back into the place.",
+	    .environment = {.dispenserGrid = false, .cursor = glm::vec2(0.5f, 0.5f)},
+	    .framing = {.shot = Shot::Overview, .include = {k_Workshop - glm::vec2 {12.0f}, k_Workshop + glm::vec2 {12.0f}}},
+	    .objects = {{.type = AbodeInfo::CelticTownCentre, .offset = {0.0f, 50.0f}},
+	                {.type = AbodeInfo::CelticWorkshop, .offset = k_Workshop, .yawDegrees = 180.0f, .storedWood = 2500}},
+	    .commands = {{.kind = Command::Kind::HandTakeNear, .delaySeconds = 60.0f, .point = k_FirstPlace}},
+	    .townBeliefInPlayer = 1.0f,
+	});
+
+	all.push_back({
 	    .id = "objects.scaffold_tap_breaks",
 	    .name = "A tap breaks one scaffold off a scaffold, and a storage pit takes a scaffold as wood",
 	    .facet = Facet::Objects,
@@ -300,9 +319,9 @@ void testbed_scenarios::AddWorkshopScenarios(std::vector<Scenario>& all)
 	    .description = "The town, the scaffold and the camera of objects.scaffold_starts_building, with a hut of four "
 	                   "villagers of the town beside the village centre. The input tools/sim/hand_inputs/scaffold_build.json "
 	                   "moves the hand: it takes the scaffold, holds it still near the village centre, and puts it down.",
-	    .expected = "When the hand puts the scaffold down, a building site opens. At the same time, symbols of belief in "
-	                "the player rise from the first villagers of the hut: from a part of the town, and from one villager "
-	                "at least. The belief of the town in the player becomes larger.",
+	    .expected = "When the hand puts the scaffold down, a building site opens. At the same time, the scaffold impresses "
+	                "the first villagers of the hut: a part of the town, and one villager at least. No symbol of belief "
+	                "rises from these villagers for this impression. The belief of the town in the player becomes larger.",
 	    .environment = {.dispenserGrid = false},
 	    .framing = {.shot = Shot::Overview, .include = {k_LooseScaffold - glm::vec2 {10.0f}, k_BuildPlace + glm::vec2 {10.0f}}},
 	    .objects = {{.type = AbodeInfo::CelticTownCentre, .offset = {0.0f, 50.0f}},

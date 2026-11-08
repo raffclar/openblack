@@ -17,11 +17,12 @@
 
 #include <entt/core/hashed_string.hpp>
 #include <fmt/format.h>
-#include <glm/geometric.hpp>
 
 #include "3D/L3DMesh.h"
 #include "3D/L3DSubMesh.h"
-#include "Common/PortableMath.h"
+#include "Common/ModelInverseSquareRoot.h"
+#include "Common/X87.h"
+#include "Common/X87Vector.h"
 #include "Gui/GameFont.h"
 #include "Gui/TextDatabase.h"
 #include "Locator.h"
@@ -84,8 +85,7 @@ const std::array k_Rooms {
                    SignPlace {"SIGN MIRACLES", "HELP_TEXT_TEMPLE_SCROLLS_09", k_DefaultColour},
                },
                4},
-    // The library. The signs are paired with their texts by what they say; the order of the game's own list of
-    // their names is unverified.
+    // The library
     RoomSigns {TempleRoom::Credits,
                "credits",
                0.8f,
@@ -157,6 +157,32 @@ std::optional<size_t> TempleSigns::MainRoomSignOfDoor(std::optional<uint32_t> do
 	return *door == 7 ? 6 : *door;
 }
 
+uint8_t TempleSigns::HighlightGrey(uint32_t milliseconds)
+{
+	// Each step rounds to a float, and the grey drops its fraction
+	const auto phase = static_cast<float>(milliseconds & 0x3FFu) * (2.0f * std::numbers::pi_v<float> / 1024.0f);
+	return static_cast<uint8_t>(static_cast<int32_t>(x87::Add(x87::Mul(x87::Sin(phase), 24.0), 230.0)));
+}
+
+TextFrame TempleSigns::FrameOf(const glm::mat4& frame, glm::vec3 min, glm::vec3 max)
+{
+	// The middle of the box goes through the frame as it is, before its axes are made unit long. Each step rounds to a
+	// float in this order.
+	const glm::vec3 middle = (min + max) * 0.5f;
+	TextFrame text;
+	for (glm::length_t i = 0; i < 3; ++i)
+	{
+		text.origin[i] = ((frame[0][i] * middle.x + frame[2][i] * middle.z) + frame[1][i] * middle.y) + frame[3][i];
+	}
+	for (size_t i = 0; i < 3; ++i)
+	{
+		const glm::vec3 axis(frame[static_cast<glm::length_t>(i)]);
+		text.axes.at(i) = axis * gutils::ModelInverseSquareRoot(x87::Dot<x87::SumOrder::Xyz>(axis, axis));
+	}
+	text.axes[1] = -text.axes[1];
+	return text;
+}
+
 void TempleSigns::Append(std::vector<OrientedTextVertex>& vertices, TempleRoom room, std::optional<size_t> highlighted,
                          uint32_t milliseconds) const
 {
@@ -165,9 +191,7 @@ void TempleSigns::Append(std::vector<OrientedTextVertex>& vertices, TempleRoom r
 	{
 		return;
 	}
-	// The highlighted label's grey, a second round
-	const auto phase = static_cast<float>(milliseconds & 0x3FFu) * (2.0f * std::numbers::pi_v<float> / 1024.0f);
-	const auto grey = static_cast<uint8_t>(portable_math::Sin(phase) * 24.0f + 230.0f);
+	const auto grey = HighlightGrey(milliseconds);
 	const float size = rooms->size * 2.1f;
 	const float stretch = rooms->stretch * 0.9f;
 	size_t index = 0;
@@ -182,16 +206,7 @@ void TempleSigns::Append(std::vector<OrientedTextVertex>& vertices, TempleRoom r
 		{
 			continue;
 		}
-		// The sign's frame with its axes made unit long and its y axis turned round, at the middle of its box
-		TextFrame frame;
-		for (size_t i = 0; i < 3; ++i)
-		{
-			const auto axis = glm::vec3(sign.frame[static_cast<glm::length_t>(i)]);
-			const auto length = glm::length(axis);
-			frame.axes.at(i) = length > 0.0f ? axis / length : axis;
-		}
-		frame.axes[1] = -frame.axes[1];
-		frame.origin = glm::vec3(sign.frame * glm::vec4((sign.min + sign.max) * 0.5f, 1.0f));
+		const auto frame = FrameOf(sign.frame, sign.min, sign.max);
 		const int across = rooms->alongX ? 0 : 1;
 		// Centred along the text and down its letters
 		const float x = _font.GetWidth(sign.text, size) * stretch * -0.5f;

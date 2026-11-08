@@ -26,7 +26,7 @@ void openblack::ecs::reflection::RegisterFields_Values_l(entt::meta_ctx& context
 {
 	Reflect<openblack::LandLightInputs>(context, ValueOnly {})
 	    .Field<&openblack::LandLightInputs::skyType>("skyType")
-	    .Field<&openblack::LandLightInputs::alignment>("alignment")
+	    .Field<&openblack::LandLightInputs::sky>("sky")
 	    .Field<&openblack::LandLightInputs::overcast>("overcast")
 	    .Field<&openblack::LandLightInputs::flash>("flash");
 	Reflect<openblack::LightCone>(context, ValueOnly {})

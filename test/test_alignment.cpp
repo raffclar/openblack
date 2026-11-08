@@ -128,7 +128,7 @@ TEST_F(Alignment, StartsNeutral)
 {
 	EXPECT_EQ(_alignment.GetPlayerAlignment(PlayerNames::PLAYER_ONE), 0.0f);
 	EXPECT_EQ(_alignment.GetCameraAlignment(), 0.0f);
-	EXPECT_EQ(_alignment.GetSkyAlignment(), 0.0f);
+	EXPECT_EQ(_alignment.GetSkyLand(), 1.0f);
 }
 
 TEST_F(Alignment, PlayersAreHeldBetweenEvilAndGood)
@@ -291,17 +291,17 @@ TEST_F(Alignment, TheSkyTurnsAWholeASecondOfGameTime)
 	_alignment.SetPlayerAlignment(PlayerNames::PLAYER_ONE, -1.0f);
 	_alignment.UpdatePlayersTurn();
 	_alignment.Update(500ms);
-	EXPECT_FLOAT_EQ(_alignment.GetSkyAlignment(), -0.5f);
+	EXPECT_FLOAT_EQ(_alignment.GetSkyLand(), 1.5f);
 	// Not while paused
 	_alignment.Update(0ms);
-	EXPECT_FLOAT_EQ(_alignment.GetSkyAlignment(), -0.5f);
+	EXPECT_FLOAT_EQ(_alignment.GetSkyLand(), 1.5f);
 	_alignment.Update(2000ms);
-	EXPECT_FLOAT_EQ(_alignment.GetSkyAlignment(), -1.0f);
+	EXPECT_FLOAT_EQ(_alignment.GetSkyLand(), 2.0f);
 	// And back the other way
 	_alignment.SetPlayerAlignment(PlayerNames::PLAYER_ONE, 1.0f);
 	_alignment.UpdatePlayersTurn();
 	_alignment.Update(1500ms);
-	EXPECT_FLOAT_EQ(_alignment.GetSkyAlignment(), 0.5f);
+	EXPECT_FLOAT_EQ(_alignment.GetSkyLand(), 0.5f);
 }
 
 TEST_F(Alignment, WhatTheirDeedsChangeScalesOneTurnsChange)

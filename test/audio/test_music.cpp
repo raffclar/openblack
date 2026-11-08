@@ -608,14 +608,21 @@ TEST(Music, AChannelStartsPartWayThroughItsStartChunkWhenAsked)
 
 TEST(GameMusic, FightsOnTheFirstLandsHaveTheirOwnMusicAndLaterOnesTheBigFight)
 {
-	EXPECT_EQ(GameMusic::SelectFightType(0, false), MusicType::CreatureFight);
-	EXPECT_EQ(GameMusic::SelectFightType(1, false), MusicType::CreatureFight);
-	EXPECT_EQ(GameMusic::SelectFightType(3, false), MusicType::CreatureFight);
-	EXPECT_EQ(GameMusic::SelectFightType(4, false), MusicType::CreatureBigFight);
-	EXPECT_EQ(GameMusic::SelectFightType(5, false), MusicType::CreatureBigFight);
+	EXPECT_EQ(GameMusic::SelectFightType(0, false, false), MusicType::CreatureFight);
+	EXPECT_EQ(GameMusic::SelectFightType(1, false, false), MusicType::CreatureFight);
+	EXPECT_EQ(GameMusic::SelectFightType(3, false, false), MusicType::CreatureFight);
+	EXPECT_EQ(GameMusic::SelectFightType(4, false, false), MusicType::CreatureBigFight);
+	EXPECT_EQ(GameMusic::SelectFightType(5, false, false), MusicType::CreatureBigFight);
 	// A negative land number counts as a later land
-	EXPECT_EQ(GameMusic::SelectFightType(-1, false), MusicType::CreatureBigFight);
-	EXPECT_EQ(GameMusic::SelectFightType(1, true), MusicType::CreatureBigFight);
+	EXPECT_EQ(GameMusic::SelectFightType(-1, false, false), MusicType::CreatureBigFight);
+	EXPECT_EQ(GameMusic::SelectFightType(1, true, false), MusicType::CreatureBigFight);
+}
+
+TEST(GameMusic, FightsOfANetworkGameHaveTheBigFightMusicOnEveryLand)
+{
+	EXPECT_EQ(GameMusic::SelectFightType(0, false, true), MusicType::CreatureBigFight);
+	EXPECT_EQ(GameMusic::SelectFightType(3, false, true), MusicType::CreatureBigFight);
+	EXPECT_EQ(GameMusic::SelectFightType(3, true, true), MusicType::CreatureBigFight);
 }
 
 TEST(GameMusic, WithNoBanksLoadedNoMusicHasABank)
@@ -647,9 +654,12 @@ public:
 		return MusicBankInfo {.groupId = 1, .chunkCount = 4};
 	}
 
+	void StopAllSoundEffects() override { ++effectStops; }
+
 	std::vector<std::string> played;
 	std::function<void()> lastFinished;
 	std::vector<MusicPiecePosition> starts;
+	int effectStops {0};
 };
 
 /// The game music writes to the audio log, which the tests do not make
@@ -834,4 +844,41 @@ TEST(MusicPlayer, TheMasterVolumeMixesInWholeSteps)
 	music.SetMasterVolume(500);
 	EXPECT_EQ(music.GetMasterVolume(), 127u);
 	EXPECT_FLOAT_EQ(stream.volume, 16251.0f / 32767.0f);
+}
+
+TEST(GameMusic, TheFirstTurnInTheTempleStopsEverySoundEffectOnceUntilATurnOutside)
+{
+	MakeAudioLog();
+	openblack::Locator::audio::emplace<MusicCountingAudio>();
+	openblack::Locator::sounds::emplace<openblack::audio::GameSoundRequests>();
+	auto& audio = static_cast<MusicCountingAudio&>(openblack::Locator::audio::value());
+	{
+		GameMusic music;
+		auto inputs = QuietLandTurn();
+		music.ProcessTurn(inputs);
+		EXPECT_EQ(audio.effectStops, 0);
+		// The first turn in the temple stops the sound effects, the next turns there do not
+		inputs.inCitadel = true;
+		music.ProcessTurn(inputs);
+		music.ProcessTurn(inputs);
+		EXPECT_EQ(audio.effectStops, 1);
+		// A turn of a film does not get to the temple's music, so it does not clear the stop
+		inputs.film = true;
+		music.ProcessTurn(inputs);
+		inputs.film = false;
+		music.ProcessTurn(inputs);
+		EXPECT_EQ(audio.effectStops, 1);
+		// A new land does not clear the stop
+		music.Reset();
+		music.ProcessTurn(inputs);
+		EXPECT_EQ(audio.effectStops, 1);
+		// After a turn outside, the next turn in the temple stops them again
+		inputs.inCitadel = false;
+		music.ProcessTurn(inputs);
+		inputs.inCitadel = true;
+		music.ProcessTurn(inputs);
+		EXPECT_EQ(audio.effectStops, 2);
+	}
+	openblack::Locator::sounds::reset();
+	openblack::Locator::audio::reset();
 }

@@ -28,6 +28,10 @@
 // interface. A body draws only when its sphere is on the screen. A hand never holds a creature. The statistics box draws
 // last, with the colours that the world's draw of the frame gave each body: the light and the haze at its place, or a
 // white light and no added colour when the world did not draw it.
+//
+// In the temple the game draws the copies of the creatures in the rooms, then the statistics box. A frame in the temple
+// does not draw the land, so it does not change the colours of the bodies in the world. The statistics box then uses
+// the colours that the last frame with the land gave each body.
 namespace openblack::creature_hair_light
 {
 
@@ -115,8 +119,14 @@ using Carried = std::variant<Colours, Kept>;
 [[nodiscard]] Carried Carry(const Plan& plan, std::span<const std::optional<Colours>> known, const Carried& before);
 
 /// The colours of the hair that the statistics box draws, when they are colours of its own. A body that the world's draw
-/// of the frame drew has the colours at its place in the world, so the result is empty. Else the body has a white light
-/// and no added colour.
+/// of the last frame with the land drew has the colours at its place in the world, so the result is empty. Else the
+/// body has a white light and no added colour.
 [[nodiscard]] std::optional<Colours> StatisticsBoxColours(bool drawnByTheWorld) noexcept;
+
+/// Whether a body has the colours that the world's draw gave it at its place, after a frame. A frame that draws the land
+/// first gives every body a white light and no added colour, then the world's draw gives each body that it draws the
+/// colours at its place. A frame that does not draw the land changes neither colour, so the body keeps what it had. A
+/// new body has a white light and no added colour.
+[[nodiscard]] bool HasWorldColours(bool landFrame, bool drawnByTheWorld, bool hadWorldColours) noexcept;
 
 } // namespace openblack::creature_hair_light

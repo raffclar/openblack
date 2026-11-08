@@ -12,12 +12,14 @@
 
 #include <bit>
 #include <numbers>
+#include <vector>
 
 #include <glm/geometric.hpp>
 #include <gtest/gtest.h>
 
 #include "3D/MapCoords.h"
 #include "Camera/CameraZoomer.h"
+#include "Common/GUtilsDistance.h"
 #include "ECS/TownAggression.h"
 #include "InfoConstants.h"
 #include "Magic/ForestRules.h"
@@ -216,7 +218,7 @@ TEST(ShieldRules, TheShelterDirectionIsTheGameAngleBetweenTheMapPositions)
 	const auto place = shield::ShelterAt({0.0f, 0.0f}, {100.0f, 0.1f}, 30.0f, shield::k_ShelterTurnRange * 0.5f, 0.0f);
 	EXPECT_FLOAT_EQ(place.y, 0.0f);
 	const auto look = shield::LookOut({0.0f, 0.0f}, {10.0f, 0.01f}, shield::k_ShelterTurnRange * 0.5f);
-	EXPECT_FLOAT_EQ(look.y, map_coords::ToMetres(map_coords::ToFixed(0.01f)));
+	EXPECT_EQ(look.y, map_coords::ToFixed(0.01f));
 	// One with nowhere to hide from a fallen shield runs on away from its middle, the run cut to whole map units
 	const auto run = shield::AwayFrom({0.0f, 0.0f}, {10.0f, 0.0f}, shield::k_ShelterTurnRange * 0.5f, 12.5f);
 	EXPECT_FLOAT_EQ(run.x, map_coords::ToMetres(map_coords::ToFixed(10.0f) + map_coords::ToFixedGUtils(12.5f)));
@@ -248,7 +250,18 @@ TEST(ShieldRules, VillagersOfATownReactOnlyWhenItWasAttackedLately)
 	EXPECT_EQ(shield::VillagerAgainTurns(true, 10, 100, false, 30), 0u);
 	EXPECT_EQ(shield::VillagerAgainTurns(false, 9999, 100, true, 30), 30u);
 	const auto look = shield::LookOut({0.0f, 0.0f}, {10.0f, 0.0f}, shield::k_ShelterTurnRange * 0.5f);
-	EXPECT_NEAR(look.x, 11.0f, k_Epsilon);
+	EXPECT_EQ(look.x, map_coords::ToFixed(10.0f) + map_coords::ToFixedGUtils(1.0f));
+	EXPECT_EQ(look.y, 0);
+}
+
+TEST(ShieldRules, ASheltersLookPointStaysInWholeMapUnits)
+{
+	// A look point one metre on from here is 8090858 map units across. Kept in metres, it would come back one unit
+	// lower, so the point stays in map units.
+	const float x = map_coords::ToMetres(8084305);
+	const auto look = shield::LookOut({0.0f, 0.0f}, {x, 0.0f}, shield::k_ShelterTurnRange * 0.5f);
+	EXPECT_EQ(look.x, 8090858);
+	EXPECT_EQ(map_coords::ToFixed(map_coords::ToMetres(look.x)), 8090857);
 }
 
 TEST(ShieldRules, OtherPlayersCreaturesWalkRoundAShield)
@@ -311,6 +324,24 @@ TEST(ForestRules, TreesFurtherOutGrowSmaller)
 	EXPECT_FLOAT_EQ(forest::TargetScale(11.0f), 0.5f);
 }
 
+TEST(ForestRules, ATreeOfTheSpiralStandsAtTheMiddlePlusItsOffsetCutToMapUnits)
+{
+	const auto spot = forest::TreeSpot({100.0f, 200.0f}, {3.3f, -7.7f});
+	EXPECT_EQ(spot.x, map_coords::ToFixed(103.3f));
+	EXPECT_EQ(spot.z, map_coords::ToFixed(192.3f));
+	EXPECT_EQ(spot.altitude, 0.0f);
+}
+
+TEST(ForestRules, ATreesSizeComesFromTheDistanceBetweenTheMapPositions)
+{
+	const auto centre = map_coords::FromMetres({100.0f, 200.0f});
+	const auto spot = forest::TreeSpot({100.0f, 200.0f}, {3.3f, -7.7f});
+	const float inMapUnits = forest::TargetScale(gutils::GetDistanceInMetres(centre, spot));
+	const float inMetres = forest::TargetScale(glm::distance(map_coords::ToMetres(centre), map_coords::ToMetres(spot)));
+	ASSERT_NE(inMapUnits, inMetres);
+	EXPECT_EQ(forest::TargetScaleAt(centre, spot), inMapUnits);
+}
+
 TEST(ForestRules, ItAffordsItsTreesWhileItHasStrength)
 {
 	EXPECT_EQ(forest::TreesWeCanAfford(-1, 18, 1.0f), 18u);
@@ -320,6 +351,16 @@ TEST(ForestRules, ItAffordsItsTreesWhileItHasStrength)
 	EXPECT_EQ(forest::MaxObjectsToCreate(-1, 18, false, std::nullopt), 18u);
 	EXPECT_EQ(forest::MaxObjectsToCreate(-1, 18, true, std::nullopt), 0u);
 	EXPECT_EQ(forest::MaxObjectsToCreate(-1, 18, true, 7u), 7u);
+}
+
+TEST(ForestRules, AForestHasTheTreesThatAreInTheWorldAtThisMoment)
+{
+	const std::vector<entt::entity> trees {entt::entity {1}, entt::entity {2}, entt::entity {3}, entt::entity {4}};
+	// Tree 2 went into a store in this turn, before the forest's own turn removed it from the list. Tree 3 is in the
+	// hand, which keeps it in the world and in the forest.
+	const auto inWorld = [](entt::entity tree) { return tree != entt::entity {2}; };
+	EXPECT_EQ(forest::StandingTrees(trees, inWorld), 3u);
+	EXPECT_EQ(forest::StandingTrees({}, inWorld), 0u);
 }
 
 TEST(ForestRules, TheGroundsKindsOfTreeAreRolledFor)
