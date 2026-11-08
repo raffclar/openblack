@@ -282,7 +282,14 @@ town_homes::Homes GameHomes()
 	    },
 	    .leaving = [](entt::entity villager) { villager_home::LeavingHome(villager); },
 	    .atHome = [](entt::entity villager) { return Locator::entitiesRegistry::value().AllOf<AtHome>(villager); },
-	    .leavingTown = [](entt::entity villager, entt::entity town) { villager_breeding::OrphanChildrenOf(villager, town); }};
+	    .leavingTown = [](entt::entity villager, entt::entity town) { villager_breeding::OrphanChildrenOf(villager, town); },
+	    .joinedTown =
+	        [](entt::entity town) {
+		        if (Locator::worshipSiteSystem::has_value())
+		        {
+			        Locator::worshipSiteSystem::value().PersonJoinedTown(town);
+		        }
+	        }};
 }
 
 /// Buildings further off than this are never the nearest

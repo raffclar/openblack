@@ -225,7 +225,6 @@ bool town_homes::AddVillagerToTown(Registry& registry, const Homes& homes, entt:
 	{
 		return false;
 	}
-	// TODO(villagers): the town's head counts take the villager in, and a town's first person sets up its worship site
 	auto& person = registry.Get<Villager>(villager);
 	person.town = town;
 	const auto abode = person.abode;
@@ -236,12 +235,17 @@ bool town_homes::AddVillagerToTown(Registry& registry, const Homes& homes, entt:
 			LeaveAbode(registry, homes, abode, villager);
 			person.abode = entt::null;
 		}
+		// When the town finds a home for the villager, the town does not look for its worship site
 		if (const auto home = FindAbodeWithSpace(registry, homes, town, villager, 0.0f); home != entt::null)
 		{
 			AddVillagerToAbode(registry, homes, home, villager);
 			return true;
 		}
 		MakeHomeless(registry, homes, villager);
+	}
+	if (homes.joinedTown)
+	{
+		homes.joinedTown(town);
 	}
 	return true;
 }

@@ -247,6 +247,62 @@ protected:
 constexpr AbodeRoom k_Hut {.maxAdults = 4, .maxChildren = 2, .functional = true, .built = true, .tooCrowded = 0.75f};
 } // namespace
 
+TEST_F(TownHomesTest, AVillagerThatTheTownMakesHomelessTellsTheTownForItsWorshipSite)
+{
+	const glm::vec3 here(0.0f);
+	const auto villager = MakeVillager(here, Villager::Sex::MALE);
+	std::vector<entt::entity> told;
+	auto homes = Rooms();
+	homes.joinedTown = [&told](entt::entity joined) { told.push_back(joined); };
+	ASSERT_TRUE(town_homes::AddVillagerToTown(registry, homes, town, villager));
+	EXPECT_EQ(Homeless(), std::vector<entt::entity> {villager});
+	EXPECT_EQ(told, std::vector<entt::entity> {town});
+}
+
+TEST_F(TownHomesTest, AVillagerThatTheTownFindsAHomeForDoesNotTellTheTown)
+{
+	const glm::vec3 here(0.0f);
+	const auto hut = MakeAbode(here, k_Hut);
+	const auto villager = MakeVillager(here, Villager::Sex::MALE);
+	std::vector<entt::entity> told;
+	auto homes = Rooms();
+	homes.joinedTown = [&told](entt::entity joined) { told.push_back(joined); };
+	ASSERT_TRUE(town_homes::AddVillagerToTown(registry, homes, town, villager));
+	EXPECT_EQ(registry.Get<Villager>(villager).abode, hut);
+	EXPECT_TRUE(told.empty());
+}
+
+TEST_F(TownHomesTest, AVillagerThatMovesIntoABuildingOfANewTownTellsTheTown)
+{
+	// The villager has its home first, then it joins the town of the home
+	const glm::vec3 here(0.0f);
+	const auto hut = MakeAbode(here, k_Hut);
+	const auto villager = MakeVillager(here, Villager::Sex::FEMALE);
+	std::vector<entt::entity> told;
+	auto homes = Rooms();
+	homes.joinedTown = [&told](entt::entity joined) { told.push_back(joined); };
+	town_homes::AddVillagerToAbode(registry, homes, hut, villager);
+	EXPECT_EQ(registry.Get<Villager>(villager).town, town);
+	EXPECT_EQ(told, std::vector<entt::entity> {town});
+
+	// A villager that moves into another building of its own town does not join the town again
+	const auto second = MakeAbode(here, k_Hut);
+	told.clear();
+	town_homes::AddVillagerToAbode(registry, homes, second, villager);
+	EXPECT_TRUE(told.empty());
+}
+
+TEST_F(TownHomesTest, NobodyTellsATownNobodyCanLiveIn)
+{
+	registry.Get<Town>(town).uninhabitable = true;
+	const auto villager = MakeVillager(glm::vec3(0.0f), Villager::Sex::MALE);
+	std::vector<entt::entity> told;
+	auto homes = Rooms();
+	homes.joinedTown = [&told](entt::entity joined) { told.push_back(joined); };
+	EXPECT_FALSE(town_homes::AddVillagerToTown(registry, homes, town, villager));
+	EXPECT_TRUE(told.empty());
+}
+
 TEST_F(TownHomesTest, TheFirstAdultManAndWomanToMoveInAreTheCoupleUntilOneDies)
 {
 	const glm::vec3 here(0.0f);
