@@ -75,6 +75,7 @@
 #include "ECS/Components/TurnAngles.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/GamePlayers.h"
+#include "ECS/LivingFacing.h"
 #include "ECS/Map.h"
 #include "ECS/MazePuzzleRules.h"
 #include "ECS/ObjectPhysics.h"
@@ -1144,11 +1145,16 @@ hand_grab::HandGrabWorldInterface::Pose GameHandGrabWorld::PullStartPoseOf(entt:
 	// The game makes the axes again from the angles that the thing keeps. A thing with no kept angles starts from its turn.
 	const auto axes = ecs::placed_turn::KeptWorldAxesOf(registry.TryGet<const components::TurnAngles>(object), *transform,
 	                                                    ecs::placed_turn::CanLean(registry, object));
-	if (!axes.has_value())
+	if (axes.has_value())
 	{
-		return PoseOf(object);
+		return {.axes = *axes, .origin = transform->position};
 	}
-	return {.axes = *axes, .origin = transform->position};
+	// A villager or an animal stands upright at the angle that it keeps, also when its turn shows a different angle
+	if (const auto kept = ecs::living_facing::KeptAngleOf(registry, object); kept.has_value())
+	{
+		return {.axes = ecs::living_facing::WorldAxesOf(*kept, transform->scale.x), .origin = transform->position};
+	}
+	return PoseOf(object);
 }
 
 void GameHandGrabWorld::SetPose(entt::entity object, const Pose& pose)
