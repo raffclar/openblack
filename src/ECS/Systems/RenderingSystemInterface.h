@@ -401,10 +401,10 @@ public:
 	virtual void SetLayoutDirty() = 0;
 	virtual void PrepareDraw(bool drawBoundingBox, bool drawFootpaths, bool drawStreams, DrawUse use) = 0;
 	virtual const RenderContext& GetContext() = 0;
-	/// The detail that a tree of the land is drawn in this frame, as the bit that its mesh's parts name it by (see
-	/// graphics::mesh_detail::LevelBit). None when the frame does not draw the tree as a mesh. Ask it before the frame is
-	/// drawn, after the camera moved.
-	[[nodiscard]] virtual std::optional<uint8_t> TreeDetailNow(entt::entity /*tree*/) { return std::nullopt; }
+	/// The detail that a thing of the land is drawn in this frame, as the bit that its mesh's parts name it by (see
+	/// graphics::mesh_detail::LevelBit). None when the frame does not draw the thing whole as a mesh by itself. Ask it
+	/// before the frame is drawn, after the camera moved.
+	[[nodiscard]] virtual std::optional<uint8_t> DetailNow(entt::entity /*thing*/) { return std::nullopt; }
 	inline ~RenderingSystemInterface() = default;
 };
 } // namespace openblack::ecs::systems

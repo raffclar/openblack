@@ -370,10 +370,10 @@ std::optional<fire::graphic::Anchor> RandomPointOn(entt::entity object)
 		    .bone = drawnByBones ? std::optional(static_cast<uint32_t>(bone)) : std::nullopt,
 		};
 	}
-	// A tree's flame starts on the parts of the detail that the frame draws the tree in
-	const auto levels = fire::graphic::FlameLevels(IsTree(object) && Locator::rendereringSystem::has_value()
-	                                                   ? Locator::rendereringSystem::value().TreeDetailNow(object)
-	                                                   : std::nullopt);
+	// The flame starts on the parts of the detail that the frame draws the thing in: a tree, a dead tree, a building or a
+	// feature
+	const auto levels = fire::graphic::FlameLevels(
+	    Locator::rendereringSystem::has_value() ? Locator::rendereringSystem::value().DetailNow(object) : std::nullopt);
 	size_t triangles = 0;
 	const auto partOfLevels = [levels](const graphics::L3DSubMesh& subMesh) {
 		return fire::graphic::FlameStartsOnPart(subMesh.GetFlags().lodMask, levels);

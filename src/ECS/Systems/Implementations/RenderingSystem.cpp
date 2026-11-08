@@ -1932,6 +1932,70 @@ void RenderingSystem::UploadPartialBuilds()
 	                        static_cast<uint32_t>(count * sizeof(RenderContext::ObjectInstance))));
 }
 
+std::optional<uint8_t> RenderingSystem::DetailNow(entt::entity thing)
+{
+	// The same steps as the draw of the things of the land takes for one thing (see UploadInstances)
+	const auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(thing) || !registry.AllOf<Mesh, Transform>(thing))
+	{
+		return std::nullopt;
+	}
+	if (registry.AllOf<Tree>(thing))
+	{
+		return TreeDetailNow(thing);
+	}
+	if (registry.AnyOf<TempleInteriorPart, AtHome, HiddenByState, VillageTotemGhostHidden, ScaffoldGhost>(thing) ||
+	    HiddenHighlight(registry, thing))
+	{
+		return std::nullopt;
+	}
+	if (const auto* totem = registry.TryGet<const VillageTotem>(thing);
+	    totem != nullptr && !openblack::ecs::village_totem::Shows(openblack::ecs::world_objects::LifeOf(thing)))
+	{
+		return std::nullopt;
+	}
+	const auto& mesh = registry.Get<const Mesh>(thing);
+	const auto& transform = registry.Get<const Transform>(thing);
+	const auto drawnPlace = openblack::ecs::drawn_place::DrawnTransformOf(registry, thing, transform);
+	const auto* drawnScale = registry.TryGet<const ScaffoldDrawnScale>(thing);
+	const auto placed =
+	    physics_draw::ModelMatrix(PlacedMatrix(drawnPlace.position, drawnPlace.rotation,
+	                                           drawnScale != nullptr ? glm::vec3(drawnScale->scale) : transform.scale),
+	                              registry.TryGet<const PhysicsDrawPose>(thing));
+	const auto ownDrawnMesh = DrawnMeshOf(thing, mesh);
+	const auto* progress = registry.TryGet<const BuildProgress>(thing);
+	const auto* feature = registry.TryGet<const Feature>(thing);
+	const bool goingUp = ownDrawnMesh == mesh.id && building_construction::DrawnGoingUp(
+	                                                    progress != nullptr ? std::optional(progress->built) : std::nullopt,
+	                                                    feature != nullptr ? std::optional(feature->type) : std::nullopt);
+	const bool listed =
+	    !Locator::objectDrawListSystem::has_value() || Locator::objectDrawListSystem::value().Drawn(registry, thing);
+	const bool drawnWhole = listed && placed.has_value() && DrawnWhole(thing) && !goingUp;
+
+	const auto* detail = registry.TryGet<const DetailMeshes>(thing);
+	const bool morphs = registry.AllOf<MorphWithTerrain>(thing);
+	const auto bounding =
+	    detail != nullptr ? detail->meshes.at(static_cast<size_t>(graphics::mesh_detail::Mesh::Standard)) : ownDrawnMesh;
+	const auto& box = MeshBox(bounding);
+	const bool banded = Locator::camera::has_value() && box.has_value() &&
+	                    !openblack::ecs::high_detail_rules::DrawsHighMeshAtAnyDistance(
+	                        detail != nullptr, registry.AllOf<HighDetail>(thing), morphs) &&
+	                    (detail == nullptr || !morphs) && object_detail::Banded(registry, thing) &&
+	                    (detail != nullptr || object_detail::BandedNow(registry, thing));
+	const auto drawn = graphics::mesh_detail::DrawnMesh(drawnWhole, banded, [&] {
+		return ChooseDetail(
+		           *box, object_detail::Importance(registry, thing), *placed, transform.scale.x,
+		           [&registry, thing] { return object_detail::Disappears(registry, thing, IsTownCentre(registry, thing)); },
+		           ViewPoint::Of(Locator::camera::value()), Locator::config::value().detail.modelDetail)
+		    .mesh;
+	});
+	if (!drawn.has_value())
+	{
+		return std::nullopt;
+	}
+	return graphics::mesh_detail::LevelBit(*drawn);
+}
+
 std::optional<uint8_t> RenderingSystem::TreeDetailNow(entt::entity tree)
 {
 	// The same steps as the draw of the trees takes for one tree (see UploadTreeInstances)
