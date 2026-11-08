@@ -190,6 +190,8 @@ class SharkSystemInterface;
 class VideoSystemInterface;
 class LoadingScreenSystemInterface;
 struct LoadingScreenHooks;
+class LoadFinishSystemInterface;
+struct LoadFinishHooks;
 class HelpTextSystemInterface;
 class TurnCheerSystemInterface;
 class GameAudioSystemInterface;
@@ -314,6 +316,8 @@ void InitializeClient(const player_profiles::Store& profiles);
 bool InitializeGame(const player_profiles::Store& profiles) noexcept;
 /// The screens of the start and of the loads of the game. Only the game's library has this function.
 void InitializeLoadingScreens(ecs::systems::LoadingScreenHooks hooks);
+/// The work behind the loading screen at the end of a load. Only the game's library has this function.
+void InitializeLoadFinish(ecs::systems::LoadFinishHooks hooks);
 /// The logs and tools of a tool's run. The caller keeps the request of the run until the services shut down. Only the
 /// game's library has this function.
 void InitializeToolRun(const std::optional<sim_run::Request>& simulation, std::optional<FightAutopilotRequest> fightAutopilot,
@@ -496,6 +500,9 @@ struct Locator
 	/// The screens that the game shows as it starts and while a land loads, and the timers of the start. The game makes
 	/// it. The dedicated server has none.
 	using loadingScreenSystem = entt::locator<ecs::systems::LoadingScreenSystemInterface>;
+	/// The work behind the loading screen that makes the first frames of a land fast. The game makes it. The dedicated
+	/// server has none.
+	using loadFinishSystem = entt::locator<ecs::systems::LoadFinishSystemInterface>;
 	using helpTextSystem = entt::locator<ecs::systems::HelpTextSystemInterface>;
 	/// The advisors' voices that this computer plays. The dedicated server does not make them.
 	using advisorVoiceSystem = entt::locator<ecs::systems::AdvisorVoiceSystemInterface>;

@@ -286,7 +286,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 			desc.frameBuffer->Bind(translucentViewId);
 		}
 		_shaderManager->SetViewOrder(translucentViewId, ViewOrder::DepthDescending);
-		_shaderManager->SetCamera(translucentViewId, *desc.camera);
+		_shaderManager->SetCamera(translucentViewId, *desc.camera, detail::SceneTarget(desc.frameBuffer));
 	}
 	// Outside the temple, the hand, the thing that it holds and the creature that the game mirrors in the sea are drawn
 	// over all of the mirrored world, in their order
@@ -300,13 +300,13 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 		}
 		bgfx::touch(static_cast<bgfx::ViewId>(mirroredViewId));
 		_shaderManager->SetViewOrder(mirroredViewId, ViewOrder::DepthAscending);
-		_shaderManager->SetCamera(mirroredViewId, *desc.camera);
+		_shaderManager->SetCamera(mirroredViewId, *desc.camera, detail::SceneTarget(desc.frameBuffer));
 	}
 	const auto cameraOrigin = desc.camera->GetOrigin();
 
-	_shaderManager->SetCamera(skyViewId, *desc.camera);
-	_shaderManager->SetCamera(landViewId, *desc.camera);
-	_shaderManager->SetCamera(desc.viewId, *desc.camera);
+	_shaderManager->SetCamera(skyViewId, *desc.camera, detail::SceneTarget(desc.frameBuffer));
+	_shaderManager->SetCamera(landViewId, *desc.camera, detail::SceneTarget(desc.frameBuffer));
+	_shaderManager->SetCamera(desc.viewId, *desc.camera, detail::SceneTarget(desc.frameBuffer));
 	_modelLight = GetModelLight();
 	if (Locator::camera::has_value())
 	{

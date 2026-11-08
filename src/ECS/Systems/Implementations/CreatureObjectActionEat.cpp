@@ -254,8 +254,10 @@ void Consume(ecs::Registry& registry, entt::entity creature, entt::entity food)
 
 float TakeInFood(entt::entity creature, std::optional<float> value)
 {
-	const auto energy = value.has_value() && Locator::creaturePhysiologySystem::has_value()
-	                        ? Locator::creaturePhysiologySystem::value().Eat(creature, *value)
+	// A thing with no food in it is taken in too, as a meal of no food. Such a meal can make a creature fat when its
+	// energy is more than full.
+	const auto energy = Locator::creaturePhysiologySystem::has_value()
+	                        ? Locator::creaturePhysiologySystem::value().Eat(creature, value.value_or(0.0f))
 	                        : 0.0f;
 	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} takes in food {}, energy {}", entt::to_integral(creature),
 	                    value.value_or(0.0f), energy);

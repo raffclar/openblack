@@ -33,6 +33,7 @@
 #include "Graphics/GraphicsHandleBgfx.h"
 #include "Graphics/IndexBuffer.h"
 #include "Graphics/Mesh.h"
+#include "Graphics/RendererDetail.h"
 #include "Graphics/ShaderManager.h"
 #include "Graphics/Texture2D.h"
 #include "Graphics/VertexBuffer.h"
@@ -202,7 +203,7 @@ void Renderer::DrawAdvisors(const DrawSceneDesc& desc) const
 	}
 	bgfx::touch(static_cast<bgfx::ViewId>(RenderPass::Advisors));
 	_shaderManager->SetViewOrder(RenderPass::Advisors, ViewOrder::Sequential);
-	_shaderManager->SetCamera(RenderPass::Advisors, camera);
+	_shaderManager->SetCamera(RenderPass::Advisors, camera, detail::SceneTarget(desc.frameBuffer));
 
 	const auto* program = _shaderManager->GetShader("Advisor");
 	const auto& island = Locator::terrainSystem::value();

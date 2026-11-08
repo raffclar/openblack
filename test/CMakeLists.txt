@@ -221,6 +221,7 @@ openblack_setup_and_add_test(test_crash_report test_crash_report.cpp)
 openblack_setup_and_add_test(test_game_clock test_game_clock.cpp)
 openblack_setup_and_add_test(test_run_seed test_run_seed.cpp)
 openblack_setup_and_add_test(test_key_bindings input/test_key_bindings.cpp)
+openblack_setup_and_add_test(test_alt_held_presses input/test_alt_held_presses.cpp)
 openblack_setup_and_add_test(test_cursor_freeze input/test_cursor_freeze.cpp)
 openblack_setup_and_add_test(test_camera_drag camera/test_camera_drag.cpp)
 openblack_setup_and_add_test(test_camera_pan camera/test_camera_pan.cpp)
@@ -603,6 +604,8 @@ openblack_setup_and_add_test(test_video_system video/test_video_system.cpp)
 target_include_directories(
   test_video_system PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/bink
 )
+# The sleep of the frame wait, which keeps its time correct over many calls
+openblack_setup_and_add_test(test_sleep_debt test_sleep_debt.cpp)
 # The videos' frames decoded ahead on a thread of their own
 openblack_setup_and_add_test(test_frame_queue video/test_frame_queue.cpp)
 target_include_directories(
@@ -697,6 +700,11 @@ if (OPENBLACK_INSPECTOR)
     test_inspector_input inspector/test_inspector_input.cpp
   )
   target_link_libraries(test_inspector_input PRIVATE inspector)
+  # input.text and input.key to the new player's name box before the first land
+  openblack_setup_and_add_test(
+    test_startup_box_input inspector/test_startup_box_input.cpp
+  )
+  target_link_libraries(test_startup_box_input PRIVATE inspector)
   openblack_setup_and_add_test(
     test_inspector_control inspector/test_inspector_control.cpp
   )
@@ -1523,6 +1531,7 @@ target_link_libraries(test_particle_save PRIVATE psys)
 target_link_libraries(test_saved_system_state PRIVATE psys)
 openblack_setup_and_add_test(test_saving_box test_saving_box.cpp)
 openblack_setup_and_add_test(test_placed_turn test_placed_turn.cpp)
+openblack_setup_and_add_test(test_living_facing test_living_facing.cpp)
 openblack_setup_and_add_test(
   test_oracle_placed_turn oracle/test_oracle_placed_turn.cpp
 )

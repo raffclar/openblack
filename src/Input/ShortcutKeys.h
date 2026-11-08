@@ -9,11 +9,20 @@
 
 #pragma once
 
+#include <cstdint>
+
 #include "Camera/ZoomToPlaces.h"
 #include "Enums.h"
 
 namespace openblack::input
 {
+
+class GameActionInterface;
+enum class BindableActionMap : uint64_t;
+
+/// Whether the press of an action came from the mouse: its mouse button is down, the wheel turns the way it has, or the
+/// press waited for Alt to go up
+[[nodiscard]] bool PressedByMouse(const GameActionInterface& actions, BindableActionMap action);
 
 /// Acts on the options screen's one-press actions that no other part of the game takes: the temple and realm keys,
 /// the villagers' names and details, and a log line for those whose feature isn't built yet. The camera and hand keys

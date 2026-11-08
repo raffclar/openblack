@@ -21,6 +21,7 @@
 #include <SDL_mouse.h>
 #include <glm/vec3.hpp>
 
+#include "AltHeldPresses.h"
 #include "BoxKeyboard.h"
 #include "CursorFreeze.h"
 #include "GameActionMapInterface.h"
@@ -106,6 +107,7 @@ public:
 	void ProcessEvent(const SDL_Event& event) final;
 	[[nodiscard]] bool IsKeyHeld(int scancode) const final;
 	[[nodiscard]] bool WheelTurned() const final { return _wheelTurned; }
+	[[nodiscard]] bool WaitedMousePress(BindableActionMap action) const final;
 
 private:
 	BindableActionMap _bindableMap = BindableActionMap::NONE;
@@ -120,6 +122,15 @@ private:
 	uint32_t PointerState(glm::ivec2* position) const;
 	/// Makes the presses queued for testing, and lets go of last frame's
 	void ApplyQueuedPresses();
+	/// True while Alt is down, on either side
+	[[nodiscard]] bool AltHeld() const;
+	/// The one-press actions of each mouse button and each turn of the wheel
+	[[nodiscard]] alt_presses::SourceActions OnePressMouseActions() const;
+	/// Presses, for this frame, the one-press actions of the mouse that waited for Alt to go up
+	void ActWaitedPresses(uint64_t actions);
+	/// Sends a press of a mouse input through the Alt rule. The actions that the press added and that act once
+	/// stay only when the rule lets them act.
+	void PressThroughAlt(alt_presses::Source source, BindableActionMap added);
 
 	/// What each of the options screen's actions is bound to, starting as the game's defaults
 	/// The computer's system says that the mouse has a wheel
@@ -168,6 +179,10 @@ private:
 	bool _wheelTurned {false};
 	/// The actions that the wheel pressed in this frame
 	uint64_t _wheelActions {0};
+	/// The one-press actions of the mouse wait while Alt is held, as the game does
+	alt_presses::AltHeldPresses _altPresses;
+	/// The one-press actions that act in this frame from mouse presses that waited for Alt
+	uint64_t _waitedMousePresses {0};
 	/// Where the cursor was at the end of the last frame, and whether the game put it somewhere in this frame
 	glm::ivec2 _lastFramePosition {0, 0};
 	bool _cursorJumped {false};

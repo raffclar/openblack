@@ -323,6 +323,21 @@ void testbed_scenarios::AddAppearance(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "interface.film_tiles_and_wait",
+	    .name = "The film in tiles, at the rate of the film",
+	    .facet = Facet::Interface,
+	    .description = "After a second, the intro film plays full screen. The game draws the picture in tiles of 256 "
+	                   "texels. While the film covers the screen, each frame of the game waits for the next frame of the "
+	                   "film.",
+	    .expected = "At 1024x768 the film fills the screen between the bars. No line shows at the edges of the tiles, "
+	                "at 40% and 80% across and at 71% down. The edges of the picture are on the same "
+	                "pixels as in the game. While the film covers the screen, the frame time is the frame time of the "
+	                "film, approximately 42 ms. When the film fades, the frame time becomes short again.",
+	    .framing = {.shot = Shot::Overview},
+	    .commands = {Command {.kind = Kind::PlayIntroFilm, .delaySeconds = 1.0f}},
+	});
+
+	all.push_back({
 	    .id = "interface.text_waits_under_film",
 	    .name = "The newest text waits under a film",
 	    .facet = Facet::Interface,

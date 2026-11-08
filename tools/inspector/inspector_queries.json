@@ -2731,7 +2731,7 @@
   "writes": true
  },
  {
-  "description": "A key by its name (\"L\", \"Space\", \"Left Shift\"), or an action by the options screen's name, pressed for a frame",
+  "description": "A key by its name (\"L\", \"Space\", \"Left Shift\"), or an action by the options screen's name, pressed for a frame. While the new player's name box waits before the first land (game.state loading \"new player\"), a key by its name goes to the box at once, such as \"Return\" to answer it",
   "kind": "object",
   "parameters": [
    {
@@ -2754,7 +2754,7 @@
   "writes": true
  },
  {
-  "description": "Types letters, as the keyboard gives them to the text box that has the focus (a name or a password). It presses no key. The answer does not repeat the letters",
+  "description": "Types letters, as the keyboard gives them to the text box that has the focus (a name or a password). It presses no key. The answer does not repeat the letters. While the new player's name box waits before the first land (game.state loading \"new player\"), the letters go to the box at once",
   "kind": "object",
   "parameters": [
    {

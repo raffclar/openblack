@@ -2190,3 +2190,26 @@ TEST(CreatureWatching, AScriptsLearnEverythingKeepsRowsPastAShortTableOnce)
 	EXPECT_TRUE(creature_watching::IsKnown(knowledge, creature_watching::KnownList::Skill, 5));
 	EXPECT_FALSE(creature_watching::IsKnown(knowledge, creature_watching::KnownList::Skill, 6));
 }
+
+TEST(CreatureLearning, TheStrokeTestsReadTheNewestActionOrActionZeroWhenNoneIsRemembered)
+{
+	std::vector<creature_learning::Context> contexts;
+	EXPECT_EQ(creature_learning::NewestActionForStroke(contexts), 0u);
+	static_cast<void>(creature_learning::Remember(contexts, {.action = 7}));
+	contexts.back().done = true;
+	static_cast<void>(creature_learning::Remember(contexts, {.action = 12}));
+	EXPECT_EQ(creature_learning::NewestActionForStroke(contexts), 12u);
+}
+
+TEST(CreatureLearning, AStrokeTeachesToEatAnyCarriedThingPastTheFirstStage)
+{
+	// Food or not, a carried thing is eaten
+	EXPECT_TRUE(creature_learning::StrokeTeachesToEat(0.1f, 1, true, true));
+	EXPECT_TRUE(creature_learning::StrokeTeachesToEat(1.0f, 2, true, true));
+	// A slap, an empty hand, an action that does not let it, or the first stage teaches nothing
+	EXPECT_FALSE(creature_learning::StrokeTeachesToEat(0.0f, 1, true, true));
+	EXPECT_FALSE(creature_learning::StrokeTeachesToEat(-0.5f, 1, true, true));
+	EXPECT_FALSE(creature_learning::StrokeTeachesToEat(0.5f, 1, true, false));
+	EXPECT_FALSE(creature_learning::StrokeTeachesToEat(0.5f, 1, false, true));
+	EXPECT_FALSE(creature_learning::StrokeTeachesToEat(0.5f, 0, true, true));
+}

@@ -144,6 +144,16 @@ uint32_t creature_learning::WholeSecondsSince(const Context& context)
 	return context.turnsSince / k_ContextTurnsPerSecond;
 }
 
+uint32_t creature_learning::NewestActionForStroke(std::span<const Context> contexts)
+{
+	return contexts.empty() ? 0 : contexts.back().action;
+}
+
+bool creature_learning::StrokeTeachesToEat(float feedback, uint32_t developmentPhase, bool actionLetsEat, bool carries)
+{
+	return feedback > 0.0f && carries && actionLetsEat && developmentPhase >= 1;
+}
+
 std::optional<size_t> creature_learning::BestContext(std::span<const Context> contexts)
 {
 	std::optional<size_t> best;

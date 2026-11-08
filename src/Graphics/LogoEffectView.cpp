@@ -21,6 +21,7 @@
 
 #include "3D/L3DSkinTexels.h"
 #include "EngineConfig.h"
+#include "Graphics/PixelCentres.h"
 #include "Graphics/RendererInterface.h"
 #include "Graphics/ShaderManager.h"
 #include "Locator.h"
@@ -184,7 +185,7 @@ void LogoEffectView::Draw(const Scene& scene)
 	bgfx::setViewClear(pass, _cleared ? BGFX_CLEAR_DEPTH : BGFX_CLEAR_COLOR | BGFX_CLEAR_DEPTH, k_Black, 1.0f, 0);
 	_cleared = true;
 	const auto view = ViewOf(scene);
-	const auto projection = ProjectionOf(scene);
+	const auto projection = pixel_centres::OnTarget(ProjectionOf(scene), glm::vec2(_size));
 	bgfx::setViewTransform(pass, &view[0][0], &projection[0][0]);
 	bgfx::touch(pass);
 

@@ -253,6 +253,8 @@ enum class KeyDownBinding : uint8_t
 /// Whether the action acts while it is held: the hand and camera actions from moving the hand to turning around the
 /// mouse, but talking. The other actions act once, when their key goes down.
 [[nodiscard]] bool IsHeldAction(BindableActionMap action) noexcept;
+/// The actions of the set that act once, when their key or mouse button goes down
+[[nodiscard]] BindableActionMap OnePressActions(BindableActionMap actions) noexcept;
 /// The actions that a key press holds. An action that acts while it is held is held with its key, and with its
 /// modifier when it has one; other modifiers held do not stop it. A one-press action is held only when it is the row
 /// that the press finds (BindingForKeyDown).

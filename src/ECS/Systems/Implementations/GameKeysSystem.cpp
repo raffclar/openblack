@@ -44,6 +44,7 @@
 #include "Input/GameActionMapInterface.h"
 #include "Input/KeyBindings.h"
 #include "Input/PlatformKeys.h"
+#include "Input/ShortcutKeys.h"
 #include "Locator.h"
 #include "Temple/TempleKeys.h"
 #include "Windowing/WindowingInterface.h"
@@ -334,13 +335,14 @@ void GameKeysSystem::UpdateTempleRoomKeys()
 
 void GameKeysSystem::SubmitKeyCommands()
 {
-	// The keys do nothing in the temple. While the debug windows have the keyboard, the controls do not change, so a key
-	// that the player pressed would read as a new press on each frame.
-	const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
-	if (inTemple || Locator::debugGui::value().StealsFocus() || !Locator::gameActionSystem::has_value())
+	// While the debug windows have the keyboard, the controls do not change, so a key that the player pressed would read
+	// as a new press on each frame
+	if (Locator::debugGui::value().StealsFocus() || !Locator::gameActionSystem::has_value())
 	{
 		return;
 	}
+	// Inside the temple, only the press of a mouse button or the wheel does the leash actions
+	const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
 	using input::BindableActionMap;
 	const auto& actions = Locator::gameActionSystem::value();
 	auto& commands = Locator::playerCommandSystem::value();
@@ -349,7 +351,8 @@ void GameKeysSystem::SubmitKeyCommands()
 	     {BindableActionMap::LEASH_UNLEASH_CREATURE, BindableActionMap::PREVIOUS_LEASH, BindableActionMap::NEXT_LEASH})
 	{
 		if (const auto key = creature_leash::KeyFor(action);
-		    key.has_value() && actions.GetChanged(action) && actions.Get(action))
+		    key.has_value() && actions.GetChanged(action) && actions.Get(action) &&
+		    input::PressDoesAction(inTemple, input::PressedByMouse(actions, action)))
 		{
 			commands.Submit(player_commands::LeashKey {.key = *key});
 		}

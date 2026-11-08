@@ -111,9 +111,15 @@ void ToggleVillagerLabels(bool names, bool details)
 	}
 	context.villagerDetailsShown = !context.villagerDetailsShown;
 }
-/// Whether the press of an action came from the mouse: its mouse button is down, or the wheel turns the way it has
+} // namespace
+
 bool PressedByMouse(const GameActionInterface& actions, BindableActionMap action)
 {
+	// A mouse press that waited for Alt acts also when its button is up
+	if (actions.WaitedMousePress(action))
+	{
+		return true;
+	}
 	const auto bindings = actions.GetKeyBindings();
 	const auto binding = std::ranges::find(bindings, action, &KeyBinding::action);
 	if (binding == bindings.end())
@@ -138,7 +144,6 @@ bool PressedByMouse(const GameActionInterface& actions, BindableActionMap action
 	}
 	return false;
 }
-} // namespace
 
 void ShortcutKeys::Update()
 {

@@ -828,6 +828,7 @@ void GameActionMap::UseInputStep(std::optional<uint32_t> step)
 void GameActionMap::Frame()
 {
 	_keysDownThisFrame.reset();
+	_waitedMousePresses = 0;
 	_doubleClickThisFrame = false;
 	_doubleClickReleaseThisFrame = false;
 	_cursorWarp.reset();
@@ -966,6 +967,54 @@ void GameActionMap::Frame()
 
 	// After the frame's starting state is kept, so that the presses show as changes
 	ApplyQueuedPresses();
+	// Without Alt, a mouse press that waited for Alt does its action
+	ActWaitedPresses(_altPresses.NewFrame(AltHeld(), OnePressMouseActions()));
+}
+
+bool GameActionMap::AltHeld() const
+{
+	return _heldKeys.test(SDL_SCANCODE_LALT) || _heldKeys.test(SDL_SCANCODE_RALT);
+}
+
+alt_presses::SourceActions GameActionMap::OnePressMouseActions() const
+{
+	const auto button = [this](int mask) -> uint64_t {
+		const auto found = _mouseBindings.find(mask);
+		return found != _mouseBindings.end() ? static_cast<uint64_t>(OnePressActions(found->second)) : 0;
+	};
+	const auto wheel = [](const std::optional<BindableActionMap>& actions) -> uint64_t {
+		return static_cast<uint64_t>(OnePressActions(actions.value_or(BindableActionMap::NONE)));
+	};
+	return {button(SDL_BUTTON_LMASK), button(SDL_BUTTON_RMASK), button(SDL_BUTTON_MMASK), wheel(_mouseWheelBinding[0]),
+	        wheel(_mouseWheelBinding[1])};
+}
+
+void GameActionMap::ActWaitedPresses(uint64_t actions)
+{
+	if (actions == 0)
+	{
+		return;
+	}
+	// The actions are held for this frame, and the next frame lets go of them
+	_bindableMap = static_cast<BindableActionMap>(static_cast<uint64_t>(_bindableMap) | actions);
+	_queuedHeld = static_cast<BindableActionMap>(static_cast<uint64_t>(_queuedHeld) | actions);
+	_waitedMousePresses |= actions;
+}
+
+void GameActionMap::PressThroughAlt(alt_presses::Source source, BindableActionMap added)
+{
+	const auto onePress = static_cast<uint64_t>(OnePressActions(added));
+	const auto acts = _altPresses.Press(source, AltHeld(), OnePressMouseActions()) & onePress;
+	_bindableMap = static_cast<BindableActionMap>((static_cast<uint64_t>(_bindableMap) & ~onePress) | acts);
+	if (source == alt_presses::Source::WheelUp || source == alt_presses::Source::WheelDown)
+	{
+		_wheelActions = (_wheelActions & ~onePress) | acts;
+	}
+}
+
+bool GameActionMap::WaitedMousePress(BindableActionMap action) const
+{
+	return (_waitedMousePresses & static_cast<uint64_t>(action)) != 0;
 }
 
 bool GameActionMap::IsKeyHeld(int scancode) const
@@ -988,6 +1037,14 @@ void GameActionMap::ProcessEvent(const SDL_Event& event)
 		_bindableMap = static_cast<BindableActionMap>(
 		    (static_cast<uint64_t>(_bindableMap) & ~static_cast<uint64_t>(ActionsForKey(_bindings, key))) |
 		    static_cast<uint64_t>(ActionsPressedByKeyDown(_bindings, key, event.key.keysym.mod, _blocked)));
+		// The game reads Alt once a frame, after the mouse's presses. Thus Alt stops the mouse presses of this frame too.
+		if (key == SDL_SCANCODE_LALT || key == SDL_SCANCODE_RALT)
+		{
+			const auto takenBack = _altPresses.AltDown(OnePressMouseActions());
+			_bindableMap = static_cast<BindableActionMap>(static_cast<uint64_t>(_bindableMap) & ~takenBack);
+			_wheelActions &= ~takenBack;
+			_waitedMousePresses &= ~takenBack;
+		}
 	}
 	// The second press of a double click with the left button marks the double click, and presses none of the button's
 	// actions again. The mark outlasts the press: it stays, through the button's letting go, until the camera takes it.
@@ -1001,6 +1058,7 @@ void GameActionMap::ProcessEvent(const SDL_Event& event)
 	}
 	else if (event.type == SDL_MOUSEBUTTONDOWN)
 	{
+		const auto before = static_cast<uint64_t>(_bindableMap);
 		const auto mod = Device().ModState();
 		const uint8_t buttonMask = SDL_BUTTON(event.button.button);
 		const uint8_t newComboMask = _currentMouseButtons | buttonMask;
@@ -1055,6 +1113,18 @@ void GameActionMap::ProcessEvent(const SDL_Event& event)
 			                                              static_cast<uint64_t>(_mouseBindings[buttonMask]));
 		}
 		_currentMouseButtons |= buttonMask;
+		// While Alt is held, the one-press actions of the button wait for Alt to go up
+		constexpr std::array<std::pair<uint8_t, alt_presses::Source>, 3> k_Sources {{
+		    {SDL_BUTTON_LEFT, alt_presses::Source::LeftButton},
+		    {SDL_BUTTON_RIGHT, alt_presses::Source::RightButton},
+		    {SDL_BUTTON_MIDDLE, alt_presses::Source::MiddleButton},
+		}};
+		if (const auto source =
+		        std::ranges::find(k_Sources, event.button.button, &std::pair<uint8_t, alt_presses::Source>::first);
+		    source != k_Sources.end())
+		{
+			PressThroughAlt(source->second, static_cast<BindableActionMap>(static_cast<uint64_t>(_bindableMap) & ~before));
+		}
 	}
 	else if (event.type == SDL_MOUSEWHEEL)
 	{
@@ -1070,18 +1140,26 @@ void GameActionMap::ProcessEvent(const SDL_Event& event)
 			_bindableMap =
 			    static_cast<BindableActionMap>(static_cast<uint64_t>(_bindableMap) |
 			                                   static_cast<uint64_t>(_mouseWheelBinding[0].value_or(BindableActionMap::NONE)));
+			// While Alt is held, a turn of the wheel goes to the held actions only
+			PressThroughAlt(alt_presses::Source::WheelUp, _mouseWheelBinding[0].value_or(BindableActionMap::NONE));
 		}
 		else if (event.wheel.y < 0)
 		{
 			_bindableMap =
 			    static_cast<BindableActionMap>(static_cast<uint64_t>(_bindableMap) |
 			                                   static_cast<uint64_t>(_mouseWheelBinding[1].value_or(BindableActionMap::NONE)));
+			PressThroughAlt(alt_presses::Source::WheelDown, _mouseWheelBinding[1].value_or(BindableActionMap::NONE));
 		}
 	}
 	else if (event.type == SDL_KEYUP)
 	{
 		const auto key = event.key.keysym.scancode;
 		_heldKeys.reset(static_cast<size_t>(key));
+		// When Alt goes up, the mouse presses that waited for it act
+		if ((key == SDL_SCANCODE_LALT || key == SDL_SCANCODE_RALT) && !AltHeld())
+		{
+			ActWaitedPresses(_altPresses.AltUp(OnePressMouseActions()));
+		}
 		// The game keeps each key press until the frame reads it, so a key that goes down and up in one frame is not lost.
 		// Its actions stay pressed for this frame and the next frame lets go of them.
 		if (_keysDownThisFrame.test(static_cast<size_t>(key)))
