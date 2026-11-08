@@ -15,6 +15,7 @@
 
 #include <algorithm>
 #include <array>
+#include <bit>
 #include <chrono>
 #include <filesystem>
 #include <limits>
@@ -27,6 +28,7 @@
 #include <gtest/gtest.h>
 
 #include "3D/HandAnimation.h"
+#include "Common/X87.h"
 #include "Hand/HandBlend.h"
 #include "Magic/HandHoldPose.h"
 
@@ -161,9 +163,10 @@ TEST_F(HandAnimationTest, PosesStayRigid)
 	{
 		for (uint32_t time = 0; time < 533; time += 37)
 		{
-			for (const auto lean : {glm::vec2(-80.0f, -80.0f), glm::vec2(0.0f), glm::vec2(80.0f, 40.0f)})
+			for (const auto lag : {glm::vec2(-80.0f, -80.0f), glm::vec2(0.0f), glm::vec2(80.0f, 40.0f)})
 			{
-				for (const auto& pose : _animation.EvaluatePoses(cycle, time, lean))
+				for (const auto& pose :
+				     _animation.EvaluatePoses(cycle, time, HandAnimation::Lean {.lag = lag, .smoothedHeight = 240.0f}))
 				{
 					for (const auto& row : pose.rotation)
 					{
@@ -180,9 +183,12 @@ TEST_F(HandAnimationTest, PosesStayRigid)
 TEST_F(HandAnimationTest, CursorLagLeansTheHand)
 {
 	using Cycle = HandAnimation::Cycle;
-	const auto centre = _animation.EvaluatePoses(Cycle::Wiggle, 0, glm::vec2(0.0f));
-	const auto left = _animation.EvaluatePoses(Cycle::Wiggle, 0, glm::vec2(-80.0f, 0.0f));
-	const auto right = _animation.EvaluatePoses(Cycle::Wiggle, 0, glm::vec2(80.0f, 0.0f));
+	const auto centre =
+	    _animation.EvaluatePoses(Cycle::Wiggle, 0, HandAnimation::Lean {.lag = glm::vec2(0.0f), .smoothedHeight = 240.0f});
+	const auto left =
+	    _animation.EvaluatePoses(Cycle::Wiggle, 0, HandAnimation::Lean {.lag = {-80.0f, 0.0f}, .smoothedHeight = 240.0f});
+	const auto right =
+	    _animation.EvaluatePoses(Cycle::Wiggle, 0, HandAnimation::Lean {.lag = {80.0f, 0.0f}, .smoothedHeight = 240.0f});
 	// Lwiggle_lr turns the root
 	float leftTurn = 0.0f;
 	float rightTurn = 0.0f;
@@ -341,4 +347,71 @@ TEST(HandRestHeight, CountsTheOriginAmongTheBones)
 	const std::array across {at(-3.0f), at(4.0f)};
 	EXPECT_FLOAT_EQ(HandAnimation::RestHeight(across), 7.0f);
 	EXPECT_FLOAT_EQ(HandAnimation::RestHeight({}), 0.0f);
+}
+
+TEST(HandLean, LayersNeedMoreThanTheSmallestLean)
+{
+	using openblack::HandAnimation;
+	const auto smallest = 0.0001f;
+	const auto above = std::nextafter(smallest, 1.0f);
+	// The sideways pose range needs a sideways lag above the smallest lean, to the left or to the right
+	EXPECT_FALSE(HandAnimation::LeanLayersFor({.lag = {0.0f, 0.0f}, .smoothedHeight = 240.0f}).sideways);
+	EXPECT_FALSE(HandAnimation::LeanLayersFor({.lag = {smallest, 0.0f}, .smoothedHeight = 240.0f}).sideways);
+	EXPECT_TRUE(HandAnimation::LeanLayersFor({.lag = {above, 0.0f}, .smoothedHeight = 240.0f}).sideways);
+	EXPECT_TRUE(HandAnimation::LeanLayersFor({.lag = {-above, 0.0f}, .smoothedHeight = 240.0f}).sideways);
+	// The forward pose range needs a smoothed cursor height above the smallest lean. The forward lag has no effect.
+	EXPECT_TRUE(HandAnimation::LeanLayersFor({.lag = {0.0f, 0.0f}, .smoothedHeight = 240.0f}).forward);
+	EXPECT_TRUE(HandAnimation::LeanLayersFor({.lag = {0.0f, 0.0f}, .smoothedHeight = above}).forward);
+	EXPECT_TRUE(HandAnimation::LeanLayersFor({.lag = {0.0f, 0.0f}, .smoothedHeight = -above}).forward);
+	EXPECT_FALSE(HandAnimation::LeanLayersFor({.lag = {0.0f, 80.0f}, .smoothedHeight = smallest}).forward);
+	EXPECT_FALSE(HandAnimation::LeanLayersFor({.lag = {0.0f, -80.0f}, .smoothedHeight = 0.0f}).forward);
+}
+
+TEST(HandLean, SpringStepsInTheGameOrder)
+{
+	using openblack::HandAnimation;
+	const float seconds = 0.016667f;
+	const HandAnimation::CursorSpring start {.position = {100.0f, 300.0f}, .velocity = {250.0f, -40.0f}};
+	const glm::vec2 mouse {130.0f, 260.0f};
+	const auto step = HandAnimation::StepSpring(start, seconds, mouse);
+	// The damping is the power function of the game's C library, not the power function of the compiler
+	const float damping = openblack::x87::Pow(0.03f, static_cast<double>(seconds));
+	for (glm::length_t axis = 0; axis < 2; ++axis)
+	{
+		const float moved = (seconds * start.velocity[axis]) + start.position[axis];
+		const float speed = ((mouse[axis] - moved) * 20.0f * seconds) + start.velocity[axis];
+		EXPECT_EQ(std::bit_cast<uint32_t>(step.position[axis]), std::bit_cast<uint32_t>(moved)) << axis;
+		EXPECT_EQ(std::bit_cast<uint32_t>(step.velocity[axis]), std::bit_cast<uint32_t>(damping * speed)) << axis;
+	}
+}
+
+TEST(HandLean, SpringKeepsTheSmoothedCursorNearTheCursor)
+{
+	using openblack::HandAnimation;
+	// A fast smoothed cursor stops 80 pixels from the cursor, on each side
+	const auto step =
+	    HandAnimation::StepSpring({.position = {0.0f, 0.0f}, .velocity = {100000.0f, -100000.0f}}, 0.1f, {50.0f, 50.0f});
+	EXPECT_EQ(step.position, glm::vec2(130.0f, -30.0f));
+	// A smoothed cursor that is not a number goes to the low limit
+	const auto lost = HandAnimation::StepSpring(
+	    {.position = {std::numeric_limits<float>::quiet_NaN(), 0.0f}, .velocity = {0.0f, 0.0f}}, 0.1f, {50.0f, 50.0f});
+	EXPECT_EQ(lost.position.x, -30.0f);
+}
+
+TEST(HandLean, SettledAtTheTopRowTheHandDoesNotLeanForwards)
+{
+	using openblack::HandAnimation;
+	// The cursor stops at the top row of the window: the smoothed cursor settles on it, and the forward lean stops
+	HandAnimation::CursorSpring top {.position = {320.0f, 80.0f}, .velocity = {0.0f, 0.0f}};
+	HandAnimation::CursorSpring below {.position = {320.0f, 81.0f}, .velocity = {0.0f, 0.0f}};
+	for (int frame = 0; frame < 6000; ++frame)
+	{
+		top = HandAnimation::StepSpring(top, 0.016667f, {320.0f, 0.0f});
+		below = HandAnimation::StepSpring(below, 0.016667f, {320.0f, 1.0f});
+	}
+	EXPECT_FALSE(
+	    HandAnimation::LeanLayersFor({.lag = {0.0f, 0.0f - top.position.y}, .smoothedHeight = top.position.y}).forward);
+	// One row lower, the hand keeps its forward lean
+	EXPECT_TRUE(
+	    HandAnimation::LeanLayersFor({.lag = {0.0f, 1.0f - below.position.y}, .smoothedHeight = below.position.y}).forward);
 }

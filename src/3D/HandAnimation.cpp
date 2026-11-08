@@ -12,6 +12,7 @@
 #include <cmath>
 
 #include <algorithm>
+#include <bit>
 #include <limits>
 
 #include <MorphFile.h>
@@ -38,8 +39,9 @@ constexpr float k_MaxCursorLag = 80.0f;
 constexpr float k_CursorStiffness = 20.0f;
 /// Fraction of the smoothed cursor's velocity left after a second
 constexpr float k_CursorDamping = 0.03f;
-/// Smaller leans are not applied
-constexpr float k_MinLean = 0.0001f;
+/// A lag or a smoothed cursor height of this size or less does not lean the hand. The value is the float 0.0001 kept as
+/// a double.
+constexpr double k_MinLean = std::bit_cast<double>(0x3F1A36E2E0000000ULL);
 /// Seconds spent cross-fading from the previous pose when the cycle or the state changes
 /// Height in world units of the hand's rest pose bones at its standard size
 constexpr float k_StandardHeight = 3.2f;
@@ -195,7 +197,31 @@ void HandAnimation::ApplyLean(const Animation& animation, uint32_t timeMs, std::
 	}
 }
 
-std::vector<HandAnimation::Pose> HandAnimation::EvaluatePoses(Cycle cycle, uint32_t timeMs, std::optional<glm::vec2> lean) const
+HandAnimation::LeanLayers HandAnimation::LeanLayersFor(const Lean& lean)
+{
+	return {.sideways = x87::Greater(std::abs(lean.lag.x), k_MinLean),
+	        .forward = x87::Greater(std::abs(lean.smoothedHeight), k_MinLean)};
+}
+
+HandAnimation::CursorSpring HandAnimation::StepSpring(CursorSpring spring, float seconds, glm::vec2 mouse)
+{
+	// The damping is the power function of the C library, at the precision of the game
+	const auto damping = x87::Pow(k_CursorDamping, static_cast<double>(seconds));
+	for (glm::length_t axis = 0; axis < 2; ++axis)
+	{
+		// The game keeps the low limit when the moved position is not above it, and the high limit when the position is
+		// not below that
+		const float moved = (seconds * spring.velocity[axis]) + spring.position[axis];
+		const float low = mouse[axis] - k_MaxCursorLag;
+		const float high = mouse[axis] + k_MaxCursorLag;
+		spring.position[axis] = !(moved > low) ? low : (moved < high ? moved : high);
+		spring.velocity[axis] = ((mouse[axis] - spring.position[axis]) * k_CursorStiffness * seconds) + spring.velocity[axis];
+		spring.velocity[axis] = damping * spring.velocity[axis];
+	}
+	return spring;
+}
+
+std::vector<HandAnimation::Pose> HandAnimation::EvaluatePoses(Cycle cycle, uint32_t timeMs, std::optional<Lean> lean) const
 {
 	std::vector<Pose> poses(_skeleton.parents.size(), Pose {.rotation = k_Identity, .translation = glm::vec3(0.0f)});
 	const auto* animation = GetAnimation(static_cast<size_t>(cycle));
@@ -208,17 +234,17 @@ std::vector<HandAnimation::Pose> HandAnimation::EvaluatePoses(Cycle cycle, uint3
 
 	if (lean)
 	{
+		const auto layers = LeanLayersFor(*lean);
 		const auto* sideways = GetAnimation(static_cast<size_t>(cycle) + 1);
-		if (sideways != nullptr && std::abs(lean->x) > k_MinLean)
+		if (sideways != nullptr && layers.sideways)
 		{
-			ApplyLean(*sideways, LeanTime(lean->x, sideways->duration), poses);
+			ApplyLean(*sideways, LeanTime(lean->lag.x, sideways->duration), poses);
 		}
-		// The game checks the smoothed cursor rather than the lag here, which is practically never zero, so the
-		// forward and backward lean is always applied
+		// The forward and backward lean checks the height of the smoothed cursor, not the lag
 		const auto* forward = GetAnimation(static_cast<size_t>(cycle) + 2);
-		if (forward != nullptr)
+		if (forward != nullptr && layers.forward)
 		{
-			ApplyLean(*forward, LeanTime(lean->y, forward->duration), poses);
+			ApplyLean(*forward, LeanTime(lean->lag.y, forward->duration), poses);
 		}
 	}
 	return poses;
@@ -240,13 +266,9 @@ void HandAnimation::StepCursorSpring(float seconds, glm::vec2 mouse)
 	}
 	else
 	{
-		for (glm::length_t axis = 0; axis < 2; ++axis)
-		{
-			_smoothedCursor[axis] = std::clamp(_smoothedCursor[axis] + (seconds * _smoothedVelocity[axis]),
-			                                   mouse[axis] - k_MaxCursorLag, mouse[axis] + k_MaxCursorLag);
-			_smoothedVelocity[axis] += (mouse[axis] - _smoothedCursor[axis]) * k_CursorStiffness * seconds;
-			_smoothedVelocity[axis] *= std::pow(k_CursorDamping, seconds);
-		}
+		const auto spring = StepSpring({.position = _smoothedCursor, .velocity = _smoothedVelocity}, seconds, mouse);
+		_smoothedCursor = spring.position;
+		_smoothedVelocity = spring.velocity;
 	}
 	_cursorLag =
 	    glm::clamp(glm::vec2(_smoothedCursor.x - mouse.x, mouse.y - _smoothedCursor.y), -k_MaxCursorLag, k_MaxCursorLag);
@@ -302,7 +324,7 @@ void HandAnimation::Update(std::chrono::microseconds dt, State state, Cycle cycl
 	}
 	const auto seconds = std::chrono::duration<float>(dt).count();
 	const auto mouse = glm::vec2(cursor);
-	std::optional<glm::vec2> lean;
+	std::optional<Lean> lean;
 	if (state == State::Creature)
 	{
 		// Held to a creature, the hand plays its cycle without leaning, and no lag is left to lean with afterwards
@@ -318,7 +340,7 @@ void HandAnimation::Update(std::chrono::microseconds dt, State state, Cycle cycl
 		// sideways as if pulling the land along.
 		const auto sideways = state == State::Normal ? _smoothedCursor.x - mouse.x : mouse.x - _smoothedCursor.x;
 		_lean = glm::clamp(glm::vec2(sideways, mouse.y - _smoothedCursor.y), -k_MaxCursorLag, k_MaxCursorLag);
-		lean = _lean;
+		lean = Lean {.lag = _lean, .smoothedHeight = _smoothedCursor.y};
 	}
 
 	auto& time = _cycleTimes.at(static_cast<size_t>(state));
