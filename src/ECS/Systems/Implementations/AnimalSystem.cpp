@@ -677,9 +677,21 @@ void AnimalSystem::SetupMoveToFixed(Animal& animal, glm::ivec2 goal, float goalH
 	animal.goalHeight = goalHeight;
 	Banked(animal, animals::SetUpMove(animal.move, goal, TurnAngleOf(animal)));
 	animal.finalState = finalState;
-	// It takes its kind's move state, and that state's clip
-	SetTopState(animal, AnimalState::MoveToPos);
+	TakeMoveState(animal);
 	SyncWorld(animal);
+}
+
+void AnimalSystem::TakeMoveState(Animal& animal)
+{
+	// A bird takes the move state and keeps its clip. Each other animal also takes the clip of the move state
+	if (animals::birds::MoveKeepsClip(animal.type))
+	{
+		SetState(animal, AnimalState::MoveToPos);
+	}
+	else
+	{
+		SetTopState(animal, AnimalState::MoveToPos);
+	}
 }
 
 void AnimalSystem::Banked(Animal& animal, const animals::Turn& turn)
@@ -744,8 +756,7 @@ void AnimalSystem::SetupMoveRoundToFixed(entt::entity entity, Animal& animal, gl
 	    registry.AllOf<MoveStateArrivedTag>(entity) ? animals::MoveStage::AtGoal : animals::MoveStage::StepThrough;
 	animal.walksRound = true;
 	animal.finalState = finalState;
-	// It takes its kind's move state, and that state's clip
-	SetTopState(animal, AnimalState::MoveToPos);
+	TakeMoveState(animal);
 	SyncWorld(animal);
 }
 
@@ -1186,27 +1197,30 @@ void AnimalSystem::FollowFlock(entt::entity entity, Animal& animal)
 	{
 		return;
 	}
-	if (!MoveTo3D(animal))
+	// The bird flies to its goal with the 3D move
+	if (MoveTo3D(animal))
 	{
-		// A land bird following chooses its flying clip afresh once it has been following as long as its clip plays
-		if (animals::birds::IsLandBird(animal.type) && animal.turnsInState * k_TurnMilliseconds >= PlayTimeOf(animal.animation))
-		{
-			const auto clip = ClipFor(animal, animal.state);
-			if (clip != animal.animation)
-			{
-				animal.animation = clip;
-				animal.clipPlace = 0;
-			}
-		}
-		return;
+		// There, it takes its final state. Then it goes on to its place in the formation, at the height of the leader.
+		// Its place in the flock gives its place in the formation.
+		SetTopState(animal, animal.finalState);
+		const auto found = std::ranges::find(flockData->members, entity);
+		// Counted from the leader, the last in the line
+		const int place = static_cast<int>(flockData->members.end() - found);
+		const auto& leader = registry.Get<const Animal>(leaderEntity);
+		const auto goal = animals::FormationGoal(leader.move.position, animal.move.position, animals::FormationSlotOf(place));
+		SetupMoveToFixed(animal, goal, leader.height, AnimalState::DecideWhatToDo);
 	}
-	// There: on to its place in the formation, by its place in the flock, at the leader's height
-	const auto found = std::ranges::find(flockData->members, entity);
-	// Counted from the leader, the last in the line
-	const int place = static_cast<int>(flockData->members.end() - found);
-	const auto& leader = registry.Get<const Animal>(leaderEntity);
-	const auto goal = animals::FormationGoal(leader.move.position, animal.move.position, animals::FormationSlotOf(place));
-	SetupMoveToFixed(animal, goal, leader.height, AnimalState::DecideWhatToDo);
+	// After each turn of the follow, a bird that played its clip to the end takes the clip of its state again. A land
+	// bird thus chooses a new flying clip
+	if (animal.turnsInState * k_TurnMilliseconds >= PlayTimeOf(animal.animation))
+	{
+		const auto clip = ClipFor(animal, animal.state);
+		if (clip != animal.animation)
+		{
+			animal.animation = clip;
+			animal.clipPlace = 0;
+		}
+	}
 }
 
 // The temples' birds
@@ -1607,8 +1621,9 @@ void AnimalSystem::Chase(entt::entity wolf, Animal& animal)
 	const auto preyPoint = Xz(registry.Get<const Transform>(prey).position);
 	if (!(glm::distance(Metres(animal.move.position), preyPoint) < map_coords::ToMetres(animal.move.speed)))
 	{
+		// The chase is a walk step to the prey that keeps the height of the hunter
 		animal.move.goal = Fixed(preyPoint);
-		MoveTo3D(animal);
+		MoveToKeepingHeight(animal);
 	}
 	if (_turn - hunt.huntStart >= info.chaseTime || !IsHuntingTargetValid(wolf, animal, prey))
 	{

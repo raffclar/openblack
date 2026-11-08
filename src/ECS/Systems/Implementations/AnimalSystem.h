@@ -124,6 +124,8 @@ private:
 	bool MoveTo3D(components::Animal& animal);
 	/// A turn's move towards its goal in the move to a place: the height above the land stays. Whether it arrived
 	bool MoveToKeepingHeight(components::Animal& animal);
+	/// The animal takes the move state when a move starts
+	static void TakeMoveState(components::Animal& animal);
 	/// It tilts into the turn it made
 	static void Banked(components::Animal& animal, const animals::Turn& turn);
 	/// A random map position between two distances of a centre that the animal can reach without circling, or the
