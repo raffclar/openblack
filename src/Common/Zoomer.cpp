@@ -123,6 +123,24 @@ void Zoomer::UpdateInline(float deltaSeconds)
 	    (((((a * a) * k_Sixth) * _coefficients.z + b * _coefficients.y) + t * _startSpeed) + a * _coefficients.x) + _startValue;
 }
 
+void Zoomer::UpdateInlineValue(float deltaSeconds)
+{
+	const float t = deltaSeconds + _elapsed;
+	_elapsed = t;
+	if (t >= _duration)
+	{
+		_value = _destination;
+		_speed = _destinationSpeed;
+		_elapsed = _duration;
+		return;
+	}
+	const float a = (t * t) * 0.5f;
+	const float b = (t * a) * k_Third;
+	_speed = ((t * _coefficients.x + a * _coefficients.y) + b * _coefficients.z) + _startSpeed;
+	_value =
+	    (((((a * a) * k_Sixth) * _coefficients.z + b * _coefficients.y) + t * _startSpeed) + a * _coefficients.x) + _startValue;
+}
+
 Zoomer3::Zoomer3(glm::vec3 point)
     : x(point.x)
     , y(point.y)

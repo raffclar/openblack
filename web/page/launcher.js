@@ -606,6 +606,16 @@ async function start(online = false) {
     // The keys go to the game again, not to the button
     event.currentTarget.blur();
   });
+  // The game thread starts each frame at a display frame of the page. The page counts its display frames in a shared
+  // array and wakes the threads that wait for the count to change. The display frames of a worker thread do not always
+  // follow the display (see the frame wait of the web platform code).
+  const displayFrames = new Int32Array(new SharedArrayBuffer(Int32Array.BYTES_PER_ELEMENT));
+  const countDisplayFrame = () => {
+    Atomics.add(displayFrames, 0, 1);
+    Atomics.notify(displayFrames, 0);
+    requestAnimationFrame(countDisplayFrame);
+  };
+  requestAnimationFrame(countDisplayFrame);
   globalThis.Module = {
     canvas,
     arguments: gameArguments,
@@ -613,7 +623,7 @@ async function start(online = false) {
     printErr: log,
     openblackWeb: {
       folder: { list, files: chosen.map((entry) => entry.file) }, storage, version: version.file, showFrame, setPresent,
-      requests,
+      requests, displayFrames,
     },
     onExit: (code) => log(`The game stopped with the code ${code}.`),
     onAbort: (reason) => gameFailed(String(reason)),

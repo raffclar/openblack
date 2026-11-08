@@ -9,6 +9,8 @@
 
 #include "DrawnPlace.h"
 
+#include <glm/ext/matrix_transform.hpp>
+
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/CarriedByTornado.h"
 #include "ECS/Components/CreatureBody.h"
@@ -16,9 +18,13 @@
 #include "ECS/Components/DrawnHeight.h"
 #include "ECS/Components/Firefly.h"
 #include "ECS/Components/HandGrab.h"
+#include "ECS/Components/HighDetail.h"
+#include "ECS/Components/Physics.h"
 #include "ECS/Components/Reward.h"
 #include "ECS/Components/Shark.h"
 #include "ECS/Components/TownDesireFlag.h"
+#include "ECS/Components/VillagerPose.h"
+#include "ECS/HighDetailRules.h"
 #include "ECS/Registry.h"
 #include "Nature/Fireflies.h"
 
@@ -49,6 +55,9 @@ drawn_place::DrawnPlaces::DrawnPlaces(const Registry& registry)
     , _flag(registry)
     , _firefly(registry)
     , _height(registry)
+    , _pose(registry)
+    , _highDetail(registry)
+    , _physics(registry)
 {
 }
 
@@ -107,6 +116,47 @@ components::Transform drawn_place::DrawnPlaces::Of(entt::entity entity, const co
 		        .scale = transform.scale};
 	}
 	return transform;
+}
+
+glm::vec3 drawn_place::ModelOrigin(const glm::vec3& drawnPlace, const components::VillagerPose* pose,
+                                   const components::HighDetail* highDetail, const components::PhysicsDrawPose* physics)
+{
+	if (physics != nullptr)
+	{
+		return physics->origin;
+	}
+	const auto standsAt = components::DrawnPosition(drawnPlace, pose);
+	return highDetail != nullptr ? high_detail_rules::DrawnAt(highDetail->heldAt, standsAt) : standsAt;
+}
+
+glm::vec3 drawn_place::ModelOriginOf(const Registry& registry, entt::entity entity, const components::Transform& transform)
+{
+	return DrawnPlaces(registry).ModelOriginOf(entity, transform);
+}
+
+glm::vec3 drawn_place::DrawnPlaces::ModelOriginOf(entt::entity entity, const components::Transform& transform) const
+{
+	return ModelOrigin(Of(entity, transform).position, _pose.TryGet(entity), _highDetail.TryGet(entity),
+	                   _physics.TryGet(entity));
+}
+
+glm::mat4 drawn_place::DrawnPlaces::ModelMatrixOf(entt::entity entity, const components::Transform& transform) const
+{
+	if (const auto* physics = _physics.TryGet(entity); physics != nullptr)
+	{
+		return glm::translate(glm::mat4(1.0f), physics->origin) * glm::mat4(physics->axes);
+	}
+	const auto drawn = Of(entity, transform);
+	const auto* pose = _pose.TryGet(entity);
+	const auto origin = ModelOrigin(drawn.position, pose, _highDetail.TryGet(entity), nullptr);
+	return glm::translate(glm::mat4(1.0f), origin) * glm::mat4(components::DrawnRotation(drawn.rotation, pose)) *
+	       glm::scale(glm::mat4(1.0f), transform.scale);
+}
+
+bool drawn_place::SunkFromView(const Registry& registry, entt::entity entity)
+{
+	const auto* physics = registry.TryGet<const components::PhysicsDrawPose>(entity);
+	return physics != nullptr && physics->underSea;
 }
 
 } // namespace openblack::ecs

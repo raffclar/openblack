@@ -14,13 +14,18 @@
 
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/mat3x3.hpp>
+#include <glm/mat4x4.hpp>
 #include <glm/vec3.hpp>
+#include <glm/vec4.hpp>
 #include <gtest/gtest.h>
 
 #include "ECS/Components/CarriedByTornado.h"
 #include "ECS/Components/DrawnHeight.h"
 #include "ECS/Components/HandGrab.h"
+#include "ECS/Components/HighDetail.h"
+#include "ECS/Components/Physics.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/Components/VillagerPose.h"
 #include "ECS/DrawnPlace.h"
 #include "ECS/Registry.h"
 #include "ECS/SoundPoint.h"
@@ -127,4 +132,72 @@ TEST(WorldDrawnPlaces, ATownTotemIsDrawnAtItsDrawnHeightAndSoundsFromThere)
 	EXPECT_EQ(drawn.scale, k_TurnPlace.scale);
 	EXPECT_EQ(ecs::SoundPointOf(registry, totem), std::optional(glm::vec3(10.0f, 7.5f, 30.0f)));
 	EXPECT_EQ(registry.Get<Transform>(totem).position, k_TurnPlace.position);
+}
+
+// The frame draws a mark over a body, for example the glow of a disciple, at the point where it draws the body's model.
+// A walking villager glides between its last two turns, thus the mark is not at the villager's Transform.
+
+TEST(WorldDrawnPlaces, TheModelOfAThingWithNoDrawnPoseIsAtItsDrawnPlace)
+{
+	const glm::vec3 place {1.0f, 2.0f, 3.0f};
+	EXPECT_EQ(ecs::drawn_place::ModelOrigin(place, nullptr, nullptr, nullptr), place);
+}
+
+TEST(WorldDrawnPlaces, TheModelOfAGlidingVillagerIsWhereItsDrawingPutIt)
+{
+	VillagerPose pose;
+	pose.drawnAt = glm::vec3(4.0f, 0.0f, 6.0f);
+	EXPECT_EQ(ecs::drawn_place::ModelOrigin(k_TurnPlace.position, &pose, nullptr, nullptr), *pose.drawnAt);
+	pose.drawnAt.reset();
+	EXPECT_EQ(ecs::drawn_place::ModelOrigin(k_TurnPlace.position, &pose, nullptr, nullptr), k_TurnPlace.position);
+}
+
+TEST(WorldDrawnPlaces, TheModelOfAVillagerInTheOpeningHandIsInTheGrip)
+{
+	VillagerPose pose;
+	pose.drawnAt = glm::vec3(4.0f, 0.0f, 6.0f);
+	HighDetail detail;
+	detail.heldAt = glm::vec3(7.0f, 8.0f, 9.0f);
+	EXPECT_EQ(ecs::drawn_place::ModelOrigin(k_TurnPlace.position, &pose, &detail, nullptr), *detail.heldAt);
+	detail.heldAt.reset();
+	EXPECT_EQ(ecs::drawn_place::ModelOrigin(k_TurnPlace.position, &pose, &detail, nullptr), *pose.drawnAt);
+}
+
+TEST(WorldDrawnPlaces, TheModelOfABodyInThePhysicsIsAtItsPhysicsPose)
+{
+	VillagerPose pose;
+	pose.drawnAt = glm::vec3(4.0f, 0.0f, 6.0f);
+	HighDetail detail;
+	detail.heldAt = glm::vec3(7.0f, 8.0f, 9.0f);
+	const PhysicsDrawPose physics {.origin = glm::vec3(-1.0f, -2.0f, -3.0f)};
+	EXPECT_EQ(ecs::drawn_place::ModelOrigin(k_TurnPlace.position, &pose, &detail, &physics), physics.origin);
+}
+
+TEST(WorldDrawnPlaces, AGlidingVillagerInTheRegistryHasItsModelWhereItsDrawingPutIt)
+{
+	ecs::Registry registry;
+	const auto villager = MakeThing(registry);
+	auto& pose = registry.Assign<VillagerPose>(villager);
+	pose.drawnAt = glm::vec3(9.5f, 2.0f, 29.5f);
+	EXPECT_EQ(ecs::drawn_place::ModelOriginOf(registry, villager, k_TurnPlace), *pose.drawnAt);
+	EXPECT_EQ(ecs::drawn_place::DrawnPlaces(registry).ModelOriginOf(villager, k_TurnPlace), *pose.drawnAt);
+	EXPECT_FALSE(ecs::drawn_place::SunkFromView(registry, villager));
+	registry.Assign<PhysicsDrawPose>(villager, PhysicsDrawPose {.origin = glm::vec3(0.0f), .underSea = true});
+	EXPECT_TRUE(ecs::drawn_place::SunkFromView(registry, villager));
+}
+
+TEST(WorldDrawnPlaces, TheModelMatrixIsThePhysicsPoseOrTheDrawnOriginTurnedAndSized)
+{
+	ecs::Registry registry;
+	const auto thing = MakeThing(registry);
+	auto& pose = registry.Assign<VillagerPose>(thing);
+	pose.drawnAt = glm::vec3(9.5f, 2.0f, 29.5f);
+	const auto matrix = ecs::drawn_place::DrawnPlaces(registry).ModelMatrixOf(thing, k_TurnPlace);
+	EXPECT_EQ(glm::vec3(matrix * glm::vec4(0.0f, 0.0f, 0.0f, 1.0f)), *pose.drawnAt);
+	EXPECT_EQ(glm::vec3(matrix * glm::vec4(1.0f, 0.0f, 0.0f, 0.0f)), glm::vec3(2.0f, 0.0f, 0.0f));
+	const PhysicsDrawPose physics {.axes = glm::mat3(3.0f), .origin = glm::vec3(-1.0f, -2.0f, -3.0f)};
+	registry.Assign<PhysicsDrawPose>(thing, physics);
+	const auto flying = ecs::drawn_place::DrawnPlaces(registry).ModelMatrixOf(thing, k_TurnPlace);
+	EXPECT_EQ(glm::vec3(flying * glm::vec4(0.0f, 0.0f, 0.0f, 1.0f)), physics.origin);
+	EXPECT_EQ(glm::vec3(flying * glm::vec4(0.0f, 1.0f, 0.0f, 0.0f)), glm::vec3(0.0f, 3.0f, 0.0f));
 }

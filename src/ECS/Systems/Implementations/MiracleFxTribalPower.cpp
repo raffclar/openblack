@@ -25,6 +25,7 @@
 #include "Camera/Camera.h"
 #include "ECS/Components/Player.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/GamePlayers.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "Gui/GameFont.h"
@@ -41,8 +42,7 @@ namespace
 /// A player's colour, fully opaque
 glm::u8vec4 ColourOf(PlayerNames player)
 {
-	const auto& colours = ecs::components::Player::k_Colours;
-	const uint32_t argb = colours.at(static_cast<size_t>(player) & (colours.size() - 1));
+	const uint32_t argb = ecs::game_players::Colour(player);
 	return {static_cast<uint8_t>((argb >> 16) & 0xFF), static_cast<uint8_t>((argb >> 8) & 0xFF),
 	        static_cast<uint8_t>(argb & 0xFF), 0xFF};
 }

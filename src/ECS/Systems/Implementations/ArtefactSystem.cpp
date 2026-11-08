@@ -35,6 +35,7 @@
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/Dances.h"
+#include "ECS/DrawnPlace.h"
 #include "ECS/PlayerTowns.h"
 #include "ECS/Registry.h"
 #include "ECS/RegistryContext.h"
@@ -677,20 +678,22 @@ void ArtefactSystem::UpdateFrame(float gameMilliseconds)
 	}
 	auto& registry = Entities();
 	std::vector<particles::draw::PlayerSymbol> symbols;
-	registry.Each<TownArtefact, const Transform>([&symbols, &registry, gameMilliseconds](
+	const ecs::drawn_place::DrawnPlaces drawnPlaces(registry);
+	registry.Each<TownArtefact, const Transform>([&symbols, &registry, &drawnPlaces, gameMilliseconds](
 	                                                 entt::entity object, TownArtefact& artefact, const Transform& transform) {
 		// Only a town's artefacts show their symbols, and only once worth enough
 		if (!artefact.inTown || !artefact.symbol || !rules::ShowsSymbol(artefact.value) || !artefact.player.has_value())
 		{
 			return;
 		}
-		// Over the middle of its model, by more than its half height; over the top of a thing without one
+		// Over the middle of its model, by more than its half height; over the top of a thing without one. The symbol is
+		// over the model where the frame draws it, thus it stays on an artefact that moves between the turns.
 		glm::vec3 at = transform.position + glm::vec3(0.0f, world_objects::SizeOf(object).height + k_SymbolOverTop, 0.0f);
 		if (const auto* mesh = registry.TryGet<const Mesh>(object);
 		    mesh != nullptr && Locator::resources::has_value() && Locator::resources::value().GetMeshes().Contains(mesh->id))
 		{
 			const auto box = Locator::resources::value().GetMeshes().Handle(mesh->id)->GetBoundingBox();
-			at = glm::vec3(world_objects::PlacementOf(object) * glm::vec4(box.Center(), 1.0f));
+			at = glm::vec3(drawnPlaces.ModelMatrixOf(object, transform) * glm::vec4(box.Center(), 1.0f));
 			at.y += box.Size().y * 0.5f * transform.scale.y * k_SymbolHalfHeights;
 		}
 		artefact.symbolMilliseconds += gameMilliseconds;

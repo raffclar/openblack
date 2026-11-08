@@ -39,6 +39,8 @@ constexpr glm::vec2 k_BurningField {-15.0f, 40.0f};
 constexpr glm::vec2 k_BurningHut {15.0f, 40.0f};
 constexpr glm::vec2 k_BurningRock {0.0f, 40.0f};
 constexpr glm::vec2 k_BurningDeadTree {0.0f, 58.0f};
+/// A burning town centre north of the burning food pile
+constexpr glm::vec2 k_BurningTownCentre {0.0f, 70.0f};
 
 /// Where the hand puts a villager down, four metres west of the altar of the town's worship site
 constexpr glm::vec2 k_BuilderDrop {k_Altar.x - 4.0f, k_Altar.y};
@@ -103,6 +105,24 @@ void openblack::testbed_scenarios::AddFixedKindScenarios(std::vector<Scenario>& 
 	                {.type = FieldTypeInfo::Wheat, .offset = k_BurningField, .ripeCrop = true, .alight = true},
 	                {.type = MobileStaticInfo::Rock, .offset = k_BurningRock, .alight = true},
 	                {.type = TreeInfo::Oak, .offset = k_BurningDeadTree, .alight = true, .dead = true}},
+	});
+
+	all.push_back({
+	    .id = "appearance.fire_kinds_sizes",
+	    .name = "A burning field, food pile, hut and town centre are measured by their own kinds",
+	    .facet = Facet::Appearance,
+	    .description = "A ripe wheat field, a low pile of food and a Norse hut stand side by side, with a Norse town "
+	                   "centre north of them. The four are set alight as they are made.",
+	    .expected = "The field burns as a thing of radius 5 across the ground, whatever the box of its model. The pile "
+	                "burns as wide as its food raises it. The hut burns by the box of its model, as before. The town "
+	                "centre burns by the icon on its plinth. The count and the scale of the flames do not change. The "
+	                "inspector's fires give the temperatures.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {k_BurningField, k_BurningHut, k_BurningTownCentre}, .distance = 0.4f},
+	    .objects = {{.type = AbodeInfo::NorseHut, .offset = k_BurningHut, .yawDegrees = 180.0f, .alight = true},
+	                {.type = FieldTypeInfo::Wheat, .offset = k_BurningField, .ripeCrop = true, .alight = true},
+	                {.type = PotInfo::MagicFood, .offset = k_BurningRock, .amount = 300, .alight = true},
+	                {.type = AbodeInfo::NorseTownCentre, .offset = k_BurningTownCentre, .alight = true}},
 	});
 
 	std::vector<ObjectSetup> town {

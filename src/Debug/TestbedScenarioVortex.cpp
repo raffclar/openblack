@@ -399,6 +399,26 @@ void testbed_scenarios::AddVortexScenarios(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "story.vortex_effects_go_far_away",
+	    .name = "The stars and the glow of a vortex go when the camera is far away",
+	    .facet = Facet::Miracles,
+	    .description = "A way out of a land opens on the flat plane after a second, seen from 900 m away. After 6 seconds "
+	                   "the camera comes near the vortex, and after 6 more seconds it goes back to 900 m. The land draws "
+	                   "the things on its blocks within 700 m of the camera only, and only the draw of a vortex shows the "
+	                   "stars over it and the glow on the ground.",
+	    .expected = "From 900 m only the swirl in the hole shows, and it turns. Near the vortex the stars rise and turn "
+	                "over the hole and the glow lights the ground. Back at 900 m the stars and the glow go: they do not "
+	                "stay in the picture without movement.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_OnThePlane.x, 300.0f, k_OnThePlane.y - 850.0f},
+	                .look = {k_OnThePlane.x, 0.0f, k_OnThePlane.y}},
+	    .vortices = {{.type = VortexType::In, .offset = k_OnThePlane, .delaySeconds = 1.0f}},
+	    .commands = {{.kind = Command::Kind::CameraLooksAt, .delaySeconds = 6.0f, .point = k_OnThePlane},
+	                 {.kind = Command::Kind::Reframe, .delaySeconds = 6.0f}},
+	});
+
+	all.push_back({
 	    .id = "story.volcano_vortex_keeps_the_land",
 	    .name = "The volcano's mouth leaves the land as it is",
 	    .facet = Facet::Miracles,

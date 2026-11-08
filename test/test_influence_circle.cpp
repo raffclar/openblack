@@ -123,12 +123,16 @@ TEST(InfluenceCircle, RippleWhereTheHandCrossed)
 {
 	std::vector<influence::Circle> circles;
 	influence::AddCircle(circles, PlayerNames::PLAYER_TWO, {0.0f, 0.0f, 0.0f}, 100.0f, Flat(0.0f));
-	const auto ripple = influence::MakeRipple(circles[0], {90.0f, 0.0f, 0.0f}, {110.0f, 5.0f, 0.0f}, Flat(20.0f),
-	                                          [](float, float) { return 1.0f; });
+	const auto ripple = influence::MakeRipple(
+	    circles[0], {90.0f, 0.0f, 0.0f}, {110.0f, 5.0f, 0.0f}, Flat(20.0f), [](float, float) { return 1.0f; }, 0);
 	EXPECT_NEAR(ripple.point.x, 100.0f, 1.0f);
 	// On the land, which is higher than the hand
 	EXPECT_FLOAT_EQ(ripple.point.y, 20.0f);
 	EXPECT_EQ(ripple.rgb, influence::k_PlayerColours[1]);
+	// The second land shows the second player in the colour of the fifth player
+	const auto onSecondLand = influence::MakeRipple(
+	    circles[0], {90.0f, 0.0f, 0.0f}, {110.0f, 5.0f, 0.0f}, Flat(20.0f), [](float, float) { return 1.0f; }, 2);
+	EXPECT_EQ(onSecondLand.rgb, influence::k_PlayerColours[4]);
 	// Upright along the border, square to the line from the centre
 	EXPECT_NEAR(ripple.along.x, 0.0f, 1e-5f);
 	EXPECT_NEAR(std::abs(ripple.along.z), 1.0f, 1e-5f);

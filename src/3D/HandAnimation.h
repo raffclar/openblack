@@ -114,9 +114,36 @@ public:
 	[[nodiscard]] Cycle GetCycle() const { return _cycle; }
 	[[nodiscard]] glm::vec2 GetLean() const { return _lean; }
 
-	/// The local poses of the bones for a cycle at a time and leans, without cross-fading. lean is the clamped
-	/// cursor lag in pixels, positive to the right and down.
-	[[nodiscard]] std::vector<Pose> EvaluatePoses(Cycle cycle, uint32_t timeMs, std::optional<glm::vec2> lean) const;
+	/// What leans the hand in a frame
+	struct Lean
+	{
+		/// The clamped cursor lag in pixels, positive to the right and down
+		glm::vec2 lag;
+		/// The height of the spring-smoothed cursor in window pixels, from the top of the window
+		float smoothedHeight;
+	};
+	/// The two lean pose ranges that a lean applies
+	struct LeanLayers
+	{
+		bool sideways;
+		bool forward;
+	};
+	/// The sideways pose range applies when the sideways lag is not almost 0. The forward pose range applies when the
+	/// height of the smoothed cursor is not almost 0, thus not when the smoothed cursor is at the top row of the window.
+	[[nodiscard]] static LeanLayers LeanLayersFor(const Lean& lean);
+
+	/// The spring-smoothed copy of the cursor and its speed, in window pixels
+	struct CursorSpring
+	{
+		glm::vec2 position;
+		glm::vec2 velocity;
+	};
+	/// One step of the spring that pulls the smoothed cursor to the cursor. The smoothed cursor moves with its speed and
+	/// stays 80 pixels or less from the cursor. Then the spring adds to the speed, and the damping removes a part of it.
+	[[nodiscard]] static CursorSpring StepSpring(CursorSpring spring, float seconds, glm::vec2 mouse);
+
+	/// The local poses of the bones for a cycle at a time and lean, without cross-fading
+	[[nodiscard]] std::vector<Pose> EvaluatePoses(Cycle cycle, uint32_t timeMs, std::optional<Lean> lean) const;
 
 private:
 	void ApplyCycle(const Animation& animation, uint32_t timeMs, std::vector<Pose>& poses) const;

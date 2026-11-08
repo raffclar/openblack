@@ -348,9 +348,10 @@ TEST(HandGrab, OnlyATreeTheHandCanLiftIsPulledFree)
 	Tug tug {.axes = glm::mat3(1.0f), .base = glm::vec3(0.0f)};
 	TugFrame frame {
 	    .hand = {0.0f, 2.0f, 0.0f}, .holdDistance = 1.0f, .weight = 50.0f, .height = 10.0f, .tree = true, .seconds = 0.01f};
-	// A pull of 1000 a unit of stretch, one unit away: more than the tree weighs
+	// A pull of 1000 a unit of stretch, about one unit away: more than the tree weighs. The 3D engine's inverse square
+	// root of 1 is a little less than 1, thus the grip is a little below 1 and the pull a little more than 1000.
 	auto result = PullAt(tug, frame);
-	EXPECT_FLOAT_EQ(result.force.y, 1000.0f);
+	EXPECT_NEAR(result.force.y, 1000.0f, 0.01f);
 	EXPECT_TRUE(result.comesFree);
 	// Pulled no harder than it weighs, it stays
 	tug = {.axes = glm::mat3(1.0f), .base = glm::vec3(0.0f)};
@@ -374,8 +375,9 @@ TEST(HandGrab, OnlyATreeTheHandCanLiftIsPulledFree)
 TEST(HandGrab, ThePullBeatsTheWeightWithTheSquaresInTheOrderOfTheGame)
 {
 	Tug tug {.axes = glm::mat3(1.0f), .base = glm::vec3(0.0f)};
-	const TugFrame frame {.hand = {2.751f, 1.0f + 3.184f, 0.263f},
-	                      .holdDistance = 1.0f,
+	// With no grip height the hand grips the tree at its base, thus the stretch is the hand point exactly
+	const TugFrame frame {.hand = {2.751f, 3.184f, 0.263f},
+	                      .holdDistance = 0.0f,
 	                      .weight = std::bit_cast<float>(0x4583C059u),
 	                      .height = 10.0f,
 	                      .tree = true,

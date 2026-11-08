@@ -96,32 +96,44 @@ inline constexpr std::array<uint32_t, player_slots::k_MaxPlayers - player_slots:
 	return table.at(static_cast<size_t>(player) & (table.size() - 1));
 }
 
-/// The colour of a player on a land, 0xFFRRGGBB. Some lands of the story give their second and third players the
-/// colours of other players; the other lands give each player its own colour.
+/// The player whose colour a player shows on a land. Some lands of the story give their second and third players the
+/// colours of other players. The other lands give each player its own colour. All the colours of a player in the
+/// world come from this player: the symbols, the columns of light, the influence circles and the effects.
+[[nodiscard]] constexpr PlayerNames ColourPlayerOnLand(PlayerNames player, int32_t landNumber) noexcept
+{
+	if (player == PlayerNames::PLAYER_TWO && (landNumber == 1 || landNumber == 4 || landNumber == 5))
+	{
+		return PlayerNames::PLAYER_SEVEN;
+	}
+	if (player == PlayerNames::PLAYER_TWO && landNumber == 2)
+	{
+		return PlayerNames::PLAYER_FIVE;
+	}
+	if ((player == PlayerNames::PLAYER_THREE && landNumber == 2) || (player == PlayerNames::PLAYER_TWO && landNumber == 3))
+	{
+		return PlayerNames::PLAYER_SIX;
+	}
+	return player;
+}
+
+/// The colour of a player on a land, 0xFFRRGGBB: the colour of the player that `ColourPlayerOnLand` gives
 [[nodiscard]] constexpr uint32_t OnLand(PlayerNames player, int32_t landNumber)
 {
-	constexpr size_t k_Yellow = 4;
-	constexpr size_t k_Blue = 5;
-	constexpr size_t k_Orange = 6;
 	if (const auto later = LaterGodColour(player); later.has_value())
 	{
 		return *later | 0xFF000000u;
 	}
-	auto index = static_cast<size_t>(player);
-	if (index == 1 && (landNumber == 1 || landNumber == 4 || landNumber == 5))
-	{
-		index = k_Orange;
-	}
-	else if (index == 1 && landNumber == 2)
-	{
-		index = k_Yellow;
-	}
-	else if ((index == 2 && landNumber == 2) || (index == 1 && landNumber == 3))
-	{
-		index = k_Blue;
-	}
 	using ecs::components::Player;
+	const auto index = static_cast<size_t>(ColourPlayerOnLand(player, landNumber));
 	return Player::k_Colours.at(std::min(index, Player::k_Colours.size() - 1)) | 0xFF000000u;
+}
+
+/// The colour of a player on a land, 0xRRGGBB, from a table of the colours of the players of a land. The player is the
+/// player that `ColourPlayerOnLand` gives.
+[[nodiscard]] constexpr uint32_t FromTableOnLand(const std::array<uint32_t, player_slots::k_LandSlots>& table,
+                                                 PlayerNames player, int32_t landNumber)
+{
+	return FromTable(table, ColourPlayerOnLand(player, landNumber));
 }
 
 } // namespace openblack::player_colour
