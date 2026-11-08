@@ -573,6 +573,48 @@ TEST(TemplePress, TheHoldAfterADoubleClickIsNoPressUntilLetGo)
 	EXPECT_EQ(hold.Filter(Button::Held), Button::Held);
 }
 
+TEST(TemplePress, ARoomKeepsTheHoveredSubMeshWhileAPressIsHeld)
+{
+	using State = temple_press::RoomPress::State;
+	temple_press::RoomPress press;
+	EXPECT_TRUE(press.FollowsHover());
+	// A press that goes down off the controls goes to the camera, and the room stops following the cursor, also when it
+	// moves onto a control
+	press.Step(true, false, false);
+	EXPECT_EQ(press.GetState(), State::OffControls);
+	press.Step(true, true, false);
+	EXPECT_EQ(press.GetState(), State::OffControls);
+	EXPECT_FALSE(press.FollowsHover());
+	// Letting go frees the room
+	press.Step(false, true, false);
+	EXPECT_TRUE(press.FollowsHover());
+	// A press that goes down on a control stays with the control
+	press.Step(true, true, false);
+	EXPECT_EQ(press.GetState(), State::OnControl);
+	press.Step(true, false, false);
+	EXPECT_EQ(press.GetState(), State::OnControl);
+	press.Step(false, false, false);
+	EXPECT_EQ(press.GetState(), State::Free);
+}
+
+TEST(TemplePress, ARoomTakesNoPressWhileABoxIsUp)
+{
+	using State = temple_press::RoomPress::State;
+	temple_press::RoomPress press;
+	// The press goes down while the box is up: the room does not hear it
+	press.Step(true, false, true);
+	EXPECT_EQ(press.GetState(), State::Free);
+	// The box goes while the player holds the press: it is still no press, as the room did not hear it go down
+	press.Step(true, false, false);
+	EXPECT_EQ(press.GetState(), State::Free);
+	// A box that comes up frees the room from a held press
+	press.Step(false, false, false);
+	press.Step(true, false, false);
+	EXPECT_EQ(press.GetState(), State::OffControls);
+	press.Step(true, false, true);
+	EXPECT_EQ(press.GetState(), State::Free);
+}
+
 TEST(TempleCamera, AHeldPressOrADoubleClickStopsACloseLook)
 {
 	// The look stops in each step that the camera gets a press, also a press that started before the look
