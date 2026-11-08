@@ -58,6 +58,7 @@
 #include "ECS/FixedKinds.h"
 #include "ECS/GameEndConditions.h"
 #include "ECS/GamePlayers.h"
+#include "ECS/InfluenceRules.h"
 #include "ECS/MainStoragePitRules.h"
 #include "ECS/Map.h"
 #include "ECS/PlayerTowns.h"
@@ -319,6 +320,37 @@ std::vector<std::pair<entt::entity, const Town*>> TownsInTurn(const ecs::Registr
 		return rank(*a.second) < rank(*b.second);
 	});
 	return towns;
+}
+
+/// The town centre of a town that a scaffold founded ends its turn. The town gets its influence again when one of these
+/// conditions is true:
+/// - the town centre is fully built
+/// - no scaffold is on the site of the town centre
+/// - the hand can no longer take the first scaffold of the site.
+/// The borders then show the change at their next draw.
+void EndFounding(ecs::Registry& registry, entt::entity townEntity, entt::entity centre, InfluenceSystemInterface* influence)
+{
+	auto& town = registry.Get<Town>(townEntity);
+	if (!town.zeroBaseInfluence)
+	{
+		return;
+	}
+	const auto* workshops = Locator::workshopSystem::has_value() ? &Locator::workshopSystem::value() : nullptr;
+	const auto scaffold = workshops != nullptr ? workshops->FirstOnSite(centre) : entt::null;
+	const openblack::influence_rules::FoundedTownCentre facts {
+	    .underConstruction = registry.AllOf<BuildProgress>(centre),
+	    .hasScaffold = scaffold != entt::null,
+	    .scaffoldTakeable = scaffold != entt::null && workshops->CanTake(scaffold),
+	};
+	if (!openblack::influence_rules::FoundedTownGetsInfluence(facts))
+	{
+		return;
+	}
+	town.zeroBaseInfluence = false;
+	if (influence != nullptr)
+	{
+		influence->BordersChanged();
+	}
 }
 } // namespace
 
@@ -1055,6 +1087,12 @@ void TownSystem::PassOverBuildings(entt::entity townEntity, InfluenceSystemInter
 		if (auto* data = registry.Valid(abode) ? registry.TryGet<Abode>(abode) : nullptr)
 		{
 			data->age = statistics::AgedOnePass(data->age);
+			// At the end of its turn, the town centre can give a town that a scaffold founded its influence again. The
+			// town centre then adds its own influence at once.
+			if (data->type == AbodeNumber::TownCentre && registry.Valid(townEntity))
+			{
+				EndFounding(registry, townEntity, abode, influence);
+			}
 			// A field of the town also has its pass here. The pass over all fields later in the turn is a second pass.
 			if (registry.AllOf<Field>(abode) && Locator::fieldSystem::has_value())
 			{

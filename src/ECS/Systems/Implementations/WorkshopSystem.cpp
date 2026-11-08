@@ -1651,16 +1651,22 @@ void WorkshopSystem::PutLoadedOnSite(entt::entity scaffold, entt::entity buildin
 	MakeGhost(scaffold);
 }
 
-entt::entity WorkshopSystem::LeaveDestroyedSite(entt::entity building)
+entt::entity WorkshopSystem::FirstOnSite(entt::entity building) const
 {
-	auto& registry = Entities();
 	entt::entity first = entt::null;
-	registry.Each<const Scaffold>([&first, building](entt::entity scaffold, const Scaffold& data) {
+	Entities().Each<const Scaffold>([&first, building](entt::entity scaffold, const Scaffold& data) {
 		if (first == entt::null && data.site == building)
 		{
 			first = scaffold;
 		}
 	});
+	return first;
+}
+
+entt::entity WorkshopSystem::LeaveDestroyedSite(entt::entity building)
+{
+	auto& registry = Entities();
+	const auto first = FirstOnSite(building);
 	if (first == entt::null)
 	{
 		return entt::null;

@@ -45,8 +45,8 @@ struct Town
 	uint32_t gained {0};
 	/// When the game made it, against the other towns: earlier made, smaller. A new player does not change it.
 	uint32_t made {0};
-	/// A scaffold founded the town: it reaches nothing with no buildings. A load clears this, as in the game, which does
-	/// not save it.
+	/// A scaffold founded the town, and the town has no influence. The town centre clears this when it is fully built, has
+	/// no scaffold, or the hand can no longer take its scaffold. A load clears this too, as the game does not save it.
 	bool zeroBaseInfluence {false};
 	/// It counted once as a new town of its player: it had a storage pit, a town centre and a house, all built
 	bool countedAsNew {false};

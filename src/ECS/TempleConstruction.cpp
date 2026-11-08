@@ -551,6 +551,8 @@ entt::entity PlaceTemple(entt::entity plan, float built)
 	const auto temple =
 	    archetypes::CitadelArchetype::Create(transform.position, OwnerOf(planned), planned.yAngle, transform.scale, built);
 	registry.Get<Temple>(temple).town = planned.townId;
+	// The heart has the size of the plan
+	registry.Get<Temple>(temple).heartScale = transform.scale.x;
 	// The temple and its heart take the exact map position of the plan
 	const auto place = thing_map_place::Of(registry, plan);
 	thing_map_place::Keep(registry, temple, place);
