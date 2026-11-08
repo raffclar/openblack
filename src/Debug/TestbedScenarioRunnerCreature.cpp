@@ -1185,7 +1185,8 @@ std::string Runner::GiveCreatureModeCommand(entt::entity creature, const Command
 		mode.ClearView();
 		if (const auto view = mode.GetView(); view.has_value())
 		{
-			return fmt::format("heading {:.2f}, pitch {:.2f}", view->yaw, view->pitch);
+			// The camera swings in its next update, so these are the angles before the swing
+			return fmt::format("swing asked from heading {:.2f}, pitch {:.2f}", view->yaw, view->pitch);
 		}
 		return "not in Creature Mode";
 	case Kind::LeaveCreatureMode:
