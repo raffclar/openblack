@@ -51,6 +51,9 @@ public:
 	virtual void BeginLoading(std::string_view what) = 0;
 	/// The load has finished: requests are answered by the game's frames again
 	virtual void EndLoading() = 0;
+	/// A box waits for the player before the first land, such as the new player's name box, while the inspector answers
+	/// as loading. While the box shows, input.text and input.key go to the box at once.
+	virtual void SetStartupBoxShown([[maybe_unused]] bool shown) {}
 	/// Once a frame, just before it is drawn, after everything the game does with its camera: the frame is drawn from
 	/// where the inspector shows the camera (an override, a picture's camera or framing), over whatever holds it
 	virtual void PlaceCamera() = 0;

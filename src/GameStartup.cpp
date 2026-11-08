@@ -141,6 +141,8 @@ bool Game::AskForNewPlayer()
 	}
 	// Tools wait while the player is asked
 	const ecs::systems::InspectorLoading asking("new player");
+	// Tools type the name and press Return through the inspector
+	const ecs::systems::InspectorStartupBox typing;
 	SPDLOG_LOGGER_INFO(spdlog::get("game"), "No player has a profile: asking the new player for their name");
 	SDL_StartTextInput();
 	Locator::gameInterface::value().ShowNewPlayerBox(

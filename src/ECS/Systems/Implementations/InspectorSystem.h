@@ -66,6 +66,7 @@ public:
 	[[nodiscard]] uint16_t GetPort() const override;
 	void BeginLoading(std::string_view what) override;
 	void EndLoading() override;
+	void SetStartupBoxShown(bool shown) override { _startupBoxShown = shown; }
 	void PlaceCamera() override;
 	void GiveCameraBack() override;
 	void ShowOverrideToPointer() override;
@@ -90,6 +91,8 @@ private:
 	[[nodiscard]] std::optional<inspector::QueryResult> QueueWhileLoading(const inspector::Request& request);
 	/// Asks for the scenario kept while loading, if any, as though it was asked for now
 	void RequestQueuedScenario();
+	/// Gives the keys and letters of input.text or input.key to the box that waits before the first land
+	[[nodiscard]] static inspector::QueryResult SendToStartupBox(const inspector::Request& request);
 
 	std::unique_ptr<inspector::Server> _server;
 	/// The game on the player's computer, or null with none
@@ -121,6 +124,8 @@ private:
 	std::optional<std::string> _queuedScenario;
 	std::mutex _loadingMutex;
 	std::atomic<bool> _stopLoadingHelper {false};
+	/// A box waits for the player before the first land, and takes the keys and letters of the inspector
+	std::atomic<bool> _startupBoxShown {false};
 	/// Wakes the helper when it must stop, so that the end of a load does not wait for its next answer
 	std::mutex _stopMutex;
 	std::condition_variable _stopSignal;

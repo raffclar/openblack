@@ -13,6 +13,7 @@
 
 #include <cstdlib>
 
+#include <algorithm>
 #include <chrono>
 #include <filesystem>
 #include <fstream>
@@ -21,7 +22,10 @@
 #include <string>
 #include <system_error>
 #include <utility>
+#include <variant>
+#include <vector>
 
+#include <SDL_events.h>
 #include <spdlog/spdlog.h>
 
 #include "3D/LandIslandInterface.h"
@@ -34,6 +38,8 @@
 #include "ECS/Systems/ObjectDrawListSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "Input/GameActionMapInterface.h"
+#include "Input/InjectedInput.h"
+#include "Input/InputDeviceInterface.h"
 #include "Inspector/CameraControl.h"
 #include "Inspector/ComponentReflection.h"
 #include "Inspector/FightAutopilot.h"
@@ -45,6 +51,7 @@
 #include "Inspector/InputControl.h"
 #include "Inspector/RunControl.h"
 #include "Inspector/SimRecorder.h"
+#include "Inspector/StartupBoxInput.h"
 #include "Locator.h"
 
 // The build's configuration, given by the build files
@@ -405,6 +412,11 @@ void InspectorSystem::StopLoadingHelper()
 
 std::optional<inspector::QueryResult> InspectorSystem::QueueWhileLoading(const inspector::Request& request)
 {
+	// The box before the first land shows while the game answers as loading: its keys and letters go to it at once
+	if (_startupBoxShown && (request.query == "input.text" || request.query == "input.key"))
+	{
+		return SendToStartupBox(request);
+	}
 	if (request.query != "game.scenario")
 	{
 		return std::nullopt;
@@ -421,6 +433,55 @@ std::optional<inspector::QueryResult> InspectorSystem::QueueWhileLoading(const i
 		_queuedScenario = id;
 	}
 	return inspector::QueryResult::Value({{"loading", id}, {"queued", true}});
+}
+
+inspector::QueryResult InspectorSystem::SendToStartupBox(const inspector::Request& request)
+{
+	auto made = inspector::startup_box::FromRequest(request.query, request.params);
+	if (const auto* error = std::get_if<std::string>(&made); error != nullptr)
+	{
+		return inspector::QueryResult::Error(*error);
+	}
+	auto& device = input::Device();
+	const auto& inputs = std::get<std::vector<inspector::startup_box::Input>>(made);
+	// The names are checked before any input goes, so that a wrong name sends nothing
+	for (const auto& each : inputs)
+	{
+		if (const auto* key = std::get_if<inspector::startup_box::Key>(&each);
+		    key != nullptr && device.ScancodeFromName(key->name) == SDL_SCANCODE_UNKNOWN)
+		{
+			return inspector::QueryResult::Error("no key " + key->name +
+			                                     "; keys go by SDL's names, as \"Return\", \"Backspace\" or \"A\"");
+		}
+	}
+	// The SDL event queue takes events from any thread. The box reads them in its own loop.
+	for (const auto& each : inputs)
+	{
+		SDL_Event event {};
+		if (const auto* key = std::get_if<inspector::startup_box::Key>(&each); key != nullptr)
+		{
+			const auto scancode = device.ScancodeFromName(key->name);
+			event.type = key->down ? SDL_KEYDOWN : SDL_KEYUP;
+			event.key.state = key->down ? SDL_PRESSED : SDL_RELEASED;
+			event.key.keysym.scancode = scancode;
+			event.key.keysym.sym = device.KeyFromScancode(scancode);
+		}
+		else
+		{
+			const auto& text = std::get<inspector::startup_box::Text>(each).text;
+			event.type = SDL_TEXTINPUT;
+			std::ranges::copy(text, event.text.text);
+		}
+		input::MarkInjected(event);
+		device.PushEvent(event);
+	}
+	inspector::Json answer = {{"to", "startup box"}, {"events", inputs.size()}};
+	// The answer does not repeat the letters, which can be a password
+	if (request.query == "input.key")
+	{
+		answer["key"] = inspector::StringMember(request.params, "key").value_or("");
+	}
+	return inspector::QueryResult::Value(std::move(answer));
 }
 
 void InspectorSystem::RequestQueuedScenario()

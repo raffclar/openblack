@@ -871,6 +871,13 @@ class GestureTest(SessionBase):
         queries = [r["query"] for r in self.first.asked()]
         self.assertEqual(queries, ["camera.set", "input.gesture", "camera.set", "input.gesture"])
 
+    def test_the_text_tool_types_into_the_new_player_box(self):
+        tool = mcp.TOOLS_BY_NAME["input_text"]
+        self.assertEqual(tool["query"], "input.text")
+        self.assertEqual(tool["inputSchema"]["required"], ["text"])
+        self.assertIn("new player", tool["description"])
+        self.assertIn("new player", mcp.TOOLS_BY_NAME["input_key"]["description"])
+
     def test_the_tool_tells_how_a_drawing_is_lost_and_how_to_see_it_was_recognised(self):
         description = mcp.TOOLS_BY_NAME["input_gesture"]["description"]
         self.assertIn("camera", description)

@@ -477,11 +477,21 @@ TOOLS = [
     {
         "name": "input_key",
         "description": "A key by SDL's name (\"L\", \"Space\", \"Left Shift\"): press, release or tap; or an action "
-                       "by name (input_names), pressed for a frame.",
+                       "by name (input_names), pressed for a frame. Keys by name also reach the new player's name box "
+                       "while the game says it loads \"new player\".",
         "inputSchema": schema({"key": {"type": "string"}, "action": {"type": "string"},
                                "how": {"type": "string", "enum": ["press", "release", "tap"]}}),
         "query": "input.key",
         "params": ["key", "action", "how"],
+    },
+    {
+        "name": "input_text",
+        "description": "Types letters into the text box that has the focus (a name or a password), with no key "
+                       "pressed. The new player's name box of a game with a new profile folder takes them while the "
+                       "game says it loads \"new player\": type the name, then input_key Return.",
+        "inputSchema": schema({"text": {"type": "string"}}, ["text"]),
+        "query": "input.text",
+        "params": ["text"],
     },
     {
         "name": "input_wheel",
