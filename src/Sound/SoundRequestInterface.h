@@ -138,7 +138,7 @@ public:
 	virtual void StopNumberedSoundEffect(entt::id_type id, uint32_t ownerNumber) = 0;
 	/// True when the first voice that keeps the sample for the owner number plays
 	[[nodiscard]] virtual bool IsNumberedSoundEffectPlaying(entt::id_type id, uint32_t ownerNumber) const = 0;
-	/// Stops every sound effect that plays (not the music)
+	/// Stops every sound effect that plays, the speech too. The music and the atmosphere continue.
 	virtual void StopAllSoundEffects() = 0;
 
 	/// An emitter for a loaded sound, ready to play (see AudioManagerInterface::CreateEmitter)

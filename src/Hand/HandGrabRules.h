@@ -437,12 +437,26 @@ enum class GripFeedback : uint8_t
 	Dust,
 	/// A ring on the water and the next water sound
 	Splash,
-	/// Nothing: a grip of the land while a script has the cinema bars in, or a grip of the sea while the game is paused
+	/// Nothing: a grip of the land while a script has the cinema bars in, or a grip of the sea that makes no splash
 	None,
 };
+/// The facts that decide the feedback of a grip
+struct GripFacts
+{
+	/// The hand grips the land, not the sea
+	bool onLand;
+	/// A script has the cinema bars in
+	bool cinemaBars;
+	/// The game is paused
+	bool paused;
+	/// The hand of this computer takes or holds a thing, from the press on the thing until the hand lets go of it
+	bool handHoldsThing;
+};
 /// The feedback of a grip. The cinema bars stop the dust and the sound of a grip of the land, but not the splash of a
-/// grip of the sea. While the game is paused a grip of the sea makes no ring and no sound, and the next water sound
-/// stays the same; a grip of the land still makes its dust and its sound.
-[[nodiscard]] GripFeedback GripFeedbackOf(bool onLand, bool cinemaBars, bool paused);
+/// grip of the sea. A grip of the land always makes its dust and its sound when the cinema bars are out.
+/// A grip of the sea makes no ring and no sound in these conditions, and the next water sound stays the same:
+/// - The game is paused.
+/// - The hand of this computer takes or holds a thing.
+[[nodiscard]] GripFeedback GripFeedbackOf(const GripFacts& facts);
 
 } // namespace openblack::hand_grab

@@ -2208,8 +2208,12 @@ void Game::PlayHandGrabSound()
 		isLand = landCell != nullptr && landCell->properties.hasWater == 0;
 	}
 
-	const auto feedback = hand_grab::GripFeedbackOf(isLand, !Locator::cinematicDirectorSystem::value().IsInterfaceActive(),
-	                                                Locator::time::value().IsPaused());
+	const auto feedback = hand_grab::GripFeedbackOf({
+	    .onLand = isLand,
+	    .cinemaBars = !Locator::cinematicDirectorSystem::value().IsInterfaceActive(),
+	    .paused = Locator::time::value().IsPaused(),
+	    .handHoldsThing = Locator::handGrabSystem::has_value() && Locator::handGrabSystem::value().IsBusy(),
+	});
 	if (feedback == hand_grab::GripFeedback::None)
 	{
 		return;
