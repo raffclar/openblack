@@ -113,14 +113,16 @@ struct Graphic
 /// The most flames an object keeps: two on a tree, else two on something small and seven on something 3 m or bigger
 [[nodiscard]] int MaxFlames(bool tree, float radius, float height);
 /// What an object's flames are sized for: a tree; a model built of many jointed parts (a creature's body, a temple);
-/// anything else, villagers and animals included
+/// a part of a temple, such as a worship site or its altar; anything else, villagers and animals included
 enum class FlameShape
 {
 	Tree,
 	Jointed,
+	TemplePart,
 	Plain,
 };
-/// How big its flames are by its height: a fifth of it on a tree, three tenths on a jointed model, else half
+/// How big its flames are by its height: a fifth of it on a tree, three tenths on a jointed model or a part of a temple,
+/// else half
 [[nodiscard]] float LocalFlameScale(FlameShape shape, float height);
 
 /// The fire this frame

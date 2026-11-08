@@ -825,11 +825,16 @@ std::vector<std::string> testbed_scenarios::Problems(const Scenario& scenario)
 		const auto what = fmt::format("command {} ({})", i, Name(command.kind));
 		// An object set alight (value 1 or 2) needs no creature, but the object must be there
 		const bool objectAlight = command.kind == Kind::SetAlight && (command.value == 1 || command.value == 2);
+		const bool siteAlight = command.kind == Kind::SetAlight && command.value == 3;
 		if (objectAlight && command.object >= scenario.objects.size())
 		{
 			problems.push_back(fmt::format("{}: no such object", what));
 		}
-		if (!NeedsNoCreature(command.kind) && !objectAlight && command.creature >= creatures)
+		if (siteAlight && scenario.temples.empty())
+		{
+			problems.push_back(fmt::format("{}: no temple for a worship site", what));
+		}
+		if (!NeedsNoCreature(command.kind) && !objectAlight && !siteAlight && command.creature >= creatures)
 		{
 			problems.push_back(fmt::format("{}: no such creature", what));
 		}

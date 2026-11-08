@@ -27,10 +27,10 @@
 #include "3D/ModelSurface.h"
 #include "Animals/AnimalRules.h"
 #include "Animals/GrazerRules.h"
+#include "Common/GUtilsAngle.h"
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
 #include "Common/MachineClock.h"
-#include "Common/PortableMath.h"
 #include "Creature/CreatureCatch.h"
 #include "Creature/CreatureDeeds.h"
 #include "Creature/CreatureDesires.h"
@@ -64,6 +64,7 @@
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/Vortex.h"
+#include "ECS/Components/WallHug.h"
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/GamePhysicsHooksWorld.h"
 #include "ECS/ObjectPhysics.h"
@@ -284,9 +285,14 @@ void LandAnimal(World& world, PhysicsEntry* entry, entt::entity entity)
 		pose = living::AnimalLandingPose(entry->body->TurnStartAxes()[0].y);
 		const float heading = living::AnimalLandingHeading(entry->body->Axes());
 		transform->rotation = physics::QuarterTurned(living::HeadingAxes(heading));
-		// Its heading across the land as the animals keep it, from the way it is drawn
-		const auto side = transform->rotation[0];
-		animal->heading = portable_math::Atan2(-side.x, side.z);
+		// It keeps the landing heading as its angle, as it is, and its walk faces the same way in the game's steps
+		animal->heading = heading;
+		animal->move.angle = static_cast<uint16_t>(gutils::ConvertAngle3DToGame(heading));
+		if (auto* walk = registry.TryGet<WallHug>(entity); walk != nullptr)
+		{
+			walk->yAngle = heading;
+			walk->gameAngle = animal->move.angle;
+		}
 	}
 	// It goes on from where it came down, on the land
 	if (const auto land = world.LandHeight(glm::vec2(transform->position.x, transform->position.z)))

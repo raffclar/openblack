@@ -941,7 +941,8 @@ struct Command
 		/// the player clicks the target. Needs no creature
 		ZoomToTempleCaveTarget,
 		/// The creature catches fire, and burns as at the start of a fire. With a value of 1, the scenario's object catches
-		/// fire in place of the creature.
+		/// fire in place of the creature. With a value of 3, the first worship site catches fire at the most heat of its
+		/// fire.
 		SetAlight,
 		/// The player's hand takes hold of the totem of the scenario's object, a town centre, and then lets go. Needs no
 		/// creature
