@@ -10,7 +10,9 @@
 #include <cstdint>
 #include <cstring>
 
+#include <algorithm>
 #include <chrono>
+#include <optional>
 #include <vector>
 
 #include <glm/geometric.hpp>
@@ -421,4 +423,86 @@ TEST(TempleCamera, AWalkBackStartsHalfwayToTheDoorAtItsHeight)
 	const auto start = TempleCameraModel::WalkBackStart(through, from);
 	EXPECT_EQ(start.origin, glm::vec3(25.0f, 16.0f, 3.0f));
 	EXPECT_EQ(start.focus, glm::vec3(10.0f, 7.0f, 1.0f));
+}
+
+TEST(TempleCamera, ACloseLookMovesTheAimAlongACosineOfItsZoom)
+{
+	const TempleCameraModel::Pose aim {{0.0f, 10.0f, 0.0f}, {4.0f, 10.0f, 0.0f}};
+	const TempleCameraModel::Pose look {{8.0f, 2.0f, -4.0f}, {12.0f, 0.0f, -4.0f}};
+	// With no zoom, the aim does not change
+	const auto none = TempleCameraModel::WithSubMeshLook(aim, look, 0.0f);
+	EXPECT_EQ(none.origin, aim.origin);
+	EXPECT_EQ(none.focus, aim.focus);
+	// Halfway into the zoom, the aim is halfway to the look
+	const auto half = TempleCameraModel::WithSubMeshLook(aim, look, 0.5f);
+	EXPECT_EQ(half.origin, glm::vec3(4.0f, 6.0f, -2.0f));
+	EXPECT_EQ(half.focus, glm::vec3(8.0f, 5.0f, -2.0f));
+	// Fully in, and past it, the aim is the look
+	for (const float zoom : {1.0f, 1.5f})
+	{
+		const auto full = TempleCameraModel::WithSubMeshLook(aim, look, zoom);
+		EXPECT_EQ(full.origin, look.origin);
+		EXPECT_EQ(full.focus, look.focus);
+	}
+	// A quarter into the zoom, the cosine gives less than a quarter of the way
+	const auto quarter = TempleCameraModel::WithSubMeshLook(aim, look, 0.25f);
+	EXPECT_LT(quarter.origin.x, 2.0f);
+	EXPECT_GT(quarter.origin.x, 1.0f);
+}
+
+TEST(TempleCamera, TheRoomsMoveToACloseLooksAimMoreSlowlyTheNearerItIs)
+{
+	EXPECT_EQ(TempleCameraModel::MainRoomLookEaseTime(0.0f), 0.0f);
+	EXPECT_EQ(TempleCameraModel::MainRoomLookEaseTime(1.0f), 0.2f);
+	EXPECT_EQ(TempleCameraModel::MainRoomLookEaseTime(0.5f), 0.1f);
+	EXPECT_EQ(TempleCameraModel::PictureRoomLookEaseTime(0.0f), 0.0f);
+	EXPECT_EQ(TempleCameraModel::PictureRoomLookEaseTime(1.0f), 0.5f);
+	EXPECT_EQ(TempleCameraModel::PictureRoomLookEaseTime(0.5f), 0.25f);
+}
+
+TEST(TempleCamera, TheCameraComesBackFromACloseLookAfterItsAim)
+{
+	// The aim comes back from the look along the cosine of the zoom, and the camera eases after it. Thus the camera is
+	// behind its aim while the zoom goes out, and arrives at the end.
+	const TempleCameraModel::Pose aim {{0.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f}};
+	const TempleCameraModel::Pose look {{10.0f, 0.0f, 0.0f}, {11.0f, 0.0f, 0.0f}};
+	Zoomer3 camera;
+	camera.Reset(look.origin);
+	float zoom = 1.0f;
+	constexpr float k_Step = 0.016f;
+	bool behind = false;
+	for (int i = 0; i < 200; ++i)
+	{
+		zoom = std::max(zoom - (0.7f * k_Step), 0.0f);
+		const auto target = TempleCameraModel::WithSubMeshLook(aim, look, zoom);
+		camera.SetDestination(target.origin, TempleCameraModel::MainRoomLookEaseTime(zoom));
+		camera.Update(k_Step);
+		behind = behind || camera.GetValue().x > target.origin.x + 0.01f;
+	}
+	EXPECT_TRUE(behind);
+	EXPECT_EQ(zoom, 0.0f);
+	EXPECT_EQ(camera.GetValue(), aim.origin);
+}
+
+TEST(TempleCamera, APressOverTheCreatureRoomsDoorWalksBack)
+{
+	const glm::vec3 eye {60.0f, 15.0f, 0.0f};
+	const glm::vec3 nearPoint {70.0f, 12.0f, 5.0f};
+	const glm::vec3 farPoint {40.0f, 10.0f, 30.0f};
+	// A new press over the door walks back through it, also far from the camera
+	EXPECT_EQ(TempleCameraModel::CaveWalkBackDoor(true, true, 0u, std::nullopt, farPoint, eye), 0);
+	// No press, or a point too far from the main room's centre, does not walk back
+	EXPECT_FALSE(TempleCameraModel::CaveWalkBackDoor(false, true, 0u, std::nullopt, farPoint, eye).has_value());
+	EXPECT_FALSE(
+	    TempleCameraModel::CaveWalkBackDoor(true, true, 0u, std::nullopt, glm::vec3(79.0f, 0.0f, 0.0f), eye).has_value());
+	EXPECT_FALSE(TempleCameraModel::CaveWalkBackDoor(true, true, 0u, std::nullopt, std::nullopt, eye).has_value());
+	// A held press over the door walks back only after a walk back through it, and only near to the camera
+	EXPECT_FALSE(TempleCameraModel::CaveWalkBackDoor(true, false, 0u, std::nullopt, nearPoint, eye).has_value());
+	EXPECT_EQ(TempleCameraModel::CaveWalkBackDoor(true, false, 0u, 0u, nearPoint, eye), 0);
+	EXPECT_FALSE(TempleCameraModel::CaveWalkBackDoor(true, false, 0u, 0u, farPoint, eye).has_value());
+	// Before the first walk back, a press over no door near to the camera walks back through the door before the
+	// first
+	EXPECT_EQ(TempleCameraModel::CaveWalkBackDoor(true, false, std::nullopt, std::nullopt, nearPoint, eye), -1);
+	EXPECT_EQ(TempleCameraModel::CaveWalkBackDoor(true, true, std::nullopt, std::nullopt, nearPoint, eye), -1);
+	EXPECT_FALSE(TempleCameraModel::CaveWalkBackDoor(true, false, std::nullopt, 0u, nearPoint, eye).has_value());
 }
