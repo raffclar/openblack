@@ -112,14 +112,14 @@ glm::vec3 CrossingPoint(const glm::vec3& centre, float radius, glm::vec3 inside,
 }
 
 Ripple MakeRipple(const Circle& circle, const glm::vec3& previous, const glm::vec3& hand, const Ground& ground,
-                  const Random& random)
+                  const Random& random, int32_t landNumber)
 {
 	const glm::vec3 current {hand.x, 0.0f, hand.z};
 	const bool wasInside = Inside(circle.centre, circle.radius, previous);
 	Ripple ripple;
 	ripple.point = CrossingPoint(circle.centre, circle.radius, wasInside ? previous : current, wasInside ? current : previous);
 	ripple.point.y = std::max(ground(glm::vec2(ripple.point.x, ripple.point.z)), hand.y);
-	ripple.rgb = player_colour::FromTable(k_PlayerColours, circle.player);
+	ripple.rgb = player_colour::FromTableOnLand(k_PlayerColours, circle.player, landNumber);
 	// Upright along the border: square to the line from the circle's centre
 	float yaw = portable_math::Atan2(ripple.point.z - circle.centre.z, ripple.point.x - circle.centre.x);
 	if (yaw < 0.0f)

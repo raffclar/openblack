@@ -772,7 +772,7 @@ void InfluenceSystem::ShowHandInfluence(std::chrono::duration<float, std::milli>
 	    scale.has_value() && Locator::effectRequestSystem::has_value() && Locator::terrainSystem::has_value())
 	{
 		const auto& land = Locator::terrainSystem::value();
-		const auto colour = player_colour::Of(player);
+		const auto colour = ecs::game_players::Colour(player);
 		Locator::effectRequestSystem::value().AddHandManaPathSpark({
 		    .from = map_coords::ToWorld(land, handCoords),
 		    .to = map_coords::ToWorld(land, *shown.manaPathStart),
@@ -852,10 +852,10 @@ bool InfluenceSystem::CrossBorders(const glm::vec3& hand)
 			{
 				continue;
 			}
-			_ripples.insert(_ripples.begin(),
-			                influence::MakeRipple(*circle, _handBefore, hand, LandHeight(), [](float a, float b) {
-				                return Locator::gameRandom::value().CrtRandom(a, b);
-			                }));
+			_ripples.insert(_ripples.begin(), influence::MakeRipple(
+			                                      *circle, _handBefore, hand, LandHeight(),
+			                                      [](float a, float b) { return Locator::gameRandom::value().CrtRandom(a, b); },
+			                                      ecs::game_players::LandNumber()));
 			crossed = true;
 		}
 	}

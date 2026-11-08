@@ -123,6 +123,44 @@ TEST(PlayerColour, ALaterGodTakesTheLandColourOfItsSlot)
 	EXPECT_EQ(player_colour::FromTable(k_Table, static_cast<PlayerNames>(9)), colours.at(1) & 0xFFFFFFu);
 }
 
+TEST(PlayerColour, TheSecondLandShowsLethysInYellowAndKhazarInBlue)
+{
+	// The world shows each god of a land of the story in the colour that the land gives it
+	const auto& colours = ecs::components::Player::k_Colours;
+	constexpr int32_t k_SecondLand = 2;
+	EXPECT_EQ(player_colour::ColourPlayerOnLand(PlayerNames::PLAYER_ONE, k_SecondLand), PlayerNames::PLAYER_ONE);
+	EXPECT_EQ(player_colour::OnLand(PlayerNames::PLAYER_TWO, k_SecondLand), 0xFFFFFD47u);
+	EXPECT_EQ(player_colour::OnLand(PlayerNames::PLAYER_THREE, k_SecondLand), 0xFF4777FFu);
+	constexpr std::array<uint32_t, k_LandSlots> k_Table {1, 2, 3, 4, 5, 6, 7, 8};
+	EXPECT_EQ(player_colour::FromTableOnLand(k_Table, PlayerNames::PLAYER_TWO, k_SecondLand), 5u);
+	EXPECT_EQ(player_colour::FromTableOnLand(k_Table, PlayerNames::PLAYER_THREE, k_SecondLand), 6u);
+	EXPECT_EQ(colours.at(4), 0xFFFFFD47u);
+	EXPECT_EQ(colours.at(5), 0xFF4777FFu);
+}
+
+TEST(PlayerColour, EachLandOfTheStoryGivesItsComputerGodsTheirColours)
+{
+	using player_colour::ColourPlayerOnLand;
+	// The first, fourth and fifth lands show the second player in orange; the third land shows it in blue
+	for (const int32_t land : {1, 4, 5})
+	{
+		EXPECT_EQ(ColourPlayerOnLand(PlayerNames::PLAYER_TWO, land), PlayerNames::PLAYER_SEVEN) << land;
+		EXPECT_EQ(ColourPlayerOnLand(PlayerNames::PLAYER_THREE, land), PlayerNames::PLAYER_THREE) << land;
+	}
+	EXPECT_EQ(ColourPlayerOnLand(PlayerNames::PLAYER_TWO, 3), PlayerNames::PLAYER_SIX);
+	EXPECT_EQ(ColourPlayerOnLand(PlayerNames::PLAYER_THREE, 3), PlayerNames::PLAYER_THREE);
+	// A network land and any other land keep the colour of each player number
+	for (const int32_t land : {0, 6})
+	{
+		for (size_t number = 0; number < k_LandSlots; ++number)
+		{
+			const auto player = static_cast<PlayerNames>(number);
+			EXPECT_EQ(ColourPlayerOnLand(player, land), player);
+			EXPECT_EQ(player_colour::OnLand(player, land), player_colour::Of(player));
+		}
+	}
+}
+
 TEST(PlayerColour, TheLandColoursOfTheLaterGodsAreFarFromTheOtherColours)
 {
 	// The rule of deviations 116 and 164: a CIE L*a*b* difference of 25 or more, and a contrast of 4.5 to 1 or more with

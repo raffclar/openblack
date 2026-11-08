@@ -556,7 +556,7 @@ void WorshipSiteSystem::AddMote(entt::entity site, glm::vec3 from, glm::vec3 to)
 		registry.Get<WorshipSite>(site).manaPath = started;
 	}
 	const auto& component = registry.Get<const WorshipSite>(site);
-	const auto rgb = player_colour::Of(component.player);
+	const auto rgb = ecs::game_players::Colour(component.player);
 	_world->AddMote(component.manaPath, from, to, rgb & 0xFFFFFFu);
 }
 

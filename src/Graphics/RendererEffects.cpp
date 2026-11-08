@@ -64,6 +64,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Vortex.h"
 #include "ECS/DrawnRegistry.h"
+#include "ECS/GamePlayers.h"
 #include "ECS/PlayerColour.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
@@ -606,7 +607,7 @@ void Renderer::DrawInfluenceBorder(const DrawSceneDesc& desc) const
 		const auto indices = std::span(reinterpret_cast<uint16_t*>(indexBuffer.data), indexCount);
 		// The player's colour; only the middle row shows, the ground and top fading out to it, and not where the
 		// circle is inside another of the player's. A hidden closing column fades to white, as the game's does.
-		const auto rgb = player_colour::FromTable(influence::k_PlayerColours, circle.player);
+		const auto rgb = ecs::game_players::Colour(influence::k_PlayerColours, circle.player);
 		const auto abgr = ((rgb & 0xFFu) << 16u) | (rgb & 0xFF00u) | ((rgb >> 16u) & 0xFFu);
 		const auto lastColumn = circle.Columns() - 1;
 		for (size_t i = 0; i < vertices.size(); ++i)

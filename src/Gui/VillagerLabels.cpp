@@ -17,6 +17,8 @@
 #include <span>
 #include <string>
 
+#include "ECS/PlayerColour.h"
+
 namespace openblack::gui::villager_labels
 {
 
@@ -248,20 +250,7 @@ std::u16string DebugDetailsText(const Details& details, std::u16string_view form
 uint8_t PlayerColourIndex(uint8_t player, int32_t landNumber)
 {
 	// The story's lands give their computer players colours of their own
-	switch (landNumber)
-	{
-	case 1:
-	case 4:
-		return player == 1 ? 6 : player;
-	case 2:
-		return player == 1 ? 4 : (player == 2 ? 5 : player);
-	case 3:
-		return player == 1 ? 5 : player;
-	case 5:
-		return player == 1 ? 6 : player;
-	default:
-		return player;
-	}
+	return static_cast<uint8_t>(player_colour::ColourPlayerOnLand(static_cast<PlayerNames>(player), landNumber));
 }
 
 glm::u8vec3 LabelColour(std::optional<glm::u8vec3> player, bool lighterForWoman)

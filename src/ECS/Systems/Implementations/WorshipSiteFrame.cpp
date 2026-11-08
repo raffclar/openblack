@@ -21,6 +21,7 @@
 #include "ECS/Components/WorshipChants.h"
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/DrawnOnScreen.h"
+#include "ECS/GamePlayers.h"
 #include "ECS/NeedFlagRules.h"
 #include "ECS/PlayerColour.h"
 #include "ECS/Registry.h"
@@ -194,7 +195,7 @@ void WorshipSiteSystem::UpdateRing(entt::entity site, bool drawn, int32_t realMi
 	// site strains. Then it moves on by the frame's real time.
 	const auto rules = _world->ChantRules(component.tribe, component.player);
 	const float strength = looks::RingStrength(chants->battery, magic::WorshipMaxBattery(rules, Dancers(site)));
-	const auto playerRgb = player_colour::Of(component.player);
+	const auto playerRgb = ecs::game_players::Colour(component.player);
 	look.ring->SetRgb(looks::RingRgb(playerRgb, chants->strain, look.throb.pulse));
 	look.ring->SetStrength(strength);
 	look.ring->SetSlideSpeed(looks::RingSlideSpeed(chants->strain));
