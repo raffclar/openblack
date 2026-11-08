@@ -46,10 +46,12 @@ public:
 		glm::vec2 screenSize {0.0f};
 		/// The land (or the sea) under a point of the screen, in pixels; none over the sky
 		std::function<std::optional<glm::vec3>(glm::vec2 pixel)> landAt;
-		/// The point under a point of the screen at the same distance in front of the camera as another point
-		std::function<glm::vec3(glm::vec2 pixel, glm::vec3 sameDepthAs)> atDepthOf;
-		/// Which way is right on the screen, in the world
-		glm::vec3 cameraRight {1.0f, 0.0f, 0.0f};
+		/// The point on the line from the drawn eye through a pixel of the screen, at a distance from that eye
+		std::function<glm::vec3(glm::ivec2 pixel, float distance)> atDistance;
+		/// Where the lines through the pixels of the screen start: the eye of the camera as it is drawn
+		glm::vec3 drawnEye {0.0f};
+		/// The heading of the camera about the upright, from its eye to the point it looks at
+		float cameraHeading {0.0f};
 		/// Where the camera's eye is. The path is forgotten when it has moved since the last frame, unless the camera
 		/// is shaking or lets the hand draw on
 		glm::vec3 cameraEye {0.0f};

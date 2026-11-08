@@ -239,13 +239,45 @@ TEST(GestureMatcher, ACirclesPlaceAndSize)
 	const auto match = Recognise(templates, GestureType::Circle, drawn.KeyPoints(), k_ScreenAspect);
 	ASSERT_TRUE(match.has_value());
 	const auto box = GestureBox(drawn, *match);
-	EXPECT_NEAR(box.Centre().x, 400.0f, 15.0f);
-	EXPECT_NEAR(box.Centre().y, 300.0f, 15.0f);
-	const auto edge = CircleEdge(box);
-	EXPECT_NEAR(edge.x - box.Centre().x, 100.0f, 15.0f);
-	EXPECT_FLOAT_EQ(edge.y, box.Centre().y);
-	// Measured across the camera's view only, a little enlarged
-	EXPECT_FLOAT_EQ(CircleRadius({0.0f, 0.0f, 0.0f}, {10.0f, 3.0f, 7.0f}, {1.0f, 0.2f, 0.0f}), 10.5f);
+	EXPECT_NEAR(BoxMiddle(box).x, 400.0f, 15.0f);
+	EXPECT_NEAR(BoxMiddle(box).y, 300.0f, 15.0f);
+	const auto edge = CircleEdgePixel(box);
+	EXPECT_NEAR(static_cast<float>(edge.x) - BoxMiddle(box).x, 100.0f, 15.0f);
+	EXPECT_EQ(edge.y, CircleMiddlePixel(box).y);
+}
+
+TEST(GestureMatcher, TheMiddleOfABoxCountsThePixelsAtBothEnds)
+{
+	const ScreenBox box {.min = {10.0f, 20.0f}, .max = {19.0f, 29.0f}};
+	EXPECT_EQ(BoxMiddle(box), glm::vec2(15.0f, 25.0f));
+}
+
+TEST(GestureMatcher, TheCirclesPixelsAreCutToWholePixels)
+{
+	// 201.7 pixels wide and 70.4 tall: the middle is at 201.05, 85.9
+	const ScreenBox box {.min = {100.2f, 50.7f}, .max = {300.9f, 120.1f}};
+	EXPECT_EQ(CircleMiddlePixel(box), glm::ivec2(201, 85));
+	// Half the larger side out from the middle: 100.85 + 201.05
+	EXPECT_EQ(CircleEdgePixel(box), glm::ivec2(301, 85));
+	// A tall box: half its height out to the right
+	const ScreenBox tall {.min = {0.0f, 0.0f}, .max = {9.0f, 99.0f}};
+	EXPECT_EQ(CircleEdgePixel(tall), glm::ivec2(55, 50));
+}
+
+TEST(GestureMatcher, ADistanceFromTheEye)
+{
+	EXPECT_FLOAT_EQ(DistanceFromEye({1.0f, 2.0f, 3.0f}, {4.0f, 2.0f, 7.0f}), 5.0f);
+}
+
+TEST(GestureMatcher, ACirclesRadiusIsMeasuredAcrossTheHeadingOfTheCamera)
+{
+	const glm::vec3 eye {0.0f, 50.0f, 0.0f};
+	// Heading 0: across the view is along x. The height and the depth do not count, and the radius is a little more.
+	EXPECT_FLOAT_EQ(CircleRadius(eye, {10.0f, 0.0f, 7.0f}, {30.0f, 3.0f, 2.0f}, 0.0f), 21.0f);
+	// A quarter turn: across the view is along z
+	EXPECT_NEAR(CircleRadius(eye, {10.0f, 0.0f, 7.0f}, {30.0f, 3.0f, 2.0f}, std::numbers::pi_v<float> * 0.5f), 5.25f, 1e-4f);
+	// The edge may be on either side
+	EXPECT_FLOAT_EQ(CircleRadius(eye, {30.0f, 0.0f, 7.0f}, {10.0f, 3.0f, 2.0f}, 0.0f), 21.0f);
 }
 
 TEST(GestureRequests, NothingToDoNothingWaitedFor)

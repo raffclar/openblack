@@ -581,7 +581,8 @@ bool GestureSystem::RecordPoint(glm::vec2 point, const Frame& frame)
 	}
 	const auto toReference = ToReference({1.0f, 1.0f}, frame).y;
 	const auto land = frame.view.landAt ? frame.view.landAt(point / toReference) : std::nullopt;
-	if (land.has_value())
+	// A point of the land at the world's origin counts as no land: the land under the last point stands in
+	if (land.has_value() && gesture::IsOnLand(*land))
 	{
 		_recorder.AddPoint(point, *land);
 	}
@@ -893,15 +894,21 @@ bool GestureSystem::Act(const gesture::Request& request, const gesture::Match& m
 	{
 	case Purpose::SizeCircle:
 	{
-		// The circle's middle on the land, and its size across the land at that depth
+		// The circle's middle on the land under the middle of its box, and its size across the land: its edge is as far
+		// from the eye as its middle
 		const auto toPixels = frame.view.screenSize.y > 0.0f ? frame.view.screenSize.y / gesture::k_ReferenceHeight : 1.0f;
-		const auto middle = frame.view.landAt ? frame.view.landAt(box.Centre() * toPixels) : std::nullopt;
+		const gesture::ScreenBox boxInPixels {.min = box.min * toPixels, .max = box.max * toPixels};
+		const auto middle =
+		    frame.view.landAt ? frame.view.landAt(glm::vec2(gesture::CircleMiddlePixel(boxInPixels))) : std::nullopt;
+		// Over the sky there is no middle on the land. Then the first point of the circle's path stands in.
 		const auto centre = middle.value_or(_recorder.At(_recorder.PointsOfKeys(match.firstKey, match.lastKey).first).world);
-		const auto edge = frame.view.atDepthOf ? frame.view.atDepthOf(gesture::CircleEdge(box) * toPixels, centre) : centre;
+		const auto distance = gesture::DistanceFromEye(frame.view.drawnEye, centre);
+		const auto edge =
+		    frame.view.atDistance ? frame.view.atDistance(gesture::CircleEdgePixel(boxInPixels), distance) : centre;
 		_events.push_back({.kind = GestureEvent::Kind::Circle,
 		                   .gesture = request.gesture,
 		                   .centre = centre,
-		                   .radius = gesture::CircleRadius(centre, edge, frame.view.cameraRight)});
+		                   .radius = gesture::CircleRadius(frame.view.drawnEye, centre, edge, frame.view.cameraHeading)});
 		_circleSeconds = gesture::k_CircleSeconds;
 		break;
 	}
