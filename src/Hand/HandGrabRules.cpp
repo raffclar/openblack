@@ -14,9 +14,9 @@
 #include <algorithm>
 
 #include <glm/geometric.hpp>
-#include <glm/gtc/matrix_transform.hpp>
 
-#include "Common/PortableRotations.h"
+#include "Common/ModelInverseSquareRoot.h"
+#include "Common/X87Matrix.h"
 #include "Common/X87Vector.h"
 #include "Physics/Body.h"
 
@@ -51,6 +51,12 @@ bool GateTotem(MobileStaticInfo type)
 float ObjectHoldRadius(HoldType hold, float height, float radius)
 {
 	return hold == HoldType::Above ? height * k_PalmHoldRadiusShare : radius;
+}
+
+/// An axis of the thing made unit with the 3D engine's inverse square root. The squares of the parts add from x to z.
+glm::vec3 UnitRow(const glm::vec3& axis)
+{
+	return axis * gutils::ModelInverseSquareRoot(x87::Dot<x87::SumOrder::Xyz>(axis, axis));
 }
 } // namespace
 
@@ -310,9 +316,8 @@ float hand_grab::MaxForce(float strength)
 
 glm::vec3 hand_grab::TugGrip(const Tug& tug, float holdDistance)
 {
-	const float length = glm::length(tug.axes[1]);
-	const auto up = length > 0.0f ? tug.axes[1] / length : tug.axes[1];
-	return tug.base + up * holdDistance;
+	const auto up = UnitRow(tug.axes[1]);
+	return {(holdDistance * up.x) + tug.base.x, (holdDistance * up.y) + tug.base.y, (holdDistance * up.z) + tug.base.z};
 }
 
 TugResult hand_grab::PullAt(Tug& tug, const TugFrame& frame)
@@ -334,17 +339,28 @@ TugResult hand_grab::PullAt(Tug& tug, const TugFrame& frame)
 	result.comesFree = !frame.tree || (frame.weight * physics::k_Gravity <= frame.maxForce &&
 	                                   frame.weight < x87::Length<x87::SumOrder::Xzy>(result.force));
 
-	// The pull turns it about its base, against its heaviness and a damping that grows with its spin. The game
-	// multiplies the turn by one over the heaviness, but divides the damping by the heaviness.
+	// The pull turns it about its base, against its heaviness and a damping that grows with its spin. The turn is the
+	// pull across the arm from the base to the grip. The game multiplies the turn by one over the heaviness, but
+	// divides the damping by the heaviness.
 	constexpr float k_OverInertia = 1.0f / k_TugTurnInertia;
-	const glm::vec3 torque = frame.leans ? glm::cross(grip - tug.base, result.force) * k_OverInertia : glm::vec3(0.0f);
+	const glm::vec3 torque = frame.leans ? glm::cross(result.force, grip - tug.base) * k_OverInertia : glm::vec3(0.0f);
 	const float damping = x87::Length<x87::SumOrder::Xzy>(tug.spin) * k_TugTurnDamping * frame.seconds / k_TugTurnInertia;
 	tug.spin += torque * frame.seconds - tug.spin * damping;
 	const auto halfBefore = tug.base + tug.axes[1] * (0.5f * frame.height);
+	// The axes turn by the spin over the frame. Each axis is a row times the turn, with its products added from z to x.
 	const auto turn = tug.spin * frame.seconds;
-	if (const float angle = glm::length(turn); angle > 0.0f)
+	float angle = 0.0f;
+	auto axis = turn;
+	if (turn != glm::vec3(0.0f))
 	{
-		tug.axes = glm::mat3(portable_math::Rotate(glm::mat4(1.0f), angle, turn * (1.0f / angle))) * tug.axes;
+		angle = x87::Length<x87::SumOrder::Xyz>(turn);
+		axis = turn * (1.0f / angle);
+	}
+	const auto turnMatrix = x87::TurnAbout(axis, angle);
+	constexpr x87::AxisOrders k_FromZ {{{2, 1, 0}, {2, 1, 0}, {2, 1, 0}}};
+	for (glm::length_t row = 0; row < 3; ++row)
+	{
+		tug.axes[row] = x87::TurnPoint(turnMatrix, tug.axes[row], k_FromZ);
 	}
 	// How fast its middle moves as it leans, the speed it has when it comes free
 	const auto halfAfter = tug.base + tug.axes[1] * (0.5f * frame.height);
@@ -355,9 +371,16 @@ TugResult hand_grab::PullAt(Tug& tug, const TugFrame& frame)
 
 glm::vec3 hand_grab::TugHandPoint(const Tug& tug, float holdDistance, float stretch)
 {
-	const float length = glm::length(tug.axes[1]);
-	const auto up = length > 0.0f ? tug.axes[1] / length : tug.axes[1];
-	return tug.base + up * (holdDistance * stretch);
+	// The hand is at the grip of the drawn thing: its axes made unit, its up axis stretched, the point moved by them
+	glm::mat4 drawn(1.0f);
+	for (glm::length_t row = 0; row < 3; ++row)
+	{
+		drawn[row] = glm::vec4(UnitRow(tug.axes[row]), 0.0f);
+	}
+	drawn[1] = glm::vec4(glm::vec3(drawn[1]) * stretch, 0.0f);
+	drawn[3] = glm::vec4(tug.base, 1.0f);
+	constexpr x87::AxisOrders k_HandOrder {{{0, 2, 1}, {2, 1, 0}, {2, 1, 0}}};
+	return x87::TransformPoint(drawn, {0.0f, holdDistance, 0.0f}, k_HandOrder);
 }
 
 bool hand_grab::IsThrow(glm::vec3 velocity, bool byCreature)

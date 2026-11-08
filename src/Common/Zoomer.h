@@ -35,6 +35,9 @@ public:
 	/// The same step with its terms summed in the other order the game uses where it moves a value on in place, which
 	/// rounds differently
 	void UpdateInline(float deltaSeconds);
+	/// The same step with the speed summed as `Update` sums it and the value summed as `UpdateInline` sums it. The hand
+	/// uses this step for the stretch of a thing that it pulls.
+	void UpdateInlineValue(float deltaSeconds);
 
 	[[nodiscard]] float GetValue() const { return _value; }
 	[[nodiscard]] float GetSpeed() const { return _speed; }
