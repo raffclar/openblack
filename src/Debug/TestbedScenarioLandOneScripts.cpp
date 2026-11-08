@@ -77,6 +77,19 @@ void testbed_scenarios::AddScriptTaskRelease(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "interface.screen_text_glyphs",
+	    .name = "The letters of the text in a box on the screen, read from the font as the game reads them",
+	    .facet = Facet::Interface,
+	    .description = "A script shows a help text in the dialogue box. Look at the letters of the text.",
+	    .expected = "Each letter of text under 26 pixels high comes from the small glyphs, a quarter of the full height, "
+	                "so it is softer than before. Each letter is two units wider than its bitmap and starts at its left "
+	                "bearing, so it sits one unit to the right.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview},
+	    .commands = {{.kind = Kind::RunText, .delaySeconds = 0.5f, .value = 1250}},
+	});
+
+	all.push_back({
 	    .id = "temple.main_room_lean",
 	    .name = "The temple's main room leans at the screen's edge and as the floor is dragged",
 	    .facet = Facet::Story,

@@ -2823,7 +2823,7 @@ void GameInterface::DrawBubbleLine(Canvas& canvas, const help::tip_bubble::Line&
 void GameInterface::DrawBubbleLine(Canvas& canvas, const help::tip_bubble::Line& line, glm::vec3 colour, const GameFont& font,
                                    const graphics::Texture2D* texture)
 {
-	const float scale = line.size / static_cast<float>(font.GetHeight());
+	const auto level = GameFont::ScreenGlyphLevel(line.size, false);
 	const auto atlasSize = glm::vec2(font.GetAtlasSize());
 	const float top = line.at.y;
 	const float bottom = line.at.y + line.size;
@@ -2831,26 +2831,30 @@ void GameInterface::DrawBubbleLine(Canvas& canvas, const help::tip_bubble::Line&
 	const auto alphaAt = [&](float y) {
 		return line.topAlpha + ((line.bottomAlpha - line.topAlpha) * (y - top) / (bottom - top));
 	};
-	float pen = line.at.x;
+	float pen = 0.0f;
 	for (const auto c : line.text)
 	{
-		const auto* glyph = font.Find(c);
-		if (glyph == nullptr)
+		const auto placed = font.PlaceOnScreen(c, line.at.x, pen, line.size, level);
+		if (!placed.has_value())
 		{
 			continue;
 		}
-		// The atlas holds the glyph at half size; it spans the whole line, cut to the box
-		const float width = static_cast<float>(glyph->atlasMax.x - glyph->atlasMin.x) * 2.0f * scale;
-		const float left = pen + (glyph->left * scale);
-		pen += (glyph->left + glyph->ink + glyph->right) * scale;
+		pen = placed->pen;
+		if (!placed->drawn)
+		{
+			continue;
+		}
+		// The glyph spans the whole line, cut to the box
+		const float left = placed->left;
+		const float width = placed->right - placed->left;
 		const float clippedTop = std::max(top, line.clipTop);
 		const float clippedBottom = std::min(bottom, line.clipBottom);
 		if (clippedBottom <= clippedTop)
 		{
 			continue;
 		}
-		auto uvMin = glm::vec2(glyph->atlasMin) / atlasSize;
-		auto uvMax = glm::vec2(glyph->atlasMax) / atlasSize;
+		auto uvMin = placed->texelMin / atlasSize;
+		auto uvMax = placed->texelMax / atlasSize;
 		const float vPerPixel = (uvMax.y - uvMin.y) / (bottom - top);
 		uvMin.y += (clippedTop - top) * vPerPixel;
 		uvMax.y -= (bottom - clippedBottom) * vPerPixel;
@@ -3008,25 +3012,28 @@ void GameInterface::DrawDialogueRun(const help::TextRun& run)
 {
 	const auto [font, texture] = DialogueFont(run.font);
 	const auto colour = glm::vec4(run.r, run.g, run.b, run.a) / 255.0f;
-	const auto scale = run.size / static_cast<float>(font->GetHeight());
+	const auto level = GameFont::ScreenGlyphLevel(run.size, false);
 	const auto atlasSize = glm::vec2(font->GetAtlasSize());
 	const float clipTop = run.clipTop;
 	const float clipBottom = run.clipBottom + 1.0f;
-	auto pen = glm::floor(glm::vec2(run.x, run.y));
+	const auto start = glm::floor(glm::vec2(run.x, run.y));
+	float pen = 0.0f;
 	for (const auto c : run.text)
 	{
-		const auto* glyph = font->Find(c);
-		if (glyph == nullptr)
+		const auto placed = font->PlaceOnScreen(c, start.x, pen, run.size, level);
+		if (!placed.has_value())
 		{
 			continue;
 		}
-		// The atlas holds the glyph at half size
-		const auto cellSize = glm::vec2(glyph->atlasMax - glyph->atlasMin) * 2.0f * scale;
-		auto min = glm::vec2(pen.x + (glyph->left * scale), pen.y);
-		auto max = min + cellSize;
-		auto uvMin = glm::vec2(glyph->atlasMin) / atlasSize;
-		auto uvMax = glm::vec2(glyph->atlasMax) / atlasSize;
-		pen.x += (glyph->left + glyph->ink + glyph->right) * scale;
+		pen = placed->pen;
+		if (!placed->drawn)
+		{
+			continue;
+		}
+		auto min = glm::vec2(placed->left, start.y);
+		auto max = glm::vec2(placed->right, start.y + run.size);
+		auto uvMin = placed->texelMin / atlasSize;
+		auto uvMax = placed->texelMax / atlasSize;
 		// Cut to the box, the glyph's picture with it
 		const float top = std::max(min.y, clipTop);
 		const float bottom = std::min(max.y, clipBottom);
