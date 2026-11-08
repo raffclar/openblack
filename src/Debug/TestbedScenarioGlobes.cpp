@@ -14,6 +14,7 @@
 #include <iterator>
 #include <vector>
 
+#include "3D/TempleRoom.h"
 #include "TestbedScenarioRegistry.h"
 
 using namespace openblack;
@@ -313,6 +314,30 @@ void AddHand(std::vector<Scenario>& all)
 	    .hand = HandHold {.offset = {0.0f, 25.0f}, .height = 6.0f},
 	    .townBeliefInPlayer = k_WorshipTownBelief,
 	    .townMiracles = {MagicType::LightningBolt, MagicType::LightningBoltPowerUpOne, MagicType::LightningBoltPowerUpTwo},
+	});
+
+	all.push_back({
+	    .id = "miracles.hand_bands_temple",
+	    .name = "The hand's bands go in the temple",
+	    .facet = Facet::Miracles,
+	    .description = "The worship town of the player, with the lightning bolt. A tap puts the lightning from the icon of "
+	                   "the worship site into the hand. After four seconds the player goes into the main room of the "
+	                   "temple.",
+	    .expected = "The bands fly onto the hand, a bracelet settles round the wrist and the hand glows. In the temple the "
+	                "hand shows no glow, no bands and no bracelet.",
+	    .environment = {.dispenserGrid = false, .landNumber = k_WorshipTownLand},
+	    .framing = {.shot = Shot::Overview, .include = {{-3.0f, 27.0f}, {3.0f, 33.0f}}, .distance = 0.2f},
+	    .objects = WorshipTown(),
+	    .temples = {{.offset = k_WorshipTemple}},
+	    .commands = {{.kind = Kind::BuildWorshipSites, .delaySeconds = 0.5f},
+	                 {.kind = Kind::TakeIconSeed,
+	                  .delaySeconds = 0.5f,
+	                  .value = static_cast<size_t>(SpellSeedType::LightningBolt),
+	                  .amount = 1.0f},
+	                 {.kind = Kind::EnterTemple, .delaySeconds = 4.0f, .value = static_cast<size_t>(TempleRoom::Main)}},
+	    .hand = HandHold {.offset = {0.0f, 25.0f}, .height = 6.0f},
+	    .townBeliefInPlayer = k_WorshipTownBelief,
+	    .townMiracles = {MagicType::LightningBolt},
 	});
 
 	all.push_back({

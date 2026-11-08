@@ -12,6 +12,7 @@
 #include "Hand/HandVisibility.h"
 
 using openblack::hand_visibility::IsShown;
+using openblack::hand_visibility::ShowsMiracleEffects;
 using openblack::hand_visibility::TakesPresses;
 
 TEST(HandVisibility, TheHandIsOutInPlay)
@@ -50,4 +51,23 @@ TEST(HandVisibility, AScriptsCinemaBarsKeepPressesFromTheHand)
 {
 	// A click during the intro's cinema grips no land, so it throws up no dust
 	EXPECT_FALSE(TakesPresses(false));
+}
+
+TEST(HandVisibility, TheHandThatIsOutShowsItsMiracle)
+{
+	static_assert(ShowsMiracleEffects(true, false));
+	EXPECT_TRUE(ShowsMiracleEffects(true, false));
+}
+
+TEST(HandVisibility, TheHandThatIsAwayStopsItsMiracleEffects)
+{
+	// The bands in flight stop where they are, and continue when the hand comes back
+	EXPECT_FALSE(ShowsMiracleEffects(false, false));
+	EXPECT_FALSE(ShowsMiracleEffects(false, true));
+}
+
+TEST(HandVisibility, InsideTheTempleTheHandShowsNoMiracleEffects)
+{
+	// The temple draws the hand, but not its glow, its bands or its bracelets
+	EXPECT_FALSE(ShowsMiracleEffects(true, true));
 }
