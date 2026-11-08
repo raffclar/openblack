@@ -1014,3 +1014,29 @@ TEST(InspectorRunControl, ASeededRunStartsEachLoadPaused)
 	const auto decoded = DecodeRequest(R"({"query": "game.seed", "params": {"pause_on_load": true}})");
 	EXPECT_FALSE(inspector.Answer(std::get<Request>(decoded)).Ok());
 }
+
+// A tool that holds a run keeps it held until a step or a resume releases it. The held frames then do not count, so that
+// the wall clock, which sets their number, does not change where the frames of the run start.
+TEST(InspectorRunControl, AHeldRunStaysHeldUntilAStepOrAResume)
+{
+	FakeRunTarget target;
+	Inspector inspector;
+	auto provider = std::make_unique<GameProvider>(target);
+	auto* game = provider.get();
+	inspector.Add(std::move(provider));
+
+	target.paused = true;
+	EXPECT_TRUE(game->HoldsFrame());
+
+	Ask(inspector, R"({"query": "game.step", "params": {"frames": 2}})");
+	EXPECT_FALSE(game->HoldsFrame());
+	game->Frame();
+	game->Frame();
+	game->Frame();
+	EXPECT_TRUE(target.paused);
+	EXPECT_TRUE(game->HoldsFrame());
+	EXPECT_EQ(game->FrameNumber(), 3u);
+
+	Ask(inspector, R"({"query": "game.resume"})");
+	EXPECT_FALSE(game->HoldsFrame());
+}

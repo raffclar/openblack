@@ -765,13 +765,16 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		// inspector
 		const bool simNoHandReports = result.count("sim-no-hand-reports") != 0;
 		const bool simPlayCommands = result.count("sim-play-commands") != 0;
-		if (simNoHandReports || simPlayCommands)
+		const bool simStartPaused = result["sim-start-paused"].as<bool>();
+		if (simNoHandReports || simPlayCommands || simStartPaused)
 		{
 			if (!args.simulation.has_value())
 			{
 				args.simulation = openblack::sim_run::Request {};
 			}
 			args.simulation->settings.noHandReports = simNoHandReports;
+			// A tool that steps the run holds each land before its first frame, also when the run keeps no record
+			args.simulation->startPaused = simStartPaused;
 			if (simPlayCommands)
 			{
 				args.simulation->playCommandsPath = std::filesystem::path(result["sim-play-commands"].as<std::string>());
@@ -795,7 +798,6 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 				args.simulation->hashParts = result["sim-hash-fields"].as<bool>()  ? openblack::sim_run::HashDetail::Fields
 				                             : result["sim-hash-parts"].as<bool>() ? openblack::sim_run::HashDetail::Components
 				                                                                   : openblack::sim_run::HashDetail::None;
-				args.simulation->startPaused = result["sim-start-paused"].as<bool>();
 				if (result.count("sim-record-input") != 0)
 				{
 					args.simulation->recordInputPath = std::filesystem::path(result["sim-record-input"].as<std::string>());

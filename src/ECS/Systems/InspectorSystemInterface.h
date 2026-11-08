@@ -43,6 +43,10 @@ public:
 	/// Once a frame, before the game's turn: answers the requests that came in since the last frame, then holds or
 	/// releases the game for any stepping asked for
 	virtual void Service() = 0;
+	/// Once a frame while a tool holds the run (see sim_run::SkipsHeldFrame): answers the requests as Service does. The
+	/// work of a frame, such as the count of the frames and the input due at a frame, occurs only when the tool releases
+	/// the run in this frame. Thus the wall clock, which sets the number of held frames, does not change the run.
+	virtual void ServiceHeld() { Service(); }
 	/// The port it listens on, on 127.0.0.1
 	[[nodiscard]] virtual uint16_t GetPort() const = 0;
 	/// The game is about to load something that takes long (a land, the testbed), during which it serves no frames:

@@ -127,6 +127,8 @@ public:
 	void Loaded();
 
 	[[nodiscard]] Json State() const;
+	/// Whether the run stays held in a frame that the tool holds: the game is paused and no step releases it
+	[[nodiscard]] bool HoldsFrame() const { return _target.IsPaused() && !_control.Stepping(); }
 	/// The frames served so far
 	[[nodiscard]] uint64_t FrameNumber() const { return _frame; }
 	/// Each land or scenario loaded from now on starts paused, before any of its frames, as for a seeded run

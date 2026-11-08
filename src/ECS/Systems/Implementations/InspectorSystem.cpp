@@ -501,6 +501,23 @@ void InspectorSystem::RequestQueuedScenario()
 
 void InspectorSystem::Service()
 {
+	AnswerRequests();
+	DoFrameWork();
+}
+
+void InspectorSystem::ServiceHeld()
+{
+	AnswerRequests();
+	// While the tool holds the run, the frame does not count, and the inspector makes no input or record of the frame
+	if (_game->HoldsFrame())
+	{
+		return;
+	}
+	DoFrameWork();
+}
+
+void InspectorSystem::AnswerRequests()
+{
 	// The player's input is kept out while a client is connected (and a moment after), as the lock's mode says
 	const auto now = std::chrono::steady_clock::now();
 	const auto seconds = std::chrono::duration<float>(now - _lastService).count();
@@ -544,6 +561,10 @@ void InspectorSystem::Service()
 		auto identity = inspector::discovery::ToJson(_discovery->Record());
 		_inspector.SetIdentity(std::move(identity));
 	}
+}
+
+void InspectorSystem::DoFrameWork()
+{
 	_game->Frame();
 	// The fight transcript stamps its records with this frame and the game time so far
 	if (Locator::fightTranscript::has_value())
