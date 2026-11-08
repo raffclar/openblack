@@ -225,6 +225,19 @@ void AddFire(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "miracles.half_built_hut_burns",
+	    .name = "A hut half built catches fire",
+	    .facet = Facet::Miracles,
+	    .description = "A hut stands half built. It catches fire. A whole hut beside it catches fire too.",
+	    .expected = "The part of the half built hut that stands becomes grey and glows with the heat as the whole hut "
+	                "does.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {k_Ground - glm::vec2(12.0f), k_Ground + glm::vec2(12.0f)}},
+	    .objects = {{.type = AbodeInfo::CelticHut, .offset = k_Ground + glm::vec2(-6.0f, 0.0f), .built = 0.5f, .alight = true},
+	                {.type = AbodeInfo::CelticHut, .offset = k_Ground + glm::vec2(6.0f, 0.0f), .alight = true}},
+	});
+
+	all.push_back({
 	    .id = "miracles.fire_paused",
 	    .name = "A pause while a forest burns and the hand holds fire",
 	    .facet = Facet::Miracles,

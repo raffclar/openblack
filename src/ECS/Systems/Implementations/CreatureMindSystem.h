@@ -112,6 +112,7 @@ public:
 	void ForceCatch(entt::entity creature, entt::entity object) override;
 	bool TakeFromHand(entt::entity creature, entt::entity object, bool leftHand, glm::vec2 camera) override;
 	[[nodiscard]] bool IsTakingFromHand(entt::entity creature) const override;
+	[[nodiscard]] bool IsActing(entt::entity creature) const override;
 	[[nodiscard]] bool IsLyingDead(entt::entity creature) override;
 	creature_mind::HandsCheck CheckHandsBeforeAction(entt::entity creature) override;
 	[[nodiscard]] bool SeemsFriendly(entt::entity creature, entt::entity other) override;

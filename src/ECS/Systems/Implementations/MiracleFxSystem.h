@@ -33,7 +33,7 @@ namespace openblack::ecs::systems
 class MiracleFxSystem final: public MiracleFxSystemInterface
 {
 public:
-	void Update(float seconds, float gameSeconds) override;
+	void Update(float seconds, float gameSeconds, bool handShowsEffects) override;
 	void LoadMeshes() override;
 	void SeedInHand(int powerUp, int previousPowerUp) override;
 	void SeedLeftHand() override;

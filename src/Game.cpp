@@ -123,6 +123,7 @@
 #include "Hand/HandBlend.h"
 #include "Hand/HandGrabRules.h"
 #include "Hand/HandTrace.h"
+#include "Hand/HandVisibility.h"
 #include "Help/DialogueText.h"
 #include "Help/HelpProfile.h"
 #include "Help/SingAlong.h"
@@ -258,6 +259,8 @@ graphics::RendererInterface::DrawSceneDesc SceneDrawDesc(const EngineConfig& con
 	    .cullBack = false,
 	    .wireframe = config.wireframe,
 	    .drawHand = drawHand,
+	    .drawHandEffects =
+	        hand_visibility::ShowsMiracleEffects(drawHand, Locator::temple::has_value() && Locator::temple::value().Active()),
 	};
 }
 

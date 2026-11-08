@@ -347,7 +347,6 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     {.component = "HandGrab", .field = "offeredTo", .marker = ""},
     {.component = "HandGrab", .field = "offer", .marker = ""},
     {.component = "HandGrab", .field = "givenTo", .marker = ""},
-    {.component = "HandGrab", .field = "callingOff", .marker = ""},
     {.component = "HandGrab", .field = "offerTurn", .marker = ""},
     {.component = "HandGrab", .field = "lastHand", .marker = ""},
     // The frames bend the trees away from what moves near them, and only the frames read the bend

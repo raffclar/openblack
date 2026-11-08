@@ -1339,8 +1339,10 @@ void Game::UpdateDrawnHand(std::chrono::microseconds deltaTime, Profiler& profil
 	{
 		// The hand and the piles show their miracles
 		auto miracleFx = profiler.BeginScoped(Profiler::Stage::MiracleFxUpdate);
+		const bool insideTemple = Locator::temple::has_value() && Locator::temple::value().Active();
 		Locator::miracleFxSystem::value().Update(std::chrono::duration_cast<std::chrono::duration<float>>(deltaTime).count(),
-		                                         std::chrono::duration<float>(gameTime).count());
+		                                         std::chrono::duration<float>(gameTime).count(),
+		                                         hand_visibility::ShowsMiracleEffects(IsHandDrawn(), insideTemple));
 	}
 	Locator::entitiesRegistry::value().SetDirty();
 }

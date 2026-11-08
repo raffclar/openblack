@@ -159,9 +159,16 @@ public:
 			{
 				return false;
 			}
-			if (trails.erase(atom.get()) > 0)
+			// Only the trail of this computer's player made the hand glow
+			const auto found = trails.find(atom.get());
+			if (found != trails.end())
 			{
-				world.SetHandGlow(0);
+				const bool own = found->second.trail != nullptr && !found->second.trail->heardAt.has_value();
+				trails.erase(found);
+				if (own)
+				{
+					world.SetHandGlow(0);
+				}
 			}
 			return true;
 		});
@@ -240,12 +247,16 @@ private:
 		const auto depth = data.boxMax.z - data.boxMin.z;
 		const auto wiggle = trail::WiggleAmount(age, wigglePhaseSpeed, dispersalTime, shrinkTime);
 
-		// A while in, the particles flash and the hand glows in the player's colour, both dying away
+		// A while in, the particles flash and the hand glows in the player's colour, both dying away. Only the trail of
+		// this computer's player makes the hand glow: the trail of another player has a place where it is heard.
 		const float sinceFlash = age - trail::k_FlashStart;
 		if (sinceFlash > 0.0f)
 		{
 			const float flash = static_cast<float>(collectionAlphaPulse) * trail::FlashLeft(sinceFlash, trail::k_FlashSeconds);
 			sub.alpha = static_cast<uint8_t>(static_cast<int>(flash));
+		}
+		if (sinceFlash > 0.0f && !data.trail->heardAt.has_value())
+		{
 			const auto glow =
 			    static_cast<uint8_t>(static_cast<int>(trail::FlashLeft(sinceFlash, handPulseDuration) * k_ByteMax));
 			world.SetHandGlow(trail::Dimmed(data.colour, glow));

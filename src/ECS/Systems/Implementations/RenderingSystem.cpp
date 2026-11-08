@@ -1112,7 +1112,7 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 			    {
 				    if (abode != nullptr)
 				    {
-					    look.x = look.x > 0.5f ? 1.0f + static_cast<float>(*heat) : -static_cast<float>(*heat);
+					    look.x = graphics::object_tint::HouseLight(look.x > 0.5f, *heat);
 				    }
 				    else
 				    {
@@ -1787,9 +1787,24 @@ void RenderingSystem::UploadPartialBuilds()
 		const auto fading = _fadingThings.find(entity);
 		// The building shows its own snow, and fades out in the distance as the whole building does
 		const auto snow = static_cast<float>(openblack::ecs::snow_levels::LevelOf(registry, entity));
-		const auto look = fading != _fadingThings.end()
-		                      ? glm::vec4(0.0f, 0.0f, -(1.0f - (static_cast<float>(fading->second) / 255.0f)), snow)
-		                      : glm::vec4(0.0f, 0.0f, 0.0f, snow);
+		auto look = fading != _fadingThings.end()
+		                ? glm::vec4(0.0f, 0.0f, -(1.0f - (static_cast<float>(fading->second) / 255.0f)), snow)
+		                : glm::vec4(0.0f, 0.0f, 0.0f, snow);
+		// The part of a burning building that stands is charred grey and glows with the heat of its fire, as all of a
+		// standing building does
+		if (registry.AllOf<Fire>(entity) && Locator::fireSystem::has_value())
+		{
+			const auto& fires = Locator::fireSystem::value();
+			if (const auto charred = fires.GetCharredColour(entity))
+			{
+				look.y = static_cast<float>(*charred);
+			}
+			if (const auto heat = fires.GetGlowColour(entity); heat.has_value() && *heat != 0)
+			{
+				look.x = registry.AllOf<Abode>(entity) ? graphics::object_tint::HouseLight(false, *heat)
+				                                       : graphics::object_tint::PackAdded(*heat, 0.0f);
+			}
+		}
 		const auto model = meshes.Handle(mesh.id);
 		const float halfHeight = 0.5f * model->GetBoundingBox().Size().y;
 		const auto build = physics::damage::PartialBuildOf(*share, transform.position.y, halfHeight, transform.scale.y);
