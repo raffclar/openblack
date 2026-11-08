@@ -71,6 +71,8 @@ public:
 		bool drawnAlone {false};
 		/// False while the frame does not draw the thing that draws the effect
 		bool shown {true};
+		/// Drawn as its last step left it, with no blend from the step before
+		bool atLastStep {false};
 	};
 
 	/// What the debug window shows of an effect
@@ -129,6 +131,9 @@ public:
 	}
 	/// Whether an effect that its thing draws shows in this frame: it shows only while the frame draws its thing
 	virtual void SetShown(EffectId /*id*/, bool /*shown*/) {}
+	/// An effect that its draw shows as its last step left it, with no blend from the step before. The seeds over the
+	/// icons of the worship sites and the hands of the village centres draw their effects in this way.
+	virtual void SetDrawnAtLastStep(EffectId /*id*/) {}
 	/// A spot visual: the info table's particle type at a point for some turns (its own life when not given, for ever
 	/// when negative), staying where it was made, and ending when its owner object (if any) goes. Its random numbers are
 	/// the shared ones, unless it shows only what the hand of this computer did.

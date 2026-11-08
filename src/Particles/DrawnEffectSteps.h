@@ -75,6 +75,13 @@ namespace openblack::particles::drawn_steps
 	return static_cast<float>(turn.count()) * 0.001f;
 }
 
+/// How far between its last two steps the draw shows an effect. Most effects show the share of the turn that the frame
+/// is at. An effect that its draw shows at its last step, as the seed over an icon does, shows all of the last step.
+[[nodiscard]] constexpr float DrawFraction(bool atLastStep, float turnFraction)
+{
+	return atLastStep ? 1.0f : turnFraction;
+}
+
 /// The order in which the frame draws some things, such as the stones or the dispensers. With a camera and a land the
 /// frame draws the things of the land's list in the list's order, the nearest blocks first, then the things that are
 /// not on the list's blocks. Without a camera or a land it draws every thing, in the given order.

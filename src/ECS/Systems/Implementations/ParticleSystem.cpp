@@ -25,6 +25,7 @@
 #include "ECS/GamePlayers.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Locator.h"
+#include "Particles/DrawnEffectSteps.h"
 #include "Particles/LightSheet.h"
 
 using namespace openblack;
@@ -125,7 +126,7 @@ void ParticleSystem::AddDrawn(const DrawnEffect& drawn, float turnFraction, part
                               const particles::draw::Sources& sources) const
 {
 	_walk.Clear();
-	drawn.effect->Walk(turnFraction, _walk);
+	drawn.effect->Walk(particles::drawn_steps::DrawFraction(drawn.atLastStep, turnFraction), _walk);
 	if (drawn.drawOffset != glm::vec3(0.0f))
 	{
 		for (auto& atom : _walk.atoms)

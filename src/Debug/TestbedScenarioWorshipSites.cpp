@@ -179,6 +179,19 @@ void testbed_scenarios::AddWorshipSiteScenarios(std::vector<Scenario>& all)
 	    .worshipShare = 1.0f,
 	});
 	all.push_back({
+	    .id = "worship.icon_holder_effects_last_step",
+	    .name = "The effects of the seeds over the icons show their last step",
+	    .facet = Facet::Miracles,
+	    .description = "As worship.icon_holder_effects. Turn the camera round the site and move it near to the icons and "
+	                   "away. Then hold the camera still.",
+	    .expected = "The effects over the icons and over the stone hands of the village centre move at the same smooth "
+	                "speed with the camera still and with the camera in motion. The swirl of the heal effect does not "
+	                "jump back at the start of each turn. The sizes of the effects do not change with the camera.",
+	    .framing = SiteFraming(),
+	    .landScript = k_HolderTownScript,
+	    .worshipShare = 1.0f,
+	});
+	all.push_back({
 	    .id = "miracles.seed_take_back",
 	    .name = "Shield: the hand takes its seed back",
 	    .facet = Facet::Miracles,
