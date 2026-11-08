@@ -89,6 +89,11 @@ void TempleDestructionSystem::RemoveTemple(entt::entity temple)
 	RemoveLanterns(temple);
 	// Any worship site made for it since its destruction began goes with it
 	_world->RemoveWorshipSites(temple);
+	// In a network game, the god whose temple goes loses the influence that their hand keeps past the border
+	if (const auto* component = registry.TryGet<const Temple>(temple); component != nullptr && _world->NetworkGame())
+	{
+		_world->SwitchOffVirtualInfluence(component->owner);
+	}
 	_world->Remove(temple);
 }
 

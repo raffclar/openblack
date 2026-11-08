@@ -272,3 +272,17 @@ TEST(VirtualInfluence, OnlyATurnOutOfInfluenceUsesTheChantsOfTheWorshipSites)
 	state.disabled = true;
 	EXPECT_FALSE(UsesChants(state, false, false));
 }
+
+TEST(VirtualInfluence, SwitchedOffItLosesAllItsStrengthAndSwitchedOnItKeepsWhatItHas)
+{
+	State state {.fraction = 0.6f};
+	Switch(state, true);
+	EXPECT_FALSE(state.disabled);
+	EXPECT_FLOAT_EQ(state.fraction, 0.6f);
+	Switch(state, false);
+	EXPECT_TRUE(state.disabled);
+	EXPECT_EQ(state.fraction, 0.0f);
+	Switch(state, true);
+	EXPECT_FALSE(state.disabled);
+	EXPECT_EQ(state.fraction, 0.0f);
+}

@@ -92,6 +92,21 @@ void testbed_scenarios::AddScriptTaskRelease(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "hand.temple_wall_gap",
+	    .name = "In the temple the hand hangs 5 units short of the wall under the pointer",
+	    .facet = Facet::Hand,
+	    .description = "The player has a temple and is put in its main room. Move the pointer slowly across the walls "
+	                   "and the floor, near and far.",
+	    .expected = "The hand stays on the line of sight through the pointer, 5 units nearer to the camera than the "
+	                "wall or floor under the pointer. It is never nearer than 4 units to the camera and never further "
+	                "than 300. It eases out slowly over 0.4 seconds and comes in quickly over 0.2 seconds.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview},
+	    .temples = {{.offset = {-300.0f, 100.0f}, .angle = 36.0f}},
+	    .commands = {{.kind = Kind::EnterTemple, .delaySeconds = 5.0f, .value = 3}},
+	});
+
+	all.push_back({
 	    .id = "temple.low_detail_rooms",
 	    .name = "At the lowest detail the temple's rooms have no light maps",
 	    .facet = Facet::Story,

@@ -96,6 +96,9 @@ struct TurnInputs
 /// shield it has none.
 void ProcessTurn(State& state, const TurnInputs& inputs, const Settings& settings);
 
+/// Switches the strength on or off. When it is switched off, the hand loses all of its strength at once.
+void Switch(State& state, bool on);
+
 /// Whether the turn uses the chants of the player's worship sites: only when the hand keeps its strength switched on, is
 /// not under a shield and is out of its player's own influence. Each such turn uses up the chants that it reads.
 [[nodiscard]] bool UsesChants(const State& state, bool handShielded, bool handInInfluence);
