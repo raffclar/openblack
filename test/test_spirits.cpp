@@ -628,3 +628,25 @@ TEST(Spirits, TheAdvisorsMoveApartInDepthInsideTheGamesOwnSquaredDistance)
 	EXPECT_EQ(std::bit_cast<uint32_t>(openblack::help::spirits::k_PartnerCloseSquared), 0x3F4F5C2Au);
 	EXPECT_LT(0.81f, openblack::help::spirits::k_PartnerCloseSquared);
 }
+
+TEST(Spirits, APuffBehindTheCameraTakesThePlaceThatTheGameLeaves)
+{
+	using openblack::help::spirits::PuffPlaceInWorld;
+
+	// The first advisor of the pass: across the halo's world x, down the integer 1 read as a float
+	PuffPlaceInWorld first;
+	const glm::vec2 halo = first.Place(std::nullopt, 1234.5f);
+	EXPECT_EQ(halo.x, 1234.5f);
+	EXPECT_EQ(std::bit_cast<uint32_t>(halo.y), 1u);
+
+	// With no halo, across is 0
+	PuffPlaceInWorld noHalo;
+	EXPECT_EQ(noHalo.Place(std::nullopt, std::nullopt).x, 0.0f);
+
+	// A projection that works gives its place, and its down value stays for the next advisor of the pass
+	PuffPlaceInWorld pass;
+	const glm::vec2 seen = pass.Place(glm::vec2(0.25f, -0.5f), 99.0f);
+	EXPECT_EQ(seen, glm::vec2(0.25f, -0.5f));
+	const glm::vec2 behind = pass.Place(std::nullopt, std::nullopt);
+	EXPECT_EQ(behind, glm::vec2(0.0f, -0.5f));
+}

@@ -310,6 +310,7 @@ void AdvisorSystem::PlayAnimSounds()
 void AdvisorSystem::MakeDraws(int32_t stepMs)
 {
 	_draws.clear();
+	PuffPlaceInWorld worldPuffPlace;
 	for (int d = 0; d < k_Dudes; ++d)
 	{
 		if (_controller->State(d) == ControlState::Home)
@@ -349,6 +350,7 @@ void AdvisorSystem::MakeDraws(int32_t stepMs)
 		const auto inFront = [this](const glm::vec3& position) {
 			return glm::dot(position - _view.eye, _view.forward) > _view.nearClip;
 		};
+		std::optional<float> haloWorldX;
 		if (model && model->file.haloScale != 0.0f && draw.alpha != 0)
 		{
 			// The halo's clock moves on only as a halo is drawn
@@ -361,6 +363,7 @@ void AdvisorSystem::MakeDraws(int32_t stepMs)
 			                   .angle = 0.0f,
 			                   .cell = static_cast<uint8_t>((_haloClockMs / 200) & 15),
 			                   .argb = WithAlpha(draw.alpha, 0xFFFFFF)};
+			haloWorldX = halo.position.x;
 			if (inFront(halo.position))
 			{
 				draw.sprites.push_back(halo);
@@ -368,8 +371,17 @@ void AdvisorSystem::MakeDraws(int32_t stepMs)
 		}
 		if (const auto& particles = dude.PuffParticles(); particles && dude.PuffRunning())
 		{
-			// The root bone in the hover's space, as far off the screen as it may be
-			const glm::vec2 hover = dude.WorldToHover(anchor, true).value_or(dude.Hover());
+			// The root bone in the hover's space, as far off the screen as it may be. Only a puff with a particle to
+			// draw asks for its place, as the game does
+			const bool drawsParticle =
+			    std::ranges::any_of(*particles, [](const PuffParticle& particle) { return particle.drawAlpha > 0; });
+			const auto projected = dude.WorldToHover(anchor, true);
+			// Near the screen, a failed projection gives the advisor's hover place (vanilla-bugs 1095, guarded)
+			glm::vec2 hover = projected.value_or(dude.Hover());
+			if (!draw.nearScreen && drawsParticle)
+			{
+				hover = worldPuffPlace.Place(projected, haloWorldX);
+			}
 			const float fade = dude.PuffFade();
 			// The evil advisor's smoke is a dark red
 			const uint32_t mask = d == k_EvilDude ? 0x7F1F1Fu : 0xFFFFFFu;
