@@ -38,13 +38,13 @@ std::optional<uint32_t> snow_dust::CurrentLandColour()
 		return std::nullopt;
 	}
 	const auto skyType = Locator::skyClockSystem::value().GetCurrentNightSkyType();
-	const auto alignment = Locator::alignmentSystem::has_value() ? Locator::alignmentSystem::value().GetSkyAlignment() : 0.0f;
+	const auto sky = Locator::alignmentSystem::has_value() ? Locator::alignmentSystem::value().GetSkyLand() : 1.0f;
 	float overcast = 0.0f;
 	if (Locator::weatherSystem::has_value() && Locator::camera::has_value())
 	{
 		overcast = Locator::weatherSystem::value().GetOvercast(Locator::camera::value().GetOrigin());
 	}
-	return LandLightTable::GetLandColour(*palettes.Handle(LandLightPalette::k_Id.value()), skyType, alignment, overcast);
+	return LandLightTable::GetLandColour(*palettes.Handle(LandLightPalette::k_Id.value()), skyType, sky, overcast);
 }
 
 int32_t snow_dust::SnowAt(glm::vec3 point)

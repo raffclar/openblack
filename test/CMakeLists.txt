@@ -2446,3 +2446,4 @@ set_tests_properties(
 openblack_setup_and_add_test(test_temple_signs temple/test_temple_signs.cpp)
 openblack_setup_and_add_test(test_game_firefly_world test_game_firefly_world.cpp)
 openblack_setup_and_add_test(test_yard_copy_rules test_yard_copy_rules.cpp)
+openblack_setup_and_add_test(test_script_line_values test_script_line_values.cpp)

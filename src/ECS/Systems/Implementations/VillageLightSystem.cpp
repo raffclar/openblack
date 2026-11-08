@@ -47,14 +47,14 @@ bool IsLandDark()
 		return false;
 	}
 	const auto skyType = Locator::skyClockSystem::value().GetCurrentNightSkyType();
-	const auto alignment = Locator::alignmentSystem::has_value() ? Locator::alignmentSystem::value().GetSkyAlignment() : 0.0f;
+	const auto sky = Locator::alignmentSystem::has_value() ? Locator::alignmentSystem::value().GetSkyLand() : 1.0f;
 	float overcast = 0.0f;
 	if (Locator::weatherSystem::has_value() && Locator::camera::has_value())
 	{
 		overcast = Locator::weatherSystem::value().GetOvercast(Locator::camera::value().GetOrigin());
 	}
 	return village_lights::IsDark(
-	    LandLightTable::GetLandColour(*palettes.Handle(LandLightPalette::k_Id.value()), skyType, alignment, overcast));
+	    LandLightTable::GetLandColour(*palettes.Handle(LandLightPalette::k_Id.value()), skyType, sky, overcast));
 }
 } // namespace
 

@@ -62,14 +62,14 @@ TEST(Clouds, TurnWithTheWindAboutTheMiddle)
 	EXPECT_EQ(std::bit_cast<uint32_t>(exact.z), 0x451E0C01u);
 }
 
-TEST(Clouds, ColourFollowsTheSkysAlignment)
+TEST(Clouds, ColourFollowsTheValueOfTheSky)
 {
-	// Good: clear white, drawn a little towards 35
-	EXPECT_EQ(clouds::Colour(1.0f, 0xFFFFFF), 0x00DBDBDBu);
-	// Neutral: half opaque
-	EXPECT_EQ(clouds::Colour(0.0f, 0xFFFFFF) >> 24, 0xC8u);
-	// Evil: opaque, dark orange
-	EXPECT_EQ(clouds::Colour(-1.0f, 0xFFFFFF) >> 24, 0xFFu);
+	// Good, 0: clear white, drawn a little towards 35
+	EXPECT_EQ(clouds::Colour(0.0f, 0xFFFFFF), 0x00DBDBDBu);
+	// Neutral, 1: half opaque
+	EXPECT_EQ(clouds::Colour(1.0f, 0xFFFFFF) >> 24, 0xC8u);
+	// Evil, 2: opaque, dark orange
+	EXPECT_EQ(clouds::Colour(2.0f, 0xFFFFFF) >> 24, 0xFFu);
 	// In no light, only the pull towards 35 is left
-	EXPECT_EQ(clouds::Colour(1.0f, 0x000000) & 0xFFFFFFu, 0x00232323u);
+	EXPECT_EQ(clouds::Colour(0.0f, 0x000000) & 0xFFFFFFu, 0x00232323u);
 }

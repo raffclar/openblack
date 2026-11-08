@@ -339,7 +339,7 @@ void Renderer::DrawMists(const DrawSceneDesc& desc) const
 		const auto texel = _landLightTable->GetTexels().back();
 		fullLight = ((texel & 0xFFu) << 16u) | (texel & 0xFF00u) | ((texel >> 16u) & 0xFFu);
 	}
-	const auto cloudColour = clouds::Colour(Locator::alignmentSystem::value().GetSkyAlignment(), fullLight);
+	const auto cloudColour = clouds::Colour(Locator::alignmentSystem::value().GetSkyLand(), fullLight);
 	// The storms' clouds are tinted from the land's colour this frame
 	const auto landColour = _landLightTable ? _landLightTable->GetLandColour() : 0xFFFFFFu;
 

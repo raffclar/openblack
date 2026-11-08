@@ -169,8 +169,6 @@ public:
 	[[nodiscard]] float GetCameraAlignment() const { return alignment::AudioAlignment(GetCameraLand()); }
 	/// The alignment at the camera that lights the temple's insides, from -1, evil, to 1, good
 	[[nodiscard]] float GetTempleLightAlignment() const { return alignment::TempleLightAlignment(GetCameraLand()); }
-	/// The alignment that the sky shows, from -1, evil, to 1, good: 1 less the value of the sky
-	[[nodiscard]] float GetSkyAlignment() const { return 1.0f - GetSkyLand(); }
 };
 
 } // namespace openblack::ecs::systems

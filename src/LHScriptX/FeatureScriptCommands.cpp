@@ -1350,6 +1350,13 @@ void FeatureScriptCommands::CreateFireFly(glm::vec3 position)
 	{
 		Locator::fireflySystem::value().Create(map_coords::FromWorld(Locator::terrainSystem::value(), position));
 	}
+	// The game then also does a town desire boost with the values that earlier lines left: the number of the first
+	// place, the text of the second and the float of the third (vanilla-bugs 954, kept)
+	if (Locator::landSystem::has_value())
+	{
+		const auto& values = Locator::landSystem::value().GetScriptLineValues();
+		TownDesireBoost(values.number[0], values.text[1], values.real[2]);
+	}
 }
 
 void FeatureScriptCommands::TownDesireBoost(int32_t townId, const std::string& desire, float boost)

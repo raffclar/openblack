@@ -52,7 +52,7 @@ sky_frame::Inputs Frame(float hour, std::optional<float> overcast = 0.0f, bool f
 	    .scriptHour = hour,
 	    .unixTime = k_Date,
 	    .ticks = 100000,
-	    .landLight = {.skyType = 0.5f, .alignment = -0.25f, .overcast = overcast.value_or(0.75f), .flash = 3},
+	    .landLight = {.skyType = 0.5f, .sky = 1.25f, .overcast = overcast.value_or(0.75f), .flash = 3},
 	    .palette = overcast.has_value() ? &FakePalette() : nullptr,
 	    .fog = fog,
 	};
@@ -134,8 +134,8 @@ TEST(SkyFrame, TheMoonsColourIsThePalettesForTheLandsLight)
 	Moon moon;
 	const auto frame = Frame(0.0f, 0.25f);
 	sky_frame::Update(frame, dome, sun, moon);
-	EXPECT_EQ(moon.colour, sky_frame::Colour(LandLightTable::GetMoonColour(FakePalette(), frame.landLight.skyType,
-	                                                                       frame.landLight.alignment)));
+	EXPECT_EQ(moon.colour,
+	          sky_frame::Colour(LandLightTable::GetMoonColour(FakePalette(), frame.landLight.skyType, frame.landLight.sky)));
 
 	// White without the palette
 	sky_frame::Update(Frame(0.0f, std::nullopt), dome, sun, moon);
@@ -149,7 +149,7 @@ TEST(SkyFrame, TheDomeKeepsTheFramesLandLightForTheLandsLightTable)
 	Moon moon;
 	sky_frame::Update(Frame(12.0f, 0.25f), dome, sun, moon);
 	EXPECT_EQ(dome.landLight.skyType, 0.5f);
-	EXPECT_EQ(dome.landLight.alignment, -0.25f);
+	EXPECT_EQ(dome.landLight.sky, 1.25f);
 	EXPECT_EQ(dome.landLight.overcast, 0.25f);
 	EXPECT_EQ(dome.landLight.flash, 3);
 
