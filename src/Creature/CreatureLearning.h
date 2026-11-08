@@ -174,6 +174,13 @@ constexpr uint32_t k_ContextTurnsPerSecond = 10;
 [[nodiscard]] uint32_t WholeSecondsSince(const Context& context);
 /// The context feedback is credited to, if any counts; of two that count the same, the newer
 [[nodiscard]] std::optional<size_t> BestContext(std::span<const Context> contexts);
+/// The action that the stroke tests look at: the newest action. When the creature remembers no action, the game reads a
+/// place that no action was written to, which holds action 0.
+[[nodiscard]] uint32_t NewestActionForStroke(std::span<const Context> contexts);
+/// Whether a stroke makes the creature eat the thing that it carries and learn to eat it. The feedback must be a stroke,
+/// the creature must carry a thing, it must be past its first stage, and its newest action must let a stroke teach this.
+/// The thing need not be food.
+[[nodiscard]] bool StrokeTeachesToEat(float feedback, uint32_t developmentPhase, bool actionLetsEat, bool carries);
 /// Remembers a new action, the newest last, forgetting the oldest beyond the most kept
 /// The newest action is replaced instead when it was not carried out to its end. Returns the action that is forgotten to
 /// make room, if any.

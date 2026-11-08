@@ -508,3 +508,20 @@ TEST(FireModel, AHotRockIsOnFireFromItsCombustionTemperatureUntilItCoolsBelowIt)
 	EXPECT_LT(turns, 1000);
 	EXPECT_LT(state.temperature, 500.0f);
 }
+
+TEST(FireGraphic, ANewFlameStartsOnThePartsOfTheDetailThatTheFrameDrawsTheThingIn)
+{
+	// A tree drawn as its standard mesh starts its flames on the parts that the standard mesh draws
+	const auto standard = fire::graphic::FlameLevels(uint8_t {0b010});
+	EXPECT_FALSE(fire::graphic::FlameStartsOnPart(0b001, standard));
+	EXPECT_TRUE(fire::graphic::FlameStartsOnPart(0b010, standard));
+	EXPECT_TRUE(fire::graphic::FlameStartsOnPart(0b111, standard));
+	// A far tree drawn as its low mesh starts them on its far card
+	const auto low = fire::graphic::FlameLevels(uint8_t {0b100});
+	EXPECT_TRUE(fire::graphic::FlameStartsOnPart(0b100, low));
+	EXPECT_FALSE(fire::graphic::FlameStartsOnPart(0b011, low));
+	// A thing that the frame does not draw as a mesh uses the parts of the most detail
+	const auto notDrawn = fire::graphic::FlameLevels(std::nullopt);
+	EXPECT_TRUE(fire::graphic::FlameStartsOnPart(0b001, notDrawn));
+	EXPECT_FALSE(fire::graphic::FlameStartsOnPart(0b110, notDrawn));
+}
