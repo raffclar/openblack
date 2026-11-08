@@ -7,6 +7,8 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#define LOCATOR_IMPLEMENTATIONS
+
 #include <algorithm>
 #include <tuple>
 
@@ -22,6 +24,7 @@ using namespace openblack::input;
 using alt_presses::AltHeldPresses;
 using alt_presses::Source;
 using alt_presses::SourceActions;
+using openblack::Platform;
 
 namespace
 {
@@ -213,6 +216,8 @@ TEST(GameActionMap, WithAltHeldTheHeldActionsOfTheMouseStillAct)
 	map.ProcessEvent(AltEvent(true));
 	map.ProcessEvent(ButtonEvent(true, SDL_BUTTON_MIDDLE));
 	EXPECT_TRUE(map.Get(BindableActionMap::ROTATE_AROUND_MOUSE_ON));
+	// Release the middle button. A left press while the middle button is held is a press of the two buttons together.
+	map.ProcessEvent(ButtonEvent(false, SDL_BUTTON_MIDDLE));
 	map.ProcessEvent(ButtonEvent(true, SDL_BUTTON_LEFT));
 	EXPECT_TRUE(map.Get(BindableActionMap::MOVE));
 	map.ProcessEvent(WheelEvent(1));

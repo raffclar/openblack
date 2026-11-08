@@ -61,7 +61,7 @@ TEST(LivingFacing, TheWorldAxesAreTheUprightTurnOfTheGameTurnedAQuarterToTheMode
 		const auto drawn = portable_math::EulerAngleY(-angle - glm::radians(90.0f));
 		for (glm::length_t column = 0; column < 3; ++column)
 		{
-			EXPECT_LT(glm::length(axes[column] / k_Scale - drawn[column]), 1.0e-6f);
+			EXPECT_LT(glm::length(axes[column] / k_Scale - glm::vec3(drawn[column])), 1.0e-6f);
 		}
 	}
 }
