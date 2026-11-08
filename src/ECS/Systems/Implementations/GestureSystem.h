@@ -61,6 +61,7 @@ public:
 	}
 	void ForgetPath() override;
 	void SeedFirstTurnInHand() override;
+	void RestartPathAtArmedPress() override { _restartAtArmedPress = true; }
 	[[nodiscard]] std::span<const gestures::GestureTemplate> GetTemplates() const override;
 	[[nodiscard]] const gesture::GestureRecorder& GetPath() const override { return _recorder; }
 	[[nodiscard]] float GetScreenAspect() const override { return _screenAspect; }
@@ -132,6 +133,10 @@ private:
 	std::optional<glm::vec2> _lastPlace;
 	/// The path started again for a miracle's first turn in the hand: the next update takes a sample at the last place
 	bool _sampleLastPlace {false};
+	/// The Action button armed the miracle in the hand: the pass of the next frame starts the path again after its places.
+	/// The second flag holds it for that pass only.
+	bool _restartAtArmedPress {false};
+	bool _restartInThisPass {false};
 	/// Where the camera's eye was last frame
 	std::optional<glm::vec3> _lastCameraEye;
 	/// Whether the camera moved in its last update
