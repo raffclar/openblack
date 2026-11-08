@@ -48,18 +48,25 @@ using namespace openblack::ecs::components;
 namespace
 {
 
-/// The place of the player's hand on the land, or the camera's focus when the hand is not on the land
-glm::vec3 HandPoint(const Camera& camera)
+/// The point under the cursor of this computer's player, from the last report of its hand that a turn did. This is the
+/// point on the land, the sea or a thing, not the place of the hand. With no hands, the point that the camera looks at.
+glm::vec3 PointUnderCursor(const Camera& camera)
 {
-	// The keys of this computer's player measure from the hand that this computer draws
 	if (Locator::handSystem::has_value())
 	{
-		if (const auto position = Locator::handSystem::value().GetDrawnHandPosition(); position.has_value())
+		const auto& hands = Locator::handSystem::value();
+		if (const auto point = hands.GetReportedPointUnderCursor(hands.GetOwnPlayer()); point.has_value())
 		{
-			return *position;
+			return *point;
 		}
 	}
 	return camera.GetFocus();
+}
+
+/// The keys measure the camera from the eye that the last frame drew
+glm::vec3 DrawnEye(const Camera& camera)
+{
+	return camera.GetOrigin(Camera::Interpolation::Drawn);
 }
 
 /// The place that the Tab key flies to in a town: its working storage pit, else its village centre, on the land
@@ -431,9 +438,9 @@ void CameraBookmarkSystem::JumpTo(size_t slot)
 		}
 	}
 	camera.GetModel().SetFlight(view->point + view->cameraOffset, view->point, camera_fly::k_BookmarkRise);
-	// The go-back key keeps the view from before the jump: the place of the hand, and the position of the camera from it
-	const auto handPoint = HandPoint(camera);
-	_back = View {.point = handPoint, .cameraOffset = camera.GetOrigin() - handPoint};
+	// The go-back key keeps the view from before the jump: the point under the cursor, and the drawn eye from it
+	const auto point = PointUnderCursor(camera);
+	_back = View {.point = point, .cameraOffset = DrawnEye(camera) - point};
 }
 
 void CameraBookmarkSystem::JumpBack()
@@ -503,7 +510,7 @@ void CameraBookmarkSystem::FlyToNextTown(std::optional<entt::entity> thingUnderH
 			point = at->position;
 		}
 	}
-	_townKey = View {.point = point, .cameraOffset = camera.GetOrigin() - point};
+	_townKey = View {.point = point, .cameraOffset = DrawnEye(camera) - point};
 	_lastTown = stops.at(*next).id;
 	// Only the world camera flies
 	const auto& model = camera.GetModel();

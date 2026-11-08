@@ -41,7 +41,7 @@ public:
 	virtual void ProcessTurn() = 0;
 	/// The marker of each slot, in the registry of the things that only the frames make
 	[[nodiscard]] virtual const std::array<entt::entity, camera_bookmarks::k_KeySlots>& GetBookmarks() const = 0;
-	/// The player keeps the place of the hand, or the thing under the hand, in a slot. The camera's position is kept
+	/// The player keeps the point under the cursor, or the thing under the hand, in a slot. The camera's position is kept
 	/// from the place. Any follow stops.
 	virtual void SetBookmark(size_t slot, glm::vec3 point, std::optional<entt::entity> thing, glm::vec3 cameraOrigin) = 0;
 	/// The bookmark and its marker go. A follow of the slot does not stop, but it does nothing.
