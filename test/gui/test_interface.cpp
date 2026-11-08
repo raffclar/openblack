@@ -571,6 +571,22 @@ TEST(GameMenu, SelectorsAndCheckBoxesChangeTheSettings)
 	EXPECT_TRUE(f.menu.TakeSettingsChanged());
 }
 
+TEST(GameMenu, TheOptionsShowThePlayersPushScrolling)
+{
+	// Deviation 228: the Push Scrolling box shows the player's value. The game shows the box clear at each start, so its
+	// first click turns push scrolling on. Here the box shows that push scrolling is on, and the first click turns it off.
+	const TextDatabase texts = MenuTexts();
+	const GameFont font = LoadFont();
+	GameMenu menu {texts, font, u"aaa", MenuSettings {.pushScrolling = true}};
+	menu.Open();
+	Click(menu, ButtonCentre(3));
+	// Push Scrolling's square at 485, 450
+	Click(menu, {497, 462});
+	EXPECT_FALSE(menu.GetSettings().pushScrolling);
+	Click(menu, {497, 462});
+	EXPECT_TRUE(menu.GetSettings().pushScrolling);
+}
+
 TEST(GameMenu, PlayersNameTheirCreatureAndPickASymbol)
 {
 	MenuFixture f;

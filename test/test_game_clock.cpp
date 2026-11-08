@@ -615,3 +615,17 @@ TEST(GameClock, AFrameBetweenTwoTurnsOfOneFrameTakesTheTimeOfATurnAndKeepsTheCou
 	network.time.ResetTimerToTurn();
 	EXPECT_TRUE(network.time.IsTurnDue());
 }
+
+TEST(GameClock, TheTimerRoundsTheScaledTicksAndTheSumOneTimeEach)
+{
+	using openblack::ecs::systems::GameTimer;
+	// The timer adds the exact count: 1 + 16777217 gives 16777218, and a float holds this value
+	const GameTimer counted {.base = 0, .elapsed = 16777217, .speed = 1.0f, .savedSpeed = 1.0f};
+	EXPECT_EQ(counted.Milliseconds(1), 16777218);
+	// The timer multiplies the exact ticks: 16777217 x 1.5 is nearer to 25165826 than to 25165824
+	const GameTimer scaled {.base = 0, .elapsed = 0, .speed = 1.5f, .savedSpeed = 1.5f};
+	EXPECT_EQ(scaled.Milliseconds(16777217), 25165826);
+	// The tick count wraps: the ticks since the base are the difference without a sign
+	const GameTimer wrapped {.base = 0xFFFFFFF0u, .elapsed = 100, .speed = 1.0f, .savedSpeed = 1.0f};
+	EXPECT_EQ(wrapped.Milliseconds(0x10u), 132);
+}
