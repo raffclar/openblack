@@ -11,11 +11,14 @@
 
 #include "VideoSystem.h"
 
+#include <memory>
+#include <thread>
 #include <utility>
 
 #include <entt/core/hashed_string.hpp>
 #include <spdlog/spdlog.h>
 
+#include "Common/SleepDebt.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
@@ -106,6 +109,15 @@ VideoSystem::Hooks GameHooks()
 		        Locator::filmCreatureSystem::value().Update(filmMs, now);
 	        },
 	    .fallingSpellEnded = []() { Locator::filmCreatureSystem::value().End(); },
+	    .waitStep =
+	        [debt = std::make_shared<SleepDebt>()]() {
+		        debt->Sleep(video::k_FrameWaitSleep, [](std::chrono::milliseconds time) {
+			        const auto start = std::chrono::steady_clock::now();
+			        std::this_thread::sleep_for(time);
+			        return std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - start);
+		        });
+		        return std::chrono::steady_clock::now();
+	        },
 	};
 }
 } // namespace
@@ -162,6 +174,7 @@ bool VideoSystem::Play(const std::filesystem::path& path)
 	// A video exists even when its file can't be opened: with no frames it ends at the next update
 	_finishedPending = false;
 	auto& video = _video.emplace(Video {.path = path});
+	_framesReady = 0;
 	if (_filmsEnabled)
 	{
 		video.file = _hooks.openFile(path);
@@ -272,6 +285,17 @@ void VideoSystem::Update(std::chrono::steady_clock::time_point now)
 			break;
 		}
 	}
+	// While the video covers the screen, the game waits for a frame before it draws. The alpha stays as it was before
+	// the wait
+	if (_video && video::WaitsForFrame(_alpha, _fallingSpell, _framesReady))
+	{
+		WaitForFrame(now);
+	}
+	// The picture of this update is drawn: the next frames count from now
+	if (_video)
+	{
+		_framesReady = 0;
+	}
 	if (_fallingSpell)
 	{
 		UpdateFallingSpell(now);
@@ -314,6 +338,27 @@ void VideoSystem::UpdateFallingSpell(std::chrono::steady_clock::time_point now)
 	}
 }
 
+void VideoSystem::WaitForFrame(std::chrono::steady_clock::time_point now)
+{
+	if (!_hooks.waitStep)
+	{
+		return;
+	}
+	auto time = now;
+	for (int32_t i = 0; i < video::k_FrameWaitTries; ++i)
+	{
+		if (_video)
+		{
+			DecodeDue(time);
+		}
+		time = _hooks.waitStep();
+		if (_framesReady != 0)
+		{
+			return;
+		}
+	}
+}
+
 void VideoSystem::DecodeDue(std::chrono::steady_clock::time_point now)
 {
 	auto& video = *_video;
@@ -340,6 +385,7 @@ void VideoSystem::DecodeDue(std::chrono::steady_clock::time_point now)
 			return;
 		}
 		++_video->frame;
+		++_framesReady;
 	}
 	if (_video->frames && _video->frame > 0)
 	{

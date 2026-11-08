@@ -63,6 +63,9 @@ public:
 		std::function<void()> fallingSpellStarted;
 		std::function<void(int32_t filmMs, std::chrono::steady_clock::time_point now)> fallingSpellFrame;
 		std::function<void()> fallingSpellEnded;
+		/// Sleeps one step of the wait for a frame and gives the time after it. When the hook is empty, the video system
+		/// does not wait
+		std::function<std::chrono::steady_clock::time_point()> waitStep;
 	};
 
 	/// The game's: the time system's pause, the cinematic director's bars, the scripts' music, the resource cache
@@ -114,6 +117,8 @@ private:
 
 	/// Counts the frames due by the real clock and takes the newest of them decoded
 	void DecodeDue(std::chrono::steady_clock::time_point now);
+	/// Counts the frames that become due until one is ready, or until all the tries of the wait are done
+	void WaitForFrame(std::chrono::steady_clock::time_point now);
 	/// The video goes; the next update puts the pause and the bars back
 	void Delete();
 	/// The update after a video ended: the pause and the bars as they were before it
@@ -126,6 +131,8 @@ private:
 	std::atomic<bool> _playing {false};
 	video::Schedule _schedule;
 	float _alpha {0.0f};
+	/// The frames counted after the last draw. The count stays when the video goes, until the next video starts
+	int32_t _framesReady {0};
 	bool _isIntro {false};
 	bool _finishedPending {false};
 	bool _previousPause {false};
