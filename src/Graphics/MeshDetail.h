@@ -12,6 +12,7 @@
 #include <cstdint>
 
 #include <optional>
+#include <utility>
 
 #include <glm/mat4x4.hpp>
 #include <glm/vec3.hpp>
@@ -74,6 +75,24 @@ struct Choice
 [[nodiscard]] constexpr uint8_t LevelBit(Mesh mesh) noexcept
 {
 	return static_cast<uint8_t>(1u << static_cast<uint8_t>(mesh));
+}
+
+/// The mesh that the frame draws a thing of the land in when it draws the thing by itself. None when the frame does not
+/// draw the thing whole by itself: the draw list leaves it out, it is drawn only as far up as it stands, or it is sunk.
+/// A thing that the distance bands draw takes the choice of its band (`band`), which is none when the band leaves it
+/// out. Any other thing takes the high mesh.
+template <typename Band>
+[[nodiscard]] constexpr std::optional<Mesh> DrawnMesh(bool drawnWhole, bool banded, Band&& band)
+{
+	if (!drawnWhole)
+	{
+		return std::nullopt;
+	}
+	if (!banded)
+	{
+		return Mesh::High;
+	}
+	return std::forward<Band>(band)();
 }
 
 /// The bits of every choice a part can be drawn at

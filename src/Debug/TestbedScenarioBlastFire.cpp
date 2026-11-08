@@ -198,6 +198,24 @@ void AddFire(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "nature.burning_dead_trees_by_distance",
+	    .name = "Burning dead trees near and far",
+	    .facet = Facet::Nature,
+	    .description =
+	        "Four dead oaks catch fire in a line east of the lake that goes away from the camera, about 50, 120, 195 "
+	        "and 275 m from it. The camera looks along the line from one side.",
+	    .expected = "Each dead tree takes its new flames from the model that it is drawn as, as a living tree does: the near "
+	                "dead tree from its full model, a far dead tree from the less detailed model that it is drawn as. A "
+	                "dead tree keeps its detail twice as far as a living tree. The flames stay on the parts that are drawn.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {40.0f, 14.0f, -90.0f}, .look = {80.0f, 6.0f, 60.0f}},
+	    .objects = {{.type = TreeInfo::Oak, .offset = {80.0f, -60.0f}, .alight = true, .dead = true},
+	                {.type = TreeInfo::Oak, .offset = {80.0f, 20.0f}, .alight = true, .dead = true},
+	                {.type = TreeInfo::Oak, .offset = {80.0f, 100.0f}, .alight = true, .dead = true},
+	                {.type = TreeInfo::Oak, .offset = {80.0f, 180.0f}, .alight = true, .dead = true}},
+	});
+
+	all.push_back({
 	    .id = "miracles.burnt_buildings",
 	    .name = "Huts burnt down, two of them held by a script",
 	    .facet = Facet::Miracles,

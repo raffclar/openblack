@@ -9,6 +9,8 @@
 
 #include <cstdint>
 
+#include <optional>
+
 #include <gtest/gtest.h>
 
 #include "Graphics/MeshDetail.h"
@@ -231,4 +233,26 @@ TEST(MeshDetail, TheHalfDiagonalIsHalfTheDiagonalOfTheBox)
 	// Halves of 3, 4 and 12 give a half diagonal of 6.5
 	EXPECT_EQ(mesh_detail::HalfDiagonal({3.0f, 4.0f, 12.0f}), 6.5f);
 	EXPECT_EQ(mesh_detail::ScaledRadius({3.0f, 4.0f, 12.0f}, 2.0f), 13.0f);
+}
+
+TEST(MeshDetail, AThingDrawnByItselfIsDrawnInTheMeshOfItsBandOrInItsHighMesh)
+{
+	int asked = 0;
+	const auto band = [&asked](std::optional<Mesh> choice) {
+		return [&asked, choice] {
+			++asked;
+			return choice;
+		};
+	};
+	// A dead tree or a building that the bands draw takes the mesh of its band, or none when its band leaves it out
+	EXPECT_EQ(mesh_detail::DrawnMesh(true, true, band(Mesh::Low)), Mesh::Low);
+	EXPECT_EQ(mesh_detail::DrawnMesh(true, true, band(std::nullopt)), std::nullopt);
+	EXPECT_EQ(asked, 2);
+	// A thing that the bands do not draw takes its high mesh, and its band is not asked
+	EXPECT_EQ(mesh_detail::DrawnMesh(true, false, band(Mesh::Low)), Mesh::High);
+	// A thing that the frame does not draw whole by itself takes none: one left out of the draw list, one drawn only as
+	// far up as it stands, or one sunk
+	EXPECT_EQ(mesh_detail::DrawnMesh(false, true, band(Mesh::Standard)), std::nullopt);
+	EXPECT_EQ(mesh_detail::DrawnMesh(false, false, band(Mesh::Standard)), std::nullopt);
+	EXPECT_EQ(asked, 2);
 }
