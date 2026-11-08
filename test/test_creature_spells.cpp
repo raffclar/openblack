@@ -459,3 +459,25 @@ TEST(CreatureSpells, EachNewFreezeAddsItsTimeAndTakesThePlaceOfTheOldMiracle)
 	EXPECT_EQ(spells[Spell::Freeze].turnsLeft, hold + 10 * 2 * hold);
 	EXPECT_EQ(spells[Spell::Freeze].miracle, last);
 }
+
+TEST(CreatureSpells, OnlyFreezeStopsTheActionOfAScriptControlledCreature)
+{
+	// With no script in control, freeze, nice, nasty and itchy stop what the creature does
+	for (const auto spell : {Spell::Freeze, Spell::Nice, Spell::Nasty, Spell::Itchy})
+	{
+		EXPECT_TRUE(StopsAction(spell, false));
+	}
+	// A script in control keeps its action through the moods and the itch, but not through the freeze
+	EXPECT_TRUE(StopsAction(Spell::Freeze, true));
+	for (const auto spell : {Spell::Nice, Spell::Nasty, Spell::Itchy})
+	{
+		EXPECT_FALSE(StopsAction(spell, true));
+	}
+	// The other spells never stop it
+	for (const auto spell : {Spell::Small, Spell::Big, Spell::Weak, Spell::Strong, Spell::Fat, Spell::Thin, Spell::Invisible,
+	                         Spell::Hungry, Spell::Frightened, Spell::Tired, Spell::Ill, Spell::Thirsty})
+	{
+		EXPECT_FALSE(StopsAction(spell, false));
+		EXPECT_FALSE(StopsAction(spell, true));
+	}
+}

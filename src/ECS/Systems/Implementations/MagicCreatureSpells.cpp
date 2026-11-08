@@ -35,6 +35,7 @@
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureNeeds.h"
 #include "ECS/Components/CreatureSpells.h"
+#include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/Spell.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
@@ -339,8 +340,9 @@ void MagicSystem::ApplyCreatureSpell(entt::entity entity, const creature_spells:
 		{
 			slot.before = *value;
 		}
-		// Freezing it, a mood taking it, or making it itch stops what it was doing
-		if ((event.spell == Spell::Freeze || mood) && minds != nullptr)
+		// Freezing it stops what it was doing. A mood taking it, or making it itch, stops it too, but not when a
+		// script controls the creature.
+		if (creature_spells::StopsAction(event.spell, registry.AllOf<ScriptControlled>(entity)) && minds != nullptr)
 		{
 			minds->AbandonAction(entity);
 		}

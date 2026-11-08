@@ -112,6 +112,21 @@ Effect creature_spells::EffectOf(Spell spell)
 	return {.desire = desire, .soundAction = k_SoundActions.at(static_cast<size_t>(spell))};
 }
 
+bool creature_spells::StopsAction(Spell spell, bool scriptControlled)
+{
+	switch (spell)
+	{
+	case Spell::Freeze:
+		return true;
+	case Spell::Nice:
+	case Spell::Nasty:
+	case Spell::Itchy:
+		return !scriptControlled;
+	default:
+		return false;
+	}
+}
+
 bool Spells::IsKindActive(Kind kind) const
 {
 	for (size_t i = 0; i < k_SpellCount; ++i)
