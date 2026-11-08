@@ -421,7 +421,12 @@ float creature_fight::HeldMs(float realMs, uint32_t turnsSincePress)
 
 float creature_fight::BlowSpeed(float chargeMs)
 {
-	return 0.5f + (ReleasedCharge(chargeMs) / k_MaxChargeMs);
+	return x87::Add(x87::Mul(ReleasedCharge(chargeMs), k_SpeedPerChargeMs), 0.5);
+}
+
+float creature_fight::ActionSpeed(float askedSpeed)
+{
+	return x87::Add(askedSpeed, k_ActionSpeedBase);
 }
 
 bool MoveQueue::Push(const Move& move, bool replace)
@@ -537,7 +542,7 @@ float creature_fight::StaminaAtStart(float energy, float exhaustion)
 
 float creature_fight::RegainStamina(float stamina)
 {
-	return std::min(stamina + k_StaminaPerTurn, 1.0f);
+	return std::clamp(x87::Add(k_StaminaPerTurn, stamina), 0.0f, 1.0f);
 }
 
 float creature_fight::LifeAfterFight(float life, float fightHealth)
@@ -769,9 +774,9 @@ bool creature_fight::Bleeds(uint8_t woundKind)
 	return woundKind == 2 || woundKind == 3 || woundKind == 5;
 }
 
-float creature_fight::PlaybackSpeed(size_t animation, float actionSpeed)
+float creature_fight::PlaybackSpeed(size_t animation)
 {
-	return k_FightSpeed * (IsStep(animation) ? k_StepSpeedShare : k_OtherSpeedShare) * actionSpeed;
+	return x87::Mul(k_FightSpeed, IsStep(animation) ? k_StepSpeedShare : k_OtherSpeedShare);
 }
 
 int32_t creature_fight::TurnAdvance(float speed, int32_t turnMs)
@@ -1031,13 +1036,16 @@ bool creature_fight::FacesOpponentEachTurn(State state, size_t animation, bool t
 	}
 }
 
-void creature_fight::Enter(Fighter& fighter, State state, std::optional<size_t> animation, float speed)
+void creature_fight::Enter(Fighter& fighter, State state, std::optional<size_t> animation, float askedSpeed)
 {
 	fighter.state = state;
 	fighter.animation = animation.value_or(AnimationOf(state));
 	fighter.timeMs = 0.0f;
 	fighter.stateMs = 0.0f;
-	fighter.speed = speed;
+	if (state == State::Action)
+	{
+		fighter.speed = ActionSpeed(askedSpeed);
+	}
 	fighter.turning = false;
 	fighter.special = state == State::Action && IsSpecialAttack(fighter.animation);
 	// The last action counts every move that the fighter starts: a blow, a step, a reel, a block or a cast. A block
