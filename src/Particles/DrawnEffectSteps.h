@@ -95,4 +95,15 @@ template <typename OnBlocks>
 	return order;
 }
 
+/// The things that the frame does not draw: the things that are not in the draw order. The effects of these things do
+/// not show in the frame, because only the draw of a thing shows its effects.
+[[nodiscard]] inline std::vector<entt::entity> LeftOut(std::span<const entt::entity> things,
+                                                       std::span<const entt::entity> order)
+{
+	std::vector<entt::entity> left;
+	std::ranges::copy_if(things, std::back_inserter(left),
+	                     [order](entt::entity thing) { return std::ranges::find(order, thing) == order.end(); });
+	return left;
+}
+
 } // namespace openblack::particles::drawn_steps

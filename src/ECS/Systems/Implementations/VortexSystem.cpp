@@ -332,10 +332,18 @@ void VortexSystem::UpdateDrawnFrame(ObjectDrawListSystemInterface& drawList, std
 	};
 	std::vector<entt::entity> vortices;
 	registry.Each<const Vortex>([&vortices](entt::entity entity, const Vortex&) { vortices.push_back(entity); });
-	std::ranges::for_each(particles::drawn_steps::DrawOrder(
-	                          drawList.GetList(), vortices, drawList.GetView().has_value(),
-	                          [&registry, &drawList](entt::entity entity) { return drawList.Decides(registry, entity); }),
-	                      update);
+	const auto order = particles::drawn_steps::DrawOrder(
+	    drawList.GetList(), vortices, drawList.GetView().has_value(),
+	    [&registry, &drawList](entt::entity entity) { return drawList.Decides(registry, entity); });
+	std::ranges::for_each(order, update);
+	// A vortex that is not on the land's list, for example far from the camera, is not drawn. Thus its effect over the
+	// land and its glow do not show, and do not stay in the picture with their last step.
+	for (const auto entity : particles::drawn_steps::LeftOut(vortices, order))
+	{
+		const auto& vortex = registry.Get<const Vortex>(entity);
+		effects.SetShown(vortex.afterLandEffect, false);
+		effects.SetShown(vortex.lightMapEffect, false);
+	}
 }
 
 bool VortexSystem::StartFadeOut(entt::entity vortex)

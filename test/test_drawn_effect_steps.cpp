@@ -134,3 +134,13 @@ TEST(DrawnEffectSteps, WithoutACameraOrALandEveryThingComesInItsOwnOrder)
 	const auto order = particles::drawn_steps::DrawOrder(list, things, false, [](entt::entity) { return true; });
 	EXPECT_EQ(order, things);
 }
+
+TEST(DrawnEffectSteps, TheThingsOffTheDrawOrderAreLeftOut)
+{
+	// B is on the land's blocks but not on the list, so the frame does not draw it, and its effects do not show
+	const std::vector list {k_C, k_Other, k_A};
+	const std::vector things {k_A, k_B, k_C, k_D};
+	const auto order = particles::drawn_steps::DrawOrder(list, things, true, [](entt::entity thing) { return thing != k_D; });
+	EXPECT_EQ(particles::drawn_steps::LeftOut(things, order), (std::vector {k_B}));
+	EXPECT_TRUE(particles::drawn_steps::LeftOut(things, things).empty());
+}
