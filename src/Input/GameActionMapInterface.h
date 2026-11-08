@@ -253,6 +253,8 @@ public:
 	[[nodiscard]] virtual bool IsKeyHeld([[maybe_unused]] int scancode) const { return false; }
 	/// Whether the mouse's wheel has turned since the game started
 	[[nodiscard]] virtual bool WheelTurned() const { return false; }
+	/// True when the press of the action in this frame came from a mouse press that waited for Alt to go up
+	[[nodiscard]] virtual bool WaitedMousePress([[maybe_unused]] BindableActionMap action) const { return false; }
 	/// Puts the cursor, and the pointer, somewhere in the window, as the camera does dragging round the screen's edge
 	virtual void WarpCursor([[maybe_unused]] glm::ivec2 position) {}
 	/// Where the cursor was put this frame, if it was

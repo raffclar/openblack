@@ -41,6 +41,7 @@
 #include "Camera/Camera.h"
 #include "EmbeddedShaders.h"
 #include "GraphicsHandleBgfx.h"
+#include "PixelCentres.h"
 #include "SamplerDefaults.h"
 
 // clang-format off
@@ -524,10 +525,10 @@ void ShaderManager::SetViewOrder(uint16_t viewId, ViewOrder order) const
 	bgfx::setViewMode(static_cast<bgfx::ViewId>(viewId), k_Modes.at(static_cast<size_t>(order)));
 }
 
-void ShaderManager::SetCamera(graphics::RenderPass viewId, const Camera& camera)
+void ShaderManager::SetCamera(graphics::RenderPass viewId, const Camera& camera, glm::vec2 target)
 {
 	auto view = camera.GetViewMatrix(Camera::Interpolation::Current);
-	auto proj = camera.GetProjectionMatrix();
+	auto proj = pixel_centres::OnTarget(camera.GetProjectionMatrix(), target);
 	bgfx::setViewTransform(static_cast<bgfx::ViewId>(viewId), &view, &proj);
 }
 

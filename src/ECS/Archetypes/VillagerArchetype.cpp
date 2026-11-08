@@ -99,7 +99,8 @@ entt::entity VillagerArchetype::Create([[maybe_unused]] const glm::vec3& abodePo
 		                             [&random](float limit) { return random.GameFloatRand(limit); });
 	}
 
-	registry.Assign<Transform>(entity, position, portable_math::EulerAngleY(glm::radians(180.0f)), glm::vec3(born.scale));
+	// A new villager faces the angle 0 that its walk keeps. The draw and the pull of the hand use this angle.
+	registry.Assign<Transform>(entity, position, portable_math::EulerAngleY(-glm::radians(90.0f)), glm::vec3(born.scale));
 	registry.Assign<Mobile>(entity);
 	const float life = info.life;
 

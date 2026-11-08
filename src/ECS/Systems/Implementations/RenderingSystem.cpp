@@ -1932,6 +1932,46 @@ void RenderingSystem::UploadPartialBuilds()
 	                        static_cast<uint32_t>(count * sizeof(RenderContext::ObjectInstance))));
 }
 
+std::optional<uint8_t> RenderingSystem::TreeDetailNow(entt::entity tree)
+{
+	// The same steps as the draw of the trees takes for one tree (see UploadTreeInstances)
+	const auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(tree) || !registry.AllOf<Mesh, Transform, Tree, Swayable>(tree))
+	{
+		return std::nullopt;
+	}
+	const auto& mesh = registry.Get<const Mesh>(tree);
+	if (!_treeSlots.contains(mesh.id))
+	{
+		return std::nullopt;
+	}
+	const auto& transform = registry.Get<const Transform>(tree);
+	const auto drawnPlace = openblack::ecs::drawn_place::DrawnTransformOf(registry, tree, transform);
+	const auto placed = physics_draw::ModelMatrix(PlacedMatrix(drawnPlace.position, drawnPlace.rotation, transform.scale),
+	                                              registry.TryGet<const PhysicsDrawPose>(tree));
+	if (!placed.has_value())
+	{
+		return std::nullopt;
+	}
+	if (Locator::objectDrawListSystem::has_value() && !Locator::objectDrawListSystem::value().Drawn(registry, tree))
+	{
+		return std::nullopt;
+	}
+	const auto& box = MeshBox(mesh.id);
+	if (!Locator::camera::has_value() || !box.has_value() || !object_detail::BandedNow(registry, tree))
+	{
+		return graphics::mesh_detail::LevelBit(graphics::mesh_detail::Mesh::High);
+	}
+	const auto choice = ChooseDetail(
+	    *box, 0.0f, *placed, transform.scale.x, [&registry, tree] { return object_detail::Disappears(registry, tree, false); },
+	    ViewPoint::Of(Locator::camera::value()), Locator::config::value().detail.modelDetail);
+	if (!choice.mesh.has_value())
+	{
+		return std::nullopt;
+	}
+	return graphics::mesh_detail::LevelBit(*choice.mesh);
+}
+
 bool RenderingSystem::UploadTreeInstances(bool drawBoundingBox)
 {
 	auto section = Locator::profiler::value().BeginScoped(Profiler::Stage::UpdateEntitiesTrees);

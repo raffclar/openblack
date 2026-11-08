@@ -13,8 +13,11 @@
 #include <cstdint>
 
 #include <algorithm>
+#include <optional>
 
 #include <glm/vec2.hpp>
+
+#include "Graphics/PixelCentres.h"
 
 /// The pixel rules of the game's screen draws. The game puts the centre of a pixel at whole coordinates, and a modern
 /// renderer puts it half a pixel further right and down. Thus a screen quad of the game reads its texture half a pixel
@@ -32,8 +35,9 @@ enum class Corners : uint8_t
 	BoxDraw,
 };
 
-/// The distance from the game's centre of a pixel to the centre of the same pixel in a modern renderer
-constexpr float k_PixelCentre = 0.5f;
+/// The distance from the game's centre of a pixel to the centre of the same pixel in a modern renderer. The 3D views
+/// use the same distance.
+constexpr float k_PixelCentre = graphics::pixel_centres::k_GameToModern;
 /// The distance that the game's box draw moves each corner, right and down
 constexpr float k_BoxDrawShift = 0.5f;
 
@@ -56,6 +60,34 @@ constexpr float k_BoxDrawShift = 0.5f;
 {
 	const auto first = std::ceil(edge + CornerShift(corners));
 	return static_cast<uint16_t>(std::clamp(first, 0.0f, static_cast<float>(most)));
+}
+
+/// The pixels that a line fills, on the game's screen, from the first to the last in each direction
+struct LineSpan
+{
+	glm::ivec2 first;
+	glm::ivec2 last;
+};
+
+/// The pixels that the game's line draw fills for a line along a row or a column, between the pixels `from` and `to`.
+/// The game adds half a pixel to the two ends, thus the line runs on the boundary between two rows (or two columns).
+/// The graphics card fills a pixel when the line leaves the diamond round the centre of the pixel. The diamond keeps its
+/// bottom corner, and also its right corner for a line along a column. Thus:
+/// - a line along a row fills that row, from the pixel after the left end to the right end;
+/// - a line along a column fills that column, from the pixel under the top end to the bottom end.
+/// The end of the line is in no diamond, thus the last pixel rule of the game adds no pixel. A line of no length fills
+/// no pixel. The game's setup draws use no other lines.
+[[nodiscard]] constexpr std::optional<LineSpan> LinePixels(glm::ivec2 from, glm::ivec2 to) noexcept
+{
+	if (from.y == to.y && from.x != to.x)
+	{
+		return LineSpan {.first = {std::min(from.x, to.x) + 1, from.y}, .last = {std::max(from.x, to.x), from.y}};
+	}
+	if (from.x == to.x && from.y != to.y)
+	{
+		return LineSpan {.first = {from.x, std::min(from.y, to.y) + 1}, .last = {from.x, std::max(from.y, to.y)}};
+	}
+	return std::nullopt;
 }
 
 } // namespace openblack::gui::screen_pixels

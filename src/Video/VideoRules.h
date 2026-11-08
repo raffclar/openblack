@@ -16,6 +16,8 @@
 #include <optional>
 #include <vector>
 
+#include <glm/vec2.hpp>
+
 #include "Gui/ScreenFit.h"
 
 /// The rules of the game's full-screen videos (the intro and the falling spell's film): when a video fades and ends, how
@@ -99,6 +101,40 @@ using ScreenRect = gui::ScreenRect;
 /// screen it sits between bars above and below; on a screen wider than 16:9 it is as tall as the screen with bars at
 /// its sides
 [[nodiscard]] ScreenRect LetterboxRect(int32_t screenWidth, int32_t screenHeight) noexcept;
+
+/// The game cuts a picture into square tiles of this many texels, as it kept the picture in textures of this size
+inline constexpr int32_t k_TileTexels = 256;
+
+/// One tile of a video's picture on the screen
+struct PictureTile
+{
+	/// The top left and bottom right corners in the render target. These are the game's corners half a pixel to the
+	/// right and down, because the game put the centre of a pixel at whole coordinates
+	glm::vec2 min {0.0f};
+	glm::vec2 max {0.0f};
+	/// The texel coordinates in the whole picture at the corners: half a texel in from each edge of the tile
+	glm::vec2 texelMin {0.0f};
+	glm::vec2 texelMax {0.0f};
+
+	bool operator==(const PictureTile&) const = default;
+};
+
+/// The tiles of a picture `width` by `height` texels on `rect`, row after row, as the game draws them. A tile has 256
+/// texels each way, or the remaining texels in the last column and row. The corners use the single precision steps of
+/// the game: the screen size of a texel, times the first texel, plus the corner of the rectangle
+[[nodiscard]] std::vector<PictureTile> PictureTiles(ScreenRect rect, uint32_t width, uint32_t height);
+
+/// While a video covers the screen and no new frame is ready, the game waits for one before it draws. It tries again
+/// up to 1000 times, with a sleep of 500 microseconds after each try: approximately half a second
+inline constexpr int32_t k_FrameWaitTries = 1000;
+inline constexpr std::chrono::microseconds k_FrameWaitSleep {500};
+
+/// Whether the game waits for a frame before it draws. The video must be at full alpha and must not be the film of the
+/// falling spell, and no frame came after the last draw
+[[nodiscard]] constexpr bool WaitsForFrame(float alpha, bool fallingSpell, int32_t framesReady) noexcept
+{
+	return alpha == 1.0f && !fallingSpell && framesReady == 0;
+}
 
 /// How many frames are due `elapsed` after a video's first frame: frame i is due at i / fps seconds, the file's exact
 /// fraction

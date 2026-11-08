@@ -14,6 +14,7 @@
 #include <glm/gtx/euler_angles.hpp>
 
 #include "3D/LandIslandInterface.h"
+#include "Common/GUtilsAngle.h"
 #include "Common/GameRandom.h"
 #include "ECS/Components/Disciple.h"
 #include "ECS/Components/HandGrab.h"
@@ -26,6 +27,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/VillagerDeath.h"
+#include "ECS/Components/WallHug.h"
 #include "ECS/CreatureSight.h"
 #include "ECS/DiscipleRules.h"
 #include "ECS/HandPlayer.h"
@@ -97,7 +99,8 @@ const GVillagerStateTableInfo* StateRowOf(VillagerStates state)
 	return index < table.size() ? &table.at(index) : nullptr;
 }
 
-/// A villager stands facing a heading as the game counts it, drawn turned a quarter from its body
+/// A villager stands facing a heading as the game counts it, drawn turned a quarter from its body. It keeps the heading
+/// as its angle, and its walk takes the game angle nearest to it. It is not in the map's cells at this time.
 void Face(entt::entity villager, float heading)
 {
 	auto* transform = Entities().TryGet<Transform>(villager);
@@ -106,6 +109,11 @@ void Face(entt::entity villager, float heading)
 		return;
 	}
 	transform->rotation = physics::QuarterTurned(living::HeadingAxes(heading));
+	if (auto* walk = Entities().TryGet<WallHug>(villager); walk != nullptr)
+	{
+		walk->yAngle = heading;
+		walk->gameAngle = static_cast<uint16_t>(gutils::ConvertAngle3DToGame(heading));
+	}
 }
 
 bool IsDead(entt::entity villager)

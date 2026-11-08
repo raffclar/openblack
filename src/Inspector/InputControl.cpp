@@ -451,7 +451,8 @@ std::vector<QueryDescription> InputProvider::Describe() const
 	          {button, Optional("action", "string", "press, release, click (the default) or double_click"), toWindow, timing}),
 	    Write("key",
 	          "A key by its name (\"L\", \"Space\", \"Left Shift\"), or an action by the options screen's name, "
-	          "pressed for a frame",
+	          "pressed for a frame. While the new player's name box waits before the first land (game.state loading "
+	          "\"new player\"), a key by its name goes to the box at once, such as \"Return\" to answer it",
 	          {Optional("key", "string", "The key's name, as SDL names it"),
 	           Optional("action", "string", "The action's name, from input.names; pressed for one frame"),
 	           Optional("how", "string",
@@ -459,7 +460,8 @@ std::vector<QueryDescription> InputProvider::Describe() const
 	                    "the game has read its input with the key down)")}),
 	    Write("text",
 	          "Types letters, as the keyboard gives them to the text box that has the focus (a name or a password). It "
-	          "presses no key. The answer does not repeat the letters",
+	          "presses no key. The answer does not repeat the letters. While the new player's name box waits before the "
+	          "first land (game.state loading \"new player\"), the letters go to the box at once",
 	          {{.name = "text", .type = "string", .description = "The letters, 1 to 256 bytes of UTF-8", .required = true}}),
 	    Write("wheel", "Turns the mouse wheel some notches, away from the player positive",
 	          {{.name = "notches", .type = "integer", .description = "Notches", .required = true}}),

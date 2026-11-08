@@ -82,6 +82,7 @@
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
+#include "ECS/Systems/RenderingSystemInterface.h"
 #include "ECS/Systems/ResourceStoreSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
@@ -328,8 +329,8 @@ const graphics::L3DMesh* MeshOf(entt::entity object)
 	return meshes.Contains(mesh->id) ? &*meshes.Handle(mesh->id) : nullptr;
 }
 
-/// A random point of a random triangle of the model's first detail, in its own frame; a random bone's place, as the
-/// bones are posed now, for a model moved by bones. A tree's flames keep to its middle half. On a creature's body, the
+/// A random point of a random triangle of the model's parts of one detail, in its own frame; a random bone's place, as
+/// the bones are posed now, for a model moved by bones. A tree's flames keep to its middle half. On a creature's body, the
 /// point also keeps its bone: the game draws the body bone by bone, and the point stays at that bone. A broken building
 /// takes the point from its broken model when that gives one.
 std::optional<fire::graphic::Anchor> RandomPointOn(entt::entity object)
@@ -369,11 +370,17 @@ std::optional<fire::graphic::Anchor> RandomPointOn(entt::entity object)
 		    .bone = drawnByBones ? std::optional(static_cast<uint32_t>(bone)) : std::nullopt,
 		};
 	}
+	// A tree's flame starts on the parts of the detail that the frame draws the tree in
+	const auto levels = fire::graphic::FlameLevels(IsTree(object) && Locator::rendereringSystem::has_value()
+	                                                   ? Locator::rendereringSystem::value().TreeDetailNow(object)
+	                                                   : std::nullopt);
 	size_t triangles = 0;
-	const auto firstDetail = [](const graphics::L3DSubMesh& subMesh) { return (subMesh.GetFlags().lodMask & 1u) != 0; };
+	const auto partOfLevels = [levels](const graphics::L3DSubMesh& subMesh) {
+		return fire::graphic::FlameStartsOnPart(subMesh.GetFlags().lodMask, levels);
+	};
 	for (const auto& subMesh : mesh->GetSubMeshes())
 	{
-		if (firstDetail(*subMesh))
+		if (partOfLevels(*subMesh))
 		{
 			triangles += subMesh->GetSurface().indices.size() / 3;
 		}
@@ -387,7 +394,7 @@ std::optional<fire::graphic::Anchor> RandomPointOn(entt::entity object)
 	const float across = random.LocalFloatRand(1.0f);
 	for (const auto& subMesh : mesh->GetSubMeshes())
 	{
-		if (!firstDetail(*subMesh))
+		if (!partOfLevels(*subMesh))
 		{
 			continue;
 		}

@@ -249,16 +249,17 @@ void CreatureMindSystem::LearnFromFeedback(entt::entity creature, CreatureMindSt
 	                       : nullptr;
 	// The two tests below read the newest action that the creature did, not the action that gets the credit
 	const auto* newest = learnt.contexts.empty() ? nullptr : &learnt.contexts.back();
-	const auto* newestInfo = newest != nullptr && tables != nullptr && newest->action < tables->actions.size()
-	                             ? &tables->actions[newest->action]
-	                             : nullptr;
+	const auto newestAction = creature_learning::NewestActionForStroke(learnt.contexts);
+	const auto* newestInfo =
+	    tables != nullptr && newestAction < tables->actions.size() ? &tables->actions[newestAction] : nullptr;
 
-	// Stroked for holding something while doing an action that allows it, it learns to eat from the hand
-	if (feedback > 0.0f && mind.developmentPhase > 0 && newestInfo != nullptr && newestInfo->eatWhenStroked &&
-	    Locator::creatureObjectActionSystem::has_value())
+	// Stroked for holding something while doing an action that allows it, it learns to eat from the hand. It eats any
+	// thing that it carries, also a thing that is not food (vanilla-bugs 1215).
+	if (Locator::creatureObjectActionSystem::has_value())
 	{
 		if (const auto held = Locator::creatureObjectActionSystem::value().GetCarried(creature);
-		    held.has_value() && FoodValueOf(*held).has_value())
+		    creature_learning::StrokeTeachesToEat(feedback, mind.developmentPhase,
+		                                          newestInfo != nullptr && newestInfo->eatWhenStroked, held.has_value()))
 		{
 			creature_learning::MakeFullyDominant(desires, Desire::Hunger, mind_detail::DesireFloorOf(creature));
 			if (const auto belief = BeliefOf(registry, *held, creature); belief.has_value() && tables != nullptr)

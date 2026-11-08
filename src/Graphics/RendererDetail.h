@@ -112,6 +112,9 @@ const Texture2D* GetTexture(uint32_t skinID, const std::unordered_map<SkinId, st
 /// level of the land's light while it draws the reflection
 float CreatureLandLightScale(RenderPass viewId);
 
+/// The size in pixels of the target that a scene draws into: its frame buffer, or the window when it has none
+glm::vec2 SceneTarget(const FrameBuffer* frameBuffer);
+
 /// A view drawing into a target a texel for each of the land's cell corners, in texels, a row for each cell along z,
 /// whichever way up the backend keeps its targets. Its draws are kept in order.
 bgfx::ViewId SetUpLandView(RenderPass pass, const FrameBuffer& frameBuffer, glm::u16vec2 size);

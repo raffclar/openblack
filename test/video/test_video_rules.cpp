@@ -83,6 +83,60 @@ TEST(VideoRules, Skip)
 	EXPECT_EQ(SkipSchedule(1392, intro, 1601), (Schedule {.fadeStart = 1392, .end = 1440}));
 }
 
+TEST(VideoRules, ThePictureIsDrawnInTilesOf256Texels)
+{
+	// INTRO.bik, 640 x 360, on a 4:3 screen of 1024 x 768: three columns and two rows
+	const auto rect = LetterboxRect(1024, 768);
+	const auto tiles = PictureTiles(rect, 640, 360);
+	ASSERT_EQ(tiles.size(), 6u);
+	// The screen size of a texel across is exact here: 1025 / 640 = 1.6015625
+	const float scaleY = 577.0f / 360.0f;
+	const float secondRowTop = (256.0f * scaleY) + 96.0f;
+	// Each tile reads from half a texel in to half a texel before its end. Its corners are the game's corners plus half
+	// a pixel, the centre of a pixel in a modern renderer
+	EXPECT_EQ(tiles[0], (PictureTile {.min = {0.5f, 96.5f},
+	                                  .max = {410.5f, secondRowTop + 0.5f},
+	                                  .texelMin = {0.5f, 0.5f},
+	                                  .texelMax = {255.5f, 255.5f}}));
+	EXPECT_EQ(tiles[1].min.x, 410.5f);
+	EXPECT_EQ(tiles[1].max.x, 820.5f);
+	EXPECT_EQ(tiles[1].texelMin, glm::vec2(256.5f, 0.5f));
+	EXPECT_EQ(tiles[1].texelMax, glm::vec2(511.5f, 255.5f));
+	// The last column has the remaining 128 texels, and the last row the remaining 104
+	EXPECT_EQ(tiles[2].min.x, 820.5f);
+	EXPECT_EQ(tiles[2].max.x, 1025.5f);
+	EXPECT_EQ(tiles[2].texelMax, glm::vec2(639.5f, 255.5f));
+	EXPECT_EQ(tiles[5].min, glm::vec2(820.5f, secondRowTop + 0.5f));
+	EXPECT_EQ(tiles[5].max.y, ((104.0f * scaleY) + secondRowTop) + 0.5f);
+	EXPECT_EQ(tiles[5].texelMin, glm::vec2(512.5f, 256.5f));
+	EXPECT_EQ(tiles[5].texelMax, glm::vec2(639.5f, 359.5f));
+	EXPECT_FLOAT_EQ(tiles[5].max.y, 96.0f + 577.0f + 0.5f);
+}
+
+TEST(VideoRules, AWholeNumberOfTilesHasNoPartTile)
+{
+	// The logo and the tips, 768 x 512, over 1:1 pixels from a pixel before the top left corner
+	const auto tiles = PictureTiles({.x = -1, .y = -1, .width = 768, .height = 512}, 768, 512);
+	ASSERT_EQ(tiles.size(), 6u);
+	EXPECT_EQ(tiles[0].min, glm::vec2(-0.5f, -0.5f));
+	EXPECT_EQ(tiles[5].max, glm::vec2(767.5f, 511.5f));
+	EXPECT_EQ(tiles[5].texelMin, glm::vec2(512.5f, 256.5f));
+	EXPECT_EQ(tiles[5].texelMax, glm::vec2(767.5f, 511.5f));
+	// No picture, no tiles
+	EXPECT_TRUE(PictureTiles({.width = 640, .height = 480}, 0, 0).empty());
+}
+
+TEST(VideoRules, TheGameWaitsForAFrameOnlyWhileTheVideoCoversTheScreen)
+{
+	EXPECT_TRUE(WaitsForFrame(1.0f, false, 0));
+	// A frame came after the last draw
+	EXPECT_FALSE(WaitsForFrame(1.0f, false, 1));
+	// The video fades
+	EXPECT_FALSE(WaitsForFrame(0.99f, false, 0));
+	// The film of the falling spell
+	EXPECT_FALSE(WaitsForFrame(1.0f, true, 0));
+}
+
 TEST(VideoRules, Letterbox)
 {
 	// 4:3: bars of 60 pixels at 640 x 480

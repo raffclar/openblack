@@ -110,6 +110,20 @@ struct Graphic
 	float drawnFraction {0.0f};
 };
 
+/// The detail bits of the model parts that a new flame can start on: the parts of the detail that the frame draws the
+/// thing in. A thing that the frame does not draw as a mesh uses the parts of the most detail.
+[[nodiscard]] constexpr uint8_t FlameLevels(std::optional<uint8_t> drawnLevel) noexcept
+{
+	constexpr uint8_t k_MostDetail = 1;
+	return drawnLevel.value_or(k_MostDetail);
+}
+
+/// Whether a new flame can start on a model part that names the detail bits `partLevels`
+[[nodiscard]] constexpr bool FlameStartsOnPart(uint32_t partLevels, uint8_t flameLevels) noexcept
+{
+	return (partLevels & flameLevels) != 0;
+}
+
 /// A flame's point on a triangle of a model, from two random numbers from 0 to 1. Two numbers with a sum over 1 are both
 /// taken from 1, so that the point stays in the triangle. The first number goes along the edge from the first corner to
 /// the second corner, the second number along the edge from the first corner to the third corner.

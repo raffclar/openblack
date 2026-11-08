@@ -196,9 +196,14 @@ void Canvas::DrawShape(const std::array<glm::vec2, 4>& corners, const std::array
 
 void Canvas::DrawLine(glm::ivec2 from, glm::ivec2 to, glm::vec4 colour)
 {
-	const auto min = glm::min(from, to);
-	const auto max = glm::max(from, to) + 1;
-	DrawQuad(min, max, {0.0f, 0.0f}, {1.0f, 1.0f}, colour, nullptr);
+	const auto span = screen_pixels::LinePixels(from, to);
+	if (!span.has_value())
+	{
+		return;
+	}
+	// The pixels of the line are whole pixels of the game's screen, whatever the corners of the draws round it
+	const CornersScope corners(*this, screen_pixels::Corners::AsGiven);
+	DrawQuad(span->first, span->last + 1, {0.0f, 0.0f}, {1.0f, 1.0f}, colour, nullptr);
 }
 
 void Canvas::End()

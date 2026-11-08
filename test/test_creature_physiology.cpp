@@ -361,6 +361,19 @@ TEST(CreaturePhysiology, EatingFillsItUpFattensAndBuildsPoo)
 	EXPECT_FLOAT_EQ(needs.poo, 0.0f);
 }
 
+TEST(CreaturePhysiology, AMealOfNoFoodGivesNoEnergyButFattensACreatureThatIsMoreThanFull)
+{
+	const auto species = Fake();
+	auto needs = Start(species);
+	needs.energy = 1.25f;
+	Shape shape {.fatness = 0.5f, .strength = 0.5f, .size = 1.5f};
+	EXPECT_FLOAT_EQ(Eat(needs, shape, species, 0.0f), 0.0f);
+	EXPECT_FLOAT_EQ(needs.energy, 1.25f);
+	EXPECT_FLOAT_EQ(shape.fatness, 0.75f);
+	EXPECT_FLOAT_EQ(needs.poo, 0.0f);
+	EXPECT_EQ(needs.meals, 1u);
+}
+
 TEST(CreaturePhysiology, ThePooLumpIsThrownBackAlongTheGroundFromTheGroin)
 {
 	// Facing +x, shown at size 2, its groin 3 m up

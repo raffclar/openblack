@@ -5,8 +5,9 @@ $input v_texcoord0, v_color0
 // A full-screen Bink video, from its three decoded planes as the game's video library and renderer show it:
 // - each pixel's colour from its luma and its 2x2 block's chroma through the library's integer tables;
 // - optionally through the game's 16-bit surface, 555 or 565 (see Graphics/FilmSurface.h);
-// - spread over the screen as the game's 256x256 tiles were, each sampled half a texel in from its edges with clamped
-//   bilinear filtering, so no tile blends into the next.
+// - drawn in the game's tiles of 256x256 texels. The texture coordinates are texels of the picture, from half a texel
+//   in to half a texel before the end of each tile. The bilinear filter stays in the tile, as the game clamped each
+//   tile texture, thus no tile mixes with the next.
 
 SAMPLER2D(s_lumaPlane, 0);
 SAMPLER2D(s_uPlane, 1);
@@ -51,17 +52,6 @@ vec3 TexelColour(vec2 texel)
 	return colour / 255.0;
 }
 
-// Where in the picture a point a fraction `t` across it samples, in texels, and the texels of its tile
-vec3 TileSample(float t, float size)
-{
-	float p = t * size;
-	float tile = min(floor(p / 256.0), floor((size - 1.0) / 256.0));
-	float first = tile * 256.0;
-	float count = min(256.0, size - first);
-	float across = clamp((p - first) / count, 0.0, 1.0);
-	return vec3(first + 0.5 + across * (count - 1.0), first, first + count - 1.0);
-}
-
 void main()
 {
 	if (u_videoOptions.y < 0.5)
@@ -69,13 +59,12 @@ void main()
 		gl_FragColor = vec4(0.0, 0.0, 0.0, v_color0.a);
 		return;
 	}
-	vec3 sx = TileSample(v_texcoord0.x, u_videoSize.x);
-	vec3 sy = TileSample(v_texcoord0.y, u_videoSize.y);
-	vec2 base = vec2(sx.x, sy.x) - vec2_splat(0.5);
+	// The tile of the point, and its first and last texels
+	vec2 lowest = floor(v_texcoord0.xy / 256.0) * 256.0;
+	vec2 highest = min(lowest + vec2_splat(255.0), u_videoSize.xy - vec2_splat(1.0));
+	vec2 base = v_texcoord0.xy - vec2_splat(0.5);
 	vec2 low = floor(base);
 	vec2 f = base - low;
-	vec2 lowest = vec2(sx.y, sy.y);
-	vec2 highest = vec2(sx.z, sy.z);
 	vec2 t0 = clamp(low, lowest, highest);
 	vec2 t1 = clamp(low + vec2_splat(1.0), lowest, highest);
 	vec3 c00 = TexelColour(vec2(t0.x, t0.y));

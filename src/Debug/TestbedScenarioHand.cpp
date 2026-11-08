@@ -1181,6 +1181,32 @@ void testbed_scenarios::AddHand(std::vector<Scenario>& all)
 	                {.type = AnimalInfo::Pig, .offset = {-6.0f, 5.0f}, .living = true}},
 	});
 
+	// The camera looks at a person and a pig from 12 m. The hand takes each from where it stands. The pull of the hand
+	// starts from the angle that each keeps, and a new person keeps the angle 0.
+	all.push_back({
+	    .id = "hand.pull_living",
+	    .name = "Pulling a person and a pig from where they stand",
+	    .facet = Facet::Hand,
+	    .description = "A new person and a pig stand still side by side. The hand takes the person, lifts it a little and "
+	                   "puts it down. Then it does the same to the pig.",
+	    .expected = "Each one faces the same way before the hand takes it and on the frame that the hand pulls it free. "
+	                "A new person faces the angle 0, as the pig does: both look along the same line.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 6.0f, -8.0f}, .look = {0.0f, 1.0f, 4.0f}},
+	    .objects = {{.type = VillagerInfo::CelticFarmerMale, .offset = {-1.5f, 4.0f}, .inScript = true},
+	                {.type = AnimalInfo::Pig, .offset = {1.5f, 4.0f}}},
+	    .commands = {{.kind = Kind::PointerTo, .delaySeconds = 1.5f, .point = {0.4f, 0.5f}},
+	                 {.kind = Kind::PointerPress, .delaySeconds = 1.0f, .value = 3},
+	                 {.kind = Kind::PointerSweep, .delaySeconds = 0.3f, .point = {0.0f, -0.15f}, .amount = 1.0f},
+	                 {.kind = Kind::PointerSweep, .delaySeconds = 1.0f, .point = {0.0f, 0.15f}, .amount = 1.0f},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 1.0f, .value = 3},
+	                 {.kind = Kind::PointerTo, .delaySeconds = 2.0f, .point = {0.6f, 0.52f}},
+	                 {.kind = Kind::PointerPress, .delaySeconds = 1.0f, .value = 3},
+	                 {.kind = Kind::PointerSweep, .delaySeconds = 0.3f, .point = {0.0f, -0.15f}, .amount = 1.0f},
+	                 {.kind = Kind::PointerSweep, .delaySeconds = 1.0f, .point = {0.0f, 0.15f}, .amount = 1.0f},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 1.0f, .value = 3}},
+	});
+
 	// One of each kind of thing the cursor picks by its own shape, in a row on bare land
 	all.push_back({
 	    .id = "hand.pick_kinds",
