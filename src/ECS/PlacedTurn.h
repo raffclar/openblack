@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include <optional>
+
 #include <glm/mat3x3.hpp>
 #include <glm/vec3.hpp>
 
@@ -61,6 +63,27 @@ template <typename Source>
 [[nodiscard]] inline glm::mat3 TurnOf(const glm::vec3& kept, bool canLean)
 {
 	return canLean ? x87::GameTurnMatrix(kept.x, kept.y, kept.z) : x87::GameUprightTurn(kept.y);
+}
+
+/// The game's world axes of a placed thing: the turn from its kept angles with its scale in it. Each product of the
+/// scale and the wide cosine or sine rounds to a float one time. The game uses the turn with no scale when the scale is
+/// 1 or is not a number.
+[[nodiscard]] inline glm::mat3 WorldAxesOf(const glm::vec3& kept, float scale, bool canLean)
+{
+	const float used = x87::EqualOrUnordered(scale, 1.0f) ? 1.0f : scale;
+	return canLean ? x87::GameTurnMatrixScaled(kept.x, kept.y, kept.z, used) : x87::GameUprightTurnScaled(kept.y, used);
+}
+
+/// The game's world axes of a thing from the angles that it keeps, when the thing has the turn that these angles made.
+/// The result is empty when the thing keeps no angles, or when a different turn replaced the turn of its angles.
+[[nodiscard]] inline std::optional<glm::mat3> KeptWorldAxesOf(const components::TurnAngles* kept,
+                                                              const components::Transform& transform, bool canLean)
+{
+	if (kept == nullptr || kept->turn != transform.rotation)
+	{
+		return std::nullopt;
+	}
+	return WorldAxesOf(kept->angles, transform.scale.x, canLean);
 }
 
 /// The angles and the turn that a thing takes from the axes of its body, each time the physics moves it

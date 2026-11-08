@@ -70,6 +70,7 @@
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
+#include "ECS/Components/TurnAngles.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/GamePlayers.h"
 #include "ECS/Map.h"
@@ -77,6 +78,7 @@
 #include "ECS/ObjectPhysics.h"
 #include "ECS/PhysicsClasses.h"
 #include "ECS/PhysicsEntry.h"
+#include "ECS/PlacedTurn.h"
 #include "ECS/PlayerMiracles.h"
 #include "ECS/Registry.h"
 #include "ECS/RegistryContext.h"
@@ -1120,6 +1122,24 @@ hand_grab::HandGrabWorldInterface::Pose GameHandGrabWorld::PoseOf(entt::entity o
 		axes[column] *= transform->scale[column];
 	}
 	return {.axes = axes, .origin = transform->position};
+}
+
+hand_grab::HandGrabWorldInterface::Pose GameHandGrabWorld::PullStartPoseOf(entt::entity object) const
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* transform = registry.TryGet<const Transform>(object);
+	if (transform == nullptr)
+	{
+		return {};
+	}
+	// The game makes the axes again from the angles that the thing keeps. A thing with no kept angles starts from its turn.
+	const auto axes = ecs::placed_turn::KeptWorldAxesOf(registry.TryGet<const components::TurnAngles>(object), *transform,
+	                                                    ecs::placed_turn::CanLean(registry, object));
+	if (!axes.has_value())
+	{
+		return PoseOf(object);
+	}
+	return {.axes = *axes, .origin = transform->position};
 }
 
 void GameHandGrabWorld::SetPose(entt::entity object, const Pose& pose)

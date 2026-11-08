@@ -310,3 +310,55 @@ TEST(PlacedTurn, TurnLookupsReadOnAnotherThreadWhileTheRegistryAddsStores)
 	reader.join();
 	EXPECT_EQ(wrong.load(), 0);
 }
+
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST(PlacedTurn, TheWorldAxesRoundTheWideCosineAndSineTimesTheScaleOneTime)
+{
+	constexpr float k_Scale = 1.3f;
+	int twoRoundsDiffer = 0;
+	for (int step = 0; step < 1000; ++step)
+	{
+		const float angle = -3.0f + 0.006f * static_cast<float>(step);
+		if (angle == 0.0f)
+		{
+			continue;
+		}
+		const auto axes = ecs::placed_turn::WorldAxesOf(glm::vec3(0.0f, angle, 0.0f), k_Scale, false);
+		const float c = x87::Mul(x87::Cos(angle), k_Scale);
+		const float s = x87::Mul(x87::Sin(angle), k_Scale);
+		EXPECT_EQ(axes[0], glm::vec3(c, 0.0f, s));
+		EXPECT_EQ(axes[1], glm::vec3(0.0f, k_Scale, 0.0f));
+		EXPECT_EQ(axes[2], glm::vec3(-s, 0.0f, c));
+		// The float cosine times the scale rounds two times
+		const float twoRounds = x87::RoundToFloat(x87::Cos(angle)) * k_Scale;
+		twoRoundsDiffer += twoRounds != c ? 1 : 0;
+	}
+	EXPECT_GT(twoRoundsDiffer, 0);
+}
+
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST(PlacedTurn, TheWorldAxesHaveNoScaleWhenTheScaleIsOneOrNotANumber)
+{
+	const float nan = std::numeric_limits<float>::quiet_NaN();
+	EXPECT_EQ(ecs::placed_turn::WorldAxesOf(glm::vec3(0.0f, 0.8f, 0.0f), nan, false),
+	          ecs::placed_turn::WorldAxesOf(glm::vec3(0.0f, 0.8f, 0.0f), 1.0f, false));
+	EXPECT_EQ(ecs::placed_turn::WorldAxesOf(glm::vec3(0.0f), nan, false), glm::mat3(1.0f));
+	EXPECT_EQ(ecs::placed_turn::WorldAxesOf(glm::vec3(0.0f), 2.0f, false), glm::mat3(2.0f));
+	EXPECT_EQ(ecs::placed_turn::WorldAxesOf(glm::vec3(0.3f, 0.8f, -0.2f), nan, true), x87::GameTurnMatrix(0.3f, 0.8f, -0.2f));
+	EXPECT_EQ(ecs::placed_turn::WorldAxesOf(glm::vec3(0.3f, 0.8f, -0.2f), 2.5f, true),
+	          x87::GameTurnMatrixScaled(0.3f, 0.8f, -0.2f, 2.5f));
+}
+
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST(PlacedTurn, KeptWorldAxesNeedTheTurnThatTheKeptAnglesMade)
+{
+	const ecs::components::TurnAngles kept {.angles = glm::vec3(0.0f, 0.9f, 0.0f), .turn = x87::GameUprightTurn(0.9f)};
+	ecs::components::Transform transform {.position = glm::vec3(0.0f), .rotation = kept.turn, .scale = glm::vec3(1.7f)};
+	const auto axes = ecs::placed_turn::KeptWorldAxesOf(&kept, transform, false);
+	ASSERT_TRUE(axes.has_value());
+	EXPECT_EQ(*axes, x87::GameUprightTurnScaled(0.9f, 1.7f));
+	EXPECT_FALSE(ecs::placed_turn::KeptWorldAxesOf(nullptr, transform, false).has_value());
+	// An other turn replaced the turn of the kept angles
+	transform.rotation = x87::GameUprightTurn(0.5f);
+	EXPECT_FALSE(ecs::placed_turn::KeptWorldAxesOf(&kept, transform, false).has_value());
+}
