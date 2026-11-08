@@ -63,13 +63,13 @@ void SkySystem::UpdateFrame(bool skyDrawn)
 	        .fog = Locator::config::value().detail.fog,
 	    },
 	    dome, registry.Get<Sun>(entities.sun), registry.Get<Moon>(entities.moon));
-	sky_frame::AdvanceDome(dome, skyClock.GetCurrentSkyType(), skyDrawn);
+	sky_frame::AdvanceDome(dome, skyClock.GetCurrentNightSkyType(), skyDrawn);
 }
 
 void SkySystem::JumpToClock()
 {
 	const auto& skyClock = Locator::skyClockSystem::value();
-	Locator::entitiesRegistry::value().Get<SkyDome>(skyClock.GetEntities().dome).follow.Jump(skyClock.GetCurrentSkyType());
+	Locator::entitiesRegistry::value().Get<SkyDome>(skyClock.GetEntities().dome).follow.Jump(skyClock.GetCurrentNightSkyType());
 }
 
 entt::entity SkySystem::GetDome() const

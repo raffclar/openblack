@@ -15,13 +15,15 @@
 
 #include <glm/geometric.hpp>
 
+#include "Common/X87.h"
+
 using namespace openblack;
 
 namespace
 {
 constexpr float k_HandLift = 10.0f;
-/// Darker than this, the light moves to the hand
-constexpr float k_NightSkyType = 0.5f;
+/// When the sky type, as the game counts it, is more than this double, the light moves to the hand
+constexpr double k_HandLightSkyType = 1.5;
 constexpr float k_DistanceFromHand = 3.0f;
 } // namespace
 
@@ -32,14 +34,20 @@ glm::vec3 model_light::FrameLight(glm::vec3 hand, float groundUnderHand, const g
 	{
 		return *templeOrigin + k_Temple;
 	}
-	if (!(skyType < k_NightSkyType))
+	if (!x87::Greater(skyType, k_HandLightSkyType))
 	{
 		return k_Sun;
 	}
 	hand.y = std::max(hand.y, groundUnderHand + k_HandLift);
-	const auto toCamera = camera - hand;
-	const auto lengthSquared = glm::dot(toCamera, toCamera);
-	const auto direction = lengthSquared > 0.0f ? toCamera / std::sqrt(lengthSquared) : toCamera;
+	auto direction = camera - hand;
+	// The length adds z, then y, then x. The game multiplies by the inverse of the length.
+	if (direction != glm::vec3(0.0f))
+	{
+		const float lengthSquared = x87::Add(x87::Add(x87::Mul(direction.z, direction.z), x87::Mul(direction.y, direction.y)),
+		                                     x87::Mul(direction.x, direction.x));
+		const float inverse = 1.0f / std::sqrt(lengthSquared);
+		direction *= inverse;
+	}
 	return hand + direction * k_DistanceFromHand;
 }
 

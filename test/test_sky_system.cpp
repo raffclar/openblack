@@ -77,6 +77,7 @@ TEST_F(SkyClockSystemTest, TheSkyStartsAtNoonWithItsThreeEntities)
 	EXPECT_TRUE((Entities().AllOf<components::Moon, components::CelestialBody, components::CelestialGlow>(entities.moon)));
 	EXPECT_FLOAT_EQ(_clock->GetClock().GetScriptTime(), 12.0f);
 	EXPECT_FLOAT_EQ(_clock->GetCurrentSkyType(), 2.0f);
+	EXPECT_FLOAT_EQ(_clock->GetCurrentNightSkyType(), 0.0f);
 }
 
 TEST_F(SkyClockSystemTest, WithNoShownSkyTheClockJumpsAndTheDomeStaysAsItWas)
@@ -157,7 +158,7 @@ TEST_F(SkySystemTest, SettingTheTimeBuildsTheWholeDomeAgain)
 	Clock().SetTime(0.0f);
 	EXPECT_FLOAT_EQ(Clock().GetClock().GetScriptTime(), 0.0f);
 	const auto& dome = Entities().Get<components::SkyDome>(Sky().GetDome());
-	EXPECT_FLOAT_EQ(dome.follow.Following(), Clock().GetCurrentSkyType());
+	EXPECT_FLOAT_EQ(dome.follow.Following(), Clock().GetCurrentNightSkyType());
 	EXPECT_EQ(dome.follow.RowsDone(), 0);
 }
 
@@ -167,8 +168,8 @@ TEST_F(SkyClockSystemTest, ALoadKeepsHowFarTheShownDomeFollowsTheSky)
 {
 	auto& shown = Entities().Get<components::SkyDome>(_clock->GetEntities().dome);
 	// The first frame builds all of the dome, then the dome follows the sky down to the night
-	static_cast<void>(shown.follow.Advance(2.0f));
-	static_cast<void>(shown.follow.Advance(0.5f));
+	static_cast<void>(shown.follow.Advance(0.0f));
+	static_cast<void>(shown.follow.Advance(1.5f));
 	const auto before = shown.follow;
 	ASSERT_EQ(before.RowsDone(), sky_dome::k_RowsPerFrame);
 
@@ -177,7 +178,7 @@ TEST_F(SkyClockSystemTest, ALoadKeepsHowFarTheShownDomeFollowsTheSky)
 	// The saved dome had all of its picture built for the day
 	const auto loaded = archetypes::SkyArchetype::Create();
 	auto& saved = Entities().Get<components::SkyDome>(loaded.dome);
-	static_cast<void>(saved.follow.Advance(2.0f));
+	static_cast<void>(saved.follow.Advance(0.0f));
 	_clock->FindAfterLoad();
 
 	const auto& dome = Entities().Get<components::SkyDome>(_clock->GetEntities().dome);
@@ -191,11 +192,11 @@ TEST_F(SkyClockSystemTest, ALoadWithNoShownDomeBuildsTheWholeDome)
 	Entities().Reset();
 	const auto loaded = archetypes::SkyArchetype::Create();
 	auto& saved = Entities().Get<components::SkyDome>(loaded.dome);
-	static_cast<void>(saved.follow.Advance(2.0f));
+	static_cast<void>(saved.follow.Advance(0.0f));
 	_clock->FindAfterLoad();
 
 	auto& dome = Entities().Get<components::SkyDome>(_clock->GetEntities().dome);
-	const auto frame = dome.follow.Advance(_clock->GetCurrentSkyType());
+	const auto frame = dome.follow.Advance(_clock->GetCurrentNightSkyType());
 	ASSERT_GE(frame.count, 1);
 	EXPECT_EQ(frame.rows.at(0).first, 0);
 	EXPECT_EQ(frame.rows.at(0).count, sky_dome::k_Rows);
