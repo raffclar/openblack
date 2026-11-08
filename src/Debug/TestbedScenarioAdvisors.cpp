@@ -173,6 +173,34 @@ void testbed_scenarios::AddAdvisorScenarios(std::vector<Scenario>& all)
 	    .commands = {Tell(k_Good, Action::Appear, 0.5f), Tell(k_Evil, Action::Appear, 0.0f), Tell(k_Good, Action::Vanish, 5.0f),
 	                 Tell(k_Evil, Action::Vanish, 0.0f)},
 	});
+	// Both advisors go out into the world at the middle of the map, then the camera turns its back to them and they vanish
+	const auto pointInWorld = [](size_t advisor, float delay) {
+		return Command {.kind = Kind::Advisor,
+		                .delaySeconds = delay,
+		                .point = {0.0f, 0.0f},
+		                .value = advisor,
+		                .gentle = true,
+		                .advisor = Action::PointAtLand};
+	};
+	all.push_back({
+	    .id = "advisors.puff_behind_camera",
+	    .name = "The advisors vanish behind the camera",
+	    .facet = Facet::Advisors,
+	    .description = "Both advisors come out and go out into the world at the middle of the map. After four seconds the "
+	                   "camera moves 25 m north of them and looks north, so that they are behind it. Then both vanish.",
+	    .expected = "While the camera has its back to the advisors, the good advisor's puff of smoke is not seen: it goes "
+	                "far off the screen. The evil advisor's dark red puff shows in the middle of the screen for about half "
+	                "a second, spreading as it fades.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = AdvisorsFraming(),
+	    .commands = {Tell(k_Good, Action::Out, 0.2f),
+	                 Tell(k_Evil, Action::Out, 0.0f),
+	                 pointInWorld(k_Good, 1.0f),
+	                 pointInWorld(k_Evil, 0.0f),
+	                 {.kind = Kind::CameraLooksAt, .delaySeconds = 4.0f, .point = {0.0f, 40.0f}},
+	                 Tell(k_Good, Action::Vanish, 0.5f),
+	                 Tell(k_Evil, Action::Vanish, 0.0f)},
+	});
 	all.push_back({
 	    .id = "advisors.escape_in_cut_scene",
 	    .name = "Escape in a script's cut scene",

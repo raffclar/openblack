@@ -283,6 +283,30 @@ struct PuffParticle
 };
 constexpr size_t k_PuffParticles = 16;
 
+/// The puff's place in the hover's space for the advisors that the world pass draws in one frame (the advisors out in
+/// the world, in their order). Make one each frame
+class PuffPlaceInWorld
+{
+public:
+	/// The place of the puff of one advisor. `projected` is the advisor's model in the hover's space, or nullopt when
+	/// the model is behind the camera's near plane. `haloWorldX` is the world x of the halo that this advisor drew in
+	/// this frame, or nullopt when it drew no halo. Use it only for an advisor that draws one or more puff particles.
+	/// When the projection fails, the game keeps the down value that the last projection of this pass wrote. Before
+	/// the first projection, that value is the integer 1 read as a float (vanilla-bugs 1095, kept)
+	[[nodiscard]] glm::vec2 Place(std::optional<glm::vec2> projected, std::optional<float> haloWorldX)
+	{
+		if (projected)
+		{
+			_leftDown = projected->y;
+			return *projected;
+		}
+		return {haloWorldX.value_or(0.0f), _leftDown};
+	}
+
+private:
+	float _leftDown {std::bit_cast<float>(1)};
+};
+
 /// A sound of an advisor's anim whose point the anim passed in this frame
 struct AnimSound
 {
