@@ -97,3 +97,28 @@ TEST(WorkerPool, WithNoThreadsTheCallerDoesEveryJob)
 	EXPECT_TRUE(std::ranges::all_of(squares.lanes, [](size_t lane) { return lane == 0; }));
 	EXPECT_EQ(squares.values[9], 81U);
 }
+
+TEST(WorkerPool, AStartedCallFinishesEveryJobOnce)
+{
+	for (const size_t threads : {size_t {0}, size_t {1}, size_t {4}})
+	{
+		WorkerPool pool(threads);
+		for (int round = 0; round < 50; ++round)
+		{
+			const size_t count = static_cast<size_t>(round % 7);
+			std::vector<std::atomic<int>> done(count);
+			pool.Start(count, [&done](size_t index, size_t /*lane*/) { done[index].fetch_add(1); });
+			// The caller does other work while the threads do the jobs, then a call of ForEach after Finish
+			pool.Finish();
+			for (const auto& runs : done)
+			{
+				EXPECT_EQ(runs.load(), 1);
+			}
+			std::vector<int> after(5, 0);
+			pool.ForEach(after.size(), [&after](size_t index, size_t /*lane*/) { after[index] = 1; });
+			EXPECT_EQ(std::accumulate(after.begin(), after.end(), 0), 5);
+		}
+		// A Finish with no Start does nothing
+		pool.Finish();
+	}
+}

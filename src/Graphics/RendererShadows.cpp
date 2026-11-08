@@ -362,14 +362,10 @@ Renderer::ShadowTextureLevels(const GroundShadowBody& body, const GroundShadow::
 	return shadow_texture::Levels(canvas, alpha);
 }
 
-void Renderer::DrawGroundShadowPass(const DrawSceneDesc& drawDesc) const
+void Renderer::StartGroundShadows(const DrawSceneDesc& drawDesc) const
 {
 	auto section = Locator::profiler::value().BeginScoped(Profiler::Stage::GroundShadowPass);
-	_groundShadowCount = 0;
-	_groundShadowsOnObjects = 0;
-	_groundShadowTexels.clear();
-	std::ranges::fill(_groundShadowBlocks, glm::vec2(0.0f));
-
+	_groundShadowsStarted = true;
 	const auto& renderCtx = Locator::rendereringSystem::value().GetContext();
 	const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
 	const bool casts = Locator::config::value().drawCreatureShadows && drawDesc.drawEntities && drawDesc.drawIsland &&
@@ -380,26 +376,15 @@ void Renderer::DrawGroundShadowPass(const DrawSceneDesc& drawDesc) const
 	const auto scaleOf = [](const glm::mat4& model) {
 		return std::max({glm::length(glm::vec3(model[0])), glm::length(glm::vec3(model[1])), glm::length(glm::vec3(model[2]))});
 	};
-	/// A shadow to cast: its bodies, where it stands, where it is cast from and laid, its opacity and whether it falls
-	/// on objects too
-	struct Caster
-	{
-		std::array<GroundShadowBody, 2> bodies;
-		uint8_t bodyCount;
-		glm::vec3 standsAt;
-		GroundShadow::Cast cast;
-		uint8_t alpha;
-		bool onObjects;
-		/// It is filled through its textures' alpha and softened, as the shadow of a moving tree is
-		bool throughAlpha {false};
-		/// The thing that the physics moves, whose shadow stays as it is while the thing is under the sea
-		entt::entity kept {entt::null};
-	};
-	std::vector<Caster> casters;
+	using Caster = GroundShadowCaster;
+	auto& casters = _groundShadowCasters;
+	casters.clear();
 	// The things under the sea, whose shadows stay as they were when they went under
-	std::vector<entt::entity> underSea;
-	// Kept for the bodies that are blended, in place: made room for first
-	std::vector<L3DMeshSubmitDesc::MorphTargets> morphs;
+	auto& underSea = _groundShadowUnderSea;
+	underSea.clear();
+	// Kept for the bodies that are blended, in place: made room for first, thus the casters can point to them
+	auto& morphs = _groundShadowMorphs;
+	morphs.clear();
 	morphs.reserve(renderCtx.entityDraws.size() + 1);
 
 	if (casts)
@@ -661,14 +646,11 @@ void Renderer::DrawGroundShadowPass(const DrawSceneDesc& drawDesc) const
 	// Each shadow's texture counted from its bodies' triangles, as the game counts them, and handed over with where it
 	// lies; what is laid on objects goes first
 	std::ranges::stable_partition(casters, &Caster::onObjects);
-	std::vector<GroundShadow::Footprint> footprints;
-	footprints.reserve(casters.size());
-	decltype(_keptGroundShadows) kept;
 	// Each shadow uses only its caster, thus the workers make the shadows at the same time, each into its own place.
-	// Then the loop below hands them over in the order of the casters, the same as before. A shadow that the textures'
-	// alpha fills reads the texture cache, thus the main thread makes it.
+	// The draw continues while the workers make them. Then DrawGroundShadowPass hands them over in the order of the
+	// casters. A shadow that the textures' alpha fills reads the texture cache, thus the main thread makes it there.
 	_groundShadowMade.resize(casters.size());
-	const auto make = [this, &casters](size_t index, size_t lane) {
+	const auto make = [this, &casters = std::as_const(casters)](size_t index, size_t lane) {
 		const auto& caster = casters[index];
 		auto& scratch = _groundShadowScratch[lane];
 		auto& made = _groundShadowMade[index];
@@ -685,7 +667,28 @@ void Renderer::DrawGroundShadowPass(const DrawSceneDesc& drawDesc) const
 			made.levels = GroundShadowLevels(*made.footprint, caster.alpha, scratch);
 		}
 	};
-	_workers->ForEach(casters.size(), make);
+	_workers->Start(casters.size(), make);
+}
+
+void Renderer::DrawGroundShadowPass(const DrawSceneDesc& drawDesc) const
+{
+	// Without a start in the draw of this scene, make the shadows here
+	if (!_groundShadowsStarted)
+	{
+		StartGroundShadows(drawDesc);
+	}
+	auto section = Locator::profiler::value().BeginScoped(Profiler::Stage::GroundShadowPass);
+	_workers->Finish();
+	_groundShadowsStarted = false;
+	_groundShadowCount = 0;
+	_groundShadowsOnObjects = 0;
+	_groundShadowTexels.clear();
+	std::ranges::fill(_groundShadowBlocks, glm::vec2(0.0f));
+	const auto& casters = _groundShadowCasters;
+	const auto& underSea = _groundShadowUnderSea;
+	std::vector<GroundShadow::Footprint> footprints;
+	footprints.reserve(casters.size());
+	decltype(_keptGroundShadows) kept;
 	for (size_t index = 0; index < casters.size(); ++index)
 	{
 		const auto& caster = casters[index];
@@ -742,18 +745,21 @@ void Renderer::DrawGroundShadowPass(const DrawSceneDesc& drawDesc) const
 	{
 		const auto& blocks = Locator::terrainSystem::value().GetBlocks();
 		_groundShadowBlocks.assign(blocks.size(), glm::vec2(0.0f));
-		for (size_t block = 0; _groundShadowCount > 0 && block < blocks.size(); ++block)
+		if (_groundShadowCount > 0)
 		{
-			const auto first = static_cast<float>(_groundShadowTexels.size());
-			const auto position = blocks[block].GetMapPosition();
-			for (uint32_t shadow = 0; shadow < _groundShadowCount; ++shadow)
+			auto& places = _groundShadowBlockPlaces;
+			places.resize(blocks.size());
+			std::ranges::transform(blocks, places.begin(), [](const auto& block) { return block.GetMapPosition(); });
+			GroundShadow::ShadowsOfBlocks(footprints, places, _groundShadowBlockFirsts, _groundShadowBlockShadows);
+			for (size_t block = 0; block < blocks.size(); ++block)
 			{
-				if (GroundShadow::ReachesBlock(footprints[shadow], position))
+				const auto first = static_cast<float>(_groundShadowTexels.size());
+				for (auto entry = _groundShadowBlockFirsts[block]; entry < _groundShadowBlockFirsts[block + 1]; ++entry)
 				{
-					_groundShadowTexels.emplace_back(static_cast<float>(shadow), 0.0f, 0.0f, 0.0f);
+					_groundShadowTexels.emplace_back(static_cast<float>(_groundShadowBlockShadows[entry]), 0.0f, 0.0f, 0.0f);
 				}
+				_groundShadowBlocks[block] = {first, static_cast<float>(_groundShadowTexels.size()) - first};
 			}
-			_groundShadowBlocks[block] = {first, static_cast<float>(_groundShadowTexels.size()) - first};
 		}
 	}
 

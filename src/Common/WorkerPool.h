@@ -51,15 +51,29 @@ public:
 
 	/// Does the job once for each index from 0 to count, then returns. Call it from one thread at a time.
 	void ForEach(size_t count, const Job& job);
+	/// Gives the job to the threads for each index from 0 to count, and returns at once. The calling thread can do
+	/// other work while the threads do the jobs. Call Finish before the next Start or ForEach. The pool keeps a copy
+	/// of the job, but the job must keep the data that it reads until Finish returns.
+	void Start(size_t count, Job job);
+	/// Does the jobs of the last Start that no thread took, then waits until all are done
+	void Finish();
 
 private:
 	void Work(const std::stop_token& stop, size_t lane);
 	void DoJobs(size_t lane);
+	/// Gives the job to the threads and wakes them
+	void Give(size_t count, const Job& job);
+	/// Waits until the jobs of the last call are done
+	void Wait(size_t count);
 
 	std::mutex _mutex;
 	std::condition_variable_any _wake;
 	std::condition_variable _done;
 	const Job* _job {nullptr};
+	/// The job of the last Start
+	Job _started;
+	/// How many jobs the last Start gave, 0 when Finish has nothing to do
+	size_t _startedCount {0};
 	size_t _count {0};
 	uint64_t _generation {0};
 	/// The threads that did not yet see that the jobs of the last call are all started
