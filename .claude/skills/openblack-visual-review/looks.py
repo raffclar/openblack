@@ -146,6 +146,26 @@ def build(looks):
 """
 
 
+def build_empty():
+    """Builds the page for the case when no look waits, so an old page never stays."""
+    return f"""<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Looks Waiting</title>
+<style>{STYLE}</style>
+</head>
+<body>
+<main>
+<h1>Looks waiting on you</h1>
+<p class="lede">No looks waiting.</p>
+</main>
+</body>
+</html>
+"""
+
+
 def load_look(path):
     """Reads one look file. A bad file prints a message naming it and gives None, so the page still builds."""
     try:
@@ -179,15 +199,12 @@ def main():
             continue
         if args.branches or args.all or look.get("status", "waiting") == "waiting":
             looks.append(look)
-    if not looks:
-        print("no looks waiting")
-        return 1
     missing = [m["path"] for l in looks for m in l.get("media", []) if not os.path.exists(m["path"])]
     for path in missing:
         print(f"MISSING media: {path}", file=sys.stderr)
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(build(looks), encoding="utf-8")
+    out.write_text(build(looks) if looks else build_empty(), encoding="utf-8")
     print(f"{out} ({len(looks)} looks)")
     if not args.no_open:
         webbrowser.open(out.resolve().as_uri())
