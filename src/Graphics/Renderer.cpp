@@ -714,6 +714,8 @@ void Renderer::DrawScene(const DrawSceneDesc& drawDesc) const noexcept
 	}
 	UploadHandSkins();
 	UploadAnimalBones(drawDesc);
+	// The workers make the moving shadows on the land while the passes below draw
+	StartGroundShadows(drawDesc);
 	{
 		const auto& textures = Locator::resources::value().GetTextures();
 		_snowTexture = textures.Find(snow_cover::k_TextureId.value());

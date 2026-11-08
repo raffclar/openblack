@@ -1125,7 +1125,7 @@ bool Game::ServeHeldRun()
 	{
 		return false;
 	}
-	Locator::inspector::value().Service();
+	Locator::inspector::value().ServiceHeld();
 	// The window stays responsive. The events wait in the queue for the next frame that plays.
 	SDL_PumpEvents();
 	if (!Locator::time::value().IsPaused())

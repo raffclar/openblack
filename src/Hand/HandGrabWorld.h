@@ -211,6 +211,10 @@ public:
 	[[nodiscard]] virtual uint32_t LocalRandom(uint32_t count) = 0;
 	/// Sends a command of the hand's player. The world does the command at the start of a later turn.
 	virtual void SendCommand(player_commands::Action action) = 0;
+	/// Whether the hand of this computer waits for its last send (see hand_send_wait)
+	[[nodiscard]] virtual bool SendWaits() const { return false; }
+	/// The hand of this computer sent a command that the wait covers
+	virtual void MarkSend() {}
 	/// Whether the world is a network game, in which the turn writes the clicks of the hand that the scripts read
 	[[nodiscard]] virtual bool IsNetworkGame() const { return false; }
 	/// A villager goes into the hand: it remembers what it was doing and is held

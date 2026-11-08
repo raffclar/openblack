@@ -9,7 +9,11 @@
 
 #include <cmath>
 
+#include <algorithm>
 #include <array>
+#include <limits>
+#include <random>
+#include <span>
 #include <vector>
 
 #include <glm/geometric.hpp>
@@ -289,4 +293,98 @@ TEST(GroundShadow, ALandBlockTakesTheShadowsItsExtentReaches)
 	EXPECT_TRUE(GroundShadow::ReachesBlock(footprint, {160.0f, 0.0f}));
 	EXPECT_FALSE(GroundShadow::ReachesBlock(footprint, {320.0f, 0.0f}));
 	EXPECT_FALSE(GroundShadow::ReachesBlock(footprint, {0.0f, 160.0f}));
+}
+
+namespace
+{
+/// The lists of the shadows of each block, from a test of each shadow against each block
+void TestAllBlocks(std::span<const GroundShadow::Footprint> footprints, std::span<const glm::vec2> blocks,
+                   std::vector<uint32_t>& firsts, std::vector<uint32_t>& shadows)
+{
+	firsts.assign(blocks.size() + 1, 0);
+	shadows.clear();
+	for (size_t block = 0; block < blocks.size(); ++block)
+	{
+		firsts[block] = static_cast<uint32_t>(shadows.size());
+		for (size_t shadow = 0; shadow < footprints.size(); ++shadow)
+		{
+			if (GroundShadow::ReachesBlock(footprints[shadow], blocks[block]))
+			{
+				shadows.push_back(static_cast<uint32_t>(shadow));
+			}
+		}
+	}
+	firsts[blocks.size()] = static_cast<uint32_t>(shadows.size());
+}
+
+void ExpectSameLists(std::span<const GroundShadow::Footprint> footprints, std::span<const glm::vec2> blocks)
+{
+	std::vector<uint32_t> firsts;
+	std::vector<uint32_t> shadows;
+	std::vector<uint32_t> allFirsts;
+	std::vector<uint32_t> allShadows;
+	GroundShadow::ShadowsOfBlocks(footprints, blocks, firsts, shadows);
+	TestAllBlocks(footprints, blocks, allFirsts, allShadows);
+	EXPECT_EQ(firsts, allFirsts);
+	EXPECT_EQ(shadows, allShadows);
+}
+} // namespace
+
+TEST(GroundShadow, TheListsOfTheBlocksAreThoseOfATestOfAllBlocks)
+{
+	std::mt19937 random(7);
+	std::uniform_real_distribution<float> place(-200.0f, 2800.0f);
+	std::uniform_real_distribution<float> extent(0.0f, 400.0f);
+	// Blocks of a land in a shuffled order, with gaps
+	std::vector<glm::vec2> blocks;
+	for (int z = 0; z < 16; ++z)
+	{
+		for (int x = 0; x < 16; ++x)
+		{
+			if ((x * 7 + z * 3) % 5 != 0)
+			{
+				blocks.emplace_back(static_cast<float>(x) * GroundShadow::k_BlockSize,
+				                    static_cast<float>(z) * GroundShadow::k_BlockSize);
+			}
+		}
+	}
+	std::ranges::shuffle(blocks, random);
+	for (int round = 0; round < 20; ++round)
+	{
+		std::vector<GroundShadow::Footprint> footprints;
+		for (int shadow = 0; shadow < 60; ++shadow)
+		{
+			const glm::vec2 low {place(random), place(random)};
+			footprints.push_back({.low = low, .high = low + glm::vec2(extent(random), extent(random)), .nearest = 0.0f});
+		}
+		// Extents on the edges of the blocks
+		footprints.push_back({.low = {160.0f, 320.0f}, .high = {160.0f, 320.0f}, .nearest = 0.0f});
+		footprints.push_back({.low = {-0.0f, 0.0f}, .high = {0.0f, 2400.0f}, .nearest = 0.0f});
+		ExpectSameLists(footprints, blocks);
+	}
+}
+
+TEST(GroundShadow, TheListsOfTheBlocksKeepExtentsThatAreNotFinite)
+{
+	const std::vector<glm::vec2> blocks {{0.0f, 0.0f}, {160.0f, 0.0f}, {0.0f, 160.0f}, {160.0f, 160.0f}};
+	constexpr float k_Infinity = std::numeric_limits<float>::infinity();
+	const std::vector<GroundShadow::Footprint> footprints {
+	    {.low = {-k_Infinity, -k_Infinity}, .high = {k_Infinity, k_Infinity}, .nearest = 0.0f},
+	    {.low = {std::nanf(""), 0.0f}, .high = {10.0f, 10.0f}, .nearest = 0.0f},
+	    {.low = {10.0f, 10.0f}, .high = {20.0f, 20.0f}, .nearest = 0.0f},
+	};
+	ExpectSameLists(footprints, blocks);
+}
+
+TEST(GroundShadow, TheListsOfTheBlocksKeepBlocksOffTheGrid)
+{
+	// Two blocks in one cell of the grid, and a block at a place that is not finite
+	const std::vector<glm::vec2> twoInACell {{0.0f, 0.0f}, {80.0f, 0.0f}, {160.0f, 0.0f}};
+	const std::vector<glm::vec2> notFinite {{0.0f, 0.0f}, {std::numeric_limits<float>::infinity(), 0.0f}};
+	const std::vector<GroundShadow::Footprint> footprints {
+	    {.low = {10.0f, 10.0f}, .high = {100.0f, 20.0f}, .nearest = 0.0f},
+	    {.low = {170.0f, 10.0f}, .high = {180.0f, 20.0f}, .nearest = 0.0f},
+	};
+	ExpectSameLists(footprints, twoInACell);
+	ExpectSameLists(footprints, notFinite);
 }

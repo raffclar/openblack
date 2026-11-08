@@ -773,6 +773,10 @@ uint32_t GameActionMap::TakeMouseMoves()
 
 uint32_t GameActionMap::GetButtonMessages() const
 {
+	if (_handMessagesSent.has_value())
+	{
+		return *_handMessagesSent;
+	}
 	const auto changed = [this](BindableActionMap action) { return GetBindableChanged(action) ? 1u : 0u; };
 	return changed(BindableActionMap::ACTION) + changed(BindableActionMap::MOVE) + (_doubleClickThisFrame ? 1u : 0u) +
 	       (_doubleClickReleaseThisFrame ? 1u : 0u);
@@ -1017,6 +1021,122 @@ bool GameActionMap::WaitedMousePress(BindableActionMap action) const
 	return (_waitedMousePresses & static_cast<uint64_t>(action)) != 0;
 }
 
+void GameActionMap::KeepHandEvent(const SDL_Event& event, bool movesPointer)
+{
+	if (event.type == SDL_MOUSEMOTION)
+	{
+		_handPointer = {event.motion.x, event.motion.y};
+	}
+	else if (event.type == SDL_MOUSEBUTTONDOWN || event.type == SDL_MOUSEBUTTONUP)
+	{
+		_handPointer = {event.button.x, event.button.y};
+	}
+	_handEvents.push_back({.event = event, .movesPointer = movesPointer});
+}
+
+void GameActionMap::TakeHandEvents(const std::function<void(const SDL_Event&, bool)>& hand)
+{
+	using hand_messages::Button;
+	using hand_messages::Input;
+	using hand_messages::Message;
+	const auto buttonOf = [](uint8_t button) -> std::optional<Button> {
+		if (button == SDL_BUTTON_RIGHT)
+		{
+			return Button::Action;
+		}
+		if (button == SDL_BUTTON_LEFT)
+		{
+			return Button::Move;
+		}
+		return std::nullopt;
+	};
+	const auto events = std::exchange(_handEvents, {});
+	std::vector<Input> inputs;
+	inputs.reserve(events.size());
+	for (const auto& kept : events)
+	{
+		const auto& event = kept.event;
+		if (event.type == SDL_MOUSEMOTION)
+		{
+			inputs.push_back({
+			    .kind = Input::Kind::Motion,
+			    .actionDown = (event.motion.state & SDL_BUTTON_RMASK) != 0,
+			    .moveDown = (event.motion.state & SDL_BUTTON_LMASK) != 0,
+			});
+		}
+		else if (const auto button = (event.type == SDL_MOUSEBUTTONDOWN || event.type == SDL_MOUSEBUTTONUP)
+		                                 ? buttonOf(event.button.button)
+		                                 : std::nullopt;
+		         button.has_value())
+		{
+			const auto kind = event.type == SDL_MOUSEBUTTONUP ? Input::Kind::LetGo
+			                  : event.button.clicks == 2      ? Input::Kind::DoublePress
+			                                                  : Input::Kind::Press;
+			inputs.push_back({.kind = kind, .button = *button});
+		}
+	}
+
+	// The motions tell the buttons as the hand has them before the messages of this frame
+	const bool actionHandDown = _handMessages.HandDown(Button::Action);
+	const bool moveHandDown = _handMessages.HandDown(Button::Move);
+	const auto sent = _handMessages.Frame(inputs, AltHeld(), HelpClockNow());
+	const bool markedThisFrame = std::exchange(_doubleClickMarkedThisFrame, false);
+	_handMessagesSent.reset();
+	if (!sent.has_value())
+	{
+		for (const auto& kept : events)
+		{
+			hand(kept.event, kept.movesPointer);
+		}
+		return;
+	}
+
+	// The double click of this frame waits with the other messages, also when it marked itself before Alt went down
+	if (markedThisFrame)
+	{
+		_unbindableMap = static_cast<UnbindableActionMap>(static_cast<uint8_t>(_unbindableMap) &
+		                                                  ~static_cast<uint8_t>(UnbindableActionMap::DOUBLE_CLICK));
+	}
+	for (const auto& kept : events)
+	{
+		const auto& event = kept.event;
+		if ((event.type == SDL_MOUSEBUTTONDOWN || event.type == SDL_MOUSEBUTTONUP) && buttonOf(event.button.button).has_value())
+		{
+			continue;
+		}
+		if (event.type == SDL_MOUSEMOTION)
+		{
+			auto motion = event;
+			constexpr auto k_Left = static_cast<uint32_t>(SDL_BUTTON_LMASK);
+			constexpr auto k_Right = static_cast<uint32_t>(SDL_BUTTON_RMASK);
+			motion.motion.state =
+			    (motion.motion.state & ~(k_Left | k_Right)) | (moveHandDown ? k_Left : 0u) | (actionHandDown ? k_Right : 0u);
+			hand(motion, kept.movesPointer);
+			continue;
+		}
+		hand(event, kept.movesPointer);
+	}
+	// The messages come after the motions of the frame, at the last place of the pointer
+	for (const auto& message : *sent)
+	{
+		SDL_Event event {};
+		event.type = message.message == Message::Up ? SDL_MOUSEBUTTONUP : SDL_MOUSEBUTTONDOWN;
+		event.button.timestamp = Device().Ticks();
+		event.button.button = message.button == Button::Action ? SDL_BUTTON_RIGHT : SDL_BUTTON_LEFT;
+		event.button.state = message.message == Message::Up ? SDL_RELEASED : SDL_PRESSED;
+		event.button.clicks = message.message == Message::Double ? 2 : 1;
+		event.button.x = _handPointer.x;
+		event.button.y = _handPointer.y;
+		hand(event, false);
+		if (message.button == Button::Move && message.message == Message::Double)
+		{
+			_unbindableMap = static_cast<UnbindableActionMap>(static_cast<uint8_t>(_unbindableMap) |
+			                                                  static_cast<uint8_t>(UnbindableActionMap::DOUBLE_CLICK));
+		}
+	}
+	_handMessagesSent = static_cast<uint32_t>(sent->size());
+}
+
 bool GameActionMap::IsKeyHeld(int scancode) const
 {
 	return scancode >= 0 && static_cast<size_t>(scancode) < _heldKeys.size() && _heldKeys.test(static_cast<size_t>(scancode));
@@ -1053,8 +1173,13 @@ void GameActionMap::ProcessEvent(const SDL_Event& event)
 	{
 		_doubleClickThisFrame = true;
 		_doubleClickHeld = true;
-		_unbindableMap = static_cast<UnbindableActionMap>(static_cast<uint8_t>(_unbindableMap) |
-		                                                  static_cast<uint8_t>(UnbindableActionMap::DOUBLE_CLICK));
+		// While the messages of the hand's buttons wait, the double click waits with them
+		if (!AltHeld() && !_handMessages.Waits(false))
+		{
+			_unbindableMap = static_cast<UnbindableActionMap>(static_cast<uint8_t>(_unbindableMap) |
+			                                                  static_cast<uint8_t>(UnbindableActionMap::DOUBLE_CLICK));
+			_doubleClickMarkedThisFrame = true;
+		}
 	}
 	else if (event.type == SDL_MOUSEBUTTONDOWN)
 	{

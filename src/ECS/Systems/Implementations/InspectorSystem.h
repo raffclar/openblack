@@ -63,6 +63,7 @@ public:
 	InspectorSystem& operator=(const InspectorSystem&) = delete;
 
 	void Service() override;
+	void ServiceHeld() override;
 	[[nodiscard]] uint16_t GetPort() const override;
 	void BeginLoading(std::string_view what) override;
 	void EndLoading() override;
@@ -82,6 +83,10 @@ public:
 	void SetHostsNetworkGame(bool hosts) override;
 
 private:
+	/// The part of a frame's service that answers the requests that came in and follows the client's input lock
+	void AnswerRequests();
+	/// The part of a frame's service that counts the frame and does the work of the tools that is due at the frame
+	void DoFrameWork();
 	/// The helper answering while the game loads: until told to stop
 	void AnswerWhileLoading();
 	/// Tells the helper to stop and waits for it

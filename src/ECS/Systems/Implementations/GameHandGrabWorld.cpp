@@ -553,6 +553,19 @@ void GameHandGrabWorld::SendCommand(player_commands::Action action)
 	}
 }
 
+bool GameHandGrabWorld::SendWaits() const
+{
+	return Locator::handSystem::has_value() && Locator::handSystem::value().OwnSendWaits();
+}
+
+void GameHandGrabWorld::MarkSend()
+{
+	if (Locator::handSystem::has_value())
+	{
+		Locator::handSystem::value().MarkOwnSend();
+	}
+}
+
 uint32_t GameHandGrabWorld::LocalRandom(uint32_t count)
 {
 	if (count == 0 || !Locator::gameRandom::has_value())

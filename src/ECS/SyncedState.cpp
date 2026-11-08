@@ -327,6 +327,8 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     {.component = "HandCreaturePress", .field = "", .marker = ""},
     // The hand sent the end of the lock on a creature and does not send it again
     {.component = "HandLockEndSent", .field = "", .marker = ""},
+    // The hand of this computer waits for its last send until the turn does it
+    {.component = "HandSendWait", .field = "", .marker = ""},
     // The guidance that the player at this machine hears, weighed from this machine's camera with the local draws
     {.component = "GuidanceHeard", .field = "", .marker = ""},
     // The help of the creature is for the player at this machine only. Each computer keeps it for the creature of its

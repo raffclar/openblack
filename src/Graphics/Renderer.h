@@ -28,6 +28,7 @@
 
 #include <SDL.h>
 #include <entt/core/fwd.hpp>
+#include <entt/entity/entity.hpp>
 #include <entt/entity/fwd.hpp>
 #include <glm/fwd.hpp>
 #include <glm/mat4x4.hpp>
@@ -320,6 +321,9 @@ private:
 	/// Bakes the shadows of the island's trees, rocks and buildings into its land (see LandShadowBake), and draws the trees'
 	/// moving shadows when they are asked for (see ObjectShadows)
 	void DrawObjectShadowPass(const DrawSceneDesc& drawDesc) const;
+	/// Finds the casters of the moving shadows and starts the workers on their shadows. The draw continues while the
+	/// workers make them, and DrawGroundShadowPass takes them.
+	void StartGroundShadows(const DrawSceneDesc& drawDesc) const;
 	/// Draws the coverage of the flattened silhouettes of the creatures, the hand and the villagers a script draws in
 	/// high detail, for their moving shadows on the land (see GroundShadow)
 	void DrawGroundShadowPass(const DrawSceneDesc& drawDesc) const;
@@ -655,6 +659,10 @@ private:
 	mutable uint32_t _groundShadowsOnObjects {0};
 	/// Each land block's first entry in the lists, and how many shadows reach it, by the block's index
 	mutable std::vector<glm::vec2> _groundShadowBlocks;
+	/// The memory of the lists of the shadows that reach each block (see GroundShadow::ShadowsOfBlocks)
+	mutable std::vector<glm::vec2> _groundShadowBlockPlaces;
+	mutable std::vector<uint32_t> _groundShadowBlockFirsts;
+	mutable std::vector<uint32_t> _groundShadowBlockShadows;
 	/// The land's level of detail this frame, from the camera of the view: the lines across the ground, and how each
 	/// block is drawn and which of its sides are stitched to coarser neighbours, by the block's index. The land
 	/// mirrored under the sea is drawn with the same. The draw list tests the triangles of the blocks with the same
@@ -698,6 +706,28 @@ private:
 		std::array<uint8_t, GroundShadow::k_Texels * GroundShadow::k_Texels> levels;
 	};
 	mutable std::vector<GroundShadowMade> _groundShadowMade;
+	/// A shadow to cast: its bodies, where it stands, where it is cast from and laid, its opacity and whether it falls on
+	/// objects too
+	struct GroundShadowCaster
+	{
+		std::array<GroundShadowBody, 2> bodies;
+		uint8_t bodyCount;
+		glm::vec3 standsAt;
+		GroundShadow::Cast cast;
+		uint8_t alpha;
+		bool onObjects;
+		/// It is filled through its textures' alpha and softened, as the shadow of a moving tree is
+		bool throughAlpha {false};
+		/// The thing that the physics moves, whose shadow stays as it is while the thing is under the sea
+		entt::entity kept {entt::null};
+	};
+	/// The casters of the shadows that the workers make for this frame, the things under the sea, and the blends of
+	/// the bodies that the casters point to
+	mutable std::vector<GroundShadowCaster> _groundShadowCasters;
+	mutable std::vector<entt::entity> _groundShadowUnderSea;
+	mutable std::vector<L3DMeshSubmitDesc::MorphTargets> _groundShadowMorphs;
+	/// The workers make the shadows of this frame, and DrawGroundShadowPass did not take them yet
+	mutable bool _groundShadowsStarted {false};
 	/// The threads that make the shadows of a frame side by side, and that encode draws with the game's thread
 	std::unique_ptr<WorkerPool> _workers;
 	/// The submit order of the game thread's encoder in this frame. Each run of draws on many threads takes the orders

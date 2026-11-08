@@ -42,9 +42,11 @@ class RenderingSystem final: public RenderingSystemCommon
 {
 public:
 	~RenderingSystem();
-	[[nodiscard]] std::optional<uint8_t> TreeDetailNow(entt::entity tree) override;
+	[[nodiscard]] std::optional<uint8_t> DetailNow(entt::entity thing) override;
 
 private:
+	/// The detail of a tree that the draw of the trees draws, as DetailNow
+	[[nodiscard]] std::optional<uint8_t> TreeDetailNow(entt::entity tree);
 	void PrepareDrawDescs(bool drawBoundingBox) override;
 	void PrepareDrawUploadUniforms(bool drawBoundingBox) override;
 	bool UploadUniformsKeepingDescs(bool drawBoundingBox) override;

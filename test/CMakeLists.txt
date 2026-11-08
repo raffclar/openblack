@@ -222,6 +222,7 @@ openblack_setup_and_add_test(test_game_clock test_game_clock.cpp)
 openblack_setup_and_add_test(test_run_seed test_run_seed.cpp)
 openblack_setup_and_add_test(test_key_bindings input/test_key_bindings.cpp)
 openblack_setup_and_add_test(test_alt_held_presses input/test_alt_held_presses.cpp)
+openblack_setup_and_add_test(test_hand_button_messages input/test_hand_button_messages.cpp)
 openblack_setup_and_add_test(test_cursor_freeze input/test_cursor_freeze.cpp)
 openblack_setup_and_add_test(test_camera_drag camera/test_camera_drag.cpp)
 openblack_setup_and_add_test(test_camera_pan camera/test_camera_pan.cpp)
@@ -1973,6 +1974,7 @@ openblack_setup_and_add_test(
   test_creature_tattoo_change test_creature_tattoo_change.cpp
 )
 openblack_setup_and_add_test(test_throw_lead hand/test_throw_lead.cpp)
+openblack_setup_and_add_test(test_hand_send_wait hand/test_hand_send_wait.cpp)
 openblack_setup_and_add_test(
   test_oracle_throw_release oracle/test_oracle_throw_release.cpp
 )
