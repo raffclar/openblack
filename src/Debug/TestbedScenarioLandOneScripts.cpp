@@ -90,6 +90,19 @@ void testbed_scenarios::AddScriptTaskRelease(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "interface.screen_quad_pixels",
+	    .name = "The boxes, buttons and text of a box on the screen, on the game's pixel centres",
+	    .facet = Facet::Interface,
+	    .description = "After a second the land information box of Two Gods shows. Look at the edges of its band, its "
+	                   "buttons and its letters.",
+	    .expected = "Each picture of the box reads its texture at the same points as the game. The band, the buttons, "
+	                "the Back arrow and the pointer are one pixel further right and down than before. The letters read "
+	                "half a texel further back, so they are a little softer.",
+	    .framing = {.shot = Shot::Overview},
+	    .commands = {{.kind = Kind::SkirmishBox, .delaySeconds = 1.0f, .value = 3}},
+	});
+
+	all.push_back({
 	    .id = "temple.main_room_lean",
 	    .name = "The temple's main room leans at the screen's edge and as the floor is dragged",
 	    .facet = Facet::Story,
