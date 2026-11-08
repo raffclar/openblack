@@ -1117,8 +1117,10 @@ void Runner::Update(float seconds)
 		{
 			return !Locator::gestureSystem::has_value() || !Locator::gestureSystem::value().IsDrawingPath();
 		}
-		// The temple takes no press while a script has the cinema bars in, as when the advisors introduce a room
-		const bool toTemple = command.kind == Kind::LookAtTempleScroll || command.kind == Kind::LookAtSaveGamePicture;
+		// The temple takes no press while a script has the cinema bars in, as when the advisors introduce a room. A move of
+		// the pointer that waits goes before a press in the temple.
+		const bool toTemple = command.kind == Kind::LookAtTempleScroll || command.kind == Kind::LookAtSaveGamePicture ||
+		                      command.kind == Kind::PointerTo;
 		if (toTemple)
 		{
 			return !Locator::cinematicDirectorSystem::has_value() ||

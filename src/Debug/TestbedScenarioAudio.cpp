@@ -1120,6 +1120,25 @@ void testbed_scenarios::AddAudio(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "temple.main_scroll_held_press",
+	    .name = "A press that the player holds in the temple's main room stops a look at the scroll at once",
+	    .facet = Facet::Story,
+	    .description = "The player goes into the temple's main room. Ten seconds after the advisors introduced the room "
+	                   "and the cinema bars went out, the player presses the left button to the left of the scroll and "
+	                   "holds it. While the player holds the button, the camera starts to look at the room's scroll, as "
+	                   "a script does. After one second, the player lets go of the button.",
+	    .expected = "The held press stops the look in the next step, before the camera moves to the scroll. The camera "
+	                "stays in the room's orbit and its lean goes from 0.7 to 1, so the camera looks more up, to the roof.",
+	    .framing = {.shot = Shot::Overview},
+	    .commands = {{.kind = Kind::EnterTemple, .delaySeconds = 1.0f, .value = 3},
+	                 // While a script has the cinema bars in, the temple takes no press
+	                 {.kind = Kind::PointerTo, .delaySeconds = 10.0f, .waitUntilFree = true, .point = {0.15f, 0.5f}},
+	                 {.kind = Kind::PointerPress, .delaySeconds = 0.4f, .value = 1},
+	                 {.kind = Kind::LookAtTempleScroll, .delaySeconds = 0.4f, .value = 0},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 1.0f, .value = 1}},
+	});
+
+	all.push_back({
 	    .id = "temple.cave_zoom_back",
 	    .name = "The creature's room camera keeps the view of a target when it zooms back from it",
 	    .facet = Facet::Story,

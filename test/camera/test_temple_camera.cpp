@@ -556,3 +556,28 @@ TEST(TempleCamera, ThePressThatLeavesALookDoesNotDragUntilLetGo)
 	EXPECT_FALSE(TempleCameraModel::PressFromLookStillHeld(true, false));
 	EXPECT_FALSE(TempleCameraModel::PressFromLookStillHeld(false, true));
 }
+
+TEST(TemplePress, TheHoldAfterADoubleClickIsNoPressUntilLetGo)
+{
+	using temple_press::Button;
+	temple_press::DoubleClickHold hold;
+	// A first click is a press while the player holds it
+	EXPECT_EQ(hold.Filter(Button::Held), Button::Held);
+	EXPECT_EQ(hold.Filter(Button::None), Button::None);
+	// The second click comes once as a double click, and its hold is not a press
+	EXPECT_EQ(hold.Filter(Button::DoubleClick), Button::DoubleClick);
+	EXPECT_EQ(hold.Filter(Button::Held), Button::None);
+	EXPECT_EQ(hold.Filter(Button::Held), Button::None);
+	// After the player lets go, the next press is a press
+	EXPECT_EQ(hold.Filter(Button::None), Button::None);
+	EXPECT_EQ(hold.Filter(Button::Held), Button::Held);
+}
+
+TEST(TempleCamera, AHeldPressOrADoubleClickStopsACloseLook)
+{
+	// The look stops in each step that the camera gets a press, also a press that started before the look
+	EXPECT_TRUE(TempleCameraModel::LeavesLookOnPress(static_cast<uint8_t>(temple_press::Button::Held)));
+	EXPECT_TRUE(TempleCameraModel::LeavesLookOnPress(static_cast<uint8_t>(temple_press::Button::DoubleClick)));
+	// A press on a control comes to the camera as no press, so the look continues
+	EXPECT_FALSE(TempleCameraModel::LeavesLookOnPress(static_cast<uint8_t>(temple_press::Button::None)));
+}

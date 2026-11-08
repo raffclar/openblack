@@ -730,9 +730,11 @@ std::optional<CameraModel::CameraInterpolationUpdateInfo> TempleCameraModel::Upd
 	    Locator::cinematicDirectorSystem::has_value() && Locator::cinematicDirectorSystem::value().IsWideScreenOn();
 	const auto pressed = static_cast<temple_press::Button>(input.button);
 	const auto afterHeld = cinemaBars ? _heldFromOutside.FilterUnderCinemaBars(pressed) : _heldFromOutside.Filter(pressed);
-	input.button = static_cast<uint8_t>(afterHeld);
-	// A press on one of the room's controls goes to the control, which the room's camera then doesn't see
-	const bool control = Locator::temple::value().HoldControl(input.button != 0, input.mouse.y);
+	const auto afterDoubleClick = _doubleClickHold.Filter(afterHeld);
+	input.button = static_cast<uint8_t>(afterDoubleClick);
+	// A press on one of the room's controls goes to the control, and the room's camera does not see the press. A double
+	// click does not go to the controls, and the camera gets it also over a control.
+	const bool control = Locator::temple::value().HoldControl(afterDoubleClick == temple_press::Button::Held, input.mouse.y);
 	if (control)
 	{
 		input.button = 0;
@@ -887,7 +889,8 @@ void TempleCameraModel::Step(float dt, const Input& input)
 		const auto& actions = Locator::gameActionSystem::value();
 		const bool turning = actions.GetAny(BindableActionMap::MOVE_LEFT, BindableActionMap::MOVE_RIGHT,
 		                                    BindableActionMap::MOVE_FORWARDS, BindableActionMap::MOVE_BACKWARDS);
-		const bool leftByPlayer = (input.button != 0 && !_wasPressed) || turning;
+		// Each room stops the look while the camera gets a held press, also a press that started before the look
+		const bool leftByPlayer = LeavesLookOnPress(input.button) || turning;
 		if (leftByPlayer || !inControl)
 		{
 			LeaveSubMesh(leftByPlayer);
