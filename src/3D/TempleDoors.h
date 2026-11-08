@@ -31,8 +31,8 @@ class TempleDoors
 public:
 	/// The size of the table of joint matrices the doors' leaves are turned by
 	static constexpr size_t k_JointCount = 32;
-	/// How far each leaf turns at most, twice this, in radians
-	static constexpr float k_HalfSwing = 0.6981317f;
+	/// How far each leaf turns at most, twice this, in radians. The game keeps this value as a double.
+	static constexpr double k_HalfSwing = 0.69813172022501617;
 
 	using Joints = std::array<glm::mat4, k_JointCount>;
 	/// Plays one of the doors' sounds

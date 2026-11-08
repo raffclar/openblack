@@ -14,9 +14,9 @@
 #include <algorithm>
 
 #include <glm/gtc/constants.hpp>
-#include <glm/gtc/matrix_transform.hpp>
+#include <glm/vec4.hpp>
 
-#include "Common/PortableRotations.h"
+#include "Common/X87.h"
 #include "Sound/SoundId.h"
 
 using namespace openblack;
@@ -120,25 +120,34 @@ void TempleDoors::Update(float deltaSeconds)
 
 void TempleDoors::LayOutJoints()
 {
-	// The leaves ease open and back shut
+	// The leaves ease open and back shut. Each step rounds to a float, as the game's maths does.
 	float turn = 0.0f;
 	if (_swing > 0.0f && _swing < 2.0f)
 	{
-		turn = (1.0f - portable_math::Cos(_swing * glm::pi<float>())) * k_HalfSwing;
+		const float angle = _swing * glm::pi<float>();
+		turn = x87::Mul(x87::Sub(1.0, x87::Cos(angle)), k_HalfSwing);
 	}
 	_joints.fill(glm::mat4(1.0f));
 	if (!_leaf.has_value())
 	{
 		return;
 	}
-	// The pair turn opposite ways, so both open outwards
-	const glm::vec3 up {0.0f, 1.0f, 0.0f};
+	// The two leaves turn in opposite directions, so that the two open outwards. The first leaf turns by the negative
+	// angle.
+	const auto leafTurn = [](float angle) {
+		const float c = x87::RoundToFloat(x87::Cos(angle));
+		const float s = x87::RoundToFloat(x87::Sin(angle));
+		glm::mat4 joint(1.0f);
+		joint[0] = glm::vec4(c, 0.0f, s, 0.0f);
+		joint[2] = glm::vec4(-s, 0.0f, c, 0.0f);
+		return joint;
+	};
 	if (*_leaf < k_JointCount)
 	{
-		_joints[*_leaf] = portable_math::Rotate(glm::mat4(1.0f), turn, up);
+		_joints.at(*_leaf) = leafTurn(-turn);
 	}
 	if (*_leaf + 1 < k_JointCount)
 	{
-		_joints[*_leaf + 1] = portable_math::Rotate(glm::mat4(1.0f), -turn, up);
+		_joints.at(*_leaf + 1) = leafTurn(turn);
 	}
 }

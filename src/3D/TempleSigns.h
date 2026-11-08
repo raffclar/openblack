@@ -47,6 +47,14 @@ public:
 	/// the wall of scrolls, sector 6: the challenge room's door, sector 7, is the last sign, 6
 	[[nodiscard]] static std::optional<size_t> MainRoomSignOfDoor(std::optional<uint32_t> door);
 
+	/// The grey of the highlighted label at a time of the machine's clock in milliseconds: it pulses between 206 and 254
+	/// once in 1024 milliseconds
+	[[nodiscard]] static uint8_t HighlightGrey(uint32_t milliseconds);
+
+	/// The frame a label is written in: the sign's frame with its axes made unit long and its y axis turned round,
+	/// at the middle of the sign's box
+	[[nodiscard]] static TextFrame FrameOf(const glm::mat4& frame, glm::vec3 min, glm::vec3 max);
+
 private:
 	struct Sign
 	{
