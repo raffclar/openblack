@@ -20,7 +20,15 @@ namespace
 {
 /// The share of the snow depth that the weather of a cell keeps
 constexpr float k_SnowCoverShare = 0.5f;
+/// The number of turns that a dead storm counts before it goes
+constexpr uint8_t k_DeadStormTurns = 2;
 } // namespace
+
+bool DeadStormGoes(uint8_t& deadTurns)
+{
+	++deadTurns;
+	return deadTurns >= k_DeadStormTurns;
+}
 
 Faded Fade(float age, float lastsFor, float fadeTime, float strength, float innerRadius)
 {

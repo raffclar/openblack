@@ -590,10 +590,10 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 		}
 		break;
 	case Step::Snow:
-		// The storms that snow lay it on the land, and it melts
+		// The storms that took their step and snow lay it on the land, and it melts
 		if (Locator::weatherSystem::has_value())
 		{
-			Locator::snowSystem::value().ProcessTurn(Locator::weatherSystem::value().GetActiveStorms());
+			Locator::snowSystem::value().ProcessTurn(Locator::weatherSystem::value().GetSteppedStorms());
 		}
 		break;
 	case Step::Players:

@@ -50,6 +50,16 @@ TEST(StormFade, TheFadeMultipliesBeforeItDivides)
 	EXPECT_EQ(std::bit_cast<uint32_t>(storm_fade::Fade(99.25f, 100.0f, 10.0f, 1.0f, 165.0f).innerRadius), 0x41460000u);
 }
 
+TEST(StormFade, ADeadStormGoesAfterItCountsTwoTurns)
+{
+	// The turn that the storm dies in is the first turn that it counts
+	uint8_t deadTurns = 0;
+	EXPECT_FALSE(storm_fade::DeadStormGoes(deadTurns));
+	EXPECT_EQ(deadTurns, 1);
+	EXPECT_TRUE(storm_fade::DeadStormGoes(deadTurns));
+	EXPECT_EQ(deadTurns, 2);
+}
+
 TEST(StormFade, TheWeatherKeepsHalfOfTheSnowDepth)
 {
 	EXPECT_EQ(storm_fade::SnowCover(0.0f), 0);

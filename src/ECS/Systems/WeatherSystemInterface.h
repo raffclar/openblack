@@ -122,7 +122,8 @@ public:
 	virtual void StrikeLightning(bool bolt) = 0;
 
 	// Scripts
-	/// Every storm whose middle is nearer a point across the land than the radius and its own outer radius ends at once
+	/// Every storm whose middle is nearer a point across the land than the radius and its own outer radius ends at once.
+	/// The cells that the turn works out from now do not get the weather of a storm that ended.
 	virtual void KillStormsInArea(glm::vec3 position, float radius) = 0;
 
 	// Miracles
@@ -130,7 +131,7 @@ public:
 	virtual entt::entity AddMiracleStorm(const MiracleStorm& storm) = 0;
 	/// The miracle's storm moved; false once the storm has ended, which a script can do
 	virtual bool MoveMiracleStorm(entt::entity storm, glm::vec3 centre) = 0;
-	/// The miracle's storm goes at once, its rain and wind with it
+	/// The miracle's storm ends at once, as a storm that a script ends
 	virtual void RemoveMiracleStorm(entt::entity storm) = 0;
 
 	// Scripts' weather things
@@ -164,6 +165,9 @@ public:
 	virtual void ProcessClimates(uint32_t turn) = 0;
 	/// The storms alive after the last turn, newest first
 	[[nodiscard]] virtual std::span<const components::Storm> GetActiveStorms() const = 0;
+	/// The storms that took a full step in the last turn, newest first. A storm that a script or a miracle ended takes
+	/// full steps for two more turns, thus it also lays snow in these turns.
+	[[nodiscard]] virtual std::span<const components::Storm> GetSteppedStorms() const = 0;
 
 	/// Weather in the atmosphere cell containing a point
 	[[nodiscard]] virtual components::WeatherInfo GetWeather(const glm::vec3& position) = 0;
