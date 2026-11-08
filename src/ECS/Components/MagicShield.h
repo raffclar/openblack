@@ -87,13 +87,13 @@ struct AntiInfluence
 };
 
 /// On a villager reacting to a shield, standing, struck or destroyed: the reaction and the shield it is to, the point it
-/// looks towards
+/// looks towards. The point is kept as the x and z of a map position, in whole map units.
 struct VillagerShieldReaction
 {
 	uint32_t reaction {0};
 	Reaction type {Reaction::None};
 	entt::entity shield {entt::null};
-	glm::vec2 lookAt {0.0f};
+	glm::ivec2 lookAt {0};
 };
 
 /// The kinds of reaction a villager took up lately, and when

@@ -73,6 +73,7 @@
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Magic/ReactionRules.h"
+#include "Magic/TownBelief.h"
 #include "Magic/VillagerReactionRules.h"
 #include "MagicLiving.h"
 #include "ObjectMeasures.h"
@@ -1043,19 +1044,20 @@ void villager_reactions::ShowTownBelief(const glm::vec3& centre, PlayerNames pla
 	Locator::effectRequestSystem::value().AddBeliefSprite({.position = centre, .amount = amount, .colour = colour});
 }
 
-void villager_reactions::ShowBelief(entt::entity villager, PlayerNames player, float belief, GuidanceAlignment alignment)
+void villager_reactions::ShowBelief(entt::entity villager, PlayerNames player, float belief, GuidanceAlignment alignment,
+                                    bool symbol)
 {
-	ShowObjectBelief(villager, EntityRegistry().Get<const Villager>(villager).town, player, belief, alignment);
+	ShowObjectBelief(villager, EntityRegistry().Get<const Villager>(villager).town, player, belief, alignment, symbol);
 }
 
 void villager_reactions::ShowObjectBelief(entt::entity object, entt::entity town, PlayerNames player, float belief,
-                                          GuidanceAlignment alignment)
+                                          GuidanceAlignment alignment, bool symbol)
 {
 	auto& registry = EntityRegistry();
 	const auto& transform = registry.Get<const Transform>(object);
 	// A symbol worth at least one ten thousandth rises from the top of the thing, in the player's colour
-	const auto amount = static_cast<int32_t>(belief * k_BeliefSpriteScale);
-	if (amount >= 1 && Locator::effectRequestSystem::has_value())
+	const auto amount = magic::town_belief::SymbolSize(belief, symbol);
+	if (amount.has_value() && Locator::effectRequestSystem::has_value())
 	{
 		float height = 0.0f;
 		if (const auto* mesh = registry.TryGet<const Mesh>(object);
@@ -1065,7 +1067,7 @@ void villager_reactions::ShowObjectBelief(entt::entity object, entt::entity town
 		}
 		const auto colour = ecs::game_players::Colour(player) & 0xFFFFFFu;
 		Locator::effectRequestSystem::value().AddBeliefSprite(
-		    {.position = transform.position + glm::vec3(0.0f, height, 0.0f), .amount = amount, .colour = colour});
+		    {.position = transform.position + glm::vec3(0.0f, height, 0.0f), .amount = *amount, .colour = colour});
 	}
 	BeliefVoiceOf(object, town, player, alignment);
 }

@@ -329,6 +329,7 @@ void Game::UpdateGestures(const Camera& camera, glm::ivec2 screenSize, float del
 	             .cameraEye = camera.GetOrigin(),
 	             .cameraForward = camera.GetForward()},
 	    .cameraShaking = Locator::explosionSystem::has_value() && Locator::explosionSystem::value().IsShaking(),
+	    .paused = Locator::time::value().IsPaused(),
 	};
 	// The places of the pointer that the interface got in this frame
 	const auto places = Locator::gameActionSystem::value().GetMousePlaces();
@@ -2161,7 +2162,8 @@ void Game::PlayHandGrabSound()
 		isLand = landCell != nullptr && landCell->properties.hasWater == 0;
 	}
 
-	const auto feedback = hand_grab::GripFeedbackOf(isLand, !Locator::cinematicDirectorSystem::value().IsInterfaceActive());
+	const auto feedback = hand_grab::GripFeedbackOf(isLand, !Locator::cinematicDirectorSystem::value().IsInterfaceActive(),
+	                                                Locator::time::value().IsPaused());
 	if (feedback == hand_grab::GripFeedback::None)
 	{
 		return;
@@ -2181,23 +2183,20 @@ void Game::PlayHandGrabSound()
 	}
 	else
 	{
-		// While the game runs, the hand splashes where it goes in: a ring on the water, in the land's brightest light
-		if (!Locator::time::value().IsPaused())
+		// The hand splashes where it goes in: a ring on the water, in the land's brightest light
+		const auto angle = Locator::gameRandom::value().CrtRandom(0.0f, glm::two_pi<float>());
+		if (Locator::waterRingSystem::has_value())
 		{
-			const auto angle = Locator::gameRandom::value().CrtRandom(0.0f, glm::two_pi<float>());
-			if (Locator::waterRingSystem::has_value())
-			{
-				Locator::waterRingSystem::value().Add(
-				    water_rings::HandSplash(glm::vec2(position.x, position.z), angle, FrameLandLight(255)));
-			}
-			// The fish near where the hand went in dart away
-			Locator::fishFarmSystem::value().Scare({position.x, k_HandSplashHeight, position.z});
-			// The shoals of the fish puzzle get the scare at the next turn, on each computer of a network game
-			if (Locator::puzzleGameSystem::has_value() && Locator::puzzleGameSystem::value().HasFishPuzzle())
-			{
-				Locator::playerCommandSystem::value().Submit(
-				    player_commands::FishScare {.point = {position.x, k_HandSplashHeight, position.z}});
-			}
+			Locator::waterRingSystem::value().Add(
+			    water_rings::HandSplash(glm::vec2(position.x, position.z), angle, FrameLandLight(255)));
+		}
+		// The fish near where the hand went in dart away
+		Locator::fishFarmSystem::value().Scare({position.x, k_HandSplashHeight, position.z});
+		// The shoals of the fish puzzle get the scare at the next turn, on each computer of a network game
+		if (Locator::puzzleGameSystem::has_value() && Locator::puzzleGameSystem::value().HasFishPuzzle())
+		{
+			Locator::playerCommandSystem::value().Submit(
+			    player_commands::FishScare {.point = {position.x, k_HandSplashHeight, position.z}});
 		}
 		// G_HandInWater_01 to _10 in turn, on the water's surface where the hand went in
 		const auto id = fmt::format("InGame.sad/{}", 99 + _handInWaterSample);

@@ -96,8 +96,9 @@ private:
 	void StartVillager(const Active& reaction, entt::entity living, components::LivingReaction& state, bool wasReacting);
 	/// A living thing stops reacting, a villager going back to what it was doing when asked
 	void Stop(entt::entity living, components::LivingReaction& state, bool resetState);
-	/// The reaction's impression on the living thing taking it up
-	void Impress(const Active& reaction, entt::entity living, const glm::vec3& at);
+	/// The reaction's impression on the living thing taking it up. When `symbol` is false, a villager shows no symbol of
+	/// the belief that it gives, but the voice of awe of its town can play.
+	void Impress(const Active& reaction, entt::entity living, const glm::vec3& at, bool symbol = true);
 	/// How much a creature impresses a villager taking up its reaction, by its size and what it last did, at the town's
 	/// weariness. Only the reactions a creature makes count: seeing it, and its win of a fight. None for any other.
 	[[nodiscard]] std::optional<float> CreatureImpressiveValue(const Active& reaction, entt::entity villager, entt::entity town,

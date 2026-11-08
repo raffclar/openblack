@@ -543,10 +543,18 @@ TEST(HandGrab, TheScoopingSoundRisesInPitchWithTheRamp)
 
 TEST(HandGrab, TheCinemaBarsSilenceAGripOfTheLandButNotOfTheSea)
 {
-	EXPECT_EQ(GripFeedbackOf(true, false), GripFeedback::Dust);
-	EXPECT_EQ(GripFeedbackOf(true, true), GripFeedback::None);
-	EXPECT_EQ(GripFeedbackOf(false, false), GripFeedback::Splash);
-	EXPECT_EQ(GripFeedbackOf(false, true), GripFeedback::Splash);
+	EXPECT_EQ(GripFeedbackOf(true, false, false), GripFeedback::Dust);
+	EXPECT_EQ(GripFeedbackOf(true, true, false), GripFeedback::None);
+	EXPECT_EQ(GripFeedbackOf(false, false, false), GripFeedback::Splash);
+	EXPECT_EQ(GripFeedbackOf(false, true, false), GripFeedback::Splash);
+}
+
+TEST(HandGrab, WhileTheGameIsPausedAGripOfTheSeaIsSilentButAGripOfTheLandIsNot)
+{
+	EXPECT_EQ(GripFeedbackOf(false, false, true), GripFeedback::None);
+	EXPECT_EQ(GripFeedbackOf(false, true, true), GripFeedback::None);
+	EXPECT_EQ(GripFeedbackOf(true, false, true), GripFeedback::Dust);
+	EXPECT_EQ(GripFeedbackOf(true, true, true), GripFeedback::None);
 }
 
 TEST(HandGrab, APressTapsThePlayersOwnFireBallAndWaitsOnAnothers)

@@ -35,6 +35,7 @@
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/SkyClockSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/ThingMapPlace.h"
 #include "ECS/ThingModel.h"
 #include "Graphics/Texture2D.h"
 #include "InfoConstants.h"
@@ -120,12 +121,12 @@ std::optional<map_coords::MapCoords> GameFireflyWorld::SpotOf(entt::entity thing
 	{
 		return std::nullopt;
 	}
-	const auto* transform = registry.TryGet<const Transform>(thing);
-	if (transform == nullptr || !Locator::terrainSystem::has_value())
+	if (!registry.AllOf<Transform>(thing))
 	{
 		return std::nullopt;
 	}
-	return FromWorld(transform->position);
+	// The spot is the map position of the thing, not the place where it is drawn
+	return ecs::thing_map_place::Of(registry, thing);
 }
 
 bool GameFireflyWorld::IsHidingPlace(entt::entity thing) const

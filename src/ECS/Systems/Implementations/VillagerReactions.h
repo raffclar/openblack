@@ -129,11 +129,12 @@ void SetSpeed(entt::entity villager, int32_t speed);
 components::TownImpression& ImpressionOf(entt::entity town);
 /// A town's belief gained in a player rises as a symbol from its town centre's foot, in the player's colour
 void ShowTownBelief(const glm::vec3& centre, PlayerNames player, float belief);
-/// The belief that a villager gained shows as a symbol that rises from it. The guidance sometimes plays a good or evil
-/// voice of awe of its people there (see GuidanceSystemInterface::BeliefVoice).
-void ShowBelief(entt::entity villager, PlayerNames player, float belief, GuidanceAlignment alignment);
+/// The belief that a villager gained shows as a symbol that rises from it, when `symbol` is true. The guidance sometimes
+/// plays a good or evil voice of awe of its people there (see GuidanceSystemInterface::BeliefVoice).
+void ShowBelief(entt::entity villager, PlayerNames player, float belief, GuidanceAlignment alignment, bool symbol);
 /// The same for belief a town gained from a thing, such as an artefact its people dance round: the symbol rises from
 /// the top of the thing, and the town's awe may be heard there
-void ShowObjectBelief(entt::entity object, entt::entity town, PlayerNames player, float belief, GuidanceAlignment alignment);
+void ShowObjectBelief(entt::entity object, entt::entity town, PlayerNames player, float belief, GuidanceAlignment alignment,
+                      bool symbol = true);
 
 } // namespace openblack::ecs::systems::villager_reactions

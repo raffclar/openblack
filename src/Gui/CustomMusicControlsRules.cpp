@@ -107,6 +107,11 @@ void custom_music_controls::Click(Panel& panel, audio::CustomMusicPlayerInterfac
 	{
 	case Button::Music:
 		panel.controlsShown = !panel.controlsShown;
+		// The play list does not show again with the controls. Only its own button shows it.
+		if (panel.controlsShown)
+		{
+			panel.playListShown = false;
+		}
 		break;
 	case Button::Play:
 		player.Play();

@@ -252,7 +252,9 @@ std::vector<EffectOutcome> magic::ApplyEffectToAll(const EffectValues& values, g
 
 float magic::StepPendingAlignment(float alignment, float& pending, float changePerTurn)
 {
-	const float step = changePerTurn * std::clamp(pending, -1.0f, 1.0f);
+	// Held between -1 and 1 as the game does it: a value that is not a number becomes -1
+	const auto hold = [](float value) { return !(value >= -1.0f) ? -1.0f : (value > 1.0f ? 1.0f : value); };
+	const float step = changePerTurn * hold(pending);
 	pending = 0.0f;
-	return std::clamp(alignment + step, -1.0f, 1.0f);
+	return hold(alignment + step);
 }

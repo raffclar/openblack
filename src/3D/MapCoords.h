@@ -286,5 +286,10 @@ template <typename GroundAt>
 {
 	return {ToMetres(coords.x), ToMetres(coords.z)};
 }
+/// The x and z of a map position, kept as whole map units without the altitude
+[[nodiscard]] constexpr glm::ivec2 WholeXZ(const MapCoords& coords)
+{
+	return {coords.x, coords.z};
+}
 
 } // namespace openblack::map_coords

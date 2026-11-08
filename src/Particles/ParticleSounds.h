@@ -27,9 +27,10 @@ void StopAtomSound(Atom& atom, const ParticleSoundLink& sound, int fadeStep = 0)
 /// The particle lets go of all its sounds
 void StopAllAtomSounds(Atom& atom);
 
-/// A thrown particle's sound is large above this share of the fastest throw, medium above the next, else small
-inline constexpr float k_LargeThrowShare = 0.6f;
-inline constexpr float k_MediumThrowShare = 0.3f;
+/// A thrown particle's sound is large above this share of the fastest throw, medium above the next, else small. The game
+/// compares the share with these as doubles.
+inline constexpr double k_LargeThrowShare = 0.6;
+inline constexpr double k_MediumThrowShare = 0.3;
 /// The size of a thrown particle's sound by its share of the fastest throw: 1 large, 2 medium, 3 small
 [[nodiscard]] int SoundSizeFromThrow(float share);
 /// The size of a landing particle's sound by how fast it struck, against the speeds of a medium and a large impact

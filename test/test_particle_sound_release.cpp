@@ -7,9 +7,12 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <cmath>
+
 #include <gtest/gtest.h>
 
 #include "Particles/ParticleSoundRelease.h"
+#include "Particles/ParticleSounds.h"
 
 using namespace openblack::particles;
 
@@ -55,4 +58,20 @@ TEST(ParticleSoundRelease, TheVolumeFallsByTheStepEachTurnToSilence)
 	EXPECT_EQ(turns, 7);
 	EXPECT_EQ(FadedVolume(50, 0), 50u);
 	EXPECT_EQ(FadedVolume(10, -5), 10u);
+}
+
+TEST(ParticleSoundRelease, AThrowsSoundSizeComparesItsShareWithTheGamesDoubles)
+{
+	// Above six tenths of the fastest throw the sound is large, above three tenths medium, else small
+	EXPECT_EQ(SoundSizeFromThrow(1.0f), 1);
+	EXPECT_EQ(SoundSizeFromThrow(0.45f), 2);
+	EXPECT_EQ(SoundSizeFromThrow(0.1f), 3);
+	// The float nearest to six tenths is a little above the double six tenths, so a share of it is large
+	EXPECT_EQ(SoundSizeFromThrow(0.6f), 1);
+	EXPECT_EQ(SoundSizeFromThrow(0.3f), 2);
+	// The float below it is small enough
+	EXPECT_EQ(SoundSizeFromThrow(std::nextafter(0.6f, 0.0f)), 2);
+	EXPECT_EQ(SoundSizeFromThrow(std::nextafter(0.3f, 0.0f)), 3);
+	// A throw at 120 of the fastest 200 is large
+	EXPECT_EQ(SoundSizeFromThrow(120.0f / 200.0f), 1);
 }

@@ -22,6 +22,28 @@ namespace openblack::input
 /// mouse's movement alone. While it lasts the game stops following the pointer: the cursor, and the hand drawn at it,
 /// stay where they were when the turning started. When it ends the pointer is put back at that spot, so the hand
 /// doesn't jump to wherever the pointer had wandered.
+/// The conditions that let the mouse hold the cursor while it turns the camera
+struct FreezeGate
+{
+	/// The player is in the temple, where the camera is not turned with the mouse
+	bool inTemple {false};
+	/// The world's own camera is the one in use
+	bool worldCamera {false};
+	/// The land's scripts let the mouse turn the camera round the hand
+	bool rotateAroundMouse {false};
+	/// The camera was put back inside the fence and ignores its controls until all of them are let go
+	bool heldBackAtFence {false};
+	/// A box of the menu is on the screen
+	bool frontEndBox {false};
+};
+
+/// Whether the mouse may hold the cursor while it turns the camera. The camera that ignores its controls lets the
+/// cursor go, and the cursor then follows the pointer again.
+[[nodiscard]] constexpr bool FreezeAllowed(const FreezeGate& gate)
+{
+	return !gate.inTemple && gate.worldCamera && gate.rotateAroundMouse && !gate.heldBackAtFence && !gate.frontEndBox;
+}
+
 class CursorFreeze
 {
 public:

@@ -292,6 +292,10 @@ bool CreatureFightSystem::Press(const glm::vec3& rayOrigin, const glm::vec3& ray
 	// goes into the queue at the next turn.
 	fighting.marks.Add(mark);
 	_markHeld = mark.anchor != marks::Anchor::Ground;
+	if (_markHeld)
+	{
+		_bodyPressHeld = true;
+	}
 	PlayDirectSound();
 	note("accepted", std::move(target));
 	Send(*command);
@@ -301,6 +305,7 @@ bool CreatureFightSystem::Press(const glm::vec3& rayOrigin, const glm::vec3& ray
 
 void CreatureFightSystem::Release(uint32_t milliseconds, uint32_t turn)
 {
+	_bodyPressHeld = false;
 	if (!_pressed.has_value())
 	{
 		return;

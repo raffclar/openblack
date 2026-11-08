@@ -425,6 +425,7 @@ void Renderer::DrawLandLuminosityPass(const DrawSceneDesc& drawDesc) const
 	    .nearPlane = camera.GetNearClip(),
 	    .landReflection = detail.landReflection,
 	    .cloudShadows = detail.cloudShadows,
+	    .skyClouds = detail.clouds,
 	    .skyAlpha = clouds::Colour(Locator::alignmentSystem::value().GetSkyAlignment(), 0xFFFFFF) >> 24u,
 	    .landColour = _landLightTable ? _landLightTable->GetLandColour() : 0xFFFFFFu,
 	    .fullLightGreen =

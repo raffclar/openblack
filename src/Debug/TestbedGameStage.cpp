@@ -274,7 +274,14 @@ std::string TestbedGameStage::OpenEndBox(size_t value)
 std::string TestbedGameStage::ShowCustomMusicControls(size_t value)
 {
 	auto& controls = Locator::gameInterface::value().GetMusicControls();
-	controls.ShowControls(value >= 1, value >= 2);
+	if (value == k_PressMusicButton)
+	{
+		controls.PressMusicButton();
+	}
+	else
+	{
+		controls.ShowControls(value >= 1, value >= 2);
+	}
 	return fmt::format("buttons {}, play list {}, the controls {}", controls.GetPanel().controlsShown ? "shown" : "hidden",
 	                   controls.GetPanel().playListShown ? "shown" : "hidden", controls.IsActive() ? "show" : "hide now");
 }

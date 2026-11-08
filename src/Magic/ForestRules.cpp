@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <numbers>
 
+#include "Common/GUtilsDistance.h"
 #include "Common/X87.h"
 
 using namespace openblack;
@@ -42,6 +43,16 @@ glm::vec2 forest::SpiralOffset(uint32_t index, uint32_t count)
 float forest::TargetScale(float distance)
 {
 	return 1.0f - (k_EdgeShrink * distance / k_OuterRadius);
+}
+
+map_coords::MapCoords forest::TreeSpot(glm::vec2 centre, glm::vec2 offset)
+{
+	return {.x = map_coords::ToFixed(centre.x + offset.x), .z = map_coords::ToFixed(centre.y + offset.y), .altitude = 0.0f};
+}
+
+float forest::TargetScaleAt(const map_coords::MapCoords& centre, const map_coords::MapCoords& spot)
+{
+	return TargetScale(gutils::GetDistanceInMetres(centre, spot));
 }
 
 uint32_t forest::TreesWeCanAfford(int maxObjectsToCreate, uint32_t finalTrees, float strength)

@@ -280,9 +280,10 @@ uint32_t shield::VillagerAgainTurns(bool hasTown, uint32_t sinceAttacked, uint32
 	return goalUnder ? standardTurns : 0;
 }
 
-glm::vec2 shield::LookOut(glm::vec2 centre, glm::vec2 villager, float turn)
+glm::ivec2 shield::LookOut(glm::vec2 centre, glm::vec2 villager, float turn)
 {
-	return AwayFrom(centre, villager, turn, 1.0f);
+	const float angle = (turn - k_ShelterTurnHalf) + gutils::Get3DAngleFromXZ(centre, villager);
+	return map_coords::WholeXZ(map_coords::FromMetres(villager) + gutils::GetPosFromAngle(angle, 1.0f));
 }
 
 glm::vec2 shield::AwayFrom(glm::vec2 centre, glm::vec2 villager, float turn, float metres)

@@ -445,5 +445,5 @@ bool CreatureFightSystem::FightMusicHeard(const glm::vec3& camera) const
 			    arenas.push_back(transform.position);
 		    }
 	    });
-	return fight::FightMusicHeard(DirectsFight(), arenas, camera);
+	return fight::FightMusicHeard(fight::DirectsFightForMusic(DirectsFight(), _bodyPressHeld), arenas, camera);
 }

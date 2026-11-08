@@ -275,6 +275,23 @@ void testbed_scenarios::AddHandNavigationScenarios(std::vector<Scenario>& all)
 	    .commands = {PointerTo({0.5f, 0.75f}, 0.5f), KeyDown(SDL_SCANCODE_UP, 0.5f), Wheel(2, false, 1.0f),
 	                 KeyUp(SDL_SCANCODE_UP, 1.0f), KeyDown(SDL_SCANCODE_UP, 5.0f), KeyUp(SDL_SCANCODE_UP, 1.0f)},
 	});
+	all.push_back({
+	    .id = "hand.fence_rotate_release",
+	    .name = "Turn the camera with the middle button while the fence holds it back",
+	    .facet = Facet::Hand,
+	    .description = "The camera zones of the first land's glade (Land1Choose.exc) are set, and the camera stands high "
+	                   "inside the fence near its north side and looks north. The up arrow key (Move Forwards) goes down "
+	                   "and stays down, so the camera goes into the fence and is held back. While the key is down, the "
+	                   "middle button is held and the mouse moves a fifth of the screen to the left over a second and a "
+	                   "half. Then the button and the key come up.",
+	    .expected = "The camera stops at the fence and does not turn, because the fence holds it back while a control "
+	                "is held. The cursor is not held: the hand follows the mouse to the left the whole time that the "
+	                "middle button is held, and stays where the mouse put it when the button comes up.",
+	    .environment = {.dispenserGrid = false, .cameraZone = "Land1Choose.exc"},
+	    .framing = {.shot = Shot::Placed, .eye = {-390.0f, 90.0f, 590.0f}, .look = {-390.0f, 70.0f, 700.0f}},
+	    .commands = {PointerTo({0.6f, 0.75f}, 0.5f), KeyDown(SDL_SCANCODE_UP, 0.5f), Press(k_Middle, 1.0f),
+	                 Sweep({-0.2f, 0.0f}, 1.5f, 0.2f), Release(k_Middle, 1.0f), KeyUp(SDL_SCANCODE_UP, 0.0f)},
+	});
 	{
 		const auto fixedTurn = [](float fixed, float delay) {
 			return Command {.kind = Kind::CallNative,

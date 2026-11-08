@@ -10,6 +10,7 @@
 #include <cmath>
 
 #include <array>
+#include <limits>
 #include <numbers>
 
 #include <glm/geometric.hpp>
@@ -621,6 +622,11 @@ TEST(AreaEffect, ThePendingAlignmentScalesTheTurnsChangeAndIsThenGone)
 	pending = -5.0f;
 	alignment = StepPendingAlignment(-0.999f, pending, 0.01f);
 	EXPECT_FLOAT_EQ(alignment, -1.0f);
+	// A change that is not a number counts as a whole evil one
+	pending = std::numeric_limits<float>::quiet_NaN();
+	EXPECT_FLOAT_EQ(StepPendingAlignment(0.0f, pending, 0.01f), -0.01f);
+	pending = 0.0f;
+	EXPECT_FLOAT_EQ(StepPendingAlignment(std::numeric_limits<float>::quiet_NaN(), pending, 0.01f), -1.0f);
 }
 
 // Impressiveness

@@ -12,11 +12,15 @@
 #include <cstddef>
 #include <cstdint>
 
+#include <algorithm>
 #include <array>
 #include <optional>
+#include <span>
 
+#include <entt/entity/entity.hpp>
 #include <glm/vec2.hpp>
 
+#include "3D/MapCoords.h"
 #include "Enums.h"
 
 // The forest miracle's rules. As its seed lands the forest plants all its trees at once, on a spiral
@@ -36,6 +40,11 @@ inline constexpr float k_TurnsPerTree = 1.307692289f;
 [[nodiscard]] glm::vec2 SpiralOffset(uint32_t index, uint32_t count);
 /// The size a tree grows to at a distance from the middle: full in the middle, half at the spiral's end
 [[nodiscard]] float TargetScale(float distance);
+/// The map position of a tree of the spiral: the middle in metres plus the tree's offset, truncated to map units, at
+/// altitude 0
+[[nodiscard]] map_coords::MapCoords TreeSpot(glm::vec2 centre, glm::vec2 offset);
+/// The size a tree grows to at its map position. The distance is between the two map positions, in the map's units
+[[nodiscard]] float TargetScaleAt(const map_coords::MapCoords& centre, const map_coords::MapCoords& spot);
 
 /// How many trees the forest may have: as many as it may still make (its tables' number for no limit), none once it
 /// has no strength left
@@ -80,6 +89,15 @@ inline constexpr float k_EvilAlignment = -0.5f;
 [[nodiscard]] constexpr bool BatsFor(float alignment)
 {
 	return alignment < k_EvilAlignment;
+}
+
+/// How many trees a forest has at this moment: the trees of its list that are still in the world. A tree in the hand
+/// stays in the forest. A tree goes from the forest at the moment that it goes from the world, not at the next turn of
+/// the forest.
+template <typename IsInWorld>
+[[nodiscard]] uint32_t StandingTrees(std::span<const entt::entity> trees, IsInWorld isInWorld)
+{
+	return static_cast<uint32_t>(std::ranges::count_if(trees, isInWorld));
 }
 
 } // namespace openblack::magic::forest

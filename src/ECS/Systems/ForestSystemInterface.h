@@ -45,6 +45,8 @@ public:
 	[[nodiscard]] virtual bool CanGrowAt(glm::vec3 point) const = 0;
 	/// Whether a forest miracle's forest still has trees
 	[[nodiscard]] virtual bool HasTrees(entt::entity spell) const = 0;
+	/// How many trees a forest miracle's forest has at this moment, a tree in the hand among them
+	[[nodiscard]] virtual uint32_t StandingTrees(entt::entity spell) const = 0;
 	/// How tall the tallest tree of a forest miracle's forest stands (none tall with no trees left); none before the
 	/// miracle has planted it
 	[[nodiscard]] virtual std::optional<float> TallestTreeOf(entt::entity spell) const = 0;

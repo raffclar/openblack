@@ -55,7 +55,13 @@ bool MagicSystem::StoreFromSpell(entt::entity entity, SpellSeed& seed, Spell& sp
 	seed.storedChants = spell.chants.chants;
 	seed.chantStore = spell.chants.chants;
 	seed.storedAge = spell.age;
-	seed.storedMaxObjects = spell.maxObjectsToCreate;
+	// A forest keeps the number of trees that it has now, so a cast again makes no more trees than that. The count is
+	// the forest's trees at this moment, not the count of the last turn of the forest.
+	if (spell.forestPlanted && Locator::forestSystem::has_value())
+	{
+		spell.objectCount = Locator::forestSystem::value().StandingTrees(seed.spell);
+	}
+	seed.storedMaxObjects = magic::spells::MaxObjectsToCreate(Info(), spell);
 	const bool enough = magic::spells::HasEnoughForRecast(Info(), spell);
 	// The seed lets go of the miracle. A miracle that still runs from this seed closes down.
 	if (spell.seed == entity)

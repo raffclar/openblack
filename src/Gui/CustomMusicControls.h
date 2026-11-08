@@ -79,6 +79,8 @@ public:
 
 	/// Shows the controls and the play list, or hides them, as the music button and the play list button do
 	void ShowControls(bool controls, bool playList);
+	/// Does what a click on the music button does
+	void PressMusicButton() { Click(custom_music_controls::Button::Music); }
 	[[nodiscard]] const custom_music_controls::Panel& GetPanel() const noexcept { return _panel; }
 	/// The controls that show, for tools that press them by name
 	[[nodiscard]] std::vector<Dialog::NamedControl> GetNamedControls() const;

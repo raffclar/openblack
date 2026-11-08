@@ -238,6 +238,27 @@ TEST(CreatureFight, TheHandDirectsTheFightOnlyInTheFightViewWithAnEmptyHand)
 	EXPECT_FALSE(DirectsFight(true, true, false));
 }
 
+TEST(CreatureFight, AHeldPressOnABodyKeepsTheHandInTheFightControls)
+{
+	EXPECT_TRUE(InFightControls(true, false));
+	EXPECT_TRUE(InFightControls(true, true));
+	// The fight ended, but the player still holds the button of the press on a body
+	EXPECT_TRUE(InFightControls(false, true));
+	EXPECT_FALSE(InFightControls(false, false));
+}
+
+TEST(CreatureFight, AHeldPressOnABodyDoesNotDirectTheFightForTheMusic)
+{
+	EXPECT_TRUE(DirectsFightForMusic(true, false));
+	EXPECT_FALSE(DirectsFightForMusic(true, true));
+	EXPECT_FALSE(DirectsFightForMusic(false, true));
+	EXPECT_FALSE(DirectsFightForMusic(false, false));
+	// While the press is held, only the distance from the camera to the arena plays the music
+	const std::array arenas {glm::vec3 {0.0f, 0.0f, 0.0f}};
+	EXPECT_FALSE(FightMusicHeard(DirectsFightForMusic(true, true), arenas, {0.0f, 0.0f, 150.0f}));
+	EXPECT_TRUE(FightMusicHeard(DirectsFightForMusic(true, true), arenas, {0.0f, 0.0f, 50.0f}));
+}
+
 TEST(CreatureFight, APlaceIsInTheArenaOnlyWithinItsRadius)
 {
 	const Arena arena {.centre = {10.0f, 0.0f}, .radius = 20.0f};

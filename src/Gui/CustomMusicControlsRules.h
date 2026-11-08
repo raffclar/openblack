@@ -166,7 +166,8 @@ struct Panel
 {
 	/// The controls other than the music button show
 	bool controlsShown {false};
-	/// The play list shows when the controls show
+	/// The play list shows when the controls show. When the music button shows the controls again, the play list does
+	/// not show.
 	bool playListShown {false};
 	bool shuffle {false};
 	bool repeat {false};

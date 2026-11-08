@@ -83,6 +83,9 @@ struct Effect
 	int32_t soundAction {0};
 };
 [[nodiscard]] Effect EffectOf(Spell spell);
+/// True when the spell stops what the creature does as it takes hold. Freeze always stops it. Nice, nasty and itchy stop
+/// it only when no script controls the creature. The other spells never stop it.
+[[nodiscard]] bool StopsAction(Spell spell, bool scriptControlled);
 
 /// How far through a spell's three parts a creature is
 enum class Phase : uint8_t

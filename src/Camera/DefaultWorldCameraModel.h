@@ -84,6 +84,8 @@ public:
 	/// than two pixels while the land is gripped or the camera turns round the hand. Such a move stops a follow of a
 	/// bookmark.
 	[[nodiscard]] bool MovedByPlayer() const { return camera_help::events::IsMoving(_helpControls); }
+	/// Whether the camera was put back inside the fence and ignores its controls until all of them are let go
+	[[nodiscard]] bool IsHeldBack() const { return _heldBack; }
 	/// One of the four wooshes of a flight
 	static void Woosh();
 	[[nodiscard]] HandCues GetHandCues() const final;
