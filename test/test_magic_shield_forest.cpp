@@ -216,7 +216,7 @@ TEST(ShieldRules, TheShelterDirectionIsTheGameAngleBetweenTheMapPositions)
 	const auto place = shield::ShelterAt({0.0f, 0.0f}, {100.0f, 0.1f}, 30.0f, shield::k_ShelterTurnRange * 0.5f, 0.0f);
 	EXPECT_FLOAT_EQ(place.y, 0.0f);
 	const auto look = shield::LookOut({0.0f, 0.0f}, {10.0f, 0.01f}, shield::k_ShelterTurnRange * 0.5f);
-	EXPECT_FLOAT_EQ(look.y, map_coords::ToMetres(map_coords::ToFixed(0.01f)));
+	EXPECT_EQ(look.y, map_coords::ToFixed(0.01f));
 	// One with nowhere to hide from a fallen shield runs on away from its middle, the run cut to whole map units
 	const auto run = shield::AwayFrom({0.0f, 0.0f}, {10.0f, 0.0f}, shield::k_ShelterTurnRange * 0.5f, 12.5f);
 	EXPECT_FLOAT_EQ(run.x, map_coords::ToMetres(map_coords::ToFixed(10.0f) + map_coords::ToFixedGUtils(12.5f)));
@@ -248,7 +248,18 @@ TEST(ShieldRules, VillagersOfATownReactOnlyWhenItWasAttackedLately)
 	EXPECT_EQ(shield::VillagerAgainTurns(true, 10, 100, false, 30), 0u);
 	EXPECT_EQ(shield::VillagerAgainTurns(false, 9999, 100, true, 30), 30u);
 	const auto look = shield::LookOut({0.0f, 0.0f}, {10.0f, 0.0f}, shield::k_ShelterTurnRange * 0.5f);
-	EXPECT_NEAR(look.x, 11.0f, k_Epsilon);
+	EXPECT_EQ(look.x, map_coords::ToFixed(10.0f) + map_coords::ToFixedGUtils(1.0f));
+	EXPECT_EQ(look.y, 0);
+}
+
+TEST(ShieldRules, ASheltersLookPointStaysInWholeMapUnits)
+{
+	// A look point one metre on from here is 8090858 map units across. Kept in metres, it would come back one unit
+	// lower, so the point stays in map units.
+	const float x = map_coords::ToMetres(8084305);
+	const auto look = shield::LookOut({0.0f, 0.0f}, {x, 0.0f}, shield::k_ShelterTurnRange * 0.5f);
+	EXPECT_EQ(look.x, 8090858);
+	EXPECT_EQ(map_coords::ToFixed(map_coords::ToMetres(look.x)), 8090857);
 }
 
 TEST(ShieldRules, OtherPlayersCreaturesWalkRoundAShield)
