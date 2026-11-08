@@ -33,6 +33,7 @@
 #include "3D/TempleSubMeshTexture.h"
 #include "3D/TempleToggles.h"
 #include "3D/TempleToolTips.h"
+#include "Camera/TemplePress.h"
 #include "Common/FramePace.h"
 #include "Temple/FutureRoomRules.h"
 #include "Temple/SaveGameRoomRules.h"
@@ -338,9 +339,11 @@ private:
 	/// The future room's words in this visit, which fade in
 	temple::future_room::Words _futureWords;
 	/// The submesh the cursor is over, and how long is left of the glow it set off, in milliseconds. Moving onto
-	/// another submesh sets the glow off again, unless a control is being dragged.
+	/// another submesh sets the glow off again, unless a press is held.
 	std::optional<std::pair<TempleRoom, uint32_t>> _hovered;
 	float _hoverGlow {0.0f};
+	/// Whether a press is held in the room, on a control or off the controls
+	temple_press::RoomPress _roomPress;
 	/// What the hand shows, which the rooms choose every frame and the tooltip's turn submits
 	TempleToolTip _toolTip {k_FirstTempleToolTip};
 	/// Moves on the options room and the future room, and what the future room draws

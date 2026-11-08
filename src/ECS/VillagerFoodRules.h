@@ -161,6 +161,9 @@ constexpr float k_CarryFoodToStoreThreshold = 0.1f;
 /// What decides whether food lying about catches a villager's eye
 struct FoodInterestInputs
 {
+	/// The food is in a player's hand, or the physics moves it now. Food of either kind is not looked at.
+	bool inHand {false};
+	bool inPhysics {false};
 	float desireForFood {0.0f};
 	/// What it carries and the most it can carry
 	int16_t carried {0};
@@ -173,11 +176,11 @@ struct FoodInterestInputs
 	/// Its town's food desire, and the desire at which a town's food desire moves its people; none without a town
 	std::optional<float> townFoodDesire;
 	float townTrigger {0.0f};
-	/// What a land's script adds to every villager's interest; none unless it sets it
+	/// A value that the game adds to every villager's interest. Nothing in the game sets it, so it is always 0.
 	float interactDesire {0.0f};
 };
-/// Whether it is interested in the food: its own want of food, its room to carry more, its state and the food's nearness
-/// together, or else its town's want of food in place of its own
+/// Whether it is interested in the food: never in food in a hand or in the physics; else its own want of food, its room
+/// to carry more, its state and the food's nearness together, or else its town's want of food in place of its own
 [[nodiscard]] bool IsInterestedInFood(const FoodInterestInputs& in);
 
 /// Whether a villager that picked up food and isn't hungry takes it to the store: by its town's shortage, the share of a

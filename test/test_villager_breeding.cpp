@@ -260,3 +260,31 @@ TEST(VillagerBreeding, AChildMakesForAPointFiveMetresFromItsMother)
 	const glm::vec2 mother {400.0f, 400.0f};
 	EXPECT_NEAR(glm::distance(NearMother(mother, angle.Make()), mother), k_NearMother, 0.05f);
 }
+
+TEST(VillagerBreeding, OnlyADyingVillagerCannotBeCalledOn)
+{
+	EXPECT_FALSE(CanBeCalledOn(VillagerStates::Dying));
+	// Held, in flight or dead, a villager stays about
+	EXPECT_TRUE(CanBeCalledOn(VillagerStates::InHand));
+	EXPECT_TRUE(CanBeCalledOn(VillagerStates::Flying));
+	EXPECT_TRUE(CanBeCalledOn(VillagerStates::Dead));
+	EXPECT_TRUE(CanBeCalledOn(VillagerStates::DecideWhatToDo));
+}
+
+TEST(VillagerBreeding, AChildKeepsItsMotherWhileTheHandHoldsHer)
+{
+	const MotherFacts held {.available = CanBeCalledOn(VillagerStates::InHand), .sameTribe = true, .female = true};
+	EXPECT_TRUE(KeepsMother(held));
+	auto dying = held;
+	dying.dying = true;
+	EXPECT_FALSE(KeepsMother(dying));
+	auto otherTribe = held;
+	otherTribe.sameTribe = false;
+	EXPECT_FALSE(KeepsMother(otherTribe));
+	auto male = held;
+	male.female = false;
+	EXPECT_FALSE(KeepsMother(male));
+	auto gone = held;
+	gone.available = CanBeCalledOn(VillagerStates::Dying);
+	EXPECT_FALSE(KeepsMother(gone));
+}

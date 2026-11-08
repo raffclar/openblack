@@ -117,14 +117,19 @@ TrailSymbol gesture::MakeTrailSymbol(std::span<const glm::vec3> filePoints)
 	return symbol;
 }
 
+bool gesture::IsOnLand(glm::vec3 point)
+{
+	const auto away = [](float value) { return std::abs(static_cast<double>(value)) > k_TrailOnLand; };
+	return away(point.x) || away(point.y) || away(point.z);
+}
+
 std::vector<glm::vec3> gesture::TrailLandPoints(const GestureRecorder& recorder)
 {
 	std::vector<glm::vec3> points;
 	for (size_t i = 0; i < recorder.Count(); ++i)
 	{
 		const auto& world = recorder.At(i).world;
-		const auto onLand = [](float value) { return std::abs(static_cast<double>(value)) > k_TrailOnLand; };
-		if (onLand(world.x) || onLand(world.y) || onLand(world.z))
+		if (IsOnLand(world))
 		{
 			points.push_back(world);
 		}

@@ -16,6 +16,7 @@
 #include <span>
 
 #include <GestureFile.h>
+#include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
 #include "Enums.h"
@@ -72,10 +73,19 @@ struct Match
 
 /// Where a recognised gesture is on the screen: the box round the points it was drawn with
 [[nodiscard]] ScreenBox GestureBox(const GestureRecorder& recorder, const Match& match);
-/// The screen point at the right of a circle drawn in the box, level with its middle, half its larger side out
-[[nodiscard]] glm::vec2 CircleEdge(const ScreenBox& box);
-/// A circle's radius on the land, from its middle and its edge put back at the same depth from the camera, measured
-/// across the camera's view
-[[nodiscard]] float CircleRadius(glm::vec3 centre, glm::vec3 edge, glm::vec3 cameraRight);
+/// The middle of a box on the screen as the game finds it: half of its size, which counts the pixels at both ends, from
+/// its smaller corner
+[[nodiscard]] glm::vec2 BoxMiddle(const ScreenBox& box);
+/// The pixel that a circle drawn in a box of pixels has its middle on: the box's middle, cut to whole pixels
+[[nodiscard]] glm::ivec2 CircleMiddlePixel(const ScreenBox& boxInPixels);
+/// The pixel at the right of a circle drawn in a box of pixels, level with its middle: half of the larger side of the box
+/// out from the middle, cut to whole pixels
+[[nodiscard]] glm::ivec2 CircleEdgePixel(const ScreenBox& boxInPixels);
+/// How far a point is from the camera's eye
+[[nodiscard]] float DistanceFromEye(glm::vec3 eye, glm::vec3 point);
+/// A circle's radius on the land: the distance across the view between its middle on the land and its edge, a little
+/// more. The edge is on the line from the eye through the edge's pixel, as far from the eye as the middle. "Across the
+/// view" is along the land, square to the heading of the camera.
+[[nodiscard]] float CircleRadius(glm::vec3 eye, glm::vec3 middle, glm::vec3 edge, float cameraHeading);
 
 } // namespace openblack::gesture

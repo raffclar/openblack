@@ -1186,6 +1186,25 @@ void testbed_scenarios::AddAudio(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "temple.main_room_drag_over_buttons",
+	    .name = "A press held off the controls of the temple's main room makes no control glow",
+	    .facet = Facet::Story,
+	    .description = "The player goes into the temple's main room. Ten seconds after the cinema bars went out, the player "
+	                   "presses the left button at the left of the screen, low down, and holds it. The pointer moves "
+	                   "across the screen to the right over four seconds, over the room's buttons, and the player lets "
+	                   "go. Then the pointer moves back to the left with no press.",
+	    .expected = "While the press is held, no button glows as the pointer goes over it. With no press, each button "
+	                "that the pointer comes onto glows and the glow fades over half a second.",
+	    .framing = {.shot = Shot::Overview},
+	    .commands = {{.kind = Kind::EnterTemple, .delaySeconds = 1.0f, .value = 3},
+	                 {.kind = Kind::PointerTo, .delaySeconds = 10.0f, .waitUntilFree = true, .point = {0.02f, 0.75f}},
+	                 {.kind = Kind::PointerPress, .delaySeconds = 0.4f, .value = 1},
+	                 {.kind = Kind::PointerSweep, .delaySeconds = 0.2f, .point = {0.96f, 0.0f}, .amount = 4.0f},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 4.2f, .value = 1},
+	                 {.kind = Kind::PointerSweep, .delaySeconds = 1.0f, .point = {-0.96f, 0.0f}, .amount = 4.0f}},
+	});
+
+	all.push_back({
 	    .id = "temple.cave_zoom_back",
 	    .name = "The creature's room camera keeps the view of a target when it zooms back from it",
 	    .facet = Facet::Story,

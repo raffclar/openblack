@@ -80,6 +80,48 @@ private:
 	bool _held {false};
 };
 
+/// What a press does in a room of the temple. A press that goes down on one of the room's controls goes to the control. A
+/// press that goes down off the controls goes to the room's camera. While a press of either kind is held, the room keeps
+/// the submesh that was under the cursor when the press went down, so a control that the cursor moves onto does not glow.
+/// While a question box is up, the room takes no press.
+class RoomPress
+{
+public:
+	enum class State : uint8_t
+	{
+		Free,
+		OnControl,
+		OffControls,
+	};
+
+	/// @param pressed Whether the room hears the button down, after the rules of the presses held from outside, of the
+	/// cinema bars and of the double click
+	/// @param overControl Whether the cursor is on one of the room's controls
+	/// @param boxUp Whether a question box takes the mouse
+	constexpr void Step(bool pressed, bool overControl, bool boxUp) noexcept
+	{
+		const bool down = pressed && !_wasPressed;
+		_wasPressed = pressed;
+		if (boxUp || !pressed)
+		{
+			_state = State::Free;
+			return;
+		}
+		if (down)
+		{
+			_state = overControl ? State::OnControl : State::OffControls;
+		}
+	}
+
+	[[nodiscard]] constexpr State GetState() const noexcept { return _state; }
+	/// Whether the room follows the submesh under the cursor: only while no press is held
+	[[nodiscard]] constexpr bool FollowsHover() const noexcept { return _state == State::Free; }
+
+private:
+	State _state {State::Free};
+	bool _wasPressed {false};
+};
+
 /// The held press the camera takes under the temple's fade; a double click always comes through
 [[nodiscard]] constexpr Button UnderFade(Button button, float fade) noexcept
 {

@@ -181,8 +181,10 @@ entt::entity VillagerArchetype::CreateLoaded(const Loaded& loaded)
 	person.woodHeld = loaded.woodHeld;
 	person.pregnancy = loaded.pregnancy;
 	registry.Assign<LivingListPlace>(entity, LivingListPlace {.made = registry.Context().livingMade++});
+	// The walk keeps the angle that the turn shows, also when the file's walk is not taken
 	registry.Assign<WallHug>(
-	    entity, WallHug {.goalPlace = {0, 0}, .yAngle = 0.0f, .speed = GetSpeedStateSpeed(info.speedGroup.speedDefault)});
+	    entity,
+	    WallHug {.goalPlace = {0, 0}, .yAngle = loaded.heading, .speed = GetSpeedStateSpeed(info.speedGroup.speedDefault)});
 	const auto resourceId = resources::HashIdentifier(child ? info.childMeshHigh : info.highDetail);
 	registry.Assign<Mesh>(entity, resourceId, static_cast<int8_t>(0), static_cast<int8_t>(0));
 	const auto detailMeshes =

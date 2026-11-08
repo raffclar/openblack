@@ -236,6 +236,19 @@ TEST(GestureSystem, NothingIsRecordedUntilTheCursorIsOverTheLand)
 	EXPECT_TRUE(system.GetPath().Empty());
 }
 
+TEST(GestureSystem, ThePlaceAtTheWorldsOriginCountsAsNoLand)
+{
+	GestureSystem system;
+	auto frame = Frame(k_FrameSeconds);
+	frame.view.landAt = [](glm::vec2 /*pixel*/) { return std::optional<glm::vec3>(glm::vec3(0.0f, 1e-5f, -1e-4f)); };
+	system.Update(frame);
+	EXPECT_TRUE(system.GetPath().Empty());
+	// Just further than the limit, the point is on the land
+	frame.view.landAt = [](glm::vec2 /*pixel*/) { return std::optional<glm::vec3>(glm::vec3(0.0f, 2e-4f, 0.0f)); };
+	system.Update(frame);
+	EXPECT_EQ(system.GetPath().Count(), 1U);
+}
+
 TEST(GestureSystem, MovingTheCameraWipesThePathUnlessItShakes)
 {
 	GestureSystem system;

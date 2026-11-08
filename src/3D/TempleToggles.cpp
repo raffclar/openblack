@@ -32,10 +32,14 @@ struct ButtonPlace
 	/// them on
 	uint32_t offPitch;
 	uint32_t onPitch;
+	/// The owner number of the click as the unchecked button turns its things on. The creature button gives its click
+	/// owner 110 and pitch 100, where the other clicks have no owner. Thus that click does not start again in the voice
+	/// of another button's click.
+	uint32_t onOwner {0};
 };
 constexpr std::array<ButtonPlace, TempleToggles::k_Count> k_Buttons = {
     ButtonPlace {"LH_CheckBox_DisplayCitadel_Checked", "LH_CheckBox_DisplayCitadel_Unchecked", 0xE91 - 0xE73, 100, 100},
-    ButtonPlace {"LH_CheckBox_DisplayCreature_Checked", "LH_CheckBox_DisplayCreature_Unchecked", 0xE8F - 0xE73, 110, 100},
+    ButtonPlace {"LH_CheckBox_DisplayCreature_Checked", "LH_CheckBox_DisplayCreature_Unchecked", 0xE8F - 0xE73, 110, 100, 110},
     ButtonPlace {"LH_CheckBox_DisplayMagicActivity_Checked", "LH_CheckBox_DisplayMagicActivity_Unchecked", 0xE93 - 0xE73, 95,
                  95},
     ButtonPlace {"LH_CheckBox_DisplayInfluence_Checked", "LH_CheckBox_DisplayInfluence_Unchecked", 0xE92 - 0xE73, 105, 105},
@@ -112,7 +116,8 @@ bool TempleToggles::Hold(bool pressed, std::optional<uint32_t> hoveredSubMesh)
 			const bool shown = _shown.at(button);
 			_playSound(static_cast<entt::id_type>(shown ? audio::SoundId::G_CitadelButtonUp_01
 			                                            : audio::SoundId::G_CitadelButtonDown_01),
-			           shown ? k_Buttons.at(button).onPitch : k_Buttons.at(button).offPitch);
+			           shown ? k_Buttons.at(button).onPitch : k_Buttons.at(button).offPitch,
+			           shown ? k_Buttons.at(button).onOwner : 0);
 		}
 		// The land of the map keeps its colours: the influence button shows the influence circles in the main room
 	}

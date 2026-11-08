@@ -141,14 +141,12 @@ bool IsVillager(entt::entity entity)
 	return entity != entt::null && Entities().Valid(entity) && Entities().AllOf<Villager, LivingAction>(entity);
 }
 
-/// Whether a villager can be called on: about, not held or flying or carried off, and neither dead nor dying
+/// Whether a villager can be called on: one that is still in the world and not in the dying state. A held, flying,
+/// carried off or dead villager is about too.
 bool IsAvailable(entt::entity villager)
 {
-	if (!IsVillager(villager) || Entities().AnyOf<InHand, InPhysics, CarriedByTornado, VillagerDeath>(villager))
-	{
-		return false;
-	}
-	return Living().VillagerGetFinalState(Entities().Get<const LivingAction>(villager)) != VillagerStates::Dying;
+	return IsVillager(villager) &&
+	       villager_breeding::CanBeCalledOn(Living().VillagerGetFinalState(Entities().Get<const LivingAction>(villager)));
 }
 
 bool IsFemale(entt::entity villager)
@@ -256,7 +254,7 @@ void WalkToMeet(entt::entity villager, entt::entity other, VillagerStates state,
 	villager_home::SetupMoveTo(Entities().Get<LivingAction>(other), villager_breeding::MeetingPoint(there, here, gap), state);
 }
 
-/// Whether a child's mother is about: alive and able, a woman of its own tribe
+/// Whether a child's mother is about: a woman of its own tribe that can be called on, whose death has not started
 bool IsMotherAlive(entt::entity child)
 {
 	const auto mother = Entities().Get<const Villager>(child).mother;
@@ -265,7 +263,12 @@ bool IsMotherAlive(entt::entity child)
 		return false;
 	}
 	const auto& her = Entities().Get<const Villager>(mother);
-	return her.tribe == Entities().Get<const Villager>(child).tribe && her.sex == Villager::Sex::FEMALE;
+	return villager_breeding::KeepsMother({
+	    .available = true,
+	    .sameTribe = her.tribe == Entities().Get<const Villager>(child).tribe,
+	    .female = her.sex == Villager::Sex::FEMALE,
+	    .dying = Entities().AllOf<VillagerDeath>(mother),
+	});
 }
 
 /// A child goes home once it has grown up or when hungry, and lets go of a mother no longer about. 1 when it went home.

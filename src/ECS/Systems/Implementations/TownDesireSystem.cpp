@@ -300,6 +300,13 @@ void TownDesireSystem::ProcessTown(entt::entity entity)
 	    .farmerMaxFood = farmer.maxFoodCarried,
 	    .farmerMaxWood = farmer.maxWoodCarried,
 	};
+	// The wood desire reads only the desires of the turn before, so its shortage before the turn is the shortage that the
+	// turn measures. A high shortage can make the advisors warn of low wood.
+	const float woodShortage = town_desire::WoodShortage(context);
+	if (Locator::guidanceSystem::has_value())
+	{
+		Locator::guidanceSystem::value().LowOnWood(entity, woodShortage);
+	}
 	// Every 50 turns the unhappiness of the villagers can make the advisors say so
 	const auto unhappiness = town_desire::Process(desire, context);
 	if (unhappiness.has_value() && Locator::guidanceSystem::has_value())
@@ -367,6 +374,11 @@ float TownDesireSystem::RecomputeDesire(entt::entity town, TownDesireInfo desire
 	    .farmerMaxFood = farmer.maxFoodCarried,
 	    .farmerMaxWood = farmer.maxWoodCarried,
 	};
+	// The wood desire works out the shortage of wood each time, and a high shortage can make the advisors warn of it
+	if (desire == TownDesireInfo::ForWood && Locator::guidanceSystem::has_value())
+	{
+		Locator::guidanceSystem::value().LowOnWood(town, town_desire::WoodShortage(context));
+	}
 	return town_desire::CallDesireFunction(*townDesire, context, Index(desire));
 }
 

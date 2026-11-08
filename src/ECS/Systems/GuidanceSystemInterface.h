@@ -64,8 +64,12 @@ public:
 	/// An advisors' remark of a kind, said when RemarkNow lets it: one of the kind's texts, picked at random
 	virtual void RemarkIfNow(guidance::Kind kind) = 0;
 
-	/// Harm done to a town by a player, applied by a creature or by anything else
-	virtual void TownAttacked(entt::entity town, PlayerNames attacker, bool byCreature) = 0;
+	/// Harm done to a town by a player. The creature is the creature that applied the harm, or entt::null when no
+	/// creature applied it.
+	virtual void TownAttacked(entt::entity town, PlayerNames attacker, entt::entity creature) = 0;
+	/// The scripts let the advisors talk about the creature as it attacks a town, or stop them. A new land and a load let
+	/// them again.
+	virtual void SetCreatureRemarks([[maybe_unused]] bool on) {}
 	/// Harm done to a town: sometimes its people cry out at the town, in a voice that tells what harmed it. The town must
 	/// have people, and the guidance kind of the cry must wait no longer.
 	virtual void TownAttackCry(entt::entity town, const guidance::TownAttackVoice& voice) = 0;
@@ -104,6 +108,10 @@ public:
 	/// guidance::WarnsLowOnFood) and the town is of the player here, the advisors can warn of low food. The town must
 	/// have people and a working storage pit, and it must be near the point under the cursor.
 	virtual void LowOnFood([[maybe_unused]] entt::entity town, [[maybe_unused]] float shortage) {}
+	/// A town worked out its wood desire, with this shortage of wood (see town_desire::WoodShortage). When the shortage is
+	/// high enough (see guidance::WarnsLowOnWood) and the town is of the player here, the advisors can warn of low wood.
+	/// The town must have people and a working storage pit, and it must be near the point under the cursor.
+	virtual void LowOnWood([[maybe_unused]] entt::entity town, [[maybe_unused]] float shortage) {}
 	/// Every 50 turns a town measures how unhappy its villagers are. When the unhappiness is high enough (see
 	/// guidance::WarnsVillagersUnhappy) and the town is of the player here, the advisors can say so. The town must have
 	/// people and a working storage pit, and it must be near the point under the cursor.
