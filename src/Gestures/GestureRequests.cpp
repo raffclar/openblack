@@ -136,6 +136,16 @@ bool PowersUp(const HandContext& context)
 }
 } // namespace
 
+size_t gesture::AfterFightMiss(std::span<const Request> requests, size_t next)
+{
+	while (next < requests.size() &&
+	       (requests[next].purpose == Purpose::FightMiracle || requests[next].purpose == Purpose::FightSpecialMove))
+	{
+		++next;
+	}
+	return next;
+}
+
 std::vector<Request> gesture::Requests(const HandContext& context)
 {
 	std::vector<Request> requests;

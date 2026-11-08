@@ -744,3 +744,32 @@ TEST(GestureRequests, AStepOfTheSelectionAlsoCountsAsAGesture)
 	EXPECT_EQ(profile.Count(24).Total(), 1u);
 	EXPECT_EQ(profile.Count(help::profile::k_AnyEvent).Total(), 1u);
 }
+
+TEST(GestureRequests, AFightMiracleThatMissesTheOpponentLeavesTheFightGesturesForTheScribble)
+{
+	HandContext context;
+	context.iconCharging = true;
+	context.creature = HandContext::Creature {
+	    .fighting = true,
+	    .directsFight = true,
+	    .takesFightMoves = true,
+	    .fightMiracles = {{.gesture = GestureType::Heart, .magic = MagicType::Fireball},
+	                      {.gesture = GestureType::EShape, .magic = MagicType::Heal}},
+	};
+	const auto requests = Requests(context);
+	ASSERT_GE(requests.size(), 4u);
+	ASSERT_EQ(requests[1].purpose, Purpose::FightMiracle);
+	// The first miracle missed: the second miracle is not tried, the scribble of the empty hand is next
+	const auto next = AfterFightMiss(requests, 2);
+	ASSERT_LT(next, requests.size());
+	EXPECT_EQ(requests[next].gesture, GestureType::Scribble);
+	// After the last request, nothing is left
+	EXPECT_EQ(AfterFightMiss(requests, requests.size()), requests.size());
+}
+
+TEST(GestureRequests, EachMessageOfTheButtonsDoesAStepOfTheFramePass)
+{
+	EXPECT_EQ(StepsOfFramePass(0), 1u);
+	EXPECT_EQ(StepsOfFramePass(1), 1u);
+	EXPECT_EQ(StepsOfFramePass(3), 3u);
+}

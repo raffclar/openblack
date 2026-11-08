@@ -772,6 +772,9 @@ void Game::PlayViewStep(game_turn::Step step, glm::vec3 cameraPosition)
 	using game_turn::Step;
 	switch (step)
 	{
+	case Step::HandInterface:
+		GestureTurn();
+		break;
 	case Step::TurnCheering:
 		ProcessTurnCheering();
 		break;
