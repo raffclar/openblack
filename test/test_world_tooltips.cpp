@@ -117,6 +117,10 @@ TEST(WorldToolTips, StoredWritesFoodThenWood)
 	const auto stored = Stored(5, 120);
 	EXPECT_EQ(Compose(stored.index, u"Stored - Food: %3.0f Wood: %3.0f", stored.first, stored.second),
 	          u"Stored - Food:   5 Wood: 120");
+	// The food goes through a float, so a food amount past 2 to the power 24 is the nearest float. The wood is exact.
+	const auto large = Stored(16777217u, 16777217u);
+	EXPECT_EQ(large.first, 16777216.0);
+	EXPECT_EQ(large.second, std::optional(16777217.0));
 }
 
 TEST(WorldToolTips, PilesAndHeldAmounts)
@@ -124,6 +128,7 @@ TEST(WorldToolTips, PilesAndHeldAmounts)
 	EXPECT_EQ(PileAmount(true, 1).index, k_FoodAmount);
 	EXPECT_EQ(PileAmount(false, 1).index, k_WoodAmount);
 	EXPECT_EQ(HeldAmount(7).index, k_HeldAmount);
+	EXPECT_EQ(HeldAmount(16777217u).first, 16777216.0);
 	EXPECT_EQ(Compose(k_HeldAmount, u"Amount: %3.0f", 7.0, std::nullopt), u"Amount:   7");
 }
 

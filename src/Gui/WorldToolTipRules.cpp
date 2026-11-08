@@ -16,6 +16,7 @@
 #include <glm/vec4.hpp>
 
 #include "Common/FixedFormat.h"
+#include "Common/X87.h"
 
 namespace openblack::gui::world_tooltip
 {
@@ -82,7 +83,10 @@ Numbered Population(uint32_t people, uint32_t places)
 
 Numbered Stored(uint32_t food, uint32_t wood)
 {
-	return {.index = k_Stored, .first = static_cast<double>(food), .second = static_cast<double>(wood)};
+	// The food goes through a float before the game writes it. The wood goes straight to the written number.
+	return {.index = k_Stored,
+	        .first = static_cast<double>(x87::RoundToFloat(static_cast<double>(food))),
+	        .second = static_cast<double>(wood)};
 }
 
 Numbered PileAmount(bool food, uint32_t amount)
@@ -92,7 +96,10 @@ Numbered PileAmount(bool food, uint32_t amount)
 
 Numbered HeldAmount(uint32_t amount)
 {
-	return {.index = k_HeldAmount, .first = static_cast<double>(amount), .second = std::nullopt};
+	// The amount is the forced number of the tooltip, a float
+	return {.index = k_HeldAmount,
+	        .first = static_cast<double>(x87::RoundToFloat(static_cast<double>(amount))),
+	        .second = std::nullopt};
 }
 
 std::optional<uint32_t> ToolTipOfText(uint32_t text)

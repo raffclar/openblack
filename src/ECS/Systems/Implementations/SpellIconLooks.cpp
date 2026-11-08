@@ -272,6 +272,8 @@ void SpellIconSystem::StepHolderEffect(entt::entity icon, bool drawn, std::optio
 			return;
 		}
 		particles.KeepOutOfSaves(effect);
+		// The seed draws its effect as the last frame step left it, not with the blend between the turns
+		particles.SetDrawnAtLastStep(effect);
 		// The effect acts on the model of the seed. The model has the bat or the dove of the player when the effect starts.
 		// Until a frame draws the model, the model stands at the middle of the seed with no turn, at the full size.
 		const float alignment = Locator::alignmentSystem::has_value() && player != PlayerNames::NEUTRAL

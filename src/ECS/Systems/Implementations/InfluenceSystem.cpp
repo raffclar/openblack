@@ -208,12 +208,15 @@ entt::entity CitadelOf(PlayerNames player)
 	    .value_or(entt::null);
 }
 
-/// The reach of a citadel's heart for the land that is played now
-float HeartReachForLand()
+/// The reach of a citadel's heart for the land that is played now: the size of the heart times the influence of a heart
+/// for the land
+float HeartReachForLand(entt::entity temple)
 {
 	const auto& heart = Locator::infoConstants::value().citadelHeart;
 	const auto land = Globals().landNumber;
-	return land != 0 ? ForLand(heart.storyInfluence, heart.transferedDamageMultiplier, land) : heart.influence;
+	const float influence = land != 0 ? ForLand(heart.storyInfluence, heart.transferedDamageMultiplier, land) : heart.influence;
+	const auto* data = Locator::entitiesRegistry::value().TryGet<const Temple>(temple);
+	return openblack::influence_rules::HeartReach(data != nullptr ? data->heartScale : 1.0f, influence);
 }
 
 /// The game turn fixes the reach of a citadel's heart the first time and keeps it on the citadel. Only the turn calls
@@ -225,7 +228,7 @@ CitadelInfluence& FixCitadelReach(entt::entity temple)
 	{
 		return *stored;
 	}
-	return registry.Assign<CitadelInfluence>(temple, HeartReachForLand());
+	return registry.Assign<CitadelInfluence>(temple, HeartReachForLand(temple));
 }
 
 /// How far a citadel reaches: its heart's reach for the land, as the turn fixed it, times the land's multiplier. Before
@@ -234,7 +237,7 @@ float CitadelReach(entt::entity temple)
 {
 	const auto& registry = Locator::entitiesRegistry::value();
 	const auto* stored = registry.TryGet<const CitadelInfluence>(temple);
-	const float reach = stored != nullptr ? stored->reach : HeartReachForLand();
+	const float reach = stored != nullptr ? stored->reach : HeartReachForLand(temple);
 	return Globals().playerInfluenceMultiplier * reach;
 }
 

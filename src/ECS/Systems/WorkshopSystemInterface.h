@@ -80,6 +80,8 @@ public:
 	/// offer. The scaffold stays, thus the caller removes the building next. The scaffold, none when no scaffold is on the
 	/// site.
 	virtual entt::entity LeaveDestroyedSite(entt::entity building) = 0;
+	/// The first scaffold on the site of a building, none when no scaffold is on the site
+	[[nodiscard]] virtual entt::entity FirstOnSite(entt::entity building) const = 0;
 	/// The scaffold starts a new building site where it lies, for a player or for no player. The building does not have to
 	/// fit. The time that the hand can take the scaffold again starts. Whether the site started. A script that sets a
 	/// scaffold active gives no player.

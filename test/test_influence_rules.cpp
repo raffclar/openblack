@@ -231,3 +231,27 @@ TEST(InfluenceRules, TheTownAddsItsBuildingsToItsBaseOneAtATimeThenTheMultiplier
 	EXPECT_EQ(AddBuilding(AddBuilding(1.0f, 1.0f), 16777216.0f), 16777218.0f);
 	EXPECT_EQ(TimesMultiplier(30.0f, 0.5f), 15.0f);
 }
+
+TEST(InfluenceRules, ATownThatAScaffoldFoundedGetsItsInfluenceWhenItsCentreIsNoLongerAFreeSite)
+{
+	using openblack::influence_rules::FoundedTownCentre;
+	using openblack::influence_rules::FoundedTownGetsInfluence;
+	// Only a town centre under construction, with a scaffold that the hand can still take, keeps the town at no influence
+	EXPECT_FALSE(FoundedTownGetsInfluence({.underConstruction = true, .hasScaffold = true, .scaffoldTakeable = true}));
+	// The town centre is fully built
+	EXPECT_TRUE(FoundedTownGetsInfluence({.underConstruction = false, .hasScaffold = true, .scaffoldTakeable = true}));
+	// No scaffold is on the site
+	EXPECT_TRUE(FoundedTownGetsInfluence({.underConstruction = true, .hasScaffold = false, .scaffoldTakeable = false}));
+	// The first wood went in, or the workshop no longer keeps the scaffold
+	EXPECT_TRUE(FoundedTownGetsInfluence({.underConstruction = true, .hasScaffold = true, .scaffoldTakeable = false}));
+	EXPECT_TRUE(FoundedTownGetsInfluence(FoundedTownCentre {}));
+}
+
+TEST(InfluenceRules, TheReachOfAHeartIsItsSizeTimesTheInfluenceForTheLand)
+{
+	using openblack::influence_rules::HeartReach;
+	EXPECT_EQ(HeartReach(1.0f, 80.0f), 80.0f);
+	// A plan of size 500 gives a heart of half the size, thus half the reach
+	EXPECT_EQ(HeartReach(static_cast<float>(500) * 0.001f, 80.0f), 40.0f);
+	EXPECT_EQ(HeartReach(0.0f, 80.0f), 0.0f);
+}

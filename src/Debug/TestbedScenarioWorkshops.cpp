@@ -448,6 +448,23 @@ void testbed_scenarios::AddWorkshopScenarios(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "objects.founded_town_gets_reach",
+	    .name = "A town that a scaffold founded gets its reach when the hand can no longer take the scaffold",
+	    .facet = Facet::Objects,
+	    .description = "The town and the scaffold of objects.scaffold_founds_town. After one second the scaffold starts "
+	                   "a village centre where it lies, and founds a new town. Nobody builds the village centre.",
+	    .expected = "The new town has no reach while the hand can take its scaffold: the inspector shows the town's "
+	                "TownInfluence radius at 0, and no border shows round the site. The workshop keeps the scaffold for "
+	                "150 game turns, about 15 seconds. Then the town gets its base reach at its next turn, and its border "
+	                "shows round the site at the next draw of the borders. A load does not keep the mark.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview,
+	                .include = {k_FoundingScaffold - glm::vec2 {40.0f}, k_FoundingScaffold + glm::vec2 {40.0f}}},
+	    .objects = {{.type = ScaffoldInfo::Normal, .offset = k_FoundingScaffold, .scale = 1.5f, .joinTown = true}},
+	    .commands = {{.kind = Kind::ScaffoldStartsSite, .delaySeconds = 1.0f, .object = 0}},
+	});
+
+	all.push_back({
 	    .id = "objects.burning_scaffold_tap",
 	    .name = "A tap on a burning scaffold breaks off a burning piece, and the fire burns the scaffolds away",
 	    .facet = Facet::Objects,

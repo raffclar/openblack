@@ -58,6 +58,7 @@ public:
 	void PutLoadedOnSite(entt::entity scaffold, entt::entity building) override;
 	entt::entity RewardScaffold(entt::entity town, glm::vec3 place) override;
 	entt::entity LeaveDestroyedSite(entt::entity building) override;
+	[[nodiscard]] entt::entity FirstOnSite(entt::entity building) const override;
 	bool ForceBuild(entt::entity scaffold, std::optional<PlayerNames> player) override;
 	void PlaceGhostsForFrame(std::optional<glm::vec3> drawnHand) override;
 	void UpdateFlagsForFrame(float seconds) override;
