@@ -29,6 +29,8 @@ namespace openblack::snowfall
 inline constexpr size_t k_Flakes = 256;
 /// The square the flakes fall over, and a quarter of a land block, which is how far apart the sets are drawn
 inline constexpr float k_Span = 80.0f;
+/// A quarter shows snow only when its most snow in percent is more than this
+inline constexpr int32_t k_LeastSnow = 5;
 /// The flakes fall to this far under the ground before they start again at the top
 inline constexpr float k_Bottom = -20.0f;
 /// Half a flake's side

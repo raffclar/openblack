@@ -14,7 +14,7 @@
 #include <LNDFile.h>
 
 #include "3D/LandIslandInterface.h"
-#include "ECS/Systems/SnowSystemInterface.h"
+#include "ECS/Systems/WeatherSystemInterface.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 
@@ -56,7 +56,11 @@ std::optional<creature_audio::Ground> ecs::sound_ground::At(const glm::vec3& pos
 			materialType = types[index];
 		}
 	}
-	const auto snow = Locator::snowSystem::has_value() ? Locator::snowSystem::value().GetDepth({position.x, position.z}) : 0.0f;
+	// The ground is snow by the lying snow in the weather of the cell, which is half of the snow depth
+	const float snow =
+	    Locator::weatherSystem::has_value()
+	        ? static_cast<float>(Locator::weatherSystem::value().GetWeather({position.x, 0.0f, position.z}).snowCover)
+	        : 0.0f;
 	const auto material = creature_audio::TerrainMaterial(materialType, snow);
 
 	int32_t surface = 0;

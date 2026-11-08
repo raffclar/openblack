@@ -7,6 +7,8 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <cstdint>
+
 #include <bit>
 #include <vector>
 
@@ -168,6 +170,12 @@ TEST(Rain, FarBlocksComeFirst)
 	const glm::vec3 eye {0.0f, 30.0f, 0.0f};
 	EXPECT_FLOAT_EQ(rain::DrawKey({30.0f, 40.0f}, 30.0f, eye), 2500.0f);
 	EXPECT_GT(rain::DrawKey({0.0f, 300.0f}, 0.0f, eye), rain::DrawKey({0.0f, 100.0f}, 0.0f, eye));
+}
+
+TEST(Rain, TheDrawKeyAddsTheGroundSquaresFirst)
+{
+	// The two squares across the ground, then the square of the height. The other order gives 18382700.
+	EXPECT_EQ(std::bit_cast<uint32_t>(rain::DrawKey({2934.0f, 1195.0f}, 2889.0f, glm::vec3(0.0f))), 0x4B8C3FB7u);
 }
 
 TEST(Rain, AStreakFadesWithEachStepRoundedToAFloat)

@@ -64,7 +64,6 @@
 #include "ECS/Systems/InfluenceSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/ResourceStoreSystemInterface.h"
-#include "ECS/Systems/SnowSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
@@ -183,7 +182,10 @@ uint16_t MaterialAt(glm::vec3 point)
 			}
 		}
 	}
-	const float snow = Locator::snowSystem::has_value() ? Locator::snowSystem::value().GetDepth({point.x, point.z}) : 0.0f;
+	// The ground is snow by the lying snow in the weather of the cell, which is half of the snow depth
+	const float snow = Locator::weatherSystem::has_value()
+	                       ? static_cast<float>(Locator::weatherSystem::value().GetWeather({point.x, 0.0f, point.z}).snowCover)
+	                       : 0.0f;
 	return creature_audio::TerrainMaterial(type, snow);
 }
 

@@ -7,6 +7,10 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <cstdint>
+
+#include <bit>
+
 #include <gtest/gtest.h>
 
 #include "3D/Clouds.h"
@@ -52,6 +56,10 @@ TEST(Clouds, TurnWithTheWindAboutTheMiddle)
 	const auto along = clouds::WorldPosition({1000.0f, 0.0f, 0.0f});
 	EXPECT_NEAR(along.x, 1280.0f - 707.10678f, 1e-2f);
 	EXPECT_NEAR(along.z, 1280.0f + 707.10678f, 1e-2f);
+	// The game's cosine and sine of the angle, and its order of the sums
+	const auto exact = clouds::WorldPosition({3000.0f, 0.0f, 1234.0f});
+	EXPECT_EQ(std::bit_cast<uint32_t>(exact.x), 0xC4D63C7Du);
+	EXPECT_EQ(std::bit_cast<uint32_t>(exact.z), 0x451E0C01u);
 }
 
 TEST(Clouds, ColourFollowsTheSkysAlignment)

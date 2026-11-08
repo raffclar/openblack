@@ -70,10 +70,14 @@ void RainSystem::Update(float seconds, std::chrono::milliseconds frameRealTime, 
 {
 	// The game made its splashes on each frame that it drew
 	_splashesDue = frame_pace::Due(_splashPace, frameRealTime) || _splashesDue;
-	// The storm nearest the camera across the land sets how high and fast the rain falls
+	// The live storm nearest the camera across the land sets how high and fast the rain falls
 	std::optional<rain::Fall> nearest;
 	float nearestDistance = 0.0f;
 	Locator::entitiesRegistry::value().Each<const components::Storm>([&](const components::Storm& storm) {
+		if (storm.dead)
+		{
+			return;
+		}
 		const glm::vec2 offset {storm.position.x - camera.x, storm.position.z - camera.z};
 		const float distance = glm::dot(offset, offset);
 		if (!nearest || distance < nearestDistance)
@@ -162,6 +166,7 @@ std::vector<rain::Tile> RainSystem::TakeTiles(const rain::View& view)
 			}
 		}
 	}
-	_drawn = _drawn || !tiles.empty();
+	// The streaks move on the next frame when a block near the eye has rain, also when that block shows no streaks
+	_drawn = _drawn || !rained.empty();
 	return tiles;
 }

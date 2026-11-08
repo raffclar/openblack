@@ -51,8 +51,8 @@
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
-#include "ECS/Systems/SnowSystemInterface.h"
 #include "ECS/Systems/TownDesireSystemInterface.h"
+#include "ECS/Systems/WeatherSystemInterface.h"
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -385,7 +385,10 @@ help_query::Ground ecs::help_query_facts::GroundAt(std::optional<glm::vec3> poin
 	}
 	const auto middleX = (static_cast<float>(cellX) + 0.5f) * LandIslandInterface::k_CellSize;
 	const auto middleZ = (static_cast<float>(cellZ) + 0.5f) * LandIslandInterface::k_CellSize;
-	const float snow = Locator::snowSystem::has_value() ? Locator::snowSystem::value().GetDepth({middleX, middleZ}) : 0.0f;
+	// The ground is snow by the lying snow in the weather of the cell, which is half of the snow depth
+	const float snow = Locator::weatherSystem::has_value()
+	                       ? static_cast<float>(Locator::weatherSystem::value().GetWeather({middleX, 0.0f, middleZ}).snowCover)
+	                       : 0.0f;
 	const auto material = creature_audio::TerrainMaterial(type, snow);
 	if (Locator::infoConstants::has_value())
 	{
