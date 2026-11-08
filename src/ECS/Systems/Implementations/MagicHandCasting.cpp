@@ -119,11 +119,21 @@ std::optional<player_commands::HandCast> MagicSystem::MakeCast(magic::CastTarget
 
 void MagicSystem::SendCast(magic::CastTarget target)
 {
+	// While the hand waits for its last send, a cast at the land does nothing: no check, no fail and no send
+	if (target == magic::CastTarget::Point && OwnSendWaits())
+	{
+		return;
+	}
 	const auto cast = MakeCast(target);
 	if (!cast.has_value())
 	{
 		_input = {};
 		FailCast();
+		return;
+	}
+	// A cast at a thing that the seed can act on also does nothing while the hand waits
+	if (OwnSendWaits())
+	{
 		return;
 	}
 	auto& registry = EntityRegistry();
@@ -168,6 +178,7 @@ void MagicSystem::SendCast(magic::CastTarget target)
 	if (Locator::playerCommandSystem::has_value())
 	{
 		Locator::playerCommandSystem::value().Submit(*cast);
+		MarkOwnSend();
 		return;
 	}
 	DoCast(OwnPlayer(), *cast);

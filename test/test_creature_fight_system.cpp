@@ -335,9 +335,15 @@ public:
 		return found != hands.end() ? std::optional(found->second) : std::nullopt;
 	}
 	[[nodiscard]] PlayerNames GetOwnPlayer() const noexcept override { return own; }
+	void MarkOwnSend() override { ++sends; }
+	[[nodiscard]] bool OwnSendWaits() const noexcept override { return waits; }
 
 	std::map<PlayerNames, std::array<entt::entity, 2>> hands;
 	PlayerNames own {PlayerNames::PLAYER_ONE};
+	/// The hand of this computer waits for its last send
+	bool waits {false};
+	/// How many sends started the wait
+	int sends {0};
 };
 
 /// The players of a land where computer minds play some of the gods
@@ -2658,4 +2664,30 @@ TEST_F(CreatureFightSystemTest, AFaintThatAScriptOrdersKeepsTheLeash)
 	EXPECT_TRUE(registry.AllOf<CreatureKnockedOut>(first));
 	EXPECT_EQ(leash.takenOff, (std::vector<entt::entity> {first}));
 	Locator::leashSystem::reset();
+}
+
+TEST_F(CreatureFightSystemTest, APressOnTheGroundMakesTheHandWaitAndAWaitingHandMakesNoMove)
+{
+	auto& hands = static_cast<FakeHands&>(Locator::handSystem::emplace<FakeHands>());
+	auto& registry = Locator::entitiesRegistry::value();
+	// A press on the ground sends the step and starts the wait of the hand
+	EXPECT_TRUE(PressGround({-15.0f, 10.0f}, fight::Button::Action));
+	fights.Release(0, 0);
+	EXPECT_EQ(hands.sends, 1);
+	EXPECT_EQ(QueueOf(first).Size(), 1u);
+	const auto sparkles = registry.Get<const CreatureFighting>(first).marks.Size();
+	// Until the turn does the step, the fight takes the press but makes no move, no sparkle and no new wait
+	hands.waits = true;
+	EXPECT_TRUE(PressGround({-15.0f, -10.0f}, fight::Button::Action));
+	EXPECT_FALSE(fights.HoldsBodyPress());
+	EXPECT_FALSE(fights.IsPressed());
+	fights.Release(0, 0);
+	EXPECT_EQ(hands.sends, 1);
+	EXPECT_EQ(QueueOf(first).Size(), 1u);
+	EXPECT_EQ(registry.Get<const CreatureFighting>(first).marks.Size(), sparkles);
+	// After the turn that did the step, a press sends again
+	hands.waits = false;
+	EXPECT_TRUE(PressGround({-15.0f, -10.0f}, fight::Button::Action));
+	EXPECT_EQ(hands.sends, 2);
+	EXPECT_EQ(QueueOf(first).Size(), 2u);
 }

@@ -75,6 +75,19 @@ PlayerNames MagicSystem::OwnPlayer()
 	return Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE;
 }
 
+bool MagicSystem::OwnSendWaits()
+{
+	return Locator::handSystem::has_value() && Locator::handSystem::value().OwnSendWaits();
+}
+
+void MagicSystem::MarkOwnSend()
+{
+	if (Locator::handSystem::has_value())
+	{
+		Locator::handSystem::value().MarkOwnSend();
+	}
+}
+
 std::optional<entt::entity> MagicSystem::HeldOf(PlayerNames player) const
 {
 	const auto hand = LeftHandOf(player);

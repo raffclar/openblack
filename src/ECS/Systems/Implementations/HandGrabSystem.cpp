@@ -484,7 +484,12 @@ bool HandGrabSystem::Press(uint32_t nowMs, uint32_t turn)
 		if (const auto target = _world->ObjectUnderCursor();
 		    target.has_value() && HandInInfluence() && AppliesTo(*grab, *target))
 		{
-			_world->SendCommand(player_commands::HandApply {.target = *target});
+			// While the hand waits for its last send, the use is not sent again
+			if (!_world->SendWaits())
+			{
+				_world->SendCommand(player_commands::HandApply {.target = *target});
+				_world->MarkSend();
+			}
 			return true;
 		}
 		// Out of the player's influence the press does nothing: the hand keeps hold, and letting go of the button later,
@@ -603,6 +608,14 @@ std::optional<entt::entity> HandGrabSystem::Release(uint32_t nowMs, uint32_t tur
 			grab->springPending = false;
 			return std::nullopt;
 		}
+		// While the hand waits for its last send, the hand keeps hold in the same way and sends nothing
+		if (_world->SendWaits())
+		{
+			grab->state = HandGrab::State::Holding;
+			grab->springOn = false;
+			grab->springPending = false;
+			return std::nullopt;
+		}
 		// The hand sends the throw with the velocity that it has now. It holds the thing until the turn that does the
 		// command, and its spring keeps the hand where the drag took it.
 		const auto velocity = hand_grab::ThrowVelocity(grab->recordedThrow, grab->springOn, grab->spring.Velocity());
@@ -622,6 +635,7 @@ std::optional<entt::entity> HandGrabSystem::Release(uint32_t nowMs, uint32_t tur
 		}
 		grab->predicted = std::move(led.flight);
 		_world->SendCommand(player_commands::HandLetGo {.object = grab->object, .velocity = led.velocity, .start = led.start});
+		_world->MarkSend();
 		return std::nullopt;
 	}
 	case HandGrab::State::Holding:
@@ -1829,8 +1843,14 @@ bool HandGrabSystem::Give(HandGrab& grab, std::optional<entt::entity> under)
 	{
 		return false;
 	}
+	// While the hand waits for its last send, the press does nothing more
+	if (_world->SendWaits())
+	{
+		return true;
+	}
 	// The side of the hand of this computer goes with the give, as the turn of every computer reads it
 	_world->SendCommand(player_commands::HandGive {.creature = *creature, .object = held, .leftHand = !_world->RightHanded()});
+	_world->MarkSend();
 	return true;
 }
 

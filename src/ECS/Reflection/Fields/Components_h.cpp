@@ -26,6 +26,7 @@
 #include "ECS/Components/HandMiracleFx.h"
 #include "ECS/Components/HandMorph.h"
 #include "ECS/Components/HandOnCreature.h"
+#include "ECS/Components/HandSendWait.h"
 #include "ECS/Components/HandStart.h"
 #include "ECS/Components/HandStillness.h"
 #include "ECS/Components/Heartbeat.h"
@@ -172,6 +173,9 @@ void openblack::ecs::reflection::RegisterFields_Components_h(entt::meta_ctx& con
 	    .Field<&components::HandOnCreature::shownAt>("shownAt")
 	    .Field<&components::HandOnCreature::shownDistance>("shownDistance");
 	Reflect<components::HandLastFeedback>(context).Field<&components::HandLastFeedback::sum>("sum");
+	Reflect<components::HandSendWait>(context)
+	    .Field<&components::HandSendWait::sentTurn>("sentTurn")
+	    .Field<&components::HandSendWait::doneTurn>("doneTurn");
 	Reflect<components::HandStart>(context).Field<&components::HandStart::point>("point");
 	Reflect<components::HandStillness>(context)
 	    .Field<&components::HandStillness::stillTurns>("stillTurns")

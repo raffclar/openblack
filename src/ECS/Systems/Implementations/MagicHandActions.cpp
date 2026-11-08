@@ -295,9 +295,15 @@ bool MagicSystem::PressAction()
 	if (const auto ball = PickedUnderHand();
 	    ball.has_value() && EntityRegistry().AllOf<MagicFireBall>(*ball) && AbsorbsFireBalls())
 	{
+		// While the hand waits for its last send, the press does nothing more
+		if (OwnSendWaits())
+		{
+			return true;
+		}
 		if (Locator::playerCommandSystem::has_value())
 		{
 			Locator::playerCommandSystem::value().Submit(player_commands::HandApply {.target = *ball});
+			MarkOwnSend();
 		}
 		else
 		{

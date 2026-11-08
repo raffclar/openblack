@@ -272,6 +272,14 @@ void RunObserver(const Command& command)
 	    command.action);
 }
 
+/// The commands that start the wait of the hand that sends them (see hand_send_wait)
+[[nodiscard]] bool SendWaitCovers(const Action& action)
+{
+	return std::holds_alternative<HandLetGo>(action) || std::holds_alternative<HandGive>(action) ||
+	       std::holds_alternative<HandApply>(action) || std::holds_alternative<HandCast>(action) ||
+	       std::holds_alternative<FightGround>(action);
+}
+
 /// Do one command for the player that sent it, at a turn
 void Run(const Command& command, uint32_t turn)
 {
@@ -279,6 +287,11 @@ void Run(const Command& command, uint32_t turn)
 	{
 		RunObserver(command);
 		return;
+	}
+	// The hand of the sender keeps the turn before the command acts, also when the command then does nothing
+	if (SendWaitCovers(command.action) && openblack::Locator::handSystem::has_value())
+	{
+		openblack::Locator::handSystem::value().MarkSendDone(command.player, turn);
 	}
 	auto& registry = openblack::Locator::entitiesRegistry::value();
 	std::visit(

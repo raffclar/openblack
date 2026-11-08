@@ -496,6 +496,10 @@ private:
 	bool LoadBody(reflection::BinaryReader& in, bool hasSpellGrid);
 	/// The player whose hand the input and the frames of this computer move
 	[[nodiscard]] static PlayerNames OwnPlayer();
+	/// The hand of this computer waits for its last send (see hand_send_wait)
+	[[nodiscard]] static bool OwnSendWaits();
+	/// The hand of this computer sent a cast or a use of the seed, which the wait covers
+	static void MarkOwnSend();
 	/// The player whose hand the miracles of the hand act on now: the player of the command, else the player of this
 	/// computer
 	[[nodiscard]] PlayerNames ActingPlayer() const { return _acting.value_or(OwnPlayer()); }
