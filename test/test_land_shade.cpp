@@ -261,6 +261,29 @@ TEST(LandShadeSystem, NoShadowsWithoutTheDetailOrRoomForThem)
 	EXPECT_EQ(CellOf(world.system.Land(), {0, 0}, 6, 2), k_Laid);
 }
 
+TEST(LandShadeSystem, WithoutTheSkysCloudsOnlyTheStormsCastTheirShadows)
+{
+	World world;
+	world.AddCloud({50.0f, 10.0f}, 255);
+	const auto storm = world.registry.Create();
+	world.registry.Assign<ecs::components::Storm>(storm, ecs::components::Storm {
+	                                                         .cloudCount = 8,
+	                                                         .cloudShade = 0.5f,
+	                                                         .currentPosition = {300.0f, 0.0f, 100.0f},
+	                                                         .currentStrength = 1.0f,
+	                                                     });
+	auto frame = World::Day();
+	frame.skyClouds = false;
+	world.system.Shade(frame);
+	// The storm's shadow only: the sky's cloud casts none
+	EXPECT_EQ(world.system.ShadowCount(), 1u);
+	EXPECT_EQ(CellOf(world.system.Land(), {0, 0}, 6, 2), k_Laid);
+	frame.skyClouds = true;
+	world.system.Shade(frame);
+	EXPECT_EQ(world.system.ShadowCount(), 2u);
+	EXPECT_EQ(CellOf(world.system.Land(), {0, 0}, 6, 2), land_shade::k_DarkestShadow);
+}
+
 TEST(LandShadeSystem, AParticlesShadowDarkensTheLandWithoutTheCloudsDetail)
 {
 	World world;

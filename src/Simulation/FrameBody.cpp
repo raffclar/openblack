@@ -67,6 +67,7 @@
 #include "ECS/Systems/WaterRingSystemInterface.h"
 #include "ECS/Systems/WorkshopSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
+#include "EngineConfig.h"
 #include "Locator.h"
 #include "Particles/LiquidParticles.h"
 #include "Profiler.h"
@@ -132,7 +133,12 @@ void PlayFrameEffects(FrameViewInterface& view)
 	// The clouds drift with the wind, then every mist and cloud animates. Only a computer that draws the world moves them.
 	if (Locator::cloudSystem::has_value())
 	{
-		Locator::cloudSystem::value().Update(gameTime);
+		// The sky's clouds move only in a frame that draws the land with its clouds
+		const bool skyClouds = !Locator::config::has_value() || Locator::config::value().detail.clouds;
+		if (skyClouds && LandDrawn())
+		{
+			Locator::cloudSystem::value().Update(gameTime);
+		}
 		// The storms' own clouds gather and wander over them with the frames, at the screen refresh's pace
 		Locator::cloudSystem::value().UpdateStormClouds(clock.GetFrameRealTime());
 	}
