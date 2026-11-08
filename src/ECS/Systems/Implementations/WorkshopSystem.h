@@ -122,6 +122,11 @@ private:
 	bool PlaceHeldGhost(entt::entity scaffold, entt::entity ghost, glm::vec3 drawnHand);
 	/// The frame shows the phantom on the building site of a scaffold. Whether it shows.
 	bool PlaceSiteGhost(entt::entity scaffold, entt::entity ghost);
+	/// The game turn makes the see-through copy that shows a scaffold at its empty yard place, if the scaffold has none
+	void MakeYardCopy(entt::entity scaffold);
+	/// The frame shows a see-through copy of each scaffold that is away from its yard place, at that place. Each
+	/// workshop that the frame draws moves the clock of the pulse by `frameMs`.
+	void PlaceYardCopies(int32_t frameMs);
 
 	/// The workshop starts a scaffold: it uses the wood and its work sound starts
 	void StartScaffold(entt::entity workshop);
@@ -144,6 +149,9 @@ private:
 	uint32_t _tapSound {0};
 	/// The sounds of the phantom in the hand that played. Only the frames change them.
 	scaffold_ghost::SoundsPlayed _ghostSounds;
+	/// The clock of the pulse of the copies at the yard places, in milliseconds. All workshops use it. Only the frames
+	/// change it.
+	int32_t _yardClockMs {0};
 };
 
 } // namespace openblack::ecs::systems

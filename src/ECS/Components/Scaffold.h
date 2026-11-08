@@ -88,6 +88,9 @@ struct Scaffold
 	entt::entity site {entt::null};
 	/// The copy that shows the phantom building, none until the scaffold first shows a phantom
 	entt::entity ghost {entt::null};
+	/// The copy that shows the scaffold at its empty place in the yard of its workshop, none until the scaffold first
+	/// goes away from its place
+	entt::entity yardCopy {entt::null};
 };
 
 /// The see-through copy that shows the phantom building of a scaffold. It is only a picture: the game turns make it
@@ -101,6 +104,9 @@ struct ScaffoldGhost
 	/// The model that the copy shows in the frames, none when it shows nothing. The copy keeps its model here and has no
 	/// Mesh: the frames must not add or remove rows of a component that the game turns use.
 	std::optional<Mesh> model;
+	/// The copy shows the scaffold at its empty place in the yard of its workshop, not a phantom building. This copy
+	/// fades out in the distance as other things do.
+	bool yard {false};
 };
 
 /// The size that a scaffold on a building site shows in the frames, which becomes small as the building grows
