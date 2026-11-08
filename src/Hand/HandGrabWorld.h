@@ -310,6 +310,7 @@ public:
 		ResourceType resource {ResourceType::Food};
 		/// The handful the hand scoops out of it
 		PotInfo handful {PotInfo::HandFood};
+		/// What it holds. A pile of a store gives what all of the store holds.
 		uint32_t amount {0};
 		/// Its food is poisoned, and poisons what it is given to
 		bool poisoned {false};

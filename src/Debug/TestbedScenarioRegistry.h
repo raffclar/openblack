@@ -953,7 +953,8 @@ struct Command
 		/// thing, as the mouse moves it
 		PointerOnRope,
 		/// The pointer moves onto the scenario's object (object) at a height (amount) over its place on the screen, as
-		/// the mouse moves it. Needs no creature
+		/// the mouse moves it. For a storage pit, a value of 1 to 5 moves it onto that wood pile of the pit, and 6 onto
+		/// its food pile. Needs no creature
 		PointerOnObject,
 		/// The creature fizzes to a share (amount: 0 in sight, 1 out of sight) over some milliseconds (value), as a
 		/// script's fade does. It stays at that share.

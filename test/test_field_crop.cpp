@@ -42,6 +42,14 @@ TEST(FieldCrop, OnlySownCropsGrow)
 	EXPECT_FLOAT_EQ(crop.food, 10.0f);
 }
 
+TEST(FieldCrop, AFieldGrowsOnceInTenTurnsAndNotWhileItBurns)
+{
+	EXPECT_TRUE(field_crop::GrowsInTurn(7, 3, false));
+	EXPECT_FALSE(field_crop::GrowsInTurn(8, 3, false));
+	EXPECT_TRUE(field_crop::GrowsInTurn(17, 3, false));
+	EXPECT_FALSE(field_crop::GrowsInTurn(7, 3, true));
+}
+
 TEST(FieldCrop, GrowsFasterOnGoodLandAndByTheWeather)
 {
 	field_crop::Crop evil {.timesSown = 4};

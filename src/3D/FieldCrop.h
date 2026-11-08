@@ -79,6 +79,9 @@ enum class Activity : uint8_t
 /// times their alignment
 [[nodiscard]] float ClampAlignment(float sum);
 
+/// Whether a field grows in a game turn: once in each 10 turns, at its own turn of the 10, and not while it burns
+[[nodiscard]] bool GrowsInTurn(uint32_t turn, uint32_t growthTurn, bool burning);
+
 /// A turn of growth, if the crop is sown and not yet past ripe: it ages by 1 to 3 on evil to good land, times its type's
 /// rate for the weather, and fills with food in step
 void Grow(Crop& crop, const Type& type, float alignment, bool raining);
