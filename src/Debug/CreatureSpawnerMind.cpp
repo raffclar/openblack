@@ -313,7 +313,8 @@ void CreatureSpawner::DrawLearning(entt::entity entity) noexcept
 			ImGui::Text("%s for %s%s%s: %s, credit %.2f%s", ActionName(tables, context.action).c_str(),
 			            creature_desires::Name(context.desire).data(), context.belief.has_value() ? " on a " : "",
 			            context.belief.has_value() ? creature_tree::BeliefName(context.belief->type) : "",
-			            context.running ? "running" : fmt::format("{:.0f} s ago", context.secondsSince).c_str(),
+			            context.running ? "running"
+			                            : fmt::format("{} s ago", creature_learning::WholeSecondsSince(context)).c_str(),
 			            static_cast<double>(priority),
 			            context.credited.has_value() ? fmt::format(", fed back {:+.2f}", *context.credited).c_str() : "");
 		}

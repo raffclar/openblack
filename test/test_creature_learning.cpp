@@ -991,29 +991,28 @@ TEST(CreatureLearning, CreditGoesToRecentActions)
 	creature_learning::Context underway {.action = 1, .windowSeconds = 20.0f};
 	EXPECT_FLOAT_EQ(creature_learning::LearningPriority(underway), 1.0f);
 	underway.running = false;
-	underway.secondsSince = 100.0f;
+	underway.turnsSince = 1000;
 	EXPECT_FLOAT_EQ(creature_learning::LearningPriority(underway), 1.0f);
 	// An action that ended well counts only when the player saw it, less and less until its window closes
-	creature_learning::Context finished {
-	    .action = 2, .running = false, .secondsSince = 5.0f, .windowSeconds = 20.0f, .done = true};
+	creature_learning::Context finished {.action = 2, .running = false, .turnsSince = 50, .windowSeconds = 20.0f, .done = true};
 	EXPECT_FLOAT_EQ(creature_learning::LearningPriority(finished), 0.0f);
 	finished.seen = true;
 	EXPECT_FLOAT_EQ(creature_learning::LearningPriority(finished), 0.75f);
-	finished.secondsSince = 25.0f;
+	finished.turnsSince = 250;
 	EXPECT_FLOAT_EQ(creature_learning::LearningPriority(finished), 0.0f);
 	creature_learning::Context unlearnable {.action = 3, .learnable = false};
 	EXPECT_FLOAT_EQ(creature_learning::LearningPriority(unlearnable), 0.0f);
 
 	std::vector<creature_learning::Context> contexts;
 	static_cast<void>(creature_learning::Remember(contexts, {.action = 1, .windowSeconds = 20.0f}));
-	creature_learning::Age(contexts, 1.0f);
+	creature_learning::Age(contexts, 10);
 	creature_learning::MarkNewestDone(contexts, true);
 	static_cast<void>(creature_learning::Remember(contexts, {.action = 2, .windowSeconds = 10.0f}));
-	creature_learning::Age(contexts, 1.0f);
+	creature_learning::Age(contexts, 10);
 	EXPECT_FALSE(contexts[0].running);
 	EXPECT_EQ(creature_learning::BestContext(contexts), 1u);
 	creature_learning::MarkNewestDone(contexts, true);
-	creature_learning::Age(contexts, 9.0f);
+	creature_learning::Age(contexts, 90);
 	// The older action's longer window now gives it the bigger share
 	EXPECT_EQ(creature_learning::BestContext(contexts), 0u);
 	for (uint32_t i = 0; i < 20; ++i)
@@ -1039,26 +1038,26 @@ TEST(CreatureLearning, ThePlayerMustSeeAnActionThatEndsWell)
 {
 	std::vector<creature_learning::Context> contexts;
 	static_cast<void>(creature_learning::Remember(contexts, {.action = 1, .windowSeconds = 10.0f}));
-	creature_learning::Age(contexts, 3.0f);
+	creature_learning::Age(contexts, 30);
 	// Not seen as it ends: feedback does not go to it
 	creature_learning::MarkNewestDone(contexts, false);
 	EXPECT_TRUE(contexts.back().done);
 	EXPECT_FALSE(contexts.back().seen);
-	EXPECT_FLOAT_EQ(contexts.back().secondsSince, 0.0f);
+	EXPECT_EQ(contexts.back().turnsSince, 0u);
 	EXPECT_EQ(creature_learning::BestContext(contexts), std::nullopt);
 
 	// Seen before it ends, at the main step: the window starts when it ends
 	static_cast<void>(creature_learning::Remember(contexts, {.action = 2, .windowSeconds = 10.0f}));
 	creature_learning::MarkNewestSeen(contexts);
-	creature_learning::Age(contexts, 4.0f);
+	creature_learning::Age(contexts, 40);
 	creature_learning::MarkNewestDone(contexts, false);
 	EXPECT_TRUE(contexts.back().seen);
-	creature_learning::Age(contexts, 2.0f);
+	creature_learning::Age(contexts, 20);
 	EXPECT_FLOAT_EQ(creature_learning::LearningPriority(contexts.back()), 0.8f);
 	// A later sighting starts the window again
 	creature_learning::MarkNewestSeen(contexts);
 	EXPECT_FLOAT_EQ(creature_learning::LearningPriority(contexts.back()), 1.0f);
-	creature_learning::Age(contexts, 10.0f);
+	creature_learning::Age(contexts, 100);
 	EXPECT_FLOAT_EQ(creature_learning::LearningPriority(contexts.back()), 0.0f);
 }
 
@@ -1186,6 +1185,52 @@ TEST(CreatureLearning, AttitudesToCreatures)
 	EXPECT_FLOAT_EQ(lessons[0].second, 0.5f);
 	EXPECT_FLOAT_EQ(lessons[1].second, -0.5f);
 	EXPECT_EQ(&creature_learning::AttitudeTo(attitudes, 7), &attitudes[0]);
+}
+
+TEST(CreatureLearning, ANastierCreatureTeachesAngerFirst)
+{
+	std::vector<creature_learning::CreatureAttitude> attitudes;
+	auto& attitude = creature_learning::AttitudeTo(attitudes, 7);
+	const auto lessons = creature_learning::ChangeHowNice(attitude, -0.25f);
+	EXPECT_FLOAT_EQ(attitude.howNice, -0.25f);
+	EXPECT_EQ(lessons[0].first, Desire::Anger);
+	EXPECT_FLOAT_EQ(lessons[0].second, 0.5f);
+	EXPECT_EQ(lessons[1].first, Desire::BeFriends);
+	EXPECT_FLOAT_EQ(lessons[1].second, -0.5f);
+	// No change counts as nicer
+	const auto none = creature_learning::ChangeHowNice(attitude, 0.0f);
+	EXPECT_EQ(none[0].first, Desire::BeFriends);
+}
+
+TEST(CreatureLearning, AYoungCreatureFeelsAtLeastAQuarterOfEachStrokeOrSlap)
+{
+	EXPECT_FLOAT_EQ(creature_learning::YoungFeedbackAmount(0.1f), 0.25f);
+	EXPECT_FLOAT_EQ(creature_learning::YoungFeedbackAmount(-0.3f), 0.25f);
+	EXPECT_FLOAT_EQ(creature_learning::YoungFeedbackAmount(0.8f), 0.4f);
+	EXPECT_FLOAT_EQ(creature_learning::YoungFeedbackAmount(-1.0f), 0.5f);
+}
+
+TEST(CreatureLearning, ForgivenForRunningAwayTheThresholdRisesWithNoLimit)
+{
+	EXPECT_FLOAT_EQ(creature_learning::ForgivenRunAwayThreshold(0.5f), 0.7f);
+	EXPECT_FLOAT_EQ(creature_learning::ForgivenRunAwayThreshold(0.9f), 1.1f);
+}
+
+TEST(CreatureLearning, TheWindowCountsWholeSeconds)
+{
+	creature_learning::Context finished {.running = false, .windowSeconds = 20.0f, .done = true, .seen = true};
+	// Each turn of the sixth second gives the same share as its first turn
+	for (uint32_t turns = 50; turns < 60; ++turns)
+	{
+		finished.turnsSince = turns;
+		EXPECT_EQ(creature_learning::WholeSecondsSince(finished), 5u);
+		EXPECT_EQ(creature_learning::LearningPriority(finished), 0.75f);
+	}
+	// The last turns before the window closes still count
+	finished.turnsSince = 199;
+	EXPECT_EQ(creature_learning::LearningPriority(finished), 1.0f - 19.0f / 20.0f);
+	finished.turnsSince = 200;
+	EXPECT_EQ(creature_learning::LearningPriority(finished), 0.0f);
 }
 
 TEST(CreatureLearning, ThoughtsAndLikes)

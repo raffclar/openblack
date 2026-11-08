@@ -1164,7 +1164,7 @@ Json SimProvider::CreatureRecord(uint32_t turn, bool track, std::vector<sim_chec
 			    {"learnable", context.learnable},
 			    {"running", context.running},
 			    {"done", context.done},
-			    {"seconds_since", context.secondsSince},
+			    {"seconds_since", creature_learning::WholeSecondsSince(context)},
 			    {"window_seconds", context.windowSeconds},
 			};
 		};
@@ -1172,7 +1172,8 @@ Json SimProvider::CreatureRecord(uint32_t turn, bool track, std::vector<sim_chec
 		creature["context"] = learnt.contexts.empty() ? Json(nullptr) : contextJson(learnt.contexts.back());
 		// The newest thing that it finished and that feedback can still be credited to
 		const auto finished = std::ranges::find_if(learnt.contexts.rbegin(), learnt.contexts.rend(), [](const auto& context) {
-			return !context.running && context.secondsSince <= context.windowSeconds;
+			return !context.running &&
+			       static_cast<float>(creature_learning::WholeSecondsSince(context)) <= context.windowSeconds;
 		});
 		creature["last_finished"] = finished != learnt.contexts.rend() ? contextJson(*finished) : Json(nullptr);
 		check("learnt.alignment", learnt.alignment, k_Signed);

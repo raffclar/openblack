@@ -65,7 +65,7 @@ void openblack::ecs::reflection::RegisterFields_Values_creaturel(entt::meta_ctx&
 	    .Field<&openblack::creature_learning::Context::activity>("activity")
 	    .Field<&openblack::creature_learning::Context::activityBelief>("activityBelief")
 	    .Field<&openblack::creature_learning::Context::running>("running")
-	    .Field<&openblack::creature_learning::Context::secondsSince>("secondsSince")
+	    .Field<&openblack::creature_learning::Context::turnsSince>("turnsSince")
 	    .Field<&openblack::creature_learning::Context::learnable>("learnable")
 	    .Field<&openblack::creature_learning::Context::windowSeconds>("windowSeconds")
 	    .Field<&openblack::creature_learning::Context::credited>("credited")
