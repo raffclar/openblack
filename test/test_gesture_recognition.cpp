@@ -574,12 +574,15 @@ TEST(GestureRequests, TheLeashPickerClosesByItself)
 {
 	LeashPicker picker;
 	picker.Open();
-	picker.Update(20.0f, 25.0f, true);
+	EXPECT_TRUE(picker.Update(20.0f, 25.0f, true));
 	EXPECT_TRUE(picker.open);
-	picker.Update(6.0f, 25.0f, true);
+	// In the frame that its time runs out, it still waits for its gestures, and then it is closed
+	EXPECT_TRUE(picker.Update(6.0f, 25.0f, true));
 	EXPECT_FALSE(picker.open);
+	EXPECT_FALSE(picker.Update(0.1f, 25.0f, true));
+	// When it may not stay open, it closes at once and waits for nothing
 	picker.Open();
-	picker.Update(0.1f, 25.0f, false);
+	EXPECT_FALSE(picker.Update(0.1f, 25.0f, false));
 	EXPECT_FALSE(picker.open);
 }
 
@@ -618,34 +621,62 @@ TEST(GestureMatcher, TheGamesTemplatesRecogniseTheirOwnShapes)
 	EXPECT_TRUE(Recognise(templates, GestureType::Scribble, drawn.KeyPoints(), k_ScreenAspect).has_value());
 }
 
-TEST(GestureRequests, WhileThePlayersCreatureDuelsOnlyItsFightGesturesAreWaitedFor)
+TEST(GestureRequests, WhileTheHandDirectsADuelItWaitsForTheFightGesturesThenTheScribbleOfTheEmptyHand)
 {
 	HandContext context;
-	// A seed in the hand would otherwise wait for its own gestures
-	context.seed = HandContext::Seed {.sizingGesture = GestureType::Circle};
-	context.actionHeld = true;
+	context.iconCharging = true;
+	// The picker stays without gestures while the hand directs the fight
+	context.pickerOpen = true;
 	context.creature = HandContext::Creature {
 	    .fighting = true,
-	    .knows = {false, true, false},
+	    .leashed = true,
+	    .tied = true,
+	    .knows = {false, true, true},
+	    .worn = LeashType::Good,
+	    .directsFight = true,
 	    .takesFightMoves = true,
 	    .fightMiracles = {{.gesture = GestureType::Heart, .magic = MagicType::Fireball},
 	                      {.gesture = GestureType::None, .magic = MagicType::LightningBolt},
 	                      {.gesture = GestureType::EShape, .magic = MagicType::Heal}},
 	};
+	const Request cancel {.gesture = GestureType::Scribble, .purpose = Purpose::CancelCharge};
 	auto requests = Requests(context);
-	ASSERT_EQ(requests.size(), 3u);
-	// The star calls the special move first, then each miracle it knows that has a gesture, in their order
+	ASSERT_EQ(requests.size(), 4u);
+	// The star calls the special move first, then each miracle it knows that has a gesture, in their order, then the
+	// scribble of the empty hand
 	EXPECT_EQ(requests[0], (Request {.gesture = GestureType::Star, .purpose = Purpose::FightSpecialMove}));
 	EXPECT_EQ(requests[1],
 	          (Request {.gesture = GestureType::Heart, .purpose = Purpose::FightMiracle, .magic = MagicType::Fireball}));
 	EXPECT_EQ(requests[2],
 	          (Request {.gesture = GestureType::EShape, .purpose = Purpose::FightMiracle, .magic = MagicType::Heal}));
-	// Its queue full, it takes no more moves, and the fight's gestures are no longer waited for
+	EXPECT_EQ(requests[3], cancel);
+	// Its queue full, it takes no more moves: only the scribble is waited for
 	context.creature->takesFightMoves = false;
 	requests = Requests(context);
-	EXPECT_TRUE(std::ranges::none_of(requests, [](const Request& request) {
-		return request.purpose == Purpose::FightSpecialMove || request.purpose == Purpose::FightMiracle;
-	}));
+	ASSERT_EQ(requests.size(), 1u);
+	EXPECT_EQ(requests[0], cancel);
+}
+
+TEST(GestureRequests, ASeedInTheHandOfAFightingPlayerWaitsForItsOwnGestures)
+{
+	HandContext context;
+	context.seed = HandContext::Seed {.type = SpellSeedType::Storm,
+	                                  .sizingGesture = GestureType::Circle,
+	                                  .powerUpGestures = {GestureType::InverseSpiral, GestureType::None, GestureType::None}};
+	context.actionHeld = true;
+	context.creature = HandContext::Creature {.fighting = true, .knows = {false, true, false}, .takesFightMoves = true};
+	// The hand holds a seed, so it does not direct the fight: the circle, the scribble and the power-up are waited for
+	auto requests = Requests(context);
+	ASSERT_EQ(requests.size(), 3u);
+	EXPECT_EQ(requests[0], (Request {.gesture = GestureType::Circle, .purpose = Purpose::SizeCircle}));
+	EXPECT_EQ(requests[1].purpose, Purpose::DropSeed);
+	EXPECT_EQ(requests[2].purpose, Purpose::PowerUp);
+	// The circle comes before the fight's gestures
+	context.creature->directsFight = true;
+	requests = Requests(context);
+	ASSERT_EQ(requests.size(), 2u);
+	EXPECT_EQ(requests[0].purpose, Purpose::SizeCircle);
+	EXPECT_EQ(requests[1].purpose, Purpose::FightSpecialMove);
 }
 
 TEST(GestureRequests, ThePowerUpsAndTheCancelCarryTheSeedForTheirHints)

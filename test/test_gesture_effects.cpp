@@ -260,6 +260,22 @@ TEST_F(GestureEffects, TheHandGlowsAsTheTrailFlashesAndTheTrailGoes)
 	EXPECT_FALSE(effect->Finished());
 }
 
+TEST_F(GestureEffects, TheTrailOfAnotherPlayerDoesNotMakeTheHandGlow)
+{
+	auto effect = Make(GestureFile());
+	auto trail = ATrail();
+	trail->heardAt = glm::vec3 {300.0f, 12.0f, 400.0f};
+	world.waiting = trail;
+	effect->Step(0.1f);
+	// Through the flash and to the end of the trail, the hand of this computer keeps its own light
+	for (int step = 0; step < 90; ++step)
+	{
+		effect->Step(0.1f);
+	}
+	EXPECT_EQ(world.glow, 0xDEADu);
+	EXPECT_EQ(effect->AtomCount(), 0u);
+}
+
 TEST_F(GestureEffects, TheChainFollowsTheGesturingHand)
 {
 	auto effect = Make(ChainFile());

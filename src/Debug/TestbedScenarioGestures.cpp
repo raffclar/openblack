@@ -289,11 +289,13 @@ void testbed_scenarios::AddGestureScenarios(std::vector<Scenario>& all)
 	                "as in the game, and the rope stays on; the second shakes it off.",
 	    .framing = {.shot = Shot::Testbed},
 	    .creatures = {Tiger()},
-	    .commands = {{.kind = Kind::PutOnLeash, .creature = 0, .delaySeconds = 1.0f, .leash = LeashType::Rope},
+	    // Each repeat waits until the hand has drawn the last scribble
+	    .commands = {AfterDrawing({.kind = Kind::PutOnLeash, .creature = 0, .delaySeconds = 1.0f, .leash = LeashType::Rope}),
 	                 {.kind = Kind::TakeOffLeash, .creature = 0, .delaySeconds = 1.0f},
 	                 Draw(GestureType::SquareSpirial, 1.0f),
 	                 Draw(GestureType::Scribble),
-	                 Draw(GestureType::Scribble)},
+	                 // After the rest that follows the first scribble
+	                 Draw(GestureType::Scribble, 4.0f)},
 	    .repeatFrom = 0,
 	});
 
