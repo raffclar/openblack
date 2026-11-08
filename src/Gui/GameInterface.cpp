@@ -2069,6 +2069,12 @@ void GameInterface::Draw(glm::u16vec2 resolution, glm::ivec2 mouse, uint32_t mil
 	// The fades cover the falling spell's film and the creature that the film shows over it
 	const bool overFilm = Locator::videoSystem::has_value() && Locator::videoSystem::value().HidesWorld();
 	auto& fadeCanvas = overFilm ? _filmOverlayCanvas : _canvas;
+	// The game draws the falling spell's film and its creature with the world, under the cinema bars. Other films go
+	// over the bars
+	if (overFilm)
+	{
+		drawBars(_filmOverlayCanvas);
+	}
 	if (const auto fade = director.GetFadeColour(); !inTemple && (fade >> 24u) != 0)
 	{
 		const auto colour = glm::vec4(static_cast<float>((fade >> 16u) & 0xFFu), static_cast<float>((fade >> 8u) & 0xFFu),
