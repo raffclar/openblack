@@ -1170,11 +1170,11 @@ void world_objects::Remove(entt::entity object)
 }
 
 void world_objects::AttackTown(entt::entity object, float damage, PlayerNames aggressor, const town_aggression::Harm& harm,
-                               bool byCreature, std::optional<guidance::TownAttackVoice> cry)
+                               entt::entity creature, std::optional<guidance::TownAttackVoice> cry)
 {
 	if (const auto target = TownAttackTargetOf(object); target.has_value())
 	{
-		AttackTown(*target, damage, aggressor, harm, byCreature, cry);
+		AttackTown(*target, damage, aggressor, harm, creature, cry);
 	}
 }
 
@@ -1235,7 +1235,8 @@ std::optional<world_objects::TownAttackTarget> world_objects::TownAttackTargetOf
 }
 
 void world_objects::AttackTown(const TownAttackTarget& target, float damage, PlayerNames aggressor,
-                               const town_aggression::Harm& harm, bool byCreature, std::optional<guidance::TownAttackVoice> cry)
+                               const town_aggression::Harm& harm, entt::entity creature,
+                               std::optional<guidance::TownAttackVoice> cry)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto town = target.town;
@@ -1263,10 +1264,11 @@ void world_objects::AttackTown(const TownAttackTarget& target, float damage, Pla
 	const uint32_t turn = Locator::time::has_value() ? static_cast<uint32_t>(Locator::time::value().GetTurn()) : 0;
 	ecs::town_aggression::Attacked(aggression->record, aggressor, owner, amount, info.town.firstTimeDamageDoneAddition, turn,
 	                               harm);
-	// The advisors of the player at this machine may remark on the player attacking a town
+	// The advisors of the player at this machine may remark on the player, or on the creature of the player, as they
+	// attack a town
 	if (Locator::guidanceSystem::has_value())
 	{
-		Locator::guidanceSystem::value().TownAttacked(town, aggressor, byCreature);
+		Locator::guidanceSystem::value().TownAttacked(town, aggressor, creature);
 	}
 }
 

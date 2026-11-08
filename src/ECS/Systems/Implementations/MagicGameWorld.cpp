@@ -578,15 +578,19 @@ void GameMagicWorld::Apply(const magic::EffectValues& values, std::span<const ma
 		if (outcome.aggression && !appliedByNothing)
 		{
 			const auto target = stays ? ecs::world_objects::TownAttackTargetOf(entity) : keptTown;
-			const bool appliedByCreature = source.appliedBy.has_value() && registry.Valid(*source.appliedBy) &&
-			                               registry.AllOf<Creature>(*source.appliedBy);
+			entt::entity applyingCreature = entt::null;
+			if (source.appliedBy.has_value() && registry.Valid(*source.appliedBy) &&
+			    registry.AllOf<Creature>(*source.appliedBy))
+			{
+				applyingCreature = *source.appliedBy;
+			}
 			// The town keeps the values of the effect itself, before the defence of what it struck
 			const ecs::town_aggression::Harm harm {.burn = values[magic::EffectKind::Burn],
 			                                       .crush = values[magic::EffectKind::Crush],
 			                                       .hit = values[magic::EffectKind::Hit]};
 			if (target.has_value())
 			{
-				ecs::world_objects::AttackTown(*target, outcome.damaged + outcome.burnt, source.player, harm, appliedByCreature,
+				ecs::world_objects::AttackTown(*target, outcome.damaged + outcome.burnt, source.player, harm, applyingCreature,
 				                               cry);
 			}
 		}

@@ -7,8 +7,10 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <functional>
 #include <limits>
 #include <numbers>
+#include <vector>
 
 #include <gtest/gtest.h>
 
@@ -57,11 +59,38 @@ TEST(GuidanceRules, MayPlayNeedsLevelLandAndWait)
 	EXPECT_FALSE(MayPlay(firstLand, 0, true, 0, 5));
 }
 
+namespace
+{
+/// Gives the numbers in turn, and counts how many it gave
+struct Draws
+{
+	std::vector<uint32_t> numbers;
+	size_t given {0};
+	uint32_t operator()() { return numbers.at(given++); }
+};
+} // namespace
+
 TEST(GuidanceRules, FirstStampNeverBeforeTheFirstTurn)
 {
-	EXPECT_EQ(FirstStamp(500, 20), 480u);
-	EXPECT_EQ(FirstStamp(20, 20), 0u);
-	EXPECT_EQ(FirstStamp(0, 7), 0u);
+	// The turn is not after the first number: the stamp is the first turn, with one number drawn
+	Draws atStart {.numbers = {7}};
+	EXPECT_EQ(FirstStamp(0, std::ref(atStart)), 0u);
+	EXPECT_EQ(atStart.given, 1u);
+	Draws equal {.numbers = {20}};
+	EXPECT_EQ(FirstStamp(20, std::ref(equal)), 0u);
+	EXPECT_EQ(equal.given, 1u);
+}
+
+TEST(GuidanceRules, FirstStampGoesBackByASecondNumber)
+{
+	// The turn is after the first number: the game draws a second number and goes back by it, not by the first
+	Draws later {.numbers = {20, 35}};
+	EXPECT_EQ(FirstStamp(500, std::ref(later)), 465u);
+	EXPECT_EQ(later.given, 2u);
+	// The second number can go back past the first turn, as the game does
+	Draws past {.numbers = {3, 40}};
+	EXPECT_EQ(FirstStamp(30, std::ref(past)), static_cast<uint32_t>(30 - 40));
+	EXPECT_EQ(past.given, 2u);
 }
 
 TEST(GuidanceRules, RemarkRowsFollowTheKinds)
@@ -109,6 +138,40 @@ TEST(GuidanceRules, LowOnFoodWarnsFromItsShortage)
 	// The value that picks the text is the shortage less 0.9, with the shortage held at 2
 	EXPECT_FLOAT_EQ(LowOnFoodValue(0.95f), 0.95f - 0.9f);
 	EXPECT_FLOAT_EQ(LowOnFoodValue(5.0f), 2.0f - 0.9f);
+}
+
+TEST(GuidanceRules, LowOnWoodWarnsFromItsShortage)
+{
+	EXPECT_FALSE(WarnsLowOnWood(0.9499f));
+	EXPECT_TRUE(WarnsLowOnWood(0.95f));
+	EXPECT_TRUE(WarnsLowOnWood(3.5f));
+	EXPECT_FALSE(WarnsLowOnWood(std::numeric_limits<float>::quiet_NaN()));
+	// The value that picks the text is the shortage less 1, with the shortage held at 2
+	EXPECT_FLOAT_EQ(LowOnWoodValue(0.95f), 0.95f - 1.0f);
+	EXPECT_FLOAT_EQ(LowOnWoodValue(1.5f), 0.5f);
+	EXPECT_FLOAT_EQ(LowOnWoodValue(5.0f), 1.0f);
+}
+
+TEST(GuidanceRules, TheCreatureOfThePlayerHereAttackingATownIsRemarkedOn)
+{
+	const CreatureAttackFacts ours {.creatureOwner = openblack::PlayerNames::PLAYER_ONE,
+	                                .here = openblack::PlayerNames::PLAYER_ONE};
+	EXPECT_TRUE(CreatureAttackRemarked(ours));
+	// The scripts can stop the remark
+	auto quiet = ours;
+	quiet.remarksOn = false;
+	EXPECT_FALSE(CreatureAttackRemarked(quiet));
+	// A creature of no player, or of another player, is not remarked on
+	auto noPlayer = ours;
+	noPlayer.creatureOwner = std::nullopt;
+	EXPECT_FALSE(CreatureAttackRemarked(noPlayer));
+	auto other = ours;
+	other.creatureOwner = openblack::PlayerNames::PLAYER_TWO;
+	EXPECT_FALSE(CreatureAttackRemarked(other));
+	// The creature of the town's own player is not remarked on
+	auto ownTown = ours;
+	ownTown.townOwnersCreature = true;
+	EXPECT_FALSE(CreatureAttackRemarked(ownTown));
 }
 
 TEST(GuidanceRules, VillagersUnhappyOnlyAboveTheThreshold)

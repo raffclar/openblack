@@ -33,7 +33,8 @@ public:
 	bool PlayNow(guidance::Kind kind) override;
 	bool RemarkNow(guidance::Kind kind) override;
 	void RemarkIfNow(guidance::Kind kind) override;
-	void TownAttacked(entt::entity town, PlayerNames attacker, bool byCreature) override;
+	void TownAttacked(entt::entity town, PlayerNames attacker, entt::entity creature) override;
+	void SetCreatureRemarks(bool on) override { _creatureRemarks = on; }
 	void TownAttackCry(entt::entity town, const guidance::TownAttackVoice& voice) override;
 	void BeliefVoice(glm::vec3 at, float share, GuidanceAlignment alignment) override;
 	void BuildingBroken(entt::entity building, std::optional<PlayerNames> player, float remaining) override;
@@ -47,6 +48,7 @@ public:
 	void LosingVillager(entt::entity villager) override;
 	void LowOnPeople(entt::entity town) override;
 	void LowOnFood(entt::entity town, float shortage) override;
+	void LowOnWood(entt::entity town, float shortage) override;
 	void VillagersUnhappy(entt::entity town, float unhappiness) override;
 	void TownChangedHands(entt::entity town, PlayerNames loser, PlayerNames taker) override;
 	void LosingBeliefTurn() override;
@@ -66,6 +68,8 @@ private:
 	/// guidance::RemarkChoicesByValue)
 	void SayRemarkByValue(guidance::Kind kind, float value);
 	void Say(uint32_t text, guidance::Kind kind);
+	/// A creature applied harm to a town: the remark on the creature of the player here as it attacks the town
+	void CreatureAttackedTown(entt::entity town, entt::entity creature);
 	void LookAtMoon();
 	/// The night whisper of this turn, if there is one. The name of the player is looked up again on each new land.
 	void NightWhisper();
@@ -83,6 +87,8 @@ private:
 	night_whisper::Whisperer _whisper;
 	/// The name of the player is still to be looked up
 	bool _nameDue {true};
+	/// The scripts let the advisors talk about the creature as it attacks a town. No save keeps it.
+	bool _creatureRemarks {true};
 };
 
 } // namespace openblack::ecs::systems

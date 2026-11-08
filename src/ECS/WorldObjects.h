@@ -128,10 +128,11 @@ void KeepForScript(entt::entity building);
 /// seven tenths, one fewer when it rises back over
 void CountInjury(entt::entity villager, float before, float after);
 /// Harm done to a town's villager or building is an attack on its town by whoever did it; the player at this machine's
-/// advisors may remark on it. A creature doing the harm is told apart. The people of the town may cry out in the voice
-/// that the harm gives, if it gives one. The town keeps how much the attack burnt, crushed and hit.
+/// advisors may remark on it. The creature is the creature that applied the harm, entt::null for harm that no creature
+/// applied. The people of the town may cry out in the voice that the harm gives, if it gives one. The town keeps how
+/// much the attack burnt, crushed and hit.
 void AttackTown(entt::entity object, float damage, PlayerNames aggressor, const town_aggression::Harm& harm,
-                bool byCreature = false, std::optional<guidance::TownAttackVoice> cry = std::nullopt);
+                entt::entity creature = entt::null, std::optional<guidance::TownAttackVoice> cry = std::nullopt);
 /// The town that harm to an object attacks, and the row of the object's kind that sets how much the attack counts
 struct TownAttackTarget
 {
@@ -142,7 +143,7 @@ struct TownAttackTarget
 [[nodiscard]] std::optional<TownAttackTarget> TownAttackTargetOf(entt::entity object);
 /// Harm done to an object of a town that was found before, as AttackTown does it. The object can be gone.
 void AttackTown(const TownAttackTarget& target, float damage, PlayerNames aggressor, const town_aggression::Harm& harm,
-                bool byCreature, std::optional<guidance::TownAttackVoice> cry);
+                entt::entity creature, std::optional<guidance::TownAttackVoice> cry);
 
 /// Life given back to an object other than a living thing, as a miracle's heal gives it: never above 1. Its life after.
 float IncreaseLife(entt::entity object, float amount);

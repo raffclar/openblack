@@ -190,6 +190,11 @@ float DesireForFood(const DesireContext& c)
 
 float DesireForWood(const DesireContext& c)
 {
+	return Clamp01(WoodShortage(c));
+}
+
+float WoodShortage(const DesireContext& c)
+{
 	const auto& d = c.desire;
 	// The wish to repair, build, and for civic buildings and abodes, as felt, in the game's order of adding, at most 3
 	const float sum = d.raw.at(12) + d.raw.at(9) + d.raw.at(6) + d.raw.at(5) + d.boost.at(12) + d.boost.at(9) + d.boost.at(6) +
@@ -206,7 +211,7 @@ float DesireForWood(const DesireContext& c)
 	const float t = 1.0f - x + a;
 	float y = wood / maximum;
 	y = (y < 1.0f || std::isnan(y)) ? y : 1.0f;
-	return Clamp01((1.0f - y) * t);
+	return (1.0f - y) * t;
 }
 
 float DesireForPlaytime(const DesireContext& c)

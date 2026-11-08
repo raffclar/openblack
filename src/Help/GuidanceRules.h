@@ -97,11 +97,17 @@ struct KindRule
 [[nodiscard]] bool MayPlay(const KindRule& rule, uint32_t helpLevel, bool firstLandOfStory, uint32_t wait,
                            uint32_t turnsSinceHeard);
 
-/// When a kind counts as last heard on a new land: a random number of turns (below its least gap) before now, at most
-/// back to the land's first turn
-[[nodiscard]] constexpr uint32_t FirstStamp(uint32_t turn, uint32_t draw)
+/// When a kind counts as last heard on a new land or after a load: a random number of turns (below its least gap)
+/// before now, at most back to the first turn. The game draws one number and compares the turn with it. Only when the
+/// turn is after that number, the game draws a second number and goes back by the second number.
+template <typename Draw>
+[[nodiscard]] constexpr uint32_t FirstStamp(uint32_t turn, Draw&& draw)
 {
-	return turn > draw ? turn - draw : 0;
+	if (static_cast<int32_t>(turn - static_cast<uint32_t>(draw())) <= 0)
+	{
+		return 0;
+	}
+	return turn - static_cast<uint32_t>(draw());
 }
 
 /// The advisors' remarks a kind says, its texts in the game's info (one row of 34, ended by a 0)
@@ -126,6 +132,36 @@ constexpr float k_LowOnFoodShortage = 0.95f;
 }
 /// The value that chooses the text of the low food warning: the shortage, at most 2, less 0.9
 [[nodiscard]] float LowOnFoodValue(float shortage);
+/// From this wood shortage up, a town of the player here makes the advisors warn of low wood
+constexpr float k_LowOnWoodShortage = 0.95f;
+/// Whether the wood shortage of a town (see town_desire::WoodShortage) is high enough for the warning
+[[nodiscard]] constexpr bool WarnsLowOnWood(float shortage)
+{
+	return shortage >= k_LowOnWoodShortage;
+}
+/// The value that chooses the text of the low wood warning: the shortage, at most 2, less 1
+[[nodiscard]] float LowOnWoodValue(float shortage);
+
+/// What the advisors know when a creature harms a town
+struct CreatureAttackFacts
+{
+	/// The scripts let the advisors talk about the creature
+	bool remarksOn {true};
+	/// The player of the creature, none for a creature of no player
+	std::optional<PlayerNames> creatureOwner;
+	/// The creature is the creature of the player that owns the town
+	bool townOwnersCreature {false};
+	/// The player at this computer
+	PlayerNames here {PlayerNames::PLAYER_ONE};
+};
+/// Whether the advisors can remark on the creature of the player here as it attacks a town: the scripts let them, the
+/// creature has a player, it is not the creature of the town's own player, and its player is the player here
+[[nodiscard]] constexpr bool CreatureAttackRemarked(const CreatureAttackFacts& facts)
+{
+	return facts.remarksOn && facts.creatureOwner.has_value() && !facts.townOwnersCreature &&
+	       *facts.creatureOwner == facts.here;
+}
+
 /// Whether the unhappiness of a town (see town_desire::Process) is more than the threshold of the town's info, at which
 /// the advisors say that the villagers are unhappy
 [[nodiscard]] constexpr bool WarnsVillagersUnhappy(float unhappiness, float threshold)

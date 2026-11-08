@@ -146,6 +146,13 @@ float guidance::LowOnFoodValue(float shortage)
 	return (shortage >= k_MostShortage ? k_MostShortage : shortage) - k_ShortageOffset;
 }
 
+float guidance::LowOnWoodValue(float shortage)
+{
+	constexpr float k_MostShortage = 2.0f;
+	constexpr float k_ShortageOffset = 1.0f;
+	return (shortage >= k_MostShortage ? k_MostShortage : shortage) - k_ShortageOffset;
+}
+
 std::optional<Kind> guidance::AlignmentRemark(float drift, float alignment, float maxChangePerTurn)
 {
 	if (!(k_DriftTurns * maxChangePerTurn < std::abs(drift)))

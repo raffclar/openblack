@@ -115,6 +115,7 @@
 #include "ECS/Systems/EffectRequestSystemInterface.h"
 #include "ECS/Systems/FightTranscriptSystemInterface.h"
 #include "ECS/Systems/GestureSystemInterface.h"
+#include "ECS/Systems/GuidanceSystemInterface.h"
 #include "ECS/Systems/HelpProfileSystemInterface.h"
 #include "ECS/Systems/HighDetailSystemInterface.h"
 #include "ECS/Systems/Implementations/VillagerDisciples.h"
@@ -1510,11 +1511,16 @@ void SetFightExit() // 420 SET_FIGHT_EXIT
 
 void SetCreatureInTemple() // 432 SET_CREATURE_IN_TEMPLE
 {
-	// Whether the temple's creature room shows the player's creature, from the next visit on
+	// Whether the temple's creature room shows the player's creature, from the next visit on. The same switch lets the
+	// advisors talk about the creature as it attacks a town.
 	const auto enable = Pop().intVal != 0;
 	if (Locator::creatureCaveSystem::has_value())
 	{
 		Locator::creatureCaveSystem::value().SetCreatureShown(enable);
+	}
+	if (Locator::guidanceSystem::has_value())
+	{
+		Locator::guidanceSystem::value().SetCreatureRemarks(enable);
 	}
 }
 

@@ -127,6 +127,9 @@ struct DesireFunctions
 
 [[nodiscard]] float DesireForFood(const DesireContext& c);
 [[nodiscard]] float DesireForWood(const DesireContext& c);
+/// The wood desire before it is held between 0 and 1. The advisors read it to warn of low wood. The wood desire reads
+/// the felt desires of the turn before for building, repair, civic buildings and abodes.
+[[nodiscard]] float WoodShortage(const DesireContext& c);
 [[nodiscard]] float DesireForPlaytime(const DesireContext& c);
 [[nodiscard]] float DesireForProtection(const DesireContext& c);
 [[nodiscard]] float DesireForMercy(const DesireContext& c);
