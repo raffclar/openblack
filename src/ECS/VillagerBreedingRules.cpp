@@ -35,6 +35,16 @@ bool villager_breeding::IsWoman(bool female, bool child)
 	return female && !child;
 }
 
+bool villager_breeding::CanBeCalledOn(VillagerStates finalState)
+{
+	return finalState != VillagerStates::Dying;
+}
+
+bool villager_breeding::KeepsMother(const MotherFacts& mother)
+{
+	return mother.available && mother.sameTribe && mother.female && !mother.dying;
+}
+
 bool villager_breeding::ConceivesAtHome(const HomeConception& facts)
 {
 	return !facts.pregnant && facts.hasTown && facts.hasAbode && facts.sexuallyActive && facts.childrenWanted > 0.0f &&
