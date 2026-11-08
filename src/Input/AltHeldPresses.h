@@ -107,6 +107,9 @@ public:
 		return altHeld ? 0 : TakeKept(actions);
 	}
 
+	/// The mouse inputs whose presses act in this frame, with one bit for each input in the order of Source
+	[[nodiscard]] constexpr uint8_t ActedThisFrame() const noexcept { return _actedThisFrame; }
+
 	/// True when a press of a button waits for Alt to go up
 	[[nodiscard]] constexpr bool HasKeptPresses() const noexcept { return _kept != 0; }
 

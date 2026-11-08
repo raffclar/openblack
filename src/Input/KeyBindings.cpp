@@ -192,6 +192,18 @@ KeyDownBinding KeyDownBindingFor(std::span<const KeyBinding> bindings, SDL_Scanc
 	return KeyDownBinding::TakesKey;
 }
 
+bool MousePressActs(std::span<const KeyBinding> bindings, MouseInput mouse, BindableActionMap blocked,
+                    bool scriptHoldsScreen) noexcept
+{
+	if (mouse == MouseInput::None || scriptHoldsScreen)
+	{
+		return false;
+	}
+	const auto found = std::ranges::find(bindings, mouse, &KeyBinding::mouse);
+	return found != bindings.end() && (static_cast<uint64_t>(found->action) & static_cast<uint64_t>(blocked)) == 0 &&
+	       !IsHeldAction(found->action);
+}
+
 BindableActionMap ActionsForKey(std::span<const KeyBinding> bindings, SDL_Scancode key) noexcept
 {
 	auto actions = BindableActionMap::NONE;

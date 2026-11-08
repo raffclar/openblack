@@ -67,14 +67,24 @@ struct Input
 	bool moveDown {false};
 };
 
+/// A one-press action of the mouse that acts in this frame. The game sends no message of the hand's buttons in this frame.
+struct OnePressAction
+{
+	/// The button of the hand whose press the action takes. The middle button and the wheel take no press of the hand.
+	std::optional<Button> button;
+};
+
 /// Two presses of a button that the game finds from the held button, closer than this time, make a double click
 inline constexpr uint32_t k_HeldDoubleClickMilliseconds = 250;
 
 /// The game's rule for the messages of the hand's buttons. The game keeps each button's press, let go and double click
 /// as one mark each, and sends the messages once a frame, after the moves of the pointer.
 /// - While Alt is held, the game sends no message. The marks stay.
+/// - When a one-press action of the mouse acts, the game sends no message in that frame. The action takes the mark of
+///   its press. The other marks stay for the next frame.
 /// - On the first frame without Alt, the game sends the messages from the marks. For each button it sends the double
 ///   click, the press and the let go, in this sequence. The Action button comes first.
+/// - A press removes the let go mark of its button. A double click does not.
 /// - A button that is down when the hand thinks that it is up sends its press on the next frame. Two such presses in
 ///   less time than k_HeldDoubleClickMilliseconds also send a double click on the frame after the second press.
 /// While no message waits, each press and let go goes to the hand as it comes.
@@ -93,10 +103,12 @@ public:
 	[[nodiscard]] constexpr bool HandDown(Button button) const noexcept { return At(button).handDown; }
 
 	/// The inputs of a frame, after all the moves of the pointer. It gives no value when the inputs go to the hand as
-	/// they come. Else it gives the messages to send at the end of the frame, which are none while Alt is held.
-	[[nodiscard]] std::optional<std::vector<Sent>> Frame(std::span<const Input> inputs, bool altHeld, uint32_t milliseconds)
+	/// they come. Else it gives the messages to send at the end of the frame. There are no messages while Alt is held,
+	/// and none in a frame where a one-press action of the mouse acts.
+	[[nodiscard]] std::optional<std::vector<Sent>> Frame(std::span<const Input> inputs, bool altHeld, uint32_t milliseconds,
+	                                                     std::optional<OnePressAction> onePress = std::nullopt)
 	{
-		if (!Waits(altHeld))
+		if (!onePress.has_value() && !Waits(altHeld))
 		{
 			for (const auto& input : inputs)
 			{
@@ -110,6 +122,14 @@ public:
 		}
 		if (altHeld)
 		{
+			return std::vector<Sent> {};
+		}
+		if (onePress.has_value())
+		{
+			if (onePress->button.has_value())
+			{
+				At(*onePress->button).marks.press = false;
+			}
 			return std::vector<Sent> {};
 		}
 		std::vector<Sent> sent;
@@ -176,6 +196,7 @@ private:
 		{
 		case Input::Kind::Press:
 			state.marks.press = true;
+			state.marks.letGo = false;
 			state.down = true;
 			break;
 		case Input::Kind::DoublePress:

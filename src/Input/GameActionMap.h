@@ -96,6 +96,7 @@ public:
 	void WarpCursor(glm::ivec2 position) final;
 	[[nodiscard]] std::optional<glm::ivec2> GetCursorWarp() const final;
 	void SetBlockedActions(BindableActionMap actions) final { _blocked = actions; }
+	void SetScriptHoldsScreen(bool held) final { _scriptHoldsScreen = held; }
 	void BoxKeyDown(bool boxWantsKeys) final { _boxKeyboard.KeyDown(boxWantsKeys); }
 	void BoxAnswered() final { _boxKeyboard.Answered(); }
 	[[nodiscard]] bool BoxHasKeyboard() const final { return _boxKeyboard.Taken(); }
@@ -111,6 +112,7 @@ public:
 	[[nodiscard]] bool WaitedMousePress(BindableActionMap action) const final;
 	void KeepHandEvent(const SDL_Event& event, bool movesPointer) final;
 	void TakeHandEvents(const std::function<void(const SDL_Event&, bool)>& hand) final;
+	[[nodiscard]] bool HandButtonsHeld() const final;
 
 private:
 	BindableActionMap _bindableMap = BindableActionMap::NONE;
@@ -129,6 +131,8 @@ private:
 	[[nodiscard]] bool AltHeld() const;
 	/// The one-press actions of each mouse button and each turn of the wheel
 	[[nodiscard]] alt_presses::SourceActions OnePressMouseActions() const;
+	/// The first press of the mouse in this frame that does a one-press action, in the sequence of the game
+	[[nodiscard]] std::optional<hand_messages::OnePressAction> OnePressActionOfFrame() const;
 	/// Presses, for this frame, the one-press actions of the mouse that waited for Alt to go up
 	void ActWaitedPresses(uint64_t actions);
 	/// Sends a press of a mouse input through the Alt rule. The actions that the press added and that act once
@@ -201,6 +205,10 @@ private:
 	bool _doubleClickMarkedThisFrame {false};
 	/// The count of the hand's button messages in this frame, when they came from the rule of the hand's messages
 	std::optional<uint32_t> _handMessagesSent;
+	/// Move or Action is held as the hand has them, when the messages of this frame came from the rule
+	bool _handButtonsHeld {false};
+	/// A script holds the screen, so no press of the mouse does a one-press action
+	bool _scriptHoldsScreen {false};
 	/// Where the cursor was at the end of the last frame, and whether the game put it somewhere in this frame
 	glm::ivec2 _lastFramePosition {0, 0};
 	bool _cursorJumped {false};
