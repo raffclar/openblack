@@ -2,7 +2,7 @@ $input v_position, v_texcoord0, v_normal, v_color0, v_haze, v_snow, v_snowLight
 
 #include <bgfx_shader.sh>
 
-// The sky's dome for each alignment, blended for the time of day, one above the other from evil to good
+// The sky's dome for each alignment, blended for the time of day, one above the other from good to evil
 SAMPLER2D(s_diffuse, 0);
 // x, y: the alignments' domes mixed. z: how much of the second there is, of 255. w: the rows of each dome
 uniform vec4 u_skyAlignment;

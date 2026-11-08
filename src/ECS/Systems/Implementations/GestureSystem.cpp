@@ -430,7 +430,10 @@ void GestureSystem::Update(const Frame& frame)
 	// The camera moved in its update after the last frame's pass. The turn's pass that follows sees the same move.
 	_cameraMoved = _lastCameraEye.has_value() && *_lastCameraEye != frame.view.cameraEye;
 	_lastCameraEye = frame.view.cameraEye;
+	// The messages of the buttons come in the frame's pass only, so the turn's pass does not start the path again
+	_restartInThisPass = std::exchange(_restartAtArmedPress, false);
 	Pass(frame, gesture::StepsOfFramePass(frame.buttonMessages));
+	_restartInThisPass = false;
 }
 
 void GestureSystem::InterfaceTurn(const Frame& frame)
@@ -520,6 +523,15 @@ void GestureSystem::Step(const Frame& frame, bool samples, std::optional<glm::ve
 		for (const auto place : frame.places)
 		{
 			SampleCursor(place, frame);
+		}
+		// The press that armed a miracle came after the places: the path starts again from the last place of the pointer
+		if (std::exchange(_restartInThisPass, false))
+		{
+			ForgetPath();
+			if (_lastPlace.has_value())
+			{
+				RecordPoint(ToReference(*_lastPlace, frame), frame);
+			}
 		}
 	}
 

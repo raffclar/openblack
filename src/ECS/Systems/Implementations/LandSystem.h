@@ -85,6 +85,7 @@ public:
 	                 std::optional<std::chrono::steady_clock::time_point> end) override;
 	[[nodiscard]] std::chrono::steady_clock::duration GetTurnDeltaTime() const override { return _turnDeltaTime; }
 	void KeepAlignmentInProfile() override;
+	[[nodiscard]] lhscriptx::ScriptLineValues& GetScriptLineValues() override { return _scriptLineValues; }
 
 private:
 	/// Loads the map script of a land from the bytes of its file. The path names the land.
@@ -136,6 +137,8 @@ private:
 	/// The map script of a land of a network game runs now
 	bool _runsNetworkMapScript {false};
 	bool _allComputerGods {false};
+	/// A load of a land does not clear them
+	lhscriptx::ScriptLineValues _scriptLineValues;
 	/// The ticks of the machine at the last turn, as the game reads them
 	uint32_t _lastGameLoopTime {0};
 	/// When the scripts last took a turn in the temple, in real time

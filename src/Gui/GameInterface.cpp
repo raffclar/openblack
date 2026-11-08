@@ -965,6 +965,7 @@ void GameInterface::DrawLogoEffectOverlay(const LogoEffectOverlay& overlay)
 		{
 			// The logo over a see-through grey box, and its label over a black shadow a pixel down and right
 			const auto boxes = logo_effect::SponsorPlaces(overlay.screen);
+			const Canvas::CornersScope boxDraw(_logoCanvas, screen_pixels::Corners::BoxDraw);
 			const auto greyAlpha = static_cast<float>((128 * overlay.textAlpha) >> 8) / 255.0f;
 			constexpr float k_Grey = 128.0f / 255.0f;
 			_logoCanvas.DrawQuad(glm::vec2(boxes.logo.min), glm::vec2(boxes.logo.max), glm::vec2(0.0f), glm::vec2(1.0f),
@@ -2182,6 +2183,7 @@ void GameInterface::DrawGlow(glm::vec2 min, glm::vec2 max, glm::vec4 colour)
 	const auto corner = static_cast<float>((static_cast<int>(max.y) - static_cast<int>(min.y)) / 4);
 	const std::array x = {min.x - corner, min.x + corner, max.x - corner, max.x + corner};
 	const std::array y = {min.y - corner, min.y + corner, max.y - corner, max.y + corner};
+	const Canvas::CornersScope boxDraw(_canvas, screen_pixels::Corners::BoxDraw);
 	_canvas.SetBlend(Canvas::Blend::Additive);
 	for (size_t row = 0; row < 3; ++row)
 	{
@@ -2436,6 +2438,7 @@ void GameInterface::DrawTipBubble(glm::u16vec2 resolution, glm::ivec2 mouse)
 		{
 			if (shown)
 			{
+				const Canvas::CornersScope boxDraw(canvas, screen_pixels::Corners::BoxDraw);
 				canvas.DrawQuad(arrow.min, arrow.max, arrow.uvMin, arrow.uvMax, tip::k_ArrowColour, _atmos.get());
 			}
 		}
@@ -2680,6 +2683,7 @@ void GameInterface::DrawChatBubbles(glm::u16vec2 resolution, glm::ivec2 mouse)
 			{
 				if (more)
 				{
+					const Canvas::CornersScope boxDraw(canvas, screen_pixels::Corners::BoxDraw);
 					canvas.DrawQuad(arrow.min, arrow.max, arrow.uvMin, arrow.uvMax, tip::k_ArrowColour, _atmos.get());
 				}
 			}
@@ -2736,6 +2740,7 @@ void GameInterface::DrawBubbleControl(const help::tip_bubble::ControlIcon& icon,
 		const auto cap = icons::LayoutKeyCap(placed);
 		if (_atmos != nullptr)
 		{
+			const Canvas::CornersScope boxDraw(_canvas, screen_pixels::Corners::BoxDraw);
 			for (size_t i = 0; i < cap.slices.size(); ++i)
 			{
 				_canvas.DrawQuad(cap.slices.at(i).min, cap.slices.at(i).max, cap.uvs.at(i).min, cap.uvs.at(i).max, colour,
@@ -2789,8 +2794,10 @@ void GameInterface::DrawVillagerLabels(glm::u16vec2 resolution)
 			draw(quad, boxColour);
 		}
 		const auto pointerColour = glm::vec4(0.0f, 0.0f, 0.0f, static_cast<float>(label->pointerAlpha) / 255.0f);
+		// The game draws the pointer with its box draw, and the box and the words with no move of their corners
 		for (const auto& quad : labels::PointerShape(*label))
 		{
+			const Canvas::CornersScope boxDraw(canvas, screen_pixels::Corners::BoxDraw);
 			draw(quad, pointerColour);
 		}
 		const float alpha = static_cast<float>(label->wordsAlpha) / 255.0f;
@@ -2926,6 +2933,7 @@ void GameInterface::DrawClickCue(const help::TextRegion& box, float share)
 		});
 		if (_atmos != nullptr)
 		{
+			const Canvas::CornersScope boxDraw(_canvas, screen_pixels::Corners::BoxDraw);
 			for (size_t i = 0; i < cap.slices.size(); ++i)
 			{
 				_canvas.DrawQuad(cap.slices.at(i).min, cap.slices.at(i).max, cap.uvs.at(i).min, cap.uvs.at(i).max,
@@ -2969,6 +2977,7 @@ void GameInterface::DrawControlIcons(const help::TextFrame& frame, const help::D
 		if (_atmos != nullptr)
 		{
 			const auto colour = glm::vec4(1.0f, 1.0f, 1.0f, placed->alpha);
+			const Canvas::CornersScope boxDraw(_canvas, screen_pixels::Corners::BoxDraw);
 			for (size_t i = 0; i < cap.slices.size(); ++i)
 			{
 				_canvas.DrawQuad(cap.slices.at(i).min, cap.slices.at(i).max, cap.uvs.at(i).min, cap.uvs.at(i).max, colour,
@@ -3088,8 +3097,11 @@ void GameInterface::DrawCreaturePanel(glm::u16vec2 resolution)
 	const glm::vec4 shade {0.0f, 0.0f, 0.0f, 95.0f / 255.0f};
 	const glm::vec4 clear {0.0f, 0.0f, 0.0f, 0.0f};
 	const auto& box = layout.box;
-	_canvas.DrawShape({box.min, glm::vec2(box.max.x, box.min.y), box.max, glm::vec2(box.min.x, box.max.y)},
-	                  {shade, clear, clear, shade});
+	{
+		const Canvas::CornersScope boxDraw(_canvas, screen_pixels::Corners::BoxDraw);
+		_canvas.DrawShape({box.min, glm::vec2(box.max.x, box.min.y), box.max, glm::vec2(box.min.x, box.max.y)},
+		                  {shade, clear, clear, shade});
+	}
 
 	const glm::vec4 white {1.0f, 1.0f, 1.0f, 1.0f};
 	const glm::vec4 black {0.0f, 0.0f, 0.0f, 1.0f};
@@ -3113,6 +3125,8 @@ void GameInterface::DrawCreaturePanel(glm::u16vec2 resolution)
 
 void GameInterface::DrawStatBar(const creature_panel::Rect& bar, float fill, glm::u8vec3 colour, bool fromMiddle)
 {
+	// The game draws the bar's boxes with its box draw
+	const Canvas::CornersScope boxDraw(_canvas, screen_pixels::Corners::BoxDraw);
 	// The frame: a three-quarters black box with a white line round it two pixels in
 	const glm::vec4 frame {0.0f, 0.0f, 0.0f, 191.0f / 255.0f};
 	const glm::vec4 line {254.0f / 255.0f, 254.0f / 255.0f, 254.0f / 255.0f, 1.0f};
@@ -3124,10 +3138,14 @@ void GameInterface::DrawStatBar(const creature_panel::Rect& bar, float fill, glm
 	quad(bar.min, bar.max, {frame, frame, frame, frame});
 	const auto inner = glm::ivec2(bar.min) + 2;
 	const auto innerMax = glm::ivec2(bar.max) - 2;
-	_canvas.DrawLine(inner, {innerMax.x, inner.y}, line);
-	_canvas.DrawLine({inner.x, innerMax.y}, innerMax, line);
-	_canvas.DrawLine(inner, {inner.x, innerMax.y}, line);
-	_canvas.DrawLine({innerMax.x, inner.y}, innerMax, line);
+	{
+		// The game draws the frame's line as lines, not with its box draw
+		const Canvas::CornersScope lines(_canvas, screen_pixels::Corners::AsGiven);
+		_canvas.DrawLine(inner, {innerMax.x, inner.y}, line);
+		_canvas.DrawLine({inner.x, innerMax.y}, innerMax, line);
+		_canvas.DrawLine(inner, {inner.x, innerMax.y}, line);
+		_canvas.DrawLine({innerMax.x, inner.y}, innerMax, line);
+	}
 
 	// The fill, from half the colour where it starts to the whole colour where it ends
 	const auto filled = creature_panel::FillOf(bar, fill, fromMiddle);
@@ -3192,8 +3210,11 @@ void GameInterface::DrawFightPanel(glm::u16vec2 resolution)
 	// The shade is darkest in the screen's corner and clear at the box's other three corners, split from its top right
 	// to its bottom left, so the lower right half of the box is clear
 	const auto& box = layout.box;
-	_canvas.DrawShape({glm::vec2(box.max.x, box.min.y), box.max, glm::vec2(box.min.x, box.max.y), box.min},
-	                  {clear, clear, clear, shade});
+	{
+		const Canvas::CornersScope boxDraw(_canvas, screen_pixels::Corners::BoxDraw);
+		_canvas.DrawShape({glm::vec2(box.max.x, box.min.y), box.max, glm::vec2(box.min.x, box.max.y), box.min},
+		                  {clear, clear, clear, shade});
+	}
 	const auto widthOf = [this, &layout](std::u16string_view text) { return _font.GetWidth(text, layout.textSize); };
 	for (size_t i = 0; i < layout.rows.size(); ++i)
 	{
@@ -3432,6 +3453,7 @@ void GameInterface::DrawToolTip(glm::u16vec2 resolution)
 		const auto cap = icons::LayoutKeyCap(placed);
 		if (_atmos != nullptr)
 		{
+			const Canvas::CornersScope boxDraw(_canvas, screen_pixels::Corners::BoxDraw);
 			for (size_t i = 0; i < cap.slices.size(); ++i)
 			{
 				_canvas.DrawQuad(cap.slices.at(i).min, cap.slices.at(i).max, cap.uvs.at(i).min, cap.uvs.at(i).max, white,
@@ -3447,6 +3469,7 @@ void GameInterface::DrawToolTip(glm::u16vec2 resolution)
 			if ((shown->arrows & arrow.bit) != 0)
 			{
 				const auto box = world_tooltip::ArrowPicture(arrow.side, lineIconX, iconWidth, handY, size);
+				const Canvas::CornersScope boxDraw(_canvas, screen_pixels::Corners::BoxDraw);
 				_canvas.DrawQuad(glm::vec2(box.min), glm::vec2(box.max), arrow.uvMin, arrow.uvMax, white, _atmos.get());
 			}
 		}

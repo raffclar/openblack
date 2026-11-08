@@ -218,6 +218,7 @@ void LoadingScreen::DrawColourBox(loading::Rect rect, const std::array<uint32_t,
 	{
 		faded.at(i) = ColourOf(colours.at(i), loading::BoxAlpha(static_cast<uint8_t>(colours.at(i) >> 24), drawAlpha));
 	}
+	const Canvas::CornersScope boxDraw(_canvas, screen_pixels::Corners::BoxDraw);
 	_canvas.DrawShape({glm::vec2 {left, top}, {right, top}, {right, bottom}, {left, bottom}}, faded);
 }
 
@@ -269,10 +270,13 @@ void LoadingScreen::DrawBar(const loading::Layout& layout, float progress, uint8
 	// The bar's bevelled body: the atlas texel's colour, edged two pixels in
 	const auto body = ToScreen(bar.body);
 	const auto* texel = &_atlasPixels[((k_BevelTexel.y * k_AtlasSize) + k_BevelTexel.x) * 4];
-	_canvas.DrawQuad({body.left, body.top}, {body.right, body.bottom}, {0.0f, 0.0f}, {1.0f, 1.0f},
-	                 {static_cast<float>(texel[0]) / 255.0f, static_cast<float>(texel[1]) / 255.0f,
-	                  static_cast<float>(texel[2]) / 255.0f, AlphaOf(alpha)},
-	                 nullptr);
+	{
+		const Canvas::CornersScope boxDraw(_canvas, screen_pixels::Corners::BoxDraw);
+		_canvas.DrawQuad({body.left, body.top}, {body.right, body.bottom}, {0.0f, 0.0f}, {1.0f, 1.0f},
+		                 {static_cast<float>(texel[0]) / 255.0f, static_cast<float>(texel[1]) / 255.0f,
+		                  static_cast<float>(texel[2]) / 255.0f, AlphaOf(alpha)},
+		                 nullptr);
+	}
 	const glm::vec4 bevelLine(k_BevelLineColour, AlphaOf(alpha));
 	const glm::ivec2 topLeft {bar.body.left + 2, bar.body.top + 2};
 	const glm::ivec2 bottomRight {bar.body.right - 2, bar.body.bottom - 2};
@@ -303,6 +307,7 @@ void LoadingScreen::DrawBar(const loading::Layout& layout, float progress, uint8
 	const glm::vec4 shadow(1.0f, 1.0f, 1.0f, AlphaOf(static_cast<uint8_t>(alpha / 2)));
 	const auto piece = [this, &shadow](loading::Rect layoutRect, const ShadowPiece& part) {
 		const auto rect = ToScreen(layoutRect);
+		const Canvas::CornersScope boxDraw(_canvas, screen_pixels::Corners::BoxDraw);
 		_canvas.DrawQuad({rect.left, rect.top}, {rect.right, rect.bottom}, part.uvMin / 256.0f, part.uvMax / 256.0f, shadow,
 		                 _atlas.get());
 	};
@@ -363,6 +368,7 @@ void LoadingScreen::DrawTips(glm::u16vec2 resolution, float fade, float progress
 		const glm::vec2 blurMin(k_BlurInset);
 		const glm::vec2 blurMax = glm::vec2(tip.blurSize) / 256.0f - k_BlurInset;
 		// The blurred picture over the whole screen, darkening to black down its lower half
+		const Canvas::CornersScope boxDraw(_canvas, screen_pixels::Corners::BoxDraw);
 		_canvas.DrawQuad({0.0f, 0.0f}, glm::vec2(screen), blurMin, blurMax, glm::vec4(k_BackdropColour, alpha), tip.blur.get());
 		DrawColourBox({.left = 0, .top = height / 2, .right = width, .bottom = height}, {0, 0, k_ShadeColour, k_ShadeColour},
 		              levels.alpha);

@@ -19,6 +19,7 @@
 #include <glm/vec2.hpp>
 #include <glm/vec4.hpp>
 
+#include "Gui/ScreenPixels.h"
 #include "Visual/RenderPass.h"
 
 namespace openblack::graphics
@@ -86,10 +87,36 @@ public:
 		bool operator==(const Clip&) const = default;
 	};
 	/// What is drawn from now on shows only inside a rectangle, its corners in pixels from the canvas's origin. With no
-	/// rectangle it shows everywhere again. Back to no rectangle with each frame
+	/// rectangle it shows everywhere again. Back to no rectangle with each frame. The rectangle moves with the corners
+	/// of each draw (see SetCorners).
 	void SetClip(std::optional<std::array<glm::vec2, 2>> corners) noexcept;
+	/// How the draws from now on place their corners on the game's screen. Back to screen_pixels::Corners::AsGiven with
+	/// each frame
+	void SetCorners(screen_pixels::Corners corners) noexcept { _corners = corners; }
+	[[nodiscard]] screen_pixels::Corners GetCorners() const noexcept { return _corners; }
+	/// Gives the draws a way to place their corners until the end of a scope, then puts back the way before it
+	class CornersScope
+	{
+	public:
+		CornersScope(Canvas& canvas, screen_pixels::Corners corners) noexcept
+		    : _canvas(canvas)
+		    , _before(canvas.GetCorners())
+		{
+			_canvas.SetCorners(corners);
+		}
+		~CornersScope() { _canvas.SetCorners(_before); }
+		CornersScope(const CornersScope&) = delete;
+		CornersScope& operator=(const CornersScope&) = delete;
+		CornersScope(CornersScope&&) = delete;
+		CornersScope& operator=(CornersScope&&) = delete;
+
+	private:
+		Canvas& _canvas;
+		screen_pixels::Corners _before;
+	};
 	/// A rectangle of a texture, tinted by colour (red, green, blue and alpha from 0 to 1). Without a texture it is
-	/// filled with the colour. Corners whose minimum is beyond the maximum flip the texture.
+	/// filled with the colour. Corners whose minimum is beyond the maximum flip the texture. All corners are on the
+	/// game's screen, where the centre of a pixel is at whole coordinates.
 	void DrawQuad(glm::vec2 min, glm::vec2 max, glm::vec2 uvMin, glm::vec2 uvMax, glm::vec4 colour,
 	              const graphics::Texture2D* texture);
 	/// A filled four sided shape, its corners in order round it, each with its own colour
@@ -130,6 +157,10 @@ private:
 
 	/// Starts a batch of a texture unless the last batch can take more of it
 	void StartBatch(const graphics::Texture2D* texture);
+	/// The pixels of the clip rectangle for the draws that place their corners in the current way
+	[[nodiscard]] std::optional<Clip> ClipInPixels() const noexcept;
+	/// The point in the render target of a corner from the canvas's origin
+	[[nodiscard]] glm::vec2 ToTarget(glm::vec2 corner) const noexcept;
 
 	graphics::RenderPass _view;
 	glm::u16vec2 _resolution {0, 0};
@@ -139,7 +170,8 @@ private:
 	std::optional<graphics::RenderPass> _sortedView;
 	uint32_t _sortDepth {0};
 	glm::vec2 _origin {0.0f, 0.0f};
-	std::optional<Clip> _clip;
+	screen_pixels::Corners _corners {screen_pixels::Corners::AsGiven};
+	std::optional<std::array<glm::vec2, 2>> _clip;
 	std::vector<Vertex> _vertices;
 	std::vector<Batch> _batches;
 	std::unique_ptr<graphics::Texture2D> _white;

@@ -238,6 +238,9 @@ private:
 	uint32_t _blockedTurns {0};
 	/// The scripts' piece plays in the music heard, and the play count of the world that it follows
 	bool _scriptStarted {false};
+	/// The first turn of the temple's music stopped every sound effect. A turn of the music outside the temple clears
+	/// this. A new land does not clear it.
+	bool _citadelStoppedSounds {false};
 	uint32_t _scriptPlayCount {0};
 	bool _alignmentMusicEnabled {true};
 	bool _banksLoaded {true};

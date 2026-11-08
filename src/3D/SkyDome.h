@@ -48,7 +48,7 @@ inline constexpr float k_Scale = 5.0f;
 /// The dome mesh's model matrix: its own units scaled up about its middle, then moved to the dome's centre
 [[nodiscard]] glm::mat4 Placement();
 
-/// The pictures of the dome: one for each alignment, evil, neutral and good, at each time of day, night, dusk and day,
+/// The pictures of the dome: one for each alignment, good, neutral and evil, at each time of day, night, dusk and day,
 /// in that order
 inline constexpr size_t k_Pictures = 9;
 /// The files of the pictures in the weather folder, in the order above: "sky_<alignment>_<time>.555", with the
@@ -133,8 +133,9 @@ struct Pair
 /// The pictures of the time of day a sky type blends, with the sky as the game counts it (2 at night, 0 by day): day
 /// into dusk up to 1, then dusk into night
 [[nodiscard]] Pair TimePair(float skyType);
-/// The alignments' domes a sky alignment from 0, evil, to 2, good, mixes: the second drawn over the first
-[[nodiscard]] Pair AlignmentPair(float alignment);
+/// The alignments' domes that the value of the land that the sky shows mixes: good into neutral up to 1, then neutral
+/// into evil up to 2. The second is drawn over the first.
+[[nodiscard]] Pair AlignmentPair(float sky);
 /// A 5-bit channel of two pictures blended by a weight of 255, in whole steps: the weights only add up to 255 of 256
 [[nodiscard]] uint8_t BlendChannel(uint8_t lower, uint8_t upper, uint8_t weight);
 
@@ -171,9 +172,9 @@ struct TintInputs
 	float skyType {0.0f};
 };
 
-/// How dark the sky is for the alignment that the land's light uses, from 0, good, to 2, evil. The sky is not dark
+/// How dark the sky is for the value of the land that the sky shows, from 0, good, to 2, evil. The sky is not dark
 /// until it is a little good, and at most 90 when it is fully good. The game darkens the good sky, not the evil sky.
-[[nodiscard]] uint8_t Darkness(float alignment);
+[[nodiscard]] uint8_t Darkness(float sky);
 /// The first colour at the low resolution textures: each channel of the land's colour times a part that falls towards
 /// night, cut to a whole number
 [[nodiscard]] glm::u8vec3 LowResolutionColour(uint32_t landColour, float skyType);

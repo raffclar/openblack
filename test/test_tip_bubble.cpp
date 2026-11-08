@@ -237,9 +237,9 @@ TEST(TipBubble, TheArrowsBlinkAtTheRightSide)
 	placement.min = {0.0f, 0.0f};
 	placement.max = {400.0f, 90.0f};
 	const auto up = UpArrow(placement);
-	// A fifth of the height is 18, grown by 2 each side
-	EXPECT_FLOAT_EQ(up.min.x, 400.0f - 9.9f - 2.0f);
-	EXPECT_FLOAT_EQ(up.max.x, 400.0f - 0.9f + 2.0f);
+	// A fifth of the height is 18, grown by 2 each side, and each corner cut down to a whole pixel
+	EXPECT_FLOAT_EQ(up.min.x, 388.0f);
+	EXPECT_FLOAT_EQ(up.max.x, 401.0f);
 	EXPECT_FLOAT_EQ(up.min.y, 9.0f - 2.0f);
 	EXPECT_FLOAT_EQ(up.max.y, 18.0f + 2.0f);
 	const auto down = DownArrow(placement);

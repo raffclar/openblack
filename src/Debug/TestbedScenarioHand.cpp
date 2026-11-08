@@ -412,6 +412,33 @@ void testbed_scenarios::AddHand(std::vector<Scenario>& all)
 	         {.kind = Kind::PointerRelease, .delaySeconds = 1.9f, .value = 3}},
 	});
 
+	// The Move button grips the lake while the Action button holds a barrel, then again with the empty hand
+	all.push_back({
+	    .id = "hand.sea_grip_while_holding",
+	    .name = "A grip of the water while the hand holds a thing makes no splash",
+	    .facet = Facet::Hand,
+	    .description = "The camera looks down on the lake. The hand takes a barrel, and the left button grips the "
+	                   "water two times. Then the hand puts the barrel down, and the left button grips the water two "
+	                   "more times.",
+	    .expected = "While the hand holds the barrel, a grip of the water makes no ring and no water sound. With the "
+	                "empty hand, each grip makes a ring on the water and the next water sound.",
+	    .environment = {.dispenserGrid = false, .cursor = glm::vec2(0.5f, 0.5f)},
+	    .framing = {.shot = Shot::Placed, .eye = {k_Lake.x, 60.0f, k_Lake.y - 40.0f}, .look = {k_Lake.x, 0.0f, k_Lake.y}},
+	    .objects = {{.type = MobileObjectInfo::EgyptBarrel, .offset = {k_Lake.x + 10.0f, k_NearShallows - 10.0f}}},
+	    .commands = {{.kind = Kind::HandTake, .delaySeconds = 1.0f, .object = 0},
+	                 {.kind = Kind::PointerTo, .delaySeconds = 0.5f, .point = {0.5f, 0.5f}},
+	                 {.kind = Kind::PointerPress, .delaySeconds = 1.0f, .value = 1},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 0.3f, .value = 1},
+	                 {.kind = Kind::PointerPress, .delaySeconds = 1.0f, .value = 1},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 0.3f, .value = 1},
+	                 {.kind = Kind::HandRelease, .delaySeconds = 1.0f},
+	                 {.kind = Kind::PointerTo, .delaySeconds = 1.0f, .point = {0.5f, 0.5f}},
+	                 {.kind = Kind::PointerPress, .delaySeconds = 1.0f, .value = 1},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 0.3f, .value = 1},
+	                 {.kind = Kind::PointerPress, .delaySeconds = 1.0f, .value = 1},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 0.3f, .value = 1}},
+	});
+
 	// The hand lets go of a thing over the slope of the lake's far shallows. The empty hand starts its up and its hover
 	// distance again.
 	all.push_back({

@@ -53,9 +53,9 @@ TEST(Lightning, FlashLightsTheLandWhite)
 	std::vector<uint8_t> bytes(LandLightPalette::k_Side * LandLightPalette::k_Side * 4, 0);
 	const LandLightPalette palette(bytes);
 	LandLightTable table;
-	table.Build(palette, 0.0f, 1.0f, 0.0f, 0);
+	table.Build(palette, 0.0f, 0.0f, 0.0f, 0);
 	const auto dark = table.GetTexels().back();
-	table.Build(palette, 0.0f, 1.0f, 0.0f, 128);
+	table.Build(palette, 0.0f, 0.0f, 0.0f, 128);
 	// Half way to white from black, in whole steps
 	EXPECT_EQ(dark & 0xFFFFFFu, 0u);
 	EXPECT_EQ(table.GetTexels().back() & 0xFFFFFFu, 0x7F7F7Fu);

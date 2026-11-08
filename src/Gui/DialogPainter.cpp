@@ -133,6 +133,7 @@ void DialogPainter::SetClip(const std::optional<DialogRect>& rect) const
 
 void DialogPainter::DrawBox(const DialogRect& rect, glm::vec2 uvMin, glm::vec2 uvMax, glm::vec3 tint) const
 {
+	const Canvas::CornersScope corners(_canvas, screen_pixels::Corners::BoxDraw);
 	_canvas.DrawQuad(ToScreen(rect.min), ToScreen(rect.max), uvMin, uvMax, glm::vec4(tint, _alpha), &_atlas);
 }
 
@@ -339,6 +340,8 @@ void DialogPainter::DrawSquare(glm::ivec2 position, int size, bool checked, bool
 
 void DialogPainter::DrawShape(const std::array<glm::vec2, 4>& corners, const std::array<glm::vec4, 4>& colours) const
 {
+	// The game fills these shapes with its box draw
+	const Canvas::CornersScope boxDraw(_canvas, screen_pixels::Corners::BoxDraw);
 	std::array<glm::vec2, 4> screen {};
 	std::array<glm::vec4, 4> faded {};
 	for (size_t i = 0; i < 4; ++i)
@@ -359,6 +362,7 @@ void DialogPainter::DrawSymbol(const DialogRect& rect, int index, glm::vec4 tint
 	const auto column = index % 4;
 	const auto row = index / 4;
 	const auto cell = (glm::vec2(static_cast<float>(column), static_cast<float>(row)) * k_Grid) + k_HalfTexel;
+	const Canvas::CornersScope corners(_canvas, screen_pixels::Corners::BoxDraw);
 	_canvas.DrawQuad(ToScreen(rect.min), ToScreen(rect.max), cell, cell + k_Grid - k_Texel,
 	                 glm::vec4(glm::vec3(tint), tint.a * _alpha), _symbols);
 }
@@ -366,6 +370,7 @@ void DialogPainter::DrawSymbol(const DialogRect& rect, int index, glm::vec4 tint
 void DialogPainter::DrawPicture(const DialogRect& rect, const graphics::Texture2D& texture, glm::vec2 uvMin, glm::vec2 uvMax,
                                 glm::vec4 colour) const
 {
+	const Canvas::CornersScope corners(_canvas, screen_pixels::Corners::BoxDraw);
 	_canvas.DrawQuad(ToScreen(rect.min), ToScreen(rect.max), uvMin, uvMax, glm::vec4(glm::vec3(colour), colour.a * _alpha),
 	                 &texture);
 }
@@ -393,6 +398,7 @@ void DialogPainter::DrawPointer(Canvas& canvas, glm::ivec2 screen, uint32_t mill
 	// A 32 pixel arrow on the default screen, grown with the layout on bigger ones
 	const auto size = 32.0f * std::max(_scale, 1.0f);
 	const auto min = glm::vec2(screen.x - 2, screen.y);
+	const Canvas::CornersScope corners(canvas, screen_pixels::Corners::BoxDraw);
 	canvas.DrawQuad(min, min + size, cell + k_HalfTexel, cell + k_PointerExtent, glm::vec4(1.0f), &_atlas);
 }
 

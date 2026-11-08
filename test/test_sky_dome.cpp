@@ -133,6 +133,9 @@ TEST(SkyDome, TimePairs)
 
 TEST(SkyDome, AlignmentPairs)
 {
+	// The value of the sky goes from 0, good, to 2, evil, and the first dome is the good one
+	EXPECT_EQ(sky_dome::AlignmentPair(0.0f), (sky_dome::Pair {.lower = 0, .upper = 1, .weight = 0}));
+	EXPECT_EQ(sky_dome::AlignmentPair(2.0f), (sky_dome::Pair {.lower = 1, .upper = 2, .weight = 255}));
 	EXPECT_EQ(sky_dome::AlignmentPair(-0.5f), (sky_dome::Pair {.lower = 0, .upper = 1, .weight = 0}));
 	EXPECT_EQ(sky_dome::AlignmentPair(0.5f), (sky_dome::Pair {.lower = 0, .upper = 1, .weight = 127}));
 	EXPECT_EQ(sky_dome::AlignmentPair(1.0f), (sky_dome::Pair {.lower = 0, .upper = 1, .weight = 255}));
@@ -255,14 +258,14 @@ TEST(SkyDome, SunAndMoonDimThroughAnOvercast)
 TEST(SkyDome, PicturesAreEachAlignmentAtEachTimeOfDay)
 {
 	const auto files = sky_dome::PictureFiles();
-	EXPECT_EQ(files[0], "sky_evil_night.555");
-	EXPECT_EQ(files[2], "sky_evil_day.555");
+	EXPECT_EQ(files[0], "sky_good_night.555");
+	EXPECT_EQ(files[2], "sky_good_day.555");
 	// The neutral ones are capitalised as the game ships them
 	EXPECT_EQ(files[3], "Sky_Ntrl_Night.555");
 	EXPECT_EQ(files[4], "Sky_Ntrl_Dusk.555");
 	EXPECT_EQ(files[5], "Sky_Ntrl_Day.555");
-	EXPECT_EQ(files[7], "sky_good_dusk.555");
-	EXPECT_EQ(files[8], "sky_good_day.555");
+	EXPECT_EQ(files[7], "sky_evil_dusk.555");
+	EXPECT_EQ(files[8], "sky_evil_day.555");
 }
 
 // The dome stands round the middle of the map at five times its mesh's size: its top, 48549 units up in the mesh, is

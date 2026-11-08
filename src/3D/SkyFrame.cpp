@@ -42,9 +42,9 @@ void Update(const Inputs& inputs, ecs::components::SkyDome& dome, ecs::component
 	    sun.placement.has_value() ? sky_dome::ThroughOvercast(sun.placement->alpha, dome.overcast, inputs.fog) : 0.0f;
 
 	moon.placement = graphics::moon::Place(inputs.scriptHour);
-	moon.colour = Colour(inputs.palette != nullptr ? LandLightTable::GetMoonColour(*inputs.palette, inputs.landLight.skyType,
-	                                                                               inputs.landLight.alignment)
-	                                               : 0xFFFFFFu);
+	moon.colour = Colour(inputs.palette != nullptr
+	                         ? LandLightTable::GetMoonColour(*inputs.palette, inputs.landLight.skyType, inputs.landLight.sky)
+	                         : 0xFFFFFFu);
 	moon.strength =
 	    moon.placement.has_value() ? sky_dome::ThroughOvercast(moon.placement->alpha, dome.overcast, inputs.fog) : 0.0f;
 	if (moon.strength <= 0.0f)

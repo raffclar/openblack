@@ -24,6 +24,7 @@
 #include "3D/MapCoords.h"
 #include "ECS/Systems/SavedStateInterface.h"
 #include "Gui/LoadingScreenRules.h"
+#include "LHScriptX/ScriptLineValues.h"
 #include "LandChange.h"
 #include "LandMessage.h"
 #include "Simulation/TurnBody.h"
@@ -219,6 +220,8 @@ public:
 	[[nodiscard]] virtual std::chrono::steady_clock::duration GetTurnDeltaTime() const = 0;
 	/// Every some turns, the profile of the player keeps the alignment of the player, but not on the testbed
 	virtual void KeepAlignmentInProfile() = 0;
+	/// The values that the reader of the land scripts keeps from the lines that it read. They stay while the game runs.
+	[[nodiscard]] virtual lhscriptx::ScriptLineValues& GetScriptLineValues() = 0;
 };
 
 /// The land script that a new game starts on: the first land script of the map script. None when the map script or its

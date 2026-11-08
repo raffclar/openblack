@@ -13,6 +13,7 @@
 
 #include <algorithm>
 
+#include <glm/common.hpp>
 #include <glm/geometric.hpp>
 
 namespace openblack::help::tip_bubble
@@ -252,9 +253,10 @@ Arrow ArrowAt(const Placement& placement, float top, float bottom, glm::vec2 uvM
 {
 	const float size = (placement.max.y - placement.min.y) * k_ArrowShare;
 	const float grow = size / 9.0f;
+	// The game draws the arrow with its box draw, which takes whole pixels: it cuts each corner down to a whole number
 	return {
-	    .min = {placement.max.x - (0.55f * size) - grow, top - grow},
-	    .max = {placement.max.x - (0.05f * size) + grow, bottom + grow},
+	    .min = glm::trunc(glm::vec2 {placement.max.x - (0.55f * size) - grow, top - grow}),
+	    .max = glm::trunc(glm::vec2 {placement.max.x - (0.05f * size) + grow, bottom + grow}),
 	    .uvMin = uvMin,
 	    .uvMax = uvMax,
 	};
