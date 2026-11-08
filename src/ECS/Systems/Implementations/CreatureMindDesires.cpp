@@ -169,6 +169,8 @@ namespace openblack::ecs::systems::mind_detail
 {
 constexpr float k_TurnSeconds = std::chrono::duration<float>(TimeSystemInterface::k_TurnDuration).count();
 constexpr float k_TurnsPerSecond = 1.0f / k_TurnSeconds;
+// The contexts count their window in whole seconds of game turns
+static_assert(TimeSystemInterface::k_TurnDuration * creature_learning::k_ContextTurnsPerSecond == std::chrono::seconds(1));
 /// The whole game turns in a second, as the game counts them
 constexpr auto k_WholeTurnsPerSecond = static_cast<uint32_t>(1000 / TimeSystemInterface::k_TurnDuration.count());
 /// A creature just put in the world takes its first few turns to stand up before it can pass out
@@ -549,7 +551,7 @@ void CreatureMindSystem::MindTurn(entt::entity entity)
 	creature_desire_sources::UpdateInterest(mind.playerInterest, PlayerInterestNow(creature, mind));
 	if (mind.learnt.has_value())
 	{
-		creature_learning::Age(mind.learnt->contexts, k_TurnSeconds);
+		creature_learning::Age(mind.learnt->contexts, 1);
 	}
 	if (mind.desiresPhase != mind.developmentPhase)
 	{

@@ -999,7 +999,7 @@ std::unique_ptr<ProviderInterface> openblack::inspector::MakeCreatureProvider(Cr
 			                        {"done", remembered.done},
 			                        {"seen", remembered.seen},
 			                        {"ordered", remembered.ordered},
-			                        {"seconds_since", remembered.secondsSince},
+			                        {"seconds_since", creature_learning::WholeSecondsSince(remembered)},
 			                        {"window_seconds", remembered.windowSeconds},
 			                        {"priority", creature_learning::LearningPriority(remembered)}});
 		    }
