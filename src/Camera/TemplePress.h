@@ -57,6 +57,29 @@ private:
 	bool _held {true};
 };
 
+/// The second click of a double click is not a press in the temple. The camera gets the double click for one step only.
+/// While the player holds the button after the double click, the temple and its controls see the button up.
+class DoubleClickHold
+{
+public:
+	[[nodiscard]] constexpr Button Filter(Button button) noexcept
+	{
+		if (button == Button::DoubleClick)
+		{
+			_held = true;
+			return button;
+		}
+		if (button == Button::None)
+		{
+			_held = false;
+		}
+		return _held ? Button::None : button;
+	}
+
+private:
+	bool _held {false};
+};
+
 /// The held press the camera takes under the temple's fade; a double click always comes through
 [[nodiscard]] constexpr Button UnderFade(Button button, float fade) noexcept
 {

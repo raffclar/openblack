@@ -150,6 +150,9 @@ public:
 	/// Whether the press that sent a room of pictures' camera back from a close look is still held. Until the player lets
 	/// go of it, that press does not drag the room.
 	[[nodiscard]] static constexpr bool PressFromLookStillHeld(bool wasHeld, bool pressed) { return wasHeld && pressed; }
+	/// Whether the button that the camera gets stops a close look. Each room stops the look on a held press or a double
+	/// click, not only on a new press. A press on a control does not come to the camera, so it does not stop the look.
+	[[nodiscard]] static constexpr bool LeavesLookOnPress(uint8_t button) { return button != 0; }
 	/// The creature's room camera's look from a point, as a heading about the vertical and a pitch up and down
 	[[nodiscard]] static Pose LookPose(glm::vec3 from, float heading, float pitch);
 	/// The heading and pitch of a look at a point, as the game's camera works them out
@@ -409,6 +412,7 @@ private:
 	// The press the mouse is held from
 	bool _wasPressed {false};
 	temple_press::HeldFromOutside _heldFromOutside;
+	temple_press::DoubleClickHold _doubleClickHold;
 	temple_press::PressWatch _pressWatch;
 	bool _dialogOpen {false};
 	bool _futureWordsShown {false};
