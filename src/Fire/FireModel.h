@@ -133,6 +133,24 @@ struct TurnOutcome
 /// The surface that cools it: four times its height by its radius
 [[nodiscard]] float CoolingArea(const Material& material);
 
+/// How a kind of thing gives the reach of its fire
+enum class FireReach : uint8_t
+{
+	/// By its radius across the ground (most things)
+	Radius,
+	/// By a share of its height (a dead or felled tree)
+	ShareOfHeight,
+	/// By a fixed radius, whatever its size (a worship site)
+	WorshipSite,
+};
+/// A dead or felled tree's fire reaches this share of its height
+constexpr float k_DeadTreeFireShare = 0.35f;
+/// A worship site's fire reaches this far
+constexpr float k_WorshipSiteFireRadius = 14.0f;
+/// How far a thing's fire reaches at its fiercest, before the fire's own scale, from its radius across the ground and
+/// its height
+[[nodiscard]] float DefaultFireRadius(FireReach reach, float radius, float height);
+
 // The temperature
 
 [[nodiscard]] bool IsOnFire(float temperature, const Material& material);
