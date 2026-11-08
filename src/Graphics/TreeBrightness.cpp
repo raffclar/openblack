@@ -20,11 +20,17 @@ namespace
 constexpr float k_Least = 200.0f;
 constexpr float k_Range = 55.0f;
 
-/// Normalised, or left as it is when it has no length
+/// Normalised, or left as it is when all its parts are zero. The game adds the squares of z, then y, then x, and
+/// multiplies by the inverse of the length.
 glm::vec3 Normalised(const glm::vec3& v)
 {
-	const auto lengthSquared = glm::dot(v, v);
-	return lengthSquared > 0.0f ? v / std::sqrt(lengthSquared) : v;
+	if (v == glm::vec3(0.0f))
+	{
+		return v;
+	}
+	const float lengthSquared = ((v.z * v.z) + (v.y * v.y)) + (v.x * v.x);
+	const float inverse = 1.0f / std::sqrt(lengthSquared);
+	return v * inverse;
 }
 } // namespace
 
