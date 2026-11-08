@@ -34,7 +34,7 @@ namespace openblack::ecs::villager_creature_dance
 /// the last building first
 [[nodiscard]] std::vector<entt::entity> SummonOrder(entt::entity town);
 /// The villager joins the creature's dance and comes under the creature's control. False when no group of the dance
-/// takes it.
+/// takes it, or when its change of state removes it from the dance again.
 bool StartWorshippingCreature(entt::entity villager, entt::entity dance);
 /// The creature sends the villager to its place in the dance, at a run. False for a villager in no group of a dance.
 bool SendToPlace(entt::entity villager, entt::entity dance);
