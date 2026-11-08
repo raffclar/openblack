@@ -31,6 +31,7 @@
 #include "ECS/Components/Hand.h"
 #include "ECS/Components/HandMiracleFx.h"
 #include "ECS/Components/HandMorph.h"
+#include "ECS/Components/HandSendWait.h"
 #include "ECS/Components/HandStart.h"
 #include "ECS/Components/HandStillness.h"
 #include "ECS/Components/HeldDrawTrack.h"
@@ -47,6 +48,7 @@
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "EngineConfig.h"
 #include "Hand/GodHand.h"
+#include "Hand/HandSendWait.h"
 #include "Hand/HandStart.h"
 #include "Hand/HandStillness.h"
 #include "Hand/OtherHeldDraw.h"
@@ -287,9 +289,49 @@ void HandSystem::FindAfterLoad()
 	}
 }
 
+void HandSystem::MarkOwnSend()
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto hand = GetOwnHands()[static_cast<size_t>(Side::Left)];
+	if (!_ownPlayer.has_value() || !registry.Valid(hand) || !Locator::time::has_value())
+	{
+		return;
+	}
+	auto* wait = registry.TryGet<HandSendWait>(hand);
+	hand_send_wait::MarkSent(wait != nullptr ? *wait : registry.Assign<HandSendWait>(hand), Locator::time::value().GetTurn());
+}
+
+void HandSystem::MarkSendDone(PlayerNames player, uint32_t turn)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto hand = GetOwnHands()[static_cast<size_t>(Side::Left)];
+	if (!IsOwnPlayer(player) || !registry.Valid(hand))
+	{
+		return;
+	}
+	auto* wait = registry.TryGet<HandSendWait>(hand);
+	hand_send_wait::MarkDone(wait != nullptr ? *wait : registry.Assign<HandSendWait>(hand), turn);
+}
+
+bool HandSystem::OwnSendWaits() const noexcept
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto hand = GetOwnHands()[static_cast<size_t>(Side::Left)];
+	const auto* wait = registry.Valid(hand) ? registry.TryGet<const HandSendWait>(hand) : nullptr;
+	return wait != nullptr && hand_send_wait::Waits(*wait);
+}
+
 void HandSystem::ProcessTurn()
 {
 	auto& registry = Locator::entitiesRegistry::value();
+	// The hand of this computer first ends its wait for a send that the commands of this turn did
+	if (const auto own = GetOwnHands()[static_cast<size_t>(Side::Left)]; _ownPlayer.has_value() && registry.Valid(own))
+	{
+		if (auto* wait = registry.TryGet<HandSendWait>(own); wait != nullptr)
+		{
+			hand_send_wait::TurnPass(*wait);
+		}
+	}
 	// The world counts the stillness of each left hand that the reports give, as each computer has the same reports
 	const auto step = [&registry](entt::entity hand) {
 		if (!registry.Valid(hand))

@@ -95,6 +95,12 @@ marks::Mark MarkOnSkin(const posed_model::SkinHit& hit, marks::Anchor anchor)
 	return {.anchor = anchor, .subMesh = hit.subMesh, .firstIndex = hit.hit.firstIndex, .s = hit.hit.s, .t = hit.hit.t};
 }
 
+/// The hand of this computer waits for its last send (see hand_send_wait)
+bool SendWaits()
+{
+	return Locator::handSystem::has_value() && Locator::handSystem::value().OwnSendWaits();
+}
+
 /// Whether the hand of the player holds nothing: no thing and no miracle. A hand that only starts to take a thing holds
 /// nothing yet.
 bool HandHoldsNothing(const ecs::Registry& registry)
@@ -273,9 +279,21 @@ bool CreatureFightSystem::Press(const glm::vec3& rayOrigin, const glm::vec3& ray
 		target.emplace_back("move", fight::Name(move.kind));
 		command = player_commands::FightMove {
 		    .target = *under, .kind = static_cast<uint8_t>(move.kind), .value = move.value, .replace = replace};
+		// While the hand waits for its last send, a press on a body does nothing: no sparkle, no move and no sound
+		if (SendWaits())
+		{
+			note("refused_send_waits", std::move(target));
+			return true;
+		}
 	}
 	else
 	{
+		// While the hand waits for its last send, a press on the ground does nothing
+		if (SendWaits())
+		{
+			note("refused_send_waits", {{"target", "ground"}});
+			return true;
+		}
 		// The arena's ground: a step towards where it was pressed
 		if (rayDirection.y >= 0.0f)
 		{
@@ -306,6 +324,11 @@ bool CreatureFightSystem::Press(const glm::vec3& rayOrigin, const glm::vec3& ray
 	PlayDirectSound();
 	note("accepted", std::move(target));
 	Send(*command);
+	// A press on the ground makes the hand wait until the turn does the step
+	if (std::holds_alternative<player_commands::FightGround>(*command) && Locator::handSystem::has_value())
+	{
+		Locator::handSystem::value().MarkOwnSend();
+	}
 	_pressed = Pressed {.creature = *self, .milliseconds = milliseconds, .turn = turn};
 	return true;
 }

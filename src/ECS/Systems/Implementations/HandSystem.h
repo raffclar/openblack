@@ -59,6 +59,9 @@ public:
 	[[nodiscard]] std::optional<ReportedView> GetReportedView(PlayerNames player) const noexcept override;
 	[[nodiscard]] entt::entity GetReportedPickOf(PlayerNames player) const noexcept override;
 	void ProcessTurn() override;
+	void MarkOwnSend() override;
+	void MarkSendDone(PlayerNames player, uint32_t turn) override;
+	[[nodiscard]] bool OwnSendWaits() const noexcept override;
 	[[nodiscard]] uint32_t GetHandStillTurnsOf(PlayerNames player) const noexcept override;
 	[[nodiscard]] hand_trace::HandTrace* GetTrace() noexcept override { return &_trace; }
 	[[nodiscard]] hand_report::OwnReporter* GetOwnReporter() noexcept override { return &_ownReporter; }

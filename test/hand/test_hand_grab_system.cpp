@@ -14,6 +14,7 @@
 #include <functional>
 #include <map>
 #include <numbers>
+#include <ranges>
 #include <set>
 #include <tuple>
 #include <type_traits>
@@ -267,6 +268,11 @@ public:
 			onCommand(action);
 		}
 	}
+	[[nodiscard]] bool SendWaits() const override { return sendWaits; }
+	void MarkSend() override { ++sendMarks; }
+	/// The hand of this computer waits for its last send, and how many sends started the wait
+	bool sendWaits {false};
+	int sendMarks {0};
 	/// The commands that the hand sent, in their order, and what the test does with each as it comes
 	std::vector<player_commands::Action> sent;
 	std::function<void(const player_commands::Action&)> onCommand;
@@ -1279,6 +1285,41 @@ TEST_F(HandGrabSystemWithWorld, LettingGoAsksTheInfluenceAtThePointPicked)
 	Frame(10, {12.0f, 0.0f, 0.0f}, {12.0f, 0.0f, 0.0f});
 	Release();
 	EXPECT_EQ(world->released.size(), 1u);
+}
+
+// While the hand waits for its last send, a let go keeps hold of the thing and sends nothing
+TEST_F(HandGrabSystemWithWorld, WhileTheHandWaitsForItsLastSendALetGoKeepsHold)
+{
+	const auto rock = world->AddRock({0.0f, 0.0f, 0.0f});
+	world->underCursor = rock;
+	Press();
+	for (int i = 0; i < 20 && !system->GetHeld().has_value(); ++i)
+	{
+		Frame(10);
+	}
+	Release();
+	ASSERT_TRUE(system->GetHeld().has_value());
+	world->underCursor.reset();
+	world->pickedPoint = glm::vec3(8.0f, 0.0f, 0.0f);
+	world->sendWaits = true;
+	const auto sentBefore = world->sent.size();
+	Frame(10, {8.0f, 0.0f, 0.0f}, {8.0f, 0.0f, 0.0f});
+	Press();
+	Frame(10, {8.0f, 0.0f, 0.0f}, {8.0f, 0.0f, 0.0f});
+	Release();
+	EXPECT_TRUE(system->GetHeld().has_value());
+	EXPECT_TRUE(world->released.empty());
+	EXPECT_TRUE(std::ranges::none_of(world->sent | std::views::drop(sentBefore), [](const auto& action) {
+		return std::holds_alternative<player_commands::HandLetGo>(action);
+	}));
+	EXPECT_EQ(world->sendMarks, 0);
+	// After the wait, the let go throws the thing and starts a wait
+	world->sendWaits = false;
+	Press();
+	Frame(10, {8.0f, 0.0f, 0.0f}, {8.0f, 0.0f, 0.0f});
+	Release();
+	EXPECT_EQ(world->released.size(), 1u);
+	EXPECT_EQ(world->sendMarks, 1);
 }
 
 // The help counts each thing that the hand takes and each thing that it lets go of. A let-go that the influence
@@ -3563,4 +3604,25 @@ TEST_F(HandGrabSystemWithWorld, AHeldThingThatGoesLeavesTheHandInTheInputOfTheTu
 	world->registry.Destroy(rock);
 	system->LockTurn(PlayerNames::PLAYER_ONE);
 	EXPECT_FALSE(system->IsBusy());
+}
+
+TEST_F(HandGrabSystemGiving, WhileTheHandWaitsForItsLastSendAPressSendsNoGive)
+{
+	HoldRock();
+	const auto creature = AddCreature(creature_giving::Verdict::Give);
+	world->underCursor = creature;
+	Frame(16);
+	deferCommands = true;
+	world->sendWaits = true;
+	// The press is taken, but no give goes
+	EXPECT_TRUE(Press());
+	EXPECT_TRUE(waiting.empty());
+	EXPECT_EQ(world->sendMarks, 0);
+	Release();
+	// After the wait, the next press sends the give and starts a wait
+	world->sendWaits = false;
+	EXPECT_TRUE(Press());
+	ASSERT_EQ(waiting.size(), 1u);
+	EXPECT_TRUE(std::holds_alternative<player_commands::HandGive>(waiting.front()));
+	EXPECT_EQ(world->sendMarks, 1);
 }

@@ -185,8 +185,15 @@ public:
 	/// picked under the cursor (see hand_morph::Pick and NextPoint). The hands of the other players have no model on the
 	/// screen, so they do not change.
 	virtual void UpdateAlignmentMorph(std::optional<map_coords::MapCoords> picked, bool holdPoint) = 0;
-	/// Once a game turn, before the creatures think: counts the turns that the player's hand stays in one place
+	/// Once a game turn, before the creatures think: counts the turns that the player's hand stays in one place. First,
+	/// the hand of this computer ends its wait for a send that a turn did (see hand_send_wait::TurnPass).
 	virtual void ProcessTurn() {}
+	/// The hand of this computer sent a command that the wait covers, at the game turn of now (see hand_send_wait)
+	virtual void MarkOwnSend() {}
+	/// At the turn: the world does a command of a player that the wait covers. Only the hand of this computer keeps it.
+	virtual void MarkSendDone([[maybe_unused]] PlayerNames player, [[maybe_unused]] uint32_t turn) {}
+	/// The hand of this computer waits for its last send (see hand_send_wait::Waits)
+	[[nodiscard]] virtual bool OwnSendWaits() const noexcept { return false; }
 	/// The game turns since the hand of a player last moved (see hand_stillness::Step). Zero for a player with no
 	/// hands.
 	[[nodiscard]] virtual uint32_t GetHandStillTurnsOf([[maybe_unused]] PlayerNames player) const noexcept { return 0; }

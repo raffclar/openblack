@@ -1973,6 +1973,7 @@ openblack_setup_and_add_test(
   test_creature_tattoo_change test_creature_tattoo_change.cpp
 )
 openblack_setup_and_add_test(test_throw_lead hand/test_throw_lead.cpp)
+openblack_setup_and_add_test(test_hand_send_wait hand/test_hand_send_wait.cpp)
 openblack_setup_and_add_test(
   test_oracle_throw_release oracle/test_oracle_throw_release.cpp
 )

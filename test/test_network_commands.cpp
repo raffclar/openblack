@@ -164,8 +164,10 @@ public:
 		made.push_back(player);
 		return {};
 	}
+	void MarkSendDone(PlayerNames player, uint32_t turn) override { done.emplace_back(player, turn); }
 
 	std::vector<PlayerNames> made;
+	std::vector<std::pair<PlayerNames, uint32_t>> done;
 };
 
 /// The computer minds of the test: it keeps the humans of each join
@@ -471,4 +473,28 @@ TEST_F(NetworkCommands, TheLeashOffOfTheTempleGoesToTheLeashOfTheSenderAtTheTurn
 	EXPECT_EQ(leashes.templeLeashOff, (std::vector {PlayerNames::PLAYER_TWO}));
 	_commands.SetSource(nullptr);
 	Locator::leashSystem::reset();
+}
+
+TEST_F(NetworkCommands, TheTurnTellsTheHandOfEachSendThatEndsAWait)
+{
+	auto& hands = static_cast<FakeHands&>(Locator::handSystem::emplace<FakeHands>());
+	_commands.SetSource(&_source);
+	// The let go, the give, the use, the cast and the press on the ground of a fight end the wait of the sender's hand.
+	// A tap does not.
+	_source.turns[6] = {
+	    {.player = PlayerNames::PLAYER_ONE, .action = FightGround {.creature = Entity(3), .point = {}, .replace = true}},
+	    {.player = PlayerNames::PLAYER_ONE, .action = HandTap {.object = Entity(2)}},
+	    {.player = PlayerNames::PLAYER_TWO, .action = HandGive {.creature = Entity(4), .object = Entity(5), .leftHand = false}},
+	    {.player = PlayerNames::PLAYER_TWO, .action = HandApply {.target = Entity(6)}},
+	    {.player = PlayerNames::PLAYER_THREE, .action = HandLetGo {.object = Entity(7), .velocity = {}, .start = {}}},
+	    {.player = PlayerNames::PLAYER_THREE, .action = HandCast {}},
+	};
+	_commands.RunSent(6);
+	const std::vector<std::pair<PlayerNames, uint32_t>> expected {
+	    {PlayerNames::PLAYER_ONE, 6u},   {PlayerNames::PLAYER_TWO, 6u},   {PlayerNames::PLAYER_TWO, 6u},
+	    {PlayerNames::PLAYER_THREE, 6u}, {PlayerNames::PLAYER_THREE, 6u},
+	};
+	EXPECT_EQ(hands.done, expected);
+	_commands.SetSource(nullptr);
+	Locator::handSystem::reset();
 }
