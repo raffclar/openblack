@@ -89,6 +89,7 @@
 #include "ECS/Systems/InspectorLoading.h"
 #include "ECS/Systems/InspectorSystemInterface.h"
 #include "ECS/Systems/LandSystemInterface.h"
+#include "ECS/Systems/LoadFinishSystemInterface.h"
 #include "ECS/Systems/LoadingScreenSystemInterface.h"
 #include "ECS/Systems/MiracleFxSystemInterface.h"
 #include "ECS/Systems/MusicMoodSystemInterface.h"
@@ -322,6 +323,14 @@ Game::Game(Arguments&& args) noexcept
 	    .requestQuit = [this]() { RequestQuit(); },
 	    .followWindowSize = [this]() { FollowWindowSize(); },
 	});
+	// The work behind the loading screen at the end of a load
+	InitializeLoadFinish({
+	    .quitRequested = [this]() { return _quitRequested; },
+	    .sizeSceneToWindow = [this]() { SizeSceneToWindow(); },
+	    .handDrawn = [this]() { return IsHandDrawn(); },
+	    .sceneDrawDesc = [](uint32_t time,
+	                        bool drawHand) { return game_detail::SceneDrawDesc(Locator::config::value(), time, drawHand); },
+	});
 	// The log of each part of the game
 	simulation::StartLogs(args.logFile, args.logLevels);
 	sInstance = this;
@@ -444,6 +453,7 @@ Game::~Game() noexcept
 	spdlog::shutdown();
 	// The timers of the start that still run stop after the logs, so they write nothing
 	Locator::loadingScreenSystem::reset();
+	Locator::loadFinishSystem::reset();
 	// A later game, or a test, must not find this one through the static pointer
 	if (sInstance == this)
 	{
