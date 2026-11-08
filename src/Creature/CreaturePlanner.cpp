@@ -36,7 +36,12 @@ float creature_planner::DistancePriority(bool held, float distance, float distan
 	{
 		return k_HeldPriority;
 	}
-	return 1.0f - distanceWeight * std::min(distance, k_MaxGoalDistance) / k_MaxGoalDistance;
+	// Past the farthest distance, the full weight applies as it is, not multiplied and divided again
+	if (distance > k_MaxGoalDistance)
+	{
+		return 1.0f - distanceWeight;
+	}
+	return 1.0f - distanceWeight * distance / k_MaxGoalDistance;
 }
 
 float creature_planner::ActionPriority(float opinion, bool disabled)
@@ -53,8 +58,11 @@ float creature_planner::Novelty(uint32_t turnsSinceDone, bool servesFirstDesire)
 float creature_planner::Priority(float desire, std::optional<float> goalUsefulness, float actionPriority,
                                  float objectUsefulness, std::optional<float> usedUsefulness)
 {
-	return desire * goalUsefulness.value_or(k_DefaultUsefulness) * std::min(actionPriority, k_MaxActionPriority) *
-	       objectUsefulness * usedUsefulness.value_or(k_DefaultUsefulness) * k_PriorityScale;
+	// Keep the order of the game: the capped action and the thing acted on, then the desire with its goal, then the thing
+	// used and the scale
+	const float desireOnGoal = desire * goalUsefulness.value_or(k_DefaultUsefulness);
+	const float actionOnThing = std::min(actionPriority, k_MaxActionPriority) * objectUsefulness;
+	return actionOnThing * desireOnGoal * usedUsefulness.value_or(k_DefaultUsefulness) * k_PriorityScale;
 }
 
 size_t creature_planner::GoalsPerTurn(size_t creatureCount)
@@ -114,7 +122,7 @@ Plan MakePlan(const DesirePlanning& planning, const ActionCandidate& action, con
 		plan.instrument = used->id;
 	}
 	plan.priority = Priority(planning.strength, planning.activityUsefulness, wanted, objectUsefulness,
-	                         used.has_value() ? std::optional(used->usefulness) : std::nullopt);
+	                         used.has_value() ? std::optional(k_UsingUsefulness) : std::nullopt);
 	return plan;
 }
 
@@ -203,8 +211,9 @@ std::optional<Plan> PlanActionThenPart(const DesirePlanning& planning)
 			{
 				continue;
 			}
+			// Keep the order of the game: the thing used, then the part, then the action
 			const auto score =
-			    Wanted(action) * k_DefaultUsefulness * (used.has_value() ? used->usefulness : k_DefaultUsefulness);
+			    (used.has_value() ? k_UsingUsefulness : k_DefaultUsefulness) * k_DefaultUsefulness * Wanted(action);
 			if (score >= most)
 			{
 				chosen = i;
@@ -252,8 +261,9 @@ std::optional<Plan> PlanPartThenAction(const DesirePlanning& planning)
 		{
 			continue;
 		}
-		const auto score = Wanted(action) * part->actedOnUsefulness.value_or(k_DefaultUsefulness) *
-		                   (used.has_value() ? used->usefulness : k_DefaultUsefulness);
+		// Keep the order of the game: the thing used, then the part, then the action
+		const auto score = (used.has_value() ? k_UsingUsefulness : k_DefaultUsefulness) *
+		                   part->actedOnUsefulness.value_or(k_DefaultUsefulness) * Wanted(action);
 		if (score >= most)
 		{
 			chosen = i;
@@ -357,11 +367,11 @@ std::optional<UsedChoice> creature_planner::ChooseUsed(std::span<const UsedCandi
 			continue;
 		}
 		const auto score =
-		    std::clamp(DistancePriority(object.held, object.distance, distanceWeight) * k_DefaultUsefulness, 0.0f, 1.0f);
+		    std::clamp(k_UsingUsefulness * DistancePriority(object.held, object.distance, distanceWeight), 0.0f, 1.0f);
 		if (score > best)
 		{
 			best = score;
-			chosen = UsedChoice {.id = object.id, .usefulness = score};
+			chosen = UsedChoice {.id = object.id};
 		}
 	}
 	return chosen;
