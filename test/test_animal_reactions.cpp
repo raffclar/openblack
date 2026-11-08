@@ -89,7 +89,7 @@ TEST(AnimalReactions, AHungryAnimalIsInterestedInFoodOfAKindThatItEats)
 	EXPECT_FALSE(animals::InterestedInFood(otherFood));
 }
 
-TEST(AnimalReactions, AnAnimalWithNoHungerLimitOrFoodInThePhysicsIsNotInterested)
+TEST(AnimalReactions, AnAnimalWithNoHungerLimitOrFoodInThePhysicsOrAHandIsNotInterested)
 {
 	const animals::FoodInterest hungry {
 	    .available = true, .hungerLimit = 100, .hunger = 500, .eats = FoodType::Any, .food = FoodType::Meat};
@@ -99,6 +99,9 @@ TEST(AnimalReactions, AnAnimalWithNoHungerLimitOrFoodInThePhysicsIsNotInterested
 	auto flying = hungry;
 	flying.inPhysics = true;
 	EXPECT_FALSE(animals::InterestedInFood(flying));
+	auto held = hungry;
+	held.inHand = true;
+	EXPECT_FALSE(animals::InterestedInFood(held));
 	auto gone = hungry;
 	gone.available = false;
 	EXPECT_FALSE(animals::InterestedInFood(gone));

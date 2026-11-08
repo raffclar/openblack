@@ -742,7 +742,6 @@ uint32_t villager_forester::ReactToWoodPriority(entt::entity villager, entt::ent
 	    .distanceModifier =
 	        gutils::GetDistanceModifier(gutils::GetDistanceInMetres(PositionOf(villager), PositionOf(wood)), reach),
 	    .townTrigger = townInfo.desireTriggersVillagerAction,
-	    // TODO(villager-jobs-1): a land's script may raise every villager's interest; no shipped land does
 	    .interactDesire = 0.0f,
 	});
 	return interested ? priority : 0;

@@ -322,6 +322,25 @@ TEST(VillagerFoodRules, FoodLyingAboutCatchesAHungryEyeWithRoomToCarry)
 	EXPECT_FALSE(IsInterestedInFood(in));
 }
 
+TEST(VillagerFoodRules, FoodInAHandOrInThePhysicsCatchesNoEye)
+{
+	const FoodInterestInputs wanted {.desireForFood = 1.0f,
+	                                 .maxCarried = 150,
+	                                 .stateInterest = 1.0f,
+	                                 .distanceModifier = 1.0f,
+	                                 .townFoodDesire = 1.0f,
+	                                 .townTrigger = 0.0f};
+	EXPECT_TRUE(IsInterestedInFood(wanted));
+	// Held by a player's hand: neither its own want nor its town's want moves it
+	auto held = wanted;
+	held.inHand = true;
+	EXPECT_FALSE(IsInterestedInFood(held));
+	// Thrown, dropped or pushed, it is not looked at until it is at rest
+	auto flying = wanted;
+	flying.inPhysics = true;
+	EXPECT_FALSE(IsInterestedInFood(flying));
+}
+
 TEST(VillagerFoodRules, PickedUpFoodGoesToTheStoreWhenTheTownIsShort)
 {
 	EXPECT_TRUE(CarriesFoodToStore(1.0f, 150, 150, 0.2f));

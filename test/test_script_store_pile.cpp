@@ -17,11 +17,13 @@
 #include <spdlog/sinks/null_sink.h>
 #include <spdlog/spdlog.h>
 
+#include "ECS/Components/FishFarm.h"
 #include "ECS/Components/MagicPile.h"
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/ResourcePile.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/FishFarmSystemInterface.h"
 #include "Enums.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -123,4 +125,78 @@ TEST_F(ScriptStorePileTest, NoOtherResourceMakesAPile)
 {
 	EXPECT_EQ(stores.MakePile(ResourceType::None, glm::vec3(5.0f, 0.0f, 7.0f), 1), entt::entity {entt::null});
 	EXPECT_EQ(stores.MakePile(ResourceType::Wood, glm::vec3(5.0f, 0.0f, 7.0f), 0), entt::entity {entt::null});
+}
+
+namespace
+{
+/// The fish farms, as far as a store asks them for fish: it takes from the farm's own count as the game does
+class FakeFishFarms final: public FishFarmSystemInterface
+{
+public:
+	void ProcessTurn(uint32_t) override {}
+	void Update(float, glm::vec3) override {}
+	void Scare(glm::vec3) override {}
+	[[nodiscard]] std::optional<entt::entity> FarmWithFishAt(glm::vec2) const override { return std::nullopt; }
+	[[nodiscard]] fish_farm::Type GetType() const override { return {}; }
+	uint32_t TakeFish(entt::entity farm, uint32_t wanted) override
+	{
+		auto* data = Locator::entitiesRegistry::value().TryGet<FishFarm>(farm);
+		return data != nullptr ? fish_farm::Take(data->fish, wanted) : 0u;
+	}
+	[[nodiscard]] float FishLeft(entt::entity) const override { return 0.0f; }
+	[[nodiscard]] std::optional<entt::entity> ClosestFarm(glm::vec3, float) const override { return std::nullopt; }
+	[[nodiscard]] std::optional<FarmChoice> BestFarmFor(entt::entity, glm::vec3) const override { return std::nullopt; }
+	void RemoveFarm(entt::entity) override {}
+	void AddFisherman(entt::entity, entt::entity) override {}
+	void RemoveFisherman(entt::entity, entt::entity) override {}
+	[[nodiscard]] glm::vec3 FishingSpot(entt::entity) override { return glm::vec3(0.0f); }
+	[[nodiscard]] std::optional<int32_t> Fish(entt::entity, uint32_t, uint32_t, float) override { return std::nullopt; }
+	void Reset() override {}
+};
+
+class StoreFishFarmTest: public ScriptStorePileTest
+{
+protected:
+	void SetUp() override
+	{
+		ScriptStorePileTest::SetUp();
+		Locator::fishFarmSystem::emplace<FakeFishFarms>();
+		auto& registry = Locator::entitiesRegistry::value();
+		farm = registry.Create();
+		registry.Assign<Transform>(farm);
+		registry.Assign<FishFarm>(farm).fish = 300.0f;
+	}
+	void TearDown() override
+	{
+		Locator::fishFarmSystem::reset();
+		ScriptStorePileTest::TearDown();
+	}
+
+	[[nodiscard]] float Fish() const { return Locator::entitiesRegistry::value().Get<const FishFarm>(farm).fish; }
+
+	entt::entity farm {entt::null};
+};
+} // namespace
+
+// Food taken from a fish farm, as a script takes it, comes out of its fish: all that is asked while it has that much,
+// else the whole fish left
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(StoreFishFarmTest, FoodTakenFromAFishFarmComesOutOfItsFish)
+{
+	EXPECT_EQ(stores.RemoveResource(farm, ResourceType::Food, 120), 120u);
+	EXPECT_FLOAT_EQ(Fish(), 180.0f);
+	EXPECT_EQ(stores.RemoveResource(farm, ResourceType::Food, 180), 180u);
+	EXPECT_FLOAT_EQ(Fish(), 0.0f);
+	Locator::entitiesRegistry::value().Get<FishFarm>(farm).fish = 50.5f;
+	EXPECT_EQ(stores.RemoveResource(farm, ResourceType::Food, 60), 50u);
+	EXPECT_FLOAT_EQ(Fish(), 0.0f);
+}
+
+// A fish farm gives no wood, and it says it holds no food, as the game's farm does
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(StoreFishFarmTest, AFishFarmGivesNoWoodAndSaysItHoldsNothing)
+{
+	EXPECT_EQ(stores.RemoveResource(farm, ResourceType::Wood, 120), 0u);
+	EXPECT_FLOAT_EQ(Fish(), 300.0f);
+	EXPECT_EQ(stores.GetResource(farm, ResourceType::Food), 0u);
 }

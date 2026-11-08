@@ -45,6 +45,7 @@
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/Construction.h"
 #include "ECS/Components/DeadTree.h"
+#include "ECS/Components/FishFarm.h"
 #include "ECS/Components/Forest.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/MagicForest.h"
@@ -76,6 +77,7 @@
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/EffectRequestSystemInterface.h"
+#include "ECS/Systems/FishFarmSystemInterface.h"
 #include "ECS/Systems/ForestSystemInterface.h"
 #include "ECS/Systems/GuidanceSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
@@ -1408,7 +1410,14 @@ uint32_t ResourceStoreSystem::RemoveResource(entt::entity object, ResourceType t
 		SetScale(object, *take.scale);
 		return take.taken;
 	}
-	// TODO(temple-builders): fish farms give up what they hold; not yet
+	// A fish farm gives food from its fish, all that is asked while it has that much, else the whole fish left. It gives
+	// no wood.
+	if (registry.AllOf<FishFarm>(object))
+	{
+		return type == ResourceType::Food && Locator::fishFarmSystem::has_value()
+		           ? Locator::fishFarmSystem::value().TakeFish(object, amount)
+		           : 0u;
+	}
 	return 0;
 }
 
