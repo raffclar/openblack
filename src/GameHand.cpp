@@ -342,7 +342,8 @@ ecs::systems::GestureSystemInterface::Frame GestureFrameOf(const Camera& camera,
 	    .actionHeld = Locator::gameActionSystem::value().Get(input::BindableActionMap::ACTION),
 	    .player = LocalInputPlayer(),
 	    .view = {.screenSize = size,
-	             .cameraRight = camera.GetRight(),
+	             .drawnEye = camera.OnNearPlane({0.5f, 0.5f}).eye,
+	             .cameraHeading = script_camera::HeadingAndPitchFromPoints(camera.GetOrigin(), camera.GetFocus()).heading,
 	             .cameraEye = camera.GetOrigin(),
 	             .cameraForward = camera.GetForward()},
 	    .cameraShaking = Locator::explosionSystem::has_value() && Locator::explosionSystem::value().IsShaking(),
@@ -376,15 +377,10 @@ ecs::systems::GestureSystemInterface::Frame GestureFrameOf(const Camera& camera,
 		return Locator::pickingSystem::value().LandUnderPixel(eye, nearPoint,
 		                                                      ecs::systems::PickingSystemInterface::Sea::Anywhere);
 	};
-	// A point of the screen as far in front of the camera as another point
-	frame.view.atDepthOf = [rayAt, forward = camera.GetForward()](glm::vec2 pixel, glm::vec3 sameDepthAs) {
-		const auto [origin, direction] = rayAt(pixel);
-		float distance = 0.0f;
-		if (glm::intersectRayPlane(origin, direction, sameDepthAs, -forward, distance))
-		{
-			return origin + (direction * distance);
-		}
-		return sameDepthAs;
+	// The point on the line from the drawn eye through a pixel, at a distance from that eye
+	frame.view.atDistance = [&camera, size](glm::ivec2 pixel, float distance) {
+		const auto [eye, nearPoint] = camera.OnNearPlane(glm::vec2(pixel) / size);
+		return hand_feel::PointAlongCursor(eye, nearPoint, distance);
 	};
 	// Where a recognised gesture's trail is laid under a pixel: where the line from the camera through it meets the land,
 	// or the sea's level no further than 7500 units from the camera across the land, at the land's height there;

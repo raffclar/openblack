@@ -57,6 +57,9 @@ struct TrailSymbol
 /// The symbol from the points of its file: x and z from -100 to 100 put in 0 to 1, z turned to run down the screen
 [[nodiscard]] TrailSymbol MakeTrailSymbol(std::span<const glm::vec3> filePoints);
 
+/// Whether a point lies on the land: a point that is all but at the world's origin counts as a place with no land
+[[nodiscard]] bool IsOnLand(glm::vec3 point);
+
 /// The points of the hand's path that lie on the land, the oldest first
 [[nodiscard]] std::vector<glm::vec3> TrailLandPoints(const GestureRecorder& recorder);
 

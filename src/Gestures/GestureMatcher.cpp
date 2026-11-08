@@ -17,6 +17,8 @@
 #include <glm/common.hpp>
 #include <glm/geometric.hpp>
 
+#include "Common/X87.h"
+
 using namespace openblack;
 using namespace openblack::gesture;
 
@@ -224,22 +226,40 @@ ScreenBox gesture::GestureBox(const GestureRecorder& recorder, const Match& matc
 	return recorder.BoxOf(range.first, range.last);
 }
 
-glm::vec2 gesture::CircleEdge(const ScreenBox& box)
+glm::vec2 gesture::BoxMiddle(const ScreenBox& box)
 {
-	const auto size = box.Size();
-	const auto centre = box.Centre();
-	return {centre.x + (std::max(size.x, size.y) * 0.5f), centre.y};
+	return {((box.max.x - box.min.x + 1.0f) * 0.5f) + box.min.x, ((box.max.y - box.min.y + 1.0f) * 0.5f) + box.min.y};
 }
 
-float gesture::CircleRadius(glm::vec3 centre, glm::vec3 edge, glm::vec3 cameraRight)
+glm::ivec2 gesture::CircleMiddlePixel(const ScreenBox& boxInPixels)
 {
-	// Measured along the camera's right across the land, so the camera's tilt doesn't stretch it
-	auto across = glm::vec3(cameraRight.x, 0.0f, cameraRight.z);
-	const auto length = glm::length(across);
-	if (length <= 0.0f)
-	{
-		return glm::length(edge - centre) * k_CircleRadiusScale;
-	}
-	across /= length;
-	return std::abs(glm::dot(edge - centre, across)) * k_CircleRadiusScale;
+	const auto middle = BoxMiddle(boxInPixels);
+	return {static_cast<int>(middle.x), static_cast<int>(middle.y)};
+}
+
+glm::ivec2 gesture::CircleEdgePixel(const ScreenBox& boxInPixels)
+{
+	const auto middle = BoxMiddle(boxInPixels);
+	const auto size = boxInPixels.Size();
+	const float larger = size.x > size.y ? size.x : size.y;
+	return {static_cast<int>((larger * 0.5f) + middle.x), static_cast<int>(middle.y)};
+}
+
+float gesture::DistanceFromEye(glm::vec3 eye, glm::vec3 point)
+{
+	const auto way = point - eye;
+	return std::sqrt(((way.z * way.z) + (way.y * way.y)) + (way.x * way.x));
+}
+
+float gesture::CircleRadius(glm::vec3 eye, glm::vec3 middle, glm::vec3 edge, float cameraHeading)
+{
+	// The cosine is kept as a float. The negative sine stays wide into its multiplies
+	const float cosine = x87::RoundToFloat(x87::Cos(cameraHeading));
+	const double negativeSine = -x87::Sin(cameraHeading);
+	const auto across = [cosine, negativeSine](glm::vec3 point) {
+		return (point.x * cosine) + x87::Mul(point.z, negativeSine);
+	};
+	const float middleAcross = across(middle - eye);
+	const float edgeAcross = across(edge - eye);
+	return std::abs(middleAcross - edgeAcross) * k_CircleRadiusScale;
 }
