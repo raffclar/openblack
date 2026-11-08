@@ -216,8 +216,6 @@ constexpr float k_StrokeSadnessSeconds = 90.0f;
 
 constexpr float k_MimicStrokeBoost = 0.3f;
 
-/// Forgiven for running away, the threshold of its wish to run raises this much
-constexpr float k_RunAwayThresholdStep = 0.1f;
 /// A thing to use is learnt about at most this strongly for poo
 constexpr float k_PooUseFeedback = 0.5f;
 
@@ -249,9 +247,14 @@ void CreatureMindSystem::LearnFromFeedback(entt::entity creature, CreatureMindSt
 	const auto* info = context != nullptr && tables != nullptr && context->action < tables->actions.size()
 	                       ? &tables->actions[context->action]
 	                       : nullptr;
+	// The two tests below read the newest action that the creature did, not the action that gets the credit
+	const auto* newest = learnt.contexts.empty() ? nullptr : &learnt.contexts.back();
+	const auto* newestInfo = newest != nullptr && tables != nullptr && newest->action < tables->actions.size()
+	                             ? &tables->actions[newest->action]
+	                             : nullptr;
 
 	// Stroked for holding something while doing an action that allows it, it learns to eat from the hand
-	if (feedback > 0.0f && mind.developmentPhase > 0 && info != nullptr && info->eatWhenStroked &&
+	if (feedback > 0.0f && mind.developmentPhase > 0 && newestInfo != nullptr && newestInfo->eatWhenStroked &&
 	    Locator::creatureObjectActionSystem::has_value())
 	{
 		if (const auto held = Locator::creatureObjectActionSystem::value().GetCarried(creature);
@@ -279,7 +282,7 @@ void CreatureMindSystem::LearnFromFeedback(entt::entity creature, CreatureMindSt
 		}
 	}
 	// Stroked for running away from the player, it is forgiven and wants to run away less
-	if (feedback > 0.0f && context != nullptr && context->desire == Desire::RunAwayFromPlayer)
+	if (feedback > 0.0f && newest != nullptr && newest->desire == Desire::RunAwayFromPlayer)
 	{
 		auto& runAway = desires[Desire::RunAwayFromPlayer];
 		creature_learning::MakeLeastDominant(desires, Desire::RunAwayFromPlayer, creature_learning::k_LeastDominantFactor,
@@ -289,7 +292,7 @@ void CreatureMindSystem::LearnFromFeedback(entt::entity creature, CreatureMindSt
 			if (source.type == sources::k_RunAwayFromPlayer)
 			{
 				source.value = 0.0f;
-				source.threshold = std::min(source.threshold + k_RunAwayThresholdStep, creature_learning::k_MaxThreshold);
+				source.threshold = creature_learning::ForgivenRunAwayThreshold(source.threshold);
 			}
 		}
 		Abandon(mind);
@@ -344,7 +347,7 @@ void CreatureMindSystem::LearnFromFeedback(entt::entity creature, CreatureMindSt
 	if (info == nullptr || mind.developmentPhase < k_MinLessonPhase)
 	{
 		// Nothing to learn from yet: stroking makes it playful, showy and kind; slapping angry and fearful
-		const auto amount = 0.5f * std::abs(feedback);
+		const auto amount = creature_learning::YoungFeedbackAmount(feedback);
 		constexpr std::array k_Stroked {sources::k_PlayFromWatchingPlayer, sources::k_ManifestState,
 		                                sources::k_CompassionFromWatchingPlayer};
 		constexpr std::array k_Slapped {sources::k_AngerFromDamage, sources::k_FearFromDamage};

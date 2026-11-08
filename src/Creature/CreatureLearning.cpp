@@ -92,6 +92,16 @@ float creature_learning::Strengthened(float feedback)
 	return std::copysign(std::max(std::abs(feedback), k_MinFeedback), feedback);
 }
 
+float creature_learning::YoungFeedbackAmount(float feedback)
+{
+	return 0.5f * std::abs(Strengthened(feedback));
+}
+
+float creature_learning::ForgivenRunAwayThreshold(float threshold)
+{
+	return threshold + k_ForgivenRunAwayThresholdStep;
+}
+
 std::vector<std::pair<Desire, float>> creature_learning::Spread(Desire desire, float feedback, const Dependencies& dependencies)
 {
 	std::vector<std::pair<Desire, float>> spread {{desire, feedback}};
@@ -121,11 +131,17 @@ float creature_learning::LearningPriority(const Context& context)
 	{
 		return 0.0f;
 	}
-	if (context.windowSeconds > 0.0f && context.secondsSince < context.windowSeconds)
+	const auto seconds = static_cast<float>(WholeSecondsSince(context));
+	if (context.windowSeconds > 0.0f && seconds < context.windowSeconds)
 	{
-		return 1.0f - context.secondsSince / context.windowSeconds;
+		return 1.0f - seconds / context.windowSeconds;
 	}
 	return 0.0f;
+}
+
+uint32_t creature_learning::WholeSecondsSince(const Context& context)
+{
+	return context.turnsSince / k_ContextTurnsPerSecond;
 }
 
 std::optional<size_t> creature_learning::BestContext(std::span<const Context> contexts)
@@ -196,11 +212,11 @@ std::optional<float> creature_learning::ForgottenOrderApproval(const Context& fo
 	return approval;
 }
 
-void creature_learning::Age(std::vector<Context>& contexts, float seconds)
+void creature_learning::Age(std::vector<Context>& contexts, uint32_t turns)
 {
 	for (auto& context : contexts)
 	{
-		context.secondsSince += seconds;
+		context.turnsSince += turns;
 	}
 }
 
@@ -212,7 +228,7 @@ void creature_learning::MarkNewestDone(std::vector<Context>& contexts, bool look
 	}
 	auto& newest = contexts.back();
 	newest.done = true;
-	newest.secondsSince = 0.0f;
+	newest.turnsSince = 0;
 	newest.seen = newest.seen || lookedAt;
 }
 
@@ -223,7 +239,7 @@ void creature_learning::MarkNewestSeen(std::vector<Context>& contexts)
 		return;
 	}
 	contexts.back().seen = true;
-	contexts.back().secondsSince = 0.0f;
+	contexts.back().turnsSince = 0;
 }
 
 void creature_learning::SuppressOpposed(creature_desires::Desires& desires, Desire desire, const Dependencies& dependencies,
@@ -384,8 +400,11 @@ CreatureAttitude& creature_learning::AttitudeTo(std::vector<CreatureAttitude>& a
 std::array<std::pair<Desire, float>, 2> creature_learning::ChangeHowNice(CreatureAttitude& attitude, float change)
 {
 	attitude.howNice = std::clamp(attitude.howNice + change, -1.0f, 1.0f);
-	const auto sign = change >= 0.0f ? 1.0f : -1.0f;
-	return {{{Desire::BeFriends, 0.5f * sign}, {Desire::Anger, -0.5f * sign}}};
+	if (change < 0.0f)
+	{
+		return {{{Desire::Anger, 0.5f}, {Desire::BeFriends, -0.5f}}};
+	}
+	return {{{Desire::BeFriends, 0.5f}, {Desire::Anger, -0.5f}}};
 }
 
 std::string creature_learning::DesireLessonText(float feedback, std::string_view desire)

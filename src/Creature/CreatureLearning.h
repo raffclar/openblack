@@ -107,6 +107,12 @@ void LearnDesireLesson(creature_desires::Desires& desires, Desire desire, std::o
 [[nodiscard]] float OpinionAfter(float opinion, float feedback);
 /// Feedback made at least the weakest that counts
 [[nodiscard]] float Strengthened(float feedback);
+/// A creature too young to learn lessons changes its feelings by half of the feedback. The weak feedback gets its
+/// minimum strength first, so each stroke or slap changes them by at least a quarter.
+[[nodiscard]] float YoungFeedbackAmount(float feedback);
+/// Forgiven for running away, the threshold of its wish to run raises this much. No limit stops the threshold.
+constexpr float k_ForgivenRunAwayThresholdStep = 0.2f;
+[[nodiscard]] float ForgivenRunAwayThreshold(float threshold);
 /// The desires an object lesson is learnt for: the desire itself fully, and every other in proportion to how much it
 /// depends on it
 [[nodiscard]] std::vector<std::pair<Desire, float>> Spread(Desire desire, float feedback, const Dependencies& dependencies);
@@ -123,9 +129,9 @@ struct Context
 	/// what it knew of that
 	std::optional<uint32_t> activity;
 	std::optional<creature_tree::Belief> activityBelief;
-	/// Still doing it. The seconds since it ended well or since the player last saw it, whichever is later.
+	/// Still doing it. The game turns since it ended well or since the player last saw it, whichever is later.
 	bool running {true};
-	float secondsSince {0.0f};
+	uint32_t turnsSince {0};
 	/// Whether the action can be learnt from, and for how many seconds after it finishes
 	bool learnable {true};
 	float windowSeconds {0.0f};
@@ -159,8 +165,13 @@ struct ThingLessons
 /// - fully for an action that did not end well, while the creature remembers it;
 /// - nothing for an action that ended well where the player did not see it;
 /// - for an action that ended well where the player saw it, less and less until its window closes. The window starts
-///   when the action ended or when the player last saw it, whichever is later.
+///   when the action ended or when the player last saw it, whichever is later. The time counts only whole seconds, so
+///   the share stays the same for all the turns of one second.
 [[nodiscard]] float LearningPriority(const Context& context);
+/// The game turns in one second, which the window of a context counts in whole seconds
+constexpr uint32_t k_ContextTurnsPerSecond = 10;
+/// The whole seconds since a context ended well or since the player last saw it
+[[nodiscard]] uint32_t WholeSecondsSince(const Context& context);
 /// The context feedback is credited to, if any counts; of two that count the same, the newer
 [[nodiscard]] std::optional<size_t> BestContext(std::span<const Context> contexts);
 /// Remembers a new action, the newest last, forgetting the oldest beyond the most kept
@@ -171,8 +182,8 @@ std::optional<Context> Remember(std::vector<Context>& contexts, Context context)
 /// thing it acted on and the whole thing, when its desire learns from orders. Feedback from the player does not stop
 /// this.
 [[nodiscard]] std::optional<float> ForgottenOrderApproval(const Context& forgotten, const DesireRules& rules, float approval);
-/// Time passes for the contexts
-void Age(std::vector<Context>& contexts, float seconds);
+/// Game turns pass for the contexts
+void Age(std::vector<Context>& contexts, uint32_t turns);
 /// The newest action ended well now. It is seen when the player's camera looks at the creature now.
 void MarkNewestDone(std::vector<Context>& contexts, bool lookedAt);
 /// The player's camera saw the newest action now
@@ -223,7 +234,8 @@ struct CreatureAttitude
 /// Finds or adds the attitude to a creature
 [[nodiscard]] CreatureAttitude& AttitudeTo(std::vector<CreatureAttitude>& attitudes, uint32_t creature);
 /// Finds the other creature nicer or nastier; returns the friendship and anger lessons it learns about creatures like
-/// it: nicer teaches befriending (+0.5) over anger (-0.5), nastier the reverse
+/// it: nicer teaches befriending (+0.5) over anger (-0.5), nastier the reverse. The first lesson is the one that gets
+/// +0.5, because the order of the examples in each tree changes what the tree keeps.
 [[nodiscard]] std::array<std::pair<Desire, float>, 2> ChangeHowNice(CreatureAttitude& attitude, float change);
 
 /// The creature's thought about a lesson, as the game words it
