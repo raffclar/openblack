@@ -52,9 +52,38 @@ private:
 	float _snap {0.0f};
 };
 
+/// The keys and the mouse buttons that the logo stills and the pre-intro read. The game keeps the last key that went
+/// down until any key goes up, and it keeps a click of the left or the right button until the input is reset. A held
+/// key that repeats goes down again.
+class StartupKeys
+{
+public:
+	/// A key goes down, also when it repeats
+	void KeyDown(bool escape) noexcept { _escapeDown = escape; }
+	/// Any key goes up: no key is down after it
+	void KeyUp() noexcept { _escapeDown = false; }
+	/// The left or the right mouse button goes down
+	void Click() noexcept { _clicked = true; }
+	/// The game forgets the keys and the clicks
+	void Reset() noexcept
+	{
+		_escapeDown = false;
+		_clicked = false;
+	}
+
+	/// Escape is the last key that went down, and no key went up after it
+	[[nodiscard]] bool EscapeDown() const noexcept { return _escapeDown; }
+	/// Escape or a click skips a logo still
+	[[nodiscard]] bool SkipsLogo() const noexcept { return _escapeDown || _clicked; }
+
+private:
+	bool _escapeDown {false};
+	bool _clicked {false};
+};
+
 /// One still of the logo film: it fades in over 0.7 s, holds for 1.7 s and fades out over 1.1 s, the last part of it
-/// still opaque. A key or a mouse button while it fades in or holds starts the fade out at once; during the fade out it
-/// ends the still
+/// still opaque. Escape or a click while it fades in or holds starts the fade out at once; during the fade out it ends
+/// the still
 class LogoStill
 {
 public:
@@ -63,6 +92,9 @@ public:
 	/// A frame `milliseconds` after the last, with the player pressing something or not. Returns the alpha to draw the
 	/// still with this frame, 0 to 255
 	uint8_t Frame(int32_t milliseconds, bool pressed) noexcept;
+	/// A frame that reads the keys. A press before the fade out resets the keys, so the next still does not see it. A
+	/// press during the fade out stays, so the next still starts its fade out at once
+	uint8_t Frame(int32_t milliseconds, StartupKeys& keys) noexcept;
 	/// The still has been shown for the last time
 	[[nodiscard]] bool Ended() const noexcept { return _phase >= 3; }
 
@@ -90,10 +122,11 @@ private:
 	return !multiplayer && (!developerRun || asked);
 }
 
-/// The pre-intro shows each of its frames once, and stops after its last or on a key
-[[nodiscard]] constexpr bool PreIntroGoesOn(int32_t framesShown, int32_t frameCount, bool keyPressed) noexcept
+/// The pre-intro shows each of its frames once, and stops after its last or when Escape is down. Other keys and the
+/// mouse do not stop it
+[[nodiscard]] constexpr bool PreIntroGoesOn(int32_t framesShown, int32_t frameCount, bool escapeDown) noexcept
 {
-	return framesShown < frameCount && !keyPressed;
+	return framesShown < frameCount && !escapeDown;
 }
 
 /// How long the tips screen takes to fade in when it first shows, from a frame's time in milliseconds

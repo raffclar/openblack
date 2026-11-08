@@ -477,11 +477,7 @@ void SetVirtualInfluence() // 254 SET_VIRTUAL_INFLUENCE
 	    (registry.AnyOf<ecs::components::VirtualInfluence>(entity) ? registry.Get<ecs::components::VirtualInfluence>(entity)
 	                                                               : registry.Assign<ecs::components::VirtualInfluence>(entity))
 	        .state;
-	state.disabled = !enable;
-	if (state.disabled)
-	{
-		state.fraction = 0.0f;
-	}
+	virtual_influence::Switch(state, enable);
 }
 
 void MoveComputerPlayerPosition() // 310 MOVE_COMPUTER_PLAYER_POSITION

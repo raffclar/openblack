@@ -24,9 +24,10 @@ namespace openblack::ecs::systems
 class RainSystem final: public RainSystemInterface
 {
 public:
-	RainSystem();
+	/// The weather option at the start of the game: when it is off, nothing shows until the weather opens
+	explicit RainSystem(bool weatherOn);
 
-	void Reset() override;
+	void Open() override;
 	void Update(float seconds, std::chrono::milliseconds frameRealTime, const glm::vec3& camera) override;
 	[[nodiscard]] std::vector<rain::Tile> TakeTiles(const rain::View& view) override;
 	[[nodiscard]] uint64_t GetSplashCount() const override { return _splashCount; }
@@ -37,6 +38,8 @@ public:
 private:
 	std::array<rain::Streak, rain::k_Streaks> _streaks {};
 	rain::Fall _fall;
+	/// Whether the weather opened, which the game does only with the weather option on
+	bool _open {false};
 	/// Whether the streaks were drawn since the last update, which moves them on only then
 	bool _drawn {false};
 	/// The splashes come at most once for each refresh of the screen

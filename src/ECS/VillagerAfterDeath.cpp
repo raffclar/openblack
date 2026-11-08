@@ -35,7 +35,6 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/WallHug.h"
-#include "ECS/Components/WorshipSite.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/ExplosionSystemInterface.h"
@@ -267,20 +266,6 @@ uint32_t villager_after_death::DeathsOf(entt::entity town, DeathReason reason)
 	const auto* deaths = town != entt::null && registry.Valid(town) ? registry.TryGet<const TownDeaths>(town) : nullptr;
 	const auto index = static_cast<size_t>(reason);
 	return deaths != nullptr && index < deaths->counts.byReason.size() ? deaths->counts.byReason.at(index) : 0u;
-}
-
-void villager_after_death::LeaveWorship(entt::entity villager, entt::entity town)
-{
-	auto& registry = Entities();
-	const auto* data = TownOf(town);
-	if (data == nullptr || data->worshipSite == entt::null || !registry.Valid(data->worshipSite))
-	{
-		return;
-	}
-	if (auto* site = registry.TryGet<WorshipSite>(data->worshipSite))
-	{
-		std::erase(site->worshippers, villager);
-	}
 }
 
 void villager_after_death::TellThoseAbout(entt::entity villager)

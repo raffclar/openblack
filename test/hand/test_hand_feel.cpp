@@ -281,3 +281,30 @@ TEST(HandFeel, OnlyAThingHeldOtherwiseThanByMagicAndNotOfferedReachesTheLand)
 	EXPECT_FALSE(hand_feel::HoldReachesLand(HoldType::Above, true));
 	EXPECT_FALSE(hand_feel::HoldReachesLand(std::nullopt, false));
 }
+
+TEST(HandFeel, InTheTempleTheHandHangsFiveUnitsShortOfTheRoom)
+{
+	const glm::vec3 camera(0.0f, 2.0f, 0.0f);
+	const glm::vec3 nearPoint(0.0f, 2.0f, 1.0f);
+	EXPECT_EQ(hand_feel::TempleHandDistance(camera, nearPoint, {0.0f, 2.0f, 50.0f}), 45.0f);
+	// The room is measured from the camera, and the hand is on the line through the cursor at that distance less 5
+	EXPECT_EQ(hand_feel::TempleHandDistance(camera, nearPoint, {30.0f, 2.0f, 40.0f}), 45.0f);
+}
+
+TEST(HandFeel, InTheTempleTheHandKeepsFromFourToThreeHundredUnitsFromTheCamera)
+{
+	const glm::vec3 camera(0.0f, 0.0f, 0.0f);
+	const glm::vec3 nearPoint(0.0f, 0.0f, 1.0f);
+	EXPECT_EQ(hand_feel::TempleHandDistance(camera, nearPoint, {0.0f, 0.0f, 3.0f}), 4.0f);
+	EXPECT_EQ(hand_feel::TempleHandDistance(camera, nearPoint, {0.0f, 0.0f, 8.5f}), 4.0f);
+	EXPECT_EQ(hand_feel::TempleHandDistance(camera, nearPoint, {0.0f, 0.0f, 10.0f}), 5.0f);
+	EXPECT_EQ(hand_feel::TempleHandDistance(camera, nearPoint, {0.0f, 0.0f, 305.0f}), 300.0f);
+	EXPECT_EQ(hand_feel::TempleHandDistance(camera, nearPoint, {0.0f, 0.0f, 400.0f}), 300.0f);
+}
+
+TEST(HandFeel, InTheTempleTheDistanceIsMeasuredAgainFromThePointOnTheLine)
+{
+	// A line of no length keeps the point at the camera, so the distance measured again is the nearest the hand can be
+	const glm::vec3 camera(1.0f, 2.0f, 3.0f);
+	EXPECT_EQ(hand_feel::TempleHandDistance(camera, camera, {1.0f, 2.0f, 103.0f}), 4.0f);
+}

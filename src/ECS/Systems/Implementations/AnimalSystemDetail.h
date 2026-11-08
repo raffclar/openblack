@@ -69,6 +69,12 @@ inline float Ground(glm::vec2 xz)
 	return Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().GetHeightAt(xz) : 0.0f;
 }
 
+/// The height of the land at a map position, with no change to metres
+inline float Ground(glm::ivec2 position)
+{
+	return Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().GetAltitude(position.x, position.y) : 0.0f;
+}
+
 inline float Random(float max)
 {
 	return Locator::gameRandom::has_value() ? Locator::gameRandom::value().GameFloatRand(max) : 0.0f;

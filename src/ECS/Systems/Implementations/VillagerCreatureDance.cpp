@@ -154,6 +154,12 @@ bool villager_creature_dance::StartWorshippingCreature(entt::entity villager, en
 		    static_cast<uint8_t>(VillagerStates::ControlledByCreature);
 	}
 	ChangeTo(*action, VillagerStates::ControlledByCreature);
+	// The change of state can remove the villager from the dance, for example when it stops eating at its worship site.
+	// Then it does not come to the dance.
+	if (ecs::dances::DanceOf(registry, villager) == entt::null)
+	{
+		return false;
+	}
 	const auto& info = InfoOf(registry.Get<const Villager>(villager));
 	systems::villager_reactions::SetSpeed(villager, static_cast<int32_t>(info.speedGroup.speed3));
 	return true;

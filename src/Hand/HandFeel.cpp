@@ -30,6 +30,12 @@ constexpr float k_HeldShare = 0.5f;
 /// The order of the sums when the game turns the straight up: x and y add the products of x, z, then y; z adds y, x,
 /// then z
 constexpr x87::AxisOrders k_PourUpOrder {{{0, 2, 1}, {0, 2, 1}, {1, 0, 2}}};
+/// Inside the temple: how far short of the room the hand hangs, the nearest point on the line it starts from, and the
+/// limits on its distance from the camera
+constexpr float k_TempleGap = 5.0f;
+constexpr float k_TempleNearestAlong = 1.0f;
+constexpr float k_TempleMinDistance = 4.0f;
+constexpr float k_TempleMaxDistance = 300.0f;
 
 /// The vector made one long with its squares added in the given order; a vector of no length stays as it is
 template <x87::SumOrder Order>
@@ -42,6 +48,21 @@ template <x87::SumOrder Order>
 	return x87::Scaled<Order>(v);
 }
 } // namespace
+
+float hand_feel::TempleHandDistance(glm::vec3 camera, glm::vec3 nearPoint, glm::vec3 roomPoint)
+{
+	auto along = x87::LengthZyx(roomPoint - camera) - k_TempleGap;
+	if (along < k_TempleNearestAlong)
+	{
+		along = k_TempleNearestAlong;
+	}
+	const auto distance = x87::LengthZyx(camera - PointAlongCursor(camera, nearPoint, along));
+	if (distance < k_TempleMinDistance)
+	{
+		return k_TempleMinDistance;
+	}
+	return distance > k_TempleMaxDistance ? k_TempleMaxDistance : distance;
+}
 
 hand_feel::Feel hand_feel::FeelOf(const Picked& picked)
 {

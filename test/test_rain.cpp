@@ -9,6 +9,7 @@
 
 #include <cstdint>
 
+#include <array>
 #include <bit>
 #include <vector>
 
@@ -183,4 +184,16 @@ TEST(Rain, AStreakFadesWithEachStepRoundedToAFloat)
 	// The fade's share times 20 rounds to a float before the product with the alpha. A product in double precision
 	// gives 152
 	EXPECT_EQ(rain::StreakAlpha(175, std::bit_cast<float>(0x3F74CF24u)), 153);
+}
+
+// The game places every streak two times when its weather opens, so it draws the numbers of all the streaks two times
+TEST(Rain, PlacedTwoTimesAtOpen)
+{
+	FakeRandom random {.values = {1.0f, 2.0f, 3.0f}};
+	std::array<rain::Streak, rain::k_Streaks> streaks {};
+	rain::PlaceAtOpen(streaks, random.Get());
+	EXPECT_EQ(random.asked.size(), 2u * 7u * rain::k_Streaks);
+
+	FakeRandom again {.values = {1.0f, 2.0f, 3.0f}, .next = 7u * rain::k_Streaks};
+	EXPECT_FLOAT_EQ(streaks.front().x, rain::Place(again.Get()).x);
 }

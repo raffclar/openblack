@@ -214,6 +214,22 @@ void TraceHand(std::string_view writer, const glm::vec3& position)
 	return Locator::handPressSystem::value().GetMousePosition();
 }
 
+/// The eye and the cursor's point on the near plane, which the hand's line of sight goes through. None when there is
+/// no window.
+[[nodiscard]] std::optional<Camera::NearPlanePoint> HandCursorLine(const Camera& camera)
+{
+	if (!Locator::windowing::has_value())
+	{
+		return std::nullopt;
+	}
+	const auto size = Locator::windowing::value().GetSize();
+	if (size.x <= 0 || size.y <= 0)
+	{
+		return std::nullopt;
+	}
+	return camera.OnNearPlane(static_cast<glm::vec2>(HandCursor()) / static_cast<glm::vec2>(size));
+}
+
 /// What the buttons of the mouse do with the hand after the last event
 [[nodiscard]] const input::HandButtons& HandButtons()
 {
@@ -1611,8 +1627,10 @@ void Game::PlaceHand(ecs::components::Transform& handTransform, float deltaSecon
 			{
 				_handRayDirection = toRoom / roomDistance;
 			}
-			const auto target =
-			    glm::clamp(glm::max(roomDistance - k_HandTempleGap, 1.0f), k_HandTempleMinDistance, k_HandTempleMaxDistance);
+			// With no window, the line goes from the camera straight to the room
+			const auto line =
+			    HandCursorLine(camera).value_or(Camera::NearPlanePoint {.eye = eye, .point = *_cursorWorldPosition});
+			const auto target = hand_feel::TempleHandDistance(line.eye, line.point, *_cursorWorldPosition);
 			const auto easeTime = _handHoverZoomer.GetDestination() <= target ? 0.4f : 0.2f;
 			_handHoverZoomer.SetDestination(target, easeTime);
 			StepEase(_handHoverZoomer);
@@ -1710,15 +1728,10 @@ void Game::PlaceHand(ecs::components::Transform& handTransform, float deltaSecon
 	// The cursor's point on the near plane, which the hand's line of sight goes through
 	std::optional<glm::vec3> cursorNearPoint;
 	auto lineEye = eye;
-	if (Locator::windowing::has_value())
+	if (const auto line = HandCursorLine(camera); line.has_value())
 	{
-		const auto size = Locator::windowing::value().GetSize();
-		if (size.x > 0 && size.y > 0)
-		{
-			const auto line = camera.OnNearPlane(static_cast<glm::vec2>(HandCursor()) / static_cast<glm::vec2>(size));
-			lineEye = line.eye;
-			cursorNearPoint = line.point;
-		}
+		lineEye = line->eye;
+		cursorNearPoint = line->point;
 	}
 
 	// The game puts the origin of the hand, by its fingertips, on the line of sight through the cursor, so the hand is

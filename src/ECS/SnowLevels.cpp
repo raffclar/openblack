@@ -161,9 +161,10 @@ void StepScaffoldPhantoms(Registry& registry, const std::function<float(glm::vec
 {
 	std::vector<std::pair<entt::entity, entt::entity>> shown;
 	registry.Each<const components::ScaffoldGhost>([&shown](entt::entity phantom, const components::ScaffoldGhost& ghost) {
+		// The copy of a scaffold at its yard place shows no snow, as a phantom on a site does
 		if (ghost.model.has_value())
 		{
-			shown.emplace_back(phantom, ghost.scaffold);
+			shown.emplace_back(phantom, ghost.yard ? entt::entity {entt::null} : ghost.scaffold);
 		}
 	});
 	for (const auto& [phantom, scaffold] : shown)

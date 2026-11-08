@@ -263,11 +263,11 @@ void PlayFrameEffects(FrameViewInterface& view)
 	}
 	if (Locator::mistSystem::has_value())
 	{
-		Locator::mistSystem::value().Update(gameTime);
+		Locator::mistSystem::value().Update(clock.GetFrameRealTime(), clock.GetFrameGameTime());
 	}
 	if (Locator::cloudSystem::has_value())
 	{
-		Locator::cloudSystem::value().AnimateStormClouds(gameTime);
+		Locator::cloudSystem::value().AnimateStormClouds(clock.GetFrameRealTime(), clock.GetFrameGameTime());
 	}
 	// The lights of owners that have gone go on every computer, then the lights flicker where the world is drawn
 	ecs::archetypes::VillageLightArchetype::DestroyOwnerless();

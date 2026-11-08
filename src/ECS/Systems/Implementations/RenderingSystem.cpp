@@ -111,6 +111,7 @@
 #include "ECS/VillageTotem.h"
 #include "ECS/VillagerHeldObject.h"
 #include "ECS/WorldObjects.h"
+#include "ECS/YardCopyRules.h"
 #include "Game.h"
 #include "Graphics/BonePalette.h"
 #include "Graphics/DebugLines.h"
@@ -873,7 +874,7 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 			    gone = true;
 			    _goneThings.push(entity);
 		    }
-		    else if (const auto* ghost = ghosts.TryGet(entity); ghost != nullptr)
+		    else if (const auto* ghost = ghosts.TryGet(entity); ghost != nullptr && !ghost->yard)
 		    {
 			    // The phantom building of a scaffold is drawn whole at any distance, blended by its own alpha among the
 			    // things that fade out
@@ -881,6 +882,30 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 			    fade = ghost->alpha;
 			    _fadingThings.emplace(entity, ghost->alpha);
 			    seeThroughRef = openblack::ecs::scaffold_ghost::SeeThroughRef(stores.AllOf<InHand>(ghost->scaffold));
+		    }
+		    else if (ghost != nullptr)
+		    {
+			    // The copy of a scaffold at its yard place is drawn in less detail the further off it is, and not at
+			    // all beyond. Where it fades out, the fade replaces the alpha of its pulse.
+			    auto alpha = ghost->alpha;
+			    if (camera != nullptr)
+			    {
+				    if (const auto& box = MeshBox(drawnMesh); box.has_value())
+				    {
+					    const auto choice =
+					        ChooseDetail(*box, 0.0f, modelMatrix, transform.scale.x, [] { return true; }, *view, modelDetail);
+					    if (!choice.mesh.has_value())
+					    {
+						    return;
+					    }
+					    level = *choice.mesh;
+					    alpha = choice.alpha.value_or(alpha);
+				    }
+			    }
+			    slotMap = &_fadingSlots;
+			    fade = alpha;
+			    _fadingThings.emplace(entity, alpha);
+			    seeThroughRef = openblack::ecs::yard_copy::SeeThroughRef(ghost->alpha);
 		    }
 		    else if (openblack::ecs::high_detail_rules::DrawsHighMeshAtAnyDistance(detail != nullptr, highDetails.Has(entity),
 		                                                                           terrainMorphs.Has(entity)))
@@ -1801,7 +1826,7 @@ void RenderingSystem::UploadPartialBuilds()
 			}
 			if (const auto heat = fires.GetGlowColour(entity); heat.has_value() && *heat != 0)
 			{
-				look.x = registry.AllOf<Abode>(entity) ? graphics::object_tint::HouseLight(false, *heat)
+				look.x = registry.AllOf<Abode>(entity) ? graphics::object_tint::PartialShareLight(*heat)
 				                                       : graphics::object_tint::PackAdded(*heat, 0.0f);
 			}
 		}

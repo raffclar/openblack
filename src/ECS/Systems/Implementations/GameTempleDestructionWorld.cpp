@@ -16,6 +16,8 @@
 #include <LHVM.h>
 
 #include "Common/GameRandom.h"
+#include "Common/VirtualInfluence.h"
+#include "ECS/Components/Influence.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/EffectRequestSystemInterface.h"
@@ -222,4 +224,22 @@ void GameTempleDestructionWorld::EndHeartbeatHold(PlayerNames player)
 	{
 		Locator::heartbeatSystem::value().EndDestruction(player);
 	}
+}
+
+void GameTempleDestructionWorld::SwitchOffVirtualInfluence(PlayerNames player)
+{
+	if (!Locator::playerSystem::has_value() || !Locator::entitiesRegistry::has_value())
+	{
+		return;
+	}
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto entity = Locator::playerSystem::value().FindPlayer(player).value_or(entt::null);
+	if (!registry.Valid(entity))
+	{
+		return;
+	}
+	auto& influence = registry.AnyOf<components::VirtualInfluence>(entity)
+	                      ? registry.Get<components::VirtualInfluence>(entity)
+	                      : registry.Assign<components::VirtualInfluence>(entity);
+	virtual_influence::Switch(influence.state, false);
 }

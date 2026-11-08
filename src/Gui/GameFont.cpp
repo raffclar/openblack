@@ -184,6 +184,7 @@ std::optional<GameFont> GameFont::Load(std::span<const uint8_t> met, std::span<c
 		    .atlasMax = {},
 		    .fullMin = {},
 		    .fullMax = {},
+		    .smallMin = {},
 		    .smallGlyph = static_cast<uint32_t>(font._smallGlyphs.size()),
 		};
 		const auto offset = Read<uint32_t>(met, record + 0x14);
@@ -234,8 +235,21 @@ std::optional<GameFont> GameFont::Load(std::span<const uint8_t> met, std::span<c
 		bitmaps.push_back(*bitmap);
 	}
 
+	// The small glyphs go in rows of their own below the half height glyphs
+	pen = {0, static_cast<uint16_t>(pen.y + cellHeight + (k_Padding * 2))};
+	for (auto& glyph : font._glyphs)
+	{
+		const auto smallWidth = font._smallGlyphs[glyph.smallGlyph].width;
+		if (pen.x + smallWidth + (k_Padding * 2) > k_AtlasWidth)
+		{
+			pen = {0, pen.y + SmallGlyph::k_Height + (k_Padding * 2)};
+		}
+		glyph.smallMin = {pen.x + k_Padding, pen.y + k_Padding};
+		pen.x += smallWidth + (k_Padding * 2);
+	}
+
 	// Power of two heights keep every backend happy
-	const auto atlasHeight = PowerOfTwoAtLeast(static_cast<uint32_t>(pen.y + cellHeight + (k_Padding * 2)));
+	const auto atlasHeight = PowerOfTwoAtLeast(static_cast<uint32_t>(pen.y + SmallGlyph::k_Height + (k_Padding * 2)));
 	font._atlasSize = {k_AtlasWidth, atlasHeight};
 	font._atlas.assign(static_cast<size_t>(k_AtlasWidth) * atlasHeight, 0);
 	for (size_t g = 0; g < font._glyphs.size(); ++g)
@@ -247,6 +261,20 @@ std::optional<GameFont> GameFont::Load(std::span<const uint8_t> met, std::span<c
 		{
 			std::memcpy(font._atlas.data() + (static_cast<size_t>(glyph.atlasMin.y + y) * k_AtlasWidth) + glyph.atlasMin.x,
 			            cells[g].data() + (y * cellWidth), cellWidth);
+		}
+	}
+
+	// The small glyphs keep their alpha in four bits, as the half height glyphs do
+	for (const auto& glyph : font._glyphs)
+	{
+		const auto& small = font._smallGlyphs[glyph.smallGlyph];
+		for (uint16_t y = 0; y < SmallGlyph::k_Height; ++y)
+		{
+			for (uint16_t x = 0; x < small.width; ++x)
+			{
+				font._atlas[(static_cast<size_t>(glyph.smallMin.y + y) * k_AtlasWidth) + glyph.smallMin.x + x] =
+				    static_cast<uint8_t>(small.At(x, y) * 17);
+			}
 		}
 	}
 
@@ -318,4 +346,65 @@ float GameFont::GetWidth(std::u16string_view text, float size) const
 std::vector<std::u16string_view> GameFont::Wrap(std::u16string_view text, float size, float width) const
 {
 	return text_wrap::BreakLines(text, width, size, WidthUnit(), [this](char16_t c) { return Advance(c); });
+}
+
+GameFont::GlyphLevel GameFont::ScreenGlyphLevel(float size, bool full) noexcept
+{
+	if (full)
+	{
+		return GlyphLevel::Full;
+	}
+	return size < k_SmallTextSize ? GlyphLevel::Quarter : GlyphLevel::Half;
+}
+
+std::optional<GameFont::ScreenGlyph> GameFont::PlaceOnScreen(char16_t character, float x, float pen, float size,
+                                                             GlyphLevel level) const
+{
+	// The blank and the line breaks take no room and show nothing
+	if (character == text_wrap::k_Tilde || character == u'\r' || character == u'\n')
+	{
+		return ScreenGlyph {.left = 0.0f, .right = 0.0f, .texelMin = {}, .texelMax = {}, .pen = pen, .drawn = false};
+	}
+	const auto* glyph = Find(character);
+	if (glyph == nullptr)
+	{
+		return std::nullopt;
+	}
+	const float scale = size * WidthUnit();
+	if (character == u' ')
+	{
+		const float advance = ((glyph->right + glyph->ink) + glyph->left) * scale;
+		return ScreenGlyph {.left = 0.0f, .right = 0.0f, .texelMin = {}, .texelMax = {}, .pen = advance + pen, .drawn = false};
+	}
+
+	// The game adds the start of the text last
+	const float start = (glyph->left * scale) + pen;
+	const float columns = static_cast<float>(glyph->width) + 2.0f;
+	ScreenGlyph placed {
+	    .left = x + start,
+	    .right = ((columns * scale) + start) + x,
+	    .texelMin = {},
+	    .texelMax = {},
+	    .pen = ((glyph->right + glyph->ink) * scale) + start,
+	    .drawn = true,
+	};
+	switch (level)
+	{
+	case GlyphLevel::Half:
+		// From the middle of the clear column before the glyph, half a texel for each two columns of the bitmap
+		placed.texelMin = {static_cast<float>(glyph->atlasMin.x) - 0.5f, static_cast<float>(glyph->atlasMin.y) + 0.5f};
+		placed.texelMax = placed.texelMin + glm::vec2(columns * 0.5f, 39.0f);
+		break;
+	case GlyphLevel::Quarter:
+		// The small glyph has its clear column in its first column
+		placed.texelMin = {static_cast<float>(glyph->smallMin.x) + 0.5f, static_cast<float>(glyph->smallMin.y) + 0.5f};
+		placed.texelMax = placed.texelMin + glm::vec2(columns * 0.25f, 19.5f);
+		break;
+	case GlyphLevel::Full:
+		// The same part of the glyph as the half height read, at twice the texels
+		placed.texelMin = {static_cast<float>(glyph->fullMin.x) - 1.0f, static_cast<float>(glyph->fullMin.y) + 1.0f};
+		placed.texelMax = placed.texelMin + glm::vec2(columns, 78.0f);
+		break;
+	}
+	return placed;
 }

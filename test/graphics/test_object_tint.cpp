@@ -114,3 +114,13 @@ TEST(ObjectTint, HouseLightCarriesTheWindowsAndTheGlow)
 	EXPECT_EQ(object_tint::HouseLight(false, 0x402010u), -static_cast<float>(0x402010u));
 	EXPECT_EQ(object_tint::HouseLight(true, 0x402010u), 1.0f + static_cast<float>(0x402010u));
 }
+
+TEST(ObjectTint, AHouseShownUpToAShareNeverLightsItsWindows)
+{
+	// The object shader shows the windows of a house only for a value of more than a half
+	for (const uint32_t glow : {0u, 1u, 0x402010u, 0xFFFFFFu})
+	{
+		EXPECT_LT(object_tint::PartialShareLight(glow), 0.5f);
+		EXPECT_EQ(object_tint::PartialShareLight(glow), object_tint::HouseLight(false, glow));
+	}
+}

@@ -40,6 +40,9 @@ namespace openblack::animals::birds
 /// Whether a bird keeps the clip that it plays when it changes what it does or how fast it goes. Only the vulture does
 /// this: the game gives it no new clip.
 [[nodiscard]] bool KeepsItsClip(AnimalInfo type);
+/// Whether an animal keeps the clip that it plays when it starts a move. A bird keeps its clip. Each other animal plays
+/// the clip of the move state.
+[[nodiscard]] bool MoveKeepsClip(AnimalInfo type);
 /// The clip a land bird lies dead in
 [[nodiscard]] std::optional<AnimId> DeadClip(AnimalInfo type);
 

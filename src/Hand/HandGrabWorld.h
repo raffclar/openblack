@@ -253,6 +253,8 @@ public:
 		glm::vec3 origin {0.0f};
 	};
 	[[nodiscard]] virtual Pose PoseOf(entt::entity object) const = 0;
+	/// The pose that a pull starts from: the game's world axes of the thing, made again from its angle and its size
+	[[nodiscard]] virtual Pose PullStartPoseOf(entt::entity object) const { return PoseOf(object); }
 	/// The place of the hand in the world: where the last report of its player put it. The turns measure from here.
 	[[nodiscard]] virtual glm::vec3 ReportedHandPlace() const { return PoseOf(Hand()).origin; }
 	/// The point under the cursor that the last report of the hand's player picked, none before the first report. The

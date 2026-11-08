@@ -115,13 +115,17 @@ private:
 	void SetupMoveToFixed(components::Animal& animal, glm::ivec2 goal, float goalHeight, components::AnimalState finalState);
 	/// Off to a goal on the land that it walks to round what is in its way, into a final state once there
 	void SetupMoveRoundTo(entt::entity entity, components::Animal& animal, glm::vec2 goal, components::AnimalState finalState);
-	/// The same with a goal in 16.16 map units
+	/// The same with a goal in 16.16 map units. The goal keeps its height above the land, as the game keeps the whole goal
 	void SetupMoveRoundToFixed(entt::entity entity, components::Animal& animal, glm::ivec2 goal,
-	                           components::AnimalState finalState);
+	                           components::AnimalState finalState, float goalHeight = 0.0f);
 	/// The walk round what is in its way ends: it takes the walk's place and way, and the walk's parts go
 	static void EndWalkRound(entt::entity entity);
 	/// A turn's move towards its goal, climbing or sinking towards its goal's height: whether it arrived
 	bool MoveTo3D(components::Animal& animal);
+	/// A turn's move towards its goal in the move to a place: the height above the land stays. Whether it arrived
+	bool MoveToKeepingHeight(components::Animal& animal);
+	/// The animal takes the move state when a move starts
+	static void TakeMoveState(components::Animal& animal);
 	/// It tilts into the turn it made
 	static void Banked(components::Animal& animal, const animals::Turn& turn);
 	/// A random map position between two distances of a centre that the animal can reach without circling, or the

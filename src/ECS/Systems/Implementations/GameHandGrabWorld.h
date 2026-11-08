@@ -101,6 +101,7 @@ public:
 	void RemovePotReaction(entt::entity pot) override;
 	void SetUpPotReaction(entt::entity pot, PlayerNames player) override;
 	[[nodiscard]] Pose PoseOf(entt::entity object) const override;
+	[[nodiscard]] Pose PullStartPoseOf(entt::entity object) const override;
 	[[nodiscard]] glm::vec3 ReportedHandPlace() const override;
 	[[nodiscard]] glm::vec3 ReportedPlaceOf(entt::entity hand) const override;
 	[[nodiscard]] std::vector<PlayerNames> OtherHandPlayers() const override;

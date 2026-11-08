@@ -39,7 +39,6 @@ struct Mist
 	float edgeShrink;
 	/// Its animation (see mists)
 	int counter;
-	float counterRemainder;
 	/// A script's fade of its size and alpha, one step each game turn (see mists::Fade), while fading is true
 	bool fading {false};
 	float fadeTurns {0.0f};

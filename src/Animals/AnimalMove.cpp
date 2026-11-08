@@ -175,7 +175,7 @@ animals::MoveResult animals::StepMove(Move& move, uint16_t turnAngle)
 float animals::FlyingHeight(float groundBefore, float heightBefore, float groundAfter, float groundAtGoal, float goalHeight,
                             float change)
 {
-	if (goalHeight < k_FlyingHeight)
+	if (!FliesToGoalHeight(goalHeight))
 	{
 		// Low down it keeps its height over the land, with no snapping onto the goal's
 		if (heightBefore > goalHeight + change)
@@ -200,6 +200,16 @@ float animals::FlyingHeight(float groundBefore, float heightBefore, float ground
 		height = now + change;
 	}
 	return std::max(height - groundAfter, k_FlyingHeight);
+}
+
+bool animals::FliesToGoalHeight(float goalHeight)
+{
+	return goalHeight >= k_FlyingHeight;
+}
+
+glm::ivec2 animals::FlyingPlace(glm::ivec2 position)
+{
+	return {map_coords::ToFixed(map_coords::ToMetres(position.x)), map_coords::ToFixed(map_coords::ToMetres(position.y))};
 }
 
 glm::vec2 animals::WorkingPosition(glm::vec2 prey, float preyRadius, glm::vec2 hunter, float hunterRadius)

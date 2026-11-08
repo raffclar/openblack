@@ -39,8 +39,6 @@ void CountInTown(entt::entity town, std::optional<PlayerNames> killer, DeathReas
 void WarnOfTownLoss(entt::entity villager, entt::entity town, DeathReason reason, std::optional<PlayerNames> killer);
 /// How many of a town's people have died of chanting at worship
 [[nodiscard]] uint32_t DeathsOf(entt::entity town, DeathReason reason);
-/// The villager leaves its town's worship site's worshippers
-void LeaveWorship(entt::entity villager, entt::entity town);
 
 /// The people about a villager are told of its death as it begins to fall (never of a death at home)
 void TellThoseAbout(entt::entity villager);

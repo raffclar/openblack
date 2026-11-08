@@ -121,7 +121,6 @@ void CloudSystem::UpdateStormClouds(std::chrono::milliseconds frameRealTime)
 			            .shrinksEdgeOn = true,
 			            .edgeShrink = shape.edgeShrink,
 			            .counter = counter,
-			            .counterRemainder = 0.0f,
 			        },
 			    .shade = 0.0f,
 			    .flashGrey = 0,
@@ -146,10 +145,11 @@ void CloudSystem::UpdateStormClouds(std::chrono::milliseconds frameRealTime)
 	}
 }
 
-void CloudSystem::AnimateStormClouds(std::chrono::duration<float, std::milli> gameTime)
+void CloudSystem::AnimateStormClouds(std::chrono::milliseconds frameRealTime, std::chrono::milliseconds frameGameTime)
 {
+	const auto step = frame_pace::Step(_stormCloudPace, frameRealTime, frameGameTime);
 	for (auto& cloud : _stormClouds)
 	{
-		mists::Advance(cloud.mist.counter, cloud.mist.counterRemainder, gameTime.count());
+		mists::Advance(cloud.mist.counter, step);
 	}
 }

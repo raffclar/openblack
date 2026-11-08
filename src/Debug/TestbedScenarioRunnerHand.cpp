@@ -279,20 +279,27 @@ std::string Runner::HandTakeNear(const Command& command)
 	{
 		return "no hand";
 	}
-	// The mobile object nearest the point, as the player picks up the one under the pointer
+	// The mobile object or the scaffold nearest the point, as the player picks up the one under the pointer
 	constexpr float k_Reach = 10.0f;
 	const auto at = MapPoint(_middle, command.point);
 	auto& registry = Locator::entitiesRegistry::value();
 	auto nearest = entt::entity {entt::null};
 	float best = k_Reach;
+	const auto closer = [&](entt::entity entity, const ecs::components::Transform& transform) {
+		const auto distance = glm::distance(glm::vec2(transform.position.x, transform.position.z), at);
+		if (distance < best)
+		{
+			best = distance;
+			nearest = entity;
+		}
+	};
 	registry.Each<const ecs::components::MobileObject, const ecs::components::Transform>(
-	    [&](entt::entity entity, const ecs::components::MobileObject&, const ecs::components::Transform& transform) {
-		    const auto distance = glm::distance(glm::vec2(transform.position.x, transform.position.z), at);
-		    if (distance < best)
-		    {
-			    best = distance;
-			    nearest = entity;
-		    }
+	    [&closer](entt::entity entity, const ecs::components::MobileObject&, const ecs::components::Transform& transform) {
+		    closer(entity, transform);
+	    });
+	registry.Each<const ecs::components::Scaffold, const ecs::components::Transform>(
+	    [&closer](entt::entity entity, const ecs::components::Scaffold&, const ecs::components::Transform& transform) {
+		    closer(entity, transform);
 	    });
 	if (nearest == entt::null)
 	{
