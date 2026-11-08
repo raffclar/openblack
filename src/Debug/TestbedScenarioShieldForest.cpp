@@ -449,6 +449,34 @@ void AddForests(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "miracles.forest_recast_keeps_its_trees",
+	    .name = "Forest: a cast again from its seed makes only the trees that are left",
+	    .facet = Facet::Miracles,
+	    .description = "A forest seed summoned from the player's worship and cast by hand on grass north of the middle, as "
+	                   "in the forest seed scenario. A storage pit with no wood stands east of the forest. At 25 seconds "
+	                   "the hand puts seventeen of the eighteen trees into the pit, one at a time. Two seconds later the "
+	                   "hand takes back the seed over the forest. Three seconds later the hand casts the seed again on "
+	                   "the grass south of the old forest.",
+	    .expected = "The pit gets the wood of seventeen magic trees (the log gives the amount). At the take, the forest "
+	                "miracle closes down and its last tree withers away. The seed keeps one tree (the inspector shows "
+	                "storedMaxObjects 1 on the held seed). The cast again plants one magic tree, not eighteen. Thus each "
+	                "cast gives the wood of its eighteen trees one time only, as in the original game.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-20.0f, 0.0f}, {40.0f, 60.0f}}},
+	    .objects = {{.type = AbodeInfo::CelticStoragePit, .offset = {30.0f, 40.0f}, .storedFood = 0, .storedWood = 0}},
+	    .miracles = {{.type = MagicType::Forest,
+	                  .point = {0.0f, 40.0f},
+	                  .handOffset = {0.0f, 40.0f},
+	                  .delaySeconds = 0.5f,
+	                  .byHand = true,
+	                  .fromWorship = true,
+	                  .holdBeforePress = 2.0f}},
+	    .commands = {{.kind = Kind::GiveMagicTreesToStore, .delaySeconds = 25.0f, .value = 1, .object = 0},
+	                 {.kind = Kind::HandTakeShownSeed, .delaySeconds = 2.0f},
+	                 {.kind = Kind::HandCastAtPoint, .delaySeconds = 3.0f, .point = {0.0f, 15.0f}}},
+	});
+
+	all.push_back({
 	    .id = "miracles.forest_camera_path",
 	    .name = "Forest: the camera follows the miracle's path",
 	    .facet = Facet::Miracles,

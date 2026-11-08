@@ -321,7 +321,7 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::ComputerPersonality || kind == Kind::ComputerUntaughtSends || kind == Kind::SkirmishBox ||
 	       kind == Kind::LookAtSaveGamePicture || kind == Kind::ZoomToTempleCaveTarget || kind == Kind::HandCastOnDispenser ||
 	       kind == Kind::HandCastOnCreature || kind == Kind::CloseHeldMiracle || kind == Kind::JoinFootball ||
-	       IsPointerCommand(kind);
+	       kind == Kind::GiveMagicTreesToStore || kind == Kind::HandCastAtPoint || IsPointerCommand(kind);
 }
 
 std::string_view testbed_scenarios::Name(Facet facet)
@@ -484,6 +484,8 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "make friends",
 	    "only desire",
 	    "remove object",
+	    "give magic trees to store",
+	    "hand cast at point",
 	    "read tip",
 	    "look at temple scroll",
 	    "look at a save game picture",

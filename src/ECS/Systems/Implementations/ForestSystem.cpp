@@ -433,6 +433,19 @@ bool ForestSystem::HasTrees(entt::entity spell) const
 	return found;
 }
 
+uint32_t ForestSystem::StandingTrees(entt::entity spell) const
+{
+	const auto& registry = EntityRegistry();
+	uint32_t standing = 0;
+	registry.Each<const MagicForest>([&standing, &registry, spell](const MagicForest& forest) {
+		if (forest.spell == spell)
+		{
+			standing += forest::StandingTrees(forest.trees, [&registry](entt::entity tree) { return registry.Valid(tree); });
+		}
+	});
+	return standing;
+}
+
 std::optional<float> ForestSystem::TallestTreeOf(entt::entity spell) const
 {
 	auto& registry = EntityRegistry();

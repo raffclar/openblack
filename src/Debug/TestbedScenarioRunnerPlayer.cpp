@@ -38,6 +38,7 @@
 #include "ECS/Components/Dance.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/LivingAction.h"
+#include "ECS/Components/MagicForest.h"
 #include "ECS/Components/MagicPile.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/ObserverInterfaces.h"
@@ -255,6 +256,36 @@ std::string Runner::GivePlayerCommand(const Command& command)
 		}
 		ecs::world_objects::Remove(*object);
 		return "removed";
+	}
+	case Kind::GiveMagicTreesToStore:
+	{
+		const auto store = ObjectAt(command.object);
+		if (!store.has_value() || !Locator::resourceStoreSystem::has_value())
+		{
+			return "no store";
+		}
+		auto& registry = Locator::entitiesRegistry::value();
+		std::vector<entt::entity> trees;
+		registry.Each<const ecs::components::MagicForest>([&trees, &command](const ecs::components::MagicForest& forest) {
+			if (trees.empty() && forest.player == command.player)
+			{
+				trees = forest.trees;
+			}
+		});
+		auto& stores = Locator::resourceStoreSystem::value();
+		const auto before = stores.GetResource(*store, ResourceType::Wood);
+		size_t given = 0;
+		while (trees.size() > command.value)
+		{
+			const auto tree = trees.back();
+			trees.pop_back();
+			if (registry.Valid(tree) && stores.TakeObject(*store, tree, command.player))
+			{
+				++given;
+			}
+		}
+		return fmt::format("{} trees give {} wood to the store, {} trees are left", given,
+		                   stores.GetResource(*store, ResourceType::Wood) - before, trees.size());
 	}
 	case Kind::OwnGod:
 	{
@@ -497,6 +528,27 @@ std::string Runner::GivePlayerCommand(const Command& command)
 		const auto& registry = Locator::entitiesRegistry::value();
 		const auto* after = registry.TryGet<const ecs::components::SpellSeed>(*seed);
 		return fmt::format("cast on thing {}: the seed is {}, linked to miracle {}", entt::to_integral(*target),
+		                   magic.GetHeldSeedOf(command.player) == seed ? "still in the hand" : "out of the hand",
+		                   after != nullptr ? entt::to_integral(after->spell) : entt::to_integral(entt::entity {entt::null}));
+	}
+	case Kind::HandCastAtPoint:
+	{
+		if (!Locator::magicSystem::has_value() || !Locator::terrainSystem::has_value())
+		{
+			return "no magic";
+		}
+		auto& magic = Locator::magicSystem::value();
+		const auto seed = magic.GetHeldSeedOf(command.player);
+		if (!seed.has_value())
+		{
+			return "the hand holds no miracle";
+		}
+		const auto at = MapPoint(_middle, command.point);
+		const glm::vec3 point {at.x, Locator::terrainSystem::value().GetHeightAt(at), at.y};
+		magic.DoCast(command.player,
+		             player_commands::HandCast {.point = point, .handPosition = point + glm::vec3(0.0f, 15.0f, 0.0f)});
+		const auto* after = Locator::entitiesRegistry::value().TryGet<const ecs::components::SpellSeed>(*seed);
+		return fmt::format("cast at ({:.1f}, {:.1f}): the seed is {}, linked to miracle {}", at.x, at.y,
 		                   magic.GetHeldSeedOf(command.player) == seed ? "still in the hand" : "out of the hand",
 		                   after != nullptr ? entt::to_integral(after->spell) : entt::to_integral(entt::entity {entt::null}));
 	}

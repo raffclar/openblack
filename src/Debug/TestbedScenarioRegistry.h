@@ -932,6 +932,12 @@ struct Command
 		/// The scenario's object goes from the world at once, as when something other than the creature removes it.
 		/// Needs no creature
 		RemoveObject,
+		/// The player's hand puts the trees of the player's forest miracle into the scenario's object, a storage pit, one
+		/// at a time, as a drop on the pit does, until the forest has a number of trees (value) left. Needs no creature
+		GiveMagicTreesToStore,
+		/// The player's hand casts the miracle that it holds on the land at the point (from the middle of the map), as a
+		/// cast by hand does. Needs no creature
+		HandCastAtPoint,
 		/// The player reads a "did you know" tip (value, by the scripts' number) of a category (amount, rounded) on a
 		/// sign, as when the hand taps the sign. The library lists the tip. Needs no creature
 		ReadTip,
