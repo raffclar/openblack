@@ -53,6 +53,9 @@ struct Homes
 	std::function<bool(entt::entity villager)> atHome;
 	/// A villager is about to leave its town alive: the children of the town whose mother it is lose her
 	std::function<void(entt::entity villager, entt::entity town)> leavingTown;
+	/// A villager joined a town, and the town did not find a new home for it. A town with its first person can get its
+	/// worship site.
+	std::function<void(entt::entity town)> joinedTown;
 };
 
 /// The people living in a building, by age, and the men among its adults

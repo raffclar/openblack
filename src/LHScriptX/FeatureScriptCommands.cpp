@@ -683,11 +683,7 @@ void FeatureScriptCommands::CreateVillagerAtHome(const map_coords::MapCoords& ho
 	{
 		return;
 	}
-	const auto town = Locator::townSystem::value().SettleScriptVillager(map_coords::Cell(homePlace), villager);
-	if (town != entt::null && Locator::worshipSiteSystem::has_value())
-	{
-		Locator::worshipSiteSystem::value().PersonJoinedTown(town);
-	}
+	std::ignore = Locator::townSystem::value().SettleScriptVillager(map_coords::Cell(homePlace), villager);
 }
 
 void FeatureScriptCommands::CreateCitadel(glm::vec3 position, int32_t, const std::string& playerOwner, int32_t rotation,

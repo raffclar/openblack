@@ -35,7 +35,6 @@
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
-#include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "ECS/VillagerAge.h"
 #include "ECS/VillagerClips.h"
 #include "ECS/VillagerDrawRules.h"
@@ -139,15 +138,11 @@ entt::entity VillagerArchetype::Create([[maybe_unused]] const glm::vec3& abodePo
 	{
 		Locator::livingActionSystem::value().VillagerStartFirstClip(entity);
 	}
-	// It joins the nearest town: into the building there that suits it best, or one of its homeless
+	// It joins the nearest town: into the building there that suits it best, or one of its homeless. A town that gets
+	// its first person as one of its homeless can get its worship site.
 	if (town != entt::null)
 	{
 		Locator::townSystem::value().AddVillagerToTown(town, entity);
-	}
-	// A town's first person may bring it its worship site
-	if (town != entt::null && Locator::worshipSiteSystem::has_value())
-	{
-		Locator::worshipSiteSystem::value().PersonJoinedTown(town);
 	}
 
 	if (name.has_value())
