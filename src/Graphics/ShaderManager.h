@@ -19,6 +19,8 @@
 #include <utility>
 #include <vector>
 
+#include <glm/vec2.hpp>
+
 #include "DrawEncoder.h"
 #include "DrawWindow.h"
 #include "ShaderProgram.h"
@@ -77,7 +79,9 @@ public:
 	void SetViewOrder(RenderPass viewId, ViewOrder order) const;
 	void SetViewOrder(uint16_t viewId, ViewOrder order) const;
 
-	void SetCamera(RenderPass viewId, const Camera& camera);
+	/// Gives a view the camera's view and projection. The projection puts the world on the pixels of a target `target`
+	/// pixels big where the game puts it (see pixel_centres::OnTarget).
+	void SetCamera(RenderPass viewId, const Camera& camera, glm::vec2 target);
 
 	/// Under Vulkan, lets only the draws first to first + count - 1 into the views go to the GPU. Gives false if the
 	/// renderer does not need the window, which then lets all draws go.

@@ -103,6 +103,19 @@ void testbed_scenarios::AddScriptTaskRelease(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "interface.world_and_line_pixels",
+	    .name = "The 3D world and the lines of a box on the screen, on the game's pixel centres",
+	    .facet = Facet::Interface,
+	    .description = "The camera looks at the village. After a second the land information box of Two Gods shows. "
+	                   "Look at the edges of the houses and trees, and at the bevel lines of the buttons.",
+	    .expected = "The 3D world is half a pixel further right and down than before, on the same pixels as in the "
+	                "game. A line of a box fills its row or column from the pixel after its first end to its last end, "
+	                "so the top left corner of a bevel has no line pixel.",
+	    .framing = {.shot = Shot::Overview},
+	    .commands = {{.kind = Kind::SkirmishBox, .delaySeconds = 1.0f, .value = 3}},
+	});
+
+	all.push_back({
 	    .id = "temple.main_room_lean",
 	    .name = "The temple's main room leans at the screen's edge and as the floor is dragged",
 	    .facet = Facet::Story,
@@ -520,13 +533,14 @@ void testbed_scenarios::AddLandOneScriptStubScenarios(std::vector<Scenario>& all
 	    .environment = {.dispenserGrid = false},
 	    .framing = {.shot = Shot::Placed, .eye = {-34.5f, 9.0f, 4.5f}, .look = {0.0f, 0.0f, 0.0f}},
 	    .objects = bendTrees,
-	    .commands = {// Takes the rock under the middle of the screen
-	                 {.kind = Kind::PointerTo, .delaySeconds = 1.0f, .point = {0.5f, 0.5f}},
-	                 {.kind = Kind::PointerPress, .delaySeconds = 0.5f, .value = 3},
-	                 {.kind = Kind::PointerRelease, .delaySeconds = 0.5f, .value = 3},
-	                 // Moves the hand along the rows and back
-	                 {.kind = Kind::PointerSweep, .delaySeconds = 0.5f, .point = {0.0f, -0.12f}, .amount = 4.0f},
-	                 {.kind = Kind::PointerSweep, .delaySeconds = 4.5f, .point = {0.0f, 0.12f}, .amount = 4.0f}},
+	    .commands =
+	        {// Takes the rock under the middle of the screen
+	         {.kind = Kind::PointerTo, .delaySeconds = 1.0f, .point = {0.5f, 0.5f}},
+	         {.kind = Kind::PointerPress, .delaySeconds = 0.5f, .value = 3},
+	         {.kind = Kind::PointerRelease, .delaySeconds = 0.5f, .value = 3},
+	         // Moves the hand along the rows and back
+	         {.kind = Kind::PointerSweep, .delaySeconds = 0.5f, .point = {0.0f, -0.12f}, .amount = 4.0f},
+	         {.kind = Kind::PointerSweep, .delaySeconds = 4.5f, .point = {0.0f, 0.12f}, .amount = 4.0f}},
 	});
 
 	// Two rows of pines with a lane between them. The player's creature walks along the lane and back.

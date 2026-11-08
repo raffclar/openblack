@@ -532,6 +532,18 @@ Renderer::~Renderer() noexcept
 #endif
 }
 
+glm::vec2 openblack::graphics::detail::SceneTarget(const FrameBuffer* frameBuffer)
+{
+	if (frameBuffer != nullptr)
+	{
+		uint16_t width = 0;
+		uint16_t height = 0;
+		frameBuffer->GetSize(width, height);
+		return {width, height};
+	}
+	return Locator::windowing::has_value() ? glm::vec2(Locator::windowing::value().GetSize()) : glm::vec2(0.0f);
+}
+
 namespace
 {
 /// The rectangles of a scene's views over the whole of a target `resolution` pixels big: its sky's, its own, what is
@@ -758,7 +770,7 @@ void Renderer::DrawScene(const DrawSceneDesc& drawDesc) const noexcept
 			// Then what is under the sea's surface, seen from the view itself, into the same target and against its
 			// depth: the main pass submits it there (the sharks' bodies) before blending the sea over the target
 			frameBuffer.Bind(RenderPass::UnderSea);
-			_shaderManager->SetCamera(RenderPass::UnderSea, *drawDesc.camera);
+			_shaderManager->SetCamera(RenderPass::UnderSea, *drawDesc.camera, detail::SceneTarget(&frameBuffer));
 			bgfx::touch(static_cast<bgfx::ViewId>(RenderPass::UnderSea));
 		}
 	}

@@ -33,6 +33,7 @@
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "Gestures/GestureHints.h"
 #include "Graphics/FrameBuffer.h"
+#include "Graphics/PixelCentres.h"
 #include "Graphics/ShaderManager.h"
 #include "Graphics/Texture2D.h"
 #include "Locator.h"
@@ -87,7 +88,8 @@ void PlacePictureView(RenderPass pass, const FrameBuffer* frameBuffer, const ges
 	                  static_cast<uint16_t>(rect.height));
 	bgfx::setViewClear(viewId, BGFX_CLEAR_DEPTH, 0, 0.0f, 0);
 	bgfx::setViewMode(viewId, bgfx::ViewMode::Sequential);
-	bgfx::setViewTransform(viewId, glm::value_ptr(view), glm::value_ptr(projection));
+	const auto onTarget = pixel_centres::OnTarget(projection, glm::vec2(rect.width, rect.height));
+	bgfx::setViewTransform(viewId, glm::value_ptr(view), glm::value_ptr(onTarget));
 	bgfx::touch(viewId);
 }
 } // namespace
@@ -172,8 +174,9 @@ void Renderer::DrawGestureHintCollars(const DrawSceneDesc& desc) const
 		bgfx::setViewRect(viewId, static_cast<uint16_t>(rect.x), static_cast<uint16_t>(rect.y),
 		                  static_cast<uint16_t>(rect.width), static_cast<uint16_t>(rect.height));
 		bgfx::setViewClear(viewId, BGFX_CLEAR_DEPTH, 0, 0.0f, 0);
-		const auto projection =
-		    k_ReverseZ * hints::CollarProjection(rect, (picture.min + picture.max) * 0.5f, focal, desc.camera->GetNearClip());
+		const auto projection = pixel_centres::OnTarget(
+		    k_ReverseZ * hints::CollarProjection(rect, (picture.min + picture.max) * 0.5f, focal, desc.camera->GetNearClip()),
+		    glm::vec2(rect.width, rect.height));
 		bgfx::setViewTransform(viewId, glm::value_ptr(view), glm::value_ptr(projection));
 		bgfx::touch(viewId);
 

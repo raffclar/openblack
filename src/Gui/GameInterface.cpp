@@ -3138,14 +3138,11 @@ void GameInterface::DrawStatBar(const creature_panel::Rect& bar, float fill, glm
 	quad(bar.min, bar.max, {frame, frame, frame, frame});
 	const auto inner = glm::ivec2(bar.min) + 2;
 	const auto innerMax = glm::ivec2(bar.max) - 2;
-	{
-		// The game draws the frame's line as lines, not with its box draw
-		const Canvas::CornersScope lines(_canvas, screen_pixels::Corners::AsGiven);
-		_canvas.DrawLine(inner, {innerMax.x, inner.y}, line);
-		_canvas.DrawLine({inner.x, innerMax.y}, innerMax, line);
-		_canvas.DrawLine(inner, {inner.x, innerMax.y}, line);
-		_canvas.DrawLine({innerMax.x, inner.y}, innerMax, line);
-	}
+	// The game draws the frame's line with its line draw, not with its box draw
+	_canvas.DrawLine(inner, {innerMax.x, inner.y}, line);
+	_canvas.DrawLine({inner.x, innerMax.y}, innerMax, line);
+	_canvas.DrawLine(inner, {inner.x, innerMax.y}, line);
+	_canvas.DrawLine({innerMax.x, inner.y}, innerMax, line);
 
 	// The fill, from half the colour where it starts to the whole colour where it ends
 	const auto filled = creature_panel::FillOf(bar, fill, fromMiddle);
@@ -3157,8 +3154,10 @@ void GameInterface::DrawStatBar(const creature_panel::Rect& bar, float fill, glm
 	}
 	if (filled.middle.has_value())
 	{
-		_canvas.DrawLine(glm::ivec2(static_cast<int>(*filled.middle), static_cast<int>(filled.top)),
-		                 glm::ivec2(static_cast<int>(*filled.middle), static_cast<int>(filled.bottom) - 1), black);
+		// The game draws the middle line with its box draw, one pixel wide
+		const auto lineTop = glm::vec2(glm::ivec2(static_cast<int>(*filled.middle), static_cast<int>(filled.top)));
+		const auto lineBottom = static_cast<float>(static_cast<int>(filled.bottom));
+		_canvas.DrawQuad(lineTop, {lineTop.x + 1.0f, lineBottom}, {0.0f, 0.0f}, {1.0f, 1.0f}, black, nullptr);
 	}
 
 	// Shadows inside the frame along its top and its left, along the whole bar

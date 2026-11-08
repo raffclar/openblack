@@ -39,6 +39,7 @@
 #include "Graphics/FrameBuffer.h"
 #include "Graphics/GraphicsHandleBgfx.h"
 #include "Graphics/InstanceDesc.h"
+#include "Graphics/PixelCentres.h"
 #include "Graphics/ShaderManager.h"
 #include "Locator.h"
 #include "Renderer.h"
@@ -85,11 +86,12 @@ void Renderer::DrawInterfaceCreatures(const DrawSceneDesc& desc, const Interface
 	// One camera goes round all the creatures, over the interface's space, with the depth cleared before them
 	const auto view = interface_creatures::View(request.turn);
 	const auto projection = interface_creatures::SpaceProjection(desc.camera->GetProjectionMatrix());
+	const auto onTarget = pixel_centres::OnTarget(projection, request.viewSize);
 	const auto viewId = static_cast<bgfx::ViewId>(RenderPass::InterfaceCreatures);
 	bgfx::setViewClear(viewId, BGFX_CLEAR_DEPTH, 0, 0.0f, 0);
 	bgfx::setViewRect(viewId, static_cast<uint16_t>(request.viewOrigin.x), static_cast<uint16_t>(request.viewOrigin.y),
 	                  static_cast<uint16_t>(request.viewSize.x), static_cast<uint16_t>(request.viewSize.y));
-	bgfx::setViewTransform(viewId, &view, &projection);
+	bgfx::setViewTransform(viewId, &view, &onTarget);
 	bgfx::touch(viewId);
 
 	const auto& meshes = Locator::resources::value().GetMeshes();
@@ -238,7 +240,8 @@ void Renderer::DrawMenuCreature(const DrawSceneDesc& desc, const InterfaceCreatu
 	bgfx::setViewClear(viewId, BGFX_CLEAR_DEPTH, 0, 0.0f, 0);
 	bgfx::setViewRect(viewId, static_cast<uint16_t>(shown.viewOrigin.x), static_cast<uint16_t>(shown.viewOrigin.y),
 	                  static_cast<uint16_t>(shown.viewSize.x), static_cast<uint16_t>(shown.viewSize.y));
-	bgfx::setViewTransform(viewId, &shown.view, &shown.projection);
+	const auto onTarget = pixel_centres::OnTarget(shown.projection, shown.viewSize);
+	bgfx::setViewTransform(viewId, &shown.view, &onTarget);
 	// The body, its eyes and then its hair, in the order they are given, so the hair blends over the body
 	_shaderManager->SetViewOrder(RenderPass::MenuCreature, ViewOrder::Sequential);
 	bgfx::touch(viewId);
@@ -308,7 +311,8 @@ void Renderer::DrawFilmCreature(const DrawSceneDesc& desc, const interface_creat
 	bgfx::setViewClear(viewId, BGFX_CLEAR_DEPTH, 0, 0.0f, 0);
 	bgfx::setViewRect(viewId, static_cast<uint16_t>(shown.viewOrigin.x), static_cast<uint16_t>(shown.viewOrigin.y),
 	                  static_cast<uint16_t>(shown.viewSize.x), static_cast<uint16_t>(shown.viewSize.y));
-	bgfx::setViewTransform(viewId, &shown.view, &shown.projection);
+	const auto onTarget = pixel_centres::OnTarget(shown.projection, shown.viewSize);
+	bgfx::setViewTransform(viewId, &shown.view, &onTarget);
 	// The body, its eyes, its hair and the glows on its hands, then the effects, in the order they are given, so each
 	// blends over what is before it
 	_shaderManager->SetViewOrder(RenderPass::FilmCreature, ViewOrder::Sequential);

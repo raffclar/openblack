@@ -139,9 +139,16 @@ void DialogPainter::DrawBox(const DialogRect& rect, glm::vec2 uvMin, glm::vec2 u
 
 void DialogPainter::DrawLine(glm::ivec2 from, glm::ivec2 to, glm::vec4 colour) const
 {
-	// A line covers whole pixels of the layout, which grow with it on a bigger screen; at least a pixel of the screen
-	const auto min = glm::floor(ToScreen(glm::vec2(glm::min(from, to))));
-	const auto max = glm::max(glm::floor(ToScreen(glm::vec2(glm::max(from, to) + 1))), min + 1.0f);
+	// The line fills the pixels of the layout that the game's line draw fills. These pixels grow with the layout on a
+	// bigger screen, and cover at least a pixel of the screen.
+	const auto span = screen_pixels::LinePixels(from, to);
+	if (!span.has_value())
+	{
+		return;
+	}
+	const auto min = glm::floor(ToScreen(glm::vec2(span->first)));
+	const auto max = glm::max(glm::floor(ToScreen(glm::vec2(span->last + 1))), min + 1.0f);
+	const Canvas::CornersScope corners(_canvas, screen_pixels::Corners::AsGiven);
 	_canvas.DrawQuad(min, max, {0.0f, 0.0f}, {1.0f, 1.0f}, glm::vec4(glm::vec3(colour), colour.a * _alpha), nullptr);
 }
 

@@ -248,17 +248,24 @@ float LoadingScreen::DrawText(std::u16string_view text, const loading::Rect& box
 
 void LoadingScreen::DrawLayoutLine(glm::ivec2 from, glm::ivec2 to, glm::vec4 colour)
 {
-	// A line covers whole pixels of the layout, which grow with it on a screen bigger than the default one
-	const auto min = glm::min(from, to);
-	const auto max = glm::max(from, to);
-	const auto a = loading::Adjust({min.x, min.y}, _resolution.x, _resolution.y);
+	// Up to the default screen, the line goes to the game's line draw at the adjusted ends
 	if (gui::ReferenceScale(_resolution.x, _resolution.y) <= 1.0f)
 	{
-		const auto b = loading::Adjust({max.x, max.y}, _resolution.x, _resolution.y);
+		const auto a = loading::Adjust({from.x, from.y}, _resolution.x, _resolution.y);
+		const auto b = loading::Adjust({to.x, to.y}, _resolution.x, _resolution.y);
 		_canvas.DrawLine({a[0], a[1]}, {b[0], b[1]}, colour);
 		return;
 	}
-	const auto b = loading::Adjust({max.x + 1, max.y + 1}, _resolution.x, _resolution.y);
+	// On a bigger screen, the line fills the pixels of the layout that the game's line draw fills. These pixels grow
+	// with the layout.
+	const auto span = gui::screen_pixels::LinePixels(from, to);
+	if (!span.has_value())
+	{
+		return;
+	}
+	const auto a = loading::Adjust({span->first.x, span->first.y}, _resolution.x, _resolution.y);
+	const auto b = loading::Adjust({span->last.x + 1, span->last.y + 1}, _resolution.x, _resolution.y);
+	const Canvas::CornersScope corners(_canvas, gui::screen_pixels::Corners::AsGiven);
 	_canvas.DrawQuad({a[0], a[1]}, {std::max(b[0], a[0] + 1), std::max(b[1], a[1] + 1)}, {0.0f, 0.0f}, {1.0f, 1.0f}, colour,
 	                 nullptr);
 }
