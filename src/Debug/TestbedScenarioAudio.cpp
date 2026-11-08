@@ -106,6 +106,21 @@ void testbed_scenarios::AddAudio(std::vector<Scenario>& all)
 	    .commands = {music(0, 0.5f), Command {.kind = Kind::ShowCustomMusicControls, .delaySeconds = 0.5f, .value = 2}},
 	});
 
+	// The music button hides the controls and shows them again: the play list does not show again
+	all.push_back({
+	    .id = "audio.custom_music_play_list_hides",
+	    .name = "The play list after the music button",
+	    .facet = Facet::Audio,
+	    .description = "Put two MP3 files in the custom_music folder of the profile folder. The first track plays, and "
+	                   "the controls at the top right of the screen open with the play list. After two seconds the music "
+	                   "button hides the controls, and after two more seconds it shows them again.",
+	    .expected = "The controls show again without the play list. The play list button shows the play list again.",
+	    .framing = {.shot = Shot::Overview},
+	    .commands = {music(0, 0.5f), Command {.kind = Kind::ShowCustomMusicControls, .delaySeconds = 0.5f, .value = 2},
+	                 Command {.kind = Kind::ShowCustomMusicControls, .delaySeconds = 2.0f, .value = k_PressMusicButton},
+	                 Command {.kind = Kind::ShowCustomMusicControls, .delaySeconds = 2.0f, .value = k_PressMusicButton}},
+	});
+
 	all.push_back({
 	    .id = "audio.snow",
 	    .name = "Footsteps in snow",

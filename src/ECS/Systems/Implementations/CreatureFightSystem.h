@@ -88,6 +88,7 @@ public:
 	void DoMove(PlayerNames player, entt::entity target, const creature_fight::Move& move, bool replace) override;
 	void DoCharge(PlayerNames player, float heldMs) override;
 	[[nodiscard]] bool IsPressed() const override { return _pressed.has_value(); }
+	[[nodiscard]] bool HoldsBodyPress() const override { return _bodyPressHeld; }
 	[[nodiscard]] std::optional<creature_fight::Tip> HandTip(std::optional<entt::entity> under) const override;
 	void DoFightCheat(PlayerNames player) override;
 	bool GestureSpecialMove() override;
@@ -254,6 +255,9 @@ private:
 		uint32_t turn;
 	};
 	std::optional<Pressed> _pressed;
+	/// The player holds the button of a press on a body that the fight took. This stays true after the fight ends, until
+	/// the player lets go of the button.
+	bool _bodyPressHeld {false};
 	/// The fight the camera watches: the creature that made the arena and the other, and once the fight is over how
 	/// long the view lingers
 	struct Watched

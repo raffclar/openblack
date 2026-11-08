@@ -211,6 +211,24 @@ TEST(CustomMusicControls, ButtonsTellThePlayer)
 	EXPECT_TRUE(CanDo(Button::Play));
 }
 
+TEST(CustomMusicControls, ThePlayListDoesNotShowAgainWithTheControls)
+{
+	auto player = TwoTracks();
+	Panel panel;
+	Click(panel, player, Button::Music);
+	Click(panel, player, Button::PlayList);
+	EXPECT_TRUE(panel.playListShown);
+	// The music button hides the controls and the play list
+	Click(panel, player, Button::Music);
+	EXPECT_FALSE(panel.controlsShown);
+	// The music button shows the controls again, but the play list stays hidden
+	Click(panel, player, Button::Music);
+	EXPECT_TRUE(panel.controlsShown);
+	EXPECT_FALSE(panel.playListShown);
+	Click(panel, player, Button::PlayList);
+	EXPECT_TRUE(panel.playListShown);
+}
+
 TEST(CustomMusicControls, NothingHappensWithoutTracks)
 {
 	FakePlayer player;

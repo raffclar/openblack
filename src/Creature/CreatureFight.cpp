@@ -231,6 +231,16 @@ bool creature_fight::DirectsFight(bool playersCreatureDuels, bool cameraShowsFig
 	return playersCreatureDuels && cameraShowsFight && handEmpty;
 }
 
+bool creature_fight::InFightControls(bool directsFight, bool bodyPressHeld)
+{
+	return directsFight || bodyPressHeld;
+}
+
+bool creature_fight::DirectsFightForMusic(bool directsFight, bool bodyPressHeld)
+{
+	return directsFight && !bodyPressHeld;
+}
+
 bool creature_fight::InArena(const Arena& arena, glm::vec2 point)
 {
 	return glm::distance(point, arena.centre) < arena.radius;

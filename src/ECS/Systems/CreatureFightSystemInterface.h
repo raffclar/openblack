@@ -202,6 +202,15 @@ public:
 	virtual void DoFightCheat(PlayerNames /*player*/) {}
 	/// Whether a press the fight took is held
 	[[nodiscard]] virtual bool IsPressed() const = 0;
+	/// Whether the player holds the button of a press on a body that the fight took. The hold continues after the fight
+	/// ends, until the player lets go of the button.
+	[[nodiscard]] virtual bool HoldsBodyPress() const { return false; }
+	/// Whether the hand is in the controls of the fight of the player's creature (see creature_fight::InFightControls).
+	/// Sounds that a sample marks as quiet in fights do not start then.
+	[[nodiscard]] virtual bool InFightControls() const
+	{
+		return creature_fight::InFightControls(DirectsFight(), HoldsBodyPress());
+	}
 	/// What the hand offers over a thing, or nothing, while the hand directs the fight
 	[[nodiscard]] virtual std::optional<creature_fight::Tip> HandTip(std::optional<entt::entity> under) const = 0;
 	/// A gesture drawn while the player's creature duels: its special move, or a miracle it knows, cast in the fight.
