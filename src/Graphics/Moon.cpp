@@ -64,17 +64,18 @@ std::optional<moon::Placement> moon::Place(float scriptHour)
 	return Placement {.offset = offset, .alpha = alpha};
 }
 
-double moon::MonthFraction(int64_t unixTime)
+float moon::MonthFraction(int64_t unixTime)
 {
-	// Whole days from a new moon, in moon months of about 29.5 days, kept at full precision until the phase is made
+	// Whole days from a new moon, in moon months of about 29.5 days. The game rounds the months to a float.
 	const auto days = static_cast<int32_t>((unixTime / k_SecondsPerDay) - k_NewMoonDay);
-	const double months = static_cast<double>(days) * k_MonthsPerDay;
-	return months - static_cast<double>(static_cast<int32_t>(months));
+	const float months = x87::Mul(static_cast<double>(days), k_MonthsPerDay);
+	// The whole months go towards zero, so this subtraction is exact
+	return months - static_cast<float>(static_cast<int32_t>(months));
 }
 
 float moon::Phase(int64_t unixTime)
 {
-	return static_cast<float>((1.0 - MonthFraction(unixTime)) * k_FullTurn);
+	return x87::Mul(1.0f - MonthFraction(unixTime), k_FullTurn);
 }
 
 float moon::ScriptPercentage(float phase)

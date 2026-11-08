@@ -46,7 +46,7 @@ bool IsLandDark()
 	{
 		return false;
 	}
-	const auto skyType = Locator::skyClockSystem::value().GetCurrentSkyType();
+	const auto skyType = Locator::skyClockSystem::value().GetCurrentNightSkyType();
 	const auto alignment = Locator::alignmentSystem::has_value() ? Locator::alignmentSystem::value().GetSkyAlignment() : 0.0f;
 	float overcast = 0.0f;
 	if (Locator::weatherSystem::has_value() && Locator::camera::has_value())

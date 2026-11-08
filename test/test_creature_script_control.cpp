@@ -14,6 +14,8 @@
 
 #include <gtest/gtest.h>
 
+#include "Creature/CreatureEyes.h"
+#include "Creature/CreatureFeedback.h"
 #include "Creature/CreatureRoute.h"
 #include "Creature/CreatureScriptAgendas.h"
 #include "ECS/Components/CreatureBody.h"
@@ -24,6 +26,7 @@
 #include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
 #include "ECS/Systems/CreatureObjectActionSystemInterface.h"
+#include "ECS/Systems/MagicSystemInterface.h"
 #include "Locator.h"
 
 #define LOCATOR_IMPLEMENTATIONS
@@ -159,6 +162,72 @@ public:
 	std::vector<entt::entity> calledOffForPlan;
 };
 
+/// Magic that only records the creatures that let go of their miracle
+class CastReleasingMagic final: public MagicSystemInterface
+{
+public:
+	entt::entity CastAtPoint(MagicType, PlayerNames, glm::vec3, const magic::SpellCastData&,
+	                         const particles::ProcessInfo&) override
+	{
+		return entt::null;
+	}
+	entt::entity CastOnObject(MagicType, PlayerNames, entt::entity, const magic::SpellCastData&,
+	                          const particles::ProcessInfo&) override
+	{
+		return entt::null;
+	}
+	void CloseDown(entt::entity) override {}
+	[[nodiscard]] bool CanCastAt(MagicType, PlayerNames, glm::vec3) override { return false; }
+	[[nodiscard]] bool MeetsKindRule(MagicType, glm::vec3, bool) override { return false; }
+	bool SpellEvent(entt::entity, const particles::SpellEventInfo&) override { return false; }
+	void PayForSpell(entt::entity, float) override {}
+	entt::entity CreateDispenser(glm::vec3, MagicType, float) override { return entt::null; }
+	void SetDispenserPeriod(entt::entity, float) override {}
+	entt::entity CreateOneOffSeed(glm::vec3, SpellSeedType, int, float) override { return entt::null; }
+	entt::entity CreateOneOffSeedFor(glm::vec3, MagicType) override { return entt::null; }
+	bool Remove(entt::entity) override { return false; }
+	entt::entity GiveSeedToHand(PlayerNames, SpellSeedType, int, float) override { return entt::null; }
+	entt::entity SummonSeed(PlayerNames, SpellSeedType, int) override { return entt::null; }
+	entt::entity SummonSeedAtSite(entt::entity, SpellSeedType, int) override { return entt::null; }
+	void DiscardHeldSeed() override {}
+	void DiscardHeldSeedOf(PlayerNames) override {}
+	void DeleteSeed(entt::entity) override {}
+	void UpdateHand(const HandFrame&, const input_steps::Steps&) override {}
+	bool TapFireBall(entt::entity) override { return false; }
+	bool TapGlobe(entt::entity, PlayerNames) override { return false; }
+	bool PressFireBall(uint32_t, uint32_t) override { return false; }
+	void HoldFireBall(uint32_t, uint32_t) override {}
+	void ReleaseFireBall(uint32_t, uint32_t) override {}
+	[[nodiscard]] std::optional<entt::entity> OrbUnderHand() const override { return std::nullopt; }
+	bool PressAction() override { return false; }
+	void ReleaseAction() override {}
+	[[nodiscard]] bool IsHandBusy() const override { return false; }
+	[[nodiscard]] bool IsHandBusyOf(PlayerNames) const override { return false; }
+	[[nodiscard]] magic::PourPose GetHandPour(float) const override { return {}; }
+	[[nodiscard]] HandCastState GetHandCastState() const override { return {}; }
+	[[nodiscard]] std::optional<entt::entity> GetHeldSeed() const override { return std::nullopt; }
+	[[nodiscard]] std::optional<entt::entity> GetHeldSeedOf(PlayerNames) const override { return std::nullopt; }
+	void SetIconSeedPowerUp(entt::entity, int) override {}
+	entt::entity TakeIconSeed(entt::entity, PlayerNames, SpellSeedType, int, float) override { return entt::null; }
+	[[nodiscard]] HandResult GetLastHandResult() const override { return {}; }
+	bool SendSpellEvent(entt::entity, const particles::SpellEventInfo&) override { return false; }
+	float ForcePayForSpell(entt::entity, float) override { return 0.0f; }
+	[[nodiscard]] float SpellStrength(entt::entity) override { return 0.0f; }
+	void ProcessTurn() override {}
+	void Update(float) override {}
+	void Reset() override {}
+	void SetIgnoreInfluence(bool) override {}
+	void DriveHand(std::optional<HandFrame>) override {}
+	[[nodiscard]] std::optional<HandFrame> GetDrivenHand() const override { return std::nullopt; }
+	[[nodiscard]] bool IsIgnoringInfluence() const override { return false; }
+	[[nodiscard]] std::vector<SpellInfo> GetSpells() const override { return {}; }
+	void RainOnFire(const glm::vec3&) override {}
+	[[nodiscard]] std::vector<DispenserInfo> GetDispensers() const override { return {}; }
+	void ReleaseCreatureCast(entt::entity creature) override { released.push_back(creature); }
+
+	std::vector<entt::entity> released;
+};
+
 class CreatureScriptControlTest: public ::testing::Test
 {
 protected:
@@ -264,4 +333,37 @@ TEST_F(CreatureScriptControlTest, FeedbackEndsTheFightOfTheBodyAgain)
 	EXPECT_EQ(fights.calledOffForPlan, (std::vector<entt::entity> {creature}));
 	EXPECT_TRUE(fights.calledOff.empty());
 	Locator::creatureFightSystem::reset();
+}
+
+// The feedback of the player stops what the creature does. The creature lets go of the miracle that it holds, and its
+// eyes go calm, also when the feedback is too slight to count.
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(CreatureScriptControlTest, FeedbackLetsGoOfTheMiracleAndCalmsTheEyes)
+{
+	auto& magic = static_cast<CastReleasingMagic&>(Locator::magicSystem::emplace<CastReleasingMagic>());
+	auto& registry = Locator::entitiesRegistry::value();
+	auto& eyes = registry.Assign<CreatureEyes>(creature);
+	eyes.mode = creature_eyes::Mode::Wide;
+	eyes.blink.intervalMs = 1;
+	minds.ReceiveFeedback(creature, 0.0f);
+	EXPECT_EQ(magic.released, (std::vector<entt::entity> {creature}));
+	EXPECT_EQ(eyes.mode, creature_eyes::Mode::Calm);
+	EXPECT_EQ(eyes.blink.intervalMs, creature_eyes::k_BlinkIntervalMs);
+	eyes.mode = creature_eyes::Mode::Wide;
+	minds.ReceiveFeedback(creature, -0.5f);
+	EXPECT_EQ(magic.released, (std::vector<entt::entity> {creature, creature}));
+	EXPECT_EQ(eyes.mode, creature_eyes::Mode::Calm);
+	Locator::magicSystem::reset();
+}
+
+// Slight feedback gives the creature an order to look at the camera of its player. The creature is free to change the
+// plan for a plan more than twice as pressing.
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST(CreatureSlightFeedback, IsAnOrderToLookAtTheCameraThatTheCreatureCanChange)
+{
+	constexpr auto k_Look = creature_feedback::k_SlightFeedbackLook;
+	EXPECT_EQ(k_Look.action, "LookAtCamera");
+	EXPECT_TRUE(k_Look.ordered);
+	EXPECT_FALSE(k_Look.forced);
+	EXPECT_FLOAT_EQ(k_Look.priority, 1.0f);
 }

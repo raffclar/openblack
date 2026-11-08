@@ -30,6 +30,9 @@ constexpr float k_NearInverseStorm = 0x1.111112p-4f; // 1 / 15
 constexpr float k_FarInverseStorm = 0x1.767DCEp-9f;  // 1 / 350
 /// How far a full overcast darkens the land's colour
 constexpr float k_OvercastDarkening = 96.0f;
+// The palette's time column: hours from midnight to noon for the sky counted from day, and the columns an hour
+constexpr float k_TimeColumnHours = 6.0f;
+constexpr float k_TimeColumnScale = 2.5f;
 
 enum Row : size_t
 {
@@ -84,8 +87,10 @@ namespace
 /// The palette's colour of each row for the time of day and the alignment
 std::array<uint32_t, k_RowCount> PaletteColours(const LandLightPalette& palette, float skyType, float alignment)
 {
-	// The palette's columns: the time of day from midnight to noon, and the alignment from good to evil
-	const float timeColumn = std::clamp(skyType, 0.0f, 2.0f) * 15.0f;
+	// The palette's columns: the time of day from midnight to noon, and the alignment from good to evil. The time's
+	// column is the sky counted from day, times 6, then times 2.5. Each step rounds to a float.
+	const float fromDay = 2.0f - std::clamp(skyType, 0.0f, 2.0f);
+	const float timeColumn = (fromDay * k_TimeColumnHours) * k_TimeColumnScale;
 	const float alignmentColumn = std::clamp(1.0f - alignment, 0.0f, 2.0f) * 15.0f;
 
 	std::array<uint32_t, k_RowCount> colours {};
@@ -150,7 +155,7 @@ void LandLightTable::Build(const LandLightPalette& palette, float skyType, float
 		auto k = static_cast<int32_t>(std::min(255u, (r + 4 * g + 3 * b) / 8 + 8));
 		_haze.colour = glm::vec3(static_cast<float>(r / 3), static_cast<float>(g / 3), static_cast<float>(b / 3));
 		// 0 by day and at night, 1 at dusk
-		const float dusk = std::clamp(skyType < 1.0f ? skyType : 2.0f - skyType, 0.0f, 1.0f);
+		const float dusk = skyType > 1.0f ? 2.0f - skyType : skyType;
 		const float duskSquared = dusk * dusk;
 		float nearInverse = k_NearInverse;
 		float farInverse = k_FarInverse;

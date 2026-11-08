@@ -305,6 +305,11 @@ fire::graphic::FlameShape FlameShapeOf(entt::entity object)
 	{
 		return fire::graphic::FlameShape::Jointed;
 	}
+	// Each other thing whose info row is of the temple kind is a part of a temple
+	if (const auto* info = world_objects::EffectInfoOf(object); info != nullptr && info->type == ObjectType::Citadel)
+	{
+		return fire::graphic::FlameShape::TemplePart;
+	}
 	return fire::graphic::FlameShape::Plain;
 }
 

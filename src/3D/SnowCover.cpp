@@ -12,6 +12,8 @@
 #include <algorithm>
 #include <array>
 
+#include "Common/X87.h"
+
 namespace openblack::snow_cover
 {
 
@@ -21,6 +23,8 @@ constexpr float k_InverseCell = 0.025f;
 /// A turn's time, and how much of a storm's snow settles in it
 constexpr float k_Turn = 0.1f;
 constexpr float k_Settles = 0.03f;
+/// Each storm lays its snow at this rate, which no storm changes
+constexpr float k_LayRate = 1.2f;
 /// The rows of the grid that melt together, every so often, and by how much
 constexpr int32_t k_Bands = 8;
 constexpr int32_t k_BandRows = k_GridSize / k_Bands;
@@ -46,7 +50,7 @@ int32_t FixedDepth(std::span<const float> grid, int32_t x, int32_t z)
 
 float StormSnowPerTurn(int8_t snow, float strength)
 {
-	const auto whole = static_cast<int32_t>(static_cast<float>(snow) * strength);
+	const auto whole = x87::ToInteger((static_cast<float>(snow) * k_LayRate) * strength);
 	return static_cast<float>(whole) * k_Turn * k_Settles;
 }
 

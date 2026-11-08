@@ -42,12 +42,12 @@ TEST(TempleLight, HalfEvilIsHalfAsRed)
 
 TEST(TempleLight, GoodPulsesThroughTheColours)
 {
-	// At the start: red 22, green 22 + 11 sin(2 pi / 3) and blue 22 + 11 sin(2 pi), each by 255 of 256
+	// At the start: red 22, green 22 + 11 sin(2 pi / 3) and blue 22 + 11 sin(4 pi / 3), each by 255 of 256
 	const auto light = TempleLight::At(1.0f, 0);
 	EXPECT_EQ(light.multiply, glm::vec3(1.0f));
 	EXPECT_FLOAT_EQ(light.add.r, 21.0f / 255.0f);
 	EXPECT_FLOAT_EQ(light.add.g, 30.0f / 255.0f);
-	EXPECT_FLOAT_EQ(light.add.b, 21.0f / 255.0f);
+	EXPECT_FLOAT_EQ(light.add.b, 11.0f / 255.0f);
 	// An eighth of the way round, red is 22 + 11 sin(pi / 4)
 	EXPECT_FLOAT_EQ(TempleLight::At(1.0f, 64 * 8).add.r, 28.0f / 255.0f);
 }
@@ -59,4 +59,13 @@ TEST(TempleLight, ColoursAreMultipliedByTheLight)
 	EXPECT_FLOAT_EQ(colour.r, 127.0f / 255.0f);
 	EXPECT_FLOAT_EQ(colour.g, 87.0f / 255.0f);
 	EXPECT_FLOAT_EQ(colour.b, 80.0f / 255.0f);
+}
+
+TEST(TempleLight, BlueIsTwoThirdsOfATurnBehindRed)
+{
+	// A third of the way round, blue is at the top of its pulse: 22 + 11 sin(2 pi), so 21 by 255 of 256. Red is at
+	// 22 + 11 sin(2 pi / 3), so 30 by 255 of 256.
+	const auto light = TempleLight::At(1.0f, 171 * 8);
+	EXPECT_FLOAT_EQ(light.add.r, 30.0f / 255.0f);
+	EXPECT_FLOAT_EQ(light.add.b, 21.0f / 255.0f);
 }

@@ -22,51 +22,51 @@ using sky_dome::Rows;
 
 TEST(SkyDome, SetUpBuildsTheWholeDomeThenFollowsFromDay)
 {
-	sky_dome::Follow follow(0.0f);
+	sky_dome::Follow follow(2.0f);
 	// The whole dome for the night, then the band following the night from row 0, as it was following the day
-	const auto first = follow.Advance(0.0f);
+	const auto first = follow.Advance(2.0f);
 	ASSERT_EQ(first.Get().size(), 2u);
-	EXPECT_EQ(first.Get()[0], (Rows {.skyType = 0.0f, .first = 0, .count = 256}));
-	EXPECT_EQ(first.Get()[1], (Rows {.skyType = 0.0f, .first = 0, .count = 32}));
+	EXPECT_EQ(first.Get()[0], (Rows {.skyType = 2.0f, .first = 0, .count = 256}));
+	EXPECT_EQ(first.Get()[1], (Rows {.skyType = 2.0f, .first = 0, .count = 32}));
 
 	// By day nothing more is needed
-	sky_dome::Follow day(2.0f);
-	EXPECT_EQ(day.Advance(2.0f).Get().size(), 1u);
-	EXPECT_TRUE(day.Advance(2.0f).Get().empty());
+	sky_dome::Follow day(0.0f);
+	EXPECT_EQ(day.Advance(0.0f).Get().size(), 1u);
+	EXPECT_TRUE(day.Advance(0.0f).Get().empty());
 }
 
 TEST(SkyDome, FollowsABandAFrame)
 {
-	sky_dome::Follow follow(2.0f);
-	(void)follow.Advance(2.0f);
+	sky_dome::Follow follow(0.0f);
+	(void)follow.Advance(0.0f);
 	// Within the hysteresis the dome stays as it is
-	EXPECT_TRUE(follow.Advance(1.98f).Get().empty());
+	EXPECT_TRUE(follow.Advance(0.02f).Get().empty());
 	// Past it, the rows start again with the new sky type, which is kept while they are built
-	auto frame = follow.Advance(1.9f);
+	auto frame = follow.Advance(0.1f);
 	ASSERT_EQ(frame.Get().size(), 1u);
-	EXPECT_EQ(frame.Get()[0], (Rows {.skyType = 1.9f, .first = 0, .count = 32}));
+	EXPECT_EQ(frame.Get()[0], (Rows {.skyType = 0.1f, .first = 0, .count = 32}));
 	for (uint16_t row = 32; row < sky_dome::k_Rows; row += 32)
 	{
-		frame = follow.Advance(1.5f);
+		frame = follow.Advance(0.5f);
 		ASSERT_EQ(frame.Get().size(), 1u);
-		EXPECT_EQ(frame.Get()[0], (Rows {.skyType = 1.9f, .first = row, .count = 32}));
+		EXPECT_EQ(frame.Get()[0], (Rows {.skyType = 0.1f, .first = row, .count = 32}));
 	}
 	// Once built, the next band follows the sky type of that frame
-	frame = follow.Advance(1.5f);
+	frame = follow.Advance(0.5f);
 	ASSERT_EQ(frame.Get().size(), 1u);
-	EXPECT_EQ(frame.Get()[0], (Rows {.skyType = 1.5f, .first = 0, .count = 32}));
+	EXPECT_EQ(frame.Get()[0], (Rows {.skyType = 0.5f, .first = 0, .count = 32}));
 }
 
 TEST(SkyDome, JumpRebuildsTheWholeDome)
 {
-	sky_dome::Follow follow(2.0f);
-	(void)follow.Advance(2.0f);
-	follow.Jump(0.5f);
-	const auto frame = follow.Advance(0.5f);
+	sky_dome::Follow follow(0.0f);
+	(void)follow.Advance(0.0f);
+	follow.Jump(1.5f);
+	const auto frame = follow.Advance(1.5f);
 	ASSERT_EQ(frame.Get().size(), 2u);
-	EXPECT_EQ(frame.Get()[0], (Rows {.skyType = 0.5f, .first = 0, .count = 256}));
-	EXPECT_EQ(frame.Get()[1], (Rows {.skyType = 0.5f, .first = 0, .count = 32}));
-	EXPECT_FLOAT_EQ(follow.Following(), 0.5f);
+	EXPECT_EQ(frame.Get()[0], (Rows {.skyType = 1.5f, .first = 0, .count = 256}));
+	EXPECT_EQ(frame.Get()[1], (Rows {.skyType = 1.5f, .first = 0, .count = 32}));
+	EXPECT_FLOAT_EQ(follow.Following(), 1.5f);
 }
 
 TEST(SkyDome, APictureNeverDrawnHasNoRowsToDrawAgain)
@@ -87,21 +87,21 @@ TEST(SkyDome, ALostPictureAfterAWholeDomeIsTheWholeDomeAgain)
 
 TEST(SkyDome, ALostPicturePartWayThroughAFollowKeepsTheOldRowsBelowTheBand)
 {
-	sky_dome::Follow follow(2.0f);
+	sky_dome::Follow follow(0.0f);
 	sky_dome::Picture picture;
 	// The whole dome by day, then three bands of a follow of a new sky type
-	picture.Drew(follow.Advance(2.0f).Get());
+	picture.Drew(follow.Advance(0.0f).Get());
 	for (int frame = 0; frame < 3; ++frame)
 	{
-		picture.Drew(follow.Advance(1.5f).Get());
+		picture.Drew(follow.Advance(0.5f).Get());
 	}
 	ASSERT_EQ(follow.RowsDone(), 96u);
 	const auto again = picture.Again();
 	ASSERT_EQ(again.size(), 2u);
-	EXPECT_EQ(again[0], (Rows {.skyType = 1.5f, .first = 0, .count = 96}));
-	EXPECT_EQ(again[1], (Rows {.skyType = 2.0f, .first = 96, .count = 160}));
+	EXPECT_EQ(again[0], (Rows {.skyType = 0.5f, .first = 0, .count = 96}));
+	EXPECT_EQ(again[1], (Rows {.skyType = 0.0f, .first = 96, .count = 160}));
 	// The record does not change the follow
-	EXPECT_FLOAT_EQ(follow.Following(), 1.5f);
+	EXPECT_FLOAT_EQ(follow.Following(), 0.5f);
 }
 
 TEST(SkyDome, ALostPictureKeepsEachBandThatHasItsOwnSkyType)
@@ -123,12 +123,12 @@ TEST(SkyDome, ALostPictureKeepsEachBandThatHasItsOwnSkyType)
 TEST(SkyDome, TimePairs)
 {
 	// 0 night, 1 dusk, 2 day
-	EXPECT_EQ(sky_dome::TimePair(2.0f), (sky_dome::Pair {.lower = 2, .upper = 1, .weight = 0}));
-	EXPECT_EQ(sky_dome::TimePair(1.5f), (sky_dome::Pair {.lower = 2, .upper = 1, .weight = 127}));
+	EXPECT_EQ(sky_dome::TimePair(0.0f), (sky_dome::Pair {.lower = 2, .upper = 1, .weight = 0}));
+	EXPECT_EQ(sky_dome::TimePair(0.5f), (sky_dome::Pair {.lower = 2, .upper = 1, .weight = 127}));
 	// Full dusk is still day into dusk, all dusk
 	EXPECT_EQ(sky_dome::TimePair(1.0f), (sky_dome::Pair {.lower = 2, .upper = 1, .weight = 255}));
-	EXPECT_EQ(sky_dome::TimePair(0.75f), (sky_dome::Pair {.lower = 1, .upper = 0, .weight = 63}));
-	EXPECT_EQ(sky_dome::TimePair(0.0f), (sky_dome::Pair {.lower = 1, .upper = 0, .weight = 255}));
+	EXPECT_EQ(sky_dome::TimePair(1.25f), (sky_dome::Pair {.lower = 1, .upper = 0, .weight = 63}));
+	EXPECT_EQ(sky_dome::TimePair(2.0f), (sky_dome::Pair {.lower = 1, .upper = 0, .weight = 255}));
 }
 
 TEST(SkyDome, AlignmentPairs)
@@ -190,6 +190,38 @@ TEST(SkyDome, OvercastTurnsTowardsTheHaze)
 	const auto noFog = sky_dome::TintOf(
 	    {.hazeColour = glm::vec3(60.0f), .overcast = 1.0f, .flash = 0, .darkness = 0, .fog = false, .weather = true});
 	EXPECT_EQ(noFog, sky_dome::Tint {});
+}
+
+TEST(SkyDome, AtLowResolutionTheFirstColourIsTheLandsDarkerTowardsNight)
+{
+	constexpr uint32_t k_Land = 0xC8DCF0u; // 200, 220, 240
+	// By day and at dusk all of the land's colour
+	EXPECT_EQ(sky_dome::LowResolutionColour(k_Land, 0.0f), glm::u8vec3(200, 220, 240));
+	EXPECT_EQ(sky_dome::LowResolutionColour(k_Land, 1.0f), glm::u8vec3(200, 220, 240));
+	// Halfway to night red stays, green and blue fall: 220 x 0.925 and 240 x 0.875, cut to whole numbers
+	EXPECT_EQ(sky_dome::LowResolutionColour(k_Land, 1.5f), glm::u8vec3(200, 203, 210));
+	// At night half of each
+	EXPECT_EQ(sky_dome::LowResolutionColour(k_Land, 2.0f), glm::u8vec3(100, 110, 120));
+
+	// The tint starts from it at low resolution, and from white at the other levels
+	const sky_dome::TintInputs night {.hazeColour = glm::vec3(0.0f),
+	                                  .overcast = 0.0f,
+	                                  .flash = 0,
+	                                  .darkness = 0,
+	                                  .fog = true,
+	                                  .weather = true,
+	                                  .lowResolution = true,
+	                                  .landColour = k_Land,
+	                                  .skyType = 2.0f};
+	EXPECT_EQ(sky_dome::TintOf(night).modulate, glm::u8vec3(100, 110, 120));
+	auto high = night;
+	high.lowResolution = false;
+	EXPECT_EQ(sky_dome::TintOf(high).modulate, glm::u8vec3(255));
+	// An overcast of 127 takes it towards the haze's colour: 100 + (60 - 100) x 127 / 256, rounded down
+	auto overcast = night;
+	overcast.hazeColour = glm::vec3(60.0f);
+	overcast.overcast = 0.5f;
+	EXPECT_EQ(sky_dome::TintOf(overcast).modulate[0], 80);
 }
 
 TEST(SkyDome, EvilDarkensAndFlashWhitens)

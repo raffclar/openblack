@@ -361,6 +361,7 @@ void GameMenu::BuildOptions(const TextDatabase& texts)
 		_settings.autoSave = checked;
 		SettingsChanged();
 	};
+	// Deviation 228: the box shows the player's push scrolling. The game shows the box clear at each start.
 	auto& pushScrolling =
 	    page.Add<CheckBox>(_font, glm::ivec2(485, k_CheckBoxTop), std::u16string(texts.Get("HELP_TEXT_DIALOG_ADDITION_116")),
 	                       _settings.pushScrolling);
@@ -755,7 +756,7 @@ void GameMenu::BuildControls(const TextDatabase& texts)
 	// Load Defaults asks first, then puts every binding back
 	page.Add<Button>(DialogRect {.min = {260, 530}, .max = {540, 570}}, _loadDefaults, Mid()).onClick = [this] {
 		Confirm(_loadDefaults, [this] {
-			_bindings = input::DefaultKeyBindings();
+			_bindings = _defaultControlsSource ? _defaultControlsSource() : input::DefaultKeyBindings();
 			RefreshControls();
 			_controlsChanged = true;
 		});

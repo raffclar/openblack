@@ -154,7 +154,8 @@ int32_t Strength(int32_t wettest)
 float DrawKey(glm::vec2 centre, float ground, glm::vec3 eye)
 {
 	const glm::vec3 offset = glm::vec3(centre.x, ground, centre.y) - eye;
-	return (offset.x * offset.x) + (offset.y * offset.y) + (offset.z * offset.z);
+	// The game adds the two squares across the ground first, then the square of the height
+	return ((offset.x * offset.x) + (offset.z * offset.z)) + (offset.y * offset.y);
 }
 
 std::optional<uint8_t> SplashAlpha(int32_t strength)

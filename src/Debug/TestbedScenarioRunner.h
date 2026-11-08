@@ -258,7 +258,7 @@ private:
 	/// Where the middle of the foot of the scenario's town's worship site altar, or of the site's food pot, is on the
 	/// screen
 	[[nodiscard]] std::optional<glm::ivec2> AltarOnScreen(glm::vec2 size, bool foodPot) const;
-	[[nodiscard]] std::optional<glm::ivec2> ObjectOnScreen(size_t object, float height, glm::vec2 size) const;
+	[[nodiscard]] std::optional<glm::ivec2> ObjectOnScreen(size_t object, float height, glm::vec2 size, size_t pile = 0) const;
 	/// A pixel over the body of the creature in the Creature Cave, as the cave finds it under the pointer, on a screen
 	/// of a size
 	[[nodiscard]] static std::optional<glm::ivec2> CaveCreatureOnScreen(glm::vec2 size);

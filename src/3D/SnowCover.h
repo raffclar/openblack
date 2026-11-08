@@ -38,7 +38,8 @@ inline constexpr float k_CellSize = 40.0f;
 /// The deepest the snow lies
 inline constexpr float k_MaxDepth = 255.0f;
 
-/// The snow a storm lays on each cell in a turn of 0.1 seconds, from its snow in percent and its strength, 0 to 1
+/// The snow a storm lays on each cell in a turn of 0.1 seconds, from its snow in percent and its strength, 0 to 1. The
+/// storm lays 1.2 times its snow, and the game cuts that amount to a whole number before the turn's share.
 [[nodiscard]] float StormSnowPerTurn(int8_t snow, float strength);
 
 /// A storm snowing on the cells within its outer radius of its centre: as much as `amount` within its inner radius,

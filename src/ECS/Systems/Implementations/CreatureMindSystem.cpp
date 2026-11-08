@@ -633,14 +633,22 @@ void CreatureMindSystem::ReceiveFeedback(entt::entity creature, float feedback)
 	{
 		body->body = creature_layers::EndDance(body->body);
 	}
-	// Too slight to count, it only looks at the player
+	// The stop also lets go of a miracle that the creature holds, and its eyes go calm
+	ReleaseCast(creature);
+	RestEyes(registry, creature, registry.TryGet<CreatureEyes>(creature));
+	// Too slight to count, it only looks at the camera of its player, for its desire to idle with the player
 	if (std::abs(feedback) <= creature_feedback::k_SlightFeedback)
 	{
-		if (const auto camera = openblack::ecs::ReportedCameraOfItsPlayer(creature);
-		    Locator::creatureLocomotionSystem::has_value() && camera.has_value())
+		if (openblack::ecs::ReportedCameraOfItsPlayer(creature).has_value())
 		{
-			Locator::creatureLocomotionSystem::value().TurnToFaceAtOnce(creature,
-			                                                            glm::vec2(camera->origin.x, camera->origin.z));
+			constexpr auto k_Look = creature_feedback::k_SlightFeedbackLook;
+			static_cast<void>(ForcePlan(creature, {.desire = creature_desires::Desire::IdleWithPlayer,
+			                                       .action = k_Look.action,
+			                                       .object = creature,
+			                                       .ordered = k_Look.ordered,
+			                                       .forced = k_Look.forced,
+			                                       .priority = k_Look.priority,
+			                                       .fightBodyEndsAgain = true}));
 		}
 		return;
 	}

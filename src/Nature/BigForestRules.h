@@ -13,6 +13,8 @@
 
 #include <optional>
 
+#include "3D/MapCoords.h"
+
 /// How a big forest gives up its wood and its trees.
 ///
 /// A big forest is one model standing for many trees. It holds an amount of wood, at first its size times its kind's
@@ -65,5 +67,7 @@ struct WoodTaken
 
 /// Whether something in a spot's cell, so far from the spot and of a radius, keeps a pine from being planted there
 [[nodiscard]] bool BlocksPine(float distance, float radius);
+/// The same for something at a map position: the distance between the two map positions is measured in map units
+[[nodiscard]] bool BlocksPine(const map_coords::MapCoords& spot, const map_coords::MapCoords& thing, float radius);
 
 } // namespace openblack::big_forest

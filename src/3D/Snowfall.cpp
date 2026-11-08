@@ -30,8 +30,6 @@ constexpr float k_TwoPi = 2.0f * k_Pi;
 constexpr float k_Drift = 3.0f;
 /// The highest the flakes start when the snow starts
 constexpr float k_ScatterTop = 160.0f;
-/// Less snow than this isn't drawn
-constexpr int32_t k_LeastSnow = 5;
 /// The quarters are drawn out to here from the camera, fainter from the nearer distance
 constexpr float k_Farthest = 300.0f;
 constexpr float k_Fading = 50.0f;

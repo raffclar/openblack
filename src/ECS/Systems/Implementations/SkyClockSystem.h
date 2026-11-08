@@ -34,6 +34,7 @@ public:
 	void ProcessTurn() override;
 	void SetTime(float time) override;
 	[[nodiscard]] float GetCurrentSkyType() const override;
+	[[nodiscard]] float GetCurrentNightSkyType() const override;
 	[[nodiscard]] float GetTime() const override { return GetClock().GetVisualTime(); }
 	[[nodiscard]] DayNightTimes GetDayNightTimes() const override { return GetClock().GetDayNightTimes(); }
 	[[nodiscard]] DayNightClock& GetClock() override;

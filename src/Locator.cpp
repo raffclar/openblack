@@ -865,9 +865,9 @@ bool openblack::InitializeSimulation(const player_profiles::Store& profiles) noe
 	return true;
 }
 
-void openblack::InitializePlayerInput()
+void openblack::InitializePlayerInput(bool systemSaysWheel)
 {
-	Locator::gameActionSystem::emplace<GameActionMap>();
+	Locator::gameActionSystem::emplace<GameActionMap>(systemSaysWheel);
 }
 
 void openblack::InitializeOnlineAndTools(const player_profiles::Store& profiles)

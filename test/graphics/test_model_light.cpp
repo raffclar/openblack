@@ -7,6 +7,8 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <cmath>
+
 #include <glm/geometric.hpp>
 #include <gtest/gtest.h>
 
@@ -18,8 +20,9 @@ namespace
 {
 constexpr glm::vec3 k_Hand {100.0f, 50.0f, 100.0f};
 constexpr glm::vec3 k_Camera {100.0f, 50.0f, 200.0f};
-constexpr float k_Night = 0.0f;
-constexpr float k_Day = 2.0f;
+// The sky as the game counts it
+constexpr float k_Night = 2.0f;
+constexpr float k_Day = 0.0f;
 } // namespace
 
 TEST(ModelLight, TheSunByDay)
@@ -66,4 +69,13 @@ TEST(ModelLight, PosedModelsAddTheZAndXPartsFirst)
 	const glm::vec3 light {1.0f, 1.0f, 1.0f};
 	EXPECT_EQ(model_light::PosedFacing(normal, light), 1.0e-8f);
 	EXPECT_EQ((normal.x * light.x + normal.y * light.y) + normal.z * light.z, 0.0f);
+}
+
+TEST(ModelLight, TheHandCarriesTheLightOnlyAboveASkyTypeOfOneAndAHalf)
+{
+	EXPECT_EQ(model_light::FrameLight(k_Hand, 0.0f, k_Camera, 1.5f, std::nullopt), model_light::k_Sun);
+	EXPECT_EQ(model_light::FrameLight(k_Hand, 0.0f, k_Camera, 1.0f, std::nullopt), model_light::k_Sun);
+	EXPECT_NE(model_light::FrameLight(k_Hand, 0.0f, k_Camera, std::nextafter(1.5f, 2.0f), std::nullopt), model_light::k_Sun);
+	// With the camera at the hand there is no direction: the light is at the hand
+	EXPECT_EQ(model_light::FrameLight(k_Hand, 0.0f, k_Hand, k_Night, std::nullopt), k_Hand);
 }

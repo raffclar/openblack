@@ -301,8 +301,9 @@ bool InitializeSimulation(const player_profiles::Store& profiles) noexcept;
 /// The systems that only show the world, which no turn and no script reads. The dedicated server does not make them.
 /// Call it after the simulation. Only the game's library has this function.
 void InitializePresentation();
-/// The input of the player. The game and the dedicated server both make it. Call it after the simulation.
-void InitializePlayerInput();
+/// The input of the player. The game and the dedicated server both make it. Call it after the simulation. When the
+/// system says that the mouse has no wheel, the key bindings start with the defaults for a mouse with no wheel.
+void InitializePlayerInput(bool systemSaysWheel = true);
 /// The online services, the editor and the videos. The game and the dedicated server both make them. Call it after the
 /// input of the player.
 void InitializeOnlineAndTools(const player_profiles::Store& profiles);

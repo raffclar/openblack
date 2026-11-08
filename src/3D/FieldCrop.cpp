@@ -99,6 +99,11 @@ float ClampAlignment(float sum)
 	return std::clamp(sum, -1.0f, 1.0f);
 }
 
+bool GrowsInTurn(uint32_t turn, uint32_t growthTurn, bool burning)
+{
+	return (turn + growthTurn) % k_TurnsPerGrowth == 0 && !burning;
+}
+
 void Grow(Crop& crop, const Type& type, float alignment, bool raining)
 {
 	if (!IsSown(crop, type) || crop.age > type.ageRipe)
@@ -111,6 +116,15 @@ void Grow(Crop& crop, const Type& type, float alignment, bool raining)
 	const auto rate = static_cast<float>((alignment * 0.5f + 1.0f) * 2.0f) * effect;
 	crop.age += rate;
 	crop.food += rate * type.totalFood / type.ageRipe;
+}
+
+void Pass(Crop& crop, const Type& type, uint32_t turn, uint32_t growthTurn, float alignment, bool raining)
+{
+	if ((turn + growthTurn) % k_TurnsPerGrowth != 0)
+	{
+		return;
+	}
+	Grow(crop, type, alignment, raining);
 }
 
 std::optional<Look> LookOf(const Crop& crop, const Type& type, uint32_t leastFood)

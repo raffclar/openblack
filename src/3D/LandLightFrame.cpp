@@ -30,7 +30,7 @@ LandLightInputs FrameLandLightInputs()
 	LandLightInputs inputs;
 	if (Locator::skyClockSystem::has_value())
 	{
-		inputs.skyType = Locator::skyClockSystem::value().GetCurrentSkyType();
+		inputs.skyType = Locator::skyClockSystem::value().GetCurrentNightSkyType();
 	}
 	if (Locator::alignmentSystem::has_value())
 	{

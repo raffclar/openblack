@@ -53,6 +53,7 @@ class Registry;
 namespace openblack::ecs::components
 {
 struct Creature;
+struct CreatureEyes;
 struct CreatureMindState;
 struct Transform;
 } // namespace openblack::ecs::components
@@ -235,6 +236,8 @@ WatchPlayerViewOf(const ecs::Registry& registry, entt::entity creature, const co
                   bool bodyPlaying);
 /// Lets go of the miracle the creature holds, as it stops what it was doing
 void ReleaseCast(entt::entity creature);
+/// The creature stops what it does: its eyes go calm, blink as usual, and its lids open by how rested it is
+void RestEyes(const ecs::Registry& registry, entt::entity creature, components::CreatureEyes* eyes);
 /// The developer log of the clips notes that the body refused a clip, because it played another action
 void NoteRefused(entt::entity creature, creature_animation_log::Layer layer, size_t clip, size_t playing);
 /// What, besides why, picks the faces the creature pulls

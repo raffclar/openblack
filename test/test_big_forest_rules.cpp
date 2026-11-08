@@ -11,6 +11,7 @@
 
 #include <gtest/gtest.h>
 
+#include "Common/GUtilsDistance.h"
 #include "Nature/BigForestRules.h"
 
 using namespace openblack;
@@ -81,4 +82,24 @@ TEST(BigForestRules, APineNeedsFourMetresClearOfWhatStandsInItsCell)
 	EXPECT_TRUE(big_forest::BlocksPine(3.0f, 0.5f));
 	EXPECT_FALSE(big_forest::BlocksPine(3.0f, 1.0f));
 	EXPECT_FALSE(big_forest::BlocksPine(5.0f, 0.0f));
+}
+
+// The distance to a thing in the spot's cell is measured between the two map positions, in the map's units
+TEST(BigForestRules, APineMeasuresItsClearanceBetweenMapPositions)
+{
+	const auto spot = map_coords::FromMetres({1000.0f, 1000.0f});
+	const auto along = map_coords::FromMetres({1003.5f, 1000.0f});
+	EXPECT_TRUE(big_forest::BlocksPine(spot, along, 0.4f));
+	EXPECT_FALSE(big_forest::BlocksPine(spot, along, 0.6f));
+	const auto across = map_coords::FromMetres({1002.0f, 1002.0f});
+	EXPECT_TRUE(big_forest::BlocksPine(spot, across, 1.0f));
+	EXPECT_FALSE(big_forest::BlocksPine(spot, across, 1.2f));
+	// Each answer is the one for the map unit distance
+	for (int step = 0; step < 40; ++step)
+	{
+		const auto thing = map_coords::FromMetres({1000.0f + 0.1f * static_cast<float>(step), 1001.0f});
+		const float radius = 0.5f;
+		EXPECT_EQ(big_forest::BlocksPine(spot, thing, radius),
+		          big_forest::BlocksPine(gutils::GetDistanceInMetres(spot, thing), radius));
+	}
 }

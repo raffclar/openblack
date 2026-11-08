@@ -79,9 +79,17 @@ enum class Activity : uint8_t
 /// times their alignment
 [[nodiscard]] float ClampAlignment(float sum);
 
+/// Whether a field grows in a game turn: once in each 10 turns, at its own turn of the 10, and not while it burns
+[[nodiscard]] bool GrowsInTurn(uint32_t turn, uint32_t growthTurn, bool burning);
+
 /// A turn of growth, if the crop is sown and not yet past ripe: it ages by 1 to 3 on evil to good land, times its type's
 /// rate for the weather, and fills with food in step
 void Grow(Crop& crop, const Type& type, float alignment, bool raining);
+
+/// One pass of the game over a field in a turn. On the field's own turn of growth the crop grows, else nothing occurs.
+/// The game makes two passes in each turn over a field of a town: one in the turn of the town and one over all fields.
+/// It makes one pass over a field with no town.
+void Pass(Crop& crop, const Type& type, uint32_t turn, uint32_t growthTurn, float alignment, bool raining);
 
 /// How the crop looks while it shows
 struct Look

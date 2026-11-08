@@ -1096,7 +1096,7 @@ void EditorWindow::DrawToolbar(EditorContext& context) noexcept
 		system.SetCameraMoveSpeed(moveSpeed);
 	}
 	ImGui::SetItemTooltip("How fast the movement keys move the camera over the land while the editor is open "
-	                      "(Ctrl+Plus and Ctrl+Minus to step, Ctrl+0 to reset)");
+	                      "(Ctrl+Plus and Ctrl+Minus to step, Ctrl+number pad 0 to reset)");
 	ImGui::SameLine();
 	ImGui::BeginDisabled(system.GetCameraMoveSpeed() == k_KeyboardMoveSpeedDefault);
 	if (ImGui::Button("1x##CameraMoveSpeedReset"))
@@ -1104,7 +1104,7 @@ void EditorWindow::DrawToolbar(EditorContext& context) noexcept
 		system.SetCameraMoveSpeed(k_KeyboardMoveSpeedDefault);
 	}
 	ImGui::EndDisabled();
-	ImGui::SetItemTooltip("Back to the game's own camera speed (Ctrl+0)");
+	ImGui::SetItemTooltip("Back to the game's own camera speed (Ctrl+number pad 0)");
 	ImGui::EndGroup();
 	_cameraGroupWidth = ImGui::GetItemRectSize().x;
 

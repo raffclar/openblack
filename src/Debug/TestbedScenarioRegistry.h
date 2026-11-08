@@ -420,6 +420,8 @@ struct ObjectSetup
 	bool notPlannedAgain {false};
 	/// The crop of a field is fully sown and ripe, with all the food of its type. If false, the field is not sown.
 	bool ripeCrop {false};
+	/// The crop of a field is fully sown, with no age and no food yet, so it starts to grow at once
+	bool sownCrop {false};
 	/// A firefly hides exactly where the thing stands, as a land's script places one
 	bool firefly {false};
 	/// The thing is set alight as it is made, burning as at the start of a fire
@@ -941,7 +943,8 @@ struct Command
 		/// the player clicks the target. Needs no creature
 		ZoomToTempleCaveTarget,
 		/// The creature catches fire, and burns as at the start of a fire. With a value of 1, the scenario's object catches
-		/// fire in place of the creature.
+		/// fire in place of the creature. With a value of 3, the first worship site catches fire at the most heat of its
+		/// fire.
 		SetAlight,
 		/// The player's hand takes hold of the totem of the scenario's object, a town centre, and then lets go. Needs no
 		/// creature
@@ -953,7 +956,8 @@ struct Command
 		/// thing, as the mouse moves it
 		PointerOnRope,
 		/// The pointer moves onto the scenario's object (object) at a height (amount) over its place on the screen, as
-		/// the mouse moves it. Needs no creature
+		/// the mouse moves it. For a storage pit, a value of 1 to 5 moves it onto that wood pile of the pit, and 6 onto
+		/// its food pile. Needs no creature
 		PointerOnObject,
 		/// The creature fizzes to a share (amount: 0 in sight, 1 out of sight) over some milliseconds (value), as a
 		/// script's fade does. It stays at that share.

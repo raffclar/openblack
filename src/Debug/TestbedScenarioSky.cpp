@@ -204,4 +204,18 @@ void testbed_scenarios::AddSkyScenarios(std::vector<Scenario>& all)
 	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 40.0f, 0.0f}, .look = {-100.0f, 90.0f, 100.0f}},
 	    .commands = {{.kind = Command::Kind::SetAlignment, .delaySeconds = 15.0f, .alignment = -1.0f}},
 	});
+
+	all.push_back({
+	    .id = "sky.low_detail_dome_tint",
+	    .name = "At Low detail the sky darkens towards night",
+	    .facet = Facet::Sky,
+	    .description = "Start the game with --detail-level 1 (Low) or 0 (Minimum). The clock runs from 17:00 under a "
+	                   "clear sky, the camera low on the land looking east.",
+	    .expected = "The dome shows only the picture of the day. By day it has the colour of the land's light. Through "
+	                "dusk it becomes darker, blue first, then green, and at night it shows at about half of the land's "
+	                "colour. Start it again with --detail-level 4: the dome then blends the pictures of dusk and night.",
+	    .environment = {.hour = 17.0f, .clockRuns = true, .dispenserGrid = false},
+	    .framing = k_LookingEast,
+	    .objects = TreesToTheEast(),
+	});
 }

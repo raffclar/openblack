@@ -15,6 +15,8 @@
 #include <algorithm>
 #include <utility>
 
+#include "MixVolume.h"
+
 namespace openblack::audio
 {
 
@@ -27,10 +29,6 @@ constexpr int32_t k_DefaultPitchPercent = 100;
 constexpr float k_DefaultMinDistance = 1.0f;
 constexpr float k_DefaultMaxDistance = 9999.0f;
 constexpr float k_DefaultDistanceScale = 0.3f;
-
-// Volumes are handed to the QMixer library, whose volume is linear from 0 to 32767
-constexpr uint32_t k_QMixerVolumePerStep = 258;
-constexpr float k_QMixerMaxVolume = 32767.0f;
 
 // Volume steps of the looping beds and of one-shots fading out of the current group, per turn
 constexpr int32_t k_FadeStep = 5;
@@ -583,8 +581,7 @@ void AtmosPlayer::SetVoiceVolume(Voice& voice, int32_t volume)
 
 float AtmosPlayer::VolumeToGain(uint32_t volume) const
 {
-	const auto mixed = ScaleVolume(volume, _masterVolume) * k_QMixerVolumePerStep;
-	return static_cast<float>(mixed) / k_QMixerMaxVolume;
+	return mix_volume::MixerGain(mix_volume::SampleMixerVolume(volume, _masterVolume));
 }
 
 AtmosPlayer::Voice* AtmosPlayer::FindVoice(VoiceBackend::Handle handle)
