@@ -7,6 +7,9 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <array>
+#include <vector>
+
 #include <gtest/gtest.h>
 
 #include "ECS/TownAreaRules.h"
@@ -56,4 +59,33 @@ TEST(TownArea, AScriptPlaceAtTheCornerOfTheMapIsNoGatheringPlace)
 	// The town then finds its own gathering place when it first needs one
 	EXPECT_FALSE(town_area::GatheringPlaceFromScript(map_coords::ScriptPlace(0.0, 0.0)).has_value());
 	EXPECT_TRUE(town_area::GatheringPlaceFromScript(map_coords::ScriptPlace(0.0, 1.0)).has_value());
+}
+
+TEST(TownArea, TheGatheringMiddleRoundsTheQuotientOneTime)
+{
+	// The sum of the places is larger than a float holds exactly. The game divides the whole sum and rounds the quotient
+	// one time: 57266109 / 3 = 19088703, rounded to 19088704. A float of the sum first gives 19088702
+	const std::array<map_coords::MapCoords, 3> buildings {
+	    map_coords::MapCoords {.x = 18054722, .z = 1000},
+	    map_coords::MapCoords {.x = 21533673, .z = 2000},
+	    map_coords::MapCoords {.x = 17677714, .z = 3000},
+	};
+	const auto middle = town_area::GatheringMiddle(buildings);
+	EXPECT_EQ(middle.x, 19088704);
+	EXPECT_EQ(middle.z, 2000);
+}
+
+TEST(TownArea, TheGatheringMiddleCountsTheRingAgainPastAHundredBuildings)
+{
+	// Building 101 takes the place of building 1 in the ring, and the sum reads place 1 again as building 101
+	std::vector<map_coords::MapCoords> buildings;
+	for (int32_t i = 1; i <= 101; ++i)
+	{
+		buildings.push_back({.x = 1000 * i, .z = 0});
+	}
+	// (101000 x 2 + 2000 + 3000 + ... + 100000) / 101 = 5251000 / 101
+	EXPECT_EQ(town_area::GatheringMiddle(buildings).x, 51990);
+	// With no more buildings than the ring, it is the plain middle
+	buildings.pop_back();
+	EXPECT_EQ(town_area::GatheringMiddle(buildings).x, 50500);
 }
