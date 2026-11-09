@@ -89,8 +89,9 @@ struct Choice
 /// season, no more than he has room for, times his tribe's skill, in whole fish. The fish come out of the sea, not the
 /// farm. Negative only for a villager already carrying more than he can.
 [[nodiscard]] int32_t Catch(uint32_t capacity, uint32_t held, uint32_t season, float tribalPower);
-/// Whether, his catch taken, a fisherman goes to put his food in the town's store: once he has less room left than he
-/// just caught, or none
-[[nodiscard]] bool TakesCatchToStore(uint32_t capacity, uint32_t held, uint32_t caught);
+/// Whether a fisherman goes to put his food in the town's store after a bite. The test uses the room that he has after
+/// he takes his catch: he goes when that room is less than his catch, or when he has no room. `heldBeforeCatch` is
+/// the food that he held before the bite.
+[[nodiscard]] bool TakesCatchToStore(uint32_t capacity, uint32_t heldBeforeCatch, uint32_t caught);
 
 } // namespace openblack::fish_farm

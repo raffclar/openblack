@@ -179,7 +179,9 @@ void testbed_scenarios::AddFishScenarios(std::vector<Scenario>& all)
 	    .expected = "The town wants food, so the fisherman walks to the middle of the farm's map cell, then on to a spot "
 	                "up to 2.5 m from it either way, and fishes there, his clip starting again every 4.3 seconds. As in "
 	                "the game, nothing turns him to the water: he fishes facing the way his short walk from the middle "
-	                "went. Once he carries nearly all the food he can, he takes it to the storage pit and comes back.",
+	                "went. Each bite gives him a quarter of what he can carry, less out of season, times the skill of his "
+	                "tribe. When the room that he has after a bite is less than that bite, or when he has no room, he "
+	                "takes the food to the storage pit and comes back. He does not fish one more clip with no room left.",
 	    .environment = {.dispenserGrid = false},
 	    .framing = OverTheShoreFarm(),
 	    .objects = ShoreFarmAndFisherman(),

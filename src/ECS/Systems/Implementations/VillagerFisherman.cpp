@@ -257,6 +257,7 @@ uint32_t villager_fisherman::Fishing(LivingAction& action)
 	{
 		return 1;
 	}
+	const auto heldBeforeCatch = static_cast<uint32_t>(static_cast<int32_t>(person.foodHeld));
 	if (*caught != 0)
 	{
 		// The fish come out of the sea; the town counts what its people carry
@@ -266,8 +267,7 @@ uint32_t villager_fisherman::Fishing(LivingAction& action)
 			tally->foodCarried += static_cast<float>(picked);
 		}
 	}
-	const auto held = static_cast<uint32_t>(static_cast<int32_t>(person.foodHeld) - *caught);
-	if (fish_farm::TakesCatchToStore(info.maxFoodCarried, held, static_cast<uint32_t>(*caught)))
+	if (fish_farm::TakesCatchToStore(info.maxFoodCarried, heldBeforeCatch, static_cast<uint32_t>(*caught)))
 	{
 		return villager_build::GotoStoragePitForDropOff(action);
 	}
