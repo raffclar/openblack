@@ -89,6 +89,14 @@ namespace
 	return value == 0.0f || std::isnan(value);
 }
 
+/// The game's compare of two floats for equality. When the FPU cannot put the two values in order, it sets the "equal"
+/// flag. Thus NaN is equal to all values. These flags also make "greater or equal" and "greater" true for NaN, but they
+/// make "less or equal" and "less" false.
+[[nodiscard]] bool FloatEqualForTheGame(float a, float b)
+{
+	return a == b || std::isnan(a) || std::isnan(b);
+}
+
 } // namespace
 
 LHVM::LHVM()
@@ -1512,7 +1520,7 @@ void LHVM::Opcode14Eq(VMTask& /*task*/, const VMInstruction& instruction)
 	case DataType::Float:
 		b0 = Pop();
 		a0 = Pop();
-		Pushb(a0.floatVal == b0.floatVal);
+		Pushb(FloatEqualForTheGame(a0.floatVal, b0.floatVal));
 		break;
 	default:
 		// The game compares only numbers and truth values. For another type it takes nothing off the stack and puts false.
@@ -1536,7 +1544,7 @@ void LHVM::Opcode15Neq(VMTask& /*task*/, const VMInstruction& instruction)
 	case DataType::Float:
 		b0 = Pop();
 		a0 = Pop();
-		Pushb(a0.floatVal != b0.floatVal);
+		Pushb(!FloatEqualForTheGame(a0.floatVal, b0.floatVal));
 		break;
 	default:
 		// The game compares only numbers and truth values. For another type it takes nothing off the stack and puts true.
@@ -1560,7 +1568,8 @@ void LHVM::Opcode16Geq(VMTask& /*task*/, const VMInstruction& instruction)
 	case DataType::Float:
 		b0 = Pop();
 		a0 = Pop();
-		Pushb(a0.floatVal >= b0.floatVal);
+		// NaN gives true
+		Pushb(!(a0.floatVal < b0.floatVal));
 		break;
 	default:
 		Pushb(false);
@@ -1606,7 +1615,8 @@ void LHVM::Opcode18Gt(VMTask& /*task*/, const VMInstruction& instruction)
 	case DataType::Float:
 		b0 = Pop();
 		a0 = Pop();
-		Pushb(a0.floatVal > b0.floatVal);
+		// NaN gives true
+		Pushb(!(a0.floatVal <= b0.floatVal));
 		break;
 	default:
 		Pushb(false);
