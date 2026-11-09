@@ -9,26 +9,26 @@
 
 #include "TreeArchetype.h"
 
-#include <cmath>
-
-#include <glm/gtc/constants.hpp>
 #include <glm/gtx/euler_angles.hpp>
 
 #include "Common/GameRandom.h"
 #include "Common/PortableRotations.h"
 #include "Common/RandomNumberManager.h"
+#include "ECS/Components/DrawImportance.h"
 #include "ECS/Components/Fixed.h"
 #include "ECS/Components/ForestMember.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Swayable.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
+#include "ECS/ObjectDetail.h"
 #include "ECS/PlacedTurn.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/ForestSystemInterface.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Nature/ForestGrowth.h"
+#include "Nature/TreeSway.h"
 #include "Resources/ResourceManager.h"
 #include "Utils.h"
 
@@ -39,8 +39,10 @@ using namespace openblack::ecs::components;
 namespace
 {
 /// The parts that every tree has: its place, its outline, its kind, its model and its sway
-entt::entity MakeTree(const glm::vec3& position, TreeInfo type, float yAngleRadians, float maxSize, float scale)
+entt::entity MakeTree(const glm::vec3& position, TreeInfo type, float yaw, float maxSize, float scale)
 {
+	// The tree keeps the yaw less its whole turns
+	const float yAngleRadians = nature::tree_sway::Facing(yaw);
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto entity = registry.Create();
 	// It takes its place in the order of the things made
@@ -55,10 +57,10 @@ entt::entity MakeTree(const glm::vec3& position, TreeInfo type, float yAngleRadi
 	registry.Assign<Tree>(entity, type, maxSize);
 	const auto resourceId = resources::HashIdentifier(info.normal);
 	registry.Assign<Mesh>(entity, resourceId, static_cast<int8_t>(0), static_cast<int8_t>(-1));
-	// As a tree is made, one of 16 sways by the tree's facing, so neighbours facing alike sway alike.
-	// The game truncates towards zero.
-	const auto swaySlot = static_cast<int32_t>(std::trunc((yAngleRadians * 8.0f / glm::pi<float>()) + 0.5f)) & 0xF;
-	registry.Assign<Swayable>(entity, static_cast<uint8_t>(swaySlot));
+	// As a tree is made, one of 16 sways by the tree's facing, so neighbours facing alike sway alike
+	registry.Assign<Swayable>(entity, nature::tree_sway::SlotOf(yAngleRadians));
+	// A tree changes its detail and goes from view a tenth nearer than another thing of its size
+	registry.Assign<DrawImportance>(entity, DrawImportance {.importance = ecs::object_detail::k_TreeImportance});
 
 	// The thing keeps the angles it got
 	ecs::placed_turn::KeepAngles(registry, entity, glm::vec3(0.0f, yAngleRadians, 0.0f));
