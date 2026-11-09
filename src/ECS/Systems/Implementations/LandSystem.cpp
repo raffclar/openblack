@@ -1070,6 +1070,11 @@ void LandSystem::PrepareNewLand(land_change::Kind change)
 	Locator::fireSystem::value().Reset();
 	// Nor the beat of its scrolls
 	Locator::scriptHighlightSystem::value().Reset();
+	// A new game starts with no tips read. The tips stay through the other changes of land.
+	if (rules.gameStarts || toTestbed)
+	{
+		Locator::scriptHighlightSystem::value().ForgetTipsRead();
+	}
 	Locator::tipBubbleSystem::value().Reset();
 	if (Locator::chatSystem::has_value())
 	{

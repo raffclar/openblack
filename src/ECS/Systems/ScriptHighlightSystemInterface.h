@@ -66,6 +66,8 @@ public:
 	                         std::chrono::milliseconds frameRealTime, bool landDrawn) = 0;
 	/// A new land: the beat starts again
 	virtual void Reset() = 0;
+	/// A new game: the player has read no tips
+	virtual void ForgetTipsRead() = 0;
 
 	[[nodiscard]] virtual const script_highlights::Pulse& GetPulse() const = 0;
 	[[nodiscard]] virtual const script_highlights::TipsRead& GetTipsRead() const = 0;
