@@ -453,6 +453,8 @@ void DefaultWorldCameraModel::UpdateModeDragging(const Camera& camera, glm::u16v
 	if (_landGrip.has_value() && _landGrip->depth > camera_pan::k_MaxGripDepth)
 	{
 		_dragGivenUp = true;
+		// As at the fence, the controls are held back until all of them are let go
+		_heldBack = true;
 		_flyToGrip = (_features & camera_help::feature::k_DoubleClick) != 0;
 		return;
 	}
