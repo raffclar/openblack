@@ -79,6 +79,20 @@ std::vector<std::pair<std::string_view, float>> Land1Rewards()
 void testbed_scenarios::AddNatureScenarios(std::vector<Scenario>& all)
 {
 	all.push_back({
+	    .id = "nature.temple_levels_land",
+	    .name = "A new temple levels the land round it",
+	    .facet = Facet::Nature,
+	    .description = "A temple is made on the flat land 50 m south of the lake. The camera looks north over the temple "
+	                   "at the south half of the lake.",
+	    .expected = "In 35 m of the temple the land is flat. From 35 m to 70 m the land goes back to its own height in a "
+	                "straight line. The south shore of the lake moves north: the bed of the lake rises in a slope out of the "
+	                "water towards the temple, to about 65 m from it. The north part of the lake does not change.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {90.0f, 70.0f, 70.0f}, .look = {0.0f, 0.0f, 185.0f}},
+	    .temples = {{.offset = {0.0f, 120.0f}}},
+	});
+
+	all.push_back({
 	    .id = "nature.roots_hole",
 	    .name = "A tree pulled up leaves its roots",
 	    .facet = Facet::Nature,

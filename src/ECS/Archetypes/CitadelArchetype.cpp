@@ -11,10 +11,13 @@
 
 #include <algorithm>
 
+#include <LNDFile.h>
 #include <entt/fwd.hpp>
 #include <glm/gtx/euler_angles.hpp>
 #include <glm/mat3x3.hpp>
 
+#include "3D/LandIslandInterface.h"
+#include "3D/TempleGround.h"
 #include "Common/PortableRotations.h"
 #include "Creature/LeashRules.h"
 #include "ECS/Components/Construction.h"
@@ -28,6 +31,7 @@
 #include "ECS/Components/UndrawnPickModel.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
+#include "ECS/ThingMapPlace.h"
 #include "Locator.h"
 #include "Utils.h"
 
@@ -42,6 +46,32 @@ glm::mat3 Rotation(float yAngle)
 {
 	return glm::mat3(portable_math::EulerAngleY(-yAngle));
 }
+
+/// The heart levels the land round the corner below it (see temple_ground). The land then draws the new altitudes.
+void LevelGroundUnderHeart(const map_coords::MapCoords& place)
+{
+	if (!Locator::terrainSystem::has_value())
+	{
+		return;
+	}
+	auto& land = Locator::terrainSystem::value();
+	const auto onMap = [](glm::ivec2 corner) {
+		return corner.x >= 0 && corner.y >= 0 && corner.x < static_cast<int>(map_coords::k_MapCells) &&
+		       corner.y < static_cast<int>(map_coords::k_MapCells);
+	};
+	const auto altitudeAt = [&land, &onMap](glm::ivec2 corner) -> uint8_t {
+		const auto* cell = onMap(corner) ? land.FindCell(glm::u16vec2(corner)) : nullptr;
+		return cell != nullptr ? cell->altitude : 0;
+	};
+	for (const auto& [corner, altitude] : temple_ground::Levelled(temple_ground::CentreCorner(place), altitudeAt))
+	{
+		if (onMap(corner))
+		{
+			land.SetCellAltitude(glm::u16vec2(corner), altitude);
+		}
+	}
+	land.CommitAltitudeChanges();
+}
 } // namespace
 
 entt::entity CitadelArchetype::Create(const glm::vec3& position, PlayerNames playerOwner, float yAngle, const glm::vec3& size)
@@ -50,7 +80,7 @@ entt::entity CitadelArchetype::Create(const glm::vec3& position, PlayerNames pla
 }
 
 entt::entity CitadelArchetype::Create(const glm::vec3& position, PlayerNames playerOwner, float yAngle, const glm::vec3& size,
-                                      float built)
+                                      float built, std::optional<map_coords::MapCoords> heartPlace)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto entity = registry.Create();
@@ -74,6 +104,8 @@ entt::entity CitadelArchetype::Create(const glm::vec3& position, PlayerNames pla
 	TakeThingMadePlace();
 	registry.Assign<Transform>(heart, position, rotation, size);
 	registry.Assign<TempleHeart>(heart, entity);
+	// As the game makes the heart, the heart levels the land round it
+	LevelGroundUnderHeart(heartPlace.value_or(thing_map_place::Of(registry, heart)));
 	// The temple's heart, as it is made, puts its entrance where it is, turned as it is
 	const auto entrance = registry.Create();
 	TakeThingMadePlace();
