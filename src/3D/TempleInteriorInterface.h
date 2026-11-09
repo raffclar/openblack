@@ -35,6 +35,7 @@
 
 namespace openblack
 {
+class Camera;
 namespace ecs
 {
 class Registry;
@@ -115,9 +116,12 @@ public:
 	virtual ~TempleInteriorInterface() = default;
 
 	[[nodiscard]] virtual bool Active() const = 0;
-	/// The camera of the world, which stays where the player left it while the player is inside. A save keeps this
-	/// camera. None while the player is outside.
+	/// The camera of the world, which continues behind the temple while the player is inside. A save keeps this camera.
+	/// None while the player is outside.
 	[[nodiscard]] virtual std::optional<OutsideCamera> GetOutsideCamera() const = 0;
+	/// The world's camera, with its model, which continues behind the temple while the player is inside: a flight goes on.
+	/// None while the player is outside.
+	[[nodiscard]] virtual Camera* GetWorldCamera() = 0;
 	/// One turn of the tooltip that the hand shows in the temple. In a game with one player, the temple's own turn does
 	/// it. In a network game, the turns of the world do it.
 	virtual void ProcessToolTipTurn() = 0;

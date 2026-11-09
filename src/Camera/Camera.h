@@ -164,7 +164,8 @@ public:
 	/// A frame goes by. The model and the camera take the fixed steps of the player's input that the frame takes, none
 	/// to a few (see input_steps), each step for its whole milliseconds. At each step after the first, the model reads
 	/// the keys after the step before and the part of the mouse that the step takes.
-	void Update(const input_steps::Steps& steps);
+	/// Without `readsKeys` the steps after the first do not read the keys, as for the world's camera behind the temple
+	void Update(const input_steps::Steps& steps, bool readsKeys = true);
 	void HandleActions(std::chrono::microseconds dt);
 	/// The keys of the current camera, after its step in this frame. They move the camera in the next frame.
 	void HandleKeys(std::chrono::microseconds dt);
@@ -179,6 +180,12 @@ public:
 	[[nodiscard]] const CameraModel& GetModel() const { return *_model; }
 	/// Hands the camera's control to another model, as the temple does inside, giving back the one it had
 	std::unique_ptr<CameraModel> SetModel(std::unique_ptr<CameraModel> model);
+	/// A camera that continues from this one with the model given: the same view, movement, lens and count of the
+	/// model's time. The world's camera continues so behind the temple.
+	[[nodiscard]] std::unique_ptr<Camera> ContinueWith(std::unique_ptr<CameraModel> model) const;
+	/// Takes back the movement, the model, the count of the model's time and the point to turn about from a camera that
+	/// continued from this one. The lens and the projection stay.
+	void TakeBackFrom(Camera& other);
 	/// The seconds since the current model took control. Each step adds its time, at most a tenth of a second, before the
 	/// model moves. A new model starts again from zero.
 	[[nodiscard]] float GetModelSeconds() const { return _modelSeconds; }

@@ -32,6 +32,7 @@
 #include "Camera/Camera.h"
 #include "Camera/DefaultWorldCameraModel.h"
 #include "Camera/ScriptCameraModel.h"
+#include "Camera/WorldCamera.h"
 #include "Commands/PlayerCommands.h"
 #include "Common/DeveloperToolsGate.h"
 #include "Common/EventManager.h"
@@ -281,6 +282,8 @@ bool Game::UpdateDebugGui()
 
 void Game::UpdateCameraKeys(std::chrono::microseconds deltaTime)
 {
+	// From the end of the frame that goes into the temple, the world's camera behind it takes no controls of the player
+	world_camera::EndFrameControls();
 	// In the temple, without the interface or while a box has the keyboard, the camera does not read its keys
 	auto& actions = Locator::gameActionSystem::value();
 	const bool interfaceActive =

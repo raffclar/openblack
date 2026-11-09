@@ -63,6 +63,14 @@ public:
 	/// back to where it was going when the other camera took it, as SetFlight with a rise of 0.1
 	void Restart(glm::vec3 origin, glm::vec3 focus, glm::vec3 returnOrigin, glm::vec3 returnFocus);
 	void PlaceAt(glm::vec3 origin, glm::vec3 focus) final;
+	/// While the player is in the temple, the camera continues behind it but takes no control of the player: no button,
+	/// no wheel, no key and no movement of the mouse. The keys of the clear view still act.
+	void SetInputsOff(bool off) { _inputsOff = off; }
+	[[nodiscard]] bool InputsOff() const { return _inputsOff; }
+	/// Starts again from where the camera is, as when the player comes out of the temple. The second part of a flight
+	/// does not start, and the clear view, the hold at the fence, the drag and the key steps stop. The camera continues
+	/// to where it goes now.
+	void StartAgain();
 	/// Finds again how far ahead the land is from the view that the camera shows, as a new press of the mouse does.
 	/// The single tap of the temple key looks that far ahead. Returns the distance.
 	float RefreshClickDistance(const Camera& camera);
@@ -246,6 +254,8 @@ private:
 	bool _selfTiltEase {false};
 	/// Put back inside the fence, the camera ignores its controls until every one of them is let go
 	bool _heldBack {false};
+	/// The player is in the temple: the camera takes no control of the player
+	bool _inputsOff {false};
 	/// The angle the player turned the camera by this frame, in radians, none when the player didn't turn it
 	std::optional<float> _turnedThisFrame;
 	/// The angle the tilt controls (or the camera that tilts itself) tilted the camera by this frame, in radians, none
