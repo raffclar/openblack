@@ -13,6 +13,7 @@
 
 #include <algorithm>
 #include <iterator>
+#include <utility>
 
 #include "3D/L3DMesh.h"
 #include "ECS/Components/BuildingDamage.h"
@@ -54,6 +55,7 @@ void SnowSystem::SaveState(reflection::BinaryWriter& out) const
 	reflection::Save(out, _depths);
 	reflection::Save(out, _melting);
 	reflection::SavePresentation(out, _objectPace);
+	reflection::Save(out, _repaint);
 }
 
 bool SnowSystem::LoadState(reflection::BinaryReader& in)
@@ -62,11 +64,14 @@ bool SnowSystem::LoadState(reflection::BinaryReader& in)
 	reflection::Load(in, depths);
 	reflection::Load(in, _melting);
 	reflection::Load(in, _objectPace);
+	reflection::Load(in, _repaint);
 	if (in.Failed() || depths.size() != _depths.size())
 	{
 		return false;
 	}
 	_depths = std::move(depths);
+	// The land of a loaded game paints each of its blocks again
+	_paintRequests.set();
 	++_revision;
 	return true;
 }
@@ -76,6 +81,8 @@ void SnowSystem::Reset()
 	std::ranges::fill(_depths, 0.0f);
 	_melting = {};
 	_objectPace = {};
+	_repaint = {};
+	_paintRequests.set();
 	++_revision;
 }
 
@@ -86,18 +93,30 @@ void SnowSystem::ProcessTurn(std::span<const Storm> storms)
 		const auto amount = snow_cover::StormSnowPerTurn(storm.effect.snow, storm.currentStrength);
 		if (amount != 0.0f)
 		{
-			snow_cover::AddStorm(_depths, {storm.currentPosition.x, storm.currentPosition.z}, storm.currentInnerRadius,
-			                     storm.outerRadius, amount);
+			snow_cover::AddStorm(_depths, _repaint.changes, {storm.currentPosition.x, storm.currentPosition.z},
+			                     storm.currentInnerRadius, storm.outerRadius, amount);
 		}
 	}
-	snow_cover::Melt(_depths, _melting, k_TurnSeconds);
+	_paintNow.clear();
+	snow_cover::Melt(_depths, _melting, k_TurnSeconds, _repaint, _paintNow);
+	for (const auto block : _paintNow)
+	{
+		_paintRequests.set(block);
+	}
 	++_revision;
 }
 
 void SnowSystem::Cover(float depth)
 {
 	std::ranges::fill(_depths, std::clamp(depth, 0.0f, snow_cover::k_MaxDepth));
+	// A testbed step: the land shows the new snow at once
+	_paintRequests.set();
 	++_revision;
+}
+
+std::bitset<openblack::snow_cover::k_Blocks> SnowSystem::TakePaintRequests()
+{
+	return std::exchange(_paintRequests, {});
 }
 
 void SnowSystem::StepObjects(Registry& registry, const ObjectDrawListSystemInterface& drawList,

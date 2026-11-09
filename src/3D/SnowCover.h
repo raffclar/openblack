@@ -12,7 +12,10 @@
 #include <cstddef>
 #include <cstdint>
 
+#include <array>
+#include <bitset>
 #include <span>
+#include <vector>
 
 #include <entt/core/hashed_string.hpp>
 #include <glm/vec2.hpp>
@@ -42,9 +45,50 @@ inline constexpr float k_MaxDepth = 255.0f;
 /// storm lays 1.2 times its snow, and the game cuts that amount to a whole number before the turn's share.
 [[nodiscard]] float StormSnowPerTurn(int8_t snow, float strength);
 
+/// A land block's texture covers a square of 4 x 4 cells of the grid, thus 32 blocks along each side
+inline constexpr int32_t k_BlockCells = 4;
+inline constexpr int32_t k_BlocksPerSide = k_GridSize / k_BlockCells;
+inline constexpr size_t k_Blocks = static_cast<size_t>(k_BlocksPerSide) * k_BlocksPerSide;
+/// The grid points that a block's texture takes its snow from, along each side: its cells and the far edge
+inline constexpr int32_t k_BlockCorners = k_BlockCells + 1;
+/// A block in the order of the grid: row by row along z, k_BlocksPerSide blocks along x in each row
+[[nodiscard]] constexpr uint16_t BlockIndex(glm::ivec2 block)
+{
+	return static_cast<uint16_t>((block.y * k_BlocksPerSide) + block.x);
+}
+
+/// The game shows the new snow on a block only when it paints the block's texture again. It adds up the change of the
+/// snow under each block, and it lists the blocks whose change is large enough for a paint.
+/// A block that changed by more than this since the game last listed it goes in the list
+inline constexpr float k_RepaintChange = 96.0f;
+/// The list holds this many blocks at most
+inline constexpr size_t k_RepaintListSize = 16;
+struct BlockRepaint
+{
+	/// The change of the snow under each block since the game last listed it, in the order of BlockIndex
+	std::array<float, k_Blocks> changes {};
+	/// The blocks in the list, each with the size of its change. The places from `count` on hold a size of 0.
+	std::array<float, k_RepaintListSize> sizes {};
+	std::array<uint16_t, k_RepaintListSize> blocks {};
+	int32_t count {0};
+
+	/// Gives the values that a saved game keeps to a visitor
+	template <typename Self, typename Visitor>
+	static void VisitSaved(Self& self, Visitor&& visit)
+	{
+		visit(self.changes, self.sizes, self.blocks, self.count);
+	}
+};
+
 /// A storm snowing on the cells within its outer radius of its centre: as much as `amount` within its inner radius,
 /// less beyond, and towards its edge it takes snow away. The depth stays between 0 and k_MaxDepth.
 void AddStorm(std::span<float> grid, glm::vec2 centre, float innerRadius, float outerRadius, float amount);
+/// The same, and the change of each cell is added to the change of its block. A cell on the low x or low z edge of its
+/// block is also on the texture of the block next to it there, so its change is also added to that block. At a corner of
+/// four blocks the game adds it to the block on the low x side and to the block on the low x and low z side, but not to
+/// the block on the low z side.
+void AddStorm(std::span<float> grid, std::span<float> changes, glm::vec2 centre, float innerRadius, float outerRadius,
+              float amount);
 
 /// The snow melts by 2 in one of eight bands of the grid's rows every 0.3 seconds, so all of it in 2.4 seconds
 struct Melting
@@ -61,6 +105,44 @@ struct Melting
 };
 /// The melting clock after `seconds` more, melting each band whose turn has come
 void Melt(std::span<float> grid, Melting& melting, float seconds);
+/// The same, and the snow that melts is taken from the change of the cell's own block only. After each band melts, the
+/// blocks of its rows are listed for a paint (see ListRepaints). The blocks that the game paints again at once are added
+/// to `paintNow`.
+void Melt(std::span<float> grid, Melting& melting, float seconds, BlockRepaint& repaint, std::vector<uint16_t>& paintNow);
+/// Lists the blocks of `rows` rows of blocks from `firstRow` for a paint. When the first row is 0, the game first paints
+/// again every block in the list and empties it. Then each block whose change is more than k_RepaintChange takes the
+/// first place in the list whose size is smaller than its change, and its change starts again from 0. A block that finds
+/// no such place stays out, and keeps its change. In a full list the block in that place is painted again at once and
+/// the new block takes its place. In a list with space the blocks from that place on move one place down.
+void ListRepaints(BlockRepaint& repaint, int32_t firstRow, int32_t rows, std::vector<uint16_t>& paintNow);
+
+/// Writes the snow at the k_BlockCorners x k_BlockCorners grid points of a block into `painted`, which holds each
+/// block's points in a square of its own: k_BlocksPerSide squares along each side, row by row along z. A point off the
+/// grid has no snow.
+inline constexpr int32_t k_PaintedSide = k_BlocksPerSide * k_BlockCorners;
+void PaintBlockCorners(std::span<const float> grid, glm::ivec2 block, std::span<float> painted);
+
+/// The snow that each block's texture shows: the snow at its grid points as it was when the texture was last painted.
+/// The game paints a block's texture again only when it draws the block with its own texture after a request for a
+/// paint. Snow is not the only reason for a request.
+class PaintedBlocks
+{
+public:
+	PaintedBlocks();
+	/// Asks for a paint of a block, or of every block
+	void Request(uint16_t block);
+	void RequestAll();
+	/// Paints the blocks that wait for a paint among `drawn`, from the snow as it lies now. It gives true when it painted
+	/// a block.
+	bool PaintDrawn(std::span<const glm::ivec2> drawn, std::span<const float> grid);
+	/// The painted snow, as PaintBlockCorners writes it
+	[[nodiscard]] std::span<const float> GetPainted() const { return _painted; }
+	[[nodiscard]] bool Waits(uint16_t block) const { return _waiting.test(block); }
+
+private:
+	std::vector<float> _painted;
+	std::bitset<k_Blocks> _waiting;
+};
 
 /// How deep the snow lies at a point in the world, blended between the four cells around it; none off the grid
 [[nodiscard]] float DepthAt(std::span<const float> grid, glm::vec2 xz);

@@ -11,11 +11,13 @@
 
 #include <cstdint>
 
+#include <bitset>
 #include <chrono>
 #include <span>
 
 #include <glm/vec2.hpp>
 
+#include "3D/SnowCover.h"
 #include "ECS/Components/Weather.h"
 #include "ECS/Systems/SavedStateInterface.h"
 
@@ -54,6 +56,9 @@ public:
 	[[nodiscard]] virtual float GetDepth(glm::vec2 xz) const = 0;
 	/// Changes whenever the snow does, so that what is drawn from it is only refreshed then
 	[[nodiscard]] virtual uint32_t GetRevision() const = 0;
+	/// The blocks whose textures the game asks to paint again for the snow since the last call, in the order of
+	/// snow_cover::BlockIndex. The land paints each of them again the next time it draws it with its own texture.
+	[[nodiscard]] virtual std::bitset<snow_cover::k_Blocks> TakePaintRequests() = 0;
 };
 
 } // namespace openblack::ecs::systems

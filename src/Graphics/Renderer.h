@@ -36,6 +36,7 @@
 #include <glm/vec3.hpp>
 
 #include "3D/SkyDome.h"
+#include "3D/SnowCover.h"
 #include "Creature/CreatureHairLight.h"
 #include "Enums.h"
 #include "Graphics/DeviceRestore.h"
@@ -137,6 +138,9 @@ public:
 private:
 	/// Paints the footprints into the blocks of the land where they changed
 	void PaintLandFootprints(const DrawSceneDesc& drawDesc) const;
+	/// Paints the snow again into the blocks in `drawn` that wait for a paint, and gives the snow that each block's texture
+	/// shows; none without snow
+	const Texture2D* PaintLandSnow(std::span<const glm::ivec2> drawn) const;
 	/// The rivers' beds or channels, a footprint for each stretch of river
 	/// The land's luminosity this frame: as it was laid, shaded by the clouds and lit by the lights at night
 	void DrawLandLuminosityPass(const DrawSceneDesc& drawDesc) const;
@@ -788,6 +792,9 @@ private:
 	/// How deep the snow lies over the island, refreshed when it changes
 	mutable std::unique_ptr<Texture2D> _snowDepth;
 	mutable std::optional<uint32_t> _snowRevision;
+	/// The snow that each land block's texture shows, as it lay when the texture was last painted, and its texture
+	mutable snow_cover::PaintedBlocks _paintedSnow;
+	mutable std::unique_ptr<Texture2D> _paintedSnowTexture;
 	/// u_haze and u_hazeColour of the frame's distance haze, off until the land's light is built
 	mutable std::array<glm::vec4, 2> _haze {};
 	/// The colours the sky's dome is drawn in this frame

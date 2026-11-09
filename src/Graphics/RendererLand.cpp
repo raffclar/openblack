@@ -163,6 +163,60 @@ void Renderer::PaintLandFootprints(const DrawSceneDesc& drawDesc) const
 		_landFootprints = std::make_unique<LandFootprints>();
 	}
 	_landFootprints->Update();
+	// The game paints all of a block's texture again when its footprints change, so the block's snow is painted again too
+	const auto repainted = _landFootprints->TakeRepainted();
+	if (repainted.empty() || !Locator::terrainSystem::has_value())
+	{
+		return;
+	}
+	const auto& blocks = Locator::terrainSystem::value().GetBlocks();
+	for (const auto block : repainted)
+	{
+		if (block < blocks.size())
+		{
+			_paintedSnow.Request(snow_cover::BlockIndex(blocks[block].GetBlockPosition()));
+		}
+	}
+}
+
+const Texture2D* Renderer::PaintLandSnow(std::span<const glm::ivec2> drawn) const
+{
+	if (!Locator::snowSystem::has_value())
+	{
+		return nullptr;
+	}
+	auto& snow = Locator::snowSystem::value();
+	const auto requests = snow.TakePaintRequests();
+	if (requests.all())
+	{
+		_paintedSnow.RequestAll();
+	}
+	else if (requests.any())
+	{
+		for (uint16_t block = 0; block < snow_cover::k_Blocks; ++block)
+		{
+			if (requests.test(block))
+			{
+				_paintedSnow.Request(block);
+			}
+		}
+	}
+	const bool painted = _paintedSnow.PaintDrawn(drawn, snow.GetDepths());
+	if (!_paintedSnowTexture)
+	{
+		_paintedSnowTexture = std::make_unique<Texture2D>("PaintedSnow");
+		_paintedSnowTexture->Create(snow_cover::k_PaintedSide, snow_cover::k_PaintedSide, 1, TextureFormat::R32F,
+		                            Wrapping::ClampEdge, Filter::Nearest, nullptr);
+		// After a restore of the graphics device the painted snow goes to the texture again
+		_paintedSnowTexture->SetTexelsGivenAgain();
+	}
+	else if (!painted)
+	{
+		return _paintedSnowTexture.get();
+	}
+	const auto texels = _paintedSnow.GetPainted();
+	_paintedSnowTexture->Update(texels.data(), static_cast<uint32_t>(texels.size_bytes()));
+	return _paintedSnowTexture.get();
 }
 
 void Renderer::SetSeaUniforms(const ShaderProgram& waterShader, const Camera& camera) const
