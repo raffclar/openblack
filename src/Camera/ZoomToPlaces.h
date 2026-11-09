@@ -140,6 +140,13 @@ public:
 		return static_cast<int32_t>(now - _state.lastTap) > k_DoubleTapMilliseconds;
 	}
 	[[nodiscard]] const State& GetState() const noexcept { return _state; }
+	/// The player's camera starts again, as when the player comes out of the temple: the next press is a single tap if
+	/// allowed, and does not fly back. Where it flies back to stays.
+	void StartAgain() noexcept
+	{
+		_state.lastTap = 0;
+		_state.flownTo = false;
+	}
 
 private:
 	State _state;

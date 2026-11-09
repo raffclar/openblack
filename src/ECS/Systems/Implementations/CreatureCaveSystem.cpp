@@ -56,6 +56,7 @@
 #include "ECS/Systems/CreatureModeSystemInterface.h"
 #include "ECS/Systems/CreatureSkinSystemInterface.h"
 #include "ECS/Systems/TattooEditorSystemInterface.h"
+#include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/TattooSites.h"
 #include "Graphics/MeshDetail.h"
 #include "Gui/GameFont.h"
@@ -129,6 +130,13 @@ bool CreatureCaveSystem::InTemple() const
 
 void CreatureCaveSystem::Update(std::chrono::duration<float, std::milli> frameTime)
 {
+	// A game turn in this frame comes before the draw, and the interface pass of the turn reads the mouse's buttons
+	if (Locator::time::has_value())
+	{
+		const auto turn = Locator::time::value().GetTurn();
+		_turnBeforeDraw = _lastTurn.has_value() && *_lastTurn != turn;
+		_lastTurn = turn;
+	}
 	if (InTemple())
 	{
 		// The temple's creature room is the cave: F5 takes the player there, and Escape back out
@@ -478,18 +486,16 @@ void CreatureCaveSystem::UpdateCaveCreature(float milliseconds)
 		frame.eye = editor.GetView().eye;
 		frame.focus = editor.GetView().focus;
 	}
+	// The tattoo editor takes the mouse's buttons while it is open. The look reads the flag of the editor's box, which
+	// follows the mouse's own buttons and not the actions that they are bound to.
+	if (frame.zoomed && _interface != nullptr)
+	{
+		frame.buttonHeld = _interface->IsTattooEditorButtonHeld(_turnBeforeDraw);
+		frame.leftHeld = _interface->IsTattooEditorLeftHeld();
+	}
 	if (Locator::gameActionSystem::has_value())
 	{
-		using input::BindableActionMap;
 		const auto& actions = Locator::gameActionSystem::value();
-		frame.buttonHeld = actions.GetAny(BindableActionMap::MOVE, BindableActionMap::ACTION);
-		frame.leftHeld = actions.Get(BindableActionMap::MOVE);
-		// The tattoo editor takes the mouse's buttons from the game's actions while it is open, and keeps them itself
-		if (frame.zoomed && _interface != nullptr)
-		{
-			frame.buttonHeld = _interface->IsTattooEditorButtonHeld();
-			frame.leftHeld = _interface->IsTattooEditorLeftHeld();
-		}
 		mouse = glm::ivec2(actions.GetMousePosition());
 		if (Locator::camera::has_value() && Locator::windowing::has_value())
 		{

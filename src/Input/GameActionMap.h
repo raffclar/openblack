@@ -110,6 +110,7 @@ public:
 	void ProcessEvent(const SDL_Event& event) final;
 	[[nodiscard]] bool IsKeyHeld(int scancode) const final;
 	[[nodiscard]] bool WheelTurned() const final { return _wheelTurned; }
+	[[nodiscard]] uint32_t GetHeldMouseButtons() const final { return PointerState(nullptr); }
 	[[nodiscard]] bool WaitedMousePress(BindableActionMap action) const final;
 	void KeepHandEvent(const SDL_Event& event, bool movesPointer) final;
 	void TakeHandEvents(const std::function<void(const SDL_Event&, bool)>& hand) final;
@@ -130,14 +131,16 @@ private:
 	void ApplyQueuedPresses();
 	/// True while Alt is down, on either side
 	[[nodiscard]] bool AltHeld() const;
-	/// The one-press actions of each mouse button and each turn of the wheel
+	/// The one-press action that each mouse button and each turn of the wheel does now
 	[[nodiscard]] alt_presses::SourceActions OnePressMouseActions() const;
 	/// The first press of the mouse in this frame that does a one-press action, in the sequence of the game
 	[[nodiscard]] std::optional<hand_messages::OnePressAction> OnePressActionOfFrame() const;
-	/// Presses, for this frame, the one-press actions of the mouse that waited for Alt to go up
+	/// Presses, for this frame, the one-press actions of the mouse that waited for a later frame
 	void ActWaitedPresses(uint64_t actions);
-	/// Sends a press of a mouse input through the Alt rule. The actions that the press added and that act once
-	/// stay only when the rule lets them act.
+	/// Lets go of the one-press actions of mouse presses that do not act in this frame after all
+	void TakeBackMousePresses(uint64_t actions);
+	/// Sends a press of a mouse input through the rule of the kept presses. The actions that the press added and that
+	/// act once stay only when the rule lets them act.
 	void PressThroughAlt(alt_presses::Source source, BindableActionMap added);
 
 	/// What each of the options screen's actions is bound to, starting as the game's defaults

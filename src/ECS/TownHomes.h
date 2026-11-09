@@ -53,6 +53,9 @@ struct Homes
 	std::function<bool(entt::entity villager)> atHome;
 	/// A villager is about to leave its town alive: the children of the town whose mother it is lose her
 	std::function<void(entt::entity villager, entt::entity town)> leavingTown;
+	/// A villager that leaves its town alive is out of its home. Its town does not count it on the way to the worship
+	/// site or at worship from now on. The villager still has its town.
+	std::function<void(entt::entity villager)> leavingWorship;
 	/// A villager joined a town, and the town did not find a new home for it. A town with its first person can get its
 	/// worship site.
 	std::function<void(entt::entity town)> joinedTown;
@@ -195,7 +198,8 @@ bool MakeHomeless(Registry& registry, const Homes& homes, entt::entity villager)
 [[nodiscard]] std::vector<entt::entity> ChildrenOf(const Registry& registry, entt::entity town, entt::entity mother);
 
 /// A villager leaves its town, alive: the town's children whose mother it is lose her, then it leaves its home or the
-/// homeless, then the town itself
+/// homeless, then the town's worship, then the town itself. A town with no person left starts its countdown to an empty
+/// town. The villager loses its own mother.
 void RemoveVillagerFromTown(Registry& registry, const Homes& homes, entt::entity villager);
 
 /// A villager has died: it leaves its home (ending the couple it was one of) and its town, with no one told

@@ -197,6 +197,8 @@ void TownSystem::OnAbodeGone(entt::registry& registry, entt::entity abode)
 	std::vector<entt::entity> left;
 	for (auto [entity, town] : registry.view<Town>().each())
 	{
+		// A workshop that goes leaves the workshops of its town too
+		std::erase(town.workshops, abode);
 		if (std::erase(town.abodes, abode) != 0)
 		{
 			left.push_back(entity);
@@ -283,6 +285,7 @@ town_homes::Homes GameHomes()
 	    .leaving = [](entt::entity villager) { villager_home::LeavingHome(villager); },
 	    .atHome = [](entt::entity villager) { return Locator::entitiesRegistry::value().AllOf<AtHome>(villager); },
 	    .leavingTown = [](entt::entity villager, entt::entity town) { villager_breeding::OrphanChildrenOf(villager, town); },
+	    .leavingWorship = [](entt::entity villager) { ecs::villager_worship::LeaveTown(villager); },
 	    .joinedTown =
 	        [](entt::entity town) {
 		        if (Locator::worshipSiteSystem::has_value())
@@ -482,12 +485,7 @@ void TownSystem::RemoveVillager(entt::entity villager)
 	{
 		return;
 	}
-	// Worship first, while its town is still known
-	ecs::villager_worship::LeaveTown(villager);
-	const auto town = person->town;
 	town_homes::RemoveVillagerFromTown(registry, GameHomes(), villager);
-	StartEmptyTownTimerIfEmpty(town);
-	registry.Get<Villager>(villager).mother = entt::null;
 }
 
 uint32_t TownSystem::PopulationOf(entt::entity town)

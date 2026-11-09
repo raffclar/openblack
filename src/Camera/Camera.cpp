@@ -422,7 +422,7 @@ void Camera::Update(std::chrono::microseconds dt)
 	Advance(dt);
 }
 
-void Camera::Update(const input_steps::Steps& steps)
+void Camera::Update(const input_steps::Steps& steps, bool readsKeys)
 {
 	_stepViewCount = 0;
 	auto* actions = Locator::gameActionSystem::has_value() ? &Locator::gameActionSystem::value() : nullptr;
@@ -442,7 +442,10 @@ void Camera::Update(const input_steps::Steps& steps)
 		if (i > 0)
 		{
 			useStep(i - 1);
-			_model->HandleKeys(std::chrono::duration_cast<std::chrono::microseconds>(steps.Time(i - 1)));
+			if (readsKeys)
+			{
+				_model->HandleKeys(std::chrono::duration_cast<std::chrono::microseconds>(steps.Time(i - 1)));
+			}
 			useStep(i);
 			_model->HandleActions(time);
 		}
@@ -546,6 +549,47 @@ std::unique_ptr<CameraModel> Camera::SetModel(std::unique_ptr<CameraModel> model
 	std::swap(_model, model);
 	_modelSeconds = 0.0f;
 	return model;
+}
+
+std::unique_ptr<Camera> Camera::ContinueWith(std::unique_ptr<CameraModel> model) const
+{
+	auto other = std::make_unique<Camera>();
+	other->_stepViews = _stepViews;
+	other->_stepViewCount = _stepViewCount;
+	other->_originInterpolators = _originInterpolators;
+	other->_focusInterpolators = _focusInterpolators;
+	other->_interpolatorTime = _interpolatorTime;
+	other->_interpolatorDuration = _interpolatorDuration;
+	other->_focusInterpolatorTime = _focusInterpolatorTime;
+	other->_focusInterpolatorDuration = _focusInterpolatorDuration;
+	other->_xFov = _xFov;
+	other->_lens = _lens;
+	other->_aspect = _aspect;
+	other->_nearClip = _nearClip;
+	other->_projectionMatrix = _projectionMatrix;
+	other->_projectionMatrixReversedZ = _projectionMatrixReversedZ;
+	other->_model = std::move(model);
+	other->_modelSeconds = _modelSeconds;
+	other->_forcedTurnPoint = _forcedTurnPoint;
+	other->_cameraProjection = _cameraProjection;
+	other->_shakeEye = _shakeEye;
+	other->_shakeFocus = _shakeFocus;
+	other->_drawnView = _drawnView;
+	other->_lastCorrectPose = _lastCorrectPose;
+	other->_keyboardMoveSpeed = _keyboardMoveSpeed;
+	other->_eyeMayGoBelowLand = _eyeMayGoBelowLand;
+	other->_heldFollowHeading = _heldFollowHeading;
+	return other;
+}
+
+void Camera::TakeBackFrom(Camera& other)
+{
+	SetMotion(other.GetMotion());
+	_model = std::move(other._model);
+	_modelSeconds = other._modelSeconds;
+	_forcedTurnPoint = other._forcedTurnPoint;
+	_eyeMayGoBelowLand = other._eyeMayGoBelowLand;
+	_heldFollowHeading = other._heldFollowHeading;
 }
 
 const glm::mat4& Camera::GetProjectionMatrix() const

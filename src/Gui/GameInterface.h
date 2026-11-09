@@ -23,6 +23,7 @@
 #include <glm/vec2.hpp>
 
 #include "3D/TempleScreenInterface.h"
+#include "BoxButtonsHeld.h"
 #include "Canvas.h"
 #include "ChatControls.h"
 #include "Creature/CreatureFightHud.h"
@@ -307,7 +308,10 @@ public:
 	void SetTattooEditorAsNetworkGame(bool asNetworkGame) noexcept { _tattooEditorAsNetworkGame = asNetworkGame; }
 	/// The mouse buttons held down while the tattoo editor takes the mouse: the left one, and any of them
 	[[nodiscard]] bool IsTattooEditorLeftHeld() const noexcept override { return _leftButtonDown; }
-	[[nodiscard]] bool IsTattooEditorButtonHeld() const noexcept override { return _leftButtonDown || _otherButtonsDown != 0; }
+	[[nodiscard]] bool IsTattooEditorButtonHeld(bool turnBeforeDraw) const noexcept override
+	{
+		return _tattooEditor->IsOpen() && _boxButtonsHeld.Drawn(turnBeforeDraw);
+	}
 	[[nodiscard]] const TextDatabase& GetTexts() const noexcept override { return _texts; }
 	/// The dialogs' font, which the temple's scrolls are written in too
 	[[nodiscard]] const GameFont& GetFont() const noexcept override { return _font; }
@@ -599,8 +603,8 @@ private:
 	std::optional<menu_backdrop::Fade> _boxOverGameFade;
 	/// Whether the left mouse button is down, as the tattoo editor's dialog has seen it
 	bool _leftButtonDown {false};
-	/// The other mouse buttons held down while the tattoo editor takes the mouse, a bit each
-	uint32_t _otherButtonsDown {0};
+	/// The flag that a mouse button is held, as the creature of the tattoo editor reads it
+	box_buttons::HeldFlag _boxButtonsHeld;
 	std::optional<Message> _message;
 	std::optional<Caption> _caption;
 	void DrawCaption(glm::u16vec2 resolution);

@@ -1104,6 +1104,108 @@ TEST(WorshipSiteSystem, ATownLeavingItsPlayerClosesOnlyItsOwnBuildingSiteAtTheSi
 	EXPECT_EQ(f.world->closedTownSites.back(), std::make_pair(site, second));
 }
 
+// A town that a player with a temple gains gets its tribe's site, and the heart of the temple gets all its life again.
+// The heart does not change when the town cannot have a site.
+TEST(WorshipSiteSystem, ATownThatJoinsAPlayerGivesTheHeartOfTheTempleAllItsLife)
+{
+	{
+		Fixture f;
+		const auto town = f.Town(0, PlayerNames::NEUTRAL, Tribe::NORSE, {0.0f, 0.0f, -50.0f});
+		const auto temple = f.Temple(PlayerNames::PLAYER_ONE);
+		f.system->AddTemple(temple, 0.0f, true);
+		f.registry.Assign<ObjectLife>(temple, ObjectLife {.life = 0.25f});
+		f.registry.Get<components::Town>(town).owner = PlayerNames::PLAYER_ONE;
+		f.system->TownChangedHands(town);
+		EXPECT_TRUE(f.registry.Get<const components::Town>(town).worshipSite != entt::null);
+		EXPECT_FLOAT_EQ(f.registry.Get<const ObjectLife>(temple).life, 1.0f);
+	}
+	{
+		Fixture f;
+		f.world->landNumber = 1;
+		const auto town = f.Town(0, PlayerNames::NEUTRAL, Tribe::NORSE, {0.0f, 0.0f, -50.0f});
+		const auto temple = f.Temple(PlayerNames::PLAYER_ONE);
+		f.system->AddTemple(temple, 0.0f, true);
+		f.registry.Assign<ObjectLife>(temple, ObjectLife {.life = 0.25f});
+		f.registry.Get<components::Town>(town).owner = PlayerNames::PLAYER_ONE;
+		f.system->TownChangedHands(town);
+		EXPECT_TRUE(f.registry.Get<const components::Town>(town).worshipSite == entt::null);
+		EXPECT_FLOAT_EQ(f.registry.Get<const ObjectLife>(temple).life, 0.25f);
+	}
+	{
+		// The first person of a town does not change the heart
+		Fixture f;
+		const auto town = f.Town(0, PlayerNames::PLAYER_ONE, Tribe::NORSE, {0.0f, 0.0f, -50.0f}, 0);
+		const auto temple = f.Temple(PlayerNames::PLAYER_ONE);
+		f.system->AddTemple(temple, 0.0f, true);
+		f.registry.Assign<ObjectLife>(temple, ObjectLife {.life = 0.25f});
+		f.world->population[town] = 1;
+		f.system->PersonJoinedTown(town);
+		EXPECT_TRUE(f.registry.Get<const components::Town>(town).worshipSite != entt::null);
+		EXPECT_FLOAT_EQ(f.registry.Get<const ObjectLife>(temple).life, 0.25f);
+	}
+}
+
+// After the land is laid out, each town with no site gets its site, and the heart of its temple gets all its life
+// again. A temple whose towns have their sites keeps its life.
+TEST(WorshipSiteSystem, TheLandLaidOutGivesTheHeartAllItsLifeWhenATownGetsItsSite)
+{
+	{
+		Fixture f;
+		const auto town = f.Town(0, PlayerNames::PLAYER_ONE, Tribe::NORSE, {0.0f, 0.0f, -50.0f});
+		const auto temple = f.Temple(PlayerNames::PLAYER_ONE);
+		f.system->AddTemple(temple, 0.0f, false);
+		f.registry.Assign<ObjectLife>(temple, ObjectLife {.life = 0.5f});
+		f.system->LandLaidOut();
+		EXPECT_TRUE(f.registry.Get<const components::Town>(town).worshipSite != entt::null);
+		EXPECT_FLOAT_EQ(f.registry.Get<const ObjectLife>(temple).life, 1.0f);
+		// Again, with the site there, nothing changes
+		f.registry.Get<ObjectLife>(temple).life = 0.5f;
+		f.system->LandLaidOut();
+		EXPECT_FLOAT_EQ(f.registry.Get<const ObjectLife>(temple).life, 0.5f);
+	}
+	{
+		Fixture f;
+		f.Town(0, PlayerNames::PLAYER_ONE, Tribe::NORSE, {0.0f, 0.0f, -50.0f}, 0);
+		const auto temple = f.Temple(PlayerNames::PLAYER_ONE);
+		f.system->AddTemple(temple, 0.0f, false);
+		f.registry.Assign<ObjectLife>(temple, ObjectLife {.life = 0.5f});
+		f.system->LandLaidOut();
+		EXPECT_FLOAT_EQ(f.registry.Get<const ObjectLife>(temple).life, 0.5f);
+	}
+}
+
+// After the land is laid out, the players get their sites in the order of the players, not in the order their temples
+// were made
+TEST(WorshipSiteSystem, TheLandLaidOutGivesThePlayersTheirSitesInTheirOrder)
+{
+	for (const bool secondFirst : {false, true})
+	{
+		Fixture f;
+		const auto first = f.Town(0, PlayerNames::PLAYER_ONE, Tribe::NORSE, {0.0f, 0.0f, -50.0f});
+		const auto second = f.Town(1, PlayerNames::PLAYER_TWO, Tribe::NORSE, {500.0f, 0.0f, -50.0f});
+		const auto makeTemple = [&f](PlayerNames player, float x) {
+			const auto temple = f.Temple(player, {x, 0.0f, 0.0f});
+			f.system->AddTemple(temple, 0.0f, false);
+		};
+		if (secondFirst)
+		{
+			makeTemple(PlayerNames::PLAYER_TWO, 500.0f);
+			makeTemple(PlayerNames::PLAYER_ONE, 0.0f);
+		}
+		else
+		{
+			makeTemple(PlayerNames::PLAYER_ONE, 0.0f);
+			makeTemple(PlayerNames::PLAYER_TWO, 500.0f);
+		}
+		f.system->LandLaidOut();
+		const auto firstSite = f.registry.Get<const components::Town>(first).worshipSite;
+		const auto secondSite = f.registry.Get<const components::Town>(second).worshipSite;
+		ASSERT_TRUE(firstSite != entt::null);
+		ASSERT_TRUE(secondSite != entt::null);
+		EXPECT_LT(entt::to_integral(firstSite), entt::to_integral(secondSite)) << "second temple made first: " << secondFirst;
+	}
+}
+
 TEST(WorshipSiteSystem, ATempleLosesItsSitesNewestFirstWithAllOfEachAndItsTownsKeepTheirShare)
 {
 	Fixture f;

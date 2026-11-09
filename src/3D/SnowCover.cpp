@@ -9,8 +9,11 @@
 
 #include "SnowCover.h"
 
+#include <cmath>
+
 #include <algorithm>
 #include <array>
+#include <iterator>
 
 #include "Common/X87.h"
 
@@ -58,6 +61,12 @@ float StormSnowPerTurn(int8_t snow, float strength)
 
 void AddStorm(std::span<float> grid, glm::vec2 centre, float innerRadius, float outerRadius, float amount)
 {
+	AddStorm(grid, {}, centre, innerRadius, outerRadius, amount);
+}
+
+void AddStorm(std::span<float> grid, std::span<float> changes, glm::vec2 centre, float innerRadius, float outerRadius,
+              float amount)
+{
 	const auto middle = centre * k_InverseCell;
 	const float inner = innerRadius * k_InverseCell;
 	float outer = outerRadius * k_InverseCell;
@@ -89,22 +98,196 @@ void AddStorm(std::span<float> grid, glm::vec2 centre, float innerRadius, float 
 			// Beyond the inner radius the snow thins with the square of the distance, and turns to melting before the edge
 			const float laid = distance2 > inner2 ? ((outer2 - distance2) - inner2) * (amount / (outer2 - inner2)) : amount;
 			auto& depth = grid[Index(x, z)];
+			const float before = depth;
 			depth = std::clamp(depth + laid, 0.0f, k_MaxDepth);
+			if (changes.empty())
+			{
+				continue;
+			}
+			const float change = depth - before;
+			const auto block = BlockIndex({x / k_BlockCells, z / k_BlockCells});
+			changes[block] += change;
+			const bool lowX = x % k_BlockCells == 0 && x > 0;
+			const bool lowZ = z % k_BlockCells == 0 && z > 0;
+			if (lowX)
+			{
+				changes[block - 1] += change;
+				if (lowZ)
+				{
+					changes[block - 1 - k_BlocksPerSide] += change;
+				}
+			}
+			else if (lowZ)
+			{
+				changes[block - k_BlocksPerSide] += change;
+			}
 		}
 	}
 }
 
-void Melt(std::span<float> grid, Melting& melting, float seconds)
+namespace
+{
+/// Melts the band whose turn has come. `melted` takes each cell's index and the snow that melted from it.
+template <typename Melted>
+void MeltBands(std::span<float> grid, Melting& melting, float seconds, Melted&& melted)
 {
 	melting.clock += seconds;
 	while (melting.clock > k_MeltEvery)
 	{
 		melting.clock -= k_MeltEvery;
 		melting.band = (melting.band + 1) % k_Bands;
-		const auto first = Index(0, melting.band * k_BandRows);
-		const auto band = grid.subspan(first, static_cast<size_t>(k_BandRows) * k_GridSize);
-		std::ranges::for_each(band, [](float& depth) { depth = depth > k_MeltBy ? depth - k_MeltBy : 0.0f; });
+		for (int32_t z = melting.band * k_BandRows; z < (melting.band + 1) * k_BandRows; ++z)
+		{
+			for (int32_t x = 0; x < k_GridSize; ++x)
+			{
+				auto& depth = grid[Index(x, z)];
+				if (depth > k_MeltBy)
+				{
+					depth -= k_MeltBy;
+					melted(x, z, k_MeltBy);
+				}
+				else if (depth > 0.0f)
+				{
+					melted(x, z, depth);
+					depth = 0.0f;
+				}
+			}
+		}
+		melted.BandDone(melting.band);
 	}
+}
+
+struct NoBlocks
+{
+	void operator()(int32_t /*x*/, int32_t /*z*/, float /*snow*/) const {}
+	void BandDone(int32_t /*band*/) const {}
+};
+
+struct ToBlocks
+{
+	BlockRepaint& repaint;
+	std::vector<uint16_t>& paintNow;
+
+	void operator()(int32_t x, int32_t z, float snow) const
+	{
+		repaint.changes[BlockIndex({x / k_BlockCells, z / k_BlockCells})] -= snow;
+	}
+	void BandDone(int32_t band) const
+	{
+		constexpr int32_t k_BlockRowsInBand = k_BandRows / k_BlockCells;
+		ListRepaints(repaint, band * k_BlockRowsInBand, k_BlockRowsInBand, paintNow);
+	}
+};
+} // namespace
+
+void Melt(std::span<float> grid, Melting& melting, float seconds)
+{
+	MeltBands(grid, melting, seconds, NoBlocks {});
+}
+
+void Melt(std::span<float> grid, Melting& melting, float seconds, BlockRepaint& repaint, std::vector<uint16_t>& paintNow)
+{
+	MeltBands(grid, melting, seconds, ToBlocks {.repaint = repaint, .paintNow = paintNow});
+}
+
+void ListRepaints(BlockRepaint& repaint, int32_t firstRow, int32_t rows, std::vector<uint16_t>& paintNow)
+{
+	auto& [changes, sizes, blocks, count] = repaint;
+	if (firstRow == 0)
+	{
+		std::copy_n(blocks.begin(), count, std::back_inserter(paintNow));
+		std::fill_n(sizes.begin(), count, 0.0f);
+		count = 0;
+	}
+	for (int32_t z = firstRow; z < firstRow + rows; ++z)
+	{
+		for (int32_t x = 0; x < k_BlocksPerSide; ++x)
+		{
+			const auto block = BlockIndex({x, z});
+			const float size = std::abs(changes[block]);
+			if (!(size > k_RepaintChange))
+			{
+				continue;
+			}
+			// Every place is searched, also the empty places, which hold 0
+			const auto place = std::ranges::find_if(sizes, [size](float listed) { return size > listed; });
+			if (place == sizes.end())
+			{
+				continue;
+			}
+			const auto at = static_cast<size_t>(std::distance(sizes.begin(), place));
+			if (count == static_cast<int32_t>(k_RepaintListSize))
+			{
+				paintNow.push_back(blocks[at]);
+			}
+			else
+			{
+				std::copy_backward(sizes.begin() + at, sizes.begin() + count, sizes.begin() + count + 1);
+				std::copy_backward(blocks.begin() + at, blocks.begin() + count, blocks.begin() + count + 1);
+				++count;
+			}
+			sizes[at] = size;
+			blocks[at] = block;
+			changes[block] = 0.0f;
+		}
+	}
+}
+
+void PaintBlockCorners(std::span<const float> grid, glm::ivec2 block, std::span<float> painted)
+{
+	for (int32_t j = 0; j < k_BlockCorners; ++j)
+	{
+		for (int32_t i = 0; i < k_BlockCorners; ++i)
+		{
+			const int32_t x = (block.x * k_BlockCells) + i;
+			const int32_t z = (block.y * k_BlockCells) + j;
+			const bool onGrid = x < k_GridSize && z < k_GridSize;
+			const auto texel = (static_cast<size_t>((block.y * k_BlockCorners) + j) * k_PaintedSide) +
+			                   static_cast<size_t>((block.x * k_BlockCorners) + i);
+			painted[texel] = onGrid ? grid[Index(x, z)] : 0.0f;
+		}
+	}
+}
+
+PaintedBlocks::PaintedBlocks()
+    : _painted(static_cast<size_t>(k_PaintedSide) * k_PaintedSide, 0.0f)
+{
+	// A new land paints each of its blocks the first time it draws it
+	_waiting.set();
+}
+
+void PaintedBlocks::Request(uint16_t block)
+{
+	if (block < k_Blocks)
+	{
+		_waiting.set(block);
+	}
+}
+
+void PaintedBlocks::RequestAll()
+{
+	_waiting.set();
+}
+
+bool PaintedBlocks::PaintDrawn(std::span<const glm::ivec2> drawn, std::span<const float> grid)
+{
+	bool painted = false;
+	for (const auto block : drawn)
+	{
+		if (block.x < 0 || block.y < 0 || block.x >= k_BlocksPerSide || block.y >= k_BlocksPerSide)
+		{
+			continue;
+		}
+		const auto index = BlockIndex(block);
+		if (!_waiting.test(index))
+		{
+			continue;
+		}
+		PaintBlockCorners(grid, block, _painted);
+		_waiting.reset(index);
+		painted = true;
+	}
+	return painted;
 }
 
 float DepthAt(std::span<const float> grid, glm::vec2 xz)

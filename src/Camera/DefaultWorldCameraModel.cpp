@@ -265,11 +265,9 @@ DefaultWorldCameraModel::LimitsMoved DefaultWorldCameraModel::ApplyLimits(glm::v
 		moved.focusMoved = true;
 	}
 
-	// Never below the clearance over the ground. Turning the camera about a point recomputes its height with a little
-	// rounding, so a camera resting on the floor is let be within a ten-thousandth of it. A camera that a saved game of
-	// the original game lets go below the land has no floor.
-	constexpr float k_FloorRounding = 1e-4f;
-	if (!camera.EyeMayGoBelowLand() && _targetOrigin.y < groundAtStart + camera_limits::k_Clearance - k_FloorRounding)
+	// Never below the clearance over the ground. A camera that a saved game of the original game lets go below the land has
+	// no floor.
+	if (!camera.EyeMayGoBelowLand() && _targetOrigin.y < groundAtStart + camera_limits::k_Clearance)
 	{
 		_targetOrigin.y = groundAtStart + camera_limits::k_Clearance;
 		moved.pushed = true;
@@ -362,7 +360,8 @@ void DefaultWorldCameraModel::UpdateFocusPointInteractionParameters(glm::vec3 or
 	_averageIslandDistance = click_distance::TowardsFocus(_averageIslandDistance, _focusDistance, origin, focus);
 }
 
-void DefaultWorldCameraModel::UpdateMode(const Camera& camera, glm::vec3 eulerAngles, float zoomDelta, glm::uvec2 mouseCurrent)
+void DefaultWorldCameraModel::UpdateMode(const Camera& camera, glm::vec3 eulerAngles, float zoomDelta, glm::uvec2 mouseCurrent,
+                                         glm::vec3 originAtFrameStart)
 {
 	switch (_mode)
 	{
@@ -383,10 +382,12 @@ void DefaultWorldCameraModel::UpdateMode(const Camera& camera, glm::vec3 eulerAn
 		break;
 	}
 
+	// A tilt keeps the eye where it was at the start of the frame, as the destination of the camera. The turn point moves
+	// with the eye.
 	if (_mode != Mode::ArcBall && _rotateAroundDelta.x != 0.0f)
 	{
 		const auto diff = _targetFocus - _targetOrigin;
-		_targetOrigin = _currentOrigin;
+		_targetOrigin = originAtFrameStart;
 		_targetFocus = _targetOrigin + diff;
 		_focusAtClick = _targetFocus;
 	}
@@ -443,8 +444,12 @@ void DefaultWorldCameraModel::UpdateModeArcBall(glm::vec3 eulerAngles, glm::u16v
 void DefaultWorldCameraModel::UpdateModeDragging(const Camera& camera, glm::u16vec2 mouseCurrent)
 {
 	// Panning is strafing, and the land must be under the cursor now and where the land was gripped
-	if ((_features & camera_help::feature::k_Strafe) == 0 || !_screenSpaceMouseRaycastHit.has_value() ||
-	    (_landGrip.has_value() && !_landGrip->land))
+	if ((_features & camera_help::feature::k_Strafe) == 0)
+	{
+		return;
+	}
+	_panRunsAlongPlane = false;
+	if (!_screenSpaceMouseRaycastHit.has_value() || (_landGrip.has_value() && !_landGrip->land))
 	{
 		return;
 	}
@@ -453,6 +458,8 @@ void DefaultWorldCameraModel::UpdateModeDragging(const Camera& camera, glm::u16v
 	if (_landGrip.has_value() && _landGrip->depth > camera_pan::k_MaxGripDepth)
 	{
 		_dragGivenUp = true;
+		// As at the fence, the controls are held back until all of them are let go
+		_heldBack = true;
 		_flyToGrip = (_features & camera_help::feature::k_DoubleClick) != 0;
 		return;
 	}
@@ -467,10 +474,18 @@ void DefaultWorldCameraModel::UpdateModeDragging(const Camera& camera, glm::u16v
 		const auto far = inverseViewProjection * glm::vec4(ndc, 0.5f, 1.0f);
 		return glm::normalize(glm::vec3(far) / far.w - glm::vec3(near) / near.w);
 	};
-	const auto place =
-	    camera_pan::Pan({.normal = _originToHandPlaneNormal, .distance = _alignmentAtInteractionStart}, _originAtClick,
-	                    _focusAtClick, _originFocusDistanceAtInteractionStart, rayThrough(glm::vec2(mouseCurrent)),
-	                    rayThrough(glm::vec2(_mouseAtClick)), glm::ivec2(mouseCurrent), glm::ivec2(_mouseAtClick));
+	const camera_pan::GripPlane plane {.normal = _originToHandPlaneNormal, .distance = _alignmentAtInteractionStart};
+	const auto rayNow = rayThrough(glm::vec2(mouseCurrent));
+	const auto rayAtGrip = rayThrough(glm::vec2(_mouseAtClick));
+	// A line of sight that runs along the plane does not move the land. The next frame, the hints show the cross that
+	// blinks.
+	if (camera_pan::RunsAlongPlane(plane, rayNow, rayAtGrip))
+	{
+		_panRunsAlongPlane = true;
+		return;
+	}
+	const auto place = camera_pan::Pan(plane, _originAtClick, _focusAtClick, _originFocusDistanceAtInteractionStart, rayNow,
+	                                   rayAtGrip, glm::ivec2(mouseCurrent), glm::ivec2(_mouseAtClick));
 	if (!place.has_value())
 	{
 		return;
@@ -709,7 +724,7 @@ std::optional<CameraModel::CameraInterpolationUpdateInfo> DefaultWorldCameraMode
 	{
 		eulerAngles.y = world_turn::ClampPitch(eulerAngles.y);
 	}
-	UpdateMode(camera, eulerAngles, zoomDelta, mouseCurrent);
+	UpdateMode(camera, eulerAngles, zoomDelta, mouseCurrent, originAtFrameStart);
 	// Land gripped too far ahead flies the camera there, and the double click waiting is taken with it
 	if (_flyToGrip)
 	{
@@ -883,6 +898,14 @@ void DefaultWorldCameraModel::HandleActions(std::chrono::microseconds dt)
 	// Whether the keys asked for a step, which keeps a camera put back inside the fence held back
 	const bool keyStep = _keySteps.rotateAround != glm::vec3() || _keySteps.move != glm::vec2();
 	_keySteps = {};
+	// In the temple the camera takes no control of the player: the steps of the keys go, and no button, wheel or
+	// movement of the mouse acts below
+	const bool takesControls = !_inputsOff;
+	if (!takesControls)
+	{
+		_rotateAroundDelta = glm::vec3(0.0f);
+		_keyBoardMoveDelta = glm::vec2(0.0f);
+	}
 	_dragTurn = 0.0f;
 	_dragTilt = 0.0f;
 
@@ -893,7 +916,8 @@ void DefaultWorldCameraModel::HandleActions(std::chrono::microseconds dt)
 	const bool onFight = Locator::creatureFightSystem::has_value() && Locator::creatureFightSystem::value().IsCameraOnFight();
 	_features = onFight ? camera_help::DuringFight(help.features) : help.features;
 	const bool aroundMouse = (_features & camera_help::feature::k_RotateAroundMouse) != 0;
-	const bool rotateAroundMouse = aroundMouse && actionSystem.Get(input::BindableActionMap::ROTATE_AROUND_MOUSE_ON);
+	const bool rotateAroundMouse =
+	    takesControls && aroundMouse && actionSystem.Get(input::BindableActionMap::ROTATE_AROUND_MOUSE_ON);
 
 	// TODO(#709): Set tricons based on ZOOM or TILT if any move is detected
 
@@ -905,7 +929,7 @@ void DefaultWorldCameraModel::HandleActions(std::chrono::microseconds dt)
 	_clearView.SetDestination(_clearViewHeld ? 1.0f : 0.0f, k_ClearViewSeconds);
 	_clearView.Update(std::chrono::duration<float>(dt).count());
 	// The wheel and the zoom keys do nothing while the clear view is in
-	const bool wheelZooms = _clearView.GetValue() < clear_view::k_Starts;
+	const bool wheelZooms = takesControls && _clearView.GetValue() < clear_view::k_Starts;
 
 	// A wheel step is a fixed distance, whatever the frame time
 	float wheelZoom = 0.0f;
@@ -920,7 +944,7 @@ void DefaultWorldCameraModel::HandleActions(std::chrono::microseconds dt)
 	}
 	_rotateAroundDelta.z += wheelZoom;
 
-	const bool twoButtons = aroundMouse && actionSystem.Get(input::UnbindableActionMap::TWO_BUTTON_CLICK);
+	const bool twoButtons = takesControls && aroundMouse && actionSystem.Get(input::UnbindableActionMap::TWO_BUTTON_CLICK);
 	if (twoButtons)
 	{
 		_rotateAroundDelta.z += actionSystem.GetMouseDelta().y * k_TwoButtonZoomFactor;
@@ -947,8 +971,8 @@ void DefaultWorldCameraModel::HandleActions(std::chrono::microseconds dt)
 	// A drag starts with the hand on the land, and goes on for as long as the button is held, even once the cursor has
 	// gone past the land (over the sky, or the land far off): the land isn't dragged meanwhile, but the drag doesn't end
 	// and hand the camera back to the controls that turn or tilt it
-	const bool gripping =
-	    actionSystem.Get(input::BindableActionMap::MOVE) && (_handPosition.has_value() || (_dragging && !rotateAroundMouse));
+	const bool gripping = takesControls && actionSystem.Get(input::BindableActionMap::MOVE) &&
+	                      (_handPosition.has_value() || (_dragging && !rotateAroundMouse));
 	if (!gripping || rotateAroundMouse)
 	{
 		std::ignore = HandleDrag(false);
@@ -964,7 +988,7 @@ void DefaultWorldCameraModel::HandleActions(std::chrono::microseconds dt)
 	    .landGripped = gripping,
 	    .rotateAroundMouse = rotateAroundMouse,
 	    .bothButtons = twoButtons,
-	    .mouseDelta = glm::ivec2(actionSystem.GetMouseDelta()),
+	    .mouseDelta = takesControls ? glm::ivec2(actionSystem.GetMouseDelta()) : glm::ivec2(0),
 	};
 	_helpEvents = {};
 	// Turning, tilting, zooming or turning round the hand, or the movement keys unless the land is gripped with them
@@ -976,7 +1000,7 @@ void DefaultWorldCameraModel::HandleActions(std::chrono::microseconds dt)
 	}
 	// The camera takes a waiting double click once double clicks are allowed and it isn't being moved; meanwhile the
 	// click waits. Taken, it is counted here and flies the camera below.
-	const bool doubleClicked = (_features & camera_help::feature::k_DoubleClick) != 0 && !moving &&
+	const bool doubleClicked = takesControls && (_features & camera_help::feature::k_DoubleClick) != 0 && !moving &&
 	                           Locator::gameActionSystem::value().TakeDoubleClick();
 	// A drag of the land given up too far ahead takes every control away until the buttons are let go
 	_turnedThisFrame.reset();
@@ -1084,8 +1108,8 @@ void DefaultWorldCameraModel::HandleActions(std::chrono::microseconds dt)
 	}
 
 	// Put back inside the fence, the player's controls do not move the camera, or count towards the help, until all of
-	// them are let go. The wheel still zooms.
-	if (_heldBack)
+	// them are let go. The wheel still zooms. In the temple the hold stays as it is.
+	if (_heldBack && takesControls)
 	{
 		const camera_zones::HoldingControls holding {
 		    .grippingLand = gripping,
@@ -1120,9 +1144,9 @@ void DefaultWorldCameraModel::HandleActions(std::chrono::microseconds dt)
 		_landGripped = fight_view::GripsLand({
 		    .gripping = gripping,
 		    .directsFight = directs,
-		    .move = actionSystem.Get(input::BindableActionMap::MOVE),
-		    .action = actionSystem.Get(input::BindableActionMap::ACTION),
-		    .bothButtons = actionSystem.Get(input::UnbindableActionMap::TWO_BUTTON_CLICK),
+		    .move = takesControls && actionSystem.Get(input::BindableActionMap::MOVE),
+		    .action = takesControls && actionSystem.Get(input::BindableActionMap::ACTION),
+		    .bothButtons = takesControls && actionSystem.Get(input::UnbindableActionMap::TWO_BUTTON_CLICK),
 		    .rotateAroundMouse = rotateAroundMouse,
 		    .heldBack = _heldBack,
 		});
@@ -1137,6 +1161,9 @@ void DefaultWorldCameraModel::HandleActions(std::chrono::microseconds dt)
 			_dragTilt = 0.0f;
 		}
 	}
+	// Whether the player moved the camera this frame. Held back, only the wheel counts, because the hold-back removes the
+	// other controls.
+	_movedByPlayer = _heldBack ? wheelZoom != 0.0f : camera_help::events::IsMoving(_helpControls);
 	// Whether the self-tilting camera keeps to its place this frame: held back, the controls count for nothing and the
 	// camera doesn't tilt itself
 	{
@@ -1252,8 +1279,8 @@ void DefaultWorldCameraModel::UpdateIconFrame(bool onFight)
 		cursor = camera_drag::AreaCursor(glm::ivec2(actionSystem.GetMousePosition()), EdgeArea(screenSize));
 	}
 	_iconFrame = {
-	    // A drag given up too far ahead shows only that
-	    .mouseHints = _dragGivenUp ? hand_tricons::k_TooFar : (_dragging ? _drag.GetTricons() : _tricons),
+	    // A drag that could not move the land in the last frame shows the cross that blinks
+	    .mouseHints = _dragging ? (_panRunsAlongPlane ? hand_tricons::k_TooFar : _drag.GetTricons()) : _tricons,
 	    .gripping = controls.landGripped,
 	    // Gripping the land is all the camera has unless it is also turned, tilted or zoomed, or turned round the mouse
 	    .grippingOnly = controls.landGripped && !asked && !controls.rotateAroundMouse,
@@ -1290,6 +1317,7 @@ DefaultWorldCameraModel::Mode DefaultWorldCameraModel::HandleDrag(bool held)
 	{
 		_dragging = false;
 		_dragGivenUp = false;
+		_panRunsAlongPlane = false;
 		return _mode;
 	}
 	if (_dragGivenUp)
@@ -1444,6 +1472,29 @@ void DefaultWorldCameraModel::PlaceAt(glm::vec3 origin, glm::vec3 focus)
 	// A flight continues from here. Its clock stops, thus after its first part the camera stays here. A control of the
 	// camera stops the flight. A movement that runs for half the flight time starts the last part of the flight.
 	// A double tap that waits for this frame flies the camera from here.
+}
+
+void DefaultWorldCameraModel::StartAgain()
+{
+	// The camera continues to where it goes now, with no second part of a flight
+	_flightPath.reset();
+	_elapsedTime = decltype(_elapsedTime)::zero();
+	_heldBack = false;
+	_inputsOff = false;
+	// The clear view goes at once, and the camera stays where the clear view put it
+	_clearView.Reset(0.0f);
+	_clearOrbit.reset();
+	_clearViewHand.reset();
+	_clearViewHeld = false;
+	_clearViewStarts = false;
+	// No drag continues, and the steps of the keys and the mouse go
+	_dragging = false;
+	_dragGivenUp = false;
+	_landGrip.reset();
+	_flyToGrip = false;
+	_keySteps = {};
+	_rotateAroundDelta = glm::vec3(0.0f);
+	_keyBoardMoveDelta = glm::vec2(0.0f);
 }
 
 glm::vec3 DefaultWorldCameraModel::GetTargetOrigin() const

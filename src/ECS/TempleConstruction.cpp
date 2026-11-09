@@ -74,6 +74,7 @@
 #include "ECS/ThingMapPlace.h"
 #include "ECS/ThingModel.h"
 #include "ECS/TownCentreParts.h"
+#include "ECS/TownWorkshops.h"
 #include "ECS/WorldObjects.h"
 #include "ECS/WorshipSiteConstruction.h"
 #include "Graphics/MeshDetail.h"
@@ -387,6 +388,8 @@ void Finish(entt::entity building)
 		creches::StartsWorking(building);
 		// A finished storage pit starts working, and its town lets go of its temporary piles
 		StoragePitStartsWorking(building);
+		// A finished workshop goes first in the workshops of its town, unless the town has it already
+		town_workshops::StartsWorking(building);
 		// A finished miracle dispenser of a town counts as put up for mending only while it is not whole, as an abode
 		if (auto* dispenser = registry.TryGet<SpellDispenser>(building); dispenser != nullptr && TownOf(building).has_value())
 		{
@@ -492,6 +495,8 @@ void Repaired(entt::entity building)
 	creches::StartsWorking(building);
 	// A repaired storage pit starts working again, and its town lets go of its temporary piles
 	StoragePitStartsWorking(building);
+	// A repaired workshop that is not in the workshops of its town goes first in them
+	town_workshops::StartsWorking(building);
 	// Whole again, the town may put it up for mending the next time it is hurt. No one is moved in: the homeless and
 	// the crowded find it when they next look for a better home.
 	if (auto* abode = registry.TryGet<Abode>(building))

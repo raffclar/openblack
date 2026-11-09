@@ -63,6 +63,14 @@ public:
 	/// back to where it was going when the other camera took it, as SetFlight with a rise of 0.1
 	void Restart(glm::vec3 origin, glm::vec3 focus, glm::vec3 returnOrigin, glm::vec3 returnFocus);
 	void PlaceAt(glm::vec3 origin, glm::vec3 focus) final;
+	/// While the player is in the temple, the camera continues behind it but takes no control of the player: no button,
+	/// no wheel, no key and no movement of the mouse. The keys of the clear view still act.
+	void SetInputsOff(bool off) { _inputsOff = off; }
+	[[nodiscard]] bool InputsOff() const { return _inputsOff; }
+	/// Starts again from where the camera is, as when the player comes out of the temple. The second part of a flight
+	/// does not start, and the clear view, the hold at the fence, the drag and the key steps stop. The camera continues
+	/// to where it goes now.
+	void StartAgain();
 	/// Finds again how far ahead the land is from the view that the camera shows, as a new press of the mouse does.
 	/// The single tap of the temple key looks that far ahead. Returns the distance.
 	float RefreshClickDistance(const Camera& camera);
@@ -78,12 +86,13 @@ public:
 		        .landHeld = _landHeld,
 		        .keysMove = _keysMove,
 		        .dragTurn = _dragTurn,
-		        .dragTilt = _dragTilt};
+		        .dragTilt = _dragTilt,
+		        .movedByPlayer = _movedByPlayer};
 	}
 	/// Whether the player moved the camera in the last frame: a control of the camera, or a drag of the mouse of more
 	/// than two pixels while the land is gripped or the camera turns round the hand. Such a move stops a follow of a
 	/// bookmark.
-	[[nodiscard]] bool MovedByPlayer() const { return camera_help::events::IsMoving(_helpControls); }
+	[[nodiscard]] bool MovedByPlayer() const { return _movedByPlayer; }
 	/// Whether the camera was put back inside the fence and ignores its controls until all of them are let go
 	[[nodiscard]] bool IsHeldBack() const { return _heldBack; }
 	/// One of the four wooshes of a flight
@@ -114,7 +123,8 @@ private:
 	/// picture while they are in
 	[[nodiscard]] static camera_drag::EdgeArea EdgeArea(glm::ivec2 screenSize);
 
-	void UpdateMode(const Camera& camera, glm::vec3 eulerAngles, float zoomDelta, glm::uvec2 mouseCurrent);
+	void UpdateMode(const Camera& camera, glm::vec3 eulerAngles, float zoomDelta, glm::uvec2 mouseCurrent,
+	                glm::vec3 originAtFrameStart);
 	void UpdateModeCartesian();
 	void UpdateModePolar(glm::vec3 eulerAngles, bool recalculatePoint);
 	void UpdateModeArcBall(glm::vec3 eulerAngles, glm::u16vec2 mouseCurrent, float xFov);
@@ -238,6 +248,8 @@ private:
 	uint32_t _features {camera_drag::k_DefaultFeatures};
 	/// A drag gripping land too far ahead is given up until the buttons are let go
 	bool _dragGivenUp {false};
+	/// The last frame of the drag could not move the land: a line of sight ran along the plane of the grip
+	bool _panRunsAlongPlane {false};
 	/// Land was just gripped too far ahead: the camera flies there this frame
 	bool _flyToGrip {false};
 	/// The camera set off on a flight this frame
@@ -246,6 +258,8 @@ private:
 	bool _selfTiltEase {false};
 	/// Put back inside the fence, the camera ignores its controls until every one of them is let go
 	bool _heldBack {false};
+	/// The player is in the temple: the camera takes no control of the player
+	bool _inputsOff {false};
 	/// The angle the player turned the camera by this frame, in radians, none when the player didn't turn it
 	std::optional<float> _turnedThisFrame;
 	/// The angle the tilt controls (or the camera that tilts itself) tilted the camera by this frame, in radians, none
@@ -262,6 +276,7 @@ private:
 	bool _keysMove {false};
 	float _dragTurn {0.0f};
 	float _dragTilt {0.0f};
+	bool _movedByPlayer {false};
 	/// The self-tilting camera goes back over where it stood at the start of the frame: it tilted itself, or nothing was
 	/// asked of it
 	bool _keepsToItsPlace {true};

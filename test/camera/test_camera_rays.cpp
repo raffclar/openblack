@@ -68,7 +68,8 @@ public:
 		const auto asked = static_cast<uint64_t>(actions);
 		const auto bit = [asked](input::BindableActionMap action) { return (asked & static_cast<uint64_t>(action)) != 0; };
 		return (held && bit(input::BindableActionMap::MOVE)) || (turnLeft && bit(input::BindableActionMap::ROTATE_LEFT)) ||
-		       (middle && bit(input::BindableActionMap::ROTATE_AROUND_MOUSE_ON));
+		       (middle && bit(input::BindableActionMap::ROTATE_AROUND_MOUSE_ON)) ||
+		       (forwards && bit(input::BindableActionMap::MOVE_FORWARDS)) || (tiltUp && bit(input::BindableActionMap::TILT_UP));
 	}
 	[[nodiscard]] glm::uvec2 GetMousePosition() const override { return cursor; }
 	[[nodiscard]] glm::ivec2 GetMouseDelta() const override { return delta; }
@@ -83,6 +84,10 @@ public:
 	bool turnLeft {false};
 	/// The button that turns the camera about the land under the hand
 	bool middle {false};
+	/// The key that moves the camera forwards
+	bool forwards {false};
+	/// The key that tilts the camera up
+	bool tiltUp {false};
 	glm::uvec2 cursor {k_Width / 2, k_Height * 3 / 4};
 	glm::ivec2 delta {0, 0};
 };
@@ -368,4 +373,73 @@ TEST_F(CameraRays, TheDrawnDirectionIsTheDirectionOfTheKeptView)
 	EXPECT_EQ(_camera.GetForward(Camera::Interpolation::Drawn), forward);
 	EXPECT_EQ(_camera.GetUp(Camera::Interpolation::Drawn), up);
 	EXPECT_NE(_camera.GetForward(), forward);
+}
+
+// Land gripped too far ahead holds the controls back as the fence does: a key that goes down before the button comes up
+// does not move the camera while it is held
+TEST_F(CameraRays, LandGrippedTooFarAheadHoldsTheKeysBackUntilAllAreLetGo)
+{
+	// Looking nearly level, the land under the middle of the screen is about 5000 ahead
+	static constexpr glm::vec3 k_LevelOrigin {1000.0f, 100.0f, 1000.0f};
+	static constexpr glm::vec3 k_LevelFocus {1000.0f, 98.0f, 1100.0f};
+	const auto run = [this](bool keyAfterGrip) {
+		std::ignore = _camera.SetModel(std::make_unique<DefaultWorldCameraModel>(k_LevelOrigin, k_LevelFocus));
+		_camera.SetOrigin(k_LevelOrigin).SetFocus(k_LevelFocus);
+		_camera.KeepDrawnView();
+		*_action = DragAction();
+		_action->cursor = {k_Width / 2, k_Height / 2};
+		RunFrames(30);
+		_action->held = true;
+		RunFrames(3);
+		// The key goes down before the button comes up
+		_action->forwards = keyAfterGrip;
+		RunFrames(1);
+		_action->held = false;
+		RunFrames(30);
+		return _camera.GetOrigin(Camera::Interpolation::Target);
+	};
+	EXPECT_EQ(run(true), run(false));
+}
+
+// Land gripped too far ahead shows no cross that blinks: in the frame of the grip the hints are those of the grip, and
+// after it the controls are held back, which shows no hints
+TEST_F(CameraRays, LandGrippedTooFarAheadShowsNoCrossThatBlinks)
+{
+	static constexpr glm::vec3 k_LevelOrigin {1000.0f, 100.0f, 1000.0f};
+	static constexpr glm::vec3 k_LevelFocus {1000.0f, 98.0f, 1100.0f};
+	std::ignore = _camera.SetModel(std::make_unique<DefaultWorldCameraModel>(k_LevelOrigin, k_LevelFocus));
+	_camera.SetOrigin(k_LevelOrigin).SetFocus(k_LevelFocus);
+	_camera.KeepDrawnView();
+	_action->cursor = {k_Width / 2, k_Height / 2};
+	RunFrames(30);
+	_action->held = true;
+	bool heldBack = false;
+	for (int frame = 0; frame < 20; ++frame)
+	{
+		RunFrames(1);
+		const auto cues = _camera.GetModel().GetHandCues();
+		ASSERT_TRUE(cues.icons.has_value()) << frame;
+		EXPECT_EQ(cues.icons->mouseHints & hand_tricons::k_TooFar, 0U) << frame;
+		heldBack = heldBack || cues.icons->blocked;
+	}
+	EXPECT_TRUE(heldBack);
+}
+
+// A tilt keeps the eye at the destination that the camera had at the start of the frame, not at the place where the
+// camera is drawn while it moves there
+TEST_F(CameraRays, ATiltKeepsTheEyeAtItsDestinationWhileTheCameraMoves)
+{
+	_camera.SetOriginInterpolator(k_StartOrigin, k_FarOrigin, glm::vec3(0.0f), glm::vec3(0.0f));
+	_camera.SetFocusInterpolator(k_StartFocus, k_FarFocus, glm::vec3(0.0f), glm::vec3(0.0f));
+	_camera.SetInterpolatorDuration(2s).SetInterpolatorTime(0us);
+	_camera.KeepDrawnView();
+	// The key goes down in this frame, and the next frame tilts the camera
+	_action->tiltUp = true;
+	RunFrames(1);
+	_action->tiltUp = false;
+	const auto destination = _camera.GetOrigin(Camera::Interpolation::Target);
+	const auto focus = _camera.GetFocus(Camera::Interpolation::Target);
+	RunFrames(1);
+	EXPECT_EQ(_camera.GetOrigin(Camera::Interpolation::Target), destination);
+	EXPECT_NE(_camera.GetFocus(Camera::Interpolation::Target), focus);
 }

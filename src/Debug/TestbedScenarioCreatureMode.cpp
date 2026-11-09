@@ -10,6 +10,8 @@
 // The testbed's scenarios of Creature Mode, the camera locked onto a creature with its status panel, and of the
 // Creature Cave
 
+#include <SDL_mouse.h>
+
 #include "3D/TempleInteriorInterface.h"
 #include "Creature/CreatureCave.h"
 #include "Input/BindableActions.h"
@@ -311,6 +313,44 @@ void AddCaveTattooOnBody(std::vector<Scenario>& all)
 	                 at(700.0f, 350.0f, 0.2f),
 	                 at(560.0f, 300.0f, 0.2f),
 	                 release(1.0f)},
+	});
+}
+
+/// The tiger in the tattoo editor of the Creature Cave looks at the pointer after a press of the mouse. The points after
+/// the click on the creature are for a screen of 1600 by 900.
+void AddCaveLookButtons(std::vector<Scenario>& all)
+{
+	const auto at = [](float x, float y, float delay) {
+		return Command {.kind = Kind::PointerTo, .delaySeconds = delay, .point = {x / 1600.0f, y / 900.0f}};
+	};
+	const auto press = [](uint8_t button, float delay) {
+		return Command {.kind = Kind::PointerPress, .delaySeconds = delay, .value = button};
+	};
+	const auto release = [](uint8_t button, float delay) {
+		return Command {.kind = Kind::PointerRelease, .delaySeconds = delay, .value = button};
+	};
+	all.push_back({
+	    .id = "creature_mode.cave_look_buttons",
+	    .name = "The creature in the cave looks at the pointer after a press of the mouse",
+	    .facet = Facet::CreatureMode,
+	    .description = "The player goes into the temple and its Creature Cave and clicks the tiger by the fire. With the "
+	                   "pointer at the top left, the player holds the middle button for three seconds. Then the player "
+	                   "holds the right button for three seconds.",
+	    .expected = "The camera zooms onto the tiger and the tattoo editor opens. When the middle button goes down, the "
+	                "tiger turns its head to the pointer. After 1.5 seconds it looks away, while the button is still "
+	                "down. The right button makes it look at the pointer again for 1.5 seconds.",
+	    .framing = {.shot = Shot::Overview},
+	    .creatures = {Player({0.0f, 40.0f}, "yours")},
+	    .commands = {{.kind = Kind::EnterTemple, .delaySeconds = 1.0f, .value = static_cast<size_t>(TempleRoom::Main)},
+	                 {.kind = Kind::OpenCreatureCave, .creature = 0, .delaySeconds = 0.5f},
+	                 {.kind = Kind::PointerOnCaveCreature, .delaySeconds = 10.0f},
+	                 press(SDL_BUTTON_LEFT, 0.5f),
+	                 release(SDL_BUTTON_LEFT, 0.2f),
+	                 at(560.0f, 180.0f, 5.0f),
+	                 press(SDL_BUTTON_MIDDLE, 0.5f),
+	                 release(SDL_BUTTON_MIDDLE, 3.0f),
+	                 press(SDL_BUTTON_RIGHT, 1.0f),
+	                 release(SDL_BUTTON_RIGHT, 3.0f)},
 	});
 }
 
@@ -692,6 +732,7 @@ void testbed_scenarios::AddCreatureModeScenarios(std::vector<Scenario>& all)
 	AddCave(all);
 	AddFizzInFront(all);
 	AddCaveTattooOnBody(all);
+	AddCaveLookButtons(all);
 	AddCaveTattooNetworkWarning(all);
 	AddCaveOwnTattooPicture(all);
 	AddMenuTattooEditor(all);

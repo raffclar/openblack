@@ -68,6 +68,7 @@
 #include "ECS/Components/CreatureNeeds.h"
 #include "ECS/Components/Dance.h"
 #include "ECS/Components/Field.h"
+#include "ECS/Components/Fire.h"
 #include "ECS/Components/Footpath.h"
 #include "ECS/Components/GameStanding.h"
 #include "ECS/Components/HandGrab.h"
@@ -430,6 +431,15 @@ void Runner::Start(const Scenario& scenario)
 	if (Locator::worshipSiteSystem::has_value())
 	{
 		Locator::worshipSiteSystem::value().LandLaidOut();
+	}
+	// A temple gets all its life again when a town gets its worship site. A temple of the scenario with less life keeps
+	// that life.
+	for (size_t index = 0; index < _temples.size() && index < scenario.temples.size(); ++index)
+	{
+		if (const auto& life = scenario.temples[index].life; life.has_value())
+		{
+			Locator::entitiesRegistry::value().AssignOrReplace<ecs::components::ObjectLife>(_temples[index], *life);
+		}
 	}
 	if (!scenario.townMiracles.empty())
 	{

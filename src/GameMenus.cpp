@@ -496,7 +496,8 @@ void Game::UpdateTattooMenu(float milliseconds)
 	const auto origin = space.ToScreen(glm::vec2(0.0f));
 	const auto corner = space.ToScreen(glm::vec2(gui::DialogPainter::k_Size));
 	const auto pointer = Locator::gameActionSystem::value().GetPointerPosition();
-	tattooMenu.Update(milliseconds, pointer, Locator::gameInterface::value().IsTattooEditorButtonHeld(),
+	// The main menu pauses the game, so no game turn comes before the draw
+	tattooMenu.Update(milliseconds, pointer, Locator::gameInterface::value().IsTattooEditorButtonHeld(false),
 	                  Locator::gameInterface::value().IsTattooEditorLeftHeld(), {.origin = origin, .size = corner - origin});
 }
 

@@ -525,6 +525,7 @@ void LandFootprints::PaintChanges(const ThingStores& stores)
 	{
 		return;
 	}
+	_repainted.insert(_repainted.end(), blocks.begin(), blocks.end());
 
 	// Each block gets its place in the kept textures first, so the lanes only change what is in a place
 	for (const auto block : blocks)

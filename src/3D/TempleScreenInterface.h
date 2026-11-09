@@ -85,9 +85,11 @@ public:
 	[[nodiscard]] virtual const gui::TextDatabase& GetTexts() const noexcept = 0;
 	[[nodiscard]] virtual const gui::GameFont& GetFont() const noexcept = 0;
 	[[nodiscard]] virtual const graphics::Texture2D& GetFontTexture() const noexcept = 0;
-	/// Whether the tattoo editor holds the left button of the mouse, or any button of the mouse
+	/// Whether the tattoo editor holds the left button of the mouse
 	[[nodiscard]] virtual bool IsTattooEditorLeftHeld() const noexcept = 0;
-	[[nodiscard]] virtual bool IsTattooEditorButtonHeld() const noexcept = 0;
+	/// Whether a mouse button is held for the look of the tattoo editor's creature, as the draw of this frame reads it.
+	/// Set turnBeforeDraw when a game turn came before the draw in this frame.
+	[[nodiscard]] virtual bool IsTattooEditorButtonHeld(bool turnBeforeDraw) const noexcept = 0;
 	/// The colour over the whole screen, which the temple fades in and out by
 	[[nodiscard]] virtual gui::ScreenFade& GetScreenFade() noexcept = 0;
 	/// What the hand shows for what it is over

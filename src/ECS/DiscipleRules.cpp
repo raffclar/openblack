@@ -204,6 +204,16 @@ Choice disciple::ChooseWhileHeld(std::span<const NearFacts> ordered, const HeldF
 	return {.type = atPickUp, .from = std::nullopt};
 }
 
+bool disciple::RefusesWork(const HeldRefusal& refusal)
+{
+	return refusal.scriptControlled || refusal.notAlive || refusal.skeleton || refusal.inFootballMatch;
+}
+
+bool disciple::CallsFollowers(VillagerDisciple type, Decision from)
+{
+	return from == Decision::WhatToDo && KindOf(type).leadsFollowers;
+}
+
 VillagerDisciple disciple::AtPickUp(VillagerDisciple current)
 {
 	return current == Missionary ? None : current;

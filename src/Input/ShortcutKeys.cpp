@@ -23,6 +23,7 @@
 #include "Camera/DefaultWorldCameraModel.h"
 #include "Camera/ScriptCameraModel.h"
 #include "Camera/StartCamera.h"
+#include "Camera/WorldCamera.h"
 #include "Commands/PlayerCommands.h"
 #include "Common/MachineClock.h"
 #include "ECS/Components/Animal.h"
@@ -199,19 +200,20 @@ void ShortcutKeys::Update()
 	// The villagers' names and details are toggled, as the game does
 	ToggleVillagerLabels(acts(BindableActionMap::SHOW_VILLAGER_NAMES), acts(BindableActionMap::SHOW_VILLAGER_DETAILS));
 
-	const bool temple = pressed(BindableActionMap::ZOOM_TO_TEMPLE);
-	const bool realm = pressed(BindableActionMap::ZOOM_TO_REALM);
+	// Inside the temple a mouse button of these actions flies the world's camera behind the temple
+	const bool temple = acts(BindableActionMap::ZOOM_TO_TEMPLE);
+	const bool realm = acts(BindableActionMap::ZOOM_TO_REALM);
 	if (!temple && !realm)
 	{
 		return;
 	}
-	// The camera isn't the player's while a script has the cinema bars in, nor inside the temple
-	if (!Locator::cinematicDirectorSystem::value().IsInterfaceActive() || inTemple)
+	// The camera isn't the player's while a script has the cinema bars in
+	if (!Locator::cinematicDirectorSystem::value().IsInterfaceActive())
 	{
 		return;
 	}
 	// A script that holds the camera does not let it go: the keys do nothing, and no tap counts
-	auto& camera = Locator::camera::value();
+	auto& camera = world_camera::Get();
 	if (!zoom_to::KeysTakeCamera(dynamic_cast<const ScriptCameraModel*>(&camera.GetModel()) != nullptr
 	                                 ? zoom_to::Holder::Script
 	                                 : zoom_to::Holder::World))

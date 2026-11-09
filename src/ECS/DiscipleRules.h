@@ -99,9 +99,24 @@ struct HeldFacts
 	bool sexuallyActive {false};
 	bool male {false};
 	bool child {false};
-	/// A script holds it, it isn't about its life, it is dead or dying: it takes up no work but worship (for a child)
+	/// It takes up no work but worship (for a child), as RefusesWork tells
 	bool otherwiseRefused {false};
 };
+
+/// What can stop a held villager from taking up work
+struct HeldRefusal
+{
+	/// A script holds it
+	bool scriptControlled {false};
+	/// It is dead, or its death has started
+	bool notAlive {false};
+	/// A script made it a walking skeleton
+	bool skeleton {false};
+	/// It plays in a football match
+	bool inFootballMatch {false};
+};
+/// Whether a held villager takes up no work but worship (for a child): true when one of these things is true
+[[nodiscard]] bool RefusesWork(const HeldRefusal& refusal);
 
 /// The work a thing offers the held villager, if any
 [[nodiscard]] VillagerDisciple Offered(const NearFacts& near, const HeldFacts& held);
@@ -149,6 +164,18 @@ struct Kind
 	bool goesForAnyWood {false};
 };
 [[nodiscard]] Kind KindOf(VillagerDisciple type);
+
+/// When a disciple looks for its work
+enum class Decision : uint8_t
+{
+	/// It decides what to do next, as each villager does
+	WhatToDo,
+	/// It waits by the town centre, and its wait comes to an end
+	AfterWait,
+};
+/// Whether the villagers of its town near a disciple can follow it when it starts its work. Only a kind with followers
+/// calls them, and only when it decides what to do. A disciple that finds work at the end of a wait calls none.
+[[nodiscard]] bool CallsFollowers(VillagerDisciple type, Decision from);
 
 /// The work a script names for a villager by its number: one of the kinds from none to coming from the vortex, nothing
 /// for any other number (the villager is left as it is)

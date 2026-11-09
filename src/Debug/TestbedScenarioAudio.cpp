@@ -1197,7 +1197,7 @@ void testbed_scenarios::AddAudio(std::vector<Scenario>& all)
 	                "that the pointer comes onto glows and the glow fades over half a second.",
 	    .framing = {.shot = Shot::Overview},
 	    .commands = {{.kind = Kind::EnterTemple, .delaySeconds = 1.0f, .value = 3},
-	                 {.kind = Kind::PointerTo, .delaySeconds = 10.0f, .waitUntilFree = true, .point = {0.02f, 0.75f}},
+	                 {.kind = Kind::PointerTo, .delaySeconds = 10.0f, .waitUntilFree = true, .point = {0.02f, 0.69f}},
 	                 {.kind = Kind::PointerPress, .delaySeconds = 0.4f, .value = 1},
 	                 {.kind = Kind::PointerSweep, .delaySeconds = 0.2f, .point = {0.96f, 0.0f}, .amount = 4.0f},
 	                 {.kind = Kind::PointerRelease, .delaySeconds = 4.2f, .value = 1},

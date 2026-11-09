@@ -257,6 +257,8 @@ public:
 	[[nodiscard]] virtual bool IsKeyHeld([[maybe_unused]] int scancode) const { return false; }
 	/// Whether the mouse's wheel has turned since the game started
 	[[nodiscard]] virtual bool WheelTurned() const { return false; }
+	/// The mouse buttons that are down now, as SDL button masks, also while a dialog takes the mouse's events
+	[[nodiscard]] virtual uint32_t GetHeldMouseButtons() const { return 0; }
 	/// True when the press of the action in this frame came from a mouse press that waited for Alt to go up
 	[[nodiscard]] virtual bool WaitedMousePress([[maybe_unused]] BindableActionMap action) const { return false; }
 	/// Keeps a press, a let go or a motion of the mouse for the hand. The hand gets the frame's events at the end of the
