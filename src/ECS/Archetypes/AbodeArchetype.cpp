@@ -48,6 +48,7 @@
 #include "ECS/Systems/WonderSystemInterface.h"
 #include "ECS/Systems/WorkshopSystemInterface.h"
 #include "ECS/TownCentreParts.h"
+#include "ECS/TownWorkshops.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Magic/ResourcePiles.h"
@@ -262,6 +263,11 @@ entt::entity AbodeArchetype::Create(uint32_t townId, const glm::vec3& position, 
 		if (Locator::workshopSystem::has_value())
 		{
 			Locator::workshopSystem::value().Made(entity);
+		}
+		// A workshop made built starts to work at once and goes first in the workshops of its town
+		if (built >= 1.0f)
+		{
+			town_workshops::StartsWorking(entity);
 		}
 		if (Locator::resourceStoreSystem::has_value())
 		{

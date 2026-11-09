@@ -197,6 +197,8 @@ void TownSystem::OnAbodeGone(entt::registry& registry, entt::entity abode)
 	std::vector<entt::entity> left;
 	for (auto [entity, town] : registry.view<Town>().each())
 	{
+		// A workshop that goes leaves the workshops of its town too
+		std::erase(town.workshops, abode);
 		if (std::erase(town.abodes, abode) != 0)
 		{
 			left.push_back(entity);
