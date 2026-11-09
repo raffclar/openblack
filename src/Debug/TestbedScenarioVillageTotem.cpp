@@ -268,6 +268,27 @@ void openblack::testbed_scenarios::AddVillageTotemScenarios(std::vector<Scenario
 	                 {.kind = Command::Kind::PauseGame, .delaySeconds = 1.0f, .value = 1}},
 	    .townBeliefInPlayer = 1.0f,
 	});
+	all.push_back({
+	    .id = "interface.floating_number_behind_building",
+	    .name = "A building in front of the share hides it",
+	    .facet = Facet::Interface,
+	    .description = "The player's Norse town centre, with its worship site built, and a workshop between it and the "
+	                   "low camera. The hand takes hold of the totem and lets go, so that the share floats up over it.",
+	    .expected = "The workshop hides the share and its shadow while they are behind it. The share comes into sight "
+	                "above the roof of the workshop as it rises. No part of the share shows through the workshop.",
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_Centre.x, 3.0f, k_Centre.y - 45.0f},
+	                .look = {k_Centre.x, 12.0f, k_Centre.y}},
+	    .objects = {{.type = AbodeInfo::NorseTownCentre, .offset = k_Centre},
+	                {.type = AbodeInfo::NorseWorkshop, .offset = k_Centre + glm::vec2(0.0f, -28.0f)},
+	                {.type = VillagerInfo::NorseHousewifeFemale,
+	                 .offset = k_Centre + glm::vec2(10.0f, -10.0f),
+	                 .joinTown = true}},
+	    .temples = {{.offset = k_Temple}},
+	    .commands = {{.kind = Command::Kind::HandGripTotem, .delaySeconds = 2.0f, .object = 0},
+	                 {.kind = Command::Kind::HandGripTotem, .delaySeconds = 1.0f, .object = 0}},
+	    .townBeliefInPlayer = 1.0f,
+	});
 	// The creature starts away from the totem, so that it walks to it first
 	const glm::vec2 mover = k_Centre + glm::vec2(-30.0f, -30.0f);
 	const auto moveTotem = [&all, mover](std::string_view id, std::string_view name, std::string_view action, float share,

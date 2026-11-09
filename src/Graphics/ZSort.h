@@ -34,6 +34,33 @@ namespace openblack::graphics::zsort
 	return std::bit_cast<uint32_t>(Key(point, camera));
 }
 
+/// The key of a placed model: a building, a tree, a villager or an animal. The game adds the height last, thus the
+/// sum can be one step different from Key.
+[[nodiscard]] inline float ModelKey(const glm::vec3& point, const glm::vec3& camera) noexcept
+{
+	const auto d = point - camera;
+	return ((d.x * d.x) + (d.z * d.z)) + (d.y * d.y);
+}
+
+/// The model key as a bgfx depth
+[[nodiscard]] inline uint32_t ModelDepth(const glm::vec3& point, const glm::vec3& camera) noexcept
+{
+	return std::bit_cast<uint32_t>(ModelKey(point, camera));
+}
+
+/// The key of a number that floats up from a thing. The game adds the first axis last.
+[[nodiscard]] inline float FloatingNumberKey(const glm::vec3& point, const glm::vec3& camera) noexcept
+{
+	const auto d = point - camera;
+	return ((d.y * d.y) + (d.z * d.z)) + (d.x * d.x);
+}
+
+/// The key of the floating number as a bgfx depth
+[[nodiscard]] inline uint32_t FloatingNumberDepth(const glm::vec3& point, const glm::vec3& camera) noexcept
+{
+	return std::bit_cast<uint32_t>(FloatingNumberKey(point, camera));
+}
+
 /// The game draws a creature fizzing out of sight in its place among the solid models, before everything it sorts, and
 /// those models the nearest first. As a bgfx depth: above every sorted key (a distance's bits never reach the top bit),
 /// the nearest the greatest, with its lowest four bits left for the draws that follow it in turn.
