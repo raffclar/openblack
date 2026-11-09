@@ -266,7 +266,8 @@ void testbed_scenarios::AddStormScenarios(std::vector<Scenario>& all)
 	    .facet = Facet::Sky,
 	    .description = "The first storm the Three Gods playground's land script places: 70.8 seconds into its 460, 8 "
 	                   "clouds of shade 0.12 500 above the land, inner radius 160 and outer 176, rain at 8 degrees, the "
-	                   "wind (-3, 39), speed 0, no lightning.",
+	                   "wind (-3, 39), speed 0, no lightning. The script first makes climate 3 round it, and the storm goes "
+	                   "in that climate.",
 	    .expected = "The storm is already in full: rain falls in streaks over a circle about 350 across north of the "
 	                "camera, the land under it darkened, and eight pale clouds gather high above it one a frame and wander. "
 	                "It stays where it is (its speed is 0), with no lightning, until about 390 seconds later it fades out "
@@ -279,7 +280,12 @@ void testbed_scenarios::AddStormScenarios(std::vector<Scenario>& all)
 	                    .cloudCount = 8,
 	                    .shape = "160.00,176.00,10.00,460.00,1.00,1.10",
 	                    .clouds = "0.12,500.00,0.00,0.00,0.00,0.00",
-	                    .weather = "0,0,8,93,-3,39"}},
+	                    .weather = "0,0,8,93,-3,39",
+	                    .climate = LandClimateSetup {.index = 3,
+	                                                 .type = 5,
+	                                                 .offset = {14.7f, -137.82f},
+	                                                 .innerRadius = 330.294128f,
+	                                                 .outerRadius = 388.529419f}}},
 	});
 
 	// The eye in the clouds of a storm, where the domes of its clouds pass over the eye as they wander
@@ -289,7 +295,8 @@ void testbed_scenarios::AddStormScenarios(std::vector<Scenario>& all)
 	    .facet = Facet::Sky,
 	    .description = "A storm of 16 clouds of shade 0.5, 40 above the land, inner radius 160 and outer 176, that does "
 	                   "not move. The eye is 45 above the land at the middle of the storm, among its clouds, and looks "
-	                   "north over the land.",
+	                   "north over the land. The storm is in a climate of its own round it, so the first new day does not "
+	                   "clear it.",
 	    .expected = "Soft grey clouds wander around the eye and drift past it. Each cloud shows only its outside. A cloud "
 	                "close in front of the eye can put a grey veil on the view for a moment as the eye goes into it. "
 	                "When the eye is in a cloud, no pale sheet with a straight lower edge covers the screen.",
@@ -301,7 +308,12 @@ void testbed_scenarios::AddStormScenarios(std::vector<Scenario>& all)
 	                    .cloudCount = 16,
 	                    .shape = "160.00,176.00,10.00,460.00,1.00,1.10",
 	                    .clouds = "0.50,40.00,0.00,0.00,0.00,0.00",
-	                    .weather = "0,0,8,93,0,0"}},
+	                    .weather = "0,0,8,93,0,0",
+	                    .climate = LandClimateSetup {.index = 1,
+	                                                 .type = 5,
+	                                                 .offset = {0.0f, 80.0f},
+	                                                 .innerRadius = 330.294128f,
+	                                                 .outerRadius = 388.529419f}}},
 	});
 
 	// The black storm cloud of the death of Khazar on the second land, which the script deletes at the end of its film
