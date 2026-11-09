@@ -7,6 +7,8 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <bit>
+
 #include <gtest/gtest.h>
 
 #include "Graphics/ZSort.h"
@@ -47,4 +49,21 @@ TEST(ZSort, BeforeSortedComesFirstAndTheNearestFirst)
 	// Above anything sorted by its distance, however far, with room for the draws after it
 	EXPECT_GT(farther - 15u, zsort::Depth(camera + glm::vec3(1.0e6f, 0.0f, 0.0f), camera));
 	EXPECT_EQ(nearer & 0xFu, 0xFu);
+}
+
+TEST(ZSort, EachKindAddsTheSquaresInItsOwnOrder)
+{
+	// These distances give three different single precision sums, one for each order of the additions
+	const glm::vec3 camera {0.0f, 0.0f, 0.0f};
+	const glm::vec3 point {1.3f, 7.9f, 2.1f};
+	const float x = point.x * point.x;
+	const float y = point.y * point.y;
+	const float z = point.z * point.z;
+	EXPECT_EQ(zsort::Key(point, camera), (x + y) + z);
+	EXPECT_EQ(zsort::ModelKey(point, camera), (x + z) + y);
+	EXPECT_EQ(zsort::FloatingNumberKey(point, camera), (y + z) + x);
+	EXPECT_NE(zsort::Key(point, camera), zsort::ModelKey(point, camera));
+	EXPECT_NE(zsort::Key(point, camera), zsort::FloatingNumberKey(point, camera));
+	EXPECT_EQ(zsort::ModelDepth(point, camera), std::bit_cast<uint32_t>(zsort::ModelKey(point, camera)));
+	EXPECT_EQ(zsort::FloatingNumberDepth(point, camera), std::bit_cast<uint32_t>(zsort::FloatingNumberKey(point, camera)));
 }

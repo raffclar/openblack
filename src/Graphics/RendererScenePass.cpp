@@ -1202,7 +1202,7 @@ void Renderer::DrawPassTranslucent(const DrawSceneDesc& desc, const ScenePass& p
 					continue;
 				}
 				const auto position = glm::vec3(renderCtx.instanceUniforms.at(instance).model[3]);
-				submitDesc.sortDepth = zsort::Depth(position, cameraOrigin);
+				submitDesc.sortDepth = zsort::ModelDepth(position, cameraOrigin);
 				if (placers.partsByLevel)
 				{
 					submitDesc.detailLevel = renderCtx.instanceLevels.at(instance);
@@ -1216,7 +1216,7 @@ void Renderer::DrawPassTranslucent(const DrawSceneDesc& desc, const ScenePass& p
 			if (build.fading && build.instance < renderCtx.partialBuildInstances.size())
 			{
 				submitDesc.sortDepth =
-				    zsort::Depth(glm::vec3(renderCtx.partialBuildInstances.at(build.instance).model[3]), cameraOrigin);
+				    zsort::ModelDepth(glm::vec3(renderCtx.partialBuildInstances.at(build.instance).model[3]), cameraOrigin);
 				drawPartialBuild(build);
 			}
 		}
@@ -1225,7 +1225,8 @@ void Renderer::DrawPassTranslucent(const DrawSceneDesc& desc, const ScenePass& p
 		{
 			if (instance < renderCtx.instanceUniforms.size() && !mirroredWithHand(instance))
 			{
-				submitDesc.sortDepth = zsort::Depth(glm::vec3(renderCtx.instanceUniforms.at(instance).model[3]), cameraOrigin);
+				submitDesc.sortDepth =
+				    zsort::ModelDepth(glm::vec3(renderCtx.instanceUniforms.at(instance).model[3]), cameraOrigin);
 				drawPosedStill(entity, instance, true);
 			}
 		}
@@ -1265,7 +1266,7 @@ void Renderer::DrawPassTranslucent(const DrawSceneDesc& desc, const ScenePass& p
 					continue;
 				}
 				const auto position = glm::vec3(renderCtx.instanceUniforms.at(instance).model[3]);
-				submitDesc.sortDepth = zsort::Depth(position, cameraOrigin);
+				submitDesc.sortDepth = zsort::ModelDepth(position, cameraOrigin);
 				drawInstances(meshId, placers, true, instance, 1);
 			}
 		}
@@ -1275,7 +1276,7 @@ void Renderer::DrawPassTranslucent(const DrawSceneDesc& desc, const ScenePass& p
 		if (instance < renderCtx.instanceUniforms.size() && !mirroredWithHand(instance))
 		{
 			const auto position = glm::vec3(renderCtx.instanceUniforms.at(instance).model[3]);
-			submitDesc.sortDepth = zsort::Depth(position, cameraOrigin);
+			submitDesc.sortDepth = zsort::ModelDepth(position, cameraOrigin);
 			drawAnimal(entity, instance, true);
 		}
 	}
@@ -2180,7 +2181,8 @@ void Renderer::DrawPassEntities(const DrawSceneDesc& desc, const ScenePass& pass
 			}
 			if (blended)
 			{
-				submitDesc.sortDepth = zsort::Depth(glm::vec3(renderCtx.instanceUniforms.at(instance).model[3]), cameraOrigin);
+				submitDesc.sortDepth =
+				    zsort::ModelDepth(glm::vec3(renderCtx.instanceUniforms.at(instance).model[3]), cameraOrigin);
 			}
 			drawPosedStillOf(drawn, entity, instance, blended);
 		}

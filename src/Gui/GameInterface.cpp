@@ -3295,16 +3295,36 @@ void GameInterface::DrawFloatingNumbers(glm::u16vec2 resolution)
 	const float scale = ReferenceScale(resolution.x, resolution.y);
 	const float textSize = ecs::floating_number::k_TextSize * scale;
 	const float shadow = ecs::floating_number::k_ShadowOffset * scale;
+	// Each number is flat on the screen, but the world in front of its point hides it. Each number takes its place
+	// among the see-through things by its point.
+	auto& canvas = _worldLabelsCanvas;
+	const auto view = PrepareWorldTextCanvas(canvas);
+	const auto lineAt = [&resolution, textSize](const std::u16string& text, glm::vec2 at, float alpha) {
+		return help::tip_bubble::Line {
+		    .text = text,
+		    .at = at,
+		    .size = textSize,
+		    .topAlpha = alpha,
+		    .bottomAlpha = alpha,
+		    .clipTop = 0.0f,
+		    .clipBottom = static_cast<float>(resolution.y),
+		};
+	};
 	for (const auto& number : _floatingNumbers)
 	{
 		const float width = _font.GetWidth(number.text, textSize);
 		const auto at = ecs::floating_number::TextPlace(number.screen, width);
 		const float alpha = static_cast<float>(number.alpha) / 255.0f;
-		const glm::vec4 colour {static_cast<float>((number.colour >> 16u) & 0xFFu) / 255.0f,
+		const glm::vec3 colour {static_cast<float>((number.colour >> 16u) & 0xFFu) / 255.0f,
 		                        static_cast<float>((number.colour >> 8u) & 0xFFu) / 255.0f,
-		                        static_cast<float>(number.colour & 0xFFu) / 255.0f, alpha};
-		_painter.DrawString({at.x - shadow, at.y + shadow}, number.text, textSize, glm::vec4(0.0f, 0.0f, 0.0f, alpha));
-		_painter.DrawString(at, number.text, textSize, colour);
+		                        static_cast<float>(number.colour & 0xFFu) / 255.0f};
+		canvas.SetSortDepth(graphics::zsort::FloatingNumberDepth(number.point, view.eye));
+		// The shadow is a little farther than the number
+		canvas.SetDepth(world_text::BufferDepth(
+		    view.projection, world_text::WordsDepth(number.depth + ecs::floating_number::k_ShadowDepth, view.nearClip)));
+		DrawBubbleLine(canvas, lineAt(number.text, {at.x - shadow, at.y + shadow}, alpha), glm::vec3(0.0f));
+		canvas.SetDepth(world_text::BufferDepth(view.projection, world_text::WordsDepth(number.depth, view.nearClip)));
+		DrawBubbleLine(canvas, lineAt(number.text, at, alpha), colour);
 	}
 }
 
