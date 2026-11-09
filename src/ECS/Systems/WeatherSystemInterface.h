@@ -42,6 +42,8 @@ struct ForcedStorm
 	/// How high its clouds are and how fast its rain falls; the global climate's when 0
 	float cloudHeight {0.0f};
 	float rainSpeed {0.0f};
+	/// How many clouds it draws. A storm with no clouds also casts no shadow.
+	int32_t cloudCount {8};
 };
 
 /// A storm a miracle lays over the land around a point. It comes in over its fading time, then stays at full strength,

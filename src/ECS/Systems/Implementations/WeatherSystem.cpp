@@ -1095,6 +1095,7 @@ void WeatherSystem::ForceStorm(const ForcedStorm& forced)
 	storm.lastsFor = std::max(forced.seconds, 2.0f * storm.fadeTime);
 	storm.strength = 1.0f;
 	storm.cloudHeight = cloudHeight;
+	storm.cloudCount = forced.cloudCount;
 	storm.rainSpeed = rainSpeed;
 	storm.effect = forced.effect;
 	storm.thunderWait = forced.thunderWait;

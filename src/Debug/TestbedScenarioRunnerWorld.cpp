@@ -453,11 +453,14 @@ void Runner::SetUpEnvironment(const Environment& environment)
 		weather.ClearStorms();
 		weather.SetStormCreationEnabled(false);
 		const auto thunder = environment.weather == Weather::Thunderstorm;
+		// A clear day keeps the mild temperature of its storm, but the storm shows no clouds and no shadow
+		const auto clear = environment.weather == Weather::Clear;
 		weather.ForceStorm({.effect = WeatherOf(environment.weather),
 		                    .seconds = k_WeatherSeconds,
 		                    .fadeSeconds = 0.5f,
 		                    .thunderWait = thunder ? glm::vec2(3.0f, 15.0f) : glm::vec2(0.0f),
-		                    .boltWait = thunder ? environment.boltSeconds.value_or(glm::vec2(2.0f, 8.0f)) : glm::vec2(0.0f)});
+		                    .boltWait = thunder ? environment.boltSeconds.value_or(glm::vec2(2.0f, 8.0f)) : glm::vec2(0.0f),
+		                    .cloudCount = clear ? 0 : ecs::systems::ForcedStorm {}.cloudCount});
 	}
 	if (environment.snowDepth.has_value() && Locator::snowSystem::has_value())
 	{

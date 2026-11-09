@@ -572,8 +572,17 @@ void Runner::Start(const Scenario& scenario)
 		{
 			const auto at = MapPoint(_middle, storm.offset);
 			const auto to = MapPoint(_middle, storm.destination);
+			int32_t climateIndex = 0;
+			if (storm.climate.has_value())
+			{
+				const auto& climate = *storm.climate;
+				const auto centre = MapPoint(_middle, climate.offset);
+				lhscriptx::FeatureScriptCommands::CreateWeatherClimate(climate.index, climate.type, {centre.x, 0.0f, centre.y},
+				                                                       climate.innerRadius, climate.outerRadius);
+				climateIndex = climate.index;
+			}
 			lhscriptx::FeatureScriptCommands::CreateWeatherStorm(
-			    0, {at.x, land.GetHeightAt(at), at.y}, storm.age, storm.cloudCount, std::string(storm.shape),
+			    climateIndex, {at.x, land.GetHeightAt(at), at.y}, storm.age, storm.cloudCount, std::string(storm.shape),
 			    std::string(storm.clouds), std::string(storm.weather), storm.speed, {to.x, land.GetHeightAt(to), to.y});
 		}
 	}
