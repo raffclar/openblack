@@ -60,6 +60,12 @@ public:
 				return std::nullopt;
 			case 601:
 				return std::nullopt;
+			case 579:
+				return std::nullopt;
+			case 582:
+				return std::nullopt;
+			case 590:
+				return std::nullopt;
 			}
 			assert(false); // Shouldn't be any unaccounted raycasts
 		}
@@ -76,6 +82,12 @@ public:
 			case 502:
 				return std::nullopt;
 			case 601:
+				return std::nullopt;
+			case 579:
+				return std::nullopt;
+			case 582:
+				return std::nullopt;
+			case 590:
 				return std::nullopt;
 			}
 			assert(false); // Shouldn't be any unaccounted raycasts
@@ -94,6 +106,12 @@ public:
 				return std::nullopt;
 			case 601:
 				return std::nullopt;
+			case 579:
+				return std::nullopt;
+			case 582:
+				return std::nullopt;
+			case 590:
+				return std::nullopt;
 			}
 			assert(false); // Shouldn't be any unaccounted raycasts
 		}
@@ -110,6 +128,12 @@ public:
 			case 502:
 				return std::nullopt;
 			case 601:
+				return std::nullopt;
+			case 579:
+				return std::nullopt;
+			case 582:
+				return std::nullopt;
+			case 590:
 				return std::nullopt;
 			}
 			assert(false); // Shouldn't be any unaccounted raycasts
@@ -128,6 +152,12 @@ public:
 				return std::nullopt;
 			case 601:
 				return std::nullopt;
+			case 579:
+				return std::nullopt;
+			case 582:
+				return std::nullopt;
+			case 590:
+				return std::nullopt;
 			}
 			assert(false); // Shouldn't be any unaccounted raycasts
 		}
@@ -144,6 +174,12 @@ public:
 			case 502:
 				return std::nullopt;
 			case 601:
+				return std::nullopt;
+			case 579:
+				return std::nullopt;
+			case 582:
+				return std::nullopt;
+			case 590:
 				return std::nullopt;
 			}
 			assert(false); // Shouldn't be any unaccounted raycasts
@@ -162,6 +198,12 @@ public:
 				return std::nullopt;
 			case 601:
 				return std::nullopt;
+			case 579:
+				return std::nullopt;
+			case 582:
+				return std::nullopt;
+			case 590:
+				return std::nullopt;
 			}
 			assert(false); // Shouldn't be any unaccounted raycasts
 		}
@@ -178,6 +220,12 @@ public:
 			case 502:
 				return std::nullopt;
 			case 601:
+				return std::nullopt;
+			case 579:
+				return std::nullopt;
+			case 582:
+				return std::nullopt;
+			case 590:
 				return std::nullopt;
 			}
 			assert(false); // Shouldn't be any unaccounted raycasts

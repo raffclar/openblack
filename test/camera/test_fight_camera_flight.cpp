@@ -48,6 +48,15 @@ public:
 	[[nodiscard]] std::optional<glm::vec2> LandAtPixel(glm::u16vec2 /*screenCoord*/) const override { return std::nullopt; }
 };
 
+/// The mouse wheel, turned one notch while asked
+class WheelAction final: public MockAction
+{
+public:
+	[[nodiscard]] float GetMouseWheelDelta() const override { return wheel ? 1.0f : 0.0f; }
+
+	bool wheel {false};
+};
+
 class FightCameraFlight: public testing::Test
 {
 protected:
@@ -135,4 +144,21 @@ TEST_F(FightCameraFlight, TheFlightToTheFightHasNoRise)
 {
 	const auto highest = Run(800ms);
 	EXPECT_LT(highest, k_Origin.y + 1.0f);
+}
+
+TEST_F(FightCameraFlight, ThePlayersCameraTellsTheFightViewWhenThePlayerMovesTheCamera)
+{
+	auto* wheel = new WheelAction();
+	Locator::gameActionSystem::reset<MockAction>(wheel);
+	Run(100ms);
+	// No control: the camera is not moved by the player, so a followed bookmark stays followed
+	_fight->HandleActions(k_Frame);
+	EXPECT_FALSE(_fight->MovedByPlayer());
+	// A zoom of the wheel moves the camera, which stops the follow
+	wheel->wheel = true;
+	_fight->HandleActions(k_Frame);
+	EXPECT_TRUE(_fight->MovedByPlayer());
+	wheel->wheel = false;
+	_fight->HandleActions(k_Frame);
+	EXPECT_FALSE(_fight->MovedByPlayer());
 }

@@ -44,6 +44,11 @@ struct CameraPlace
 	glm::vec3 focus;
 };
 
+/// Whether the cursor's line of sight now and at the grip are not both clearly on the same side of the plane: one runs
+/// almost along it, or they cross it in opposite directions. Then the drag cannot move the land, and the mouse hints show
+/// the cross that blinks.
+[[nodiscard]] bool RunsAlongPlane(const GripPlane& plane, glm::vec3 rayNow, glm::vec3 rayAtGrip);
+
 /// Where the camera goes for the cursor's line of sight now and at the grip, both cast from the camera as it was at the
 /// grip, at originAtGrip looking at focusAtGrip from distance away. The land moves at most 0.011 of the distance for
 /// every pixel the cursor has moved since the grip, and at least 50. None when either line misses the plane.

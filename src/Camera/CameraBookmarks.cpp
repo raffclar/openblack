@@ -80,6 +80,15 @@ FollowKey ShiftKey(bool onThing, std::optional<size_t> followed, size_t slot)
 	return followed == slot ? FollowKey::Stop : FollowKey::Follow;
 }
 
+FollowTurn Follow(bool following, bool worldCamera, bool movedByPlayer)
+{
+	if (!following)
+	{
+		return {};
+	}
+	return {.jump = worldCamera, .stop = !worldCamera || movedByPlayer};
+}
+
 std::optional<size_t> NextTown(std::span<const TownStop> towns, std::optional<uint32_t> lastTown)
 {
 	if (towns.empty())
