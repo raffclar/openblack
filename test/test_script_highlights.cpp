@@ -307,12 +307,22 @@ TEST(ScriptHighlightRules, TipsAreKeptByCategoryUpToFortyEight)
 	EXPECT_TRUE(tips.Has(4127, 3));
 	EXPECT_FALSE(tips.Has(4127, 2));
 	EXPECT_FALSE(tips.Has(1, 5));
-	for (uint32_t i = 0; i < 60; ++i)
+	for (uint32_t i = 0; i < 47; ++i)
 	{
 		tips.Add(i, 0);
 	}
-	EXPECT_TRUE(tips.Has(47, 0));
+	EXPECT_TRUE(tips.Has(46, 0));
+	for (uint32_t i = 47; i < 60; ++i)
+	{
+		tips.Add(i, 0);
+	}
+	EXPECT_EQ(tips.In(0).size(), 48u);
+	EXPECT_EQ(tips.In(0).back(), 47u);
+	// A full category finds none of its tips, as in the original game
+	EXPECT_FALSE(tips.Has(0, 0));
+	EXPECT_FALSE(tips.Has(47, 0));
 	EXPECT_FALSE(tips.Has(48, 0));
+	EXPECT_TRUE(tips.Has(4127, 3));
 }
 
 TEST(ScriptHighlightRules, TheLibraryListsTheTipsOfACategoryInTheOrderTheyWereRead)
@@ -746,6 +756,24 @@ TEST(ScriptHighlights, AScrollOfLeavingThroughTheVortexSavesThePreviousLand)
 	}
 	EXPECT_FALSE(SavesPreviousLandOnClick(HighlightInfo::Gold, 57));
 	EXPECT_FALSE(SavesPreviousLandOnClick(HighlightInfo::Silver, 0));
+}
+
+TEST(ScriptHighlights, ANewGameForgetsTheTipsRead)
+{
+	auto [world, system] = Make();
+	const auto sign = system->Create(k_Sign, {0.0f, 0.0f, 0.0f}, 0);
+	system->SetProperties(sign, 4127, 3);
+	EXPECT_TRUE(system->Tap(sign, true));
+	// A new land keeps them
+	system->Reset();
+	EXPECT_TRUE(system->GetTipsRead().Has(4127, 3));
+	system->ForgetTipsRead();
+	EXPECT_TRUE(system->GetTipsRead().Empty());
+	// The first tip of the new game has the advisors explain the signs again
+	const auto other = system->Create(k_Sign, {5.0f, 0.0f, 0.0f}, 0);
+	system->SetProperties(other, 4130, 0);
+	EXPECT_TRUE(system->Tap(other, true));
+	EXPECT_EQ(world->helpScripts.size(), 2u);
 }
 
 TEST(ScriptHighlights, ASaveKeepsTheTipsRead)

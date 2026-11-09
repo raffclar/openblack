@@ -566,6 +566,11 @@ void ScriptHighlightSystem::Reset()
 	_pulse = {};
 }
 
+void ScriptHighlightSystem::ForgetTipsRead()
+{
+	_tipsRead.Clear();
+}
+
 void ScriptHighlightSystem::SaveState(reflection::BinaryWriter& out) const
 {
 	for (uint32_t category = 0; category < script_highlights::TipsRead::k_Categories; ++category)
