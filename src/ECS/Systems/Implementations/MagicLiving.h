@@ -43,10 +43,8 @@ namespace openblack::ecs::systems::magic_living
 void SetLife(entt::entity entity, float life);
 /// A villager or animal with no life left; creatures faint rather than die of a miracle
 [[nodiscard]] bool IsDead(entt::entity entity);
-/// Whether the heal may heal it: a villager or animal while alive, a creature always, the doves of a flock never
+/// Whether the heal may heal it: a villager or animal while alive, a creature always, a bird never
 [[nodiscard]] bool CanBeHealedByHeal(entt::entity entity);
-/// Whether an animal kind is a dove, which no heal ever heals
-[[nodiscard]] bool IsDove(AnimalInfo type);
 
 /// The people a heal of a radius and most targets at a point heals, as the game finds them: once, through the land's
 /// cells in a spiral from the point's (see Magic/HealTargets.h)

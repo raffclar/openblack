@@ -83,7 +83,8 @@ Appearance creature_morph::WeakStrongMesh(float value)
 
 float creature_morph::EaseFatness(float shown, float fatness)
 {
-	return shown + std::clamp(fatness - shown, -k_MaxFatnessStep, k_MaxFatnessStep);
+	// The shown fatness stays between 0 and 1. A new creature's fatness can start above 1 or below 0.
+	return std::clamp(shown + std::clamp(fatness - shown, -k_MaxFatnessStep, k_MaxFatnessStep), 0.0f, 1.0f);
 }
 
 creature_morph::Looks creature_morph::TakeLooks(float shownFatness, float fatness, float alignment, float strength,

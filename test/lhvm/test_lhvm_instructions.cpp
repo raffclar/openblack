@@ -13,6 +13,7 @@
 
 #include <limits>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include <LHVM.h>
@@ -34,6 +35,7 @@ public:
 	using LHVM::Opcode14Eq;
 	using LHVM::Opcode15Neq;
 	using LHVM::Opcode16Geq;
+	using LHVM::Opcode17Leq;
 	using LHVM::Opcode18Gt;
 	using LHVM::Opcode19Lt;
 	using LHVM::Opcode21Sleep;
@@ -111,6 +113,69 @@ TEST_F(LhvmInstructions, IntegersDivideAndCompareAsUnsignedValues)
 	_vm.Pushi(1);
 	_vm.Opcode19Lt(_task, Typed(Opcode::Lt, DataType::Int));
 	EXPECT_EQ(_vm.Pop().intVal, 0);
+}
+
+TEST_F(LhvmInstructions, AFloatCompareWithNotANumberGivesTheFpuResult)
+{
+	const auto nan = std::numeric_limits<float>::quiet_NaN();
+	const auto compare = [this](float a, float b, Opcode code) {
+		_vm.Pushf(a);
+		_vm.Pushf(b);
+		const auto instruction = Typed(code, DataType::Float);
+		switch (code)
+		{
+		case Opcode::Eq:
+			_vm.Opcode14Eq(_task, instruction);
+			break;
+		case Opcode::Ne:
+			_vm.Opcode15Neq(_task, instruction);
+			break;
+		case Opcode::Ge:
+			_vm.Opcode16Geq(_task, instruction);
+			break;
+		case Opcode::Le:
+			_vm.Opcode17Leq(_task, instruction);
+			break;
+		case Opcode::Gt:
+			_vm.Opcode18Gt(_task, instruction);
+			break;
+		default:
+			_vm.Opcode19Lt(_task, instruction);
+			break;
+		}
+		EXPECT_EQ(_vm.Count(), 1u);
+		return _vm.Pop().intVal;
+	};
+
+	// The FPU cannot put NaN in order: "equal", "greater or equal" and "greater" are true, the others are false
+	for (const auto& [a, b] : {std::pair {nan, 1.0f}, std::pair {1.0f, nan}})
+	{
+		EXPECT_EQ(compare(a, b, Opcode::Eq), 1);
+		EXPECT_EQ(compare(a, b, Opcode::Ne), 0);
+		EXPECT_EQ(compare(a, b, Opcode::Ge), 1);
+		EXPECT_EQ(compare(a, b, Opcode::Gt), 1);
+		EXPECT_EQ(compare(a, b, Opcode::Le), 0);
+		EXPECT_EQ(compare(a, b, Opcode::Lt), 0);
+	}
+
+	// Values in order compare as usual
+	EXPECT_EQ(compare(1.0f, 2.0f, Opcode::Eq), 0);
+	EXPECT_EQ(compare(1.0f, 2.0f, Opcode::Ne), 1);
+	EXPECT_EQ(compare(1.0f, 2.0f, Opcode::Ge), 0);
+	EXPECT_EQ(compare(2.0f, 2.0f, Opcode::Ge), 1);
+	EXPECT_EQ(compare(1.0f, 2.0f, Opcode::Gt), 0);
+	EXPECT_EQ(compare(3.0f, 2.0f, Opcode::Gt), 1);
+	EXPECT_EQ(compare(2.0f, 2.0f, Opcode::Le), 1);
+	EXPECT_EQ(compare(1.0f, 2.0f, Opcode::Lt), 1);
+}
+
+TEST_F(LhvmInstructions, AFloatRemainderOfTwoToThe31ByMinusOneDoesNotStop)
+{
+	// The game's integer division stops the game here (vanilla-bugs 1385). openblack gives a value and continues.
+	_vm.Pushf(2147483648.0f);
+	_vm.Pushf(-1.0f);
+	_vm.Opcode10Mod(_task, Typed(Opcode::Mod, DataType::Float));
+	EXPECT_EQ(_vm.Count(), 1u);
 }
 
 TEST_F(LhvmInstructions, AFloatRemainderUsesTheTruncatedValues)

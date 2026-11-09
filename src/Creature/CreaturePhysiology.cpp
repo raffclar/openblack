@@ -24,7 +24,6 @@ using namespace openblack::creature_physiology;
 namespace
 {
 constexpr float k_SecondsPerMinute = 60.0f;
-constexpr float k_MinutesPerHour = 60.0f;
 /// Carrying for the species' minutes makes it this much stronger
 constexpr float k_CarryStrength = 0.5f;
 /// After an action, a creature counts as at most this many times bigger than size 0 for what it costs
@@ -95,18 +94,21 @@ float creature_physiology::SigmoidThreshold(float threshold, float value)
 	return creature_desires::SigmoidStep(threshold, value);
 }
 
-float creature_physiology::Growth(const Needs& needs, const Species& species, bool fastGrowth, float turnsPerSecond)
+float creature_physiology::Growth(const Needs& needs, const Species& species, bool fastGrowth)
 {
 	const auto minutes = species.growUpMinutes;
-	if (minutes <= 0.0f || turnsPerSecond <= 0.0f)
+	if (minutes <= 0.0f)
 	{
 		return k_MinGrowth;
 	}
-	const auto grownAge = minutes / k_MinutesPerHour;
+	// The game finds the share of the growing up time for one turn first, and multiplies by it. It finds the grown up
+	// age with a multiplication by its float for one sixtieth, not with a division.
+	const auto perTurn = 1.0f / (minutes * k_GrowthTurnsPerMinute);
+	const auto grownAge = minutes * k_GrownAgePerMinute;
 	const auto age = std::min(static_cast<float>(needs.age), grownAge);
 	const auto youth = std::clamp((1.0f - (age / grownAge)) * k_YouthGrowthSlope, 0.0f, k_MaxYouthGrowth);
 	const auto spare = Clamp01(needs.energy - needs.exhaustion);
-	auto growth = std::max(spare * youth / (minutes * k_SecondsPerMinute * turnsPerSecond), k_MinGrowth);
+	auto growth = std::max((spare * youth) * perTurn, k_MinGrowth);
 	if (fastGrowth)
 	{
 		growth *= k_SleepGrowthFactor;
@@ -154,7 +156,7 @@ void creature_physiology::TickTurn(Needs& needs, Shape& shape, const Species& sp
 	// full size the first turn it grows
 	if (!turn.moving && turn.phase >= k_GrowingPhase)
 	{
-		const auto growth = Growth(needs, species, turn.fastGrowth, turn.turnsPerSecond);
+		const auto growth = Growth(needs, species, turn.fastGrowth);
 		shape.size = std::clamp(shape.size + growth, 0.0f, k_MaxGrownSize);
 	}
 

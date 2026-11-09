@@ -11,6 +11,10 @@
 
 #include <cmath>
 
+#include "Common/GUtilsAngle.h"
+#include "Common/X87.h"
+#include "PredatorRules.h"
+
 using namespace openblack;
 using namespace openblack::animals;
 
@@ -120,6 +124,19 @@ std::optional<AnimId> birds::DeadClip(AnimalInfo type)
 	default:
 		return std::nullopt;
 	}
+}
+
+bool birds::TheHealHeals(AnimalInfo type)
+{
+	return !IsBird(type);
+}
+
+glm::vec3 birds::DyingFallVelocity(uint16_t angle, uint16_t speed)
+{
+	// The game turns the angle a quarter turn on, so its sine gives x and its cosine, turned round, gives z
+	const double turned = gutils::ConvertGameAngleToScawenAngle(angle);
+	const float metres = predators::SpeedMetresPerSecond(speed);
+	return {x87::Mul(x87::Sin(turned), metres), 0.0f, -x87::Mul(x87::Cos(turned), metres)};
 }
 
 birds::Bank birds::BankOf(AnimalInfo type)

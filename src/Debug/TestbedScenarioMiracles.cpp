@@ -162,6 +162,36 @@ void AddCasting(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "miracles.heal_skips_birds",
+	    .name = "Heal: a bird is never healed",
+	    .facet = Facet::Miracles,
+	    .description = "A script casts a heal of 10 m between a hurt villager, a hurt cow and a hurt crow on the land, each "
+	                   "with a third of its life.",
+	    .expected = "A chakra lights over the villager and the cow, and their life goes up. The crow gets no chakra and "
+	                "keeps its third of a life.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {k_Spot}, .distance = 0.5f},
+	    .objects = {{.type = VillagerInfo::CelticFarmerMale, .offset = k_Spot + glm::vec2(-3.0f, 0.0f), .life = 0.33f},
+	                {.type = AnimalInfo::Cow, .offset = k_Spot + glm::vec2(3.0f, 0.0f), .life = 0.33f},
+	                {.type = AnimalInfo::Crow, .offset = k_Spot + glm::vec2(0.0f, 3.0f), .life = 0.33f}},
+	    .miracles = {{.type = MagicType::Heal,
+	                  .point = k_Spot,
+	                  .handOffset = k_Spot,
+	                  .script = ScriptSpell {.radius = 10.0f, .seconds = -1.0f, .curl = 0.0f}}},
+	    .checks = {{.label = "the life of the cow goes up",
+	                .quantity = checks::Quantity::ObjectLife,
+	                .index = 1,
+	                .afterTurns = 10,
+	                .byTurn = 300,
+	                .atLeast = 0.4},
+	               {.label = "the crow keeps its third of a life",
+	                .quantity = checks::Quantity::ObjectLife,
+	                .index = 2,
+	                .afterTurns = 300,
+	                .atMost = 0.34}},
+	});
+
+	all.push_back({
 	    .id = "miracles.food_wood",
 	    .name = "Food and wood piles",
 	    .facet = Facet::Miracles,

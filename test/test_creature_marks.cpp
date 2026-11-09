@@ -69,17 +69,48 @@ TEST(CreatureMarks, MarksAgeEvery600Counts)
 TEST(CreatureMarks, MarksGoOnceTheirKindHasLasted)
 {
 	Marks marks;
-	// A wound of the first kind lasts 32 steps, the last kind one, the others 64; blood 63
+	// A wound of the first kind lasts 32 steps, the last kind one, the others 64
 	Add(marks.wounds, {.u = 0, .v = 0, .skin = 0, .age = 31, .type = 0, .column = 0});
 	Add(marks.wounds, {.u = 0, .v = 0, .skin = 0, .age = 31, .type = 3, .column = 0});
 	Add(marks.wounds, {.u = 0, .v = 0, .skin = 0, .age = 0, .type = 7, .column = 0});
+	// A drop of blood goes on the step after it gets to the oldest age
+	Add(marks.blood, {.u = 0, .v = 0, .skin = 0, .age = 63, .type = 0, .column = 0});
 	Add(marks.blood, {.u = 0, .v = 0, .skin = 0, .age = 62, .type = 0, .column = 0});
-	Add(marks.blood, {.u = 0, .v = 0, .skin = 0, .age = 61, .type = 0, .column = 0});
 	Heal(marks, k_CountsPerStep);
 	ASSERT_EQ(marks.wounds.size(), 1u);
 	EXPECT_EQ(marks.wounds[0].type, 3);
 	ASSERT_EQ(marks.blood.size(), 1u);
-	EXPECT_EQ(marks.blood[0].age, 62);
+	EXPECT_EQ(marks.blood[0].age, 63);
+	Heal(marks, k_CountsPerStep);
+	EXPECT_TRUE(marks.blood.empty());
+}
+
+TEST(CreatureMarks, AWoundThatLastsLongerThanTheOldestAgeStaysAsAnOldScar)
+{
+	Marks marks;
+	Add(marks.wounds, {.u = 0, .v = 0, .skin = 0, .age = 62, .type = 3, .column = 0});
+	// A wound with an age past its kind's lifetime never gets to the lifetime, so it stays too
+	Add(marks.wounds, {.u = 0, .v = 0, .skin = 0, .age = 40, .type = 0, .column = 0});
+	Heal(marks, k_CountsPerStep * 100);
+	ASSERT_EQ(marks.wounds.size(), 2u);
+	EXPECT_EQ(marks.wounds[0].age, k_OldestAge);
+	EXPECT_EQ(marks.wounds[1].age, k_OldestAge);
+}
+
+TEST(CreatureMarks, AMarkThatGoesTakesTheLastMarkIntoItsPlace)
+{
+	Marks marks;
+	Add(marks.wounds, {.u = 1, .v = 0, .skin = 0, .age = 0, .type = 7, .column = 0});
+	Add(marks.wounds, {.u = 2, .v = 0, .skin = 0, .age = 0, .type = 3, .column = 0});
+	Add(marks.wounds, {.u = 3, .v = 0, .skin = 0, .age = 0, .type = 3, .column = 0});
+	Add(marks.wounds, {.u = 4, .v = 0, .skin = 0, .age = 0, .type = 7, .column = 0});
+	Heal(marks, k_CountsPerStep);
+	// The first goes and the last takes its place; that one goes too, and the third takes the place. Each aged one step.
+	ASSERT_EQ(marks.wounds.size(), 2u);
+	EXPECT_EQ(marks.wounds[0].u, 3);
+	EXPECT_EQ(marks.wounds[1].u, 2);
+	EXPECT_EQ(marks.wounds[0].age, 1);
+	EXPECT_EQ(marks.wounds[1].age, 1);
 }
 
 TEST(CreatureMarks, WoundsFadeFromFreshToOld)

@@ -1057,6 +1057,31 @@ void testbed_scenarios::AddAppearance(std::vector<Scenario>& all)
 	    .creatures = {tattooed, plain},
 	});
 
+	// Marks at the end of their healing: the wounds of the middle kinds stop at the oldest age and stay
+	auto scarred = Posed(CreatureType::Tiger, {0.0f, 0.0f}, 30.0f, "scarred");
+	scarred.wounds = {
+	    {.u = 60, .v = 90, .skin = 0, .age = 63, .type = 3, .column = 1},
+	    {.u = 150, .v = 120, .skin = 0, .age = 63, .type = 4, .column = 3},
+	    {.u = 90, .v = 180, .skin = 1, .age = 63, .type = 1, .column = 2},
+	    {.u = 120, .v = 40, .skin = 2, .age = 31, .type = 0, .column = 6},
+	};
+	for (uint8_t v = 100; v < 112; ++v)
+	{
+		scarred.blood.push_back({.u = 128, .v = v, .skin = 0, .age = 62});
+	}
+	all.push_back({
+	    .id = "appearance.old_scars_stay",
+	    .name = "Old scars stay after healing",
+	    .facet = Facet::Appearance,
+	    .description = "A tiger with three old wounds at the oldest age, one wound of the first kind a step before its "
+	                   "end, and a trail of dry blood a step before the oldest age. Marks heal a step each minute of "
+	                   "game time: watch for two minutes.",
+	    .expected = "At the first heal step the wound of the first kind goes and the three old wounds stay as old scars. "
+	                "The blood stays until the second heal step, then it goes. The three old scars never go.",
+	    .framing = {.shot = Shot::Follow, .distance = 0.9f},
+	    .creatures = {scarred},
+	});
+
 	auto evilFace = Posed(CreatureType::Tiger, {-4.0f, 0.0f}, 0.0f, "evil");
 	evilFace.alignment = -1.0f;
 	auto goodFace = Posed(CreatureType::Tiger, {4.0f, 0.0f}, 0.0f, "good");

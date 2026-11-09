@@ -78,6 +78,27 @@ TEST(TestbedScenarios, EveryFacetHasScenarios)
 	}
 }
 
+TEST(TestbedScenarios, ACheckThatACreatureGetsToAPointStopsItsMind)
+{
+	// A mind that thinks starts its own plans and sends the creature to other places. Thus a check of where a command
+	// sends a creature is correct only when the mind of that creature does not think.
+	size_t found = 0;
+	for (const auto& scenario : All())
+	{
+		for (const auto& check : scenario.checks)
+		{
+			if (check.quantity != checks::Quantity::CreatureDistance)
+			{
+				continue;
+			}
+			++found;
+			ASSERT_LT(check.index, scenario.creatures.size()) << scenario.id;
+			EXPECT_TRUE(scenario.creatures[check.index].pauseMind) << scenario.id << ": " << check.label;
+		}
+	}
+	EXPECT_GE(found, 1U);
+}
+
 TEST(TestbedScenarios, EveryScenarioIsWellFormed)
 {
 	for (const auto& scenario : All())

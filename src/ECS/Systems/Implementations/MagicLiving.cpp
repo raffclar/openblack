@@ -21,6 +21,7 @@
 #include "3D/L3DMesh.h"
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
+#include "Animals/BirdRules.h"
 #include "Common/GameRandom.h"
 #include "Common/X87Vector.h"
 #include "Creature/CreatureDesires.h"
@@ -165,11 +166,6 @@ bool magic_living::IsDead(entt::entity entity)
 	return life.has_value() && !(*life > 0.0f);
 }
 
-bool magic_living::IsDove(AnimalInfo type)
-{
-	return type == AnimalInfo::Dove || type == AnimalInfo::CitadelDove || type == AnimalInfo::SpellDove;
-}
-
 bool magic_living::CanBeHealedByHeal(entt::entity entity)
 {
 	const auto& registry = EntityRegistry();
@@ -181,7 +177,8 @@ bool magic_living::CanBeHealedByHeal(entt::entity entity)
 	{
 		return true;
 	}
-	if (const auto* animal = registry.TryGet<const Animal>(entity); animal != nullptr && IsDove(animal->type))
+	if (const auto* animal = registry.TryGet<const Animal>(entity);
+	    animal != nullptr && !animals::birds::TheHealHeals(animal->type))
 	{
 		return false;
 	}
