@@ -191,8 +191,9 @@ GroundPush camera_limits::PushOffTheGround(const Ground& ground, std::span<const
 	for (int ring = -2; ring <= 2; ++ring)
 	{
 		const float ringAngle = static_cast<float>(ring) * glm::quarter_pi<float>();
-		const float ringCos = std::cos(ringAngle);
-		const float ringSin = std::sin(ringAngle);
+		// The game keeps the cosine and the sine of the ring's angle as floats
+		const float ringCos = x87::RoundToFloat(x87::Cos(ringAngle));
+		const float ringSin = x87::RoundToFloat(x87::Sin(ringAngle));
 		const int count = k_RingPoints.at(static_cast<size_t>(ring + 2));
 		for (int i = 0; i < count; ++i)
 		{
