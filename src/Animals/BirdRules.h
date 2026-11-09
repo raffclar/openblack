@@ -14,6 +14,8 @@
 #include <functional>
 #include <optional>
 
+#include <glm/vec3.hpp>
+
 #include "3D/AllMeshes.h"
 #include "Enums.h"
 
@@ -45,6 +47,12 @@ namespace openblack::animals::birds
 [[nodiscard]] bool MoveKeepsClip(AnimalInfo type);
 /// The clip a land bird lies dead in
 [[nodiscard]] std::optional<AnimId> DeadClip(AnimalInfo type);
+/// Whether the heal miracle can heal an animal of a kind while it lives. It never heals a bird of any kind: not the
+/// land's birds, the vulture, or the miracles' doves and bats.
+[[nodiscard]] bool TheHealHeals(AnimalInfo type);
+/// The speed in metres a second with which a dying bird starts to fall: forward along the angle of its move, at the
+/// speed of its move, level with the land. `angle` is a game angle and `speed` is in map units a turn.
+[[nodiscard]] glm::vec3 DyingFallVelocity(uint16_t angle, uint16_t speed);
 
 /// How far a bird tilts into a turn, in radians, and the seconds it takes to tilt there
 struct Bank

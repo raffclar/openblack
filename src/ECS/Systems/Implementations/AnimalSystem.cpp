@@ -97,8 +97,6 @@ namespace
 constexpr float k_TurnSeconds = std::chrono::duration<float>(TimeSystemInterface::k_TurnDuration).count();
 constexpr auto k_TurnMilliseconds =
     static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::milliseconds>(TimeSystemInterface::k_TurnDuration).count());
-/// Game turns a second
-constexpr float k_TurnsPerSecond = 1000.0f / static_cast<float>(k_TurnMilliseconds);
 constexpr float k_TwoPi = 2.0f * std::numbers::pi_v<float>;
 /// A spell wolf eases into its tilt over a second, tilting by its speed times its turn, to at most half a radian
 constexpr float k_WolfTimeToBank = 1.0f;
@@ -2073,12 +2071,10 @@ void AnimalSystem::FallDying(entt::entity entity, const Animal& animal)
 	{
 		return;
 	}
-	// Forward at its speed across the land, tumbling about its side axis
+	// Forward along its move at the speed of its move, level with the land, tumbling about its side axis
 	constexpr glm::vec3 k_DyingTumble {5.0f, 0.0f, 0.0f};
-	const auto step = Metres(animal.move.step);
-	const float speed = glm::length(step) * k_TurnsPerSecond;
-	const glm::vec3 forward(portable_math::Cos(animal.heading), 0.0f, portable_math::Sin(animal.heading));
-	Locator::dynamicsSystem::value().InitialisePhysics(entity, {.velocity = forward * speed, .spin = k_DyingTumble});
+	Locator::dynamicsSystem::value().InitialisePhysics(
+	    entity, {.velocity = animals::birds::DyingFallVelocity(animal.move.angle, animal.move.speed), .spin = k_DyingTumble});
 }
 
 void AnimalSystem::EndReactionForState(entt::entity entity, AnimalState next)

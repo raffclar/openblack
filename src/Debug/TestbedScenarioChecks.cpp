@@ -64,6 +64,8 @@ std::string_view Name(Quantity quantity)
 		return "distance of the object to the point";
 	case Quantity::ObjectTemperature:
 		return "temperature";
+	case Quantity::ObjectLife:
+		return "life of the object";
 	case Quantity::FireNear:
 		return "fire near the point";
 	case Quantity::RewardChestsInATown:

@@ -55,6 +55,8 @@ enum class Quantity : uint8_t
 	ObjectDistance,
 	/// The temperature of the scenario's object at the index
 	ObjectTemperature,
+	/// The life of the scenario's object at the index, from 0 to 1: a villager's or an animal's
+	ObjectLife,
 	/// 1 when a script's test for a fire near the point finds a burning thing within the radius, else 0
 	FireNear,
 	/// How many reward chests in the world have a town
