@@ -502,16 +502,17 @@ void Renderer::DrawPassLand(const DrawSceneDesc& desc, const ScenePass& pass) co
 		;
 		// clang-format on
 
-		// The snow lying on the land, when there is its noise to draw it with
+		// The snow lying on the land, as each block's texture was last painted with it, when there is its noise to draw it
+		// with
+		const Texture2D* paintedSnow = nullptr;
 		const auto setTerrainSnow = [&]() {
 			const auto& textures = Locator::resources::value().GetTextures();
-			const auto* depth = SnowDepth(_snowDepth, _snowRevision);
-			const bool snowed = depth != nullptr && textures.Contains(snow_cover::k_NoiseTextureId.value());
+			const bool snowed = paintedSnow != nullptr && textures.Contains(snow_cover::k_NoiseTextureId.value());
 			const glm::vec4 u_snow {snowed ? 1.0f : 0.0f, 0.0f, 0.0f, 0.0f};
 			terrainShader->SetUniformValue("u_snow", &u_snow);
 			if (snowed)
 			{
-				terrainShader->SetTextureSampler("s_snowDepth", 11, *depth);
+				terrainShader->SetTextureSampler("s3_paintedSnow", 3, *paintedSnow);
 				terrainShader->SetTextureSampler("s12_snowNoise", 12, *textures.Handle(snow_cover::k_NoiseTextureId.value()));
 			}
 		};
@@ -654,6 +655,26 @@ void Renderer::DrawPassLand(const DrawSceneDesc& desc, const ScenePass& pass) co
 				}
 			}
 			std::ranges::stable_sort(order, {}, [](const auto& entry) { return entry.first; });
+			// The game paints a block's texture again, with the snow as it lies now, when it draws the block with that
+			// texture after a request for a paint. A block drawn with its coarse texture alone does not use it. The coarse
+			// land makes no block textures, so it shows the landscape file's pages with no snow.
+			const bool pagesOnly = coarseLand && island.GetCoarsePages() != nullptr;
+			if (!pagesOnly)
+			{
+				std::vector<glm::ivec2> drawnWithTexture;
+				drawnWithTexture.reserve(order.size());
+				for (const auto& entry : order)
+				{
+					const auto index = entry.second;
+					const bool coarseAlone = index < _landDetail.detail.blocks.size() &&
+					                         _landDetail.detail.blocks[index].texture == land_detail::Texture::Coarse;
+					if (!coarseAlone)
+					{
+						drawnWithTexture.push_back(blocks[index].GetBlockPosition());
+					}
+				}
+				paintedSnow = PaintLandSnow(drawnWithTexture);
+			}
 			setTerrainUniforms();
 			for (const auto& entry : order)
 			{

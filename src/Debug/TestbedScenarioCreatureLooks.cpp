@@ -1387,6 +1387,35 @@ void testbed_scenarios::AddLight(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "light.snow_repaint_lay",
+	    .name = "Snow lies on the land block by block",
+	    .facet = Facet::Light,
+	    .description = "Snow 40 deep lies over the whole island and a blizzard falls on it at noon. The camera looks down "
+	                   "over many land blocks, each a square of 160 units, and a tree in the middle.",
+	    .expected = "The land does not turn whiter smoothly. A full square of the land turns whiter in one step, and "
+	                "then shows no change until its next step, often 15 to 40 seconds later. The squares change at "
+	                "different times. In the first minute the land near the camera changes very little.",
+	    .environment =
+	        {.hour = 12.0f, .clockRuns = false, .weather = Weather::Blizzard, .dispenserGrid = false, .snowDepth = 40.0f},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 260.0f, -420.0f}, .look = {0.0f, 0.0f, 120.0f}},
+	    .objects = {{.type = TreeInfo::Conifer, .offset = {0.0f, 120.0f}, .scale = 1.5f}},
+	});
+
+	all.push_back({
+	    .id = "light.snow_repaint_melt",
+	    .name = "Snow melts off the land block by block",
+	    .facet = Facet::Light,
+	    .description = "Snow 120 deep lies over the whole island on a clear day at noon, and it melts. The camera looks "
+	                   "down over many land blocks, each a square of 160 units, and a tree in the middle.",
+	    .expected = "For about 7 seconds the land does not change. Then full squares of the land lose some of their "
+	                "white in one step each. A square changes again only after 10 seconds or more. The squares change "
+	                "at different times. The land far from the camera shows no snow.",
+	    .environment = {.hour = 12.0f, .clockRuns = false, .dispenserGrid = false, .snowDepth = 120.0f},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 260.0f, -420.0f}, .look = {0.0f, 0.0f, 120.0f}},
+	    .objects = {{.type = TreeInfo::Conifer, .offset = {0.0f, 120.0f}, .scale = 1.5f}},
+	});
+
+	all.push_back({
 	    .id = "light.snow_on_things",
 	    .name = "Snow settles on new things",
 	    .facet = Facet::Light,

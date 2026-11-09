@@ -43,10 +43,17 @@ public:
 	[[nodiscard]] std::span<const float> GetDepths() const override { return _depths; }
 	[[nodiscard]] float GetDepth(glm::vec2 xz) const override { return snow_cover::DepthAt(_depths, xz); }
 	[[nodiscard]] uint32_t GetRevision() const override { return _revision; }
+	[[nodiscard]] std::bitset<snow_cover::k_Blocks> TakePaintRequests() override;
 
 private:
 	std::vector<float> _depths;
 	snow_cover::Melting _melting;
+	/// The change of the snow under each block, and the blocks listed for a paint
+	snow_cover::BlockRepaint _repaint;
+	/// The blocks that the game asks to paint again, since the land last took them
+	std::bitset<snow_cover::k_Blocks> _paintRequests;
+	/// The blocks that the melt of this turn asks to paint again
+	std::vector<uint16_t> _paintNow;
 	uint32_t _revision {0};
 	/// The things show their snow at the same pace as the rings on the water: 60 steps a second at most
 	water_rings::Pace _objectPace;

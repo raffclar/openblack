@@ -64,6 +64,9 @@ public:
 	void ForgetSearch();
 	/// The next update paints again each block that has footprints, as after the land painted all of its blocks again
 	void PaintAgain();
+	/// The blocks, by their places in the land's list, whose footprints the updates asked to paint again since the last
+	/// call. The game paints all of a block's texture again for each of them, its snow too.
+	[[nodiscard]] std::vector<size_t> TakeRepainted() { return std::exchange(_repainted, {}); }
 
 private:
 	/// A thing with a footprint, as it was the last time
@@ -133,6 +136,8 @@ private:
 	/// The last model that FootprintOf found, as things of one model often come one after the other
 	std::optional<std::pair<entt::id_type, const L3DMesh::Footprint*>> _lastFootprint;
 	std::vector<LoosePrint> _rivers;
+	/// The blocks that the updates asked to paint again, for TakeRepainted
+	std::vector<size_t> _repainted;
 	/// The prints of the things that show only as prints, the newest first
 	std::vector<LoosePrint> _groundPrints;
 	/// The things that show only as prints, as they were the last time

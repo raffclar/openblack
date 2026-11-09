@@ -124,6 +124,8 @@ TEST(TestbedScenarios, CoversTheCreatureFeatures)
 	                       "light.rain_splashes_night",
 	                       "light.sky_dawn",
 	                       "light.snow_close",
+	                       "light.snow_repaint_lay",
+	                       "light.snow_repaint_melt",
 	                       "movement.course",
 	                       "movement.route_obstacles",
 	                       "movement.footstep_dust",

@@ -24,6 +24,9 @@ SAMPLER2D(s14_landShadows, 14);
 
 // The noise that makes the snow's edges ragged, once across each land block of 160 units
 SAMPLER2D(s12_snowNoise, 12);
+// The snow that each block's texture was last painted with: the depth at the block's 5 x 5 grid points, in a square of
+// its own, 32 squares along each side, x along the texture's width and z along its height
+SAMPLER2D(s3_paintedSnow, 3);
 // The ring an open vortex lays over the land around its hole
 SAMPLER2D(s13_vortexRing, 13);
 // The coarse texture pages the landscape file keeps, a layer each: the coarse land (detail level 0) draws from them
@@ -42,11 +45,15 @@ uniform vec4 u_landTexels;
 // Units along a side of a block
 #define BLOCK_UNITS 160.0f
 
-// The depth of the snow at a corner of the grid in 65536ths, cut towards zero; none off the grid. The snow lies at
-// most 255 deep, so each whole number of this sum is exact in a float.
-float SnowFixedDepth(vec2 cell)
+// The depth of the snow at a grid point of a block (0 to 4 along x and z), as the block's texture was last painted with
+// it, in 65536ths, cut towards zero. A point off the grid has none. The snow lies at most 255 deep, so each whole number
+// of this sum is exact in a float.
+float SnowFixedDepth(vec2 block, vec2 corner)
 {
-	return floor(SnowDepthCell(cell) * 65536.0f);
+	bool onGrid = all(greaterThanEqual(block, vec2_splat(0.0f))) && all(lessThan(block, vec2_splat(32.0f)));
+	vec2 texel = block * 5.0f + corner;
+	float depth = onGrid ? texture2DLod(s3_paintedSnow, (texel + 0.5f) / 160.0f, 0.0f).r : 0.0f;
+	return floor(depth * 65536.0f);
 }
 
 // A whole number divided by another, cut towards zero
@@ -64,12 +71,12 @@ vec3 SnowOverTexel(vec3 levels, vec2 blockOrigin, vec2 blockTexel, float blockTe
 	float cellTexels = blockTexels * 0.25f;
 	vec2 texel = blockTexel.yx;
 	vec2 inCell = floor(texel / cellTexels);
-	vec2 cell = floor(blockOrigin / 40.0f + 0.5f) + inCell;
+	vec2 block = floor(blockOrigin / BLOCK_UNITS + 0.5f);
 	vec2 step = texel - inCell * cellTexels;
-	float low = SnowFixedDepth(cell);
-	float high = SnowFixedDepth(cell + vec2(1.0f, 0.0f));
-	float lowFar = SnowFixedDepth(cell + vec2(0.0f, 1.0f));
-	float highFar = SnowFixedDepth(cell + 1.0f);
+	float low = SnowFixedDepth(block, inCell);
+	float high = SnowFixedDepth(block, inCell + vec2(1.0f, 0.0f));
+	float lowFar = SnowFixedDepth(block, inCell + vec2(0.0f, 1.0f));
+	float highFar = SnowFixedDepth(block, inCell + 1.0f);
 	// The cell takes no snow when no corner has more than 5
 	if (max(max(low, high), max(lowFar, highFar)) <= 327680.0f)
 	{
