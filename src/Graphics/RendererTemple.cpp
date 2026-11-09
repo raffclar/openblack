@@ -35,6 +35,7 @@
 #include "3D/OrientedText.h"
 #include "3D/TempleInteriorInterface.h"
 #include "3D/TempleMap.h"
+#include "3D/TemplePool.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Sprite.h"
@@ -127,12 +128,11 @@ void Renderer::DrawTemplePool(const DrawSceneDesc& desc) const
 	{
 		return;
 	}
-	// The water's alpha swells and ebbs with the sine of the time, and the second layer's is what the first's lacks
+	// The alpha of the water follows the sine of the time
 	const float time = temple.GetPoolTime();
-	const auto alpha = static_cast<int32_t>((std::sin(time) * 32.0f) + 128.0f);
-	// The layers take 13 sixteenths of the temple's light, and of its colour added
-	const float k_Light = 13.0f / 16.0f;
+	const auto alpha = temple_pool::FirstLayerAlpha(time);
 	const auto& light = temple.GetLight();
+	const auto layerLight = temple_pool::LayerLight(light);
 	struct Layer
 	{
 		glm::vec3 position;
@@ -142,7 +142,8 @@ void Renderer::DrawTemplePool(const DrawSceneDesc& desc) const
 	};
 	const std::array layers = {
 	    Layer {glm::vec3(0.0f), 0.0f, alpha, glm::vec2(-0.01f, 0.007f) * time},
-	    Layer {glm::vec3(0.0f, 0.05f, 0.0f), glm::quarter_pi<float>(), 255 - alpha, glm::vec2(0.01f, 0.005f) * time},
+	    Layer {glm::vec3(0.0f, 0.05f, 0.0f), glm::quarter_pi<float>(), temple_pool::SecondLayerAlpha(alpha),
+	           glm::vec2(0.01f, 0.005f) * time},
 	};
 	// Under the water the room's reflection shows, where the floor leaves it uncovered
 	{
@@ -181,8 +182,8 @@ void Renderer::DrawTemplePool(const DrawSceneDesc& desc) const
 		submitDesc.modelMatrices = &model;
 		submitDesc.matrixCount = 1;
 		submitDesc.uvOffset = layer.uvOffset;
-		submitDesc.tint = glm::vec4(light.multiply * k_Light, static_cast<float>(layer.alpha) / 255.0f);
-		submitDesc.lightAdd = light.add * k_Light;
+		submitDesc.tint = glm::vec4(layerLight, static_cast<float>(layer.alpha) / 255.0f);
+		submitDesc.lightAdd = light.add;
 		DrawMesh(*meshes.Handle(pool), submitDesc, std::numeric_limits<uint8_t>::max());
 	}
 }
