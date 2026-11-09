@@ -1773,19 +1773,11 @@ bool GameInterface::ProcessTattooEditorEvent(const SDL_Event& event)
 			_leftButtonDown = true;
 			_tattooEditor->MouseDown(_painter.ToDialog({event.button.x, event.button.y}));
 		}
-		else
-		{
-			_otherButtonsDown |= SDL_BUTTON(event.button.button);
-		}
 		return true;
 	case SDL_MOUSEBUTTONUP:
 		if (event.button.button == SDL_BUTTON_LEFT)
 		{
 			_leftButtonDown = false;
-		}
-		else
-		{
-			_otherButtonsDown &= ~SDL_BUTTON(event.button.button);
 		}
 		if (event.button.button == SDL_BUTTON_LEFT &&
 		    _tattooEditor->MouseUp(_painter.ToDialog({event.button.x, event.button.y}), editor))
@@ -1882,11 +1874,13 @@ void GameInterface::UpdateTattooEditor(float deltaSeconds)
 		return;
 	}
 	auto& editor = Locator::tattooEditorSystem::value();
+	bool opened = false;
 	if (editor.IsOpen() && !_tattooEditor->IsOpen())
 	{
 		// In the temple the dialog stands over the cave without a frame. From the main menu it has a frame of its own,
 		// and takes the menu's place until it closes.
 		_tattooEditor->Open(editor.IsFromMenu());
+		opened = true;
 	}
 	std::span<const std::array<uint8_t, 3>> palette;
 	auto& arts = Locator::resources::value().GetCreatureSkinArt();
@@ -1897,7 +1891,18 @@ void GameInterface::UpdateTattooEditor(float deltaSeconds)
 	if (!_tattooEditor->IsOpen())
 	{
 		_leftButtonDown = false;
-		_otherButtonsDown = 0;
+	}
+	else if (Locator::gameActionSystem::has_value())
+	{
+		// The buttons of the mouse itself, also those that went down before the dialog opened
+		const auto held = Locator::gameActionSystem::value().GetHeldMouseButtons();
+		_boxButtonsHeld.Frame(
+		    {
+		        .left = (held & SDL_BUTTON_LMASK) != 0,
+		        .right = (held & SDL_BUTTON_RMASK) != 0,
+		        .middle = (held & SDL_BUTTON_MMASK) != 0,
+		    },
+		    opened);
 	}
 	_tattooEditor->SetNetworkGame(_tattooEditorAsNetworkGame ||
 	                              (Locator::time::has_value() && Locator::time::value().IsNetworkGame()));

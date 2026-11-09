@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include <cstdint>
+
 #include <optional>
 #include <vector>
 
@@ -70,6 +72,9 @@ private:
 	static void StartCaveTurn(const components::CreatureCopy& copy, cave_creature::State& state, GameHeading heading);
 
 	const TempleScreenInterface* _interface {nullptr};
+	/// The game turn of the last frame, and whether a turn came in this frame
+	std::optional<uint32_t> _lastTurn;
+	bool _turnBeforeDraw {false};
 	creature_cave::Screen _screen;
 	bool _creatureShown {true};
 	/// The creature room has been made on this visit to the temple

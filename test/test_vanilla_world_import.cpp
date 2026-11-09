@@ -364,6 +364,7 @@ TEST(VanillaWorldImport, ReadsTheTownsBuildingsAndVillagersOfTheFile)
 	    .OwnedBy(0)
 	    .Value<uint32_t>("cannotBuildWorshipSite", 1)
 	    .Value<uint32_t>("uninhabitable", 0)
+	    .Refs("workshops", {4})
 	    .Refs("abodes", {3, 4})
 	    .Refs("homeless", {6})
 	    .Value<uint32_t>("emptyTownTimer", 7);
@@ -439,6 +440,7 @@ TEST(VanillaWorldImport, ReadsTheTownsBuildingsAndVillagersOfTheFile)
 	EXPECT_EQ(town.emptyTownTimer, 7U);
 	EXPECT_EQ(town.abodes, (std::vector<uint32_t> {3, 4}));
 	EXPECT_EQ(town.homeless, (std::vector<uint32_t> {6}));
+	EXPECT_EQ(town.workshops, (std::vector<uint32_t> {4}));
 
 	ASSERT_EQ(imported.abodes.size(), 2U);
 	const auto& pit = imported.abodes[0];

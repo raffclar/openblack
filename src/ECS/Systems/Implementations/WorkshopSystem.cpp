@@ -88,6 +88,7 @@
 #include "ECS/TownHomes.h"
 #include "ECS/TownPlanning.h"
 #include "ECS/TownTurnOrder.h"
+#include "ECS/TownWorkshops.h"
 #include "ECS/WorkshopRules.h"
 #include "ECS/WorldObjects.h"
 #include "ECS/YardCopyRules.h"
@@ -176,24 +177,10 @@ std::optional<workshop::SpecialPlace> SpecialPlaceOf(entt::entity building, size
 	return workshop::SpecialPlaceOf(matrices->first, matrices->second);
 }
 
-/// The town's workshops in the town's order, the newest first
+/// The workshops of the town, the newest to start to work first
 std::vector<entt::entity> WorkshopsOf(entt::entity town)
 {
-	const auto& registry = Entities();
-	std::vector<entt::entity> workshops;
-	if (const auto* data = registry.Valid(town) ? registry.TryGet<const Town>(town) : nullptr)
-	{
-		// Only a workshop that is built is on the list of the town
-		for (const auto abode : data->abodes)
-		{
-			if (registry.Valid(abode) && registry.AllOf<Workshop>(abode) && ecs::construction::IsBuilt(abode))
-			{
-				workshops.push_back(abode);
-			}
-		}
-	}
-	std::ranges::reverse(workshops);
-	return workshops;
+	return town_workshops::Of(town);
 }
 
 void MarkDesiresChanged(entt::entity town)
@@ -508,8 +495,8 @@ entt::entity WorkshopSystem::RewardScaffold(entt::entity town, glm::vec3 place)
 	{
 		return entt::null;
 	}
-	// The scaffold is worth one and is not turned. The first workshop of the town counts it as its own, but gives it no
-	// place in its yard.
+	// The scaffold is worth one and is not turned. The workshop of the town that started to work last counts it as its
+	// own, but gives it no place in its yard.
 	const auto workshopEntity = workshops.front();
 	const auto scaffold = CreateScaffold(place, town, workshopEntity, 0.0f, workshop::ScaleOfValue(1));
 	if (scaffold != entt::null)

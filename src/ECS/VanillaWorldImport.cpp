@@ -365,6 +365,8 @@ std::optional<ImportedTown> ReadTown(const VanillaWorld& world, const VanillaRec
 	town.abodes.assign(abodes.begin(), abodes.end());
 	const auto homeless = world.Refs(record, "homeless");
 	town.homeless.assign(homeless.begin(), homeless.end());
+	const auto workshops = world.Refs(record, "workshops");
+	town.workshops.assign(workshops.begin(), workshops.end());
 	const auto planned = world.Refs(record, "planned");
 	town.planned.assign(planned.begin(), planned.end());
 	const auto sites = world.Refs(record, "buildingSites");

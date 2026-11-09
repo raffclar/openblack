@@ -815,8 +815,9 @@ struct Command
 		/// The tattoo editor opened on the player's creature, as clicking it in the Creature Cave does
 		OpenTattooEditor,
 		/// The player's hand is given a seed (value, by the game's seed number) as if from a bubble; a gesture (value, by
-		/// the game's gesture number) is drawn with the hand across the middle of the screen, through the same recogniser
-		/// the cursor goes through. Neither needs a creature.
+		/// the game's gesture number) is drawn with the hand across the middle of the screen, or moved from it by a part
+		/// (point) of the screen's width and height, through the same recogniser the cursor goes through. Neither needs
+		/// a creature.
 		HoldSeed,
 		DrawGesture,
 		/// The player's hand is given a seed (value) summoned from their worship, charged from their prayer power, which

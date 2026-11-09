@@ -82,6 +82,11 @@ int32_t IdleTurnsLeft(int32_t turnsLeft, bool townWantsChanged, const std::funct
 	return turnsLeft - 1;
 }
 
+bool KeepsPreaching(const PreachingFacts& facts)
+{
+	return facts.townLives && facts.reactionLives && facts.missionaryAbout && facts.stillMissionary;
+}
+
 int32_t WorkshopRoom(bool makingScaffold, uint32_t scaffoldsHeld)
 {
 	return static_cast<int32_t>(k_WorkshopScaffoldPlaces - (makingScaffold ? 1u : 0u) - scaffoldsHeld);

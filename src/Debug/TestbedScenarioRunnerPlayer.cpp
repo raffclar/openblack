@@ -139,7 +139,7 @@ std::string Runner::GivePlayerCommand(const Command& command)
 		return given != entt::null ? fmt::format("seed {} in the hand", command.value) : "the hand isn't free";
 	}
 	case Kind::DrawGesture:
-		return DrawGesture(static_cast<GestureType>(command.value));
+		return DrawGesture(static_cast<GestureType>(command.value), command.point);
 	case Kind::PressKey:
 		if (!Locator::gameActionSystem::has_value())
 		{

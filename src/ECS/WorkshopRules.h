@@ -15,6 +15,7 @@
 #include <array>
 #include <optional>
 #include <span>
+#include <vector>
 
 #include <entt/entity/entity.hpp>
 #include <glm/mat4x4.hpp>
@@ -143,6 +144,10 @@ struct TurnFacts
 /// Whether a workshop still counts a scaffold as its own. The workshop lets the scaffold go when the scaffold has lain
 /// for the given turns after a hand put it down, unless a script gave the scaffold its building.
 [[nodiscard]] bool KeepsScaffold(uint32_t putDownTurn, uint32_t turn, uint32_t keepTurns, bool scriptBuilding);
+
+/// A workshop starts to work: its town puts it first in its list of workshops. A workshop that is in the list already
+/// keeps its place.
+void StartsWorkingInTown(std::vector<entt::entity>& townWorkshops, entt::entity workshop);
 
 /// The workshop counts a new scaffold as its own, the newest first
 void AddScaffold(components::Workshop& workshop, entt::entity scaffold);

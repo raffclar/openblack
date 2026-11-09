@@ -98,6 +98,27 @@ void testbed_scenarios::AddGestureScenarios(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "miracles.gesture_circle_shield_to_side",
+	    .name = "Size a shield with a circle drawn well to one side of the screen",
+	    .facet = Facet::Miracles,
+	    .description = "A shield seed is put in the hand and a circle is drawn with the Action button held, with its "
+	                   "middle a third of the screen's width to the right of the screen's middle. The hand lets go when "
+	                   "the circle is recognised, and the shield is cast. The scenario repeats.",
+	    .expected = "The circle is recognised and the shield is cast on the land at the circle's middle. The radius "
+	                "is the distance across the land that the drawn edge has from the middle, measured as the game "
+	                "does, from the eye. A circle far from the middle of the screen thus gives a smaller shield than a "
+	                "measure along the view would give, by about 8 percent at 25 degrees from the middle.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Testbed},
+	    .commands = {HoldSeed(SpellSeedType::Shield, 1.0f),
+	                 {.kind = Kind::DrawGesture,
+	                  .delaySeconds = 1.0f,
+	                  .point = {0.3f, 0.0f},
+	                  .value = static_cast<size_t>(GestureType::Circle)}},
+	    .repeatFrom = 0,
+	});
+
+	all.push_back({
 	    .id = "miracles.gesture_power_up_storm",
 	    .name = "Power up a storm",
 	    .facet = Facet::Miracles,

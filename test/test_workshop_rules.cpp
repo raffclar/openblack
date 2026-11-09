@@ -12,6 +12,7 @@
 
 #include <array>
 #include <bit>
+#include <vector>
 
 #include <glm/mat4x4.hpp>
 #include <glm/vec2.hpp>
@@ -382,4 +383,33 @@ TEST(WorkshopRules, AJoinPlaysTheFourSoundsInTurnAtTheHandForTheHeldScaffold)
 TEST(WorkshopRules, ThePuffOfAJoinShowsTheColourOfTheNeutralPlayer)
 {
 	EXPECT_EQ(workshop::k_JoinPuffPlayer, openblack::PlayerNames::NEUTRAL);
+}
+
+TEST(WorkshopRules, ATownPutsTheWorkshopThatStartsToWorkLastFirstInItsList)
+{
+	Registry registry;
+	const auto older = registry.Create();
+	const auto newer = registry.Create();
+	std::vector<entt::entity> workshops;
+	workshop::StartsWorkingInTown(workshops, older);
+	workshop::StartsWorkingInTown(workshops, newer);
+	ASSERT_EQ(workshops.size(), 2u);
+	EXPECT_EQ(workshops.front(), newer);
+	EXPECT_EQ(workshops.back(), older);
+}
+
+TEST(WorkshopRules, AWorkshopThatStartsToWorkAgainKeepsItsPlaceInTheList)
+{
+	Registry registry;
+	const auto older = registry.Create();
+	const auto newer = registry.Create();
+	std::vector<entt::entity> workshops;
+	workshop::StartsWorkingInTown(workshops, older);
+	workshop::StartsWorkingInTown(workshops, newer);
+	// The older workshop is repaired: it starts to work again but does not move
+	workshop::StartsWorkingInTown(workshops, older);
+	workshop::StartsWorkingInTown(workshops, entt::null);
+	ASSERT_EQ(workshops.size(), 2u);
+	EXPECT_EQ(workshops.front(), newer);
+	EXPECT_EQ(workshops.back(), older);
 }

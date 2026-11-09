@@ -87,16 +87,100 @@ constexpr SourceActions k_Actions {0x1, 0x2, 0x4, 0x8, 0x10};
 TEST(AltHeldPresses, WithoutAltAPressActsAtOnce)
 {
 	AltHeldPresses presses;
-	EXPECT_EQ(presses.Press(Source::LeftButton, false, k_Actions), 0x1u);
-	EXPECT_EQ(presses.Press(Source::WheelUp, false, k_Actions), 0x8u);
+	EXPECT_EQ(presses.Press(Source::LeftButton, false, k_Actions).acts, 0x1u);
 	EXPECT_FALSE(presses.HasKeptPresses());
 	EXPECT_EQ(presses.NewFrame(false, k_Actions), 0u);
+	EXPECT_EQ(presses.Press(Source::WheelUp, false, k_Actions).acts, 0x8u);
+	EXPECT_EQ(presses.NewFrame(false, k_Actions), 0u);
+}
+
+TEST(AltHeldPresses, OnlyOnePressActsInAFrameAndTheNextWaitsForTheNextFrame)
+{
+	AltHeldPresses presses;
+	EXPECT_EQ(presses.Press(Source::LeftButton, false, k_Actions).acts, 0x1u);
+	const auto right = presses.Press(Source::RightButton, false, k_Actions);
+	EXPECT_EQ(right.acts, 0u);
+	EXPECT_EQ(right.takenBack, 0u);
+	EXPECT_TRUE(presses.HasKeptPresses());
+	EXPECT_EQ(presses.ActedThisFrame(), 0x1u);
+	EXPECT_EQ(presses.NewFrame(false, k_Actions), 0x2u);
+	EXPECT_EQ(presses.ActedThisFrame(), 0x2u);
+	EXPECT_EQ(presses.NewFrame(false, k_Actions), 0u);
+	EXPECT_FALSE(presses.HasKeptPresses());
+}
+
+TEST(AltHeldPresses, ALaterPressThatComesFirstInTheOrderActsInsteadOfTheEarlierPress)
+{
+	AltHeldPresses presses;
+	EXPECT_EQ(presses.Press(Source::MiddleButton, false, k_Actions).acts, 0x4u);
+	const auto left = presses.Press(Source::LeftButton, false, k_Actions);
+	EXPECT_EQ(left.acts, 0x1u);
+	EXPECT_EQ(left.takenBack, 0x4u);
+	EXPECT_EQ(presses.ActedThisFrame(), 0x1u);
+	// The middle press waits for the next frame
+	EXPECT_EQ(presses.NewFrame(false, k_Actions), 0x4u);
+}
+
+TEST(AltHeldPresses, AButtonPressInTheFrameOfATurnOfTheWheelLosesTheTurn)
+{
+	AltHeldPresses presses;
+	EXPECT_EQ(presses.Press(Source::WheelDown, false, k_Actions).acts, 0x10u);
+	const auto right = presses.Press(Source::RightButton, false, k_Actions);
+	EXPECT_EQ(right.acts, 0x2u);
+	EXPECT_EQ(right.takenBack, 0x10u);
+	EXPECT_EQ(presses.NewFrame(false, k_Actions), 0u);
+	// A turn after the press of the frame is lost too
+	EXPECT_EQ(presses.Press(Source::RightButton, false, k_Actions).acts, 0x2u);
+	EXPECT_EQ(presses.Press(Source::WheelUp, false, k_Actions).acts, 0u);
+	EXPECT_EQ(presses.NewFrame(false, k_Actions), 0u);
+}
+
+TEST(AltHeldPresses, TwoPressesOfOneButtonInAFrameAreOnePress)
+{
+	AltHeldPresses presses;
+	EXPECT_EQ(presses.Press(Source::LeftButton, false, k_Actions).acts, 0x1u);
+	EXPECT_EQ(presses.Press(Source::LeftButton, false, k_Actions).acts, 0x1u);
+	EXPECT_FALSE(presses.HasKeptPresses());
+	EXPECT_EQ(presses.NewFrame(false, k_Actions), 0u);
+}
+
+TEST(AltHeldPresses, APressThatDoesNotActDoesNotStopTheNextPress)
+{
+	constexpr SourceActions k_LeftHasNone {0x0, 0x2, 0x4, 0x8, 0x10};
+	AltHeldPresses presses;
+	EXPECT_EQ(presses.Press(Source::LeftButton, false, k_LeftHasNone).acts, 0u);
+	EXPECT_EQ(presses.ActedThisFrame(), 0u);
+	EXPECT_EQ(presses.Press(Source::RightButton, false, k_LeftHasNone).acts, 0x2u);
+}
+
+TEST(AltHeldPresses, ALeftPressThatDoesNotActGoesAtTheEndOfAFrameWithNoAction)
+{
+	constexpr SourceActions k_None {};
+	AltHeldPresses presses;
+	std::ignore = presses.Press(Source::LeftButton, false, k_None);
+	std::ignore = presses.Press(Source::RightButton, false, k_None);
+	EXPECT_TRUE(presses.HasKeptPresses());
+	EXPECT_EQ(presses.NewFrame(false, k_Actions), 0u);
+	EXPECT_FALSE(presses.HasKeptPresses());
+}
+
+TEST(AltHeldPresses, AMiddlePressThatDoesNotActStaysKeptUntilItActs)
+{
+	constexpr SourceActions k_None {};
+	AltHeldPresses presses;
+	std::ignore = presses.Press(Source::MiddleButton, false, k_None);
+	EXPECT_EQ(presses.NewFrame(false, k_None), 0u);
+	EXPECT_EQ(presses.NewFrame(false, k_None), 0u);
+	EXPECT_TRUE(presses.HasKeptPresses());
+	// The old press acts on the first frame that its button has an action that acts
+	EXPECT_EQ(presses.NewFrame(false, k_Actions), 0x4u);
+	EXPECT_FALSE(presses.HasKeptPresses());
 }
 
 TEST(AltHeldPresses, WithAltAButtonPressWaitsUntilAltGoesUp)
 {
 	AltHeldPresses presses;
-	EXPECT_EQ(presses.Press(Source::RightButton, true, k_Actions), 0u);
+	EXPECT_EQ(presses.Press(Source::RightButton, true, k_Actions).acts, 0u);
 	EXPECT_TRUE(presses.HasKeptPresses());
 	// The press waits for as many frames as Alt stays down
 	EXPECT_EQ(presses.NewFrame(true, k_Actions), 0u);
@@ -135,13 +219,16 @@ TEST(AltHeldPresses, AKeptPressOfAButtonWithNoOnePressActionGoesWithoutAFrame)
 	std::ignore = presses.Press(Source::LeftButton, true, k_LeftHasNone);
 	std::ignore = presses.Press(Source::RightButton, true, k_LeftHasNone);
 	EXPECT_EQ(presses.NewFrame(false, k_LeftHasNone), 0x2u);
+	// The left press stays until the end of the next frame, because a press acted in this frame
+	EXPECT_EQ(presses.NewFrame(false, k_LeftHasNone), 0u);
+	EXPECT_EQ(presses.NewFrame(false, k_LeftHasNone), 0u);
 	EXPECT_FALSE(presses.HasKeptPresses());
 }
 
 TEST(AltHeldPresses, WithAltATurnOfTheWheelLosesItsOnePressAction)
 {
 	AltHeldPresses presses;
-	EXPECT_EQ(presses.Press(Source::WheelDown, true, k_Actions), 0u);
+	EXPECT_EQ(presses.Press(Source::WheelDown, true, k_Actions).acts, 0u);
 	EXPECT_FALSE(presses.HasKeptPresses());
 	EXPECT_EQ(presses.NewFrame(false, k_Actions), 0u);
 }
@@ -149,10 +236,9 @@ TEST(AltHeldPresses, WithAltATurnOfTheWheelLosesItsOnePressAction)
 TEST(AltHeldPresses, AltDownInTheFrameOfAPressStopsThePress)
 {
 	AltHeldPresses presses;
-	EXPECT_EQ(presses.Press(Source::LeftButton, false, k_Actions), 0x1u);
-	EXPECT_EQ(presses.Press(Source::WheelUp, false, k_Actions), 0x8u);
-	// The game reads Alt at the end of the frame, so both presses did not act: the button waits, the wheel is lost
-	EXPECT_EQ(presses.AltDown(k_Actions), 0x9u);
+	EXPECT_EQ(presses.Press(Source::LeftButton, false, k_Actions).acts, 0x1u);
+	// The game reads Alt at the end of the frame, so the press did not act: the button waits
+	EXPECT_EQ(presses.AltDown(k_Actions), 0x1u);
 	EXPECT_TRUE(presses.HasKeptPresses());
 	EXPECT_EQ(presses.NewFrame(true, k_Actions), 0u);
 	EXPECT_EQ(presses.NewFrame(false, k_Actions), 0x1u);
@@ -163,8 +249,18 @@ TEST(AltHeldPresses, AltUpInTheFrameOfAPressLetsThePressAct)
 	AltHeldPresses presses;
 	std::ignore = presses.Press(Source::WheelUp, true, k_Actions);
 	std::ignore = presses.Press(Source::LeftButton, true, k_Actions);
-	EXPECT_EQ(presses.AltUp(k_Actions), 0x9u);
+	// Only the button acts. The turn of the wheel loses its action.
+	EXPECT_EQ(presses.AltUp(k_Actions), 0x1u);
 	EXPECT_FALSE(presses.HasKeptPresses());
+	EXPECT_EQ(presses.NewFrame(false, k_Actions), 0u);
+}
+
+TEST(AltHeldPresses, AltUpInTheFrameOfATurnOfTheWheelLetsTheTurnAct)
+{
+	AltHeldPresses presses;
+	std::ignore = presses.Press(Source::WheelUp, true, k_Actions);
+	EXPECT_EQ(presses.AltUp(k_Actions), 0x8u);
+	EXPECT_EQ(presses.ActedThisFrame(), 0x8u);
 	EXPECT_EQ(presses.NewFrame(false, k_Actions), 0u);
 }
 
@@ -236,4 +332,63 @@ TEST(GameActionMap, WithAltHeldATurnOfTheWheelLosesItsOnePressAction)
 	map.ProcessEvent(AltEvent(false));
 	map.Frame();
 	EXPECT_FALSE(map.Get(BindableActionMap::HELP));
+}
+
+TEST(GameActionMap, TwoMousePressesOfOneFrameActInTwoFrames)
+{
+	// Help on the middle button and Zoom To Temple on the right button
+	auto table = HelpOnTheMouse(MouseInput::MiddleButton);
+	for (auto& binding : table)
+	{
+		if (binding.mouse == MouseInput::RightButton)
+		{
+			binding.mouse = MouseInput::None;
+		}
+	}
+	std::ranges::find(table, BindableActionMap::ZOOM_TO_TEMPLE, &KeyBinding::action)->mouse = MouseInput::RightButton;
+	GameActionMap map;
+	map.SetKeyBindings(table);
+	map.Frame();
+	// The middle press comes first, but the right button comes first in the order of the game
+	map.ProcessEvent(ButtonEvent(true, SDL_BUTTON_MIDDLE));
+	map.ProcessEvent(ButtonEvent(true, SDL_BUTTON_RIGHT));
+	EXPECT_TRUE(map.Get(BindableActionMap::ZOOM_TO_TEMPLE));
+	EXPECT_FALSE(map.Get(BindableActionMap::HELP));
+	map.ProcessEvent(ButtonEvent(false, SDL_BUTTON_MIDDLE));
+	map.ProcessEvent(ButtonEvent(false, SDL_BUTTON_RIGHT));
+	// The middle press acts in the next frame, from the kept press
+	map.Frame();
+	EXPECT_TRUE(HelpPressed(map));
+	EXPECT_TRUE(map.WaitedMousePress(BindableActionMap::HELP));
+	EXPECT_FALSE(map.Get(BindableActionMap::ZOOM_TO_TEMPLE));
+	map.Frame();
+	EXPECT_FALSE(map.Get(BindableActionMap::HELP));
+}
+
+TEST(GameActionMap, AMousePressOfABlockedActionDoesNotStopTheNextPress)
+{
+	auto table = HelpOnTheMouse(MouseInput::MiddleButton);
+	std::ranges::find(table, BindableActionMap::ZOOM_TO_TEMPLE, &KeyBinding::action)->mouse = MouseInput::WheelUp;
+	for (auto& binding : table)
+	{
+		if (binding.mouse == MouseInput::WheelUp && binding.action != BindableActionMap::ZOOM_TO_TEMPLE)
+		{
+			binding.mouse = MouseInput::None;
+		}
+	}
+	GameActionMap map;
+	map.SetKeyBindings(table);
+	map.SetBlockedActions(BindableActionMap::HELP);
+	map.Frame();
+	map.ProcessEvent(ButtonEvent(true, SDL_BUTTON_MIDDLE));
+	map.ProcessEvent(WheelEvent(1));
+	EXPECT_FALSE(map.Get(BindableActionMap::HELP));
+	EXPECT_TRUE(map.Get(BindableActionMap::ZOOM_TO_TEMPLE));
+	map.ProcessEvent(ButtonEvent(false, SDL_BUTTON_MIDDLE));
+	map.Frame();
+	EXPECT_FALSE(map.Get(BindableActionMap::HELP));
+	// The game keeps a middle press that did not act. It acts when the land lets its action act again (vanilla bug 1355).
+	map.SetBlockedActions(BindableActionMap::NONE);
+	map.Frame();
+	EXPECT_TRUE(HelpPressed(map));
 }

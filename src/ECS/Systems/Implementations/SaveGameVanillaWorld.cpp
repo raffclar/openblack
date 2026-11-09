@@ -1446,7 +1446,7 @@ bool SaveGameSystem::ImportVanillaTowns(const gamesave::VanillaWorld& world, Van
 		SPDLOG_LOGGER_WARN(ImportLog(), "{} villagers of the file are in their homes, but the buildings count {}", present,
 		                   presentInFile);
 	}
-	// Each town takes its homeless villagers and the order of its buildings from the file
+	// Each town takes its homeless villagers, the order of its buildings and the order of its workshops from the file
 	for (const auto& town : imported.towns)
 	{
 		auto& component = registry.Get<Town>(EntityOf(made, town.number));
@@ -1470,6 +1470,16 @@ bool SaveGameSystem::ImportVanillaTowns(const gamesave::VanillaWorld& world, Van
 		std::ranges::copy_if(component.abodes, std::back_inserter(ordered),
 		                     [&ordered](entt::entity abode) { return std::ranges::find(ordered, abode) == ordered.end(); });
 		component.abodes = std::move(ordered);
+		// The town takes the order of its workshops from the file
+		component.workshops.clear();
+		for (const auto number : town.workshops)
+		{
+			if (const auto workshop = EntityOf(made, number);
+			    workshop != entt::null && std::ranges::find(component.abodes, workshop) != component.abodes.end())
+			{
+				component.workshops.push_back(workshop);
+			}
+		}
 	}
 	PutWorshipSites(registry, imported, made);
 	// The other dances come when the things that they are for are made. Only a villager that keeps the states of the

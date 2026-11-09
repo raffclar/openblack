@@ -54,6 +54,22 @@ void EndTownTurn(bool& changed, bool& lastTurn);
 /// it looks again soon (random below ten turns, `random(limit)` giving below limit), else one turn nearer
 [[nodiscard]] int32_t IdleTurnsLeft(int32_t turnsLeft, bool townWantsChanged, const std::function<uint32_t(uint32_t)>& random);
 
+/// What a town's turn knows of a preaching missionary
+struct PreachingFacts
+{
+	/// The town that it preaches in is still there
+	bool townLives {false};
+	/// The reaction that does the preaching is still there
+	bool reactionLives {false};
+	/// The missionary is still in the world and its death has not started. A missionary in the hand, in flight or carried
+	/// off by a tornado is about.
+	bool missionaryAbout {false};
+	/// It is still a missionary
+	bool stillMissionary {false};
+};
+/// Whether a missionary keeps its preaching in this town turn. Else the preaching stops and the missionary is freed.
+[[nodiscard]] bool KeepsPreaching(const PreachingFacts& facts);
+
 /// A workshop holds at most this many scaffolds, one fewer while it makes one
 inline constexpr uint32_t k_WorkshopScaffoldPlaces = 3;
 /// The room of a workshop for more scaffolds: its places less the scaffold it makes and the scaffolds it counts. The game
