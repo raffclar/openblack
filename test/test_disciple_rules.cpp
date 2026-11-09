@@ -340,3 +340,25 @@ TEST(DiscipleRules, AFixedThingOfNoTownIsMendedOnlyByItsOwnPlayer)
 	// Their temple has no town to preach to
 	EXPECT_EQ(Offered({.kind = NearKind::Building, .owner = k_Them, .repaired = false}, MyAdult()), None);
 }
+
+TEST(DiscipleRules, AHeldSkeletonOrFootballerTakesUpNoWork)
+{
+	EXPECT_FALSE(RefusesWork({}));
+	EXPECT_TRUE(RefusesWork({.scriptControlled = true}));
+	EXPECT_TRUE(RefusesWork({.notAlive = true}));
+	// A walking skeleton and a villager in a football match take up no work, as in the game
+	EXPECT_TRUE(RefusesWork({.skeleton = true}));
+	EXPECT_TRUE(RefusesWork({.inFootballMatch = true}));
+}
+
+TEST(DiscipleRules, ADiscipleCallsFollowersOnlyWhenItDecidesWhatToDo)
+{
+	EXPECT_TRUE(CallsFollowers(Farmer, Decision::WhatToDo));
+	EXPECT_TRUE(CallsFollowers(Builder, Decision::WhatToDo));
+	// A kind without followers calls none
+	EXPECT_FALSE(CallsFollowers(Breeder, Decision::WhatToDo));
+	EXPECT_FALSE(CallsFollowers(None, Decision::WhatToDo));
+	// A disciple that finds its work at the end of a wait calls none
+	EXPECT_FALSE(CallsFollowers(Farmer, Decision::AfterWait));
+	EXPECT_FALSE(CallsFollowers(Forester, Decision::AfterWait));
+}

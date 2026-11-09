@@ -20,16 +20,12 @@
 #include "Common/GUtilsDistance.h"
 #include "ECS/BuildingSites.h"
 #include "ECS/Components/Abode.h"
-#include "ECS/Components/CarriedByTornado.h"
 #include "ECS/Components/Disciple.h"
-#include "ECS/Components/HandGrab.h"
 #include "ECS/Components/LivingAction.h"
-#include "ECS/Components/Physics.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/TownDesire.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
-#include "ECS/Components/VillagerDeath.h"
 #include "ECS/Components/WallHug.h"
 #include "ECS/DiscipleWorkRules.h"
 #include "ECS/Registry.h"
@@ -39,6 +35,7 @@
 #include "ECS/Systems/TownDesireSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
 #include "ECS/Systems/WorkshopSystemInterface.h"
+#include "ECS/VillagerBreedingRules.h"
 #include "ECS/VillagerCarry.h"
 #include "ECS/VillagerWorkRules.h"
 #include "ECS/WallHugRules.h"
@@ -174,16 +171,17 @@ std::optional<entt::entity> BestWorkshop(entt::entity villager)
 	return best.has_value() ? std::optional(workshops.at(*best)) : std::nullopt;
 }
 
-bool IsAvailable(entt::entity villager)
+/// Whether a villager is still in the world and its death has not started. A villager in the hand, in flight or carried
+/// off by a tornado is about.
+bool IsAbout(entt::entity villager)
 {
 	auto& registry = Entities();
-	if (!registry.Valid(villager) || !registry.AllOf<Villager, LivingAction>(villager) ||
-	    registry.AnyOf<InHand, InPhysics, CarriedByTornado, VillagerDeath>(villager))
+	if (!registry.Valid(villager) || !registry.AllOf<Villager, LivingAction>(villager))
 	{
 		return false;
 	}
-	return Locator::livingActionSystem::value().VillagerGetFinalState(registry.Get<const LivingAction>(villager)) !=
-	       VillagerStates::Dying;
+	return villager_breeding::CanBeCalledOn(
+	    Locator::livingActionSystem::value().VillagerGetFinalState(registry.Get<const LivingAction>(villager)));
 }
 
 /// A missionary stops preaching: freed if still one, its reaction ended
@@ -421,10 +419,14 @@ void villager_disciple_work::ProcessMissionaries(entt::entity town)
 		    {
 			    return;
 		    }
-		    const bool reactionLives =
-		        Locator::reactionSystem::has_value() && Locator::reactionSystem::value().IsActive(preaching.reaction);
-		    if (!reactionLives || !ValidTown(preaching.town).has_value() || !IsAvailable(preaching.villager) ||
-		        villager_disciple::TypeOf(preaching.villager) != VillagerDisciple::Missionary)
+		    const bool about = IsAbout(preaching.villager);
+		    if (!disciple_work::KeepsPreaching({
+		            .townLives = ValidTown(preaching.town).has_value(),
+		            .reactionLives =
+		                Locator::reactionSystem::has_value() && Locator::reactionSystem::value().IsActive(preaching.reaction),
+		            .missionaryAbout = about,
+		            .stillMissionary = about && villager_disciple::TypeOf(preaching.villager) == VillagerDisciple::Missionary,
+		        }))
 		    {
 			    stopping.push_back(control);
 			    return;

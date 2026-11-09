@@ -9,7 +9,8 @@
 
 // The testbed scenarios for disciples. One shows the symbol of the work. One shows that a disciple in the hand of another
 // god shows no symbol. One shows the work that a villager keeps when the hand releases it. One shows the villagers that
-// follow a disciple to its work. One shows the object that a script gives a villager to hold.
+// follow a disciple to its work, and one that a disciple calls no followers after a wait. One shows the object that a
+// script gives a villager to hold.
 
 #include <vector>
 
@@ -122,6 +123,36 @@ void testbed_scenarios::AddDiscipleScenarios(std::vector<Scenario>& all)
 	                {.type = AbodeInfo::CelticStoragePit, .offset = {-30.0f, -20.0f}, .storedFood = 5000, .storedWood = 5000},
 	                {.type = VillagerInfo::CelticFarmerMale,
 	                 .offset = {0.0f, -16.0f},
+	                 .joinTown = true,
+	                 .disciple = VillagerDisciple::Farmer},
+	                {.type = VillagerInfo::CelticForesterMale, .offset = {-4.0f, -18.0f}, .joinTown = true},
+	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {4.0f, -18.0f}, .joinTown = true},
+	                {.type = VillagerInfo::CelticFishermanMale, .offset = {-3.0f, -22.0f}, .joinTown = true},
+	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {3.0f, -22.0f}, .joinTown = true},
+	                {.type = VillagerInfo::CelticForesterMale, .offset = {20.0f, -16.0f}, .joinTown = true}},
+	    .townBeliefInPlayer = 1000.0f,
+	});
+
+	// A farming disciple waits, then finds its field. At the end of a wait it calls no followers.
+	all.push_back({
+	    .id = "villagers.disciple_no_followers_after_wait",
+	    .name = "A disciple that finds work after a wait calls no followers",
+	    .facet = Facet::Objects,
+	    .description = "The field, the storage pit and the villagers of villagers.disciple_followers. The farming "
+	                   "disciple first walks one metre south and waits there, as a disciple with no work waits by its "
+	                   "town centre. Its wait comes to an end at once. Best watched at game speed 4.",
+	    .expected = "The disciple glows and walks to the field to farm it. When it starts this first work at the end of "
+	                "its wait, no villager follows it. Later, each time the disciple decides what to do and starts its "
+	                "work again, the villagers within 10 metres of it that are free to change what they do can follow "
+	                "it one time. Before, the villagers near it also followed it at the end of its wait.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 26.0f, -40.0f}, .look = {0.0f, 0.0f, -8.0f}},
+	    .objects = {{.type = FieldTypeInfo::Wheat, .offset = {0.0f, 0.0f}},
+	                {.type = AbodeInfo::CelticStoragePit, .offset = {-30.0f, -20.0f}, .storedFood = 5000, .storedWood = 5000},
+	                {.type = VillagerInfo::CelticFarmerMale,
+	                 .offset = {0.0f, -16.0f},
+	                 .walkTo = glm::vec2 {0.0f, -17.0f},
+	                 .walkFinal = VillagerStates::DiscipleNothingToDo,
 	                 .joinTown = true,
 	                 .disciple = VillagerDisciple::Farmer},
 	                {.type = VillagerInfo::CelticForesterMale, .offset = {-4.0f, -18.0f}, .joinTown = true},

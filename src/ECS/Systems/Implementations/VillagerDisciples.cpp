@@ -34,6 +34,7 @@
 #include "ECS/Components/Disciple.h"
 #include "ECS/Components/Field.h"
 #include "ECS/Components/FishFarm.h"
+#include "ECS/Components/Football.h"
 #include "ECS/Components/Forest.h"
 #include "ECS/Components/Graveyard.h"
 #include "ECS/Components/HandGrab.h"
@@ -441,13 +442,19 @@ disciple::HeldFacts HeldFactsOf(entt::entity villager, std::optional<PlayerNames
 	const auto& registry = Entities();
 	const auto& person = registry.Get<const Villager>(villager);
 	const auto town = TownOfVillager(villager);
+	const auto* footballer = registry.TryGet<const Footballer>(villager);
 	return {
 	    .hand = hand,
 	    .villager = town.has_value() ? std::optional(registry.Get<const Town>(*town).owner) : std::nullopt,
 	    .sexuallyActive = IsSexuallyActive(person),
 	    .male = person.sex == Villager::Sex::MALE,
 	    .child = person.lifeStage == Villager::LifeStage::Child,
-	    .otherwiseRefused = registry.AllOf<ScriptControlled>(villager) || !IsFunctionalVillager(villager),
+	    .otherwiseRefused = disciple::RefusesWork({
+	        .scriptControlled = registry.AllOf<ScriptControlled>(villager),
+	        .notAlive = !IsFunctionalVillager(villager),
+	        .skeleton = registry.AllOf<WalkingSkeleton>(villager),
+	        .inFootballMatch = footballer != nullptr && footballer->inMatch,
+	    }),
 	};
 }
 
@@ -705,6 +712,26 @@ uint32_t DecideByWork(LivingAction& action)
 		return 1;
 	}
 	return 0;
+}
+
+/// A disciple starts its work as DecideByWork does. 1 when it did. When the rules let it, the villagers of its town near
+/// it can follow it to its work.
+uint32_t StartWork(LivingAction& action, disciple::Decision from)
+{
+	if (DecideByWork(action) != 1)
+	{
+		return 0;
+	}
+	const auto villager = EntityOf(action);
+	if (disciple::CallsFollowers(villager_disciple::TypeOf(villager), from) && Locator::reactionSystem::has_value())
+	{
+		Locator::reactionSystem::value().Create({.initiator = villager,
+		                                         .type = Reaction::ReactToDroppedByHand,
+		                                         .player = world_objects::PlayerOf(villager).value_or(PlayerNames::NEUTRAL),
+		                                         .position = Entities().Get<const Transform>(villager).position,
+		                                         .onCast = true});
+	}
+	return 1;
 }
 
 /// A villager that is about: one that is not dying. A villager in the hand is about too.
@@ -974,20 +1001,7 @@ uint32_t villager_disciple::DecideAsDisciple(LivingAction& action)
 		Entities().Remove<DiscipleFollower>(villager);
 		return 0;
 	}
-	if (DecideByWork(action) != 1)
-	{
-		return 0;
-	}
-	// The villagers of its town near it can follow it to its work
-	if (disciple::KindOf(TypeOf(villager)).leadsFollowers && Locator::reactionSystem::has_value())
-	{
-		Locator::reactionSystem::value().Create({.initiator = villager,
-		                                         .type = Reaction::ReactToDroppedByHand,
-		                                         .player = world_objects::PlayerOf(villager).value_or(PlayerNames::NEUTRAL),
-		                                         .position = Entities().Get<const Transform>(villager).position,
-		                                         .onCast = true});
-	}
-	return 1;
+	return StartWork(action, disciple::Decision::WhatToDo);
 }
 
 uint8_t villager_disciple::FollowPriority(entt::entity villager, entt::entity disciple, uint32_t tablePriority)
@@ -1077,7 +1091,8 @@ uint32_t villager_disciple::DiscipleNothingToDo(LivingAction& action)
 		action.turnsUntilStateChange = 1;
 		return 1;
 	}
-	if (DecideAsDisciple(action) == 0)
+	// It looks for its own work only: it does not decide what to do as a villager does
+	if (StartWork(action, disciple::Decision::AfterWait) == 0)
 	{
 		action.turnsUntilStateChange = static_cast<uint16_t>(disciple::k_IdleRetryTurns);
 	}
