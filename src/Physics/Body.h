@@ -219,6 +219,8 @@ public:
 	void BeginTurn();
 	/// A resting body follows its object: its centre moves, its points stay where they were placed
 	void MoveCentre(glm::vec3 centre) { _centre = centre; }
+	/// A resting body follows its object: its centre moves to the place of the object plus the turned centre of mass
+	void FollowObject(glm::vec3 objectPlace);
 
 	/// The object's matrix from the body: its axes scaled by the object's scale, its origin back from the centre of mass
 	[[nodiscard]] Pose ObjectPose() const;

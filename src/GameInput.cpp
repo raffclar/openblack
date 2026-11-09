@@ -198,6 +198,9 @@ void Game::UpdateInput()
 		}));
 		// The land's scripts may take the camera's keys away, as the tutorials do
 		actions.SetBlockedActions(Locator::cameraHelpSystem::value().Get().BlockedActions());
+		// While a script holds the screen, no press of the mouse does a one-press action
+		actions.SetScriptHoldsScreen(Locator::cinematicDirectorSystem::has_value() &&
+		                             !Locator::cinematicDirectorSystem::value().IsInterfaceActive());
 		if (!Locator::debugGui::value().StealsFocus() || actions.HasQueuedPresses())
 		{
 			actions.Frame();

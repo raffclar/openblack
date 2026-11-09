@@ -89,6 +89,14 @@ glm::vec3 TurnedYxz(const glm::mat3& axes, glm::vec3 v)
 	return (axes[1] * v.y + axes[0] * v.x) + axes[2] * v.z;
 }
 
+/// The axes times the centre of mass, as the game adds the parts of each row: z, y, x for the first, z, x, y for the
+/// others
+glm::vec3 TurnedCentreOfMass(const glm::mat3& axes, glm::vec3 c)
+{
+	return {(axes[2].x * c.z + axes[1].x * c.y) + axes[0].x * c.x, (axes[2].y * c.z + axes[0].y * c.x) + axes[1].y * c.y,
+	        (axes[2].z * c.z + axes[0].z * c.x) + axes[1].z * c.y};
+}
+
 glm::mat3 NormaliseAxes(glm::mat3 axes)
 {
 	for (int i = 0; i < 3; ++i)
@@ -306,8 +314,19 @@ void Body::SettleOnLand(const Ground& ground, bool noPullDown, bool alignToSlope
 	float lowest = 1000.0f;
 	for (const auto& point : _points)
 	{
-		const auto world = _axes * point.local + _centre;
-		lowest = std::min(lowest, world.y - ground.HeightAt(Xz(world)));
+		// The game adds the parts of each row in its own order: z, y, x for the first, y, x, z for the second and x, z, y
+		// for the third
+		const auto& a = _axes;
+		const auto& l = point.local;
+		const glm::vec3 world(((a[2].x * l.z + a[1].x * l.y) + a[0].x * l.x) + _centre.x,
+		                      ((a[1].y * l.y + a[0].y * l.x) + a[2].y * l.z) + _centre.y,
+		                      ((a[0].z * l.x + a[2].z * l.z) + a[1].z * l.y) + _centre.z);
+		// A gap that is not a number also becomes the lowest, as the game compares with the FPU
+		const float gap = world.y - ground.HeightAt(Xz(world));
+		if (openblack::x87::LessOrUnordered(gap, lowest))
+		{
+			lowest = gap;
+		}
 	}
 	if (noPullDown && lowest > 0.0f)
 	{
@@ -333,7 +352,9 @@ void Body::ClearForces()
 	for (auto& point : _points)
 	{
 		point.world = TurnedYxz(_axes, point.local) + _centre + ahead;
-		point.aheadLength = std::max(openblack::x87::LengthZyx(point.world - _centre), k_MinAheadLength);
+		// A length that is not a number also becomes the least length
+		const float length = openblack::x87::LengthZyx(point.world - _centre);
+		point.aheadLength = openblack::x87::LessOrUnordered(length, k_MinAheadLength) ? k_MinAheadLength : length;
 	}
 	_aheadCentre = _centre + ahead;
 	for (auto& face : _faces)
@@ -761,15 +782,13 @@ glm::vec3 Body::AngularVelocity() const
 
 void Body::SetAngularVelocityInBodyAxes(glm::vec3 omega)
 {
-	glm::vec3 local(0.0f);
-	for (int column = 0; column < 3; ++column)
-	{
-		for (int row = 0; row < 3; ++row)
-		{
-			local[column] += omega[row] * _inertia[row][column];
-		}
-	}
-	angularMomentum = _axes * local;
+	// The game adds the products of each part in its own order: rows 1, 2, 0 for the first part and rows 0, 1, 2 for the
+	// others. Then it turns the result into the world from the last axis to the first.
+	const auto& inertia = _inertia;
+	const glm::vec3 local((inertia[1][0] * omega.y + inertia[2][0] * omega.z) + inertia[0][0] * omega.x,
+	                      (inertia[0][1] * omega.x + inertia[1][1] * omega.y) + inertia[2][1] * omega.z,
+	                      (inertia[0][2] * omega.x + inertia[1][2] * omega.y) + inertia[2][2] * omega.z);
+	angularMomentum = TurnedZyx(_axes, local);
 }
 
 void Body::SetAngularVelocity(glm::vec3 omega)
@@ -914,7 +933,13 @@ void Body::BeginTurn()
 Pose Body::ObjectPose() const
 {
 	const auto scaled = _axes * _scale;
-	return {.axes = scaled, .origin = _centre - scaled * _centreOfMass};
+	return {.axes = scaled, .origin = _centre - TurnedCentreOfMass(scaled, _centreOfMass)};
+}
+
+void Body::FollowObject(glm::vec3 objectPlace)
+{
+	// The game turns the centre of mass with the unit axes first, and then multiplies it by the scale
+	_centre = objectPlace + TurnedCentreOfMass(_axes, _centreOfMass) * _scale;
 }
 
 Pose Body::DrawPose(float turnFraction, bool animated) const

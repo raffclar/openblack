@@ -134,7 +134,7 @@ struct Storm
 	/// Creation order: later storms are applied on top of earlier ones
 	uint32_t serial;
 	bool dead;
-	/// Turns since the storm died, it is removed after a couple
+	/// The turns that the storm counted after it died. The storm goes after two.
 	uint8_t deadTurns;
 	entt::entity climate;
 };

@@ -1424,7 +1424,7 @@ void DynamicsSystem::EndTurn()
 		{
 			if (const auto* transform = registry.TryGet<const Transform>(entry.entity))
 			{
-				body.MoveCentre(transform->position + body.Axes() * (body.CentreOfMass() * body.Scale()));
+				body.FollowObject(transform->position);
 			}
 		}
 		const auto impact = turn::Impact(entry.forceSum);

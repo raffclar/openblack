@@ -83,6 +83,7 @@ public:
 	void ProcessWeatherThings() override;
 	void ProcessClimates(uint32_t turn) override;
 	[[nodiscard]] std::span<const components::Storm> GetActiveStorms() const override { return _activeStorms; }
+	[[nodiscard]] std::span<const components::Storm> GetSteppedStorms() const override { return _steppedStorms; }
 
 	[[nodiscard]] components::WeatherInfo GetWeather(const glm::vec3& position) override;
 	[[nodiscard]] components::WeatherInfo GetWeatherSmooth(const glm::vec3& position) override;
@@ -101,6 +102,8 @@ private:
 	void InitialiseClimate(components::Climate& climate) const;
 
 	void UpdateStorms();
+	bool StepStorm(components::Storm& storm);
+	void KillStorm(components::Storm& storm);
 	/// The wind that blows a weather thing's storm where it is: the air's and the climates'
 	[[nodiscard]] script_weather::Wind DriftWindAt(const glm::vec3& position);
 	void ProcessClimate(entt::entity entity, bool newDay);
@@ -132,6 +135,7 @@ private:
 
 	/// Live storms as they stood at the start of the turn, newest first
 	std::vector<components::Storm> _activeStorms;
+	std::vector<components::Storm> _steppedStorms;
 	uint32_t _nextStormSerial {0};
 	/// The storm forced over the island, if there is one
 	entt::entity _forcedStorm {entt::null};

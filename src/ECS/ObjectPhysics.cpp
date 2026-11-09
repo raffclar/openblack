@@ -707,20 +707,7 @@ void object_physics::ConsiderArtefact(const PhysicsEntry* entry, entt::entity ob
 		artefacts.AddToSite(object, nearest, player);
 		return;
 	}
-	// TODO(dispensers): a spell dispenser belongs to its town in the game; openblack's keep no town, so none takes it
-	const auto* abode = registry.TryGet<const Abode>(nearest);
-	if (abode == nullptr)
-	{
-		return;
-	}
-	entt::entity town = entt::null;
-	const auto townId = abode->townId;
-	registry.Each<const Town>([&town, townId](entt::entity entity, const Town& data) {
-		if (data.id == townId)
-		{
-			town = entity;
-		}
-	});
+	const auto town = TownOfBuilding(registry, nearest);
 	if (town == entt::null)
 	{
 		return;
@@ -729,6 +716,27 @@ void object_physics::ConsiderArtefact(const PhysicsEntry* entry, entt::entity ob
 	impress(record != nullptr && record->town == town);
 	// It becomes the town's artefact, worth what it impresses villagers when it is new
 	artefacts.AddToTown(object, town, player);
+}
+
+entt::entity object_physics::TownOfBuilding(const Registry& registry, entt::entity building)
+{
+	entt::entity town = entt::null;
+	// A spell dispenser is a building of its town, as an abode is
+	if (const auto* dispenser = registry.TryGet<const SpellDispenser>(building))
+	{
+		town = dispenser->town;
+	}
+	else if (const auto* abode = registry.TryGet<const Abode>(building))
+	{
+		const auto townId = abode->townId;
+		registry.Each<const Town>([&town, townId](entt::entity entity, const Town& data) {
+			if (data.id == townId)
+			{
+				town = entity;
+			}
+		});
+	}
+	return town != entt::null && registry.Valid(town) && registry.AllOf<Town>(town) ? town : entt::null;
 }
 
 void object_physics::ArtefactTaken(entt::entity object, PlayerNames player)
