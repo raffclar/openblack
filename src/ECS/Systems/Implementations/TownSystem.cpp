@@ -283,6 +283,7 @@ town_homes::Homes GameHomes()
 	    .leaving = [](entt::entity villager) { villager_home::LeavingHome(villager); },
 	    .atHome = [](entt::entity villager) { return Locator::entitiesRegistry::value().AllOf<AtHome>(villager); },
 	    .leavingTown = [](entt::entity villager, entt::entity town) { villager_breeding::OrphanChildrenOf(villager, town); },
+	    .leavingWorship = [](entt::entity villager) { ecs::villager_worship::LeaveTown(villager); },
 	    .joinedTown =
 	        [](entt::entity town) {
 		        if (Locator::worshipSiteSystem::has_value())
@@ -482,12 +483,7 @@ void TownSystem::RemoveVillager(entt::entity villager)
 	{
 		return;
 	}
-	// Worship first, while its town is still known
-	ecs::villager_worship::LeaveTown(villager);
-	const auto town = person->town;
 	town_homes::RemoveVillagerFromTown(registry, GameHomes(), villager);
-	StartEmptyTownTimerIfEmpty(town);
-	registry.Get<Villager>(villager).mother = entt::null;
 }
 
 uint32_t TownSystem::PopulationOf(entt::entity town)

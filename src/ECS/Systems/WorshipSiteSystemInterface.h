@@ -40,11 +40,13 @@ public:
 	/// A person joins a town: the town's first, with its player's temple, has it given its tribe's worship site
 	virtual void PersonJoinedTown(entt::entity town) = 0;
 	/// A town has changed hands: it leaves its worship site, which no longer asks it to build, and is given its new
-	/// player's site of its tribe when they have a temple
+	/// player's site of its tribe when they have a temple. When the town gets the site, the heart of the temple gets
+	/// all its life again.
 	virtual void TownChangedHands(entt::entity town) = 0;
 	/// A town goes from the game: it leaves its worship site, which no longer asks it to build
 	virtual void TownRemoved(entt::entity town) = 0;
-	/// The land has been laid out: each town of a player with a temple and no worship site is given one
+	/// The land has been laid out: the players in their order, each town of a player with a temple and no worship site
+	/// is given one. When a town gets its site, the heart of the temple gets all its life again.
 	virtual void LandLaidOut() = 0;
 	/// The land's script puts down a worship site already built: the player's site of the tribe, made if it isn't
 	/// there, is built and given to the first of the player's towns of that tribe. The site, none without the player's
