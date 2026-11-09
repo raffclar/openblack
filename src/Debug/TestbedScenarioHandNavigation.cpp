@@ -348,4 +348,22 @@ void testbed_scenarios::AddHandNavigationScenarios(std::vector<Scenario>& all)
 	    .commands = {KeyDown(SDL_SCANCODE_LEFT, 1.0f), KeyUp(SDL_SCANCODE_LEFT, 2.0f), KeyDown(SDL_SCANCODE_UP, 0.5f),
 	                 KeyUp(SDL_SCANCODE_UP, 2.0f)},
 	});
+	all.push_back({
+	    .id = "hand.bookmark_under_cursor",
+	    .name = "Keep a bookmark at the point under the cursor",
+	    .facet = Facet::Hand,
+	    .description = "The camera looks down at the middle of the map. The pointer rests a little right of the middle, on "
+	                   "bare land. After a second, Ctrl and the key 1 keep bookmark 1. Then the left arrow key moves the "
+	                   "camera away for two seconds. Then the key 1 flies the camera back to the bookmark, and four seconds "
+	                   "later Backspace flies it back to where it was before the jump.",
+	    .expected = "The marker of bookmark 1 hangs two metres above the land at the point under the cursor, not above "
+	                "the hand, which floats higher. The key 1 flies the camera back to the same view that it had when the "
+	                "bookmark was kept, looking at that point on the land. Backspace flies back to the view before the "
+	                "jump, looking at the point that was under the cursor then.",
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 40.0f, -60.0f}, .look = {0.0f, 0.0f, 0.0f}},
+	    .commands = {PointerTo({0.6f, 0.55f}, 0.5f), KeyDown(SDL_SCANCODE_LCTRL, 1.0f), KeyDown(SDL_SCANCODE_1, 0.1f),
+	                 KeyUp(SDL_SCANCODE_1, 0.1f), KeyUp(SDL_SCANCODE_LCTRL, 0.1f), KeyDown(SDL_SCANCODE_LEFT, 1.0f),
+	                 KeyUp(SDL_SCANCODE_LEFT, 2.0f), KeyDown(SDL_SCANCODE_1, 1.0f), KeyUp(SDL_SCANCODE_1, 0.1f),
+	                 KeyDown(SDL_SCANCODE_BACKSPACE, 4.0f), KeyUp(SDL_SCANCODE_BACKSPACE, 0.1f)},
+	});
 }

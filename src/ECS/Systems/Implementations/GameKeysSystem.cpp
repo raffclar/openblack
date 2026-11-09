@@ -16,7 +16,6 @@
 #include <utility>
 
 #include <SDL.h>
-#include <glm/gtc/constants.hpp>
 
 #include "3D/TempleInteriorInterface.h"
 #include "3D/TempleRoom.h"
@@ -186,20 +185,17 @@ bool GameKeysSystem::ProcessKeyPress(const SDL_Event& event, input::KeyDownBindi
 				break;
 			case keys::BookmarkKey::Set:
 			{
-				// The bookmark keeps the place of the hand, or the thing under the hand
-				const auto left = Locator::handSystem::value().GetDrawnHandPosition();
-				const auto right =
-				    Locator::handSystem::value()
-				        .GetOwnHandPositions()[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Right)];
-				if (left.has_value() || right.has_value())
+				// The bookmark keeps the point under the cursor from the last report of the hand, or the thing under the
+				// hand. It keeps the camera from the eye that the last frame drew.
+				const auto& hands = Locator::handSystem::value();
+				if (const auto point = hands.GetReportedPointUnderCursor(hands.GetOwnPlayer()); point.has_value())
 				{
 					std::optional<entt::entity> thing;
 					if (Locator::pickingSystem::has_value())
 					{
 						thing = Locator::pickingSystem::value().GetPick().object;
 					}
-					bookmarks.SetBookmark(slot, left.value_or(right.value_or(glm::zero<glm::vec3>())), thing,
-					                      camera.GetOrigin());
+					bookmarks.SetBookmark(slot, *point, thing, camera.GetOrigin(Camera::Interpolation::Drawn));
 				}
 				break;
 			}

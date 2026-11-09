@@ -472,6 +472,19 @@ std::optional<HandSystemInterface::ReportedCamera> HandSystem::GetReportedCamera
 	return ReportedCamera {.origin = reported->camera, .focus = reported->focus};
 }
 
+std::optional<glm::vec3> HandSystem::GetReportedPointUnderCursor(PlayerNames player) const noexcept
+{
+	const auto hands = GetHandsOf(player);
+	if (!hands.has_value())
+	{
+		return std::nullopt;
+	}
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto hand = (*hands)[static_cast<size_t>(Side::Left)];
+	const auto* reported = registry.Valid(hand) ? registry.TryGet<const ReportedHand>(hand) : nullptr;
+	return reported != nullptr ? std::optional(reported->collidePoint) : std::nullopt;
+}
+
 void HandSystem::ReportView(PlayerNames player, const player_commands::ViewReport& report)
 {
 	// The view belongs to the left hand of its player. A player with no hands yet has no view.

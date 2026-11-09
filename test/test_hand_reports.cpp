@@ -606,6 +606,16 @@ TEST_F(ReportedHands, TheWorldHasTheCameraWhereTheLastReportPutIt)
 	EXPECT_EQ(camera->focus, glm::vec3(25.0f, 0.0f, 35.0f));
 }
 
+TEST_F(ReportedHands, TheBookmarkKeysHaveThePointUnderTheCursorNotTheHand)
+{
+	// A player with no hands has no point
+	EXPECT_FALSE(_hands.GetReportedPointUnderCursor(PlayerNames::PLAYER_TWO).has_value());
+	_hands.Report(PlayerNames::PLAYER_ONE, ReportAt({20.0f, 1.0f, 30.0f}));
+	DrawHandAt({500.0f, 0.0f, 500.0f});
+	// The point under the cursor is one below the hand in these reports
+	EXPECT_EQ(_hands.GetReportedPointUnderCursor(PlayerNames::PLAYER_ONE), glm::vec3(20.0f, 0.0f, 30.0f));
+}
+
 TEST_F(ReportedHands, EachPlayerHasTheCameraOfItsOwnReports)
 {
 	// A player with no hands has no camera

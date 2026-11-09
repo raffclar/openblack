@@ -11,6 +11,9 @@
 
 #include <cstdint>
 
+#include <array>
+#include <utility>
+
 #include <SDL_events.h>
 
 namespace
@@ -135,4 +138,41 @@ bool openblack::input::IsPlayerDeviceEvent(const SDL_Event& event)
 	default:
 		return false;
 	}
+}
+
+uint16_t openblack::input::ModifiersOfHeldKeys(const std::bitset<SDL_NUM_SCANCODES>& held)
+{
+	constexpr std::array<std::pair<SDL_Scancode, uint16_t>, 8> k_ModifierKeys {{
+	    {SDL_SCANCODE_LSHIFT, KMOD_LSHIFT},
+	    {SDL_SCANCODE_RSHIFT, KMOD_RSHIFT},
+	    {SDL_SCANCODE_LCTRL, KMOD_LCTRL},
+	    {SDL_SCANCODE_RCTRL, KMOD_RCTRL},
+	    {SDL_SCANCODE_LALT, KMOD_LALT},
+	    {SDL_SCANCODE_RALT, KMOD_RALT},
+	    {SDL_SCANCODE_LGUI, KMOD_LGUI},
+	    {SDL_SCANCODE_RGUI, KMOD_RGUI},
+	}};
+	uint16_t mod = KMOD_NONE;
+	for (const auto& [key, bit] : k_ModifierKeys)
+	{
+		if (held.test(static_cast<size_t>(key)))
+		{
+			mod |= bit;
+		}
+	}
+	return mod;
+}
+
+SDL_Event openblack::input::MakeInjectedKey(const InjectedKey& key)
+{
+	SDL_Event event {};
+	event.type = key.down ? SDL_KEYDOWN : SDL_KEYUP;
+	event.key.windowID = key.windowId;
+	event.key.state = key.down ? SDL_PRESSED : SDL_RELEASED;
+	event.key.repeat = key.repeat ? 1 : 0;
+	event.key.keysym.scancode = key.scancode;
+	event.key.keysym.sym = key.sym;
+	event.key.keysym.mod = key.mod;
+	MarkInjected(event);
+	return event;
 }

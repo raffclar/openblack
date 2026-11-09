@@ -53,6 +53,7 @@ public:
 	[[nodiscard]] PlayerNames GetOwnPlayer() const noexcept override { return _ownPlayer.value_or(PlayerNames::PLAYER_ONE); }
 	[[nodiscard]] bool IsOwnPlayer(PlayerNames player) const noexcept override { return _ownPlayer == player; }
 	[[nodiscard]] std::optional<ReportedCamera> GetReportedCamera(PlayerNames player) const noexcept override;
+	[[nodiscard]] std::optional<glm::vec3> GetReportedPointUnderCursor(PlayerNames player) const noexcept override;
 	void Report(PlayerNames player, const player_commands::HandReport& report) override;
 	void ReportPick(PlayerNames player, entt::entity object) override;
 	void ReportView(PlayerNames player, const player_commands::ViewReport& report) override;
