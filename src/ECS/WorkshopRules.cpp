@@ -166,6 +166,14 @@ bool workshop::KeepsScaffold(uint32_t putDownTurn, uint32_t turn, uint32_t keepT
 	return !(keepTurns <= lain && !scriptBuilding);
 }
 
+void workshop::StartsWorkingInTown(std::vector<entt::entity>& townWorkshops, entt::entity workshop)
+{
+	if (workshop != entt::null && std::ranges::find(townWorkshops, workshop) == townWorkshops.end())
+	{
+		townWorkshops.insert(townWorkshops.begin(), workshop);
+	}
+}
+
 void workshop::AddScaffold(components::Workshop& workshop, entt::entity scaffold)
 {
 	if (scaffold != entt::null)

@@ -280,6 +280,10 @@ enum class KeyDownBinding : uint8_t
 /// - No script holds the screen.
 [[nodiscard]] bool MousePressActs(std::span<const KeyBinding> bindings, MouseInput mouse, BindableActionMap blocked,
                                   bool scriptHoldsScreen) noexcept;
+/// The one-press action that a press of the mouse input does, from the same rule as MousePressActs. It is NONE when
+/// the press does not act.
+[[nodiscard]] BindableActionMap MousePressAction(std::span<const KeyBinding> bindings, MouseInput mouse,
+                                                 BindableActionMap blocked, bool scriptHoldsScreen) noexcept;
 /// The actions bound to a mouse input
 [[nodiscard]] BindableActionMap ActionsForMouse(std::span<const KeyBinding> bindings, MouseInput mouse) noexcept;
 

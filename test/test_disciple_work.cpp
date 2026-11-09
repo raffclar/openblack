@@ -159,3 +159,22 @@ TEST(DiscipleWork, CarryRoomIsASignedCount)
 	// Carrying more than it may, the room runs below nothing
 	EXPECT_EQ(CarryRoom(300, 350), -50);
 }
+
+TEST(DiscipleWork, AMissionaryInTheHandKeepsItsPreaching)
+{
+	const PreachingFacts preaching {.townLives = true, .reactionLives = true, .missionaryAbout = true, .stillMissionary = true};
+	EXPECT_TRUE(KeepsPreaching(preaching));
+	// It stops when its town or its reaction goes, when its death starts, or when it is no longer a missionary
+	auto gone = preaching;
+	gone.townLives = false;
+	EXPECT_FALSE(KeepsPreaching(gone));
+	gone = preaching;
+	gone.reactionLives = false;
+	EXPECT_FALSE(KeepsPreaching(gone));
+	gone = preaching;
+	gone.missionaryAbout = false;
+	EXPECT_FALSE(KeepsPreaching(gone));
+	gone = preaching;
+	gone.stillMissionary = false;
+	EXPECT_FALSE(KeepsPreaching(gone));
+}

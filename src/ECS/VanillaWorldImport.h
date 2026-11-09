@@ -344,6 +344,8 @@ struct ImportedTown
 	/// The numbers of the objects of its buildings and of its homeless villagers, in the order of the file
 	std::vector<uint32_t> abodes;
 	std::vector<uint32_t> homeless;
+	/// The numbers of the objects of its workshops, in the order of the file: the newest to start to work first
+	std::vector<uint32_t> workshops;
 	/// The numbers of the objects of its plans and of its building sites, in the order of the file: the newest site first
 	std::vector<uint32_t> planned;
 	std::vector<uint32_t> sites;
