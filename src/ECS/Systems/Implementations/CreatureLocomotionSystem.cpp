@@ -1067,11 +1067,13 @@ const route::WalkableLand& CreatureLocomotionSystem::GetWalkableLand()
 		}
 		const auto& land = Locator::terrainSystem::value();
 		// The corners' own altitudes rather than the drawn heights, which put everything at sea level at the bottom: only
-		// corners right at the bottom make deep water, and shallows a little above it can be waded
+		// corners right at the bottom make deep water, and shallows a little above it can be waded. The game sorts the
+		// cells when it opens the land, before a script or a temple changes the land. Thus the map uses the altitudes of
+		// the land as it was built, and is the same at each time that it is made.
 		_land = route::WalkableLand::Build(
 		    [&land](int32_t x, int32_t z) {
-			    const auto* cell = land.FindCell(glm::u16vec2(static_cast<uint16_t>(x), static_cast<uint16_t>(z)));
-			    return cell != nullptr ? static_cast<float>(cell->altitude) * LandIslandInterface::k_HeightUnit : 0.0f;
+			    const auto altitude = land.FindBuiltAltitude(glm::u16vec2(static_cast<uint16_t>(x), static_cast<uint16_t>(z)));
+			    return static_cast<float>(altitude.value_or(0)) * LandIslandInterface::k_HeightUnit;
 		    },
 		    [&land](int32_t x, int32_t z) -> std::optional<bool> {
 			    const auto* cell = land.FindCell(glm::u16vec2(static_cast<uint16_t>(x), static_cast<uint16_t>(z)));
