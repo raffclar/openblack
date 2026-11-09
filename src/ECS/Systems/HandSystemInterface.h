@@ -88,6 +88,13 @@ public:
 	{
 		return std::nullopt;
 	}
+	/// The point under the cursor of a player (on the land, the sea or a thing), from the last report of the player that a
+	/// turn did. Zero before the first report. None for a player with no hands.
+	[[nodiscard]] virtual std::optional<glm::vec3>
+	GetReportedPointUnderCursor([[maybe_unused]] PlayerNames player) const noexcept
+	{
+		return std::nullopt;
+	}
 	/// What the world has of the view of a player, from the last view report of the player that a turn did (see
 	/// player_commands::ViewReport)
 	struct ReportedView
