@@ -75,9 +75,18 @@ struct Settings
 	float lightBoost {0.0f};
 };
 
+/// The game keeps the model detail and the tiling of the sea as whole numbers for each level. It multiplies each number
+/// by a float scale, thus some values are one float step below the round value: 0.8 is 0.79999995.
+[[nodiscard]] constexpr std::array<float, k_Count> Scaled(const std::array<int32_t, k_Count>& whole, float scale)
+{
+	std::array<float, k_Count> values {};
+	std::ranges::transform(whole, values.begin(), [scale](int32_t value) { return static_cast<float>(value) * scale; });
+	return values;
+}
+
 // The game's tables, one value per level
-inline constexpr std::array<float, k_Count> k_ModelDetail = {0.2f, 0.3f, 0.4f, 0.5f, 0.5f, 0.5f, 0.5f};
-inline constexpr std::array<float, k_Count> k_WaterTiling = {0.0f, 0.2f, 0.4f, 0.6f, 0.8f, 0.5f, 1.0f};
+inline constexpr std::array<float, k_Count> k_ModelDetail = Scaled({2000, 3000, 4000, 5000, 5000, 5000, 5000}, 0.0001f);
+inline constexpr std::array<float, k_Count> k_WaterTiling = Scaled({0, 20, 40, 60, 80, 50, 100}, 0.01f);
 inline constexpr std::array<uint8_t, k_Count> k_RainSplashes = {0, 0, 3, 5, 8, 8, 8};
 
 /// The settings of a level; any level above the highest is the highest
