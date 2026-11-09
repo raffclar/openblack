@@ -271,6 +271,7 @@ void Runner::Start(const Scenario& scenario)
 	_log.clear();
 	_checks.Start(scenario.checks);
 	_checksReported = false;
+	_checksProgressTurn.reset();
 	_shot.reset();
 	_crowdCreatures.clear();
 	_village = {};
@@ -1325,22 +1326,50 @@ void Runner::UpdateChecks()
 		const auto turns = Locator::time::value().GetTurn() - _startTurn;
 		_checks.Update(turns, [this](const checks::Check& check) { return ReadCheck(check); });
 	}
-	const auto verdict = _checks.GetVerdict();
-	if (verdict == checks::Verdict::Waiting)
+	if (_checks.GetVerdict() == checks::Verdict::Waiting)
 	{
+		// The inspector can read how far the checks are while they wait
+		const auto turn = Locator::time::value().GetTurn();
+		if (_stage != nullptr && _checksProgressTurn != turn)
+		{
+			_checksProgressTurn = turn;
+			_stage->ReportChecks(checks::MakeReport(_checks, _scenario->id), false);
+		}
 		return;
 	}
+	PublishChecks(_benchmark.reportChecks);
+}
+
+void Runner::PublishChecks(bool quit)
+{
 	_checksReported = true;
-	auto lines = _checks.Report(_scenario->id);
-	for (const auto& line : lines)
+	auto report = checks::MakeReport(_checks, _scenario->id);
+	for (const auto& line : report.lines)
 	{
 		SPDLOG_LOGGER_INFO(spdlog::get("game"), "Scenario check: {}", line);
 	}
 	if (_stage != nullptr)
 	{
-		_stage->ReportChecks({.scenario = std::string(_scenario->id), .verdict = verdict, .lines = std::move(lines)},
-		                     _benchmark.reportChecks);
+		_stage->ReportChecks(std::move(report), quit);
 	}
+}
+
+void Runner::EndChecks()
+{
+	if (_scenario == nullptr || _checksReported || !Locator::time::has_value())
+	{
+		return;
+	}
+	if (_scenario->checks.empty() && !_benchmark.reportChecks)
+	{
+		return;
+	}
+	if (!_checks.Done())
+	{
+		const auto turns = Locator::time::value().GetTurn() - _startTurn;
+		_checks.Update(turns, [this](const checks::Check& check) { return ReadCheck(check); });
+	}
+	PublishChecks(_benchmark.reportChecks);
 }
 
 void Runner::UpdateTurnsAsked()

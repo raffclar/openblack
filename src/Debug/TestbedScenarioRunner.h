@@ -82,6 +82,9 @@ public:
 	/// Stops giving commands and puts back the settings the scenario changed: the body time, fainting, the footprints'
 	/// smileys, the clock and whether anger starts fights. What is on the land stays, to look at or carry on with by hand.
 	void Stop();
+	/// Called as the game ends. A scenario whose checks are not all decided is reported as it stands, so that a run that
+	/// ends early still writes its report and sets its exit code.
+	void EndChecks();
 	/// Once a frame
 	void Update(float seconds);
 	/// Once a frame of a network game: only the camera follows the scenario. The commands come before the turns.
@@ -181,6 +184,8 @@ private:
 	/// Asks the renderer to make the graphics device again once the dome of the sky is part way through a follow
 	void UpdateDeviceRestore();
 	void UpdateChecks();
+	/// Gives the report of the checks to the stage. With quit, the game also ends with the exit code of the verdict.
+	void PublishChecks(bool quit);
 	[[nodiscard]] std::optional<double> ReadCheck(const checks::Check& check) const;
 	/// Casts the scenario's miracle of that index; the running miracle, or none
 	entt::entity CastMiracle(size_t index);
@@ -410,6 +415,8 @@ private:
 	std::deque<std::string> _log;
 	checks::Evaluator _checks;
 	bool _checksReported {false};
+	/// The turn of the last progress report, so that the report is made once for each turn
+	std::optional<uint32_t> _checksProgressTurn;
 	/// The gesture being drawn, and the count of gestures recognised before it
 	std::optional<GestureType> _drawing;
 	uint32_t _recognisedBefore {0};

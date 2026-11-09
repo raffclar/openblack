@@ -170,3 +170,32 @@ TEST(TestbedScenarioChecks, AStoryLandIsNamedExactlyForAStoryLand)
 		EXPECT_EQ(scenario.environment.land == Land::Story, !scenario.environment.storyLand.empty()) << scenario.id;
 	}
 }
+
+TEST(TestbedScenarioChecks, AReportOfWaitingChecksShowsThemAndTheCodeForNotDecided)
+{
+	const std::vector<Check> list {{.label = "early", .afterTurns = 0, .atLeast = 1.0},
+	                               {.label = "late", .afterTurns = 50, .atLeast = 1.0}};
+	Evaluator evaluator;
+	evaluator.Start(list);
+	evaluator.Update(10, Gives(5.0));
+	const auto report = MakeReport(evaluator, "some.scenario");
+	EXPECT_EQ(report.scenario, "some.scenario");
+	EXPECT_EQ(report.verdict, Verdict::Waiting);
+	ASSERT_EQ(report.lines.size(), 3u);
+	EXPECT_NE(report.lines[0].find("pass early"), std::string::npos);
+	EXPECT_NE(report.lines[1].find("waiting late"), std::string::npos);
+	EXPECT_NE(report.lines[2].find("waiting"), std::string::npos);
+	EXPECT_EQ(ExitCodeOf(report.verdict), 2);
+}
+
+TEST(TestbedScenarioChecks, AReportOfADecidedRunGivesItsVerdict)
+{
+	const std::vector<Check> list {{.label = "one", .atMost = 1.0}};
+	Evaluator evaluator;
+	evaluator.Start(list);
+	evaluator.Update(0, Gives(5.0));
+	const auto report = MakeReport(evaluator, "s");
+	EXPECT_EQ(report.verdict, Verdict::Failed);
+	EXPECT_EQ(report.lines.size(), 2u);
+	EXPECT_EQ(ExitCodeOf(report.verdict), 1);
+}

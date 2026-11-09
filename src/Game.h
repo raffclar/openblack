@@ -485,6 +485,9 @@ public:
 	/// The scenarios' window sets the question whether the scenario of the run gave all its commands. A turn-limited run
 	/// ends when the temple then holds the world (see sim_run::EndsHeldInTemple). None: the window is gone.
 	void SetScenarioGaveAll(std::function<bool()> gaveAll) { _scenarioGaveAll = std::move(gaveAll); }
+	/// The scenarios' window sets the work that reports the checks of the scenario as the game ends, also when the run
+	/// ends before all checks are decided. None: the window is gone.
+	void SetScenarioEnd(std::function<void()> end) { _scenarioEnd = std::move(end); }
 	/// A scenario asked for that the scenarios' window hasn't started yet
 	[[nodiscard]] const std::optional<ScenarioRequest>& PendingScenario() const { return _scenarioRequest; }
 	/// Asks for a scenario while the game runs: the scenarios' window runs it on a fresh testbed next frame. A build
@@ -616,6 +619,7 @@ private:
 	std::function<void()> _scenarioStager;
 	std::function<void()> _scenarioTurn;
 	std::function<bool()> _scenarioGaveAll;
+	std::function<void()> _scenarioEnd;
 	/// The port the debug inspector is to listen on, if it is to start
 	std::optional<uint16_t> _inspectPort;
 	/// The request of a tool's run. The tool run system reads it until the services shut down.
