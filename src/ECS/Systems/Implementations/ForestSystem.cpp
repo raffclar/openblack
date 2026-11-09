@@ -207,7 +207,8 @@ void Resize(entt::entity entity, float scale)
 	}
 }
 
-/// A forest's growing or grown trees, the nearest its place first and, of those as near, the one listed first
+/// A forest's growing or grown trees, the nearest its place first and, of those as near, the one listed first. The
+/// distances go from the map position of each tree to the map position of the forest.
 std::vector<entt::entity> ListedTrees(const ecs::Registry& registry, uint32_t forest, bool growing,
                                       const map_coords::MapCoords& centre)
 {
@@ -219,10 +220,10 @@ std::vector<entt::entity> ListedTrees(const ecs::Registry& registry, uint32_t fo
 	};
 	std::vector<Listed> trees;
 	registry.Each<const Tree, const ForestMember, const Transform>(
-	    [&](entt::entity tree, const Tree& /*unused*/, const ForestMember& member, const Transform& at) {
+	    [&](entt::entity tree, const Tree& /*unused*/, const ForestMember& member, const Transform& /*unused*/) {
 		    if (member.forest == forest && member.growing == growing)
 		    {
-			    trees.push_back({.distance = gutils::GetDistanceInMetres(map_coords::FromMetres(glm::xz(at.position)), centre),
+			    trees.push_back({.distance = gutils::GetDistanceInMetres(ecs::thing_map_place::Of(registry, tree), centre),
 			                     .listed = member.listed,
 			                     .tree = tree});
 		    }
@@ -497,7 +498,7 @@ std::optional<entt::entity> ForestSystem::PlantBeside(entt::entity tree)
 	auto& random = Locator::gameRandom::value();
 	const auto& land = Locator::terrainSystem::value();
 	// From the tree's own map position, keeping its height above the land
-	auto base = map_coords::FromMetres({from.x, from.z});
+	auto base = ecs::thing_map_place::Of(registry, tree);
 	base.altitude = from.y - land.GetHeightAt({from.x, from.z});
 	float angle = random.GameFloatRand(k_TwoPi);
 	// Round the tree at a step of a sixteenth of a half turn, each time at a whole number of metres from 5 to 9 and four
@@ -621,7 +622,7 @@ void ForestSystem::GrowForests()
 		{
 			continue;
 		}
-		const auto centre = map_coords::FromMetres(glm::xz(registry.Get<const Transform>(forest).position));
+		const auto centre = ecs::thing_map_place::Of(registry, forest);
 
 		// Its growing trees grow, the nearest its place first; a tree that leaves them is listed among the grown ones
 		if (trees.anyGrowing)
@@ -805,8 +806,7 @@ std::vector<entt::entity> ForestSystem::TreesOf(entt::entity forest, bool growin
 	{
 		return {};
 	}
-	const auto centre = map_coords::FromMetres(glm::xz(registry.Get<const Transform>(forest).position));
-	return ListedTrees(registry, record->id, growing, centre);
+	return ListedTrees(registry, record->id, growing, ecs::thing_map_place::Of(registry, forest));
 }
 
 float ForestSystem::WoodOf(entt::entity forest) const
@@ -1132,14 +1132,13 @@ std::optional<entt::entity> ForestSystem::CentreTreeOf(entt::entity forest) cons
 	const auto grown = TreesOf(forest, false);
 	const auto growing = TreesOf(forest, true);
 	// The distances go through the map positions, as the lists of the forest measure them
-	const auto centre = map_coords::FromMetres(glm::xz(registry.Get<const Transform>(forest).position));
+	const auto centre = ecs::thing_map_place::Of(registry, forest);
 	const auto distanceTo = [&](const std::vector<entt::entity>& trees) -> std::optional<float> {
 		if (trees.empty())
 		{
 			return std::nullopt;
 		}
-		return gutils::GetDistanceInMetres(
-		    map_coords::FromMetres(glm::xz(registry.Get<const Transform>(trees.front()).position)), centre);
+		return gutils::GetDistanceInMetres(ecs::thing_map_place::Of(registry, trees.front()), centre);
 	};
 	const auto pick = ecs::villager_work::CentreTree(distanceTo(grown), distanceTo(growing));
 	if (!pick.has_value())

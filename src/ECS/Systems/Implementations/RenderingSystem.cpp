@@ -2027,8 +2027,9 @@ std::optional<uint8_t> RenderingSystem::TreeDetailNow(entt::entity tree)
 		return graphics::mesh_detail::LevelBit(graphics::mesh_detail::Mesh::High);
 	}
 	const auto choice = ChooseDetail(
-	    *box, 0.0f, *placed, transform.scale.x, [&registry, tree] { return object_detail::Disappears(registry, tree, false); },
-	    ViewPoint::Of(Locator::camera::value()), Locator::config::value().detail.modelDetail);
+	    *box, object_detail::Importance(registry, tree), *placed, transform.scale.x,
+	    [&registry, tree] { return object_detail::Disappears(registry, tree, false); }, ViewPoint::Of(Locator::camera::value()),
+	    Locator::config::value().detail.modelDetail);
 	if (!choice.mesh.has_value())
 	{
 		return std::nullopt;
@@ -2102,7 +2103,7 @@ bool RenderingSystem::UploadTreeInstances(bool drawBoundingBox)
 		        camera != nullptr && box.has_value() && object_detail::BandedNow(registry, entity))
 		    {
 			    const auto choice = ChooseDetail(
-			        *box, 0.0f, modelMatrix, transform.scale.x,
+			        *box, object_detail::Importance(registry, entity), modelMatrix, transform.scale.x,
 			        [&registry, entity] { return object_detail::Disappears(registry, entity, false); }, *view, modelDetail);
 			    if (noteKept)
 			    {

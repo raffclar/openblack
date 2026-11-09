@@ -73,6 +73,9 @@ namespace openblack::ecs::object_detail
 inline constexpr float k_CarriedByVortexImportance = 10.0f;
 /// The importance of a dead tree
 inline constexpr float k_DeadTreeImportance = 1.0f;
+/// The importance of a tree that stands, is held or flies. Its bands are a tenth nearer than those of a thing with no
+/// importance.
+inline constexpr float k_TreeImportance = -0.1f;
 
 /// How important it is to keep a thing in detail: its distance bands reach further by this much and one. A thing that a
 /// vortex carries to the next land has the vortex importance. Another thing has the importance it got when it was made:

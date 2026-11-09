@@ -138,3 +138,27 @@ TEST(TreeSway, ThePhaseMovesOnByTheFrameTimeTimesTheSpeed)
 	}
 	EXPECT_NEAR(phase, 6.2831855f, 1e-2f);
 }
+
+TEST(TreeSway, ATreeKeepsItsYawLessItsWholeTurns)
+{
+	constexpr float k_Turn = std::bit_cast<float>(0x40C90FDBu);
+	EXPECT_EQ(tree_sway::Facing(1.0f), 1.0f);
+	EXPECT_EQ(tree_sway::Facing(-5.305f), -5.305f);
+	EXPECT_EQ(tree_sway::Facing(7.0f), 7.0f - k_Turn);
+	// The whole turns are truncated towards zero, so a negative yaw stays negative
+	EXPECT_EQ(tree_sway::Facing(-7.0f), -7.0f + k_Turn);
+}
+
+TEST(TreeSway, ATreeTakesTheSwayOfItsFacingInSixteenthsOfATurnRoundedAndTruncated)
+{
+	EXPECT_EQ(tree_sway::SlotOf(0.0f), 0);
+	// Just short of half a sixteenth stays on the first sway, half a sixteenth goes to the next
+	EXPECT_EQ(tree_sway::SlotOf(0.19f), 0);
+	EXPECT_EQ(tree_sway::SlotOf(0.2f), 1);
+	EXPECT_EQ(tree_sway::SlotOf(3.0f), 8);
+	// Near a whole turn it comes round to the first sway again
+	EXPECT_EQ(tree_sway::SlotOf(6.28261f), 0);
+	// A negative facing is truncated towards zero
+	EXPECT_EQ(tree_sway::SlotOf(-0.3f), 0);
+	EXPECT_EQ(tree_sway::SlotOf(-0.6f), 15);
+}

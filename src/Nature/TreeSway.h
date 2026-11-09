@@ -30,4 +30,12 @@ inline constexpr float k_MaxSpeed = 2.0f;
 /// How far a sway leans a tree along the world's z axis at a phase, per unit of the tree's height: at most 3%
 [[nodiscard]] float Lean(float phase);
 
+/// The facing that a new tree keeps: the given yaw less its whole turns. The count of whole turns is truncated towards
+/// zero, so a negative yaw stays negative.
+[[nodiscard]] float Facing(float yaw);
+
+/// The sway of a tree that has this facing: the facing in sixteenths of a turn, plus a half, truncated towards zero, of
+/// the 16 sways
+[[nodiscard]] uint8_t SlotOf(float facing);
+
 } // namespace openblack::nature::tree_sway

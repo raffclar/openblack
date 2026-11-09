@@ -37,6 +37,7 @@
 #include "ECS/Components/Vortex.h"
 #include "ECS/ObjectDetail.h"
 #include "ECS/Registry.h"
+#include "Graphics/MeshDetail.h"
 
 namespace
 {
@@ -124,9 +125,20 @@ TEST(ObjectDetail, AThingHasTheImportanceItWasMadeWith)
 	const auto deadTree = registry.Create();
 	registry.Assign<DrawImportance>(deadTree, DrawImportance {.importance = object_detail::k_DeadTreeImportance});
 	EXPECT_EQ(object_detail::Importance(registry, deadTree), 1.0f);
+	const auto tree = registry.Create();
+	registry.Assign<DrawImportance>(tree, DrawImportance {.importance = object_detail::k_TreeImportance});
+	EXPECT_EQ(object_detail::Importance(registry, tree), -0.1f);
 	const auto villager = registry.Create();
 	registry.Assign<DetailMeshes>(villager, DetailMeshes {.meshes = {}, .importance = 0.025f});
 	EXPECT_EQ(object_detail::Importance(registry, villager), 0.025f);
+}
+
+TEST(ObjectDetail, ATreeChangesItsDetailATenthNearerThanAThingWithNoImportance)
+{
+	// The game adds 1 to the importance as a float, then multiplies by the radius and the model detail
+	const float reach = openblack::graphics::mesh_detail::Reach(object_detail::k_TreeImportance, 2.0f, 1.0f);
+	EXPECT_EQ(reach, (-0.1f + 1.0f) * 2.0f);
+	EXPECT_LT(reach, openblack::graphics::mesh_detail::Reach(0.0f, 2.0f, 1.0f));
 }
 
 TEST(ObjectDetail, AThingThatAVortexCarriesAwayKeepsItsDetailAndDoesNotFade)
