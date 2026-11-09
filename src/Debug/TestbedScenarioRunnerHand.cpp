@@ -530,16 +530,18 @@ void Runner::FinishTakingFireBall()
 	Log(fmt::format("{:.1f}s: hand on the fireball: {}", _seconds, result));
 }
 
-std::string Runner::DrawGesture(GestureType gesture)
+std::string Runner::DrawGesture(GestureType gesture, glm::vec2 offset)
 {
 	if (!Locator::gestureSystem::has_value())
 	{
 		return "no gestures";
 	}
 	auto& gestures = Locator::gestureSystem::value();
-	// Across the middle of the screen, a little under half its height across
+	// Across the middle of the screen, or moved from it by a part of the screen's width and height, a little under half
+	// its height across
 	const auto aspect = gestures.GetScreenAspect();
-	const glm::vec2 middle {gesture::k_ReferenceHeight * aspect * 0.5f, gesture::k_ReferenceHeight * 0.5f};
+	const glm::vec2 middle {gesture::k_ReferenceHeight * aspect * (0.5f + offset.x),
+	                        gesture::k_ReferenceHeight * (0.5f + offset.y)};
 	constexpr float k_Size = 320.0f;
 	auto path = gesture::TraceGesture(gestures.GetTemplates(), gesture, middle, k_Size, aspect);
 	if (!path.has_value())
