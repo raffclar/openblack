@@ -197,4 +197,9 @@ std::vector<std::string> Evaluator::Report(std::string_view scenario) const
 	return lines;
 }
 
+Report MakeReport(const Evaluator& evaluator, std::string_view scenario)
+{
+	return {.scenario = std::string(scenario), .verdict = evaluator.GetVerdict(), .lines = evaluator.Report(scenario)};
+}
+
 } // namespace openblack::testbed_scenarios::checks
