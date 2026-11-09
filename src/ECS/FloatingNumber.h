@@ -38,6 +38,8 @@ constexpr float k_RiseSpeed = 10.0f;
 constexpr float k_TextSize = 15.0f;
 /// Its shadow is drawn this many pixels left of it and below it
 constexpr float k_ShadowOffset = 1.0f;
+/// Its shadow is this much farther from the camera than the number
+constexpr float k_ShadowDepth = 0.1f;
 
 /// The number moves on by some seconds: it rises and its life runs down. Whether it lasts.
 [[nodiscard]] bool Step(components::FloatingNumber& number, float seconds);

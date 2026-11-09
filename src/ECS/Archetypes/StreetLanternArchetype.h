@@ -21,6 +21,8 @@ class StreetLanternArchetype
 public:
 	/// A lantern of the given kind: the street lantern of the towns, or any other kind for a country lantern on a campfire
 	static entt::entity Create(const glm::vec3& position, MobileStaticInfo info);
+	/// A street light of a land script at the place. Nothing shows it, and nothing finds it on the map.
+	static entt::entity CreateStreetLight(const glm::vec3& position);
 	StreetLanternArchetype() = delete;
 };
 } // namespace openblack::ecs::archetypes

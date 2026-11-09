@@ -9,9 +9,12 @@
 
 #pragma once
 
+#include <optional>
+
 #include <entt/fwd.hpp>
 #include <glm/fwd.hpp>
 
+#include "3D/MapCoords.h"
 #include "Enums.h"
 
 namespace openblack::ecs::archetypes
@@ -22,9 +25,10 @@ public:
 	/// A temple standing built, as a script makes one ready for its player, turned by yAngle radians about the
 	/// vertical, as the game measures its turn
 	static entt::entity Create(const glm::vec3& position, PlayerNames playerOwner, float yAngle, const glm::vec3& size);
-	/// A temple with this much of it built, 0 to 1: one not all built is under construction
+	/// A temple with this much of it built, 0 to 1: one not all built is under construction. heartPlace is the exact
+	/// map position of the heart, when the caller has one; else the heart is where its metres put it.
 	static entt::entity Create(const glm::vec3& position, PlayerNames playerOwner, float yAngle, const glm::vec3& size,
-	                           float built);
+	                           float built, std::optional<map_coords::MapCoords> heartPlace = std::nullopt);
 	/// A temple a town plans for its player: nothing of it stands until a script has the town start it
 	static entt::entity CreatePlan(int32_t townId, const glm::vec3& position, PlayerNames playerOwner, float yAngle,
 	                               const glm::vec3& size);

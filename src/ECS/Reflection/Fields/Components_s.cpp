@@ -36,6 +36,7 @@
 #include "ECS/Components/StoragePit.h"
 #include "ECS/Components/Stream.h"
 #include "ECS/Components/StreetLantern.h"
+#include "ECS/Components/StreetLight.h"
 #include "ECS/Components/Swayable.h"
 #include "ECS/Reflection/ComponentReflection.h"
 
@@ -299,5 +300,6 @@ void openblack::ecs::reflection::RegisterFields_Components_s(entt::meta_ctx& con
 	Reflect<components::StreetLantern>(context)
 	    .Field<&components::StreetLantern::country>("country")
 	    .Field<&components::StreetLantern::info>("info");
+	Reflect<components::StreetLight>(context).Field<&components::StreetLight::position>("position");
 	Reflect<components::Swayable>(context).Field<&components::Swayable::swaySlot>("swaySlot");
 }

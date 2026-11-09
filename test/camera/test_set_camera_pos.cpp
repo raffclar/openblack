@@ -79,12 +79,14 @@ TEST_F(SetCameraPos, setCameraZero)
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
 TEST_F(SetCameraPos, setCameraLand1)
 {
-	// Since the land island is mocked, the land is flat and the altitude is the same
+	// The mock land has two blocks, and every block place of the map shows one of them. The temple levels the land
+	// round it, so the corners of the mock block under the camera change too.
 	const auto cameraPos = glm::vec2(1788.40f, 2710.00f);
 	LoadSceneWithCameraPos(cameraPos, {1915.05f, 2508.89f});
 	const auto altitude = openblack::Locator::terrainSystem::value().GetHeightAt(cameraPos);
-	ASSERT_FLOAT_EQ(altitude, 28.81); // Actual vanilla value 28.9173050f
-	ExpectCameraPos({1833.1592f, 55.512512f /*55.6197281f*/, 2601.9094f});
+	ASSERT_FLOAT_EQ(altitude, 22.698868f); // Actual vanilla value 28.9173050f, on the real land
+	// The camera stands the same height above the land as at the other places
+	ExpectCameraPos({1833.1592f, 49.401382f /*55.6197281f on the real land*/, 2601.9094f});
 }
 
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro

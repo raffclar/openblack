@@ -11,8 +11,11 @@
 #include <ECS/Components/Abode.h>
 #include <ECS/Components/Construction.h>
 #include <ECS/Components/Footpath.h>
+#include <ECS/Components/Mesh.h>
 #include <ECS/Components/MiracleImpression.h>
 #include <ECS/Components/Mobile.h>
+#include <ECS/Components/StreetLantern.h>
+#include <ECS/Components/StreetLight.h>
 #include <ECS/Components/Temple.h>
 #include <ECS/Components/Town.h>
 #include <ECS/Components/Transform.h>
@@ -309,6 +312,29 @@ CREATE_BONFIRE("1425.03,2331.89", 24.700001, 0.000000, 1.000000)
 		    ++bonfires;
 	    });
 	EXPECT_EQ(bonfires, 1u);
+}
+
+TEST_F(LoadScene, a_street_light_has_no_model_and_is_no_lantern)
+{
+	// The street light keeps its place only. The lantern line makes a lantern with a model.
+	LoadTestScene(R""""(
+VERSION(2.300000)
+LOAD_LANDSCAPE(".\Data\Landscape\Land1.lnd")
+CREATE_STREET_LIGHT("2202.51,2412.95")
+)"""");
+	const auto& registry = openblack::Locator::entitiesRegistry::value();
+	size_t lights = 0;
+	registry.Each<const openblack::ecs::components::StreetLight>([&](entt::entity light, const auto& component) {
+		EXPECT_FALSE(registry.AnyOf<openblack::ecs::components::Mesh>(light));
+		EXPECT_FALSE(registry.AnyOf<openblack::ecs::components::Transform>(light));
+		EXPECT_NEAR(component.position.x, 2202.51f, 0.01f);
+		EXPECT_NEAR(component.position.z, 2412.95f, 0.01f);
+		++lights;
+	});
+	EXPECT_EQ(lights, 1u);
+	size_t lanterns = 0;
+	registry.Each<const openblack::ecs::components::StreetLantern>([&lanterns](entt::entity, const auto&) { ++lanterns; });
+	EXPECT_EQ(lanterns, 0u);
 }
 
 TEST_F(LoadScene, a_footpath_node_with_a_third_number_is_above_the_land_by_that_height)

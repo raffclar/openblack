@@ -1636,4 +1636,20 @@ void testbed_scenarios::AddObjects(std::vector<Scenario>& all)
 		                {.type = TreeInfo::Birch, .offset = {50.0f, 30.0f}}},
 		});
 	}
+
+	// A street light is not a lantern: it has no model and no light
+	all.push_back({
+	    .id = "objects.street_light_has_no_model",
+	    .name = "A street light of a land script beside a street lantern",
+	    .facet = Facet::Objects,
+	    .description = "Lines of a land make a street lantern 4 metres to one side of the middle and a street light 4 "
+	                   "metres to the other side. The clock stands still at night.",
+	    .expected = "The street lantern has its post and its light. Nothing shows at the other side: the street light "
+	                "has no model, no light and no sound.",
+	    .environment = {.hour = 21.0f, .clockRuns = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 6.0f, -14.0f}, .look = {0.0f, 2.0f, 0.0f}},
+	    .landScript = R"(CREATE_STREET_LANTERN("-4.0,0.0", 7)
+CREATE_STREET_LIGHT("4.0,0.0")
+)",
+	});
 }

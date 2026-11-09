@@ -9,6 +9,8 @@
 
 #include <cstdint>
 
+#include <bit>
+
 #include <gtest/gtest.h>
 
 #include "Visual/DetailLevel.h"
@@ -99,6 +101,20 @@ TEST(DetailLevel, TheSeaTilesMoreFinelyWithDetail)
 	// Custom starts halfway, the super level is the finest
 	EXPECT_FLOAT_EQ(detail_level::For(detail_level::k_Custom).waterTiling, 0.5f);
 	EXPECT_FLOAT_EQ(detail_level::For(6).waterTiling, 1.0f);
+}
+
+TEST(DetailLevel, TheScaledValuesAreTheGameFloats)
+{
+	// The game multiplies a whole number by a float scale, so 0.8 is one float step below 0.8f
+	EXPECT_EQ(std::bit_cast<uint32_t>(detail_level::For(1).waterTiling), 0x3E4CCCCCu);
+	EXPECT_EQ(std::bit_cast<uint32_t>(detail_level::For(2).waterTiling), 0x3ECCCCCCu);
+	EXPECT_EQ(std::bit_cast<uint32_t>(detail_level::For(3).waterTiling), 0x3F199999u);
+	EXPECT_EQ(std::bit_cast<uint32_t>(detail_level::For(4).waterTiling), 0x3F4CCCCCu);
+	EXPECT_EQ(std::bit_cast<uint32_t>(detail_level::For(5).waterTiling), std::bit_cast<uint32_t>(0.5f));
+	EXPECT_EQ(std::bit_cast<uint32_t>(detail_level::For(0).modelDetail), 0x3E4CCCCCu);
+	EXPECT_EQ(std::bit_cast<uint32_t>(detail_level::For(1).modelDetail), 0x3E999999u);
+	EXPECT_EQ(std::bit_cast<uint32_t>(detail_level::For(2).modelDetail), 0x3ECCCCCCu);
+	EXPECT_EQ(std::bit_cast<uint32_t>(detail_level::For(4).modelDetail), std::bit_cast<uint32_t>(0.5f));
 }
 
 TEST(DetailLevel, SuperDetailOnlyChangesTheSea)

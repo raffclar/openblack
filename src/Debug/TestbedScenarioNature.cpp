@@ -79,6 +79,20 @@ std::vector<std::pair<std::string_view, float>> Land1Rewards()
 void testbed_scenarios::AddNatureScenarios(std::vector<Scenario>& all)
 {
 	all.push_back({
+	    .id = "nature.temple_levels_land",
+	    .name = "A new temple levels the land round it",
+	    .facet = Facet::Nature,
+	    .description = "A temple is made on the flat land 50 m south of the lake. The camera looks north over the temple "
+	                   "at the south half of the lake.",
+	    .expected = "In 35 m of the temple the land is flat. From 35 m to 70 m the land goes back to its own height in a "
+	                "straight line. The south shore of the lake moves north: the bed of the lake rises in a slope out of the "
+	                "water towards the temple, to about 65 m from it. The north part of the lake does not change.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {90.0f, 70.0f, 70.0f}, .look = {0.0f, 0.0f, 185.0f}},
+	    .temples = {{.offset = {0.0f, 120.0f}}},
+	});
+
+	all.push_back({
 	    .id = "nature.roots_hole",
 	    .name = "A tree pulled up leaves its roots",
 	    .facet = Facet::Nature,
@@ -291,9 +305,10 @@ void testbed_scenarios::AddNatureScenarios(std::vector<Scenario>& all)
 	    .facet = Facet::Nature,
 	    .description = "A live conifer on the left and a dead conifer of the same model on the right, 20 m apart. The "
 	                   "camera is about 400 m from them.",
-	    .expected = "At the highest model detail, the live tree fades out from 356 m into the view and it is gone from "
-	                "711 m. At 400 m it is partly see-through. The dead tree fades out from 433 m and it is gone from "
-	                "867 m. At 400 m it is solid. Move the camera away: the live tree goes first.",
+	    .expected = "At the highest model detail, the live tree fades out from about 320 m into the view and it is gone "
+	                "from about 640 m: a live tree changes its detail a tenth nearer than a thing with no importance. At "
+	                "400 m it is partly see-through. The dead tree fades out from 433 m and it is gone from 867 m. At "
+	                "400 m it is solid. Move the camera away: the live tree goes first.",
 	    .environment = {.hour = 12.0f, .clockRuns = false, .dispenserGrid = false},
 	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 150.0f, -380.0f}, .look = {0.0f, 8.0f, 0.0f}},
 	    .objects = {{.type = TreeInfo::ConiferA, .offset = {-10.0f, 0.0f}},

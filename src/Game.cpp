@@ -1361,6 +1361,18 @@ bool Game::RunFrame() noexcept
 
 void Game::EndRun() noexcept
 {
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
+	// A run that ends before its scenario is laid out, or before its checks are decided, still writes its report
+	if (_scenarioRequest.has_value() && _scenarioRequest->checks)
+	{
+		fmt::print(stderr, "Scenario {}: the run ended before the scenario started\n", _scenarioRequest->id);
+		_exitCode = testbed_scenarios::checks::ExitCodeOf(testbed_scenarios::checks::Verdict::Failed);
+	}
+	else if (_scenarioEnd)
+	{
+		_scenarioEnd();
+	}
+#endif
 	// As the player leaves the game, the game saves it into the slot of the save on exit
 	SaveAsGameEnds(game_session::End::Quit, true);
 	// As the game ends, the player's creature is written to their files as it is now

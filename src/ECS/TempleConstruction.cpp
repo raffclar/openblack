@@ -552,14 +552,14 @@ entt::entity PlaceTemple(entt::entity plan, float built)
 	{
 		std::erase(registry.Get<Town>(town->second).planned, plan);
 	}
-	// The temple's heart goes up where it was planned
-	const auto temple =
-	    archetypes::CitadelArchetype::Create(transform.position, OwnerOf(planned), planned.yAngle, transform.scale, built);
+	// The temple's heart goes up where it was planned, at the exact map position of the plan
+	const auto place = thing_map_place::Of(registry, plan);
+	const auto temple = archetypes::CitadelArchetype::Create(transform.position, OwnerOf(planned), planned.yAngle,
+	                                                         transform.scale, built, place);
 	registry.Get<Temple>(temple).town = planned.townId;
 	// The heart has the size of the plan
 	registry.Get<Temple>(temple).heartScale = transform.scale.x;
-	// The temple and its heart take the exact map position of the plan
-	const auto place = thing_map_place::Of(registry, plan);
+	// The temple and its heart keep that map position
 	thing_map_place::Keep(registry, temple, place);
 	if (const auto heart = temple_heart::Of(registry, temple); heart != entt::null)
 	{

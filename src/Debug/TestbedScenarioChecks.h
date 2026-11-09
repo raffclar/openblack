@@ -156,4 +156,8 @@ struct Report
 	std::vector<std::string> lines;
 };
 
+/// The report of an evaluator as it stands now. Checks that are not decided show as waiting, and the verdict is waiting
+/// until all are decided.
+[[nodiscard]] Report MakeReport(const Evaluator& evaluator, std::string_view scenario);
+
 } // namespace openblack::testbed_scenarios::checks

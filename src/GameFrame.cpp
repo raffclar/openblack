@@ -551,19 +551,25 @@ void Game::PlaceScreenLabels()
 		gui::GameInterface::FloatingNumber number;
 	};
 	std::vector<Placed> placed;
-	const auto eye = Locator::camera::value().GetOrigin();
+	const auto& camera = Locator::camera::value();
+	const auto eye = camera.GetOrigin();
+	const auto viewProjection = camera.GetViewProjectionMatrix();
 	const auto floating = Locator::floatingNumberSystem::has_value() ? Locator::floatingNumberSystem::value().Numbers()
 	                                                                 : std::span<const ecs::components::FloatingNumber> {};
-	std::ranges::for_each(floating, [this, &placed, eye](const ecs::components::FloatingNumber& number) {
+	std::ranges::for_each(floating, [this, &placed, eye, &viewProjection](const ecs::components::FloatingNumber& number) {
 		const auto alpha = ecs::floating_number::Alpha(number.life);
 		const auto screen = OnScreen(number.position);
 		if (!alpha.has_value() || !screen.has_value())
 		{
 			return;
 		}
-		placed.push_back(
-		    {.distance = glm::distance(eye, number.position),
-		     .number = {.screen = *screen, .text = gui::ToUtf16(number.text), .colour = number.colour, .alpha = *alpha}});
+		placed.push_back({.distance = glm::distance(eye, number.position),
+		                  .number = {.screen = *screen,
+		                             .text = gui::ToUtf16(number.text),
+		                             .colour = number.colour,
+		                             .alpha = *alpha,
+		                             .point = number.position,
+		                             .depth = (viewProjection * glm::vec4(number.position, 1.0f)).w}});
 	});
 	std::ranges::sort(placed, std::ranges::greater {}, &Placed::distance);
 	std::vector<gui::GameInterface::FloatingNumber> numbers;

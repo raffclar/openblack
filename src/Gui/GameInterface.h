@@ -355,6 +355,10 @@ public:
 		/// Its colour, 0xAARRGGBB; drawn at its alpha over a black shadow
 		uint32_t colour;
 		uint8_t alpha;
+		/// Its point in the world, which sorts it among the see-through things
+		glm::vec3 point {0.0f};
+		/// The depth of its point in front of the camera. The world in front of the number hides it.
+		float depth {0.0f};
 	};
 	/// The words of a learning mark over a creature: the share it has learnt, centred on a point of the screen
 	struct LearningText
