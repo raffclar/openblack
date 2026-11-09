@@ -32,10 +32,6 @@ uint8_t LifetimeOf(const Mark& wound)
 	return k_WoundLifetimes.at(wound.type % k_WoundLifetimes.size());
 }
 
-bool Expired(const Mark& wound)
-{
-	return wound.age >= LifetimeOf(wound);
-}
 } // namespace
 
 void creature_marks::Add(std::vector<Mark>& marks, const Mark& mark)
@@ -83,22 +79,44 @@ Mark creature_marks::BloodFromWord(uint32_t word)
 
 bool creature_marks::Heal(Marks& marks, uint32_t counts)
 {
+	// A mark that goes takes the last mark of its list into its place, and that mark is looked at next
+	const auto removeAt = [](std::vector<Mark>& list, size_t index) {
+		list[index] = list.back();
+		list.pop_back();
+	};
 	marks.counts += counts;
 	bool aged = false;
 	while (marks.counts >= k_CountsPerStep)
 	{
 		marks.counts -= k_CountsPerStep;
 		aged = true;
-		for (auto& blood : marks.blood)
+		// A drop of blood at the oldest age goes. All others age a step.
+		for (size_t i = 0; i < marks.blood.size();)
 		{
-			++blood.age;
+			if (marks.blood[i].age >= k_OldestAge)
+			{
+				removeAt(marks.blood, i);
+				continue;
+			}
+			++marks.blood[i].age;
+			++i;
 		}
-		std::erase_if(marks.blood, [](const Mark& blood) { return blood.age >= k_BloodLifetime; });
-		for (auto& wound : marks.wounds)
+		// A wound below the oldest age ages a step, and goes when its new age is the lifetime of its kind. A wound at
+		// the oldest age stays as it is, so a kind that lasts longer than the oldest age never goes.
+		for (size_t i = 0; i < marks.wounds.size();)
 		{
-			++wound.age;
+			auto& wound = marks.wounds[i];
+			if (wound.age < k_OldestAge)
+			{
+				++wound.age;
+				if (wound.age == LifetimeOf(wound))
+				{
+					removeAt(marks.wounds, i);
+					continue;
+				}
+			}
+			++i;
 		}
-		std::erase_if(marks.wounds, Expired);
 	}
 	return aged;
 }

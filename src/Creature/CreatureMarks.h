@@ -45,10 +45,11 @@ struct Mark
 	bool operator==(const Mark&) const = default;
 };
 
-/// How many steps of healing a wound of each kind lasts, which it fades from fresh to old over
+/// How many steps of healing a wound of each kind lasts, which it fades from fresh to old over. A mark keeps its age in
+/// 6 bits, so a wound of a kind that lasts 64 steps stops at k_OldestAge and stays as an old scar.
 constexpr std::array<uint8_t, 8> k_WoundLifetimes {32, 64, 64, 64, 64, 64, 64, 1};
-/// A drop of blood goes after this many steps
-constexpr uint8_t k_BloodLifetime = 63;
+/// The oldest age a mark can have. A drop of blood goes on the step after it gets to this age.
+constexpr uint8_t k_OldestAge = 63;
 /// Healing comes in counts: a mark ages a step every so many
 constexpr uint32_t k_CountsPerStep = 600;
 /// The counts a game turn heals by. Healing never runs faster than this.
@@ -106,7 +107,8 @@ constexpr int32_t k_CatchingBurnTries = 3;
 [[nodiscard]] glm::u8vec2 TexelAt(const std::array<glm::vec2, 3>& uvs, float s, float t);
 } // namespace scar
 
-/// The marks healed by some counts: every k_CountsPerStep they age a step, and those as old as their kind lasts go.
+/// The marks healed by some counts: every k_CountsPerStep they age a step. A wound goes when it gets to the lifetime of
+/// its kind, and a drop of blood goes on the step after it gets to k_OldestAge.
 /// Whether they aged, so the skin is to be painted again.
 bool Heal(Marks& marks, uint32_t counts);
 
