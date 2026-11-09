@@ -94,6 +94,9 @@ private:
 	[[nodiscard]] bool TownMayHaveSite(entt::entity town) const;
 	/// A town of a player with a temple is given its tribe's site, if it may have one
 	void CheckAddSite(entt::entity town);
+	/// A town joins the player of the temple: it is given its tribe's site, if it may have one. When the town has the
+	/// site, the temple's heart gets all its life again.
+	void AddTownToTemple(entt::entity temple, entt::entity town);
 	/// Each of the player's towns is given its tribe's site, and asked to build it, wanting to by the boost more
 	void OpenSites(entt::entity temple, float desireBoost);
 	/// A town's tribe's site, made if the temple may make it and the town may have one; none otherwise

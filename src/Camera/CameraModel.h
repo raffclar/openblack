@@ -131,6 +131,8 @@ public:
 		/// What a drag of the land turned the camera across and tilted it this frame, in radians
 		float dragTurn {0.0f};
 		float dragTilt {0.0f};
+		/// Whether the player moved the camera this frame, which stops the follow of a bookmark
+		bool movedByPlayer {false};
 	};
 	[[nodiscard]] virtual Asked GetAsked() const { return {}; }
 	/// Whether the last step removes the point that a script gave the player's camera to turn about. Only a step of the

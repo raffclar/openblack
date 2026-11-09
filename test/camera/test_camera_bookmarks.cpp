@@ -126,3 +126,19 @@ TEST(CameraBookmarks, TabFliesFromAFixedPlaceAboveAndBehindTheTown)
 	EXPECT_EQ(k_TownViewX, 24.45f);
 	EXPECT_EQ(k_TownViewZ, 47.4f);
 }
+
+TEST(CameraBookmarks, TheWorldCameraAndTheFightViewKeepTheFollowUntilThePlayerMovesTheCamera)
+{
+	// No follow: nothing happens
+	EXPECT_FALSE(Follow(false, true, false).jump);
+	EXPECT_FALSE(Follow(false, true, true).stop);
+	// The world camera or the fight view flies to the bookmark again and keeps the follow
+	EXPECT_TRUE(Follow(true, true, false).jump);
+	EXPECT_FALSE(Follow(true, true, false).stop);
+	// A move by the player still flies this turn, then stops the follow
+	EXPECT_TRUE(Follow(true, true, true).jump);
+	EXPECT_TRUE(Follow(true, true, true).stop);
+	// Another camera stops the follow with no flight
+	EXPECT_FALSE(Follow(true, false, false).jump);
+	EXPECT_TRUE(Follow(true, false, false).stop);
+}

@@ -32,9 +32,6 @@ namespace
 constexpr std::array<int, 5> k_RingPoints {1, 4, 6, 4, 1};
 /// A cylinder's push measures the camera's distance from its axis as at least this
 constexpr float k_NearestToAxis = 0.01f;
-/// A point is felt in the land only when deeper than this, so that a camera resting at its clearance over the land isn't
-/// pushed by the rounding of the maths that turned it there
-constexpr float k_Rounding = 1e-4f;
 
 float SquaredAcross(const glm::vec3& a, const glm::vec3& b)
 {
@@ -207,7 +204,7 @@ GroundPush camera_limits::PushOffTheGround(const Ground& ground, std::span<const
 			    (((upRow.y * ringSin) + (sideRow.y * alongSide)) + (backRow.y * alongBack)) + result.origin.y,
 			    (((upRow.z * ringSin) + (sideRow.z * alongSide)) + (backRow.z * alongBack)) + result.origin.z};
 			const glm::vec2 across {point.x, point.z};
-			if (!(SurfaceHeight(ground, nearby, exclusionsOn, across) > point.y + k_Rounding))
+			if (!(SurfaceHeight(ground, nearby, exclusionsOn, across) > point.y))
 			{
 				continue;
 			}

@@ -128,7 +128,15 @@ void WorshipSiteSystem::PersonJoinedTown(entt::entity town)
 void WorshipSiteSystem::TownChangedHands(entt::entity town)
 {
 	TownRemoved(town);
-	CheckAddSite(town);
+	const auto owner = _world->Entities().Get<const Town>(town).owner;
+	if (owner == PlayerNames::NEUTRAL)
+	{
+		return;
+	}
+	if (const auto temple = TempleOf(owner); temple != entt::null)
+	{
+		AddTownToTemple(temple, town);
+	}
 }
 
 void WorshipSiteSystem::TownRemoved(entt::entity town)
@@ -178,29 +186,34 @@ void WorshipSiteSystem::CheckAddSite(entt::entity town)
 void WorshipSiteSystem::LandLaidOut()
 {
 	auto& registry = _world->Entities();
-	std::vector<std::pair<PlayerNames, entt::entity>> temples;
-	registry.Each<const Temple, const CitadelWorship>(
-	    [&temples](entt::entity entity, const Temple& temple, const CitadelWorship& /*unused*/) {
-		    temples.emplace_back(temple.owner, entity);
-	    });
-	for (const auto& [player, temple] : temples)
+	// The players in their order, the neutral player last
+	for (const auto temple : TemplesOfPlayers(static_cast<size_t>(PlayerNames::_COUNT)))
 	{
-		if (TempleOf(player) != temple)
+		if (temple == entt::null)
 		{
 			continue;
 		}
-		for (const auto town : TownsOf(player))
+		const auto owner = registry.Get<const Temple>(temple).owner;
+		for (const auto town : TownsOf(owner))
 		{
-			if (registry.Get<const Town>(town).worshipSite != entt::null)
+			if (registry.Get<const Town>(town).worshipSite == entt::null)
 			{
-				continue;
-			}
-			if (const auto site = FindOrMakeForTown(temple, town); site != entt::null)
-			{
-				AddTownIfMissing(site, town);
+				AddTownToTemple(temple, town);
 			}
 		}
 	}
+}
+
+void WorshipSiteSystem::AddTownToTemple(entt::entity temple, entt::entity town)
+{
+	const auto site = FindOrMakeForTown(temple, town);
+	if (site == entt::null)
+	{
+		return;
+	}
+	AddTownIfMissing(site, town);
+	// The heart gets all its life again, also when the town had the site before
+	_world->Entities().AssignOrReplace<ObjectLife>(temple, ObjectLife {.life = 1.0f});
 }
 
 entt::entity WorshipSiteSystem::MakeBuiltSite(PlayerNames player, Tribe tribe)

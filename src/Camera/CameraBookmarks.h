@@ -85,6 +85,19 @@ enum class FollowKey : uint8_t
 };
 [[nodiscard]] FollowKey ShiftKey(bool onThing, std::optional<size_t> followed, size_t slot);
 
+/// What the follow of a bookmark does in a turn
+struct FollowTurn
+{
+	/// The camera flies to the followed bookmark again
+	bool jump {false};
+	/// The follow stops after this turn
+	bool stop {false};
+};
+/// The follow in a turn. Only the world camera follows a bookmark, and the fight view is a part of the world camera. With
+/// another camera the follow stops. When the player moved the camera in the last frame, the follow stops after the
+/// flight of this turn.
+[[nodiscard]] FollowTurn Follow(bool following, bool worldCamera, bool movedByPlayer);
+
 /// A town of the player, as the Tab key sees it
 struct TownStop
 {

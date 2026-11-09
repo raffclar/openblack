@@ -462,6 +462,7 @@ Renderer::~Renderer() noexcept
 	_particleLightMaps.clear();
 	_glowShells.clear();
 	_snowDepth.reset();
+	_paintedSnowTexture.reset();
 	_plane.reset();
 	_morphStreamLayouts.reset();
 	_handFlowTexture.reset();

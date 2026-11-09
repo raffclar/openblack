@@ -13,6 +13,7 @@
 #include <cmath>
 
 #include <algorithm>
+#include <array>
 #include <limits>
 #include <string>
 #include <string_view>
@@ -192,6 +193,42 @@ bool Runner::GiveStoryCommand(const Command& command)
 		actions.SetKeyBindings(bindings);
 		Log(fmt::format("{:.1f}s: the move action is on {}", _seconds,
 		                key != SDL_SCANCODE_UNKNOWN ? input::Device().ScancodeName(key) : std::string_view("its own buttons")));
+		return true;
+	}
+	if (command.kind == Kind::BindMouseButton)
+	{
+		if (!Locator::gameActionSystem::has_value())
+		{
+			return true;
+		}
+		auto& actions = Locator::gameActionSystem::value();
+		auto bindings = input::DefaultKeyBindings();
+		const auto action = static_cast<input::BindableActionMap>(command.value);
+		constexpr std::array k_Buttons {input::MouseInput::None, input::MouseInput::LeftButton, input::MouseInput::MiddleButton,
+		                                input::MouseInput::RightButton};
+		const auto button = k_Buttons.at(std::clamp<size_t>(static_cast<size_t>(command.amount), 0, k_Buttons.size() - 1));
+		if (command.value != 0)
+		{
+			std::ranges::copy(actions.GetKeyBindings(), bindings.begin());
+			for (auto& binding : bindings)
+			{
+				// The button leaves any other action that had it
+				if (binding.mouse == button)
+				{
+					binding.mouse = input::MouseInput::None;
+				}
+				if (binding.action == action)
+				{
+					binding.key = std::nullopt;
+					binding.mouse = button;
+				}
+			}
+		}
+		actions.SetKeyBindings(bindings);
+		Log(fmt::format("{:.1f}s: {}", _seconds,
+		                command.value != 0
+		                    ? fmt::format("the action {:#x} is on mouse button {}", command.value, command.amount)
+		                    : std::string("the game's bindings are back")));
 		return true;
 	}
 	if (command.kind == Kind::PutLoadedArena)
