@@ -36,6 +36,8 @@ public:
 	/// temple key makes it fly. The next press of the temple key flies the camera back. Without a temple of the player,
 	/// the camera stays where it is.
 	void StartAtTemple(PlayerNames player);
+	/// The player's camera of the world starts again, as when the player comes out of the temple
+	void WorldCameraStartsAgain() { _zoomTo.StartAgain(); }
 
 private:
 	zoom_to::ZoomToPlaces _zoomTo;

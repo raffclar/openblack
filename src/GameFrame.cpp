@@ -36,6 +36,7 @@
 #include "Camera/Camera.h"
 #include "Camera/CreatureCameraModel.h"
 #include "Camera/ScriptCameraModel.h"
+#include "Camera/WorldCamera.h"
 #include "Common/BuildVersion.h"
 #include "Game.h"
 #include "GameDetail.h"
@@ -289,13 +290,26 @@ bool Game::PlayFrameStep(game_frame::Step step, FrameState& frame)
 	case Step::CameraMouse:
 		// The camera reads the movement of the mouse and of the hand of this frame as it moves, after the turns
 		// The first step of the input reads its part of the mouse. A frame with no step keeps the mouse for the next step.
-		if (const auto& steps = Locator::time::value().GetInputSteps();
-		    steps.count > 0 && !Locator::cameraPathSystem::value().HoldsCamera())
+		if (const auto& steps = Locator::time::value().GetInputSteps(); steps.count > 0)
 		{
-			auto& actions = Locator::gameActionSystem::value();
-			actions.UseInputStep(0);
-			Locator::camera::value().HandleActions(std::chrono::duration_cast<std::chrono::microseconds>(steps.Time(0)));
-			actions.UseInputStep(std::nullopt);
+			// The world's camera behind the temple reads the mouse too
+			auto* world = world_camera::BehindTemple();
+			const bool player = !Locator::cameraPathSystem::value().HoldsCamera();
+			if (player || world != nullptr)
+			{
+				auto& actions = Locator::gameActionSystem::value();
+				actions.UseInputStep(0);
+				const auto time = std::chrono::duration_cast<std::chrono::microseconds>(steps.Time(0));
+				if (player)
+				{
+					Locator::camera::value().HandleActions(time);
+				}
+				if (world != nullptr)
+				{
+					world->HandleActions(time);
+				}
+				actions.UseInputStep(std::nullopt);
+			}
 		}
 		break;
 	case Step::CameraPaths:

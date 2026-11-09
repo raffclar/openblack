@@ -30,6 +30,7 @@ public:
 	void UpdateTempleRoomKeys() final;
 	void UpdateShortcutKeys() final { _shortcutKeys.Update(); }
 	void StartShortcutKeysAtTemple(PlayerNames player) final { _shortcutKeys.StartAtTemple(player); }
+	void WorldCameraStartsAgain() final { _shortcutKeys.WorldCameraStartsAgain(); }
 	void SubmitKeyCommands() final;
 	void MenuClosed() final { _menuClosedAt = std::chrono::steady_clock::now(); }
 	[[nodiscard]] const std::optional<std::chrono::steady_clock::time_point>& GetMenuClosedAt() const final

@@ -46,6 +46,7 @@
 #include "Camera/ScriptCameraModel.h"
 #include "Camera/TempleCameraModel.h"
 #include "Camera/TemplePress.h"
+#include "Camera/WorldCamera.h"
 #include "Common/EventManager.h"
 #include "Common/MachineClock.h"
 #include "Common/PortableRotations.h"
@@ -65,6 +66,7 @@
 #include "ECS/Systems/CameraHelpSystemInterface.h"
 #include "ECS/Systems/CreatureCaveSystemInterface.h"
 #include "ECS/Systems/CreatureModeSystemInterface.h"
+#include "ECS/Systems/GameKeysSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/HelpTextSystemInterface.h"
 #include "ECS/Systems/Implementations/CameraPathSystem.h"
@@ -793,6 +795,7 @@ void TempleInterior::LeaveToReplayChallenge()
 	if (help.cameraKeys && help.placeKeys && challenge.position.has_value() && challenge.focus.has_value())
 	{
 		_leaveTo = std::make_pair(*challenge.position, *challenge.focus);
+		_leaveToMapPick = false;
 	}
 	const auto number = challenge.challenge;
 	Deactivate();
@@ -1120,6 +1123,7 @@ void TempleInterior::LeaveForMapPoint(glm::vec3 point)
 	// Leaving the temple puts the camera 50 above the place and 70 along z from it, looking at it
 	// The game also starts a force-feedback effect here, which openblack leaves out (deviation 73)
 	_leaveTo = std::make_pair(glm::vec3(world.x, altitude + 50.0f, world.y + 70.0f), glm::vec3(world.x, altitude, world.y));
+	_leaveToMapPick = true;
 	// The main room's camera fades the temple out to white, and the room leaves once it is
 	if (_interface != nullptr)
 	{
@@ -1598,12 +1602,13 @@ void TempleInterior::SetCurrentRoom(TempleRoom room)
 
 bool TempleInterior::ReleaseOutsideScriptCamera()
 {
-	if (dynamic_cast<ScriptCameraModel*>(_outsideCameraModel.get()) == nullptr)
+	if (_worldCamera == nullptr || dynamic_cast<ScriptCameraModel*>(&_worldCamera->GetModel()) == nullptr)
 	{
 		return false;
 	}
-	_outsideCameraModel = std::make_unique<DefaultWorldCameraModel>(_outsideCameraModel->GetTargetOrigin(),
-	                                                                _outsideCameraModel->GetTargetFocus());
+	const auto& script = _worldCamera->GetModel();
+	std::ignore =
+	    _worldCamera->SetModel(std::make_unique<DefaultWorldCameraModel>(script.GetTargetOrigin(), script.GetTargetFocus()));
 	return true;
 }
 
@@ -2018,9 +2023,6 @@ void TempleInterior::Activate(TempleRoom room)
 	auto& config = Locator::config::value();
 	auto& camera = Locator::camera::value();
 
-	_playerPositionOutside = camera.GetOrigin();
-	_playerRotationOutside = camera.GetRotation();
-
 	// The main room frames the map on the island as it is each visit, and draws its texture afresh
 	++_visits;
 	if (Locator::terrainSystem::has_value())
@@ -2072,7 +2074,10 @@ void TempleInterior::Activate(TempleRoom room)
 	_enteredRoom.reset();
 	auto model = std::make_unique<TempleCameraModel>(LoadCameraPaths(), _currentRoom);
 	_cameraModel = model.get();
-	_outsideCameraModel = camera.SetModel(std::move(model));
+	// The world's camera continues behind the temple with its model, its movement and its count of time
+	const auto worldSeconds = camera.GetModelSeconds();
+	_worldCamera = camera.ContinueWith(camera.SetModel(std::move(model)));
+	_worldCamera->SetModelSeconds(worldSeconds);
 	_cameraModel->StartIntro(_currentRoom, false);
 	camera.SetOrigin(_cameraModel->GetTargetOrigin());
 	camera.SetFocus(_cameraModel->GetTargetFocus());
@@ -2129,8 +2134,11 @@ std::optional<OutsideCamera> TempleInterior::GetOutsideCamera() const
 	{
 		return std::nullopt;
 	}
-	return OutsideCamera {.origin = _playerPositionOutside,
-	                      .focus = _playerPositionOutside + glm::quat(_playerRotationOutside) * glm::vec3(0.0f, 0.0f, 1.0f)};
+	if (_worldCamera == nullptr)
+	{
+		return std::nullopt;
+	}
+	return OutsideCamera {.origin = _worldCamera->GetOrigin(), .focus = _worldCamera->GetFocus()};
 }
 
 void TempleInterior::Deactivate()
@@ -2162,6 +2170,7 @@ void TempleInterior::Deactivate()
 		_leaveTo.reset();
 		return;
 	}
+	LeaveWorldCamera();
 	Close();
 	// Leaving the temple goes out to the island all white, which fades over a second
 	if (_interface != nullptr)
@@ -2173,15 +2182,61 @@ void TempleInterior::Deactivate()
 	BringBackDialogue();
 	temple_help::GameScripts scripts;
 	temple_help::Leave(scripts);
-	auto& camera = Locator::camera::value();
-	camera.SetOrigin(_playerPositionOutside);
-	camera.SetFocus(_playerPositionOutside + glm::quat(_playerRotationOutside) * glm::vec3(0.0f, 0.0f, 1.0f));
-	if (_leaveTo.has_value())
-	{
-		camera.SetOrigin(_leaveTo->first);
-		camera.SetFocus(_leaveTo->second);
-	}
 	_leaveTo.reset();
+}
+
+void TempleInterior::LeaveWorldCamera()
+{
+	if (_worldCamera == nullptr)
+	{
+		return;
+	}
+	auto& camera = Locator::camera::value();
+	camera.TakeBackFrom(*_worldCamera);
+	_worldCamera.reset();
+	auto* world = dynamic_cast<DefaultWorldCameraModel*>(&camera.GetModel());
+	const auto picked = _leaveTo.has_value() && _leaveToMapPick
+	                        ? std::optional(world_camera::Place {.origin = _leaveTo->first, .focus = _leaveTo->second})
+	                        : std::nullopt;
+	const auto leave =
+	    world_camera::OnLeave(picked, world != nullptr ? world_camera::Model::World : world_camera::Model::Other);
+	if (leave.cutTo.has_value())
+	{
+		// The camera is at the place at once, still
+		camera.SetOrigin(leave.cutTo->origin).SetFocus(leave.cutTo->focus);
+		camera.SetInterpolatorDuration(std::chrono::microseconds::zero());
+		camera.SetInterpolatorTime(std::chrono::microseconds::zero());
+		if (world != nullptr)
+		{
+			world->PlaceAt(leave.cutTo->origin, leave.cutTo->focus);
+		}
+	}
+	if (leave.newWorldModel)
+	{
+		// The camera that follows the creature gives the camera back first, and a new camera of the player's own takes
+		// over at the place
+		if (Locator::creatureModeSystem::has_value())
+		{
+			Locator::creatureModeSystem::value().Leave();
+		}
+		std::ignore = camera.SetModel(std::make_unique<DefaultWorldCameraModel>(leave.cutTo->origin, leave.cutTo->focus));
+		camera.SetForcedTurnPoint(std::nullopt);
+	}
+	if (leave.startAgain && world != nullptr)
+	{
+		world->StartAgain();
+		camera.SetForcedTurnPoint(std::nullopt);
+	}
+	// The temple and realm keys start again with the player's camera
+	if ((leave.startAgain || leave.newWorldModel) && Locator::gameKeysSystem::has_value())
+	{
+		Locator::gameKeysSystem::value().WorldCameraStartsAgain();
+	}
+	// A place of a challenge's picture puts only the camera there
+	if (_leaveTo.has_value() && !_leaveToMapPick)
+	{
+		camera.SetOrigin(_leaveTo->first).SetFocus(_leaveTo->second);
+	}
 }
 
 void TempleInterior::EnterMultiplayerFrontEnd()
@@ -2377,9 +2432,11 @@ void TempleInterior::Close()
 
 	auto& camera = Locator::camera::value();
 	DrawIsland();
-	if (_outsideCameraModel != nullptr)
+	// The game ends in a room, or a new land comes: the player's camera gets the world's model back, and stays where it is
+	if (_worldCamera != nullptr)
 	{
-		camera.SetModel(std::move(_outsideCameraModel));
+		std::ignore = camera.SetModel(_worldCamera->SetModel(nullptr));
+		_worldCamera.reset();
 	}
 	_cameraModel = nullptr;
 	_transitionRoom.reset();

@@ -52,6 +52,7 @@ class RenderingSystemInterface;
 
 namespace openblack
 {
+class Camera;
 class CameraModel;
 class CreatureCaveEffects;
 class TempleCameraModel;
@@ -71,6 +72,7 @@ public:
 	void SetCurrentRoom(TempleRoom room) override;
 	bool ReleaseOutsideScriptCamera() override;
 	[[nodiscard]] std::optional<OutsideCamera> GetOutsideCamera() const override;
+	[[nodiscard]] Camera* GetWorldCamera() override { return _worldCamera.get(); }
 	void ProcessToolTipTurn() override;
 	[[nodiscard]] std::optional<TempleRoom> GetTransitionRoom() const override { return _transitionRoom; }
 	void SetTransitionRoom(std::optional<TempleRoom> room) override { _transitionRoom = room; }
@@ -210,10 +212,11 @@ private:
 	/// The game places each room at the origin, unturned: the temple is a scene of its own
 	glm::vec3 _templePosition {0.0f};
 	glm::vec3 _templeRotation {0.0f};
-	glm::vec3 _playerPositionOutside {0.0f};
-	glm::vec3 _playerRotationOutside {0.0f};
-	/// The camera's model outside, while the temple's has the camera
-	std::unique_ptr<CameraModel> _outsideCameraModel;
+	/// The world's camera, which continues behind the temple with its model while the temple's model has the camera
+	std::unique_ptr<Camera> _worldCamera;
+	/// Gives the player's camera back the world's camera as the player comes out of the temple, and puts it at the place
+	/// picked on the map, if there is one
+	void LeaveWorldCamera();
 	TempleCameraModel* _cameraModel {nullptr};
 	TempleDoors _doors;
 	/// The main room's buttons of what its map shows, which keep their state from one visit to the next
@@ -264,8 +267,11 @@ private:
 	float _poolTime {0.0f};
 	/// The main room's markers of the temples and creatures
 	void UpdateMapMarkers(float seconds);
-	/// Where the camera is to look from and at as the player leaves for a place double clicked on the map
+	/// Where the camera is to look from and at as the player leaves for a place double clicked on the map, or for the
+	/// place of a challenge's picture
 	std::optional<std::pair<glm::vec3, glm::vec3>> _leaveTo;
+	/// Whether `_leaveTo` is a place picked on the map, which the world's camera goes to as the game does
+	bool _leaveToMapPick {false};
 	/// Whether the temple is fading to white to leave for the place on the map, which it does once the screen is white
 	bool _leavingForMapPoint {false};
 	/// A double click on the main room's map: leaves the temple for that place

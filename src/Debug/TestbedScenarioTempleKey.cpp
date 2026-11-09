@@ -12,6 +12,7 @@
 
 #include <vector>
 
+#include "3D/TempleRoom.h"
 #include "Input/BindableActions.h"
 #include "TestbedScenarioRegistry.h"
 
@@ -52,6 +53,50 @@ void testbed_scenarios::AddTempleKeyScenarios(std::vector<Scenario>& all)
 	    .environment = {.dispenserGrid = false},
 	    .framing = {.shot = Shot::Testbed},
 	    .commands = {press(3.0f, k_Realm), press(6.0f, k_Realm)},
+	});
+	const auto enter = [](float delaySeconds) {
+		return Command {
+		    .kind = Kind::EnterTemple, .delaySeconds = delaySeconds, .value = static_cast<size_t>(TempleRoom::Main)};
+	};
+	const auto leave = [](float delaySeconds) {
+		return Command {
+		    .kind = Kind::EnterTemple, .delaySeconds = delaySeconds, .value = static_cast<size_t>(TempleRoom::Unknown)};
+	};
+	all.push_back({
+	    .id = "hand.temple_flight_behind",
+	    .name = "A flight of the realm key goes on behind the temple",
+	    .facet = Facet::Hand,
+	    .description = "After 3 seconds the scenario presses the realm key. A tenth of a second later the player goes into "
+	                   "the temple. After 13 more seconds, once the camera has come in, the player walks out of the temple.",
+	    .expected = "The camera comes out of the temple at the view of the realm key, 2200 metres from the middle of the "
+	                "island. It does not come out where it was when the player went in. Out of the temple the camera "
+	                "takes the controls again at once.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Testbed},
+	    .commands = {press(3.0f, k_Realm), enter(0.1f), leave(13.0f)},
+	});
+	all.push_back({
+	    .id = "hand.temple_zoom_button",
+	    .name = "Inside the temple a mouse button of the realm key flies the camera of the world",
+	    .facet = Facet::Hand,
+	    .description = "The scenario puts the realm key on the middle mouse button and goes into the temple. It stops "
+	                   "the advisors' help of the temple, which holds the interface. After 3.5 seconds it presses the "
+	                   "realm key on the keyboard, then after 2 seconds the middle button. After 8 more seconds the "
+	                   "player walks out of the temple, and the game's bindings come back.",
+	    .expected = "In the temple neither press changes the view of the temple. The keyboard press does nothing. The "
+	                "button press flies the camera of the world behind the temple, so the camera comes out of the "
+	                "temple at the view of the realm key, 2200 metres from the middle of the island.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Testbed},
+	    .commands =
+	        {{.kind = Kind::BindMouseButton, .delaySeconds = 0.5f, .value = static_cast<size_t>(k_Realm), .amount = 2.0f},
+	         enter(1.0f),
+	         {.kind = Kind::StopScript, .delaySeconds = 0.5f, .script = "CitadelWorldRoomHelp"},
+	         press(3.5f, k_Realm),
+	         {.kind = Kind::PointerPress, .delaySeconds = 2.0f, .value = 2},
+	         {.kind = Kind::PointerRelease, .delaySeconds = 0.1f, .value = 2},
+	         leave(8.0f),
+	         {.kind = Kind::BindMouseButton, .delaySeconds = 3.0f, .value = 0}},
 	});
 	all.push_back({
 	    .id = "hand.clear_view",

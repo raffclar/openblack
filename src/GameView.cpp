@@ -29,6 +29,7 @@
 #include "Camera/FreeCameraModel.h"
 #include "Camera/NearClipping.h"
 #include "Camera/ScriptCameraModel.h"
+#include "Camera/WorldCamera.h"
 #include "Common/GameRandom.h"
 #include "ECS/Components/CarriedByTornado.h"
 #include "ECS/Components/Creature.h"
@@ -130,6 +131,16 @@ void Game::UpdateCamera()
 			scriptCamera->PassGameTime(Locator::time::value().GetFrameGameTime());
 		}
 		camera.Update(Locator::time::value().GetInputSteps());
+	}
+	// The world's camera continues behind the temple, with its own view. It does not read the keys there.
+	if (auto* world = world_camera::BehindTemple(); world != nullptr)
+	{
+		if (auto* scriptCamera = Locator::scriptControlSystem::value().GetScriptCamera(*world); scriptCamera != nullptr)
+		{
+			scriptCamera->PassGameTime(Locator::time::value().GetFrameGameTime());
+		}
+		world->Update(Locator::time::value().GetInputSteps(), false);
+		world->KeepDrawnView();
 	}
 	// The lens glides on the game's time, and holds while the player is in the temple, whose own lens it has
 	if (!(Locator::temple::has_value() && Locator::temple::value().Active()))

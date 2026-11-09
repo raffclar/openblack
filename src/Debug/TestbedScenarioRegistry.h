@@ -1266,6 +1266,9 @@ struct Command
 		/// The move action takes the key (value, the key's scancode) and loses its mouse button, as the Controls page
 		/// binds it. Value 0 gives back the bindings of the game. Needs no creature
 		BindMoveKey,
+		/// An action (value, the bindable action's flag) takes a mouse button (amount: 1 left, 2 middle, 3 right) and
+		/// loses its key, as the Controls page binds it. Value 0 gives back the bindings of the game. Needs no creature
+		BindMouseButton,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures

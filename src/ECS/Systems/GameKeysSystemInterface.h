@@ -35,6 +35,9 @@ public:
 	virtual void UpdateShortcutKeys() = 0;
 	/// The one-press actions start at the temple of the player
 	virtual void StartShortcutKeysAtTemple(PlayerNames player) = 0;
+	/// The player's camera of the world starts again, as when the player comes out of the temple: the temple and realm
+	/// keys start again too
+	virtual void WorldCameraStartsAgain() = 0;
 	/// Sends the commands of the leash shortcuts that went down in this frame
 	virtual void SubmitKeyCommands() = 0;
 
