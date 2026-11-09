@@ -98,39 +98,6 @@ const input::KeyBinding* ActionNamed(std::string_view name)
 	return found != bindings.end() ? &*found : nullptr;
 }
 
-/// The modifiers the keys held make
-uint16_t Modifiers(const std::vector<int>& held)
-{
-	uint16_t mod = KMOD_NONE;
-	for (const auto key : held)
-	{
-		switch (key)
-		{
-		case SDL_SCANCODE_LSHIFT:
-			mod |= KMOD_LSHIFT;
-			break;
-		case SDL_SCANCODE_RSHIFT:
-			mod |= KMOD_RSHIFT;
-			break;
-		case SDL_SCANCODE_LCTRL:
-			mod |= KMOD_LCTRL;
-			break;
-		case SDL_SCANCODE_RCTRL:
-			mod |= KMOD_RCTRL;
-			break;
-		case SDL_SCANCODE_LALT:
-			mod |= KMOD_LALT;
-			break;
-		case SDL_SCANCODE_RALT:
-			mod |= KMOD_RALT;
-			break;
-		default:
-			break;
-		}
-	}
-	return mod;
-}
-
 } // namespace
 
 std::string GameInput::Apply(const InputEvent& event)
@@ -241,16 +208,16 @@ std::string GameInput::Apply(const InputEvent& event)
 			_heldKeys.push_back(code);
 		}
 		actions.HoldScriptedKey(code, down);
-		const auto mod = Modifiers(_heldKeys);
+		// The modifiers are those of all the keys that the game holds, the testbed's too, as one keyboard's are
+		const auto mod = actions.ScriptedModifiers();
 		input::Device().SetModState(static_cast<SDL_Keymod>(mod));
-		SDL_Event key {};
-		key.type = down ? SDL_KEYDOWN : SDL_KEYUP;
-		key.key.windowID = WindowId();
-		key.key.state = down ? SDL_PRESSED : SDL_RELEASED;
-		key.key.keysym.scancode = scancode;
-		key.key.keysym.sym = input::Device().KeyFromScancode(scancode);
-		key.key.keysym.mod = mod;
-		input::MarkInjected(key);
+		auto key = input::MakeInjectedKey({
+		    .scancode = scancode,
+		    .sym = input::Device().KeyFromScancode(scancode),
+		    .down = down,
+		    .mod = mod,
+		    .windowId = WindowId(),
+		});
 		input::Device().PushEvent(key);
 		return {};
 	}
@@ -337,16 +304,16 @@ void GameInput::Release()
 	for (const auto key : std::exchange(_heldKeys, {}))
 	{
 		actions.HoldScriptedKey(key, false);
-		SDL_Event up {};
-		up.type = SDL_KEYUP;
-		up.key.windowID = WindowId();
-		up.key.state = SDL_RELEASED;
-		up.key.keysym.scancode = static_cast<SDL_Scancode>(key);
-		up.key.keysym.sym = input::Device().KeyFromScancode(static_cast<SDL_Scancode>(key));
-		input::MarkInjected(up);
+		auto up = input::MakeInjectedKey({
+		    .scancode = static_cast<SDL_Scancode>(key),
+		    .sym = input::Device().KeyFromScancode(static_cast<SDL_Scancode>(key)),
+		    .down = false,
+		    .mod = actions.ScriptedModifiers(),
+		    .windowId = WindowId(),
+		});
 		input::Device().PushEvent(up);
 	}
-	input::Device().SetModState(KMOD_NONE);
+	input::Device().SetModState(static_cast<SDL_Keymod>(actions.ScriptedModifiers()));
 	// A hold on a creature that a command started has no button to let go, so it lets go here
 	LetGoOfCommandHold();
 	// The buttons held once what was sent is pumped, which the mouse's timing may not have yet

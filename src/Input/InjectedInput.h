@@ -9,6 +9,13 @@
 
 #pragma once
 
+#include <cstdint>
+
+#include <bitset>
+
+#include <SDL_keycode.h>
+#include <SDL_scancode.h>
+
 union SDL_Event;
 
 /// Telling the input the game makes for itself (the testbed's scenarios, the debug inspector driving it for an agent)
@@ -28,5 +35,24 @@ void MarkPumped(SDL_Event& event);
 [[nodiscard]] bool IsPumped(const SDL_Event& event);
 /// Whether an event is the player's mouse or keyboard at work: moving, buttons, the wheel, keys and typing
 [[nodiscard]] bool IsPlayerDeviceEvent(const SDL_Event& event);
+
+/// The modifiers that the held keys make, as SDL's modifier bits: each Shift, Ctrl, Alt and system key held sets its bit
+[[nodiscard]] uint16_t ModifiersOfHeldKeys(const std::bitset<SDL_NUM_SCANCODES>& held);
+
+/// A key that the game itself presses or lets go of
+struct InjectedKey
+{
+	SDL_Scancode scancode {SDL_SCANCODE_UNKNOWN};
+	/// The key that the keyboard's layout puts on the scancode
+	SDL_Keycode sym {SDLK_UNKNOWN};
+	bool down {true};
+	bool repeat {false};
+	/// The modifiers held after the key went down or up, as a real key's event has them
+	uint16_t mod {0};
+	uint32_t windowId {0};
+};
+
+/// The window's event for a key that the game itself presses or lets go of, marked injected
+[[nodiscard]] SDL_Event MakeInjectedKey(const InjectedKey& key);
 
 } // namespace openblack::input

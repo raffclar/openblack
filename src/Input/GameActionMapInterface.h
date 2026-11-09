@@ -250,6 +250,9 @@ public:
 	/// A key held by a script or the debug inspector rather than on the keyboard, by its SDL scancode: it stays held until
 	/// its own key-up comes, though the keyboard says it is up
 	virtual void HoldScriptedKey([[maybe_unused]] int scancode, [[maybe_unused]] bool held) {}
+	/// The modifiers that the keys held by a script or the debug inspector make, as SDL's modifier bits. The game's own key
+	/// events carry them, as a real key's event carries the modifiers that the keyboard holds.
+	[[nodiscard]] virtual uint16_t ScriptedModifiers() const { return 0; }
 	/// Whether a key is held, by its SDL scancode: it went down and its key-up has not come
 	[[nodiscard]] virtual bool IsKeyHeld([[maybe_unused]] int scancode) const { return false; }
 	/// Whether the mouse's wheel has turned since the game started

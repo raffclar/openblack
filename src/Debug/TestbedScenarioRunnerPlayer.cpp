@@ -694,18 +694,19 @@ std::string Runner::GivePlayerCommand(const Command& command)
 	}
 	case Kind::PressPlainKey:
 	{
-		// The key goes down and comes up again, each as an event of the window
+		// The key goes down and comes up again, each as an event of the window, with the modifiers that the scenario
+		// holds
 		const auto scancode = static_cast<SDL_Scancode>(command.value);
+		const auto mod = Locator::gameActionSystem::value().ScriptedModifiers();
 		for (const bool down : {true, false})
 		{
-			SDL_Event key {};
-			key.type = down ? SDL_KEYDOWN : SDL_KEYUP;
-			key.key.windowID = Locator::windowing::has_value() ? Locator::windowing::value().GetID() : 0;
-			key.key.state = down ? SDL_PRESSED : SDL_RELEASED;
-			key.key.keysym.scancode = scancode;
-			key.key.keysym.sym = input::Device().KeyFromScancode(scancode);
-			key.key.keysym.mod = KMOD_NONE;
-			input::MarkInjected(key);
+			auto key = input::MakeInjectedKey({
+			    .scancode = scancode,
+			    .sym = input::Device().KeyFromScancode(scancode),
+			    .down = down,
+			    .mod = mod,
+			    .windowId = Locator::windowing::has_value() ? Locator::windowing::value().GetID() : 0,
+			});
 			input::Device().PushEvent(key);
 		}
 		return fmt::format("key {} pressed", input::Device().ScancodeName(scancode));
@@ -717,16 +718,20 @@ std::string Runner::GivePlayerCommand(const Command& command)
 		// The key stays held after its event until the scenario lets go of it, though the keyboard does not hold it
 		const auto scancode = static_cast<SDL_Scancode>(command.value);
 		const bool down = command.kind != Kind::PlainKeyUp;
-		SDL_Event key {};
-		key.type = down ? SDL_KEYDOWN : SDL_KEYUP;
-		key.key.windowID = Locator::windowing::has_value() ? Locator::windowing::value().GetID() : 0;
-		key.key.state = down ? SDL_PRESSED : SDL_RELEASED;
-		key.key.repeat = command.kind == Kind::PlainKeyRepeat ? 1 : 0;
-		key.key.keysym.scancode = scancode;
-		key.key.keysym.sym = input::Device().KeyFromScancode(scancode);
-		key.key.keysym.mod = KMOD_NONE;
-		input::MarkInjected(key);
-		Locator::gameActionSystem::value().HoldScriptedKey(static_cast<int>(scancode), down);
+		auto& actions = Locator::gameActionSystem::value();
+		actions.HoldScriptedKey(static_cast<int>(scancode), down);
+		// The event carries the modifiers that the scenario holds after the key went down or up, as a real key's event
+		// does, and the window's modifier state has them for the code that reads it
+		const auto mod = actions.ScriptedModifiers();
+		input::Device().SetModState(static_cast<SDL_Keymod>(mod));
+		auto key = input::MakeInjectedKey({
+		    .scancode = scancode,
+		    .sym = input::Device().KeyFromScancode(scancode),
+		    .down = down,
+		    .repeat = command.kind == Kind::PlainKeyRepeat,
+		    .mod = mod,
+		    .windowId = Locator::windowing::has_value() ? Locator::windowing::value().GetID() : 0,
+		});
 		input::Device().PushEvent(key);
 		constexpr std::array<std::string_view, 3> k_Done {"down", "repeated", "let go"};
 		return fmt::format("key {} {}", input::Device().ScancodeName(scancode),

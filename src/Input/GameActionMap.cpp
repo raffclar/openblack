@@ -679,6 +679,11 @@ void GameActionMap::HoldScriptedKey(int scancode, bool held)
 	}
 }
 
+uint16_t GameActionMap::ScriptedModifiers() const
+{
+	return ModifiersOfHeldKeys(_scriptedKeys);
+}
+
 void GameActionMap::WarpCursor(glm::ivec2 position)
 {
 	_mousePosition = position;
