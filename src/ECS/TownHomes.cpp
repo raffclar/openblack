@@ -24,6 +24,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Registry.h"
+#include "ECS/TownEmpty.h"
 
 using namespace openblack;
 using namespace openblack::ecs;
@@ -424,22 +425,37 @@ std::vector<entt::entity> town_homes::ChildrenOf(const Registry& registry, entt:
 
 void town_homes::RemoveVillagerFromTown(Registry& registry, const Homes& homes, entt::entity villager)
 {
-	// TODO(villager-life-cycle): it leaves its town's worshippers
+	const auto town = registry.Get<const Villager>(villager).town;
 	if (homes.leavingTown)
 	{
-		homes.leavingTown(villager, registry.Get<const Villager>(villager).town);
+		homes.leavingTown(villager, town);
 	}
-	auto& person = registry.Get<Villager>(villager);
-	if (person.abode != entt::null)
+	if (auto& person = registry.Get<Villager>(villager); person.abode != entt::null)
 	{
 		LeaveAbode(registry, homes, person.abode, villager);
-		person.abode = entt::null;
+		registry.Get<Villager>(villager).abode = entt::null;
 	}
-	else if (auto* town = TownData(registry, person.town); town != nullptr)
+	else if (auto* data = TownData(registry, town); data != nullptr)
 	{
-		std::erase(town->homelessVillagers, villager);
+		std::erase(data->homelessVillagers, villager);
 	}
-	person.town = entt::null;
+	if (homes.leavingWorship)
+	{
+		homes.leavingWorship(villager);
+	}
+	registry.Get<Villager>(villager).town = entt::null;
+	if (auto* data = TownData(registry, town); data != nullptr)
+	{
+		uint32_t people = 0;
+		registry.Each<const Villager>([&people, town](const Villager& other) {
+			if (other.town == town)
+			{
+				++people;
+			}
+		});
+		data->emptyTownTimer = town_empty::AfterLeaving(data->emptyTownTimer, people);
+	}
+	registry.Get<Villager>(villager).mother = entt::null;
 }
 
 void town_homes::RemoveDeadVillager(Registry& registry, entt::entity villager)

@@ -29,6 +29,7 @@
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/Registry.h"
+#include "ECS/TownEmpty.h"
 #include "ECS/TownHomes.h"
 
 using namespace openblack;
@@ -633,6 +634,66 @@ TEST_F(TwoTownsTest, AMotherLeavingHerTownAliveIsToldFirstWithTheTownSheLeaves)
 	town_homes::MoveInAnyway(registry, homes, hut, mother);
 	EXPECT_EQ(told, (std::vector<std::pair<entt::entity, entt::entity>> {{mother, town}}));
 	EXPECT_EQ(registry.Get<Villager>(mother).town, other);
+}
+
+TEST_F(TwoTownsTest, AVillagerMovingToAnotherTownLeavesTheWorshipOfItsOldTownAfterItsHome)
+{
+	const glm::vec3 here(0.0f);
+	const auto home = MakeAbode(here, k_Hut);
+	const auto mover = MakeVillager(here, Villager::Sex::FEMALE);
+	town_homes::AddVillagerToTown(registry, Rooms(), town, mover);
+	const auto hut = MakeOtherAbode(here, k_Hut);
+
+	struct Told
+	{
+		entt::entity villager;
+		entt::entity town;
+		entt::entity abode;
+	};
+	std::vector<Told> told;
+	auto homes = Rooms();
+	homes.leavingWorship = [this, &told](entt::entity villager) {
+		const auto& person = registry.Get<const Villager>(villager);
+		told.push_back({villager, person.town, person.abode});
+	};
+	town_homes::MoveInAnyway(registry, homes, hut, mover);
+	// It is out of its home, and it still has its old town
+	ASSERT_EQ(told.size(), 1u);
+	EXPECT_EQ(told.front().villager, mover);
+	EXPECT_EQ(told.front().town, town);
+	EXPECT_TRUE(told.front().abode == entt::null);
+	EXPECT_TRUE(std::ranges::find(registry.Get<const Abode>(home).inhabitants, mover) ==
+	            registry.Get<const Abode>(home).inhabitants.end());
+	EXPECT_EQ(registry.Get<Villager>(mover).town, other);
+
+	// A move in the same town does not leave the worship
+	const auto second = MakeOtherAbode(here, k_Hut);
+	town_homes::MoveInAnyway(registry, homes, second, mover);
+	EXPECT_EQ(told.size(), 1u);
+}
+
+TEST_F(TwoTownsTest, TheLastVillagerMovingToAnotherTownStartsTheCountdownOfItsOldTown)
+{
+	const glm::vec3 here(0.0f);
+	MakeAbode(here, k_Hut);
+	const auto mother = MakeVillager(here, Villager::Sex::FEMALE);
+	const auto child = MakeVillager(here, Villager::Sex::MALE, Villager::LifeStage::Child);
+	const auto grandmother = MakeVillager(here, Villager::Sex::FEMALE);
+	town_homes::AddVillagerToTown(registry, Rooms(), town, mother);
+	town_homes::AddVillagerToTown(registry, Rooms(), town, child);
+	registry.Get<Villager>(child).mother = mother;
+	registry.Get<Villager>(mother).mother = grandmother;
+	const auto hut = MakeOtherAbode(here, k_Hut);
+
+	// One person is left: no countdown yet
+	town_homes::MoveInAnyway(registry, Rooms(), hut, mother);
+	EXPECT_EQ(registry.Get<const Town>(town).emptyTownTimer, 0u);
+	// The villager that leaves loses its own mother
+	EXPECT_TRUE(registry.Get<const Villager>(mother).mother == entt::null);
+	// The last person goes: the countdown starts
+	town_homes::MoveInAnyway(registry, Rooms(), hut, child);
+	EXPECT_EQ(registry.Get<const Town>(town).emptyTownTimer, town_empty::k_EmptyTownTurns);
+	EXPECT_EQ(registry.Get<const Town>(other).emptyTownTimer, 0u);
 }
 
 namespace
