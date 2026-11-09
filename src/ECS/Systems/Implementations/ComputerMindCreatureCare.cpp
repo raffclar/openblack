@@ -20,7 +20,7 @@
 #include "ComputerMindRuleTable.h"
 #include "Creature/CreatureDesires.h"
 #include "Creature/CreatureExplorationMap.h"
-#include "Creature/CreatureLayers.h"
+#include "CreatureBodyBusy.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureLeash.h"
@@ -39,8 +39,6 @@
 #include "ECS/PlayerMiracles.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
-#include "ECS/Systems/CreatureLocomotionSystemInterface.h"
-#include "ECS/Systems/CreatureObjectActionSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "InfoConstants.h"
@@ -64,18 +62,6 @@ constexpr uint32_t k_SleepAtHomeAction = 17;
 constexpr uint32_t k_DrinkFromTheSeaAction = 55;
 constexpr uint32_t k_GoHomeAction = 162;
 
-/// The body of the creature plays an action, walks, turns or catches
-bool BodyBusy(entt::entity creature)
-{
-	const auto* animation = Entities().TryGet<const CreatureAnimation>(creature);
-	const bool playing = animation != nullptr && creature_layers::IsPlaying(animation->body);
-	const bool moving =
-	    Locator::creatureLocomotionSystem::has_value() && Locator::creatureLocomotionSystem::value().IsMoving(creature);
-	const bool catching =
-	    Locator::creatureObjectActionSystem::has_value() && Locator::creatureObjectActionSystem::value().IsCatching(creature);
-	return playing || moving || catching;
-}
-
 /// The needs of the body of the creature, as the body starts when it has none yet
 creature_physiology::Needs NeedsOf(entt::entity creature)
 {
@@ -94,7 +80,7 @@ float DesireOf(entt::entity creature, Desire desire)
 float CreatureInteract(RuleContext& context, computer_mind::Mind& /*mind*/, uint16_t /*node*/)
 {
 	const auto creature = CreatureOf(context.player);
-	if (creature == entt::null || BodyBusy(creature))
+	if (creature == entt::null || creature_body_busy::PerformsBodyAction(Entities(), creature))
 	{
 		return 0.0f;
 	}

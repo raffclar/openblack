@@ -319,6 +319,23 @@ void testbed_scenarios::AddComputerGodCreatureCareScenarios(std::vector<Scenario
 	                  .amount = 1.0f}},
 	});
 	all.push_back({
+	    .id = "mind.computer_god_waits_while_creature_eats",
+	    .name = "A computer god that waits while its creature picks up and eats",
+	    .facet = Facet::Mind,
+	    .description = "Lines of a land give player two a temple to the south. The tiger of player two stands 60 metres "
+	                   "to the east of the temple and is hungry. A live pig stands 20 metres to the north of the "
+	                   "tiger.",
+	    .expected = "The tiger walks to the pig, picks it up and eats it. While the tiger walks, picks up the pig or eats "
+	                "it, the god does not want to interact with its creature: the players.computer_nodes query shows the "
+	                "intensity 0 for the top node CreatureInteract of player two. Before this change, the intensity was "
+	                "above 0 while the tiger picked up or ate the pig, because only a walk, a turn or a catch made the "
+	                "body busy for the god.",
+	    .framing = {.shot = Shot::Overview, .include = {glm::vec2(-40.0f, -130.0f), glm::vec2(100.0f, 0.0f)}},
+	    .creatures = {GodCreature({60.0f, -60.0f}, {.energy = 0.2f}, {{.desire = Desire::Hunger, .fraction = 0.9f}})},
+	    .objects = {{.type = AnimalInfo::Pig, .offset = {60.0f, -40.0f}, .living = true}},
+	    .landScript = k_TempleScript,
+	});
+	all.push_back({
 	    .id = "mind.god_camera_looks_at_creature",
 	    .name = "The camera of another god looks at the creature of that god",
 	    .facet = Facet::Mind,

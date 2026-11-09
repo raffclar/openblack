@@ -1156,6 +1156,14 @@ bool CreatureObjectActionSystem::PlaysOnAlone(entt::entity creature) const
 	       (stop == creature_object_actions::PlanStop::EndsPoint && action->pointEnding);
 }
 
+bool CreatureObjectActionSystem::BodyActs(entt::entity creature) const
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* action = registry.Valid(creature) ? registry.TryGet<const CreatureObjectAction>(creature) : nullptr;
+	return action != nullptr && Runs(*action) &&
+	       creature_object_actions::BodyStarted(action->kind, action->phase == Phase::Playing, TurnsForIt(*action));
+}
+
 void CreatureObjectActionSystem::StopForPlan(entt::entity creature, bool stopsBody)
 {
 	auto& registry = Locator::entitiesRegistry::value();

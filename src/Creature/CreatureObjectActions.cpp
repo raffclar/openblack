@@ -67,12 +67,16 @@ bool creature_object_actions::Hurries(Kind kind)
 	return false;
 }
 
-creature_object_actions::PlanStop creature_object_actions::OnPlanStop(Kind kind, bool playing, bool turnsForIt)
+bool creature_object_actions::BodyStarted(Kind kind, bool playing, bool turnsForIt)
 {
 	// Only these actions turn on the spot as a part of the body action
 	const bool turnBelongs = kind == Kind::PickUp || kind == Kind::Destroy || kind == Kind::Throw || kind == Kind::Point;
-	const bool started = playing || (turnsForIt && turnBelongs);
-	if (!started)
+	return playing || (turnsForIt && turnBelongs);
+}
+
+creature_object_actions::PlanStop creature_object_actions::OnPlanStop(Kind kind, bool playing, bool turnsForIt)
+{
+	if (!BodyStarted(kind, playing, turnsForIt))
 	{
 		return PlanStop::Stops;
 	}

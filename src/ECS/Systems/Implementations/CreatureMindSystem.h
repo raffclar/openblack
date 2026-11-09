@@ -606,6 +606,7 @@ private:
 	void BecomeHigh(entt::entity creature);
 	/// Going near, getting away from or turning to face an object begins, and each turn it goes on
 	void StartSubMove(entt::entity creature, const creature_mind::Movement& movement, float seconds);
+	/// "animating" tells whether the body does an action that is not only its move
 	void StepSubMove(entt::entity creature, bool animating);
 	/// It asks for a walk near the thing that it goes near, if the thing has a place
 	std::optional<creature_cast_moves::WalkStart> GoNear(entt::entity creature, components::CreatureCasting& casting,

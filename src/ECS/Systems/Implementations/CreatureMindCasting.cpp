@@ -34,7 +34,6 @@
 #include "Creature/CreatureCastMoves.h"
 #include "Creature/CreatureGiving.h"
 #include "Creature/CreatureHelp.h"
-#include "Creature/CreatureLayers.h"
 #include "Creature/CreatureMindTables.h"
 #include "Creature/CreatureObjectActions.h"
 #include "Creature/CreatureRoute.h"
@@ -43,6 +42,7 @@
 #include "Creature/CreatureThrow.h"
 #include "Creature/CreatureWatching.h"
 #include "Creature/LeashRules.h"
+#include "CreatureBodyBusy.h"
 #include "CreatureMindSystem.h"
 #include "CreatureMindSystemDetail.h"
 #include "ECS/Components/Abode.h"
@@ -851,8 +851,7 @@ void CreatureMindSystem::StartSubMove(entt::entity creature, const creature_mind
 		casting.move = CreatureCasting::Move::None;
 		return;
 	}
-	const auto* animation = registry.TryGet<const CreatureAnimation>(creature);
-	StepSubMove(creature, animation != nullptr && creature_layers::IsPlaying(animation->body));
+	StepSubMove(creature, creature_body::ActsBesidesMoving(creature_body_busy::ActivityOf(registry, creature)));
 }
 
 std::optional<creature_cast_moves::WalkStart> CreatureMindSystem::GoNear(entt::entity creature, CreatureCasting& casting,
@@ -902,7 +901,7 @@ void CreatureMindSystem::StepSubMove(entt::entity creature, bool animating)
 	auto& locomotion = Locator::creatureLocomotionSystem::value();
 	const auto at = object_measures::PositionOf(registry, casting->target);
 	const auto here = Flat(transform->position);
-	// Playing an action, walking or turning: the game counts all as its body doing something
+	// An action of the body or on a thing, a walk or a turn: the game counts each as its body doing something
 	const bool bodyBusy = animating || locomotion.IsMoving(creature);
 	const auto fail = [&] { casting->outcome = CreatureCasting::Outcome::Failed; };
 	const auto done = [&] { casting->outcome = CreatureCasting::Outcome::Done; };

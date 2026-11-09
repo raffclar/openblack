@@ -72,6 +72,7 @@
 #include "Creature/CreatureThrow.h"
 #include "Creature/CreatureTownHelp.h"
 #include "Creature/CreatureTurnOrder.h"
+#include "CreatureBodyBusy.h"
 #include "CreatureMindSystem.h"
 #include "CreatureMindSystemDetail.h"
 #include "CreatureMindTownHelp.h"
@@ -1143,7 +1144,7 @@ void CreatureMindSystem::AgendaTurn(entt::entity entity)
 		{
 			++mind.stepTurns;
 		}
-		StepSubMove(entity, creature_layers::IsPlaying(animation.body));
+		StepSubMove(entity, creature_body::ActsBesidesMoving(creature_body_busy::ActivityOf(registry, entity)));
 		// A drawing that a step started continues each turn; a dance continues its own only on the turns of its move
 		if (const auto* drawing = registry.TryGet<const CreatureGestureDrawing>(entity);
 		    drawing != nullptr && !drawing->inDance)
@@ -1153,9 +1154,9 @@ void CreatureMindSystem::AgendaTurn(entt::entity entity)
 		// A catch takes up the body until it is over, but the plan to catch is carried out as soon as the catch starts
 		const bool catching =
 		    Locator::creatureObjectActionSystem::has_value() && Locator::creatureObjectActionSystem::value().IsCatching(entity);
-		// An action that plays on after its plan stopped also keeps the body busy: the new plan waits until it ends
-		const bool playsOn = Locator::creatureObjectActionSystem::has_value() &&
-		                     Locator::creatureObjectActionSystem::value().PlaysOnAlone(entity);
+		// The body is busy while it plays an action, does an action on a thing or moves. An action on a thing that plays
+		// on after its plan stopped is one of these: the new plan waits until it ends.
+		const auto body = creature_body_busy::ActivityOf(registry, entity);
 		const bool catchStep = mind.idle.stepStarted && mind.idle.step < mind.idle.agenda.size() &&
 		                       mind.idle.agenda[mind.idle.step].kind == creature_mind::Step::Kind::Object &&
 		                       mind.idle.agenda[mind.idle.step].order.kind == creature_mind::ObjectOrder::Kind::Catch;
@@ -1169,13 +1170,13 @@ void CreatureMindSystem::AgendaTurn(entt::entity entity)
 		const auto [cameraFocus, cameraFocusAhead] = CameraFocusOf(registry, entity, mind.idle);
 		const creature_mind::Senses senses {
 		    .seconds = k_TurnSeconds,
-		    .bodyBusy = creature_layers::IsPlaying(animation.body) || moving || playsOn,
+		    .bodyBusy = creature_body::PerformsBodyAction(body),
 		    .bodyLooping = creature_layers::IsLooping(animation.body),
 		    .clipMissing = ClipMissing(entity, animation, mind.idle, communication.animation),
 		    .realTime = animation.realTime,
 		    .bodyDancing = creature_layers::IsDancing(animation.body),
 		    .moving = moving,
-		    .onlyMoves = moving && !creature_layers::IsPlaying(animation.body) && !playsOn,
+		    .onlyMoves = body.moving && !creature_body::ActsBesidesMoving(body),
 		    .subMove = SubMoveOf(entity),
 		    .position = glm::vec2(transform.position.x, transform.position.z),
 		    .communication = communication,
