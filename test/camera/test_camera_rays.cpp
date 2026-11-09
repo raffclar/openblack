@@ -68,7 +68,8 @@ public:
 		const auto asked = static_cast<uint64_t>(actions);
 		const auto bit = [asked](input::BindableActionMap action) { return (asked & static_cast<uint64_t>(action)) != 0; };
 		return (held && bit(input::BindableActionMap::MOVE)) || (turnLeft && bit(input::BindableActionMap::ROTATE_LEFT)) ||
-		       (middle && bit(input::BindableActionMap::ROTATE_AROUND_MOUSE_ON));
+		       (middle && bit(input::BindableActionMap::ROTATE_AROUND_MOUSE_ON)) ||
+		       (forwards && bit(input::BindableActionMap::MOVE_FORWARDS));
 	}
 	[[nodiscard]] glm::uvec2 GetMousePosition() const override { return cursor; }
 	[[nodiscard]] glm::ivec2 GetMouseDelta() const override { return delta; }
@@ -83,6 +84,8 @@ public:
 	bool turnLeft {false};
 	/// The button that turns the camera about the land under the hand
 	bool middle {false};
+	/// The key that moves the camera forwards
+	bool forwards {false};
 	glm::uvec2 cursor {k_Width / 2, k_Height * 3 / 4};
 	glm::ivec2 delta {0, 0};
 };
@@ -368,4 +371,30 @@ TEST_F(CameraRays, TheDrawnDirectionIsTheDirectionOfTheKeptView)
 	EXPECT_EQ(_camera.GetForward(Camera::Interpolation::Drawn), forward);
 	EXPECT_EQ(_camera.GetUp(Camera::Interpolation::Drawn), up);
 	EXPECT_NE(_camera.GetForward(), forward);
+}
+
+// Land gripped too far ahead holds the controls back as the fence does: a key that goes down before the button comes up
+// does not move the camera while it is held
+TEST_F(CameraRays, LandGrippedTooFarAheadHoldsTheKeysBackUntilAllAreLetGo)
+{
+	// Looking nearly level, the land under the middle of the screen is about 5000 ahead
+	static constexpr glm::vec3 k_LevelOrigin {1000.0f, 100.0f, 1000.0f};
+	static constexpr glm::vec3 k_LevelFocus {1000.0f, 98.0f, 1100.0f};
+	const auto run = [this](bool keyAfterGrip) {
+		std::ignore = _camera.SetModel(std::make_unique<DefaultWorldCameraModel>(k_LevelOrigin, k_LevelFocus));
+		_camera.SetOrigin(k_LevelOrigin).SetFocus(k_LevelFocus);
+		_camera.KeepDrawnView();
+		*_action = DragAction();
+		_action->cursor = {k_Width / 2, k_Height / 2};
+		RunFrames(30);
+		_action->held = true;
+		RunFrames(3);
+		// The key goes down before the button comes up
+		_action->forwards = keyAfterGrip;
+		RunFrames(1);
+		_action->held = false;
+		RunFrames(30);
+		return _camera.GetOrigin(Camera::Interpolation::Target);
+	};
+	EXPECT_EQ(run(true), run(false));
 }
