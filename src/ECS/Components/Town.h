@@ -96,6 +96,9 @@ struct Town
 	uint32_t emptyTownTimer {0};
 	/// Its main storage pit: the pit that last started to work. None when that pit went and no other pit took its place.
 	entt::entity storagePit {entt::null};
+	/// Its workshops in the order that they first started to work, the newest first. A workshop stays in the list until
+	/// it goes, also when it does not work.
+	std::vector<entt::entity> workshops;
 	/// The temporary piles of food and wood it keeps while it has no storage pit that works, none until one is wanted
 	std::array<entt::entity, 2> temporaryStores {entt::null, entt::null};
 	/// The ground it covers, made again when a building joins or leaves it or one of its fields goes

@@ -39,6 +39,7 @@
 #include "ECS/Systems/TownDesireSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
 #include "ECS/Systems/WorkshopSystemInterface.h"
+#include "ECS/TownWorkshops.h"
 #include "ECS/VillagerCarry.h"
 #include "ECS/VillagerWorkRules.h"
 #include "ECS/WallHugRules.h"
@@ -127,20 +128,10 @@ uint32_t SetTraderNothingToDo(LivingAction& action, entt::entity tradeTown)
 	return villager_disciple::SetDiscipleNothingToDo(action, tradeTown) ? 1 : 0;
 }
 
-/// A town's workshops in its order, the newest first
+/// The workshops of the town, the newest to start to work first
 std::vector<entt::entity> WorkshopsOf(entt::entity town)
 {
-	std::vector<entt::entity> workshops;
-	auto& registry = Entities();
-	for (const auto abode : registry.Get<const Town>(town).abodes)
-	{
-		const auto* building = registry.Valid(abode) ? registry.TryGet<const Abode>(abode) : nullptr;
-		if (building != nullptr && building->type == AbodeNumber::Workshop)
-		{
-			workshops.push_back(abode);
-		}
-	}
-	return workshops;
+	return town_workshops::Of(town);
 }
 
 /// The wood a workshop needs to make a scaffold
