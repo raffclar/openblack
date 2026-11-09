@@ -44,6 +44,7 @@
 #include "Creature/CreatureShownFace.h"
 #include "Creature/CreatureStomp.h"
 #include "Creature/CreatureTouchStep.h"
+#include "CreatureBodyBusy.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureDestruction.h"
@@ -190,13 +191,11 @@ std::optional<feedback::ReleaseBody> ReleaseBodyOf(entt::entity creature)
 	{
 		return std::nullopt;
 	}
-	const bool moving =
-	    Locator::creatureLocomotionSystem::has_value() && Locator::creatureLocomotionSystem::value().IsMoving(creature);
 	// The face that this computer shows, which can be the face of a stroke
 	const auto* shown = registry.TryGet<const ShownCreatureFace>(creature);
 	return feedback::ReleaseBody {
 	    .headStraight = animation->yaw.angle == 0.0f && animation->pitch.angle == 0.0f,
-	    .bodyBusy = creature_layers::IsPlaying(animation->body) || moving,
+	    .bodyBusy = creature_body_busy::PerformsBodyAction(registry, creature),
 	    .lyingDead = creature_layers::IsLooping(animation->body) && animation->body.holdLoop,
 	    .faceShown = creature_shown_face::Shown(animation->face, shown != nullptr ? &shown->face : nullptr).current.has_value(),
 	};

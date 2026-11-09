@@ -13,6 +13,7 @@
 
 #include <limits>
 #include <optional>
+#include <span>
 
 #include <glm/vec2.hpp>
 
@@ -40,6 +41,17 @@ void Widen(components::TownArea& area, const map_coords::MapCoords& at, float ra
 
 /// The radius of the town: half of the longer side of the box, each side first cut to whole metres
 [[nodiscard]] float Radius(const components::TownArea& area);
+
+/// The number of buildings that the search for a town's gathering place keeps. It keeps them in a ring, so the building
+/// after the last one takes the place of the first.
+constexpr size_t k_GatheringRing = 100;
+
+/// The middle of a town's buildings, where the town starts to look for its gathering place. Use it for two buildings or
+/// more, in the order that the town keeps them. The ring keeps only the last buildings, but the sum reads as many places
+/// of the ring as there are buildings, so a town with more buildings than the ring counts some of them two times. Each
+/// sum is made in whole map units and wraps at 32 bits. It is divided by the number of buildings and rounded one time to
+/// a float, then cut to whole map units.
+[[nodiscard]] map_coords::MapCoords GatheringMiddle(std::span<const map_coords::MapCoords> buildings);
 
 /// The gathering place that a land script gives a town, in metres. A place at 0, 0 counts as no place: the town then
 /// finds its own gathering place when it first needs one.

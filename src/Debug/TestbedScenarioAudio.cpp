@@ -594,6 +594,19 @@ void testbed_scenarios::AddAudio(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "temple.pool_light",
+	    .name = "The water of the main room's pool in a good temple's light",
+	    .facet = Facet::Story,
+	    .description = "The player is wholly good and goes into the temple's main room. Look at the pool in the middle "
+	                   "of the room for some seconds.",
+	    .expected = "The two layers of the water move slowly across the pool. When one layer becomes clearer, the other "
+	                "becomes less clear. The water gets all of the rainbow pulse of the light, as the walls get it.",
+	    .environment = {.playerAlignment = 1.0f, .temple = glm::vec2(0.0f)},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 40.0f, -80.0f}, .look = {0.0f, 10.0f, 0.0f}},
+	    .commands = {{.kind = Kind::EnterTemple, .delaySeconds = 4.0f, .value = static_cast<size_t>(TempleRoom::Main)}},
+	});
+
+	all.push_back({
 	    .id = "temple.pictures_unlit",
 	    .name = "The temple's pictures drawn in one colour with no lightmap",
 	    .facet = Facet::Story,

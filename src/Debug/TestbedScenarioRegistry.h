@@ -522,8 +522,22 @@ struct ScriptSpell
 	float curl {0.0f};
 };
 
-/// A storm a land's setup script places in the island's global climate, as CREATE_WEATHER_STORM does, with the script's
-/// own lists of numbers (see script_weather::ParseLandStorm), made as the scenario starts
+/// A climate that a land's setup script makes, as CREATE_WEATHER_CLIMATE does
+struct LandClimateSetup
+{
+	/// The number that the script gives to the climate, and the kind of climate
+	int32_t index {0};
+	int32_t type {0};
+	/// The centre of the climate, from the middle of the map
+	glm::vec2 offset {0.0f};
+	/// The inner and outer radius of the climate
+	float innerRadius {0.0f};
+	float outerRadius {0.0f};
+};
+
+/// A storm that a land's setup script places, as CREATE_WEATHER_STORM does, with the script's own lists of numbers
+/// (see script_weather::ParseLandStorm), made as the scenario starts. Without a climate of its own, the storm goes in
+/// the global climate of the island. On the first new day, a storm of the global climate starts to clear.
 struct LandStormSetup
 {
 	/// Where it starts and where it heads, from the middle of the map, on the land
@@ -536,6 +550,8 @@ struct LandStormSetup
 	std::string_view shape;
 	std::string_view clouds;
 	std::string_view weather;
+	/// The climate that the script makes first and puts the storm in
+	std::optional<LandClimateSetup> climate;
 };
 
 /// A miracle cast in the scenario, as if from a hand above the land

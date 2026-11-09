@@ -54,6 +54,7 @@ public:
 	void UpdateFrame(float frameMilliseconds, float turnFraction, glm::vec3 camera, std::chrono::milliseconds frameRealTime,
 	                 bool landDrawn) override;
 	void Reset() override;
+	void ForgetTipsRead() override;
 	[[nodiscard]] const script_highlights::Pulse& GetPulse() const override { return _pulse; }
 	[[nodiscard]] const script_highlights::TipsRead& GetTipsRead() const override { return _tipsRead; }
 	/// A save keeps the tips that the player has read, in each category in the order read

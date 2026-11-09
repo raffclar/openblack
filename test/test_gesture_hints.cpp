@@ -145,6 +145,26 @@ TEST(GestureHints, TheSquaresRunLeftFromTheBottomRightCornerByShareOfTheWidth)
 	EXPECT_NEAR(picture.min.y, first.min.y - 28.0f, k_Tolerance);
 }
 
+TEST(GestureHints, TheSquaresHaveTheGamesRoundingOnA4By3Screen)
+{
+	// The values that the game's order of operations gives in single precision
+	const auto second = Square(1, {640.0f, 480.0f});
+	EXPECT_EQ(second.min.x, 0x1.233332p+9f);
+	EXPECT_EQ(second.max.x, 0x1.2e6666p+9f);
+	EXPECT_EQ(Square(2, {640.0f, 480.0f}).max.x, 0x1.219998p+9f);
+	const auto eighth = Square(7, {1152.0f, 864.0f});
+	EXPECT_EQ(eighth.min.x, 0x1.81eb86p+9f);
+	EXPECT_EQ(eighth.max.x, 0x1.96147cp+9f);
+	EXPECT_EQ(RowWidth({960.0f, 720.0f}), 960.0f);
+}
+
+TEST(GestureHints, TheFramesSecondsAreItsMillisecondsTimesAThousandth)
+{
+	EXPECT_EQ(FrameSeconds(10), 0x1.47ae16p-7f);
+	EXPECT_EQ(FrameSeconds(0), 0.0f);
+	EXPECT_EQ(FrameSeconds(1000), 1000.0f * 0.001f);
+}
+
 TEST(GestureHints, OnAWideScreenTheRowIsSizedAsOnA4By3ScreenAsTall)
 {
 	const auto wide = Square(0, {2560.0f, 1080.0f});
@@ -300,8 +320,9 @@ TEST(GestureHints, TheSelectionGesturesShowAGlobeAndTheCreaturesSeed)
 	EXPECT_TRUE(hints[2].globe);
 }
 
-TEST(GestureHints, TheSelectionStepsShowNoSeed)
+TEST(GestureHints, TheSelectionStepsShowTheSeedOfTheirMiracle)
 {
+	// The open selection gives each gesture that it waits for the seed of its last miracle. The hint shows that seed.
 	const std::vector<gesture::Request> requests {
 	    {.gesture = GestureType::Scribble, .purpose = gesture::Purpose::CloseSelection},
 	    {.gesture = GestureType::WShape, .purpose = gesture::Purpose::SelectMiracle, .seed = SpellSeedType::Water},
@@ -309,7 +330,9 @@ TEST(GestureHints, TheSelectionStepsShowNoSeed)
 	const auto hints = HintsFor(requests, FakeShapes, FakeMagic);
 	ASSERT_EQ(hints.size(), 1u);
 	EXPECT_EQ(hints[0].order, k_SelectionStepOrder);
-	EXPECT_EQ(hints[0].seed, SpellSeedType::None);
+	EXPECT_EQ(hints[0].seed, SpellSeedType::Water);
+	EXPECT_EQ(hints[0].powerUp, -1);
+	EXPECT_EQ(hints[0].magic, FakeMagic(SpellSeedType::Water, -1));
 	EXPECT_FALSE(hints[0].globe);
 }
 

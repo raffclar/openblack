@@ -779,9 +779,10 @@ void openblack::testbed_scenarios::AddTownMiracleScenarios(std::vector<Scenario>
 	        "is built and each icon holds the full charge of its miracle. The M key is pressed on the keyboard, and the "
 	        "hand draws a W. Then a scribble drops the water miracle, and the R key is pressed on the keyboard.",
 	    .expected = "The M key opens the miracle selection: white sparks come out of the hand, and the hints show the "
-	                "gestures of the two miracles. The W closes the selection, and at the next turn the water miracle "
-	                "comes into the hand. The scribble shakes the hand and drops the miracle. The R key asks the water "
-	                "icon again: at the next turn the icon starts to charge, and its charge goes up in the tooltip.",
+	                "gestures of the two miracles, each with the seed of its miracle turning over it. The W closes the "
+	                "selection, and at the next turn the water miracle comes into the hand. The scribble shakes the hand "
+	                "and drops the miracle. The R key asks the water icon again: at the next turn the icon starts to "
+	                "charge, and its charge goes up in the tooltip.",
 	    .environment = {.dispenserGrid = false, .landNumber = k_FirstLand},
 	    .framing = {.shot = Shot::Placed, .eye = {9.0f, 14.0f, -40.0f}, .look = {9.0f, 2.0f, -19.0f}},
 	    .objects = Town(),

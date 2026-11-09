@@ -161,6 +161,8 @@ public:
 	static constexpr size_t k_Categories = 5;
 	static constexpr size_t k_MostInCategory = 48;
 
+	/// Whether a tip was read. When a category holds 48 tips, the original game finds none of them, and openblack does
+	/// the same.
 	[[nodiscard]] bool Has(uint32_t text, uint32_t category) const;
 	/// A tip read; nothing for a category past the last, a full one or one already there
 	void Add(uint32_t text, uint32_t category);

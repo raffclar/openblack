@@ -43,6 +43,7 @@
 #include "Creature/CreatureRig.h"
 #include "Creature/CreatureWalkPlanner.h"
 #include "Creature/FightMarks.h"
+#include "CreatureBodyBusy.h"
 #include "CreatureFightSystemDetail.h"
 #include "ECS/Archetypes/CreatureArchetype.h"
 #include "ECS/Components/Creature.h"
@@ -277,15 +278,12 @@ GameHeading HeadingOf(const ecs::Registry& registry, entt::entity creature)
 	return GameHeading::Of(ahead.x, ahead.z);
 }
 
-/// Whether the body of the creature is busy: it moves or turns, it plays an action, or it lets go of a thing or catches a
-/// thing
+/// Whether the body of the creature is busy: it moves or turns, it plays an action, or it does an action on a thing
 bool BodyBusy(const ecs::Registry& registry, entt::entity creature, const CreatureLocomotionSystemInterface* locomotion)
 {
-	const auto* animation = registry.TryGet<const CreatureAnimation>(creature);
-	const bool lettingGo =
-	    Locator::creatureObjectActionSystem::has_value() && Locator::creatureObjectActionSystem::value().PlaysOnAlone(creature);
-	return (locomotion != nullptr && locomotion->IsMoving(creature)) || lettingGo ||
-	       (animation != nullptr && creature_layers::IsPlaying(animation->body));
+	const auto* hands =
+	    Locator::creatureObjectActionSystem::has_value() ? &Locator::creatureObjectActionSystem::value() : nullptr;
+	return creature_body::PerformsBodyAction(creature_body_busy::ActivityOf(registry, creature, locomotion, hands));
 }
 
 /// Whether the creature can start its duel on this turn. Its body refuses while it is busy, and a body with no clips for

@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <array>
 #include <chrono>
+#include <iterator>
 #include <limits>
 #include <numeric>
 #include <optional>
@@ -740,7 +741,12 @@ bool TownSystem::CheckForClearArea(glm::vec2 point, float radius, ClearAreaFilte
 std::optional<glm::vec2> TownSystem::FindClearArea(glm::vec2 point, float searchRadius, float step, float radius,
                                                    ClearAreaFilter filter, entt::entity ignore) const
 {
-	auto coords = map_coords::FromMetres(point);
+	return FindClearAreaFrom(map_coords::FromMetres(point), searchRadius, step, radius, filter, ignore);
+}
+
+std::optional<glm::vec2> TownSystem::FindClearAreaFrom(map_coords::MapCoords coords, float searchRadius, float step,
+                                                       float radius, ClearAreaFilter filter, entt::entity ignore) const
+{
 	map_coords::Spiral spiral;
 	for (auto count = map_coords::IncrementSpiralSize(searchRadius, step); count != 0; --count)
 	{
@@ -773,7 +779,7 @@ glm::vec2 TownSystem::GetCongregationPos(entt::entity townEntity)
 		{
 			continue;
 		}
-		buildings.emplace_back(transform->position.x, transform->position.z);
+		buildings.push_back(glm::xz(transform->position));
 	}
 	// A town with fewer than three counts its planned buildings too
 	if (buildings.size() < k_CongregationLeastBuildings)
@@ -782,7 +788,7 @@ glm::vec2 TownSystem::GetCongregationPos(entt::entity townEntity)
 		{
 			if (const auto* transform = registry.Valid(planned) ? registry.TryGet<const Transform>(planned) : nullptr)
 			{
-				buildings.emplace_back(transform->position.x, transform->position.z);
+				buildings.push_back(glm::xz(transform->position));
 			}
 		}
 	}
@@ -791,21 +797,14 @@ glm::vec2 TownSystem::GetCongregationPos(entt::entity townEntity)
 	glm::vec2 centre {townTransform.position.x, townTransform.position.z};
 	if (buildings.size() > 1)
 	{
-		// The middle of the buildings, on the map's grid; all of them are used up finding it, so failing a clear area
-		// there it is near the town itself
-		uint32_t x = 0;
-		uint32_t z = 0;
-		for (const auto& building : buildings)
-		{
-			const auto coords = map_coords::FromMetres(building);
-			x += static_cast<uint32_t>(coords.x);
-			z += static_cast<uint32_t>(coords.z);
-		}
-		const auto count = static_cast<float>(buildings.size());
-		const glm::vec2 middle {map_coords::ToMetres(map_coords::FtoL(static_cast<float>(x) / count)),
-		                        map_coords::ToMetres(map_coords::FtoL(static_cast<float>(z) / count))};
-		found = FindClearArea(middle, k_CongregationSearch, k_CongregationStep, k_CongregationClear,
-		                      ClearAreaFilter::BlocksTown, entt::null);
+		// The search starts at the middle of the buildings, in whole map units. If it finds no clear area, the place is
+		// near the town itself, because the middle used all of the buildings
+		std::vector<map_coords::MapCoords> places;
+		places.reserve(buildings.size());
+		std::ranges::transform(buildings, std::back_inserter(places),
+		                       [](glm::vec2 place) { return map_coords::FromMetres(place); });
+		found = FindClearAreaFrom(town_area::GatheringMiddle(places), k_CongregationSearch, k_CongregationStep,
+		                          k_CongregationClear, ClearAreaFilter::BlocksTown, entt::null);
 	}
 	else if (!buildings.empty())
 	{

@@ -69,9 +69,12 @@ enum class PlanStop : uint8_t
 	/// The arm plays the end of its point with no hold. A turn to the point ends first.
 	EndsPoint,
 };
-/// What a plan stop does to an action of the kind. The body starts an action when it plays its animations, or when it
-/// turns on the spot for the action: to get a thing in reach, to throw or to point. Only a dance, a fight, the static
-/// loop and a point stop with the plan. Each other action that the body started plays on.
+/// Whether the body started an action of the kind. The body starts an action when it plays its animations, or when it
+/// turns on the spot for the action: to get a thing in reach, to throw or to point. From that time, the body does the
+/// action, and the creature is busy as when it plays an action of its own.
+[[nodiscard]] bool BodyStarted(Kind kind, bool playing, bool turnsForIt);
+/// What a plan stop does to an action of the kind. Only a dance, a fight, the static loop and a point stop with the
+/// plan. Each other action that the body started (see BodyStarted) plays on.
 [[nodiscard]] PlanStop OnPlanStop(Kind kind, bool playing, bool turnsForIt);
 
 /// What a plan stop does to the thing of an eat

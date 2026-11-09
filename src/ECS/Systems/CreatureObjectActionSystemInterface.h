@@ -136,6 +136,9 @@ public:
 	/// Whether the body continues its action to the end when the plan stops: each action that the body started, and a
 	/// point that plays its end. A point that holds its arm stops.
 	[[nodiscard]] virtual bool PlaysOnAlone(entt::entity creature) const { return IsCatching(creature); }
+	/// Whether the body does an action on a thing now: the action runs, and the body started it. The body starts an
+	/// action when it plays its animations, or when it turns on the spot for it. A catch is such an action from its start.
+	[[nodiscard]] virtual bool BodyActs(entt::entity creature) const { return PlaysOnAlone(creature); }
 	/// The plan that asked for the action stops. Each action that the body started plays on to its end. A point plays
 	/// its end when the stop also stops the body, and otherwise holds on alone. An eat swallows the thing after the bite,
 	/// or loses the thing before the bite. Other actions stop.

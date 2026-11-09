@@ -14,6 +14,7 @@
 
 #include <entt/signal/sigh.hpp>
 
+#include "3D/MapCoords.h"
 #include "Common/FramePace.h"
 #include "ECS/Systems/TownSystemInterface.h"
 
@@ -102,6 +103,9 @@ private:
 	/// At the town's turn it forgets its temporary piles that have gone, and removes the empty ones once it has a
 	/// storage pit that works
 	static void TemporaryStoresTurn(entt::entity town);
+	/// FindClearArea from a place in whole map units, with no change to metres first
+	[[nodiscard]] std::optional<glm::vec2> FindClearAreaFrom(map_coords::MapCoords coords, float searchRadius, float step,
+	                                                         float radius, ClearAreaFilter filter, entt::entity ignore) const;
 
 	Registry* _registry {nullptr};
 	std::vector<entt::connection> _connections;

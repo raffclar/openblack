@@ -68,6 +68,7 @@
 #include "ECS/Systems/WorkshopSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "EngineConfig.h"
+#include "Gestures/GestureHints.h"
 #include "Locator.h"
 #include "Particles/LiquidParticles.h"
 #include "Profiler.h"
@@ -336,7 +337,7 @@ void PlayFrameEffects(FrameViewInterface& view)
 	// turn, by the game's time
 	if (Locator::gestureSystem::has_value())
 	{
-		const auto seconds = std::chrono::duration<float>(clock.GetFrameGameTime()).count();
+		const auto seconds = gesture_hints::FrameSeconds(clock.GetFrameGameTime().count());
 		Locator::gestureSystem::value().StepHints(seconds, view.DialogueWordsDrawn());
 	}
 	// The tip bubble's time to show runs down by the game's time while it is up

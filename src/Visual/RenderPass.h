@@ -59,12 +59,31 @@ enum class RenderPass : uint8_t
 	GestureHintCollar1,
 	GestureHintCollar2,
 	/// The seeds and the globe that the gestures' hints picture, each in a view of its own over its hint's square. A
-	/// row has at most five such pictures: the five miracles that a creature can cast in a fight.
+	/// row has one hint for each gesture at most, and 23 pictures at most. For example, the open miracle selection shows
+	/// a seed over each gesture that it waits for.
 	GestureHintSeed0,
 	GestureHintSeed1,
 	GestureHintSeed2,
 	GestureHintSeed3,
 	GestureHintSeed4,
+	GestureHintSeed5,
+	GestureHintSeed6,
+	GestureHintSeed7,
+	GestureHintSeed8,
+	GestureHintSeed9,
+	GestureHintSeed10,
+	GestureHintSeed11,
+	GestureHintSeed12,
+	GestureHintSeed13,
+	GestureHintSeed14,
+	GestureHintSeed15,
+	GestureHintSeed16,
+	GestureHintSeed17,
+	GestureHintSeed18,
+	GestureHintSeed19,
+	GestureHintSeed20,
+	GestureHintSeed21,
+	GestureHintSeed22,
 	/// The gestures' hints along the bottom of the screen, over the scene and under the cinema bars
 	GestureHints,
 	/// The cinema bars over the scene: the advisors near the screen are drawn over them
@@ -130,6 +149,24 @@ static constexpr std::array<std::string_view, static_cast<uint8_t>(RenderPass::_
     "Gesture Hint Seed 2 Pass",    //
     "Gesture Hint Seed 3 Pass",    //
     "Gesture Hint Seed 4 Pass",    //
+    "Gesture Hint Seed 5 Pass",    //
+    "Gesture Hint Seed 6 Pass",    //
+    "Gesture Hint Seed 7 Pass",    //
+    "Gesture Hint Seed 8 Pass",    //
+    "Gesture Hint Seed 9 Pass",    //
+    "Gesture Hint Seed 10 Pass",   //
+    "Gesture Hint Seed 11 Pass",   //
+    "Gesture Hint Seed 12 Pass",   //
+    "Gesture Hint Seed 13 Pass",   //
+    "Gesture Hint Seed 14 Pass",   //
+    "Gesture Hint Seed 15 Pass",   //
+    "Gesture Hint Seed 16 Pass",   //
+    "Gesture Hint Seed 17 Pass",   //
+    "Gesture Hint Seed 18 Pass",   //
+    "Gesture Hint Seed 19 Pass",   //
+    "Gesture Hint Seed 20 Pass",   //
+    "Gesture Hint Seed 21 Pass",   //
+    "Gesture Hint Seed 22 Pass",   //
     "Gesture Hints Pass",          //
     "Cinema Bars Pass",            //
     "Advisors Pass",               //

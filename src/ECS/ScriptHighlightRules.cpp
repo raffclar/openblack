@@ -175,7 +175,9 @@ TapOutcome Tap(HighlightInfo kind, uint32_t scriptId, bool byThisPlayer)
 
 bool TipsRead::Has(uint32_t text, uint32_t category) const
 {
-	return category < k_Categories && std::ranges::find(_texts.at(category), text) != _texts.at(category).end();
+	// A full category finds no tip, as in the original game
+	return category < k_Categories && _texts.at(category).size() < k_MostInCategory &&
+	       std::ranges::find(_texts.at(category), text) != _texts.at(category).end();
 }
 
 void TipsRead::Add(uint32_t text, uint32_t category)

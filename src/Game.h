@@ -785,8 +785,8 @@ private:
 	void UpdateHandTricons(bool handDrawn, float seconds, hand_blend::HandMode mode);
 	/// The part of the hand's frame that reads what is under the cursor: the gestures, the input of the leash, and the
 	/// place where the hand rests
-	void UpdateHandCursor(std::chrono::microseconds deltaTime, Profiler& profiler, Camera& camera,
-	                      ecs::components::Transform& intersectionTransform, std::optional<map_coords::MapCoords>& handPick);
+	void UpdateHandCursor(Profiler& profiler, Camera& camera, ecs::components::Transform& intersectionTransform,
+	                      std::optional<map_coords::MapCoords>& handPick);
 	/// The part of the hand's frame that puts the drawn hand at its place, or keeps it away
 	void UpdateDrawnHand(std::chrono::microseconds deltaTime, Profiler& profiler, Camera& camera,
 	                     const std::chrono::duration<float, std::milli>& gameTime,
