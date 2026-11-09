@@ -9,6 +9,8 @@
 
 #include "TownAreaRules.h"
 
+#include <array>
+
 #include "Common/X87.h"
 
 using namespace openblack;
@@ -78,4 +80,29 @@ float town_area::Radius(const components::TownArea& area)
 	const int32_t across = Size(map_coords::FtoL(Metres(area.max.x) - Metres(area.min.x)));
 	const int32_t down = Size(map_coords::FtoL(Metres(area.max.y) - Metres(area.min.y)));
 	return static_cast<float>(across > down ? across : down) * k_Half;
+}
+
+map_coords::MapCoords town_area::GatheringMiddle(std::span<const map_coords::MapCoords> buildings)
+{
+	if (buildings.empty())
+	{
+		return {};
+	}
+	std::array<map_coords::MapCoords, k_GatheringRing> ring {};
+	for (size_t i = 0; i < buildings.size(); ++i)
+	{
+		ring.at(i % k_GatheringRing) = buildings[i];
+	}
+	uint32_t x = 0;
+	uint32_t z = 0;
+	for (size_t i = 0; i < buildings.size(); ++i)
+	{
+		const auto& building = ring.at(i % k_GatheringRing);
+		x += static_cast<uint32_t>(building.x);
+		z += static_cast<uint32_t>(building.z);
+	}
+	const auto count = static_cast<double>(buildings.size());
+	return {.x = map_coords::FtoL(x87::Div(static_cast<double>(x), count)),
+	        .z = map_coords::FtoL(x87::Div(static_cast<double>(z), count)),
+	        .altitude = 0.0f};
 }
