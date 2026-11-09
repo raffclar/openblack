@@ -128,9 +128,9 @@ int32_t Catch(uint32_t capacity, uint32_t held, uint32_t season, float tribalPow
 	return map_coords::FtoL(caught);
 }
 
-bool TakesCatchToStore(uint32_t capacity, uint32_t held, uint32_t caught)
+bool TakesCatchToStore(uint32_t capacity, uint32_t heldBeforeCatch, uint32_t caught)
 {
-	const float room = Room(capacity, held);
+	const float room = Room(capacity, heldBeforeCatch + caught);
 	return room < static_cast<float>(caught) || room == 0.0f;
 }
 

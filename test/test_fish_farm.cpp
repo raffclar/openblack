@@ -132,10 +132,15 @@ TEST(FishFarm, AFishermanCatchesAQuarterOfWhatHeCarriesLessOutOfSeason)
 
 TEST(FishFarm, AFishermanTakesHisFoodToTheStoreOnceHisRoomIsLessThanHisCatch)
 {
+	// The room after the catch: 10 is not less than the catch of 10
 	EXPECT_FALSE(fish_farm::TakesCatchToStore(40, 20, 10));
-	EXPECT_TRUE(fish_farm::TakesCatchToStore(40, 31, 10));
+	// The room after the catch: 5 is less than the catch of 10
+	EXPECT_TRUE(fish_farm::TakesCatchToStore(40, 25, 10));
+	// No room after the catch
+	EXPECT_TRUE(fish_farm::TakesCatchToStore(40, 30, 10));
 	EXPECT_TRUE(fish_farm::TakesCatchToStore(40, 40, 0));
-	EXPECT_FALSE(fish_farm::TakesCatchToStore(40, 30, 10));
+	// No bite and room left: he fishes on
+	EXPECT_FALSE(fish_farm::TakesCatchToStore(40, 30, 0));
 }
 
 TEST(FishShoal, TheShoalLiesWhereTheSeaIsOpenOnTwoRingsRunning)
