@@ -978,7 +978,7 @@ void GameActionMap::Frame()
 
 	// After the frame's starting state is kept, so that the presses show as changes
 	ApplyQueuedPresses();
-	// Without Alt, a mouse press that waited for Alt does its action
+	// Without Alt, a mouse press that waited for this frame does its action
 	ActWaitedPresses(_altPresses.NewFrame(AltHeld(), OnePressMouseActions()));
 }
 
@@ -989,15 +989,12 @@ bool GameActionMap::AltHeld() const
 
 alt_presses::SourceActions GameActionMap::OnePressMouseActions() const
 {
-	const auto button = [this](int mask) -> uint64_t {
-		const auto found = _mouseBindings.find(mask);
-		return found != _mouseBindings.end() ? static_cast<uint64_t>(OnePressActions(found->second)) : 0;
+	// The game does only the first action bound to the input, and only when that action is a one-press action that acts
+	const auto acts = [this](MouseInput mouse) -> uint64_t {
+		return static_cast<uint64_t>(MousePressAction(GetKeyBindings(), mouse, _blocked, _scriptHoldsScreen));
 	};
-	const auto wheel = [](const std::optional<BindableActionMap>& actions) -> uint64_t {
-		return static_cast<uint64_t>(OnePressActions(actions.value_or(BindableActionMap::NONE)));
-	};
-	return {button(SDL_BUTTON_LMASK), button(SDL_BUTTON_RMASK), button(SDL_BUTTON_MMASK), wheel(_mouseWheelBinding[0]),
-	        wheel(_mouseWheelBinding[1])};
+	return {acts(MouseInput::LeftButton), acts(MouseInput::RightButton), acts(MouseInput::MiddleButton),
+	        acts(MouseInput::WheelUp), acts(MouseInput::WheelDown)};
 }
 
 void GameActionMap::ActWaitedPresses(uint64_t actions)
@@ -1015,12 +1012,26 @@ void GameActionMap::ActWaitedPresses(uint64_t actions)
 void GameActionMap::PressThroughAlt(alt_presses::Source source, BindableActionMap added)
 {
 	const auto onePress = static_cast<uint64_t>(OnePressActions(added));
-	const auto acts = _altPresses.Press(source, AltHeld(), OnePressMouseActions()) & onePress;
-	_bindableMap = static_cast<BindableActionMap>((static_cast<uint64_t>(_bindableMap) & ~onePress) | acts);
+	const auto pressed = _altPresses.Press(source, AltHeld(), OnePressMouseActions());
+	TakeBackMousePresses(pressed.takenBack);
+	_bindableMap = static_cast<BindableActionMap>((static_cast<uint64_t>(_bindableMap) & ~onePress) | pressed.acts);
 	if (source == alt_presses::Source::WheelUp || source == alt_presses::Source::WheelDown)
 	{
-		_wheelActions = (_wheelActions & ~onePress) | acts;
+		_wheelActions = (_wheelActions & ~onePress) | pressed.acts;
 	}
+	ActWaitedPresses(pressed.waitedActs);
+}
+
+void GameActionMap::TakeBackMousePresses(uint64_t actions)
+{
+	if (actions == 0)
+	{
+		return;
+	}
+	_bindableMap = static_cast<BindableActionMap>(static_cast<uint64_t>(_bindableMap) & ~actions);
+	_queuedHeld = static_cast<BindableActionMap>(static_cast<uint64_t>(_queuedHeld) & ~actions);
+	_wheelActions &= ~actions;
+	_waitedMousePresses &= ~actions;
 }
 
 bool GameActionMap::WaitedMousePress(BindableActionMap action) const
@@ -1203,10 +1214,7 @@ void GameActionMap::ProcessEvent(const SDL_Event& event)
 		// The game reads Alt once a frame, after the mouse's presses. Thus Alt stops the mouse presses of this frame too.
 		if (key == SDL_SCANCODE_LALT || key == SDL_SCANCODE_RALT)
 		{
-			const auto takenBack = _altPresses.AltDown(OnePressMouseActions());
-			_bindableMap = static_cast<BindableActionMap>(static_cast<uint64_t>(_bindableMap) & ~takenBack);
-			_wheelActions &= ~takenBack;
-			_waitedMousePresses &= ~takenBack;
+			TakeBackMousePresses(_altPresses.AltDown(OnePressMouseActions()));
 		}
 	}
 	// The second press of a double click with the left button marks the double click, and presses none of the button's

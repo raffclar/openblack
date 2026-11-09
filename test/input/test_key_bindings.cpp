@@ -588,3 +588,16 @@ TEST(KeyBindings, AMousePressDoesNotActWhenTheScriptsBlockItsActionOrHoldTheScre
 	EXPECT_FALSE(MousePressActs(bindings, MouseInput::MiddleButton, BindableActionMap::ZOOM_TO_TEMPLE, false));
 	EXPECT_FALSE(MousePressActs(bindings, MouseInput::MiddleButton, none, true));
 }
+
+TEST(KeyBindings, AMousePressDoesOnlyTheFirstActionBoundToItsInput)
+{
+	auto bindings = k_DefaultKeyBindings;
+	constexpr auto none = BindableActionMap::NONE;
+	EXPECT_EQ(MousePressAction(bindings, MouseInput::LeftButton, none, false), none);
+	// Help and Talk are both one-press actions on the left button. Help comes first in the table.
+	bindings.at(*IndexOf(bindings, BindableActionMap::TALK)).mouse = MouseInput::LeftButton;
+	bindings.at(*IndexOf(bindings, BindableActionMap::HELP)).mouse = MouseInput::LeftButton;
+	EXPECT_EQ(MousePressAction(bindings, MouseInput::LeftButton, none, false), BindableActionMap::HELP);
+	EXPECT_EQ(MousePressAction(bindings, MouseInput::LeftButton, BindableActionMap::HELP, false), none);
+	EXPECT_EQ(MousePressAction(bindings, MouseInput::LeftButton, none, true), none);
+}
