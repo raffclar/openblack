@@ -1273,6 +1273,11 @@ std::optional<double> Runner::ReadCheck(const checks::Check& check) const
 		}
 		return static_cast<double>(Locator::fireSystem::value().GetTemperature(*object));
 	}
+	case checks::Quantity::ObjectLife:
+	{
+		const auto object = ObjectAt(check.index);
+		return object.has_value() ? std::optional(static_cast<double>(ecs::world_objects::LifeOf(*object))) : std::nullopt;
+	}
 	case checks::Quantity::FireNear:
 	{
 		if (!Locator::fireSystem::has_value())

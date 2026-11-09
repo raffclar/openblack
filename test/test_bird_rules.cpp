@@ -11,6 +11,7 @@
 #include <numbers>
 #include <vector>
 
+#include <glm/geometric.hpp>
 #include <gtest/gtest.h>
 
 #include "Animals/AnimalRules.h"
@@ -292,4 +293,37 @@ TEST(BirdRules, TheStateOfTheHandLetsAnAnimalGoOnlyIntoFlightALandingOrDeath)
 	{
 		EXPECT_FALSE(HandStateAllows(state)) << static_cast<int>(state);
 	}
+}
+
+TEST(BirdRules, TheHealNeverHealsABird)
+{
+	for (const auto type : {AnimalInfo::Crow, AnimalInfo::Dove, AnimalInfo::Swallow, AnimalInfo::Pigeon, AnimalInfo::Seagull,
+	                        AnimalInfo::Bat, AnimalInfo::Vulture, AnimalInfo::SpellDove, AnimalInfo::SpellBat})
+	{
+		EXPECT_FALSE(TheHealHeals(type)) << static_cast<int>(type);
+	}
+	for (const auto type : {AnimalInfo::Cow, AnimalInfo::Sheep, AnimalInfo::Horse, AnimalInfo::Pig, AnimalInfo::Tortoise,
+	                        AnimalInfo::Lion, AnimalInfo::Tiger, AnimalInfo::Leopard, AnimalInfo::Wolf})
+	{
+		EXPECT_TRUE(TheHealHeals(type)) << static_cast<int>(type);
+	}
+}
+
+TEST(BirdRules, ADyingBirdFallsForwardAtTheSpeedOfItsMove)
+{
+	// 6553 map units a turn is a little under 10 metres a second
+	constexpr uint16_t k_Speed = 6553;
+	constexpr float k_Metres = 9.999084f;
+	// Angle 0 points along x, a quarter turn (512) along z. The other part is what is left of the sine or cosine of the
+	// quarter turn the game adds, in float
+	const auto alongX = DyingFallVelocity(0, k_Speed);
+	EXPECT_FLOAT_EQ(alongX.x, k_Metres);
+	EXPECT_EQ(alongX.y, 0.0f);
+	EXPECT_NEAR(alongX.z, 4.3707388e-07f, 1e-12f);
+	const auto alongZ = DyingFallVelocity(512, k_Speed);
+	EXPECT_NEAR(alongZ.x, -8.7414776e-07f, 1e-12f);
+	EXPECT_FLOAT_EQ(alongZ.z, k_Metres);
+	// A bird that does not move falls straight down
+	const auto still = DyingFallVelocity(300, 0);
+	EXPECT_EQ(glm::length(still), 0.0f);
 }
