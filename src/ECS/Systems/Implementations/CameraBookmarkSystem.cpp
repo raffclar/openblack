@@ -317,22 +317,22 @@ void CameraBookmarkSystem::ProcessTurn()
 		bookmark.point = at->position;
 	}
 
-	// The world camera flies to the bookmark that it follows, each turn. Another camera stops the follow. A move of the
-	// camera by the player also stops it.
+	// The world camera flies to the bookmark that it follows, each turn. The fight view is a part of the world camera.
+	// Another camera stops the follow. A move of the camera by the player also stops it.
 	if (!Locator::camera::has_value())
 	{
 		return;
 	}
-	const auto* world = dynamic_cast<const DefaultWorldCameraModel*>(&Locator::camera::value().GetModel());
-	if (world == nullptr)
-	{
-		_followed.reset();
-	}
-	else if (_followed.has_value())
+	const auto& model = Locator::camera::value().GetModel();
+	const auto* world = dynamic_cast<const DefaultWorldCameraModel*>(&model);
+	const auto* fight = dynamic_cast<const FightCameraModel*>(&model);
+	const bool moved = (world != nullptr && world->MovedByPlayer()) || (fight != nullptr && fight->MovedByPlayer());
+	const auto turn = camera_bookmarks::Follow(_followed.has_value(), world != nullptr || fight != nullptr, moved);
+	if (turn.jump)
 	{
 		JumpTo(*_followed);
 	}
-	if (world != nullptr && world->MovedByPlayer())
+	if (turn.stop)
 	{
 		_followed.reset();
 	}

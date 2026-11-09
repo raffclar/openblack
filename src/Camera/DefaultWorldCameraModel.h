@@ -78,12 +78,13 @@ public:
 		        .landHeld = _landHeld,
 		        .keysMove = _keysMove,
 		        .dragTurn = _dragTurn,
-		        .dragTilt = _dragTilt};
+		        .dragTilt = _dragTilt,
+		        .movedByPlayer = _movedByPlayer};
 	}
 	/// Whether the player moved the camera in the last frame: a control of the camera, or a drag of the mouse of more
 	/// than two pixels while the land is gripped or the camera turns round the hand. Such a move stops a follow of a
 	/// bookmark.
-	[[nodiscard]] bool MovedByPlayer() const { return camera_help::events::IsMoving(_helpControls); }
+	[[nodiscard]] bool MovedByPlayer() const { return _movedByPlayer; }
 	/// Whether the camera was put back inside the fence and ignores its controls until all of them are let go
 	[[nodiscard]] bool IsHeldBack() const { return _heldBack; }
 	/// One of the four wooshes of a flight
@@ -114,7 +115,8 @@ private:
 	/// picture while they are in
 	[[nodiscard]] static camera_drag::EdgeArea EdgeArea(glm::ivec2 screenSize);
 
-	void UpdateMode(const Camera& camera, glm::vec3 eulerAngles, float zoomDelta, glm::uvec2 mouseCurrent);
+	void UpdateMode(const Camera& camera, glm::vec3 eulerAngles, float zoomDelta, glm::uvec2 mouseCurrent,
+	                glm::vec3 originAtFrameStart);
 	void UpdateModeCartesian();
 	void UpdateModePolar(glm::vec3 eulerAngles, bool recalculatePoint);
 	void UpdateModeArcBall(glm::vec3 eulerAngles, glm::u16vec2 mouseCurrent, float xFov);
@@ -238,6 +240,8 @@ private:
 	uint32_t _features {camera_drag::k_DefaultFeatures};
 	/// A drag gripping land too far ahead is given up until the buttons are let go
 	bool _dragGivenUp {false};
+	/// The last frame of the drag could not move the land: a line of sight ran along the plane of the grip
+	bool _panRunsAlongPlane {false};
 	/// Land was just gripped too far ahead: the camera flies there this frame
 	bool _flyToGrip {false};
 	/// The camera set off on a flight this frame
@@ -262,6 +266,7 @@ private:
 	bool _keysMove {false};
 	float _dragTurn {0.0f};
 	float _dragTilt {0.0f};
+	bool _movedByPlayer {false};
 	/// The self-tilting camera goes back over where it stood at the start of the frame: it tilted itself, or nothing was
 	/// asked of it
 	bool _keepsToItsPlace {true};

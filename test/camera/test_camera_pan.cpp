@@ -90,6 +90,21 @@ TEST(CameraPan, LookingAboveTheLandDragsNothing)
 	EXPECT_FALSE(Pan(level, origin, {0.0f, 0.0f, 10.0f}, 14.0f, {0.0f, 0.0f, 1.0f}, atGrip, {0, 0}, {0, 0}).has_value());
 }
 
+TEST(CameraPan, OnlyLinesOfSightClearlyOnOneSideOfThePlaneCanDrag)
+{
+	const GripPlane level {.normal = {0.0f, 1.0f, 0.0f}, .distance = 0.0f};
+	const auto down = glm::normalize(glm::vec3(0.0f, -10.0f, 10.0f));
+	const auto up = glm::normalize(glm::vec3(0.0f, 10.0f, 10.0f));
+	EXPECT_FALSE(RunsAlongPlane(level, down, down));
+	EXPECT_FALSE(RunsAlongPlane(level, up, up));
+	// Opposite sides
+	EXPECT_TRUE(RunsAlongPlane(level, up, down));
+	// Along the plane, inside a thousandth either way
+	EXPECT_TRUE(RunsAlongPlane(level, {0.0f, 0.001f, 1.0f}, down));
+	EXPECT_TRUE(RunsAlongPlane(level, down, {0.0f, -0.001f, 1.0f}));
+	EXPECT_FALSE(RunsAlongPlane(level, glm::vec3(0.0f, -0.0011f, 1.0f), down));
+}
+
 TEST(CameraPan, StopsThreeShortOfLandInItsWay)
 {
 	const CameraPlace place {.origin = {0.0f, 10.0f, 100.0f}, .focus = {0.0f, 0.0f, 110.0f}};

@@ -49,15 +49,22 @@ GripPlane PlaneThrough(glm::vec3 gripped, glm::vec3 cameraOrigin, float groundUn
 	return {.normal = normal, .distance = openblack::x87::DotZyx(normal, gripped)};
 }
 
-std::optional<CameraPlace> Pan(const GripPlane& plane, glm::vec3 originAtGrip, glm::vec3 focusAtGrip, float distance,
-                               glm::vec3 rayNow, glm::vec3 rayAtGrip, glm::ivec2 cursorNow, glm::ivec2 cursorAtGrip)
+bool RunsAlongPlane(const GripPlane& plane, glm::vec3 rayNow, glm::vec3 rayAtGrip)
 {
 	const auto now = openblack::x87::Dot<openblack::x87::SumOrder::Yzx>(plane.normal, rayNow);
 	const auto atGrip = openblack::x87::DotZyx(plane.normal, rayAtGrip);
-	if ((-k_ParallelLimit <= now || -k_ParallelLimit <= atGrip) && (now <= k_ParallelLimit || atGrip <= k_ParallelLimit))
+	return (-k_ParallelLimit <= now || -k_ParallelLimit <= atGrip) && (now <= k_ParallelLimit || atGrip <= k_ParallelLimit);
+}
+
+std::optional<CameraPlace> Pan(const GripPlane& plane, glm::vec3 originAtGrip, glm::vec3 focusAtGrip, float distance,
+                               glm::vec3 rayNow, glm::vec3 rayAtGrip, glm::ivec2 cursorNow, glm::ivec2 cursorAtGrip)
+{
+	if (RunsAlongPlane(plane, rayNow, rayAtGrip))
 	{
 		return std::nullopt;
 	}
+	const auto now = openblack::x87::Dot<openblack::x87::SumOrder::Yzx>(plane.normal, rayNow);
+	const auto atGrip = openblack::x87::DotZyx(plane.normal, rayAtGrip);
 	const auto toPlane = plane.distance - openblack::x87::DotZyx(plane.normal, originAtGrip);
 	const auto alongNow = toPlane / now;
 	const auto alongAtGrip = toPlane / atGrip;

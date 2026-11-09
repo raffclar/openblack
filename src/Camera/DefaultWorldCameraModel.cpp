@@ -265,11 +265,9 @@ DefaultWorldCameraModel::LimitsMoved DefaultWorldCameraModel::ApplyLimits(glm::v
 		moved.focusMoved = true;
 	}
 
-	// Never below the clearance over the ground. Turning the camera about a point recomputes its height with a little
-	// rounding, so a camera resting on the floor is let be within a ten-thousandth of it. A camera that a saved game of
-	// the original game lets go below the land has no floor.
-	constexpr float k_FloorRounding = 1e-4f;
-	if (!camera.EyeMayGoBelowLand() && _targetOrigin.y < groundAtStart + camera_limits::k_Clearance - k_FloorRounding)
+	// Never below the clearance over the ground. A camera that a saved game of the original game lets go below the land has
+	// no floor.
+	if (!camera.EyeMayGoBelowLand() && _targetOrigin.y < groundAtStart + camera_limits::k_Clearance)
 	{
 		_targetOrigin.y = groundAtStart + camera_limits::k_Clearance;
 		moved.pushed = true;
@@ -362,7 +360,8 @@ void DefaultWorldCameraModel::UpdateFocusPointInteractionParameters(glm::vec3 or
 	_averageIslandDistance = click_distance::TowardsFocus(_averageIslandDistance, _focusDistance, origin, focus);
 }
 
-void DefaultWorldCameraModel::UpdateMode(const Camera& camera, glm::vec3 eulerAngles, float zoomDelta, glm::uvec2 mouseCurrent)
+void DefaultWorldCameraModel::UpdateMode(const Camera& camera, glm::vec3 eulerAngles, float zoomDelta, glm::uvec2 mouseCurrent,
+                                         glm::vec3 originAtFrameStart)
 {
 	switch (_mode)
 	{
@@ -383,10 +382,12 @@ void DefaultWorldCameraModel::UpdateMode(const Camera& camera, glm::vec3 eulerAn
 		break;
 	}
 
+	// A tilt keeps the eye where it was at the start of the frame, as the destination of the camera. The turn point moves
+	// with the eye.
 	if (_mode != Mode::ArcBall && _rotateAroundDelta.x != 0.0f)
 	{
 		const auto diff = _targetFocus - _targetOrigin;
-		_targetOrigin = _currentOrigin;
+		_targetOrigin = originAtFrameStart;
 		_targetFocus = _targetOrigin + diff;
 		_focusAtClick = _targetFocus;
 	}
@@ -443,8 +444,12 @@ void DefaultWorldCameraModel::UpdateModeArcBall(glm::vec3 eulerAngles, glm::u16v
 void DefaultWorldCameraModel::UpdateModeDragging(const Camera& camera, glm::u16vec2 mouseCurrent)
 {
 	// Panning is strafing, and the land must be under the cursor now and where the land was gripped
-	if ((_features & camera_help::feature::k_Strafe) == 0 || !_screenSpaceMouseRaycastHit.has_value() ||
-	    (_landGrip.has_value() && !_landGrip->land))
+	if ((_features & camera_help::feature::k_Strafe) == 0)
+	{
+		return;
+	}
+	_panRunsAlongPlane = false;
+	if (!_screenSpaceMouseRaycastHit.has_value() || (_landGrip.has_value() && !_landGrip->land))
 	{
 		return;
 	}
@@ -469,10 +474,18 @@ void DefaultWorldCameraModel::UpdateModeDragging(const Camera& camera, glm::u16v
 		const auto far = inverseViewProjection * glm::vec4(ndc, 0.5f, 1.0f);
 		return glm::normalize(glm::vec3(far) / far.w - glm::vec3(near) / near.w);
 	};
-	const auto place =
-	    camera_pan::Pan({.normal = _originToHandPlaneNormal, .distance = _alignmentAtInteractionStart}, _originAtClick,
-	                    _focusAtClick, _originFocusDistanceAtInteractionStart, rayThrough(glm::vec2(mouseCurrent)),
-	                    rayThrough(glm::vec2(_mouseAtClick)), glm::ivec2(mouseCurrent), glm::ivec2(_mouseAtClick));
+	const camera_pan::GripPlane plane {.normal = _originToHandPlaneNormal, .distance = _alignmentAtInteractionStart};
+	const auto rayNow = rayThrough(glm::vec2(mouseCurrent));
+	const auto rayAtGrip = rayThrough(glm::vec2(_mouseAtClick));
+	// A line of sight that runs along the plane does not move the land. The next frame, the hints show the cross that
+	// blinks.
+	if (camera_pan::RunsAlongPlane(plane, rayNow, rayAtGrip))
+	{
+		_panRunsAlongPlane = true;
+		return;
+	}
+	const auto place = camera_pan::Pan(plane, _originAtClick, _focusAtClick, _originFocusDistanceAtInteractionStart, rayNow,
+	                                   rayAtGrip, glm::ivec2(mouseCurrent), glm::ivec2(_mouseAtClick));
 	if (!place.has_value())
 	{
 		return;
@@ -711,7 +724,7 @@ std::optional<CameraModel::CameraInterpolationUpdateInfo> DefaultWorldCameraMode
 	{
 		eulerAngles.y = world_turn::ClampPitch(eulerAngles.y);
 	}
-	UpdateMode(camera, eulerAngles, zoomDelta, mouseCurrent);
+	UpdateMode(camera, eulerAngles, zoomDelta, mouseCurrent, originAtFrameStart);
 	// Land gripped too far ahead flies the camera there, and the double click waiting is taken with it
 	if (_flyToGrip)
 	{
@@ -1139,6 +1152,9 @@ void DefaultWorldCameraModel::HandleActions(std::chrono::microseconds dt)
 			_dragTilt = 0.0f;
 		}
 	}
+	// Whether the player moved the camera this frame. Held back, only the wheel counts, because the hold-back removes the
+	// other controls.
+	_movedByPlayer = _heldBack ? wheelZoom != 0.0f : camera_help::events::IsMoving(_helpControls);
 	// Whether the self-tilting camera keeps to its place this frame: held back, the controls count for nothing and the
 	// camera doesn't tilt itself
 	{
@@ -1254,8 +1270,8 @@ void DefaultWorldCameraModel::UpdateIconFrame(bool onFight)
 		cursor = camera_drag::AreaCursor(glm::ivec2(actionSystem.GetMousePosition()), EdgeArea(screenSize));
 	}
 	_iconFrame = {
-	    // A drag given up too far ahead shows only that
-	    .mouseHints = _dragGivenUp ? hand_tricons::k_TooFar : (_dragging ? _drag.GetTricons() : _tricons),
+	    // A drag that could not move the land in the last frame shows the cross that blinks
+	    .mouseHints = _dragging ? (_panRunsAlongPlane ? hand_tricons::k_TooFar : _drag.GetTricons()) : _tricons,
 	    .gripping = controls.landGripped,
 	    // Gripping the land is all the camera has unless it is also turned, tilted or zoomed, or turned round the mouse
 	    .grippingOnly = controls.landGripped && !asked && !controls.rotateAroundMouse,
@@ -1292,6 +1308,7 @@ DefaultWorldCameraModel::Mode DefaultWorldCameraModel::HandleDrag(bool held)
 	{
 		_dragging = false;
 		_dragGivenUp = false;
+		_panRunsAlongPlane = false;
 		return _mode;
 	}
 	if (_dragGivenUp)

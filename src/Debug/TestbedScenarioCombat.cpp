@@ -403,6 +403,23 @@ void testbed_scenarios::AddCombat(std::vector<Scenario>& all)
 	    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f), Fight(Kind::FightAuto, 0, 1, 0.2f)},
 	});
 
+	all.push_back({
+	    .id = "combat.fight_view_follows_bookmark",
+	    .name = "A followed bookmark in the fight view",
+	    .facet = Facet::Combat,
+	    .description = "As Watching a fight. Three seconds after the tigers are told to fight, the player keeps the blue "
+	                   "tiger in bookmark 4, as Ctrl and the key 4 do with the hand over it, and the camera follows it, as "
+	                   "Shift and the key 4 do. The fight view is a part of the world camera.",
+	    .expected = "The follow stays on in the fight view: each turn the camera flies again towards the view of bookmark "
+	                "4 on the blue tiger, until the player moves the camera. A key that turns, tilts or zooms the camera, "
+	                "or a drag of more than two pixels with the land gripped, stops the follow.",
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 80.0f, 10.0f}, .look = {0.0f, 0.0f, 40.0f}},
+	    .creatures = {red(PlayerNames::PLAYER_ONE, 0.6f, -0.2f), blue(PlayerNames::PLAYER_TWO, 0.5f, -0.2f)},
+	    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f),
+	                 Fight(Kind::FightAuto, 0, 1, 0.2f),
+	                 {.kind = Kind::BookmarkCreature, .creature = 1, .delaySeconds = 3.0f, .value = 3}},
+	});
+
 	// The fight that the recorded input of the hand directs for the dedicated server's check (tools/sim/hand_inputs).
 	// The creature help is on: in a network game every computer counts the time that the reported hand stays over the
 	// creature.

@@ -43,6 +43,8 @@ public:
 	[[nodiscard]] bool LandHeld() const { return _landHeld; }
 	[[nodiscard]] bool LandGripped() const { return _asked.landGripped; }
 	[[nodiscard]] float GetSecondsSinceFlight() const { return _sinceFlight; }
+	/// Whether the player moved the camera in the last frame, as the player's camera measured it
+	[[nodiscard]] bool MovedByPlayer() const { return _asked.movedByPlayer; }
 	/// The player's own camera, which it hands back
 	void SetPlayerModel(std::unique_ptr<CameraModel> model) { _playerModel = std::move(model); }
 	[[nodiscard]] std::unique_ptr<CameraModel> TakePlayerModel() { return std::move(_playerModel); }
