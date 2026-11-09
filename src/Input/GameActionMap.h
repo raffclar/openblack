@@ -81,6 +81,7 @@ public:
 	[[nodiscard]] std::optional<ScriptedPointer> GetScriptedPointer() const final;
 	void PumpScriptedPointer() final;
 	void HoldScriptedKey(int scancode, bool held) final;
+	[[nodiscard]] uint16_t ScriptedModifiers() const final;
 	void SetInputLockMode(LockMode mode) final;
 	[[nodiscard]] LockMode GetInputLockMode() const final { return _lock.Mode(); }
 	void UpdateInputLock(bool clientConnected, float seconds) final;
