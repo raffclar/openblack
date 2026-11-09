@@ -16,6 +16,7 @@
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/SoundTag.h"
 #include "ECS/Components/StreetLantern.h"
+#include "ECS/Components/StreetLight.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/VillageLight.h"
 #include "ECS/Map.h"
@@ -78,5 +79,15 @@ entt::entity StreetLanternArchetype::Create(const glm::vec3& position, MobileSta
 	                          dark);
 	// Its light lights the village around it at night
 	VillageLightArchetype::Create(position, country ? VillageLight::Kind::Country : VillageLight::Kind::Town, entity);
+	return entity;
+}
+
+entt::entity StreetLanternArchetype::CreateStreetLight(const glm::vec3& position)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto entity = registry.Create();
+	// It takes its place in the order of the things made
+	TakeThingMadePlace();
+	registry.Assign<StreetLight>(entity, StreetLight {.position = position});
 	return entity;
 }
