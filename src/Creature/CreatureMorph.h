@@ -80,7 +80,8 @@ constexpr float k_RefreshThreshold = 0.03f;
 /// How far a creature's fatness, as its body shows it, follows its fatness in a game turn
 constexpr float k_MaxFatnessStep = 0.01f;
 
-/// The fatness a body shows, a turn on: towards the creature's fatness, but by no more than k_MaxFatnessStep
+/// The fatness a body shows, a turn on: towards the creature's fatness, but by no more than k_MaxFatnessStep, and
+/// between 0 and 1
 [[nodiscard]] float EaseFatness(float shown, float fatness);
 
 /// The looks that the body takes from the creature

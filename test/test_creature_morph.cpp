@@ -75,6 +75,9 @@ TEST(CreatureMorph, ShownFatnessFollowsByAHundredthATurn)
 	EXPECT_FLOAT_EQ(creature_morph::EaseFatness(0.5f, 1.0f), 0.51f);
 	EXPECT_FLOAT_EQ(creature_morph::EaseFatness(0.5f, 0.0f), 0.49f);
 	EXPECT_FLOAT_EQ(creature_morph::EaseFatness(0.5f, 0.505f), 0.505f);
+	// A fatness above 1 or below 0 (a new creature's spread start) is shown as 1 or 0
+	EXPECT_FLOAT_EQ(creature_morph::EaseFatness(0.995f, 1.08f), 1.0f);
+	EXPECT_FLOAT_EQ(creature_morph::EaseFatness(0.005f, -0.08f), 0.0f);
 }
 
 TEST(CreatureMorph, SmallChangesDoNotRedrawTheBody)

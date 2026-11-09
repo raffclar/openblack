@@ -133,16 +133,16 @@ TEST(CreaturePhysiology, YoungCreaturesGrowFastThenSlowly)
 	needs.energy = 1.0f;
 	needs.exhaustion = 0.0f;
 	// Twice as fast as one full growing up spread over its time, until 7/8 of it
-	EXPECT_NEAR(Growth(needs, species, false, 10.0f), 2.0f / (120.0f * 600.0f), k_Tolerance);
+	EXPECT_NEAR(Growth(needs, species, false), 2.0f / (120.0f * 600.0f), k_Tolerance);
 	// With a plan to sleep at home or by a thing, three times as fast
-	EXPECT_NEAR(Growth(needs, species, true, 10.0f), 3.0f * 2.0f / (120.0f * 600.0f), k_Tolerance);
+	EXPECT_NEAR(Growth(needs, species, true), 3.0f * 2.0f / (120.0f * 600.0f), k_Tolerance);
 	// Grown up, at the slowest
 	needs.age = 2;
-	EXPECT_FLOAT_EQ(Growth(needs, species, false, 10.0f), k_MinGrowth);
+	EXPECT_FLOAT_EQ(Growth(needs, species, false), k_MinGrowth);
 	// Without energy to spare, at the slowest too
 	needs.age = 0;
 	needs.exhaustion = 1.0f;
-	EXPECT_FLOAT_EQ(Growth(needs, species, false, 10.0f), k_MinGrowth);
+	EXPECT_FLOAT_EQ(Growth(needs, species, false), k_MinGrowth);
 }
 
 TEST(CreaturePhysiology, ItGrowsOnlyStandingStillAndUpToFullSize)
@@ -637,7 +637,28 @@ TEST(CreaturePhysiology, AFastGrowthTripleIsAppliedAfterTheSlowestGrowth)
 	const auto species = Fake();
 	Needs needs;
 	needs.age = 2;
-	EXPECT_FLOAT_EQ(Growth(needs, species, true, 10.0f), k_SleepGrowthFactor * k_MinGrowth);
+	EXPECT_FLOAT_EQ(Growth(needs, species, true), k_SleepGrowthFactor * k_MinGrowth);
+}
+
+TEST(CreaturePhysiology, GrowthUsesTheGamesOrderOfOperations)
+{
+	// The constants are the game's floats
+	static_assert(std::bit_cast<uint32_t>(k_GrownAgePerMinute) == 0x3C888889U);
+	static_assert(std::bit_cast<uint32_t>(k_MinGrowth) == 0x3490F484U);
+	// The game multiplies by the share of one turn and finds the grown up age with a multiplication. A division in
+	// each place gives a different last bit for these values.
+	auto species = Fake();
+	species.growUpMinutes = 1200.0f;
+	Needs needs;
+	needs.energy = 1.0f;
+	needs.exhaustion = 0.0f;
+	needs.age = 16;
+	EXPECT_EQ(std::bit_cast<uint32_t>(Growth(needs, species, false)), 0x3615217FU);
+	needs.age = 17;
+	EXPECT_EQ(std::bit_cast<uint32_t>(Growth(needs, species, false)), 0x35DFB245U);
+	needs.age = 16;
+	needs.energy = 0.3f;
+	EXPECT_EQ(std::bit_cast<uint32_t>(Growth(needs, species, false)), 0x3532F500U);
 }
 
 TEST(CreaturePhysiology, ANewBodyAddsTheDrawThenTakesTheSpreadOff)

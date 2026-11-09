@@ -41,6 +41,11 @@ constexpr float k_MinGrowth = 2.7e-7f;
 /// Growth goes on at full speed until this fraction of the growing up time, then falls to its slowest
 constexpr float k_YouthGrowthSlope = 8.0f;
 constexpr float k_MaxYouthGrowth = 2.0f;
+/// Growth counts the turns in a minute of the growing up time as 600 (ten turns each second), whatever the turn length
+constexpr float k_GrowthTurnsPerMinute = 600.0f;
+/// The float nearest to one sixtieth. The game multiplies the growing up minutes by it to get the age at which growth
+/// falls to its slowest
+constexpr float k_GrownAgePerMinute = 0.0166666675f;
 /// A creature grows by itself up to this size
 constexpr float k_MaxGrownSize = 2.0f;
 /// A bigger creature uses its energy more slowly, up to half as fast at size 2. It uses its energy much more slowly while
@@ -181,7 +186,7 @@ void TakeUp(Needs& needs, const Kept& kept);
 [[nodiscard]] float SigmoidThreshold(float threshold, float value);
 
 /// How much the creature grows this turn: fast while young, then slowly, all the more for energy it has to spare
-[[nodiscard]] float Growth(const Needs& needs, const Species& species, bool fastGrowth, float turnsPerSecond);
+[[nodiscard]] float Growth(const Needs& needs, const Species& species, bool fastGrowth);
 
 /// How the action of the plan changes the body's pace. The plan decides, not the body: the walk home to sleep also
 /// counts, and a sleep on the spot does not.
