@@ -1302,7 +1302,8 @@ void FeatureScriptCommands::CreateStreetLantern(glm::vec3 position, int32_t type
 
 void FeatureScriptCommands::CreateStreetLight(glm::vec3 position)
 {
-	LastObject() = StreetLanternArchetype::Create(position, MobileStaticInfo::StreetLantern);
+	// The street light is not a lantern. It has no model, light or sound, and it is not on the map.
+	LastObject() = StreetLanternArchetype::CreateStreetLight(position);
 }
 
 void FeatureScriptCommands::SetLandNumber(int32_t number)
