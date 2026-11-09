@@ -280,11 +280,13 @@ const land_avoid::Map& LandAvoidOf(ecs::Registry& registry)
 		const auto find = [&island](glm::ivec2 cell) {
 			return island.FindCell({static_cast<uint16_t>(cell.x), static_cast<uint16_t>(cell.y)});
 		};
+		// The game makes this map when it opens the land, before a script or a temple changes the land. Thus the map
+		// uses the altitudes of the land as it was built.
 		context.landAvoid = land_avoid::Build(
 		    LandIslandInterface::k_MapCellsPerSide,
-		    [&find](glm::ivec2 corner) {
-			    const auto* cell = find(corner);
-			    return cell != nullptr ? cell->altitude : uint8_t {0};
+		    [&island](glm::ivec2 corner) {
+			    return island.FindBuiltAltitude({static_cast<uint16_t>(corner.x), static_cast<uint16_t>(corner.y)})
+			        .value_or(uint8_t {0});
 		    },
 		    [&find](glm::ivec2 cell) {
 			    const auto* found = find(cell);

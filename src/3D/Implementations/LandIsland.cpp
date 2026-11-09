@@ -546,6 +546,22 @@ const lnd::LNDCell* LandIsland::FindCell(const glm::u16vec2& coordinates) const
 	return &_landBlocks[blockIndex - 1].GetCells()[cellIndex];
 }
 
+std::optional<uint8_t> LandIsland::FindBuiltAltitude(const glm::u16vec2& coordinates) const
+{
+	if (coordinates.x > 511 || coordinates.y > 511)
+	{
+		return std::nullopt;
+	}
+	const auto mapCoordinates = coordinates >> static_cast<uint16_t>(0x4);
+	const auto cellCoordinates = static_cast<glm::u8vec2>(coordinates) & static_cast<uint8_t>(0xF);
+	const auto blockIndex = _blockIndexLookup.at(mapCoordinates.x << 5u | mapCoordinates.y);
+	if (blockIndex == 0)
+	{
+		return std::nullopt;
+	}
+	return _builtAltitudes.at(blockIndex - 1).at(cellCoordinates.x * 0x11u + cellCoordinates.y);
+}
+
 void LandIsland::SetCellAltitude(glm::u16vec2 coordinates, uint8_t altitude)
 {
 	SetCorner(coordinates,
