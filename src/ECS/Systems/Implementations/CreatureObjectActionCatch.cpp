@@ -25,6 +25,7 @@
 #include "Creature/CreatureObjectActions.h"
 #include "Creature/CreatureRig.h"
 #include "Creature/CreatureRoute.h"
+#include "CreatureBodyBusy.h"
 #include "CreatureObjectActionSystem.h"
 #include "CreatureObjectActionSystemDetail.h"
 #include "ECS/Components/AtHome.h"
@@ -61,24 +62,15 @@ using namespace openblack::ecs::systems::object_action_detail;
 
 namespace
 {
-/// Whether the creature's body is acting something out, a catch included
-bool BodyBusy(const CreatureObjectAction* doing)
-{
-	return doing != nullptr && doing->phase == Phase::Playing &&
-	       (doing->status == Status::Running || doing->status == Status::Contact);
-}
-
-/// Whether a catch must wait before it starts. It waits while the body plays any action, and while the creature
-/// walks, turns or waits for its route. A stop lets a walking creature slow to a stand first.
-bool CatchWaits(entt::entity creature)
+/// Whether a catch must wait before it starts. It waits while the body plays any action or does an action on a thing,
+/// and while the creature walks, turns or waits for its route. A stop lets a walking creature slow to a stand first.
+bool CatchWaits(entt::entity creature, const CreatureObjectActionSystemInterface& hands)
 {
 	const auto& registry = Locator::entitiesRegistry::value();
-	const auto* animation = registry.TryGet<const CreatureAnimation>(creature);
-	const bool bodyPlaysAction = BodyBusy(registry.TryGet<const CreatureObjectAction>(creature)) ||
-	                             (animation != nullptr && creature_layers::IsPlaying(animation->body));
-	const bool moving =
-	    Locator::creatureLocomotionSystem::has_value() && Locator::creatureLocomotionSystem::value().IsMoving(creature);
-	return creature_catch::WaitsToStart(bodyPlaysAction, moving);
+	const auto* locomotion =
+	    Locator::creatureLocomotionSystem::has_value() ? &Locator::creatureLocomotionSystem::value() : nullptr;
+	const auto body = creature_body_busy::ActivityOf(registry, creature, locomotion, &hands);
+	return creature_catch::WaitsToStart(creature_body::ActsBesidesMoving(body), body.moving);
 }
 
 /// The thing's centre and velocity while it is in the physics, flying or resting there
@@ -404,7 +396,7 @@ bool CreatureObjectActionSystem::Catch(entt::entity creature, entt::entity objec
 	auto& registry = Locator::entitiesRegistry::value();
 	// While its body acts out something else, or while it walks on to its stop or turns, the catch waits. The catch
 	// tries again each frame.
-	if (CatchWaits(creature))
+	if (CatchWaits(creature, *this))
 	{
 		registry.AssignOrReplace<PendingCatch>(creature, PendingCatch {.object = object});
 		return true;
@@ -418,7 +410,7 @@ void CreatureObjectActionSystem::StartPendingCatches(std::optional<entt::entity>
 	auto& registry = Locator::entitiesRegistry::value();
 	std::vector<std::pair<entt::entity, entt::entity>> due;
 	registry.Each<const PendingCatch>([&](entt::entity creature, const PendingCatch& pending) {
-		if ((!only.has_value() || *only == creature) && !CatchWaits(creature))
+		if ((!only.has_value() || *only == creature) && !CatchWaits(creature, *this))
 		{
 			due.emplace_back(creature, pending.object);
 		}

@@ -14,8 +14,8 @@
 
 #include <spdlog/spdlog.h>
 
-#include "Creature/CreatureLayers.h"
 #include "Creature/CreatureMindTables.h"
+#include "CreatureBodyBusy.h"
 #include "CreatureMindSystem.h"
 #include "CreatureMindSystemDetail.h"
 #include "ECS/Components/CreatureBody.h"
@@ -168,10 +168,8 @@ creature_mind::HandsCheck CreatureMindSystem::CheckHandsBeforeAction(entt::entit
 		return creature_mind::HandsCheck::Free;
 	}
 	auto& hands = Locator::creatureObjectActionSystem::value();
-	// The body is busy while it plays an action, moves or catches, and the hands while they do a thing
-	const bool moving =
-	    Locator::creatureLocomotionSystem::has_value() && Locator::creatureLocomotionSystem::value().IsMoving(creature);
-	const bool bodyBusy = creature_layers::IsPlaying(animation->body) || moving || hands.IsCatching(creature);
+	// The body is busy while it plays an action, does an action on a thing or moves, and the hands while they do a thing
+	const bool bodyBusy = creature_body_busy::PerformsBodyAction(registry, creature);
 	const bool handsBusy = hands.GetState(creature) == CreatureObjectActionSystemInterface::State::Busy;
 	const auto check = creature_mind::CheckHands(hands.GetHeld(creature).has_value(), bodyBusy, handsBusy);
 	if (check != creature_mind::HandsCheck::LetGo)
