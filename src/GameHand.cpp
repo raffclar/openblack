@@ -151,6 +151,7 @@
 #include "ECS/VillagerLabelSource.h"
 #include "ECS/WorldObjects.h"
 #include "EngineConfig.h"
+#include "Gestures/GestureHints.h"
 #include "Gestures/GestureTrailBuilder.h"
 #include "Graphics/FrameBuffer.h"
 #include "Gui/GameInterface.h"
@@ -903,7 +904,7 @@ void Game::UpdateHandFrame(std::chrono::microseconds deltaTime)
 		    .position = glm::vec3(0.0f), .rotation = glm::mat3(1.0f), .scale = glm::vec3(1.0f)};
 		// The point the interface picks under the cursor, which the hand's influence is tested at
 		std::optional<map_coords::MapCoords> handPick;
-		UpdateHandCursor(deltaTime, profiler, camera, intersectionTransform, handPick);
+		UpdateHandCursor(profiler, camera, intersectionTransform, handPick);
 
 		// The hand's debugging trace records this frame, starting from where the hand was left before it
 		if (auto* trace = Locator::handSystem::value().GetTrace(); trace != nullptr && trace->Enabled())
@@ -1019,8 +1020,8 @@ void Game::UpdateHandFrame(std::chrono::microseconds deltaTime)
 	}
 }
 
-void Game::UpdateHandCursor(std::chrono::microseconds deltaTime, Profiler& profiler, Camera& camera,
-                            ecs::components::Transform& intersectionTransform, std::optional<map_coords::MapCoords>& handPick)
+void Game::UpdateHandCursor(Profiler& profiler, Camera& camera, ecs::components::Transform& intersectionTransform,
+                            std::optional<map_coords::MapCoords>& handPick)
 {
 	const auto screenSize = Locator::windowing::has_value() ? Locator::windowing::value().GetSize() : glm::zero<glm::ivec2>();
 	const auto scale = glm::vec3(50.0f, 50.0f, 50.0f);
@@ -1084,10 +1085,13 @@ void Game::UpdateHandCursor(std::chrono::microseconds deltaTime, Profiler& profi
 				leashes.HandleInput(rayOrigin, rayDirection, Locator::handPressSystem::value().TakeActionPress());
 			}
 			// The gestures drawn with the hand: circles and power-ups for the miracles, the leash's gestures, and
-			// the scribble that shakes off what the hand holds
+			// the scribble that shakes off what the hand holds. Their times (the rest after a gesture, the circle, the
+			// leash picker and the miracle selection) use the game time of the frame. They stop while the game is
+			// paused and they follow the game's speed.
 			{
 				auto gestures = profiler.BeginScoped(Profiler::Stage::GestureUpdate);
-				UpdateGestures(camera, screenSize, std::chrono::duration_cast<std::chrono::duration<float>>(deltaTime).count());
+				UpdateGestures(camera, screenSize,
+				               gesture_hints::FrameSeconds(Locator::time::value().GetFrameGameTime().count()));
 			}
 			// What the interface picked under the cursor as the last frame was drawn: the object nearest the camera, or
 			// else the land or the sea. The hand's influence is tested at that point.

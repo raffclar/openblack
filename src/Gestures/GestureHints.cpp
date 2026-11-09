@@ -19,7 +19,6 @@
 #include <glm/gtc/matrix_transform.hpp>
 
 #include "Common/X87.h"
-#include "Gui/ScreenFit.h"
 #include "Magic/MiracleVisuals.h"
 
 using namespace openblack;
@@ -35,12 +34,6 @@ void Turn(glm::vec3& a, glm::vec3& b, float angle)
 	const auto oldA = a;
 	a = (c * a) - (s * b);
 	b = (c * b) + (s * oldA);
-}
-
-/// The width of the row, from its share of the screen
-float Share(float share, float rowWidth)
-{
-	return share * rowWidth;
 }
 
 /// Where the hint of a request goes in the row, none for a request that is not hinted
@@ -85,6 +78,7 @@ std::pair<SpellSeedType, int> PictureOf(const gesture::Request& request)
 	{
 	case gesture::Purpose::FightMiracle:
 	case gesture::Purpose::RepeatMiracle:
+	case gesture::Purpose::SelectMiracle:
 		return {request.seed, -1};
 	case gesture::Purpose::OpenSelection:
 		return {request.forCreature ? k_CreatureSelectionSeed : SpellSeedType::None, -1};
@@ -157,19 +151,24 @@ bool gesture_hints::Differs(std::span<const Hint> shown, std::span<const Hint> n
 
 float gesture_hints::RowWidth(glm::vec2 screen)
 {
-	return gui::ReferenceScale(static_cast<int32_t>(screen.x), static_cast<int32_t>(screen.y)) *
-	       static_cast<float>(gui::k_ReferenceWidth);
+	// The width of the screen. When the screen is wider than 4:3, the width of a 4:3 screen of the same height. On a 4:3
+	// screen, the result is the width of the screen exactly.
+	return std::min(screen.x, screen.y * 4.0f / 3.0f);
 }
 
 Box gesture_hints::Square(size_t slot, glm::vec2 screen)
 {
+	// The game adds the shares, subtracts the sum from 1 and multiplies the result by the width. Keep this order. Another
+	// order can move a pixel by one. On a wider screen, the row starts at the right edge of a 4:3 screen of the same
+	// height. That 4:3 screen is at the right edge of the screen.
 	const float width = RowWidth(screen);
-	const float side = Share(k_SquareShare, width);
-	const float step = Share(k_GapShare + k_SquareShare, width) * static_cast<float>(slot);
-	const float margin = Share(k_MarginShare, width);
+	const float offset = screen.x - width;
+	const float step = (k_GapShare + k_SquareShare) * static_cast<float>(slot);
+	const float left = 1.0f - ((step + k_SquareShare) + k_MarginShare);
+	const float right = 1.0f - (step + k_MarginShare);
 	return {
-	    .min = {screen.x - (step + side + margin), screen.y - side},
-	    .max = {screen.x - (step + margin), screen.y},
+	    .min = {(left * width) + offset, screen.y - (width * k_SquareShare)},
+	    .max = {(right * width) + offset, screen.y},
 	};
 }
 

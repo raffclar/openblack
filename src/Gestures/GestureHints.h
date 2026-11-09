@@ -103,7 +103,8 @@ using MagicOf = std::function<MagicType(SpellSeedType, int)>;
 /// - the leash gesture, with the collar of the leash it is about, and a hint for each leash that the picker offers
 /// - in a fight, the special move, and each fight miracle with its seed
 /// - the gestures that open the selection: a globe over the gesture for the player's miracles, a seed over the other
-/// - the gesture that calls the last miracle again, with that seed, and each gesture that the open selection waits for
+/// - the gesture that calls the last miracle again, with that seed
+/// - each gesture that the open selection waits for, with the seed of the last miracle that has the gesture
 /// - the circle that sizes the seed in the hand
 /// - with a seed that can power up, each other level's gesture with the seed and its rings, and, after a level is
 /// asked for, the scribble with the seed
@@ -143,6 +144,14 @@ inline constexpr float k_DotHalfSize = 0.1f;
 /// The side in pixels of a square facing the camera, of a half size, for a row of a width and the camera's horizontal
 /// field of view (radians)
 [[nodiscard]] float SpriteSide(float halfSize, float rowWidth, float horizontalFov);
+
+/// The game time of a frame in seconds: the milliseconds multiplied by 0.001, as in the game. Do not divide by 1000. The
+/// result of a division can be different by one float step.
+inline constexpr float k_SecondsPerMillisecond = 0.001f;
+[[nodiscard]] constexpr float FrameSeconds(int64_t milliseconds)
+{
+	return static_cast<float>(milliseconds) * k_SecondsPerMillisecond;
+}
 
 /// The row fades in and out at this much a second
 inline constexpr float k_FadeRate = 2.0f;

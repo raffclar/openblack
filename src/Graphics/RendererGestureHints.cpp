@@ -59,8 +59,16 @@ constexpr uint64_t k_CollarState = BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A | B
 constexpr std::array k_CollarPasses = {RenderPass::GestureHintCollar0, RenderPass::GestureHintCollar1,
                                        RenderPass::GestureHintCollar2};
 /// The views the seeds and the globe are drawn in, one for each picture
-constexpr std::array k_SeedPasses = {RenderPass::GestureHintSeed0, RenderPass::GestureHintSeed1, RenderPass::GestureHintSeed2,
-                                     RenderPass::GestureHintSeed3, RenderPass::GestureHintSeed4};
+constexpr size_t k_SeedPassCount =
+    static_cast<size_t>(RenderPass::GestureHintSeed22) - static_cast<size_t>(RenderPass::GestureHintSeed0) + 1;
+constexpr auto k_SeedPasses = [] {
+	std::array<RenderPass, k_SeedPassCount> passes {};
+	for (size_t i = 0; i < passes.size(); ++i)
+	{
+		passes.at(i) = static_cast<RenderPass>(static_cast<size_t>(RenderPass::GestureHintSeed0) + i);
+	}
+	return passes;
+}();
 
 /// Tested against the depth, added over what is behind by the texture's alpha times the tint's alpha
 constexpr uint64_t k_AddedState = BGFX_STATE_WRITE_RGB | BGFX_STATE_DEPTH_TEST_GREATER | BGFX_STATE_MSAA |
