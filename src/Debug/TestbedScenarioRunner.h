@@ -239,7 +239,7 @@ private:
 	/// Once the hand is over the fireball, it taps it, or presses the action button with a seed in it
 	void FinishTakingFireBall();
 	/// Draws a gesture through the gesture recogniser, across the middle of the screen
-	std::string DrawGesture(GestureType gesture);
+	std::string DrawGesture(GestureType gesture, glm::vec2 offset = {0.0f, 0.0f});
 	/// Once a drawn gesture is finished, logs what was recognised
 	void WatchGesture();
 	/// The commands of fights, and of being knocked out and brought round

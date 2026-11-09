@@ -185,12 +185,13 @@ void AddFire(std::vector<Scenario>& all)
 	    .name = "Burning trees near and far",
 	    .facet = Facet::Nature,
 	    .description =
-	        "Four oaks catch fire in a line east of the lake that goes away from the camera, 20, 100, 180 and 260 m from it.",
+	        "Four oaks catch fire in a line east of the lake that goes away from the camera, about 50, 120, 195 and 275 m "
+	        "from it. The camera looks along the line from one side, so the near oak does not hide the far ones.",
 	    .expected = "Each tree takes its new flames from the model that it is drawn as: the near tree from its full model, "
 	                "the far trees from their less detailed models, the farthest from its flat far card. The flames stay "
 	                "on the parts that are drawn.",
 	    .environment = {.dispenserGrid = false},
-	    .framing = {.shot = Shot::Placed, .eye = {80.0f, 12.0f, -80.0f}, .look = {80.0f, 6.0f, 40.0f}},
+	    .framing = {.shot = Shot::Placed, .eye = {40.0f, 14.0f, -90.0f}, .look = {80.0f, 6.0f, 60.0f}},
 	    .objects = {{.type = TreeInfo::Oak, .offset = {80.0f, -60.0f}, .alight = true},
 	                {.type = TreeInfo::Oak, .offset = {80.0f, 20.0f}, .alight = true},
 	                {.type = TreeInfo::Oak, .offset = {80.0f, 100.0f}, .alight = true},
