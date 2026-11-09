@@ -345,7 +345,9 @@ void AdvisorSystem::MakeDraws(int32_t stepMs)
 			draw.pupilDownAlongZ = d == k_EvilDude;
 		}
 
-		// The halo and the puff stand about the root bone, in the world's axes
+		// The halo and the puff stand about the root bone, in the world's axes. In each frame, the game sets the axes of
+		// the model object to the world's axes. Because of this, the halo offset does not change with the advisor's
+		// direction
 		const glm::vec3 anchor = draw.bones.empty() ? dude.Position() : glm::vec3(draw.bones.front()[3]);
 		const auto inFront = [this](const glm::vec3& position) {
 			return glm::dot(position - _view.eye, _view.forward) > _view.nearClip;
