@@ -68,6 +68,9 @@ public:
 	/// The cell at the given coordinates in the 17x17 cell array of its block, so the neighbours at +1 (z + 1),
 	/// +17 (x + 1) and +18 are also valid. Null outside the map or where there is no block.
 	[[nodiscard]] virtual const lnd::LNDCell* FindCell(const glm::u16vec2& coordinates) const = 0;
+	/// The altitude of a cell corner when the land was built, before the game changed it. Nothing outside the map or
+	/// where there is no block. A land that cannot change gives the altitude that it has now.
+	[[nodiscard]] virtual std::optional<uint8_t> FindBuiltAltitude(const glm::u16vec2& coordinates) const;
 	/// Sets a cell corner's altitude while the game runs, in every block that shares the corner. The land the game reads
 	/// changes at once; its drawing follows at the next CommitAltitudeChanges. Lands that can't change ignore it.
 	virtual void SetCellAltitude(glm::u16vec2 /*coordinates*/, uint8_t /*altitude*/) {}

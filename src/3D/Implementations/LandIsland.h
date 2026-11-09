@@ -54,6 +54,7 @@ public:
 	[[nodiscard]] const LandBlock* GetBlock(const glm::u8vec2& coordinates) const;
 	[[nodiscard]] const lnd::LNDCell& GetCell(const glm::u16vec2& coordinates) const override;
 	[[nodiscard]] const lnd::LNDCell* FindCell(const glm::u16vec2& coordinates) const override;
+	[[nodiscard]] std::optional<uint8_t> FindBuiltAltitude(const glm::u16vec2& coordinates) const override;
 	void SetCellAltitude(glm::u16vec2 coordinates, uint8_t altitude) override;
 	void SetCellCountry(glm::u16vec2 coordinates, uint8_t country) override;
 	void CommitAltitudeChanges() override;
