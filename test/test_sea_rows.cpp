@@ -51,6 +51,8 @@ TEST(SeaRows, PeriodFollowsTheWaterTiling)
 	EXPECT_FLOAT_EQ(sea_rows::Period(0.0f), 2000.0f);
 	EXPECT_FLOAT_EQ(sea_rows::Period(0.8f), 560.0f);
 	EXPECT_FLOAT_EQ(sea_rows::Period(1.0f), 200.0f);
+	// At Maximum detail the game's tiling is 0.79999995, so its period is one float step above 560
+	EXPECT_EQ(std::bit_cast<uint32_t>(sea_rows::Period(80 * 0.01f)), 0x440C0002u);
 }
 
 TEST(SeaRows, LookingDownTheSeaFillsTheScreen)
