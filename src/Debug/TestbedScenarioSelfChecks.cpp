@@ -26,15 +26,17 @@ void testbed_scenarios::AddSelfCheckScenarios(std::vector<Scenario>& all)
 	    .id = "checks.creature_walks_to_point",
 	    .name = "Checks: a creature walks to a point",
 	    .facet = Facet::Movement,
-	    .description = "A grown tiger with its needs full is told to walk to a point 150 metres from it. The scenario checks "
-	                   "that the tiger lives and that it gets to the point.",
+	    .description = "A grown tiger with its needs full is told to walk to a point 150 metres from it. Its mind does not "
+	                   "think, because its own desires can send it to other places before it gets to the point. The "
+	                   "scenario checks that the tiger lives and that it gets to the point.",
 	    .expected = "The tiger walks to the point and stops there. A run with --scenario-check ends with the exit code 0.",
 	    .environment = {.dispenserGrid = false},
 	    .framing = {.shot = Shot::Overview, .include = {{-30.0f, -20.0f}, {30.0f, 170.0f}}},
 	    .creatures = {{.label = "walker",
 	                   .species = CreatureType::Tiger,
 	                   .phase = 3,
-	                   .needs = {.energy = 1.0f, .exhaustion = 0.0f, .dehydration = 0.0f, .poo = 0.0f, .life = 1.0f}}},
+	                   .needs = {.energy = 1.0f, .exhaustion = 0.0f, .dehydration = 0.0f, .poo = 0.0f, .life = 1.0f},
+	                   .pauseMind = true}},
 	    .commands = {{.kind = Kind::WalkTo, .delaySeconds = 1.0f, .point = k_Goal}},
 	    .checks = {{.label = "the tiger lives", .quantity = Quantity::CreaturesAlive, .afterTurns = 5, .atLeast = 1.0},
 	               {.label = "the tiger gets to the point",
