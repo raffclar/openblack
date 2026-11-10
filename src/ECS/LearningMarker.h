@@ -11,8 +11,10 @@
 
 #include <cstdint>
 
+#include <optional>
 #include <string>
 
+#include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 #include <glm/vec4.hpp>
 
@@ -86,6 +88,18 @@ struct Look
 	float textAlpha {0.0f};
 };
 [[nodiscard]] Look LookOf(const components::LearningMarker& marker);
+
+/// Where the text of a mark goes on the screen: the pixel of its point, not rounded, and the point's depth in front of
+/// the camera
+struct TextPlace
+{
+	glm::vec2 screen {0.0f};
+	float depth {0.0f};
+};
+/// The text's place from its point in the camera's clipping space (w is the depth in front of the camera) and half the
+/// screen's size in pixels. Nothing when the point is closer than the near plane. A point off the screen keeps its
+/// place, thus the part of the text that is on the screen shows.
+[[nodiscard]] std::optional<TextPlace> PlaceText(const glm::vec4& clip, float nearClip, glm::vec2 halfScreen);
 
 /// Every mark in the registry moves on, in the frames. A mark whose time is up stands still and shows nothing.
 void StepAll(Registry& registry, float milliseconds);

@@ -135,3 +135,27 @@ TEST(LearningMarker, MarksWhoseTimeIsUpGoAtTheTurn)
 	marker::RemoveDone(registry, 100);
 	EXPECT_FALSE(registry.Valid(first));
 }
+
+TEST(LearningMarker, ItsTextGoesWhereItsPointIsOnTheScreenAndAtItsDepth)
+{
+	const glm::vec2 half {400.0f, 300.0f};
+	// Halfway right and a quarter down from the top of an 800 by 600 screen, 20 in front of the camera
+	const auto place = marker::PlaceText({0.0f, 10.0f, 5.0f, 20.0f}, 1.0f, half);
+	ASSERT_TRUE(place.has_value());
+	EXPECT_EQ(place->screen, glm::vec2(400.0f, 150.0f));
+	EXPECT_EQ(place->depth, 20.0f);
+	// The pixel is not rounded
+	EXPECT_EQ(marker::PlaceText({0.5f, 0.0f, 0.0f, 4.0f}, 1.0f, half)->screen.x, 450.0f);
+}
+
+TEST(LearningMarker, ItsTextShowsOffTheScreenButNotCloserThanTheNearPlane)
+{
+	const glm::vec2 half {400.0f, 300.0f};
+	// Over the top of the screen: the part of the words on the screen still shows
+	const auto over = marker::PlaceText({0.0f, 12.0f, 0.0f, 10.0f}, 1.0f, half);
+	ASSERT_TRUE(over.has_value());
+	EXPECT_LT(over->screen.y, 0.0f);
+	EXPECT_FALSE(marker::PlaceText({0.0f, 0.0f, 0.0f, 0.5f}, 1.0f, half).has_value());
+	// On the near plane it shows
+	EXPECT_TRUE(marker::PlaceText({0.0f, 0.0f, 0.0f, 1.0f}, 1.0f, half).has_value());
+}
