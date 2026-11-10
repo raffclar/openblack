@@ -14,6 +14,7 @@
 #include <entt/entity/entity.hpp>
 
 #include "Commands/PlayerCommands.h"
+#include "ECS/Components/HandMorph.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "Hand/HandTrace.h"
 #include "Hand/OwnHandReport.h"
@@ -39,6 +40,7 @@ public:
 	[[nodiscard]] std::array<std::optional<glm::vec3>, static_cast<size_t>(Side::_Count)>
 	GetOwnHandPositions() const noexcept override;
 	void UpdateAlignmentMorph(std::optional<map_coords::MapCoords> picked, bool holdPoint) override;
+	void KeepLooksForNextLand() override;
 	[[nodiscard]] std::optional<glm::vec3> GetDrawnHandPosition() const noexcept override;
 	[[nodiscard]] std::optional<std::array<entt::entity, static_cast<size_t>(Side::_Count)>>
 	GetHandsOf(PlayerNames player) const noexcept override;
@@ -75,5 +77,8 @@ private:
 	hand_trace::HandTrace _trace;
 	/// What this computer last sent of its hand. It is not part of the world.
 	hand_report::OwnReporter _ownReporter;
+	/// The look of the hands of this computer, kept from the last land until the hands of the next land take it. It is
+	/// not part of the world.
+	std::optional<ecs::components::HandMorph> _keptLooks;
 };
 } // namespace openblack::ecs::systems

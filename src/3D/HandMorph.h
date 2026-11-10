@@ -62,6 +62,10 @@ struct Change
 	bool shape {false};
 };
 
+/// The morph that a hand keeps when the land changes. The game keeps its one hand from land to land. Thus the shape and
+/// the skin stay at the alignment that they show, and the hand is in its player's influence until the next test.
+[[nodiscard]] State KeptForNextLand(const State& state);
+
 /// A frame of the hand. Going into or out of its player's influence (none when that isn't known this frame) blends the
 /// skin again for the alignment taken the frame before, so the skin can show an alignment up to k_RefreshThreshold
 /// away from the shape's. Then the frame's alignment is taken, and once far enough from the shape's the skin and the

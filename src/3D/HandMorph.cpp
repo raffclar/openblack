@@ -37,6 +37,11 @@ std::optional<float> hand_morph::Refresh(float drawn, float target)
 	return target;
 }
 
+hand_morph::State hand_morph::KeptForNextLand(const State& state)
+{
+	return {.target = state.target, .drawn = state.drawn, .inInfluence = true};
+}
+
 hand_morph::Change hand_morph::Advance(State& state, float playerAlignment, std::optional<bool> inInfluence)
 {
 	Change change;

@@ -127,9 +127,9 @@ bool HandHoldPoser::Pose(const std::optional<HeldSeed>& seed, const Frame& frame
 void HandHoldPoser::Fade(const hand_blend::Changes& changes, bool drawn, bool hangsHeld, entt::entity held, float seconds,
                          const Transform& hand, std::vector<glm::mat4>& bones)
 {
+	_poseFade.Change(changes.count, changes.left.has_value() && !drawn);
 	for (uint8_t change = 0; change < changes.count; ++change)
 	{
-		_poseFade.Change();
 		_heldFade.Change();
 	}
 	if (!drawn)

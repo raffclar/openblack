@@ -104,6 +104,10 @@ public:
 	/// A change starts the blend again. The last drawn pose becomes the kept pose. The kept pose of the last change becomes
 	/// the drawn pose until the frame gives its pose.
 	void Change();
+	/// The changes of a frame start the blend again count times. When the hand goes out of view in the frame, the change
+	/// of mode is the last change. Before that change, the kept pose becomes the last drawn pose. Thus, when the hand
+	/// comes into view again, the blend starts from the pose that the hand had when it went out of view.
+	void Change(uint8_t count, bool goesOutOfView);
 	/// The model matrix and the bones place and pose the hand in this frame. The bones change to draw the blend. Usually
 	/// the pose of the frame replaces the drawn pose. When poseIntoKept is true, the pose of the frame replaces the kept
 	/// pose, and the blend goes from the pose of the frame to the old drawn pose.

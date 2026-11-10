@@ -93,10 +93,7 @@ protected:
 	std::vector<glm::mat4> DrawFrame(const hand_blend::Frame& frame)
 	{
 		const auto changes = _tracker.Step(frame);
-		for (uint8_t change = 0; change < changes.count; ++change)
-		{
-			_fade.Change();
-		}
+		_fade.Change(changes.count, false);
 		auto bones = _animation.GetBoneMatrices();
 		_fade.Apply(k_FrameSeconds, glm::mat4(1.0f), bones, changes.poseIntoKept);
 		return bones;
