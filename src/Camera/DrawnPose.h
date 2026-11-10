@@ -59,7 +59,10 @@ inline constexpr glm::vec3 k_FirstCorrectPoint {1000.0f, 0.0f, 1000.0f};
 [[nodiscard]] inline Pose Separate(Pose pose)
 {
 	const auto gap = pose.eye - pose.focus;
-	if (glm::dot(gap, gap) < k_SmallestGapSquared)
+	// The game adds the squares in this order: y and z first, then x. Near the limit, a different order can give a
+	// different result.
+	const float gapSquared = ((gap.y * gap.y) + (gap.z * gap.z)) + (gap.x * gap.x);
+	if (gapSquared < k_SmallestGapSquared)
 	{
 		pose.eye += k_GapStep;
 	}

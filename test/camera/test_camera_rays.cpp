@@ -8,6 +8,7 @@
  *******************************************************************************/
 
 #include <array>
+#include <bit>
 #include <chrono>
 #include <limits>
 #include <memory>
@@ -291,6 +292,17 @@ TEST(CameraDrawnPose, AnEyeOnItsFocusMovesAway)
 	EXPECT_EQ(pose.eye, glm::vec3(9.0f, 6.0f, 10.0f));
 	const auto apart = camera_drawn::Separate({.eye = {10.0f, 5.0f, 10.0f}, .focus = {10.0f, 5.0f, 10.1f}});
 	EXPECT_EQ(apart.eye, glm::vec3(10.0f, 5.0f, 10.0f));
+}
+
+// The squares of the gap are added in the game's order: y and z, then x. For this gap the sum in the order x, y, z is
+// below the limit, but the game's sum is not, so the eye stays.
+TEST(CameraDrawnPose, TheGapIsMeasuredInTheGamesOrder)
+{
+	const glm::vec3 gap {std::bit_cast<float>(0x3C9F20E1u), std::bit_cast<float>(0x3C8205AEu),
+	                     std::bit_cast<float>(0x3C9DBCE5u)};
+	ASSERT_LT(glm::dot(gap, gap), camera_drawn::k_SmallestGapSquared);
+	const auto pose = camera_drawn::Separate({.eye = gap, .focus = glm::vec3(0.0f)});
+	EXPECT_EQ(pose.eye, gap);
 }
 
 // The eye stays one unit above the land, and the focus moves with it
