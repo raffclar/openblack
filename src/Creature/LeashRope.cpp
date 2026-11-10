@@ -100,6 +100,18 @@ void Integrate(Rope& rope, const std::array<glm::vec3, k_NodeCount>& acceleratio
 }
 } // namespace
 
+glm::vec3 leash_rope::TiedEnd(const TiedThing& thing)
+{
+	if (thing.built <= k_TiedOnLandBuilt)
+	{
+		return thing.place;
+	}
+	// Half the height first, then the division by the size, then each part of the axis times that and added to the place
+	const float along = (thing.height * k_TiedHeightShare) / thing.scale;
+	return {(thing.posedUp.x * along) + thing.posedPlace.x, (thing.posedUp.y * along) + thing.posedPlace.y,
+	        (thing.posedUp.z * along) + thing.posedPlace.z};
+}
+
 float leash_rope::RestLength(float slackLength)
 {
 	return slackLength * k_RestShare;

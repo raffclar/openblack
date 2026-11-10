@@ -407,6 +407,31 @@ void testbed_scenarios::AddLeash(std::vector<Scenario>& all)
 	    .repeatFrom = 0,
 	});
 
+	// The camera looks down at 45 degrees on a very large oak from about 150 m, the pointer on its crown. A tiger is tied
+	// to the oak. The hand pulls the oak for a tenth of a second and lets go, so the oak stays drawn in the lean of the
+	// pull. Then the leash key unties the leash to the hand.
+	all.push_back({
+	    .id = "leash.tied_tree_pulled",
+	    .name = "Rope of a leash tied to a pulled tree",
+	    .facet = Facet::Leash,
+	    .description = "A tiger on the learning leash is tied to a very large oak. The hand pulls the oak for a tenth of "
+	                   "a second and lets go. Three seconds later, the leash key unties the leash to the hand.",
+	    .expected = "The rope meets the oak halfway up the oak and moves with the lean of the pull. After the leash key, "
+	                "the rope keeps its shape and swings to the hand. It does not jump straight.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 106.0f, -66.0f}, .look = {0.0f, 0.0f, 40.0f}},
+	    .creatures = {Posed(CreatureType::Tiger, {-30.0f, 20.0f})},
+	    .objects = {{.type = TreeInfo::Oak, .offset = {0.0f, 40.0f}, .scale = 2.5f}},
+	    .commands = {Leash(0, LeashType::Rope, 1.0f),
+	                 OnObject(Kind::TieLeash, 0, 0, 1.0f, false),
+	                 {.kind = Kind::PointerTo, .delaySeconds = 1.0f, .point = {0.5f, 0.42f}},
+	                 {.kind = Kind::PointerPress, .delaySeconds = 1.0f, .value = 3},
+	                 {.kind = Kind::PointerSweep, .delaySeconds = 0.3f, .point = {0.0f, -0.1f}, .amount = 1.0f},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 0.1f, .value = 3},
+	                 {.kind = Kind::PointerTo, .delaySeconds = 0.5f, .point = {0.8f, 0.8f}},
+	                 {.kind = Kind::LeashKey, .delaySeconds = 3.0f, .value = 0}},
+	});
+
 	all.push_back({
 	    .id = "leash.hand_attach_sounds",
 	    .name = "Attach sounds of the leash in the hand",

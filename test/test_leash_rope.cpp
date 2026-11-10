@@ -273,3 +273,38 @@ TEST(LeashRope, RibbonHasNoWidthWhereTheRopePointsAtTheEye)
 	const auto ribbon = BuildRibbon(rope, k_Start + glm::vec3(-10.0f, 0.0f, 0.0f), Flat);
 	EXPECT_EQ(ribbon.rope.at(10).position, ribbon.rope.at(11).position);
 }
+
+TEST(LeashRope, TheRopeMeetsATiedThingHalfwayUpItsUpAxis)
+{
+	// An upright tree, twice its first size and 20 high: the rope meets it 10 above its place
+	const TiedThing upright {.place = {100.0f, 5.0f, 50.0f},
+	                         .posedPlace = {100.0f, 5.0f, 50.0f},
+	                         .posedUp = {0.0f, 2.0f, 0.0f},
+	                         .scale = 2.0f,
+	                         .height = 20.0f};
+	EXPECT_EQ(TiedEnd(upright), glm::vec3(100.0f, 15.0f, 50.0f));
+	// A hand pulls it: it leans to x and stretches up, and the rope meets it along that lean
+	auto pulled = upright;
+	pulled.posedPlace = glm::vec3(100.0f, 6.0f, 50.0f);
+	pulled.posedUp = glm::vec3(1.0f, 3.0f, 0.0f);
+	EXPECT_EQ(TiedEnd(pulled), glm::vec3(105.0f, 21.0f, 50.0f));
+}
+
+TEST(LeashRope, ABuildingBuiltToHalfOrLessHoldsTheRopeOnTheLand)
+{
+	TiedThing building {.place = {10.0f, 2.0f, 30.0f},
+	                    .posedPlace = {10.0f, 2.0f, 30.0f},
+	                    .posedUp = {0.0f, 1.0f, 0.0f},
+	                    .scale = 1.0f,
+	                    .height = 8.0f,
+	                    .built = 0.5f};
+	EXPECT_EQ(TiedEnd(building), building.place);
+	building.built = 0.51f;
+	EXPECT_EQ(TiedEnd(building), glm::vec3(10.0f, 6.0f, 30.0f));
+}
+
+TEST(LeashRope, AThingWithNoHeightHoldsTheRopeAtItsPlace)
+{
+	const TiedThing flat {.place = {1.0f, 2.0f, 3.0f}, .posedPlace = {1.0f, 2.0f, 3.0f}, .height = 0.0f};
+	EXPECT_EQ(TiedEnd(flat), flat.place);
+}

@@ -73,6 +73,7 @@
 #include "ECS/Components/MiracleImpression.h"
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/OneOffSpellSeed.h"
+#include "ECS/Components/Physics.h"
 #include "ECS/Components/PuzzleGame.h"
 #include "ECS/Components/ReportedHand.h"
 #include "ECS/Components/ScriptControl.h"
@@ -86,6 +87,7 @@
 #include "ECS/Components/VillageTotem.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/WorshipSite.h"
+#include "ECS/DrawnPlace.h"
 #include "ECS/MazePuzzleRules.h"
 #include "ECS/NeedFlagRules.h"
 #include "ECS/Registry.h"
@@ -161,8 +163,7 @@ void PromptKnown(entt::entity creature, openblack::creature_help::Prompt prompt)
 constexpr float k_TurnsPerSecond = 1.0f / std::chrono::duration<float>(TimeSystemInterface::k_TurnDuration).count();
 /// Where the leash meets a creature with no collar bone, as a share of its height
 constexpr float k_CollarHeightShare = 0.7f;
-/// Where the leash meets something it is tied to, as a share of its height, and that height when it has no mesh
-constexpr float k_TiedHeightShare = 0.5f;
+/// The height of a thing with no mesh, under the marker of a leash order
 constexpr float k_DefaultObjectHeight = 5.0f;
 /// How far round a creature is tapped, as a share of its height
 constexpr float k_CreatureTapShare = 0.4f;
@@ -284,15 +285,72 @@ float ObjectHeight(const Registry& registry, entt::entity entity)
 	return std::max((box.maxima.y - box.minima.y) * transform.scale.y, 0.0f);
 }
 
-/// Where the leash meets something it is tied to: a creature's collar, else halfway up it
-glm::vec3 TiedPoint(const Registry& registry, entt::entity entity)
+/// How much of a building is built, 0 to 1. A worship site's altar keeps its own share. Each other thing is fully built.
+float BuiltShare(const Registry& registry, entt::entity entity)
+{
+	if (const auto* altar = registry.TryGet<const WorshipAltar>(entity))
+	{
+		return altar->built;
+	}
+	const auto* progress = registry.TryGet<const BuildProgress>(entity);
+	return progress != nullptr ? progress->built : 1.0f;
+}
+
+/// Where the leash meets something it is tied to: the collar of a creature, else halfway up the thing (see
+/// leash_rope::TiedEnd). The drawn pose is the pose that the frame draws, also the lean of a pull of the hand. The turn
+/// pose is the pose of the thing in the world, and the rope starts from it when the leash goes on.
+glm::vec3 TiedPoint(const Registry& registry, entt::entity entity, CollarPose pose)
 {
 	if (registry.TryGet<const Creature>(entity) != nullptr)
 	{
-		return CollarPoint(registry, entity);
+		return CollarPoint(registry, entity, pose);
 	}
-	return registry.Get<const Transform>(entity).position +
-	       glm::vec3(0.0f, ObjectHeight(registry, entity) * k_TiedHeightShare, 0.0f);
+	const auto& transform = registry.Get<const Transform>(entity);
+	const auto posed = pose == CollarPose::Drawn ? ecs::drawn_place::DrawnTransformOf(registry, entity, transform) : transform;
+	return leash_rope::TiedEnd({
+	    .place = transform.position,
+	    .posedPlace = posed.position,
+	    .posedUp = posed.rotation[1] * posed.scale.y,
+	    .scale = transform.scale.x,
+	    .height = object_measures::Height(registry, entity),
+	    .built = BuiltShare(registry, entity),
+	});
+}
+
+/// The camera of a player in the world, as the reports of the player put it, none for a player with no hands
+std::optional<glm::vec3> ReportedCamera(PlayerNames player)
+{
+	if (!Locator::handSystem::has_value())
+	{
+		return std::nullopt;
+	}
+	const auto own = Locator::handSystem::value().GetHandsOf(player);
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto hand = own.has_value() ? (*own)[static_cast<size_t>(HandSystemInterface::Side::Left)] : entt::null;
+	const auto* reported = registry.Valid(hand) ? registry.TryGet<const ReportedHand>(hand) : nullptr;
+	return reported != nullptr ? std::optional(reported->camera) : std::nullopt;
+}
+
+/// Where the rope of a leash that a player holds ends, none when the end is not known. The rope of the player at this
+/// computer goes to the hand. In the drawn pose, it is the hand where the frame draws it. In the turn pose, it is the
+/// hand as the reports put it. The rope of each other player goes to the camera of that player.
+std::optional<glm::vec3> HeldRopeEnd(PlayerNames holder, CollarPose pose)
+{
+	if (holder != OwnPlayer())
+	{
+		return ReportedCamera(holder);
+	}
+	return pose == CollarPose::Drawn ? DrawnHandPoint() : HandPoint(holder);
+}
+
+/// Where the rope of a worn leash ends in a pose: at the thing that the leash is tied to, else at its holder
+std::optional<glm::vec3> RopeEnd(const Registry& registry, const CreatureLeash::Worn& worn, CollarPose pose)
+{
+	if (worn.tiedTo.has_value() && registry.Valid(*worn.tiedTo) && registry.TryGet<const Transform>(*worn.tiedTo) != nullptr)
+	{
+		return TiedPoint(registry, *worn.tiedTo, pose);
+	}
+	return HeldRopeEnd(worn.holder, pose);
 }
 
 /// Only a living tree and a tree of a forest miracle are trees for the leash. A dead tree is not a tree.
@@ -1123,8 +1181,8 @@ void LeashSystem::UntieToHand(entt::entity creature)
 	{
 		return;
 	}
+	// The rope keeps its shape and swings to the hand
 	leashes->worn->tiedTo.reset();
-	LayRopeAfresh(registry, creature);
 }
 
 void LeashSystem::PlayHandAttachSound(entt::entity creature)
@@ -1742,11 +1800,12 @@ void LeashSystem::CreatureTurn(entt::entity entity)
 		else
 		{
 			auto& worn = *leashes.worn;
+			// The thing that the leash is tied to has gone: the leash is in the hand again. The rope keeps its shape and
+			// swings to the hand.
 			if (worn.tiedTo.has_value() &&
 			    (!registry.Valid(*worn.tiedTo) || registry.TryGet<const Transform>(*worn.tiedTo) == nullptr))
 			{
 				worn.tiedTo.reset();
-				LayRopeAfresh(registry, entity);
 			}
 			// Held in the hand, the leash's lengths follow the creature's size
 			if (!worn.tiedTo.has_value())
@@ -1816,18 +1875,8 @@ void LeashSystem::Update(float seconds)
 			    return;
 		    }
 		    const auto& worn = *leashes.worn;
-		    std::optional<glm::vec3> start;
-		    if (worn.tiedTo.has_value() && registry.Valid(*worn.tiedTo) &&
-		        registry.TryGet<const Transform>(*worn.tiedTo) != nullptr)
-		    {
-			    start = TiedPoint(registry, *worn.tiedTo);
-		    }
-		    else
-		    {
-			    // The rope goes to the hand of its holder: the hand of this computer where it is drawn, or the reported hand
-			    // of another player
-			    start = worn.holder == OwnPlayer() ? hand : HandPoint(worn.holder);
-		    }
+		    // The rope goes to the thing that the leash is tied to, else to the hand or the camera of its holder
+		    const auto start = RopeEnd(registry, worn, CollarPose::Drawn);
 		    if (!start.has_value())
 		    {
 			    // The hand is off the land: the rope keeps its last place
@@ -1843,11 +1892,12 @@ void LeashSystem::Update(float seconds)
 		    drawn->rope.slackLength = worn.slackLength;
 		    drawn->rope.maxLength = worn.maxLength;
 		    // The rope runs from the collar to the hand or the tied thing, so its tension is the stretch at the collar. A new
-		    // rope starts straight from the collar where the body was at the end of its newest game turn. It then moves on
-		    // in the same frame, as each rope does.
+		    // rope starts straight between its two ends as the world has them at the end of its newest game turn. It then
+		    // moves on in the same frame, as each rope does.
 		    if (!drawn->started)
 		    {
-			    drawn->rope = leash_rope::Create(CollarPoint(registry, entity, CollarPose::Turn), *start, worn.slackLength,
+			    const auto laid = RopeEnd(registry, worn, CollarPose::Turn).value_or(*start);
+			    drawn->rope = leash_rope::Create(CollarPoint(registry, entity, CollarPose::Turn), laid, worn.slackLength,
 			                                     worn.maxLength, leash::LookFor(worn.type));
 			    drawn->started = true;
 		    }
