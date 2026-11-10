@@ -575,6 +575,11 @@ void GameHandGrabWorld::EndInterfaceLock(PlayerNames player)
 	}
 }
 
+bool GameHandGrabWorld::HoldsSeed(PlayerNames player) const
+{
+	return Locator::magicSystem::has_value() && Locator::magicSystem::value().GetHeldSeedOf(player).has_value();
+}
+
 uint32_t GameHandGrabWorld::LocalRandom(uint32_t count)
 {
 	if (count == 0 || !Locator::gameRandom::has_value())

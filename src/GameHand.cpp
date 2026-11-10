@@ -166,6 +166,7 @@
 #include "Hand/HandFeel.h"
 #include "Hand/HandGrabRules.h"
 #include "Hand/HandReach.h"
+#include "Hand/HandSendWait.h"
 #include "Hand/HandTrace.h"
 #include "Hand/HandVisibility.h"
 #include "Hand/ScriptHandState.h"
@@ -537,6 +538,49 @@ void Game::UpdateHandInterface()
 	{
 		// The reward is the hand's, which it keeps showing after letting go until it takes hold again
 		Locator::gameInterface::value().SetCreaturePanel(creature_panel::FromNeeds(needs->needs, reward));
+	}
+}
+
+void Game::EndHandLockForFrame()
+{
+	if (!Locator::handSystem::has_value())
+	{
+		return;
+	}
+	// The action of the hand of this computer, and whether the action needs the thing or the seed that the hand holds
+	auto action = hand_send_wait::FrameAction::Free;
+	std::optional<entt::entity> held;
+	const bool hasGrab = Locator::handGrabSystem::has_value();
+	if (Locator::magicSystem::has_value() &&
+	    Locator::magicSystem::value().GetHandCastState().state != magic::CastInput::State::Idle)
+	{
+		action = hand_send_wait::FrameAction::UsesHeld;
+		held = Locator::magicSystem::value().GetHeldSeed();
+	}
+	else if (hasGrab && Locator::handGrabSystem::value().IsAboutToThrow())
+	{
+		action = hand_send_wait::FrameAction::UsesHeld;
+		held = Locator::handGrabSystem::value().GetHeld();
+	}
+	else if ((Locator::creatureHandSystem::has_value() && Locator::creatureHandSystem::value().GetCreature().has_value()) ||
+	         (hasGrab &&
+	          (Locator::handGrabSystem::value().GetLockedOn().has_value() || Locator::handGrabSystem::value().IsPulling())))
+	{
+		action = hand_send_wait::FrameAction::Other;
+	}
+	const auto& buttons = Locator::handPressSystem::value().GetPointerButtons();
+	const hand_send_wait::FrameFacts facts {
+	    .frontEndBox = FrontEndBoxShows(),
+	    .interfaceOff =
+	        Locator::cinematicDirectorSystem::has_value() && !Locator::cinematicDirectorSystem::value().IsInterfaceActive(),
+	    .onTotem = Locator::villageTotemSystem::has_value() && Locator::villageTotemSystem::value().GetGripped().has_value(),
+	    .action = action,
+	    .bothButtons = buttons.left && buttons.right,
+	    .heldThere = held.has_value() && Locator::entitiesRegistry::value().Valid(*held),
+	};
+	if (hand_send_wait::FrameEndsLock(facts))
+	{
+		Locator::handSystem::value().EndOwnInterfaceLock();
 	}
 }
 

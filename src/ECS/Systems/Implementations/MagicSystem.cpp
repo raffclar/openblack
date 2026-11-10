@@ -652,10 +652,14 @@ void MagicSystem::HeldSeedTurn()
 	const bool wasReady = seed.ready;
 	seed.ready =
 	    seed.ready || magic::SeedReadyAfter(seed.turnsInHand, k_TurnMilliseconds, Info().spellSystem.delayBeforeSeedActive);
-	// Becoming ready calls off a press made too early
+	// Becoming ready calls off a press made too early, and ends the interface lock of the hand
 	if (own && seed.ready && !wasReady)
 	{
 		Do(magic::Cancel(_input));
+		if (Locator::handSystem::has_value())
+		{
+			Locator::handSystem::value().EndOwnInterfaceLock();
+		}
 	}
 	// The hand looks again at how it holds the seed, and the miracle shows in the hand once ready
 	ShowHeldSeed();

@@ -105,3 +105,26 @@ TEST(HandSendWait, TheTurnEndsTheLockOnlyForACommandThatItCannotDo)
 	EXPECT_TRUE(TurnEndsLock(TurnCommand::Unlock, {.thingThere = false, .holdsSomething = true, .heldThere = true}));
 	EXPECT_TRUE(TurnEndsLock(TurnCommand::CastUnlock, {.thingThere = false, .holdsSomething = true, .heldThere = true}));
 }
+
+TEST(HandSendWait, TheFrameEndsTheLockForABoxAnInterfaceThatIsOffBothButtonsOrAHeldThingThatWent)
+{
+	using hand_send_wait::FrameAction;
+	using hand_send_wait::FrameEndsLock;
+	// A hand with no action keeps the lock, also with both buttons down
+	EXPECT_FALSE(FrameEndsLock({}));
+	EXPECT_FALSE(FrameEndsLock({.action = FrameAction::Free, .bothButtons = true}));
+	// A front-end box ends it in every action
+	EXPECT_TRUE(FrameEndsLock({.frontEndBox = true}));
+	EXPECT_TRUE(FrameEndsLock({.frontEndBox = true, .onTotem = true}));
+	// An interface that is off ends it, but not on a totem
+	EXPECT_TRUE(FrameEndsLock({.interfaceOff = true}));
+	EXPECT_FALSE(FrameEndsLock({.interfaceOff = true, .onTotem = true}));
+	// Both buttons end every action but the free ones
+	EXPECT_TRUE(FrameEndsLock({.action = FrameAction::Other, .bothButtons = true}));
+	EXPECT_TRUE(FrameEndsLock({.action = FrameAction::UsesHeld, .bothButtons = true, .heldThere = true}));
+	EXPECT_FALSE(FrameEndsLock({.action = FrameAction::Other}));
+	// An action that uses the held thing ends when the thing is not there
+	EXPECT_TRUE(FrameEndsLock({.action = FrameAction::UsesHeld, .heldThere = false}));
+	EXPECT_FALSE(FrameEndsLock({.action = FrameAction::UsesHeld, .heldThere = true}));
+	EXPECT_FALSE(FrameEndsLock({.action = FrameAction::Other, .heldThere = false}));
+}

@@ -94,6 +94,7 @@ public:
 	[[nodiscard]] bool SendWaits() const override;
 	void MarkSend() override;
 	void EndInterfaceLock(PlayerNames player) override;
+	[[nodiscard]] bool HoldsSeed(PlayerNames player) const override;
 	void VillagerIntoHand(entt::entity villager) override;
 	void AnimalIntoOwnFlock(entt::entity animal) override;
 	void ArtefactTaken(entt::entity object, PlayerNames player) override;

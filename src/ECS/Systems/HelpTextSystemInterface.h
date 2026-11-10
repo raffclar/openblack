@@ -75,6 +75,11 @@ public:
 	/// The player clicked the dialogue, or holds the key that cuts a text short (the keypad's Enter). The turn gives
 	/// them from the player's command (player_commands::DialogueClick). The next turn of the dialogue takes them.
 	virtual void TakeClick(bool click, bool skipKey) = 0;
+	/// Whether the click or the key of this frame cuts the text short now (see help::DialogueText::CutsShort)
+	[[nodiscard]] virtual bool ClickCutsShort([[maybe_unused]] bool click, [[maybe_unused]] bool skipKey) const
+	{
+		return false;
+	}
 	/// Before the scripts' turn, in the world or in the temple: the scripts' clock moves on by the turn's time, and the
 	/// dialogue takes the clicks that came since the last turn
 	virtual void ProcessTurn(uint32_t milliseconds) = 0;

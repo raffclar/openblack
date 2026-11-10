@@ -386,6 +386,10 @@ public:
 	void UpdateScreenMarks();
 	/// The hand goes under the cursor, as the camera of this frame sees it, before the draw
 	void UpdateHandFrame(std::chrono::microseconds deltaTime);
+	/// At the start of a frame, before the hand acts on the input of the frame: the interface lock of the hand of this
+	/// computer ends when a box takes the interface, the interface is off, both buttons end the action, or the held thing
+	/// went (see hand_send_wait::FrameEndsLock)
+	void EndHandLockForFrame();
 	/// Before the block of commands goes: sends the player's click of the dialogue and the key that cuts a text short
 	void SendDialogueClick();
 	/// Whether the player holds the key that cuts a text short

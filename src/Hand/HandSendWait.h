@@ -118,4 +118,56 @@ struct TurnFacts
 	return false;
 }
 
+/// The kind of the action of the hand in a frame, for the ends of the interface lock
+enum class FrameAction : uint8_t
+{
+	/// The hand does no action, or it is in the fight or on a totem. Both buttons do not end these.
+	Free,
+	/// The hand holds a thing or a seed for a use at the let go or for a pour. The action needs the held thing, and
+	/// both buttons end it.
+	UsesHeld,
+	/// The hand does another action: a lock on a creature, a pile, a field or a fish farm, or a pull. Both buttons end
+	/// it.
+	Other,
+};
+
+/// What the interface of the hand of this computer knows at the start of a frame
+struct FrameFacts
+{
+	/// A front-end box takes the interface: the menu of the game, the question at the start of a game, or the tattoo
+	/// editor
+	bool frontEndBox {false};
+	/// The interface is off: a script or the game has the cinema bars in, or a hand demonstration plays
+	bool interfaceOff {false};
+	/// The hand grips a totem. The interface lock stays on while the interface is off.
+	bool onTotem {false};
+	FrameAction action {FrameAction::Free};
+	/// The select button and the action button are both down
+	bool bothButtons {false};
+	/// The hand holds a thing or a seed that is in the world and not on its way out of it
+	bool heldThere {false};
+};
+
+/// Whether the interface lock of the hand ends in this frame, before the hand acts on the input of the frame:
+/// - The interface is off, and the hand does not grip a totem.
+/// - The action needs the held thing, and the thing is not there.
+/// - A front-end box takes the interface.
+/// - Both buttons are down in an action that both buttons end.
+[[nodiscard]] constexpr bool FrameEndsLock(const FrameFacts& facts)
+{
+	if (facts.interfaceOff && !facts.onTotem)
+	{
+		return true;
+	}
+	if (facts.action == FrameAction::UsesHeld && !facts.heldThere)
+	{
+		return true;
+	}
+	if (facts.frontEndBox)
+	{
+		return true;
+	}
+	return facts.action != FrameAction::Free && facts.bothButtons;
+}
+
 } // namespace openblack::hand_send_wait

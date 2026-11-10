@@ -1206,6 +1206,30 @@ TEST_F(HandGrabSystemWithWorld, ATakeAtTheTurnAsksTheInfluenceAtTheReportedPoint
 	EXPECT_NE(system->GetHeld(), std::optional(other));
 }
 
+TEST_F(HandGrabSystemWithWorld, ATakeThatTheTurnCannotDoEndsTheInterfaceLock)
+{
+	world->borderX = 10.0f;
+	const auto outside = world->AddRock({12.0f, 0.0f, 0.0f});
+	const auto inside = world->AddRock({8.0f, 0.0f, 0.0f});
+	world->reportedCollide = glm::vec3(12.0f, 0.0f, 0.0f);
+	// The thing cannot go into the hand outside the influence
+	system->DoTake(world->HandPlayer(), outside);
+	EXPECT_EQ(world->lockEnds, 1);
+	// A take that the turn does keeps the lock
+	world->reportedCollide = glm::vec3(8.0f, 0.0f, 0.0f);
+	system->DoTake(world->HandPlayer(), inside);
+	ASSERT_EQ(system->GetHeld(), std::optional(inside));
+	EXPECT_EQ(world->lockEnds, 1);
+	// The hand holds something already
+	system->DoTake(world->HandPlayer(), outside);
+	EXPECT_EQ(world->lockEnds, 2);
+	// The thing went
+	system->Reset();
+	world->registry.Destroy(outside);
+	system->DoTake(world->HandPlayer(), outside);
+	EXPECT_EQ(world->lockEnds, 3);
+}
+
 // The steps of a computer god take a thing also outside the influence of its player
 TEST_F(HandGrabSystemWithWorld, AComputerGodTakesAThingOutsideItsInfluence)
 {
