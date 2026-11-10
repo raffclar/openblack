@@ -245,7 +245,7 @@ public:
 			    portable_math::Sin(static_cast<float>(wiggles + 1) * u * pi) * portable_math::Sin(2.0f * t + phase) * wiggle;
 			const auto p = m[0] * (r * across) + m[1] * (u * r) + m[2] * (r * along);
 			joint->ruleScale = scale;
-			joint->velocity = (p - joint->position) / std::max(effect.GetDt(), k_MinimumStep);
+			joint->velocity = (p - joint->position) * (1.0f / std::max(effect.GetDt(), k_MinimumStep));
 			joint->position = p;
 			joint->rgba[3] = static_cast<uint8_t>(alpha);
 			index -= 1.0f;
