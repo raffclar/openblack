@@ -262,6 +262,11 @@ villager_work::FarmerArrival villager_work::ArriveAtField(bool sowing, bool grow
 	return FarmerArrival::Decide;
 }
 
+bool villager_work::RipeTestFindsASpot(bool sowing, bool grown, bool ripe)
+{
+	return !sowing && grown && ripe;
+}
+
 bool villager_work::TakesHarvestToStore(uint32_t given, int16_t roomAfter, float cropFoodValue)
 {
 	return given != 0 && static_cast<float>(roomAfter) < cropFoodValue;

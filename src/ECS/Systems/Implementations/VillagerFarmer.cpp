@@ -202,6 +202,11 @@ uint32_t villager_farmer::FarmerArrivesAtFarm(LivingAction& action)
 	}
 	const bool grown = activity == field_crop::Activity::Grown;
 	const bool ripe = grown && fields.IsRipe(field);
+	if (work::RipeTestFindsASpot(sowing, grown, ripe))
+	{
+		// The test for a ripe crop finds a spot and does not keep it
+		static_cast<void>(RandomSpot(field));
+	}
 	switch (work::ArriveAtField(sowing, grown, ripe, (sowing || ripe) && AtSpot(villager)))
 	{
 	case work::FarmerArrival::Sow:

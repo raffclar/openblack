@@ -214,6 +214,9 @@ enum class FarmerArrival : uint8_t
 };
 /// A field still being sown is sown, a grown and ripe one is dug, each once the farmer stands at its spot
 [[nodiscard]] FarmerArrival ArriveAtField(bool sowing, bool grown, bool ripe, bool atSpot);
+/// Whether the test of a grown field for a ripe crop also finds a spot in the field and does not keep it. The spot
+/// takes two game random numbers, as a kept spot does
+[[nodiscard]] bool RipeTestFindsASpot(bool sowing, bool grown, bool ripe);
 
 /// After digging up the crop, a farmer that got some and has less room than a load of crop takes it to the store;
 /// otherwise it goes back to work
