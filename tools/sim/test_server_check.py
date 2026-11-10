@@ -84,6 +84,25 @@ class ServerCheckTest(unittest.TestCase):
         self.assertEqual(server_check.compare(server, game, 3), ([], [1, 2, 3]))
         self.assertEqual(server_check.compare(server, game, 4), ([4], [1, 2, 3, 4]))
 
+    def test_the_input_first_closes_the_information_box(self):
+        value = {"camera": {"yaw": 30}, "events": [{"frame": 10, "event": {"kind": "pointer"}}]}
+        closed = server_check.input_closing_info_box(value)
+        self.assertEqual(closed["camera"], {"yaw": 30})
+        self.assertEqual([(event["frame"], event["event"]["kind"]) for event in closed["events"]],
+                         [(3, "key_down"), (8, "key_up"), (10, "pointer")])
+        self.assertEqual(closed["events"][0]["event"]["key"], "Escape")
+        # The input of the caller stays as it was
+        self.assertEqual(len(value["events"]), 1)
+
+    def test_a_list_input_closes_the_box_too(self):
+        closed = server_check.input_closing_info_box([{"frame": 4, "event": {"kind": "pointer"}}])
+        self.assertEqual([event["frame"] for event in closed], [1, 6, 4])
+
+    def test_only_a_land_that_opens_the_box_is_known(self):
+        self.assertTrue(server_check.land_opens_info_box("Playgrounds/TwoGods.txt"))
+        self.assertTrue(server_check.land_opens_info_box("Playgrounds\\TwoGods.txt"))
+        self.assertFalse(server_check.land_opens_info_box("Land1.txt"))
+
 
 if __name__ == "__main__":
     unittest.main()
