@@ -103,7 +103,8 @@ std::vector<snowfall::Tile> SnowfallSystem::TakeTiles(const rain::View& view)
 			if (auto tile = snowfall::TileOf(centre, snowiest, eye))
 			{
 				tile->ground = island.GetHeightAt(tile->corner);
-				snowed.push_back({.tile = *tile, .key = rain::DrawKey(centre, island.GetHeightAt(centre), view.eye)});
+				tile->sortKey = rain::DrawKey(centre, island.GetHeightAt(centre), view.eye);
+				snowed.push_back({.tile = *tile, .key = tile->sortKey});
 			}
 		}
 	}

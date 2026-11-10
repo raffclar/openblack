@@ -39,3 +39,14 @@ TEST(DestructionGhosts, ANewLandHasNoGhosts)
 	explosions.Reset();
 	EXPECT_TRUE(explosions.Ghosts().empty());
 }
+
+TEST(DestructionGhosts, AGhostSortsByThePlaceOfTheThingItCopies)
+{
+	// A model put at (10, 20, 30) and made twice as big: the point is its place, not the middle of its box
+	components::DestructionGhost ghost {.mesh = 1, .model = glm::mat4(1.0f)};
+	ghost.model[0][0] = 2.0f;
+	ghost.model[1][1] = 2.0f;
+	ghost.model[2][2] = 2.0f;
+	ghost.model[3] = glm::vec4(10.0f, 20.0f, 30.0f, 1.0f);
+	EXPECT_EQ(components::SortPoint(ghost), glm::vec3(10.0f, 20.0f, 30.0f));
+}

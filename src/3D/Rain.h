@@ -81,6 +81,8 @@ struct Tile
 	int32_t alphaTop {0};
 	/// The ground's height under its centre, which its streaks stand on
 	float ground {0.0f};
+	/// The block's place among the things that blend: DrawKey of its centre
+	float sortKey {0.0f};
 
 	bool operator==(const Tile&) const = default;
 };
@@ -105,6 +107,9 @@ inline constexpr int32_t k_LeastRain = 5;
 /// The order in which the game draws the rain over the blocks: the block with the largest key comes first, so the
 /// blocks go from far to near. The key is the squared distance from the eye to the ground under the block's centre.
 [[nodiscard]] float DrawKey(glm::vec2 centre, float ground, glm::vec3 eye);
+/// A draw key as a bgfx depth for a view sorted by depth, the greatest first. A float that is not negative orders the
+/// same as its bits.
+[[nodiscard]] uint32_t DrawDepth(float key);
 
 /// Each frame, rain of this strength or less makes no splashes on a block
 inline constexpr int32_t k_LeastSplashStrength = 44;

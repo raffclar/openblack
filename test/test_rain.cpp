@@ -16,6 +16,7 @@
 #include <gtest/gtest.h>
 
 #include "3D/Rain.h"
+#include "Graphics/ZSort.h"
 
 using namespace openblack;
 
@@ -177,6 +178,18 @@ TEST(Rain, TheDrawKeyAddsTheGroundSquaresFirst)
 {
 	// The two squares across the ground, then the square of the height. The other order gives 18382700.
 	EXPECT_EQ(std::bit_cast<uint32_t>(rain::DrawKey({2934.0f, 1195.0f}, 2889.0f, glm::vec3(0.0f))), 0x4B8C3FB7u);
+}
+
+TEST(Rain, TheDrawDepthIsTheDrawKeyThatTheGameSortsBy)
+{
+	// The same point as above: the depth keeps the game's sum, not the sum of the other sorted things
+	const auto key = rain::DrawKey({2934.0f, 1195.0f}, 2889.0f, glm::vec3(0.0f));
+	EXPECT_EQ(rain::DrawDepth(key), 0x4B8C3FB7u);
+	EXPECT_NE(rain::DrawDepth(key), graphics::zsort::Depth({2934.0f, 2889.0f, 1195.0f}, glm::vec3(0.0f)));
+	// A far block comes before a near one in a view sorted by depth, the greatest first
+	const glm::vec3 eye {0.0f, 30.0f, 0.0f};
+	const auto far = rain::DrawDepth(rain::DrawKey({0.0f, 300.0f}, 0.0f, eye));
+	EXPECT_GT(far, rain::DrawDepth(rain::DrawKey({0.0f, 100.0f}, 0.0f, eye)));
 }
 
 TEST(Rain, AStreakFadesWithEachStepRoundedToAFloat)
