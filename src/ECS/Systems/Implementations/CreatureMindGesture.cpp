@@ -20,7 +20,7 @@
 #include "Creature/CreatureCastMoves.h"
 #include "Creature/CreatureDance.h"
 #include "Creature/CreatureGesture.h"
-#include "Creature/CreatureLayers.h"
+#include "CreatureBodyBusy.h"
 #include "CreatureMindSystem.h"
 #include "CreatureMindSystemDetail.h"
 #include "ECS/Components/Creature.h"
@@ -171,9 +171,8 @@ void CreatureMindSystem::StepGesture(entt::entity creature)
 	const auto now = GameTurn();
 	const auto elapsed = now - drawing->countedTurn;
 	drawing->countedTurn = now;
-	const auto* animation = registry.TryGet<const CreatureAnimation>(creature);
-	const bool bodyPlaying = animation != nullptr && creature_layers::IsPlaying(animation->body);
-	const bool bodyBusy = bodyPlaying || objects.GetState(creature) == CreatureObjectActionSystemInterface::State::Busy;
+	// The body is busy in each state but the stand: a move, an own action or an action on a thing
+	const bool bodyBusy = creature_body_busy::PerformsBodyAction(registry, creature);
 	switch (drawing->stage)
 	{
 	case Stage::Start:
