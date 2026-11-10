@@ -745,7 +745,13 @@ void CameraProperties() // 180 CAMERA_PROPERTIES
 	auto* camera = OrderedScriptCamera();
 	if (camera == nullptr)
 	{
-		ScriptMessage("Script camera has been removed! - Exception happened?");
+		ScriptMessage("Script camera has been removed! ESC key?");
+		return;
+	}
+	// While a two-thing camera has taken over, the native does not keep the settings
+	if (camera->InDualView())
+	{
+		ScriptMessage("We are in the wrong camera mode!");
 		return;
 	}
 	// How the script's camera follows a thing: from how far, how quickly, at what heading, and whether the heading turns

@@ -1646,6 +1646,22 @@ TEST_F(CreatureFightSystemTest, TheFightMusicPlaysWhileTheHandDirectsTheFightOrN
 	EXPECT_FALSE(fights.FightMusicHeard({0.0f, 30.0f, 90.0f}));
 }
 
+TEST_F(CreatureFightSystemTest, AScriptFindsAnArenaNearForThingsThatAreNotCreaturesButMakesNoNewOneForThem)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto arena = registry.Create();
+	registry.Assign<CreatureArena>(arena, CreatureArena {.place = {0, 0}, .radius = 40.0f});
+	const auto rock = registry.Create();
+	// The search gives the arena near the point as it is, also when one of the two things is not a creature
+	const auto found = fights.FindOrMakeArena({0.0f, 0.0f, 0.0f}, rock, first, 10.0f);
+	ASSERT_TRUE(found.has_value());
+	EXPECT_EQ(found->arena, arena);
+	EXPECT_FALSE(found->made);
+	// With no arena near, only two creatures make a new one
+	EXPECT_FALSE(fights.FindOrMakeArena({1000.0f, 0.0f, 1000.0f}, rock, first, 10.0f).has_value());
+	EXPECT_FALSE(fights.FindOrMakeArena({1000.0f, 0.0f, 1000.0f}, first, rock, 10.0f).has_value());
+}
+
 TEST_F(CreatureFightSystemTest, AFightGestureIsTakenOnlyWhenTheLineToTheOpponentMeetsItsBody)
 {
 	// Neither creature has a body, so the line from the player's creature meets nothing
