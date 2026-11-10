@@ -19,6 +19,7 @@
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
+#include "Enums.h"
 #include "Magic/HeldCastRules.h"
 
 /// The words and numbers of the tooltips the hand shows over things in the world: a village centre's belief and
@@ -207,6 +208,10 @@ struct Wording
 
 /// A pile's food or wood amount, by what it holds
 [[nodiscard]] Numbered PileAmount(bool food, uint32_t amount);
+
+/// The amount over a pot, by its kind of pot: a food pile shows its food, a wood pile its wood. A plain pot, which is
+/// not a pile, shows no amount.
+[[nodiscard]] std::optional<Numbered> PotAmount(PotType type, uint32_t food, uint32_t wood);
 
 /// The amount shown as the hand takes from a pile
 [[nodiscard]] Numbered HeldAmount(uint32_t amount);
