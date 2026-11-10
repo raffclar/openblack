@@ -223,6 +223,37 @@ TEST(HandHoldPose, TwoChangesBeforeAFrameBlendFromThePoseThatTheBlendKeptBefore)
 	EXPECT_NEAR(DrawnAt(fade, 3.0f, k_FadeSeconds * 0.5f), 1.5f, k_Epsilon);
 }
 
+TEST(HandHoldPose, AHandThatComesIntoViewAgainBlendsFromThePoseThatItHadWhenItWentOutOfView)
+{
+	WorldPoseFade fade;
+	DrawnAt(fade, 0.0f, 0.016f);
+	// A change at 0 keeps the pose at 0. The blend goes to 1 and stops, and the hand moves to 2.
+	fade.Change(1, false);
+	DrawnAt(fade, 1.0f, k_FadeSeconds);
+	EXPECT_NEAR(DrawnAt(fade, 2.0f, 0.016f), 2.0f, k_Epsilon);
+	// The hand goes out of view at 2 and is not drawn. Then it comes into view again at 4.
+	fade.Change(1, true);
+	fade.Change(1, false);
+	// The blend goes from 2, not from the pose at 0 that the change before kept
+	EXPECT_NEAR(DrawnAt(fade, 4.0f, k_FadeSeconds * 0.5f), 3.0f, k_Epsilon);
+	EXPECT_NEAR(DrawnAt(fade, 4.0f, k_FadeSeconds), 4.0f, k_Epsilon);
+	EXPECT_FALSE(fade.Fading());
+}
+
+TEST(HandHoldPose, WhenTheHandGoesOutOfViewThePoseIsKeptOnlyBeforeTheLastChange)
+{
+	WorldPoseFade fade;
+	DrawnAt(fade, 0.0f, 0.016f);
+	fade.Change(1, false);
+	DrawnAt(fade, 1.0f, k_FadeSeconds);
+	DrawnAt(fade, 2.0f, 0.016f);
+	// Another thing replaces the thing in the hand, and the hand goes out of view in the same frame. The first change
+	// puts the pose at 0 in place of the drawn pose. The game then keeps that pose, and not the pose at 2.
+	fade.Change(2, true);
+	fade.Change(1, false);
+	EXPECT_NEAR(DrawnAt(fade, 4.0f, k_FadeSeconds * 0.5f), 2.0f, k_Epsilon);
+}
+
 TEST(HandHoldPose, APoseIntoTheKeptPoseBlendsTowardsTheOldDrawnPoseForOneFrame)
 {
 	WorldPoseFade fade;

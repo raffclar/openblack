@@ -83,7 +83,9 @@ public:
 	          ecs::components::Transform& hand);
 	/// Blends the drawn hand after its changes in this frame. The hand stays at its place, and its bones draw the blend
 	/// (see hand_hold::WorldPoseFade). When hangsHeld is true, the held thing moves with the blend (see hand_hold::HeldFade).
-	/// When the game does not draw the hand, the blend stays the same. The changes of the hand still start the blend.
+	/// When the game does not draw the hand, the blend stays the same. The changes of the hand still start the blend. When
+	/// the hand goes out of view, the blend keeps its last drawn pose, and the hand blends from that pose when it comes
+	/// into view again.
 	void Fade(const hand_blend::Changes& changes, bool drawn, bool hangsHeld, entt::entity held, float seconds,
 	          const ecs::components::Transform& hand, std::vector<glm::mat4>& bones);
 	/// Once the hand is drawn at its size: the held seed's in-hand effect is placed in its fingers

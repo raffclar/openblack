@@ -230,6 +230,18 @@ void WorldPoseFade::Change()
 	_time = 0.0f;
 }
 
+void WorldPoseFade::Change(uint8_t count, bool goesOutOfView)
+{
+	for (uint8_t change = 0; change < count; ++change)
+	{
+		if (goesOutOfView && change + 1 == count)
+		{
+			_kept = _drawn;
+		}
+		Change();
+	}
+}
+
 void WorldPoseFade::Apply(float seconds, const glm::mat4& model, std::vector<glm::mat4>& bones, bool poseIntoKept)
 {
 	// The bones of a hand with no size cannot come back from the world

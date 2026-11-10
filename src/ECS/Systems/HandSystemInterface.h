@@ -192,6 +192,9 @@ public:
 	/// picked under the cursor (see hand_morph::Pick and NextPoint). The hands of the other players have no model on the
 	/// screen, so they do not change.
 	virtual void UpdateAlignmentMorph(std::optional<map_coords::MapCoords> picked, bool holdPoint) = 0;
+	/// Before the land goes with its entities: the system keeps the look of the hands of this computer. The next land's
+	/// hands start with that look, as the game keeps its one hand from land to land (see hand_morph::KeptForNextLand).
+	virtual void KeepLooksForNextLand() {}
 	/// Once a game turn, before the creatures think: counts the turns that the player's hand stays in one place. First,
 	/// the hand of this computer ends its wait for a send that a turn did (see hand_send_wait::TurnPass).
 	virtual void ProcessTurn() {}

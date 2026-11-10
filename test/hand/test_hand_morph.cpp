@@ -51,6 +51,22 @@ TEST(HandMorph, JumpsStraightToTheAlignmentOnceFarEnough)
 	EXPECT_FLOAT_EQ(*hand_morph::Refresh(-0.5f, 0.0f), 0.0f);
 }
 
+TEST(HandMorph, ANewLandKeepsTheLookOfTheLastLand)
+{
+	// The hand of the last land shows 0.5, and its player has gone to 0.52. It left the influence of its player.
+	hand_morph::State state {.target = 0.52f, .drawn = 0.5f, .inInfluence = false};
+	auto kept = hand_morph::KeptForNextLand(state);
+	EXPECT_FLOAT_EQ(kept.drawn, 0.5f);
+	EXPECT_FLOAT_EQ(kept.target, 0.52f);
+	EXPECT_TRUE(kept.inInfluence);
+	// On the new land the hand stays at 0.5, because the alignment is not far enough from it. It does not jump from
+	// neutral to 0.52. Its skin is not blended again, because the first test of the influence finds the hand in it.
+	const auto change = hand_morph::Advance(kept, 0.52f, true);
+	EXPECT_FALSE(change.shape);
+	EXPECT_FALSE(change.skin.has_value());
+	EXPECT_FLOAT_EQ(kept.drawn, 0.5f);
+}
+
 TEST(HandMorph, SlowChangesComeInSteps)
 {
 	float drawn = 0.0f;
