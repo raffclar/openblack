@@ -23,6 +23,7 @@
 #include "Animals/Zoomer.h"
 #include "Audio/AtmosAudio.h"
 #include "Audio/SoundMap.h"
+#include "Camera/CameraZoomer.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "OracleData.h"
 #include "Sound/LipSync.h"
@@ -225,6 +226,54 @@ TEST(OracleFloatSweep3, TheZoomerGlidesAsTheGameZoomer)
 			                ": the game gives " + oracle::Hex(pinned.Float(row, 5)) + " at " +
 			                oracle::Hex(pinned.Float(row, 6)) + ", ours gives " + oracle::Hex(zoomer.Value()) + " at " +
 			                oracle::Hex(zoomer.Speed()));
+		}
+	}
+	EXPECT_EQ(differences.Count(), 0u);
+}
+
+TEST(OracleFloatSweep3, TheCameraGlidesAsTheGameZoomer)
+{
+	// The camera's position, focus and lens glide on the game's zoomer. The lens adds the terms of its speed in another
+	// order (see CameraZoomer.h). Its value is the same until a new target starts from that speed.
+	const Pinned pinned("zoomer.txt", {"case", "kind", "a", "b", "c", "value", "speed"});
+	ASSERT_TRUE(pinned.table.has_value());
+	ASSERT_GT(pinned.table->Rows(), 1000u);
+	Differences differences;
+	camera::Zoomer zoomer;
+	camera::Zoomer lens;
+	int targets = 0;
+	for (size_t row = 0; row < pinned.table->Rows(); ++row)
+	{
+		switch (pinned.Bits(row, 1))
+		{
+		case 0:
+			zoomer.SetPosition(pinned.Float(row, 2));
+			lens.SetPosition(pinned.Float(row, 2));
+			targets = 0;
+			break;
+		case 1:
+			zoomer.SetDestination(pinned.Float(row, 2), pinned.Float(row, 3), pinned.Float(row, 4));
+			lens.SetDestination(pinned.Float(row, 2), pinned.Float(row, 3), pinned.Float(row, 4));
+			++targets;
+			break;
+		default:
+			zoomer.Update(pinned.Float(row, 2));
+			lens.UpdateLens(pinned.Float(row, 2));
+			break;
+		}
+		if (std::bit_cast<uint32_t>(zoomer.Value()) != pinned.Bits(row, 5) ||
+		    std::bit_cast<uint32_t>(zoomer.Speed()) != pinned.Bits(row, 6))
+		{
+			differences.Add("case " + std::to_string(pinned.Bits(row, 0)) + " row " + std::to_string(row) +
+			                ": the game gives " + oracle::Hex(pinned.Float(row, 5)) + " at " +
+			                oracle::Hex(pinned.Float(row, 6)) + ", ours gives " + oracle::Hex(zoomer.Value()) + " at " +
+			                oracle::Hex(zoomer.Speed()));
+		}
+		if (targets <= 1 && std::bit_cast<uint32_t>(lens.Value()) != pinned.Bits(row, 5))
+		{
+			differences.Add("lens case " + std::to_string(pinned.Bits(row, 0)) + " row " + std::to_string(row) +
+			                ": the game gives " + oracle::Hex(pinned.Float(row, 5)) + ", ours gives " +
+			                oracle::Hex(lens.Value()));
 		}
 	}
 	EXPECT_EQ(differences.Count(), 0u);
