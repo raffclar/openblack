@@ -1126,7 +1126,8 @@ void FireSystem::Process(entt::entity object)
 	if (Locator::weatherSystem::has_value())
 	{
 		const auto weather = Locator::weatherSystem::value().GetWeather(position);
-		surroundings.rain = static_cast<float>(std::max(weather.rain, weather.snow));
+		// The rain, or the snow that lies on the ground, cools the fire
+		surroundings.rain = static_cast<float>(std::max(weather.rain, weather.snowCover));
 	}
 	if (fire.source != entt::null && !registry.Valid(fire.source))
 	{
@@ -1760,8 +1761,9 @@ void FireSystem::Update(std::chrono::milliseconds frameRealTime, std::chrono::mi
 		    glm::vec3 wind(0.0f);
 		    if (Locator::weatherSystem::has_value())
 		    {
-			    // The steam and smoke drift with the wind blended between the weather's nearest cells, the storms' too
-			    const auto weather = Locator::weatherSystem::value().GetWeatherSmooth(transform.position);
+			    // The steam and the smoke drift with the wind of the air (blended between the nearest cells) and of the
+			    // climates
+			    const auto weather = Locator::weatherSystem::value().GetClimateWeather(transform.position, true);
 			    wind = glm::vec3(static_cast<float>(weather.windX), 0.0f, static_cast<float>(weather.windZ)) * k_WindByteSpeed;
 		    }
 		    const fire::graphic::Inputs inputs {

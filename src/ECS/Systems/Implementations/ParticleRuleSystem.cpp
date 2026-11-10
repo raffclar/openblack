@@ -141,7 +141,7 @@ constexpr int k_ShallowWaterSurface = 7;
 /// A ground of no sound of its own sounds hard
 constexpr int k_HardSurface = 3;
 constexpr int k_LastSurface = 8;
-/// Any rain or snow makes a fireball steam
+/// Any rain, or any snow that lies on the ground, makes a fireball steam
 constexpr int k_SteamingRain = 0;
 /// The land's cells are this many units across
 constexpr float k_CellSize = 10.0f;
@@ -571,7 +571,8 @@ bool GameParticleWorld::IsRainingAt(glm::vec3 point) const
 		return false;
 	}
 	const auto weather = Locator::weatherSystem::value().GetWeather(point);
-	return weather.rain > k_SteamingRain || weather.snow > k_SteamingRain;
+	// The rain, or the snow that lies on the ground, makes the steam
+	return weather.rain > k_SteamingRain || weather.snowCover > k_SteamingRain;
 }
 
 glm::vec3 GameParticleWorld::WindAt(glm::vec3 point) const
@@ -590,7 +591,8 @@ glm::vec3 GameParticleWorld::SmoothWindAt(glm::vec3 point) const
 	{
 		return glm::vec3(0.0f);
 	}
-	const auto weather = Locator::weatherSystem::value().GetWeatherSmooth(point);
+	// The wind of the air, blended between the nearest cells, and of the climates
+	const auto weather = Locator::weatherSystem::value().GetClimateWeather(point, true);
 	return glm::vec3(static_cast<float>(weather.windX), 0.0f, static_cast<float>(weather.windZ)) * k_WindByteSpeed;
 }
 

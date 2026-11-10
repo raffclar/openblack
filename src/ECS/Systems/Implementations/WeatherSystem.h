@@ -87,6 +87,7 @@ public:
 
 	[[nodiscard]] components::WeatherInfo GetWeather(const glm::vec3& position) override;
 	[[nodiscard]] components::WeatherInfo GetWeatherSmooth(const glm::vec3& position) override;
+	[[nodiscard]] components::WeatherInfo GetClimateWeather(const glm::vec3& position, bool smooth) override;
 	[[nodiscard]] float GetOvercast(const glm::vec3& position) override;
 	[[nodiscard]] uint8_t GetLightningFlash(const glm::vec3& camera) const override;
 
@@ -106,6 +107,8 @@ private:
 	void KillStorm(components::Storm& storm);
 	/// The wind that blows a weather thing's storm where it is: the air's and the climates'
 	[[nodiscard]] script_weather::Wind DriftWindAt(const glm::vec3& position);
+	/// The climates' parts in the weather at a point: the global climate, then every climate, the newest first
+	[[nodiscard]] components::WeatherInfo AddClimates(components::WeatherInfo air, const glm::vec3& position);
 	void ProcessClimate(entt::entity entity, bool newDay);
 	void ProcessTemperature(components::Climate& climate) const;
 	void ProcessRain(components::Climate& climate);
@@ -141,6 +144,8 @@ private:
 	entt::entity _forcedStorm {entt::null};
 	/// The weather of each place before the storms add to it. It stays from one land to the next.
 	components::WeatherInfo _background {};
+	/// The climates' parts of the last weather that AddClimates found
+	std::vector<script_weather::ClimateWind> _climateParts;
 	/// The direction of the background weather's wind at the start of the last turn. A new land and a load keep it, so
 	/// it changes only with the next turn.
 	glm::vec2 _ambientWind {ambient_wind::Start()};

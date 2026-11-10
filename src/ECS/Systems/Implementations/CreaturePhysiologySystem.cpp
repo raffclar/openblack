@@ -133,7 +133,8 @@ float TemperatureAt(const glm::vec3& position)
 	{
 		return 0.0f;
 	}
-	return static_cast<float>(Locator::weatherSystem::value().GetWeather(position).temperature);
+	// The creature feels the temperature of the air and of the climates where it stands
+	return static_cast<float>(Locator::weatherSystem::value().GetClimateWeather(position, false).temperature);
 }
 
 bool IsMoving(const CreatureLocomotion* locomotion)
