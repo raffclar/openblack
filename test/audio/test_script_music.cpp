@@ -17,6 +17,7 @@
 
 #include <ECS/SyncedState.h>
 #include <PackFile.h>
+#include <Sound/AudioTurn.h>
 #include <Sound/MusicTimingFile.h>
 #include <Sound/ScriptMusic.h>
 #include <Sound/SoundDecoder.h>
@@ -93,6 +94,27 @@ TEST(ScriptMusicClock, ThePieceStartsAtTheMusicTurnAndItsCuesComeOnTheTicksOfThe
 	music.Turn(100ms, timing);
 	EXPECT_EQ(music.GetLyrics().line, 2);
 	EXPECT_EQ(music.GetLyrics().word, 1);
+}
+
+TEST(ScriptMusicClock, TheFirstTurnsOfALandDoNotStartTheScriptsMusic)
+{
+	// Turns 0 to 5 of a land do not do the audio turn. The script's music starts at turn 6, at the start of its clock.
+	EXPECT_FALSE(AudioTurnRuns(0));
+	EXPECT_FALSE(AudioTurnRuns(5));
+	EXPECT_TRUE(AudioTurnRuns(6));
+	ScriptMusic music;
+	const auto timing = Always(MakeTiming(k_Cues, -1));
+	music.Start(k_Verse);
+	for (uint32_t turn = 1; turn < k_FirstAudioTurn; ++turn)
+	{
+		music.Turn(100ms, timing, AudioTurnRuns(turn));
+		EXPECT_FALSE(music.IsStarted());
+		EXPECT_FALSE(music.GetChannelTime().has_value());
+	}
+	music.Turn(100ms, timing, AudioTurnRuns(k_FirstAudioTurn));
+	EXPECT_TRUE(music.IsStarted());
+	EXPECT_EQ(music.GetChannelTime(), 0us);
+	EXPECT_EQ(music.GetPlayCount(), 1U);
 }
 
 TEST(ScriptMusicClock, TheTurnsTimeTheCuesWhateverTheirLength)

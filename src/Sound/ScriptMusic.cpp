@@ -132,7 +132,7 @@ void ScriptMusic::Start(MusicType type)
 	}
 }
 
-void ScriptMusic::Turn(std::chrono::microseconds turnTime, const TimingFor& timingFor)
+void ScriptMusic::Turn(std::chrono::microseconds turnTime, const TimingFor& timingFor, bool audioTurn)
 {
 	// The music thread plays the channel for the time of the turn
 	if (_channel.has_value())
@@ -149,8 +149,11 @@ void ScriptMusic::Turn(std::chrono::microseconds turnTime, const TimingFor& timi
 			}
 		}
 	}
-	// Then the game's music turn starts or stops the script's music
-	ProcessScript(timingFor);
+	// Then the game's music turn starts or stops the script's music. The first turns of a land do not do the audio turn.
+	if (audioTurn)
+	{
+		ProcessScript(timingFor);
+	}
 }
 
 bool ScriptMusic::Tick(Channel& channel)

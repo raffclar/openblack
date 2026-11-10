@@ -40,6 +40,7 @@
 #include "Common/BuildVersion.h"
 #include "Game.h"
 #include "GameDetail.h"
+#include "Sound/AudioTurn.h"
 #include "Sound/GameSoundEffects.h"
 #include "Sound/HelpSpeech.h"
 #include "Sound/ScriptSoundEffect.h"
@@ -690,7 +691,8 @@ void Game::PlayViewStep(game_turn::Step step, glm::vec3 cameraPosition)
 		}
 		break;
 	case Step::Music:
-		if (Locator::gameAudioSystem::has_value())
+		// The first turns of a land do not choose the music
+		if (Locator::gameAudioSystem::has_value() && audio::AudioTurnRuns(GetTurn()))
 		{
 			Locator::gameAudioSystem::value().ProcessMusicTurn(cameraPosition, PlayerInTemple());
 		}

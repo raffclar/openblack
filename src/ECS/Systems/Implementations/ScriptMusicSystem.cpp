@@ -27,6 +27,7 @@
 #include "FileSystem/FileSystemInterface.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
+#include "Sound/AudioTurn.h"
 #include "Sound/SoundRequestInterface.h"
 
 using namespace openblack::ecs::systems;
@@ -39,7 +40,8 @@ void ScriptMusicSystem::ProcessTurn()
 	    std::chrono::duration_cast<std::chrono::microseconds>(TimeSystemInterface::k_TurnDuration).count();
 	const auto turnTime =
 	    std::chrono::microseconds(static_cast<int64_t>(static_cast<float>(turnMicroseconds) / (speed > 0.0f ? speed : 1.0f)));
-	_music.Turn(turnTime, [this](audio::MusicType type) { return Timing(type); });
+	const bool audioTurn = !Locator::time::has_value() || audio::AudioTurnRuns(Locator::time::value().GetTurn());
+	_music.Turn(turnTime, [this](audio::MusicType type) { return Timing(type); }, audioTurn);
 }
 
 void ScriptMusicSystem::RegisterTimings()

@@ -20,15 +20,13 @@
 #include "FileSystem/FileSystemInterface.h"
 #include "InfoConstants.h"
 #include "Locator.h"
+#include "Sound/AudioTurn.h"
 
 namespace openblack::audio
 {
 
 namespace
 {
-// Ambience stays silent for the first turns of a level
-constexpr uint32_t k_FirstAudibleTurn = 6;
-
 // Banks switch to their evil samples at or below this alignment. The game keeps it as a double
 constexpr double k_EvilAlignment = -0.6;
 
@@ -150,7 +148,7 @@ void AtmosAudio::EndTurn(const TurnInputs& inputs)
 	        CalculateSkyType(Locator::skyClockSystem::value().GetTime(), Locator::skyClockSystem::value().GetDayNightTimes()),
 	};
 	_soundMap.Update(Locator::terrainSystem::value(), Locator::infoConstants::value().sound, mapInputs);
-	if (inputs.paused || inputs.turn < k_FirstAudibleTurn)
+	if (inputs.paused || !AudioTurnRuns(inputs.turn))
 	{
 		Locator::audio::value().AtmosProcess(false);
 		return;
