@@ -353,7 +353,29 @@ CREATE_FOOTPATH_NODE(0, "1290.00,1280.04")
 	ASSERT_EQ(nodes.size(), 2u);
 	const auto& terrain = openblack::Locator::terrainSystem::value();
 	const auto raised = openblack::map_coords::MapCoords {.x = 8388870, .z = 8388870};
-	EXPECT_EQ(nodes[0].altitude, 7.5f);
-	EXPECT_EQ(nodes[0].position.y, terrain.GetHeightAt(openblack::map_coords::ToMetres(raised)) + 7.5f);
-	EXPECT_EQ(nodes[1].altitude, 0.0f);
+	// Each node line puts its node first on the path
+	EXPECT_EQ(nodes[1].altitude, 7.5f);
+	EXPECT_EQ(nodes[1].position.y, terrain.GetHeightAt(openblack::map_coords::ToMetres(raised)) + 7.5f);
+	EXPECT_EQ(nodes[0].altitude, 0.0f);
+}
+
+TEST_F(LoadScene, each_footpath_node_line_puts_its_node_first_on_the_path)
+{
+	LoadTestScene(R""""(
+VERSION(2.300000)
+LOAD_LANDSCAPE(".\Data\Landscape\Land1.lnd")
+CREATE_FOOTPATH(0)
+CREATE_FOOTPATH_NODE(0, "1280.00,1280.00")
+CREATE_FOOTPATH_NODE(0, "1290.00,1280.00")
+CREATE_FOOTPATH_NODE(0, "1300.00,1280.00")
+)"""");
+	auto& registry = openblack::Locator::entitiesRegistry::value();
+	const auto& footpaths = registry.Context().scriptFootpaths;
+	ASSERT_EQ(footpaths.size(), 1u);
+	const auto& nodes = registry.Get<openblack::ecs::components::Footpath>(footpaths.front()).nodes;
+	ASSERT_EQ(nodes.size(), 3u);
+	// The last line's node comes first, the first line's node last
+	EXPECT_GT(nodes[0].place.x, nodes[1].place.x);
+	EXPECT_GT(nodes[1].place.x, nodes[2].place.x);
+	EXPECT_EQ(nodes[0].place.y, nodes[2].place.y);
 }

@@ -288,7 +288,7 @@ TEST(EditorLandSave, StreamsFootpathsAndTreesAreWrittenAsTheLandScriptMakesThem)
 	EXPECT_EQ(land_save::StreamText(2, places),
 	          "CREATE_STREAM(2)\nCREATE_STREAM_POINT(2, \"10.00,20.00\")\nCREATE_STREAM_POINT(2, \"15.00,20.00\")\n");
 	EXPECT_EQ(land_save::FootpathText(places),
-	          "CREATE_FOOTPATH(0)\nCREATE_FOOTPATH_NODE(0, \"10.00,20.00\")\nCREATE_FOOTPATH_NODE(0, \"15.00,20.00\")\n");
+	          "CREATE_FOOTPATH(0)\nCREATE_FOOTPATH_NODE(0, \"15.00,20.00\")\nCREATE_FOOTPATH_NODE(0, \"10.00,20.00\")\n");
 	EXPECT_EQ(land_save::TreeText({.forest = -1,
 	                               .place = places.front(),
 	                               .type = 7,
