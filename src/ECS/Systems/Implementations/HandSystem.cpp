@@ -652,12 +652,21 @@ void HandSystem::UpdateAlignmentMorph(std::optional<map_coords::MapCoords> picke
 		return files.Contains(id) ? &*files.Handle(id) : nullptr;
 	};
 	auto& registry = Locator::entitiesRegistry::value();
+	bool tookKeptLooks = false;
 	for (const auto entity : GetOwnHands())
 	{
 		auto* morph = registry.Valid(entity) ? registry.TryGet<HandMorph>(entity) : nullptr;
 		if (morph == nullptr)
 		{
 			continue;
+		}
+		// The first frame of a new land gives the hands the look that the hands of the last land had
+		if (_keptLooks.has_value())
+		{
+			morph->state = _keptLooks->state;
+			morph->skins = _keptLooks->skins;
+			++morph->revision;
+			tookKeptLooks = true;
 		}
 		// The frame goes by the influence tested after the last one, then tests it again for the next
 		const auto change = hand_morph::Advance(morph->state, alignment, morph->pointInInfluence);
@@ -680,4 +689,21 @@ void HandSystem::UpdateAlignmentMorph(std::optional<map_coords::MapCoords> picke
 		                               : std::vector<HandMorph::Skin> {};
 		++morph->revision;
 	}
+	if (tookKeptLooks)
+	{
+		_keptLooks.reset();
+	}
+}
+
+void HandSystem::KeepLooksForNextLand()
+{
+	_keptLooks.reset();
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto hand = GetOwnHands()[static_cast<size_t>(Side::Left)];
+	const auto* morph = registry.Valid(hand) ? registry.TryGet<const HandMorph>(hand) : nullptr;
+	if (morph == nullptr)
+	{
+		return;
+	}
+	_keptLooks = HandMorph {.state = hand_morph::KeptForNextLand(morph->state), .skins = morph->skins};
 }

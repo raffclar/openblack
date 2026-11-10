@@ -366,4 +366,24 @@ void testbed_scenarios::AddHandNavigationScenarios(std::vector<Scenario>& all)
 	                 KeyUp(SDL_SCANCODE_LEFT, 2.0f), KeyDown(SDL_SCANCODE_1, 1.0f), KeyUp(SDL_SCANCODE_1, 0.1f),
 	                 KeyDown(SDL_SCANCODE_BACKSPACE, 4.0f), KeyUp(SDL_SCANCODE_BACKSPACE, 0.1f)},
 	});
+	all.push_back({
+	    .id = "hand.back_into_view",
+	    .name = "The hand comes back into view after a script's cut scene",
+	    .facet = Facet::Hand,
+	    .description = "The camera looks down at the middle of the map. The pointer rests on the left of the land and the "
+	                   "left button grips the land for half a second. Then the pointer goes to the right of the land. A "
+	                   "script's cinema bars slide in, and the hand goes out of view. While the bars are in, the pointer "
+	                   "goes to the top of the land. Then the bars slide out.",
+	    .expected = "When the bars are gone, the hand comes into view at the top of the land. For about an eighth of a "
+	                "second it moves there from the right of the land, where it went out of view. It does not move from "
+	                "the left of the land, where it let go of the land.",
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 40.0f, -60.0f}, .look = {0.0f, 0.0f, 0.0f}},
+	    .commands = {PointerTo({0.25f, 0.6f}, 0.5f),
+	                 Press(k_Left, 1.0f),
+	                 Release(k_Left, 0.5f),
+	                 PointerTo({0.75f, 0.6f}, 0.5f),
+	                 {.kind = Kind::WideScreen, .delaySeconds = 1.0f, .value = 1},
+	                 PointerTo({0.5f, 0.35f}, 1.0f),
+	                 {.kind = Kind::WideScreen, .delaySeconds = 1.0f, .value = 0}},
+	});
 }

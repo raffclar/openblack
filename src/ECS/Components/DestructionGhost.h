@@ -11,6 +11,7 @@
 
 #include <entt/core/fwd.hpp>
 #include <glm/mat4x4.hpp>
+#include <glm/vec3.hpp>
 
 namespace openblack::ecs::components
 {
@@ -27,5 +28,12 @@ struct DestructionGhost
 	/// It has been drawn once, so the time drawing it takes runs down from the next frame
 	bool shown {false};
 };
+
+/// The point a ghost takes its place by among the things that blend: the place of the thing it copies, as the game
+/// keeps it with the copy of its matrix. It is not the middle of the model's box.
+[[nodiscard]] inline glm::vec3 SortPoint(const DestructionGhost& ghost)
+{
+	return glm::vec3(ghost.model[3]);
+}
 
 } // namespace openblack::ecs::components

@@ -1149,6 +1149,8 @@ void LandSystem::PrepareNewLand(land_change::Kind change)
 
 	// The sky goes on as it was: it is kept while every entity goes, and made again after
 	Locator::skyClockSystem::value().KeepForNextLand();
+	// The hand keeps its look of alignment, as the game keeps its one hand from land to land
+	Locator::handSystem::value().KeepLooksForNextLand();
 	// The turns go back to 0 as the land clears, before the script of the next land starts. Thus the buildings that the
 	// script makes are not made in play, and they get no path from their storage pit, as on the first land of a game.
 	Locator::time::value().RestartTurns();
