@@ -111,6 +111,7 @@ class StepRecorder final: public systems::PathfindingSystemInterface
 {
 public:
 	void Update() override {}
+	void FaceWalkGoal(entt::entity /*walker*/) override {}
 	void WalkInOwnTurn(entt::entity walker) override
 	{
 		auto& registry = Locator::entitiesRegistry::value();

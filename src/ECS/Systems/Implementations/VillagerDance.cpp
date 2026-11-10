@@ -55,6 +55,8 @@ namespace
 {
 /// The state the interface puts a villager in
 constexpr auto k_InterfaceState = static_cast<VillagerStates>(24);
+/// A dancer more than this far (metres) from its place walks there round what is in the way
+constexpr float k_WalkRoundDistance = 4.0f;
 
 const GVillagerStateTableInfo& StateInfo(VillagerStates state)
 {
@@ -183,7 +185,7 @@ bool villager_dance::WalkToOwnPlace(LivingAction& action, VillagerStates danceSt
 	auto& living = Locator::livingActionSystem::value();
 	if (living.VillagerSetCurrentAndDestinationState(action, VillagerStates::MoveToPos, danceState))
 	{
-		villager_home::SetupMobileMoveTo(action, *SlotGoalOf(villager));
+		villager_home::SetupMobileMoveTo(action, *SlotGoalOf(villager), villager_home::WalkWay::StraightThrough);
 	}
 	return true;
 }
@@ -230,14 +232,16 @@ uint32_t villager_dance::PerformDance(LivingAction& action, VillagerStates dance
 	// TODO(opening): looking at the first dancer of another group (2)
 	if (distance > 0.0f)
 	{
-		// It walks to its place, and dances again there; a place more than 4 m off is walked to round what is in the way
-		// TODO(opening): the game's walk round things for places more than 4 m off
+		// It walks to its place, and dances again there. It walks round what is in the way to a place more than 4 m off,
+		// and straight through to a nearer place.
+		const auto way =
+		    distance > k_WalkRoundDistance ? villager_home::WalkWay::RoundThings : villager_home::WalkWay::StraightThrough;
 		auto& living = Locator::livingActionSystem::value();
 		if (living.VillagerSetCurrentAndDestinationState(action, VillagerStates::MoveToPos, danceState))
 		{
 			// The goal keeps the height of the dance's place above the land
 			const auto goal = ecs::wall_hug::ToWhole(map_coords::ToMetres(slot));
-			villager_home::SetupMobileMoveTo(action, MapCoords {.x = goal.x, .z = goal.y, .altitude = slot.altitude});
+			villager_home::SetupMobileMoveTo(action, MapCoords {.x = goal.x, .z = goal.y, .altitude = slot.altitude}, way);
 		}
 		living.VillagerSetState(action, LivingAction::Index::Top, VillagerStates::MoveToDancePos, true);
 		// The dancer takes the first step of this walk in this turn, after the move of the dance
@@ -349,7 +353,8 @@ ecs::VillagerStateEntry villager_dance::EnterInDance(LivingAction& action, Villa
 	// It walks to the goal its walk has now, with the height of that goal above the land. The walk takes it on into the
 	// dance state.
 	villager_home::SetupMoveTo(
-	    action, MapCoords {.x = wallHug->goalPlace.x, .z = wallHug->goalPlace.y, .altitude = wallHug->goalHeight}, into);
+	    action, MapCoords {.x = wallHug->goalPlace.x, .z = wallHug->goalPlace.y, .altitude = wallHug->goalHeight}, into,
+	    villager_home::WalkWay::StraightThrough);
 	return ecs::VillagerStateEntry::Outcome::SentOn;
 }
 

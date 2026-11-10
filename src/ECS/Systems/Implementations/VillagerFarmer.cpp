@@ -81,9 +81,10 @@ void SetTopState(LivingAction& action, VillagerStates state)
 	Locator::livingActionSystem::value().VillagerSetState(action, LivingAction::Index::Top, state, false);
 }
 
+/// Walks straight to a point through what is in the way, then on into a state
 void MoveTo(LivingAction& action, glm::ivec2 goal, VillagerStates final)
 {
-	villager_home::SetupMoveTo(action, goal, final);
+	villager_home::SetupMoveTo(action, goal, final, villager_home::WalkWay::StraightThrough);
 }
 
 /// Walks to the field along its footpaths where they lead its way

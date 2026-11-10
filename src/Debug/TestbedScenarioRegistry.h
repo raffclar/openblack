@@ -346,6 +346,8 @@ struct ObjectSetup
 	/// What a walking villager is to do once there: deciding afresh unless given. A villager walking to decide afresh takes
 	/// up no reaction on its way, as in the game
 	VillagerStates walkFinal {VillagerStates::DecideWhatToDo};
+	/// The villager walks straight through what stands in its way, as a footballer, a farmer or a dancer walks
+	bool walkStraight {false};
 	/// A villager or a scaffold belongs to the scenario's town of the player, rather than to none
 	bool joinTown {false};
 	/// On a land of the story, a villager or a building belongs to the land's own town with this number. The scenario's

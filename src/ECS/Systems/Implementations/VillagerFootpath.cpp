@@ -383,7 +383,7 @@ uint32_t villager_footpath::MoveOnPath(LivingAction& action)
 			const auto drawZ = random.GameRand(2 * footpath_rules::k_Jitter);
 			target = footpath_rules::Jittered(target, drawX, drawZ);
 		}
-		WalkToNode(action, target, nodes.altitudes.at(leg->node), villager_home::WalkWay::StraightThrough);
+		WalkToNode(action, target, nodes.altitudes.at(leg->node), villager_home::WalkWay::StraightOn);
 		return 1;
 	}
 	// The path has ended: on along the path that follows it, if any, from its end nearer the villager
@@ -396,8 +396,7 @@ uint32_t villager_footpath::MoveOnPath(LivingAction& action)
 		walk->node = footpath_rules::OnwardFirstNode(places, walk->towardsStart, nodes.passedBy);
 		if (walk->node.has_value())
 		{
-			WalkToNode(action, places.at(*walk->node), nodes.altitudes.at(*walk->node),
-			           villager_home::WalkWay::StraightThrough);
+			WalkToNode(action, places.at(*walk->node), nodes.altitudes.at(*walk->node), villager_home::WalkWay::StraightOn);
 			return 1;
 		}
 	}

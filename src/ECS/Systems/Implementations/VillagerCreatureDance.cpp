@@ -249,7 +249,8 @@ uint32_t villager_creature_dance::ControlledByCreature(LivingAction& action)
 		                                                 VillagerStates::ControlledByCreature))
 		{
 			// The goal keeps the height of the dance's place above the land
-			villager_home::SetupMobileMoveTo(action, *villager_dance::SlotGoalOf(villager));
+			villager_home::SetupMobileMoveTo(action, *villager_dance::SlotGoalOf(villager),
+			                                 villager_home::WalkWay::StraightThrough);
 		}
 	}
 	return 1;

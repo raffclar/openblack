@@ -645,6 +645,84 @@ TEST_F(WalkerToGoal, AScriptsWalkKeepsTheHeightOfItsPoint)
 	EXPECT_FLOAT_EQ(registry.Get<const WallHug>(_walker).goalHeight, 0.0f);
 }
 
+// A walk that starts within a step of its goal has arrived at once, whatever way it walks. The villager turns to face
+// its goal at once. On its first turn it stands on its goal and the walk is over.
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(WalkerToGoal, AWalkThatStartsWithinAStepOfItsGoalHasArrivedAtOnce)
+{
+	using namespace openblack::ecs::components;
+	using ecs::villager_home::WalkWay;
+	Load("goal_beside_trees.txt");
+	auto& registry = Locator::entitiesRegistry::value();
+	Locator::entitiesMap::value().Sync();
+	constexpr glm::vec2 k_From {2161.24f, 2276.99f};
+	const auto goal = ecs::wall_hug::ToWhole(k_From + glm::vec2(0.1f, 0.0f));
+	for (const auto way : {WalkWay::RoundThings, WalkWay::StraightThrough, WalkWay::StraightOn})
+	{
+		registry.Get<Transform>(_walker).position = glm::vec3(k_From.x, 0.0f, k_From.y);
+		registry.Get<WallHug>(_walker).speed = 2.0f;
+		// It faces away from its goal before the walk
+		const auto towards = gutils::GetAngleFromXZ(ecs::wall_hug::ToWhole(k_From), goal);
+		registry.Get<WallHug>(_walker).gameAngle = static_cast<uint16_t>((towards + 0x400) & gutils::k_GameAngleMask);
+		auto& action = registry.Get<LivingAction>(_walker);
+		ecs::villager_home::SetupMobileMoveTo(action, goal, way);
+		EXPECT_EQ(registry.Get<const WallHug>(_walker).gameAngle, towards);
+		EXPECT_TRUE(registry.AllOf<MoveStateArrivedTag>(_walker));
+		EXPECT_FALSE((registry.AnyOf<MoveStateLinearTag, MoveStateStepThroughTag>(_walker)));
+		EXPECT_FALSE(ecs::villager_home::WalkIsOverAt(_walker, goal));
+		Locator::pathfindingSystem::value().Update();
+		EXPECT_EQ(registry.Get<const WallHug>(_walker).position, goal);
+		EXPECT_TRUE(ecs::villager_home::WalkIsOverAt(_walker, goal));
+	}
+}
+
+// A walk straight through steps at once, and aims at its goal on its first step. A walk round things looks along its
+// way first.
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(WalkerToGoal, AWalkStartsInTheStateOfItsWay)
+{
+	using namespace openblack::ecs::components;
+	using ecs::villager_home::WalkWay;
+	Load("goal_beside_circle.txt");
+	auto& registry = Locator::entitiesRegistry::value();
+	Locator::entitiesMap::value().Sync();
+	const auto goal = ecs::wall_hug::ToWhole({2150.0f, 2251.0f});
+	for (const auto way : {WalkWay::StraightThrough, WalkWay::StraightOn})
+	{
+		registry.Get<Transform>(_walker).position = glm::vec3(2149.5f, 0.0f, 2235.0f);
+		ecs::villager_home::SetupMobileMoveTo(registry.Get<LivingAction>(_walker), goal, way);
+		EXPECT_TRUE(registry.AllOf<MoveStateStepThroughTag>(_walker));
+		EXPECT_EQ(registry.Get<const WallHug>(_walker).turnsUntilStepRebuild, 1);
+	}
+	ecs::villager_home::SetupMobileMoveTo(registry.Get<LivingAction>(_walker), goal, WalkWay::RoundThings);
+	EXPECT_TRUE(registry.AllOf<MoveStateLinearTag>(_walker));
+	EXPECT_FALSE(registry.AnyOf<MoveStateStepThroughTag>(_walker));
+}
+
+// A walk straight through no longer waits for a trial of both ways round. A walk straight on, as along a footpath, and a
+// walk round things still wait for it. Every new walk forgets a trial that the walker had.
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(WalkerToGoal, OnlyAWalkStraightThroughDropsTheTrialThatItWaitsFor)
+{
+	using namespace openblack::ecs::components;
+	using ecs::villager_home::WalkWay;
+	Load("goal_beside_circle.txt");
+	auto& registry = Locator::entitiesRegistry::value();
+	Locator::entitiesMap::value().Sync();
+	registry.Get<Transform>(_walker).position = glm::vec3(2149.5f, 0.0f, 2235.0f);
+	const auto goal = ecs::wall_hug::ToWhole({2150.0f, 2251.0f});
+	auto& action = registry.Get<LivingAction>(_walker);
+	for (const auto way : {WalkWay::RoundThings, WalkWay::StraightThrough, WalkWay::StraightOn})
+	{
+		registry.AssignOrReplace<WallHugLookahead>(_walker, WallHugLookahead {.tried = false});
+		ecs::villager_home::SetupMobileMoveTo(action, goal, way);
+		EXPECT_EQ(registry.AllOf<WallHugLookahead>(_walker), way != WalkWay::StraightThrough);
+		registry.AssignOrReplace<WallHugLookahead>(_walker, WallHugLookahead {.tried = true});
+		ecs::villager_home::SetupMobileMoveTo(action, goal, way);
+		EXPECT_FALSE(registry.AllOf<WallHugLookahead>(_walker));
+	}
+}
+
 // A villager called away mid-walk into a state that doesn't walk it (a kiss) stands where it was, and goes on with the
 // same walk once back in it, as the game walks a villager only in the states that walk it
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro

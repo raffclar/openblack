@@ -93,11 +93,12 @@ void SetTopState(LivingAction& action, VillagerStates state)
 	Locator::livingActionSystem::value().VillagerSetState(action, LivingAction::Index::Top, state, false);
 }
 
+/// Walks straight to a point through what is in the way, then on into a state
 void MoveTo(LivingAction& action, glm::vec2 goal, VillagerStates final)
 {
 	if (Locator::livingActionSystem::value().VillagerSetCurrentAndDestinationState(action, VillagerStates::MoveToPos, final))
 	{
-		villager_home::SetupMobileMoveTo(action, goal);
+		villager_home::SetupMobileMoveTo(action, goal, villager_home::WalkWay::StraightThrough);
 	}
 }
 

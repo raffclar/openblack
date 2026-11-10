@@ -249,9 +249,10 @@ void WalkToMeet(entt::entity villager, entt::entity other, VillagerStates state,
 {
 	const auto here = PositionOf(villager);
 	const auto there = PositionOf(other);
-	villager_home::SetupMoveTo(Entities().Get<LivingAction>(villager), villager_breeding::MeetingPoint(here, there, gap),
-	                           state);
-	villager_home::SetupMoveTo(Entities().Get<LivingAction>(other), villager_breeding::MeetingPoint(there, here, gap), state);
+	villager_home::SetupMoveTo(Entities().Get<LivingAction>(villager), villager_breeding::MeetingPoint(here, there, gap), state,
+	                           villager_home::WalkWay::StraightThrough);
+	villager_home::SetupMoveTo(Entities().Get<LivingAction>(other), villager_breeding::MeetingPoint(there, here, gap), state,
+	                           villager_home::WalkWay::StraightThrough);
 }
 
 /// Whether a child's mother is about: a woman of its own tribe that can be called on, whose death has not started
@@ -324,19 +325,20 @@ void StrollOn(LivingAction& action, entt::entity creche)
 	person.crecheLeg = static_cast<int16_t>(leg.stroll.leg);
 	if (!leg.point.has_value())
 	{
-		villager_home::SetupMoveTo(action, door, VillagerStates::ChildAtCreche);
+		villager_home::SetupMoveTo(action, door, VillagerStates::ChildAtCreche, villager_home::WalkWay::StraightThrough);
 		return;
 	}
 	const auto point = creches::PathPoint(creche, *leg.point);
 	if (!point.has_value())
 	{
-		villager_home::SetupMoveTo(action, creche::Strayed(door, GameFloat()), VillagerStates::ChildAtCreche);
+		villager_home::SetupMoveTo(action, creche::Strayed(door, GameFloat()), VillagerStates::ChildAtCreche,
+		                           villager_home::WalkWay::StraightThrough);
 		return;
 	}
 	// The child strays from the point on the land only. The goal keeps the height of the marker above the land there.
 	const auto goal = creche::Strayed(glm::xz(*point), GameFloat());
 	villager_home::SetupMoveTo(action, map_coords::FromWorld(Locator::terrainSystem::value(), {goal.x, point->y, goal.y}),
-	                           VillagerStates::ChildAtCreche);
+	                           VillagerStates::ChildAtCreche, villager_home::WalkWay::StraightThrough);
 }
 
 /// The sound of children at play at the crèche
@@ -682,7 +684,7 @@ bool villager_breeding::SetupBreederDisciple(LivingAction& action)
 	{
 		// Near where its town leaves food: its working pit's door, or its temporary pile, made if missing
 		spot = BreederSpotByStore(villager_build::ResourceDropoffPos(villager, ResourceType::Food), GameFloat());
-		villager_home::SetupMoveTo(action, spot, VillagerStates::BreederDisciple);
+		villager_home::SetupMoveTo(action, spot, VillagerStates::BreederDisciple, villager_home::WalkWay::StraightThrough);
 	}
 	SetLover(villager, entt::null);
 	registry.AssignOrReplace<BreederSpot>(villager, spot);

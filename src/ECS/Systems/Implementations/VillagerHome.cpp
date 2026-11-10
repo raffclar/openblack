@@ -773,20 +773,31 @@ void villager_home::SetupMobileMoveTo(LivingAction& action, glm::ivec2 goal, Wal
 	auto& wallHug = registry.Get<WallHug>(villager);
 	wallHug.goalPlace = goal;
 	wallHug.goalHeight = 0.0f;
+	// It turns to face its goal at once, also when it is there already
+	if (Locator::pathfindingSystem::has_value())
+	{
+		Locator::pathfindingSystem::value().FaceWalkGoal(villager);
+	}
 	// A fresh step is worked out on the next pathfinding turn
 	wallHug.step = {0, 0};
 	wallHug.stepAltitude = 0.0f;
 	registry.Remove<MoveStateLinearTag, MoveStateOrbitTag, MoveStateExitCircleTag, MoveStateStepThroughTag,
 	                MoveStateFinalStepTag, MoveStateArrivedTag>(villager);
 	registry.Remove<WallHugObjectReference>(villager);
+	// A walker that is within a step of its goal has arrived at once, whatever way it walks
+	const bool there = AreWeThere(villager, goal);
 	// A new walk may be tried both ways round again; one walking straight through no longer waits for its trial, unless
 	// it is there already
 	if (const auto* lookahead = registry.TryGet<const WallHugLookahead>(villager);
-	    lookahead != nullptr && (lookahead->tried || (way == WalkWay::StraightThrough && !AreWeThere(villager, goal))))
+	    lookahead != nullptr && (lookahead->tried || (way == WalkWay::StraightThrough && !there)))
 	{
 		registry.Remove<WallHugLookahead>(villager);
 	}
-	if (way == WalkWay::StraightThrough)
+	if (there)
+	{
+		registry.Assign<MoveStateArrivedTag>(villager);
+	}
+	else if (way != WalkWay::RoundThings)
 	{
 		// Aimed at the goal on its first step, then again only now and then
 		wallHug.turnsUntilStepRebuild = 1;
@@ -927,7 +938,7 @@ bool villager_home::SetStateWhenTappedOnAbode(entt::entity villager)
 	// It decides afresh once it has yawned outside, and its needs and bed leave it be for that decision
 	Locator::livingActionSystem::value().VillagerSetState(*action, LivingAction::Index::Previous,
 	                                                      VillagerStates::DecideWhatToDo, true);
-	SetupMoveTo(*action, spot, VillagerStates::AfterTapOnAbode);
+	SetupMoveTo(*action, spot, VillagerStates::AfterTapOnAbode, WalkWay::StraightThrough);
 	registry.Get<Villager>(villager).woken = true;
 	return true;
 }
@@ -1509,7 +1520,7 @@ uint32_t villager_home::GoHomeAndChange(LivingAction& action)
 		const auto door = ArrivePosition(abode);
 		if (!AreWeThere(villager, door))
 		{
-			// TODO(villagers): hugging round what stands in the way, as the game's walk home does
+			// It walks home round what stands in the way
 			SetupMoveTo(action, door, VillagerStates::GoHomeAndChange);
 			return 1;
 		}
