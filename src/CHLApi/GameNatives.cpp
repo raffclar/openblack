@@ -677,12 +677,16 @@ void GetArena() // 211 GET_ARENA
 	{
 		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "GET_ARENA: creature for arena not found!");
 	}
-	else if (!registry.AllOf<ecs::components::Creature>(first) || !registry.AllOf<ecs::components::Creature>(second))
-	{
-		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "GET_ARENA: thing not creature");
-	}
 	else if (Locator::creatureFightSystem::has_value())
 	{
+		// A thing that is not a creature gives a message, but the native still finds an arena near the point for it
+		for (const auto thing : {first, second})
+		{
+			if (!registry.AllOf<ecs::components::Creature>(thing))
+			{
+				SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "GET_ARENA: Thing not creature!");
+			}
+		}
 		if (const auto found = Locator::creatureFightSystem::value().FindOrMakeArena(position, first, second, distance))
 		{
 			if (Locator::scriptObjects::has_value())

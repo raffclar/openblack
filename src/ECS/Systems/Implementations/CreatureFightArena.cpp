@@ -400,15 +400,16 @@ CreatureFightSystem::FindOrMakeArena(const glm::vec3& point, entt::entity creatu
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto* first = registry.Valid(creature) ? registry.TryGet<const Creature>(creature) : nullptr;
 	const auto* second = registry.Valid(other) ? registry.TryGet<const Creature>(other) : nullptr;
-	if (first == nullptr || second == nullptr)
-	{
-		return std::nullopt;
-	}
 	const glm::ivec2 start {map_coords::ToFixed(point.x), map_coords::ToFixed(point.z)};
-	// An arena found is taken as it is, whatever its size
+	// The search takes an arena that it finds as it is, whatever its size, also for things that are not creatures
 	if (const auto nearest = NearestArena(registry, start, within))
 	{
 		return FoundArena {.arena = *nearest, .made = false};
+	}
+	// Only two creatures can make a new arena (vanilla-bugs row 1565)
+	if (first == nullptr || second == nullptr)
+	{
+		return std::nullopt;
 	}
 	const float wanted = fight::ArenaRadius(ShownSize(*first), ShownSize(*second));
 	if (const auto made = MakeArena(registry, start, wanted, ShownSize(*first)))

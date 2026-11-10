@@ -158,8 +158,9 @@ public:
 		entt::entity arena;
 		bool made;
 	};
-	/// Scripts: the nearest arena closer than a distance to a point, or else a new one there for two creatures, as a fight
-	/// makes one (sized for the bigger of them, with room clear for the first); none without room
+	/// Scripts: the nearest arena closer than a distance to a point, for any two things, or else a new one there when the
+	/// two are creatures, as a fight makes one (sized for the bigger of them, with room clear for the first); none without
+	/// room
 	[[nodiscard]] virtual std::optional<FoundArena> FindOrMakeArena(const glm::vec3& /*point*/, entt::entity /*creature*/,
 	                                                                entt::entity /*other*/, float /*within*/)
 	{

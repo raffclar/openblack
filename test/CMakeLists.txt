@@ -808,6 +808,9 @@ openblack_setup_and_add_test(
   test_building_site_rules test_building_site_rules.cpp
 )
 openblack_setup_and_add_test(
+  test_site_pile_reaction test_site_pile_reaction.cpp
+)
+openblack_setup_and_add_test(
   test_creature_action_agendas test_creature_action_agendas.cpp
 )
 openblack_setup_and_add_test(test_villager_draw test_villager_draw.cpp)
