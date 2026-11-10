@@ -13,6 +13,8 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
+#include <bitset>
 #include <chrono>
 #include <map>
 #include <memory>
@@ -175,18 +177,30 @@ public:
 	static_assert(std::ranges::none_of(k_StageNames, &std::string_view::empty));
 
 private:
+	/// The scope keeps the result of Begin. It calls End only when the clock timed the scope at its start.
 	struct ScopedSection
 	{
 		inline explicit ScopedSection(Profiler* profiler, Stage stage)
 		    : profiler(profiler)
 		    , stage(stage)
+		    , timed(profiler->Begin(stage))
 		{
-			profiler->Begin(stage);
 		}
-		inline ~ScopedSection() { profiler->End(stage); }
+		inline ~ScopedSection()
+		{
+			if (timed)
+			{
+				profiler->End(stage);
+			}
+		}
+		ScopedSection(const ScopedSection&) = delete;
+		ScopedSection& operator=(const ScopedSection&) = delete;
+		ScopedSection(ScopedSection&&) = delete;
+		ScopedSection& operator=(ScopedSection&&) = delete;
 
 		Profiler* const profiler;
 		const Stage stage;
+		const bool timed;
 	};
 
 public:
@@ -208,6 +222,21 @@ public:
 		std::chrono::steady_clock::time_point frameStart;
 		std::chrono::steady_clock::time_point frameEnd;
 		std::array<Scope, static_cast<uint8_t>(Stage::_count)> stages;
+		/// The clock timed all the stages of this frame. When false, the frame has the times of no stage, but its start
+		/// and end are correct.
+		bool stagesTimed = false;
+	};
+
+	/// The tools that read the times of the stages. The stage clock runs only while one of them reads, because each
+	/// read of the clock is slow in a web browser.
+	enum class Reader : uint8_t
+	{
+		FrameStats,
+		DebugWindow,
+		RunRecord,
+		Benchmark,
+
+		_count,
 	};
 
 	/// The thread that makes the profiler is its main thread, whose scopes go into the entries at once
@@ -220,9 +249,18 @@ public:
 	/// thread calls it.
 	void Frame();
 	/// Any thread may open and close scopes. The scopes of a thread other than the main thread wait in its own list,
-	/// until the main thread merges them.
-	void Begin(Stage stage);
+	/// until the main thread merges them. Begin gives false and keeps no scope when the clock does not time the stages
+	/// of this frame. Call End only after a Begin that gave true.
+	[[nodiscard]] bool Begin(Stage stage);
 	void End(Stage stage);
+	/// A tool starts or stops to read the times of the stages. The change starts at the next frame, so that each frame
+	/// has the times of all its stages or of none. Only the main thread calls it.
+	void SetReader(Reader reader, bool reads);
+	/// A tool option keeps the stage clock off, also while tools read, so that a measured run costs what a player's game
+	/// costs. The change starts at the next frame.
+	void SetStageClockOff(bool off) { _stageClockOff = off; }
+	/// The clock times the stages of this frame
+	[[nodiscard]] bool TimesStages() const { return _timesStages.load(std::memory_order_relaxed); }
 	inline ScopedSection BeginScoped(Stage stage) { return ScopedSection(this, stage); }
 	/// The main thread puts the scopes that the other threads closed into the current entry, one level below its own
 	/// open scopes. A scope that is still open stays with its thread.
@@ -259,6 +297,10 @@ private:
 	void MergeInto(Entry& entry);
 
 	std::array<Entry, k_BufferSize> _entries;
+	std::bitset<static_cast<size_t>(Reader::_count)> _readers;
+	bool _stageClockOff = false;
+	/// The other threads read it when they open a scope; only the main thread changes it, at the start of a frame
+	std::atomic<bool> _timesStages = false;
 	uint8_t _currentEntry = k_BufferSize - 1;
 	uint8_t _currentLevel = 0;
 	const std::thread::id _mainThread;
