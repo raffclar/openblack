@@ -148,6 +148,7 @@ std::vector<rain::Tile> RainSystem::TakeTiles(const rain::View& view)
 		if (auto tile = rain::TileOf(block.centre, block.wettest, eye))
 		{
 			tile->ground = block.ground;
+			tile->sortKey = block.key;
 			tiles.push_back(*tile);
 		}
 		const auto alpha = splash ? rain::SplashAlpha(rain::Strength(block.wettest)) : std::nullopt;

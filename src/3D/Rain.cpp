@@ -12,6 +12,7 @@
 #include <cmath>
 
 #include <algorithm>
+#include <bit>
 
 namespace openblack::rain
 {
@@ -164,6 +165,11 @@ float DrawKey(glm::vec2 centre, float ground, glm::vec3 eye)
 	const glm::vec3 offset = glm::vec3(centre.x, ground, centre.y) - eye;
 	// The game adds the two squares across the ground first, then the square of the height
 	return ((offset.x * offset.x) + (offset.z * offset.z)) + (offset.y * offset.y);
+}
+
+uint32_t DrawDepth(float key)
+{
+	return std::bit_cast<uint32_t>(key);
 }
 
 std::optional<uint8_t> SplashAlpha(int32_t strength)

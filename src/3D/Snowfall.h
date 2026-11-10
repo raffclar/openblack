@@ -77,6 +77,8 @@ struct Tile
 	int32_t alpha {0};
 	/// The ground's height under its corner, which its flakes fall to
 	float ground {0.0f};
+	/// The quarter's place among the things that blend: the rain's DrawKey of the quarter's middle, not of its corner
+	float sortKey {0.0f};
 
 	bool operator==(const Tile&) const = default;
 };

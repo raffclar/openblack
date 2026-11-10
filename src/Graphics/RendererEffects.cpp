@@ -840,8 +840,8 @@ void Renderer::DrawSnowfall(const DrawSceneDesc& desc) const
 		bgfx::setIndexBuffer(&indexBuffer);
 		// Both sides of each flake, blended over what is behind, tested against depth but leaving none
 		bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_DEPTH_TEST_GREATER | BGFX_STATE_BLEND_ALPHA);
-		// In its place among what blends, by the ground under the quarter's corner
-		program->Submit(viewId, zsort::Depth(corner, origin));
+		// In its place among what blends, by the key of the quarter's middle that the game sorts it by
+		program->Submit(viewId, rain::DrawDepth(tile.sortKey));
 	}
 }
 
@@ -911,8 +911,8 @@ void Renderer::DrawRain(const DrawSceneDesc& desc) const
 		bgfx::setVertexBuffer(0, &buffer);
 		// Lines, blended over what is behind, tested against depth but leaving none
 		bgfx::setState(BGFX_STATE_PT_LINES | BGFX_STATE_WRITE_RGB | BGFX_STATE_DEPTH_TEST_GREATER | BGFX_STATE_BLEND_ALPHA);
-		// In its place among what blends, by the ground under the block's centre
-		program->Submit(viewId, zsort::Depth(centre, origin));
+		// In its place among what blends, by the key of the block's centre that the game sorts it by
+		program->Submit(viewId, rain::DrawDepth(tile.sortKey));
 	}
 }
 
@@ -962,8 +962,7 @@ void Renderer::DrawDestructionGhosts(const DrawSceneDesc& desc) const
 			return;
 		}
 		const auto& mesh = *meshes.Handle(ghost.mesh);
-		const auto centre = glm::vec3(ghost.model * glm::vec4(mesh.GetBoundingBox().Center(), 1.0f));
-		const auto depth = zsort::Depth(centre, camera);
+		const auto depth = zsort::Depth(ecs::components::SortPoint(ghost), camera);
 		// The pattern must pass an alpha that rises as the ghost runs out, so less and less of it lays its depth
 		const auto passed =
 		    static_cast<int32_t>(static_cast<float>(ghost.millisecondsLeft) * 255.0f / static_cast<float>(k_GhostMilliseconds));
