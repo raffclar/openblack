@@ -144,6 +144,11 @@ struct Bar
 
 /// The version number shown, from the game's version (100 for 1.00) and, for a developer's patch, its number
 [[nodiscard]] std::u16string VersionText(uint32_t version, uint32_t developerPatch);
+/// The game's version as the install records it, 1.00 when the install has no record
+inline constexpr uint32_t k_DefaultVersion = 100;
+/// The version number shown, from the install's records of the version and the developer's patch. A missing version
+/// is 1.00 and a missing patch number is no patch
+[[nodiscard]] std::u16string InstallVersionText(std::optional<uint32_t> version, std::optional<uint32_t> developerPatch);
 
 /// The time the loading screen has been loading for, which drives its bar. It doesn't start again with each load
 class LoadingClock
