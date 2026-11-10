@@ -455,7 +455,7 @@ void Runner::Start(const Scenario& scenario)
 	}
 	if (scenario.worshipShare.has_value())
 	{
-		SetUpWorship(*scenario.worshipShare);
+		SetUpWorship(*scenario.worshipShare, scenario.worshipperFood);
 	}
 	_startTurn = Locator::time::has_value() ? Locator::time::value().GetTurn() : 0;
 	_computerActionsDone.assign(scenario.computerActions.size(), false);

@@ -9,6 +9,7 @@
 
 #include <cstdint>
 
+#include <optional>
 #include <set>
 #include <utility>
 #include <vector>
@@ -145,6 +146,20 @@ TEST(LoadingScreen, BarSweeps)
 	EXPECT_EQ(BarFor(layout, 2.25f, 800, 600), BarFor(layout, 0.25f, 800, 600));
 }
 
+TEST(LoadingScreen, OnASmallScreenTheBarsBorderIsAFiftiethOfTheWidthInLayoutUnits)
+{
+	// The game does not turn the fiftieth of the width into layout units on a small screen, so the border is 12 units
+	// at 640 by 480, not 16
+	const auto layout = LayoutFor(640, 480);
+	const auto bar = BarFor(layout, 0.0f, 640, 480);
+	EXPECT_EQ(bar.border, 12);
+	EXPECT_EQ(bar.body.top, bar.outline.bottom + 18);
+	EXPECT_EQ(bar.body.bottom, bar.outline.bottom + 30);
+	// On the default screen and bigger ones the border keeps its share of the screen
+	EXPECT_EQ(BarFor(LayoutFor(800, 600), 0.0f, 800, 600).border, 16);
+	EXPECT_EQ(BarFor(LayoutFor(1024, 768), 0.0f, 1024, 768).border, 15);
+}
+
 TEST(LoadingScreen, TheBarIsTheDefaultScreensOnEvery4By3Screen)
 {
 	const auto reference = BarFor(LayoutFor(800, 600), 0.0f, 800, 600);
@@ -176,6 +191,18 @@ TEST(LoadingScreen, Version)
 	EXPECT_EQ(VersionText(100, 0), u"V1.00");
 	EXPECT_EQ(VersionText(142, 0), u"V1.42");
 	EXPECT_EQ(VersionText(105, 3), u"V1.05 Beta 3");
+}
+
+TEST(LoadingScreen, TheVersionComesFromTheInstallsRecords)
+{
+	EXPECT_EQ(InstallVersionText(142, 0), u"V1.42");
+	EXPECT_EQ(InstallVersionText(120, 7), u"V1.20 Beta 7");
+	// A missing record of the version gives 1.00, and a missing record of the patch gives no patch
+	EXPECT_EQ(InstallVersionText(std::nullopt, std::nullopt), u"V1.00");
+	EXPECT_EQ(InstallVersionText(std::nullopt, 2), u"V1.00 Beta 2");
+	EXPECT_EQ(InstallVersionText(142, std::nullopt), u"V1.42");
+	// The patch number is written as a signed number
+	EXPECT_EQ(InstallVersionText(100, 0xFFFFFFFFU), u"V1.00 Beta -1");
 }
 
 TEST(LoadingScreen, ClockRedrawsEveryOneHundredAndFiftyMilliseconds)

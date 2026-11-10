@@ -225,7 +225,7 @@ Camera& Camera::SetLens(float radians, float seconds)
 
 void Camera::UpdateLens(float seconds)
 {
-	_lens.Update(seconds);
+	_lens.UpdateLens(seconds);
 	if (_lens.Value() != _xFov)
 	{
 		_xFov = _lens.Value();

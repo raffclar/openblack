@@ -24,6 +24,7 @@
 
 #include "3D/CameraPath.h"
 #include "Camera/Camera.h"
+#include "Camera/CameraZoomer.h"
 #include "Camera/TempleCameraModel.h"
 #include "Camera/TemplePress.h"
 #include "Common/Zoomer.h"
@@ -85,6 +86,25 @@ TEST(Zoomer, PutsItThereForNoTime)
 	EXPECT_FLOAT_EQ(value.GetValue(), -3.0f);
 	value.Update(0.1f);
 	EXPECT_FLOAT_EQ(value.GetValue(), -3.0f);
+}
+
+TEST(CameraZoomer, AGlideOfLessThanAboutAFiftiethOfASecondBarelyMovesUntilItsTimeIsUp)
+{
+	// The game keeps the determinant of the glide's matrix at 1e-10 or more, so a very short glide barely moves and then
+	// jumps to its destination. A longer glide is halfway at 0.6875 of the way.
+	camera::Zoomer shortGlide;
+	shortGlide.SetPosition(0.0f);
+	shortGlide.SetDestination(10.0f, 0.0f, 0.01f);
+	shortGlide.Update(0.005f);
+	EXPECT_LT(shortGlide.Value(), 0.001f);
+	shortGlide.Update(0.006f);
+	EXPECT_EQ(shortGlide.Value(), 10.0f);
+
+	camera::Zoomer longGlide;
+	longGlide.SetPosition(0.0f);
+	longGlide.SetDestination(10.0f, 0.0f, 0.1f);
+	longGlide.Update(0.05f);
+	EXPECT_NEAR(longGlide.Value(), 6.875f, 1e-4f);
 }
 
 TEST(CameraPath, SamplesBetweenItsPointsAndHoldsTheLast)

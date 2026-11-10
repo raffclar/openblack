@@ -182,18 +182,23 @@ bool MoveOnPathsTo(LivingAction& action, entt::entity place, glm::vec2 goal, Vil
 	return villager_footpath::SetupMoveToOnFootpath(action, place, goal, final);
 }
 
-/// Whether the villager has got to a point, as near as its step and some slack in the map's whole units
-bool AreWeThere(entt::entity villager, glm::vec2 point, float slack)
+/// Whether the villager has got to a place, as near as its step and some slack in the map's whole units
+bool AreWeThere(entt::entity villager, const map_coords::MapCoords& goal, float slack)
 {
 	const auto& registry = Entities();
 	const auto* wallHug = registry.TryGet<const WallHug>(villager);
 	const auto speed = static_cast<float>(wall_hug::WholeSpeed(wallHug != nullptr ? wallHug->speed : 0.0f));
 	const auto at = map_coords::FromMetres(PositionOf(villager));
-	const auto goal = map_coords::FromMetres(point);
 	const auto dx = static_cast<float>(at.x - goal.x);
 	const auto dz = static_cast<float>(at.z - goal.z);
 	const float reach = speed + slack;
 	return dx * dx + dz * dz < reach * reach;
+}
+
+/// The same for a point in metres
+bool AreWeThere(entt::entity villager, glm::vec2 point, float slack)
+{
+	return AreWeThere(villager, map_coords::FromMetres(point), slack);
 }
 
 /// The town centre of a town, standing and built, if it has one
@@ -434,9 +439,10 @@ bool CheckNeededForWorshipSiteBuilding(LivingAction& action)
 	return villager_build::TakeUpSite(action, site) == 1;
 }
 
-/// Where a villager gives food to a worship site, with its height above the land. With a food pot it is the point nearest
-/// the villager at which the villager touches the pot: the pot sinks into the land, and so this point has the height of
-/// the pot. With no pot it is the site's food place, which has the height of the site's place above the land there.
+/// Where a villager gives food to a worship site or eats at it, with its height above the land. With a food pot it is the
+/// point nearest the villager at which the villager touches the pot: the pot sinks into the land, and so this point has
+/// the height of the pot. With no pot it is the site's food place, which has the height of the site's place above the
+/// land there.
 map_coords::MapCoords FoodDropPlace(entt::entity site, entt::entity villager)
 {
 	const auto& registry = Entities();
@@ -467,26 +473,6 @@ bool WithinAStep(entt::entity villager, const map_coords::MapCoords& place)
 	return gutils::GetDistanceInMetres(map_coords::FromMetres(PositionOf(villager)), place) <= step;
 }
 
-/// Where a worshipper eats: the edge of the site's pot nearest it, or the pot's own place
-glm::vec2 PotEdge(entt::entity site, entt::entity villager)
-{
-	const auto& registry = Entities();
-	const auto pot = registry.Get<const WorshipSite>(site).foodPot;
-	if (pot == entt::null || !registry.Valid(pot) || !registry.AllOf<Transform>(pot))
-	{
-		return PositionOf(site);
-	}
-	const auto middle = PositionOf(pot);
-	const auto towards = PositionOf(villager) - middle;
-	const float length = glm::length(towards);
-	if (length <= 0.0f)
-	{
-		return middle;
-	}
-	const float reach = std::min(world_objects::SizeOf(pot).radius, length);
-	return middle + towards / length * reach;
-}
-
 /// Whether a hungry worshipper eats at its site, walking to its pot when asked. Whether it eats there.
 bool CheckAllowedToRestAtWorshipSite(LivingAction& action, bool moveToFood)
 {
@@ -500,7 +486,8 @@ bool CheckAllowedToRestAtWorshipSite(LivingAction& action, bool moveToFood)
 	}
 	if (moveToFood && site != entt::null)
 	{
-		MoveTo(action, PotEdge(site, villager), VillagerStates::GetFoodAtWorshipSite);
+		// It walks to the edge of the pot nearest to it, where it touches the pot
+		MoveTo(action, FoodDropPlace(site, villager), VillagerStates::GetFoodAtWorshipSite);
 	}
 	return true;
 }
@@ -968,7 +955,7 @@ uint32_t villager_worship::GetFoodAtWorshipSite(LivingAction& action)
 		SetTopState(action, VillagerStates::DecideWhatToDo);
 		return 1;
 	}
-	const auto edge = PotEdge(site, villager);
+	const auto edge = FoodDropPlace(site, villager);
 	if (!AreWeThere(villager, edge, 0.0f))
 	{
 		MoveTo(action, edge, VillagerStates::GetFoodAtWorshipSite);

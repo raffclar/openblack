@@ -82,6 +82,7 @@
 #include "ECS/Components/Town.h"
 #include "ECS/Components/TownDesireFlag.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/Components/Tree.h"
 #include "ECS/Components/VillageTotem.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/WorshipSite.h"
@@ -294,10 +295,10 @@ glm::vec3 TiedPoint(const Registry& registry, entt::entity entity)
 	       glm::vec3(0.0f, ObjectHeight(registry, entity) * k_TiedHeightShare, 0.0f);
 }
 
-bool IsMobile(const Registry& registry, entt::entity entity)
+/// Only a living tree and a tree of a forest miracle are trees for the leash. A dead tree is not a tree.
+bool IsTree(const Registry& registry, entt::entity entity)
 {
-	return registry.TryGet<const Creature>(entity) != nullptr || registry.TryGet<const Villager>(entity) != nullptr ||
-	       registry.TryGet<const Mobile>(entity) != nullptr || registry.TryGet<const MobileObject>(entity) != nullptr;
+	return registry.TryGet<const Tree>(entity) != nullptr;
 }
 
 /// The leash's lengths: by the creature's size in the hand, by what it is tied to otherwise
@@ -308,14 +309,14 @@ leash::Lengths LengthsOf(const Registry& registry, entt::entity creature, const 
 	{
 		return leash::InHand(ShownSize(body));
 	}
-	if (IsMobile(registry, *worn.tiedTo))
+	if (IsTree(registry, *worn.tiedTo))
 	{
-		return leash::TiedToMobile(CreatureHeight(body));
+		return leash::TiedToTree(CreatureHeight(body));
 	}
 	// A need flag of a worship site holds the leash at the place of the altar of its site, not where the draw shows it
 	const auto& from = registry.Get<const Transform>(creature).position;
 	const auto to = object_measures::PositionOf(registry, *worn.tiedTo).value_or(from);
-	return leash::TiedToStatic(gutils::GetDistanceInMetres(from, to));
+	return leash::TiedToThing(gutils::GetDistanceInMetres(from, to));
 }
 
 /// How far along a ray it meets a ball, if it does

@@ -152,7 +152,7 @@ private:
 	/// The scenario's temples and its flocks of the land's birds
 	void PlaceBirds(const Scenario& scenario, glm::vec2 middle);
 	/// The scenario's town's worship site is put up built and its totem raised to the share
-	static void SetUpWorship(float share);
+	static void SetUpWorship(float share, std::optional<float> food);
 	/// The testbed tool forces each action of the computer gods that the scenario gives, at its turn
 	void UpdateComputerActions();
 	/// The thing that a forced action of a computer god gets, or none when the scenario has no such thing

@@ -46,11 +46,13 @@ struct Lengths
 /// and full length 3 s + 32
 [[nodiscard]] Lengths InHand(float creatureSize);
 
-/// Tied to something that stays put, the leash reaches one and a half times as far as the creature is from it, between
-/// 180 and 360, half of that at rest
-[[nodiscard]] Lengths TiedToStatic(float distance);
-/// Tied to something that moves, the leash is seven times the creature's height, at most 40, half of that at rest
-[[nodiscard]] Lengths TiedToMobile(float creatureHeight);
+/// Tied to a thing that is not a tree, the full length is 1.5 times the distance from the creature to the thing at the
+/// time of the tie. The full length is between 180 and 360. The slack length is half of the full length. A villager,
+/// a creature and a thing that moves use this rule too.
+[[nodiscard]] Lengths TiedToThing(float distance);
+/// Tied to a tree, the full length is six times the height of the creature, with a maximum of 40. The slack length is
+/// half of the full length. Thus a tree keeps the creature near it.
+[[nodiscard]] Lengths TiedToTree(float creatureHeight);
 
 /// The rope's look for each leash: which band of the leash texture it shows, and its width. The compassion leash is
 /// thicker.

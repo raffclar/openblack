@@ -87,4 +87,15 @@ struct Zoomer3
 	[[nodiscard]] glm::vec3 GetSpeed() const;
 };
 
+namespace zoomer_path
+{
+
+/// The coefficients of t^2/2, t^3/6 and t^4/24 of a path that starts at a value and a speed and arrives at a destination
+/// at a speed after some seconds, with its last term at zero at the end. The game solves the end conditions with the
+/// inverse of their matrix and keeps its determinant at 1e-10 or more. This function does the same float operations in
+/// the same order.
+[[nodiscard]] glm::vec3 Coefficients(float startValue, float startSpeed, float destination, float speed, float seconds);
+
+} // namespace zoomer_path
+
 } // namespace openblack
