@@ -77,6 +77,10 @@ private:
 	/// Whether another player's shield keeps a player out of a place
 	[[nodiscard]] static bool Shielded(PlayerNames player, const glm::vec3& point);
 	[[nodiscard]] static bool Shielded(PlayerNames player, const map_coords::MapCoords& position);
+	/// Whether another player's shield or an anti-influence that a script made for the player keeps the player out of a
+	/// place. What the hand keeps past the border does not reach such a place.
+	[[nodiscard]] static bool InAntiInfluence(PlayerNames player, const glm::vec3& point);
+	[[nodiscard]] static bool InAntiInfluence(PlayerNames player, const map_coords::MapCoords& position);
 	/// One turn of what a player's hand keeps past the border, with the hand where it is
 	void ProcessVirtualInfluence(entt::entity playerEntity, PlayerNames player, glm::vec3 hand, uint32_t turn);
 	/// The own influence of a player at a place, or where it is none or less, the influence that an ally lends there

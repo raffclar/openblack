@@ -42,6 +42,7 @@
 #include "ECS/Components/MagicShield.h"
 #include "ECS/Components/MiracleImpression.h"
 #include "ECS/Components/Mobile.h"
+#include "ECS/Components/Pot.h"
 #include "ECS/Components/ReportedHand.h"
 #include "ECS/Components/Scaffold.h"
 #include "ECS/Components/ScriptControl.h"
@@ -67,6 +68,7 @@
 #include "ECS/WallHugRules.h"
 #include "InfoConstants.h"
 #include "Locator.h"
+#include "Magic/Impressiveness.h"
 #include "Magic/ReactionRules.h"
 #include "Magic/ShieldRules.h"
 #include "Magic/VillagerReactionRules.h"
@@ -1422,6 +1424,85 @@ TEST_F(Reactions, AThingInTheWorldIsScaledByTheThingsBalanceNotTheMiracles)
 	_reactions.Create(thing);
 	EXPECT_FLOAT_EQ(Locator::entitiesRegistry::value().Get<const CreatureImpression>(_creature).byOwnPlayer,
 	                3.0f * 2.0f * 4.0f);
+}
+
+// A thing in the world impresses by the value of its own table, measured from where the thing is now, in the order of
+// the steps of a thing. The value that its reaction was made with is not used.
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(Reactions, AThingImpressesByItsOwnTableFromWhereItIsNow)
+{
+	using Balance = ecs::systems::ReactionSystemInterface::Balance;
+	auto& registry = Locator::entitiesRegistry::value();
+	// Only the first villager is in reach
+	registry.Get<Transform>(_villagers[1]).position = k_Here + glm::vec3(200.0f, 0.0f, 0.0f);
+	Locator::entitiesMap::value().Sync();
+	_info->pot.at(static_cast<size_t>(PotInfo::FoodPot)).impressiveValue = 0.375f;
+	Locator::infoConstants::emplace(*_info);
+	_reactions.SetLandBalance(Balance::Things, 3.0f);
+	const auto pot = registry.Create();
+	registry.Assign<Transform>(pot, k_Here, glm::mat3(1.0f), glm::vec3(1.0f));
+	registry.Assign<Pot>(pot, Pot {.amount = 10, .maxAmount = 100, .type = PotInfo::FoodPot});
+	_reactions.Create({.initiator = pot,
+	                   .type = Reaction::LookAtObject,
+	                   .player = PlayerNames::PLAYER_ONE,
+	                   .position = k_Here + glm::vec3(20.0f, 0.0f, 0.0f),
+	                   .impressiveValue = 0.0f,
+	                   .balance = Balance::Things});
+	const float share = (30.0f + 0.001f) / (3.0f + 0.001f);
+	const float value = openblack::magic::ObjectImpressiveValue({.landBalance = 3.0f,
+	                                                             .impressiveValue = 0.375f,
+	                                                             .reactionMultiplier = 1.0f,
+	                                                             .distance = 0.0f,
+	                                                             .maxDistance = 60.0f,
+	                                                             .boredom = 1.0f,
+	                                                             .artefact = 1.0f});
+	ASSERT_GT(value, 0.0f);
+	const auto& impression = registry.Get<const TownImpression>(_town);
+	EXPECT_EQ(impression.belief.pending.at(static_cast<size_t>(PlayerNames::PLAYER_ONE)), value * share);
+}
+
+// An animal is a thing in the world too: it impresses by its row of the animals' table
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(Reactions, AnAnimalImpressesByItsRowOfTheAnimalsTable)
+{
+	using Balance = ecs::systems::ReactionSystemInterface::Balance;
+	auto& registry = Locator::entitiesRegistry::value();
+	registry.Get<Transform>(_villagers[1]).position = k_Here + glm::vec3(200.0f, 0.0f, 0.0f);
+	Locator::entitiesMap::value().Sync();
+	_info->animal.at(static_cast<size_t>(AnimalInfo::Cow)).impressiveValue = 0.25f;
+	Locator::infoConstants::emplace(*_info);
+	const auto cow = registry.Create();
+	registry.Assign<Transform>(cow, k_Here, glm::mat3(1.0f), glm::vec3(1.0f));
+	registry.Assign<Animal>(cow).type = AnimalInfo::Cow;
+	_reactions.Create({.initiator = cow,
+	                   .type = Reaction::LookAtObject,
+	                   .player = PlayerNames::PLAYER_ONE,
+	                   .position = k_Here,
+	                   .balance = Balance::Things});
+	const float share = (30.0f + 0.001f) / (3.0f + 0.001f);
+	const float value = openblack::magic::ObjectImpressiveValue(
+	    {.impressiveValue = 0.25f, .distance = 0.0f, .maxDistance = 60.0f, .boredom = 1.0f, .artefact = 1.0f});
+	const auto& impression = registry.Get<const TownImpression>(_town);
+	EXPECT_EQ(impression.belief.pending.at(static_cast<size_t>(PlayerNames::PLAYER_ONE)), value * share);
+}
+
+// A creature that a reaction of any kind is about impresses by the creature's own value, not by the value of the
+// reaction. Here the creature's table makes its value nothing.
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(Reactions, ACreatureImpressesByItsOwnValueInAnyKindOfReaction)
+{
+	using Balance = ecs::systems::ReactionSystemInterface::Balance;
+	_reactions.Create({.initiator = _creature,
+	                   .type = Reaction::LookAtObject,
+	                   .player = PlayerNames::PLAYER_ONE,
+	                   .position = k_Here,
+	                   .impressiveValue = 2.0f,
+	                   .balance = Balance::Things});
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* impression = registry.TryGet<const TownImpression>(_town);
+	ASSERT_NE(impression, nullptr);
+	EXPECT_EQ(impression->belief.pending.at(static_cast<size_t>(PlayerNames::PLAYER_ONE)), 0.0f);
+	EXPECT_LT(impression->boredom.at(Reaction::LookAtObject), 1.0f);
 }
 
 TEST_F(Reactions, ADancingVillagerNoticesAFlyingThingOnlyWhenItComesAtIt)

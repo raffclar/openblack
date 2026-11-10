@@ -93,6 +93,7 @@
 #include "ECS/TownDesire.h"
 #include "ECS/TownHomes.h"
 #include "ECS/WorkshopRules.h"
+#include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Magic/AreaEffect.h"
@@ -583,6 +584,24 @@ bool Available(const ecs::Registry& registry, entt::entity entity, Reaction type
 
 /// A villager that the hand cannot reach (at home, in a hand, or hiding in a building), or one of the kinds of reaction
 /// only believed in, is impressed by what it sees without taking the reaction up
+/// The table of a thing in the world that gives how impressive it is: its row of the world's things, or for an animal its
+/// row of the animals' table
+const GObjectInfo* ImpressingInfoOf(const ecs::Registry& registry, entt::entity thing)
+{
+	if (const auto* info = ecs::world_objects::InfoOf(thing))
+	{
+		return info;
+	}
+	const auto* animal = registry.TryGet<const Animal>(thing);
+	if (animal == nullptr || !Locator::infoConstants::has_value())
+	{
+		return nullptr;
+	}
+	const auto& rows = Locator::infoConstants::value().animal;
+	const auto row = static_cast<size_t>(animal->type);
+	return row < rows.size() ? &rows.at(row) : nullptr;
+}
+
 bool BelievesWithoutReacting(const ecs::Registry& registry, entt::entity entity, Reaction type)
 {
 	if (!registry.AllOf<Villager>(entity))
@@ -1870,11 +1889,10 @@ std::optional<float> ReactionSystem::CreatureImpressiveValue(const Active& react
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto watched = reaction.source.initiator;
 	const auto* info = InfoOf(reaction.source.type);
-	// A creature that makes a reaction, as by seeing it or by winning a fight, impresses by its own value
-	const bool byCreature =
-	    reaction.source.type == Reaction::ReactToCreature || reaction.source.type == Reaction::ReactToFightWon;
-	if (!byCreature || info == nullptr || !registry.Valid(watched) || !registry.AllOf<Creature, Transform>(watched) ||
-	    !Locator::infoConstants::has_value())
+	// A creature that makes a reaction of any kind impresses by its own value. Villagers can see it, or it can win a
+	// fight or burn. A miracle that a creature cast impresses as a miracle.
+	if (reaction.source.balance != Balance::Things || info == nullptr || !registry.Valid(watched) ||
+	    !registry.AllOf<Creature, Transform>(watched) || !Locator::infoConstants::has_value())
 	{
 		return std::nullopt;
 	}
@@ -1941,11 +1959,39 @@ void ReactionSystem::Impress(const Active& reaction, entt::entity living, const 
 	const float artefact = Locator::artefactSystem::has_value() && source.initiator != entt::null
 	                           ? Locator::artefactSystem::value().ImpressiveModifier(source.initiator)
 	                           : 1.0f;
+	// A thing in the world, which is not a miracle, a missionary or a creature, impresses by the value of its own table and
+	// from where it is now. A thing with no table keeps the value that its reaction has.
+	const bool thing =
+	    source.balance == Balance::Things &&
+	    !(source.initiator != entt::null && registry.Valid(source.initiator) && registry.AllOf<Creature>(source.initiator));
+	float thingValue = source.impressiveValue;
+	float thingDistance = distance;
+	if (thing && source.initiator != entt::null && registry.Valid(source.initiator))
+	{
+		if (const auto* thingInfo = ImpressingInfoOf(registry, source.initiator))
+		{
+			thingValue = thingInfo->impressiveValue;
+		}
+		if (const auto* transform = registry.TryGet<const Transform>(source.initiator))
+		{
+			thingDistance = gutils::GetDistanceInMetres(at, transform->position);
+		}
+	}
 	const auto value = [&](float boredom, entt::entity town) {
 		// A scaffold has its own impressiveness, as a thing in the world with the value of its scaffolds
 		if (const auto scaffold = ScaffoldImpressiveValue(reaction, at, boredom, multiplier(town), artefact))
 		{
 			return *scaffold;
+		}
+		if (thing)
+		{
+			return magic::ObjectImpressiveValue({.landBalance = GetLandBalance(Balance::Things),
+			                                     .impressiveValue = thingValue,
+			                                     .reactionMultiplier = multiplier(town),
+			                                     .distance = thingDistance,
+			                                     .maxDistance = info->maxReactionDistance,
+			                                     .boredom = boredom,
+			                                     .artefact = artefact});
 		}
 		return artefact * magic::ImpressiveValue({.landBalance = GetLandBalance(source.balance),
 		                                          .impressiveValue = source.impressiveValue,

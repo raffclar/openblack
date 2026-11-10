@@ -21,6 +21,7 @@
 
 #include "3D/InfluenceCircle.h"
 #include "Camera/CameraZones.h"
+#include "Common/GUtilsDistance.h"
 #include "ECS/Components/Influence.h"
 #include "ECS/Components/MagicShield.h"
 #include "ECS/Components/Player.h"
@@ -212,6 +213,38 @@ TEST_F(VirtualGrant, AnotherPlayersShieldKeepsTheShareOut)
 	registry.Assign<components::AntiInfluence>(shield, PlayerNames::PLAYER_TWO, 20.0f);
 	EXPECT_EQ(_influence.PlayerInfluence(PlayerNames::PLAYER_ONE, out), 0.0f);
 	EXPECT_FALSE(_influence.IsHandInInfluence(PlayerNames::PLAYER_ONE, out));
+}
+
+// A script's anti-influence for the player keeps out what the hand keeps past the border, as another player's shield does
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(VirtualGrant, AScriptsAntiInfluenceKeepsTheShareOut)
+{
+	const glm::vec3 out {1300.0f, 0.0f, 1000.0f};
+	HandOut(1.0f, out);
+	MoveHand(out);
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto anti = registry.Create();
+	registry.Assign<components::Transform>(anti, out, glm::mat3(1.0f), glm::vec3(1.0f));
+	registry.Assign<components::InfluenceSource>(anti, PlayerNames::PLAYER_ONE, 20.0f, true);
+	EXPECT_EQ(_influence.PlayerInfluence(PlayerNames::PLAYER_ONE, out), 0.0f);
+	EXPECT_FALSE(_influence.IsHandInInfluence(PlayerNames::PLAYER_ONE, out));
+}
+
+// A place at the edge of another player's shield is in the shield
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(VirtualGrant, AnotherPlayersShieldKeepsThePlayerOutAtItsEdge)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const glm::vec3 centre = k_Middle + glm::vec3(50.0f, 0.0f, 0.0f);
+	const float edge = gutils::GetDistanceInMetres(map_coords::FromMetres({centre.x, centre.z}),
+	                                               map_coords::FromMetres({k_Middle.x, k_Middle.z}));
+	const auto shield = registry.Create();
+	registry.Assign<components::Transform>(shield, centre, glm::mat3(1.0f), glm::vec3(1.0f));
+	registry.Assign<components::AntiInfluence>(shield, PlayerNames::PLAYER_TWO, edge);
+	EXPECT_EQ(_influence.PlayerRawInfluence(PlayerNames::PLAYER_ONE, k_Middle), 0.0f);
+	// The shield's own player keeps theirs
+	registry.Get<components::AntiInfluence>(shield).owner = PlayerNames::PLAYER_ONE;
+	EXPECT_EQ(_influence.PlayerRawInfluence(PlayerNames::PLAYER_ONE, k_Middle), 1.0f);
 }
 
 TEST_F(VirtualGrant, APlayerWithoutAHandShareHasTheirOwnInfluenceOnly)
