@@ -25,6 +25,9 @@ The object can also have an "expect", the least count of each deed of the hand (
 gives the deeds of the hand of each player that the server did ("Hand deed" lines of the logs: takes, scoops, throws,
 puts_down, pours, uses), and a run whose hand did fewer than its input expects is not the same.
 
+The information box of a land whose script opens it (TwoGods) takes every press of the buttons until the player closes it.
+On such a land the check gives the game the input with the Escape key pressed just before its first event (--close-info-box).
+
 A testbed scenario can make the game load a saved world. The server keeps no saves and never loads, so it gets only the
 commands before the game's first load (commands.before_load.jsonl), and the turns are compared only up to the game's last
 turn before its first load (the summary gives that turn as compared_until_load_at_turn).
@@ -198,6 +201,30 @@ def compare(server, game, turns):
     return different, compared
 
 
+# Lands whose script opens the information box of the land at the start of a network game. The box takes every press of the
+# buttons until the player closes it, so an input for the hand first closes it with the Escape key, as Go! does.
+INFO_BOX_LANDS = ("twogods.txt",)
+BOX_KEY_FRAMES = 5
+
+
+def land_opens_info_box(land):
+    """Whether the land is one whose script opens the information box of the land"""
+    return os.path.basename(land.replace(chr(92), "/")).lower() in INFO_BOX_LANDS
+
+
+def input_closing_info_box(value):
+    """The input (a list of events, or an object with "events") with the Escape key pressed and let go just before its
+    first event, which closes the information box of the land. The input of the caller stays as it was."""
+    events = list(value.get("events", [])) if isinstance(value, dict) else list(value)
+    first = min((event["frame"] for event in events), default=BOX_KEY_FRAMES + 2)
+    down = max(1, first - BOX_KEY_FRAMES - 2)
+    closing = [{"frame": down, "event": {"kind": "key_down", "timing": "mouse", "key": "Escape"}},
+               {"frame": down + BOX_KEY_FRAMES, "event": {"kind": "key_up", "timing": "mouse", "key": "Escape"}}]
+    if isinstance(value, dict):
+        return {**value, "events": closing + events}
+    return closing + events
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--turns", type=int, default=100)
@@ -235,6 +262,9 @@ def main():
     parser.add_argument("--game-frames", type=int,
                         help="the game stops after this many frames. A scenario that pauses the game never gets to its "
                              "last turn: the check then compares the turns that the game played")
+    parser.add_argument("--close-info-box", choices=("auto", "yes", "no"), default="auto",
+                        help="the input first closes the information box of the land with the Escape key. auto: only on a "
+                             "land whose script opens it (TwoGods)")
     parser.add_argument("--game-args", default="",
                         help="more arguments of the game, divided by spaces, such as the fight autopilot and "
                              "--sim-record-input to record an input for --input")
@@ -264,11 +294,18 @@ def main():
         where = ["--scenario", options.scenario, "--scenario-hide-window"]
         server_where = ["--scenario", options.scenario]
     events = None
+    input_path = options.input
     if options.input:
         with open(options.input, encoding="utf-8") as file:
-            events = json.load(file)
-        if isinstance(events, dict):
-            events = events.get("events", [])
+            recorded = json.load(file)
+        # The box takes every press of the buttons while it shows, so the hand would do none of its deeds
+        if options.close_info_box == "yes" or (options.close_info_box == "auto" and land_opens_info_box(options.land)):
+            recorded = input_closing_info_box(recorded)
+            os.makedirs(out, exist_ok=True)
+            input_path = os.path.join(out, "input.json")
+            with open(input_path, "w", encoding="utf-8") as file:
+                json.dump(recorded, file)
+        events = recorded.get("events", []) if isinstance(recorded, dict) else recorded
     relay = not options.no_relay
     commands = os.path.join(game_dir, "commands.jsonl")
     # The game writes the commands of its testbed scenario beside its commands, and the server gives them with the game
@@ -323,7 +360,7 @@ def main():
     if events is None:
         game_command.append("--sim-still-hand")
     else:
-        game_command += ["--sim-input", os.path.abspath(options.input)]
+        game_command += ["--sim-input", os.path.abspath(input_path)]
     if relay:
         game_command += ["--sim-commands", commands]
     if options.throw_lead_latency_ms is not None:
