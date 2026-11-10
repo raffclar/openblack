@@ -41,13 +41,41 @@ inline constexpr std::string_view k_LaunchClip = "boat1.anm";
 inline constexpr std::string_view k_SailingClip = "boat2.anm";
 
 /// The sea mirrors the boat, and nothing else of the film, in this colour of its own (0xAARRGGBB): flat, unshaded by
-/// the sun and unfaded by the haze, with the land's colour where the boat is added, however far off it is
+/// the sun and unfaded by the haze, with the land's colour added (see MirrorLookOf), however far off it is
 inline constexpr uint32_t k_SeaReflectionColour = 0xFF303070u;
 /// That colour's red, green and blue, 0 to 255
 [[nodiscard]] constexpr glm::vec3 SeaReflectionColour() noexcept
 {
 	return {static_cast<float>((k_SeaReflectionColour >> 16) & 0xFFu), static_cast<float>((k_SeaReflectionColour >> 8) & 0xFFu),
 	        static_cast<float>(k_SeaReflectionColour & 0xFFu)};
+}
+
+/// What a mirrored boat kept from the frame before: its detail and the origin of its matrix
+struct MirrorBefore
+{
+	uint8_t detailLevel;
+	glm::vec3 place;
+};
+
+/// How the sea mirrors a boat on a frame
+struct MirrorLook
+{
+	uint8_t detailLevel;
+	/// The point whose land colour of the frame before is added over the boat's own colour. None on the first frame
+	/// that the boat shows: then no land colour is added.
+	std::optional<glm::vec3> landColourAt;
+};
+
+/// The sea mirrors the boat before the boat finds the land's colour at its place on this frame. Thus the mirror adds the
+/// land's colour at the place of the frame before, and nothing on the first frame of a boat (the launch boat and the
+/// sailing boat are two different boats). highest: the detail of a boat that has no frame before.
+[[nodiscard]] constexpr MirrorLook MirrorLookOf(const std::optional<MirrorBefore>& before, uint8_t highest) noexcept
+{
+	if (!before.has_value())
+	{
+		return {.detailLevel = highest, .landColourAt = std::nullopt};
+	}
+	return {.detailLevel = before->detailLevel, .landColourAt = before->place};
 }
 
 /// The milliseconds the sailors push before the boat starts to move

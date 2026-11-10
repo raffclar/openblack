@@ -278,6 +278,9 @@ struct RenderContext
 		entt::id_type mesh;
 		glm::mat4 model;
 		uint8_t detailLevel;
+		/// The point whose land colour of the frame before is added over the boat: its place of the frame before. None on
+		/// the boat's first frame, which has no land colour added.
+		std::optional<glm::vec3> landColourAt;
 	};
 	std::vector<FilmReflection> filmReflections;
 	/// The things held in a hand this frame, with the model each is drawn with and its matrix (as castModel too): each

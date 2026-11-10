@@ -226,6 +226,9 @@ public:
 		/// The land's colour where the mesh stands is added over it after its light. Off for a mesh lit in a colour of its
 		/// own that the land's colour never reaches, as the shrinking and growing phials are
 		bool landColourAdded {true};
+		/// The land's colour that is added is the one of the frame before: the explorers' boat in the sea, which is
+		/// mirrored before the frame finds the land's colour at its place
+		bool landColourBefore {false};
 		/// The world's distance haze fades it and adds its colour. Off for the explorers' boat in the sea, which is mirrored
 		/// in its own colour and the land's alone, however far off
 		bool hazed {true};

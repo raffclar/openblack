@@ -747,7 +747,7 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 	_renderContext.highDetailDraws.clear();
 	_renderContext.filmShadowDraws.clear();
 	_renderContext.filmReflections.clear();
-	auto lastFilmLevels = std::exchange(_filmReflectionLevels, {});
+	auto lastFilmBoats = std::exchange(_filmReflectionBoats, {});
 	_renderContext.inHandDraws.clear();
 	_renderContext.bonePalette.clear();
 	_heldThings.clear();
@@ -766,7 +766,7 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 	// The things that only the frames make are in the first segment, before the things of the land. The gate stones that
 	// the cursor finds come after the things of the land.
 	std::vector<RenderContext::DrawnObject> drawnPicks;
-	UploadDrawnThings(drawBoundingBox, fits, drawnPicks, lastFilmLevels);
+	UploadDrawnThings(drawBoundingBox, fits, drawnPicks, lastFilmBoats);
 	// The instances of each mesh go in the order of their segments. Each pass places the things of one segment.
 	uint32_t segmentPlaced = 0;
 	uint32_t lastSegment = 0;
@@ -1538,8 +1538,9 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 	return fits;
 }
 
-void RenderingSystem::UploadDrawnThings(bool drawBoundingBox, bool& fits, std::vector<RenderContext::DrawnObject>& picks,
-                                        const std::unordered_map<entt::entity, uint8_t>& lastFilmLevels)
+void RenderingSystem::UploadDrawnThings(
+    bool drawBoundingBox, bool& fits, std::vector<RenderContext::DrawnObject>& picks,
+    const std::unordered_map<entt::entity, openblack::ecs::boat_launch::MirrorBefore>& lastFilmBoats)
 {
 	if (!Locator::drawnRegistry::has_value())
 	{
@@ -1567,17 +1568,21 @@ void RenderingSystem::UploadDrawnThings(bool drawBoundingBox, bool& fits, std::v
 		    const auto modelMatrix =
 		        exact != nullptr ? exact->model : PlacedMatrix(transform.position, transform.rotation, transform.scale);
 		    // The sea mirrors the explorers' boat, and no other part of its film, wherever it is and however far off. It
-		    // mirrors the boat at the detail of the frame before.
+		    // mirrors the boat at the detail of the frame before, with the land's colour at its place of the frame before.
 		    const auto* filmPart = drawn.TryGet<const BoatFilmPart>(entity);
 		    const bool mirroredBoat = filmPart != nullptr && filmPart->role == BoatFilmPart::Role::Boat;
+		    const glm::vec3 boatPlace {modelMatrix[3]};
 		    if (mirroredBoat)
 		    {
-			    const auto last = lastFilmLevels.find(entity);
-			    const auto lastLevel = last != lastFilmLevels.end()
-			                               ? last->second
-			                               : graphics::mesh_detail::LevelBit(graphics::mesh_detail::Mesh::High);
-			    _filmReflectionLevels[entity] = lastLevel;
-			    _renderContext.filmReflections.push_back({.mesh = mesh.id, .model = modelMatrix, .detailLevel = lastLevel});
+			    const auto last = lastFilmBoats.find(entity);
+			    const auto mirror = openblack::ecs::boat_launch::MirrorLookOf(
+			        last != lastFilmBoats.end() ? std::optional(last->second) : std::nullopt,
+			        graphics::mesh_detail::LevelBit(graphics::mesh_detail::Mesh::High));
+			    _filmReflectionBoats[entity] = {.detailLevel = mirror.detailLevel, .place = boatPlace};
+			    _renderContext.filmReflections.push_back({.mesh = mesh.id,
+			                                              .model = modelMatrix,
+			                                              .detailLevel = mirror.detailLevel,
+			                                              .landColourAt = mirror.landColourAt});
 		    }
 		    auto* slotMap = &_instanceSlots;
 		    std::optional<uint8_t> fade;
@@ -1608,7 +1613,7 @@ void RenderingSystem::UploadDrawnThings(bool drawBoundingBox, bool& fits, std::v
 		    }
 		    if (mirroredBoat && !gone)
 		    {
-			    _filmReflectionLevels[entity] = graphics::mesh_detail::LevelBit(level);
+			    _filmReflectionBoats[entity] = {.detailLevel = graphics::mesh_detail::LevelBit(level), .place = boatPlace};
 		    }
 		    // One too far off to be drawn keeps a place at the back of its model's instances
 		    const auto slots = (gone ? &_instanceSlots : slotMap)->find(mesh.id);
