@@ -55,23 +55,28 @@ void main()
     v_position.y += LandAltitude(treeBasePos.xz) - treeBasePos.y;
 #endif // USE_HEIGHT_MAP
 
-    // The game makes its trees unlit: no light shades them, they take the land's light of the cell they stand in, scaled
-    // by the trees' brightness of the frame
+    // The game makes its trees unlit: no light shades them. A tree takes the land's light at its place on the map.
     vec3 origin = InstanceMul(model, vec4(0.0, 0.0, 0.0, 1.0)).xyz;
     // A tree held in the hand and mirrored in the sea takes the light that it kept in the hand: the land's light and
-    // colour at its place on the map, blended over the four cells around it, and the haze of the kept distance
+    // colour at its place on the map, and the haze of the kept distance
     // A tree with a fire on it takes a grey instead, no brighter than the trees' brightness
     float grey = heldMirror ? u_fogAt.y : i_data4.x;
     float brightness = grey > 0.0 ? min(grey, u_landLight.y) : u_landLight.y;
-    vec3 landLight = heldMirror ? LandLightAt(u_shadeAt.xz) : LandLightCellAt(origin.xz);
-    vec3 colour = u_landLight.x > 0.0 ? min(floor(landLight * brightness), vec3_splat(255.0)) : vec3_splat(255.0);
-    float hazeT = HazeT(heldMirror ? u_fogAt.x : mul(u_view, vec4(origin, 1.0)).z);
+    vec2 mapPlace = heldMirror ? u_shadeAt.xz : origin.xz;
+    vec3 colour = u_landLight.x > 0.0 ? LandLightMapAt(mapPlace) : vec3_splat(255.0);
+    // The haze of a tree comes from its place on the map at the height of the sea, not from the height of the tree
+    float hazeT = HazeT(heldMirror ? u_fogAt.x : mul(u_view, vec4(origin.x, 0.0, origin.z, 1.0)).z);
     colour = HazeDiffuse(colour, HazeFactor(hazeT));
-    // The haze is added with the land's colour of the cell the tree stands in, each channel at most white
+    // The game applies the trees' brightness, or the grey of a fire, after the haze
+    if (u_landLight.x > 0.0)
+    {
+        colour = min(floor(colour * brightness), vec3_splat(255.0));
+    }
+    // The haze is added with the land's colour at the place of the tree, each channel at most white
     vec3 added = HazeColour(hazeT);
     if (u_landLight.x > 0.0)
     {
-        added = min(added + (heldMirror ? LandColourAt(u_shadeAt.xz) : LandColourCellAt(origin.xz)), vec3_splat(255.0));
+        added = min(added + LandColourMapAt(mapPlace), vec3_splat(255.0));
     }
     // How much of a tree fading out in the distance is faded, carried with the haze
     v_haze = vec4(added / 255.0, i_data4.z);

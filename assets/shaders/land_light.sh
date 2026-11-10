@@ -62,21 +62,45 @@ vec3 LandColourAt(vec2 xz)
 	return onLand ? z0 + floor((z1 - z0) * w.x / 256.0f) : vec3_splat(0.0f);
 }
 
-// The land's colour of the cell a point is in, unblended, as trees take it
-vec3 LandColourCellAt(vec2 xz)
+// The weights that the game uses when it takes the land's light at a place on the map for a tree. The game blends the
+// four cells around the place, but its weight is the number of the cell over 256, not the part of the cell. Thus the
+// weight is 0 below cell 256 and 1 from cell 256. With a weight of 1, a channel is 1 less where the next cell is darker.
+vec2 LandMapWeights(vec2 cell)
 {
-	vec2 texels = (u_islandExtent.zw - u_islandExtent.xy) / 10.0f + 1.0f;
-	return LandColour(floor((xz - u_islandExtent.xy) / 10.0f), texels);
+	return floor(cell / 256.0f);
 }
 
-// The land's light of the cell a point is in, unblended, as trees take it
-vec3 LandLightCellAt(vec2 xz)
+// The land's light at a place on the map, 0 to 255, as the game takes it for a tree. Off the land, the colour of the
+// brightest luminosity.
+vec3 LandLightMapAt(vec2 xz)
 {
 	vec2 texels = (u_islandExtent.zw - u_islandExtent.xy) / 10.0f + 1.0f;
 	vec2 cell = floor((xz - u_islandExtent.xy) / 10.0f);
-	bool onLand = all(greaterThanEqual(cell, vec2_splat(0.0f))) && all(lessThan(cell, texels));
-	float luminosity = floor(texture2DLod(s_landLuminosity, (cell + 0.5f) / texels, 0.0f).r * 255.0f + 0.5f);
-	return LandLightColour(onLand ? luminosity : 255.0f);
+	bool onLand = all(greaterThanEqual(cell, vec2_splat(0.0f))) && all(lessThan(cell + 1.0f, texels));
+	vec2 w = LandMapWeights(cell);
+	vec3 c00 = LandLightColour(floor(texture2DLod(s_landLuminosity, (cell + 0.5f) / texels, 0.0f).r * 255.0f + 0.5f));
+	vec3 c01 = LandLightColour(floor(texture2DLod(s_landLuminosity, (cell + vec2(0.5f, 1.5f)) / texels, 0.0f).r * 255.0f + 0.5f));
+	vec3 c10 = LandLightColour(floor(texture2DLod(s_landLuminosity, (cell + vec2(1.5f, 0.5f)) / texels, 0.0f).r * 255.0f + 0.5f));
+	vec3 c11 = LandLightColour(floor(texture2DLod(s_landLuminosity, (cell + 1.5f) / texels, 0.0f).r * 255.0f + 0.5f));
+	vec3 z0 = c00 + floor((c01 - c00) * w.y / 256.0f);
+	vec3 z1 = c10 + floor((c11 - c10) * w.y / 256.0f);
+	return onLand ? z0 + floor((z1 - z0) * w.x / 256.0f) : LandLightColour(255.0f);
+}
+
+// The land's colour at a place on the map, 0 to 255, with the weights of LandLightMapAt. Off the land, black.
+vec3 LandColourMapAt(vec2 xz)
+{
+	vec2 texels = (u_islandExtent.zw - u_islandExtent.xy) / 10.0f + 1.0f;
+	vec2 cell = floor((xz - u_islandExtent.xy) / 10.0f);
+	bool onLand = all(greaterThanEqual(cell, vec2_splat(0.0f))) && all(lessThan(cell + 1.0f, texels));
+	vec2 w = LandMapWeights(cell);
+	vec3 c00 = LandColour(cell, texels);
+	vec3 c01 = LandColour(cell + vec2(0.0f, 1.0f), texels);
+	vec3 c10 = LandColour(cell + vec2(1.0f, 0.0f), texels);
+	vec3 c11 = LandColour(cell + 1.0f, texels);
+	vec3 z0 = c00 + floor((c01 - c00) * w.y / 256.0f);
+	vec3 z1 = c10 + floor((c11 - c10) * w.y / 256.0f);
+	return onLand ? z0 + floor((z1 - z0) * w.x / 256.0f) : vec3_splat(0.0f);
 }
 
 #endif // LAND_LIGHT_SH
