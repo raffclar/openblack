@@ -3335,13 +3335,30 @@ void GameInterface::DrawLearningTexts(glm::u16vec2 resolution)
 	const float textSize = ecs::learning_marker::k_TextSize * scale;
 	const float halfHeight = ecs::learning_marker::k_TextHalfHeight * scale;
 	const float shadow = ecs::learning_marker::k_ShadowOffset * scale;
+	// The words are flat on the screen, but the world in front of their point hides them. The game draws them after the
+	// solid models and before the see-through things.
+	auto& canvas = _worldLabelsCanvas;
+	const auto view = PrepareWorldTextCanvas(canvas);
 	for (const auto& text : _learningTexts)
 	{
-		// Centred across on the point, and half a line above it; the shadow right of it and below it
+		// Centred across on the point, and half a line above it; the shadow right of it and below it, at the same depth
 		const float width = _font.GetWidth(text.text, textSize);
 		const glm::vec2 at {text.screen.x - (width * 0.5f), text.screen.y - halfHeight};
-		_painter.DrawString(at + shadow, text.text, textSize, glm::vec4(0.0f, 0.0f, 0.0f, text.alpha));
-		_painter.DrawString(at, text.text, textSize, glm::vec4(1.0f, 1.0f, 0.0f, text.alpha));
+		const auto line = [&](glm::vec2 place) {
+			return help::tip_bubble::Line {
+			    .text = text.text,
+			    .at = place,
+			    .size = textSize,
+			    .topAlpha = text.alpha,
+			    .bottomAlpha = text.alpha,
+			    .clipTop = 0.0f,
+			    .clipBottom = static_cast<float>(resolution.y),
+			};
+		};
+		canvas.SetSortDepth(graphics::zsort::k_AfterSolidBeforeSorted);
+		canvas.SetDepth(world_text::BufferDepth(view.projection, world_text::WordsDepth(text.depth, view.nearClip)));
+		DrawBubbleLine(canvas, line(at + shadow), glm::vec3(0.0f));
+		DrawBubbleLine(canvas, line(at), glm::vec3(1.0f, 1.0f, 0.0f));
 	}
 }
 

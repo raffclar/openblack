@@ -8,6 +8,7 @@
  *******************************************************************************/
 
 #include <bit>
+#include <limits>
 
 #include <gtest/gtest.h>
 
@@ -49,6 +50,15 @@ TEST(ZSort, BeforeSortedComesFirstAndTheNearestFirst)
 	// Above anything sorted by its distance, however far, with room for the draws after it
 	EXPECT_GT(farther - 15u, zsort::Depth(camera + glm::vec3(1.0e6f, 0.0f, 0.0f), camera));
 	EXPECT_EQ(nearer & 0xFu, 0xFu);
+}
+
+TEST(ZSort, TheLearningWordsComeAfterTheFizzingCreaturesAndBeforeEverythingSorted)
+{
+	const glm::vec3 camera {100.0f, 50.0f, -20.0f};
+	const auto farthest = std::numeric_limits<float>::infinity();
+	// The farthest fizzing creature, with the draws that follow it in turn
+	EXPECT_GT(zsort::BeforeSorted(camera + glm::vec3(farthest, 0.0f, 0.0f), camera) - 15u, zsort::k_AfterSolidBeforeSorted);
+	EXPECT_GT(zsort::k_AfterSolidBeforeSorted, zsort::Depth(camera + glm::vec3(farthest, 0.0f, 0.0f), camera));
 }
 
 TEST(ZSort, EachKindAddsTheSquaresInItsOwnOrder)
