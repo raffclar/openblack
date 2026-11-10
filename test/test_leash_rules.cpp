@@ -35,13 +35,17 @@ TEST(LeashRules, HandLengthsGrowWithTheCreature)
 
 TEST(LeashRules, TiedLengths)
 {
-	EXPECT_NEAR(TiedToStatic(50.0f).max, 180.0f, k_Tolerance);
-	EXPECT_NEAR(TiedToStatic(200.0f).max, 300.0f, k_Tolerance);
-	EXPECT_NEAR(TiedToStatic(200.0f).slack, 150.0f, k_Tolerance);
-	EXPECT_NEAR(TiedToStatic(1000.0f).max, 360.0f, k_Tolerance);
-	EXPECT_NEAR(TiedToMobile(4.0f).max, 28.0f, k_Tolerance);
-	EXPECT_NEAR(TiedToMobile(15.0f).max, 40.0f, k_Tolerance);
-	EXPECT_NEAR(TiedToMobile(15.0f).slack, 20.0f, k_Tolerance);
+	EXPECT_NEAR(TiedToThing(50.0f).max, 180.0f, k_Tolerance);
+	EXPECT_NEAR(TiedToThing(200.0f).max, 300.0f, k_Tolerance);
+	EXPECT_NEAR(TiedToThing(200.0f).slack, 150.0f, k_Tolerance);
+	EXPECT_NEAR(TiedToThing(1000.0f).max, 360.0f, k_Tolerance);
+	// A tree: six times the height of the creature, with a maximum of 40
+	EXPECT_FLOAT_EQ(TiedToTree(4.0f).max, 24.0f);
+	EXPECT_FLOAT_EQ(TiedToTree(4.0f).slack, 12.0f);
+	EXPECT_FLOAT_EQ(TiedToTree(6.0f).max, 36.0f);
+	EXPECT_FLOAT_EQ(TiedToTree(7.0f).max, 40.0f);
+	EXPECT_FLOAT_EQ(TiedToTree(15.0f).max, 40.0f);
+	EXPECT_FLOAT_EQ(TiedToTree(15.0f).slack, 20.0f);
 }
 
 TEST(LeashRules, EachLeashLooksItsOwn)

@@ -25,11 +25,11 @@ constexpr float k_HandSlackScale = 0.7f;
 constexpr float k_HandSlackBase = 22.0f;
 constexpr float k_HandMaxScale = 3.0f;
 constexpr float k_HandMaxBase = 32.0f;
-constexpr float k_TiedStaticReach = 1.5f;
-constexpr float k_TiedStaticMin = 180.0f;
-constexpr float k_TiedStaticMax = 360.0f;
-constexpr float k_TiedMobileHeights = 7.0f;
-constexpr float k_TiedMobileMax = 40.0f;
+constexpr float k_TiedReach = 1.5f;
+constexpr float k_TiedMin = 180.0f;
+constexpr float k_TiedMax = 360.0f;
+constexpr float k_TiedTreeHeights = 6.0f;
+constexpr float k_TiedTreeMax = 40.0f;
 constexpr float k_SlackShare = 0.5f;
 } // namespace
 
@@ -65,15 +65,15 @@ Lengths creature_leash::InHand(float creatureSize)
 	return {.slack = (k_HandSlackScale * s) + k_HandSlackBase, .max = (k_HandMaxScale * s) + k_HandMaxBase};
 }
 
-Lengths creature_leash::TiedToStatic(float distance)
+Lengths creature_leash::TiedToThing(float distance)
 {
-	const auto max = std::clamp(distance * k_TiedStaticReach, k_TiedStaticMin, k_TiedStaticMax);
+	const auto max = std::clamp(distance * k_TiedReach, k_TiedMin, k_TiedMax);
 	return {.slack = k_SlackShare * max, .max = max};
 }
 
-Lengths creature_leash::TiedToMobile(float creatureHeight)
+Lengths creature_leash::TiedToTree(float creatureHeight)
 {
-	const auto max = std::min(creatureHeight * k_TiedMobileHeights, k_TiedMobileMax);
+	const auto max = std::min(creatureHeight * k_TiedTreeHeights, k_TiedTreeMax);
 	return {.slack = k_SlackShare * max, .max = max};
 }
 
