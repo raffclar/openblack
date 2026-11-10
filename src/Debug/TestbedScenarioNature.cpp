@@ -314,4 +314,25 @@ void testbed_scenarios::AddNatureScenarios(std::vector<Scenario>& all)
 	    .objects = {{.type = TreeInfo::ConiferA, .offset = {-10.0f, 0.0f}},
 	                {.type = TreeInfo::ConiferA, .offset = {10.0f, 0.0f}, .dead = true}},
 	});
+
+	// The first land's forest north of the middle, where the trees stand past cell 256 along z. The places are the
+	// script's, from the middle of the first land's extent.
+	constexpr glm::vec2 k_LandOneMiddle {2240.0f, 2640.0f};
+	constexpr glm::vec2 k_NorthForest = glm::vec2(2200.0f, 3150.0f) - k_LandOneMiddle;
+	all.push_back({
+	    .id = "nature.tree_light_on_the_map",
+	    .name = "Trees take the land's light at their place on the map",
+	    .facet = Facet::Nature,
+	    .description = "The first land at noon with the clock stopped. The camera is 350 m south of the forest north of "
+	                   "the middle of the land and 150 m above it. The trees of the forest stand past cell 256 along z.",
+	    .expected = "Each tree takes the land's light of its cell. A channel is one step darker where the next cell to "
+	                "the north is darker. The trees take the haze of their place at the height of the sea, so trees on "
+	                "high ground show a little more haze. The trees' brightness comes after the haze. Move the camera "
+	                "slowly: the trees do not flicker.",
+	    .environment =
+	        {.land = Land::Story, .storyLand = "Land1.txt", .hour = 12.0f, .clockRuns = false, .dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_NorthForest.x, 150.0f, k_NorthForest.y - 350.0f},
+	                .look = {k_NorthForest.x, 10.0f, k_NorthForest.y}},
+	});
 }
