@@ -223,6 +223,14 @@ TEST(DiscipleRules, ADisciplePutDownEndsItsInHandReactionAfterItsLanding)
 	EXPECT_TRUE(EndsInHandReaction(false, true));
 }
 
+TEST(DiscipleRules, OnlyAVillagerThatTheHandPutDownOnTheLandKeepsTheMarkOfTheHand)
+{
+	EXPECT_TRUE(KeepsHandMarkOnLanding(true, true));
+	EXPECT_FALSE(KeepsHandMarkOnLanding(true, false));
+	EXPECT_TRUE(KeepsHandMarkOnLanding(false, false));
+	EXPECT_TRUE(KeepsHandMarkOnLanding(false, true));
+}
+
 TEST(DiscipleRules, KindsAsTheTableHasThem)
 {
 	EXPECT_TRUE(KindOf(Farmer).glows);

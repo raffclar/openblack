@@ -244,6 +244,11 @@ void villager_physics::Land(PhysicsEntry* entry, entt::entity villager)
 			creature_sight::EmpathiseWithPlayer(*player, feet ? CreatureDesires::Compassion : CreatureDesires::Anger,
 			                                    feet ? 0.1f : 0.5f, transform->position);
 		}
+		// A villager that flew loses the mark of the hand. Only one that the hand put down on the land keeps it.
+		if (!disciple::KeepsHandMarkOnLanding(true, entry->Has(PhysicsEntry::k_Landed)))
+		{
+			registry.Remove<DiscipleHeld>(villager);
+		}
 	}
 	// It stands on the land where it came down
 	if (Locator::terrainSystem::has_value())
@@ -372,7 +377,7 @@ bool ActuallyInTheAir(entt::entity object, const PhysicsEntry& entry)
 	const auto centre = entry.body->Centre();
 	const float land =
 	    Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().GetHeightAt(glm::vec2(centre.x, centre.z)) : 0.0f;
-	return living::IsActuallyInTheAir(entry.body->Speed(), centre.y, land, entry.body->Radius());
+	return living::IsActuallyInTheAir(entry.body->SpeedNow(), centre.y, land, entry.body->Radius());
 }
 } // namespace
 
@@ -396,7 +401,7 @@ void villager_physics::SetupReactToFlyingObject(entt::entity villager, entt::ent
 	const auto& here = registry.Get<const Transform>(villager).position;
 	const float distance = living::MapDistance(here, *there);
 	registry.AssignOrReplace<WatchedFlyingObject>(villager, WatchedFlyingObject {.object = object});
-	if (living::RespondToFlyingObject(distance, entry->body->Speed()) == living::FlyingObjectResponse::Run)
+	if (living::RespondToFlyingObject(distance, entry->body->SpeedNow()) == living::FlyingObjectResponse::Run)
 	{
 		SetTopState(*action, VillagerStates::FleeingFromObjectReaction);
 		return;
@@ -506,7 +511,7 @@ uint32_t villager_physics::PointAtFlyingObject(LivingAction& action)
 	}
 	// Too near, it runs; otherwise it looks at the thing, and once that is no longer really in the air it stops reacting
 	const auto& here = registry.Get<const Transform>(villager).position;
-	if (living::RespondToFlyingObject(living::MapDistance(here, *there), entry->body->Speed()) ==
+	if (living::RespondToFlyingObject(living::MapDistance(here, *there), entry->body->SpeedNow()) ==
 	    living::FlyingObjectResponse::Run)
 	{
 		SetTopState(action, VillagerStates::FleeingFromObjectReaction);
