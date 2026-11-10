@@ -50,8 +50,10 @@ public:
 	/// A pile takes what it will of an amount of its own resource, with its thud; a poisoned gift poisons it. What it took.
 	virtual uint32_t AddToPile(entt::entity pile, ResourceType type, uint32_t amount, bool poisoned) = 0;
 	/// What is taken from a pile: a store's pile gives what its store can spare, the rest coming from the store's other
-	/// piles, and the taking counts against the taker in the store's town. What was taken.
-	virtual uint32_t TakeFromPile(entt::entity pile, ResourceType type, uint32_t amount, std::optional<PlayerNames> taker) = 0;
+	/// piles, and the taking counts against the taker in the store's town. A building site's pile gives as its site
+	/// gives; the point of a hand that takes chooses the pile of a temple's site. What was taken.
+	virtual uint32_t TakeFromPile(entt::entity pile, ResourceType type, uint32_t amount, std::optional<PlayerNames> taker,
+	                              std::optional<glm::vec3> handPoint) = 0;
 	/// A store takes a thing whole, for all the resource it is worth, and the thing goes; whether it took it. Thrown by a
 	/// player, the giving is that player's.
 	virtual bool TakeObject(entt::entity store, entt::entity object, std::optional<PlayerNames> giver) = 0;

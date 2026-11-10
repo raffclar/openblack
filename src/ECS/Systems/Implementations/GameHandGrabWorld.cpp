@@ -1382,8 +1382,10 @@ uint32_t GameHandGrabWorld::TakeFromPile(entt::entity pile, uint32_t amount)
 	{
 		return 0;
 	}
-	// Taking from a town's store counts against its owner, and is remembered of the hand's player
-	return Locator::resourceStoreSystem::value().TakeFromPile(pile, facts->resource, amount, HandPlayer());
+	// Taking from a town's store counts against its owner, and is remembered of the hand's player. The point of the hand
+	// on the land chooses the pile of a temple's site. With no such point, the hand takes from the pile that it scoops.
+	const auto point = ReportedCollidePoint().value_or(PoseOf(pile).origin);
+	return Locator::resourceStoreSystem::value().TakeFromPile(pile, facts->resource, amount, HandPlayer(), point);
 }
 
 std::optional<fish_farm::Type> GameHandGrabWorld::FishFarmOf(entt::entity farm) const

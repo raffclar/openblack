@@ -794,6 +794,25 @@ void testbed_scenarios::AddHand(std::vector<Scenario>& all)
 	                 {.kind = Kind::PointerTo, .delaySeconds = 1.0f, .point = {0.5f, 0.7f}}},
 	});
 
+	// The camera looks at a plain pot of fish and a food pile on flat land from 35 m. The empty hand goes over the pot,
+	// then over the pile.
+	all.push_back({
+	    .id = "hand.plain_pot_amount",
+	    .name = "No amount over a plain pot",
+	    .facet = Facet::Hand,
+	    .description = "A plain pot of fish (300 food) and a pile of food (300 food) lie on flat land. The empty hand "
+	                   "goes over the pot for four seconds, then over the pile for four seconds.",
+	    .expected = "Over the pot of fish, the hand shows no food amount, because the pot is not a pile. Over the pile, "
+	                "the hand shows 'Food Amount: 300'.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {-34.5f, 9.0f, 4.5f}, .look = {0.0f, 0.0f, 6.0f}},
+	    .objects = {{.type = PotInfo::Fish, .offset = {0.0f, 0.0f}, .amount = 300},
+	                {.type = PotInfo::MagicFood, .offset = {0.0f, 12.0f}, .amount = 300}},
+	    .commands = {{.kind = Kind::PointerOnObject, .delaySeconds = 2.0f, .object = 0, .amount = 0.3f},
+	                 {.kind = Kind::PointerOnObject, .delaySeconds = 4.0f, .object = 1, .amount = 0.3f},
+	                 {.kind = Kind::PointerTo, .delaySeconds = 4.0f, .point = {0.5f, 0.9f}}},
+	});
+
 	// The camera looks at a ripe wheat field of the player's town from 22 m. The hand scoops from it for three seconds.
 	all.push_back({
 	    .id = "hand.scoop_field_let_go",

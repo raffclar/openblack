@@ -2340,6 +2340,7 @@ openblack_setup_and_add_test(
 )
 openblack_setup_and_add_test(test_game_font_glyphs gui/test_game_font_glyphs.cpp)
 openblack_setup_and_add_test(test_script_store_pile test_script_store_pile.cpp)
+openblack_setup_and_add_test(test_site_pile_take test_site_pile_take.cpp)
 openblack_setup_and_add_test(test_script_town_health script/test_script_town_health.cpp)
 openblack_setup_and_add_test(test_designed_waterfall test_designed_waterfall.cpp)
 openblack_setup_and_add_test(test_leaver_hand test_leaver_hand.cpp)

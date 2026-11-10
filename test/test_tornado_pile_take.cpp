@@ -39,7 +39,10 @@ public:
 		return 0;
 	}
 	uint32_t AddToPile(entt::entity, ResourceType, uint32_t, bool) override { return 0; }
-	uint32_t TakeFromPile(entt::entity, ResourceType, uint32_t, std::optional<PlayerNames>) override { return 0; }
+	uint32_t TakeFromPile(entt::entity, ResourceType, uint32_t, std::optional<PlayerNames>, std::optional<glm::vec3>) override
+	{
+		return 0;
+	}
 	bool TakeObject(entt::entity, entt::entity, std::optional<PlayerNames>) override { return false; }
 	bool TakeObjectAs(entt::entity, entt::entity, ObjectResource, std::optional<PlayerNames>) override { return false; }
 	bool PourAt(ResourceType, glm::vec3, uint32_t, bool, PlayerNames, bool) override { return false; }
