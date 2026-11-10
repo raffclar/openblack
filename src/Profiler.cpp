@@ -34,8 +34,12 @@ openblack::Profiler::ThreadScopes& openblack::Profiler::ScopesOfThisThread()
 	return scopes;
 }
 
-void openblack::Profiler::Begin(Stage stage)
+bool openblack::Profiler::Begin(Stage stage)
 {
+	if (!TimesStages())
+	{
+		return false;
+	}
 	if (!IsMainThread())
 	{
 		auto& scopes = ScopesOfThisThread();
@@ -45,7 +49,7 @@ void openblack::Profiler::Begin(Stage stage)
 		                       .level = static_cast<uint8_t>(scopes.open.size()),
 		                       .start = std::chrono::steady_clock::now(),
 		                       .end = {}});
-		return;
+		return true;
 	}
 	assert(_currentLevel < 255);
 	auto& entry = _entries.at(_currentEntry).stages.at(static_cast<uint8_t>(stage));
@@ -53,6 +57,13 @@ void openblack::Profiler::Begin(Stage stage)
 	_currentLevel++;
 	entry.start = std::chrono::steady_clock::now();
 	entry.finalized = false;
+	return true;
+}
+
+void openblack::Profiler::SetReader(Reader reader, bool reads)
+{
+	assert(IsMainThread());
+	_readers.set(static_cast<size_t>(reader), reads);
 }
 
 void openblack::Profiler::End(Stage stage)
@@ -122,10 +133,15 @@ void openblack::Profiler::Frame()
 	_currentEntry = (_currentEntry + 1) % k_BufferSize;
 	auto& entry = _entries.at(_currentEntry);
 	prevEntry.frameEnd = entry.frameStart = std::chrono::steady_clock::now();
+	// The clock times the stages of the new frame only when a tool reads them
+	const bool timed = _readers.any() && !_stageClockOff;
+	entry.stagesTimed = timed;
+	_timesStages.store(timed, std::memory_order_relaxed);
 	// The new frame's stages have taken no time yet
 	for (auto& stage : entry.stages)
 	{
 		stage.total = {};
 		stage.calls = 0;
+		stage.finalized = false;
 	}
 }

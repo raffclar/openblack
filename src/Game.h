@@ -161,6 +161,8 @@ struct Arguments
 	std::optional<float> turnStepTimesMs;
 	/// With the frame statistics, the file that gets each frame of the run when the game ends; none when empty
 	std::string frameStatsOut;
+	/// Tools: the profiler times its stages while a tool reads them. When false, it never times them.
+	bool stageTimes {true};
 	/// Draw the first frame of a land once behind the loading screen, to make the renderer's pipelines there
 	bool warmUpFirstFrame {true};
 	/// Encode some of the draws on worker threads at the same time as the game's thread

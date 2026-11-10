@@ -585,6 +585,11 @@ std::optional<std::string> SimProvider::StartRecord(const std::filesystem::path&
 	// The record sees the messages of every log
 	_sink = std::make_shared<SimLogSink>();
 	spdlog::apply_all([this](const std::shared_ptr<spdlog::logger>& logger) { logger->sinks().push_back(_sink); });
+	// The record keeps the times of the stages
+	if (Locator::profiler::has_value())
+	{
+		Locator::profiler::value().SetReader(Profiler::Reader::RunRecord, true);
+	}
 	// The times so far are not the record's
 	[[maybe_unused]] const auto before = Locator::simulation::value().TakeTimings();
 	// The record keeps the synced part of the world at the end of each turn that it records
@@ -606,6 +611,10 @@ std::optional<std::string> SimProvider::StartRecord(const std::filesystem::path&
 
 void SimProvider::StopRecord()
 {
+	if (Locator::profiler::has_value())
+	{
+		Locator::profiler::value().SetReader(Profiler::Reader::RunRecord, false);
+	}
 	if (Locator::simulation::has_value())
 	{
 		Locator::simulation::value().SetTurnEndWatcher({});

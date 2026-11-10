@@ -199,6 +199,15 @@ void Profiler::Draw() noexcept
 
 void Profiler::Update() noexcept {}
 
+void Profiler::UpdateAlways() noexcept
+{
+	// The window shows the stages of the last frame, so the clock times them while the window is open
+	if (Locator::profiler::has_value())
+	{
+		Locator::profiler::value().SetReader(openblack::Profiler::Reader::DebugWindow, IsOpen());
+	}
+}
+
 void Profiler::ProcessEventOpen([[maybe_unused]] const SDL_Event& event) noexcept {}
 
 void Profiler::ProcessEventAlways([[maybe_unused]] const SDL_Event& event) noexcept {}

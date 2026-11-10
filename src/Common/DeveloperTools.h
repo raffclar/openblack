@@ -114,6 +114,7 @@ inline constexpr std::array k_DeveloperOptions {
     DeveloperOption {.name = "frame-stats", .takesValue = true},
     DeveloperOption {.name = "frame-stats-views"},
     DeveloperOption {.name = "frame-stats-out", .takesValue = true},
+    DeveloperOption {.name = "no-stage-times"},
     DeveloperOption {.name = "parallel-draw-encode"},
     DeveloperOption {.name = "ai-times", .takesValue = true},
     DeveloperOption {.name = "turn-step-times", .takesValue = true},

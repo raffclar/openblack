@@ -167,6 +167,8 @@ private:
 	void SpawnCrowdMember(size_t index);
 	/// Takes the last frame's times from the profiler, once the crowd has spawned and settled
 	void Measure();
+	/// The benchmark reads the times of the profiler's stages while it has a recorder
+	static void SetBenchmarkReads(bool reads);
 	/// Starts the scenario's particle effect of that index
 	[[nodiscard]] uint32_t StartParticle(size_t index) const;
 	/// The scenario's dispensers and lone bubbles, after the testbed's grid stays or goes as it asks

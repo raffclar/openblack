@@ -284,8 +284,9 @@ TEST(DeveloperTools, TheFrameStatisticsAndDrawEncodeOptionsAreDeveloperOptions)
 {
 	EXPECT_TRUE(IsDeveloperOption("frame-stats-out", k_DeveloperOptions));
 	EXPECT_TRUE(IsDeveloperOption("parallel-draw-encode", k_DeveloperOptions));
+	EXPECT_TRUE(IsDeveloperOption("no-stage-times", k_DeveloperOptions));
 	const std::vector<std::string_view> arguments {
-	    "openblack", "--frame-stats-out", "stats.csv", "--parallel-draw-encode", "-W", "800"};
+	    "openblack", "--frame-stats-out", "stats.csv", "--parallel-draw-encode", "--no-stage-times", "-W", "800"};
 	EXPECT_EQ(Kept(arguments, k_DeveloperOptions), (std::vector<std::string> {"openblack", "-W", "800"}));
 }
 

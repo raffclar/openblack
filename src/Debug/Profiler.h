@@ -28,6 +28,7 @@ public:
 protected:
 	void Draw() noexcept override;
 	void Update() noexcept override;
+	void UpdateAlways() noexcept override;
 	void ProcessEventOpen(const SDL_Event& event) noexcept override;
 	void ProcessEventAlways(const SDL_Event& event) noexcept override;
 
