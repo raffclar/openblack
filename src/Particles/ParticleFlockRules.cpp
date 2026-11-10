@@ -72,13 +72,10 @@ public:
 			{
 				// Its animal gone, the atom stays where it was
 				found->second.object = entt::null;
-				atom->velocity = glm::vec3(0.0f);
 				return removeAtomWhenTargetDies;
 			}
-			const auto local = effect.GlobalToLocal(collection, info->position);
-			const float dt = effect.GetDt();
-			atom->velocity = dt > 0.0f ? (local - atom->position) / dt : glm::vec3(0.0f);
-			atom->position = local;
+			// Only the position follows the animal: the speed of the atom does not change
+			atom->position = effect.GlobalToLocal(collection, info->position);
 			return false;
 		});
 		return true;

@@ -34,6 +34,12 @@ namespace
 /// The shortest step the rules divide a move by, so that a zero step doesn't make an endless speed
 constexpr float k_MinimumStep = 1e-4f;
 
+/// One divided by the step: a move multiplied by this value gives the speed
+[[nodiscard]] float PerStep(float dt)
+{
+	return 1.0f / std::max(dt, k_MinimumStep);
+}
+
 /// A point of the world in an atom's collection's frame
 glm::vec3 ToCollection(const Effect& effect, const Atom& atom, const glm::vec3& global)
 {
@@ -47,7 +53,7 @@ public:
 	bool ModifyAtom(Effect& effect, Atom& atom, Collection::Slot& /*slot*/) const override
 	{
 		const auto local = ToCollection(effect, atom, effect.GetProcessInfo().handPosition);
-		atom.velocity = (local - atom.position) / std::max(effect.GetDt(), k_MinimumStep);
+		atom.velocity = (local - atom.position) * PerStep(effect.GetDt());
 		atom.position = local;
 		return true;
 	}
@@ -108,11 +114,11 @@ public:
 		{
 			collection.interpolated = false;
 		}
-		const float dt = std::max(effect.GetDt(), k_MinimumStep);
+		const float perStep = PerStep(effect.GetDt());
 		const float lift = effect.IsHumanPlayerCasting() ? liftForHuman : 0.0f;
 		for (auto& atom : collection.atoms)
 		{
-			atom->velocity = glm::vec3(0.0f, (target.y - atom->position.y) / dt + lift, 0.0f);
+			atom->velocity = glm::vec3(0.0f, (target.y - atom->position.y) * perStep + lift, 0.0f);
 			atom->position = target;
 			if (mine)
 			{
@@ -218,7 +224,7 @@ public:
 				atom.position = effect.GlobalToLocal(collection, start);
 			}
 		}
-		const float step = std::max(effect.GetDt(), k_MinimumStep);
+		const float perStep = PerStep(effect.GetDt());
 		for (size_t i = 0; i < collection.atoms.size();)
 		{
 			auto& atom = *collection.atoms[i];
@@ -231,7 +237,7 @@ public:
 			const auto start = glm::vec3(atom.data[this].a);
 			const auto risen = start + (hand - start) * (age / _raiseTime);
 			const auto local = effect.GlobalToLocal(collection, risen);
-			atom.velocity = (local - atom.position) / step;
+			atom.velocity = (local - atom.position) * perStep;
 			atom.position = local;
 			++i;
 		}

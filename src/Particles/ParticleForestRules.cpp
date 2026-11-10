@@ -90,7 +90,7 @@ public:
 			auto point = forest_path::PathPoint(radius, effect.AtomAge(*atom), thetaSpeed, phiSpeed, data.a.x, data.a.y, scale);
 			point += parent;
 			point.y += height;
-			atom->velocity = dt > 0.0f ? (point - atom->position) / dt : glm::vec3(0.0f);
+			atom->velocity = dt > 0.0f ? (point - atom->position) * (1.0f / dt) : glm::vec3(0.0f);
 			atom->position = point;
 		}
 		return true;
