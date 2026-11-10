@@ -31,7 +31,8 @@ public:
 	uint32_t AddToStore(entt::entity store, ResourceType type, uint32_t amount, std::optional<PlayerNames> giver, bool poisoned,
 	                    std::optional<glm::vec3> at) override;
 	uint32_t AddToPile(entt::entity pile, ResourceType type, uint32_t amount, bool poisoned) override;
-	uint32_t TakeFromPile(entt::entity pile, ResourceType type, uint32_t amount, std::optional<PlayerNames> taker) override;
+	uint32_t TakeFromPile(entt::entity pile, ResourceType type, uint32_t amount, std::optional<PlayerNames> taker,
+	                      std::optional<glm::vec3> handPoint) override;
 	bool TakeObject(entt::entity store, entt::entity object, std::optional<PlayerNames> giver) override;
 	bool TakeObjectAs(entt::entity store, entt::entity object, ObjectResource resource,
 	                  std::optional<PlayerNames> giver) override;
@@ -53,8 +54,10 @@ public:
 	/// pile, made for the first wood. What it took.
 	uint32_t AddToSite(entt::entity building, components::BuildingSite& site, ResourceType type, uint32_t amount,
 	                   std::optional<glm::vec3> at);
-	/// One site at a building gives up to an amount of wood from its piles. What it gave.
-	uint32_t TakeFromSite(entt::entity building, components::BuildingSite& site, ResourceType type, uint32_t amount);
+	/// One site at a building gives up to an amount of wood from its piles. A hand takes from a temple's site at the pile
+	/// nearest its point. What it gave.
+	uint32_t TakeFromSite(entt::entity building, components::BuildingSite& site, ResourceType type, uint32_t amount,
+	                      std::optional<glm::vec3> handPoint);
 
 private:
 	/// A new pile of food or wood of a player at a point, holding an amount: it thuds as it lands, and the people come
