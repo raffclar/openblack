@@ -66,6 +66,52 @@ TEST(ScriptWeather, TheWindsSumIsHeldWithinAByte)
 	EXPECT_EQ(wind.z, -128);
 }
 
+TEST(ScriptWeather, TheClimatesAddTheirTemperatureAndWindToTheAir)
+{
+	// The global climate counts first and again among the climates, a local one by its share
+	const weather::ClimateWind global {.centre = {2560.0f, 2560.0f},
+	                                   .innerRadius = 5120.0f,
+	                                   .outerRadius = 5120.0f,
+	                                   .windX = 4.0f,
+	                                   .windZ = 0.0f,
+	                                   .temperature = 12.6f};
+	const std::vector<weather::ClimateWind> climates {
+	    {.centre = {1000.0f, 1000.0f},
+	     .innerRadius = 10.0f,
+	     .outerRadius = 30.0f,
+	     .windX = 0.0f,
+	     .windZ = 0.0f,
+	     .temperature = 9.0f},
+	    global,
+	};
+	const openblack::ecs::components::WeatherInfo air {
+	    .temperature = 3, .rain = 40, .snow = 20, .overcast = 70, .windX = 1, .windZ = 2, .snowCover = 9};
+	const auto weather = weather::ClimateWeather(air, global, climates, {1020.0f, 1000.0f});
+	// 12 + half of 9 cut to 4 (16), then 12 more (28), then the air's 3
+	EXPECT_EQ(weather.temperature, 3 + 28);
+	EXPECT_EQ(weather.windX, 1 + 4 + 4);
+	EXPECT_EQ(weather.windZ, 2);
+	// The climates do not change the rain, the snow, the clouds or the snow that lies on the ground
+	EXPECT_EQ(weather.rain, 40);
+	EXPECT_EQ(weather.snow, 20);
+	EXPECT_EQ(weather.overcast, 70);
+	EXPECT_EQ(weather.snowCover, 9);
+}
+
+TEST(ScriptWeather, AClimateOutOfReachAddsNoTemperature)
+{
+	const weather::ClimateWind global {
+	    .centre = {0.0f, 0.0f}, .innerRadius = 0.0f, .outerRadius = 0.0f, .windX = 0.0f, .windZ = 0.0f, .temperature = 0.0f};
+	const std::vector<weather::ClimateWind> climates {{.centre = {0.0f, 0.0f},
+	                                                   .innerRadius = 10.0f,
+	                                                   .outerRadius = 30.0f,
+	                                                   .windX = 0.0f,
+	                                                   .windZ = 0.0f,
+	                                                   .temperature = 25.0f}};
+	EXPECT_EQ(weather::ClimateWeather({.temperature = 5}, global, climates, {40.0f, 0.0f}).temperature, 5);
+	EXPECT_EQ(weather::ClimateWeather({.temperature = 5}, global, climates, {5.0f, 0.0f}).temperature, 30);
+}
+
 TEST(ScriptWeather, AStormTheWindBlowsMovesAHundredthOfItsWindATurn)
 {
 	const auto moved = weather::Drift({100.0f, 5.0f, 200.0f}, {.x = 50, .z = -20});

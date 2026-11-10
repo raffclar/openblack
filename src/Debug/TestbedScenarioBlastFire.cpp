@@ -273,6 +273,20 @@ void AddFire(std::vector<Scenario>& all)
 	                {.type = AbodeInfo::CelticHut, .offset = k_Ground + glm::vec2(6.0f, 0.0f), .alight = true}},
 	});
 
+	// The smoke of a fire in clear weather, where only the wind of the climates blows
+	all.push_back({
+	    .id = "sky.climate_wind_smoke",
+	    .name = "The wind of the climate blows the smoke of a fire",
+	    .facet = Facet::Sky,
+	    .description = "A hut burns in clear weather with no storm. The air has no wind of its own, so only the wind of "
+	                   "the island's climate blows. The game counts the wind of the global climate two times.",
+	    .expected = "The smoke and the steam of the hut lean and drift along the wind of the climate as they rise. They "
+	                "do not go straight up.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 14.0f, 14.0f}, .look = {0.0f, 7.0f, 40.0f}},
+	    .objects = {{.type = AbodeInfo::CelticHut, .offset = k_Ground, .alight = true}},
+	});
+
 	all.push_back({
 	    .id = "miracles.fire_paused",
 	    .name = "A pause while a forest burns and the hand holds fire",
