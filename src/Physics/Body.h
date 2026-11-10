@@ -250,7 +250,11 @@ public:
 	[[nodiscard]] float Scale() const { return _scale; }
 	[[nodiscard]] float Radius() const { return _radius; }
 	[[nodiscard]] float Mass() const { return _mass; }
+	/// The speed of the last step. The step uses it for the drag.
 	[[nodiscard]] float Speed() const { return _speed; }
+	/// The length of the velocity at this time, with the squares added from z to x. The game finds the speed of a body
+	/// in this way out of the step, also when the velocity was set after the last step (for example, a throw).
+	[[nodiscard]] float SpeedNow() const;
 	[[nodiscard]] float Drag() const { return _drag; }
 	void SetDrag(float drag) { _drag = drag; }
 	[[nodiscard]] bool IsDynamic() const { return _dynamic; }

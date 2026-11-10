@@ -943,3 +943,13 @@ TEST(PhysicsBody, TheStartSpinBecomesTheAngularMomentumInTheGamesOrder)
 	EXPECT_EQ(body.angularMomentum.z, expected.z);
 	EXPECT_FLOAT_EQ(expected.x, 11.140625f);
 }
+
+TEST(PhysicsBody, TheSpeedNowIsTheLengthOfTheVelocityAsItIs)
+{
+	auto body = OnePointBody({}, glm::mat3(1.0f), {});
+	// A velocity set after the last step, as a throw sets it. The game adds the squares from z to x.
+	body.velocity = {0.3f, -7.1f, 19.7f};
+	const float expected = std::sqrt((19.7f * 19.7f + -7.1f * -7.1f) + 0.3f * 0.3f);
+	EXPECT_EQ(body.SpeedNow(), expected);
+	EXPECT_EQ(body.Speed(), 0.0f);
+}

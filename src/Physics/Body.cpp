@@ -918,6 +918,11 @@ float Body::OverlapDepth(const Body& other, glm::vec3 direction) const
 	return deepest;
 }
 
+float Body::SpeedNow() const
+{
+	return openblack::x87::LengthZyx(velocity);
+}
+
 void Body::Raise(float height)
 {
 	_centre.y += height;

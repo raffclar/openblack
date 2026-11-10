@@ -1442,7 +1442,7 @@ void ReactionSystem::Start(Active& reaction, entt::entity living, LivingReaction
 		      Locator::animalSystem::value().SetupLookAtObject(living, source.initiator)) ||
 		     (source.type == Reaction::ReactToFood && Locator::animalSystem::value().SetupGotoFood(living, source.initiator)) ||
 		     (source.type == Reaction::ReactToFlyingObject && entry != nullptr && entry->body != nullptr &&
-		      Locator::animalSystem::value().SetupReactToFlyingObject(living, source.initiator, entry->body->Speed())));
+		      Locator::animalSystem::value().SetupReactToFlyingObject(living, source.initiator, entry->body->SpeedNow())));
 		if (!flees)
 		{
 			return;

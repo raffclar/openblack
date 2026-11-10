@@ -372,7 +372,7 @@ bool ActuallyInTheAir(entt::entity object, const PhysicsEntry& entry)
 	const auto centre = entry.body->Centre();
 	const float land =
 	    Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().GetHeightAt(glm::vec2(centre.x, centre.z)) : 0.0f;
-	return living::IsActuallyInTheAir(entry.body->Speed(), centre.y, land, entry.body->Radius());
+	return living::IsActuallyInTheAir(entry.body->SpeedNow(), centre.y, land, entry.body->Radius());
 }
 } // namespace
 
@@ -396,7 +396,7 @@ void villager_physics::SetupReactToFlyingObject(entt::entity villager, entt::ent
 	const auto& here = registry.Get<const Transform>(villager).position;
 	const float distance = living::MapDistance(here, *there);
 	registry.AssignOrReplace<WatchedFlyingObject>(villager, WatchedFlyingObject {.object = object});
-	if (living::RespondToFlyingObject(distance, entry->body->Speed()) == living::FlyingObjectResponse::Run)
+	if (living::RespondToFlyingObject(distance, entry->body->SpeedNow()) == living::FlyingObjectResponse::Run)
 	{
 		SetTopState(*action, VillagerStates::FleeingFromObjectReaction);
 		return;
@@ -506,7 +506,7 @@ uint32_t villager_physics::PointAtFlyingObject(LivingAction& action)
 	}
 	// Too near, it runs; otherwise it looks at the thing, and once that is no longer really in the air it stops reacting
 	const auto& here = registry.Get<const Transform>(villager).position;
-	if (living::RespondToFlyingObject(living::MapDistance(here, *there), entry->body->Speed()) ==
+	if (living::RespondToFlyingObject(living::MapDistance(here, *there), entry->body->SpeedNow()) ==
 	    living::FlyingObjectResponse::Run)
 	{
 		SetTopState(action, VillagerStates::FleeingFromObjectReaction);
