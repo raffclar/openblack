@@ -553,15 +553,38 @@ bool InfluenceSystem::Shielded(PlayerNames player, const glm::vec3& point)
 
 bool InfluenceSystem::Shielded(PlayerNames player, const map_coords::MapCoords& position)
 {
+	// A place at the edge of the shield is in the shield
 	bool shielded = false;
 	Locator::entitiesRegistry::value().Each<const AntiInfluence, const Transform>(
 	    [&](const AntiInfluence& ring, const Transform& transform) {
 		    shielded =
 		        shielded || (ring.owner != player &&
 		                     gutils::GetDistanceInMetres(map_coords::FromMetres({transform.position.x, transform.position.z}),
-		                                                 position) < ring.radius);
+		                                                 position) <= ring.radius);
 	    });
 	return shielded;
+}
+
+bool InfluenceSystem::InAntiInfluence(PlayerNames player, const glm::vec3& point)
+{
+	return InAntiInfluence(player, map_coords::FromMetres({point.x, point.z}));
+}
+
+bool InfluenceSystem::InAntiInfluence(PlayerNames player, const map_coords::MapCoords& position)
+{
+	if (Shielded(player, position))
+	{
+		return true;
+	}
+	// An anti-influence that a script made for the player keeps the player out too, up to and at its edge
+	const auto& registry = Locator::entitiesRegistry::value();
+	bool anti = false;
+	registry.Each<const InfluenceSource, const Transform>([&](const InfluenceSource& source, const Transform& transform) {
+		const auto at = SourcePosition(registry, source, transform);
+		anti = anti || (source.anti && source.player == player &&
+		                gutils::GetDistanceInMetres(map_coords::FromMetres({at.x, at.z}), position) <= source.radius);
+	});
+	return anti;
 }
 
 float InfluenceSystem::CitadelReachOf(PlayerNames player) const
@@ -669,7 +692,7 @@ void InfluenceSystem::ProcessVirtualInfluence(entt::entity entity, PlayerNames p
 	auto& virtualInfluence = registry.AnyOf<VirtualInfluence>(entity) ? registry.Get<VirtualInfluence>(entity)
 	                                                                  : registry.Assign<VirtualInfluence>(entity);
 	const auto& citadel = Locator::infoConstants::value().citadel;
-	const bool shielded = Shielded(player, hand);
+	const bool shielded = InAntiInfluence(player, hand);
 	// Only the player's own influence counts here, not what the hand keeps
 	const bool inInfluence = !shielded && PlayerRawInfluence(player, hand) > 0.0f;
 	const auto before = virtualInfluence.state;
@@ -740,8 +763,8 @@ void InfluenceSystem::ShowHandInfluence(std::chrono::duration<float, std::milli>
 	const auto hand = HandPosition();
 	const auto inInfluence = [this, player](const glm::vec3& point) { return PlayerRawInfluence(player, point) > 0.0f; };
 	const bool plays = hand.has_value() && state.anchor.has_value() &&
-	                   virtual_influence::HumPlays(state, Shielded(player, *hand), inInfluence(*hand),
-	                                               Shielded(player, *state.anchor), inInfluence(*state.anchor));
+	                   virtual_influence::HumPlays(state, InAntiInfluence(player, *hand), inInfluence(*hand),
+	                                               InAntiInfluence(player, *state.anchor), inInfluence(*state.anchor));
 	if (!plays)
 	{
 		if (shown.soundStarted)
@@ -931,7 +954,7 @@ float InfluenceSystem::PlayerOwnInfluence(PlayerNames player, const map_coords::
 				hand = live;
 			}
 		}
-		if (hand.has_value() && !Shielded(player, position))
+		if (hand.has_value() && !InAntiInfluence(player, position))
 		{
 			if (const auto granted = virtual_influence::Grant(*state, map_coords::FromMetres({hand->x, hand->z}), position);
 			    granted.has_value())
@@ -950,7 +973,7 @@ float InfluenceSystem::HandPointInfluence(PlayerNames player, const map_coords::
 		return 1.0f;
 	}
 	// The place asked is the hand's own, so the hand is inside while it keeps anything
-	if (const auto* state = VirtualStateOf(player); state != nullptr && !Shielded(player, hand))
+	if (const auto* state = VirtualStateOf(player); state != nullptr && !InAntiInfluence(player, hand))
 	{
 		if (const auto granted = virtual_influence::Grant(*state, hand, hand); granted.has_value())
 		{

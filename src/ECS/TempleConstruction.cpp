@@ -179,8 +179,9 @@ void TempleFinished(PlayerNames owner)
 	}
 }
 
-/// A site's pile left with wood calls the villagers to come for it, as a pile belonging to no player. It is still a site's
-/// pile, so they come whether or not their town wants wood.
+/// A site's pile left with wood calls the villagers to come for it. A site's pile is a pile of the neutral player, so what
+/// it shows impresses its watchers for the neutral player. It is still a site's pile, so they come whether or not their
+/// town wants wood.
 void CallForLeftoverWood(entt::entity pile)
 {
 	auto& registry = Entities();
@@ -198,8 +199,7 @@ void CallForLeftoverWood(entt::entity pile)
 	reactions.Create({.initiator = pile,
 	                  .type = type,
 	                  .player = PlayerNames::NEUTRAL,
-	                  .position = registry.Get<const Transform>(pile).position,
-	                  .playerless = true});
+	                  .position = registry.Get<const Transform>(pile).position});
 }
 
 } // namespace
