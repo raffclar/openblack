@@ -664,6 +664,42 @@ TEST_F(ParticleMiracleTest, TheMiracleInTheHandFollowsTheHand)
 	EXPECT_NEAR(atoms[0].position.x, 13.0f, k_Epsilon);
 }
 
+TEST_F(ParticleMiracleTest, TheSpeedOfTheMiracleInTheHandIsItsMoveTimesOneDividedByTheStep)
+{
+	auto effect = Make(Header() + Object("ParticleSpriteCreator", "Glow", k_Point) +
+	                   Object("CreateRuleAnAtom", "One", "PROPERTY Group INTEGER 0\nPROPERTY PCreator PERSIS_PNTR Glow\n") +
+	                   Object("UR_FollowLocalHand", "Follow", "PROPERTY Group INTEGER 0\n") +
+	                   Object("UR_UpdatePosnFromVelocity", "Move", "PROPERTY Group INTEGER 0\n"));
+	effect->SetProcessInfo({.handPosition = {0.0f, 0.0f, 0.0f}});
+	effect->Step(k_Step);
+	effect->SetProcessInfo({.handPosition = {26.03f, 0.0f, 0.0f}});
+	effect->Step(k_Step);
+	effect->Step(k_Step);
+	// At the start of the last step, the atom was at the hand plus its speed for one step. The speed is the move times
+	// 1 / 0.1f, which is 10: 260.30002f. The move divided by 0.1f gives 260.3f and puts the atom at 52.059998f.
+	std::vector<Effect::DrawAtom> atoms;
+	effect->Collect(0.0f, atoms);
+	ASSERT_EQ(atoms.size(), 1u);
+	EXPECT_EQ(atoms[0].position.x, 52.060005f);
+}
+
+TEST_F(ParticleMiracleTest, AFlockAtomGoesWhereItsAnimalIsAndKeepsItsSpeed)
+{
+	world.candidates = {{.object = static_cast<entt::entity>(1), .position = {5.0f, 0.0f, 0.0f}, .height = 2.0f}};
+	auto effect = Make(Header() + Object("ParticleSpriteCreator", "Glow", k_Point) +
+	                   Object("UR_FollowTargets", "Follow", "PROPERTY Group INTEGER 0\nPROPERTY PCreator PERSIS_PNTR Glow\n") +
+	                   Object("UR_UpdatePosnFromVelocity", "Move", "PROPERTY Group INTEGER 0\n"));
+	effect->AddTarget(static_cast<entt::entity>(1));
+	effect->Step(k_Step);
+	world.candidates[0].position = {8.0f, 0.0f, 0.0f};
+	effect->Step(k_Step);
+	// The atom does not get the animal's move as a speed, so it stays on the animal
+	std::vector<Effect::DrawAtom> atoms;
+	effect->Collect(1.0f, atoms);
+	ASSERT_EQ(atoms.size(), 1u);
+	EXPECT_NEAR(atoms[0].position.x, 8.0f, k_Epsilon);
+}
+
 TEST_F(ParticleMiracleTest, TheSprinklingSourceFollowsTheHandNoHigherThanALimit)
 {
 	auto effect =

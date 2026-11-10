@@ -186,15 +186,18 @@ std::vector<Submission> Over(entt::entity object, bool handInInfluence)
 		}
 		return submissions;
 	}
-	if (registry.AllOf<Pot>(object) && Shows(Subject::Pile, handInInfluence) && Locator::resourceStoreSystem::has_value())
+	const auto* pot = registry.TryGet<const Pot>(object);
+	if (pot != nullptr && Shows(Subject::Pile, handInInfluence) && Locator::resourceStoreSystem::has_value() &&
+	    Locator::infoConstants::has_value())
 	{
-		// A pile, of a store or alone, says what its store holds or else what it holds itself
+		// A pile, of a store or alone, says what its store holds or else what it holds itself. A plain pot shows no
+		// amount.
 		const auto& stores = Locator::resourceStoreSystem::value();
-		const auto type = stores.ResourceOf(object).type;
-		if (type == ResourceType::Food || type == ResourceType::Wood)
+		const auto type = Locator::infoConstants::value().pot.at(static_cast<size_t>(pot->type)).potType;
+		if (const auto amount =
+		        PotAmount(type, stores.GetResource(object, ResourceType::Food), stores.GetResource(object, ResourceType::Wood)))
 		{
-			submissions.push_back(
-			    {.numbers = PileAmount(type == ResourceType::Food, stores.GetResource(object, type)), .force = true});
+			submissions.push_back({.numbers = *amount, .force = true});
 		}
 	}
 	return submissions;

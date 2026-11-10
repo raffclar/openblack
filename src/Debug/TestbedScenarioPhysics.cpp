@@ -131,6 +131,28 @@ void AddThrownAngles(std::vector<Scenario>& all)
 	});
 }
 
+void AddVillagersSeeAThrow(std::vector<Scenario>& all)
+{
+	// The rock leaves the hand at about 18 m/s, so a villager nearer than about 37 m runs
+	const glm::vec2 release = k_Field + glm::vec2 {-k_ThrowFrom, 0.0f};
+	all.push_back({
+	    .id = "physics.villagers_see_a_throw",
+	    .name = "Villagers near a throw run",
+	    .facet = Facet::Physics,
+	    .description = "A rock is thrown across the field every eight seconds, from the west towards the middle. Three "
+	                   "villagers stand 12 m to 20 m north of the place where the hand lets go of the rock.",
+	    .expected = "At the throw, each villager runs from the rock, because the rock is nearer than the distance that it "
+	                "flies in two seconds. The villagers do not stand and point at the rock.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {release - glm::vec2 {25.0f}, k_Field + glm::vec2 {25.0f}}},
+	    .objects = {{.type = MobileStaticInfo::RockChalk, .offset = k_Field},
+	                {.type = VillagerInfo::CelticFarmerMale, .offset = release + glm::vec2 {0.0f, 12.0f}},
+	                {.type = VillagerInfo::CelticFarmerMale, .offset = release + glm::vec2 {0.0f, 20.0f}},
+	                {.type = VillagerInfo::CelticFarmerMale, .offset = release + glm::vec2 {8.0f, 15.0f}}},
+	    .throws = {Inward(0, std::numbers::pi_v<float>, 1.0f, 8.0f)},
+	});
+}
+
 void AddCrowdThrow(std::vector<Scenario>& all)
 {
 	constexpr size_t k_Count = 60;
@@ -689,6 +711,7 @@ void testbed_scenarios::AddPhysicsScenarios(std::vector<Scenario>& all)
 	AddIdleField(all);
 	AddOneThrow(all);
 	AddThrownAngles(all);
+	AddVillagersSeeAThrow(all);
 	AddCrowdThrow(all);
 	AddBuildingBreak(all);
 	AddUnbuiltOnBank(all);

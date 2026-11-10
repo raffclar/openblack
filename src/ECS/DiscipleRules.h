@@ -141,6 +141,14 @@ struct Choice
 /// The work a villager is taken to have had as it is picked up: a missionary picked up has given up preaching
 [[nodiscard]] VillagerDisciple AtPickUp(VillagerDisciple current);
 
+/// Whether a villager that comes down out of the physics keeps the mark of the player's hand. It keeps the mark when it
+/// had no body, or when the hand put it down on the land. A villager that flew loses the mark, so it does not set about
+/// work as a disciple when it lands.
+[[nodiscard]] constexpr bool KeepsHandMarkOnLanding(bool hadBody, bool putDownOnLand)
+{
+	return !hadBody || putDownOnLand;
+}
+
 /// Whether a villager that lands ends its villager-in-hand reaction in this turn. A disciple that the hand put down ends
 /// it only when its landing clip has played. Any other villager ends it in each turn of its landing.
 [[nodiscard]] bool EndsInHandReaction(bool putDownAsDisciple, bool landingPlayed);

@@ -129,6 +129,16 @@ TEST(WorldToolTips, PilesAndHeldAmounts)
 	EXPECT_EQ(PileAmount(false, 1).index, k_WoodAmount);
 	EXPECT_EQ(HeldAmount(7).index, k_HeldAmount);
 	EXPECT_EQ(HeldAmount(16777217u).first, 16777216.0);
+	// A food pile shows its food, a wood pile its wood. A plain pot is not a pile and shows no amount.
+	const auto food = PotAmount(openblack::PotType::PileFood, 12, 34);
+	ASSERT_TRUE(food.has_value());
+	EXPECT_EQ(food->index, k_FoodAmount);
+	EXPECT_EQ(food->first, 12.0);
+	const auto wood = PotAmount(openblack::PotType::PileWood, 12, 34);
+	ASSERT_TRUE(wood.has_value());
+	EXPECT_EQ(wood->index, k_WoodAmount);
+	EXPECT_EQ(wood->first, 34.0);
+	EXPECT_FALSE(PotAmount(openblack::PotType::Pot, 12, 34).has_value());
 	EXPECT_EQ(Compose(k_HeldAmount, u"Amount: %3.0f", 7.0, std::nullopt), u"Amount:   7");
 }
 

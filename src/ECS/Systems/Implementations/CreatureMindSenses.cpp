@@ -527,7 +527,7 @@ bool WatchedIsInTheAir(const ecs::Registry& registry, const creature_mind::IdleM
 	const auto centre = entry->body->Centre();
 	const float land =
 	    Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().GetHeightAt(glm::vec2(centre.x, centre.z)) : 0.0f;
-	return physics::living::IsActuallyInTheAir(entry->body->Speed(), centre.y, land, entry->body->Radius());
+	return physics::living::IsActuallyInTheAir(entry->body->SpeedNow(), centre.y, land, entry->body->Radius());
 }
 
 /// The game turns that the hand stays in one place, of the player whose camera the creature reads: its own player

@@ -22,6 +22,7 @@
 #include <algorithm>
 #include <chrono>
 #include <limits>
+#include <utility>
 #include <vector>
 
 #include <LNDFile.h>
@@ -785,8 +786,52 @@ uint32_t ResourceStoreSystem::TakeFromPit(entt::entity store, ResourceType type,
 	return taken;
 }
 
+namespace
+{
+/// The building and its site that keep a pile, if a site keeps it
+std::pair<entt::entity, BuildingSite*> SiteThatKeeps(entt::entity pile)
+{
+	entt::entity building = entt::null;
+	BuildingSite* keeper = nullptr;
+	Entities().Each<BuildingSites>([&](entt::entity entity, BuildingSites& sites) {
+		for (auto& site : sites.sites)
+		{
+			if (keeper == nullptr && std::ranges::find(site.piles, pile) != site.piles.end())
+			{
+				building = entity;
+				keeper = &site;
+			}
+		}
+	});
+	return {building, keeper};
+}
+
+/// Of the piles of a temple's site that are still there, the pile nearest a point
+entt::entity NearestSitePile(const BuildingSite& site, glm::vec3 point)
+{
+	auto& registry = Entities();
+	entt::entity best = entt::null;
+	float bestDistance = std::numeric_limits<float>::max();
+	for (const auto pile : site.piles)
+	{
+		if (!registry.Valid(pile) || !registry.AllOf<Pot>(pile))
+		{
+			continue;
+		}
+		const auto& position = registry.Get<const Transform>(pile).position;
+		const float distance = gutils::GetDistanceInMetres(point, position);
+		if (distance < bestDistance)
+		{
+			bestDistance = distance;
+			best = pile;
+		}
+	}
+	return best;
+}
+} // namespace
+
 uint32_t ResourceStoreSystem::TakeFromPile(entt::entity pile, ResourceType type, uint32_t amount,
-                                           std::optional<PlayerNames> taker)
+                                           std::optional<PlayerNames> taker, std::optional<glm::vec3> handPoint)
 {
 	auto& registry = Entities();
 	auto* pot = registry.TryGet<Pot>(pile);
@@ -797,6 +842,11 @@ uint32_t ResourceStoreSystem::TakeFromPile(entt::entity pile, ResourceType type,
 	const auto store = StoreOf(pile);
 	if (!store.has_value())
 	{
+		// A pile that a building's site keeps gives its wood as the site gives it. The pile stays when it is empty.
+		if (const auto [building, site] = SiteThatKeeps(pile); site != nullptr)
+		{
+			return TakeFromSite(building, *site, type, amount, handPoint);
+		}
 		// A pile on its own goes once it has nothing left. A pot first takes its size from what is left.
 		const auto taken = std::min(amount, pot->amount);
 		pot->amount -= taken;
@@ -1318,7 +1368,7 @@ uint32_t ResourceStoreSystem::RemoveResource(entt::entity object, ResourceType t
 	}
 	if (auto* site = PiledSite(object))
 	{
-		return TakeFromSite(object, *site, type, amount);
+		return TakeFromSite(object, *site, type, amount, std::nullopt);
 	}
 	if (registry.AllOf<Temple>(object))
 	{
@@ -1327,7 +1377,7 @@ uint32_t ResourceStoreSystem::RemoveResource(entt::entity object, ResourceType t
 	// A building with a site gives wood from the site's one pile
 	if (auto* site = StandardSite(object))
 	{
-		return TakeFromSite(object, *site, type, amount);
+		return TakeFromSite(object, *site, type, amount, std::nullopt);
 	}
 	if (auto* abode = registry.TryGet<Abode>(object))
 	{
@@ -1354,23 +1404,7 @@ uint32_t ResourceStoreSystem::RemoveResource(entt::entity object, ResourceType t
 	if (registry.AllOf<Pot>(object))
 	{
 		// A pile a building's site keeps its wood in gives it up as the site gives wood
-		entt::entity building = entt::null;
-		BuildingSite* keeper = nullptr;
-		registry.Each<BuildingSites>([&](entt::entity entity, BuildingSites& sites) {
-			for (auto& site : sites.sites)
-			{
-				if (keeper == nullptr && std::ranges::find(site.piles, object) != site.piles.end())
-				{
-					building = entity;
-					keeper = &site;
-				}
-			}
-		});
-		if (keeper != nullptr)
-		{
-			return TakeFromSite(building, *keeper, type, amount);
-		}
-		return TakeFromPile(object, type, amount, std::nullopt);
+		return TakeFromPile(object, type, amount, std::nullopt, std::nullopt);
 	}
 	if (auto* dead = registry.TryGet<DeadTree>(object))
 	{
@@ -1447,30 +1481,11 @@ uint32_t ResourceStoreSystem::AddToSite(entt::entity building, BuildingSite& sit
 		// A temple's site puts it on its pile nearest where it is brought, making its piles again if none is left
 		if (at.has_value())
 		{
-			const auto nearest = [&]() -> entt::entity {
-				entt::entity best = entt::null;
-				float bestDistance = std::numeric_limits<float>::max();
-				for (const auto pile : site.piles)
-				{
-					if (LivePile(pile) == nullptr)
-					{
-						continue;
-					}
-					const auto& position = registry.Get<const Transform>(pile).position;
-					const float distance = gutils::GetDistanceInMetres(*at, position);
-					if (distance < bestDistance)
-					{
-						bestDistance = distance;
-						best = pile;
-					}
-				}
-				return best;
-			};
-			auto pile = nearest();
+			auto pile = NearestSitePile(site, *at);
 			if (pile == entt::null)
 			{
 				ecs::construction::MakeSitePiles(building, site);
-				pile = nearest();
+				pile = NearestSitePile(site, *at);
 			}
 			if (pile != entt::null)
 			{
@@ -1496,7 +1511,8 @@ uint32_t ResourceStoreSystem::AddToSite(entt::entity building, BuildingSite& sit
 	return added;
 }
 
-uint32_t ResourceStoreSystem::TakeFromSite(entt::entity building, BuildingSite& site, ResourceType type, uint32_t amount)
+uint32_t ResourceStoreSystem::TakeFromSite(entt::entity building, BuildingSite& site, ResourceType type, uint32_t amount,
+                                           std::optional<glm::vec3> handPoint)
 {
 	auto& registry = Entities();
 	if (type != ResourceType::Wood && type != ResourceType::Any)
@@ -1519,6 +1535,28 @@ uint32_t ResourceStoreSystem::TakeFromSite(entt::entity building, BuildingSite& 
 		const auto taken = std::min(amount, pot->amount);
 		pot->amount -= taken;
 		return taken;
+	}
+	if (registry.AllOf<Temple>(building) && handPoint.has_value())
+	{
+		// A hand takes only wood, from the pile nearest the point of the hand. The town counts that much less wood at its
+		// sites. An emptied pile stays where it is.
+		uint32_t removed = 0;
+		const auto pile = NearestSitePile(site, *handPoint);
+		if (auto* pot = LivePile(pile); pot != nullptr && type == ResourceType::Wood)
+		{
+			removed = std::min(amount, pot->amount);
+			pot->amount -= removed;
+			if (pot->amount == 0)
+			{
+				PileEmptied(pile, *pot);
+			}
+		}
+		if (auto* tally = TallyOf(ecs::construction::TownOfSite(building)))
+		{
+			tally->woodAtSites =
+			    building_site::WoodAtSitesAfter(tally->woodAtSites, building_site::SiteWoodKind::Other, 0, removed);
+		}
+		return removed;
 	}
 	if (registry.AllOf<Temple>(building))
 	{
@@ -1573,7 +1611,7 @@ uint32_t ResourceStoreSystem::AddToTownsSite(entt::entity building, entt::entity
 uint32_t ResourceStoreSystem::RemoveFromTownsSite(entt::entity building, entt::entity town, ResourceType type, uint32_t amount)
 {
 	auto* site = ecs::construction::SiteOf(town, building);
-	return site != nullptr ? TakeFromSite(building, *site, type, amount) : 0u;
+	return site != nullptr ? TakeFromSite(building, *site, type, amount, std::nullopt) : 0u;
 }
 
 void ResourceStoreSystem::StoreStopsWorking(entt::entity store)

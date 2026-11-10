@@ -503,7 +503,7 @@ public:
 		{
 			p += effect.SpawnPosition(*atom.collection);
 		}
-		atom.velocity = (p - atom.position) / std::max(effect.GetDt(), k_MinimumDuration);
+		atom.velocity = (p - atom.position) * (1.0f / std::max(effect.GetDt(), k_MinimumDuration));
 		atom.position = p;
 		const float a = alphaScale.empty()
 		                    ? static_cast<float>(alpha)

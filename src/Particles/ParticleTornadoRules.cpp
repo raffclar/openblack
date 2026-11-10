@@ -268,8 +268,9 @@ private:
 		}
 		else
 		{
-			state.baseVelocity = (state.base - oldBase) / dt;
-			state.topVelocity = (state.top - oldTop) / dt;
+			const float perStep = 1.0f / dt;
+			state.baseVelocity = (state.base - oldBase) * perStep;
+			state.topVelocity = (state.top - oldTop) * perStep;
 		}
 		if (!state.closing)
 		{

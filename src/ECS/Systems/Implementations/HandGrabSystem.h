@@ -167,6 +167,10 @@ private:
 	/// The scoop ends: its stream stops, and the hand holds its handful as anything else
 	/// The scoop's stream and sound stop
 	void StopScoopEffects(components::HandGrab& grab);
+	/// The scooping sound of a turn of the scoop, at the hand, for the hand of this computer only
+	void PlayScoopSound(components::HandGrab& grab, ResourceType resource, float ramp);
+	/// Shows the amount that the hand holds, for the hand of this computer only
+	void ShowHeldAmount(uint32_t amount);
 	void EndScoop(components::HandGrab& grab);
 	/// The second press with the pointer on something the held thing is used on (a store, a pile of the same): it is
 	/// given to it at once, without being thrown. Whether it was.

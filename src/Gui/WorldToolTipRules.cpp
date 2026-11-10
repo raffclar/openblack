@@ -94,6 +94,20 @@ Numbered PileAmount(bool food, uint32_t amount)
 	return {.index = food ? k_FoodAmount : k_WoodAmount, .first = static_cast<double>(amount), .second = std::nullopt};
 }
 
+std::optional<Numbered> PotAmount(PotType type, uint32_t food, uint32_t wood)
+{
+	switch (type)
+	{
+	case PotType::PileFood:
+		return PileAmount(true, food);
+	case PotType::PileWood:
+		return PileAmount(false, wood);
+	case PotType::Pot:
+		break;
+	}
+	return std::nullopt;
+}
+
 Numbered HeldAmount(uint32_t amount)
 {
 	// The amount is the forced number of the tooltip, a float

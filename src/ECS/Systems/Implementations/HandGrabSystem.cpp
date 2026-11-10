@@ -756,7 +756,7 @@ void HandGrabSystem::DoUnlock(PlayerNames player, entt::entity object)
 	if (const auto* handful = _world->Entities().TryGet<const Pot>(grab->object);
 	    handful != nullptr && Exists(object) && !_world->FieldFactsOf(object).has_value())
 	{
-		_amountToolTip = handful->amount;
+		ShowHeldAmount(handful->amount);
 	}
 	EndScoop(*grab);
 }
@@ -809,9 +809,13 @@ bool HandGrabSystem::StartScoop(HandGrab& grab, entt::entity source)
 	grab.scoopAnchor = hand;
 	// What is scooped streams from the source into the hand
 	grab.scoopStreamSeconds = 0.0f;
-	// The cursor is pinned while it scoops
-	_world->PinCursor(true);
-	grab.scoopStream = _world->StartScoopStream(facts->resource, sourcePosition, poisoned);
+	// Only the hand of this computer pins the cursor and shows the stream
+	if (_world->IsLocalHand())
+	{
+		// The cursor is pinned while it scoops
+		_world->PinCursor(true);
+		grab.scoopStream = _world->StartScoopStream(facts->resource, sourcePosition, poisoned);
+	}
 	return true;
 }
 
@@ -849,9 +853,13 @@ bool HandGrabSystem::StartFieldScoop(HandGrab& grab, entt::entity field, const F
 	grab.scoopTurns = 0;
 	grab.scoopAnchor = hand;
 	grab.scoopStreamSeconds = 0.0f;
-	// The cursor is pinned while it scoops
-	_world->PinCursor(true);
-	grab.scoopStream = _world->StartScoopStream(ResourceType::Food, _world->PoseOf(field).origin, false);
+	// Only the hand of this computer pins the cursor and shows the stream
+	if (_world->IsLocalHand())
+	{
+		// The cursor is pinned while it scoops
+		_world->PinCursor(true);
+		grab.scoopStream = _world->StartScoopStream(ResourceType::Food, _world->PoseOf(field).origin, false);
+	}
 	return true;
 }
 
@@ -865,8 +873,7 @@ bool HandGrabSystem::ScoopField(HandGrab& grab, const FieldFacts& facts)
 	}
 	const auto scoop = _world->ScoopFactsOf(PotInfo::HandFood);
 	// It sounds as food pours, before anything is taken
-	grab.scoopSound = _world->PlayScoopSound(grab.scoopSound, ResourceType::Food, _world->PoseOf(_world->Hand()).origin,
-	                                         hand_grab::ScoopRamp(grab.scoopTurns, scoop));
+	PlayScoopSound(grab, ResourceType::Food, hand_grab::ScoopRamp(grab.scoopTurns, scoop));
 	// As much as the ramp gives, no more than the field has, within what one handful holds, and half once ripe
 	auto taken = std::min(hand_grab::ScoopAmount(grab.scoopTurns, scoop), facts.food);
 	if (scoop.maxPickedUp != 0)
@@ -885,7 +892,7 @@ bool HandGrabSystem::ScoopField(HandGrab& grab, const FieldFacts& facts)
 	}
 	_world->TakeFromField(grab.scoopSource, taken);
 	handful->amount += taken;
-	_amountToolTip = handful->amount;
+	ShowHeldAmount(handful->amount);
 	_world->ResizePot(grab.object);
 	return true;
 }
@@ -915,9 +922,13 @@ bool HandGrabSystem::StartFishFarmScoop(HandGrab& grab, entt::entity farm, const
 	grab.scoopTurns = 0;
 	grab.scoopAnchor = hand;
 	grab.scoopStreamSeconds = 0.0f;
-	// The cursor is pinned while it scoops
-	_world->PinCursor(true);
-	grab.scoopStream = _world->StartFishScoopStream(_world->PoseOf(farm).origin);
+	// Only the hand of this computer pins the cursor and shows the stream
+	if (_world->IsLocalHand())
+	{
+		// The cursor is pinned while it scoops
+		_world->PinCursor(true);
+		grab.scoopStream = _world->StartFishScoopStream(_world->PoseOf(farm).origin);
+	}
 	return true;
 }
 
@@ -931,8 +942,7 @@ bool HandGrabSystem::ScoopFishFarm(HandGrab& grab, const fish_farm::Type& type)
 	}
 	const auto scoop = _world->ScoopFactsOf(PotInfo::HandFood);
 	// It sounds as food pours, before anything is taken
-	grab.scoopSound = _world->PlayScoopSound(grab.scoopSound, ResourceType::Food, _world->PoseOf(_world->Hand()).origin,
-	                                         hand_grab::ScoopRamp(grab.scoopTurns, scoop));
+	PlayScoopSound(grab, ResourceType::Food, hand_grab::ScoopRamp(grab.scoopTurns, scoop));
 	const auto wanted =
 	    fish_farm::ScoopWanted(hand_grab::ScoopAmount(grab.scoopTurns, scoop), type, handful->amount, scoop.maxPickedUp);
 	// Once the farm gives nothing the scoop ends; while it gives any, the hand gets all it wanted
@@ -942,7 +952,7 @@ bool HandGrabSystem::ScoopFishFarm(HandGrab& grab, const fish_farm::Type& type)
 		return false;
 	}
 	handful->amount += wanted;
-	_amountToolTip = handful->amount;
+	ShowHeldAmount(handful->amount);
 	_world->ResizePot(grab.object);
 	return true;
 }
@@ -968,8 +978,7 @@ bool HandGrabSystem::Scoop(HandGrab& grab)
 	const auto scoop = _world->ScoopFactsOf(source->handful);
 	const auto wanted = hand_grab::ScoopAmount(grab.scoopTurns, scoop);
 	// It sounds before anything is taken
-	grab.scoopSound = _world->PlayScoopSound(grab.scoopSound, source->resource, _world->PoseOf(_world->Hand()).origin,
-	                                         hand_grab::ScoopRamp(grab.scoopTurns, scoop));
+	PlayScoopSound(grab, source->resource, hand_grab::ScoopRamp(grab.scoopTurns, scoop));
 	const auto taken = hand_grab::ScoopTaken(wanted, source->amount, handful->amount, scoop);
 	if (taken == 0)
 	{
@@ -981,7 +990,7 @@ bool HandGrabSystem::Scoop(HandGrab& grab)
 	held.amount += took;
 	// Poisoned food poisons the handful, which stays poisoned
 	held.poisoned = held.poisoned || TakenIsPoisoned(grab.scoopSource);
-	_amountToolTip = held.amount;
+	ShowHeldAmount(held.amount);
 	_world->ResizePot(grab.object);
 	// A pile scooped empty stops streaming and sounding; the scoop ends with the next turn
 	if (!Exists(grab.scoopSource))
@@ -1005,10 +1014,28 @@ void HandGrabSystem::StopScoopEffects(HandGrab& grab)
 	}
 }
 
+void HandGrabSystem::PlayScoopSound(HandGrab& grab, ResourceType resource, float ramp)
+{
+	// Only the scoop of this computer's hand sounds on this computer
+	if (_world->IsLocalHand())
+	{
+		grab.scoopSound = _world->PlayScoopSound(grab.scoopSound, resource, _world->PoseOf(_world->Hand()).origin, ramp);
+	}
+}
+
+void HandGrabSystem::ShowHeldAmount(uint32_t amount)
+{
+	// Only the hand of this computer shows what it holds on this computer
+	if (_world->IsLocalHand())
+	{
+		_amountToolTip = amount;
+	}
+}
+
 void HandGrabSystem::EndScoop(HandGrab& grab)
 {
 	StopScoopEffects(grab);
-	if (grab.scoopSource != entt::null)
+	if (grab.scoopSource != entt::null && _world->IsLocalHand())
 	{
 		_world->PinCursor(false);
 	}

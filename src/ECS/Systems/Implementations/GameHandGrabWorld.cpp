@@ -1323,7 +1323,7 @@ std::optional<uint32_t> GameHandGrabWorld::PourPot(entt::entity pot, PlayerNames
 	// It pours out of the hand where the last report put the hand
 	const auto hand = ReportedHandPlace();
 	std::optional<uint32_t> pour;
-	if (Locator::effectRequestSystem::has_value() && player == HandPlayer())
+	if (Locator::effectRequestSystem::has_value() && IsLocalHand())
 	{
 		// A poisoned handful pours its own poisoned food. Only the computer of the hand shows the pour, so the particles
 		// of this computer give it its number.
@@ -1382,8 +1382,10 @@ uint32_t GameHandGrabWorld::TakeFromPile(entt::entity pile, uint32_t amount)
 	{
 		return 0;
 	}
-	// Taking from a town's store counts against its owner, and is remembered of the hand's player
-	return Locator::resourceStoreSystem::value().TakeFromPile(pile, facts->resource, amount, HandPlayer());
+	// Taking from a town's store counts against its owner, and is remembered of the hand's player. The point of the hand
+	// on the land chooses the pile of a temple's site. With no such point, the hand takes from the pile that it scoops.
+	const auto point = ReportedCollidePoint().value_or(PoseOf(pile).origin);
+	return Locator::resourceStoreSystem::value().TakeFromPile(pile, facts->resource, amount, HandPlayer(), point);
 }
 
 std::optional<fish_farm::Type> GameHandGrabWorld::FishFarmOf(entt::entity farm) const

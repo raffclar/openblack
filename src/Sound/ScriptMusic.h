@@ -144,8 +144,9 @@ public:
 	/// The end of a dialogue starts the sung line again at no word, and keeps the line
 	void ResetWord() { _lyrics.word = 0; }
 
-	/// One game turn: the channel plays for the real time of the turn, then the script's music starts or stops
-	void Turn(std::chrono::microseconds turnTime, const TimingFor& timingFor);
+	/// One game turn: the channel plays for the real time of the turn. Then, when the turn does the audio turn, the
+	/// script's music starts or stops.
+	void Turn(std::chrono::microseconds turnTime, const TimingFor& timingFor, bool audioTurn = true);
 
 	/// The piece that the scripts want, MusicType::None for none
 	[[nodiscard]] MusicType GetType() const { return _type; }
