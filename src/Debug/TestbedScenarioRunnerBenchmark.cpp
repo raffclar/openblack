@@ -228,6 +228,14 @@ void Runner::SpawnCrowdMember(size_t index)
 	}
 }
 
+void Runner::SetBenchmarkReads(bool reads)
+{
+	if (Locator::profiler::has_value())
+	{
+		Locator::profiler::value().SetReader(Profiler::Reader::Benchmark, reads);
+	}
+}
+
 void Runner::Measure()
 {
 	if (_recorder == nullptr || !_crowdProgress.Done() || !Locator::profiler::has_value())

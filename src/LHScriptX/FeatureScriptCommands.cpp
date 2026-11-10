@@ -1208,11 +1208,11 @@ void FeatureScriptCommands::AddFootpathNode(int footpathId, const map_coords::Ma
 		return;
 	}
 	// The node goes at the given place, raised by the place's height above the land, as the land's footpath file puts its
-	// nodes
+	// nodes. Each new node becomes the first node of the path, so the last node line of the script gives the first node.
 	const auto ground = map_coords::ToMetres(place);
 	const glm::vec3 position {ground.x, Locator::terrainSystem::value().GetHeightAt(ground) + place.altitude, ground.y};
-	registry.Get<Footpath>(footpaths[*index])
-	    .nodes.push_back({.position = position, .place = {place.x, place.z}, .altitude = place.altitude});
+	auto& nodes = registry.Get<Footpath>(footpaths[*index]).nodes;
+	nodes.insert(nodes.begin(), {.position = position, .place = {place.x, place.z}, .altitude = place.altitude});
 }
 
 void FeatureScriptCommands::LinkFootpath(int32_t footpathId)

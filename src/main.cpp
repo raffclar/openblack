@@ -213,6 +213,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		("ai-times", "Tools: log the mean and longest time of the seen list, the mind and the hand of each computer god each time this many turns go by (0 for never).", cxxopts::value<uint32_t>()->default_value("0"))
 		("turn-step-times", "Tools: log the time of each step of each turn that takes this many milliseconds or more.", cxxopts::value<float>())
 		("frame-stats-out", "With --frame-stats, write each frame of the run (its time, its time on the processor and the game turn) into this CSV file when the game ends.", cxxopts::value<std::string>())
+		("no-stage-times", "Tools: do not time the profiler stages, also when --frame-stats, a benchmark, the run record or the profiler window reads them. A measured run then costs what a player's game costs. The frame times stay correct, and the stage times are zero.")
 		("no-first-frame-warm-up", "Do not draw the first frame of a land behind the loading screen. Then the first frames of the game make the renderer's pipelines and render targets.")
 		("parallel-draw-encode", "Developer: let worker threads encode some of the draws at the same time as the game's thread, in the same order and with the same picture. By default the game's thread encodes all draws.")
 		("unlock-bonus-creatures", "Debug: take the Creature Breeder's bonus creatures as unlocked, which the game only had once an unlock from outside it was installed: all, or some of leopard, horse, mandrill, gorilla and rhino joined by commas. None by default, as on a normal install.", cxxopts::value<std::string>())
@@ -683,6 +684,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		{
 			args.frameStatsOut = result["frame-stats-out"].as<std::string>();
 		}
+		args.stageTimes = result.count("no-stage-times") == 0;
 		args.warmUpFirstFrame = result.count("no-first-frame-warm-up") == 0;
 		args.parallelDrawEncode = result.count("parallel-draw-encode") != 0;
 		args.lobbyOrigin = result["lobby"].as<std::string>();

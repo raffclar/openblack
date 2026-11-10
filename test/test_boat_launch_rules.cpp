@@ -279,3 +279,18 @@ TEST(BoatLaunchRules, TheSeaMirrorsTheBoatInADarkBlueOfItsOwn)
 	EXPECT_EQ(rules::k_SeaReflectionColour >> 24, 0xFFu);
 	ExpectNear(rules::SeaReflectionColour(), {48.0f, 48.0f, 112.0f});
 }
+
+TEST(BoatLaunchRules, TheMirrorAddsTheLandColourOfTheFrameBefore)
+{
+	constexpr uint8_t k_Highest = 1;
+	// The first frame of a boat: its most detailed parts and no land colour
+	const auto first = rules::MirrorLookOf(std::nullopt, k_Highest);
+	EXPECT_EQ(first.detailLevel, k_Highest);
+	EXPECT_FALSE(first.landColourAt.has_value());
+
+	// After that, the detail and the place of the frame before
+	const auto next = rules::MirrorLookOf(rules::MirrorBefore {.detailLevel = 4, .place = {10.0f, -2.0f, 30.0f}}, k_Highest);
+	EXPECT_EQ(next.detailLevel, 4);
+	ASSERT_TRUE(next.landColourAt.has_value());
+	ExpectNear(*next.landColourAt, {10.0f, -2.0f, 30.0f});
+}

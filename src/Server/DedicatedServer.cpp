@@ -683,9 +683,9 @@ bool ServerWorld::Frame()
 	}
 	const auto frameEnd = std::chrono::steady_clock::now();
 	simulation.FrameEnded(std::chrono::duration<float, std::milli>(frameEnd - _frameStart).count());
+	// The run record keeps the time of each stage too. A frame without stage times adds nothing to them.
+	if (const auto& entry = profiler.GetEntries().at(profiler.GetEntryIndex(0)); entry.stagesTimed)
 	{
-		// The run record keeps the time of each stage too
-		const auto& entry = profiler.GetEntries().at(profiler.GetEntryIndex(0));
 		std::array<float, static_cast<size_t>(Profiler::Stage::_count)> stageMs {};
 		std::ranges::transform(entry.stages, stageMs.begin(), [](const Profiler::Scope& scope) {
 			return std::chrono::duration<float, std::milli>(scope.total).count();

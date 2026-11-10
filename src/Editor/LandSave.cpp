@@ -13,6 +13,7 @@
 
 #include <algorithm>
 #include <array>
+#include <ranges>
 #include <system_error>
 #include <type_traits>
 #include <utility>
@@ -315,7 +316,8 @@ std::string FootpathText(std::span<const glm::ivec2> places)
 {
 	// The command makes the new footpath the script's footpath 0, whatever number the line gives
 	std::string text = writer::CommandLine("CREATE_FOOTPATH", "N", std::array<writer::Argument, 1> {int32_t {0}});
-	for (const auto place : places)
+	// Each node line puts its node first on the path, so the lines give the nodes from the last to the first
+	for (const auto place : std::views::reverse(places))
 	{
 		text += writer::CommandLine("CREATE_FOOTPATH_NODE", "NA",
 		                            std::array<writer::Argument, 2> {int32_t {0}, writer::Place {writer::PlaceText(place)}});
@@ -354,8 +356,9 @@ SavedPaths ReadSavedPaths(const std::string& script)
 		else if (command.name == "CREATE_FOOTPATH_NODE" && arguments.size() == 2 && arguments.back().IsString() &&
 		         !paths.footpaths.empty())
 		{
-			// A node goes to the newest footpath, which is the script's footpath 0
-			paths.footpaths.back().push_back(arguments.back().StringValue());
+			// A node goes to the newest footpath, which is the script's footpath 0, as its first node
+			auto& nodes = paths.footpaths.back();
+			nodes.insert(nodes.begin(), arguments.back().StringValue());
 		}
 	}
 	return paths;

@@ -292,12 +292,13 @@ struct GameLine
 /// The lines that make a stream again: the stream with its number, then each of its points in order
 [[nodiscard]] std::string StreamText(int32_t id, std::span<const glm::ivec2> places);
 
-/// The lines that make a footpath again: a new footpath, which becomes the script's footpath 0, then each of its nodes
-/// in order
+/// The lines that make a footpath again: a new footpath, which becomes the script's footpath 0, then its nodes from the
+/// last to the first. Each node line puts its node first on the path, so the script makes the nodes in the same order.
 [[nodiscard]] std::string FootpathText(std::span<const glm::ivec2> places);
 
-/// The streams and the footpaths that a saved land script makes. Each path is the list of the texts of its places, as the
-/// lines give them.
+/// The streams and the footpaths that a saved land script makes. Each stream is the list of the texts of its places, as
+/// the lines give them. Each footpath is the list of the texts of its nodes in the order of the path: each node line puts
+/// its node first.
 struct SavedPaths
 {
 	std::vector<std::vector<std::string>> streams;

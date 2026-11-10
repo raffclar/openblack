@@ -281,6 +281,7 @@ void Runner::Start(const Scenario& scenario)
 	_crowdProgress = {};
 	_settledFrames = 0;
 	_recorder.reset();
+	SetBenchmarkReads(false);
 	_liveResults = {};
 	_framesSinceSummary = 0;
 	_saved = false;
@@ -303,6 +304,7 @@ void Runner::Start(const Scenario& scenario)
 		_crowdProgress.total =
 		    _village.towns.size() + _village.abodes.size() + _village.villagers.size() + _crowdCreatures.size();
 		_recorder = std::make_unique<benchmark::Recorder>(BenchmarkStages(), _benchmark.frames);
+		SetBenchmarkReads(true);
 	}
 
 	// A fresh testbed: the last one's creatures, objects, footprints, weather and scripts all go with it

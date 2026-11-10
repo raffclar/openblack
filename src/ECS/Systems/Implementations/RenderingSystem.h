@@ -21,6 +21,7 @@
 
 #include "3D/AllMeshes.h"
 #include "3D/AxisAlignedBoundingBox.h"
+#include "ECS/BoatLaunchRules.h"
 #include "Graphics/InstanceUpload.h"
 #include "RenderingSystemCommon.h"
 
@@ -56,9 +57,10 @@ private:
 	bool UploadInstances(bool drawBoundingBox);
 	/// Places the instances of the things of the drawn registry. `fits` goes false when the draw lists have no room.
 	/// `picks` gets the gate stones that the cursor finds, each as its plinth.
-	/// The things of the drawn registry. lastFilmLevels: the detail that the explorers' boat had in the frame before.
+	/// The things of the drawn registry. lastFilmBoats: the detail and the place that the explorers' boat had in the frame
+	/// before.
 	void UploadDrawnThings(bool drawBoundingBox, bool& fits, std::vector<RenderContext::DrawnObject>& picks,
-	                       const std::unordered_map<entt::entity, uint8_t>& lastFilmLevels);
+	                       const std::unordered_map<entt::entity, ecs::boat_launch::MirrorBefore>& lastFilmBoats);
 	/// The broken and unfinished buildings drawn as far up as they stand
 	void UploadPartialBuilds();
 	/// What the villagers drawn this frame hold, a draw for each model, from the held things gathered with the instances
@@ -146,9 +148,9 @@ private:
 	/// drawn at all: their other draws (a building's part built, a graveyard's graves) follow them
 	std::unordered_map<entt::entity, uint8_t> _fadingThings;
 	entt::sparse_set _goneThings;
-	/// The detail the explorers' boat was last drawn at, which the sea mirrors it at the frame after (kept while it is
-	/// too far off to be drawn)
-	std::unordered_map<entt::entity, uint8_t> _filmReflectionLevels;
+	/// The detail the explorers' boat was last drawn at (kept while it is too far off to be drawn) and its place, which the
+	/// sea mirrors it with on the frame after
+	std::unordered_map<entt::entity, ecs::boat_launch::MirrorBefore> _filmReflectionBoats;
 	/// The colour, 0xRRGGBB, that the heart of each temple glows in its destruction, as the last frame set it
 	std::unordered_map<entt::entity, uint32_t> _heartGlows;
 };

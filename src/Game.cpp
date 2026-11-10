@@ -348,6 +348,7 @@ Game::Game(Arguments&& args) noexcept
 	config.aiTimesEvery = args.aiTimesEvery;
 	config.turnStepTimesMs = args.turnStepTimesMs;
 	config.frameStatsOut = args.frameStatsOut;
+	config.stageTimes = args.stageTimes;
 	config.warmUpFirstFrame = args.warmUpFirstFrame;
 	config.parallelDrawEncode = args.parallelDrawEncode;
 	config.lobbyOrigin = args.lobbyOrigin;
@@ -1030,6 +1031,8 @@ Game::RunStart Game::StartRun() noexcept
 	{
 		Locator::computerPlayerSystem::value().SetTimesReport(config.aiTimesEvery);
 	}
+	// A tool option can keep the stage clock off for a measured run
+	Locator::profiler::value().SetStageClockOff(!config.stageTimes);
 	if (config.frameStatsInterval > 0)
 	{
 		_frameLoop->frameStats.emplace(config.frameStatsInterval, config.frameStatsViews,
@@ -1039,6 +1042,8 @@ Game::RunStart Game::StartRun() noexcept
 		{
 			Locator::rendererInterface::value().SetProfile(true);
 		}
+		// The frame statistics log the stages of the frames
+		Locator::profiler::value().SetReader(Profiler::Reader::FrameStats, true);
 	}
 	_frameLoop->frameStart = std::chrono::steady_clock::now();
 	return RunStart::Play;
@@ -1331,9 +1336,10 @@ bool Game::RunFrame() noexcept
 		}
 		const auto frameEnd = std::chrono::steady_clock::now();
 		simulation.FrameEnded(std::chrono::duration<float, std::milli>(frameEnd - frameStart).count());
+		// The run record keeps the time of each stage too, to find what costs more as a run goes on. A frame without stage
+		// times adds nothing to them.
+		if (const auto& entry = profiler.GetEntries().at(profiler.GetEntryIndex(0)); entry.stagesTimed)
 		{
-			// The run record keeps the time of each stage too, to find what costs more as a run goes on
-			const auto& entry = profiler.GetEntries().at(profiler.GetEntryIndex(0));
 			std::array<float, static_cast<size_t>(Profiler::Stage::_count)> stageMs {};
 			std::ranges::transform(entry.stages, stageMs.begin(), [](const Profiler::Scope& scope) {
 				return std::chrono::duration<float, std::milli>(scope.total).count();
@@ -1383,5 +1389,6 @@ void Game::EndRun() noexcept
 	// The last line of an orderly end: a log that stops without it, and without a crash report, was ended from outside
 	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The game ends after {} frames, at turn {}", _frameCount,
 	                   Locator::time::value().GetTurn());
+	Locator::profiler::value().SetReader(Profiler::Reader::FrameStats, false);
 	_frameLoop.reset();
 }
