@@ -244,6 +244,11 @@ void villager_physics::Land(PhysicsEntry* entry, entt::entity villager)
 			creature_sight::EmpathiseWithPlayer(*player, feet ? CreatureDesires::Compassion : CreatureDesires::Anger,
 			                                    feet ? 0.1f : 0.5f, transform->position);
 		}
+		// A villager that flew loses the mark of the hand. Only one that the hand put down on the land keeps it.
+		if (!disciple::KeepsHandMarkOnLanding(true, entry->Has(PhysicsEntry::k_Landed)))
+		{
+			registry.Remove<DiscipleHeld>(villager);
+		}
 	}
 	// It stands on the land where it came down
 	if (Locator::terrainSystem::has_value())
