@@ -271,6 +271,16 @@ TEST(VillagerWork, AFarmerSowsOrDigsOnceAtItsSpotAndOtherwiseDecidesAfresh)
 	EXPECT_EQ(work::ArriveAtField(false, false, false, true), Decide);
 }
 
+TEST(VillagerWork, TheTestOfAGrownFieldForARipeCropFindsASpotThatItDoesNotKeep)
+{
+	// A grown and ripe field: the test finds a spot, also when the farmer is not at its spot
+	EXPECT_TRUE(work::RipeTestFindsASpot(false, true, true));
+	// A field to sow, a grown field that is not ripe and a field that grows: no spot
+	EXPECT_FALSE(work::RipeTestFindsASpot(true, false, false));
+	EXPECT_FALSE(work::RipeTestFindsASpot(false, true, false));
+	EXPECT_FALSE(work::RipeTestFindsASpot(false, false, false));
+}
+
 TEST(VillagerWork, AFarmerTakesItsHarvestToTheStoreOnceItHasLessRoomThanALoadOfCrop)
 {
 	// A full load of 150 leaves no room
