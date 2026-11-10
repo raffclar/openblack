@@ -1170,13 +1170,17 @@ void AnimalSystem::InteractDecideWhatToDo(entt::entity entity, Animal& animal)
 	}
 	// A grazer and a hunter walk on the land. Thus they do not start a leg with a goal height, which only the other
 	// kinds follow.
-	switch (animals::WanderStartOf(registry.AllOf<Grazer>(entity), registry.AllOf<Hunter>(entity)))
+	switch (animals::WanderStartOf(registry.AllOf<Grazer>(entity), registry.AllOf<Hunter>(entity),
+	                               registry.AllOf<SpellWolf>(entity)))
 	{
 	case animals::WanderStart::OnTheLand:
 		GrazerStartWander(entity, animal);
 		break;
 	case animals::WanderStart::AsLeader:
 		StartWander(entity, animal);
+		break;
+	case animals::WanderStart::SpellWolf:
+		WolfStartWander(entity, animal);
 		break;
 	}
 }
@@ -1379,6 +1383,10 @@ void AnimalSystem::Wolf(entt::entity entity, Animal& animal)
 		break;
 	case AnimalState::StartWander:
 		WolfStartWander(entity, animal);
+		break;
+	case AnimalState::InteractDecideWhatToDo:
+		// Up again after a landing, it joins a flock near it if it can, then it starts a leg
+		InteractDecideWhatToDo(entity, animal);
 		break;
 	case AnimalState::Chase:
 		Chase(entity, animal);
@@ -1815,9 +1823,9 @@ void AnimalSystem::Landed(entt::entity entity, Animal& animal)
 {
 	// Its flock's home moves by its kind's rule
 	ChooseLair(entity, animal);
-	// It plays its landing clip to the end. Then it joins a flock near it if it can, and it wanders off
-	WaitForClipOfState(animal, physics::living::JoinsAFlockAfterLanding(animal.type) ? AnimalState::InteractDecideWhatToDo
-	                                                                                 : AnimalState::DecideWhatToDo);
+	// It plays its landing clip to the end. Then it joins a flock near it if it can, and it wanders off. Every kind
+	// does this, the wolves of the wolf miracle also
+	WaitForClipOfState(animal, AnimalState::InteractDecideWhatToDo);
 }
 
 void AnimalSystem::FinishPouncing(entt::entity wolf, Animal& animal, entt::entity prey)
