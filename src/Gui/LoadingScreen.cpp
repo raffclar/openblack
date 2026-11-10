@@ -21,6 +21,7 @@
 #include "Graphics/Texture2D.h"
 #include "Graphics/VideoOverlay.h"
 #include "Gui/GlyphTexture.h"
+#include "Gui/InstallVersion.h"
 #include "Gui/ScreenFit.h"
 #include "Locator.h"
 #include "Visual/RenderPass.h"
@@ -55,8 +56,6 @@ constexpr glm::vec3 k_BevelLineColour {254.0f / 255.0f};
 constexpr glm::uvec2 k_BevelTexel {24, 8};
 /// The blurred picture is sampled a quarter of its texels in from each edge of its part of the texture
 constexpr float k_BlurInset = 1.0f / 64.0f;
-/// The game's version when it doesn't say: 1.00
-constexpr uint32_t k_DefaultVersion = 100;
 
 /// The pieces of the button atlas the frame's soft shadow is cut from, in 256ths: corners, edges
 struct ShadowPiece
@@ -82,6 +81,13 @@ std::vector<uint8_t> ReadIfExists(const std::filesystem::path& path)
 		return {};
 	}
 	return fileSystem.ReadAll(path);
+}
+
+/// The version number of the tips screen, from the install's records. The game reads them one time in a run
+std::u16string InstallVersionTextOfThisInstall()
+{
+	const auto install = ReadInstallVersion();
+	return loading::InstallVersionText(install.version, install.developerPatch);
 }
 
 glm::vec4 ColourOf(uint32_t argb, uint8_t alpha)
@@ -134,7 +140,7 @@ LoadingScreen::LoadingScreen(TextDatabase texts, GameFont font, std::vector<uint
     , _atlasPixels(std::move(atlasPixels))
     , _atlas(std::make_unique<graphics::Texture2D>("LoadingScreenButtons"))
     , _overlay(std::make_unique<graphics::VideoOverlay>())
-    , _version(loading::VersionText(k_DefaultVersion, 0))
+    , _version(InstallVersionTextOfThisInstall())
 {
 	_atlas->Create(k_AtlasSize, k_AtlasSize, 1, graphics::TextureFormat::RGBA8, graphics::Wrapping::ClampEdge,
 	               graphics::Filter::Linear, bgfx::copy(_atlasPixels.data(), static_cast<uint32_t>(_atlasPixels.size())));

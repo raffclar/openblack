@@ -181,7 +181,10 @@ Bar BarFor(const Layout& layout, float progress, int32_t screenWidth, int32_t sc
 {
 	const auto [left, top] = Unadjust({layout.picture.left - 1, layout.picture.top - 1}, screenWidth, screenHeight);
 	const auto [right, bottom] = Unadjust({layout.picture.right + 1, layout.picture.bottom + 1}, screenWidth, screenHeight);
-	const int32_t border = UnadjustSize(screenWidth / 50, screenWidth, screenHeight);
+	// The border is a fiftieth of the screen's width. On a screen smaller than the layout, the game uses that
+	// number of pixels as layout units, so the frame and the bar shrink with the layout
+	const int32_t border =
+	    FitsLayout(screenWidth, screenHeight) ? UnadjustSize(screenWidth / 50, screenWidth, screenHeight) : screenWidth / 50;
 	const float barTop = static_cast<float>(border) * 1.5f;
 	const float barBottom = static_cast<float>(border) * 2.5f;
 	const auto below = static_cast<float>(bottom);
@@ -241,9 +244,15 @@ std::u16string VersionText(uint32_t version, uint32_t developerPatch)
 	auto text = fmt::format("V{:01}.{:02}", version / 100, version % 100);
 	if (developerPatch != 0)
 	{
-		text += fmt::format(" Beta {}", developerPatch);
+		// The game writes the patch number as a signed number
+		text += fmt::format(" Beta {}", static_cast<int32_t>(developerPatch));
 	}
 	return {text.begin(), text.end()};
+}
+
+std::u16string InstallVersionText(std::optional<uint32_t> version, std::optional<uint32_t> developerPatch)
+{
+	return VersionText(version.value_or(k_DefaultVersion), developerPatch.value_or(0));
 }
 
 bool LoadingClock::Tick(uint32_t now, Mode mode) noexcept
