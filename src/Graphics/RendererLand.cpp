@@ -857,10 +857,17 @@ void Renderer::DrawFilmReflections(const DrawSceneDesc& desc) const
 		submitDesc.useMaterialCulling = true;
 		submitDesc.mirrored = desc.cullBack;
 		submitDesc.detailLevel = boat.detailLevel;
-		// In one flat colour of its own at every vertex, unshaded by the sun, with the land's colour where it is added
-		// over it, and neither faded nor coloured by the distance haze
+		// In one flat colour of its own at every vertex, unshaded by the sun, and neither faded nor coloured by the
+		// distance haze. The land's colour of the frame before at its place of the frame before is added over it, and
+		// no land colour on its first frame.
 		submitDesc.objectLook =
 		    L3DMeshSubmitDesc::ObjectLook {.colour = ecs::boat_launch::SeaReflectionColour(), .alpha = 1.0f};
+		submitDesc.landColourAdded = boat.landColourAt.has_value();
+		submitDesc.landColourBefore = true;
+		if (boat.landColourAt.has_value())
+		{
+			submitDesc.shadeAt = glm::vec4(*boat.landColourAt, 255.0f);
+		}
 		submitDesc.unlit = true;
 		submitDesc.alwaysLit = true;
 		submitDesc.hazed = false;

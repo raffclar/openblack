@@ -751,14 +751,14 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 				                             desc.landColourAdded ? 0.0f : 1.0f};
 				// A held thing mirrored in the sea takes the land's light of the frame before
 				const bool before = desc.heldMirror.has_value() && _before.texturesKept;
-				if (before)
+				setSampler(MeshUniform::LandLuminosity, 6, before ? GetLandLuminosityBefore() : GetLandLuminosity());
+				// The explorers' boat in the sea takes only the land's colour of the frame before
+				if ((before || desc.landColourBefore) && _before.texturesKept)
 				{
-					setSampler(MeshUniform::LandLuminosity, 6, GetLandLuminosityBefore());
 					setSampler(MeshUniform::LandColour, 8, *_before.colour);
 				}
 				else
 				{
-					setSampler(MeshUniform::LandLuminosity, 6, GetLandLuminosity());
 					setSampler(MeshUniform::LandColour, 8, GetLandColour());
 				}
 				setSampler(MeshUniform::LandLightTexture, 7,
