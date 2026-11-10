@@ -406,6 +406,56 @@ TEST_F(VillagerWalkStates, AVillagerWithFoodForTheSiteWalksToTheFoodPlaceFirst)
 	EXPECT_EQ(registry.Get<const Villager>(_villager).foodHeld, 5);
 }
 
+// A hungry worshipper away from its site's pot walks to the edge of the pot nearest to it, where it touches the pot, with
+// the height of the pot. The walk takes it back into the same state.
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(VillagerWalkStates, AWorshipperThatGetsFoodWalksToTheEdgeOfThePot)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto& island = Locator::terrainSystem::emplace<FlatIsland>();
+	const auto site = registry.Create();
+	constexpr glm::vec3 k_SiteAt {k_Here.x + 100.0f, 4.0f, k_Here.z};
+	registry.Assign<Transform>(site, k_SiteAt, glm::mat3(1.0f), glm::vec3(1.0f));
+	const auto pot = registry.Create();
+	constexpr glm::vec3 k_PotAt {k_Here.x + 90.0f, 4.0f, k_Here.z + 30.0f};
+	registry.Assign<Transform>(pot, k_PotAt, glm::mat3(1.0f), glm::vec3(0.7f));
+	registry.Assign<WorshipSite>(site, WorshipSite {.facing = 0.5f, .foodPot = pot});
+	const auto town = registry.Create();
+	registry.Assign<Town>(town).worshipSite = site;
+	registry.Get<Villager>(_villager).town = town;
+	SetStates(VillagerStates::GetFoodAtWorshipSite, VillagerStates::GetFoodAtWorshipSite);
+
+	EXPECT_EQ(villager_worship::GetFoodAtWorshipSite(Action()), 1u);
+	// Neither the pot nor the villager has a model here, so the edge is the place of the pot
+	const auto expected = map_coords::FromWorld(island, map_coords::ToWorld(island, map_coords::FromMetres(glm::xz(k_PotAt))));
+	const auto& wallHug = registry.Get<const WallHug>(_villager);
+	EXPECT_EQ(wallHug.goalPlace, glm::ivec2(expected.x, expected.z));
+	EXPECT_EQ(Final(), VillagerStates::GetFoodAtWorshipSite);
+}
+
+// A hungry worshipper at a site that has no pot walks to the site's food place, not to the middle of the site
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(VillagerWalkStates, AWorshipperThatGetsFoodAtASiteWithNoPotWalksToTheFoodPlace)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto& island = Locator::terrainSystem::emplace<FlatIsland>();
+	const auto site = registry.Create();
+	constexpr glm::vec3 k_SiteAt {k_Here.x + 100.0f, 4.0f, k_Here.z};
+	registry.Assign<Transform>(site, k_SiteAt, glm::mat3(1.0f), glm::vec3(1.0f));
+	registry.Assign<WorshipSite>(site).facing = 0.5f;
+	const auto town = registry.Create();
+	registry.Assign<Town>(town).worshipSite = site;
+	registry.Get<Villager>(_villager).town = town;
+	SetStates(VillagerStates::GetFoodAtWorshipSite, VillagerStates::GetFoodAtWorshipSite);
+
+	EXPECT_EQ(villager_worship::GetFoodAtWorshipSite(Action()), 1u);
+	const auto food = worship_site::TurnedPoint(glm::xz(k_SiteAt), 0.5f, worship_site::k_FoodPotPoint);
+	const auto expected = map_coords::FromWorld(island, glm::vec3(food.x, k_SiteAt.y, food.y));
+	const auto& wallHug = registry.Get<const WallHug>(_villager);
+	EXPECT_EQ(wallHug.goalPlace, glm::ivec2(expected.x, expected.z));
+	EXPECT_EQ(Final(), VillagerStates::GetFoodAtWorshipSite);
+}
+
 // A dancer that leaves a script's dance for a state of its own keeps the dance in mind and leaves the dance. Into another
 // script state it stays in the dance and keeps nothing.
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro

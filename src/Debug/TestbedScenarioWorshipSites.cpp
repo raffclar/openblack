@@ -293,6 +293,27 @@ void testbed_scenarios::AddWorshipSiteScenarios(std::vector<Scenario>& all)
 	    .worshipShare = 1.0f,
 	});
 	all.push_back({
+	    .id = "worship.dancers_eat_at_pot",
+	    .name = "Hungry dancers walk to the edge of the food pot of a worship site and eat",
+	    .facet = Facet::Miracles,
+	    .description = "The land of the ring scenario. All of the people go to worship at the site, which stands built. "
+	                   "Their bellies are empty. After 20 seconds the hand pours the food miracle on the food pot of the "
+	                   "site for 5 seconds.",
+	    .expected = "When the pot holds food, each dancer leaves the dance, walks to the pot and stops where it touches "
+	                "the edge of the pot nearest to it, at the height of the pot. It eats there, then goes back to the "
+	                "dance. No dancer walks into the pot.",
+	    .framing = SiteFraming(),
+	    .miracles = {{.type = MagicType::Food,
+	                  .point = {-4.0f, -51.0f},
+	                  .handOffset = {-4.0f, -51.0f},
+	                  .delaySeconds = 20.0f,
+	                  .holdSeconds = 5.0f,
+	                  .byHand = true}},
+	    .landScript = k_PlayerOneTownScript,
+	    .worshipShare = 1.0f,
+	    .worshipperFood = 0.0f,
+	});
+	all.push_back({
 	    .id = "worship.site_food_seen",
 	    .name = "A creature on the learning leash sees the food miracle poured on a worship site",
 	    .facet = Facet::Mind,
