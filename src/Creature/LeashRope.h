@@ -97,6 +97,31 @@ void Step(Rope& rope, const glm::vec3& start, const glm::vec3& end, float second
 /// stretches when the rope is at its full length, 0 to 1
 [[nodiscard]] float Tension(const Rope& rope);
 
+/// A thing that a leash is tied to, as the rope sees it. The thing is not a creature.
+struct TiedThing
+{
+	/// The place of the thing on the land
+	glm::vec3 place {0.0f};
+	/// The place of the thing in the pose that the rope follows
+	glm::vec3 posedPlace {0.0f};
+	/// The up axis of the thing in the pose that the rope follows, with its size and its stretch in it
+	glm::vec3 posedUp {0.0f, 1.0f, 0.0f};
+	/// The size of the thing in the world
+	float scale {1.0f};
+	/// The height of the thing in the world
+	float height {0.0f};
+	/// How much of a building is built, 0 to 1. Each other thing is fully built.
+	float built {1.0f};
+};
+/// A building that is built to this share or less holds the rope at its place on the land
+constexpr float k_TiedOnLandBuilt = 0.5f;
+/// The rope meets the thing at this share of the height of the thing, along its up axis
+constexpr float k_TiedHeightShare = 0.5f;
+/// The point where the rope meets a thing that it is tied to. The point is halfway up the thing, along the up axis of
+/// the pose, so the point leans with a thing that a hand pulls. A building that is built to half or less holds the rope
+/// at its place on the land.
+[[nodiscard]] glm::vec3 TiedEnd(const TiedThing& thing);
+
 /// The rope's points from start to end, its two ends included
 constexpr size_t k_PointCount = k_NodeCount + 2;
 /// A corner of the rope's ribbon or of its shadow. The ribbon's corners are fully opaque; the shadow's are faint and
