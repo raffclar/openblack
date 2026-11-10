@@ -85,6 +85,7 @@
 #include "ECS/Systems/CreatureObjectActionSystemInterface.h"
 #include "ECS/Systems/DanceSystemInterface.h"
 #include "ECS/Systems/EffectRequestSystemInterface.h"
+#include "ECS/Systems/FootballSystemInterface.h"
 #include "ECS/Systems/HelpProfileSystemInterface.h"
 #include "ECS/Systems/Implementations/VillagerDance.h"
 #include "ECS/Systems/Implementations/VillagerScript.h"
@@ -488,7 +489,8 @@ void FlockDetach() // 038 FLOCK_DETACH
 		Pusho(0);
 		return;
 	}
-	if (IsFlockLiving(registry, container))
+	// A creature is a living thing here too: it is in no flock, thus it gets the message of a living thing with no flock
+	if (IsFlockLiving(registry, container) || registry.AllOf<ecs::components::Creature>(container))
 	{
 		const auto flock = ecs::script_flocks::FlockOf(registry, container);
 		if (flock == entt::null)
@@ -551,7 +553,13 @@ void IdSize() // 040 ID_SIZE
 		Pushf(static_cast<float>(ecs::dances::Size(registry, container)));
 		return;
 	}
-	// TODO(opening): footballs
+	// For a football pitch, the size is the count of the players of the two teams
+	if (container != entt::null && Locator::footballSystem::has_value() && Locator::footballSystem::value().IsPitch(container))
+	{
+		const auto& football = Locator::footballSystem::value();
+		Pushf(static_cast<float>(football.TeamSize(container, true) + football.TeamSize(container, false)));
+		return;
+	}
 	ScriptMessage("Cannot Find Flock/Dance/Town Size");
 	Pushf(0.0f);
 }
