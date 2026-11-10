@@ -12,6 +12,8 @@
 #include <entt/entity/fwd.hpp>
 #include <glm/vec3.hpp>
 
+#include "Enums.h"
+
 namespace openblack::ecs::systems
 {
 
@@ -40,9 +42,9 @@ public:
 	[[nodiscard]] virtual float PowerAt(entt::entity town, glm::vec3 place) const = 0;
 	/// The size of a wonder of a town at a place: see wonder::Scale
 	[[nodiscard]] virtual float ScaleAt(entt::entity town, glm::vec3 place) const = 0;
-	/// Each turn, the power of each tribe for each player becomes the most power that the tribe gave the player, and at
-	/// least 1
-	virtual void ProcessTurn() = 0;
+	/// In the turn of the player, after its computer mind: the power of each tribe for the player becomes the most power
+	/// that the tribe gave the player, and at least 1
+	virtual void PlayerTurn(PlayerNames player) = 0;
 };
 
 } // namespace openblack::ecs::systems

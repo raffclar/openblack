@@ -154,7 +154,7 @@ TEST(GameTurnOrder, TheStormsMoveBeforeThePlayersAndTheClimatesAfterTheTimeOfDay
 	EXPECT_TRUE(recorder.Before(Step::ScriptHighlights, Step::Climates));
 }
 
-TEST(GameTurnOrder, TheAlignmentsMoveAtTheEndOfThePlayersTurns)
+TEST(GameTurnOrder, TheCameraTakesItsAlignmentAtTheEndOfThePlayersTurns)
 {
 	const auto recorder = PlayOneTurn();
 	EXPECT_TRUE(recorder.Before(Step::Players, Step::TempleLooks));
@@ -274,13 +274,6 @@ TEST(GameTurnOrder, TheTotemsTakeTheirTurnWithTheirTowns)
 	const auto recorder = PlayOneTurn();
 	EXPECT_TRUE(recorder.Before(Step::Players, Step::VillageTotems));
 	EXPECT_TRUE(recorder.Before(Step::VillageTotems, Step::PlayerAlignment));
-}
-
-TEST(GameTurnOrder, TheTribalPowersSettleAfterTheComputerPlayersAndBeforeTheInfluence)
-{
-	const auto recorder = PlayOneTurn();
-	EXPECT_TRUE(recorder.Before(Step::ComputerPlayers, Step::TribalPowers));
-	EXPECT_TRUE(recorder.Before(Step::TribalPowers, Step::Influence));
 }
 
 TEST(GameTurnOrder, TheTeleportTravellersAreDroppedAfterTheTownsAndBeforeTheComputerPlayers)

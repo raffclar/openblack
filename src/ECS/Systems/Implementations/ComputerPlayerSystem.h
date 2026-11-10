@@ -55,6 +55,7 @@ public:
 	[[nodiscard]] float Attitude(PlayerNames player, PlayerNames other) const override;
 	bool SavePersonality(PlayerNames player, std::string_view file) override;
 	bool LoadPersonality(PlayerNames player, std::string_view file) override;
+	void PlayerTurn(PlayerNames name) override;
 	void ProcessTurn() override;
 	void FillEmptySlots(std::span<const PlayerNames> gods, std::span<const PlayerNames> humans) override;
 	void WaitForHumans() override;

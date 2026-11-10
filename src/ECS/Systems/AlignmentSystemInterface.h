@@ -148,10 +148,12 @@ public:
 	/// players are not kept. Only a debug window shows the totals.
 	virtual void AddToHistory(PlayerNames /*player*/, components::AlignmentCause /*cause*/, float /*change*/) {}
 
-	/// At the end of the players' turns: each player's waiting change moves its alignment. Then the camera takes the
-	/// alignment of the player of most influence at its eye, the neutral player's where no player has any. The eye is
-	/// the camera that the player of this computer last reported, so that the frames do not change it. Before the first
-	/// report, the eye is at the middle of the world's axes.
+	/// In the turn of the player, after its stones and before its computer mind: the waiting change of the player moves
+	/// its alignment. The alignment of the neutral player then goes back to 0.
+	virtual void PlayerTurn(PlayerNames player) = 0;
+	/// At the end of the players' turns: the camera takes the alignment of the player of most influence at its eye, the
+	/// neutral player's where no player has any. The eye is the camera that the player of this computer last reported,
+	/// so that the frames do not change it. Before the first report, the eye is at the middle of the world's axes.
 	virtual void UpdatePlayersTurn() = 0;
 	/// Each game turn: the plan of each creature adds its change, and the waiting change moves its alignment
 	virtual void UpdateCreaturesTurn() = 0;

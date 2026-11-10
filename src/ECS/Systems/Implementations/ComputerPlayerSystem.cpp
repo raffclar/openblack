@@ -609,52 +609,47 @@ bool ComputerPlayerSystem::LoadPersonality(PlayerNames player, std::string_view 
 	return false;
 }
 
-void ComputerPlayerSystem::ProcessTurn()
+void ComputerPlayerSystem::PlayerTurn(PlayerNames name)
 {
 	auto& registry = Locator::entitiesRegistry::value();
-	std::vector<std::pair<PlayerNames, entt::entity>> players;
-	registry.Each<const Player>(
-	    [&players](entt::entity entity, const Player& player) { players.emplace_back(player.name, entity); });
-	// The players take their turns in the order of their numbers. After its mind, each player notes its influence
-	// power, so a mind sees the players before it as they are in this turn.
-	std::ranges::sort(players, {}, &std::pair<PlayerNames, entt::entity>::first);
-	const uint32_t turn = Locator::time::has_value() ? Locator::time::value().GetTurn() : 0;
-	for (const auto& [name, entity] : players)
+	std::optional<entt::entity> found;
+	registry.Each<const Player>([&found, name](entt::entity entity, const Player& player) {
+		if (player.name == name && !found.has_value())
+		{
+			found = entity;
+		}
+	});
+	if (!found.has_value())
 	{
-		if (_timesEvery == 0)
+		return;
+	}
+	const auto entity = *found;
+	const uint32_t turn = Locator::time::has_value() ? Locator::time::value().GetTurn() : 0;
+	if (_timesEvery == 0)
+	{
+		MindTurn(name, entity, turn);
+	}
+	else
+	{
+		_seeMs = 0.0;
+		_handMs = 0.0;
+		const auto start = std::chrono::steady_clock::now();
+		if (MindTurn(name, entity, turn))
 		{
-			MindTurn(name, entity, turn);
-		}
-		else
-		{
-			_seeMs = 0.0;
-			_handMs = 0.0;
-			const auto start = std::chrono::steady_clock::now();
-			if (MindTurn(name, entity, turn))
+			const auto fullMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
+			_times.Add(static_cast<int>(name), turn, _seeMs, _handMs, fullMs);
+			if (fullMs >= computer_god_times::k_SlowTurnMs)
 			{
-				const auto fullMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
-				_times.Add(static_cast<int>(name), turn, _seeMs, _handMs, fullMs);
-				if (fullMs >= computer_god_times::k_SlowTurnMs)
-				{
-					SPDLOG_LOGGER_INFO(spdlog::get("game"), "Computer god {} slow turn {}: {:.3f} ms, see {:.3f} hand {:.3f}",
-					                   static_cast<int>(name), turn, fullMs, _seeMs, _handMs);
-				}
+				SPDLOG_LOGGER_INFO(spdlog::get("game"), "Computer god {} slow turn {}: {:.3f} ms, see {:.3f} hand {:.3f}",
+				                   static_cast<int>(name), turn, fullMs, _seeMs, _handMs);
 			}
-		}
-		if (Locator::influenceSystem::has_value())
-		{
-			auto& influence = Locator::influenceSystem::value();
-			// The temples of the player grow toward twice the share of the influence that the player had as its turn
-			// started. The share has the power of the players before it in this turn, and the power of the others in the
-			// last turn.
-			if (Locator::templeExteriorSystem::has_value())
-			{
-				Locator::templeExteriorSystem::value().NoteSizeTarget(name, influence.RelativeInfluencePower(name));
-			}
-			// After its mind, the player notes its influence power, its running average and a sample of its history
-			influence.NoteInfluencePower(name);
 		}
 	}
+}
+
+void ComputerPlayerSystem::ProcessTurn()
+{
+	const uint32_t turn = Locator::time::has_value() ? Locator::time::value().GetTurn() : 0;
 	if (_timesEvery != 0 && turn % _timesEvery == 0 && !_times.Gods().empty())
 	{
 		SPDLOG_LOGGER_INFO(spdlog::get("game"), "{}", _times.Report(turn));

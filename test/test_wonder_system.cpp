@@ -106,7 +106,7 @@ TEST_F(WonderSystemTest, AFinishedWonderAddsThePowerOfItsSizeWhenItIsMade)
 	EXPECT_EQ(Most(_one), 2.5f);
 	// The power of the tribe follows at the next turn
 	EXPECT_EQ(Power(_one), 1.0f);
-	_system.ProcessTurn();
+	_system.PlayerTurn(PlayerNames::PLAYER_ONE);
 	EXPECT_EQ(Power(_one), 2.5f);
 	EXPECT_EQ(Most(_two), 1.0f);
 }
@@ -151,9 +151,23 @@ TEST_F(WonderSystemTest, EachTurnTheTribalPowerIsTheMostPowerAndAtLeastOne)
 	auto& miracles = Locator::entitiesRegistry::value().Get<Player>(_one).miracles;
 	miracles.maxTribalPower.at(k_Celtic) = 0.5f;
 	miracles.tribalPower.at(k_Celtic) = 7.0f;
-	_system.ProcessTurn();
+	_system.PlayerTurn(PlayerNames::PLAYER_ONE);
 	EXPECT_EQ(Most(_one), 1.0f);
 	EXPECT_EQ(Power(_one), 1.0f);
+}
+
+// Each player settles the power of its tribes in its own turn. A change to another player waits for the turn of that
+// player.
+TEST_F(WonderSystemTest, ThePlayerTurnSettlesOnlyThePowerOfThatPlayer)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	registry.Get<Player>(_one).miracles.maxTribalPower.at(k_Celtic) = 2.0f;
+	registry.Get<Player>(_two).miracles.maxTribalPower.at(k_Celtic) = 3.0f;
+	_system.PlayerTurn(PlayerNames::PLAYER_TWO);
+	EXPECT_EQ(Power(_one), 1.0f);
+	EXPECT_EQ(Power(_two), 3.0f);
+	_system.PlayerTurn(PlayerNames::PLAYER_ONE);
+	EXPECT_EQ(Power(_one), 2.0f);
 }
 
 TEST_F(WonderSystemTest, SetPowerChangesOnlyAWonder)

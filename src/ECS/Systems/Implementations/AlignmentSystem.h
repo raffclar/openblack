@@ -31,6 +31,7 @@ public:
 	void AddPendingAlignment(PlayerNames player, float change) override;
 	[[nodiscard]] float GetPendingAlignment(PlayerNames player) const override;
 	void AddToHistory(PlayerNames player, components::AlignmentCause cause, float change) override;
+	void PlayerTurn(PlayerNames player) override;
 	void UpdatePlayersTurn() override;
 	void UpdateCreaturesTurn() override;
 	void CreatureTurn(entt::entity creature) override;
