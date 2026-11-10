@@ -923,7 +923,7 @@ void Runner::SetUpStatistics(const Scenario& scenario)
 	}
 }
 
-void Runner::SetUpWorship(float share)
+void Runner::SetUpWorship(float share, std::optional<float> food)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto& towns = registry.Context().towns;
@@ -940,6 +940,15 @@ void Runner::SetUpWorship(float share)
 	}
 	// Put up at once, as a land's script puts down a site already built, then the totem raised to the share
 	Locator::worshipSiteSystem::value().BuildBy(site, 1.0f);
+	if (food.has_value())
+	{
+		registry.Each<ecs::components::Villager>([town, food](ecs::components::Villager& person) {
+			if (person.town == town)
+			{
+				person.food = *food;
+			}
+		});
+	}
 	if (Locator::villageTotemSystem::has_value())
 	{
 		Locator::villageTotemSystem::value().SetTownShare(town, share);
