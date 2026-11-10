@@ -1323,7 +1323,7 @@ std::optional<uint32_t> GameHandGrabWorld::PourPot(entt::entity pot, PlayerNames
 	// It pours out of the hand where the last report put the hand
 	const auto hand = ReportedHandPlace();
 	std::optional<uint32_t> pour;
-	if (Locator::effectRequestSystem::has_value() && player == HandPlayer())
+	if (Locator::effectRequestSystem::has_value() && IsLocalHand())
 	{
 		// A poisoned handful pours its own poisoned food. Only the computer of the hand shows the pour, so the particles
 		// of this computer give it its number.

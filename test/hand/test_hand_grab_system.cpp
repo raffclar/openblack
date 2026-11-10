@@ -2456,6 +2456,36 @@ TEST_F(HandGrabSystemWithWorld, APileIsScoopedIntoAHandfulThatGrowsWhileTheButto
 	EXPECT_TRUE(system->GetHeld().has_value());
 }
 
+// The scoop of another player's hand takes from the pile on every computer, but only the computer of that hand pins
+// its cursor, shows the stream, plays the scooping sound and shows the amount that the hand holds
+TEST_F(HandGrabSystemWithWorld, TheScoopOfAHandThatIsNotTheLocalOneShowsAndSoundsNothing)
+{
+	world->localHand = false;
+	const auto pile = world->registry.Create();
+	world->registry.Assign<Transform>(pile, glm::vec3(0.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+	world->registry.Assign<Pot>(pile, Pot {.amount = 1000, .maxAmount = 2000, .type = PotInfo::FoodPile});
+	world->sizes[pile] = {.radius = 2.0f, .height = 3.0f};
+	system->DoLock(PlayerNames::PLAYER_ONE, pile);
+	const auto handful = system->GetHeld();
+	ASSERT_TRUE(handful.has_value());
+	EXPECT_EQ(world->registry.Get<const Pot>(*handful).amount, 25u);
+	EXPECT_EQ(world->streams, 0u);
+	EXPECT_FALSE(world->cursorPinned);
+	// Each turn still takes more from the pile
+	Turn();
+	EXPECT_EQ(world->registry.Get<const Pot>(*handful).amount, 25u + 8u);
+	EXPECT_EQ(world->registry.Get<const Pot>(pile).amount, 1000u - 25u - 8u);
+	EXPECT_TRUE(world->scoopSounds.empty());
+	EXPECT_FALSE(system->TakeAmountToolTip().has_value());
+	// A pinned cursor of the local hand stays pinned when the other hand's scoop ends
+	world->cursorPinned = true;
+	system->DoUnlock(PlayerNames::PLAYER_ONE, pile);
+	EXPECT_TRUE(world->cursorPinned);
+	EXPECT_FALSE(system->TakeAmountToolTip().has_value());
+	EXPECT_EQ(world->scoopSoundStops, 0u);
+	EXPECT_TRUE(system->GetHeld().has_value());
+}
+
 TEST_F(HandGrabSystemWithWorld, AHandfulPressedOntoAStoreGoesIntoIt)
 {
 	const auto pile = world->registry.Create();
