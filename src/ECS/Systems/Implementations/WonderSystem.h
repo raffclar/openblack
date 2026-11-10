@@ -29,7 +29,7 @@ public:
 	void SetPower(entt::entity building, float power) override;
 	[[nodiscard]] float PowerAt(entt::entity town, glm::vec3 place) const override;
 	[[nodiscard]] float ScaleAt(entt::entity town, glm::vec3 place) const override;
-	void ProcessTurn() override;
+	void PlayerTurn(PlayerNames player) override;
 };
 
 } // namespace openblack::ecs::systems

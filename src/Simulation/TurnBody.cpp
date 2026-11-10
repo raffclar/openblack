@@ -98,6 +98,7 @@
 #include "ECS/Systems/ParticleRuleSystemInterface.h"
 #include "ECS/Systems/PathfindingSystemInterface.h"
 #include "ECS/Systems/PlayerCommandSystemInterface.h"
+#include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/PlaygroundTripSystemInterface.h"
 #include "ECS/Systems/PuzzleGameSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
@@ -133,6 +134,7 @@
 #include "EngineConfig.h"
 #include "LivingTurnOrder.h"
 #include "Locator.h"
+#include "PlayerTurnOrder.h"
 #include "Profiler.h"
 #include "TurnStepTimes.h"
 
@@ -151,35 +153,85 @@ void FileNewInMap()
 	}
 }
 
+/// The temples of the player grow toward twice the share of the influence that the player had as its turn started. The
+/// share has the power of the players before it in this turn, and the power of the others in the last turn. Then the
+/// player notes its influence power, its running average and a sample of its history.
+void NotePlayerInfluence(PlayerNames player)
+{
+	if (!Locator::influenceSystem::has_value() ||
+	    (Locator::playerSystem::has_value() && !Locator::playerSystem::value().FindPlayer(player).has_value()))
+	{
+		return;
+	}
+	auto& influence = Locator::influenceSystem::value();
+	if (Locator::templeExteriorSystem::has_value())
+	{
+		Locator::templeExteriorSystem::value().NoteSizeTarget(player, influence.RelativeInfluencePower(player));
+	}
+	influence.NoteInfluencePower(player);
+}
+
 void PlayPlayerTurns()
 {
-	// Each player takes its turn in the order of the players, the neutral player last. First its temple: one whose heart
-	// lost all its life moves on through its destruction, and a hurt heart beams. Then each of its towns, in the order
-	// the player gained them, takes its turn. So the game's random numbers are drawn in the same order as the game draws
-	// them.
+	// Each player takes its whole turn in the order of the players, the neutral player last, before the next player starts.
+	// First its temple: one whose heart lost all its life moves on through its destruction, and a hurt heart beams. Then
+	// each of its towns, in the order the player got them, takes its turn. Then its stones, its alignment, its computer
+	// mind, the power of its tribes and its influence power. So the game's random numbers come in the same order as the
+	// game draws them.
 	if (Locator::templeDestructionSystem::has_value())
 	{
 		Locator::templeDestructionSystem::value().StartTurn();
 	}
 	auto& towns = Locator::townSystem::value();
-	for (const auto player : ecs::game_players::All())
-	{
-		// In a network game, the winning conditions that the world measures take their values before the player's turn
-		if (Locator::gameEndSystem::has_value())
+	player_turn::Play(ecs::game_players::All(), [&towns](PlayerNames player, player_turn::Part part) {
+		switch (part)
 		{
-			Locator::gameEndSystem::value().MeasureConditions(player);
+		case player_turn::Part::Conditions:
+			// In a network game, the winning conditions that the world measures take their values before the player's turn
+			if (Locator::gameEndSystem::has_value())
+			{
+				Locator::gameEndSystem::value().MeasureConditions(player);
+			}
+			break;
+		case player_turn::Part::Temple:
+			if (Locator::templeDestructionSystem::has_value())
+			{
+				Locator::templeDestructionSystem::value().ProcessPlayerTurn(player);
+			}
+			break;
+		case player_turn::Part::Towns:
+			towns.ProcessPlayerTowns(player);
+			break;
+		case player_turn::Part::Stones:
+			// After its towns, the player's stones drop the travellers that changed to a different thing
+			if (Locator::teleportSystem::has_value())
+			{
+				Locator::teleportSystem::value().PlayerTurn(player);
+			}
+			break;
+		case player_turn::Part::Alignment:
+			// The waiting change of the player moves its alignment before its computer mind looks at the players
+			Locator::alignmentSystem::value().PlayerTurn(player);
+			break;
+		case player_turn::Part::Mind:
+			// The computer mind of the player, when a land script switched it on
+			if (Locator::computerPlayerSystem::has_value())
+			{
+				Locator::computerPlayerSystem::value().PlayerTurn(player);
+			}
+			break;
+		case player_turn::Part::Powers:
+			// The player's tribes give the player the most power that they gave it, at least 1
+			if (Locator::wonderSystem::has_value())
+			{
+				Locator::wonderSystem::value().PlayerTurn(player);
+			}
+			break;
+		case player_turn::Part::Influence:
+			NotePlayerInfluence(player);
+			break;
 		}
-		if (Locator::templeDestructionSystem::has_value())
-		{
-			Locator::templeDestructionSystem::value().ProcessPlayerTurn(player);
-		}
-		towns.ProcessPlayerTowns(player);
-		// After its towns, the player's stones drop the travellers that turned to something else
-		if (Locator::teleportSystem::has_value())
-		{
-			Locator::teleportSystem::value().PlayerTurn(player);
-		}
-	}
+	});
 }
 
 /// The footpaths go round what came onto the map since the last time, and stop going round what left it. The game does
@@ -615,17 +667,10 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 		PlayPlayerTurns();
 		break;
 	case Step::ComputerPlayers:
-		// In the turn of the players, each computer mind that a land script switched on starts on the land
+		// The minds took their turns in the turns of their players. Here the computer minds give the report of their times.
 		if (Locator::computerPlayerSystem::has_value())
 		{
 			Locator::computerPlayerSystem::value().ProcessTurn();
-		}
-		break;
-	case Step::TribalPowers:
-		// Each player's tribes give the player the most power that they gave it, at least 1
-		if (Locator::wonderSystem::has_value())
-		{
-			Locator::wonderSystem::value().ProcessTurn();
 		}
 		break;
 	case Step::Influence:
@@ -669,7 +714,7 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 		}
 		break;
 	case Step::PlayerAlignment:
-		// Each player's waiting change moves its alignment. Then the camera takes the alignment of the player of most
+		// The players moved their alignments in their own turns. Here the camera takes the alignment of the player of most
 		// influence where the player of this computer last reported its camera.
 		Locator::alignmentSystem::value().UpdatePlayersTurn();
 		break;

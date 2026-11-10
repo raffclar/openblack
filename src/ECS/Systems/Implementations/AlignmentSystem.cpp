@@ -167,28 +167,38 @@ void AlignmentSystem::AddPlayerAlignment(PlayerNames player, float change)
 	SetPlayerAlignment(player, alignment::AddedAlignment(GetPlayerAlignment(player), change));
 }
 
-void AlignmentSystem::UpdatePlayersTurn()
+void AlignmentSystem::PlayerTurn(PlayerNames player)
 {
-	// What the players' deeds changed comes through: each turn the change that waits, held to a whole one, moves the
-	// alignment by that share of the owner's change a turn, and the rest is gone
-	if (Locator::infoConstants::has_value())
+	const auto entity = FindPlayer(player);
+	if (!entity.has_value())
 	{
-		const auto& info = Locator::infoConstants::value();
-		const float change = info.player.maxAlignmentChangePerGameTurn;
+		return;
+	}
+	auto* alignment = Locator::entitiesRegistry::value().TryGet<Alignment>(*entity);
+	// What the player's deeds changed comes through: the change that waits, held to a whole one, moves the alignment by
+	// that share of the player's change a turn, and the rest is gone
+	if (alignment != nullptr && Locator::infoConstants::has_value())
+	{
+		const float change = Locator::infoConstants::value().player.maxAlignmentChangePerGameTurn;
 		// The advisors of the player at this machine watch which way its alignment moves, by the change that waits
 		// before it is held to a whole one
-		if (Locator::guidanceSystem::has_value() && Locator::playerSystem::has_value())
+		const auto here =
+		    (Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE);
+		if (player == here && Locator::guidanceSystem::has_value() && Locator::playerSystem::has_value())
 		{
-			const auto here =
-			    (Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE);
-			Locator::guidanceSystem::value().AlignmentTurn(GetPendingAlignment(here) * change);
+			Locator::guidanceSystem::value().AlignmentTurn(alignment->pending * change);
 		}
-		auto& registry = Locator::entitiesRegistry::value();
-		registry.Each<Alignment>([change](entt::entity, Alignment& alignment) {
-			alignment.value = magic::StepPendingAlignment(alignment.value, alignment.pending, change);
-		});
+		alignment->value = magic::StepPendingAlignment(alignment->value, alignment->pending, change);
 	}
+	// The neutral player is neither good nor evil at the end of its turn
+	if (alignment != nullptr && player == PlayerNames::NEUTRAL)
+	{
+		alignment->value = 0.0f;
+	}
+}
 
+void AlignmentSystem::UpdatePlayersTurn()
+{
 	// The camera takes the alignment of the most influential player at its eye. The eye is the camera that the player of
 	// this computer last reported, not the camera that the frames move.
 	std::optional<HandSystemInterface::ReportedCamera> reported;
