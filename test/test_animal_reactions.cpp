@@ -208,11 +208,18 @@ TEST(AnimalSlope, TheLeanLiftsTheXAndZAxesAlongTheUpAxis)
 
 TEST(AnimalWanderStart, AGrazerOrAHunterStartsItsLegOnTheLand)
 {
-	EXPECT_EQ(animals::WanderStartOf(true, false), animals::WanderStart::OnTheLand);
-	EXPECT_EQ(animals::WanderStartOf(false, true), animals::WanderStart::OnTheLand);
+	EXPECT_EQ(animals::WanderStartOf(true, false, false), animals::WanderStart::OnTheLand);
+	EXPECT_EQ(animals::WanderStartOf(false, true, false), animals::WanderStart::OnTheLand);
 }
 
 TEST(AnimalWanderStart, AnyOtherKindStartsItsLegAsALeader)
 {
-	EXPECT_EQ(animals::WanderStartOf(false, false), animals::WanderStart::AsLeader);
+	EXPECT_EQ(animals::WanderStartOf(false, false, false), animals::WanderStart::AsLeader);
+}
+
+TEST(AnimalWanderStart, AWolfOfTheWolfMiracleStartsItsOwnLegAfterALanding)
+{
+	// The game sends every landed animal through the flock merge, the miracle's wolves also. A wolf then starts its
+	// leg about its leader, and not as a bird leader does
+	EXPECT_EQ(animals::WanderStartOf(false, false, true), animals::WanderStart::SpellWolf);
 }

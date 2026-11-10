@@ -73,7 +73,10 @@ public:
 	/// A land script loads the weights of a personality file into the mind of the player. The load looks for a relative
 	/// name in the profile folder first, then in the game folder. Returns true when it found the file.
 	virtual bool LoadPersonality(PlayerNames /*player*/, std::string_view /*file*/) { return false; }
-	/// In the turn of the players: each mind that is switched on and did not start on the land starts
+	/// In the turn of the player, after its towns, its stones and its alignment: the mind of the player takes its turn when
+	/// it is switched on, and starts when it did not start on the land yet
+	virtual void PlayerTurn(PlayerNames player) = 0;
+	/// After the turns of all the players: the report of the times of the minds, when a report is asked
 	virtual void ProcessTurn() = 0;
 	/// At the start of a network game, in the order of the gods of the slots: each god with a citadel that no human and
 	/// no computer mind plays gets a computer god. Its mind switches on, and it gets a fully grown creature of a random

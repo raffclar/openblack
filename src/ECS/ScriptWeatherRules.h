@@ -60,8 +60,8 @@ struct Wind
 	int8_t z {0};
 };
 
-/// A climate's say in that wind: where its middle is, how far it is at full strength and how far it reaches, and its own
-/// wind
+/// A climate's part in the weather at a point: where its middle is, how far it is at full strength and how far it
+/// reaches, and its own wind and temperature
 struct ClimateWind
 {
 	glm::vec2 centre;
@@ -69,6 +69,7 @@ struct ClimateWind
 	float outerRadius;
 	float windX;
 	float windZ;
+	float temperature {0.0f};
 };
 
 /// How much of a climate's wind blows at a point: all of it within its inner radius, none past its outer, and in between
@@ -79,6 +80,11 @@ struct ClimateWind
 /// of each climate's wind that reaches it (the global climate's again among them), in the order given, each part cut
 /// to a whole number and kept to a byte, the sum held within a byte
 [[nodiscard]] Wind DriftWind(Wind air, const ClimateWind& global, std::span<const ClimateWind> climates, glm::vec2 point);
+
+/// The weather of the climates at a point. The climates add their temperature and wind to the weather of the air in the
+/// same way as the wind that blows a weather thing's storm. The other parts of the weather stay as the air has them.
+[[nodiscard]] components::WeatherInfo ClimateWeather(components::WeatherInfo air, const ClimateWind& global,
+                                                     std::span<const ClimateWind> climates, glm::vec2 point);
 
 /// A turn of the wind on a storm the wind blows: a hundredth of the wind's bytes
 [[nodiscard]] glm::vec3 Drift(glm::vec3 position, Wind wind);

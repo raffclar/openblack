@@ -95,6 +95,21 @@ void openblack::testbed_scenarios::AddCreatureLearningScenarios(std::vector<Scen
 	    .environment = {.dispenserGrid = false},
 	    .framing = {.shot = Shot::Follow},
 	    .creatures = {Curious({0.0f, -5.0f}, 180.0f)},
+	    .objects = building,
+	    .townBeliefInPlayer = k_TownBelief,
+	});
+	all.push_back({
+	    .id = "interface.learning_words_behind_building",
+	    .name = "A building in front of the learning mark hides its words",
+	    .facet = Facet::Interface,
+	    .description = "The town and the lion of creatures.learns_build, seen from the height of the land north of the "
+	                   "village centre, which stands between the camera and the lion. Best watched at game speed 2.",
+	    .expected = "When the lion learns, its light bulb and the yellow share float up over its head. While the words "
+	                "are behind the village centre, the village centre hides them and their shadow. The words come into "
+	                "sight above the roof as they rise. No part of the words shows through the building.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {-2.0f, 0.5f, 95.0f}, .look = {-2.0f, 0.5f, 15.0f}},
+	    .creatures = {Curious({0.0f, -5.0f}, 180.0f)},
 	    .objects = std::move(building),
 	    .townBeliefInPlayer = k_TownBelief,
 	});

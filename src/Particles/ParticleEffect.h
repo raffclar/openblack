@@ -318,11 +318,12 @@ public:
 	[[nodiscard]] virtual int SurfaceAt(glm::vec3 /*point*/) const { return 1; }
 	/// A player's alignment as a sound takes it: 1 evil, 2 middling, 3 good
 	[[nodiscard]] virtual int SoundAlignment(int /*player*/) const { return 2; }
-	/// Whether it is raining or snowing at a point
+	/// Whether it rains at a point, or snow lies there
 	[[nodiscard]] virtual bool IsRainingAt(glm::vec3 /*point*/) const { return false; }
 	/// The wind at a point, in metres a second
 	[[nodiscard]] virtual glm::vec3 WindAt(glm::vec3 /*point*/) const { return glm::vec3(0.0f); }
-	/// The wind at a point blended between the weather's nearest cells, in metres a second
+	/// The wind at a point, blended between the weather's nearest cells, with the wind of the climates, in metres a
+	/// second
 	[[nodiscard]] virtual glm::vec3 SmoothWindAt(glm::vec3 point) const { return WindAt(point); }
 	/// A storm's weather is laid over the land, until it is moved or taken away; 0 for none
 	[[nodiscard]] virtual uint32_t AddRainStorm(const storm::RainStorm& /*storm*/) { return 0; }

@@ -106,7 +106,7 @@ struct Surroundings
 {
 	/// In the water or on the coast, low enough to be wet
 	bool inWater {false};
-	/// The heaviest rain or snow on it, 0..127
+	/// The rain on it or the snow that lies there, 0..127, whichever is more
 	float rain {0.0f};
 	/// Its object's life, 0..1
 	float life {1.0f};

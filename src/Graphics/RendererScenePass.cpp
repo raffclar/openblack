@@ -1245,7 +1245,9 @@ void Renderer::DrawPassTranslucent(const DrawSceneDesc& desc, const ScenePass& p
 			}
 			RenderContext::InstancedDrawDesc placers {soul.instance, 1, false};
 			const EntityPose soulPose {.bones = soul.bones, .morphTargets = nullptr};
-			submitDesc.sortDepth = zsort::Depth(glm::vec3(renderCtx.soulInstances.at(soul.instance).model[3]), cameraOrigin);
+			// A soul is a model that moves by its bones, so its sort uses the key of a placed model
+			submitDesc.sortDepth =
+			    zsort::ModelDepth(glm::vec3(renderCtx.soulInstances.at(soul.instance).model[3]), cameraOrigin);
 			submitDesc.objectLook = L3DMeshSubmitDesc::ObjectLook {.colour = glm::vec3(255.0f), .alpha = soul.alpha};
 			drawInstances(soul.meshId, placers, true, soul.instance, 1, &soulPose, nullptr, renderCtx.soulInstanceBuffer);
 			submitDesc.objectLook.reset();

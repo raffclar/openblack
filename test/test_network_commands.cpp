@@ -195,6 +195,7 @@ public:
 	void MoveHand(PlayerNames /*player*/, glm::vec3 /*place*/, float /*speed*/, bool /*fixedHeight*/) override {}
 	void SetHand(PlayerNames /*player*/, glm::vec3 /*place*/, bool /*fixedHeight*/) override {}
 	[[nodiscard]] std::optional<glm::vec3> HandPosition(PlayerNames /*player*/) override { return std::nullopt; }
+	void PlayerTurn(PlayerNames /*player*/) override {}
 	void ProcessTurn() override {}
 	void FillEmptySlots(std::span<const PlayerNames> /*gods*/, std::span<const PlayerNames> /*humans*/) override {}
 	void WaitForHumans() override {}

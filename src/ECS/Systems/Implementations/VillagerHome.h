@@ -38,10 +38,15 @@ namespace openblack::ecs::villager_home
 /// How a villager's walk to its goal goes about the things in its way
 enum class WalkWay : uint8_t
 {
-	/// It heads for its goal and goes round whatever stands in its way: villagers going about their lives
+	/// It heads for its goal and goes round whatever stands in its way. It looks along its way for the first thing in the
+	/// way when the walk starts.
 	RoundThings,
-	/// It walks straight to its goal, through whatever stands in the way: a script sending it somewhere
+	/// It walks straight to its goal, through whatever stands in the way. It forgets the circle that it went round last,
+	/// and it does not wait for a trial of both ways round: most walks to a near place, a script, a dance and football.
 	StraightThrough,
+	/// It walks straight to its goal, through whatever stands in the way, as StraightThrough. A trial of both ways round
+	/// that it waits for still comes: the legs of a footpath after the first.
+	StraightOn,
 };
 
 /// Walks the villager to a point, then on into a state: it goes into its walk and the state it walks to together, then

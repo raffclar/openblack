@@ -985,6 +985,20 @@ void PathfindingSystem::WalkTo(entt::entity walker, glm::ivec2 goal, float goalA
 	Retag(registry, walking);
 }
 
+void PathfindingSystem::FaceWalkGoal(entt::entity walker)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto* wallHug = registry.Valid(walker) ? registry.TryGet<WallHug>(walker) : nullptr;
+	auto* transform = registry.TryGet<Transform>(walker);
+	if (wallHug == nullptr || transform == nullptr)
+	{
+		return;
+	}
+	HeldPosition(registry, walker, *wallHug, *transform);
+	auto walking = WalkerOf(registry, walker, *wallHug, *transform);
+	::FaceGoal(walking);
+}
+
 void PathfindingSystem::SetupWalkRound(entt::entity walker, glm::ivec2 goal)
 {
 	auto& registry = Locator::entitiesRegistry::value();

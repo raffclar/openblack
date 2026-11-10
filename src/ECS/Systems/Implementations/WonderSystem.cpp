@@ -226,9 +226,13 @@ float WonderSystem::ScaleAt(entt::entity town, glm::vec3 place) const
 	return wonder::Scale(PowerAt(town, place));
 }
 
-void WonderSystem::ProcessTurn()
+void WonderSystem::PlayerTurn(PlayerNames player)
 {
-	Entities().Each<Player>([](Player& record) {
+	Entities().Each<Player>([player](Player& record) {
+		if (record.name != player)
+		{
+			return;
+		}
 		for (size_t tribe = 0; tribe < Player::k_TribeCount; ++tribe)
 		{
 			auto& most = record.miracles.maxTribalPower.at(tribe);

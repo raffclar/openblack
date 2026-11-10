@@ -1138,7 +1138,9 @@ void Runner::UpdateVillagerWalks()
 			if (walk.nextAt.has_value() && _seconds >= *walk.nextAt)
 			{
 				const auto goal = MapPoint(_middle, walk.outwards ? *setup.walkTo : setup.offset);
-				ecs::villager_home::SetupMoveTo(registry.Get<ecs::components::LivingAction>(entity), goal, setup.walkFinal);
+				ecs::villager_home::SetupMoveTo(registry.Get<ecs::components::LivingAction>(entity), goal, setup.walkFinal,
+				                                setup.walkStraight ? ecs::villager_home::WalkWay::StraightThrough
+				                                                   : ecs::villager_home::WalkWay::RoundThings);
 				Log(fmt::format("Villager {} walks {}", i, walk.outwards ? "out" : "back"));
 				walk.goal = goal;
 				walk.setOffTurn = Locator::time::has_value() ? std::optional(Locator::time::value().GetTurn()) : std::nullopt;

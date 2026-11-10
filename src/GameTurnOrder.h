@@ -110,10 +110,11 @@ enum class Step : uint8_t
 	Sharks,
 	Storms,
 	Snow,
+	/// Each player does its whole turn: its temple, its towns, its stones, its alignment, its computer mind, the power of
+	/// its tribes and its influence power
 	Players,
+	/// After the turns of the players, the computer minds give the report of their times
 	ComputerPlayers,
-	/// The power that each tribe gives each player
-	TribalPowers,
 	Influence,
 	PlayerStatistics,
 	Heartbeats,
@@ -304,8 +305,6 @@ inline constexpr std::array k_Turn = std::to_array<Place>({
     {.step = Step::Teleports, .stage = Stage::Players},
     {.step = Step::TownFlags, .stage = std::nullopt},
     {.step = Step::ComputerPlayers, .stage = Stage::Players},
-    // After its computer mind, the power that each tribe gives a player becomes the most power that the tribe gave it
-    {.step = Step::TribalPowers, .stage = Stage::Players},
     // The influence of the towns and the temples, and the borders that it draws
     {.step = Step::Influence, .stage = Stage::Players},
     {.step = Step::PlayerStatistics, .stage = Stage::Players},
@@ -315,7 +314,7 @@ inline constexpr std::array k_Turn = std::to_array<Place>({
     {.step = Step::WorshipSiteLooks, .stage = Stage::Players},
     // After the players' turns, a god with no temple is out, and the game is decided when one god is left
     {.step = Step::GameEnd, .stage = Stage::Players},
-    // At the end of the players' turns: their alignments, then the alignment at the camera's eye
+    // At the end of the players' turns: the alignment at the camera's eye
     {.step = Step::PlayerAlignment, .stage = Stage::Players},
     {.step = Step::Dances, .stage = Stage::Dances},
     {.step = Step::Fields, .stage = Stage::Lists},

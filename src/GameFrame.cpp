@@ -524,16 +524,29 @@ void Game::PlaceLearningTexts()
 		return;
 	}
 	std::vector<gui::GameInterface::LearningText> texts;
+	if (!Locator::windowing::has_value() || !Locator::camera::has_value())
+	{
+		Locator::gameInterface::value().SetLearningTexts(std::move(texts));
+		return;
+	}
+	const auto& camera = Locator::camera::value();
+	const auto viewProjection = camera.GetViewProjectionMatrix();
+	const float nearClip = camera.GetNearClip();
+	const auto halfScreen = glm::vec2(Locator::windowing::value().GetSize()) * 0.5f;
 	Locator::entitiesRegistry::value().Each<const ecs::components::LearningMarker>(
-	    [this, &texts](entt::entity /*unused*/, const ecs::components::LearningMarker& marker) {
+	    [&](entt::entity /*unused*/, const ecs::components::LearningMarker& marker) {
 		    const auto look = ecs::learning_marker::LookOf(marker);
 		    if (marker.text.empty())
 		    {
 			    return;
 		    }
-		    if (const auto screen = OnScreen(look.textPoint); screen.has_value())
+		    const auto clip = viewProjection * glm::vec4(look.textPoint, 1.0f);
+		    if (const auto place = ecs::learning_marker::PlaceText(clip, nearClip, halfScreen); place.has_value())
 		    {
-			    texts.push_back({.screen = *screen, .text = gui::ToUtf16(marker.text), .alpha = look.textAlpha});
+			    texts.push_back({.screen = place->screen,
+			                     .text = gui::ToUtf16(marker.text),
+			                     .alpha = look.textAlpha,
+			                     .depth = place->depth});
 		    }
 	    });
 	Locator::gameInterface::value().SetLearningTexts(std::move(texts));

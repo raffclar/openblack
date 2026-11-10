@@ -265,11 +265,6 @@ living::LandedLair living::LairOnLanding(AnimalInfo kind, bool leader)
 	}
 }
 
-bool living::JoinsAFlockAfterLanding(AnimalInfo kind)
-{
-	return kind != AnimalInfo::SpellWolf;
-}
-
 float living::MapDistance(glm::vec3 from, glm::vec3 to)
 {
 	// The game's map distance

@@ -176,6 +176,12 @@ public:
 	/// Weather interpolated between the four nearest cells, as heard and seen at the camera. High above the
 	/// ground it blends back towards calm air.
 	[[nodiscard]] virtual components::WeatherInfo GetWeatherSmooth(const glm::vec3& position) = 0;
+	/// The weather of the air at a point (one cell, or blended when smooth), plus the temperature and wind of the
+	/// climates there. The creature feels this temperature, and the smoke and the particles drift with this wind.
+	[[nodiscard]] virtual components::WeatherInfo GetClimateWeather(const glm::vec3& position, bool smooth)
+	{
+		return smooth ? GetWeatherSmooth(position) : GetWeather(position);
+	}
 	/// The cloud cover seen from a point, 0 for a clear sky and 1 for a full one, a little over in a storm
 	[[nodiscard]] virtual float GetOvercast(const glm::vec3& position) = 0;
 	/// How brightly lightning lights the land at the camera, 0 to 255: the last flash of the nearest storm, while the

@@ -639,6 +639,17 @@ void WeatherSystem::ProcessWeatherThings()
 
 script_weather::Wind WeatherSystem::DriftWindAt(const glm::vec3& position)
 {
+	const auto weather = AddClimates(GetWeather(position), position);
+	return {.x = weather.windX, .z = weather.windZ};
+}
+
+WeatherInfo WeatherSystem::GetClimateWeather(const glm::vec3& position, bool smooth)
+{
+	return AddClimates(smooth ? GetWeatherSmooth(position) : GetWeather(position), position);
+}
+
+WeatherInfo WeatherSystem::AddClimates(WeatherInfo air, const glm::vec3& position)
+{
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto toWind = [](const Climate& climate) {
 		const auto centre = ExactCentre(climate);
@@ -648,14 +659,15 @@ script_weather::Wind WeatherSystem::DriftWindAt(const glm::vec3& position)
 		    .outerRadius = climate.outerRadius,
 		    .windX = climate.windX,
 		    .windZ = climate.windZ,
+		    .temperature = climate.temperature,
 		};
 	};
 	const auto global = toWind(registry.Get<const Climate>(GetGlobalClimate()));
-	// The newest climate first
-	std::vector<script_weather::ClimateWind> climates;
+	// The newest climate first. The list keeps its memory from call to call, because the particles ask for each atom.
+	auto& climates = _climateParts;
+	climates.clear();
 	registry.Each<const Climate>([&climates, &toWind](const Climate& climate) { climates.push_back(toWind(climate)); });
-	const auto air = GetWeather(position);
-	return script_weather::DriftWind({.x = air.windX, .z = air.windZ}, global, climates, {position.x, position.z});
+	return script_weather::ClimateWeather(air, global, climates, {position.x, position.z});
 }
 
 // Storms age, fade in and out and travel towards their destination. A dead storm also takes its step, and it goes

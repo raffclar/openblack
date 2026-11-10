@@ -548,6 +548,33 @@ void testbed_scenarios::AddMovement(std::vector<Scenario>& all)
 	    .framing = {.shot = Shot::Overview, .include = {k_Pen + glm::vec2(-30.0f, -30.0f), k_Pen + glm::vec2(30.0f, 30.0f)}},
 	    .objects = pen,
 	});
+
+	// The same ring of fence. One villager walks round it and one villager walks straight through it.
+	std::vector<ObjectSetup> through(pen.begin(), pen.begin() + k_PenPieces);
+	through.push_back({.type = VillagerInfo::CelticForesterMale,
+	                   .offset = k_Pen + glm::vec2(-2.0f, -25.0f),
+	                   .walkTo = k_Pen + glm::vec2(-2.0f, 25.0f),
+	                   .walkAfterSeconds = 2.0f,
+	                   .walkRepeatSeconds = 60.0f});
+	through.push_back({.type = VillagerInfo::CelticHousewifeFemale,
+	                   .offset = k_Pen + glm::vec2(2.0f, -25.0f),
+	                   .walkTo = k_Pen + glm::vec2(2.0f, 25.0f),
+	                   .walkAfterSeconds = 2.0f,
+	                   .walkRepeatSeconds = 60.0f,
+	                   .walkStraight = true});
+	all.push_back({
+	    .id = "movement.villager_straight_walk",
+	    .name = "Villagers walking round and through a fence",
+	    .facet = Facet::Movement,
+	    .description = "A ring of fence round a pen stands between two villagers and the points they walk to beyond it. "
+	                   "The man walks as a villager goes about its life, round what is in the way. The woman walks as a "
+	                   "footballer, a farmer at the farm or a dancer to a near place walks: straight to the point. They "
+	                   "walk there and back every minute; the scenario log gives each walk's game turns.",
+	    .expected = "The man goes round the fence. The woman walks straight through the fence and the pen, and gets "
+	                "there first.",
+	    .framing = {.shot = Shot::Overview, .include = {k_Pen + glm::vec2(-30.0f, -30.0f), k_Pen + glm::vec2(30.0f, 30.0f)}},
+	    .objects = through,
+	});
 }
 
 void testbed_scenarios::AddFootprints(std::vector<Scenario>& all)

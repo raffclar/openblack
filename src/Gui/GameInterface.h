@@ -367,6 +367,8 @@ public:
 		std::u16string text;
 		/// 0..1; drawn yellow over a black shadow
 		float alpha;
+		/// The depth of its point in front of the camera. The world in front of the words hides them.
+		float depth {0.0f};
 	};
 	/// The camera's helper icons by the hand this frame, from the world camera or a tutorial demonstration; none while
 	/// they aren't drawn, when their fades hold where they are

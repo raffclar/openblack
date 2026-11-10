@@ -143,8 +143,17 @@ std::optional<float> script_weather::ClimateShare(const ClimateWind& climate, gl
 script_weather::Wind script_weather::DriftWind(Wind air, const ClimateWind& global, std::span<const ClimateWind> climates,
                                                glm::vec2 point)
 {
-	// The climates' part, each step cut to a whole number and kept to a byte
-	Wind climatesPart {.x = WholeByte(global.windX), .z = WholeByte(global.windZ)};
+	const auto weather = ClimateWeather({.windX = air.x, .windZ = air.z}, global, climates, point);
+	return {.x = weather.windX, .z = weather.windZ};
+}
+
+components::WeatherInfo script_weather::ClimateWeather(components::WeatherInfo air, const ClimateWind& global,
+                                                       std::span<const ClimateWind> climates, glm::vec2 point)
+{
+	// The part of the climates. Each step cuts the value to a whole number and keeps it to a byte.
+	int8_t temperature = WholeByte(global.temperature);
+	int8_t windX = WholeByte(global.windX);
+	int8_t windZ = WholeByte(global.windZ);
 	for (const auto& climate : climates)
 	{
 		const auto share = ClimateShare(climate, point);
@@ -152,17 +161,21 @@ script_weather::Wind script_weather::DriftWind(Wind air, const ClimateWind& glob
 		{
 			continue;
 		}
-		const auto add = [share](float wind, int8_t sum) {
-			const float part = (static_cast<float>(WholeByte(wind)) * *share) + static_cast<float>(sum);
+		const auto add = [share](float value, int8_t sum) {
+			const float part = (static_cast<float>(WholeByte(value)) * *share) + static_cast<float>(sum);
 			return static_cast<int8_t>(static_cast<uint8_t>(static_cast<int32_t>(part) & 0xff));
 		};
-		climatesPart.x = add(climate.windX, climatesPart.x);
-		climatesPart.z = add(climate.windZ, climatesPart.z);
+		temperature = add(climate.temperature, temperature);
+		windX = add(climate.windX, windX);
+		windZ = add(climate.windZ, windZ);
 	}
 	const auto sum = [](int8_t a, int8_t b) {
 		return static_cast<int8_t>(std::clamp(static_cast<int32_t>(a) + static_cast<int32_t>(b), -128, 127));
 	};
-	return {.x = sum(air.x, climatesPart.x), .z = sum(air.z, climatesPart.z)};
+	air.temperature = sum(air.temperature, temperature);
+	air.windX = sum(air.windX, windX);
+	air.windZ = sum(air.windZ, windZ);
+	return air;
 }
 
 glm::vec3 script_weather::Drift(glm::vec3 position, Wind wind)

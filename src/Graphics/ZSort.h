@@ -69,4 +69,9 @@ namespace openblack::graphics::zsort
 	return ~Depth(point, camera) | 0xFu;
 }
 
+/// The game draws the words of the learning marks after the solid models and the creatures that fizz out of sight, but
+/// before everything it sorts. As a bgfx depth: under every key of BeforeSorted and above every sorted key. Draws of
+/// this depth keep the order that the canvas gets them in.
+constexpr uint32_t k_AfterSolidBeforeSorted = 0x80000000u;
+
 } // namespace openblack::graphics::zsort

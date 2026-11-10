@@ -801,7 +801,8 @@ void SettleTemperature(entt::entity creature)
 	{
 		return;
 	}
-	const auto temperature = static_cast<float>(Locator::weatherSystem::value().GetWeather(transform->position).temperature);
+	const auto temperature =
+	    static_cast<float>(Locator::weatherSystem::value().GetClimateWeather(transform->position, false).temperature);
 	Locator::fireSystem::value().SetTemperature(creature, temperature, entt::null);
 }
 } // namespace

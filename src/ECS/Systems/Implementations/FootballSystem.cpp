@@ -479,7 +479,8 @@ void FootballSystem::SendToKickOff(entt::entity pitch, entt::entity villager)
 	const auto centre = CoordsOf(pitch);
 	const auto x = ScatterBy(centre.x, rules::k_KickOffScatter);
 	const auto z = ScatterBy(centre.z, rules::k_KickOffScatter);
-	ecs::villager_home::SetupMoveTo(ActionOf(villager), glm::ivec2(x, z), VillagerStates::FootballWaitForKickOff);
+	ecs::villager_home::SetupMoveTo(ActionOf(villager), glm::ivec2(x, z), VillagerStates::FootballWaitForKickOff,
+	                                ecs::villager_home::WalkWay::StraightThrough);
 }
 
 void FootballSystem::StopAllGames(entt::entity pitch)
@@ -667,7 +668,8 @@ bool FootballSystem::Join(entt::entity town, entt::entity villager)
 		    gutils::GetPosFromAngle(angle, ecs::systems::object_measures::TwoDRadius(registry, pitch) + rules::k_CrowdDistance);
 		const auto x = ScatterBy(place.x, rules::k_CrowdScatter);
 		const auto z = ScatterBy(place.z, rules::k_CrowdScatter);
-		ecs::villager_home::SetupMoveTo(action, glm::ivec2(x, z), VillagerStates::FootballWatchMatch);
+		ecs::villager_home::SetupMoveTo(action, glm::ivec2(x, z), VillagerStates::FootballWatchMatch,
+		                                ecs::villager_home::WalkWay::StraightThrough);
 		break;
 	}
 	}
@@ -1339,7 +1341,8 @@ void FootballSystem::DoTask(entt::entity pitch, entt::entity villager, VillagerS
 		finishKick();
 	};
 	const auto goToPlace = [&]() {
-		ecs::villager_home::SetupMoveTo(action, PlaceCoordsOf(pitch, villager), role);
+		ecs::villager_home::SetupMoveTo(action, PlaceCoordsOf(pitch, villager), role,
+		                                ecs::villager_home::WalkWay::StraightThrough);
 		registry.Get<Footballer>(villager).chooseTask = true;
 	};
 	const auto goalkeeperSave = [&]() {
@@ -1446,7 +1449,8 @@ void FootballSystem::DoTask(entt::entity pitch, entt::entity villager, VillagerS
 			GoToBall(pitch, villager, role);
 			break;
 		case rules::GoalkeeperTask::GoToPlace:
-			ecs::villager_home::SetupMoveTo(action, GoalCoords(pitch, rules::KeptGoal(side)), role);
+			ecs::villager_home::SetupMoveTo(action, GoalCoords(pitch, rules::KeptGoal(side)), role,
+			                                ecs::villager_home::WalkWay::StraightThrough);
 			registry.Get<Footballer>(villager).chooseTask = true;
 			break;
 		}
@@ -1474,7 +1478,7 @@ void FootballSystem::GoToBall(entt::entity pitch, entt::entity villager, Village
 		{
 			const auto& kicked = registry.Get<const Ball>(ball);
 			const auto destination = kicked.destination.value_or(PositionOf(ball));
-			ecs::villager_home::SetupMoveTo(action, CoordsOf(destination), role);
+			ecs::villager_home::SetupMoveTo(action, CoordsOf(destination), role, ecs::villager_home::WalkWay::StraightThrough);
 			Living().VillagerSetState(action, LivingAction::Index::Top, VillagerStates::FootballMoveToBall, true);
 			return;
 		}
@@ -1526,7 +1530,8 @@ void FootballSystem::RunForPass(entt::entity pitch, entt::entity villager)
 	const float ahead = x87::Add(FloatRand(0.2f), 0.6);
 	const float across = FloatRand(18.0f) - 9.0f;
 	const auto point = rules::PassPlace(kept, attacked, ahead, across);
-	ecs::villager_home::SetupMoveTo(action, point, VillagerStates::FootballAttacker);
+	ecs::villager_home::SetupMoveTo(action, point, VillagerStates::FootballAttacker,
+	                                ecs::villager_home::WalkWay::StraightThrough);
 	Entities().Get<Footballer>(villager).chooseTask = true;
 }
 

@@ -248,7 +248,10 @@ enum class WanderStart : uint8_t
 	OnTheLand,
 	/// Any other kind starts its leg as its flock's leader does, with a goal height
 	AsLeader,
+	/// A wolf of the wolf miracle starts a leg about its flock's leader. On its next turn it runs on to the place that
+	/// the miracle sent it to
+	SpellWolf,
 };
-[[nodiscard]] WanderStart WanderStartOf(bool grazer, bool hunter);
+[[nodiscard]] WanderStart WanderStartOf(bool grazer, bool hunter, bool spellWolf);
 
 } // namespace openblack::animals

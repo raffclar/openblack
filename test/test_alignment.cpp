@@ -315,11 +315,49 @@ TEST_F(Alignment, WhatTheirDeedsChangeScalesOneTurnsChange)
 	// Setting the alignment keeps what is still to come
 	_alignment.SetPlayerAlignment(PlayerNames::PLAYER_ONE, 0.5f);
 	// The turn's change is the limit times what waits, and the rest of what waited is gone
-	_alignment.UpdatePlayersTurn();
+	_alignment.PlayerTurn(PlayerNames::PLAYER_ONE);
 	EXPECT_FLOAT_EQ(_alignment.GetPlayerAlignment(PlayerNames::PLAYER_ONE), 0.5f - (0.025f * 0.01f));
 	EXPECT_FLOAT_EQ(_alignment.GetPendingAlignment(PlayerNames::PLAYER_ONE), 0.0f);
-	_alignment.UpdatePlayersTurn();
+	_alignment.PlayerTurn(PlayerNames::PLAYER_ONE);
 	EXPECT_FLOAT_EQ(_alignment.GetPlayerAlignment(PlayerNames::PLAYER_ONE), 0.5f - (0.025f * 0.01f));
+	Locator::infoConstants::reset();
+}
+
+// Each player moves its alignment in its own turn. The turn of one player does not move the alignment of another player.
+TEST_F(Alignment, ThePlayerTurnMovesOnlyTheAlignmentOfThatPlayer)
+{
+	auto info = std::make_unique<InfoConstants>();
+	info->player.maxAlignmentChangePerGameTurn = 0.5f;
+	Locator::infoConstants::emplace(*info);
+	_alignment.AddPendingAlignment(PlayerNames::PLAYER_ONE, 1.0f);
+	_alignment.AddPendingAlignment(PlayerNames::PLAYER_TWO, -1.0f);
+	_alignment.PlayerTurn(PlayerNames::PLAYER_TWO);
+	EXPECT_FLOAT_EQ(_alignment.GetPlayerAlignment(PlayerNames::PLAYER_ONE), 0.0f);
+	EXPECT_FLOAT_EQ(_alignment.GetPendingAlignment(PlayerNames::PLAYER_ONE), 1.0f);
+	EXPECT_FLOAT_EQ(_alignment.GetPlayerAlignment(PlayerNames::PLAYER_TWO), -0.5f);
+	_alignment.PlayerTurn(PlayerNames::PLAYER_ONE);
+	EXPECT_FLOAT_EQ(_alignment.GetPlayerAlignment(PlayerNames::PLAYER_ONE), 0.5f);
+	// The camera turn moves no alignment
+	_alignment.AddPendingAlignment(PlayerNames::PLAYER_ONE, 1.0f);
+	_alignment.UpdatePlayersTurn();
+	EXPECT_FLOAT_EQ(_alignment.GetPlayerAlignment(PlayerNames::PLAYER_ONE), 0.5f);
+	Locator::infoConstants::reset();
+}
+
+// The neutral player is neither good nor evil after its turn, also when a change waited or a script set its alignment
+TEST_F(Alignment, TheNeutralPlayerHasNoAlignmentAfterItsTurn)
+{
+	auto info = std::make_unique<InfoConstants>();
+	info->player.maxAlignmentChangePerGameTurn = 0.5f;
+	Locator::infoConstants::emplace(*info);
+	auto& registry = Locator::entitiesRegistry::value();
+	registry.Assign<components::Player>(registry.Create(), PlayerNames::NEUTRAL);
+	_alignment.SetPlayerAlignment(PlayerNames::NEUTRAL, 0.75f);
+	_alignment.AddPendingAlignment(PlayerNames::NEUTRAL, 1.0f);
+	EXPECT_FLOAT_EQ(_alignment.GetPlayerAlignment(PlayerNames::NEUTRAL), 0.75f);
+	_alignment.PlayerTurn(PlayerNames::NEUTRAL);
+	EXPECT_FLOAT_EQ(_alignment.GetPlayerAlignment(PlayerNames::NEUTRAL), 0.0f);
+	EXPECT_FLOAT_EQ(_alignment.GetPendingAlignment(PlayerNames::NEUTRAL), 0.0f);
 	Locator::infoConstants::reset();
 }
 

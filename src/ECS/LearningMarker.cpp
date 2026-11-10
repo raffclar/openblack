@@ -105,6 +105,20 @@ Look LookOf(const components::LearningMarker& marker)
 	};
 }
 
+std::optional<TextPlace> PlaceText(const glm::vec4& clip, float nearClip, glm::vec2 halfScreen)
+{
+	if (clip.w < nearClip)
+	{
+		return std::nullopt;
+	}
+	// The game divides once, then multiplies each axis by the inverse
+	const float inverse = 1.0f / clip.w;
+	return TextPlace {
+	    .screen = {((inverse * clip.x) + 1.0f) * halfScreen.x, (1.0f - (inverse * clip.y)) * halfScreen.y},
+	    .depth = clip.w,
+	};
+}
+
 void StepAll(Registry& registry, float milliseconds)
 {
 	registry.Each<components::LearningMarker>([milliseconds](components::LearningMarker& marker) {
