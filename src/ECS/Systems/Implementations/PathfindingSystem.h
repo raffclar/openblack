@@ -25,6 +25,7 @@ public:
 	void LookAgain(entt::entity walker) override;
 	void WalkTo(entt::entity walker, glm::ivec2 goal, float goalAltitude) override;
 	void SetupWalkRound(entt::entity walker, glm::ivec2 goal) override;
+	void FaceWalkGoal(entt::entity walker) override;
 	bool WalkOne(entt::entity walker) override;
 	void WalkInOwnTurn(entt::entity walker) override;
 };

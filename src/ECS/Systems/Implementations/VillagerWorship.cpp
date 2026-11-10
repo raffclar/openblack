@@ -165,14 +165,15 @@ bool MoveTo(LivingAction& action, glm::vec2 goal, VillagerStates final)
 	return true;
 }
 
-/// The same for a goal with a height above the land, which the walk keeps
-bool MoveTo(LivingAction& action, const map_coords::MapCoords& goal, VillagerStates final)
+/// The same for a goal with a height above the land, which the walk keeps, in a way
+bool MoveTo(LivingAction& action, const map_coords::MapCoords& goal, VillagerStates final,
+            villager_home::WalkWay way = villager_home::WalkWay::RoundThings)
 {
 	if (!Locator::livingActionSystem::value().VillagerSetCurrentAndDestinationState(action, VillagerStates::MoveToPos, final))
 	{
 		return false;
 	}
-	villager_home::SetupMobileMoveTo(action, goal);
+	villager_home::SetupMobileMoveTo(action, goal, way);
 	return true;
 }
 
@@ -577,9 +578,10 @@ bool StartWorshippingAtWorshipSite(LivingAction& action)
 	{
 		return false;
 	}
-	// The walk goal keeps the height of the dance's place above the land
+	// The walk goal keeps the height of the dance's place above the land. It walks straight there.
 	const auto slot = villager_dance::SlotGoalOf(villager);
-	if (!slot.has_value() || !MoveTo(action, *slot, VillagerStates::WorshippingAtWorshipSite))
+	if (!slot.has_value() ||
+	    !MoveTo(action, *slot, VillagerStates::WorshippingAtWorshipSite, villager_home::WalkWay::StraightThrough))
 	{
 		return false;
 	}

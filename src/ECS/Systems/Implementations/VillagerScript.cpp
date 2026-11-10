@@ -533,7 +533,8 @@ uint32_t villager_script::ScriptGoAndMoveAlongPath(LivingAction& action)
 	}
 	if (const auto point = TrackPointOf(villager); point.has_value())
 	{
-		villager_home::SetupMoveTo(action, *point, VillagerStates::ScriptGoAndMoveAlongPath);
+		villager_home::SetupMoveTo(action, *point, VillagerStates::ScriptGoAndMoveAlongPath,
+		                           villager_home::WalkWay::StraightThrough);
 	}
 	return 1;
 }
@@ -556,14 +557,15 @@ ecs::VillagerStateEntry villager_script::EnterInScript(LivingAction& action, Vil
 	// state
 	if (const auto point = TrackPointOf(villager); point.has_value())
 	{
-		villager_home::SetupMoveTo(action, *point, VillagerStates::ScriptGoAndMoveAlongPath);
+		villager_home::SetupMoveTo(action, *point, VillagerStates::ScriptGoAndMoveAlongPath,
+		                           villager_home::WalkWay::StraightThrough);
 	}
 	else
 	{
 		// The walk keeps the height of the kept place above the land
 		const auto whole = wall_hug::ToWhole(kept.goal);
 		villager_home::SetupMoveTo(action, map_coords::MapCoords {.x = whole.x, .z = whole.y, .altitude = kept.goalHeight},
-		                           into);
+		                           into, villager_home::WalkWay::StraightThrough);
 	}
 	return ecs::VillagerStateEntry::Outcome::SentOn;
 }
@@ -586,7 +588,7 @@ ecs::VillagerStateEntry villager_script::EnterPlayAnim(LivingAction& action, Vil
 		// The walk keeps the height of the kept place above the land
 		const auto whole = wall_hug::ToWhole(goal);
 		villager_home::SetupMoveTo(action, map_coords::MapCoords {.x = whole.x, .z = whole.y, .altitude = remind->goalHeight},
-		                           into);
+		                           into, villager_home::WalkWay::StraightThrough);
 		return ecs::VillagerStateEntry::Outcome::SentOn;
 	}
 	// There: the clip a script forced starts again, unless it plays already
