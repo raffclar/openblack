@@ -118,6 +118,11 @@ void ForgetUnsavedState(entt::registry& registry);
 /// the drawn registry, and the land lays them out when it loads.
 void RemoveSavedSkyClouds(entt::registry& registry);
 
+/// Gives each measured blow of a fight the height in the creature's mesh space. A save from an older version keeps the
+/// height in the scale of the world. The point where the blow lands is in the mesh space in each version, so its height
+/// is correct.
+void TakeBlowHeightsFromTheMesh(entt::registry& registry);
+
 /// A save does not keep the file of a dance. After a load each dance takes its file again from the row of the dances'
 /// table that it dances, so its groups continue to move as before the save.
 void TakeDanceFilesAgain(entt::registry& registry,

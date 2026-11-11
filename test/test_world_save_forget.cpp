@@ -17,6 +17,7 @@
 #include "ECS/Archetypes/CloudArchetype.h"
 #include "ECS/Components/Cloud.h"
 #include "ECS/Components/ComputerPlayer.h"
+#include "ECS/Components/CreatureFight.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/Dance.h"
 #include "ECS/Components/Temple.h"
@@ -198,4 +199,24 @@ TEST(WorldSaveForget, ALoadGivesEachDanceTheFileOfItsRowAgain)
 	EXPECT_EQ(registry.get<ecs::components::Dance>(first).file, worship);
 	EXPECT_EQ(registry.get<ecs::components::Dance>(second).file, meeting);
 	EXPECT_EQ(registry.get<ecs::components::Dance>(unknown).file, nullptr);
+}
+
+// A save from an older version keeps the height of each blow in the scale of the world. The load takes the height again
+// from the point of the blow in the mesh space.
+TEST(WorldSaveForget, ALoadTakesTheHeightsOfTheBlowsFromTheMesh)
+{
+	entt::registry registry;
+	const auto creature = registry.create();
+	auto& fighting = registry.emplace<ecs::components::CreatureFighting>(creature);
+	fighting.reaches.push_back({.animation = 3, .point = glm::vec3(0.5f, 12.25f, -4.0f), .height = 12.25f * 1.75f});
+	fighting.reaches.push_back({.animation = 4, .point = glm::vec3(0.0f), .height = 0.0f});
+	ecs::world_save::TakeBlowHeightsFromTheMesh(registry);
+	const auto& reaches = registry.get<ecs::components::CreatureFighting>(creature).reaches;
+	ASSERT_EQ(reaches.size(), 2u);
+	EXPECT_EQ(reaches[0].height, 12.25f);
+	EXPECT_EQ(reaches[0].point, glm::vec3(0.5f, 12.25f, -4.0f));
+	EXPECT_EQ(reaches[1].height, 0.0f);
+	// A save from this version gives the same heights
+	ecs::world_save::TakeBlowHeightsFromTheMesh(registry);
+	EXPECT_EQ(reaches[0].height, 12.25f);
 }
