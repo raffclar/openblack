@@ -109,10 +109,22 @@ private:
 /// The alpha a logo still is drawn with for the eased position: 255 per unit, rounded down, kept within 0 and 255
 [[nodiscard]] uint8_t LogoAlpha(float position) noexcept;
 
-/// Whether the pre-intro film plays: asked for on the command line, or on a first run, before any player profile
-[[nodiscard]] constexpr bool PlaysPreIntro(bool requested, bool hasProfiles) noexcept
+/// What decides whether the pre-intro film plays
+struct PreIntroAsk
 {
-	return requested || !hasProfiles;
+	/// The command line asked for the film
+	bool requested {false};
+	/// A player profile exists
+	bool hasProfiles {false};
+	/// The command line removed the logo pictures, or started a testbed scenario. These are runs for tools and developers.
+	bool toolRun {false};
+};
+
+/// Whether the pre-intro film plays: asked for on the command line, or on a first run, before any player profile. A run
+/// for tools does not play it on a first run, because the film holds the load for about 100 seconds.
+[[nodiscard]] constexpr bool PlaysPreIntro(const PreIntroAsk& ask) noexcept
+{
+	return ask.requested || (!ask.hasProfiles && !ask.toolRun);
 }
 
 /// Whether the first game of the program plays the logo effect: a plain start does. A developer's or a tool's run plays it
