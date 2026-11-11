@@ -261,6 +261,24 @@ constexpr std::array k_Executors {
     Executor {
         .action = "GiveFriendToy", .target = Target::CreatureFreeForJoint, .use = Target::Toy, .build = Build::GiveFriendToy},
     Executor {.action = "ShowFriendCitadel", .target = Target::CreatureFreeForJoint, .build = Build::ShowFriendCitadel},
+    // To teach a friend, it shows the friend a miracle, its home, or a thing. Showing a thing never makes an agenda.
+    Executor {
+        .action = "ShowFriendSpellFireball", .target = Target::CreatureFreeForJoint, .build = Build::ShowFriendAttackMiracle},
+    Executor {.action = "ShowFriendSpellLightningBolt",
+              .target = Target::CreatureFreeForJoint,
+              .build = Build::ShowFriendAttackMiracle},
+    Executor {.action = "ShowFriendSpellLightningStorm",
+              .target = Target::CreatureFreeForJoint,
+              .build = Build::ShowFriendAttackMiracle},
+    Executor {
+        .action = "ShowFriendSpellMagicFood", .target = Target::CreatureFreeForJoint, .build = Build::ShowFriendMakingMiracle},
+    Executor {
+        .action = "ShowFriendSpellMagicWood", .target = Target::CreatureFreeForJoint, .build = Build::ShowFriendMakingMiracle},
+    Executor {.action = "ShowFriendObject", .target = Target::CreatureFreeForJoint, .build = Build::Never},
+    Executor {.action = "ShowFriendHome", .target = Target::CreatureFreeForJoint, .build = Build::ShowFriendHome},
+    Executor {.action = "ConfuseFriend", .target = Target::CreatureFreeForJoint, .build = Build::ConfuseFriend},
+    // To tell another creature what it thinks of it
+    Executor {.action = "ShowHowNiceYouThinkCreatureIs", .target = Target::Creature, .build = Build::ShowCreatureHowNice},
     Executor {.action = "LookAtMountains", .build = Build::LookAtMountains},
     Executor {.action = "LookOutToSea", .build = Build::LookOutToSea, .leavesHome = true},
     // It dances alone on the nearest coast, by its map of the land
@@ -772,6 +790,8 @@ bool creature_plan_actions::IsCast(const Executor& executor)
 	case Build::CastForest:
 	case Build::WaterTreeForTown:
 	case Build::HealItself:
+	case Build::ShowFriendAttackMiracle:
+	case Build::ShowFriendMakingMiracle:
 		return true;
 	default:
 		return false;
@@ -802,7 +822,8 @@ namespace
 /// The joint actions with a friend. Without what the action needs (the friend, a clear place, a coast and a sea, or a
 /// town with a storage pit), the creature cannot do it.
 std::optional<std::vector<creature_mind::Step>> FriendsAgenda(const Executor& executor, uint32_t friendly,
-                                                              const Situation& situation, const creature_mind::Random& random)
+                                                              const Situation& situation, const creature_mind::Random& random,
+                                                              uint32_t magicType = 0)
 {
 	if (!situation.friendly.has_value())
 	{
@@ -917,6 +938,33 @@ std::optional<std::vector<creature_mind::Step>> FriendsAgenda(const Executor& ex
 		return creature_mind::ShowFriendCitadel(
 		    friends, {.point = situation.templeHeart->point, .radius = situation.templeHeart->radius}, situation.radius,
 		    situation.friendly->radius, *situation.head, situation.seesFriend, random);
+	case Build::ShowFriendHome:
+		if (!situation.homePlace.has_value() || !situation.head.has_value())
+		{
+			return std::nullopt;
+		}
+		return creature_mind::ShowFriendHome(friends, *situation.homePlace, *situation.head, situation.seesFriend, random);
+	case Build::ConfuseFriend:
+		if (!situation.homePlace.has_value())
+		{
+			return std::nullopt;
+		}
+		return creature_mind::ConfuseFriend(situation.self, friendly, situation.height, *situation.homePlace, random);
+	case Build::ShowFriendAttackMiracle:
+	case Build::ShowFriendMakingMiracle:
+	{
+		// The head is needed only when there is a thing to show the miracle on
+		if (situation.shownThing.has_value() && !situation.head.has_value())
+		{
+			return std::nullopt;
+		}
+		const auto head = situation.head.value_or(glm::vec3(0.0f));
+		return executor.build == Build::ShowFriendAttackMiracle
+		           ? creature_mind::ShowFriendAttackMiracle(friends, magicType, situation.shownThing, head,
+		                                                    situation.seesFriend)
+		           : creature_mind::ShowFriendMakingMiracle(friends, magicType, situation.shownThing, head,
+		                                                    situation.seesFriend);
+	}
 	default:
 		return std::nullopt;
 	}
@@ -1033,6 +1081,9 @@ bool creature_plan_actions::Possible(const Executor& executor, const Situation& 
 		return !situation.hasPlayer || situation.eye.has_value();
 	case Build::Fight:
 		return situation.healthyEnoughToFight;
+	case Build::ShowFriendHome:
+		// The creature adds no part to its home in this version of the game, so it never has built its home
+		return creature_mind::HasBuiltHome(0);
 	// The joint actions with a friend that need a desire of the creature's own to be a little strong
 	case Build::DrinkWithFriend:
 		return situation.water > k_SlightDesire;
@@ -1117,6 +1168,9 @@ bool creature_plan_actions::Buildable(const Executor& executor, const Situation&
 		return situation.home.has_value();
 	case Build::LookAtHand:
 		// The agenda needs nothing. A script can make the creature look at the hand when the hand does not move.
+		return true;
+	case Build::ShowFriendHome:
+		// The agenda needs only the place of the home. A script or a debug tool can tell the creature to show its home.
 		return true;
 	default:
 		return Possible(executor, situation);
@@ -1391,7 +1445,14 @@ std::optional<std::vector<creature_mind::Step>> creature_plan_actions::Agenda(co
 	case Build::PlayThrowingGameWithFriend:
 	case Build::GiveFriendToy:
 	case Build::ShowFriendCitadel:
+	case Build::ShowFriendHome:
+	case Build::ConfuseFriend:
 		return FriendsAgenda(executor, *object, situation, random);
+	case Build::ShowFriendAttackMiracle:
+	case Build::ShowFriendMakingMiracle:
+		return FriendsAgenda(executor, *object, situation, random, cast->magicType);
+	case Build::ShowCreatureHowNice:
+		return creature_mind::ShowCreatureHowNice(*object, situation.howNiceOther, random);
 	case Build::GetAttentionFromFriend:
 		return creature_mind::GetAttentionFromFriend(*object, random);
 	case Build::HowlAtFriend:

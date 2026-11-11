@@ -12,6 +12,7 @@
 #include <cstddef>
 #include <cstdint>
 
+#include <optional>
 #include <utility>
 #include <vector>
 
@@ -23,6 +24,8 @@
 /// The agendas of the actions that a creature does with or for another creature: waving at a friend, which the friend
 /// does too, howling at a friend, pining for and looking for a friend that it misses, and the joint actions that two
 /// friends do side by side: being happy, having a poo, sitting, sleeping, drinking, and helping or attacking a town.
+/// Also the actions that show a friend something (its home, its temple, a miracle) and that tell another creature what
+/// the creature thinks of it.
 namespace openblack::creature_mind
 {
 
@@ -405,6 +408,121 @@ constexpr float k_CitadelHeartRadii = 1.2f;
 constexpr float k_PointAtCitadelSeconds = 3.0f;
 constexpr float k_ShowCitadelWaitSeconds = 5.0f;
 constexpr float k_ShowCitadelWaitExtraSeconds = 20.0f;
+
+/// Showing its home to a friend. The agenda has these steps:
+/// 1. When it cannot see the friend, it goes near the friend, to three times its own height, with a face of compassion.
+/// 2. It turns to face the friend for a tenth of a second, with a face of compassion, as it looks at it.
+/// 3. It asks the friend to be shown something, as it looks at it. If the friend refuses, the agenda stops.
+/// 4. It tells the friend to go to its home, to within three times the height of the friend.
+/// 5. It goes to its home, to within three times its own height, as it looks where it goes.
+/// 6. It waits until the friend does not move, as it looks at it, and grimaces.
+/// 7. It points at its home for three seconds, and grimaces, as it looks at it. This is the main step.
+/// 8. It tells the friend to turn to face the head of the creature.
+/// 9. It waits until the friend is free, four turns at least.
+/// 10. It tells the friend to turn to face the home, and to wait for five seconds and up to twenty seconds more.
+/// 11. It waits for five seconds and up to twenty seconds more, with a face of compassion, as it looks at its feet.
+/// The home is the place on the ground where the creature was made.
+[[nodiscard]] std::vector<Step> ShowFriendHome(const Friends& friends, glm::vec3 home, glm::vec3 head, bool seesFriend,
+                                               const Random& random);
+constexpr float k_ShowHomeNearHeights = 3.0f;
+constexpr float k_PointAtHomeToShowSeconds = 3.0f;
+/// The creature has built its home when it has added more than this number of parts to it. No action adds a part to a
+/// home in this version of the game. Thus a creature never has built its home, and it never chooses to show its home.
+constexpr uint32_t k_HomeBuiltParts = 6;
+[[nodiscard]] constexpr bool HasBuiltHome(uint32_t partsAdded)
+{
+	return partsAdded > k_HomeBuiltParts;
+}
+
+/// Showing a friend a miracle that attacks: a fireball, a lightning bolt or a lightning storm. The agenda has these
+/// steps:
+/// 1. When it cannot see the friend, it goes near the friend, to one and a half times its own height, as it looks at it.
+/// 2. It turns to face the friend for a tenth of a second, as it looks at it.
+/// With no thing to show the miracle on (see CanBeSetOnFire), the agenda stops here. Else:
+/// 3. It asks the friend to be shown something, with a playful face, as it looks at it. If the friend refuses, the
+///    agenda stops.
+/// 4. It tells the friend to go near the thing, to two and a half times the height of the creature.
+/// 5. It goes near the thing, to five times its own height, as it looks at it.
+/// 6. It gets away from the thing, to two times its own height, as it looks at it.
+/// 7. It turns to face the thing for a tenth of a second, with a face of fear, as it looks at it.
+/// 8. It points at the thing for two seconds, and grimaces.
+/// 9. It tells the friend to turn to face the head of the creature.
+/// 10. It waits until the friend is free, four turns at least.
+/// 11. It tells the friend to turn to face the thing for a tenth of a second.
+/// 12. It casts the miracle at the thing from its casting pose, and grimaces. This is the main step.
+/// 13. It tells the friend to turn to face it for a tenth of a second.
+/// The friend sees the miracle as it is cast. Thus it learns the miracle, as from each miracle that a creature sees.
+[[nodiscard]] std::vector<Step> ShowFriendAttackMiracle(const Friends& friends, uint32_t magicType,
+                                                        std::optional<uint32_t> thing, glm::vec3 head, bool seesFriend);
+constexpr float k_ShowAttackFriendNearHeights = 1.5f;
+constexpr float k_ShowAttackFriendToThingHeights = 2.5f;
+constexpr float k_ShowAttackThingNearHeights = 5.0f;
+constexpr float k_ShowAttackBackOffHeights = 2.0f;
+constexpr float k_PointAtShownThingSeconds = 2.0f;
+
+/// Showing a friend a miracle that makes something: food or wood. The agenda has these steps:
+/// 1. When it cannot see the friend, it goes near the friend, to three and a half times its own height, with a face of
+///    compassion, as it looks at it.
+/// 2. It turns to face the friend for a tenth of a second, with a face of compassion, as it looks at it.
+/// With no thing to show the miracle on (see CanBeHelpedByCreature), the agenda stops here. Else:
+/// 3. It asks the friend to be shown something, as it looks at it. If the friend refuses, the agenda stops.
+/// 4. It tells the friend to go near the thing, to five times the height of the creature.
+/// 5. It goes near the thing, to five times its own height, as it looks at it.
+/// 6. It waits until the friend does not move, as it looks at it, and grimaces.
+/// 7. It tells the friend to turn to face the thing for a tenth of a second.
+/// 8. It turns to face the thing for a tenth of a second, with a face of compassion, as it looks at it.
+/// 9. It points at the thing for two seconds, and grimaces.
+/// 10. It tells the friend to turn to face the head of the creature.
+/// 11. It waits until the friend is free, four turns at least.
+/// 12. It tells the friend to turn to face the thing for a tenth of a second.
+/// 13. It casts the miracle at the thing from its casting pose, with a face of compassion. This is the main step.
+/// 14. It tells the friend to turn to face it for a tenth of a second.
+/// The friend sees the miracle as it is cast. Thus it learns the miracle, as from each miracle that a creature sees.
+[[nodiscard]] std::vector<Step> ShowFriendMakingMiracle(const Friends& friends, uint32_t magicType,
+                                                        std::optional<uint32_t> thing, glm::vec3 head, bool seesFriend);
+constexpr float k_ShowMakingFriendNearHeights = 3.5f;
+constexpr float k_ShowMakingThingNearHeights = 5.0f;
+
+/// The kinds of thing that a creature can show a miracle on, by the rules of the game for each kind
+enum class ShownThingKind : uint8_t
+{
+	/// A thing that is not an object of the world: a town, a forest, a flock, a temple as a whole, a miracle, a puff of
+	/// mist or a planned building
+	NotAnObject,
+	Villager,
+	/// Any other object that is not set into the land: a creature, an animal, a loose object, a lantern and the like
+	LooseObject,
+	/// An object set into the land: a building, a part of a temple, a field, a fish farm, a feature, flowers, a totem, a
+	/// tree, a rock, a dead tree, a static, a shield or the icon of a miracle
+	SetIntoLand,
+	/// A vortex or a teleport stone: set into the land, but it does not burn
+	SetIntoLandNeverBurns,
+};
+/// Whether a creature can show a miracle that attacks on a thing: an object set into the land (not a vortex or a
+/// teleport stone) that a script did not make safe from fire
+[[nodiscard]] bool CanBeSetOnFire(ShownThingKind kind, bool fireproof);
+/// Whether a creature can show a miracle that makes something on a thing: a villager that a hand can pick up, or any
+/// other object
+[[nodiscard]] bool CanBeHelpedByCreature(ShownThingKind kind, bool villagerPickable);
+
+/// Confusing a friend, after the first four steps with a smile (see ShowOffToFriend):
+/// 5. It turns to face the friend for four seconds and up to four seconds more, with a smile, as it looks at it.
+/// 6. It points at its home for three seconds and grimaces, as it looks at its home. This is the main step.
+/// 7. It tells the friend to turn to face its home.
+/// 8. It points at the friend for two seconds, sad, fluttering its eyelids.
+/// 9. It tells the friend to play the confused action.
+[[nodiscard]] std::vector<Step> ConfuseFriend(uint32_t self, uint32_t friendly, float height, glm::vec3 home,
+                                              const Random& random);
+
+/// Showing another creature how nice it thinks the other creature is. The agenda has these steps:
+/// 1. It turns to face the other creature for two seconds, as it looks at it.
+/// 2. This is the main step. When it finds the other creature neither nice nor nasty (zero, or not a number), it holds
+///    the smile face as it looks at the other creature. When it finds it nice, it plays the happy action. When it finds
+///    it nasty, half the time it plays the rude action and half the time the taunt.
+[[nodiscard]] std::vector<Step> ShowCreatureHowNice(uint32_t other, float howNice, const Random& random);
+constexpr float k_FaceToShowHowNiceSeconds = 2.0f;
+/// A face that a step holds lasts this long
+constexpr float k_HeldFaceSeconds = 5.0f;
 
 /// Whether a creature can see an object: when the object is less than ten metres away, or less than fifty times the
 /// height of the object

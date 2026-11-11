@@ -38,14 +38,43 @@
 #include "CreatureMindSystem.h"
 #include "CreatureMindSystemDetail.h"
 #include "ECS/BuildingSites.h"
+#include "ECS/Components/Abode.h"
+#include "ECS/Components/AnimatedStatic.h"
+#include "ECS/Components/AtHome.h"
+#include "ECS/Components/BuildingDamage.h"
+#include "ECS/Components/Construction.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureFight.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreaturePartner.h"
+#include "ECS/Components/DeadTree.h"
+#include "ECS/Components/Feature.h"
 #include "ECS/Components/Field.h"
+#include "ECS/Components/Fire.h"
+#include "ECS/Components/FishFarm.h"
+#include "ECS/Components/Flock.h"
+#include "ECS/Components/Flowers.h"
+#include "ECS/Components/Forest.h"
+#include "ECS/Components/HandGrab.h"
+#include "ECS/Components/LandForest.h"
+#include "ECS/Components/MagicShield.h"
+#include "ECS/Components/Mist.h"
+#include "ECS/Components/Mobile.h"
 #include "ECS/Components/ScriptControl.h"
+#include "ECS/Components/Spell.h"
+#include "ECS/Components/SpellDispenser.h"
+#include "ECS/Components/SpellIcon.h"
+#include "ECS/Components/StoragePit.h"
+#include "ECS/Components/TeleportStone.h"
+#include "ECS/Components/Temple.h"
+#include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/Components/Tree.h"
+#include "ECS/Components/VillageTotem.h"
+#include "ECS/Components/Villager.h"
+#include "ECS/Components/Vortex.h"
+#include "ECS/Components/WorshipSite.h"
 #include "ECS/CreatureExplorationLand.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureAnimationSystemInterface.h"
@@ -402,6 +431,88 @@ std::optional<glm::vec3> HeadOf(const ecs::Registry& registry, entt::entity crea
 	                                     creature::PlacementMatrix(transform->position, transform->rotation, transform->scale));
 	return glm::vec3(creature::PosedBone(points->head, pose.bones, pose.placement)[3]);
 }
+
+/// The kind of a thing that a creature believes in, by the rules for showing a friend a miracle on it
+creature_mind::ShownThingKind ShownThingKindOf(const ecs::Registry& registry, entt::entity thing)
+{
+	using creature_mind::ShownThingKind;
+	if (registry.AllOf<Villager>(thing))
+	{
+		return ShownThingKind::Villager;
+	}
+	// A big forest is an object set into the land, but the forest about it is not
+	if (registry.AllOf<BigForest>(thing))
+	{
+		return ShownThingKind::SetIntoLand;
+	}
+	// The temple as one thing, a forest, a flock, a town, a miracle, a puff of mist and a planned building are not
+	// objects
+	if (registry.AnyOf<Temple, ForestTurns, LandForest, Forest, Flock, Town, ecs::components::Spell, Mist, PlannedAbode,
+	                   PlannedTemple>(thing))
+	{
+		return ShownThingKind::NotAnObject;
+	}
+	if (registry.AnyOf<TeleportStone, Vortex>(thing))
+	{
+		return ShownThingKind::SetIntoLandNeverBurns;
+	}
+	if (registry.AnyOf<Tree, DeadTree, Rock, BuildingPiece, MobileStatic, Abode, StoragePit, SpellDispenser, Field, FishFarm,
+	                   TempleHeart, WorshipSite, WorshipAltar, VillageTotem, Feature, AnimatedStatic, Flowers, TownCentreIcon,
+	                   WorshipIcon, MagicShield>(thing))
+	{
+		return ShownThingKind::SetIntoLand;
+	}
+	// A creature, an animal, a pot, a pile, a ball, a seed, a lantern, a firefly, a fireball, a leash post, the way into
+	// a temple, a town's need flag, a scroll of a script
+	return ShownThingKind::LooseObject;
+}
+
+/// The thing that a creature shows a friend a miracle on: of the things that it believes in, in the order of its two
+/// lists of beliefs, the first that is nearest to the creature and that the miracle suits. The distance is from the
+/// creature to where the thing is now, at any distance.
+std::optional<uint32_t> NearestShownThing(const ecs::Registry& registry, entt::entity creature, bool attacks)
+{
+	const auto* mind = registry.TryGet<const CreatureMindState>(creature);
+	const auto* self = registry.TryGet<const Transform>(creature);
+	if (mind == nullptr || self == nullptr)
+	{
+		return std::nullopt;
+	}
+	const glm::vec2 from {self->position.x, self->position.z};
+	std::optional<uint32_t> nearest;
+	float nearestDistance = std::numeric_limits<float>::max();
+	for (const auto& belief : mind->beliefs.InListOrder())
+	{
+		const auto thing = belief.thing;
+		const auto* at = registry.Valid(thing) ? registry.TryGet<const Transform>(thing) : nullptr;
+		if (at == nullptr)
+		{
+			continue;
+		}
+		const auto kind = ShownThingKindOf(registry, thing);
+		bool suits = false;
+		if (attacks)
+		{
+			const auto* proofing = registry.TryGet<const FireProofing>(thing);
+			suits = creature_mind::CanBeSetOnFire(kind, proofing != nullptr && proofing->cannotBeSetOnFire);
+		}
+		else
+		{
+			suits = creature_mind::CanBeHelpedByCreature(kind, !registry.AnyOf<AtHome, CannotBePickedUp>(thing));
+		}
+		if (!suits)
+		{
+			continue;
+		}
+		const float distance = gutils::GetDistanceInMetres(from, glm::vec2(at->position.x, at->position.z));
+		if (distance < nearestDistance)
+		{
+			nearestDistance = distance;
+			nearest = entt::to_integral(thing);
+		}
+	}
+	return nearest;
+}
 } // namespace
 
 void CreatureMindSystem::SituateFriends(entt::entity creature, creature_plan_actions::Situation& situation)
@@ -462,6 +573,11 @@ void CreatureMindSystem::SituateFriend(entt::entity creature, const creature_pla
 	case Build::PlayThrowingGameWithFriend:
 	case Build::GiveFriendToy:
 	case Build::ShowFriendCitadel:
+	case Build::ShowFriendHome:
+	case Build::ShowFriendAttackMiracle:
+	case Build::ShowFriendMakingMiracle:
+	case Build::ConfuseFriend:
+	case Build::ShowCreatureHowNice:
 		break;
 	default:
 		return;
@@ -538,7 +654,12 @@ void CreatureMindSystem::SituateFriend(entt::entity creature, const creature_pla
 	case Build::EatFromFieldWithFriend:
 		situation.friendsField = NearestBelievedField(registry, creature, self->position);
 		break;
+	case Build::ShowFriendCitadel:
+		situation.head = HeadOf(registry, creature);
+		break;
 	case Build::ShowOffToFriend:
+	case Build::ShowFriendHome:
+	case Build::ConfuseFriend:
 		if (situation.home.has_value())
 		{
 			const float ground = Locator::terrainSystem::has_value()
@@ -546,10 +667,44 @@ void CreatureMindSystem::SituateFriend(entt::entity creature, const creature_pla
 			                         : self->position.y;
 			situation.homePlace = glm::vec3(situation.home->x, ground, situation.home->y);
 		}
+		if (executor.build == Build::ShowFriendHome)
+		{
+			situation.head = HeadOf(registry, creature);
+		}
 		break;
-	case Build::ShowFriendCitadel:
+	case Build::ShowFriendAttackMiracle:
+	case Build::ShowFriendMakingMiracle:
+	{
+		const bool attacks = executor.build == Build::ShowFriendAttackMiracle;
+		situation.shownThing = NearestShownThing(registry, creature, attacks);
+		if (!situation.shownThing.has_value())
+		{
+			break;
+		}
 		situation.head = HeadOf(registry, creature);
+		// As the agenda is made, the friend comes to believe in the creature and in the thing that it is shown. For a
+		// miracle that attacks, the creature comes first. For a miracle that makes something, the thing comes first.
+		auto& world = Locator::entitiesRegistry::value();
+		if (auto* friendMind = world.TryGet<CreatureMindState>(friendly))
+		{
+			const auto shown = static_cast<entt::entity>(*situation.shownThing);
+			ComeAcross(friendly, *friendMind, attacks ? creature : shown);
+			ComeAcross(friendly, *friendMind, attacks ? shown : creature);
+		}
 		break;
+	}
+	case Build::ShowCreatureHowNice:
+	{
+		// The creature finds its attitude to the other creature, and makes one when it has none
+		auto& world = Locator::entitiesRegistry::value();
+		auto* mind = world.TryGet<CreatureMindState>(creature);
+		if (mind != nullptr && mind->learnt.has_value())
+		{
+			situation.howNiceOther =
+			    creature_learning::AttitudeTo(mind->learnt->creatures, entt::to_integral(friendly)).howNice;
+		}
+		break;
+	}
 	case Build::HelpTownWithFriend:
 	case Build::AttackTownWithFriend:
 	{
