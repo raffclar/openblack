@@ -1316,7 +1316,8 @@ struct Command
 	/// The velocity at which the player's hand throws the thing that it releases
 	glm::vec3 velocity {0.0f};
 	/// The animation played, the creature followed or fought, the band of a blow (high, middle, low), the step
-	/// (forward, back, right, left), or whether it fights by itself (1) or not
+	/// (forward, back, right, left), whether it fights by itself (1) or not, or for a fart, whether the creature farts
+	/// by its own wish (1), as its planner makes the plan, or by a forced plan (0)
 	size_t value {0};
 	/// The hour jumped to
 	float hour {12.0f};
