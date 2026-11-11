@@ -21,6 +21,7 @@
 #include "ECS/Components/Dance.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/CreatureListOrder.h"
 #include "ECS/Dances.h"
 #include "ECS/Registry.h"
 #include "Locator.h"
@@ -39,30 +40,38 @@ std::optional<audio::GameMusic::TurnInputs::CreatureDance> ecs::creature_dance_m
 	std::optional<entt::entity> dancing;
 	entt::entity firstDancer = entt::null;
 	entt::entity dance = entt::null;
-	registry.Each<const CreatureMindState, const CreatureDance, const Transform>(
-	    [&](entt::entity creature, const CreatureMindState& mind, const CreatureDance& record, const Transform& at) {
-		    const auto& idle = mind.idle;
-		    // Only while the creature's agenda is at its dance
-		    if (idle.step >= idle.agenda.size() || idle.agenda[idle.step].kind != creature_mind::Step::Kind::Dance ||
-		        idle.agenda[idle.step].dance.kind != creature_mind::DanceOrder::Kind::Dance ||
-		        !dances::IsDance(registry, record.dance))
-		    {
-			    return;
-		    }
-		    const auto first = dances::FirstDancer(registry, record.dance, entt::null);
-		    if (first == entt::null || !registry.AllOf<Villager>(first))
-		    {
-			    return;
-		    }
-		    const float distance = gutils::GetDistanceInMetres(camera, at.position);
-		    if (distance < nearest)
-		    {
-			    nearest = distance;
-			    dancing = creature;
-			    firstDancer = first;
-			    dance = record.dance;
-		    }
-	    });
+	// The creatures in the order of the game's list of creatures: of two at the same distance, the newer one is heard
+	for (const auto creature : creature_list::NewestFirst(registry))
+	{
+		const auto* mind = registry.TryGet<const CreatureMindState>(creature);
+		const auto* record = registry.TryGet<const CreatureDance>(creature);
+		const auto* at = registry.TryGet<const Transform>(creature);
+		if (mind == nullptr || record == nullptr || at == nullptr)
+		{
+			continue;
+		}
+		const auto& idle = mind->idle;
+		// Only while the creature's agenda is at its dance
+		if (idle.step >= idle.agenda.size() || idle.agenda[idle.step].kind != creature_mind::Step::Kind::Dance ||
+		    idle.agenda[idle.step].dance.kind != creature_mind::DanceOrder::Kind::Dance ||
+		    !dances::IsDance(registry, record->dance))
+		{
+			continue;
+		}
+		const auto first = dances::FirstDancer(registry, record->dance, entt::null);
+		if (first == entt::null || !registry.AllOf<Villager>(first))
+		{
+			continue;
+		}
+		const float distance = gutils::GetDistanceInMetres(camera, at->position);
+		if (distance < nearest)
+		{
+			nearest = distance;
+			dancing = creature;
+			firstDancer = first;
+			dance = record->dance;
+		}
+	}
 	if (!dancing.has_value())
 	{
 		return std::nullopt;
