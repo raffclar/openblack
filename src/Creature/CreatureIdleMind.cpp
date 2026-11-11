@@ -806,6 +806,12 @@ bool creature_mind::FaintWaitDone(float countedSeconds, float turnSeconds, float
 	return static_cast<int64_t>(*turns) - static_cast<int64_t>(counted) <= 0;
 }
 
+bool creature_mind::FaceAgainDue(float& seconds, float turnSeconds)
+{
+	seconds -= turnSeconds;
+	return seconds < k_FaceDue;
+}
+
 std::optional<creature_face::Request> creature_mind::PullFace(IdleMind& mind, creature_face::Cue cue, const Senses& senses,
                                                               const Random& random, const Random& gameRandom)
 {
@@ -1427,8 +1433,7 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 	// A step pulls its face again every few seconds from its first try to start, also while it waits for the body
 	if ((mind.stepStarted || IsStep(mind.facePulled, mind)) && step.face != creature_face::Cue::None)
 	{
-		mind.faceSeconds -= senses.seconds;
-		if (mind.faceSeconds < k_FaceDue)
+		if (FaceAgainDue(mind.faceSeconds, senses.seconds))
 		{
 			commands.face = PullFace(mind, step.face, senses, random, gameRandom);
 		}

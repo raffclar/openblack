@@ -142,7 +142,11 @@ public:
 	bool PlayAction(entt::entity, size_t) override { return false; }
 	bool PlayGesture(entt::entity, size_t) override { return false; }
 	void PullFace(entt::entity, size_t) override {}
-	std::optional<creature_face::Request> ShowFeeling(entt::entity, creature_face::Cue) override { return std::nullopt; }
+	std::optional<creature_face::Request> ShowFeeling(entt::entity creature, creature_face::Cue cue) override
+	{
+		feelings.emplace_back(creature, cue);
+		return std::nullopt;
+	}
 	bool SitDown(entt::entity) override { return false; }
 	void StandUp(entt::entity) override {}
 	void ReceiveFeedback(entt::entity, float) override {}
@@ -215,6 +219,7 @@ public:
 	std::vector<Forced> forced;
 	/// Each creature told to obey in a fight, with the creature that told it
 	std::vector<std::pair<entt::entity, entt::entity>> ordered;
+	std::vector<std::pair<entt::entity, creature_face::Cue>> feelings;
 	/// Each creature whose action stopped as a failure
 	std::vector<entt::entity> abandoned;
 	/// Each creature whose plan to obey ended, with the creature that it obeyed
@@ -1234,7 +1239,7 @@ public:
 	void ResetPace(entt::entity) override {}
 	void Place(entt::entity, glm::vec3) override {}
 	void PlaceWithoutWalking(entt::entity, glm::vec3) override {}
-	[[nodiscard]] bool IsMoving(entt::entity) const override { return false; }
+	[[nodiscard]] bool IsMoving(entt::entity) const override { return walking; }
 	[[nodiscard]] float KeptFraction(entt::entity) const override { return 0.0f; }
 	[[nodiscard]] const creature_route::WalkableLand& GetWalkableLand() override
 	{
@@ -1242,6 +1247,8 @@ public:
 	}
 	[[nodiscard]] std::vector<creature_route::Circle> ThingCirclesIn(entt::entity, glm::ivec2) override { return {}; }
 
+	/// Whether every creature walks and does not stop
+	bool walking {false};
 	std::map<entt::entity, size_t> asked;
 	std::map<entt::entity, size_t> stopped;
 	std::map<entt::entity, size_t> stoppedAtOnce;
@@ -1338,6 +1345,112 @@ TEST_F(CreatureFightSystemTest, TheAskedCreatureStandsStillOnTheSecondTurnAndObe
 	EXPECT_EQ(minds.ordered.back().first, second);
 	EXPECT_EQ(legs.stopped[second], 2u);
 	EXPECT_EQ(legs.stopped[first], 1u);
+	Locator::creatureMindSystem::reset();
+	Locator::creatureLocomotionSystem::reset();
+}
+
+namespace
+{
+/// How many times the creature pulled its angry face
+size_t Angers(const ForcedMinds& minds, entt::entity creature)
+{
+	return static_cast<size_t>(std::ranges::count(minds.feelings, std::pair {creature, creature_face::Cue::Anger}));
+}
+} // namespace
+
+// Only the creature that started the fight shows anger. In the face-off it shows anger as it asks, as it orders the
+// other creature to turn, and as its own turn starts. The order to stand still and the taunt show no face.
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(CreatureFightSystemTest, TheFirstCreatureShowsAngerAsEachStepOfTheFaceOffStarts)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	registry.Remove<CreatureFighting>(first);
+	registry.Remove<CreatureFighting>(second);
+	Locator::creatureLocomotionSystem::emplace<TurningLegs>();
+	auto& minds = static_cast<ForcedMinds&>(Locator::creatureMindSystem::emplace<ForcedMinds>());
+	ASSERT_EQ(fights.StartFight(first, second), ecs::systems::CreatureFightSystemInterface::StartResult::Started);
+	EXPECT_EQ(Angers(minds, first), 0u);
+
+	for (const size_t angers : {1u, 1u, 2u, 3u})
+	{
+		fights.ProcessTurn();
+		EXPECT_EQ(Angers(minds, first), angers);
+	}
+	for (int turn = 0; turn < 20 && registry.Get<const CreatureFighting>(first).stage == CreatureFighting::Stage::FaceOff;
+	     ++turn)
+	{
+		fights.ProcessTurn();
+	}
+	EXPECT_EQ(registry.Get<const CreatureFighting>(first).stage, CreatureFighting::Stage::Taunt);
+	EXPECT_EQ(Angers(minds, first), 3u);
+	EXPECT_EQ(Angers(minds, second), 0u);
+	Locator::creatureMindSystem::reset();
+	Locator::creatureLocomotionSystem::reset();
+}
+
+// In the arena, the first creature shows anger as its wait starts, as it orders the other creature to turn, as its own
+// turn starts, as it orders the other creature to start its duel, and as its own duel starts
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(CreatureFightSystemTest, TheFirstCreatureShowsAngerAsEachStepInTheArenaStarts)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	Locator::creatureLocomotionSystem::emplace<TurningLegs>();
+	auto& minds = static_cast<ForcedMinds&>(Locator::creatureMindSystem::emplace<ForcedMinds>());
+	using Stage = CreatureFighting::Stage;
+	for (const auto self : {first, second})
+	{
+		registry.Get<CreatureFighting>(self).stage = Stage::Ready;
+	}
+	for (const size_t angers : {1u, 2u, 3u, 3u})
+	{
+		fights.ProcessTurn();
+		EXPECT_EQ(Angers(minds, first), angers);
+	}
+	for (int turn = 0; turn < 20 && !registry.Get<const CreatureFighting>(first).played; ++turn)
+	{
+		fights.ProcessTurn();
+	}
+	EXPECT_EQ(Angers(minds, first), 4u);
+	fights.ProcessTurn();
+	EXPECT_EQ(registry.Get<const CreatureFighting>(first).stage, Stage::Duel);
+	EXPECT_EQ(Angers(minds, first), 5u);
+	// The duel shows anger again every forty-two turns, as each step with a face does (test AStepPullsItsFaceAgain).
+	// The test creatures have no bodies to make blows with, so the duel does not continue here.
+	EXPECT_TRUE(registry.Get<const CreatureFighting>(first).angerShown);
+	EXPECT_EQ(Angers(minds, second), 0u);
+	Locator::creatureMindSystem::reset();
+	Locator::creatureLocomotionSystem::reset();
+}
+
+// The walk to the arena and the wait for the other creature have no time limit. A creature that walks for a long time
+// does not stop the fight.
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(CreatureFightSystemTest, TheWalkToTheArenaAndTheWaitForTheOtherCreatureHaveNoTimeLimit)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto& legs = static_cast<TurningLegs&>(Locator::creatureLocomotionSystem::emplace<TurningLegs>());
+	auto& minds = static_cast<ForcedMinds&>(Locator::creatureMindSystem::emplace<ForcedMinds>());
+	using Stage = CreatureFighting::Stage;
+	legs.walking = true;
+	registry.Get<CreatureFighting>(first).stage = Stage::Ready;
+	auto& walker = registry.Get<CreatureFighting>(second);
+	walker.stage = Stage::Approach;
+	walker.played = true;
+	for (int turn = 0; turn < 1000; ++turn)
+	{
+		fights.ProcessTurn();
+	}
+	ASSERT_TRUE(registry.AllOf<CreatureFighting>(first));
+	ASSERT_TRUE(registry.AllOf<CreatureFighting>(second));
+	EXPECT_EQ(registry.Get<const CreatureFighting>(first).stage, Stage::Ready);
+	// The wait of the first creature shows anger as it starts and again every forty-two turns: 1000 turns give 24 faces
+	EXPECT_EQ(Angers(minds, first), 24u);
+	EXPECT_EQ(Angers(minds, second), 0u);
+	EXPECT_EQ(registry.Get<const CreatureFighting>(second).stage, Stage::Approach);
+	// The walk ends when the body stops
+	legs.walking = false;
+	fights.ProcessTurn();
+	EXPECT_EQ(registry.Get<const CreatureFighting>(second).stage, Stage::Ready);
 	Locator::creatureMindSystem::reset();
 	Locator::creatureLocomotionSystem::reset();
 }
@@ -2831,4 +2944,31 @@ TEST_F(CreatureFightSystemTest, APressOnTheGroundMakesTheHandWaitAndAWaitingHand
 	EXPECT_TRUE(PressGround({-15.0f, -10.0f}, fight::Button::Action));
 	EXPECT_EQ(hands.sends, 2);
 	EXPECT_EQ(QueueOf(first).Size(), 2u);
+}
+
+// The other creature of a fight waits for its next order when it turned to face the first creature, when it is ready in
+// the arena, and when it turned in the arena but has no order to start its duel yet
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST(CreatureFightLook, TheOtherCreatureWaitsForAnOrderOnlyWhenItDidTheLastOrder)
+{
+	using Stage = CreatureFighting::Stage;
+	using Phase = creature_turn_to_face::Turn::Phase;
+	CreatureFighting fighting {.stage = Stage::FaceOff};
+	fighting.faceTurn.phase = Phase::Start;
+	EXPECT_FALSE(WaitsForNextOrder(fighting));
+	fighting.faceTurn.phase = Phase::Done;
+	EXPECT_TRUE(WaitsForNextOrder(fighting));
+	fighting.stage = Stage::Taunt;
+	EXPECT_FALSE(WaitsForNextOrder(fighting));
+	fighting.stage = Stage::Approach;
+	EXPECT_FALSE(WaitsForNextOrder(fighting));
+	fighting.stage = Stage::Ready;
+	EXPECT_TRUE(WaitsForNextOrder(fighting));
+	fighting.stage = Stage::Square;
+	EXPECT_TRUE(WaitsForNextOrder(fighting));
+	fighting.played = true;
+	EXPECT_FALSE(WaitsForNextOrder(fighting));
+	fighting.faceTurn.phase = Phase::Idle;
+	fighting.played = false;
+	EXPECT_FALSE(WaitsForNextOrder(fighting));
 }

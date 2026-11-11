@@ -253,7 +253,9 @@ TEST(LeashOrders, TheFightWithItselfStartsAsEachFightStarts)
 	EXPECT_EQ(agenda[0].request, creature_friendship::RequestKind::Fight);
 	ASSERT_TRUE(agenda[0].gaze.has_value());
 	EXPECT_EQ(agenda[0].gaze->object, k_Creature);
-	EXPECT_EQ(agenda[0].face, creature_face::Cue::None);
+	// It shows its anger as it asks and as it gives the order, as each fight does
+	EXPECT_EQ(agenda[0].face, creature_face::Cue::Anger);
+	EXPECT_EQ(agenda[2].face, creature_face::Cue::Anger);
 	// It makes itself stand still in its mind
 	EXPECT_EQ(agenda[1].kind, Step::Kind::Demobilise);
 	EXPECT_EQ(agenda[1].object, k_Creature);
