@@ -196,10 +196,13 @@ TEST(CreatureCastAgenda, TheMiracleIsCastAsThePoseLoopsAndHeldThirtyTurns)
 	commands = Think(mind, senses, Always(0));
 	ASSERT_TRUE(commands.cast.has_value());
 	EXPECT_EQ(commands.cast->magicType, 4u);
+	EXPECT_FALSE(commands.endSit);
+	// The loop of the pose holds until the time is up
 	for (int turn = 0; turn < 30; ++turn)
 	{
 		commands = Think(mind, senses, Always(0));
 		EXPECT_FALSE(commands.releaseCast) << turn;
+		EXPECT_FALSE(commands.endSit) << turn;
 	}
 	commands = Think(mind, senses, Always(0));
 	EXPECT_TRUE(commands.releaseCast);
@@ -209,6 +212,27 @@ TEST(CreatureCastAgenda, TheMiracleIsCastAsThePoseLoopsAndHeldThirtyTurns)
 	commands = Think(mind, senses, Always(0));
 	EXPECT_FALSE(commands.releaseCast);
 	EXPECT_EQ(mind.step, 1u);
+	EXPECT_FALSE(mind.gaveUp);
+}
+
+TEST(CreatureCastAgenda, APoseThatEndsBeforeItsLoopKeepsTheCastWaiting)
+{
+	IdleMind mind;
+	Plan(mind, Activity::Planned, {CastAt(CastStyle::Lightning, 4, 0, 7, 15.0f, Always(1)).back()});
+	Senses senses {.seconds = 0.1f};
+	auto commands = Think(mind, senses, Always(0));
+	ASSERT_TRUE(commands.startSequence.has_value());
+	senses.bodyBusy = true;
+	(void)Think(mind, senses, Always(0));
+	// The pose ends without its loop: the step does not cast and does not give up
+	senses.bodyBusy = false;
+	for (int turn = 0; turn < 50; ++turn)
+	{
+		commands = Think(mind, senses, Always(0));
+		EXPECT_FALSE(commands.cast.has_value()) << turn;
+		EXPECT_FALSE(commands.startSequence.has_value()) << turn;
+	}
+	EXPECT_EQ(mind.step, 0u);
 	EXPECT_FALSE(mind.gaveUp);
 }
 
