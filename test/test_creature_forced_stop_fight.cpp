@@ -53,6 +53,7 @@ public:
 	void AbortFight(entt::entity /*creature*/) override {}
 	void CallOff(entt::entity creature) override { calledOff.push_back(creature); }
 	void CallOffForPlan(entt::entity creature) override { calledOffForPlan.push_back(creature); }
+	void GetUpForPlan(entt::entity creature) override { gotUpForPlan.push_back(creature); }
 	[[nodiscard]] bool IsFighting(entt::entity /*creature*/) const override { return true; }
 	[[nodiscard]] bool IsDuelling(entt::entity /*creature*/) const override { return false; }
 	[[nodiscard]] std::optional<entt::entity> OpponentOf(entt::entity /*creature*/) const override { return std::nullopt; }
@@ -92,6 +93,7 @@ public:
 
 	std::vector<entt::entity> calledOff;
 	std::vector<entt::entity> calledOffForPlan;
+	std::vector<entt::entity> gotUpForPlan;
 	float health {1.0f};
 	std::vector<float> healthsSet;
 };
@@ -171,6 +173,23 @@ TEST_F(CreatureForcedStopFightTest, TheOtherForcedActivitiesKeepThePlainCallOff)
 	EXPECT_TRUE(fights->calledOffForPlan.empty());
 }
 
+// A forced activity takes the place of a faint, as when the creature sees a villager do a skill that it does not know:
+// a knocked-out creature gets up for it
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(CreatureForcedStopFightTest, AForcedActivityGetsTheCreatureUpFromItsFaint)
+{
+	static_cast<void>(minds.ForceActivity(creature, {.actionObject = creature, .forced = false, .fightBodyEndsAgain = true}));
+	EXPECT_EQ(fights->gotUpForPlan, (std::vector<entt::entity> {creature}));
+}
+
+// A plan forced by hand, such as the puke, also takes the place of a faint
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(CreatureForcedStopFightTest, AForcedPlanGetsTheCreatureUpFromItsFaint)
+{
+	static_cast<void>(minds.Puke(creature));
+	EXPECT_EQ(fights->gotUpForPlan, (std::vector<entt::entity> {creature}));
+}
+
 // The puke, the order of a computer god and the take of a gift from the hand also end the fight of the body again
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
 TEST_F(CreatureForcedStopFightTest, ThePukeStopsTheFightForThePlan)
@@ -219,4 +238,14 @@ TEST_F(CreatureForcedStopFightTest, ALoadWithTheSameFightHealthSetsNothing)
 	ASSERT_TRUE(saved.has_value());
 	minds.LoadMind(creature, std::make_shared<const creaturemind::MindFileData>(*saved));
 	EXPECT_TRUE(fights->healthsSet.empty());
+}
+
+// A stroke or a slap that reaches the mind stops what the creature does, and that also ends a faint: a knocked-out
+// creature gets up where it lies
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(CreatureForcedStopFightTest, FeedbackGetsTheCreatureUpFromItsFaint)
+{
+	minds.ReceiveFeedback(creature, -1.0f);
+	ASSERT_FALSE(fights->gotUpForPlan.empty());
+	EXPECT_EQ(fights->gotUpForPlan.front(), creature);
 }

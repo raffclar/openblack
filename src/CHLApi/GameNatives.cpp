@@ -602,14 +602,16 @@ void DevFunction() // 205 DEV_FUNCTION
 		}
 		return;
 	}
-	// The functions the tutorials use on the first player's creature: starting it growing up again kept at home, and
-	// granting it the learning leash, then the aggression and compassion leashes
+	// The functions the tutorials use on the creature of the player at this computer: starting it growing up again kept
+	// at home, and granting it the learning leash, then the aggression and compassion leashes
 	if (!Locator::leashSystem::has_value())
 	{
 		return;
 	}
 	auto& leashes = Locator::leashSystem::value();
-	const auto creature = leashes.PlayersCreature(PlayerNames::PLAYER_ONE);
+	const auto player =
+	    Locator::playerSystem::has_value() ? Locator::playerSystem::value().GetLocalPlayer() : PlayerNames::PLAYER_ONE;
+	const auto creature = leashes.PlayersCreature(player);
 	if (!creature.has_value())
 	{
 		SPDLOG_LOGGER_WARN(spdlog::get("scripting"), "DEV_FUNCTION({}): the player has no creature they can lead", func);

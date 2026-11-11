@@ -907,6 +907,38 @@ bool CreatureFightSystem::IsDuelling(entt::entity creature) const
 	return registry.Valid(creature) && InDuel(registry, creature);
 }
 
+bool CreatureFightSystem::GetUp(entt::entity creature)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto* knockedOut = registry.Valid(creature) ? registry.TryGet<CreatureKnockedOut>(creature) : nullptr;
+	if (knockedOut == nullptr || knockedOut->permanent)
+	{
+		return false;
+	}
+	// It gets up where it is. If it was on its way home, it is back in full sight at once.
+	StopCarryingHome(creature, *knockedOut);
+	if (auto* animation = registry.TryGet<CreatureAnimation>(creature))
+	{
+		animation->body = creature_layers::EndLoop(animation->body);
+	}
+	SetEyes(registry, creature, creature_eyes::Mode::Calm);
+	if (auto* needs = registry.TryGet<CreatureNeeds>(creature))
+	{
+		needs->rest = CreatureNeeds::Rest::Awake;
+	}
+	registry.Remove<CreatureKnockedOut>(creature);
+	return true;
+}
+
+void CreatureFightSystem::GetUpForPlan(entt::entity creature)
+{
+	if (GetUp(creature))
+	{
+		fight_transcript::Note(creature, "got_up_for_plan",
+		                       [&] { return fight_transcript::Fields {{"creature", fight_transcript::Id(creature)}}; });
+	}
+}
+
 void CreatureFightSystem::TakeForScript(entt::entity creature)
 {
 	auto& registry = Locator::entitiesRegistry::value();
@@ -919,23 +951,7 @@ void CreatureFightSystem::TakeForScript(entt::entity creature)
 	{
 		CallOff(creature);
 	}
-	auto* knockedOut = registry.TryGet<CreatureKnockedOut>(creature);
-	const bool roused = knockedOut != nullptr && !knockedOut->permanent;
-	if (roused)
-	{
-		// It gets up where it is. If it was on its way home, it is back in full sight at once.
-		StopCarryingHome(creature, *knockedOut);
-		if (auto* animation = registry.TryGet<CreatureAnimation>(creature))
-		{
-			animation->body = creature_layers::EndLoop(animation->body);
-		}
-		SetEyes(registry, creature, creature_eyes::Mode::Calm);
-		if (auto* needs = registry.TryGet<CreatureNeeds>(creature))
-		{
-			needs->rest = CreatureNeeds::Rest::Awake;
-		}
-		registry.Remove<CreatureKnockedOut>(creature);
-	}
+	const bool roused = GetUp(creature);
 	if (fought || roused)
 	{
 		fight_transcript::Note(creature, "taken_by_script", [&] {

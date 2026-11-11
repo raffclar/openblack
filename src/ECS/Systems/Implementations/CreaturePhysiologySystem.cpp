@@ -462,8 +462,8 @@ void CreaturePhysiologySystem::LetOutWind(entt::entity creature)
 	const auto* morph = registry.TryGet<const CreatureMorph>(creature);
 	if (morph != nullptr && creature_fart::Stinks(morph->drawn.evilGood) && Locator::reactionSystem::has_value())
 	{
-		// TODO(gossip-and-fainting): the creature must impress the villagers by its size and its last action. The
-		// reactions do not have this value yet, thus the fart impresses no villager
+		// The reaction has no value of its own. The creature is the thing of the reaction, so it impresses a villager
+		// by its size and its last action, as in all reactions that a creature makes
 		Locator::reactionSystem::value().Create(
 		    {.initiator = creature, .type = Reaction::Fainting, .player = self->owner, .position = transform->position});
 	}

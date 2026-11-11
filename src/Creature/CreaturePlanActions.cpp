@@ -1235,8 +1235,8 @@ std::optional<std::vector<creature_mind::Step>> creature_plan_actions::Agenda(co
 		{
 			return creature_mind::SleepAtHome(*situation.home, situation.height, random);
 		}
-		// TODO(creature-rest-and-home): the game keeps the place where a creature without a temple was made as its
-		// home, and sleeps there. openblack does not keep that place, so such a creature sleeps where it stands.
+		// Each creature gets a home when it is made: the pen of its temple, or the place where it was made. Only a
+		// creature that has no home sleeps where it stands.
 		return creature_mind::Sleep(random);
 	case Build::Poo:
 		return creature_mind::Poo(random,

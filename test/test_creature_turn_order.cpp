@@ -159,6 +159,12 @@ TEST(CreatureTurnOrder, AForcedPlanOrAReactionKeepsTheCreatureFromDeciding)
 	EXPECT_FALSE(turn::SkipsDecision({.planRuns = false, .planForced = true, .reacting = true}));
 }
 
+TEST(CreatureTurnOrder, ACreatureMarkedAsFaintedDoesNotDecideAlsoWithNoAgenda)
+{
+	EXPECT_TRUE(turn::SkipsDecision({.planRuns = true, .fainted = true}));
+	EXPECT_TRUE(turn::SkipsDecision({.planRuns = false, .fainted = true}));
+}
+
 TEST(CreatureTurnOrder, OnlyAFreeDecisionDoesTheThingThatWaits)
 {
 	EXPECT_TRUE(turn::DoesFollowUp({}, false, false));

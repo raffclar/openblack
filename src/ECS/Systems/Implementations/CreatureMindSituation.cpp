@@ -503,8 +503,8 @@ creature_mind::HangAroundPlaces CreatureMindSystem::HangAroundPlacesOf(entt::ent
 	creature_mind::HangAroundPlaces places;
 	const auto* body = registry.TryGet<const Creature>(creature);
 	places.height = body != nullptr ? k_HeightOfSizeOne * ShownSize(*body) : 0.0f;
-	// TODO(creature-hang-around): the game keeps the place where a creature without a temple was made as its home.
-	// openblack does not keep that place, so a creature without a home hangs around where it stands.
+	// Each creature gets a home when it is made: the pen of its temple, or the place where it was made. Only a
+	// creature that has no home hangs around where it stands.
 	if (const auto home = ecs::creature_home::HomeOf(registry, creature))
 	{
 		places.home = onGround(*home);

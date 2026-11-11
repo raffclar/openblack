@@ -44,6 +44,7 @@
 #include "ECS/Components/ComputerPlayer.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureArena.h"
+#include "ECS/Components/CreatureFight.h"
 #include "ECS/Components/CreatureHandGlows.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/Dance.h"
@@ -590,6 +591,8 @@ std::optional<reflection::WorldLoadReport> world_save::LoadEntities(const entt::
 	}
 	// An older save keeps the sky's clouds as things of the land. The land laid out its own clouds when it loaded.
 	RemoveSavedSkyClouds(registry.Underlying());
+	// An older save keeps the heights of the blows of a fight in the scale of the world
+	TakeBlowHeightsFromTheMesh(registry.Underlying());
 	// Things the save does not keep go back to their start. A world state keeps them.
 	if (kind == LoadKind::SavedGame)
 	{
@@ -734,6 +737,17 @@ void world_save::RemoveSavedSkyClouds(entt::registry& registry)
 {
 	const auto clouds = registry.view<const components::Cloud>();
 	registry.destroy(clouds.begin(), clouds.end());
+}
+
+void world_save::TakeBlowHeightsFromTheMesh(entt::registry& registry)
+{
+	for (auto&& [entity, fighting] : registry.view<components::CreatureFighting>().each())
+	{
+		for (auto& reach : fighting.reaches)
+		{
+			reach.height = reach.point.y;
+		}
+	}
 }
 
 void world_save::TakeDanceFilesAgain(entt::registry& registry,

@@ -44,6 +44,9 @@ struct CreatureNeeds
 	bool rested {false};
 	/// Why it should faint, as of this turn
 	std::optional<creature_physiology::Faint> faint;
+	/// It fainted, and since then it did not get up at the end of that faint and did not have a turn with no plan. Until
+	/// then it cannot faint again.
+	bool fainted {false};
 
 	/// What it carries, as heavy as itself at 1, while it carries anything
 	std::optional<float> carriedWeight;

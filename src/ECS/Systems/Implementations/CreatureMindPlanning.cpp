@@ -1478,10 +1478,12 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 	// Before the creature decides for itself, it stops a reaction when no agenda runs
 	const auto decisionState = [&registry, &mind, creature]() {
 		const auto* reaction = registry.TryGet<const LivingReaction>(creature);
+		const auto* needs = registry.TryGet<const CreatureNeeds>(creature);
 		return creature_turn_order::DecisionState {
 		    .planRuns = mind.idle.step < mind.idle.agenda.size(),
 		    .planForced = mind.planForced,
 		    .reacting = reaction != nullptr && reaction->reaction != 0,
+		    .fainted = needs != nullptr && needs->fainted,
 		};
 	};
 	if (!only.has_value() && creature_turn_order::StopsReactionBeforeDecision(decisionState()))

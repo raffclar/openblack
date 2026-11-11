@@ -740,7 +740,8 @@ struct Choice
 
 /// One of the creature's blows as it lands: where it lands and how high, and the swing of its striking bone, all in the
 /// creature's mesh space. The size of the creature at the time of each use scales the height. A blow that the creature has but
-/// does not measure lands at the origin of the mesh, with no swing.
+/// does not measure lands at the origin of the mesh, with no swing. The height is the height of the point. A load gives
+/// it again from the point, because a save from an older version keeps it in the scale of the world.
 struct Reach
 {
 	size_t animation;
