@@ -39,6 +39,7 @@
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/WorldObjects.h"
+#include "Input/LocalPlayer.h"
 #include "Locator.h"
 #include "Sound/SoundRequestInterface.h"
 
@@ -103,11 +104,10 @@ public:
 			Locator::leashSystem::value().SetLeashable(creature, false);
 		}
 		// The leash of each hand of the creature's player comes off, also when no leash was on. So the hand of this
-		// computer's player forgets the path of its gesture.
+		// computer's player forgets the path of its gesture. In a network game, this is the god of this computer.
 		const auto* body = Locator::entitiesRegistry::value().TryGet<const Creature>(creature);
-		const auto local =
-		    Locator::playerSystem::has_value() ? Locator::playerSystem::value().GetLocalPlayer() : PlayerNames::PLAYER_ONE;
-		if (body != nullptr && body->owner != PlayerNames::NEUTRAL && body->owner == local &&
+		const auto* hands = Locator::handSystem::has_value() ? &Locator::handSystem::value() : nullptr;
+		if (body != nullptr && body->owner != PlayerNames::NEUTRAL && input::IsLocalPlayer(hands, body->owner) &&
 		    Locator::gestureSystem::has_value())
 		{
 			Locator::gestureSystem::value().ForgetPath();
