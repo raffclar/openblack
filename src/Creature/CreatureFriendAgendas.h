@@ -407,8 +407,11 @@ constexpr float k_ShowCitadelWaitSeconds = 5.0f;
 constexpr float k_ShowCitadelWaitExtraSeconds = 20.0f;
 
 /// Whether a creature can see an object: when the object is less than ten metres away, or less than fifty times the
-/// height of the object
+/// height of the object. A distance that is not a number counts as near.
 [[nodiscard]] bool CanSee(float distance, float objectHeight);
+/// Whether a creature at a point can see an object. The object must be on the map. The distance goes from the
+/// creature to the map position of the object, at the height of the object.
+[[nodiscard]] bool CanSeeObject(glm::vec3 creature, glm::vec3 object, float objectHeight);
 constexpr float k_SeenWithinMetres = 10.0f;
 constexpr float k_SeenWithinHeights = 50.0f;
 

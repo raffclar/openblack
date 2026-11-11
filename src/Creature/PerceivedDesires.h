@@ -46,9 +46,4 @@ void Fade(PerceivedDesires& desires);
 /// wants at all, each of which it then forgets; none if there are none
 [[nodiscard]] std::optional<size_t> TakeDominant(PerceivedDesires& desires, const std::function<bool(size_t)>& activated);
 
-/// Whether a creature sees a point: within two thirds of a half turn either way of where it looks, by the game's angles
-/// (2048 to a turn), or in its own map cell, however far
-inline constexpr uint16_t k_SeeHalfAngle = 0x2AA;
-[[nodiscard]] bool CanSeePos(uint16_t lookAngle, uint16_t angleToPoint, bool sameCell);
-
 } // namespace openblack::creature_perceived_desires

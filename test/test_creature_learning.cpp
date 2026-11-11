@@ -1962,16 +1962,6 @@ TEST(PerceivedDesires, SeenDesiresAddUpHeldToOneAndFade)
 	EXPECT_FALSE(TakeDominant(desires, [](size_t desire) { return desire != 5; }).has_value());
 }
 
-TEST(PerceivedDesires, ACreatureSeesTwoThirdsOfAHalfTurnEitherWayOrInItsCell)
-{
-	using namespace openblack::creature_perceived_desires;
-	EXPECT_TRUE(CanSeePos(0, 0x2AA, false));
-	EXPECT_FALSE(CanSeePos(0, 0x2AB, false));
-	// Across the turn's end
-	EXPECT_TRUE(CanSeePos(0x7FF, 0x2A9, false));
-	EXPECT_TRUE(CanSeePos(0, 0x400, true));
-}
-
 namespace
 {
 namespace town_compassion = creature_town_compassion;

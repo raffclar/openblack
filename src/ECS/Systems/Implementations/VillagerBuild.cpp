@@ -181,15 +181,23 @@ void MoveOnPathsTo(LivingAction& action, entt::entity building, glm::vec2 goal, 
 	villager_footpath::SetupMoveToOnFootpath(action, building, goal, final);
 }
 
+/// The angle across the land that the model of a villager faces, in radians
+float ModelFacingOf(const Transform& transform)
+{
+	const auto x = transform.rotation * glm::vec3(1.0f, 0.0f, 0.0f);
+	return -portable_math::Atan2(-x.z, x.x) - glm::radians(90.0f);
+}
+
 /// Turns the villager towards a point by at most a step of the game's angles; whether it now faces it
 bool LookAtPos(entt::entity villager, glm::ivec2 point, int32_t step)
 {
 	auto& transform = Entities().Get<Transform>(villager);
-	const auto x = transform.rotation * glm::vec3(1.0f, 0.0f, 0.0f);
-	const float facingRadians = -portable_math::Atan2(-x.z, x.x) - glm::radians(90.0f);
 	const auto from = map_coords::WholeXZ(map_coords::FromMetres(glm::xz(transform.position)));
 	const auto target = static_cast<int32_t>(gutils::GetAngleFromXZ(from, point));
-	const auto facing = static_cast<int32_t>(gutils::ConvertAngle3DToGame(facingRadians));
+	// The turn starts from the game angle that the walk keeps. Only a villager with no walk takes the angle of its model.
+	const auto kept = openblack::ecs::living_facing::WalkGameAngleOf(Entities(), villager);
+	const auto facing = kept.has_value() ? static_cast<int32_t>(*kept)
+	                                     : static_cast<int32_t>(gutils::ConvertAngle3DToGame(ModelFacingOf(transform)));
 	const auto turn = gutils::LookStep(facing, target, step);
 	openblack::ecs::living_facing::FaceGameAngle(Entities(), villager, turn.angle);
 	return turn.faces;

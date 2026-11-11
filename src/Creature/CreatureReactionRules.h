@@ -41,17 +41,6 @@ inline constexpr uint32_t k_OtherPlayersDraw = 100;
 inline constexpr uint32_t k_OtherPlayersChance = 3;
 /// The hand picking something up is this many times as urgent to a creature as the table says, kept to a byte
 inline constexpr uint32_t k_HandPickUpUrgency = 3;
-/// A creature sees what is within this many game-angle steps (of 2048 to the circle) of the way it looks, or in its own
-/// map cell
-inline constexpr uint32_t k_SightHalfAngle = 0x2aa;
-
-/// Whether a creature sees a point: within its sight's half angle either side of the way it looks, or in the same map
-/// cell as it. The angles are game angles; the way it looks is the way its head is turned to look at something, or the
-/// way it faces when it looks at nothing.
-[[nodiscard]] bool CanSee(uint16_t lookAngle, uint16_t angleToPoint, bool sameCell);
-/// The game angle a creature looks along, from the way on the land it looks (x, z), as it keeps it: a quarter turn off
-/// the heading that way, truncated to a game angle; none for no way at all
-[[nodiscard]] uint16_t LookAngle(glm::vec2 way);
 
 /// What a creature knows as it weighs a reaction
 struct Facts

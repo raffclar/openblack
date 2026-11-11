@@ -158,8 +158,6 @@ void Satisfied(entt::entity creature, creature_desires::Desires& desires, std::s
 /// Whether a cell of the land is clear for a creature: land it can walk on, with nothing standing in its way there (nor
 /// anything living, when asked)
 [[nodiscard]] bool CellClearFor(const ecs::Registry& registry, entt::entity creature, int32_t x, int32_t z, bool livingBlocks);
-/// The way a creature looks, as a game angle: towards what its head is turned to, or else the way its body faces
-[[nodiscard]] uint16_t LookingAngle(const components::Transform& transform, const std::optional<glm::vec3>& lookAt);
 /// Whether the body of the creature can pay for a miracle of a type
 [[nodiscard]] bool CanPayForMiracle(entt::entity creature, MagicType type);
 /// Where a creature's head is as posed this frame: its head bone, else its height over its feet

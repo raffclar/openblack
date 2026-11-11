@@ -93,6 +93,15 @@ std::optional<float> living_facing::KeptAngleOf(const Registry& registry, entt::
 	return std::nullopt;
 }
 
+std::optional<uint16_t> living_facing::WalkGameAngleOf(const Registry& registry, entt::entity walker)
+{
+	if (const auto* walk = registry.TryGet<const components::WallHug>(walker); walk != nullptr)
+	{
+		return walk->gameAngle;
+	}
+	return std::nullopt;
+}
+
 glm::mat3 living_facing::WorldAxesOf(float yAngle, float scale)
 {
 	return physics::QuarterTurned(placed_turn::WorldAxesOf(glm::vec3(0.0f, yAngle, 0.0f), scale, false));

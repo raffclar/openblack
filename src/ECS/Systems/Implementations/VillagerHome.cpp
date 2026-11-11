@@ -228,7 +228,10 @@ void LookAtPos(entt::entity villager, glm::vec2 point, int32_t step)
 {
 	auto& transform = WorldRegistry().Get<Transform>(villager);
 	const auto target = static_cast<int32_t>(gutils::GetAngleFromXZ(glm::xz(transform.position), point));
-	const auto facing = static_cast<int32_t>(gutils::ConvertAngle3DToGame(FacingOf(villager)));
+	// The turn starts from the game angle that the walk keeps. Only a villager with no walk takes the angle of its model.
+	const auto kept = openblack::ecs::living_facing::WalkGameAngleOf(WorldRegistry(), villager);
+	const auto facing =
+	    kept.has_value() ? static_cast<int32_t>(*kept) : static_cast<int32_t>(gutils::ConvertAngle3DToGame(FacingOf(villager)));
 	openblack::ecs::living_facing::FaceGameAngle(WorldRegistry(), villager, gutils::LookStep(facing, target, step).angle);
 }
 
