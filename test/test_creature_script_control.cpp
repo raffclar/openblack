@@ -21,6 +21,7 @@
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureFight.h"
 #include "ECS/Components/CreatureMind.h"
+#include "ECS/Components/CreaturePartner.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
@@ -298,8 +299,8 @@ TEST_F(CreatureScriptControlTest, FeedbackStopsTheHandsButNotALetGo)
 	EXPECT_TRUE(hands->cancelled.empty());
 }
 
-// A script that lets go of the creature, the order of a computer god and a gift that the hand calls off make the
-// creature give up its action. A fight that it is in ends for both creatures, as a fight called off does.
+// A script that lets go of the creature and a gift that the hand calls off make the creature give up its action. A fight that
+// it is in ends for both creatures, as a fight called off does.
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
 TEST_F(CreatureScriptControlTest, AGiveUpOfTheActionCallsOffTheFightOfTheCreature)
 {
@@ -319,6 +320,55 @@ TEST_F(CreatureScriptControlTest, AGiveUpOfTheActionCallsOffTheFightOfTheCreatur
 	EXPECT_TRUE(fights.calledOff.empty());
 	EXPECT_EQ(registry.Get<const CreatureMindState>(creature).idle.step, 2u);
 	Locator::creatureFightSystem::reset();
+}
+
+// The order of a computer god that makes a desire dominant stops all that the creature does as a failure. The fight
+// ends for both creatures. The walk, the hands, the miracle, the eyes and the agenda stop. The partner of a joint action
+// is free.
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(CreatureScriptControlTest, AStopAndGiveUpStopsTheWalkTheHandsAndTheJointAction)
+{
+	auto& fights = static_cast<CalledOffFights&>(Locator::creatureFightSystem::emplace<CalledOffFights>());
+	auto& magic = static_cast<CastReleasingMagic&>(Locator::magicSystem::emplace<CastReleasingMagic>());
+	auto& registry = Locator::entitiesRegistry::value();
+	registry.Assign<CreatureFighting>(creature);
+	auto& eyes = registry.Assign<CreatureEyes>(creature);
+	eyes.mode = creature_eyes::Mode::Wide;
+	const auto partner = registry.Create();
+	registry.Assign<CreatureMindState>(partner);
+	registry.Assign<CreaturePartner>(creature, CreaturePartner {.partner = partner});
+	registry.Assign<CreaturePartner>(partner, CreaturePartner {.partner = creature});
+	auto& mind = registry.Get<CreatureMindState>(creature);
+	mind.idle.agenda.resize(2);
+	mind.planActive = true;
+	mind.planForced = true;
+
+	minds.StopAndGiveUpAction(creature);
+
+	EXPECT_EQ(fights.calledOffForPlan, (std::vector<entt::entity> {creature}));
+	EXPECT_TRUE(fights.calledOff.empty());
+	EXPECT_EQ(legs->stopped, (std::vector<entt::entity> {creature}));
+	EXPECT_EQ(hands->cancelled, (std::vector<entt::entity> {creature}));
+	// The partner also fails, so it lets go of its miracle after the creature
+	EXPECT_EQ(magic.released, (std::vector<entt::entity> {creature, partner}));
+	EXPECT_EQ(eyes.mode, creature_eyes::Mode::Calm);
+	const auto& stopped = registry.Get<const CreatureMindState>(creature);
+	EXPECT_TRUE(stopped.idle.agenda.empty());
+	EXPECT_FALSE(stopped.planActive);
+	EXPECT_FALSE(stopped.planForced);
+	EXPECT_FALSE(registry.AllOf<CreaturePartner>(creature));
+	EXPECT_FALSE(registry.AllOf<CreaturePartner>(partner));
+	Locator::magicSystem::reset();
+	Locator::creatureFightSystem::reset();
+}
+
+// The plain give-up leaves the walk and the hands as they are
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(CreatureScriptControlTest, AGiveUpLeavesTheWalkAndTheHands)
+{
+	minds.GiveUpAction(creature);
+	EXPECT_TRUE(legs->stopped.empty());
+	EXPECT_TRUE(hands->cancelled.empty());
 }
 
 // The feedback of the player stops the fight of the creature, and its body ends the fight again after a fight that is
