@@ -394,6 +394,7 @@ bool Move(entt::entity creature, const creature_mind::Commands& commands)
 	case Kind::TurnToFaceObject:
 	case Kind::TurnToFaceAwayFromObject:
 	case Kind::ToThrowPosition:
+	case Kind::ToThrowAtPoint:
 		// Overseen turn by turn by the mind as it casts (StartSubMove)
 		break;
 	}
@@ -404,7 +405,7 @@ bool IsSubMove(creature_mind::Movement::Kind kind)
 {
 	using Kind = creature_mind::Movement::Kind;
 	return kind == Kind::GoNearObject || kind == Kind::GetAwayFromObject || kind == Kind::TurnToFaceObject ||
-	       kind == Kind::TurnToFaceAwayFromObject || kind == Kind::ToThrowPosition;
+	       kind == Kind::TurnToFaceAwayFromObject || kind == Kind::ToThrowPosition || kind == Kind::ToThrowAtPoint;
 }
 
 /// The creature heals itself: its life becomes full, and its wounds and blood age as if much time went by
@@ -1248,6 +1249,10 @@ void CreatureMindSystem::AgendaTurn(entt::entity entity)
 		if (commands.endPoint)
 		{
 			EndDanceGesturePoint(entity);
+		}
+		if (commands.stopPointing && Locator::creatureObjectActionSystem::has_value())
+		{
+			Locator::creatureObjectActionSystem::value().EndPoint(entity);
 		}
 		if (commands.releaseCast)
 		{

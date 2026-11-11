@@ -81,6 +81,8 @@ void openblack::ecs::reflection::RegisterFields_Values_creaturem(entt::meta_ctx&
 	    .Field<&openblack::creature_mind::IdleMind::wakeWanted>("wakeWanted")
 	    .Field<&openblack::creature_mind::IdleMind::serial>("serial")
 	    .Field<&openblack::creature_mind::IdleMind::handsChecked>("handsChecked")
+	    .Field<&openblack::creature_mind::IdleMind::facePulled>("facePulled")
+	    .Field<&openblack::creature_mind::IdleMind::eyesShut>("eyesShut")
 	    .Field<&openblack::creature_mind::IdleMind::fightAgreed>("fightAgreed")
 	    .Field<&openblack::creature_mind::IdleMind::gaveUp>("gaveUp")
 	    .Field<&openblack::creature_mind::IdleMind::stoppedByScript>("stoppedByScript")

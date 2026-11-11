@@ -810,6 +810,7 @@ void CreatureMindSystem::StartSubMove(entt::entity creature, const creature_mind
 	auto* existing = registry.TryGet<CreatureCasting>(creature);
 	auto& casting = existing != nullptr ? *existing : registry.Assign<CreatureCasting>(creature);
 	casting.target = movement.object.has_value() ? static_cast<entt::entity>(*movement.object) : entt::null;
+	casting.point = movement.point;
 	casting.keep = movement.maxDistance;
 	casting.settleSeconds = seconds;
 	casting.run = movement.run;
@@ -844,6 +845,9 @@ void CreatureMindSystem::StartSubMove(entt::entity creature, const creature_mind
 		break;
 	case Kind::ToThrowPosition:
 		casting.move = CreatureCasting::Move::ToThrowPosition;
+		break;
+	case Kind::ToThrowAtPoint:
+		casting.move = CreatureCasting::Move::ToThrowAtPoint;
 		break;
 	default:
 		casting.move = CreatureCasting::Move::None;
@@ -1042,6 +1046,44 @@ void CreatureMindSystem::StepSubMove(entt::entity creature, bool animating)
 		if (!bodyBusy)
 		{
 			done();
+		}
+		break;
+	}
+	case CreatureCasting::Move::ToThrowAtPoint:
+	{
+		if (casting->phase == 1)
+		{
+			if (!locomotion.IsMoving(creature))
+			{
+				done();
+			}
+			break;
+		}
+		// The game works from the map position of the creature. It does not look for a place to stand: a point that the
+		// creature cannot stand on fails the walk.
+		const auto stand = creature_throw::WhereToThrowAt(MapPosition(here), casting->point,
+		                                                  object_measures::Height(registry, creature), casting->keep);
+		if (!stand.has_value())
+		{
+			fail();
+			break;
+		}
+		if (stand->kind == creature_throw::ThrowStand::Kind::There)
+		{
+			done();
+			break;
+		}
+		switch (locomotion.MoveTo(creature, stand->point, KeptOrRun(*casting), stand->minDistance, stand->maxDistance))
+		{
+		case CreatureLocomotionSystemInterface::MoveResult::Started:
+			casting->phase = 1;
+			break;
+		case CreatureLocomotionSystemInterface::MoveResult::Busy:
+			// It tries again next turn
+			break;
+		case CreatureLocomotionSystemInterface::MoveResult::InvalidDestination:
+			fail();
+			break;
 		}
 		break;
 	}

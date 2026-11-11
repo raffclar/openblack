@@ -42,7 +42,19 @@ bool IsSubMove(Movement::Kind kind)
 {
 	return kind == Movement::Kind::GoNearObject || kind == Movement::Kind::GetAwayFromObject ||
 	       kind == Movement::Kind::TurnToFaceObject || kind == Movement::Kind::TurnToFaceAwayFromObject ||
-	       kind == Movement::Kind::ToThrowPosition;
+	       kind == Movement::Kind::ToThrowPosition || kind == Movement::Kind::ToThrowAtPoint;
+}
+
+/// A sleep and a faint close the eyes only when the body first lies still in the loop
+bool EyesShutInLoop(const Step& step)
+{
+	return step.untilRested || step.faint;
+}
+
+/// Whether a step reference names the current step of the current agenda
+bool IsStep(const std::optional<IdleMind::StepRef>& ref, const IdleMind& mind)
+{
+	return ref.has_value() && ref->serial == mind.serial && ref->step == mind.step;
 }
 
 void FinishStep(IdleMind& mind)
@@ -782,6 +794,18 @@ bool creature_mind::StaticTimeUp(uint32_t countedTurns, float seconds)
 	return countedTurns >= (count == 0 ? k_CountRange : count);
 }
 
+bool creature_mind::FaintWaitDone(float countedSeconds, float turnSeconds, float seconds)
+{
+	const auto turns = WaitTurns(seconds);
+	if (!turns.has_value() || !(turnSeconds > 0.0f))
+	{
+		return false;
+	}
+	// The same count of whole turns as the wait of a fight's knock-out
+	const auto counted = creature_fight::TurnsCounted(countedSeconds, turnSeconds);
+	return static_cast<int64_t>(*turns) - static_cast<int64_t>(counted) <= 0;
+}
+
 std::optional<creature_face::Request> creature_mind::PullFace(IdleMind& mind, creature_face::Cue cue, const Senses& senses,
                                                               const Random& random, const Random& gameRandom)
 {
@@ -1400,8 +1424,8 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 	const bool sitting =
 	    ((step.kind == Step::Kind::Static || step.kind == Step::Kind::Cast) && mind.stepStarted) || villageDance;
 	const bool dancing = step.kind == Step::Kind::PracticeDance || villageDance;
-	// A step that goes on pulls its face again every few seconds
-	if (mind.stepStarted && step.face != creature_face::Cue::None)
+	// A step pulls its face again every few seconds from its first try to start, also while it waits for the body
+	if ((mind.stepStarted || IsStep(mind.facePulled, mind)) && step.face != creature_face::Cue::None)
 	{
 		mind.faceSeconds -= senses.seconds;
 		if (mind.faceSeconds < k_FaceDue)
@@ -1456,6 +1480,13 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 			}
 			return commands;
 		}
+		// Each step pulls the face it is meant to on its first try to start, also when the body is busy and the step
+		// waits. The face holds for as long as the face goes with.
+		if (!IsStep(mind.facePulled, mind))
+		{
+			commands.face = PullFace(mind, step.face, senses, random, gameRandom);
+			mind.facePulled = IdleMind::StepRef {.serial = mind.serial, .step = mind.step};
+		}
 		// A swap of minds waits until no spell is on either creature, bringing those on itself to their end meanwhile
 		if (step.kind == Step::Kind::SwapMind && !senses.swap.spellsGone)
 		{
@@ -1479,8 +1510,8 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 			}
 			return commands;
 		}
-		// A dance alone waits only while the body plays an action
-		if (step.kind == Step::Kind::PracticeDance && senses.bodyPlaying)
+		// A dance alone waits while the body is busy. A walk, a turn and an action on a thing make the body busy too.
+		if (step.kind == Step::Kind::PracticeDance && bodyBusy)
 		{
 			return commands;
 		}
@@ -1496,8 +1527,6 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 		mind.movedOn = mind.step;
 		mind.stepSeconds = 0.0f;
 		mind.faintLay = false;
-		// Each step pulls the face it is meant to as it starts, held for as long as the face goes with
-		commands.face = PullFace(mind, step.face, senses, random, gameRandom);
 		if (step.heldEyes.has_value())
 		{
 			commands.eyes = *step.heldEyes;
@@ -1537,7 +1566,11 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 			}
 			if (step.closedEyes)
 			{
-				commands.eyes = Eyes::Closed;
+				// The eyes of a sleep or a faint close later, when the body lies still in the loop
+				if (!EyesShutInLoop(step))
+				{
+					commands.eyes = Eyes::Closed;
+				}
 				// Asleep or out cold, it pulls no face
 				commands.face.reset();
 				commands.relaxFace = true;
@@ -1827,6 +1860,12 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 			mind.stepSeconds = wait.seconds;
 			mind.faintLay = wait.started;
 		}
+		// The eyes of a sleep or a faint close when the body first lies still in the loop
+		if (step.closedEyes && EyesShutInLoop(step) && !mind.sitEnding && senses.bodyLooping && !IsStep(mind.eyesShut, mind))
+		{
+			commands.eyes = Eyes::Closed;
+			mind.eyesShut = IdleMind::StepRef {.serial = mind.serial, .step = mind.step};
+		}
 		// Sitting rests it a little every turn until it is told to get up
 		commands.restSitting = !mind.sitEnding && step.sequence[1] == animations::k_Sit;
 		// Each turn of the rest its fire stops, until it starts to get up
@@ -1842,7 +1881,7 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 		{
 			if (step.faint)
 			{
-				timeUp = mind.stepSeconds >= step.seconds;
+				timeUp = FaintWaitDone(mind.stepSeconds, senses.seconds, step.seconds);
 			}
 			else
 			{
@@ -1874,6 +1913,18 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 			if (!step.untilBetter)
 			{
 				commands.effect = step.effect;
+			}
+			// The eyes of a sleep or a faint open as the get-up starts
+			if (step.closedEyes && EyesShutInLoop(step))
+			{
+				commands.eyes = Eyes::Normal;
+			}
+			// A sleep does not wait for the get-up. The next step tries to start on the next turn while the get-up plays.
+			if (step.untilRested)
+			{
+				mind.wakeWanted = false;
+				FinishStep(mind);
+				break;
 			}
 			mind.sitEnding = true;
 			mind.movedOn = mind.step;
@@ -2013,10 +2064,15 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 		}
 		break;
 	case Step::Kind::StopMoving:
-		// It waits until it stands still: its walk slows to a stop and no action plays
-		if (!senses.bodyPlaying && !senses.moving)
+		// It waits until the body is not busy: its walk slows to a stop, and no action plays. While it waits, a point
+		// that the arm holds stops.
+		if (!senses.bodyBusy)
 		{
 			FinishStep(mind);
+		}
+		else
+		{
+			commands.stopPointing = true;
 		}
 		break;
 	case Step::Kind::Dance:
