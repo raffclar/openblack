@@ -577,14 +577,14 @@ void AddCaveCopyHair(std::vector<Scenario>& all)
 	    .name = "The exit from the temple paints the skin with the target",
 	    .facet = Facet::CreatureMode,
 	    .description = "The player has an ape with the alignment 0.02, and its mind stops. The player goes into the temple "
-	                   "and, after 2 s, walks out through the main room.",
+	                   "and, after 10 s, walks out through the main room.",
 	    .expected = "The drawn evil to good axis of the ape stays 0. Before the exit, the paintedAlignment of its "
 	                "CreatureMorph is 0. After the exit it is 0.02, so the skin blends 5 parts in 256 towards the good "
 	                "skin. The change is too small to see.",
 	    .framing = {.shot = Shot::Overview},
 	    .creatures = {nearlyNeutral},
 	    .commands = {{.kind = Kind::EnterTemple, .delaySeconds = 1.0f, .value = static_cast<size_t>(TempleRoom::Main)},
-	                 {.kind = Kind::EnterTemple, .delaySeconds = 2.0f, .value = static_cast<size_t>(TempleRoom::Unknown)}},
+	                 {.kind = Kind::EnterTemple, .delaySeconds = 10.0f, .value = static_cast<size_t>(TempleRoom::Unknown)}},
 	});
 }
 
