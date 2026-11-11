@@ -112,6 +112,9 @@ struct Request
 	Settings settings {};
 	/// Tools: the modes of the AI soak for the first land. A game that joins a game server takes them from the server.
 	developer_tools::SoakTools soak;
+	/// Tools: the synced seed that each map starts with, in place of the 0 of the game. A story land then has another
+	/// life for each value. None keeps the game's 0.
+	std::optional<uint32_t> worldSeed;
 	/// The game time of each frame, none for the wall clock
 	std::optional<std::chrono::microseconds> frameTime;
 	/// The file to write the run record to, as JSON lines

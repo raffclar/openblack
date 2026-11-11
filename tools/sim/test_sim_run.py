@@ -9,6 +9,7 @@
 # ******************************************************************************
 """Tests of the feedback that the training style of the simulation driver gives, and of its repeat comparison"""
 
+import argparse
 import os
 import sys
 import unittest
@@ -170,6 +171,24 @@ class LoadReplayTests(unittest.TestCase):
 
     def test_a_plain_repeat_keeps_the_input_of_each_run(self):
         self.assertEqual(sim_run.repeat_extra(2, ["--x"], "c.jsonl", False, None), ["--x"])
+
+
+class WorldSeedTests(unittest.TestCase):
+    @staticmethod
+    def options(**changes):
+        values = {"game_path": "C:/black", "seed": 1, "every": 200, "frame_ms": 20, "draw_every": 0, "limits": None,
+                  "hash_parts": False, "scenario": None, "testbed": False, "land": "Land1.txt", "opening": "cow",
+                  "extra": []}
+        values.update(changes)
+        return argparse.Namespace(**values)
+
+    def test_a_world_seed_goes_to_the_game(self):
+        args = sim_run.game_arguments(self.options(world_seed=7), "r.jsonl", "r.log", 100, True, True)
+        self.assertEqual(args[args.index("--sim-world-seed") + 1], "7")
+
+    def test_with_no_world_seed_the_game_keeps_its_zero(self):
+        args = sim_run.game_arguments(self.options(), "r.jsonl", "r.log", 100, True, True)
+        self.assertNotIn("--sim-world-seed", args)
 
 
 class LoadPartingTests(unittest.TestCase):
