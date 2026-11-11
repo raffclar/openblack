@@ -930,6 +930,20 @@ void testbed_scenarios::AddAppearance(std::vector<Scenario>& all)
 	          "shakes its head and does its other gestures.",
 	          "Each eyeball shines with the glass environment map. The night does not dim the shine, because it is "
 	          "added after the light, so the eyes look bright in the dark face.");
+	// The eyes close up with no gestures, so that the blinks and the look of the eyes are easy to see
+	all.push_back({
+	    .id = "appearance.creature_eyes_blink",
+	    .name = "Creature eyes blink in turn steps",
+	    .facet = Facet::Appearance,
+	    .description = "At noon, the clock stopped, a giant ape with a paused mind faces the camera close up and stands "
+	                   "still.",
+	    .expected = "Every 2.5 to 7.5 seconds the lids blink. A blink moves with the game turns: half shut, shut, half "
+	                "open, open, one step each turn, with no smooth movement between the steps. When the eyes look at a "
+	                "new point, they get there in one or two frames.",
+	    .environment = {.hour = 12.0f, .clockRuns = false, .dispenserGrid = false},
+	    .framing = {.shot = Shot::Head, .distance = 0.6f},
+	    .creatures = {Posed(CreatureType::GiantApe, {0.0f, 0.0f})},
+	});
 	const auto hairClose = [&all, &headMoves](std::string_view id, std::string_view name, CreatureType species,
 	                                          std::string_view description, std::string_view expected, float distance) {
 		all.push_back({

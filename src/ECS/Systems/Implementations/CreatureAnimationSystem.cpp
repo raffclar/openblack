@@ -1172,12 +1172,12 @@ void CreatureAnimationSystem::Update(std::chrono::duration<float, std::milli> ga
 		    {
 			    return;
 		    }
-		    eyes->blink = creature_eyes::AdvanceBlink(
-		        eyes->blink, milliseconds, [this](uint32_t range) { return _random.LocalRand(static_cast<int32_t>(range)); });
+		    // The blink moves on with the turns (PoseForTurn), so between two turns the lids stay at the same angle. Each
+		    // drawn frame moves the eyes towards where they look by the milliseconds of the last turn, as the game does.
 		    eyes->drawn = {};
 		    if (rig != nullptr && rig->eyes.has_value())
 		    {
-			    PlaceEyes(*eyes, *rig->eyes, morph.drawn, animation.boneMatrices, transform, ShownSize(creature), milliseconds,
+			    PlaceEyes(*eyes, *rig->eyes, morph.drawn, animation.boneMatrices, transform, ShownSize(creature), eyes->turnMs,
 			              [this](uint32_t range) { return _random.LocalRand(static_cast<int32_t>(range)); });
 		    }
 	    });
@@ -1339,14 +1339,22 @@ void CreatureAnimationSystem::PoseForTurn(entt::entity entity, float millisecond
 	{
 		return;
 	}
+	// A frozen creature lives fewer whole milliseconds in the turn, down to none
+	const auto turnMs = creature_walk_planner::TurnMs(animation->playbackScale, static_cast<int32_t>(milliseconds));
+	// The eyes blink by the milliseconds of the turn, before the body moves on. Thus a blink closes and opens the lids in
+	// steps of one turn.
+	if (auto* eyes = registry.TryGet<CreatureEyes>(entity); eyes != nullptr)
+	{
+		eyes->turnMs = turnMs;
+		eyes->blink = creature_eyes::AdvanceBlink(
+		    eyes->blink, turnMs, [this](uint32_t range) { return _random.LocalRand(static_cast<int32_t>(range)); });
+	}
 	const auto& rigs = Locator::resources::value().GetCreatureRigs();
 	const auto rigId = creature::GetRigId(creature->species);
 	if (rigs.Contains(rigId))
 	{
 		const auto& rig = *rigs.Handle(rigId);
-		// A frozen creature lives fewer whole milliseconds in the turn, down to none. The body's animations move on by
-		// these milliseconds at the rate of its size, cut to whole milliseconds.
-		const auto turnMs = creature_walk_planner::TurnMs(animation->playbackScale, static_cast<int32_t>(milliseconds));
+		// The body's animations move on by the turn's milliseconds at the rate of its size, cut to whole milliseconds
 		const auto stepMs = creature_layers::TurnStepMs(turnMs, ShownSize(*creature), animation->realTime);
 		const auto lookOf = [&]() {
 			return HeadLookOf(BlendStores(), registry, entity, *animation, &rig, morph->drawn, *transform, *creature, turnMs);

@@ -166,6 +166,9 @@ struct CreatureEyes
 	/// How open the eyes are, -1 to about 0.75: sleepy eyes turn slowly and droop
 	float openness {0.0f};
 	creature_eyes::Blink blink {};
+	/// The milliseconds of the creature's last turn. Each drawn frame moves the eyes towards where they look by these
+	/// milliseconds, so the eyes move faster when more frames are drawn (vanilla-bugs 1715).
+	int32_t turnMs {0};
 	/// Where the creature looks, when it looks at something rather than ahead
 	std::optional<glm::vec3> lookAt;
 	/// Which way the back of each eye faces as it eases round to where it looks

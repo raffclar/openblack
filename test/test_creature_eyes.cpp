@@ -49,6 +49,26 @@ TEST(CreatureEyes, BlinksCloseAndOpenOverTwoHundredMillisecondsEach)
 	EXPECT_EQ(blink.timerMs, 4999 + 2500);
 }
 
+TEST(CreatureEyes, ABlinkMovesTheLidsInStepsOfTheTurn)
+{
+	// The blink moves on only with the turns of 100 milliseconds. The lids are half shut after one turn, fully shut after
+	// two, half open after three, and open after four.
+	constexpr float k_Calm = k_Lids.calm * k_Pi;
+	constexpr float k_Shut = k_Lids.closed * k_Pi;
+	Blink blink;
+	blink = AdvanceBlink(blink, 1000, Highest);
+	EXPECT_NEAR(EyelidAngle(Mode::Calm, k_Lids, 0.0f, 0.0f, blink), k_Calm, k_Tolerance);
+	blink = AdvanceBlink(blink, 100, Highest);
+	EXPECT_NEAR(EyelidAngle(Mode::Calm, k_Lids, 0.0f, 0.0f, blink), (k_Calm + k_Shut) / 2.0f, k_Tolerance);
+	blink = AdvanceBlink(blink, 100, Highest);
+	EXPECT_NEAR(EyelidAngle(Mode::Calm, k_Lids, 0.0f, 0.0f, blink), k_Shut, k_Tolerance);
+	blink = AdvanceBlink(blink, 100, Highest);
+	EXPECT_NEAR(EyelidAngle(Mode::Calm, k_Lids, 0.0f, 0.0f, blink), (k_Calm + k_Shut) / 2.0f, k_Tolerance);
+	blink = AdvanceBlink(blink, 100, Highest);
+	EXPECT_EQ(blink.state, Blink::State::Open);
+	EXPECT_NEAR(EyelidAngle(Mode::Calm, k_Lids, 0.0f, 0.0f, blink), k_Calm, k_Tolerance);
+}
+
 TEST(CreatureEyes, ThePointIsOnTheTriangleAndItsNormalPointsIn)
 {
 	const auto point = PointOnTriangle({0, 0, 0}, {2, 0, 0}, {0, 2, 0}, 0.25f, 0.5f);
