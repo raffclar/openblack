@@ -1215,6 +1215,9 @@ target_link_libraries(test_creature_web_page PRIVATE creaturehtml lhp)
 openblack_setup_and_add_test(test_oracle_catch oracle/test_oracle_catch.cpp)
 openblack_setup_and_add_test(test_oracle_sigmoid oracle/test_oracle_sigmoid.cpp)
 openblack_setup_and_add_test(
+  test_oracle_creature_desire_update oracle/test_oracle_creature_desire_update.cpp
+)
+openblack_setup_and_add_test(
   test_oracle_inverse_square_root oracle/test_oracle_inverse_square_root.cpp
 )
 openblack_setup_and_add_test(
@@ -1294,6 +1297,7 @@ file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/oracle_data_folder.txt
 "
 )
 foreach (oracle_test test_oracle_catch test_oracle_sigmoid
+                     test_oracle_creature_desire_update
                      test_oracle_inverse_square_root test_oracle_data_folder
                      test_oracle_creature_camera_maths
                      test_oracle_creature_may_try

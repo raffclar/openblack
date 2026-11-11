@@ -311,3 +311,8 @@ float creature_desire_sources::ImpressAfterSighting(float impress)
 {
 	return Clamp01(impress + k_ImpressPerSighting);
 }
+
+float creature_desire_sources::ImpressAfterTurn(float impress)
+{
+	return impress * k_ImpressFromSeeingFade;
+}

@@ -650,6 +650,8 @@ void CreatureMindSystem::DesiresTurn(entt::entity entity)
 		                                [&mind, &body, night, &state](uint32_t type, const creature_desires::Desires& desires) {
 			                                return ReadSource(type, desires, mind, body, night, state);
 		                                });
+		// What it saw to impress becomes less after the sources read it
+		mind.impressFromSeeing = creature_desire_sources::ImpressAfterTurn(mind.impressFromSeeing);
 		creature_desires::UpdateDesires(*mind.desires, k_TurnsPerSecond, DesireFloorOf(entity));
 	}
 

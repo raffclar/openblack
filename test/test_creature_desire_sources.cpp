@@ -243,6 +243,20 @@ TEST(CreatureDesireSources, ImpressFromSeeingVillagesGoesUpByHalves)
 	EXPECT_FLOAT_EQ(*Read(types::k_ImpressFromSeeingThings, state), 0.5f);
 }
 
+TEST(CreatureDesireSources, ImpressFromSeeingBecomesLessEachTurn)
+{
+	EXPECT_EQ(std::bit_cast<uint32_t>(k_ImpressFromSeeingFade), 0x3F7D70A4u);
+	EXPECT_EQ(ImpressAfterTurn(1.0f), 0.99f);
+	EXPECT_EQ(ImpressAfterTurn(0.5f), 0.5f * 0.99f);
+	// One hundred turns with no new sighting take a full source down to about a third
+	float impress = 1.0f;
+	for (int turn = 0; turn < 100; ++turn)
+	{
+		impress = ImpressAfterTurn(impress);
+	}
+	EXPECT_NEAR(impress, 0.366f, 0.001f);
+}
+
 TEST(CreatureDesireSources, ASourceSetByAScriptChangesWhatItFollows)
 {
 	InnateTraits traits;

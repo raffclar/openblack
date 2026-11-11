@@ -180,6 +180,9 @@ void Write(uint32_t type, float value, const Written& written);
 /// The creature saw a village of another player, or of no player, again: impress from seeing things goes up by a half
 constexpr float k_ImpressPerSighting = 0.5f;
 [[nodiscard]] float ImpressAfterSighting(float impress);
+/// Each turn that its desires change, after the sources are read, impress from seeing things becomes less by this factor
+constexpr float k_ImpressFromSeeingFade = 0.99f;
+[[nodiscard]] float ImpressAfterTurn(float impress);
 
 /// Seeing again a whole thing it may act on (a town, a forest, a temple, a flock or another creature) stirs these
 /// sources by a half, each one whose desire the thing is more than a tenth useful for. It does so for each thing at most
