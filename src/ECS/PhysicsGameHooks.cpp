@@ -546,12 +546,13 @@ void PhysicsGameHooks::OfferToCatchingCreatures(entt::entity object, PhysicsEntr
 		{
 			continue;
 		}
-		// Not its own throw; another player's (none are allied in openblack) only now and then
+		// Not its own throw. The throw of another player that is not the ally of the creature's player is caught only now
+		// and then. The draw is made only for such a throw.
 		if (entry.thrower == creature)
 		{
 			continue;
 		}
-		if (entry.player.has_value() && *entry.player != body.owner &&
+		if (entry.player.has_value() && *entry.player != body.owner && !world.IsAllied(*entry.player, body.owner) &&
 		    random->GameRand(100) > creature_catch::k_OtherPlayersChance)
 		{
 			continue;

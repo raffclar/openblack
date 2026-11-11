@@ -143,6 +143,10 @@ public:
 	[[nodiscard]] GameRandomInterface* Random() override { return random; }
 	[[nodiscard]] bool PersonPlays(PlayerNames player) const override { return persons.contains(player); }
 	[[nodiscard]] std::optional<PlayerNames> OwnPlayer() const override { return ownPlayer; }
+	[[nodiscard]] bool IsAllied(PlayerNames player, PlayerNames other) const override
+	{
+		return alliances.contains({player, other});
+	}
 	[[nodiscard]] float LifeOf(entt::entity object) const override
 	{
 		const auto life = lives.find(object);
@@ -303,6 +307,8 @@ public:
 	std::set<PlayerNames> persons {PlayerNames::PLAYER_ONE};
 	/// The player of this computer
 	PlayerNames ownPlayer {PlayerNames::PLAYER_ONE};
+	/// Each pair is a player and the other player that it is the ally of
+	std::set<std::pair<PlayerNames, PlayerNames>> alliances;
 };
 
 struct Fixture
@@ -816,6 +822,69 @@ TEST(PhysicsGameHooks, ACreatureThatTakesNoNoticeOfReactionsCatchesNothing)
 	fixture.hooks->OfferToCatchingCreatures(rock, entry);
 	ASSERT_EQ(world.catches.size(), 1U);
 	EXPECT_EQ(world.catches.front(), std::make_pair(creature, rock));
+}
+
+/// Each synchronised draw gives the same number and is counted
+class CountedRandom final: public GameRandomInterface
+{
+public:
+	explicit CountedRandom(uint32_t draw)
+	    : _draw(draw)
+	{
+	}
+	uint32_t SyncedRand(uint32_t /*n*/, DrawSite /*site*/) override
+	{
+		++draws;
+		return _draw;
+	}
+	float SyncedFloatRand(float /*x*/, DrawSite /*site*/) override { return 0.0f; }
+	uint32_t LocalRand(int32_t /*n*/) override { return 0; }
+	float LocalFloatRand(float /*x*/) override { return 0.0f; }
+	int32_t CrtRand() override { return 0; }
+	void CrtSrand(uint32_t /*seed*/) override {}
+	[[nodiscard]] GameRandomSeeds GetSeeds() const override { return {}; }
+	void SetSeeds(GameRandomSeeds /*seeds*/) override {}
+	[[nodiscard]] ParticleRandomStream GetParticleStream() const override { return ParticleRandomStream::None; }
+	void SetParticleStream(ParticleRandomStream /*stream*/) override {}
+
+	uint32_t draws {0};
+
+private:
+	uint32_t _draw;
+};
+
+// The creature always tries to catch a throw of its own player, or of a player that is the ally of its player, with no
+// draw. It tries to catch the throw of any other player only when a draw of a hundred is at most 2.
+TEST(PhysicsGameHooks, ACreatureCatchesTheThrowOfAnAllyAsItsOwnPlayersThrow)
+{
+	const auto offer = [](std::optional<PlayerNames> thrower, bool allied, uint32_t draw) {
+		Fixture fixture;
+		auto& world = *fixture.world;
+		CountedRandom random(draw);
+		world.random = &random;
+		world.catchMs = 0.0f;
+		world.stepMs = 1000.0f;
+		world.stepTravel = glm::vec3(-100.0f, 0.0f, 0.0f);
+		if (allied && thrower.has_value())
+		{
+			world.alliances.insert({*thrower, PlayerNames::PLAYER_ONE});
+		}
+		const auto creature = world.registry.Create();
+		world.registry.Assign<Creature>(creature).owner = PlayerNames::PLAYER_ONE;
+		world.registry.Assign<Transform>(creature, glm::vec3(5.0f, 0.0f, 0.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+		const auto rock = world.registry.Create();
+		auto& entry = fixture.dynamics.AddRock(rock, glm::vec3(0.0f, 0.0f, -10.0f), thrower);
+		fixture.hooks->OfferToCatchingCreatures(rock, entry);
+		return std::make_pair(world.catches.size(), random.draws);
+	};
+	// The own player's throw and a throw of no player: always tried, no draw
+	EXPECT_EQ(offer(PlayerNames::PLAYER_ONE, false, 99), std::make_pair(size_t {1}, 0U));
+	EXPECT_EQ(offer(std::nullopt, false, 99), std::make_pair(size_t {1}, 0U));
+	// An ally's throw: always tried, no draw
+	EXPECT_EQ(offer(PlayerNames::PLAYER_TWO, true, 99), std::make_pair(size_t {1}, 0U));
+	// Another player's throw: one draw, tried only at 2 or less
+	EXPECT_EQ(offer(PlayerNames::PLAYER_TWO, false, 3), std::make_pair(size_t {0}, 1U));
+	EXPECT_EQ(offer(PlayerNames::PLAYER_TWO, false, 2), std::make_pair(size_t {1}, 1U));
 }
 
 TEST(TempleHeartPassOn, AWorshipSiteTakesWhatItsHeartChoseOrItselfWhenTheHeartChoseItself)

@@ -18,6 +18,7 @@
 #include "ECS/Components/LivingAction.h"
 #include "ECS/ObjectPhysics.h"
 #include "ECS/PhysicsClasses.h"
+#include "ECS/PlayerRelations.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
 #include "ECS/Systems/BuildingDamageSystemInterface.h"
@@ -94,6 +95,12 @@ std::optional<PlayerNames> GamePhysicsHooksWorld::OwnPlayer() const
 		return std::nullopt;
 	}
 	return Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE;
+}
+
+bool GamePhysicsHooksWorld::IsAllied(PlayerNames player, PlayerNames other) const
+{
+	return Locator::playerSystem::has_value() && player != PlayerNames::NEUTRAL && other != PlayerNames::NEUTRAL &&
+	       player_relations::IsAlly(Locator::playerSystem::value().AllyStrength(player, other));
 }
 
 float GamePhysicsHooksWorld::LifeOf(entt::entity object) const
