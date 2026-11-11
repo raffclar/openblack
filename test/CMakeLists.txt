@@ -1241,6 +1241,9 @@ openblack_setup_and_add_test(
   test_oracle_creature_may_try oracle/test_oracle_creature_may_try.cpp
 )
 openblack_setup_and_add_test(
+  test_oracle_creature_tree_maths oracle/test_oracle_creature_tree_maths.cpp
+)
+openblack_setup_and_add_test(
   test_oracle_wisp_orbit oracle/test_oracle_wisp_orbit.cpp
 )
 openblack_setup_and_add_test(
@@ -1297,6 +1300,7 @@ foreach (oracle_test test_oracle_catch test_oracle_sigmoid
                      test_oracle_inverse_square_root test_oracle_data_folder
                      test_oracle_creature_camera_maths
                      test_oracle_creature_may_try
+                     test_oracle_creature_tree_maths
                      test_oracle_totem_hand test_oracle_formation_land_line
                      test_oracle_float_sweep_3 test_oracle_float_sweep_4
                      test_oracle_wisp_orbit test_oracle_creature_start_side
@@ -2471,3 +2475,14 @@ openblack_setup_and_add_test(test_yard_copy_rules test_yard_copy_rules.cpp)
 openblack_setup_and_add_test(test_script_line_values test_script_line_values.cpp)
 openblack_setup_and_add_test(test_screen_pixels gui/test_screen_pixels.cpp)
 openblack_setup_and_add_test(test_temple_pool temple/test_temple_pool.cpp)
+# The mouse events that the debug windows take while the inspector or a scenario drives the pointer
+openblack_setup_and_add_test(test_debug_window_mouse debug/test_debug_window_mouse.cpp)
+openblack_setup_and_add_test(test_creature_opinion_clock test_creature_opinion_clock.cpp)
+openblack_setup_and_add_test(
+  test_oracle_creature_friendship oracle/test_oracle_creature_friendship.cpp
+)
+set_tests_properties(
+  test_oracle_creature_friendship
+  PROPERTIES ENVIRONMENT
+             "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)

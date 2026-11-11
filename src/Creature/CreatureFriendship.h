@@ -15,6 +15,7 @@
 #include <functional>
 #include <optional>
 #include <span>
+#include <string_view>
 #include <vector>
 
 #include "Creature/CreatureDesires.h"
@@ -47,6 +48,10 @@ enum class Availability : uint8_t
 	Free,
 };
 
+/// The actions of dying and of lying dead for good
+constexpr std::string_view k_DieAction = "Die";
+constexpr std::string_view k_DeadForeverAction = "DeadForever";
+
 /// The facts about the asked creature that its availability comes from
 struct AvailabilityFacts
 {
@@ -59,6 +64,10 @@ struct AvailabilityFacts
 	uint32_t asker {0};
 };
 [[nodiscard]] Availability AvailabilityOf(const AvailabilityFacts& facts);
+/// Whether the asked creature counts as dead for a request: it is knocked out (as a creature that faints, it lies dead
+/// until it gets up), or the action of its plan now (or of its last plan, when it has no plan now) is to die or to lie
+/// dead for good
+[[nodiscard]] bool LiesDead(bool knockedOut, std::string_view planAction);
 /// The partner of a creature now: the creature it does a joint action with, else the opponent of the fight it is in,
 /// else none
 [[nodiscard]] std::optional<uint32_t> PartnerNow(std::optional<uint32_t> jointPartner, std::optional<uint32_t> opponent);
@@ -78,6 +87,8 @@ constexpr uint32_t k_RefusedToBeFriends = 6;
 /// A fight is agreed to only when the height of the asked creature is from half to two times the height of the asker
 constexpr float k_LeastFightHeightRatio = 0.5f;
 constexpr float k_MostFightHeightRatio = 2.0f;
+/// Whether the height of the asked creature divided by the height of the asker is near enough to agree to a fight
+[[nodiscard]] bool NearInHeightToFight(float heightRatio);
 
 /// What the answer to a request comes from
 struct AnswerFacts
@@ -113,7 +124,7 @@ struct AgendaUse
 	/// The plan's whole thing, the thing it acts on and the thing it uses
 	std::array<std::optional<uint32_t>, 3> plan {};
 	/// The things of the steps that are left, from the current step to the last
-	std::vector<std::optional<uint32_t>> steps;
+	std::span<const std::optional<uint32_t>> steps;
 	/// The plan is current and has steps left
 	bool running {false};
 };

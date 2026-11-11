@@ -65,12 +65,13 @@ uint32_t WindowId()
 	return Locator::windowing::has_value() ? Locator::windowing::value().GetID() : 0;
 }
 
-/// While the inspector moves the pointer, the debug windows don't take the mouse as theirs, as with the testbed's
-void KeepDebugWindowsOffTheMouse(bool off)
+/// While the inspector moves the pointer, the debug windows follow the pointer of the inspector, not the real pointer.
+/// Then a click of the inspector on a debug window goes to that window.
+void DebugWindowsFollowDrivenPointer(bool follow)
 {
 	if (Locator::debugGui::has_value())
 	{
-		Locator::debugGui::value().KeepOffTheMouse(off);
+		Locator::debugGui::value().FollowDrivenPointer(follow);
 	}
 }
 
@@ -112,7 +113,7 @@ std::string GameInput::Apply(const InputEvent& event)
 	});
 	const auto takeMouse = [&actions, &pointer]() {
 		actions.SetScriptedPointer(pointer);
-		KeepDebugWindowsOffTheMouse(true);
+		DebugWindowsFollowDrivenPointer(true);
 	};
 	const bool mouseTiming = event.timing == InputEvent::Timing::Mouse;
 	// With a real mouse's timing, the scripted mouse is taken where the pointer is, and its moves and buttons are sent as
@@ -122,7 +123,7 @@ std::string GameInput::Apply(const InputEvent& event)
 		{
 			actions.SetScriptedPointer(pointer);
 		}
-		KeepDebugWindowsOffTheMouse(true);
+		DebugWindowsFollowDrivenPointer(true);
 		// Written as the window would report it, should the scripted mouse be handed back before it is pumped
 		pointer = input::QueuedAhead(*actions.GetScriptedPointer(), ScreenSize());
 		std::ignore = input::Pump(pointer, sent, ScreenSize());
@@ -339,7 +340,7 @@ void GameInput::Release()
 		}
 	}
 	actions.SetScriptedPointer(std::nullopt);
-	KeepDebugWindowsOffTheMouse(false);
+	DebugWindowsFollowDrivenPointer(false);
 }
 
 void GameInput::LetGoOfCommandHold()

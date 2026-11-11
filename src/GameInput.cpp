@@ -266,9 +266,9 @@ bool Game::UpdateDebugGui()
 	// ImGui events + prepare
 	{
 		auto guiLoop = profiler.BeginScoped(Profiler::Stage::GuiLoop);
-		// The debug windows keep off the mouse while the player's input is locked out, and show a notice
-		Locator::debugGui::value().SetInputLock(Locator::gameActionSystem::value().IsPlayerInputBlocked(),
-		                                        Locator::gameActionSystem::value().GetScriptedPointer().has_value());
+		// While the input of the player is locked, the debug windows take only the mouse events of the game and the tools.
+		// A notice shows the lock.
+		Locator::debugGui::value().SetInputLock(Locator::gameActionSystem::value().IsPlayerInputBlocked());
 		// The debug menu bar comes up with the game's menu, or always without it
 		Locator::debugGui::value().SetMenuBarVisible(!Locator::gameInterface::has_value() ||
 		                                             Locator::gameInterface::value().GetMenu().IsOpen());

@@ -73,6 +73,17 @@ TEST(CreatureFriendship, AvailabilityOfTheAskedCreature)
 	EXPECT_EQ(AvailabilityOf({.partner = 3U, .asker = k_Asker}), Availability::Refuses);
 }
 
+// A creature that dies, lies dead for good or is knocked out counts as dead and refuses every request
+TEST(CreatureFriendship, AKnockedOutCreatureCountsAsDead)
+{
+	EXPECT_TRUE(LiesDead(false, k_DieAction));
+	EXPECT_TRUE(LiesDead(false, k_DeadForeverAction));
+	EXPECT_TRUE(LiesDead(true, "SitWithFriend"));
+	EXPECT_TRUE(LiesDead(true, ""));
+	EXPECT_FALSE(LiesDead(false, "SitWithFriend"));
+	EXPECT_FALSE(LiesDead(false, ""));
+}
+
 // A creature in a fight has its opponent as its partner: it refuses a third creature and stays free for its opponent
 TEST(CreatureFriendship, ACreatureInAFightIsTakenUpWithItsOpponent)
 {
@@ -173,9 +184,13 @@ TEST(CreatureFriendship, AfterAForcedActionAFreeCreatureAlwaysAgrees)
 
 TEST(CreatureFriendship, AttentionRisesForAnAgendaThatUsesTheCreature)
 {
-	AgendaUse use {.plan = {std::nullopt, k_Asked, std::nullopt}, .steps = {k_Asked}, .running = true};
+	const std::array<std::optional<uint32_t>, 1> askedStep {k_Asked};
+	const std::array<std::optional<uint32_t>, 1> otherStep {4U};
+	AgendaUse use {.plan = {std::nullopt, k_Asked, std::nullopt}, .steps = askedStep, .running = true};
 	EXPECT_TRUE(AgendaUses(use, k_Asked));
-	EXPECT_FALSE(AgendaUses(AgendaUse {.plan = {1U, 2U, 3U}, .steps = {4U}, .running = true}, k_Asked));
+	EXPECT_FALSE(AgendaUses(AgendaUse {.plan = {1U, 2U, 3U}, .steps = otherStep, .running = true}, k_Asked));
+	// A step that is left and uses the creature counts by itself
+	EXPECT_TRUE(AgendaUses(AgendaUse {.plan = {1U, 2U, 3U}, .steps = askedStep, .running = true}, k_Asked));
 	use.running = false;
 	EXPECT_FALSE(AgendaUses(use, k_Asked));
 	// With no belief about the creature, a part of the plan that uses nothing counts, as in the game

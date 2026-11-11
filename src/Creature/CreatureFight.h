@@ -425,9 +425,8 @@ struct MindInFight
 /// it is not forced.
 constexpr float k_ObeyPlanPriority = 1.0f;
 /// A creature asked to fight agrees only to one between half and twice its own height, not while it lies dead, and only
-/// when both or neither of them are under a script's control
-constexpr float k_SmallestOpponentShare = 0.5f;
-constexpr float k_BiggestOpponentShare = 2.0f;
+/// when both or neither of them are under a script's control. The height rule is the one of every request to fight
+/// (creature_friendship::NearInHeightToFight).
 [[nodiscard]] bool AgreesToFight(float height, float askerHeight, bool dead, bool scripted, bool askerScripted);
 /// Knocked out, a creature lies 8 seconds and 4 more for each of its size
 [[nodiscard]] float FaintSeconds(float size);

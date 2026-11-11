@@ -156,6 +156,12 @@ Path creature_tree_view::PathOf(const Tree& tree, const creature_tree::Belief& b
 			return path;
 		}
 		const auto found = std::ranges::find(node.children, *value, &Branch::first);
+		if (found == node.children.end() && *value < node.branches)
+		{
+			path.reachesLeaf = true;
+			path.emptyBranch = *value;
+			return path;
+		}
 		if (found == node.children.end() || found->second >= tree.nodes.size())
 		{
 			return path;
@@ -165,10 +171,20 @@ Path creature_tree_view::PathOf(const Tree& tree, const creature_tree::Belief& b
 	return path;
 }
 
+std::string creature_tree_view::PathEnd(const Path& path)
+{
+	if (path.emptyBranch.has_value())
+	{
+		return std::string(" (") + k_EmptyBranchLabel + ")";
+	}
+	return path.reachesLeaf ? "" : " (no leaf: no branch for it)";
+}
+
 bool creature_tree_view::SameTree(const Tree& a, const Tree& b)
 {
 	return std::ranges::equal(a.nodes, b.nodes, [](const Node& x, const Node& y) {
-		return x.test == y.test && x.children == y.children && x.bucket == y.bucket && x.examples == y.examples;
+		return x.test == y.test && x.children == y.children && x.branches == y.branches && x.bucket == y.bucket &&
+		       x.examples == y.examples;
 	});
 }
 

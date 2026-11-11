@@ -118,8 +118,13 @@ Tables creature_mind_tables::Build(const InfoConstants& info)
 		{
 			tables.dependencies.at(d).at(e) = dependencies[e];
 		}
+		// The list runs up to its first empty slot
 		for (const auto attribute : Words<uint32_t>(info.creatureDesireAttributeEntry.at(d)))
 		{
+			if (attribute == creature_tree::k_NoAttribute)
+			{
+				break;
+			}
 			if (attribute < creature_tree::k_NoAttribute)
 			{
 				tables.attributes.at(d).push_back(static_cast<creature_tree::Attribute>(attribute));

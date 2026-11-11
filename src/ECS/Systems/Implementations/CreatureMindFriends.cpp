@@ -64,9 +64,6 @@ namespace
 {
 /// The action of the plan that a partner carries out the orders of the asker in
 constexpr std::string_view k_ObeyCreatureAction = "ObeyCreature";
-/// The actions of dying and of lying dead for good: a creature that does either, or did either last, refuses
-constexpr std::string_view k_DieAction = "Die";
-constexpr std::string_view k_DeadForeverAction = "DeadForever";
 /// The height of a creature of size one
 constexpr float k_FriendHeightOfSizeOne = 15.0f;
 /// The priority of the plan of a partner that obeys the asker, in the planner's units
@@ -114,8 +111,9 @@ bool CreatureMindSystem::RequestPartner(entt::entity asker, entt::entity asked, 
 	// The current plan's action, or the last plan's when it has none now
 	const auto action =
 	    askedMind->planner.current.has_value() ? askedMind->planner.current->action : askedMind->planner.lastAction;
-	const bool dead = action < tables->actions.size() &&
-	                  (tables->actions[action].name == k_DieAction || tables->actions[action].name == k_DeadForeverAction);
+	const auto actionName =
+	    action < tables->actions.size() ? std::string_view(tables->actions[action].name) : std::string_view {};
+	const bool dead = creature_friendship::LiesDead(registry.AllOf<CreatureKnockedOut>(asked), actionName);
 	// A creature in a fight has its opponent as its partner until the fight is over
 	const auto* askedLink = registry.TryGet<const CreaturePartner>(asked);
 	const auto* askedFight = registry.TryGet<const CreatureFighting>(asked);
@@ -334,10 +332,13 @@ void CreatureMindSystem::NoteAttention(entt::entity creature, CreatureMindState&
 		const auto& plan = *otherMind->planner.current;
 		use.plan = {plan.activityObject, plan.object, plan.instrument};
 	}
+	// The list of things is kept from turn to turn, so that a sighting needs no new memory
+	_agendaThings.clear();
 	for (size_t i = otherMind->idle.step; i < otherMind->idle.agenda.size(); ++i)
 	{
-		use.steps.push_back(ThingOfStep(otherMind->idle.agenda[i]));
+		_agendaThings.push_back(ThingOfStep(otherMind->idle.agenda[i]));
 	}
+	use.steps = _agendaThings;
 	const auto believed =
 	    otherMind->beliefs.Find(creature) != nullptr ? std::optional(entt::to_integral(creature)) : std::nullopt;
 	if (creature_friendship::AttentionRises(registry.AllOf<ScriptControlled>(creature), creature == other,

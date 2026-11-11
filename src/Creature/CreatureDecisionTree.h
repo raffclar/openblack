@@ -104,6 +104,8 @@ constexpr uint32_t k_TotemStatue = 23;
 /// The attributes a kind of thing has, in the order the game lists them in its mind files: seven every thing has, and
 /// four more for towns, abodes, villagers and creatures, one more for forests
 [[nodiscard]] std::span<const Attribute> SlotsFor(uint32_t beliefType);
+/// Whether every kind of thing has the attribute: the seven attributes before the kind-only ones
+[[nodiscard]] bool IsCommon(Attribute attribute);
 
 /// What the creature knew of a thing: its kind and the values of the attributes it has
 struct Belief
@@ -212,10 +214,20 @@ void AddEpisode(std::vector<Episode>& episodes, Episode episode);
 /// The feedback is sorted into 11 steps from -1 to 1, each the first whose middle is within a quarter of it
 constexpr std::array<float, 11> k_Buckets {-1.0f, -0.8f, -0.6f, -0.4f, -0.2f, 0.0f, 0.2f, 0.4f, 0.6f, 0.8f, 1.0f};
 constexpr size_t k_NeutralBucket = 5;
+/// The first step within a quarter of the feedback; none for feedback further than a quarter from each step
+[[nodiscard]] std::optional<size_t> StepOf(float feedback);
+/// The step of the feedback; feedback further than a quarter from each step takes the nearest end step
 [[nodiscard]] size_t BucketOf(float feedback);
-/// How mixed the examples' feedback is: two parts how mixed its signs are and one how mixed its steps are, in bits
+/// The base 2 logarithm of a share of the examples, as the game finds it: the base 10 logarithm times a constant a
+/// little less than the one that changes the base, rounded to a float
+[[nodiscard]] float ShareLog2(float share);
+/// The mean feedback of the examples. The sum starts with the newest example, as the game adds them up.
+[[nodiscard]] float MeanFeedback(std::span<const Episode> episodes);
+/// How mixed the examples' feedback is: two parts how mixed its signs are and one how mixed its steps are, in bits, times
+/// the game's float of a third. Feedback further than a quarter from each step is in no step.
 [[nodiscard]] float Entropy(std::span<const Episode> episodes);
-/// How much testing an attribute separates the examples, against how much it splits them; 0 if any example lacks it
+/// How much testing an attribute separates the examples, against how much it splits them; 0 if any example lacks it.
+/// Only the values in the attribute's range make parts. An example with a value out of the range is in no part.
 [[nodiscard]] float Gain(std::span<const Episode> episodes, Attribute attribute);
 
 struct Node
@@ -224,7 +236,11 @@ struct Node
 	std::optional<Attribute> test;
 	/// For each value of the attribute the examples had, the node it leads to
 	std::vector<std::pair<uint32_t, size_t>> children;
-	/// A leaf's step of the feedback scale
+	/// How many values the tested attribute has. A value below this with no child is a branch with no examples: it
+	/// takes the step of this node.
+	uint32_t branches {0};
+	/// The step of the feedback scale of the examples that reached it: a leaf's value, and the value of each branch
+	/// with no examples below it
 	size_t bucket {k_NeutralBucket};
 	/// How many examples reached it
 	size_t examples {0};
@@ -234,10 +250,23 @@ struct Tree
 	/// The root first; empty for a tree with no examples
 	std::vector<Node> nodes;
 };
-/// Grows a tree from examples, testing only the attributes allowed
+/// Grows a tree from examples. The root can test only the allowed attributes that every kind of thing has. Below a test
+/// of the kind of thing, each branch can also test the allowed attributes of its own kind.
 [[nodiscard]] Tree Build(std::span<const Episode> episodes, std::span<const Attribute> allowed);
-/// The leaf a thing reaches in the tree, by its node's place; none when the tree is empty or has no branch for it
-[[nodiscard]] std::optional<size_t> LeafOf(const Tree& tree, const Belief& belief);
+/// Where a thing ends in a tree
+struct Leaf
+{
+	/// The node whose step the thing takes
+	size_t node {0};
+	/// The thing went down a branch with no examples below the node
+	bool emptyBranch {false};
+
+	[[nodiscard]] bool BelowRoot() const { return node != 0 || emptyBranch; }
+	bool operator==(const Leaf& other) const = default;
+};
+/// The leaf a thing reaches in the tree; none when the tree is empty, the thing lacks a tested attribute, or its value
+/// is out of the attribute's range
+[[nodiscard]] std::optional<Leaf> LeafOf(const Tree& tree, const Belief& belief);
 /// How good a thing is by the tree, from -1 to 1; 0 when the tree has nothing to say about it
 [[nodiscard]] float Evaluate(const Tree& tree, const Belief& belief);
 /// The most useful anything can be for the planner, an eighth

@@ -69,12 +69,15 @@ public:
 	{
 		return false;
 	}
-	/// The player's input is locked out for an agent driving the game: the debug windows take nothing from the mouse, and
-	/// a notice says so. Whether the game's own pointer stands in for the mouse, which keeps the mouse off them anyway
-	virtual void SetInputLock([[maybe_unused]] bool locked, [[maybe_unused]] bool pointerScripted) noexcept {}
-	/// While a tool or a scenario moves the pointer, the debug windows do not take the mouse. Then the real pointer on
-	/// a debug window does not take the presses of the tool.
+	/// The input of the player is locked for an agent that drives the game. The debug windows then take only the mouse
+	/// events that the game or a tool sends, and a notice shows the lock.
+	virtual void SetInputLock([[maybe_unused]] bool locked) noexcept {}
+	/// While a scenario moves the hand, the debug windows take no press of the mouse. Then a debug window under the
+	/// pointer does not take the presses of the scenario.
 	virtual void KeepOffTheMouse([[maybe_unused]] bool off) noexcept {}
+	/// While the inspector drives the pointer, the debug windows follow the driven pointer and not the real pointer.
+	/// Then a click of the inspector on a debug window goes to that window, as a click of the player does.
+	virtual void FollowDrivenPointer([[maybe_unused]] bool follow) noexcept {}
 	virtual bool Loop() noexcept = 0;
 	virtual void Draw() noexcept = 0;
 	/// Draws nothing in each way that the debug windows draw, so that the graphics card makes its states before the

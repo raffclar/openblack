@@ -1609,7 +1609,9 @@ void LeashSystem::UpdateMoods(entt::entity creature, const CreatureLeash::Worn& 
 	{
 		minds.MakeDesireDominant(other, creature_desires::Desire::Anger, leash::k_ForcedDesireSeconds, false);
 	}
-	// And the two warm or cool to each other, now and then
+	// And the two warm or cool to each other, now and then. The other creature's clock is the one that also limits how
+	// often an effect changes the opinion of the creature. On the learning leash the change is zero, but each creature
+	// still learns to want to be friends with the other creature, as for a change that is not bad.
 	auto* mind = MindOf(registry, creature);
 	auto* otherMind = MindOf(registry, other);
 	const auto turn = Locator::time::has_value() ? Locator::time::value().GetTurn() : 0;
@@ -1618,14 +1620,12 @@ void LeashSystem::UpdateMoods(entt::entity creature, const CreatureLeash::Worn& 
 		return;
 	}
 	otherMind->leash.attitudeTurn = turn;
-	if (const auto change = leash::AttitudeChange(worn.type); change != 0.0f)
+	const auto change = leash::AttitudeChange(worn.type);
+	if (mind != nullptr)
 	{
-		if (mind != nullptr)
-		{
-			mind->leash.attitudes.push_back({.creature = static_cast<uint32_t>(other), .change = change});
-		}
-		otherMind->leash.attitudes.push_back({.creature = static_cast<uint32_t>(creature), .change = change});
+		mind->leash.attitudes.push_back({.creature = static_cast<uint32_t>(other), .change = change});
 	}
+	otherMind->leash.attitudes.push_back({.creature = static_cast<uint32_t>(creature), .change = change});
 }
 
 bool LeashSystem::ShouldWalkBack(entt::entity creature) const
