@@ -1178,6 +1178,17 @@ bool CreatureMindSystem::Adopt(entt::entity creature, CreatureMindState& mind, c
 	}
 	auto situated = situation;
 	Situate(creature, situated);
+	// A fishing action finds the fish farm nearest to the creature when it starts. The planner looks for a fish farm
+	// only in a turn that plans a fishing action. Thus the turn that adopts the plan looks again.
+	if (const auto* executor = creature_plan_actions::For(info.name);
+	    executor != nullptr && creature_plan_actions::FishesFirst(*executor) && !situated.fishing.has_value())
+	{
+		const auto& registry = Locator::entitiesRegistry::value();
+		if (const auto* transform = registry.TryGet<const Transform>(creature))
+		{
+			situated.fishing = FishingFor(registry, creature, glm::vec2(transform->position.x, transform->position.z));
+		}
+	}
 	// An action done with something takes up the thing to use too, as the plan found it or, for a plan made otherwise
 	// (copying the player, doing it again), as the planner would
 	auto chosen = plan;
