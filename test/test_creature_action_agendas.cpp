@@ -8,6 +8,7 @@
  *******************************************************************************/
 
 #include <algorithm>
+#include <vector>
 
 #include <Common/GameRandom.h>
 #include <gtest/gtest.h>
@@ -305,6 +306,37 @@ TEST(CreatureActionAgendas, WatchingTheHandLastsItsTurnsUpToFiveSeconds)
 	senses.hand.reset();
 	(void)Think(mind, senses, NeverFirst);
 	EXPECT_EQ(mind.step, 1u);
+}
+
+// Each turn that it watches the hand, with a player, draws one synced number below thirty that changes nothing; with no
+// player it draws nothing
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST(CreatureActionAgendas, WatchingTheHandDrawsBelowThirtyEachTurnWithAPlayer)
+{
+	std::vector<uint32_t> ranges;
+	const auto recorded = [&ranges](uint32_t range) {
+		ranges.push_back(range);
+		return NeverFirst(range);
+	};
+	IdleMind mind;
+	Plan(mind, Activity::Planned, LookAtHand());
+	creature_mind::Senses senses {.seconds = 0.1f};
+	senses.hand = creature_mind::Senses::CameraView {.distance = 30.0f, .groundDistance = 20.0f, .point = {0.0f, 20.0f}};
+	uint32_t turns = 0;
+	while (mind.step == 0 && turns < 100)
+	{
+		(void)Think(mind, senses, recorded);
+		++turns;
+	}
+	EXPECT_EQ(turns, 20u);
+	EXPECT_EQ(std::ranges::count(ranges, k_HandWatchUnusedDraw), 20);
+	EXPECT_EQ(k_HandWatchUnusedDraw, 30u);
+	ranges.clear();
+	Plan(mind, Activity::Planned, LookAtHand());
+	senses.hand.reset();
+	(void)Think(mind, senses, recorded);
+	EXPECT_EQ(mind.step, 1u);
+	EXPECT_EQ(std::ranges::count(ranges, k_HandWatchUnusedDraw), 0);
 }
 
 // A body that turns or does an action does not start a new turn to the hand, so the turn that it does now comes to its

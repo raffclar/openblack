@@ -278,6 +278,11 @@ float creature_leash_orders::RunWaitSeconds(float extraSeconds, float turnsPerSe
 	return WholeTurns(k_RunWaitSeconds + std::clamp(extraSeconds, 0.0f, k_RunWaitExtraSeconds), turnsPerSecond);
 }
 
+float creature_leash_orders::RunWaitExtraSeconds(bool run, const std::function<float(float)>& floatRandom)
+{
+	return run ? floatRandom(k_RunWaitExtraSeconds) : 0.0f;
+}
+
 std::vector<Step> creature_leash_orders::SleepAtHome(glm::vec2 home, float height, std::vector<Step> sleep)
 {
 	// A yawn first, when the sleep has one, then off home, then the sleep itself
