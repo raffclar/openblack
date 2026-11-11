@@ -40,7 +40,7 @@ constexpr float k_MaxActionPriority = 0.01f;
 /// The usefulness of each thing that an action uses. The distance to the thing chooses the thing, but it does not
 /// change this value.
 constexpr float k_UsingUsefulness = 0.1f;
-/// Scales priorities to readable numbers; it doesn't change which plan wins
+/// Scales priorities to readable numbers. It comes before the thing used in the product, as in the game.
 constexpr float k_PriorityScale = 1e5f;
 /// How long since an action was done before it is fully new again, in game turns, and the most novelty adds
 constexpr uint32_t k_NoveltyTurns = 36000;
