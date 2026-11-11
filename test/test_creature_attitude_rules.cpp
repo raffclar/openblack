@@ -13,6 +13,7 @@
 #include <stdexcept>
 #include <vector>
 
+#include <Creature/CreaturePlanner.h>
 #include <ECS/CreatureAttitudeRules.h>
 #include <LNDFile.h>
 #include <gtest/gtest.h>
@@ -215,6 +216,39 @@ TEST(CreatureAttitudeRules, TimingsByNearnessImpressivenessAndFeeling)
 	EXPECT_EQ(attitude::TurnsBeforeReactingAgain(timing, true), 0u);
 	timing.attitude = Attitude::Respect;
 	EXPECT_EQ(attitude::TurnsBeforeReactingAgain(timing, false), 0u);
+}
+
+// The plan that tells whether the creature means something impressive is the plan it carries out, else its last plan:
+// after an impressive plan stops, the villagers react again at once until the creature starts a new plan
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST(CreatureAttitudeRules, TheLastPlanStillTellsWhetherTheCreatureMeansSomethingImpressive)
+{
+	constexpr uint32_t k_Impressive = 39;
+	constexpr uint32_t k_Ordinary = 1;
+	const auto impressiveType = [](uint32_t action) {
+		return action == k_Impressive ? ImpressiveType::CreatureQuiteImpressive : ImpressiveType::CreatureNotImpressive;
+	};
+	const attitude::Timing timing {.tableTurns = 100,
+	                               .maxReactionDistance = 30.0f,
+	                               .howImportantIsDistance = 0.5f,
+	                               .distance = 20.0f,
+	                               .attitude = Attitude::Curious};
+	const auto turns = [&](const creature_planner::PlannerState& planner) {
+		const bool impressive =
+		    impressiveType(creature_planner::ActionInView(planner)) != ImpressiveType::CreatureNotImpressive;
+		return attitude::TurnsBeforeReactingAgain(timing, impressive);
+	};
+
+	creature_planner::PlannerState planner;
+	planner.current = creature_planner::Plan {.action = k_Impressive};
+	EXPECT_EQ(turns(planner), 0u);
+	// The plan stops: its action stays in view
+	planner.lastAction = k_Impressive;
+	planner.current.reset();
+	EXPECT_EQ(turns(planner), 0u);
+	// A new plan that is not impressive
+	planner.current = creature_planner::Plan {.action = k_Ordinary};
+	EXPECT_EQ(turns(planner), 75u);
 }
 
 // A curious villager steps towards the creature by the whole metres it is too far; within a metre of where it means to

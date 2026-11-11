@@ -21,12 +21,12 @@
 /// How a creature's compassion is spent on a town. Compassion is always about something: of the towns and other
 /// creatures it knows, the one most worth it for the distance. Only a town gives it anything to do. It then helps the
 /// town with one of the town's desires at a time, each desire having its own list of actions in the game's tables. It
-/// takes the desires the town feels in the town's own order, most felt first, stopping at the first the town doesn't feel
-/// at all, and goes round them: after half a minute of game turns, when it plans compassion while compassion is what it
-/// wants most and it isn't already being compassionate, or each time it has finished helping. Having finished, it stays
-/// with a desire the town still feels more than when it took it up (more than 85 hundredths of that) a few times more,
-/// except the desire to relax. A town with hurt people may make it think of healing first, once it has seen the healing
-/// miracle well over half the times it needs to learn it.
+/// takes the desires the town feels in the town's own order, most felt first, stopping at the first the town doesn't
+/// feel at all, and goes round them: when it plans compassion more than 30 game turns after it last moved on or helped,
+/// while compassion is what it wants most and it isn't already being compassionate, or each time it has finished
+/// helping. Having finished, it stays with a desire the town still feels more than when it took it up (more than 85
+/// hundredths of that) a few times more, except the desire to relax. A town with hurt people may make it think of
+/// healing first, once it has seen the healing miracle well over half the times it needs to learn it.
 namespace openblack::creature_town_compassion
 {
 /// The things a town can want
