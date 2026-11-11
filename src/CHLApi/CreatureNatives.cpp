@@ -144,6 +144,7 @@
 #include "Help/Spirits.h"
 #include "InfoConstants.h"
 #include "Input/GameActionMapInterface.h"
+#include "Input/LocalPlayer.h"
 #include "Locator.h"
 #include "Magic/MagicTables.h"
 #include "Magic/TownBelief.h"
@@ -734,10 +735,10 @@ void DetachObjectLeash() // 187 DETACH_OBJECT_LEASH
 		Locator::leashSystem::value().TakeOff(creature);
 		return;
 	}
-	// The hand of the creature's player forgets the path of its gesture, as when a leash comes off
-	const auto local =
-	    Locator::playerSystem::has_value() ? Locator::playerSystem::value().GetLocalPlayer() : PlayerNames::PLAYER_ONE;
-	if (body->owner == local && Locator::gestureSystem::has_value())
+	// The hand of the creature's player forgets the path of its gesture, as when a leash comes off. Only the hand of this
+	// computer's god has a path.
+	const auto* hands = Locator::handSystem::has_value() ? &Locator::handSystem::value() : nullptr;
+	if (input::IsLocalPlayer(hands, body->owner) && Locator::gestureSystem::has_value())
 	{
 		Locator::gestureSystem::value().ForgetPath();
 	}
