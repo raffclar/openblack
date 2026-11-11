@@ -2493,26 +2493,8 @@ set_tests_properties(
 openblack_setup_and_add_test(
   test_oracle_creature_spell_pay oracle/test_oracle_creature_spell_pay.cpp
 )
-foreach (oracle_test test_oracle_catch test_oracle_sigmoid
-                     test_oracle_inverse_square_root test_oracle_data_folder
-                     test_oracle_creature_camera_maths
-                     test_oracle_creature_may_try
-                     test_oracle_creature_spell_pay
-                     test_oracle_totem_hand test_oracle_formation_land_line
-                     test_oracle_float_sweep_3 test_oracle_float_sweep_4
-                     test_oracle_wisp_orbit test_oracle_creature_start_side
-                     test_oracle_glm_order_3
-                     test_oracle_glm_order_4
-                     test_oracle_glm_order_5
-                     test_oracle_glm_order_6
-                     test_oracle_glm_order_7
-                     test_oracle_held_frame_heading
-                     test_oracle_lightning_spell_order
-                     test_oracle_sway_ribbon
-                     test_oracle_casting_distance
-                     test_oracle_creature_heading
-                     test_oracle_logo_effect
-                     test_oracle_walk_lead
-                     test_oracle_villager_food
-                     test_oracle_computer_hand_moves
+set_tests_properties(
+  test_oracle_creature_spell_pay
+  PROPERTIES ENVIRONMENT
+             "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
 )
