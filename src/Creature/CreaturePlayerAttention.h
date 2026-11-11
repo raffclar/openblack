@@ -117,8 +117,10 @@ struct FollowHandView
 	glm::vec2 hand {0.0f};
 	float distance {0.0f};
 	float reach {0.0f};
-	/// The body plays an action, and the hand is near the creature's heading
-	bool bodyPlaying {false};
+	/// The hand is at the origin of the map, on the ground
+	bool handAtOrigin {false};
+	/// The body does an action (a walk or a turn on the spot included), and the hand is near the creature's heading
+	bool bodyBusy {false};
 	bool directionClose {false};
 };
 /// What a creature that follows the hand does on one turn
@@ -133,8 +135,9 @@ enum class FollowHandAction : uint8_t
 	/// It walks to the hand again
 	WalkToHand,
 };
-/// One turn of the step that follows the hand. Each turn uses one of the turns that are left. While the body plays an action it
-/// walks again only when the hand is not near its heading.
+/// One turn of the step that follows the hand. Each turn uses one of the turns that are left. While the body does an action,
+/// a walk included, it walks again only when the hand is not near its heading. It is near the hand only when its body is
+/// free.
 [[nodiscard]] FollowHandAction FollowHandTurn(const FollowHandView& view, uint32_t& turnsLeft);
 
 /// What a creature that watches the player sees on one turn
@@ -143,7 +146,8 @@ struct WatchPlayerView
 	/// It waits for orders after the player told it to go to a place, and it has a player
 	bool waitingForOrders {false};
 	bool hasPlayer {false};
-	bool bodyPlaying {false};
+	/// The body does an action, a walk or a turn on the spot included
+	bool bodyBusy {false};
 	/// How much the hand moved lately
 	float handMovement {0.0f};
 	/// The hand and the camera as the creature sees them: how far each is, and how far round from its heading (radians,

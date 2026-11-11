@@ -40,6 +40,8 @@ constexpr float k_SizeOffset = 0.25f;
 /// The arrival ring never reaches past the destination by less than this, and is never thinner than this
 constexpr float k_RingInside = 0.05f;
 constexpr float k_RingThickness = 0.001f;
+/// A new walk that asks for a max distance not more than its min distance gets this much more than the min distance
+constexpr float k_StartRingThickness = std::bit_cast<float>(0x3C23D70Au);
 /// A walk is given this long and this much longer per unit of distance before it is given up on
 constexpr float k_TimeLimitBaseMs = 5000.0f;
 constexpr float k_TimeLimitPerUnitMs = 2.0f;
@@ -118,14 +120,19 @@ Pair creature_locomotion::SpinPairFor(size_t first, float angle)
 
 Ring creature_locomotion::MoveRing(float distance, float minDistance, float maxDistance)
 {
-	const auto min = std::max(std::min(minDistance, distance - k_RingInside), 0.0f);
+	const auto min = std::min(minDistance, distance - k_RingInside);
 	return {.min = min, .max = std::max(maxDistance, min + k_RingThickness)};
+}
+
+float creature_locomotion::StartMax(float maxDistance, float minDistance)
+{
+	return maxDistance > minDistance ? maxDistance : minDistance + k_StartRingThickness;
 }
 
 Ring creature_locomotion::ObjectRing(float creatureRadius, float objectRadius, float extra)
 {
 	const auto min = creatureRadius + objectRadius;
-	return {.min = min, .max = min + std::max(extra, k_RingThickness)};
+	return {.min = min, .max = min + StartMax(extra, 0.0f)};
 }
 
 bool creature_locomotion::Arrived(float distance, const Ring& ring)

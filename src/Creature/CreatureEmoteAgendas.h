@@ -71,9 +71,10 @@ struct FollowCameraView
 	/// The point of focus of its player's camera, on the land; none without a player
 	std::optional<glm::vec3> focus;
 	glm::vec2 position {0.0f};
+	/// The body does an action: a walk, a turn on the spot or an animation of its own
 	bool moving {false};
-	/// While it moves: whether the point of focus is less than a sixth of a turn from the way its body faces, or in its
-	/// own map cell
+	/// While the body does an action: whether the point of focus is less than a sixth of a turn from the way its body faces, or
+	/// in its own map cell
 	bool focusAhead {false};
 };
 enum class FollowCameraAction : uint8_t

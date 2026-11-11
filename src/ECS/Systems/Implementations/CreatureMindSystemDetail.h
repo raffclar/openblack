@@ -229,11 +229,11 @@ CameraViewOf(const ecs::Registry& registry, entt::entity creature, const creatur
 /// the land, the last position of the hand counts.
 [[nodiscard]] std::optional<creature_player_attention::FollowHandView>
 FollowHandViewOf(const ecs::Registry& registry, entt::entity creature, const components::CreatureMindState& mind,
-                 bool bodyPlaying);
+                 bool bodyBusy);
 /// The player as a creature that watches it sees it, only while its step watches the player
 [[nodiscard]] std::optional<creature_player_attention::WatchPlayerView>
 WatchPlayerViewOf(const ecs::Registry& registry, entt::entity creature, const components::CreatureMindState& mind,
-                  bool bodyPlaying);
+                  bool bodyBusy);
 /// Lets go of the miracle the creature holds, as it stops what it was doing
 void ReleaseCast(entt::entity creature);
 /// The creature stops what it does: its eyes go calm, blink as usual, and its lids open by how rested it is

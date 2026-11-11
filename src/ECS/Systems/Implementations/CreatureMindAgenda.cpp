@@ -1202,8 +1202,8 @@ void CreatureMindSystem::AgendaTurn(entt::entity entity)
 		    .followed = FollowedViewOf(registry, transform.position, mind),
 		    .cameraFocus = cameraFocus,
 		    .cameraFocusAhead = cameraFocusAhead,
-		    .followHand = FollowHandViewOf(registry, entity, mind, creature_layers::IsPlaying(animation.body)),
-		    .watchPlayer = WatchPlayerViewOf(registry, entity, mind, creature_layers::IsPlaying(animation.body)),
+		    .followHand = FollowHandViewOf(registry, entity, mind, creature_body::PerformsBodyAction(body)),
+		    .watchPlayer = WatchPlayerViewOf(registry, entity, mind, creature_body::PerformsBodyAction(body)),
 		    .fighting = registry.AllOf<CreatureFighting>(entity),
 		    .totemShare = mind_town_help::TotemShareOf(registry, mind.idle),
 		};

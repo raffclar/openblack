@@ -118,6 +118,27 @@ TEST(CreatureLocomotion, ArrivalRings)
 	EXPECT_NEAR(TimeLimitMs(100.0f), 5200.0f, k_Tolerance);
 }
 
+TEST(CreatureLocomotion, ANewWalkWithAMaxNotMoreThanItsMinGetsAHundredthMore)
+{
+	EXPECT_EQ(StartMax(2.0f, 0.0f), 2.0f);
+	EXPECT_EQ(StartMax(0.0f, 0.0f), std::bit_cast<float>(0x3C23D70Au));
+	EXPECT_EQ(StartMax(1.0f, 3.0f), 3.0f + std::bit_cast<float>(0x3C23D70Au));
+	// A walk up to an object with no extra distance arrives a hundredth past the two radii
+	const auto object = ObjectRing(5.0f, 2.0f, 0.0f);
+	EXPECT_EQ(object.min, 7.0f);
+	EXPECT_EQ(object.max, 7.0f + std::bit_cast<float>(0x3C23D70Au));
+}
+
+TEST(CreatureLocomotion, NearItsDestinationTheMinOfTheRingIsLessThanZero)
+{
+	// The min is 5 cm less than the distance, with no limit at zero
+	const auto ring = MoveRing(0.02f, 0.0f, 1.0f);
+	EXPECT_EQ(ring.min, 0.02f - 0.05f);
+	EXPECT_EQ(ring.max, 1.0f);
+	const auto thin = MoveRing(0.02f, 0.0f, -0.5f);
+	EXPECT_EQ(thin.max, (0.02f - 0.05f) + 0.001f);
+}
+
 namespace
 {
 /// A creature in the middle of map cell (100, 100)
