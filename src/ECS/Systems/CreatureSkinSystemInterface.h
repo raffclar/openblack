@@ -56,7 +56,8 @@ public:
 	virtual void RemakeTattooMasks(entt::entity creature, creature_tattoo::Sheet sheet) = 0;
 	/// At the turn: the tattoo editor of the player changed the tattoos of a creature (player_commands::CreatureTattoo)
 	virtual void DoTattoo(PlayerNames /*player*/, const player_commands::CreatureTattoo& /*tattoo*/) {}
-	/// Paints the creature's tattoos again, as they are now, with the masks of its player
+	/// Paints the creature's skin again: its tattoos as they are now, with the masks of its player. The skin and the hair
+	/// also get the evil to good target that the creature has now.
 	virtual void PaintTattoos(entt::entity creature) = 0;
 	/// Puts tattoos on a creature as the end of a drag in the tattoo editor does. The creature gets the slots and the
 	/// block of pictures again. Then the masks of its player change to the player's own pictures, and the skin changes.
@@ -65,7 +66,8 @@ public:
 	/// A wound or burn, or a drop of blood, on a creature's skin
 	virtual void AddWound(entt::entity creature, const creature_marks::Mark& wound) = 0;
 	virtual void AddBlood(entt::entity creature, const creature_marks::Mark& blood) = 0;
-	/// A creature's marks healed by some counts at once, as a heal effect does
+	/// A creature's marks healed by some counts at once, as a heal effect does. Each heal step also paints the skin again
+	/// with the evil to good target.
 	virtual void Heal(entt::entity creature, uint32_t counts) = 0;
 };
 

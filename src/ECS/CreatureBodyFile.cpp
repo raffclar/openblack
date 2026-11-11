@@ -110,6 +110,12 @@ void creature_body_file::Apply(Registry& registry, entt::entity creature, const 
 		archetypes::CreatureArchetype::TakeLooks(registry, creature);
 		archetypes::CreatureArchetype::TakeLooks(registry, creature);
 		++morph->revision;
+		// The load paints the skin and the hair of a creature of a player with the evil to good target
+		if (const auto* owner = registry.TryGet<const Creature>(creature);
+		    owner != nullptr && owner->owner != PlayerNames::NEUTRAL)
+		{
+			archetypes::CreatureArchetype::PaintWithTarget(registry, creature);
+		}
 	}
 	if (auto* needs = registry.TryGet<CreatureNeeds>(creature); needs != nullptr && body.needs.has_value())
 	{

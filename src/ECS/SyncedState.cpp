@@ -397,6 +397,9 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     {.component = "CreatureDrawnFeet", .field = "", .marker = ""},
     // The creature's skins as the frames paint them for the renderer
     {.component = "CreatureSkin", .field = "", .marker = ""},
+    // The evil to good value of the last paint of the skin. The exit from the temple and the tattoo editor paint the
+    // skin of the player's creature on the computer of the player only. Only the skin and the hair read it.
+    {.component = "CreatureMorph", .field = "paintedAlignment", .marker = ""},
     // The skin paints the tattoos that the tattoo editor shows, and the masks of the player, in the frames. The turns put
     // the slots and the block of pictures on the creature (player_commands::CreatureTattoo) and read only those.
     {.component = "CreatureTattoos", .field = "shown", .marker = ""},

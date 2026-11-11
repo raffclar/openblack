@@ -245,7 +245,9 @@ TEST(CreatureMorph, ACopyWithLooksOfItsOwnIsDrawnWithItsOwnShape)
 	using namespace openblack::ecs::components;
 	ecs::Registry land;
 	const auto creature = land.Create();
-	land.Assign<CreatureMorph>(creature, CreatureMorph {.drawn = {.evilGood = 0.9f, .thinFat = 0.0f, .weakStrong = 0.0f}});
+	// The last paint of the skin took a target a little away from the drawn axis
+	land.Assign<CreatureMorph>(
+	    creature, CreatureMorph {.drawn = {.evilGood = 0.9f, .thinFat = 0.0f, .weakStrong = 0.0f}, .paintedAlignment = 0.92f});
 
 	ecs::Registry copies;
 	const auto plain = copies.Create();
@@ -253,7 +255,8 @@ TEST(CreatureMorph, ACopyWithLooksOfItsOwnIsDrawnWithItsOwnShape)
 	const auto* shape = ShapeOfCopy(copies, plain, land);
 	ASSERT_NE(shape, nullptr);
 	EXPECT_EQ(shape->drawn.evilGood, 0.9f);
-	EXPECT_EQ(HairAlignmentOfCopy(copies.Get<const CreatureCopy>(plain), *shape), 0.9f);
+	// A copy without looks of its own takes the hair of its creature: the target of the last paint, not the drawn axis
+	EXPECT_EQ(HairAlignmentOfCopy(copies.Get<const CreatureCopy>(plain), *shape), 0.92f);
 
 	const auto kept = copies.Create();
 	copies.Assign<CreatureCopy>(kept, CreatureCopy {.creature = creature,

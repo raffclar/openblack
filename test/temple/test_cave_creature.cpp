@@ -104,6 +104,39 @@ TEST(CaveCreature, ASleeperLiesDownAndLooksAtNothing)
 	EXPECT_FALSE(body.lookAt.has_value());
 }
 
+TEST(CaveCreature, AsTheCaveMakesTheCopyItStartsToRest)
+{
+	auto state = FacingTheFire();
+	Body body;
+	Settle(state, body, k_Places.fire, Draws({{2, 1}}));
+	EXPECT_EQ(body.body.animations, (std::array<size_t, 3> {animations::k_StartSit, animations::k_Sit, animations::k_EndSit}));
+	EXPECT_TRUE(body.body.mirrored);
+	EXPECT_EQ(body.lookAt, k_Places.fire);
+
+	auto sleeper = FacingTheFire(Rest::Sleep);
+	Body sleeping;
+	Settle(sleeper, sleeping, k_Places.fire, Draws({{2, 0}}));
+	EXPECT_EQ(sleeping.body.animations,
+	          (std::array<size_t, 3> {animations::k_StartSleep, animations::k_Sleep, animations::k_EndSleep}));
+	EXPECT_FALSE(sleeping.lookAt.has_value());
+}
+
+TEST(CaveCreature, EachFrameFacingTheFireTossesTheCoinAlsoWhenItRests)
+{
+	auto state = FacingTheFire();
+	Body body;
+	Settle(state, body, k_Places.fire, Draws({{2, 1}}));
+	// The body already rests, so the sit does not start again. The coin is still tossed.
+	uint32_t coins = 0;
+	(void)Step(state, body, NotZoomed(), [&coins](uint32_t range) {
+		coins += range == 2 ? 1 : 0;
+		return 0u;
+	});
+	EXPECT_EQ(coins, 1u);
+	EXPECT_EQ(body.body.animations, (std::array<size_t, 3> {animations::k_StartSit, animations::k_Sit, animations::k_EndSit}));
+	EXPECT_TRUE(body.body.mirrored);
+}
+
 TEST(CaveCreature, NotFacingTheFireItGetsUpThenTurns)
 {
 	auto state = FacingTheFire();
