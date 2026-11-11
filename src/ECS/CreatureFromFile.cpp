@@ -220,7 +220,8 @@ Result Bring(PlayerNames owner, std::span<const uint8_t> file)
 {
 	// The bytes came from the player before the start, as the game reads the file of a creature
 	auto mind = std::make_shared<creaturemind::MindFileData>();
-	const auto readable = !file.empty() && creaturemind::Read(file, *mind) == creaturemind::MindResult::Success;
+	const auto readable = !file.empty() && creaturemind::Read(file, *mind, creaturemind::MindNames::FromVersion21) ==
+	                                           creaturemind::MindResult::Success;
 	return BringMind(owner, std::move(mind), !file.empty(), readable,
 	                 fmt::format("the creature file of {} bytes that its player sent", file.size()));
 }

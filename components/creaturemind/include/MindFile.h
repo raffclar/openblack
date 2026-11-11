@@ -256,9 +256,20 @@ struct MindFileData
 /// Writes the bytes to the file at the path, in place of what it had
 [[nodiscard]] bool WriteFileBytes(const std::filesystem::path& path, std::span<const uint8_t> bytes);
 
+/// Which files have the two encrypted names (saved as, and the profile) after the species row
+enum class MindNames
+{
+	/// Each file has the names. The game reads a file in this way when it loads a mind into a creature that it has, and
+	/// when it loads a saved game.
+	Always,
+	/// Only a file of version 21 or later has the names. The game reads a file in this way when it makes a creature from
+	/// a file: the player's creature from the profile, and the creature that a player brings into a network game.
+	FromVersion21,
+};
+
 /// Reads a mind file into data
-[[nodiscard]] MindResult Read(std::span<const uint8_t> bytes, MindFileData& data);
-[[nodiscard]] MindResult ReadFile(const std::filesystem::path& path, MindFileData& data);
+[[nodiscard]] MindResult Read(std::span<const uint8_t> bytes, MindFileData& data, MindNames names = MindNames::Always);
+[[nodiscard]] MindResult ReadFile(const std::filesystem::path& path, MindFileData& data, MindNames names = MindNames::Always);
 /// Writes the data as its version lays it out
 [[nodiscard]] std::vector<uint8_t> Write(const MindFileData& data);
 [[nodiscard]] MindResult WriteFile(const std::filesystem::path& path, const MindFileData& data);

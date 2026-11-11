@@ -23,6 +23,8 @@ namespace
 constexpr uint32_t k_CipherSeed = 0x913;
 /// No count in a mind comes near this; beyond it the file is not laid out as a mind file
 constexpr uint32_t k_MaxCount = 1u << 20;
+/// The smallest tree in a file: its type, its desire two times and the count of its examples
+constexpr uint64_t k_MinTreeBytes = 16;
 
 /// The C library's random sequence the encryption adds
 class CipherStream
@@ -307,7 +309,7 @@ void Database(Stream& stream, std::vector<MindDatabaseEntry>& entries)
 	stream.Value(end);
 }
 
-void Layout(Stream& stream, MindFileData& data)
+void Layout(Stream& stream, MindFileData& data, MindNames names)
 {
 	stream.Value(data.version);
 	stream.Value(data.speciesRow);
@@ -326,8 +328,11 @@ void Layout(Stream& stream, MindFileData& data)
 		return;
 	}
 	const auto version = data.version;
-	EncryptedName(stream, data.savedAs);
-	EncryptedName(stream, data.profile);
+	if (names == MindNames::Always || version > 20)
+	{
+		EncryptedName(stream, data.savedAs);
+		EncryptedName(stream, data.profile);
+	}
 	{
 		std::vector<char16_t> name(data.name.begin(), data.name.end());
 		stream.Counted<uint32_t>(name, [&stream](char16_t& c) {
@@ -363,6 +368,13 @@ void Layout(Stream& stream, MindFileData& data)
 		if (data.treeDesireCount < 0 || static_cast<uint32_t>(data.treeDesireCount) > k_MaxCount)
 		{
 			stream.Fail(MindResult::ErrBadCount);
+			return;
+		}
+		// Each tree has four words or more, so more trees than the bytes that remain can hold is a file that ends too
+		// early. The check comes before the trees get the memory.
+		if (static_cast<uint64_t>(data.treeDesireCount) * 2 * k_MinTreeBytes > stream.Remaining())
+		{
+			stream.Fail(MindResult::ErrTruncated);
 			return;
 		}
 		data.trees.assign(static_cast<size_t>(data.treeDesireCount) * 2, MindTree {});
@@ -536,11 +548,11 @@ std::u16string MindFileData::ProfileText() const
 	return text;
 }
 
-MindResult openblack::creaturemind::Read(std::span<const uint8_t> bytes, MindFileData& data)
+MindResult openblack::creaturemind::Read(std::span<const uint8_t> bytes, MindFileData& data, MindNames names)
 {
 	data = {};
 	Stream stream(bytes);
-	Layout(stream, data);
+	Layout(stream, data, names);
 	return stream.Result();
 }
 
@@ -570,14 +582,14 @@ bool openblack::creaturemind::WriteFileBytes(const std::filesystem::path& path, 
 	return static_cast<bool>(file);
 }
 
-MindResult openblack::creaturemind::ReadFile(const std::filesystem::path& path, MindFileData& data)
+MindResult openblack::creaturemind::ReadFile(const std::filesystem::path& path, MindFileData& data, MindNames names)
 {
 	const auto bytes = ReadFileBytes(path);
 	if (!bytes.has_value())
 	{
 		return MindResult::ErrCantOpen;
 	}
-	return Read(*bytes, data);
+	return Read(*bytes, data, names);
 }
 
 std::vector<uint8_t> openblack::creaturemind::Write(const MindFileData& data)
@@ -588,7 +600,7 @@ std::vector<uint8_t> openblack::creaturemind::Write(const MindFileData& data)
 	EncryptBlock(copy.savedAs);
 	EncryptBlock(copy.profile);
 	Stream stream(bytes);
-	Layout(stream, copy);
+	Layout(stream, copy, MindNames::Always);
 	return bytes;
 }
 
