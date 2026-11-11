@@ -13,6 +13,7 @@
 #include <algorithm>
 #include <array>
 #include <bit>
+#include <limits>
 #include <numbers>
 #include <optional>
 #include <vector>
@@ -451,15 +452,85 @@ TEST(CreatureIdleMind, BeingIdleIsWaitingThenYawningTwice)
 		body.Obey(commands, 30);
 	}
 	ASSERT_EQ(actionTurns.size(), 2u);
-	// The wait starts on the first turn and lasts 11 turns more, then the yawn starts
-	EXPECT_EQ(actionTurns[0], 12);
+	// The wait of 1.001 seconds is 10 whole turns. It counts from its first turn, then the yawn starts.
+	EXPECT_EQ(actionTurns[0], 10);
 	// The yawn keeps the body busy 30 turns; the mind sees it free the turn after, starts the next wait on the one after
-	// that, and yawns again 12 turns on
-	EXPECT_EQ(actionTurns[1], 12 + 31 + 1 + 12);
+	// that, and yawns again 10 turns on
+	EXPECT_EQ(actionTurns[1], 10 + 31 + 1 + 10);
 	// The lids droop with each yawn and stay down between the yawns, until it stops what it does
 	ASSERT_GE(eyes.size(), 2u);
 	EXPECT_EQ(eyes[0], creature_mind::Eyes::Sleepy);
 	EXPECT_EQ(eyes[1], creature_mind::Eyes::Sleepy);
+}
+
+// The game's wait step counts whole turns: the seconds times 10 in float, with the fraction cut off
+TEST(CreatureIdleMind, AWaitIsTheWholeTurnsOfItsSeconds)
+{
+	EXPECT_EQ(creature_mind::WaitTurns(1.1f), 11);
+	EXPECT_EQ(creature_mind::WaitTurns(3.0f), 30);
+	EXPECT_EQ(creature_mind::WaitTurns(0.7f), 7);
+	EXPECT_EQ(creature_mind::WaitTurns(1.0999f), 10);
+	EXPECT_EQ(creature_mind::WaitTurns(0.0f), 0);
+	EXPECT_EQ(creature_mind::WaitTurns(86400.0f), 864000);
+	EXPECT_FALSE(creature_mind::WaitTurns(std::numeric_limits<float>::infinity()).has_value());
+	// A wait of 0 or 1 turn is done on its first counted turn; an endless wait is never done
+	EXPECT_TRUE(creature_mind::WaitDone(1, 0));
+	EXPECT_TRUE(creature_mind::WaitDone(1, 1));
+	EXPECT_FALSE(creature_mind::WaitDone(1, 2));
+	EXPECT_TRUE(creature_mind::WaitDone(2, 2));
+	EXPECT_FALSE(creature_mind::WaitDone(1000000, std::nullopt));
+}
+
+// A timed static pose ends its loop when its 16-bit count of whole turns goes down to 0
+TEST(CreatureIdleMind, AStaticPoseEndsAfterTheWholeTurnsOfItsSeconds)
+{
+	// A squat of 4 seconds asks for its end on the 40th turn after it starts, not the 41st
+	EXPECT_FALSE(creature_mind::StaticTimeUp(39, 4.0f));
+	EXPECT_TRUE(creature_mind::StaticTimeUp(40, 4.0f));
+	// A sit of 12.34 seconds is 123 whole turns
+	EXPECT_FALSE(creature_mind::StaticTimeUp(122, 12.34f));
+	EXPECT_TRUE(creature_mind::StaticTimeUp(123, 12.34f));
+	// A count of 0 goes round first
+	EXPECT_FALSE(creature_mind::StaticTimeUp(65535, 0.05f));
+	EXPECT_TRUE(creature_mind::StaticTimeUp(65536, 0.05f));
+}
+
+// The game counts a wait from the first turn of the step, and the count stops while the body does an action or moves
+TEST(CreatureIdleMind, AWaitCountsFromItsFirstTurnAndStopsWhileTheBodyActs)
+{
+	using creature_mind::Step;
+	creature_mind::IdleMind mind;
+	creature_mind::Plan(mind, creature_mind::Activity::Planned,
+	                    {{.kind = Step::Kind::Wait, .seconds = 1.1f}, {.kind = Step::Kind::Action, .animation = 0}});
+	const creature_mind::Senses free {.seconds = k_Turn};
+	auto busy = free;
+	busy.bodyBusy = true;
+	// The wait starts while the body still acts, but it does not count
+	static_cast<void>(creature_mind::Think(mind, busy, Always(0)));
+	EXPECT_TRUE(mind.stepStarted);
+	static_cast<void>(creature_mind::Think(mind, busy, Always(0)));
+	EXPECT_EQ(mind.watchTurns, 0u);
+	// Then it counts 11 turns, and the 11th ends it
+	for (int turn = 0; turn < 10; ++turn)
+	{
+		static_cast<void>(creature_mind::Think(mind, free, Always(0)));
+		ASSERT_EQ(mind.step, 0u);
+	}
+	static_cast<void>(creature_mind::Think(mind, busy, Always(0)));
+	EXPECT_EQ(mind.step, 0u);
+	static_cast<void>(creature_mind::Think(mind, free, Always(0)));
+	EXPECT_EQ(mind.step, 1u);
+}
+
+// A wait of no time is done on the first turn that the body is free, as the game's wait for a free body
+TEST(CreatureIdleMind, AWaitOfNoTimeEndsOnTheFirstTurnThatTheBodyIsFree)
+{
+	using creature_mind::Step;
+	creature_mind::IdleMind mind;
+	creature_mind::Plan(mind, creature_mind::Activity::Planned, {{.kind = Step::Kind::Wait, .seconds = 0.0f}});
+	const creature_mind::Senses free {.seconds = k_Turn};
+	static_cast<void>(creature_mind::Think(mind, free, Always(0)));
+	EXPECT_EQ(mind.step, 1u);
 }
 
 TEST(CreatureIdleMind, IdleStepsPullAFaceAsTheyStartAndEveryFewSeconds)
@@ -484,8 +555,8 @@ TEST(CreatureIdleMind, IdleStepsPullAFaceAsTheyStartAndEveryFewSeconds)
 	// Pulled as the wait starts and as the yawn starts, then again 42 turns into the long yawn, and not every turn
 	ASSERT_EQ(pulled.size(), 3u);
 	EXPECT_EQ(pulled[0], 0);
-	EXPECT_EQ(pulled[1], 12);
-	EXPECT_EQ(pulled[2], 12 + 42);
+	EXPECT_EQ(pulled[1], 10);
+	EXPECT_EQ(pulled[2], 10 + 42);
 }
 
 TEST(CreatureIdleMind, AgendasPullTheFacesOfWhatTheyDo)
