@@ -383,9 +383,9 @@ uint32_t villager_creature::TurnsToReact(entt::entity villager, entt::entity cre
 
 uint32_t villager_creature::TurnsBeforeReactingAgain(entt::entity villager, entt::entity creature, float distance)
 {
-	// What it means to do next, as its plan says
+	// The action of its plan. After the plan stops, the action of the last plan stays until it starts a new plan.
 	const auto* mind = EntityRegistry().TryGet<const CreatureMindState>(creature);
-	const uint32_t meant = mind != nullptr && mind->planner.current.has_value() ? mind->planner.current->action : 0;
+	const uint32_t meant = mind != nullptr ? creature_planner::ActionInView(mind->planner) : 0;
 	const bool impressive = ImpressiveOf(meant) != ImpressiveType::CreatureNotImpressive;
 	return creature_attitude::TurnsBeforeReactingAgain(TimingOf(villager, creature, distance, true), impressive);
 }
