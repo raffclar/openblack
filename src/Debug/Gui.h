@@ -19,6 +19,7 @@
 #include <imgui.h>
 
 #include "DebugGuiInterface.h"
+#include "DebugWindowMouse.h"
 #include "Graphics/GraphicsHandle.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
@@ -41,8 +42,9 @@ public:
 	void SetMenuBarVisible(bool visible) noexcept override { _menuBarVisible = visible; }
 	bool ProcessEvents(const SDL_Event& event) noexcept override;
 	void OpenWindow(std::string_view name) noexcept override;
-	void SetInputLock(bool locked, bool pointerScripted) noexcept override;
+	void SetInputLock(bool locked) noexcept override;
 	void KeepOffTheMouse(bool off) noexcept override;
+	void FollowDrivenPointer(bool follow) noexcept override;
 	[[nodiscard]] std::vector<WindowState> ListWindows() const noexcept override;
 	void CloseWindow(std::string_view name) noexcept override;
 	[[nodiscard]] std::string WindowTakingEvent(const SDL_Event& event) const noexcept override;
@@ -52,8 +54,10 @@ public:
 	void WarmUp() noexcept override;
 
 private:
-	/// Whether the debug windows are kept off the mouse, as while the input is locked or the pointer is driven
+	/// Whether the debug windows are kept off the mouse, as while a scenario drives the hand
 	[[nodiscard]] static bool MouseKeptOff() noexcept;
+	/// Applies the mouse events that the debug windows take to Dear ImGui and to its backend
+	void ApplyWindowMouse() noexcept;
 	bool CreateFontsTextureBgfx() noexcept;
 	/// Gives the texels of the font atlas to the graphics device again after a restore
 	void GiveFontTexelsAgain() const;
@@ -89,8 +93,14 @@ private:
 	std::string _screenshotFilename = "screenshot.png";
 	bool _stealsFocus = false;
 	bool _menuBarVisible = true;
-	/// The player's input was locked out last frame
+	/// The input of the player was locked last frame
 	bool _inputLocked = false;
+	/// A scenario drives the hand: the debug windows take no press of the mouse
+	bool _mouseKeptOff = false;
+	/// The inspector drives the pointer: the debug windows follow the driven pointer
+	bool _followsDrivenPointer = false;
+	/// The mouse events that the debug windows take now
+	WindowMouse _windowMouse = WindowMouse::Player;
 	/// A network game was live last frame: the debug windows and the menu do not show and take no input
 	bool _networkDormant = false;
 	/// Closes the editor when a network game starts, and tells the log when the debug windows stop or start again

@@ -21,6 +21,7 @@
 #include <gtest/gtest.h>
 
 #define LOCATOR_IMPLEMENTATIONS
+#include <Debug/DebugGuiInterface.h>
 #include <EngineConfig.h>
 #include <Input/GameActionMap.h>
 #include <Input/InjectedInput.h>
@@ -87,6 +88,7 @@ protected:
 
 	void TearDown() override
 	{
+		Locator::debugGui::reset();
 		Locator::gameActionSystem::reset();
 		Locator::windowing::reset();
 		Locator::inputDevice::reset();
@@ -331,4 +333,54 @@ TEST_F(ScriptedMouse, ABackgroundRunNeverTakesTheDesksMouse)
 	ASSERT_EQ(pressed.pressesAt.size(), 1U);
 	EXPECT_EQ(pressed.pressesAt.front(), k_Window / 2);
 	EXPECT_TRUE(_actions->IsPointerKnown());
+}
+
+namespace
+{
+/// A debug GUI that keeps what the inspector told it about the driven pointer
+class FollowingDebugGui final: public debug::gui::DebugGuiInterface
+{
+public:
+	[[nodiscard]] bool StealsFocus() const noexcept override { return false; }
+	[[nodiscard]] bool IsMouseOverWindow() const noexcept override { return false; }
+	void SetScale(float /*scale*/) noexcept override {}
+	void SetMenuBarVisible(bool /*visible*/) noexcept override {}
+	bool ProcessEvents(const SDL_Event& /*event*/) noexcept override { return false; }
+	void OpenWindow(std::string_view /*name*/) noexcept override {}
+	void FollowDrivenPointer(bool follow) noexcept override { follows = follow; }
+	void KeepOffTheMouse(bool off) noexcept override { keptOff = off; }
+	bool Loop() noexcept override { return false; }
+	void Draw() noexcept override {}
+
+	bool follows {false};
+	bool keptOff {false};
+};
+} // namespace
+
+// While the inspector drives the pointer, the debug windows follow the driven pointer and are not kept off the mouse.
+// Then a click of the inspector on a debug window goes to that window. At the release, the windows take the mouse of
+// the player again.
+TEST_F(ScriptedMouse, TheDebugWindowsFollowTheInspectorsPointer)
+{
+	auto& gui = static_cast<FollowingDebugGui&>(Locator::debugGui::emplace<FollowingDebugGui>());
+	Frame();
+	Ask(R"({"query": "input.pointer", "params": {"screen": [120, 80]}})");
+	EXPECT_TRUE(gui.follows);
+	EXPECT_FALSE(gui.keptOff);
+	Ask(R"({"query": "input.button", "params": {"button": "left", "action": "press"}})");
+	// The press waits until the game knows what the pointer is over
+	std::vector<glm::ivec2> presses;
+	for (int frame = 0; frame < 3; ++frame)
+	{
+		const auto seen = Frame();
+		presses.insert(presses.end(), seen.pressesAt.begin(), seen.pressesAt.end());
+	}
+	EXPECT_TRUE(gui.follows);
+	EXPECT_FALSE(gui.keptOff);
+	ASSERT_EQ(presses.size(), 1U);
+	EXPECT_EQ(presses.front(), glm::ivec2(120, 80));
+	Ask(R"({"query": "input.release", "params": {}})");
+	Frame();
+	EXPECT_FALSE(gui.follows);
+	EXPECT_FALSE(gui.keptOff);
 }

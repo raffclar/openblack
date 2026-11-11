@@ -625,12 +625,16 @@ void ImGui_ImplSDL2_Shutdown()
 void ImGui_ImplSDL2_KeepOffSystemPointer(bool keep_off)
 {
     ImGui_ImplSDL2_Data* bd = ImGui_ImplSDL2_GetBackendData();
-    if (bd != nullptr)
-        bd->KeepOffSystemPointer = keep_off;
-    // The backend may not move the pointer of the system for Dear ImGui then
+    if (bd == nullptr)
+        return;
+    bd->KeepOffSystemPointer = keep_off;
+    // The backend may not move the pointer of the system for Dear ImGui then. When the backend can use the pointer of
+    // the system again, it can also move the pointer again.
     ImGuiIO& io = ImGui::GetIO();
     if (keep_off)
         io.BackendFlags &= ~ImGuiBackendFlags_HasSetMousePos;
+    else
+        io.BackendFlags |= ImGuiBackendFlags_HasSetMousePos;
 }
 
 static void ImGui_ImplSDL2_UpdateMouseData()

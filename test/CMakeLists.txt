@@ -2471,3 +2471,5 @@ openblack_setup_and_add_test(test_yard_copy_rules test_yard_copy_rules.cpp)
 openblack_setup_and_add_test(test_script_line_values test_script_line_values.cpp)
 openblack_setup_and_add_test(test_screen_pixels gui/test_screen_pixels.cpp)
 openblack_setup_and_add_test(test_temple_pool temple/test_temple_pool.cpp)
+# The mouse events that the debug windows take while the inspector or a scenario drives the pointer
+openblack_setup_and_add_test(test_debug_window_mouse debug/test_debug_window_mouse.cpp)

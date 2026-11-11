@@ -310,21 +310,27 @@ bool Gui::ProcessEvents(const SDL_Event& event) noexcept
 		takenByWindow = window->WindowProcessEvent(event) || takenByWindow;
 	}
 
-	// While the debug windows are kept off the mouse (the input is locked, or the inspector or a scenario moves the
-	// pointer), they take none of its events. A press reaching them would still make a window take the button as its
-	// own when their idea of the pointer is over one (with the game's window focused, that's the player's own mouse,
-	// wherever the driven pointer is), and they would then keep its letting go from the game. Lettings go still reach
-	// them, so that none of their buttons stays held.
-	const bool mouseKeptOff = MouseKeptOff();
-	const bool mouseEvent = event.type == SDL_MOUSEMOTION || event.type == SDL_MOUSEBUTTONDOWN ||
-	                        event.type == SDL_MOUSEBUTTONUP || event.type == SDL_MOUSEWHEEL;
-	if (!mouseKeptOff || (event.type != SDL_MOUSEBUTTONDOWN && event.type != SDL_MOUSEWHEEL))
+	// The debug windows take only some mouse events while a scenario or the inspector drives the pointer, or while the
+	// input is locked. Refer to WindowsTakeEvent for the rules.
+	const bool taken = WindowsTakeEvent(event, _windowMouse);
+	if (taken)
 	{
+		// A press of the driven pointer also gives its position. Then the press goes to the item under the driven
+		// pointer, also when no movement of the driven pointer came before the press.
+		if (_windowMouse == WindowMouse::DrivenOnly && (event.type == SDL_MOUSEBUTTONDOWN || event.type == SDL_MOUSEBUTTONUP))
+		{
+			ImGui::GetIO().AddMousePosEvent(static_cast<float>(event.button.x), static_cast<float>(event.button.y));
+		}
 		ImGui_ImplSDL2_ProcessEvent(&event);
 	}
 
+	// A mouse event that the debug windows do not take goes to the game. Kept off the mouse, the windows give all the
+	// mouse events to the game.
+	const bool mouseEvent = event.type == SDL_MOUSEMOTION || event.type == SDL_MOUSEBUTTONDOWN ||
+	                        event.type == SDL_MOUSEBUTTONUP || event.type == SDL_MOUSEWHEEL;
+	const bool mouseForWindows = !mouseEvent || (taken && _windowMouse != WindowMouse::KeptOff);
 	const auto& io = ImGui::GetIO();
-	_stealsFocus = (io.WantCaptureMouse && !(mouseKeptOff && mouseEvent)) || takenByWindow;
+	_stealsFocus = (io.WantCaptureMouse && mouseForWindows) || takenByWindow;
 	switch (event.type)
 	{
 	default:
@@ -1381,30 +1387,52 @@ void Gui::ShowVillagerNames() noexcept
 
 void Gui::KeepOffTheMouse(bool off) noexcept
 {
-	if (ImGui::GetCurrentContext() == nullptr)
+	_mouseKeptOff = off;
+	ApplyWindowMouse();
+}
+
+void Gui::FollowDrivenPointer(bool follow) noexcept
+{
+	_followsDrivenPointer = follow;
+	ApplyWindowMouse();
+}
+
+void Gui::SetInputLock(bool locked) noexcept
+{
+	_inputLocked = locked;
+	ApplyWindowMouse();
+}
+
+void Gui::ApplyWindowMouse() noexcept
+{
+	if (_imgui == nullptr)
 	{
 		return;
 	}
+	ImGui::SetCurrentContext(_imgui);
 	auto& io = ImGui::GetIO();
-	io.ConfigFlags = off ? (io.ConfigFlags | ImGuiConfigFlags_NoMouse) : (io.ConfigFlags & ~ImGuiConfigFlags_NoMouse);
-}
-
-void Gui::SetInputLock(bool locked, bool pointerScripted) noexcept
-{
-	// While the player's input is locked out, the debug windows take nothing from the mouse either
-	if (ImGui::GetCurrentContext() != nullptr)
+	const auto mouse = ChooseWindowMouse(_mouseKeptOff, _followsDrivenPointer, _inputLocked);
+	// Kept off the mouse, Dear ImGui does not use the mouse at all
+	io.ConfigFlags = mouse == WindowMouse::KeptOff ? (io.ConfigFlags | ImGuiConfigFlags_NoMouse)
+	                                               : (io.ConfigFlags & ~ImGuiConfigFlags_NoMouse);
+	if (mouse == _windowMouse)
 	{
-		auto& io = ImGui::GetIO();
-		if (locked)
-		{
-			io.ConfigFlags |= ImGuiConfigFlags_NoMouse;
-		}
-		else if (_inputLocked && !pointerScripted)
-		{
-			io.ConfigFlags &= ~ImGuiConfigFlags_NoMouse;
-		}
+		return;
 	}
-	_inputLocked = locked;
+	_windowMouse = mouse;
+	// At a change of the source of the mouse, the buttons of the debug windows go up. A button of the real mouse then
+	// does not stay down while the driven pointer clicks.
+	for (int button = 0; button < ImGuiMouseButton_COUNT; ++button)
+	{
+		io.AddMouseButtonEvent(button, false);
+	}
+	// With the driven pointer only, the backend does not read the position of the real pointer
+	if (!_headless)
+	{
+		const bool background = Locator::config::has_value() && Locator::config::value().background;
+		ImGui_ImplSDL2_KeepOffSystemPointer(!openblack::windowing::system_pointer::MayTouch(background) ||
+		                                    mouse == WindowMouse::DrivenOnly);
+	}
 }
 
 void Gui::ShowInputLockNotice() const noexcept
