@@ -633,7 +633,7 @@ std::optional<std::vector<creature_mind::Step>> TownHelpAgenda(const Executor& e
 		{
 			return std::nullopt;
 		}
-		return help::DropCowInStore(situation.holdingCow ? std::nullopt : situation.instrument, thing);
+		return help::DropCowInStore(situation.holdingCow ? std::nullopt : situation.instrument, thing, situation.height);
 	case Build::MakeBreeder:
 		return help::MakeBreeder(thing);
 	case Build::TakeVillagerHome:
@@ -1216,8 +1216,7 @@ std::optional<std::vector<creature_mind::Step>> creature_plan_actions::Agenda(co
 		return creature_mind::EatFromStoragePit(situation.storeFood->pile, situation.storeFood->point, situation.height);
 	case Build::EatFromField:
 	case Build::EatFromTree:
-		// TODO(creature-eat-from-stores): When the hand holds food, the game makes no steps for these two actions. The
-		// result of that empty agenda is not known, thus the creature does not do the action.
+		// With something it can eat in its hand already, it makes no steps, and so decides again at once
 		if (situation.holdingEatable)
 		{
 			return std::nullopt;
