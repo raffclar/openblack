@@ -110,6 +110,7 @@ public:
 	void ObeyEnded(entt::entity creature, entt::entity asker) override;
 	void AbandonAction(entt::entity creature) override;
 	void GiveUpAction(entt::entity creature) override;
+	void StopAndGiveUpAction(entt::entity creature) override;
 	void FailAction(entt::entity creature) override;
 	bool ForceDesireOn(entt::entity creature, creature_desires::Desire desire, entt::entity thing) override;
 	void ForceCatch(entt::entity creature, entt::entity object) override;

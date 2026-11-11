@@ -12,6 +12,7 @@
 #include <string_view>
 #include <vector>
 
+#include "TestbedScenarioBuilders.h"
 #include "TestbedScenarioComputerPlayers.h"
 #include "TestbedScenarioRegistry.h"
 
@@ -60,6 +61,8 @@ CREATE_VILLAGER_POS("136.0,62.0", "140.0,60.0", "CELTIC_FORESTER", 20)
 constexpr ComputerActionThing k_NeutralTown {.kind = ComputerActionThing::Kind::Town, .townId = 901};
 /// The game turns that the scenarios wait before the action, so that the worshippers come to the site first
 constexpr uint32_t k_Wait = 300;
+/// The game turns before the god sends its creature to impress while the creature walks
+constexpr uint32_t k_ImpressWhileWalking = 100;
 
 /// The scenarios show the temple, the god's town and the neutral town
 Framing ConquestFraming()
@@ -140,6 +143,32 @@ void testbed_scenarios::AddComputerGodConquestScenarios(std::vector<Scenario>& a
 	                         .node = "UseCreatureToImpressTown",
 	                         .first = k_NeutralTown,
 	                         .second = {.kind = ComputerActionThing::Kind::Creature, .object = 0}}},
+	});
+	all.push_back({
+	    .id = "mind.computer_god_creature_impress_stops_walk",
+	    .name = "A computer god that stops the walk of its creature to send it to impress a town",
+	    .facet = Facet::Mind,
+	    .description = "The land of the creature impress scenario. The mind of the tiger starts to think after 40 "
+	                   "seconds. After 2 seconds, the tiger walks far to the west. After 10 seconds, a testbed tool forces "
+	                   "the action UseCreatureToImpressTown on the god, with the neutral town and the tiger.",
+	    .expected = "The tiger walks to the west. The hand of the god moves to the tiger. When the god makes the impress "
+	                "desire dominant, the walk of the tiger stops at once, and the tiger stands. Impress is then the "
+	                "strongest desire of the tiger.",
+	    .framing = ConquestFraming(),
+	    .creatures = {[] {
+		    auto tiger = GodTiger();
+		    tiger.pauseMind = true;
+		    tiger.thinksAfterSeconds = 40.0f;
+		    return tiger;
+	    }()},
+	    .landScript = k_NeutralTownScript,
+	    .commands = {Go(Command::Kind::WalkTo, 0, {-400.0f, -30.0f}, 2.0f, false)},
+	    .worshipShare = 0.5f,
+	    .computerActions = {{.afterTurns = k_ImpressWhileWalking,
+	                         .node = "UseCreatureToImpressTown",
+	                         .first = k_NeutralTown,
+	                         .second = {.kind = ComputerActionThing::Kind::Creature, .object = 0},
+	                         .forceAtOnce = true}},
 	});
 	all.push_back({
 	    .id = "mind.computer_god_creature_help",
