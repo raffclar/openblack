@@ -181,20 +181,22 @@ void creature_physiology::TickTurn(Needs& needs, Shape& shape, const Species& sp
 	{
 		const auto rate = std::max(k_YouthExhaustion - (k_ExhaustionYouthPerAge * static_cast<float>(needs.age)), 1.0f) *
 		                  species.exhaustionRate;
-		auto tiring = rate;
+		// The game adds the rate first, then a share of the rate to that sum
+		auto exhaustion = needs.exhaustion + rate;
 		if (needs.energy < species.lowEnergyThreshold)
 		{
-			tiring += k_LowEnergyExtraExhaustion * rate;
+			exhaustion = (rate * k_LowEnergyExtraExhaustion) + exhaustion;
 		}
-		needs.exhaustion = Clamp01(needs.exhaustion + tiring);
+		needs.exhaustion = Clamp01(exhaustion);
 	}
 
 	if (turn.phase >= k_GrowingPhase)
 	{
-		const auto turnsToDehydrate = std::round(turn.turnsPerSecond * species.secondsToDehydrate);
-		if (turnsToDehydrate > 0.0f)
+		// The game cuts the turns to dehydrate to a whole number, towards zero
+		const auto turnsToDehydrate = x87::ToInteger(turn.turnsPerSecond * species.secondsToDehydrate);
+		if (turnsToDehydrate > 0)
 		{
-			needs.dehydration = Clamp01(needs.dehydration + (1.0f / turnsToDehydrate));
+			needs.dehydration = Clamp01((1.0f / static_cast<float>(turnsToDehydrate)) + needs.dehydration);
 		}
 	}
 
@@ -277,7 +279,8 @@ void creature_physiology::SitTurn(Needs& needs, const Species& species)
 	needs.exhaustion = Clamp01(needs.exhaustion - (species.sleepRecover * k_SitRestShare));
 }
 
-bool creature_physiology::SleepTurn(Needs& needs, const Species& species, float size, uint32_t turnsAsleep, bool night)
+bool creature_physiology::SleepTurn(Needs& needs, const Species& species, float size, uint32_t turnsAsleep, bool night,
+                                    float dayLength)
 {
 	needs.life = Clamp01(needs.life + species.sleepHeal);
 	needs.exhaustion = Clamp01(needs.exhaustion - species.sleepRecover);
@@ -285,8 +288,9 @@ bool creature_physiology::SleepTurn(Needs& needs, const Species& species, float 
 	{
 		return false;
 	}
-	// The game scales how long it sleeps by a setting of its own, taken as 1 here
-	const auto longEnough = static_cast<float>(turnsAsleep) >= size * species.sleepLength * k_SleepTurnsPerLength;
+	// The length of a day sets how long a creature sleeps: the longer the day, the longer the sleep
+	const auto longEnough =
+	    static_cast<float>(turnsAsleep) >= ((size * species.sleepLength) * dayLength) * k_SleepTurnsPerLength;
 	return (needs.exhaustion <= 0.0f && !night) || (needs.exhaustion < k_NearlyRested && longEnough);
 }
 
