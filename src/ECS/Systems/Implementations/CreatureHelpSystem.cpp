@@ -21,7 +21,10 @@
 #include "3D/TempleInteriorInterface.h"
 #include "Camera/Camera.h"
 #include "Creature/CreatureLearning.h"
+#include "Creature/CreatureMindTables.h"
+#include "Creature/CreaturePlanner.h"
 #include "ECS/Components/Creature.h"
+#include "ECS/Components/CreatureFight.h"
 #include "ECS/Components/CreatureHelp.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureNeeds.h"
@@ -32,6 +35,7 @@
 #include "ECS/ReportedCamera.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/CreatureHandSystemInterface.h"
+#include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/CreatureObjectActionSystemInterface.h"
 #include "ECS/Systems/DialogueControlSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
@@ -101,22 +105,22 @@ bool InView(const ecs::Registry& registry, entt::entity creature)
 	return camera.has_value() && help::LooksAt(camera->origin, camera->focus, transform->position);
 }
 
-/// Fainted or asleep: the game's plans of dying and of sleeping, which hold back the help
+/// The plans that hold back the help: the action of the current plan, or of the last plan, is to die or to sleep. A
+/// creature that lies knocked out has the plan to die.
 bool OutOrAsleep(const ecs::Registry& registry, entt::entity creature)
 {
-	if (const auto* mind = registry.TryGet<const CreatureMindState>(creature); mind != nullptr)
+	if (registry.AllOf<CreatureKnockedOut>(creature))
 	{
-		const auto activity = mind->idle.activity;
-		if (activity == creature_mind::Activity::Sleep || activity == creature_mind::Activity::Faint)
-		{
-			return true;
-		}
+		return true;
 	}
-	if (const auto* needs = registry.TryGet<const CreatureNeeds>(creature); needs != nullptr)
+	const auto* mind = registry.TryGet<const CreatureMindState>(creature);
+	const auto* tables = Locator::creatureMindSystem::has_value() ? Locator::creatureMindSystem::value().GetTables() : nullptr;
+	if (mind == nullptr || tables == nullptr)
 	{
-		return needs->rest == CreatureNeeds::Rest::Asleep || needs->rest == CreatureNeeds::Rest::Unconscious;
+		return false;
 	}
-	return false;
+	const auto action = creature_planner::ActionInView(mind->planner);
+	return action < tables->actions.size() && help::PlanHoldsBackHelp(tables->actions.at(action).name);
 }
 
 const GCreatureInfo* SpeciesInfo(const ecs::Registry& registry, entt::entity creature)

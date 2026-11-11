@@ -464,6 +464,42 @@ void testbed_scenarios::AddMind(std::vector<Scenario>& all)
 	                 Act(Kind::Stroke, 0, 4.0f)},
 	});
 
+	// The help is held back while the plan of the creature is to sleep at home, but not while it sleeps on the spot
+	CreatureSetup lowOnEnergy {.species = CreatureType::Tiger,
+	                           .offset = {0.0f, 20.0f},
+	                           .phase = 13,
+	                           .needs = {.energy = 0.3f, .exhaustion = 0.95f, .dehydration = 0.0f, .poo = 0.0f, .life = 1.0f},
+	                           .desires = OnlyDesire(Desire::Tiredness),
+	                           .hold = true};
+	// Not so tired that it cannot walk home
+	auto lowOnEnergyCanWalk = lowOnEnergy;
+	lowOnEnergyCanWalk.needs.exhaustion = 0.6f;
+	all.push_back({
+	    .id = "mind.help_sleep_on_spot",
+	    .name = "The help speaks while the creature sleeps on the spot",
+	    .facet = Facet::Mind,
+	    .description = "A grown-up tiger with low energy and a strong desire to sleep has no temple. After two seconds it "
+	                   "lies down and sleeps where it stands. Its body stays as it is.",
+	    .expected = "The good advisor says that the tiger has low energy (help text 868), also while it sleeps on the "
+	                "spot. The advisor says it again every two minutes. Before, the help said nothing while it slept.",
+	    .framing = {.shot = Shot::Follow, .distance = 2.0f},
+	    .creatures = {lowOnEnergy},
+	    .commands = {Act(Kind::Sleep, 0, 2.0f, false)},
+	});
+	all.push_back({
+	    .id = "mind.help_sleep_at_home",
+	    .name = "The help holds back while the creature goes home to sleep",
+	    .facet = Facet::Mind,
+	    .description = "A grown-up tiger with low energy and a strong desire to sleep is about 110 metres from its player's "
+	                   "temple. That is near enough that it does not sleep on the spot. It is less tired than the tiger of "
+	                   "mind.help_sleep_on_spot, so that it can walk. Its body stays as it is.",
+	    .expected = "The tiger goes home to sleep. While its plan is to sleep at home, on the way and as it sleeps, the good "
+	                "advisor says nothing about its low energy. Compare with mind.help_sleep_on_spot.",
+	    .framing = {.shot = Shot::Follow, .distance = 2.0f},
+	    .creatures = {lowOnEnergyCanWalk},
+	    .temples = {{.offset = {-100.0f, 60.0f}, .angle = 36.0f}},
+	});
+
 	auto curious = Content(CreatureType::Tiger, {0.0f, 20.0f});
 	curious.phase = 13;
 	all.push_back({
