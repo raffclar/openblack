@@ -596,6 +596,24 @@ TEST(CreatureActionAgendas, SleepingByAThingFallsBackToHome)
 	EXPECT_EQ(byThing->front().movement.point, glm::vec2(10.0f, 20.0f));
 }
 
+// A script that tells a creature to sleep by a thing gets the agenda also when the creature has no clear place by the
+// thing and no home. The game does not examine the action before it makes the agenda for a script.
+TEST(CreatureActionAgendas, AScriptSleepByAThingNeedsNoClearPlaceOrHome)
+{
+	const auto* sleep = plan_actions::For("SleepByObject");
+	ASSERT_NE(sleep, nullptr);
+	const plan_actions::Situation situation {.controlledByScript = true, .radius = 6.0f, .height = 15.0f};
+	EXPECT_TRUE(plan_actions::Possible(*sleep, situation));
+	std::vector<uint32_t> draws;
+	const auto agenda = plan_actions::Agenda(*sleep, 3, {}, situation, [&draws](uint32_t range) {
+		draws.push_back(range);
+		return NeverFirst(range);
+	});
+	ASSERT_TRUE(agenda.has_value());
+	EXPECT_EQ(draws, std::vector<uint32_t> {2});
+	EXPECT_TRUE(std::ranges::any_of(*agenda, [](const Step& step) { return step.effect == Effect::Slept; }));
+}
+
 // Left to itself, it sleeps by a thing only on the leash or far from home, with nothing frightening near it
 TEST(CreatureActionAgendas, SleepingByAThingIsPlannedOnTheLeashOrFarFromHome)
 {

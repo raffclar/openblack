@@ -45,6 +45,8 @@ public:
 #if defined(OPENBLACK_DEVELOPER_TOOLS)
 	void SetDrawTrace(std::shared_ptr<draw_trace::DrawTrace> trace) override { _trace = std::move(trace); }
 	[[nodiscard]] draw_trace::DrawTrace* GetDrawTrace() const override { return _trace.get(); }
+	[[nodiscard]] uint32_t GetMapStartSeed() const override { return _mapStartSeed; }
+	void SetMapStartSeed(uint32_t seed) override { _mapStartSeed = seed; }
 #endif
 
 protected:
@@ -61,6 +63,7 @@ private:
 	uint64_t _syncedDraws {0};
 #if defined(OPENBLACK_DEVELOPER_TOOLS)
 	std::shared_ptr<draw_trace::DrawTrace> _trace;
+	uint32_t _mapStartSeed {0};
 #endif
 };
 

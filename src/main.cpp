@@ -255,6 +255,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		("sim-frame-guard-from", "Tools: the turn at which --sim-frame-guard starts to look (0 by default).", cxxopts::value<uint32_t>()->default_value("0"))
 		("sim-all-computer-gods", "Tools: every god with a citadel is a computer god, also the god of this computer, and no human plays (the AI soak). The hand of this computer does nothing.")
 		("sim-ai-seed", "Tools: the seed of the personalities of the computer gods (the AI soak).", cxxopts::value<uint32_t>())
+		("sim-world-seed", "Tools: start the synced seed of each map at this value, in place of the 0 of the game, so that a story land has another life for each value. Not for a network game.", cxxopts::value<uint32_t>())
 		("sim-play-commands", "Tools: do the commands of this file (as --sim-commands writes it) at their turns, and no command of the player of this computer, as a computer that only receives the commands of a network game.", cxxopts::value<std::string>())
 		("sim-trace-draws", "Tools: write each draw on the synced random seed to this file, with its turn and the place of its call in the source (tools/sim/draw_trace.py compares two files).", cxxopts::value<std::string>());
 #if defined(OPENBLACK_DEVELOPER_TOOLS)
@@ -584,6 +585,10 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 			if (result.count("sim-ai-seed") != 0)
 			{
 				simulation.soak.aiSeed = result["sim-ai-seed"].as<uint32_t>();
+			}
+			if (result.count("sim-world-seed") != 0)
+			{
+				simulation.worldSeed = result["sim-world-seed"].as<uint32_t>();
 			}
 #if defined(OPENBLACK_DEVELOPER_TOOLS)
 			if (result.count("sim-row-dump") != 0)
