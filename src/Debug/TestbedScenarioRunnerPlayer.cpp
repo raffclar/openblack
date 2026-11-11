@@ -82,6 +82,7 @@
 #include "ECS/Systems/PlayerCommandSystemInterface.h"
 #include "ECS/Systems/PlayerProfileSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
+#include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/ResourceStoreSystemInterface.h"
 #include "ECS/Systems/ScriptObjectsSystemInterface.h"
 #include "ECS/Systems/SoundTagSystemInterface.h"
@@ -246,6 +247,23 @@ std::string Runner::GivePlayerCommand(const Command& command)
 		}
 		ecs::world_objects::DestroyedByEffect(scaffold->site, {.killer = std::nullopt, .weight = 0.0f});
 		return "the building of the site is destroyed";
+	}
+	case Kind::CreateReaction:
+	{
+		const auto object = ObjectAt(command.object);
+		const auto* transform =
+		    object.has_value() ? Locator::entitiesRegistry::value().TryGet<const Transform>(*object) : nullptr;
+		if (transform == nullptr || !Locator::reactionSystem::has_value())
+		{
+			return "no thing for the reaction";
+		}
+		// As the script's command makes it: of no player, so it impresses no one
+		Locator::reactionSystem::value().Create({.initiator = *object,
+		                                         .type = static_cast<Reaction>(command.value),
+		                                         .player = PlayerNames::NEUTRAL,
+		                                         .position = transform->position,
+		                                         .playerless = true});
+		return fmt::format("reaction {} made", command.value);
 	}
 	case Kind::RemoveObject:
 	{

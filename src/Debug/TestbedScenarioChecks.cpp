@@ -70,6 +70,8 @@ std::string_view Name(Quantity quantity)
 		return "fire near the point";
 	case Quantity::RewardChestsInATown:
 		return "reward chests in a town";
+	case Quantity::CreatureReaction:
+		return "kind of reaction kept";
 	}
 	return "";
 }

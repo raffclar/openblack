@@ -128,6 +128,7 @@ std::vector<Scenario> Build()
 	AddFixedKindScenarios(all);
 	AddCreatureExplorationScenarios(all);
 	AddCreatureActionScenarios(all);
+	AddCreatureReactionKindScenarios(all);
 	AddScriptTaskRelease(all);
 	AddLandOneScriptStubScenarios(all);
 	AddVillagerSizeAndReachScenarios(all);
@@ -303,12 +304,12 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::ClickCreatureAt || kind == Kind::CameraLooksAt || kind == Kind::HandTakeNear ||
 	       kind == Kind::ClickCreatureNear || kind == Kind::TapRewardNear || kind == Kind::PlayBoatFilm ||
 	       kind == Kind::HandPour || kind == Kind::HandRelease || kind == Kind::SetReportLatency ||
-	       kind == Kind::RemoveObject || kind == Kind::ReadTip || kind == Kind::LookAtTempleScroll ||
-	       kind == Kind::HandGripTotem || kind == Kind::ProfileFolderCheck || kind == Kind::PlayCustomMusic ||
-	       kind == Kind::ShowCustomMusicControls || kind == Kind::OwnTattooPicture || kind == Kind::OpenTattooMenu ||
-	       kind == Kind::OpenControlsBox || kind == Kind::OpenMenuPage || kind == Kind::PressMenuKey ||
-	       kind == Kind::StopScript || kind == Kind::StartScriptMusic || kind == Kind::SaveGame || kind == Kind::LoadGame ||
-	       kind == Kind::QuickSave || kind == Kind::ContinueGame || kind == Kind::PlayLogoEffect ||
+	       kind == Kind::RemoveObject || kind == Kind::CreateReaction || kind == Kind::ReadTip ||
+	       kind == Kind::LookAtTempleScroll || kind == Kind::HandGripTotem || kind == Kind::ProfileFolderCheck ||
+	       kind == Kind::PlayCustomMusic || kind == Kind::ShowCustomMusicControls || kind == Kind::OwnTattooPicture ||
+	       kind == Kind::OpenTattooMenu || kind == Kind::OpenControlsBox || kind == Kind::OpenMenuPage ||
+	       kind == Kind::PressMenuKey || kind == Kind::StopScript || kind == Kind::StartScriptMusic || kind == Kind::SaveGame ||
+	       kind == Kind::LoadGame || kind == Kind::QuickSave || kind == Kind::ContinueGame || kind == Kind::PlayLogoEffect ||
 	       kind == Kind::PlayFallingSpellFilm || kind == Kind::PlayIntroFilm || kind == Kind::SayLine ||
 	       kind == Kind::PlayGuidanceVoice || kind == Kind::ScriptRelease || kind == Kind::FillSiteIcons ||
 	       kind == Kind::ChargeIconWithSeedHeld || kind == Kind::TakeIconSeed || kind == Kind::TapSiteIcon ||
@@ -352,7 +353,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 238> k_Names {
+	constexpr std::array<std::string_view, 239> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -591,6 +592,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "bind the move action to a key",
 	    "bind an action to a mouse button",
 	    "pick a place on the temple's map",
+	    "create a reaction at an object",
 	};
 	return k_Names.at(static_cast<size_t>(kind));
 }
@@ -894,6 +896,8 @@ std::vector<std::string> testbed_scenarios::Problems(const Scenario& scenario)
 		    (command.kind == Kind::CastMiracle &&
 		     (command.atCreature.has_value() ? *command.atCreature >= scenario.creatures.size()
 		                                     : command.object >= scenario.objects.size())) ||
+		    (command.kind == Kind::CreateReaction &&
+		     (command.object >= scenario.objects.size() || command.value > static_cast<size_t>(Reaction::ReactToFightWon))) ||
 		    ((command.kind == Kind::PlayerDid || command.kind == Kind::PlayerDidOn) && command.value >= k_Deeds) ||
 		    (command.kind == Kind::CameraKeys && (command.value >= 4 || command.amount <= 0.0f)) ||
 		    (command.kind == Kind::PointerTo &&

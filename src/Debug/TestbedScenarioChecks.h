@@ -61,6 +61,8 @@ enum class Quantity : uint8_t
 	FireNear,
 	/// How many reward chests in the world have a town
 	RewardChestsInATown,
+	/// The kind of reaction, by its number, that the scenario's creature at the index keeps now; 0 when it keeps none
+	CreatureReaction,
 };
 
 /// One statement about the world. It is read once at its turn; with byTurn it is read again at each frame from its
