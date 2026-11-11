@@ -84,3 +84,14 @@ Use these where they fit. A small value type or a pure function doesn't need to 
 Write unit tests for components and systems. Use mocks for dependencies. Don't test systems through the locator.
 
 - Tests live in `test/`, registered in `test/CMakeLists.txt`.
+- A lane runs only the test suites of its own area, plus its new tests. The agent chooses the suites (for example
+  `ob-build test -R 'creature|oracle'`) and names them in its handover. The merge-train car runs the full suite.
+- A change to synced logic still needs the repeat sim runs and the server check.
+
+## Machine load
+
+- Keep adding work (lane builds, build locks, agents) while memory use stays below 95%. Each lane checks the memory
+  use before each build or test step, and waits while it is 95% or more.
+- If Claude Code stops a process for low memory, do not start it again without the user's word.
+- Merge-train batches overlap: the next batch builds as soon as the previous batch's PR merges. The previous batch's
+  checks after the merge run at the same time.
