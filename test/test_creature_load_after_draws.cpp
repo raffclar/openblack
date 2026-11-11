@@ -189,3 +189,22 @@ TEST(CreatureLoadAfterDraws, TheWholeWorldKeepsTheDrawnBodyAndMind)
 	}
 	EXPECT_EQ(backMind.innate.kindness, mind.innate.kindness);
 }
+
+// A creature takes the count of magic mushrooms of the file. A file with no count leaves the count of the creature.
+// The capture of the creature then gives the count back.
+TEST(CreatureLoadAfterDraws, TheBodyTakesTheMagicMushroomsOfTheFile)
+{
+	ecs::Registry registry;
+	const auto creature = registry.Create();
+	registry.Assign<ecs::components::Creature>(creature, ecs::components::Creature {.magicMushroomsEaten = 7});
+
+	creature_mind_body::Body saved {.species = CreatureType::Tiger};
+	ecs::creature_body_file::Apply(registry, creature, saved);
+	const auto& body = registry.Get<const ecs::components::Creature>(creature);
+	EXPECT_EQ(body.magicMushroomsEaten, 7u);
+
+	saved.magicMushroomsEaten = 205u;
+	ecs::creature_body_file::Apply(registry, creature, saved);
+	EXPECT_EQ(body.magicMushroomsEaten, 205u);
+	EXPECT_EQ(ecs::creature_body_file::Capture(registry, creature).magicMushroomsEaten, std::optional<uint32_t>(205u));
+}
