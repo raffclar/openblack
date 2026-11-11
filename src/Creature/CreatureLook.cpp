@@ -53,10 +53,7 @@ float creature_look::LookRange(float size)
 
 float creature_look::DistanceFactor(float distance, float range)
 {
-	if (range <= 0.0f)
-	{
-		return 0.0f;
-	}
+	// A distance that is not a number gives 1 - distance / range, as the game's compare does
 	return distance < range * 0.5f ? 1.0f : 1.0f - (distance / range);
 }
 
@@ -95,13 +92,21 @@ float creature_look::Hold(const Target& target, float distance, float range, flo
 	{
 		return 0.0f;
 	}
-	return weight * target.interest * DistanceFactor(std::clamp(distance, 0.0f, std::max(range, 0.0f)), range);
+	// The game keeps the distance from 0 to the range. A distance below 0 or that is not a number gives 0.
+	float held = distance;
+	if (!(held >= 0.0f))
+	{
+		held = 0.0f;
+	}
+	else if (held > range)
+	{
+		held = range;
+	}
+	return weight * target.interest * DistanceFactor(held, range);
 }
 
-namespace
-{
-/// How much a new sight catches the eye: less as the whole seconds of watching go up to k_BoredSeconds
-float Catches(const Target& target, float weight, float interest, float distance, float range, uint32_t turnsPerSecond)
+float creature_look::Catches(const Target& target, float weight, float interest, float distance, float range,
+                             uint32_t turnsPerSecond)
 {
 	const auto watchedSeconds = turnsPerSecond > 0 ? target.watchedTurns / turnsPerSecond : 0u;
 	const auto boredom =
@@ -109,6 +114,8 @@ float Catches(const Target& target, float weight, float interest, float distance
 	return boredom * weight * DistanceFactor(distance, range) * interest;
 }
 
+namespace
+{
 /// Whether a sight that catches the eye this much takes over what the creature watches
 bool TakesOver(const Target& target, float catches, float watchedDistance, float range, const Weights& weights)
 {

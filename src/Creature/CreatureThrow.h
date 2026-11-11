@@ -132,9 +132,55 @@ struct ThrowAim
 /// Whether a target is far enough along the ground to throw at, for a creature of a size
 [[nodiscard]] bool FarEnoughToThrow(float groundDistance, float size);
 
-/// How much of the high throw to blend into the flat one, 0 to 1. Each slope is height over distance ahead: the
-/// target's, and the hand's where it lets go in the flat and in the high throw.
+/// How much of the high throw to blend into the flat one: (target slope - flat slope) / (high slope - flat slope), with
+/// no limit. A slope is the height over the distance along the ground.
 [[nodiscard]] float HighThrowWeight(float targetSlope, float flatSlope, float highSlope);
+
+/// The hand in the flat and the high throw, measured one time from the two animations at the throw time
+struct HurlHands
+{
+	/// The middle of the finger ends at the throw time, in the model's space at size 1
+	glm::vec3 flat {0.0f};
+	glm::vec3 high {0.0f};
+	/// How fast the hand moves, from HurlHandSpeed
+	float flatSpeed {0.0f};
+	float highSpeed {0.0f};
+
+	/// The slope of each throw. The game keeps each speed as a distance along the ground and a height that are the same
+	/// value, with the height of the flat throw below the ground. The slopes are thus -1 and 1 (not a number when the
+	/// hand does not move).
+	[[nodiscard]] float FlatSlope() const { return -flatSpeed / flatSpeed; }
+	[[nodiscard]] float HighSlope() const { return highSpeed / highSpeed; }
+};
+/// How fast the hand moves up and forwards in a throw: the length of the change of y and z over the last 100 ms before
+/// the throw time (the squares of z first), times 10 and times 0.707
+[[nodiscard]] float HurlHandSpeed(const glm::vec3& atThrow, const glm::vec3& before);
+/// The slope that the game gives for the point where the hand lets go, at the start of a throw
+constexpr float k_HurlReleaseSlope = 0.5f;
+/// Where the hand lets go in the world: the blend of the two hands by the weight of the slope, flipped to the other side
+/// for the other hand, made the creature's size and turned by the heading. The game keeps the cosine and the sine of
+/// the heading as floats.
+[[nodiscard]] glm::vec3 HurlReleasePoint(const HurlHands& hands, const glm::vec3& position, GameHeading heading, float scale,
+                                         bool mirrored, float slope);
+
+/// The speed along the ground and the height speed of a throw, from which the game chooses the blend of the two throws
+struct HurlLift
+{
+	float speed {0.0f};
+	/// The height speed, kept from minus the speed to the speed
+	float rise {0.0f};
+};
+/// At the start of a throw, the game finds where the hand lets go (at the heading to the target, with the slope 0.5)
+/// and the velocity from there to the target in the flight time. No limit keeps the time above 0.
+[[nodiscard]] HurlLift LiftOf(const HurlHands& hands, const glm::vec3& position, float scale, bool mirrored,
+                              const glm::vec3& target, float seconds);
+/// The weight of the high throw in the blend: the slope of the throw against the slopes of the two hands
+[[nodiscard]] float HurlHighWeight(const HurlHands& hands, const HurlLift& lift);
+/// The milliseconds that the throw animations move on in a turn. Near the throw time the hand moves at the speed of the
+/// throw: the turn's milliseconds times the throw's speed along the ground times 1.6, over the blended hand speed times
+/// the scale. Further away the step goes to the clip step of the turn, which it reaches 400 ms from the throw time.
+[[nodiscard]] int32_t HurlStepMs(const HurlHands& hands, const HurlLift& lift, float highWeight, float scale, int32_t turnMs,
+                                 int32_t clipStepMs, int32_t timeMs, int32_t throwMs);
 
 /// The hand's velocity in units a second, from where it is when it lets go and where it was a span of milliseconds
 /// before

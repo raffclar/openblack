@@ -92,6 +92,13 @@ struct CreatureObjectAction
 	float flightSeconds {0.0f};
 	/// Throwing: how long it was asked to take, none to take as long as it would to fall the distance to the target
 	std::optional<float> givenFlightSeconds;
+	/// Throwing: the speeds of the hand in the flat and the high throw, the speed of the throw along the ground and the
+	/// weight of the high throw. The step of each turn comes from them. Not measured: the throw steps by the clip step.
+	bool hurlMeasured {false};
+	float hurlFlatSpeed {0.0f};
+	float hurlHighSpeed {0.0f};
+	float hurlSpeed {0.0f};
+	float hurlHigh {0.0f};
 	/// Throwing into a store: it isn't done until what it threw has stopped flying, which it keeps once let go
 	bool waitsForLanding {false};
 	std::optional<entt::entity> thrown;
@@ -186,6 +193,19 @@ struct StompReach
 struct TossHandVelocity
 {
 	glm::vec3 velocity {0.0f};
+	/// The revision of the body shape (CreatureMorph::revision) that the measure is for
+	uint32_t bodyRevision {0};
+};
+
+/// Where the creature's hand lets go in its flat and its high throw at the model's own size, and how fast the hand moves
+/// in each: measured at its first throw, and measured again at the next throw after its animations follow a new body
+/// shape
+struct ThrowHands
+{
+	glm::vec3 flat {0.0f};
+	glm::vec3 high {0.0f};
+	float flatSpeed {0.0f};
+	float highSpeed {0.0f};
 	/// The revision of the body shape (CreatureMorph::revision) that the measure is for
 	uint32_t bodyRevision {0};
 };

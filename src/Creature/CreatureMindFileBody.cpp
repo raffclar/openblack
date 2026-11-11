@@ -38,6 +38,9 @@ constexpr size_t k_DehydrationNeed = 2;
 constexpr size_t k_SlowSpeedNeed = 3;
 constexpr size_t k_WalkSpeedNeed = 4;
 constexpr size_t k_RunSpeedNeed = 5;
+/// The place of the count of magic mushrooms eaten in the counters of the file. A file older than version 17 does not
+/// have this counter.
+constexpr size_t k_MushroomsCounter = 6;
 } // namespace
 
 std::optional<CreatureType> creature_mind_body::SpeciesFromRow(uint32_t row)
@@ -133,6 +136,10 @@ std::optional<Body> creature_mind_body::FromMindFile(const creaturemind::MindFil
 	{
 		body.environmentMap = std::bit_cast<uint32_t>(*physique.unknown3);
 	}
+	if (file.counters.size() > k_MushroomsCounter)
+	{
+		body.magicMushroomsEaten = file.counters.at(k_MushroomsCounter);
+	}
 	return body;
 }
 
@@ -180,6 +187,10 @@ void creature_mind_body::ToMindFile(const Body& body, creaturemind::MindFileData
 	if (body.environmentMap.has_value())
 	{
 		physique.unknown3 = std::bit_cast<int32_t>(*body.environmentMap);
+	}
+	if (body.magicMushroomsEaten.has_value() && file.counters.size() > k_MushroomsCounter)
+	{
+		file.counters.at(k_MushroomsCounter) = *body.magicMushroomsEaten;
 	}
 	physique.wounds.clear();
 	std::ranges::transform(body.wounds, std::back_inserter(physique.wounds), creature_marks::WoundToWord);

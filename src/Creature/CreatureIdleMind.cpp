@@ -57,7 +57,16 @@ bool IsStep(const std::optional<IdleMind::StepRef>& ref, const IdleMind& mind)
 	return ref.has_value() && ref->serial == mind.serial && ref->step == mind.step;
 }
 
-void FinishStep(IdleMind& mind)
+/// Whether the last stage of a kind of step has no code, after a stage with code. The agenda stays at such a step until
+/// the next turn goes past the empty stage.
+bool EndStageEmpty(const Step& step)
+{
+	const auto stages = creature_sub_states::StagesOf(SubStateOf(step));
+	return !stages.end && (stages.start || stages.turn);
+}
+
+/// The agenda moves on to its next step
+void MoveOn(IdleMind& mind)
 {
 	mind.movedOn = mind.step;
 	++mind.step;
@@ -65,9 +74,42 @@ void FinishStep(IdleMind& mind)
 	mind.stepSeconds = 0.0f;
 	mind.sitEnding = false;
 	mind.faintLay = false;
-	// With its last step done, it stops what it does
+}
+
+/// The step did its work. A last stage with no code holds the step for one more turn:
+/// - the head keeps the look of the step;
+/// - when it is the last step, the agenda ends on the next turn of thought.
+void FinishStep(IdleMind& mind)
+{
+	const bool emptyEnd = mind.step < mind.agenda.size() && EndStageEmpty(mind.agenda[mind.step]);
+	if (emptyEnd && creature_sub_states::LookHoldsAfterEnd(SubStateOf(mind.agenda[mind.step])))
+	{
+		mind.endedLook = IdleMind::EndedLook {.serial = mind.serial, .gaze = LookOf(mind.agenda[mind.step])};
+	}
+	MoveOn(mind);
+	if (mind.step < mind.agenda.size())
+	{
+		return;
+	}
+	if (emptyEnd)
+	{
+		mind.endsNextTurn = mind.serial;
+	}
+	else
+	{
+		// With its last step done, it stops what it does
+		mind.eyesToClear = true;
+	}
+}
+
+/// The step is not done, as its work is done already. The agenda moves on at once. When it is the last step, the plan
+/// ends, but it does not see to its desire.
+void SkipStep(IdleMind& mind)
+{
+	MoveOn(mind);
 	if (mind.step >= mind.agenda.size())
 	{
+		mind.lastStepSkipped = mind.serial;
 		mind.eyesToClear = true;
 	}
 }
@@ -638,6 +680,11 @@ const Step* CurrentStep(const IdleMind& mind)
 }
 } // namespace
 
+bool creature_mind::AgendaOver(const IdleMind& mind)
+{
+	return mind.step >= mind.agenda.size() && mind.endsNextTurn != mind.serial;
+}
+
 bool creature_mind::IsAsleep(const IdleMind& mind)
 {
 	const auto* step = CurrentStep(mind);
@@ -749,6 +796,9 @@ void creature_mind::Plan(IdleMind& mind, Activity activity, std::vector<Step> ag
 	mind.stoppedByScript = false;
 	mind.stoppedSeen = false;
 	mind.usedUpHeld.reset();
+	mind.endedLook.reset();
+	mind.endsNextTurn.reset();
+	mind.lastStepSkipped.reset();
 	// Taking up something else, it stops what it did, and its eyes look as a rested creature's eyes do again
 	mind.eyesToClear = true;
 }
@@ -1329,6 +1379,264 @@ std::optional<Gaze> creature_mind::LookOf(const Step& step)
 	return std::nullopt;
 }
 
+namespace
+{
+using creature_sub_states::SubState;
+
+SubState SubStateOfMove(const Movement& movement)
+{
+	switch (movement.kind)
+	{
+	case Movement::Kind::ToPoint:
+	case Movement::Kind::Nearby:
+		return SubState::MoveToPos;
+	case Movement::Kind::ToObject:
+	case Movement::Kind::GoNearObject:
+		return SubState::GoNearObject;
+	case Movement::Kind::Follow:
+		return SubState::FollowInterestingObject;
+	case Movement::Kind::FleeFrom:
+		return SubState::RunAway;
+	case Movement::Kind::TurnToFace:
+	case Movement::Kind::FacePoint:
+		return SubState::TurnToFacePos;
+	case Movement::Kind::GetAwayFromObject:
+		return SubState::GetAwayFromObject;
+	case Movement::Kind::TurnToFaceObject:
+		return SubState::TurnToFaceObject;
+	case Movement::Kind::TurnToFaceAwayFromObject:
+		return SubState::TurnToFaceAwayFromObject;
+	case Movement::Kind::ToThrowPosition:
+		return SubState::MoveToThrowPos;
+	case Movement::Kind::ToThrowAtPoint:
+		return SubState::MoveToThrowAtPos;
+	case Movement::Kind::FaceDownSlope:
+		return SubState::FaceDownSlope;
+	}
+	return SubState::MoveToPos;
+}
+
+SubState SubStateOfObject(const ObjectOrder& order)
+{
+	switch (order.kind)
+	{
+	case ObjectOrder::Kind::PickUp:
+		return SubState::Pickup;
+	case ObjectOrder::Kind::PutDown:
+	case ObjectOrder::Kind::Discard:
+		return SubState::Discard;
+	case ObjectOrder::Kind::Eat:
+		return SubState::Eat;
+	case ObjectOrder::Kind::Keep:
+		return SubState::HeldObjectAction;
+	case ObjectOrder::Kind::Throw:
+	case ObjectOrder::Kind::ThrowNearby:
+		return SubState::Throw;
+	case ObjectOrder::Kind::Destroy:
+		return SubState::DestroyObject;
+	case ObjectOrder::Kind::PointAt:
+		return SubState::PointAtPoint;
+	case ObjectOrder::Kind::Catch:
+		return SubState::Catch;
+	case ObjectOrder::Kind::FishFromSea:
+		// The fish comes out of the sea, then the creature picks it up: the pick-up is the last part
+		return SubState::PickupCreatedObject;
+	case ObjectOrder::Kind::ThrowInStore:
+		return SubState::ThrowInPile;
+	case ObjectOrder::Kind::TakeFromPile:
+		return SubState::CreatePickUpThenRemove;
+	case ObjectOrder::Kind::TakeFromHand:
+		return SubState::PickUpFromHand;
+	case ObjectOrder::Kind::Kick:
+		return SubState::KickObject;
+	}
+	return SubState::Pickup;
+}
+
+SubState SubStateOfDance(const DanceOrder& order)
+{
+	switch (order.kind)
+	{
+	case DanceOrder::Kind::Set:
+	case DanceOrder::Kind::Clear:
+		return SubState::SetDance;
+	case DanceOrder::Kind::Summon:
+		return SubState::AddVillagersToDance;
+	case DanceOrder::Kind::StopLooking:
+		return SubState::StopLooking;
+	case DanceOrder::Kind::SendToPlaces:
+		return SubState::TellVillagersToGoToStartDancePos;
+	case DanceOrder::Kind::WaitUntilStill:
+		return SubState::WaitForDancersToStopMoving;
+	case DanceOrder::Kind::Start:
+		return SubState::StartTheDance;
+	case DanceOrder::Kind::TellToDance:
+		return SubState::TellVillagersToDance;
+	case DanceOrder::Kind::Dance:
+	case DanceOrder::Kind::Stop:
+		return SubState::Dance;
+	}
+	return SubState::Dance;
+}
+
+SubState SubStateOfStatic(const Step& step)
+{
+	// A poo or a fart ends with the step that lets it out, after the squat
+	if (step.effect == Effect::Poo || step.effect == Effect::Fart)
+	{
+		return SubState::Poo;
+	}
+	if (step.faint)
+	{
+		return SubState::Faint;
+	}
+	if (step.untilBetter)
+	{
+		return SubState::RestToGetBetter;
+	}
+	if (step.untilRested)
+	{
+		return SubState::Sleep;
+	}
+	return SubState::StaticAction;
+}
+} // namespace
+
+creature_sub_states::SubState creature_mind::SubStateOf(const Step& step)
+{
+	switch (step.kind)
+	{
+	case Step::Kind::Wait:
+		return SubState::Wait;
+	case Step::Kind::Action:
+		return SubState::IndividualAction;
+	case Step::Kind::Static:
+		return SubStateOfStatic(step);
+	case Step::Kind::Move:
+		return SubStateOfMove(step.movement);
+	case Step::Kind::Object:
+		return SubStateOfObject(step.order);
+	case Step::Kind::Cast:
+		return step.cast.object.has_value() ? SubState::CastSpellAtObject : SubState::CastSpellAtPos;
+	case Step::Kind::Gesture:
+		return SubState::Gesture;
+	case Step::Kind::WaitInMap:
+		return SubState::WaitForObjectToBeInMap;
+	case Step::Kind::Douse:
+		return SubState::PutOutFire;
+	case Step::Kind::CoolDown:
+		return SubState::StopBeingOnFire;
+	case Step::Kind::Shatter:
+		return SubState::ShatterRock;
+	case Step::Kind::Repair:
+		return SubState::Repair;
+	case Step::Kind::UseUp:
+		return SubState::DestroyObjectToUse;
+	case Step::Kind::UseUpHeld:
+		return SubState::HideObjectInHand;
+	case Step::Kind::WatchCamera:
+		return SubState::LookAtCamera;
+	case Step::Kind::Observe:
+		return SubState::ObserveObject;
+	case Step::Kind::SwapMind:
+		return SubState::SwapMindWithOtherCreature;
+	case Step::Kind::Overlay:
+		return SubState::Talk;
+	case Step::Kind::Inspect:
+		return SubState::InspectCreature;
+	case Step::Kind::WatchFlying:
+		return SubState::LookAtFlyingObject;
+	case Step::Kind::WatchHand:
+		return SubState::LookAtHand;
+	case Step::Kind::Communicate:
+		return SubState::CommunicateToPlayer;
+	case Step::Kind::StopMoving:
+		return SubState::StopMoving;
+	case Step::Kind::Dance:
+		return SubStateOfDance(step.dance);
+	case Step::Kind::Face:
+		return SubState::FacialAnimation;
+	case Step::Kind::FollowCamera:
+		return SubState::FollowCamera;
+	case Step::Kind::Heal:
+		return SubState::Heal;
+	case Step::Kind::HealItself:
+		return SubState::HealHimself;
+	case Step::Kind::FollowWatching:
+		return SubState::FollowInterestingObject;
+	case Step::Kind::FollowHand:
+		return SubState::FollowHand;
+	case Step::Kind::WatchPlayer:
+		return SubState::WatchPlayerWhileHeHasYourAttention;
+	case Step::Kind::ActOnItself:
+		return SubState::ClearObjectToActOn;
+	case Step::Kind::Fight:
+		return SubState::Fight;
+	case Step::Kind::RaiseTotem:
+		return SubState::RaiseTotem;
+	case Step::Kind::LowerTotem:
+		return SubState::LowerTotem;
+	case Step::Kind::MakeDisciple:
+		return SubState::MakeDisciple;
+	case Step::Kind::Kiss:
+		return step.object.has_value() ? SubState::Kiss : SubState::SingleKiss;
+	case Step::Kind::PracticeDance:
+		return SubState::PracticeDance;
+	case Step::Kind::RenderImmobile:
+		return SubState::RenderImmobile;
+	case Step::Kind::RequestPartner:
+		return SubState::RequestPartner;
+	case Step::Kind::Order:
+		return SubState::OrderCreature;
+	case Step::Kind::Demobilise:
+		return SubState::DemobiliseObject;
+	case Step::Kind::Remobilise:
+		return SubState::RemobiliseObject;
+	case Step::Kind::WaitForStill:
+		return SubState::WaitForObject;
+	case Step::Kind::Apply:
+		return step.effect == Effect::Poo || step.effect == Effect::Fart ? SubState::Poo : SubState::Drink;
+	case Step::Kind::ApplyDesire:
+		return SubState::ApplyDesireToObject;
+	case Step::Kind::WaitForFree:
+		return SubState::WaitForCreatureToBeFree;
+	case Step::Kind::Teleport:
+		return SubState::DoTeleport;
+	case Step::Kind::Transported:
+		return SubState::TransportedByTeleport;
+	case Step::Kind::StopTeleportControl:
+		return SubState::StopControlledByTeleport;
+	}
+	return SubState::Wait;
+}
+
+std::optional<Gaze> creature_mind::TurnLook(const IdleMind& mind)
+{
+	if (mind.endedLook.has_value() && mind.endedLook->serial == mind.serial)
+	{
+		return mind.endedLook->gaze;
+	}
+	if (mind.step < mind.agenda.size())
+	{
+		return LookOf(mind.agenda[mind.step]);
+	}
+	return std::nullopt;
+}
+
+creature_mind::LookEyes creature_mind::TurnLookEyes(const IdleMind& mind)
+{
+	// The step that ended with empty last stages is the step before the current one
+	const bool held = mind.endedLook.has_value() && mind.endedLook->serial == mind.serial && mind.step > 0;
+	const size_t index = held ? mind.step - 1 : mind.step;
+	if (index >= mind.agenda.size())
+	{
+		return {};
+	}
+	const auto& step = mind.agenda[index];
+	const auto eyes = step.heldEyes.value_or(step.sleepyEyes ? Eyes::Sleepy : Eyes::Unchanged);
+	return {.eyes = eyes, .flutterEyelids = step.flutterEyelids};
+}
+
 bool creature_mind::StartsOnTheWay(const Step& step)
 {
 	if (step.kind != Step::Kind::Move)
@@ -1403,10 +1711,21 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 	return Think(mind, senses, random, random);
 }
 
-Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random& random, const Random& gameRandom)
+namespace
+{
+/// One turn of thought: the step of the agenda starts, continues or ends
+Commands TurnOfThought(IdleMind& mind, const Senses& senses, const Random& random, const Random& gameRandom)
 {
 	Commands commands;
 	mind.movedOn.reset();
+	// The agenda goes past the empty last stages of the step that ended, so the look of that step ends
+	mind.endedLook.reset();
+	// When those stages were the last of the agenda, the agenda ends now, and the creature stops what it does
+	if (mind.endsNextTurn == mind.serial)
+	{
+		mind.eyesToClear = true;
+	}
+	mind.endsNextTurn.reset();
 	if (mind.eyesToClear)
 	{
 		commands.restEyes = true;
@@ -1474,7 +1793,7 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 			if (need == HandsNeed::FreeOrTarget && step.order.object == senses.held)
 			{
 				// It holds the thing that the step picks up already, so it does not do the step
-				FinishStep(mind);
+				SkipStep(mind);
 				return commands;
 			}
 			// If it cannot start to let go, it tries again next turn
@@ -1532,24 +1851,11 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 		mind.movedOn = mind.step;
 		mind.stepSeconds = 0.0f;
 		mind.faintLay = false;
-		if (step.heldEyes.has_value())
-		{
-			commands.eyes = *step.heldEyes;
-		}
-		if (step.flutterEyelids)
-		{
-			// Its eyes go back to their usual blinking once it stops what it does
-			commands.blinkIntervalMs = k_FlutterBlinkIntervalMs;
-		}
 		switch (step.kind)
 		{
 		case Step::Kind::Action:
 			commands.playOnce = step.animation;
 			commands.mirrored = PickIndividualSide(gameRandom, senses);
-			if (step.sleepyEyes)
-			{
-				commands.eyes = Eyes::Sleepy;
-			}
 			break;
 		case Step::Kind::Static:
 			commands.startSequence = step.sequence;
@@ -2202,6 +2508,19 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 			FinishStep(mind);
 		}
 		break;
+	}
+	return commands;
+}
+} // namespace
+
+Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random& random, const Random& gameRandom)
+{
+	auto commands = TurnOfThought(mind, senses, random, gameRandom);
+	// An agenda that ended in this turn stops what the creature does in this turn
+	if (mind.eyesToClear)
+	{
+		commands.restEyes = true;
+		mind.eyesToClear = false;
 	}
 	return commands;
 }

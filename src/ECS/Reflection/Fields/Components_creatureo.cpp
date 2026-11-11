@@ -56,6 +56,11 @@ void openblack::ecs::reflection::RegisterFields_Components_creatureo(entt::meta_
 	    .Field<&components::CreatureObjectAction::waitedForWay>("waitedForWay")
 	    .Field<&components::CreatureObjectAction::flightSeconds>("flightSeconds")
 	    .Field<&components::CreatureObjectAction::givenFlightSeconds>("givenFlightSeconds")
+	    .Field<&components::CreatureObjectAction::hurlMeasured>("hurlMeasured")
+	    .Field<&components::CreatureObjectAction::hurlFlatSpeed>("hurlFlatSpeed")
+	    .Field<&components::CreatureObjectAction::hurlHighSpeed>("hurlHighSpeed")
+	    .Field<&components::CreatureObjectAction::hurlSpeed>("hurlSpeed")
+	    .Field<&components::CreatureObjectAction::hurlHigh>("hurlHigh")
 	    .Field<&components::CreatureObjectAction::waitsForLanding>("waitsForLanding")
 	    .Field<&components::CreatureObjectAction::thrown>("thrown")
 	    .Field<&components::CreatureObjectAction::catchHands>("catchHands")
@@ -87,6 +92,12 @@ void openblack::ecs::reflection::RegisterFields_Components_creatureo(entt::meta_
 	Reflect<components::TossHandVelocity>(context)
 	    .Field<&components::TossHandVelocity::velocity>("velocity")
 	    .Field<&components::TossHandVelocity::bodyRevision>("bodyRevision");
+	Reflect<components::ThrowHands>(context)
+	    .Field<&components::ThrowHands::flat>("flat")
+	    .Field<&components::ThrowHands::high>("high")
+	    .Field<&components::ThrowHands::flatSpeed>("flatSpeed")
+	    .Field<&components::ThrowHands::highSpeed>("highSpeed")
+	    .Field<&components::ThrowHands::bodyRevision>("bodyRevision");
 	Reflect<components::HeldByCreature>(context)
 	    .Field<&components::HeldByCreature::creature>("creature")
 	    .Field<&components::HeldByCreature::drawn>("drawn");

@@ -723,6 +723,42 @@ void openblack::testbed_scenarios::AddTempleVillagerScenarios(std::vector<Scenar
 	                  .value = static_cast<size_t>(TownDesireInfo::ForWood)}},
 	    .townBeliefInPlayer = k_TownBelief,
 	});
+	// A tiny creature that wants only to poo goes up to a tall thing of the town and squats by it
+	all.push_back({
+	    .id = "needs.tiny_poo_at_flag",
+	    .name = "A tiny creature poos by a town's flag",
+	    .facet = Facet::Needs,
+	    .description = "The Celtic town of the temple scenarios. An evil cow of the player's, as small as a creature "
+	                   "that a curse made small (size 0.166), stands south of the town. Its bowels are full. It wants "
+	                   "only to poo, and every other desire stays at nothing.",
+	    .expected = "The cow chooses a poo or a fart by a tall thing of the town, often a flag of the town's desires. "
+	                "It walks up to the thing, turns its back to it and squats. A tiny creature gets to the thing as a "
+	                "large creature does: the plan does not stop before the squat.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview,
+	                .include = {k_Centre - glm::vec2(25.0f, 40.0f), k_Centre + glm::vec2(25.0f, 25.0f)},
+	                .distance = 0.6f},
+	    .creatures = {{.species = CreatureType::Cow,
+	                   .offset = k_Centre - glm::vec2(0.0f, 35.0f),
+	                   .alignment = -1.0f,
+	                   .size = 0.166f,
+	                   .phase = 13,
+	                   .needs = {.energy = 1.0f, .exhaustion = 0.0f, .dehydration = 0.0f, .poo = 0.95f, .life = 1.0f},
+	                   .desires =
+	                       [] {
+		                       std::vector<DesireOverride> desires;
+		                       for (size_t i = 0; i < creature_desires::k_DesireCount; ++i)
+		                       {
+			                       const auto desire = static_cast<creature_desires::Desire>(i);
+			                       desires.push_back(
+			                           {.desire = desire, .fraction = desire == creature_desires::Desire::Poo ? 1.0f : 0.0f});
+		                       }
+		                       return desires;
+	                       }(),
+	                   .hold = true}},
+	    .objects = Town(),
+	    .townBeliefInPlayer = k_TownBelief,
+	});
 	all.push_back({
 	    .id = "audio.worship_site_voice",
 	    .name = "The people at a worship site call out for food",

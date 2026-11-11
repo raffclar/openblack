@@ -103,6 +103,10 @@ struct Target
 /// How much what it watches holds the creature: the creature's weight for that kind of sight, times the interest, times
 /// the distance factor at the distance now (held between 0 and the range). Nothing holds it when it watches nothing.
 [[nodiscard]] float Hold(const Target& target, float distance, float range, float weight);
+/// How much a new sight catches the eye: ((boredom x weight) x distance factor) x interest, in this order. The boredom
+/// is 1 less the whole seconds of watching (at most k_BoredSeconds) over k_BoredSeconds.
+[[nodiscard]] float Catches(const Target& target, float weight, float interest, float distance, float range,
+                            uint32_t turnsPerSecond);
 /// A thing in view that the creature sees takes over what it watches, if it watches nothing or if the thing catches its
 /// eye more than what it watches holds it. A thing catches its eye by the weight for things, its interest and the
 /// distance factor, less as the whole seconds of watching go up to k_BoredSeconds. Returns whether the thing took over.

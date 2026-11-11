@@ -136,12 +136,17 @@ void Step(Strand& strand, const Root& root, const Physics& physics, float second
 /// The longest step that hair takes at once, in seconds
 constexpr float k_MaxStepSeconds = 1.0f;
 
-/// The seconds that hair moves for a frame of some milliseconds: none for a time that runs back, at most the longest
-/// step
+/// The seconds that hair moves for a frame of some milliseconds: the milliseconds times 0.001 (a float product, not a
+/// division by 1000). A time that is not above 0, or is not a number, gives none. The step is at most the longest step.
 [[nodiscard]] constexpr float StepSeconds(float milliseconds)
 {
-	const auto seconds = milliseconds / 1000.0f;
-	return seconds < 0.0f ? 0.0f : (seconds > k_MaxStepSeconds ? k_MaxStepSeconds : seconds);
+	constexpr float k_SecondsPerMillisecond = 0.001f;
+	const auto seconds = milliseconds * k_SecondsPerMillisecond;
+	if (!(seconds > 0.0f))
+	{
+		return 0.0f;
+	}
+	return seconds < k_MaxStepSeconds ? seconds : k_MaxStepSeconds;
 }
 
 /// A corner of a strand's ribbon
