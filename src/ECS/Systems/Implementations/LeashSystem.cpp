@@ -68,6 +68,7 @@
 #include "ECS/Components/FishFarm.h"
 #include "ECS/Components/Forest.h"
 #include "ECS/Components/Hand.h"
+#include "ECS/Components/HandGrab.h"
 #include "ECS/Components/LeashOrderSparkles.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/MiracleImpression.h"
@@ -529,7 +530,18 @@ orders::Body BodyOf(const Registry& registry, entt::entity creature)
 	    .exhaustion = needs != nullptr ? needs->needs.exhaustion : 0.0f,
 	    .frozen = spells != nullptr && spells->pausedMind,
 	    .scriptControlled = registry.AllOf<ScriptControlled>(creature),
+	    .held = registry.AllOf<InHand>(creature),
 	};
+}
+
+/// An order stops the creature copying the player before the order checks if the creature takes it
+void StopCopying(Registry& registry, entt::entity creature)
+{
+	auto* mind = registry.TryGet<CreatureMindState>(creature);
+	if (mind != nullptr && mind->learnt.has_value() && orders::StopsCopying(BodyOf(registry, creature)))
+	{
+		mind->learnt->mimicry.reset();
+	}
 }
 
 std::optional<entt::entity> HeldBy(entt::entity creature)
@@ -2386,7 +2398,7 @@ bool LeashSystem::OrderOn(PlayerNames player, entt::entity object)
 	return TakeThingOrder(*creature, object);
 }
 
-bool LeashSystem::TakeOutOfFight(entt::entity creature)
+bool LeashSystem::AskedForFight(entt::entity creature) const
 {
 	// A creature that plans a fight with itself asked for a fight and is not in it. It takes no orders until the order
 	// that it gives to itself stops that plan.
@@ -2394,6 +2406,28 @@ bool LeashSystem::TakeOutOfFight(entt::entity creature)
 	{
 		SPDLOG_LOGGER_INFO(spdlog::get("game"), "Creature {} takes no orders while it asks itself for a fight",
 		                   entt::to_integral(creature));
+		return true;
+	}
+	if (!Locator::creatureFightSystem::has_value())
+	{
+		return false;
+	}
+	const auto& fights = Locator::creatureFightSystem::value();
+	// The creature that started a fight takes no orders out of its duel. The other creature takes orders before its duel
+	// and after it.
+	if (fights.StartedFight(creature) && !fights.IsDuelling(creature))
+	{
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "Creature {} takes no orders while it leads a fight",
+		                   entt::to_integral(creature));
+		return true;
+	}
+	return false;
+}
+
+bool LeashSystem::TakeOutOfFight(entt::entity creature)
+{
+	if (AskedForFight(creature))
+	{
 		return false;
 	}
 	if (!Locator::creatureFightSystem::has_value())
@@ -2401,14 +2435,7 @@ bool LeashSystem::TakeOutOfFight(entt::entity creature)
 		return true;
 	}
 	auto& fights = Locator::creatureFightSystem::value();
-	// The creature that started a fight takes no orders out of its duel. In its duel, an order calls the fight off. The
-	// other creature takes orders before its duel and after it: the order stops the fight, as a new plan does.
-	if (fights.StartedFight(creature) && !fights.IsDuelling(creature))
-	{
-		SPDLOG_LOGGER_INFO(spdlog::get("game"), "Creature {} takes no orders while it leads a fight",
-		                   entt::to_integral(creature));
-		return false;
-	}
+	// In its duel, an order calls the fight off. For the other creature, the order stops the fight, as a new plan does.
 	if (fights.IsFighting(creature))
 	{
 		// After a stop that ended the fight, the order stops the creature again
@@ -2421,6 +2448,7 @@ bool LeashSystem::TakeOutOfFight(entt::entity creature)
 bool LeashSystem::TakeGroundOrder(entt::entity creature, const glm::vec3& place)
 {
 	auto& registry = Locator::entitiesRegistry::value();
+	StopCopying(registry, creature);
 	if (!orders::TakesGroundOrders(BodyOf(registry, creature)))
 	{
 		SPDLOG_LOGGER_INFO(spdlog::get("game"), "Creature {} takes no orders now", entt::to_integral(creature));
@@ -2597,9 +2625,15 @@ bool LeashSystem::TakeThingOrder(entt::entity creature, entt::entity object)
 	{
 		return false;
 	}
+	StopCopying(registry, creature);
 	if (!orders::TakesOrders(BodyOf(registry, creature)))
 	{
 		SPDLOG_LOGGER_INFO(spdlog::get("game"), "Creature {} takes no orders now", entt::to_integral(creature));
+		return false;
+	}
+	// The creature that asked for a fight refuses before a forest sends it to the place of the forest
+	if (AskedForFight(creature))
+	{
 		return false;
 	}
 	const auto objectAt = registry.Get<const Transform>(object).position;

@@ -10,6 +10,7 @@
 #include <glm/gtx/rotate_vector.hpp>
 #include <gtest/gtest.h>
 
+#include "Creature/CreaturePlanActions.h"
 #include "Creature/LeashOrders.h"
 
 using namespace openblack;
@@ -117,6 +118,21 @@ TEST(LeashOrders, SomeStatesRefuseOrders)
 	EXPECT_FALSE(TakesGroundOrders({.scriptControlled = true}));
 	EXPECT_TRUE(TakesGroundOrders({}));
 	EXPECT_FALSE(TakesGroundOrders({.frozen = true}));
+	// Held in a hand, it takes no order
+	EXPECT_FALSE(TakesOrders({.held = true}));
+	EXPECT_FALSE(TakesGroundOrders({.held = true}));
+}
+
+TEST(LeashOrders, AnOrderStopsTheCopyOfThePlayerWhileTheMindRuns)
+{
+	// The copy stops also when the creature then does not take the order
+	EXPECT_TRUE(StopsCopying({}));
+	EXPECT_TRUE(StopsCopying({.leashWorks = false}));
+	EXPECT_TRUE(StopsCopying({.exhaustion = 1.0f}));
+	EXPECT_TRUE(StopsCopying({.held = true}));
+	EXPECT_TRUE(StopsCopying({.scriptControlled = true}));
+	// A frozen mind does nothing
+	EXPECT_FALSE(StopsCopying({.frozen = true}));
 }
 
 TEST(LeashOrders, TheLandSendsItThere)
@@ -336,4 +352,13 @@ TEST(LeashOrders, TheMarkerShowsOnlyWithTheLand)
 	// Not under a video that covers the screen, or behind the falling spell's film
 	EXPECT_FALSE(MarkerShown(false, true));
 	EXPECT_FALSE(MarkerShown(true, true));
+}
+
+TEST(LeashOrders, TheOrderToSleepAtHomeIsAnActionOfTheTable)
+{
+	// The plan keeps a record only of an action that the table has
+	EXPECT_EQ(k_SleepAction, "SleepAtHome");
+	const auto* executor = creature_plan_actions::For(k_SleepAction);
+	ASSERT_NE(executor, nullptr);
+	EXPECT_EQ(executor->action, "SleepAtHome");
 }

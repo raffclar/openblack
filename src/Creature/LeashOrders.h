@@ -132,10 +132,15 @@ struct Body
 	bool frozen {false};
 	/// A script controls the creature
 	bool scriptControlled {false};
+	/// A hand holds the creature
+	bool held {false};
 };
-/// Whether the creature takes orders: not when the leash doesn't work, it has no life left, it is wholly exhausted, or
-/// it is frozen
+/// Whether the creature takes orders: not when the leash doesn't work, a hand holds it, it has no life left, it is
+/// wholly exhausted, or it is frozen
 [[nodiscard]] bool TakesOrders(const Body& body);
+/// Whether an order stops the creature copying the player. Each order does this while the mind of the creature runs,
+/// also when the creature then does not take the order.
+[[nodiscard]] bool StopsCopying(const Body& body);
 /// Whether it takes an order to go somewhere: as any order, and not while a script controls it (an order on a thing it
 /// still takes)
 [[nodiscard]] bool TakesGroundOrders(const Body& body);
@@ -291,7 +296,8 @@ constexpr Interruption k_WalkBackInterrupts {.hurries = true, .stopsWalk = false
 constexpr std::string_view k_MoveAction = "MoveToPos";
 constexpr std::string_view k_DrinkAction = "DrinkFromTheSea";
 constexpr std::string_view k_ReflectionAction = "LookAtReflection";
-constexpr std::string_view k_SleepAction = "Sleep";
+/// The order to sleep at home is the action to sleep at home, so that the plan keeps a record of it
+constexpr std::string_view k_SleepAction = "SleepAtHome";
 constexpr std::string_view k_HoldAction = "HoldObject";
 constexpr std::string_view k_LookAction = "ExamineByLooking";
 constexpr std::string_view k_FightAction = "Fight";
