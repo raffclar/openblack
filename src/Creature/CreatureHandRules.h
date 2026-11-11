@@ -12,6 +12,7 @@
 #include <cstdint>
 
 #include "Creature/CreatureFeedback.h"
+#include "ECS/Components/CreatureFight.h"
 #include "Enums.h"
 
 /// What the right mouse button does on a creature. Clicked, it puts the leash on the player's own creature. Held, the
@@ -44,6 +45,13 @@ struct Holdable
 /// creature of a god that is the ally of the player (allied), wherever it is. The creature must also take hold at all,
 /// and a script must not stop the hand from picking it up.
 [[nodiscard]] bool MayHold(const Holdable& creature, PlayerNames handPlayer, bool allied = false);
+/// Whether a creature knocked out is out cold for the hand: from the start of its faint until it is back at its home.
+/// After that, while it lies at home and rests, the hand can take hold of it again.
+[[nodiscard]] constexpr bool OutColdForHand(ecs::components::CreatureKnockedOut::Stage stage)
+{
+	using Stage = ecs::components::CreatureKnockedOut::Stage;
+	return stage == Stage::Lying || stage == Stage::FadingOut || stage == Stage::FadingIn;
+}
 /// Whether the strokes and the slaps of a player's hand can come to a creature. The hand holds only the creature of the
 /// player or of an ally of the player (allied), so the feedback of a release comes only to such a creature.
 [[nodiscard]] bool FeelsHandOf(PlayerNames owner, PlayerNames handPlayer, bool allied);

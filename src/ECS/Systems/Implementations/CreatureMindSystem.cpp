@@ -48,6 +48,7 @@
 #include "Creature/CreatureFeedback.h"
 #include "Creature/CreatureFriendship.h"
 #include "Creature/CreatureGiving.h"
+#include "Creature/CreatureHandRules.h"
 #include "Creature/CreatureHelp.h"
 #include "Creature/CreatureIdleMind.h"
 #include "Creature/CreatureKindAgendas.h"
@@ -706,6 +707,17 @@ std::optional<float> CreatureMindSystem::BodyShare(entt::entity creature) const
 	return creature_animation::StandShare(body->breathPhase, static_cast<uint32_t>(*stand));
 }
 
+namespace
+{
+/// Whether a knock-out keeps the creature out cold. A stroke or a slap that played then would cut the faint before the
+/// body lies still, and the faint would never end.
+bool OutCold(const ecs::Registry& registry, entt::entity creature)
+{
+	const auto* knockedOut = registry.TryGet<const CreatureKnockedOut>(creature);
+	return knockedOut != nullptr && creature_hand::OutColdForHand(knockedOut->stage);
+}
+} // namespace
+
 bool CreatureMindSystem::MayInterrupt(entt::entity creature, const CreatureAnimation& body, double interruptsAfter)
 {
 	const auto objectActionShare = Locator::creatureObjectActionSystem::has_value()
@@ -719,7 +731,7 @@ bool CreatureMindSystem::CanForceAction(entt::entity creature, size_t animation,
 	const auto& registry = Locator::entitiesRegistry::value();
 	const auto* body = registry.TryGet<const CreatureAnimation>(creature);
 	const auto* mind = registry.TryGet<const CreatureMindState>(creature);
-	if (body == nullptr || mind == nullptr || creature_mind::IsUnconscious(mind->idle))
+	if (body == nullptr || mind == nullptr || creature_mind::IsUnconscious(mind->idle) || OutCold(registry, creature))
 	{
 		return false;
 	}
@@ -732,7 +744,7 @@ bool CreatureMindSystem::ForceAction(entt::entity creature, size_t animation, bo
 	auto& registry = Locator::entitiesRegistry::value();
 	auto* body = registry.TryGet<CreatureAnimation>(creature);
 	auto* mind = registry.TryGet<CreatureMindState>(creature);
-	if (body == nullptr || mind == nullptr || creature_mind::IsUnconscious(mind->idle))
+	if (body == nullptr || mind == nullptr || creature_mind::IsUnconscious(mind->idle) || OutCold(registry, creature))
 	{
 		return false;
 	}

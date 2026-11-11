@@ -456,6 +456,21 @@ TEST(CreatureHand, ASleepingCreatureTakesHold)
 	    creature_hand::TakesHold({.owner = PlayerNames::PLAYER_ONE, .species = CreatureType::Tiger, .cannotBePickedUp = true}));
 }
 
+// A knocked out creature is out cold for the hand while it falls, lies where it fell and is taken home. At home, while
+// it waits, waits for its spells, rests and gets up, the hand can take hold of it again.
+TEST(CreatureHand, AKnockedOutCreatureIsOutColdUntilItIsAtHome)
+{
+	using Stage = ecs::components::CreatureKnockedOut::Stage;
+	using creature_hand::OutColdForHand;
+	EXPECT_TRUE(OutColdForHand(Stage::Lying));
+	EXPECT_TRUE(OutColdForHand(Stage::FadingOut));
+	EXPECT_TRUE(OutColdForHand(Stage::FadingIn));
+	EXPECT_FALSE(OutColdForHand(Stage::Waiting));
+	EXPECT_FALSE(OutColdForHand(Stage::WaitingForSpells));
+	EXPECT_FALSE(OutColdForHand(Stage::Resting));
+	EXPECT_FALSE(OutColdForHand(Stage::GettingUp));
+}
+
 // The press on a creature: with the leash held loose, the hand waits for a tap on a creature that it may hold, and taps
 // at once a creature that it may not hold. Without the leash held loose, the press holds or does nothing.
 TEST(CreatureHand, TheLooseLeashMakesThePressOnACreatureATapFirst)
