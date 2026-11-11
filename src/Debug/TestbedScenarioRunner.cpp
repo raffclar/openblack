@@ -72,6 +72,7 @@
 #include "ECS/Components/Footpath.h"
 #include "ECS/Components/GameStanding.h"
 #include "ECS/Components/HandGrab.h"
+#include "ECS/Components/LivingReaction.h"
 #include "ECS/Components/MiracleImpression.h"
 #include "ECS/Components/Player.h"
 #include "ECS/Components/Reward.h"
@@ -885,9 +886,9 @@ void Runner::Give(const Command& command)
 	    command.kind == Kind::PressKey || command.kind == Kind::HandTakeFireBall || command.kind == Kind::HandTapObject ||
 	    command.kind == Kind::HandTake || command.kind == Kind::HandApply || command.kind == Kind::HandTakeShownSeed ||
 	    command.kind == Kind::HandPour || command.kind == Kind::HandRelease || command.kind == Kind::SetReportLatency ||
-	    command.kind == Kind::RemoveObject || command.kind == Kind::GiveMagicTreesToStore ||
-	    command.kind == Kind::HandCastAtPoint || command.kind == Kind::HandGripTotem ||
-	    command.kind == Kind::AttachObjectScriptSound || command.kind == Kind::SayLine ||
+	    command.kind == Kind::RemoveObject || command.kind == Kind::CreateReaction ||
+	    command.kind == Kind::GiveMagicTreesToStore || command.kind == Kind::HandCastAtPoint ||
+	    command.kind == Kind::HandGripTotem || command.kind == Kind::AttachObjectScriptSound || command.kind == Kind::SayLine ||
 	    command.kind == Kind::PlayGuidanceVoice || command.kind == Kind::ScriptRelease || command.kind == Kind::FillSiteIcons ||
 	    command.kind == Kind::BuildWorshipSites || command.kind == Kind::ScriptBuildsWorshipSites ||
 	    command.kind == Kind::PressPlainKey || command.kind == Kind::PlainKeyDown || command.kind == Kind::PlainKeyRepeat ||
@@ -1316,6 +1317,16 @@ std::optional<double> Runner::ReadCheck(const checks::Check& check) const
 			inATown += registry.Valid(chest.town) && registry.AllOf<ecs::components::Town>(chest.town) ? 1 : 0;
 		});
 		return static_cast<double>(inATown);
+	}
+	case checks::Quantity::CreatureReaction:
+	{
+		const auto creature = CreatureAt(creatureIndex());
+		if (!creature.has_value())
+		{
+			return std::nullopt;
+		}
+		const auto* state = registry.TryGet<const ecs::components::LivingReaction>(*creature);
+		return state != nullptr && state->reaction != 0 ? static_cast<double>(state->type) : 0.0;
 	}
 	}
 	return std::nullopt;
