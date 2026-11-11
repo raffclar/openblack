@@ -117,6 +117,10 @@ public:
 	/// The next number of the sound library's random stream, from 0 to AudioRandom::k_RandMax. Each start of a bank
 	/// sample takes one, and the stream gets a new seed at the first start.
 	[[nodiscard]] uint32_t NextPlayRandom();
+	/// The index of the sample that the sound library picks among the count samples of an animation effect. With
+	/// more than one sample, the pick takes a number of the stream. Before the first number, the stream gets a new
+	/// seed. With one sample, the pick takes no number.
+	[[nodiscard]] uint32_t PickAnimEffectSample(uint32_t count);
 
 	// Introspection for debugging tools
 	struct LoopState
@@ -236,6 +240,8 @@ private:
 	Clock _clock;
 	AudioRandom _random;
 	bool _playSeeded {false};
+	AnimEffectDraw _animEffectDraw;
+	bool _animEffectSeeded {false};
 	uint32_t _masterVolume {k_MaxVolume};
 
 	std::map<BankId, std::unique_ptr<Bank>> _banks;

@@ -451,6 +451,20 @@ uint32_t AtmosPlayer::NextPlayRandom()
 	return _random.Next();
 }
 
+uint32_t AtmosPlayer::PickAnimEffectSample(uint32_t count)
+{
+	if (count <= 1)
+	{
+		return 0;
+	}
+	if (!_animEffectSeeded)
+	{
+		Reseed();
+		_animEffectSeeded = true;
+	}
+	return AnimEffectSampleIndex(_animEffectDraw.Next(_random.Next()), count);
+}
+
 VoiceBackend::Handle AtmosPlayer::PlaySample(Bank& bank, const pack::AudioBankSampleHeader& header, const PlayOptions& options)
 {
 	if (!_playSeeded)
