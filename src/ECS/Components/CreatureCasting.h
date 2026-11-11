@@ -57,6 +57,10 @@ struct CreatureCasting
 	/// Where it stood when it last looked whether it is stuck, and where it last set off for
 	glm::vec2 stuckCheck {0.0f};
 	std::optional<glm::vec2> destination;
+	/// The agenda and its step that started the move. The move is part of that step only: when the creature goes on to a
+	/// different step or agenda, the move stops.
+	uint32_t agendaSerial {0};
+	uint32_t agendaStep {0};
 
 	/// A try at a miracle that fizzled: what at, and which miracle
 	struct Fizzle

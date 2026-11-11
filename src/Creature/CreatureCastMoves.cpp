@@ -301,6 +301,11 @@ creature_cast_moves::Stall creature_cast_moves::CheckStall(uint32_t turns, float
 	return Stall::None;
 }
 
+bool creature_cast_moves::BelongsToStep(uint32_t startedSerial, uint32_t startedStep, uint32_t serial, size_t step)
+{
+	return startedSerial == serial && startedStep == step;
+}
+
 creature_cast_moves::WalkStart creature_cast_moves::WalkStartOf(bool started, bool destinationValid)
 {
 	if (!destinationValid)

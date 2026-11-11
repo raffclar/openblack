@@ -818,6 +818,11 @@ void CreatureMindSystem::StartSubMove(entt::entity creature, const creature_mind
 	casting.holdTurns = 0;
 	casting.destination.reset();
 	casting.outcome = CreatureCasting::Outcome::Running;
+	if (const auto* mind = registry.TryGet<const CreatureMindState>(creature); mind != nullptr)
+	{
+		casting.agendaSerial = mind->idle.serial;
+		casting.agendaStep = static_cast<uint32_t>(mind->idle.step);
+	}
 	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {}: {} {} keeping {:.1f}, its radius {:.2f}, the target's {:.2f}",
 	                    entt::to_integral(creature), static_cast<int>(movement.kind), entt::to_integral(casting.target),
 	                    casting.keep, object_measures::TwoDRadius(registry, creature),
@@ -889,6 +894,15 @@ void CreatureMindSystem::StepSubMove(entt::entity creature, bool animating)
 	    casting->outcome != CreatureCasting::Outcome::Running || transform == nullptr ||
 	    !Locator::creatureLocomotionSystem::has_value())
 	{
+		return;
+	}
+	// The move is part of the step that started it. When the creature has gone on to a different step or agenda, the move
+	// stops and does not set off on its walk again.
+	if (const auto* mind = registry.TryGet<const CreatureMindState>(creature);
+	    mind != nullptr &&
+	    !cast_moves::BelongsToStep(casting->agendaSerial, casting->agendaStep, mind->idle.serial, mind->idle.step))
+	{
+		casting->move = CreatureCasting::Move::None;
 		return;
 	}
 	auto& locomotion = Locator::creatureLocomotionSystem::value();
