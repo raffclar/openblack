@@ -25,6 +25,9 @@ namespace openblack::creature_carry_over
 
 /// A loaded creature sparkles into sight over this many seconds, from out of sight
 constexpr float k_ArrivalSeconds = 3.0f;
+/// A loaded creature faces this angle about the vertical axis, in radians. The game gives it no angle, and no step of
+/// the load turns it: the angle of a new object is 0.
+constexpr float k_ArrivalYaw = 0.0f;
 
 /// How far a creature has sparkled out of sight, 0 to 1, and where it is going: a share of the way a second
 struct Fizz

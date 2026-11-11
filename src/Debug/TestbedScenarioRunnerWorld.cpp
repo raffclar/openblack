@@ -1030,6 +1030,13 @@ void Runner::PlaceCreatures(const Scenario& scenario, glm::vec2 middle)
 				creature->environmentMap = setup.environmentMap;
 			}
 		}
+		if (setup.autoScale.has_value())
+		{
+			if (auto* creature = registry.TryGet<ecs::components::Creature>(entity))
+			{
+				creature->autoScale = setup.autoScale;
+			}
+		}
 		if (Locator::creatureMindSystem::has_value())
 		{
 			for (const auto skill : setup.skills)

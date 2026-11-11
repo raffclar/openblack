@@ -378,6 +378,40 @@ TEST(CreatureSpells, ItIsSavedAsItWasBeforeItsSpells)
 	EXPECT_FLOAT_EQ(creature_spells::ValuesToSave(spells, now).size, 0.9f);
 }
 
+TEST(CreatureSpells, ANewOwnSizeWaitsBehindASizeSpell)
+{
+	creature_spells::Spells spells;
+	float now = 0.8f;
+	// Nothing on it: its own size is the size now, and a new own size changes the size now
+	EXPECT_EQ(creature_spells::OwnSize(spells, now), 0.8f);
+	creature_spells::SetOwnSize(spells, now, 1.1f);
+	EXPECT_EQ(now, 1.1f);
+
+	// Small on it: the size now stays, and the size before small changes
+	spells[creature_spells::Spell::Small].phase = creature_spells::Phase::Holding;
+	spells[creature_spells::Spell::Small].before = 1.1f;
+	now = 0.5f;
+	creature_spells::SetOwnSize(spells, now, 1.4f);
+	EXPECT_EQ(now, 0.5f);
+	EXPECT_EQ(spells[creature_spells::Spell::Small].before, 1.4f);
+	EXPECT_EQ(creature_spells::OwnSize(spells, now), 1.4f);
+
+	// Big before small
+	spells[creature_spells::Spell::Big].phase = creature_spells::Phase::Starting;
+	spells[creature_spells::Spell::Big].before = 1.4f;
+	creature_spells::SetOwnSize(spells, now, 1.7f);
+	EXPECT_EQ(spells[creature_spells::Spell::Big].before, 1.7f);
+	EXPECT_EQ(spells[creature_spells::Spell::Small].before, 1.4f);
+	EXPECT_EQ(creature_spells::OwnSize(spells, now), 1.7f);
+	EXPECT_EQ(now, 0.5f);
+
+	// Another kind of spell does not keep the size
+	creature_spells::Spells strong;
+	strong[creature_spells::Spell::Strong].phase = creature_spells::Phase::Holding;
+	creature_spells::SetOwnSize(strong, now, 0.9f);
+	EXPECT_EQ(now, 0.9f);
+}
+
 TEST(CreatureSpells, AFaintBringsEverySpellToItsEnd)
 {
 	Spells spells;

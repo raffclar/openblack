@@ -301,6 +301,9 @@ struct CreatureSetup
 	std::optional<float> fatness;
 	std::optional<float> strength;
 	std::optional<float> size;
+	/// The share of the player's creature's size that it grows or shrinks to follow, as a script's automatic scale sets
+	/// it; none when not given
+	std::optional<float> autoScale;
 	/// How far it has grown up, from 0; fully grown up when not given
 	std::optional<uint32_t> phase;
 	NeedOverrides needs;

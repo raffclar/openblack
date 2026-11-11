@@ -30,6 +30,7 @@
 
 #include "3D/MapCoords.h"
 #include "Creature/CreatureCarryOver.h"
+#include "Creature/CreatureFileLoad.h"
 #include "Creature/CreatureHandGlow.h"
 #include "Creature/CreatureMarks.h"
 #include "Creature/CreatureMindFileBody.h"
@@ -333,6 +334,13 @@ TEST(CreatureCarryOver, OnlyThePlacesCellIsTakenAndTheCreatureStandsInItsMiddle)
 	EXPECT_FLOAT_EQ(map_coords::ToMetres(coords.x), 1235.0f);
 	EXPECT_FLOAT_EQ(map_coords::ToMetres(coords.z), 455.0f);
 	EXPECT_EQ(coords.altitude, 0.0f);
+}
+
+TEST(CreatureCarryOver, ALoadedCreatureFacesTheAngleOfANewObject)
+{
+	// The game makes the creature with no angle, as a script makes a creature from a file
+	EXPECT_EQ(k_ArrivalYaw, 0.0f);
+	EXPECT_EQ(k_ArrivalYaw, creature_file_load::k_StartYaw);
 }
 
 class CreatureBodyFile: public ::testing::Test

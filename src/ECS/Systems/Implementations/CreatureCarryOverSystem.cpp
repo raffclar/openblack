@@ -21,7 +21,6 @@
 
 #include <MindFile.h>
 #include <PhysiqueFile.h>
-#include <glm/trigonometric.hpp>
 #include <spdlog/spdlog.h>
 
 #include "3D/LandIslandInterface.h"
@@ -56,9 +55,6 @@ namespace
 {
 /// A game turn's milliseconds
 constexpr float k_TurnMilliseconds = std::chrono::duration<float, std::milli>(TimeSystemInterface::k_TurnDuration).count();
-/// A creature made from its file faces as one a land's set-up makes from a file does
-constexpr float k_ArrivalYawDegrees = 180.0f;
-
 /// The first player, who gets the creature that came from the last land. Only a game alone goes from land to land.
 PlayerNames FirstPlayer()
 {
@@ -335,7 +331,7 @@ std::optional<entt::entity> CreatureCarryOverSystem::LoadPlayersCreature(glm::ve
 	start.fatness = body->fatness;
 	start.strength = body->strength;
 	const auto creature =
-	    archetypes::CreatureArchetype::Create(position, FirstPlayer(), species, 0, glm::radians(k_ArrivalYawDegrees),
+	    archetypes::CreatureArchetype::Create(position, FirstPlayer(), species, 0, creature_carry_over::k_ArrivalYaw,
 	                                          body->size.value_or(archetypes::CreatureArchetype::StartScale(species)), start);
 	auto& registry = Locator::entitiesRegistry::value();
 	// It keeps the exact map position where it arrives

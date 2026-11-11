@@ -277,5 +277,12 @@ struct SavedBody
 /// itself. Size: before big, else small, while a size spell is on; strength: before strong, else weak; alignment:
 /// before nice, else nasty. Anything else, and a kind on with neither of its two spells, as it is now.
 [[nodiscard]] SavedBody ValuesToSave(const Spells& spells, const SavedBody& now);
+/// The size that the game takes as the creature's own: the size before big, else before small, while a size spell is on
+/// it. Else the size now.
+[[nodiscard]] float OwnSize(const Spells& spells, float now);
+/// A new size goes to the creature's own size. While a size spell is on the creature, the size before big (else before
+/// small) changes, and the size now stays. The spell then eases the creature to the new size as it ends. Else the size
+/// now changes.
+void SetOwnSize(Spells& spells, float& now, float size);
 
 } // namespace openblack::creature_spells

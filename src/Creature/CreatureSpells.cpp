@@ -420,3 +420,25 @@ SavedBody creature_spells::ValuesToSave(const Spells& spells, const SavedBody& n
 	saved.alignment = before(Spell::Nice, Spell::Nasty, now.alignment);
 	return saved;
 }
+
+float creature_spells::OwnSize(const Spells& spells, float now)
+{
+	return ValuesToSave(spells, {.size = now}).size;
+}
+
+void creature_spells::SetOwnSize(Spells& spells, float& now, float size)
+{
+	if (!spells.IsKindActive(Kind::Size))
+	{
+		now = size;
+		return;
+	}
+	if (spells.IsActive(Spell::Big))
+	{
+		spells[Spell::Big].before = size;
+	}
+	else if (spells.IsActive(Spell::Small))
+	{
+		spells[Spell::Small].before = size;
+	}
+}
