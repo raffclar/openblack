@@ -268,7 +268,7 @@ struct DanceOrder
 		Set,
 		/// Call the free grown up people of a villager's town to the dance, at least the step's count of them
 		Summon,
-		/// Stop the head that looks about. No later step of the agenda turns the head.
+		/// Stop the eyes that look about for things of interest. The head still turns to what each later step looks at.
 		StopLooking,
 		/// Send each called villager to its place in the dance, at a run
 		SendToPlaces,
@@ -378,6 +378,9 @@ struct Gaze
 	bool runningAway {false};
 	/// The ground a few metres ahead of where its body faces (see k_FeetLookMetres)
 	bool feet {false};
+	/// The people that it called to dance with it: each turn one of them, drawn at random, at the top of its body.
+	/// With nobody called, it looks about.
+	bool dependents {false};
 };
 /// Looking at its feet, it looks at the ground this many metres ahead of where its body faces
 constexpr float k_FeetLookMetres = 4.0f;
@@ -672,8 +675,12 @@ struct IdleMind
 	bool followMoved {false};
 	/// For a step that follows the hand: the number of turns that are left
 	uint32_t followHandTurns {0};
-	/// A step that rests to get better: the turns since it started, the first turn included
+	/// A step that rests to get better or sleeps: the turns since it first tried to start, the turns it could not start
+	/// and its first turn included
 	uint32_t restTurns {0};
+	/// The step that tried to start but could not, and the number of turns it tried
+	std::optional<StepRef> startTried;
+	uint32_t startTries {0};
 	/// A dance step: the turns it dances yet, and whether its dance stops next turn
 	uint32_t danceTurns {0};
 	bool danceEnding {false};
@@ -1178,7 +1185,7 @@ struct PooBy
 /// A creature that rests to get better gets up only when its life is full, it is not tired at all, and the step has
 /// lasted more than this many turns
 constexpr uint32_t k_FewestRestTurns = 30;
-/// Whether the creature is asleep, or out cold, in its current step
+/// Whether the creature sleeps in its current step, until it starts to get up
 [[nodiscard]] bool IsAsleep(const IdleMind& mind);
 /// Whether the creature rests to get better in its current step, until it starts to get up
 [[nodiscard]] bool IsResting(const IdleMind& mind);
@@ -1219,6 +1226,8 @@ void CarryDone(IdleMind& mind);
 [[nodiscard]] bool WatchedHandEnough(uint32_t turns, uint32_t limitTurns, uint32_t turnsPerSecond);
 /// The longest a creature watches the hand, in whole seconds
 constexpr float k_LongestHandWatchSeconds = 5.0f;
+/// Each turn of watching the hand draws below this number. The game gives the draw to a check that it does not use.
+constexpr uint32_t k_HandWatchUnusedDraw = 30;
 /// The step that a creature does for the order of its partner in a joint action. A creature that gives the order to
 /// itself first stops what it does, and thus clears the agenda that holds the order. In place of the order it then reads
 /// a pick-up of no thing, and that pick-up fails as it starts.

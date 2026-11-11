@@ -127,14 +127,14 @@ void openblack::players_symbols::PutPicture(Sheet& players, std::span<const uint
 uint32_t openblack::players_symbols::GodPictureOf(uint32_t player, int32_t landNumber)
 {
 	constexpr uint32_t k_SecondPlayer = 1;
-	constexpr int32_t k_KhazarLand = 3;
+	constexpr int32_t k_LethysLand = 3;
 	constexpr int32_t k_NemesisLand = 5;
-	constexpr int64_t k_Khazar = 1;
+	constexpr int64_t k_Lethys = 1;
 	constexpr int64_t k_Nemesis = 2;
 	auto picture = static_cast<int64_t>(player) - 1;
-	if (landNumber == k_KhazarLand && player == k_SecondPlayer)
+	if (landNumber == k_LethysLand && player == k_SecondPlayer)
 	{
-		picture = k_Khazar;
+		picture = k_Lethys;
 	}
 	if (landNumber == k_NemesisLand && player == k_SecondPlayer)
 	{

@@ -79,6 +79,10 @@ public:
 	/// than the land's, as the temple's rooms have. Its creature is a thing of the registry of bodies: the land, or the
 	/// drawn registry for the creature of the tattoo menu.
 	virtual void PoseCopy(Registry& copies, entt::entity copy, float milliseconds, const Registry& bodies) = 0;
+	/// Each drawn frame of a copy: its eyes move towards where they look by the milliseconds of its last pose step, and
+	/// take their place on its body. The eyes move also on a frame that does not pose the copy, as the game does. Nothing
+	/// occurs to an entity that is not a copy, or whose creature is gone.
+	virtual void PlaceCopyEyes(Registry& /*copies*/, entt::entity /*copy*/, const Registry& /*bodies*/) {}
 
 	/// Where a bone of a creature is in one of its animations at a time, played left to right or not, in its mesh's space,
 	/// the animation blended as the body is drawn; nothing when the creature has no such animation or bone, or hasn't been

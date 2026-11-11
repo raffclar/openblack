@@ -27,6 +27,7 @@
 #include "CreatureMindSystemDetail.h"
 #include "ECS/Components/CreatureDance.h"
 #include "ECS/Components/CreatureLocomotion.h"
+#include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/Dance.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/Town.h"
@@ -300,6 +301,11 @@ void CreatureMindSystem::CarryOutDance(entt::entity creature, creature_mind::Idl
 		creature_mind::DanceOrderDone(idle, Summon(creature, record, order.villager, order.count));
 		break;
 	case DanceOrder::Kind::StopLooking:
+		// Its eyes stop the sweep of the cells about it until it stops what it does. The head still turns.
+		if (auto* mind = registry.TryGet<CreatureMindState>(creature))
+		{
+			mind->eyesSweep = false;
+		}
 		creature_mind::DanceOrderDone(idle, true);
 		break;
 	case DanceOrder::Kind::SendToPlaces:
@@ -373,5 +379,28 @@ void CreatureMindSystem::KeepDanceWithAgenda(entt::entity creature, const creatu
 	if (!creature_dance::DanceGoesOn(record->startedBy, idle.serial, idle.step < idle.agenda.size()))
 	{
 		registry.Get<Dance>(dance).state = Dance::State::Stopped;
+	}
+}
+
+void CreatureMindSystem::DrawDependentLook(entt::entity creature, CreatureMindState& mind)
+{
+	mind.dependentLook.reset();
+	// A script's focus holds the head, and then the step's look draws nothing
+	const auto& idle = mind.idle;
+	if (mind.scriptFocus.has_value() || idle.step >= idle.agenda.size())
+	{
+		return;
+	}
+	const auto& gaze = idle.agenda[idle.step].gaze;
+	if (!gaze.has_value() || !gaze->dependents)
+	{
+		return;
+	}
+	const auto* record = Entities().TryGet<const CreatureDance>(creature);
+	const auto called = record != nullptr ? record->dancers.size() : 0;
+	const auto pick = creature_dance::DependentToLookAt(called, [this](uint32_t range) { return _random.GameRand(range); });
+	if (pick.has_value())
+	{
+		mind.dependentLook = entt::to_integral(record->dancers[*pick]);
 	}
 }

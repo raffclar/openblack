@@ -102,19 +102,12 @@ void CreatureMindSystem::WatchMiracle(entt::entity creature, size_t miracle)
 	const auto* tables = GetTables();
 	auto* mind = registry.TryGet<CreatureMindState>(creature);
 	const auto* body = registry.TryGet<const Creature>(creature);
-	// A mind stilled, as by the freeze spell, learns nothing
-	if (tables == nullptr || mind == nullptr || body == nullptr || !mind->learnt.has_value() || mind->paused ||
-	    miracle == k_NotLearnt || miracle >= tables->miracles.size())
+	if (tables == nullptr || mind == nullptr || body == nullptr || miracle == k_NotLearnt || miracle >= tables->miracles.size())
 	{
 		return;
 	}
-	const auto progress = creature_watching::SeeMiracle(
-	    mind->learnt->knowledge, miracle, tables->miracles, mind->developmentPhase, mind->turn,
-	    mind->leash.miracleSightingWeight, creature_mind_tables::MiracleMultiplier(creature::InfoRow(body->species)));
-	if (progress.learnt && !progress.ignored)
-	{
-		creature_mind_model::Think(*mind->learnt, fmt::format("I've learnt the miracle {}", tables->miracles.at(miracle).name));
-	}
+	// The sighting counts as all other sightings do: the learning meter and the advisor tell of it too
+	CountMiracleSighting(creature, *body, *mind, miracle);
 }
 
 void CreatureMindSystem::ReactToNastyMagic(entt::entity creature, const glm::vec3& point, std::optional<size_t> learn)

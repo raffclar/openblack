@@ -78,8 +78,9 @@ uint16_t TurnsOf(float seconds, uint32_t turnMilliseconds)
 	{
 		return 0;
 	}
-	const auto turnsPerSecond = 1000 / turnMilliseconds;
-	return static_cast<uint16_t>(static_cast<int64_t>(static_cast<double>(turnsPerSecond) * seconds));
+	// The game rounds the product to a float one time. Then it drops the fraction.
+	const auto turnsPerSecond = static_cast<float>(1000 / turnMilliseconds);
+	return static_cast<uint16_t>(static_cast<int32_t>(seconds * turnsPerSecond));
 }
 
 } // namespace openblack::creature_fizz

@@ -1495,6 +1495,20 @@ TEST(CreatureWatching, LearnsAMiracleBySightingsAndSpecies)
 	EXPECT_FALSE(again.meter.has_value());
 }
 
+TEST(CreatureWatching, AMiracleSeenOnTurnZeroCountsAsNeverSeen)
+{
+	const std::vector<creature_watching::MiracleRule> miracles {{.name = "Heal", .timesToSee = 10, .minPhase = 0}};
+	auto knowledge = creature_watching::StartKnowledge({}, miracles);
+	(void)creature_watching::SeeMiracle(knowledge, 0, miracles, 13, 0, 1, 1.0f);
+	EXPECT_EQ(knowledge.miraclesSeen[0].count, 1u);
+	// The game keeps turn 0 as the mark of no sighting, so the next sighting counts although it comes soon after
+	(void)creature_watching::SeeMiracle(knowledge, 0, miracles, 13, 10, 1, 1.0f);
+	EXPECT_EQ(knowledge.miraclesSeen[0].count, 2u);
+	// From a sighting on any other turn, the wait applies
+	(void)creature_watching::SeeMiracle(knowledge, 0, miracles, 13, 20, 1, 1.0f);
+	EXPECT_EQ(knowledge.miraclesSeen[0].count, 2u);
+}
+
 TEST(CreatureWatching, APowerUpTeachesNothingBeforeItsMiracle)
 {
 	std::vector<creature_watching::MiracleRule> miracles(42, {.timesToSee = 10, .minPhase = 0});

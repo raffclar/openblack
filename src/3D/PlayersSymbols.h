@@ -65,15 +65,17 @@ void CopyDesign(Sheet& players, const Sheet& designs, uint32_t design, uint32_t 
 /// of full size, and 32 texels for a sheet at half size. A picture of a different size puts nothing.
 void PutPicture(Sheet& players, std::span<const uint8_t> greys, uint32_t player);
 
-/// The pictures of the computer gods, by their number: Lethys, Khazar and Nemesis. Each is a file in the textures
-/// folder with the name and the ending ".cps", of 64 by 64 greys.
+/// The pictures of the computer gods, by their number. Each is a file in the textures folder with the name and the
+/// ending ".cps", of 64 by 64 greys. The game shows the first picture (a cross) for Khazar, the second picture (a
+/// swirl) for Lethys and the third picture for Nemesis. The names of the first two files are the other way round.
 constexpr std::array<std::string_view, 3> k_GodPictures {"Lethis", "Kazarr", "nemesis"};
 /// At the low detail levels each god's picture comes from a file of 32 by 32 greys, with this letter after the name
 constexpr std::string_view k_LowDetailLetter = "L";
 
 /// The picture of the god that the computer plays as a player, at the start of a land. The picture is the player's
-/// number less one. On the third land, and on the fifth land, the second player takes Khazar and Nemesis. A number
-/// below the first picture gives the first picture, and a number after the last picture gives the last picture.
+/// number less one. On the third land, the second player is Lethys and takes the picture of Lethys. On the fifth land,
+/// the second player is Nemesis and takes the picture of Nemesis. A number below the first picture gives the first
+/// picture, and a number after the last picture gives the last picture.
 [[nodiscard]] uint32_t GodPictureOf(uint32_t player, int32_t landNumber);
 
 /// Gives the player of this computer the symbol of the profile, or the player's own picture for it when there is one

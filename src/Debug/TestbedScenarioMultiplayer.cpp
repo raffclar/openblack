@@ -233,6 +233,27 @@ void testbed_scenarios::AddOtherGodScenarios(std::vector<Scenario>& all)
 	                  .object = 0,
 	                  .radius = 5.0f}},
 	});
+	// The symbol of a computer god over its sparkles, seen from near
+	all.push_back({
+	    .id = "multiplayer.other_god_symbol",
+	    .name = "The symbol of a computer god over its sparkles",
+	    .facet = Facet::Multiplayer,
+	    .description = "As on the second land, the land script makes the temple of the second player (Khazar) 90 m from "
+	                   "the middle of the testbed and switches on his computer mind. The sheet of the players' symbols is "
+	                   "then made again, as at the start of a land. The camera of the god starts 20 m above the base of "
+	                   "the temple, 20 m nearer the middle of the testbed, and this camera looks at that point from 22 m.",
+	    .expected = "Yellow sparkles come out one after another beside the temple and fall down slowly. Over the bright "
+	                "middle of the sparkles, the picture of Khazar (a cross) shows as a faint grey picture, 6 m across. "
+	                "It turns slowly, one full turn in about 13 seconds. Where the sparkles are not bright, the picture "
+	                "is almost not seen.",
+	    .environment = {.clockRuns = false,
+	                    .dispenserGrid = false,
+	                    .symbolsAfterLandScript = true,
+	                    .landNumber = 2,
+	                    .players = {PlayerNames::PLAYER_TWO}},
+	    .framing = {.shot = Shot::Placed, .eye = {12.0f, 23.5f, -52.0f}, .look = {0.0f, 20.0f, -70.0f}},
+	    .landScript = k_ComputerGodAtCitadel,
+	});
 	// Another god's hand holds a miracle seed whose model shows in the hand, and that god's camera stands above it
 	all.push_back({
 	    .id = "multiplayer.other_god_seed",

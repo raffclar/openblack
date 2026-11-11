@@ -196,10 +196,13 @@ TEST(CreatureCastAgenda, TheMiracleIsCastAsThePoseLoopsAndHeldThirtyTurns)
 	commands = Think(mind, senses, Always(0));
 	ASSERT_TRUE(commands.cast.has_value());
 	EXPECT_EQ(commands.cast->magicType, 4u);
+	EXPECT_FALSE(commands.endSit);
+	// The loop of the pose holds until the time is up
 	for (int turn = 0; turn < 30; ++turn)
 	{
 		commands = Think(mind, senses, Always(0));
 		EXPECT_FALSE(commands.releaseCast) << turn;
+		EXPECT_FALSE(commands.endSit) << turn;
 	}
 	commands = Think(mind, senses, Always(0));
 	EXPECT_TRUE(commands.releaseCast);
@@ -209,6 +212,27 @@ TEST(CreatureCastAgenda, TheMiracleIsCastAsThePoseLoopsAndHeldThirtyTurns)
 	commands = Think(mind, senses, Always(0));
 	EXPECT_FALSE(commands.releaseCast);
 	EXPECT_EQ(mind.step, 1u);
+	EXPECT_FALSE(mind.gaveUp);
+}
+
+TEST(CreatureCastAgenda, APoseThatEndsBeforeItsLoopKeepsTheCastWaiting)
+{
+	IdleMind mind;
+	Plan(mind, Activity::Planned, {CastAt(CastStyle::Lightning, 4, 0, 7, 15.0f, Always(1)).back()});
+	Senses senses {.seconds = 0.1f};
+	auto commands = Think(mind, senses, Always(0));
+	ASSERT_TRUE(commands.startSequence.has_value());
+	senses.bodyBusy = true;
+	(void)Think(mind, senses, Always(0));
+	// The pose ends without its loop: the step does not cast and does not give up
+	senses.bodyBusy = false;
+	for (int turn = 0; turn < 50; ++turn)
+	{
+		commands = Think(mind, senses, Always(0));
+		EXPECT_FALSE(commands.cast.has_value()) << turn;
+		EXPECT_FALSE(commands.startSequence.has_value()) << turn;
+	}
+	EXPECT_EQ(mind.step, 0u);
 	EXPECT_FALSE(mind.gaveUp);
 }
 
@@ -1010,4 +1034,16 @@ TEST(CreatureCastAgenda, FarFromItsHomeTheCreatureCastsTheTeleportAtItself)
 	EXPECT_EQ(agenda->back().kind, Step::Kind::Cast);
 	EXPECT_EQ(agenda->back().cast.magicType, 12u);
 	EXPECT_EQ(agenda->back().cast.object, std::optional<uint32_t>(7u));
+}
+
+TEST(CreatureCastMoves, AGoNearStopsWhenTheCreatureGoesOnToADifferentStepOrAgenda)
+{
+	// The step that started the move
+	EXPECT_TRUE(cast_moves::BelongsToStep(7, 2, 7, 2));
+	// The next step of the same agenda
+	EXPECT_FALSE(cast_moves::BelongsToStep(7, 2, 7, 3));
+	// The same step of a new agenda, such as a plan forced after a slap
+	EXPECT_FALSE(cast_moves::BelongsToStep(7, 0, 8, 0));
+	// The agenda ended and the creature has no step
+	EXPECT_FALSE(cast_moves::BelongsToStep(7, 2, 7, 4));
 }

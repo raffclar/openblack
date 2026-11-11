@@ -217,10 +217,15 @@ class Game:
 
 # The hand's work: the inspector's sim.feedback has the player's hand take hold of the creature by a command and
 # stroke or slap it, as the mouse button would, then let go. The creature learns from the sum as the hand lets go.
+# The game refuses a stroke while the body is not more than four fifths through an action, and a slap while it is not
+# more than about a third through, with no change to the sum. A player's hand tries again at each frame while it rubs
+# or sweeps, so the driver tries again too, until the creature takes the touch or the driver stops.
 STROKE_PARTS = (3, 0, 4)
-# Frames between two strokes, for the stroke's clocks (1.25 s at 20 ms a frame), and before a slap (1 s)
+# Frames after a stroke that played, for the stroke's clocks (1.25 s at 20 ms a frame)
 STROKE_WAIT_FRAMES = 70
-SLAP_WAIT_FRAMES = 55
+# Frames between two tries of a touch that the body refused (0.2 s), and the most frames to try one touch (10 s)
+TOUCH_RETRY_FRAMES = 10
+TOUCH_GIVE_UP_FRAMES = 500
 
 
 def creature_of(game):
@@ -229,27 +234,38 @@ def creature_of(game):
     return creature.get("id") if creature else None
 
 
+def touch(game, creature, params, played):
+    """Tries one stroke or slap until the creature takes it or the time is up: whether it played"""
+    waited = 0
+    while True:
+        answer = game.call("sim.feedback", dict(params, id=creature))
+        if answer.get("did") == played:
+            return True
+        if waited >= TOUCH_GIVE_UP_FRAMES:
+            return False
+        game.step_frames(TOUCH_RETRY_FRAMES)
+        waited += TOUCH_RETRY_FRAMES
+
+
 def stroke(game, creature):
-    """Strokes the creature on three parts of its body, then lets go: whether a stroke counted"""
-    stroked = False
+    """Strokes the creature on three parts of its body, then lets go: the number of strokes that played"""
+    strokes = 0
     for part in STROKE_PARTS:
-        answer = game.call("sim.feedback", {"kind": "stroke", "id": creature, "part": part})
-        stroked = stroked or answer.get("did") == "stroked"
+        if touch(game, creature, {"kind": "stroke", "part": part}, "stroked"):
+            strokes += 1
         game.step_frames(STROKE_WAIT_FRAMES)
     game.call("sim.feedback", {"kind": "release", "id": creature})
     game.step_frames(2)
-    return stroked
+    return strokes
 
 
 def slap(game, creature):
-    """Takes hold of the creature, waits until a slap is ready, slaps it, then lets go: whether the slap counted"""
-    game.call("sim.feedback", {"kind": "slap", "id": creature})
-    game.step_frames(SLAP_WAIT_FRAMES)
-    answer = game.call("sim.feedback", {"kind": "slap", "id": creature})
+    """Takes hold of the creature, slaps it once, then lets go: whether the slap played"""
+    slapped = touch(game, creature, {"kind": "slap"}, "slapped")
     game.step_frames(5)
     game.call("sim.feedback", {"kind": "release", "id": creature})
     game.step_frames(2)
-    return answer.get("did") == "slapped"
+    return slapped
 
 
 def park_hand(game):

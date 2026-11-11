@@ -455,8 +455,13 @@ TEST(CreatureFight, HealthStaminaAndLife)
 	EXPECT_FLOAT_EQ(LifeAfterFight(1.0f, -0.2f), 1.0f - (1.2f * 0.25f));
 	EXPECT_TRUE(HealthyEnoughToFight(0.11f));
 	EXPECT_FALSE(HealthyEnoughToFight(0.1f));
-	EXPECT_FLOAT_EQ(FaintSeconds(1.0f), 12.0f);
-	EXPECT_FLOAT_EQ(FaintSeconds(2.0f), 16.0f);
+	EXPECT_EQ(FaintWaitTurns(1.0f, 100), 120);
+	EXPECT_EQ(FaintWaitTurns(2.0f, 100), 160);
+	// The game drops the fraction of a turn
+	EXPECT_EQ(FaintWaitTurns(1.234f, 100), 129);
+	// A sum of thirty float turns is a little less than 3 seconds, but it counts as 30 turns
+	EXPECT_EQ(TurnsCounted(2.9999993f, 0.1f), 30);
+	EXPECT_EQ(TurnsCounted(-0.3f, 0.1f), -3);
 	EXPECT_TRUE(NeedsRest(0.3f, 0.0f));
 	EXPECT_TRUE(NeedsRest(0.9f, 0.5f));
 	EXPECT_FALSE(NeedsRest(0.4f, 0.3f));

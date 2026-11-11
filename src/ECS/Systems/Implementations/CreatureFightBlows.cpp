@@ -181,8 +181,8 @@ void PushApartOnBlow(ecs::Registry& registry, entt::entity striker, entt::entity
 	{
 		return;
 	}
-	Shift(*self, *pushed.first - at);
-	Shift(*other, *pushed.second - otherAt);
+	MoveTo(*self, *pushed.first);
+	MoveTo(*other, *pushed.second);
 	registry.SetDirty();
 	fight_transcript::Note(striker, "blow_push", [&] {
 		return fight_transcript::Fields {{"creature", fight_transcript::Id(striker)},

@@ -12,6 +12,7 @@
 #include <cstdint>
 
 #include <optional>
+#include <type_traits>
 
 #include <entt/entity/entity.hpp>
 #include <glm/mat3x3.hpp>
@@ -20,20 +21,33 @@
 
 #include "Creature/CreatureDecisionTree.h"
 #include "ECS/Components/Abode.h"
+#include "ECS/Components/Ball.h"
 #include "ECS/Components/BuildingDamage.h"
 #include "ECS/Components/Construction.h"
 #include "ECS/Components/CreatureLeash.h"
+#include "ECS/Components/DeadTree.h"
+#include "ECS/Components/Feature.h"
+#include "ECS/Components/Field.h"
 #include "ECS/Components/Firefly.h"
+#include "ECS/Components/FishFarm.h"
 #include "ECS/Components/MagicFireBall.h"
 #include "ECS/Components/MagicShield.h"
 #include "ECS/Components/Mobile.h"
+#include "ECS/Components/OneOffSpellSeed.h"
+#include "ECS/Components/Pot.h"
+#include "ECS/Components/PuzzleGame.h"
+#include "ECS/Components/Reward.h"
 #include "ECS/Components/Scaffold.h"
 #include "ECS/Components/ScriptHighlight.h"
 #include "ECS/Components/Spell.h"
+#include "ECS/Components/SpellDispenser.h"
 #include "ECS/Components/StreetLantern.h"
+#include "ECS/Components/TeleportStone.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/TownDesireFlag.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/Components/VillageTotem.h"
+#include "ECS/Components/Vortex.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/Implementations/CreatureMindSystemDetail.h"
 #include "Enums.h"
@@ -52,7 +66,15 @@ entt::entity Make(ecs::Registry& registry, const Component& component)
 {
 	const auto thing = registry.Create();
 	registry.Assign<Transform>(thing, glm::vec3(5.0f, 0.0f, 5.0f), glm::mat3(1.0f), glm::vec3(1.0f));
-	registry.Assign<Component>(thing, component);
+	// A component with no values takes no value
+	if constexpr (std::is_empty_v<Component>)
+	{
+		registry.Assign<Component>(thing);
+	}
+	else
+	{
+		registry.Assign<Component>(thing, component);
+	}
 	return thing;
 }
 
@@ -161,4 +183,33 @@ TEST(CreatureBeliefKinds, AScaffoldDoesNotCatchTheEyeOfACreature)
 	ecs::Registry registry;
 	EXPECT_EQ(mind_detail::LookInterestOf(registry, Make<Scaffold>(registry)), creature_look::Interest::None);
 	EXPECT_EQ(mind_detail::LookInterestOf(registry, Make<MobileObject>(registry)), creature_look::Interest::None);
+}
+
+TEST(CreatureBeliefKinds, EachThingCatchesTheEyeAsItsKindInTheGameDoes)
+{
+	ecs::Registry registry;
+	using Interest = creature_look::Interest;
+	// The game's field, town totem, puzzle totem and spell dispenser are buildings
+	EXPECT_EQ(mind_detail::LookInterestOf(registry, Make<Abode>(registry)), Interest::Abode);
+	EXPECT_EQ(mind_detail::LookInterestOf(registry, Make<Field>(registry)), Interest::Abode);
+	EXPECT_EQ(mind_detail::LookInterestOf(registry, Make<VillageTotem>(registry)), Interest::Abode);
+	EXPECT_EQ(mind_detail::LookInterestOf(registry, Make<PuzzleTotem>(registry)), Interest::Abode);
+	EXPECT_EQ(mind_detail::LookInterestOf(registry, Make<SpellDispenser>(registry)), Interest::Abode);
+	// Its dead trees, vortexes, teleport stones and broken pieces are rocks that are not toys
+	EXPECT_EQ(mind_detail::LookInterestOf(registry, Make<DeadTree>(registry)), Interest::Static);
+	EXPECT_EQ(mind_detail::LookInterestOf(registry, Make<Vortex>(registry)), Interest::Static);
+	EXPECT_EQ(mind_detail::LookInterestOf(registry, Make<TeleportStone>(registry)), Interest::Static);
+	EXPECT_EQ(mind_detail::LookInterestOf(registry, Make<BuildingPiece>(registry)), Interest::Static);
+	// These have no interest of their own
+	EXPECT_EQ(mind_detail::LookInterestOf(registry, Make<Ball>(registry)), Interest::None);
+	EXPECT_EQ(mind_detail::LookInterestOf(registry, Make<Pot>(registry)), Interest::None);
+	EXPECT_EQ(mind_detail::LookInterestOf(registry, Make<OneOffSpellSeed>(registry)), Interest::None);
+	EXPECT_EQ(mind_detail::LookInterestOf(registry, Make<StreetLantern>(registry)), Interest::None);
+	EXPECT_EQ(mind_detail::LookInterestOf(registry, Make<TownDesireFlag>(registry)), Interest::None);
+	EXPECT_EQ(mind_detail::LookInterestOf(registry, Make<RewardOnLand>(registry)), Interest::None);
+	EXPECT_EQ(mind_detail::LookInterestOf(registry, Make<Firefly>(registry)), Interest::None);
+	// The heart of a temple, a feature and a fish farm are fixed things
+	EXPECT_EQ(mind_detail::LookInterestOf(registry, Make<Temple>(registry)), Interest::Fixed);
+	EXPECT_EQ(mind_detail::LookInterestOf(registry, Make<Feature>(registry)), Interest::Fixed);
+	EXPECT_EQ(mind_detail::LookInterestOf(registry, Make<FishFarm>(registry)), Interest::Fixed);
 }

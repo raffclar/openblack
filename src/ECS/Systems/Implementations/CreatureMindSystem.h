@@ -245,6 +245,9 @@ private:
 	/// a fire in the nearest town
 	void StepEmergencies(entt::entity creature, const components::Creature& body, components::CreatureMindState& mind,
 	                     bool scripted);
+	/// After the emergencies and before the creature decides: a step that looks at the people called to the dance
+	/// draws the one to look at this turn (CreatureMindDance.cpp)
+	void DrawDependentLook(entt::entity creature, components::CreatureMindState& mind);
 	/// The creature heals a thing at once, as a stroke heals it
 	void Heal(entt::entity creature, entt::entity thing);
 	/// Copying the player, the creature does what the player did: to the player's thing, else to the nearest thing of the

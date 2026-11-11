@@ -331,6 +331,23 @@ struct PlayerSymbol
 /// Adds a player's symbol to the frame, its three sprites drawn together at its place among what blends
 void AddPlayerSymbol(Frame& frame, const PlayerSymbol& symbol, const Sources& sources);
 
+/// The symbol of a god over the sparkles at the camera of another player: one square of the players' symbols, facing the
+/// screen, blended over what is behind it, writing no depth
+struct SparklesSymbol
+{
+	glm::vec3 position {0.0f};
+	/// Half its width and height
+	float halfSize {1.0f};
+	/// Its turn on the screen, in radians
+	float angle {0.0f};
+	/// Its colour, 0xAARRGGBB
+	uint32_t argb {0};
+	int player {k_NeutralPlayer};
+};
+/// Adds the symbol after the sparkles, in the same place among what blends, when the sparkles are the last group of the
+/// frame and stand at the same point. Else the symbol takes its own place.
+void AddSparklesSymbol(Frame& frame, const SparklesSymbol& symbol, const Sources& sources);
+
 /// The corners of a ribbon through its joints, four to a segment, with their texture coordinates from its creator, slid
 /// along it by a scroll in sheet heights, and their colours; and its joints, which place the corners for each pass
 void AppendChain(std::vector<ChainVertex>& out, std::vector<ChainJoint>& outJoints, const Creator& creator,

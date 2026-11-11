@@ -546,8 +546,9 @@ void CreatureCaveSystem::UpdateCaveCreature(float milliseconds)
 	transform->rotation = glm::mat3(portable_math::EulerAngleY(state.heading.Yaw()));
 	if (Locator::creatureAnimationSystem::has_value())
 	{
-		Locator::creatureAnimationSystem::value().PoseCopy(registry, *_caveCreature, frameMs,
-		                                                   Locator::entitiesRegistry::value());
+		auto& animations = Locator::creatureAnimationSystem::value();
+		animations.PoseCopy(registry, *_caveCreature, frameMs, Locator::entitiesRegistry::value());
+		animations.PlaceCopyEyes(registry, *_caveCreature, Locator::entitiesRegistry::value());
 	}
 	// Its hair swings from the new pose, by the whole time of the frame
 	if (Locator::creatureHairSystem::has_value())

@@ -353,9 +353,10 @@ std::vector<QueryDescription> SimProvider::Describe() const
 	    {.name = "feedback",
 	     .description = "The player's hand strokes or slaps the player's creature, as the button would: it takes hold of "
 	                    "the creature by a command first. With release, or kind release, it lets go, and the creature "
-	                    "learns from the sum. The right button let go, input.release or input.gesture also lets go. A "
-	                    "stroke waits for the clocks of the last one, and a slap needs the hand to "
-	                    "hold the creature for a second first: an answer of busy is no stroke or slap",
+	                    "learns from the sum. The right button let go, input.release or input.gesture also lets go. The "
+	                    "command does not wait for the clocks of the hand. The body refuses a stroke until it is more "
+	                    "than four fifths through its action, and a slap until it is more than about a third through: an "
+	                    "answer of busy is no stroke or slap, and the sum does not change",
 	     .parameters = {{.name = "kind", .type = "string", .description = "stroke, slap or release", .required = true},
 	                    {.name = "id",
 	                     .type = "integer",

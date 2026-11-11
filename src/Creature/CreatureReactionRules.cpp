@@ -238,7 +238,9 @@ creature_reaction::WatchVerdict creature_reaction::WeighWatch(std::optional<Desi
 
 float creature_reaction::WorthAbout(float strength, float usefulness, float nearness)
 {
-	return std::clamp(usefulness * strength * nearness, 0.0f, 1.0f);
+	// A worth below 0, or a worth that is not a number, gives 0
+	const float worth = usefulness * strength * nearness;
+	return !(worth >= 0.0f) ? 0.0f : std::min(worth, 1.0f);
 }
 
 bool creature_reaction::IsDominant(uint32_t age, uint32_t otherAge, bool madeFirst)

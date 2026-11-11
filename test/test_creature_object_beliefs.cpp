@@ -13,6 +13,7 @@
 
 #include <algorithm>
 #include <array>
+#include <bit>
 #include <optional>
 #include <set>
 #include <unordered_map>
@@ -285,6 +286,31 @@ TEST(CreatureObjectBeliefs, ItsEyesSweepASquareThatGrowsWithItsSize)
 	EXPECT_EQ(SweepCells(0.22f), 13u * 13u);
 	EXPECT_EQ(SweepCells(4.0f), 21u * 21u);
 	EXPECT_EQ(SweepCells(0.0f), 13u * 13u);
+}
+
+TEST(CreatureObjectBeliefs, TheSweepSquareHasTheGamesFloatSteps)
+{
+	// The game's own count for these sizes (the oracle at 24-bit precision). Just below a size where the root comes to
+	// an even number, the float sum already comes to that square, so the square is the larger one.
+	struct Case
+	{
+		uint32_t sizeBits;
+		uint32_t cells;
+	};
+	constexpr std::array<Case, 10> k_Cases {{{0x3F199997, 225},
+	                                         {0x3F199999, 225},
+	                                         {0x3F19999A, 225},
+	                                         {0x3FCCCCCC, 289},
+	                                         {0x402EEEED, 361},
+	                                         {0x407FFFFE, 441},
+	                                         {0x40800000, 441},
+	                                         {0x40ACCCCC, 529},
+	                                         {0x41266666, 841},
+	                                         {0x3F800000, 225}}};
+	for (const auto& [sizeBits, cells] : k_Cases)
+	{
+		EXPECT_EQ(SweepCells(std::bit_cast<float>(sizeBits)), cells) << std::hex << sizeBits;
+	}
 }
 
 TEST(CreatureObjectBeliefs, EachRingGoesRoundFromTheCornerAtTheLeastXAndZ)

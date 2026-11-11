@@ -58,6 +58,8 @@ struct CreatureMindState
 	std::optional<creature_look::NoticedMover> noticedMover;
 	/// Whether the head turns to what it watches this turn
 	bool lookingAbout {false};
+	/// The person called to dance whom the head looks at this turn, drawn before the creature decides what to do
+	std::optional<uint32_t> dependentLook;
 	/// What a script has it keep its head turned to, whatever it is doing, until the script lets it go: a thing (looked
 	/// at where it stands) or a point
 	std::optional<creature_mind::Gaze> scriptFocus;
@@ -75,6 +77,9 @@ struct CreatureMindState
 	/// What it believes about the things it has come across, and how far its eyes have swept the cells about it
 	creature_object_beliefs::Store beliefs;
 	creature_object_beliefs::Sweep sweep {};
+	/// Whether its eyes sweep the cells about it and follow what it watches. An action can stop this. It starts again
+	/// when the creature stops what it does.
+	bool eyesSweep {true};
 	/// The town and the temple that it came across last as it looked far about it
 	entt::entity lastTown {entt::null};
 	entt::entity nearestTemple {entt::null};

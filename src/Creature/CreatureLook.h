@@ -124,16 +124,10 @@ bool ConsiderLand(Target& target, const LandCandidate& candidate, float watchedD
 /// creature watches nothing.
 void Watch(Target& target, bool inView);
 
-/// The creature looking about
-struct Viewer
-{
-	glm::vec3 position;
-	/// Which way it faces, on the ground
-	glm::vec3 ahead;
-	float size;
-};
-/// Where to look when nothing is interesting: straight ahead at head height
-[[nodiscard]] glm::vec3 PointAhead(const Viewer& viewer);
+/// Where the creature looks about: at what it watches, or else at its destination on the land. The destination is the
+/// place that it last set out for, as high above the land as that place is. It does not change when the creature
+/// arrives.
+[[nodiscard]] glm::vec3 LookAboutPoint(const Target& target, glm::vec3 destination);
 
 /// The creature info values for the look of a creature that walks to a place
 struct WhileGoingInfo

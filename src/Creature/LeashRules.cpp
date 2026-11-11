@@ -224,12 +224,13 @@ float creature_leash::AttitudeChange(LeashType type)
 std::vector<Lesson> creature_leash::LessonsFor(LeashType type, bool objectIsCreature)
 {
 	const auto kind = objectIsCreature ? Desire::BeFriends : Desire::Compassion;
+	// The desire that increases is always taught first. This order sets the order of the examples in the trees.
 	switch (type)
 	{
 	case LeashType::Evil:
 		return {{.desire = Desire::Anger, .change = 1.0f}, {.desire = kind, .change = -1.0f}};
 	case LeashType::Good:
-		return {{.desire = Desire::Anger, .change = -1.0f}, {.desire = kind, .change = 1.0f}};
+		return {{.desire = kind, .change = 1.0f}, {.desire = Desire::Anger, .change = -1.0f}};
 	case LeashType::Rope:
 	case LeashType::None:
 		break;
