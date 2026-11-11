@@ -141,7 +141,13 @@ void creature_desire_sources::UpdateInterest(PlayerInterest& interest, float now
 
 float creature_desire_sources::ManifestState(float desireSum)
 {
-	return Clamp01(desireSum * k_ManifestPart);
+	// The game tests the low end first, and a value that is not a number fails that test
+	const float value = desireSum * k_ManifestPart;
+	if (!(value >= 0.0f))
+	{
+		return 0.0f;
+	}
+	return value > 1.0f ? 1.0f : value;
 }
 
 std::optional<float> creature_desire_sources::Read(uint32_t type, const State& state)

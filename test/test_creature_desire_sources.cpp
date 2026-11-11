@@ -14,6 +14,7 @@
 #include <bit>
 #include <deque>
 #include <iterator>
+#include <limits>
 #include <optional>
 #include <vector>
 
@@ -303,6 +304,8 @@ TEST(CreatureDesireSources, TheWishToShowHowItFeelsMultipliesTheSumByAThird)
 	EXPECT_EQ(std::bit_cast<uint32_t>(ManifestState(1.3f)), 0x3EDDDDDEu);
 	EXPECT_FLOAT_EQ(ManifestState(-1.0f), 0.0f);
 	EXPECT_FLOAT_EQ(ManifestState(4.0f), 1.0f);
+	// The game tests the low end first: a sum that is not a number gives 0
+	EXPECT_EQ(std::bit_cast<uint32_t>(ManifestState(std::numeric_limits<float>::quiet_NaN())), 0u);
 }
 
 TEST(CreatureDesireSources, NewDesiresSpreadTheirSourcesAndGrowingTimes)
