@@ -43,6 +43,7 @@
 #include "CHLApi.h"
 #include "Camera/Camera.h"
 #include "Camera/DefaultWorldCameraModel.h"
+#include "Camera/FightCameraModel.h"
 #include "Camera/ScriptCameraModel.h"
 #include "Camera/TempleCameraModel.h"
 #include "Camera/TemplePress.h"
@@ -65,6 +66,7 @@
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/CameraHelpSystemInterface.h"
 #include "ECS/Systems/CreatureCaveSystemInterface.h"
+#include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/CreatureModeSystemInterface.h"
 #include "ECS/Systems/GameKeysSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
@@ -202,6 +204,15 @@ inline void addGlowsToRegistry(ecs::Registry& registry, Indoors templeRoom)
 
 namespace
 {
+/// The interface lock of the hand of this computer ends (see hand_send_wait::LockEnd)
+void EndHandInterfaceLock()
+{
+	if (Locator::handSystem::has_value())
+	{
+		Locator::handSystem::value().EndOwnInterfaceLock();
+	}
+}
+
 /// How far through its swing the main room's door is before the room behind it is drawn
 constexpr float k_MainRoomOpenSwing = 0.01f;
 
@@ -1630,6 +1641,8 @@ void TempleInterior::GoToRoom(TempleRoom room)
 		if (room != _currentRoom)
 		{
 			FadeIntoRoom();
+			// The move to another room closes every box, and the interface lock of the hand ends
+			EndHandInterfaceLock();
 		}
 		_cameraModel->GoToRoom(room);
 	}
@@ -2147,6 +2160,8 @@ void TempleInterior::Deactivate()
 	{
 		return;
 	}
+	// The exit from the temple ends the interface lock of the hand
+	EndHandInterfaceLock();
 	// The exit gives back the dialogue, the scripts and the bars in this frame step, as the original game does
 	NoteFrameWrite(temple::FrameWrite::Exit);
 	// The story history's buttons go with the temple
@@ -2194,12 +2209,19 @@ void TempleInterior::LeaveWorldCamera()
 	auto& camera = Locator::camera::value();
 	camera.TakeBackFrom(*_worldCamera);
 	_worldCamera.reset();
-	auto* world = dynamic_cast<DefaultWorldCameraModel*>(&camera.GetModel());
 	const auto picked = _leaveTo.has_value() && _leaveToMapPick
 	                        ? std::optional(world_camera::Place {.origin = _leaveTo->first, .focus = _leaveTo->second})
 	                        : std::nullopt;
-	const auto leave =
-	    world_camera::OnLeave(picked, world != nullptr ? world_camera::Model::World : world_camera::Model::Other);
+	// The fight view is a part of the player's camera of the world. A place picked on the map stops it, and so does the end
+	// of its fight.
+	if (Locator::creatureFightSystem::has_value())
+	{
+		Locator::creatureFightSystem::value().ComeOutOfTemple(picked.has_value());
+	}
+	auto* fight = dynamic_cast<FightCameraModel*>(&camera.GetModel());
+	auto* world = dynamic_cast<DefaultWorldCameraModel*>(&camera.GetModel());
+	const auto leave = world_camera::OnLeave(picked, world != nullptr || fight != nullptr ? world_camera::Model::World
+	                                                                                      : world_camera::Model::Other);
 	if (leave.cutTo.has_value())
 	{
 		// The camera is at the place at once, still
@@ -2222,9 +2244,13 @@ void TempleInterior::LeaveWorldCamera()
 		std::ignore = camera.SetModel(std::make_unique<DefaultWorldCameraModel>(leave.cutTo->origin, leave.cutTo->focus));
 		camera.SetForcedTurnPoint(std::nullopt);
 	}
+	// The fight view started again already, when it stayed
 	if (leave.startAgain && world != nullptr)
 	{
 		world->StartAgain();
+	}
+	if (leave.startAgain)
+	{
 		camera.SetForcedTurnPoint(std::nullopt);
 	}
 	// The temple and realm keys start again with the player's camera

@@ -25,6 +25,7 @@
 #include "Camera/CreatureInteractCameraModel.h"
 #include "Camera/DefaultWorldCameraModel.h"
 #include "Camera/FightCameraModel.h"
+#include "Camera/WorldCamera.h"
 #include "Creature/FightMarks.h"
 #include "CreatureFightSystem.h"
 #include "CreatureFightSystemDetail.h"
@@ -155,7 +156,8 @@ void CreatureFightSystem::UpdateView(float seconds)
 	{
 		return;
 	}
-	auto& camera = Locator::camera::value();
+	// The fight view is a part of the player's camera of the world, which continues behind the temple
+	auto& camera = world_camera::Get();
 	const auto& registry = Locator::entitiesRegistry::value();
 	if (_view.has_value())
 	{
@@ -268,7 +270,7 @@ void CreatureFightSystem::UpdateView(float seconds)
 void CreatureFightSystem::TryStartView(entt::entity first, entt::entity second, const fight::Arena& arena, std::string_view how,
                                        std::optional<std::pair<glm::vec3, glm::vec3>> from)
 {
-	auto& camera = Locator::camera::value();
+	auto& camera = world_camera::Get();
 	const auto& registry = Locator::entitiesRegistry::value();
 	const auto own = PrimaryCreatureOf(registry, OwnPlayer());
 	const bool involved = own == first || own == second;
@@ -327,7 +329,7 @@ bool CreatureFightSystem::DraggedAway(const FightCameraModel& model) const
 		return false;
 	}
 	// The camera must look at the land in the middle of the screen
-	const auto& camera = Locator::camera::value();
+	const auto& camera = world_camera::Get();
 	const auto looking = camera.RaycastScreenCoordToLand({0.5f, 0.5f}, true, Camera::Interpolation::Drawn);
 	if (!looking.has_value())
 	{
@@ -349,7 +351,7 @@ void CreatureFightSystem::EndView(std::string_view why)
 	{
 		return;
 	}
-	auto& camera = Locator::camera::value();
+	auto& camera = world_camera::Get();
 	if (auto* model = dynamic_cast<FightCameraModel*>(&camera.GetModel()))
 	{
 		if (auto player = model->TakePlayerModel())
@@ -370,13 +372,35 @@ void CreatureFightSystem::EndView(std::string_view why)
 	}
 }
 
+void CreatureFightSystem::ComeOutOfTemple(bool placePicked)
+{
+	if (!_view.has_value() || !Locator::camera::has_value())
+	{
+		return;
+	}
+	auto* model = dynamic_cast<FightCameraModel*>(&Locator::camera::value().GetModel());
+	if (model == nullptr)
+	{
+		return;
+	}
+	// The view stays only when no place was picked on the map, and the fight continues in its arena
+	const auto& registry = Locator::entitiesRegistry::value();
+	if (!placePicked && !_view->lingerSeconds.has_value() && ArenaOn(registry, _view->first) &&
+	    ArenaOn(registry, _view->second))
+	{
+		model->StartAgain();
+		return;
+	}
+	EndView(placePicked ? "temple_map_pick" : "temple_fight_over");
+}
+
 std::pair<glm::vec3, glm::vec3> CreatureFightSystem::ViewNow()
 {
 	if (!Locator::camera::has_value())
 	{
 		return {glm::vec3(0.0f), _screenCentre.value_or(glm::vec3(0.0f))};
 	}
-	const auto& camera = Locator::camera::value();
+	const auto& camera = world_camera::Get();
 	if (const auto hit = camera.RaycastScreenCoordToLand({0.5f, 0.5f}, true, Camera::Interpolation::Drawn); hit.has_value())
 	{
 		_screenCentre = hit->position;

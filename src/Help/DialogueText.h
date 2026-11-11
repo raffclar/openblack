@@ -194,6 +194,9 @@ public:
 	void EmptyBox() { _display.Reset(true); }
 	/// The player clicked (or holds the keypad's Enter): it may end the wait for a click or cut the text short
 	void ProcessClick(bool click, bool skipKey);
+	/// Whether the click or the key cuts the text short: the text is not read, it takes clicks, and a script's cut scene
+	/// has the cinema bars in or the key is down. The click then takes the hand too, and the action of the hand ends.
+	[[nodiscard]] bool CutsShort(bool click, bool skipKey) const;
 
 	/// Once a frame, with the frame's real seconds: the "Continue" cue fades in while the text waits for a click
 	void AdvanceClickCue(float realSeconds);

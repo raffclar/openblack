@@ -567,6 +567,19 @@ void GameHandGrabWorld::MarkSend()
 	}
 }
 
+void GameHandGrabWorld::EndInterfaceLock(PlayerNames player)
+{
+	if (Locator::handSystem::has_value())
+	{
+		Locator::handSystem::value().EndInterfaceLock(player);
+	}
+}
+
+bool GameHandGrabWorld::HoldsSeed(PlayerNames player) const
+{
+	return Locator::magicSystem::has_value() && Locator::magicSystem::value().GetHeldSeedOf(player).has_value();
+}
+
 uint32_t GameHandGrabWorld::LocalRandom(uint32_t count)
 {
 	if (count == 0 || !Locator::gameRandom::has_value())

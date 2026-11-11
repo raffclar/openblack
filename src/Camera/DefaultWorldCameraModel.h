@@ -64,7 +64,8 @@ public:
 	void Restart(glm::vec3 origin, glm::vec3 focus, glm::vec3 returnOrigin, glm::vec3 returnFocus);
 	void PlaceAt(glm::vec3 origin, glm::vec3 focus) final;
 	/// While the player is in the temple, the camera continues behind it but takes no control of the player: no button,
-	/// no wheel, no key and no movement of the mouse. The keys of the clear view still act.
+	/// no wheel, no key and no movement of the mouse. The keys of the clear view still act. A box of the front end on the
+	/// screen also stops the controls.
 	void SetInputsOff(bool off) { _inputsOff = off; }
 	[[nodiscard]] bool InputsOff() const { return _inputsOff; }
 	/// Starts again from where the camera is, as when the player comes out of the temple. The second part of a flight

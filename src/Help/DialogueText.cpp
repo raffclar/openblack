@@ -270,7 +270,7 @@ void DialogueText::ProcessClick(bool click, bool skipKey)
 		return;
 	}
 	// In a script's cut scene, or with the key, the text is cut short
-	if ((_queries.scriptWideScreen && _queries.scriptWideScreen()) || skipKey)
+	if (CutsShort(click, skipKey))
 	{
 		if (_texts[0] != 0)
 		{
@@ -289,6 +289,15 @@ void DialogueText::ProcessClick(bool click, bool skipKey)
 	// Otherwise the click only ends the wait for it
 	_waitClick = false;
 	_clickCueSeconds = 0.0f;
+}
+
+bool DialogueText::CutsShort(bool click, bool skipKey) const
+{
+	if (_noClick || (!click && !skipKey) || IsTextRead() || (!ShownLongEnough() && !skipKey))
+	{
+		return false;
+	}
+	return skipKey || (_queries.scriptWideScreen && _queries.scriptWideScreen());
 }
 
 void DialogueText::AdvanceClickCue(float realSeconds)

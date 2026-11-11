@@ -191,11 +191,17 @@ size_t creature_fight::StepAnimation(Step step)
 
 Step creature_fight::StepTowards(glm::vec2 local)
 {
-	if (std::abs(local.y) >= std::abs(local.x))
+	const auto side = std::abs(local.x);
+	if (local.y > side)
 	{
-		return local.y >= 0.0f ? Step::Forward : Step::Back;
+		return Step::Forward;
 	}
-	return local.x >= 0.0f ? Step::Right : Step::Left;
+	if (-local.y > side)
+	{
+		return Step::Back;
+	}
+	// A point on the negative side of the x axis takes the step to the right, as in the step back to the middle
+	return std::abs(local.y) < -local.x ? Step::Right : Step::Left;
 }
 
 std::optional<Step> creature_fight::StepToMiddle(glm::vec2 local, float distance, float bodyRadius)
@@ -489,9 +495,12 @@ bool MoveQueue::Release(float heldMs)
 
 void MoveQueue::CancelWaiting()
 {
-	const auto moves = std::span(_moves.data(), _count);
-	const auto kept = std::ranges::remove_if(moves, [](const QueuedMove& move) { return !move.chargeMs.has_value(); });
-	_count -= kept.size();
+	// Only the move added last goes, and only while it waits for its charge
+	if (!_awaitingRelease || _count == 0)
+	{
+		return;
+	}
+	--_count;
 	_awaitingRelease = false;
 }
 
@@ -601,8 +610,11 @@ float creature_fight::DamageFactor(const Blow& blow)
 {
 	// The game multiplies in this order: the strengths, then the sizes, then the speed
 	const auto strengths = (blow.attackerStrength + k_StrengthShift) / (blow.defenderStrength + k_StrengthShift);
-	const auto factor =
-	    std::clamp((strengths * (blow.attackerSize / blow.defenderSize)) * blow.speed, k_MinDamageFactor, k_MaxDamageFactor);
+	const auto product = (strengths * (blow.attackerSize / blow.defenderSize)) * blow.speed;
+	// The game tests the lower limit first, and a value that is not a number gets the lower limit
+	const auto factor = !(product > k_MinDamageFactor) ? k_MinDamageFactor
+	                    : product < k_MaxDamageFactor  ? product
+	                                                   : k_MaxDamageFactor;
 	return blow.special ? factor + factor : factor;
 }
 
@@ -1001,7 +1013,8 @@ bool creature_fight::OwnTestEnds(State state, float animationMs, int32_t testMs,
 
 bool creature_fight::IsBlocking(State state, float timeMs, float startBlockDurationMs)
 {
-	const auto half = startBlockDurationMs * 0.5f;
+	// The half of the whole milliseconds, cut down to a whole millisecond
+	const auto half = static_cast<float>(static_cast<int32_t>(startBlockDurationMs) / 2);
 	switch (state)
 	{
 	case State::Block:

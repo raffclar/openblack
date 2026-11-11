@@ -28,6 +28,7 @@
 #include "ECS/Systems/CreatureHandSystemInterface.h"
 #include "ECS/Systems/EffectRequestSystemInterface.h"
 #include "ECS/Systems/ForestSystemInterface.h"
+#include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/MiracleFxSystemInterface.h"
 #include "ECS/ThingMapPlace.h"
 #include "ECS/WorldObjects.h"
@@ -233,9 +234,8 @@ std::optional<entt::entity> MagicSystem::HeldSeedTarget() const
 
 void MagicSystem::LetGoIfOutsideCastRule()
 {
-	// Only the local hand's own miracle, held locked in it; over nothing the hand keeps it
-	if (!Held().has_value() || _input.state != magic::CastInput::State::Locked || !_hand.point.has_value() ||
-	    !EntityRegistry().Valid(*Held()))
+	// Only the local hand's own miracle that runs in it; over nothing the hand keeps it
+	if (!Held().has_value() || !_hand.point.has_value() || !EntityRegistry().Valid(*Held()))
 	{
 		return;
 	}
@@ -245,7 +245,16 @@ void MagicSystem::LetGoIfOutsideCastRule()
 	{
 		return;
 	}
-	if (!magic::spells::MeetsCastRule(*this, spell->magicType, spell->caster.player, *_hand.point, _ignoreInfluence))
+	if (magic::spells::MeetsCastRule(*this, spell->magicType, spell->caster.player, *_hand.point, _ignoreInfluence))
+	{
+		return;
+	}
+	// The interface lock of the hand ends, also when the button is not down
+	if (Locator::handSystem::has_value())
+	{
+		Locator::handSystem::value().EndOwnInterfaceLock();
+	}
+	if (_input.state == magic::CastInput::State::Locked)
 	{
 		Do(magic::Cancel(_input));
 	}

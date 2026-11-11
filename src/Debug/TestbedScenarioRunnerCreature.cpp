@@ -40,6 +40,7 @@
 #include "Creature/CreatureFight.h"
 #include "Creature/CreatureLayers.h"
 #include "Creature/CreatureLearning.h"
+#include "Creature/CreatureLocomotion.h"
 #include "Creature/CreatureMindTables.h"
 #include "Creature/CreatureObjectActions.h"
 #include "Creature/CreatureRig.h"
@@ -489,6 +490,23 @@ std::string Runner::GiveFightCommand(entt::entity creature, const Command& comma
 		           : "not fighting";
 	case Kind::FightSpecial:
 		return fights.QueueMove(creature, {.kind = creature_fight::Move::Kind::Special}, true) ? "" : "not fighting";
+	case Kind::FightGroundPress:
+	{
+		if (!fights.IsFighting(creature))
+		{
+			return "not fighting";
+		}
+		constexpr float k_SideMetres = 5.0f;
+		const auto& registry = Locator::entitiesRegistry::value();
+		const auto& at = registry.Get<const ecs::components::Transform>(creature).position;
+		const auto ahead =
+		    creature_locomotion::DirectionOf(registry.Get<const ecs::components::CreatureLocomotion>(creature).heading);
+		// The positive side of the x axis of the creature, from its heading
+		const glm::vec2 side = glm::vec2(-ahead.y, ahead.x) * (command.value == 0 ? k_SideMetres : -k_SideMetres);
+		fights.DoGroundPress(registry.Get<const ecs::components::Creature>(creature).owner, creature,
+		                     {at.x + side.x, at.y, at.z + side.y}, true);
+		return command.value == 0 ? "positive side" : "negative side";
+	}
 	case Kind::FightAuto:
 		fights.SetAutoFighting(creature, command.value != 0);
 		return fights.IsFighting(creature) ? "" : "not fighting";
@@ -834,6 +852,7 @@ void Runner::GiveCreatureCommand(const Command& command)
 	case Kind::FightBlock:
 	case Kind::FightStep:
 	case Kind::FightSpecial:
+	case Kind::FightGroundPress:
 	case Kind::FightAuto:
 	case Kind::FightSpell:
 	case Kind::FightView:
@@ -945,6 +964,7 @@ void Runner::GiveCreatureCommand(const Command& command)
 	case Kind::RestoreDevice:
 	case Kind::BindMoveKey:
 	case Kind::BindMouseButton:
+	case Kind::PickTempleMapPlace:
 	case Kind::PutLoadedArena:
 	case Kind::HoldSeed:
 	case Kind::DrawGesture:

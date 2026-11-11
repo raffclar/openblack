@@ -401,9 +401,12 @@ TEST(Startup, AClickDuringTheFadeOutSkipsTheNextStillToo)
 
 TEST(Startup, PreIntro)
 {
-	EXPECT_TRUE(PlaysPreIntro(true, true));
-	EXPECT_TRUE(PlaysPreIntro(false, false));
-	EXPECT_FALSE(PlaysPreIntro(false, true));
+	EXPECT_TRUE(PlaysPreIntro({.requested = true, .hasProfiles = true, .toolRun = false}));
+	EXPECT_TRUE(PlaysPreIntro({.requested = false, .hasProfiles = false, .toolRun = false}));
+	EXPECT_FALSE(PlaysPreIntro({.requested = false, .hasProfiles = true, .toolRun = false}));
+	// A run for tools does not play the film on a first run, but plays it when the command line asks for it
+	EXPECT_FALSE(PlaysPreIntro({.requested = false, .hasProfiles = false, .toolRun = true}));
+	EXPECT_TRUE(PlaysPreIntro({.requested = true, .hasProfiles = false, .toolRun = true}));
 	EXPECT_TRUE(PreIntroGoesOn(1, 2515, false));
 	EXPECT_TRUE(PreIntroGoesOn(2514, 2515, false));
 	EXPECT_FALSE(PreIntroGoesOn(2515, 2515, false));

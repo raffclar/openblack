@@ -129,6 +129,7 @@ TEST(TestbedScenarios, CoversTheCreatureFeatures)
 	                       "needs.starving",
 	                       "needs.sleep_day",
 	                       "needs.sleep_night",
+	                       "needs.sleep_night_length",
 	                       "needs.poo",
 	                       "needs.puke",
 	                       "needs.exhaustion",

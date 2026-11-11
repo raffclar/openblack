@@ -19,6 +19,7 @@
 #include "Camera/CreatureCameraModel.h"
 #include "Camera/DanceCameraModel.h"
 #include "Camera/DefaultWorldCameraModel.h"
+#include "Camera/WorldCamera.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/FollowHeadingThing.h"
 #include "ECS/Registry.h"
@@ -27,6 +28,8 @@
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "Input/GameActionMapInterface.h"
+#include "Input/KeyBindings.h"
+#include "Input/ShortcutKeys.h"
 #include "Locator.h"
 #include "Windowing/WindowingInterface.h"
 
@@ -64,14 +67,15 @@ std::optional<creature_follow::View> CreatureModeSystem::GetView() const
 
 bool CreatureModeSystem::OwnsCamera() const
 {
-	return _model != nullptr && Locator::camera::has_value() && &Locator::camera::value().GetModel() == _model;
+	// Behind the temple the mode has the player's camera of the world, which continues there
+	return _model != nullptr && Locator::camera::has_value() && &world_camera::Get().GetModel() == _model;
 }
 
 void CreatureModeSystem::ReleaseCamera()
 {
 	if (OwnsCamera() && _playerModel != nullptr)
 	{
-		Locator::camera::value().SetModel(std::move(_playerModel));
+		world_camera::Get().SetModel(std::move(_playerModel));
 	}
 	_model = nullptr;
 	_playerModel.reset();
@@ -148,7 +152,7 @@ bool CreatureModeSystem::EnterLoaded(entt::entity thing, const creature_follow::
 
 bool CreatureModeSystem::Take(entt::entity thing, const MakeModel& make)
 {
-	if (!Locator::camera::has_value() || !Locator::entitiesRegistry::has_value() || TempleActive())
+	if (!Locator::camera::has_value() || !Locator::entitiesRegistry::has_value())
 	{
 		return false;
 	}
@@ -157,14 +161,15 @@ bool CreatureModeSystem::Take(entt::entity thing, const MakeModel& make)
 	{
 		return false;
 	}
-	auto& camera = Locator::camera::value();
+	// Inside the temple the mode takes the player's camera of the world behind the temple
+	auto& camera = world_camera::Get();
 	if (OwnsCamera())
 	{
 		// Already locked on, it moves over to the other thing from where the camera is
 		ReleaseCamera();
 	}
-	// Only the player's own camera and the camera of a dance are taken over. The temple's camera is not, and the editor's
-	// camera is not while it follows what it picked.
+	// Only the player's own camera and the camera of a dance are taken over. The editor's camera is not while it follows
+	// what it picked.
 	if (dynamic_cast<DefaultWorldCameraModel*>(&camera.GetModel()) == nullptr &&
 	    dynamic_cast<DanceCameraModel*>(&camera.GetModel()) == nullptr)
 	{
@@ -194,7 +199,7 @@ void CreatureModeSystem::Leave()
 		ReleaseCamera();
 		return;
 	}
-	// The temple or the editor took the camera from this mode's: it is given back once they return it
+	// The editor took the camera from this mode's: it is given back once the editor returns it
 	_leaving = true;
 }
 
@@ -250,12 +255,15 @@ void CreatureModeSystem::Update(std::chrono::microseconds dt, const Frame& frame
 		ReleaseCamera();
 	}
 
-	// C locks onto the player's creature, and lets go of it again
-	if (Locator::gameActionSystem::has_value() && !TempleActive())
+	// C locks onto the player's creature, and lets go of it again. Inside the temple only a mouse button of the action
+	// does this, to the player's camera of the world behind the temple.
+	const bool inTemple = TempleActive();
+	if (Locator::gameActionSystem::has_value())
 	{
 		using input::BindableActionMap;
 		const auto& actions = Locator::gameActionSystem::value();
-		if (actions.Get(BindableActionMap::ZOOM_TO_CREATURE) && actions.GetChanged(BindableActionMap::ZOOM_TO_CREATURE))
+		if (actions.Get(BindableActionMap::ZOOM_TO_CREATURE) && actions.GetChanged(BindableActionMap::ZOOM_TO_CREATURE) &&
+		    input::PressDoesAction(inTemple, input::PressedByMouse(actions, BindableActionMap::ZOOM_TO_CREATURE)))
 		{
 			PressCreatureKey();
 		}
@@ -265,23 +273,20 @@ void CreatureModeSystem::Update(std::chrono::microseconds dt, const Frame& frame
 	{
 		return;
 	}
-	// The temple and the editor take the camera, and the camera stays with them until they hand it back
-	if (TempleActive())
-	{
-		Leave();
-		return;
-	}
+	// The editor takes the camera, and the camera stays with it until it hands it back. The temple does not take the
+	// mode's camera: the mode continues behind the temple.
 	if (!OwnsCamera())
 	{
 		return;
 	}
-	// The cursor keys alone, or the hand taking a fresh grip of the land, give the player the camera back
-	const bool gripped = frame.handGripping && !_wasGripping;
+	// The cursor keys alone, or the hand taking a fresh grip of the land, give the player the camera back. Inside the
+	// temple the camera does not read them.
+	const bool gripped = !inTemple && frame.handGripping && !_wasGripping;
 	_wasGripping = frame.handGripping;
 	if (!StillValid() || _model->WantsToLeave() || gripped)
 	{
 		// Stopped at the fence, the player's camera starts afresh from where it is
-		auto& camera = Locator::camera::value();
+		auto& camera = world_camera::Get();
 		if (_model->StoppedAtFence())
 		{
 			_playerModel = std::make_unique<DefaultWorldCameraModel>(camera.GetOrigin(), camera.GetFocus());

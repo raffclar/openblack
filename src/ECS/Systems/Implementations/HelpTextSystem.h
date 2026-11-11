@@ -36,6 +36,7 @@ public:
 	void StopVoices() override;
 	void Update(const Frame& frame) override;
 	void TakeClick(bool click, bool skipKey) override;
+	[[nodiscard]] bool ClickCutsShort(bool click, bool skipKey) const override;
 	void ProcessTurn(uint32_t milliseconds) override;
 	bool RunText(bool singleLine, uint32_t text, int32_t withInteraction) override;
 	bool RunTextWithNumber(bool singleLine, uint32_t text, float number, int32_t withInteraction) override;

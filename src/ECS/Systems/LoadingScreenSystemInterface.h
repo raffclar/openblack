@@ -45,6 +45,8 @@ struct StartupScreenOptions
 	bool skipLogos {false};
 	/// The command line asked for the pre-intro film
 	bool preIntro {false};
+	/// The command line started a testbed scenario
+	bool scenario {false};
 };
 
 /// A save box that the game shows as a frame of its own

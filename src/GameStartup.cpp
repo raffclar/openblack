@@ -245,8 +245,10 @@ std::optional<std::filesystem::path> Game::AskForSkirmishLand()
 
 void Game::PlayStartupScreens()
 {
-	Locator::loadingScreenSystem::value().PlayStartupScreens(
-	    {.build = _buildVersion.Short(), .skipLogos = _skipLogos, .preIntro = _preIntro});
+	Locator::loadingScreenSystem::value().PlayStartupScreens({.build = _buildVersion.Short(),
+	                                                          .skipLogos = _skipLogos,
+	                                                          .preIntro = _preIntro,
+	                                                          .scenario = _scenarioRequest.has_value()});
 }
 
 void Game::BeginLoadingScreen(loading::LoadingClock::Mode look)

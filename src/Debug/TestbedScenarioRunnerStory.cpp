@@ -231,6 +231,15 @@ bool Runner::GiveStoryCommand(const Command& command)
 		                    : std::string("the game's bindings are back")));
 		return true;
 	}
+	if (command.kind == Kind::PickTempleMapPlace)
+	{
+		if (Locator::temple::has_value() && Locator::temple::value().Active())
+		{
+			Locator::temple::value().PickMapPlace(MapPoint(_middle, command.point));
+		}
+		Log(fmt::format("{:.1f}s: {}", _seconds, Name(command.kind)));
+		return true;
+	}
 	if (command.kind == Kind::PutLoadedArena)
 	{
 		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), PutLoadedArena(command)));

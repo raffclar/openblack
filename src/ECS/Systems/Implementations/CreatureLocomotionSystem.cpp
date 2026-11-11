@@ -326,6 +326,14 @@ int32_t LegsTimeMs(const CreatureLocomotion& self, const Moves& moves, float bre
 
 void SetIdle(CreatureLocomotion& self)
 {
+	// A turn on the spot that ended in this turn keeps the last part of its spin, which turns the body to the new
+	// heading. The clear below removes that part. Thus the body shows at the new heading at once, and does not swing
+	// back to the old heading for one turn.
+	const auto drawn =
+	    locomotion::DrawnAfterStop({.from = self.fromHeading, .to = self.toHeading, .snaps = self.headingSnaps}, self.heading);
+	self.fromHeading = drawn.from;
+	self.toHeading = drawn.to;
+	self.headingSnaps = drawn.snaps;
 	self.motion = Motion::Standing;
 	self.speed = 0.0f;
 	self.move.reset();
@@ -591,10 +599,10 @@ void TurnStep(CreatureLocomotion& self, const WalkTurn& turn)
 	{
 		// The spin plays out over this turn, ending with the body turned to face the new way, which its heading takes up
 		// at once as the next turn starts
-		self.headingSnaps = true;
 		auto lastPart = std::move(self.tracks);
 		ClearWalk(self);
 		self.tracks = std::move(lastPart);
+		self.headingSnaps = true;
 		return;
 	}
 	// The walk starts in the same turn, from the start of its animations
@@ -847,13 +855,7 @@ bool IsOnItsWay(const CreatureLocomotion& self)
 /// Stops it at once where it is, as a new body action or a placement does
 void Halt(CreatureLocomotion& self)
 {
-	// A turn on the spot that ended in this turn has turned the body: without the rest of its spin, the body shows at
-	// the new heading at once
-	const auto drawn =
-	    locomotion::DrawnAfterStop({.from = self.fromHeading, .to = self.toHeading, .snaps = self.headingSnaps}, self.heading);
-	self.fromHeading = drawn.from;
-	self.toHeading = drawn.to;
-	self.headingSnaps = drawn.snaps;
+	// The clear of the walk also shows the body at once at the heading of a turn on the spot that ended in this turn
 	ClearWalk(self);
 	self.following.reset();
 }

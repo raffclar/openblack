@@ -1312,8 +1312,15 @@ void HandGrabSystem::TakeAtTurn(PlayerNames player, entt::entity object, bool as
 	// Every computer takes the thing into the hand, whatever the hand of this computer does now. Only a hand that holds
 	// nothing takes.
 	auto* grab = Grab();
-	if (grab == nullptr || player != _world->HandPlayer() || Holds(*grab))
+	if (grab == nullptr || player != _world->HandPlayer())
 	{
+		return;
+	}
+	// A take that the hand cannot do ends the interface lock of the hand: the hand holds something already, the thing
+	// went, or the thing cannot go into the hand
+	if (Holds(*grab) || _world->HoldsSeed(player))
+	{
+		_world->EndInterfaceLock(player);
 		return;
 	}
 	if (!Exists(object))
@@ -1322,10 +1329,16 @@ void HandGrabSystem::TakeAtTurn(PlayerNames player, entt::entity object, bool as
 		{
 			Empty(*grab);
 		}
+		_world->EndInterfaceLock(player);
 		return;
 	}
 	Take(*grab, object, true, false, askInfluence);
-	if (Holds(*grab) && grab->object == object)
+	// The miracles, not the grab, hold a seed that the hand took back
+	if (!Holds(*grab) && !_world->HoldsSeed(player))
+	{
+		_world->EndInterfaceLock(player);
+	}
+	else if (grab->object == object)
 	{
 		LogHandDeed(player, "takes", object);
 	}
@@ -2105,6 +2118,8 @@ void HandGrabSystem::LockTurn(PlayerNames player)
 		    !_world->InInfluence(_world->HandPlayer(), _world->ReportedHandPlace()) || !Scoop(*grab))
 		{
 			EndScoop(*grab);
+			// The lock on the source ends, and with it the interface lock of the hand
+			_world->EndInterfaceLock(player);
 		}
 	}
 	if (!Exists(grab->lastPickedUp))

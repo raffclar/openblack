@@ -225,6 +225,26 @@ TEST(DialogueText, TheControlIconsFadeInOverAThirdOfASecond)
 	EXPECT_FLOAT_EQ(dialogue.GetKeyIconShare(), 0.0f);
 }
 
+TEST(DialogueText, AClickCutsTheTextShortOnlyInACutSceneOrWithTheKey)
+{
+	Fixture f;
+	f.texts[10] = {.text = u"click me"};
+	auto dialogue = f.Make();
+	dialogue.RunText(false, 10, 1);
+	f.turn += 1000;
+	// Out of a cut scene the click only ends the wait: it does not take the hand
+	EXPECT_FALSE(dialogue.CutsShort(true, false));
+	EXPECT_FALSE(dialogue.CutsShort(false, false));
+	// The key cuts it short, and so does a click in a cut scene
+	EXPECT_TRUE(dialogue.CutsShort(false, true));
+	f.wideScreen = true;
+	EXPECT_TRUE(dialogue.CutsShort(true, false));
+	// A text that was read takes nothing
+	dialogue.ProcessClick(true, false);
+	EXPECT_FALSE(dialogue.CutsShort(true, false));
+	EXPECT_FALSE(dialogue.CutsShort(false, true));
+}
+
 TEST(DialogueText, AClickTooSoonDoesNothing)
 {
 	Fixture f;

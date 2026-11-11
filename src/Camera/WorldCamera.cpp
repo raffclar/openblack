@@ -12,6 +12,8 @@
 #include "3D/TempleInteriorInterface.h"
 #include "Camera.h"
 #include "DefaultWorldCameraModel.h"
+#include "ECS/Systems/CameraPathSystemInterface.h"
+#include "FightCameraModel.h"
 #include "Locator.h"
 
 namespace openblack::world_camera
@@ -31,16 +33,31 @@ Camera& Get()
 	return Locator::camera::value();
 }
 
-void EndFrameControls()
+DefaultWorldCameraModel* PlayersWorldModel(CameraModel& model)
 {
-	auto* behind = BehindTemple();
-	if (behind == nullptr)
+	if (auto* fight = dynamic_cast<FightCameraModel*>(&model); fight != nullptr)
+	{
+		return fight->GetPlayerModel() != nullptr ? dynamic_cast<DefaultWorldCameraModel*>(fight->GetPlayerModel()) : nullptr;
+	}
+	return dynamic_cast<DefaultWorldCameraModel*>(&model);
+}
+
+void EndFrameControls(bool frontEndBox)
+{
+	// The camera path is a model of its own: the player's camera is then not the current model, and keeps its state
+	if (Locator::cameraPathSystem::has_value() && Locator::cameraPathSystem::value().HoldsCamera())
 	{
 		return;
 	}
-	if (auto* world = dynamic_cast<DefaultWorldCameraModel*>(&behind->GetModel()); world != nullptr)
+	auto* behind = BehindTemple();
+	if (behind == nullptr && !Locator::camera::has_value())
 	{
-		world->SetInputsOff(!TakesControls(true));
+		return;
+	}
+	auto& camera = behind != nullptr ? *behind : Locator::camera::value();
+	if (auto* world = PlayersWorldModel(camera.GetModel()); world != nullptr)
+	{
+		world->SetInputsOff(InputsOff(behind != nullptr, frontEndBox));
 	}
 }
 

@@ -66,7 +66,8 @@ constexpr float k_WarmthPerDegree = 0.025f;
 /// A meal fills a creature for its size up to this size: bigger creatures fill up on as little as one this big
 constexpr float k_MaxMealSize = 0.8f;
 /// Asleep for fewer turns than this, it never wakes by itself; it wakes once fully rested in the day, or once nearly
-/// rested and asleep for long enough for its size
+/// rested and asleep for long enough: its size, by the species' sleep length, by the seconds of a game day, by this
+/// many turns
 constexpr uint32_t k_MinSleepTurns = 50;
 constexpr float k_NearlyRested = 0.1f;
 constexpr float k_SleepTurnsPerLength = 5.0f;
@@ -266,8 +267,10 @@ struct PooLump
 void SitTurn(Needs& needs, const Species& species);
 constexpr float k_SitRestShare = 0.2f;
 
-/// One game turn asleep: it heals and rests. Returns whether it wakes now, having slept some turns with this one.
-[[nodiscard]] bool SleepTurn(Needs& needs, const Species& species, float size, uint32_t turnsAsleep, bool night);
+/// One game turn asleep: it heals and rests. Returns whether it wakes now, having slept some turns with this one. The
+/// day length is the seconds of game time in a whole day and night.
+[[nodiscard]] bool SleepTurn(Needs& needs, const Species& species, float size, uint32_t turnsAsleep, bool night,
+                             float dayLength);
 
 /// Why a creature faints
 enum class Faint : uint8_t

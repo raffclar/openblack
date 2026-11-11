@@ -773,6 +773,9 @@ struct Command
 		FightStep,
 		FightSpecial,
 		FightAuto,
+		/// In the fight, the player presses the land five metres to the side of the creature (value: 0 to the positive
+		/// side of its x axis, 1 to the negative side), as a click of the Move button on the land does
+		FightGroundPress,
 		/// In the fight, a miracle (value, by its magic type) added to the end of the moves, as drawing its gesture does
 		FightSpell,
 		/// The player double clicks the place of the creature, which is in its arena: the camera shows the fight at once
@@ -1287,6 +1290,9 @@ struct Command
 		/// An action (value, the bindable action's flag) takes a mouse button (amount: 1 left, 2 middle, 3 right) and
 		/// loses its key, as the Controls page binds it. Value 0 gives back the bindings of the game. Needs no creature
 		BindMouseButton,
+		/// In the temple, the player double clicks the main room's map at a point of the land (point, from the middle of
+		/// the map), and leaves the temple for that place. Needs no creature
+		PickTempleMapPlace,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures

@@ -270,9 +270,11 @@ public:
 	}
 	[[nodiscard]] bool SendWaits() const override { return sendWaits; }
 	void MarkSend() override { ++sendMarks; }
+	void EndInterfaceLock(PlayerNames /*player*/) override { ++lockEnds; }
 	/// The hand of this computer waits for its last send, and how many sends started the wait
 	bool sendWaits {false};
 	int sendMarks {0};
+	int lockEnds {0};
 	/// The commands that the hand sent, in their order, and what the test does with each as it comes
 	std::vector<player_commands::Action> sent;
 	std::function<void(const player_commands::Action&)> onCommand;
@@ -1204,6 +1206,30 @@ TEST_F(HandGrabSystemWithWorld, ATakeAtTheTurnAsksTheInfluenceAtTheReportedPoint
 	EXPECT_NE(system->GetHeld(), std::optional(other));
 }
 
+TEST_F(HandGrabSystemWithWorld, ATakeThatTheTurnCannotDoEndsTheInterfaceLock)
+{
+	world->borderX = 10.0f;
+	const auto outside = world->AddRock({12.0f, 0.0f, 0.0f});
+	const auto inside = world->AddRock({8.0f, 0.0f, 0.0f});
+	world->reportedCollide = glm::vec3(12.0f, 0.0f, 0.0f);
+	// The thing cannot go into the hand outside the influence
+	system->DoTake(world->HandPlayer(), outside);
+	EXPECT_EQ(world->lockEnds, 1);
+	// A take that the turn does keeps the lock
+	world->reportedCollide = glm::vec3(8.0f, 0.0f, 0.0f);
+	system->DoTake(world->HandPlayer(), inside);
+	ASSERT_EQ(system->GetHeld(), std::optional(inside));
+	EXPECT_EQ(world->lockEnds, 1);
+	// The hand holds something already
+	system->DoTake(world->HandPlayer(), outside);
+	EXPECT_EQ(world->lockEnds, 2);
+	// The thing went
+	system->Reset();
+	world->registry.Destroy(outside);
+	system->DoTake(world->HandPlayer(), outside);
+	EXPECT_EQ(world->lockEnds, 3);
+}
+
 // The steps of a computer god take a thing also outside the influence of its player
 TEST_F(HandGrabSystemWithWorld, AComputerGodTakesAThingOutsideItsInfluence)
 {
@@ -1255,6 +1281,27 @@ TEST_F(HandGrabSystemWithWorld, AScoopAsksTheInfluenceWhereThePileStands)
 	Frame(10, {12.0f, 0.0f, 0.0f}, {12.0f, 0.0f, 0.0f});
 	EXPECT_TRUE(Press());
 	EXPECT_EQ(world->registry.Get<const Pot>(inside).amount, 975u);
+}
+
+TEST_F(HandGrabSystemWithWorld, TheEndOfAScoopAtTheTurnEndsTheInterfaceLock)
+{
+	const auto pile = world->registry.Create();
+	world->registry.Assign<Transform>(pile, glm::vec3(0.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+	world->registry.Assign<Pot>(pile, Pot {.amount = 1000, .maxAmount = 2000, .type = PotInfo::FoodPile});
+	world->sizes[pile] = {.radius = 2.0f, .height = 3.0f};
+	world->underCursor = pile;
+	world->pickedPoint = glm::vec3(0.0f);
+	Frame(10);
+	ASSERT_TRUE(Press());
+	ASSERT_EQ(system->GetLockedOn(), std::optional(pile));
+	// A turn that scoops more keeps the lock
+	Turn();
+	EXPECT_EQ(world->lockEnds, 0);
+	// The pile goes: the turn ends the scoop, and with it the interface lock of the hand
+	world->registry.Destroy(pile);
+	Turn();
+	EXPECT_EQ(system->GetLockedOn(), std::nullopt);
+	EXPECT_EQ(world->lockEnds, 1);
 }
 
 TEST_F(HandGrabSystemWithWorld, LettingGoAsksTheInfluenceAtThePointPicked)

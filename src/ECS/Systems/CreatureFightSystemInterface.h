@@ -256,6 +256,10 @@ public:
 	/// Whether the camera's fight view shows a fight that goes on in its arena: not while the view stays a little after
 	/// the fight
 	[[nodiscard]] virtual bool IsCameraOnFightInArena() const { return false; }
+	/// The player comes out of the temple, and the player's camera has the fight view. The view stays when no place was
+	/// picked on the map and the fight continues in its arena: it then starts again (FightCameraModel::StartAgain). Else
+	/// the view stops, and the player's own camera has the camera.
+	virtual void ComeOutOfTemple(bool /*placePicked*/) {}
 	/// Whether the player may zoom out of the fight view, and the view ends by itself after the fight (scripts may forbid
 	/// it)
 	virtual void SetFightExit(bool /*allowed*/) {}

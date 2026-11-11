@@ -144,6 +144,32 @@ TEST(CreatureReactionRules, FlyingThings)
 	EXPECT_EQ(draws, 2);
 }
 
+// A flying thing of an ally catches its eye as its own player's does, with no draw
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST(CreatureReactionRules, AFlyingThingOfAnAllyNeedsNoDraw)
+{
+	auto facts = Seeing();
+	facts.thrownFromHand = true;
+	facts.inTheAir = true;
+	facts.otherPlayers = true;
+	facts.alliedPlayers = true;
+	int draws = 0;
+	EXPECT_EQ(rules::Priority(Reaction::ReactToFlyingObject, facts, FixedDraw {99, &draws}), 40);
+	EXPECT_EQ(draws, 0);
+}
+
+// A crushed thing of an ally still needs the draw, as for any other player
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST(CreatureReactionRules, ACrushedThingOfAnAllyStillNeedsTheDraw)
+{
+	auto facts = Seeing();
+	facts.otherPlayers = true;
+	facts.alliedPlayers = true;
+	int draws = 0;
+	EXPECT_EQ(rules::Priority(Reaction::ReactToObjectCrushed, facts, FixedDraw {3, &draws}), 0);
+	EXPECT_EQ(draws, 1);
+}
+
 // A thing crushed catches its eye as a flying thing does, except while it acts out of anger or it is the thing
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
 TEST(CreatureReactionRules, CrushedThings)
@@ -365,12 +391,16 @@ TEST(CreatureReactionRules, WorthAndDominance)
 	EXPECT_FALSE(creature_reaction::IsDominant(24, 14, false));
 }
 
-TEST(CreatureReactionRules, ANiceMiracleOfAnotherGodTeachesNothing)
+TEST(CreatureReactionRules, ANiceMiracleOfAGodThatIsNotAnAllyIsIgnored)
 {
-	EXPECT_FALSE(creature_reaction::OfAnotherGod(PlayerNames::PLAYER_ONE, PlayerNames::PLAYER_ONE));
-	EXPECT_FALSE(creature_reaction::OfAnotherGod(PlayerNames::NEUTRAL, PlayerNames::PLAYER_ONE));
-	EXPECT_TRUE(creature_reaction::OfAnotherGod(PlayerNames::PLAYER_TWO, PlayerNames::PLAYER_ONE));
-	EXPECT_TRUE(creature_reaction::OfAnotherGod(PlayerNames::PLAYER_ONE, PlayerNames::PLAYER_TWO));
+	using creature_reaction::IgnoresNiceMiracle;
+	EXPECT_FALSE(IgnoresNiceMiracle(true, PlayerNames::PLAYER_ONE, PlayerNames::PLAYER_ONE, false));
+	EXPECT_TRUE(IgnoresNiceMiracle(true, PlayerNames::PLAYER_TWO, PlayerNames::PLAYER_ONE, false));
+	EXPECT_TRUE(IgnoresNiceMiracle(true, PlayerNames::PLAYER_ONE, PlayerNames::PLAYER_TWO, false));
+	// The miracle of an ally is as the miracle of the god of the creature
+	EXPECT_FALSE(IgnoresNiceMiracle(true, PlayerNames::PLAYER_TWO, PlayerNames::PLAYER_ONE, true));
+	// A reaction with no god is not ignored
+	EXPECT_FALSE(IgnoresNiceMiracle(false, PlayerNames::NEUTRAL, PlayerNames::PLAYER_ONE, false));
 }
 
 TEST(CreatureReactionRules, NoLifeTheHandOrATeleportKeepsAllReactionsOff)

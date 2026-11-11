@@ -215,6 +215,11 @@ public:
 	[[nodiscard]] virtual bool SendWaits() const { return false; }
 	/// The hand of this computer sent a command that the wait covers
 	virtual void MarkSend() {}
+	/// The interface lock of the hand of a player ends, and with it the wait of the hand of this computer (see
+	/// hand_send_wait::LockEnd)
+	virtual void EndInterfaceLock(PlayerNames /*player*/) {}
+	/// Whether the hand of a player holds a miracle's seed
+	[[nodiscard]] virtual bool HoldsSeed(PlayerNames /*player*/) const { return false; }
 	/// Whether the world is a network game, in which the turn writes the clicks of the hand that the scripts read
 	[[nodiscard]] virtual bool IsNetworkGame() const { return false; }
 	/// A villager goes into the hand: it remembers what it was doing and is held

@@ -14,6 +14,7 @@
 
 #include "3D/TempleRoom.h"
 #include "Input/BindableActions.h"
+#include "TestbedScenarioBuilders.h"
 #include "TestbedScenarioRegistry.h"
 
 using namespace openblack;
@@ -97,6 +98,48 @@ void testbed_scenarios::AddTempleKeyScenarios(std::vector<Scenario>& all)
 	         {.kind = Kind::PointerRelease, .delaySeconds = 0.1f, .value = 2},
 	         leave(8.0f),
 	         {.kind = Kind::BindMouseButton, .delaySeconds = 3.0f, .value = 0}},
+	});
+	constexpr auto k_Creature = input::BindableActionMap::ZOOM_TO_CREATURE;
+	all.push_back({
+	    .id = "hand.temple_follow_button",
+	    .name = "Inside the temple a mouse button of Zoom To Creature makes the follow camera",
+	    .facet = Facet::Hand,
+	    .description = "The player's tiger stands 60 metres east of the middle of the testbed. The scenario puts Zoom To "
+	                   "Creature on the middle mouse button and goes into the temple. It stops the advisors' help of the "
+	                   "temple, which holds the interface. After 3.5 seconds it presses Zoom To Creature on the keyboard, "
+	                   "then after 2 seconds the middle button. After 8 more seconds the player walks out of the temple, "
+	                   "and the game's bindings come back.",
+	    .expected = "In the temple neither press changes the view of the temple. The keyboard press does nothing. The "
+	                "button press locks the camera of the world behind the temple onto the tiger. The camera comes out "
+	                "of the temple at the follow view of the tiger, and it continues to follow the tiger.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Testbed},
+	    .creatures = {Content(CreatureType::Tiger, {60.0f, 0.0f}, 270.0f, "tiger")},
+	    .commands =
+	        {{.kind = Kind::BindMouseButton, .delaySeconds = 0.5f, .value = static_cast<size_t>(k_Creature), .amount = 2.0f},
+	         enter(1.0f),
+	         {.kind = Kind::StopScript, .delaySeconds = 0.5f, .script = "CitadelWorldRoomHelp"},
+	         press(3.5f, k_Creature),
+	         {.kind = Kind::PointerPress, .delaySeconds = 2.0f, .value = 2},
+	         {.kind = Kind::PointerRelease, .delaySeconds = 0.1f, .value = 2},
+	         leave(8.0f),
+	         {.kind = Kind::BindMouseButton, .delaySeconds = 3.0f, .value = 0}},
+	});
+	all.push_back({
+	    .id = "hand.front_end_box_wheel",
+	    .name = "While the game's menu shows, the wheel does not move the camera",
+	    .facet = Facet::Hand,
+	    .description = "After 2 seconds the scenario opens the game's menu and turns the wheel 3 notches away from the "
+	                   "player. After 2 more seconds Escape closes the menu, and after 1 second the scenario turns the "
+	                   "wheel 3 notches again.",
+	    .expected = "While the menu shows, the camera stays where it is: the wheel does not zoom it. After the menu "
+	                "closes, the wheel zooms the camera in.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Testbed},
+	    .commands = {{.kind = Kind::OpenMenuPage, .delaySeconds = 2.0f, .value = 0},
+	                 {.kind = Kind::WheelTurn, .delaySeconds = 0.5f, .value = 3},
+	                 {.kind = Kind::PressMenuKey, .delaySeconds = 2.0f, .value = 27},
+	                 {.kind = Kind::WheelTurn, .delaySeconds = 1.0f, .value = 3}},
 	});
 	all.push_back({
 	    .id = "hand.clear_view",

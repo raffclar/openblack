@@ -110,6 +110,7 @@ public:
 	void SetCameraWatches(bool enabled) override { _cameraWatches = enabled; }
 	[[nodiscard]] bool GetCameraWatches() const override { return _cameraWatches; }
 	[[nodiscard]] bool IsCameraOnFight() const final { return _view.has_value(); }
+	void ComeOutOfTemple(bool placePicked) final;
 	[[nodiscard]] bool IsCameraOnFightInArena() const final;
 	void SetFightExit(bool allowed) override { _fightExit = allowed; }
 	[[nodiscard]] bool GetFightExit() const override { return _fightExit; }

@@ -1719,6 +1719,7 @@ openblack_setup_and_add_test(test_game_frame_order test_game_frame_order.cpp)
 openblack_setup_and_add_test(test_camera_keys_frame camera/test_camera_keys_frame.cpp)
 openblack_setup_and_add_test(test_clear_view_hand camera/test_clear_view_hand.cpp)
 openblack_setup_and_add_test(test_world_camera_behind_temple camera/test_world_camera_behind_temple.cpp)
+openblack_setup_and_add_test(test_camera_modes_behind_temple camera/test_camera_modes_behind_temple.cpp)
 openblack_setup_and_add_test(test_mouse_moves help/test_mouse_moves.cpp)
 openblack_setup_and_add_test(test_players_symbols test_players_symbols.cpp)
 openblack_setup_and_add_test(test_system_libraries test_system_libraries.cpp)
@@ -1780,6 +1781,14 @@ set_tests_properties(
              "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
 )
 openblack_setup_and_add_test(test_creature_looks test_creature_looks.cpp)
+openblack_setup_and_add_test(
+  test_oracle_creature_body_turn oracle/test_oracle_creature_body_turn.cpp
+)
+set_tests_properties(
+  test_oracle_creature_body_turn
+  PROPERTIES ENVIRONMENT
+             "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)
 openblack_setup_and_add_test(test_creature_hurry test_creature_hurry.cpp)
 openblack_setup_and_add_test(test_buffered_log_sink test_buffered_log_sink.cpp)
 openblack_setup_and_add_test(test_plain_image test_plain_image.cpp)
