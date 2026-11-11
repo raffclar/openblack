@@ -487,6 +487,18 @@ void testbed_scenarios::AddMind(std::vector<Scenario>& all)
 	    .commands = {Act(Kind::Sleep, 0, 2.0f, false)},
 	});
 	all.push_back({
+	    .id = "mind.sleep_eyes_close_in_the_loop",
+	    .name = "The eyes close when the sleep loop starts",
+	    .facet = Facet::Mind,
+	    .description = "A grown-up tiger with low energy and a strong desire to sleep has no temple. After two seconds it "
+	                   "lies down and sleeps where it stands. The camera looks at its face.",
+	    .expected = "The eyes stay open while the tiger lies down. They close on the first turn of the sleep loop, when "
+	                "the body lies still. Before, the eyes closed as the tiger started to lie down.",
+	    .framing = {.shot = Shot::Head, .distance = 1.0f},
+	    .creatures = {lowOnEnergy},
+	    .commands = {Act(Kind::Sleep, 0, 2.0f, false)},
+	});
+	all.push_back({
 	    .id = "mind.help_sleep_at_home",
 	    .name = "The help holds back while the creature goes home to sleep",
 	    .facet = Facet::Mind,

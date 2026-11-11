@@ -232,6 +232,9 @@ struct Movement
 		/// Turning to face the lowest of the ground around it, done once it faces it, or at once when it stands on top of
 		/// it
 		FaceDownSlope,
+		/// Going to where it can throw at a point: nearer than the step's distance it backs away to that distance, further
+		/// than eight times its height it walks up to eight times its height from the point
+		ToThrowAtPoint,
 	};
 	Kind kind {Kind::ToPoint};
 	glm::vec2 point {0.0f};
@@ -648,6 +651,11 @@ struct IdleMind
 	};
 	/// The step that started to let go of the thing in the hand before it starts. Its hands are not checked again.
 	std::optional<StepRef> handsChecked;
+	/// The step that pulled its face on its first try to start. A step that waits for the body keeps this face, and the
+	/// time until the next face counts from that try.
+	std::optional<StepRef> facePulled;
+	/// The step whose eyes closed when the body lay still in the loop of its sleep or its faint
+	std::optional<StepRef> eyesShut;
 	/// The fight step that the other creature agreed to while a move of a fight that stopped still finished. The step
 	/// tries again on later turns and does not ask again.
 	std::optional<StepRef> fightAgreed;
@@ -972,6 +980,8 @@ struct Commands
 	bool gestureInDance {false};
 	/// The arm stops pointing, at a move of a dance that is not a gesture
 	bool endPoint {false};
+	/// The arm stops a point that it holds, whatever the point is for. The arm plays its animations to the end.
+	bool stopPointing {false};
 	/// An animation to play on top of the body
 	std::optional<size_t> playOverlay;
 	/// A miracle to cast, and whether to let go of the one it holds
@@ -1087,6 +1097,10 @@ constexpr int32_t k_WaitTurnsPerSecond = 10;
 /// game keeps the turns of the pose in a 16-bit count and stops the loop when the count goes down to 0. A count that
 /// starts at 0 goes round to 65535 first.
 [[nodiscard]] bool StaticTimeUp(uint32_t countedTurns, float seconds);
+/// Whether the wait of a faint is done. The wait adds the seconds of a turn on each turn that it counts, so the sum
+/// changes to the nearest whole number of turns first. The wait is done when it counted the turns of WaitTurns. Before the
+/// creature lies still, the sum is below 0.
+[[nodiscard]] bool FaintWaitDone(float countedSeconds, float turnSeconds, float seconds);
 
 /// Fluttering its eyelids, the creature blinks every 0.625 to 1.875 seconds
 constexpr int32_t k_FlutterBlinkIntervalMs = 1250;

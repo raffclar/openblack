@@ -306,7 +306,10 @@ std::vector<Step> creature_leash_orders::PutDownAt(glm::vec2 point, float height
 
 std::vector<Step> creature_leash_orders::ThrowAt(glm::vec2 point, float height)
 {
-	return {Walk(point, height * k_ThrowReachHeights, false), Hands({.kind = ObjectOrder::Kind::Throw, .point = point})};
+	// It backs away, or walks up, to eight times its height from the place, and then throws
+	Step move {.kind = Step::Kind::Move};
+	move.movement = {.kind = Movement::Kind::ToThrowAtPoint, .point = point, .maxDistance = height * k_ThrowReachHeights};
+	return {move, Hands({.kind = ObjectOrder::Kind::Throw, .point = point})};
 }
 
 std::vector<Step> creature_leash_orders::Hold(uint32_t object, bool alreadyHeld, glm::vec2 camera,

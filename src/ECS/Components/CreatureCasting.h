@@ -35,6 +35,8 @@ struct CreatureCasting
 		TurnAway,
 		/// Going to where it can throw into the target from
 		ToThrowPosition,
+		/// Going to where it can throw at a place from
+		ToThrowAtPoint,
 	};
 	enum class Outcome : uint8_t
 	{
@@ -45,6 +47,8 @@ struct CreatureCasting
 	Move move {Move::None};
 	Outcome outcome {Outcome::Running};
 	entt::entity target {entt::null};
+	/// The place that a move to throw at a place goes for
+	glm::vec2 point {0.0f};
 	/// The distance it keeps, and the turns it holds still once facing
 	float keep {0.0f};
 	float settleSeconds {0.0f};
