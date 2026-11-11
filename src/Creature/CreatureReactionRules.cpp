@@ -13,66 +13,18 @@
 
 #include <algorithm>
 
-#include "Common/GUtilsAngle.h"
-#include "Common/PortableMath.h"
-
 using namespace openblack;
 using namespace openblack::creature_reaction;
 using creature_desires::Desire;
 
 namespace
 {
-/// A way shorter than this, squared, is no way at all
-constexpr float k_NoWaySquared = 1e-6f;
-constexpr float k_QuarterTurn = 1.5707964f;
-constexpr float k_HalfTurn = 3.1415927f;
-
-/// The heading of a way across the land as a creature keeps it, a quarter turn on from the game's angles: the arctangent
-/// of the way's x over its negated z, worked out by octant in single floats as the game does
-float HeadingOf(float x, float z)
-{
-	const float across = -z;
-	const auto atan = [](float ratio) { return static_cast<float>(portable_math::Atan(static_cast<double>(ratio))); };
-	if (!(across < x) && !(-x > across))
-	{
-		return atan(x / across);
-	}
-	if (!(x < across) && !(-across > x))
-	{
-		return k_QuarterTurn - atan(across / x);
-	}
-	if (!(-x < across) && across < x)
-	{
-		const float turn = atan(x / across);
-		return x < 0.0f ? turn - k_HalfTurn : turn + k_HalfTurn;
-	}
-	return -k_QuarterTurn - atan(across / x);
-}
-
 /// Whether a thing seen at a turn is past its wait now
 bool PastWait(std::optional<uint32_t> saw, uint32_t turn)
 {
 	return !saw.has_value() || static_cast<int32_t>(turn - *saw) > static_cast<int32_t>(k_SightingTurns);
 }
 } // namespace
-
-bool creature_reaction::CanSee(uint16_t lookAngle, uint16_t angleToPoint, bool sameCell)
-{
-	const int32_t full = gutils::k_GameAngleCircle;
-	auto off = std::abs(static_cast<int32_t>(lookAngle) - static_cast<int32_t>(angleToPoint));
-	if (off > full / 2)
-	{
-		off = full - off;
-	}
-	return static_cast<uint32_t>(off) <= k_SightHalfAngle || sameCell;
-}
-
-uint16_t creature_reaction::LookAngle(glm::vec2 way)
-{
-	const float heading = way.x * way.x + way.y * way.y > k_NoWaySquared ? HeadingOf(way.x, way.y) : 0.0f;
-	return static_cast<uint16_t>(gutils::ConvertScawenAngleToGameAngle(heading) &
-	                             static_cast<uint32_t>(gutils::k_GameAngleMask));
-}
 
 bool creature_reaction::BlocksInspecting(const Facts& facts)
 {

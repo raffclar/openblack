@@ -147,6 +147,7 @@
 #include "ECS/CreatureExplorationLand.h"
 #include "ECS/CreatureHome.h"
 #include "ECS/CreatureNaming.h"
+#include "ECS/CreatureSight.h"
 #include "ECS/FixedKinds.h"
 #include "ECS/LearningMarker.h"
 #include "ECS/PlayerTowns.h"
@@ -835,12 +836,9 @@ void CreatureMindSystem::NoticeDeed(size_t deed, const glm::vec3& point, std::op
 		const glm::vec2 here(at.position.x, at.position.z);
 		const auto seen =
 		    object.has_value() ? PointOf(registry, *object).value_or(glm::vec2(point.x, point.z)) : glm::vec2(point.x, point.z);
-		const auto* animation = registry.TryGet<const CreatureAnimation>(entity);
 		const auto from = map_coords::FromMetres(here);
 		const auto to = map_coords::FromMetres(seen);
-		const auto looking = LookingAngle(at, animation != nullptr ? animation->lookAt : std::nullopt);
-		const bool inView = creature_object_beliefs::CanSee(looking, gutils::GetAngleFromXZ(from, to),
-		                                                    map_coords::Cell(from) == map_coords::Cell(to));
+		const bool inView = ecs::creature_sight::CanSeePos(registry, entity, seen);
 		const bool nearEnough = creature_watching::WithinCopyReach(gutils::GetDistanceInMetres(to, from),
 		                                                           creature_object_beliefs::SweepCells(ShownSize(creature)));
 		const auto* leashes = registry.TryGet<const CreatureLeash>(entity);

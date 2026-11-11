@@ -16,12 +16,10 @@
 #include <algorithm>
 #include <array>
 #include <limits>
-#include <numbers>
 #include <optional>
 #include <utility>
 
 #include <glm/geometric.hpp>
-#include <glm/gtx/euler_angles.hpp>
 #include <glm/gtx/vec_swizzle.hpp>
 
 #include "3D/InfluenceCircle.h"
@@ -31,7 +29,6 @@
 #include "Common/GUtilsAngle.h"
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
-#include "Common/PortableRotations.h"
 #include "ECS/Components/Dance.h"
 #include "ECS/Components/Disciple.h"
 #include "ECS/Components/Fire.h"
@@ -52,7 +49,6 @@
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/Dances.h"
 #include "ECS/GamePlayers.h"
-#include "ECS/LivingFacing.h"
 #include "ECS/PlayerColour.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/DanceSystemInterface.h"
@@ -81,6 +77,7 @@
 #include "Resources/ResourceManager.h"
 #include "Resources/ResourcesInterface.h"
 #include "VillagerAnimate.h"
+#include "VillagerBuild.h"
 #include "VillagerCover.h"
 #include "VillagerCreatureReactions.h"
 #include "VillagerDance.h"
@@ -100,8 +97,10 @@ namespace
 {
 /// A building at least this wide, in metres from its middle, is danced round by the large building dance
 constexpr float k_LargeBuildingRadius = 10.0f;
-/// A watching villager turns this much a turn towards what it watches: an eighth of a half turn
-constexpr float k_WatchTurn = std::numbers::pi_v<float> / 8.0f;
+/// A watching villager turns this many game angles (2048 to the circle) a turn towards what it watches: an eighth of a
+/// half turn. A quick look turns twice as far.
+constexpr int32_t k_WatchTurn = 0x80;
+constexpr int32_t k_QuickWatchTurn = 0x100;
 
 /// The share a town takes is padded by this, so that an empty town takes a share at all
 constexpr float k_BeliefShareSmall = 0.001f;
@@ -189,27 +188,10 @@ bool HoldsReaction(entt::entity villager)
 	return (state != nullptr && state->reaction != 0) || (fire != nullptr && fire->reaction != 0);
 }
 
-/// The villager turns towards a point by at most a step a turn: whether it now faces it
-bool TurnTowards(entt::entity villager, const glm::vec3& point, float step = k_WatchTurn)
+/// The villager turns towards a point by at most a step a turn, in whole game angles: whether it now faces it
+bool TurnTowards(entt::entity villager, const glm::vec3& point, int32_t step = k_WatchTurn)
 {
-	auto& registry = EntityRegistry();
-	auto& transform = registry.Get<Transform>(villager);
-	auto& wallHug = registry.Get<WallHug>(villager);
-	const auto diff = glm::xz(point) - glm::xz(transform.position);
-	if (diff == glm::vec2(0.0f))
-	{
-		return true;
-	}
-	const float wanted = portable_math::Atan2(diff.y, diff.x);
-	float turn = std::remainder(wanted - wallHug.yAngle, 2.0f * std::numbers::pi_v<float>);
-	const bool faces = std::abs(turn) < step;
-	if (!faces)
-	{
-		turn = std::copysign(step, turn);
-	}
-	// Turning the walker turns the way its walk faces as well
-	openblack::ecs::living_facing::FaceAngle(registry, villager, wallHug.yAngle + turn);
-	return faces;
+	return ecs::villager_build::FaceTowards(villager, glm::xz(point), step);
 }
 /// The awe of a town's people at the belief that it gained: the guidance sometimes plays a voice at the thing
 void BeliefVoiceOf(entt::entity source, entt::entity town, PlayerNames player, GuidanceAlignment alignment)
@@ -762,7 +744,7 @@ bool villager_reactions::ReactionValidate(LivingAction& action)
 
 bool villager_reactions::LookAt(entt::entity villager, const glm::vec3& point, LookSpeed speed)
 {
-	return TurnTowards(villager, point, speed == LookSpeed::Quick ? 2.0f * k_WatchTurn : k_WatchTurn);
+	return TurnTowards(villager, point, speed == LookSpeed::Quick ? k_QuickWatchTurn : k_WatchTurn);
 }
 
 uint32_t villager_reactions::Fainting(LivingAction& /*action*/)
