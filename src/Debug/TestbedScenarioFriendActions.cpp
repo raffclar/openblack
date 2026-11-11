@@ -138,6 +138,10 @@ void testbed_scenarios::AddFriendActionScenarios(std::vector<Scenario>& all)
 	                         "The tiger walks with a smile until it is within three and a half times its height of the "
 	                         "lion. It faces the lion for 1.4 seconds and waves at it. Only a creature can be the thing of "
 	                         "this wave when the tiger does the action again."));
+	all.push_back(TwoFriends("friends.wave_at_friend_looks", "The looks of a wave at a friend", "WaveAtFriend",
+	                         "The tiger asks the lion to play. On the turn after it gives the lion the order to wave, its "
+	                         "head turns to look straight ahead for one turn. The lion turns to the tiger and waves. A step "
+	                         "that waits for nothing after it ends keeps its look for one more turn."));
 	all.push_back(TwoFriends("friends.kiss", "Kiss a friend", "KissFriend",
 	                         "The tiger asks the lion to be its friend. The two walk to the two sides of the point halfway "
 	                         "between them and turn to face each other. Each kisses the other. The taller one bends down "

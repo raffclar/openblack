@@ -267,6 +267,9 @@ TEST(LeashOrders, TheFightWithItselfStartsAsEachFightStarts)
 	EXPECT_EQ(agenda[2].ordered->movement.kind, Movement::Kind::TurnToFaceObject);
 	EXPECT_EQ(agenda[2].ordered->movement.object, k_Creature);
 	EXPECT_EQ(agenda[2].ordered->seconds, 0.1f);
+	// The order looks at itself, so its head looks straight ahead
+	ASSERT_TRUE(agenda[2].gaze.has_value());
+	EXPECT_EQ(agenda[2].gaze->object, k_Creature);
 }
 
 TEST(LeashOrders, Agendas)
