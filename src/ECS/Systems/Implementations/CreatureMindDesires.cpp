@@ -385,8 +385,8 @@ creature_desire_sources::State SourceStateOf(entt::entity entity, const Creature
 	    .impressFromSeeing = mind.impressFromSeeing,
 	};
 	const auto* transform = registry.TryGet<const Transform>(entity);
-	// TODO(creature-hang-around): the game keeps the place where a creature without a temple was made as its home;
-	// without a home here, the sources of going home keep their own values
+	// Each creature gets a home when it is made: the pen of its temple, or the place where it was made. A creature
+	// that has no home keeps the values of its sources of going home.
 	if (const auto home = ecs::creature_home::HomeOf(registry, entity); home.has_value() && transform != nullptr)
 	{
 		state.homeDistance = gutils::GetDistanceInMetres(glm::xz(transform->position), glm::xz(*home));
