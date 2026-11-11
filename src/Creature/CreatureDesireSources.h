@@ -154,7 +154,8 @@ struct State
 };
 
 /// The wish to show how it feels: the sum of all its active desires times a third, held between 0 and 1. The game
-/// multiplies by a third. It does not divide by 3, so the result can be different in the last bit.
+/// multiplies by a third. It does not divide by 3, so the result can be different in the last bit. A sum that is not a
+/// number gives 0.
 constexpr float k_ManifestPart = 1.0f / 3.0f;
 [[nodiscard]] float ManifestState(float desireSum);
 
