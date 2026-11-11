@@ -15,6 +15,7 @@
 #include <limits>
 #include <optional>
 #include <system_error>
+#include <vector>
 
 #include <MindFile.h>
 #include <gtest/gtest.h>
@@ -252,4 +253,28 @@ TEST(CreatureMindFileBody, TheGamesMindsGiveTheirBodyValuesBack)
 		++checked;
 	}
 	EXPECT_GT(checked, 0u);
+}
+
+// The last of the seven counters of a file is the count of magic mushrooms that the creature ate. The body takes it
+// from the file and writes it back to the same place. A file older than version 17 has six counters only.
+TEST(CreatureMindFileBody, TheFileKeepsTheMagicMushroomsThatItAte)
+{
+	creaturemind::MindFileData file;
+	file.speciesRow = 2;
+	file.counters = {1, 2, 3, 4, 5, 6, 250};
+	const auto body = FromMindFile(file);
+	ASSERT_TRUE(body.has_value());
+	EXPECT_EQ(body->magicMushroomsEaten, std::optional<uint32_t>(250u));
+
+	creaturemind::MindFileData written;
+	written.counters = {9, 9, 9, 9, 9, 9, 9};
+	ToMindFile(*body, written);
+	EXPECT_EQ(written.counters, (std::vector<uint32_t> {9, 9, 9, 9, 9, 9, 250}));
+
+	creaturemind::MindFileData older;
+	older.speciesRow = 2;
+	older.counters = {1, 2, 3, 4, 5, 6};
+	const auto olderBody = FromMindFile(older);
+	ASSERT_TRUE(olderBody.has_value());
+	EXPECT_FALSE(olderBody->magicMushroomsEaten.has_value());
 }
