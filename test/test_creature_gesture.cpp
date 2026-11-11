@@ -102,6 +102,31 @@ TEST(CreaturePointing, TheTimeHoldsAtThePointUntilThePointEnds)
 	EXPECT_FLOAT_EQ(AdvanceTime(520.0f, 40.0f, 500.0f, true), 560.0f);
 }
 
+// The hold of a point counts whole turns: the seconds times the turns in a second, rounded to a float and cut towards
+// zero, in 16 bits. Each turn after the start takes one off, and the hold ends at zero.
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST(CreaturePointing, TheHoldCountsWholeTurnsFromTheStart)
+{
+	using namespace creature_pointing;
+	EXPECT_EQ(HoldTurns(1.0f, 10), 10);
+	EXPECT_EQ(HoldTurns(2.0f, 10), 20);
+	EXPECT_EQ(HoldTurns(0.3f, 10), 3);
+	// 0.7 as a float times 10 is just below 7, and the product rounds to 7 as a float before the cut
+	EXPECT_EQ(HoldTurns(0.7f, 10), 7);
+	EXPECT_EQ(HoldTurns(0.05f, 10), 0);
+	// The count is 16 bits: 7000 seconds give 70000 turns, which keep the low 16 bits
+	EXPECT_EQ(HoldTurns(7000.0f, 10), 70000 - 65536);
+
+	uint16_t left = 3;
+	EXPECT_FALSE(CountHoldTurn(left));
+	EXPECT_FALSE(CountHoldTurn(left));
+	EXPECT_TRUE(CountHoldTurn(left));
+	// A count of zero goes round to the largest count
+	left = 0;
+	EXPECT_FALSE(CountHoldTurn(left));
+	EXPECT_EQ(left, 65535);
+}
+
 // The point at the route: the arm moves on by the clip step until it is at the moment of the point or past it, and
 // round the animation once at most when the point ends
 TEST(CreaturePointing, ThePointAtTheRouteHoldsThenPlaysToItsEnd)

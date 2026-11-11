@@ -56,8 +56,13 @@ struct CreatureObjectAction
 	bool eventDone {false};
 	/// Pointing holds the arm at its point for a while: for the seconds that it was asked to point, or its usual while.
 	/// Pointing at a thing (the target), it points wherever the thing goes.
-	float holdMs {0.0f};
 	std::optional<float> pointSeconds;
+	/// Pointing: the turns that the arm holds its point. The count starts on the turn that the point starts. It decreases
+	/// by one on each next turn, also while the creature turns to the point. There is no count when the arm points until
+	/// it is told to stop.
+	std::optional<uint16_t> holdTurns;
+	/// Pointing: the turn that the point started is over, thus each turn from now decreases the count
+	bool holdCounting {false};
 	/// Pointing: the arm points until it is told to stop, as it does when it draws a gesture
 	bool pointsUntilTold {false};
 	/// Pointing: the point ends, and the arm plays to the end of its animations
