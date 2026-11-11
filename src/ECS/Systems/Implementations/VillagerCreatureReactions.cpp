@@ -22,7 +22,6 @@
 #include "Common/GameRandom.h"
 #include "Creature/CreatureDesires.h"
 #include "Creature/CreatureHelp.h"
-#include "Creature/CreatureSpells.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureObjectAction.h"
@@ -163,9 +162,9 @@ bool Invisible(entt::entity creature)
 	{
 		return false;
 	}
-	const auto phase = spells->spells[creature_spells::Spell::Invisible].phase;
-	return phase == creature_spells::Phase::Starting || phase == creature_spells::Phase::Holding ||
-	       phase == creature_spells::Phase::Finishing;
+	// The mark that the spell sets as it starts and clears as it finishes. A spell that stops with no reversion leaves
+	// the mark, and villagers then do not see the creature.
+	return spells->invisible;
 }
 
 /// How much the villager's town wants what the state it works towards does for it, times how much that state does

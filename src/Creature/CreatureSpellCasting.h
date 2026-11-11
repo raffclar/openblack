@@ -69,8 +69,12 @@ float MaintainSpell(Body& body, const Rates& rates, float amount, float energySh
 /// Whether it may cast a miracle that costs so much to make
 [[nodiscard]] bool CanCast(const Body& body, const Rates& rates, float costToCreate);
 
+/// The value kept between two limits as the game does it: a value that is not a number becomes the lower limit
+[[nodiscard]] float ClampLikeGame(float value, float least, float most);
 /// The stamina a miracle costs in a fight, by its cost to make
 [[nodiscard]] float StaminaCost(float costToCreate);
+/// The stamina that is left after it pays a cost in a fight, between 0 and 1. None when it can't pay.
+[[nodiscard]] std::optional<float> PayStamina(float stamina, float cost);
 /// Whether a creature may try a miracle it has seen so often, needing to see it so often to learn it
 [[nodiscard]] bool MayTry(float seen, float needed);
 /// Whether its try comes off, or fizzles

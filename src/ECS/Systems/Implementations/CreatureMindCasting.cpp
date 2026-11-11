@@ -625,12 +625,12 @@ bool CreatureMindSystem::TryMiracle(entt::entity creature, MagicType type, entt:
 	{
 		const float cost =
 		    creature_spell_casting::StaminaCost(magic::GetMagicEffectInfo(Locator::infoConstants::value(), type).costToCreate);
-		auto& stamina = fighting->fighter.stamina;
-		if (stamina < cost)
+		const auto left = creature_spell_casting::PayStamina(fighting->fighter.stamina, cost);
+		if (!left.has_value())
 		{
 			return false;
 		}
-		stamina = std::clamp(stamina - cost, 0.0f, 1.0f);
+		fighting->fighter.stamina = *left;
 	}
 	if (!StartTry(creature, type, target))
 	{
