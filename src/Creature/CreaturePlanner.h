@@ -156,6 +156,17 @@ enum class PlanOrder : uint8_t
 	PartThenAction,
 };
 
+/// A whole thing that the plan always acts on, as a desire about a creature does: the creature is the thing acted on
+struct WholeActedOn
+{
+	/// The whole thing as the part that the action acts on
+	ObjectCandidate part;
+	/// How useful the whole thing is to act on for the desire. The score of each action counts it.
+	float usefulness {0.0f};
+	/// Whether an action can act on the whole thing. The plan does not examine the other actions.
+	std::function<bool(const ActionCandidate&)> suits;
+};
+
 /// What the plan for a desire needs
 struct DesirePlanning
 {
@@ -186,6 +197,8 @@ struct DesirePlanning
 	/// takes the first place. Else the first action of the town takes it. The planner looks at the first place one time
 	/// before it examines the list, and one more time for each action that it weighs.
 	std::function<bool()> healsFirst;
+	/// When the action comes before the part: the whole thing that each action acts on, with no search for a part
+	std::optional<WholeActedOn> wholeActedOn;
 };
 
 /// The plan for a desire: the action, the thing that it acts on, and the thing that it uses. None when no action can be

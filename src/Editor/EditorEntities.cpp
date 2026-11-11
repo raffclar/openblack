@@ -20,6 +20,7 @@
 #include "3D/L3DMesh.h"
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
+#include "Creature/CreatureTurnPose.h"
 #include "Creature/LeashRules.h"
 #include "ECS/Archetypes/AbodeArchetype.h"
 #include "ECS/Archetypes/CreatureArchetype.h"
@@ -34,6 +35,7 @@
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/Creature.h"
+#include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/Feature.h"
 #include "ECS/Components/Field.h"
@@ -44,6 +46,7 @@
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/ScriptHighlight.h"
+#include "ECS/Components/ShownCreatureFace.h"
 #include "ECS/Components/SpellDispenser.h"
 #include "ECS/Components/StoragePit.h"
 #include "ECS/Components/Town.h"
@@ -51,6 +54,7 @@
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/TurnAngles.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/CreaturePlacement.h"
 #include "ECS/Map.h"
 #include "ECS/MobileObjectRecord.h"
 #include "ECS/PlacedTurn.h"
@@ -576,6 +580,41 @@ entt::entity Place(const PlaceItem& item, glm::vec3 position, float yawRadians)
 	return entt::null;
 }
 
+namespace
+{
+/// The placement of a creature's body in the world, when the creature has turn poses
+std::optional<glm::mat4> PlacementOfPosed(const ecs::Registry& registry, entt::entity entity, const Transform& transform)
+{
+	if (!registry.AllOf<Creature, CreatureAnimation>(entity))
+	{
+		return std::nullopt;
+	}
+	return ecs::creature_placement::PlacementOf(registry, entity, transform);
+}
+
+/// The drawn body of a creature goes between the poses of its last two turns. When the editor turns or puts the body,
+/// each pose goes with the body. If not, the drawn body is a blend of two headings and is too narrow until the next turn.
+void KeepTurnPoses(ecs::Registry& registry, entt::entity entity, const std::optional<glm::mat4>& placedBefore)
+{
+	if (!placedBefore.has_value())
+	{
+		return;
+	}
+	const auto placedAfter = ecs::creature_placement::PlacementOf(registry, entity, registry.Get<Transform>(entity));
+	auto& animation = registry.Get<CreatureAnimation>(entity);
+	creature_turn_pose::FollowPlacement(animation.olderTurnPose, *placedBefore, placedAfter);
+	creature_turn_pose::FollowPlacement(animation.newerTurnPose, *placedBefore, placedAfter);
+	animation.lastTurnBones.resize(animation.newerTurnPose.size());
+	std::ranges::transform(animation.newerTurnPose, animation.lastTurnBones.begin(),
+	                       [](const glm::mat4& bone) { return glm::vec3(bone[3]); });
+	if (auto* shown = registry.TryGet<ShownCreatureFace>(entity))
+	{
+		creature_turn_pose::FollowPlacement(shown->olderTurnPose, *placedBefore, placedAfter);
+		creature_turn_pose::FollowPlacement(shown->newerTurnPose, *placedBefore, placedAfter);
+	}
+}
+} // namespace
+
 std::optional<Pose> PoseOf(const ecs::Registry& registry, entt::entity entity)
 {
 	const auto* transform = registry.TryGet<const Transform>(entity);
@@ -598,6 +637,7 @@ void SetPose(entt::entity entity, const Pose& pose)
 	{
 		return;
 	}
+	const auto placedBefore = PlacementOfPosed(registry, entity, registry.Get<Transform>(entity));
 	MoveTo(entity, pose.position);
 	auto& transform = registry.Get<Transform>(entity);
 	transform.rotation = pose.rotation;
@@ -619,6 +659,7 @@ void SetPose(entt::entity entity, const Pose& pose)
 		locomotion->fromHeading = heading;
 		locomotion->toHeading = heading;
 	}
+	KeepTurnPoses(registry, entity, placedBefore);
 	registry.SetDirty();
 }
 
@@ -804,6 +845,7 @@ void Turn(entt::entity entity, float radians)
 	{
 		return;
 	}
+	const auto placedBefore = PlacementOfPosed(registry, entity, *transform);
 	// A thing that can lean keeps its leans, and turns about the upright axis by the game's turn
 	if (ecs::placed_turn::CanLean(registry, entity))
 	{
@@ -822,6 +864,7 @@ void Turn(entt::entity entity, float radians)
 		locomotion->fromHeading = heading;
 		locomotion->toHeading = heading;
 	}
+	KeepTurnPoses(registry, entity, placedBefore);
 	registry.SetDirty();
 }
 

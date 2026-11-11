@@ -633,7 +633,7 @@ std::optional<std::vector<creature_mind::Step>> TownHelpAgenda(const Executor& e
 		{
 			return std::nullopt;
 		}
-		return help::DropCowInStore(situation.holdingCow ? std::nullopt : situation.instrument, thing);
+		return help::DropCowInStore(situation.holdingCow ? std::nullopt : situation.instrument, thing, situation.height);
 	case Build::MakeBreeder:
 		return help::MakeBreeder(thing);
 	case Build::TakeVillagerHome:
@@ -1216,8 +1216,7 @@ std::optional<std::vector<creature_mind::Step>> creature_plan_actions::Agenda(co
 		return creature_mind::EatFromStoragePit(situation.storeFood->pile, situation.storeFood->point, situation.height);
 	case Build::EatFromField:
 	case Build::EatFromTree:
-		// TODO(creature-eat-from-stores): When the hand holds food, the game makes no steps for these two actions. The
-		// result of that empty agenda is not known, thus the creature does not do the action.
+		// With something it can eat in its hand already, it makes no steps, and so decides again at once
 		if (situation.holdingEatable)
 		{
 			return std::nullopt;
@@ -1283,14 +1282,15 @@ std::optional<std::vector<creature_mind::Step>> creature_plan_actions::Agenda(co
 	case Build::PooAtHome:
 		return creature_mind::PooAtHome(*situation.home, situation.height, situation.self, random);
 	case Build::SleepByObject:
-		// Without a clear place by the thing, it sleeps at home instead
+		// Without a clear place by the thing, it sleeps at home instead. Without a home, it sleeps where it stands, as the
+		// sleep on the spot does. In each case the draw for the yawn comes first.
 		if (situation.clearArea.has_value())
 		{
 			return creature_mind::SleepByObject(*situation.clearArea, situation.radius, random);
 		}
 		if (!situation.home.has_value())
 		{
-			return std::nullopt;
+			return creature_mind::Sleep(random);
 		}
 		return creature_mind::SleepAtHome(*situation.home, situation.height, random);
 	case Build::SmileAt:
@@ -1580,9 +1580,11 @@ std::optional<std::vector<creature_mind::Step>> creature_plan_actions::Agenda(co
 		                                                *situation.eye);
 	case Build::WatchPlayer:
 		return creature_player_attention::WatchPlayer();
+	case Build::BeCrossWithPlayer:
+		// The game builds this agenda with no test of the camera, thus the draw for the sign comes first
+		return creature_player_attention::BeCrossWithPlayer(situation.camera, situation.height, random);
 	case Build::GoToMiddleOfScreen:
 	case Build::FollowPlayer:
-	case Build::BeCrossWithPlayer:
 	case Build::BeSillyWithPlayer:
 		// The creature needs the camera to turn to it
 		if (!situation.camera.has_value())
@@ -1595,8 +1597,6 @@ std::optional<std::vector<creature_mind::Step>> creature_plan_actions::Agenda(co
 			return creature_player_attention::GoToMiddleOfScreen(*situation.camera, situation.height);
 		case Build::FollowPlayer:
 			return creature_player_attention::FollowPlayer(*situation.camera, situation.height);
-		case Build::BeCrossWithPlayer:
-			return creature_player_attention::BeCrossWithPlayer(*situation.camera, situation.height, random);
 		default:
 			return creature_player_attention::BeSillyWithPlayer(*situation.camera, random);
 		}

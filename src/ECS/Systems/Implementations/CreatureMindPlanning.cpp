@@ -1791,6 +1791,21 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 			order = desire == Desire::Anger ? creature_planner::PlanOrder::PartThenAction
 			                                : creature_planner::PlanOrder::ActionThenPart;
 		}
+		// A desire about a creature acts on the creature itself. Each action counts how useful the creature is to act on,
+		// and only an action that can act on the creature is examined.
+		std::optional<creature_planner::WholeActedOn> wholeActedOn;
+		if (order == creature_planner::PlanOrder::ActionThenPart && activity->kind == creature_activity::Whole::Creature)
+		{
+			const auto whole = activity->whole;
+			wholeActedOn = creature_planner::WholeActedOn {
+			    .part = parts.empty() ? creature_planner::ObjectCandidate {.id = entt::to_integral(whole)} : parts.front(),
+			    .usefulness = ObjectToActOnUsefulness(creature, mind, desire, whole),
+			    .suits =
+			        [&suitsPart, whole](const creature_planner::ActionCandidate& candidate) {
+				        return suitsPart(candidate, entt::to_integral(whole));
+			        },
+			};
+		}
 		// A desire of the round plans with its own value, also when it was turned off or held back after the round started
 		auto best = creature_planner::PlanDesire({
 		    .desire = desire,
@@ -1805,6 +1820,7 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 		    .suits = suitsPart,
 		    .onlyActsOnThings = leashTarget.has_value(),
 		    .healsFirst = healsFirst,
+		    .wholeActedOn = wholeActedOn,
 		});
 		if (best.has_value() && activity.has_value())
 		{

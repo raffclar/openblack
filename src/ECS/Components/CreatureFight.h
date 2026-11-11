@@ -263,6 +263,7 @@ struct CreatureKnockedOut
 		Waiting,
 		/// Lying until the spells on it have worn off
 		WaitingForSpells,
+		/// Starting the sleep pose when its body is free, then healing in the pose until it is better
 		Resting,
 		GettingUp,
 	};
@@ -278,6 +279,8 @@ struct CreatureKnockedOut
 	bool handsChecked {false};
 	/// Decided as it faints: whether it rests to get better before it gets up
 	bool rest {false};
+	/// The rest pose started. Until the body is free to start it, the creature does not heal.
+	bool restPosed {false};
 	/// Only a script kills a creature for good: it never gets up
 	bool permanent {false};
 	/// Where it is taken, if it is taken home

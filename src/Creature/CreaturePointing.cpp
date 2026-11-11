@@ -119,6 +119,19 @@ std::pair<int32_t, int32_t> creature_pointing::RoutePointEndSounds(float timeMs,
 	return {from, std::min(static_cast<int32_t>(endDurationMs), from + stepMs)};
 }
 
+uint16_t creature_pointing::HoldTurns(float seconds, uint32_t turnsPerSecond)
+{
+	// The product rounds to a float one time, and the cut takes the low 16 bits of the whole number
+	const float turns = x87::Mul(static_cast<double>(seconds), static_cast<double>(turnsPerSecond));
+	return static_cast<uint16_t>(static_cast<int64_t>(turns));
+}
+
+bool creature_pointing::CountHoldTurn(uint16_t& turnsLeft)
+{
+	--turnsLeft;
+	return turnsLeft == 0;
+}
+
 float creature_pointing::AdvanceTime(float timeMs, float stepMs, float pointMs, bool ending)
 {
 	if (ending || timeMs < pointMs)

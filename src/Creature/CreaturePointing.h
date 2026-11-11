@@ -71,6 +71,13 @@ inline constexpr float k_TurnLimit = 0.4712389409542084f;
 /// over before the weights.
 [[nodiscard]] std::array<float, 4> Weights(const Aim& aim, bool left);
 
+/// The turns that the arm holds a point for the seconds that the creature points. The game multiplies the seconds by the
+/// turns in a second, rounds the product to a float and cuts it towards zero. It keeps the count in 16 bits, thus a count
+/// of zero becomes the largest count after the first turn.
+[[nodiscard]] uint16_t HoldTurns(float seconds, uint32_t turnsPerSecond);
+/// One turn of the hold, on each turn after the turn that the point starts. Returns true when the hold ends in this turn.
+[[nodiscard]] bool CountHoldTurn(uint16_t& turnsLeft);
+
 /// The time in the animations after a step. While the creature points, the time moves on until it gets to the
 /// moment of the point, and stays there. When the point ends, the time moves on freely.
 [[nodiscard]] float AdvanceTime(float timeMs, float stepMs, float pointMs, bool ending);

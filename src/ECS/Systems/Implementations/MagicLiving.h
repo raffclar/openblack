@@ -55,11 +55,13 @@ void SetLife(entt::entity entity, float life);
 
 /// An effect about to reach a creature: whether the creature takes it its own way, so that its life is left alone. A
 /// creature is never harmed by its own miracle. In a fight a miracle that does no harm reaches it only from itself or its
-/// own player's hand; one that reaches it makes it reel, a heal gives back the health it fights with and harm takes it
-/// (a tenth of either while it blocks), and its life is untouched. Out of a fight harm from another player's miracle
-/// frightens and angers it, and it then takes the effect as anything else does.
-[[nodiscard]] bool TakesEffectItsOwnWay(entt::entity entity, const magic::EffectValues& values,
-                                        const magic::EffectSource& source);
+/// own player's hand; one that reaches it makes it reel, a heal gives back the health it fights with and harm takes it,
+/// and its life is untouched. Out of a fight harm from another player's miracle frightens and angers it, and it then
+/// takes the effect as anything else does.
+///
+/// The burn of the effect heats the creature once, and once more out of a fight; the life of the creature takes the last
+/// heat. A creature that blocks in a fight changes the effect to a tenth of its values, for the things after it too.
+[[nodiscard]] bool TakesEffectItsOwnWay(entt::entity entity, magic::EffectValues& values, const magic::EffectSource& source);
 /// What more an effect does to a creature it reached, out of a fight: a heal mends its cuts and scars, and a miracle a
 /// creature cast, itself too, changes how nice it finds that creature, no more often than once a minute
 void AfterEffect(entt::entity entity, const magic::EffectValues& values, const magic::EffectSource& source);

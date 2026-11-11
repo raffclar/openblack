@@ -570,13 +570,22 @@ TEST(CreatureActionAgendas, SleepingByAThingGoesToItsClearPlaceFirst)
 	EXPECT_EQ(SleepByObject({}, 6.0f, NeverFirst).size(), 4);
 }
 
-// Without a clear place by the thing it sleeps at home, and without either it can't
+// Without a clear place by the thing it sleeps at home, and without either it sleeps where it stands. Each way draws
+// for the yawn first, as the game's sleep at home does.
 TEST(CreatureActionAgendas, SleepingByAThingFallsBackToHome)
 {
 	const auto* sleep = plan_actions::For("SleepByObject");
 	ASSERT_NE(sleep, nullptr);
-	plan_actions::Situation situation {.controlledByScript = true, .radius = 6.0f, .height = 15.0f};
-	EXPECT_FALSE(plan_actions::Agenda(*sleep, 3, {}, situation, NeverFirst).has_value());
+	plan_actions::Situation situation {.radius = 6.0f, .height = 15.0f};
+	std::vector<uint32_t> draws;
+	const auto counted = [&draws](uint32_t range) {
+		draws.push_back(range);
+		return NeverFirst(range);
+	};
+	const auto onTheSpot = plan_actions::Agenda(*sleep, 3, {}, situation, counted);
+	ASSERT_TRUE(onTheSpot.has_value());
+	EXPECT_EQ(draws, std::vector<uint32_t> {2});
+	EXPECT_TRUE(std::ranges::none_of(*onTheSpot, [](const Step& step) { return step.kind == Step::Kind::Move; }));
 	situation.home = glm::vec2(100.0f, 200.0f);
 	const auto atHome = plan_actions::Agenda(*sleep, 3, {}, situation, NeverFirst);
 	ASSERT_TRUE(atHome.has_value());
@@ -634,13 +643,17 @@ TEST(CreatureActionAgendas, AFartIsDoneByTheThingThatThePlannerGives)
 TEST(CreatureActionAgendas, ExaminingByPickingUpKeepsWhatItHolds)
 {
 	const auto empty = ExamineByPickingUp(4, false, NeverFirst);
-	ASSERT_EQ(empty.size(), 4);
+	ASSERT_EQ(empty.size(), 5);
 	EXPECT_EQ(empty[0].order.kind, ObjectOrder::Kind::PickUp);
 	EXPECT_EQ(empty[0].order.object, 4u);
 	const auto holding = ExamineByPickingUp(4, true, NeverFirst);
-	ASSERT_EQ(holding.size(), 3);
+	ASSERT_EQ(holding.size(), 4);
 	EXPECT_EQ(holding[0].order.kind, ObjectOrder::Kind::Keep);
 	EXPECT_EQ(holding[0].effect, Effect::Examined);
+	// After the look at the thing, the eyes stop their sweep before it lets the thing go
+	EXPECT_EQ(holding[1].kind, Step::Kind::Dance);
+	EXPECT_EQ(holding[1].dance.kind, DanceOrder::Kind::StopLooking);
+	EXPECT_EQ(holding[2].kind, Step::Kind::Object);
 }
 
 // After it releases a thing that it picked up to examine, it knows the kind of thing, as after it examines by looking

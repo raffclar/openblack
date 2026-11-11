@@ -17,6 +17,7 @@
 #include <random>
 #include <vector>
 
+#include <glm/geometric.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/mat4x4.hpp>
 #include <gtest/gtest.h>
@@ -96,6 +97,36 @@ TEST(CreatureTurnPose, BonesInTheWorldGoBackToTheSpaceOfTheMesh)
 			}
 		}
 	}
+}
+
+TEST(CreatureTurnPose, PosesThatFollowATurnOfThePlacementKeepTheWidthOfTheDrawnBody)
+{
+	// A body turned by half a turn between two turn poses
+	const auto before = glm::translate(glm::mat4(1.0f), glm::vec3(100.0f, 5.0f, -40.0f));
+	const auto after = glm::rotate(before, 2.6f, glm::vec3(0.0f, 1.0f, 0.0f));
+	const std::vector bones {glm::translate(glm::mat4(1.0f), glm::vec3(1.0f, 0.0f, 0.0f)),
+	                         glm::translate(glm::mat4(1.0f), glm::vec3(-1.0f, 0.0f, 0.0f))};
+	auto older = ToWorld(bones, before);
+	auto newer = ToWorld(bones, before);
+	FollowPlacement(older, before, after);
+	FollowPlacement(newer, before, after);
+	// Each pose is now the pose of the bones at the new placement
+	const auto expected = ToWorld(bones, after);
+	for (size_t bone = 0; bone < bones.size(); ++bone)
+	{
+		for (glm::length_t column = 0; column < 4; ++column)
+		{
+			for (glm::length_t row = 0; row < 4; ++row)
+			{
+				EXPECT_NEAR(older[bone][column][row], expected[bone][column][row], 1e-4f);
+				EXPECT_NEAR(newer[bone][column][row], expected[bone][column][row], 1e-4f);
+			}
+		}
+	}
+	// Half way through the turn the drawn body has its full width
+	std::vector<glm::mat4> drawn(bones.size());
+	Blend(older, newer, 0.5f, drawn);
+	EXPECT_NEAR(glm::length(glm::vec3(drawn[0][3]) - glm::vec3(drawn[1][3])), 2.0f, 1e-4f);
 }
 
 TEST(CreatureTurnPose, GameRulesReadTheNewestTurnPoseInTheWorld)

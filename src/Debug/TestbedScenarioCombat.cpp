@@ -102,6 +102,31 @@ void testbed_scenarios::AddCombat(std::vector<Scenario>& all)
 	    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f), Fight(Kind::FightAuto, 0, 1, 0.2f)},
 	});
 
+	all.push_back({
+	    .id = "combat.fireball_sets_fighter_alight",
+	    .name = "A fireball sets a fighting tiger alight",
+	    .facet = Facet::Combat,
+	    .description = "Two tigers duel by themselves. A third tiger to the south knows the fireball. Ten seconds after "
+	                   "the fight starts, the third tiger casts a fireball at the blue tiger.",
+	    .expected = "The fireball takes some fight health from the blue tiger, and its burn heats the blue tiger, which "
+	                "catches fire and burns in the duel. The fire takes more fight health and life while it burns. The "
+	                "inspector shows a Fire on the blue tiger.",
+	    .framing = ringside,
+	    .creatures = {red(PlayerNames::PLAYER_ONE, 0.6f, -0.45f), blue(PlayerNames::PLAYER_TWO, 0.6f, -0.45f),
+	                  Content(CreatureType::Tiger, {0.0f, -10.0f}, 0.0f, "caster")},
+	    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f),
+	                 Fight(Kind::FightAuto, 0, 1, 0.2f),
+	                 {.kind = Kind::KnowMiracle,
+	                  .creature = 2,
+	                  .delaySeconds = 0.5f,
+	                  .value = static_cast<size_t>(MagicType::Fireball)},
+	                 {.kind = Kind::CastMiracle,
+	                  .creature = 2,
+	                  .delaySeconds = 8.0f,
+	                  .value = static_cast<size_t>(MagicType::Fireball),
+	                  .atCreature = 1}},
+	});
+
 	// The first land's Ogre, and creatures on later lands, heal by a script after they win a fight: the script gives the
 	// victor a hundredth of life every six seconds, until it is full or it fights again
 	const auto healScript = [](float delay) {
@@ -910,8 +935,9 @@ void testbed_scenarios::AddCombat(std::vector<Scenario>& all)
 	    .facet = Facet::Combat,
 	    .description = "A worn tiger, life 0.6 and exhaustion 0.7, is given a home where it stands, walks 90 units away "
 	                   "and is knocked out there as a fight's loser is.",
-	    .expected = "It faints and lies out cold with its eyes closed for 12 seconds, is taken home, lies there a few "
-	                "seconds more, then rests until it is no more exhausted than 0.3, and gets up.",
+	    .expected = "It faints and lies out cold with its eyes closed for 12 seconds and is taken home. The move home "
+	                "stands its body, and it stands there with its eyes closed for a few seconds. Then it lies down in "
+	                "the sleep pose, heals until its life is full and it is not tired, and gets up from the sleep pose.",
 	    .framing = {.shot = Shot::Overview, .include = {{90.0f, 30.0f}, {-20.0f, 0.0f}}, .distance = 0.6f},
 	    .creatures = {worn},
 	    .commands = {{.kind = Kind::ConfineToHome, .delaySeconds = 0.5f, .radius = 400.0f},

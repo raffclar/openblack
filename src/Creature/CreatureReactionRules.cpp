@@ -185,6 +185,7 @@ std::optional<Setup> creature_reaction::SetupFor(Reaction type, bool thingInTheA
 	case Reaction::Fainting:
 		return Setup {.plan = Plan {.desire = Desire::Tiredness, .action = "SleepAtHome", .onSelf = true}};
 	case Reaction::Confused:
+		// The game plans the examine under the desire to sleep, as for the fainting reaction (vanilla-bugs 1916)
 		return Setup {.comesAcross = true, .plan = Plan {.desire = Desire::Tiredness, .action = "ExamineByLooking"}};
 	case Reaction::ReactToFight:
 	case Reaction::ReactToWood:

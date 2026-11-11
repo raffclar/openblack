@@ -40,6 +40,11 @@ bool EndsHeldInTemple(const Settings& settings, bool clockHeld, bool networkGame
 	return settings.untilTurn.has_value() && clockHeld && !networkGame && scenarioGaveAll;
 }
 
+bool EndsAtGameOver(const Settings& settings, bool clockHeld, bool gameOver)
+{
+	return settings.untilTurn.has_value() && clockHeld && gameOver;
+}
+
 bool SkipsHeldFrame(bool steppedByTool, bool paused, bool workWaits)
 {
 	return steppedByTool && paused && !workWaits;

@@ -595,7 +595,7 @@ TEST(CreatureIdleMind, AgendasPullTheFacesOfWhatTheyDo)
 	EXPECT_EQ(creature_mind::Hurl(1, {}, Always(1)).back().face, Cue::Anger);
 	EXPECT_EQ(creature_mind::DestroyThing(1).back().face, Cue::Anger);
 	const auto examine = creature_mind::ExamineByPickingUp(1, false, Always(0));
-	ASSERT_EQ(examine.size(), 4u);
+	ASSERT_EQ(examine.size(), 5u);
 	EXPECT_EQ(examine[0].face, Cue::None);
 	EXPECT_EQ(examine[1].face, Cue::Curiosity);
 	EXPECT_EQ(examine[2].face, Cue::None);

@@ -81,6 +81,7 @@
 #include "Magic/WaterRules.h"
 #include "MagicLiving.h"
 #include "MagicSystem.h"
+#include "ObjectMeasures.h"
 #include "Resources/ResourcesInterface.h"
 #include "Sound/GameSoundEffects.h"
 #include "Sound/SoundId.h"
@@ -191,6 +192,12 @@ std::optional<magic::EffectReceiver> ReceiverOf(entt::entity entity)
 		receiver.alignmentType = info->alignmentType;
 		receiver.crushable = true;
 		receiver.creature = registry.AllOf<Creature>(entity);
+		// A creature is as wide as its body across the ground and as tall as its size, not as its model's box
+		if (receiver.creature)
+		{
+			receiver.radius = object_measures::TwoDRadius(registry, entity);
+			receiver.height = object_measures::Height(registry, entity);
+		}
 	}
 	else if (registry.AllOf<Temple>(entity))
 	{
@@ -364,15 +371,16 @@ bool GameMagicWorld::ApplyEffect(entt::entity object, const magic::EffectValues&
 	{
 		return false;
 	}
-	// A creature takes some effects its own way, such as a heal in a fight
-	if (magic_living::TakesEffectItsOwnWay(object, values, source))
+	// A creature takes some effects its own way, such as a heal in a fight. A creature that blocks makes the effect less.
+	auto taken = values;
+	if (magic_living::TakesEffectItsOwnWay(object, taken, source))
 	{
 		return true;
 	}
 	const auto& info = Locator::infoConstants::value();
-	const std::array outcomes {magic::ApplyEffectTo(values, *receiver, info.alignment,
+	const std::array outcomes {magic::ApplyEffectTo(taken, *receiver, info.alignment,
 	                                                info.player.applyEffectAlignmentChangeAddition, AlignmentOf(source))};
-	Apply(values, outcomes, source);
+	Apply(taken, outcomes, source);
 	return receiver->life.has_value();
 }
 
@@ -387,15 +395,18 @@ std::vector<entt::entity> GameMagicWorld::ApplyEffectAt(glm::vec3 point, const m
 	const bool breaksBuildings = values.IsDestructive();
 	ecs::GamePhysicsHooksWorld hooksWorld;
 	std::vector<entt::entity> reached;
+	// All the things that the effect reaches share one effect. A creature that blocks in a fight makes it a tenth, also
+	// for the things that take it after the creature.
+	auto shared = values;
 	for (const auto& receiver : receivers)
 	{
-		if (!magic::Reaches(values, point, receiver))
+		if (!magic::Reaches(shared, point, receiver))
 		{
 			continue;
 		}
 		const auto taker = ecs::temple_heart_pass_on::TakerOf(hooksWorld, receiver.entity, breaksBuildings);
 		// A creature takes some effects its own way, such as a heal in a fight
-		if (!EntityRegistry().Valid(taker) || magic_living::TakesEffectItsOwnWay(taker, values, source))
+		if (!EntityRegistry().Valid(taker) || magic_living::TakesEffectItsOwnWay(taker, shared, source))
 		{
 			continue;
 		}
@@ -404,9 +415,9 @@ std::vector<entt::entity> GameMagicWorld::ApplyEffectAt(glm::vec3 point, const m
 		{
 			continue;
 		}
-		const std::array outcomes {magic::ApplyEffectTo(values, *takerReceiver, info.alignment,
+		const std::array outcomes {magic::ApplyEffectTo(shared, *takerReceiver, info.alignment,
 		                                                info.player.applyEffectAlignmentChangeAddition, casterAlignment)};
-		Apply(values, outcomes, source);
+		Apply(shared, outcomes, source);
 		reached.push_back(taker);
 	}
 	return reached;
@@ -670,10 +681,11 @@ void GameMagicWorld::Water(const magic::WaterDrop& drop)
 					{
 						continue;
 					}
-					// A field counts as 5 m across whatever its size; anything else by its model
+					// A field counts as 5 m across whatever its size, a creature by its body, anything else by its model
 					const float across = gutils::GetDistance(transform->position, drop.position);
-					const float radius =
-					    registry.AllOf<Field>(object) ? k_FieldWaterRadius : ecs::world_objects::SizeOf(object).radius;
+					const float radius = registry.AllOf<Field>(object)      ? k_FieldWaterRadius
+					                     : registry.AllOf<Creature>(object) ? object_measures::TwoDRadius(registry, object)
+					                                                        : ecs::world_objects::SizeOf(object).radius;
 					if (across - radius < drop.reach)
 					{
 						WaterObject(object, drop);
