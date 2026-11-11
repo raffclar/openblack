@@ -14,6 +14,7 @@
 #include "3D/TempleInteriorInterface.h"
 #include "Camera/Camera.h"
 #include "ECS/Archetypes/VillageLightArchetype.h"
+#include "ECS/OtherPlayerSparkles.h"
 #include "ECS/Systems/AdvisorVoiceSystemInterface.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
@@ -198,6 +199,8 @@ void PlayFrameEffects(FrameViewInterface& view)
 		const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
 		const auto milliseconds = inTemple ? clock.GetFrameRealTime() : clock.GetFrameGameTime();
 		Locator::liquidParticleSystem::value().UpdateFrame(liquid_particles::FrameSeconds(milliseconds.count()), true);
+		// The symbols of the gods over the sparkles of the other players turn by the frame's game time
+		ecs::other_player_sparkles::TurnSymbols(static_cast<int32_t>(clock.GetFrameGameTime().count()));
 	}
 	{
 		// The sparkles that mark the player's queued fight moves. The hand goes to a sparkle in the next frame.

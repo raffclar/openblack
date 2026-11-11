@@ -1555,6 +1555,14 @@ set_tests_properties(
   PROPERTIES ENVIRONMENT
              "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
 )
+openblack_setup_and_add_test(
+  test_oracle_creature_maths oracle/test_oracle_creature_maths.cpp
+)
+set_tests_properties(
+  test_oracle_creature_maths
+  PROPERTIES ENVIRONMENT
+             "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)
 openblack_setup_and_add_test(test_world_save_forget test_world_save_forget.cpp)
 target_link_libraries(test_world_save_forget PRIVATE dance)
 openblack_setup_and_add_test(test_dead_tree_lean test_dead_tree_lean.cpp)

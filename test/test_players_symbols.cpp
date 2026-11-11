@@ -140,7 +140,8 @@ TEST(PlayersSymbols, WithNoProfileTheSheetIsTheFilesSheet)
 
 TEST(PlayersSymbols, EachComputerPlayerTakesTheGodBeforeItsNumber)
 {
-	// The second player takes Lethys and the third player takes Khazar, as on the second land
+	// On the second land the second player is Khazar and takes the first picture, and the third player is Lethys and
+	// takes the second picture. The names of these two files are the other way round.
 	EXPECT_EQ(k_GodPictures.at(GodPictureOf(1, 2)), "Lethis");
 	EXPECT_EQ(k_GodPictures.at(GodPictureOf(2, 2)), "Kazarr");
 	EXPECT_EQ(k_GodPictures.at(GodPictureOf(3, 4)), "nemesis");
@@ -166,7 +167,7 @@ TEST(PlayersSymbols, EachComputerGodAfterTheSeventhTakesNemesis)
 	}
 }
 
-TEST(PlayersSymbols, OnTheThirdAndFifthLandsTheSecondPlayerTakesKhazarAndNemesis)
+TEST(PlayersSymbols, OnTheThirdAndFifthLandsTheSecondPlayerTakesLethysAndNemesis)
 {
 	EXPECT_EQ(k_GodPictures.at(GodPictureOf(1, 3)), "Kazarr");
 	EXPECT_EQ(k_GodPictures.at(GodPictureOf(1, 5)), "nemesis");

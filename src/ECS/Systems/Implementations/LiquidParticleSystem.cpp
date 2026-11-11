@@ -26,6 +26,7 @@
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "Locator.h"
 #include "Particles/ParticleDrawFrame.h"
+#include "Particles/PlayerSparkles.h"
 
 using namespace openblack;
 using namespace openblack::ecs::systems;
@@ -37,6 +38,9 @@ namespace
 /// The particles are drawn from this sheet, eight frames a row
 constexpr entt::hashed_string k_Sheet = entt::hashed_string("raw/blobs");
 constexpr entt::hashed_string k_SheetAlpha = entt::hashed_string("raw/blobsa");
+/// The players' symbols, one square for each player
+constexpr entt::hashed_string k_Symbols = entt::hashed_string("raw/PlayersSymbols");
+constexpr entt::hashed_string k_SymbolsAlpha = entt::hashed_string("raw/PlayersSymbolsa");
 
 /// The dust and the smoke: the blobs sheet, blended over what is behind, writing no depth
 particles::Creator MakePuffCreator()
@@ -115,6 +119,21 @@ void LiquidParticleSystem::SetPlayerPoint(liquid_particles::Interface interface,
 	_playerPools[interface].point = point;
 }
 
+void LiquidParticleSystem::TurnPlayerSymbols(int32_t milliseconds,
+                                             const std::function<bool(liquid_particles::Interface)>& shows)
+{
+	for (auto& [interface, pool] : _playerPools)
+	{
+		pool.symbolAngle.reset();
+		if (pool.particles.empty() || !shows(interface))
+		{
+			continue;
+		}
+		_symbolAngle = player_sparkles::SymbolAngle(_symbolAngle, milliseconds);
+		pool.symbolAngle = _symbolAngle;
+	}
+}
+
 std::span<const Particle> LiquidParticleSystem::PlayerParticles(liquid_particles::Interface interface) const
 {
 	const auto found = _playerPools.find(interface);
@@ -177,9 +196,29 @@ void LiquidParticleSystem::CollectDrawFrame(particles::draw::Frame& frame) const
 	{
 		CollectPool(frame, _pool, _pool.front().position);
 	}
-	for (const auto& [player, pool] : _playerPools)
+	for (const auto& [interface, pool] : _playerPools)
 	{
 		CollectPool(frame, pool.particles, pool.point);
+		if (pool.particles.empty() || !pool.symbolAngle.has_value())
+		{
+			continue;
+		}
+		// The symbol of the god of the interface, drawn after its particles
+		const particles::draw::Sources sources {
+		    .textures = [](std::string_view /*texture*/) -> std::optional<std::pair<entt::id_type, entt::id_type>> {
+			    return std::pair {k_Symbols.value(), k_SymbolsAlpha.value()};
+		    },
+		    .symbolsInARow = static_cast<int>(players_symbols::SquaresInARowFor(ecs::game_players::Count())),
+		};
+		particles::draw::AddSparklesSymbol(frame,
+		                                   {
+		                                       .position = pool.point,
+		                                       .halfSize = player_sparkles::k_SymbolHalfSize,
+		                                       .angle = *pool.symbolAngle,
+		                                       .argb = player_sparkles::k_SymbolColour,
+		                                       .player = static_cast<int>(interface.player),
+		                                   },
+		                                   sources);
 	}
 }
 

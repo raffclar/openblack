@@ -82,6 +82,19 @@ with Oracle() as o:
 - A virtual call reads a vtable from your object: put a pointer to a small table of function addresses there, and
   stub those addresses or point them at real functions.
 
+## Running a part of a function (a slice)
+
+Some maths is inline in a large function. You can run only the game's own instructions of that part:
+`cases/creature_maths_cases.py` (class `Slice`) shows how.
+
+- Write a small piece of code into free bytes at the end of the image (the host calls only addresses in the image).
+  It keeps the registers that the caller keeps, makes a stack frame, writes the inputs at the stack offsets that the
+  part reads, loads the FPU inputs, sets the registers and jumps to the first instruction of the part.
+- Write `PUSH <back>; RET` (6 bytes) over the first instruction after the part. The part then comes back to your
+  code with the stack as it was, and your code copies the stack outputs to the arena.
+- Replace a call inside the part that you do not want to run with a fixed answer (for example `MOV AL, n` and NOPs).
+- Give the part a stack frame of the size that it uses. Read the disassembly for the stack offsets.
+
 ## The JSON request
 
 `python tools/oracle/oracle.py run request.json` (or `run -` for the standard input) prints the results as JSON:

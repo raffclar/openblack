@@ -644,7 +644,7 @@ const Step* CurrentStep(const IdleMind& mind)
 bool creature_mind::IsAsleep(const IdleMind& mind)
 {
 	const auto* step = CurrentStep(mind);
-	return step != nullptr && step->kind == Step::Kind::Static && step->untilRested;
+	return step != nullptr && step->kind == Step::Kind::Static && step->untilRested && !mind.sitEnding;
 }
 
 bool creature_mind::IsResting(const IdleMind& mind)
@@ -1615,11 +1615,24 @@ bool TriesToStartClip(const Step& step, const Senses& senses)
 	}
 }
 
+/// Whether a step reference is the current step of the agenda
+bool IsCurrentStep(const IdleMind& mind, const std::optional<IdleMind::StepRef>& ref)
+{
+	return ref.has_value() && ref->serial == mind.serial && ref->step == mind.step;
+}
+
 /// One try to start a step that the body refuses, because the body is busy or does not have the clip. Each try picks a
 /// side first from the game's random numbers: a static action or a cast always, other actions only while the hand
 /// holds nothing. Each try to communicate also stops the desire to show its state for a time.
 void RefusedStart(IdleMind& mind, const Step& step, const Senses& senses, const Random& gameRandom, Commands& commands)
 {
+	// Each turn that the step tries to start counts as a turn of the step
+	if (!IsCurrentStep(mind, mind.startTried))
+	{
+		mind.startTried = IdleMind::StepRef {.serial = mind.serial, .step = mind.step};
+		mind.startTries = 0;
+	}
+	++mind.startTries;
 	const bool always = step.kind == Step::Kind::Static || step.kind == Step::Kind::Cast;
 	if (always || !senses.held.has_value())
 	{
@@ -1792,8 +1805,8 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 			commands.startSequence = step.sequence;
 			commands.holdLoop = step.holdLoop;
 			commands.fainted = step.faint;
-			// The turn that the rest starts is its first turn
-			mind.restTurns = 1;
+			// The turns that the rest or the sleep tried to start count, and the turn that it starts counts too
+			mind.restTurns = (IsCurrentStep(mind, mind.startTried) ? mind.startTries : 0) + 1;
 			mind.watchTurns = 0;
 			if (IsFaint(step))
 			{

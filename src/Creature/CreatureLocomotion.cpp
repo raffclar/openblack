@@ -57,7 +57,9 @@ Speeds creature_locomotion::SpeedsFor(float size)
 
 float creature_locomotion::TargetSpeed(float fraction, float runSpeed)
 {
-	return std::clamp(fraction, 0.0f, 1.0f) * runSpeed * k_TopSpeedMargin;
+	// A share that is not more than 0 gives 0. This includes a negative zero and a share that is not a number
+	const float share = !(fraction > 0.0f) ? 0.0f : std::min(fraction, 1.0f);
+	return share * runSpeed * k_TopSpeedMargin;
 }
 
 float creature_locomotion::KeptFraction(float kept, float walkFraction)

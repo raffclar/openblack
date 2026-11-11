@@ -90,6 +90,51 @@ class TrainingStyleTests(unittest.TestCase):
         self.assertIsNone(sim_run.training_key(None))
 
 
+class BusyGame(FakeGame):
+    """A game whose creature refuses the first touches, as a body that is not far enough through its action does"""
+
+    def __init__(self, creature, refusals):
+        super().__init__(creature)
+        self.refusals = refusals
+        self.frames = 0
+        self.feedback = []
+
+    def call(self, query, params=None):
+        if query == "sim.feedback" and (params or {}).get("kind") != "release":
+            self.feedback.append(params)
+            if self.refusals > 0:
+                self.refusals -= 1
+                return {"did": "busy"}
+        return super().call(query, params)
+
+    def step_frames(self, frames):
+        self.frames += frames
+        return True
+
+
+class TouchTests(unittest.TestCase):
+    def test_each_of_the_three_strokes_plays_when_the_body_is_busy_at_first(self):
+        game = BusyGame({"id": 5}, refusals=4)
+        self.assertEqual(sim_run.stroke(game, 5), 3)
+        self.assertEqual([p.get("part") for p in game.feedback], [3, 3, 3, 3, 3, 0, 4])
+
+    def test_a_stroke_that_the_body_always_refuses_stops_after_the_last_try(self):
+        game = BusyGame({"id": 5}, refusals=10 ** 6)
+        self.assertEqual(sim_run.stroke(game, 5), 0)
+        tries = sim_run.TOUCH_GIVE_UP_FRAMES // sim_run.TOUCH_RETRY_FRAMES + 1
+        self.assertEqual(len(game.feedback), 3 * tries)
+
+    def test_one_slap_input_gives_one_slap(self):
+        game = BusyGame({"id": 5}, refusals=2)
+        self.assertTrue(sim_run.slap(game, 5))
+        self.assertEqual(len(game.feedback), 3)
+
+    def test_a_slap_on_a_ready_body_is_tried_once(self):
+        game = BusyGame({"id": 5}, refusals=0)
+        self.assertTrue(sim_run.slap(game, 5))
+        self.assertEqual(len(game.feedback), 1)
+
+
 def repeat_record(turn, local=9, draws=None):
     return {"type": "record", "turn": turn, "hash": "a", "seeds": [7, local], "draws": draws or turn * 3}
 

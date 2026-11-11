@@ -92,6 +92,7 @@ void openblack::ecs::reflection::RegisterFields_Components_creaturem(entt::meta_
 	    .Field<&components::CreatureMindState::turnsLookedAt>("turnsLookedAt")
 	    .Field<&components::CreatureMindState::beliefs>("beliefs")
 	    .Field<&components::CreatureMindState::sweep>("sweep")
+	    .Field<&components::CreatureMindState::eyesSweep>("eyesSweep")
 	    .Field<&components::CreatureMindState::lastTown>("lastTown")
 	    .Field<&components::CreatureMindState::nearestTemple>("nearestTemple")
 	    .Field<&components::CreatureMindState::feedbackSeconds>("feedbackSeconds")

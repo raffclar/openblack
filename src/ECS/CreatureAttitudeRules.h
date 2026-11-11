@@ -148,6 +148,10 @@ inline constexpr float k_LaterLookExtraSeconds = 7.0f;
 /// turn round
 inline constexpr float k_RespectSeconds = 4.0f;
 inline constexpr int32_t k_RespectDrift = 0x100;
+/// A villager that looks at a creature turns by at most this many game angles (2048 to the circle) in a turn. To face a
+/// creature that it respects, it turns by at most twice that.
+inline constexpr int32_t k_LookStep = 0x80;
+inline constexpr int32_t k_FaceStep = 0x100;
 /// A walk to or from the creature is over within this of its goal
 inline constexpr float k_ArrivedMetres = 0.5f;
 /// A frightened villager runs from a creature 1.2 times the reaction's reach, and stops once it is 1.5 times that away;

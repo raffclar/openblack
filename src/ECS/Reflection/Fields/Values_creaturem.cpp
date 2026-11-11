@@ -97,6 +97,8 @@ void openblack::ecs::reflection::RegisterFields_Values_creaturem(entt::meta_ctx&
 	    .Field<&openblack::creature_mind::IdleMind::followMoved>("followMoved")
 	    .Field<&openblack::creature_mind::IdleMind::followHandTurns>("followHandTurns")
 	    .Field<&openblack::creature_mind::IdleMind::restTurns>("restTurns")
+	    .Field<&openblack::creature_mind::IdleMind::startTried>("startTried")
+	    .Field<&openblack::creature_mind::IdleMind::startTries>("startTries")
 	    .Field<&openblack::creature_mind::IdleMind::danceTurns>("danceTurns")
 	    .Field<&openblack::creature_mind::IdleMind::danceEnding>("danceEnding")
 	    .Field<&openblack::creature_mind::IdleMind::danceSet>("danceSet")
