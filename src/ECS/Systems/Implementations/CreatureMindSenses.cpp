@@ -372,16 +372,39 @@ std::optional<glm::vec3> DependentLookPoint(const ecs::Registry& registry, entt:
 glm::vec3 FightLook(const ecs::Registry& registry, entt::entity entity, const Creature& creature, const Transform& transform,
                     const CreatureMindState& mind)
 {
-	using Stage = CreatureFighting::Stage;
-	// Before the duel the first creature looks at the other creature, but not in its taunt or as it points at the arena.
-	// The other creature looks about while it does an order, and at the first creature while it waits for an order.
-	if (const auto* fighting = registry.TryGet<const CreatureFighting>(entity);
-	    fighting != nullptr && registry.Valid(fighting->opponent) && IsLeadIn(fighting->stage) &&
-	    fighting->stage != Stage::Taunt && fighting->stage != Stage::Point &&
-	    (fighting->madeArena || WaitsForNextOrder(*fighting)))
+	const auto* fighting = registry.TryGet<const CreatureFighting>(entity);
+	if (fighting == nullptr || !registry.Valid(fighting->opponent) || !IsLeadIn(fighting->stage))
 	{
-		if (const auto top = GazePoint(registry, entity, {.object = entt::to_integral(fighting->opponent)}, /*moving=*/false);
-		    top.has_value())
+		return LookAbout(creature, transform, mind);
+	}
+	const auto opponent = entt::to_integral(fighting->opponent);
+	if (fighting->madeArena)
+	{
+		// Before the duel, the head of the first creature follows the looks of the steps of the fight, one turn late
+		std::optional<glm::vec3> point;
+		switch (FirstCreatureLook(*fighting))
+		{
+		case LeadInLook::Before:
+			point = mind.turnLook.has_value() ? GazePoint(registry, entity, *mind.turnLook, /*moving=*/false) : std::nullopt;
+			break;
+		case LeadInLook::Opponent:
+			point = GazePoint(registry, entity, {.object = opponent}, /*moving=*/false);
+			break;
+		case LeadInLook::Ahead:
+			point = GazePoint(registry, entity, {.object = entt::to_integral(entity)}, /*moving=*/false);
+			break;
+		case LeadInLook::Partner:
+			point = DependentLookPoint(registry, fighting->opponent);
+			break;
+		case LeadInLook::About:
+			break;
+		}
+		return point.value_or(LookAbout(creature, transform, mind));
+	}
+	// The other creature looks about while it does an order, and at the first creature while it waits for an order
+	if (WaitsForNextOrder(*fighting))
+	{
+		if (const auto top = GazePoint(registry, entity, {.object = opponent}, /*moving=*/false); top.has_value())
 		{
 			return *top;
 		}

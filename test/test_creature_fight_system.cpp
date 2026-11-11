@@ -2972,3 +2972,51 @@ TEST(CreatureFightLook, TheOtherCreatureWaitsForAnOrderOnlyWhenItDidTheLastOrder
 	fighting.played = false;
 	EXPECT_FALSE(WaitsForNextOrder(fighting));
 }
+
+// Before the duel, the head of the first creature follows the looks of the steps of the fight one turn late. The look
+// comes from the fight as the last turn left it.
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST(CreatureFightLook, TheFirstCreatureLooksAsTheStepOfTheLastTurnTellsIt)
+{
+	using Stage = CreatureFighting::Stage;
+	using Phase = creature_turn_to_face::Turn::Phase;
+	CreatureFighting fighting {.stage = Stage::FaceOff, .madeArena = true};
+	// Before its first fight turn it keeps the look that it had
+	EXPECT_EQ(FirstCreatureLook(fighting), LeadInLook::Before);
+	// The request looks at the other creature, the order to stand still has no look, the order to turn looks ahead
+	const std::vector<LeadInLook> faceOff {LeadInLook::Opponent, LeadInLook::About, LeadInLook::Ahead, LeadInLook::Opponent,
+	                                       LeadInLook::Opponent};
+	for (uint32_t turn = 1; turn <= faceOff.size(); ++turn)
+	{
+		fighting.faceOffTurns = turn;
+		fighting.faceTurn.phase = turn >= fight::k_FaceOffOwnTurn ? Phase::Start : Phase::Idle;
+		EXPECT_EQ(FirstCreatureLook(fighting), faceOff[turn - 1]) << "face-off turn " << turn;
+	}
+	// The turn after its own turn ended, the order to taunt has no look
+	fighting.faceTurn.phase = Phase::Done;
+	EXPECT_EQ(FirstCreatureLook(fighting), LeadInLook::About);
+	fighting.stage = Stage::Taunt;
+	EXPECT_EQ(FirstCreatureLook(fighting), LeadInLook::About);
+	fighting.stage = Stage::Point;
+	EXPECT_EQ(FirstCreatureLook(fighting), LeadInLook::About);
+	// The order to walk to the arena and the walk look at the other creature, and the wait looks at it
+	fighting.stage = Stage::Approach;
+	EXPECT_EQ(FirstCreatureLook(fighting), LeadInLook::Partner);
+	fighting.stage = Stage::Ready;
+	EXPECT_EQ(FirstCreatureLook(fighting), LeadInLook::Opponent);
+	// The wait keeps its look for one more turn, then the order to turn looks ahead and its own turn at the other
+	fighting.stage = Stage::Square;
+	fighting.faceOffTurns = 0;
+	fighting.faceTurn = {};
+	EXPECT_EQ(FirstCreatureLook(fighting), LeadInLook::Opponent);
+	fighting.faceOffTurns = fight::k_SquareOrderTurn;
+	EXPECT_EQ(FirstCreatureLook(fighting), LeadInLook::Ahead);
+	fighting.faceOffTurns = fight::k_SquareOwnTurn;
+	fighting.faceTurn.phase = Phase::Start;
+	EXPECT_EQ(FirstCreatureLook(fighting), LeadInLook::Opponent);
+	// The order to start the duel has no look
+	fighting.faceTurn.phase = Phase::Done;
+	EXPECT_EQ(FirstCreatureLook(fighting), LeadInLook::About);
+	fighting.played = true;
+	EXPECT_EQ(FirstCreatureLook(fighting), LeadInLook::About);
+}
