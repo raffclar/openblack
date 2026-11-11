@@ -80,14 +80,17 @@
 #include "ECS/Components/OneOffSpellSeed.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Pot.h"
+#include "ECS/Components/PuzzleGame.h"
 #include "ECS/Components/Reward.h"
 #include "ECS/Components/Scaffold.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/ScriptHighlight.h"
 #include "ECS/Components/Spell.h"
+#include "ECS/Components/SpellDispenser.h"
 #include "ECS/Components/SpellIcon.h"
 #include "ECS/Components/SpellSeed.h"
 #include "ECS/Components/StreetLantern.h"
+#include "ECS/Components/TeleportStone.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/TownDesire.h"
@@ -98,6 +101,7 @@
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/VillagerDeath.h"
 #include "ECS/Components/VillagerPose.h"
+#include "ECS/Components/Vortex.h"
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/CreatureExplorationLand.h"
 #include "ECS/GamePlayers.h"
@@ -301,7 +305,8 @@ creature_look::Interest mind_detail::LookInterestOf(const ecs::Registry& registr
 	{
 		return animals::birds::InterestsACreatureAsADove(animal->type) ? Interest::Dove : Interest::Animal;
 	}
-	if (registry.AllOf<Abode>(thing))
+	// The game gives a field, a town's totem, a puzzle totem and a spell dispenser the interest of a building
+	if (registry.AnyOf<Abode, Field, VillageTotem, PuzzleTotem, SpellDispenser>(thing))
 	{
 		return Interest::Abode;
 	}
@@ -316,8 +321,16 @@ creature_look::Interest mind_detail::LookInterestOf(const ecs::Registry& registr
 		           ? Interest::Toy
 		           : Interest::Static;
 	}
-	// A scaffold is a loose object
-	if (registry.AnyOf<MobileObject, Scaffold>(thing))
+	// A dead tree, a vortex, a teleport stone and a piece that broke off a building are rocks of a kind. None of them
+	// is a toy.
+	if (registry.AnyOf<DeadTree, Vortex, TeleportStone, BuildingPiece>(thing))
+	{
+		return Interest::Static;
+	}
+	// A loose object, a scaffold, the football, a pot or pile, a one-shot globe, a street lantern, the flag of a town's
+	// want, a reward chest and a firefly do not catch the eye
+	if (registry.AnyOf<MobileObject, Scaffold, Ball, Pot, OneOffSpellSeed, StreetLantern, TownDesireFlag, RewardOnLand,
+	                   Firefly>(thing))
 	{
 		return Interest::None;
 	}

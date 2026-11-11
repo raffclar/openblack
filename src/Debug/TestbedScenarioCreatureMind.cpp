@@ -151,14 +151,36 @@ void testbed_scenarios::AddMind(std::vector<Scenario>& all)
 	    .description = "A player's lion stands alone, with only a birch far from it, facing the nearest hill. A script "
 	                   "tells it to be idle every fifteen seconds.",
 	    .expected = "While it waits, nothing else catches its eye, so its head turns to the nearest hill or sea that it "
-	                "did not go to yet, at the ground there. When that place is no longer in front of it, it looks ahead "
-	                "again until the hill or the sea comes back into view.",
+	                "did not go to yet, at the ground there. When that place is no longer in front of it, it looks down "
+	                "at the ground where it stands, the place where it started, until the hill or the sea comes back "
+	                "into view.",
 	    .framing = {.shot = Shot::Testbed},
 	    .creatures = {Content(CreatureType::Lion, {0.0f, 0.0f}, 180.0f)},
 	    .objects = {{.type = TreeInfo::Birch, .offset = {100.0f, 0.0f}}},
 	    .commands = {{.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 0, .action = "BeIdle"},
 	                 {.kind = Kind::DoAction, .delaySeconds = 15.0f, .object = 0, .action = "BeIdle"}},
 	    .repeatFrom = 1,
+	});
+
+	all.push_back({
+	    .id = "mind.look_at_destination",
+	    .name = "With nothing to watch, a lion looks at the place it walked to",
+	    .facet = Facet::Mind,
+	    .description = "A player's lion stands alone, with only a birch far behind it. It walks forty metres to the "
+	                   "east, then a script tells it to be idle every fifteen seconds. Then it walks back.",
+	    .expected = "As it walks, its head looks ahead along the walk. When it is idle with nothing in view, its head "
+	                "turns down to the ground at the place that it walked to, where it now stands. It does not look "
+	                "straight ahead at the height of its head.",
+	    .framing = {.shot = Shot::Testbed},
+	    .creatures = {Content(CreatureType::Lion, {0.0f, 0.0f}, 90.0f)},
+	    .objects = {{.type = TreeInfo::Birch, .offset = {-100.0f, 0.0f}}},
+	    .commands = {Go(Kind::WalkTo, 0, {40.0f, 0.0f}, 1.0f),
+	                 {.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 0, .action = "BeIdle"},
+	                 {.kind = Kind::DoAction, .delaySeconds = 15.0f, .object = 0, .action = "BeIdle"},
+	                 Go(Kind::WalkTo, 0, {0.0f, 0.0f}, 15.0f),
+	                 Go(Kind::WalkTo, 0, {40.0f, 0.0f}, 1.0f),
+	                 {.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 0, .action = "BeIdle"}},
+	    .repeatFrom = 3,
 	});
 
 	all.push_back({
