@@ -125,6 +125,15 @@ struct Plan
 	std::optional<uint32_t> instrument;
 };
 
+/// Whether a plan is valid, as the game tests it. A valid plan has all of these:
+/// - a desire of the table
+/// - a whole thing, when its desire is about a whole thing
+/// - a thing that it acts on
+/// - an action
+/// - a thing that it uses, when its action uses a thing
+/// The whole thing is the thing that the desire is about, or the thing that the desire of a forced plan serves through.
+[[nodiscard]] bool IsValid(const Plan& plan, bool aboutSomething, bool usesThing);
+
 /// The thing that a planned action uses. Each thing used has the usefulness k_UsingUsefulness.
 struct UsedChoice
 {
@@ -141,9 +150,9 @@ enum class PlanOrder : uint8_t
 	/// the thing that it uses, the last of equals. Then the part of the whole thing that it acts on. When the whole thing
 	/// has no part for the action, the next action is tried. The part counts the default usefulness.
 	ActionThenPart,
-	/// For anger: the part of the whole thing is chosen before the plan. The action is the one that can act on the part,
-	/// by its priority and novelty multiplied by the usefulness of the part and of the thing that it uses, the last of
-	/// equals.
+	/// For anger and for a thing shown on the leash: the parts are chosen before the plan. For each part in turn, the
+	/// action is the one that can act on the part, by its priority and novelty multiplied by the usefulness of the part
+	/// and of the thing that it uses, the last of equals. The first part with such an action gives the plan.
 	PartThenAction,
 };
 
@@ -164,6 +173,19 @@ struct DesirePlanning
 	/// The creature itself, by its entity's number. When the action comes first, an action that does not act on a thing
 	/// acts on the creature itself, with the default usefulness. With none, such an action acts on nothing.
 	std::optional<uint32_t> itself;
+	/// When the part comes before the action: the parts to try, in their order. The plan takes the first part that an
+	/// action can act on, and the action that the creature wants most for that part.
+	std::span<const ObjectCandidate> parts;
+	/// When the part comes before the action: whether an action can act on a part
+	std::function<bool(const ActionCandidate&, uint32_t part)> suits;
+	/// When the part comes before the action: only an action that acts on a thing can act on a part. This applies to a
+	/// thing shown on the leash.
+	bool onlyActsOnThings {false};
+	/// For compassion for a town with hurt people. The first action of the list is the heal action, and the list of the
+	/// town follows it. Each look at the first place of the list asks this again. When it gives true, the heal action
+	/// takes the first place. Else the first action of the town takes it. The planner looks at the first place one time
+	/// before it examines the list, and one more time for each action that it weighs.
+	std::function<bool()> healsFirst;
 };
 
 /// The plan for a desire: the action, the thing that it acts on, and the thing that it uses. None when no action can be
@@ -295,8 +317,12 @@ constexpr float k_HangAroundHomeDistance = 60.0f;
 /// - to hang around at home: near its home
 /// - to follow the player: it started to copy a deed of the player before
 [[nodiscard]] bool DesireMayPlan(creature_desires::Desire desire, const DesireState& state);
+/// A desire that its own condition refuses keeps its stored plan with a priority of 0. Thus no choice takes the plan,
+/// but a thing of the plan that goes still removes it and starts a new round.
+void KeepRefusedPlan(PlannerState& state, creature_desires::Desire desire);
 
-/// The most pressing plan of all the desires', if any
+/// The most pressing plan of all the desires', if any. Only a plan with a priority more than 0 counts, and the first of
+/// equals wins.
 [[nodiscard]] std::optional<Plan> Best(const PlannerState& state);
 /// The plan to change to now, if the best is pressing enough against what the creature carries out (nothing counts as 0)
 [[nodiscard]] std::optional<Plan> Choose(const PlannerState& state);

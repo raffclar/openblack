@@ -486,7 +486,7 @@ bool CreatureMindSystem::ForceDesireAbout(entt::entity creature, CreatureMindSta
 	{
 		Locator::creatureObjectActionSystem::value().StopForPlan(creature, true);
 	}
-	Abandon(mind);
+	Abandon(creature, mind);
 	if (Locator::magicSystem::has_value())
 	{
 		Locator::magicSystem::value().ReleaseCreatureCast(creature);

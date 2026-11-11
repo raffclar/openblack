@@ -296,7 +296,7 @@ void CreatureMindSystem::LearnFromFeedback(entt::entity creature, CreatureMindSt
 				source.threshold = creature_learning::ForgivenRunAwayThreshold(source.threshold);
 			}
 		}
-		Abandon(mind);
+		Abandon(creature, mind);
 		return;
 	}
 
@@ -342,7 +342,7 @@ void CreatureMindSystem::LearnFromFeedback(entt::entity creature, CreatureMindSt
 		}
 		// This slap also clears the mark that the hand held it
 		mind.heldSinceRestart = false;
-		Abandon(mind);
+		Abandon(creature, mind);
 	};
 
 	if (info == nullptr || mind.developmentPhase < k_MinLessonPhase)

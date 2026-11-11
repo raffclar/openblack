@@ -391,7 +391,7 @@ bool CreatureMindSystem::SitDown(entt::entity creature)
 		    *creature_layers::PlaySequence(body->body, animations::k_StartSit, animations::k_Sit, animations::k_EndSit);
 		return true;
 	}
-	Abandon(*mind);
+	Abandon(creature, *mind);
 	creature_mind::Plan(mind->idle, creature_mind::Activity::Told, {creature_mind::SitDown(_random.GameFloat())});
 	return true;
 }
@@ -481,7 +481,7 @@ void CreatureMindSystem::StartPlanAgain(entt::entity creature, CreatureMindState
 		// With no agenda, the plan stops and the creature decides again
 		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} has no agenda to start {} again after the hand let go",
 		                    entt::to_integral(creature), plan.action);
-		Abandon(mind);
+		Abandon(creature, mind);
 		return;
 	}
 	auto& [executor, agenda] = *built;
@@ -1032,7 +1032,7 @@ void CreatureMindSystem::ForceCatch(entt::entity creature, entt::entity object)
 	// what it was doing stops as a failure.
 	ComeAcross(creature, *mind, object);
 	EndReaction(creature);
-	Abandon(*mind);
+	Abandon(creature, *mind);
 	ReleaseCast(creature);
 	// When what it does fails, its body also stops its dance, its sitting or lying pose and its point (see Replan).
 	// Each of these plays its end, which the catch waits for. An action that its body plays continues to its end.
@@ -1113,7 +1113,7 @@ bool CreatureMindSystem::TakeFromHand(entt::entity creature, entt::entity object
 	}
 	// The take stops a fight out of its duel. After a fight that is over, it ends the fight of the body again.
 	EndFightForPlan(creature, true);
-	Abandon(*mind);
+	Abandon(creature, *mind);
 	ReleaseCast(creature);
 	if (!Replan(creature, creature_mind::Activity::Planned,
 	            creature_mind::TakeFromHand(entt::to_integral(object), camera, leftHand)))
@@ -1286,5 +1286,5 @@ void CreatureMindSystem::MoveToStage(entt::entity creature, uint32_t stage)
 	{
 		creature_help::MovedToStage(help->memory);
 	}
-	Abandon(*mind);
+	Abandon(creature, *mind);
 }

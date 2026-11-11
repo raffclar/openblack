@@ -521,6 +521,8 @@ TEST(CreaturePlanner, AnActionThatLeftTheAreaHasNoPriority)
 	EXPECT_FLOAT_EQ(creature_planner::ActionPriority(1.0f, true), 0.0f);
 	// For a thing chosen first, the creature does not take the action at all
 	const std::vector<creature_planner::ActionCandidate> refused {{.action = 2, .opinion = 1.0f, .leftArea = true}};
+	const std::vector<creature_planner::ObjectCandidate> parts {{.id = 5, .usefulness = 1.0f}};
+	const auto suitsAll = [](const creature_planner::ActionCandidate&, uint32_t) { return true; };
 	for (const auto order : {creature_planner::PlanOrder::ActionThenPart, creature_planner::PlanOrder::PartThenAction})
 	{
 		EXPECT_FALSE(creature_planner::PlanDesire({.desire = Desire::Anger,
@@ -528,7 +530,9 @@ TEST(CreaturePlanner, AnActionThatLeftTheAreaHasNoPriority)
 		                                           .order = order,
 		                                           .actions = refused,
 		                                           .findObject = noThing,
-		                                           .findUsed = noUse})
+		                                           .findUsed = noUse,
+		                                           .parts = parts,
+		                                           .suits = suitsAll})
 		                 .has_value());
 	}
 }
@@ -697,19 +701,17 @@ TEST(CreaturePlanner, AngerFindsThePartFirst)
 	    {.action = 21, .needsObject = true, .opinion = 1.0f},
 	    {.action = 22, .needsObject = true, .opinion = 1.0f},
 	};
+	const std::vector<creature_planner::ObjectCandidate> parts {{.id = 4, .usefulness = 0.06f, .actedOnUsefulness = 0.06f}};
 	const auto plan = creature_planner::PlanDesire({
 	    .desire = Desire::Anger,
 	    .strength = 1.0f,
 	    .order = creature_planner::PlanOrder::PartThenAction,
 	    .actions = actions,
 	    .activityUsefulness = 0.09f,
-	    .findObject =
-	        [](const creature_planner::ActionCandidate& action) {
-		        return action.action == 22 ? std::nullopt
-		                                   : std::optional(creature_planner::ObjectCandidate {
-		                                         .id = 4, .usefulness = 0.06f, .actedOnUsefulness = 0.06f});
-	        },
+	    .findObject = {},
 	    .findUsed = {},
+	    .parts = parts,
+	    .suits = [](const creature_planner::ActionCandidate& action, uint32_t) { return action.action != 22; },
 	});
 	ASSERT_TRUE(plan.has_value());
 	EXPECT_EQ(plan->action, 21u);
@@ -2297,4 +2299,242 @@ TEST(CreatureLearning, AStrokeTeachesToEatAnyCarriedThingPastTheFirstStage)
 	EXPECT_FALSE(creature_learning::StrokeTeachesToEat(0.5f, 1, true, false));
 	EXPECT_FALSE(creature_learning::StrokeTeachesToEat(0.5f, 1, false, true));
 	EXPECT_FALSE(creature_learning::StrokeTeachesToEat(0.5f, 0, true, true));
+}
+
+// A plan is valid by the game's test: a whole thing for a desire about one, a thing that it acts on, an action, and a
+// thing that it uses when its action uses one
+TEST(CreaturePlanner, APlanIsValidOnlyWithTheThingsThatTheGameTests)
+{
+	const creature_planner::Plan plan {.desire = Desire::Hunger, .action = 5, .object = 9};
+	EXPECT_TRUE(creature_planner::IsValid(plan, false, false));
+	EXPECT_FALSE(creature_planner::IsValid({.desire = Desire::Hunger, .action = 5}, false, false));
+	EXPECT_FALSE(creature_planner::IsValid({.desire = Desire::Hunger, .action = 0, .object = 9}, false, false));
+	// A desire about a whole thing needs the whole thing, from the planner or from the order that forced the plan
+	EXPECT_FALSE(creature_planner::IsValid(plan, true, false));
+	EXPECT_TRUE(creature_planner::IsValid({.desire = Desire::Hunger, .action = 5, .object = 9, .about = 3}, true, false));
+	EXPECT_TRUE(
+	    creature_planner::IsValid({.desire = Desire::Hunger, .action = 5, .object = 9, .activityObject = 3}, true, false));
+	// An action that uses a thing needs the thing
+	EXPECT_FALSE(creature_planner::IsValid(plan, false, true));
+	EXPECT_TRUE(creature_planner::IsValid({.desire = Desire::Hunger, .action = 5, .object = 9, .instrument = 4}, false, true));
+}
+
+TEST(CreaturePlanner, OnlyAPlanWithAPriorityAboveNothingIsTheBest)
+{
+	creature_planner::PlannerState state;
+	state.best.at(static_cast<size_t>(Desire::Hunger)) =
+	    creature_planner::Plan {.desire = Desire::Hunger, .action = 1, .priority = 0.0f};
+	EXPECT_FALSE(creature_planner::Best(state).has_value());
+	// The first of equals wins
+	state.best.at(static_cast<size_t>(Desire::Play)) =
+	    creature_planner::Plan {.desire = Desire::Play, .action = 2, .priority = 0.5f};
+	state.best.at(static_cast<size_t>(Desire::Poo)) =
+	    creature_planner::Plan {.desire = Desire::Poo, .action = 3, .priority = 0.5f};
+	const auto best = creature_planner::Best(state);
+	ASSERT_TRUE(best.has_value());
+	EXPECT_EQ(best->desire, Desire::Play);
+}
+
+// A refused desire keeps its plan at priority 0. No choice takes the plan, but the loss of one of its things still
+// removes it, and so a new round starts.
+TEST(CreaturePlanner, ARefusedDesireKeepsItsPlanAtNoPriority)
+{
+	creature_planner::PlannerState state;
+	state.best.at(static_cast<size_t>(Desire::Wanderlust)) =
+	    creature_planner::Plan {.desire = Desire::Wanderlust, .action = 4, .object = 77, .priority = 3.0f};
+	creature_planner::KeepRefusedPlan(state, Desire::Wanderlust);
+	const auto& kept = state.best.at(static_cast<size_t>(Desire::Wanderlust));
+	ASSERT_TRUE(kept.has_value());
+	EXPECT_EQ(kept->action, 4u);
+	EXPECT_FLOAT_EQ(kept->priority, 0.0f);
+	EXPECT_FALSE(creature_planner::Choose(state).has_value());
+	EXPECT_TRUE(creature_planner::DropPlansOfGoneThings(state, [](uint32_t thing) { return thing == 77; }));
+	EXPECT_FALSE(state.best.at(static_cast<size_t>(Desire::Wanderlust)).has_value());
+	// A desire with no stored plan continues with no plan
+	creature_planner::KeepRefusedPlan(state, Desire::Wanderlust);
+	EXPECT_FALSE(state.best.at(static_cast<size_t>(Desire::Wanderlust)).has_value());
+}
+
+namespace
+{
+/// Gives the answers in their order, and counts the questions
+struct HealAnswers
+{
+	std::vector<bool> answers;
+	size_t asked {0};
+	[[nodiscard]] std::function<bool()> Ask()
+	{
+		return [this]() { return answers.at(asked++); };
+	}
+};
+} // namespace
+
+// Compassion for a town with hurt people looks at the first place of its list one time before each examination of the
+// list, and one more time for each action that it weighs
+TEST(CreaturePlanner, TheHealChoiceIsAskedAtEachLookAtTheFirstPlace)
+{
+	// The heal action, then the list of the town
+	const std::vector<creature_planner::ActionCandidate> actions {
+	    {.action = 101, .opinion = 1.0f},
+	    {.action = 29},
+	    {.action = 28, .disabled = true},
+	};
+	const auto part = [](const creature_planner::ActionCandidate&) {
+		return std::optional(creature_planner::ObjectCandidate {.id = 6, .usefulness = 1.0f});
+	};
+	const auto planning = [&](HealAnswers& heal) {
+		return creature_planner::PlanDesire({
+		    .desire = Desire::Compassion,
+		    .strength = 1.0f,
+		    .order = creature_planner::PlanOrder::ActionThenPart,
+		    .actions = actions,
+		    .activityUsefulness = 0.5f,
+		    .findObject = part,
+		    .findUsed = {},
+		    .healsFirst = heal.Ask(),
+		});
+	};
+	// Heads: the heal action takes the first place. One look for the list, and one for the heal action that it weighs.
+	HealAnswers heads {.answers = {true, false}};
+	const auto healed = planning(heads);
+	ASSERT_TRUE(healed.has_value());
+	EXPECT_EQ(healed->action, 101u);
+	EXPECT_EQ(heads.asked, 2u);
+	// Tails: the first action of the town takes the first place, and the planner does not weigh the heal action
+	HealAnswers tails {.answers = {false, true}};
+	const auto helped = planning(tails);
+	ASSERT_TRUE(helped.has_value());
+	EXPECT_EQ(helped->action, 29u);
+	EXPECT_EQ(tails.asked, 2u);
+}
+
+// The planner does not try an action with no part again, and the next examination of the list looks at the first place
+// again
+TEST(CreaturePlanner, EachTryOfTheListLooksAtTheFirstPlaceAgain)
+{
+	const std::vector<creature_planner::ActionCandidate> actions {
+	    {.action = 101, .opinion = 1.0f},
+	    {.action = 29},
+	};
+	HealAnswers heal {.answers = {true, false, false, false}};
+	const auto plan = creature_planner::PlanDesire({
+	    .desire = Desire::Compassion,
+	    .strength = 1.0f,
+	    .order = creature_planner::PlanOrder::ActionThenPart,
+	    .actions = actions,
+	    .activityUsefulness = 0.5f,
+	    .findObject =
+	        [](const creature_planner::ActionCandidate& action) {
+		        return action.action == 101 ? std::nullopt
+		                                    : std::optional(creature_planner::ObjectCandidate {.id = 6, .usefulness = 1.0f});
+	        },
+	    .findUsed = {},
+	    .healsFirst = heal.Ask(),
+	});
+	ASSERT_TRUE(plan.has_value());
+	EXPECT_EQ(plan->action, 29u);
+	// The first try: the list and the heal action. The second try: the list and the action of the town.
+	EXPECT_EQ(heal.asked, 4u);
+}
+
+// With the part first, the first part that an action can act on gives the plan. This is also true when a later part has
+// an action that the creature wants more.
+TEST(CreaturePlanner, TheFirstPartWithAnActionGivesThePlan)
+{
+	const std::vector<creature_planner::ActionCandidate> actions {
+	    {.action = 40, .needsObject = true},
+	    {.action = 41, .needsObject = true, .opinion = 1.0f},
+	};
+	const std::vector<creature_planner::ObjectCandidate> parts {
+	    {.id = 1, .usefulness = 1.0f},
+	    {.id = 2, .usefulness = 1.0f},
+	    {.id = 3, .usefulness = 1.0f},
+	};
+	const auto plan = creature_planner::PlanDesire({
+	    .desire = Desire::Play,
+	    .strength = 1.0f,
+	    .order = creature_planner::PlanOrder::PartThenAction,
+	    .actions = actions,
+	    .findObject = {},
+	    .findUsed = {},
+	    .parts = parts,
+	    .suits = [](const creature_planner::ActionCandidate& action,
+	                uint32_t part) { return (part == 2 && action.action == 40) || (part == 3 && action.action == 41); },
+	});
+	ASSERT_TRUE(plan.has_value());
+	EXPECT_EQ(plan->object, 2u);
+	EXPECT_EQ(plan->action, 40u);
+}
+
+// For a thing shown on the leash, only an action that acts on a thing can act on it
+TEST(CreaturePlanner, AShownThingTakesOnlyAnActionOnAThing)
+{
+	const std::vector<creature_planner::ActionCandidate> actions {
+	    {.action = 50, .opinion = 1.0f},
+	    {.action = 51, .needsObject = true},
+	};
+	const std::vector<creature_planner::ObjectCandidate> parts {{.id = 8, .usefulness = 1.0f}};
+	const auto planning = [&](bool shown) {
+		return creature_planner::PlanDesire({
+		    .desire = Desire::Play,
+		    .strength = 1.0f,
+		    .order = creature_planner::PlanOrder::PartThenAction,
+		    .actions = actions,
+		    .findObject = {},
+		    .findUsed = {},
+		    .parts = parts,
+		    .suits = [](const creature_planner::ActionCandidate&, uint32_t) { return true; },
+		    .onlyActsOnThings = shown,
+		});
+	};
+	const auto anyAction = planning(false);
+	ASSERT_TRUE(anyAction.has_value());
+	EXPECT_EQ(anyAction->action, 50u);
+	const auto onThing = planning(true);
+	ASSERT_TRUE(onThing.has_value());
+	EXPECT_EQ(onThing->action, 51u);
+}
+
+// With the part first, each part looks at the first place of the list one time. It looks one more time for each action
+// that can act on the part.
+TEST(CreaturePlanner, EachPartLooksAtTheFirstPlace)
+{
+	const std::vector<creature_planner::ActionCandidate> actions {
+	    {.action = 101, .needsObject = true, .opinion = 1.0f},
+	    {.action = 29, .needsObject = true},
+	};
+	const std::vector<creature_planner::ObjectCandidate> parts {{.id = 1, .usefulness = 1.0f}, {.id = 2, .usefulness = 1.0f}};
+	HealAnswers heal {.answers = {false, true, false}};
+	const auto plan = creature_planner::PlanDesire({
+	    .desire = Desire::Compassion,
+	    .strength = 1.0f,
+	    .order = creature_planner::PlanOrder::PartThenAction,
+	    .actions = actions,
+	    .findObject = {},
+	    .findUsed = {},
+	    .parts = parts,
+	    .suits = [](const creature_planner::ActionCandidate&, uint32_t part) { return part == 2; },
+	    .healsFirst = heal.Ask(),
+	});
+	ASSERT_TRUE(plan.has_value());
+	EXPECT_EQ(plan->object, 2u);
+	EXPECT_EQ(plan->action, 101u);
+	// The first part: the list only. The second part: the list, then the heal action that it weighs.
+	EXPECT_EQ(heal.asked, 3u);
+}
+
+TEST(CreatureTownCompassion, TheHealChoiceListHasTheHealActionBeforeTheWholeList)
+{
+	town_compassion::DesireActions actions {};
+	actions.at(2) = {29, 28};
+	town_compassion::State state;
+	state.desire = 2;
+	EXPECT_EQ(town_compassion::ActionsWithHealChoice(state, actions, 101u), (std::vector<uint32_t> {101, 29, 28}));
+	EXPECT_EQ(town_compassion::ActionsWithHealChoice(state, actions, std::nullopt), (std::vector<uint32_t> {29, 28}));
+	EXPECT_TRUE(town_compassion::MayHealFirst(1, false, 6.1f, 10.0f));
+	EXPECT_FALSE(town_compassion::MayHealFirst(1, false, 6.0f, 10.0f));
+	EXPECT_FALSE(town_compassion::MayHealFirst(0, false, 10.0f, 10.0f));
+	EXPECT_FALSE(town_compassion::MayHealFirst(1, true, 10.0f, 10.0f));
+	EXPECT_TRUE(town_compassion::HealComesFirst(0));
+	EXPECT_FALSE(town_compassion::HealComesFirst(1));
 }
