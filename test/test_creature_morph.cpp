@@ -119,6 +119,16 @@ TEST(CreatureMorph, ANewStrengthOnlyReshapesTheVertices)
 	EXPECT_FLOAT_EQ(refresh.drawn.weakStrong, -1.0f);
 }
 
+// A new body starts at the middle of each axis. Its first turn draws only the axes that are far enough from the middle.
+TEST(CreatureMorph, TheFirstTurnOfANewBodyKeepsAnAxisNearTheMiddleAtTheMiddle)
+{
+	const auto refresh = creature_morph::RefreshDrawn({}, {.evilGood = 0.0f, .thinFat = 0.02f, .weakStrong = 0.5f});
+	EXPECT_TRUE(refresh.vertices);
+	EXPECT_FLOAT_EQ(refresh.drawn.evilGood, 0.0f);
+	EXPECT_FLOAT_EQ(refresh.drawn.thinFat, 0.0f);
+	EXPECT_FLOAT_EQ(refresh.drawn.weakStrong, 0.5f);
+}
+
 TEST(CreatureMorph, MissingMeshesFallBackOnTheBase)
 {
 	const auto base = creature::GetIdFromType(CreatureType::Tiger, A::Base);
