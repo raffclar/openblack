@@ -606,6 +606,9 @@ void CreatureMindSystem::MindTurn(entt::entity entity)
 	const bool scripted = registry.AllOf<ScriptControlled>(entity);
 	TurnBeforeDecision(entity, creature, mind, scripted);
 	StepEmergencies(entity, creature, mind, scripted);
+	// The head takes its look for the turn here: after the emergencies, but before the creature decides and before the
+	// step of the turn runs
+	mind.turnLook = creature_mind::TurnLook(mind.idle);
 	DrawDependentLook(entity, mind);
 	_thinking.push_back(entity);
 }

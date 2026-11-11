@@ -379,14 +379,10 @@ void CreatureMindSystem::KeepDanceWithAgenda(entt::entity creature, const creatu
 void CreatureMindSystem::DrawDependentLook(entt::entity creature, CreatureMindState& mind)
 {
 	mind.dependentLook.reset();
-	// A script's focus holds the head, and then the step's look draws nothing
-	const auto& idle = mind.idle;
-	if (mind.scriptFocus.has_value() || idle.step >= idle.agenda.size())
-	{
-		return;
-	}
-	const auto& gaze = idle.agenda[idle.step].gaze;
-	if (!gaze.has_value() || !gaze->dependents)
+	// A script's focus holds the head, and then the step's look draws nothing. The look of the turn comes from the step
+	// that the last turn left, so a look that holds for one more turn draws again.
+	const auto& gaze = mind.turnLook;
+	if (mind.scriptFocus.has_value() || !gaze.has_value() || !gaze->dependents)
 	{
 		return;
 	}

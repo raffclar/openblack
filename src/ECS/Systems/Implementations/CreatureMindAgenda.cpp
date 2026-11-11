@@ -1522,33 +1522,35 @@ void CreatureMindSystem::AgendaTurn(entt::entity entity)
 
 		// Looking about, the head turns to the most interesting thing in sight, or ahead
 		mind.lookingAbout = commands.lookAbout;
+		// The step's look comes from the agenda as the last turn left it
+		const auto& gaze = mind.turnLook;
 		const auto focus = ScriptFocusPoint(registry, entity, mind);
 		if (focus.has_value())
 		{
 			// A script's focus holds the head whatever the creature is doing
 			animation.lookAt = focus;
 		}
-		else if (commands.gaze.has_value() && commands.gaze->runningAway)
+		else if (gaze.has_value() && gaze->runningAway)
 		{
 			// Running away, it looks back at what it runs from for a time, then looks about for a time
 			const bool back =
 			    creature_emote::RunLooksBack(mind.runLookBack, k_TurnsPerSecond, RunLookBackSeconds(creature.species),
 			                                 RunLookAheadSeconds(creature.species));
-			auto from = *commands.gaze;
+			auto from = *gaze;
 			from.runningAway = false;
 			const auto point = back ? GazePoint(registry, entity, from, moving) : std::nullopt;
 			animation.lookAt = point.has_value() ? point : LookAbout(creature, transform, mind);
 		}
-		else if (commands.gaze.has_value() && commands.gaze->whileGoing)
+		else if (gaze.has_value() && gaze->whileGoing)
 		{
 			// On the way to a place: the head looks at the place, at what it watches, or from side to side. Without
 			// a point of its own, the look uses the top of the thing that it goes to, or else the place that the
 			// creature walks to.
 			const auto about = LookAbout(creature, transform, mind);
-			auto place = commands.gaze->point;
-			if (!place.has_value() && commands.gaze->object.has_value())
+			auto place = gaze->point;
+			if (!place.has_value() && gaze->object.has_value())
 			{
-				place = GazePoint(registry, entity, {.object = commands.gaze->object}, false);
+				place = GazePoint(registry, entity, {.object = gaze->object}, false);
 			}
 			if (const auto* walk = registry.TryGet<const CreatureLocomotion>(entity);
 			    !place.has_value() && walk != nullptr && walk->destination.has_value())
@@ -1569,7 +1571,7 @@ void CreatureMindSystem::AgendaTurn(entt::entity entity)
 		{
 			// A step with nothing to look at, or whose thing is gone, looks about. The pose of the body decides if
 			// the head can turn to the point.
-			const auto point = commands.gaze.has_value() ? GazePoint(registry, entity, *commands.gaze, moving) : std::nullopt;
+			const auto point = gaze.has_value() ? GazePoint(registry, entity, *gaze, moving) : std::nullopt;
 			animation.lookAt = point.has_value() ? *point : LookAbout(creature, transform, mind);
 		}
 		// After the hold of a pick-up, the head and the eyes look at no point until the body has played the pick-up
