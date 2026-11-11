@@ -88,7 +88,13 @@ float creature_eyes::EyeSize(float size, float speciesEyeScale, float evilGood, 
 
 float creature_eyes::RestedOpenness(float exhaustion)
 {
-	return std::clamp(1.0f - (exhaustion + exhaustion), k_RestedOpennessLeast, k_RestedOpennessMost);
+	// A value that is not a number gets the least openness, as in the game
+	const float openness = 1.0f - (exhaustion + exhaustion);
+	if (x87::LessOrUnordered(openness, k_RestedOpennessLeast))
+	{
+		return k_RestedOpennessLeast;
+	}
+	return openness > k_RestedOpennessMost ? k_RestedOpennessMost : openness;
 }
 
 float creature_eyes::LookSeconds(float openness, Mode mode)
