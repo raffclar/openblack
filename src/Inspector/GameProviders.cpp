@@ -449,6 +449,11 @@ GameProvider* openblack::inspector::AddGameProviders(Inspector& inspector, const
 		    return Locator::creatureMindSystem::has_value() ? Locator::creatureMindSystem::value().BeliefAbout(creature, thing)
 		                                                    : std::nullopt;
 	    },
+	    .actedOnBeliefAbout = [](entt::entity creature, entt::entity thing) -> std::optional<creature_tree::Belief> {
+		    return Locator::creatureMindSystem::has_value()
+		               ? Locator::creatureMindSystem::value().ActedOnBeliefAbout(creature, thing)
+		               : std::nullopt;
+	    },
 	    .setReactionNotice =
 	        [](entt::entity creature, bool notice) {
 		        ecs::creature_reaction_notice::SetTakesNotice(Locator::entitiesRegistry::value(), creature, notice);

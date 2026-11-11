@@ -10,6 +10,7 @@
 #pragma once
 
 #include <string>
+#include <string_view>
 
 #include <imgui.h>
 
@@ -40,6 +41,8 @@ public:
 	[[nodiscard]] bool IsOpen() const noexcept { return _open; }
 	[[nodiscard]] const std::string& GetName() const noexcept { return _name; }
 	virtual void Open() noexcept;
+	/// Shows the tab of this name the next time that the window draws; a window with no tabs does nothing
+	virtual void ShowTab([[maybe_unused]] std::string_view tab) noexcept {}
 	virtual void Close() noexcept;
 	virtual void Toggle() noexcept;
 

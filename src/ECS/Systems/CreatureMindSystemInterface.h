@@ -129,6 +129,13 @@ public:
 	{
 		return std::nullopt;
 	}
+	/// What a creature believes about a thing that it acts on, as the tree of what to act on tests it. The temple stands
+	/// for its heart. None for a thing that is of no kind that a creature keeps beliefs about.
+	[[nodiscard]] virtual std::optional<creature_tree::Belief> ActedOnBeliefAbout(entt::entity /*creature*/,
+	                                                                              entt::entity /*thing*/) const
+	{
+		return std::nullopt;
+	}
 
 	/// Whether a cell of the land, by its column and row, is clear for a creature to go to: land it can walk on with
 	/// nothing in the way (nor anything living, when asked)
