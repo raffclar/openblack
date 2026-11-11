@@ -1147,7 +1147,7 @@ bool CreatureMindSystem::IsActing(entt::entity creature) const
 {
 	const auto& registry = Locator::entitiesRegistry::value();
 	const auto* mind = registry.Valid(creature) ? registry.TryGet<const CreatureMindState>(creature) : nullptr;
-	return mind != nullptr && (mind->planActive || mind->idle.step < mind->idle.agenda.size());
+	return mind != nullptr && (mind->planActive || !creature_mind::AgendaOver(mind->idle));
 }
 
 bool CreatureMindSystem::IsTakingFromHand(entt::entity creature) const

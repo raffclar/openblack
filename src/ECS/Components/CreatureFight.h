@@ -160,6 +160,64 @@ struct CreatureFighting
 	return fighting.stage == Stage::Ready || (fighting.stage == Stage::FaceOff && turned) ||
 	       (fighting.stage == Stage::Square && turned && !fighting.played);
 }
+/// What the head of the creature that started a fight looks at before the duel
+enum class LeadInLook : uint8_t
+{
+	/// The look that it had before the fight started
+	Before,
+	/// The top of the other creature
+	Opponent,
+	/// It looks about
+	About,
+	/// Straight ahead, as it looks at itself
+	Ahead,
+	/// The other creature, at the height of that creature above the ground below it
+	Partner,
+};
+/// The look of the creature that started a fight, from its fight as the last game turn left it. Each step of the fight
+/// gives its look on the turn after the turn that started the step. A step that waits for nothing after it ends keeps
+/// its look for one more turn.
+[[nodiscard]] constexpr LeadInLook FirstCreatureLook(const CreatureFighting& fighting)
+{
+	using Stage = CreatureFighting::Stage;
+	const bool turned = fighting.faceTurn.phase == creature_turn_to_face::Turn::Phase::Done;
+	switch (fighting.stage)
+	{
+	case Stage::FaceOff:
+		// The request looks at the other creature, the order to stand still has no look, and the order to turn looks at
+		// the creature itself. Its own turn looks at the other creature until the turn ends. The order to taunt has no
+		// look.
+		if (fighting.faceOffTurns == 0)
+		{
+			return LeadInLook::Before;
+		}
+		if (fighting.faceOffTurns == creature_fight::k_FaceOffStillTurn)
+		{
+			return LeadInLook::About;
+		}
+		if (fighting.faceOffTurns == creature_fight::k_FaceOffOrderTurn)
+		{
+			return LeadInLook::Ahead;
+		}
+		return turned ? LeadInLook::About : LeadInLook::Opponent;
+	case Stage::Approach:
+		// The order to walk to the arena and its own walk look at the other creature
+		return LeadInLook::Partner;
+	case Stage::Ready:
+		return LeadInLook::Opponent;
+	case Stage::Square:
+		// The wait for the other creature looks at it for one more turn. The order to turn looks at the creature itself,
+		// and its own turn looks at the other creature until the turn ends. The order to start the duel has no look.
+		if (fighting.faceOffTurns == creature_fight::k_SquareOrderTurn)
+		{
+			return LeadInLook::Ahead;
+		}
+		return turned || fighting.played ? LeadInLook::About : LeadInLook::Opponent;
+	default:
+		// The taunts, the arena and the point at the arena have no look
+		return LeadInLook::About;
+	}
+}
 
 /// What a creature has learnt of fighting, kept between fights
 struct CreatureFightRecord

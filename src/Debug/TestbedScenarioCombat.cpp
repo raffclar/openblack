@@ -74,6 +74,22 @@ void testbed_scenarios::AddCombat(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "combat.lead_in_looks",
+	    .name = "The head of the first tiger follows the steps before the duel",
+	    .facet = Facet::Combat,
+	    .description = "Two somewhat evil tigers are told to fight, and both fight by themselves. Watch the head of the red "
+	                   "tiger, which starts the fight, before the duel.",
+	    .expected = "Each look comes one turn after the step that gives it. The red tiger looks at the blue tiger, looks "
+	                "about for one turn, looks straight ahead for one turn, then looks at the blue tiger as it turns to "
+	                "face it. It looks about through the taunts and as it points at the arena. On the walk to the arena it "
+	                "looks at the blue tiger, and it looks at it while it waits. In the arena it looks straight ahead for "
+	                "one turn, then at the blue tiger as it turns, then about until the duel starts.",
+	    .framing = ringside,
+	    .creatures = {red(PlayerNames::PLAYER_ONE, 0.9f, -0.45f), blue(PlayerNames::PLAYER_TWO, 0.3f, -0.45f)},
+	    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f), Fight(Kind::FightAuto, 0, 1, 0.2f)},
+	});
+
+	all.push_back({
 	    .id = "combat.blow_no_wobble",
 	    .name = "A struck tiger reels with no wobble on top",
 	    .facet = Facet::Combat,

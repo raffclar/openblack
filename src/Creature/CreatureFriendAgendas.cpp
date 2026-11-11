@@ -51,14 +51,17 @@ Step PointAt(uint32_t thing, float seconds, Cue face)
 }
 
 /// An order to the partner. The partner does the step with no face of its own and looks about as it does it. The face
-/// of the order goes to the creature that gives the order: it pulls that face on the turn of the order.
-Step Order(uint32_t partner, Step ordered, Cue askerFace = Cue::None)
+/// and the look of the order go to the creature that gives the order: it pulls that face on the turn of the order, and
+/// its head takes the look while the order is its step. An order to look at the creature itself makes its head look
+/// straight ahead.
+Step Order(uint32_t partner, Step ordered, Cue askerFace = Cue::None, std::optional<Gaze> askerLook = std::nullopt)
 {
 	ordered.face = Cue::None;
 	ordered.gaze.reset();
 	return {.kind = Step::Kind::Order,
 	        .object = partner,
 	        .face = askerFace,
+	        .gaze = askerLook,
 	        .ordered = std::make_shared<const Step>(std::move(ordered))};
 }
 } // namespace
@@ -74,7 +77,7 @@ std::vector<Step> creature_mind::WaveAtFriend(uint32_t self, uint32_t friendly)
 	     .gaze = Gaze {.object = friendly},
 	     .request = creature_friendship::RequestKind::Play},
 	    {.kind = Step::Kind::Demobilise, .object = friendly},
-	    Order(friendly, FaceThing(self, k_FriendFacesWaverSeconds), Cue::Grimace),
+	    Order(friendly, FaceThing(self, k_FriendFacesWaverSeconds), Cue::Grimace, Gaze {.object = self}),
 	    FaceThing(friendly, k_FaceFriendToWaveSeconds, Cue::Smile, Gaze {.object = friendly}),
 	    Order(friendly, PlayOnce(animations::k_FriendlyWave)),
 	    wave,
@@ -151,7 +154,7 @@ std::vector<Step> MeetAt(const Friends& friends, glm::vec2 selfPlace, glm::vec2 
 {
 	return {
 	    AskToBeFriends(friends.friendly),
-	    Order(friends.friendly, GoTo(friendPlace, friends.friendHeight)),
+	    Order(friends.friendly, GoTo(friendPlace, friends.friendHeight), Cue::None, GoingLook(friendPlace)),
 	    GoTo(selfPlace, friends.height, GoingLook(selfPlace)),
 	    WaitForStill(friends.friendly),
 	};
@@ -192,7 +195,7 @@ std::vector<Step> creature_mind::BeHappyWithFriend(const Friends& friends)
 {
 	const auto [selfPlace, friendPlace] = SideBySide(friends);
 	auto agenda = MeetAt(friends, selfPlace, friendPlace);
-	agenda.push_back(Order(friends.friendly, FaceThing(friends.self, k_FaceFriendSeconds)));
+	agenda.push_back(Fluttering(Order(friends.friendly, FaceThing(friends.self, k_FaceFriendSeconds)), friends.self));
 	agenda.push_back(Fluttering(FaceThing(friends.friendly, k_FaceFriendSeconds), friends.friendly));
 	agenda.push_back(Order(friends.friendly, PlayOnce(animations::k_Happy)));
 	agenda.push_back(PlayOnce(animations::k_Happy));
@@ -225,7 +228,8 @@ std::vector<Step> creature_mind::SitWithFriend(const Friends& friends, glm::vec2
 	const auto [selfPlace, friendPlace] = AboutPlace(middle, radius);
 	auto agenda = MeetAt(friends, selfPlace, friendPlace);
 	agenda.back().flutterEyelids = true;
-	agenda.push_back(Order(friends.friendly, FaceThing(friends.self, k_FaceFriendSeconds)));
+	agenda.push_back(
+	    Order(friends.friendly, FaceThing(friends.self, k_FaceFriendSeconds), Cue::None, Gaze {.object = friends.self}));
 	agenda.push_back(FaceThing(friends.friendly, k_FaceFriendSeconds, Cue::None, Gaze {.object = friends.friendly}));
 	agenda.push_back(
 	    Order(friends.friendly, SitFor(k_SitTogetherSeconds + creature_emote::FloatRandom(random, k_SitTogetherExtraSeconds))));
@@ -248,7 +252,7 @@ std::vector<Step> creature_mind::SleepWithFriend(const Friends& friends, glm::ve
 	const auto [selfPlace, friendPlace] = AboutPlace(middle, radius);
 	const auto meet = MeetAt(friends, selfPlace, friendPlace);
 	agenda.insert(agenda.end(), meet.begin(), meet.end());
-	agenda.push_back(Order(friends.friendly, FaceThing(friends.self, k_FaceFriendSeconds)));
+	agenda.push_back(Fluttering(Order(friends.friendly, FaceThing(friends.self, k_FaceFriendSeconds)), friends.self));
 	agenda.push_back(Fluttering(FaceThing(friends.friendly, k_FaceFriendSeconds), friends.friendly));
 	auto sleep = Step {.kind = Step::Kind::Static,
 	                   .seconds = k_SleepTogetherSeconds,
@@ -268,7 +272,7 @@ std::vector<Step> creature_mind::DrinkWithFriend(const Friends& friends, glm::ve
 	auto agenda = MeetAt(friends, coast, friendPlace);
 	const auto faceSea =
 	    Step {.kind = Step::Kind::Move, .movement = {.kind = Movement::Kind::TurnToFace, .point = sea}, .gaze = GoingLook(sea)};
-	agenda.push_back(Order(friends.friendly, faceSea));
+	agenda.push_back(Order(friends.friendly, faceSea, Cue::None, GoingLook(sea)));
 	agenda.push_back(faceSea);
 	agenda.push_back(Order(friends.friendly, PlayOnce(animations::k_Drink)));
 	auto drinkAction = PlayOnce(animations::k_Drink);
@@ -302,7 +306,7 @@ std::vector<Step> creature_mind::TownWithFriend(const Friends& friends, const Fr
 	     .face = Cue::Playfulness,
 	     .gaze = Gaze {.point = glm::vec3 {town.townPoint.x, 0.0f, town.townPoint.y}},
 	     .main = true},
-	    Order(friends.friendly, nearPit),
+	    Order(friends.friendly, nearPit, Cue::None, Gaze {.object = town.pit, .whileGoing = true}),
 	    nearPit,
 	    Order(friends.friendly, FaceThing(friends.self, k_FaceFriendSeconds)),
 	    FaceThing(friends.friendly, k_FaceFriendSeconds),
@@ -347,6 +351,12 @@ Step PointAtPlace(glm::vec3 place, float seconds, Cue face)
 	    .order = {.kind = ObjectOrder::Kind::PointAt, .point = {place.x, place.z}, .pointHeight = place.y, .seconds = seconds},
 	    .face = face,
 	    .gaze = Gaze {.point = place}};
+}
+
+/// The look at the ground below a place. While the creature moves near the place, it does not look at it.
+Gaze LookAtPlace(glm::vec3 place)
+{
+	return {.point = glm::vec3(place.x, 0.0f, place.z), .pointOnGround = true};
 }
 
 Step TurnToFacePlace(glm::vec3 place)
@@ -423,9 +433,10 @@ std::vector<Step> creature_mind::KissFriend(const Friends& friends, float kissin
 	face.face = Cue::Compassion;
 	std::vector<Step> agenda {
 	    AskToBeFriends(friends.friendly),
-	    Order(friends.friendly, GoTo(friendPlace, k_KissPlaceWithin), Cue::Puzzled),
+	    Order(friends.friendly, GoTo(friendPlace, k_KissPlaceWithin), Cue::Puzzled,
+	          LookAtPlace(glm::vec3(friendPlace.x, 0.0f, friendPlace.y))),
 	    goToPlace,
-	    Order(friends.friendly, FaceThing(friends.self, k_FaceFriendSeconds)),
+	    Fluttering(Order(friends.friendly, FaceThing(friends.self, k_FaceFriendSeconds)), friends.self),
 	    face,
 	    Order(friends.friendly, {.kind = Step::Kind::Kiss, .object = friends.self}),
 	    Main({.kind = Step::Kind::Kiss, .object = friends.friendly}),
@@ -440,28 +451,35 @@ std::vector<Step> creature_mind::KissFriend(const Friends& friends, float kissin
 
 namespace
 {
-std::vector<Step> TalkAgenda(uint32_t self, uint32_t friendly, float height, const Random& random, Step answer)
+/// The steps of a talk. When fluttering is true, the order of the answer makes the talker flutter its eyelids, and its
+/// head looks straight ahead.
+std::vector<Step> TalkAgenda(uint32_t self, uint32_t friendly, float height, const Random& random, Step answer, bool fluttering)
 {
+	auto answerOrder = Order(friendly, std::move(answer));
+	if (fluttering)
+	{
+		answerOrder = Fluttering(std::move(answerOrder), self);
+	}
 	const float seconds = k_FaceToTalkSeconds + creature_emote::FloatRandom(random, k_FaceToTalkExtraSeconds);
 	return {
 	    Fluttering(GoNear(friendly, k_TalkNearHeights * height, std::nullopt, Cue::Smile), friendly),
 	    Main(Fluttering(FaceThing(friendly, seconds, Cue::Smile), friendly)),
 	    AskToBeFriends(friendly),
-	    Order(friendly, FaceThing(self, k_FriendFacesTalkerSeconds)),
+	    Order(friendly, FaceThing(self, k_FriendFacesTalkerSeconds), Cue::None, Gaze {.object = self}),
 	    Talk(friendly),
-	    Order(friendly, std::move(answer)),
+	    answerOrder,
 	};
 }
 } // namespace
 
 std::vector<Step> creature_mind::TalkToFriend(uint32_t self, uint32_t friendly, float height, const Random& random)
 {
-	return TalkAgenda(self, friendly, height, random, {.kind = Step::Kind::Overlay, .animation = animations::k_Talk});
+	return TalkAgenda(self, friendly, height, random, {.kind = Step::Kind::Overlay, .animation = animations::k_Talk}, true);
 }
 
 std::vector<Step> creature_mind::TellFriendAJoke(uint32_t self, uint32_t friendly, float height, const Random& random)
 {
-	return TalkAgenda(self, friendly, height, random, PlayOnce(k_Laugh));
+	return TalkAgenda(self, friendly, height, random, PlayOnce(k_Laugh), false);
 }
 
 std::vector<Step> creature_mind::DanceWithFriend(uint32_t self, uint32_t friendly, float height)
@@ -474,7 +492,7 @@ std::vector<Step> creature_mind::DanceWithFriend(uint32_t self, uint32_t friendl
 	Append(agenda, std::array {
 	                   AskToBeFriends(friendly),
 	                   Demobilise(friendly, true),
-	                   Order(friendly, FaceThing(self, k_FaceFriendSeconds)),
+	                   Order(friendly, FaceThing(self, k_FaceFriendSeconds), Cue::None, Gaze {.object = self}),
 	                   wait,
 	                   Order(friendly, dance, Cue::Playfulness),
 	                   Main(dance),
@@ -572,13 +590,13 @@ std::vector<Step> creature_mind::TellCreatureToSodOff(uint32_t self, uint32_t ot
 	return {
 	    Ask(other, creature_friendship::RequestKind::Fight, Cue::Playfulness),
 	    Demobilise(other, true),
-	    Order(other, FaceThing(self, k_FaceFriendSeconds), Cue::Grimace),
+	    Order(other, FaceThing(self, k_FaceFriendSeconds), Cue::Grimace, Gaze {.object = self}),
 	    FaceThing(other, k_FaceToSodOffSeconds, Cue::Smile, Gaze {.object = other}),
 	    angry,
 	    Main(PointAtPlace(away, k_PointAwaySeconds, Cue::Grimace)),
 	    Order(other, PlayOnce(animations::k_Sad)),
 	    angry,
-	    Order(other, GoTo({away.x, away.z}, k_GoAwayWithinHeights * otherHeight)),
+	    Order(other, GoTo({away.x, away.z}, k_GoAwayWithinHeights * otherHeight), Cue::None, GoingLook({away.x, away.z})),
 	    WaitForStill(other),
 	    Order(other, PlayOnce(animations::k_Sad)),
 	    angry,
@@ -591,9 +609,9 @@ std::vector<Step> creature_mind::ExamineOtherCreatureWithFriend(uint32_t friendl
 	std::vector<Step> agenda {
 	    Ask(friendly, creature_friendship::RequestKind::Play, Cue::Playfulness),
 	    Demobilise(friendly, true),
-	    Order(friendly, FaceThing(other, k_FaceFriendSeconds), Cue::Playfulness),
+	    Order(friendly, FaceThing(other, k_FaceFriendSeconds), Cue::Playfulness, Gaze {.object = other}),
 	    FaceThing(other, k_FaceFriendSeconds, Cue::Playfulness, Gaze {.object = other}),
-	    Order(friendly, PointAt(other, k_PointAtExaminedSeconds, Cue::None), Cue::Playfulness),
+	    Order(friendly, PointAt(other, k_PointAtExaminedSeconds, Cue::None), Cue::Playfulness, Gaze {.object = other}),
 	    PointAt(other, k_PointAtExaminedSeconds, Cue::Playfulness),
 	};
 	if (random(2) == 0)
@@ -632,7 +650,7 @@ std::vector<Step> creature_mind::SitOnTopOfHillWithFriend(const Friends& friends
 	const auto friendSits = SitFor(k_SitTogetherSeconds + creature_emote::FloatRandom(random, k_SitTogetherExtraSeconds));
 	const auto sits = SitFor(k_SitTogetherSeconds + creature_emote::FloatRandom(random, k_SitTogetherExtraSeconds));
 	Append(agenda, std::array {
-	                   Order(friends.friendly, GoTo(friendPlace, within)),
+	                   Order(friends.friendly, GoTo(friendPlace, within), Cue::None, GoingLook(friendPlace)),
 	                   GoTo(selfPlace, within, GoingLook(selfPlace)),
 	                   WaitForStill(friends.friendly),
 	                   Order(friends.friendly, faceDown),
@@ -681,7 +699,8 @@ std::vector<Step> creature_mind::PlayThrowingGameWithFriend(const Friends& frien
 	    Demobilise(friends.friendly, true),
 	};
 	Append(agenda, HappyAtFriend(friends.friendly));
-	agenda.push_back(Order(friends.friendly, FaceThing(friends.self, k_FaceFriendSeconds), Cue::Grimace));
+	agenda.push_back(
+	    Order(friends.friendly, FaceThing(friends.self, k_FaceFriendSeconds), Cue::Grimace, Gaze {.object = friends.self}));
 	if (!handFull)
 	{
 		agenda.push_back(PickUpThing(toy));
@@ -691,7 +710,7 @@ std::vector<Step> creature_mind::PlayThrowingGameWithFriend(const Friends& frien
 	Append(agenda, std::array {
 	                   Main(ThrowAt(atFriend)),
 	                   WaitFor(k_WaitAfterThrowSeconds),
-	                   Order(friends.friendly, PickUpThing(toy)),
+	                   Order(friends.friendly, PickUpThing(toy), Cue::None, Gaze {.object = toy, .whileGoing = true}),
 	                   WaitForStill(friends.friendly),
 	                   Order(friends.friendly, ThrowAt(atSelf)),
 	                   WaitForStill(friends.friendly),
@@ -705,7 +724,7 @@ std::vector<Step> creature_mind::GiveFriendToy(uint32_t self, uint32_t friendly,
 {
 	std::vector<Step> agenda {
 	    AskToBeFriends(friendly),
-	    Order(friendly, PointAt(self, k_FriendPointsAtGiverSeconds, Cue::None), Cue::Smile),
+	    Fluttering(Order(friendly, PointAt(self, k_FriendPointsAtGiverSeconds, Cue::None), Cue::Smile), self),
 	};
 	if (!handFull)
 	{
@@ -744,21 +763,21 @@ std::vector<Step> creature_mind::ShowFriendCitadel(const Friends& friends, const
 	wait.face = Cue::Grimace;
 	const float friendWaits = k_ShowCitadelWaitSeconds + creature_emote::FloatRandom(random, k_ShowCitadelWaitExtraSeconds);
 	const float waits = k_ShowCitadelWaitSeconds + creature_emote::FloatRandom(random, k_ShowCitadelWaitExtraSeconds);
-	Append(agenda,
-	       std::array {
-	           FaceThing(friends.friendly, k_FaceFriendSeconds, Cue::Compassion, Gaze {.object = friends.friendly}),
-	           Ask(friends.friendly, creature_friendship::RequestKind::BeShown),
-	           Order(friends.friendly,
-	                 GoTo(heart, (friendRadius * k_CitadelNearRadii) + (citadel.radius * k_CitadelHeartRadii)), Cue::Puzzled),
-	           GoTo(heart, (radius * k_CitadelNearRadii) + (citadel.radius * k_CitadelHeartRadii), GoingLook(heart)),
-	           wait,
-	           Main(PointAtPlace(citadel.point, k_PointAtCitadelSeconds, Cue::Grimace)),
-	           Order(friends.friendly, TurnToFacePlace(head)),
-	           WaitForFree(friends.friendly),
-	           Order(friends.friendly, TurnToFacePlace(citadel.point)),
-	           Order(friends.friendly, WaitFor(friendWaits), Cue::Puzzled),
-	           WaitFor(waits, Cue::Compassion, Gaze {.feet = true}),
-	       });
+	Append(agenda, std::array {
+	                   FaceThing(friends.friendly, k_FaceFriendSeconds, Cue::Compassion, Gaze {.object = friends.friendly}),
+	                   Ask(friends.friendly, creature_friendship::RequestKind::BeShown),
+	                   Order(friends.friendly,
+	                         GoTo(heart, (friendRadius * k_CitadelNearRadii) + (citadel.radius * k_CitadelHeartRadii)),
+	                         Cue::Puzzled, GoingLook(heart)),
+	                   GoTo(heart, (radius * k_CitadelNearRadii) + (citadel.radius * k_CitadelHeartRadii), GoingLook(heart)),
+	                   wait,
+	                   Main(PointAtPlace(citadel.point, k_PointAtCitadelSeconds, Cue::Grimace)),
+	                   Order(friends.friendly, TurnToFacePlace(head), Cue::None, LookAtPlace(head)),
+	                   WaitForFree(friends.friendly),
+	                   Order(friends.friendly, TurnToFacePlace(citadel.point), Cue::None, LookAtPlace(citadel.point)),
+	                   Order(friends.friendly, WaitFor(friendWaits), Cue::Puzzled),
+	                   WaitFor(waits, Cue::Compassion, Gaze {.feet = true}),
+	               });
 	return agenda;
 }
 

@@ -239,6 +239,8 @@ WatchPlayerViewOf(const ecs::Registry& registry, entt::entity creature, const co
                   bool bodyBusy);
 /// Lets go of the miracle the creature holds, as it stops what it was doing
 void ReleaseCast(entt::entity creature);
+/// The look of the turn changes the eyes: how they look, and how often the eyelids blink
+void ApplyLookEyes(components::CreatureEyes* eyes, const creature_mind::LookEyes& look);
 /// The creature stops what it does: its eyes go calm, blink as usual, and its lids open by how rested it is
 void RestEyes(const ecs::Registry& registry, entt::entity creature, components::CreatureEyes* eyes);
 /// The developer log of the clips notes that the body refused a clip, because it played another action

@@ -12,6 +12,7 @@
 
 #include <algorithm>
 #include <memory>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -545,6 +546,80 @@ TEST(CreatureJointActions, TheAskerPullsTheFaceOfEachOrder)
 		for (const auto face : FacesOfOrders(agenda))
 		{
 			EXPECT_EQ(face, Cue::None);
+		}
+	}
+}
+
+namespace
+{
+/// The looks that the creature which asks takes while its orders are its steps, in agenda order: "-" for no look,
+/// "ahead" for a look at itself, "thing" for a look at another thing, "going" for the look on the way to a place or a
+/// thing, "ground" for the look at the ground below a place. A look that flutters the eyelids ends in "+flutter".
+std::vector<std::string> LooksOfOrders(const std::vector<Step>& agenda)
+{
+	std::vector<std::string> looks;
+	for (const auto& step : agenda)
+	{
+		if (step.kind != Step::Kind::Order)
+		{
+			continue;
+		}
+		std::string look = "-";
+		if (step.gaze.has_value())
+		{
+			look = step.gaze->whileGoing          ? "going"
+			       : step.gaze->pointOnGround     ? "ground"
+			       : step.gaze->object == k_Asker ? "ahead"
+			                                      : "thing";
+		}
+		if (step.flutterEyelids)
+		{
+			look += "+flutter";
+		}
+		looks.push_back(look);
+	}
+	return looks;
+}
+} // namespace
+
+TEST(CreatureJointActions, TheAskerTakesTheLookOfEachOrder)
+{
+	using Looks = std::vector<std::string>;
+	const auto friends = TwoFriends();
+	EXPECT_EQ(LooksOfOrders(creature_mind::WaveAtFriend(k_Asker, k_Friend)), (Looks {"ahead", "-"}));
+	EXPECT_EQ(LooksOfOrders(creature_mind::BeHappyWithFriend(friends)), (Looks {"going", "ahead+flutter", "-"}));
+	EXPECT_EQ(LooksOfOrders(creature_mind::PooWithFriend(friends, Always(0))), (Looks {"going", "-", "-"}));
+	EXPECT_EQ(LooksOfOrders(creature_mind::SitWithFriend(friends, {10.0f, 20.0f}, 40.0f, Always(0))),
+	          (Looks {"going", "ahead", "-"}));
+	EXPECT_EQ(LooksOfOrders(creature_mind::SleepWithFriend(friends, {10.0f, 20.0f}, 40.0f, Always(1))),
+	          (Looks {"going", "ahead+flutter", "-"}));
+	EXPECT_EQ(LooksOfOrders(creature_mind::DrinkWithFriend(friends, {10.0f, 20.0f}, {30.0f, 20.0f}, Always(0))),
+	          (Looks {"going", "going", "-", "-"}));
+	EXPECT_EQ(LooksOfOrders(creature_mind::KissFriend(friends, 2.0f, 5.0f, Always(1))),
+	          (Looks {"ground", "ahead+flutter", "-"}));
+	EXPECT_EQ(LooksOfOrders(creature_mind::TalkToFriend(k_Asker, k_Friend, 10.0f, Always(0))),
+	          (Looks {"ahead", "ahead+flutter"}));
+	EXPECT_EQ(LooksOfOrders(creature_mind::TellFriendAJoke(k_Asker, k_Friend, 10.0f, Always(0))), (Looks {"ahead", "-"}));
+	EXPECT_EQ(LooksOfOrders(creature_mind::DanceWithFriend(k_Asker, k_Friend, 10.0f)), (Looks {"ahead", "-"}));
+	EXPECT_EQ(LooksOfOrders(creature_mind::TellCreatureToSodOff(k_Asker, k_Friend, {}, {10.0f, 0.0f, 0.0f}, 20.0f, Always(1))),
+	          (Looks {"ahead", "-", "going", "-"}));
+	EXPECT_EQ(LooksOfOrders(creature_mind::ExamineOtherCreatureWithFriend(k_Friend, 3, Always(0))),
+	          (Looks {"thing", "thing", "-"}));
+	EXPECT_EQ(LooksOfOrders(creature_mind::PlayThrowingGameWithFriend(friends, 4, {}, {}, false)),
+	          (Looks {"ahead", "going", "-"}));
+	EXPECT_EQ(LooksOfOrders(creature_mind::GiveFriendToy(k_Asker, k_Friend, 4, false, Always(2))),
+	          (Looks {"ahead+flutter", "-", "-"}));
+	EXPECT_EQ(LooksOfOrders(creature_mind::ShowFriendCitadel(friends, {.point = {50.0f, 2.0f, 50.0f}, .radius = 10.0f}, 3.0f,
+	                                                         2.0f, {1.0f, 2.0f, 3.0f}, false, InTurn({0, 0}))),
+	          (Looks {"going", "ground", "ground", "-"}));
+	// Arguing, moping and showing off give their orders with no look
+	for (const auto& agenda : {creature_mind::ArgueWithFriend(k_Asker, k_Friend, 10.0f, Always(0)),
+	                           creature_mind::MopeAboutWithFriend(k_Asker, k_Friend, 10.0f, Always(0)),
+	                           creature_mind::ShowOffToFriend(k_Asker, k_Friend, 10.0f, {}, Always(0))})
+	{
+		for (const auto& look : LooksOfOrders(agenda))
+		{
+			EXPECT_EQ(look, "-");
 		}
 	}
 }
