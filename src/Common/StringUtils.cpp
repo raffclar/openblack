@@ -17,15 +17,6 @@
 #include <string_view>
 #include <vector>
 
-bool openblack::string_utils::EndsWith(const std::string& string, const std::string& ending)
-{
-	if (string.length() < ending.length())
-	{
-		return false;
-	}
-	return string.compare(string.length() - ending.length(), ending.length(), ending) == 0;
-}
-
 bool openblack::string_utils::BeginsWith(const std::string& string, const std::string& beginning)
 {
 	if (string.length() < beginning.length())
@@ -49,13 +40,6 @@ std::string openblack::string_utils::LowerCase(const std::string& string)
 	std::transform(lowercase.begin(), lowercase.end(), lowercase.begin(),
 	               [](auto c) { return static_cast<unsigned char>(std::tolower(static_cast<unsigned char>(c))); });
 	return lowercase;
-}
-
-std::string openblack::string_utils::Capitalise(const std::string& string)
-{
-	auto capitalised = string;
-	capitalised[0] = static_cast<unsigned char>(std::toupper(static_cast<unsigned char>(string[0])));
-	return capitalised;
 }
 
 [[nodiscard]] std::vector<std::string> openblack::string_utils::Split(const std::string& string, const std::string& delimiter)

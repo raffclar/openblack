@@ -385,15 +385,6 @@ int WriteAnimationFile(const std::filesystem::path& outFilename) noexcept
 	return EXIT_SUCCESS;
 }
 
-int WriteSoundFile(const std::filesystem::path& outFilename) noexcept
-{
-	openblack::pack::PackFile pack;
-	pack.CreateBodyBlock();
-	pack.Write(outFilename);
-
-	return EXIT_SUCCESS;
-}
-
 struct Arguments
 {
 	enum class Mode : uint8_t
