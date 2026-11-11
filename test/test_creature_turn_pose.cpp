@@ -7,6 +7,7 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <cmath>
 #include <cstdint>
 #include <cstring>
 
@@ -228,4 +229,29 @@ TEST(CreatureTurnPose, ThePosedBonesAreTheBonesInTheWorld)
 			ASSERT_EQ(std::memcmp(&kept, &made, sizeof(made)), 0) << round;
 		}
 	}
+}
+
+// The game blends the two turn poses number by number, not as turns. A small turn between two game turns keeps the body's
+// size, but a body that turns far between two game turns is drawn narrow at the middle of the turn, and flat for a half
+// turn. Thus the turns must not make the body jump far between two poses.
+TEST(CreatureTurnPose, TheBlendOfTwoHeadingsKeepsTheSizeOnlyForASmallTurn)
+{
+	const auto headingBone = [](float degrees) {
+		return glm::rotate(glm::mat4(1.0f), glm::radians(degrees), glm::vec3(0.0f, 1.0f, 0.0f));
+	};
+	const auto middleWidth = [&headingBone](float degrees) {
+		const std::array older {headingBone(0.0f)};
+		const std::array newer {headingBone(degrees)};
+		std::array<glm::mat4, 1> drawn {};
+		Blend(older, newer, 0.5f, drawn);
+		// The axis up the body does not turn, and keeps its length
+		EXPECT_FLOAT_EQ(glm::length(glm::vec3(drawn[0][1])), 1.0f);
+		EXPECT_NEAR(glm::length(glm::vec3(drawn[0][0])), glm::length(glm::vec3(drawn[0][2])), 1e-6f);
+		return glm::length(glm::vec3(drawn[0][0]));
+	};
+	EXPECT_NEAR(middleWidth(0.0f), 1.0f, 1e-6f);
+	EXPECT_NEAR(middleWidth(20.0f), std::cos(glm::radians(10.0f)), 1e-6f);
+	EXPECT_GT(middleWidth(20.0f), 0.98f);
+	EXPECT_NEAR(middleWidth(90.0f), std::cos(glm::radians(45.0f)), 1e-6f);
+	EXPECT_NEAR(middleWidth(180.0f), 0.0f, 1e-6f);
 }

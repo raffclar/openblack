@@ -1406,6 +1406,20 @@ void testbed_scenarios::AddCombat(std::vector<Scenario>& all)
 		    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f), Fight(Kind::FightAuto, 0, 1, 0.2f)},
 		});
 		all.push_back({
+		    .id = "combat.face_off_turn_keeps_size",
+		    .name = "Fighters turn to face off and keep their size",
+		    .facet = Facet::Combat,
+		    .description = "The red tiger and the blue tiger stand side by side and face the same way. The red tiger starts "
+		                   "a fight, so each tiger turns on the spot to face the other. The camera looks at the arena "
+		                   "from the side.",
+		    .expected = "Each tiger turns smoothly and then faces the other. At the end of the turn the body does "
+		                "not swing back to its old heading, and it does not become flat or narrow for a moment.",
+		    .framing = ringside,
+		    .creatures = {Fighter(left, 0.0f, "red", PlayerNames::PLAYER_ONE, 0.6f, -0.2f),
+		                  Fighter(right, 0.0f, "blue", PlayerNames::PLAYER_TWO, 0.5f, -0.2f)},
+		    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f), Fight(Kind::FightAuto, 0, 1, 0.2f)},
+		});
+		all.push_back({
 		    .id = "combat.queued_blows",
 		    .name = "Queued blows follow each other at once",
 		    .facet = Facet::Combat,
