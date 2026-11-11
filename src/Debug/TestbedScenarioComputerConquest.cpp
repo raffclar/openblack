@@ -132,11 +132,38 @@ void testbed_scenarios::AddComputerGodConquestScenarios(std::vector<Scenario>& a
 	    .description = "The land of the feed scenario, with the tiger of player two between the temple and its town. "
 	                   "After 30 seconds, a testbed tool puts the action UseCreatureToImpressTown in the queue of the "
 	                   "god, with the neutral town and the tiger.",
-	    .expected = "The hand puts the leash on the tiger and ties the leash to the storage pit of the neutral town. The "
-	                "tiger wants to impress for two minutes, walks to the town and does impressive things there. The "
-	                "players.list query shows the steps of the hand.",
+	    .expected = "The hand puts the leash on the tiger and ties the leash to the storage pit of the neutral town. "
+	                "Impress is the dominant desire for two minutes. The tiger has not seen a person or the totem of "
+	                "the neutral town, so it has no plan to impress it and it does not go there. It does what its other "
+	                "desires and the next orders of the god tell it, as in the game. The players.list query shows the "
+	                "steps of the hand.",
 	    .framing = ConquestFraming(),
 	    .creatures = {GodTiger()},
+	    .landScript = k_NeutralTownScript,
+	    .worshipShare = 0.5f,
+	    .computerActions = {{.afterTurns = k_Wait,
+	                         .node = "UseCreatureToImpressTown",
+	                         .first = k_NeutralTown,
+	                         .second = {.kind = ComputerActionThing::Kind::Creature, .object = 0}}},
+	});
+	all.push_back({
+	    .id = "mind.computer_god_creature_impress_known_town",
+	    .name = "A computer god that sends its creature to impress a neutral town that it knows",
+	    .facet = Facet::Mind,
+	    .description = "The land of the creature impress scenario. The tiger of player two starts between the two "
+	                   "abodes of the neutral town, where it sees the people of the town. After 30 seconds, a testbed "
+	                   "tool puts the action UseCreatureToImpressTown in the queue of the god, with the neutral town "
+	                   "and the tiger.",
+	    .expected = "The hand puts the leash on the tiger and ties the leash to the storage pit of the neutral town. "
+	                "Impress is the dominant desire for two minutes. The tiger plans to impress the neutral town and "
+	                "acts on one of its people: it dances with the people or shows an impressive animation to them. The "
+	                "creature.plan query shows the desire Impress about the neutral town.",
+	    .framing = ConquestFraming(),
+	    .creatures = {[] {
+		    auto tiger = GodTiger();
+		    tiger.offset = {170.0f, 60.0f};
+		    return tiger;
+	    }()},
 	    .landScript = k_NeutralTownScript,
 	    .worshipShare = 0.5f,
 	    .computerActions = {{.afterTurns = k_Wait,
