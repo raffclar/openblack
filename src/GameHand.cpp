@@ -547,10 +547,11 @@ void Game::EndHandLockForFrame()
 	{
 		return;
 	}
-	// The action of the hand of this computer, and whether the action needs the thing or the seed that the hand holds
+	// The action of the hand of this computer, and the thing or the seed that the action needs
 	auto action = hand_send_wait::FrameAction::Free;
 	std::optional<entt::entity> held;
 	const bool hasGrab = Locator::handGrabSystem::has_value();
+	const auto taking = hasGrab ? Locator::handGrabSystem::value().GetTaking() : std::nullopt;
 	if (Locator::magicSystem::has_value() &&
 	    Locator::magicSystem::value().GetHandCastState().state != magic::CastInput::State::Idle)
 	{
@@ -562,9 +563,13 @@ void Game::EndHandLockForFrame()
 		action = hand_send_wait::FrameAction::UsesHeld;
 		held = Locator::handGrabSystem::value().GetHeld();
 	}
+	else if (taking.has_value())
+	{
+		// The hand presses on a thing to take it, and waits, pulls or waits for the turn that puts it in the hand
+		action = hand_send_wait::FrameAction::Takes;
+	}
 	else if ((Locator::creatureHandSystem::has_value() && Locator::creatureHandSystem::value().GetCreature().has_value()) ||
-	         (hasGrab &&
-	          (Locator::handGrabSystem::value().GetLockedOn().has_value() || Locator::handGrabSystem::value().IsPulling())))
+	         (hasGrab && Locator::handGrabSystem::value().GetLockedOn().has_value()))
 	{
 		action = hand_send_wait::FrameAction::Other;
 	}
@@ -577,6 +582,7 @@ void Game::EndHandLockForFrame()
 	    .action = action,
 	    .bothButtons = buttons.left && buttons.right,
 	    .heldThere = held.has_value() && Locator::entitiesRegistry::value().Valid(*held),
+	    .takenThere = taking.has_value() && Locator::entitiesRegistry::value().Valid(*taking),
 	};
 	if (hand_send_wait::FrameEndsLock(facts))
 	{

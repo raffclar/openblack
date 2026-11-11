@@ -127,4 +127,9 @@ TEST(HandSendWait, TheFrameEndsTheLockForABoxAnInterfaceThatIsOffBothButtonsOrAH
 	EXPECT_TRUE(FrameEndsLock({.action = FrameAction::UsesHeld, .heldThere = false}));
 	EXPECT_FALSE(FrameEndsLock({.action = FrameAction::UsesHeld, .heldThere = true}));
 	EXPECT_FALSE(FrameEndsLock({.action = FrameAction::Other, .heldThere = false}));
+	// The take of a thing ends with both buttons, and when the thing is not there
+	EXPECT_TRUE(FrameEndsLock({.action = FrameAction::Takes, .bothButtons = true, .takenThere = true}));
+	EXPECT_TRUE(FrameEndsLock({.action = FrameAction::Takes, .takenThere = false}));
+	EXPECT_FALSE(FrameEndsLock({.action = FrameAction::Takes, .takenThere = true}));
+	EXPECT_FALSE(FrameEndsLock({.action = FrameAction::Other, .takenThere = false}));
 }
