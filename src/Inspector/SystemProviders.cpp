@@ -28,6 +28,7 @@
 #include "Creature/CreatureMindTables.h"
 #include "Creature/CreatureMindView.h"
 #include "Creature/CreaturePlanner.h"
+#include "Creature/CreatureTreeView.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/AudioEmitter.h"
 #include "ECS/Components/CreatureMind.h"
@@ -1008,6 +1009,166 @@ std::unique_ptr<ProviderInterface> openblack::inspector::MakeCreatureProvider(Cr
 		                               {"opinions_size", learnt.opinions.size()},
 		                               {"contexts", std::move(contexts)},
 		                               {"trees", std::move(trees)}});
+	    });
+	provider->Add(
+	    Query("trees",
+	          "A creature's decision trees as nodes: for each desire and tree kind (activity: the whole thing that the desire "
+	          "is about; act_on: the thing to act on), each node's test, branches and child nodes, a leaf's value (-1 to 1) "
+	          "and count of examples, and its place in the drawing (x in leaf columns, y the depth); the examples that the "
+	          "tree grew from; and, given a thing, the path of the thing from the root",
+	          {id, Parameter("desire", "string", "Only this desire, by name (e.g. Hunger) or number", false),
+	           Parameter("tree", "string", "Only this tree: activity or act_on", false),
+	           Parameter("thing", "integer", "The entity id of a thing: the path of the thing through each tree", false),
+	           Parameter("empty", "boolean", "Also the trees with no examples", false)}),
+	    [sources](const QueryContext& context) {
+		    const auto* registry = Registry(sources.world);
+		    if (registry == nullptr)
+		    {
+			    return QueryResult::Error(std::string(k_NoRegistry));
+		    }
+		    const auto creature = CreatureParam(*registry, context.params);
+		    if (const auto* problem = std::get_if<std::string>(&creature); problem != nullptr)
+		    {
+			    return QueryResult::Error(*problem);
+		    }
+		    const auto entity = std::get<entt::entity>(creature);
+		    const auto& mind = registry->Get<const CreatureMindState>(entity);
+		    if (!mind.learnt.has_value())
+		    {
+			    return QueryResult::Error("its learning isn't set up yet: its mind hasn't thought");
+		    }
+		    std::optional<size_t> onlyDesire;
+		    if (const auto name = StringMember(context.params, "desire"); name.has_value())
+		    {
+			    for (size_t d = 0; d < creature_desires::k_DesireCount; ++d)
+			    {
+				    if (creature_desires::Name(static_cast<creature_desires::Desire>(d)) == *name || std::to_string(d) == *name)
+				    {
+					    onlyDesire = d;
+				    }
+			    }
+			    if (!onlyDesire.has_value())
+			    {
+				    return QueryResult::Error("no desire of that name or number");
+			    }
+		    }
+		    else if (const auto number = NumberMember(context.params, "desire"); number.has_value())
+		    {
+			    if (*number < 0.0 || *number >= static_cast<double>(creature_desires::k_DesireCount))
+			    {
+				    return QueryResult::Error("no desire of that number");
+			    }
+			    onlyDesire = static_cast<size_t>(*number);
+		    }
+		    std::optional<size_t> onlyKind;
+		    if (const auto kind = StringMember(context.params, "tree"); kind.has_value())
+		    {
+			    if (*kind == "activity")
+			    {
+				    onlyKind = static_cast<size_t>(creature_mind_model::TreeKind::Activity);
+			    }
+			    else if (*kind == "act_on" || *kind == "act on")
+			    {
+				    onlyKind = static_cast<size_t>(creature_mind_model::TreeKind::ActOn);
+			    }
+			    else
+			    {
+				    return QueryResult::Error("tree is activity or act_on");
+			    }
+		    }
+		    const auto thing = EntityParam(*registry, context.params, "thing");
+		    if (context.params.contains("thing") && !thing.has_value())
+		    {
+			    return QueryResult::Error("no such thing");
+		    }
+		    const bool withEmpty = BoolMember(context.params, "empty").value_or(false) || onlyDesire.has_value();
+		    const auto& learnt = *mind.learnt;
+		    auto trees = Json::array();
+		    for (size_t k = 0; k < creature_mind_model::k_TreeKinds; ++k)
+		    {
+			    if (onlyKind.has_value() && *onlyKind != k)
+			    {
+				    continue;
+			    }
+			    const bool actOn = k == static_cast<size_t>(creature_mind_model::TreeKind::ActOn);
+			    for (size_t d = 0; d < creature_desires::k_DesireCount; ++d)
+			    {
+				    const auto& tree = learnt.trees.at(k).at(d);
+				    const auto& episodes = learnt.episodes.at(k).at(d);
+				    if ((onlyDesire.has_value() && *onlyDesire != d) || (!withEmpty && episodes.empty()))
+				    {
+					    continue;
+				    }
+				    const auto layout = creature_tree_view::LayOut(tree);
+				    auto nodes = Json::array();
+				    for (size_t i = 0; i < tree.nodes.size(); ++i)
+				    {
+					    const auto& node = tree.nodes[i];
+					    Json item {
+					        {"node", i}, {"examples", node.examples}, {"x", layout.nodes.at(i).x}, {"y", layout.nodes.at(i).y}};
+					    if (node.test.has_value())
+					    {
+						    auto branches = Json::array();
+						    for (const auto& [value, child] : node.children)
+						    {
+							    branches.push_back({{"value", value},
+							                        {"value_name", creature_tree_view::ValueName(*node.test, value)},
+							                        {"node", child}});
+						    }
+						    item["test"] = creature_tree::Name(*node.test);
+						    item["branches"] = std::move(branches);
+					    }
+					    else
+					    {
+						    item["leaf"] = creature_tree_view::LeafValue(node);
+						    item["bucket"] = node.bucket;
+					    }
+					    nodes.push_back(std::move(item));
+				    }
+				    auto examples = Json::array();
+				    for (size_t e = 0; e < episodes.size(); ++e)
+				    {
+					    const auto& episode = episodes[e];
+					    auto attributes = Json::object();
+					    for (const auto attribute : creature_tree::SlotsFor(episode.belief.type))
+					    {
+						    const auto value = episode.belief.Value(attribute);
+						    attributes[creature_tree::Name(attribute)] = value.has_value() ? Json(*value) : Json(nullptr);
+					    }
+					    examples.push_back({{"order", e + 1},
+					                        {"kind", creature_tree::BeliefName(episode.belief.type)},
+					                        {"attributes", std::move(attributes)},
+					                        {"feedback", episode.feedback},
+					                        {"lesson_kind", episode.lessonKind}});
+				    }
+				    Json item {{"tree", actOn ? "act_on" : "activity"},
+				               {"desire", creature_desires::Name(static_cast<creature_desires::Desire>(d))},
+				               {"columns", layout.columns},
+				               {"rows", layout.rows},
+				               {"nodes", std::move(nodes)},
+				               {"examples", std::move(examples)}};
+				    if (thing.has_value())
+				    {
+					    const auto& believe = actOn ? sources.actedOnBeliefAbout : sources.beliefAbout;
+					    const auto belief = believe ? believe(entity, *thing) : std::nullopt;
+					    if (belief.has_value())
+					    {
+						    const auto path = creature_tree_view::PathOf(tree, *belief);
+						    item["path"] = {{"thing", ToId(*thing)},
+						                    {"kind", creature_tree::BeliefName(belief->type)},
+						                    {"nodes", path.nodes},
+						                    {"reaches_leaf", path.reachesLeaf},
+						                    {"value", creature_tree::Evaluate(tree, *belief)}};
+					    }
+					    else
+					    {
+						    item["path"] = nullptr;
+					    }
+				    }
+				    trees.push_back(std::move(item));
+			    }
+		    }
+		    return QueryResult::Value({{"id", ToId(entity)}, {"trees", std::move(trees)}});
 	    });
 	provider->Add(
 	    Query("beliefs",

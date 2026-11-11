@@ -1601,7 +1601,7 @@ struct Scenario
 	bool objectsAfterLandScript {false};
 	/// Actions of computer gods that the testbed tool forces once the scenario is laid out, in order
 	std::vector<ComputerActionSetup> computerActions;
-	/// The debug window opened as the scenario starts, by its name; none when empty
+	/// The debug window opened as the scenario starts, by its name ("Window/Tab" opens it on a tab); none when empty
 	std::string_view debugWindow;
 	/// After the land script, the start of a network game fills each slot with no player, as for a game where player
 	/// one is the only human

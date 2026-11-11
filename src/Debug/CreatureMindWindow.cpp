@@ -48,6 +48,8 @@ using openblack::ecs::components::Transform;
 namespace
 {
 constexpr float k_TurnsPerSecond = 1000.0f / static_cast<float>(ecs::systems::TimeSystemInterface::k_TurnDuration.count());
+constexpr std::string_view k_PlansTab = "Desires and plans";
+constexpr std::string_view k_TreesTab = "Decision trees";
 /// The label stands this far above the creature's feet, in units of its size
 constexpr float k_LabelHeight = 17.0f;
 
@@ -106,7 +108,7 @@ const creature_mind_view::Trace* TraceOf(entt::entity creature)
 } // namespace
 
 CreatureMindWindow::CreatureMindWindow() noexcept
-    : Window("Creature Mind", ImVec2(560.0f, 720.0f))
+    : Window("Creature Mind", ImVec2(900.0f, 760.0f))
 {
 }
 
@@ -166,6 +168,11 @@ void CreatureMindWindow::Update() noexcept
 		});
 	}
 	WatchChosen();
+	// The trees view looks for trees that grew again only while the window is open
+	if (_chosen.has_value() && Locator::time::has_value())
+	{
+		_trees.Observe(*_chosen, Locator::time::value().GetTurn());
+	}
 }
 
 void CreatureMindWindow::UpdateAlways() noexcept
@@ -220,13 +227,33 @@ void CreatureMindWindow::Draw() noexcept
 	{
 		ImGui::TextUnformatted("The mind log is not there: the build has no developer tools");
 	}
-	DrawDesires(creature);
-	DrawPlans(creature);
-	DrawTimeline(creature);
 	if (_showLabel)
 	{
 		DrawLabel(creature);
 	}
+	if (!ImGui::BeginTabBar("mind tabs"))
+	{
+		return;
+	}
+	const auto flagsOf = [this](std::string_view tab) {
+		return _showTab == tab ? ImGuiTabItemFlags_SetSelected : ImGuiTabItemFlags_None;
+	};
+	const auto plansFlags = flagsOf(k_PlansTab);
+	const auto treesFlags = flagsOf(k_TreesTab);
+	_showTab.reset();
+	if (ImGui::BeginTabItem(k_PlansTab.data(), nullptr, plansFlags))
+	{
+		DrawDesires(creature);
+		DrawPlans(creature);
+		DrawTimeline(creature);
+		ImGui::EndTabItem();
+	}
+	if (ImGui::BeginTabItem(k_TreesTab.data(), nullptr, treesFlags))
+	{
+		_trees.Draw(creature);
+		ImGui::EndTabItem();
+	}
+	ImGui::EndTabBar();
 }
 
 void CreatureMindWindow::DrawDesires(entt::entity creature) noexcept

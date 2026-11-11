@@ -47,7 +47,7 @@ public:
 	/// The main menu bar, which only shows while the game's own menu is open
 	virtual void SetMenuBarVisible(bool visible) noexcept = 0;
 	virtual bool ProcessEvents(const SDL_Event& event) noexcept = 0;
-	/// Opens the debug window of the name, if there is one
+	/// Opens the debug window of the name, if there is one. "Window/Tab" opens the window on the tab of that name.
 	virtual void OpenWindow(std::string_view name) noexcept = 0;
 	/// The debug windows by name, and whether each is open
 	struct WindowState

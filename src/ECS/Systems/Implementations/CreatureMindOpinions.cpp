@@ -554,6 +554,11 @@ std::optional<creature_tree::Belief> CreatureMindSystem::BeliefAbout(entt::entit
 	return mind_detail::BeliefOf(Locator::entitiesRegistry::value(), thing, creature);
 }
 
+std::optional<creature_tree::Belief> CreatureMindSystem::ActedOnBeliefAbout(entt::entity creature, entt::entity thing) const
+{
+	return mind_detail::ActedOnBeliefOf(Locator::entitiesRegistry::value(), thing, creature);
+}
+
 std::optional<creature_tree::Belief> mind_detail::ActedOnBeliefOf(const ecs::Registry& registry, entt::entity entity,
                                                                   entt::entity self)
 {

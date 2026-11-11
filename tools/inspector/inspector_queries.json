@@ -631,6 +631,38 @@
   "query": "creature.learnt"
  },
  {
+  "description": "A creature's decision trees as nodes: for each desire and tree kind (activity: the whole thing that the desire is about; act_on: the thing to act on), each node's test, branches and child nodes, a leaf's value (-1 to 1) and count of examples, and its place in the drawing (x in leaf columns, y the depth); the examples that the tree grew from; and, given a thing, the path of the thing from the root",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The creature's entity id; may be left out when there is one creature",
+    "name": "id",
+    "type": "integer"
+   },
+   {
+    "description": "Only this desire, by name (e.g. Hunger) or number",
+    "name": "desire",
+    "type": "string"
+   },
+   {
+    "description": "Only this tree: activity or act_on",
+    "name": "tree",
+    "type": "string"
+   },
+   {
+    "description": "The entity id of a thing: the path of the thing through each tree",
+    "name": "thing",
+    "type": "integer"
+   },
+   {
+    "description": "Also the trees with no examples",
+    "name": "empty",
+    "type": "boolean"
+   }
+  ],
+  "query": "creature.trees"
+ },
+ {
   "description": "A creature's beliefs about things: kind, last place (in metres, and in map units as place_map), the whole thing, the attributes it last took in, which its decision trees test; and how nice it finds other creatures",
   "kind": "object",
   "parameters": [

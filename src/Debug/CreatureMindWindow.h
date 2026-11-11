@@ -10,16 +10,20 @@
 #pragma once
 
 #include <optional>
+#include <string>
+#include <string_view>
 
 #include <entt/entity/fwd.hpp>
 
+#include "CreatureMindTrees.h"
 #include "Window.h"
 
 namespace openblack::debug::gui
 {
 
 /// The developer view of a creature's mind: its active desires and the sources that drive them, the plans of the
-/// planner with a short history, and a graph of the desire values over the last turns. The view only reads the mind.
+/// planner with a short history, and a graph of the desire values over the last turns. A second tab shows the decision
+/// trees that the creature learnt, for each desire. The view only reads the mind.
 /// While it is open, the mind log records the chosen creature at the end of each turn.
 class CreatureMindWindow final: public Window
 {
@@ -33,6 +37,7 @@ protected:
 	void Draw() noexcept override;
 	void Update() noexcept override;
 	void UpdateAlways() noexcept override;
+	void ShowTab(std::string_view tab) noexcept override { _showTab = std::string(tab); }
 	void ProcessEventOpen(const SDL_Event&) noexcept override {}
 	void ProcessEventAlways(const SDL_Event&) noexcept override {}
 
@@ -52,6 +57,9 @@ private:
 	std::optional<entt::entity> _watching;
 	bool _followHand {false};
 	bool _showLabel {true};
+	CreatureMindTrees _trees;
+	/// The tab to show at the next draw, by its name
+	std::optional<std::string> _showTab;
 };
 
 } // namespace openblack::debug::gui

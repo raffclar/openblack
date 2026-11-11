@@ -352,11 +352,18 @@ bool Gui::ProcessEvents(const SDL_Event& event) noexcept
 
 void Gui::OpenWindow(std::string_view name) noexcept
 {
+	// "Window/Tab" opens the window on the tab
+	const auto slash = name.find('/');
+	const auto windowName = name.substr(0, slash);
 	for (auto& window : _debugWindows)
 	{
-		if (window->GetName() == name)
+		if (window->GetName() == windowName)
 		{
 			window->Open();
+			if (slash != std::string_view::npos)
+			{
+				window->ShowTab(name.substr(slash + 1));
+			}
 		}
 	}
 }

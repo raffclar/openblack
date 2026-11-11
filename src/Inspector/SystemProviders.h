@@ -156,6 +156,8 @@ struct CreatureSources
 	std::function<const creature_mind_tables::Tables*()> tables;
 	/// What a creature believes about a thing now, with the attributes that its decision trees test
 	std::function<std::optional<creature_tree::Belief>(entt::entity creature, entt::entity thing)> beliefAbout;
+	/// What a creature believes about a thing that it acts on, as the tree of what to act on tests it
+	std::function<std::optional<creature_tree::Belief>(entt::entity creature, entt::entity thing)> actedOnBeliefAbout;
 	/// A debug tool: the creature starts or stops to take notice of reactions; none when the inspector may not set it
 	std::function<void(entt::entity creature, bool notice)> setReactionNotice;
 	/// Whether a cell is clear for a creature to go to, and the nearest clear area so wide about a point
