@@ -65,8 +65,6 @@ using namespace openblack::ecs::systems;
 
 namespace
 {
-/// A creature changes its mind about another creature for its miracles no more often than this many turns
-constexpr uint32_t k_OpinionTurns = 600;
 /// Blocking in a fight, a creature takes this share of a miracle
 constexpr float k_BlockedEffectShare = 0.1f;
 
@@ -246,27 +244,23 @@ void HealMarks(entt::entity entity, float heal)
 }
 
 /// How nice a creature finds a creature whose miracle reached it (itself too) changes, by how its burn, crush, hit and heal
-/// weigh against a creature, no more often than every minute
+/// weigh against a creature, no more often than every minute. The clock is the same clock that a creature leashed to it
+/// uses to change how nice the two find each other.
 void ChangeOpinion(entt::entity entity, const magic::EffectValues& values, const magic::EffectSource& source)
 {
 	auto& registry = EntityRegistry();
-	if (source.casterCreature == entt::null || !registry.Valid(source.casterCreature) ||
+	auto* mind = registry.TryGet<CreatureMindState>(entity);
+	if (mind == nullptr || source.casterCreature == entt::null || !registry.Valid(source.casterCreature) ||
 	    !registry.AllOf<Creature>(source.casterCreature) || !Locator::infoConstants::has_value())
 	{
 		return;
 	}
 	const uint32_t turn = Locator::time::has_value() ? Locator::time::value().GetTurn() : 0;
-	auto* clock = registry.TryGet<CreatureMiracleOpinion>(entity);
-	if (clock == nullptr)
-	{
-		clock = &registry.Assign<CreatureMiracleOpinion>(entity);
-	}
-	if (clock->changed && turn - clock->lastTurn <= k_OpinionTurns)
+	if (!creature_leash::AttitudeDue(mind->leash.attitudeTurn, turn))
 	{
 		return;
 	}
-	clock->changed = true;
-	clock->lastTurn = turn;
+	mind->leash.attitudeTurn = turn;
 	const auto& table = Locator::infoConstants::value().alignment;
 	float change = 0.0f;
 	for (const auto kind : k_OpinionKinds)
@@ -277,10 +271,7 @@ void ChangeOpinion(entt::entity entity, const magic::EffectValues& values, const
 			change += values[kind] * table.at(row).creature;
 		}
 	}
-	if (auto* mind = registry.TryGet<CreatureMindState>(entity))
-	{
-		mind->leash.attitudes.push_back({.creature = static_cast<uint32_t>(source.casterCreature), .change = change});
-	}
+	mind->leash.attitudes.push_back({.creature = static_cast<uint32_t>(source.casterCreature), .change = change});
 }
 
 /// The line from where a blow or burn came to the creature's groin marks its skin where it first meets the body: a

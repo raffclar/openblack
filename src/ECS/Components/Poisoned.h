@@ -9,8 +9,6 @@
 
 #pragma once
 
-#include <cstdint>
-
 namespace openblack::ecs::components
 {
 
@@ -18,14 +16,6 @@ namespace openblack::ecs::components
 struct Poisoned
 {
 	char dummy {0};
-};
-
-/// When a creature last changed its mind about another creature for that creature's miracle, in game turns: it does so
-/// no more often than every minute
-struct CreatureMiracleOpinion
-{
-	uint32_t lastTurn {0};
-	bool changed {false};
 };
 
 } // namespace openblack::ecs::components

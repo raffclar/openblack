@@ -638,6 +638,8 @@ private:
 	std::vector<entt::entity> _thinking;
 	/// The creatures whose minds do the step of their agendas after the second part, until the last part
 	std::vector<entt::entity> _acting;
+	/// The things that the agenda of a creature that another creature sees uses, kept from sighting to sighting
+	std::vector<std::optional<uint32_t>> _agendaThings;
 	/// How many times a creature came across a thing and this changed what the tests of the beliefs read: a new belief,
 	/// a new place or new attributes, a noticed mover, a first sighting in the turn, a villager or a creature seen again.
 	/// Facts kept about beliefs stay true while this does not change.

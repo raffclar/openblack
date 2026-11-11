@@ -183,11 +183,13 @@ struct AgendaArea
 constexpr float k_AngerOtherReach = 8.0f;
 /// Leashed to another creature, how nice each finds the other goes down (aggression) or up (compassion) by 0.1 at the
 /// first turn, then whenever more than 600 turns have passed since the other creature's feelings were last touched so
+/// (by a leash or by the effect of a creature)
 constexpr uint32_t k_AttitudeTurns = 600;
 constexpr float k_AttitudeStep = 0.1f;
-/// How much nicer each finds the other each time, none on the learning leash
+/// How much nicer each finds the other each time, none on the learning leash. A change of zero still teaches the creature.
 [[nodiscard]] float AttitudeChange(LeashType type);
-/// Whether the feelings are touched this turn, given the turn the other creature's were last touched by a leash
+/// Whether the feelings are touched this turn, given the turn the other creature's were last touched by a leash or by
+/// the effect of a creature
 [[nodiscard]] bool AttitudeDue(std::optional<uint32_t> lastTurn, uint32_t turn);
 
 /// A lesson the creature learns about something the player showed it on a leash: how much more the desire is what to
@@ -204,7 +206,8 @@ struct Lesson
 /// What the leash tells the creature's mind, for its planner and its learning to act on
 struct MindHooks
 {
-	/// The turn a creature leashed to this one last touched how nice the two find each other
+	/// The turn that how nice this creature finds another creature last changed, for a creature leashed to this one or
+	/// for the effect of a creature on this one
 	std::optional<uint32_t> attitudeTurn;
 	/// Wearing the learning leash in its player's hand, it copies the player's actions that need it
 	bool learningInHand {false};

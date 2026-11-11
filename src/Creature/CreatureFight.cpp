@@ -20,6 +20,7 @@
 #include "Common/ModelInverseSquareRoot.h"
 #include "Common/X87.h"
 #include "Common/X87Vector.h"
+#include "Creature/CreatureFriendship.h"
 #include "Help/HelpProfile.h"
 #include "ScriptHeaders/ScriptPropertyRules.h"
 
@@ -572,8 +573,7 @@ bool creature_fight::HealthyEnoughToFight(float life)
 
 bool creature_fight::AgreesToFight(float height, float askerHeight, bool dead, bool scripted, bool askerScripted)
 {
-	const float share = height / askerHeight;
-	return share >= k_SmallestOpponentShare && share <= k_BiggestOpponentShare && !dead && scripted == askerScripted;
+	return creature_friendship::NearInHeightToFight(height / askerHeight) && !dead && scripted == askerScripted;
 }
 
 float creature_fight::FaintSeconds(float size)
