@@ -50,12 +50,16 @@ Step PointAt(uint32_t thing, float seconds, Cue face)
 	        .gaze = Gaze {.object = thing}};
 }
 
-/// An order to the partner. The partner does the step with no face of its own and looks about as it does it.
-Step Order(uint32_t partner, Step ordered)
+/// An order to the partner. The partner does the step with no face of its own and looks about as it does it. The face
+/// of the order goes to the creature that gives the order: it pulls that face on the turn of the order.
+Step Order(uint32_t partner, Step ordered, Cue askerFace = Cue::None)
 {
 	ordered.face = Cue::None;
 	ordered.gaze.reset();
-	return {.kind = Step::Kind::Order, .object = partner, .ordered = std::make_shared<const Step>(std::move(ordered))};
+	return {.kind = Step::Kind::Order,
+	        .object = partner,
+	        .face = askerFace,
+	        .ordered = std::make_shared<const Step>(std::move(ordered))};
 }
 } // namespace
 
@@ -70,7 +74,7 @@ std::vector<Step> creature_mind::WaveAtFriend(uint32_t self, uint32_t friendly)
 	     .gaze = Gaze {.object = friendly},
 	     .request = creature_friendship::RequestKind::Play},
 	    {.kind = Step::Kind::Demobilise, .object = friendly},
-	    Order(friendly, FaceThing(self, k_FriendFacesWaverSeconds)),
+	    Order(friendly, FaceThing(self, k_FriendFacesWaverSeconds), Cue::Grimace),
 	    FaceThing(friendly, k_FaceFriendToWaveSeconds, Cue::Smile, Gaze {.object = friendly}),
 	    Order(friendly, PlayOnce(animations::k_FriendlyWave)),
 	    wave,
@@ -205,10 +209,10 @@ std::vector<Step> creature_mind::PooWithFriend(const Friends& friends, const Ran
 	                   .sequence = {animations::k_StartPoo, animations::k_Poo, animations::k_EndPoo},
 	                   .face = Cue::Smile};
 	const auto poo = Step {.kind = Step::Kind::Apply, .effect = Effect::Poo, .face = Cue::Smile};
-	agenda.push_back(Order(friends.friendly, squat));
+	agenda.push_back(Order(friends.friendly, squat, Cue::Smile));
 	squat.main = true;
 	agenda.push_back(squat);
-	agenda.push_back(Order(friends.friendly, poo));
+	agenda.push_back(Order(friends.friendly, poo, Cue::Smile));
 	agenda.push_back(poo);
 	const float seconds = k_FaceAfterPooSeconds + creature_emote::FloatRandom(random, k_FaceAfterPooExtraSeconds);
 	agenda.push_back(FaceThing(friends.friendly, seconds, Cue::Smile, Gaze {.object = friends.friendly}));
@@ -401,10 +405,10 @@ std::vector<Step> ComeTogether(uint32_t self, uint32_t friendly, float height, C
 	const float near = k_TogetherNearHeights * height;
 	return {
 	    AskToBeFriends(friendly),
-	    Order(friendly, GoNear(self, near)),
+	    Order(friendly, GoNear(self, near), face),
 	    GoNearLooking(friendly, near, face),
 	    Order(friendly,
-	          FaceThing(self, k_FaceTogetherSeconds + creature_emote::FloatRandom(random, k_FaceTogetherExtraSeconds))),
+	          FaceThing(self, k_FaceTogetherSeconds + creature_emote::FloatRandom(random, k_FaceTogetherExtraSeconds)), face),
 	};
 }
 } // namespace
@@ -419,7 +423,7 @@ std::vector<Step> creature_mind::KissFriend(const Friends& friends, float kissin
 	face.face = Cue::Compassion;
 	std::vector<Step> agenda {
 	    AskToBeFriends(friends.friendly),
-	    Order(friends.friendly, GoTo(friendPlace, k_KissPlaceWithin)),
+	    Order(friends.friendly, GoTo(friendPlace, k_KissPlaceWithin), Cue::Puzzled),
 	    goToPlace,
 	    Order(friends.friendly, FaceThing(friends.self, k_FaceFriendSeconds)),
 	    face,
@@ -472,7 +476,7 @@ std::vector<Step> creature_mind::DanceWithFriend(uint32_t self, uint32_t friendl
 	                   Demobilise(friendly, true),
 	                   Order(friendly, FaceThing(self, k_FaceFriendSeconds)),
 	                   wait,
-	                   Order(friendly, dance),
+	                   Order(friendly, dance, Cue::Playfulness),
 	                   Main(dance),
 	                   Demobilise(friendly, false),
 	               });
@@ -487,14 +491,14 @@ std::vector<Step> creature_mind::ArgueWithFriend(uint32_t self, uint32_t friendl
 	angry.face = Cue::Anger;
 	Append(agenda, std::array {
 	                   Fluttering(FaceThing(friendly, k_FaceToArgueSeconds, Cue::Smile), friendly),
-	                   Order(friendly, FaceThing(self, k_FaceToArgueSeconds)),
+	                   Order(friendly, FaceThing(self, k_FaceToArgueSeconds), Cue::Anger),
 	                   FaceThing(friendly, seconds, Cue::Anger, Gaze {.object = friendly}),
 	                   PointAt(friendly, k_PointAtFriendSeconds, Cue::Anger),
-	                   Order(friendly, PlayOnce(animations::k_Angry)),
+	                   Order(friendly, PlayOnce(animations::k_Angry), Cue::Anger),
 	                   angry,
-	                   Order(friendly, WaitFor(k_ArgueWaitSeconds)),
+	                   Order(friendly, WaitFor(k_ArgueWaitSeconds), Cue::Anger),
 	                   WaitFor(k_ArgueWaitSeconds),
-	                   Order(friendly, WaitFor(k_AfterArgueSeconds)),
+	                   Order(friendly, WaitFor(k_AfterArgueSeconds), Cue::Smile),
 	                   Main(WaitFor(k_AfterArgueSeconds, Cue::Smile)),
 	               });
 	Append(agenda, HappyAtFriend(friendly));
@@ -509,7 +513,7 @@ std::vector<Step> creature_mind::MopeAboutWithFriend(uint32_t self, uint32_t fri
 	sad.face = Cue::Sad;
 	Append(agenda, std::array {
 	                   Fluttering(FaceThing(friendly, seconds, Cue::Sad), friendly),
-	                   Order(friendly, PlayOnce(animations::k_Sad)),
+	                   Order(friendly, PlayOnce(animations::k_Sad), Cue::Sad),
 	                   Main(sad),
 	               });
 	if (random(2) == 0)
@@ -527,9 +531,9 @@ std::vector<Step> creature_mind::ShowOffToFriend(uint32_t self, uint32_t friendl
 	Append(agenda, std::array {
 	                   Fluttering(FaceThing(friendly, seconds, Cue::Smile), friendly),
 	                   Main(PointAtPlace(home, k_PointAtHomeSeconds, Cue::Grimace)),
-	                   Order(friendly, TurnToFacePlace(home)),
+	                   Order(friendly, TurnToFacePlace(home), Cue::Puzzled),
 	                   PointAt(friendly, k_PointAtFriendSeconds, Cue::Sad),
-	                   Order(friendly, PlayOnce(animations::k_Confused)),
+	                   Order(friendly, PlayOnce(animations::k_Confused), Cue::Puzzled),
 	               });
 	Append(agenda, HappyAtFriend(friendly));
 	return agenda;
@@ -568,7 +572,7 @@ std::vector<Step> creature_mind::TellCreatureToSodOff(uint32_t self, uint32_t ot
 	return {
 	    Ask(other, creature_friendship::RequestKind::Fight, Cue::Playfulness),
 	    Demobilise(other, true),
-	    Order(other, FaceThing(self, k_FaceFriendSeconds)),
+	    Order(other, FaceThing(self, k_FaceFriendSeconds), Cue::Grimace),
 	    FaceThing(other, k_FaceToSodOffSeconds, Cue::Smile, Gaze {.object = other}),
 	    angry,
 	    Main(PointAtPlace(away, k_PointAwaySeconds, Cue::Grimace)),
@@ -587,9 +591,9 @@ std::vector<Step> creature_mind::ExamineOtherCreatureWithFriend(uint32_t friendl
 	std::vector<Step> agenda {
 	    Ask(friendly, creature_friendship::RequestKind::Play, Cue::Playfulness),
 	    Demobilise(friendly, true),
-	    Order(friendly, FaceThing(other, k_FaceFriendSeconds)),
+	    Order(friendly, FaceThing(other, k_FaceFriendSeconds), Cue::Playfulness),
 	    FaceThing(other, k_FaceFriendSeconds, Cue::Playfulness, Gaze {.object = other}),
-	    Order(friendly, PointAt(other, k_PointAtExaminedSeconds, Cue::None)),
+	    Order(friendly, PointAt(other, k_PointAtExaminedSeconds, Cue::None), Cue::Playfulness),
 	    PointAt(other, k_PointAtExaminedSeconds, Cue::Playfulness),
 	};
 	if (random(2) == 0)
@@ -677,7 +681,7 @@ std::vector<Step> creature_mind::PlayThrowingGameWithFriend(const Friends& frien
 	    Demobilise(friends.friendly, true),
 	};
 	Append(agenda, HappyAtFriend(friends.friendly));
-	agenda.push_back(Order(friends.friendly, FaceThing(friends.self, k_FaceFriendSeconds)));
+	agenda.push_back(Order(friends.friendly, FaceThing(friends.self, k_FaceFriendSeconds), Cue::Grimace));
 	if (!handFull)
 	{
 		agenda.push_back(PickUpThing(toy));
@@ -701,7 +705,7 @@ std::vector<Step> creature_mind::GiveFriendToy(uint32_t self, uint32_t friendly,
 {
 	std::vector<Step> agenda {
 	    AskToBeFriends(friendly),
-	    Order(friendly, PointAt(self, k_FriendPointsAtGiverSeconds, Cue::None)),
+	    Order(friendly, PointAt(self, k_FriendPointsAtGiverSeconds, Cue::None), Cue::Smile),
 	};
 	if (!handFull)
 	{
@@ -716,14 +720,14 @@ std::vector<Step> creature_mind::GiveFriendToy(uint32_t self, uint32_t friendly,
 	                         .order = {.kind = ObjectOrder::Kind::Discard, .animation = creature_throw::k_PutDown},
 	                         .face = Cue::Smile}),
 	                   Step {.kind = Step::Kind::WaitInMap, .object = toy, .gaze = Gaze {.object = toy}},
-	                   Order(friendly, PickUpThing(toy)),
+	                   Order(friendly, PickUpThing(toy), Cue::Smile),
 	                   FaceThing(friendly, k_FaceFriendSeconds, Cue::Compassion, Gaze {.object = friendly}),
 	                   WaitFor(k_WaitAfterGiftSeconds, Cue::Smile),
 	                   WaitForFree(friendly),
 	               });
 	const auto keep = creature_object_actions::k_FirstKeepAnimation + random(creature_object_actions::k_KeepAnimationCount);
-	agenda.push_back(
-	    Order(friendly, {.kind = Step::Kind::Object, .order = {.kind = ObjectOrder::Kind::Keep, .animation = keep}}));
+	agenda.push_back(Order(
+	    friendly, {.kind = Step::Kind::Object, .order = {.kind = ObjectOrder::Kind::Keep, .animation = keep}}, Cue::Smile));
 	return agenda;
 }
 
@@ -740,20 +744,21 @@ std::vector<Step> creature_mind::ShowFriendCitadel(const Friends& friends, const
 	wait.face = Cue::Grimace;
 	const float friendWaits = k_ShowCitadelWaitSeconds + creature_emote::FloatRandom(random, k_ShowCitadelWaitExtraSeconds);
 	const float waits = k_ShowCitadelWaitSeconds + creature_emote::FloatRandom(random, k_ShowCitadelWaitExtraSeconds);
-	Append(agenda, std::array {
-	                   FaceThing(friends.friendly, k_FaceFriendSeconds, Cue::Compassion, Gaze {.object = friends.friendly}),
-	                   Ask(friends.friendly, creature_friendship::RequestKind::BeShown),
-	                   Order(friends.friendly,
-	                         GoTo(heart, (friendRadius * k_CitadelNearRadii) + (citadel.radius * k_CitadelHeartRadii))),
-	                   GoTo(heart, (radius * k_CitadelNearRadii) + (citadel.radius * k_CitadelHeartRadii), GoingLook(heart)),
-	                   wait,
-	                   Main(PointAtPlace(citadel.point, k_PointAtCitadelSeconds, Cue::Grimace)),
-	                   Order(friends.friendly, TurnToFacePlace(head)),
-	                   WaitForFree(friends.friendly),
-	                   Order(friends.friendly, TurnToFacePlace(citadel.point)),
-	                   Order(friends.friendly, WaitFor(friendWaits)),
-	                   WaitFor(waits, Cue::Compassion, Gaze {.feet = true}),
-	               });
+	Append(agenda,
+	       std::array {
+	           FaceThing(friends.friendly, k_FaceFriendSeconds, Cue::Compassion, Gaze {.object = friends.friendly}),
+	           Ask(friends.friendly, creature_friendship::RequestKind::BeShown),
+	           Order(friends.friendly,
+	                 GoTo(heart, (friendRadius * k_CitadelNearRadii) + (citadel.radius * k_CitadelHeartRadii)), Cue::Puzzled),
+	           GoTo(heart, (radius * k_CitadelNearRadii) + (citadel.radius * k_CitadelHeartRadii), GoingLook(heart)),
+	           wait,
+	           Main(PointAtPlace(citadel.point, k_PointAtCitadelSeconds, Cue::Grimace)),
+	           Order(friends.friendly, TurnToFacePlace(head)),
+	           WaitForFree(friends.friendly),
+	           Order(friends.friendly, TurnToFacePlace(citadel.point)),
+	           Order(friends.friendly, WaitFor(friendWaits), Cue::Puzzled),
+	           WaitFor(waits, Cue::Compassion, Gaze {.feet = true}),
+	       });
 	return agenda;
 }
 

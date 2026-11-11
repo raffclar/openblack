@@ -40,6 +40,9 @@ namespace openblack::creature_mind
 {
 /// Each step pulls a face as it starts, and again this often for as long as it lasts: every four seconds and two turns
 constexpr float k_FaceRepeatSeconds = 4.2f;
+/// Counts down one turn of a step that pulls a face. Returns true when the step pulls its face again on this turn. The
+/// caller starts the wait again with k_FaceRepeatSeconds when it pulls the face.
+[[nodiscard]] bool FaceAgainDue(float& seconds, float turnSeconds);
 /// After each face it pulls, the creature's variety of faces moves on by up to this much less one
 constexpr uint32_t k_FaceVarietyStep = 7;
 /// Idle waits are one second and up to one more

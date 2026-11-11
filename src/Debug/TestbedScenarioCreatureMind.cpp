@@ -1371,7 +1371,8 @@ void testbed_scenarios::AddMind(std::vector<Scenario>& all)
 	    .expected = "The tiger smiles, howls or waves at the lion. To wave, it asks the lion to play first; the lion agrees "
 	                "when it wants to be friends with the tiger more than it fears it or is angry with it. Then the lion "
 	                "stands still in its mind, turns to the tiger and waves back as the tiger waves, from where they "
-	                "stand. The inspector shows the partners while they wave.",
+	                "stand. The tiger grimaces as it tells the lion to turn. The lion shows no face of the order. The "
+	                "inspector shows the partners while they wave.",
 	    .framing = {.shot = Shot::Overview},
 	    .creatures = {befriender, guideLion({25.0f, 0.0f}, 270.0f)},
 	    .commands = {{.kind = Kind::OnlyDesire,

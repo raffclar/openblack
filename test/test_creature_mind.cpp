@@ -636,6 +636,18 @@ TEST(CreatureIdleMind, AStepPullsItsFaceOnItsFirstTryEvenWhileItWaitsForTheBody)
 	EXPECT_FALSE(commands.face.has_value());
 }
 
+// A step pulls its face again on the forty-second turn after the turn that pulled it, as the fight steps do too
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST(CreatureIdleMind, AStepPullsItsFaceAgainEveryFortyTwoTurns)
+{
+	float seconds = creature_mind::k_FaceRepeatSeconds;
+	for (int turn = 1; turn < 42; ++turn)
+	{
+		EXPECT_FALSE(creature_mind::FaceAgainDue(seconds, k_Turn)) << turn;
+	}
+	EXPECT_TRUE(creature_mind::FaceAgainDue(seconds, k_Turn));
+}
+
 TEST(CreatureIdleMind, EachFacePulledMovesTheVarietyOn)
 {
 	creature_mind::IdleMind mind;

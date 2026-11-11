@@ -43,6 +43,7 @@ void openblack::ecs::reflection::RegisterFields_Components_creaturef(entt::meta_
 	    .Field<&components::CreatureFighting::measured>("measured")
 	    .Field<&components::CreatureFighting::stageSeconds>("stageSeconds")
 	    .Field<&components::CreatureFighting::faceSeconds>("faceSeconds")
+	    .Field<&components::CreatureFighting::angerShown>("angerShown")
 	    .Field<&components::CreatureFighting::played>("played")
 	    .Field<&components::CreatureFighting::taunted>("taunted")
 	    .Field<&components::CreatureFighting::faceTurn>("faceTurn")

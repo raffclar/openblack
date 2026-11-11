@@ -373,9 +373,12 @@ glm::vec3 FightLook(const ecs::Registry& registry, entt::entity entity, const Cr
                     const CreatureMindState& mind)
 {
 	using Stage = CreatureFighting::Stage;
+	// Before the duel the first creature looks at the other creature, but not in its taunt or as it points at the arena.
+	// The other creature looks about while it does an order, and at the first creature while it waits for an order.
 	if (const auto* fighting = registry.TryGet<const CreatureFighting>(entity);
 	    fighting != nullptr && registry.Valid(fighting->opponent) && IsLeadIn(fighting->stage) &&
-	    fighting->stage != Stage::Taunt && fighting->stage != Stage::Point)
+	    fighting->stage != Stage::Taunt && fighting->stage != Stage::Point &&
+	    (fighting->madeArena || WaitsForNextOrder(*fighting)))
 	{
 		if (const auto top = GazePoint(registry, entity, {.object = entt::to_integral(fighting->opponent)}, /*moving=*/false);
 		    top.has_value())
