@@ -1241,6 +1241,9 @@ openblack_setup_and_add_test(
   test_oracle_creature_may_try oracle/test_oracle_creature_may_try.cpp
 )
 openblack_setup_and_add_test(
+  test_oracle_creature_spell_pay oracle/test_oracle_creature_spell_pay.cpp
+)
+openblack_setup_and_add_test(
   test_oracle_wisp_orbit oracle/test_oracle_wisp_orbit.cpp
 )
 openblack_setup_and_add_test(
@@ -1297,6 +1300,7 @@ foreach (oracle_test test_oracle_catch test_oracle_sigmoid
                      test_oracle_inverse_square_root test_oracle_data_folder
                      test_oracle_creature_camera_maths
                      test_oracle_creature_may_try
+                     test_oracle_creature_spell_pay
                      test_oracle_totem_hand test_oracle_formation_land_line
                      test_oracle_float_sweep_3 test_oracle_float_sweep_4
                      test_oracle_wisp_orbit test_oracle_creature_start_side

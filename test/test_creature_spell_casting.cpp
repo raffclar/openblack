@@ -7,6 +7,8 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <limits>
+
 #include <gtest/gtest.h>
 
 #include "Creature/CreatureSpellCasting.h"
@@ -78,4 +80,32 @@ TEST(CreatureSpellCasting, AMiracleAtAPlaceHasSizeTenOrForFireByItsHeight)
 	EXPECT_FLOAT_EQ(CastMagnitudeAtPlace(false, 15.0f), 10.0f);
 	EXPECT_FLOAT_EQ(CastMagnitudeAtPlace(true, 5.0f), 0.5f);
 	EXPECT_FLOAT_EQ(CastMagnitudeAtPlace(true, 30.0f), 1.0f);
+}
+
+// A value that is not a number goes to the lower limit, as in the game
+TEST(CreatureSpellCasting, ANumberThatIsNotANumberGoesToTheLowerLimit)
+{
+	const float nan = std::numeric_limits<float>::quiet_NaN();
+	EXPECT_EQ(ClampLikeGame(nan, 0.0f, 0.7f), 0.0f);
+	EXPECT_EQ(ClampLikeGame(-1.0f, 0.0f, 0.7f), 0.0f);
+	EXPECT_EQ(ClampLikeGame(0.9f, 0.0f, 0.7f), 0.7f);
+	EXPECT_EQ(StaminaCost(nan), 0.0f);
+	// An energy share that is not a number takes all of its energy
+	Body body {.size = 1.0f, .strength = 0.5f, .energy = 1.0f, .exhaustion = 0.0f};
+	MaintainSpell(body, Rates {}, 9000.0f, nan);
+	EXPECT_EQ(body.energy, 0.0f);
+	// Fewer than two sightings needed, or not a number, counts as one
+	EXPECT_TRUE(TrySucceeds(1.0f, nan));
+}
+
+// In a fight it pays the stamina only when it has the cost, and keeps the rest between 0 and 1
+TEST(CreatureSpellCasting, ItPaysTheStaminaOnlyWhenItHasTheCost)
+{
+	const float nan = std::numeric_limits<float>::quiet_NaN();
+	EXPECT_FALSE(PayStamina(0.2f, 0.3f).has_value());
+	EXPECT_FALSE(PayStamina(nan, 0.3f).has_value());
+	EXPECT_FALSE(PayStamina(0.5f, nan).has_value());
+	ASSERT_TRUE(PayStamina(0.5f, 0.3f).has_value());
+	EXPECT_FLOAT_EQ(*PayStamina(0.5f, 0.3f), 0.2f);
+	EXPECT_EQ(*PayStamina(1.5f, 0.0f), 1.0f);
 }
