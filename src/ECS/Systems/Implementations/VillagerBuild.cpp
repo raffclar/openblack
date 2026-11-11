@@ -190,17 +190,9 @@ bool LookAtPos(entt::entity villager, glm::ivec2 point, int32_t step)
 	const auto from = map_coords::WholeXZ(map_coords::FromMetres(glm::xz(transform.position)));
 	const auto target = static_cast<int32_t>(gutils::GetAngleFromXZ(from, point));
 	const auto facing = static_cast<int32_t>(gutils::ConvertAngle3DToGame(facingRadians));
-	const int32_t difference = target - facing;
-	int32_t angle = target;
-	bool facesIt = true;
-	if (std::abs(difference) >= step)
-	{
-		const bool forwards = difference < 1 ? std::abs(difference) > 0x3FF : difference < 0x400;
-		angle = (facing + (forwards ? step : -step)) & gutils::k_GameAngleMask;
-		facesIt = false;
-	}
-	openblack::ecs::living_facing::FaceGameAngle(Entities(), villager, static_cast<uint16_t>(angle));
-	return facesIt;
+	const auto turn = gutils::LookStep(facing, target, step);
+	openblack::ecs::living_facing::FaceGameAngle(Entities(), villager, turn.angle);
+	return turn.faces;
 }
 
 /// The store that the villager uses as a member of its own town
