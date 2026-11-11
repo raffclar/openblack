@@ -13,6 +13,8 @@
 #include <vector>
 
 #include <gtest/gtest.h>
+#include <spdlog/sinks/null_sink.h>
+#include <spdlog/spdlog.h>
 
 #include "Creature/CreatureEyes.h"
 #include "Creature/CreatureFeedback.h"
@@ -234,6 +236,10 @@ class CreatureScriptControlTest: public ::testing::Test
 protected:
 	void SetUp() override
 	{
+		if (spdlog::get("game") == nullptr)
+		{
+			spdlog::create<spdlog::sinks::null_sink_st>("game");
+		}
 		Locator::entitiesRegistry::emplace<Registry>();
 		hands = &static_cast<WalkingHands&>(Locator::creatureObjectActionSystem::emplace<WalkingHands>());
 		legs = &static_cast<StoppingLegs&>(Locator::creatureLocomotionSystem::emplace<StoppingLegs>());
