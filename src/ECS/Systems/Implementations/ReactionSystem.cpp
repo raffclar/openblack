@@ -881,16 +881,24 @@ void ReactionSystem::ShutDown(uint32_t id)
 	if (Locator::entitiesRegistry::has_value())
 	{
 		auto& registry = Locator::entitiesRegistry::value();
-		std::vector<entt::entity> reacting;
+		// The group of the reaction stops in the order that its members joined it, the last to join first. A creature
+		// that left the group for a reaction that it did not keep is not in the group.
+		std::vector<ecs::list_order::Entry> group;
 		registry.Each<LivingReaction>([&](entt::entity entity, const LivingReaction& state) {
-			if (state.reaction == id)
+			if (state.reaction == id && state.left != id)
 			{
-				reacting.push_back(entity);
+				group.push_back({.id = entity, .made = state.joined});
 			}
 		});
-		for (const auto entity : reacting)
+		ecs::list_order::NewestFirst(group);
+		for (const auto& member : group)
 		{
-			Stop(entity, registry.Get<LivingReaction>(entity), true);
+			// A member that stopped before, as the result of a member before it, is not stopped again
+			auto* state = registry.Valid(member.id) ? registry.TryGet<LivingReaction>(member.id) : nullptr;
+			if (state != nullptr && state->reaction == id)
+			{
+				Stop(member.id, *state, true);
+			}
 		}
 	}
 	// Its dance goes with it, once its dancers have gone back
@@ -929,6 +937,12 @@ uint32_t ReactionSystem::PriorityTo(const Active& reaction, entt::entity living,
 	const auto& registry = Locator::entitiesRegistry::value();
 	const auto* livingInfo = LivingInfoOf(registry, living);
 	if (info == nullptr || livingInfo == nullptr)
+	{
+		return 0;
+	}
+	// A living thing that does not react to the kind, or that is farther than the reach, gets no priority. This test
+	// comes before the rule of each kind. Thus a rule that makes a random draw or records a turn does not run then.
+	if (!villager_reaction::PassesReachGate(Reacts(*livingInfo, reaction.source.type), info->maxReactionDistance, distance))
 	{
 		return 0;
 	}
@@ -1170,11 +1184,13 @@ void ReactionSystem::SpreadInCell(Active& reaction, const std::vector<entt::enti
 	const auto type = static_cast<uint32_t>(reaction.source.type);
 	for (const auto entity : mobiles)
 	{
-		// The shields' villagers take up the shields' own reactions through the shields
-		// A burning creature takes up its own fire's reaction, as any other within reach does
-		const bool ownFire = reaction.source.type == Reaction::ReactToFire && registry.AllOf<Creature>(entity);
+		// The shields' villagers take up the shields' own reactions through the shields.
+		// A creature also weighs a reaction that it made, as it weighs all other reactions. Thus a burning creature takes
+		// up its own fire, an evil creature can take up the fainting of its own fart, and a creature that reacts weighs
+		// what it reacts to when its own reaction reaches it.
 		if (!registry.Valid(entity) || !registry.AllOf<Transform>(entity) ||
-		    (entity == reaction.source.initiator && !ownFire) || !Reaches(registry, entity, reaction.source.type) ||
+		    (entity == reaction.source.initiator && !registry.AllOf<Creature>(entity)) ||
+		    !Reaches(registry, entity, reaction.source.type) ||
 		    (registry.AllOf<Villager>(entity) && ShieldKind(reaction.source.type)) ||
 		    !Available(registry, entity, reaction.source.type))
 		{
@@ -1247,10 +1263,12 @@ void ReactionSystem::SpreadInCell(Active& reaction, const std::vector<entt::enti
 			{
 				continue;
 			}
-			// A creature heeds the new one, but keeps what it reacts to rather than change to one it doesn't keep
-			// TODO(raffclar): the game also drops the creature from the list of the reaction it keeps, as for villagers
+			// A creature heeds the new one, but keeps what it reacts to rather than change to one it does not keep. It
+			// leaves the group of the old reaction. Thus the end of the old reaction does not stop it: it stops when it
+			// next finds the old reaction gone.
 			if (registry.AllOf<Creature>(entity) && !CreatureKeeps(registry, entity, reaction))
 			{
+				state->left = state->reaction;
 				Start(reaction, entity, *state, true);
 				continue;
 			}
@@ -1334,6 +1352,7 @@ void ReactionSystem::LeaveForOtherReaction(entt::entity villager)
 		fire->reactionTarget = entt::null;
 	}
 	state->reaction = 0;
+	state->left = 0;
 	state->type = Reaction::None;
 }
 
@@ -1451,6 +1470,8 @@ void ReactionSystem::Start(Active& reaction, entt::entity living, LivingReaction
 			state.reaction = reaction.id;
 			state.type = reaction.source.type;
 			state.startTurn = _turn;
+			state.joined = ++_joins;
+			state.left = 0;
 			Impress(reaction, living, registry.Get<const Transform>(living).position);
 			return;
 		}
@@ -1488,6 +1509,8 @@ void ReactionSystem::Start(Active& reaction, entt::entity living, LivingReaction
 		state.reaction = reaction.id;
 		state.type = reaction.source.type;
 		state.startTurn = _turn;
+		state.joined = ++_joins;
+		state.left = 0;
 		Impress(reaction, living, registry.Get<const Transform>(living).position);
 		return;
 	}
@@ -1503,6 +1526,8 @@ void ReactionSystem::Start(Active& reaction, entt::entity living, LivingReaction
 		state.reaction = reaction.id;
 		state.type = reaction.source.type;
 		state.startTurn = _turn;
+		state.joined = ++_joins;
+		state.left = 0;
 		Impress(reaction, living, registry.Get<const Transform>(living).position);
 	};
 	if (!registry.AllOf<Creature>(living))
@@ -1590,6 +1615,7 @@ void ReactionSystem::StartVillager(const Active& reaction, entt::entity living, 
 	state.type = reaction.source.type;
 	state.startTurn = _turn;
 	state.joined = ++_joins;
+	state.left = 0;
 	// A villager is impressed only by what it takes up the usual way: not joining a dance round the thing
 	const auto taken = villager_reactions::Start(living, reaction.source.type, state, wasReacting);
 	if (taken == villager_reactions::Taken::No)
@@ -1645,6 +1671,7 @@ void ReactionSystem::Stop(entt::entity living, LivingReaction& state, bool reset
 		MemoryOf(registry, living, state).Refresh(static_cast<uint32_t>(type), _turn);
 	}
 	state.reaction = 0;
+	state.left = 0;
 	state.type = Reaction::None;
 }
 
@@ -1659,6 +1686,7 @@ void ReactionSystem::StopReacting(entt::entity living)
 	// Its memory of the kind is brought up to now, so it waits its time before taking up that kind again
 	MemoryOf(registry, living, *state).Refresh(static_cast<uint32_t>(state->type), _turn);
 	state->reaction = 0;
+	state->left = 0;
 	state->type = Reaction::None;
 }
 

@@ -29,9 +29,12 @@ struct LivingReaction
 	Reaction type {Reaction::None};
 	/// The game turn it began
 	uint32_t startTurn {0};
-	/// When a villager took up the reaction it holds, in the order every villager took one up: the villagers holding the
-	/// same reaction are ordered by it, the last to join first
+	/// When a living thing took up the reaction it holds, in the order every living thing took one up: the living things
+	/// that hold the same reaction are ordered by it, the last to join first
 	uint32_t joined {0};
+	/// The reaction that a creature still holds but whose group it left, for a reaction that it did not keep. The end of
+	/// that reaction does not stop the creature. The creature stops when it next finds the reaction gone. 0 for none
+	uint32_t left {0};
 	/// A creature's memory of the kinds it reacted to lately; a villager's is its VillagerReactionMemory, which the
 	/// shields' reactions share
 	magic::villager_reaction::Memory creatureMemory;
