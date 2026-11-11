@@ -82,11 +82,14 @@ struct DecisionState
 	bool planForced {false};
 	/// The creature has a reaction
 	bool reacting {false};
+	/// The creature fainted, and did not get up from that faint or have a turn with no plan since
+	bool fainted {false};
 };
 /// With no agenda that runs, the creature stops the reaction that it has before it decides
 [[nodiscard]] bool StopsReactionBeforeDecision(const DecisionState& state);
 /// The creature does not decide, and does not do what waits for the end of its work, while it has a forced plan or a
-/// reaction. The check of the copy of the player comes before this and still occurs.
+/// reaction, or while it is marked as fainted (also with no agenda). The check of the copy of the player comes before
+/// this and still occurs.
 [[nodiscard]] bool SkipsDecision(const DecisionState& state);
 /// When it completes its work, the creature does the thing that waits in place of its own decision. A plan for one
 /// desire only, such as an order on a thing, does not do the thing that waits. A creature that a script controls does

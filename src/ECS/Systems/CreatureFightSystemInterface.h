@@ -121,6 +121,9 @@ public:
 	/// called off does. A creature that is knocked out gets up at once, and is not taken home. A creature that a script
 	/// killed for good stays dead.
 	virtual void TakeForScript(entt::entity /*creature*/) {}
+	/// A forced plan takes the creature from its faint: a creature that is knocked out gets up where it lies at once, and
+	/// is not taken home. A creature that a script killed for good stays dead.
+	virtual void GetUpForPlan(entt::entity /*creature*/) {}
 	/// Something stops a creature again after a stop ended its fight, when its mind has no partner any more: its body
 	/// ends its fight again, and its life pays again while its body is still in a state of the fight
 	virtual void EndBodyFightAgain(entt::entity /*creature*/) {}

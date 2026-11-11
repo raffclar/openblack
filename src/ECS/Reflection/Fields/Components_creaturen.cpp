@@ -33,6 +33,7 @@ void openblack::ecs::reflection::RegisterFields_Components_creaturen(entt::meta_
 	    .Field<&components::CreatureNeeds::restTurns>("restTurns")
 	    .Field<&components::CreatureNeeds::rested>("rested")
 	    .Field<&components::CreatureNeeds::faint>("faint")
+	    .Field<&components::CreatureNeeds::fainted>("fainted")
 	    .Field<&components::CreatureNeeds::carriedWeight>("carriedWeight")
 	    .Field<&components::CreatureNeeds::moving>("moving");
 }

@@ -666,6 +666,13 @@ void CreatureMindSystem::DesiresTurn(entt::entity entity)
 		registry.Remove<CreatureAfterFight>(entity);
 	}
 	auto* eyes = registry.TryGet<CreatureEyes>(entity);
+	// A creature that fainted, and did not get up from that faint or have a turn with no plan since, does not faint
+	// again. The advisor still tells of it.
+	if (needs != nullptr && needs->faint.has_value() && needs->fainted)
+	{
+		TellFainting(entity);
+		needs->faint.reset();
+	}
 	// Exhausted, starved or out of life while it is in a fight, it passes out: its fight is called off for both, and
 	// nobody wins
 	if (!mind.paused && Locator::creatureFightSystem::has_value() && fighting != nullptr && needs != nullptr &&
@@ -740,6 +747,11 @@ void CreatureMindSystem::DesiresTurn(entt::entity entity)
 		if (!mind.planActive && mind.idle.step >= mind.idle.agenda.size())
 		{
 			++mind.thinksWithoutPlan;
+			// A turn with no plan lets it faint again
+			if (needs != nullptr)
+			{
+				needs->fainted = false;
+			}
 		}
 	}
 	_acting.push_back(entity);
