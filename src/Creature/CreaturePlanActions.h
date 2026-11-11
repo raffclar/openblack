@@ -280,6 +280,8 @@ enum class Build : uint8_t
 	/// Looking at the camera while a script's cut scene is on, as every creature free to think for itself is made to
 	LookAtCameraInCutScene,
 	PointAtCamera,
+	/// The twelve gesture actions: each turns to the camera and draws the circle in the air. Only a script starts them.
+	Gesture,
 	/// Hurling, sleeping at home, smiling or waving at someone, being frightened on the spot, putting down what it
 	/// holds and lying dead for good, as the game builds them whoever chose them
 	SleepAtHome,

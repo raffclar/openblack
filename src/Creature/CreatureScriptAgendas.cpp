@@ -86,6 +86,21 @@ std::vector<Step> openblack::creature_mind::LookAtCamera(bool hasPlayer)
 	         .gaze = Gaze {.camera = true}}};
 }
 
+std::vector<Step> openblack::creature_mind::DrawGestureForPlayer(bool hasPlayer, glm::vec3 camera)
+{
+	std::vector<Step> agenda;
+	// A creature without a player has no camera of its own to turn to
+	if (hasPlayer)
+	{
+		agenda.push_back({.kind = Step::Kind::Move,
+		                  .movement = {.kind = Movement::Kind::TurnToFace, .point = {camera.x, camera.z}},
+		                  .gaze = Gaze {.camera = true}});
+	}
+	// The drawing has no face and no look of its own
+	agenda.push_back({.kind = Step::Kind::Gesture, .animation = k_GestureActionShape, .main = true});
+	return agenda;
+}
+
 std::vector<Step> openblack::creature_mind::LookAtCameraInCutScene(const std::optional<glm::vec3>& camera, const Random& random)
 {
 	namespace animations = creature_layers::animations;

@@ -179,6 +179,20 @@ constexpr std::array k_Executors {
     Executor {.action = "WaveAtPlayer", .build = Build::FaceCameraEmote, .animation = animations::k_FriendlyWave},
     Executor {.action = "LookAtHand", .build = Build::LookAtHand},
     Executor {.action = "PointAtCamera", .build = Build::PointAtCamera},
+    // The gesture actions have different names, but each one draws the circle. No desire starts them: only a script
+    // can force them.
+    Executor {.action = "GestureFullCircle", .build = Build::Gesture},
+    Executor {.action = "GestureStar", .build = Build::Gesture},
+    Executor {.action = "GestureSpiral", .build = Build::Gesture},
+    Executor {.action = "GestureSquareWave", .build = Build::Gesture},
+    Executor {.action = "GestureScribble", .build = Build::Gesture},
+    Executor {.action = "GestureSquare", .build = Build::Gesture},
+    Executor {.action = "GestureTriangle", .build = Build::Gesture},
+    Executor {.action = "GestureS-Shape", .build = Build::Gesture},
+    Executor {.action = "GestureV-Ball", .build = Build::Gesture},
+    Executor {.action = "GestureMoon", .build = Build::Gesture},
+    Executor {.action = "GestureHeart", .build = Build::Gesture},
+    Executor {.action = "GestureBowTie", .build = Build::Gesture},
     Executor {.action = "BePatheticToPlayer", .build = Build::BePathetic},
     Executor {.action = "HowlAtPlayer", .build = Build::Howl},
     Executor {.action = "RunAwayFromObject", .target = Target::Frightening, .build = Build::RunFromObject},
@@ -1029,6 +1043,7 @@ bool creature_plan_actions::Possible(const Executor& executor, const Situation& 
 	case Build::PointOutHighlight:
 		return situation.eye.has_value();
 	case Build::Notice:
+	case Build::Gesture:
 		// It turns to the camera only when it has a player
 		return !situation.hasPlayer || situation.eye.has_value();
 	case Build::Fight:
@@ -1526,6 +1541,8 @@ std::optional<std::vector<creature_mind::Step>> creature_plan_actions::Agenda(co
 		return creature_mind::LookAtCameraInCutScene(situation.eye, random);
 	case Build::PointAtCamera:
 		return creature_mind::PointAtCamera(situation.hasPlayer, *situation.eye);
+	case Build::Gesture:
+		return creature_mind::DrawGestureForPlayer(situation.hasPlayer, situation.eye.value_or(glm::vec3(0.0f)));
 	case Build::CastOneShotInHand:
 		return creature_mind::CastOneShotAt({.magicType = situation.heldOneShot->magicType,
 		                                     .target = *object,
