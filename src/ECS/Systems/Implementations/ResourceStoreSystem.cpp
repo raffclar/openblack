@@ -992,14 +992,16 @@ bool ResourceStoreSystem::TakeObjectAs(entt::entity store, entt::entity object, 
 	}
 	ecs::world_objects::LeaveGhost(object);
 	ecs::world_objects::Remove(object);
-	// A storage pit calls its people to what was put in it
+	// A storage pit calls its people to what was put in it. The time of this reaction starts at once, so it ends also
+	// when no living thing takes it up.
 	if (registry.AllOf<StoragePit>(store) && Locator::reactionSystem::has_value())
 	{
 		const auto& position = registry.Get<const Transform>(store).position;
 		Locator::reactionSystem::value().Create({.initiator = store,
 		                                         .type = Reaction::ReactToHandPuttingStuffInStoragePit,
 		                                         .player = giver.value_or(PlayerNames::NEUTRAL),
-		                                         .position = position});
+		                                         .position = position,
+		                                         .onCast = true});
 	}
 	return true;
 }

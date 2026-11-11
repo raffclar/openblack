@@ -820,6 +820,8 @@ TEST_F(HandGrabSystemWithWorld, ARockIsTakenOnceTheHandHasFadedIntoItsPull)
 	ASSERT_FALSE(world->reactions.empty());
 	EXPECT_EQ(world->reactions.front().type, Reaction::ReactToHandPickUp);
 	EXPECT_EQ(world->reactions.front().initiator, world->hand);
+	// Its time starts at once, so it ends also when nobody takes it up
+	EXPECT_TRUE(world->reactions.front().timedFromStart);
 }
 
 // The debug tools let go at once with no command. In a network game, each computer does this let go in its own turn, so
@@ -981,6 +983,7 @@ TEST_F(HandGrabSystemWithWorld, AHeldPressTakesTheOwnShownSeedBackToTheMiracles)
 	EXPECT_EQ(world->helpEvents, std::vector<uint32_t> {help::profile::k_PickUp});
 	ASSERT_EQ(world->reactions.size(), 1u);
 	EXPECT_EQ(world->reactions.front().type, Reaction::ReactToHandPickUp);
+	EXPECT_TRUE(world->reactions.front().timedFromStart);
 	EXPECT_EQ(world->spreadStopped, std::vector<entt::entity> {seed});
 	EXPECT_EQ(world->pathsForgotten, 1);
 	// It never goes into the hand as a thing
@@ -1243,6 +1246,11 @@ TEST_F(HandGrabSystemWithWorld, AComputerGodTakesAThingOutsideItsInfluence)
 	// The take of a computer god takes it
 	system->DoComputerTake(world->HandPlayer(), rock);
 	EXPECT_EQ(system->GetHeld(), std::optional(rock));
+	// The pick-up reaction of a computer god's hand has the same time as that of the player's hand
+	const auto pickUp =
+	    std::ranges::find(world->reactions, Reaction::ReactToHandPickUp, &decltype(world->reactions)::value_type::type);
+	ASSERT_NE(pickUp, world->reactions.end());
+	EXPECT_TRUE(pickUp->timedFromStart);
 }
 
 // The other rules of a take apply to the steps of a computer god

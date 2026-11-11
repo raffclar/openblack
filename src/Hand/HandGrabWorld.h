@@ -141,6 +141,8 @@ public:
 		Reaction type {Reaction::None};
 		PlayerNames player {PlayerNames::NEUTRAL};
 		glm::vec3 position {0.0f};
+		/// The time of the reaction starts at once, not when a living thing first takes it up
+		bool timedFromStart {false};
 	};
 	virtual void CreateReaction(const ReactionRequest& request) = 0;
 	virtual void RemoveReactions(entt::entity initiator, Reaction type) = 0;

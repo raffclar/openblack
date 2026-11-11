@@ -450,8 +450,11 @@ void GameHandGrabWorld::CreateReaction(const ReactionRequest& request)
 {
 	if (Locator::reactionSystem::has_value())
 	{
-		Locator::reactionSystem::value().Create(
-		    {.initiator = request.initiator, .type = request.type, .player = request.player, .position = request.position});
+		Locator::reactionSystem::value().Create({.initiator = request.initiator,
+		                                         .type = request.type,
+		                                         .player = request.player,
+		                                         .position = request.position,
+		                                         .onCast = request.timedFromStart});
 	}
 }
 
