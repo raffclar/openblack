@@ -1035,3 +1035,15 @@ TEST(CreatureCastAgenda, FarFromItsHomeTheCreatureCastsTheTeleportAtItself)
 	EXPECT_EQ(agenda->back().cast.magicType, 12u);
 	EXPECT_EQ(agenda->back().cast.object, std::optional<uint32_t>(7u));
 }
+
+TEST(CreatureCastMoves, AGoNearStopsWhenTheCreatureGoesOnToADifferentStepOrAgenda)
+{
+	// The step that started the move
+	EXPECT_TRUE(cast_moves::BelongsToStep(7, 2, 7, 2));
+	// The next step of the same agenda
+	EXPECT_FALSE(cast_moves::BelongsToStep(7, 2, 7, 3));
+	// The same step of a new agenda, such as a plan forced after a slap
+	EXPECT_FALSE(cast_moves::BelongsToStep(7, 0, 8, 0));
+	// The agenda ended and the creature has no step
+	EXPECT_FALSE(cast_moves::BelongsToStep(7, 2, 7, 4));
+}
