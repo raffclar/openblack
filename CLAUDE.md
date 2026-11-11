@@ -5,6 +5,23 @@ openblack reimplements Black & White (2001). Follow the conventions below for al
 The goal is to recreate the original game as closely as possible, ensuring vanilla visuals from the original game
 are preserved but with modern libraries such as BGFX, EnTT and with C++20 optimisations.
 
+## Skills
+
+At the start of every session, and again after the context is compacted, load all of these skills with the Skill
+tool before any other work. They are in `.claude/skills`; `test-triage` is a user skill and loads only where it is
+installed.
+
+- `openblack-lead-loop`
+- `openblack-merge-train`
+- `openblack-visual-review`
+- `openblack-deviations`
+- `openblack-vanilla-bugs`
+- `openblack-commit-check`
+- `openblack-code-comments`
+- `openblack-modern-cpp`
+- `ghidra-catalogue`
+- `test-triage`
+
 ## Research Precedence
 
 - bw1-decomp source code. This is a byte-for-byte decompilation of the original game. Not all source files are complete.
