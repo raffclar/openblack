@@ -110,6 +110,9 @@ struct KindInfo
 
 /// The kinds, in Kind's order
 [[nodiscard]] const KindInfo& Info(Kind kind);
+/// Whether the action of the creature's plan holds back a message that is not forced. The plan is the current plan, or
+/// the last plan when the creature has no plan now.
+[[nodiscard]] bool PlanHoldsBackHelp(std::string_view action);
 [[nodiscard]] constexpr bool IsStageMessage(Kind kind)
 {
 	return kind >= Kind::StageInitial && kind <= Kind::StageFullyMature;
@@ -159,7 +162,7 @@ struct Situation
 	bool playersCreature {true};
 	/// Its stage of growing up
 	uint32_t stage {13};
-	/// Fainted, dying or asleep
+	/// The action of its plan is to die or to sleep (see PlanHoldsBackHelp), or it lies knocked out
 	bool outOrAsleep {false};
 	/// A script holds the dialogue
 	bool dialogueTaken {false};

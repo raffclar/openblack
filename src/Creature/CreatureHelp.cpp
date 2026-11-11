@@ -117,6 +117,13 @@ const KindInfo& creature_help::Info(Kind kind)
 	return k_Kinds.at(static_cast<size_t>(kind));
 }
 
+bool creature_help::PlanHoldsBackHelp(std::string_view action)
+{
+	// The action to die, and the three actions to sleep. The action to sleep on the spot is not one of them.
+	constexpr std::array<std::string_view, 4> k_Actions {"Die", "SleepAtHome", "SleepByObject", "SleepAtPos"};
+	return std::ranges::find(k_Actions, action) != k_Actions.end();
+}
+
 std::optional<std::string_view> creature_help::StageScript(Kind kind, uint32_t land)
 {
 	if (!IsStageMessage(kind) || kind == Kind::StageInitial)

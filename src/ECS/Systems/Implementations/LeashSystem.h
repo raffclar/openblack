@@ -113,6 +113,8 @@ private:
 	/// What the worn leash does to the creature's desires this turn, and to those of a creature it is tied to
 	void UpdateMoods(entt::entity creature, const components::CreatureLeash::Worn& worn);
 	/// The creature takes an order on the land or on a thing, unless it refuses
+	/// Whether the creature asked for a fight and is not in its duel yet: it takes no order then
+	[[nodiscard]] bool AskedForFight(entt::entity creature) const;
 	/// Before an order: the creature that started a fight takes none out of its duel (false). Else the order calls off
 	/// the fight that the creature is in.
 	bool TakeOutOfFight(entt::entity creature);

@@ -115,6 +115,21 @@ TEST(CreatureHelp, AsleepOrDyingNothingButForcedHelp)
 	situation.outOrAsleep = true;
 	EXPECT_EQ(Decide(Of(Kind::PhysicalProblem), situation, false), Outcome::Drop);
 	EXPECT_EQ(Decide(Of(Kind::CurrentDesire, 0, true), situation, false), Outcome::Tell);
+	// A stage message is not held back
+	EXPECT_EQ(Decide(Of(Kind::StageLearnToEat), situation, false), Outcome::Tell);
+}
+
+TEST(CreatureHelp, OnlyThePlansToDieAndToSleepHoldBackHelp)
+{
+	EXPECT_TRUE(PlanHoldsBackHelp("Die"));
+	EXPECT_TRUE(PlanHoldsBackHelp("SleepAtHome"));
+	EXPECT_TRUE(PlanHoldsBackHelp("SleepByObject"));
+	EXPECT_TRUE(PlanHoldsBackHelp("SleepAtPos"));
+	// The creature that sleeps on the spot, or with a friend, still gets help
+	EXPECT_FALSE(PlanHoldsBackHelp("SleepOnTheSpot"));
+	EXPECT_FALSE(PlanHoldsBackHelp("SleepWithFriend"));
+	EXPECT_FALSE(PlanHoldsBackHelp("DeadForever"));
+	EXPECT_FALSE(PlanHoldsBackHelp("MoveToPos"));
 }
 
 TEST(CreatureHelp, SomeKindsOnlyWithTheCreatureInView)
