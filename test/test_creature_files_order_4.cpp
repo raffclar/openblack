@@ -173,22 +173,14 @@ TEST(CreatureFilesOrder4, AThrowAtAPlaceStandsEightHeightsAway)
 	EXPECT_EQ(there->kind, creature_throw::ThrowStand::Kind::There);
 }
 
-// Right on the place the way has no length. As in the game, the point to back away to is not a number. With deviation
-// 232 on, there is no stand and the move fails.
+// Vanilla bug 1890, kept: right on the place the way has no length, and the point to back away to is not a number
 TEST(CreatureFilesOrder4, ThrowingAtThePlaceItStandsOnBacksAwayToNoNumber)
 {
 	const auto stand = creature_throw::WhereToThrowAt({100.0f, 200.0f}, {100.0f, 200.0f}, 5.0f, 40.0f);
-	if constexpr (creature_throw::k_FailThrowAtOwnPlace)
-	{
-		EXPECT_FALSE(stand.has_value());
-	}
-	else
-	{
-		ASSERT_TRUE(stand.has_value());
-		EXPECT_EQ(stand->kind, creature_throw::ThrowStand::Kind::BackOff);
-		EXPECT_TRUE(std::isnan(stand->point.x));
-		EXPECT_TRUE(std::isnan(stand->point.y));
-	}
+	ASSERT_TRUE(stand.has_value());
+	EXPECT_EQ(stand->kind, creature_throw::ThrowStand::Kind::BackOff);
+	EXPECT_TRUE(std::isnan(stand->point.x));
+	EXPECT_TRUE(std::isnan(stand->point.y));
 }
 
 // Deviation 79, case 727: a point that it may stand on is kept

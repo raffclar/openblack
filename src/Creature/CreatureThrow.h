@@ -201,13 +201,10 @@ struct ThrowStand
 /// when it backs away it may stop up to this far from the point that it backs away to
 constexpr float k_ThrowAtPointHeights = 8.0f;
 constexpr float k_ThrowAtPointBackOffHeights = 3.0f;
-/// Deviation 232 (not signed): when true, a creature that stands right on the place it throws at has no stand, and the
-/// move fails. When false, as the game does, the point that it backs away to is not a number.
-constexpr bool k_FailThrowAtOwnPlace = false;
 /// Where a creature of a height goes to throw at a place, keeping the distance it was given. Nearer than that distance it
 /// backs away to that distance from the place. Further than eight times its height it walks up to that distance. The game
-/// works from the map position of the creature. None only with deviation 232 on, when the creature stands right on the
-/// place.
+/// works from the map position of the creature. As in the game, a creature right on the place gets a point to back away to
+/// that is not a number (vanilla-bugs 1890).
 [[nodiscard]] std::optional<ThrowStand> WhereToThrowAt(glm::vec2 creature, glm::vec2 place, float height, float keep);
 /// The point that a creature backs away to for a throw. A point that the creature may stand on is used as it is. If not,
 /// it is the nearest place that it may stand on, when that is less than the valid point reach away. None when the search

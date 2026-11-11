@@ -227,10 +227,6 @@ std::optional<creature_throw::ThrowStand> creature_throw::WhereToThrowAt(glm::ve
 	const auto stopWithin = [](float least, float most) { return most > least ? most : least + k_ThrowWalkUpSpare; };
 	if (distance < keep)
 	{
-		if (k_FailThrowAtOwnPlace && distance <= 0.0f)
-		{
-			return std::nullopt;
-		}
 		// Back along the line from the place to where it stands, to the distance that it keeps
 		return ThrowStand {.kind = ThrowStand::Kind::BackOff,
 		                   .point = {place.x - ((keep * acrossX) / distance), place.y - ((keep * acrossZ) / distance)},
