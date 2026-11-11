@@ -89,8 +89,9 @@ bool Has(entt::entity creature, size_t animation);
 /// A direction in the world as seen by a creature facing a heading: x to its right, y ahead
 glm::vec2 WorldToLocal(glm::vec2 world, GameHeading heading);
 
-/// Moves a creature where it stands, both where it is drawn from and to this turn
-void Shift(CreatureLocomotion& locomotion, glm::vec2 by);
+/// Moves a creature to a point on the land. The creature stands at the exact point this turn. The point that the
+/// creature is drawn from moves by the same distance.
+void MoveTo(CreatureLocomotion& locomotion, glm::vec2 point);
 
 void SetEyes(ecs::Registry& registry, entt::entity creature, creature_eyes::Mode mode);
 

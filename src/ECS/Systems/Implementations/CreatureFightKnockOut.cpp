@@ -383,7 +383,8 @@ void CreatureFightSystem::KnockedOutTurn(entt::entity entity)
 	switch (knockedOut.stage)
 	{
 	case CreatureKnockedOut::Stage::Lying:
-		if (!knockedOut.permanent && knockedOut.seconds >= fight::FaintSeconds(ShownSize(body)))
+		if (!knockedOut.permanent && fight::TurnsCounted(knockedOut.seconds, k_TurnSeconds) >=
+		                                 fight::FaintWaitTurns(ShownSize(body), k_TurnMilliseconds))
 		{
 			// A player's creature is taken home; any other comes round where it lies
 			if (body.owner != PlayerNames::NEUTRAL)
@@ -449,7 +450,8 @@ void CreatureFightSystem::KnockedOutTurn(entt::entity entity)
 		}
 		break;
 	case CreatureKnockedOut::Stage::Waiting:
-		if (knockedOut.seconds >= fight::k_WaitAfterHomeSeconds)
+		if (fight::TurnsCounted(knockedOut.seconds, k_TurnSeconds) >=
+		    creature_fizz::TurnsOf(fight::k_WaitAfterHomeSeconds, k_TurnMilliseconds))
 		{
 			next(CreatureKnockedOut::Stage::WaitingForSpells);
 		}
