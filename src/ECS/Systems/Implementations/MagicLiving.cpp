@@ -50,6 +50,7 @@
 #include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/CreatureSkinSystemInterface.h"
 #include "ECS/Systems/FightTranscriptNote.h"
+#include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
@@ -233,6 +234,16 @@ magic::EffectDefence magic_living::DefenceOf(entt::entity entity)
 
 namespace
 {
+/// The burn of an effect heats the creature each time that the game finds the harm of the effect. Water cools it.
+void Heat(entt::entity entity, const magic::EffectValues& values, const magic::EffectSource& source)
+{
+	const float burn = values[magic::EffectKind::Burn];
+	if (burn != 0.0f && Locator::fireSystem::has_value())
+	{
+		Locator::fireSystem::value().ApplyBurn(entity, burn, source.player);
+	}
+}
+
 /// A heal mends a creature's cuts and scars as though so much time had passed
 void HealMarks(entt::entity entity, float heal)
 {
@@ -345,14 +356,15 @@ void CutAndScarred(entt::entity entity, float damage, const magic::EffectValues&
 }
 } // namespace
 
-bool magic_living::TakesEffectItsOwnWay(entt::entity entity, const magic::EffectValues& values,
-                                        const magic::EffectSource& source)
+bool magic_living::TakesEffectItsOwnWay(entt::entity entity, magic::EffectValues& values, const magic::EffectSource& source)
 {
 	auto& registry = EntityRegistry();
 	if (!registry.Valid(entity) || !registry.AnyOf<Creature>(entity))
 	{
 		return false;
 	}
+	// The game finds the harm first, and this heats the creature, also when the creature then keeps the effect out
+	Heat(entity, values, source);
 	const auto defence = DefenceOf(entity);
 	const float damage = magic::DamageFrom(values, defence);
 	const bool self = source.casterCreature == entity;
@@ -380,6 +392,9 @@ bool magic_living::TakesEffectItsOwnWay(entt::entity entity, const magic::Effect
 	}
 	if (!inDuel)
 	{
+		// The cuts and scars find the harm again, and the heat goes on the creature a second time. The life takes the
+		// third heat.
+		Heat(entity, values, source);
 		CutAndScarred(entity, damage, values, source);
 		return false;
 	}
@@ -391,9 +406,10 @@ bool magic_living::TakesEffectItsOwnWay(entt::entity entity, const magic::Effect
 		ChangeOpinion(entity, values, source);
 		return true;
 	}
-	// In a fight it takes the miracle as a blow: blocking, a tenth of it; it reels, a heal gives back the health it fights
-	// with, and harm takes it, which can knock it out. Its life is untouched.
-	auto taken = values;
+	// In a fight it takes the miracle as a blow; it reels, a heal gives back the health it fights with, and harm takes it,
+	// which can knock it out. Its life is untouched. While it blocks, the heal is a tenth, but the harm found before the
+	// block stays full. The effect stays a tenth for all the things that it reaches after this creature.
+	auto& taken = values;
 	const bool blocking = Locator::creatureFightSystem::has_value() && Locator::creatureFightSystem::value().IsBlocking(entity);
 	if (blocking)
 	{
