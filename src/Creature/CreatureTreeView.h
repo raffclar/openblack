@@ -68,11 +68,18 @@ constexpr Colour k_BestColour {.r = 50, .g = 190, .b = 80};
 struct Path
 {
 	std::vector<size_t> nodes;
-	/// The path ends at a leaf. If not, the thing does not have the attribute of the last node, or has a value that no
-	/// branch of the last node has.
+	/// The path ends at a leaf. If not, the thing does not have the attribute of the last node, or has a value out of the
+	/// range of the attribute of the last node.
 	bool reachesLeaf {false};
+	/// The value of the branch with no examples that the thing goes down below the last node. Such a branch is a leaf
+	/// with the step of the last node: the mean of the examples of the node above it.
+	std::optional<uint32_t> emptyBranch;
 };
 [[nodiscard]] Path PathOf(const creature_tree::Tree& tree, const creature_tree::Belief& belief);
+/// The text of a leaf on a branch with no examples
+constexpr const char* k_EmptyBranchLabel = "empty (mean of the node above)";
+/// A note on how a path ends, for the end of a line: nothing at a leaf, the empty branch, or no leaf
+[[nodiscard]] std::string PathEnd(const Path& path);
 
 /// Two trees are the same when each node tests the same attribute, has the same branches, the same step of the
 /// feedback scale and the same count of examples

@@ -71,6 +71,9 @@ private:
 	{
 		std::vector<size_t> planner;
 		std::vector<size_t> picked;
+		/// The branch with no examples that each path goes down below its last node
+		std::optional<uint32_t> plannerEmpty;
+		std::optional<uint32_t> pickedEmpty;
 	};
 	void DrawGraph(const creature_tree::Tree& tree, const Watch& watch, const Paths& paths, GraphView& view) noexcept;
 	void DrawTextTree(const creature_tree::Tree& tree, const Watch& watch, const Paths& paths, size_t index,

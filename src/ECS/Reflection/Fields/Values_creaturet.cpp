@@ -85,6 +85,7 @@ void openblack::ecs::reflection::RegisterFields_Values_creaturet(entt::meta_ctx&
 	Reflect<openblack::creature_tree::Node>(context, ValueOnly {})
 	    .Field<&openblack::creature_tree::Node::test>("test")
 	    .Field<&openblack::creature_tree::Node::children>("children")
+	    .Field<&openblack::creature_tree::Node::branches>("branches")
 	    .Field<&openblack::creature_tree::Node::bucket>("bucket")
 	    .Field<&openblack::creature_tree::Node::examples>("examples");
 	Reflect<openblack::creature_tree::Tree>(context, ValueOnly {}).Field<&openblack::creature_tree::Tree::nodes>("nodes");

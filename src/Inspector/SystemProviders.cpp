@@ -1117,6 +1117,10 @@ std::unique_ptr<ProviderInterface> openblack::inspector::MakeCreatureProvider(Cr
 						    }
 						    item["test"] = creature_tree::Name(*node.test);
 						    item["branches"] = std::move(branches);
+						    // Each value of the range with no branch above is a branch with no examples: a leaf with the
+						    // value of this node, the mean of its examples
+						    item["value_count"] = node.branches;
+						    item["empty_branch_leaf"] = creature_tree_view::LeafValue(node);
 					    }
 					    else
 					    {
@@ -1154,11 +1158,13 @@ std::unique_ptr<ProviderInterface> openblack::inspector::MakeCreatureProvider(Cr
 					    if (belief.has_value())
 					    {
 						    const auto path = creature_tree_view::PathOf(tree, *belief);
-						    item["path"] = {{"thing", ToId(*thing)},
-						                    {"kind", creature_tree::BeliefName(belief->type)},
-						                    {"nodes", path.nodes},
-						                    {"reaches_leaf", path.reachesLeaf},
-						                    {"value", creature_tree::Evaluate(tree, *belief)}};
+						    item["path"] = {
+						        {"thing", ToId(*thing)},
+						        {"kind", creature_tree::BeliefName(belief->type)},
+						        {"nodes", path.nodes},
+						        {"reaches_leaf", path.reachesLeaf},
+						        {"empty_branch", path.emptyBranch.has_value() ? Json(*path.emptyBranch) : Json(nullptr)},
+						        {"value", creature_tree::Evaluate(tree, *belief)}};
 					    }
 					    else
 					    {
