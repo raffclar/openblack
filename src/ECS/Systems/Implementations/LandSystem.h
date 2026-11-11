@@ -40,6 +40,7 @@ public:
 	bool LoadNetworkMapFile(const std::filesystem::path& path, std::span<const uint8_t> file,
 	                        ChallengeScripts scripts) override;
 	bool LoadTestbed() override;
+	bool LoadGeneratedLand(uint64_t seed) override;
 	bool LoadGodsRingMap() override;
 	bool LoadGodsRingMapFile(std::span<const uint8_t> file) override;
 	bool LoadSavedLand(const std::filesystem::path& landPath, const std::filesystem::path& landscape,

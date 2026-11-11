@@ -33,6 +33,7 @@
 #include <spdlog/spdlog.h>
 
 #include "3D/FlatLand.h"
+#include "3D/GeneratedLand.h"
 #include "3D/GodsRingLand.h"
 #include "3D/LandData.h"
 #include "3D/LandIslandInterface.h"
@@ -49,11 +50,15 @@
 #include "Debug/TestbedDispenserGrid.h"
 #endif
 #include "ECS/Archetypes/CloudArchetype.h"
+#include "ECS/Archetypes/MobileStaticArchetype.h"
 #include "ECS/Archetypes/PlayerArchetype.h"
+#include "ECS/Archetypes/StreamSegmentArchetype.h"
+#include "ECS/Archetypes/TreeArchetype.h"
 #include "ECS/Components/Influence.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Player.h"
 #include "ECS/Components/PrayerPower.h"
+#include "ECS/Components/Stream.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/ComputerPlayerStart.h"
 #include "ECS/CreatureExplorationLand.h"
@@ -167,6 +172,9 @@ namespace
 /// How far the testbed's player's influence reaches from its middle, and the prayer power their worship has stored
 constexpr float k_TestbedInfluenceRadius = 400.0f;
 constexpr float k_TestbedPrayer = 1.0e6f;
+/// The camera over the start area of a generated land: this high above it and this far to the south
+constexpr float k_GeneratedCameraHeight = 220.0f;
+constexpr float k_GeneratedCameraBack = 320.0f;
 #endif
 /// How many times longer a turn takes than at the normal speed, at the normal speed
 constexpr float k_NormalTurnDurationMultiplier = 1.0f;
@@ -488,6 +496,119 @@ bool LandSystem::LoadTestbed()
 }
 #endif
 
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
+namespace
+{
+// The generator gives the game's numbers of the kinds of tree and rock
+static_assert(static_cast<int>(landgen::features::Tree::Burnt) == static_cast<int>(TreeInfo::Burnt));
+static_assert(static_cast<int>(landgen::features::Tree::CypressA) == static_cast<int>(TreeInfo::CypressA));
+static_assert(landgen::features::k_DeadTreeStatic == static_cast<uint8_t>(MobileStaticInfo::DeadTree));
+static_assert(landgen::features::RockType(landgen::features::RockShape::Square, landgen::features::Stone::Volcanic) ==
+              static_cast<uint8_t>(MobileStaticInfo::SquarerockVolcanic));
+
+/// Puts the trees, rocks and rivers of a generated land on the land, as the land script of a land of the story does
+void PlaceGeneratedThings(const landgen::GeneratedLand& land)
+{
+	constexpr float k_MetresPerCorner = 10.0f;
+	const auto& terrain = Locator::terrainSystem::value();
+	const auto onLand = [&terrain](float x, float z) { return glm::vec3(x, terrain.GetHeightAt({x, z}), z); };
+	for (const auto& feature : land.features)
+	{
+		const auto position = onLand(feature.x, feature.z);
+		if (feature.kind == landgen::features::Kind::Tree)
+		{
+			// A tree of the scenery in no forest, as the trees of the land scripts of the story are
+			archetypes::TreeArchetype::Create(0, position, static_cast<TreeInfo>(feature.type), true, feature.angle,
+			                                  feature.maxSize, feature.size);
+		}
+		else
+		{
+			archetypes::MobileStaticArchetype::Create(position, static_cast<MobileStaticInfo>(feature.type), 0.0f, 0.0f,
+			                                          feature.angle, 0.0f, feature.size);
+		}
+	}
+
+	// Each river is a stream of the game, which lets the sea show through the land along its points
+	auto& registry = Locator::entitiesRegistry::value();
+	auto& context = registry.Context();
+	components::Stream::Id id = 0;
+	for (const auto& river : land.rivers)
+	{
+		while (context.streams.contains(id))
+		{
+			++id;
+		}
+		const auto entity = registry.Create();
+		auto& stream = registry.Assign<components::Stream>(entity, id);
+		context.streams.insert({id, entity});
+		for (const auto& point : river.points)
+		{
+			stream.points.push_back(onLand(point.x * k_MetresPerCorner, point.z * k_MetresPerCorner));
+			if (stream.points.size() >= 2)
+			{
+				archetypes::StreamSegmentArchetype::Create(stream.points[stream.points.size() - 2], stream.points.back());
+			}
+		}
+	}
+}
+} // namespace
+
+bool LandSystem::LoadGeneratedLand(uint64_t seed)
+{
+	const InspectorLoading loading("generated land");
+	const auto parts = generated_land::ReadStoryParts(Locator::filesystem::value());
+	if (!parts.has_value())
+	{
+		return false;
+	}
+	// No script runs on a generated land, as on the testbed
+	if (Locator::vm::has_value())
+	{
+		Locator::vm::value().StopAllTasks();
+	}
+	View().BeginLoadingScreen(loading::LoadingClock::Mode::Tips);
+	PrepareNewLand(land_change::Kind::Testbed);
+	_landPath = generated_land::PathOf(seed);
+	// The generator makes the land, so it has no landscape file
+	_landscapePath.clear();
+	View().ShowLoadingFrame();
+	const auto land = landgen::Generate(generated_land::SettingsFor(seed));
+	for (const auto& time : land.times)
+	{
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "Generated land {}: {} took {:.1f} ms", seed, time.stage, time.milliseconds);
+	}
+	InitializeLevel(generated_land::Build(land, *parts));
+	SetUpLandscape();
+	View().ShowLoadingFrame();
+	PlaceGeneratedThings(land);
+
+	// The camera looks down over the start area from the south
+	constexpr float k_MetresPerCorner = 10.0f;
+	const glm::vec2 start {land.start.x * k_MetresPerCorner, land.start.z * k_MetresPerCorner};
+	const auto ground = Locator::terrainSystem::value().GetHeightAt(start);
+	Locator::camera::value()
+	    .SetOrigin({start.x, ground + k_GeneratedCameraHeight, start.y - k_GeneratedCameraBack})
+	    .SetFocus({start.x, ground, start.y});
+
+	// The land has no temple yet. A source of influence over the start area gives the player the reach of a citadel,
+	// as on the testbed.
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto influence = registry.Create();
+	registry.Assign<components::Transform>(influence, glm::vec3(start.x, ground, start.y), glm::mat3(1.0f), glm::vec3(1.0f));
+	registry.Assign<components::InfluenceSource>(influence, PlayerNames::PLAYER_ONE, k_TestbedInfluenceRadius);
+	View().EndLoadingScreen();
+
+	StartNewLand(land_change::Kind::Testbed);
+	return true;
+}
+#else
+bool LandSystem::LoadGeneratedLand(uint64_t /*seed*/)
+{
+	// The generated lands are a developer tool for now: a build for players has none
+	return false;
+}
+#endif
+
 bool LandSystem::LoadGodsRingMap()
 {
 	// The village of each slot comes from a land of the game for network play, which the player has. The game makes the
@@ -677,7 +798,8 @@ bool LandSystem::LoadSavedLand(const std::filesystem::path& landPath, const std:
 	LoadTimer timer(fmt::format("saved land {}", landPath.stem().string()));
 	// A world state of the land that is open keeps the land: the landscape is the same, so only the altitudes that the
 	// world changed go back. The world loads its own changes after. The load is short and shows no loading screen.
-	const bool builtByGame = landPath == k_TestbedLandPath || gods_ring_map::IsThisMap(landPath.generic_string());
+	const bool builtByGame = landPath == k_TestbedLandPath || gods_ring_map::IsThisMap(landPath.generic_string()) ||
+	                         generated_land::SeedOf(landPath.generic_string()).has_value();
 	const bool keepsLand = land_reuse::KeepsLand({
 	    .worldState = use == SavedLandUse::WorldState,
 	    .landLoaded = Locator::terrainSystem::has_value() && Locator::terrainSystem::value().IsLoaded(),
@@ -717,6 +839,18 @@ bool LandSystem::LoadSavedLand(const std::filesystem::path& landPath, const std:
 		{
 			_landscapePath.clear();
 			InitializeLevel(gods_ring_land::Build());
+			SetUpLandscape();
+		}
+		// A generated land comes from no file: the generator makes it again from its seed
+		else if (const auto seed = generated_land::SeedOf(landPath.generic_string()); seed.has_value())
+		{
+			const auto parts = generated_land::ReadStoryParts(Locator::filesystem::value());
+			if (!parts.has_value())
+			{
+				throw std::runtime_error("The landscapes of a generated land are not in the game folder");
+			}
+			_landscapePath.clear();
+			InitializeLevel(generated_land::Build(landgen::Generate(generated_land::SettingsFor(*seed)), *parts));
 			SetUpLandscape();
 		}
 		else if (online_map_land::IsOnlineMap(landPath.generic_string()))

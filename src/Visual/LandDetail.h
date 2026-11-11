@@ -230,10 +230,11 @@ struct MorphTargets
 [[nodiscard]] std::array<uint8_t, k_CornerCount> CrossFadeCorners(const GroundLine& line, float width, float band,
                                                                   glm::vec2 blockCorner);
 
-/// The land's vertex shader reads the blocks' corners as they are drawn in a frame from one texture: 16 by 16 squares,
+/// The land's vertex shader reads the blocks' corners as they are drawn in a frame from one texture: 32 by 32 squares,
 /// one for each block in the order of the blocks, of 17 by 17 texels, the corner's x along the width and z along the
-/// height. Each texel holds the drawn altitude and the coarse texture's opacity, a byte each.
-inline constexpr size_t k_CornerSquaresPerSide = 16;
+/// height. Each texel holds the drawn altitude and the coarse texture's opacity, a byte each. There is a square for
+/// each block of the whole map, because a land made by the game can have more blocks than a landscape file.
+inline constexpr size_t k_CornerSquaresPerSide = 32;
 inline constexpr size_t k_CornerTextureSide = k_CornerSquaresPerSide * k_CornersPerSide;
 
 /// The texel of the corner texture that holds the corner (x, z) of a block

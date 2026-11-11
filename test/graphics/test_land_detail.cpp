@@ -507,3 +507,13 @@ TEST(LandDetail, AFrameIsClassifiedOnceForTheSameCameraAndBlocks)
 	EXPECT_EQ(memo.For(inputs, RowAlongX(3)).blocks.size(), 3u);
 	EXPECT_EQ(memo.Classifications(), 3u);
 }
+
+TEST(LandDetail, TheCornerTextureHasASquareForEachBlockOfTheMap)
+{
+	// The map is 32 by 32 blocks, and a land made by the game can use all of them
+	EXPECT_GE(k_CornerSquaresPerSide * k_CornerSquaresPerSide, size_t {32 * 32});
+	// The last corner of the last block is the last texel of the texture
+	EXPECT_EQ(CornerTexel(1023, k_CornersPerSide - 1, k_CornersPerSide - 1), (k_CornerTextureSide * k_CornerTextureSide) - 1);
+	// Block 256 starts a new row of squares after the first 32, not in the place of block 0
+	EXPECT_EQ(CornerTexel(256, 0, 0), size_t {8} * k_CornersPerSide * k_CornerTextureSide);
+}
