@@ -321,6 +321,28 @@ bool HandSystem::OwnSendWaits() const noexcept
 	return wait != nullptr && hand_send_wait::Waits(*wait);
 }
 
+void HandSystem::EndInterfaceLock(PlayerNames player)
+{
+	if (IsOwnPlayer(player))
+	{
+		EndOwnInterfaceLock();
+	}
+}
+
+void HandSystem::EndOwnInterfaceLock()
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto hand = GetOwnHands()[static_cast<size_t>(Side::Left)];
+	if (!_ownPlayer.has_value() || !registry.Valid(hand))
+	{
+		return;
+	}
+	if (auto* wait = registry.TryGet<HandSendWait>(hand); wait != nullptr)
+	{
+		hand_send_wait::LockEnd(*wait);
+	}
+}
+
 void HandSystem::ProcessTurn()
 {
 	auto& registry = Locator::entitiesRegistry::value();

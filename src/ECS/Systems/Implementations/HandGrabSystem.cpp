@@ -2105,6 +2105,8 @@ void HandGrabSystem::LockTurn(PlayerNames player)
 		    !_world->InInfluence(_world->HandPlayer(), _world->ReportedHandPlace()) || !Scoop(*grab))
 		{
 			EndScoop(*grab);
+			// The lock on the source ends, and with it the interface lock of the hand
+			_world->EndInterfaceLock(player);
 		}
 	}
 	if (!Exists(grab->lastPickedUp))
