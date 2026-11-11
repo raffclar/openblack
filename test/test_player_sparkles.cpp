@@ -9,6 +9,7 @@
 
 #include <cstdint>
 
+#include <bit>
 #include <optional>
 
 #include <glm/vec3.hpp>
@@ -128,4 +129,28 @@ TEST(PlayerSparkles, APlayerThatNobodyPlaysShowsNoSparkle)
 	    player_sparkles::PlaceOf(
 	        {.kind = player_kind::Kind::None, .mindOn = true, .mindCamera = glm::vec3(1.0f), .reportedCamera = glm::vec3(2.0f)})
 	        .has_value());
+}
+
+TEST(PlayerSparkles, TheSymbolShowsOverTheSparklesOfAPlayingMindOrAPersonInTheGame)
+{
+	EXPECT_TRUE(player_sparkles::ShowsSymbol({.kind = player_kind::Kind::Computer, .mindOn = true}));
+	EXPECT_FALSE(player_sparkles::ShowsSymbol({.kind = player_kind::Kind::Computer, .mindOn = false}));
+	EXPECT_TRUE(player_sparkles::ShowsSymbol({.kind = player_kind::Kind::Human}));
+	EXPECT_FALSE(player_sparkles::ShowsSymbol({.kind = player_kind::Kind::Human, .left = true}));
+	// The sparkles of a player that nobody plays still show the symbol until they go
+	EXPECT_TRUE(player_sparkles::ShowsSymbol({.kind = player_kind::Kind::None}));
+}
+
+TEST(PlayerSparkles, TheSymbolTurnsByTheMillisecondsAndStaysBetweenMinusPiAndPi)
+{
+	// Twenty milliseconds turn it by a hundredth of a radian, in the game's floats
+	EXPECT_EQ(player_sparkles::SymbolAngle(0.0f, 20), 20.0f * std::bit_cast<float>(0x3A03126Fu));
+	const float pi = std::bit_cast<float>(0x40490FDBu);
+	const float twoPi = std::bit_cast<float>(0x40C90FDBu);
+	const float past = 10.0f * std::bit_cast<float>(0x3A03126Fu) + 3.14f;
+	EXPECT_EQ(player_sparkles::SymbolAngle(3.14f, 10), past - twoPi);
+	EXPECT_GT(player_sparkles::SymbolAngle(3.14f, 10), -pi);
+	// A turn back stays in the same span
+	EXPECT_EQ(player_sparkles::SymbolAngle(-3.14f, -10), -10.0f * std::bit_cast<float>(0x3A03126Fu) - 3.14f + twoPi);
+	EXPECT_EQ(player_sparkles::SymbolAngle(1.0f, 0), 1.0f);
 }

@@ -59,4 +59,20 @@ struct Watched
 /// - A player that nobody plays shows none.
 [[nodiscard]] std::optional<glm::vec3> PlaceOf(const Watched& watched);
 
+/// The symbol of the god over the sparkles of another player: half its width, and its colour, 0xAARRGGBB. The symbol is
+/// black and faint, and it is blended over what is behind it, thus it shows as a dark picture in the sparkles.
+inline constexpr float k_SymbolHalfSize = 3.0f;
+inline constexpr uint32_t k_SymbolColour = 0x30000000u;
+
+/// Whether the symbol of the god shows over the sparkles of another player:
+/// - A computer player shows it only while its mind plays.
+/// - A human player shows it only while the person is in the game.
+/// - A player that nobody plays shows it.
+[[nodiscard]] bool ShowsSymbol(const Watched& watched);
+
+/// The angle of the symbols over the sparkles after one more symbol is drawn. All the symbols share one angle. Each
+/// symbol that is drawn turns it by the milliseconds of the frame's game time, then the angle stays between minus pi and
+/// pi. Thus when two symbols show, the angle turns twice in each frame.
+[[nodiscard]] float SymbolAngle(float angle, int32_t milliseconds);
+
 } // namespace openblack::player_sparkles
