@@ -362,6 +362,8 @@ std::string_view StepKindName(creature_mind::Step::Kind kind)
 		return "apply_desire";
 	case Kind::WaitForFree:
 		return "wait_for_free";
+	case Kind::WaitUntilFree:
+		return "wait_until_free";
 	case Kind::Communicate:
 		return "communicate";
 	case Kind::Teleport:

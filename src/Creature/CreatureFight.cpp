@@ -613,6 +613,16 @@ creature_fight::FaintWait creature_fight::LyingTurn(FaintWait wait, const FaintB
 	return {.seconds = WaitTurnCounts(body) ? wait.seconds + turnSeconds : wait.seconds, .started = true};
 }
 
+creature_fight::FaintCount creature_fight::LyingTurn(FaintCount wait, const FaintBody& body, int32_t notStartedTurns)
+{
+	// The fall of the faint ends only when the body lies still in its loop
+	if (!wait.started && !(body.faintStarted && body.lies))
+	{
+		return {.turns = notStartedTurns, .started = false};
+	}
+	return {.turns = WaitTurnCounts(body) ? wait.turns + 1 : wait.turns, .started = true};
+}
+
 float creature_fight::DamageFactor(const Blow& blow)
 {
 	// The game multiplies in this order: the strengths, then the sizes, then the speed

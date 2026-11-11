@@ -9,6 +9,7 @@
 
 #include "CreatureScriptPlay.h"
 
+#include <algorithm>
 #include <limits>
 
 using namespace openblack;
@@ -28,9 +29,12 @@ std::vector<creature_mind::Step> creature_script_play::Agenda(const Request& req
 		         .retriedClip = isStatic ? creature_mind::RetriedClip::Static : creature_mind::RetriedClip::Individual}};
 	}
 	const auto animation = static_cast<size_t>(request.animation);
+	// The game has no limit on the plays and writes the steps after the last slot of its agenda into other data. Only
+	// the plays that fit in the agenda, with the wait after them, are kept.
+	const auto plays = std::min<size_t>(request.plays, k_MostPlays);
 	std::vector<Step> agenda;
-	agenda.reserve(static_cast<size_t>(request.plays) + 1);
-	for (uint32_t i = 0; i < request.plays; ++i)
+	agenda.reserve(plays + 1);
+	for (size_t i = 0; i < plays; ++i)
 	{
 		// Each starts once its body is free
 		if (isStatic)
@@ -45,26 +49,25 @@ std::vector<creature_mind::Step> creature_script_play::Agenda(const Request& req
 			agenda.push_back({.kind = Step::Kind::Action, .seconds = 0.0f, .animation = animation});
 		}
 	}
-	// Then it waits for its body to be free, which the last action's end already waits for; with nothing to play, it
-	// only waits
-	if (agenda.empty())
-	{
-		agenda.push_back({.kind = Step::Kind::Wait, .seconds = 0.0f});
-	}
+	// Then it waits until its body is free. With nothing to play, it only waits.
+	agenda.push_back({.kind = Step::Kind::WaitUntilFree});
 	return agenda;
 }
 
 bool creature_script_play::Played(const creature_mind::IdleMind& mind)
 {
-	return mind.activity == creature_mind::Activity::BeIdle || mind.step >= mind.agenda.size();
+	// A last step that ended with empty last stages keeps the agenda until the next turn goes past those stages
+	return mind.activity == creature_mind::Activity::BeIdle || creature_mind::AgendaOver(mind);
 }
 
 void creature_script_play::ClearAfterPlayed(creature_mind::IdleMind& mind)
 {
-	if (mind.step >= mind.agenda.size())
+	if (creature_mind::AgendaOver(mind))
 	{
 		return;
 	}
+	// The agenda does not go past the empty last stages of its last step, so it does not complete
+	mind.endsNextTurn.reset();
 	mind.step = mind.agenda.size();
 	mind.stepStarted = false;
 	mind.gaveUp = true;
