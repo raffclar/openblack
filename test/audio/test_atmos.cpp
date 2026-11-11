@@ -349,6 +349,43 @@ TEST(AtmosPlayer, MsvcRandomSequence)
 	EXPECT_EQ(random.Next(), 26500u);
 }
 
+TEST(AtmosPlayer, AnAnimEffectDrawIsHalfTheNumberInTheUpperHalfEverySecondDraw)
+{
+	AnimEffectDraw draw;
+	// The first draw is in the upper half
+	EXPECT_EQ(draw.Next(0), 0x3FFFu);
+	EXPECT_EQ(draw.Next(0), 0u);
+	EXPECT_EQ(draw.Next(AudioRandom::k_RandMax), 0x3FFFu + 0x3FFFu);
+	EXPECT_EQ(draw.Next(AudioRandom::k_RandMax), 0x3FFFu);
+	// An odd number loses its last bit
+	EXPECT_EQ(draw.Next(41), 20u + 0x3FFFu);
+}
+
+TEST(AtmosPlayer, AnAnimEffectSampleIndexDividesByTheLargestNumberOfTheStream)
+{
+	EXPECT_EQ(AnimEffectSampleIndex(0, 2), 0u);
+	EXPECT_EQ(AnimEffectSampleIndex(0x3FFF, 2), 0u);
+	EXPECT_EQ(AnimEffectSampleIndex(0x4000, 2), 1u);
+	EXPECT_EQ(AnimEffectSampleIndex(0x7FFE, 2), 1u);
+	EXPECT_EQ(AnimEffectSampleIndex(0x7FFE, 5), 4u);
+	EXPECT_EQ(AnimEffectSampleIndex(10922, 3), 0u);
+	EXPECT_EQ(AnimEffectSampleIndex(10923, 3), 1u);
+}
+
+TEST(AtmosPlayer, TheSamplesOfAnAnimEffectAreChosenInTurnWhenThereAreTwo)
+{
+	RecordingBackend backend;
+	AtmosPlayer player(backend, [] { return 1u; });
+	// One sample takes no number of the stream
+	EXPECT_EQ(player.PickAnimEffectSample(1), 0u);
+	// With srand(1) the stream gives 41, 18467, 6334 and 26500. The draws are 20 + 0x3FFF, 9233, 3167 + 0x3FFF and
+	// 13250: with two samples, the picks change from one sample to the other, the second sample first
+	EXPECT_EQ(player.PickAnimEffectSample(2), 1u);
+	EXPECT_EQ(player.PickAnimEffectSample(2), 0u);
+	EXPECT_EQ(player.PickAnimEffectSample(2), 1u);
+	EXPECT_EQ(player.PickAnimEffectSample(2), 0u);
+}
+
 TEST(AtmosPlayer, MatchesOriginalScheduler1)
 {
 	RunSchedulerScenario("scheduler_1.json");

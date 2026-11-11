@@ -36,7 +36,6 @@
 #include "AxisLocks.h"
 #include "Camera/Camera.h"
 #include "Common/MachineClock.h"
-#include "Common/RandomNumberManager.h"
 #include "Common/StringUtils.h"
 #include "ECS/Registry.h"
 #include "ECS/SoundPoint.h"
@@ -920,7 +919,8 @@ AnimEffectPlay AudioManager::PlayAnimEffect(const std::string& bankName, std::sp
 	{
 		return {};
 	}
-	const auto sample = samples[Locator::rng::value().NextValue<size_t>(0, samples.size() - 1)];
+	// The sound library picks one of them from its own random numbers
+	const auto sample = samples[_atmos->PickAnimEffectSample(static_cast<uint32_t>(samples.size()))];
 	const auto id = AnimEffectSampleId(bankName, sample);
 	auto& sounds = Locator::resources::value().GetSounds();
 	if (!sounds.Contains(id))
