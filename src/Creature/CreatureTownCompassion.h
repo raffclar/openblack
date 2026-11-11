@@ -97,9 +97,15 @@ void TiedToFlag(State& state, uint32_t desire, const DesireActions& actions);
 /// Other ways to untie the leash or take it off do not change the desire.
 void UntiedFromFlag(State& state);
 
-/// Whether hurt people make it think of healing first: some of the town's people are hurt, no town desire is shown to it
-/// on the leash, it has seen the healing miracle more than 60 hundredths of the times it needs to learn it, and a coin's
-/// toss comes up heads
+/// Whether hurt people can make it think of healing first: some of the town's people are hurt, no town desire is shown
+/// to it on the leash, and it has seen the healing miracle more than 60 hundredths of the times it needs to learn it
+[[nodiscard]] bool MayHealFirst(uint32_t hurt, bool leashedToTownDesire, float sightings, float sightingsNeeded);
+/// When it can heal first, each look at the first action of the list tosses a coin. The draw is below this range, and
+/// HealComesFirst tells the result.
+constexpr uint32_t k_HealChance = 2;
+/// Whether a draw below k_HealChance puts healing first: it does when the draw is 0
+[[nodiscard]] bool HealComesFirst(uint32_t draw);
+/// Whether hurt people make it think of healing first: it can heal first, and a coin's toss comes up heads
 [[nodiscard]] bool HealFirst(uint32_t hurt, bool leashedToTownDesire, float sightings, float sightingsNeeded,
                              const std::function<uint32_t(uint32_t)>& random);
 
@@ -107,6 +113,11 @@ void UntiedFromFlag(State& state);
 /// thinks of healing first
 [[nodiscard]] std::vector<uint32_t> Actions(const State& state, const DesireActions& actions,
                                             std::optional<uint32_t> healFirst);
+/// The actions it weighs for the town when it can heal first: the heal action, then all the actions for the desire it
+/// helps with. Each look at the list chooses one of the first two (see creature_planner::DesirePlanning::healsFirst).
+/// With no heal action, the actions for the desire only.
+[[nodiscard]] std::vector<uint32_t> ActionsWithHealChoice(const State& state, const DesireActions& actions,
+                                                          std::optional<uint32_t> heal);
 
 /// What a creature makes of a town for its decision trees: how much the town believes in the creature's player, 0 to 3: under
 /// 0.2, under 0.4, under 0.6, or more

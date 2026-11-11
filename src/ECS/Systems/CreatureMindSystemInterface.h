@@ -122,6 +122,8 @@ public:
 	}
 	/// The game's tables the minds use, once the game's data is loaded
 	[[nodiscard]] virtual const creature_mind_tables::Tables* GetTables() = 0;
+	/// Whether the plan that a creature carries out passes the game's test of a valid plan
+	[[nodiscard]] virtual bool HasValidPlan(entt::entity /*creature*/) { return false; }
 	/// What a creature believes about a thing now, with the attributes that its decision trees test. None for a thing
 	/// that is of no kind that a creature keeps beliefs about.
 	[[nodiscard]] virtual std::optional<creature_tree::Belief> BeliefAbout(entt::entity /*creature*/,

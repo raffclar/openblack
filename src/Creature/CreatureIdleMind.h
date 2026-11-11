@@ -662,7 +662,7 @@ struct IdleMind
 	uint32_t castTurns {0};
 	/// An inspect step: the turns it watches for yet
 	uint32_t inspectTurns {0};
-	/// A step watching a flying thing: the turns it has watched it
+	/// A step watching a flying thing: the turns it has watched it. A wait step: the turns it has counted.
 	uint32_t watchTurns {0};
 	/// A step that follows to watch: whether it has stopped watching and holds, and the turns it holds for yet (it
 	/// counts its watching turns with the flying watch's)
@@ -1070,6 +1070,20 @@ using Random = std::function<uint32_t(uint32_t)>;
 /// GameFloatRand(most) made from the whole number draw: 0 for a most of 0 or NaN with no draw, else (u * most) * k with
 /// u = random(0xFFFF), k about 1/65535. The game's float draw moves the seed as a whole number draw does.
 [[nodiscard]] float FloatRand(const Random& random, float most);
+
+/// The game counts the time of a wait step in its turns. There are 10 turns in a second.
+constexpr int32_t k_WaitTurnsPerSecond = 10;
+/// The turns of a wait step: the seconds times the turns in a second, as a float, with the fraction cut off. A wait
+/// that has no end (infinite seconds) gives no number.
+[[nodiscard]] std::optional<int32_t> WaitTurns(float seconds);
+/// Whether a wait step is done after it counted the given turns. The count goes down by one on each turn that the body
+/// does not do an action, also on the first turn of the step. The wait is done when its count is 0 or less, so a wait of
+/// 0 or 1 turn is done on the first turn that the body is free.
+[[nodiscard]] bool WaitDone(uint32_t countedTurns, std::optional<int32_t> turns);
+/// Whether the time of a timed static pose is up after it counted the given turns from the turn after it started. The
+/// game keeps the turns of the pose in a 16-bit count and stops the loop when the count goes down to 0. A count that
+/// starts at 0 goes round to 65535 first.
+[[nodiscard]] bool StaticTimeUp(uint32_t countedTurns, float seconds);
 
 /// Fluttering its eyelids, the creature blinks every 0.625 to 1.875 seconds
 constexpr int32_t k_FlutterBlinkIntervalMs = 1250;

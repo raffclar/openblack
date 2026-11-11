@@ -248,6 +248,8 @@ void Renderer::DrawTempleMapPass() const
 	terrainShader->SetTextureSampler("s2_smallBump", 2, *smallBump);
 	SetObjectShadowUniforms(*terrainShader);
 	terrainShader->SetTextureSampler("s7_landLight", 7, GetLandLightTexture());
+	// No block morphs or cross-fades on the map, but the vertex shader reads the corners' texture
+	terrainShader->SetTextureSampler("s8_landCorners", 8, GetLandCorners());
 	// Nor any moving shadow, on no block
 	SetGroundShadowUniforms(*terrainShader, false);
 	const auto noGroundShadow = glm::vec4(0.0f);

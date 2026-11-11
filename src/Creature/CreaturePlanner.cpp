@@ -13,6 +13,7 @@
 #include <array>
 #include <functional>
 #include <iterator>
+#include <numeric>
 #include <vector>
 
 #include "Creature/CreatureExplorationMap.h"
@@ -85,8 +86,42 @@ bool creature_planner::CountsActedOn(Desire desire, bool aboutSomething)
 	return !aboutSomething || desire == Desire::Anger;
 }
 
+bool creature_planner::IsValid(const Plan& plan, bool aboutSomething, bool usesThing)
+{
+	return static_cast<size_t>(plan.desire) < creature_desires::k_DesireCount &&
+	       (!aboutSomething || plan.about.has_value() || plan.activityObject.has_value()) && plan.object.has_value() &&
+	       plan.action != 0 && (!usesThing || plan.instrument.has_value());
+}
+
 namespace
 {
+/// The places in the list of actions that one look at the list gives. Compassion for a town with hurt people asks again
+/// whether the heal action takes the first place.
+std::vector<size_t> Look(const DesirePlanning& planning)
+{
+	std::vector<size_t> places(planning.actions.size());
+	std::iota(places.begin(), places.end(), size_t {0});
+	if (planning.healsFirst && !places.empty())
+	{
+		// The heal action is first and the list of the town follows it
+		const auto dropped = planning.healsFirst() ? size_t {1} : size_t {0};
+		if (dropped < places.size())
+		{
+			places.erase(places.begin() + static_cast<std::ptrdiff_t>(dropped));
+		}
+	}
+	return places;
+}
+
+/// The planner finds the place of an action that it weighs. This looks at the first place of the list again.
+void LookAgain(const DesirePlanning& planning)
+{
+	if (planning.healsFirst)
+	{
+		static_cast<void>(planning.healsFirst());
+	}
+}
+
 /// How much the creature wants to take an action: its priority and its novelty
 float Wanted(const ActionCandidate& action)
 {
@@ -198,13 +233,14 @@ std::optional<Plan> PlanActionThenPart(const DesirePlanning& planning)
 		std::optional<size_t> chosen;
 		std::optional<UsedChoice> chosenUsed;
 		float most = 0.0f;
-		for (size_t i = 0; i < planning.actions.size(); ++i)
+		for (const auto i : Look(planning))
 		{
 			const auto& action = planning.actions[i];
 			if (action.disabled || action.leftArea || tried.at(i))
 			{
 				continue;
 			}
+			LookAgain(planning);
 			// An action that has no thing to use is not chosen
 			const auto used = action.usesThing ? planning.findUsed(action, std::nullopt) : std::nullopt;
 			if (action.usesThing && !used.has_value())
@@ -237,47 +273,46 @@ std::optional<Plan> PlanActionThenPart(const DesirePlanning& planning)
 	return std::nullopt;
 }
 
-/// The plan for the part chosen before it: the action that can act on the part and is wanted the most
+/// The plan for the parts chosen before it. For each part in turn, the action that can act on the part and is wanted the
+/// most. The first part that an action can act on gives the plan.
 std::optional<Plan> PlanPartThenAction(const DesirePlanning& planning)
 {
-	std::optional<size_t> chosen;
-	std::optional<ObjectCandidate> chosenPart;
-	std::optional<UsedChoice> chosenUsed;
-	float most = 0.0f;
-	for (size_t i = 0; i < planning.actions.size(); ++i)
+	for (const auto& part : planning.parts)
 	{
-		const auto& action = planning.actions[i];
-		if (action.disabled || action.leftArea)
+		std::optional<size_t> chosen;
+		std::optional<UsedChoice> chosenUsed;
+		float most = 0.0f;
+		for (const auto i : Look(planning))
 		{
-			continue;
+			const auto& action = planning.actions[i];
+			if (action.disabled || action.leftArea || (planning.onlyActsOnThings && !action.needsObject) ||
+			    !planning.suits(action, part.id))
+			{
+				continue;
+			}
+			LookAgain(planning);
+			const auto used = action.usesThing ? planning.findUsed(action, part.id) : std::nullopt;
+			if (action.usesThing && !used.has_value())
+			{
+				continue;
+			}
+			// Keep the order of the game: the thing used, then the part, then the action
+			const auto score = (used.has_value() ? k_UsingUsefulness : k_DefaultUsefulness) *
+			                   part.actedOnUsefulness.value_or(k_DefaultUsefulness) * Wanted(action);
+			if (score >= most)
+			{
+				chosen = i;
+				chosenUsed = used;
+				most = score;
+			}
 		}
-		const auto part = planning.findObject(action);
-		if (!part.has_value())
+		if (chosen.has_value())
 		{
-			continue;
-		}
-		const auto used = action.usesThing ? planning.findUsed(action, part->id) : std::nullopt;
-		if (action.usesThing && !used.has_value())
-		{
-			continue;
-		}
-		// Keep the order of the game: the thing used, then the part, then the action
-		const auto score = (used.has_value() ? k_UsingUsefulness : k_DefaultUsefulness) *
-		                   part->actedOnUsefulness.value_or(k_DefaultUsefulness) * Wanted(action);
-		if (score >= most)
-		{
-			chosen = i;
-			chosenPart = part;
-			chosenUsed = used;
-			most = score;
+			return MakePlan(planning, planning.actions[*chosen], part, part.actedOnUsefulness.value_or(k_DefaultUsefulness),
+			                chosenUsed);
 		}
 	}
-	if (!chosen.has_value())
-	{
-		return std::nullopt;
-	}
-	return MakePlan(planning, planning.actions[*chosen], chosenPart,
-	                chosenPart->actedOnUsefulness.value_or(k_DefaultUsefulness), chosenUsed);
+	return std::nullopt;
 }
 } // namespace
 
@@ -449,14 +484,24 @@ bool creature_planner::DesireMayPlan(Desire desire, const DesireState& state)
 	}
 }
 
+void creature_planner::KeepRefusedPlan(PlannerState& state, Desire desire)
+{
+	if (auto& kept = state.best.at(static_cast<size_t>(desire)); kept.has_value())
+	{
+		kept->priority = 0.0f;
+	}
+}
+
 std::optional<Plan> creature_planner::Best(const PlannerState& state)
 {
 	std::optional<Plan> best;
+	float most = 0.0f;
 	for (const auto& plan : state.best)
 	{
-		if (plan.has_value() && (!best.has_value() || plan->priority > best->priority))
+		if (plan.has_value() && plan->priority > most)
 		{
 			best = plan;
+			most = plan->priority;
 		}
 	}
 	return best;

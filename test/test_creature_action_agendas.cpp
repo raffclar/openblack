@@ -414,6 +414,10 @@ TEST(CreatureActionAgendas, SmilingAndWavingGoNearAndFaceTheOther)
 	EXPECT_FLOAT_EQ(wave[0].movement.maxDistance, 35.0f);
 	EXPECT_FLOAT_EQ(wave[1].seconds, 1.4f);
 	EXPECT_EQ(wave[2].animation, animations::k_FriendlyWave);
+	// The wave flutters the eyelids, the steps before it do not
+	EXPECT_FALSE(wave[0].flutterEyelids);
+	EXPECT_FALSE(wave[1].flutterEyelids);
+	EXPECT_TRUE(wave[2].flutterEyelids);
 }
 
 TEST(CreatureActionAgendas, ShowingOffGoesNearThePartFacesItAndPlaysTwoActions)

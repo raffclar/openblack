@@ -262,20 +262,75 @@ TEST(LandDetail, CornersMorphTowardsTheirCoarserNeighbours)
 
 TEST(LandDetail, MorphBlendsAcrossTheBandIn256ths)
 {
-	EXPECT_EQ(MorphedAltitude(100, 200, 25.0f, 25.0f), 100);
-	EXPECT_EQ(MorphedAltitude(100, 200, -25.0f, 25.0f), 200);
-	EXPECT_EQ(MorphedAltitude(100, 200, 0.0f, 25.0f), 150);
+	// A band 50 units wide, 25 on each side of the line
+	EXPECT_EQ(MorphedAltitude(100, 200, 25.0f, 50.0f), 100);
+	EXPECT_EQ(MorphedAltitude(100, 200, -25.0f, 50.0f), 200);
+	EXPECT_EQ(MorphedAltitude(100, 200, 0.0f, 50.0f), 150);
 	// A quarter of the way: 64/256
-	EXPECT_EQ(MorphedAltitude(100, 201, 12.5f, 25.0f), (192 * 100 + 64 * 201) >> 8);
+	EXPECT_EQ(MorphedAltitude(100, 201, 12.5f, 50.0f), (192 * 100 + 64 * 201) >> 8);
 }
 
 TEST(LandDetail, CoarseTextureFadesInAcrossTheBand)
 {
-	EXPECT_EQ(CrossFadeAlpha(36.0f, 35.0f), 0);
-	EXPECT_EQ(CrossFadeAlpha(35.0f, 35.0f), 0);
-	EXPECT_EQ(CrossFadeAlpha(0.0f, 35.0f), 128);
-	EXPECT_EQ(CrossFadeAlpha(-34.0f, 35.0f), 251);
-	EXPECT_EQ(CrossFadeAlpha(-35.0f, 35.0f), 255);
+	EXPECT_EQ(CrossFadeAlpha(36.0f, 70.0f, 35.0f), 0);
+	EXPECT_EQ(CrossFadeAlpha(35.0f, 70.0f, 35.0f), 0);
+	EXPECT_EQ(CrossFadeAlpha(0.0f, 70.0f, 35.0f), 128);
+	EXPECT_EQ(CrossFadeAlpha(-34.0f, 70.0f, 35.0f), 251);
+	EXPECT_EQ(CrossFadeAlpha(-35.0f, 70.0f, 35.0f), 255);
+}
+
+TEST(LandDetail, GroundLineRunsSquareToTheViewThroughThePlaneOnTheGround)
+{
+	// Looking along z, down at 45 degrees from a height of 100: the plane 100 units along the view meets the ground at
+	// z = 100 * sqrt(2) - 100, a line along x
+	const float down = std::sqrt(0.5f);
+	const auto line = GroundLineAcross({50.0f, 100.0f, 0.0f}, {0.0f, -down, down}, 100.0f, 0.0f, GroundLine {});
+	EXPECT_FLOAT_EQ(line.along.x, 1.0f);
+	EXPECT_FLOAT_EQ(line.along.y, 0.0f);
+	EXPECT_NEAR(line.point.y, 100.0f * std::sqrt(2.0f) - 100.0f, 1e-3f);
+	// A point before the line, towards the camera, is on the positive side
+	EXPECT_GT(SideOf(line, 0.0f, -10.0f), 0.0f);
+	EXPECT_LT(SideOf(line, 0.0f, 10.0f), 0.0f);
+}
+
+TEST(LandDetail, GroundLineKeepsThePointOfBeforeWhenTheCameraLooksStraightDown)
+{
+	const GroundLine before {.along = {0.6f, 0.8f}, .point = {7.0f, 9.0f}};
+	const auto line = GroundLineAcross({50.0f, 100.0f, 0.0f}, {0.0f, -1.0f, 0.0f}, 100.0f, 0.0f, before);
+	EXPECT_EQ(line.point, before.point);
+	// The direction is the view's square along the ground, which has no length here
+	EXPECT_EQ(line.along.x, 0.0f);
+	EXPECT_EQ(line.along.y, 0.0f);
+}
+
+TEST(LandDetail, OnlyTheCornersBetweenTheCoarserMeshMorph)
+{
+	std::array<uint8_t, k_CornerCount> altitudes {};
+	for (size_t i = 0; i < altitudes.size(); ++i)
+	{
+		altitudes.at(i) = static_cast<uint8_t>((i * 37) % 256);
+	}
+	// A line that lies across the whole block, every corner in the middle of its band
+	const GroundLine line {.along = {1.0f, 0.0f}, .point = {0.0f, 80.0f}};
+	const auto half = MorphedCorners(altitudes, Morph::ToHalf, line, 2000.0f, {0.0f, 0.0f});
+	const auto quarter = MorphedCorners(altitudes, Morph::ToQuarter, line, 2000.0f, {0.0f, 0.0f});
+	const auto none = MorphedCorners(altitudes, Morph::None, line, 2000.0f, {0.0f, 0.0f});
+	EXPECT_EQ(none, altitudes);
+	for (size_t x = 0; x < k_CornersPerSide; ++x)
+	{
+		for (size_t z = 0; z < k_CornersPerSide; ++z)
+		{
+			const size_t corner = x * k_CornersPerSide + z;
+			if (x % 2 == 0 && z % 2 == 0)
+			{
+				EXPECT_EQ(half.at(corner), altitudes.at(corner));
+			}
+			if ((x % 2 == 1 || z % 2 == 1) || (x % 4 == 0 && z % 4 == 0))
+			{
+				EXPECT_EQ(quarter.at(corner), altitudes.at(corner));
+			}
+		}
+	}
 }
 
 TEST(LandDetail, CoarseTextureSamplesTheBlockTexture)

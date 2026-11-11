@@ -755,7 +755,7 @@ void CreatureMindSystem::ForgetGoneThings(entt::entity creature, components::Cre
 			    creature, {.kind = creature_help::Kind::FailureExplanation, .parameter = creature_lost_thing::k_LostThing});
 		}
 		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} lost a thing that it used", entt::to_integral(creature));
-		Abandon(mind);
+		Abandon(creature, mind);
 		idle.step = idle.agenda.size();
 		idle.stepStarted = false;
 		idle.gaveUp = true;

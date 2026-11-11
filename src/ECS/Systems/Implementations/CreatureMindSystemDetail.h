@@ -328,4 +328,15 @@ void DrawAgendaLengths(const creature_plan_actions::Executor& executor, creature
 /// a village totem. None for any other thing. It finds what the thing belongs to only for a villager, a building or a
 /// field, because for a tree that search goes through the forests of the land.
 [[nodiscard]] std::optional<entt::entity> TownOfThing(const ecs::Registry& registry, entt::entity thing);
+/// The actions that compassion for a town weighs, and whether hurt people can put healing first
+struct TownCompassionList
+{
+	/// With healDraw, the heal action is first and the actions for the town desire follow it
+	std::vector<uint32_t> actions;
+	bool healDraw {false};
+};
+/// The actions that compassion for a town weighs now. First the creature settles the town desire that it helps with.
+[[nodiscard]] TownCompassionList TownCompassionActions(const ecs::Registry& registry, entt::entity creature,
+                                                       components::CreatureMindState& mind, entt::entity town,
+                                                       const creature_mind_tables::Tables& tables);
 } // namespace openblack::ecs::systems::mind_detail

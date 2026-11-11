@@ -735,16 +735,13 @@ bool CompassionMostWanted(const creature_desires::Desires& desires)
 /// The action that heals, which hurt people in a town may make a creature think of first
 constexpr std::string_view k_HealAction = "CastHealSpell";
 
-/// The actions a creature's compassion for a town may take now: those for the town desire it helps with, which it may
-/// move on from first, or healing first for a town with hurt people
-std::vector<uint32_t> TownCompassionActions(const ecs::Registry& registry, entt::entity creature, CreatureMindState& mind,
-                                            entt::entity town, const creature_mind_tables::Tables& tables,
-                                            const std::function<uint32_t(uint32_t)>& random)
+/// As compassion for a town plans, the creature may move on from the town desire that it helps with
+void MoveOnFromTownDesire(const ecs::Registry& registry, CreatureMindState& mind, entt::entity town,
+                          const creature_mind_tables::Tables& tables)
 {
 	const auto feelings = TownFeelingsOf(registry, town);
 	const auto desires = town_compassion::DesiresToHelp(feelings.order, feelings.felt, tables.townActions);
 	auto& state = mind.townCompassion;
-	const auto before = state.desire;
 	const bool beingCompassionate =
 	    mind.planActive && mind.planner.current.has_value() && mind.planner.current->desire == Desire::Compassion;
 	if (mind.desires.has_value() &&
@@ -752,6 +749,18 @@ std::vector<uint32_t> TownCompassionActions(const ecs::Registry& registry, entt:
 	{
 		town_compassion::MoveOnWhilePlanning(state, desires, feelings.felt, mind.turn);
 	}
+}
+} // namespace
+
+namespace openblack::ecs::systems::mind_detail
+{
+TownCompassionList TownCompassionActions(const ecs::Registry& registry, entt::entity creature, CreatureMindState& mind,
+                                         entt::entity town, const creature_mind_tables::Tables& tables)
+{
+	const auto feelings = TownFeelingsOf(registry, town);
+	const auto desires = town_compassion::DesiresToHelp(feelings.order, feelings.felt, tables.townActions);
+	auto& state = mind.townCompassion;
+	const auto before = state.desire;
 	std::optional<uint32_t> heal;
 	const auto* data = registry.TryGet<const Town>(town);
 	const auto* body = registry.TryGet<const Creature>(creature);
@@ -765,7 +774,7 @@ std::vector<uint32_t> TownCompassionActions(const ecs::Registry& registry, entt:
 		                                 registry.AllOf<TownDesireFlag>(*leashes->worn->tiedTo);
 		const auto sightings = MiracleSightings(mind, tables, body->species, MagicType::Heal);
 		if (sightings.has_value() &&
-		    town_compassion::HealFirst(data->injured, leashedToTownDesire, sightings->first, sightings->second, random))
+		    town_compassion::MayHealFirst(data->injured, leashedToTownDesire, sightings->first, sightings->second))
 		{
 			heal = healAction;
 		}
@@ -777,9 +786,12 @@ std::vector<uint32_t> TownCompassionActions(const ecs::Registry& registry, entt:
 		                    entt::to_integral(creature), entt::to_integral(town),
 		                    state.desire.has_value() ? static_cast<int>(*state.desire) : -1, desires.size());
 	}
-	return town_compassion::Actions(state, tables.townActions, heal);
+	return {.actions = town_compassion::ActionsWithHealChoice(state, tables.townActions, heal), .healDraw = heal.has_value()};
 }
+} // namespace openblack::ecs::systems::mind_detail
 
+namespace
+{
 /// Having finished helping a town, the creature may move on to another of its desires
 void FinishedHelpingTown(const ecs::Registry& registry, CreatureMindState& mind, entt::entity town,
                          const creature_mind_tables::Tables& tables, const std::function<uint32_t(uint32_t)>& random)
@@ -910,7 +922,7 @@ void CreatureMindSystem::FollowAgenda(entt::entity creature, CreatureMindState& 
 			                    [this](uint32_t range) { return Random(range); });
 		}
 		mind.desireSeenTo = false;
-		Abandon(mind);
+		Abandon(creature, mind);
 		mind.planner.best.at(static_cast<size_t>(plan.desire)).reset();
 	}
 	// What the idle mind started is over once its agenda runs out: carried out to its end, its action counts
@@ -1158,7 +1170,7 @@ bool CreatureMindSystem::Adopt(entt::entity creature, CreatureMindState& mind, c
 		{
 			Locator::creatureObjectActionSystem::value().StopForPlan(creature, true);
 		}
-		Abandon(mind);
+		Abandon(creature, mind);
 		creature_mind::Plan(mind.idle, creature_mind::Activity::None, {});
 		CopyObservedDeedAgain(creature, mind);
 		if (const auto source = creature_learning::TakeUpChosenPlan((*mind.desires)[plan.desire]); source.has_value())
@@ -1532,7 +1544,6 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 
 	creature_plan_actions::Situation situation;
 	Situate(creature, situation);
-	const auto random = [this](uint32_t range) { return Random(range); };
 	bool fishingLooked = false;
 	const auto prepare = [&](const creature_plan_actions::Executor& executor) {
 		if (creature_plan_actions::FishesFirst(executor) && !fishingLooked)
@@ -1616,15 +1627,17 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 	for (const auto desire : goals)
 	{
 		const auto d = static_cast<size_t>(desire);
-		if (!creature_planner::DesireMayPlan(desire, desireState))
+		// A desire that its own condition refuses keeps its stored plan, with a priority of 0. A plan forced on one
+		// desire does not examine the condition.
+		if (!only.has_value() && !creature_planner::DesireMayPlan(desire, desireState))
 		{
-			mind.planner.best.at(d).reset();
+			creature_planner::KeepRefusedPlan(mind.planner, desire);
 			continue;
 		}
 		// A desire about something is about a whole thing: a town, a forest, a temple, a flock or a creature. The plan
 		// acts on a part of the whole thing. Without a whole thing, the desire has no plan.
 		std::span<const uint32_t> actions = tables->desireActions.at(d);
-		std::vector<uint32_t> townActions;
+		TownCompassionList townActions;
 		std::optional<ChosenActivity> activity;
 		std::vector<creature_planner::ObjectCandidate> parts;
 		const bool aboutSomething = tables->rules.at(d).aboutSomething;
@@ -1647,8 +1660,9 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 			}
 			if (desire == Desire::Compassion)
 			{
-				townActions = TownCompassionActions(registry, creature, mind, activity->whole, *tables, random);
-				actions = townActions;
+				MoveOnFromTownDesire(registry, mind, activity->whole, *tables);
+				townActions = TownCompassionActions(registry, creature, mind, activity->whole, *tables);
+				actions = townActions.actions;
 			}
 			if (leashTarget.has_value())
 			{
@@ -1728,24 +1742,19 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 			}
 			return best;
 		};
+		// Whether an action can act on a thing
+		const auto suitsPart = [&](const creature_planner::ActionCandidate& candidate, uint32_t part) {
+			const auto* executor = executorOf(candidate);
+			const auto thing = static_cast<entt::entity>(part);
+			return (executor->target == Target::None || Accepts(registry, executor->target, thing, creature)) &&
+			       !(executor->notWhatItHolds && heldByItself(thing));
+		};
 		// The facts about the believed things that one action finds are for the next actions of this desire only
 		believed.foundAt.reset();
 		const auto findObject =
 		    [&](const creature_planner::ActionCandidate& candidate) -> std::optional<creature_planner::ObjectCandidate> {
-			const auto* executor = executorOf(candidate);
-			const auto suits = [&](entt::entity thing) {
-				return (executor->target == Target::None || Accepts(registry, executor->target, thing, creature)) &&
-				       !(executor->notWhatItHolds && heldByItself(thing));
-			};
+			const auto suits = [&](entt::entity thing) { return suitsPart(candidate, entt::to_integral(thing)); };
 			std::vector<creature_planner::ObjectCandidate> found;
-			if (leashTarget.has_value())
-			{
-				// The first of the shown parts that the action can act on
-				const auto first = std::ranges::find_if(parts, [&](const creature_planner::ObjectCandidate& part) {
-					return suits(static_cast<entt::entity>(part.id));
-				});
-				return first != parts.end() ? std::optional(*first) : std::nullopt;
-			}
 			if (activity.has_value())
 			{
 				std::ranges::copy_if(parts, std::back_inserter(found), [&](const creature_planner::ObjectCandidate& part) {
@@ -1758,6 +1767,13 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 			}
 			return mostUseful(found);
 		};
+		// For hurt people, each look at the first action of the list asks again whether the creature heals first
+		std::function<bool()> healsFirst;
+		if (townActions.healDraw && !candidates.empty() && !townActions.actions.empty() &&
+		    candidates.front().action == townActions.actions.front())
+		{
+			healsFirst = [this]() { return town_compassion::HealComesFirst(Random(town_compassion::k_HealChance)); };
+		}
 		const auto distanceWeight = tables->rules.at(d).distanceWeight;
 		const auto findUsed = [&](const creature_planner::ActionCandidate& candidate, std::optional<uint32_t> object) {
 			return UsedFor(creature, executorOf(candidate)->use, position, distanceWeight, object);
@@ -1783,6 +1799,10 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 		    .findObject = findObject,
 		    .findUsed = findUsed,
 		    .itself = entt::to_integral(creature),
+		    .parts = parts,
+		    .suits = suitsPart,
+		    .onlyActsOnThings = leashTarget.has_value(),
+		    .healsFirst = healsFirst,
 		});
 		if (best.has_value() && activity.has_value())
 		{

@@ -154,6 +154,50 @@ float Offset(const ViewLine& line, glm::vec2 xz)
 	return line.valid ? line.ahead - glm::dot(xz - line.camera, line.forward) : 0.0f;
 }
 
+GroundLine GroundLineAcross(glm::vec3 cameraPosition, glm::vec3 cameraForward, float depth, float groundHeight,
+                            const GroundLine& before)
+{
+	const glm::vec3& c = cameraPosition;
+	const glm::vec3& f = cameraForward;
+	// The plane square to the view through the point depth units along it: f . p + d = 0
+	const float px = c.x + depth * f.x;
+	const float py = c.y + depth * f.y;
+	const float pz = depth * f.z + c.z;
+	const float d = -((pz * f.z + py * f.y) + px * f.x);
+	// The line runs along the cross product of the up direction and the view. Each step is a float step of its own, in
+	// the game's order, also the steps with zero. The cross product has no y: its square adds nothing.
+	const float alongX = f.z * 1.0f - 0.0f * f.y;
+	const float alongZ = 0.0f * f.y - f.x * 1.0f;
+	const float squareX = alongX * alongX;
+	const float squareZ = alongZ * alongZ;
+	GroundLine line {.along = {alongX, alongZ}, .point = before.point};
+	const float lowHeight = -groundHeight;
+	if (squareZ > 0.0f && squareZ > squareX && squareZ > k_SmallestDirection)
+	{
+		// The point on the line where z is 0
+		const float scale = 1.0f / alongZ;
+		line.point = {scale * (d - lowHeight * f.y), scale * 0.0f};
+	}
+	else if (squareX > k_SmallestDirection)
+	{
+		// The point on the line where x is 0
+		const float scale = 1.0f / alongX;
+		line.point = {scale * 0.0f, scale * (lowHeight * f.y - d)};
+	}
+	else
+	{
+		return line;
+	}
+	const float unit = 1.0f / std::sqrt(squareZ + squareX);
+	line.along = {unit * alongX, unit * alongZ};
+	return line;
+}
+
+float SideOf(const GroundLine& line, float x, float z)
+{
+	return line.along.y * x - line.along.x * z;
+}
+
 BlockDetail Classify(const CornerOffsets& offsets, const Lines& lines, bool coarseLand)
 {
 	BlockDetail detail;
@@ -316,31 +360,120 @@ MorphTargets TargetsAt(std::span<const uint8_t, k_CornerCount> altitudes, size_t
 	return targets;
 }
 
-uint8_t MorphedAltitude(uint8_t own, uint8_t target, float offset, float band)
+uint8_t MorphedAltitude(uint8_t own, uint8_t target, float side, float width)
 {
-	if (offset >= band)
+	const float scale = 256.0f / width;
+	const float half = width * 0.5f;
+	if (!(side < half))
 	{
 		return own;
 	}
-	if (offset <= -band)
+	if (!(-half < side))
 	{
 		return target;
 	}
-	const auto share = static_cast<int>(std::nearbyint((band - offset) * 256.0f / (2.0f * band)));
-	return static_cast<uint8_t>(((256 - share) * own + share * target) >> 8);
+	// The share of the target, rounded to the nearest whole number and to the even one at a half
+	const float scaled = (half - side) * scale;
+	const auto share = static_cast<uint32_t>(std::nearbyint(scaled));
+	return static_cast<uint8_t>(((256u - share) * own + share * target) >> 8);
 }
 
-uint8_t CrossFadeAlpha(float offset, float band)
+float MorphCornerSide(const GroundLine& line, Morph morph, glm::vec2 blockCorner, size_t x, size_t z)
 {
-	if (offset > band)
+	// The coarser mesh's step, and the first corner between its corners, in cells
+	const size_t step = morph == Morph::ToQuarter ? 4 : 2;
+	const size_t first = step / 2;
+	const float stepUnits = static_cast<float>(step) * k_CellSize;
+	const float firstUnits = static_cast<float>(first) * k_CellSize;
+	// A corner on a row of the coarser mesh starts from the block's corner, the others from the first corner between.
+	// Then the place steps on by the coarser mesh's step, one float sum at a time.
+	const bool onRowX = x % step == 0;
+	const bool onRowZ = z % step == 0;
+	float alongX = onRowX ? blockCorner.x - line.point.x : (firstUnits + blockCorner.x) - line.point.x;
+	float alongZ = onRowZ ? blockCorner.y - line.point.y : (firstUnits + blockCorner.y) - line.point.y;
+	for (size_t at = onRowX ? 0 : first; at < x; at += step)
+	{
+		alongX = stepUnits + alongX;
+	}
+	for (size_t at = onRowZ ? 0 : first; at < z; at += step)
+	{
+		alongZ = alongZ + stepUnits;
+	}
+	return SideOf(line, alongX, alongZ);
+}
+
+std::array<uint8_t, k_CornerCount> MorphedCorners(std::span<const uint8_t, k_CornerCount> altitudes, Morph morph,
+                                                  const GroundLine& line, float width, glm::vec2 blockCorner)
+{
+	std::array<uint8_t, k_CornerCount> drawn {};
+	std::ranges::copy(altitudes, drawn.begin());
+	if (morph == Morph::None)
+	{
+		return drawn;
+	}
+	const size_t step = morph == Morph::ToQuarter ? 4 : 2;
+	const size_t first = step / 2;
+	const float stepUnits = static_cast<float>(step) * k_CellSize;
+	const float firstUnits = static_cast<float>(first) * k_CellSize;
+	// Only the corners between the coarser mesh's corners morph: on the half mesh for the morph to the quarter mesh. The
+	// game takes them in three sets, each row by row: those between along z, those between along both, and those
+	// between along x. Each place steps on from the one before by one float sum, as MorphCornerSide finds it.
+	const auto morphSet = [&](size_t firstX, size_t firstZ) {
+		float alongX = (firstX == 0 ? blockCorner.x : firstUnits + blockCorner.x) - line.point.x;
+		const float startZ = (firstZ == 0 ? blockCorner.y : firstUnits + blockCorner.y) - line.point.y;
+		for (size_t x = firstX; x < k_CornersPerSide; x += step)
+		{
+			float alongZ = startZ;
+			for (size_t z = firstZ; z < k_CornersPerSide; z += step)
+			{
+				const auto targets = TargetsAt(altitudes, x, z);
+				const uint8_t target = morph == Morph::ToQuarter ? targets.quarter : targets.half;
+				const size_t corner = x * k_CornersPerSide + z;
+				drawn.at(corner) = MorphedAltitude(altitudes[corner], target, SideOf(line, alongX, alongZ), width);
+				alongZ = alongZ + stepUnits;
+			}
+			alongX = stepUnits + alongX;
+		}
+	};
+	morphSet(0, first);
+	morphSet(first, first);
+	morphSet(first, 0);
+	return drawn;
+}
+
+uint8_t CrossFadeAlpha(float side, float width, float band)
+{
+	const float scale = 255.0f / width;
+	if (side > band)
 	{
 		return 0;
 	}
-	if (offset > -band)
+	if (-band < side)
 	{
-		return static_cast<uint8_t>(std::nearbyint((band - offset) * 255.0f / (2.0f * band)));
+		// Rounded to the nearest whole number and to the even one at a half
+		const float scaled = (band - side) * scale;
+		return static_cast<uint8_t>(std::nearbyint(scaled));
 	}
 	return 255;
+}
+
+std::array<uint8_t, k_CornerCount> CrossFadeCorners(const GroundLine& line, float width, float band, glm::vec2 blockCorner)
+{
+	std::array<uint8_t, k_CornerCount> alphas {};
+	for (size_t x = 0; x < k_CornersPerSide; ++x)
+	{
+		for (size_t z = 0; z < k_CornersPerSide; ++z)
+		{
+			// The game finds the corner's place again from its texture coordinates, in 16ths across the block
+			const float acrossX = static_cast<float>(x) * 0.0625f;
+			const float acrossZ = static_cast<float>(z) * 0.0625f;
+			const float alongX = (acrossX * k_BlockSize + blockCorner.x) - line.point.x;
+			const float alongZ = (acrossZ * k_BlockSize + blockCorner.y) - line.point.y;
+			const float side = alongX * line.along.y - alongZ * line.along.x;
+			alphas.at(x * k_CornersPerSide + z) = CrossFadeAlpha(side, width, band);
+		}
+	}
+	return alphas;
 }
 
 uint16_t CoarseSourceTexel(uint8_t coarseTexel, const CoarseSampling& sampling)
@@ -356,14 +489,20 @@ float CoarseTexelPosition(float fraction, const CoarseSampling& sampling)
 	return static_cast<float>(sampling.blockTexels) / 255.0f + fraction * sampling.drawnTexels;
 }
 
-FrameDetail ClassifyFrame(const FrameInputs& inputs, std::span<const BlockPlace> blocks)
+FrameDetail ClassifyFrame(const FrameInputs& inputs, std::span<const BlockPlace> blocks, const FrameDetail* before)
 {
 	FrameDetail frame;
 	frame.lines = inputs.lines;
+	const float textureGround = std::min(inputs.origin.y, k_TextureGroundCap);
 	frame.meshNear = LineAcross(inputs.origin, inputs.forward, inputs.lines.meshNear, 0.0f);
 	frame.meshFar = LineAcross(inputs.origin, inputs.forward, inputs.lines.meshFar, 0.0f);
-	frame.texture =
-	    LineAcross(inputs.origin, inputs.forward, inputs.lines.texture, std::min(inputs.origin.y, k_TextureGroundCap));
+	frame.texture = LineAcross(inputs.origin, inputs.forward, inputs.lines.texture, textureGround);
+	const FrameDetail start;
+	const FrameDetail& kept = before != nullptr ? *before : start;
+	frame.meshNearGround = GroundLineAcross(inputs.origin, inputs.forward, inputs.lines.meshNear, 0.0f, kept.meshNearGround);
+	frame.meshFarGround = GroundLineAcross(inputs.origin, inputs.forward, inputs.lines.meshFar, 0.0f, kept.meshFarGround);
+	frame.textureGround =
+	    GroundLineAcross(inputs.origin, inputs.forward, inputs.lines.texture, textureGround, kept.textureGround);
 
 	// The blocks by where they are on the map's grid of blocks
 	std::array<int16_t, static_cast<size_t>(k_BlocksPerSide * k_BlocksPerSide)> grid {};
@@ -415,24 +554,28 @@ FrameDetail ClassifyFrame(const FrameInputs& inputs, std::span<const BlockPlace>
 uint8_t DrawnCornerAltitude(std::span<const uint8_t, k_CornerCount> altitudes, size_t x, size_t z, Morph morph,
                             const FrameDetail& frame, glm::vec2 blockCorner)
 {
-	const uint8_t own = altitudes[x * k_CornersPerSide + z];
-	if (morph == Morph::None)
+	const size_t corner = x * k_CornersPerSide + z;
+	const uint8_t own = altitudes[corner];
+	const size_t step = morph == Morph::ToQuarter ? 4 : 2;
+	const size_t first = step / 2;
+	// Only the corners between the coarser mesh's corners morph, as the land draws them (see MorphedCorners)
+	if (morph == Morph::None || x % first != 0 || z % first != 0 || (x % step == 0 && z % step == 0))
 	{
 		return own;
 	}
-	// The same sum as the land's vertex shader: the block's corner, then the corner's place in the block
-	const glm::vec2 at = blockCorner + glm::vec2(static_cast<float>(x), static_cast<float>(z)) * k_CellSize;
 	const auto targets = TargetsAt(altitudes, x, z);
 	const bool toHalf = morph == Morph::ToHalf;
-	return MorphedAltitude(own, toHalf ? targets.half : targets.quarter, Offset(toHalf ? frame.meshNear : frame.meshFar, at),
-	                       frame.lines.meshBand);
+	const auto& line = toHalf ? frame.meshNearGround : frame.meshFarGround;
+	return MorphedAltitude(own, toHalf ? targets.half : targets.quarter, MorphCornerSide(line, morph, blockCorner, x, z),
+	                       2.0f * frame.lines.meshBand);
 }
 
 const FrameDetail& FrameMemo::For(const FrameInputs& inputs, std::span<const BlockPlace> blocks)
 {
 	if (_inputs != inputs || !std::ranges::equal(_blocks, blocks))
 	{
-		_frame = ClassifyFrame(inputs, blocks);
+		_frame = ClassifyFrame(inputs, blocks, _classified ? &_frame : nullptr);
+		_classified = true;
 		_inputs = inputs;
 		_blocks.assign(blocks.begin(), blocks.end());
 		++_classifications;

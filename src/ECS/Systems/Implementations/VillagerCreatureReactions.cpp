@@ -40,6 +40,7 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/CreatureHelpSystemInterface.h"
+#include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TownDesireSystemInterface.h"
@@ -137,16 +138,24 @@ ImpressiveType ImpressiveOf(uint32_t action)
 	                               : ImpressiveType::CreatureNotImpressive;
 }
 
-/// The plan a creature carries out, when it has something to act on
-const creature_planner::Plan* PlanOf(entt::entity creature)
+/// The plan a creature carries out, when the plan is valid by the game's test
+const creature_planner::Plan* ValidPlanOf(entt::entity creature)
 {
 	const auto* mind = EntityRegistry().TryGet<const CreatureMindState>(creature);
-	if (mind == nullptr || !mind->planner.current.has_value() || !mind->planner.current->object.has_value() ||
-	    mind->planner.current->action == 0)
+	if (mind == nullptr || !mind->planner.current.has_value() || !Locator::creatureMindSystem::has_value() ||
+	    !Locator::creatureMindSystem::value().HasValidPlan(creature))
 	{
 		return nullptr;
 	}
 	return &*mind->planner.current;
+}
+
+/// Whether the plan that a creature carries out has a thing to act on. The action of the plan does not count.
+bool PlanActsOnThing(entt::entity creature)
+{
+	const auto* mind = EntityRegistry().TryGet<const CreatureMindState>(creature);
+	return mind != nullptr && mind->planner.current.has_value() && mind->planner.current->object.has_value() &&
+	       EntityRegistry().Valid(static_cast<entt::entity>(*mind->planner.current->object));
 }
 
 ImpressiveType LastImpressive(entt::entity creature)
@@ -319,10 +328,10 @@ void villager_creature::TownTurn(entt::entity town, uint32_t turn)
 	});
 	for (auto& watched : watching->creatures)
 	{
-		// What it last finished doing tells the town how to feel about it, as long as it means to act on something. A
-		// hungry creature that means to act on a person it holds frightens the town
+		// What it last finished doing tells the town how to feel about it, as long as its plan is valid. A hungry
+		// creature that means to act on a person it holds frightens the town
 		std::optional<Attitude> shown;
-		if (const auto* plan = PlanOf(watched.creature))
+		if (const auto* plan = ValidPlanOf(watched.creature))
 		{
 			const auto thing = static_cast<entt::entity>(*plan->object);
 			const auto* mind = registry.TryGet<const CreatureMindState>(watched.creature);
@@ -588,7 +597,7 @@ uint32_t villager_creature::FleeingFromCreatureReaction(LivingAction& action)
 	const auto& info = InfoOf(registry.Get<const Villager>(villager));
 	const auto fleeing = static_cast<int32_t>(info.speedGroup.speedFleeing);
 	// While the creature means to act on something, it sets off now and then, at half its fleeing speed
-	if (PlanOf(*creature) != nullptr)
+	if (PlanActsOnThing(*creature))
 	{
 		if (Random(creature_attitude::k_FleeChance) != 0)
 		{

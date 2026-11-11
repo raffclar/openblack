@@ -359,8 +359,10 @@ std::vector<Step> creature_mind::SmileAt(uint32_t friendly, float height, float 
 std::vector<Step> creature_mind::WaveAt(uint32_t thing, float height)
 {
 	const Gaze look {.object = thing};
+	// It flutters its eyelids at the thing as it waves
 	auto wave = PlayOnce(animations::k_FriendlyWave);
 	wave.gaze = look;
+	wave.flutterEyelids = true;
 	return {
 	    GoNear(thing, k_WaveHeights * height, creature_face::Cue::Smile),
 	    FaceThing(thing, k_WaveFaceSeconds, creature_face::Cue::Smile, look),

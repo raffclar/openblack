@@ -558,7 +558,8 @@ void CreatureMindSystem::MindTurn(entt::entity entity)
 		creature_desires::ActivateForPhase(*mind.desires, Phases(), mind.developmentPhase);
 		mind.desiresPhase = mind.developmentPhase;
 	}
-	// On the Gods' Playground every desire counts as activated
+	// While the flag of influence everywhere is set, every desire counts as activated. Only the Gods' Playground sets
+	// the flag in the game as it ships.
 	mind.desires->everyDesireActivated =
 	    Locator::playgroundTripSystem::has_value() && Locator::playgroundTripSystem::value().InfluenceEverywhere();
 	// What it believed about things now gone is forgotten

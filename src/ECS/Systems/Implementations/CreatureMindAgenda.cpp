@@ -1115,7 +1115,7 @@ void CreatureMindSystem::AgendaTurn(entt::entity entity)
 				{
 					mind.beliefs.MarkBlocked(static_cast<entt::entity>(*object), mind.turn);
 				}
-				Abandon(mind);
+				Abandon(entity, mind);
 				mind.idle.step = mind.idle.agenda.size();
 				mind.idle.stepStarted = false;
 				mind.idle.gaveUp = true;
@@ -1638,7 +1638,7 @@ void CreatureMindSystem::StopForNewAgenda(entt::entity creature, CreatureMindSta
 	}
 	ReleaseCast(creature);
 	RestEyes(registry, creature, registry.TryGet<CreatureEyes>(creature));
-	Abandon(mind);
+	Abandon(creature, mind);
 }
 
 bool CreatureMindSystem::ForceActivity(entt::entity creature, const ForcedActivity& forced)
@@ -1671,7 +1671,7 @@ bool CreatureMindSystem::ForceActivity(entt::entity creature, const ForcedActivi
 	{
 		Locator::creatureObjectActionSystem::value().StopForPlan(creature, true);
 	}
-	Abandon(*mind);
+	Abandon(creature, *mind);
 	ReleaseCast(creature);
 	const auto toNumber = [](std::optional<entt::entity> entity) {
 		return entity.has_value() ? std::optional(entt::to_integral(*entity)) : std::nullopt;
@@ -1751,7 +1751,7 @@ void CreatureMindSystem::AbandonAction(entt::entity creature)
 	auto& registry = Locator::entitiesRegistry::value();
 	if (auto* mind = registry.Valid(creature) ? registry.TryGet<CreatureMindState>(creature) : nullptr)
 	{
-		Abandon(*mind);
+		Abandon(creature, *mind);
 		// The action stops as a failure, and its agenda ends with it. The creature then chooses a new plan.
 		mind->idle.step = mind->idle.agenda.size();
 		mind->idle.stepStarted = false;
