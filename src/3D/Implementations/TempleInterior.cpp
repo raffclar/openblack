@@ -68,6 +68,7 @@
 #include "ECS/Systems/CreatureCaveSystemInterface.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/CreatureModeSystemInterface.h"
+#include "ECS/Systems/CreatureSkinSystemInterface.h"
 #include "ECS/Systems/GameKeysSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/HelpTextSystemInterface.h"
@@ -2154,12 +2155,27 @@ std::optional<OutsideCamera> TempleInterior::GetOutsideCamera() const
 	return OutsideCamera {.origin = _worldCamera->GetOrigin(), .focus = _worldCamera->GetFocus()};
 }
 
+void TempleInterior::PaintOwnCreature()
+{
+	if (!Locator::playerSystem::has_value() || !Locator::creatureSkinSystem::has_value())
+	{
+		return;
+	}
+	const auto local = Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE;
+	if (const auto creature = Locator::playerSystem::value().GetPrimaryCreature(local); creature.has_value())
+	{
+		Locator::creatureSkinSystem::value().PaintTattoos(*creature);
+	}
+}
+
 void TempleInterior::Deactivate()
 {
 	if (!_active)
 	{
 		return;
 	}
+	// The exit paints the skin of the local player's creature again, on this computer only
+	PaintOwnCreature();
 	// The exit from the temple ends the interface lock of the hand
 	EndHandInterfaceLock();
 	// The exit gives back the dialogue, the scripts and the bars in this frame step, as the original game does

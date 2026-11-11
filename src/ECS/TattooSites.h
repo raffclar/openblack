@@ -47,10 +47,11 @@ using Found = std::array<std::optional<posed_model::SkinPoint>, creature_tattoo:
 [[nodiscard]] Found Find(const graphics::L3DMesh& mesh, CreatureType species);
 
 /// Each place as the posed body shows it, in the pixels of a view whose top left corner is at an origin on the window.
-/// Only a place in front of the camera has a pixel. The creature gives the body its shape.
+/// Only a place in front of the camera has a pixel. The creature gives the body its shape, or the shape that is given.
 [[nodiscard]] std::vector<creature_tattoo_editor::SiteOnScreen> OnScreen(const Registry& registry, entt::entity creature,
                                                                          const graphics::L3DMesh& mesh, const glm::mat4& model,
                                                                          std::span<const glm::mat4> bones, const Found& found,
-                                                                         const screen_pick::View& view, glm::ivec2 origin);
+                                                                         const screen_pick::View& view, glm::ivec2 origin,
+                                                                         const creature_morph::Morph* shape = nullptr);
 
 } // namespace openblack::ecs::tattoo_sites

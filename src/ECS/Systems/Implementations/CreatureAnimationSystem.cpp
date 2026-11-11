@@ -150,11 +150,7 @@ void Kick(const ecs::Registry& registry, entt::entity entity, CreatureAnimation&
 
 creature_morph::Morph TargetMorph(const Creature& creature, const CreatureMorph& morph)
 {
-	auto target = creature_morph::FromAttributes(creature.alignment, morph.shownFatness, creature.strength,
-	                                             ecs::archetypes::CreatureArchetype::SpeciesStrength(creature.species));
-	target.evilGood = morph.alignmentLook.value_or(target.evilGood);
-	target.weakStrong = morph.strengthLook.value_or(target.weakStrong);
-	return target;
+	return ecs::archetypes::CreatureArchetype::Targets(creature, morph);
 }
 
 /// The animations of the first pose of a body and of its first plan: its stand and the two turns of its head. A body
@@ -992,11 +988,17 @@ void CreatureAnimationSystem::MorphTurn(entt::entity entity)
 	{
 		return;
 	}
-	const auto refresh = creature_morph::RefreshDrawn(morph->drawn, TargetMorph(*creature, *morph));
+	const auto targets = TargetMorph(*creature, *morph);
+	const auto refresh = creature_morph::RefreshDrawn(morph->drawn, targets);
 	morph->drawn = refresh.drawn;
 	if (refresh.animations)
 	{
 		++morph->revision;
+	}
+	// A new alignment paints the skin and the hair with the evil to good target
+	if (refresh.skin)
+	{
+		morph->paintedAlignment = targets.evilGood;
 	}
 	BuildSkeleton(*creature, *morph, *animation);
 }
@@ -1538,7 +1540,7 @@ void CreatureAnimationSystem::PoseCopy(Registry& copies, entt::entity copy, floa
 		return;
 	}
 	const auto* creature = bodies.TryGet<const Creature>(self->creature);
-	const auto* morph = bodies.TryGet<const CreatureMorph>(self->creature);
+	const auto* morph = ShapeOfCopy(copies, copy, bodies);
 	auto* animation = copies.TryGet<CreatureAnimation>(copy);
 	const auto* transform = copies.TryGet<const Transform>(copy);
 	if (creature == nullptr || morph == nullptr || animation == nullptr || transform == nullptr)
@@ -1559,7 +1561,7 @@ void CreatureAnimationSystem::PoseCopy(Registry& copies, entt::entity copy, floa
 	const CreatureRig* rig = rigs.Contains(rigId) ? &*rigs.Handle(rigId) : nullptr;
 	const float seconds = milliseconds / 1000.0f;
 
-	// The copy is shaped as the creature is: its rest pose and animations follow the creature's body as it changes
+	// The rest pose and the animations of the copy follow the shape that it is drawn with
 	if (animation->builtRevision != morph->revision || animation->skeleton.Empty())
 	{
 		const auto rest = creature_animation::BlendRest(
@@ -1620,7 +1622,7 @@ void CreatureAnimationSystem::PlaceCopyEyes(Registry& copies, entt::entity copy,
 		return;
 	}
 	const auto* creature = bodies.TryGet<const Creature>(self->creature);
-	const auto* morph = bodies.TryGet<const CreatureMorph>(self->creature);
+	const auto* morph = ShapeOfCopy(copies, copy, bodies);
 	const auto* animation = copies.TryGet<const CreatureAnimation>(copy);
 	const auto* transform = copies.TryGet<const Transform>(copy);
 	auto* eyes = copies.TryGet<CreatureEyes>(copy);
@@ -1882,7 +1884,7 @@ struct BodyOf
 };
 
 /// The body of a creature, or of the creature of a copy. `things` is the registry of the creature or the copy, and `land`
-/// the registry of the creature of a copy.
+/// the registry of the creature of a copy. A copy with a shape of its own is drawn with that shape.
 std::optional<BodyOf> FindBody(const ecs::Registry& things, const ecs::Registry& land, entt::entity entity)
 {
 	if (const auto* creature = things.TryGet<const Creature>(entity); creature != nullptr)
@@ -1896,7 +1898,7 @@ std::optional<BodyOf> FindBody(const ecs::Registry& things, const ecs::Registry&
 		return std::nullopt;
 	}
 	const auto* creature = land.TryGet<const Creature>(copy->creature);
-	const auto* morph = land.TryGet<const CreatureMorph>(copy->creature);
+	const auto* morph = ShapeOfCopy(things, entity, land);
 	if (creature == nullptr || morph == nullptr)
 	{
 		return std::nullopt;
@@ -2166,8 +2168,14 @@ void CreatureAnimationSystem::AddAlignmentMotesOf(const Registry& copies, entt::
 	const auto* animation = copies.TryGet<const CreatureAnimation>(copy);
 	const auto* transform = copies.TryGet<const Transform>(copy);
 	const auto body = FindBody(copies, Locator::entitiesRegistry::value(), copy);
-	if (animation == nullptr || transform == nullptr || !body.has_value() || !copies.AllOf<CreatureCopy>(copy) ||
-	    !creature_alignment_motes::MakesAny(body->morph->drawn.evilGood))
+	const auto* self = copies.TryGet<const CreatureCopy>(copy);
+	if (animation == nullptr || transform == nullptr || !body.has_value() || self == nullptr)
+	{
+		return;
+	}
+	// The motes show the evil to good target that the copy keeps
+	const auto alignment = self->targets.has_value() ? self->targets->evilGood : body->morph->drawn.evilGood;
+	if (!creature_alignment_motes::MakesAny(alignment))
 	{
 		return;
 	}
@@ -2180,8 +2188,7 @@ void CreatureAnimationSystem::AddAlignmentMotesOf(const Registry& copies, entt::
 	};
 	auto& liquids = Locator::liquidParticleSystem::value();
 	const auto bones = static_cast<uint32_t>(animation->boneMatrices.size());
-	for (const auto& puff :
-	     creature_alignment_motes::PuffsOf(body->morph->drawn.evilGood, body->size, bones, bonePoint, localRandom))
+	for (const auto& puff : creature_alignment_motes::PuffsOf(alignment, body->size, bones, bonePoint, localRandom))
 	{
 		liquids.Add(puff.position, puff.velocity, puff.size, puff.argb, puff.kind);
 	}

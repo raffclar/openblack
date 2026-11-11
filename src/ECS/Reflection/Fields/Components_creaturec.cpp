@@ -45,7 +45,9 @@ void openblack::ecs::reflection::RegisterFields_Components_creaturec(entt::meta_
 	    .Field<&components::CreatureCasting::lastFizzleTarget>("lastFizzleTarget");
 	Reflect<components::CreatureCopy>(context)
 	    .Field<&components::CreatureCopy::creature>("creature")
-	    .Field<&components::CreatureCopy::size>("size");
+	    .Field<&components::CreatureCopy::size>("size")
+	    .Field<&components::CreatureCopy::targets>("targets")
+	    .Field<&components::CreatureCopy::paintedAlignment>("paintedAlignment");
 	Reflect<components::CaveCreature>(context)
 	    .Field<&components::CaveCreature::state>("state")
 	    .Field<&components::CaveCreature::light>("light")

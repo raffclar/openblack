@@ -61,3 +61,37 @@ TEST(CreatureLooks, AThingWithNoBodyIsLeftAlone)
 	CreatureArchetype::TakeLooks(registry, thing);
 	EXPECT_FALSE(registry.AllOf<CreatureMorph>(thing));
 }
+
+TEST(CreatureLooks, APaintGivesTheSkinTheEvilToGoodTargetNotTheDrawnAxis)
+{
+	ecs::Registry registry;
+	const auto creature = MakeCreature(registry);
+	// The drawn axis is within the morph threshold of the target, so a new alignment does not paint the skin
+	auto& morph = registry.Get<CreatureMorph>(creature);
+	morph.drawn.evilGood = 0.88f;
+	morph.paintedAlignment = 0.88f;
+	CreatureArchetype::PaintWithTarget(registry, creature);
+	EXPECT_EQ(morph.paintedAlignment, 0.9f);
+	EXPECT_EQ(morph.drawn.evilGood, 0.88f);
+}
+
+TEST(CreatureLooks, BeforeItTakesLooksAPaintGivesTheSkinTheAlignment)
+{
+	ecs::Registry registry;
+	const auto creature = registry.Create();
+	registry.Assign<Creature>(creature, Creature {.species = CreatureType::Tiger, .alignment = -0.3f});
+	registry.Assign<CreatureMorph>(creature);
+	CreatureArchetype::PaintWithTarget(registry, creature);
+	EXPECT_EQ(registry.Get<const CreatureMorph>(creature).paintedAlignment,
+	          CreatureArchetype::Targets(registry.Get<const Creature>(creature), registry.Get<const CreatureMorph>(creature))
+	              .evilGood);
+}
+
+TEST(CreatureLooks, APaintLeavesAThingWithNoBodyAlone)
+{
+	ecs::Registry registry;
+	const auto thing = registry.Create();
+	registry.Assign<Creature>(thing);
+	CreatureArchetype::PaintWithTarget(registry, thing);
+	EXPECT_FALSE(registry.AllOf<CreatureMorph>(thing));
+}

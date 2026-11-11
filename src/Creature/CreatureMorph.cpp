@@ -106,7 +106,7 @@ creature_morph::Refresh creature_morph::RefreshDrawn(const Morph& drawn, const M
 {
 	if (std::abs(target.evilGood - drawn.evilGood) >= k_RefreshThreshold)
 	{
-		return {.drawn = target, .animations = true, .vertices = true};
+		return {.drawn = target, .animations = true, .vertices = true, .skin = true};
 	}
 	if (std::abs(target.thinFat - drawn.thinFat) >= k_RefreshThreshold)
 	{
@@ -121,4 +121,24 @@ creature_morph::Refresh creature_morph::RefreshDrawn(const Morph& drawn, const M
 		        .vertices = true};
 	}
 	return {.drawn = drawn, .animations = false, .vertices = false};
+}
+
+creature_morph::Morph creature_morph::CopiedTargets(const Morph& targets)
+{
+	// A value at or below -1, or a value that is not a number, becomes -1
+	const auto copied = [](float value) {
+		if (!(value > -1.0f))
+		{
+			return -1.0f;
+		}
+		return value < 1.0f ? value : 1.0f;
+	};
+	return {.evilGood = copied(targets.evilGood), .thinFat = copied(targets.thinFat), .weakStrong = copied(targets.weakStrong)};
+}
+
+creature_morph::CopyLooks creature_morph::FirstLooksOfCopy(const Morph& creatureTargets)
+{
+	const auto targets = CopiedTargets(creatureTargets);
+	const auto refresh = RefreshDrawn({}, targets);
+	return {.targets = targets, .drawn = refresh.drawn, .painted = refresh.skin};
 }

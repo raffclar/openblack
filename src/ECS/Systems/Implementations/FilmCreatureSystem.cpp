@@ -27,6 +27,7 @@
 #include "ECS/Components/CreatureCopy.h"
 #include "ECS/Components/CreatureHair.h"
 #include "ECS/Components/CreatureHandGlows.h"
+#include "ECS/Components/CreatureSkin.h"
 #include "ECS/Components/FilmCreature.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Transform.h"
@@ -96,11 +97,32 @@ void FilmCreatureSystem::Start()
 	const auto copy = registry.Create();
 	registry.Assign<Transform>(copy, glm::vec3(0.0f), glm::mat3(1.0f),
 	                           glm::vec3(archetypes::CreatureArchetype::DrawnScale(body.species, size)));
-	registry.Assign<CreatureCopy>(copy, *creature, size);
+	// It keeps the looks that the creature was to show now, and its first update draws them from the middle of each
+	// axis. That update paints its skin and its hair only when its evil to good target is far enough from the middle.
+	// The film shows no tattoos on it.
+	const auto looks = creature_morph::FirstLooksOfCopy(
+	    archetypes::CreatureArchetype::Targets(body, land.Get<const CreatureMorph>(*creature)));
+	registry.Assign<CreatureCopy>(
+	    copy, CreatureCopy {.creature = *creature,
+	                        .size = size,
+	                        .targets = looks.targets,
+	                        .paintedAlignment = looks.painted ? std::optional(looks.targets.evilGood) : std::nullopt});
+	registry.Assign<CreatureMorph>(copy, CreatureMorph {.drawn = looks.drawn});
 	auto& animation = registry.Assign<CreatureAnimation>(copy);
 	registry.Assign<CreatureEyes>(copy);
 	// It has hair of its own
 	registry.Assign<CreatureHair>(copy);
+	// It has a skin of its own, with the wounds and the blood that the creature has now
+	registry.Assign<CreatureTattoos>(copy);
+	if (const auto* marks = land.TryGet<const CreatureMarks>(*creature))
+	{
+		registry.Assign<CreatureMarks>(copy, *marks);
+	}
+	else
+	{
+		registry.Assign<CreatureMarks>(copy);
+	}
+	registry.Assign<CreatureSkin>(copy);
 	registry.Assign<FilmCreature>(copy);
 	_copy = copy;
 	_path = LoadPath();
@@ -120,11 +142,7 @@ void FilmCreatureSystem::Start()
 	}
 	animation.lookAt.reset();
 
-	// It makes its first motes as it is first posed
-	if (Locator::creatureAnimationSystem::has_value())
-	{
-		Locator::creatureAnimationSystem::value().AddAlignmentMotesOf(registry, copy);
-	}
+	// The first update of the copy makes no motes: it has no pose before it (vanilla-bugs 1960)
 	// It has a glow on each hand
 	auto& glows = registry.Assign<CreatureHandGlows>(copy);
 	for (const auto hand : {creature_hand_glow::Place::LeftHand, creature_hand_glow::Place::RightHand})

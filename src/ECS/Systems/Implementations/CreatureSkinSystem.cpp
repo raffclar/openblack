@@ -28,6 +28,7 @@
 #include "Commands/PlayerCommands.h"
 #include "Creature/CreatureRig.h"
 #include "Creature/CreatureSkin.h"
+#include "ECS/Archetypes/CreatureArchetype.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureCopy.h"
@@ -233,20 +234,45 @@ const creature_tattoo::Slots& ShownTattoos(const ecs::Registry& registry, Player
 	return body.shown.has_value() ? *body.shown : body.slots;
 }
 
-/// Paints the skin when what it shows has changed
-void PaintIfChanged(CreatureSkin& skin, const Creature& creature, const CreatureMorph& morph,
-                    const creature_tattoo::Slots& tattoos, uint32_t tattooRevision, const creature_tattoo::Masks* masks,
-                    const CreatureMarks& marks, const creature_skin::Art* art)
+/// The tattoos that the skin of a copy with looks of its own shows. The tattoos being edited come first. Else, while the
+/// player is in the temple, the copy shows the tattoos of the local player's creature. At other times it shows none: the
+/// copy has no creature of its own.
+const creature_tattoo::Slots& ShownTattoosOfCopy(const ecs::Registry& registry, const CreatureTattoos& own)
+{
+	static const creature_tattoo::Slots k_None {};
+	if (own.shown.has_value())
+	{
+		return *own.shown;
+	}
+	const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
+	if (!inTemple || !Locator::playerSystem::has_value())
+	{
+		return k_None;
+	}
+	const auto local = Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE;
+	if (const auto primary = Locator::playerSystem::value().GetPrimaryCreature(local); primary.has_value())
+	{
+		if (const auto* tattoos = registry.TryGet<const CreatureTattoos>(*primary))
+		{
+			return tattoos->shown.has_value() ? *tattoos->shown : tattoos->slots;
+		}
+	}
+	return k_None;
+}
+
+/// Paints the skin of a body of a species with an evil to good value when what it shows has changed
+void PaintIfChanged(CreatureSkin& skin, CreatureType species, float evilGood, const creature_tattoo::Slots& tattoos,
+                    uint32_t tattooRevision, const creature_tattoo::Masks* masks, const CreatureMarks& marks,
+                    const creature_skin::Art* art)
 {
 	const auto& rigs = Locator::resources::value().GetCreatureRigs();
-	const auto rigId = creature::GetRigId(creature.species);
+	const auto rigId = creature::GetRigId(species);
 	if (!rigs.Contains(rigId))
 	{
 		return;
 	}
 	const auto& rig = *rigs.Handle(rigId);
-	// The skins follow the alignment the body is drawn with, which moves on only past the morph threshold
-	const auto sources = SourcesOf(rig, morph.drawn.evilGood);
+	const auto sources = SourcesOf(rig, evilGood);
 	if (!sources)
 	{
 		return;
@@ -254,7 +280,7 @@ void PaintIfChanged(CreatureSkin& skin, const Creature& creature, const Creature
 	const CreatureSkin::Painted wanted {
 	    .baseMesh = sources->baseId,
 	    .variantMesh = sources->variantId,
-	    .weight = creature_skin::BlendWeight(morph.drawn.evilGood),
+	    .weight = creature_skin::BlendWeight(evilGood),
 	    .tattoos = tattooRevision,
 	    .marks = marks.revision,
 	    .art = art != nullptr,
@@ -274,10 +300,12 @@ void CreatureSkinSystem::Update()
 	const auto& arts = Locator::resources::value().GetCreatureSkinArt();
 	const creature_skin::Art* art = arts.Contains(creature_skin::k_ArtId) ? &*arts.Handle(creature_skin::k_ArtId) : nullptr;
 
+	// The skins follow the evil to good target of their last paint
 	registry.Each<const Creature, const CreatureMorph, const CreatureTattoos, const CreatureMarks, CreatureSkin>(
 	    [&](const Creature& creature, const CreatureMorph& morph, const CreatureTattoos& tattoos, const CreatureMarks& marks,
 	        CreatureSkin& skin) {
-		    PaintIfChanged(skin, creature, morph, ShownTattoos(registry, creature.owner, tattoos, tattoos), tattoos.revision,
+		    PaintIfChanged(skin, creature.species, morph.paintedAlignment,
+		                   ShownTattoos(registry, creature.owner, tattoos, tattoos), tattoos.revision,
 		                   MasksOf(registry, creature.owner), marks, art);
 	    });
 	// The creature of the tattoo menu is a thing of the drawn registry. It shows the tattoos and uses the masks of the
@@ -288,35 +316,65 @@ void CreatureSkinSystem::Update()
 		    .Each<const Creature, const CreatureMorph, const CreatureTattoos, const CreatureMarks, CreatureSkin>(
 		        [&](const Creature& creature, const CreatureMorph& morph, const CreatureTattoos& tattoos,
 		            const CreatureMarks& marks, CreatureSkin& skin) {
-			        PaintIfChanged(skin, creature, morph, ShownTattoos(registry, creature.owner, tattoos, tattoos),
-			                       tattoos.revision, MasksOf(registry, creature.owner), marks, art);
+			        PaintIfChanged(skin, creature.species, morph.paintedAlignment,
+			                       ShownTattoos(registry, creature.owner, tattoos, tattoos), tattoos.revision,
+			                       MasksOf(registry, creature.owner), marks, art);
 		        });
 	}
 	// A copy with a skin of its own is painted at its own times. The copy of the land's creature in the temple's
-	// creature room is a thing of the temple's rooms.
+	// creature room is a thing of the temple's rooms, and the copy of the falling spell film a thing of the drawn
+	// registry.
 	const auto paintCopies = [&](Registry& copies) {
 		copies.Each<const CreatureCopy, const CreatureTattoos, CreatureSkin>(
-		    [&](const CreatureCopy& copy, const CreatureTattoos& tattoos, CreatureSkin& skin) {
+		    [&](entt::entity entity, const CreatureCopy& copy, const CreatureTattoos& tattoos, CreatureSkin& skin) {
 			    if (!registry.Valid(copy.creature))
 			    {
 				    return;
 			    }
 			    const auto* creature = registry.TryGet<const Creature>(copy.creature);
-			    const auto* morph = registry.TryGet<const CreatureMorph>(copy.creature);
-			    const auto* body = registry.TryGet<const CreatureTattoos>(copy.creature);
-			    const auto* marks = registry.TryGet<const CreatureMarks>(copy.creature);
-			    if (creature == nullptr || morph == nullptr || body == nullptr || marks == nullptr)
+			    if (creature == nullptr)
 			    {
 				    return;
 			    }
-			    PaintIfChanged(skin, *creature, *morph, ShownTattoos(registry, creature->owner, tattoos, *body),
-			                   tattoos.revision, MasksOf(registry, creature->owner), *marks, art);
+			    // A copy with looks of its own has the wounds and the blood that its creature had when it was made. It
+			    // uses the masks of the local player, as it has no creature of its own. Its skin shows the alignment
+			    // that it was painted with last. Until it is painted, it shows the base skin of the species, with no
+			    // tattoos, wounds or blood.
+			    if (copy.targets.has_value())
+			    {
+				    static const CreatureMarks k_NoMarks {};
+				    static const creature_tattoo::Slots k_NoTattoos {};
+				    if (!copy.paintedAlignment.has_value())
+				    {
+					    PaintIfChanged(skin, creature->species, 0.0f, k_NoTattoos, 0, nullptr, k_NoMarks, art);
+					    return;
+				    }
+				    const auto* marks = copies.TryGet<const CreatureMarks>(entity);
+				    PaintIfChanged(skin, creature->species, *copy.paintedAlignment, ShownTattoosOfCopy(registry, tattoos),
+				                   tattoos.revision, MasksOf(registry, PlayerNames::NEUTRAL),
+				                   marks != nullptr ? *marks : k_NoMarks, art);
+				    return;
+			    }
+			    const auto* morph = registry.TryGet<const CreatureMorph>(copy.creature);
+			    const auto* body = registry.TryGet<const CreatureTattoos>(copy.creature);
+			    const auto* marks = registry.TryGet<const CreatureMarks>(copy.creature);
+			    if (morph == nullptr || body == nullptr || marks == nullptr)
+			    {
+				    return;
+			    }
+			    PaintIfChanged(skin, creature->species, morph->paintedAlignment,
+			                   ShownTattoos(registry, creature->owner, tattoos, *body), tattoos.revision,
+			                   MasksOf(registry, creature->owner), *marks, art);
 		    });
 	};
 	paintCopies(registry);
 	if (Locator::temple::has_value())
 	{
 		paintCopies(Locator::temple::value().GetRooms());
+	}
+	if (Locator::drawnRegistry::has_value())
+	{
+		paintCopies(Locator::drawnRegistry::value());
 	}
 
 	// The eyelids take their colour from the skins as painted for this frame. A copy without a skin of its own takes the
@@ -349,20 +407,25 @@ void CreatureSkinSystem::Update()
 void CreatureSkinSystem::ProcessTurn()
 {
 	auto& registry = Locator::entitiesRegistry::value();
-	registry.Each<CreatureMarks>([](CreatureMarks& marks) {
+	registry.Each<CreatureMarks>([&registry](entt::entity creature, CreatureMarks& marks) {
 		if (creature_marks::Heal(marks.marks, creature_marks::k_CountsPerTurn))
 		{
 			++marks.revision;
+			// Each heal step paints the skin again with the evil to good target
+			ecs::archetypes::CreatureArchetype::PaintWithTarget(registry, creature);
 		}
 	});
 }
 
 void CreatureSkinSystem::CreatureTurn(entt::entity creature)
 {
-	if (auto* marks = Locator::entitiesRegistry::value().TryGet<CreatureMarks>(creature);
+	auto& registry = Locator::entitiesRegistry::value();
+	if (auto* marks = registry.TryGet<CreatureMarks>(creature);
 	    marks != nullptr && creature_marks::Heal(marks->marks, creature_marks::k_CountsPerTurn))
 	{
 		++marks->revision;
+		// Each heal step paints the skin again with the evil to good target
+		ecs::archetypes::CreatureArchetype::PaintWithTarget(registry, creature);
 	}
 }
 
@@ -419,10 +482,13 @@ void CreatureSkinSystem::RemakeTattooMasks(entt::entity creature, creature_tatto
 
 void CreatureSkinSystem::PaintTattoos(entt::entity creature)
 {
-	if (auto* tattoos = Locator::entitiesRegistry::value().TryGet<CreatureTattoos>(creature); tattoos != nullptr)
+	auto& registry = Locator::entitiesRegistry::value();
+	if (auto* tattoos = registry.TryGet<CreatureTattoos>(creature); tattoos != nullptr)
 	{
 		++tattoos->revision;
 	}
+	// The paint blends the skin and gives the hair its look with the evil to good target
+	ecs::archetypes::CreatureArchetype::PaintWithTarget(registry, creature);
 }
 
 void CreatureSkinSystem::DoTattoo(PlayerNames player, const player_commands::CreatureTattoo& tattoo)
@@ -451,7 +517,9 @@ void CreatureSkinSystem::DoTattoo(PlayerNames player, const player_commands::Cre
 	// Only the computer of the player has the player's own pictures.
 	const bool local = input::IsLocalPlayer(Locator::handSystem::has_value() ? &Locator::handSystem::value() : nullptr, player);
 	RemakeTattooMasks(tattoo.creature, local ? creature_tattoo::Sheet::OwnPictures : creature_tattoo::Sheet::Shipped);
-	PaintTattoos(tattoo.creature);
+	// The skin keeps the evil to good value of its last paint. The editor gave the target to the skin of the player's
+	// creature when the drag ended, on the computer of the player only.
+	++tattoos->revision;
 }
 
 void CreatureSkinSystem::PutOnTattoos(entt::entity creature, const creature_tattoo::Slots& slots,
@@ -483,9 +551,11 @@ void CreatureSkinSystem::AddBlood(entt::entity creature, const creature_marks::M
 
 void CreatureSkinSystem::Heal(entt::entity creature, uint32_t counts)
 {
-	if (auto* marks = Locator::entitiesRegistry::value().TryGet<CreatureMarks>(creature);
-	    marks != nullptr && creature_marks::Heal(marks->marks, counts))
+	auto& registry = Locator::entitiesRegistry::value();
+	if (auto* marks = registry.TryGet<CreatureMarks>(creature); marks != nullptr && creature_marks::Heal(marks->marks, counts))
 	{
 		++marks->revision;
+		// Each heal step paints the skin again with the evil to good target
+		ecs::archetypes::CreatureArchetype::PaintWithTarget(registry, creature);
 	}
 }

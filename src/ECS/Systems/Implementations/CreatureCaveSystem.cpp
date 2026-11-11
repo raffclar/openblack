@@ -121,6 +121,13 @@ Registry* Copies()
 {
 	return Locator::temple::has_value() ? &Locator::temple::value().GetRooms() : nullptr;
 }
+
+/// The shape that a copy is drawn with, or none to use the shape of its creature
+const creature_morph::Morph* ShapeOfDrawnCopy(const Registry& copies, entt::entity copy, const Registry& bodies)
+{
+	const auto* shape = ShapeOfCopy(copies, copy, bodies);
+	return shape != nullptr ? &shape->drawn : nullptr;
+}
 } // namespace
 
 bool CreatureCaveSystem::InTemple() const
@@ -431,17 +438,55 @@ void CreatureCaveSystem::MakeCaveCreature(entt::entity creature)
 	const auto copy = registry.Create();
 	registry.Assign<Transform>(copy, position, glm::mat3(portable_math::EulerAngleY(heading.Yaw())),
 	                           glm::vec3(archetypes::CreatureArchetype::DrawnScale(body->species, size)));
-	registry.Assign<CreatureCopy>(copy, creature, size);
+	// It keeps the looks that the creature was to show now. Its first update draws them from the middle of each axis, and
+	// then its skin is painted with its evil to good target.
+	const auto looks = creature_morph::FirstLooksOfCopy(
+	    archetypes::CreatureArchetype::Targets(*body, land.Get<const CreatureMorph>(creature)));
+	registry.Assign<CreatureCopy>(
+	    copy, CreatureCopy {
+	              .creature = creature, .size = size, .targets = looks.targets, .paintedAlignment = looks.targets.evilGood});
+	registry.Assign<CreatureMorph>(copy, CreatureMorph {.drawn = looks.drawn});
 	const cave_creature::State state {.rest = rest, .heading = heading};
 	registry.Assign<CaveCreature>(copy, state, places->fire);
 	registry.Assign<CreatureAnimation>(copy);
 	registry.Assign<CreatureEyes>(copy);
 	// It has hair of its own, which starts straight out from the roots
 	registry.Assign<CreatureHair>(copy);
-	// It has a skin of its own, painted when it is made and at the times that the tattoo editor paints it
+	// It has a skin of its own, painted when it is made and at the times that the tattoo editor paints it. The skin
+	// shows the wounds and the blood that the creature has now.
 	registry.Assign<CreatureTattoos>(copy);
+	if (const auto* marks = land.TryGet<const CreatureMarks>(creature))
+	{
+		registry.Assign<CreatureMarks>(copy, *marks);
+	}
+	else
+	{
+		registry.Assign<CreatureMarks>(copy);
+	}
 	registry.Assign<CreatureSkin>(copy);
 	_caveCreature = copy;
+
+	// As the cave makes the copy, it brings the copy up to date two times by 1 ms. The copy starts to rest between the
+	// two updates, so the second update makes motes from the pose of the first.
+	UpdateCopyBy(registry, copy, cave_creature::k_MadeUpdateMs);
+	auto& animation = registry.Get<CreatureAnimation>(copy);
+	cave_creature::Body settled {.body = animation.body, .gesture = animation.gesture, .lookAt = animation.lookAt};
+	cave_creature::Settle(registry.Get<CaveCreature>(copy).state, settled, places->fire,
+	                      [this](uint32_t range) { return _random.LocalRand(static_cast<int32_t>(range)); });
+	animation.body = settled.body;
+	animation.gesture = settled.gesture;
+	animation.lookAt = settled.lookAt;
+	UpdateCopyBy(registry, copy, cave_creature::k_MadeUpdateMs);
+}
+
+void CreatureCaveSystem::UpdateCopyBy(Registry& copies, entt::entity copy, float milliseconds)
+{
+	if (Locator::creatureAnimationSystem::has_value())
+	{
+		auto& animations = Locator::creatureAnimationSystem::value();
+		animations.AddAlignmentMotesOf(copies, copy);
+		animations.PoseCopy(copies, copy, milliseconds, Locator::entitiesRegistry::value());
+	}
 }
 
 void CreatureCaveSystem::DropCaveCreature()
@@ -544,11 +589,11 @@ void CreatureCaveSystem::UpdateCaveCreature(float milliseconds)
 		                            .blendWeight = turn.blendWeight});
 	}
 	transform->rotation = glm::mat3(portable_math::EulerAngleY(state.heading.Yaw()));
+	// Each frame it makes its motes or its smoke from its last pose, then it takes its new pose
+	UpdateCopyBy(registry, *_caveCreature, frameMs);
 	if (Locator::creatureAnimationSystem::has_value())
 	{
-		auto& animations = Locator::creatureAnimationSystem::value();
-		animations.PoseCopy(registry, *_caveCreature, frameMs, Locator::entitiesRegistry::value());
-		animations.PlaceCopyEyes(registry, *_caveCreature, Locator::entitiesRegistry::value());
+		Locator::creatureAnimationSystem::value().PlaceCopyEyes(registry, *_caveCreature, Locator::entitiesRegistry::value());
 	}
 	// Its hair swings from the new pose, by the whole time of the frame
 	if (Locator::creatureHairSystem::has_value())
@@ -604,8 +649,8 @@ void CreatureCaveSystem::HoverTattooSites(entt::entity copyEntity, glm::ivec2 po
 	const auto bones = animation->boneMatrices.size() == rest.size() ? std::span<const glm::mat4>(animation->boneMatrices)
 	                                                                 : std::span<const glm::mat4>(rest);
 	// Each place as the posed copy shows it. Only a place in front of the camera has a pixel.
-	_tattooSitesOnScreen =
-	    tattoo_sites::OnScreen(registry, copy->creature, *mesh, model, bones, *cave->tattooSites, view, glm::ivec2(0));
+	_tattooSitesOnScreen = tattoo_sites::OnScreen(registry, copy->creature, *mesh, model, bones, *cave->tattooSites, view,
+	                                              glm::ivec2(0), ShapeOfDrawnCopy(copies, copyEntity, registry));
 	editor.Hover(_tattooSitesOnScreen, pointer);
 }
 
@@ -701,7 +746,8 @@ bool CreatureCaveSystem::CursorOverCaveCreature(const screen_pick::View& view) c
 		{
 			continue;
 		}
-		posed_model::Place(registry, copy->creature, *mesh, s, model, bones, placed);
+		posed_model::Place(registry, copy->creature, *mesh, s, model, bones, placed,
+		                   ShapeOfDrawnCopy(*copies, *_caveCreature, registry));
 		const auto& geometry = subMesh.GetBodyGeometry();
 		corners.clear();
 		for (size_t c = 0; c < placed.size(); ++c)

@@ -30,6 +30,7 @@ void openblack::ecs::reflection::RegisterFields_Components_creatureb(entt::meta_
 	    .Field<&components::CreatureMorph::drawn>("drawn")
 	    .Field<&components::CreatureMorph::strengthLook>("strengthLook")
 	    .Field<&components::CreatureMorph::alignmentLook>("alignmentLook")
+	    .Field<&components::CreatureMorph::paintedAlignment>("paintedAlignment")
 	    .Field<&components::CreatureMorph::revision>("revision");
 	Reflect<components::CreatureAnimation>(context)
 	    .Field<&components::CreatureAnimation::body>("body")
