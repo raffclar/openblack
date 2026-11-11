@@ -801,7 +801,7 @@ TEST(CreatureActionAgendas, WatchingAVillagerFollowsItThenScratchesItsHead)
 	ASSERT_EQ(agenda.size(), 2);
 	EXPECT_EQ(agenda[0].kind, Step::Kind::FollowWatching);
 	EXPECT_EQ(agenda[0].object, 9u);
-	EXPECT_FLOAT_EQ(agenda[0].seconds, 30.0f);
+	EXPECT_FLOAT_EQ(agenda[0].seconds, 60.0f);
 	EXPECT_FLOAT_EQ(agenda[0].movement.maxDistance, 15.0f);
 	EXPECT_EQ(agenda[0].face, creature_face::Cue::Amazed);
 	ASSERT_TRUE(agenda[0].gaze.has_value());
@@ -831,8 +831,8 @@ TEST(CreatureActionAgendas, WatchingAVillagerKeepsWithinFifteenOfIt)
 	EXPECT_EQ(mind.step, 0u);
 }
 
-// It watches up to thirty whole seconds, then holds one to four seconds before it scratches its head
-TEST(CreatureActionAgendas, WatchingAVillagerLastsThirtySecondsThenHolds)
+// It watches up to sixty whole seconds, then holds one to four seconds before it scratches its head
+TEST(CreatureActionAgendas, WatchingAVillagerLastsSixtySecondsThenHolds)
 {
 	for (const auto& [draw, hold] : {std::pair {0u, 10u}, std::pair {0xfffeu, 39u}})
 	{
@@ -848,8 +848,8 @@ TEST(CreatureActionAgendas, WatchingAVillagerLastsThirtySecondsThenHolds)
 			(void)Think(mind, senses, random);
 			++turns;
 		}
-		// Turn 310 is the first of 31 whole seconds
-		EXPECT_EQ(turns, 310u);
+		// Turn 610 is the first of 61 whole seconds
+		EXPECT_EQ(turns, 610u);
 		EXPECT_EQ(mind.followHoldTurns, hold);
 		uint32_t held = 0;
 		while (mind.step == 0 && held < 1000)

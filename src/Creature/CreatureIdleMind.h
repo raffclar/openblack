@@ -99,9 +99,9 @@ constexpr float k_FaceStoreSeconds = 0.1f;
 constexpr float k_ApproachDistance = 12.0f;
 /// Waving at a friend, it turns to face the friend and holds still this long first
 constexpr float k_ApproachFaceSeconds = 1.4f;
-/// Following a villager to watch it: for up to 30 whole seconds, keeping within 15 of it; then holding for one second
+/// Following a villager to watch it: for up to 60 whole seconds, keeping within 15 of it; then holding for one second
 /// and up to three more
-constexpr float k_FollowWatchingSeconds = 30.0f;
+constexpr float k_FollowWatchingSeconds = 60.0f;
 constexpr float k_FollowWatchingDistance = 15.0f;
 constexpr float k_FollowWatchingHoldSeconds = 1.0f;
 constexpr float k_FollowWatchingExtraHoldSeconds = 3.0f;
