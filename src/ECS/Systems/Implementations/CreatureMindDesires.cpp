@@ -637,8 +637,9 @@ void CreatureMindSystem::DesiresTurn(entt::entity entity)
 	    .onlyAsked = fighting != nullptr && fighting->part == CreatureFighting::Part::Asked,
 	    .mindFree = fighting != nullptr && fighting->mindFree,
 	});
-	// How impressive it finds the other creatures, and the attention they gave it, fade each turn it thinks
-	if (!scripted && !demobilised && mind.learnt.has_value())
+	// How impressive it finds the other creatures, and the attention they gave it, fade each turn it thinks. They stand
+	// still when its desires stand still.
+	if (!scripted && !obeysInFight && !demobilised && mind.learnt.has_value())
 	{
 		creature_friendship::Fade(mind.learnt->creatures);
 	}

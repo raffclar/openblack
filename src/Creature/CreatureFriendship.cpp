@@ -50,17 +50,26 @@ Availability creature_friendship::AvailabilityOf(const AvailabilityFacts& facts)
 	return facts.partner.has_value() ? Availability::Refuses : Availability::Free;
 }
 
+bool creature_friendship::LiesDead(bool knockedOut, std::string_view planAction)
+{
+	return knockedOut || planAction == k_DieAction || planAction == k_DeadForeverAction;
+}
+
 std::optional<uint32_t> creature_friendship::PartnerNow(std::optional<uint32_t> jointPartner, std::optional<uint32_t> opponent)
 {
 	return jointPartner.has_value() ? jointPartner : opponent;
+}
+
+bool creature_friendship::NearInHeightToFight(float heightRatio)
+{
+	return heightRatio >= k_LeastFightHeightRatio && heightRatio <= k_MostFightHeightRatio;
 }
 
 Answer creature_friendship::AnswerOf(const AnswerFacts& facts)
 {
 	if (facts.kind == RequestKind::Fight)
 	{
-		const bool nearInHeight = facts.heightRatio >= k_LeastFightHeightRatio && facts.heightRatio <= k_MostFightHeightRatio;
-		return {.agrees = nearInHeight && facts.availability != Availability::Refuses};
+		return {.agrees = NearInHeightToFight(facts.heightRatio) && facts.availability != Availability::Refuses};
 	}
 	if (facts.availability != Availability::Free)
 	{

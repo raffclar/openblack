@@ -2471,3 +2471,12 @@ openblack_setup_and_add_test(test_yard_copy_rules test_yard_copy_rules.cpp)
 openblack_setup_and_add_test(test_script_line_values test_script_line_values.cpp)
 openblack_setup_and_add_test(test_screen_pixels gui/test_screen_pixels.cpp)
 openblack_setup_and_add_test(test_temple_pool temple/test_temple_pool.cpp)
+openblack_setup_and_add_test(test_creature_opinion_clock test_creature_opinion_clock.cpp)
+openblack_setup_and_add_test(
+  test_oracle_creature_friendship oracle/test_oracle_creature_friendship.cpp
+)
+set_tests_properties(
+  test_oracle_creature_friendship
+  PROPERTIES ENVIRONMENT
+             "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)

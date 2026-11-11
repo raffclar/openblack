@@ -95,9 +95,6 @@ void openblack::ecs::reflection::RegisterFields_Components_p(entt::meta_ctx& con
 	    .Field<&components::PlayerStatistics::influenceHistory>("influenceHistory")
 	    .Field<&components::PlayerStatistics::populationHistory>("populationHistory");
 	Reflect<components::Poisoned>(context).Field<&components::Poisoned::dummy>("dummy");
-	Reflect<components::CreatureMiracleOpinion>(context)
-	    .Field<&components::CreatureMiracleOpinion::lastTurn>("lastTurn")
-	    .Field<&components::CreatureMiracleOpinion::changed>("changed");
 	Reflect<components::Pot>(context)
 	    .Field<&components::Pot::amount>("amount")
 	    .Field<&components::Pot::maxAmount>("maxAmount")
