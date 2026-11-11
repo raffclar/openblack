@@ -59,6 +59,22 @@ TEST(CreatureSpellMind, ASpellsDesireIsWantedAboveAllAndMostOthersHeldDown)
 	EXPECT_TRUE(HeldDownByCheat(Desire::Water, true));
 }
 
+TEST(CreatureSpellMind, ADesireHeldDownForLongerLosesItsPlan)
+{
+	auto desires = Some();
+	desires[Desire::Curiosity].suppressedTurns = k_HeldTurns + 1;
+	(void)SetCheatDominant(desires, Desire::Anger, {.all = true, .floor = k_Floor}, k_TurnsPerSecond);
+	// Held down for longer, a desire loses its plan
+	EXPECT_TRUE(desires[Desire::Hunger].losesPlan);
+	EXPECT_TRUE(desires[Desire::Fear].losesPlan);
+	// Held for longer already, it keeps its hold and its plan
+	EXPECT_EQ(desires[Desire::Curiosity].suppressedTurns, k_HeldTurns + 1);
+	EXPECT_FALSE(desires[Desire::Curiosity].losesPlan);
+	// Not held down, it keeps its plan
+	EXPECT_FALSE(desires[Desire::Anger].losesPlan);
+	EXPECT_FALSE(desires[Desire::Rest].losesPlan);
+}
+
 TEST(CreatureSpellMind, CompassionAlsoWantsToMakeFriendsAboveAll)
 {
 	auto desires = Some();

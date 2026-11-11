@@ -44,14 +44,13 @@ creature_spell_mind::Cheat creature_spell_mind::SetCheatDominant(creature_desire
                                                                  const CheatSetup& setup, float turnsPerSecond)
 {
 	desires[desire].activated = true;
-	const auto turns = static_cast<uint32_t>(std::max(turnsPerSecond * setup.seconds, 0.0f));
+	// Each other desire is held back as any desire is held back, so a longer hold also removes the plan of that desire
 	for (size_t i = 0; i < creature_desires::k_DesireCount; ++i)
 	{
 		const auto other = static_cast<Desire>(i);
 		if (other != desire && HeldDownByCheat(other, setup.all))
 		{
-			auto& state = desires.desires.at(i);
-			state.suppressedTurns = std::max(state.suppressedTurns, turns);
+			creature_desires::Suppress(desires, other, setup.seconds, turnsPerSecond);
 		}
 	}
 	// It is wanted above all, the others as little as any can be, and everything that drives it is full
