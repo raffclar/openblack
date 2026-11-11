@@ -1,8 +1,8 @@
 {
   "about": "The longest time, in game turns, that the creature's plan, activity or action can stay the same before the run record flags it as stuck. The key is plan:, activity: or action: and the name the record shows; plan:* and the like apply to every name without a row of its own. A null limit flags nothing: the record only keeps the longest time it saw. The audit fills each limit from the game's own rules, with the evidence in source; no limit is tuned.",
   "limits": [
-    {"key": "plan:*", "turns": null, "source": "todo: vanilla"},
-    {"key": "activity:*", "turns": null, "source": "todo: vanilla"},
-    {"key": "action:*", "turns": null, "source": "todo: vanilla"}
+    {"key": "plan:*", "turns": null, "source": "game: no limit. The mind decides again each turn (DecideWhatToDo 0x4F0560 from 0x4F0370) and keeps a plan while no other plan is more than two times as pressing (0x4F0500); a forced plan scores FLT_MAX. creature-audit2-lives 2026-11-11"},
+    {"key": "activity:*", "turns": null, "source": "game: no limit. An activity lasts as long as its plan's agenda, and a step has no time limit (ProcessSubAction 0x4FEDA0 only counts the turns at +0x1BDC; a walk ends only in reach, a failure or a new plan). creature-audit2-lives 2026-11-11"},
+    {"key": "action:*", "turns": null, "source": "game: no limit, as plan:*. A stall shows instead as a plan rate of 0 with an unchanged creature state (E:/openblack/scratch/creature-audit2-lives/life_audit.py). creature-audit2-lives 2026-11-11"}
   ]
 }

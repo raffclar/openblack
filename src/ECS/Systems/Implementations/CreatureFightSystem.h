@@ -64,6 +64,7 @@ public:
 	[[nodiscard]] bool IsFighting(entt::entity creature) const override;
 	[[nodiscard]] bool IsDuelling(entt::entity creature) const override;
 	void TakeForScript(entt::entity creature) override;
+	void GetUpForPlan(entt::entity creature) override;
 	[[nodiscard]] std::optional<entt::entity> OpponentOf(entt::entity creature) const override;
 
 	bool QueueMove(entt::entity creature, const creature_fight::Move& move, bool replace) override;
@@ -203,6 +204,8 @@ private:
 	};
 	/// Faints and lies out cold, to be taken home later
 	void Faint(entt::entity creature, Leash leash = Leash::TakeOff);
+	/// A knocked-out creature that is not dead for good gets up where it lies. Returns whether it got up.
+	bool GetUp(entt::entity creature);
 	/// The faint starts on the body: its side, the faint itself, and the reaction of those near it
 	void StartFaint(entt::entity creature);
 	/// The camera's fight view: started by looking at an arena with a fight on, it follows the fight and lingers a little

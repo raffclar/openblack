@@ -738,7 +738,10 @@ def parse(argv):
                          help="the start-of-game answer (--skip-opening) on a land: cow by default; '' for none")
         sub.add_argument("--testbed", action="store_true", help="the creature testbed instead of a land")
         sub.add_argument("--scenario", help="a testbed scenario by its id")
-        sub.add_argument("--seed", type=int, default=1)
+        sub.add_argument("--seed", type=int, default=1,
+                         help="the random seed; it changes only the testbed. A story land sets its synced random "
+                              "numbers to 0 as it starts, as the game does. On a story land, use other --act-every "
+                              "values and styles for other lives")
         sub.add_argument("--style", choices=STYLES, default="none")
         sub.add_argument("--turns", type=int, default=3000, help="the turn to stop at")
         sub.add_argument("--every", type=int, default=100, help="a record each time this many turns go by")

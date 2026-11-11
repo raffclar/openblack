@@ -867,6 +867,66 @@ TEST_F(CreatureFightSystemTest, AScriptTakesAKnockedOutCreatureBeforeItIsTakenHo
 	EXPECT_EQ(registry.Get<const Transform>(second).position, where);
 }
 
+TEST_F(CreatureFightSystemTest, AForcedPlanGetsAKnockedOutCreatureUpWhereItLies)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	fights.Withdraw(second);
+	registry.Assign<CreatureNeeds>(second);
+	fights.ForceFaint(second);
+	ASSERT_TRUE(fights.IsKnockedOut(second));
+	EXPECT_EQ(registry.Get<const CreatureNeeds>(second).rest, CreatureNeeds::Rest::Unconscious);
+	const auto where = registry.Get<const Transform>(second).position;
+	fights.GetUpForPlan(second);
+	EXPECT_FALSE(fights.IsKnockedOut(second));
+	EXPECT_EQ(registry.Get<const CreatureNeeds>(second).rest, CreatureNeeds::Rest::Awake);
+	// It is not taken home later
+	for (int turn = 0; turn < 600; ++turn)
+	{
+		fights.ProcessTurn();
+	}
+	EXPECT_EQ(registry.Get<const Transform>(second).position, where);
+}
+
+TEST_F(CreatureFightSystemTest, AForcedPlanDoesNotRaiseACreatureKilledForGood)
+{
+	fights.Withdraw(second);
+	fights.KillPermanently(second);
+	ASSERT_TRUE(fights.IsKnockedOut(second));
+	fights.GetUpForPlan(second);
+	EXPECT_TRUE(fights.IsKnockedOut(second));
+}
+
+// A creature that got up from a faint for a forced plan does not faint again until the end of a faint or a turn with
+// no plan lets it
+TEST_F(CreatureFightSystemTest, ACreatureThatFaintedCannotFaintAgainUntilItIsFreeOfThatFaint)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	fights.Withdraw(second);
+	registry.Assign<CreatureNeeds>(second);
+	fights.ForceFaint(second);
+	ASSERT_TRUE(fights.IsKnockedOut(second));
+	EXPECT_TRUE(registry.Get<const CreatureNeeds>(second).fainted);
+	fights.GetUpForPlan(second);
+	fights.ForceFaint(second);
+	fights.KnockOut(second);
+	EXPECT_FALSE(fights.IsKnockedOut(second));
+	registry.Get<CreatureNeeds>(second).fainted = false;
+	fights.KnockOut(second);
+	EXPECT_TRUE(fights.IsKnockedOut(second));
+}
+
+// A script that kills a creature for good kills it also just after it got up from a faint
+TEST_F(CreatureFightSystemTest, AScriptKillsForGoodACreatureThatJustGotUpFromAFaint)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	fights.Withdraw(second);
+	registry.Assign<CreatureNeeds>(second);
+	fights.ForceFaint(second);
+	fights.GetUpForPlan(second);
+	fights.KillPermanently(second);
+	EXPECT_TRUE(fights.IsKnockedOut(second));
+}
+
 TEST_F(CreatureFightSystemTest, AScriptDoesNotRaiseACreatureKilledForGood)
 {
 	fights.Withdraw(second);

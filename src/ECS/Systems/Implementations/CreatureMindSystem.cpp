@@ -637,6 +637,11 @@ void CreatureMindSystem::ReceiveFeedback(entt::entity creature, float feedback)
 	// The stop also lets go of a miracle that the creature holds, and its eyes go calm
 	ReleaseCast(creature);
 	RestEyes(registry, creature, registry.TryGet<CreatureEyes>(creature));
+	// The stop also ends a faint: a knocked-out creature gets up where it lies
+	if (Locator::creatureFightSystem::has_value())
+	{
+		Locator::creatureFightSystem::value().GetUpForPlan(creature);
+	}
 	// Too slight to count, it only looks at the camera of its player, for its desire to idle with the player
 	if (std::abs(feedback) <= creature_feedback::k_SlightFeedback)
 	{

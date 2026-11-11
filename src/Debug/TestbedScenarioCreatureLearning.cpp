@@ -98,6 +98,24 @@ void openblack::testbed_scenarios::AddCreatureLearningScenarios(std::vector<Scen
 	    .objects = building,
 	    .townBeliefInPlayer = k_TownBelief,
 	});
+	// The same town and lion, but the lion has no energy, so it faints at once
+	auto fainted = Curious({0.0f, -5.0f}, 180.0f);
+	fainted.needs.energy = 0.0f;
+	all.push_back({
+	    .id = "creatures.faint_cut_by_skill",
+	    .name = "A creature in a faint gets up to follow a builder",
+	    .facet = Facet::Mind,
+	    .description = "The town and the lion of creatures.learns_build, but the lion has no energy and keeps none. Best "
+	                   "watched at game speed 2.",
+	    .expected = "The lion faints at once and lies on the ground. When it sees a builder at work again, it gets up "
+	                "where it lies and goes after the builder, amazed, as in creatures.learns_build. It is not taken "
+	                "to its pen. It faints again only after the follow is over, and then it is taken to its pen.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Follow},
+	    .creatures = {fainted},
+	    .objects = building,
+	    .townBeliefInPlayer = k_TownBelief,
+	});
 	all.push_back({
 	    .id = "interface.learning_words_behind_building",
 	    .name = "A building in front of the learning mark hides its words",

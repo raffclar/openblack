@@ -69,6 +69,23 @@ using namespace openblack::ecs::systems::fight_detail;
 
 namespace
 {
+/// Whether the creature fainted and did not get up from that faint or have a turn with no plan since. Such a creature
+/// does not faint again.
+bool StillFainted(const ecs::Registry& registry, entt::entity creature)
+{
+	const auto* needs = registry.TryGet<const CreatureNeeds>(creature);
+	return needs != nullptr && needs->fainted;
+}
+
+/// Marks that the creature fainted. A script's order to die is not a faint, and does not mark it.
+void MarkFainted(ecs::Registry& registry, entt::entity creature)
+{
+	if (auto* needs = registry.TryGet<CreatureNeeds>(creature))
+	{
+		needs->fainted = true;
+	}
+}
+
 void PlaceAt(CreatureLocomotion& locomotion, Transform& transform, glm::vec3 at)
 {
 	at.y = GroundAt(Flat(at));
@@ -82,7 +99,7 @@ void CreatureFightSystem::KnockOut(entt::entity creature)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	if (!registry.Valid(creature) || !registry.AllOf<Creature, CreatureAnimation>(creature) ||
-	    registry.AllOf<CreatureKnockedOut>(creature))
+	    registry.AllOf<CreatureKnockedOut>(creature) || StillFainted(registry, creature))
 	{
 		return;
 	}
@@ -97,13 +114,14 @@ void CreatureFightSystem::KnockOut(entt::entity creature)
 		Leave(creature);
 	}
 	Faint(creature);
+	MarkFainted(registry, creature);
 }
 
 void CreatureFightSystem::ForceFaint(entt::entity creature)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	if (!registry.Valid(creature) || !registry.AllOf<Creature, CreatureAnimation>(creature) ||
-	    registry.AllOf<CreatureKnockedOut>(creature))
+	    registry.AllOf<CreatureKnockedOut>(creature) || StillFainted(registry, creature))
 	{
 		return;
 	}
@@ -112,6 +130,7 @@ void CreatureFightSystem::ForceFaint(entt::entity creature)
 		Leave(creature);
 	}
 	Faint(creature);
+	MarkFainted(registry, creature);
 }
 
 void CreatureFightSystem::FaintForScript(entt::entity creature)
@@ -210,6 +229,8 @@ void CreatureFightSystem::StartFaint(entt::entity creature)
 	shown_creature_faces::ChangeFace(registry, creature, animation.face,
 	                                 [](const creature_layers::FaceLayer& face) { return creature_layers::RelaxFace(face); });
 	SetEyes(registry, creature, creature_eyes::Mode::Closed);
+	// The faint on the body marks it as fainted, also when a script orders it to die
+	MarkFainted(registry, creature);
 	// The people and the creatures near it react to the faint as to a death. The reaction belongs to no player.
 	if (Locator::reactionSystem::has_value())
 	{
@@ -235,6 +256,11 @@ void CreatureFightSystem::KillPermanently(entt::entity creature)
 		AbortFight(creature);
 		Leave(creature);
 	}
+	// A creature killed for good lies dead, also when it got up from a faint a short time before
+	if (auto* needs = registry.TryGet<CreatureNeeds>(creature))
+	{
+		needs->fainted = false;
+	}
 	KnockOut(creature);
 	if (auto* knockedOut = registry.TryGet<CreatureKnockedOut>(creature))
 	{
@@ -256,9 +282,11 @@ void CreatureFightSystem::Resurrect(entt::entity creature)
 	{
 		return;
 	}
+	// The get-up of the resurrection lets it faint again
 	if (auto* needs = registry.TryGet<CreatureNeeds>(creature))
 	{
 		needs->needs.life = fight::k_GetUpLife;
+		needs->fainted = false;
 	}
 	StopCarryingHome(creature, *knockedOut);
 	knockedOut->permanent = false;
@@ -343,6 +371,11 @@ void CreatureFightSystem::KnockedOutTurn(entt::entity entity)
 	};
 	const auto getUp = [&] {
 		next(CreatureKnockedOut::Stage::GettingUp);
+		// When it starts to get up, it can faint again
+		if (needs != nullptr)
+		{
+			needs->fainted = false;
+		}
 		animation.body = creature_layers::EndLoop(animation.body);
 		SetEyes(registry, entity, creature_eyes::Mode::Calm);
 	};

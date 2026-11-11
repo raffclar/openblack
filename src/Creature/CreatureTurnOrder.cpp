@@ -97,6 +97,11 @@ bool creature_turn_order::StopsReactionBeforeDecision(const DecisionState& state
 
 bool creature_turn_order::SkipsDecision(const DecisionState& state)
 {
+	// A creature marked as fainted does not decide. With no agenda, the mark goes after this turn.
+	if (state.fainted)
+	{
+		return true;
+	}
 	// With no agenda that runs, the forced mark is clear and the reaction stopped
 	if (!state.planRuns)
 	{

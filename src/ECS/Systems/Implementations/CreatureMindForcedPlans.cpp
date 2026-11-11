@@ -317,6 +317,11 @@ bool CreatureMindSystem::ForcePlan(entt::entity creature, const ForcedPlan& plan
 	// A forced plan first stops the reaction that the creature has. What the creature does stops as a failure. This also
 	// stops a fight that the creature is in, out of its duel.
 	EndReaction(creature);
+	// A forced plan takes the place of a faint: a knocked-out creature gets up where it lies
+	if (Locator::creatureFightSystem::has_value())
+	{
+		Locator::creatureFightSystem::value().GetUpForPlan(creature);
+	}
 	if (!plan.ownFight)
 	{
 		EndFightForPlan(creature, plan.fightBodyEndsAgain);
