@@ -970,6 +970,8 @@ void CreatureMindSystem::StepSubMove(entt::entity creature, bool animating)
 		}
 		// It gives up when it has got nowhere for a while, and wants what it went for less for a while. A creature
 		// under the control of a script does not give up.
+		// A walk that moves never gives up, as in the game. A thing inside the circle of a building that the creature
+		// stands in can make each route go round the building and back to the same point. Then the step does not end.
 		auto* mindState = registry.TryGet<CreatureMindState>(creature);
 		const uint32_t count = mindState != nullptr ? mindState->stepTurns : casting->turns;
 		const auto stall =
