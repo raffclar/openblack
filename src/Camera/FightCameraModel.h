@@ -48,6 +48,13 @@ public:
 	/// The player's own camera, which it hands back
 	void SetPlayerModel(std::unique_ptr<CameraModel> model) { _playerModel = std::move(model); }
 	[[nodiscard]] std::unique_ptr<CameraModel> TakePlayerModel() { return std::move(_playerModel); }
+	[[nodiscard]] CameraModel* GetPlayerModel() { return _playerModel.get(); }
+	/// Starts again from where the camera is, as when the player comes out of the temple with the fight on. The view
+	/// stays on the fight:
+	/// - The next step puts the heading and the point of the view where they must be, at once.
+	/// - A flight stops, and the count of seconds since the flight starts again from zero.
+	/// - The player's own camera starts again (see DefaultWorldCameraModel::StartAgain).
+	void StartAgain();
 
 	std::optional<CameraInterpolationUpdateInfo> Update(std::chrono::microseconds dt, const Camera& camera) override;
 	void HandleActions(std::chrono::microseconds dt) override;

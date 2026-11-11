@@ -25,6 +25,8 @@
 #include <gtest/gtest.h>
 
 #include "Camera/Camera.h"
+#include "Camera/DefaultWorldCameraModel.h"
+#include "Camera/FightCameraModel.h"
 #include "Common/GameRandom.h"
 #include "Creature/CreatureFight.h"
 #include "Creature/CreatureLayers.h"
@@ -59,6 +61,7 @@
 
 #define LOCATOR_IMPLEMENTATIONS
 #include "ECS/Systems/Implementations/CreatureFightSystem.h"
+#include "camera/scenarios/FakeTemple.h"
 
 using namespace openblack;
 using namespace openblack::ecs;
@@ -676,6 +679,68 @@ TEST_F(CreatureFightSystemTest, ANewLandForgetsThePressAndTheView)
 	Locator::entitiesRegistry::value().Destroy(first);
 	fights.Release(400, 5);
 	EXPECT_FALSE(fights.IsPressed());
+}
+
+namespace
+{
+/// The player goes into the temple: the player's camera of the world continues behind it with its model
+std::unique_ptr<Camera> GoIntoTemple(FakeTemple& temple)
+{
+	auto& camera = Locator::camera::value();
+	auto behind = camera.ContinueWith(camera.SetModel(std::make_unique<DefaultWorldCameraModel>()));
+	temple.worldCamera = behind.get();
+	temple.active = true;
+	return behind;
+}
+
+/// The player comes out of the temple: the player's camera takes back the camera of the world
+void ComeOutOfTemple(FakeTemple& temple, std::unique_ptr<Camera>& behind)
+{
+	Locator::camera::value().TakeBackFrom(*behind);
+	behind.reset();
+	temple.worldCamera = nullptr;
+	temple.active = false;
+}
+} // namespace
+
+TEST_F(CreatureFightSystemTest, TheFightViewGoesOnBehindTheTempleAndStaysWhenThePlayerComesOut)
+{
+	ASSERT_TRUE(fights.IsCameraOnFight());
+	auto& temple = static_cast<FakeTemple&>(Locator::temple::emplace<FakeTemple>());
+	auto behind = GoIntoTemple(temple);
+	fights.Update(std::chrono::duration<float, std::milli>(16.0f));
+	EXPECT_TRUE(fights.IsCameraOnFight());
+	EXPECT_NE(dynamic_cast<const FightCameraModel*>(&behind->GetModel()), nullptr);
+	// With no place picked on the map, the fight view stays on the player's camera
+	ComeOutOfTemple(temple, behind);
+	fights.ComeOutOfTemple(false);
+	EXPECT_TRUE(fights.IsCameraOnFight());
+	EXPECT_NE(dynamic_cast<const FightCameraModel*>(&Locator::camera::value().GetModel()), nullptr);
+	Locator::temple::reset();
+}
+
+TEST_F(CreatureFightSystemTest, APlacePickedOnTheMapInTheTempleEndsTheFightView)
+{
+	ASSERT_TRUE(fights.IsCameraOnFight());
+	auto& temple = static_cast<FakeTemple&>(Locator::temple::emplace<FakeTemple>());
+	auto behind = GoIntoTemple(temple);
+	fights.Update(std::chrono::duration<float, std::milli>(16.0f));
+	ComeOutOfTemple(temple, behind);
+	fights.ComeOutOfTemple(true);
+	EXPECT_FALSE(fights.IsCameraOnFight());
+	// The player's own camera of the world has the camera again
+	EXPECT_NE(dynamic_cast<const DefaultWorldCameraModel*>(&Locator::camera::value().GetModel()), nullptr);
+	Locator::temple::reset();
+}
+
+TEST_F(CreatureFightSystemTest, AFightThatIsOverWhenThePlayerComesOutOfTheTempleEndsTheFightView)
+{
+	ASSERT_TRUE(fights.IsCameraOnFight());
+	// The duel is over: the arena is no longer on
+	Locator::entitiesRegistry::value().Get<CreatureFighting>(first).stage = CreatureFighting::Stage::Celebrate;
+	fights.ComeOutOfTemple(false);
+	EXPECT_FALSE(fights.IsCameraOnFight());
+	EXPECT_NE(dynamic_cast<const DefaultWorldCameraModel*>(&Locator::camera::value().GetModel()), nullptr);
 }
 
 TEST_F(CreatureFightSystemTest, AScriptHandsAFighterToTheComputerOrToNobody)

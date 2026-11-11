@@ -18,6 +18,8 @@
 namespace openblack
 {
 class Camera;
+class CameraModel;
+class DefaultWorldCameraModel;
 } // namespace openblack
 
 /// The world's camera. While the player is in the temple, the temple has its own camera, and the world's camera continues
@@ -60,20 +62,26 @@ struct Leave
 	return {.cutTo = picked, .newWorldModel = picked.has_value() && model == Model::Other, .startAgain = model == Model::World};
 }
 
-/// Whether the player's camera of the world takes the controls of the player. In the temple it does not, from the end of
-/// the frame that goes in: in that first frame it still takes them.
-[[nodiscard]] constexpr bool TakesControls(bool inTemple)
+/// Whether the player's camera of the world takes no controls of the player in the next frame. It takes none in the
+/// temple and none while a box of the front end shows. The frame that goes in or that opens the box still takes them.
+/// The frame after the box goes takes them again.
+[[nodiscard]] constexpr bool InputsOff(bool inTemple, bool frontEndBox)
 {
-	return !inTemple;
+	return inTemple || frontEndBox;
 }
+
+/// The player's own camera of the world in a model: the model itself, or the player's camera under the fight view. None
+/// for another model, for example the camera that follows the creature.
+[[nodiscard]] DefaultWorldCameraModel* PlayersWorldModel(CameraModel& model);
 
 /// The camera that the world's camera model moves: the temple's camera of the world while the player is inside, else the
 /// player's camera
 [[nodiscard]] Camera& Get();
 /// The camera of the world behind the temple, none while the player is outside
 [[nodiscard]] Camera* BehindTemple();
-/// At the end of the frame, after the camera keys: in the temple, the player's camera of the world behind it takes no
-/// more controls of the player
-void EndFrameControls();
+/// At the end of the frame, after the camera keys: the player's camera of the world finds if it takes the controls of
+/// the player in the next frame (see InputsOff). While a miracle's camera path has the camera, the player's camera keeps
+/// its state.
+void EndFrameControls(bool frontEndBox);
 
 } // namespace openblack::world_camera

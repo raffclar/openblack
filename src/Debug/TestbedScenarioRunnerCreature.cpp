@@ -964,6 +964,7 @@ void Runner::GiveCreatureCommand(const Command& command)
 	case Kind::RestoreDevice:
 	case Kind::BindMoveKey:
 	case Kind::BindMouseButton:
+	case Kind::PickTempleMapPlace:
 	case Kind::PutLoadedArena:
 	case Kind::HoldSeed:
 	case Kind::DrawGesture:

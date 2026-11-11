@@ -239,6 +239,9 @@ public:
 	virtual bool ReleaseOutsideScriptCamera() = 0;
 	/// Leaves the temple once the frame is done with it
 	virtual void RequestLeave() = 0;
+	/// As a double click on the main room's map at a place of the land (x east and y north, in the units of the land):
+	/// the player leaves the temple for that place
+	virtual void PickMapPlace(glm::vec2 place) = 0;
 	/// Fades the screen to white over a second, as the temple does before the player leaves it for the island
 	virtual void FadeToWhite() = 0;
 	/// A fade of the temple that goes up to a whole and did not turn yet fades down again from its amount

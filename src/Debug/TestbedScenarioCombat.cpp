@@ -12,6 +12,7 @@
 #include <SDL_scancode.h>
 #include <glm/gtc/constants.hpp>
 
+#include "3D/TempleRoom.h"
 #include "Common/PortableMath.h"
 #include "Creature/CreatureCave.h"
 #include "Creature/CreatureFeedback.h"
@@ -452,6 +453,43 @@ void testbed_scenarios::AddCombat(std::vector<Scenario>& all)
 	                     .kind = Kind::PlainKeyDown, .delaySeconds = 0.5f, .value = static_cast<size_t>(SDL_SCANCODE_LEFT)},
 	                 Fight(Kind::StartFight, 0, 1, 0.5f), Fight(Kind::FightAuto, 0, 1, 0.2f),
 	                 Command {.kind = Kind::PlainKeyUp, .delaySeconds = 2.3f, .value = static_cast<size_t>(SDL_SCANCODE_LEFT)}},
+	});
+
+	const auto enterTemple = [](float delaySeconds) {
+		return Command {
+		    .kind = Kind::EnterTemple, .delaySeconds = delaySeconds, .value = static_cast<size_t>(TempleRoom::Main)};
+	};
+	const Command stopTempleHelp {.kind = Kind::StopScript, .delaySeconds = 0.5f, .script = "CitadelWorldRoomHelp"};
+	all.push_back({
+	    .id = "combat.fight_view_behind_temple",
+	    .name = "The fight view goes on behind the temple",
+	    .facet = Facet::Combat,
+	    .description = "As Watching a fight. After 6 seconds of the fight the player goes into the temple, and the "
+	                   "scenario stops the advisors' help of the temple. After 13 more seconds the player walks out of "
+	                   "the temple.",
+	    .expected = "The camera flies to the side of the arena and follows the duel. The camera comes out of the "
+	                "temple at the fight view, and the view follows the duel again. The camera does not come out as "
+	                "the player's own camera.",
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 80.0f, 10.0f}, .look = {0.0f, 0.0f, 40.0f}},
+	    .creatures = {red(PlayerNames::PLAYER_ONE, 0.6f, -0.2f), blue(PlayerNames::PLAYER_TWO, 0.5f, -0.2f)},
+	    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f), Fight(Kind::FightAuto, 0, 1, 0.2f), enterTemple(6.0f), stopTempleHelp,
+	                 Command {
+	                     .kind = Kind::EnterTemple, .delaySeconds = 13.0f, .value = static_cast<size_t>(TempleRoom::Unknown)}},
+	});
+	all.push_back({
+	    .id = "combat.fight_view_temple_map_pick",
+	    .name = "A place picked on the temple's map ends the fight view",
+	    .facet = Facet::Combat,
+	    .description = "As Watching a fight. After 6 seconds of the fight the player goes into the temple, and the "
+	                   "scenario stops the advisors' help of the temple. After 13 more seconds the player double clicks "
+	                   "the main room's map 200 metres east and 200 metres south of the middle of the testbed.",
+	    .expected = "The temple fades to white, and the camera comes out at the place: 50 metres above it and 70 metres "
+	                "north of it, looking at it. The fight view is gone: the camera stays at the place and does not fly "
+	                "back to the duel.",
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 80.0f, 10.0f}, .look = {0.0f, 0.0f, 40.0f}},
+	    .creatures = {red(PlayerNames::PLAYER_ONE, 0.6f, -0.2f), blue(PlayerNames::PLAYER_TWO, 0.5f, -0.2f)},
+	    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f), Fight(Kind::FightAuto, 0, 1, 0.2f), enterTemple(6.0f), stopTempleHelp,
+	                 Command {.kind = Kind::PickTempleMapPlace, .delaySeconds = 13.0f, .point = {200.0f, -200.0f}}},
 	});
 
 	all.push_back({
