@@ -127,6 +127,12 @@ bool IsNight()
 	return Locator::skyClockSystem::has_value() && Locator::skyClockSystem::value().GetClock().IsVisualNight();
 }
 
+/// The seconds of game time in a whole day and night, which set how long a creature sleeps
+float DayLength()
+{
+	return Locator::skyClockSystem::has_value() ? Locator::skyClockSystem::value().GetCycle().duration : DayCycle {}.duration;
+}
+
 float TemperatureAt(const glm::vec3& position)
 {
 	if (!Locator::weatherSystem::has_value())
@@ -276,6 +282,7 @@ void CreaturePhysiologySystem::CreatureTurn(entt::entity entity)
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto turns = _turns;
 	const bool night = IsNight();
+	const float dayLength = DayLength();
 	bool resized = false;
 	// The player's creature, whose size the creatures scripts scale to follow
 	std::optional<float> playersSize;
@@ -335,7 +342,8 @@ void CreaturePhysiologySystem::CreatureTurn(entt::entity entity)
 			if (needs.rest == CreatureNeeds::Rest::Asleep || needs.rest == CreatureNeeds::Rest::Resting)
 			{
 				++needs.restTurns;
-				needs.rested = physiology::SleepTurn(needs.needs, species, shape.size, needs.restTurns, night) || needs.rested;
+				needs.rested =
+				    physiology::SleepTurn(needs.needs, species, shape.size, needs.restTurns, night, dayLength) || needs.rested;
 			}
 		}
 		resized = TakeShape(creature, registry.TryGet<CreatureMorph>(entity), transform, shape) || resized;

@@ -1780,6 +1780,14 @@ set_tests_properties(
              "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
 )
 openblack_setup_and_add_test(test_creature_looks test_creature_looks.cpp)
+openblack_setup_and_add_test(
+  test_oracle_creature_body_turn oracle/test_oracle_creature_body_turn.cpp
+)
+set_tests_properties(
+  test_oracle_creature_body_turn
+  PROPERTIES ENVIRONMENT
+             "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)
 openblack_setup_and_add_test(test_creature_hurry test_creature_hurry.cpp)
 openblack_setup_and_add_test(test_buffered_log_sink test_buffered_log_sink.cpp)
 openblack_setup_and_add_test(test_plain_image test_plain_image.cpp)

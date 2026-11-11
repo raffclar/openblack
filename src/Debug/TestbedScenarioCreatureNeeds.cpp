@@ -1067,6 +1067,24 @@ void testbed_scenarios::AddNeeds(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "needs.sleep_night_length",
+	    .name = "Nearly rested creature sleeps out its night",
+	    .facet = Facet::Needs,
+	    .description = "Ten at night, the clock standing still: a tiger only a little tired, told to sleep. At night a "
+	                   "nearly rested creature sleeps for its size, by its species' sleep length, by the seconds of a "
+	                   "game day, by 5 turns.",
+	    .expected = "It lies down and sleeps. It does not get up after a few seconds, when it is nearly rested: it "
+	                "sleeps on for about a minute (the day is 1700 seconds long), then gets up.",
+	    .environment = {.hour = 22.0f, .clockRuns = false},
+	    .framing = {.shot = Shot::Follow},
+	    .creatures = {CreatureSetup {
+	        .species = CreatureType::Tiger,
+	        .needs = {.energy = 1.0f, .exhaustion = 0.12f, .dehydration = 0.0f, .poo = 0.0f},
+	        .desires = {{.desire = Desire::Tiredness, .fraction = 1.0f}},
+	    }},
+	});
+
+	all.push_back({
 	    .id = "needs.poo",
 	    .name = "Needs to poo",
 	    .facet = Facet::Needs,

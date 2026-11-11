@@ -31,6 +31,8 @@ using namespace openblack::creature_physiology;
 namespace
 {
 constexpr float k_Tolerance = 1e-6f;
+/// The seconds of a game day and night, as the game's default cycle
+constexpr float k_DayLength = 1700.0f;
 
 /// A made-up species with round numbers
 Species Fake()
@@ -427,19 +429,71 @@ TEST(CreaturePhysiology, SleepHealsAndRestsThenWakes)
 	auto needs = Start(species);
 	needs.exhaustion = 0.5f;
 	needs.life = 0.5f;
-	EXPECT_FALSE(SleepTurn(needs, species, 1.0f, 1, false));
+	EXPECT_FALSE(SleepTurn(needs, species, 1.0f, 1, false, k_DayLength));
 	EXPECT_NEAR(needs.exhaustion, 0.48f, k_Tolerance);
 	EXPECT_NEAR(needs.life, 0.51f, k_Tolerance);
 	// Rested, it still sleeps out its first turns
 	needs.exhaustion = 0.0f;
-	EXPECT_FALSE(SleepTurn(needs, species, 1.0f, k_MinSleepTurns, false));
-	EXPECT_TRUE(SleepTurn(needs, species, 1.0f, k_MinSleepTurns + 1, false));
-	// Nearly rested, it wakes even at night
+	EXPECT_FALSE(SleepTurn(needs, species, 1.0f, k_MinSleepTurns, false, k_DayLength));
+	EXPECT_TRUE(SleepTurn(needs, species, 1.0f, k_MinSleepTurns + 1, false, k_DayLength));
+	// Nearly rested, it wakes even at night once it has slept long enough: size 1 x sleep length 0.5 x 1700 s x 5
 	needs.exhaustion = 0.09f;
-	EXPECT_TRUE(SleepTurn(needs, species, 1.0f, k_MinSleepTurns + 1, true));
+	EXPECT_FALSE(SleepTurn(needs, species, 1.0f, 4249, true, k_DayLength));
+	needs.exhaustion = 0.09f;
+	EXPECT_TRUE(SleepTurn(needs, species, 1.0f, 4250, true, k_DayLength));
 	// Still tired, it sleeps on
 	needs.exhaustion = 0.5f;
-	EXPECT_FALSE(SleepTurn(needs, species, 1.0f, 1000, false));
+	EXPECT_FALSE(SleepTurn(needs, species, 1.0f, 10000, false, k_DayLength));
+}
+
+TEST(CreaturePhysiology, NearlyRestedItSleepsLongerForABiggerBodyAndALongerDay)
+{
+	auto species = Fake();
+	species.sleepLength = 0.1f;
+	auto needs = Start(species);
+	// A size 1 creature with a sleep length of 0.1 in a day of 1700 s sleeps 850 turns
+	needs.exhaustion = 0.09f;
+	EXPECT_FALSE(SleepTurn(needs, species, 1.0f, 849, true, k_DayLength));
+	needs.exhaustion = 0.09f;
+	EXPECT_TRUE(SleepTurn(needs, species, 1.0f, 850, true, k_DayLength));
+	// Twice as big, or with a day twice as long, it sleeps twice as long
+	needs.exhaustion = 0.09f;
+	EXPECT_FALSE(SleepTurn(needs, species, 2.0f, 850, true, k_DayLength));
+	needs.exhaustion = 0.09f;
+	EXPECT_FALSE(SleepTurn(needs, species, 1.0f, 850, true, 2.0f * k_DayLength));
+	needs.exhaustion = 0.09f;
+	EXPECT_TRUE(SleepTurn(needs, species, 2.0f, 1700, true, k_DayLength));
+	// Fully rested in the day, it wakes after its first turns, however short its sleep
+	needs.exhaustion = 0.0f;
+	EXPECT_TRUE(SleepTurn(needs, species, 2.0f, k_MinSleepTurns + 1, false, k_DayLength));
+}
+
+TEST(CreaturePhysiology, WalkingLowOnEnergyAddsTheExtraTirednessToTheSum)
+{
+	// The game adds the rate to the exhaustion, then three tenths of the rate to that sum. Adding the two parts of the
+	// rate first gives a different last bit for this exhaustion.
+	auto species = Fake();
+	species.exhaustionRate = 4e-5f;
+	auto needs = Start(species);
+	needs.energy = 0.1f;
+	needs.exhaustion = std::bit_cast<float>(0x3e0996c8u);
+	Shape shape {.fatness = 0.5f, .strength = 0.5f, .size = 1.0f};
+	auto walking = Standing();
+	walking.moving = true;
+	walking.phase = 2;
+	TickTurn(needs, shape, species, walking);
+	EXPECT_EQ(std::bit_cast<uint32_t>(needs.exhaustion), 0x3e09cd4eu);
+}
+
+TEST(CreaturePhysiology, TheTurnsToDehydrateAreCutToAWholeNumber)
+{
+	// 10 turns a second x 1000.05 s is 10000.5 turns, which the game cuts to 10000
+	auto species = Fake();
+	species.secondsToDehydrate = 1000.05f;
+	auto needs = Start(species);
+	Shape shape {.fatness = 0.5f, .strength = 0.5f, .size = 1.0f};
+	TickTurn(needs, shape, species, Standing());
+	EXPECT_EQ(std::bit_cast<uint32_t>(needs.dehydration), std::bit_cast<uint32_t>(1.0f / 10000.0f));
 }
 
 TEST(CreaturePhysiology, OnlyAPlayersOwnCreatureFaintsFromItsNeeds)
