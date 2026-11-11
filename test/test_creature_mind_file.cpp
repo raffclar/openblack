@@ -206,6 +206,55 @@ TEST(CreatureMindFile, RejectsWhatIsNotAMind)
 	EXPECT_EQ(Read(bytes, read), MindResult::ErrTruncated);
 }
 
+// When the game makes a creature from a file, only a file of version 21 or later has the two names after the species
+// row. When it loads a mind into a creature that it has, each file has them.
+TEST(CreatureMindFile, AFileOlderThanVersion21HasTheNamesOnlyWhenTheGameLoadsItIntoACreatureThatItHas)
+{
+	auto mind = SampleMind();
+	mind.version = 20;
+	mind.savedAs.clear();
+	mind.profile.clear();
+	auto withNames = Write(mind);
+	// The two names are two bytes of 0 (their lengths) after the version and the species row
+	ASSERT_EQ(withNames.at(8), 0);
+	ASSERT_EQ(withNames.at(9), 0);
+	auto withoutNames = withNames;
+	withoutNames.erase(withoutNames.begin() + 8, withoutNames.begin() + 10);
+
+	MindFileData read;
+	ASSERT_EQ(Read(withoutNames, read, MindNames::FromVersion21), MindResult::Success);
+	EXPECT_EQ(read.name, u"Tester");
+	EXPECT_FALSE(Read(withoutNames, read, MindNames::Always) == MindResult::Success && read.name == u"Tester");
+	ASSERT_EQ(Read(withNames, read, MindNames::Always), MindResult::Success);
+	EXPECT_EQ(read.name, u"Tester");
+
+	// From version 21 on, each way reads the names
+	mind.version = 21;
+	mind.savedAs = {'a', 0};
+	const auto current = Write(mind);
+	ASSERT_EQ(Read(current, read, MindNames::FromVersion21), MindResult::Success);
+	EXPECT_EQ(read.SavedAsText(), "a");
+	EXPECT_EQ(Write(read), current);
+}
+
+TEST(CreatureMindFile, MoreTreesThanTheFileCanHoldIsAFileThatEndsEarly)
+{
+	auto mind = SampleMind();
+	auto noTrees = mind;
+	noTrees.trees.clear();
+	const auto bytes = Write(mind);
+	const auto other = Write(noTrees);
+	// The first byte that is not the same is in the count of the trees
+	const auto at = static_cast<size_t>(std::ranges::mismatch(bytes, other).in1 - bytes.begin());
+	ASSERT_LT(at + 4, bytes.size());
+	auto changed = bytes;
+	const int32_t many = 1 << 16;
+	std::memcpy(changed.data() + at, &many, sizeof(many));
+	MindFileData read;
+	EXPECT_EQ(Read(changed, read), MindResult::ErrTruncated);
+	EXPECT_TRUE(read.trees.empty());
+}
+
 // A changed client can send any bytes as its creature file. The game server sends the file on only when it reads as a
 // creature file, or when it is the order to make a new clan creature, or when it is empty.
 TEST(CreatureMindFile, TheGameServerSendsOnOnlyAStartDataThatReads)
