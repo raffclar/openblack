@@ -569,6 +569,27 @@ void testbed_scenarios::AddMind(std::vector<Scenario>& all)
 	                  .fromWorship = true}},
 	});
 
+	all.push_back({
+	    .id = "learning.miracle_meter",
+	    .name = "The learning meter after a miracle that the creature sees",
+	    .facet = Facet::Mind,
+	    .description = "A grown-up tiger stands near a hurt cow. After 12 seconds, the hand casts a heal on the cow. The "
+	                   "tiger takes up its reaction to the heal and looks at it. The meter shows at most once in 100 "
+	                   "turns, counted from the start, so the heal comes after the first 10 seconds.",
+	    .expected = "When the tiger takes up the reaction, the heal counts as one sighting. The learning meter shows over "
+	                "the head of the tiger: a light bulb and a small yellow percentage that rise and fade in about six "
+	                "seconds.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{0.0f, 0.0f}, {0.0f, 30.0f}}, .distance = 0.6f},
+	    .creatures = {iconWatcher, healed},
+	    .miracles = {{.type = MagicType::Heal,
+	                  .target = MiracleCast::Target::Creature,
+	                  .creature = 1,
+	                  .handOffset = {0.0f, 30.0f},
+	                  .delaySeconds = 12.0f,
+	                  .byHand = true}},
+	});
+
 	{
 		// A ring of huts shuts the tiger in, with a cow outside it
 		auto shutIn = Content(CreatureType::Tiger, {0.0f, 0.0f});

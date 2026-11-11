@@ -781,8 +781,9 @@ void CreatureMindSystem::CountMiracleSighting(entt::entity entity, const Creatur
 	{
 		return;
 	}
+	// The time between sightings runs on the game's turns, as the clock of a skill does
 	const auto progress = creature_watching::SeeMiracle(
-	    mind.learnt->knowledge, miracle, tables->miracles, mind.developmentPhase, mind.turn, mind.leash.miracleSightingWeight,
+	    mind.learnt->knowledge, miracle, tables->miracles, mind.developmentPhase, GameTurn(), mind.leash.miracleSightingWeight,
 	    creature_mind_tables::MiracleMultiplier(creature::InfoRow(creature.species)));
 	if (progress.learnt && !progress.ignored)
 	{
