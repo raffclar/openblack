@@ -107,4 +107,18 @@ void AddDistanceFromAngle(map_coords::MapCoords& pos, float radians, float metre
 /// way the plain difference points
 [[nodiscard]] int32_t GetAngleSign(int32_t from, int32_t to);
 
+/// One turn of a thing that turns towards a game angle by at most a step
+struct LookTurn
+{
+	/// The game angle that the thing faces after the turn
+	uint16_t angle {0};
+	/// The thing faces the target angle
+	bool faces {false};
+};
+/// A thing that faces one game angle turns towards a target game angle by at most a step. When the plain difference of the
+/// two numbers is less than the step, the thing faces the target. Otherwise it turns by the step the short way round.
+/// The test does not go round the circle. Thus, near angle 0 a thing can turn past the target, and faces it on the next
+/// turn.
+[[nodiscard]] LookTurn LookStep(int32_t facing, int32_t target, int32_t step);
+
 } // namespace openblack::gutils

@@ -10,6 +10,7 @@
 #include "GUtilsAngle.h"
 
 #include <cmath>
+#include <cstdlib>
 
 #include <numbers>
 
@@ -258,6 +259,17 @@ uint32_t gutils::GetAngleDifference(int32_t a, int32_t b)
 	const auto d = static_cast<int64_t>(Wrap(int64_t {a} - b));
 	const auto magnitude = static_cast<uint32_t>(d < 0 ? -d : d);
 	return magnitude > 0x400u ? 0x800u - magnitude : magnitude;
+}
+
+gutils::LookTurn gutils::LookStep(int32_t facing, int32_t target, int32_t step)
+{
+	const int32_t difference = target - facing;
+	if (std::abs(difference) < step)
+	{
+		return {.angle = static_cast<uint16_t>(target), .faces = true};
+	}
+	const bool forwards = difference < 1 ? std::abs(difference) > 0x3FF : difference < 0x400;
+	return {.angle = static_cast<uint16_t>((facing + (forwards ? step : -step)) & k_GameAngleMask), .faces = false};
 }
 
 int32_t gutils::GetAngleSign(int32_t from, int32_t to)
