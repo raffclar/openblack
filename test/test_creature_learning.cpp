@@ -419,9 +419,9 @@ TEST(CreaturePlanner, PriorityAndSwitching)
 
 TEST(CreaturePlanner, APlanPriorityHasTheBitsOfTheOrderOfTheGame)
 {
-	// The capped action and the thing acted on, then the desire with its goal, then the thing used and the scale
+	// The capped action and the thing acted on, then the desire with its goal, then the scale and the thing used
 	EXPECT_EQ(std::bit_cast<uint32_t>(creature_planner::Priority(0.5f, 0.45f, 0.5f, 0.2f, std::nullopt)), 0x40900001u);
-	EXPECT_EQ(std::bit_cast<uint32_t>(creature_planner::Priority(0.75f, 0.3f, 0.5f, 0.65f, std::nullopt)), 0x4169FFFFu);
+	EXPECT_EQ(std::bit_cast<uint32_t>(creature_planner::Priority(0.75f, 0.3f, 0.5f, 0.65f, std::nullopt)), 0x416A0000u);
 }
 
 TEST(CreaturePlanner, AnAgendaThatNoPlanGaveRunsToItsEndWhateverItsKind)
@@ -1984,6 +1984,12 @@ TEST(CreatureTownCompassion, ItMovesOnAsItPlansOnlyWhenCompassionLeadsAndHalfAMi
 	EXPECT_FALSE(town_compassion::MovesOnWhilePlanning(state, true, true, 131));
 	state.choosesFreely = false;
 	EXPECT_FALSE(town_compassion::MovesOnWhilePlanning(state, true, false, 131));
+	// A plan of compassion for a town that it takes up starts the wait again
+	town_compassion::State helping {.lastTurn = 100};
+	town_compassion::TookUpPlan(helping, 120);
+	EXPECT_FALSE(town_compassion::MovesOnWhilePlanning(helping, true, false, 131));
+	EXPECT_FALSE(town_compassion::MovesOnWhilePlanning(helping, true, false, 150));
+	EXPECT_TRUE(town_compassion::MovesOnWhilePlanning(helping, true, false, 151));
 
 	const FakeTown town;
 	const auto desires = town_compassion::DesiresToHelp(town.order, town.felt, town.actions);

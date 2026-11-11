@@ -48,6 +48,7 @@
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureDestruction.h"
+#include "ECS/Components/CreatureFight.h"
 #include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureNeeds.h"
@@ -332,13 +333,15 @@ std::optional<creature_hand::Holdable> HoldableOf(const ecs::Registry& registry,
 	}
 	const auto* mind = registry.TryGet<const CreatureMindState>(creature);
 	const auto* spells = registry.TryGet<const CreatureSpells>(creature);
+	const auto* knockedOut = registry.TryGet<const CreatureKnockedOut>(creature);
 	return creature_hand::Holdable {
 	    .owner = body->owner,
 	    .species = body->species,
 	    .frozen = spells != nullptr && spells->spells.IsActive(creature_spells::Spell::Freeze),
 	    .scriptControlled = registry.AllOf<ScriptControlled>(creature),
-	    .fainting = mind != nullptr && mind->idle.activity == creature_mind::Activity::Faint &&
-	                creature_mind::IsUnconscious(mind->idle),
+	    .fainting = (mind != nullptr && mind->idle.activity == creature_mind::Activity::Faint &&
+	                 creature_mind::IsUnconscious(mind->idle)) ||
+	                (knockedOut != nullptr && creature_hand::OutColdForHand(knockedOut->stage)),
 	    .cannotBePickedUp = registry.AllOf<CannotBePickedUp>(creature),
 	};
 }

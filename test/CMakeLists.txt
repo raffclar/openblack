@@ -1537,6 +1537,14 @@ set_tests_properties(
   PROPERTIES ENVIRONMENT
              "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
 )
+openblack_setup_and_add_test(
+  test_oracle_creature_plan_priority oracle/test_oracle_creature_plan_priority.cpp
+)
+set_tests_properties(
+  test_oracle_creature_plan_priority
+  PROPERTIES ENVIRONMENT
+             "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)
 openblack_setup_and_add_test(test_world_save_forget test_world_save_forget.cpp)
 target_link_libraries(test_world_save_forget PRIVATE dance)
 openblack_setup_and_add_test(test_dead_tree_lean test_dead_tree_lean.cpp)
@@ -2325,6 +2333,7 @@ openblack_setup_and_add_test(test_developer_keys input/test_developer_keys.cpp)
 openblack_setup_and_add_test(test_scaffold_push_zero test_scaffold_push_zero.cpp)
 openblack_setup_and_add_test(test_night_whisper test_night_whisper.cpp)
 openblack_setup_and_add_test(test_creature_learn_every_leash test_creature_learn_every_leash.cpp)
+openblack_setup_and_add_test(test_creature_fishing_adopt test_creature_fishing_adopt.cpp)
 openblack_setup_and_add_test(test_worship_site_food_pot test_worship_site_food_pot.cpp)
 openblack_setup_and_add_test(test_creature_hand_draw test_creature_hand_draw.cpp)
 openblack_setup_and_add_test(test_script_sound_stop audio/test_script_sound_stop.cpp)

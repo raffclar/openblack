@@ -773,12 +773,12 @@ bool CreatureMindSystem::CastGivenGlobe(entt::entity creature, CreatureMindState
 	return true;
 }
 
-void CreatureMindSystem::ShowFizzle(entt::entity creature, CreatureMindState& mind)
+bool CreatureMindSystem::ShowFizzle(entt::entity creature, CreatureMindState& mind)
 {
 	auto* casting = Entities().TryGet<CreatureCasting>(creature);
 	if (casting == nullptr || !casting->fizzle.has_value() || !Locator::gameRandom::has_value())
 	{
-		return;
+		return false;
 	}
 	const auto fizzle = *casting->fizzle;
 	casting->fizzle.reset();
@@ -787,28 +787,21 @@ void CreatureMindSystem::ShowFizzle(entt::entity creature, CreatureMindState& mi
 	auto& gameRandom = Locator::gameRandom::value();
 	auto reaction = creature_mind::ReactToFizzle([&gameRandom](uint32_t range) { return gameRandom.GameRand(range); },
 	                                             [&gameRandom](float most) { return gameRandom.GameFloatRand(most); });
+	// It shows how it feels about what it tried. As each thing that waits for the end of its work, the plan is forced:
+	// it chooses no other plan and takes no reaction until the plan ends.
+	const bool shown =
+	    ForcePlan(creature, {.desire = Desire::ManifestState,
+	                         .action = "CommunicateState",
+	                         .object = Entities().Valid(fizzle.target) ? std::optional(fizzle.target) : std::nullopt,
+	                         .agenda = std::move(reaction.agenda),
+	                         .activity = creature_mind::Activity::Planned,
+	                         .ordered = true,
+	                         .fightBodyEndsAgain = true});
 	if (reaction.sadness.has_value() && mind.desires.has_value())
 	{
 		creature_desires::ChangeSource(*mind.desires, creature_desires::sources::k_Sadness, *reaction.sadness);
 	}
-	if (!Replan(creature, creature_mind::Activity::Planned, std::move(reaction.agenda)))
-	{
-		return;
-	}
-	// It is showing how it feels about what it tried
-	if (const auto* tables = GetTables())
-	{
-		if (const auto action = creature_mind_tables::FindAction(*tables, "CommunicateState"))
-		{
-			mind.planner.current = creature_planner::Plan {
-			    .desire = Desire::ManifestState,
-			    .action = *action,
-			    .object = Entities().Valid(fizzle.target) ? std::optional(entt::to_integral(fizzle.target)) : std::nullopt};
-			mind.planActive = true;
-			mind.planSerial = mind.idle.serial;
-			mind.agendaSeen = mind.idle.serial;
-		}
-	}
+	return shown;
 }
 
 void CreatureMindSystem::StartSubMove(entt::entity creature, const creature_mind::Movement& movement, float seconds)
