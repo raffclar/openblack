@@ -10,6 +10,7 @@
 #include "PlayerSparkles.h"
 
 #include <array>
+#include <bit>
 
 namespace openblack::player_sparkles
 {
@@ -84,6 +85,38 @@ std::optional<glm::vec3> PlaceOf(const Watched& watched)
 		break;
 	}
 	return std::nullopt;
+}
+
+bool ShowsSymbol(const Watched& watched)
+{
+	switch (watched.kind)
+	{
+	case player_kind::Kind::Computer:
+		return watched.mindOn;
+	case player_kind::Kind::Human:
+		return !watched.left;
+	case player_kind::Kind::None:
+		break;
+	}
+	return true;
+}
+
+float SymbolAngle(float angle, int32_t milliseconds)
+{
+	// The symbol turns by this many radians in a millisecond. The game's floats for pi and two pi.
+	constexpr float k_TurnRate = std::bit_cast<float>(0x3A03126Fu);
+	constexpr float k_Pi = std::bit_cast<float>(0x40490FDBu);
+	constexpr float k_TwoPi = std::bit_cast<float>(0x40C90FDBu);
+	const float turned = static_cast<float>(milliseconds) * k_TurnRate + angle;
+	if (turned > k_Pi)
+	{
+		return turned - k_TwoPi;
+	}
+	if (turned < -k_Pi)
+	{
+		return turned + k_TwoPi;
+	}
+	return turned;
 }
 
 } // namespace openblack::player_sparkles

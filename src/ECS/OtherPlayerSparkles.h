@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include <cstdint>
+
 /// The sparkles at the cameras of the other players of a network game and of the computer gods (rules in
 /// player_sparkles)
 namespace openblack::ecs::other_player_sparkles
@@ -19,5 +21,10 @@ namespace openblack::ecs::other_player_sparkles
 /// (player_sparkles::PlaceOf). None while this computer's camera is inside the temple, or while its hand directs a
 /// fight. The sparkles take the local random numbers.
 void AddAtCameras();
+
+/// Once a frame, before the draw: the symbol of the god shows over the sparkles of each other player that shows it
+/// (player_sparkles::ShowsSymbol), and turns by the milliseconds of the frame's game time. An observer of the god of the
+/// observers shows it. No symbol shows while this computer's hand directs a fight.
+void TurnSymbols(int32_t milliseconds);
 
 } // namespace openblack::ecs::other_player_sparkles
