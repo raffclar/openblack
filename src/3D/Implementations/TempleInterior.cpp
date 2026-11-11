@@ -204,6 +204,15 @@ inline void addGlowsToRegistry(ecs::Registry& registry, Indoors templeRoom)
 
 namespace
 {
+/// The interface lock of the hand of this computer ends (see hand_send_wait::LockEnd)
+void EndHandInterfaceLock()
+{
+	if (Locator::handSystem::has_value())
+	{
+		Locator::handSystem::value().EndOwnInterfaceLock();
+	}
+}
+
 /// How far through its swing the main room's door is before the room behind it is drawn
 constexpr float k_MainRoomOpenSwing = 0.01f;
 
@@ -1632,6 +1641,8 @@ void TempleInterior::GoToRoom(TempleRoom room)
 		if (room != _currentRoom)
 		{
 			FadeIntoRoom();
+			// The move to another room closes every box, and the interface lock of the hand ends
+			EndHandInterfaceLock();
 		}
 		_cameraModel->GoToRoom(room);
 	}
@@ -2149,6 +2160,8 @@ void TempleInterior::Deactivate()
 	{
 		return;
 	}
+	// The exit from the temple ends the interface lock of the hand
+	EndHandInterfaceLock();
 	// The exit gives back the dialogue, the scripts and the bars in this frame step, as the original game does
 	NoteFrameWrite(temple::FrameWrite::Exit);
 	// The story history's buttons go with the temple

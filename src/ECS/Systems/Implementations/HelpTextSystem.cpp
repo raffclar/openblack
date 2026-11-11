@@ -292,6 +292,11 @@ void HelpTextSystem::TakeClick(bool click, bool skipKey)
 	_pendingSkipKey = _pendingSkipKey || skipKey;
 }
 
+bool HelpTextSystem::ClickCutsShort(bool click, bool skipKey) const
+{
+	return _dialogue && _dialogue->CutsShort(click, skipKey);
+}
+
 void HelpTextSystem::ProcessTurn(uint32_t milliseconds)
 {
 	Locator::helpSpeechSystem::value().AdvanceClock(milliseconds);

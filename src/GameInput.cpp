@@ -181,6 +181,8 @@ void Game::UpdateInput()
 {
 	auto& profiler = Locator::profiler::value();
 	auto& camera = Locator::camera::value();
+	// The interface lock of the hand ends before the hand reads the presses of this frame
+	EndHandLockForFrame();
 	// Input events
 	{
 		auto sdlInput = profiler.BeginScoped(Profiler::Stage::SdlInput);
@@ -478,6 +480,12 @@ void Game::SendDialogueClick()
 	if (!click && !skipKey)
 	{
 		return;
+	}
+	// A click or a key that cuts the help text short takes the hand too: the interface lock of the hand ends
+	if (Locator::helpTextSystem::has_value() && Locator::helpTextSystem::value().ClickCutsShort(click, skipKey) &&
+	    Locator::handSystem::has_value())
+	{
+		Locator::handSystem::value().EndOwnInterfaceLock();
 	}
 	// In a game alone the world's turns stop in the temple, so the temple's own turns take the click
 	const bool templeTakes = help::TempleTurnsTakeTheClick({
