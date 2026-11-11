@@ -450,19 +450,56 @@ bool RefusesCreature(const ecs::Registry& registry, entt::entity object)
 
 namespace
 {
-/// The flat and high throws blended by how high the target is against where the hand lets go in each
-std::array<float, 2> ThrowWeights(entt::entity creature, const Transform& transform, const CreatureRig::ActionPoints& points,
-                                  const glm::vec3& target)
+/// The hand of the flat and the high throw: the middle of the finger ends at the throw time, at the model's own size, and
+/// the speed of the hand over the 100 ms before (from 0 when the throw time is nearer the start). It is measured at the
+/// creature's first throw and kept until the animations follow a new body shape.
+std::optional<creature_throw::HurlHands> ThrowHandsOf(entt::entity creature, const CreatureRig::ActionPoints& points)
 {
-	const auto slope = [](const glm::vec3& local) { return local.y / std::max(-local.z, k_Tiny); };
-	const auto flat = HandAt(creature, transform, points, creature_throw::k_HurlFlat, points.throwMs);
-	const auto high = HandAt(creature, transform, points, creature_throw::k_HurlHigh, points.throwMs);
-	if (!flat.has_value() || !high.has_value())
+	auto& registry = Locator::entitiesRegistry::value();
+	if (const auto* kept = KeptMeasure<ThrowHands>(registry, creature))
+	{
+		return creature_throw::HurlHands {
+		    .flat = kept->flat, .high = kept->high, .flatSpeed = kept->flatSpeed, .highSpeed = kept->highSpeed};
+	}
+	const auto before = std::max(points.throwMs - creature_throw::k_HandSpeedSpanMs, 0.0f);
+	const auto flat = FingerEndsInAnimation(creature, points.rightHand, creature_throw::k_HurlFlat, points.throwMs);
+	const auto flatBefore = FingerEndsInAnimation(creature, points.rightHand, creature_throw::k_HurlFlat, before);
+	const auto high = FingerEndsInAnimation(creature, points.rightHand, creature_throw::k_HurlHigh, points.throwMs);
+	const auto highBefore = FingerEndsInAnimation(creature, points.rightHand, creature_throw::k_HurlHigh, before);
+	if (!flat.has_value() || !flatBefore.has_value() || !high.has_value() || !highBefore.has_value())
+	{
+		return std::nullopt;
+	}
+	const creature_throw::HurlHands hands {.flat = *flat,
+	                                       .high = *high,
+	                                       .flatSpeed = creature_throw::HurlHandSpeed(*flat, *flatBefore),
+	                                       .highSpeed = creature_throw::HurlHandSpeed(*high, *highBefore)};
+	registry.AssignOrReplace<ThrowHands>(creature, ThrowHands {.flat = hands.flat,
+	                                                           .high = hands.high,
+	                                                           .flatSpeed = hands.flatSpeed,
+	                                                           .highSpeed = hands.highSpeed,
+	                                                           .bodyRevision = BodyRevision(registry, creature)});
+	return hands;
+}
+
+/// At the start of a throw: the blend of the flat and the high throw, from the slope of the velocity that takes the
+/// thing to the target, and what the step of each turn needs. Without the throw hands only the flat throw plays.
+std::array<float, 2> StartThrow(entt::entity creature, const Transform& transform, const CreatureRig::ActionPoints& points,
+                                bool mirrored, CreatureObjectAction& action)
+{
+	const auto hands = ThrowHandsOf(creature, points);
+	action.hurlMeasured = hands.has_value();
+	if (!hands.has_value())
 	{
 		return {1.0f, 0.0f};
 	}
-	const auto weight = creature_throw::HighThrowWeight(slope(ToLocal(transform, target)), slope(*flat), slope(*high));
-	return {1.0f - weight, weight};
+	const auto lift =
+	    creature_throw::LiftOf(*hands, transform.position, transform.scale.x, mirrored, action.point, action.flightSeconds);
+	action.hurlFlatSpeed = hands->flatSpeed;
+	action.hurlHighSpeed = hands->highSpeed;
+	action.hurlSpeed = lift.speed;
+	action.hurlHigh = creature_throw::HurlHighWeight(*hands, lift);
+	return {1.0f - action.hurlHigh, action.hurlHigh};
 }
 
 /// The point to turn to face so that a target lies in the direction of the middle of the reach. The middle is on the
@@ -765,10 +802,10 @@ void Approach(entt::entity creature, CreatureObjectAction& action, const Creatur
 		{
 			action.flightSeconds =
 			    action.givenFlightSeconds.value_or(creature_throw::FlightTime(transform.position, action.point));
-			const auto weights = ThrowWeights(creature, transform, *points, action.point);
+			action.mirrored = held != nullptr && held->mirrored;
+			const auto weights = StartThrow(creature, transform, *points, action.mirrored, action);
 			const std::array<size_t, 2> animations {creature_throw::k_HurlFlat, creature_throw::k_HurlHigh};
 			SetSlots(action, animations, weights);
-			action.mirrored = held != nullptr && held->mirrored;
 			action.eventMs = points->throwMs;
 		}
 		else
@@ -1385,9 +1422,23 @@ void CreatureObjectActionSystem::ActionTurn(entt::entity creature)
 			return;
 		}
 		const float timeBefore = action.timeMs;
-		action.timeMs = action.kind == Kind::Point
-		                    ? creature_pointing::AdvanceTime(action.timeMs, step, action.pointMs, action.pointEnding)
-		                    : action.timeMs + step;
+		if (action.kind == Kind::Point)
+		{
+			action.timeMs = creature_pointing::AdvanceTime(action.timeMs, step, action.pointMs, action.pointEnding);
+		}
+		else if (action.kind == Kind::Throw && action.hurlMeasured)
+		{
+			// Near the throw time the hand moves at the speed of the throw
+			const creature_throw::HurlHands hands {.flatSpeed = action.hurlFlatSpeed, .highSpeed = action.hurlHighSpeed};
+			const creature_throw::HurlLift lift {.speed = action.hurlSpeed};
+			action.timeMs += static_cast<float>(
+			    creature_throw::HurlStepMs(hands, lift, action.hurlHigh, transform.scale.x, turnMs, static_cast<int32_t>(step),
+			                               static_cast<int32_t>(action.timeMs), static_cast<int32_t>(action.eventMs)));
+		}
+		else
+		{
+			action.timeMs += step;
+		}
 
 		// Until it has hold, the reach follows what it reaches for. When the thing gets out of reach, the time of the
 		// reach starts to decrease.

@@ -267,9 +267,26 @@ TEST(CreatureThrow, HighTargetsBlendInTheHighThrow)
 {
 	EXPECT_FLOAT_EQ(creature_throw::HighThrowWeight(0.5f, 0.5f, 1.5f), 0.0f);
 	EXPECT_FLOAT_EQ(creature_throw::HighThrowWeight(1.0f, 0.5f, 1.5f), 0.5f);
-	EXPECT_FLOAT_EQ(creature_throw::HighThrowWeight(3.0f, 0.5f, 1.5f), 1.0f);
-	EXPECT_FLOAT_EQ(creature_throw::HighThrowWeight(-2.0f, 0.5f, 1.5f), 0.0f);
-	EXPECT_FLOAT_EQ(creature_throw::HighThrowWeight(1.0f, 0.5f, 0.5f), 0.0f);
+	// The game keeps no limit on the weight
+	EXPECT_FLOAT_EQ(creature_throw::HighThrowWeight(3.0f, 0.5f, 1.5f), 2.5f);
+	EXPECT_FLOAT_EQ(creature_throw::HighThrowWeight(-2.0f, 0.5f, 1.5f), -2.5f);
+	// The hand slopes are -1 and 1, so a throw that rises as fast as it goes along the ground is all the high throw
+	const creature_throw::HurlHands hands {.flatSpeed = 3.0f, .highSpeed = 7.0f};
+	EXPECT_FLOAT_EQ(creature_throw::HurlHighWeight(hands, {.speed = 10.0f, .rise = 10.0f}), 1.0f);
+	EXPECT_FLOAT_EQ(creature_throw::HurlHighWeight(hands, {.speed = 10.0f, .rise = 0.0f}), 0.5f);
+	EXPECT_FLOAT_EQ(creature_throw::HurlHighWeight(hands, {.speed = 10.0f, .rise = -10.0f}), 0.0f);
+}
+
+TEST(CreatureThrow, TheThrowStepsAtTheSpeedOfTheThrowNearTheThrowTime)
+{
+	// The hand moves 10 units a second at size 1 in both throws; the throw goes 20 units a second along the ground
+	const creature_throw::HurlHands hands {.flatSpeed = 10.0f, .highSpeed = 10.0f};
+	const creature_throw::HurlLift lift {.speed = 20.0f};
+	// 100 ms x 20 x 1.6 / 10 = 320 ms at the throw time; the clip step of 100 ms 400 ms or more away; between, a blend
+	EXPECT_EQ(creature_throw::HurlStepMs(hands, lift, 0.5f, 1.0f, 100, 100, 1000, 1000), 320);
+	EXPECT_EQ(creature_throw::HurlStepMs(hands, lift, 0.5f, 1.0f, 100, 100, 1200, 1000), 210);
+	EXPECT_EQ(creature_throw::HurlStepMs(hands, lift, 0.5f, 1.0f, 100, 100, 600, 1000), 100);
+	EXPECT_EQ(creature_throw::HurlStepMs(hands, lift, 0.5f, 1.0f, 100, 100, 0, 1000), 100);
 }
 
 TEST(CreatureThrow, TossingKeepsSomeOfTheHandsSpeed)

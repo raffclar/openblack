@@ -92,12 +92,78 @@ bool creature_throw::FarEnoughToThrow(float groundDistance, float size)
 
 float creature_throw::HighThrowWeight(float targetSlope, float flatSlope, float highSlope)
 {
-	const auto span = highSlope - flatSlope;
-	if (std::abs(span) < k_Tiny)
+	return (targetSlope - flatSlope) / (highSlope - flatSlope);
+}
+
+float creature_throw::HurlHandSpeed(const glm::vec3& atThrow, const glm::vec3& before)
+{
+	constexpr float k_PerSecond = 10.0f;
+	// The game keeps this factor as a double
+	constexpr double k_Share = 0.707;
+	const float up = atThrow.y - before.y;
+	const float ahead = atThrow.z - before.z;
+	return x87::Mul(std::sqrt((ahead * ahead) + (up * up)) * k_PerSecond, k_Share);
+}
+
+glm::vec3 creature_throw::HurlReleasePoint(const HurlHands& hands, const glm::vec3& position, GameHeading heading, float scale,
+                                           bool mirrored, float slope)
+{
+	const float flatSlope = hands.FlatSlope();
+	const float high = (slope - flatSlope) / (hands.HighSlope() - flatSlope);
+	const float flat = 1.0f - high;
+	const float x = (high * hands.high.x) + (flat * hands.flat.x);
+	const float y = (high * hands.high.y) + (flat * hands.flat.y);
+	const float z = (high * hands.high.z) + (flat * hands.flat.z);
+	const float across = (mirrored ? -x : x) * scale;
+	const float ahead = z * scale;
+	const float cosine = x87::RoundToFloat(x87::Cos(heading.Radians()));
+	const float sine = x87::RoundToFloat(x87::Sin(heading.Radians()));
+	// The game adds 0 to the turned x and z before it adds the position
+	return {(((cosine * across) + (-sine * ahead)) + 0.0f) + position.x, (y * scale) + position.y,
+	        (((cosine * ahead) + (sine * across)) + 0.0f) + position.z};
+}
+
+creature_throw::HurlLift creature_throw::LiftOf(const HurlHands& hands, const glm::vec3& position, float scale, bool mirrored,
+                                                const glm::vec3& target, float seconds)
+{
+	const auto heading = GameHeading::Of(target.x - position.x, target.z - position.z);
+	const auto release = HurlReleasePoint(hands, position, heading, scale, mirrored, k_HurlReleaseSlope);
+	const float fall = ((seconds * seconds) * 0.5f) * -k_Gravity;
+	const float inverse = 1.0f / seconds;
+	const float x = ((target.x - release.x) - 0.0f) * inverse;
+	const float y = ((target.y - release.y) - fall) * inverse;
+	const float z = ((target.z - release.z) - 0.0f) * inverse;
+	const float speed = std::sqrt((x * x) + (z * z));
+	// The height speed is kept between minus the speed and the speed. Each compare with no order (a value that is not a
+	// number) takes the limit.
+	float rise = y;
+	if (!(rise >= -speed))
 	{
-		return 0.0f;
+		rise = -speed;
 	}
-	return std::clamp((targetSlope - flatSlope) / span, 0.0f, 1.0f);
+	if (!(speed >= rise))
+	{
+		rise = speed;
+	}
+	return {.speed = speed, .rise = rise};
+}
+
+float creature_throw::HurlHighWeight(const HurlHands& hands, const HurlLift& lift)
+{
+	return HighThrowWeight(lift.rise / lift.speed, hands.FlatSlope(), hands.HighSlope());
+}
+
+int32_t creature_throw::HurlStepMs(const HurlHands& hands, const HurlLift& lift, float highWeight, float scale, int32_t turnMs,
+                                   int32_t clipStepMs, int32_t timeMs, int32_t throwMs)
+{
+	constexpr float k_SpeedFactor = 1.6f;
+	constexpr int32_t k_EaseMs = 400;
+	constexpr float k_EasePerMs = 0.0025f;
+	const float handSpeed = ((highWeight * hands.highSpeed) + ((1.0f - highWeight) * hands.flatSpeed)) * scale;
+	const auto speedStep = x87::ToInteger(((static_cast<float>(turnMs) * lift.speed) * k_SpeedFactor) / handSpeed);
+	const auto apart = std::min(std::abs(timeMs - throwMs), k_EaseMs);
+	const float ease = static_cast<float>(apart) * k_EasePerMs;
+	return x87::ToInteger(x87::Add(x87::Mul(static_cast<double>(clipStepMs - speedStep), ease), speedStep));
 }
 
 glm::vec3 creature_throw::HandVelocity(const glm::vec3& atRelease, const glm::vec3& before, float spanMs)

@@ -51,6 +51,7 @@ constexpr float k_UnknownSpeciesStrength = 0.5f;
 /// it when the other looks weak, from 0 to 1
 [[nodiscard]] float CopiedWeakStrong(float source, float scale);
 
+/// The size that the body keeps, from the smallest to the largest. A size that is not a number gives the smallest.
 [[nodiscard]] float ClampScale(float scale);
 
 /// The game draws a creature of size 1 this tall, by the height of its rest pose's bones
