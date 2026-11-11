@@ -328,7 +328,9 @@ void LoadingScreenSystem::PlayStartupScreens(const StartupScreenOptions& options
 	{
 		PlayLogoScreens();
 	}
-	if (!QuitRequested() && startup::PlaysPreIntro(options.preIntro, HasPlayerProfiles()))
+	if (!QuitRequested() && startup::PlaysPreIntro({.requested = options.preIntro,
+	                                                .hasProfiles = HasPlayerProfiles(),
+	                                                .toolRun = options.skipLogos || options.scenario}))
 	{
 		PlayPreIntro();
 	}
