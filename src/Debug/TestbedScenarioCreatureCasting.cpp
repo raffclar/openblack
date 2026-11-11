@@ -83,6 +83,31 @@ void testbed_scenarios::AddCreatureCastingScenarios(std::vector<Scenario>& all)
 	    .commands = {Know(MagicType::CreatureSpellItchy), CastAtCreature(MagicType::CreatureSpellItchy, 1, 0.5f)},
 	});
 
+	// A creature that a script scales to follow the player's creature, under a size spell
+	all.push_back({
+	    .id = "miracles.creature_big_on_scaled_creature",
+	    .name = "Creature casting: big at a creature that follows the size of the player's creature",
+	    .facet = Facet::Miracles,
+	    .description = "A cow of no player follows the size of the player's tiger, as a script's automatic scale makes it "
+	                   "follow. The tiger knows the big spell and casts it at the cow sixty metres away.",
+	    .expected = "The cow grows from its small size to the size of the tiger in less than a second. After the cast, the "
+	                "cow grows big over the start of the spell. While the spell holds, the cow stays at size 2, because "
+	                "its growth keeps a still creature at size 2 or less. It does not go back to the size of the tiger. "
+	                "As the spell ends, the cow shrinks to the size of the tiger again.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-20.0f, 0.0f}, {20.0f, 70.0f}}},
+	    .creatures = {Caster({0.0f, 0.0f}, "caster"),
+	                  {.label = "scaled",
+	                   .species = CreatureType::Cow,
+	                   .offset = {0.0f, 60.0f},
+	                   .facingDegrees = 180.0f,
+	                   .owner = PlayerNames::NEUTRAL,
+	                   .size = 0.6f,
+	                   .autoScale = 1.0f,
+	                   .pauseMind = true}},
+	    .commands = {Know(MagicType::CreatureSpellBig), CastAtCreature(MagicType::CreatureSpellBig, 1, 0.5f)},
+	});
+
 	// The particles of two creature spells: the hearts of compassion and the steam of a freeze
 	all.push_back({
 	    .id = "miracles.creature_spell_hearts_and_steam",

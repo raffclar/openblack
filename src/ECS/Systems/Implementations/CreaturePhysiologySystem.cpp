@@ -33,6 +33,7 @@
 #include "Creature/CreatureMindTables.h"
 #include "Creature/CreaturePhysiology.h"
 #include "Creature/CreatureRig.h"
+#include "Creature/CreatureSpells.h"
 #include "ECS/Archetypes/CreatureArchetype.h"
 #include "ECS/Archetypes/MobileObjectArchetype.h"
 #include "ECS/Components/ChimneySmoke.h"
@@ -41,6 +42,7 @@
 #include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureNeeds.h"
+#include "ECS/Components/CreatureSpells.h"
 #include "ECS/Components/CreatureSquat.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/ScriptControl.h"
@@ -284,7 +286,8 @@ void CreaturePhysiologySystem::CreatureTurn(entt::entity entity)
 	const bool night = IsNight();
 	const float dayLength = DayLength();
 	bool resized = false;
-	// The player's creature, whose size the creatures scripts scale to follow
+	// The player's creature, whose size the creatures scripts scale to follow. The scale follows its own size, not the
+	// size that a size spell gives it.
 	std::optional<float> playersSize;
 	if (Locator::playerSystem::has_value())
 	{
@@ -293,7 +296,8 @@ void CreaturePhysiologySystem::CreatureTurn(entt::entity entity)
 		{
 			if (const auto* body = registry.TryGet<const Creature>(*players))
 			{
-				playersSize = body->size;
+				const auto* spells = registry.TryGet<const CreatureSpells>(*players);
+				playersSize = spells != nullptr ? creature_spells::OwnSize(spells->spells, body->size) : body->size;
 			}
 		}
 	}
@@ -335,7 +339,17 @@ void CreaturePhysiologySystem::CreatureTurn(entt::entity entity)
 		{
 			if (autoScaled)
 			{
-				shape.size = physiology::AutoScaledSize(shape.size, *playersSize, *creature.autoScale);
+				// The new size goes to the creature's own size. While a size spell is on it, the spell keeps the size
+				// that it shows.
+				const auto scaled = physiology::AutoScaledSize(shape.size, *playersSize, *creature.autoScale);
+				if (auto* spells = registry.TryGet<CreatureSpells>(entity); spells != nullptr)
+				{
+					creature_spells::SetOwnSize(spells->spells, shape.size, scaled);
+				}
+				else
+				{
+					shape.size = scaled;
+				}
 			}
 			physiology::TickTurn(needs.needs, shape, species, turn);
 			// Asleep or resting, it heals and rests, and may be ready to wake
