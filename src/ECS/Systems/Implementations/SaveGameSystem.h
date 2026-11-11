@@ -130,6 +130,9 @@ private:
 	/// Loads the whole world of a slot: the saved land, its entities, its clock and its scripts
 	bool LoadWholeWorld(uint32_t slot, const gamesave::WorldFile& world, const gamesave::GameChunk& game,
 	                    ecs::world_save::LoadKind kind = ecs::world_save::LoadKind::SavedGame);
+	/// After the load of a saved whole world, puts each creature back from its record and its mind file, as the game
+	/// loads a creature. A world state does not do this: it keeps each creature exactly.
+	void RestoreWholeWorldCreatures(uint32_t slot, const gamesave::WorldFile& world, const std::filesystem::path& mindFolder);
 
 	bool LoadVanilla(uint32_t slot, const std::filesystem::path& slotFolder, const std::filesystem::path& mindFolder,
 	                 const std::vector<uint8_t>& bytes);

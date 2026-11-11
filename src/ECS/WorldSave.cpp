@@ -45,6 +45,7 @@
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureArena.h"
 #include "ECS/Components/CreatureFight.h"
+#include "ECS/Components/CreatureFriends.h"
 #include "ECS/Components/CreatureHandGlows.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/Dance.h"
@@ -724,6 +725,20 @@ void world_save::ForgetUnsavedState(entt::registry& registry)
 		mind.leftAreaActions.clear();
 		mind.agendaRefused = false;
 	});
+	// The save keeps no friends that a script made and no plan put aside
+	std::vector<entt::entity> creatures;
+	for (const auto entity : registry.view<components::CreatureMindState>())
+	{
+		creatures.push_back(entity);
+	}
+	for (const auto entity : registry.view<components::CreatureFriends>())
+	{
+		creatures.push_back(entity);
+	}
+	for (const auto creature : creatures)
+	{
+		ForgetUnsavedCreatureState(registry, creature);
+	}
 	// A footpath that the game still looks for starts its search again from its two ends, as the game loads it
 	registry.view<components::FootpathFinder>().each([](components::FootpathFinder& finder) { finder.plan.reset(); });
 	// A save from inside the temple has the rooms of the temple, so the load removes them
@@ -731,6 +746,15 @@ void world_save::ForgetUnsavedState(entt::registry& registry)
 	// The mind of each computer god starts again. It keeps only the parts that a saved game keeps.
 	registry.view<components::ComputerPlayer>().each(
 	    [](components::ComputerPlayer& player) { computer_player::StartAgainAfterLoad(player); });
+}
+
+void world_save::ForgetUnsavedCreatureState(entt::registry& registry, entt::entity creature)
+{
+	registry.remove<components::CreatureFriends>(creature);
+	if (auto* mind = registry.try_get<components::CreatureMindState>(creature))
+	{
+		mind->keptPlan.reset();
+	}
 }
 
 void world_save::RemoveSavedSkyClouds(entt::registry& registry)

@@ -644,15 +644,27 @@ MindForLoad MindToLoad(const gamesave::CreatureRecord& record, const std::filesy
 	return found;
 }
 
+/// Where the creature that a load puts back comes from
+enum class RestoreInto : uint8_t
+{
+	/// A creature of the open land takes the record of a save that keeps only the creatures
+	OpenLand,
+	/// A creature of a saved whole world. The world already has its creed glows and its leash as the record keeps them.
+	WholeWorld,
+};
+
 /// Puts the creature back as the save keeps it: the values of its record, then the mind of its mind file over them,
 /// then the plan that the save kept, then its leash
-void Restore(ecs::Registry& registry, entt::entity entity, const gamesave::SavedCreature& saved, const MindForLoad& found)
+void Restore(ecs::Registry& registry, entt::entity entity, const gamesave::SavedCreature& saved, const MindForLoad& found,
+             RestoreInto into = RestoreInto::OpenLand)
 {
 	const auto& object = saved.creature;
 	const auto& record = object.creature;
 	auto& body = registry.Get<Creature>(entity);
-	// It starts as a new creature does, which takes notice of every reaction
+	// It starts as a new creature does, which takes notice of every reaction, has no friends that a script made and has
+	// no plan put aside
 	registry.Remove<CreatureReactionsOff>(entity);
+	ecs::world_save::ForgetUnsavedCreatureState(registry.Underlying(), entity);
 	if (auto* transform = registry.TryGet<Transform>(entity))
 	{
 		transform->position = WorldPosition(object.position.position);
@@ -738,7 +750,7 @@ void Restore(ecs::Registry& registry, entt::entity entity, const gamesave::Saved
 	std::ranges::transform(record.creedPowers, creed.begin(), [](const gamesave::CreedPower& kept) {
 		return creature_hand_glow::SavedPower {.scale = kept.scale, .power = kept.power};
 	});
-	if (Locator::creatureAnimationSystem::has_value())
+	if (into == RestoreInto::OpenLand && Locator::creatureAnimationSystem::has_value())
 	{
 		Locator::creatureAnimationSystem::value().LoadCreedPowers(entity, creed);
 	}
@@ -779,7 +791,7 @@ void Restore(ecs::Registry& registry, entt::entity entity, const gamesave::Saved
 	}
 
 	// The leash goes on or off again as the player had it
-	if (!Locator::leashSystem::has_value())
+	if (into == RestoreInto::WholeWorld || !Locator::leashSystem::has_value())
 	{
 		return;
 	}
@@ -1275,6 +1287,7 @@ bool SaveGameSystem::LoadSlot(uint32_t slot)
 			StartLandAgain();
 			return false;
 		}
+		RestoreWholeWorldCreatures(slot, *world, mindFolder);
 		ShowChallengePictures(copiedPictures);
 		if (counts)
 		{
@@ -1344,6 +1357,34 @@ bool SaveGameSystem::LoadSlot(uint32_t slot)
 		_lastQuickSaveTurn = game->lastQuickSaveTurn;
 	}
 	return restored > 0;
+}
+
+void SaveGameSystem::RestoreWholeWorldCreatures(uint32_t slot, const gamesave::WorldFile& world,
+                                                const std::filesystem::path& mindFolder)
+{
+	// The game loads each creature of a saved game as a new creature: the values of its record, the fresh mind of its
+	// mind file, and the plan only when the save kept it. The whole world keeps more, so each creature takes its record
+	// and its mind file again.
+	const auto creatures = gamesave::ReadCreatures(world);
+	if (!creatures.has_value())
+	{
+		SPDLOG_LOGGER_WARN(Log(), "Slot {} has no creatures that the game can read", slot);
+		return;
+	}
+	auto& registry = Locator::entitiesRegistry::value();
+	for (const auto& creature : *creatures)
+	{
+		const auto entity = save_state::FromRef(gamesave::RefTo(creature.key));
+		if (!entity.has_value() || !registry.Valid(*entity) || !registry.AllOf<Creature>(*entity))
+		{
+			SPDLOG_LOGGER_WARN(Log(), "A creature of slot {} is not in the saved world", slot);
+			continue;
+		}
+		Restore(registry, *entity, creature, MindToLoad(creature.creature.creature, mindFolder), RestoreInto::WholeWorld);
+		SPDLOG_LOGGER_INFO(
+		    Log(), "Put the creature {} of the saved world back, at step {} of its plan", entt::to_integral(*entity),
+		    creature.creature.creature.plan.has_value() ? std::to_string(creature.agendaStep) : std::string("none"));
+	}
 }
 
 std::vector<uint8_t> SaveGameSystem::WorldState()

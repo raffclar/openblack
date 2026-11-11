@@ -114,6 +114,11 @@ LoadEntities(const entt::meta_ctx& reflection, const gamesave::WorldFile& file, 
 /// that the game still looks for starts its search again.
 void ForgetUnsavedState(entt::registry& registry);
 
+/// Forgets what a saved game does not keep of one creature: the friends that a script made for it, and the plan that it
+/// put aside for a reaction or a gift. A load of a saved game makes each creature again from its record and its mind
+/// file, which keep neither.
+void ForgetUnsavedCreatureState(entt::registry& registry, entt::entity creature);
+
 /// Removes the sky's clouds that a save from an older version keeps as things of the land. The clouds are now things of
 /// the drawn registry, and the land lays them out when it loads.
 void RemoveSavedSkyClouds(entt::registry& registry);
