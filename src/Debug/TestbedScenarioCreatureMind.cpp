@@ -1779,4 +1779,37 @@ void testbed_scenarios::AddMind(std::vector<Scenario>& all)
 	    .commands = {setDesire(Desire::Hunger, 0.8f, 1.0f), setDesire(Desire::Play, 0.5f, 1.0f)},
 	    .debugWindow = "Creature Mind",
 	});
+
+	// The tree view of the developer view of the mind. The tiger takes up the game's Khazar mind, whose trees have grown
+	// from many examples. The hand strokes it and then slaps it again and again, so that the trees of what it does then
+	// grow again while the view is open.
+	all.push_back({
+	    .id = "mind.debug_trees",
+	    .name = "The decision trees of a creature's mind",
+	    .facet = Facet::Mind,
+	    .description = "A player's tiger takes up the game's Khazar creature mind. A villager, a sheep, a birch and a pot "
+	                   "of food stand near it. The Creature Mind window opens on it, on its Decision trees tab. One "
+	                   "second in, a script sets its hunger to 0.9. Then, every ten seconds, the hand strokes it and lets "
+	                   "it go, and ten seconds later slaps it and lets it go.",
+	    .expected = "The tab lists the active desires first, with the count of examples of each tree. A desire shows its "
+	                "activity tree and its act-on tree as a graph of boxes and lines, which you can drag and zoom, and "
+	                "as a text tree. Inner boxes show the attribute that they test, and each line shows its value. Each "
+	                "leaf shows its value from -1 to 1, red through grey to green, and its count of examples. The path "
+	                "of the thing of the planner's best plan is yellow. Use Under the hand or Follow the hand to see the "
+	                "path of another thing in blue. After each stroke or slap, the tree of the desire that the tiger "
+	                "served grows again: the desire gets a star, the changed nodes blink orange, the turn shows, and the "
+	                "new example shows in the examples list with its turn. The view changes nothing in the world.",
+	    .framing = {.shot = Shot::Testbed},
+	    .creatures = {CreatureSetup {
+	        .species = CreatureType::Tiger, .facingDegrees = 180.0f, .mindFile = "game:KhazarCreature"}},
+	    .objects = {{.type = VillagerInfo::CelticFarmerMale, .offset = {-25.0f, 10.0f}},
+	                {.type = AnimalInfo::Sheep, .offset = {25.0f, 10.0f}, .living = true},
+	                {.type = TreeInfo::Birch, .offset = {-15.0f, -20.0f}},
+	                {.type = PotInfo::FoodPot, .offset = {15.0f, -20.0f}}},
+	    .commands = {setDesire(Desire::Hunger, 0.9f, 1.0f), Stroke(0, creature_feedback::BodyPart::Head, 10.0f),
+	                 Act(Kind::HandLetGo, 0, 1.0f, true), Slap(0, 0.5f, false, true, 10.0f),
+	                 Act(Kind::HandLetGo, 0, 1.0f, true)},
+	    .repeatFrom = 1,
+	    .debugWindow = "Creature Mind/Decision trees",
+	});
 }
