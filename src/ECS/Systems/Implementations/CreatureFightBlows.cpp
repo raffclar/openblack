@@ -427,7 +427,6 @@ void CreatureFightSystem::MeasureBlows(entt::entity creature)
 		return;
 	}
 	auto& animations = Locator::creatureAnimationSystem::value();
-	const auto scale = std::abs(registry.Get<const Transform>(creature).scale.x);
 	fighting.reaches.clear();
 	for (size_t i = 0; i < fight::animations::k_AttackCount; ++i)
 	{
@@ -459,7 +458,7 @@ void CreatureFightSystem::MeasureBlows(entt::entity creature)
 		fighting.reaches.push_back({
 		    .animation = animation,
 		    .point = shape.point,
-		    .height = shape.point.y * scale,
+		    .height = shape.point.y,
 		    .swing = shape.swing,
 		});
 	}
@@ -622,8 +621,10 @@ void CreatureFightSystem::AttemptBlow(entt::entity creature, fight::Band band, f
 	blows.reserve(fighting.reaches.size());
 	for (const auto& reach : fighting.reaches)
 	{
-		fight::BlowDepth blow {.animation = reach.animation, .height = reach.height, .depth = std::nullopt};
-		if (reach.animation != fight::animations::k_AttackSpecial && reach.height <= *headHeight)
+		// The height of the blow takes the size of the creature now
+		const auto height = reach.height * scale;
+		fight::BlowDepth blow {.animation = reach.animation, .height = height, .depth = std::nullopt};
+		if (reach.animation != fight::animations::k_AttackSpecial && height <= *headHeight)
 		{
 			const auto point = glm::vec3(placement * glm::vec4(0.0f, reach.point.y, reach.point.z, 1.0f));
 			blow.depth = fight::DepthToBody(bones, point, unitTowards, opponentSize);
@@ -1069,8 +1070,8 @@ void CreatureFightSystem::LandBlow(entt::entity creature, const glm::vec3& point
 	}
 
 	// How high it lands: how high the blow reaches over how high the victim's head is over the land under it
-	const auto heightShare =
-	    fight::HeightShareOf(found->height, HeadHeightOf(registry, opponent).value_or(HeightOf(ShownSize(opponentBody))));
+	const auto heightShare = fight::HeightShareOf(found->height * std::abs(registry.Get<const Transform>(creature).scale.x),
+	                                              HeadHeightOf(registry, opponent).value_or(HeightOf(ShownSize(opponentBody))));
 	const auto direction = fight::RecoilDirectionOf(found->swing);
 	// The blows compare the strengths that the two bodies show
 	const auto bodyLook = ShownStrength(body);
@@ -1155,30 +1156,6 @@ void CreatureFightSystem::LandBlow(entt::entity creature, const glm::vec3& point
 	{
 		opponentFighting.marks.DropNewest();
 		_markHeld = false;
-	}
-
-	// Too close, the attacker is pushed back by half of how far they overlap
-	const auto* opponentMoves = registry.TryGet<const CreatureLocomotion>(opponent);
-	if (auto* moves = registry.TryGet<CreatureLocomotion>(creature); moves != nullptr && opponentMoves != nullptr)
-	{
-		const auto between = Flat(moves->toPosition) - Flat(opponentMoves->toPosition);
-		const auto distance = glm::length(between);
-		const auto closest = (moves->radius * 0.5f) + opponentMoves->radius;
-		if (distance < closest && distance > 0.0f)
-		{
-			const auto by = between * (((closest - distance) * 0.5f) / distance);
-			Shift(*moves, by);
-			fight_transcript::Note(
-			    creature, "pushed_back",
-			    [&] {
-				    return fight_transcript::Fields {{"creature", fight_transcript::Id(creature)},
-				                                     {"by_x", by.x},
-				                                     {"by_z", by.y},
-				                                     {"distance", distance},
-				                                     {"closest", closest}};
-			    },
-			    blowIndex);
-		}
 	}
 
 	if (victim.health <= 0.0f)

@@ -773,6 +773,9 @@ struct Command
 		FightStep,
 		FightSpecial,
 		FightAuto,
+		/// In the fight, the player presses the land five metres to the side of the creature (value: 0 to the positive
+		/// side of its x axis, 1 to the negative side), as a click of the Move button on the land does
+		FightGroundPress,
 		/// In the fight, a miracle (value, by its magic type) added to the end of the moves, as drawing its gesture does
 		FightSpell,
 		/// The player double clicks the place of the creature, which is in its arena: the camera shows the fight at once

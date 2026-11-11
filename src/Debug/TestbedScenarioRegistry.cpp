@@ -280,6 +280,8 @@ std::string_view CommandProblem(const Command& command, std::span<const ObjectSe
 		           : "no such blow or charge";
 	case Kind::FightStep:
 		return command.value < 4 ? "" : "no such step";
+	case Kind::FightGroundPress:
+		return command.value < 2 ? "" : "no such side";
 	default:
 		return "";
 	}
@@ -350,7 +352,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 236> k_Names {
+	constexpr std::array<std::string_view, 237> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -409,6 +411,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "fight block",
 	    "fight step",
 	    "fight special",
+	    "fight press on the land",
 	    "fight by itself",
 	    "fight miracle",
 	    "show the fight",
