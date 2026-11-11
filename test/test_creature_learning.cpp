@@ -665,6 +665,51 @@ TEST(CreaturePlanner, ADesireAboutAWholeThingFindsThePartAfterTheAction)
 	EXPECT_TRUE(creature_planner::CountsActedOn(Desire::Hunger, false));
 }
 
+TEST(CreaturePlanner, ADesireAboutACreatureActsOnTheCreature)
+{
+	// The creature is the thing acted on for each action: the plan does not search for a part. Only the actions that can
+	// act on the creature count.
+	const std::vector<creature_planner::ActionCandidate> actions {
+	    {.action = 30, .needsObject = true},
+	    {.action = 31, .needsObject = true, .opinion = 1.0f},
+	    {.action = 32, .needsObject = true},
+	};
+	const auto planning = [&](bool suitsOnlyFirst) {
+		return creature_planner::PlanDesire({
+		    .desire = Desire::BeFriends,
+		    .strength = 0.5f,
+		    .order = creature_planner::PlanOrder::ActionThenPart,
+		    .actions = actions,
+		    .activityUsefulness = 0.4f,
+		    .findObject = [](const creature_planner::ActionCandidate&) -> std::optional<creature_planner::ObjectCandidate> {
+			    ADD_FAILURE() << "A desire about a creature does not search for a part";
+			    return std::nullopt;
+		    },
+		    .findUsed = [](const creature_planner::ActionCandidate&,
+		                   std::optional<uint32_t>) { return std::optional<creature_planner::UsedChoice> {}; },
+		    .wholeActedOn =
+		        creature_planner::WholeActedOn {
+		            .part = {.id = 77, .usefulness = 0.4f},
+		            .usefulness = 0.25f,
+		            .suits =
+		                [suitsOnlyFirst](const creature_planner::ActionCandidate& candidate) {
+			                return !suitsOnlyFirst || candidate.action == 30;
+		                },
+		        },
+		});
+	};
+	const auto plan = planning(false);
+	ASSERT_TRUE(plan.has_value());
+	EXPECT_EQ(plan->action, 31u);
+	EXPECT_EQ(plan->object, 77u);
+	EXPECT_EQ(plan->priority, creature_planner::Priority(0.5f, 0.4f, plan->actionPriority,
+	                                                     creature_planner::k_DefaultUsefulness, std::nullopt));
+	const auto onlyFirst = planning(true);
+	ASSERT_TRUE(onlyFirst.has_value());
+	EXPECT_EQ(onlyFirst->action, 30u);
+	EXPECT_EQ(onlyFirst->object, 77u);
+}
+
 TEST(CreaturePlanner, AnActionThatNeedsNoThingActsOnThePartOfTheWholeThing)
 {
 	// Under a desire about a whole thing, an action with no thing of its own still gets the part as its object
@@ -2059,6 +2104,11 @@ TEST(CreatureTownCompassion, HurtPeopleMakeItThinkOfHealingFirstOnceItHasSeenHea
 	EXPECT_FALSE(town_compassion::HealFirst(1, false, 6.0f, 10.0f, Always(0)));
 	EXPECT_FALSE(town_compassion::HealFirst(0, false, 10.0f, 10.0f, Always(0)));
 	EXPECT_FALSE(town_compassion::HealFirst(1, true, 10.0f, 10.0f, Always(0)));
+	// With no sightings needed, one sighting is an endless share and passes; no sighting gives no number and fails
+	EXPECT_TRUE(town_compassion::HealFirst(1, false, 1.0f, 0.0f, Always(0)));
+	EXPECT_FALSE(town_compassion::HealFirst(1, false, 0.0f, 0.0f, Always(0)));
+	// The share is a float divide: 0.6 of a float is not above the share of six in ten
+	EXPECT_FALSE(town_compassion::HealFirst(1, false, 3.0f, 5.0f, Always(0)));
 
 	const FakeTown town;
 	const town_compassion::State state {.desire = 0};

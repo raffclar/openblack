@@ -368,6 +368,8 @@ std::vector<Step> creature_mind::ExamineByPickingUp(uint32_t object, bool handFu
 	examine.gaze = Gaze {.object = object};
 	examine.main = true;
 	agenda.push_back(std::move(examine));
+	// After the look at the thing, its eyes stop their sweep, as the dance does. The head still looks about.
+	agenda.push_back({.kind = Step::Kind::Dance, .dance = {.kind = DanceOrder::Kind::StopLooking}});
 	agenda.push_back(Object({.kind = letGo}));
 	// After it releases the thing, it knows the kind of thing
 	agenda.push_back({.kind = Step::Kind::Observe, .object = object});

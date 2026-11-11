@@ -15,7 +15,6 @@
 
 #include <algorithm>
 #include <array>
-#include <limits>
 #include <numbers>
 #include <span>
 #include <utility>
@@ -113,6 +112,8 @@ constexpr uint32_t k_TurnAttempts = 2;
 
 /// Nothing smaller than this counts as a distance
 constexpr float k_Tiny = 1e-4f;
+/// The turns in a second, as the game calculates them for the hold of a point: a second divided by the length of a turn
+constexpr auto k_PointTurnsPerSecond = static_cast<uint32_t>(1000 / TimeSystemInterface::k_TurnDuration.count());
 
 const CreatureRig* RigOf(const Creature& creature)
 {
@@ -775,11 +776,6 @@ void Approach(entt::entity creature, CreatureObjectAction& action, const Creatur
 		else
 		{
 			SetPointing(action, transform, body, held, true);
-			// A point that ended during its turn does not hold the arm
-			action.holdMs = action.pointEnding ? 0.0f
-			                : action.pointsUntilTold
-			                    ? std::numeric_limits<float>::infinity()
-			                    : action.pointSeconds.value_or(creature_object_actions::k_PointSeconds) * 1000.0f;
 			action.pointMs = points->pointMs;
 		}
 		BeginPlaying(creature, action, animation);
@@ -919,6 +915,13 @@ bool CreatureObjectActionSystem::Start(entt::entity creature, CreatureObjectActi
 	const auto* held = registry.TryGet<const CreatureHeldObject>(creature);
 	action.status = Status::Running;
 	action.phase = Phase::Approach;
+	// The hold of a point counts its turns from the turn that the point starts, before a turn to the point
+	if (action.kind == Kind::Point && !action.pointsUntilTold)
+	{
+		action.holdTurns = creature_pointing::HoldTurns(action.pointSeconds.value_or(creature_object_actions::k_PointSeconds),
+		                                                k_PointTurnsPerSecond);
+		action.holdCounting = false;
+	}
 	switch (creature_object_actions::HandsFor(action.kind))
 	{
 	case creature_object_actions::Hands::Holding:
@@ -1248,7 +1251,7 @@ std::optional<float> CreatureObjectActionSystem::GetProgress(entt::entity creatu
 		const float stand = DurationOf(creature, creature_layers::animations::k_Stand);
 		return stand > 0.0f ? std::optional(action->timeMs / stand) : std::nullopt;
 	}
-	if (action->holdMs > 0.0f || action->durationMs <= 0.0f)
+	if ((action->kind == Kind::Point && !action->pointEnding) || action->durationMs <= 0.0f)
 	{
 		return 0.0f;
 	}
@@ -1436,17 +1439,8 @@ void CreatureObjectActionSystem::ActionTurn(entt::entity creature)
 				}
 			}
 			SetPointing(action, transform, body, registry.TryGet<const CreatureHeldObject>(entity), false);
-			if (!action.pointEnding)
-			{
-				action.holdMs -= gameTime.count();
-				if (action.holdMs <= 0.0f)
-				{
-					// The point ends, and the arm plays to the end of its animations
-					action.holdMs = 0.0f;
-					action.pointEnding = true;
-				}
-			}
-			else if (action.timeMs >= action.durationMs)
+			// After the hold, the arm plays to the end of its animations
+			if (action.pointEnding && action.timeMs >= action.durationMs)
 			{
 				action.status = Status::Done;
 			}
@@ -1486,6 +1480,15 @@ void CreatureObjectActionSystem::ActionTurn(entt::entity creature)
 	};
 	if (registry.Valid(creature) && registry.AllOf<Creature, Transform, CreatureAnimation, CreatureObjectAction>(creature))
 	{
+		// The hold of a point decreases by one on each turn after the turn that the point starts, also while the creature
+		// turns to the point. The point ends when the count gets to zero.
+		auto& action = registry.Get<CreatureObjectAction>(creature);
+		if (action.kind == Kind::Point && action.status == Status::Running && !action.pointEnding &&
+		    action.holdTurns.has_value() && std::exchange(action.holdCounting, true) &&
+		    creature_pointing::CountHoldTurn(*action.holdTurns))
+		{
+			EndPoint(creature);
+		}
 		play(creature, registry.Get<const Creature>(creature), registry.Get<const Transform>(creature),
 		     registry.Get<CreatureAnimation>(creature), registry.Get<CreatureObjectAction>(creature));
 	}

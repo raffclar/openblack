@@ -106,7 +106,6 @@ void CreatureObjectActionSystem::EndPoint(entt::entity creature)
 	}
 	// The arm plays to the end of its animations with no hold. A turn to the point ends first, and then the arm plays
 	// all of its animations.
-	action->holdMs = 0.0f;
 	action->pointEnding = true;
 }
 
