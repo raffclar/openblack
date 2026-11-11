@@ -185,6 +185,11 @@ constexpr uint32_t k_LongestFrameMs = 1000;
 /// does not stop its turns, and in a run with no scenario, the player can still go out.
 [[nodiscard]] bool EndsHeldInTemple(const Settings& settings, bool clockHeld, bool networkGame, bool scenarioGaveAll);
 
+/// Whether a turn-limited run ends because the game is over. When the player loses the temple, the script of the game's
+/// end plays and then keeps the player in the save game room of the temple. The temple holds the world, and the only
+/// exit from the room ends the game, so the last turn does not come.
+[[nodiscard]] bool EndsAtGameOver(const Settings& settings, bool clockHeld, bool gameOver);
+
 /// Whether the game skips a frame of a run that a tool steps through the inspector. While the tool holds the run, the
 /// game is paused and the frame only gives the answers to the tool. The wall clock sets the number of these frames.
 /// Thus they must not move the clock, the camera or the hand, because the turns get the camera and the hand from the

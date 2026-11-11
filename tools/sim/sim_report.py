@@ -437,6 +437,7 @@ def summary(start, records, end, log_lines=None, exit_code=None):
         "first_turn": first_turn,
         "last_turn": last_turn,
         "ended": end is not None,
+        "game_over": bool((end or {}).get("game_over")),
         "exit_code": exit_code,
         "wall_s": wall,
         "turns_per_second": turns_per_second,
@@ -628,6 +629,10 @@ def markdown(result, title="Simulation run"):
         f"{number(result['frame_ms_average'], 3)} ms, longest {number(result['frame_ms_longest'], 2)} ms",
         f"- Memory {number(result['memory_mb_start'], 0)} MB to {number(result['memory_mb_end'], 0)} MB (highest "
         f"{number(result['memory_mb_highest'], 0)}); entities {result['entities_start']} to {result['entities_end']}",
+    ]
+    if result.get("game_over"):
+        lines.append(f"- The game is over: the player lost the temple, and the run ended at turn {result['last_turn']}")
+    lines += [
         "",
         "## Creature",
         "",
