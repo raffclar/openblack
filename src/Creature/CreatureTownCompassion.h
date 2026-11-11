@@ -76,6 +76,9 @@ void MoveOn(State& state, std::span<const uint32_t> desires, std::span<const flo
 /// Whether, planning compassion for a town at a game turn, it moves on first: it chooses freely, compassion is what it
 /// wants most, it isn't being compassionate already, and more than 30 turns have gone since it last moved on or helped
 [[nodiscard]] bool MovesOnWhilePlanning(const State& state, bool compassionMostWanted, bool beingCompassionate, uint32_t turn);
+/// It takes up a plan of compassion for a town at a game turn. The wait before it moves on starts again, also when it
+/// does not choose freely.
+void TookUpPlan(State& state, uint32_t turn);
 /// It moves on as it plans, at a game turn
 void MoveOnWhilePlanning(State& state, std::span<const uint32_t> desires, std::span<const float, k_TownDesireCount> felt,
                          uint32_t turn);

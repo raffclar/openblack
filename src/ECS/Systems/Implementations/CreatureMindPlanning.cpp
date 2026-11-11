@@ -1206,6 +1206,13 @@ bool CreatureMindSystem::Adopt(entt::entity creature, CreatureMindState& mind, c
 	auto built = PlanAgenda(creature, plan.action, plan.object, situated);
 	if (!built.has_value())
 	{
+		// What it does stops as a failure before the agenda is made, so it also stops when the agenda cannot be made. The
+		// creature then has no plan and decides again; the stored plan of the desire stays.
+		if (Locator::entitiesRegistry::value().AllOf<CreatureFighting>(creature) && Locator::creatureFightSystem::has_value())
+		{
+			StopFightForPlan(creature, fightBodyEndsAgain);
+		}
+		StopForUnbuiltPlan(creature);
 		return false;
 	}
 	auto& [executor, agenda] = *built;
@@ -1501,6 +1508,13 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 	{
 		mind.followUp.reset();
 		mind.feedSiteFlag = entt::null;
+	}
+	// A try at a miracle that fizzled waits as the other things do, and it shows it first
+	if (adopt &&
+	    creature_turn_order::DoesFollowUp(decisionState(), only.has_value(), registry.AllOf<ScriptControlled>(creature)) &&
+	    ShowFizzle(creature, mind))
+	{
+		return;
 	}
 	// When it completes its work, the thing that waits replaces its next decision: it becomes high after a magic
 	// mushroom, or it reacts to a stroke or a slap
@@ -1810,9 +1824,20 @@ void CreatureMindSystem::ChoosePlan(entt::entity creature, CreatureMindState& mi
 	mind.planner.currentHasNoSteps = mind.planActive && mind.idle.stoppedByScript && mind.idle.serial == mind.planSerial &&
 	                                 mind.idle.step >= mind.idle.agenda.size();
 	const auto choice = creature_planner::Choose(mind.planner);
-	if (choice.has_value() && !Adopt(creature, mind, *choice, situation, true))
+	// A plan of compassion for a town that it chooses starts the wait before it moves on to another desire of the town.
+	// This occurs before the agenda is made, so it also occurs when the agenda cannot be made.
+	if (choice.has_value() && choice->desire == Desire::Compassion && choice->about.has_value())
 	{
-		mind.planner.best.at(static_cast<size_t>(choice->desire)).reset();
+		const auto& things = Locator::entitiesRegistry::value();
+		if (const auto about = static_cast<entt::entity>(*choice->about); things.Valid(about) && things.AllOf<Town>(about))
+		{
+			town_compassion::TookUpPlan(mind.townCompassion, mind.turn);
+		}
+	}
+	// A plan that it cannot take up stays stored, as in the game: its desire plans again in its turn of the round
+	if (choice.has_value())
+	{
+		static_cast<void>(Adopt(creature, mind, *choice, situation, true));
 	}
 }
 

@@ -85,6 +85,11 @@ bool creature_town_compassion::MovesOnWhilePlanning(const State& state, bool com
 	return state.choosesFreely && compassionMostWanted && !beingCompassionate && turn - state.lastTurn > k_TurnsBeforeMovingOn;
 }
 
+void creature_town_compassion::TookUpPlan(State& state, uint32_t turn)
+{
+	state.lastTurn = turn;
+}
+
 void creature_town_compassion::MoveOnWhilePlanning(State& state, std::span<const uint32_t> desires,
                                                    std::span<const float, k_TownDesireCount> felt, uint32_t turn)
 {

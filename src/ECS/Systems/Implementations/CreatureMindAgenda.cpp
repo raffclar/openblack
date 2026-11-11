@@ -1588,6 +1588,33 @@ bool CreatureMindSystem::Replan(entt::entity creature, creature_mind::Activity a
 	{
 		return false;
 	}
+	StopForNewAgenda(creature, *mind, *body, stopsWalk, endsBody);
+	creature_mind::Plan(mind->idle, activity, std::move(agenda));
+	// The area that holds the creature refused a walk of the new agenda: the creature stops and its plan fails
+	if (std::exchange(mind->agendaRefused, false))
+	{
+		GiveUp(mind->idle);
+	}
+	return true;
+}
+
+void CreatureMindSystem::StopForUnbuiltPlan(entt::entity creature)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto* mind = registry.TryGet<CreatureMindState>(creature);
+	auto* body = registry.TryGet<CreatureAnimation>(creature);
+	if (mind == nullptr || body == nullptr)
+	{
+		return;
+	}
+	StopForNewAgenda(creature, *mind, *body, true, true);
+	creature_mind::Plan(mind->idle, creature_mind::Activity::None, {});
+}
+
+void CreatureMindSystem::StopForNewAgenda(entt::entity creature, CreatureMindState& mind, CreatureAnimation& body,
+                                          bool stopsWalk, bool endsBody)
+{
+	auto& registry = Locator::entitiesRegistry::value();
 	// It stops walking, unless a catch it has started is turning it to face what it catches: changing what it does
 	// leaves a catch to its body
 	// TODO(physics): whether the game's stopping cuts short the turn a catch starts with wasn't traced
@@ -1607,18 +1634,11 @@ bool CreatureMindSystem::Replan(entt::entity creature, creature_mind::Activity a
 	}
 	if (endsBody)
 	{
-		body->body = creature_layers::EndDance(creature_layers::EndLoop(body->body));
+		body.body = creature_layers::EndDance(creature_layers::EndLoop(body.body));
 	}
 	ReleaseCast(creature);
 	RestEyes(registry, creature, registry.TryGet<CreatureEyes>(creature));
-	Abandon(*mind);
-	creature_mind::Plan(mind->idle, activity, std::move(agenda));
-	// The area that holds the creature refused a walk of the new agenda: the creature stops and its plan fails
-	if (std::exchange(mind->agendaRefused, false))
-	{
-		GiveUp(mind->idle);
-	}
-	return true;
+	Abandon(mind);
 }
 
 bool CreatureMindSystem::ForceActivity(entt::entity creature, const ForcedActivity& forced)

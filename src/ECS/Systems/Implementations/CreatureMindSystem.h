@@ -323,6 +323,12 @@ private:
 	/// or also let the pose continue.
 	bool Replan(entt::entity creature, creature_mind::Activity activity, std::vector<creature_mind::Step> agenda,
 	            bool stopsWalk = true, bool endsBody = true);
+	/// What the creature does stops as a failure because it takes up a new plan whose agenda cannot be made. It is left
+	/// with no plan and no agenda, and it decides again.
+	void StopForUnbuiltPlan(entt::entity creature);
+	/// The stop of what the creature does before a new agenda: the walk, the hands, a pose, a held miracle and the plan
+	void StopForNewAgenda(entt::entity creature, components::CreatureMindState& mind, components::CreatureAnimation& body,
+	                      bool stopsWalk, bool endsBody);
 	/// The creature sees a miracle it reacted to, and learns from it
 	void WatchMiracle(entt::entity creature, size_t miracle);
 	/// The creature counts one sighting of the miracle, and the advisor tells what the sighting showed
@@ -545,8 +551,9 @@ private:
 	                                                           std::optional<entt::entity> target);
 	/// How often the creature has seen a miracle and how often it needs to have seen it to cast it
 	[[nodiscard]] std::optional<std::pair<float, float>> MiracleSightings(entt::entity creature, MagicType type);
-	/// A fizzled try, shown as it next chooses what to do
-	void ShowFizzle(entt::entity creature, components::CreatureMindState& mind);
+	/// A fizzled try, shown as a forced plan when the creature next decides with no plan that runs. Return true if it
+	/// shows it.
+	bool ShowFizzle(entt::entity creature, components::CreatureMindState& mind);
 	/// The creature tries a miracle at a place, as its casting pose's loop begins. A try short of the sightings that it
 	/// needs fizzles. A miracle that it cannot cast there frustrates it. Return true if it cast the miracle.
 	bool TryMiracleAt(entt::entity creature, MagicType type, glm::vec3 place);

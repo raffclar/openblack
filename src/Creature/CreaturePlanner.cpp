@@ -58,11 +58,11 @@ float creature_planner::Novelty(uint32_t turnsSinceDone, bool servesFirstDesire)
 float creature_planner::Priority(float desire, std::optional<float> goalUsefulness, float actionPriority,
                                  float objectUsefulness, std::optional<float> usedUsefulness)
 {
-	// Keep the order of the game: the capped action and the thing acted on, then the desire with its goal, then the thing
-	// used and the scale
+	// Keep the order of the game: the capped action and the thing acted on, then the desire with its goal, then the scale
+	// and then the thing used
 	const float desireOnGoal = desire * goalUsefulness.value_or(k_DefaultUsefulness);
 	const float actionOnThing = std::min(actionPriority, k_MaxActionPriority) * objectUsefulness;
-	return actionOnThing * desireOnGoal * usedUsefulness.value_or(k_DefaultUsefulness) * k_PriorityScale;
+	return actionOnThing * desireOnGoal * k_PriorityScale * usedUsefulness.value_or(k_DefaultUsefulness);
 }
 
 size_t creature_planner::GoalsPerTurn(size_t creatureCount)

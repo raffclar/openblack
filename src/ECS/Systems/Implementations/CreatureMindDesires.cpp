@@ -729,12 +729,7 @@ void CreatureMindSystem::DesiresTurn(entt::entity entity)
 	if (!scripted && !demobilised && !mind.planActive && mind.idle.step >= mind.idle.agenda.size() &&
 	    !(needs != nullptr && needs->faint.has_value()))
 	{
-		// A try at a miracle that fizzled is what it shows first
-		ShowFizzle(entity, mind);
-		if (mind.idle.step >= mind.idle.agenda.size())
-		{
-			PlanCreature(entity, mind);
-		}
+		PlanCreature(entity, mind);
 		// It counts the times it thinks and still has no plan, from the start of its last agenda
 		if (mind.thinksWithoutPlanSerial != mind.idle.serial)
 		{
