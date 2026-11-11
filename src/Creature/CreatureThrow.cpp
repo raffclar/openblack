@@ -281,6 +281,34 @@ std::optional<creature_throw::ThrowStand> creature_throw::WhereToThrowFrom(glm::
 	return ThrowStand {};
 }
 
+std::optional<creature_throw::ThrowStand> creature_throw::WhereToThrowAt(glm::vec2 creature, glm::vec2 place, float height,
+                                                                         float keep)
+{
+	// The way from the creature to the place, and its length with the square of z first
+	const float acrossX = place.x - creature.x;
+	const float acrossZ = place.y - creature.y;
+	const float distance = std::sqrt((acrossZ * acrossZ) + (acrossX * acrossX));
+	const float furthest = height * k_ThrowAtPointHeights;
+	// The walk may stop no further than this, but no nearer than its least distance plus the spare
+	const auto stopWithin = [](float least, float most) { return most > least ? most : least + k_ThrowWalkUpSpare; };
+	if (distance < keep)
+	{
+		// Back along the line from the place to where it stands, to the distance that it keeps
+		return ThrowStand {.kind = ThrowStand::Kind::BackOff,
+		                   .point = {place.x - ((keep * acrossX) / distance), place.y - ((keep * acrossZ) / distance)},
+		                   .minDistance = keep,
+		                   .maxDistance = stopWithin(keep, height * k_ThrowAtPointBackOffHeights)};
+	}
+	if (!(distance <= furthest))
+	{
+		return ThrowStand {.kind = ThrowStand::Kind::WalkUp,
+		                   .point = place,
+		                   .minDistance = furthest,
+		                   .maxDistance = stopWithin(furthest, height * k_ThrowAtPointBackOffHeights)};
+	}
+	return ThrowStand {};
+}
+
 std::optional<glm::vec2> creature_throw::BackOffPoint(const creature_route::WalkableLand& land, glm::vec2 point)
 {
 	if (land.IsValid(point, creature_route::k_DestinationClearance))

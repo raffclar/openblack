@@ -151,14 +151,36 @@ void testbed_scenarios::AddMind(std::vector<Scenario>& all)
 	    .description = "A player's lion stands alone, with only a birch far from it, facing the nearest hill. A script "
 	                   "tells it to be idle every fifteen seconds.",
 	    .expected = "While it waits, nothing else catches its eye, so its head turns to the nearest hill or sea that it "
-	                "did not go to yet, at the ground there. When that place is no longer in front of it, it looks ahead "
-	                "again until the hill or the sea comes back into view.",
+	                "did not go to yet, at the ground there. When that place is no longer in front of it, it looks down "
+	                "at the ground where it stands, the place where it started, until the hill or the sea comes back "
+	                "into view.",
 	    .framing = {.shot = Shot::Testbed},
 	    .creatures = {Content(CreatureType::Lion, {0.0f, 0.0f}, 180.0f)},
 	    .objects = {{.type = TreeInfo::Birch, .offset = {100.0f, 0.0f}}},
 	    .commands = {{.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 0, .action = "BeIdle"},
 	                 {.kind = Kind::DoAction, .delaySeconds = 15.0f, .object = 0, .action = "BeIdle"}},
 	    .repeatFrom = 1,
+	});
+
+	all.push_back({
+	    .id = "mind.look_at_destination",
+	    .name = "With nothing to watch, a lion looks at the place it walked to",
+	    .facet = Facet::Mind,
+	    .description = "A player's lion stands alone, with only a birch far behind it. It walks forty metres to the "
+	                   "east, then a script tells it to be idle every fifteen seconds. Then it walks back.",
+	    .expected = "As it walks, its head looks ahead along the walk. When it is idle with nothing in view, its head "
+	                "turns down to the ground at the place that it walked to, where it now stands. It does not look "
+	                "straight ahead at the height of its head.",
+	    .framing = {.shot = Shot::Testbed},
+	    .creatures = {Content(CreatureType::Lion, {0.0f, 0.0f}, 90.0f)},
+	    .objects = {{.type = TreeInfo::Birch, .offset = {-100.0f, 0.0f}}},
+	    .commands = {Go(Kind::WalkTo, 0, {40.0f, 0.0f}, 1.0f),
+	                 {.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 0, .action = "BeIdle"},
+	                 {.kind = Kind::DoAction, .delaySeconds = 15.0f, .object = 0, .action = "BeIdle"},
+	                 Go(Kind::WalkTo, 0, {0.0f, 0.0f}, 15.0f),
+	                 Go(Kind::WalkTo, 0, {40.0f, 0.0f}, 1.0f),
+	                 {.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 0, .action = "BeIdle"}},
+	    .repeatFrom = 3,
 	});
 
 	all.push_back({
@@ -487,6 +509,18 @@ void testbed_scenarios::AddMind(std::vector<Scenario>& all)
 	    .commands = {Act(Kind::Sleep, 0, 2.0f, false)},
 	});
 	all.push_back({
+	    .id = "mind.sleep_eyes_close_in_the_loop",
+	    .name = "The eyes close when the sleep loop starts",
+	    .facet = Facet::Mind,
+	    .description = "A grown-up tiger with low energy and a strong desire to sleep has no temple. After two seconds it "
+	                   "lies down and sleeps where it stands. The camera looks at its face.",
+	    .expected = "The eyes stay open while the tiger lies down. They close on the first turn of the sleep loop, when "
+	                "the body lies still. Before, the eyes closed as the tiger started to lie down.",
+	    .framing = {.shot = Shot::Head, .distance = 1.0f},
+	    .creatures = {lowOnEnergy},
+	    .commands = {Act(Kind::Sleep, 0, 2.0f, false)},
+	});
+	all.push_back({
 	    .id = "mind.help_sleep_at_home",
 	    .name = "The help holds back while the creature goes home to sleep",
 	    .facet = Facet::Mind,
@@ -567,6 +601,27 @@ void testbed_scenarios::AddMind(std::vector<Scenario>& all)
 	                  .delaySeconds = 2.0f,
 	                  .byHand = true,
 	                  .fromWorship = true}},
+	});
+
+	all.push_back({
+	    .id = "learning.miracle_meter",
+	    .name = "The learning meter after a miracle that the creature sees",
+	    .facet = Facet::Mind,
+	    .description = "A grown-up tiger stands near a hurt cow. After 12 seconds, the hand casts a heal on the cow. The "
+	                   "tiger takes up its reaction to the heal and looks at it. The meter shows at most once in 100 "
+	                   "turns, counted from the start, so the heal comes after the first 10 seconds.",
+	    .expected = "When the tiger takes up the reaction, the heal counts as one sighting. The learning meter shows over "
+	                "the head of the tiger: a light bulb and a small yellow percentage that rise and fade in about six "
+	                "seconds.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{0.0f, 0.0f}, {0.0f, 30.0f}}, .distance = 0.6f},
+	    .creatures = {iconWatcher, healed},
+	    .miracles = {{.type = MagicType::Heal,
+	                  .target = MiracleCast::Target::Creature,
+	                  .creature = 1,
+	                  .handOffset = {0.0f, 30.0f},
+	                  .delaySeconds = 12.0f,
+	                  .byHand = true}},
 	});
 
 	{
@@ -1338,7 +1393,8 @@ void testbed_scenarios::AddMind(std::vector<Scenario>& all)
 	    .expected = "The tiger smiles, howls or waves at the lion. To wave, it asks the lion to play first; the lion agrees "
 	                "when it wants to be friends with the tiger more than it fears it or is angry with it. Then the lion "
 	                "stands still in its mind, turns to the tiger and waves back as the tiger waves, from where they "
-	                "stand. The inspector shows the partners while they wave.",
+	                "stand. The tiger grimaces as it tells the lion to turn. The lion shows no face of the order. The "
+	                "inspector shows the partners while they wave.",
 	    .framing = {.shot = Shot::Overview},
 	    .creatures = {befriender, guideLion({25.0f, 0.0f}, 270.0f)},
 	    .commands = {{.kind = Kind::OnlyDesire,

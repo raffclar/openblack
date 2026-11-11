@@ -225,14 +225,19 @@ std::vector<Step> creature_leash_orders::FightItself(uint32_t self)
 {
 	Step face {.kind = Step::Kind::Move, .seconds = k_FightFaceSeconds};
 	face.movement = {.kind = Movement::Kind::TurnToFaceObject, .object = self};
+	// The steps of a fight. It looks at the creature that it asks, which is itself. It shows its anger as it asks and as
+	// it gives the order.
 	return {
-	    // It looks at the creature that it asks, which is itself
 	    {.kind = Step::Kind::RequestPartner,
 	     .object = self,
+	     .face = creature_face::Cue::Anger,
 	     .gaze = creature_mind::Gaze {.object = self},
 	     .request = creature_friendship::RequestKind::Fight},
 	    {.kind = Step::Kind::Demobilise, .object = self},
-	    {.kind = Step::Kind::Order, .object = self, .ordered = std::make_shared<const Step>(std::move(face))},
+	    {.kind = Step::Kind::Order,
+	     .object = self,
+	     .face = creature_face::Cue::Anger,
+	     .ordered = std::make_shared<const Step>(std::move(face))},
 	};
 }
 
@@ -278,6 +283,11 @@ float creature_leash_orders::RunWaitSeconds(float extraSeconds, float turnsPerSe
 	return WholeTurns(k_RunWaitSeconds + std::clamp(extraSeconds, 0.0f, k_RunWaitExtraSeconds), turnsPerSecond);
 }
 
+float creature_leash_orders::RunWaitExtraSeconds(bool run, const std::function<float(float)>& floatRandom)
+{
+	return run ? floatRandom(k_RunWaitExtraSeconds) : 0.0f;
+}
+
 std::vector<Step> creature_leash_orders::SleepAtHome(glm::vec2 home, float height, std::vector<Step> sleep)
 {
 	// A yawn first, when the sleep has one, then off home, then the sleep itself
@@ -301,7 +311,10 @@ std::vector<Step> creature_leash_orders::PutDownAt(glm::vec2 point, float height
 
 std::vector<Step> creature_leash_orders::ThrowAt(glm::vec2 point, float height)
 {
-	return {Walk(point, height * k_ThrowReachHeights, false), Hands({.kind = ObjectOrder::Kind::Throw, .point = point})};
+	// It backs away, or walks up, to eight times its height from the place, and then throws
+	Step move {.kind = Step::Kind::Move};
+	move.movement = {.kind = Movement::Kind::ToThrowAtPoint, .point = point, .maxDistance = height * k_ThrowReachHeights};
+	return {move, Hands({.kind = ObjectOrder::Kind::Throw, .point = point})};
 }
 
 std::vector<Step> creature_leash_orders::Hold(uint32_t object, bool alreadyHeld, glm::vec2 camera,

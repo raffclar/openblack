@@ -35,6 +35,8 @@ struct CreatureCasting
 		TurnAway,
 		/// Going to where it can throw into the target from
 		ToThrowPosition,
+		/// Going to where it can throw at a place from
+		ToThrowAtPoint,
 	};
 	enum class Outcome : uint8_t
 	{
@@ -45,6 +47,8 @@ struct CreatureCasting
 	Move move {Move::None};
 	Outcome outcome {Outcome::Running};
 	entt::entity target {entt::null};
+	/// The place that a move to throw at a place goes for
+	glm::vec2 point {0.0f};
 	/// The distance it keeps, and the turns it holds still once facing
 	float keep {0.0f};
 	float settleSeconds {0.0f};
@@ -57,6 +61,10 @@ struct CreatureCasting
 	/// Where it stood when it last looked whether it is stuck, and where it last set off for
 	glm::vec2 stuckCheck {0.0f};
 	std::optional<glm::vec2> destination;
+	/// The agenda and its step that started the move. The move is part of that step only: when the creature goes on to a
+	/// different step or agenda, the move stops.
+	uint32_t agendaSerial {0};
+	uint32_t agendaStep {0};
 
 	/// A try at a miracle that fizzled: what at, and which miracle
 	struct Fizzle

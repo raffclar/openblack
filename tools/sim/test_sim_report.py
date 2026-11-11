@@ -70,6 +70,16 @@ class SummaryTests(unittest.TestCase):
         self.assertEqual(sim_report.summary(None, clean, end, [], 3)["verdict"], "problems")
         self.assertEqual(sim_report.summary(None, clean, None, [], 0)["verdict"], "problems")
 
+    def test_a_lost_game_ends_the_run_and_the_report_tells_it(self):
+        records = [record(100), record(200)]
+        end = {"type": "end", "turn": 250, "wall_s": 1.0, "game_over": True}
+        result = sim_report.summary(None, records, end, [], 0)
+        self.assertTrue(result["game_over"])
+        self.assertIn("The game is over", sim_report.markdown(result))
+        played_on = sim_report.summary(None, records, {"type": "end", "turn": 200, "wall_s": 1.0}, [], 0)
+        self.assertFalse(played_on["game_over"])
+        self.assertNotIn("The game is over", sim_report.markdown(played_on))
+
     def test_asserts_count_at_any_level(self):
         log = ["[warning] Assertion failed: x", "[warning] the creature is hungry"]
         self.assertEqual(sim_report.scan_log(log)["counts"], {"assert": 1})

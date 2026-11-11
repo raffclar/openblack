@@ -668,6 +668,32 @@ void draw::AddPlayerSymbol(Frame& frame, const PlayerSymbol& symbol, const Sourc
 	}
 }
 
+void draw::AddSparklesSymbol(Frame& frame, const SparklesSymbol& symbol, const Sources& sources)
+{
+	const auto firstItem = static_cast<uint32_t>(frame.items.size());
+	const auto channel = [&symbol](uint32_t shift) { return static_cast<float>((symbol.argb >> shift) & 0xFFu) / k_ByteMax; };
+	GroupBuilder builder(frame, sources);
+	builder.Sprite(FacingSprite(symbol.position, symbol.halfSize, symbol.angle, std::max(symbol.player, 0),
+	                            sources.symbolsInARow, glm::vec4(channel(16), channel(8), channel(0), channel(24))),
+	               k_SymbolTexture, Mode::AlphaTexturedAlphaNz);
+	const auto count = static_cast<uint32_t>(frame.items.size()) - firstItem;
+	if (count == 0)
+	{
+		return;
+	}
+	// The sparkles and their symbol are one thing among what blends, the symbol drawn last
+	if (!frame.groups.empty())
+	{
+		auto& last = frame.groups.back();
+		if (last.path == DrawPath::Sorted && last.origin == symbol.position && last.firstItem + last.itemCount == firstItem)
+		{
+			last.itemCount += count;
+			return;
+		}
+	}
+	frame.groups.push_back({.path = DrawPath::Sorted, .origin = symbol.position, .firstItem = firstItem, .itemCount = count});
+}
+
 void draw::AddFightMarks(Frame& frame, std::span<const FightMark> marks)
 {
 	if (marks.empty())

@@ -117,9 +117,9 @@ void testbed_scenarios::AddLeash(std::vector<Scenario>& all)
 	    .description = "A tiger of size 1 has a lump of poo 40 metres in front of it. After one second its alignment jumps "
 	                   "to fully evil, so its body takes the evil shape after it first measured its reach. After one and "
 	                   "a half seconds more it is told to pick up the poo.",
-	    .expected = "It walks up to the poo and stops a hand's reach from it. It turns a little on the spot if it must, "
-	                "then picks the poo up and holds it. Before, it stopped a little too far away for the arms of its new "
-	                "shape, reached for nothing and gave up the pick-up.",
+	    .expected = "It walks to the poo and stops on the place of the poo, as the game does: the walk goes to the place "
+	                "itself, and the reach starts when the walk ends. Then it picks the poo up and holds it. Before, it "
+	                "stopped 11 metres from the poo, at twice the two radii.",
 	    .framing = {.shot = Shot::Overview, .include = {{0.0f, 60.0f}, {0.0f, 20.0f}}},
 	    .creatures = {CreatureSetup {.species = CreatureType::Tiger, .offset = {0.0f, 60.0f}, .size = 1.0f}},
 	    .objects = {{.type = MobileObjectInfo::LumpOfPoo, .offset = {0.0f, 20.0f}}},

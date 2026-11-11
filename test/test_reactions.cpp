@@ -2782,3 +2782,41 @@ TEST_F(Reactions, TheReactionsOfASavedGameReplaceTheReactionsOfTheLand)
 	const auto* third = registry.TryGet<const LivingReaction>(_villagers[2]);
 	EXPECT_TRUE(third == nullptr || third->reaction == 0);
 }
+
+// The time of a hand's pick-up reaction starts at once. The reaction ends when no living thing is near to take it up,
+// for example when the hand of a rival god picks up a thing far from all people. A reaction that only times out after
+// the first take stays.
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(Reactions, AHandPickUpThatNobodyTakesUpEndsWhenItsTimeIsUp)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const glm::vec3 farAway(2500.0f, 0.0f, 2500.0f);
+	const auto hand = registry.Create();
+	registry.Assign<Transform>(hand, farAway, glm::mat3(1.0f), glm::vec3(1.0f));
+	const auto timed = _reactions.Create({.initiator = hand,
+	                                      .type = Reaction::ReactToHandPickUp,
+	                                      .player = PlayerNames::PLAYER_TWO,
+	                                      .position = farAway,
+	                                      .onCast = true});
+	const auto untimed = _reactions.Create(
+	    {.initiator = hand, .type = Reaction::ReactToHandPickUp, .player = PlayerNames::PLAYER_TWO, .position = farAway});
+	// The row gives 80 turns: the reaction stays until they are over
+	for (int i = 0; i < 80; ++i)
+	{
+		PlayTurn();
+	}
+	EXPECT_TRUE(_reactions.IsActive(timed));
+	// Each reaction has one turn in each few turns, so 120 more turns are sufficient
+	for (int i = 0; i < 120; ++i)
+	{
+		PlayTurn();
+	}
+	EXPECT_FALSE(_reactions.IsActive(timed));
+	EXPECT_TRUE(_reactions.IsActive(untimed));
+	// Nobody took either of them up
+	for (const auto villager : _villagers)
+	{
+		const auto* state = registry.TryGet<const LivingReaction>(villager);
+		EXPECT_TRUE(state == nullptr || (state->reaction != timed && state->reaction != untimed));
+	}
+}

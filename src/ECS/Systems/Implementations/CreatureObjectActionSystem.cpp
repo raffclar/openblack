@@ -15,7 +15,6 @@
 
 #include <algorithm>
 #include <array>
-#include <limits>
 #include <numbers>
 #include <span>
 #include <utility>
@@ -113,6 +112,8 @@ constexpr uint32_t k_TurnAttempts = 2;
 
 /// Nothing smaller than this counts as a distance
 constexpr float k_Tiny = 1e-4f;
+/// The turns in a second, as the game calculates them for the hold of a point: a second divided by the length of a turn
+constexpr auto k_PointTurnsPerSecond = static_cast<uint32_t>(1000 / TimeSystemInterface::k_TurnDuration.count());
 
 const CreatureRig* RigOf(const Creature& creature)
 {
@@ -656,11 +657,11 @@ void AimWhileMoving(entt::entity creature, CreatureObjectAction& action, const C
 	const bool seen = creature_mind::CanSee(x87::Distance<x87::SumOrder::Zyx>(place, transform.position),
 	                                        object_measures::Height(registry, *action.target));
 	auto destination = glm::xz(place);
-	float stopShort = 0.0f;
+	float arriveWithin = 0.0f;
 	if (!seen)
 	{
-		stopShort = creature_object_actions::NearWalkDistance(object_measures::TwoDRadius(registry, creature),
-		                                                      object_measures::TwoDRadius(registry, *action.target));
+		arriveWithin = creature_object_actions::NearWalkDistance(object_measures::TwoDRadius(registry, creature),
+		                                                         object_measures::TwoDRadius(registry, *action.target));
 		const auto* mind = registry.TryGet<const CreatureMindState>(creature);
 		const auto* belief = mind != nullptr && pickingUp ? mind->beliefs.Find(*action.target) : nullptr;
 		if (belief != nullptr)
@@ -680,13 +681,14 @@ void AimWhileMoving(entt::entity creature, CreatureObjectAction& action, const C
 	}
 	else
 	{
-		stopShort = creature_reach::StraightReach(*points, transform.scale.x);
+		arriveWithin = creature_reach::StraightReach(*points, transform.scale.x);
 		destination = glm::xz(WalkAim(creature, body, transform, living, place));
 	}
 	using MoveResult = CreatureLocomotionSystemInterface::MoveResult;
-	// The walk keeps the pace that the creature has
+	// The walk keeps the pace that the creature has. The route goes to the point itself and ends early only at a thing
+	// in its way within the reach. The walk continues while the creature is in its reach.
 	const auto result = Locator::creatureLocomotionSystem::value().MoveTo(
-	    creature, destination, CreatureLocomotionSystemInterface::Pace::Keep, stopShort, 0.0f);
+	    creature, destination, CreatureLocomotionSystemInterface::Pace::Keep, 0.0f, arriveWithin);
 	if (result == MoveResult::InvalidDestination)
 	{
 		// The action fails, and the creature stops its walk
@@ -811,11 +813,6 @@ void Approach(entt::entity creature, CreatureObjectAction& action, const Creatur
 		else
 		{
 			SetPointing(action, transform, body, held, true);
-			// A point that ended during its turn does not hold the arm
-			action.holdMs = action.pointEnding ? 0.0f
-			                : action.pointsUntilTold
-			                    ? std::numeric_limits<float>::infinity()
-			                    : action.pointSeconds.value_or(creature_object_actions::k_PointSeconds) * 1000.0f;
 			action.pointMs = points->pointMs;
 		}
 		BeginPlaying(creature, action, animation);
@@ -905,15 +902,15 @@ void Approach(entt::entity creature, CreatureObjectAction& action, const Creatur
 		BeginReaching(creature, action, animation, aimed);
 		return;
 	}
-	// Out of reach, it walks to the thing again and stops short of it. It walks to where a villager or an animal that
-	// moves will be. Not yet seen, a pick-up walks to where the creature believes the thing is, and stops further away.
+	// Out of reach, it walks to the thing again. It walks to where a villager or an animal that moves will be. Not yet
+	// seen, a pick-up walks to where the creature believes the thing is, and a thing in the way ends the walk further away.
 	auto destination = glm::xz(WalkAim(creature, body, transform, living, place));
-	float stopShort = *straight;
+	float arriveWithin = *straight;
 	if (step == Step::WalkNear)
 	{
 		destination = glm::xz(place);
-		stopShort = creature_object_actions::NearWalkDistance(object_measures::TwoDRadius(registry, creature),
-		                                                      object_measures::TwoDRadius(registry, *action.target));
+		arriveWithin = creature_object_actions::NearWalkDistance(object_measures::TwoDRadius(registry, creature),
+		                                                         object_measures::TwoDRadius(registry, *action.target));
 		const auto* mind = registry.TryGet<const CreatureMindState>(creature);
 		const auto* belief = mind != nullptr && pickingUp ? mind->beliefs.Find(*action.target) : nullptr;
 		if (belief != nullptr)
@@ -923,9 +920,10 @@ void Approach(entt::entity creature, CreatureObjectAction& action, const Creatur
 	}
 	++action.attempts;
 	using MoveResult = CreatureLocomotionSystemInterface::MoveResult;
-	// The walk keeps the pace that the creature has
+	// The walk keeps the pace that the creature has. The route goes to the point itself and ends early only at a thing
+	// in its way within the reach.
 	const auto result =
-	    locomotion.MoveTo(creature, destination, CreatureLocomotionSystemInterface::Pace::Keep, stopShort, 0.0f);
+	    locomotion.MoveTo(creature, destination, CreatureLocomotionSystemInterface::Pace::Keep, 0.0f, arriveWithin);
 	switch (creature_cast_moves::WalkStartOf(result == MoveResult::Started, result != MoveResult::InvalidDestination))
 	{
 	case creature_cast_moves::WalkStart::Walking:
@@ -954,6 +952,13 @@ bool CreatureObjectActionSystem::Start(entt::entity creature, CreatureObjectActi
 	const auto* held = registry.TryGet<const CreatureHeldObject>(creature);
 	action.status = Status::Running;
 	action.phase = Phase::Approach;
+	// The hold of a point counts its turns from the turn that the point starts, before a turn to the point
+	if (action.kind == Kind::Point && !action.pointsUntilTold)
+	{
+		action.holdTurns = creature_pointing::HoldTurns(action.pointSeconds.value_or(creature_object_actions::k_PointSeconds),
+		                                                k_PointTurnsPerSecond);
+		action.holdCounting = false;
+	}
 	switch (creature_object_actions::HandsFor(action.kind))
 	{
 	case creature_object_actions::Hands::Holding:
@@ -1283,7 +1288,7 @@ std::optional<float> CreatureObjectActionSystem::GetProgress(entt::entity creatu
 		const float stand = DurationOf(creature, creature_layers::animations::k_Stand);
 		return stand > 0.0f ? std::optional(action->timeMs / stand) : std::nullopt;
 	}
-	if (action->holdMs > 0.0f || action->durationMs <= 0.0f)
+	if ((action->kind == Kind::Point && !action->pointEnding) || action->durationMs <= 0.0f)
 	{
 		return 0.0f;
 	}
@@ -1485,17 +1490,8 @@ void CreatureObjectActionSystem::ActionTurn(entt::entity creature)
 				}
 			}
 			SetPointing(action, transform, body, registry.TryGet<const CreatureHeldObject>(entity), false);
-			if (!action.pointEnding)
-			{
-				action.holdMs -= gameTime.count();
-				if (action.holdMs <= 0.0f)
-				{
-					// The point ends, and the arm plays to the end of its animations
-					action.holdMs = 0.0f;
-					action.pointEnding = true;
-				}
-			}
-			else if (action.timeMs >= action.durationMs)
+			// After the hold, the arm plays to the end of its animations
+			if (action.pointEnding && action.timeMs >= action.durationMs)
 			{
 				action.status = Status::Done;
 			}
@@ -1535,6 +1531,15 @@ void CreatureObjectActionSystem::ActionTurn(entt::entity creature)
 	};
 	if (registry.Valid(creature) && registry.AllOf<Creature, Transform, CreatureAnimation, CreatureObjectAction>(creature))
 	{
+		// The hold of a point decreases by one on each turn after the turn that the point starts, also while the creature
+		// turns to the point. The point ends when the count gets to zero.
+		auto& action = registry.Get<CreatureObjectAction>(creature);
+		if (action.kind == Kind::Point && action.status == Status::Running && !action.pointEnding &&
+		    action.holdTurns.has_value() && std::exchange(action.holdCounting, true) &&
+		    creature_pointing::CountHoldTurn(*action.holdTurns))
+		{
+			EndPoint(creature);
+		}
 		play(creature, registry.Get<const Creature>(creature), registry.Get<const Transform>(creature),
 		     registry.Get<CreatureAnimation>(creature), registry.Get<CreatureObjectAction>(creature));
 	}

@@ -40,6 +40,9 @@ namespace openblack::creature_mind
 {
 /// Each step pulls a face as it starts, and again this often for as long as it lasts: every four seconds and two turns
 constexpr float k_FaceRepeatSeconds = 4.2f;
+/// Counts down one turn of a step that pulls a face. Returns true when the step pulls its face again on this turn. The
+/// caller starts the wait again with k_FaceRepeatSeconds when it pulls the face.
+[[nodiscard]] bool FaceAgainDue(float& seconds, float turnSeconds);
 /// After each face it pulls, the creature's variety of faces moves on by up to this much less one
 constexpr uint32_t k_FaceVarietyStep = 7;
 /// Idle waits are one second and up to one more
@@ -232,6 +235,9 @@ struct Movement
 		/// Turning to face the lowest of the ground around it, done once it faces it, or at once when it stands on top of
 		/// it
 		FaceDownSlope,
+		/// Going to where it can throw at a point: nearer than the step's distance it backs away to that distance, further
+		/// than eight times its height it walks up to eight times its height from the point
+		ToThrowAtPoint,
 	};
 	Kind kind {Kind::ToPoint};
 	glm::vec2 point {0.0f};
@@ -268,7 +274,7 @@ struct DanceOrder
 		Set,
 		/// Call the free grown up people of a villager's town to the dance, at least the step's count of them
 		Summon,
-		/// Stop the head that looks about. No later step of the agenda turns the head.
+		/// Stop the eyes that look about for things of interest. The head still turns to what each later step looks at.
 		StopLooking,
 		/// Send each called villager to its place in the dance, at a run
 		SendToPlaces,
@@ -378,6 +384,9 @@ struct Gaze
 	bool runningAway {false};
 	/// The ground a few metres ahead of where its body faces (see k_FeetLookMetres)
 	bool feet {false};
+	/// The people that it called to dance with it: each turn one of them, drawn at random, at the top of its body.
+	/// With nobody called, it looks about.
+	bool dependents {false};
 };
 /// Looking at its feet, it looks at the ground this many metres ahead of where its body faces
 constexpr float k_FeetLookMetres = 4.0f;
@@ -645,6 +654,11 @@ struct IdleMind
 	};
 	/// The step that started to let go of the thing in the hand before it starts. Its hands are not checked again.
 	std::optional<StepRef> handsChecked;
+	/// The step that pulled its face on its first try to start. A step that waits for the body keeps this face, and the
+	/// time until the next face counts from that try.
+	std::optional<StepRef> facePulled;
+	/// The step whose eyes closed when the body lay still in the loop of its sleep or its faint
+	std::optional<StepRef> eyesShut;
 	/// The fight step that the other creature agreed to while a move of a fight that stopped still finished. The step
 	/// tries again on later turns and does not ask again.
 	std::optional<StepRef> fightAgreed;
@@ -672,8 +686,12 @@ struct IdleMind
 	bool followMoved {false};
 	/// For a step that follows the hand: the number of turns that are left
 	uint32_t followHandTurns {0};
-	/// A step that rests to get better: the turns since it started, the first turn included
+	/// A step that rests to get better or sleeps: the turns since it first tried to start, the turns it could not start
+	/// and its first turn included
 	uint32_t restTurns {0};
+	/// The step that tried to start but could not, and the number of turns it tried
+	std::optional<StepRef> startTried;
+	uint32_t startTries {0};
 	/// A dance step: the turns it dances yet, and whether its dance stops next turn
 	uint32_t danceTurns {0};
 	bool danceEnding {false};
@@ -969,6 +987,8 @@ struct Commands
 	bool gestureInDance {false};
 	/// The arm stops pointing, at a move of a dance that is not a gesture
 	bool endPoint {false};
+	/// The arm stops a point that it holds, whatever the point is for. The arm plays its animations to the end.
+	bool stopPointing {false};
 	/// An animation to play on top of the body
 	std::optional<size_t> playOverlay;
 	/// A miracle to cast, and whether to let go of the one it holds
@@ -1084,6 +1104,10 @@ constexpr int32_t k_WaitTurnsPerSecond = 10;
 /// game keeps the turns of the pose in a 16-bit count and stops the loop when the count goes down to 0. A count that
 /// starts at 0 goes round to 65535 first.
 [[nodiscard]] bool StaticTimeUp(uint32_t countedTurns, float seconds);
+/// Whether the wait of a faint is done. The wait adds the seconds of a turn on each turn that it counts, so the sum
+/// changes to the nearest whole number of turns first. The wait is done when it counted the turns of WaitTurns. Before the
+/// creature lies still, the sum is below 0.
+[[nodiscard]] bool FaintWaitDone(float countedSeconds, float turnSeconds, float seconds);
 
 /// Fluttering its eyelids, the creature blinks every 0.625 to 1.875 seconds
 constexpr int32_t k_FlutterBlinkIntervalMs = 1250;
@@ -1178,7 +1202,7 @@ struct PooBy
 /// A creature that rests to get better gets up only when its life is full, it is not tired at all, and the step has
 /// lasted more than this many turns
 constexpr uint32_t k_FewestRestTurns = 30;
-/// Whether the creature is asleep, or out cold, in its current step
+/// Whether the creature sleeps in its current step, until it starts to get up
 [[nodiscard]] bool IsAsleep(const IdleMind& mind);
 /// Whether the creature rests to get better in its current step, until it starts to get up
 [[nodiscard]] bool IsResting(const IdleMind& mind);
@@ -1219,6 +1243,8 @@ void CarryDone(IdleMind& mind);
 [[nodiscard]] bool WatchedHandEnough(uint32_t turns, uint32_t limitTurns, uint32_t turnsPerSecond);
 /// The longest a creature watches the hand, in whole seconds
 constexpr float k_LongestHandWatchSeconds = 5.0f;
+/// Each turn of watching the hand draws below this number. The game gives the draw to a check that it does not use.
+constexpr uint32_t k_HandWatchUnusedDraw = 30;
 /// The step that a creature does for the order of its partner in a joint action. A creature that gives the order to
 /// itself first stops what it does, and thus clears the agenda that holds the order. In place of the order it then reads
 /// a pick-up of no thing, and that pick-up fails as it starts.

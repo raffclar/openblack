@@ -209,6 +209,7 @@ public:
 		return true;
 	}
 	[[nodiscard]] bool ForestCanGrowAt(glm::vec3 /*point*/) const override { return forestGrows; }
+	[[nodiscard]] bool CanPlaceTeleportStone(glm::vec3 /*point*/) const override { return stoneFits; }
 
 	InfoConstants& info;
 	FakeWorld world;
@@ -227,6 +228,7 @@ public:
 	bool worldObjects {false};
 	int planted {0};
 	bool forestGrows {true};
+	bool stoneFits {true};
 };
 
 Spell MakeSpell(MagicType type, float chants)
@@ -739,6 +741,28 @@ TEST(SpellBehaviours, ACreatureCastsAForestOnlyOnLandInTheMapWhereTreesCanGrow)
 	EXPECT_FALSE(spells::CanCastAtPointItself(services, MagicType::Forest, land));
 	// The other miracles that are not a heal go to any place
 	EXPECT_TRUE(spells::CanCastAtPointItself(services, MagicType::Fireball, {100.0f, 0.0f, 10.0f}));
+}
+
+TEST(SpellBehaviours, ACreatureCastHasTheTestOfTheKindAtThePoint)
+{
+	auto info = MakeTables();
+	FakeServices services(*info);
+	services.world.waterBelowZ = 50.0f;
+	const glm::vec3 land {100.0f, 0.0f, 100.0f};
+	const glm::vec3 sea {100.0f, 0.0f, 10.0f};
+	// Food and wood go only on land
+	EXPECT_TRUE(spells::CanCastAtPointItself(services, MagicType::Food, land));
+	EXPECT_FALSE(spells::CanCastAtPointItself(services, MagicType::Food, sea));
+	EXPECT_FALSE(spells::CanCastAtPointItself(services, MagicType::Wood, sea));
+	// A teleport goes only where its stone can stand
+	EXPECT_TRUE(spells::CanCastAtPointItself(services, MagicType::Teleport, land));
+	services.stoneFits = false;
+	EXPECT_FALSE(spells::CanCastAtPointItself(services, MagicType::Teleport, land));
+	// A creature spell never goes at a point
+	EXPECT_FALSE(spells::CanCastAtPointItself(services, MagicType::CreatureSpellBig, land));
+	// Water and a shield go to any place, also into the sea
+	EXPECT_TRUE(spells::CanCastAtPointItself(services, MagicType::Water, sea));
+	EXPECT_TRUE(spells::CanCastAtPointItself(services, MagicType::Shield, sea));
 }
 
 TEST(SpellBehaviours, TheKindOfAMiracleDecidesWhereItCanGoWithNoCastRule)

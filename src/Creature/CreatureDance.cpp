@@ -132,7 +132,11 @@ float creature_dance::AreaWidth(float radius)
 std::vector<Step> creature_dance::Agenda(const AgendaInput& input)
 {
 	const auto villager = input.villager;
-	const auto order = [](DanceOrder dance) { return Step {.kind = Step::Kind::Dance, .dance = dance}; };
+	const auto order = [](DanceOrder dance, std::optional<Gaze> gaze = std::nullopt) {
+		return Step {.kind = Step::Kind::Dance, .gaze = gaze, .dance = dance};
+	};
+	const glm::vec3 place {input.place.x, 0.0f, input.place.y};
+	const Gaze dependents {.dependents = true};
 	return {
 	    {.kind = Step::Kind::StopMoving},
 	    {.kind = Step::Kind::Move,
@@ -146,18 +150,33 @@ std::vector<Step> creature_dance::Agenda(const AgendaInput& input)
 	    order({.kind = DanceOrder::Kind::Set, .point = input.place, .type = input.type}),
 	    order({.kind = DanceOrder::Kind::Summon, .villager = villager, .count = input.fewestDancers}),
 	    order({.kind = DanceOrder::Kind::StopLooking}),
-	    // The head no longer turns from here on, so these steps give it nothing to look at
-	    {.kind = Step::Kind::Move, .movement = {.kind = Movement::Kind::ToPoint, .point = input.place}},
+	    // The head looks ahead on the way to the place, then at the place on the ground as it points
+	    {.kind = Step::Kind::Move,
+	     .movement = {.kind = Movement::Kind::ToPoint, .point = input.place},
+	     .gaze = Gaze {.point = place, .whileGoing = true}},
 	    {.kind = Step::Kind::Object,
 	     .order = {.kind = creature_mind::ObjectOrder::Kind::PointAt, .point = input.place, .seconds = k_PointSeconds},
 	     .face = creature_face::Cue::Smile,
+	     .gaze = Gaze {.point = place, .pointOnGround = true},
 	     .main = true},
-	    order({.kind = DanceOrder::Kind::SendToPlaces}),
-	    order({.kind = DanceOrder::Kind::WaitUntilStill}),
+	    // While the people go to their places and until they stand still, it looks at one of them, drawn each turn
+	    order({.kind = DanceOrder::Kind::SendToPlaces}, dependents),
+	    order({.kind = DanceOrder::Kind::WaitUntilStill}, dependents),
 	    order({.kind = DanceOrder::Kind::Start}),
 	    order({.kind = DanceOrder::Kind::TellToDance, .villager = villager}),
 	    order({.kind = DanceOrder::Kind::Dance, .count = input.beats * k_TurnsPerBeat}),
 	};
+}
+
+std::optional<std::size_t> creature_dance::DependentToLookAt(std::size_t called,
+                                                             const std::function<uint32_t(uint32_t)>& random)
+{
+	if (called == 0)
+	{
+		return std::nullopt;
+	}
+	const auto drawn = static_cast<std::size_t>(random(static_cast<uint32_t>(called)));
+	return drawn < called ? std::optional(drawn) : std::nullopt;
 }
 
 std::optional<std::vector<uint32_t>> creature_dance::Summon(std::span<const uint32_t> free, uint32_t fewest, uint32_t adults,

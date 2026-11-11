@@ -114,9 +114,14 @@ struct Ring
 	float min;
 	float max;
 };
-/// The arrival ring for a walk of a distance: min never beyond the destination, max at least a hair beyond min
+/// The arrival ring for a walk of a distance: min is at most 5 cm less than the distance, and max is at least 0.001
+/// more than min. Near the destination, min can be less than zero.
 [[nodiscard]] Ring MoveRing(float distance, float minDistance, float maxDistance);
-/// The arrival ring for walking up to an object: its radius and the creature's, and some way further
+/// The max distance that a new walk asks for: when it is not more than the min distance, it becomes the min distance
+/// and a hundredth more
+[[nodiscard]] float StartMax(float maxDistance, float minDistance);
+/// The arrival ring for a walk up to an object: min is its radius and the creature's. The extra distance gives max
+/// as a walk asks for it with a min of zero.
 [[nodiscard]] Ring ObjectRing(float creatureRadius, float objectRadius, float extra);
 /// Whether a creature this far from its destination has arrived
 [[nodiscard]] bool Arrived(float distance, const Ring& ring);

@@ -111,10 +111,14 @@ struct AgendaInput
 	float height {0.0f};
 };
 /// The agenda of a dance with villagers. The creature stops and goes near the villager, faces it and summons the
-/// people. It makes the dance and calls the people. Then, with its head still, it walks to the place of the dance and
-/// points at it, smiling. It sends the people to their places, waits until they stand still and starts the dance. It
-/// tells them to dance, and dances with them.
+/// people. It makes the dance and calls the people. Then it walks to the place of the dance and points at it, smiling.
+/// It sends the people to their places, waits until they stand still and starts the dance, and meanwhile looks at one
+/// of the people, drawn each turn. It tells them to dance, and dances with them.
 [[nodiscard]] std::vector<creature_mind::Step> Agenda(const AgendaInput& input);
+
+/// Which of the people called to the dance the head looks at this turn, by its place in the list (the last called
+/// first). It draws from the synced random numbers only when somebody is called. None when nobody is.
+[[nodiscard]] std::optional<std::size_t> DependentToLookAt(std::size_t called, const std::function<uint32_t(uint32_t)>& random);
 
 /// Which of the villagers that are free a creature calls to its dance. `start` tells a villager to come, and is true
 /// when the villager comes. It calls them in the given order. It stops after an even number of villagers, when it has

@@ -511,6 +511,16 @@ bool Game::Update() noexcept
 		    time.GetTurn());
 		return false;
 	}
+	// After the script of the game's end, the temple keeps the player in the save game room and holds the world. A run
+	// that is there does not come to its last turn.
+	if (const auto& time = Locator::time::value(); sim_run::EndsAtGameOver(
+	        Locator::simulation::value().GetSettings(), time.IsHeld(), Locator::entitiesRegistry::value().Context().gameOver))
+	{
+		SPDLOG_LOGGER_INFO(spdlog::get("game"),
+		                   "The game is over and the temple holds the world: the simulation run ends at turn {}",
+		                   time.GetTurn());
+		return false;
+	}
 	// A game that joined from the command line stops when its network game ends: its world turns no more
 	// After the out-of-sync box, the game stops on No and plays on with Yes
 	if (_leaveNetworkGame)

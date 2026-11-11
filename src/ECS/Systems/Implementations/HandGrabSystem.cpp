@@ -1332,6 +1332,9 @@ void HandGrabSystem::TakeAtTurn(PlayerNames player, entt::entity object, bool as
 		_world->EndInterfaceLock(player);
 		return;
 	}
+	// The hand pressed on this thing to take it
+	const bool pressed =
+	    (grab->state == HandGrab::State::Grabbing || grab->state == HandGrab::State::Taking) && grab->object == object;
 	Take(*grab, object, true, false, askInfluence);
 	// The miracles, not the grab, hold a seed that the hand took back
 	if (!Holds(*grab) && !_world->HoldsSeed(player))
@@ -1341,6 +1344,12 @@ void HandGrabSystem::TakeAtTurn(PlayerNames player, entt::entity object, bool as
 	else if (grab->object == object)
 	{
 		LogHandDeed(player, "takes", object);
+		// The interface keeps the thing of the press. This thing is now in the hand, and a thing in the hand ends the
+		// interface lock before the next input of the hand.
+		if (pressed)
+		{
+			_world->EndInterfaceLock(player);
+		}
 	}
 }
 
@@ -1395,10 +1404,14 @@ void HandGrabSystem::Take(HandGrab& grab, entt::entity object, bool fromTheWorld
 		PlayTakeSounds(object);
 	}
 
-	// The people and animals about the hand see it pick something up
+	// The people and animals about the hand see it pick something up. The time of this reaction starts at once, so it
+	// ends also when no living thing takes it up. This is true for the hand of each player.
 	const auto handPosition = _world->ReportedHandPlace();
-	_world->CreateReaction(
-	    {.initiator = _world->Hand(), .type = Reaction::ReactToHandPickUp, .player = player, .position = handPosition});
+	_world->CreateReaction({.initiator = _world->Hand(),
+	                        .type = Reaction::ReactToHandPickUp,
+	                        .player = player,
+	                        .position = handPosition,
+	                        .timedFromStart = true});
 	// A burning thing keeps burning in the hand, out of its blaze; the people round it flee one that isn't a villager
 	_world->FireStartedMoving(object, !registry.AllOf<Villager>(object));
 	// A firefly hiding exactly where the thing stood is caught, for a miracle there
@@ -1509,7 +1522,8 @@ void HandGrabSystem::TakeSeedBack(HandGrab& grab, entt::entity seed)
 	_world->CreateReaction({.initiator = _world->Hand(),
 	                        .type = Reaction::ReactToHandPickUp,
 	                        .player = player,
-	                        .position = _world->ReportedHandPlace()});
+	                        .position = _world->ReportedHandPlace(),
+	                        .timedFromStart = true});
 	if (_world->IsLocalHand())
 	{
 		_world->CountHelpEvent(help::profile::k_PickUp);
@@ -2383,6 +2397,18 @@ bool HandGrabSystem::IsPulling() const
 	const auto* grab = Grab();
 	// Once it has come free the pull is over, though the hand takes it a frame later
 	return grab != nullptr && grab->state == HandGrab::State::Grabbing && grab->pulling;
+}
+
+std::optional<entt::entity> HandGrabSystem::GetTaking() const
+{
+	// The input and the frames of this computer act with its own hand
+	const hand_grab::HandGrabWorldInterface::ActingPlayer own(*_world, _world->OwnHandPlayer());
+	const auto* grab = Grab();
+	if (grab == nullptr || (grab->state != HandGrab::State::Grabbing && grab->state != HandGrab::State::Taking))
+	{
+		return std::nullopt;
+	}
+	return grab->object;
 }
 
 bool HandGrabSystem::IsAboutToThrow() const

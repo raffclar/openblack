@@ -11,6 +11,7 @@
 
 #include <cstdint>
 
+#include <functional>
 #include <numbers>
 #include <optional>
 #include <string_view>
@@ -310,6 +311,9 @@ constexpr std::string_view k_FishAction = "FishAndEat";
 /// How long it waits after running to the place: the least and a random part of the extra seconds, counted in whole
 /// game turns
 [[nodiscard]] float RunWaitSeconds(float extraSeconds, float turnsPerSecond);
+/// The random part of the wait after a run, drawn from the synced float numbers below k_RunWaitExtraSeconds. A walk has
+/// no wait and draws nothing.
+[[nodiscard]] float RunWaitExtraSeconds(bool run, const std::function<float(float)>& floatRandom);
 /// Walking home and sleeping there, then the sleep's own agenda
 [[nodiscard]] std::vector<creature_mind::Step> SleepAtHome(glm::vec2 home, float height,
                                                            std::vector<creature_mind::Step> sleep);

@@ -97,6 +97,8 @@ struct CreatureFighting
 	/// Seconds in the stage, and until it next shows its anger in its face
 	float stageSeconds {0.0f};
 	float faceSeconds {0.0f};
+	/// Whether the step that the creature does now shows anger in its face
+	bool angerShown {false};
 	/// Whether it has been told what to do in this stage yet, and has taunted its opponent
 	bool played {false};
 	bool taunted {false};
@@ -149,6 +151,15 @@ struct CreatureFighting
 {
 	return stage < CreatureFighting::Stage::Duel;
 }
+/// Whether the other creature of a fight did its last order and waits for the next order. It does an order with no look
+/// of its own, and it looks about. While it waits, it looks at the first creature.
+[[nodiscard]] constexpr bool WaitsForNextOrder(const CreatureFighting& fighting)
+{
+	using Stage = CreatureFighting::Stage;
+	const bool turned = fighting.faceTurn.phase == creature_turn_to_face::Turn::Phase::Done;
+	return fighting.stage == Stage::Ready || (fighting.stage == Stage::FaceOff && turned) ||
+	       (fighting.stage == Stage::Square && turned && !fighting.played);
+}
 
 /// What a creature has learnt of fighting, kept between fights
 struct CreatureFightRecord
@@ -194,6 +205,7 @@ struct CreatureKnockedOut
 		Waiting,
 		/// Lying until the spells on it have worn off
 		WaitingForSpells,
+		/// Starting the sleep pose when its body is free, then healing in the pose until it is better
 		Resting,
 		GettingUp,
 	};
@@ -209,6 +221,8 @@ struct CreatureKnockedOut
 	bool handsChecked {false};
 	/// Decided as it faints: whether it rests to get better before it gets up
 	bool rest {false};
+	/// The rest pose started. Until the body is free to start it, the creature does not heal.
+	bool restPosed {false};
 	/// Only a script kills a creature for good: it never gets up
 	bool permanent {false};
 	/// Where it is taken, if it is taken home

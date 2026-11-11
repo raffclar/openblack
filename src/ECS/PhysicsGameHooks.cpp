@@ -66,6 +66,7 @@
 #include "ECS/Components/Vortex.h"
 #include "ECS/Components/WallHug.h"
 #include "ECS/Components/WorshipSite.h"
+#include "ECS/CreatureListOrder.h"
 #include "ECS/GamePhysicsHooksWorld.h"
 #include "ECS/ObjectPhysics.h"
 #include "ECS/PlayerTowns.h"
@@ -520,9 +521,10 @@ void PhysicsGameHooks::OfferToCatchingCreatures(entt::entity object, PhysicsEntr
 	{
 		return;
 	}
-	std::vector<entt::entity> creatures;
-	registry.Each<const Creature, const Transform>(
-	    [&creatures](entt::entity creature, const Creature&, const Transform&) { creatures.push_back(creature); });
+	// The creatures get their chance in the order of the game's list of creatures, the newest first, also after a creature
+	// has gone. Thus the draws for the throws of other players go to the creatures in the game's order.
+	auto creatures = creature_list::NewestFirst(registry);
+	std::erase_if(creatures, [&registry](entt::entity creature) { return !registry.AllOf<Transform>(creature); });
 	const float objectWeight = world.WeightOf(object);
 	for (const auto creature : creatures)
 	{

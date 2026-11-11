@@ -223,7 +223,9 @@ void TattooMenuSystem::Update(float milliseconds, glm::ivec2 pointer, bool butto
 	animation->lookAt = body.lookAt;
 	if (Locator::creatureAnimationSystem::has_value())
 	{
-		Locator::creatureAnimationSystem::value().PoseCopy(registry, *_copy, frameMs, registry);
+		auto& animations = Locator::creatureAnimationSystem::value();
+		animations.PoseCopy(registry, *_copy, frameMs, registry);
+		animations.PlaceCopyEyes(registry, *_copy, registry);
 	}
 	// Its hair swings from the new pose by the whole time of the frame, as the game is paused under the menu
 	if (Locator::creatureHairSystem::has_value())

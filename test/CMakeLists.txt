@@ -361,6 +361,7 @@ openblack_setup_and_add_test(test_land_avoid test_land_avoid.cpp)
 openblack_setup_and_add_test(
   test_creature_fight_system test_creature_fight_system.cpp
 )
+openblack_setup_and_add_test(test_creature_scar_draws test_creature_scar_draws.cpp)
 openblack_setup_and_add_test(test_fight_view test_fight_view.cpp)
 openblack_setup_and_add_test(test_leash_rope test_leash_rope.cpp)
 openblack_setup_and_add_test(test_leash_rules test_leash_rules.cpp)
@@ -1297,6 +1298,9 @@ openblack_setup_and_add_test(
   test_oracle_computer_hand_moves oracle/test_oracle_computer_hand_moves.cpp
 )
 openblack_setup_and_add_test(
+  test_oracle_creature_maths_2 oracle/test_oracle_creature_maths_2.cpp
+)
+openblack_setup_and_add_test(
   test_oracle_creature_maths_3 oracle/test_oracle_creature_maths_3.cpp
 )
 # The data folder is found at run time (see oracle/OracleData.h), never compiled into an object: ctest sets the
@@ -1329,6 +1333,7 @@ foreach (oracle_test test_oracle_catch test_oracle_sigmoid
                      test_oracle_walk_lead
                      test_oracle_villager_food
                      test_oracle_computer_hand_moves
+                     test_oracle_creature_maths_2
                      test_oracle_creature_maths_3
 )
   set_tests_properties(
@@ -1768,6 +1773,7 @@ openblack_setup_and_add_test(test_villager_row test_villager_row.cpp)
 openblack_setup_and_add_test(test_text_database gui/test_text_database.cpp)
 openblack_setup_and_add_test(test_creature_files_draws test_creature_files_draws.cpp)
 openblack_setup_and_add_test(test_living_turn_order test_living_turn_order.cpp)
+openblack_setup_and_add_test(test_creature_list_order test_creature_list_order.cpp)
 openblack_setup_and_add_test(test_player_turn_order test_player_turn_order.cpp)
 openblack_setup_and_add_test(test_spell_sparing test_spell_sparing.cpp)
 openblack_setup_and_add_test(
@@ -2377,6 +2383,10 @@ openblack_setup_and_add_test(
   test_script_ally_natives test_script_ally_natives.cpp
 )
 target_link_libraries(test_script_ally_natives PRIVATE ScriptLibrary)
+openblack_setup_and_add_test(test_film_creature_eyes test_film_creature_eyes.cpp)
+if(MSVC)
+  target_compile_options(test_film_creature_eyes PRIVATE /bigobj)
+endif()
 openblack_setup_and_add_test(test_creature_reach_read_only test_creature_reach_read_only.cpp)
 if(MSVC)
   target_compile_options(test_creature_reach_read_only PRIVATE /bigobj)
@@ -2516,6 +2526,7 @@ openblack_setup_and_add_test(test_temple_pool temple/test_temple_pool.cpp)
 # The mouse events that the debug windows take while the inspector or a scenario drives the pointer
 openblack_setup_and_add_test(test_debug_window_mouse debug/test_debug_window_mouse.cpp)
 openblack_setup_and_add_test(test_creature_opinion_clock test_creature_opinion_clock.cpp)
+openblack_setup_and_add_test(test_creature_miracle_effects test_creature_miracle_effects.cpp)
 openblack_setup_and_add_test(
   test_oracle_creature_friendship oracle/test_oracle_creature_friendship.cpp
 )

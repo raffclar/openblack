@@ -30,6 +30,7 @@ void openblack::ecs::reflection::RegisterFields_Components_creaturec(entt::meta_
 	    .Field<&components::CreatureCasting::move>("move")
 	    .Field<&components::CreatureCasting::outcome>("outcome")
 	    .Field<&components::CreatureCasting::target>("target")
+	    .Field<&components::CreatureCasting::point>("point")
 	    .Field<&components::CreatureCasting::keep>("keep")
 	    .Field<&components::CreatureCasting::settleSeconds>("settleSeconds")
 	    .Field<&components::CreatureCasting::run>("run")
@@ -38,6 +39,8 @@ void openblack::ecs::reflection::RegisterFields_Components_creaturec(entt::meta_
 	    .Field<&components::CreatureCasting::holdTurns>("holdTurns")
 	    .Field<&components::CreatureCasting::stuckCheck>("stuckCheck")
 	    .Field<&components::CreatureCasting::destination>("destination")
+	    .Field<&components::CreatureCasting::agendaSerial>("agendaSerial")
+	    .Field<&components::CreatureCasting::agendaStep>("agendaStep")
 	    .Field<&components::CreatureCasting::fizzle>("fizzle")
 	    .Field<&components::CreatureCasting::lastFizzleTarget>("lastFizzleTarget");
 	Reflect<components::CreatureCopy>(context)

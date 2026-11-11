@@ -37,8 +37,6 @@ constexpr float k_CellsSquaredPerSize = 60.0f;
 constexpr float k_CellsSquaredAtSizeZero = 160.0f;
 /// A full turn in game angles
 constexpr int32_t k_Circle = 0x800;
-/// How far ahead the creature looks when nothing catches its eye
-constexpr float k_AheadMetres = 50.0f;
 } // namespace
 
 float creature_look::InterestOf(Interest kind)
@@ -171,11 +169,9 @@ void creature_look::Watch(Target& target, bool inView)
 	}
 }
 
-glm::vec3 creature_look::PointAhead(const Viewer& viewer)
+glm::vec3 creature_look::LookAboutPoint(const Target& target, glm::vec3 destination)
 {
-	const glm::vec3 flat {viewer.ahead.x, 0.0f, viewer.ahead.z};
-	const auto ahead = glm::length(flat) > 0.0f ? glm::normalize(flat) : glm::vec3(0.0f, 0.0f, -1.0f);
-	return viewer.position + glm::vec3(0.0f, k_HeadHeight * viewer.size, 0.0f) + (ahead * k_AheadMetres);
+	return Watches(target) ? target.point : destination;
 }
 
 WhileGoing creature_look::StartWhileGoing(const WhileGoingInfo& info)

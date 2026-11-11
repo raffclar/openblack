@@ -81,16 +81,46 @@ TEST(CreatureDance, TheAgendaGoesToTheVillagerCallsThePeopleAndDancesFiveTurnsAB
 	EXPECT_EQ(agenda[5].dance.kind, DanceOrder::Kind::Summon);
 	EXPECT_EQ(agenda[5].dance.count, 8U);
 	EXPECT_EQ(agenda[6].dance.kind, DanceOrder::Kind::StopLooking);
-	// With the head still, the walk and the point give it nothing to look at
-	EXPECT_FALSE(agenda[7].gaze.has_value());
+	// The stop of the eyes looks about. The walk looks ahead to the place, and the point at the place on the ground.
+	EXPECT_FALSE(agenda[6].gaze.has_value());
+	ASSERT_TRUE(agenda[7].gaze.has_value());
+	EXPECT_TRUE(agenda[7].gaze->whileGoing);
+	EXPECT_EQ(agenda[7].gaze->point, glm::vec3(10.0f, 0.0f, 20.0f));
 	EXPECT_EQ(agenda[8].order.kind, creature_mind::ObjectOrder::Kind::PointAt);
-	EXPECT_FALSE(agenda[8].gaze.has_value());
+	ASSERT_TRUE(agenda[8].gaze.has_value());
+	EXPECT_TRUE(agenda[8].gaze->pointOnGround);
+	EXPECT_EQ(agenda[8].gaze->point, glm::vec3(10.0f, 0.0f, 20.0f));
+	// While the people go to their places and until they stand still, it looks at one of them
 	EXPECT_EQ(agenda[9].dance.kind, DanceOrder::Kind::SendToPlaces);
+	ASSERT_TRUE(agenda[9].gaze.has_value());
+	EXPECT_TRUE(agenda[9].gaze->dependents);
 	EXPECT_EQ(agenda[10].dance.kind, DanceOrder::Kind::WaitUntilStill);
+	ASSERT_TRUE(agenda[10].gaze.has_value());
+	EXPECT_TRUE(agenda[10].gaze->dependents);
+	// From the start of the dance on, the steps look about
+	EXPECT_FALSE(agenda[11].gaze.has_value());
+	EXPECT_FALSE(agenda[12].gaze.has_value());
+	EXPECT_FALSE(agenda[13].gaze.has_value());
 	EXPECT_EQ(agenda[11].dance.kind, DanceOrder::Kind::Start);
 	EXPECT_EQ(agenda[12].dance.kind, DanceOrder::Kind::TellToDance);
 	EXPECT_EQ(agenda[13].dance.kind, DanceOrder::Kind::Dance);
 	EXPECT_EQ(agenda[13].dance.count, 450U);
+}
+
+TEST(CreatureDance, TheHeadLooksAtAPersonCalledDrawnEachTurnAndDrawsNothingWithNobodyCalled)
+{
+	std::vector<uint32_t> ranges;
+	const auto random = [&ranges](uint32_t range) {
+		ranges.push_back(range);
+		return 2u;
+	};
+	// Three people called: one draw below three, and the third in the list (the first called)
+	EXPECT_EQ(creature_dance::DependentToLookAt(3, random), std::optional<std::size_t>(2));
+	ASSERT_EQ(ranges.size(), 1U);
+	EXPECT_EQ(ranges[0], 3U);
+	// Nobody called: no draw, and it looks about
+	EXPECT_FALSE(creature_dance::DependentToLookAt(0, random).has_value());
+	EXPECT_EQ(ranges.size(), 1U);
 }
 
 TEST(CreatureDance, TooFewFreeVillagersCallNoOne)
@@ -201,7 +231,7 @@ TEST(CreatureDance, TheMusicIsTheTribesChantWithVoicesForMoreThanEightDancers)
 	EXPECT_EQ(creature_dance::MusicType(9, 9), 5);
 }
 
-TEST(CreatureDance, AStopStartsWhileTheBodyMovesAndEndsOnceItStandsStill)
+TEST(CreatureDance, AStopStartsWhileTheBodyMovesAndEndsOnceTheBodyIsNotBusy)
 {
 	creature_mind::IdleMind mind;
 	creature_mind::Plan(mind, creature_mind::Activity::Planned, {{.kind = Step::Kind::StopMoving}, {.kind = Step::Kind::Wait}});
@@ -211,15 +241,21 @@ TEST(CreatureDance, AStopStartsWhileTheBodyMovesAndEndsOnceItStandsStill)
 	senses.bodyPlaying = true;
 	const auto commands = creature_mind::Think(mind, senses, NoRandom());
 	EXPECT_TRUE(commands.stopMoving);
+	EXPECT_FALSE(commands.stopPointing);
 	EXPECT_TRUE(mind.stepStarted);
-	static_cast<void>(creature_mind::Think(mind, senses, NoRandom()));
+	// On each turn that it waits, a point that the arm holds stops
+	EXPECT_TRUE(creature_mind::Think(mind, senses, NoRandom()).stopPointing);
 	EXPECT_EQ(mind.step, 0U);
 	senses.bodyPlaying = false;
 	static_cast<void>(creature_mind::Think(mind, senses, NoRandom()));
 	// It still walks on to its stop
 	EXPECT_EQ(mind.step, 0U);
 	senses.moving = false;
+	// An action on a thing keeps the body busy with no clip on the body
 	static_cast<void>(creature_mind::Think(mind, senses, NoRandom()));
+	EXPECT_EQ(mind.step, 0U);
+	senses.bodyBusy = false;
+	EXPECT_FALSE(creature_mind::Think(mind, senses, NoRandom()).stopPointing);
 	EXPECT_EQ(mind.step, 1U);
 }
 
@@ -391,11 +427,16 @@ TEST(CreatureDance, ADanceAloneWaitsForTheBodyThenDancesForTwentySeconds)
 	busy.bodyPlaying = true;
 	busy.bodyBusy = true;
 	EXPECT_FALSE(creature_mind::Think(mind, busy, NoRandom()).startDance.has_value());
-	// The creature can still move as it starts to dance
+	// A walk or a turn makes the body busy too, so the dance waits until the creature stands
 	auto moving = Free();
 	moving.bodyBusy = true;
 	moving.moving = true;
-	const auto start = creature_mind::Think(mind, moving, NoRandom());
+	EXPECT_FALSE(creature_mind::Think(mind, moving, NoRandom()).startDance.has_value());
+	// An action on a thing makes the body busy with no clip on the body
+	auto acting = Free();
+	acting.bodyBusy = true;
+	EXPECT_FALSE(creature_mind::Think(mind, acting, NoRandom()).startDance.has_value());
+	const auto start = creature_mind::Think(mind, Free(), NoRandom());
 	ASSERT_TRUE(start.startDance.has_value());
 	EXPECT_FLOAT_EQ(*start.startDance, 1000.0f);
 	auto dancing = Free();

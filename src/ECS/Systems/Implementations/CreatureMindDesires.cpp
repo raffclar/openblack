@@ -583,7 +583,11 @@ void CreatureMindSystem::MindTurn(entt::entity entity)
 		}
 		// What it thinks its player wants fades, but not while the hand holds it
 		creature_perceived_desires::Fade(mind.perceivedDesires);
-		SweepEyes(entity, creature, mind, animation, transform);
+		// An action can stop the sweep of its eyes until the creature stops what it does
+		if (mind.eyesSweep)
+		{
+			SweepEyes(entity, creature, mind, animation, transform);
+		}
 	}
 	if (mind.feedbackSeconds.has_value())
 	{
@@ -606,6 +610,7 @@ void CreatureMindSystem::MindTurn(entt::entity entity)
 	const bool scripted = registry.AllOf<ScriptControlled>(entity);
 	TurnBeforeDecision(entity, creature, mind, scripted);
 	StepEmergencies(entity, creature, mind, scripted);
+	DrawDependentLook(entity, mind);
 	_thinking.push_back(entity);
 }
 
@@ -698,7 +703,7 @@ void CreatureMindSystem::DesiresTurn(entt::entity entity)
 		}
 		if (!mind.paused)
 		{
-			animation.lookAt = FightLook(registry, entity, creature, transform, mind);
+			animation.lookAt = FightLook(registry, entity, transform, mind);
 			if (eyes != nullptr)
 			{
 				eyes->lookAt = animation.lookAt;

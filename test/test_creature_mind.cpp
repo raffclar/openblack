@@ -495,6 +495,30 @@ TEST(CreatureIdleMind, AStaticPoseEndsAfterTheWholeTurnsOfItsSeconds)
 	EXPECT_TRUE(creature_mind::StaticTimeUp(65536, 0.05f));
 }
 
+// The wait of a faint ends after the whole turns of its seconds, also when the float sum of its turns is a little short
+TEST(CreatureIdleMind, AFaintWaitEndsAfterTheWholeTurnsOfItsSeconds)
+{
+	const auto sum = [](int turns) {
+		float seconds = 0.0f;
+		for (int turn = 0; turn < turns; ++turn)
+		{
+			seconds += k_Turn;
+		}
+		return seconds;
+	};
+	// The sum of 73 turns is less than 7.3 seconds, but the wait of 7.3 seconds is 73 turns
+	ASSERT_LT(sum(73), 7.3f);
+	EXPECT_FALSE(creature_mind::FaintWaitDone(sum(72), k_Turn, 7.3f));
+	EXPECT_TRUE(creature_mind::FaintWaitDone(sum(73), k_Turn, 7.3f));
+	// A faint of a creature of size 1.234 waits 4 x 1.234 + 8 seconds: 129 whole turns, the fraction cut off
+	const float seconds = (4.0f * 1.234f) + 8.0f;
+	EXPECT_FALSE(creature_mind::FaintWaitDone(sum(128), k_Turn, seconds));
+	EXPECT_TRUE(creature_mind::FaintWaitDone(sum(129), k_Turn, seconds));
+	// Before the creature lies still, the sum is below 0
+	EXPECT_FALSE(creature_mind::FaintWaitDone(-2.0f * k_Turn, k_Turn, seconds));
+	EXPECT_FALSE(creature_mind::FaintWaitDone(sum(1000), k_Turn, std::numeric_limits<float>::infinity()));
+}
+
 // The game counts a wait from the first turn of the step, and the count stops while the body does an action or moves
 TEST(CreatureIdleMind, AWaitCountsFromItsFirstTurnAndStopsWhileTheBodyActs)
 {
@@ -571,7 +595,7 @@ TEST(CreatureIdleMind, AgendasPullTheFacesOfWhatTheyDo)
 	EXPECT_EQ(creature_mind::Hurl(1, {}, Always(1)).back().face, Cue::Anger);
 	EXPECT_EQ(creature_mind::DestroyThing(1).back().face, Cue::Anger);
 	const auto examine = creature_mind::ExamineByPickingUp(1, false, Always(0));
-	ASSERT_EQ(examine.size(), 4u);
+	ASSERT_EQ(examine.size(), 5u);
 	EXPECT_EQ(examine[0].face, Cue::None);
 	EXPECT_EQ(examine[1].face, Cue::Curiosity);
 	EXPECT_EQ(examine[2].face, Cue::None);
@@ -583,6 +607,45 @@ TEST(CreatureIdleMind, AgendasPullTheFacesOfWhatTheyDo)
 	EXPECT_EQ(creature_mind::LookAt({}, 1.0f).back().face, Cue::Amazed);
 	EXPECT_EQ(creature_mind::PutDownHeld().back().face, Cue::None);
 	EXPECT_EQ(creature_mind::Faint(1.0f).back().face, Cue::None);
+}
+
+TEST(CreatureIdleMind, AStepPullsItsFaceOnItsFirstTryEvenWhileItWaitsForTheBody)
+{
+	creature_mind::IdleMind mind;
+	creature_mind::Plan(mind, creature_mind::Activity::Puke, creature_mind::Puke());
+	creature_mind::Senses senses {.seconds = k_Turn, .bodyBusy = true};
+	// The body is busy, so the step waits, but it pulls its face on the first turn. The face comes again every 42 turns
+	// from that turn.
+	std::vector<int> faceTurns;
+	for (int turn = 0; turn < 50; ++turn)
+	{
+		const auto commands = creature_mind::Think(mind, senses, Always(1));
+		EXPECT_FALSE(mind.stepStarted);
+		if (commands.face.has_value())
+		{
+			faceTurns.push_back(turn);
+		}
+	}
+	ASSERT_EQ(faceTurns.size(), 2u);
+	EXPECT_EQ(faceTurns[0], 0);
+	EXPECT_EQ(faceTurns[1], 42);
+	// When the step starts, it does not pull its face again
+	senses.bodyBusy = false;
+	const auto commands = creature_mind::Think(mind, senses, Always(1));
+	EXPECT_TRUE(mind.stepStarted);
+	EXPECT_FALSE(commands.face.has_value());
+}
+
+// A step pulls its face again on the forty-second turn after the turn that pulled it, as the fight steps do too
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST(CreatureIdleMind, AStepPullsItsFaceAgainEveryFortyTwoTurns)
+{
+	float seconds = creature_mind::k_FaceRepeatSeconds;
+	for (int turn = 1; turn < 42; ++turn)
+	{
+		EXPECT_FALSE(creature_mind::FaceAgainDue(seconds, k_Turn)) << turn;
+	}
+	EXPECT_TRUE(creature_mind::FaceAgainDue(seconds, k_Turn));
 }
 
 TEST(CreatureIdleMind, EachFacePulledMovesTheVarietyOn)
@@ -1175,13 +1238,14 @@ TEST(CreatureLook, WhatGoesOutOfViewIsDropped)
 	EXPECT_EQ(watching.watchedTurns, 0u);
 }
 
-TEST(CreatureLook, WithNothingToSeeItLooksAhead)
+TEST(CreatureLook, WithNothingToSeeItLooksAtItsDestination)
 {
-	const creature_look::Viewer viewer {.position = {10.0f, 0.0f, 0.0f}, .ahead = {1.0f, 0.0f, 0.0f}, .size = 2.0f};
-	const auto point = creature_look::PointAhead(viewer);
-	EXPECT_NEAR(point.x, 60.0f, k_Tolerance);
-	EXPECT_NEAR(point.y, 30.0f, k_Tolerance);
-	EXPECT_NEAR(point.z, 0.0f, k_Tolerance);
+	const glm::vec3 destination {60.0f, 4.0f, 20.0f};
+	const auto point = creature_look::LookAboutPoint({}, destination);
+	EXPECT_EQ(point, destination);
+	// What it watches comes first
+	const creature_look::Target watching {.id = 7, .interest = 0.85f, .point = {1.0f, 2.0f, 3.0f}};
+	EXPECT_EQ(creature_look::LookAboutPoint(watching, destination), watching.point);
 }
 
 /// A home 100 north of its temple, in an area of radius 10, for a creature 20 tall
@@ -1378,6 +1442,44 @@ TEST(CreatureIdleMind, WithNoAgendaItDoesNothing)
 	}
 }
 
+TEST(CreatureNeedsMind, TheSleepStopsAsItStartsToGetUp)
+{
+	creature_mind::IdleMind mind;
+	creature_mind::Plan(mind, creature_mind::Activity::Sleep, creature_mind::Sleep(Always(1)));
+	FakeBody body;
+	auto commands = creature_mind::Think(mind, body.Senses(), Always(1));
+	body.Obey(commands, 1);
+	commands = creature_mind::Think(mind, body.Senses(), Always(1));
+	body.Obey(commands, 1);
+	EXPECT_TRUE(creature_mind::IsAsleep(mind));
+	auto senses = body.Senses();
+	senses.rested = true;
+	commands = creature_mind::Think(mind, senses, Always(1));
+	ASSERT_TRUE(commands.endSit);
+	// The game's sleep heals and rests the body no more once the creature starts to get up
+	EXPECT_FALSE(creature_mind::IsAsleep(mind));
+}
+
+TEST(CreatureNeedsMind, TheTurnsTheSleepCouldNotStartCountAsTurnsOfTheSleep)
+{
+	creature_mind::IdleMind mind;
+	creature_mind::Plan(mind, creature_mind::Activity::Sleep, creature_mind::Sleep(Always(1)));
+	FakeBody body;
+	auto senses = body.Senses();
+	senses.bodyBusy = true;
+	for (int turn = 0; turn < 3; ++turn)
+	{
+		const auto commands = creature_mind::Think(mind, senses, Always(1));
+		EXPECT_FALSE(commands.startSequence.has_value());
+		EXPECT_FALSE(creature_mind::IsAsleep(mind));
+	}
+	const auto commands = creature_mind::Think(mind, body.Senses(), Always(1));
+	ASSERT_TRUE(commands.startSequence.has_value());
+	EXPECT_TRUE(creature_mind::IsAsleep(mind));
+	// Three turns that it could not lie down and the turn that it lies down
+	EXPECT_EQ(mind.restTurns, 4u);
+}
+
 TEST(CreatureNeedsMind, ItSleepsWithItsEyesClosedUntilRested)
 {
 	creature_mind::IdleMind mind;
@@ -1388,13 +1490,22 @@ TEST(CreatureNeedsMind, ItSleepsWithItsEyesClosedUntilRested)
 	auto commands = creature_mind::Think(mind, body.Senses(), Always(1));
 	ASSERT_TRUE(commands.startSequence.has_value());
 	EXPECT_EQ((*commands.startSequence)[1], animations::k_Sleep);
-	EXPECT_EQ(commands.eyes, creature_mind::Eyes::Closed);
+	// The eyes close only when the body lies still in the loop of the sleep
+	EXPECT_NE(commands.eyes, creature_mind::Eyes::Closed);
 	EXPECT_TRUE(creature_mind::IsAsleep(mind));
 	body.Obey(commands, 1);
 	// However long it sleeps, it sleeps on until rested
 	for (int turn = 0; turn < 1000; ++turn)
 	{
 		commands = creature_mind::Think(mind, body.Senses(), Always(1));
+		if (turn == 0)
+		{
+			EXPECT_EQ(commands.eyes, creature_mind::Eyes::Closed);
+		}
+		else
+		{
+			EXPECT_NE(commands.eyes, creature_mind::Eyes::Closed);
+		}
 		EXPECT_FALSE(commands.endSit);
 		EXPECT_FALSE(commands.lookAbout);
 		body.Obey(commands, 1);
@@ -1404,14 +1515,50 @@ TEST(CreatureNeedsMind, ItSleepsWithItsEyesClosedUntilRested)
 	commands = creature_mind::Think(mind, senses, Always(1));
 	EXPECT_TRUE(commands.endSit);
 	EXPECT_EQ(commands.effect, creature_mind::Effect::Slept);
-	body.Obey(commands, 1);
-	commands = creature_mind::Think(mind, body.Senses(), Always(1));
+	// The eyes open as the get-up starts, and the sleep step is done at once
 	EXPECT_EQ(commands.eyes, creature_mind::Eyes::Normal);
 	EXPECT_FALSE(creature_mind::IsAsleep(mind));
+	EXPECT_EQ(mind.step, 1u);
+	body.Obey(commands, 1);
 	// Then a dazed look about with sleepy eyes
 	commands = creature_mind::Think(mind, body.Senses(), Always(1));
 	EXPECT_EQ(commands.playOnce, animations::k_Confused);
 	EXPECT_EQ(commands.eyes, creature_mind::Eyes::Sleepy);
+}
+
+TEST(CreatureNeedsMind, AfterASleepTheNextStepTriesToStartWhileTheGetUpPlays)
+{
+	creature_mind::IdleMind mind;
+	creature_mind::Plan(mind, creature_mind::Activity::Sleep, creature_mind::Sleep(Always(1)));
+	creature_mind::Senses senses {.seconds = k_Turn};
+	static_cast<void>(creature_mind::Think(mind, senses, Always(1)));
+	senses.bodyBusy = true;
+	senses.bodyLooping = true;
+	senses.rested = true;
+	// The wake turn: the get-up starts and the sleep step is done
+	const auto wake = creature_mind::Think(mind, senses, Always(1));
+	EXPECT_TRUE(wake.endSit);
+	EXPECT_EQ(mind.step, 1u);
+	EXPECT_FALSE(mind.stepStarted);
+	// On each turn of the get-up, the dazed look tries to start and draws its side from the game's numbers. On its first
+	// try it also pulls its face, which draws one more number for the variety of the face.
+	senses.bodyLooping = false;
+	int draws = 0;
+	const creature_mind::Random counted = [&draws](uint32_t) {
+		++draws;
+		return 1u;
+	};
+	for (int turn = 0; turn < 3; ++turn)
+	{
+		const auto commands = creature_mind::Think(mind, senses, Always(1), counted);
+		EXPECT_FALSE(commands.playOnce.has_value());
+		EXPECT_FALSE(mind.stepStarted);
+	}
+	EXPECT_EQ(draws, 4);
+	// When the get-up is over, the dazed look starts
+	senses.bodyBusy = false;
+	const auto start = creature_mind::Think(mind, senses, Always(1), counted);
+	EXPECT_EQ(start.playOnce, animations::k_Confused);
 }
 
 TEST(CreatureIdleMind, WokenItsLidsDroopUntilItStopsWhatItDoes)

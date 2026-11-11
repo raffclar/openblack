@@ -43,6 +43,7 @@ void openblack::ecs::reflection::RegisterFields_Components_creaturef(entt::meta_
 	    .Field<&components::CreatureFighting::measured>("measured")
 	    .Field<&components::CreatureFighting::stageSeconds>("stageSeconds")
 	    .Field<&components::CreatureFighting::faceSeconds>("faceSeconds")
+	    .Field<&components::CreatureFighting::angerShown>("angerShown")
 	    .Field<&components::CreatureFighting::played>("played")
 	    .Field<&components::CreatureFighting::taunted>("taunted")
 	    .Field<&components::CreatureFighting::faceTurn>("faceTurn")
@@ -75,6 +76,7 @@ void openblack::ecs::reflection::RegisterFields_Components_creaturef(entt::meta_
 	    .Field<&components::CreatureKnockedOut::fainting>("fainting")
 	    .Field<&components::CreatureKnockedOut::handsChecked>("handsChecked")
 	    .Field<&components::CreatureKnockedOut::rest>("rest")
+	    .Field<&components::CreatureKnockedOut::restPosed>("restPosed")
 	    .Field<&components::CreatureKnockedOut::permanent>("permanent")
 	    .Field<&components::CreatureKnockedOut::home>("home")
 	    .Field<&components::CreatureKnockedOut::fizzTurns>("fizzTurns");

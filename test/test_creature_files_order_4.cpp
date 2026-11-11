@@ -7,6 +7,7 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <cmath>
 #include <cstdint>
 
 #include <bit>
@@ -146,6 +147,40 @@ TEST(CreatureFilesOrder4, ThrowingFromTheThingsCentreHasNoStand)
 	const glm::vec2 centre {Quantised(1000.37f), Quantised(2000.91f)};
 	EXPECT_FALSE(creature_throw::WhereToThrowFrom(centre, centre, 15.3f, 4.1f, 2.7f).has_value());
 	EXPECT_FALSE(creature_throw::WhereToThrowFrom(centre, centre, 15.3f, 0.0f, 0.0f).has_value());
+}
+
+// A throw at a place: nearer than eight heights it backs away to eight heights from the place, further it walks up to
+// eight heights. The game raises the most distance of three heights to the least distance and a hundredth.
+TEST(CreatureFilesOrder4, AThrowAtAPlaceStandsEightHeightsAway)
+{
+	constexpr float k_Height = 5.0f;
+	constexpr float k_Keep = k_Height * 8.0f;
+	const auto back = creature_throw::WhereToThrowAt({0.0f, 0.0f}, {10.0f, 0.0f}, k_Height, k_Keep);
+	ASSERT_TRUE(back.has_value());
+	EXPECT_EQ(back->kind, creature_throw::ThrowStand::Kind::BackOff);
+	EXPECT_EQ(back->point, glm::vec2(-30.0f, 0.0f));
+	EXPECT_EQ(back->minDistance, 40.0f);
+	EXPECT_EQ(back->maxDistance, 40.0f + 0.01f);
+	const auto up = creature_throw::WhereToThrowAt({0.0f, 0.0f}, {30.0f, 40.0f}, k_Height, k_Keep);
+	ASSERT_TRUE(up.has_value());
+	EXPECT_EQ(up->kind, creature_throw::ThrowStand::Kind::WalkUp);
+	EXPECT_EQ(up->point, glm::vec2(30.0f, 40.0f));
+	EXPECT_EQ(up->minDistance, 40.0f);
+	EXPECT_EQ(up->maxDistance, 40.0f + 0.01f);
+	// At eight heights exactly it throws from where it stands
+	const auto there = creature_throw::WhereToThrowAt({0.0f, 0.0f}, {24.0f, 32.0f}, k_Height, k_Keep);
+	ASSERT_TRUE(there.has_value());
+	EXPECT_EQ(there->kind, creature_throw::ThrowStand::Kind::There);
+}
+
+// Vanilla bug 1890, kept: right on the place the way has no length, and the point to back away to is not a number
+TEST(CreatureFilesOrder4, ThrowingAtThePlaceItStandsOnBacksAwayToNoNumber)
+{
+	const auto stand = creature_throw::WhereToThrowAt({100.0f, 200.0f}, {100.0f, 200.0f}, 5.0f, 40.0f);
+	ASSERT_TRUE(stand.has_value());
+	EXPECT_EQ(stand->kind, creature_throw::ThrowStand::Kind::BackOff);
+	EXPECT_TRUE(std::isnan(stand->point.x));
+	EXPECT_TRUE(std::isnan(stand->point.y));
 }
 
 // Deviation 79, case 727: a point that it may stand on is kept

@@ -236,6 +236,20 @@ void testbed_scenarios::AddCreatureActionScenarios(std::vector<Scenario>& all)
 	    .objects = {{.type = AnimalInfo::Cow, .offset = {0.0f, -40.0f}}},
 	    .commands = {Do("PointAtObject", 1.0f)},
 	});
+	all.push_back({
+	    .id = "actions.point_at_thing_behind",
+	    .name = "Points at a thing behind it",
+	    .facet = Facet::Expressions,
+	    .description = "A grown tiger is told to point at a cow 40 metres behind it. The hold of the point counts its "
+	                   "turns from the turn that the point starts.",
+	    .expected = "It turns to the cow and then points. The five seconds include the turn, thus the arm holds "
+	                "its point for less than five seconds after the turn.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = Near(),
+	    .creatures = {Actor()},
+	    .objects = {{.type = AnimalInfo::Cow, .offset = {0.0f, 40.0f}}},
+	    .commands = {Do("PointAtObject", 1.0f)},
+	});
 	auto pooer = Actor();
 	pooer.needs.poo = 0.9f;
 	all.push_back({

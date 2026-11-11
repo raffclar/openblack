@@ -492,3 +492,59 @@ TEST(CreatureJointActions, TheOtherJointActionsHaveNoCondition)
 	          creature_plan_actions::Target::CreatureNotFreeForJoint);
 	EXPECT_EQ(creature_plan_actions::For("GiveFriendToy")->use, creature_plan_actions::Target::Toy);
 }
+
+namespace
+{
+/// The faces that the creature which asks pulls on the turns of its orders, in agenda order
+std::vector<creature_face::Cue> FacesOfOrders(const std::vector<Step>& agenda)
+{
+	std::vector<creature_face::Cue> faces;
+	for (const auto& step : agenda)
+	{
+		if (step.kind == Step::Kind::Order)
+		{
+			faces.push_back(step.face);
+		}
+	}
+	return faces;
+}
+} // namespace
+
+TEST(CreatureJointActions, TheAskerPullsTheFaceOfEachOrder)
+{
+	using creature_face::Cue;
+	using Faces = std::vector<Cue>;
+	const auto friends = TwoFriends();
+	EXPECT_EQ(FacesOfOrders(creature_mind::WaveAtFriend(k_Asker, k_Friend)), (Faces {Cue::Grimace, Cue::None}));
+	EXPECT_EQ(FacesOfOrders(creature_mind::PooWithFriend(friends, Always(0))), (Faces {Cue::None, Cue::Smile, Cue::Smile}));
+	EXPECT_EQ(FacesOfOrders(creature_mind::KissFriend(friends, 2.0f, 5.0f, Always(1))),
+	          (Faces {Cue::Puzzled, Cue::None, Cue::None}));
+	EXPECT_EQ(FacesOfOrders(creature_mind::DanceWithFriend(k_Asker, k_Friend, 10.0f)), (Faces {Cue::None, Cue::Playfulness}));
+	EXPECT_EQ(FacesOfOrders(creature_mind::ArgueWithFriend(k_Asker, k_Friend, 10.0f, Always(0))),
+	          (Faces {Cue::Smile, Cue::Smile, Cue::Anger, Cue::Anger, Cue::Anger, Cue::Smile}));
+	EXPECT_EQ(FacesOfOrders(creature_mind::MopeAboutWithFriend(k_Asker, k_Friend, 10.0f, Always(0))),
+	          (Faces {Cue::Sad, Cue::Sad, Cue::Sad}));
+	EXPECT_EQ(FacesOfOrders(creature_mind::ShowOffToFriend(k_Asker, k_Friend, 10.0f, {}, Always(0))),
+	          (Faces {Cue::Smile, Cue::Smile, Cue::Puzzled, Cue::Puzzled}));
+	EXPECT_EQ(FacesOfOrders(creature_mind::TellCreatureToSodOff(k_Asker, k_Friend, {}, {10.0f, 0.0f, 0.0f}, 20.0f, Always(1))),
+	          (Faces {Cue::Grimace, Cue::None, Cue::None, Cue::None}));
+	EXPECT_EQ(FacesOfOrders(creature_mind::ExamineOtherCreatureWithFriend(k_Friend, 3, Always(0))),
+	          (Faces {Cue::Playfulness, Cue::Playfulness, Cue::None}));
+	EXPECT_EQ(FacesOfOrders(creature_mind::PlayThrowingGameWithFriend(friends, 4, {}, {}, false)),
+	          (Faces {Cue::Grimace, Cue::None, Cue::None}));
+	EXPECT_EQ(FacesOfOrders(creature_mind::GiveFriendToy(k_Asker, k_Friend, 4, false, Always(2))),
+	          (Faces {Cue::Smile, Cue::Smile, Cue::Smile}));
+	EXPECT_EQ(FacesOfOrders(creature_mind::ShowFriendCitadel(friends, {.point = {50.0f, 2.0f, 50.0f}, .radius = 10.0f}, 3.0f,
+	                                                         2.0f, {1.0f, 2.0f, 3.0f}, false, InTurn({0, 0}))),
+	          (Faces {Cue::Puzzled, Cue::None, Cue::None, Cue::Puzzled}));
+	// The other joint actions give their orders with no face
+	for (const auto& agenda :
+	     {creature_mind::TalkToFriend(k_Asker, k_Friend, 10.0f, Always(0)),
+	      creature_mind::SitWithFriend(friends, {10.0f, 20.0f}, 40.0f, Always(0)), creature_mind::BeHappyWithFriend(friends)})
+	{
+		for (const auto face : FacesOfOrders(agenda))
+		{
+			EXPECT_EQ(face, Cue::None);
+		}
+	}
+}

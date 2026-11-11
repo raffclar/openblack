@@ -249,20 +249,7 @@ bool spells::MeetsKindRuleOn(SpellServicesInterface& services, MagicType type, g
 
 bool spells::CanCastAtPointItself(SpellServicesInterface& services, MagicType type, glm::vec3 point)
 {
-	auto& world = services.World();
-	switch (ClassOf(type))
-	{
-	case SpellClass::Heal:
-	{
-		const auto reach = HealReachOf(services.Info(), type, 1.0f);
-		return reach.has_value() && !world.HealTargets(point, reach->radius, reach->maximum).empty();
-	}
-	case SpellClass::Forest:
-		// A forest goes only on land in the map, where trees can grow
-		return world.InBounds(point) && world.IsLand(point) && services.ForestCanGrowAt(point);
-	default:
-		return true;
-	}
+	return MeetsKindRuleAt(services, type, point);
 }
 
 void spells::Prepare(SpellServicesInterface& services, Spell& spell)

@@ -101,12 +101,6 @@ using namespace openblack::ecs::systems::fight_detail;
 
 namespace
 {
-/// A face is due again once its wait is within this much of over
-constexpr float k_FaceDue = 1e-3f;
-
-/// The stages before the duel give up waiting after this long
-constexpr float k_ApproachSeconds = 30.0f;
-
 /// How many times a creature completed the fight action
 uint32_t FightsCompleted(entt::entity creature)
 {
@@ -246,11 +240,11 @@ void PullApartFighters(ecs::Registry& registry, entt::entity creature, const Cre
 	    fight::PullApartOf(fighting.arena, at, otherAt, creature_locomotion::DirectionOf(self->heading), extents);
 	if (pulled.first.has_value())
 	{
-		Shift(*self, *pulled.first - at);
+		MoveTo(*self, *pulled.first);
 	}
 	if (pulled.second.has_value())
 	{
-		Shift(*otherBody, *pulled.second - otherAt);
+		MoveTo(*otherBody, *pulled.second);
 	}
 	if (pulled.first.has_value() || pulled.second.has_value())
 	{
@@ -396,14 +390,14 @@ glm::vec2 WorldToLocal(glm::vec2 world, GameHeading heading)
 	return {glm::dot(world, right), glm::dot(world, ahead)};
 }
 
-void Shift(CreatureLocomotion& locomotion, glm::vec2 by)
+void MoveTo(CreatureLocomotion& locomotion, glm::vec2 point)
 {
-	for (auto* point : {&locomotion.fromPosition, &locomotion.toPosition})
-	{
-		point->x += by.x;
-		point->z += by.y;
-		point->y = GroundAt(Flat(*point));
-	}
+	const auto by = point - Flat(locomotion.toPosition);
+	locomotion.fromPosition.x += by.x;
+	locomotion.fromPosition.z += by.y;
+	locomotion.fromPosition.y = GroundAt(Flat(locomotion.fromPosition));
+	// The game keeps the new point as it is. A sum of the old point and the move can be one float step away from it.
+	locomotion.toPosition = glm::vec3(point.x, GroundAt(point), point.y);
 }
 
 void SetEyes(ecs::Registry& registry, entt::entity creature, creature_eyes::Mode mode)
@@ -1110,18 +1104,6 @@ void CreatureFightSystem::StageTurn(entt::entity entity)
 		return;
 	}
 	fighting->stageSeconds += k_TurnSeconds;
-	// Squaring up to the opponent and fighting it, it shows its anger as it starts and every few seconds after. The
-	// other creature starts when it obeys.
-	if (fighting->stage <= CreatureFighting::Stage::Duel && fighting->part == CreatureFighting::Part::Obeys &&
-	    Locator::creatureMindSystem::has_value())
-	{
-		fighting->faceSeconds -= k_TurnSeconds;
-		if (fighting->faceSeconds < k_FaceDue)
-		{
-			Locator::creatureMindSystem::value().ShowFeeling(entity, creature_face::Cue::Anger);
-			fighting->faceSeconds = creature_mind::k_FaceRepeatSeconds;
-		}
-	}
 	const auto opponent = fighting->opponent;
 	const bool opponentHere = registry.Valid(opponent) && registry.AllOf<Creature, Transform>(opponent);
 	const auto& body = registry.Get<const Creature>(entity);
@@ -1169,6 +1151,33 @@ void CreatureFightSystem::StageTurn(entt::entity entity)
 		Leave(entity);
 		return;
 	}
+	// Only the creature that started the fight shows anger in its face. The other creature takes its orders with no
+	// face. Some steps of the fight show anger and others show no face. A step with anger pulls the face on its first
+	// turn and again each time the face is due. An order with anger pulls the face only on the turn of the order.
+	const auto showAnger = [entity]() {
+		if (Locator::creatureMindSystem::has_value())
+		{
+			Locator::creatureMindSystem::value().ShowFeeling(entity, creature_face::Cue::Anger);
+		}
+	};
+	const auto angerOnOrder = [&registry, entity, &showAnger]() {
+		showAnger();
+		registry.Get<CreatureFighting>(entity).angerShown = false;
+	};
+	const auto angerStarts = [&registry, entity, &showAnger]() {
+		showAnger();
+		auto& side = registry.Get<CreatureFighting>(entity);
+		side.angerShown = true;
+		side.faceSeconds = creature_mind::k_FaceRepeatSeconds;
+	};
+	const auto angerTurn = [&registry, entity, &showAnger]() {
+		auto& side = registry.Get<CreatureFighting>(entity);
+		if (side.angerShown && creature_mind::FaceAgainDue(side.faceSeconds, k_TurnSeconds))
+		{
+			showAnger();
+			side.faceSeconds = creature_mind::k_FaceRepeatSeconds;
+		}
+	};
 	// The other creature continues with what it did until its first order
 	if (fighting->part != CreatureFighting::Part::Obeys)
 	{
@@ -1187,6 +1196,24 @@ void CreatureFightSystem::StageTurn(entt::entity entity)
 		// tries its own taunt from the next turn.
 		if (starter)
 		{
+			// The request and the order to turn show anger, the order to stand still does not. Its own turn to face the
+			// other creature shows anger until the turn of the order to taunt.
+			if (fighting->faceOffTurns == fight::k_FaceOffRequestTurn || fighting->faceOffTurns == fight::k_FaceOffOrderTurn)
+			{
+				angerOnOrder();
+			}
+			else if (fighting->faceOffTurns == fight::k_FaceOffOwnTurn)
+			{
+				angerStarts();
+			}
+			else if (fighting->faceOffTurns > fight::k_FaceOffOwnTurn && fighting->faceTurn.phase != Phase::Done)
+			{
+				angerTurn();
+			}
+			else
+			{
+				fighting->angerShown = false;
+			}
 			auto* other = &registry.Get<CreatureFighting>(opponent);
 			if (fighting->faceOffTurns == fight::k_FaceOffStillTurn && other->part == CreatureFighting::Part::Asked)
 			{
@@ -1227,6 +1254,23 @@ void CreatureFightSystem::StageTurn(entt::entity entity)
 		if (starter)
 		{
 			++fighting->faceOffTurns;
+			// The order to turn, its own turn, the order to start the duel and its own duel show anger
+			if (fighting->faceOffTurns == fight::k_SquareOrderTurn)
+			{
+				angerOnOrder();
+			}
+			else if (fighting->faceOffTurns == fight::k_SquareOwnTurn || (fighting->played && !fighting->angerShown))
+			{
+				angerStarts();
+			}
+			else if (!fighting->played && fighting->faceTurn.phase == Phase::Done)
+			{
+				angerOnOrder();
+			}
+			else
+			{
+				angerTurn();
+			}
 			if (fighting->faceOffTurns == fight::k_SquareOrderTurn &&
 			    registry.Get<const CreatureFighting>(opponent).stage == CreatureFighting::Stage::Ready)
 			{
@@ -1354,12 +1398,26 @@ void CreatureFightSystem::StageTurn(entt::entity entity)
 			{
 				hands->Cancel(entity);
 			}
+			// The order to walk to the arena shows anger
+			angerOnOrder();
 			order(opponent, CreatureFighting::Stage::Approach);
 			next(CreatureFighting::Stage::Approach);
 		}
 		break;
 	}
 	case CreatureFighting::Stage::Approach:
+		// The walk of the first creature to its place shows anger
+		if (starter)
+		{
+			if (fighting->played)
+			{
+				angerTurn();
+			}
+			else
+			{
+				angerStarts();
+			}
+		}
 		if (!fighting->played)
 		{
 			fighting->played = true;
@@ -1369,7 +1427,8 @@ void CreatureFightSystem::StageTurn(entt::entity entity)
 				locomotion->MoveTo(entity, spot, Pace::Walk, 0.0f, fight::ArrivalDistance(ShownSize(body)));
 			}
 		}
-		else if (!moving(entity) || fighting->stageSeconds > k_ApproachSeconds)
+		// The walk has no time limit. It ends when the body stops.
+		else if (!moving(entity))
 		{
 			next(CreatureFighting::Stage::Ready);
 		}
@@ -1380,19 +1439,31 @@ void CreatureFightSystem::StageTurn(entt::entity entity)
 		{
 			break;
 		}
-		// When the other creature is ready, the first creature turns to face it in the arena from the next turn
+		// The wait for the other creature shows anger. In this stage, the played flag shows that the wait started.
+		if (fighting->played)
+		{
+			angerTurn();
+		}
+		else
+		{
+			fighting->played = true;
+			angerStarts();
+		}
+		// When the other creature is ready, the first creature turns to face it in the arena from the next turn. The
+		// wait has no time limit.
 		if (partner->stage == CreatureFighting::Stage::Ready)
 		{
 			next(CreatureFighting::Stage::Square);
 			fighting->faceOffTurns = 0;
 			fighting->faceTurn = {};
 		}
-		else if (fighting->stageSeconds > k_ApproachSeconds)
-		{
-			AbortFight(entity);
-		}
 		break;
 	case CreatureFighting::Stage::Duel:
+		// The duel of the first creature shows anger until the duel ends
+		if (starter)
+		{
+			angerTurn();
+		}
 		// An opponent with no life left loses the duel, also when its fight health is not zero
 		if (opponentHere && fight::WinsByOpponentsLife(LifeOf(registry, opponent), registry.AllOf<ScriptControlled>(entity)))
 		{

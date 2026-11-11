@@ -73,6 +73,18 @@ TEST(SimRun, ATurnLimitedRunEndsWhenTheTempleHoldsTheWorldAfterTheLastScenarioCo
 	EXPECT_FALSE(EndsHeldInTemple(settings, true, false, false));
 }
 
+TEST(SimRun, ATurnLimitedRunEndsWhenTheGameIsOverInTheTemple)
+{
+	const Settings settings {.untilTurn = 100000};
+	EXPECT_TRUE(EndsAtGameOver(settings, true, true));
+	// A run with no last turn continues to its last frame
+	EXPECT_FALSE(EndsAtGameOver(Settings {}, true, true));
+	// The script of the game's end still plays its turns before the temple holds the world
+	EXPECT_FALSE(EndsAtGameOver(settings, false, true));
+	// A player in the temple of a game that is not over can go out again
+	EXPECT_FALSE(EndsAtGameOver(settings, true, false));
+}
+
 TEST(SimRun, AHeldRunThatAToolStepsSkipsItsFrames)
 {
 	EXPECT_TRUE(SkipsHeldFrame(true, true, false));

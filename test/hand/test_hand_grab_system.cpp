@@ -820,6 +820,8 @@ TEST_F(HandGrabSystemWithWorld, ARockIsTakenOnceTheHandHasFadedIntoItsPull)
 	ASSERT_FALSE(world->reactions.empty());
 	EXPECT_EQ(world->reactions.front().type, Reaction::ReactToHandPickUp);
 	EXPECT_EQ(world->reactions.front().initiator, world->hand);
+	// Its time starts at once, so it ends also when nobody takes it up
+	EXPECT_TRUE(world->reactions.front().timedFromStart);
 }
 
 // The debug tools let go at once with no command. In a network game, each computer does this let go in its own turn, so
@@ -981,6 +983,7 @@ TEST_F(HandGrabSystemWithWorld, AHeldPressTakesTheOwnShownSeedBackToTheMiracles)
 	EXPECT_EQ(world->helpEvents, std::vector<uint32_t> {help::profile::k_PickUp});
 	ASSERT_EQ(world->reactions.size(), 1u);
 	EXPECT_EQ(world->reactions.front().type, Reaction::ReactToHandPickUp);
+	EXPECT_TRUE(world->reactions.front().timedFromStart);
 	EXPECT_EQ(world->spreadStopped, std::vector<entt::entity> {seed});
 	EXPECT_EQ(world->pathsForgotten, 1);
 	// It never goes into the hand as a thing
@@ -1243,6 +1246,11 @@ TEST_F(HandGrabSystemWithWorld, AComputerGodTakesAThingOutsideItsInfluence)
 	// The take of a computer god takes it
 	system->DoComputerTake(world->HandPlayer(), rock);
 	EXPECT_EQ(system->GetHeld(), std::optional(rock));
+	// The pick-up reaction of a computer god's hand has the same time as that of the player's hand
+	const auto pickUp =
+	    std::ranges::find(world->reactions, Reaction::ReactToHandPickUp, &decltype(world->reactions)::value_type::type);
+	ASSERT_NE(pickUp, world->reactions.end());
+	EXPECT_TRUE(pickUp->timedFromStart);
 }
 
 // The other rules of a take apply to the steps of a computer god
@@ -1778,6 +1786,40 @@ TEST_F(HandGrabSystemWithWorld, AThingInFlightIsCaughtOnlyAfterTheWait)
 	Frame(130);
 	ASSERT_TRUE(system->GetHeld().has_value());
 	EXPECT_EQ(*system->GetHeld(), rock);
+}
+
+// The hand takes a thing from the press until the turn puts the thing in the hand, also while it waits for a thing in
+// flight and does not pull it. Both buttons and the loss of the thing end the interface lock in all of this time.
+TEST_F(HandGrabSystemWithWorld, TheHandTakesAThingFromThePressUntilTheTurnPutsItInTheHand)
+{
+	const auto rock = world->AddRock({0.0f, 5.0f, 0.0f});
+	world->underCursor = rock;
+	world->flying.insert(rock);
+	EXPECT_FALSE(system->GetTaking().has_value());
+	deferCommands = true;
+	EXPECT_TRUE(Press());
+	EXPECT_EQ(system->GetTaking(), std::optional(rock));
+	EXPECT_FALSE(system->IsPulling());
+	// After the wait the hand sends the take, and it takes the thing until the turn does the take
+	Frame(230);
+	EXPECT_FALSE(system->GetHeld().has_value());
+	EXPECT_EQ(system->GetTaking(), std::optional(rock));
+	EXPECT_EQ(world->lockEnds, 0);
+	RunWaiting();
+	ASSERT_EQ(system->GetHeld(), std::optional(rock));
+	EXPECT_FALSE(system->GetTaking().has_value());
+	// The thing of the press is in the hand now, which ends the interface lock
+	EXPECT_EQ(world->lockEnds, 1);
+}
+
+TEST_F(HandGrabSystemWithWorld, ATapTakesNothing)
+{
+	const auto rock = world->AddRock({0.0f, 0.0f, 0.0f});
+	world->underCursor = rock;
+	EXPECT_TRUE(Press());
+	EXPECT_EQ(system->GetTaking(), std::optional(rock));
+	Release();
+	EXPECT_FALSE(system->GetTaking().has_value());
 }
 
 TEST_F(HandGrabSystemWithWorld, AFlyingThingThatLandsDuringTheWaitIsTakenAtOnce)

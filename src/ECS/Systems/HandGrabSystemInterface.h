@@ -172,6 +172,9 @@ public:
 	[[nodiscard]] virtual bool IsBusyOf(PlayerNames player) const = 0;
 	/// Whether the hand is pulling a thing out of the ground, from the press until it holds it
 	[[nodiscard]] virtual bool IsPulling() const = 0;
+	/// The thing that the hand of this computer takes: from the press on the thing, while the hand waits or pulls, until
+	/// the turn puts the thing in the hand
+	[[nodiscard]] virtual std::optional<entt::entity> GetTaking() const { return std::nullopt; }
 	/// Whether the hand's point on the land is in its player's influence
 	[[nodiscard]] virtual bool IsInInfluence() const = 0;
 	/// Whether the point of the hand of a player on the land is in the influence of that player

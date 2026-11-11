@@ -123,7 +123,7 @@ TEST(PlayerColour, ALaterGodTakesTheLandColourOfItsSlot)
 	EXPECT_EQ(player_colour::FromTable(k_Table, static_cast<PlayerNames>(9)), colours.at(1) & 0xFFFFFFu);
 }
 
-TEST(PlayerColour, TheSecondLandShowsLethysInYellowAndKhazarInBlue)
+TEST(PlayerColour, TheSecondLandShowsKhazarInYellowAndLethysInBlue)
 {
 	// The world shows each god of a land of the story in the colour that the land gives it
 	const auto& colours = ecs::components::Player::k_Colours;

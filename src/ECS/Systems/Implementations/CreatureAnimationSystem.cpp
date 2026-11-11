@@ -1605,14 +1605,40 @@ void CreatureAnimationSystem::PoseCopy(Registry& copies, entt::entity copy, floa
 		eyes->openness = own->openness;
 	}
 	eyes->lookAt = animation->lookAt;
-	eyes->blink =
-	    creature_eyes::AdvanceBlink(eyes->blink, static_cast<int32_t>(std::lround(milliseconds)),
-	                                [this](uint32_t range) { return _random.LocalRand(static_cast<int32_t>(range)); });
-	eyes->drawn = {};
-	if (rig != nullptr && rig->eyes.has_value())
+	// The eyes blink by the milliseconds of the step. Each drawn frame until the next step moves the eyes by these
+	// milliseconds (PlaceCopyEyes).
+	eyes->turnMs = static_cast<int32_t>(std::lround(milliseconds));
+	eyes->blink = creature_eyes::AdvanceBlink(
+	    eyes->blink, eyes->turnMs, [this](uint32_t range) { return _random.LocalRand(static_cast<int32_t>(range)); });
+}
+
+void CreatureAnimationSystem::PlaceCopyEyes(Registry& copies, entt::entity copy, const Registry& bodies)
+{
+	const auto* self = copies.Valid(copy) ? copies.TryGet<const CreatureCopy>(copy) : nullptr;
+	if (self == nullptr || !bodies.Valid(self->creature))
 	{
-		PlaceEyes(*eyes, *rig->eyes, morph->drawn, animation->boneMatrices, *transform, self->size,
-		          static_cast<int32_t>(std::lround(milliseconds)),
+		return;
+	}
+	const auto* creature = bodies.TryGet<const Creature>(self->creature);
+	const auto* morph = bodies.TryGet<const CreatureMorph>(self->creature);
+	const auto* animation = copies.TryGet<const CreatureAnimation>(copy);
+	const auto* transform = copies.TryGet<const Transform>(copy);
+	auto* eyes = copies.TryGet<CreatureEyes>(copy);
+	if (creature == nullptr || morph == nullptr || animation == nullptr || transform == nullptr || eyes == nullptr)
+	{
+		return;
+	}
+	eyes->drawn = {};
+	const auto& rigs = Locator::resources::value().GetCreatureRigs();
+	const auto rigId = creature::GetRigId(creature->species);
+	if (!rigs.Contains(rigId))
+	{
+		return;
+	}
+	const auto& rig = *rigs.Handle(rigId);
+	if (rig.eyes.has_value())
+	{
+		PlaceEyes(*eyes, *rig.eyes, morph->drawn, animation->boneMatrices, *transform, self->size, eyes->turnMs,
 		          [this](uint32_t range) { return _random.LocalRand(static_cast<int32_t>(range)); });
 	}
 }

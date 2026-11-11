@@ -243,6 +243,15 @@ struct ThrowStand
 /// from the map positions of the two. None when the creature stands right on the thing's centre, with no way to back away.
 [[nodiscard]] std::optional<ThrowStand> WhereToThrowFrom(glm::vec2 creature, glm::vec2 target, float height, float targetRadius,
                                                          float keep);
+/// The distances of a throw at a place, in heights of the creature: the creature stands this far from the place, and
+/// when it backs away it may stop up to this far from the point that it backs away to
+constexpr float k_ThrowAtPointHeights = 8.0f;
+constexpr float k_ThrowAtPointBackOffHeights = 3.0f;
+/// Where a creature of a height goes to throw at a place, keeping the distance it was given. Nearer than that distance it
+/// backs away to that distance from the place. Further than eight times its height it walks up to that distance. The game
+/// works from the map position of the creature. As in the game, a creature right on the place gets a point to back away to
+/// that is not a number (vanilla-bugs 1890).
+[[nodiscard]] std::optional<ThrowStand> WhereToThrowAt(glm::vec2 creature, glm::vec2 place, float height, float keep);
 /// The point that a creature backs away to for a throw. A point that the creature may stand on is used as it is. If not,
 /// it is the nearest place that it may stand on, when that is less than the valid point reach away. None when the search
 /// finds no place, or the place is too far: the move then fails (deviation 79: the game tests a point that the search

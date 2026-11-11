@@ -162,4 +162,26 @@ void AddAtCameras()
 	}
 }
 
+void TurnSymbols(int32_t milliseconds)
+{
+	if (!Locator::liquidParticleSystem::has_value())
+	{
+		return;
+	}
+	const bool directsFight = Locator::creatureFightSystem::has_value() && Locator::creatureFightSystem::value().DirectsFight();
+	const auto* registry = Locator::entitiesRegistry::has_value() ? &Locator::entitiesRegistry::value() : nullptr;
+	const auto* hands = Locator::handSystem::has_value() ? &Locator::handSystem::value() : nullptr;
+	Locator::liquidParticleSystem::value().TurnPlayerSymbols(milliseconds, [&](liquid_particles::Interface interface) {
+		if (directsFight || registry == nullptr || hands == nullptr)
+		{
+			return false;
+		}
+		if (interface.observer != 0)
+		{
+			return true;
+		}
+		return player_sparkles::ShowsSymbol(WatchedOf(*registry, *hands, interface.player));
+	});
+}
+
 } // namespace openblack::ecs::other_player_sparkles

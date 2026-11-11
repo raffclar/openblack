@@ -50,6 +50,7 @@
 #include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/CreatureSkinSystemInterface.h"
 #include "ECS/Systems/FightTranscriptNote.h"
+#include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
@@ -233,6 +234,16 @@ magic::EffectDefence magic_living::DefenceOf(entt::entity entity)
 
 namespace
 {
+/// The burn of an effect heats the creature each time that the game finds the harm of the effect. Water cools it.
+void Heat(entt::entity entity, const magic::EffectValues& values, const magic::EffectSource& source)
+{
+	const float burn = values[magic::EffectKind::Burn];
+	if (burn != 0.0f && Locator::fireSystem::has_value())
+	{
+		Locator::fireSystem::value().ApplyBurn(entity, burn, source.player);
+	}
+}
+
 /// A heal mends a creature's cuts and scars as though so much time had passed
 void HealMarks(entt::entity entity, float heal)
 {
@@ -275,8 +286,9 @@ void ChangeOpinion(entt::entity entity, const magic::EffectValues& values, const
 }
 
 /// The line from where a blow or burn came to the creature's groin marks its skin where it first meets the body: a
-/// cut, deep for a hard blow, or a burn's scar, further along its row the harder it was
-void Scar(entt::entity entity, glm::vec3 from, glm::vec3 groin, uint8_t kind, float harm)
+/// cut, deep for a hard blow, or a burn's scar, further along its row the harder it was. The synced draw is made also
+/// when the body has no pose, but then nothing is marked.
+void Scar(entt::entity entity, glm::vec3 from, glm::vec3 groin, bool posed, uint8_t kind, float harm)
 {
 	const auto direction = groin - from;
 	// The squares add z, y, then x
@@ -286,7 +298,10 @@ void Scar(entt::entity entity, glm::vec3 from, glm::vec3 groin, uint8_t kind, fl
 		return;
 	}
 	const auto column = creature_marks::scar::Column(Locator::gameRandom::value().GameRand(5), harm);
-	ecs::creature_scars::MarkAlong(entity, from, direction, kind, column);
+	if (posed)
+	{
+		ecs::creature_scars::MarkAlong(entity, from, direction, kind, column);
+	}
 }
 
 /// Hurt by an effect out of a fight, a creature is frightened and angered by it, unless its own player applied it, and
@@ -311,12 +326,12 @@ void CutAndScarred(entt::entity entity, float damage, const magic::EffectValues&
 	{
 		return;
 	}
-	const auto groinAt = ecs::creature_scars::GroinOf(entity);
-	if (!groinAt.has_value())
-	{
-		return;
-	}
-	const auto groin = *groinAt;
+	// The synced draws are made whether or not the posed body can be marked: without it they are drawn about where the
+	// creature stands, and nothing is marked
+	const auto posedGroin = ecs::creature_scars::GroinOf(entity);
+	const auto* standing = registry.TryGet<const Transform>(entity);
+	const glm::vec3 groin = posedGroin.value_or(standing != nullptr ? standing->position : glm::vec3(0.0f));
+	const bool posed = posedGroin.has_value();
 	const float reach = ShownSize(*creature) * creature_marks::scar::k_BurnReachPerSize;
 	auto& random = Locator::gameRandom::value();
 	if (values[magic::EffectKind::Burn] < values[magic::EffectKind::Crush])
@@ -326,7 +341,7 @@ void CutAndScarred(entt::entity entity, float damage, const magic::EffectValues&
 		const float cornerHeight =
 		    Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().GetHeightAt(glm::vec2(0.0f)) : 0.0f;
 		const auto from = source.point.value_or(glm::vec3(0.0f, cornerHeight, 0.0f));
-		Scar(entity, from, groin, creature_marks::scar::BlowKind(harm), harm);
+		Scar(entity, from, groin, posed, creature_marks::scar::BlowKind(harm), harm);
 		return;
 	}
 	const auto kind = creature_marks::scar::BurnKind(random.GameRand(3));
@@ -337,18 +352,19 @@ void CutAndScarred(entt::entity entity, float damage, const magic::EffectValues&
 	}
 	const auto from =
 	    creature_marks::scar::BurnFrom(groin, reach, [&random](float limit) { return random.GameFloatRand(limit); });
-	Scar(entity, from, groin, kind, harm);
+	Scar(entity, from, groin, posed, kind, harm);
 }
 } // namespace
 
-bool magic_living::TakesEffectItsOwnWay(entt::entity entity, const magic::EffectValues& values,
-                                        const magic::EffectSource& source)
+bool magic_living::TakesEffectItsOwnWay(entt::entity entity, magic::EffectValues& values, const magic::EffectSource& source)
 {
 	auto& registry = EntityRegistry();
 	if (!registry.Valid(entity) || !registry.AnyOf<Creature>(entity))
 	{
 		return false;
 	}
+	// The game finds the harm first, and this heats the creature, also when the creature then keeps the effect out
+	Heat(entity, values, source);
 	const auto defence = DefenceOf(entity);
 	const float damage = magic::DamageFrom(values, defence);
 	const bool self = source.casterCreature == entity;
@@ -376,6 +392,9 @@ bool magic_living::TakesEffectItsOwnWay(entt::entity entity, const magic::Effect
 	}
 	if (!inDuel)
 	{
+		// The cuts and scars find the harm again, and the heat goes on the creature a second time. The life takes the
+		// third heat.
+		Heat(entity, values, source);
 		CutAndScarred(entity, damage, values, source);
 		return false;
 	}
@@ -387,9 +406,10 @@ bool magic_living::TakesEffectItsOwnWay(entt::entity entity, const magic::Effect
 		ChangeOpinion(entity, values, source);
 		return true;
 	}
-	// In a fight it takes the miracle as a blow: blocking, a tenth of it; it reels, a heal gives back the health it fights
-	// with, and harm takes it, which can knock it out. Its life is untouched.
-	auto taken = values;
+	// In a fight it takes the miracle as a blow; it reels, a heal gives back the health it fights with, and harm takes it,
+	// which can knock it out. Its life is untouched. While it blocks, the heal is a tenth, but the harm found before the
+	// block stays full. The effect stays a tenth for all the things that it reaches after this creature.
+	auto& taken = values;
 	const bool blocking = Locator::creatureFightSystem::has_value() && Locator::creatureFightSystem::value().IsBlocking(entity);
 	if (blocking)
 	{

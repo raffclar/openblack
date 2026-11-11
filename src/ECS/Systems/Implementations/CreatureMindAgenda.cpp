@@ -394,6 +394,7 @@ bool Move(entt::entity creature, const creature_mind::Commands& commands)
 	case Kind::TurnToFaceObject:
 	case Kind::TurnToFaceAwayFromObject:
 	case Kind::ToThrowPosition:
+	case Kind::ToThrowAtPoint:
 		// Overseen turn by turn by the mind as it casts (StartSubMove)
 		break;
 	}
@@ -404,7 +405,7 @@ bool IsSubMove(creature_mind::Movement::Kind kind)
 {
 	using Kind = creature_mind::Movement::Kind;
 	return kind == Kind::GoNearObject || kind == Kind::GetAwayFromObject || kind == Kind::TurnToFaceObject ||
-	       kind == Kind::TurnToFaceAwayFromObject || kind == Kind::ToThrowPosition;
+	       kind == Kind::TurnToFaceAwayFromObject || kind == Kind::ToThrowPosition || kind == Kind::ToThrowAtPoint;
 }
 
 /// The creature heals itself: its life becomes full, and its wounds and blood age as if much time went by
@@ -1202,8 +1203,8 @@ void CreatureMindSystem::AgendaTurn(entt::entity entity)
 		    .followed = FollowedViewOf(registry, transform.position, mind),
 		    .cameraFocus = cameraFocus,
 		    .cameraFocusAhead = cameraFocusAhead,
-		    .followHand = FollowHandViewOf(registry, entity, mind, creature_layers::IsPlaying(animation.body)),
-		    .watchPlayer = WatchPlayerViewOf(registry, entity, mind, creature_layers::IsPlaying(animation.body)),
+		    .followHand = FollowHandViewOf(registry, entity, mind, creature_body::PerformsBodyAction(body)),
+		    .watchPlayer = WatchPlayerViewOf(registry, entity, mind, creature_body::PerformsBodyAction(body)),
 		    .fighting = registry.AllOf<CreatureFighting>(entity),
 		    .totemShare = mind_town_help::TotemShareOf(registry, mind.idle),
 		};
@@ -1248,6 +1249,10 @@ void CreatureMindSystem::AgendaTurn(entt::entity entity)
 		if (commands.endPoint)
 		{
 			EndDanceGesturePoint(entity);
+		}
+		if (commands.stopPointing && Locator::creatureObjectActionSystem::has_value())
+		{
+			Locator::creatureObjectActionSystem::value().EndPoint(entity);
 		}
 		if (commands.releaseCast)
 		{
@@ -1509,10 +1514,16 @@ void CreatureMindSystem::AgendaTurn(entt::entity entity)
 		}
 		if (needs != nullptr)
 		{
-			needs->rest = creature_mind::IsUnconscious(mind.idle) ? CreatureNeeds::Rest::Unconscious
-			              : creature_mind::IsAsleep(mind.idle)    ? CreatureNeeds::Rest::Asleep
-			              : creature_mind::IsResting(mind.idle)   ? CreatureNeeds::Rest::Resting
-			                                                      : CreatureNeeds::Rest::Awake;
+			const auto rest = creature_mind::IsUnconscious(mind.idle) ? CreatureNeeds::Rest::Unconscious
+			                  : creature_mind::IsAsleep(mind.idle)    ? CreatureNeeds::Rest::Asleep
+			                  : creature_mind::IsResting(mind.idle)   ? CreatureNeeds::Rest::Resting
+			                                                          : CreatureNeeds::Rest::Awake;
+			// The turns of a sleep count from the first turn that it tried to start. The body counts each turn after this
+			if (rest == CreatureNeeds::Rest::Asleep && needs->rest != CreatureNeeds::Rest::Asleep)
+			{
+				needs->restTurns = mind.idle.restTurns;
+			}
+			needs->rest = rest;
 		}
 
 		// Looking about, the head turns to the most interesting thing in sight, or ahead
@@ -1532,14 +1543,14 @@ void CreatureMindSystem::AgendaTurn(entt::entity entity)
 			auto from = *commands.gaze;
 			from.runningAway = false;
 			const auto point = back ? GazePoint(registry, entity, from, moving) : std::nullopt;
-			animation.lookAt = point.has_value() ? point : LookAbout(creature, transform, mind);
+			animation.lookAt = point.has_value() ? point : LookAbout(registry, entity, transform, mind);
 		}
 		else if (commands.gaze.has_value() && commands.gaze->whileGoing)
 		{
 			// On the way to a place: the head looks at the place, at what it watches, or from side to side. Without
 			// a point of its own, the look uses the top of the thing that it goes to, or else the place that the
 			// creature walks to.
-			const auto about = LookAbout(creature, transform, mind);
+			const auto about = LookAbout(registry, entity, transform, mind);
 			auto place = commands.gaze->point;
 			if (!place.has_value() && commands.gaze->object.has_value())
 			{
@@ -1553,12 +1564,19 @@ void CreatureMindSystem::AgendaTurn(entt::entity entity)
 			animation.lookAt =
 			    place.has_value() ? LookWhileGoing(entity, creature, transform, mind, *place).value_or(about) : about;
 		}
+		else if (const auto person = std::exchange(mind.dependentLook, std::nullopt); person.has_value())
+		{
+			// The person called to the dance that it drew this turn, before it decided: the head looks at the top of
+			// that person, also when the step ended in this turn
+			const auto point = DependentLookPoint(registry, static_cast<entt::entity>(*person));
+			animation.lookAt = point.has_value() ? *point : LookAbout(registry, entity, transform, mind);
+		}
 		else
 		{
 			// A step with nothing to look at, or whose thing is gone, looks about. The pose of the body decides if
 			// the head can turn to the point.
 			const auto point = commands.gaze.has_value() ? GazePoint(registry, entity, *commands.gaze, moving) : std::nullopt;
-			animation.lookAt = point.has_value() ? *point : LookAbout(creature, transform, mind);
+			animation.lookAt = point.has_value() ? *point : LookAbout(registry, entity, transform, mind);
 		}
 		// After the hold of a pick-up, the head and the eyes look at no point until the body has played the pick-up
 		if (commands.noLookPoint)

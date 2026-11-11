@@ -90,12 +90,22 @@ bool openblack::creature_spell_casting::TrySucceeds(float seen, float needed)
 	return share > 1.0f || !(share < k_ShareToSucceed);
 }
 
+namespace
+{
+/// A fire miracle is as big as the caster's height over 10, at most 1. A height that is not a number gives 1.
+float FireMagnitude(float casterHeight)
+{
+	const float magnitude = casterHeight / openblack::creature_spell_casting::k_FireMagnitudeHeight;
+	return openblack::x87::LessOrUnordered(1.0f, magnitude) ? 1.0f : magnitude;
+}
+} // namespace
+
 float openblack::creature_spell_casting::CastMagnitude(float targetSize, std::optional<float> targetCreatureScale,
                                                        bool fireSeed, float casterHeight)
 {
 	if (fireSeed)
 	{
-		return std::min(casterHeight / k_FireMagnitudeHeight, 1.0f);
+		return FireMagnitude(casterHeight);
 	}
 	if (targetCreatureScale.has_value())
 	{
@@ -106,5 +116,5 @@ float openblack::creature_spell_casting::CastMagnitude(float targetSize, std::op
 
 float openblack::creature_spell_casting::CastMagnitudeAtPlace(bool fireSeed, float casterHeight)
 {
-	return fireSeed ? std::min(casterHeight / k_FireMagnitudeHeight, 1.0f) : k_PlaceMagnitude;
+	return fireSeed ? FireMagnitude(casterHeight) : k_PlaceMagnitude;
 }

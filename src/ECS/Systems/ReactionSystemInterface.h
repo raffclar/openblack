@@ -65,7 +65,8 @@ public:
 		std::optional<float> reach;
 		/// Made by what belongs to no player, such as a crushed tree: it impresses no one and moves no alignment
 		bool playerless {false};
-		/// Made as its miracle was cast: its time starts at once rather than when someone first takes it up
+		/// Its time starts at once, not when a living thing first takes it up. A miracle, a hand that picks up a thing
+		/// and a storage pit that gets a thing make such reactions.
 		bool onCast {false};
 		/// The land's balance its impressiveness is scaled by
 		Balance balance {Balance::Things};

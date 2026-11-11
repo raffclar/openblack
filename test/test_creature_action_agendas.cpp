@@ -8,6 +8,7 @@
  *******************************************************************************/
 
 #include <algorithm>
+#include <vector>
 
 #include <Common/GameRandom.h>
 #include <gtest/gtest.h>
@@ -307,6 +308,37 @@ TEST(CreatureActionAgendas, WatchingTheHandLastsItsTurnsUpToFiveSeconds)
 	EXPECT_EQ(mind.step, 1u);
 }
 
+// Each turn that it watches the hand, with a player, draws one synced number below thirty that changes nothing; with no
+// player it draws nothing
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST(CreatureActionAgendas, WatchingTheHandDrawsBelowThirtyEachTurnWithAPlayer)
+{
+	std::vector<uint32_t> ranges;
+	const auto recorded = [&ranges](uint32_t range) {
+		ranges.push_back(range);
+		return NeverFirst(range);
+	};
+	IdleMind mind;
+	Plan(mind, Activity::Planned, LookAtHand());
+	creature_mind::Senses senses {.seconds = 0.1f};
+	senses.hand = creature_mind::Senses::CameraView {.distance = 30.0f, .groundDistance = 20.0f, .point = {0.0f, 20.0f}};
+	uint32_t turns = 0;
+	while (mind.step == 0 && turns < 100)
+	{
+		(void)Think(mind, senses, recorded);
+		++turns;
+	}
+	EXPECT_EQ(turns, 20u);
+	EXPECT_EQ(std::ranges::count(ranges, k_HandWatchUnusedDraw), 20);
+	EXPECT_EQ(k_HandWatchUnusedDraw, 30u);
+	ranges.clear();
+	Plan(mind, Activity::Planned, LookAtHand());
+	senses.hand.reset();
+	(void)Think(mind, senses, recorded);
+	EXPECT_EQ(mind.step, 1u);
+	EXPECT_EQ(std::ranges::count(ranges, k_HandWatchUnusedDraw), 0);
+}
+
 // A body that turns or does an action does not start a new turn to the hand, so the turn that it does now comes to its
 // end. The watch continues while the body moves.
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
@@ -538,13 +570,22 @@ TEST(CreatureActionAgendas, SleepingByAThingGoesToItsClearPlaceFirst)
 	EXPECT_EQ(SleepByObject({}, 6.0f, NeverFirst).size(), 4);
 }
 
-// Without a clear place by the thing it sleeps at home, and without either it can't
+// Without a clear place by the thing it sleeps at home, and without either it sleeps where it stands. Each way draws
+// for the yawn first, as the game's sleep at home does.
 TEST(CreatureActionAgendas, SleepingByAThingFallsBackToHome)
 {
 	const auto* sleep = plan_actions::For("SleepByObject");
 	ASSERT_NE(sleep, nullptr);
-	plan_actions::Situation situation {.controlledByScript = true, .radius = 6.0f, .height = 15.0f};
-	EXPECT_FALSE(plan_actions::Agenda(*sleep, 3, {}, situation, NeverFirst).has_value());
+	plan_actions::Situation situation {.radius = 6.0f, .height = 15.0f};
+	std::vector<uint32_t> draws;
+	const auto counted = [&draws](uint32_t range) {
+		draws.push_back(range);
+		return NeverFirst(range);
+	};
+	const auto onTheSpot = plan_actions::Agenda(*sleep, 3, {}, situation, counted);
+	ASSERT_TRUE(onTheSpot.has_value());
+	EXPECT_EQ(draws, std::vector<uint32_t> {2});
+	EXPECT_TRUE(std::ranges::none_of(*onTheSpot, [](const Step& step) { return step.kind == Step::Kind::Move; }));
 	situation.home = glm::vec2(100.0f, 200.0f);
 	const auto atHome = plan_actions::Agenda(*sleep, 3, {}, situation, NeverFirst);
 	ASSERT_TRUE(atHome.has_value());
@@ -602,13 +643,17 @@ TEST(CreatureActionAgendas, AFartIsDoneByTheThingThatThePlannerGives)
 TEST(CreatureActionAgendas, ExaminingByPickingUpKeepsWhatItHolds)
 {
 	const auto empty = ExamineByPickingUp(4, false, NeverFirst);
-	ASSERT_EQ(empty.size(), 4);
+	ASSERT_EQ(empty.size(), 5);
 	EXPECT_EQ(empty[0].order.kind, ObjectOrder::Kind::PickUp);
 	EXPECT_EQ(empty[0].order.object, 4u);
 	const auto holding = ExamineByPickingUp(4, true, NeverFirst);
-	ASSERT_EQ(holding.size(), 3);
+	ASSERT_EQ(holding.size(), 4);
 	EXPECT_EQ(holding[0].order.kind, ObjectOrder::Kind::Keep);
 	EXPECT_EQ(holding[0].effect, Effect::Examined);
+	// After the look at the thing, the eyes stop their sweep before it lets the thing go
+	EXPECT_EQ(holding[1].kind, Step::Kind::Dance);
+	EXPECT_EQ(holding[1].dance.kind, DanceOrder::Kind::StopLooking);
+	EXPECT_EQ(holding[2].kind, Step::Kind::Object);
 }
 
 // After it releases a thing that it picked up to examine, it knows the kind of thing, as after it examines by looking

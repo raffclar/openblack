@@ -215,6 +215,12 @@ void FilmCreatureSystem::Update(int32_t filmMs, std::chrono::steady_clock::time_
 		const auto blue = random.LocalRand(4);
 		film->look = film_creature::LookAt(film_creature::Brightness(filmMs), red, green, blue);
 	}
+	// Each frame that shows it, its eyes move by the last step of the film's time, also when the film time did not move
+	// (vanilla-bugs 1715). Its eyes do not move while the film hides it.
+	if (film->shown && Locator::creatureAnimationSystem::has_value())
+	{
+		Locator::creatureAnimationSystem::value().PlaceCopyEyes(registry, *_copy, Locator::entitiesRegistry::value());
+	}
 	if (auto* glows = registry.TryGet<CreatureHandGlows>(*_copy); film->shown && glows != nullptr)
 	{
 		if (Locator::creatureAnimationSystem::has_value())
