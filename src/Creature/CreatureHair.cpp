@@ -108,8 +108,14 @@ Look creature_hair::LookFor(const Variants& variants, float alignment)
 
 float creature_hair::HairScale(float size)
 {
-	const auto headScale = k_HeadScaleAtSizeZero - (k_HeadScalePerSize * std::clamp(size, 0.0f, k_MaxHeadScaleSize));
-	return headScale * size * k_HeightAtSizeOne;
+	// The size is kept from 0 to its largest value. A size that is not above 0, or is not a number, gives 0.
+	float kept = 0.0f;
+	if (size > 0.0f)
+	{
+		kept = size < k_MaxHeadScaleSize ? size : k_MaxHeadScaleSize;
+	}
+	const auto headScale = k_HeadScaleAtSizeZero - (k_HeadScalePerSize * kept);
+	return (headScale * size) * k_HeightAtSizeOne;
 }
 
 Physics creature_hair::PhysicsFor(const Look& look, float scale, uint32_t segmentCount)

@@ -512,6 +512,37 @@ void testbed_scenarios::AddMovement(std::vector<Scenario>& all)
 	    .repeatFrom = 0,
 	});
 
+	// A tiger hurls rocks at a cow near it and at a cow far from it
+	all.push_back({
+	    .id = "objects.hurl_near_and_far",
+	    .name = "Hurling near and far",
+	    .facet = Facet::Objects,
+	    .description = "A grown tiger with two rocks in front of it. A cow stands 25 units to the north and a cow stands "
+	                   "120 units to the north. A script tells the tiger to hurl a rock at the near cow, then at the far "
+	                   "cow, again and again.",
+	    .expected = "At the near cow the throw goes up more and the arm comes up high. At the far cow the throw is flatter "
+	                "and the arm stays lower. Near the moment it lets go, the arm moves at the speed of the rock.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-40.0f, -130.0f}, {40.0f, 10.0f}}},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f}), Posed(CreatureType::Cow, {0.0f, -25.0f}, 90.0f),
+	                  Posed(CreatureType::Cow, {0.0f, -120.0f}, 90.0f)},
+	    .objects = {{.type = MobileStaticInfo::RockChalk, .offset = {-4.0f, -10.0f}},
+	                {.type = MobileStaticInfo::RockChalk, .offset = {4.0f, -10.0f}}},
+	    .commands = {{.kind = Kind::DoAction,
+	                  .delaySeconds = 1.0f,
+	                  .waitUntilFree = true,
+	                  .action = "Hurl",
+	                  .with = 0,
+	                  .atCreature = 1},
+	                 {.kind = Kind::DoAction,
+	                  .delaySeconds = 3.0f,
+	                  .waitUntilFree = true,
+	                  .action = "Hurl",
+	                  .with = 1,
+	                  .atCreature = 2}},
+	    .repeatFrom = 0,
+	});
+
 	// A ring of fence round a pen, with two villagers walking to the far side of it, one aiming a little to each side
 	constexpr glm::vec2 k_Pen {-60.0f, -40.0f};
 	constexpr float k_PenRadius = 12.0f;

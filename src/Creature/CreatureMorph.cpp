@@ -46,7 +46,12 @@ float creature_morph::CopiedWeakStrong(float source, float scale)
 
 float creature_morph::ClampScale(float scale)
 {
-	return std::clamp(scale, k_MinScale, k_MaxScale);
+	// A scale that is not above the smallest, or is not a number, gives the smallest
+	if (!(scale > k_MinScale))
+	{
+		return k_MinScale;
+	}
+	return scale < k_MaxScale ? scale : k_MaxScale;
 }
 
 float creature_morph::RestHeight(std::span<const glm::mat4> rest)
