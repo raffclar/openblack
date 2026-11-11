@@ -266,8 +266,9 @@ Progress creature_watching::SeeMiracle(Knowledge& knowledge, size_t miracle, std
 		return {.ignored = true, .event = LearningEvent::TooYoung};
 	}
 	auto& seen = knowledge.miraclesSeen[miracle];
-	// A sighting soon after the last doesn't count, but is remembered as the last
-	if (!seen.turn.has_value() || turn - *seen.turn > k_MiracleSightingTurns)
+	// A sighting soon after the last doesn't count, but is remembered as the last. A last sighting on turn 0 counts as
+	// none, so the next sighting always counts.
+	if (!seen.turn.has_value() || *seen.turn == 0 || turn - *seen.turn > k_MiracleSightingTurns)
 	{
 		seen.count += weight;
 	}

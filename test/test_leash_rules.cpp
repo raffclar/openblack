@@ -219,8 +219,15 @@ TEST(LeashRules, LessonsOfWhatThePlayerShows)
 	EXPECT_FLOAT_EQ(evil[1].change, -1.0f);
 	const auto good = LessonsFor(LeashType::Good, true);
 	ASSERT_EQ(good.size(), 2u);
-	EXPECT_EQ(good[1].desire, Desire::BeFriends);
-	EXPECT_FLOAT_EQ(good[1].change, 1.0f);
+	// The compassion leash teaches the desire that increases first, as the aggression leash does
+	EXPECT_EQ(good[0].desire, Desire::BeFriends);
+	EXPECT_FLOAT_EQ(good[0].change, 1.0f);
+	EXPECT_EQ(good[1].desire, Desire::Anger);
+	EXPECT_FLOAT_EQ(good[1].change, -1.0f);
+	const auto goodOnThing = LessonsFor(LeashType::Good, false);
+	ASSERT_EQ(goodOnThing.size(), 2u);
+	EXPECT_EQ(goodOnThing[0].desire, Desire::Compassion);
+	EXPECT_EQ(goodOnThing[1].desire, Desire::Anger);
 	EXPECT_TRUE(LessonsFor(LeashType::Rope, false).empty());
 }
 
