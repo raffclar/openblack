@@ -648,10 +648,16 @@ void SimProvider::StopRecord()
 		longest.push_back(
 		    {{"key", run.key}, {"turns", run.turns}, {"limit", run.limit.has_value() ? Json(*run.limit) : Json(nullptr)}});
 	}
+	// The end line tells when the player lost the game, because then the run ends before its last turn
+	const auto* registry = RegistryOrNone();
 	const Json end = {
-	    {"type", "end"},         {"turn", Locator::time::has_value() ? Locator::time::value().GetTurn() : 0},
-	    {"records", _records},   {"wall_s", std::chrono::duration<double>(std::chrono::steady_clock::now() - _started).count()},
-	    {"flag_counts", counts}, {"longest", std::move(longest)},
+	    {"type", "end"},
+	    {"turn", Locator::time::has_value() ? Locator::time::value().GetTurn() : 0},
+	    {"records", _records},
+	    {"wall_s", std::chrono::duration<double>(std::chrono::steady_clock::now() - _started).count()},
+	    {"flag_counts", counts},
+	    {"longest", std::move(longest)},
+	    {"game_over", registry != nullptr && registry->Context().gameOver},
 	};
 	*_out << Dump(end) << '\n';
 	_out->close();
