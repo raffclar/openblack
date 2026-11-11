@@ -336,11 +336,12 @@ void CreatureMindTrees::DrawTree(entt::entity creature, TreeKind kind) noexcept
 		{
 			const auto path = creature_tree_view::PathOf(tree, *belief);
 			paths.planner = path.nodes;
+			paths.plannerEmpty = path.emptyBranch;
 			const auto utility = creature_tree::Evaluate(tree, *belief);
 			ImGui::TextColored(k_PlannerText, "Planner's thing: %s %u, value %+.1f, usefulness %.3f%s",
 			                   creature_tree::BeliefName(belief->type), *id, static_cast<double>(utility),
 			                   static_cast<double>(creature_tree::Usefulness(utility)),
-			                   path.reachesLeaf ? "" : " (no leaf: no branch for it)");
+			                   creature_tree_view::PathEnd(path).c_str());
 		}
 		else
 		{
@@ -360,11 +361,12 @@ void CreatureMindTrees::DrawTree(entt::entity creature, TreeKind kind) noexcept
 		{
 			const auto path = creature_tree_view::PathOf(tree, *belief);
 			paths.picked = path.nodes;
+			paths.pickedEmpty = path.emptyBranch;
 			const auto utility = creature_tree::Evaluate(tree, *belief);
 			ImGui::TextColored(k_PickedText, "Thing tested: %s %u, value %+.1f, usefulness %.3f%s",
 			                   creature_tree::BeliefName(belief->type), entt::to_integral(*_thing),
 			                   static_cast<double>(utility), static_cast<double>(creature_tree::Usefulness(utility)),
-			                   path.reachesLeaf ? "" : " (no leaf: no branch for it)");
+			                   creature_tree_view::PathEnd(path).c_str());
 			ImGui::TextWrapped("  %s", Attributes(*belief).c_str());
 		}
 		else
@@ -594,6 +596,22 @@ void CreatureMindTrees::DrawTextTree(const creature_tree::Tree& tree, const Watc
 	{
 		DrawTextTree(tree, watch, paths, child, value, depth + 1);
 	}
+	// A branch with no examples has no node of its own: show the one that a path goes down as a leaf
+	const auto emptyLeaf = [&](const std::vector<size_t>& path, std::optional<uint32_t> empty, const char* mark) {
+		if (!empty.has_value() || path.empty() || path.back() != index)
+		{
+			return;
+		}
+		const auto value = creature_tree_view::LeafValue(node);
+		ImGui::PushStyleColor(ImGuiCol_Text, ToVec4(creature_tree_view::LeafColour(value)));
+		ImGui::TreeNodeEx(fmt::format("= {} -> {} {:+.1f}  {}###empty{}{}", *empty, creature_tree_view::k_EmptyBranchLabel,
+		                              static_cast<double>(value), mark, index, mark)
+		                      .c_str(),
+		                  ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen);
+		ImGui::PopStyleColor();
+	};
+	emptyLeaf(paths.planner, paths.plannerEmpty, "[planner]");
+	emptyLeaf(paths.picked, paths.pickedEmpty, "[tested]");
 	ImGui::TreePop();
 }
 

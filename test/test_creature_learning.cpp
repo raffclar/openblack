@@ -137,16 +137,95 @@ TEST(CreatureDecisionTree, TheLeafAThingReachesIsBelowTheRootOnceTheTreeSplits)
 	std::vector<creature_tree::Episode> agreeing {{.belief = Thing(k_Food, 0), .feedback = 1.0f},
 	                                              {.belief = Thing(k_Villager, 1), .feedback = 1.0f}};
 	// Examples that agree leave the tree a single leaf: the root
-	EXPECT_EQ(creature_tree::LeafOf(creature_tree::Build(agreeing, k_HungerAttributes), Thing(k_Food, 0)), 0u);
+	const auto root = creature_tree::LeafOf(creature_tree::Build(agreeing, k_HungerAttributes), Thing(k_Food, 0));
+	ASSERT_TRUE(root.has_value());
+	EXPECT_EQ(root->node, 0u);
+	EXPECT_FALSE(root->BelowRoot());
 	std::vector<creature_tree::Episode> split {{.belief = Thing(k_Food, 0), .feedback = -1.0f},
 	                                           {.belief = Thing(k_Villager, 1), .feedback = 1.0f}};
 	const auto tree = creature_tree::Build(split, k_HungerAttributes);
 	const auto leaf = creature_tree::LeafOf(tree, Thing(k_Villager, 1));
 	ASSERT_TRUE(leaf.has_value());
-	EXPECT_NE(*leaf, 0u);
-	// No branch for it, or no tree at all: no leaf
+	EXPECT_NE(leaf->node, 0u);
+	EXPECT_TRUE(leaf->BelowRoot());
+	// A value out of the attribute's range, or no tree at all: no leaf
 	EXPECT_FALSE(creature_tree::LeafOf(tree, Thing(creature_tree::belief_types::k_Tree, 2)).has_value());
 	EXPECT_FALSE(creature_tree::LeafOf(creature_tree::Build({}, k_HungerAttributes), Thing(k_Food, 0)).has_value());
+}
+
+TEST(CreatureDecisionTree, AValueNoExampleHadTakesTheStepOfTheNodeAbove)
+{
+	// The root tests the kind of thing: food is bad, villagers are good
+	const std::vector<creature_tree::Episode> episodes {{.belief = Thing(k_Food, 0), .feedback = -1.0f},
+	                                                    {.belief = Thing(k_Villager, 0), .feedback = 1.0f},
+	                                                    {.belief = Thing(k_Food, 0), .feedback = -1.0f}};
+	const std::array kind {Attribute::Type};
+	const auto tree = creature_tree::Build(episodes, kind);
+	ASSERT_EQ(tree.nodes[0].test, Attribute::Type);
+	// A tree is of a kind no example had: its branch has no examples, so it takes the mean of the root's, -1/3, whose
+	// first step within a quarter is -0.4
+	const auto leaf = creature_tree::LeafOf(tree, Thing(creature_tree::belief_types::k_Tree, 0));
+	ASSERT_TRUE(leaf.has_value());
+	EXPECT_EQ(leaf->node, 0u);
+	EXPECT_TRUE(leaf->emptyBranch);
+	EXPECT_TRUE(leaf->BelowRoot());
+	EXPECT_FLOAT_EQ(creature_tree::Evaluate(tree, Thing(creature_tree::belief_types::k_Tree, 0)), -0.4f);
+	// A kind out of the range of kinds has no branch
+	EXPECT_FALSE(creature_tree::LeafOf(tree, Thing(24, 0)).has_value());
+}
+
+TEST(CreatureDecisionTree, TheRootTestsOnlyWhatEveryThingHas)
+{
+	// Villagers of one job are good and of another bad; the job is allowed, but the root cannot test it, and the kind is
+	// the same for all, so the tree stays one leaf
+	const auto villager = [](uint32_t job) {
+		auto belief = Thing(k_Villager, 1);
+		belief.Set(Attribute::VillagerJob, job);
+		return belief;
+	};
+	const std::vector<creature_tree::Episode> episodes {{.belief = villager(1), .feedback = 1.0f},
+	                                                    {.belief = villager(2), .feedback = -1.0f}};
+	const std::array allowed {Attribute::Type, Attribute::VillagerJob};
+	const auto tree = creature_tree::Build(episodes, allowed);
+	ASSERT_EQ(tree.nodes.size(), 1u);
+	EXPECT_FALSE(tree.nodes[0].test.has_value());
+}
+
+TEST(CreatureDecisionTree, BelowATestOfTheKindEachBranchCanTestItsKindsAttributes)
+{
+	const auto villager = [](uint32_t job) {
+		auto belief = Thing(k_Villager, 1);
+		belief.Set(Attribute::VillagerJob, job);
+		return belief;
+	};
+	const std::vector<creature_tree::Episode> episodes {{.belief = villager(1), .feedback = 1.0f},
+	                                                    {.belief = villager(2), .feedback = -1.0f},
+	                                                    {.belief = Thing(k_Food, 0), .feedback = 1.0f},
+	                                                    {.belief = Thing(k_Food, 0), .feedback = 1.0f}};
+	const std::array allowed {Attribute::Type, Attribute::VillagerJob};
+	const auto tree = creature_tree::Build(episodes, allowed);
+	ASSERT_EQ(tree.nodes[0].test, Attribute::Type);
+	EXPECT_FLOAT_EQ(creature_tree::Evaluate(tree, villager(1)), 0.8f);
+	EXPECT_FLOAT_EQ(creature_tree::Evaluate(tree, villager(2)), -1.0f);
+	// A job no example had takes the mean of the villagers, 0, whose first step within a quarter is -0.2
+	EXPECT_FLOAT_EQ(creature_tree::Evaluate(tree, villager(3)), -0.2f);
+	// An attribute that is not allowed is never tested: all villagers share one leaf
+	const std::array onlyKind {Attribute::Type};
+	const auto kindOnly = creature_tree::Build(episodes, onlyKind);
+	EXPECT_FLOAT_EQ(creature_tree::Evaluate(kindOnly, villager(1)), -0.2f);
+	EXPECT_FLOAT_EQ(creature_tree::Evaluate(kindOnly, villager(2)), -0.2f);
+}
+
+TEST(CreatureDecisionTree, FeedbackFarFromEachStepIsInNoStep)
+{
+	EXPECT_FALSE(creature_tree::StepOf(1.3f).has_value());
+	EXPECT_EQ(creature_tree::StepOf(1.25f), 10u);
+	// Feedback in no step still counts towards the shares of the steps
+	const std::vector<creature_tree::Episode> far {{.belief = Thing(k_Food, 0), .feedback = 1.3f},
+	                                               {.belief = Thing(k_Food, 0), .feedback = 1.0f}};
+	const std::vector<creature_tree::Episode> near {{.belief = Thing(k_Food, 0), .feedback = 0.0f},
+	                                                {.belief = Thing(k_Food, 0), .feedback = 1.0f}};
+	EXPECT_LT(creature_tree::Entropy(far), creature_tree::Entropy(near));
 }
 
 TEST(CreatureDecisionTree, EmptyTreeKnowsNothing)

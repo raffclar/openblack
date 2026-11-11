@@ -37,8 +37,8 @@ Tree SmallTree()
 {
 	Tree tree;
 	tree.nodes = {
-	    {.test = Attribute::Allegiance, .children = {{0, 1}, {1, 2}}, .examples = 6},
-	    {.test = Attribute::Type, .children = {{6, 3}, {7, 4}}, .examples = 3},
+	    {.test = Attribute::Allegiance, .children = {{0, 1}, {1, 2}}, .branches = 3, .examples = 6},
+	    {.test = Attribute::Type, .children = {{6, 3}, {7, 4}}, .branches = 24, .examples = 3},
 	    {.bucket = 0, .examples = 3},
 	    {.bucket = 9, .examples = 2},
 	    {.bucket = 3, .examples = 1},
@@ -130,7 +130,7 @@ TEST(CreatureTreeView, FollowsAThingFromTheRootToItsLeaf)
 	const auto friendlyAnimal = PathOf(tree, Thing(0, creature_tree::belief_types::k_Animal));
 	EXPECT_EQ(friendlyAnimal.nodes, (std::vector<size_t> {0, 1, 4}));
 	EXPECT_TRUE(friendlyAnimal.reachesLeaf);
-	EXPECT_EQ(friendlyAnimal.nodes.back(), creature_tree::LeafOf(tree, Thing(0, creature_tree::belief_types::k_Animal)));
+	EXPECT_EQ(friendlyAnimal.nodes.back(), creature_tree::LeafOf(tree, Thing(0, creature_tree::belief_types::k_Animal))->node);
 
 	const auto enemy = PathOf(tree, Thing(1, std::nullopt));
 	EXPECT_EQ(enemy.nodes, (std::vector<size_t> {0, 2}));
@@ -144,11 +144,11 @@ TEST(CreatureTreeView, APathStopsWhereTheTreeHasNoBranchForTheThing)
 	const auto noType = PathOf(tree, Thing(0, std::nullopt));
 	EXPECT_EQ(noType.nodes, (std::vector<size_t> {0, 1}));
 	EXPECT_FALSE(noType.reachesLeaf);
-	// A town has no branch at the type test
-	const auto town = PathOf(tree, Thing(0, creature_tree::belief_types::k_Town));
-	EXPECT_EQ(town.nodes, (std::vector<size_t> {0, 1}));
-	EXPECT_FALSE(town.reachesLeaf);
-	EXPECT_FALSE(creature_tree::LeafOf(tree, Thing(0, creature_tree::belief_types::k_Town)).has_value());
+	// A kind out of the range of kinds has no branch at the type test
+	const auto beyond = PathOf(tree, Thing(0, 24));
+	EXPECT_EQ(beyond.nodes, (std::vector<size_t> {0, 1}));
+	EXPECT_FALSE(beyond.reachesLeaf);
+	EXPECT_FALSE(creature_tree::LeafOf(tree, Thing(0, 24)).has_value());
 	// An empty tree has no path
 	EXPECT_TRUE(PathOf(Tree {}, Thing(0, std::nullopt)).nodes.empty());
 }
@@ -218,4 +218,24 @@ TEST(CreatureTreeView, NamesValuesAndNodes)
 	EXPECT_EQ(ValueName(Attribute::Height, 2), "2");
 	EXPECT_EQ(NodeLabel(SmallTree().nodes[0]), creature_tree::Name(Attribute::Allegiance));
 	EXPECT_EQ(NodeLabel(SmallTree().nodes[3]), "+0.8 (2)");
+}
+
+TEST(CreatureTreeView, APathEndsOnABranchWithNoExamplesInTheRange)
+{
+	auto tree = SmallTree();
+	// The type test has a branch for each of the 24 kinds; only villagers and animals have examples
+	tree.nodes[1].bucket = 7;
+	const auto town = PathOf(tree, Thing(0, creature_tree::belief_types::k_Town));
+	EXPECT_EQ(town.nodes, (std::vector<size_t> {0, 1}));
+	EXPECT_TRUE(town.reachesLeaf);
+	EXPECT_EQ(town.emptyBranch, creature_tree::belief_types::k_Town);
+	EXPECT_EQ(PathEnd(town), " (empty (mean of the node above))");
+	// It takes the value of the node above, as the tree does
+	EXPECT_FLOAT_EQ(creature_tree::Evaluate(tree, Thing(0, creature_tree::belief_types::k_Town)), LeafValue(tree.nodes[1]));
+	// A kind out of the range has no branch
+	const auto beyond = PathOf(tree, Thing(0, 24));
+	EXPECT_FALSE(beyond.reachesLeaf);
+	EXPECT_FALSE(beyond.emptyBranch.has_value());
+	EXPECT_EQ(PathEnd(beyond), " (no leaf: no branch for it)");
+	EXPECT_EQ(PathEnd(PathOf(tree, Thing(1, std::nullopt))), "");
 }

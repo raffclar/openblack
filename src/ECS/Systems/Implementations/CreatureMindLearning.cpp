@@ -402,7 +402,7 @@ void CreatureMindSystem::LearnFromFeedback(entt::entity creature, CreatureMindSt
 		const auto belowRoot = [&learnt, desire](TreeKind kind, const creature_tree::Belief& belief) {
 			const auto& tree = learnt.trees.at(static_cast<size_t>(kind)).at(static_cast<size_t>(desire));
 			const auto leaf = creature_tree::LeafOf(tree, belief);
-			return leaf.has_value() && *leaf != 0;
+			return leaf.has_value() && leaf->BelowRoot();
 		};
 		const bool opinionChanged = (lessons.activity && belowRoot(TreeKind::Activity, *context->activityBelief)) ||
 		                            (lessons.actedOn && belowRoot(TreeKind::ActOn, *context->belief));
