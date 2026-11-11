@@ -97,11 +97,12 @@ FollowHandAction creature_player_attention::FollowHandTurn(const FollowHandView&
 	{
 		return FollowHandAction::Fail;
 	}
-	if (view.bodyPlaying)
+	if (view.bodyBusy)
 	{
 		return view.directionClose ? FollowHandAction::Continue : FollowHandAction::WalkToHand;
 	}
-	if (view.distance < view.reach)
+	// A hand at the origin of the map on the ground also ends the step
+	if (view.distance < view.reach || view.handAtOrigin)
 	{
 		return FollowHandAction::Done;
 	}
@@ -114,7 +115,7 @@ WatchPlayerAction creature_player_attention::WatchPlayerTurn(const WatchPlayerVi
 	{
 		return {.done = true};
 	}
-	if (view.bodyPlaying)
+	if (view.bodyBusy)
 	{
 		return {};
 	}

@@ -38,6 +38,8 @@ void openblack::ecs::reflection::RegisterFields_Components_creaturec(entt::meta_
 	    .Field<&components::CreatureCasting::holdTurns>("holdTurns")
 	    .Field<&components::CreatureCasting::stuckCheck>("stuckCheck")
 	    .Field<&components::CreatureCasting::destination>("destination")
+	    .Field<&components::CreatureCasting::agendaSerial>("agendaSerial")
+	    .Field<&components::CreatureCasting::agendaStep>("agendaStep")
 	    .Field<&components::CreatureCasting::fizzle>("fizzle")
 	    .Field<&components::CreatureCasting::lastFizzleTarget>("lastFizzleTarget");
 	Reflect<components::CreatureCopy>(context)

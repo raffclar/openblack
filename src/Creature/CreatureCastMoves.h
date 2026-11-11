@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 
 #include <array>
@@ -105,6 +106,10 @@ enum class Stall : uint8_t
 /// What a creature that goes near a thing does about a stall, by the turns of the step, how far it moved since the
 /// last note and whether a script controls it
 [[nodiscard]] Stall CheckStall(uint32_t turns, float moved, bool scripted);
+
+/// Whether a move is part of the step that the creature does now. The move is part of the agenda and the step that
+/// started it. When the creature goes on to a different step, or to a new agenda, the move is not part of it.
+[[nodiscard]] bool BelongsToStep(uint32_t startedSerial, uint32_t startedStep, uint32_t serial, size_t step);
 
 /// What a creature that walks to a thing does after it asks for the walk: a creature that goes near a thing, picks it
 /// up or stomps on it

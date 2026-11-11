@@ -82,6 +82,7 @@ void openblack::ecs::reflection::RegisterFields_Components_creaturem(entt::meta_
 	    .Field<&components::CreatureMindState::goingLook>("goingLook")
 	    .Field<&components::CreatureMindState::noticedMover>("noticedMover")
 	    .Field<&components::CreatureMindState::lookingAbout>("lookingAbout")
+	    .Field<&components::CreatureMindState::dependentLook>("dependentLook")
 	    .Field<&components::CreatureMindState::scriptFocus>("scriptFocus")
 	    .Field<&components::CreatureMindState::innate>("innate")
 	    .Field<&components::CreatureMindState::attention>("attention")

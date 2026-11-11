@@ -1293,6 +1293,9 @@ struct Command
 		/// In the temple, the player double clicks the main room's map at a point of the land (point, from the middle of
 		/// the map), and leaves the temple for that place. Needs no creature
 		PickTempleMapPlace,
+		/// The living near the scenario's object react to it as to a kind of reaction (value, by its number), as a
+		/// script's "create reaction" makes it. It belongs to no player. Needs no creature
+		CreateReaction,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures
@@ -1757,6 +1760,8 @@ void AddCreatureLearningScenarios(std::vector<Scenario>& all);
 void AddCreatureExplorationScenarios(std::vector<Scenario>& all);
 /// Creature actions that Land 1 can start and that no other scenario stages, each told by a script
 void AddCreatureActionScenarios(std::vector<Scenario>& all);
+/// One scenario for each kind of reaction a creature heeds that no other scenario stages, with notice on and off
+void AddCreatureReactionKindScenarios(std::vector<Scenario>& all);
 /// The casts that the creature's desires choose, each told by a script (called by AddCreatureActionScenarios)
 void AddCreatureActionCastScenarios(std::vector<Scenario>& all);
 /// The gifts to a town, throws, notices and villager actions that the creature's desires choose, each told by a script

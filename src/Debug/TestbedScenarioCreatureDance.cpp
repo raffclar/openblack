@@ -75,20 +75,22 @@ openblack::testbed_scenarios::Scenario TownDance(std::string_view id, std::strin
 
 void openblack::testbed_scenarios::AddCreatureDanceScenarios(std::vector<Scenario>& all)
 {
-	all.push_back(TownDance("creatures.dance_with_villagers", "A creature dancing with villagers", "DanceWithVillagers",
-	                        "Two huts of the player's town, with ten grown people of the town who live in them, standing in "
-	                        "two rows on open ground. The player's tiger stands forty metres to the east. One second in, it "
-	                        "is told to dance with the villagers, with the first man of the rows as the villager it dances "
-	                        "for.",
-	                        "The tiger goes near the man and faces him, and plays its summon. The town's people stop what "
-	                        "they do: eight of the ten come under its control (it calls an even number, and stops when it has "
-	                        "more than two thirds of the town's adults). The tiger walks to a clear place by the man, without "
-	                        "a turn of its head, and points at it with a smile. The eight people run to their places in a "
-	                        "circle round it and stand still. Then the dance starts: the people dance and worship the tiger, "
-	                        "and the tiger dances in the middle, playing its wave, impress, happy and summon actions and "
-	                        "turning as the dance says. While the people worship, the town's belief in the player goes up, "
-	                        "with the belief symbols above them. A camera near the dance hears the celtic chant. After 45 "
-	                        "seconds the dance stops and the people go home."));
+	all.push_back(
+	    TownDance("creatures.dance_with_villagers", "A creature dancing with villagers", "DanceWithVillagers",
+	              "Two huts of the player's town, with ten grown people of the town who live in them, standing in "
+	              "two rows on open ground. The player's tiger stands forty metres to the east. One second in, it "
+	              "is told to dance with the villagers, with the first man of the rows as the villager it dances "
+	              "for.",
+	              "The tiger goes near the man and faces him, and plays its summon. The town's people stop what "
+	              "they do: eight of the ten come under its control (it calls an even number, and stops when it has "
+	              "more than two thirds of the town's adults). The tiger walks to a clear place by the man, its head "
+	              "on the way ahead, and points at it with a smile, its head on the place. The eight people run to "
+	              "their places in a circle round it and stand still; until they stand still, its head turns each "
+	              "turn to one of them, drawn at random. Then the dance starts: the people dance and worship the tiger, "
+	              "and the tiger dances in the middle, playing its wave, impress, happy and summon actions and "
+	              "turning as the dance says. While the people worship, the town's belief in the player goes up, "
+	              "with the belief symbols above them. A camera near the dance hears the celtic chant. After 45 "
+	              "seconds the dance stops and the people go home."));
 	all.push_back(TownDance("creatures.dance_story", "A creature telling villagers a story", "TellVillagersAStory",
 	                        "Two huts of the player's town, with ten grown people of the town who live in them, standing in "
 	                        "two rows on open ground. The player's tiger stands forty metres to the east. One second in, it "

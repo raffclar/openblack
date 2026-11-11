@@ -1780,6 +1780,40 @@ TEST_F(HandGrabSystemWithWorld, AThingInFlightIsCaughtOnlyAfterTheWait)
 	EXPECT_EQ(*system->GetHeld(), rock);
 }
 
+// The hand takes a thing from the press until the turn puts the thing in the hand, also while it waits for a thing in
+// flight and does not pull it. Both buttons and the loss of the thing end the interface lock in all of this time.
+TEST_F(HandGrabSystemWithWorld, TheHandTakesAThingFromThePressUntilTheTurnPutsItInTheHand)
+{
+	const auto rock = world->AddRock({0.0f, 5.0f, 0.0f});
+	world->underCursor = rock;
+	world->flying.insert(rock);
+	EXPECT_FALSE(system->GetTaking().has_value());
+	deferCommands = true;
+	EXPECT_TRUE(Press());
+	EXPECT_EQ(system->GetTaking(), std::optional(rock));
+	EXPECT_FALSE(system->IsPulling());
+	// After the wait the hand sends the take, and it takes the thing until the turn does the take
+	Frame(230);
+	EXPECT_FALSE(system->GetHeld().has_value());
+	EXPECT_EQ(system->GetTaking(), std::optional(rock));
+	EXPECT_EQ(world->lockEnds, 0);
+	RunWaiting();
+	ASSERT_EQ(system->GetHeld(), std::optional(rock));
+	EXPECT_FALSE(system->GetTaking().has_value());
+	// The thing of the press is in the hand now, which ends the interface lock
+	EXPECT_EQ(world->lockEnds, 1);
+}
+
+TEST_F(HandGrabSystemWithWorld, ATapTakesNothing)
+{
+	const auto rock = world->AddRock({0.0f, 0.0f, 0.0f});
+	world->underCursor = rock;
+	EXPECT_TRUE(Press());
+	EXPECT_EQ(system->GetTaking(), std::optional(rock));
+	Release();
+	EXPECT_FALSE(system->GetTaking().has_value());
+}
+
 TEST_F(HandGrabSystemWithWorld, AFlyingThingThatLandsDuringTheWaitIsTakenAtOnce)
 {
 	const auto rock = world->AddRock({0.0f, 5.0f, 0.0f});

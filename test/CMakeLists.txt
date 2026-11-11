@@ -361,6 +361,7 @@ openblack_setup_and_add_test(test_land_avoid test_land_avoid.cpp)
 openblack_setup_and_add_test(
   test_creature_fight_system test_creature_fight_system.cpp
 )
+openblack_setup_and_add_test(test_creature_scar_draws test_creature_scar_draws.cpp)
 openblack_setup_and_add_test(test_fight_view test_fight_view.cpp)
 openblack_setup_and_add_test(test_leash_rope test_leash_rope.cpp)
 openblack_setup_and_add_test(test_leash_rules test_leash_rules.cpp)
@@ -1756,6 +1757,7 @@ openblack_setup_and_add_test(test_villager_row test_villager_row.cpp)
 openblack_setup_and_add_test(test_text_database gui/test_text_database.cpp)
 openblack_setup_and_add_test(test_creature_files_draws test_creature_files_draws.cpp)
 openblack_setup_and_add_test(test_living_turn_order test_living_turn_order.cpp)
+openblack_setup_and_add_test(test_creature_list_order test_creature_list_order.cpp)
 openblack_setup_and_add_test(test_player_turn_order test_player_turn_order.cpp)
 openblack_setup_and_add_test(test_spell_sparing test_spell_sparing.cpp)
 openblack_setup_and_add_test(
@@ -2365,6 +2367,10 @@ openblack_setup_and_add_test(
   test_script_ally_natives test_script_ally_natives.cpp
 )
 target_link_libraries(test_script_ally_natives PRIVATE ScriptLibrary)
+openblack_setup_and_add_test(test_film_creature_eyes test_film_creature_eyes.cpp)
+if(MSVC)
+  target_compile_options(test_film_creature_eyes PRIVATE /bigobj)
+endif()
 openblack_setup_and_add_test(test_creature_reach_read_only test_creature_reach_read_only.cpp)
 if(MSVC)
   target_compile_options(test_creature_reach_read_only PRIVATE /bigobj)

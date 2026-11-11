@@ -375,3 +375,26 @@ void CreatureMindSystem::KeepDanceWithAgenda(entt::entity creature, const creatu
 		registry.Get<Dance>(dance).state = Dance::State::Stopped;
 	}
 }
+
+void CreatureMindSystem::DrawDependentLook(entt::entity creature, CreatureMindState& mind)
+{
+	mind.dependentLook.reset();
+	// A script's focus holds the head, and then the step's look draws nothing
+	const auto& idle = mind.idle;
+	if (mind.scriptFocus.has_value() || idle.step >= idle.agenda.size())
+	{
+		return;
+	}
+	const auto& gaze = idle.agenda[idle.step].gaze;
+	if (!gaze.has_value() || !gaze->dependents)
+	{
+		return;
+	}
+	const auto* record = Entities().TryGet<const CreatureDance>(creature);
+	const auto called = record != nullptr ? record->dancers.size() : 0;
+	const auto pick = creature_dance::DependentToLookAt(called, [this](uint32_t range) { return _random.GameRand(range); });
+	if (pick.has_value())
+	{
+		mind.dependentLook = entt::to_integral(record->dancers[*pick]);
+	}
+}

@@ -812,11 +812,17 @@ bool creature_mind::WatchedHandEnough(uint32_t turns, uint32_t limitTurns, uint3
 
 namespace
 {
-/// A turn of watching the player's hand
-void WatchHand(IdleMind& mind, const Step& step, const Senses& senses, Commands& commands)
+/// A turn of watching the player's hand. With a player, each turn draws a synced random number that has no effect.
+void WatchHand(IdleMind& mind, const Step& step, const Senses& senses, const Random& random, Commands& commands)
 {
 	++mind.watchTurns;
-	if (!senses.hand.has_value() || !(senses.seconds > 0.0f))
+	if (!senses.hand.has_value())
+	{
+		FinishStep(mind);
+		return;
+	}
+	static_cast<void>(random(k_HandWatchUnusedDraw));
+	if (!(senses.seconds > 0.0f))
 	{
 		FinishStep(mind);
 		return;
@@ -1109,7 +1115,7 @@ void StartDanceStep(IdleMind& mind, const Step& step, const Senses& senses, Comm
 		WaitForDancers(mind, senses);
 		return;
 	case DanceOrder::Kind::StopLooking:
-		// Its head looks about this last turn, then stays still
+		// This turn the eyes look about for things of interest. The head turns to the look of each later step.
 		commands.lookAbout = true;
 		break;
 	case DanceOrder::Kind::Set:
@@ -1254,7 +1260,7 @@ void FollowCamera(IdleMind& mind, const Step& step, const Senses& senses, Comman
 	const float reach = step.movement.maxDistance;
 	const auto action = creature_emote::FollowCameraTurn({.focus = senses.cameraFocus,
 	                                                      .position = senses.position,
-	                                                      .moving = senses.moving,
+	                                                      .moving = senses.bodyBusy,
 	                                                      .focusAhead = senses.cameraFocusAhead},
 	                                                     mind.followCameraTurns, reach);
 	switch (action)
@@ -1375,7 +1381,9 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 	commands.gaze = LookOf(step);
 	// The creature's moves in a dance with villagers start and stop its poses and its dance themselves
 	const bool villageDance = step.kind == Step::Kind::Dance && step.dance.kind == DanceOrder::Kind::Dance;
-	const bool sitting = (step.kind == Step::Kind::Static && mind.stepStarted) || villageDance;
+	// A cast holds the loop of its pose until its time is up
+	const bool sitting =
+	    ((step.kind == Step::Kind::Static || step.kind == Step::Kind::Cast) && mind.stepStarted) || villageDance;
 	const bool dancing = step.kind == Step::Kind::PracticeDance || villageDance;
 	// A step that goes on pulls its face again every few seconds
 	if (mind.stepStarted && step.face != creature_face::Cue::None)
@@ -1624,7 +1632,7 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 			break;
 		case Step::Kind::WatchHand:
 			mind.watchTurns = 0;
-			WatchHand(mind, step, senses, commands);
+			WatchHand(mind, step, senses, random, commands);
 			break;
 		case Step::Kind::Inspect:
 		{
@@ -1890,20 +1898,14 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 	case Step::Kind::Cast:
 		if (!mind.castDone)
 		{
-			// The miracle is cast as the loop of the pose begins, and held for whole turns from the next
+			// The miracle is cast as the loop of the pose begins, and held for whole turns from the next. Until the
+			// loop begins, the step waits. A pose that ends before its loop keeps the step waiting, as in the game.
 			if (senses.bodyLooping)
 			{
 				commands.cast = step.cast;
 				mind.castDone = true;
 				const auto turnsPerSecond = static_cast<uint32_t>(std::lround(1.0f / senses.seconds));
 				mind.castTurns = static_cast<uint32_t>(step.seconds * static_cast<float>(turnsPerSecond));
-			}
-			else if (!senses.bodyBusy)
-			{
-				// The pose ended before it could cast
-				mind.step = mind.agenda.size();
-				mind.stepStarted = false;
-				mind.gaveUp = true;
 			}
 		}
 		else if (mind.castTurns > 0)
@@ -1956,7 +1958,7 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 		WatchFlying(mind, senses, random);
 		break;
 	case Step::Kind::WatchHand:
-		WatchHand(mind, step, senses, commands);
+		WatchHand(mind, step, senses, random, commands);
 		break;
 	case Step::Kind::Inspect:
 		if (mind.inspectTurns > 0)

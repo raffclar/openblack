@@ -162,8 +162,9 @@ namespace spells
 /// Whether the kind of a miracle lets it go on a thing at the position. A forest never goes on a thing. A creature spell
 /// has the test of its cast on a creature. The other kinds use the test at the position of the thing.
 [[nodiscard]] bool MeetsKindRuleOn(SpellServicesInterface& services, MagicType type, glm::vec3 position);
-/// Whether a miracle can be cast at a point by itself, as a creature casts it, with no influence to hold it back. A heal
-/// needs someone to heal. A forest needs land in the map where trees can grow.
+/// Whether a creature can cast a miracle at a point, with no cast rule and no influence. The test is the test of the kind
+/// at a point: food and wood need land, a teleport needs a place for its stone, and a creature spell never goes there.
+/// A cast on a thing uses the same test at the position of the thing.
 [[nodiscard]] bool CanCastAtPointItself(SpellServicesInterface& services, MagicType type, glm::vec3 point);
 
 /// What its kind does before its effect starts: a shield takes its size within its limits, and what a kind keeps

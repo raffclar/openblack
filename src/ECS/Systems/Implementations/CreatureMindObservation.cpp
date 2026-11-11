@@ -427,23 +427,24 @@ void CreatureMindSystem::CopyPlayersDeed(entt::entity creature, CreatureMindStat
 			}
 			const auto whole = WholeOfForcedPlan(creature, mind, desire, object.value_or(creature));
 			creature_plan_actions::Situation situation;
-			if (!Adopt(creature, mind,
-			           {.desire = desire,
-			            .action = action,
-			            .object = object.has_value() ? std::optional(entt::to_integral(*object)) : std::nullopt,
-			            .about = whole.has_value() ? std::optional(entt::to_integral(*whole)) : std::nullopt,
-			            // Copying counts as pressing as a desire at its strongest, with nothing learnt
-			            .priority = creature_planner::Priority(1.0f, std::nullopt,
-			                                                   creature_planner::ActionPriority(learnt.opinions.at(action)),
-			                                                   creature_planner::k_DefaultUsefulness, std::nullopt)},
-			           situation, true))
+			const bool adopted = Adopt(creature, mind,
+			                           {.desire = desire,
+			                            .action = action,
+			                            .object = object.has_value() ? std::optional(entt::to_integral(*object)) : std::nullopt,
+			                            .about = whole.has_value() ? std::optional(entt::to_integral(*whole)) : std::nullopt,
+			                            // Copying counts as pressing as a desire at its strongest, with nothing learnt
+			                            .priority = creature_planner::Priority(
+			                                1.0f, std::nullopt, creature_planner::ActionPriority(learnt.opinions.at(action)),
+			                                creature_planner::k_DefaultUsefulness, std::nullopt)},
+			                           situation, true);
+			if (adopted)
 			{
-				continue;
+				creature_mind_model::Think(learnt, fmt::format("I'm copying you: {}", tables->actions.at(action).name));
+				SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} copies the player in pass {}: {} on {}",
+				                    entt::to_integral(creature), static_cast<int>(pass), tables->actions.at(action).name,
+				                    object.has_value() ? static_cast<int64_t>(entt::to_integral(*object)) : -1);
 			}
-			creature_mind_model::Think(learnt, fmt::format("I'm copying you: {}", tables->actions.at(action).name));
-			SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} copies the player in pass {}: {} on {}",
-			                    entt::to_integral(creature), static_cast<int>(pass), tables->actions.at(action).name,
-			                    object.has_value() ? static_cast<int64_t>(entt::to_integral(*object)) : -1);
+			// Each valid choice that it tries to take up, taken up or not, draws to stop or to try the next
 			if (Random(2) == 0)
 			{
 				return;
@@ -781,8 +782,9 @@ void CreatureMindSystem::CountMiracleSighting(entt::entity entity, const Creatur
 	{
 		return;
 	}
+	// The time between sightings runs on the game's turns, as the clock of a skill does
 	const auto progress = creature_watching::SeeMiracle(
-	    mind.learnt->knowledge, miracle, tables->miracles, mind.developmentPhase, mind.turn, mind.leash.miracleSightingWeight,
+	    mind.learnt->knowledge, miracle, tables->miracles, mind.developmentPhase, GameTurn(), mind.leash.miracleSightingWeight,
 	    creature_mind_tables::MiracleMultiplier(creature::InfoRow(creature.species)));
 	if (progress.learnt && !progress.ignored)
 	{
