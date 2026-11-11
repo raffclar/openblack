@@ -620,7 +620,7 @@ std::optional<creature_mind::Senses::CameraView> HandViewOf(const ecs::Registry&
 }
 
 std::optional<creature_player_attention::FollowHandView> FollowHandViewOf(const ecs::Registry& registry, entt::entity creature,
-                                                                          const CreatureMindState& mind, bool bodyPlaying)
+                                                                          const CreatureMindState& mind, bool bodyBusy)
 {
 	const auto& idle = mind.idle;
 	if (idle.step >= idle.agenda.size() || idle.agenda[idle.step].kind != creature_mind::Step::Kind::FollowHand)
@@ -648,13 +648,15 @@ std::optional<creature_player_attention::FollowHandView> FollowHandViewOf(const 
 	view.hand = {hand->x, hand->z};
 	view.distance = gutils::GetDistanceInMetres(at, handAt);
 	view.reach = creature_player_attention::FollowHandReach(object_measures::TwoDRadius(registry, creature));
-	view.bodyPlaying = bodyPlaying;
+	view.handAtOrigin = handAt.x == 0 && handAt.z == 0 && Locator::terrainSystem::has_value() &&
+	                    map_coords::FromWorld(Locator::terrainSystem::value(), *hand).altitude == 0.0f;
+	view.bodyBusy = bodyBusy;
 	view.directionClose = creature_player_attention::IsDirectionClose(at, handAt, self->heading.GameAngle());
 	return view;
 }
 
 std::optional<creature_player_attention::WatchPlayerView>
-WatchPlayerViewOf(const ecs::Registry& registry, entt::entity creature, const CreatureMindState& mind, bool bodyPlaying)
+WatchPlayerViewOf(const ecs::Registry& registry, entt::entity creature, const CreatureMindState& mind, bool bodyBusy)
 {
 	const auto& idle = mind.idle;
 	if (idle.step >= idle.agenda.size() || idle.agenda[idle.step].kind != creature_mind::Step::Kind::WatchPlayer)
@@ -669,7 +671,7 @@ WatchPlayerViewOf(const ecs::Registry& registry, entt::entity creature, const Cr
 	    // waits, and the watch ends at once, as in the game.
 	    .waitingForOrders = false,
 	    .hasPlayer = body != nullptr && body->owner != PlayerNames::NEUTRAL,
-	    .bodyPlaying = bodyPlaying,
+	    .bodyBusy = bodyBusy,
 	    .handMovement = mind.playerInterest.handMovement,
 	};
 	if (transform == nullptr || self == nullptr)

@@ -1193,7 +1193,7 @@ CreatureLocomotionSystem::MoveResult CreatureLocomotionSystem::MoveTo(entt::enti
 	BreatheForWalk(creature, *body, fraction, fractions);
 	// The scripts read the point as its destination also when the walk does not start
 	self->scriptDestination = ecs::script_destination::OfPoint(point);
-	return StartMove(creature, *self, point, fraction, minDistance, maxDistance, true);
+	return StartMove(creature, *self, point, fraction, minDistance, locomotion::StartMax(maxDistance, minDistance), true);
 }
 
 CreatureLocomotionSystem::MoveResult CreatureLocomotionSystem::LeadTo(entt::entity creature, glm::vec2 point, float extraSpeed,
@@ -1207,7 +1207,8 @@ CreatureLocomotionSystem::MoveResult CreatureLocomotionSystem::LeadTo(entt::enti
 		return MoveResult::Busy;
 	}
 	self->following.reset();
-	return StartMove(creature, *self, point, FractionsOf(body->species).walk + extraSpeed, 0.0f, maxDistance, true);
+	return StartMove(creature, *self, point, FractionsOf(body->species).walk + extraSpeed, 0.0f,
+	                 locomotion::StartMax(maxDistance, 0.0f), true);
 }
 
 CreatureLocomotionSystem::MoveResult CreatureLocomotionSystem::MoveToObject(entt::entity creature, entt::entity target,

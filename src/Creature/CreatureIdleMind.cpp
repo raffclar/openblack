@@ -1207,7 +1207,7 @@ void FollowCamera(IdleMind& mind, const Step& step, const Senses& senses, Comman
 	const float reach = step.movement.maxDistance;
 	const auto action = creature_emote::FollowCameraTurn({.focus = senses.cameraFocus,
 	                                                      .position = senses.position,
-	                                                      .moving = senses.moving,
+	                                                      .moving = senses.bodyBusy,
 	                                                      .focusAhead = senses.cameraFocusAhead},
 	                                                     mind.followCameraTurns, reach);
 	switch (action)

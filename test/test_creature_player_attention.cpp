@@ -124,8 +124,8 @@ TEST(CreaturePlayerAttention, AFollowHandTurnWalksUntilNearThenIsDone)
 	FollowHandView view {.hasPlayer = true, .handInMap = true, .distance = 50.0f, .reach = 10.0f};
 	EXPECT_EQ(FollowHandTurn(view, turns), FollowHandAction::WalkToHand);
 	EXPECT_EQ(turns, 2u);
-	// While the body plays an action it walks again only when the hand is not ahead
-	view.bodyPlaying = true;
+	// While the body does an action, a walk included, it walks again only when the hand is not ahead
+	view.bodyBusy = true;
 	view.directionClose = true;
 	EXPECT_EQ(FollowHandTurn(view, turns), FollowHandAction::Continue);
 	view.directionClose = false;
@@ -134,13 +134,42 @@ TEST(CreaturePlayerAttention, AFollowHandTurnWalksUntilNearThenIsDone)
 	// With the turns used up it is done
 	EXPECT_EQ(FollowHandTurn(view, turns), FollowHandAction::Done);
 	turns = 5;
-	view.bodyPlaying = false;
+	view.bodyBusy = false;
 	view.distance = 9.9f;
 	EXPECT_EQ(FollowHandTurn(view, turns), FollowHandAction::Done);
+	// A hand at the origin of the map on the ground ends the step when the body is free
+	view.distance = 50.0f;
+	view.handAtOrigin = true;
+	EXPECT_EQ(FollowHandTurn(view, turns), FollowHandAction::Done);
+	view.handAtOrigin = false;
 	view.handInMap = false;
 	EXPECT_EQ(FollowHandTurn(view, turns), FollowHandAction::Fail);
 	view.hasPlayer = false;
 	EXPECT_EQ(FollowHandTurn(view, turns), FollowHandAction::Done);
+}
+
+TEST(CreaturePlayerAttention, AFollowHandTurnIsNotDoneNearTheHandWhileTheCreatureWalks)
+{
+	uint32_t turns = 10;
+	// It walks to the hand, and the hand is ahead: the walk continues, also within the distance where it stops
+	FollowHandView view {
+	    .hasPlayer = true, .handInMap = true, .distance = 5.0f, .reach = 10.0f, .bodyBusy = true, .directionClose = true};
+	EXPECT_EQ(FollowHandTurn(view, turns), FollowHandAction::Continue);
+	// The hand is not ahead: it walks to the hand again
+	view.directionClose = false;
+	EXPECT_EQ(FollowHandTurn(view, turns), FollowHandAction::WalkToHand);
+	// The walk ended: it is near the hand
+	view.bodyBusy = false;
+	EXPECT_EQ(FollowHandTurn(view, turns), FollowHandAction::Done);
+}
+
+TEST(CreaturePlayerAttention, WatchingThePlayerWaitsWhileTheBodyTurns)
+{
+	WatchPlayerView view {.waitingForOrders = true, .hasPlayer = true, .bodyBusy = true, .handMovement = 0.0f};
+	view.camera = WatchPlayerView::Target {.point = {3.0f, 4.0f}, .distance = 50.0f, .turn = -2.0f};
+	const auto action = WatchPlayerTurn(view);
+	EXPECT_FALSE(action.done);
+	EXPECT_FALSE(action.turnTo.has_value());
 }
 
 TEST(CreaturePlayerAttention, WatchingThePlayerTurnsToTheHandWhenItMovedMuchElseToTheCamera)
