@@ -162,7 +162,7 @@ std::vector<Step> creature_town_help::PutFieldFoodBySite(const std::optional<Han
 	return agenda;
 }
 
-std::vector<Step> creature_town_help::DropCowInStore(std::optional<uint32_t> pickUp, uint32_t store)
+std::vector<Step> creature_town_help::DropCowInStore(std::optional<uint32_t> pickUp, uint32_t store, float height)
 {
 	std::vector<Step> agenda;
 	if (pickUp.has_value())
@@ -171,7 +171,7 @@ std::vector<Step> creature_town_help::DropCowInStore(std::optional<uint32_t> pic
 	}
 	agenda.push_back(FaceThing(store));
 	agenda.push_back({.kind = Step::Kind::Move,
-	                  .movement = {.kind = Movement::Kind::ToThrowPosition, .object = store},
+	                  .movement = {.kind = Movement::Kind::ToThrowPosition, .object = store, .maxDistance = height},
 	                  .effect = Effect::Completed,
 	                  .face = Cue::Compassion,
 	                  .gaze = Gaze {.object = store}});

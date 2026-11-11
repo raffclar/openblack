@@ -69,8 +69,8 @@ constexpr float k_FaceSeconds = 0.1f;
 
 /// Dropping a cow in a store: unless it holds a cow, it picks the cow up. It turns to face the store a tenth of a second,
 /// goes to where it can throw into the store with a look of compassion (where the action counts as done), and throws the
-/// cow in.
-[[nodiscard]] std::vector<Step> DropCowInStore(std::optional<uint32_t> pickUp, uint32_t store);
+/// cow in. The place to throw from keeps the creature's height clear of the store, as for the other throws into a store.
+[[nodiscard]] std::vector<Step> DropCowInStore(std::optional<uint32_t> pickUp, uint32_t store, float height);
 
 /// Making a villager a breeder: it picks the villager up, strokes it with a look of compassion (where the action counts
 /// as done), makes it a breeder and puts it down
