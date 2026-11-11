@@ -137,6 +137,7 @@ TEST(CreatureTownHelp, ACowIsDroppedInTheStore)
 	EXPECT_EQ((*agenda)[0].order.object, 9u);
 	EXPECT_EQ((*agenda)[1].movement.kind, Movement::Kind::TurnToFaceObject);
 	EXPECT_EQ((*agenda)[2].movement.kind, Movement::Kind::ToThrowPosition);
+	EXPECT_FLOAT_EQ((*agenda)[2].movement.maxDistance, 10.0f);
 	EXPECT_EQ((*agenda)[2].effect, Effect::Completed);
 	EXPECT_EQ((*agenda)[3].order.kind, ObjectOrder::Kind::ThrowInStore);
 	const auto held = plan_actions::Agenda(action, 5, {}, {.instrument = 9, .height = 10.0f, .holdingCow = true}, First);

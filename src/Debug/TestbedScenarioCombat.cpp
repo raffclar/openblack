@@ -86,6 +86,31 @@ void testbed_scenarios::AddCombat(std::vector<Scenario>& all)
 	    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f), Fight(Kind::FightAuto, 0, 1, 0.2f)},
 	});
 
+	all.push_back({
+	    .id = "combat.fireball_sets_fighter_alight",
+	    .name = "A fireball sets a fighting tiger alight",
+	    .facet = Facet::Combat,
+	    .description = "Two tigers duel by themselves. A third tiger to the south knows the fireball. Ten seconds after "
+	                   "the fight starts, the third tiger casts a fireball at the blue tiger.",
+	    .expected = "The fireball takes some fight health from the blue tiger, and its burn heats the blue tiger, which "
+	                "catches fire and burns in the duel. The fire takes more fight health and life while it burns. The "
+	                "inspector shows a Fire on the blue tiger.",
+	    .framing = ringside,
+	    .creatures = {red(PlayerNames::PLAYER_ONE, 0.6f, -0.45f), blue(PlayerNames::PLAYER_TWO, 0.6f, -0.45f),
+	                  Content(CreatureType::Tiger, {0.0f, -10.0f}, 0.0f, "caster")},
+	    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f),
+	                 Fight(Kind::FightAuto, 0, 1, 0.2f),
+	                 {.kind = Kind::KnowMiracle,
+	                  .creature = 2,
+	                  .delaySeconds = 0.5f,
+	                  .value = static_cast<size_t>(MagicType::Fireball)},
+	                 {.kind = Kind::CastMiracle,
+	                  .creature = 2,
+	                  .delaySeconds = 8.0f,
+	                  .value = static_cast<size_t>(MagicType::Fireball),
+	                  .atCreature = 1}},
+	});
+
 	// The first land's Ogre, and creatures on later lands, heal by a script after they win a fight: the script gives the
 	// victor a hundredth of life every six seconds, until it is full or it fights again
 	const auto healScript = [](float delay) {
@@ -354,7 +379,8 @@ void testbed_scenarios::AddCombat(std::vector<Scenario>& all)
 		    .description = "The player's red lion and a blue tiger start to look at the camera. A second later they fight "
 		                   "by themselves, so each head has a point to look at from before the fight. The camera looks at "
 		                   "the arena from the side.",
-		    .expected = "Before the duel each creature looks at the other as it walks to its place. In the fight stance "
+		    .expected = "Before the duel the red lion looks at the blue tiger as it walks to its place. The blue tiger looks "
+		                "about as it walks, and looks at the lion while it waits. In the fight stance "
 		                "each head follows the head of the other creature. During a blow, a block, a cast or a fall the "
 		                "head turns back to straight ahead. No head looks off to the left or the right of the opponent.",
 		    .framing = ringside,
@@ -380,9 +406,24 @@ void testbed_scenarios::AddCombat(std::vector<Scenario>& all)
 		                   "tiger, and both fight by themselves.",
 		    .expected = "Both tigers stop and turn to face each other. Each one taunts or makes the rude gesture. Then "
 		                "the ring of the arena appears with its sound, and the red tiger points at the arena. Both walk to "
-		                "their places and look at each other with angry faces. They turn to face each other again, and "
+		                "their places. Only the red tiger shows an angry face. They turn to face each other again, and "
 		                "the duel starts.",
 		    .framing = ringside,
+		    .creatures = {away, otherAway},
+		    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f), Fight(Kind::FightAuto, 0, 1, 0.2f)},
+		});
+		all.push_back({
+		    .id = "combat.lead_in_faces",
+		    .name = "The faces and looks before a duel",
+		    .facet = Facet::Combat,
+		    .description = "The red tiger and the blue tiger stand back to back. The red tiger starts a fight with the blue "
+		                   "tiger, and both fight by themselves. The camera looks at the face of the red tiger.",
+		    .expected = "Only the red tiger shows anger. It growls or grimaces as it asks, as it orders the blue tiger to "
+		                "turn, as it turns, as it orders the walk, as it walks, as it waits, and as each step in the "
+		                "arena starts. In the taunt and as it points at the arena, it shows no angry face. The blue tiger "
+		                "never shows an angry face. It looks about while it turns and walks, and it looks at the red tiger "
+		                "while it waits for the next order. The walk to the arena and the wait have no time limit.",
+		    .framing = {.shot = Shot::Head, .creature = 0},
 		    .creatures = {away, otherAway},
 		    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f), Fight(Kind::FightAuto, 0, 1, 0.2f)},
 		});
@@ -885,6 +926,18 @@ void testbed_scenarios::AddCombat(std::vector<Scenario>& all)
 	    .commands = {{.kind = Kind::ConfineToHome, .delaySeconds = 0.5f, .radius = 400.0f},
 	                 Go(Kind::WalkTo, 0, {90.0f, 30.0f}, 0.5f, false),
 	                 Act(Kind::KnockOut, 0, 1.0f, true)},
+	});
+	all.push_back({
+	    .id = "combat.knocked_out_eyes_close_lying",
+	    .name = "Knocked out, the eyes close when the body lies still",
+	    .facet = Facet::Combat,
+	    .description = "A worn tiger, life 0.6 and exhaustion 0.7, is knocked out where it stands, as a fight's loser is. "
+	                   "The camera looks at its face.",
+	    .expected = "The eyes stay open while the tiger falls. They close on the first turn that the body lies still. "
+	                "They open as the get-up starts. Before, the eyes closed as the faint started.",
+	    .framing = {.shot = Shot::Head, .distance = 1.0f},
+	    .creatures = {worn},
+	    .commands = {Act(Kind::KnockOut, 0, 1.0f, false)},
 	});
 	all.push_back({
 	    .id = "combat.script_moves_knocked_out",

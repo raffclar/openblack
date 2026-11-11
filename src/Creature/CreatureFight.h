@@ -898,6 +898,7 @@ constexpr float k_WinPlanPriority = 1.0f;
 /// 2. On the second turn, it tells the other creature not to think for itself.
 /// 3. On the third turn, it tells the other creature to stop and turn to face it.
 /// 4. From the fourth turn, it turns to face the other creature.
+constexpr uint32_t k_FaceOffRequestTurn = 1;
 constexpr uint32_t k_FaceOffStillTurn = 2;
 constexpr uint32_t k_FaceOffOrderTurn = 3;
 constexpr uint32_t k_FaceOffOwnTurn = 4;

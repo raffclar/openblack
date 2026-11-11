@@ -509,6 +509,18 @@ void testbed_scenarios::AddMind(std::vector<Scenario>& all)
 	    .commands = {Act(Kind::Sleep, 0, 2.0f, false)},
 	});
 	all.push_back({
+	    .id = "mind.sleep_eyes_close_in_the_loop",
+	    .name = "The eyes close when the sleep loop starts",
+	    .facet = Facet::Mind,
+	    .description = "A grown-up tiger with low energy and a strong desire to sleep has no temple. After two seconds it "
+	                   "lies down and sleeps where it stands. The camera looks at its face.",
+	    .expected = "The eyes stay open while the tiger lies down. They close on the first turn of the sleep loop, when "
+	                "the body lies still. Before, the eyes closed as the tiger started to lie down.",
+	    .framing = {.shot = Shot::Head, .distance = 1.0f},
+	    .creatures = {lowOnEnergy},
+	    .commands = {Act(Kind::Sleep, 0, 2.0f, false)},
+	});
+	all.push_back({
 	    .id = "mind.help_sleep_at_home",
 	    .name = "The help holds back while the creature goes home to sleep",
 	    .facet = Facet::Mind,
@@ -1381,7 +1393,8 @@ void testbed_scenarios::AddMind(std::vector<Scenario>& all)
 	    .expected = "The tiger smiles, howls or waves at the lion. To wave, it asks the lion to play first; the lion agrees "
 	                "when it wants to be friends with the tiger more than it fears it or is angry with it. Then the lion "
 	                "stands still in its mind, turns to the tiger and waves back as the tiger waves, from where they "
-	                "stand. The inspector shows the partners while they wave.",
+	                "stand. The tiger grimaces as it tells the lion to turn. The lion shows no face of the order. The "
+	                "inspector shows the partners while they wave.",
 	    .framing = {.shot = Shot::Overview},
 	    .creatures = {befriender, guideLion({25.0f, 0.0f}, 270.0f)},
 	    .commands = {{.kind = Kind::OnlyDesire,

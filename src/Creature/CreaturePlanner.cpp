@@ -241,15 +241,22 @@ std::optional<Plan> PlanActionThenPart(const DesirePlanning& planning)
 				continue;
 			}
 			LookAgain(planning);
+			// For a whole thing that is always acted on, an action that cannot act on it is not chosen
+			if (planning.wholeActedOn.has_value() && !planning.wholeActedOn->suits(action))
+			{
+				continue;
+			}
 			// An action that has no thing to use is not chosen
 			const auto used = action.usesThing ? planning.findUsed(action, std::nullopt) : std::nullopt;
 			if (action.usesThing && !used.has_value())
 			{
 				continue;
 			}
-			// Keep the order of the game: the thing used, then the part, then the action
-			const auto score =
-			    (used.has_value() ? k_UsingUsefulness : k_DefaultUsefulness) * k_DefaultUsefulness * Wanted(action);
+			// Keep the order of the game: the thing used, then the part, then the action. The part counts the default
+			// usefulness, but a whole thing that is always acted on counts its own usefulness.
+			const auto partUsefulness =
+			    planning.wholeActedOn.has_value() ? planning.wholeActedOn->usefulness : k_DefaultUsefulness;
+			const auto score = (used.has_value() ? k_UsingUsefulness : k_DefaultUsefulness) * partUsefulness * Wanted(action);
 			if (score >= most)
 			{
 				chosen = i;
@@ -262,7 +269,8 @@ std::optional<Plan> PlanActionThenPart(const DesirePlanning& planning)
 			return std::nullopt;
 		}
 		const auto& action = planning.actions[*chosen];
-		const auto part = planning.findObject(action);
+		const auto part =
+		    planning.wholeActedOn.has_value() ? std::optional(planning.wholeActedOn->part) : planning.findObject(action);
 		if (!part.has_value())
 		{
 			MarkTried(planning.actions, action.action, tried);

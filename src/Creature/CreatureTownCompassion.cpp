@@ -140,7 +140,14 @@ void creature_town_compassion::UntiedFromFlag(State& state)
 
 bool creature_town_compassion::MayHealFirst(uint32_t hurt, bool leashedToTownDesire, float sightings, float sightingsNeeded)
 {
-	return hurt != 0 && !leashedToTownDesire && sightingsNeeded > 0.0f && sightings / sightingsNeeded > k_HealSightingsShare;
+	if (hurt == 0 || leashedToTownDesire)
+	{
+		return false;
+	}
+	// The share is a float divide, as in the game. When no sightings are needed, some sightings give an endless share
+	// that passes, and no sightings give no number, which fails.
+	const float share = sightings / sightingsNeeded;
+	return share > k_HealSightingsShare;
 }
 
 bool creature_town_compassion::HealComesFirst(uint32_t draw)

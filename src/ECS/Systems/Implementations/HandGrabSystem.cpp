@@ -1404,10 +1404,14 @@ void HandGrabSystem::Take(HandGrab& grab, entt::entity object, bool fromTheWorld
 		PlayTakeSounds(object);
 	}
 
-	// The people and animals about the hand see it pick something up
+	// The people and animals about the hand see it pick something up. The time of this reaction starts at once, so it
+	// ends also when no living thing takes it up. This is true for the hand of each player.
 	const auto handPosition = _world->ReportedHandPlace();
-	_world->CreateReaction(
-	    {.initiator = _world->Hand(), .type = Reaction::ReactToHandPickUp, .player = player, .position = handPosition});
+	_world->CreateReaction({.initiator = _world->Hand(),
+	                        .type = Reaction::ReactToHandPickUp,
+	                        .player = player,
+	                        .position = handPosition,
+	                        .timedFromStart = true});
 	// A burning thing keeps burning in the hand, out of its blaze; the people round it flee one that isn't a villager
 	_world->FireStartedMoving(object, !registry.AllOf<Villager>(object));
 	// A firefly hiding exactly where the thing stood is caught, for a miracle there
@@ -1518,7 +1522,8 @@ void HandGrabSystem::TakeSeedBack(HandGrab& grab, entt::entity seed)
 	_world->CreateReaction({.initiator = _world->Hand(),
 	                        .type = Reaction::ReactToHandPickUp,
 	                        .player = player,
-	                        .position = _world->ReportedHandPlace()});
+	                        .position = _world->ReportedHandPlace(),
+	                        .timedFromStart = true});
 	if (_world->IsLocalHand())
 	{
 		_world->CountHelpEvent(help::profile::k_PickUp);

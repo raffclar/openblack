@@ -224,11 +224,21 @@ TEST(CreaturePlayerAgendas, HowNiceItThinksThePlayerIsIsAWaveOrTheSadClip)
 
 TEST(CreaturePlayerAgendas, BeingCrossFollowsTheCameraThenMakesARudeSignOrTaunts)
 {
-	const auto rude = BeCrossWithPlayer({}, 10.0f, NeverFirst);
+	const auto rude = BeCrossWithPlayer(glm::vec2 {}, 10.0f, NeverFirst);
 	ASSERT_EQ(rude.size(), 3u);
 	EXPECT_EQ(rude[0].kind, Step::Kind::FollowCamera);
 	EXPECT_EQ(rude[2].animation, k_RudeSignAnimation);
-	EXPECT_EQ(BeCrossWithPlayer({}, 10.0f, AlwaysFirst)[2].animation, k_TauntAnimation);
+	EXPECT_EQ(BeCrossWithPlayer(glm::vec2 {}, 10.0f, AlwaysFirst)[2].animation, k_TauntAnimation);
+	// Without a camera the game still draws for the sign first, and the creature makes it with no turn to the camera
+	std::vector<uint32_t> draws;
+	const auto noCamera = BeCrossWithPlayer(std::nullopt, 10.0f, [&draws](uint32_t range) {
+		draws.push_back(range);
+		return NeverFirst(range);
+	});
+	EXPECT_EQ(draws, std::vector<uint32_t> {2});
+	ASSERT_EQ(noCamera.size(), 2u);
+	EXPECT_EQ(noCamera[0].kind, Step::Kind::FollowCamera);
+	EXPECT_EQ(noCamera[1].animation, k_RudeSignAnimation);
 	EXPECT_EQ(FollowPlayer({}, 10.0f)[2].animation, k_LookAtMeAnimation);
 	EXPECT_EQ(GoToMiddleOfScreen({}, 10.0f).size(), 2u);
 }

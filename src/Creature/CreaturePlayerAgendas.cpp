@@ -54,11 +54,17 @@ std::vector<Step> creature_player_attention::FollowPlayer(glm::vec2 camera, floa
 	return {FollowCamera(height), FaceCamera(camera), {.kind = Step::Kind::Action, .animation = k_LookAtMeAnimation}};
 }
 
-std::vector<Step> creature_player_attention::BeCrossWithPlayer(glm::vec2 camera, float height,
+std::vector<Step> creature_player_attention::BeCrossWithPlayer(std::optional<glm::vec2> camera, float height,
                                                                const creature_mind::Random& random)
 {
 	const auto animation = random(k_CrossLots) != 0 ? k_RudeSignAnimation : k_TauntAnimation;
-	return {FollowCamera(height), FaceCamera(camera), {.kind = Step::Kind::Action, .animation = animation}};
+	const Step sign {.kind = Step::Kind::Action, .animation = animation};
+	// With no camera, the follow ends at once, and the turn to the camera ends at once too
+	if (!camera.has_value())
+	{
+		return {FollowCamera(height), sign};
+	}
+	return {FollowCamera(height), FaceCamera(*camera), sign};
 }
 
 std::vector<Step> creature_player_attention::ShowPlayerAnObject(std::optional<uint32_t> pickUp, glm::vec2 camera, float height)

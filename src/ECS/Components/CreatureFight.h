@@ -97,6 +97,8 @@ struct CreatureFighting
 	/// Seconds in the stage, and until it next shows its anger in its face
 	float stageSeconds {0.0f};
 	float faceSeconds {0.0f};
+	/// Whether the step that the creature does now shows anger in its face
+	bool angerShown {false};
 	/// Whether it has been told what to do in this stage yet, and has taunted its opponent
 	bool played {false};
 	bool taunted {false};
@@ -148,6 +150,15 @@ struct CreatureFighting
 [[nodiscard]] constexpr bool IsLeadIn(CreatureFighting::Stage stage)
 {
 	return stage < CreatureFighting::Stage::Duel;
+}
+/// Whether the other creature of a fight did its last order and waits for the next order. It does an order with no look
+/// of its own, and it looks about. While it waits, it looks at the first creature.
+[[nodiscard]] constexpr bool WaitsForNextOrder(const CreatureFighting& fighting)
+{
+	using Stage = CreatureFighting::Stage;
+	const bool turned = fighting.faceTurn.phase == creature_turn_to_face::Turn::Phase::Done;
+	return fighting.stage == Stage::Ready || (fighting.stage == Stage::FaceOff && turned) ||
+	       (fighting.stage == Stage::Square && turned && !fighting.played);
 }
 
 /// What a creature has learnt of fighting, kept between fights

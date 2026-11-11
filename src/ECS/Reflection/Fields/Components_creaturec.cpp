@@ -30,6 +30,7 @@ void openblack::ecs::reflection::RegisterFields_Components_creaturec(entt::meta_
 	    .Field<&components::CreatureCasting::move>("move")
 	    .Field<&components::CreatureCasting::outcome>("outcome")
 	    .Field<&components::CreatureCasting::target>("target")
+	    .Field<&components::CreatureCasting::point>("point")
 	    .Field<&components::CreatureCasting::keep>("keep")
 	    .Field<&components::CreatureCasting::settleSeconds>("settleSeconds")
 	    .Field<&components::CreatureCasting::run>("run")

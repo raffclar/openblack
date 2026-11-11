@@ -44,8 +44,9 @@ namespace openblack::creature_player_attention
 /// looks at the camera. Then it plays the clip that asks the player to look at it.
 [[nodiscard]] std::vector<creature_mind::Step> FollowPlayer(glm::vec2 camera, float height);
 /// The agenda to be cross with the player: the creature follows the point of focus of the camera and turns to the
-/// camera. It looks at the camera. Then one time in two it makes a rude sign, else it taunts the player.
-[[nodiscard]] std::vector<creature_mind::Step> BeCrossWithPlayer(glm::vec2 camera, float height,
+/// camera. It looks at the camera. Then one time in two it makes a rude sign, else it taunts the player. Without a
+/// camera, the follow ends at once and there is no turn, but the draw and the sign or the taunt stay.
+[[nodiscard]] std::vector<creature_mind::Step> BeCrossWithPlayer(std::optional<glm::vec2> camera, float height,
                                                                  const creature_mind::Random& random);
 /// The agenda to show the player a thing: if its hand is empty, the creature picks the thing up. It follows the point of
 /// focus of the camera, turns to the camera and puts the thing down. When it turns and puts the thing down, its face
