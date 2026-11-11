@@ -61,6 +61,7 @@ void openblack::ecs::reflection::RegisterFields_Components_creatureb(entt::meta_
 	    .Field<&components::CreatureEyes::mode>("mode")
 	    .Field<&components::CreatureEyes::openness>("openness")
 	    .Field<&components::CreatureEyes::blink>("blink")
+	    .Field<&components::CreatureEyes::turnMs>("turnMs")
 	    .Field<&components::CreatureEyes::lookAt>("lookAt")
 	    .Field<&components::CreatureEyes::look>("look")
 	    .Field<&components::CreatureEyes::lookStarted>("lookStarted")
