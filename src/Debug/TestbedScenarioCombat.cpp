@@ -1437,6 +1437,24 @@ void testbed_scenarios::AddCombat(std::vector<Scenario>& all)
 		    .repeatFrom = 1,
 		});
 		all.push_back({
+		    .id = "combat.ground_side_steps",
+		    .name = "A press on the land to the side steps towards it",
+		    .facet = Facet::Combat,
+		    .description = "The player's red tiger fights a blue tiger that does not fight. The player presses the land "
+		                   "five metres to the side of the red tiger: first on the positive side of its x axis, then on "
+		                   "the negative side. Then the red tiger gets a blow in the middle.",
+		    .expected = "After each press the red tiger takes one step to the side, towards the place of the press: "
+		                "first the step to the left, then the step to the right. When the blow of the red tiger lands, "
+		                "the red tiger does not jump back. The two tigers move apart only by the push of the blow. The "
+		                "original game does the same.",
+		    .framing = ringside,
+		    .creatures = {red(PlayerNames::PLAYER_ONE, 0.5f, 0.0f), blue(PlayerNames::PLAYER_TWO, 0.5f, 0.0f)},
+		    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f), Fight(Kind::FightAuto, 1, 0, 0.2f),
+		                 Fight(Kind::FightGroundPress, 0, 0, 14.0f), Fight(Kind::FightGroundPress, 0, 1, 3.0f),
+		                 Fight(Kind::FightBlow, 0, k_Mid, 3.0f, 0.0f)},
+		    .repeatFrom = 2,
+		});
+		all.push_back({
 		    .id = "combat.own_end_tests",
 		    .name = "The next fight state plays in the turn that the last one ends",
 		    .facet = Facet::Combat,

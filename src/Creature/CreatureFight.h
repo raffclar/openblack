@@ -169,8 +169,9 @@ enum class Step : uint8_t
 	Left,
 };
 [[nodiscard]] size_t StepAnimation(Step step);
-/// The step towards a point, given in the creature's frame (x to its right, y ahead): whichever axis is longer picks
-/// stepping forward or back, or right or left
+/// The step towards a point, given in the creature's frame (x to its right, y ahead). A point farther ahead or behind
+/// than to the side picks the step forward or back. Each other point picks the step to the right when it is farther
+/// on the negative side of the x axis than ahead or behind, else the step to the left.
 [[nodiscard]] Step StepTowards(glm::vec2 local);
 /// The step that a fighter in its stance takes back to the middle of the arena, when it is farther from the middle than
 /// its body radius. The middle is given in the frame of the creature's model (x to the side of its model, y ahead), and
@@ -326,9 +327,9 @@ public:
 	void Pop();
 	void Clear();
 	/// The move added last gets its charge, if it is a blow still waiting for it. False otherwise. A blow left waiting
-	/// behind a later move never gets one, and waits until a hit takes it away.
+	/// behind a later move never gets one, and stays in the queue.
 	bool Release(float heldMs);
-	/// Getting hit takes away a charged blow still waiting
+	/// Getting hit takes away the move added last when it is a blow that waits for its charge
 	void CancelWaiting();
 	[[nodiscard]] bool HasWaiting() const;
 	[[nodiscard]] size_t Size() const { return static_cast<size_t>(_count); }
@@ -606,7 +607,7 @@ constexpr float k_CastHoldMs = 2.0f;
 /// duration, in whole milliseconds.
 [[nodiscard]] bool OwnTestEnds(State state, float animationMs, int32_t testMs, float durationMs, float stateMs, int32_t turnMs);
 /// Whether the creature is blocking: while blocking, once half way into starting to block, and until half way out of
-/// it again
+/// it again. Both halves are half of the duration of the start of the block, cut down to a whole millisecond.
 [[nodiscard]] bool IsBlocking(State state, float timeMs, float startBlockDurationMs);
 /// Whether a creature in a state can be told to make a move
 [[nodiscard]] bool TakesMoves(State state);
@@ -737,9 +738,9 @@ struct Choice
 
 // Choosing the blow
 
-/// One of the creature's blows as it lands: where it lands in the creature's mesh space, how high it lands in the
-/// world, and the swing of its striking bone in the mesh space. A blow that the creature has but does not measure lands
-/// at the origin of the mesh, with no swing.
+/// One of the creature's blows as it lands: where it lands and how high, and the swing of its striking bone, all in the
+/// creature's mesh space. The size of the creature at the time of each use scales the height. A blow that the creature has but
+/// does not measure lands at the origin of the mesh, with no swing.
 struct Reach
 {
 	size_t animation;
@@ -934,8 +935,10 @@ constexpr float k_FightMusicDistance = 100.0f;
 /// DirectsFightForMusic gives it. It also plays while the camera is less than the music distance from the middle of an
 /// arena where a fight of the creature is on.
 [[nodiscard]] bool FightMusicHeard(bool directsFight, std::span<const glm::vec3> arenasOfItsFights, const glm::vec3& camera);
-/// The hit that a blow that lands gives its victim from the attacker, which changes how nice the victim finds it
-constexpr float k_BlowHitEffect = 0.05f;
+/// The hit that a blow that lands gives its victim from the attacker, which changes how nice the victim finds it: half
+/// of the hit share of a blow
+constexpr float k_BlowHitShare = 0.05f;
+constexpr float k_BlowHitEffect = 0.5f * k_BlowHitShare;
 /// The fight health of a creature in a duel after it loses damage to its life: the same amount less, never below none
 [[nodiscard]] float HealthAfterLifeLost(float health, float damage);
 /// The fight health of the victim after a blow that lands: the damage of the blow less, with no lower limit. A knock out

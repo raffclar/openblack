@@ -136,8 +136,16 @@ TEST(CreatureFight, GroundClickStepsAlongTheLongerAxis)
 {
 	EXPECT_EQ(StepTowards({1.0f, 5.0f}), Step::Forward);
 	EXPECT_EQ(StepTowards({1.0f, -5.0f}), Step::Back);
-	EXPECT_EQ(StepTowards({5.0f, 1.0f}), Step::Right);
-	EXPECT_EQ(StepTowards({-5.0f, -1.0f}), Step::Left);
+	// A point on the negative side of the x axis takes the step to the right, as the step back to the middle does
+	EXPECT_EQ(StepTowards({-5.0f, 1.0f}), Step::Right);
+	EXPECT_EQ(StepTowards({5.0f, -1.0f}), Step::Left);
+	EXPECT_EQ(StepTowards({-5.0f, 1.0f}), StepToMiddle({-5.0f, 1.0f}, 10.0f, 1.0f));
+	EXPECT_EQ(StepTowards({5.0f, -1.0f}), StepToMiddle({5.0f, -1.0f}, 10.0f, 1.0f));
+	// At equal lengths the step is to the left, and also with no length at all
+	EXPECT_EQ(StepTowards({-3.0f, 3.0f}), Step::Left);
+	EXPECT_EQ(StepTowards({3.0f, -3.0f}), Step::Left);
+	EXPECT_EQ(StepTowards({-3.0f, 2.0f}), Step::Right);
+	EXPECT_EQ(StepTowards({0.0f, 0.0f}), Step::Left);
 	EXPECT_EQ(StepMove(Step::Left).value, animations::k_StepLeft);
 	EXPECT_EQ(StepOf(animations::k_StepBack), Step::Back);
 	EXPECT_FALSE(StepOf(animations::k_AttackHigh).has_value());
@@ -299,12 +307,39 @@ TEST(CreatureFight, GettingHitTakesAWaitingBlowAway)
 {
 	MoveQueue queue;
 	queue.Push(BlockMove(), false);
-	queue.Push(AttackMove(Band::Mid), false);
 	queue.Push(StepMove(Step::Forward), false);
+	queue.Push(AttackMove(Band::Mid), false);
 	queue.CancelWaiting();
 	ASSERT_EQ(queue.Size(), 2u);
 	EXPECT_EQ(queue.Moves()[0].move, BlockMove());
 	EXPECT_EQ(queue.Moves()[1].move, StepMove(Step::Forward));
+	EXPECT_FALSE(queue.HasWaiting());
+}
+
+TEST(CreatureFight, AHitLeavesABlowThatWaitsBehindALaterMove)
+{
+	MoveQueue queue;
+	queue.Push(BlockMove(), false);
+	queue.Push(AttackMove(Band::Mid), false);
+	queue.Push(StepMove(Step::Forward), false);
+	queue.CancelWaiting();
+	ASSERT_EQ(queue.Size(), 3u);
+	EXPECT_EQ(queue.Moves()[1].move, AttackMove(Band::Mid));
+	EXPECT_FALSE(queue.Moves()[1].chargeMs.has_value());
+	EXPECT_EQ(queue.Moves()[2].move, StepMove(Step::Forward));
+}
+
+TEST(CreatureFight, AHitTakesOnlyTheBlowAddedLast)
+{
+	MoveQueue queue;
+	queue.Push(AttackMove(Band::High), false);
+	queue.Push(AttackMove(Band::Low), false);
+	queue.CancelWaiting();
+	ASSERT_EQ(queue.Size(), 1u);
+	EXPECT_EQ(queue.Moves()[0].move, AttackMove(Band::High));
+	// The blow left has no charge, but no blow waits now, so a second hit takes nothing
+	queue.CancelWaiting();
+	EXPECT_EQ(queue.Size(), 1u);
 }
 
 TEST(CreatureFight, OrdersAreTakenInRangeAndOnceCharged)
@@ -493,6 +528,10 @@ TEST(CreatureFight, DamageFollowsTheFormula)
 	EXPECT_FLOAT_EQ(DamageFactor({.attackerSize = 4.0f, .defenderSize = 1.0f, .speed = 1.5f}), 2.0f);
 	EXPECT_FLOAT_EQ(DamageFactor({.attackerSize = 4.0f, .defenderSize = 1.0f, .speed = 1.5f, .special = true}), 4.0f);
 	EXPECT_FLOAT_EQ(DamageFactor({.attackerSize = 0.1f, .defenderSize = 2.0f, .speed = 0.5f}), 0.04f);
+	// A factor that is not a number gets the lower limit, as in the game
+	EXPECT_FLOAT_EQ(DamageFactor({.attackerSize = 0.0f, .defenderSize = 0.0f}), 0.04f);
+	// The hit on the victim is half of the hit share of a blow, from the bits of the game
+	EXPECT_EQ(std::bit_cast<uint32_t>(k_BlowHitEffect), 0x3CCCCCCDu);
 	// The most a blow does: 0.1, or 0.2 for the special move
 	EXPECT_FLOAT_EQ(ResolveBlow({.attackerSize = 4.0f, .speed = 1.5f, .heightShare = 0.9f}, RecoilDirection::Plain).damage,
 	                0.1f);
@@ -629,6 +668,11 @@ TEST(CreatureFight, StatesFollowOneAnother)
 	EXPECT_TRUE(IsBlocking(State::BlockStart, 600.0f, 1000.0f));
 	EXPECT_TRUE(IsBlocking(State::BlockEnd, 400.0f, 1000.0f));
 	EXPECT_FALSE(IsBlocking(State::BlockEnd, 600.0f, 1000.0f));
+	// An odd duration has its half cut down to a whole millisecond
+	EXPECT_FALSE(IsBlocking(State::BlockStart, 500.0f, 1001.0f));
+	EXPECT_TRUE(IsBlocking(State::BlockStart, 501.0f, 1001.0f));
+	EXPECT_TRUE(IsBlocking(State::BlockEnd, 499.0f, 1001.0f));
+	EXPECT_FALSE(IsBlocking(State::BlockEnd, 500.0f, 1001.0f));
 	EXPECT_FLOAT_EQ(PlaybackSpeed(animations::k_StepBack), 1.1f * 0.9f);
 	EXPECT_FLOAT_EQ(PlaybackSpeed(animations::k_AttackHigh), 1.1f * 0.6f);
 
