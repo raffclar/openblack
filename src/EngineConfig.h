@@ -94,8 +94,9 @@ struct EngineConfig
 	bool showVillagerDetails {false};
 	bool debugVillagerNames {false};
 	bool debugVillagerStates {false};
-	/// Each miracle dispenser is labelled with its miracle
-	bool showDispenserNames {true};
+	/// The debug overlay shows the name of the miracle above each miracle dispenser. The game shows no text above a
+	/// dispenser. Thus, this overlay stays off until a developer sets it in the Magic window
+	bool showDispenserNames {false};
 	/// The Creature Cave's ImGui screen of the creature's facts and lessons, a debugging aid shown only when asked for
 	bool showCreatureCaveScreen {false};
 
