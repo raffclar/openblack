@@ -831,6 +831,30 @@ void openblack::testbed_scenarios::AddTownGrowthScenarios(std::vector<Scenario>&
 	    .throws = {{.object = 0, .height = 4.0f, .velocity = {10.0f, 10.0f, 0.0f}, .delaySeconds = 3.0f}},
 	});
 
+	// A tiger and a barrel thrown past it, with a row of villagers behind
+	all.push_back({
+	    .id = "villagers.watch_flying_turns",
+	    .name = "Villagers that turn to look at a tiger and a thrown thing",
+	    .facet = Facet::Objects,
+	    .description = "The player's tiger stands facing south. Six villagers with no town stand in a row 20 metres north "
+	                   "of it. Three seconds in, the player's hand throws a barrel from 20 metres to the "
+	                   "tiger's left, 12 metres in front of it, across its view.",
+	    .expected = "The villagers turn to look at the tiger and at the barrel. Each turn is a step of one sixteenth of "
+	                "a circle or less, and a villager stops when it faces the thing it looks at. No villager turns the "
+	                "wrong way or spins.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 9.0f, 36.0f}, .look = {0.0f, 1.0f, 12.0f}},
+	    .creatures = {{.offset = {0.0f, 0.0f}, .facingDegrees = 0.0f}},
+	    .objects = {{.type = MobileObjectInfo::EgyptBarrel, .offset = {-20.0f, -12.0f}},
+	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {-10.0f, 20.0f}},
+	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {-6.0f, 20.0f}},
+	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {-2.0f, 20.0f}},
+	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {2.0f, 20.0f}},
+	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {6.0f, 20.0f}},
+	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {10.0f, 20.0f}}},
+	    .throws = {{.object = 0, .height = 4.0f, .velocity = {10.0f, 10.0f, 0.0f}, .delaySeconds = 3.0f}},
+	});
+
 	// A town whose store has run out of food, with fields to farm
 	std::vector<ObjectSetup> hungry {
 	    {.type = AbodeInfo::CelticTownCentre, .offset = k_Centre},
