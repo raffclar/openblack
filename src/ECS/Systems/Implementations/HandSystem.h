@@ -65,6 +65,8 @@ public:
 	void MarkOwnSend() override;
 	void MarkSendDone(PlayerNames player, uint32_t turn) override;
 	[[nodiscard]] bool OwnSendWaits() const noexcept override;
+	void EndInterfaceLock(PlayerNames player) override;
+	void EndOwnInterfaceLock() override;
 	[[nodiscard]] uint32_t GetHandStillTurnsOf(PlayerNames player) const noexcept override;
 	[[nodiscard]] hand_trace::HandTrace* GetTrace() noexcept override { return &_trace; }
 	[[nodiscard]] hand_report::OwnReporter* GetOwnReporter() noexcept override { return &_ownReporter; }

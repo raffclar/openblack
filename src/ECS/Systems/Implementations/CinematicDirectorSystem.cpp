@@ -16,6 +16,7 @@
 #include <vector>
 
 #include "ECS/Reflection/BinaryArchive.h"
+#include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -30,6 +31,15 @@ namespace
 float WideScreenTime()
 {
 	return Locator::infoConstants::has_value() ? Locator::infoConstants::value().helpSystem.wideScreenTime : 0.0f;
+}
+
+/// The interface lock of the hand of this computer ends (see hand_send_wait::LockEnd)
+void EndHandInterfaceLock()
+{
+	if (Locator::handSystem::has_value())
+	{
+		Locator::handSystem::value().EndOwnInterfaceLock();
+	}
 }
 } // namespace
 
@@ -73,6 +83,15 @@ void CinematicDirectorSystem::SetWideScreen(bool on, uint32_t owner)
 	_interfaceActive = !on || owner == 0;
 	_wideScreenOwner = on ? owner : 0;
 	_bars.Set(on, WideScreenTime());
+	// The interface goes away or comes back, also for the game's own bars: the action of the hand ends
+	EndHandInterfaceLock();
+}
+
+void CinematicDirectorSystem::SetInterfaceActive(bool active)
+{
+	_interfaceActive = active;
+	// The action of the hand ends, as the interface goes away or comes back
+	EndHandInterfaceLock();
 }
 
 bool CinematicDirectorSystem::IsWideScreenOn() const

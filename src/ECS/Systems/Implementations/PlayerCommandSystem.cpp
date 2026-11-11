@@ -67,6 +67,7 @@
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/VillageTotemSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
+#include "Hand/HandSendWait.h"
 #include "Input/LocalPlayer.h"
 #include "Locator.h"
 
@@ -280,6 +281,122 @@ void RunObserver(const Command& command)
 	       std::holds_alternative<FightGround>(action);
 }
 
+/// What the hand of a player holds now: a thing, else a miracle
+[[nodiscard]] std::optional<entt::entity> HeldBy(openblack::PlayerNames player)
+{
+	if (openblack::Locator::handGrabSystem::has_value())
+	{
+		if (const auto held = openblack::Locator::handGrabSystem::value().GetHeldOf(player); held.has_value())
+		{
+			return held;
+		}
+	}
+	if (openblack::Locator::magicSystem::has_value())
+	{
+		return openblack::Locator::magicSystem::value().GetHeldSeedOf(player);
+	}
+	return std::nullopt;
+}
+
+/// Whether a hand already holds a thing in a lock: a creature, or a pile, a field or a fish farm that it scoops from
+[[nodiscard]] bool LockedByAHand(const openblack::ecs::Registry& registry, entt::entity object)
+{
+	if (registry.AllOf<openblack::ecs::components::Creature>(object))
+	{
+		return openblack::Locator::creatureHandSystem::has_value() &&
+		       openblack::Locator::creatureHandSystem::value().IsLocked(object);
+	}
+	if (!openblack::Locator::handGrabSystem::has_value())
+	{
+		return false;
+	}
+	const auto& hands = openblack::Locator::handGrabSystem::value();
+	for (uint8_t i = 0; i < static_cast<uint8_t>(openblack::PlayerNames::_COUNT); ++i)
+	{
+		if (hands.GetLockedOnOf(static_cast<openblack::PlayerNames>(i)) == object)
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+/// The command of a hand that can end the interface lock of the hand at the turn, and the thing of the command
+[[nodiscard]] std::optional<std::pair<openblack::hand_send_wait::TurnCommand, entt::entity>> LockCommandOf(const Action& action)
+{
+	using openblack::hand_send_wait::TurnCommand;
+	return std::visit(
+	    [](const auto& command) -> std::optional<std::pair<TurnCommand, entt::entity>> {
+		    using Kind = std::decay_t<decltype(command)>;
+		    if constexpr (std::is_same_v<Kind, HandLetGo>)
+		    {
+			    return std::pair {TurnCommand::LetGo, command.object};
+		    }
+		    else if constexpr (std::is_same_v<Kind, HandCast>)
+		    {
+			    // A cast at a point of the land is a let go of the seed, and a cast on a thing is a use of it
+			    return std::pair {command.object == entt::null ? TurnCommand::LetGo : TurnCommand::Apply, command.object};
+		    }
+		    else if constexpr (std::is_same_v<Kind, HandApply>)
+		    {
+			    return std::pair {TurnCommand::Apply, command.target};
+		    }
+		    else if constexpr (std::is_same_v<Kind, HandGive>)
+		    {
+			    return std::pair {TurnCommand::Give, command.creature};
+		    }
+		    else if constexpr (std::is_same_v<Kind, HandLock>)
+		    {
+			    return std::pair {TurnCommand::Lock, command.object};
+		    }
+		    else if constexpr (std::is_same_v<Kind, HandUnlock>)
+		    {
+			    return std::pair {TurnCommand::Unlock, command.object};
+		    }
+		    else if constexpr (std::is_same_v<Kind, HandCastUnlock>)
+		    {
+			    return std::pair {TurnCommand::CastUnlock, command.seed};
+		    }
+		    else if constexpr (std::is_same_v<Kind, GiveCallOff>)
+		    {
+			    return std::pair {TurnCommand::GiveCallOff, command.creature};
+		    }
+		    else
+		    {
+			    return std::nullopt;
+		    }
+	    },
+	    action);
+}
+
+/// At the turn, before a command of a hand acts: the interface lock of the hand ends when the turn cannot do the command
+void EndLockOfRefusedCommand(const Command& command)
+{
+	if (!openblack::Locator::handSystem::has_value())
+	{
+		return;
+	}
+	const auto lockCommand = LockCommandOf(command.action);
+	if (!lockCommand.has_value())
+	{
+		return;
+	}
+	const auto& registry = openblack::Locator::entitiesRegistry::value();
+	const auto [kind, thing] = *lockCommand;
+	const auto held = HeldBy(command.player);
+	const bool thingThere = thing != entt::null && registry.Valid(thing);
+	const openblack::hand_send_wait::TurnFacts facts {
+	    .thingThere = thingThere,
+	    .holdsSomething = held.has_value(),
+	    .heldThere = held.has_value() && registry.Valid(*held),
+	    .thingLocked = thingThere && kind == openblack::hand_send_wait::TurnCommand::Lock && LockedByAHand(registry, thing),
+	};
+	if (openblack::hand_send_wait::TurnEndsLock(kind, facts))
+	{
+		openblack::Locator::handSystem::value().EndInterfaceLock(command.player);
+	}
+}
+
 /// Do one command for the player that sent it, at a turn
 void Run(const Command& command, uint32_t turn)
 {
@@ -293,6 +410,7 @@ void Run(const Command& command, uint32_t turn)
 	{
 		openblack::Locator::handSystem::value().MarkSendDone(command.player, turn);
 	}
+	EndLockOfRefusedCommand(command);
 	auto& registry = openblack::Locator::entitiesRegistry::value();
 	std::visit(
 	    [&](const auto& action) {

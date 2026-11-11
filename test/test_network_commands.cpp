@@ -165,9 +165,11 @@ public:
 		return {};
 	}
 	void MarkSendDone(PlayerNames player, uint32_t turn) override { done.emplace_back(player, turn); }
+	void EndInterfaceLock(PlayerNames player) override { lockEnds.push_back(player); }
 
 	std::vector<PlayerNames> made;
 	std::vector<std::pair<PlayerNames, uint32_t>> done;
+	std::vector<PlayerNames> lockEnds;
 };
 
 /// The computer minds of the test: it keeps the humans of each join
@@ -496,6 +498,35 @@ TEST_F(NetworkCommands, TheTurnTellsTheHandOfEachSendThatEndsAWait)
 	    {PlayerNames::PLAYER_THREE, 6u}, {PlayerNames::PLAYER_THREE, 6u},
 	};
 	EXPECT_EQ(hands.done, expected);
+	_commands.SetSource(nullptr);
+	Locator::handSystem::reset();
+}
+
+TEST_F(NetworkCommands, ACommandOfAHandThatTheTurnCannotDoEndsTheInterfaceLockOfTheHand)
+{
+	auto& hands = static_cast<FakeHands&>(Locator::handSystem::emplace<FakeHands>());
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto there = registry.Create();
+	_commands.SetSource(&_source);
+	// No hand holds anything, and only one thing is in the world
+	_source.turns[6] = {
+	    // A let go with nothing in the hand ends the lock. A tap never does.
+	    {.player = PlayerNames::PLAYER_ONE, .action = HandLetGo {.object = there, .velocity = {}, .start = {}}},
+	    {.player = PlayerNames::PLAYER_ONE, .action = HandTap {.object = Entity(2)}},
+	    // The end of a lock on a thing that is there does not end it; on a thing that is gone it does
+	    {.player = PlayerNames::PLAYER_TWO, .action = HandUnlock {.object = there}},
+	    {.player = PlayerNames::PLAYER_TWO, .action = HandUnlock {.object = Entity(9)}},
+	    // A lock on a thing that is there and that no hand holds does not end it
+	    {.player = PlayerNames::PLAYER_THREE, .action = HandLock {.object = there}},
+	    // The let go of a poured miracle that is gone ends it
+	    {.player = PlayerNames::PLAYER_THREE, .action = HandCastUnlock {.seed = Entity(9)}},
+	    // The call-off of a gift always ends it
+	    {.player = PlayerNames::PLAYER_FOUR, .action = GiveCallOff {.creature = there}},
+	};
+	_commands.RunSent(6);
+	const std::vector<PlayerNames> expected {PlayerNames::PLAYER_ONE, PlayerNames::PLAYER_TWO, PlayerNames::PLAYER_THREE,
+	                                         PlayerNames::PLAYER_FOUR};
+	EXPECT_EQ(hands.lockEnds, expected);
 	_commands.SetSource(nullptr);
 	Locator::handSystem::reset();
 }

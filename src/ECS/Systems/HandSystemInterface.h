@@ -204,6 +204,12 @@ public:
 	virtual void MarkSendDone([[maybe_unused]] PlayerNames player, [[maybe_unused]] uint32_t turn) {}
 	/// The hand of this computer waits for its last send (see hand_send_wait::Waits)
 	[[nodiscard]] virtual bool OwnSendWaits() const noexcept { return false; }
+	/// The interface lock of the hand of a player ends (see hand_send_wait::LockEnd). Only the hand of this computer keeps
+	/// a wait, so the call does nothing for the hand of another player.
+	virtual void EndInterfaceLock([[maybe_unused]] PlayerNames player) {}
+	/// The interface lock of the hand of this computer ends, when the interface goes away or comes back (see
+	/// hand_send_wait::LockEnd)
+	virtual void EndOwnInterfaceLock() {}
 	/// The game turns since the hand of a player last moved (see hand_stillness::Step). Zero for a player with no
 	/// hands.
 	[[nodiscard]] virtual uint32_t GetHandStillTurnsOf([[maybe_unused]] PlayerNames player) const noexcept { return 0; }
