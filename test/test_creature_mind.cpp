@@ -430,6 +430,8 @@ TEST(CreatureIdleMind, BeingIdleIsWaitingThenYawningTwice)
 	std::vector<creature_mind::Eyes> eyes;
 	for (int turn = 0; turn < 200 && body.played.size() < 2; ++turn)
 	{
+		// The head takes the look of the turn before the mind thinks
+		const auto look = creature_mind::TurnLookEyes(mind);
 		const auto commands = creature_mind::Think(mind, body.Senses(), random);
 		if (turn == 0)
 		{
@@ -445,9 +447,9 @@ TEST(CreatureIdleMind, BeingIdleIsWaitingThenYawningTwice)
 			EXPECT_EQ(*commands.playOnce, animations::k_Tired);
 			EXPECT_TRUE(commands.mirrored);
 		}
-		if (commands.eyes != creature_mind::Eyes::Unchanged)
+		if (look.eyes != creature_mind::Eyes::Unchanged)
 		{
-			eyes.push_back(commands.eyes);
+			eyes.push_back(look.eyes);
 		}
 		body.Obey(commands, 30);
 	}
@@ -1523,7 +1525,7 @@ TEST(CreatureNeedsMind, ItSleepsWithItsEyesClosedUntilRested)
 	// Then a dazed look about with sleepy eyes
 	commands = creature_mind::Think(mind, body.Senses(), Always(1));
 	EXPECT_EQ(commands.playOnce, animations::k_Confused);
-	EXPECT_EQ(commands.eyes, creature_mind::Eyes::Sleepy);
+	EXPECT_EQ(creature_mind::TurnLookEyes(mind).eyes, creature_mind::Eyes::Sleepy);
 }
 
 TEST(CreatureNeedsMind, AfterASleepTheNextStepTriesToStartWhileTheGetUpPlays)
@@ -1568,10 +1570,10 @@ TEST(CreatureIdleMind, WokenItsLidsDroopUntilItStopsWhatItDoes)
 	creature_mind::Plan(mind, creature_mind::Activity::BeIdle,
 	                    {{.kind = creature_mind::Step::Kind::Action, .animation = animations::k_Confused, .sleepyEyes = true},
 	                     {.kind = creature_mind::Step::Kind::Wait, .seconds = 0.2f}});
-	// Taking up the plan, its eyes look rested first; then the dazed look droops them
+	// The look of the dazed step droops the lids, and the first turn of the plan rests the eyes
+	EXPECT_EQ(creature_mind::TurnLookEyes(mind).eyes, creature_mind::Eyes::Sleepy);
 	auto commands = creature_mind::Think(mind, body.Senses(), Always(1));
 	EXPECT_TRUE(commands.restEyes);
-	EXPECT_EQ(commands.eyes, creature_mind::Eyes::Sleepy);
 	body.Obey(commands, 2);
 	// The droop stays through the end of the look and the wait after it
 	bool rested = false;

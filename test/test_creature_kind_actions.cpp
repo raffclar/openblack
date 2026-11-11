@@ -634,8 +634,10 @@ TEST(CreatureKindActions, TalkingWhenHighFluttersTheEyelidsUntilItTakesUpSomethi
 	EXPECT_TRUE(agenda[1].flutterEyelids);
 	IdleMind mind;
 	mind.agenda = {{.kind = Step::Kind::Overlay, .animation = k_Talk, .flutterEyelids = true}};
-	const auto started = Think(mind, Senses {.seconds = 0.1f}, KindActionsFirst);
-	EXPECT_EQ(started.blinkIntervalMs, k_FlutterBlinkIntervalMs);
+	// The look of the step flutters the eyelids in each turn that the head takes it
+	EXPECT_TRUE(TurnLookEyes(mind).flutterEyelids);
+	static_cast<void>(Think(mind, Senses {.seconds = 0.1f}, KindActionsFirst));
+	EXPECT_TRUE(TurnLookEyes(mind).flutterEyelids);
 	Plan(mind, Activity::BeIdle, {{.kind = Step::Kind::Wait, .seconds = 1.0f}});
 	const auto next = Think(mind, Senses {.seconds = 0.1f}, KindActionsFirst);
 	EXPECT_TRUE(next.restEyes);

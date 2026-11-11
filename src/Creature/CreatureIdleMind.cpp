@@ -57,22 +57,59 @@ bool IsStep(const std::optional<IdleMind::StepRef>& ref, const IdleMind& mind)
 	return ref.has_value() && ref->serial == mind.serial && ref->step == mind.step;
 }
 
-void FinishStep(IdleMind& mind)
+/// Whether the last stage of a kind of step has no code, after a stage with code. The agenda stays at such a step until
+/// the next turn goes past the empty stage.
+bool EndStageEmpty(const Step& step)
 {
-	// When the last stage of the step has no code, the head keeps the look of the step for one more turn
-	if (mind.step < mind.agenda.size() && creature_sub_states::LookHoldsAfterEnd(SubStateOf(mind.agenda[mind.step])))
-	{
-		mind.endedLook = IdleMind::EndedLook {.serial = mind.serial, .gaze = LookOf(mind.agenda[mind.step])};
-	}
+	const auto stages = creature_sub_states::StagesOf(SubStateOf(step));
+	return !stages.end && (stages.start || stages.turn);
+}
+
+/// The agenda moves on to its next step
+void MoveOn(IdleMind& mind)
+{
 	mind.movedOn = mind.step;
 	++mind.step;
 	mind.stepStarted = false;
 	mind.stepSeconds = 0.0f;
 	mind.sitEnding = false;
 	mind.faintLay = false;
-	// With its last step done, it stops what it does
+}
+
+/// The step did its work. A last stage with no code holds the step for one more turn:
+/// - the head keeps the look of the step;
+/// - when it is the last step, the agenda ends on the next turn of thought.
+void FinishStep(IdleMind& mind)
+{
+	const bool emptyEnd = mind.step < mind.agenda.size() && EndStageEmpty(mind.agenda[mind.step]);
+	if (emptyEnd && creature_sub_states::LookHoldsAfterEnd(SubStateOf(mind.agenda[mind.step])))
+	{
+		mind.endedLook = IdleMind::EndedLook {.serial = mind.serial, .gaze = LookOf(mind.agenda[mind.step])};
+	}
+	MoveOn(mind);
+	if (mind.step < mind.agenda.size())
+	{
+		return;
+	}
+	if (emptyEnd)
+	{
+		mind.endsNextTurn = mind.serial;
+	}
+	else
+	{
+		// With its last step done, it stops what it does
+		mind.eyesToClear = true;
+	}
+}
+
+/// The step is not done, as its work is done already. The agenda moves on at once. When it is the last step, the plan
+/// ends, but it does not see to its desire.
+void SkipStep(IdleMind& mind)
+{
+	MoveOn(mind);
 	if (mind.step >= mind.agenda.size())
 	{
+		mind.lastStepSkipped = mind.serial;
 		mind.eyesToClear = true;
 	}
 }
@@ -643,6 +680,11 @@ const Step* CurrentStep(const IdleMind& mind)
 }
 } // namespace
 
+bool creature_mind::AgendaOver(const IdleMind& mind)
+{
+	return mind.step >= mind.agenda.size() && mind.endsNextTurn != mind.serial;
+}
+
 bool creature_mind::IsAsleep(const IdleMind& mind)
 {
 	const auto* step = CurrentStep(mind);
@@ -755,6 +797,8 @@ void creature_mind::Plan(IdleMind& mind, Activity activity, std::vector<Step> ag
 	mind.stoppedSeen = false;
 	mind.usedUpHeld.reset();
 	mind.endedLook.reset();
+	mind.endsNextTurn.reset();
+	mind.lastStepSkipped.reset();
 	// Taking up something else, it stops what it did, and its eyes look as a rested creature's eyes do again
 	mind.eyesToClear = true;
 }
@@ -1579,6 +1623,20 @@ std::optional<Gaze> creature_mind::TurnLook(const IdleMind& mind)
 	return std::nullopt;
 }
 
+creature_mind::LookEyes creature_mind::TurnLookEyes(const IdleMind& mind)
+{
+	// The step that ended with empty last stages is the step before the current one
+	const bool held = mind.endedLook.has_value() && mind.endedLook->serial == mind.serial && mind.step > 0;
+	const size_t index = held ? mind.step - 1 : mind.step;
+	if (index >= mind.agenda.size())
+	{
+		return {};
+	}
+	const auto& step = mind.agenda[index];
+	const auto eyes = step.heldEyes.value_or(step.sleepyEyes ? Eyes::Sleepy : Eyes::Unchanged);
+	return {.eyes = eyes, .flutterEyelids = step.flutterEyelids};
+}
+
 bool creature_mind::StartsOnTheWay(const Step& step)
 {
 	if (step.kind != Step::Kind::Move)
@@ -1653,12 +1711,21 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 	return Think(mind, senses, random, random);
 }
 
-Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random& random, const Random& gameRandom)
+namespace
+{
+/// One turn of thought: the step of the agenda starts, continues or ends
+Commands TurnOfThought(IdleMind& mind, const Senses& senses, const Random& random, const Random& gameRandom)
 {
 	Commands commands;
 	mind.movedOn.reset();
 	// The agenda goes past the empty last stages of the step that ended, so the look of that step ends
 	mind.endedLook.reset();
+	// When those stages were the last of the agenda, the agenda ends now, and the creature stops what it does
+	if (mind.endsNextTurn == mind.serial)
+	{
+		mind.eyesToClear = true;
+	}
+	mind.endsNextTurn.reset();
 	if (mind.eyesToClear)
 	{
 		commands.restEyes = true;
@@ -1726,7 +1793,7 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 			if (need == HandsNeed::FreeOrTarget && step.order.object == senses.held)
 			{
 				// It holds the thing that the step picks up already, so it does not do the step
-				FinishStep(mind);
+				SkipStep(mind);
 				return commands;
 			}
 			// If it cannot start to let go, it tries again next turn
@@ -1784,24 +1851,11 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 		mind.movedOn = mind.step;
 		mind.stepSeconds = 0.0f;
 		mind.faintLay = false;
-		if (step.heldEyes.has_value())
-		{
-			commands.eyes = *step.heldEyes;
-		}
-		if (step.flutterEyelids)
-		{
-			// Its eyes go back to their usual blinking once it stops what it does
-			commands.blinkIntervalMs = k_FlutterBlinkIntervalMs;
-		}
 		switch (step.kind)
 		{
 		case Step::Kind::Action:
 			commands.playOnce = step.animation;
 			commands.mirrored = PickIndividualSide(gameRandom, senses);
-			if (step.sleepyEyes)
-			{
-				commands.eyes = Eyes::Sleepy;
-			}
 			break;
 		case Step::Kind::Static:
 			commands.startSequence = step.sequence;
@@ -2454,6 +2508,19 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 			FinishStep(mind);
 		}
 		break;
+	}
+	return commands;
+}
+} // namespace
+
+Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random& random, const Random& gameRandom)
+{
+	auto commands = TurnOfThought(mind, senses, random, gameRandom);
+	// An agenda that ended in this turn stops what the creature does in this turn
+	if (mind.eyesToClear)
+	{
+		commands.restEyes = true;
+		mind.eyesToClear = false;
 	}
 	return commands;
 }

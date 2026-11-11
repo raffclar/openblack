@@ -613,6 +613,11 @@ void CreatureMindSystem::MindTurn(entt::entity entity)
 	// The head takes its look for the turn here: after the emergencies, but before the creature decides and before the
 	// step of the turn runs
 	mind.turnLook = creature_mind::TurnLook(mind.idle);
+	// The look of the step also changes the eyes, but a script's focus takes the place of the look
+	if (!mind.scriptFocus.has_value())
+	{
+		ApplyLookEyes(registry.TryGet<CreatureEyes>(entity), creature_mind::TurnLookEyes(mind.idle));
+	}
 	DrawDependentLook(entity, mind);
 	_thinking.push_back(entity);
 }
@@ -742,7 +747,7 @@ void CreatureMindSystem::DesiresTurn(entt::entity entity)
 	}
 	// When the creature is free to choose, it plans the desires of the round for this turn. When no plan is ready, it
 	// does nothing.
-	if (!scripted && !demobilised && !mind.planActive && mind.idle.step >= mind.idle.agenda.size() &&
+	if (!scripted && !demobilised && !mind.planActive && creature_mind::AgendaOver(mind.idle) &&
 	    !(needs != nullptr && needs->faint.has_value()))
 	{
 		PlanCreature(entity, mind);
@@ -752,7 +757,7 @@ void CreatureMindSystem::DesiresTurn(entt::entity entity)
 			mind.thinksWithoutPlanSerial = mind.idle.serial;
 			mind.thinksWithoutPlan = 0;
 		}
-		if (!mind.planActive && mind.idle.step >= mind.idle.agenda.size())
+		if (!mind.planActive && creature_mind::AgendaOver(mind.idle))
 		{
 			++mind.thinksWithoutPlan;
 			// A turn with no plan lets it faint again

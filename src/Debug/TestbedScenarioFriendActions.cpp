@@ -142,6 +142,10 @@ void testbed_scenarios::AddFriendActionScenarios(std::vector<Scenario>& all)
 	                         "The tiger asks the lion to play. On the turn after it gives the lion the order to wave, its "
 	                         "head turns to look straight ahead for one turn. The lion turns to the tiger and waves. A step "
 	                         "that waits for nothing after it ends keeps its look for one more turn."));
+	all.push_back(TwoFriends("friends.smile_eyelids", "The eyelids of a smile at a friend", "SmileAtFriend",
+	                         "The tiger walks near the lion with a smile and faces it. Its eyelids flutter from the turn "
+	                         "after the walk starts, also while it walks. They flutter for one more turn after the walk "
+	                         "ends. On the turn that the tiger stops what it does, its eyes blink as usual again."));
 	all.push_back(TwoFriends("friends.kiss", "Kiss a friend", "KissFriend",
 	                         "The tiger asks the lion to be its friend. The two walk to the two sides of the point halfway "
 	                         "between them and turn to face each other. Each kisses the other. The taller one bends down "

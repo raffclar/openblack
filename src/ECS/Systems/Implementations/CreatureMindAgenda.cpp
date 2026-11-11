@@ -258,6 +258,15 @@ void ApplyEyes(CreatureEyes* eyes, creature_mind::Eyes look)
 	                                                   : creature_eyes::Mode::Calm;
 }
 
+void ApplyLookEyes(CreatureEyes* eyes, const creature_mind::LookEyes& look)
+{
+	ApplyEyes(eyes, look.eyes);
+	if (eyes != nullptr && look.flutterEyelids)
+	{
+		eyes->blink.intervalMs = creature_mind::k_FlutterBlinkIntervalMs;
+	}
+}
+
 /// The creature stops what it does: its eyes go calm, blink as usual, and its lids open by how rested it is
 void RestEyes(const ecs::Registry& registry, entt::entity creature, CreatureEyes* eyes)
 {
@@ -574,10 +583,6 @@ void Apply(entt::entity creature, const creature_mind::Commands& commands, Creat
 		});
 	}
 	ApplyEyes(eyes, commands.eyes);
-	if (eyes != nullptr && commands.blinkIntervalMs.has_value())
-	{
-		eyes->blink.intervalMs = *commands.blinkIntervalMs;
-	}
 }
 
 /// What the creature shows when it communicates its state now
