@@ -61,6 +61,31 @@ void testbed_scenarios::AddLeash(std::vector<Scenario>& all)
 	    .repeatFrom = 0,
 	});
 
+	// A small tiger, 6 metres high, so that eight of its heights (48 metres) fit in the view
+	constexpr glm::vec2 k_ThrowNear {20.0f, 0.0f};
+	constexpr glm::vec2 k_ThrowFar {-110.0f, 0.0f};
+	all.push_back({
+	    .id = "leash.throw_at_place",
+	    .name = "A thing carried on the aggression leash is thrown at a place",
+	    .facet = Facet::Leash,
+	    .description = "A tiger of size 0.4 on the aggression leash picks up a rock. With the Action button the player "
+	                   "tells it to go to a place about 16 metres away. When the rock is still, the tiger picks it up "
+	                   "again, and the player tells it to go to a place far to the west.",
+	    .expected = "The tiger does not carry the rock to the place. For the near place, it stays where it is and throws "
+	                "the rock at the place. The game sends it back to eight of its heights (48 metres) from the place, "
+	                "but the walk ends at once, because the creature is already in the ring of that walk. For the far "
+	                "place, it walks until it is eight of its heights from the place, then it throws the rock at the "
+	                "place.",
+	    .framing = {.shot = Shot::Overview, .include = {k_ThrowFar, k_ThrowNear + glm::vec2(48.0f, 0.0f)}},
+	    .creatures = {CreatureSetup {
+	        .species = CreatureType::Tiger, .offset = {0.0f, 0.0f}, .size = 0.4f, .needs = Content(), .hold = true}},
+	    .objects = {{.type = MobileStaticInfo::RockChalk, .offset = {4.0f, -6.0f}}},
+	    .commands = {Leash(0, LeashType::Evil, 1.0f), OnObject(Kind::PickUp, 0, 0, 1.0f),
+	                 Go(Kind::LeashOrderAt, 0, k_ThrowNear, 1.0f), OnObject(Kind::PickUp, 0, 0, 8.0f),
+	                 Go(Kind::LeashOrderAt, 0, k_ThrowFar, 1.0f), Act(Kind::TakeOffLeash, 0, 6.0f, true)},
+	    .repeatFrom = 0,
+	});
+
 	// A man held by a script out in the lake, as the drowning men of Land 1's silver scroll, and a tiger that shrinks
 	// in its temple's pen first, so that it grows again on its way out to him
 	constexpr glm::vec2 k_RescueTemple {-150.0f, 150.0f};
@@ -394,8 +419,9 @@ void testbed_scenarios::AddLeash(std::vector<Scenario>& all)
 	    .facet = Facet::Leash,
 	    .description = "A tiger on the learning leash is tied to a tree and told to walk far off, untied back to the "
 	                   "hand, then tied to a pillar of rock and told to walk far off again.",
-	    .expected = "The rope runs from what it is tied to, and it is kept within the rope's length of it however far "
-	                "it is told to walk; untied, the rope goes back to the hand.",
+	    .expected = "The rope runs from what it is tied to. The walk of the testbed moves the tiger directly, not as an "
+	                "order from the player, so the tie does not stop it and the rope stretches to it. Untied, the rope "
+	                "keeps its shape and swings back to the wrist of the hand.",
 	    .framing = {.shot = Shot::Overview, .include = {{-120.0f, 60.0f}, {120.0f, 60.0f}}},
 	    .creatures = {Posed(CreatureType::Tiger, {0.0f, 0.0f})},
 	    .objects = {{.type = TreeInfo::Oak, .offset = {-40.0f, 10.0f}},
