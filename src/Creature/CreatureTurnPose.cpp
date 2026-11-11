@@ -83,6 +83,12 @@ std::vector<glm::mat4> ToWorld(std::span<const glm::mat4> bones, const glm::mat4
 	return world;
 }
 
+void FollowPlacement(std::span<glm::mat4> world, const glm::mat4& from, const glm::mat4& to)
+{
+	const auto change = to * glm::inverse(from);
+	std::ranges::transform(world, world.begin(), [&change](const glm::mat4& bone) { return change * bone; });
+}
+
 void ToMesh(std::span<const glm::mat4> world, const glm::mat4& placement, std::span<glm::mat4> bones)
 {
 	assert(world.size() == bones.size());

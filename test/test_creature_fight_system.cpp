@@ -2832,3 +2832,106 @@ TEST_F(CreatureFightSystemTest, APressOnTheGroundMakesTheHandWaitAndAWaitingHand
 	EXPECT_EQ(hands.sends, 2);
 	EXPECT_EQ(QueueOf(first).Size(), 2u);
 }
+
+namespace
+{
+/// A creature out cold that is about to rest to get better, with its faint already on its body
+CreatureKnockedOut& AboutToRest(Registry& registry, entt::entity creature)
+{
+	registry.Remove<CreatureFighting>(creature);
+	auto& needs = registry.Assign<CreatureNeeds>(creature);
+	needs.needs.life = 0.3f;
+	needs.needs.exhaustion = 0.5f;
+	return registry.AssignOrReplace<CreatureKnockedOut>(creature, CreatureKnockedOut {
+	                                                                  .stage = CreatureKnockedOut::Stage::Resting,
+	                                                                  .fainting = false,
+	                                                                  .rest = true,
+	                                                              });
+}
+} // namespace
+
+TEST_F(CreatureFightSystemTest, TheRestAfterAFaintStartsTheSleepPoseAndHealsFromTheNextTurn)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto& game = static_cast<ListedGameRandom&>(Locator::gameRandom::emplace<ListedGameRandom>());
+	game.numbers = {1};
+	AboutToRest(registry, first);
+	registry.Remove<CreatureFighting>(second);
+	// Taken home, the body stands. On the first turn of the rest it starts the sleep pose on the drawn side.
+	fights.FightTurn(first);
+	const auto& body = registry.Get<const CreatureAnimation>(first).body;
+	EXPECT_EQ(body.kind, creature_layers::BodyAction::Kind::Sequence);
+	EXPECT_EQ(body.animations, (std::array<size_t, 3> {28, 29, 30}));
+	EXPECT_TRUE(body.mirrored);
+	EXPECT_EQ(game.ranges, (std::vector<uint32_t> {2}));
+	// The body heals at the start of a turn, before this step. Thus the rest that the start of the pose gives heals
+	// from the next turn, not in the turn that the pose starts.
+	EXPECT_TRUE(registry.Get<const CreatureKnockedOut>(first).restPosed);
+	EXPECT_EQ(registry.Get<const CreatureNeeds>(first).rest, CreatureNeeds::Rest::Resting);
+	// Each later turn of the pose rests and draws no side
+	fights.FightTurn(first);
+	EXPECT_EQ(registry.Get<const CreatureNeeds>(first).rest, CreatureNeeds::Rest::Resting);
+	EXPECT_EQ(game.ranges.size(), 1u);
+	Locator::gameRandom::reset();
+}
+
+TEST_F(CreatureFightSystemTest, TheRestAfterAFaintTriesThePoseEachTurnWhileTheBodyIsBusyAndCountsThoseTurns)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto& game = static_cast<ListedGameRandom&>(Locator::gameRandom::emplace<ListedGameRandom>());
+	AboutToRest(registry, first);
+	registry.Remove<CreatureFighting>(second);
+	// It lies where it fell, as a creature that nobody takes home: the body is busy
+	auto& animation = registry.Get<CreatureAnimation>(first);
+	animation.body = {.kind = creature_layers::BodyAction::Kind::Sequence,
+	                  .phase = creature_layers::BodyAction::Phase::Loop,
+	                  .animations = {105, 105, 107},
+	                  .holdLoop = true};
+	for (int turn = 0; turn < 5; ++turn)
+	{
+		fights.FightTurn(first);
+	}
+	// Each try draws a side, and the pose does not start. It does not heal.
+	EXPECT_EQ(game.ranges, (std::vector<uint32_t>(5, 2)));
+	EXPECT_FALSE(registry.Get<const CreatureKnockedOut>(first).restPosed);
+	EXPECT_EQ(registry.Get<const CreatureNeeds>(first).rest, CreatureNeeds::Rest::Unconscious);
+	EXPECT_EQ(animation.body.animations[0], 105u);
+	// Once the body is free, the pose starts, and the turns of the tries count as turns of the rest
+	animation.body = {};
+	fights.FightTurn(first);
+	EXPECT_TRUE(registry.Get<const CreatureKnockedOut>(first).restPosed);
+	auto& needs = registry.Get<CreatureNeeds>(first);
+	needs.needs.life = 1.0f;
+	needs.needs.exhaustion = 0.0f;
+	// Better, it gets up on the 31st turn of the rest, from the end of the sleep pose
+	for (int turn = 6; turn < 30; ++turn)
+	{
+		fights.FightTurn(first);
+	}
+	EXPECT_EQ(registry.Get<const CreatureKnockedOut>(first).stage, CreatureKnockedOut::Stage::Resting);
+	fights.FightTurn(first);
+	EXPECT_EQ(registry.Get<const CreatureKnockedOut>(first).stage, CreatureKnockedOut::Stage::GettingUp);
+	EXPECT_TRUE(animation.body.endWanted);
+	EXPECT_EQ(needs.rest, CreatureNeeds::Rest::Awake);
+	Locator::gameRandom::reset();
+}
+
+TEST_F(CreatureFightSystemTest, TheMoveHomeAfterAFaintCutsTheFaintAndTheBodyStands)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	registry.Remove<CreatureFighting>(first);
+	registry.Remove<CreatureFighting>(second);
+	auto& animation = registry.Get<CreatureAnimation>(first);
+	animation.body = {.kind = creature_layers::BodyAction::Kind::Sequence,
+	                  .phase = creature_layers::BodyAction::Phase::Loop,
+	                  .animations = {105, 105, 107},
+	                  .holdLoop = true};
+	registry.Assign<CreatureKnockedOut>(first, CreatureKnockedOut {.stage = CreatureKnockedOut::Stage::FadingOut,
+	                                                               .fainting = false,
+	                                                               .home = glm::vec3(40.0f, 0.0f, 40.0f),
+	                                                               .fizzTurns = 1});
+	fights.FightTurn(first);
+	EXPECT_EQ(registry.Get<const CreatureKnockedOut>(first).stage, CreatureKnockedOut::Stage::FadingIn);
+	EXPECT_EQ(registry.Get<const Transform>(first).position.x, 40.0f);
+	EXPECT_EQ(animation.body.kind, creature_layers::BodyAction::Kind::Stand);
+}

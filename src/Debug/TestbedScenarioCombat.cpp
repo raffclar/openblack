@@ -878,8 +878,9 @@ void testbed_scenarios::AddCombat(std::vector<Scenario>& all)
 	    .facet = Facet::Combat,
 	    .description = "A worn tiger, life 0.6 and exhaustion 0.7, is given a home where it stands, walks 90 units away "
 	                   "and is knocked out there as a fight's loser is.",
-	    .expected = "It faints and lies out cold with its eyes closed for 12 seconds, is taken home, lies there a few "
-	                "seconds more, then rests until it is no more exhausted than 0.3, and gets up.",
+	    .expected = "It faints and lies out cold with its eyes closed for 12 seconds and is taken home. The move home "
+	                "stands its body, and it stands there with its eyes closed for a few seconds. Then it lies down in "
+	                "the sleep pose, heals until its life is full and it is not tired, and gets up from the sleep pose.",
 	    .framing = {.shot = Shot::Overview, .include = {{90.0f, 30.0f}, {-20.0f, 0.0f}}, .distance = 0.6f},
 	    .creatures = {worn},
 	    .commands = {{.kind = Kind::ConfineToHome, .delaySeconds = 0.5f, .radius = 400.0f},

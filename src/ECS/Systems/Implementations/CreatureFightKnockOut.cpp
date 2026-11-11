@@ -26,6 +26,7 @@
 #include "Creature/CreatureIdleMind.h"
 #include "Creature/CreatureLayers.h"
 #include "Creature/CreatureRestAndHome.h"
+#include "CreatureBodyBusy.h"
 #include "CreatureFightSystem.h"
 #include "CreatureFightSystemDetail.h"
 #include "ECS/Archetypes/CreatureArchetype.h"
@@ -52,6 +53,7 @@
 #include "ECS/Systems/CreaturePhysiologySystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/FightTranscriptNote.h"
+#include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/ThingCircles.h"
@@ -419,6 +421,8 @@ void CreatureFightSystem::KnockedOutTurn(entt::entity entity)
 					to.z = map_coords::ToMetres(homeOnMap->z);
 				}
 				PlaceAt(*locomotion, registry.Get<Transform>(entity), to);
+				// The move cuts the faint: the body stands at home with no action, and its eyes stay shut
+				animation.body = creature_layers::BodyAction {};
 				ecs::thing_map_place::Keep(registry, entity, homeOnMap.value_or(map_coords::FromMetres({to.x, to.z})));
 				registry.SetDirty();
 				fight_transcript::Note(entity, "taken_home", [&] {
@@ -473,8 +477,32 @@ void CreatureFightSystem::KnockedOutTurn(entt::entity entity)
 	}
 	case CreatureKnockedOut::Stage::Resting:
 	{
-		// It rests until its life is full, it is not tired at all, and the rest has lasted long enough
+		// Each turn of the rest counts, also each turn that the pose cannot start
 		const auto turns = static_cast<uint32_t>(std::lround(knockedOut.seconds / k_TurnSeconds));
+		if (!knockedOut.restPosed)
+		{
+			// It tries to start the sleep pose each turn. The side is drawn on each try, but when a script set real time
+			// on the body, the pose starts on the right side. A busy body refuses the pose: a creature that lies where
+			// it fell is busy, thus it keeps on with the tries (vanilla-bugs 1915).
+			const bool mirrored =
+			    Locator::gameRandom::has_value() && Locator::gameRandom::value().GameRand(2) == 1 && !animation.realTime;
+			if (!ecs::systems::creature_body_busy::PerformsBodyAction(registry, entity))
+			{
+				const auto pose = creature_mind::RestStep().sequence;
+				if (auto posed = creature_layers::PlaySequence(animation.body, pose[0], pose[1], pose[2], false, mirrored))
+				{
+					animation.body = *posed;
+					knockedOut.restPosed = true;
+				}
+			}
+			break;
+		}
+		// In the pose, its own fire stops each turn
+		if (Locator::fireSystem::has_value())
+		{
+			Locator::fireSystem::value().PutOut(entity);
+		}
+		// It rests until its life is full, it is not tired at all, and the rest has lasted long enough
 		if (needs == nullptr ||
 		    (creature_mind::IsBetter(needs->needs.life, needs->needs.exhaustion) && turns > creature_mind::k_FewestRestTurns))
 		{
@@ -497,8 +525,9 @@ void CreatureFightSystem::KnockedOutTurn(entt::entity entity)
 	}
 	if (needs != nullptr)
 	{
-		// Resting, its body heals; otherwise it is out cold until it gets up
-		needs->rest = knockedOut.stage == CreatureKnockedOut::Stage::Resting     ? CreatureNeeds::Rest::Resting
+		// In the rest pose, its body heals; otherwise it is out cold until it gets up
+		const bool resting = knockedOut.stage == CreatureKnockedOut::Stage::Resting && knockedOut.restPosed;
+		needs->rest = resting                                                    ? CreatureNeeds::Rest::Resting
 		              : knockedOut.stage == CreatureKnockedOut::Stage::GettingUp ? CreatureNeeds::Rest::Awake
 		                                                                         : CreatureNeeds::Rest::Unconscious;
 	}
