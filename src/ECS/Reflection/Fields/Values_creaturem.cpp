@@ -103,7 +103,13 @@ void openblack::ecs::reflection::RegisterFields_Values_creaturem(entt::meta_ctx&
 	    .Field<&openblack::creature_mind::IdleMind::danceEnding>("danceEnding")
 	    .Field<&openblack::creature_mind::IdleMind::danceSet>("danceSet")
 	    .Field<&openblack::creature_mind::IdleMind::followCameraTurns>("followCameraTurns")
-	    .Field<&openblack::creature_mind::IdleMind::movedOn>("movedOn");
+	    .Field<&openblack::creature_mind::IdleMind::movedOn>("movedOn")
+	    .Field<&openblack::creature_mind::IdleMind::endedLook>("endedLook")
+	    .Field<&openblack::creature_mind::IdleMind::endsNextTurn>("endsNextTurn")
+	    .Field<&openblack::creature_mind::IdleMind::lastStepSkipped>("lastStepSkipped");
+	Reflect<openblack::creature_mind::IdleMind::EndedLook>(context, ValueOnly {})
+	    .Field<&openblack::creature_mind::IdleMind::EndedLook::serial>("serial")
+	    .Field<&openblack::creature_mind::IdleMind::EndedLook::gaze>("gaze");
 	Reflect<openblack::creature_mind::IdleMind::StepRef>(context, ValueOnly {})
 	    .Field<&openblack::creature_mind::IdleMind::StepRef::serial>("serial")
 	    .Field<&openblack::creature_mind::IdleMind::StepRef::step>("step");

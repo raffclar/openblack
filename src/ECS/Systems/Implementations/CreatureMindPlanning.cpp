@@ -883,7 +883,7 @@ void CreatureMindSystem::FollowAgenda(entt::entity creature, CreatureMindState& 
 		}
 		idle.stoppedSeen = true;
 	}
-	if (mind.planActive && !keptWithNoSteps && (idle.serial != mind.planSerial || idle.step >= idle.agenda.size()))
+	if (mind.planActive && !keptWithNoSteps && (idle.serial != mind.planSerial || creature_mind::AgendaOver(idle)))
 	{
 		// The plan is over. Carried out to its end, its action is complete (see CompletePlanAction). Cut short by
 		// something else (fainting, a fight, a more pressing plan) or given up, it is still wanted.
@@ -901,7 +901,11 @@ void CreatureMindSystem::FollowAgenda(entt::entity creature, CreatureMindState& 
 			                                   Locator::entitiesRegistry::value().AllOf<ScriptControlled>(creature));
 			mind.lastActionDone = plan.action;
 			creature_watching::MimicActionDone(mind.learnt->mimicry);
-			CompletePlanAction(creature, mind);
+			// A last step that it did not do, as the hand held its thing already, does not see to the desire
+			if (idle.lastStepSkipped != idle.serial)
+			{
+				CompletePlanAction(creature, mind);
+			}
 		}
 		// An action that ends well on a creature makes the creature find that creature nicer or nastier, as the game's
 		// table says for the action. An action on no thing acts on the creature itself, so it also changes how nice the
@@ -931,7 +935,7 @@ void CreatureMindSystem::FollowAgenda(entt::entity creature, CreatureMindState& 
 		EndUnderway(mind);
 		mind.underway.reset();
 	}
-	if (mind.underway.has_value() && idle.step >= idle.agenda.size())
+	if (mind.underway.has_value() && creature_mind::AgendaOver(idle))
 	{
 		EndUnderway(mind);
 		if (!idle.gaveUp)
@@ -948,7 +952,7 @@ void CreatureMindSystem::FollowAgenda(entt::entity creature, CreatureMindState& 
 		}
 		mind.underway.reset();
 	}
-	if (!mind.planActive && idle.serial == mind.agendaSeen && idle.step >= idle.agenda.size() && !mind.learnt->contexts.empty())
+	if (!mind.planActive && idle.serial == mind.agendaSeen && creature_mind::AgendaOver(idle) && !mind.learnt->contexts.empty())
 	{
 		mind.learnt->contexts.back().running = false;
 	}
@@ -1855,7 +1859,7 @@ void CreatureMindSystem::ChoosePlan(entt::entity creature, CreatureMindState& mi
                                     const creature_plan_actions::Situation& situation)
 {
 	// An agenda that it was made to do continues to its end
-	if (!creature_planner::MayChoose(mind.planActive, mind.idle.step < mind.idle.agenda.size()))
+	if (!creature_planner::MayChoose(mind.planActive, !creature_mind::AgendaOver(mind.idle)))
 	{
 		return;
 	}

@@ -226,7 +226,7 @@ std::vector<Step> creature_leash_orders::FightItself(uint32_t self)
 	Step face {.kind = Step::Kind::Move, .seconds = k_FightFaceSeconds};
 	face.movement = {.kind = Movement::Kind::TurnToFaceObject, .object = self};
 	// The steps of a fight. It looks at the creature that it asks, which is itself. It shows its anger as it asks and as
-	// it gives the order.
+	// it gives the order. The order looks at itself too, so its head looks straight ahead.
 	return {
 	    {.kind = Step::Kind::RequestPartner,
 	     .object = self,
@@ -237,6 +237,7 @@ std::vector<Step> creature_leash_orders::FightItself(uint32_t self)
 	    {.kind = Step::Kind::Order,
 	     .object = self,
 	     .face = creature_face::Cue::Anger,
+	     .gaze = creature_mind::Gaze {.object = self},
 	     .ordered = std::make_shared<const Step>(std::move(face))},
 	};
 }

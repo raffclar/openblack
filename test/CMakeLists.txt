@@ -302,6 +302,8 @@ openblack_setup_and_add_test(test_creature_eyes test_creature_eyes.cpp)
 openblack_setup_and_add_test(test_creature_layers test_creature_layers.cpp)
 openblack_setup_and_add_test(test_creature_face test_creature_face.cpp)
 openblack_setup_and_add_test(test_creature_mind test_creature_mind.cpp)
+openblack_setup_and_add_test(test_creature_sub_states test_creature_sub_states.cpp)
+openblack_setup_and_add_test(test_creature_step_ends test_creature_step_ends.cpp)
 openblack_setup_and_add_test(test_creature_learning test_creature_learning.cpp)
 openblack_setup_and_add_test(
   test_creature_mind_file test_creature_mind_file.cpp
@@ -1300,6 +1302,9 @@ openblack_setup_and_add_test(
 openblack_setup_and_add_test(
   test_oracle_creature_maths_2 oracle/test_oracle_creature_maths_2.cpp
 )
+openblack_setup_and_add_test(
+  test_oracle_creature_maths_3 oracle/test_oracle_creature_maths_3.cpp
+)
 # The data folder is found at run time (see oracle/OracleData.h), never compiled into an object: ctest sets the
 # environment variable for each test, and the file in the build folder serves a program started by hand from there
 file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/oracle_data_folder.txt
@@ -1331,6 +1336,7 @@ foreach (oracle_test test_oracle_catch test_oracle_sigmoid
                      test_oracle_villager_food
                      test_oracle_computer_hand_moves
                      test_oracle_creature_maths_2
+                     test_oracle_creature_maths_3
 )
   set_tests_properties(
     ${oracle_test}

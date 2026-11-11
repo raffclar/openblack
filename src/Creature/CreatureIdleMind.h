@@ -28,6 +28,7 @@
 #include "Creature/CreatureFace.h"
 #include "Creature/CreatureFriendship.h"
 #include "Creature/CreaturePlayerAttention.h"
+#include "Creature/CreatureSubStates.h"
 
 /// What a creature does, decided once a game turn. It works through an agenda of steps: it waits while it looks about,
 /// plays an action, sits for a while or goes to a place. Each step pulls a face for what it does or feels as it starts.
@@ -565,7 +566,8 @@ struct Step
 	/// Watching the camera for a set number of turns, rather than until the camera goes or the step's seconds are up
 	std::optional<uint32_t> turns;
 	size_t animation {0};
-	/// Played with drooping, slowly blinking eyes, as if just woken up. The eyes stay so until it stops what it does.
+	/// The look of the step makes the eyes droop and blink slowly, as if just woken up. The eyes stay so until it stops
+	/// what it does.
 	bool sleepyEyes {false};
 	Movement movement {};
 	/// A static step's start, loop and end
@@ -593,10 +595,10 @@ struct Step
 	creature_face::Cue face {creature_face::Cue::None};
 	/// What its head looks at while the step lasts, in place of looking about
 	std::optional<Gaze> gaze;
-	/// How its eyes look from the step's start until it next takes up something else to do: stoned (wide and darting
-	/// about) or wide open, as when frightened
+	/// How the look of the step makes its eyes look until it next takes up something else to do: stoned (wide and
+	/// darting about) or wide open, as when frightened
 	std::optional<Eyes> heldEyes;
-	/// It flutters its eyelids, blinking far more often, from the step's start until it next takes up something else
+	/// The look of the step flutters its eyelids: they blink far more often until it next takes up something else
 	bool flutterEyelids {false};
 	/// What a dance step does
 	DanceOrder dance {};
@@ -702,6 +704,20 @@ struct IdleMind
 	/// The step that moved on to its next part this turn: it started, its loop ended, or it ended. Each turn of thought
 	/// clears it first.
 	std::optional<size_t> movedOn;
+	/// The look of a step that ended with no code in its last stages, by the agenda's count. The head keeps this look
+	/// until the next turn of thought goes past the empty stages (see TurnLook).
+	struct EndedLook
+	{
+		uint32_t serial {0};
+		std::optional<Gaze> gaze;
+	};
+	std::optional<EndedLook> endedLook;
+	/// The agenda, by its count, whose last step ended with no code in its last stages. The agenda ends on the next
+	/// turn of thought, when it goes past those stages (see AgendaOver).
+	std::optional<uint32_t> endsNextTurn;
+	/// The agenda, by its count, whose last step it did not do: the step picks up the thing that the hand holds. The
+	/// plan of this agenda ends, but it does not see to its desire.
+	std::optional<uint32_t> lastStepSkipped;
 };
 
 /// How what its hands were told to do is going
@@ -1018,8 +1034,6 @@ struct Commands
 	std::optional<uint32_t> startFight;
 	/// Sitting down this turn, it rests a little
 	bool restSitting {false};
-	/// How often its eyes now blink, when that changes
-	std::optional<int32_t> blinkIntervalMs;
 	/// A building to mend, and a thing to do away with, by their entities' numbers
 	std::optional<uint32_t> repair;
 	std::optional<uint32_t> useUp;
@@ -1208,6 +1222,9 @@ constexpr uint32_t k_FewestRestTurns = 30;
 [[nodiscard]] bool IsResting(const IdleMind& mind);
 [[nodiscard]] bool IsUnconscious(const IdleMind& mind);
 
+/// Whether the agenda is over: no step is left, and the last step does not wait for a turn to go past its empty last
+/// stages
+[[nodiscard]] bool AgendaOver(const IdleMind& mind);
 /// A new agenda in place of the current one
 void Plan(IdleMind& mind, Activity activity, std::vector<Step> agenda);
 /// Pulls a face for a reason, if the reason calls for one, and moves the variety of faces on by a draw from gameRandom
@@ -1221,6 +1238,24 @@ void CarryDone(IdleMind& mind);
 /// What the head looks at while the step lasts. A step that picks a thing up, or goes near a thing, looks at that
 /// thing as the creature walks, unless the step gives a look of its own. Without a look, the head looks about.
 [[nodiscard]] std::optional<Gaze> LookOf(const Step& step);
+/// The kind of the game's step that a step stands for. A step that does the work of two of the game's steps gives the
+/// kind of the last of them.
+[[nodiscard]] creature_sub_states::SubState SubStateOf(const Step& step);
+/// What the head looks at in a turn. The head takes its look before the creature decides and before the step of the
+/// turn runs, so it uses the agenda as the last turn left it:
+/// - the look of a step that ended with no code in its last stages, until a turn of thought goes past those stages;
+/// - else the look of the current step;
+/// - else no look, and the head looks about.
+[[nodiscard]] std::optional<Gaze> TurnLook(const IdleMind& mind);
+/// What the look of a turn does to the eyes. The head takes the look of a step in each turn, so the look changes the
+/// eyes in each turn too. It uses the same step as TurnLook.
+struct LookEyes
+{
+	Eyes eyes {Eyes::Unchanged};
+	/// The eyelids flutter: they blink far more often (see k_FlutterBlinkIntervalMs)
+	bool flutterEyelids {false};
+};
+[[nodiscard]] LookEyes TurnLookEyes(const IdleMind& mind);
 /// One game turn of the mind. The variety of faces moves on by the random numbers of the game (gameRandom), and all
 /// else draws from random.
 [[nodiscard]] Commands Think(IdleMind& mind, const Senses& senses, const Random& random, const Random& gameRandom);
