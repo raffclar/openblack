@@ -2971,3 +2971,163 @@ TEST_F(Reactions, ACreatureThatLeftTheGroupStopsWhenItNextFindsTheReactionGone)
 	EXPECT_EQ(after.left, 0u);
 	EXPECT_EQ(after.creatureMemory.LastReacted(kind), ended + 1);
 }
+
+/// Two cows that look at a thing that made a reaction, the thing having a kind given by a component
+class ReactionsOfAGoneThing: public Reactions
+{
+protected:
+	void SetUp() override
+	{
+		Reactions::SetUp();
+		ReactToEverything(_info->animal.at(static_cast<size_t>(AnimalInfo::Cow)));
+		_info->pot.at(static_cast<size_t>(PotInfo::FoodPot)).associatedReaction = Reaction::LookAtObject;
+		Locator::infoConstants::emplace(*_info);
+		_animals = &static_cast<FakeAnimals&>(Locator::animalSystem::emplace<FakeAnimals>());
+		_animals->available = true;
+		auto& registry = Locator::entitiesRegistry::value();
+		for (const float x : {10.0f, 30.0f})
+		{
+			const auto cow = registry.Create();
+			registry.Assign<Transform>(cow, k_Here + glm::vec3(x, 0.0f, 0.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+			auto& animal = registry.Assign<Animal>(cow);
+			animal.type = AnimalInfo::Cow;
+			animal.move.position = {map_coords::ToFixed(k_Here.x + x), map_coords::ToFixed(k_Here.z)};
+			_cows.push_back(cow);
+		}
+		_thing = registry.Create();
+		registry.Assign<Transform>(_thing, k_Here, glm::mat3(1.0f), glm::vec3(1.0f));
+		Locator::entitiesMap::value().Sync();
+	}
+	void TearDown() override
+	{
+		Locator::animalSystem::reset();
+		Reactions::TearDown();
+	}
+
+	/// The thing makes a reaction that both cows take up. Gives its id.
+	uint32_t MakeReaction(Reaction type = Reaction::LookAtObject)
+	{
+		auto source = Miracle(type);
+		source.initiator = _thing;
+		const auto id = _reactions.Create(source);
+		const auto& registry = Locator::entitiesRegistry::value();
+		for (const auto cow : _cows)
+		{
+			EXPECT_EQ(registry.Get<const LivingReaction>(cow).reaction, id);
+		}
+		return id;
+	}
+
+	FakeAnimals* _animals {nullptr};
+	std::vector<entt::entity> _cows;
+	entt::entity _thing {entt::null};
+};
+
+TEST_F(ReactionsOfAGoneThing, AReactionOfADeletedThingGoesWithoutAStopOfItsGroup)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto id = MakeReaction();
+	registry.Destroy(_thing);
+	_reactions.ProcessTurn();
+	EXPECT_FALSE(_reactions.IsActive(id));
+	// No cow stops when the reaction goes
+	EXPECT_TRUE(_animals->stopped.empty());
+	EXPECT_EQ(registry.Get<const LivingReaction>(_cows[0]).reaction, id);
+	// Each cow stops in its next turn, as it finds the reaction gone, and keeps what it does
+	_reactions.StartTurn();
+	for (const auto cow : _cows)
+	{
+		_reactions.EndReactionIfOver(cow);
+		EXPECT_EQ(registry.Get<const LivingReaction>(cow).reaction, 0u);
+	}
+	EXPECT_EQ(_animals->stopped, _cows);
+	EXPECT_EQ(_animals->stops, (std::vector<bool> {false, false}));
+}
+
+TEST_F(ReactionsOfAGoneThing, TheDeletionOfABuildingStopsTheGroupOfItsReactionAtOnce)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	registry.Assign<Abode>(_thing);
+	const auto id = MakeReaction();
+	registry.Destroy(_thing);
+	_reactions.ProcessTurn();
+	EXPECT_FALSE(_reactions.IsActive(id));
+	EXPECT_EQ(_animals->stopped.size(), 2u);
+	EXPECT_EQ(_animals->stops, (std::vector<bool> {true, true}));
+	for (const auto cow : _cows)
+	{
+		EXPECT_EQ(registry.Get<const LivingReaction>(cow).reaction, 0u);
+	}
+}
+
+TEST_F(ReactionsOfAGoneThing, APotStopsTheGroupsOfAllItsReactionsOnlyWhenItCalledTheLivingToIt)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	registry.Assign<Pot>(_thing, Pot {.amount = 10, .maxAmount = 100, .type = PotInfo::FoodPot});
+	// A reaction of another kind than the call of the pot does not stop its group
+	auto& callOfPot = _info->pot.at(static_cast<size_t>(PotInfo::FoodPot)).associatedReaction;
+	callOfPot = Reaction::ReactToFood;
+	Locator::infoConstants::emplace(*_info);
+	const auto other = MakeReaction(Reaction::LookAtObject);
+	registry.Destroy(_thing);
+	_reactions.ProcessTurn();
+	EXPECT_FALSE(_reactions.IsActive(other));
+	EXPECT_TRUE(_animals->stopped.empty());
+	// The call of a pot stops its group
+	callOfPot = Reaction::LookAtObject;
+	Locator::infoConstants::emplace(*_info);
+	_thing = registry.Create();
+	registry.Assign<Transform>(_thing, k_Here, glm::mat3(1.0f), glm::vec3(1.0f));
+	registry.Assign<Pot>(_thing, Pot {.amount = 10, .maxAmount = 100, .type = PotInfo::FoodPot});
+	for (const auto cow : _cows)
+	{
+		registry.Remove<LivingReaction>(cow);
+	}
+	const auto call = MakeReaction(Reaction::LookAtObject);
+	registry.Destroy(_thing);
+	_reactions.ProcessTurn();
+	EXPECT_FALSE(_reactions.IsActive(call));
+	EXPECT_EQ(_animals->stops, (std::vector<bool> {true, true}));
+}
+
+TEST_F(ReactionsOfAGoneThing, TheReactionOfAVillagerGoesWhenTheVillagerDies)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto villager = _villagers[2];
+	auto source = Miracle(Reaction::LookAtObject);
+	source.initiator = villager;
+	const auto id = _reactions.Create(source);
+	_reactions.ProcessTurn();
+	ASSERT_TRUE(_reactions.IsActive(id));
+	auto& action = registry.Get<LivingAction>(villager);
+	action.states.at(static_cast<size_t>(LivingAction::Index::Final)) = static_cast<uint8_t>(VillagerStates::Dying);
+	_reactions.ProcessTurn();
+	EXPECT_FALSE(_reactions.IsActive(id));
+	EXPECT_TRUE(_animals->stopped.empty());
+}
+
+TEST_F(Reactions, ANewCreatureMakesItsReactionAtOnceAndTheSpreadDoesNotReachIt)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto creature = registry.Create();
+	registry.Assign<Transform>(creature, k_Here + glm::vec3(2.0f, 0.0f, 0.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+	registry.Assign<Creature>(creature).owner = PlayerNames::PLAYER_TWO;
+	_reactions.CreateForNewCreature(creature, PlayerNames::PLAYER_TWO, k_Here + glm::vec3(2.0f, 0.0f, 0.0f));
+	const auto reactions = _reactions.GetReactions();
+	ASSERT_EQ(reactions.size(), 1u);
+	EXPECT_EQ(reactions[0].source.initiator, creature);
+	EXPECT_EQ(reactions[0].source.type, Reaction::ReactToCreature);
+	EXPECT_EQ(reactions[0].source.player, PlayerNames::PLAYER_TWO);
+	EXPECT_TRUE(reactions[0].stopsGroupWhenGone);
+	// The spread does not come to the new creature itself
+	EXPECT_EQ(registry.TryGet<const LivingReaction>(creature), nullptr);
+}
+
+TEST_F(Reactions, AGameTurnMakesNoReactionForACreatureThatHasNone)
+{
+	// Only the creation of a creature makes its reaction, so a creature whose reaction went does not get it again
+	PlayTurn();
+	EXPECT_FALSE(std::ranges::any_of(_reactions.GetReactions(), [this](const auto& reaction) {
+		return reaction.source.initiator == _creature && reaction.source.type == Reaction::ReactToCreature;
+	}));
+}

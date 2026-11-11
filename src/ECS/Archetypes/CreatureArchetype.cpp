@@ -40,6 +40,7 @@
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
+#include "ECS/Systems/ReactionSystemInterface.h"
 #include "Enums.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -212,7 +213,18 @@ entt::entity CreatureArchetype::Create(const glm::vec3& position, PlayerNames pl
 	// The creature gets its mind as it is made, after its body, as the game makes it
 	if (Locator::creatureMindSystem::has_value())
 	{
-		Locator::creatureMindSystem::value().StartMind(entity);
+		Locator::creatureMindSystem::value().SetUpNewMind(entity);
+	}
+	// Then it makes its own reaction, which the living things near it can take up. The reaction spreads at once,
+	// before the creature is in the map's cells. It follows the creature for as long as the creature lives.
+	if (Locator::reactionSystem::has_value())
+	{
+		Locator::reactionSystem::value().CreateForNewCreature(entity, playerName, position);
+	}
+	// A creature made for a mind file reads the file after the game made it
+	if (Locator::creatureMindSystem::has_value())
+	{
+		Locator::creatureMindSystem::value().TakeUpPendingFile(entity);
 	}
 	return entity;
 }
