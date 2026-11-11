@@ -114,6 +114,7 @@
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
 #include "ECS/ReportedCamera.h"
+#include "ECS/ScriptDestination.h"
 #include "ECS/ShownCreatureFaces.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
@@ -160,17 +161,21 @@ namespace openblack::ecs::systems::mind_detail
 constexpr float k_TurnSeconds = std::chrono::duration<float>(TimeSystemInterface::k_TurnDuration).count();
 constexpr float k_TurnsPerSecond = 1.0f / k_TurnSeconds;
 
-glm::vec3 LookAbout(const Creature& creature, const Transform& transform, const CreatureMindState& mind)
+glm::vec3 LookAbout(const ecs::Registry& registry, entt::entity entity, const Transform& transform,
+                    const CreatureMindState& mind)
 {
-	if (creature_look::Watches(mind.look))
+	// With nothing that it watches, it looks at the place that it last set out for, on the land. A new creature has the
+	// place where it started.
+	const auto destination = ecs::script_destination::Of(registry, entity);
+	if (!destination.has_value())
 	{
-		return mind.look.point;
+		return creature_look::LookAboutPoint(mind.look, transform.position);
 	}
-	return creature_look::PointAhead({
-	    .position = transform.position,
-	    .ahead = -(transform.rotation * glm::vec3(0.0f, 0.0f, 1.0f)),
-	    .size = ShownSize(creature),
-	});
+	const auto onLand =
+	    Locator::terrainSystem::has_value()
+	        ? map_coords::ToWorld(Locator::terrainSystem::value(), *destination)
+	        : glm::vec3(map_coords::ToMetres(destination->x), destination->altitude, map_coords::ToMetres(destination->z));
+	return creature_look::LookAboutPoint(mind.look, onLand);
 }
 
 /// The creature info values for the look of a creature that walks to a place
@@ -369,7 +374,7 @@ std::optional<glm::vec3> DependentLookPoint(const ecs::Registry& registry, entt:
 	return glm::vec3 {flat.x, ground + ecs::systems::object_measures::Height(registry, person), flat.y};
 }
 
-glm::vec3 FightLook(const ecs::Registry& registry, entt::entity entity, const Creature& creature, const Transform& transform,
+glm::vec3 FightLook(const ecs::Registry& registry, entt::entity entity, const Transform& transform,
                     const CreatureMindState& mind)
 {
 	using Stage = CreatureFighting::Stage;
@@ -383,7 +388,7 @@ glm::vec3 FightLook(const ecs::Registry& registry, entt::entity entity, const Cr
 			return *top;
 		}
 	}
-	return LookAbout(creature, transform, mind);
+	return LookAbout(registry, entity, transform, mind);
 }
 
 std::optional<glm::vec3> ScriptFocusPoint(const ecs::Registry& registry, entt::entity creature, CreatureMindState& mind)

@@ -376,11 +376,14 @@ void openblack::testbed_scenarios::AddVillageTotemScenarios(std::vector<Scenario
 	    .name = "The symbols of belief of the three gods of the second land over a totem",
 	    .facet = Facet::Objects,
 	    .description = "As on the second land, a land script switches on the computer minds of the second and third "
-	                   "players. A Norse town centre of the player's town believes in the player, in Lethys a little "
-	                   "less and in Khazar less again. The camera is still, a little above the top of the totem.",
-	    .expected = "The player's symbol sits over the totem in red. The picture of Lethys circles it in yellow and the "
-	                "picture of Khazar circles it in blue, as the second land shows these gods everywhere in the world. "
-	                "Each symbol is bright, with a glow of its colour and a white glow that turns.",
+	                   "players. A Norse town centre of the player's town believes in the player, in Khazar (the second "
+	                   "player) a little less and in Lethys (the third player) less again. The camera is still, a "
+	                   "little above the top of the totem.",
+	    .expected = "The player's symbol sits over the totem in red. The picture of Khazar (a cross) circles it in "
+	                "yellow and the picture of Lethys (a swirl) circles it in blue, as the second land shows these gods "
+	                "everywhere in the world. Each symbol is bright, with a glow of its colour and a white glow that "
+	                "turns. The symbols and the glows add their light to what is behind them, thus the blue swirl is "
+	                "almost white in front of a bright sky or snow, as in the original game.",
 	    .environment = {.dispenserGrid = false,
 	                    .symbolsAfterLandScript = true,
 	                    .landNumber = 2,

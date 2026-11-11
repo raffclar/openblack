@@ -55,7 +55,7 @@ struct Set
 [[nodiscard]] bool Settled(const Fizz& fizz);
 
 /// The number of whole game turns timing something that lasts so many seconds: the turns in a second, a whole number,
-/// times the seconds, the fraction dropped
+/// times the seconds. The product is a float, and the fraction is dropped.
 [[nodiscard]] uint16_t TurnsOf(float seconds, uint32_t turnMilliseconds);
 
 /// Carried home, a creature fizzes out over this long, is moved, then fizzes back in over this long

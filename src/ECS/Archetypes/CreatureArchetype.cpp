@@ -165,8 +165,9 @@ entt::entity CreatureArchetype::Create(const glm::vec3& position, PlayerNames pl
 	registry.Assign<LivingListPlace>(entity, LivingListPlace {.made = registry.Context().livingMade++});
 	// The body is drawn with the base mesh's skins, its shape blended towards the other meshes
 	registry.Assign<Mesh>(entity, creature::GetIdFromType(creatureType, CreatureBody::Appearance::Base));
+	// A new body is drawn at the middle of each axis. Its first turn draws each axis that is far enough from the middle.
 	registry.Assign<CreatureMorph>(entity, CreatureMorph {.shownFatness = body.fatness,
-	                                                      .drawn = morph,
+	                                                      .drawn = creature_morph::Morph {},
 	                                                      .strengthLook = morph.weakStrong,
 	                                                      .alignmentLook = morph.evilGood,
 	                                                      .revision = 0});

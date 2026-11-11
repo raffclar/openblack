@@ -229,14 +229,7 @@ void LookAtPos(entt::entity villager, glm::vec2 point, int32_t step)
 	auto& transform = WorldRegistry().Get<Transform>(villager);
 	const auto target = static_cast<int32_t>(gutils::GetAngleFromXZ(glm::xz(transform.position), point));
 	const auto facing = static_cast<int32_t>(gutils::ConvertAngle3DToGame(FacingOf(villager)));
-	const int32_t difference = target - facing;
-	int32_t angle = target;
-	if (std::abs(difference) >= step)
-	{
-		const bool forwards = difference < 1 ? std::abs(difference) > 0x3FF : difference < 0x400;
-		angle = (facing + (forwards ? step : -step)) & gutils::k_GameAngleMask;
-	}
-	openblack::ecs::living_facing::FaceGameAngle(WorldRegistry(), villager, static_cast<uint16_t>(angle));
+	openblack::ecs::living_facing::FaceGameAngle(WorldRegistry(), villager, gutils::LookStep(facing, target, step).angle);
 }
 
 /// Where the walk holds the villager, in whole map units: where it last put it, unless something else has moved it since

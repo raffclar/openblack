@@ -1175,13 +1175,14 @@ TEST(CreatureLook, WhatGoesOutOfViewIsDropped)
 	EXPECT_EQ(watching.watchedTurns, 0u);
 }
 
-TEST(CreatureLook, WithNothingToSeeItLooksAhead)
+TEST(CreatureLook, WithNothingToSeeItLooksAtItsDestination)
 {
-	const creature_look::Viewer viewer {.position = {10.0f, 0.0f, 0.0f}, .ahead = {1.0f, 0.0f, 0.0f}, .size = 2.0f};
-	const auto point = creature_look::PointAhead(viewer);
-	EXPECT_NEAR(point.x, 60.0f, k_Tolerance);
-	EXPECT_NEAR(point.y, 30.0f, k_Tolerance);
-	EXPECT_NEAR(point.z, 0.0f, k_Tolerance);
+	const glm::vec3 destination {60.0f, 4.0f, 20.0f};
+	const auto point = creature_look::LookAboutPoint({}, destination);
+	EXPECT_EQ(point, destination);
+	// What it watches comes first
+	const creature_look::Target watching {.id = 7, .interest = 0.85f, .point = {1.0f, 2.0f, 3.0f}};
+	EXPECT_EQ(creature_look::LookAboutPoint(watching, destination), watching.point);
 }
 
 /// A home 100 north of its temple, in an area of radius 10, for a creature 20 tall
@@ -1376,6 +1377,44 @@ TEST(CreatureIdleMind, WithNoAgendaItDoesNothing)
 		EXPECT_EQ(mind.activity, creature_mind::Activity::None);
 		EXPECT_TRUE(mind.agenda.empty());
 	}
+}
+
+TEST(CreatureNeedsMind, TheSleepStopsAsItStartsToGetUp)
+{
+	creature_mind::IdleMind mind;
+	creature_mind::Plan(mind, creature_mind::Activity::Sleep, creature_mind::Sleep(Always(1)));
+	FakeBody body;
+	auto commands = creature_mind::Think(mind, body.Senses(), Always(1));
+	body.Obey(commands, 1);
+	commands = creature_mind::Think(mind, body.Senses(), Always(1));
+	body.Obey(commands, 1);
+	EXPECT_TRUE(creature_mind::IsAsleep(mind));
+	auto senses = body.Senses();
+	senses.rested = true;
+	commands = creature_mind::Think(mind, senses, Always(1));
+	ASSERT_TRUE(commands.endSit);
+	// The game's sleep heals and rests the body no more once the creature starts to get up
+	EXPECT_FALSE(creature_mind::IsAsleep(mind));
+}
+
+TEST(CreatureNeedsMind, TheTurnsTheSleepCouldNotStartCountAsTurnsOfTheSleep)
+{
+	creature_mind::IdleMind mind;
+	creature_mind::Plan(mind, creature_mind::Activity::Sleep, creature_mind::Sleep(Always(1)));
+	FakeBody body;
+	auto senses = body.Senses();
+	senses.bodyBusy = true;
+	for (int turn = 0; turn < 3; ++turn)
+	{
+		const auto commands = creature_mind::Think(mind, senses, Always(1));
+		EXPECT_FALSE(commands.startSequence.has_value());
+		EXPECT_FALSE(creature_mind::IsAsleep(mind));
+	}
+	const auto commands = creature_mind::Think(mind, body.Senses(), Always(1));
+	ASSERT_TRUE(commands.startSequence.has_value());
+	EXPECT_TRUE(creature_mind::IsAsleep(mind));
+	// Three turns that it could not lie down and the turn that it lies down
+	EXPECT_EQ(mind.restTurns, 4u);
 }
 
 TEST(CreatureNeedsMind, ItSleepsWithItsEyesClosedUntilRested)

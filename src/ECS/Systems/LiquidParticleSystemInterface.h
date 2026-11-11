@@ -12,6 +12,7 @@
 #include <compare>
 #include <cstdint>
 
+#include <functional>
 #include <span>
 
 #include <glm/vec3.hpp>
@@ -62,6 +63,13 @@ public:
 	/// The point that the pool of an interface of another player is drawn at, for the order of the things that show what
 	/// is behind them
 	virtual void SetPlayerPoint([[maybe_unused]] liquid_particles::Interface interface, [[maybe_unused]] glm::vec3 point) {}
+	/// Once a frame, before the draw: whether each pool of another player that has particles shows the symbol of its god
+	/// over them (see player_sparkles::ShowsSymbol). Each symbol that shows turns the angle that all of them share by
+	/// the milliseconds of the frame's game time (see player_sparkles::SymbolAngle).
+	virtual void TurnPlayerSymbols([[maybe_unused]] int32_t milliseconds,
+	                               [[maybe_unused]] const std::function<bool(liquid_particles::Interface)>& shows)
+	{
+	}
 	/// The particles of the pool of an interface of another player
 	[[nodiscard]] virtual std::span<const liquid_particles::Particle>
 	PlayerParticles([[maybe_unused]] liquid_particles::Interface interface) const

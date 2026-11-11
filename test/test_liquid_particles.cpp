@@ -12,11 +12,13 @@
 #include <bit>
 #include <vector>
 
+#include <entt/core/hashed_string.hpp>
 #include <gtest/gtest.h>
 
 #define LOCATOR_IMPLEMENTATIONS
 #include "ECS/Systems/Implementations/LiquidParticleSystem.h"
 #include "Particles/LiquidParticles.h"
+#include "Particles/ParticleDrawFrame.h"
 
 using namespace openblack;
 using liquid_particles::Kind;
@@ -217,4 +219,52 @@ TEST(LiquidParticles, AFramesMillisecondsAreTakenToSecondsAsTheGameTakesThem)
 	EXPECT_EQ(std::bit_cast<uint32_t>(liquid_particles::FrameSeconds(33)), std::bit_cast<uint32_t>(33.0f * 0.001f));
 	EXPECT_NE(std::bit_cast<uint32_t>(liquid_particles::FrameSeconds(5)), std::bit_cast<uint32_t>(5.0f / 1000.0f));
 	EXPECT_EQ(liquid_particles::FrameSeconds(0), 0.0f);
+}
+
+TEST(LiquidParticleSystem, ThePoolOfAnotherPlayerShowsTheSymbolOfItsGodLast)
+{
+	QueuedRandom random {.numbers = {5, 7, 9}};
+	ecs::systems::LiquidParticleSystem pool(Sources(random, false));
+	const liquid_particles::Interface khazar {.player = PlayerNames::PLAYER_TWO};
+	const liquid_particles::Interface lethys {.player = PlayerNames::PLAYER_THREE};
+	const glm::vec3 point {1.0f, 2.0f, 3.0f};
+	pool.AddForPlayer(khazar, point, glm::vec3(0.0f), 10.0f, 0x80FF0000u, Kind::Mote);
+	pool.AddForPlayer(khazar, point, glm::vec3(0.0f), 10.0f, 0x80FF0000u, Kind::Mote);
+	pool.SetPlayerPoint(khazar, point);
+	pool.AddForPlayer(lethys, glm::vec3(9.0f), glm::vec3(0.0f), 10.0f, 0x800000FFu, Kind::Mote);
+	pool.SetPlayerPoint(lethys, glm::vec3(9.0f));
+	const float turn = 20.0f * std::bit_cast<float>(0x3A03126Fu);
+
+	// Lethys shows no symbol; Khazar's symbol is drawn after the two motes, as one thing at the point
+	pool.TurnPlayerSymbols(20, [&](liquid_particles::Interface interface) { return interface == khazar; });
+	particles::draw::Frame frame;
+	pool.CollectDrawFrame(frame);
+	ASSERT_EQ(frame.groups.size(), 2u);
+	EXPECT_EQ(frame.groups[0].origin, point);
+	ASSERT_EQ(frame.groups[0].itemCount, 3u);
+	EXPECT_EQ(frame.groups[1].itemCount, 1u);
+	const auto& symbol = frame.sprites[2];
+	EXPECT_EQ(glm::vec3(symbol.positionHalfWidth), point);
+	EXPECT_EQ(symbol.positionHalfWidth.w, 3.0f);
+	EXPECT_EQ(symbol.shape.y, turn);
+	EXPECT_EQ(symbol.colour, glm::vec4(0.0f, 0.0f, 0.0f, 0x30 / 255.0f));
+	const auto& material = frame.materials[frame.spriteMaterials[2]];
+	EXPECT_EQ(material.texture, entt::hashed_string("raw/PlayersSymbols").value());
+	EXPECT_EQ(material.alphaTexture, entt::hashed_string("raw/PlayersSymbolsa").value());
+	EXPECT_EQ(material.mode, graphics::render_modes::Mode::AlphaTexturedAlphaNz);
+
+	// When both show it, they share one angle that turns once for each
+	pool.TurnPlayerSymbols(20, [](liquid_particles::Interface /*interface*/) { return true; });
+	frame.Clear();
+	pool.CollectDrawFrame(frame);
+	ASSERT_EQ(frame.sprites.size(), 5u);
+	EXPECT_EQ(frame.sprites[2].shape.y, turn + turn);
+	EXPECT_EQ(frame.sprites[4].shape.y, turn + turn + turn);
+
+	// A pool with no particles left shows no symbol
+	pool.UpdateFrame(2.5f, false);
+	pool.TurnPlayerSymbols(20, [](liquid_particles::Interface /*interface*/) { return true; });
+	frame.Clear();
+	pool.CollectDrawFrame(frame);
+	EXPECT_TRUE(frame.sprites.empty());
 }

@@ -429,8 +429,11 @@ constexpr float k_ObeyPlanPriority = 1.0f;
 /// when both or neither of them are under a script's control. The height rule is the one of every request to fight
 /// (creature_friendship::NearInHeightToFight).
 [[nodiscard]] bool AgreesToFight(float height, float askerHeight, bool dead, bool scripted, bool askerScripted);
-/// Knocked out, a creature lies 8 seconds and 4 more for each of its size
-[[nodiscard]] float FaintSeconds(float size);
+/// Knocked out, a creature lies 8 seconds and 4 more for each of its size. The game counts this time in whole turns: the
+/// seconds times the turns in a second, with the fraction dropped. Each product and sum is a float.
+[[nodiscard]] uint16_t FaintWaitTurns(float size, uint32_t turnMilliseconds);
+/// The whole turns that a wait counted, from the seconds that it added one turn at a time
+[[nodiscard]] int32_t TurnsCounted(float seconds, float turnSeconds);
 /// Taken home (fizzing out and back in, see creature_fizz), it waits this long before resting
 constexpr float k_WaitAfterHomeSeconds = 3.0f;
 /// After a faint, it rests to get better when its life is below this or it is more tired than this

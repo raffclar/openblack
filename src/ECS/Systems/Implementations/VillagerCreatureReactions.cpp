@@ -48,6 +48,7 @@
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "ObjectMeasures.h"
+#include "VillagerBuild.h"
 #include "VillagerFightWatch.h"
 #include "VillagerHome.h"
 #include "VillagerReactions.h"
@@ -117,6 +118,12 @@ std::optional<entt::entity> CreatureOf(entt::entity villager)
 		return std::nullopt;
 	}
 	return thing;
+}
+
+/// Where the creature is on the map, in whole map units: a villager turns towards this point
+glm::ivec2 CreaturePlace(entt::entity creature)
+{
+	return map_coords::WholeXZ(ecs::thing_map_place::Of(EntityRegistry(), creature));
 }
 
 entt::entity TownOf(entt::entity villager)
@@ -469,7 +476,7 @@ uint32_t villager_creature::PerformInspectCreatureReaction(LivingAction& action)
 	}
 	else
 	{
-		villager_reactions::LookAt(villager, registry.Get<const Transform>(*creature).position);
+		ecs::villager_build::FaceTowards(villager, CreaturePlace(*creature), creature_attitude::k_LookStep);
 	}
 	FollowTownFeeling(action);
 	return 0;
@@ -529,8 +536,7 @@ uint32_t villager_creature::TurnToFaceCreatureReaction(LivingAction& action)
 	{
 		return StopReacting(action);
 	}
-	if (villager_reactions::LookAt(villager, registry.Get<const Transform>(*creature).position,
-	                               villager_reactions::LookSpeed::Quick))
+	if (ecs::villager_build::FaceTowards(villager, CreaturePlace(*creature), creature_attitude::k_FaceStep))
 	{
 		// Facing it, it starts to count the time it bows
 		action.turnsUntilStateChange = 0;

@@ -245,9 +245,9 @@ void testbed_scenarios::AddParticles(std::vector<Scenario>& all)
 	                   "players. The sheet of the players' symbols is then made again, as at the start of a land. The "
 	                   "player icon fountains of the first three players stand side by side.",
 	    .expected = "The fountain on the left throws up the symbol of the player's profile in red. The fountain in the "
-	                "middle throws up the picture of Lethys for the second player, in yellow. The fountain on the right "
-	                "throws up the picture of Khazar for the third player, in blue. The second land gives these colours "
-	                "to these gods.",
+	                "middle throws up the picture of Khazar (a cross) for the second player, in yellow. The fountain "
+	                "on the right throws up the picture of Lethys (a swirl) for the third player, in blue. The second "
+	                "land gives these colours to these gods.",
 	    .environment = {.symbolsAfterLandScript = true, .landNumber = 2},
 	    .framing = {.shot = Shot::Overview, .include = {{-20.0f, 0.0f}, {20.0f, 0.0f}}, .distance = 0.35f},
 	    .particles = {{.file = "SF_PlayerIconFountain", .offset = {-15.0f, 0.0f}, .magnitude = 2.0f, .player = 0},

@@ -487,6 +487,8 @@ void CreatureMindSystem::Abandon(entt::entity creature, CreatureMindState& mind)
 	mind.planner.current.reset();
 	// To stop what it does clears the marks of the plan, also what the sweep of its eyes found of the plan's things
 	mind.sweep.targets = {};
+	// The sweep of its eyes starts again if an action stopped it
+	mind.eyesSweep = true;
 	mind.ownPlanSinceStop = false;
 	mind.planForced = false;
 	mind.forcedPlanCounts = false;

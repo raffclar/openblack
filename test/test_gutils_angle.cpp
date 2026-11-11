@@ -224,6 +224,34 @@ TEST(GUtilsAngle, DifferenceAndDirection)
 	EXPECT_EQ(gu::GetAngleSign(0, 0x7FF), -1);
 }
 
+TEST(GUtilsAngle, ALookTurnsByTheStepOrFacesTheTarget)
+{
+	// Within the step it faces the target at once
+	EXPECT_EQ(gu::LookStep(0x100, 0x150, 0x80).angle, 0x150);
+	EXPECT_TRUE(gu::LookStep(0x100, 0x150, 0x80).faces);
+	// A difference equal to the step is a turn by the step
+	EXPECT_EQ(gu::LookStep(0x100, 0x180, 0x80).angle, 0x180);
+	EXPECT_FALSE(gu::LookStep(0x100, 0x180, 0x80).faces);
+	// It turns the short way round
+	EXPECT_EQ(gu::LookStep(0x100, 0x600, 0x80).angle, 0x080);
+	EXPECT_EQ(gu::LookStep(0x600, 0x100, 0x80).angle, 0x680);
+	EXPECT_EQ(gu::LookStep(0x050, 0x700, 0x100).angle, 0x750);
+}
+
+TEST(GUtilsAngle, ALookNearAngleZeroTurnsPastTheTargetFirst)
+{
+	// The test of the step does not go round the circle: 0x20 apart across angle 0, it turns a full step past the
+	// target, then comes back to it on the next turn
+	const auto first = gu::LookStep(0x7F0, 0x010, 0x80);
+	EXPECT_EQ(first.angle, 0x070);
+	EXPECT_FALSE(first.faces);
+	const auto second = gu::LookStep(first.angle, 0x010, 0x80);
+	EXPECT_EQ(second.angle, 0x010);
+	EXPECT_TRUE(second.faces);
+	// The same the other way
+	EXPECT_EQ(gu::LookStep(0x010, 0x7F0, 0x80).angle, 0x790);
+}
+
 TEST(GUtilsAngle, MapCoordsOperators)
 {
 	// The altitude is added and subtracted too

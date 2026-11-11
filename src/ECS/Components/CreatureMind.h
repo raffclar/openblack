@@ -77,6 +77,9 @@ struct CreatureMindState
 	/// What it believes about the things it has come across, and how far its eyes have swept the cells about it
 	creature_object_beliefs::Store beliefs;
 	creature_object_beliefs::Sweep sweep {};
+	/// Whether its eyes sweep the cells about it and follow what it watches. An action can stop this. It starts again
+	/// when the creature stops what it does.
+	bool eyesSweep {true};
 	/// The town and the temple that it came across last as it looked far about it
 	entt::entity lastTown {entt::null};
 	entt::entity nearestTemple {entt::null};
