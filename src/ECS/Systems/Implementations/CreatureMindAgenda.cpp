@@ -1509,10 +1509,16 @@ void CreatureMindSystem::AgendaTurn(entt::entity entity)
 		}
 		if (needs != nullptr)
 		{
-			needs->rest = creature_mind::IsUnconscious(mind.idle) ? CreatureNeeds::Rest::Unconscious
-			              : creature_mind::IsAsleep(mind.idle)    ? CreatureNeeds::Rest::Asleep
-			              : creature_mind::IsResting(mind.idle)   ? CreatureNeeds::Rest::Resting
-			                                                      : CreatureNeeds::Rest::Awake;
+			const auto rest = creature_mind::IsUnconscious(mind.idle) ? CreatureNeeds::Rest::Unconscious
+			                  : creature_mind::IsAsleep(mind.idle)    ? CreatureNeeds::Rest::Asleep
+			                  : creature_mind::IsResting(mind.idle)   ? CreatureNeeds::Rest::Resting
+			                                                          : CreatureNeeds::Rest::Awake;
+			// The turns of a sleep count from the first turn that it tried to start. The body counts each turn after this
+			if (rest == CreatureNeeds::Rest::Asleep && needs->rest != CreatureNeeds::Rest::Asleep)
+			{
+				needs->restTurns = mind.idle.restTurns;
+			}
+			needs->rest = rest;
 		}
 
 		// Looking about, the head turns to the most interesting thing in sight, or ahead
