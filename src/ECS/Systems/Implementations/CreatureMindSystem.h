@@ -69,6 +69,7 @@ public:
 	void PlayerCastDeed(size_t deed, const glm::vec3& point, std::optional<entt::entity> object,
 	                    std::optional<PlayerNames> player, MagicType magic) override;
 	[[nodiscard]] const creature_mind_tables::Tables* GetTables() override;
+	[[nodiscard]] bool HasValidPlan(entt::entity creature) override;
 	[[nodiscard]] std::optional<creature_tree::Belief> BeliefAbout(entt::entity creature, entt::entity thing) const override;
 	[[nodiscard]] std::optional<creature_tree::Belief> ActedOnBeliefAbout(entt::entity creature,
 	                                                                      entt::entity thing) const override;
@@ -209,8 +210,14 @@ private:
 	/// continues
 	void ChoosePlan(entt::entity creature, components::CreatureMindState& mind,
 	                const creature_plan_actions::Situation& situation);
-	/// Gives up the plan carried out, if any
-	static void Abandon(components::CreatureMindState& mind);
+	/// Gives up the plan carried out, if any. A valid plan makes the other actions of its list older.
+	void Abandon(entt::entity creature, components::CreatureMindState& mind);
+	/// Whether a plan passes the game's test of a valid plan, by the desire and action tables
+	[[nodiscard]] bool IsPlanValid(const creature_planner::Plan& plan);
+	/// The list of actions of a plan as the creature stops it. Compassion for a town finds its list again from the town.
+	/// Compassion for any other thing has no list.
+	[[nodiscard]] std::vector<uint32_t> ListOfStoppedPlan(entt::entity creature, components::CreatureMindState& mind,
+	                                                      const creature_planner::Plan& plan);
 	/// A joint action: the asker asks another creature to be its partner, and the two become partners when it agrees;
 	/// the partner takes an order of the asker, which it does and then waits; the asker makes the partner's mind stand
 	/// still or go free. The joint action stops for both when either takes up another agenda or comes to the end of its

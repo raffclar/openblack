@@ -343,7 +343,7 @@ void CreatureMindSystem::TakeUpFile(entt::entity creature, CreatureMindState& mi
 	// own examples
 	if (base == FileBase::Own)
 	{
-		Abandon(mind);
+		Abandon(creature, mind);
 		ApplyLoaded(creature, mind, creature_mind_model::FromFile(*file, *mind.desires, *mind.learnt), *file);
 		return;
 	}
@@ -369,7 +369,7 @@ void CreatureMindSystem::ApplyLoaded(entt::entity creature, CreatureMindState& m
 	{
 		creature_mind_model::RebuildTrees(loaded.learnt, tables->attributes);
 	}
-	Abandon(mind);
+	Abandon(creature, mind);
 	mind.planner = {};
 	mind.desires = std::move(loaded.desires);
 	mind.planner.round = creature_planner::RoundOf(*mind.desires);
@@ -415,17 +415,68 @@ void CreatureMindSystem::LearnEveryLeash(entt::entity creature)
 	}
 }
 
-void CreatureMindSystem::Abandon(CreatureMindState& mind)
+bool CreatureMindSystem::HasValidPlan(entt::entity creature)
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* mind = registry.Valid(creature) ? registry.TryGet<const CreatureMindState>(creature) : nullptr;
+	return mind != nullptr && mind->planner.current.has_value() && IsPlanValid(*mind->planner.current);
+}
+
+bool CreatureMindSystem::IsPlanValid(const creature_planner::Plan& plan)
+{
+	const auto* tables = GetTables();
+	const auto desire = static_cast<size_t>(plan.desire);
+	if (tables == nullptr || desire >= tables->rules.size())
+	{
+		return false;
+	}
+	const auto* executor = ExecutorOf(plan.action);
+	const bool usesThing = executor != nullptr && executor->use != Target::None;
+	return creature_planner::IsValid(plan, tables->rules.at(desire).aboutSomething, usesThing);
+}
+
+std::vector<uint32_t> CreatureMindSystem::ListOfStoppedPlan(entt::entity creature, CreatureMindState& mind,
+                                                            const creature_planner::Plan& plan)
+{
+	if (plan.desire != Desire::Compassion)
+	{
+		return mind.planActions;
+	}
+	// Compassion has the list of the town desire that it helps with. With hurt people in the town, the first look at the
+	// list can put healing first.
+	const auto* tables = GetTables();
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto whole = plan.about.has_value() ? plan.about : plan.activityObject;
+	if (tables == nullptr || !whole.has_value() || !registry.Valid(static_cast<entt::entity>(*whole)) ||
+	    !registry.AllOf<Town>(static_cast<entt::entity>(*whole)))
+	{
+		return {};
+	}
+	auto list = TownCompassionActions(registry, creature, mind, static_cast<entt::entity>(*whole), *tables);
+	if (list.healDraw)
+	{
+		const auto dropped = creature_town_compassion::HealComesFirst(Random(creature_town_compassion::k_HealChance)) ? 1 : 0;
+		if (static_cast<size_t>(dropped) < list.actions.size())
+		{
+			list.actions.erase(list.actions.begin() + dropped);
+		}
+	}
+	return list.actions;
+}
+
+void CreatureMindSystem::Abandon(entt::entity creature, CreatureMindState& mind)
 {
 	if (mind.planActive && mind.learnt.has_value() && !mind.learnt->contexts.empty())
 	{
 		mind.learnt->contexts.back().running = false;
 	}
-	// Whether carried out or not, the plan's action was done just now, and the other actions of its desire get older
+	// Whether carried out or not, the plan's action was done just now. When the plan is valid, the other actions of its
+	// list get older. The list is found again as the plan stops.
 	if (mind.planActive && mind.learnt.has_value() && mind.planner.current.has_value())
 	{
-		creature_action_history::PlanEnded(mind.learnt->turnsSinceDone, mind.planner.current->action, mind.planActions,
-		                                   mind.agendaTurns);
+		const auto plan = *mind.planner.current;
+		const auto list = IsPlanValid(plan) ? ListOfStoppedPlan(creature, mind, plan) : std::vector<uint32_t> {};
+		creature_action_history::PlanEnded(mind.learnt->turnsSinceDone, plan.action, list, mind.agendaTurns);
 	}
 	mind.planActive = false;
 	if (mind.planner.current.has_value())
@@ -589,7 +640,7 @@ void CreatureMindSystem::ClearLearning(entt::entity creature)
 		return;
 	}
 	const auto name = mind->learnt.has_value() ? mind->learnt->name : std::u16string {};
-	Abandon(*mind);
+	Abandon(creature, *mind);
 	mind->desires = creature_desires::Create(SetupFor(body->species), _random.GameFloat());
 	mind->desiresPhase.reset();
 	mind->planner = {};

@@ -138,14 +138,20 @@ void creature_town_compassion::UntiedFromFlag(State& state)
 	state.choosesFreely = true;
 }
 
+bool creature_town_compassion::MayHealFirst(uint32_t hurt, bool leashedToTownDesire, float sightings, float sightingsNeeded)
+{
+	return hurt != 0 && !leashedToTownDesire && sightingsNeeded > 0.0f && sightings / sightingsNeeded > k_HealSightingsShare;
+}
+
+bool creature_town_compassion::HealComesFirst(uint32_t draw)
+{
+	return draw == 0;
+}
+
 bool creature_town_compassion::HealFirst(uint32_t hurt, bool leashedToTownDesire, float sightings, float sightingsNeeded,
                                          const std::function<uint32_t(uint32_t)>& random)
 {
-	if (hurt == 0 || leashedToTownDesire || sightingsNeeded <= 0.0f || sightings / sightingsNeeded <= k_HealSightingsShare)
-	{
-		return false;
-	}
-	return random(2) == 0;
+	return MayHealFirst(hurt, leashedToTownDesire, sightings, sightingsNeeded) && HealComesFirst(random(k_HealChance));
 }
 
 std::vector<uint32_t> creature_town_compassion::Actions(const State& state, const DesireActions& actions,
@@ -164,6 +170,17 @@ std::vector<uint32_t> creature_town_compassion::Actions(const State& state, cons
 	for (size_t slot = healFirst.has_value() ? 1 : 0; slot < row.size(); ++slot)
 	{
 		chosen.push_back(row[slot]);
+	}
+	return chosen;
+}
+
+std::vector<uint32_t> creature_town_compassion::ActionsWithHealChoice(const State& state, const DesireActions& actions,
+                                                                      std::optional<uint32_t> heal)
+{
+	auto chosen = Actions(state, actions, std::nullopt);
+	if (heal.has_value())
+	{
+		chosen.insert(chosen.begin(), *heal);
 	}
 	return chosen;
 }

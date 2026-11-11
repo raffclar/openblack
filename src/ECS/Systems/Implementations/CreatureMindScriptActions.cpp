@@ -186,7 +186,7 @@ bool CreatureMindSystem::FightForScript(entt::entity creature, entt::entity oppo
 	auto& registry = Locator::entitiesRegistry::value();
 	auto& mind = registry.Get<CreatureMindState>(creature);
 	// What it was doing is given up as a failure, whatever comes of the fight
-	Abandon(mind);
+	Abandon(creature, mind);
 	creature_mind::Plan(mind.idle, creature_mind::Activity::None, {});
 	if (!Locator::creatureFightSystem::has_value())
 	{
@@ -223,7 +223,7 @@ void CreatureMindSystem::ForceFinish(entt::entity creature)
 	{
 		Locator::creatureLocomotionSystem::value().Stop(creature);
 	}
-	Abandon(*mind);
+	Abandon(creature, *mind);
 	if (Locator::magicSystem::has_value())
 	{
 		Locator::magicSystem::value().ReleaseCreatureCast(creature);

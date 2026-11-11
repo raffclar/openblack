@@ -389,7 +389,7 @@ std::optional<creature_desires::Desire> CreatureMindSystem::ForcePlanOn(entt::en
 		return std::nullopt;
 	}
 	// What it was doing is given up, so that the thing is planned for at once, whatever it was doing
-	Abandon(*mind);
+	Abandon(creature, *mind);
 	creature_mind::Plan(mind->idle, creature_mind::Activity::None, {});
 	ComeAcross(creature, *mind, object);
 	// It finds the desire that it most wants for the shown thing, and plans that desire alone. With no plan, it leaves

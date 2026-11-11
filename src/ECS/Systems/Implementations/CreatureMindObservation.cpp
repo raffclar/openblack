@@ -940,7 +940,7 @@ void CreatureMindSystem::NoticeDeed(size_t deed, const glm::vec3& point, std::op
 			{
 				Locator::creatureObjectActionSystem::value().StopForPlan(entity, true);
 			}
-			Abandon(*mind);
+			Abandon(entity, *mind);
 			if (Locator::magicSystem::has_value())
 			{
 				Locator::magicSystem::value().ReleaseCreatureCast(entity);

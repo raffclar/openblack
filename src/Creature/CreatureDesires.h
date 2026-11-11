@@ -163,8 +163,9 @@ struct Desires
 	/// The kinds of source set to a value since the mind last took them, in order. The mind changes what each kind
 	/// follows to agree, so that the value lasts.
 	std::vector<std::pair<uint32_t, float>> written;
-	/// Every desire counts as activated, whatever its own setting, while the rules of the Gods' Playground apply. The
-	/// mind sets it at the start of each of its turns.
+	/// Every desire counts as activated, whatever its own setting, while the game's flag of influence everywhere is
+	/// set. The visit to the Gods' Playground sets that flag, and the return from it clears the flag. The mind reads the
+	/// flag at the start of each of its turns.
 	bool everyDesireActivated {false};
 
 	[[nodiscard]] DesireState& operator[](Desire desire) { return desires.at(static_cast<size_t>(desire)); }
