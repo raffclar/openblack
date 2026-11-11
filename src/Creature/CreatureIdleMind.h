@@ -675,8 +675,12 @@ struct IdleMind
 	bool followMoved {false};
 	/// For a step that follows the hand: the number of turns that are left
 	uint32_t followHandTurns {0};
-	/// A step that rests to get better: the turns since it started, the first turn included
+	/// A step that rests to get better or sleeps: the turns since it first tried to start, the turns it could not start
+	/// and its first turn included
 	uint32_t restTurns {0};
+	/// The step that tried to start but could not, and the number of turns it tried
+	std::optional<StepRef> startTried;
+	uint32_t startTries {0};
 	/// A dance step: the turns it dances yet, and whether its dance stops next turn
 	uint32_t danceTurns {0};
 	bool danceEnding {false};
@@ -1181,7 +1185,7 @@ struct PooBy
 /// A creature that rests to get better gets up only when its life is full, it is not tired at all, and the step has
 /// lasted more than this many turns
 constexpr uint32_t k_FewestRestTurns = 30;
-/// Whether the creature is asleep, or out cold, in its current step
+/// Whether the creature sleeps in its current step, until it starts to get up
 [[nodiscard]] bool IsAsleep(const IdleMind& mind);
 /// Whether the creature rests to get better in its current step, until it starts to get up
 [[nodiscard]] bool IsResting(const IdleMind& mind);
