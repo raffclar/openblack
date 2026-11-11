@@ -394,8 +394,11 @@ std::vector<Belief> Store::All() const
 
 uint32_t openblack::creature_object_beliefs::SweepCells(float shownSize)
 {
-	// Worked out as the game does, in the FPU's extended precision, then truncated
-	const auto across = static_cast<uint32_t>(static_cast<int32_t>(std::sqrt(static_cast<double>(shownSize) * 60.0 + 160.0)));
+	// The game works this out in float steps (its FPU keeps 24 bits), in this order, then truncates the root
+	constexpr float k_CellsSquaredPerSize = 60.0f;
+	constexpr float k_CellsSquaredAtSizeZero = 160.0f;
+	const float squared = (shownSize * k_CellsSquaredPerSize) + k_CellsSquaredAtSizeZero;
+	const auto across = static_cast<uint32_t>(static_cast<int32_t>(std::sqrt(squared)));
 	const auto side = (across >> 1) * 2 + 1;
 	return side * side;
 }

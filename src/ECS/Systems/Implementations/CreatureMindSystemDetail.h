@@ -172,8 +172,8 @@ void TellFainting(entt::entity creature);
 [[nodiscard]] std::array<bool, creature_desires::k_DesireCount> BodyDesires();
 /// The desires each stage of growing up brings and takes away, from the game's tables
 [[nodiscard]] std::vector<creature_desires::PhaseDesires> Phases();
-/// One turn of looking about: the head turns to what the creature watches, or ahead
-[[nodiscard]] glm::vec3 LookAbout(const components::Creature& creature, const components::Transform& transform,
+/// One turn of looking about: the head turns to what the creature watches, or else to its destination on the land
+[[nodiscard]] glm::vec3 LookAbout(const ecs::Registry& registry, entt::entity entity, const components::Transform& transform,
                                   const components::CreatureMindState& mind);
 /// The look of a creature that walks to a place in this turn, or none near the place
 [[nodiscard]] std::optional<glm::vec3> LookWhileGoing(entt::entity entity, const components::Creature& creature,
@@ -190,10 +190,10 @@ void TellFainting(entt::entity creature);
 [[nodiscard]] std::optional<glm::vec3> DependentLookPoint(const ecs::Registry& registry, entt::entity person);
 /// The point that the head of a creature in a fight or knocked out looks at, each turn. Before the duel, it looks at the
 /// top of its opponent, but not while it taunts or points at the arena. Then, in the duel and after it, it looks at what
-/// it watches, or ahead. In the duel, the fight stance turns the head to the head of the opponent, and the moves keep the
-/// head straight.
-[[nodiscard]] glm::vec3 FightLook(const ecs::Registry& registry, entt::entity entity, const components::Creature& creature,
-                                  const components::Transform& transform, const components::CreatureMindState& mind);
+/// it watches, or else at its destination. In the duel, the fight stance turns the head to the head of the opponent, and
+/// the moves keep the head straight.
+[[nodiscard]] glm::vec3 FightLook(const ecs::Registry& registry, entt::entity entity, const components::Transform& transform,
+                                  const components::CreatureMindState& mind);
 /// Where a script has the creature keep its head turned: a thing where it stands, or a point. The focus is let go once
 /// the thing is gone or the script has let the creature go.
 [[nodiscard]] std::optional<glm::vec3> ScriptFocusPoint(const ecs::Registry& registry, entt::entity creature,

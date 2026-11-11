@@ -27,6 +27,7 @@
 #include "CreatureMindSystemDetail.h"
 #include "ECS/Components/CreatureDance.h"
 #include "ECS/Components/CreatureLocomotion.h"
+#include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/Dance.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/Town.h"
@@ -300,6 +301,11 @@ void CreatureMindSystem::CarryOutDance(entt::entity creature, creature_mind::Idl
 		creature_mind::DanceOrderDone(idle, Summon(creature, record, order.villager, order.count));
 		break;
 	case DanceOrder::Kind::StopLooking:
+		// Its eyes stop the sweep of the cells about it until it stops what it does. The head still turns.
+		if (auto* mind = registry.TryGet<CreatureMindState>(creature))
+		{
+			mind->eyesSweep = false;
+		}
 		creature_mind::DanceOrderDone(idle, true);
 		break;
 	case DanceOrder::Kind::SendToPlaces:
