@@ -1782,6 +1782,24 @@ void CreatureMindSystem::GiveUpAction(entt::entity creature)
 	AbandonAction(creature);
 }
 
+void CreatureMindSystem::StopAndGiveUpAction(entt::entity creature)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(creature))
+	{
+		return;
+	}
+	// The failure stops a fight that the creature is in, for both creatures, with the strength gains of the stop
+	if (registry.AllOf<CreatureFighting>(creature) && Locator::creatureFightSystem::has_value())
+	{
+		Locator::creatureFightSystem::value().CallOffForPlan(creature);
+	}
+	// The creature stops as for a plan that it cannot make: the walk, the hands, the pose, the miracle, the eyes and the
+	// agenda stop. Then the partner of a joint action stops what it does for that action.
+	StopForUnbuiltPlan(creature);
+	EndJointAction(creature);
+}
+
 void CreatureMindSystem::FailAction(entt::entity creature)
 {
 	auto& registry = Locator::entitiesRegistry::value();
