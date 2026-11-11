@@ -922,6 +922,65 @@ void Renderer::UpdateLandDetail(const DrawSceneDesc& drawDesc) const
 	std::ranges::transform(frame.detail.neighbours, frame.neighbours.begin(), [](const std::array<int16_t, 4>& indices) {
 		return glm::vec4(indices[0], indices[1], indices[2], indices[3]);
 	});
+
+	// The game works out the morph of the corners and the cross-fade of the texture on the CPU, in an order of float
+	// sums that a vertex shader can not keep. Thus they are worked out here, for the blocks that morph or cross-fade,
+	// and the vertex shader reads them.
+	const auto& detail = frame.detail;
+	const float meshWidth = 2.0f * detail.lines.meshBand;
+	const float textureWidth = 2.0f * detail.lines.textureBand;
+	const auto& corners = GetLandCorners();
+	bool changed = false;
+	const size_t squares = std::min(blocks.size(), land_detail::k_CornerSquaresPerSide * land_detail::k_CornerSquaresPerSide);
+	for (size_t i = 0; i < squares && i < detail.blocks.size(); ++i)
+	{
+		const auto& block = detail.blocks[i];
+		const bool morphs = block.morph != land_detail::Morph::None;
+		const bool fades = block.texture == land_detail::Texture::CrossFade;
+		if (!morphs && !fades)
+		{
+			continue;
+		}
+		const auto blockCorner = blocks[i].GetMapPosition();
+		const auto& own = blocks[i].GetCornerAltitudes();
+		const auto& meshLine = block.morph == land_detail::Morph::ToQuarter ? detail.meshFarGround : detail.meshNearGround;
+		const auto altitudes = land_detail::MorphedCorners(own, block.morph, meshLine, meshWidth, blockCorner);
+		const auto alphas =
+		    fades ? land_detail::CrossFadeCorners(detail.textureGround, textureWidth, detail.lines.textureBand, blockCorner)
+		          : std::array<uint8_t, land_detail::k_CornerCount> {};
+		for (size_t x = 0; x < land_detail::k_CornersPerSide; ++x)
+		{
+			for (size_t z = 0; z < land_detail::k_CornersPerSide; ++z)
+			{
+				const size_t corner = x * land_detail::k_CornersPerSide + z;
+				const size_t texel = 2 * land_detail::CornerTexel(i, x, z);
+				const std::array<uint8_t, 2> drawn = {altitudes.at(corner), alphas.at(corner)};
+				if (frame.corners.at(texel) != drawn[0] || frame.corners.at(texel + 1) != drawn[1])
+				{
+					frame.corners.at(texel) = drawn[0];
+					frame.corners.at(texel + 1) = drawn[1];
+					changed = true;
+				}
+			}
+		}
+	}
+	if (changed)
+	{
+		corners.Update(frame.corners.data(), static_cast<uint32_t>(frame.corners.size()));
+	}
+}
+
+const Texture2D& Renderer::GetLandCorners() const
+{
+	if (!_landCorners)
+	{
+		constexpr auto k_Side = static_cast<uint16_t>(land_detail::k_CornerTextureSide);
+		_landDetail.corners.assign(2 * land_detail::k_CornerTextureSide * land_detail::k_CornerTextureSide, 0);
+		_landCorners = std::make_unique<Texture2D>("LandCorners");
+		_landCorners->CreateWithinFrame(k_Side, k_Side, 1, TextureFormat::RG8, Wrapping::ClampEdge, Filter::Nearest, nullptr);
+		_landCorners->Update(_landDetail.corners.data(), static_cast<uint32_t>(_landDetail.corners.size()));
+	}
+	return *_landCorners;
 }
 
 void Renderer::BakeLandShadows(bool drawVegetation) const noexcept

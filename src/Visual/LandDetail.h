@@ -88,6 +88,29 @@ struct ViewLine
 /// the line when the line is not valid.
 [[nodiscard]] float Offset(const ViewLine& line, glm::vec2 xz);
 
+/// A detail line as the game keeps it from frame to frame: a direction along the line and a point on it, x and z. The
+/// morph of the corners and the cross-fade of the texture find each corner's side of the line from it.
+struct GroundLine
+{
+	/// The direction along the line. It is of unit length, except after a frame with the camera straight up or down.
+	glm::vec2 along {1.0f, 0.0f};
+	/// A point on the line
+	glm::vec2 point {0.0f};
+
+	bool operator==(const GroundLine&) const = default;
+};
+
+/// The line where the plane depth units along the camera's view meets level ground at groundHeight, in the game's order
+/// of float steps. When the camera looks straight up or down, the plane meets the ground nowhere. Then, as in the game,
+/// the line keeps the point of the line before, and its direction is the view's square along the ground, of the
+/// view's length along it.
+[[nodiscard]] GroundLine GroundLineAcross(glm::vec3 cameraPosition, glm::vec3 cameraForward, float depth, float groundHeight,
+                                          const GroundLine& before);
+
+/// How far a point is before the line, towards the camera; negative beyond it. x and z are the point's place less the
+/// line's point.
+[[nodiscard]] float SideOf(const GroundLine& line, float x, float z);
+
 /// The mesh a block is drawn with
 enum class Mesh : uint8_t
 {
@@ -183,12 +206,43 @@ struct MorphTargets
 /// The morph targets of the corner at (x, z) of a block whose corner altitudes are [x * 17 + z]
 [[nodiscard]] MorphTargets TargetsAt(std::span<const uint8_t, k_CornerCount> altitudes, size_t x, size_t z);
 
-/// A corner's altitude as it is drawn while it morphs: its own before the band, the target beyond it, and between them
-/// blended in 256ths, rounded down to a whole altitude
-[[nodiscard]] uint8_t MorphedAltitude(uint8_t own, uint8_t target, float offset, float band);
+/// A corner's altitude as it is drawn while it morphs, by its side of the mesh line (see SideOf): its own before the
+/// band, the target beyond it, and between them blended in 256ths, rounded down to a whole altitude. The band is width
+/// units wide, half of it on each side of the line.
+[[nodiscard]] uint8_t MorphedAltitude(uint8_t own, uint8_t target, float side, float width);
 
-/// How opaque the coarse texture is over the full one at a corner, 0 to 255: clear before the band, opaque beyond it
-[[nodiscard]] uint8_t CrossFadeAlpha(float offset, float band);
+/// The side of the mesh line (see SideOf) of the corner (x, z) of a block that morphs. The game finds each corner's
+/// place from the block's corner with the least x and z, in steps of the coarser mesh, and these float sums do the
+/// same.
+[[nodiscard]] float MorphCornerSide(const GroundLine& line, Morph morph, glm::vec2 blockCorner, size_t x, size_t z);
+
+/// The altitudes at which the corners of a block that morphs are drawn, [x * 17 + z], from the corners' own altitudes
+/// and the morph's line and band width
+[[nodiscard]] std::array<uint8_t, k_CornerCount> MorphedCorners(std::span<const uint8_t, k_CornerCount> altitudes, Morph morph,
+                                                                const GroundLine& line, float width, glm::vec2 blockCorner);
+
+/// How opaque the coarse texture is over the full one at a corner, 0 to 255, by its side of the texture line (see
+/// SideOf): clear before the band, opaque beyond it. The band is width units wide, band of them on each side of the
+/// line.
+[[nodiscard]] uint8_t CrossFadeAlpha(float side, float width, float band);
+
+/// How opaque the coarse texture of a block that cross-fades is at each of its corners, [x * 17 + z]
+[[nodiscard]] std::array<uint8_t, k_CornerCount> CrossFadeCorners(const GroundLine& line, float width, float band,
+                                                                  glm::vec2 blockCorner);
+
+/// The land's vertex shader reads the blocks' corners as they are drawn in a frame from one texture: 16 by 16 squares,
+/// one for each block in the order of the blocks, of 17 by 17 texels, the corner's x along the width and z along the
+/// height. Each texel holds the drawn altitude and the coarse texture's opacity, a byte each.
+inline constexpr size_t k_CornerSquaresPerSide = 16;
+inline constexpr size_t k_CornerTextureSide = k_CornerSquaresPerSide * k_CornersPerSide;
+
+/// The texel of the corner texture that holds the corner (x, z) of a block
+[[nodiscard]] constexpr size_t CornerTexel(size_t block, size_t x, size_t z)
+{
+	const size_t column = (block % k_CornerSquaresPerSide) * k_CornersPerSide + x;
+	const size_t row = (block / k_CornerSquaresPerSide) * k_CornersPerSide + z;
+	return row * k_CornerTextureSide + column;
+}
 
 /// Where a block of the land is: its corner of least x and z, and its column and row on the map's 32 by 32 grid
 struct BlockPlace
@@ -217,6 +271,10 @@ struct FrameDetail
 	ViewLine meshNear;
 	ViewLine meshFar;
 	ViewLine texture;
+	/// The lines as the game keeps them, which the morph and the cross-fade use (see GroundLineAcross)
+	GroundLine meshNearGround;
+	GroundLine meshFarGround;
+	GroundLine textureGround;
 	std::vector<BlockDetail> blocks;
 	/// The sides of each block whose neighbour has a coarser mesh (see CoarserSides)
 	std::vector<uint8_t> coarserSides;
@@ -225,8 +283,10 @@ struct FrameDetail
 };
 
 /// The mesh, morph, texture and coarser sides of each block in a frame. The lines cross the ground ahead of the camera.
-/// The texture line meets the ground no higher than k_TextureGroundCap.
-[[nodiscard]] FrameDetail ClassifyFrame(const FrameInputs& inputs, std::span<const BlockPlace> blocks);
+/// The texture line meets the ground no higher than k_TextureGroundCap. The lines that the game keeps start from those
+/// of the frame before, when there is one.
+[[nodiscard]] FrameDetail ClassifyFrame(const FrameInputs& inputs, std::span<const BlockPlace> blocks,
+                                        const FrameDetail* before = nullptr);
 
 /// The altitude at which the corner (x, z) of a block is drawn in a frame. This is the corner's own altitude. While the
 /// block morphs, the altitude goes towards the coarser mesh by the corner's place in the band of the morph's line. The
@@ -246,6 +306,8 @@ public:
 private:
 	std::optional<FrameInputs> _inputs;
 	std::vector<BlockPlace> _blocks;
+	/// Whether _frame holds a classification, whose kept lines the next one starts from
+	bool _classified {false};
 	FrameDetail _frame;
 	uint64_t _classifications {0};
 };

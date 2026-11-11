@@ -1,4 +1,4 @@
-$input a_position, a_texcoord0, a_texcoord1
+$input a_position, a_texcoord0
 $output v_texcoord0, v_texcoord1, v_lightColour, v_smallBumpFade, v_shadowCoord, v_haze, v_world
 
 #include <bgfx_shader.sh>
@@ -19,38 +19,14 @@ uniform vec4 u_skyAndBump;
 uniform vec4 u_smallBumpLine;
 // x: how far ahead of the camera along the ground the small bump detail fades out
 uniform vec4 u_smallBump;
-// The land's detail lines (see land_detail): xy the camera's x and z, zw the way it faces along the ground
-uniform vec4 u_landLine;
-// How far ahead the first and second mesh lines and the texture line lie; w 0 when the camera looks straight down, when
-// every corner counts as on the lines
-uniform vec4 u_landLineAhead;
-// x: how far either side of a mesh line its morph reaches, y: the texture line's cross-fade
-uniform vec4 u_landBands;
+// The corners of the blocks that morph or cross-fade, as the game works them out on the CPU this frame (see
+// land_detail::CornerTexel): a square of 17 by 17 texels for each block, 16 squares along each side. r: the altitude at
+// which the corner is drawn while its block morphs, g: how opaque the coarse texture is at it while its block
+// cross-fades.
+SAMPLER2D(s8_landCorners, 8);
 // x: the block's layer of the block textures, y: how its corners morph (0 not, 1 to the half mesh, 2 to the quarter
 // mesh), z: its texture (0 full, 1 cross-faded, 2 coarse)
 uniform vec4 u_block;
-
-// How far a point on the ground is before a detail line lying ahead units from the camera; negative beyond it
-float LandLineOffset(vec2 xz, float ahead)
-{
-	return u_landLineAhead.w > 0.5f ? ahead - dot(xz - u_landLine.xy, u_landLine.zw) : 0.0f;
-}
-
-// A corner's altitude as it is drawn while it morphs: its own before the band, the target beyond it, and between them
-// blended in 256ths, rounded down to a whole altitude
-float MorphedAltitude(float own, float target, float offset, float band)
-{
-	if (offset >= band)
-	{
-		return own;
-	}
-	if (offset <= -band)
-	{
-		return target;
-	}
-	float share = floor((band - offset) * 256.0f / (2.0f * band) + 0.5f);
-	return floor(((256.0f - share) * own + share * target) / 256.0f);
-}
 
 void main()
 {
@@ -60,19 +36,13 @@ void main()
 	vec2 extentMin = u_islandExtent.xy;
 	vec2 extentMax = u_islandExtent.zw;
 
-	// z: how opaque the block's coarse texture is over its full one at the corner (see land_detail::CrossFadeAlpha):
-	// clear before the texture line's band, opaque beyond it, in 255ths across it
-	float textureOffset = LandLineOffset(blockPosition + a_position.xz, u_landLineAhead.z);
-	float textureBand = u_landBands.y;
-	float coarseFade = 1.0f;
-	if (textureOffset > textureBand)
-	{
-		coarseFade = 0.0f;
-	}
-	else if (textureOffset > -textureBand)
-	{
-		coarseFade = floor((textureBand - textureOffset) * 255.0f / (2.0f * textureBand) + 0.5f) / 255.0f;
-	}
+	// The corner as it is drawn this frame, when its block morphs or cross-fades
+	vec2 corner = floor(a_position.xz / 10.0f + 0.5f);
+	vec2 square = vec2(mod(u_block.x, 16.0f), floor(u_block.x / 16.0f)) * 17.0f;
+	vec2 drawn = floor(texture2DLod(s8_landCorners, (square + corner + 0.5f) / 272.0f, 0.0f).rg * 255.0f + 0.5f);
+	// z: how opaque the block's coarse texture is over its full one at the corner: clear before the texture line's band,
+	// opaque beyond it, in 255ths across it
+	float coarseFade = u_block.z > 0.5f && u_block.z < 1.5f ? drawn.y / 255.0f : 1.0f;
 	v_texcoord0 = vec4(a_position.zx / blockSize.yx, coarseFade, 0.0f);
 	vec2 blockStartUv = (blockPosition + a_position.xz - extentMin) / (extentMax - extentMin);
 	#if !BGFX_SHADER_LANGUAGE_GLSL
@@ -84,9 +54,7 @@ void main()
 	float height = a_position.y;
 	if (u_block.y > 0.5f)
 	{
-		bool toHalf = u_block.y < 1.5f;
-		float offset = LandLineOffset(blockPosition + a_position.xz, toHalf ? u_landLineAhead.x : u_landLineAhead.y);
-		altitude = MorphedAltitude(altitude, toHalf ? a_texcoord1.x : a_texcoord1.y, offset, u_landBands.x);
+		altitude = drawn.x;
 		height = altitude <= 3.0f ? 0.0f : altitude * 0.67f;
 	}
 	vec3 transformedPosition = vec3(a_position.x + blockPosition.x, height, a_position.z + blockPosition.y);

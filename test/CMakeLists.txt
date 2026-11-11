@@ -1238,6 +1238,9 @@ openblack_setup_and_add_test(
   test_oracle_formation_land_line oracle/test_oracle_formation_land_line.cpp
 )
 openblack_setup_and_add_test(
+  test_oracle_land_detail oracle/test_oracle_land_detail.cpp
+)
+openblack_setup_and_add_test(
   test_oracle_totem_hand oracle/test_oracle_totem_hand.cpp
 )
 openblack_setup_and_add_test(
@@ -1306,6 +1309,7 @@ foreach (oracle_test test_oracle_catch test_oracle_sigmoid
                      test_oracle_creature_may_try
                      test_oracle_creature_tree_maths
                      test_oracle_totem_hand test_oracle_formation_land_line
+                     test_oracle_land_detail
                      test_oracle_float_sweep_3 test_oracle_float_sweep_4
                      test_oracle_wisp_orbit test_oracle_creature_start_side
                      test_oracle_glm_order_3
