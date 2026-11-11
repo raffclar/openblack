@@ -341,7 +341,8 @@ void Renderer::DrawFilmCopy(const DrawSceneDesc& desc, const interface_creatures
 	}
 	const auto* mesh = desc.entities.TryGet<const ecs::components::Mesh>(copy->creature);
 	const auto* creature = desc.entities.TryGet<const ecs::components::Creature>(copy->creature);
-	const auto* morph = desc.entities.TryGet<const ecs::components::CreatureMorph>(copy->creature);
+	// The copy is drawn with its own shape
+	const auto* morph = ecs::components::ShapeOfCopy(copies, shown.copy, desc.entities);
 	const auto& meshes = Locator::resources::value().GetMeshes();
 	if (mesh == nullptr || creature == nullptr || morph == nullptr || !meshes.Contains(mesh->id))
 	{
@@ -382,7 +383,17 @@ void Renderer::DrawFilmCopy(const DrawSceneDesc& desc, const interface_creatures
 	    .skins = {},
 	    .blendSeams = Locator::config::value().blendCreatureSeams,
 	};
-	if (const auto skins = _creatureSkins.find(copy->creature); skins != _creatureSkins.end())
+	// The copy has a skin of its own. The film hides the world, thus the draw of the scene does not send the skin of the
+	// copy. This draw sends it. A copy without a skin of its own shows the skin of its creature.
+	if (!_warmingUp)
+	{
+		UploadCreatureSkins(copies, _drawnCreatureSkins);
+	}
+	if (const auto own = _drawnCreatureSkins.find(shown.copy); own != _drawnCreatureSkins.end())
+	{
+		targets.skins = own->second.drawn;
+	}
+	else if (const auto skins = _creatureSkins.find(copy->creature); skins != _creatureSkins.end())
 	{
 		targets.skins = skins->second.drawn;
 	}

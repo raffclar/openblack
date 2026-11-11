@@ -110,11 +110,34 @@ struct Refresh
 	bool animations;
 	/// The vertices follow all three axes
 	bool vertices;
+	/// The skin and the hair are painted again with the evil to good target. Only a new alignment does this.
+	bool skin {false};
 };
 
 /// The body is drawn anew once an axis has moved by k_RefreshThreshold. A new alignment brings all three axes up to
 /// date, a new fatness the fatness and strength, a new strength the strength alone.
 [[nodiscard]] Refresh RefreshDrawn(const Morph& drawn, const Morph& target);
+
+/// The targets that a copy of a creature keeps, from the creature's targets: each axis from -1 to 1. A value that is not
+/// a number becomes -1.
+[[nodiscard]] Morph CopiedTargets(const Morph& targets);
+
+/// The looks of a new copy of a creature after its first update
+struct CopyLooks
+{
+	/// The targets that the copy keeps
+	Morph targets;
+	/// How the copy is drawn: from the middle of each axis towards its targets, as a new body is
+	Morph drawn;
+	/// The first update painted the skin and the hair with the evil to good target
+	bool painted;
+
+	bool operator==(const CopyLooks&) const = default;
+};
+
+/// A copy keeps the targets of its creature from the time it is made. The copy starts at the middle of each axis, and
+/// its first update draws it towards the targets.
+[[nodiscard]] CopyLooks FirstLooksOfCopy(const Morph& creatureTargets);
 
 /// The meshes a body is drawn from: its base, and the mesh each axis pulls it towards, or the base where the species
 /// has no such mesh

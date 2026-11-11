@@ -310,6 +310,33 @@ void testbed_scenarios::AddAppearance(std::vector<Scenario>& all)
 	    .commands = {Command {.kind = Kind::PlayFallingSpellFilm, .delaySeconds = 1.0f}},
 	});
 
+	// The film's copy keeps the looks of the creature from the start of the film, with a skin of its own
+	CreatureSetup marked {.species = CreatureType::GiantApe, .needs = Content(), .hold = true, .pauseMind = true};
+	marked.alignment = 0.6f;
+	for (uint8_t site = 0; site < creature_tattoo::k_SlotCount; ++site)
+	{
+		marked.tattoos.push_back({.design = static_cast<uint8_t>(site + 1), .site = site, .colour = {50, 90, 230}});
+	}
+	marked.wounds = {
+	    {.u = 60, .v = 90, .skin = 0, .type = 3, .column = 1},
+	    {.u = 150, .v = 120, .skin = 0, .type = 4, .column = 3},
+	    {.u = 120, .v = 40, .skin = 1, .type = 3, .column = 6},
+	};
+	all.push_back({
+	    .id = "appearance.falling_spell_film_copy_looks",
+	    .name = "The looks of the copy in the falling spell's film",
+	    .facet = Facet::Appearance,
+	    .description = "The player's giant ape is good (alignment 0.6), with a blue tattoo on each site and three wounds. "
+	                   "After a second, the falling spell's film plays as the Land 5 script starts it.",
+	    .expected = "The copy in the film has the shape and the skin of a good ape, with the three wounds. It shows no "
+	                "tattoos: the game paints the copy with no tattoos while the film plays. Pastel motes come off the "
+	                "copy while it shows, from its second step, not when it first shows.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview},
+	    .creatures = {marked},
+	    .commands = {Command {.kind = Kind::PlayFallingSpellFilm, .delaySeconds = 1.0f}},
+	});
+
 	all.push_back({
 	    .id = "interface.film_surface",
 	    .name = "The 16-bit colours of a film",

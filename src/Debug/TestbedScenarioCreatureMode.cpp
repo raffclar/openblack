@@ -549,6 +549,22 @@ void AddCaveCopyHair(std::vector<Scenario>& all)
 	    .commands = {{.kind = Kind::EnterTemple, .delaySeconds = 1.0f, .value = static_cast<size_t>(TempleRoom::Main)},
 	                 {.kind = Kind::OpenCreatureCave, .creature = 0, .delaySeconds = 0.5f}},
 	});
+
+	auto good = ape;
+	good.alignment = 0.9f;
+	all.push_back({
+	    .id = "creature_mode.cave_copy_motes",
+	    .name = "The motes of a good creature in the cave",
+	    .facet = Facet::CreatureMode,
+	    .description = "The player has a good ape (alignment 0.9). The player goes into the temple and its Creature Cave, "
+	                   "and stays there.",
+	    .expected = "The ape by the fire has the shape and the skin of a good ape. Faint pastel motes come off its body "
+	                "on each frame and fade, as they do in the world, while the world stays paused.",
+	    .framing = {.shot = Shot::Overview},
+	    .creatures = {good},
+	    .commands = {{.kind = Kind::EnterTemple, .delaySeconds = 1.0f, .value = static_cast<size_t>(TempleRoom::Main)},
+	                 {.kind = Kind::OpenCreatureCave, .creature = 0, .delaySeconds = 0.5f}},
+	});
 }
 
 /// The Creature Cave's trophies for creatures of different histories: the belts on the attack dummies for how each leans
