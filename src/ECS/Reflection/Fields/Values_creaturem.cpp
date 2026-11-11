@@ -64,7 +64,8 @@ void openblack::ecs::reflection::RegisterFields_Values_creaturem(entt::meta_ctx&
 	    .Field<&openblack::creature_mind::Gaze::camera>("camera")
 	    .Field<&openblack::creature_mind::Gaze::whileGoing>("whileGoing")
 	    .Field<&openblack::creature_mind::Gaze::runningAway>("runningAway")
-	    .Field<&openblack::creature_mind::Gaze::feet>("feet");
+	    .Field<&openblack::creature_mind::Gaze::feet>("feet")
+	    .Field<&openblack::creature_mind::Gaze::dependents>("dependents");
 	Reflect<openblack::creature_mind::IdleMind>(context, ValueOnly {})
 	    .Field<&openblack::creature_mind::IdleMind::activity>("activity")
 	    .Field<&openblack::creature_mind::IdleMind::agenda>("agenda")

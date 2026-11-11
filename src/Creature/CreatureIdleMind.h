@@ -268,7 +268,7 @@ struct DanceOrder
 		Set,
 		/// Call the free grown up people of a villager's town to the dance, at least the step's count of them
 		Summon,
-		/// Stop the head that looks about. No later step of the agenda turns the head.
+		/// Stop the eyes that look about for things of interest. The head still turns to what each later step looks at.
 		StopLooking,
 		/// Send each called villager to its place in the dance, at a run
 		SendToPlaces,
@@ -378,6 +378,9 @@ struct Gaze
 	bool runningAway {false};
 	/// The ground a few metres ahead of where its body faces (see k_FeetLookMetres)
 	bool feet {false};
+	/// The people that it called to dance with it: each turn one of them, drawn at random, at the top of its body.
+	/// With nobody called, it looks about.
+	bool dependents {false};
 };
 /// Looking at its feet, it looks at the ground this many metres ahead of where its body faces
 constexpr float k_FeetLookMetres = 4.0f;
@@ -1219,6 +1222,8 @@ void CarryDone(IdleMind& mind);
 [[nodiscard]] bool WatchedHandEnough(uint32_t turns, uint32_t limitTurns, uint32_t turnsPerSecond);
 /// The longest a creature watches the hand, in whole seconds
 constexpr float k_LongestHandWatchSeconds = 5.0f;
+/// Each turn of watching the hand draws below this number. The game gives the draw to a check that it does not use.
+constexpr uint32_t k_HandWatchUnusedDraw = 30;
 /// The step that a creature does for the order of its partner in a joint action. A creature that gives the order to
 /// itself first stops what it does, and thus clears the agenda that holds the order. In place of the order it then reads
 /// a pick-up of no thing, and that pick-up fails as it starts.

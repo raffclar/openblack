@@ -1553,6 +1553,13 @@ void CreatureMindSystem::AgendaTurn(entt::entity entity)
 			animation.lookAt =
 			    place.has_value() ? LookWhileGoing(entity, creature, transform, mind, *place).value_or(about) : about;
 		}
+		else if (const auto person = std::exchange(mind.dependentLook, std::nullopt); person.has_value())
+		{
+			// The person called to the dance that it drew this turn, before it decided: the head looks at the top of
+			// that person, also when the step ended in this turn
+			const auto point = DependentLookPoint(registry, static_cast<entt::entity>(*person));
+			animation.lookAt = point.has_value() ? *point : LookAbout(creature, transform, mind);
+		}
 		else
 		{
 			// A step with nothing to look at, or whose thing is gone, looks about. The pose of the body decides if

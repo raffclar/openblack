@@ -357,6 +357,18 @@ std::optional<glm::vec3> GazePoint(const ecs::Registry& registry, entt::entity c
 	return glm::vec3 {flat.x, at->y + ecs::systems::object_measures::Height(registry, thing), flat.y};
 }
 
+std::optional<glm::vec3> DependentLookPoint(const ecs::Registry& registry, entt::entity person)
+{
+	const auto at = registry.Valid(person) ? ecs::systems::object_measures::PositionOf(registry, person) : std::nullopt;
+	if (!at.has_value())
+	{
+		return std::nullopt;
+	}
+	const glm::vec2 flat {at->x, at->z};
+	const auto ground = Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().GetHeightAt(flat) : at->y;
+	return glm::vec3 {flat.x, ground + ecs::systems::object_measures::Height(registry, person), flat.y};
+}
+
 glm::vec3 FightLook(const ecs::Registry& registry, entt::entity entity, const Creature& creature, const Transform& transform,
                     const CreatureMindState& mind)
 {

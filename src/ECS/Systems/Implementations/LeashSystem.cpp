@@ -2557,7 +2557,10 @@ bool LeashSystem::TakeGroundOrder(entt::entity creature, const glm::vec3& place)
 			PromptKnown(creature, creature_help::Prompt::Run);
 		}
 		const auto extra =
-		    Locator::gameRandom::has_value() ? Locator::gameRandom::value().GameFloatRand(orders::k_RunWaitExtraSeconds) : 0.0f;
+		    Locator::gameRandom::has_value()
+		        ? orders::RunWaitExtraSeconds(order.runAndWait,
+		                                      [](float limit) { return Locator::gameRandom::value().GameFloatRand(limit); })
+		        : 0.0f;
 		const auto wait = orders::RunWaitSeconds(extra, k_TurnsPerSecond);
 		taken = Force(creature,
 		              {.desire = Desire::ObeyPlayer,

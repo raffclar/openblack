@@ -58,6 +58,8 @@ struct CreatureMindState
 	std::optional<creature_look::NoticedMover> noticedMover;
 	/// Whether the head turns to what it watches this turn
 	bool lookingAbout {false};
+	/// The person called to dance whom the head looks at this turn, drawn before the creature decides what to do
+	std::optional<uint32_t> dependentLook;
 	/// What a script has it keep its head turned to, whatever it is doing, until the script lets it go: a thing (looked
 	/// at where it stands) or a point
 	std::optional<creature_mind::Gaze> scriptFocus;

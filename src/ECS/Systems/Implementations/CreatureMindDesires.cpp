@@ -606,6 +606,7 @@ void CreatureMindSystem::MindTurn(entt::entity entity)
 	const bool scripted = registry.AllOf<ScriptControlled>(entity);
 	TurnBeforeDecision(entity, creature, mind, scripted);
 	StepEmergencies(entity, creature, mind, scripted);
+	DrawDependentLook(entity, mind);
 	_thinking.push_back(entity);
 }
 

@@ -361,6 +361,7 @@ openblack_setup_and_add_test(test_land_avoid test_land_avoid.cpp)
 openblack_setup_and_add_test(
   test_creature_fight_system test_creature_fight_system.cpp
 )
+openblack_setup_and_add_test(test_creature_scar_draws test_creature_scar_draws.cpp)
 openblack_setup_and_add_test(test_fight_view test_fight_view.cpp)
 openblack_setup_and_add_test(test_leash_rope test_leash_rope.cpp)
 openblack_setup_and_add_test(test_leash_rules test_leash_rules.cpp)

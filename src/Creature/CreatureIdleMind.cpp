@@ -812,11 +812,17 @@ bool creature_mind::WatchedHandEnough(uint32_t turns, uint32_t limitTurns, uint3
 
 namespace
 {
-/// A turn of watching the player's hand
-void WatchHand(IdleMind& mind, const Step& step, const Senses& senses, Commands& commands)
+/// A turn of watching the player's hand. With a player, each turn draws a synced random number that has no effect.
+void WatchHand(IdleMind& mind, const Step& step, const Senses& senses, const Random& random, Commands& commands)
 {
 	++mind.watchTurns;
-	if (!senses.hand.has_value() || !(senses.seconds > 0.0f))
+	if (!senses.hand.has_value())
+	{
+		FinishStep(mind);
+		return;
+	}
+	static_cast<void>(random(k_HandWatchUnusedDraw));
+	if (!(senses.seconds > 0.0f))
 	{
 		FinishStep(mind);
 		return;
@@ -1109,7 +1115,7 @@ void StartDanceStep(IdleMind& mind, const Step& step, const Senses& senses, Comm
 		WaitForDancers(mind, senses);
 		return;
 	case DanceOrder::Kind::StopLooking:
-		// Its head looks about this last turn, then stays still
+		// This turn the eyes look about for things of interest. The head turns to the look of each later step.
 		commands.lookAbout = true;
 		break;
 	case DanceOrder::Kind::Set:
@@ -1624,7 +1630,7 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 			break;
 		case Step::Kind::WatchHand:
 			mind.watchTurns = 0;
-			WatchHand(mind, step, senses, commands);
+			WatchHand(mind, step, senses, random, commands);
 			break;
 		case Step::Kind::Inspect:
 		{
@@ -1956,7 +1962,7 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 		WatchFlying(mind, senses, random);
 		break;
 	case Step::Kind::WatchHand:
-		WatchHand(mind, step, senses, commands);
+		WatchHand(mind, step, senses, random, commands);
 		break;
 	case Step::Kind::Inspect:
 		if (mind.inspectTurns > 0)

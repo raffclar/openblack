@@ -185,6 +185,9 @@ void TellFainting(entt::entity creature);
 [[nodiscard]] float RunLookAheadSeconds(CreatureType species);
 [[nodiscard]] std::optional<glm::vec3> GazePoint(const ecs::Registry& registry, entt::entity creature,
                                                  const creature_mind::Gaze& gaze, bool moving);
+/// The top of a person called to a dance: where the person stands on the map, at the height of the land there plus the
+/// height of the person. None when the person is gone.
+[[nodiscard]] std::optional<glm::vec3> DependentLookPoint(const ecs::Registry& registry, entt::entity person);
 /// The point that the head of a creature in a fight or knocked out looks at, each turn. Before the duel, it looks at the
 /// top of its opponent, but not while it taunts or points at the arena. Then, in the duel and after it, it looks at what
 /// it watches, or ahead. In the duel, the fight stance turns the head to the head of the opponent, and the moves keep the
