@@ -107,7 +107,8 @@ std::optional<uint8_t> creature_reaction::Priority(Reaction type, const Facts& f
 	case Reaction::ReactToHandUsingTotem:
 		return facts.humanPlayer && facts.seesThing ? facts.tablePriority : 0;
 	case Reaction::ReactToFlyingObject:
-		if (!facts.humanPlayer || othersPassedOver())
+		// The draw does not occur for a thing of an ally
+		if (!facts.humanPlayer || (!facts.alliedPlayers && othersPassedOver()))
 		{
 			return 0;
 		}
@@ -258,9 +259,9 @@ bool creature_reaction::PlanFree(const PlanState& plan)
 	return !plan.forced || plan.ledByLeash;
 }
 
-bool creature_reaction::OfAnotherGod(PlayerNames caster, PlayerNames creatureOwner)
+bool creature_reaction::IgnoresNiceMiracle(bool hasGod, PlayerNames caster, PlayerNames creatureOwner, bool allied)
 {
-	return caster != PlayerNames::NEUTRAL && caster != creatureOwner;
+	return hasGod && caster != creatureOwner && !allied;
 }
 
 bool creature_reaction::MadeByIconWithoutSeed(bool madeBySpellIcon, bool seedLinked)

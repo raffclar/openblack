@@ -62,6 +62,8 @@ struct Facts
 	bool humanPlayer {false};
 	/// The reaction belongs to a player, and not the creature's own
 	bool otherPlayers {false};
+	/// The player of the reaction is an ally of the player of the creature
+	bool alliedPlayers {false};
 	/// It sees the reaction's thing
 	bool seesThing {false};
 	/// The reaction's thing is the creature itself
@@ -225,9 +227,13 @@ inline constexpr float k_SadnessAtDeath = 1.0f;
 /// teleport stones, miracles, magic trees). A flying thing makes it look only while the thing is still in the air.
 [[nodiscard]] std::optional<Setup> SetupFor(Reaction type, bool thingInTheAir);
 
-/// Whether a nice miracle comes from a god other than the god of the creature. The creature does not look at the miracle
-/// and does not learn it. Gods are never allies in openblack, so every other god counts. A miracle of no god does not.
-[[nodiscard]] bool OfAnotherGod(PlayerNames caster, PlayerNames creatureOwner);
+/// Whether a creature ignores a nice miracle because the miracle comes from a different god. The creature does not look at
+/// the miracle, it does not learn it and the miracle does not impress it. This occurs only when all these conditions are
+/// true:
+/// - The reaction of the miracle has a god.
+/// - That god is not the god of the creature.
+/// - That god is not an ally of the god of the creature.
+[[nodiscard]] bool IgnoresNiceMiracle(bool hasGod, PlayerNames caster, PlayerNames creatureOwner, bool allied);
 
 /// Whether a creature ignores a miracle because a spell icon made it and no seed is linked to it now. This occurs when
 /// the seed that cast the miracle is gone or let it go. The creature does not look at a nice miracle of this kind, and it
