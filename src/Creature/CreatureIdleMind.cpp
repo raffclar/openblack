@@ -60,6 +60,21 @@ void FinishStep(IdleMind& mind)
 	}
 }
 
+/// One turn of a wait step. The count stops while the body does an action, a move or a turn included. The body of a
+/// creature in the game also counts while it lies after a faint, but in openblack no wait step comes after a faint.
+void CountWaitTurn(IdleMind& mind, const Step& step, const Senses& senses)
+{
+	if (senses.bodyBusy)
+	{
+		return;
+	}
+	++mind.watchTurns;
+	if (creature_mind::WaitDone(mind.watchTurns, creature_mind::WaitTurns(step.seconds)))
+	{
+		FinishStep(mind);
+	}
+}
+
 /// One turn of watching the camera, the turn it starts on counting as the first: it turns to the camera when it is more
 /// than a quarter turn away, and is done once whole seconds of turns more than the step's seconds have gone by, or the
 /// camera is right overhead or out of sight, or the player's hand has stayed in one place for more turns than the step's
@@ -731,6 +746,38 @@ float creature_mind::FloatRand(const Random& random, float most)
 		return 0.0f;
 	}
 	return game_random::FloatOf(random(game_random::k_FloatRandRange), most);
+}
+
+std::optional<int32_t> creature_mind::WaitTurns(float seconds)
+{
+	if (!std::isfinite(seconds))
+	{
+		return std::nullopt;
+	}
+	// The game multiplies in float and then cuts off the fraction
+	const float turns = seconds * static_cast<float>(k_WaitTurnsPerSecond);
+	return static_cast<int32_t>(turns);
+}
+
+bool creature_mind::WaitDone(uint32_t countedTurns, std::optional<int32_t> turns)
+{
+	if (!turns.has_value())
+	{
+		return false;
+	}
+	return static_cast<int64_t>(*turns) - static_cast<int64_t>(countedTurns) <= 0;
+}
+
+bool creature_mind::StaticTimeUp(uint32_t countedTurns, float seconds)
+{
+	constexpr uint32_t k_CountRange = 0x10000;
+	const auto turns = WaitTurns(seconds);
+	if (!turns.has_value())
+	{
+		return false;
+	}
+	const auto count = static_cast<uint32_t>(static_cast<uint16_t>(*turns));
+	return countedTurns >= (count == 0 ? k_CountRange : count);
 }
 
 std::optional<creature_face::Request> creature_mind::PullFace(IdleMind& mind, creature_face::Cue cue, const Senses& senses,
@@ -1453,6 +1500,7 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 			commands.fainted = step.faint;
 			// The turn that the rest starts is its first turn
 			mind.restTurns = 1;
+			mind.watchTurns = 0;
 			if (IsFaint(step))
 			{
 				// A faint stops the walk and cuts the action that the body plays. Real time does not change its side.
@@ -1708,6 +1756,10 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 			}
 			break;
 		case Step::Kind::Wait:
+			// The wait counts its first turn too
+			mind.watchTurns = 0;
+			CountWaitTurn(mind, step, senses);
+			break;
 		case Step::Kind::WaitInMap:
 			break;
 		}
@@ -1719,10 +1771,7 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 	{
 	case Step::Kind::Wait:
 		commands.lookAbout = !step.gaze.has_value();
-		if (mind.stepSeconds >= step.seconds)
-		{
-			FinishStep(mind);
-		}
+		CountWaitTurn(mind, step, senses);
 		break;
 	case Step::Kind::Communicate:
 		if (!senses.bodyBusy)
@@ -1764,9 +1813,21 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 			commands.coolDown = true;
 		}
 		const bool better = senses.better && mind.restTurns > k_FewestRestTurns;
-		const bool done = mind.wakeWanted || (step.untilBetter   ? better
-		                                      : step.untilRested ? senses.rested
-		                                                         : mind.stepSeconds >= step.seconds);
+		// A timed pose counts its turns from the turn after it starts. A faint counts its own wait above.
+		bool timeUp = false;
+		if (!step.untilBetter && !step.untilRested && !mind.sitEnding)
+		{
+			if (step.faint)
+			{
+				timeUp = mind.stepSeconds >= step.seconds;
+			}
+			else
+			{
+				++mind.watchTurns;
+				timeUp = StaticTimeUp(mind.watchTurns, step.seconds);
+			}
+		}
+		const bool done = mind.wakeWanted || (step.untilBetter ? better : step.untilRested ? senses.rested : timeUp);
 		// A body that stands with no action does not end a faint, as after a script moves the creature. The faint ends
 		// only when its wait ends.
 		const bool faintHolds = step.faint && !mind.sitEnding;

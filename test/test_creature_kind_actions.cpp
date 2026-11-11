@@ -620,7 +620,8 @@ TEST(CreatureKindActions, ASittingStepRestsUntilItIsToldToGetUp)
 	senses.bodyBusy = true;
 	senses.bodyLooping = true;
 	EXPECT_TRUE(Think(mind, senses, KindActionsFirst).restSitting);
-	mind.stepSeconds = 2.0f;
+	// Its second of sitting is 10 turns: the 10th turn after the start tells it to get up
+	mind.watchTurns = 9;
 	// The turn it is told to get up it still rests; after that it doesn't
 	EXPECT_TRUE(Think(mind, senses, KindActionsFirst).restSitting);
 	EXPECT_FALSE(Think(mind, senses, KindActionsFirst).restSitting);
