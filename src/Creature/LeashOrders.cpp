@@ -147,7 +147,12 @@ std::optional<uint32_t> creature_leash_orders::ToolTipFor(const Leash& leash, co
 
 bool creature_leash_orders::TakesOrders(const Body& body)
 {
-	return body.leashWorks && body.life > 0.0f && body.exhaustion < k_TooExhausted && !body.frozen;
+	return body.leashWorks && !body.held && body.life > 0.0f && body.exhaustion < k_TooExhausted && !body.frozen;
+}
+
+bool creature_leash_orders::StopsCopying(const Body& body)
+{
+	return !body.frozen;
 }
 
 bool creature_leash_orders::TakesGroundOrders(const Body& body)
