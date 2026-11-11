@@ -73,6 +73,8 @@ public:
 	[[nodiscard]] virtual bool PersonPlays(PlayerNames player) const = 0;
 	/// The player of this computer, whose help counts what its hand throws, none when there are no players
 	[[nodiscard]] virtual std::optional<PlayerNames> OwnPlayer() const = 0;
+	/// Whether the player is the ally of the other player, by the strength that the player gives the alliance
+	[[nodiscard]] virtual bool IsAllied(PlayerNames player, PlayerNames other) const = 0;
 
 	[[nodiscard]] virtual float LifeOf(entt::entity object) const = 0;
 	/// An object's height as the game measures it

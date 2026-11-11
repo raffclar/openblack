@@ -83,6 +83,7 @@
 #include "ECS/PhysicsEntry.h"
 #include "ECS/PlacedTurn.h"
 #include "ECS/PlayerMiracles.h"
+#include "ECS/PlayerRelations.h"
 #include "ECS/Registry.h"
 #include "ECS/RegistryContext.h"
 #include "ECS/ReportedCamera.h"
@@ -876,15 +877,18 @@ std::optional<creature_giving::Verdict> GameHandGrabWorld::GiveVerdict(entt::ent
 	{
 		return std::nullopt;
 	}
-	// openblack has no alliances between players, so only the creature's own player may give it things. The hand never
-	// holds a miracle's seed as a thing (seeds are held by the miracles), so no seed is ever offered this way.
+	// Only the creature's own player, or a player that the creature's player is the ally of, may give it things. The hand
+	// never holds a miracle's seed as a thing (seeds are held by the miracles), so no seed is ever offered this way.
 	const auto giver = HandPlayer();
 	const bool heldByHand =
 	    Locator::creatureHandSystem::has_value() && Locator::creatureHandSystem::value().GetLockedCreature(giver) == target;
+	const bool hasPlayer = creature->owner != PlayerNames::NEUTRAL;
+	const bool allied = hasPlayer && Locator::playerSystem::has_value() &&
+	                    player_relations::IsAlly(Locator::playerSystem::value().AllyStrength(creature->owner, giver));
 	return creature_giving::MayGive({
-	    .creatureHasPlayer = true,
+	    .creatureHasPlayer = hasPlayer,
 	    .giverHasPlayer = true,
-	    .friendly = creature->owner == giver,
+	    .friendly = creature->owner == giver || allied,
 	    .spellSeed = false,
 	    .creatureCanPickUp = Locator::creatureObjectActionSystem::has_value() &&
 	                         Locator::creatureObjectActionSystem::value().CanTakeFromHand(target, held),

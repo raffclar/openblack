@@ -24,6 +24,7 @@ public:
 	[[nodiscard]] GameRandomInterface* Random() override;
 	[[nodiscard]] bool PersonPlays(PlayerNames player) const override;
 	[[nodiscard]] std::optional<PlayerNames> OwnPlayer() const override;
+	[[nodiscard]] bool IsAllied(PlayerNames player, PlayerNames other) const override;
 	[[nodiscard]] float LifeOf(entt::entity object) const override;
 	[[nodiscard]] float HeightOf(entt::entity object) const override;
 	[[nodiscard]] const GAbodeInfo* AbodeInfoOf(entt::entity object) const override;
