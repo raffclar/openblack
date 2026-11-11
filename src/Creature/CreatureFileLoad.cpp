@@ -79,7 +79,7 @@ bool ServerRelays(std::span<const uint8_t> data)
 	}
 	// The server reads the file as each computer reads it before it brings the creature
 	creaturemind::MindFileData mind;
-	return creaturemind::Read(data, mind) == creaturemind::MindResult::Success;
+	return creaturemind::Read(data, mind, creaturemind::MindNames::FromVersion21) == creaturemind::MindResult::Success;
 }
 
 } // namespace openblack::creature_file_load

@@ -70,7 +70,13 @@ creature_carry_over::KeptFiles creature_carry_over::KeptFilesIn(const std::files
 
 bool creature_carry_over::SavesAsItLives(uint32_t turnsBefore, uint32_t turnsNow)
 {
-	return turnsNow > turnsBefore && turnsNow / k_SaveEveryTurns > turnsBefore / k_SaveEveryTurns;
+	if (turnsNow == 0)
+	{
+		return false;
+	}
+	const bool atMultiple = turnsNow % k_SaveEveryTurns == 0;
+	const bool steppedPast = turnsNow > turnsBefore && turnsNow / k_SaveEveryTurns > turnsBefore / k_SaveEveryTurns;
+	return atMultiple || steppedPast;
 }
 
 bool creature_carry_over::WritesToPlayersFiles(const WriteFacts& facts)

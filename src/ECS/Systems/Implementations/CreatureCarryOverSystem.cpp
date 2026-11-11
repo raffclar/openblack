@@ -273,7 +273,7 @@ void CreatureCarryOverSystem::ReadIfNoneKept()
 		return;
 	}
 	auto file = std::make_shared<creaturemind::MindFileData>();
-	const auto read = creaturemind::ReadFile(path, *file);
+	const auto read = creaturemind::ReadFile(path, *file, creaturemind::MindNames::FromVersion21);
 	if (read != creaturemind::MindResult::Success)
 	{
 		SPDLOG_LOGGER_WARN(spdlog::get("game"), "The player's kept creature could not be read from {}: {}", path.string(),
@@ -391,7 +391,7 @@ void CreatureCarryOverSystem::SaveAsItLives(entt::entity entity)
 		}
 		const auto turns = registry.Get<const CreatureNeeds>(entity).needs.turns;
 		const auto before = std::exchange(_broughtTurnsSeen, turns);
-		if (!before.has_value() || !creature_carry_over::SavesAsItLives(*before, turns))
+		if (!creature_carry_over::SavesAsItLives(before.value_or(turns), turns))
 		{
 			return;
 		}
@@ -407,9 +407,8 @@ void CreatureCarryOverSystem::SaveAsItLives(entt::entity entity)
 		auto* save = registry.TryGet<CreatureFileSave>(entity);
 		if (save == nullptr)
 		{
-			// A creature first looked at now is written only once it gets to the next multiple of 600 turns
-			registry.Assign<CreatureFileSave>(entity, turns);
-			return;
+			// For a creature first looked at now, only its number of turns tells if the game writes it
+			save = &registry.Assign<CreatureFileSave>(entity, turns);
 		}
 		const bool due = creature_carry_over::SavesAsItLives(save->turnsSeen, turns);
 		save->turnsSeen = turns;

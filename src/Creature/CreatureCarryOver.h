@@ -58,8 +58,11 @@ struct KeptFiles
 
 /// As it lives, the player's creature is written to its files each time it has lived this many more game turns
 constexpr uint32_t k_SaveEveryTurns = 600;
-/// Whether the creature is written to its files now that it has lived this many turns, from the number it had lived when
-/// it was last looked at: it is written each time its count gets to a multiple of 600 turns
+/// Whether the creature is written to its files in this turn of the creature, from the number of turns it lived at its
+/// last turn and the number it lived now. The game writes the creature in each turn where the number is a multiple of
+/// 600 that is not 0. The number does not increase while the hand holds the creature, thus the game writes the
+/// creature in each turn of that hold (vanilla-bugs 1720). When more than one turn goes by in one step (a faster time
+/// scale for debug), a step past a multiple of 600 also writes the creature.
 [[nodiscard]] bool SavesAsItLives(uint32_t turnsBefore, uint32_t turnsNow);
 
 /// What this computer knows about a creature that it can write to the player's files

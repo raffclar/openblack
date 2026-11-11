@@ -599,13 +599,27 @@ TEST(CreatureCarryOver, TheCreatureIsSavedEachTimeItHasLivedAnother600Turns)
 	EXPECT_FALSE(SavesAsItLives(0, 0));
 	EXPECT_FALSE(SavesAsItLives(0, 599));
 	EXPECT_TRUE(SavesAsItLives(599, 600));
-	EXPECT_FALSE(SavesAsItLives(600, 600));
+	EXPECT_FALSE(SavesAsItLives(600, 601));
 	EXPECT_FALSE(SavesAsItLives(600, 1199));
 	EXPECT_TRUE(SavesAsItLives(1199, 1200));
 	// Turns that go by in one step past a multiple of 600 save it once
 	EXPECT_TRUE(SavesAsItLives(1198, 1201));
-	// A count that goes back, as when a mind file is loaded, saves nothing
-	EXPECT_FALSE(SavesAsItLives(1800, 1200));
+	// A count that goes back, as when a mind file is loaded, saves nothing unless it is at a multiple of 600
+	EXPECT_FALSE(SavesAsItLives(1800, 1201));
+	// A creature first looked at with no earlier count is written only at a multiple of 600
+	EXPECT_TRUE(SavesAsItLives(1200, 1200));
+	EXPECT_FALSE(SavesAsItLives(1201, 1201));
+}
+
+TEST(CreatureCarryOver, TheGameWritesTheCreatureInEachTurnThatTheHandHoldsItAtAMultipleOf600Turns)
+{
+	// While the hand holds the creature, its number of turns does not increase. The game writes it again in each turn.
+	EXPECT_TRUE(SavesAsItLives(599, 600));
+	EXPECT_TRUE(SavesAsItLives(600, 600));
+	EXPECT_TRUE(SavesAsItLives(600, 600));
+	EXPECT_FALSE(SavesAsItLives(600, 601));
+	// A count of 0 is never written
+	EXPECT_FALSE(SavesAsItLives(0, 0));
 }
 
 class CreatureCarryOverSaves: public CreatureCarryOverSystem
@@ -660,6 +674,7 @@ TEST_F(CreatureCarryOverSaves, ThePlayersCreatureIsWrittenToItsFilesAsItLives)
 	EXPECT_EQ(carryOver.Kept()->name, u"Spot");
 
 	// Not again until it has lived another 600 turns
+	Live(creature, 1201);
 	carryOver.ProcessTurn();
 	Live(creature, 1799);
 	carryOver.ProcessTurn();
@@ -667,6 +682,27 @@ TEST_F(CreatureCarryOverSaves, ThePlayersCreatureIsWrittenToItsFilesAsItLives)
 	Live(creature, 1800);
 	carryOver.ProcessTurn();
 	EXPECT_EQ(Saved(), 2);
+}
+
+TEST_F(CreatureCarryOverSaves, ThePlayersCreatureHeldAtAMultipleOf600TurnsIsWrittenInEachTurnOfTheHold)
+{
+	const TestFolder folder("carry_over_held");
+	ecs::systems::CreatureCarryOverSystem carryOver(folder.Path(), ProfileFile);
+	const auto creature = MakeCreature(PlayerNames::PLAYER_ONE, 599);
+
+	carryOver.ProcessTurn();
+	Live(creature, 600);
+	carryOver.ProcessTurn();
+	EXPECT_EQ(Saved(), 1);
+	// The hand holds it: its number of turns stays at 600, and the game writes it in each turn
+	carryOver.ProcessTurn();
+	carryOver.ProcessTurn();
+	EXPECT_EQ(Saved(), 3);
+	// The hand lets it go: it lives one more turn and is not written
+	Live(creature, 601);
+	carryOver.ProcessTurn();
+	EXPECT_EQ(Saved(), 3);
+	carryOver.FinishWrites();
 }
 
 TEST_F(CreatureCarryOverSaves, TheKeptFileHasTheTattoosThatThisComputerShows)
