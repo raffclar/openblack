@@ -836,7 +836,8 @@ void openblack::testbed_scenarios::AddTownGrowthScenarios(std::vector<Scenario>&
 	    .id = "villagers.watch_flying_turns",
 	    .name = "Villagers that turn to look at a tiger and a thrown thing",
 	    .facet = Facet::Objects,
-	    .description = "The player's tiger stands facing south. Six villagers with no town stand in a row 20 metres north "
+	    .description = "The player's tiger stands still, facing south, with its mind paused. Six villagers with no town stand "
+	                   "in a row 20 metres north "
 	                   "of it. Three seconds in, the player's hand throws a barrel from 20 metres to the "
 	                   "tiger's left, 12 metres in front of it, across its view.",
 	    .expected = "The villagers turn to look at the tiger and at the barrel. Each turn is a step of one sixteenth of "
@@ -844,7 +845,7 @@ void openblack::testbed_scenarios::AddTownGrowthScenarios(std::vector<Scenario>&
 	                "wrong way or spins.",
 	    .environment = {.dispenserGrid = false},
 	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 9.0f, 36.0f}, .look = {0.0f, 1.0f, 12.0f}},
-	    .creatures = {{.offset = {0.0f, 0.0f}, .facingDegrees = 0.0f}},
+	    .creatures = {{.offset = {0.0f, 0.0f}, .facingDegrees = 0.0f, .pauseMind = true}},
 	    .objects = {{.type = MobileObjectInfo::EgyptBarrel, .offset = {-20.0f, -12.0f}},
 	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {-10.0f, 20.0f}},
 	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {-6.0f, 20.0f}},
