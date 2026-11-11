@@ -72,6 +72,7 @@
 #include "ECS/ListOrder.h"
 #include "ECS/Map.h"
 #include "ECS/PhysicsEntry.h"
+#include "ECS/PlayerRelations.h"
 #include "ECS/PlayerTowns.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
@@ -376,6 +377,14 @@ bool CreatureSees(const ecs::Registry& registry, entt::entity creature, const gl
 	return creature_reaction::CanSee(creature_reaction::LookAngle(way), gutils::GetAngleFromXZ(from, to), sameCell);
 }
 
+/// Whether the player of a reaction is an ally of the player of a creature, by the strength of the alliance that the
+/// player of the reaction has
+bool AlliedTo(PlayerNames reactionPlayer, PlayerNames creatureOwner)
+{
+	return Locator::playerSystem::has_value() &&
+	       player_relations::IsAlly(Locator::playerSystem::value().AllyStrength(reactionPlayer, creatureOwner));
+}
+
 /// What a creature knows as it weighs a reaction
 creature_reaction::Facts CreatureFactsOf(const ecs::Registry& registry, entt::entity creature,
                                          const ReactionSystem::Active& reaction, const ReactionInfo& info, uint32_t turn)
@@ -416,6 +425,8 @@ creature_reaction::Facts CreatureFactsOf(const ecs::Registry& registry, entt::en
 	{
 		const auto* entry = Locator::dynamicsSystem::has_value() ? Locator::dynamicsSystem::value().Find(thing) : nullptr;
 		facts.thrownFromHand = entry != nullptr && entry->Has(ecs::PhysicsEntry::k_FromHand);
+		// An alliance changes only the rule for a flying thing
+		facts.alliedPlayers = facts.otherPlayers && AlliedTo(source.player, body.owner);
 		facts.inTheAir = ecs::villager_physics::IsActuallyInTheAir(thing);
 	}
 	if (source.type == Reaction::ReactToCreature)
@@ -461,14 +472,22 @@ std::optional<creature_reaction::Setup> CreatureSetupOf(const ecs::Registry& reg
 	return creature_reaction::SetupFor(reaction.source.type, inTheAir);
 }
 
-/// Whether a creature keeps a reaction it takes up: not another player's nice miracle or shield, nor a magic tree's,
+/// Whether a creature ignores a nice miracle or a shield of a different god that is not an ally of its god
+bool IgnoresNiceMiracle(const ecs::Registry& registry, entt::entity creature, const ReactionSystem::Source& source)
+{
+	const auto owner = registry.Get<const Creature>(creature).owner;
+	return creature_reaction::IgnoresNiceMiracle(!source.playerless, source.player, owner,
+	                                             !source.playerless && AlliedTo(source.player, owner));
+}
+
+/// Whether a creature keeps a reaction it takes up: not a nice miracle or shield that it ignores, nor a magic tree's,
 /// nor the kinds it heeds without keeping
 bool CreatureKeeps(const ecs::Registry& registry, entt::entity creature, const ReactionSystem::Active& reaction)
 {
 	const auto& source = reaction.source;
 	const bool nice = source.type == Reaction::LookAtNiceSpell || source.type == Reaction::ReactToImpressiveSpell ||
 	                  source.type == Reaction::ReactToMagicShield;
-	if ((nice && source.player != registry.Get<const Creature>(creature).owner) || source.type == Reaction::ReactToMagicTree)
+	if ((nice && IgnoresNiceMiracle(registry, creature, source)) || source.type == Reaction::ReactToMagicTree)
 	{
 		return false;
 	}
@@ -1552,7 +1571,7 @@ void ReactionSystem::Start(Active& reaction, entt::entity living, LivingReaction
 		}
 	}
 	else if ((nice || shield) && magic.has_value() && (byCreature || !computer) && !seedSpent && !iconWithoutSeed &&
-	         !(nice && creature_reaction::OfAnotherGod(source.player, registry.Get<const Creature>(living).owner)))
+	         !(nice && IgnoresNiceMiracle(registry, living, source)))
 	{
 		// A seed's miracle a creature has already learnt from isn't looked at again
 		minds.ReactToNiceMagic(living, source.position, magic);

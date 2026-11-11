@@ -65,6 +65,7 @@
 #include "ECS/Systems/DanceSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/MagicShieldSystemInterface.h"
+#include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/WallHugRules.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -166,6 +167,28 @@ public:
 	[[nodiscard]] ParticleRandomStream GetParticleStream() const override { return ParticleRandomStream::None; }
 	void SetParticleStream(ParticleRandomStream) override {}
 };
+/// Players where the second player is an ally of the first player, with each alliance the same for the two players
+class TwoAllies final: public ecs::systems::PlayerSystemInterface
+{
+public:
+	void RegisterPlayers() override {}
+	void AddPlayer(entt::entity /*playerEntity*/) override {}
+	[[nodiscard]] std::optional<entt::entity> FindPlayer(PlayerNames /*name*/) const override { return std::nullopt; }
+	entt::entity EnsurePlayer(PlayerNames /*name*/) override { return entt::null; }
+	void AddCreature(entt::entity /*creature*/) override {}
+	[[nodiscard]] std::optional<entt::entity> GetPrimaryCreature(PlayerNames /*name*/) const override { return std::nullopt; }
+	void KeepForNextLand() override {}
+	void ForgetKept() override {}
+	[[nodiscard]] bool KeepAlignmentAt(uint32_t /*turn*/) override { return false; }
+	void TakeUpKept(entt::entity /*playerEntity*/) override {}
+	[[nodiscard]] float AllyStrength(PlayerNames player, PlayerNames other) const override
+	{
+		const bool pair = (player == PlayerNames::PLAYER_ONE && other == PlayerNames::PLAYER_TWO) ||
+		                  (player == PlayerNames::PLAYER_TWO && other == PlayerNames::PLAYER_ONE);
+		return pair ? 1.0f : 0.0f;
+	}
+};
+
 /// The fights of the creatures: a creature in the fighting list is in a fight, one in the setting up list is not in its
 /// duel yet, and one in the duelling list is in its duel
 class ListedFights final: public ecs::systems::CreatureFightSystemInterface
@@ -1556,6 +1579,41 @@ TEST_F(Reactions, ACreatureIgnoresAnotherPlayersShield)
 	_reactions.Create(source);
 	const auto* state = Locator::entitiesRegistry::value().TryGet<const LivingReaction>(_creature);
 	EXPECT_TRUE(state == nullptr || state->reaction == 0);
+}
+
+// The nice miracle of an ally is as the nice miracle of the creature's own player: the creature keeps the reaction
+TEST_F(Reactions, ACreatureTakesUpTheNiceMiracleOfAnAlly)
+{
+	Locator::playerSystem::emplace<TwoAllies>();
+	auto source = Miracle();
+	source.player = PlayerNames::PLAYER_TWO;
+	_reactions.Create(source);
+	const auto* state = Locator::entitiesRegistry::value().TryGet<const LivingReaction>(_creature);
+	EXPECT_TRUE(state != nullptr && state->reaction != 0);
+	Locator::playerSystem::reset();
+}
+
+// The nice miracle of a different player that is not an ally does not change the creature
+TEST_F(Reactions, ACreatureIgnoresTheNiceMiracleOfAPlayerThatIsNotAnAlly)
+{
+	Locator::playerSystem::emplace<TwoAllies>();
+	auto source = Miracle();
+	source.player = PlayerNames::PLAYER_THREE;
+	_reactions.Create(source);
+	const auto* state = Locator::entitiesRegistry::value().TryGet<const LivingReaction>(_creature);
+	EXPECT_TRUE(state == nullptr || state->reaction == 0);
+	Locator::playerSystem::reset();
+}
+
+// A nice miracle that a script made with no player is not a miracle of a different player: the creature keeps it
+TEST_F(Reactions, ACreatureTakesUpANiceMiracleWithNoPlayer)
+{
+	auto source = Miracle();
+	source.player = PlayerNames::NEUTRAL;
+	source.playerless = true;
+	_reactions.Create(source);
+	const auto* state = Locator::entitiesRegistry::value().TryGet<const LivingReaction>(_creature);
+	EXPECT_TRUE(state != nullptr && state->reaction != 0);
 }
 
 TEST_F(Reactions, VillagersBusyWithAShieldAreLeftToIt)

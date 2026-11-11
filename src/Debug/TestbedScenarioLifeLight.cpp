@@ -324,6 +324,25 @@ void AddReactions(std::vector<Scenario>& all)
 	    .townOwner = PlayerNames::NEUTRAL,
 	});
 	all.push_back({
+	    .id = "creatures.ally_nice_miracle",
+	    .name = "Reactions: a creature looks at the nice miracle of an ally",
+	    .facet = Facet::Senses,
+	    .description = "The second player is an ally of the first player. The second player casts the heal's power-up straight "
+	                   "at a point every ten seconds. The first player's creature stands 25 metres in front of the point "
+	                   "and faces it.",
+	    .expected = "The creature takes up the miracle as a miracle of its own player. It goes to look at the miracle and "
+	                "points at it, or turns and points, or waits there puzzled. Without the alliance it does not move.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-15.0f, 15.0f}, {15.0f, 50.0f}}, .distance = 0.7f},
+	    .creatures = {Hurt({0.0f, 20.0f}, "curious", 1.0f)},
+	    .allies = {{.player = PlayerNames::PLAYER_ONE, .other = PlayerNames::PLAYER_TWO, .strength = 1.0f}},
+	    .miracles = {{.type = MagicType::HealPowerUpOne,
+	                  .point = {0.0f, 45.0f},
+	                  .delaySeconds = 2.0f,
+	                  .repeatSeconds = 10.0f,
+	                  .player = PlayerNames::PLAYER_TWO}},
+	});
+	all.push_back({
 	    .id = "miracles.reactions_food",
 	    .name = "Reactions: villagers react to the food miracle",
 	    .facet = Facet::Miracles,
