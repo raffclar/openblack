@@ -472,15 +472,6 @@ void Renderer::DrawPassLand(const DrawSceneDesc& desc, const ScenePass& pass) co
 		    (k_SmallBumpDistance + cameraForward.y * std::max(0.0f, cameraOrigin.y - k_SmallBumpHighestGround)) / forwardLength;
 		const glm::vec4 u_smallBumpLine {cameraOrigin.x, cameraOrigin.z, forwardAlongGround / forwardLength};
 		const glm::vec4 u_smallBump {lineDistance, 0.0f, 0.0f, 0.0f};
-		// The land's detail lines this frame, from the view's camera (see land_detail): xy the camera's x and z, zw the
-		// way it faces along the ground; then how far ahead the two mesh lines and the texture line lie, each 0 when
-		// the camera looks straight down, and the bands
-		const auto lineAhead = [](const land_detail::ViewLine& line) { return line.valid ? line.ahead : 0.0f; };
-		const glm::vec4 u_landLine {_landDetail.detail.meshNear.camera, _landDetail.detail.meshNear.forward};
-		const glm::vec4 u_landLineAhead {lineAhead(_landDetail.detail.meshNear), lineAhead(_landDetail.detail.meshFar),
-		                                 lineAhead(_landDetail.detail.texture),
-		                                 _landDetail.detail.meshNear.valid ? 1.0f : 0.0f};
-		const glm::vec4 u_landBands {_landDetail.detail.lines.meshBand, _landDetail.detail.lines.textureBand, 0.0f, 0.0f};
 
 		// The hand's light is in the land's own lighting, so the reflection shows it too
 
@@ -530,9 +521,8 @@ void Renderer::DrawPassLand(const DrawSceneDesc& desc, const ScenePass& pass) co
 			terrainShader->SetTextureSampler("s2_smallBump", 2, *smallBump);
 			terrainShader->SetUniformValue("u_smallBumpLine", &u_smallBumpLine);
 			terrainShader->SetUniformValue("u_smallBump", &u_smallBump);
-			terrainShader->SetUniformValue("u_landLine", &u_landLine);
-			terrainShader->SetUniformValue("u_landLineAhead", &u_landLineAhead);
-			terrainShader->SetUniformValue("u_landBands", &u_landBands);
+			// The corners of the blocks that morph or cross-fade, as the game works them out this frame
+			terrainShader->SetTextureSampler("s8_landCorners", 8, GetLandCorners());
 			// Without pages of its own the land binds its block textures in their place, never read
 			const auto* coarsePages = island.GetCoarsePages();
 			terrainShader->SetTextureSampler("s15_coarsePages", 15,

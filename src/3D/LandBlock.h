@@ -47,10 +47,6 @@ struct LandVertex
 	/// The corner's own altitude, 0 to 255, before the land at sea level is flattened. The small bump detail and the
 	/// shadows on the land go by it: they show on the flattened land of altitudes 2 and 3 but not below.
 	float altitude;
-	/// The altitudes the corner morphs towards beyond the land's detail lines: on the half mesh, then on the quarter
-	/// mesh (see graphics::land_detail::TargetsAt)
-	float halfAltitude;
-	float quarterAltitude;
 };
 
 /// The vertex of a cell corner at cornerPosition (x and z in its block) of the given altitude
@@ -86,6 +82,11 @@ public:
 	/// Binds the block's vertices for a draw
 	void BindVertices() const;
 	[[nodiscard]] const lnd::LNDCell* GetCells() const;
+	/// The altitudes of the block's corners as its vertices were last built with them, [x * 17 + z]
+	[[nodiscard]] const std::array<uint8_t, graphics::land_detail::k_CornerCount>& GetCornerAltitudes() const
+	{
+		return _cornerAltitudes;
+	}
 	[[nodiscard]] glm::ivec2 GetBlockPosition() const;
 	[[nodiscard]] glm::vec2 GetMapPosition() const;
 	[[nodiscard]] const std::unique_ptr<lnd::LNDBlock>& GetLndBlock() const { return _block; };
@@ -114,6 +115,9 @@ private:
 	glm::ivec2 _blockPosition {-1};
 	glm::vec2 _mapPosition {0.0f};
 	uint8_t _highestAltitude {0};
+	/// The corners' altitudes of the last build of the vertices. The land works out the drawn altitudes of a block that
+	/// morphs from them each frame.
+	std::array<uint8_t, graphics::land_detail::k_CornerCount> _cornerAltitudes {};
 
 	void BuildVertexList(std::span<LandVertex> vertices, LandIslandInterface& island);
 };

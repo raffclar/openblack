@@ -679,8 +679,11 @@ private:
 		/// Whether a part of the box over the block can be seen from the view's camera. Only those blocks are drawn,
 		/// on the land and mirrored under the sea.
 		std::vector<bool> inView;
+		/// The texels of the corner texture (see GetLandCorners), two bytes each
+		std::vector<uint8_t> corners;
 	};
 	mutable LandDetailFrame _landDetail;
+	mutable std::unique_ptr<Texture2D> _landCorners;
 	/// A counted part of a shadow's bodies: a submesh, its first point and whether it covers only every second row of
 	/// samples
 	struct GroundShadowPart
@@ -943,6 +946,10 @@ private:
 	TextureHandle UpdateLandLight() const;
 	/// Works out the land's level of detail for this frame from the view's camera (see land_detail)
 	void UpdateLandDetail(const DrawSceneDesc& drawDesc) const;
+	/// The blocks' corners as they are drawn this frame (see land_detail::k_CornerTextureSide): the altitude of each
+	/// corner of a block that morphs, and how opaque the coarse texture is at each corner of a block that cross-fades.
+	/// The texture is made, with no corners, the first time it is needed.
+	[[nodiscard]] const Texture2D& GetLandCorners() const;
 	/// The land's light, or a texture to bind in its place before it is first built
 	[[nodiscard]] TextureHandle GetLandLightTexture() const;
 	std::unique_ptr<Mesh> _plane;

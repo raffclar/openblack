@@ -30,8 +30,6 @@ LandVertex openblack::MakeLandVertex(glm::vec2 cornerPosition, uint8_t altitude)
 	return {
 	    .position = glm::vec3(cornerPosition.x, LandIslandInterface::GetDrawnAltitude(altitude), cornerPosition.y),
 	    .altitude = height,
-	    .halfAltitude = height,
-	    .quarterAltitude = height,
 	};
 }
 
@@ -106,13 +104,10 @@ void LandBlock::BuildVertexList(std::span<LandVertex> vertices, LandIslandInterf
 		for (size_t z = 0; z < land_detail::k_CornersPerSide; ++z)
 		{
 			const size_t corner = x * land_detail::k_CornersPerSide + z;
-			auto vertex = MakeLandVertex(glm::vec2(x, z) * LandIslandInterface::k_CellSize, altitudes.at(corner));
-			const auto targets = land_detail::TargetsAt(altitudes, x, z);
-			vertex.halfAltitude = static_cast<float>(targets.half);
-			vertex.quarterAltitude = static_cast<float>(targets.quarter);
-			vertices[corner] = vertex;
+			vertices[corner] = MakeLandVertex(glm::vec2(x, z) * LandIslandInterface::k_CellSize, altitudes.at(corner));
 		}
 	}
+	_cornerAltitudes = altitudes;
 }
 
 const lnd::LNDCell* LandBlock::GetCells() const

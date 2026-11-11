@@ -463,6 +463,7 @@ Renderer::~Renderer() noexcept
 	_glowShells.clear();
 	_snowDepth.reset();
 	_paintedSnowTexture.reset();
+	_landCorners.reset();
 	_plane.reset();
 	_morphStreamLayouts.reset();
 	_handFlowTexture.reset();
