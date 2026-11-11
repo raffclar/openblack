@@ -112,23 +112,6 @@ bool IsValidClanCreature(const lobby_api::ClanCreature& creature)
 	return IsMind(creature.mind);
 }
 
-std::optional<lobby_api::ClanCreature> ClanCreatureAtGameEnd(entt::entity god, entt::entity creature,
-                                                             std::span<const uint8_t> userData)
-{
-	if (!Locator::entitiesRegistry::has_value() || !Locator::creatureCarryOverSystem::has_value())
-	{
-		return std::nullopt;
-	}
-	const auto& registry = Locator::entitiesRegistry::value();
-	const auto* alignment = registry.Valid(god) ? registry.TryGet<const ecs::components::Alignment>(god) : nullptr;
-	const auto file = Locator::creatureCarryOverSystem::value().CreatureFile(creature);
-	if (alignment == nullptr || !file.has_value())
-	{
-		return std::nullopt;
-	}
-	return PackClanCreature(alignment->value, *file, userData);
-}
-
 std::optional<std::vector<uint8_t>> StartData(const lobby_api::ClanCreatureReply& reply)
 {
 	switch (reply.kind)

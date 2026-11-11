@@ -71,11 +71,6 @@ void living_facing::FaceAngle(Registry& registry, entt::entity walker, float yAn
 	}
 }
 
-void living_facing::FaceOnly(Registry& registry, entt::entity walker, float yAngle)
-{
-	Turn(registry, walker, yAngle, registry.TryGet<components::WallHug>(walker));
-}
-
 std::optional<float> living_facing::KeptAngleOf(const Registry& registry, entt::entity thing)
 {
 	if (const auto* animal = registry.TryGet<const components::Animal>(thing); animal != nullptr)

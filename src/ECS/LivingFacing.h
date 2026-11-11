@@ -33,9 +33,6 @@ void FaceGameAngle(Registry& registry, entt::entity walker, uint16_t gameAngle);
 /// The walker faces an angle across the land, in radians. Its walk takes the game angle nearest to it.
 void FaceAngle(Registry& registry, entt::entity walker, float yAngle);
 
-/// The walker faces an angle across the land, in radians, and its walk keeps its angle. A thing with no walk only turns.
-void FaceOnly(Registry& registry, entt::entity walker, float yAngle);
-
 /// The angle across the land that a villager or an animal keeps, in radians. The game keeps this angle and changes the
 /// walk's angle with it. An animal keeps it as its heading, and a villager keeps it with its walk. Other things have no
 /// such angle.

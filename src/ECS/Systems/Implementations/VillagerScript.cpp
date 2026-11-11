@@ -607,11 +607,6 @@ void villager_script::KeepScriptWorkInMind(entt::entity villager, VillagerStates
 	KeepInMind(villager, remind);
 }
 
-void villager_script::ForgetScriptWork(entt::entity villager)
-{
-	Entities().Remove<ScriptRemind>(villager);
-}
-
 bool villager_script::ExitInScript(LivingAction& action, VillagerStates next)
 {
 	auto& registry = Entities();
