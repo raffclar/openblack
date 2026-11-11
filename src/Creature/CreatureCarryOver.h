@@ -26,23 +26,6 @@ namespace openblack::creature_carry_over
 /// A loaded creature sparkles into sight over this many seconds, from out of sight
 constexpr float k_ArrivalSeconds = 3.0f;
 
-/// How far a creature has sparkled out of sight, 0 to 1, and where it is going: a share of the way a second
-struct Fizz
-{
-	float now {0.0f};
-	float target {0.0f};
-	float perSecond {0.0f};
-
-	bool operator==(const Fizz&) const = default;
-};
-
-/// The fizz set going to a target over some seconds; over no seconds, or when already there, it is there at once
-[[nodiscard]] Fizz SetFizz(const Fizz& fizz, float target, float seconds);
-/// One game turn of so many milliseconds of the fizz going to its target, stopping there
-[[nodiscard]] Fizz StepFizz(const Fizz& fizz, float turnMilliseconds);
-/// A loaded creature's fizz: out of sight at once, then coming back into sight over three seconds
-[[nodiscard]] Fizz ArrivalFizz();
-
 /// Where on the map a script's place puts a loaded creature: only the place's cell is taken, and the creature stands on
 /// the ground in the middle of it
 [[nodiscard]] map_coords::MapCoords ArrivalCoords(glm::vec2 place);

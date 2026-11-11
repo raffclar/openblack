@@ -9,52 +9,12 @@
 
 #include "CreatureCarryOver.h"
 
-#include <algorithm>
 #include <string>
 
 #include <PhysiqueFile.h>
 
 using namespace openblack;
 using namespace openblack::creature_carry_over;
-
-namespace
-{
-/// A millisecond in seconds, as a float product
-constexpr float k_SecondsPerMillisecond = 0.001f;
-} // namespace
-
-Fizz creature_carry_over::SetFizz(const Fizz& fizz, float target, float seconds)
-{
-	target = std::clamp(target, 0.0f, 1.0f);
-	if (seconds != 0.0f && target != fizz.now)
-	{
-		const auto rate = 1.0f / seconds;
-		return {.now = fizz.now, .target = target, .perSecond = target - fizz.now > 0.0f ? rate : -rate};
-	}
-	return {.now = target, .target = target, .perSecond = 0.0f};
-}
-
-Fizz creature_carry_over::StepFizz(const Fizz& fizz, float turnMilliseconds)
-{
-	if (fizz.perSecond == 0.0f)
-	{
-		return fizz;
-	}
-	auto next = fizz;
-	next.now = (turnMilliseconds * fizz.perSecond * k_SecondsPerMillisecond) + fizz.now;
-	const bool rising = fizz.perSecond > 0.0f;
-	if ((rising && next.now >= fizz.target) || (!rising && next.now <= fizz.target))
-	{
-		next.now = fizz.target;
-		next.perSecond = 0.0f;
-	}
-	return next;
-}
-
-Fizz creature_carry_over::ArrivalFizz()
-{
-	return SetFizz(SetFizz({}, 1.0f, 0.0f), 0.0f, k_ArrivalSeconds);
-}
 
 map_coords::MapCoords creature_carry_over::ArrivalCoords(glm::vec2 place)
 {

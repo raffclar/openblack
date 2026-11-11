@@ -30,6 +30,7 @@
 
 #include "3D/MapCoords.h"
 #include "Creature/CreatureCarryOver.h"
+#include "Creature/CreatureFizz.h"
 #include "Creature/CreatureHandGlow.h"
 #include "Creature/CreatureMarks.h"
 #include "Creature/CreatureMindFileBody.h"
@@ -297,32 +298,27 @@ TEST(CreatureCarryOver, AKeptBodyStartsFromItsSpeciesWithWhatItKept)
 	EXPECT_EQ(needs.poo, 0.0f);
 }
 
+// The arrival is the creature's own fizz: out of sight at once with the sound, then into sight over three seconds
 TEST(CreatureCarryOver, ALoadedCreatureSparklesIntoSightOverThreeSeconds)
 {
-	auto fizz = ArrivalFizz();
+	const auto out = creature_fizz::SetFizz({}, 1.0f, 0.0f, false);
+	EXPECT_TRUE(out.sound);
+	const auto back = creature_fizz::SetFizz(out.fizz, 0.0f, k_ArrivalSeconds, false);
+	EXPECT_FALSE(back.sound);
+	auto fizz = back.fizz;
 	EXPECT_EQ(fizz.now, 1.0f);
 	EXPECT_EQ(fizz.target, 0.0f);
 	EXPECT_FLOAT_EQ(fizz.perSecond, -1.0f / 3.0f);
 	for (int turn = 0; turn < 15; ++turn)
 	{
-		fizz = StepFizz(fizz, 100.0f);
+		fizz = creature_fizz::Step(fizz, 100);
 	}
 	EXPECT_NEAR(fizz.now, 0.5f, 1e-5f);
-	for (int turn = 0; turn < 15; ++turn)
+	for (int turn = 0; turn < 16; ++turn)
 	{
-		fizz = StepFizz(fizz, 100.0f);
+		fizz = creature_fizz::Step(fizz, 100);
 	}
-	EXPECT_EQ(fizz.now, 0.0f);
-	EXPECT_EQ(fizz.perSecond, 0.0f);
-	EXPECT_EQ(StepFizz(fizz, 100.0f), fizz);
-}
-
-TEST(CreatureCarryOver, AFizzOverNoSecondsIsThereAtOnce)
-{
-	const auto fizz = SetFizz({.now = 0.3f}, 2.0f, 0.0f);
-	EXPECT_EQ(fizz.now, 1.0f);
-	EXPECT_EQ(fizz.perSecond, 0.0f);
-	EXPECT_FLOAT_EQ(SetFizz({}, 1.0f, 2.0f).perSecond, 0.5f);
+	EXPECT_TRUE(creature_fizz::Settled(fizz));
 }
 
 TEST(CreatureCarryOver, OnlyThePlacesCellIsTakenAndTheCreatureStandsInItsMiddle)

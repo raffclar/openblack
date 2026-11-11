@@ -70,12 +70,6 @@ public:
 	void SetBroughtCreature(entt::entity creature) override;
 
 private:
-	struct Arriving
-	{
-		entt::entity creature;
-		creature_carry_over::Fizz fizz;
-	};
-
 	/// The creature kept goes to its files on the thread of the writer. The system reads the files when it kept no
 	/// creature since the game started.
 	void Write(std::shared_ptr<const creaturemind::MindFileData> mind, creaturemind::PhysiqueFileData physique) const;
@@ -84,8 +78,6 @@ private:
 	void SaveAsTheyLive();
 	/// The player's creature is written to its files each time it has lived 600 more turns
 	void SaveAsItLives(entt::entity creature);
-	/// The sparkle into sight of the creatures from a last land, or of one creature, moves on
-	void StepArrivals(std::optional<entt::entity> creature);
 
 	/// The kept creature's two files, when there is a folder and a profile to keep them for
 	[[nodiscard]] std::optional<creature_carry_over::KeptFiles> Files() const;
@@ -98,7 +90,6 @@ private:
 	/// The profile's file the game being played keeps its creature in, taken when it started; none before the first game
 	std::optional<std::string> _gameFile;
 	std::shared_ptr<const creaturemind::MindFileData> _kept;
-	std::vector<Arriving> _arriving;
 	bool _landKeepsCreatures {true};
 	/// The creature that the god of this computer brought into the network game, and the turns that it lived when this
 	/// computer last looked at it. This is not world state: only this computer writes the player's files.

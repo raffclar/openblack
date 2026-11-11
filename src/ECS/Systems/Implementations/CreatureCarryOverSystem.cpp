@@ -13,7 +13,6 @@
 
 #include <algorithm>
 #include <array>
-#include <chrono>
 #include <system_error>
 #include <tuple>
 #include <utility>
@@ -37,16 +36,15 @@
 #include "ECS/CreatureTattooChange.h"
 #include "ECS/Registry.h"
 #include "ECS/SaveFileWriter.h"
+#include "ECS/Systems/CreatureFizzSystemInterface.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/CreatureWebPageSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
-#include "ECS/Systems/SoundTagSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/ThingMapPlace.h"
 #include "Locator.h"
-#include "Sound/SoundId.h"
 
 using namespace openblack;
 using namespace openblack::ecs::systems;
@@ -54,8 +52,6 @@ using namespace openblack::ecs::components;
 
 namespace
 {
-/// A game turn's milliseconds
-constexpr float k_TurnMilliseconds = std::chrono::duration<float, std::milli>(TimeSystemInterface::k_TurnDuration).count();
 /// A creature made from its file faces as one a land's set-up makes from a file does
 constexpr float k_ArrivalYawDegrees = 180.0f;
 
@@ -347,19 +343,13 @@ std::optional<entt::entity> CreatureCarryOverSystem::LoadPlayersCreature(glm::ve
 		Locator::creatureMindSystem::value().LoadMind(creature, _kept);
 	}
 
-	// It starts out of sight, with the sound of sparkling, and sparkles into sight
-	const auto fizz = creature_carry_over::ArrivalFizz();
-	auto* spells = registry.TryGet<CreatureSpells>(creature);
-	if (spells == nullptr)
+	// It starts out of sight, with the sound of sparkling, and sparkles into sight. This is the creature's own fizz, so a
+	// save keeps it and stops it as it stops any fizz of the creature.
+	if (Locator::creatureFizzSystem::has_value())
 	{
-		spells = &registry.Assign<CreatureSpells>(creature);
-	}
-	spells->fizz = fizz.now;
-	_arriving.push_back({.creature = creature, .fizz = fizz});
-	if (Locator::soundTagSystem::has_value())
-	{
-		Locator::soundTagSystem::value().CreatePointSound(static_cast<entt::id_type>(audio::SoundId::G_SpellTeleportEnergiseGo),
-		                                                  position, false);
+		auto& fizz = Locator::creatureFizzSystem::value();
+		fizz.SetFizz(creature, 1.0f, 0.0f, false);
+		fizz.SetFizz(creature, 0.0f, creature_carry_over::k_ArrivalSeconds, false);
 	}
 	SPDLOG_LOGGER_INFO(spdlog::get("game"), "Loaded the player's creature {} at {:.1f}, {:.1f}", entt::to_integral(creature),
 	                   position.x, position.z);
@@ -435,7 +425,6 @@ void CreatureCarryOverSystem::ProcessTurn()
 	{
 		SaveAsTheyLive();
 	}
-	StepArrivals(std::nullopt);
 }
 
 void CreatureCarryOverSystem::CreatureTurn(entt::entity creature)
@@ -444,36 +433,10 @@ void CreatureCarryOverSystem::CreatureTurn(entt::entity creature)
 	{
 		SaveAsItLives(creature);
 	}
-	StepArrivals(creature);
-}
-
-void CreatureCarryOverSystem::StepArrivals(std::optional<entt::entity> creature)
-{
-	if (_arriving.empty())
-	{
-		return;
-	}
-	auto& registry = Locator::entitiesRegistry::value();
-	std::erase_if(_arriving, [&registry, creature](Arriving& arriving) {
-		// A creature that is gone takes no turn, and its sparkle ends with it
-		if (creature.has_value() && arriving.creature != *creature && registry.Valid(arriving.creature))
-		{
-			return false;
-		}
-		auto* spells = registry.Valid(arriving.creature) ? registry.TryGet<CreatureSpells>(arriving.creature) : nullptr;
-		if (spells == nullptr)
-		{
-			return true;
-		}
-		arriving.fizz = creature_carry_over::StepFizz(arriving.fizz, k_TurnMilliseconds);
-		spells->fizz = arriving.fizz.now;
-		return arriving.fizz.perSecond == 0.0f;
-	});
 }
 
 void CreatureCarryOverSystem::Reset()
 {
-	_arriving.clear();
 	_brought.reset();
 	_broughtTurnsSeen.reset();
 	_networkLand = false;
