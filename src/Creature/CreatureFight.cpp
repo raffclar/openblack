@@ -20,6 +20,7 @@
 #include "Common/ModelInverseSquareRoot.h"
 #include "Common/X87.h"
 #include "Common/X87Vector.h"
+#include "Creature/CreatureFizz.h"
 #include "Creature/CreatureFriendship.h"
 #include "Help/HelpProfile.h"
 #include "ScriptHeaders/ScriptPropertyRules.h"
@@ -585,9 +586,15 @@ bool creature_fight::AgreesToFight(float height, float askerHeight, bool dead, b
 	return creature_friendship::NearInHeightToFight(height / askerHeight) && !dead && scripted == askerScripted;
 }
 
-float creature_fight::FaintSeconds(float size)
+uint16_t creature_fight::FaintWaitTurns(float size, uint32_t turnMilliseconds)
 {
-	return (k_FaintSecondsPerSize * size) + k_FaintBaseSeconds;
+	return creature_fizz::TurnsOf((size * k_FaintSecondsPerSize) + k_FaintBaseSeconds, turnMilliseconds);
+}
+
+int32_t creature_fight::TurnsCounted(float seconds, float turnSeconds)
+{
+	// A sum of many float turns is not exact. Round it to the nearest whole turn.
+	return static_cast<int32_t>(std::lround(seconds / turnSeconds));
 }
 
 bool creature_fight::NeedsRest(float life, float exhaustion)

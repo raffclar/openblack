@@ -231,7 +231,7 @@ TEST(CreatureDance, TheMusicIsTheTribesChantWithVoicesForMoreThanEightDancers)
 	EXPECT_EQ(creature_dance::MusicType(9, 9), 5);
 }
 
-TEST(CreatureDance, AStopStartsWhileTheBodyMovesAndEndsOnceItStandsStill)
+TEST(CreatureDance, AStopStartsWhileTheBodyMovesAndEndsOnceTheBodyIsNotBusy)
 {
 	creature_mind::IdleMind mind;
 	creature_mind::Plan(mind, creature_mind::Activity::Planned, {{.kind = Step::Kind::StopMoving}, {.kind = Step::Kind::Wait}});
@@ -241,15 +241,21 @@ TEST(CreatureDance, AStopStartsWhileTheBodyMovesAndEndsOnceItStandsStill)
 	senses.bodyPlaying = true;
 	const auto commands = creature_mind::Think(mind, senses, NoRandom());
 	EXPECT_TRUE(commands.stopMoving);
+	EXPECT_FALSE(commands.stopPointing);
 	EXPECT_TRUE(mind.stepStarted);
-	static_cast<void>(creature_mind::Think(mind, senses, NoRandom()));
+	// On each turn that it waits, a point that the arm holds stops
+	EXPECT_TRUE(creature_mind::Think(mind, senses, NoRandom()).stopPointing);
 	EXPECT_EQ(mind.step, 0U);
 	senses.bodyPlaying = false;
 	static_cast<void>(creature_mind::Think(mind, senses, NoRandom()));
 	// It still walks on to its stop
 	EXPECT_EQ(mind.step, 0U);
 	senses.moving = false;
+	// An action on a thing keeps the body busy with no clip on the body
 	static_cast<void>(creature_mind::Think(mind, senses, NoRandom()));
+	EXPECT_EQ(mind.step, 0U);
+	senses.bodyBusy = false;
+	EXPECT_FALSE(creature_mind::Think(mind, senses, NoRandom()).stopPointing);
 	EXPECT_EQ(mind.step, 1U);
 }
 
@@ -421,11 +427,16 @@ TEST(CreatureDance, ADanceAloneWaitsForTheBodyThenDancesForTwentySeconds)
 	busy.bodyPlaying = true;
 	busy.bodyBusy = true;
 	EXPECT_FALSE(creature_mind::Think(mind, busy, NoRandom()).startDance.has_value());
-	// The creature can still move as it starts to dance
+	// A walk or a turn makes the body busy too, so the dance waits until the creature stands
 	auto moving = Free();
 	moving.bodyBusy = true;
 	moving.moving = true;
-	const auto start = creature_mind::Think(mind, moving, NoRandom());
+	EXPECT_FALSE(creature_mind::Think(mind, moving, NoRandom()).startDance.has_value());
+	// An action on a thing makes the body busy with no clip on the body
+	auto acting = Free();
+	acting.bodyBusy = true;
+	EXPECT_FALSE(creature_mind::Think(mind, acting, NoRandom()).startDance.has_value());
+	const auto start = creature_mind::Think(mind, Free(), NoRandom());
 	ASSERT_TRUE(start.startDance.has_value());
 	EXPECT_FLOAT_EQ(*start.startDance, 1000.0f);
 	auto dancing = Free();

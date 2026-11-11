@@ -228,7 +228,7 @@ void CreatureFightSystem::StartFaint(entt::entity creature)
 	};
 	shown_creature_faces::ChangeFace(registry, creature, animation.face,
 	                                 [](const creature_layers::FaceLayer& face) { return creature_layers::RelaxFace(face); });
-	SetEyes(registry, creature, creature_eyes::Mode::Closed);
+	// The eyes close later, when the body first lies still
 	// The faint on the body marks it as fainted, also when a script orders it to die
 	MarkFainted(registry, creature);
 	// The people and the creatures near it react to the faint as to a death. The reaction belongs to no player.
@@ -352,6 +352,11 @@ void CreatureFightSystem::KnockedOutTurn(entt::entity entity)
 		// after that stands its body, but the time goes on.
 		const auto wait = fight::LyingTurn({.seconds = knockedOut.seconds, .started = knockedOut.layStill}, faintBody,
 		                                   k_TurnSeconds, -creature_mind::k_FaintWaitTurnsLate * k_TurnSeconds);
+		// The eyes close when the body first lies still
+		if (wait.started && !knockedOut.layStill)
+		{
+			SetEyes(registry, entity, creature_eyes::Mode::Closed);
+		}
 		knockedOut.seconds = wait.seconds;
 		knockedOut.layStill = wait.started;
 	}
@@ -383,7 +388,8 @@ void CreatureFightSystem::KnockedOutTurn(entt::entity entity)
 	switch (knockedOut.stage)
 	{
 	case CreatureKnockedOut::Stage::Lying:
-		if (!knockedOut.permanent && knockedOut.seconds >= fight::FaintSeconds(ShownSize(body)))
+		if (!knockedOut.permanent && fight::TurnsCounted(knockedOut.seconds, k_TurnSeconds) >=
+		                                 fight::FaintWaitTurns(ShownSize(body), k_TurnMilliseconds))
 		{
 			// A player's creature is taken home; any other comes round where it lies
 			if (body.owner != PlayerNames::NEUTRAL)
@@ -449,7 +455,8 @@ void CreatureFightSystem::KnockedOutTurn(entt::entity entity)
 		}
 		break;
 	case CreatureKnockedOut::Stage::Waiting:
-		if (knockedOut.seconds >= fight::k_WaitAfterHomeSeconds)
+		if (fight::TurnsCounted(knockedOut.seconds, k_TurnSeconds) >=
+		    creature_fizz::TurnsOf(fight::k_WaitAfterHomeSeconds, k_TurnMilliseconds))
 		{
 			next(CreatureKnockedOut::Stage::WaitingForSpells);
 		}

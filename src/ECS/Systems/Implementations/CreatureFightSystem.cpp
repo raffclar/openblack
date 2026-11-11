@@ -246,11 +246,11 @@ void PullApartFighters(ecs::Registry& registry, entt::entity creature, const Cre
 	    fight::PullApartOf(fighting.arena, at, otherAt, creature_locomotion::DirectionOf(self->heading), extents);
 	if (pulled.first.has_value())
 	{
-		Shift(*self, *pulled.first - at);
+		MoveTo(*self, *pulled.first);
 	}
 	if (pulled.second.has_value())
 	{
-		Shift(*otherBody, *pulled.second - otherAt);
+		MoveTo(*otherBody, *pulled.second);
 	}
 	if (pulled.first.has_value() || pulled.second.has_value())
 	{
@@ -396,14 +396,14 @@ glm::vec2 WorldToLocal(glm::vec2 world, GameHeading heading)
 	return {glm::dot(world, right), glm::dot(world, ahead)};
 }
 
-void Shift(CreatureLocomotion& locomotion, glm::vec2 by)
+void MoveTo(CreatureLocomotion& locomotion, glm::vec2 point)
 {
-	for (auto* point : {&locomotion.fromPosition, &locomotion.toPosition})
-	{
-		point->x += by.x;
-		point->z += by.y;
-		point->y = GroundAt(Flat(*point));
-	}
+	const auto by = point - Flat(locomotion.toPosition);
+	locomotion.fromPosition.x += by.x;
+	locomotion.fromPosition.z += by.y;
+	locomotion.fromPosition.y = GroundAt(Flat(locomotion.fromPosition));
+	// The game keeps the new point as it is. A sum of the old point and the move can be one float step away from it.
+	locomotion.toPosition = glm::vec3(point.x, GroundAt(point), point.y);
 }
 
 void SetEyes(ecs::Registry& registry, entt::entity creature, creature_eyes::Mode mode)

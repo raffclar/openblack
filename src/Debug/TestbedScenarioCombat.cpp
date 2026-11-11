@@ -887,6 +887,18 @@ void testbed_scenarios::AddCombat(std::vector<Scenario>& all)
 	                 Act(Kind::KnockOut, 0, 1.0f, true)},
 	});
 	all.push_back({
+	    .id = "combat.knocked_out_eyes_close_lying",
+	    .name = "Knocked out, the eyes close when the body lies still",
+	    .facet = Facet::Combat,
+	    .description = "A worn tiger, life 0.6 and exhaustion 0.7, is knocked out where it stands, as a fight's loser is. "
+	                   "The camera looks at its face.",
+	    .expected = "The eyes stay open while the tiger falls. They close on the first turn that the body lies still. "
+	                "They open as the get-up starts. Before, the eyes closed as the faint started.",
+	    .framing = {.shot = Shot::Head, .distance = 1.0f},
+	    .creatures = {worn},
+	    .commands = {Act(Kind::KnockOut, 0, 1.0f, false)},
+	});
+	all.push_back({
 	    .id = "combat.script_moves_knocked_out",
 	    .name = "A script moves a creature that lies knocked out",
 	    .facet = Facet::Combat,
