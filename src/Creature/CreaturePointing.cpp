@@ -126,6 +126,12 @@ uint16_t creature_pointing::HoldTurns(float seconds, uint32_t turnsPerSecond)
 	return static_cast<uint16_t>(static_cast<int64_t>(turns));
 }
 
+uint16_t creature_pointing::PlaceHoldTurns(float seconds, uint32_t turnsPerSecond)
+{
+	const auto turns = HoldTurns(seconds, turnsPerSecond);
+	return static_cast<int16_t>(turns) < k_PlaceHoldMinimumTurns ? static_cast<uint16_t>(k_PlaceHoldMinimumTurns) : turns;
+}
+
 bool creature_pointing::CountHoldTurn(uint16_t& turnsLeft)
 {
 	--turnsLeft;

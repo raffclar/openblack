@@ -10,6 +10,7 @@
 #include <cmath>
 
 #include <functional>
+#include <utility>
 #include <vector>
 
 #include <gtest/gtest.h>
@@ -229,16 +230,18 @@ TEST(CreaturePlayerAgendas, BeingCrossFollowsTheCameraThenMakesARudeSignOrTaunts
 	EXPECT_EQ(rude[0].kind, Step::Kind::FollowCamera);
 	EXPECT_EQ(rude[2].animation, k_RudeSignAnimation);
 	EXPECT_EQ(BeCrossWithPlayer(glm::vec2 {}, 10.0f, AlwaysFirst)[2].animation, k_TauntAnimation);
-	// Without a camera the game still draws for the sign first, and the creature makes it with no turn to the camera
+	// Without a camera the game still draws for the sign first. The turn to the camera has nothing to do, but it keeps
+	// its place in the agenda.
 	std::vector<uint32_t> draws;
 	const auto noCamera = BeCrossWithPlayer(std::nullopt, 10.0f, [&draws](uint32_t range) {
 		draws.push_back(range);
 		return NeverFirst(range);
 	});
 	EXPECT_EQ(draws, std::vector<uint32_t> {2});
-	ASSERT_EQ(noCamera.size(), 2u);
+	ASSERT_EQ(noCamera.size(), 3u);
 	EXPECT_EQ(noCamera[0].kind, Step::Kind::FollowCamera);
-	EXPECT_EQ(noCamera[1].animation, k_RudeSignAnimation);
+	EXPECT_EQ(noCamera[1].kind, Step::Kind::Empty);
+	EXPECT_EQ(noCamera[2].animation, k_RudeSignAnimation);
 	EXPECT_EQ(FollowPlayer({}, 10.0f)[2].animation, k_LookAtMeAnimation);
 	EXPECT_EQ(GoToMiddleOfScreen({}, 10.0f).size(), 2u);
 }
@@ -320,4 +323,27 @@ TEST(CreaturePlayerAttention, TheIdleMindFollowsTheHandUntilNear)
 	senses.followHand->distance = 5.0f;
 	commands = creature_mind::Think(mind, senses, AlwaysFirst);
 	EXPECT_EQ(mind.step, 1u);
+}
+
+// Without a camera, the follow of the camera takes its turn to start and is done on the next turn. The turn to the
+// camera has nothing to do, but it also takes two turns. Thus the sign starts on the fifth turn. Neither of the two
+// steps waits for the body.
+TEST(CreaturePlayerAttention, BeingCrossWithNoCameraStartsTheSignOnTheFifthTurn)
+{
+	creature_mind::IdleMind mind;
+	creature_mind::Plan(mind, creature_mind::Activity::Planned, BeCrossWithPlayer(std::nullopt, 10.0f, NeverFirst));
+	creature_mind::Senses senses {.seconds = 0.1f, .bodyBusy = true};
+	// The step and whether it has started, after each of the first four turns
+	const std::vector<std::pair<size_t, bool>> afterTurn {{0, true}, {1, false}, {1, true}, {2, false}};
+	for (const auto& [step, started] : afterTurn)
+	{
+		const auto commands = creature_mind::Think(mind, senses, AlwaysFirst);
+		EXPECT_FALSE(commands.playOnce.has_value());
+		EXPECT_EQ(mind.step, step);
+		EXPECT_EQ(mind.stepStarted, started);
+	}
+	senses.bodyBusy = false;
+	const auto commands = creature_mind::Think(mind, senses, AlwaysFirst);
+	EXPECT_EQ(commands.playOnce, std::optional<size_t>(k_RudeSignAnimation));
+	EXPECT_EQ(mind.step, 2u);
 }
