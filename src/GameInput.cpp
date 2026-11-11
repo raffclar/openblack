@@ -282,8 +282,9 @@ bool Game::UpdateDebugGui()
 
 void Game::UpdateCameraKeys(std::chrono::microseconds deltaTime)
 {
-	// From the end of the frame that goes into the temple, the world's camera behind it takes no controls of the player
-	world_camera::EndFrameControls();
+	// From the end of the frame that goes into the temple or that opens a box of the front end, the player's camera of the
+	// world takes no controls of the player
+	world_camera::EndFrameControls(FrontEndBoxShows());
 	// In the temple, without the interface or while a box has the keyboard, the camera does not read its keys
 	auto& actions = Locator::gameActionSystem::value();
 	const bool interfaceActive =

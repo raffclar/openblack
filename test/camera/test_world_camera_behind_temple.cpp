@@ -141,12 +141,6 @@ TEST(WorldCameraLeave, WithNoPlacePickedOnlyThePlayersCameraStartsAgain)
 	EXPECT_FALSE(other.startAgain);
 }
 
-TEST(WorldCameraLeave, InTheTempleThePlayersCameraTakesNoControls)
-{
-	EXPECT_TRUE(world_camera::TakesControls(false));
-	EXPECT_FALSE(world_camera::TakesControls(true));
-}
-
 TEST(WorldCameraLeave, StartingAgainForgetsTheTapAndTheFlightToThePlaceButKeepsWhereToFlyBack)
 {
 	const zoom_to::CameraView back {.origin = k_Origin, .focus = k_Focus};

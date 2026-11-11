@@ -73,6 +73,17 @@ void FightCameraModel::Return(const fight_view::View& from, const fight_view::Vi
 	Fly(_chase, from, speed, _chase.GetHeld(), fight_view::k_ReturnWayRise);
 }
 
+void FightCameraModel::StartAgain()
+{
+	_tracker.Resnap();
+	_chase.StopFlight();
+	_sinceFlight = 0.0f;
+	if (auto* world = dynamic_cast<DefaultWorldCameraModel*>(_playerModel.get()); world != nullptr)
+	{
+		world->StartAgain();
+	}
+}
+
 void FightCameraModel::SetFighters(const fight_view::Fighter& first, const fight_view::Fighter& second)
 {
 	_first = first;

@@ -119,6 +119,7 @@ public:
 	[[nodiscard]] float GetPoolTime() const override { return _poolTime; }
 	void Escape() override;
 	void RequestLeave() override { _leaveRequested = true; }
+	void PickMapPlace(glm::vec2 place) override { LeaveForMapPoint(_map.ToMap(place) + _templePosition); }
 	void FadeToWhite() override;
 	void ZoomToCaveTarget(size_t target) override;
 	void TurnBackRisingFade() override;

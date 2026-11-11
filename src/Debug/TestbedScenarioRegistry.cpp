@@ -289,9 +289,9 @@ std::string_view CommandProblem(const Command& command, std::span<const ObjectSe
 bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 {
 	return kind == Kind::SetHour || kind == Kind::RestoreDeviceInDomeFollow || kind == Kind::RestoreDevice ||
-	       kind == Kind::BindMoveKey || kind == Kind::BindMouseButton || kind == Kind::PutLoadedArena ||
-	       kind == Kind::HoldSeed || kind == Kind::DrawGesture || kind == Kind::SummonSeed || kind == Kind::PressKey ||
-	       kind == Kind::HandTakeFireBall || kind == Kind::SetAlignment || kind == Kind::WideScreen ||
+	       kind == Kind::BindMoveKey || kind == Kind::BindMouseButton || kind == Kind::PickTempleMapPlace ||
+	       kind == Kind::PutLoadedArena || kind == Kind::HoldSeed || kind == Kind::DrawGesture || kind == Kind::SummonSeed ||
+	       kind == Kind::PressKey || kind == Kind::HandTakeFireBall || kind == Kind::SetAlignment || kind == Kind::WideScreen ||
 	       kind == Kind::SetInterfaceLevel || kind == Kind::FlyToBookmark || kind == Kind::TabToTown ||
 	       kind == Kind::SetOpenClose || kind == Kind::LayGateStone || kind == Kind::HandTapObject || kind == Kind::Advisor ||
 	       kind == Kind::RunText || kind == Kind::PlayHandDemo || kind == Kind::Reframe || kind == Kind::DestroyTemple ||
@@ -350,7 +350,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 236> k_Names {
+	constexpr std::array<std::string_view, 237> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -587,6 +587,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "put an arena of a loaded file between two creatures",
 	    "bind the move action to a key",
 	    "bind an action to a mouse button",
+	    "pick a place on the temple's map",
 	};
 	return k_Names.at(static_cast<size_t>(kind));
 }
