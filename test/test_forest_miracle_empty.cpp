@@ -15,6 +15,8 @@
 #include <glm/mat3x3.hpp>
 #include <glm/vec3.hpp>
 #include <gtest/gtest.h>
+#include <spdlog/sinks/null_sink.h>
+#include <spdlog/spdlog.h>
 
 #include "ECS/Components/ForestMember.h"
 #include "ECS/Components/LandForest.h"
@@ -46,6 +48,11 @@ class ForestMiracleEmpty: public ::testing::Test
 protected:
 	void SetUp() override
 	{
+		// The forest system reports to the game's log
+		if (spdlog::get("game") == nullptr)
+		{
+			spdlog::create<spdlog::sinks::null_sink_st>("game");
+		}
 		Locator::entitiesRegistry::emplace<ecs::Registry>();
 		auto& registry = Locator::entitiesRegistry::value();
 		land = Thing();
