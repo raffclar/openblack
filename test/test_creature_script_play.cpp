@@ -277,6 +277,18 @@ TEST(CreatureScriptPlay, ACreatureWithNoValidPlanHasPlayedWhileStepsAreLeft)
 	EXPECT_TRUE(Played(mind, false));
 }
 
+// A creature that lies knocked out with its valid plan to lie dead has not played, also when its mind has no agenda.
+// Once it gets up, it has played. A plan that is not valid gives yes also in the knock-out.
+TEST(CreatureScriptPlay, AKnockedOutCreatureHasNotPlayedUntilItGetsUp)
+{
+	creature_mind::IdleMind mind;
+	mind.activity = creature_mind::Activity::BeIdle;
+	ASSERT_TRUE(creature_mind::AgendaOver(mind));
+	EXPECT_FALSE(Played(mind, true, true));
+	EXPECT_TRUE(Played(mind, true, false));
+	EXPECT_TRUE(Played(mind, false, true));
+}
+
 // A yes to the script's question stops the steps that remain, and those steps do not count as done
 TEST(CreatureScriptPlay, AYesStopsTheStepsThatRemain)
 {

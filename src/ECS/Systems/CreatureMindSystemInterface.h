@@ -447,6 +447,9 @@ public:
 	/// Whether the creature has played what it was doing, as scripts ask: its plan is not valid, its agenda is over, or it
 	/// is only idle
 	[[nodiscard]] virtual bool HasPlayed(entt::entity /*creature*/) { return true; }
+	/// The creature faints: its plan becomes the plan to lie dead, about itself, for its desire to obey. The knock-out
+	/// is the agenda of this plan. A script order to die gives an ordered plan, a knock-out gives a forced plan.
+	virtual void PlanDeath(entt::entity /*creature*/, bool /*ordered*/) {}
 	/// A script asked and the creature has played: it stops the remaining steps of its agenda
 	virtual void ClearAfterPlayed(entt::entity /*creature*/) {}
 

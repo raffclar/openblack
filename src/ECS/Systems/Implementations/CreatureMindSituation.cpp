@@ -539,7 +539,7 @@ bool CreatureMindSystem::HasPlayed(entt::entity creature)
 	}
 	// A creature with no plan, or with a plan that is not valid, has played, also while steps of its agenda are left
 	const bool planValid = mind->planner.current.has_value() && IsPlanValid(*mind->planner.current);
-	return creature_script_play::Played(mind->idle, planValid);
+	return creature_script_play::Played(mind->idle, planValid, registry.AllOf<CreatureKnockedOut>(creature));
 }
 
 void CreatureMindSystem::ClearAfterPlayed(entt::entity creature)

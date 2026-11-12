@@ -53,6 +53,9 @@ struct Request
 /// A creature busy with any agenda of a valid plan, its own or a script's, has not played. When the last step ends with
 /// empty last stages, the agenda is over only on the next turn, when it goes past those stages.
 [[nodiscard]] bool Played(const creature_mind::IdleMind& mind, bool planValid);
+/// As Played, for a creature that can lie knocked out. The knock-out is the agenda of the plan to lie dead. While the
+/// creature lies knocked out with a valid plan, steps of that agenda are left, so it has not played.
+[[nodiscard]] bool Played(const creature_mind::IdleMind& mind, bool planValid, bool knockedOut);
 
 /// When a script asks and the creature has played, the creature stops the remaining steps of its agenda. An idle
 /// creature thus stops its idle steps. The creature does not complete these steps, so they do not count as done. The

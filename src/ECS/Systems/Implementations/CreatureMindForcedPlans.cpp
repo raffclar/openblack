@@ -196,6 +196,8 @@ namespace
 {
 constexpr float k_TurnSeconds = std::chrono::duration<float>(TimeSystemInterface::k_TurnDuration).count();
 constexpr float k_TurnsPerSecond = 1.0f / k_TurnSeconds;
+/// The action of the game's table that shows a creature that lies dead after a faint
+constexpr std::string_view k_DeathAction = "Die";
 
 constexpr float k_HeightOfSizeOne = 15.0f;
 } // namespace
@@ -591,6 +593,30 @@ bool CreatureMindSystem::CarryOutForScript(entt::entity creature, std::vector<cr
 	mind->agendaSeen = mind->idle.serial;
 	mind->desireSeenTo = false;
 	return true;
+}
+
+void CreatureMindSystem::PlanDeath(entt::entity creature, bool ordered)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto* mind = registry.Valid(creature) ? registry.TryGet<CreatureMindState>(creature) : nullptr;
+	const auto* tables = GetTables();
+	if (mind == nullptr || tables == nullptr)
+	{
+		return;
+	}
+	const auto action = creature_mind_tables::FindAction(*tables, k_DeathAction);
+	if (!action.has_value())
+	{
+		return;
+	}
+	// The knock-out does the steps of the plan, so the mind does not start an agenda for it. The plan stays until the
+	// creature chooses or gets a new plan after the knock-out.
+	mind->planner.current = creature_planner::Plan {.desire = creature_desires::Desire::ObeyPlayer,
+	                                                .action = *action,
+	                                                .object = entt::to_integral(creature),
+	                                                .priority = std::numeric_limits<float>::max()};
+	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} lies dead by its {} plan", entt::to_integral(creature),
+	                    ordered ? "ordered" : "forced");
 }
 
 void CreatureMindSystem::SetScriptFocus(entt::entity creature, std::optional<creature_mind::Gaze> focus)

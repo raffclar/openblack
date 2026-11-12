@@ -60,6 +60,15 @@ bool creature_script_play::Played(const creature_mind::IdleMind& mind, bool plan
 	return !planValid || mind.activity == creature_mind::Activity::BeIdle || creature_mind::AgendaOver(mind);
 }
 
+bool creature_script_play::Played(const creature_mind::IdleMind& mind, bool planValid, bool knockedOut)
+{
+	if (knockedOut && planValid)
+	{
+		return false;
+	}
+	return Played(mind, planValid);
+}
+
 void creature_script_play::ClearAfterPlayed(creature_mind::IdleMind& mind)
 {
 	if (creature_mind::AgendaOver(mind))
