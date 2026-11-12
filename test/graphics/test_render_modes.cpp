@@ -81,9 +81,23 @@ TEST(RenderModes, TheAlphaTexturedModeKeepsItsTexelsWithNoAlphaAndTheirDepth)
 	// The chroma modes have a test, and the modes without depth write show nothing there
 	EXPECT_FALSE(KeepsTexelsWithNoAlpha(Desc(Mode::TexturedChroma)));
 	EXPECT_FALSE(KeepsTexelsWithNoAlpha(Desc(Mode::AlphaTexturedAlphaNz)));
-	EXPECT_FALSE(KeepsTexelsWithNoAlpha(Desc(Mode::AlphaTexturedAlphaAdditive)));
+	EXPECT_FALSE(KeepsTexelsWithNoAlpha(Desc(Mode::AlphaTexturedAlphaAdditiveNz)));
+	EXPECT_FALSE(KeepsTexelsWithNoAlpha(Desc(Mode::AlphaTexturedAlphaAdditiveChroma)));
+	EXPECT_FALSE(KeepsTexelsWithNoAlpha(Desc(Mode::ChromaJustZ)));
 	// The renderer gives such a material a reference below 0, so the shader keeps every texel and writes its depth
 	EXPECT_FALSE(ShaderFailsAlphaTest(0.0f, -1.0f));
+}
+
+TEST(RenderModes, TheAddedModeThatWritesDepthKeepsTheDepthOfItsTexelsWithNoAlpha)
+{
+	using graphics::render_modes::Desc;
+	using graphics::render_modes::KeepsTexelsWithNoAlpha;
+	// The added mode with depth write has no alpha test. A texel with no alpha adds nothing, but it writes its depth.
+	const auto& added = Desc(Mode::AlphaTexturedAlphaAdditive);
+	EXPECT_EQ(added.blend, graphics::render_modes::Blend::Additive);
+	EXPECT_FALSE(added.alphaTest);
+	EXPECT_TRUE(added.zWrite);
+	EXPECT_TRUE(KeepsTexelsWithNoAlpha(added));
 }
 
 TEST(RenderModes, TheTexturedModeShowsTheColourOfItsTexelsWithNoAlpha)
