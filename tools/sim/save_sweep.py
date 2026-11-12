@@ -17,16 +17,17 @@ At each check the game is held, and three round trips follow with no frame and n
                   The world state keeps the altitudes of the land that the world changed (the LALT block).
     saved game    the game saves (A), loads A and saves (B), loads B and saves (C). Each load of a saved game starts a
                   game, as the game does: the player takes the alignment that the profile keeps, and the statistics
-                  note the start again (see save_diff.GAME_START_VALUES). B and C must have the same bytes; A and B can
-                  differ only by the start of a game. A saved game keeps the altitudes that the world changed (the
-                  LALT block, deviation 168), as a world state does.
+                  note the start again (see save_diff.GAME_START). Each load also makes each creature again from its
+                  record and its mind file (see save_diff.CREATURE_RELOAD). B and C can differ only by the new
+                  creatures; A and B can differ only by the start of a game and the new creatures. A saved game keeps
+                  the altitudes that the world changed (the LALT block, deviation 168), as a world state does.
 
     python tools/sim/save_sweep.py --exe <openblack> --out E:/runs/sweep --scenarios all --turns 100
     python tools/sim/save_sweep.py --exe <openblack> --out E:/runs/land1 --land Land1.txt --at 0,500,2000
 
 The result is one line of JSON for each check in sweep.jsonl, and a summary in sweep.json. The exit code is 0 only when
-every world state and every second saved-game round trip has the same bytes, and the start of a game explains every
-difference of the first saved-game round trip.
+every world state has the same bytes, the new creatures explain every difference of the second saved-game round trip,
+and the start of a game and the new creatures explain every difference of the first saved-game round trip.
 """
 
 import argparse
@@ -127,8 +128,10 @@ def check(game, options, name):
     b, c = results[second_slot], results[third_slot]
     game_start = save_diff.compare_files(a, b)
     again = save_diff.compare_files(b, c)
-    unexplained = save_diff.not_game_start(game_start)
-    entry["saved_game"] = {"same": not again and not unexplained, "parts": save_diff.differing_parts(again),
+    unexplained = save_diff.not_game_start_or_creature_reload(game_start)
+    unexplained_again = save_diff.not_creature_reload(again)
+    entry["saved_game"] = {"same": not unexplained_again and not unexplained, "parts": save_diff.differing_parts(again),
+                           "not_creature_reload": unexplained_again,
                            "game_start": save_diff.differing_parts(game_start), "not_game_start": unexplained}
     if options.keep:
         if again:

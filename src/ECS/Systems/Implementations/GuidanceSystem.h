@@ -59,6 +59,9 @@ public:
 	[[nodiscard]] const night_whisper::Whisperer& GetNightWhisper() const override { return _whisper; }
 	void StageNightWhisper(uint32_t count) override { _whisper.Stage(count); }
 
+	/// The stamps of the kinds are still to be drawn, for a new land or after a load
+	[[nodiscard]] bool StampsDue() const { return _stampsDue || _stampsDueAfterLoad; }
+
 private:
 	/// The guidance kept on the player at this machine, none without one
 	components::GuidanceHeard* Heard();
@@ -79,6 +82,9 @@ private:
 
 	/// The new land's stamps are still to be drawn
 	bool _stampsDue {true};
+	/// A load asks for the stamps again. No save keeps it, so a save at once after a load has the bytes of the save that
+	/// it loaded.
+	bool _stampsDueAfterLoad {false};
 	/// The moon's wait is kept from land to land, as the game keeps it
 	int32_t _moonWait {1};
 	std::vector<Remark> _remarks;
