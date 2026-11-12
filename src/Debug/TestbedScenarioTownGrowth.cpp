@@ -661,6 +661,25 @@ void openblack::testbed_scenarios::AddTownGrowthScenarios(std::vector<Scenario>&
 	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {52.0f, 0.0f}, .yawDegrees = 0.0f}},
 	});
 
+	// Villagers that watch a thing which goes from the world
+	all.push_back({
+	    .id = "villagers.reaction_thing_removed",
+	    .name = "Villagers watching a thing that goes",
+	    .facet = Facet::Objects,
+	    .description = "A cart in the middle of open land makes a reaction to look at it, of the kind a miracle makes. "
+	                   "Three villagers stand in a line east of it, 4, 10 and 16 metres away. Six seconds in, the cart "
+	                   "goes from the world.",
+	    .expected = "Each villager takes the reaction up and turns to watch the cart. When the cart goes, each villager "
+	                "does not watch it any more, at once. The villagers have no town, so each starts as a vagrant.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-4.0f, -6.0f}, {20.0f, 6.0f}}, .distance = 0.5f},
+	    .objects = {{.type = MobileObjectInfo::Cart, .offset = {0.0f, 0.0f}, .reaction = Reaction::LookAtSpell},
+	                {.type = VillagerInfo::CelticFarmerMale, .offset = {4.0f, 0.0f}, .yawDegrees = 0.0f},
+	                {.type = VillagerInfo::CelticForesterMale, .offset = {10.0f, 0.0f}, .yawDegrees = 0.0f},
+	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {16.0f, 0.0f}, .yawDegrees = 0.0f}},
+	    .commands = {{.kind = Command::Kind::RemoveObject, .delaySeconds = 6.0f, .object = 0}},
+	});
+
 	// A villager under the control of a script takes up no reaction until the script releases it
 	all.push_back({
 	    .id = "villagers.script_release_reacts",

@@ -99,10 +99,15 @@ public:
 	/// Loads a mind file over the mind of the creature at once, as for a creature that a script makes from a file. The
 	/// creature keeps its examples and adds the examples of the file. The help gives the message of the new stage.
 	virtual void TakeUpMindFile(entt::entity /*creature*/, std::shared_ptr<const creaturemind::MindFileData> /*file*/) {}
-	/// Forgets everything learnt: the desires start again as the species' do, with no opinions or examples
 	/// Gives a new creature its desires, its traits and its learning at once, as the creature is made. The draws of the
-	/// random numbers then come in the order of the game
+	/// random numbers then come in the order of the game. A creature made for a mind file then reads the file.
 	virtual void StartMind(entt::entity /*creature*/) {}
+	/// Gives a new creature its desires, its traits and its learning, as StartMind does, but does not read its mind file
+	virtual void SetUpNewMind(entt::entity /*creature*/) {}
+	/// A new creature made for a mind file reads the file now, over the mind that it got. The game reads the file after
+	/// it made the creature.
+	virtual void TakeUpPendingFile(entt::entity /*creature*/) {}
+	/// Forgets everything learnt: the desires start again as the species' do, with no opinions or examples
 	virtual void ClearLearning(entt::entity creature) = 0;
 	/// Creatures that can see the point watch an ordinary skill practised (by its row in the game's table), or a miracle
 	/// cast
