@@ -1338,6 +1338,11 @@ std::optional<double> Runner::ReadCheck(const checks::Check& check) const
 	}
 	case checks::Quantity::HandShown:
 	{
+		const auto shown = _stage != nullptr ? _stage->IsHandShown() : std::nullopt;
+		return shown.has_value() ? std::optional(*shown ? 1.0 : 0.0) : std::nullopt;
+	}
+	case checks::Quantity::HandShown:
+	{
 		if (!Locator::cinematicDirectorSystem::has_value())
 		{
 			return std::nullopt;

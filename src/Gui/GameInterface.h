@@ -169,6 +169,9 @@ public:
 	{
 		return _menu->IsOpen() || _skipBox->IsActive() || _endGameBox->IsOpen() || _landInfoBox->IsActive();
 	}
+	/// Whether the front end's pointer shows: a box of the front end takes the mouse. The player's hand is away while it
+	/// shows, also in the temple.
+	[[nodiscard]] bool FrontEndPointerOn() const;
 	/// Whether the active box has a background: the menu and its questions, the start-of-game question, the new
 	/// player's box, the save game room's boxes, or the tattoo editor in its own frame
 	[[nodiscard]] bool IsBoxWithBackgroundActive() const noexcept

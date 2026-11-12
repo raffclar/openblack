@@ -71,6 +71,7 @@
 #include "Gui/ChatControlsRules.h"
 #include "Gui/CinemaBars.h"
 #include "Gui/CinemaHides.h"
+#include "Gui/FrontEndPointerRules.h"
 #include "Gui/GameTexts.h"
 #include "Gui/GlyphTexture.h"
 #include "Gui/IncomingMessageStripRules.h"
@@ -2057,7 +2058,9 @@ void GameInterface::Draw(glm::u16vec2 resolution, glm::ivec2 mouse, uint32_t mil
 			_menu->Draw(_painter);
 		}
 		_skipBox->Draw(_painter);
-		if (menuOpen || overDebugWindow)
+		// The front end's pointer shows while a box takes the mouse: under a box, or over the chat, the custom music
+		// controls, the incoming message or the buttons of the story history
+		if (FrontEndPointerOn() || overDebugWindow)
 		{
 			_painter.DrawPointer(_pointerCanvas, mouse, milliseconds);
 		}
@@ -2239,6 +2242,16 @@ bool GameInterface::DialogBoxOpen() const
 	return (_menu->IsVisible() && _menu->IsOpen()) || _skipBox->IsActive() || _tattooEditor->IsOpen() ||
 	       _newPlayerBox->IsActive() || _skirmishBox->IsActive() || _saveGameBoxes->IsActive() ||
 	       _staffQuestionBox->IsActive() || _multiplayerBoxes->IsActive() || _endGameBox->IsOpen() || _landInfoBox->IsActive();
+}
+
+bool GameInterface::FrontEndPointerOn() const
+{
+	const auto mouseButtonDown = (SDL_GetMouseState(nullptr, nullptr) & (SDL_BUTTON_LMASK | SDL_BUTTON_RMASK)) != 0;
+	return front_end_pointer::IsOn({
+	    .boxUp = DialogBoxOpen(),
+	    .controlsTakeMouse = _chatControls->WantsMouse(mouseButtonDown) || _musicControls->WantsMouse(mouseButtonDown) ||
+	                         _incomingMessages->WantsMouse(mouseButtonDown) || _storyHistoryBox->WantsMouse(),
+	});
 }
 
 void GameInterface::DrawDialogue(glm::u16vec2 resolution, int barPixels)

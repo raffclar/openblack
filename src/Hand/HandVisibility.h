@@ -15,7 +15,8 @@ namespace openblack::hand_visibility
 /// What decides whether the player's hand is out
 struct ShowFacts
 {
-	/// A dialog shows its own pointer
+	/// A box of the front end takes the mouse and shows the front end's pointer, in the land and in the temple (see
+	/// gui::front_end_pointer)
 	bool dialogOpen {false};
 	/// The interface is active: no script's cinema bars have taken it
 	bool interfaceActive {true};

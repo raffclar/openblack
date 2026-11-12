@@ -63,6 +63,8 @@ enum class Quantity : uint8_t
 	RewardChestsInATown,
 	/// The kind of reaction, by its number, that the scenario's creature at the index keeps now; 0 when it keeps none
 	CreatureReaction,
+	/// 1 when the game draws the player's hand in this frame, else 0
+	HandShown,
 	/// 1 when the player's hand is out, else 0. A dialog and the cinema bars of a script put the hand away.
 	HandShown,
 	/// 1 when the hand of the player holds the rope of the tied leash, else 0
