@@ -539,9 +539,8 @@ bool CreatureMindSystem::HasPlayed(entt::entity creature)
 	}
 	// A creature with no plan, or with a plan that is not valid, has played, also while steps of its agenda are left
 	const bool planValid = mind->planner.current.has_value() && IsPlanValid(*mind->planner.current);
-	// The steps of a knock-out end before the creature is up when it gets up with no rest
-	const auto* knockedOut = registry.TryGet<const CreatureKnockedOut>(creature);
-	const bool outCold = knockedOut != nullptr && knockedOut->steps != CreatureKnockedOut::Steps::Over;
+	// The knock-out ends with its steps. With no rest, it ends before the body is up.
+	const bool outCold = registry.AllOf<CreatureKnockedOut>(creature);
 	return creature_script_play::Played(mind->idle, planValid, outCold);
 }
 

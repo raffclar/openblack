@@ -82,7 +82,7 @@ struct DecisionState
 	bool planForced {false};
 	/// The creature has a reaction
 	bool reacting {false};
-	/// The creature fainted, and did not get up from that faint or have a turn with no plan since
+	/// The creature fainted, and since then did not come back to life and did not have a turn with no plan
 	bool fainted {false};
 };
 /// With no agenda that runs, the creature stops the reaction that it has before it decides
