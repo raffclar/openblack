@@ -1,0 +1,169 @@
+diff --git a/bgfx/src/renderer_webgpu.cpp b/bgfx/src/renderer_webgpu.cpp
+index d05284d..be77540 100644
+--- a/bgfx/src/renderer_webgpu.cpp
++++ b/bgfx/src/renderer_webgpu.cpp
+@@ -15,6 +15,7 @@
+ #		include <Cocoa/Cocoa.h>
+ #	endif // BX_PLATFORM_OSX
+ #	include <bx/pixelformat.h>
++#	include <string.h>
+ #	include "renderer_webgpu.h"
+ 
+ namespace bgfx { namespace wgpu
+@@ -4579,6 +4580,48 @@ WGPU_IMPORT
+ 		return s_renderWGPU->m_cmd.m_currentFrameInFlight;
+ 	}
+ 
++	const uint8_t* ChunkedScratchBufferWGPU::findData(WGPUBuffer _buffer) const
++	{
++		for (const ChunkWGPU& chunk : m_chunks)
++		{
++			if (chunk.buffer == _buffer)
++			{
++				return chunk.data;
++			}
++		}
++
++		return NULL;
++	}
++
++	// Compares 8 bytes at a time. The byte loop of memCmp costs more for the uniform blocks of each draw.
++	static bool sameBytes(const uint8_t* _a, const uint8_t* _b, uint32_t _size)
++	{
++		uint32_t ii = 0;
++
++		for (; ii + 8 <= _size; ii += 8)
++		{
++			uint64_t aa;
++			uint64_t bb;
++			memcpy(&aa, &_a[ii], 8);
++			memcpy(&bb, &_b[ii], 8);
++
++			if (aa != bb)
++			{
++				return false;
++			}
++		}
++
++		for (; ii < _size; ++ii)
++		{
++			if (_a[ii] != _b[ii])
++			{
++				return false;
++			}
++		}
++
++		return true;
++	}
++
+ 	static void writeBufferAligned(WGPUBuffer _buffer, uint32_t _offset, const void* _data, uint32_t _size)
+ 	{
+ 		const uint32_t alignedSize = bx::alignUp(_size, 4);
+@@ -7622,6 +7665,32 @@ WGPU_IMPORT
+ 		BindState bindState;
+ 		bx::memSet(&bindState, 0, sizeof(bindState) );
+ 
++		// The last uniform block that a draw wrote in this frame. All blocks of the frame stay in the scratch
++		// buffer until the end of the frame, thus a later draw of any view can use the block again.
++		struct UniformReuse
++		{
++			ChunkedScratchBufferOffset sbo;
++			const uint8_t* vsData;
++			const uint8_t* fsData;
++			uint32_t       vsSize;
++			uint32_t       fsSize;
++			bool           valid;
++		};
++
++		UniformReuse lastUniforms;
++		bx::memSet(&lastUniforms, 0, sizeof(lastUniforms) );
++
++		// The bind group and the offsets that the current render pass has.
++		struct PassBind
++		{
++			WGPUBindGroup bindGroup;
++			uint32_t      offsets[2];
++			bool          valid;
++		};
++
++		PassBind passBind;
++		bx::memSet(&passBind, 0, sizeof(passBind) );
++
+ 		Profiler<TimerQueryWGPU> profiler(
+ 			  _render
+ 			, m_gpuTimer
+@@ -7890,6 +7959,7 @@ WGPU_IMPORT
+ 						renderPassEncoder = WGPU_CHECK(wgpuCommandEncoderBeginRenderPass(cmdEncoder, &renderPassDesc) );
+ 						currentPipeline   = NULL;
+ 						blendFactor       = 0;
++						passBind.valid    = false;
+ 
+ 						currentState.m_stencil = UINT64_MAX;
+ 
+@@ -8214,7 +8284,29 @@ WGPU_IMPORT
+ 				ChunkedScratchBufferOffset sbo;
+ 				const uint32_t vsSize = program.m_vsh->m_size;
+ 				const uint32_t fsSize = NULL != program.m_fsh ? program.m_fsh->m_size : 0;
+-				m_uniformScratchBuffer.write(sbo, m_vsScratch, vsSize, m_fsScratch, fsSize);
++
++				// A draw with the same uniform values as the last written block uses that block again. Thus the
++				// frame writes fewer bytes to the device, and the next draws keep the same bind group offsets.
++				if (lastUniforms.valid
++				&&  lastUniforms.vsSize == vsSize
++				&&  lastUniforms.fsSize == fsSize
++				&&  sameBytes(lastUniforms.vsData, m_vsScratch, vsSize)
++				&&  sameBytes(lastUniforms.fsData, m_fsScratch, fsSize) )
++				{
++					sbo = lastUniforms.sbo;
++				}
++				else
++				{
++					m_uniformScratchBuffer.write(sbo, m_vsScratch, vsSize, m_fsScratch, fsSize);
++
++					const uint8_t* chunkData = m_uniformScratchBuffer.findData(sbo.buffer);
++					lastUniforms.valid  = NULL != chunkData;
++					lastUniforms.sbo    = sbo;
++					lastUniforms.vsData = NULL != chunkData ? &chunkData[sbo.offsets[0] ] : NULL;
++					lastUniforms.fsData = NULL != chunkData ? &chunkData[sbo.offsets[1] ] : NULL;
++					lastUniforms.vsSize = vsSize;
++					lastUniforms.fsSize = fsSize;
++				}
+ 
+ 				const BindGroup* bindGroupCached;
+ 				if (bindState.valid
+@@ -8265,7 +8357,20 @@ WGPU_IMPORT
+ 					bindState.bindGroup = bindGroupCached;
+ 				}
+ 
+-				WGPU_CHECK(wgpuRenderPassEncoderSetBindGroup(renderPassEncoder, 0, bindGroupCached->bindGroup, bindGroupCached->numOffsets, sbo.offsets) );
++				// The pass keeps its bind group until the next set. Thus a draw with the same bind group and offsets
++				// as the last draw of the pass does not set it again.
++				if (!passBind.valid
++				||  passBind.bindGroup  != bindGroupCached->bindGroup
++				||  passBind.offsets[0] != sbo.offsets[0]
++				||  passBind.offsets[1] != sbo.offsets[1])
++				{
++					WGPU_CHECK(wgpuRenderPassEncoderSetBindGroup(renderPassEncoder, 0, bindGroupCached->bindGroup, bindGroupCached->numOffsets, sbo.offsets) );
++
++					passBind.valid      = true;
++					passBind.bindGroup  = bindGroupCached->bindGroup;
++					passBind.offsets[0] = sbo.offsets[0];
++					passBind.offsets[1] = sbo.offsets[1];
++				}
+ 
+ 				if (0 != changedStencil)
+ 				{
+diff --git a/bgfx/src/renderer_webgpu.h b/bgfx/src/renderer_webgpu.h
+index 4a61a6d..16bb1e0 100644
+--- a/bgfx/src/renderer_webgpu.h
++++ b/bgfx/src/renderer_webgpu.h
+@@ -445,6 +445,9 @@ namespace wgpu {
+ 		void flushChunk(ChunkWGPU& _chunk, uint32_t _size);
+ 		uint32_t currentFrameInFlight() const;
+ 
++		// The memory copy of the chunk that has the buffer, or NULL.
++		const uint8_t* findData(WGPUBuffer _buffer) const;
++
+ 		WGPUBufferUsage m_usage;
+ 	};
+ 
