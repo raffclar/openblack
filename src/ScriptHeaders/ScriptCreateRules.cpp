@@ -110,13 +110,17 @@ bool KeepsScriptHeight(ObjectType type, uint32_t subtype, bool rockKind)
 	return IsFixedInPhysics(subtype) || rockKind;
 }
 
-std::optional<ScriptRockStart> RockStartOf(ObjectType type, uint32_t subtype, bool rockKind)
+std::optional<ScriptPhysicsStart> PhysicsStartOf(ObjectType type, uint32_t subtype, bool rockKind)
 {
+	if (type == ObjectType::OneShotSpell)
+	{
+		return ScriptPhysicsStart {.settlesOnLand = true};
+	}
 	if ((type != ObjectType::MobileStatic && type != ObjectType::Rock) || !rockKind || IsFixedInPhysics(subtype))
 	{
 		return std::nullopt;
 	}
-	return ScriptRockStart {.settlesOnLand = type == ObjectType::Rock};
+	return ScriptPhysicsStart {.settlesOnLand = type == ObjectType::Rock};
 }
 
 bool IgnoresReactions(ObjectType type)

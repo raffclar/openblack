@@ -303,16 +303,16 @@ bool IsRockKindRow(uint32_t subtype)
 	return script::create_rules::IsRow(subtype, rows.size()) && rows.at(subtype).mobileType == MobileStaticInfo::Rock;
 }
 
-/// A rock that a script made starts in the physics at rest. The physics puts it on the land when the start asks for
+/// A thing that a script made starts in the physics at rest. The physics puts it on the land when the start asks for
 /// it, and then lifts it clear of the things under it. A rock above the land falls in the next turns.
-void StartScriptRock(entt::entity rock, const script::create_rules::ScriptRockStart& start)
+void StartScriptPhysics(entt::entity thing, const script::create_rules::ScriptPhysicsStart& start)
 {
-	if (rock == entt::null || !Locator::dynamicsSystem::has_value())
+	if (thing == entt::null || !Locator::dynamicsSystem::has_value())
 	{
 		return;
 	}
 	auto& dynamics = Locator::dynamicsSystem::value();
-	const auto started = dynamics.InitialisePhysics(rock, {.add = true});
+	const auto started = dynamics.InitialisePhysics(thing, {.add = true});
 	if (started.entry == nullptr)
 	{
 		return;
@@ -383,9 +383,9 @@ entt::entity CreateScriptObject(const ObjectType type, uint32_t subtype, const g
 		{
 			MarkGroundPrint(made);
 		}
-		if (const auto start = script::create_rules::RockStartOf(type, subtype, rockKind))
+		if (const auto start = script::create_rules::PhysicsStartOf(type, subtype, rockKind))
 		{
-			StartScriptRock(made, *start);
+			StartScriptPhysics(made, *start);
 		}
 		return made;
 	}
@@ -547,9 +547,17 @@ entt::entity CreateScriptObject(const ObjectType type, uint32_t subtype, const g
 		return Locator::resourceStoreSystem::value().MakePile(*resource, position, 1);
 	}
 	case ObjectType::OneShotSpell:
-		// A globe of a seed at its plain miracle, lying on the ground
-		return Locator::magicSystem::value().CreateOneOffSeed(OnGround(position), static_cast<SpellSeedType>(subtype),
-		                                                      magic::k_BasePowerUpLevel, 1.0f);
+	{
+		// A globe of a seed at its plain miracle, lying on the ground. The globe starts in the physics, and the physics
+		// keeps it on the land. A height that the script gives later thus does not lift the globe.
+		const auto globe = Locator::magicSystem::value().CreateOneOffSeed(
+		    OnGround(position), static_cast<SpellSeedType>(subtype), magic::k_BasePowerUpLevel, 1.0f);
+		if (const auto start = script::create_rules::PhysicsStartOf(type, subtype, false))
+		{
+			StartScriptPhysics(globe, *start);
+		}
+		return globe;
+	}
 	case ObjectType::OneShotSpellInHand:
 		return CreateScriptSeedInHand(subtype);
 	case ObjectType::SpellDispenser:

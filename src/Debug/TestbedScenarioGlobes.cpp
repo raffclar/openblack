@@ -637,11 +637,12 @@ void AddLandTwoGifts(std::vector<Scenario>& all)
 	    .facet = Facet::Miracles,
 	    .description = "The second land of the story. One second in, the land's script GiveOneShots runs as it runs when "
 	                   "Khazar shows the player his scroll. It makes three food, three wood, three water and two heal "
-	                   "globes within 5 metres of its place, and it sets the height of each globe to 75. The camera "
-	                   "stands about 140 metres away and looks at a point 40 metres over the place.",
-	    .expected = "The eleven globes appear at once, 75 metres over the land under each of them, and they stay there. "
-	                "The inspector query game_find_objects for one-off spell seeds gives each globe a height 75 metres "
-	                "over the land at its place.",
+	                   "globes within 5 metres of its place, and it sets the height of each globe to 75. Each globe starts "
+	                   "in the physics, so the height does not lift it. The camera stands about 140 metres away and "
+	                   "looks at a point 40 metres over the place.",
+	    .expected = "The eleven globes appear at once on the land near the place, and they stay there. They do not "
+	                "float in the air. The inspector query game_find_objects for one-off spell seeds gives each globe a "
+	                "height near the land at its place.",
 	    .environment = {.land = Land::Story, .storyLand = "Land2.txt", .dispenserGrid = false},
 	    .framing = {.shot = Shot::Placed, .eye = {k_Eye.x, 25.0f, k_Eye.y}, .look = {k_GiftPlace.x, 40.0f, k_GiftPlace.y}},
 	    .commands = {{.kind = Command::Kind::RunScript, .delaySeconds = 1.0f, .script = "GiveOneShots"}},
