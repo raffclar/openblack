@@ -9,6 +9,7 @@
 
 #include <gtest/gtest.h>
 
+#include "Gui/FrontEndPointerRules.h"
 #include "Hand/HandVisibility.h"
 
 using openblack::hand_visibility::IsShown;
@@ -59,6 +60,37 @@ TEST(HandVisibility, TheHandComesBackWhenTheOnlineFrontEndCloses)
 {
 	// The game starts on its land, out of the temple, with the hand out
 	EXPECT_TRUE(IsShown({.dialogOpen = false, .interfaceActive = true, .insideTemple = false, .onlineFrontEnd = false}));
+}
+
+TEST(FrontEndPointer, ABoxTakesTheMouseForAllTheTimeThatItShows)
+{
+	using openblack::gui::front_end_pointer::IsOn;
+	static_assert(!IsOn({}));
+	// The tattoo editor, a question, the save name box, the staff question and the new player's box are boxes
+	EXPECT_TRUE(IsOn({.boxUp = true, .controlsTakeMouse = false}));
+}
+
+TEST(FrontEndPointer, ControlsWithNoBoxTakeTheMouseOnlyUnderThePointer)
+{
+	using openblack::gui::front_end_pointer::IsOn;
+	// The chat, the custom music controls, the incoming message and the story history's buttons
+	EXPECT_TRUE(IsOn({.boxUp = false, .controlsTakeMouse = true}));
+	EXPECT_FALSE(IsOn({.boxUp = false, .controlsTakeMouse = false}));
+}
+
+TEST(HandVisibility, TheFrontEndsPointerPutsItAwayInTheLandAndInTheTemple)
+{
+	using openblack::gui::front_end_pointer::IsOn;
+	for (const bool insideTemple : {false, true})
+	{
+		// Under the tattoo editor over the cave, or a question of the save game room
+		EXPECT_FALSE(IsShown({.dialogOpen = IsOn({.boxUp = true}), .interfaceActive = true, .insideTemple = insideTemple}));
+		// With the pointer over a button of the story history, or over the incoming message
+		EXPECT_FALSE(
+		    IsShown({.dialogOpen = IsOn({.controlsTakeMouse = true}), .interfaceActive = true, .insideTemple = insideTemple}));
+		// The pointer moves off the buttons: the hand comes back
+		EXPECT_TRUE(IsShown({.dialogOpen = IsOn({}), .interfaceActive = true, .insideTemple = insideTemple}));
+	}
 }
 
 TEST(HandVisibility, TheHandTakesPressesInPlay)

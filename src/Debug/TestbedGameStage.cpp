@@ -340,6 +340,12 @@ void TestbedGameStage::RequestQuit()
 	}
 }
 
+std::optional<bool> TestbedGameStage::IsHandShown() const
+{
+	const auto* game = Game::Instance();
+	return game != nullptr ? std::optional(game->IsHandDrawn()) : std::nullopt;
+}
+
 void TestbedGameStage::ReportChecks(checks::Report report, bool quit)
 {
 	auto* game = Game::Instance();

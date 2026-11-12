@@ -2422,7 +2422,7 @@ bool Game::IsHandDrawn() const
 {
 	const bool temple = Locator::temple::has_value();
 	return hand_visibility::IsShown({
-	    .dialogOpen = Locator::gameInterface::has_value() && Locator::gameInterface::value().IsDialogOpen(),
+	    .dialogOpen = Locator::gameInterface::has_value() && Locator::gameInterface::value().FrontEndPointerOn(),
 	    .interfaceActive = Locator::cinematicDirectorSystem::value().IsInterfaceActive(),
 	    .insideTemple = temple && Locator::temple::value().Active(),
 	    .onlineFrontEnd = temple && Locator::temple::value().IsMultiplayerFrontEnd(),

@@ -116,6 +116,7 @@ std::vector<Scenario> Build()
 	AddMultiplayerFrontEndScenarios(all);
 	AddOtherGodScenarios(all);
 	AddJoinOnlineScenarios(all);
+	AddFrontEndHandScenarios(all);
 	AddTutorialScenarios(all);
 	AddCreatureDanceScenarios(all);
 	AddCreatureLearningScenarios(all);

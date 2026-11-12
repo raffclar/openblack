@@ -1328,6 +1328,11 @@ std::optional<double> Runner::ReadCheck(const checks::Check& check) const
 		const auto* state = registry.TryGet<const ecs::components::LivingReaction>(*creature);
 		return state != nullptr && state->reaction != 0 ? static_cast<double>(state->type) : 0.0;
 	}
+	case checks::Quantity::HandShown:
+	{
+		const auto shown = _stage != nullptr ? _stage->IsHandShown() : std::nullopt;
+		return shown.has_value() ? std::optional(*shown ? 1.0 : 0.0) : std::nullopt;
+	}
 	}
 	return std::nullopt;
 }

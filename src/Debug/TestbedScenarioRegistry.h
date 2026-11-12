@@ -1647,6 +1647,8 @@ void AddMultiplayerFrontEndScenarios(std::vector<Scenario>& all);
 void AddOtherGodScenarios(std::vector<Scenario>& all);
 /// The Join Online Game button of the browser page
 void AddJoinOnlineScenarios(std::vector<Scenario>& all);
+/// The hand under the boxes of the front end: away while a box takes the mouse
+void AddFrontEndHandScenarios(std::vector<Scenario>& all);
 /// The sounds of a village by day and by night: its buildings, its foresters and its animals
 void AddWorldSoundScenarios(std::vector<Scenario>& all);
 /// A town given miracles by the debug tool, and its worship site going up
