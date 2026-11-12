@@ -378,3 +378,14 @@ TEST(MiracleVisuals, TheGlobeIsSortedFromItsMiddleMovedTowardsTheCameraByItsRadi
 	// A camera in the middle of the globe does not move the point
 	EXPECT_EQ(GlobeSortPoint(middle, middle, 2.0f), middle);
 }
+
+TEST(MiracleVisuals, TheGlobeDomeAddsItsTextureWritesItsDepthAndShowsOnlyItsFront)
+{
+	namespace render_modes = openblack::graphics::render_modes;
+	// The dome's material is alpha textured and shows both of its faces in the file
+	const auto mode = render_modes::Changed(render_modes::Mode::AlphaTextured, visuals::k_GlobeMaterials);
+	EXPECT_EQ(mode, render_modes::Mode::AlphaTexturedAlphaAdditive);
+	// It keeps the depth of the texels with no alpha
+	EXPECT_TRUE(render_modes::KeepsTexelsWithNoAlpha(render_modes::Desc(mode)));
+	EXPECT_FALSE(render_modes::DrawsBothSides(render_modes::ChangedCull(5, visuals::k_GlobeMaterials)));
+}

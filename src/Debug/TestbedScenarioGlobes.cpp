@@ -259,6 +259,22 @@ void AddGlobes(std::vector<Scenario>& all)
 	    .dispensers = GlobeRow({MagicType::Fireball}, 25.0f),
 	});
 
+	all.push_back({
+	    .id = "miracles.globe_dome_near",
+	    .name = "The dome of a globe very near the camera",
+	    .facet = Facet::Miracles,
+	    .description = "A heal globe floats very near the camera, and a forest globe and an oak stand behind it. Turn "
+	                   "the camera slowly round the near globe.",
+	    .expected = "The dome shows only its front faces. The inside of the dome does not add a second, brighter band "
+	                "near its edge. Where the texture of the dome has no alpha, the dome adds nothing, but it writes its "
+	                "depth there. The forest globe and the oak show through the dome.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 5.5f, 18.5f}, .look = {0.0f, 4.5f, 25.0f}},
+	    .objects = {{.type = TreeInfo::Oak, .offset = {6.0f, 40.0f}}},
+	    .dispensers = {{.type = MagicType::Heal, .offset = {0.0f, 25.0f}, .bubbleHeight = 5.0f},
+	                   {.type = MagicType::Forest, .offset = {-2.0f, 32.0f}, .bubbleHeight = 5.0f}},
+	});
+
 	auto extreme = GlobeRow({MagicType::Fireball, MagicType::FireballPowerUpOne, MagicType::FireballPowerUpTwo}, 34.0f);
 	for (auto& row :
 	     {GlobeRow({MagicType::LightningBolt, MagicType::LightningBoltPowerUpOne, MagicType::LightningBoltPowerUpTwo}, 27.0f),

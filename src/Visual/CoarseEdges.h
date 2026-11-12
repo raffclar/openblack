@@ -80,6 +80,24 @@ struct PaintRequest
 /// block that came later in the requests goes first. A block that comes again keeps the place of its first request.
 [[nodiscard]] std::vector<size_t> PaintOrder(std::span<const PaintRequest> requests, glm::vec3 camera);
 
+/// The blocks that paint in a frame, in the order of their requests.
+///
+/// The game paints a block again only when the land draws the block with its own texture after a request for a paint.
+/// Thus a block that the land draws with its coarse texture alone keeps all of its coarse texture until the land draws
+/// it nearer. A block with no paint yet paints at once, because the land paints all blocks at the load.
+///
+/// The arguments are as follows:
+/// - waiting: the blocks with a request for a paint, by their index in the land's blocks.
+/// - drawn: the blocks that the land draws with their own textures in this frame, in the order of the draws.
+/// - painted: whether a block got a paint before.
+/// - busy: whether a block must wait more, for example while the other threads bake its shadows.
+///
+/// The result has the blocks with no paint first, in the order of their indices. The blocks that the land draws come
+/// after them, in the order of the draws.
+[[nodiscard]] std::vector<size_t> PaintsDue(const std::vector<bool>& waiting, std::span<const size_t> drawn,
+                                            const std::function<bool(size_t)>& painted,
+                                            const std::function<bool(size_t)>& busy);
+
 /// The paint of a place of the map in a frame
 struct FramePaint
 {
@@ -115,6 +133,17 @@ using CellLevels = std::function<Levels(glm::ivec2 block, Cell cell)>;
 /// The texel of the texture that keeps a cell round the edge of a block. The texture keeps a corner cell only in the run
 /// of its side along z.
 [[nodiscard]] glm::ivec2 EdgeTexel(glm::ivec2 block, Cell cell, int32_t samples);
+
+/// The texture that keeps the blocks' coarse textures as their last paints made them: a square of 64 x 64 texels for
+/// each place of the map, a column of squares for each z and a row of squares for each x. A pass on the GPU writes the
+/// squares of the blocks that paint, with the cells round their edges from the edges texture (fs_land_coarse_textures).
+inline constexpr uint16_t k_CoarseTexturesSide = k_SideTexels * k_BlocksPerSide;
+
+/// The texel of the coarse textures that keeps a cell of a block's coarse texture
+[[nodiscard]] constexpr glm::ivec2 CoarseTexel(glm::ivec2 block, Cell cell)
+{
+	return {(block.y * k_SideTexels) + cell.x, (block.x * k_SideTexels) + cell.y};
+}
 
 /// Where the land shader takes a block's coarse texture from
 enum class CoarseTexture : uint8_t

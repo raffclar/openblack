@@ -150,6 +150,7 @@ TEST(TestbedScenarios, CoversTheCreatureFeatures)
 	                       "light.snow_repaint_melt",
 	                       "light.coarse_edges_snow",
 	                       "light.coarse_first_paint",
+	                       "light.coarse_repaint_on_use",
 	                       "movement.course",
 	                       "movement.route_obstacles",
 	                       "movement.footstep_dust",

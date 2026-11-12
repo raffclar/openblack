@@ -524,10 +524,10 @@ void Renderer::DrawPassLand(const DrawSceneDesc& desc, const ScenePass& pass) co
 			terrainShader->SetUniformValue("u_smallBump", &u_smallBump);
 			// The corners of the blocks that morph or cross-fade, as the game works them out this frame
 			terrainShader->SetTextureSampler("s8_landCorners", 8, GetLandCorners());
-			// The edges of the blocks' coarse textures, as the paints of the blocks mixed them
-			if (const auto* coarseEdges = GetCoarseEdges())
+			// The blocks' coarse textures, as their last paints made them
+			if (const auto* coarseTextures = GetCoarseTextures())
 			{
-				terrainShader->SetTextureSampler("s11_coarseEdges", 11, *coarseEdges);
+				terrainShader->SetTextureSampler("s11_coarseTextures", 11, *coarseTextures);
 			}
 			// Without pages of its own the land binds its block textures in their place, never read
 			const auto* coarsePages = island.GetCoarsePages();
@@ -595,8 +595,8 @@ void Renderer::DrawPassLand(const DrawSceneDesc& desc, const ScenePass& pass) co
 			}
 			const glm::vec4 mapPositionAndSize = glm::vec4(block.GetMapPosition(), 160.0f, 160.0f);
 			blockPositionUniform.Set(&mapPositionAndSize);
-			// w: 1 when the edges of the block's coarse texture come from the paints of the blocks
-			const bool coarseEdges = GetCoarseEdges() != nullptr && CoarseEdgesPainted(block.GetBlockPosition());
+			// w: 1 when the block's coarse texture comes from its last paint
+			const bool coarseEdges = GetCoarseTextures() != nullptr && CoarseEdgesPainted(block.GetBlockPosition());
 			const glm::vec4 u_block {static_cast<float>(index), static_cast<float>(detail.morph),
 			                         static_cast<float>(detail.texture), coarseEdges ? 1.0f : 0.0f};
 			blockUniform.Set(&u_block);
@@ -662,7 +662,9 @@ void Renderer::DrawPassLand(const DrawSceneDesc& desc, const ScenePass& pass) co
 			if (!pagesOnly)
 			{
 				std::vector<glm::ivec2> drawnWithTexture;
+				std::vector<size_t> drawnIndices;
 				drawnWithTexture.reserve(order.size());
+				drawnIndices.reserve(order.size());
 				for (const auto& entry : order)
 				{
 					const auto index = entry.second;
@@ -671,12 +673,13 @@ void Renderer::DrawPassLand(const DrawSceneDesc& desc, const ScenePass& pass) co
 					if (!coarseAlone)
 					{
 						drawnWithTexture.push_back(blocks[index].GetBlockPosition());
+						drawnIndices.push_back(index);
 					}
 				}
 				paintedSnow = PaintLandSnow(drawnWithTexture);
 				// The paints of this frame also paint the blocks' coarse textures, in the order from the game's camera
 				PaintCoarseEdges(Locator::camera::has_value() ? Locator::camera::value().GetOrigin() : desc.camera->GetOrigin(),
-				                 paintedSnow);
+				                 drawnIndices, paintedSnow);
 			}
 			setTerrainUniforms();
 			for (const auto& entry : order)

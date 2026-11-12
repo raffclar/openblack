@@ -2,7 +2,7 @@ $input v_texcoord0, v_texcoord1, v_lightColour, v_smallBumpFade, v_shadowCoord, 
 
 #include <bgfx_shader.sh>
 
-// The land's shader reads no snow depth grid, and takes its stage for the coarse edges
+// The land's shader reads no snow depth grid, and takes its stage for the coarse textures
 #define SNOW_NO_DEPTH_GRID
 #include "snow.sh"
 #include "land_paint.sh"
@@ -19,15 +19,15 @@ SAMPLER2D(s4_groundShadowData, 4);
 #include "ground_shadow.sh"
 // The ring an open vortex lays over the land around its hole
 SAMPLER2D(s13_vortexRing, 13);
-// The cells round the edges of the blocks' coarse textures, as the paints of the blocks mixed them
-SAMPLER2D(s11_coarseEdges, 11);
-#define COARSE_EDGES s11_coarseEdges
-#include "coarse_edges.sh"
+// The blocks' coarse textures, as their last paints made them
+SAMPLER2D(s11_coarseTextures, 11);
+#define COARSE_TEXTURES s11_coarseTextures
+#include "coarse_textures.sh"
 // The coarse texture pages the landscape file keeps, a layer each: the coarse land (detail level 0) draws from them
 SAMPLER2DARRAY(s15_coarsePages, 15);
 
 // x: the block's layer of s0_blockTextures, z: its texture (0 full, 1 the coarse one faded in over the full one, 2
-// coarse), w: 1 when the edges of its coarse texture come from the paints of the blocks (s11_coarseEdges)
+// coarse), w: 1 when its coarse texture comes from its last paint (s11_coarseTextures)
 uniform vec4 u_block;
 // The layers of the neighbouring blocks: x the block at x - 1, y at z - 1, z at z + 1, w at x + 1; -1 where there is
 // none
@@ -75,18 +75,19 @@ vec4 PaintedBlock(vec2 blockUv, vec2 islandUv)
 }
 
 // A texel of the block's coarse texture, in 4-bit levels, coarse.x along z and coarse.y along x (0 to 63). The two
-// texels at each edge are shared with the neighbouring block's. After the block's first paint, the cells round the edges
-// come from the paints of the blocks, which mix each shared edge in the order of the paints. Before it, they are the two
-// blocks' edge samples, averaged: along z first, then along x with the neighbour's own sample.
+// texels at each edge are shared with the neighbouring block's. After the block's first paint, the coarse texture is as
+// the last paint of the block made it, and the paints of the blocks mix each shared edge in the order of the paints.
+// Before it, the cells are the samples of the block's texture now, and the edges are the two blocks' samples averaged:
+// along z first, then along x with the neighbour's own sample.
 vec4 CoarseLevels(vec2 coarse)
 {
 	vec2 origin = u_blockPositionAndSize.xy;
 	float samples = CoarseSamples();
 	vec2 cell = clamp(coarse, 1.0f, samples) - 1.0f;
 	vec4 levels = vec4_splat(0.0f);
-	if (u_block.w > 0.5f && OnCoarseEdge(cell, samples))
+	if (u_block.w > 0.5f)
 	{
-		levels = CoarseEdgeLevels(floor(origin / BLOCK_UNITS + 0.5f), cell, samples);
+		levels = CoarseTextureLevels(floor(origin / BLOCK_UNITS + 0.5f), cell);
 	}
 	else
 	{

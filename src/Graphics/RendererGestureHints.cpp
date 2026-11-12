@@ -232,7 +232,8 @@ void Renderer::DrawGestureHintSeeds(const DrawSceneDesc& desc) const
 		                      .cullBack = desc.cullBack,
 		                      .wireframe = desc.wireframe};
 	};
-	// The globe adds its mesh over what is behind by the texture's alpha, at the row's alpha. It writes its depth.
+	// The globe adds its mesh over what is behind by the texture's alpha, at the row's alpha. It writes its depth, also
+	// where the texture has no alpha. These are the materials that the game changes when it makes the globe.
 	const auto drawGlobe = [&](RenderPass pass, const glm::mat4& model, uint8_t alpha) {
 		if (!meshes.Contains(OneOffSpellSeed::k_MeshId.value()))
 		{
@@ -244,6 +245,8 @@ void Renderer::DrawGestureHintSeeds(const DrawSceneDesc& desc) const
 		submitDesc.modelMatrices = &model;
 		submitDesc.matrixCount = 1;
 		submitDesc.useMaterialCulling = true;
+		submitDesc.useMaterialBlending = true;
+		submitDesc.changedMaterials = magic::visuals::k_GlobeMaterials;
 		submitDesc.state = k_AddedState | BGFX_STATE_WRITE_Z;
 		submitDesc.tint = glm::vec4(1.0f, 1.0f, 1.0f, static_cast<float>(alpha) / k_ByteMax);
 		DrawMesh(*meshes.Handle(OneOffSpellSeed::k_MeshId.value()), submitDesc, std::numeric_limits<uint8_t>::max());
