@@ -386,4 +386,18 @@ void testbed_scenarios::AddHandNavigationScenarios(std::vector<Scenario>& all)
 	                 PointerTo({0.5f, 0.35f}, 1.0f),
 	                 {.kind = Kind::WideScreen, .delaySeconds = 1.0f, .value = 0}},
 	});
+	all.push_back({
+	    .id = "hand.hidden_under_cinema_bars",
+	    .name = "The hand stays out of view while a script's cut scene shows",
+	    .facet = Facet::Hand,
+	    .description = "The camera looks down at the middle of the map, and the pointer rests in the middle of the land. "
+	                   "After one second, a script's cinema bars slide in and stay for six seconds. The camera does not "
+	                   "move. This is what a gold or silver scroll does when the player clicks it.",
+	    .expected = "The hand shows before the bars come. While the bars are in, no part of the hand shows: not the "
+	                "posed hand and not a flat open hand. The hand comes back when the bars are gone.",
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 30.0f, -40.0f}, .look = {0.0f, 0.0f, 0.0f}},
+	    .commands = {PointerTo({0.5f, 0.55f}, 0.5f),
+	                 {.kind = Kind::WideScreen, .delaySeconds = 1.0f, .value = 1},
+	                 {.kind = Kind::WideScreen, .delaySeconds = 6.0f, .value = 0}},
+	});
 }
