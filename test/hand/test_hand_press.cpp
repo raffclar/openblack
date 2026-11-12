@@ -58,6 +58,7 @@ struct FakeWorld final: public HandPressWorld
 	std::optional<entt::entity> underCursor;
 	std::optional<entt::entity> held;
 	bool mayHoldCreature {true};
+	bool waitIgnoresPresses {false};
 
 	std::vector<std::string> calls;
 
@@ -103,6 +104,7 @@ struct FakeWorld final: public HandPressWorld
 	void GrabRelease(uint32_t /*nowMs*/, uint32_t /*turn*/) final { calls.emplace_back("GrabRelease"); }
 	void GrabClickReleased() final { calls.emplace_back("GrabClickReleased"); }
 	void GrabClickThing(entt::entity /*thing*/) final { calls.emplace_back("GrabClickThing"); }
+	[[nodiscard]] bool WaitIgnoresPresses() const final { return waitIgnoresPresses; }
 
 	[[nodiscard]] bool MagicHandBusy() const final { return magicBusy; }
 	bool MagicPressAction() final
@@ -541,6 +543,81 @@ TEST(HandPress, TheEndOfTheInterfaceLockStopsNoGripOfTheMiddleButtonOrOfAButtonT
 	fixture.Press(ButtonEvent(SDL_MOUSEBUTTONDOWN, SDL_BUTTON_LEFT));
 	fixture.system->StopLandGrip();
 	EXPECT_FALSE(fixture.system->LandGripStopped());
+}
+
+// While the interface waits after a gift or after a use on a thing, the Action press does nothing, and the select press
+// grips no land and makes no sound. The select press grips nothing until it is let go, also after the wait ends.
+TEST(HandPress, APressInAWaitOfTheInterfaceDoesNothing)
+{
+	Fixture fixture;
+	fixture.world->grabPressTakes = true;
+	fixture.world->underCursor = k_OtherCreature;
+	fixture.world->waitIgnoresPresses = true;
+	fixture.Press(ButtonEvent(SDL_MOUSEBUTTONDOWN, SDL_BUTTON_RIGHT));
+	fixture.Press(ButtonEvent(SDL_MOUSEBUTTONUP, SDL_BUTTON_RIGHT));
+	EXPECT_FALSE(fixture.Called("GrabPress"));
+	EXPECT_FALSE(fixture.Called("GrabCreature"));
+	EXPECT_FALSE(fixture.Called("LeashPressAction"));
+	EXPECT_FALSE(fixture.Called("GrabClickReleased"));
+	fixture.Press(ButtonEvent(SDL_MOUSEBUTTONDOWN, SDL_BUTTON_LEFT));
+	EXPECT_FALSE(fixture.system->GetHandButtons().selectGrip);
+	EXPECT_FALSE(fixture.system->GetHandButtons().gripping);
+	EXPECT_TRUE(fixture.system->LandGripStopped());
+	EXPECT_EQ(fixture.grabSounds, 0);
+	// The wait ends, and the select button that stays down grips nothing until the player lets go of it
+	fixture.world->waitIgnoresPresses = false;
+	fixture.Press(Motion(SDL_BUTTON_LMASK));
+	EXPECT_FALSE(fixture.system->GetHandButtons().selectGrip);
+	fixture.Press(ButtonEvent(SDL_MOUSEBUTTONUP, SDL_BUTTON_LEFT));
+	fixture.Press(ButtonEvent(SDL_MOUSEBUTTONDOWN, SDL_BUTTON_LEFT));
+	EXPECT_TRUE(fixture.system->GetHandButtons().selectGrip);
+	EXPECT_EQ(fixture.grabSounds, 1);
+}
+
+// Both buttons end the wait of the interface. The select button then grips the land at once, and this grip keeps no
+// thing until the grip ends.
+TEST(HandPress, BothButtonsEndTheWaitAndGripTheLandWithNoThing)
+{
+	Fixture fixture;
+	fixture.world->holdsThing = true;
+	fixture.world->waitIgnoresPresses = true;
+	fixture.Press(ButtonEvent(SDL_MOUSEBUTTONDOWN, SDL_BUTTON_RIGHT));
+	fixture.Press(ButtonEvent(SDL_MOUSEBUTTONDOWN, SDL_BUTTON_LEFT));
+	ASSERT_FALSE(fixture.system->GetHandButtons().selectGrip);
+	EXPECT_FALSE(fixture.system->LandGripKeepsNoThing());
+	fixture.system->StopLandGrip();
+	fixture.world->waitIgnoresPresses = false;
+	EXPECT_TRUE(fixture.system->GripLandAgain());
+	EXPECT_FALSE(fixture.system->LandGripStopped());
+	EXPECT_TRUE(fixture.system->GetHandButtons().selectGrip);
+	EXPECT_TRUE(fixture.system->GetHandButtons().rotating);
+	EXPECT_TRUE(fixture.system->LandGripKeepsNoThing());
+	fixture.Press(Motion(SDL_BUTTON_LMASK | SDL_BUTTON_RMASK));
+	EXPECT_TRUE(fixture.system->LandGripKeepsNoThing());
+	fixture.Press(ButtonEvent(SDL_MOUSEBUTTONUP, SDL_BUTTON_LEFT));
+	EXPECT_FALSE(fixture.system->LandGripKeepsNoThing());
+	// A later grip of the select button keeps the thing of its press
+	fixture.Press(ButtonEvent(SDL_MOUSEBUTTONDOWN, SDL_BUTTON_LEFT));
+	EXPECT_TRUE(fixture.system->GetHandButtons().selectGrip);
+	EXPECT_FALSE(fixture.system->LandGripKeepsNoThing());
+}
+
+// Both buttons that end the interface lock while the hand holds a creature grip the land at once, as the hand lets go
+// of the creature
+TEST(HandPress, BothButtonsThatEndTheHoldOfACreatureGripTheLand)
+{
+	Fixture fixture;
+	fixture.world->held = k_Creature;
+	fixture.Press(ButtonEvent(SDL_MOUSEBUTTONDOWN, SDL_BUTTON_RIGHT));
+	fixture.Press(ButtonEvent(SDL_MOUSEBUTTONDOWN, SDL_BUTTON_LEFT));
+	ASSERT_FALSE(fixture.system->GetHandButtons().selectGrip);
+	EXPECT_TRUE(fixture.system->GripLandAgain());
+	EXPECT_TRUE(fixture.system->GetHandButtons().selectGrip);
+	// With the select button up, both buttons cannot end the lock, and nothing grips
+	Fixture other;
+	other.Press(ButtonEvent(SDL_MOUSEBUTTONDOWN, SDL_BUTTON_RIGHT));
+	EXPECT_FALSE(other.system->GripLandAgain());
+	EXPECT_FALSE(other.system->GetHandButtons().selectGrip);
 }
 
 TEST(HandPress, TheHandFollowsTheGamesPointerUntilTheMouseMoves)

@@ -79,6 +79,9 @@ public:
 	virtual void GrabRelease(uint32_t nowMs, uint32_t turn) = 0;
 	virtual void GrabClickReleased() = 0;
 	virtual void GrabClickThing(entt::entity thing) = 0;
+	/// The interface waits after a gift of the held thing, or after a use of the held thing or the miracle on a thing,
+	/// until the button is let go. In these waits the presses of the buttons do nothing.
+	[[nodiscard]] virtual bool WaitIgnoresPresses() const = 0;
 
 	// The miracles in the hand
 	[[nodiscard]] virtual bool MagicHandBusy() const = 0;

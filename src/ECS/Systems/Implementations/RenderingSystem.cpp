@@ -16,6 +16,7 @@
 #include <algorithm>
 #include <array>
 #include <iostream>
+#include <limits>
 #include <memory>
 #include <optional>
 #include <span>
@@ -218,6 +219,12 @@ bool SortedWhole(entt::id_type meshId)
 {
 	const auto& meshes = entt::locator<openblack::resources::ResourcesInterface>::value().GetMeshes();
 	return meshes.Contains(meshId) && openblack::graphics::object_draw::SortedWhole(meshes.Handle(meshId)->GetFlags());
+}
+
+/// Whether an animal is drawn see-through by its own alpha
+bool SeeThroughAnimal(const AnimalPose* pose)
+{
+	return pose != nullptr && pose->alpha < std::numeric_limits<uint8_t>::max();
 }
 
 /// Whether a thing is a tree that a forester felled, on the land and not held. The game draws it two times in each
@@ -798,6 +805,18 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 	                                                                      })
 	                               : graphics::fizz_draw_order::Order {};
 	const auto& fizzOrder = _renderContext.fizzOrder;
+	// The game draws a model that blends and is not sorted at its place in the list
+	_renderContext.atOnceInstances.clear();
+	_listPlaces.clear();
+	if (drawList != nullptr)
+	{
+		const auto list = drawList->GetList();
+		_listPlaces.reserve(list.size());
+		for (uint32_t place = 0; place < static_cast<uint32_t>(list.size()); ++place)
+		{
+			_listPlaces.try_emplace(list[place], place);
+		}
+	}
 	// The things that only the frames make are in the first segment, before the things of the land. The gate stones that
 	// the cursor finds come after the things of the land.
 	std::vector<RenderContext::DrawnObject> drawnPicks;
@@ -1345,6 +1364,24 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		    if (seeThroughRef.has_value())
 		    {
 			    _renderContext.seeThroughRefs.emplace(idx, *seeThroughRef);
+		    }
+		    // A thing that fades out in the distance, or a see-through copy, comes among the blended things at its place in
+		    // the land's draw list, unless its own draw sorts it
+		    if (fade.has_value() || stores.AllOf<SeeThrough>(entity) || SeeThroughAnimal(stores.TryGet<AnimalPose>(entity)))
+		    {
+			    const bool sortedByItsDraw = ghosts.Has(entity) ||
+			                                 stores.AnyOf<InHand, HeldByCreature, ChangedMaterials>(entity) ||
+			                                 registry.AnyOf<BlendedByMaterial, Translucent, AnimatedStaticPose>(entity);
+			    if (graphics::object_draw::BlendsAtOnce(
+			            {.blended = true, .sortedWhole = SortedWhole(drawnMesh), .sortedByItsDraw = sortedByItsDraw}))
+			    {
+				    const auto place = ListPlace(entity);
+				    _renderContext.atOnceInstances.emplace(idx, place);
+				    if (drawnTwice)
+				    {
+					    _renderContext.atOnceInstances.emplace(idx + 1, place);
+				    }
+			    }
 		    }
 		    // The phantom building and the yard copy of a scaffold take the land's light of their place on the map
 		    if (graphics::object_land_light::Of(ghosts.Has(entity)) == graphics::object_land_light::Rule::AtMapPlace)
@@ -1944,6 +1981,7 @@ void RenderingSystem::UploadPartialBuilds()
 		_renderContext.partialBuildInstances.push_back(
 		    {.model = glm::translate(glm::mat4(1.0f), -up * build.scaffoldSink) * matrix, .look = look});
 		draw.segment = _renderContext.fizzOrder.SegmentOf(entity);
+		draw.listPlace = ListPlace(entity);
 		_renderContext.partialBuilds.push_back(draw);
 	});
 	// A standing building shows its model's numbered parts up to a number over its model drawn with the others; one going
@@ -1962,6 +2000,7 @@ void RenderingSystem::UploadPartialBuilds()
 		    .gravesShown = parts,
 		    .segment = _renderContext.fizzOrder.SegmentOf(entity),
 		    .fading = fading != _fadingThings.end(),
+		    .listPlace = ListPlace(entity),
 		});
 		_renderContext.partialBuildInstances.push_back(
 		    {.model = glm::translate(glm::mat4(1.0f), transform.position) * glm::mat4(transform.rotation) *
@@ -2252,6 +2291,7 @@ bool RenderingSystem::UploadTreeInstances(bool drawBoundingBox)
 		                            .slots = &slots->second,
 		                            .group = group,
 		                            .segment = _renderContext.fizzOrder.SegmentOf(entity),
+		                            .listPlace = ListPlace(entity),
 		                            .data = {.modelMatrix = drawnMatrix, .burning = burning},
 		                            .box = boxMatrix,
 		                            .entity = entity,
@@ -2286,6 +2326,7 @@ bool RenderingSystem::UploadTreeInstances(bool drawBoundingBox)
 		++tree.slots->treeGroups.at(group);
 	}
 	_renderContext.treeRuns.clear();
+	_renderContext.atOnceTrees.clear();
 	_renderContext.heldTreeDraws.clear();
 	bool fits = true;
 	const auto low = graphics::mesh_detail::LevelBit(graphics::mesh_detail::Mesh::Low);
@@ -2329,6 +2370,11 @@ bool RenderingSystem::UploadTreeInstances(bool drawBoundingBox)
 		}
 		const uint32_t idx = tree.slots->treeGroups.at(groupOf(tree))++;
 		_renderContext.treeInstanceData[idx] = tree.data;
+		// A tree that fades out comes among the blended things at its place in the land's draw list
+		if (tree.group == PlacedTree::Group::Fading && !tree.held)
+		{
+			_renderContext.atOnceTrees.emplace(idx, tree.listPlace);
+		}
 		// A tree in a hand is mirrored in the sea with the hand
 		if (tree.held)
 		{
@@ -2353,6 +2399,12 @@ bool RenderingSystem::UploadTreeInstances(bool drawBoundingBox)
 		              _uploadedTreeInstances);
 	}
 	return fits;
+}
+
+uint32_t RenderingSystem::ListPlace(entt::entity entity) const
+{
+	const auto found = _listPlaces.find(entity);
+	return found != _listPlaces.end() ? found->second : graphics::zsort::k_Unlisted;
 }
 
 bool RenderingSystem::FizzesInList(const Registry& registry, const ObjectDrawListSystemInterface& drawList, entt::entity entity)

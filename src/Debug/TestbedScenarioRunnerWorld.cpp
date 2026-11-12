@@ -538,6 +538,10 @@ void Runner::SetUpEnvironment(const Environment& environment)
 	{
 		Locator::config::value().drawFootpaths = true;
 	}
+	if (environment.dynamicTreeShadows && Locator::config::has_value())
+	{
+		Locator::config::value().dynamicTreeShadows = true;
+	}
 	if (environment.unlockedBonusCreatures.has_value() && Locator::config::has_value())
 	{
 		auto& unlocked = Locator::config::value().unlockedBonusCreatures;

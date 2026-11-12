@@ -1521,6 +1521,22 @@ void testbed_scenarios::AddLight(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "light.moving_tree_shadow_over_baked",
+	    .name = "The moving shadow of a tree darkens the baked shadow of a building",
+	    .facet = Facet::Light,
+	    .description = "The trees' shadows move with the trees, as the debug menu's Dynamic Tree Shadows box draws them. "
+	                   "A storage pit stands at noon with the clock stopped. An oak stands to its south-west, and the "
+	                   "shadow of the oak falls on the pit and on the shadow of the pit.",
+	    .expected = "Where the shadow of the oak and the shadow of the pit cover the same land, the land is darker than "
+	                "under each shadow alone. Move the hand near the oak: the shadow of the oak moves, and the shadow of the "
+	                "pit stays.",
+	    .environment = {.hour = 12.0f, .clockRuns = false, .dispenserGrid = false, .dynamicTreeShadows = true},
+	    .framing = {.shot = Shot::Placed, .eye = {50.0f, 40.0f, -15.0f}, .look = {0.0f, 0.0f, 25.0f}},
+	    .objects = {{.type = AbodeInfo::CelticStoragePit, .offset = {5.0f, 25.0f}},
+	                {.type = TreeInfo::Oak, .offset = {-8.0f, 12.0f}, .scale = 1.5f}},
+	});
+
+	all.push_back({
 	    .id = "light.snow_repaint_melt",
 	    .name = "Snow melts off the land block by block",
 	    .facet = Facet::Light,

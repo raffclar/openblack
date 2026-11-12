@@ -645,8 +645,8 @@ void Game::EndHandLockForFrame()
 		keepsThing = false;
 	}
 	// The thing under the hand: the pick of the last frame drawn. While the hand grips the land, the pick keeps the thing
-	// that was under the hand at the grip.
-	if (!keepsThing && Locator::pickingSystem::has_value())
+	// that was under the hand at the grip. The grip that both buttons started keeps no thing.
+	if (!keepsThing && Locator::pickingSystem::has_value() && !Locator::handPressSystem::value().LandGripKeepsNoThing())
 	{
 		pressThing = Locator::pickingSystem::value().GetPick().object.value_or(entt::entity {entt::null});
 	}
@@ -665,10 +665,11 @@ void Game::EndHandLockForFrame()
 	if (hand_send_wait::FrameEndsLock(facts))
 	{
 		Locator::handSystem::value().EndOwnInterfaceLock();
-		// When only both buttons ended the lock, the grip of the land starts again at once, and the hand turns the camera
-		if (hand_send_wait::BothButtonsAloneEndLock(facts))
+		// When only both buttons ended the lock, the grip of the land starts again at once, and the hand turns the camera.
+		// The grip makes its sound and its dust as a press of the select button does.
+		if (hand_send_wait::BothButtonsAloneEndLock(facts) && Locator::handPressSystem::value().GripLandAgain())
 		{
-			Locator::handPressSystem::value().GripLandAgain();
+			PlayHandGrabSound();
 		}
 	}
 	// The wait after a use on a thing ends in the frame after the let go of the button
@@ -773,6 +774,11 @@ void Game::ProcessHandToolTipTurn()
 void Game::SubmitHandToolTips(gui::ToolTips& toolTips, std::optional<entt::entity> pointed)
 {
 	namespace tips = gui::hand_tooltip;
+	// While the interface waits after a gift, the hand shows the fixed state of that wait, which has no tooltip
+	if (Locator::handGrabSystem::has_value() && Locator::handGrabSystem::value().GetGiveWait().has_value())
+	{
+		return;
+	}
 	const auto submitAll = [&toolTips](const std::vector<tips::Offer>& offers) {
 		for (const auto& offer : offers)
 		{

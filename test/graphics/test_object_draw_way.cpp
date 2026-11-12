@@ -94,3 +94,12 @@ TEST(ObjectDrawWay, OnlyTheObjectDrawSortsAModelMarkedToBeSortedWhole)
 	// A draw at once comes before every sorted key
 	EXPECT_GT(zsort::k_AfterSolidBeforeSorted, zsort::ModelDepth(place, camera));
 }
+
+// The game draws a standing model that fades or is a see-through copy at once, unless its mesh or its own draw sorts it
+TEST(ObjectDrawWay, AFadingModelBlendsAtOnceUnlessItIsSorted)
+{
+	EXPECT_TRUE(object_draw::BlendsAtOnce({.blended = true}));
+	EXPECT_FALSE(object_draw::BlendsAtOnce({.blended = false}));
+	EXPECT_FALSE(object_draw::BlendsAtOnce({.blended = true, .sortedWhole = true}));
+	EXPECT_FALSE(object_draw::BlendsAtOnce({.blended = true, .sortedByItsDraw = true}));
+}

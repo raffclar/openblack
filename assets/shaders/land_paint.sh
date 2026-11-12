@@ -7,8 +7,6 @@
 
 // The blocks' painted textures, a layer each: the land's colour, and the coast alpha that fades it into the sea
 SAMPLER2DARRAY(s0_blockTextures, 0);
-// Where the trees' shadows cover the island when they are drawn moving, a texel for each texel of the blocks
-SAMPLER2D(s5_objectShadows, 5);
 // The shadows baked into the land, of the buildings, rocks and other things and of the trees and big forests: what each
 // texel's 4-bit colour is scaled by, over 256, a texel for each texel of the blocks
 SAMPLER2D(s14_landShadows, 14);
@@ -110,10 +108,9 @@ vec4 PaintedTexelOf(float layer, vec2 blockOrigin, vec2 blockTexel, vec2 islandU
 	{
 		levels = SnowOverTexel(levels, blockOrigin, blockTexel, BLOCK_TEXELS);
 	}
-	// The shadows are baked into each texel: its 4-bit colour scaled and rounded down. Where a tree's moving shadow
-	// drawn this frame covers the texel, that shadow (as dark as any baked one) stands for both.
-	bool moving = u_objectShadows.x > 0.0f && texture2DLod(s5_objectShadows, islandUv, 0.0f).r >= 0.5f;
-	if (u_objectShadows.w > 0.5f && !moving)
+	// The shadows are baked into each texel: its 4-bit colour scaled and rounded down. The paint keeps every baked
+	// shadow. The moving shadows do not change the paint: the land draws them over the painted texture.
+	if (u_objectShadows.w > 0.5f)
 	{
 		float shade = floor(texture2DLod(s14_landShadows, islandUv, 0.0f).r * 255.0f + 0.5f);
 		levels = floor(levels * shade / 256.0f + 0.001f);

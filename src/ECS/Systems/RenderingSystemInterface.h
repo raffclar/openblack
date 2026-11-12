@@ -17,6 +17,7 @@
 #include <memory>
 #include <optional>
 #include <set>
+#include <unordered_map>
 #include <vector>
 
 #include <entt/entity/entity.hpp>
@@ -30,6 +31,7 @@
 #include "Graphics/GraphicsHandle.h"
 #include "Graphics/HandReflection.h"
 #include "Graphics/Mesh.h"
+#include "Graphics/ZSort.h"
 #include "Visual/RenderModes.h"
 
 namespace openblack::graphics
@@ -158,6 +160,9 @@ struct RenderContext
 	/// The instances drawn a second time over the instance before them, at the same depth: the second draw of a felled
 	/// tree (see ecs::felled_tree_draw)
 	std::set<uint32_t> drawnOverInstances;
+	/// By instance, the place in the land's draw list of a thing that blends and that the game draws at once, not among
+	/// the sorted things (see graphics::object_draw::BlendsAtOnce): zsort::k_Unlisted for a thing not in the list
+	std::unordered_map<uint32_t, uint32_t> atOnceInstances;
 	/// By instance, the detail it is drawn in this frame, as the bit its model's parts name it by (see
 	/// graphics::mesh_detail::LevelBit): only read for models whose parts differ by it
 	std::vector<uint8_t> instanceLevels;
@@ -196,6 +201,8 @@ struct RenderContext
 		uint32_t segment {0};
 	};
 	std::vector<TreeRun> treeRuns;
+	/// By tree instance, the place in the land's draw list of a tree that fades out, as atOnceInstances
+	std::unordered_map<uint32_t, uint32_t> atOnceTrees;
 	/// The creatures that fizz in the land's draw list this frame, and the segment of each listed thing
 	graphics::fizz_draw_order::Order fizzOrder;
 
@@ -339,6 +346,8 @@ struct RenderContext
 		uint32_t segment {0};
 		/// It is fading out in the distance: blended by the alpha in its instances' looks, with the blended things
 		bool fading {false};
+		/// Its place in the land's draw list, which orders it among the blended things while it fades
+		uint32_t listPlace {graphics::zsort::k_Unlisted};
 	};
 	std::vector<PartialBuildDraw> partialBuilds;
 	std::vector<ObjectInstance> partialBuildInstances;

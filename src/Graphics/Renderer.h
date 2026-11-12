@@ -868,6 +868,9 @@ private:
 		int32_t samples {0};
 		/// The edges are lost (no land yet, or a restore of the graphics device) and every block paints again
 		bool lost {true};
+		/// The count of changes to the casters of the baked shadows at the last paint (see
+		/// LandShadowBake::GetCastersChanges)
+		uint32_t bakeCastersChanges {0};
 	};
 	mutable CoarseEdges _coarseEdges;
 	/// u_haze and u_hazeColour of the frame's distance haze, off until the land's light is built

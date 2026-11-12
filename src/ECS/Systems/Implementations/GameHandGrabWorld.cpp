@@ -290,7 +290,9 @@ std::optional<entt::entity> GameHandGrabWorld::ObjectNearHand() const
 		}
 	}
 	const auto cursor = picked.has_value() ? map_coords::FromMetres({picked->x, picked->z}) : map_coords::MapCoords {};
-	// The things in the cells about the point, as a search meets them; broken pieces of buildings are passed by
+	// The things in the cells about the point, as a search meets them. The search passes by broken pieces of buildings
+	// and each thing in a hand, because a hand takes its thing out of the cells. It does not pass by a thing that the
+	// hand cannot use, such as a villager on its way to die. The action of the press finds that the hand cannot use it.
 	const auto& registry = Locator::entitiesRegistry::value();
 	const auto& map = Locator::entitiesMap::value();
 	const auto cells = hand_reach::CellsAround(behindHand);
@@ -303,7 +305,7 @@ std::optional<entt::entity> GameHandGrabWorld::ObjectNearHand() const
 			for (const auto entity : map.GetAllInCell({x, z}))
 			{
 				const auto* transform = registry.TryGet<const Transform>(entity);
-				if (transform == nullptr || registry.AllOf<BuildingPiece>(entity))
+				if (transform == nullptr || registry.AnyOf<BuildingPiece, InHand>(entity))
 				{
 					continue;
 				}
