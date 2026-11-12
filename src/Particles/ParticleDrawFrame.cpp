@@ -234,10 +234,8 @@ void AddSurface(Frame& frame, const SurfaceCreator& creator, const Effect::DrawA
 	const surface::Argb tint =
 	    (alpha << 24u) | (static_cast<uint32_t>(atom.rgb[0]) << 16u) | (static_cast<uint32_t>(atom.rgb[1]) << 8u) | atom.rgb[2];
 	const auto uvOffset = SurfaceUvOffset(*atom.surface, creator, atom.fraction);
-	const auto mode = creator.additive
-	                      ? (creator.writeDepth ? Mode::AlphaTexturedAlphaAdditive : Mode::AlphaTexturedAlphaAdditiveNz)
-	                      : (creator.writeDepth ? Mode::AlphaTexturedAlpha : Mode::AlphaTexturedAlphaNz);
-	const auto material = frame.MaterialIndex({.texture = ids->first, .alphaTexture = ids->second, .mode = mode});
+	const auto material =
+	    frame.MaterialIndex({.texture = ids->first, .alphaTexture = ids->second, .mode = SurfaceMode(creator)});
 	const auto firstVertex = static_cast<uint32_t>(frame.surfaceVertices.size());
 	const bool lit = creator.lit && mesh.normals.size() == mesh.vertices.size();
 	for (size_t i = 0; i < mesh.vertices.size(); ++i)

@@ -84,6 +84,7 @@ public:
 		creator.additive = object.Bool("UseAdditiveAlpha", false);
 		creator.writeDepth = object.Bool("MaterialUpdateZBuffer", false);
 		creator.doubleSided = object.Bool("MaterialSetDoubleSided", true);
+		creator.textureAlpha = object.Bool("MaterialUseTextureAlpha", true);
 		const float height = static_cast<float>(object.Int("TextureHeight", 256)) / k_SheetPixels;
 		const float width = static_cast<float>(object.Int("TextureWidth", 256)) / k_SheetPixels;
 		creator.shape = {
@@ -212,6 +213,18 @@ glm::vec2 openblack::particles::SurfaceUvOffset(const SurfaceInstance& instance,
 		}
 	}
 	return offset;
+}
+
+openblack::graphics::render_modes::Mode openblack::particles::SurfaceMode(const SurfaceCreator& creator)
+{
+	namespace render_modes = graphics::render_modes;
+	const render_modes::Properties properties {
+	    .additive = creator.additive,
+	    .writesDepth = creator.writeDepth,
+	    .bothSides = creator.doubleSided,
+	    .textureAlpha = creator.textureAlpha,
+	};
+	return render_modes::Changed(render_modes::Mode::AlphaTexturedAlphaNz, properties);
 }
 
 void openblack::particles::RegisterSurfaceRules(ParticleClassRegistry& registry)

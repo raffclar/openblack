@@ -1319,7 +1319,8 @@ bool Game::RunFrame() noexcept
 			Locator::temple::value().FrameDrawn();
 		}
 		// The pictures of the player's creature whose screens are back
-		if (Locator::creatureWebPageSystem::has_value())
+		// A frame that was not drawn gets no picture back
+		if (drawsFrame && Locator::creatureWebPageSystem::has_value())
 		{
 			Locator::creatureWebPageSystem::value().CollectPictures(
 			    {.take = [&renderer](const std::string& name) { return renderer.TakeScreenPicture(name); },
