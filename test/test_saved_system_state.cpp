@@ -311,6 +311,19 @@ TEST(SavedSystemState, TheStoryHistoryComesBack)
 	HelpTextSystem texts;
 	HelpTextSystem loadedTexts;
 	LoadInto(loadedTexts, StateOf(texts));
+	EXPECT_FALSE(loadedTexts.KeepsSelectPress());
+}
+
+TEST(SavedSystemState, TheSelectPressThatTheHelpKeepsComesBack)
+{
+	HelpTextSystem texts;
+	texts.KeepSelectPress(true);
+	HelpTextSystem loaded;
+	LoadInto(loaded, StateOf(texts));
+	EXPECT_TRUE(loaded.KeepsSelectPress());
+	// A new land starts with no select press
+	loaded.Reset();
+	EXPECT_FALSE(loaded.KeepsSelectPress());
 }
 
 TEST(SavedSystemState, TheHelpOfEachComputerIsAPresentationPart)

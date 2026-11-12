@@ -37,6 +37,7 @@
 #include "ECS/Systems/VillageTotemSystemInterface.h"
 #include "GameDetail.h"
 #include "Hand/HandVisibility.h"
+#include "Input/SelectPress.h"
 #include "Locator.h"
 #include "ScriptHeaders/ScriptInterfaceLevels.h"
 #include "Windowing/WindowingInterface.h"
@@ -46,6 +47,31 @@ using namespace openblack::ecs::systems;
 
 namespace
 {
+
+/// What a button event does to the flag of the select press. The left button is the select button, and the right
+/// button is the other button. The second click of a double click comes as an event with two clicks.
+[[nodiscard]] input::select_press::Event SelectPressEvent(const SDL_Event& event)
+{
+	using input::select_press::Event;
+	if (event.type != SDL_MOUSEBUTTONDOWN && event.type != SDL_MOUSEBUTTONUP)
+	{
+		return Event::Other;
+	}
+	const bool down = event.type == SDL_MOUSEBUTTONDOWN;
+	if (event.button.button == SDL_BUTTON_LEFT)
+	{
+		if (!down)
+		{
+			return Event::SelectLetGo;
+		}
+		return event.button.clicks >= 2 ? Event::SelectDoublePress : Event::SelectPress;
+	}
+	if (event.button.button == SDL_BUTTON_RIGHT && down)
+	{
+		return Event::OtherPress;
+	}
+	return Event::Other;
+}
 
 /// The services of the locator, as the routing of the presses uses them
 class LocatorHandPressWorld final: public HandPressWorld
@@ -233,8 +259,8 @@ HandPressSystem::~HandPressSystem() = default;
 void HandPressSystem::Press(const SDL_Event& event, const PressContext& context)
 {
 	const bool rightLetGo = _buttons.Apply(event);
-	// A press of the left button may click the dialogue on, whatever else it does
-	if (event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_LEFT && !_world->MouseOverDebugWindow())
+	// The let go of the left button (the select button) may click the dialogue on, whatever else it does
+	if (event.type == SDL_MOUSEBUTTONUP && event.button.button == SDL_BUTTON_LEFT && !_world->MouseOverDebugWindow())
 	{
 		_dialogueClick = true;
 	}
@@ -275,6 +301,12 @@ void HandPressSystem::Press(const SDL_Event& event, const PressContext& context)
 	}
 	const bool onCreature = _world->HeldCreature().has_value();
 	_handButtons = input::HandButtonsOf(_buttons, inTemple, onCreature, _world->FightPressed());
+	_selectPress = input::select_press::Next(_selectPress, {
+	                                                           .event = SelectPressEvent(event),
+	                                                           .interfaceOn = handTakesPresses,
+	                                                           .gripsLandAlone = _handButtons.selectGrip && !_buttons.right,
+	                                                           .selectDown = _buttons.left,
+	                                                       });
 }
 
 void HandPressSystem::ActionLetGo(const SDL_Event& event, bool rightLetGo, bool inTemple, bool handTakesPresses, bool hasGrab,

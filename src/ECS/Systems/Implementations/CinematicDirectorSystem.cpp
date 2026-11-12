@@ -16,7 +16,9 @@
 #include <vector>
 
 #include "ECS/Reflection/BinaryArchive.h"
+#include "ECS/Systems/HandPressSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
+#include "ECS/Systems/HelpTextSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -31,6 +33,18 @@ namespace
 float WideScreenTime()
 {
 	return Locator::infoConstants::has_value() ? Locator::infoConstants::value().helpSystem.wideScreenTime : 0.0f;
+}
+
+/// The interface goes off or comes back. First the help keeps the flag of a press of the select button that holds
+/// the land, or no flag. Then the action of the hand ends, which clears the flag.
+void KeepSelectPressForHelp(bool keep)
+{
+	if (!Locator::helpTextSystem::has_value())
+	{
+		return;
+	}
+	const bool held = keep && Locator::handPressSystem::has_value() && Locator::handPressSystem::value().SelectPressHolds();
+	Locator::helpTextSystem::value().KeepSelectPress(held);
 }
 
 /// The interface lock of the hand of this computer ends (see hand_send_wait::LockEnd)
@@ -83,6 +97,9 @@ void CinematicDirectorSystem::SetWideScreen(bool on, uint32_t owner)
 	_interfaceActive = !on || owner == 0;
 	_wideScreenOwner = on ? owner : 0;
 	_bars.Set(on, WideScreenTime());
+	// When the bars come in, the boxes close first, and the interface comes back for them. That ends the action of the
+	// hand. Thus the help keeps no select press. When the bars go, the help keeps the flag of the select press.
+	KeepSelectPressForHelp(!on);
 	// The interface goes away or comes back, also for the game's own bars: the action of the hand ends
 	EndHandInterfaceLock();
 }
@@ -91,6 +108,7 @@ void CinematicDirectorSystem::SetInterfaceActive(bool active)
 {
 	_interfaceActive = active;
 	// The action of the hand ends, as the interface goes away or comes back
+	KeepSelectPressForHelp(true);
 	EndHandInterfaceLock();
 }
 

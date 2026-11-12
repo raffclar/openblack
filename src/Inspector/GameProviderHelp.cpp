@@ -126,6 +126,7 @@ std::unique_ptr<ProviderInterface> HelpProvider()
 		            Locator::advisorVoiceSystem::has_value() ? &Locator::advisorVoiceSystem::value().GetVoices() : nullptr;
 		        Json result {{"started", help.IsStarted()},
 		                     {"text_read", help.IsTextRead()},
+		                     {"select_press_kept", help.KeepsSelectPress()},
 		                     {"speaker", voices != nullptr ? voices->GetSpeaker() : -1},
 		                     {"sentence", voices != nullptr ? voices->GetSentence() : 0u},
 		                     {"owner", Locator::dialogueControlSystem::has_value()
