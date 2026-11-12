@@ -167,6 +167,31 @@ public:
 	[[nodiscard]] ParticleRandomStream GetParticleStream() const override { return ParticleRandomStream::None; }
 	void SetParticleStream(ParticleRandomStream) override {}
 };
+/// Every draw of the game's random numbers is as low as it can be, and the synced draws are counted
+class CountedGameRandom final: public GameRandomInterface
+{
+public:
+	uint32_t SyncedRand(uint32_t, DrawSite) override
+	{
+		++draws;
+		return 0;
+	}
+	float SyncedFloatRand(float, DrawSite) override
+	{
+		++draws;
+		return 0.0f;
+	}
+	uint32_t LocalRand(int32_t) override { return 0; }
+	float LocalFloatRand(float) override { return 0.0f; }
+	int32_t CrtRand() override { return 0; }
+	void CrtSrand(uint32_t) override {}
+	[[nodiscard]] GameRandomSeeds GetSeeds() const override { return {}; }
+	void SetSeeds(GameRandomSeeds) override {}
+	[[nodiscard]] ParticleRandomStream GetParticleStream() const override { return ParticleRandomStream::None; }
+	void SetParticleStream(ParticleRandomStream) override {}
+
+	uint32_t draws {0};
+};
 /// Players where the second player is an ally of the first player, with each alliance the same for the two players
 class TwoAllies final: public ecs::systems::PlayerSystemInterface
 {
@@ -293,7 +318,11 @@ public:
 	[[nodiscard]] bool CanPlayerPickUp(entt::entity) const override { return false; }
 	[[nodiscard]] std::optional<bool> BirdCanBePickedUpByCreature(entt::entity) const override { return std::nullopt; }
 	[[nodiscard]] bool CanBeStompedOnByCreature(entt::entity, float) const override { return false; }
-	void StopReaction(entt::entity, bool resetState) override { stops.push_back(resetState); }
+	void StopReaction(entt::entity animal, bool resetState) override
+	{
+		stops.push_back(resetState);
+		stopped.push_back(animal);
+	}
 	[[nodiscard]] bool IsAvailableForReaction(entt::entity) const override { return available; }
 	bool SetupLookAtObject(entt::entity, entt::entity object) override
 	{
@@ -310,8 +339,9 @@ public:
 		return foodInterests ? tablePriority : 0;
 	}
 
-	/// For each end of a reaction, whether the animal goes into the state after the reaction
+	/// For each end of a reaction, whether the animal goes into the state after the reaction, and which animal stopped
 	std::vector<bool> stops;
+	std::vector<entt::entity> stopped;
 	/// Whether the animal may take up a reaction, and whether food interests it
 	bool available {false};
 	bool foodInterests {false};
@@ -944,6 +974,49 @@ TEST_F(Reactions, AnAnimalWhoseReactionShutsDownGoesIntoTheStateAfterTheReaction
 	_reactions.Remove(id);
 	EXPECT_EQ(animals.stops, std::vector<bool> {true});
 	EXPECT_EQ(registry.Get<const LivingReaction>(animal).reaction, 0u);
+	Locator::animalSystem::reset();
+}
+
+// Two cows go to the food of a pot. The stop of the food reaction lets both go, and the pot can go after it.
+TEST_F(Reactions, TheStopOfAFoodReactionThatCowsHoldLetsThemGo)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	ReactToEverything(_info->animal.at(static_cast<size_t>(AnimalInfo::Cow)));
+	Locator::infoConstants::emplace(*_info);
+	auto& animals = static_cast<FakeAnimals&>(Locator::animalSystem::emplace<FakeAnimals>());
+	animals.available = true;
+	animals.foodInterests = true;
+	std::vector<entt::entity> cows;
+	for (const float x : {10.0f, 30.0f})
+	{
+		const auto cow = registry.Create();
+		registry.Assign<Transform>(cow, k_Here + glm::vec3(x, 0.0f, 0.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+		auto& animal = registry.Assign<Animal>(cow);
+		animal.type = AnimalInfo::Cow;
+		animal.move.position = {map_coords::ToFixed(k_Here.x + x), map_coords::ToFixed(k_Here.z)};
+		cows.push_back(cow);
+	}
+	const auto pot = registry.Create();
+	registry.Assign<Transform>(pot, k_Here, glm::mat3(1.0f), glm::vec3(1.0f));
+	registry.Assign<Pot>(pot, Pot {.amount = 10, .maxAmount = 100, .type = PotInfo::FoodPot});
+	Locator::entitiesMap::value().Sync();
+	auto source = Miracle(Reaction::ReactToFood);
+	source.initiator = pot;
+	const auto id = _reactions.Create(source);
+	for (const auto cow : cows)
+	{
+		ASSERT_EQ(registry.Get<const LivingReaction>(cow).reaction, id);
+	}
+	_reactions.ProcessTurn();
+	_reactions.Remove(id);
+	EXPECT_EQ(animals.stops, (std::vector<bool> {true, true}));
+	for (const auto cow : cows)
+	{
+		EXPECT_EQ(registry.Get<const LivingReaction>(cow).reaction, 0u);
+	}
+	registry.Destroy(pot);
+	_reactions.ProcessTurn();
+	EXPECT_FALSE(_reactions.IsActive(id));
 	Locator::animalSystem::reset();
 }
 
@@ -2819,4 +2892,125 @@ TEST_F(Reactions, AHandPickUpThatNobodyTakesUpEndsWhenItsTimeIsUp)
 		const auto* state = registry.TryGet<const LivingReaction>(villager);
 		EXPECT_TRUE(state == nullptr || (state->reaction != timed && state->reaction != untimed));
 	}
+}
+
+TEST(ReactionRules, TheReachComesBeforeTheRuleOfTheKind)
+{
+	using openblack::magic::villager_reaction::PassesReachGate;
+	EXPECT_TRUE(PassesReachGate(true, 60.0f, 0.0f));
+	// The reach itself is in reach
+	EXPECT_TRUE(PassesReachGate(true, 60.0f, 60.0f));
+	EXPECT_FALSE(PassesReachGate(true, 60.0f, 60.5f));
+	// A living thing whose kind does not react to the reaction gets no priority
+	EXPECT_FALSE(PassesReachGate(false, 60.0f, 0.0f));
+}
+
+TEST_F(Reactions, ACreatureMakesNoDrawForWhatItReactsToWhenThatIsOutOfReach)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	for (const auto villager : _villagers)
+	{
+		registry.Destroy(villager);
+	}
+	Locator::entitiesMap::value().Sync();
+	auto& random = static_cast<CountedGameRandom&>(Locator::gameRandom::emplace<CountedGameRandom>());
+	// The creature reacts to a thing of another player that was crushed 100 m away, farther than the reach of 60 m
+	auto crushed = Miracle(Reaction::ReactToObjectCrushed);
+	crushed.initiator = static_cast<entt::entity>(1001);
+	crushed.player = PlayerNames::PLAYER_TWO;
+	crushed.position = k_Here + glm::vec3(100.0f, 0.0f, 0.0f);
+	const auto held = _reactions.Create(crushed);
+	registry.AssignOrReplace<LivingReaction>(_creature,
+	                                         LivingReaction {.reaction = held, .type = Reaction::ReactToObjectCrushed});
+	ASSERT_EQ(random.draws, 0u);
+	// A new reaction reaches the creature. The creature weighs what it reacts to, but makes no draw for it
+	_reactions.Create(Miracle());
+	EXPECT_EQ(random.draws, 0u);
+	// Near the crushed thing, the creature makes the draw for a thing of another player
+	registry.Get<Transform>(_creature).position = crushed.position;
+	Locator::entitiesMap::value().Sync();
+	auto near = Miracle();
+	near.position = crushed.position;
+	_reactions.Create(near);
+	EXPECT_EQ(random.draws, 1u);
+	Locator::gameRandom::reset();
+}
+
+TEST_F(Reactions, ACreatureTakesUpTheFaintingOfItsOwnFart)
+{
+	auto& row = _info->reaction.at(static_cast<size_t>(Reaction::Fainting));
+	row.priority = 200;
+	row.maxReactionDistance = 50.0f;
+	row.howImportantIsDistance = 0.4f;
+	row.numGameTurnsForCreatureToReact = 600;
+	Locator::infoConstants::emplace(*_info);
+	auto& registry = Locator::entitiesRegistry::value();
+	// The creature makes the reaction, and the reaction reaches the creature first
+	const auto id = _reactions.Create(
+	    {.initiator = _creature, .type = Reaction::Fainting, .player = PlayerNames::PLAYER_ONE, .position = k_Here});
+	EXPECT_EQ(registry.Get<const LivingReaction>(_creature).reaction, id);
+	// A villager does not take up a reaction that it made itself
+	auto own = Miracle(Reaction::LookAtObject);
+	own.initiator = _villagers[0];
+	const auto villagerOwn = _reactions.Create(own);
+	const auto* state = registry.TryGet<const LivingReaction>(_villagers[0]);
+	EXPECT_TRUE(state == nullptr || state->reaction != villagerOwn);
+}
+
+TEST_F(Reactions, AReactionStopsItsGroupTheLastToJoinFirst)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	ReactToEverything(_info->animal.at(static_cast<size_t>(AnimalInfo::Cow)));
+	Locator::infoConstants::emplace(*_info);
+	auto& animals = static_cast<FakeAnimals&>(Locator::animalSystem::emplace<FakeAnimals>());
+	animals.available = true;
+	std::vector<entt::entity> cows;
+	for (const float x : {10.0f, 30.0f})
+	{
+		const auto cow = registry.Create();
+		registry.Assign<Transform>(cow, k_Here + glm::vec3(x, 0.0f, 0.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+		auto& animal = registry.Assign<Animal>(cow);
+		animal.type = AnimalInfo::Cow;
+		animal.move.position = {map_coords::ToFixed(k_Here.x + x), map_coords::ToFixed(k_Here.z)};
+		cows.push_back(cow);
+	}
+	Locator::entitiesMap::value().Sync();
+	const auto id = _reactions.Create(Miracle(Reaction::LookAtObject));
+	const auto& first = registry.Get<const LivingReaction>(cows[0]);
+	const auto& second = registry.Get<const LivingReaction>(cows[1]);
+	ASSERT_EQ(first.reaction, id);
+	ASSERT_EQ(second.reaction, id);
+	ASSERT_NE(first.joined, second.joined);
+	const auto lastToJoin = first.joined > second.joined ? cows[0] : cows[1];
+	const auto firstToJoin = first.joined > second.joined ? cows[1] : cows[0];
+	_reactions.Remove(id);
+	EXPECT_EQ(animals.stopped, (std::vector<entt::entity> {lastToJoin, firstToJoin}));
+	Locator::animalSystem::reset();
+}
+
+TEST_F(Reactions, ACreatureThatLeftTheGroupStopsWhenItNextFindsTheReactionGone)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	for (int turn = 0; turn < 3; ++turn)
+	{
+		PlayTurn();
+	}
+	const auto kind = static_cast<uint32_t>(Reaction::ReactToObjectCrushed);
+	auto crushed = Miracle(Reaction::ReactToObjectCrushed);
+	crushed.position = k_Here + glm::vec3(500.0f, 0.0f, 0.0f);
+	const auto id = _reactions.Create(crushed);
+	// The creature holds the reaction, but it left the group for a reaction that it did not keep
+	auto& state = registry.AssignOrReplace<LivingReaction>(
+	    _creature, LivingReaction {.reaction = id, .type = Reaction::ReactToObjectCrushed, .left = id});
+	state.creatureMemory.Record(kind, 1);
+	_reactions.Remove(id);
+	const auto ended = _reactions.CurrentTurn();
+	// The end of the reaction does not stop it
+	EXPECT_EQ(registry.Get<const LivingReaction>(_creature).reaction, id);
+	// In its next turn it finds the reaction gone and stops. Its memory of the kind comes up to that turn
+	PlayTurn();
+	const auto& after = registry.Get<const LivingReaction>(_creature);
+	EXPECT_EQ(after.reaction, 0u);
+	EXPECT_EQ(after.left, 0u);
+	EXPECT_EQ(after.creatureMemory.LastReacted(kind), ended + 1);
 }

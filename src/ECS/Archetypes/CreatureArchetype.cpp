@@ -137,6 +137,26 @@ void CreatureArchetype::TakeLooks(Registry& registry, entt::entity creature)
 	morph->strengthLook = looks.weakStrong;
 }
 
+creature_morph::Morph CreatureArchetype::Targets(const Creature& creature, const CreatureMorph& morph)
+{
+	auto targets = creature_morph::FromAttributes(creature.alignment, morph.shownFatness, creature.strength,
+	                                              SpeciesStrength(creature.species));
+	targets.evilGood = morph.alignmentLook.value_or(targets.evilGood);
+	targets.weakStrong = morph.strengthLook.value_or(targets.weakStrong);
+	return targets;
+}
+
+void CreatureArchetype::PaintWithTarget(Registry& registry, entt::entity creature)
+{
+	const auto* body = registry.TryGet<const Creature>(creature);
+	auto* morph = registry.TryGet<CreatureMorph>(creature);
+	if (body == nullptr || morph == nullptr)
+	{
+		return;
+	}
+	morph->paintedAlignment = Targets(*body, *morph).evilGood;
+}
+
 entt::entity CreatureArchetype::Create(const glm::vec3& position, PlayerNames playerName, CreatureType creatureType,
                                        entt::id_type creatureMindId, float yAngleRadians, float scale, const Body& body)
 {

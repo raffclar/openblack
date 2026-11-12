@@ -96,6 +96,23 @@ void testbed_scenarios::AddMind(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "mind.gesture_action",
+	    .name = "A script forces a gesture action",
+	    .facet = Facet::Mind,
+	    .description = "A player's tiger stands facing away from the camera, a birch beside it. A script forces the gesture "
+	                   "actions on it: the star after one second, the moon after twelve seconds. No shipped script "
+	                   "does this, and no desire starts these actions.",
+	    .expected = "Each time it turns round to the camera and looks at it. Then it raises an arm and draws the circle "
+	                "in the air in front of its head, with a glowing chain in the player's colour. The star and the moon "
+	                "both draw the circle. The arm holds the end of the circle a moment, then comes down.",
+	    .framing = {.shot = Shot::Testbed},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f}, 180.0f)},
+	    .objects = {{.type = TreeInfo::Birch, .offset = {-15.0f, 0.0f}}},
+	    .commands = {{.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 0, .action = "GestureStar"},
+	                 {.kind = Kind::DoAction, .delaySeconds = 12.0f, .object = 0, .action = "GestureMoon"}},
+	});
+
+	all.push_back({
 	    .id = "mind.slight_feedback_looks_at_camera",
 	    .name = "Feedback too slight to count: it looks at the camera",
 	    .facet = Facet::Mind,

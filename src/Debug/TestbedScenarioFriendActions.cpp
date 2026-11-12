@@ -9,7 +9,8 @@
 
 // The testbed's scenarios of the joint actions of two friends, each staged close up: a kiss, a talk, a joke, a dance,
 // an argument, a mope, a show of its home, a call for attention, an order to go away, a look at another creature, a sit
-// on a hill, a meal at a field, a throwing game, a gift of a toy and a visit to the citadel. Two scenarios show the
+// on a hill, a meal at a field, a throwing game, a gift of a toy, a visit to the citadel and to the home, a show of the
+// fireball and of the food miracle, a confusion, and a show of how nice it thinks the other is. Two scenarios show the
 // player's creature as it refuses the request of a rival god's creature.
 
 #include <optional>
@@ -275,5 +276,75 @@ void testbed_scenarios::AddFriendActionScenarios(std::vector<Scenario>& all)
 	    .framing = {.shot = Shot::Overview, .distance = k_CloseUp},
 	    .creatures = {Asker(), Partner()},
 	    .commands = {Smile(1, 0), Do("ShowFriendCitadel", 1)},
+	});
+	all.push_back({
+	    .id = "friends.show_home",
+	    .name = "Show its home to a friend",
+	    .facet = Facet::Mind,
+	    .description = "A tiger and a lion of no player stand 30 apart. A script tells the lion to smile at the tiger, "
+	                   "then tells the tiger to show its home to the lion. The tiger never does this by itself, because "
+	                   "it never has built its home.",
+	    .expected = "The tiger asks the lion to be shown something. Both walk to the home of the tiger. The tiger points "
+	                "at it and grimaces. The lion turns to the tiger, then to the home, and waits. The tiger looks at its "
+	                "feet.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .distance = k_CloseUp},
+	    .creatures = {Asker(), Partner()},
+	    .commands = {Smile(1, 0), Do("ShowFriendHome", 1)},
+	});
+	// The tiger knows the miracle, and a rock stands near it to show the miracle on
+	all.push_back({
+	    .id = "friends.show_fireball",
+	    .name = "Show a friend the fireball",
+	    .facet = Facet::Mind,
+	    .description = "A tiger that knows the fireball and a lion of no player stand 30 apart. A rock stands 20 south of "
+	                   "the tiger. A script tells the lion to smile at the tiger, then tells the tiger to show the "
+	                   "fireball to the lion.",
+	    .expected = "The tiger turns to the lion and asks it to be shown something, with a playful face. The lion walks "
+	                "near the rock. The tiger walks near the rock, backs away, turns to it with a face of fear and points "
+	                "at it. The lion turns to the tiger. When the lion is free, it turns to the rock, and the tiger casts "
+	                "a fireball at the rock. Then the lion turns to the tiger.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .distance = k_CloseUp},
+	    .creatures = {Asker(), Partner()},
+	    .objects = {{.type = MobileStaticInfo::Rock, .offset = {-k_Apart * 0.5f, -20.0f}}},
+	    .commands = {{.kind = Kind::KnowMiracle, .delaySeconds = 0.5f, .value = static_cast<size_t>(MagicType::Fireball)},
+	                 Smile(1, 0),
+	                 Do("ShowFriendSpellFireball", 1)},
+	});
+	all.push_back({
+	    .id = "friends.show_food",
+	    .name = "Show a friend the food miracle",
+	    .facet = Facet::Mind,
+	    .description = "A tiger that knows the food miracle and a lion of no player stand 30 apart. A rock stands 20 south "
+	                   "of the tiger. A script tells the lion to smile at the tiger, then tells the tiger to show the "
+	                   "food miracle to the lion.",
+	    .expected = "The tiger turns to the lion with a face of compassion and asks it to be shown something. Both walk "
+	                "near the thing nearest the tiger that it believes in. The tiger waits for the lion, turns to the "
+	                "thing and points at it. When the lion is free, it turns to the thing, and the tiger casts food at "
+	                "it. Then the lion turns to the tiger.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .distance = k_CloseUp},
+	    .creatures = {Asker(), Partner()},
+	    .objects = {{.type = MobileStaticInfo::Rock, .offset = {-k_Apart * 0.5f, -20.0f}}},
+	    .commands = {{.kind = Kind::KnowMiracle, .delaySeconds = 0.5f, .value = static_cast<size_t>(MagicType::Food)},
+	                 Smile(1, 0),
+	                 Do("ShowFriendSpellMagicFood", 1)},
+	});
+	all.push_back(TwoFriends("friends.confuse", "Confuse a friend", "ConfuseFriend",
+	                         "The two walk near each other and face each other. The tiger points at its home and grimaces. "
+	                         "The lion turns to face that home. The tiger points at the lion, sad, and flutters its "
+	                         "eyelids. The lion plays its confused action."));
+	all.push_back({
+	    .id = "friends.how_nice",
+	    .name = "Show another creature how nice it is",
+	    .facet = Facet::Mind,
+	    .description = "A tiger and a lion of no player stand 30 apart. A script tells the tiger to show the lion how nice "
+	                   "it thinks the lion is. The tiger thinks the lion is neither nice nor nasty.",
+	    .expected = "The tiger turns to face the lion for two seconds, then holds a smile as it looks at the lion.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .distance = k_CloseUp},
+	    .creatures = {Asker(), Partner()},
+	    .commands = {Do("ShowHowNiceYouThinkCreatureIs", 1)},
 	});
 }

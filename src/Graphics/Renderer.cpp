@@ -708,7 +708,7 @@ void Renderer::DrawScene(const DrawSceneDesc& drawDesc) const noexcept
 		{
 			UploadCreatureSkins(Locator::temple::value().GetRooms(), _roomCreatureSkins);
 		}
-		// The creature of the tattoo menu is a thing of the drawn registry
+		// The creature of the tattoo menu and the copy of the falling spell film are things of the drawn registry
 		if (Locator::drawnRegistry::has_value())
 		{
 			UploadCreatureSkins(Locator::drawnRegistry::value(), _drawnCreatureSkins);

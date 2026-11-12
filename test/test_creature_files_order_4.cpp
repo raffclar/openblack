@@ -14,6 +14,7 @@
 #include <utility>
 #include <vector>
 
+#include <glm/geometric.hpp>
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 #include <gtest/gtest.h>
@@ -22,6 +23,7 @@
 #include "Creature/CreatureArena.h"
 #include "Creature/CreatureCastMoves.h"
 #include "Creature/CreatureKindAgendas.h"
+#include "Creature/CreatureLocomotion.h"
 #include "Creature/CreatureLook.h"
 #include "Creature/CreatureObstacles.h"
 #include "Creature/CreatureThrow.h"
@@ -171,6 +173,23 @@ TEST(CreatureFilesOrder4, AThrowAtAPlaceStandsEightHeightsAway)
 	const auto there = creature_throw::WhereToThrowAt({0.0f, 0.0f}, {24.0f, 32.0f}, k_Height, k_Keep);
 	ASSERT_TRUE(there.has_value());
 	EXPECT_EQ(there->kind, creature_throw::ThrowStand::Kind::There);
+}
+
+// Vanilla bug 2060, kept: the walk to back away starts and ends in the same turn. The point to back away to is nearer
+// than the distance that the creature keeps, so the creature is already inside the ring of that walk, and it throws from
+// where it stands.
+TEST(CreatureFilesOrder4, TheBackOffFromAThrowAtAPlaceEndsAtOnce)
+{
+	constexpr float k_Height = 6.0f;
+	constexpr float k_Keep = k_Height * 8.0f;
+	constexpr glm::vec2 k_Creature {0.0f, 0.0f};
+	const auto back = creature_throw::WhereToThrowAt(k_Creature, {19.0f, 0.0f}, k_Height, k_Keep);
+	ASSERT_TRUE(back.has_value());
+	ASSERT_EQ(back->kind, creature_throw::ThrowStand::Kind::BackOff);
+	const float distance = glm::distance(k_Creature, back->point);
+	EXPECT_FLOAT_EQ(distance, k_Keep - 19.0f);
+	const auto ring = creature_locomotion::MoveRing(distance, back->minDistance, back->maxDistance);
+	EXPECT_TRUE(creature_locomotion::Arrived(distance, ring));
 }
 
 // Vanilla bug 1890, kept: right on the place the way has no length, and the point to back away to is not a number

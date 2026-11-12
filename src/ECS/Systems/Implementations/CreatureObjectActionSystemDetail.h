@@ -239,6 +239,11 @@ void UpdateCatch(ecs::Registry& registry, entt::entity creature, const Creature&
 /// the player's hand.
 bool RefusesCreature(const ecs::Registry& registry, entt::entity object);
 
+/// The throw ended before the hand let go. The body stops the throw, the hand keeps the thing, and the creature does not
+/// carry it. The action then waits while the hand holds the thing. When the plan that asked for the throw stopped
+/// already, nothing waits, and the action ends.
+void KeepInHand(ecs::Registry& registry, entt::entity creature, CreatureObjectAction& action, CreatureAnimation& animation);
+
 /// The spheres round the body of each creature come on and go off as its body actions start. While they are on, each
 /// part that moved far enough since its last check knocks about what it reaches.
 void Trample(ecs::Registry& registry, entt::entity only);

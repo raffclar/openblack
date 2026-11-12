@@ -8,12 +8,16 @@
  *******************************************************************************/
 
 #include <array>
+#include <limits>
 
 #include <glm/mat4x4.hpp>
 #include <glm/vec3.hpp>
 #include <gtest/gtest.h>
 
 #include "Creature/CreatureMorph.h"
+#include "ECS/Components/CreatureBody.h"
+#include "ECS/Components/CreatureCopy.h"
+#include "ECS/Registry.h"
 
 using namespace openblack;
 using A = creature::CreatureBody::Appearance;
@@ -194,4 +198,77 @@ TEST(CreatureMorph, TheLookOfTheAlignmentStaysOnItsAxis)
 {
 	EXPECT_EQ(creature_morph::TakeLooks(0.5f, 0.5f, -1.5f, 0.5f, 0.5f).evilGood, -1.0f);
 	EXPECT_EQ(creature_morph::TakeLooks(0.5f, 0.5f, 1.5f, 0.5f, 0.5f).evilGood, 1.0f);
+}
+
+TEST(CreatureMorph, OnlyANewAlignmentPaintsTheSkinAgain)
+{
+	const creature_morph::Morph drawn {};
+	EXPECT_TRUE(creature_morph::RefreshDrawn(drawn, {.evilGood = -0.03f, .thinFat = 0.0f, .weakStrong = 0.0f}).skin);
+	EXPECT_FALSE(creature_morph::RefreshDrawn(drawn, {.evilGood = 0.02f, .thinFat = 0.5f, .weakStrong = 0.0f}).skin);
+	EXPECT_FALSE(creature_morph::RefreshDrawn(drawn, {.evilGood = 0.0f, .thinFat = 0.0f, .weakStrong = 1.0f}).skin);
+}
+
+TEST(CreatureMorph, ACopyKeepsTheTargetsOfItsCreatureOnEachAxis)
+{
+	const auto copied = creature_morph::CopiedTargets({.evilGood = -1.5f, .thinFat = 0.25f, .weakStrong = 1.0f});
+	EXPECT_EQ(copied.evilGood, -1.0f);
+	EXPECT_EQ(copied.thinFat, 0.25f);
+	EXPECT_EQ(copied.weakStrong, 1.0f);
+	EXPECT_EQ(creature_morph::CopiedTargets({.evilGood = -1.0f, .thinFat = 2.0f, .weakStrong = 0.0f}).evilGood, -1.0f);
+	EXPECT_EQ(creature_morph::CopiedTargets({.evilGood = 0.0f, .thinFat = 2.0f, .weakStrong = 0.0f}).thinFat, 1.0f);
+	// A value that is not a number is not above -1
+	const auto nan = std::numeric_limits<float>::quiet_NaN();
+	EXPECT_EQ(creature_morph::CopiedTargets({.evilGood = nan, .thinFat = 0.0f, .weakStrong = 0.0f}).evilGood, -1.0f);
+}
+
+TEST(CreatureMorph, ANewCopyDrawsItsTargetsFromTheMiddle)
+{
+	const auto looks = creature_morph::FirstLooksOfCopy({.evilGood = 0.6f, .thinFat = 0.02f, .weakStrong = -0.4f});
+	EXPECT_EQ(looks.targets, (creature_morph::Morph {.evilGood = 0.6f, .thinFat = 0.02f, .weakStrong = -0.4f}));
+	// A new alignment draws every axis, also one near the middle
+	EXPECT_EQ(looks.drawn, looks.targets);
+	EXPECT_TRUE(looks.painted);
+}
+
+TEST(CreatureMorph, ACopyOfACreatureNearTheMiddleKeepsItsUnpaintedSkin)
+{
+	const auto looks = creature_morph::FirstLooksOfCopy({.evilGood = 0.029f, .thinFat = 0.5f, .weakStrong = 0.01f});
+	EXPECT_FALSE(looks.painted);
+	EXPECT_EQ(looks.drawn.evilGood, 0.0f);
+	EXPECT_EQ(looks.drawn.thinFat, 0.5f);
+	EXPECT_EQ(looks.drawn.weakStrong, 0.01f);
+	EXPECT_EQ(looks.targets.evilGood, 0.029f);
+}
+
+TEST(CreatureMorph, ACopyWithLooksOfItsOwnIsDrawnWithItsOwnShape)
+{
+	using namespace openblack::ecs::components;
+	ecs::Registry land;
+	const auto creature = land.Create();
+	// The last paint of the skin took a target a little away from the drawn axis
+	land.Assign<CreatureMorph>(
+	    creature, CreatureMorph {.drawn = {.evilGood = 0.9f, .thinFat = 0.0f, .weakStrong = 0.0f}, .paintedAlignment = 0.92f});
+
+	ecs::Registry copies;
+	const auto plain = copies.Create();
+	copies.Assign<CreatureCopy>(plain, CreatureCopy {.creature = creature, .size = 1.0f});
+	const auto* shape = ShapeOfCopy(copies, plain, land);
+	ASSERT_NE(shape, nullptr);
+	EXPECT_EQ(shape->drawn.evilGood, 0.9f);
+	// A copy without looks of its own takes the hair of its creature: the target of the last paint, not the drawn axis
+	EXPECT_EQ(HairAlignmentOfCopy(copies.Get<const CreatureCopy>(plain), *shape), 0.92f);
+
+	const auto kept = copies.Create();
+	copies.Assign<CreatureCopy>(kept, CreatureCopy {.creature = creature,
+	                                                .size = 1.0f,
+	                                                .targets = creature_morph::Morph {.evilGood = 0.02f},
+	                                                .paintedAlignment = std::nullopt});
+	copies.Assign<CreatureMorph>(kept, CreatureMorph {.drawn = {}});
+	shape = ShapeOfCopy(copies, kept, land);
+	ASSERT_NE(shape, nullptr);
+	EXPECT_EQ(shape->drawn.evilGood, 0.0f);
+	// Hair that was not painted has the look of a creature that is neither evil nor good
+	EXPECT_EQ(HairAlignmentOfCopy(copies.Get<const CreatureCopy>(kept), *shape), 0.0f);
+	copies.Get<CreatureCopy>(kept).paintedAlignment = 0.02f;
+	EXPECT_EQ(HairAlignmentOfCopy(copies.Get<const CreatureCopy>(kept), *shape), 0.02f);
 }

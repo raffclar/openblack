@@ -11,6 +11,7 @@
 #include <cstdint>
 
 #include <algorithm>
+#include <limits>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -19,6 +20,7 @@
 #include <glm/vec2.hpp>
 #include <gtest/gtest.h>
 
+#include "Creature/CreatureActionAgendas.h"
 #include "Creature/CreatureFriendAgendas.h"
 #include "Creature/CreatureFriendship.h"
 #include "Creature/CreatureIdleMind.h"
@@ -622,4 +624,186 @@ TEST(CreatureJointActions, TheAskerTakesTheLookOfEachOrder)
 			EXPECT_EQ(look, "-");
 		}
 	}
+}
+
+TEST(CreatureJointActions, ShowingItsHomeToAFriend)
+{
+	const auto friends = TwoFriends();
+	const glm::vec3 home {50.0f, 2.0f, 60.0f};
+	const auto agenda = creature_mind::ShowFriendHome(friends, home, {1.0f, 2.0f, 3.0f}, false, InTurn({0, 0}));
+	ASSERT_EQ(agenda.size(), 12);
+	EXPECT_EQ(agenda[0].face, creature_face::Cue::Compassion);
+	EXPECT_FLOAT_EQ(agenda[0].movement.maxDistance, 3.0f * 30.0f);
+	EXPECT_EQ(agenda[1].face, creature_face::Cue::Compassion);
+	EXPECT_EQ(agenda[2].request, creature_friendship::RequestKind::BeShown);
+	EXPECT_FLOAT_EQ(Ordered(agenda[3]).movement.maxDistance, 3.0f * 20.0f);
+	EXPECT_FLOAT_EQ(agenda[4].movement.maxDistance, 3.0f * 30.0f);
+	EXPECT_EQ(agenda[5].face, creature_face::Cue::Grimace);
+	EXPECT_EQ(MainStep(agenda), 6u);
+	EXPECT_FLOAT_EQ(*agenda[6].order.seconds, creature_mind::k_PointAtHomeToShowSeconds);
+	EXPECT_EQ(agenda[8].kind, Step::Kind::WaitForFree);
+	EXPECT_FLOAT_EQ(Ordered(agenda[10]).seconds, creature_mind::k_ShowCitadelWaitSeconds);
+	EXPECT_FLOAT_EQ(agenda[11].seconds, creature_mind::k_ShowCitadelWaitSeconds);
+	EXPECT_EQ(agenda[11].face, creature_face::Cue::Compassion);
+	EXPECT_TRUE(agenda[11].gaze->feet);
+	// It does not go near a friend that it can see
+	EXPECT_EQ(creature_mind::ShowFriendHome(friends, home, {}, true, InTurn({0, 0})).size(), 11);
+}
+
+TEST(CreatureJointActions, ACreatureNeverHasBuiltItsHome)
+{
+	EXPECT_FALSE(creature_mind::HasBuiltHome(0));
+	EXPECT_FALSE(creature_mind::HasBuiltHome(6));
+	EXPECT_TRUE(creature_mind::HasBuiltHome(7));
+	creature_plan_actions::Situation situation;
+	const auto* executor = creature_plan_actions::For("ShowFriendHome");
+	ASSERT_NE(executor, nullptr);
+	EXPECT_FALSE(creature_plan_actions::Possible(*executor, situation));
+	EXPECT_TRUE(creature_plan_actions::Buildable(*executor, situation));
+}
+
+TEST(CreatureJointActions, ShowingAFriendAMiracleThatAttacks)
+{
+	const auto friends = TwoFriends();
+	constexpr uint32_t k_Rock = 40;
+	const auto agenda = creature_mind::ShowFriendAttackMiracle(friends, 1, k_Rock, {1.0f, 2.0f, 3.0f}, false);
+	ASSERT_EQ(agenda.size(), 13);
+	EXPECT_FLOAT_EQ(agenda[0].movement.maxDistance, 1.5f * 30.0f);
+	EXPECT_EQ(agenda[0].face, creature_face::Cue::None);
+	EXPECT_EQ(agenda[1].movement.kind, creature_mind::Movement::Kind::TurnToFaceObject);
+	EXPECT_EQ(agenda[2].request, creature_friendship::RequestKind::BeShown);
+	EXPECT_EQ(agenda[2].face, creature_face::Cue::Playfulness);
+	// The friend goes near the thing, to a distance from the height of the creature that shows it
+	EXPECT_FLOAT_EQ(Ordered(agenda[3]).movement.maxDistance, 2.5f * 30.0f);
+	EXPECT_EQ(*Ordered(agenda[3]).movement.object, k_Rock);
+	EXPECT_FLOAT_EQ(agenda[4].movement.maxDistance, 5.0f * 30.0f);
+	EXPECT_EQ(agenda[5].movement.kind, creature_mind::Movement::Kind::GetAwayFromObject);
+	EXPECT_FLOAT_EQ(agenda[5].movement.maxDistance, 2.0f * 30.0f);
+	EXPECT_EQ(agenda[6].face, creature_face::Cue::Fear);
+	EXPECT_EQ(agenda[7].face, creature_face::Cue::Grimace);
+	EXPECT_FLOAT_EQ(*agenda[7].order.seconds, 2.0f);
+	EXPECT_EQ(agenda[9].kind, Step::Kind::WaitForFree);
+	EXPECT_EQ(MainStep(agenda), 11u);
+	EXPECT_EQ(agenda[11].kind, Step::Kind::Cast);
+	EXPECT_EQ(agenda[11].cast.magicType, 1u);
+	EXPECT_EQ(*agenda[11].cast.object, k_Rock);
+	EXPECT_EQ(agenda[11].face, creature_face::Cue::Grimace);
+	EXPECT_FALSE(agenda[11].gaze.has_value());
+	EXPECT_EQ(*Ordered(agenda[12]).movement.object, k_Asker);
+	// With no thing to show the miracle on, it only turns to the friend
+	EXPECT_EQ(creature_mind::ShowFriendAttackMiracle(friends, 1, std::nullopt, {}, true).size(), 1);
+}
+
+TEST(CreatureJointActions, ShowingAFriendAMiracleThatMakesSomething)
+{
+	const auto friends = TwoFriends();
+	constexpr uint32_t k_Villager = 41;
+	const auto agenda = creature_mind::ShowFriendMakingMiracle(friends, 14, k_Villager, {1.0f, 2.0f, 3.0f}, false);
+	ASSERT_EQ(agenda.size(), 14);
+	EXPECT_FLOAT_EQ(agenda[0].movement.maxDistance, 3.5f * 30.0f);
+	EXPECT_EQ(agenda[0].face, creature_face::Cue::Compassion);
+	EXPECT_EQ(agenda[1].face, creature_face::Cue::Compassion);
+	EXPECT_EQ(agenda[2].face, creature_face::Cue::None);
+	EXPECT_FLOAT_EQ(Ordered(agenda[3]).movement.maxDistance, 5.0f * 30.0f);
+	EXPECT_EQ(agenda[5].face, creature_face::Cue::Grimace);
+	EXPECT_EQ(*Ordered(agenda[6]).movement.object, k_Villager);
+	EXPECT_EQ(agenda[7].face, creature_face::Cue::Compassion);
+	EXPECT_EQ(agenda[8].face, creature_face::Cue::Grimace);
+	EXPECT_EQ(MainStep(agenda), 12u);
+	EXPECT_EQ(agenda[12].cast.magicType, 14u);
+	EXPECT_EQ(agenda[12].face, creature_face::Cue::Compassion);
+	EXPECT_EQ(creature_mind::ShowFriendMakingMiracle(friends, 14, std::nullopt, {}, true).size(), 1);
+}
+
+TEST(CreatureJointActions, TheThingsThatAMiracleCanBeShownOn)
+{
+	using creature_mind::ShownThingKind;
+	EXPECT_TRUE(creature_mind::CanBeSetOnFire(ShownThingKind::SetIntoLand, false));
+	EXPECT_FALSE(creature_mind::CanBeSetOnFire(ShownThingKind::SetIntoLand, true));
+	EXPECT_FALSE(creature_mind::CanBeSetOnFire(ShownThingKind::SetIntoLandNeverBurns, false));
+	EXPECT_FALSE(creature_mind::CanBeSetOnFire(ShownThingKind::LooseObject, false));
+	EXPECT_FALSE(creature_mind::CanBeSetOnFire(ShownThingKind::Villager, false));
+	EXPECT_FALSE(creature_mind::CanBeSetOnFire(ShownThingKind::NotAnObject, false));
+
+	EXPECT_TRUE(creature_mind::CanBeHelpedByCreature(ShownThingKind::Villager, true));
+	EXPECT_FALSE(creature_mind::CanBeHelpedByCreature(ShownThingKind::Villager, false));
+	EXPECT_TRUE(creature_mind::CanBeHelpedByCreature(ShownThingKind::LooseObject, false));
+	EXPECT_TRUE(creature_mind::CanBeHelpedByCreature(ShownThingKind::SetIntoLand, false));
+	EXPECT_TRUE(creature_mind::CanBeHelpedByCreature(ShownThingKind::SetIntoLandNeverBurns, false));
+	EXPECT_FALSE(creature_mind::CanBeHelpedByCreature(ShownThingKind::NotAnObject, true));
+}
+
+TEST(CreatureJointActions, ConfusingAFriend)
+{
+	const auto agenda = creature_mind::ConfuseFriend(k_Asker, k_Friend, 10.0f, {50.0f, 3.0f, 60.0f}, Always(0));
+	ASSERT_EQ(agenda.size(), 9);
+	EXPECT_EQ(agenda[0].request, creature_friendship::RequestKind::BeFriends);
+	EXPECT_EQ(agenda[4].face, creature_face::Cue::Smile);
+	EXPECT_FLOAT_EQ(agenda[4].seconds, creature_mind::k_FaceTogetherSeconds);
+	EXPECT_FALSE(agenda[4].flutterEyelids);
+	EXPECT_EQ(MainStep(agenda), 5u);
+	EXPECT_EQ(agenda[5].face, creature_face::Cue::Grimace);
+	EXPECT_EQ(Ordered(agenda[6]).movement.kind, creature_mind::Movement::Kind::TurnToFace);
+	EXPECT_EQ(agenda[7].face, creature_face::Cue::Sad);
+	EXPECT_TRUE(agenda[7].flutterEyelids);
+	EXPECT_EQ(Ordered(agenda[8]).animation, animations::k_Confused);
+}
+
+TEST(CreatureJointActions, ShowingAnotherCreatureHowNiceItIs)
+{
+	const auto nice = creature_mind::ShowCreatureHowNice(k_Friend, 0.5f, Always(0));
+	ASSERT_EQ(nice.size(), 2);
+	EXPECT_FLOAT_EQ(nice[0].seconds, 2.0f);
+	EXPECT_EQ(*nice[0].gaze->object, k_Friend);
+	EXPECT_TRUE(nice[1].main);
+	EXPECT_EQ(nice[1].animation, animations::k_Happy);
+	EXPECT_EQ(creature_mind::ShowCreatureHowNice(k_Friend, -0.5f, Always(1))[1].animation, creature_mind::k_HateTaunt);
+	EXPECT_EQ(creature_mind::ShowCreatureHowNice(k_Friend, -0.5f, Always(0))[1].animation, animations::k_Taunt);
+	const auto neither = creature_mind::ShowCreatureHowNice(k_Friend, 0.0f, Always(0));
+	EXPECT_EQ(neither[1].kind, Step::Kind::Face);
+	EXPECT_EQ(neither[1].animation, animations::k_FirstFace);
+	EXPECT_EQ(*neither[1].gaze->object, k_Friend);
+	EXPECT_EQ(creature_mind::ShowCreatureHowNice(k_Friend, std::numeric_limits<float>::quiet_NaN(), Always(0))[1].kind,
+	          Step::Kind::Face);
+}
+
+TEST(CreatureJointActions, TheMiraclesShownToAFriendAreCasts)
+{
+	for (const auto action : {"ShowFriendSpellFireball", "ShowFriendSpellLightningBolt", "ShowFriendSpellLightningStorm",
+	                          "ShowFriendSpellMagicFood", "ShowFriendSpellMagicWood"})
+	{
+		const auto* executor = creature_plan_actions::For(action);
+		ASSERT_NE(executor, nullptr) << action;
+		EXPECT_TRUE(creature_plan_actions::IsCast(*executor)) << action;
+	}
+	EXPECT_EQ(creature_plan_actions::For("ShowFriendObject")->build, creature_plan_actions::Build::Never);
+}
+
+TEST(CreatureJointActions, TheFacesOfTheOrdersThatShowAFriendSomething)
+{
+	using creature_face::Cue;
+	using Faces = std::vector<Cue>;
+	const auto friends = TwoFriends();
+	EXPECT_EQ(FacesOfOrders(creature_mind::ShowFriendHome(friends, {}, {}, true, InTurn({0, 0}))),
+	          (Faces {Cue::Puzzled, Cue::None, Cue::None, Cue::Puzzled}));
+	EXPECT_EQ(FacesOfOrders(creature_mind::ShowFriendAttackMiracle(friends, 1, 40, {}, true)),
+	          (Faces {Cue::None, Cue::None, Cue::None, Cue::Amazed}));
+	EXPECT_EQ(FacesOfOrders(creature_mind::ShowFriendMakingMiracle(friends, 14, 40, {}, true)),
+	          (Faces {Cue::None, Cue::None, Cue::None, Cue::None, Cue::Amazed}));
+	EXPECT_EQ(FacesOfOrders(creature_mind::ConfuseFriend(k_Asker, k_Friend, 10.0f, {}, Always(0))),
+	          (Faces {Cue::Smile, Cue::Smile, Cue::Puzzled, Cue::Puzzled}));
+}
+
+TEST(CreatureJointActions, TheLooksOfTheOrdersThatShowAFriendSomething)
+{
+	using Looks = std::vector<std::string>;
+	const auto friends = TwoFriends();
+	EXPECT_EQ(LooksOfOrders(creature_mind::ShowFriendHome(friends, {}, {}, true, InTurn({0, 0}))),
+	          (Looks {"going", "ground", "ground", "-"}));
+	EXPECT_EQ(LooksOfOrders(creature_mind::ShowFriendAttackMiracle(friends, 1, 40, {}, true)),
+	          (Looks {"going", "ground", "thing", "ahead"}));
+	EXPECT_EQ(LooksOfOrders(creature_mind::ShowFriendMakingMiracle(friends, 14, 40, {}, true)),
+	          (Looks {"going", "thing", "ground", "thing", "ahead"}));
+	EXPECT_EQ(LooksOfOrders(creature_mind::ConfuseFriend(k_Asker, k_Friend, 10.0f, {}, Always(0))),
+	          (Looks {"-", "-", "-", "-"}));
 }

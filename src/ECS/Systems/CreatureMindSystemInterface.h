@@ -444,8 +444,12 @@ public:
 	/// the game's table (by its row) to the thing for its desire to obey. The plan is forced and counts for that desire
 	/// at its end, also when the creature could not make it. Returns whether the action is in the table.
 	virtual bool ObeyGodOrder(entt::entity /*creature*/, uint32_t /*action*/, entt::entity /*object*/) { return false; }
-	/// Whether the creature has played what it was doing, as scripts ask: its agenda is over or it is only idle
-	[[nodiscard]] virtual bool HasPlayed(entt::entity /*creature*/) const { return true; }
+	/// Whether the creature has played what it was doing, as scripts ask: its plan is not valid, its agenda is over, or it
+	/// is only idle
+	[[nodiscard]] virtual bool HasPlayed(entt::entity /*creature*/) { return true; }
+	/// The creature faints: its plan becomes the plan to lie dead, about itself, for its desire to obey. The knock-out
+	/// is the agenda of this plan.
+	virtual void PlanDeath(entt::entity /*creature*/) {}
 	/// A script asked and the creature has played: it stops the remaining steps of its agenda
 	virtual void ClearAfterPlayed(entt::entity /*creature*/) {}
 

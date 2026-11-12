@@ -37,6 +37,11 @@ namespace openblack::ecs
 class Registry;
 }
 
+namespace openblack::creature_morph
+{
+struct Morph;
+}
+
 /// A model's triangles where they are drawn this frame, which the cursor pick and the marks a blow or a burn leaves on a
 /// creature's skin both test lines against
 namespace openblack::ecs::posed_model
@@ -50,9 +55,11 @@ namespace openblack::ecs::posed_model
 /// meshes, and a model following the land moved up and down with it
 void Place(const ecs::Registry& registry, entt::entity entity, const graphics::L3DMesh& mesh, size_t index,
            const glm::mat4& model, std::vector<glm::vec3>& corners);
-/// The same, posed by other bones than the model's own, as a copy of a creature drawn elsewhere in a pose of its own
+/// The same, posed by other bones than the model's own, as a copy of a creature drawn elsewhere in a pose of its own.
+/// With a shape, a creature's body is placed with that shape, as a copy with a shape of its own is drawn.
 void Place(const ecs::Registry& registry, entt::entity entity, const graphics::L3DMesh& mesh, size_t index,
-           const glm::mat4& model, std::span<const glm::mat4> bones, std::vector<glm::vec3>& corners);
+           const glm::mat4& model, std::span<const glm::mat4> bones, std::vector<glm::vec3>& corners,
+           const creature_morph::Morph* shape = nullptr);
 
 /// How a placement moves the corners of a model that follows the land
 enum class LandFollow : uint8_t
@@ -133,10 +140,11 @@ struct SkinPoint
                                                    const graphics::L3DMesh& mesh, const glm::mat4& model,
                                                    const SkinPoint& point);
 /// The three corners of the triangle of a point on the skin, posed by other bones than the model's own. None when the
-/// model does not have that triangle.
+/// model does not have that triangle. With a shape, a creature's body is placed with that shape.
 [[nodiscard]] std::optional<std::array<glm::vec3, 3>> CornersOnSkin(const ecs::Registry& registry, entt::entity entity,
                                                                     const graphics::L3DMesh& mesh, const glm::mat4& model,
-                                                                    std::span<const glm::mat4> bones, const SkinPoint& point);
+                                                                    std::span<const glm::mat4> bones, const SkinPoint& point,
+                                                                    const creature_morph::Morph* shape = nullptr);
 /// A triangle's first corner, moved s of the way along its first side and t along its third
 [[nodiscard]] glm::vec3 SkinPointPosition(const std::array<glm::vec3, 3>& corners, float s, float t);
 } // namespace openblack::ecs::posed_model

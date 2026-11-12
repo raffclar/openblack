@@ -229,6 +229,13 @@ enum class Build : uint8_t
 	PlayThrowingGameWithFriend,
 	GiveFriendToy,
 	ShowFriendCitadel,
+	/// Showing a friend its home, a miracle that attacks or a miracle that makes something; confusing a friend; showing
+	/// another creature how nice it thinks that creature is (see creature_mind::ShowFriendHome and the others)
+	ShowFriendHome,
+	ShowFriendAttackMiracle,
+	ShowFriendMakingMiracle,
+	ConfuseFriend,
+	ShowCreatureHowNice,
 	RunFromObject,
 	RunFromPlayer,
 	LookAbout,
@@ -280,6 +287,8 @@ enum class Build : uint8_t
 	/// Looking at the camera while a script's cut scene is on, as every creature free to think for itself is made to
 	LookAtCameraInCutScene,
 	PointAtCamera,
+	/// The twelve gesture actions: each turns to the camera and draws the circle in the air. Only a script starts them.
+	Gesture,
 	/// Hurling, sleeping at home, smiling or waving at someone, being frightened on the spot, putting down what it
 	/// holds and lying dead for good, as the game builds them whoever chose them
 	SleepAtHome,
@@ -689,6 +698,12 @@ struct Situation
 	/// Where the head of the creature is, and where its home is on the ground
 	std::optional<glm::vec3> head;
 	std::optional<glm::vec3> homePlace;
+	/// The thing on which the creature shows a friend a miracle, by its entity's number: the nearest thing that it
+	/// believes in and that the miracle suits (see creature_mind::CanBeSetOnFire and CanBeHelpedByCreature). None when
+	/// no thing suits it.
+	std::optional<uint32_t> shownThing;
+	/// How nice the creature thinks the other creature is, from -1 to 1
+	float howNiceOther {0.0f};
 	/// For the football actions: the ball of the pitch where the villager plays, the goal that the creature's side
 	/// attacks, and the first player of the other team (none when that team has no player). None when the villager
 	/// plays on no pitch.

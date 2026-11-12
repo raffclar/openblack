@@ -549,6 +549,43 @@ void AddCaveCopyHair(std::vector<Scenario>& all)
 	    .commands = {{.kind = Kind::EnterTemple, .delaySeconds = 1.0f, .value = static_cast<size_t>(TempleRoom::Main)},
 	                 {.kind = Kind::OpenCreatureCave, .creature = 0, .delaySeconds = 0.5f}},
 	});
+
+	auto good = ape;
+	good.alignment = 0.9f;
+	all.push_back({
+	    .id = "creature_mode.cave_copy_motes",
+	    .name = "The motes of a good creature in the cave",
+	    .facet = Facet::CreatureMode,
+	    .description = "The player has a good ape (alignment 0.9). The player goes into the temple and its Creature Cave, "
+	                   "and stays there.",
+	    .expected = "The ape by the fire has the shape and the skin of a good ape. Faint pastel motes come off its body "
+	                "from the first frame that the cave shows, and on each frame after, and fade, as they do in the world, "
+	                "while the world stays paused.",
+	    .framing = {.shot = Shot::Overview},
+	    .creatures = {good},
+	    .commands = {{.kind = Kind::EnterTemple, .delaySeconds = 1.0f, .value = static_cast<size_t>(TempleRoom::Main)},
+	                 {.kind = Kind::OpenCreatureCave, .creature = 0, .delaySeconds = 0.5f}},
+	});
+
+	// The alignment is within the morph threshold of the drawn axis, which starts at 0. Thus no new alignment paints the
+	// skin, and only the exit from the temple gives the skin and the hair the target.
+	auto nearlyNeutral = ape;
+	nearlyNeutral.alignment = 0.02f;
+	nearlyNeutral.pauseMind = true;
+	all.push_back({
+	    .id = "creature_mode.temple_exit_paints_target",
+	    .name = "The exit from the temple paints the skin with the target",
+	    .facet = Facet::CreatureMode,
+	    .description = "The player has an ape with the alignment 0.02, and its mind stops. The player goes into the temple "
+	                   "and, after 10 s, walks out through the main room.",
+	    .expected = "The drawn evil to good axis of the ape stays 0. Before the exit, the paintedAlignment of its "
+	                "CreatureMorph is 0. After the exit it is 0.02, so the skin blends 5 parts in 256 towards the good "
+	                "skin. The change is too small to see.",
+	    .framing = {.shot = Shot::Overview},
+	    .creatures = {nearlyNeutral},
+	    .commands = {{.kind = Kind::EnterTemple, .delaySeconds = 1.0f, .value = static_cast<size_t>(TempleRoom::Main)},
+	                 {.kind = Kind::EnterTemple, .delaySeconds = 10.0f, .value = static_cast<size_t>(TempleRoom::Unknown)}},
+	});
 }
 
 /// The Creature Cave's trophies for creatures of different histories: the belts on the attack dummies for how each leans

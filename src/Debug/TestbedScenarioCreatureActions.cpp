@@ -10,6 +10,7 @@
 // The testbed's scenarios of creature actions that Land 1 can start and that no other scenario stages. A script tells
 // a tiger to do each action, so that the sweep of the creature's clips sees every action
 
+#include <array>
 #include <string_view>
 #include <vector>
 
@@ -606,6 +607,46 @@ void testbed_scenarios::AddCreatureActionTownScenarios(std::vector<Scenario>& al
 	    .objects = {{.type = MobileStaticInfo::Rock, .offset = {0.0f, -12.0f}}},
 	    .commands = {Do("PracticeThrow", 1.0f)},
 	});
+	{
+		// One grown creature of each species, 40 metres apart, each with a rock 12 metres in front of it
+		constexpr std::array k_Species {
+		    CreatureType::Cow,       CreatureType::Tiger,     CreatureType::Leopard,  CreatureType::Wolf,
+		    CreatureType::Lion,      CreatureType::Horse,     CreatureType::Tortoise, CreatureType::Zebra,
+		    CreatureType::BrownBear, CreatureType::PolarBear, CreatureType::Sheep,    CreatureType::Chimp,
+		    CreatureType::Mandrill,  CreatureType::Rhino,     CreatureType::Gorilla,  CreatureType::GiantApe};
+		std::vector<CreatureSetup> throwers;
+		std::vector<ObjectSetup> rocks;
+		std::vector<Command> throws;
+		for (size_t i = 0; i < k_Species.size(); ++i)
+		{
+			const float x = (static_cast<float>(i) - 7.5f) * 40.0f;
+			auto thrower = Actor();
+			thrower.label = {};
+			thrower.species = k_Species.at(i);
+			thrower.offset = {x, 0.0f};
+			throwers.push_back(thrower);
+			// The reach of a tortoise of size 1 is too short for a rock of scale 1, so its rock is smaller
+			const float rockScale = k_Species.at(i) == CreatureType::Tortoise ? 0.9f : 1.0f;
+			rocks.push_back({.type = MobileStaticInfo::Rock, .offset = {x, -12.0f}, .scale = rockScale});
+			auto practice = Do("PracticeThrow", 0.5f, i);
+			practice.creature = i;
+			throws.push_back(practice);
+		}
+		all.push_back({
+		    .id = "actions.practice_throw_each_species",
+		    .name = "Each species practises a throw with a rock",
+		    .facet = Facet::Objects,
+		    .description = "One grown creature of each species stands in a row, each with a rock 12 metres in front of it. "
+		                   "The tortoise has a smaller rock: it cannot reach round a full rock. Each is told to practise a "
+		                   "throw with its rock.",
+		    .expected = "Each creature picks its rock up and throws it. The inspector shows the hand of each throw.",
+		    .environment = {.dispenserGrid = false},
+		    .framing = {.shot = Shot::Overview, .include = {{-340.0f, -60.0f}, {340.0f, 20.0f}}},
+		    .creatures = std::move(throwers),
+		    .objects = std::move(rocks),
+		    .commands = std::move(throws),
+		});
+	}
 	all.push_back({
 	    .id = "actions.throw_to_impress",
 	    .name = "Throws a rock to impress",

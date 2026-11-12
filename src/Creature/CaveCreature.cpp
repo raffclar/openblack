@@ -25,9 +25,11 @@ namespace
 {
 namespace animations = creature_layers::animations;
 
-/// Sits or lies down, played left to right or not by the toss of a coin, unless the body is busy
+/// Sits or lies down, played left to right or not by the toss of a coin, unless the body is busy. The coin is tossed
+/// also when the body is busy.
 void StartRest(State& state, Body& body, const Random& random)
 {
+	const bool mirrored = random(2) != 0;
 	if (Busy(state, body))
 	{
 		return;
@@ -38,7 +40,7 @@ void StartRest(State& state, Body& body, const Random& random)
 	           : creature_layers::PlaySequence(body.body, animations::k_StartSit, animations::k_Sit, animations::k_EndSit);
 	if (rest.has_value())
 	{
-		rest->mirrored = random(2) != 0;
+		rest->mirrored = mirrored;
 		body.body = *rest;
 	}
 }
@@ -175,6 +177,15 @@ void cave_creature::InEditor(State& state, Body& body, const Frame& frame, const
 	Fidget(state, body, frame, random);
 }
 
+void cave_creature::Settle(State& state, Body& body, const glm::vec3& fire, const Random& random)
+{
+	StartRest(state, body, random);
+	if (state.rest == Rest::Sit)
+	{
+		body.lookAt = fire;
+	}
+}
+
 std::optional<GameHeading> cave_creature::Step(State& state, Body& body, const Frame& frame, const Random& random)
 {
 	if (!frame.zoomed)
@@ -188,11 +199,7 @@ std::optional<GameHeading> cave_creature::Step(State& state, Body& body, const F
 		}
 		else
 		{
-			StartRest(state, body, random);
-			if (state.rest == Rest::Sit)
-			{
-				body.lookAt = frame.fire;
-			}
+			Settle(state, body, frame.fire, random);
 		}
 	}
 	else

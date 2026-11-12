@@ -22,7 +22,7 @@ using namespace openblack::ecs::components;
 std::optional<entt::entity> creature_carried::CarriedBy(const Registry& registry, entt::entity creature)
 {
 	const auto* held = registry.Valid(creature) ? registry.TryGet<const CreatureHeldObject>(creature) : nullptr;
-	if (held == nullptr || !registry.Valid(held->object))
+	if (held == nullptr || !registry.Valid(held->object) || !held->carried)
 	{
 		return std::nullopt;
 	}

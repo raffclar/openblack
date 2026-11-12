@@ -113,6 +113,7 @@
 #include "ECS/ThingMapPlace.h"
 #include "ECS/WorldObjects.h"
 #include "Graphics/Texture2D.h"
+#include "Hand/HandTricons.h"
 #include "Help/HelpProfile.h"
 #include "InfoConstants.h"
 #include "Input/GameActionMapInterface.h"
@@ -233,6 +234,27 @@ float GroundAt(glm::vec2 point)
 	return Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().GetHeightAt(point) : 0.0f;
 }
 
+/// The wrist of this computer's hand where the frames draw it, none off the land: the first bone of the hand, where
+/// this frame poses it. The animations of the hand keep this bone away from the point that the hand hovers at. The rope
+/// of a leash that is not tied goes to here.
+std::optional<glm::vec3> DrawnWristPoint()
+{
+	const auto hover = DrawnHandPoint();
+	if (!hover.has_value())
+	{
+		return std::nullopt;
+	}
+	const auto entity = Locator::handSystem::value().GetOwnHands()[static_cast<size_t>(HandSystemInterface::Side::Left)];
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* at = registry.Valid(entity) ? registry.TryGet<const Transform>(entity) : nullptr;
+	const auto* hand = registry.Valid(entity) ? registry.TryGet<const Hand>(entity) : nullptr;
+	if (at == nullptr || hand == nullptr)
+	{
+		return hover;
+	}
+	return hand_tricons::AnchorPoint(at->position, at->rotation, at->scale, hand->boneMatrices);
+}
+
 /// Which pose of the body the collar point comes from
 enum class CollarPose
 {
@@ -333,15 +355,15 @@ std::optional<glm::vec3> ReportedCamera(PlayerNames player)
 }
 
 /// Where the rope of a leash that a player holds ends, none when the end is not known. The rope of the player at this
-/// computer goes to the hand. In the drawn pose, it is the hand where the frame draws it. In the turn pose, it is the
-/// hand as the reports put it. The rope of each other player goes to the camera of that player.
+/// computer goes to the hand. In the drawn pose, it is the wrist of the hand where the frame draws it. In the turn
+/// pose, it is the hand as the reports put it. The rope of each other player goes to the camera of that player.
 std::optional<glm::vec3> HeldRopeEnd(PlayerNames holder, CollarPose pose)
 {
 	if (holder != OwnPlayer())
 	{
 		return ReportedCamera(holder);
 	}
-	return pose == CollarPose::Drawn ? DrawnHandPoint() : HandPoint(holder);
+	return pose == CollarPose::Drawn ? DrawnWristPoint() : HandPoint(holder);
 }
 
 /// Where the rope of a worn leash ends in a pose: at the thing that the leash is tied to, else at its holder

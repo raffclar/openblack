@@ -54,10 +54,19 @@ std::vector<creature_mind::Step> creature_script_play::Agenda(const Request& req
 	return agenda;
 }
 
-bool creature_script_play::Played(const creature_mind::IdleMind& mind)
+bool creature_script_play::Played(const creature_mind::IdleMind& mind, bool planValid)
 {
 	// A last step that ended with empty last stages keeps the agenda until the next turn goes past those stages
-	return mind.activity == creature_mind::Activity::BeIdle || creature_mind::AgendaOver(mind);
+	return !planValid || mind.activity == creature_mind::Activity::BeIdle || creature_mind::AgendaOver(mind);
+}
+
+bool creature_script_play::Played(const creature_mind::IdleMind& mind, bool planValid, bool knockedOut)
+{
+	if (knockedOut && planValid)
+	{
+		return false;
+	}
+	return Played(mind, planValid);
 }
 
 void creature_script_play::ClearAfterPlayed(creature_mind::IdleMind& mind)

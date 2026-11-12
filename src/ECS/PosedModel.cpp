@@ -85,10 +85,12 @@ namespace
 class VertexPlacer
 {
 public:
-	/// With a reach, the placer adds to it each map point where it reads the land height
+	/// With a reach, the placer adds to it each map point where it reads the land height. With a shape, a creature's
+	/// body is placed with that shape in place of its own.
 	VertexPlacer(const ecs::Registry& registry, entt::entity entity, const graphics::L3DMesh& mesh, size_t index,
 	             const glm::mat4& model, std::span<const glm::mat4> bones, MapReach* reach = nullptr,
-	             posed_model::LandFollow landFollow = posed_model::LandFollow::AsDrawn)
+	             posed_model::LandFollow landFollow = posed_model::LandFollow::AsDrawn,
+	             const creature_morph::Morph* shape = nullptr)
 	    : _geometry(mesh.GetSubMeshes()[index]->GetBodyGeometry())
 	    , _model(model)
 	    , _bones(bones)
@@ -118,17 +120,18 @@ public:
 		// it is drawn
 		if (const auto* creature = registry.TryGet<const Creature>(entity))
 		{
-			if (const auto* shape = registry.TryGet<const CreatureMorph>(entity))
+			const auto* own = registry.TryGet<const CreatureMorph>(entity);
+			if (const auto* drawn = shape != nullptr ? shape : (own != nullptr ? &own->drawn : nullptr))
 			{
 				auto& meshes = Locator::resources::value().GetMeshes();
-				const auto ids = creature_morph::MeshesOf(creature->species, shape->drawn,
+				const auto ids = creature_morph::MeshesOf(creature->species, *drawn,
 				                                          [&meshes](entt::id_type id) { return meshes.Contains(id); });
 				const auto subMeshOf = [&meshes, index](entt::id_type id) -> const graphics::L3DSubMesh* {
 					const auto& subs = meshes.Handle(id)->GetSubMeshes();
 					return index < subs.size() ? subs[index].get() : nullptr;
 				};
 				_morphs = {subMeshOf(ids.evilGood), subMeshOf(ids.thinFat), subMeshOf(ids.weakStrong)};
-				_morph = &shape->drawn;
+				_morph = drawn;
 			}
 		}
 	}
@@ -264,9 +267,10 @@ void posed_model::Place(const ecs::Registry& registry, entt::entity entity, cons
 }
 
 void posed_model::Place(const ecs::Registry& registry, entt::entity entity, const graphics::L3DMesh& mesh, size_t index,
-                        const glm::mat4& model, std::span<const glm::mat4> bones, std::vector<glm::vec3>& corners)
+                        const glm::mat4& model, std::span<const glm::mat4> bones, std::vector<glm::vec3>& corners,
+                        const creature_morph::Morph* shape)
 {
-	const VertexPlacer place(registry, entity, mesh, index, model, bones);
+	const VertexPlacer place(registry, entity, mesh, index, model, bones, nullptr, LandFollow::AsDrawn, shape);
 	corners.clear();
 	corners.reserve(place.Count());
 	for (size_t i = 0; i < place.Count(); ++i)
@@ -314,7 +318,8 @@ std::optional<glm::vec3> posed_model::PointOnSkin(const ecs::Registry& registry,
 
 std::optional<std::array<glm::vec3, 3>> posed_model::CornersOnSkin(const ecs::Registry& registry, entt::entity entity,
                                                                    const graphics::L3DMesh& mesh, const glm::mat4& model,
-                                                                   std::span<const glm::mat4> bones, const SkinPoint& point)
+                                                                   std::span<const glm::mat4> bones, const SkinPoint& point,
+                                                                   const creature_morph::Morph* shape)
 {
 	if (point.subMesh >= mesh.GetSubMeshes().size())
 	{
@@ -325,7 +330,7 @@ std::optional<std::array<glm::vec3, 3>> posed_model::CornersOnSkin(const ecs::Re
 	{
 		return std::nullopt;
 	}
-	const VertexPlacer place(registry, entity, mesh, point.subMesh, model, bones);
+	const VertexPlacer place(registry, entity, mesh, point.subMesh, model, bones, nullptr, LandFollow::AsDrawn, shape);
 	std::array<glm::vec3, 3> corners {};
 	for (size_t c = 0; c < corners.size(); ++c)
 	{

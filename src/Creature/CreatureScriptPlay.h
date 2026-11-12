@@ -46,10 +46,16 @@ struct Request
 /// body does not have (static action 0, or a number below 0) never begins, so the agenda never ends.
 [[nodiscard]] std::vector<creature_mind::Step> Agenda(const Request& request);
 
-/// Whether a creature has played what it was doing: its agenda is over, or it is only being idle. A creature busy with
-/// any agenda, its own or a script's, has not. When the last step ends with empty last stages, the agenda is over only on
-/// the next turn, when it goes past those stages.
-[[nodiscard]] bool Played(const creature_mind::IdleMind& mind);
+/// Whether a creature has played what it was doing. It has played when one of these is true:
+/// - its plan is not valid (see creature_planner::IsValid), also while steps of its agenda are left
+/// - its agenda is over
+/// - it is only being idle
+/// A creature busy with any agenda of a valid plan, its own or a script's, has not played. When the last step ends with
+/// empty last stages, the agenda is over only on the next turn, when it goes past those stages.
+[[nodiscard]] bool Played(const creature_mind::IdleMind& mind, bool planValid);
+/// As Played, for a creature that can lie knocked out. The knock-out is the agenda of the plan to lie dead. While the
+/// creature lies knocked out with a valid plan, steps of that agenda are left, so it has not played.
+[[nodiscard]] bool Played(const creature_mind::IdleMind& mind, bool planValid, bool knockedOut);
 
 /// When a script asks and the creature has played, the creature stops the remaining steps of its agenda. An idle
 /// creature thus stops its idle steps. The creature does not complete these steps, so they do not count as done. The

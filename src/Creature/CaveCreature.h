@@ -61,6 +61,8 @@ constexpr float k_PointerLookMs = 1500.0f;
 /// The point under the pointer it looks at lies this far into the screen, along the camera's view. It is not the depth
 /// that the tattoo editor of the main menu uses.
 constexpr float k_PointerDepth = 3.0f;
+/// As the cave makes the copy, it brings the copy up to date two times by this many milliseconds
+constexpr float k_MadeUpdateMs = 1.0f;
 /// The pose moves on by no more than this much of a frame's time
 constexpr float k_MaxFrameMs = 200.0f;
 /// The editor's fidgets: one every 20 to 40 seconds, the first nine a random choice of three, then it sits
@@ -151,6 +153,9 @@ using Random = std::function<uint32_t(uint32_t range)>;
 /// The editor's fidgets start again from the beginning as it opens, the next 20 to 40 seconds away
 void StartIdle(State& state, const Random& random);
 
+/// It starts to rest by the fire: it sits and looks into the fire, or it lies down. The cave does this when it makes the
+/// copy, between its first two updates, and each frame that the copy faces the fire.
+void Settle(State& state, Body& body, const glm::vec3& fire, const Random& random);
 /// One frame of a creature that the tattoo editor shows: it looks at the pointer while a button has been held for under
 /// a second and a half, and fidgets now and then
 void InEditor(State& state, Body& body, const Frame& frame, const Random& random);

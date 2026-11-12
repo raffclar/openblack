@@ -529,7 +529,9 @@ bool IsInterestedInFoodObject(entt::entity villager, entt::entity food)
 uint32_t villager_food::ReactToFoodPriority(entt::entity villager, entt::entity food, uint32_t priority)
 {
 	auto& registry = Entities();
+	// With no stores to ask, the villager finds no food in the thing
 	if (food == entt::null || !registry.Valid(food) || !registry.AllOf<Transform>(food) ||
+	    !Locator::resourceStoreSystem::has_value() ||
 	    Locator::resourceStoreSystem::value().GetResource(food, ResourceType::Food) == 0 ||
 	    gutils::GetDistanceInMetres(Position(villager), Position(food)) > FoodReactionInfo().maxDistanceToRunAwayFromObject)
 	{

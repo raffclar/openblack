@@ -148,7 +148,8 @@ public:
 	void SetScriptFocus(entt::entity creature, std::optional<creature_mind::Gaze> focus) override;
 	bool ScriptDoAction(entt::entity creature, uint32_t action, entt::entity target, std::optional<entt::entity> with) override;
 	bool ObeyGodOrder(entt::entity creature, uint32_t action, entt::entity object) override;
-	[[nodiscard]] bool HasPlayed(entt::entity creature) const override;
+	[[nodiscard]] bool HasPlayed(entt::entity creature) override;
+	void PlanDeath(entt::entity creature) override;
 	void ClearAfterPlayed(entt::entity creature) override;
 	[[nodiscard]] float GetInteractionMagnitude(entt::entity creature) const override;
 	void ClearInteractionMagnitude(entt::entity creature) override;

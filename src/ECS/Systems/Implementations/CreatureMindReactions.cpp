@@ -76,6 +76,10 @@ constexpr uint32_t k_TurnsPerSecond = 10;
 constexpr size_t k_NotLearnt = static_cast<size_t>(MagicType::LightningBoltPowerUpTwo);
 /// The cells that the creature looks in, out from the hand, for a thing to cast the miracle at
 constexpr int32_t k_LeashCastCells = 64;
+/// The actions of the game's table for a reaction to a miracle: to go and look at where it struck, and to run away
+/// from there
+constexpr std::string_view k_ExaminePlaceAction = "ExaminePos";
+constexpr std::string_view k_RunAwayFromPlaceAction = "RunAwayFromPos";
 
 /// The point that the interface of a player picks under the cursor, as the last report of the player's hand tells it.
 /// The turn reads the reports and never the pick of the cursor of this computer.
@@ -129,8 +133,16 @@ void CreatureMindSystem::ReactToNastyMagic(entt::entity creature, const glm::vec
 	const float height = ShownSize(*body) * k_HeightOfSizeOne;
 	const auto random = [this](uint32_t range) { return Random(range); };
 	const glm::vec2 at(point.x, point.z);
-	Replan(creature, creature_mind::Activity::Planned,
-	       curious ? creature_mind::ExamineMiracle(at, height, random) : creature_mind::RunAwayFromMiracle(at, height, random));
+	// The reaction is a plan on the creature itself, which a script sees as valid until it is over. It is not a forced
+	// plan, and not an order.
+	static_cast<void>(ForcePlan(creature, {.desire = curious ? Desire::Curiosity : Desire::Fear,
+	                                       .action = curious ? k_ExaminePlaceAction : k_RunAwayFromPlaceAction,
+	                                       .object = creature,
+	                                       .agenda = curious ? creature_mind::ExamineMiracle(at, height, random)
+	                                                         : creature_mind::RunAwayFromMiracle(at, height, random),
+	                                       .activity = creature_mind::Activity::Planned,
+	                                       .forced = false,
+	                                       .fightBodyEndsAgain = true}));
 	if (learn.has_value())
 	{
 		WatchMiracle(creature, *learn);
@@ -261,8 +273,14 @@ void CreatureMindSystem::ReactToNiceMagic(entt::entity creature, const glm::vec3
 	}
 	EndReaction(creature);
 	const auto random = [this](uint32_t range) { return Random(range); };
-	Replan(creature, creature_mind::Activity::Planned,
-	       creature_mind::ExamineMiracle({point.x, point.z}, ShownSize(*body) * k_HeightOfSizeOne, random));
+	static_cast<void>(ForcePlan(
+	    creature, {.desire = Desire::Curiosity,
+	               .action = k_ExaminePlaceAction,
+	               .object = creature,
+	               .agenda = creature_mind::ExamineMiracle({point.x, point.z}, ShownSize(*body) * k_HeightOfSizeOne, random),
+	               .activity = creature_mind::Activity::Planned,
+	               .forced = false,
+	               .fightBodyEndsAgain = true}));
 	if (learn.has_value())
 	{
 		WatchMiracle(creature, *learn);

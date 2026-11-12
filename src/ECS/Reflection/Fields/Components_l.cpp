@@ -80,6 +80,7 @@ void openblack::ecs::reflection::RegisterFields_Components_l(entt::meta_ctx& con
 	    .Field<&components::LivingReaction::type>("type")
 	    .Field<&components::LivingReaction::startTurn>("startTurn")
 	    .Field<&components::LivingReaction::joined>("joined")
+	    .Field<&components::LivingReaction::left>("left")
 	    .Field<&components::LivingReaction::creatureMemory>("creatureMemory")
 	    .Field<&components::LivingReaction::sawFlying>("sawFlying")
 	    .Field<&components::LivingReaction::sawCrushed>("sawCrushed");

@@ -543,6 +543,30 @@ void testbed_scenarios::AddMovement(std::vector<Scenario>& all)
 	    .repeatFrom = 0,
 	});
 
+	// A tiger hurls a rock at a cow far from it. A step of the fast throw can get to the end of the throw before the
+	// release.
+	all.push_back({
+	    .id = "objects.hurl_kept_in_hand",
+	    .name = "Hurl kept in the hand",
+	    .facet = Facet::Objects,
+	    .description = "A grown tiger with a rock in front of it. A cow stands 250 units to the north. A script tells the "
+	                   "tiger to hurl the rock at the cow one time.",
+	    .expected = "The arm moves fast near the moment it lets go. When one step of the throw gets past that moment and "
+	                "the end of the throw, the throw ends and the rock stays in the hand. The tiger then stands with the "
+	                "rock in its hand and does not throw it. It carries nothing, so the rock does not move with it on "
+	                "the map.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-40.0f, -260.0f}, {40.0f, 10.0f}}},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f}), Posed(CreatureType::Cow, {0.0f, -250.0f}, 90.0f)},
+	    .objects = {{.type = MobileStaticInfo::RockChalk, .offset = {0.0f, -10.0f}}},
+	    .commands = {{.kind = Kind::DoAction,
+	                  .delaySeconds = 1.0f,
+	                  .waitUntilFree = true,
+	                  .action = "Hurl",
+	                  .with = 0,
+	                  .atCreature = 1}},
+	});
+
 	// A ring of fence round a pen, with two villagers walking to the far side of it, one aiming a little to each side
 	constexpr glm::vec2 k_Pen {-60.0f, -40.0f};
 	constexpr float k_PenRadius = 12.0f;

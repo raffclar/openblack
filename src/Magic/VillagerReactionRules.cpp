@@ -128,6 +128,11 @@ bool villager_reaction::KeepsWaitingForMate(float distance, float reach)
 	return distance < reach;
 }
 
+bool villager_reaction::PassesReachGate(bool kindReacts, float maxDistance, float at)
+{
+	return kindReacts && !(at > maxDistance);
+}
+
 uint8_t villager_reaction::Priority(uint8_t kindPriority, bool kindReacts, const Distance& distance, float at)
 {
 	if (!kindReacts || at > distance.maxDistance || !(distance.maxDistance > 0.0f))

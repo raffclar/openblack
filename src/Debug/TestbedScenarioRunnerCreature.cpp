@@ -799,8 +799,12 @@ void Runner::GiveCreatureCommand(const Command& command)
 		        : "can't";
 		break;
 	case Kind::Fart:
-		// A fart is always a plan for the desire to poo
-		result = minds.ForcePlan(*entity, {.desire = creature_desires::Desire::Poo, .action = "Fart"}) ? "started" : "can't";
+		// A fart is always a plan for the desire to poo. A plan that the creature makes by its own wish is not forced, so
+		// the creature can take up reactions while it farts.
+		result =
+		    minds.ForcePlan(*entity, {.desire = creature_desires::Desire::Poo, .action = "Fart", .forced = command.value == 0})
+		        ? "started"
+		        : "can't";
 		break;
 	case Kind::Puke:
 		result = minds.Puke(*entity) ? "started" : "can't";

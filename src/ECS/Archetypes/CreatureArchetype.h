@@ -12,12 +12,19 @@
 #include <entt/fwd.hpp>
 #include <glm/fwd.hpp>
 
+#include "Creature/CreatureMorph.h"
 #include "Enums.h"
 
 namespace openblack::ecs
 {
 class Registry;
 }
+
+namespace openblack::ecs::components
+{
+struct Creature;
+struct CreatureMorph;
+} // namespace openblack::ecs::components
 
 namespace openblack::ecs::archetypes
 {
@@ -47,6 +54,13 @@ public:
 	/// they are now. This occurs at the end of each turn that the hand does not hold it, when a mind file loads into
 	/// it, and when a swap of minds changes it.
 	static void TakeLooks(Registry& registry, entt::entity creature);
+	/// The evil to good, thin to fat and weak to strong targets that the creature's body moves towards: the looks it took
+	/// last, or its alignment and strength as they are now before it takes looks
+	[[nodiscard]] static creature_morph::Morph Targets(const components::Creature& creature,
+	                                                   const components::CreatureMorph& morph);
+	/// The skin and the hair of the creature get the evil to good target that the creature has now, as each paint of
+	/// the skin does (see components::CreatureMorph::paintedAlignment)
+	static void PaintWithTarget(Registry& registry, entt::entity creature);
 
 	static entt::entity Create(const glm::vec3& position, PlayerNames playerName, CreatureType creatureType,
 	                           entt::id_type creatureMindId, float yAngleRadians, float scale, const Body& body);

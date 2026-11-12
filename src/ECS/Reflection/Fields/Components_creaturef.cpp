@@ -79,7 +79,8 @@ void openblack::ecs::reflection::RegisterFields_Components_creaturef(entt::meta_
 	    .Field<&components::CreatureKnockedOut::restPosed>("restPosed")
 	    .Field<&components::CreatureKnockedOut::permanent>("permanent")
 	    .Field<&components::CreatureKnockedOut::home>("home")
-	    .Field<&components::CreatureKnockedOut::fizzTurns>("fizzTurns");
+	    .Field<&components::CreatureKnockedOut::fizzTurns>("fizzTurns")
+	    .Field<&components::CreatureKnockedOut::steps>("steps");
 	Reflect<components::CreatureFileSave>(context).Field<&components::CreatureFileSave::turnsSeen>("turnsSeen");
 	Reflect<components::CreatureFizz>(context).Field<&components::CreatureFizz::fizz>("fizz");
 	Reflect<components::CreatureFriends>(context).Field<&components::CreatureFriends::friends>("friends");

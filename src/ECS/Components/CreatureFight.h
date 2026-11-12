@@ -287,6 +287,15 @@ struct CreatureKnockedOut
 	std::optional<glm::vec3> home;
 	/// Game turns left of fizzing out of sight, or back in at home
 	uint16_t fizzTurns {0};
+	/// How far the steps of the knock-out are. With no rest, the knock-out ends on the turn after the wait for the
+	/// spells, and the body gets up after that. After a rest, the knock-out ends when the body is free.
+	enum class Steps : uint8_t
+	{
+		Running,
+		/// The wait for the spells ended, and the knock-out ends on the next turn with no rest
+		EndNextTurn,
+	};
+	Steps steps {Steps::Running};
 };
 
 } // namespace openblack::ecs::components

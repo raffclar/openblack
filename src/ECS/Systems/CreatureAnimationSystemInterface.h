@@ -73,11 +73,11 @@ public:
 	/// A creature that moves to a new place without a walk keeps its last pose as both poses. Thus the body does not
 	/// move back to the pose from two turns before.
 	virtual void HoldTurnPose(entt::entity creature) = 0;
-	/// Poses a copy of a creature's body some milliseconds on (see components::CreatureCopy): shaped as its creature is,
-	/// by its own animations, its eyes looking where its head does and blinking. Nothing happens to an entity that isn't
-	/// a copy, or whose creature is gone. The copy is a thing of the registry of copies, which can be another registry
-	/// than the land's, as the temple's rooms have. Its creature is a thing of the registry of bodies: the land, or the
-	/// drawn registry for the creature of the tattoo menu.
+	/// Poses a copy of a creature's body some milliseconds on (see components::CreatureCopy): with its own shape, else
+	/// shaped as its creature is, by its own animations, its eyes looking where its head does and blinking. Nothing happens to
+	/// an entity that isn't a copy, or whose creature is gone. The copy is a thing of the registry of copies, which can be
+	/// another registry than the land's, as the temple's rooms have. Its creature is a thing of the registry of bodies: the
+	/// land, or the drawn registry for the creature of the tattoo menu.
 	virtual void PoseCopy(Registry& copies, entt::entity copy, float milliseconds, const Registry& bodies) = 0;
 	/// Each drawn frame of a copy: its eyes move towards where they look by the milliseconds of its last pose step, and
 	/// take their place on its body. The eyes move also on a frame that does not pose the copy, as the game does. Nothing
@@ -136,7 +136,8 @@ public:
 	/// `things` is the registry of the creature or the copy.
 	[[nodiscard]] virtual std::optional<glm::vec3> MiddleOfGroinAndLips(const Registry& things, entt::entity creature) = 0;
 	/// A copy of a creature makes its motes or its smoke once, as a creature does each game turn, from the bones of its
-	/// newest turn pose and the alignment that its body shows. `copies` is the registry of the copy.
+	/// newest turn pose. A copy that keeps the targets of its creature uses its evil to good target, else the alignment
+	/// that its body shows. `copies` is the registry of the copy.
 	virtual void AddAlignmentMotesOf(const Registry& copies, entt::entity copy) = 0;
 };
 
