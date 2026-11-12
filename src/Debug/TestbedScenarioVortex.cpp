@@ -14,6 +14,7 @@
 #include <string_view>
 
 #include "3D/FlatLand.h"
+#include "3D/TempleRoom.h"
 #include "TestbedScenarioRegistry.h"
 
 using namespace openblack;
@@ -381,6 +382,47 @@ void testbed_scenarios::AddVortexScenarios(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "audio.vortex_hum_comes_back_near",
+	    .name = "The hum of a vortex comes back when the camera comes back near",
+	    .facet = Facet::Audio,
+	    .description = "A way out of a land opens on the flat plane after a second, seen from 370 m away, and hums. After 6 "
+	                   "seconds the camera goes 900 m away, and after 6 more seconds it comes back near the vortex.",
+	    .expected = "The hum starts as the vortex opens. Far away the audio stops it. When the camera comes back near, "
+	                "the hum plays again from its start (deviation 235: the game does not start it again).",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_OnThePlane.x, 120.0f, k_OnThePlane.y - 355.0f},
+	                .look = {k_OnThePlane.x, 0.0f, k_OnThePlane.y}},
+	    .vortices = {{.type = VortexType::In, .offset = k_OnThePlane, .delaySeconds = 1.0f}},
+	    .commands = {{.kind = Command::Kind::CameraLooksAt,
+	                  .delaySeconds = 6.0f,
+	                  .point = k_OnThePlane + glm::vec2(0.0f, -900.0f)},
+	                 {.kind = Command::Kind::CameraLooksAt, .delaySeconds = 6.0f, .point = k_OnThePlane}},
+	});
+
+	all.push_back({
+	    .id = "audio.vortex_hum_after_the_temple",
+	    .name = "The hum of a vortex comes back after the temple",
+	    .facet = Facet::Audio,
+	    .description =
+	        "A way out of a land opens on the flat plane after a second, near the player's temple, and hums. After 5 "
+	        "seconds the player goes into the temple's main room, and after 10 more seconds the player leaves "
+	        "the temple.",
+	    .expected = "The hum starts as the vortex opens. In the temple the first turn of the temple's music stops every "
+	                "sound effect, and the hum too. When the player is out of the temple and the camera is near the "
+	                "vortex again, the hum plays again from its start (deviation 235: the game does not start it again).",
+	    .environment = {.dispenserGrid = false, .temple = glm::vec2(0.0f)},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_OnThePlane.x, 120.0f, k_OnThePlane.y - 355.0f},
+	                .look = {k_OnThePlane.x, 0.0f, k_OnThePlane.y}},
+	    .vortices = {{.type = VortexType::In, .offset = k_OnThePlane, .delaySeconds = 1.0f}},
+	    .commands = {{.kind = Command::Kind::EnterTemple, .delaySeconds = 5.0f, .value = static_cast<size_t>(TempleRoom::Main)},
+	                 {.kind = Command::Kind::EnterTemple,
+	                  .delaySeconds = 10.0f,
+	                  .value = static_cast<size_t>(TempleRoom::Unknown)}},
+	});
+
+	all.push_back({
 	    .id = "audio.vortex_hum_stops_far_away",
 	    .name = "The hum of a vortex stops far away",
 	    .facet = Facet::Audio,
@@ -389,8 +431,8 @@ void testbed_scenarios::AddVortexScenarios(std::vector<Scenario>& all)
 	                   "Past 400 m it is silent.",
 	    .expected = "The hum starts at 0.37 of its full volume as the vortex opens, and is louder as the camera comes "
 	                "nearer: full volume at 200 m and nearer, half at 300 m. Move the camera back past 400 m from the "
-	                "vortex: the hum stops at once and the debug log (audio) says why. As in the game, the hum does not "
-	                "start again when the camera comes back, until the particle that carries it is made again.",
+	                "vortex: the hum stops at once and the debug log (audio) says why. When the camera comes back nearer "
+	                "than 400 m, the hum plays again from its start (deviation 235: the game does not start it again).",
 	    .environment = {.dispenserGrid = false},
 	    .framing = {.shot = Shot::Placed,
 	                .eye = {k_OnThePlane.x, 120.0f, k_OnThePlane.y - 355.0f},

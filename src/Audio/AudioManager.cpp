@@ -369,13 +369,22 @@ void AudioManager::StopOutOfRangeEmitters()
 	});
 	for (const auto entity : stopped)
 	{
-		[[maybe_unused]] const auto& emitter = registry.Get<const AudioEmitter>(entity);
+		const auto& emitter = registry.Get<const AudioEmitter>(entity);
 		SPDLOG_LOGGER_DEBUG(spdlog::get("audio"), "Emitter {} stops at turn {}: {}", DescribeEmitter(entity, emitter),
 		                    LogTurn(),
 		                    emitter.follows == Follows::Owner &&
 		                            !ecs::SoundPointOf(Locator::entitiesRegistry::value(), emitter.owner).has_value()
 		                        ? std::string("its owner is gone or has no point")
 		                        : TooFar(emitter.position, emitter.maxDistance));
+		// A sound that stays at its place stops only for the distance. Tell the owner that the audio made for the sound
+		// that the listener left it. Then the system of the owner can start the sound again (deviation 235).
+		if (emitter.follows == Follows::Place && emitter.owner != entt::null && registry.Valid(emitter.owner))
+		{
+			if (auto* const owner = registry.TryGet<ecs::components::SoundOwner>(emitter.owner); owner != nullptr)
+			{
+				owner->listenerLeft = true;
+			}
+		}
 		DestroyEmitter(entity);
 	}
 }
@@ -933,7 +942,10 @@ AnimEffectPlay AudioManager::PlayAnimEffect(const std::string& bankName, std::sp
 	if (heardUnder.has_value() && !SoundEffectHeard(*heardUnder, BankOfFile(bankName), sound->userParam))
 	{
 		LogNotStarted(*sound, position, "its sample may not be heard now");
-		return {.outcome = AnimEffectPlay::Outcome::NotHeard, .emitter = entt::null, .sample = sample};
+		return {.outcome = AnimEffectPlay::Outcome::NotHeard,
+		        .emitter = entt::null,
+		        .sample = sample,
+		        .maxDistance = sound->maxDistance};
 	}
 
 	// The sample doesn't start further from the camera than the hearing limit, or than its bank's maximum distance,
@@ -946,7 +958,10 @@ AnimEffectPlay AudioManager::PlayAnimEffect(const std::string& bankName, std::sp
 		                    "the {} m limit",
 		                    sound->name, position.x, position.y, position.z, LogTurn(), distance, sound->maxDistance,
 		                    k_AnimEffectHearingLimit);
-		return {.outcome = AnimEffectPlay::Outcome::TooFar, .emitter = entt::null, .sample = sample};
+		return {.outcome = AnimEffectPlay::Outcome::TooFar,
+		        .emitter = entt::null,
+		        .sample = sample,
+		        .maxDistance = sound->maxDistance};
 	}
 
 	// The library plays an animation effect with the restart play type, unless the bank header gives another
@@ -958,10 +973,10 @@ AnimEffectPlay AudioManager::PlayAnimEffect(const std::string& bankName, std::sp
 		const auto outcome = choice.slot.has_value() ? AnimEffectPlay::Outcome::AlreadyPlaying
 		                     : sounds.Contains(id)   ? AnimEffectPlay::Outcome::NoVoice
 		                                             : AnimEffectPlay::Outcome::NotLoaded;
-		return {.outcome = outcome, .emitter = entt::null, .sample = sample};
+		return {.outcome = outcome, .emitter = entt::null, .sample = sample, .maxDistance = sound->maxDistance};
 	}
 	PlayEmitter(entity);
-	return {.outcome = AnimEffectPlay::Outcome::Played, .emitter = entity, .sample = sample};
+	return {.outcome = AnimEffectPlay::Outcome::Played, .emitter = entity, .sample = sample, .maxDistance = sound->maxDistance};
 }
 
 void AudioManager::EndAnimEffect(const std::string& bankName, std::span<const int32_t> keys, entt::entity owner,
