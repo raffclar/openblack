@@ -150,6 +150,15 @@ public:
 	/// The blocks whose textures the land painted again with no footprints since the last call, in the order it painted
 	/// them: each block after a land loads, and the cells of the blocks that change height
 	[[nodiscard]] virtual std::vector<RepaintedBlock> TakeRepaintedBlocks() { return {}; }
+	/// The paints of the blocks' textures since the last call. Each paint also samples the block's coarse texture again.
+	struct CoarseRepaints
+	{
+		/// A new land loaded, and its blocks have no coarse texture yet
+		bool newLand {false};
+		/// The blocks painted, in the order of the paints. A block can come more than one time.
+		std::vector<size_t> blocks;
+	};
+	[[nodiscard]] virtual CoarseRepaints TakeCoarseRepaints() { return {}; }
 	/// Gives the graphics data of the land again after a restore of the device: it paints the texture of each block as
 	/// the land does when it loads, and gives the vertices and the triangles of the blocks. The graphics device keeps no
 	/// copy of these, thus the renderer calls this after it makes the device again.

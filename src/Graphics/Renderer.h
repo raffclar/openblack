@@ -12,6 +12,7 @@
 #include <cstdint>
 
 #include <array>
+#include <bitset>
 #include <chrono>
 #include <filesystem>
 #include <functional>
@@ -50,6 +51,7 @@
 #include "Graphics/SeaRows.h"
 #include "Graphics/VolumeGlowShell.h"
 #include "Particles/ParticleDrawFrame.h"
+#include "Visual/CoarseEdges.h"
 #include "Visual/LandDetail.h"
 #include "Visual/RenderPass.h"
 
@@ -141,6 +143,14 @@ private:
 	/// Paints the snow again into the blocks in `drawn` that wait for a paint, and gives the snow that each block's texture
 	/// shows; none without snow
 	const Texture2D* PaintLandSnow(std::span<const glm::ivec2> drawn) const;
+	/// Paints the coarse textures of the blocks that the land, the snow and the shadow bake painted since the last time,
+	/// in the game's order from the camera at `camera`. A pass on the GPU mixes the edges that each painted block shares
+	/// with its neighbours (see coarse_edges). paintedSnow is the snow that the blocks' textures show, none without snow.
+	void PaintCoarseEdges(glm::vec3 camera, const Texture2D* paintedSnow) const;
+	/// The texture that keeps the edges of the blocks' coarse textures, none before the first paint
+	[[nodiscard]] const Texture2D* GetCoarseEdges() const;
+	/// Whether the block at a place of the map got a paint of its coarse texture
+	[[nodiscard]] bool CoarseEdgesPainted(glm::ivec2 block) const;
 	/// The rivers' beds or channels, a footprint for each stretch of river
 	/// The land's luminosity this frame: as it was laid, shaded by the clouds and lit by the lights at night
 	void DrawLandLuminosityPass(const DrawSceneDesc& drawDesc) const;
@@ -798,6 +808,34 @@ private:
 	/// The snow that each land block's texture shows, as it lay when the texture was last painted, and its texture
 	mutable snow_cover::PaintedBlocks _paintedSnow;
 	mutable std::unique_ptr<Texture2D> _paintedSnowTexture;
+	/// The blocks (by snow_cover::BlockIndex) that wait for a paint for a change of the snow, and the places of the blocks
+	/// that PaintLandSnow painted for it since the coarse textures last caught up
+	mutable std::bitset<snow_cover::k_Blocks> _snowRepaints;
+	mutable std::vector<glm::ivec2> _snowPaintedBlocks;
+	/// The edges of the blocks' coarse textures, which a pass on the GPU makes again at each frame with paints
+	struct CoarseEdges
+	{
+		/// The views that the passes of a frame draw in
+		static constexpr std::array<RenderPass, 2> k_Views {RenderPass::LandCoarseEdges0, RenderPass::LandCoarseEdges1};
+		/// Two textures of the edges: each pass reads the edges from one and writes them to the other
+		std::array<std::unique_ptr<FrameBuffer>, 2> targets;
+		/// The texture that keeps the edges now
+		size_t current {0};
+		/// The paints of each pass of a frame (see coarse_edges::FramePaintTexels)
+		std::array<std::unique_ptr<Texture2D>, k_Views.size()> paints;
+		/// The passes of this frame
+		size_t passes {0};
+		/// The places whose blocks got a paint
+		std::bitset<coarse_edges::k_Blocks> painted;
+		/// The blocks whose paint waits for the paint of their snow or for the bake of their shadows, in the order of
+		/// the requests
+		std::vector<size_t> held;
+		/// The coarse samples along a side of a block when the edges were made
+		int32_t samples {0};
+		/// The edges are lost (no land yet, or a restore of the graphics device) and every block paints again
+		bool lost {true};
+	};
+	mutable CoarseEdges _coarseEdges;
 	/// u_haze and u_hazeColour of the frame's distance haze, off until the land's light is built
 	mutable std::array<glm::vec4, 2> _haze {};
 	/// The colours the sky's dome is drawn in this frame

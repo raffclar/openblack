@@ -524,6 +524,11 @@ void Renderer::DrawPassLand(const DrawSceneDesc& desc, const ScenePass& pass) co
 			terrainShader->SetUniformValue("u_smallBump", &u_smallBump);
 			// The corners of the blocks that morph or cross-fade, as the game works them out this frame
 			terrainShader->SetTextureSampler("s8_landCorners", 8, GetLandCorners());
+			// The edges of the blocks' coarse textures, as the paints of the blocks mixed them
+			if (const auto* coarseEdges = GetCoarseEdges())
+			{
+				terrainShader->SetTextureSampler("s11_coarseEdges", 11, *coarseEdges);
+			}
 			// Without pages of its own the land binds its block textures in their place, never read
 			const auto* coarsePages = island.GetCoarsePages();
 			terrainShader->SetTextureSampler("s15_coarsePages", 15,
@@ -590,8 +595,10 @@ void Renderer::DrawPassLand(const DrawSceneDesc& desc, const ScenePass& pass) co
 			}
 			const glm::vec4 mapPositionAndSize = glm::vec4(block.GetMapPosition(), 160.0f, 160.0f);
 			blockPositionUniform.Set(&mapPositionAndSize);
+			// w: 1 when the edges of the block's coarse texture come from the paints of the blocks
+			const bool coarseEdges = GetCoarseEdges() != nullptr && CoarseEdgesPainted(block.GetBlockPosition());
 			const glm::vec4 u_block {static_cast<float>(index), static_cast<float>(detail.morph),
-			                         static_cast<float>(detail.texture), 0.0f};
+			                         static_cast<float>(detail.texture), coarseEdges ? 1.0f : 0.0f};
 			blockUniform.Set(&u_block);
 			const glm::vec4 u_blockNeighbours =
 			    index < _landDetail.neighbours.size() ? _landDetail.neighbours[index] : glm::vec4(-1.0f);
@@ -665,6 +672,9 @@ void Renderer::DrawPassLand(const DrawSceneDesc& desc, const ScenePass& pass) co
 					}
 				}
 				paintedSnow = PaintLandSnow(drawnWithTexture);
+				// The paints of this frame also paint the blocks' coarse textures, in the order from the game's camera
+				PaintCoarseEdges(Locator::camera::has_value() ? Locator::camera::value().GetOrigin() : desc.camera->GetOrigin(),
+				                 paintedSnow);
 			}
 			setTerrainUniforms();
 			for (const auto& entry : order)
