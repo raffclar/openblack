@@ -41,14 +41,15 @@ glm::vec2 villager_routine::PosOutside(glm::vec2 abode, glm::vec2 door, float di
 	return Polar(door, angle, distance);
 }
 
-glm::vec2 villager_routine::ChillOutPos(glm::vec2 congregation, glm::vec2 villager, float chillOutDistance,
-                                        const FloatRandom& random)
+map_coords::MapCoords villager_routine::ChillOutPos(const map_coords::MapCoords& congregation,
+                                                    const map_coords::MapCoords& villager, float chillOutDistance,
+                                                    const FloatRandom& random)
 {
 	const float radius = chillOutDistance * k_ChillOutRadiusShare;
 	const float angle = gutils::Get3DAngleFromXZ(congregation, villager);
 	const float jitter = random(k_QuarterPi) - k_EighthPi;
 	const float distance = random(radius * k_ChillOutRadiusSpan) + radius;
-	return Polar(congregation, jitter + angle, distance);
+	return congregation + gutils::GetPosFromAngle(jitter + angle, distance);
 }
 
 villager_routine::Idle villager_routine::NothingToDo(bool hasAbode, bool abodeFunctional, bool hasTown, const IntRandom& random)

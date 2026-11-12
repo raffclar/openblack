@@ -525,12 +525,12 @@ std::optional<TownSystemInterface::TemporaryStore> TownSystem::TemporaryStorePil
 	if (pile == entt::null || !registry.Valid(pile))
 	{
 		// A new empty pile near the gathering place, the wood a little to one side, at a place clear of fixed things
-		auto coords = map_coords::FromMetres(GetCongregationPos(town));
+		auto coords = GetCongregationPos(town);
 		coords += gutils::GetPosFromAngle(0.0f, temporary_store::OffsetOf(type));
-		const auto wanted = map_coords::ToMetres(coords);
-		const auto place = FindClearArea(wanted, temporary_store::k_ClearSearch, temporary_store::k_ClearStep,
-		                                 temporary_store::k_ClearRadius, ClearAreaFilter::AnyFixed, entt::null)
-		                       .value_or(wanted);
+		const auto place =
+		    map_coords::ToMetres(FindClearAreaCoords(coords, temporary_store::k_ClearSearch, temporary_store::k_ClearStep,
+		                                             temporary_store::k_ClearRadius, ClearAreaFilter::AnyFixed, entt::null)
+		                             .value_or(coords));
 		const float height = Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().GetHeightAt(place) : 0.0f;
 		pile = archetypes::PotArchetype::CreateEmpty({place.x, height, place.y}, 0.0f, temporary_store::PileOf(type));
 		if (pile == entt::null)
@@ -694,9 +694,6 @@ bool Blocks(const Registry& registry, entt::entity thing, TownSystemInterface::C
 constexpr float k_CongregationSearch = 130.0f;
 constexpr float k_CongregationStep = 3.0f;
 constexpr float k_CongregationClear = 10.0f;
-/// Failing that it is near a building, this far and up to as far again
-constexpr float k_CongregationNearLeast = 10.0f;
-constexpr float k_CongregationNearRange = 10.0f;
 /// With fewer buildings than this, the gathering place counts the town's planned buildings too
 constexpr size_t k_CongregationLeastBuildings = 3;
 /// A new building this close to the gathering place, past its own size, moves it
@@ -705,13 +702,19 @@ constexpr float k_CongregationBuildingGap = 7.5f;
 
 bool TownSystem::CheckForClearArea(glm::vec2 point, float radius, ClearAreaFilter filter, entt::entity ignore) const
 {
+	return CheckForClearAreaCoords(map_coords::FromMetres(point), radius, filter, ignore);
+}
+
+bool TownSystem::CheckForClearAreaCoords(const map_coords::MapCoords& point, float radius, ClearAreaFilter filter,
+                                         entt::entity ignore) const
+{
 	if (!Locator::entitiesMap::has_value())
 	{
 		return true;
 	}
 	const auto& map = Locator::entitiesMap::value();
 	const auto& registry = Locator::entitiesRegistry::value();
-	auto cell = map_coords::CellOf(point);
+	auto cell = map_coords::Cell(point);
 	map_coords::Spiral spiral;
 	for (auto count = map_coords::CellSpiralSize(radius); count != 0; --count)
 	{
@@ -724,7 +727,7 @@ bool TownSystem::CheckForClearArea(glm::vec2 point, float radius, ClearAreaFilte
 				{
 					continue;
 				}
-				const float gap = gutils::GetDistanceInMetres(glm::vec2(transform->position.x, transform->position.z), point) -
+				const float gap = gutils::GetDistanceInMetres(map_coords::FromMetres(glm::xz(transform->position)), point) -
 				                  world_objects::SizeOf(thing).radius;
 				if (gap < radius && Blocks(registry, thing, filter))
 				{
@@ -741,30 +744,31 @@ bool TownSystem::CheckForClearArea(glm::vec2 point, float radius, ClearAreaFilte
 std::optional<glm::vec2> TownSystem::FindClearArea(glm::vec2 point, float searchRadius, float step, float radius,
                                                    ClearAreaFilter filter, entt::entity ignore) const
 {
-	return FindClearAreaFrom(map_coords::FromMetres(point), searchRadius, step, radius, filter, ignore);
+	return FindClearAreaCoords(map_coords::FromMetres(point), searchRadius, step, radius, filter, ignore)
+	    .transform([](const map_coords::MapCoords& coords) { return map_coords::ToMetres(coords); });
 }
 
-std::optional<glm::vec2> TownSystem::FindClearAreaFrom(map_coords::MapCoords coords, float searchRadius, float step,
-                                                       float radius, ClearAreaFilter filter, entt::entity ignore) const
+std::optional<map_coords::MapCoords> TownSystem::FindClearAreaCoords(map_coords::MapCoords coords, float searchRadius,
+                                                                     float step, float radius, ClearAreaFilter filter,
+                                                                     entt::entity ignore) const
 {
 	map_coords::Spiral spiral;
 	for (auto count = map_coords::IncrementSpiralSize(searchRadius, step); count != 0; --count)
 	{
-		const auto at = map_coords::ToMetres(coords);
-		if (CheckForClearArea(at, radius, filter, ignore))
+		if (CheckForClearAreaCoords(coords, radius, filter, ignore))
 		{
-			return at;
+			return coords;
 		}
 		map_coords::SpiralIncrement(coords, spiral, step);
 	}
 	return std::nullopt;
 }
 
-glm::vec2 TownSystem::GetCongregationPos(entt::entity townEntity)
+map_coords::MapCoords TownSystem::GetCongregationPos(entt::entity townEntity)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	auto& town = registry.Get<Town>(townEntity);
-	if (town.congregationPos.has_value())
+	if (town.congregationPos.has_value() && town_area::IsGatheringPlace(*town.congregationPos))
 	{
 		return *town.congregationPos;
 	}
@@ -792,9 +796,8 @@ glm::vec2 TownSystem::GetCongregationPos(entt::entity townEntity)
 			}
 		}
 	}
-	std::optional<glm::vec2> found;
-	const auto& townTransform = registry.Get<const Transform>(townEntity);
-	glm::vec2 centre {townTransform.position.x, townTransform.position.z};
+	std::optional<map_coords::MapCoords> found;
+	auto centre = map_coords::FromMetres(glm::xz(registry.Get<const Transform>(townEntity).position));
 	if (buildings.size() > 1)
 	{
 		// The search starts at the middle of the buildings, in whole map units. If it finds no clear area, the place is
@@ -803,19 +806,17 @@ glm::vec2 TownSystem::GetCongregationPos(entt::entity townEntity)
 		places.reserve(buildings.size());
 		std::ranges::transform(buildings, std::back_inserter(places),
 		                       [](glm::vec2 place) { return map_coords::FromMetres(place); });
-		found = FindClearAreaFrom(town_area::GatheringMiddle(places), k_CongregationSearch, k_CongregationStep,
-		                          k_CongregationClear, ClearAreaFilter::BlocksTown, entt::null);
+		found = FindClearAreaCoords(town_area::GatheringMiddle(places), k_CongregationSearch, k_CongregationStep,
+		                            k_CongregationClear, ClearAreaFilter::BlocksTown, entt::null);
 	}
 	else if (!buildings.empty())
 	{
-		centre = buildings.front();
+		centre = map_coords::FromMetres(buildings.front());
 	}
 	if (!found.has_value())
 	{
 		auto& random = Locator::gameRandom::value();
-		const float distance = random.GameFloatRand(k_CongregationNearRange) + k_CongregationNearLeast;
-		const float angle = random.GameFloatRand(villager_routine::k_TwoPi);
-		found = villager_routine::Polar(centre, angle, distance);
+		found = town_area::GatheringPlaceNear(centre, [&random](float limit) { return random.GameFloatRand(limit); });
 	}
 	town.congregationPos = found;
 	return *found;
@@ -825,7 +826,8 @@ void TownSystem::BuildingCreated(entt::entity townEntity, glm::vec2 position, fl
 {
 	auto& town = Locator::entitiesRegistry::value().Get<Town>(townEntity);
 	if (town.congregationPos.has_value() &&
-	    gutils::GetDistanceInMetres(*town.congregationPos, position) - radius < k_CongregationBuildingGap)
+	    gutils::GetDistanceInMetres(*town.congregationPos, map_coords::FromMetres(position)) - radius <
+	        k_CongregationBuildingGap)
 	{
 		town.congregationPos.reset();
 	}

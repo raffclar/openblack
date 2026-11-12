@@ -223,11 +223,12 @@ float FacingOf(entt::entity villager)
 	return -portable_math::Atan2(-x.z, x.x) - glm::radians(90.0f);
 }
 
-/// Turns the villager towards a point, by at most a step of the game's angles
-void LookAtPos(entt::entity villager, glm::vec2 point, int32_t step)
+/// Turns the villager towards a point in whole map units, by at most a step of the game's angles
+void LookAtPos(entt::entity villager, const map_coords::MapCoords& point, int32_t step)
 {
 	auto& transform = WorldRegistry().Get<Transform>(villager);
-	const auto target = static_cast<int32_t>(gutils::GetAngleFromXZ(glm::xz(transform.position), point));
+	const auto target =
+	    static_cast<int32_t>(gutils::GetAngleFromXZ(map_coords::FromMetres(glm::xz(transform.position)), point));
 	const auto facing = static_cast<int32_t>(gutils::ConvertAngle3DToGame(FacingOf(villager)));
 	openblack::ecs::living_facing::FaceGameAngle(WorldRegistry(), villager, gutils::LookStep(facing, target, step).angle);
 }
@@ -621,20 +622,21 @@ std::optional<glm::vec2> GetTentPos(entt::entity villager, glm::vec2 spot)
 }
 
 /// Gets the villager to where it sits about: down where it is when there is room, else to room near it, else to the
-/// spot its kind of sitting about finds
+/// spot its kind of sitting about finds. The villager's place, the centre and the steps are in whole map units.
 template <typename SpotFinder>
-void GetMeToMyChillOutPos(LivingAction& action, SpotFinder findSpot, glm::vec2 centre, float radius,
-                          std::optional<glm::vec2> lookAt)
+void GetMeToMyChillOutPos(LivingAction& action, SpotFinder findSpot, const map_coords::MapCoords& centre, float radius,
+                          std::optional<map_coords::MapCoords> lookAt)
 {
 	const auto villager = EntityOf(action);
-	const auto position = PositionOf(villager);
+	const auto walk = WalkPositionOf(villager);
+	const map_coords::MapCoords position {.x = walk.x, .z = walk.y, .altitude = 0.0f};
 	const float distance = gutils::GetDistanceInMetres(centre, position);
 	auto& towns = Locator::townSystem::value();
 	if (distance <= radius)
 	{
 		auto spot = position;
 		const float room = k_SitDownRoom * world_objects::SizeOf(villager).radius;
-		if (towns.CheckForClearArea(spot, room, ClearAreaFilter::AnyObject, villager))
+		if (towns.CheckForClearAreaCoords(spot, room, ClearAreaFilter::AnyObject, villager))
 		{
 			if (lookAt.has_value())
 			{
@@ -645,10 +647,10 @@ void GetMeToMyChillOutPos(LivingAction& action, SpotFinder findSpot, glm::vec2 c
 		}
 		if (radius + k_SitDownTowards < distance)
 		{
-			spot = routine::Polar(spot, gutils::Get3DAngleFromXZ(spot, centre), k_SitDownTowards);
+			spot += gutils::GetPosFromAngle(gutils::Get3DAngleFromXZ(spot, centre), k_SitDownTowards);
 		}
 		if (const auto clear =
-		        towns.FindClearArea(spot, k_SitDownSearch, k_SitDownStep, room, ClearAreaFilter::AnyObject, villager);
+		        towns.FindClearAreaCoords(spot, k_SitDownSearch, k_SitDownStep, room, ClearAreaFilter::AnyObject, villager);
 		    clear.has_value())
 		{
 			villager_home::SetupMoveTo(action, *clear, FinalState(action));
@@ -662,14 +664,16 @@ void GetMeToMyChillOutPos(LivingAction& action, SpotFinder findSpot, glm::vec2 c
 }
 
 /// Where a villager sits about its town, near the gathering place on its own side
-std::optional<glm::vec2> GetChillOutPos(entt::entity villager)
+std::optional<map_coords::MapCoords> GetChillOutPos(entt::entity villager)
 {
 	const auto town = TownOf(villager);
 	if (town == entt::null)
 	{
 		return std::nullopt;
 	}
-	return routine::ChillOutPos(Locator::townSystem::value().GetCongregationPos(town), PositionOf(villager),
+	const auto walk = WalkPositionOf(villager);
+	return routine::ChillOutPos(Locator::townSystem::value().GetCongregationPos(town),
+	                            map_coords::MapCoords {.x = walk.x, .z = walk.y, .altitude = 0.0f},
 	                            Locator::infoConstants::value().town.maxDistanceFromCongreationPosThatPeopleChillOut,
 	                            FloatRandom());
 }
@@ -1340,7 +1344,9 @@ uint32_t villager_home::GoAndChilloutOutsideHome(LivingAction& action)
 	const float distance = Locator::infoConstants::value().town.maxDistanceFromHouseThatPeopleChillOut;
 	const auto lookOut =
 	    routine::Polar(door, gutils::Get3DAngleFromXZ(PositionOf(abode), door), k_OutsideHouseLookOut * distance);
-	GetMeToMyChillOutPos(action, [villager] { return GetPosOutsideMyHouse(villager); }, door, distance, lookOut);
+	GetMeToMyChillOutPos(
+	    action, [villager] { return GetPosOutsideMyHouse(villager); }, map_coords::FromMetres(door), distance,
+	    map_coords::FromMetres(lookOut));
 	return 1;
 }
 
@@ -1404,12 +1410,12 @@ uint32_t villager_home::GotoCongregateInTownAfterEmergency(LivingAction& action)
 	{
 		return 0;
 	}
-	auto centre = Locator::townSystem::value().GetCongregationPos(town);
+	const auto centre = Locator::townSystem::value().GetCongregationPos(town);
 	// The more people the town has, the wider they stand round the gathering place
 	const auto* stats = WorldRegistry().TryGet<const TownStats>(town);
 	const float distance = routine::EmergencyRingDistance(stats != nullptr ? stats->adults + stats->children : 0);
 	const float angle = Locator::gameRandom::value().GameFloatRand(routine::k_TwoPi);
-	SetupMoveTo(action, routine::Polar(centre, angle, distance), VillagerStates::CongregateInTownAfterEmergency);
+	SetupMoveTo(action, centre + gutils::GetPosFromAngle(angle, distance), VillagerStates::CongregateInTownAfterEmergency);
 	return 1;
 }
 

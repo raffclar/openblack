@@ -16,6 +16,7 @@
 #include <glm/gtx/vec_swizzle.hpp>
 #include <glm/mat4x4.hpp>
 
+#include "3D/MapCoords.h"
 #include "3D/TempleInteriorInterface.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/Temple.h"
@@ -141,7 +142,8 @@ void SurveyTowns(const ecs::Registry& registry, PlayerNames player, Survey& surv
 		}
 		if (!entry.home.has_value() && component.congregationPos.has_value())
 		{
-			entry.home = glm::vec3(component.congregationPos->x, survey.templePosition.y, component.congregationPos->y);
+			const auto place = map_coords::ToMetres(*component.congregationPos);
+			entry.home = glm::vec3(place.x, survey.templePosition.y, place.y);
 		}
 		survey.towns.push_back(entry);
 	});
