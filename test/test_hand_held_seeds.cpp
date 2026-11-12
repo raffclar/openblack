@@ -22,6 +22,8 @@
 
 #include <entt/entity/entity.hpp>
 #include <gtest/gtest.h>
+#include <spdlog/sinks/null_sink.h>
+#include <spdlog/spdlog.h>
 
 #include "Commands/PlayerCommands.h"
 #include "ECS/Components/Creature.h"
@@ -164,6 +166,11 @@ class HandHeldSeeds: public ::testing::Test
 protected:
 	void SetUp() override
 	{
+		// The hand reports a taken fireball to the game log
+		if (spdlog::get("game") == nullptr)
+		{
+			spdlog::create<spdlog::sinks::null_sink_st>("game");
+		}
 		auto& registry = Locator::entitiesRegistry::emplace<ecs::Registry>();
 		_hands = &static_cast<FakeHands&>(Locator::handSystem::emplace<FakeHands>());
 		for (const auto player : {PlayerNames::PLAYER_ONE, PlayerNames::PLAYER_TWO})
