@@ -385,12 +385,6 @@ std::optional<Desire> computer_world::PlanDesireOf(entt::entity creature)
 	return mind->planner.current->desire;
 }
 
-bool computer_world::LeashedBy(PlayerNames player, entt::entity creature)
-{
-	const auto* leash = Entities().TryGet<const CreatureLeash>(creature);
-	return leash != nullptr && leash->worn.has_value() && leash->worn->holder == player;
-}
-
 float computer_world::FreedomOf(PlayerNames player, entt::entity creature)
 {
 	const auto* leash = Entities().TryGet<const CreatureLeash>(creature);

@@ -92,7 +92,6 @@ template <class T>
 [[nodiscard]] float GetChantsRequiredToCreate(const InfoConstants& info, MagicType type);
 
 // How long the miracle lasts in seconds, by who casts it; k_NoTimeLimit when it lasts until its prayer power runs out
-[[nodiscard]] float GetTimerWhenOneShot(const InfoConstants& info, MagicType type);
 [[nodiscard]] float GetTimerWhenPlayerCasting(const InfoConstants& info, MagicType type);
 [[nodiscard]] float GetTimerWhenCreatureCasting(const InfoConstants& info, MagicType type);
 [[nodiscard]] float GetTimerWhenComputerPlayerCasting(const InfoConstants& info, MagicType type);

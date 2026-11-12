@@ -561,6 +561,9 @@ struct Step
 		Transported,
 		/// The stone no longer controls the creature. The step is done as it starts.
 		StopTeleportControl,
+		/// A step with nothing to do, as the turn to the camera of a creature that has no player. The step starts also
+		/// while the body plays an action, and it is done on the turn after the turn that it starts.
+		Empty,
 	};
 	Kind kind {Kind::Wait};
 	float seconds {0.0f};

@@ -380,6 +380,8 @@ std::string_view StepKindName(creature_mind::Step::Kind kind)
 		return "watch_player";
 	case Kind::StopTeleportControl:
 		return "stop_teleport_control";
+	case Kind::Empty:
+		return "empty";
 	}
 	return "unknown";
 }

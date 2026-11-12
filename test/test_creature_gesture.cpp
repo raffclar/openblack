@@ -127,6 +127,24 @@ TEST(CreaturePointing, TheHoldCountsWholeTurnsFromTheStart)
 	EXPECT_EQ(left, 65535);
 }
 
+// A point at a place holds for 10 turns at least. The game compares the count as a signed 16-bit number, so a count
+// that is negative in 16 bits also becomes 10.
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST(CreaturePointing, APointAtAPlaceHoldsForTenTurnsAtLeast)
+{
+	using namespace creature_pointing;
+	EXPECT_EQ(PlaceHoldTurns(0.05f, 10), 10);
+	EXPECT_EQ(PlaceHoldTurns(0.3f, 10), 10);
+	EXPECT_EQ(PlaceHoldTurns(0.9f, 10), 10);
+	EXPECT_EQ(PlaceHoldTurns(1.0f, 10), 10);
+	EXPECT_EQ(PlaceHoldTurns(1.1f, 10), 11);
+	EXPECT_EQ(PlaceHoldTurns(3.0f, 10), 30);
+	// 3276.7 seconds give 32767 turns, the largest positive count in 16 bits
+	EXPECT_EQ(PlaceHoldTurns(3276.7f, 10), HoldTurns(3276.7f, 10));
+	EXPECT_EQ(PlaceHoldTurns(3500.0f, 10), 10);
+	EXPECT_EQ(PlaceHoldTurns(7000.0f, 10), 70000 - 65536);
+}
+
 // The point at the route: the arm moves on by the clip step until it is at the moment of the point or past it, and
 // round the animation once at most when the point ends
 TEST(CreaturePointing, ThePointAtTheRouteHoldsThenPlaysToItsEnd)

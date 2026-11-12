@@ -1119,6 +1119,7 @@ HandsNeed creature_mind::HandsNeededFor(const Step& step)
 	case Step::Kind::Teleport:
 	case Step::Kind::Transported:
 	case Step::Kind::StopTeleportControl:
+	case Step::Kind::Empty:
 		break;
 	}
 	return HandsNeed::Any;
@@ -1823,13 +1824,16 @@ Commands TurnOfThought(IdleMind& mind, const Senses& senses, const Random& rando
 		// Nothing starts while the body still plays an action. A stop starts while the body moves, to stop it, and a
 		// faint starts at once. The steps of a teleport also start at once. A walk to a point or to a thing starts
 		// while the body only moves: the new walk takes the place of the old one at once. A step that tries to start its
-		// clip tries again on each turn.
+		// clip tries again on each turn. A follow of the camera and a step with nothing to do start at once: the body
+		// is not examined until the turn after the start.
 		const bool teleportStep = step.kind == Step::Kind::Teleport || step.kind == Step::Kind::Transported ||
 		                          step.kind == Step::Kind::StopTeleportControl;
+		const bool startsAtOnce = step.kind == Step::Kind::FollowCamera || step.kind == Step::Kind::Empty;
 		const bool walkOnTheWay =
 		    StartsOnTheWay(step) && senses.onlyMoves && !(handsChecked && senses.hands == HandsState::Busy);
 		if (step.kind != Step::Kind::Wait && step.kind != Step::Kind::WatchCamera && step.kind != Step::Kind::StopMoving &&
-		    step.kind != Step::Kind::PracticeDance && !IsFaint(step) && !teleportStep && !walkOnTheWay && bodyBusy)
+		    step.kind != Step::Kind::PracticeDance && !IsFaint(step) && !teleportStep && !startsAtOnce && !walkOnTheWay &&
+		    bodyBusy)
 		{
 			if (TriesToStartClip(step, senses))
 			{
@@ -2094,6 +2098,9 @@ Commands TurnOfThought(IdleMind& mind, const Senses& senses, const Random& rando
 		case Step::Kind::StopTeleportControl:
 			commands.stopTeleportControl = true;
 			FinishStep(mind);
+			break;
+		case Step::Kind::Empty:
+			// The step is done on the next turn
 			break;
 		case Step::Kind::Apply:
 			commands.effect = step.effect;
@@ -2476,6 +2483,7 @@ Commands TurnOfThought(IdleMind& mind, const Senses& senses, const Random& rando
 		}
 		break;
 	case Step::Kind::Apply:
+	case Step::Kind::Empty:
 		FinishStep(mind);
 		break;
 	case Step::Kind::ApplyDesire:

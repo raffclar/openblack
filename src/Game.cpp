@@ -827,6 +827,14 @@ bool Game::Initialize() noexcept
 			SPDLOG_LOGGER_CRITICAL(spdlog::get("game"), "The simulation run cannot start: {}", *refusal);
 			return false;
 		}
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
+		if (_simulation->worldSeed.has_value())
+		{
+			Locator::gameRandom::value().SetMapStartSeed(*_simulation->worldSeed);
+			SPDLOG_LOGGER_INFO(spdlog::get("game"), "Simulation run: each map starts the synced seed at {}",
+			                   *_simulation->worldSeed);
+		}
+#endif
 		if (_simulation->frameTime.has_value())
 		{
 			Locator::time::value().SetFixedFrameTime(*_simulation->frameTime);

@@ -76,7 +76,9 @@ every train step. Otherwise use the steps here.
    `priority_order.txt` (respect its "after N" notes) or in `lost_ignore.txt` with a reason.
 2. **No merge agent runs:** if `priority_order.txt` has unmerged cars with no hold (an unapproved look, an unsigned
    deviation, an unmet "after N"), write batch lines (as many cars per line as possible, a dependency before the cars
-   that need it) and start one merge agent (`models.merge`). Only one merge agent at a time.
+   that need it) and start one merge agent (`models.merge`). Only one run_queue at a time.
+   A merge agent that only runs the checks after its merge, or its clean-up, does not count as running: batches
+   overlap, so start the next batch as soon as the previous PR merges.
 3. **A merge agent runs:** look for progress in the last 60 minutes. Any of these counts:
    - `git.mainBranch` on `git.remote` moved (fetch first);
    - the newest `carlogs/queue-*.log` or step log changed;
@@ -100,6 +102,8 @@ For each free local slot:
 1. Check the load: CPU under `load.cpuMaxPercent`, free RAM at least `load.freeRamMinGB`, and at least
    `load.freeDiskMinGB` free on `load.disk`. If one fails, leave the slot free and say which limit stopped it.
    If disk is the limit, remove the worktrees and builds of lanes whose branches are merged, then check again.
+   Memory: keep adding work (agents, build locks) while memory use is below 95%. Builds take more memory while they
+   compile and link, so check again after new builds start before you add more.
 2. Choose work from `paths.workSources`, highest impact first. Before you write a brief, search `paths.handovers` and
    `git log <remote>/<mainBranch> --grep` for the item. A lane that already ran it, or a branch that already holds it,
    means the item is not free.

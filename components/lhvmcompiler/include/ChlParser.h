@@ -142,7 +142,4 @@ private:
 [[nodiscard]] ParsedFile ParseFile(std::string_view text, std::string_view fileName, ParseEnvironment& environment,
                                    DiagnosticSink& sink);
 
-/// The statement forms that could spell the call, for diagnostics and tests: each entry is the form's pattern
-[[nodiscard]] std::vector<std::string> DescribeFormsOf(const ParseEnvironment& environment, std::string_view native);
-
 } // namespace openblack::lhvm::chl

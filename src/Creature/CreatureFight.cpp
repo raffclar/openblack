@@ -376,11 +376,6 @@ Move creature_fight::BlockMove()
 	return {.kind = Move::Kind::Block};
 }
 
-bool creature_fight::IsBlow(Move::Kind kind)
-{
-	return kind == Move::Kind::High || kind == Move::Kind::Mid || kind == Move::Kind::Low;
-}
-
 bool creature_fight::HandGives(const Move& move, std::span<const MagicType> knownMiracles)
 {
 	switch (move.kind)
@@ -1043,11 +1038,6 @@ bool creature_fight::IsBlocking(State state, float timeMs, float startBlockDurat
 	default:
 		return false;
 	}
-}
-
-bool creature_fight::TakesMoves(State state)
-{
-	return state == State::Stance || state == State::Block;
 }
 
 bool creature_fight::FacesOpponentEachTurn(State state, size_t animation, bool turning)

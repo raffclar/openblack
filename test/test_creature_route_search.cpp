@@ -689,3 +689,62 @@ TEST(CreatureRouteSearch, TheSearchingCreaturesShareThirtyTwoStepsATurn)
 	// Each creature gets at least one step
 	EXPECT_EQ(TurnSearchShare(100), 1);
 }
+
+TEST(CreatureRouteSearch, AWalkFromTheEdgeOfACircleToAThingInsideItGoesRoundTheCircleBackToTheStart)
+{
+	// A town flag inside the circle of a store. The creature stands in the circle, at the point of the edge nearest the
+	// flag, out of its reach. The circle reaches only to the creature, so the edge point nearest the flag is where the
+	// creature stands. Each circle beside the store is then in the way of the arc, and the route goes round the store
+	// and back to the same point.
+	const glm::vec2 creature {1307.095947265625f, 3479.902099609375f};
+	const glm::vec2 flag {1310.219482421875f, 3483.6416015625f};
+	const glm::vec2 store {1317.3875732421875f, 3492.223388671875f};
+	struct Placed
+	{
+		std::optional<uint32_t> thing;
+		glm::vec2 centre;
+		float radius;
+	};
+	const std::vector<Placed> placed {
+	    {.thing = 1u, .centre = store, .radius = 18.0f},
+	    {.thing = 2u, .centre = {1317.5328369140625f, 3475.859375f}, .radius = 1.580207347869873f},
+	    {.thing = 3u, .centre = {1349.6600341796875f, 3486.239990234375f}, .radius = 2.726243257522583f},
+	    {.thing = 4u, .centre = {1350.93994140625f, 3488.340087890625f}, .radius = 1.3947951793670654f},
+	    {.thing = 5u, .centre = {1350.3800048828125f, 3489.840087890625f}, .radius = 0.7903664112091064f},
+	    {.thing = 6u, .centre = {1348.4100341796875f, 3490.739990234375f}, .radius = 1.5368826389312744f},
+	    {.thing = std::nullopt, .centre = {1325.0f, 3475.0f}, .radius = 7.1f},
+	    {.thing = std::nullopt, .centre = {1335.0f, 3475.0f}, .radius = 7.1f},
+	    {.thing = std::nullopt, .centre = {1355.0f, 3465.0f}, .radius = 7.1f},
+	    {.thing = std::nullopt, .centre = {1365.0f, 3465.0f}, .radius = 7.1f},
+	    {.thing = std::nullopt, .centre = {1345.0f, 3505.0f}, .radius = 7.1f},
+	    {.thing = std::nullopt, .centre = {1335.0f, 3515.0f}, .radius = 7.1f},
+	};
+	Obstacles obstacles;
+	obstacles.Reset(creature, 1.0083619f, [&placed](glm::ivec2 cell, Obstacles& into) {
+		for (const auto& one : placed)
+		{
+			if (glm::ivec2(one.centre / 10.0f) == cell)
+			{
+				into.Add(one.thing, one.centre, one.radius);
+			}
+		}
+	});
+	const float distance = glm::distance(creature, flag);
+	const auto ring = creature_locomotion::MoveRing(distance, 1.844285f, creature_locomotion::StartMax(1.845285f, 1.844285f));
+	Search search(obstacles, {.point = creature},
+	              {.point = flag, .stopShort = ring.min, .arriveWithin = ring.max, .mostCost = (2.0f * distance) + 5000.0f});
+	ASSERT_EQ(Finish(search, obstacles), Search::Status::Found);
+
+	// The store's circle reaches only to the creature, and its edge point nearest the flag is the creature's point
+	const auto kept = std::ranges::find_if(obstacles.All(), [](const auto& obstacle) { return obstacle.thing == 1u; });
+	ASSERT_NE(kept, obstacles.All().end());
+	EXPECT_EQ(kept->circle.radius, glm::distance(creature, store));
+	const auto edge = SidePointFrom(kept->circle, flag, Way::Clockwise);
+	EXPECT_EQ(edge.point, creature);
+
+	// The route ends where it starts, out of the flag's reach, after a walk round the store
+	const auto route = Followed(search.GetBest(), obstacles);
+	EXPECT_EQ(route.legs.back().to, creature);
+	EXPECT_GT(glm::distance(route.legs.back().to, flag), ring.max);
+	EXPECT_GT(LengthOfRoute(route), 50.0f);
+}

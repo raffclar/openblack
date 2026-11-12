@@ -606,6 +606,9 @@ void CreatureSpawner::DrawMind(entt::entity entity) noexcept
 		case creature_mind::Step::Kind::StopTeleportControl:
 			ImGui::Text("Free of the teleport stone");
 			break;
+		case creature_mind::Step::Kind::Empty:
+			ImGui::Text("Nothing to do");
+			break;
 		case creature_mind::Step::Kind::WatchFlying:
 			ImGui::Text("Watching a thing fly for %.1f s", static_cast<double>(idle.stepSeconds));
 			break;

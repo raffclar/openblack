@@ -185,11 +185,6 @@ inline constexpr std::array<uint8_t, k_Count> k_RainSplashes = {0, 0, 3, 5, 8, 8
 	return settings.smallBump ? strength : 0.0f;
 }
 
-[[nodiscard]] constexpr bool Fog(uint8_t level)
-{
-	return For(level).fog;
-}
-
 [[nodiscard]] constexpr bool Weather(uint8_t level)
 {
 	return For(level).weather;
@@ -200,19 +195,9 @@ inline constexpr std::array<uint8_t, k_Count> k_RainSplashes = {0, 0, 3, 5, 8, 8
 	return For(level).clouds;
 }
 
-[[nodiscard]] constexpr bool CloudShadows(uint8_t level)
-{
-	return For(level).cloudShadows;
-}
-
 [[nodiscard]] constexpr float ModelDetail(uint8_t level)
 {
 	return For(level).modelDetail;
-}
-
-[[nodiscard]] constexpr float WaterTiling(uint8_t level)
-{
-	return For(level).waterTiling;
 }
 
 } // namespace openblack::graphics::detail_level
