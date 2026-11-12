@@ -78,13 +78,34 @@ TEST(RenderModes, TheAlphaTexturedModeKeepsItsTexelsWithNoAlphaAndTheirDepth)
 	EXPECT_TRUE(KeepsTexelsWithNoAlpha(Desc(Mode::AlphaTextured)));
 	EXPECT_TRUE(KeepsTexelsWithNoAlpha(Desc(Mode::TexturedAlpha)));
 	EXPECT_TRUE(KeepsTexelsWithNoAlpha(Desc(Mode::AlphaTexturedAlpha)));
-	// The chroma modes have a test, the opaque modes do not blend, and the modes without depth write show nothing there
+	// The chroma modes have a test, and the modes without depth write show nothing there
 	EXPECT_FALSE(KeepsTexelsWithNoAlpha(Desc(Mode::TexturedChroma)));
-	EXPECT_FALSE(KeepsTexelsWithNoAlpha(Desc(Mode::Textured)));
 	EXPECT_FALSE(KeepsTexelsWithNoAlpha(Desc(Mode::AlphaTexturedAlphaNz)));
 	EXPECT_FALSE(KeepsTexelsWithNoAlpha(Desc(Mode::AlphaTexturedAlphaAdditive)));
 	// The renderer gives such a material a reference below 0, so the shader keeps every texel and writes its depth
 	EXPECT_FALSE(ShaderFailsAlphaTest(0.0f, -1.0f));
+}
+
+TEST(RenderModes, TheTexturedModeShowsTheColourOfItsTexelsWithNoAlpha)
+{
+	using graphics::render_modes::Desc;
+	using graphics::render_modes::KeepsTexelsWithNoAlpha;
+	// The opaque textured mode has no alpha test and no blend, so each texel shows its colour
+	const auto& textured = Desc(Mode::Textured);
+	EXPECT_EQ(textured.blend, graphics::render_modes::Blend::Disabled);
+	EXPECT_FALSE(textured.alphaTest);
+	EXPECT_TRUE(KeepsTexelsWithNoAlpha(textured));
+	EXPECT_TRUE(KeepsTexelsWithNoAlpha(Desc(Mode::Mode17)));
+}
+
+TEST(RenderModes, AOneSidedMaterialShowsOnlyItsFrontFaces)
+{
+	using graphics::render_modes::DrawsBothSides;
+	// The first bit of the cull byte alone gives the two-sided material
+	EXPECT_FALSE(DrawsBothSides(0));
+	EXPECT_TRUE(DrawsBothSides(1));
+	EXPECT_FALSE(DrawsBothSides(4));
+	EXPECT_TRUE(DrawsBothSides(5));
 }
 
 TEST(RenderModes, TheChromaModeBlendsByTheTextureAlphaAfterItsTestAndWritesTheDepth)
