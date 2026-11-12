@@ -71,6 +71,23 @@ void testbed_scenarios::AddTutorialScenarios(std::vector<Scenario>& all)
 	    .commands = texts,
 	});
 
+	// The click on a help text is the let go of the select button, as in the original game
+	all.push_back({
+	    .id = "tutorial.help_text_click_at_let_go",
+	    .name = "A help text goes on at the let go of the click",
+	    .facet = Facet::Tutorial,
+	    .description = "The drag lesson's first help text is shown and waits for a click. Three seconds later the left "
+	                   "button goes down, stays down for two seconds, and then the player lets go of it.",
+	    .expected = "The \"Continue\" cue stays while the button is down. The cue goes, and the text stops its wait, only "
+	                "when the player lets go of the button.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Testbed},
+	    .commands = {{.kind = Kind::RunText, .delaySeconds = 1.0f, .value = k_DragLessonFirstText, .waitsForClick = true},
+	                 {.kind = Kind::PointerTo, .delaySeconds = 3.0f, .point = {0.5f, 0.3f}},
+	                 {.kind = Kind::PointerPress, .delaySeconds = 0.1f, .value = 1},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 2.0f, .value = 1}},
+	});
+
 	const glm::vec2 pile = k_RecordedWoodPile + k_WoodPileShift - flat_land::k_MapMiddle;
 	all.push_back({
 	    .id = "tutorial.demo_click_retarget",

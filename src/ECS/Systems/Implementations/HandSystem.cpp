@@ -46,6 +46,7 @@
 #include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/CreatureHandSystemInterface.h"
 #include "ECS/Systems/HandGrabSystemInterface.h"
+#include "ECS/Systems/HandPressSystemInterface.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
@@ -357,6 +358,11 @@ void HandSystem::EndOwnInterfaceLock()
 	if (Locator::creatureHandSystem::has_value())
 	{
 		Locator::creatureHandSystem::value().StopActionAtLockEnd();
+	}
+	// The interface also clears the flag of a press of the select button
+	if (Locator::handPressSystem::has_value())
+	{
+		Locator::handPressSystem::value().EndSelectPress();
 	}
 	// Then the wait for the last send ends
 	auto& registry = Locator::entitiesRegistry::value();

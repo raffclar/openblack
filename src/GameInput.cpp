@@ -481,6 +481,16 @@ void Game::SendDialogueClick()
 	{
 		return;
 	}
+	// The interface went off or came back while a press of the select button held the land. Then the next click or key
+	// on a text that takes it is the help's: the action of the hand ends, and the dialogue does not get the click.
+	if (Locator::helpTextSystem::has_value() && Locator::helpTextSystem::value().TakeKeptSelectPress(click, skipKey))
+	{
+		if (Locator::handSystem::has_value())
+		{
+			Locator::handSystem::value().EndOwnInterfaceLock();
+		}
+		return;
+	}
 	// A click or a key that cuts the help text short takes the hand too: the interface lock of the hand ends
 	if (Locator::helpTextSystem::has_value() && Locator::helpTextSystem::value().ClickCutsShort(click, skipKey) &&
 	    Locator::handSystem::has_value())

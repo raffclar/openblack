@@ -440,9 +440,11 @@ bool Runner::GiveStoryCommand(const Command& command)
 	}
 	if (command.kind == Kind::RunText)
 	{
-		// Not alone on its line and not waiting for a click, as the lessons' texts are shown
-		const bool shown = Locator::helpTextSystem::has_value() && Locator::helpTextSystem::value().IsStarted() &&
-		                   Locator::helpTextSystem::value().RunText(false, static_cast<uint32_t>(command.value), 0);
+		// Not alone on its line, as the lessons' texts are shown. A text can wait for a click.
+		const int32_t withInteraction = command.waitsForClick ? 1 : 0;
+		const bool shown =
+		    Locator::helpTextSystem::has_value() && Locator::helpTextSystem::value().IsStarted() &&
+		    Locator::helpTextSystem::value().RunText(false, static_cast<uint32_t>(command.value), withInteraction);
 		Log(fmt::format("{:.1f}s: help text {} {}", _seconds, command.value, shown ? "shown" : "not shown"));
 		return true;
 	}

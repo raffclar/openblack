@@ -53,9 +53,14 @@ public:
 	/// Gives whether a press of the Action button went since the last call, and clears it. The leash uses it so that a
 	/// press that a miracle or a creature took taps nothing else.
 	[[nodiscard]] virtual bool TakeActionPress() = 0;
-	/// Gives whether the left button went down since the last call, and clears it. A press of the button can click the
-	/// dialogue on.
+	/// Gives whether the player let go of the left button since the last call, and clears it. The let go of the button
+	/// can click the dialogue on.
 	[[nodiscard]] virtual bool TakeDialogueClick() = 0;
+	/// Whether the interface keeps the flag of a press of the select button that holds the land (see
+	/// input::select_press). The help reads it when the interface goes off or comes back.
+	[[nodiscard]] virtual bool SelectPressHolds() const { return false; }
+	/// The action of the hand ended, and the interface clears the flag of the select press
+	virtual void EndSelectPress() {}
 
 	/// The place of the pointer on the hand when the hand holds a totem, none when it holds no totem
 	[[nodiscard]] virtual const std::optional<glm::ivec2>& GetTotemPointer() const = 0;

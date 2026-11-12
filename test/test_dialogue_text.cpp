@@ -245,6 +245,27 @@ TEST(DialogueText, AClickCutsTheTextShortOnlyInACutSceneOrWithTheKey)
 	EXPECT_FALSE(dialogue.CutsShort(false, true));
 }
 
+TEST(DialogueText, AClickOrTheKeyComesToATextThatIsNotReadAfterItShowedLongEnough)
+{
+	Fixture f;
+	f.texts[10] = {.text = u"click me"};
+	auto dialogue = f.Make();
+	dialogue.RunText(false, 10, 1);
+	// No click and no key: nothing comes to the text
+	EXPECT_FALSE(dialogue.TakesInput(false, false));
+	// Too soon the click does not come to the text, but the key does
+	f.turn += 9;
+	EXPECT_FALSE(dialogue.TakesInput(true, false));
+	EXPECT_TRUE(dialogue.TakesInput(false, true));
+	f.turn += 1;
+	EXPECT_TRUE(dialogue.TakesInput(true, false));
+	// A text that was read takes nothing
+	f.turn += 1000;
+	dialogue.ProcessClick(true, false);
+	EXPECT_FALSE(dialogue.TakesInput(true, false));
+	EXPECT_FALSE(dialogue.TakesInput(false, true));
+}
+
 TEST(DialogueText, AClickTooSoonDoesNothing)
 {
 	Fixture f;

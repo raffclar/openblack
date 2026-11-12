@@ -148,6 +148,7 @@ void HelpTextSystem::SaveState(reflection::BinaryWriter& out) const
 		reflection::Save(out, saved);
 	}
 	reflection::Save(out, _storyHistory);
+	reflection::Save(out, _selectPress);
 	out.EndPresentation();
 }
 
@@ -172,13 +173,15 @@ bool HelpTextSystem::LoadState(reflection::BinaryReader& in)
 		dialogue.EmptyBox();
 	}
 	reflection::Load(in, _storyHistory);
+	reflection::Load(in, _selectPress);
 	return !in.Failed();
 }
 
 void HelpTextSystem::Reset()
 {
-	// The story history starts again when the scripts start again
+	// The story history starts again when the scripts start again, and the help keeps no select press
 	_storyHistory.Clear();
+	_selectPress = false;
 	if (_dialogue)
 	{
 		_dialogue->ClearAllText();
@@ -295,6 +298,17 @@ void HelpTextSystem::TakeClick(bool click, bool skipKey)
 bool HelpTextSystem::ClickCutsShort(bool click, bool skipKey) const
 {
 	return _dialogue && _dialogue->CutsShort(click, skipKey);
+}
+
+bool HelpTextSystem::TakeKeptSelectPress(bool click, bool skipKey)
+{
+	// The flag stays until a click or a key comes to a text that takes it
+	if (!_selectPress || !_dialogue || !_dialogue->TakesInput(click, skipKey))
+	{
+		return false;
+	}
+	_selectPress = false;
+	return true;
 }
 
 void HelpTextSystem::ProcessTurn(uint32_t milliseconds)

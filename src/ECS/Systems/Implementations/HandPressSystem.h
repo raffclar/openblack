@@ -38,6 +38,8 @@ public:
 	[[nodiscard]] const input::HandButtons& GetHandButtons() const final { return _handButtons; }
 	[[nodiscard]] bool TakeActionPress() final;
 	[[nodiscard]] bool TakeDialogueClick() final;
+	[[nodiscard]] bool SelectPressHolds() const final { return _selectPress; }
+	void EndSelectPress() final { _selectPress = false; }
 	[[nodiscard]] const std::optional<glm::ivec2>& GetTotemPointer() const final { return _totemPointer; }
 	void SetTotemPointer(std::optional<glm::ivec2> pointer) final { _totemPointer = pointer; }
 	[[nodiscard]] glm::ivec2 GetMousePosition() const final { return _mousePosition; }
@@ -63,8 +65,10 @@ private:
 	/// nothing else for the leash
 	bool _actionPressTaken {false};
 	std::optional<creature_fight::Button> _fightButton;
-	/// The left button went down since the last frame, which may click the dialogue on
+	/// The player let go of the left button since the last frame, which may click the dialogue on
 	bool _dialogueClick {false};
+	/// The flag of the interface for a press of the select button that holds the land
+	bool _selectPress {false};
 	std::optional<glm::ivec2> _totemPointer;
 	glm::ivec2 _mousePosition {0, 0};
 	/// Whether the hand follows the pointer that the window reports yet, or until the mouse first moves the game's own
