@@ -51,6 +51,7 @@
 #include "ECS/Systems/MiracleFxSystemInterface.h"
 #include "ECS/Systems/ObjectDrawListSystemInterface.h"
 #include "ECS/Systems/RenderingSystemInterface.h"
+#include "ECS/Systems/SpellIconSystemInterface.h"
 #include "ECS/WorldObjects.h"
 #include "EngineConfig.h"
 #include "FileSystem/FileSystemInterface.h"
@@ -501,7 +502,13 @@ void Renderer::DrawIconSeeds(const DrawSceneDesc& desc) const
 		}
 		return *kept;
 	};
+	const auto* iconSystem = Locator::spellIconSystem::has_value() ? &Locator::spellIconSystem::value() : nullptr;
 	registry.Each<const IconSeed>([&](entt::entity icon, const IconSeed& shown) {
+		// The seed of an icon at a worship site that is not built does not show
+		if (iconSystem != nullptr && !iconSystem->Shown(icon))
+		{
+			return;
+		}
 		const auto player = ecs::world_objects::IconPlayer(registry, icon);
 		const float alignment = alignmentOf(player);
 		icons.push_back({.shown = &shown, .player = player, .alignment = alignment});

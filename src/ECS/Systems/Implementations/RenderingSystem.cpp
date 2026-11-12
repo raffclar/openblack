@@ -1290,8 +1290,10 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 			    }
 		    }
 
-		    // A body sunk wholly under the sea isn't drawn in any pass, its shadow included
-		    if (!placed.has_value())
+		    // A body sunk wholly under the sea isn't drawn in any pass, its shadow included. Also an icon at a worship site
+		    // that is not built is not drawn, and the cursor does not find it.
+		    if (!placed.has_value() || (stores.AllOf<WorshipIcon>(entity) && Locator::spellIconSystem::has_value() &&
+		                                !Locator::spellIconSystem::value().Shown(entity)))
 		    {
 			    look.z = 1.0f;
 			    modelMatrix = glm::mat4(0.0f);

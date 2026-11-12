@@ -108,6 +108,26 @@ void AddSecondLandIconScenarios(std::vector<Scenario>& all)
 	    .townMiracles = {MagicType::Heal, MagicType::Water},
 	});
 	all.push_back({
+	    .id = "worship.icons_show_when_site_built",
+	    .name = "The icons of a worship site show only when the site is built",
+	    .facet = Facet::Miracles,
+	    .description = "The town and temple of town.miracle_debug_given on the second land, with the heal and water "
+	                   "miracles. The town's worship site goes up by the temple as the scenario starts, and it stays a "
+	                   "scaffold for six seconds. Then the site is built at once.",
+	    .expected = "While the site is a scaffold, its places for the icons are empty: no hand, no miracle above a hand, "
+	                "and the cursor finds no icon there. When the site is built, the hands of the heal icon and the water "
+	                "icon show with their miracles above them. Before, the hands and their miracles stood by the "
+	                "scaffold before the site was built.",
+	    .environment = {.dispenserGrid = false, .landNumber = k_SecondLand},
+	    // The camera looks across the site at its places for the icons, from the side away from the temple
+	    .framing = {.shot = Shot::Placed, .eye = {-9.0f, 20.0f, -3.0f}, .look = {-20.0f, 2.0f, -35.0f}},
+	    .objects = Town(),
+	    .temples = {{.offset = k_Temple}},
+	    .commands = {{.kind = Kind::BuildWorshipSites, .delaySeconds = 6.0f}},
+	    .townBeliefInPlayer = k_TownBelief,
+	    .townMiracles = {MagicType::Heal, MagicType::Water},
+	});
+	all.push_back({
 	    .id = "hand.charge_pulse",
 	    .name = "Bands pulse onto the hand while a worship site icon charges a miracle for it",
 	    .facet = Facet::Miracles,

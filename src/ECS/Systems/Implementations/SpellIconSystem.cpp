@@ -1069,6 +1069,17 @@ bool SpellIconSystem::ValidToTap(entt::entity icon, PlayerNames player) const
 	return false;
 }
 
+bool SpellIconSystem::Shown(entt::entity icon) const
+{
+	const auto& registry = Entities();
+	const auto* worshipIcon = registry.Valid(icon) ? registry.TryGet<const WorshipIcon>(icon) : nullptr;
+	if (worshipIcon == nullptr || !registry.Valid(worshipIcon->site) || !Locator::worshipSiteSystem::has_value())
+	{
+		return icons::Shown(std::nullopt);
+	}
+	return icons::Shown(Locator::worshipSiteSystem::value().IsBuilt(worshipIcon->site));
+}
+
 bool SpellIconSystem::Tap(entt::entity icon, PlayerNames player)
 {
 	auto& registry = Entities();

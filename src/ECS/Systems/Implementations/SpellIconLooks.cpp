@@ -99,7 +99,8 @@ void SpellIconSystem::UpdateChargeLooks(int32_t gameMilliseconds, bool landDrawn
 	}
 	registry.Each<const WorshipIcon, const Transform, const Mesh>(
 	    [this, &registry, gameMilliseconds](entt::entity entity, const WorshipIcon& icon, const Transform&, const Mesh&) {
-		    if (ecs::DrawnOnScreen(registry, entity))
+		    // An icon at a worship site that is not built shows no charge
+		    if (Shown(entity) && ecs::DrawnOnScreen(registry, entity))
 		    {
 			    ShowCharge(entity, icon, gameMilliseconds);
 		    }
