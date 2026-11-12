@@ -447,6 +447,23 @@ bool RefusesCreature(const ecs::Registry& registry, entt::entity object)
 	}
 	return registry.AllOf<CannotBePickedUp>(object);
 }
+
+void KeepInHand(ecs::Registry& registry, entt::entity creature, CreatureObjectAction& action, CreatureAnimation& animation)
+{
+	animation.slots.clear();
+	if (auto* held = registry.TryGet<CreatureHeldObject>(creature))
+	{
+		held->carried = false;
+		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} ends its throw before it lets go of {}",
+		                    entt::to_integral(creature), entt::to_integral(held->object));
+	}
+	if (action.planStopped)
+	{
+		registry.Remove<CreatureObjectAction>(creature);
+		return;
+	}
+	action.phase = CreatureObjectAction::Phase::KeptInHand;
+}
 } // namespace openblack::ecs::systems::object_action_detail
 
 namespace
@@ -824,8 +841,8 @@ void Approach(entt::entity creature, CreatureObjectAction& action, const Creatur
 		else
 		{
 			// The throw ends when its step gets to the end of the flat throw. The length of the high throw has no effect.
+			// A throw time at or after this end never lets go.
 			action.durationMs = DurationOf(creature, creature_throw::k_HurlFlat);
-			action.eventMs = std::min(action.eventMs, std::max(action.durationMs - 1.0f, 0.0f));
 		}
 		return;
 	}
@@ -971,6 +988,11 @@ bool CreatureObjectActionSystem::Start(entt::entity creature, CreatureObjectActi
 		if (held == nullptr)
 		{
 			Fail(action, "it has nothing in its hand");
+		}
+		// A throw needs a thing that the creature carries. The thing that a throw kept in the hand is not carried.
+		else if (action.kind == Kind::Throw && !held->carried)
+		{
+			Fail(action, "it carries nothing");
 		}
 		break;
 	case creature_object_actions::Hands::Empty:
@@ -1339,6 +1361,12 @@ void CreatureObjectActionSystem::CreatureTurn(entt::entity entity)
 	{
 		registry.Remove<CreatureHeldObject>(entity);
 	}
+	// A throw that ended before the hand let go waits until the hand is empty. Then the throw is done.
+	if (auto* kept = registry.TryGet<CreatureObjectAction>(entity);
+	    kept != nullptr && kept->phase == Phase::KeptInHand && kept->status == Status::Running && !GetHeld(entity).has_value())
+	{
+		kept->status = Status::Done;
+	}
 
 	if (registry.AllOf<Creature, Transform, CreatureAnimation, CreatureObjectAction>(entity))
 	{
@@ -1437,14 +1465,26 @@ void CreatureObjectActionSystem::ActionTurn(entt::entity creature)
 		{
 			action.timeMs = creature_pointing::AdvanceTime(action.timeMs, step, action.pointMs, action.pointEnding);
 		}
-		else if (action.kind == Kind::Throw && action.hurlMeasured)
+		else if (action.kind == Kind::Throw)
 		{
 			// Near the throw time the hand moves at the speed of the throw
 			const creature_throw::HurlHands hands {.flatSpeed = action.hurlFlatSpeed, .highSpeed = action.hurlHighSpeed};
 			const creature_throw::HurlLift lift {.speed = action.hurlSpeed};
-			action.timeMs += static_cast<float>(
-			    creature_throw::HurlStepMs(hands, lift, action.hurlHigh, transform.scale.x, turnMs, static_cast<int32_t>(step),
-			                               static_cast<int32_t>(action.timeMs), static_cast<int32_t>(action.eventMs)));
+			const auto throwStep =
+			    action.hurlMeasured
+			        ? creature_throw::HurlStepMs(hands, lift, action.hurlHigh, transform.scale.x, turnMs,
+			                                     static_cast<int32_t>(step), static_cast<int32_t>(action.timeMs),
+			                                     static_cast<int32_t>(action.eventMs))
+			        : static_cast<int32_t>(step);
+			// The body ends the throw before the step that lets go. When the step gets to the end first, the hand keeps
+			// the thing.
+			if (creature_throw::EndsBeforeRelease(static_cast<int32_t>(action.timeMs), throwStep,
+			                                      static_cast<int32_t>(action.durationMs), action.eventDone))
+			{
+				object_action_detail::KeepInHand(registry, entity, action, animation);
+				return;
+			}
+			action.timeMs += static_cast<float>(throwStep);
 		}
 		else
 		{

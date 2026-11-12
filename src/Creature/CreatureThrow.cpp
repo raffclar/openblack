@@ -166,6 +166,11 @@ int32_t creature_throw::HurlStepMs(const HurlHands& hands, const HurlLift& lift,
 	return x87::ToInteger(x87::Add(x87::Mul(static_cast<double>(clipStepMs - speedStep), ease), speedStep));
 }
 
+bool creature_throw::EndsBeforeRelease(int32_t timeMs, int32_t stepMs, int32_t flatLengthMs, bool released)
+{
+	return !released && timeMs + stepMs >= flatLengthMs;
+}
+
 glm::vec3 creature_throw::HandVelocity(const glm::vec3& atRelease, const glm::vec3& before, float spanMs)
 {
 	return spanMs > 0.0f ? (atRelease - before) * (1000.0f / spanMs) : glm::vec3(0.0f);

@@ -1274,7 +1274,18 @@ creature_animation_log::Cause CauseOf(const ecs::Registry& registry, entt::entit
 	if (action != nullptr)
 	{
 		cause.objectAction = std::string(creature_object_actions::Name(action->kind));
-		cause.objectAction += action->phase == CreatureObjectAction::Phase::Playing ? " (playing)" : " (approach)";
+		switch (action->phase)
+		{
+		case CreatureObjectAction::Phase::Approach:
+			cause.objectAction += " (approach)";
+			break;
+		case CreatureObjectAction::Phase::Playing:
+			cause.objectAction += " (playing)";
+			break;
+		case CreatureObjectAction::Phase::KeptInHand:
+			cause.objectAction += " (kept in hand)";
+			break;
+		}
 	}
 	if (fighting != nullptr)
 	{

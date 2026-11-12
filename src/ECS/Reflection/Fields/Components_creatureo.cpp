@@ -78,7 +78,8 @@ void openblack::ecs::reflection::RegisterFields_Components_creatureo(entt::meta_
 	Reflect<components::CreatureHeldObject>(context)
 	    .Field<&components::CreatureHeldObject::object>("object")
 	    .Field<&components::CreatureHeldObject::mirrored>("mirrored")
-	    .Field<&components::CreatureHeldObject::bone>("bone");
+	    .Field<&components::CreatureHeldObject::bone>("bone")
+	    .Field<&components::CreatureHeldObject::carried>("carried");
 	Reflect<components::PendingCatch>(context).Field<&components::PendingCatch::object>("object");
 	Reflect<components::CatchHands>(context)
 	    .Field<&components::CatchHands::hands>("hands")

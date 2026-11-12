@@ -163,19 +163,19 @@ TEST(CreatureScriptPlay, TheMindPlaysAStaticActionForTenSeconds)
 			}
 		}
 		EXPECT_EQ(endedOn, 100);
-		EXPECT_FALSE(Played(mind));
+		EXPECT_FALSE(Played(mind, true));
 		// The end plays out
 		senses.bodyLooping = false;
 		senses.bodyBusy = false;
 		static_cast<void>(creature_mind::Think(mind, senses, random));
 		EXPECT_EQ(mind.step, 1u);
-		EXPECT_FALSE(Played(mind));
+		EXPECT_FALSE(Played(mind, true));
 		// The body is free: the last step is done, but its empty last stage holds the agenda for one more turn
 		static_cast<void>(creature_mind::Think(mind, senses, random));
 		EXPECT_EQ(mind.step, mind.agenda.size());
-		EXPECT_FALSE(Played(mind));
+		EXPECT_FALSE(Played(mind, true));
 		static_cast<void>(creature_mind::Think(mind, senses, random));
-		EXPECT_TRUE(Played(mind));
+		EXPECT_TRUE(Played(mind, true));
 	}
 }
 
@@ -194,18 +194,18 @@ TEST(CreatureScriptPlay, TheMindPlaysAnIndividualActionAndThenWaitsUntilTheBodyI
 	for (int turn = 0; turn < 5; ++turn)
 	{
 		static_cast<void>(creature_mind::Think(mind, senses, random));
-		EXPECT_FALSE(Played(mind));
+		EXPECT_FALSE(Played(mind, true));
 	}
 	// The action ends on the first turn that the body is free
 	senses.bodyBusy = false;
 	static_cast<void>(creature_mind::Think(mind, senses, random));
 	EXPECT_EQ(mind.step, 1u);
-	EXPECT_FALSE(Played(mind));
+	EXPECT_FALSE(Played(mind, true));
 	static_cast<void>(creature_mind::Think(mind, senses, random));
 	EXPECT_EQ(mind.step, mind.agenda.size());
-	EXPECT_FALSE(Played(mind));
+	EXPECT_FALSE(Played(mind, true));
 	static_cast<void>(creature_mind::Think(mind, senses, random));
-	EXPECT_TRUE(Played(mind));
+	EXPECT_TRUE(Played(mind, true));
 }
 
 // While the agenda waits to go past the empty last stage of its last step, the creature has not played
@@ -218,9 +218,9 @@ TEST(CreatureScriptPlay, AnAgendaThatWaitsToGoPastAnEmptyLastStageHasNotPlayed)
 	static_cast<void>(creature_mind::Think(mind, senses, random));
 	ASSERT_EQ(mind.step, mind.agenda.size());
 	ASSERT_EQ(mind.endsNextTurn, mind.serial);
-	EXPECT_FALSE(Played(mind));
+	EXPECT_FALSE(Played(mind, true));
 	static_cast<void>(creature_mind::Think(mind, senses, random));
-	EXPECT_TRUE(Played(mind));
+	EXPECT_TRUE(Played(mind, true));
 }
 
 // An idle creature has played at once. A yes in the turn before its agenda goes past an empty last stage stops the
@@ -233,7 +233,7 @@ TEST(CreatureScriptPlay, AYesToAnIdleCreatureStopsAnAgendaThatWaitsToGoPastAnEmp
 	const creature_mind::Senses senses {.seconds = 0.1f};
 	static_cast<void>(creature_mind::Think(mind, senses, random));
 	ASSERT_EQ(mind.endsNextTurn, mind.serial);
-	ASSERT_TRUE(Played(mind));
+	ASSERT_TRUE(Played(mind, true));
 	ClearAfterPlayed(mind);
 	EXPECT_FALSE(mind.endsNextTurn.has_value());
 	EXPECT_TRUE(mind.gaveUp);
@@ -247,19 +247,34 @@ TEST(CreatureScriptPlay, AYesToAnIdleCreatureStopsAnAgendaThatWaitsToGoPastAnEmp
 TEST(CreatureScriptPlay, PlayedOnceTheAgendaIsOver)
 {
 	creature_mind::IdleMind mind;
-	EXPECT_TRUE(Played(mind));
+	EXPECT_TRUE(Played(mind, true));
 	mind.activity = creature_mind::Activity::Told;
 	mind.agenda = Agenda({.animation = 63, .plays = 2});
 	mind.step = 2;
-	EXPECT_FALSE(Played(mind));
+	EXPECT_FALSE(Played(mind, true));
 	mind.step = 3;
-	EXPECT_TRUE(Played(mind));
+	EXPECT_TRUE(Played(mind, true));
 	// Its own agenda counts as well
 	mind.activity = creature_mind::Activity::HangAround;
 	mind.step = 0;
-	EXPECT_FALSE(Played(mind));
+	EXPECT_FALSE(Played(mind, true));
 	mind.activity = creature_mind::Activity::BeIdle;
-	EXPECT_TRUE(Played(mind));
+	EXPECT_TRUE(Played(mind, true));
+}
+
+// A creature whose plan is not valid has played, also while steps of its agenda are left. The yes stops those steps.
+TEST(CreatureScriptPlay, ACreatureWithNoValidPlanHasPlayedWhileStepsAreLeft)
+{
+	creature_mind::IdleMind mind;
+	creature_mind::Plan(mind, creature_mind::Activity::Told, Agenda({.animation = 63, .plays = 2}));
+	ASSERT_FALSE(creature_mind::AgendaOver(mind));
+	EXPECT_FALSE(Played(mind, true));
+	ASSERT_TRUE(Played(mind, false));
+	ClearAfterPlayed(mind);
+	EXPECT_TRUE(creature_mind::AgendaOver(mind));
+	EXPECT_TRUE(mind.gaveUp);
+	EXPECT_TRUE(mind.stoppedByScript);
+	EXPECT_TRUE(Played(mind, false));
 }
 
 // A yes to the script's question stops the steps that remain, and those steps do not count as done
@@ -270,13 +285,13 @@ TEST(CreatureScriptPlay, AYesStopsTheStepsThatRemain)
 	mind.agenda = Agenda({.animation = 63, .plays = 2});
 	mind.step = 1;
 	mind.stepStarted = true;
-	ASSERT_TRUE(Played(mind));
+	ASSERT_TRUE(Played(mind, true));
 	ClearAfterPlayed(mind);
 	EXPECT_EQ(mind.step, mind.agenda.size());
 	EXPECT_FALSE(mind.stepStarted);
 	EXPECT_TRUE(mind.gaveUp);
 	EXPECT_TRUE(mind.stoppedByScript);
-	EXPECT_TRUE(Played(mind));
+	EXPECT_TRUE(Played(mind, true));
 	// A new agenda is not stopped
 	creature_mind::Plan(mind, creature_mind::Activity::Told, Agenda({.animation = 63, .plays = 1}));
 	EXPECT_FALSE(mind.stoppedByScript);

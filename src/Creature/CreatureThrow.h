@@ -181,6 +181,10 @@ struct HurlLift
 /// the scale. Further away the step goes to the clip step of the turn, which it reaches 400 ms from the throw time.
 [[nodiscard]] int32_t HurlStepMs(const HurlHands& hands, const HurlLift& lift, float highWeight, float scale, int32_t turnMs,
                                  int32_t clipStepMs, int32_t timeMs, int32_t throwMs);
+/// Whether the body ends the throw before the hand lets go of the thing. The body ends the throw when the time and the
+/// step of the turn get to the length of the flat throw. It tests this before the step that lets go. Thus, when one step
+/// goes past both the throw time and the end, the hand keeps the thing. A throw that let go already ends as usual.
+[[nodiscard]] bool EndsBeforeRelease(int32_t timeMs, int32_t stepMs, int32_t flatLengthMs, bool released);
 
 /// The hand's velocity in units a second, from where it is when it lets go and where it was a span of milliseconds
 /// before
