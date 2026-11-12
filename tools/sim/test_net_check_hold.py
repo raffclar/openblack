@@ -13,6 +13,7 @@ import json
 import os
 import sys
 import tempfile
+import threading
 import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -248,6 +249,16 @@ class LeashAfterHold(unittest.TestCase):
         self.assertTrue(result["on"])
         self.assertTrue(result["off"])
         self.assertTrue(result["same"])
+
+    def test_a_long_hand_step_of_one_client_does_not_stop_the_other_client(self):
+        steps = net_check.HandSteps()
+        go = threading.Event()
+        steps.start(0, go.wait)
+        self.assertTrue(steps.busy(0))
+        self.assertFalse(steps.busy(1))
+        go.set()
+        steps.wait(5)
+        self.assertFalse(steps.busy(0))
 
     def test_a_late_first_key_keeps_the_hold_of_the_later_keys(self):
         presses = [(900, "L", 0.0), (1100, "L", 0.0)]

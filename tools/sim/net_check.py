@@ -148,6 +148,7 @@ import socket
 import struct
 import subprocess
 import sys
+import threading
 import time
 
 import draw_trace
@@ -1353,6 +1354,31 @@ def leash_press_turn(presses, done, turn_of_first):
     return max(turns, turn_of_first + turns - presses[0][0])
 
 
+class HandSteps:
+    """The long steps of the hand (a hold of the creature, a gift) of each client. Each step runs in its own thread,
+    so a long step of one client does not stop the steps of the other clients. A client does one step at a time."""
+
+    def __init__(self):
+        self.threads = {}
+
+    def busy(self, index):
+        """Whether a step of the client still runs"""
+        thread = self.threads.get(index)
+        return thread is not None and thread.is_alive()
+
+    def start(self, index, step):
+        """Starts the step for the client"""
+        thread = threading.Thread(target=step, daemon=True)
+        self.threads[index] = thread
+        thread.start()
+
+    def wait(self, seconds):
+        """Waits up to the seconds for the steps that still run"""
+        end = time.monotonic() + seconds
+        for thread in self.threads.values():
+            thread.join(max(0.0, end - time.monotonic()))
+
+
 def desktop_leash_step(leash, done, pid, log):
     """Presses the next keys of a leash check on a desktop client once the client reached the turn of the key. Gives
     True when the check pressed every key."""
@@ -2160,6 +2186,7 @@ def main():
     miracle_done = None
     fight_done = None
     give_done = None
+    hand_steps = HandSteps()
     # The keys that each leash check of a desktop client pressed, by the place of the check in the list
     leash_done = {number: [] for number, leash in enumerate(leashes) if leash["client"] != "web"}
     for leash in leashes:
@@ -2353,14 +2380,17 @@ def main():
             for index, near in holds.items():
                 if index not in held and clients[index].poll() is None and reached_turn(
                         os.path.join(client_dirs[index], "client.log"), clients[index].pid, options.hold_after):
-                    hold_creature(clients[index].pid, near, options.hold_slaps)
+                    hand_steps.start(index, lambda pid=clients[index].pid, near=near: hold_creature(
+                        pid, near, options.hold_slaps))
                     held.add(index)
             slot = (options.slot_miracle or 0) - 1
-            if (miracle_done is None and 0 <= slot < len(clients) and clients[slot].poll() is None and reached_turn(
+            if (miracle_done is None and 0 <= slot < len(clients) and clients[slot].poll() is None
+                    and not hand_steps.busy(slot) and reached_turn(
                     os.path.join(client_dirs[slot], "client.log"), clients[slot].pid, options.hold_after)):
                 miracle_done = slot_miracle(clients[slot].pid, slot)
             if (options.slot_fight and fight_done is None and len(clients) == 2
-                    and all(client.poll() is None for client in clients) and reached_turn(
+                    and all(client.poll() is None for client in clients)
+                    and not any(hand_steps.busy(index) for index in range(len(clients))) and reached_turn(
                         os.path.join(client_dirs[0], "client.log"), clients[0].pid, options.hold_after)):
                 fight_done = slot_fight([client.pid for client in clients], options.slot_fight)
             for index, client in enumerate(clients):
@@ -2375,20 +2405,24 @@ def main():
                     cameras_again.add(index)
             for number, done in leash_done.items():
                 index = leashes[number]["client"]
-                if index < len(clients) and clients[index].poll() is None:
+                if index < len(clients) and clients[index].poll() is None and not hand_steps.busy(index):
                     desktop_leash_step(leashes[number], done, clients[index].pid,
                                        os.path.join(client_dirs[index], "client.log"))
             giver = (options.give or 0) - 1
-            # The gift waits for the leash keys of its client: it can take some hundreds of turns
+            # The gift waits for the leash keys of its client: until the last key, the hand can hold the leash
             if (give_done is None and 0 <= giver < len(clients) and clients[giver].poll() is None
-                    and leash_keys_done(leashes, leash_done, giver) and reached_turn(
+                    and not hand_steps.busy(giver) and leash_keys_done(leashes, leash_done, giver) and reached_turn(
                     os.path.join(client_dirs[giver], "client.log"), clients[giver].pid, options.hold_after)):
-                give_done = give_to_creature(clients[giver].pid, os.path.join(client_dirs[giver], "client.log"))
+                give_done = {}
+                hand_steps.start(giver, lambda pid=clients[giver].pid, log=os.path.join(
+                    client_dirs[giver], "client.log"): give_done.update(give_to_creature(pid, log)))
             if (options.stop_second_after is not None and not stopped_second and len(clients) > 1
                     and time.monotonic() - started > options.stop_second_after):
                 stop(clients[1])
                 stopped_second = True
             time.sleep(0.5)
+        # A step of the hand ends soon after its client stops
+        hand_steps.wait(30)
         # The server stops at its last turn; give it the time to write its summary
         end = time.monotonic() + 60
         while server.poll() is None and time.monotonic() < end:
