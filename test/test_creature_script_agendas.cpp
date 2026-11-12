@@ -79,6 +79,31 @@ TEST(CreatureScriptAgendas, OnlyACreatureWithAPlayerLooksAtTheCamera)
 	EXPECT_EQ(owned[0].kind, Step::Kind::WatchCamera);
 }
 
+// A gesture action: with a player it turns to face the camera and looks at it, then draws the circle. The drawing is
+// the main step, with no face and no look.
+TEST(CreatureScriptAgendas, AGestureActionTurnsToTheCameraAndDrawsTheCircle)
+{
+	const auto owned = DrawGestureForPlayer(true, {3.0f, 9.0f, 7.0f});
+	ASSERT_EQ(owned.size(), 2);
+	EXPECT_EQ(owned[0].kind, Step::Kind::Move);
+	EXPECT_EQ(owned[0].movement.kind, Movement::Kind::TurnToFace);
+	EXPECT_EQ(owned[0].movement.point, glm::vec2(3.0f, 7.0f));
+	ASSERT_TRUE(owned[0].gaze.has_value());
+	EXPECT_TRUE(owned[0].gaze->camera);
+	EXPECT_FALSE(owned[0].main);
+	EXPECT_EQ(owned[1].kind, Step::Kind::Gesture);
+	EXPECT_EQ(owned[1].animation, 4);
+	EXPECT_TRUE(owned[1].main);
+	EXPECT_FALSE(owned[1].gaze.has_value());
+	EXPECT_EQ(owned[1].face, creature_face::Cue::None);
+
+	// A creature without a player does not turn and only draws
+	const auto none = DrawGestureForPlayer(false, {});
+	ASSERT_EQ(none.size(), 1);
+	EXPECT_EQ(none[0].kind, Step::Kind::Gesture);
+	EXPECT_EQ(none[0].animation, 4);
+}
+
 namespace
 {
 Senses Watching(float distance, float turn)

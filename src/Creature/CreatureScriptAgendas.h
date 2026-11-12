@@ -55,6 +55,11 @@ constexpr float k_FacePlaceSeconds = 0.1f;
 /// Watching the camera, curious, turning to it when it is more than a quarter turn away, for six seconds or until the
 /// camera is overhead or more than 100 away, for a creature with a player; done at once for one without
 [[nodiscard]] std::vector<Step> LookAtCamera(bool hasPlayer);
+/// The shape that each gesture action draws. All twelve gesture actions draw the circle, whatever their names are.
+constexpr uint32_t k_GestureActionShape = 4;
+/// A gesture action: the creature turns to face the camera and looks at it, then draws the circle in the air. A
+/// creature without a player does not turn and only draws.
+[[nodiscard]] std::vector<Step> DrawGestureForPlayer(bool hasPlayer, glm::vec3 camera);
 /// While a script's cut scene is on, a creature free to think for itself is made to look at the camera, over and over
 /// until the cut scene is over. Half the time it first points at the camera for a second, amazed; then it watches the
 /// camera, curious, for 21 turns; half the time it waves, amazed; half the time it talks, curious; one time in three it
