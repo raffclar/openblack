@@ -11,6 +11,7 @@
 
 #include <cstdint>
 
+#include <functional>
 #include <limits>
 #include <optional>
 #include <span>
@@ -53,15 +54,33 @@ constexpr size_t k_GatheringRing = 100;
 /// a float, then cut to whole map units.
 [[nodiscard]] map_coords::MapCoords GatheringMiddle(std::span<const map_coords::MapCoords> buildings);
 
-/// The gathering place that a land script gives a town, in metres. A place at 0, 0 counts as no place: the town then
-/// finds its own gathering place when it first needs one.
-[[nodiscard]] constexpr std::optional<glm::vec2> GatheringPlaceFromScript(const map_coords::MapCoords& place)
+/// When the town finds no clear gathering place, the place is near a building or the town, this far and up to as far
+/// again
+constexpr float k_GatheringNearLeast = 10.0f;
+constexpr float k_GatheringNearRange = 10.0f;
+constexpr float k_GatheringNearTurn = 6.2831855f;
+
+/// The gathering place near a base place, when the town finds no clear one. The distance is drawn first, then the angle.
+/// The step is cut to whole map units and then added to the base.
+[[nodiscard]] map_coords::MapCoords GatheringPlaceNear(const map_coords::MapCoords& base,
+                                                       const std::function<float(float)>& random);
+
+/// A kept gathering place counts only when it is not at 0, 0 with no altitude. The town finds a new place in place of
+/// such a place.
+[[nodiscard]] constexpr bool IsGatheringPlace(const map_coords::MapCoords& place)
 {
-	if (place.x == 0 && place.z == 0)
+	return place.x != 0 || place.z != 0 || place.altitude != 0.0f;
+}
+
+/// The gathering place that a land script gives a town, in whole map units. A place at 0, 0 counts as no place: the town
+/// then finds its own gathering place when it first needs one.
+[[nodiscard]] constexpr std::optional<map_coords::MapCoords> GatheringPlaceFromScript(const map_coords::MapCoords& place)
+{
+	if (!IsGatheringPlace(place))
 	{
 		return std::nullopt;
 	}
-	return glm::vec2 {map_coords::ToMetres(place.x), map_coords::ToMetres(place.z)};
+	return place;
 }
 
 } // namespace openblack::ecs::town_area

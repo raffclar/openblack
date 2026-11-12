@@ -663,6 +663,52 @@ TEST(CreatureIdleMind, AStepPullsItsFaceOnItsFirstTryEvenWhileItWaitsForTheBody)
 	EXPECT_FALSE(commands.face.has_value());
 }
 
+TEST(CreatureIdleMind, TheStepsThatUseUpAThingStartWhileTheBodyIsBusy)
+{
+	using Step = creature_mind::Step;
+	constexpr uint32_t k_Held = 7;
+	constexpr uint32_t k_Tree = 9;
+	creature_mind::IdleMind mind;
+	creature_mind::Plan(mind, creature_mind::Activity::Told,
+	                    {Step {.kind = Step::Kind::UseUpHeld}, Step {.kind = Step::Kind::UseUp, .object = k_Tree},
+	                     Step {.kind = Step::Kind::Wait, .seconds = 1.0f}});
+	creature_mind::Senses senses {.seconds = k_Turn, .bodyBusy = true, .held = k_Held};
+	// The thing in the hand goes on the first turn, also when the body plays an action
+	auto commands = creature_mind::Think(mind, senses, Always(1));
+	EXPECT_TRUE(commands.useUpHeld);
+	EXPECT_EQ(mind.step, 1u);
+	// The thing that the next step uses goes on the next turn, also when the body is busy
+	senses.held.reset();
+	commands = creature_mind::Think(mind, senses, Always(1));
+	EXPECT_EQ(commands.useUp, k_Tree);
+	EXPECT_EQ(mind.step, 2u);
+}
+
+TEST(CreatureIdleMind, TheStepsThatAreDoneOnTheirFirstTurnStartWhileTheBodyIsBusy)
+{
+	using Step = creature_mind::Step;
+	constexpr uint32_t k_Thing = 9;
+	for (const auto kind :
+	     {Step::Kind::Douse, Step::Kind::CoolDown, Step::Kind::Shatter, Step::Kind::Repair, Step::Kind::Observe,
+	      Step::Kind::Face, Step::Kind::Heal, Step::Kind::HealItself, Step::Kind::ActOnItself})
+	{
+		creature_mind::IdleMind mind;
+		creature_mind::Plan(mind, creature_mind::Activity::Told,
+		                    {Step {.kind = kind, .object = k_Thing}, Step {.kind = Step::Kind::Wait, .seconds = 1.0f}});
+		const creature_mind::Senses senses {.seconds = k_Turn, .bodyBusy = true};
+		static_cast<void>(creature_mind::Think(mind, senses, Always(1)));
+		EXPECT_EQ(mind.step, 1u) << static_cast<int>(kind);
+	}
+	// A step that plays a clip still waits for the body
+	creature_mind::IdleMind mind;
+	creature_mind::Plan(mind, creature_mind::Activity::Told,
+	                    {Step {.kind = Step::Kind::Action, .animation = 1}, Step {.kind = Step::Kind::Wait, .seconds = 1.0f}});
+	const creature_mind::Senses senses {.seconds = k_Turn, .bodyBusy = true};
+	static_cast<void>(creature_mind::Think(mind, senses, Always(1)));
+	EXPECT_FALSE(mind.stepStarted);
+	EXPECT_EQ(mind.step, 0u);
+}
+
 // A step pulls its face again on the forty-second turn after the turn that pulled it, as the fight steps do too
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
 TEST(CreatureIdleMind, AStepPullsItsFaceAgainEveryFortyTwoTurns)

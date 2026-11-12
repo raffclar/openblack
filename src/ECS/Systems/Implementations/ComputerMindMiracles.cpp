@@ -301,7 +301,7 @@ std::optional<ImpressPlace> ImpressPlaceOf(entt::entity town, const map_coords::
 	{
 		places.push_back(fromMetres(ecs::villager_home::DoorPosition(*pit)));
 	}
-	places.push_back(fromMetres(Locator::townSystem::value().GetCongregationPos(town)));
+	places.push_back(Locator::townSystem::value().GetCongregationPos(town));
 	if (const auto centre = CoordsOfThing(TownCentreOf(town)))
 	{
 		places.push_back(*centre);
