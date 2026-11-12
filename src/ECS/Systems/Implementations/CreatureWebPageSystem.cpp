@@ -210,7 +210,8 @@ void CreatureWebPageSystem::CreatureTurn(entt::entity entity)
 	    Locator::helpTextSystem::has_value() ? Locator::helpTextSystem::value().GetWords(text) : std::u16string {});
 	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The game took picture {} of creature {}: action {}, score {}", *slot,
 	                   entt::to_integral(entity), plan.action, score);
-	if (!player.has_value() || !Locator::rendererRequests::has_value())
+	if (!player.has_value() || !Locator::rendererRequests::has_value() ||
+	    !creature_web_page::MayAskForPicture(_waiting.size()))
 	{
 		return;
 	}

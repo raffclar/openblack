@@ -111,6 +111,16 @@ struct Chance
 /// the last picture, the body gets to the moment of its action, and no picture that the creature keeps shows the action
 [[nodiscard]] bool TakesPicture(std::span<const Picture> pictures, const Chance& chance);
 
+/// The most pictures of the screen that wait for the renderer at one time. A drawn game gets each picture back in a frame
+/// or two, so it does not reach this. A run that draws no frames never gets a picture back, and the list stops here.
+constexpr size_t k_MaxPicturesWaiting = 5;
+
+/// Whether the game can ask the renderer for one more picture of the screen, when some already wait
+[[nodiscard]] constexpr bool MayAskForPicture(size_t waiting)
+{
+	return waiting < k_MaxPicturesWaiting;
+}
+
 /// The score of a picture: how much the action is worth, times the priority of the plan, each kept from 0 to 1, times
 /// 1 for a creature younger than 30, 0.9 for one younger than 100, and 0.8 for an older one
 [[nodiscard]] float Score(float actionWorth, float planPriority, uint32_t age);

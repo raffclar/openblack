@@ -826,6 +826,10 @@ def hand_holds(pid):
     return hand.get("creature") if isinstance(hand, dict) else None
 
 
+# The most tries that the hand has to hold its creature, and then to click it: the creature walks away from the pointer
+HOLD_TRIES = 24
+
+
 def hold_creature(pid, near, slaps=0):
     """The hand of a client holds the creature nearest a point, strokes it and lets go; then a click puts the leash on
     and a tap on the land leads the creature there. The camera looks at the creature first, and the pointer goes to a
@@ -871,13 +875,17 @@ def hold_creature(pid, near, slaps=0):
     # The hand takes the pick of the last frame that was drawn, and the creature walks: a press can come when the pick
     # has left the creature. The hand holds the creature when the creature systems say so, else the press is let go and
     # tried again.
+    # The creature walks and often leaves the pointer between the pick and the press, so many tries can go by.
     pixel = None
-    for _ in range(8):
+    for _ in range(HOLD_TRIES):
         pixel = pixel_on_creature("press")
         if pixel is not None:
             time.sleep(1.0)
             if hand_holds(pid) == creature:
                 break
+            if os.environ.get("NET_CHECK_DEBUG"):
+                print("hold debug: not held; pointer", pixel, "input", json.dumps(inspector_call(pid, "input.state", {}))[:600],
+                      "camera", json.dumps(inspector_call(pid, "camera.state", {}))[:300])
             inspector_call(pid, "input.button", {"params": {"button": "right", "action": "release"}})
             time.sleep(1.0)
             pixel = None
@@ -904,7 +912,12 @@ def hold_creature(pid, near, slaps=0):
     # The camera flies back to where it was before the hold
     time.sleep(8.0)
     # A click on the creature puts the leash on
-    pixel = pixel_on_creature("click")
+    pixel = None
+    for _ in range(HOLD_TRIES):
+        pixel = pixel_on_creature("click")
+        if pixel is not None:
+            break
+        time.sleep(4.0)
     if pixel is None:
         print("hold: the pointer found no pixel on creature", creature, "for the leash")
         return
@@ -951,6 +964,12 @@ def pixel_on(pid, entity, heights=(0.5, 1.0, 2.0, 3.0, 5.0)):
     return None
 
 
+# How far from a town of its god the hand looks for a villager to take: the influence of a town reaches far
+GIFT_TOWN_RADIUS = 300
+# How many times the hand looks for a villager inside the influence of its god, five seconds apart
+GIFT_SEARCHES = 12
+
+
 def give_to_creature(pid, log):
     """The hand of a client takes a villager near its god's creature and gives it to the creature, as a player does: a
     hold of the Action button on the villager takes it, and a press on the creature gives it. The log of the client
@@ -969,21 +988,41 @@ def give_to_creature(pid, log):
     if not isinstance(at, list):
         done["why"] = "the creature has no place"
         return done
+    done["creature_at"] = [round(value, 1) for value in at]
     # The hand takes only within the influence of its god: the people of the god's own towns come first, then the
     # people near the creature
     places = [town["position"] for town in items_of(inspector_call(pid, "town.list", {}))
               if town.get("owner") == player and isinstance(town.get("position"), list)]
+    def villagers_in_influence():
+        """The villagers that the hand of the god can take: the ones inside the influence of the god, the nearest to
+        the creature first. The people of the god's own towns and the people near the creature are the candidates."""
+        found = []
+        for place, radius in [(town, GIFT_TOWN_RADIUS) for town in places] + [(at, 400)]:
+            for villager in items_of(inspector_call(pid, "objects.find", {"params": {"kind": "Villager"},
+                                                                          "near": [place[0], place[2]],
+                                                                          "radius": radius, "limit": 60})):
+                if all(villager["id"] != known["id"] for known in found) and isinstance(villager.get("position"), list):
+                    found.append(villager)
+        inside = []
+        for villager in found:
+            covered = inspector_call(pid, "influence.at", {"params": {
+                "position": [villager["position"][0], villager["position"][2]], "player": player}})
+            if isinstance(covered, dict) and covered.get("influence", 0.0) > 0.0:
+                inside.append(villager)
+        return len(found), inside
+
+    # The people walk to work and home: the search tries again a while later until a villager is inside the influence
     villagers = []
-    for place, radius in [(town, 80) for town in places] + [(at, 400)]:
-        for villager in items_of(inspector_call(pid, "objects.find", {"params": {"kind": "Villager"},
-                                                                      "near": [place[0], place[2]], "radius": radius,
-                                                                      "limit": 12})):
-            if all(villager["id"] != known["id"] for known in villagers):
-                villagers.append(villager)
-    done["villagers_near"] = len(villagers)
+    for _ in range(GIFT_SEARCHES):
+        found, villagers = villagers_in_influence()
+        done["villagers_near"] = found
+        done["villagers_in_influence"] = len(villagers)
+        if villagers:
+            break
+        time.sleep(5.0)
     def press_on_walker(entity):
         """The villager walks: the pointer goes to its place now and the press follows at once, when the interface
-        picks it there. Whether the press came."""
+        picks it there. Whether the press came; None when the hand cannot take the villager."""
         for height in (1.0, 0.5, 1.5, 2.0):
             found = inspector_call(pid, "ecs.entity", {"params": {"id": entity}})
             place = found.get("position") if isinstance(found, dict) else None
@@ -995,12 +1034,24 @@ def give_to_creature(pid, log):
             pick = state.get("pick") if isinstance(state, dict) else None
             if isinstance(pick, dict) and pick.get("object") == entity:
                 grab = pick.get("grab") or {}
+                # The hand goes to the pointer in some frames: until it comes, it can still be outside the influence
+                for _ in range(10):
+                    if grab.get("takes") or "influence" not in str(grab.get("why_not")):
+                        break
+                    time.sleep(0.3)
+                    state = inspector_call(pid, "input.state", {})
+                    pick = state.get("pick") if isinstance(state, dict) else None
+                    if not isinstance(pick, dict) or pick.get("object") != entity:
+                        break
+                    grab = pick.get("grab") or {}
+                if not isinstance(pick, dict) or pick.get("object") != entity:
+                    continue
                 if not grab.get("takes"):
                     # The hand would not take it here: the reason goes to the summary
                     reasons = done.setdefault("why_not", [])
                     if grab.get("why_not") not in reasons:
                         reasons.append(grab.get("why_not"))
-                    return False
+                    return None
                 inspector_call(pid, "input.button", {"params": {"button": "right", "action": "press"}})
                 time.sleep(1.0)
                 inspector_call(pid, "input.button", {"params": {"button": "right", "action": "release"}})
@@ -1011,7 +1062,11 @@ def give_to_creature(pid, log):
         inspector_call(pid, "camera.frame", {"params": {"id": villager["id"], "yaw": 0, "pitch": 40, "distance": 30}})
         time.sleep(1.0)
         for _ in range(8):
-            if not press_on_walker(villager["id"]):
+            pressed = press_on_walker(villager["id"])
+            if pressed is None:
+                # The hand cannot take this villager (outside the influence): the next villager is tried
+                break
+            if not pressed:
                 continue
             done.setdefault("tries", []).append(villager["id"])
             if wait_for(lambda: lines_with(log, [f"Hand deed: the hand of player {player} takes thing "
@@ -1022,9 +1077,16 @@ def give_to_creature(pid, log):
         if done["took"]:
             break
     if not done["took"]:
-        done["why"] = "the pointer found no villager near the creature"
+        done["why"] = ("no villager of the land is inside the influence of the god" if not villagers
+                       else "the pointer found no villager near the creature")
         return done
-    pixel = pixel_on(pid, creature, heights=(1.0, 2.0, 3.0, 4.0, 5.0))
+    # The creature walks, so the search for a pixel on it tries again a while later
+    pixel = None
+    for _ in range(GIFT_SEARCHES):
+        pixel = pixel_on(pid, creature, heights=(1.0, 2.0, 3.0, 4.0, 5.0))
+        if pixel is not None:
+            break
+        time.sleep(2.0)
     if pixel is None:
         done["why"] = "the pointer found no pixel on the creature"
         return done
