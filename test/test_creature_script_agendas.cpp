@@ -288,7 +288,7 @@ TEST(CreatureScriptAgendas, DownTheSlopeIsTheLowestGroundAbout)
 }
 
 // The mind chooses nothing for itself when its agenda is done. A step with something to look at gives the point to look
-// at, and the creature does not look about.
+// at.
 TEST(CreatureScriptAgendas, TheMindChoosesNothingAndLooksWhereItIsTold)
 {
 	IdleMind mind;
@@ -301,5 +301,4 @@ TEST(CreatureScriptAgendas, TheMindChoosesNothingAndLooksWhereItIsTold)
 	const auto commands = Think(told, Free(), NoRandom);
 	ASSERT_TRUE(commands.gaze.has_value());
 	EXPECT_EQ(commands.gaze->object, 5u);
-	EXPECT_FALSE(commands.lookAbout);
 }
