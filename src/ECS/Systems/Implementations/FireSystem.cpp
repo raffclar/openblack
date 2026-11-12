@@ -134,6 +134,9 @@ constexpr float k_CellSize = 10.0f;
 constexpr int k_MostSpiralSteps = 99999;
 /// A fireball's sprite is this big for its miracle's magnitude; its heat capacity grows by its radius squared times this
 constexpr float k_FireBallCapacityScale = 0.0625f;
+/// The burn of the fire's own effect. A thing takes fire only when it takes this burn, also when the burn that
+/// heats it is different.
+constexpr float k_FireBurn = 100.0f;
 /// The weather's wind bytes are this many metres a second
 constexpr float k_WindByteSpeed = 0.125f;
 
@@ -179,20 +182,15 @@ std::optional<fire::Material> MaterialOf(entt::entity object)
 	// creature measures by its shown size and the reach of its body. A field and a teleport stone have a fixed radius. A
 	// food pile is as wide as its food raises it. A town centre measures by the icon on its plinth. A thing with no model
 	// has a size of 0.
-	const float radius = object_measures::TwoDRadius(registry, object);
-	const float height = object_measures::Height(registry, object);
-	const auto reach = registry.AllOf<WorshipSite>(object) ? fire::FireReach::WorshipSite
-	                   : registry.AllOf<DeadTree>(object)  ? fire::FireReach::ShareOfHeight
-	                                                       : fire::FireReach::Radius;
 	return fire::Material {
 	    .combustion = info->combustionTemperature,
 	    .capacity = info->heatCapacity,
 	    .defence = info->defenceMultiplierBurn,
 	    .burningPriority = info->burningPriority,
 	    .rainCooling = fire::k_RainCooling,
-	    .radius = radius,
-	    .height = height,
-	    .fireRadius = fire::DefaultFireRadius(reach, radius, height),
+	    .radius = object_measures::TwoDRadius(registry, object),
+	    .height = object_measures::Height(registry, object),
+	    .fireRadius = object_measures::FireRadius(registry, object),
 	};
 }
 
@@ -211,7 +209,9 @@ glm::vec3 FireCentre(entt::entity object)
 		const auto middle = worship_site::CentreOnLand(p, transform->rotation, transform->scale.x);
 		return {middle.x, p.y - LandHeight(middle), middle.y};
 	}
-	return {p.x, p.y - LandHeight({p.x, p.z}), p.z};
+	// A dead or felled tree burns round the middle of its model as it lies, at the height of its own place
+	const auto middle = object_measures::FireMiddle(Entities(), object);
+	return {middle.x, p.y - LandHeight({p.x, p.z}), middle.y};
 }
 
 float AcrossGround(const glm::vec3& a, const glm::vec3& b)
@@ -259,21 +259,6 @@ bool IsInMap(entt::entity object)
 {
 	const auto& registry = Entities();
 	return !registry.AnyOf<MagicFireBall, InHand, InPhysics, CarriedByTornado>(object);
-}
-
-/// Whether an object takes a burn at all: a pot only with something in it, a field only with food to burn
-bool TakesBurn(entt::entity object, float burn)
-{
-	auto& registry = Entities();
-	if (const auto* pot = registry.TryGet<const Pot>(object))
-	{
-		return pot->amount != 0;
-	}
-	if (const auto* field = registry.TryGet<const Field>(object))
-	{
-		return burn <= 0.0f || field->crop.food > 0.0f;
-	}
-	return true;
 }
 
 /// Whether an object's fire lights the land: the object has the fixed mark of the land and its radius across the ground
@@ -542,12 +527,10 @@ Fire* FireSystem::FindOrCreate(entt::entity object, std::optional<PlayerNames> p
 	{
 		return nullptr;
 	}
-	// What can burn: what has a combustion temperature in its table and takes the burn of a fire. A villager doesn't
-	// while it is dying, at home or hiding in a building.
-	constexpr float k_FireBurn = 100.0f;
+	// What can burn: what has a combustion temperature in its table and takes the burn of a fire. A villager does not
+	// while it is dying, in its home, in a hand or on its way to hide in a building.
 	const auto material = MaterialOf(object);
-	if (!material.has_value() || material->combustion == 0.0f || !TakesBurn(object, k_FireBurn) ||
-	    (world_objects::IsVillager(object) && !villager_fire::CanCatchFire(object)))
+	if (!material.has_value() || material->combustion == 0.0f || !world_objects::TakesEffect(object, k_FireBurn, 0.0f))
 	{
 		return nullptr;
 	}
@@ -598,7 +581,8 @@ Fire* FireSystem::FindOrCreate(entt::entity object, std::optional<PlayerNames> p
 
 void FireSystem::ApplyBurn(entt::entity object, float burn, std::optional<PlayerNames> player)
 {
-	if (burn == 0.0f || !Entities().Valid(object) || !TakesBurn(object, burn))
+	// The burn itself has no test of what takes it. Only a new fire tests that the object takes the burn of a fire.
+	if (burn == 0.0f || !Entities().Valid(object))
 	{
 		return;
 	}
@@ -657,8 +641,13 @@ void FireSystem::PutOut(entt::entity object)
 
 void FireSystem::HeatHeldObject(entt::entity object)
 {
-	// Every fire in the held object's cell heats it, as a tree held over a bonfire catches
+	// Every fire in the held object's cell heats it, as a tree held over a bonfire catches. Only a thing that takes the
+	// burn of a fire is heated: a villager in the hand or an empty pot is not, also when it burns.
 	auto& registry = Entities();
+	if (!registry.Valid(object) || !world_objects::TakesEffect(object, k_FireBurn, 0.0f))
+	{
+		return;
+	}
 	const auto* transform = registry.TryGet<const Transform>(object);
 	if (transform == nullptr || !Locator::entitiesMap::has_value())
 	{

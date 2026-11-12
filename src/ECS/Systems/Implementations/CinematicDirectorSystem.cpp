@@ -16,7 +16,9 @@
 #include <vector>
 
 #include "ECS/Reflection/BinaryArchive.h"
+#include "ECS/Systems/HandPressSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
+#include "ECS/Systems/HelpTextSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -31,6 +33,18 @@ namespace
 float WideScreenTime()
 {
 	return Locator::infoConstants::has_value() ? Locator::infoConstants::value().helpSystem.wideScreenTime : 0.0f;
+}
+
+/// The interface goes off or comes back. First the help keeps the flag of a press of the select button that holds
+/// the land, or no flag. Then the action of the hand ends, which clears the flag.
+void KeepSelectPressForHelp()
+{
+	if (!Locator::helpTextSystem::has_value())
+	{
+		return;
+	}
+	const bool held = Locator::handPressSystem::has_value() && Locator::handPressSystem::value().SelectPressHolds();
+	Locator::helpTextSystem::value().KeepSelectPress(held);
 }
 
 /// The interface lock of the hand of this computer ends (see hand_send_wait::LockEnd)
@@ -75,23 +89,40 @@ void CinematicDirectorSystem::SetWideScreen(bool on, uint32_t owner)
 	{
 		return;
 	}
+	// When the bars come in, all the boxes close first, and the interface comes back for them. That ends the action of
+	// the hand, so the help keeps no select press after the bars come in.
 	if (on)
 	{
 		_hideDialogs = true;
+		AllBoxesClosed();
 	}
-	// The game's own bars leave the interface be; a script's put it away until they go
-	_interfaceActive = !on || owner == 0;
+	// The game's own bars leave the interface. The bars of a script put the interface away until they go. Also for the
+	// game's own bars, the interface goes away or comes back, and the action of the hand ends.
+	SetInterfaceActive(!on || owner == 0);
 	_wideScreenOwner = on ? owner : 0;
 	_bars.Set(on, WideScreenTime());
-	// The interface goes away or comes back, also for the game's own bars: the action of the hand ends
-	EndHandInterfaceLock();
 }
 
 void CinematicDirectorSystem::SetInterfaceActive(bool active)
 {
 	_interfaceActive = active;
-	// The action of the hand ends, as the interface goes away or comes back
+	// The help keeps the flag of the select press. Then the action of the hand ends, as the interface goes away or
+	// comes back.
+	KeepSelectPressForHelp();
 	EndHandInterfaceLock();
+}
+
+void CinematicDirectorSystem::AllBoxesClosed()
+{
+	SetInterfaceActive(true);
+}
+
+void CinematicDirectorSystem::KeepInterfaceAwayForScriptBars(bool demonstrationPlays)
+{
+	if (_interfaceActive && _bars.IsOn() && _wideScreenOwner != 0 && !demonstrationPlays)
+	{
+		SetInterfaceActive(false);
+	}
 }
 
 bool CinematicDirectorSystem::IsWideScreenOn() const

@@ -460,6 +460,20 @@ void testbed_scenarios::AddCombat(std::vector<Scenario>& all)
 	    .creatures = {red(PlayerNames::PLAYER_ONE, 0.6f, -0.2f), blue(PlayerNames::PLAYER_TWO, 0.5f, -0.2f)},
 	    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f), Fight(Kind::FightAuto, 0, 1, 0.2f)},
 	});
+	all.push_back({
+	    .id = "combat.fight_view_look_while_paused",
+	    .name = "The look at a fight counts while the game pauses",
+	    .facet = Facet::Combat,
+	    .description = "As Watching a fight. Six and a half seconds after the start, when the tigers are in the arena "
+	                   "and the camera looks at it from within for half a second, the game pauses.",
+	    .expected = "The tigers stop. In less than a second the camera flies to the side of the arena, because "
+	                "the look counts the real time of the frames, also while the game pauses.",
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 80.0f, 10.0f}, .look = {0.0f, 0.0f, 40.0f}},
+	    .creatures = {red(PlayerNames::PLAYER_ONE, 0.6f, -0.2f), blue(PlayerNames::PLAYER_TWO, 0.5f, -0.2f)},
+	    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f),
+	                 Fight(Kind::FightAuto, 0, 1, 0.2f),
+	                 {.kind = Kind::PauseGame, .delaySeconds = 5.3f, .value = 1}},
+	});
 
 	all.push_back({
 	    .id = "combat.fight_view_follows_bookmark",

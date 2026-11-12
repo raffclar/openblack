@@ -14,6 +14,8 @@
 #include <map>
 #include <memory>
 #include <optional>
+#include <set>
+#include <tuple>
 #include <vector>
 
 #include <glm/geometric.hpp>
@@ -87,11 +89,19 @@ public:
 		const auto found = objects.find(object);
 		return found != objects.end() ? std::optional(found->second) : std::nullopt;
 	}
+	[[nodiscard]] bool TakesEffect(entt::entity object, const EffectValues& /*values*/) const override
+	{
+		return !refusesEffects.contains(object);
+	}
 	bool ApplyEffect(entt::entity object, const EffectValues& values, const EffectSource& source) override
 	{
 		lastSource = source;
 		applied.emplace_back(object, values);
-		return true;
+		return !lifeless.contains(object);
+	}
+	void PlayerAffected(entt::entity object, MagicType type, PlayerNames player) override
+	{
+		affected.emplace_back(object, type, player);
 	}
 	std::vector<entt::entity> ApplyEffectAt(glm::vec3 point, const EffectValues& values, const EffectSource& source) override
 	{
@@ -137,6 +147,11 @@ public:
 	float waterBelowZ {-1.0f};
 	std::map<entt::entity, glm::vec3> objects;
 	std::vector<std::pair<entt::entity, EffectValues>> applied;
+	/// The objects that do not take an effect that a miracle aims at them
+	std::set<entt::entity> refusesEffects;
+	/// The objects with no life, which the world says did not take an effect
+	std::set<entt::entity> lifeless;
+	std::vector<std::tuple<entt::entity, MagicType, PlayerNames>> affected;
 	std::vector<std::pair<glm::vec3, EffectValues>> appliedAt;
 	EffectSource lastSource;
 	std::vector<glm::vec3> drops;
@@ -556,6 +571,50 @@ TEST(SpellBehaviours, AnEventPaysItsCostAndActsOnItsTargetByTheMiraclesStrength)
 	// A closed miracle acts no more
 	spell.closedDown = true;
 	EXPECT_FALSE(spells::OnEvent(services, spell, EventAt(SpellEventInfo::Type::Landed, {90.0f, 2.0f, 90.0f})));
+}
+
+TEST(SpellBehaviours, AnEventAtAnObjectThatIsNotAReceiverDoesNotActOnIt)
+{
+	auto info = MakeTables();
+	auto& bolt = Effect(*info, MagicType::LightningBolt);
+	bolt.initialChants = 5000.0f;
+	bolt.costPerEvent = 2.0f;
+	bolt.effectBurn = 800.0f;
+	bolt.radius = 1.0f;
+	FakeServices services(*info);
+	auto spell = MakeSpell(MagicType::LightningBolt, 5000.0f);
+	const auto villager = static_cast<entt::entity>(7);
+	services.world.objects[villager] = {100.0f, 0.0f, 120.0f};
+	services.world.refusesEffects.insert(villager);
+	// The miracle pays for the event, but the object does not take the effect, and nothing round it takes it
+	ASSERT_TRUE(spells::OnEvent(services, spell, EventAt(SpellEventInfo::Type::Object, {100.0f, 9.0f, 120.0f}, villager)));
+	EXPECT_FLOAT_EQ(spell.chants.chants, 4998.0f);
+	EXPECT_TRUE(services.world.applied.empty());
+	EXPECT_TRUE(services.world.appliedAt.empty());
+	// The creature does not see the miracle reach the object
+	EXPECT_TRUE(services.world.affected.empty());
+}
+
+TEST(SpellBehaviours, AnEventAtAnObjectWithNoLifeStillReachesItForTheCreature)
+{
+	auto info = MakeTables();
+	auto& bolt = Effect(*info, MagicType::LightningBolt);
+	bolt.initialChants = 5000.0f;
+	bolt.costPerEvent = 2.0f;
+	bolt.effectBurn = 800.0f;
+	bolt.radius = 1.0f;
+	FakeServices services(*info);
+	auto spell = MakeSpell(MagicType::LightningBolt, 5000.0f);
+	const auto hut = static_cast<entt::entity>(9);
+	services.world.objects[hut] = {100.0f, 0.0f, 120.0f};
+	services.world.lifeless.insert(hut);
+	ASSERT_TRUE(spells::OnEvent(services, spell, EventAt(SpellEventInfo::Type::Object, {100.0f, 9.0f, 120.0f}, hut)));
+	ASSERT_EQ(services.world.applied.size(), 1u);
+	// The player's creature sees the miracle reach the hut, as for a thing with life
+	ASSERT_EQ(services.world.affected.size(), 1u);
+	EXPECT_EQ(std::get<0>(services.world.affected[0]), hut);
+	EXPECT_EQ(std::get<1>(services.world.affected[0]), MagicType::LightningBolt);
+	EXPECT_EQ(std::get<2>(services.world.affected[0]), PlayerNames::PLAYER_ONE);
 }
 
 TEST(SpellBehaviours, TheStartOfTheEffectIsNotAnEventToActOn)

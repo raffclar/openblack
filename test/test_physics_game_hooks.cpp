@@ -52,6 +52,7 @@
 #include "ECS/PhysicsHooksWorld.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
+#include "ECS/Systems/Implementations/VillagerFire.h"
 #include "ECS/Systems/Implementations/VillagerPhysics.h"
 #include "ECS/TempleHeartPassOn.h"
 #include "Help/HelpProfile.h"
@@ -922,6 +923,30 @@ TEST(TempleHeartPassOn, AnEffectOnAWorshipSiteGoesToItsHeartsBuildingWithABeamWh
 	// The heart gives what comes to it the same way, and anything else takes it itself
 	EXPECT_EQ(temple_heart_pass_on::TakerOf(world, heart, true), building);
 	EXPECT_EQ(temple_heart_pass_on::TakerOf(world, building, true), building);
+}
+
+TEST(TempleHeartPassOn, AVillagersBeatOfABurningWorshipSiteGoesToItsHeartsBuildingWithABeam)
+{
+	FakeWorld world;
+	auto& registry = world.registry;
+	const auto heart = registry.Create();
+	registry.Assign<Transform>(heart, glm::vec3(0.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+	registry.Assign<Temple>(heart, PlayerNames::PLAYER_TWO);
+	const auto site = registry.Create();
+	registry.Assign<WorshipSite>(site).temple = heart;
+	const auto building = registry.Create();
+	registry.Assign<Transform>(building, glm::vec3(50.0f, 0.0f, 0.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+	const auto town = registry.Create();
+	registry.Assign<Town>(town, 1U, PlayerNames::PLAYER_TWO).abodes.push_back(building);
+	world.turn = temple_heart::BeamInterval(100) + 1;
+
+	// The beat goes as an effect that destroys: the heart chooses its building and fires a beam at it
+	EXPECT_EQ(villager_fire::BeatTaker(world, site), building);
+	ASSERT_EQ(world.plasma.size(), 1U);
+	EXPECT_EQ(world.plasma[0].second.end, glm::vec3(50.0f, 10.0f, 0.0f));
+	EXPECT_EQ(villager_fire::BeatTaker(world, heart), building);
+	// Every other burning thing takes the beat itself
+	EXPECT_EQ(villager_fire::BeatTaker(world, building), building);
 }
 
 TEST(TempleHeartPassOn, AWorshipSiteTakesAnEffectItselfWhileItHasLifeAndItsHeartHasNothingToGiveItTo)

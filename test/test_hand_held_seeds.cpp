@@ -13,23 +13,30 @@
 
 #include <array>
 #include <map>
+#include <memory>
 #include <optional>
 #include <set>
 #include <span>
+#include <variant>
 #include <vector>
 
 #include <entt/entity/entity.hpp>
 #include <gtest/gtest.h>
 
+#include "Commands/PlayerCommands.h"
+#include "ECS/Components/Creature.h"
 #include "ECS/Components/HandHeldSeed.h"
 #include "ECS/Components/SpellSeed.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/CreatureHandSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/Implementations/MagicSystem.h"
 #include "ECS/Systems/Implementations/SpellIconSystem.h"
+#include "ECS/Systems/PlayerCommandSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/SpellIconSystemInterface.h"
 #include "Enums.h"
+#include "InfoConstants.h"
 #include "Locator.h"
 
 using namespace openblack;
@@ -62,9 +69,11 @@ public:
 		return found != hands.end() ? std::optional(found->second) : std::nullopt;
 	}
 	[[nodiscard]] PlayerNames GetOwnPlayer() const noexcept override { return own; }
+	void EndOwnInterfaceLock() override { ++lockEnds; }
 
 	std::map<PlayerNames, std::array<entt::entity, 2>> hands;
 	PlayerNames own {PlayerNames::PLAYER_ONE};
+	int lockEnds {0};
 };
 
 /// The players of the test: the players that the computer plays
@@ -320,4 +329,144 @@ TEST_F(HandHeldSeeds, APowerUpChargesAtTheIconOfTheGestureNotTheIconOfTheSeedInT
 	                      player_commands::SeedGesture {.kind = player_commands::SeedGesture::Kind::PowerUp, .level = 0});
 	ASSERT_EQ(icons.charges.size(), 2u);
 	EXPECT_TRUE(icons.charges[1].icon == entt::null);
+}
+
+namespace
+{
+/// The commands that the hand of this computer sends
+class SentCommands final: public ecs::systems::PlayerCommandSystemInterface
+{
+public:
+	void Submit(player_commands::Action action) override { sent.push_back(std::move(action)); }
+	void SendOpenBlock() override {}
+	void RunSent(uint32_t /*turn*/) override {}
+	void Reset() override {}
+	void SetTurnListener(TurnListener /*listener*/) override {}
+	void Receive(uint32_t /*turn*/, std::vector<player_commands::Command> /*commands*/) override {}
+	void SetSender(PlayerNames /*player*/) override {}
+	[[nodiscard]] PlayerNames GetSender() const override { return PlayerNames::PLAYER_ONE; }
+	[[nodiscard]] size_t PendingCount() const override { return sent.size(); }
+	void SetSource(player_commands::TurnCommandSourceInterface* /*source*/) override {}
+	[[nodiscard]] bool TurnReady(uint32_t /*turn*/) const override { return true; }
+	[[nodiscard]] bool HasSource() const override { return false; }
+
+	std::vector<player_commands::Action> sent;
+};
+
+/// A hand with a creature under the cursor, and no other part
+class CursorOnCreature final: public ecs::systems::CreatureHandSystemInterface
+{
+public:
+	bool Grab() override { return false; }
+	[[nodiscard]] bool MayHold(entt::entity /*creature*/) const override { return false; }
+	[[nodiscard]] creature_hand::InteractTip InteractTipOver(entt::entity /*creature*/, bool /*handInInfluence*/) const override
+	{
+		return creature_hand::InteractTip::None;
+	}
+	[[nodiscard]] bool IsClick() const override { return false; }
+	std::optional<HandPose> Update(const glm::vec3& /*rayOrigin*/, const glm::vec3& /*rayDirection*/, glm::vec2 /*cursor*/,
+	                               float /*screenWidth*/, const input_steps::Steps& /*steps*/) override
+	{
+		return std::nullopt;
+	}
+	void Release() override {}
+	bool Stroke(entt::entity /*creature*/, creature_feedback::BodyPart /*part*/) override { return false; }
+	bool Slap(entt::entity /*creature*/, float /*heightShare*/, bool /*gentle*/, bool /*sweepsRight*/) override
+	{
+		return false;
+	}
+	[[nodiscard]] std::optional<entt::entity> GetCreature() const override { return std::nullopt; }
+	[[nodiscard]] bool IsHeldByCommand() const override { return false; }
+	[[nodiscard]] std::optional<entt::entity> CreatureUnderCursor() const override { return under; }
+	[[nodiscard]] float GetFeedbackSum() const override { return 0.0f; }
+	[[nodiscard]] float GetLastFeedbackSum() const override { return 0.0f; }
+	bool TakeFocusTip() override { return false; }
+
+	std::optional<entt::entity> under;
+};
+
+/// A gesture seed that is cast on things, ready in the hand of this computer, with a creature under the cursor
+class ArmedOnThing: public HandHeldSeeds
+{
+protected:
+	void SetUp() override
+	{
+		HandHeldSeeds::SetUp();
+		_info = std::make_unique<InfoConstants>();
+		auto& seedInfo = _info->spellSeed.at(static_cast<size_t>(SpellSeedType::Heal));
+		seedInfo.castType = SpellCastType::SpellCastHandGesture;
+		seedInfo.castOnObject = 1;
+		seedInfo.magicTypes.at(0) = MagicType::Heal;
+		Locator::infoConstants::emplace(*_info);
+		_commands = &static_cast<SentCommands&>(Locator::playerCommandSystem::emplace<SentCommands>());
+		_cursor = &static_cast<CursorOnCreature&>(Locator::creatureHandSystem::emplace<CursorOnCreature>());
+		auto& registry = Locator::entitiesRegistry::value();
+		registry.Get<SpellSeed>(HoldSeed(PlayerNames::PLAYER_ONE)).ready = true;
+		_magic->SetIgnoreInfluence(true);
+		_magic->UpdateHand({}, {});
+		_creature = MakeCreature();
+		_cursor->under = _creature;
+	}
+	void TearDown() override
+	{
+		Locator::creatureHandSystem::reset();
+		Locator::playerCommandSystem::reset();
+		Locator::infoConstants::reset();
+		HandHeldSeeds::TearDown();
+	}
+
+	static entt::entity MakeCreature()
+	{
+		auto& registry = Locator::entitiesRegistry::value();
+		const auto creature = registry.Create();
+		registry.Assign<ecs::components::Creature>(creature, ecs::components::Creature {.owner = PlayerNames::PLAYER_ONE});
+		return creature;
+	}
+
+	std::unique_ptr<InfoConstants> _info;
+	SentCommands* _commands {nullptr};
+	CursorOnCreature* _cursor {nullptr};
+	entt::entity _creature {entt::null};
+};
+} // namespace
+
+// A seed armed on a thing casts at the thing of the press, also when the cursor is on another thing at the let go
+TEST_F(ArmedOnThing, TheLetGoCastsAtTheThingOfThePress)
+{
+	ASSERT_TRUE(_magic->PressAction());
+	EXPECT_EQ(_magic->GetHandCastState().state, magic::CastInput::State::Armed);
+	_cursor->under = MakeCreature();
+	_magic->ReleaseAction();
+	ASSERT_EQ(_commands->sent.size(), 1u);
+	ASSERT_TRUE(std::holds_alternative<player_commands::HandCast>(_commands->sent.front()));
+	EXPECT_EQ(std::get<player_commands::HandCast>(_commands->sent.front()).object, _creature);
+	EXPECT_EQ(_hands->lockEnds, 0);
+}
+
+// When the thing of the press is no target at the let go, the cast does nothing: no fail and no send. The interface
+// lock ends.
+TEST_F(ArmedOnThing, TheLetGoOnAThingOfThePressThatIsNoTargetDoesNothingAndEndsTheLock)
+{
+	ASSERT_TRUE(_magic->PressAction());
+	Locator::entitiesRegistry::value().Remove<ecs::components::Creature>(_creature);
+	_magic->ReleaseAction();
+	EXPECT_TRUE(_commands->sent.empty());
+	EXPECT_EQ(_magic->GetLastHandResult(), ecs::systems::MagicSystemInterface::HandResult::Readied);
+	EXPECT_EQ(_hands->lockEnds, 1);
+	EXPECT_EQ(_magic->GetHandCastState().state, magic::CastInput::State::Idle);
+}
+
+// Each frame, a thing of the press that went from the world ends the interface lock of the armed seed
+TEST_F(ArmedOnThing, AThingOfThePressThatWentEndsTheLockEachFrame)
+{
+	EXPECT_FALSE(_magic->PressThingGone());
+	ASSERT_TRUE(_magic->PressAction());
+	EXPECT_FALSE(_magic->PressThingGone());
+	Locator::entitiesRegistry::value().Destroy(_creature);
+	EXPECT_TRUE(_magic->PressThingGone());
+	// The end of the lock stops the armed seed: no cast, and the thing is forgotten
+	_magic->StopActionAtLockEnd();
+	EXPECT_FALSE(_magic->PressThingGone());
+	_magic->ReleaseAction();
+	EXPECT_TRUE(_commands->sent.empty());
 }

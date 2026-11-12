@@ -254,13 +254,19 @@ std::vector<Dialog::Tab> GameMenu::OptionsTabs(const TextDatabase& texts, Page s
 	// The options' tabs: Main Menu, Options, Players, Advanced and Controls. Inside the temple the first is the World
 	// Room, which goes back as Back does.
 	(void)selected;
+	// A click on a tab closes all the boxes of the game first
+	const auto pick = [this](Page page) {
+		return [this, page] {
+			CloseAllBoxesForTab();
+			PickTab(page);
+		};
+	};
 	return {
-	    {.label = _insideTemple ? _worldRoomTab : _mainMenuTab, .onSelect = [this] { PickTab(Page::Main); }},
-	    {.label = std::u16string(texts.Get("HELP_TEXT_DIALOG_OPTIONS")), .onSelect = [this] { PickTab(Page::Options); }},
-	    {.label = std::u16string(texts.Get("HELP_TEXT_DIALOG_PLAYERLIST")), .onSelect = [this] { PickTab(Page::Players); }},
-	    {.label = std::u16string(texts.Get("HELP_TEXT_FRONT_END_06")), .onSelect = [this] { PickTab(Page::Advanced); }},
-	    {.label = std::u16string(texts.Get("HELP_TEXT_DIALOG_CONTROLOPTIONS")),
-	     .onSelect = [this] { PickTab(Page::Controls); }},
+	    {.label = _insideTemple ? _worldRoomTab : _mainMenuTab, .onSelect = pick(Page::Main)},
+	    {.label = std::u16string(texts.Get("HELP_TEXT_DIALOG_OPTIONS")), .onSelect = pick(Page::Options)},
+	    {.label = std::u16string(texts.Get("HELP_TEXT_DIALOG_PLAYERLIST")), .onSelect = pick(Page::Players)},
+	    {.label = std::u16string(texts.Get("HELP_TEXT_FRONT_END_06")), .onSelect = pick(Page::Advanced)},
+	    {.label = std::u16string(texts.Get("HELP_TEXT_DIALOG_CONTROLOPTIONS")), .onSelect = pick(Page::Controls)},
 	};
 }
 
@@ -275,8 +281,18 @@ void GameMenu::BuildMain(const TextDatabase& texts)
 	// label takes no click.
 	std::vector<Dialog::Tab> tabs {
 	    {.label = std::u16string(texts.Get("HELP_TEXT_DIALOG_ADDITION_88")), .onSelect = {}},
-	    {.label = std::u16string(texts.Get("HELP_TEXT_PAUSE_STATS_151")), .onSelect = [this] { OpenStatistics(); }},
-	    {.label = {}, .onSelect = [this] { OpenConditions(); }},
+	    {.label = std::u16string(texts.Get("HELP_TEXT_PAUSE_STATS_151")),
+	     .onSelect =
+	         [this] {
+		         CloseAllBoxesForTab();
+		         OpenStatistics();
+	         }},
+	    {.label = {},
+	     .onSelect =
+	         [this] {
+		         CloseAllBoxesForTab();
+		         OpenConditions();
+	         }},
 	};
 	auto& page = *(_pages[static_cast<size_t>(Page::Main)] = std::make_unique<Dialog>(std::move(tabs), 0));
 
@@ -628,6 +644,16 @@ void GameMenu::PlayersBack()
 	else
 	{
 		Back();
+	}
+}
+
+void GameMenu::CloseAllBoxesForTab() const
+{
+	// The tab closes all the boxes of the game, and then shows the main menu with the box of the tab again. Thus the
+	// player sees only the change of the page.
+	if (_onAllBoxesClosed)
+	{
+		_onAllBoxesClosed();
 	}
 }
 

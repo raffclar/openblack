@@ -422,15 +422,75 @@ TEST(HandPress, TheLetGoWhilePausedDoesNotClick)
 	EXPECT_FALSE(fixture.Called("GrabClickReleased"));
 }
 
-TEST(HandPress, ALeftPressClicksTheDialogueUnlessTheDebugWindowsHaveTheMouse)
+TEST(HandPress, TheLetGoOfTheLeftButtonClicksTheDialogueUnlessTheDebugWindowsHaveTheMouse)
 {
 	Fixture fixture;
+	// The press does not click the dialogue: the let go does
 	fixture.Press(ButtonEvent(SDL_MOUSEBUTTONDOWN, SDL_BUTTON_LEFT));
+	EXPECT_FALSE(fixture.system->TakeDialogueClick());
+	fixture.Press(ButtonEvent(SDL_MOUSEBUTTONUP, SDL_BUTTON_LEFT));
 	EXPECT_TRUE(fixture.system->TakeDialogueClick());
 	EXPECT_FALSE(fixture.system->TakeDialogueClick());
 	fixture.world->mouseOverDebugWindow = true;
 	fixture.Press(ButtonEvent(SDL_MOUSEBUTTONDOWN, SDL_BUTTON_LEFT));
+	fixture.Press(ButtonEvent(SDL_MOUSEBUTTONUP, SDL_BUTTON_LEFT));
 	EXPECT_FALSE(fixture.system->TakeDialogueClick());
+}
+
+TEST(HandPress, APressOfTheSelectButtonThatGripsTheLandKeepsTheFlagUntilTheLetGo)
+{
+	Fixture fixture;
+	EXPECT_FALSE(fixture.system->SelectPressHolds());
+	fixture.Press(ButtonEvent(SDL_MOUSEBUTTONDOWN, SDL_BUTTON_LEFT));
+	EXPECT_TRUE(fixture.system->SelectPressHolds());
+	// A motion with the button down keeps the flag
+	fixture.Press(Motion(SDL_BUTTON_LMASK));
+	EXPECT_TRUE(fixture.system->SelectPressHolds());
+	fixture.Press(ButtonEvent(SDL_MOUSEBUTTONUP, SDL_BUTTON_LEFT));
+	EXPECT_FALSE(fixture.system->SelectPressHolds());
+}
+
+TEST(HandPress, TheOtherButtonOrTheEndOfTheActionClearsTheFlagOfTheSelectPress)
+{
+	Fixture fixture;
+	fixture.Press(ButtonEvent(SDL_MOUSEBUTTONDOWN, SDL_BUTTON_LEFT));
+	fixture.Press(ButtonEvent(SDL_MOUSEBUTTONDOWN, SDL_BUTTON_RIGHT));
+	EXPECT_FALSE(fixture.system->SelectPressHolds());
+	// The let go of the other button does not set it again
+	fixture.Press(ButtonEvent(SDL_MOUSEBUTTONUP, SDL_BUTTON_RIGHT));
+	EXPECT_FALSE(fixture.system->SelectPressHolds());
+	fixture.Press(ButtonEvent(SDL_MOUSEBUTTONUP, SDL_BUTTON_LEFT));
+	fixture.Press(ButtonEvent(SDL_MOUSEBUTTONDOWN, SDL_BUTTON_LEFT));
+	ASSERT_TRUE(fixture.system->SelectPressHolds());
+	fixture.system->EndSelectPress();
+	EXPECT_FALSE(fixture.system->SelectPressHolds());
+}
+
+TEST(HandPress, APressWithTheOtherButtonDownOrWithTheInterfaceOffKeepsNoFlag)
+{
+	Fixture fixture;
+	fixture.Press(ButtonEvent(SDL_MOUSEBUTTONDOWN, SDL_BUTTON_RIGHT));
+	fixture.Press(ButtonEvent(SDL_MOUSEBUTTONDOWN, SDL_BUTTON_LEFT));
+	EXPECT_FALSE(fixture.system->SelectPressHolds());
+	fixture.Press(ButtonEvent(SDL_MOUSEBUTTONUP, SDL_BUTTON_LEFT));
+	fixture.Press(ButtonEvent(SDL_MOUSEBUTTONUP, SDL_BUTTON_RIGHT));
+	fixture.world->handTakesPresses = false;
+	fixture.Press(ButtonEvent(SDL_MOUSEBUTTONDOWN, SDL_BUTTON_LEFT));
+	EXPECT_FALSE(fixture.system->SelectPressHolds());
+}
+
+TEST(HandPress, APressOfTheSelectButtonThatDoesNotGripTheLandKeepsNoFlag)
+{
+	Fixture fixture;
+	// The hand holds a creature, which takes the press
+	fixture.world->held = k_Creature;
+	fixture.Press(ButtonEvent(SDL_MOUSEBUTTONDOWN, SDL_BUTTON_LEFT));
+	EXPECT_FALSE(fixture.system->SelectPressHolds());
+	fixture.Press(ButtonEvent(SDL_MOUSEBUTTONUP, SDL_BUTTON_LEFT));
+	fixture.world->held.reset();
+	// In the temple the hand grips no land
+	fixture.Press(ButtonEvent(SDL_MOUSEBUTTONDOWN, SDL_BUTTON_LEFT), true);
+	EXPECT_FALSE(fixture.system->SelectPressHolds());
 }
 
 TEST(HandPress, TheHandFollowsTheGamesPointerUntilTheMouseMoves)

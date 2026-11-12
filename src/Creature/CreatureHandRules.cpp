@@ -90,3 +90,22 @@ bool creature_hand::SendsLockEnd(const LockAfterRelease& lock)
 {
 	return lock.released && !lock.endSent && (!lock.inWorld || lock.still);
 }
+
+creature_hand::LockEndSends creature_hand::SendsAtLockEnd(HoldStage stage, bool inWorld)
+{
+	if (!inWorld)
+	{
+		return {};
+	}
+	switch (stage)
+	{
+	case HoldStage::Held:
+		return {.release = true, .unlock = true};
+	case HoldStage::LetGo:
+		return {.unlock = true};
+	case HoldStage::None:
+	case HoldStage::Stopped:
+		break;
+	}
+	return {};
+}

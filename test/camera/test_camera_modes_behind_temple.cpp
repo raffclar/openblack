@@ -32,6 +32,7 @@
 #include <ECS/Components/Creature.h>
 #include <ECS/Components/Transform.h>
 #include <ECS/Registry.h>
+#include <ECS/Systems/Implementations/CinematicDirectorSystem.h>
 #include <ECS/Systems/Implementations/CreatureModeSystem.h>
 #include <ECS/Systems/PlayerSystemInterface.h>
 #include <Input/KeyBindings.h>
@@ -161,6 +162,7 @@ protected:
 	void TearDown() override
 	{
 		_behind.reset();
+		Locator::cinematicDirectorSystem::reset();
 		Locator::playerSystem::reset();
 		Locator::temple::reset();
 		Locator::camera::reset();
@@ -191,11 +193,11 @@ protected:
 	}
 
 	/// Frames of the game: the creature mode, then the camera of the world
-	void RunFrames(int frames)
+	void RunFrames(int frames, ecs::systems::CreatureModeSystemInterface::Frame input = {})
 	{
 		for (int frame = 0; frame < frames; ++frame)
 		{
-			_mode.Update(k_Frame, {.handGripping = false});
+			_mode.Update(k_Frame, input);
 			world_camera::Get().Update(k_Frame);
 		}
 	}
@@ -311,4 +313,36 @@ TEST_F(CameraModesBehindTemple, InsideTheTempleASecondPressOfTheMouseButtonGives
 	_actions->pressed = false;
 	EXPECT_FALSE(_mode.IsActive());
 	EXPECT_NE(dynamic_cast<const DefaultWorldCameraModel*>(&_behind->GetModel()), nullptr);
+}
+
+TEST_F(CameraModesBehindTemple, TheCinemaBarsOfAScriptDoNotEndTheFollowCamera)
+{
+	auto& director = Locator::cinematicDirectorSystem::emplace<ecs::systems::CinematicDirectorSystem>();
+	ASSERT_TRUE(_mode.Enter(_creature, creature_follow::StartDistance::KeepWhenClose));
+	const auto* follow = &Locator::camera::value().GetModel();
+	// The bars of a script put the interface away. The follow camera continues and goes to the creature.
+	director.SetWideScreen(true, 7);
+	ASSERT_FALSE(director.IsInterfaceActive());
+	RunFrames(300);
+	EXPECT_TRUE(_mode.IsActive());
+	EXPECT_EQ(&Locator::camera::value().GetModel(), follow);
+	EXPECT_TRUE(LooksAtTheCreature(Locator::camera::value()));
+	// The follow camera stays when the bars go
+	director.SetWideScreen(false, 0);
+	RunFrames(1);
+	EXPECT_TRUE(_mode.IsActive());
+	EXPECT_EQ(&Locator::camera::value().GetModel(), follow);
+}
+
+TEST_F(CameraModesBehindTemple, TheGripOfTheLandEndsTheFollowCameraOnlyWhenTheCameraReadsItsKeys)
+{
+	ASSERT_TRUE(_mode.Enter(_creature, creature_follow::StartDistance::KeepWhenClose));
+	// Without the interface, or while a box has the keyboard, the camera does not read the grip
+	RunFrames(1, {.handGripping = true, .readsKeys = false});
+	EXPECT_TRUE(_mode.IsActive());
+	RunFrames(1, {.handGripping = false, .readsKeys = false});
+	// A fresh grip, read by the camera, gives the player the camera back
+	RunFrames(1, {.handGripping = true, .readsKeys = true});
+	EXPECT_FALSE(_mode.IsActive());
+	EXPECT_NE(dynamic_cast<const DefaultWorldCameraModel*>(&Locator::camera::value().GetModel()), nullptr);
 }

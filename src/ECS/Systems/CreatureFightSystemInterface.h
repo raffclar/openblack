@@ -74,6 +74,9 @@ public:
 	/// Once a frame, by the game time, before the creatures are placed: the fight animations play, blows land and the
 	/// fighters move as their animations carry them
 	virtual void Update(std::chrono::duration<float, std::milli> gameTime) = 0;
+	/// Once a frame, before the camera moves: keeps what the look at a fight uses in this frame. These are the view that
+	/// the last frame drew and the place and the aim of the player's camera of the world before it moves.
+	virtual void NoteLook() {}
 
 	/// A fight between two creatures, the first making the arena, as scripts and the leash start them. The first
 	/// creature is made to fight: nothing it wants stops the fight. The second creature obeys the first until the fight

@@ -43,7 +43,12 @@
 #include "ECS/HandPlayer.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
+#include "ECS/Systems/CreatureFightSystemInterface.h"
+#include "ECS/Systems/CreatureHandSystemInterface.h"
+#include "ECS/Systems/HandGrabSystemInterface.h"
+#include "ECS/Systems/HandPressSystemInterface.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
+#include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "EngineConfig.h"
@@ -331,9 +336,38 @@ void HandSystem::EndInterfaceLock(PlayerNames player)
 
 void HandSystem::EndOwnInterfaceLock()
 {
+	if (!_ownPlayer.has_value())
+	{
+		return;
+	}
+	// First the action of the hand stops at once: the press of a miracle, the take, the throw or the scoop lock, the
+	// press of the fight and a press that waits for a tap on a creature
+	if (Locator::magicSystem::has_value())
+	{
+		Locator::magicSystem::value().StopActionAtLockEnd();
+	}
+	if (Locator::handGrabSystem::has_value())
+	{
+		Locator::handGrabSystem::value().StopActionAtLockEnd();
+	}
+	if (Locator::creatureFightSystem::has_value() && Locator::creatureFightSystem::value().IsPressed())
+	{
+		const auto turn = Locator::time::has_value() ? Locator::time::value().GetTurn() : 0u;
+		Locator::creatureFightSystem::value().Release(machine_clock::Ticks(), turn);
+	}
+	if (Locator::creatureHandSystem::has_value())
+	{
+		Locator::creatureHandSystem::value().StopActionAtLockEnd();
+	}
+	// The interface also clears the flag of a press of the select button
+	if (Locator::handPressSystem::has_value())
+	{
+		Locator::handPressSystem::value().EndSelectPress();
+	}
+	// Then the wait for the last send ends
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto hand = GetOwnHands()[static_cast<size_t>(Side::Left)];
-	if (!_ownPlayer.has_value() || !registry.Valid(hand))
+	if (!registry.Valid(hand))
 	{
 		return;
 	}

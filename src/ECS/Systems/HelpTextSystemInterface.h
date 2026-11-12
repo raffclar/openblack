@@ -80,6 +80,15 @@ public:
 	{
 		return false;
 	}
+	/// The interface goes off or comes back. The help keeps whether the interface had the flag of a press of the select
+	/// button then (see input::select_press). This value replaces the value that the help kept before.
+	virtual void KeepSelectPress([[maybe_unused]] bool held) {}
+	/// Whether the help kept the flag of a select press (see KeepSelectPress)
+	[[nodiscard]] virtual bool KeepsSelectPress() const { return false; }
+	/// The click or the key of this frame on a text that takes it (see help::DialogueText::TakesInput), while the help
+	/// keeps the flag of a select press. If this is true, the help clears the flag and the click or the key does nothing
+	/// more: it only ends the action of the hand. Do this before the dialogue gets the click.
+	[[nodiscard]] virtual bool TakeKeptSelectPress([[maybe_unused]] bool click, [[maybe_unused]] bool skipKey) { return false; }
 	/// Before the scripts' turn, in the world or in the temple: the scripts' clock moves on by the turn's time, and the
 	/// dialogue takes the clicks that came since the last turn
 	virtual void ProcessTurn(uint32_t milliseconds) = 0;

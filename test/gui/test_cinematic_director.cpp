@@ -56,6 +56,43 @@ TEST(CinematicDirector, SettingTheSameAgainChangesNothing)
 	EXPECT_TRUE(director.IsInterfaceActive());
 }
 
+TEST(CinematicDirector, AllTheBoxesCloseAndTheInterfaceComesBackUntilTheNextFrame)
+{
+	CinematicDirectorSystem director;
+	director.SetWideScreen(true, 7);
+	ASSERT_FALSE(director.IsInterfaceActive());
+	// The boxes close while the script has the bars in: the interface comes back
+	director.AllBoxesClosed();
+	EXPECT_TRUE(director.IsInterfaceActive());
+	// A hand demonstration that plays keeps the interface
+	director.KeepInterfaceAwayForScriptBars(true);
+	EXPECT_TRUE(director.IsInterfaceActive());
+	// Else the next frame puts the interface away again
+	director.KeepInterfaceAwayForScriptBars(false);
+	EXPECT_FALSE(director.IsInterfaceActive());
+	// The bars and their owner stay
+	EXPECT_TRUE(director.IsWideScreenOn());
+	EXPECT_EQ(director.GetWideScreenOwner(), 7u);
+}
+
+TEST(CinematicDirector, TheInterfaceStaysWithTheGamesOwnBarsOrWithNoBars)
+{
+	CinematicDirectorSystem director;
+	director.AllBoxesClosed();
+	director.KeepInterfaceAwayForScriptBars(false);
+	EXPECT_TRUE(director.IsInterfaceActive());
+	director.SetWideScreen(true, 0);
+	director.AllBoxesClosed();
+	director.KeepInterfaceAwayForScriptBars(false);
+	EXPECT_TRUE(director.IsInterfaceActive());
+	// The bars of a script go: nothing puts the interface away after that
+	director.SetWideScreen(false, 0);
+	director.SetWideScreen(true, 7);
+	director.SetWideScreen(false, 7);
+	director.KeepInterfaceAwayForScriptBars(false);
+	EXPECT_TRUE(director.IsInterfaceActive());
+}
+
 TEST(CinematicDirector, TheStoryOpensOnABlackScreen)
 {
 	CinematicDirectorSystem director;

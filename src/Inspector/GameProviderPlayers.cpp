@@ -608,6 +608,7 @@ std::unique_ptr<ProviderInterface> PlayersProvider()
 		                     {"gripping", hand.gripping},
 		                     {"rotating", hand.rotating},
 		                     {"selectGrip", hand.selectGrip},
+		                     {"selectPress", presses.SelectPressHolds()},
 		                     {"otherButton", hand.otherButton},
 		                     {"mouse", {mouse.x, mouse.y}},
 		                     {"pointerMoved", presses.GetHandPointer().HasMoved()},

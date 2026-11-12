@@ -13,6 +13,7 @@
 #define LOCATOR_IMPLEMENTATIONS
 
 #include <optional>
+#include <utility>
 
 #include <glm/gtx/euler_angles.hpp>
 
@@ -28,6 +29,7 @@
 #include "ECS/Systems/EffectRequestSystemInterface.h"
 #include "ECS/Systems/ForestSystemInterface.h"
 #include "ECS/Systems/GestureSystemInterface.h"
+#include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/HelpProfileSystemInterface.h"
 #include "ECS/Systems/PlayerCommandSystemInterface.h"
 #include "ECS/Systems/SpellIconSystemInterface.h"
@@ -60,7 +62,7 @@ ecs::Registry& EntityRegistry()
 }
 } // namespace
 
-std::optional<player_commands::HandCast> MagicSystem::MakeCast(magic::CastTarget target)
+std::optional<player_commands::HandCast> MagicSystem::MakeCast(magic::CastTarget target, entt::entity pressThing)
 {
 	auto& registry = EntityRegistry();
 	if (!Held().has_value() || !registry.Valid(*Held()))
@@ -86,7 +88,8 @@ std::optional<player_commands::HandCast> MagicSystem::MakeCast(magic::CastTarget
 	}
 	if (target == magic::CastTarget::Object)
 	{
-		const auto object = HeldSeedTarget();
+		// A seed armed on a thing casts at the thing of the press, else at the thing under the hand
+		const auto object = pressThing != entt::null ? std::optional(pressThing) : HeldSeedTarget();
 		if (!object.has_value())
 		{
 			return std::nullopt;
@@ -124,7 +127,19 @@ void MagicSystem::SendCast(magic::CastTarget target)
 	{
 		return;
 	}
-	const auto cast = MakeCast(target);
+	// A seed armed on a thing casts at the thing of the press. When that thing is no target now, the cast does nothing:
+	// no fail and no send. The interface lock ends.
+	const auto pressThing = std::exchange(_pressThing, entt::entity {entt::null});
+	if (target == magic::CastTarget::Object && pressThing != entt::null && !IsHeldSeedTarget(pressThing))
+	{
+		_input = {};
+		if (ActsOnOwnHand() && Locator::handSystem::has_value())
+		{
+			Locator::handSystem::value().EndOwnInterfaceLock();
+		}
+		return;
+	}
+	const auto cast = MakeCast(target, target == magic::CastTarget::Object ? pressThing : entt::entity {entt::null});
 	if (!cast.has_value())
 	{
 		_input = {};

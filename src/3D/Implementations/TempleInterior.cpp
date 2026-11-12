@@ -65,6 +65,7 @@
 #include "ECS/Statistics.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/CameraHelpSystemInterface.h"
+#include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/CreatureCaveSystemInterface.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/CreatureModeSystemInterface.h"
@@ -211,6 +212,19 @@ void EndHandInterfaceLock()
 	if (Locator::handSystem::has_value())
 	{
 		Locator::handSystem::value().EndOwnInterfaceLock();
+	}
+}
+
+/// All the boxes of the game close, and the interface comes back. This ends the action of the hand.
+void CloseAllBoxes()
+{
+	if (Locator::cinematicDirectorSystem::has_value())
+	{
+		Locator::cinematicDirectorSystem::value().AllBoxesClosed();
+	}
+	else
+	{
+		EndHandInterfaceLock();
 	}
 }
 
@@ -1642,8 +1656,8 @@ void TempleInterior::GoToRoom(TempleRoom room)
 		if (room != _currentRoom)
 		{
 			FadeIntoRoom();
-			// The move to another room closes every box, and the interface lock of the hand ends
-			EndHandInterfaceLock();
+			// The move to another room closes all the boxes, and the interface comes back
+			CloseAllBoxes();
 		}
 		_cameraModel->GoToRoom(room);
 	}
@@ -2134,6 +2148,8 @@ void TempleInterior::EnterLockedRoom(TempleRoom room)
 	_lock.Lock(room);
 	if (_active)
 	{
+		// The player is in the temple already: all the boxes close first, also for the same room
+		CloseAllBoxes();
 		GoToRoom(room);
 	}
 	else

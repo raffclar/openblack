@@ -543,6 +543,13 @@ void Game::UpdateHandInterface()
 
 void Game::EndHandLockForFrame()
 {
+	// First, while a script has the bars in, the interface goes away again if it came back, for example when all the
+	// boxes closed. A hand demonstration that plays keeps the interface.
+	if (Locator::cinematicDirectorSystem::has_value())
+	{
+		const bool demonstration = Locator::handDemoSystem::has_value() && Locator::handDemoSystem::value().IsPlaying(0);
+		Locator::cinematicDirectorSystem::value().KeepInterfaceAwayForScriptBars(demonstration);
+	}
 	if (!Locator::handSystem::has_value())
 	{
 		return;
@@ -568,9 +575,13 @@ void Game::EndHandLockForFrame()
 		// The hand presses on a thing to take it, and waits, pulls or waits for the turn that puts it in the hand
 		action = hand_send_wait::FrameAction::Takes;
 	}
-	else if ((Locator::creatureHandSystem::has_value() && Locator::creatureHandSystem::value().GetCreature().has_value()) ||
+	else if ((Locator::creatureHandSystem::has_value() &&
+	          (Locator::creatureHandSystem::value().GetCreature().has_value() ||
+	           Locator::creatureHandSystem::value().WaitsForTap() || Locator::creatureHandSystem::value().WaitsForLockEnd())) ||
 	         (hasGrab && Locator::handGrabSystem::value().GetLockedOn().has_value()))
 	{
+		// A held creature, a creature that the button let go of while the lock stays, a press that waits for a tap on a
+		// creature, or a scoop lock
 		action = hand_send_wait::FrameAction::Other;
 	}
 	const auto& buttons = Locator::handPressSystem::value().GetPointerButtons();
@@ -583,6 +594,7 @@ void Game::EndHandLockForFrame()
 	    .bothButtons = buttons.left && buttons.right,
 	    .heldThere = held.has_value() && Locator::entitiesRegistry::value().Valid(*held),
 	    .takenThere = taking.has_value() && Locator::entitiesRegistry::value().Valid(*taking),
+	    .pressThingGone = Locator::magicSystem::has_value() && Locator::magicSystem::value().PressThingGone(),
 	};
 	if (hand_send_wait::FrameEndsLock(facts))
 	{

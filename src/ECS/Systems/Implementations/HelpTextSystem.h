@@ -37,6 +37,9 @@ public:
 	void Update(const Frame& frame) override;
 	void TakeClick(bool click, bool skipKey) override;
 	[[nodiscard]] bool ClickCutsShort(bool click, bool skipKey) const override;
+	void KeepSelectPress(bool held) override { _selectPress = held; }
+	[[nodiscard]] bool KeepsSelectPress() const override { return _selectPress; }
+	[[nodiscard]] bool TakeKeptSelectPress(bool click, bool skipKey) override;
 	void ProcessTurn(uint32_t milliseconds) override;
 	bool RunText(bool singleLine, uint32_t text, int32_t withInteraction) override;
 	bool RunTextWithNumber(bool singleLine, uint32_t text, float number, int32_t withInteraction) override;
@@ -76,6 +79,8 @@ private:
 	/// The player's click and key that came since the last turn of the dialogue
 	bool _pendingClick {false};
 	bool _pendingSkipKey {false};
+	/// The flag of a press of the select button at the last change of the interface, which takes the next click
+	bool _selectPress {false};
 };
 
 } // namespace openblack::ecs::systems

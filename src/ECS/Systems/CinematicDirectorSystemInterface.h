@@ -55,6 +55,14 @@ public:
 	[[nodiscard]] virtual bool IsInterfaceActive() const = 0;
 	/// The player's interface is put away or given back whatever the bars are, as a hand demonstration does
 	virtual void SetInterfaceActive(bool active) = 0;
+	/// All the boxes of the game close at once while a land is loaded. The caller closes its boxes. The interface of the
+	/// player comes back, as SetInterfaceActive(true) does: the help keeps the flag of the select press, and the action
+	/// of the hand ends. This occurs also while a script has the bars in, or while a hand demonstration plays.
+	virtual void AllBoxesClosed() = 0;
+	/// Once a frame, before the hand reads the input of the frame. If the interface is active while a script has the bars
+	/// in, the interface goes away again, as SetInterfaceActive(false) does. A hand demonstration that plays keeps the
+	/// interface.
+	virtual void KeepInterfaceAwayForScriptBars(bool demonstrationPlays) = 0;
 	/// Whether the game's dialogs were told to hide since this was last asked
 	[[nodiscard]] virtual bool TakeHideDialogs() = 0;
 

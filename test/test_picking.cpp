@@ -121,6 +121,18 @@ TEST(LandLine, ALineFromOffTheMapIsCutToItsEdge)
 	EXPECT_NEAR(hit->x, 30.0f * k_Metres, 0.05f);
 }
 
+TEST(LandLine, ALineFromACellCornerThatLeansAwayFromItsColumnMissesTheLand)
+{
+	// The line starts on the corner of four cells and goes down along the column of cells over flat land of 32
+	const glm::vec3 from(2760.0f, 71.44f, 2430.0f);
+	const auto hit = land_line::LandAlong(from, {2760.0f, 69.405663f, 2427.1519f}, Flat(32));
+	ASSERT_TRUE(hit.has_value());
+	EXPECT_NEAR(hit->y, 2360.0f, 0.01f);
+	// The same line that leans a millimetre towards a lower x leaves the first cell across x far past the land. The game
+	// walks the cells this way, so it misses the land and the camera finds the sea below it instead.
+	EXPECT_FALSE(land_line::LandAlong(from, {2759.999f, 69.405663f, 2427.1519f}, Flat(32)).has_value());
+}
+
 TEST(LandLine, TheSeaIsMetGoingDownNearTheCamera)
 {
 	const glm::vec3 camera(1000.0f, 100.0f, 1000.0f);

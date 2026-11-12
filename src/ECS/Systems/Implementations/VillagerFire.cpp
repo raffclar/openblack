@@ -45,6 +45,7 @@
 #include "ECS/Components/WallHug.h"
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/GameEndConditions.h"
+#include "ECS/GamePhysicsHooksWorld.h"
 #include "ECS/GraveyardRules.h"
 #include "ECS/Graveyards.h"
 #include "ECS/LivingFacing.h"
@@ -57,6 +58,7 @@
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
+#include "ECS/TempleHeartPassOn.h"
 #include "ECS/ThingMapPlace.h"
 #include "ECS/VillagerAfterDeath.h"
 #include "ECS/VillagerAnimation.h"
@@ -596,6 +598,11 @@ uint32_t villager_fire::ReactToFire(LivingAction& action)
 	return 1;
 }
 
+entt::entity villager_fire::BeatTaker(ecs::physics_hooks::World& world, entt::entity object)
+{
+	return ecs::temple_heart_pass_on::TakerOf(world, object, true);
+}
+
 uint32_t villager_fire::PutOutFireByBeating(LivingAction& action)
 {
 	const auto villager = EntityOf(action);
@@ -626,7 +633,8 @@ uint32_t villager_fire::PutOutFireByBeating(LivingAction& action)
 		return 1;
 	}
 	// Once its arms have swung, it beats the fire every turn: the turns in the state are never counted afresh
-	fires.ApplyBurn(state.fire, k_BeatBurn, std::nullopt);
+	ecs::GamePhysicsHooksWorld hooksWorld;
+	fires.ApplyBurn(BeatTaker(hooksWorld, state.fire), k_BeatBurn, std::nullopt);
 	return 1;
 }
 
@@ -918,20 +926,6 @@ bool villager_fire::IsRunningOnFire(entt::entity villager)
 {
 	const auto* action = Entities().TryGet<const LivingAction>(villager);
 	return action != nullptr && Locator::livingActionSystem::has_value() && FinalState(*action) == VillagerStates::OnFire;
-}
-
-bool villager_fire::CanCatchFire(entt::entity villager)
-{
-	auto& registry = Entities();
-	const auto* action = registry.TryGet<const LivingAction>(villager);
-	if (action == nullptr || !Locator::livingActionSystem::has_value())
-	{
-		return true;
-	}
-	// Dying, inside its home, or gone to hide in a building nearby. (One held in the hand neither, but the hand doesn't
-	// hold villagers yet.)
-	return FinalState(*action) != VillagerStates::Dying && !registry.AllOf<AtHome>(villager) &&
-	       State(*action, LivingAction::Index::Top) != VillagerStates::GoAndHideInNearbyBuilding;
 }
 
 bool villager_fire::IsFireMan(entt::entity villager)

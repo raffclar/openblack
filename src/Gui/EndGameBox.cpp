@@ -44,8 +44,9 @@ EndGameBox::EndGameBox(const TextDatabase& texts, const GameFont& font)
 {
 	std::vector<Dialog::Tab> tabs {
 	    {.label = std::u16string(texts.Get("HELP_TEXT_GAME_OVER")), .onSelect = {}},
-	    {.label = std::u16string(texts.Get("HELP_TEXT_MULTIPLAYER_MAIN_TAB")), .onSelect = [this] { OpenConditions(); }},
-	    {.label = std::u16string(texts.Get("HELP_TEXT_PAUSE_STATS_151")), .onSelect = [this] { OpenStatistics(); }},
+	    {.label = std::u16string(texts.Get("HELP_TEXT_MULTIPLAYER_MAIN_TAB")),
+	     .onSelect = [this] { OpenTab(k_MultiplayerTab); }},
+	    {.label = std::u16string(texts.Get("HELP_TEXT_PAUSE_STATS_151")), .onSelect = [this] { OpenTab(k_StatisticsTab); }},
 	};
 	tabs.resize(k_TabCount);
 	for (auto& tab : tabs)
@@ -139,6 +140,11 @@ bool EndGameBox::OpenTab(size_t tab)
 	if (!_open)
 	{
 		return false;
+	}
+	// A tab closes all the boxes of the game first. Then the end box shows again with the box of the tab over it.
+	if ((tab == k_MultiplayerTab || tab == k_StatisticsTab) && _onAllBoxesClosed)
+	{
+		_onAllBoxesClosed();
 	}
 	switch (tab)
 	{
