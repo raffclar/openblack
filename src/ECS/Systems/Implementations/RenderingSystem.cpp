@@ -235,6 +235,18 @@ bool FelledOnTheLand(const openblack::ecs::Registry& registry, entt::entity enti
 	return deadTree != nullptr && deadTree->felled && !registry.AnyOf<InHand, HeldByCreature>(entity);
 }
 
+/// Whether the frame draws a pot for what it holds, and whether a hand holds it (see magic::piles::PotDrawn)
+bool PotShown(const Pot& pot, bool held)
+{
+	if (!openblack::Locator::infoConstants::has_value())
+	{
+		return true;
+	}
+	const auto& infos = openblack::Locator::infoConstants::value().pot;
+	const auto type = static_cast<size_t>(pot.type);
+	return type >= infos.size() || openblack::magic::piles::PotDrawn(infos.at(type).potType, pot.amount, held);
+}
+
 /// Whether a thing is a village centre
 bool IsTownCentre(const openblack::ecs::Registry& registry, entt::entity entity)
 {
@@ -857,6 +869,12 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		    }
 		    // A script highlight that its draw list did not select in this frame is not drawn
 		    if (const auto* highlight = highlights.TryGet(entity); highlight != nullptr && highlight->hidden)
+		    {
+			    return;
+		    }
+		    // A pot that holds nothing is not drawn in a hand, and a plain pot that holds nothing is not drawn at all
+		    if (const auto* pot = stores.TryGet<Pot>(entity);
+		        pot != nullptr && !PotShown(*pot, stores.AnyOf<InHand, HeldByCreature>(entity)))
 		    {
 			    return;
 		    }
