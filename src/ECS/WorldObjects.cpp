@@ -1340,6 +1340,20 @@ float world_objects::IncreaseLife(entt::entity object, float amount)
 	return life.life;
 }
 
+bool world_objects::TakesEffect(entt::entity object, float burn)
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	if (const auto* pot = registry.TryGet<const Pot>(object))
+	{
+		return pot->amount != 0;
+	}
+	if (const auto* field = registry.TryGet<const Field>(object))
+	{
+		return (field->crop.age > 0.0f && field->crop.food > 0.0f) || !(burn > 0.0f);
+	}
+	return true;
+}
+
 bool world_objects::CanBeCrushed(entt::entity object)
 {
 	const auto& registry = Locator::entitiesRegistry::value();

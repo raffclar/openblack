@@ -60,6 +60,10 @@ constexpr glm::vec2 k_HurtTemple {-10.0f, -60.0f};
 constexpr glm::vec2 k_TempleDrop {12.0f, -60.0f};
 constexpr glm::vec2 k_TempleTown {-10.0f, -110.0f};
 
+/// A dead pine that lies flat on the land with its top to the north, and a rock beside the middle of its trunk
+constexpr glm::vec2 k_LyingPine {0.0f, 80.0f};
+constexpr glm::vec2 k_RockByMiddle {3.0f, 86.5f};
+
 /// Where a boulder flies from towards the altar of the town's worship site: 20 metres north of the altar
 constexpr glm::vec2 k_BoulderFrom {k_Altar.x, k_Altar.y + 20.0f};
 } // namespace
@@ -441,5 +445,22 @@ void openblack::testbed_scenarios::AddFixedKindScenarios(std::vector<Scenario>& 
 	    .commands = {{.kind = Kind::HandTake, .delaySeconds = 2.0f, .object = 2},
 	                 {.kind = Kind::HandRelease, .delaySeconds = 3.0f}},
 	    .townBeliefInPlayer = 1000.0f,
+	});
+
+	all.push_back({
+	    .id = "nature.fire_reaches_lying_tree_by_its_middle",
+	    .name = "A burning rock beside the middle of a dead pine that lies flat sets the pine alight",
+	    .facet = Facet::Objects,
+	    .description = "A dead pine lies flat on the land, with its top to the north. A rock lies beside the middle of "
+	                   "its trunk, and the rock is set alight as it is made.",
+	    .expected = "The fire of the rock reaches the pine from the middle of its trunk, by 0.35 of the height of the pine, "
+	                "so the pine catches fire. An area effect of a miracle reaches the pine in the same way. Before, the "
+	                "fire measured from the root of the pine, and the pine did not catch fire.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_LyingPine.x + 30.0f, 20.0f, k_LyingPine.y + 5.0f},
+	                .look = {k_LyingPine.x, 1.0f, k_LyingPine.y + 8.0f}},
+	    .objects = {{.type = TreeInfo::Pine, .offset = k_LyingPine, .dead = true, .leanDegrees = {-90.0f, 0.0f}},
+	                {.type = MobileStaticInfo::Rock, .offset = k_RockByMiddle, .alight = true}},
 	});
 }

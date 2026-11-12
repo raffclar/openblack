@@ -25,6 +25,7 @@
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureLocomotion.h"
+#include "ECS/Components/DeadTree.h"
 #include "ECS/Components/Feature.h"
 #include "ECS/Components/Field.h"
 #include "ECS/Components/FishFarm.h"
@@ -41,6 +42,7 @@
 #include "ECS/Registry.h"
 #include "ECS/ThingModel.h"
 #include "ECS/WorshipSites.h"
+#include "Fire/FireModel.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Magic/ResourcePiles.h"
@@ -239,6 +241,44 @@ float object_measures::Height(const Registry& registry, entt::entity entity)
 	}
 	const auto half = HalfExtentsOf(registry, MeasuredPart(registry, entity));
 	return half.has_value() ? 2.0f * half->y : 0.0f;
+}
+
+float object_measures::FireRadius(const Registry& registry, entt::entity entity)
+{
+	const auto reach = registry.AllOf<WorshipSite>(entity) ? fire::FireReach::WorshipSite
+	                   : registry.AllOf<DeadTree>(entity)  ? fire::FireReach::ShareOfHeight
+	                                                       : fire::FireReach::Radius;
+	return fire::DefaultFireRadius(reach, TwoDRadius(registry, entity), Height(registry, entity));
+}
+
+glm::vec2 object_measures::FireMiddle(const Registry& registry, entt::entity entity)
+{
+	const auto& transform = registry.Get<const Transform>(entity);
+	if (registry.AllOf<WorshipSite>(entity))
+	{
+		return worship_site::CentreOnLand(transform.position, transform.rotation, transform.scale.x);
+	}
+	if (registry.AllOf<DeadTree>(entity) && Locator::resources::has_value())
+	{
+		// A dead tree without a model measures from where it stands
+		const auto model = ecs::thing_model::ModelOf(registry, entity);
+		const auto& meshes = Locator::resources::value().GetMeshes();
+		if (model.has_value() && meshes.Contains(*model))
+		{
+			const auto middle = meshes.Handle(*model)->GetBoundingBox().Center();
+			return PlacedAcrossLand(middle, transform.rotation, transform.scale.x, transform.position);
+		}
+	}
+	return glm::xz(transform.position);
+}
+
+glm::vec2 object_measures::PlacedAcrossLand(glm::vec3 point, const glm::mat3& rotation, float scale, glm::vec3 position)
+{
+	// The game scales each entry of the turn first, and then adds the axes in this order
+	const glm::mat3 scaled(rotation[0] * scale, rotation[1] * scale, rotation[2] * scale);
+	const float x = scaled[2].x * point.z + scaled[1].x * point.y + scaled[0].x * point.x + position.x;
+	const float z = scaled[2].z * point.z + scaled[1].z * point.y + scaled[0].z * point.x + position.z;
+	return {x, z};
 }
 
 float object_measures::PlaceAltitude(const Registry& registry, entt::entity entity)

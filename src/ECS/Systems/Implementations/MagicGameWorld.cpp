@@ -20,10 +20,8 @@
 #include <glm/gtx/euler_angles.hpp>
 #include <spdlog/spdlog.h>
 
-#include "3D/L3DMesh.h"
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
-#include "Animals/FishFarmRules.h"
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
 #include "ECS/BuildingSites.h"
@@ -41,7 +39,6 @@
 #include "ECS/Components/Fixed.h"
 #include "ECS/Components/Flowers.h"
 #include "ECS/Components/Forest.h"
-#include "ECS/Components/Mesh.h"
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/Player.h"
 #include "ECS/Components/Pot.h"
@@ -103,8 +100,6 @@ constexpr std::array<audio::SoundId, 9> k_TreeGrowSounds {
     audio::SoundId::G_TreeGrow_01_1, audio::SoundId::G_TreeGrow_02_1, audio::SoundId::G_TreeGrow_03_1,
     audio::SoundId::G_TreeGrow_04_1, audio::SoundId::G_TreeGrow_01_2, audio::SoundId::G_TreeGrow_02_2,
     audio::SoundId::G_TreeGrow_03_2, audio::SoundId::G_TreeGrow_04_2, audio::SoundId::G_TreeGrow_01_3};
-/// The water reaches a field as though it were this wide round its middle
-constexpr float k_FieldWaterRadius = 5.0f;
 
 ecs::Registry& EntityRegistry()
 {
@@ -168,23 +163,13 @@ std::optional<magic::EffectReceiver> ReceiverOf(entt::entity entity)
 	{
 		return std::nullopt;
 	}
-	magic::EffectReceiver receiver {.entity = entity, .position = transform->position, .radius = 0.5f, .height = 1.0f};
-	if (const auto* mesh = registry.TryGet<const Mesh>(entity))
-	{
-		auto& meshes = Locator::resources::value().GetMeshes();
-		if (meshes.Contains(mesh->id))
-		{
-			const auto size = meshes.Handle(mesh->id)->GetBoundingBox().Size() * transform->scale;
-			receiver.radius = std::max(size.x, size.z) * 0.5f;
-			receiver.height = size.y;
-		}
-	}
-	// A fish farm has no model: it reaches its own radius across the land, and has no height
-	if (registry.AllOf<FishFarm>(entity))
-	{
-		receiver.radius = fish_farm::k_Radius;
-		receiver.height = 0.0f;
-	}
+	// Each kind of thing takes an effect by the reach of its fire: from its fire middle, by its fire radius across the land
+	// and by its height up and down
+	magic::EffectReceiver receiver {.entity = entity,
+	                                .position = transform->position,
+	                                .middle = object_measures::FireMiddle(registry, entity),
+	                                .radius = object_measures::FireRadius(registry, entity),
+	                                .height = object_measures::Height(registry, entity)};
 	if (const auto* info = InfoOfLiving(entity))
 	{
 		receiver.life = LifeOf(entity);
@@ -192,12 +177,6 @@ std::optional<magic::EffectReceiver> ReceiverOf(entt::entity entity)
 		receiver.alignmentType = info->alignmentType;
 		receiver.crushable = true;
 		receiver.creature = registry.AllOf<Creature>(entity);
-		// A creature is as wide as its body across the ground and as tall as its size, not as its model's box
-		if (receiver.creature)
-		{
-			receiver.radius = object_measures::TwoDRadius(registry, entity);
-			receiver.height = object_measures::Height(registry, entity);
-		}
 	}
 	else if (registry.AllOf<Temple>(entity))
 	{
@@ -218,12 +197,6 @@ std::optional<magic::EffectReceiver> ReceiverOf(entt::entity entity)
 		receiver.defence = magic::EffectDefence::From(*objectInfo);
 		receiver.alignmentType = objectInfo->alignmentType;
 		receiver.crushable = ecs::world_objects::CanBeCrushed(entity);
-		// A worship site takes effects round its middle, by a radius of its own
-		if (registry.AllOf<WorshipSite>(entity))
-		{
-			receiver.middle = ecs::worship_site::CentreOnLand(transform->position, transform->rotation, transform->scale.x);
-			receiver.radius = ecs::worship_site::k_EffectRadius;
-		}
 	}
 	else
 	{
@@ -367,7 +340,8 @@ bool GameMagicWorld::ApplyEffect(entt::entity object, const magic::EffectValues&
 		return false;
 	}
 	const auto receiver = ReceiverOf(object);
-	if (!receiver.has_value())
+	// An empty pot, or a field without food under an effect that burns, does not take the effect
+	if (!receiver.has_value() || !ecs::world_objects::TakesEffect(object, values[magic::EffectKind::Burn]))
 	{
 		return false;
 	}
@@ -400,7 +374,9 @@ std::vector<entt::entity> GameMagicWorld::ApplyEffectAt(glm::vec3 point, const m
 	auto shared = values;
 	for (const auto& receiver : receivers)
 	{
-		if (!magic::Reaches(shared, point, receiver))
+		// An empty pot, or a field without food under an effect that burns, does not take the effect
+		if (!ecs::world_objects::TakesEffect(receiver.entity, shared[magic::EffectKind::Burn]) ||
+		    !magic::Reaches(shared, point, receiver))
 		{
 			continue;
 		}
@@ -681,11 +657,10 @@ void GameMagicWorld::Water(const magic::WaterDrop& drop)
 					{
 						continue;
 					}
-					// A field counts as 5 m across whatever its size, a creature by its body, anything else by its model
+					// Each kind of thing counts by its own radius on the ground: a field is 5 m across whatever its size,
+					// a creature counts by its body and a food pile by what it holds
 					const float across = gutils::GetDistance(transform->position, drop.position);
-					const float radius = registry.AllOf<Field>(object)      ? k_FieldWaterRadius
-					                     : registry.AllOf<Creature>(object) ? object_measures::TwoDRadius(registry, object)
-					                                                        : ecs::world_objects::SizeOf(object).radius;
+					const float radius = object_measures::TwoDRadius(registry, object);
 					if (across - radius < drop.reach)
 					{
 						WaterObject(object, drop);

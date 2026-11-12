@@ -12,6 +12,7 @@
 #include <optional>
 
 #include <entt/entity/entity.hpp>
+#include <glm/mat3x3.hpp>
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
@@ -41,6 +42,17 @@ namespace openblack::ecs::systems::object_measures
 [[nodiscard]] float PlaceAltitude(const Registry& registry, entt::entity entity);
 /// A thing's height, 0 for one without a model
 [[nodiscard]] float Height(const Registry& registry, entt::entity entity);
+/// How far the fire of a thing reaches across the land from its fire middle (FireMiddle). An area effect reaches the
+/// thing by the same radius. A dead or felled tree uses a share of its height, and a worship site uses a fixed radius.
+/// Every other thing uses its radius on the ground (TwoDRadius).
+[[nodiscard]] float FireRadius(const Registry& registry, entt::entity entity);
+/// The point across the land that the fire of a thing and an area effect on it measure from. A worship site measures
+/// from its middle. A dead or felled tree measures from the middle of the box of its model, as the tree lies. Every
+/// other thing measures from where it stands.
+[[nodiscard]] glm::vec2 FireMiddle(const Registry& registry, entt::entity entity);
+/// Where a point of a model is across the land, for a model at the position with the turn and the scale. The sum adds
+/// the third axis, then the second axis, then the first axis, then the position, as the game adds them.
+[[nodiscard]] glm::vec2 PlacedAcrossLand(glm::vec3 point, const glm::mat3& rotation, float scale, glm::vec3 position);
 /// What a creature walking up to the thing keeps clear of: the thing's radius less a share of the creature's radius on
 /// its walks (NavRadius)
 [[nodiscard]] float RoutePlanRadius(const Registry& registry, entt::entity entity, entt::entity creature);
