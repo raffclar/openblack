@@ -27,6 +27,7 @@
 #include "ECS/Systems/CreatureHandSystemInterface.h"
 #include "ECS/Systems/CreatureModeSystemInterface.h"
 #include "ECS/Systems/HandGrabSystemInterface.h"
+#include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/PickingSystemInterface.h"
@@ -176,6 +177,12 @@ public:
 		return useWait.has_value() && !useWait->letGo;
 	}
 
+	[[nodiscard]] bool DoesAction() const final
+	{
+		return Locator::handSystem::has_value() &&
+		       Locator::handSystem::value().GetOwnAction().action != hand_send_wait::FrameAction::Free;
+	}
+
 	[[nodiscard]] bool MagicHandBusy() const final { return Locator::magicSystem::value().IsHandBusy(); }
 	bool MagicPressAction() final { return Locator::magicSystem::value().PressAction(); }
 	void MagicReleaseAction() final { Locator::magicSystem::value().ReleaseAction(); }
@@ -287,16 +294,20 @@ void HandPressSystem::Press(const SDL_Event& event, const PressContext& context)
 	// stop an empty hand from acting on anything but a highlight that a script made.
 	const auto interfaceLimits = _world->Limits();
 	const bool mayHold = script::interface_levels::MayHold(interfaceLimits);
-	// While the interface waits after a gift or after a use on a thing, the presses of the buttons do nothing. A press
-	// of the select button in the wait grips nothing until the player lets go of it. Both buttons still end the wait.
+	// While the interface waits after a gift or after a use on a thing, the presses of the buttons do nothing
 	const bool waitIgnoresPresses = _world->WaitIgnoresPresses();
-	if (waitIgnoresPresses && handTakesPresses && event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_LEFT)
+	// Only the normal action of the hand grips the land at a press of the select button. In every other action, the
+	// press grips nothing until the player lets go of the button. Both buttons still end these actions, and then the
+	// hand grips the land at once.
+	const bool selectPressed = event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_LEFT;
+	_selectPressInAction = selectPressed && handTakesPresses && (waitIgnoresPresses || _world->DoesAction());
+	if (_selectPressInAction)
 	{
 		_landGripStopped = true;
 	}
 	ActionLetGo(event, rightLetGo, inTemple, handTakesPresses, hasGrab, handHoldsThing);
 	ActionPress(event, inTemple, handTakesPresses, waitIgnoresPresses, hasGrab, handHoldsThing, interfaceLimits, mayHold);
-	MovePress(event, inTemple, handTakesPresses, waitIgnoresPresses, context);
+	MovePress(event, inTemple, handTakesPresses, context);
 	// When the player releases the button of the press, the blow that the press queued gets its charge. The fight
 	// system also gets the release when the fight ended before it, because the hold of a press on a body continues.
 	if (_fightButton.has_value() && ((*_fightButton == creature_fight::Button::Move && !_buttons.left) ||
@@ -539,8 +550,7 @@ void HandPressSystem::ActionPress(const SDL_Event& event, bool inTemple, bool ha
 	}
 }
 
-void HandPressSystem::MovePress(const SDL_Event& event, bool inTemple, bool handTakesPresses, bool waitIgnoresPresses,
-                                const PressContext& context)
+void HandPressSystem::MovePress(const SDL_Event& event, bool inTemple, bool handTakesPresses, const PressContext& context)
 {
 	if (!handTakesPresses || _world->MagicHandBusy() || inTemple || event.type != SDL_MOUSEBUTTONDOWN ||
 	    event.button.button != SDL_BUTTON_LEFT || _buttons.middle)
@@ -560,8 +570,8 @@ void HandPressSystem::MovePress(const SDL_Event& event, bool inTemple, bool hand
 	{
 		_fightButton = creature_fight::Button::Move;
 	}
-	// In a wait of the interface the press grips no land, so the hand makes no sound and no dust
-	else if (!doubleClicked && !waitIgnoresPresses && context.playGrabSound)
+	// In an action other than the normal one the press grips no land, so the hand makes no sound and no dust
+	else if (!doubleClicked && !_selectPressInAction && context.playGrabSound)
 	{
 		context.playGrabSound();
 	}
