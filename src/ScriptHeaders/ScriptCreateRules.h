@@ -46,18 +46,21 @@ inline constexpr int32_t k_LastCreateType = static_cast<int32_t>(ObjectType::Ani
 /// `rockKind` tells if the info table puts the row in the rock kind.
 [[nodiscard]] bool KeepsScriptHeight(ObjectType type, uint32_t subtype = 0, bool rockKind = false);
 
-/// How a rock that a script makes starts in the physics. The rock starts at rest with no thrower and no player.
-struct ScriptRockStart
+/// How a thing that a script makes starts in the physics. The thing starts at rest with no thrower and no player.
+struct ScriptPhysicsStart
 {
 	/// The physics puts the body on the land and turns it to the slope before it lifts the body clear of things.
-	/// Only a rock that the script asks for by the rock type does this.
+	/// All things do this, but a mobile static does not.
 	bool settlesOnLand;
 };
 
-/// Whether a thing that a script makes is a rock that starts in the physics, and how it starts. A mobile static or a
-/// rock does this when the info table puts its row in the rock kind. The holder of a singing stone, the lanterns and
-/// the bonfire never do, because the physics can not move them.
-[[nodiscard]] std::optional<ScriptRockStart> RockStartOf(ObjectType type, uint32_t subtype, bool rockKind);
+/// Whether a thing that a script makes starts in the physics, and how it starts.
+/// - A mobile static or a rock starts in the physics when the info table puts its row in the rock kind. The holder of
+///   a singing stone, the lanterns and the bonfire never do, because the physics can not move them.
+/// - A one-shot miracle globe always starts in the physics. Thus the physics keeps the globe on the land, also when a
+///   script then gives the globe a height.
+/// `rockKind` tells if the info table puts the row in the rock kind.
+[[nodiscard]] std::optional<ScriptPhysicsStart> PhysicsStartOf(ObjectType type, uint32_t subtype, bool rockKind);
 
 /// Whether a thing a script creates takes no notice of reactions until a script tells it to. Only a creature does: it
 /// does not react to what happens near it, and it does not catch what flies to it.

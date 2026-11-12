@@ -93,22 +93,35 @@ TEST(ScriptCreate, ARockOfTheRockKindStartsInThePhysics)
 {
 	const auto rock = static_cast<uint32_t>(MobileStaticInfo::Rock);
 	// A mobile static of the rock kind starts in the physics, but is not put on the land first
-	const auto asMobileStatic = RockStartOf(ScriptType::MobileStatic, rock, true);
+	const auto asMobileStatic = PhysicsStartOf(ScriptType::MobileStatic, rock, true);
 	ASSERT_TRUE(asMobileStatic.has_value());
 	EXPECT_FALSE(asMobileStatic->settlesOnLand);
 	// Made by the rock type, the physics puts it on the land and turns it to the slope
-	const auto asRock = RockStartOf(ScriptType::Rock, rock, true);
+	const auto asRock = PhysicsStartOf(ScriptType::Rock, rock, true);
 	ASSERT_TRUE(asRock.has_value());
 	EXPECT_TRUE(asRock->settlesOnLand);
 	// A row out of the rock kind, such as a singing stone, does not start in the physics
-	EXPECT_FALSE(RockStartOf(ScriptType::MobileStatic, static_cast<uint32_t>(MobileStaticInfo::SingingStone_1), false));
+	EXPECT_FALSE(PhysicsStartOf(ScriptType::MobileStatic, static_cast<uint32_t>(MobileStaticInfo::SingingStone_1), false));
 	// The rows that the physics can not move never start in it, whatever their kind
-	EXPECT_FALSE(RockStartOf(ScriptType::MobileStatic, static_cast<uint32_t>(MobileStaticInfo::Bonfire), true));
-	EXPECT_FALSE(RockStartOf(ScriptType::Rock, static_cast<uint32_t>(MobileStaticInfo::SingingStoneBase), true));
-	EXPECT_FALSE(RockStartOf(ScriptType::MobileStatic, static_cast<uint32_t>(MobileStaticInfo::StreetLantern), true));
-	EXPECT_FALSE(RockStartOf(ScriptType::MobileStatic, static_cast<uint32_t>(MobileStaticInfo::CountryLantern), true));
+	EXPECT_FALSE(PhysicsStartOf(ScriptType::MobileStatic, static_cast<uint32_t>(MobileStaticInfo::Bonfire), true));
+	EXPECT_FALSE(PhysicsStartOf(ScriptType::Rock, static_cast<uint32_t>(MobileStaticInfo::SingingStoneBase), true));
+	EXPECT_FALSE(PhysicsStartOf(ScriptType::MobileStatic, static_cast<uint32_t>(MobileStaticInfo::StreetLantern), true));
+	EXPECT_FALSE(PhysicsStartOf(ScriptType::MobileStatic, static_cast<uint32_t>(MobileStaticInfo::CountryLantern), true));
 	// Other types never do
-	EXPECT_FALSE(RockStartOf(ScriptType::Feature, rock, true));
+	EXPECT_FALSE(PhysicsStartOf(ScriptType::Feature, rock, true));
+}
+
+TEST(ScriptCreate, AOneShotMiracleGlobeStartsInThePhysicsOnTheLand)
+{
+	// Every globe starts in the physics, and the physics puts it on the land and turns it to the slope
+	for (const auto seed : {0u, 3u, 7u, 8u, 9u})
+	{
+		const auto start = PhysicsStartOf(ScriptType::OneShotSpell, seed, false);
+		ASSERT_TRUE(start.has_value());
+		EXPECT_TRUE(start->settlesOnLand);
+	}
+	// A globe that goes straight into the hand does not
+	EXPECT_FALSE(PhysicsStartOf(ScriptType::OneShotSpellInHand, 3, false));
 }
 
 TEST(ScriptCreate, AnglesAreGivenInDegrees)
