@@ -116,4 +116,31 @@ using CellLevels = std::function<Levels(glm::ivec2 block, Cell cell)>;
 /// of its side along z.
 [[nodiscard]] glm::ivec2 EdgeTexel(glm::ivec2 block, Cell cell, int32_t samples);
 
+/// Where the land shader takes a block's coarse texture from
+enum class CoarseTexture : uint8_t
+{
+	/// The samples of the block's painted texture, with the edges from the paints
+	Samples = 0,
+	/// The block's square of its page in the landscape file: the coarse land draws all blocks from the pages
+	CoarseLand = 1,
+	/// The block's square of its page as the landscape file keeps it. The game loads the pages into the coarse
+	/// textures, and the first paint of a block samples its painted texture into its square.
+	FilePage = 2,
+};
+
+/// Where a block's coarse texture comes from. hasPage tells if the land has the block's page, and painted tells if
+/// the block got its first paint.
+[[nodiscard]] constexpr CoarseTexture CoarseTextureOf(bool coarseLand, bool hasPage, bool painted)
+{
+	if (!hasPage)
+	{
+		return CoarseTexture::Samples;
+	}
+	if (coarseLand)
+	{
+		return CoarseTexture::CoarseLand;
+	}
+	return painted ? CoarseTexture::Samples : CoarseTexture::FilePage;
+}
+
 } // namespace openblack::graphics::coarse_edges

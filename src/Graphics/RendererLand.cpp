@@ -1068,8 +1068,9 @@ void Renderer::PaintCoarseEdges(glm::vec3 camera, const Texture2D* paintedSnow) 
 			painted.push_back(static_cast<size_t>(blockAt.at(coarse_edges::PlaceOf(at))));
 		}
 	}
-	// A block whose snow waits for its paint, or whose shadows the other threads bake now, waits too. Its paint then
-	// takes the new snow and shadows with the rest, as the game's one paint does.
+	// A block that got a paint before and whose snow waits for its paint waits too. A block whose shadows the other
+	// threads bake now also waits. Its paint then takes the new snow and shadows with the rest, as the game's one paint
+	// does.
 	const bool snowPainted = Locator::snowSystem::has_value();
 	const auto hold = [&edges](size_t index) {
 		if (std::ranges::find(edges.held, index) == edges.held.end())
@@ -1086,7 +1087,11 @@ void Renderer::PaintCoarseEdges(glm::vec3 camera, const Texture2D* paintedSnow) 
 			continue;
 		}
 		const auto at = places[index];
-		const bool snowWaits = snowPainted && coarse_edges::OnMap(at) && _paintedSnow.Waits(snow_cover::BlockIndex(at));
+		// The first paint of a block does not wait for its snow. The land paints all blocks at the load, with the snow
+		// that each block's texture shows. A block that the land draws with its coarse texture alone does not paint its
+		// snow, so a wait would keep it with no first paint.
+		const bool snowWaits = snowPainted && coarse_edges::OnMap(at) && edges.painted.test(coarse_edges::PlaceOf(at)) &&
+		                       _paintedSnow.Waits(snow_cover::BlockIndex(at));
 		if (snowWaits || (_landShadowBake && _landShadowBake->Bakes(at)))
 		{
 			hold(index);

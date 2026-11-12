@@ -32,8 +32,9 @@ uniform vec4 u_block;
 // The layers of the neighbouring blocks: x the block at x - 1, y at z - 1, z at z + 1, w at x + 1; -1 where there is
 // none
 uniform vec4 u_blockNeighbours;
-// x: the layer of the block's coarse page, yz: where its square starts on it (0 to 1), w: 1 when the block is drawn from
-// the page (the coarse land), 0 when its coarse texture is sampled from its own painted one
+// x: the layer of the block's coarse page, yz: where its square starts on it (0 to 1), w: where the block's coarse
+// texture comes from (see coarse_edges::CoarseTexture). 0: the samples of its own painted texture. 1: the page (the
+// coarse land). 2: the page as the landscape file keeps it, before the first paint of the block.
 uniform vec4 u_coarsePage;
 // y: how bright the land's light is, a half for the land mirrored under the sea
 // z: the small bump detail's strength
@@ -133,8 +134,9 @@ vec4 PageLevels(vec2 texel)
 {
 	vec4 colour = texture2DArrayLod(s15_coarsePages, vec3((texel + 0.5f) / 256.0f, u_coarsePage.x), 0.0f);
 	vec4 levels = floor(floor(colour * 255.0f + 0.5f) / 16.0f);
-	// The snow shows as it does in the texel of the block's own texture that the coarse texel takes its colour from
-	if (u_snow.x > 0.5f)
+	// On the coarse land, the snow shows as it does in the texel of the block's own texture that the coarse texel takes
+	// its colour from. Before its first paint, the square keeps the colours of the file.
+	if (u_snow.x > 0.5f && u_coarsePage.w < 1.5f)
 	{
 		vec2 coarse = texel - u_coarsePage.yz * FULL_TEXELS;
 		vec2 source = vec2(CoarseSourceOf(coarse.x, 62.0f, 67650.0f), CoarseSourceOf(coarse.y, 62.0f, 67650.0f));
@@ -243,7 +245,7 @@ void main()
 	// The moving shadows of the creatures, the hand and the high-detail villagers are laid over all of it in black,
 	// after the land is drawn
 	// The coarse land, drawn from its pages, takes none
-	if (u_groundShadowBlock.y > 0.0f && v_shadowCoord.w > 0.0f && u_coarsePage.w < 0.5f)
+	if (u_groundShadowBlock.y > 0.0f && v_shadowCoord.w > 0.0f && abs(u_coarsePage.w - 1.0f) > 0.5f)
 	{
 		premultiplied.rgb = premultiplied.rgb * GroundShadowsOnLand(v_world, v_shadowCoord.w);
 	}
