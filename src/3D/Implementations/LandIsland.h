@@ -16,6 +16,7 @@
 #include <memory>
 #include <span>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include <glm/common.hpp>
@@ -129,6 +130,7 @@ public:
 	void SetBlockTexels(size_t block, std::span<const uint16_t> texels) override;
 	void PaintBlocksTexels(std::span<const size_t> blocks, const PaintTexels& paint, WorkerPool& pool) override;
 	[[nodiscard]] std::vector<RepaintedBlock> TakeRepaintedBlocks() override;
+	[[nodiscard]] CoarseRepaints TakeCoarseRepaints() override { return std::exchange(_coarseRepaints, {}); }
 	void GiveDeviceDataAgain() override;
 
 	[[nodiscard]] glm::mat4 GetOrthoView() const override { return _view; }
@@ -157,6 +159,8 @@ private:
 	/// The blocks' triangle sets, each made once and shared by every block drawing the same triangles
 	std::unique_ptr<SharedIndexLists<graphics::IndexBuffer>> _blockTriangles;
 
+	/// The paints of the blocks' textures since the last TakeCoarseRepaints
+	CoarseRepaints _coarseRepaints;
 	/// The blocks whose textures were painted again with no footprints since the footprints last caught up
 	std::vector<RepaintedBlock> _repaintedBlocks;
 	/// With data only, as on the dedicated server, the land keeps the sizes of its maps and textures, and it makes no

@@ -464,6 +464,7 @@ Renderer::~Renderer() noexcept
 	_snowDepth.reset();
 	_paintedSnowTexture.reset();
 	_landCorners.reset();
+	_coarseEdges = {};
 	_plane.reset();
 	_morphStreamLayouts.reset();
 	_handFlowTexture.reset();
@@ -879,6 +880,8 @@ void Renderer::Frame() noexcept
 	const auto frame = bgfx::frame();
 	// The game thread's encoder starts each frame at submit order 0
 	_submitOrder = 0;
+	// Each frame has its own views for the passes of the coarse edges
+	_coarseEdges.passes = 0;
 #if defined(__EMSCRIPTEN__)
 	web::PresentFrame();
 #endif
@@ -912,6 +915,8 @@ void Renderer::Frame() noexcept
 		}
 		// The colours that the world gave the bodies are written again from their places
 		_worldBodyColoursKept.reset();
+		// A restore of the device loses the edges of the blocks' coarse textures: every block paints them again
+		_coarseEdges.lost = true;
 		// The graphics device keeps no copy of the textures, the vertices and the triangles of the land's blocks: the
 		// land gives them again, and then the footprints paint the textures
 		if (Locator::terrainSystem::has_value())

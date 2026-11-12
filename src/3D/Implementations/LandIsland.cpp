@@ -359,9 +359,11 @@ void LandIsland::Build(const LandData& data)
 		_blockTextures->SetTexelsGivenAgain();
 		PaintBlockTextures(sources);
 		// The footprints are painted into the blocks after
+		_coarseRepaints = {.newLand = true, .blocks = {}};
 		for (size_t i = 0; i < _landBlocks.size(); ++i)
 		{
 			_repaintedBlocks.push_back({.block = i, .cells = std::nullopt});
+			_coarseRepaints.blocks.push_back(i);
 		}
 	}
 	else
@@ -719,6 +721,7 @@ void LandIsland::CommitAltitudeChanges()
 		_blockTextures->UpdateLayerRegion(
 		    static_cast<uint16_t>(i), glm::u16vec2(changed.minimum.y * perCell, changed.minimum.x * perCell),
 		    glm::u16vec2(cellCount.y * perCell, cellCount.x * perCell), rgba.data(), static_cast<uint32_t>(rgba.size()));
+		_coarseRepaints.blocks.push_back(i);
 		// The game paints the whole block again, with its footprints, when the land under it changes height. At the full
 		// resolution the painted cells go with the block, so that its texture without footprints is not painted again in
 		// full. The low resolution has no such cells: the footprints paint the whole block again.
@@ -952,6 +955,7 @@ void LandIsland::SetBlockTexels(size_t block, std::span<const uint16_t> texels)
 	const auto* memory = device.Alloc(static_cast<uint32_t>(block_texture::BlockBytesOf(_textureResolution)));
 	block_texture::ToBlockRgba(texels, device.Bytes(memory));
 	_blockTextures->UpdateLayerFromMemory(static_cast<uint16_t>(block), memory);
+	_coarseRepaints.blocks.push_back(block);
 }
 
 void LandIsland::PaintBlocksTexels(std::span<const size_t> blocks, const PaintTexels& paint, WorkerPool& pool)
@@ -994,6 +998,7 @@ void LandIsland::PaintBlocksTexels(std::span<const size_t> blocks, const PaintTe
 		if (memories[i] != nullptr)
 		{
 			_blockTextures->UpdateLayerFromMemory(static_cast<uint16_t>(blocks[i]), memories[i]);
+			_coarseRepaints.blocks.push_back(blocks[i]);
 		}
 	}
 }
