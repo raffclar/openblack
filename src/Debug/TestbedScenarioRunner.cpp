@@ -145,6 +145,8 @@
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "ECS/WorldObjects.h"
 #include "FileSystem/FileSystemInterface.h"
+#include "Gui/GameInterface.h"
+#include "Hand/HandVisibility.h"
 #include "Help/Spirits.h"
 #include "Input/GameActionMapInterface.h"
 #include "LHScriptX/FeatureScriptCommands.h"
@@ -1331,6 +1333,15 @@ std::optional<double> Runner::ReadCheck(const checks::Check& check) const
 		}
 		const auto* state = registry.TryGet<const ecs::components::LivingReaction>(*creature);
 		return state != nullptr && state->reaction != 0 ? static_cast<double>(state->type) : 0.0;
+	}
+	case checks::Quantity::HandShown:
+	{
+		if (!Locator::cinematicDirectorSystem::has_value())
+		{
+			return std::nullopt;
+		}
+		const bool dialogOpen = Locator::gameInterface::has_value() && Locator::gameInterface::value().IsDialogOpen();
+		return hand_visibility::IsShown(dialogOpen, Locator::cinematicDirectorSystem::value().IsInterfaceActive()) ? 1.0 : 0.0;
 	}
 	}
 	return std::nullopt;

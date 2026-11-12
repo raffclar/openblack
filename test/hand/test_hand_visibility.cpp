@@ -17,28 +17,21 @@ using openblack::hand_visibility::TakesPresses;
 
 TEST(HandVisibility, TheHandIsOutInPlay)
 {
-	static_assert(IsShown(false, true, false));
-	EXPECT_TRUE(IsShown(false, true, false));
+	static_assert(IsShown(false, true));
+	EXPECT_TRUE(IsShown(false, true));
 }
 
 TEST(HandVisibility, ADialogsPointerPutsItAway)
 {
-	EXPECT_FALSE(IsShown(true, true, false));
-	EXPECT_FALSE(IsShown(true, true, true));
+	EXPECT_FALSE(IsShown(true, true));
 }
 
 TEST(HandVisibility, AScriptsCinemaBarsPutItAway)
 {
 	// Put away, it is still and bends no trees, so nothing near where it was moves for it
-	EXPECT_FALSE(IsShown(false, false, false));
-	EXPECT_FALSE(IsShown(true, false, false));
-}
-
-TEST(HandVisibility, InsideTheTempleTheCinemaBarsLeaveItOut)
-{
-	// While the advisors introduce the temple, the player still moves the hand about its rooms
-	EXPECT_TRUE(IsShown(false, false, true));
-	EXPECT_FALSE(IsShown(true, false, true));
+	// The same rule applies inside the temple, while the advisors introduce a room
+	EXPECT_FALSE(IsShown(false, false));
+	EXPECT_FALSE(IsShown(true, false));
 }
 
 TEST(HandVisibility, TheHandTakesPressesInPlay)
