@@ -239,3 +239,20 @@ TEST(GameLifetime, TheWarningComesTenMinutesBeforeTheDeadline)
 	EXPECT_FALSE(game_lifetime::WarningDue(10'000, 10'000 - 601));
 	EXPECT_TRUE(game_lifetime::WarningDue(10'000, 10'000 - 600));
 }
+
+TEST(LobbyGame, TheWaitForTheLoadsGoesAsJson)
+{
+	const game_socket::LoadWait wait {.loading = {"alice", "bob"}, .secondsLeft = 97};
+	const auto parsed = game_socket::Parse(game_socket::ToJson(wait));
+	ASSERT_TRUE(parsed.has_value());
+	ASSERT_TRUE(std::holds_alternative<game_socket::LoadWait>(*parsed));
+	EXPECT_EQ(std::get<game_socket::LoadWait>(*parsed), wait);
+	const auto loaded = game_socket::Parse(game_socket::ToJson(game_socket::Loaded {}));
+	ASSERT_TRUE(loaded.has_value());
+	EXPECT_TRUE(std::holds_alternative<game_socket::Loaded>(*loaded));
+	// The end of the wait has no names
+	const auto end = game_socket::Parse(R"({"type":"game.wait","loading":[],"seconds_left":0})");
+	ASSERT_TRUE(end.has_value());
+	EXPECT_TRUE(std::get<game_socket::LoadWait>(*end).loading.empty());
+	EXPECT_FALSE(game_socket::Parse(R"({"type":"game.wait","loading":[1],"seconds_left":0})").has_value());
+}

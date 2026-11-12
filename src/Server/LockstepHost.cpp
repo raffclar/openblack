@@ -161,6 +161,7 @@ LockstepHost::LockstepHost(WebSocketServerInterface& sockets, CheckTicket checkT
     , _godsToWaitFor(_settings.lobby.has_value()
                          ? game_lifetime::GodsToWaitFor(_settings.lobby->Gods(), _settings.minGods, false)
                          : _settings.minGods)
+    , _createdAt(_clock())
 {
 	_sockets.SetHandlers(ServerSocketHandlers {
 	    .opened = [this](ConnectionId connection) { Opened(connection); },
@@ -262,6 +263,15 @@ void LockstepHost::Text(ConnectionId connection, std::string_view text)
 		if (peer.seat.has_value())
 		{
 			_seats[*peer.seat].ready = ready->ready;
+		}
+	}
+	else if (std::holds_alternative<game_socket::Loaded>(*frame))
+	{
+		if (_started && peer.seat.has_value() && !_seats[*peer.seat].loaded)
+		{
+			_seats[*peer.seat].loaded = true;
+			Log(spdlog::level::info, fmt::format("The player of slot {} loaded the world", *peer.seat));
+			UpdateLoadWait();
 		}
 	}
 	else if (std::holds_alternative<game_socket::Leave>(*frame))
@@ -675,6 +685,16 @@ void LockstepHost::SendKeptTurns(ConnectionId connection, uint32_t from)
 	{
 		SendTo(connection, game_socket::GameStop {.turn = *_stoppedAfter});
 	}
+	SendLoadWait(connection);
+}
+
+void LockstepHost::SendLoadWait(ConnectionId connection)
+{
+	// A player who comes back or joins during the wait for the loads gets the wait, and counts down from the same end
+	if (_loadWait && !_loadingSent.empty())
+	{
+		SendTo(connection, game_socket::LoadWait {.loading = _loadingSent, .secondsLeft = LoadSecondsLeft()});
+	}
 }
 
 std::string LockstepHost::NewWatcher(ConnectionId connection, std::string name, uint8_t number)
@@ -872,6 +892,7 @@ bool LockstepHost::SendWorld(ConnectionId connection)
 	{
 		SendTo(connection, game_socket::GameStop {.turn = *_stoppedAfter});
 	}
+	SendLoadWait(connection);
 	return true;
 }
 
@@ -1197,6 +1218,13 @@ void LockstepHost::Update()
 			CloseSeat(static_cast<uint8_t>(i));
 		}
 	}
+	// A god who left or did not come back no longer holds the wait for the loads. At the end of the time to load, each
+	// god whose player did not load leaves the game.
+	if (_loadWait && now >= _loadWaitEndsAt)
+	{
+		EndLoadWait();
+	}
+	UpdateLoadWait();
 	const bool paused = Paused();
 	if (paused != _pausedBefore)
 	{
@@ -1329,6 +1357,92 @@ void LockstepHost::StartGame()
 		}
 	}
 	Broadcast(start);
+	// The turns of a lobby game wait until each god's player loaded the world (deviation 254)
+	if (_settings.lobby.has_value() && !AllComputerGods())
+	{
+		_loadWait = true;
+		// The time to load counts from the time when the room was made. A start after that time gets the whole time from
+		// the start, so that the players can load.
+		const auto now = _clock();
+		const auto fromCreation = _createdAt + _settings.loadWindowMicroseconds;
+		_loadWaitEndsAt = now < fromCreation ? fromCreation : now + _settings.loadWindowMicroseconds;
+		UpdateLoadWait();
+	}
+}
+
+std::vector<uint8_t> LockstepHost::LoadingSeats() const
+{
+	std::vector<uint8_t> loading;
+	if (!_loadWait)
+	{
+		return loading;
+	}
+	for (size_t i = 0; i < _seats.size(); ++i)
+	{
+		const auto& seat = _seats[i];
+		if ((seat.state == SeatState::Taken || seat.state == SeatState::Away) && !seat.loaded)
+		{
+			loading.push_back(static_cast<uint8_t>(i));
+		}
+	}
+	return loading;
+}
+
+uint32_t LockstepHost::LoadSecondsLeft() const
+{
+	if (!_loadWait)
+	{
+		return 0;
+	}
+	const auto left = std::max<int64_t>(_loadWaitEndsAt - _clock(), 0);
+	return static_cast<uint32_t>((left + 999'999) / 1'000'000);
+}
+
+void LockstepHost::UpdateLoadWait()
+{
+	if (!_loadWait)
+	{
+		return;
+	}
+	std::vector<std::string> names;
+	for (const auto seat : LoadingSeats())
+	{
+		names.push_back(_seats[seat].name);
+	}
+	if (names.empty())
+	{
+		_loadWait = false;
+		Log(spdlog::level::info, "Each god's player loaded the world: the turns of the game start");
+	}
+	else if (names != _loadingSent)
+	{
+		Log(spdlog::level::info, fmt::format("The turns wait for {} players to load the world", names.size()));
+	}
+	if (names != _loadingSent || names.empty())
+	{
+		_loadingSent = names;
+		Broadcast(game_socket::LoadWait {.loading = std::move(names), .secondsLeft = LoadSecondsLeft()});
+	}
+}
+
+void LockstepHost::EndLoadWait()
+{
+	for (const auto seat : LoadingSeats())
+	{
+		Log(spdlog::level::info,
+		    fmt::format("The player of slot {} did not load the world in time: the god leaves the game", seat));
+		const auto connection = _seats[seat].connection;
+		if (const auto peer = connection.has_value() ? _peers.find(*connection) : _peers.end(); peer != _peers.end())
+		{
+			peer->second.seat.reset();
+		}
+		CloseSeat(seat);
+		if (connection.has_value())
+		{
+			Refuse(*connection, "load");
+		}
+	}
+	UpdateLoadWait();
 }
 
 std::vector<game_socket::God> LockstepHost::Gods() const
@@ -1501,6 +1615,12 @@ bool LockstepHost::HasTurn(uint32_t turn) const
 	if (AllComputerGods())
 	{
 		return _started && _observersJoined && !_stoppedAfter.has_value();
+	}
+	// The turns of a lobby game wait for the loads of the gods' players. A god who leaves in this time leaves in the
+	// first turn after the wait.
+	if (_loadWait)
+	{
+		return false;
 	}
 	return _started && !_stoppedAfter.has_value() && (AnyGodConnected() || !_leaving.empty());
 }

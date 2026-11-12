@@ -27,6 +27,7 @@
 
 #include "Commands/TurnCodec.h"
 #include "Commands/TurnCommandSource.h"
+#include "Server/GameLifetime.h"
 #include "Server/LobbyGame.h"
 #include "Server/ServerSnapshots.h"
 #include "Server/SessionHash.h"
@@ -88,6 +89,9 @@ struct HostSettings
 	/// The SHA-256 of the server's file of the land, as 64 hex digits in lower case. The room refuses a client that gives
 	/// another SHA-256 with "map". Empty: no check at the join.
 	std::string mapSha256;
+	/// A lobby game: the time that the gods' players have to load the world (deviation 254). The time counts from the
+	/// creation of the room (the server listens). When the game starts after that time, it counts from the start.
+	int64_t loadWindowMicroseconds {game_lifetime::k_DefaultJoinWindowSeconds * 1'000'000};
 };
 
 /// The claims of a player who joins a room on the local network by the name of the profile, as a god. None when the name
@@ -156,6 +160,8 @@ public:
 		std::string account;
 		std::string name;
 		bool ready {false};
+		/// The player's computer loaded the world of the started game (game.loaded)
+		bool loaded {false};
 		int64_t awaySince {0};
 		Compares compares;
 		uint32_t resumes {0};
@@ -256,6 +262,15 @@ public:
 	[[nodiscard]] bool GameOver() const;
 	/// The time to join of the lobby's members ended: the room then starts with the fewest gods of the room
 	void EndJoinWindow();
+	/// A lobby game: true while the turns wait for the players of the gods to load the world (deviation 254)
+	[[nodiscard]] bool WaitsForLoads() const { return _loadWait; }
+	/// The slots of the gods whose players did not load the world yet, while the turns wait for them
+	[[nodiscard]] std::vector<uint8_t> LoadingSeats() const;
+	/// The whole seconds until the wait for the loads ends, rounded up. 0 when the turns do not wait.
+	[[nodiscard]] uint32_t LoadSecondsLeft() const;
+	/// The time to load ended: each god whose player did not load the world leaves the game, and the turns start with
+	/// the other gods
+	void EndLoadWait();
 	/// The gods with a player in the room
 	[[nodiscard]] size_t GodsInRoom() const;
 	/// The gods for which the room waits before the start
@@ -394,6 +409,18 @@ private:
 	/// The gods for which the room waits before the start: every god of the lobby until the time to join ends, then the
 	/// fewest gods of the room
 	uint32_t _godsToWaitFor {1};
+	/// A lobby game that started waits for the loads of the gods' players. The wait ends one time and does not come back.
+	bool _loadWait {false};
+	/// The names in the last game.wait that the server sent
+	std::vector<std::string> _loadingSent;
+	/// The time when the room was made, by the clock of the room
+	int64_t _createdAt {0};
+	/// The time when the wait for the loads ends, by the clock of the room
+	int64_t _loadWaitEndsAt {0};
+	/// Sends game.wait when the list of the players who load changed, and ends the wait when the list is empty
+	void UpdateLoadWait();
+	/// Sends the wait for the loads to one connection, while the turns wait
+	void SendLoadWait(ConnectionId connection);
 	enum class StartStep : uint8_t
 	{
 		None,
