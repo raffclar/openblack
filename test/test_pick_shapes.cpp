@@ -87,3 +87,17 @@ TEST(PickShapes, ATempleNotWhollyBuiltTakesTheHitOnlyOnItsBuiltPart)
 	// A whole temple takes the hit anywhere on its model
 	EXPECT_TRUE(pick_shapes::HitsBuiltPart(true, 1.0f, 40.0f, 20.0f, 5.0f, 2.0f));
 }
+
+TEST(PickShapes, TheCursorFindsNoThingThatAHandHolds)
+{
+	// A thing on the land takes the cursor
+	EXPECT_TRUE(pick_shapes::HeldThingTakesCursor(false, false));
+	// The hand of a god draws its thing without the cursor
+	EXPECT_FALSE(pick_shapes::HeldThingTakesCursor(true, false));
+	// A creature draws the thing in its hand without the cursor, so the hand of a god cannot press on it
+	EXPECT_FALSE(pick_shapes::HeldThingTakesCursor(false, true));
+	EXPECT_FALSE(pick_shapes::HeldThingTakesCursor(true, true));
+}
+
+// The rule is also known when the game compiles
+static_assert(!pick_shapes::HeldThingTakesCursor(false, true));

@@ -1293,6 +1293,29 @@ void testbed_scenarios::AddObjects(std::vector<Scenario>& all)
 	    .hand = offering,
 	});
 
+	// The tiger holds the food, and the pointer moves onto the food in its hand. The Action button goes down there, goes
+	// up a second later, and then the tiger eats what it holds.
+	const std::vector<Command> reachForHeld {
+	    OnObject(Kind::PickUp, 0, 0, 1.0f),
+	    {.kind = Kind::PointerOnObject, .delaySeconds = 1.0f, .waitUntilFree = true, .object = 0},
+	    {.kind = Kind::PointerPress, .delaySeconds = 0.3f, .value = 3},
+	    {.kind = Kind::PointerRelease, .delaySeconds = 1.0f, .value = 3},
+	    Act(Kind::EatHeld, 0, 1.0f, true)};
+	all.push_back({
+	    .id = "creature.hand_presses_on_held_food",
+	    .name = "The hand presses on food that a creature holds",
+	    .facet = Facet::Objects,
+	    .description = "A hungry tiger picks up a pile of food and holds it. The pointer moves onto the food in the "
+	                   "tiger's hand, and the Action button goes down and up. Then the tiger eats what it holds.",
+	    .expected = "The cursor does not find the food in the tiger's hand, so the player's hand does not take it. The "
+	                "food stays in the tiger's hand, and only the tiger holds it. The tiger eats the food.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Follow, .distance = 1.3f},
+	    .creatures = {hungry},
+	    .objects = {{.type = MobileObjectInfo::MagicFood, .offset = {0.0f, -k_Reach}}},
+	    .commands = reachForHeld,
+	});
+
 	all.push_back({
 	    .id = "creature.give_animal_kept_at_home",
 	    .name = "Giving an animal from afar to a creature kept at home",

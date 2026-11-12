@@ -55,6 +55,7 @@
 #include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureNeeds.h"
+#include "ECS/Components/CreatureObjectAction.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/MagicFireBall.h"
 #include "ECS/Components/Mesh.h"
@@ -713,14 +714,22 @@ std::optional<glm::ivec2> Runner::ObjectOnScreen(size_t object, float height, gl
 		}
 		entity = pile <= pit->woodPiles.size() ? pit->woodPiles.at(pile - 1) : pit->foodPile;
 	}
-	const auto* transform = Locator::entitiesRegistry::value().TryGet<const ecs::components::Transform>(*entity);
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* transform = registry.TryGet<const ecs::components::Transform>(*entity);
 	if (transform == nullptr)
 	{
 		return std::nullopt;
 	}
+	// A thing in a creature's hand is where the last frame drew it in the hand, not where its place stays
+	auto position = transform->position;
+	if (const auto* held = registry.TryGet<const ecs::components::HeldByCreature>(*entity);
+	    held != nullptr && held->drawn.has_value())
+	{
+		position = held->drawn->position;
+	}
 	glm::vec3 screen;
-	if (!Locator::camera::value().ProjectWorldToScreen(transform->position + glm::vec3(0.0f, height, 0.0f),
-	                                                   {0.0f, 0.0f, size.x, size.y}, screen))
+	if (!Locator::camera::value().ProjectWorldToScreen(position + glm::vec3(0.0f, height, 0.0f), {0.0f, 0.0f, size.x, size.y},
+	                                                   screen))
 	{
 		return std::nullopt;
 	}

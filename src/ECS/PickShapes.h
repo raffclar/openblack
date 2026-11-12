@@ -73,4 +73,12 @@ constexpr float k_LeashPostBallRadius = 1.0f;
 /// share. Other buildings take the hit on all of their model, also above their built part.
 [[nodiscard]] bool HitsBuiltPart(bool temple, float built, float hitHeight, float baseHeight, float halfHeight, float scale);
 
+/// Whether the cursor can find a thing that the frame draws. The hand of a god and the hand of a creature draw the thing
+/// that they hold, but they do not give it to the cursor. Thus the hand of a god cannot take a thing that a creature
+/// holds, and one thing has one holder.
+[[nodiscard]] constexpr bool HeldThingTakesCursor(bool inGodsHand, bool inCreaturesHand) noexcept
+{
+	return !inGodsHand && !inCreaturesHand;
+}
+
 } // namespace openblack::ecs::pick_shapes
