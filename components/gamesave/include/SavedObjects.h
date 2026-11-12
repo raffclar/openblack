@@ -204,10 +204,23 @@ struct LeashStatusObject
 	bool operator==(const LeashStatusObject&) const = default;
 };
 
+/// The record of an object of another class, such as the spell that a creature holds, as the file has it after the
+/// reference. A stream writes these bytes again only at the same place: with the same objects and running sum before
+/// them. At another place, the object has no record in the stream.
+struct OtherObject
+{
+	/// The objects and the running sum after the reference, then after the record
+	StreamStart start;
+	StreamStart after;
+	std::vector<uint8_t> bytes;
+
+	bool operator==(const OtherObject&) const = default;
+};
+
 /// The record of an object of a class that openblack reads and writes in the game's layout
 struct SavedObject
 {
-	std::variant<CreatureObject, LeashStatusObject> value;
+	std::variant<CreatureObject, LeashStatusObject, OtherObject> value;
 
 	bool operator==(const SavedObject&) const = default;
 };
@@ -220,6 +233,8 @@ void Write(StreamWriter& writer, const SavedObject& object);
 
 void Write(StreamWriter& writer, const CreatureObject& creature);
 void Write(StreamWriter& writer, const LeashStatusObject& leash);
+/// Writes the bytes of the record, or stops the writer when it is not at the place of the record
+void Write(StreamWriter& writer, const OtherObject& other);
 
 /// Calls the function for each reference of the creature's record, in the order that the game writes them. The
 /// function does not go into the records that the references hold.

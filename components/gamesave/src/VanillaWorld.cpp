@@ -195,6 +195,9 @@ public:
 	/// A record: the type, a word, the running sum, a word and the flags, then the values of the type
 	uint32_t Record(size_t at);
 
+	/// The objects that the stream has read, and the running sum, where the reader is now
+	[[nodiscard]] StreamStart Now() const { return {.objects = _objects, .checksum = _sum}; }
+
 	[[nodiscard]] std::vector<VanillaRecord> TakeRecords() { return std::move(_records); }
 	[[nodiscard]] std::vector<uint32_t> TakeNumbers() { return std::move(_numbers); }
 
@@ -1855,6 +1858,21 @@ std::optional<VanillaWorld> ReadVanillaRecords(std::span<const uint8_t> bytes, S
 	}
 	return VanillaWorld(std::vector<uint8_t>(bytes.begin(), bytes.end()), VanillaFraming {}, reader.TakeRecords(),
 	                    reader.TakeNumbers());
+}
+
+std::optional<VanillaRecordEnd> ReadVanillaRecordEnd(std::span<const uint8_t> bytes, size_t at, StreamStart start)
+{
+	if (at > bytes.size())
+	{
+		return std::nullopt;
+	}
+	WorldReader reader(bytes, at, start);
+	const auto number = reader.Ref();
+	if (reader.Failed() || number != start.objects + 1)
+	{
+		return std::nullopt;
+	}
+	return VanillaRecordEnd {.end = reader.Position(), .after = reader.Now()};
 }
 
 bool VillagerStateKeepsValues(uint8_t state)

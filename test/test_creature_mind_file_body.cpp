@@ -269,7 +269,7 @@ TEST(CreatureMindFileBody, TheFileKeepsTheMagicMushroomsThatItAte)
 	creaturemind::MindFileData written;
 	written.counters = {9, 9, 9, 9, 9, 9, 9};
 	ToMindFile(*body, written);
-	EXPECT_EQ(written.counters, (std::vector<uint32_t> {9, 9, 9, 9, 9, 9, 250}));
+	EXPECT_EQ(written.counters, (std::vector<uint32_t> {1, 2, 3, 4, 5, 6, 250}));
 
 	creaturemind::MindFileData older;
 	older.speciesRow = 2;
@@ -277,4 +277,33 @@ TEST(CreatureMindFileBody, TheFileKeepsTheMagicMushroomsThatItAte)
 	const auto olderBody = FromMindFile(older);
 	ASSERT_TRUE(olderBody.has_value());
 	EXPECT_FALSE(olderBody->magicMushroomsEaten.has_value());
+}
+
+// The first six counters of a file are the counts of the creature's life: the people, animals and creatures that it
+// killed, the fights that it started and won, and its poos. The body takes them from the file and writes them back.
+TEST(CreatureMindFileBody, TheFileKeepsTheCountsOfTheLifeOfTheCreature)
+{
+	creaturemind::MindFileData file;
+	file.speciesRow = 2;
+	file.counters = {11, 12, 13, 14, 15, 16};
+	const auto body = FromMindFile(file);
+	ASSERT_TRUE(body.has_value());
+	ASSERT_TRUE(body->counts.has_value());
+	EXPECT_EQ(*body->counts, (LifeCounts {.peopleKilled = 11,
+	                                      .animalsKilled = 12,
+	                                      .creaturesKilled = 13,
+	                                      .battlesFought = 14,
+	                                      .battlesWon = 15,
+	                                      .poos = 16}));
+
+	creaturemind::MindFileData written;
+	written.counters = {0, 0, 0, 0, 0, 0, 7};
+	ToMindFile(*body, written);
+	EXPECT_EQ(written.counters, (std::vector<uint32_t> {11, 12, 13, 14, 15, 16, 7}));
+
+	creaturemind::MindFileData none;
+	none.speciesRow = 2;
+	const auto noCounts = FromMindFile(none);
+	ASSERT_TRUE(noCounts.has_value());
+	EXPECT_FALSE(noCounts->counts.has_value());
 }

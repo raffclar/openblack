@@ -43,6 +43,22 @@ void StreamWriter::MarkForeign(ObjectKey key)
 	_foreign.push_back({.number = _objects, .key = key});
 }
 
+bool StreamWriter::PutRecorded(StreamStart start, std::span<const uint8_t> bytes, StreamStart after)
+{
+	if (_objects != start.objects || _checksum != start.checksum || after.objects < start.objects)
+	{
+		return false;
+	}
+	_bytes.insert(_bytes.end(), bytes.begin(), bytes.end());
+	for (uint32_t number = start.objects + 1; number <= after.objects; ++number)
+	{
+		_numbers.emplace(NumberKey(number), number);
+	}
+	_objects = after.objects;
+	_checksum = after.checksum;
+	return true;
+}
+
 std::optional<uint32_t> StreamWriter::NumberOfKey(ObjectKey key) const
 {
 	if (const auto found = _numbers.find(key); found != _numbers.end())

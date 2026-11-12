@@ -41,6 +41,8 @@ constexpr size_t k_RunSpeedNeed = 5;
 /// The place of the count of magic mushrooms eaten in the counters of the file. A file older than version 17 does not
 /// have this counter.
 constexpr size_t k_MushroomsCounter = 6;
+/// The counts of the creature's life are the first six counters of the file, in this order
+constexpr size_t k_LifeCounters = 6;
 } // namespace
 
 std::optional<CreatureType> creature_mind_body::SpeciesFromRow(uint32_t row)
@@ -140,6 +142,16 @@ std::optional<Body> creature_mind_body::FromMindFile(const creaturemind::MindFil
 	{
 		body.magicMushroomsEaten = file.counters.at(k_MushroomsCounter);
 	}
+	if (file.counters.size() >= k_LifeCounters)
+	{
+		const auto& c = file.counters;
+		body.counts = LifeCounts {.peopleKilled = c[0],
+		                          .animalsKilled = c[1],
+		                          .creaturesKilled = c[2],
+		                          .battlesFought = c[3],
+		                          .battlesWon = c[4],
+		                          .poos = c[5]};
+	}
 	return body;
 }
 
@@ -191,6 +203,13 @@ void creature_mind_body::ToMindFile(const Body& body, creaturemind::MindFileData
 	if (body.magicMushroomsEaten.has_value() && file.counters.size() > k_MushroomsCounter)
 	{
 		file.counters.at(k_MushroomsCounter) = *body.magicMushroomsEaten;
+	}
+	if (body.counts.has_value() && file.counters.size() >= k_LifeCounters)
+	{
+		const auto& counts = *body.counts;
+		const std::array<uint32_t, k_LifeCounters> words {counts.peopleKilled,  counts.animalsKilled, counts.creaturesKilled,
+		                                                  counts.battlesFought, counts.battlesWon,    counts.poos};
+		std::ranges::copy(words, file.counters.begin());
 	}
 	physique.wounds.clear();
 	std::ranges::transform(body.wounds, std::back_inserter(physique.wounds), creature_marks::WoundToWord);

@@ -29,16 +29,31 @@ struct PhysiqueFileData;
 
 /// The creature a mind file describes besides its mind: a saved creature carries its species, name, alignment,
 /// strength, fatness, size, age, energy, tiredness, tattoos, the marks on its skin and the magic mushrooms it ate. So
-/// the game can make the creature again from the file alone. Older versions do not have the size, alignment or
-/// tattoos, which then stay as the species starts them.
+/// the game can make the creature again from the file alone. Older versions do not have the size or tattoos, which
+/// then stay as the species starts them.
 namespace openblack::creature_mind_body
 {
+
+/// What a creature counted of its life: the people, animals and creatures that it killed, the fights that it started and
+/// won, and its poos. The mind file keeps these as its first six counters.
+struct LifeCounts
+{
+	uint32_t peopleKilled {0};
+	uint32_t animalsKilled {0};
+	uint32_t creaturesKilled {0};
+	uint32_t battlesFought {0};
+	uint32_t battlesWon {0};
+	uint32_t poos {0};
+
+	bool operator==(const LifeCounts&) const = default;
+};
 
 struct Body
 {
 	CreatureType species {CreatureType::Unknown};
 	std::u16string name;
-	/// -1 (evil) to 1 (good)
+	/// -1 (evil) to 1 (good). A file older than version 11 does not have it, and a body that loads such a file gets
+	/// the alignment 0.
 	std::optional<float> alignment;
 	/// 0 to 1
 	float strength {0.5f};
@@ -62,6 +77,9 @@ struct Body
 	/// The count of magic mushrooms that it ate, which makes it want to get high and makes it mentally ill. A file
 	/// older than version 17 does not have it, and a body that loads such a file keeps its own count.
 	std::optional<uint32_t> magicMushroomsEaten;
+	/// What it counted of its life. A file with fewer than six counters does not have them, and a body that loads such a
+	/// file keeps its own counts.
+	std::optional<LifeCounts> counts;
 };
 
 /// The species of a row of the game's creature tables, which start with the Giant Ape

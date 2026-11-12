@@ -490,6 +490,126 @@ TEST(SaveCreatureObject, AnObjectOfAClassThatOpenblackDoesNotKnowStopsTheRead)
 	EXPECT_EQ(reader.UnknownType(), 0x27u);
 }
 
+/// The record of a new spell of the food or wood class, as the game writes it, after the reference to it
+std::vector<uint8_t> SpellRecord(StreamStart start, uint32_t number)
+{
+	constexpr uint32_t k_SpellResourceType = 0x0A;
+	StreamWriter writer(start);
+	EXPECT_TRUE(writer.PutReference(NumberKey(number)));
+	writer.Put(k_SpellResourceType);
+	writer.Put(uint32_t {0});
+	writer.PutChecksum();
+	writer.Put(uint32_t {0});
+	writer.Put(uint8_t {0});
+	const std::array<uint8_t, 12> point {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12};
+	writer.Put(point);
+	writer.Put(uint16_t {0});
+	// Two marks, each before a reference to no object
+	for (const auto mark : {0x12C859u, 0x2A1C9Au})
+	{
+		writer.Put(mark);
+		writer.Put(uint32_t {0});
+	}
+	for (int i = 0; i < 3; ++i)
+	{
+		writer.Put(point);
+	}
+	for (int i = 0; i < 6; ++i)
+	{
+		writer.Put(uint32_t {7});
+	}
+	writer.Put(std::array<uint8_t, 60> {});
+	// Its time, then two bytes, then four references to no object
+	writer.Put(-1.0f);
+	writer.Put(uint8_t {1});
+	writer.Put(uint8_t {0});
+	for (int i = 0; i < 4; ++i)
+	{
+		writer.Put(uint32_t {0});
+	}
+	for (int i = 0; i < 4; ++i)
+	{
+		writer.Put(uint32_t {3});
+	}
+	writer.Put(point);
+	writer.Put(0.5f);
+	writer.Put(0.25f);
+	// The byte of the food or wood class
+	writer.Put(uint8_t {1});
+	return writer.Take();
+}
+
+// A creature that holds a spell that the stream did not write before has the spell's record inside its own record. The
+// read takes the spell's record with the layout of its class and keeps its bytes. A write at the same place gives the
+// same bytes; a write at another place gives the spell no record.
+TEST(SaveCreatureObject, ACreatureWithTheRecordOfItsHeldSpellInsideReadsToItsEnd)
+{
+	// The bytes of a creature whose first spell visual is a new leash, then the leash's record changed to a spell's
+	auto creature = AFullCreature();
+	creature.creature.spellVisuals[0] = NewObject(102, LeashStatusObject {});
+	StreamWriter writer(k_After100);
+	Write(writer, NewObject(101, creature));
+	const auto bytes = writer.Take();
+	size_t leashAt = 0;
+	for (size_t at = 0; at + 8 <= bytes.size(); ++at)
+	{
+		if (At<uint32_t>(bytes, at) == 102u && At<uint32_t>(bytes, at + 4) == k_LeashStatusType)
+		{
+			leashAt = at;
+			break;
+		}
+	}
+	ASSERT_NE(leashAt, 0u);
+	const auto start = StartOfRecordAt(bytes, leashAt);
+	ASSERT_TRUE(start.has_value());
+	StreamReader leashReader(bytes, *start, leashAt);
+	ObjectRef leash;
+	ASSERT_TRUE(Read(leashReader, leash));
+	const auto spell = SpellRecord(*start, 102);
+	std::vector<uint8_t> file(bytes.begin(), bytes.begin() + static_cast<std::ptrdiff_t>(leashAt));
+	file.insert(file.end(), spell.begin(), spell.end());
+	file.insert(file.end(), bytes.begin() + static_cast<std::ptrdiff_t>(leashReader.Position()), bytes.end());
+
+	StreamReader reader(file, k_After100);
+	ObjectRef read;
+	ASSERT_TRUE(Read(reader, read));
+	EXPECT_EQ(reader.Position(), file.size());
+	EXPECT_EQ(reader.Objects(), 102u);
+	ASSERT_NE(read.record, nullptr);
+	const auto& held = std::get<CreatureObject>(read.record->value).creature.spellVisuals[0];
+	EXPECT_EQ(held.key, NumberKey(102));
+	ASSERT_NE(held.record, nullptr);
+	const auto* other = std::get_if<OtherObject>(&held.record->value);
+	ASSERT_NE(other, nullptr);
+	EXPECT_EQ(other->bytes.size(), spell.size() - sizeof(uint32_t));
+	EXPECT_EQ(other->after.objects, 102u);
+	auto expected = creature;
+	expected.creature.spellVisuals[0] = held;
+	EXPECT_EQ(std::get<CreatureObject>(read.record->value), expected);
+
+	StreamWriter again(k_After100);
+	Write(again, read);
+	EXPECT_FALSE(again.Failed());
+	EXPECT_EQ(again.Bytes(), file);
+	StreamWriter elsewhere({.objects = 100, .checksum = 7});
+	Write(elsewhere, read);
+	EXPECT_FALSE(elsewhere.Failed());
+	ASSERT_EQ(elsewhere.Foreign().size(), 1u);
+	EXPECT_EQ(elsewhere.Foreign()[0].key, NumberKey(102));
+
+	// The search of a file finds the creature, and its record writes back the same
+	const auto found = FindCreatures(file);
+	ASSERT_EQ(found.size(), 1u);
+	EXPECT_EQ(found[0].end, file.size());
+	EXPECT_EQ(found[0].objectsAfter, 102u);
+	EXPECT_EQ(Replace(file, found[0], NewObject(101, found[0].object)), file);
+
+	// A spell record that the bytes cut stops the read
+	file.resize(leashAt + spell.size() - 1);
+	StreamReader cut(file, k_After100);
+	EXPECT_FALSE(Read(cut, read));
+}
+
 TEST(SaveCreatureObject, ABodyInThePhysicsWritesItsMatrixAndItsSpeeds)
 {
 	auto creature = AFullCreature();
