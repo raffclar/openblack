@@ -2,6 +2,7 @@ $input v_position, v_texcoord0, v_normal, v_color0, v_haze, v_snow, v_snowLight
 
 #include <bgfx_shader.sh>
 
+#include "alpha_test.sh"
 #include "snow_object.sh"
 
 // The creatures' and the hand's moving shadows' data (see ground_shadow.sh)
@@ -101,7 +102,7 @@ void main()
 	// A see-through primitive drops the fragments whose alpha is below the reference of its mode, if its mode has an
 	// alpha test. The reference of the blended chroma mode becomes lower with the instance's alpha.
 	float seeThroughTest = floor(u_skyAlphaThreshold.z + 0.5f);
-	bool belowThreshold = diffuseTex.a <= alphaThreshold;
+	bool belowThreshold = FailsAlphaTest(diffuseTex.a, alphaThreshold);
 	if (seeThroughTest > 0.5f)
 	{
 		float reference = seeThroughTest > 1.5f ? u_skyAlphaThreshold.w : 0.0f;

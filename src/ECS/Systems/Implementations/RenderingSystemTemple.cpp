@@ -262,6 +262,7 @@ void RenderingSystemTemple::PrepareDrawDescs(bool drawBoundingBox)
 		if (meshId != Hand::k_MeshId)
 		{
 			drawDesc->second.materialBlending = true;
+			drawDesc->second.materialCulling = true;
 			const auto mesh = Locator::resources::value().GetMeshes().Handle(meshId);
 			bool allBlended = true;
 			for (const auto& subMesh : mesh->GetSubMeshes())
