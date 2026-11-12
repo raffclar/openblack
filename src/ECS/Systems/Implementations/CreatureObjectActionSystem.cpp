@@ -995,9 +995,16 @@ bool CreatureObjectActionSystem::Start(entt::entity creature, CreatureObjectActi
 		{
 			Fail(action, "it has nothing in its hand");
 		}
-		// A throw needs a thing that the creature carries. The thing that a throw kept in the hand is not carried.
-		else if (action.kind == Kind::Throw && !held->carried)
+		// A throw and an eat need a thing that the creature carries. The thing that a throw kept in the hand is not
+		// carried. The game reads the carried thing with no check to eat it, and fails with an invalid read. Here the eat
+		// fails and the game continues (vanilla-bugs 2065).
+		else if (creature_object_actions::NeedsCarried(action.kind) && !held->carried)
 		{
+			if (action.kind == Kind::Eat)
+			{
+				SPDLOG_LOGGER_WARN(spdlog::get("game"), "Creature {} eats {}, which it does not carry: the game fails here",
+				                   entt::to_integral(creature), entt::to_integral(held->object));
+			}
 			Fail(action, "it carries nothing");
 		}
 		break;

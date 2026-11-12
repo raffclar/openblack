@@ -855,6 +855,9 @@ struct Senses
 	std::optional<uint32_t> held;
 	/// Whether it holds the thing in its left hand, as it reached for the thing on the left side
 	bool heldLeft {false};
+	/// Whether the creature carries the thing in its hand. A throw that ended before the hand let go keeps the thing in
+	/// the hand, but the creature does not carry it.
+	bool heldCarried {true};
 	/// Whether the object a step waits for is on the map, none when the object is gone
 	std::optional<bool> objectInMap;
 	/// Whether the object that a step waits to be still moves

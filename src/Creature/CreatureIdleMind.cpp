@@ -1837,6 +1837,13 @@ Commands TurnOfThought(IdleMind& mind, const Senses& senses, const Random& rando
 			commands.face = PullFace(mind, step.face, senses, random, gameRandom);
 			mind.facePulled = IdleMind::StepRef {.serial = mind.serial, .step = mind.step};
 		}
+		// A toss of a thing that the hand holds but that the creature does not carry fails at once, also while the body
+		// is busy. A throw and an eat of such a thing wait for the body first.
+		if (step.kind == Step::Kind::Object && step.order.kind == ObjectOrder::Kind::Discard && !senses.heldCarried)
+		{
+			GiveUpAgenda(mind);
+			return commands;
+		}
 		// A swap of minds waits until no spell is on either creature, bringing those on itself to their end meanwhile
 		if (step.kind == Step::Kind::SwapMind && !senses.swap.spellsGone)
 		{

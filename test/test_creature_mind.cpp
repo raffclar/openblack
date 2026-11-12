@@ -917,6 +917,41 @@ TEST(CreatureIdleMind, AStepThatNeedsAThingInTheHandStartsWhenTheHandHoldsAThing
 	EXPECT_FALSE(mind.gaveUp);
 }
 
+// A throw that ended before the hand let go keeps the thing in the hand, but the creature does not carry it. A toss of
+// it stops the agenda at once, also while the body is busy. A throw or an eat of it waits for the body first.
+TEST(CreatureIdleMind, AStepOnAThingInTheHandThatTheCreatureDoesNotCarry)
+{
+	using creature_mind::ObjectOrder;
+	using creature_mind::Step;
+	auto senses = FakeBody {}.Senses();
+	senses.held = 4u;
+	senses.heldCarried = false;
+	senses.bodyBusy = true;
+	{
+		creature_mind::IdleMind mind;
+		creature_mind::Plan(mind, creature_mind::Activity::Told,
+		                    {{.kind = Step::Kind::Object, .order = {.kind = ObjectOrder::Kind::Discard}},
+		                     {.kind = Step::Kind::Wait, .seconds = 1.0f}});
+		const auto commands = creature_mind::Think(mind, senses, Always(0));
+		EXPECT_FALSE(commands.object.has_value());
+		EXPECT_TRUE(mind.gaveUp);
+		EXPECT_GE(mind.step, mind.agenda.size());
+	}
+	for (const auto kind : {ObjectOrder::Kind::Throw, ObjectOrder::Kind::Eat})
+	{
+		creature_mind::IdleMind mind;
+		creature_mind::Plan(mind, creature_mind::Activity::Told, {{.kind = Step::Kind::Object, .order = {.kind = kind}}});
+		auto busy = senses;
+		auto commands = creature_mind::Think(mind, busy, Always(0));
+		EXPECT_FALSE(commands.object.has_value());
+		EXPECT_FALSE(mind.gaveUp);
+		busy.bodyBusy = false;
+		commands = creature_mind::Think(mind, busy, Always(0));
+		ASSERT_TRUE(commands.object.has_value());
+		EXPECT_EQ(commands.object->kind, kind);
+	}
+}
+
 TEST(CreatureIdleMind, AWalkToAPointGivesUpWhereTheCreatureCannotStandUnlessItIsALeashOrScriptWalk)
 {
 	// A walk of an agenda stops the agenda at a point where the creature cannot stand

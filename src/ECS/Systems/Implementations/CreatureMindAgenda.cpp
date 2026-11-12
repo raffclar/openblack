@@ -1193,6 +1193,7 @@ void CreatureMindSystem::AgendaTurn(entt::entity entity)
 		                    Locator::creatureObjectActionSystem::value().HandsTouched(entity),
 		    .held = inHand.has_value() ? std::optional(entt::to_integral(*inHand)) : std::nullopt,
 		    .heldLeft = HeldLeft(registry, entity),
+		    .heldCarried = !inHand.has_value() || ecs::creature_carried::CarriedBy(registry, entity).has_value(),
 		    .objectInMap = WaitedForInMap(registry, mind.idle),
 		    .objectMoving = WaitedForMoving(registry, mind.idle),
 		    .objectBusy = WaitedForBusy(registry, mind.idle),

@@ -480,6 +480,7 @@ void CreatureFightSystem::KnockedOutTurn(entt::entity entity)
 			else
 			{
 				getUp();
+				knockedOut.steps = CreatureKnockedOut::Steps::EndNextTurn;
 			}
 		}
 		break;
@@ -520,6 +521,11 @@ void CreatureFightSystem::KnockedOutTurn(entt::entity entity)
 		break;
 	}
 	case CreatureKnockedOut::Stage::GettingUp:
+		// The steps with no rest end on the turn after the wait for the spells, also while the body gets up
+		if (knockedOut.steps == CreatureKnockedOut::Steps::EndNextTurn)
+		{
+			knockedOut.steps = CreatureKnockedOut::Steps::Over;
+		}
 		if (!creature_layers::IsPlaying(animation.body))
 		{
 			if (needs != nullptr)
