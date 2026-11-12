@@ -55,6 +55,9 @@ struct Body
 	/// -1 (evil) to 1 (good). A file older than version 11 does not have it, and a body that loads such a file gets
 	/// the alignment 0.
 	std::optional<float> alignment;
+	/// The alignment as the file keeps it, not held to -1..1. A load while a nice or nasty spell is on puts this
+	/// value into the spell. The spell puts it back at its end.
+	std::optional<float> fileAlignment;
 	/// 0 to 1
 	float strength {0.5f};
 	std::optional<float> size;
