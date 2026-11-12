@@ -128,3 +128,15 @@ TEST(EscapeKeyRules, AsksNothingOnceTheGameIsOverInAScriptsCutScene)
 	EXPECT_EQ(response.outcome, Outcome::Nothing);
 	EXPECT_FALSE(response.stopHelpScripts);
 }
+
+TEST(EscapeKeyRules, TheWaitStartsAgainWhenTheMainMenuStopsTakingTheInput)
+{
+	// The menu closes, or another page or a question shows over the main menu
+	EXPECT_TRUE(MainMenuLeft({.wasActive = true, .active = false}));
+	// The main menu stays, or it comes back
+	EXPECT_FALSE(MainMenuLeft({.wasActive = true, .active = true}));
+	EXPECT_FALSE(MainMenuLeft({.wasActive = false, .active = true}));
+	EXPECT_FALSE(MainMenuLeft({}));
+	// The tab of the main menu closes all the boxes and shows the main menu again
+	EXPECT_TRUE(MainMenuLeft({.wasActive = true, .active = true, .shownAgain = true}));
+}

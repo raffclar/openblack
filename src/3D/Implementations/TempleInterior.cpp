@@ -919,6 +919,12 @@ void TempleInterior::UpdateOptionsAndFutureRooms(float milliseconds)
 		if (_cameraModel != nullptr)
 		{
 			_cameraModel->SetDialogOpen(_interface->IsMenuOpen() || _multiplayerFrontEnd);
+			// Once the game is over, the rooms of pictures ignore the presses under any box, and their doors ask about a
+			// new game
+			_cameraModel->SetPressFacts({
+			    .gameOver = Locator::entitiesRegistry::has_value() && Locator::entitiesRegistry::value().Context().gameOver,
+			    .boxUp = _interface->IsMenuOpen() || _multiplayerFrontEnd || _interface->IsSaveBoxActive(),
+			});
 		}
 		// The options room, while no dialog is up: once the camera has come into the room it opens the game's
 		// options, and once they are closed it goes back to the main room
@@ -1584,6 +1590,14 @@ bool TempleInterior::IsRoomAvailable(TempleRoom room) const
 	                                      .keptIn = _lock.GetRoom(),
 	                                      .networkGame = networkGame,
 	                                      .skirmish = skirmish});
+}
+
+void TempleInterior::AskNewGame()
+{
+	if (_interface != nullptr)
+	{
+		_interface->AskNewGameQuestion();
+	}
 }
 
 void TempleInterior::TellRoomNotAvailable()

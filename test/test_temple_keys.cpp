@@ -14,6 +14,9 @@
 using openblack::temple::keys::EscapeAsksNewGame;
 using openblack::temple::keys::EscapeFacts;
 using openblack::temple::keys::EscapeLeavesRoom;
+using openblack::temple::keys::PictureDoorClick;
+using openblack::temple::keys::PictureDoorClickOutcome;
+using openblack::temple::keys::PictureRoomTakesPress;
 using openblack::temple::keys::RoomKeyActs;
 using openblack::temple::keys::RoomKeyFacts;
 
@@ -75,4 +78,18 @@ TEST(TempleKeys, EscapeAsksNothingBeforeTheGameIsOverOrUnderTheCinemaBars)
 {
 	EXPECT_FALSE(EscapeAsksNewGame({}));
 	EXPECT_FALSE(EscapeAsksNewGame({.scriptBars = true, .gameOver = true}));
+}
+
+TEST(TempleKeys, ARoomOfPicturesTakesThePressUnlessTheGameIsOverUnderABox)
+{
+	EXPECT_TRUE(PictureRoomTakesPress({}));
+	EXPECT_TRUE(PictureRoomTakesPress({.boxUp = true}));
+	EXPECT_TRUE(PictureRoomTakesPress({.gameOver = true}));
+	EXPECT_FALSE(PictureRoomTakesPress({.gameOver = true, .boxUp = true}));
+}
+
+TEST(TempleKeys, TheDoorOfARoomOfPicturesAsksAboutANewGameOnceTheGameIsOver)
+{
+	EXPECT_EQ(PictureDoorClickOutcome(false), PictureDoorClick::WalkBack);
+	EXPECT_EQ(PictureDoorClickOutcome(true), PictureDoorClick::AskNewGame);
 }

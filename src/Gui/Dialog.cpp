@@ -74,7 +74,7 @@ Dialog::Dialog(std::vector<Tab> tabs, size_t selectedTab)
 	tabs.resize(k_TabCount);
 	for (size_t i = 0; i < k_TabCount; ++i)
 	{
-		auto onSelect = i == selectedTab ? std::function<void()>() : std::move(tabs[i].onSelect);
+		auto onSelect = i == selectedTab && !tabs[i].clickWhenSelected ? std::function<void()>() : std::move(tabs[i].onSelect);
 		Add<TabControl>(GetTabRect(i), std::move(tabs[i].label), i == selectedTab, i == 0, i + 1 == k_TabCount,
 		                std::move(onSelect));
 	}

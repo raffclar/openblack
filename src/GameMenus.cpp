@@ -97,6 +97,7 @@
 #include "Graphics/RendererInterface.h"
 #include "Gui/Canvas.h"
 #include "Gui/DialogPainter.h"
+#include "Gui/EscapeKeyRules.h"
 #include "Gui/GameInterface.h"
 #include "Gui/LoadingScreen.h"
 #include "Gui/MultiplayerFrontEnd.h"
@@ -373,6 +374,14 @@ void Game::HandleInterfaceAction()
 		KeepProfileKeys();
 	}
 	_menuWasOpen = menu.IsOpen();
+	// Each time that the main menu stops being the box that takes the input, Escape waits again before it opens the menu
+	const bool mainMenuActive = menu.IsMainMenuActive();
+	if (escape_key::MainMenuLeft(
+	        {.wasActive = _mainMenuWasActive, .active = mainMenuActive, .shownAgain = menu.TakeMainMenuShownAgain()}))
+	{
+		Locator::gameKeysSystem::value().MenuClosed();
+	}
+	_mainMenuWasActive = mainMenuActive;
 
 	// The menu pauses the game while it is open
 	if (const auto pause = _menuPause.Follow(Locator::gameInterface::value().GetMenu().IsOpen()); pause.has_value())
