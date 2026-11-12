@@ -36,6 +36,7 @@
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/SpellIconSystemInterface.h"
 #include "Enums.h"
+#include "Hand/HandSendWait.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 
@@ -456,17 +457,21 @@ TEST_F(ArmedOnThing, TheLetGoOnAThingOfThePressThatIsNoTargetDoesNothingAndEndsT
 	EXPECT_EQ(_magic->GetHandCastState().state, magic::CastInput::State::Idle);
 }
 
-// Each frame, a thing of the press that went from the world ends the interface lock of the armed seed
-TEST_F(ArmedOnThing, AThingOfThePressThatWentEndsTheLockEachFrame)
+// The armed seed keeps the thing of its press, also when the thing goes from the world. Each frame, the interface
+// lock ends for such a thing.
+TEST_F(ArmedOnThing, TheArmedSeedKeepsTheThingOfThePressUntilTheEndOfTheLock)
 {
-	EXPECT_FALSE(_magic->PressThingGone());
+	EXPECT_EQ(_magic->GetPressThing(), entt::entity {entt::null});
 	ASSERT_TRUE(_magic->PressAction());
-	EXPECT_FALSE(_magic->PressThingGone());
+	EXPECT_EQ(_magic->GetPressThing(), _creature);
+	_cursor->under = MakeCreature();
+	EXPECT_EQ(_magic->GetPressThing(), _creature);
 	Locator::entitiesRegistry::value().Destroy(_creature);
-	EXPECT_TRUE(_magic->PressThingGone());
+	EXPECT_EQ(_magic->GetPressThing(), _creature);
+	EXPECT_TRUE(hand_send_wait::PressThingEndsLock({.inWorld = false}));
 	// The end of the lock stops the armed seed: no cast, and the thing is forgotten
 	_magic->StopActionAtLockEnd();
-	EXPECT_FALSE(_magic->PressThingGone());
+	EXPECT_EQ(_magic->GetPressThing(), entt::entity {entt::null});
 	_magic->ReleaseAction();
 	EXPECT_TRUE(_commands->sent.empty());
 }
