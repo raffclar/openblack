@@ -610,7 +610,9 @@ void RenderingSystem::PrepareDrawDescs(bool drawBoundingBox)
 		// Each primitive is drawn in the mode of its material. A standing thing blends the texels of its blended
 		// materials over what is behind them, and writes the depth where its material says.
 		drawDesc->second.materialBlending = true;
-		drawDesc->second.materialCulling = desc.translucent;
+		// A standing thing shows only the front faces of its one-sided materials. The hand sets the faces that it
+		// shows in its own draws.
+		drawDesc->second.materialCulling = meshId != ecs::components::Hand::k_MeshId || desc.translucent;
 		drawDesc->second.translucent = desc.translucent;
 		drawDesc->second.alphaTexturedAdditive = desc.alphaTexturedAdditive;
 		drawDesc->second.shineColour = desc.shineColour;

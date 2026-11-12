@@ -129,6 +129,24 @@ void testbed_scenarios::AddNatureScenarios(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "nature.model_faces_and_texels",
+	    .name = "Standing models show the front faces of one-sided materials and all opaque texels",
+	    .facet = Facet::Nature,
+	    .description = "A Celtic creche, a Celtic graveyard and a Celtic football pitch stand near the camera, with an "
+	                   "oak and a beech beside them. The camera looks down at them from the side.",
+	    .expected = "The back faces of a one-sided material do not show: the inner faces of the walls and the back of "
+	                "the leaf cards. A two-sided material shows both faces. The opaque textured parts show every texel "
+	                "of their texture, also the texels with no alpha, which are dark: they make no holes.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {-6.0f, 14.0f, 6.0f}, .look = {k_Tree.x, 2.0f, k_Tree.y}},
+	    .objects = {{.type = AbodeInfo::CelticCreche, .offset = k_Tree + glm::vec2(-14.0f, 4.0f)},
+	                {.type = AbodeInfo::CelticGraveyard, .offset = k_Tree + glm::vec2(12.0f, 6.0f)},
+	                {.type = AbodeInfo::CelticFootballPitch, .offset = k_Tree + glm::vec2(0.0f, 30.0f)},
+	                {.type = TreeInfo::Oak, .offset = k_Tree + glm::vec2(-2.0f, -6.0f)},
+	                {.type = TreeInfo::Beech, .offset = k_Tree + glm::vec2(4.0f, -4.0f)}},
+	});
+
+	all.push_back({
 	    .id = "nature.tree_roots",
 	    .name = "A tree pulled up shows its roots until it is planted again",
 	    .facet = Facet::Nature,

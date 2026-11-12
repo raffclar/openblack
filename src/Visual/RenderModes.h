@@ -98,11 +98,12 @@ inline constexpr std::array<ModeDesc, k_ModeCount> k_Modes = {{
 	return alpha >= reference;
 }
 
-/// Whether a mode keeps the texels that have no alpha: a blended mode with no alpha test that writes the depth. Such a
-/// texel shows nothing, but its depth hides a model that the game draws after it, behind it.
+/// Whether a mode keeps the texels that have no alpha: an opaque or blended mode with no alpha test that writes the
+/// depth. An opaque mode shows the colour of such a texel. A blended mode shows nothing there, but the depth of the texel
+/// hides a model that the game draws after it, behind it.
 [[nodiscard]] constexpr bool KeepsTexelsWithNoAlpha(const ModeDesc& mode)
 {
-	return mode.blend == Blend::Standard && !mode.alphaTest && mode.zWrite;
+	return (mode.blend == Blend::Standard || mode.blend == Blend::Disabled) && !mode.alphaTest && mode.zWrite;
 }
 
 /// The mode that a material draws in when its whole object is see-through: the game's second table of modes. The opaque
