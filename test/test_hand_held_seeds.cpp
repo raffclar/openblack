@@ -26,12 +26,14 @@
 #include "Commands/PlayerCommands.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/HandHeldSeed.h"
+#include "ECS/Components/MagicFireBall.h"
 #include "ECS/Components/SpellSeed.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureHandSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/Implementations/MagicSystem.h"
 #include "ECS/Systems/Implementations/SpellIconSystem.h"
+#include "ECS/Systems/PickingSystemInterface.h"
 #include "ECS/Systems/PlayerCommandSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/SpellIconSystemInterface.h"
@@ -386,6 +388,39 @@ public:
 	std::optional<entt::entity> under;
 };
 
+/// A pick under the cursor that the test sets
+class FixedPick final: public ecs::systems::PickingSystemInterface
+{
+public:
+	[[nodiscard]] std::optional<glm::vec3> LandAlong(glm::vec3 /*from*/, glm::vec3 /*to*/) const override
+	{
+		return std::nullopt;
+	}
+	[[nodiscard]] std::optional<glm::vec3> LandOrSeaAlong(glm::vec3 /*from*/, glm::vec3 /*to*/,
+	                                                      glm::vec3 /*camera*/) const override
+	{
+		return std::nullopt;
+	}
+	[[nodiscard]] std::optional<glm::vec3> LandUnderPixel(glm::vec3 /*camera*/, glm::vec3 /*nearPoint*/,
+	                                                      Sea /*sea*/) const override
+	{
+		return std::nullopt;
+	}
+	void PickUnderCursor(const Frame& /*frame*/) override {}
+	void ResolveScreenShapes(const ScreenShapes& /*shapes*/) override {}
+	[[nodiscard]] const Pick& GetPick() const override { return pick; }
+	void RetargetObject(std::optional<entt::entity> object, float /*distance*/) override { pick.object = object; }
+	void FindBehindHand(glm::vec3 /*camera*/, std::optional<glm::vec3> /*handMiddle*/) override {}
+	[[nodiscard]] std::optional<glm::vec3> GetBehindHand() const override { return std::nullopt; }
+	[[nodiscard]] std::optional<screen_pick::MeshHit> FeelModel(entt::entity /*object*/, glm::vec3 /*origin*/,
+	                                                            glm::vec3 /*direction*/) const override
+	{
+		return std::nullopt;
+	}
+
+	Pick pick;
+};
+
 /// A gesture seed that is cast on things, ready in the hand of this computer, with a creature under the cursor
 class ArmedOnThing: public HandHeldSeeds
 {
@@ -410,6 +445,7 @@ protected:
 	}
 	void TearDown() override
 	{
+		Locator::pickingSystem::reset();
 		Locator::creatureHandSystem::reset();
 		Locator::playerCommandSystem::reset();
 		Locator::infoConstants::reset();
@@ -514,4 +550,65 @@ TEST_F(ArmedOnThing, AMiracleCastAtThePlaceOfTheHandWaitsForTheLetGoAndKeepsNoTh
 	ASSERT_TRUE(_magic->GetUseWait().has_value());
 	_magic->StopActionAtLockEnd();
 	EXPECT_FALSE(_magic->GetUseWait().has_value());
+}
+
+// A ready fire seed pressed on a fireball arms on the ball, as on any thing that the seed acts on. The press takes nothing
+// in. The let go sends the use of the seed on the ball, and the turn of the use takes the ball in.
+TEST_F(ArmedOnThing, AReadyFireSeedPressedOnAFireballArmsOnItAndTakesItInAtTheLetGo)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto& fireInfo = _info->spellSeed.at(static_cast<size_t>(SpellSeedType::Fire));
+	fireInfo.castType = SpellCastType::SpellCastHandGesture;
+	fireInfo.castOnObject = 0;
+	Locator::infoConstants::emplace(*_info);
+	registry.Get<SpellSeed>(*_magic->GetHeldSeed()).seedType = SpellSeedType::Fire;
+	_cursor->under.reset();
+	const auto ball = registry.Create();
+	registry.Assign<ecs::components::MagicFireBall>(
+	    ball, ecs::components::MagicFireBall {.player = PlayerNames::PLAYER_TWO, .hasPlayer = true});
+	auto& pick = static_cast<FixedPick&>(Locator::pickingSystem::emplace<FixedPick>());
+	pick.pick.object = ball;
+
+	ASSERT_TRUE(_magic->PressAction());
+	EXPECT_EQ(_magic->GetHandCastState().state, magic::CastInput::State::Armed);
+	EXPECT_EQ(_magic->GetPressThing(), ball);
+	EXPECT_TRUE(_commands->sent.empty());
+	ASSERT_TRUE(registry.Valid(ball));
+
+	// The let go casts at the ball of the press, also with the cursor on another place
+	pick.pick.object.reset();
+	_magic->ReleaseAction();
+	ASSERT_EQ(_commands->sent.size(), 1u);
+	ASSERT_TRUE(std::holds_alternative<player_commands::HandCast>(_commands->sent.front()));
+	const auto cast = std::get<player_commands::HandCast>(_commands->sent.front());
+	EXPECT_EQ(cast.object, ball);
+	ASSERT_TRUE(registry.Valid(ball));
+	_magic->DoCast(PlayerNames::PLAYER_ONE, cast);
+	EXPECT_FALSE(registry.Valid(ball));
+	EXPECT_TRUE(_magic->GetHeldSeed().has_value());
+}
+
+// A fire seed that is not ready, or another seed, does not arm on a fireball
+TEST_F(ArmedOnThing, OnlyAReadyFireSeedArmsOnAFireball)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto& fireInfo = _info->spellSeed.at(static_cast<size_t>(SpellSeedType::Fire));
+	fireInfo.castType = SpellCastType::SpellCastHandGesture;
+	Locator::infoConstants::emplace(*_info);
+	_cursor->under.reset();
+	const auto ball = registry.Create();
+	registry.Assign<ecs::components::MagicFireBall>(ball);
+	Locator::pickingSystem::emplace<FixedPick>();
+	static_cast<FixedPick&>(Locator::pickingSystem::value()).pick.object = ball;
+	// The seed in the hand heals
+	_magic->PressAction();
+	EXPECT_NE(_magic->GetPressThing(), ball);
+	_magic->ReleaseAction();
+	auto& seed = registry.Get<SpellSeed>(*_magic->GetHeldSeed());
+	seed.seedType = SpellSeedType::Fire;
+	seed.ready = false;
+	_magic->PressAction();
+	EXPECT_NE(_magic->GetPressThing(), ball);
+	_magic->ReleaseAction();
+	EXPECT_TRUE(registry.Valid(ball));
 }

@@ -41,8 +41,9 @@ public:
 	[[nodiscard]] bool SelectPressHolds() const final { return _selectPress; }
 	void EndSelectPress() final { _selectPress = false; }
 	void StopLandGrip() final;
-	void GripLandAgain() final;
+	bool GripLandAgain() final;
 	[[nodiscard]] bool LandGripStopped() const final { return _landGripStopped; }
+	[[nodiscard]] bool LandGripKeepsNoThing() const final { return _gripKeepsNoThing; }
 	[[nodiscard]] const std::optional<glm::ivec2>& GetTotemPointer() const final { return _totemPointer; }
 	void SetTotemPointer(std::optional<glm::ivec2> pointer) final { _totemPointer = pointer; }
 	[[nodiscard]] glm::ivec2 GetMousePosition() const final { return _mousePosition; }
@@ -57,9 +58,10 @@ public:
 private:
 	void ActionLetGo(const SDL_Event& event, bool rightLetGo, bool inTemple, bool handTakesPresses, bool hasGrab,
 	                 bool handHoldsThing);
-	void ActionPress(const SDL_Event& event, bool inTemple, bool handTakesPresses, bool hasGrab, bool handHoldsThing,
-	                 const components::InterfaceLimits& interfaceLimits, bool mayHold);
-	void MovePress(const SDL_Event& event, bool inTemple, bool handTakesPresses, const PressContext& context);
+	void ActionPress(const SDL_Event& event, bool inTemple, bool handTakesPresses, bool waitIgnoresPresses, bool hasGrab,
+	                 bool handHoldsThing, const components::InterfaceLimits& interfaceLimits, bool mayHold);
+	void MovePress(const SDL_Event& event, bool inTemple, bool handTakesPresses, bool waitIgnoresPresses,
+	               const PressContext& context);
 
 	std::unique_ptr<HandPressWorld> _world;
 	input::PointerButtons _buttons;
@@ -72,10 +74,13 @@ private:
 	bool _dialogueClick {false};
 	/// The flag of the interface for a press of the select button that holds the land
 	bool _selectPress {false};
-	/// The end of the interface lock stopped the grip of the land, until the player lets go of the select button. The flags
-	/// of the hand from before the stop come back when both buttons ended the lock.
+	/// The end of the interface lock, or a press in a wait of the interface, stopped the grip of the land, until the player
+	/// lets go of the select button
 	bool _landGripStopped {false};
-	input::HandButtons _beforeGripStop;
+	/// The flags of the hand when both buttons end the interface lock and the select button grips the land at once
+	input::HandButtons _gripAgainButtons;
+	/// The grip of the land that both buttons started keeps no thing, until the grip ends
+	bool _gripKeepsNoThing {false};
 	std::optional<glm::ivec2> _totemPointer;
 	glm::ivec2 _mousePosition {0, 0};
 	/// Whether the hand follows the pointer that the window reports yet, or until the mouse first moves the game's own

@@ -1269,6 +1269,30 @@ void testbed_scenarios::AddObjects(std::vector<Scenario>& all)
 	    .hand = offering,
 	});
 
+	// The hand gives the food, and then the select button and the Action button go down and up while the tiger reaches
+	// for the food
+	auto pressesInTheWait = giving;
+	pressesInTheWait.push_back({.kind = Kind::PointerPress, .delaySeconds = 0.3f, .value = 1});
+	pressesInTheWait.push_back({.kind = Kind::PointerRelease, .delaySeconds = 0.3f, .value = 1});
+	pressesInTheWait.push_back({.kind = Kind::PointerPress, .delaySeconds = 0.3f, .value = 3});
+	pressesInTheWait.push_back({.kind = Kind::PointerRelease, .delaySeconds = 0.3f, .value = 3});
+	all.push_back({
+	    .id = "hand.gift_wait_presses",
+	    .name = "Presses while the hand waits after a gift",
+	    .facet = Facet::Hand,
+	    .description = "The player's hand gives a pile of food to a hungry tiger. While the tiger reaches for the food, "
+	                   "the select button goes down and up, and then the Action button goes down and up.",
+	    .expected = "From the gift until the tiger takes the food, the hand shows no tooltip. The select button grips "
+	                "no land and makes no sound. The Action button gives nothing again and does not make the hand ready "
+	                "to throw. The tiger takes the food and eats it.",
+	    .environment = {.cursor = glm::vec2(0.5f, 0.6f), .temple = glm::vec2(0.0f, 80.0f)},
+	    .framing = {.shot = Shot::Follow, .distance = 1.3f},
+	    .creatures = {hungryThinking},
+	    .objects = {{.type = MobileObjectInfo::MagicFood, .offset = {-15.0f, -15.0f}}},
+	    .commands = pressesInTheWait,
+	    .hand = offering,
+	});
+
 	all.push_back({
 	    .id = "creature.give_animal_kept_at_home",
 	    .name = "Giving an animal from afar to a creature kept at home",

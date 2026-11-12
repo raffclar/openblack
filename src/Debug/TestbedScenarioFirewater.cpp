@@ -236,6 +236,33 @@ void AddFireballCatching(std::vector<Scenario>& all)
 	                 {.kind = Command::Kind::HandTakeFireBall, .delaySeconds = 1.6f}},
 	});
 
+	// The hand holds a fire seed. The Action button stays down on a fireball that rises slowly, and lets go after two
+	// seconds.
+	all.push_back({
+	    .id = "hand.fire_seed_held_on_fireball",
+	    .name = "A fire seed held down on a fireball",
+	    .facet = Facet::Hand,
+	    .description = "The hand holds a fire seed. Another player throws a fireball straight up, slowly, in the middle "
+	                   "of the screen. The pointer goes on the ball, and the Action button stays down for two seconds. "
+	                   "Then the button lets go.",
+	    .expected = "The press does not take the ball in. The seed hums in the hand while the button is down, and the "
+	                "ball flies on. When the button lets go, the ball goes into the seed, which stays in the hand. If "
+	                "the ball bursts before the let go, the seed takes nothing in.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 14.0f, -20.0f}, .look = {0.0f, 8.0f, 10.0f}},
+	    .miracles = {{.type = MagicType::Fireball,
+	                  .point = {0.0f, 10.0f},
+	                  .handOffset = {0.0f, 10.0f},
+	                  .handHeight = 6.0f,
+	                  .throwVelocity = {0.0f, 7.0f, 0.0f},
+	                  .delaySeconds = 2.0f,
+	                  .player = PlayerNames::PLAYER_TWO}},
+	    .commands = {{.kind = Command::Kind::HoldSeed, .delaySeconds = 0.5f, .value = static_cast<size_t>(SpellSeedType::Fire)},
+	                 {.kind = Command::Kind::PointerTo, .delaySeconds = 0.5f, .point = {0.5f, 0.55f}},
+	                 {.kind = Command::Kind::PointerPress, .delaySeconds = 1.3f, .value = 3},
+	                 {.kind = Command::Kind::PointerRelease, .delaySeconds = 2.0f, .value = 3}},
+	});
+
 	// The fire seed and the fireballs that the recorded input of the hand presses on for the dedicated server's check
 	// (tools/sim/hand_inputs/absorb.json)
 	all.push_back({
