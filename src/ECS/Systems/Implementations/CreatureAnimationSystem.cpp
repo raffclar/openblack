@@ -1113,6 +1113,15 @@ creature_blends::Stores& CreatureAnimationSystem::BlendStores()
 	return _stores;
 }
 
+WorkerPool& CreatureAnimationSystem::FrameWorkers()
+{
+	if (_frameWorkers == nullptr)
+	{
+		_frameWorkers = std::make_unique<WorkerPool>(WorkerPool::DefaultThreadCount());
+	}
+	return *_frameWorkers;
+}
+
 WorkerPool& CreatureAnimationSystem::Workers()
 {
 	if (_workers == nullptr)
@@ -1133,6 +1142,21 @@ void CreatureAnimationSystem::Update(std::chrono::duration<float, std::milli> ga
 	const auto weight =
 	    creature_turn_pose::DrawWeight(Locator::time::has_value() ? Locator::time::value().GetTurnFraction() : 1.0f);
 
+	// Each body is drawn only from its own poses, so the threads draw the bodies at the same time. The eyes of a stoned
+	// creature dart by the random numbers of this computer. These eyes take their numbers after the threads, one creature
+	// after the other in the same sequence as before. Thus each creature takes the same numbers as on one thread.
+	struct Body
+	{
+		const Creature* creature;
+		const CreatureMorph* morph;
+		CreatureAnimation* animation;
+		Transform transform;
+		const std::vector<glm::mat4>* meshBones;
+		const CreatureRig* rig;
+		const ShownCreatureFace* shown;
+		CreatureEyes* eyes;
+	};
+	std::vector<Body> bodies;
 	registry.Each<const Creature, const CreatureMorph, CreatureAnimation, const Transform>(
 	    [&](entt::entity entity, const Creature& creature, const CreatureMorph& morph, CreatureAnimation& animation,
 	        const Transform& turnTransform) {
@@ -1142,45 +1166,67 @@ void CreatureAnimationSystem::Update(std::chrono::duration<float, std::milli> ga
 		    {
 			    return;
 		    }
-		    const auto base = meshes.Handle(bodyMeshes.base);
 		    const auto rigId = creature::GetRigId(creature.species);
-		    const CreatureRig* rig = rigs.Contains(rigId) ? &*rigs.Handle(rigId) : nullptr;
-		    // A walking body is drawn between the places of its last two turns
-		    const auto transform = DrawnTransform(turnTransform, &animation);
-
-		    // A face that only this computer shows is drawn with the bones that its own pose gave
-		    const auto* shown = registry.TryGet<const ShownCreatureFace>(entity);
-		    const bool drawsShown =
-		        shown != nullptr && !shown->newerTurnPose.empty() && shown->olderTurnPose.size() == shown->newerTurnPose.size();
-		    const auto& older = drawsShown ? shown->olderTurnPose : animation.olderTurnPose;
-		    const auto& newer = drawsShown ? shown->newerTurnPose : animation.newerTurnPose;
-		    if (!newer.empty() && older.size() == newer.size() && transform.scale.x != 0.0f && transform.scale.y != 0.0f &&
-		        transform.scale.z != 0.0f)
-		    {
-			    animation.boneMatrices.resize(newer.size());
-			    creature_turn_pose::BlendToMesh(
-			        older, newer, weight, creature::PlacementMatrix(transform.position, transform.rotation, transform.scale),
-			        animation.boneMatrices);
-		    }
-		    if (animation.boneMatrices.size() != base->GetBoneMatrices().size())
-		    {
-			    animation.boneMatrices = base->GetBoneMatrices();
-		    }
-
-		    auto* eyes = registry.TryGet<CreatureEyes>(entity);
-		    if (eyes == nullptr)
-		    {
-			    return;
-		    }
-		    // The blink moves on with the turns (PoseForTurn), so between two turns the lids stay at the same angle. Each
-		    // drawn frame moves the eyes towards where they look by the milliseconds of the last turn, as the game does.
-		    eyes->drawn = {};
-		    if (rig != nullptr && rig->eyes.has_value())
-		    {
-			    PlaceEyes(*eyes, *rig->eyes, morph.drawn, animation.boneMatrices, transform, ShownSize(creature), eyes->turnMs,
-			              [this](uint32_t range) { return _random.LocalRand(static_cast<int32_t>(range)); });
-		    }
+		    bodies.push_back({
+		        .creature = &creature,
+		        .morph = &morph,
+		        .animation = &animation,
+		        // A walking body is drawn between the places of its last two turns
+		        .transform = DrawnTransform(turnTransform, &animation),
+		        .meshBones = &meshes.Handle(bodyMeshes.base)->GetBoneMatrices(),
+		        .rig = rigs.Contains(rigId) ? &*rigs.Handle(rigId) : nullptr,
+		        .shown = registry.TryGet<const ShownCreatureFace>(entity),
+		        .eyes = registry.TryGet<CreatureEyes>(entity),
+		    });
 	    });
+	const auto stoned = [](const Body& body) { return body.eyes != nullptr && body.eyes->mode == creature_eyes::Mode::Stoned; };
+	// The eyes of the body, after the body has its bones
+	const auto placeEyes = [](const Body& body, const auto& random) {
+		auto& eyes = *body.eyes;
+		// The blink moves on with the turns (PoseForTurn), so between two turns the lids stay at the same angle. Each
+		// drawn frame moves the eyes towards where they look by the milliseconds of the last turn, as the game does.
+		eyes.drawn = {};
+		if (body.rig != nullptr && body.rig->eyes.has_value())
+		{
+			PlaceEyes(eyes, *body.rig->eyes, body.morph->drawn, body.animation->boneMatrices, body.transform,
+			          ShownSize(*body.creature), eyes.turnMs, random);
+		}
+	};
+	FrameWorkers().ForEach(bodies.size(), [&](size_t index, size_t /*lane*/) {
+		const auto& body = bodies[index];
+		auto& animation = *body.animation;
+		const auto& transform = body.transform;
+		// A face that only this computer shows is drawn with the bones that its own pose gave
+		const auto* shown = body.shown;
+		const bool drawsShown =
+		    shown != nullptr && !shown->newerTurnPose.empty() && shown->olderTurnPose.size() == shown->newerTurnPose.size();
+		const auto& older = drawsShown ? shown->olderTurnPose : animation.olderTurnPose;
+		const auto& newer = drawsShown ? shown->newerTurnPose : animation.newerTurnPose;
+		if (!newer.empty() && older.size() == newer.size() && transform.scale.x != 0.0f && transform.scale.y != 0.0f &&
+		    transform.scale.z != 0.0f)
+		{
+			animation.boneMatrices.resize(newer.size());
+			creature_turn_pose::BlendToMesh(older, newer, weight,
+			                                creature::PlacementMatrix(transform.position, transform.rotation, transform.scale),
+			                                animation.boneMatrices);
+		}
+		if (animation.boneMatrices.size() != body.meshBones->size())
+		{
+			animation.boneMatrices = *body.meshBones;
+		}
+		// Eyes that use no random numbers
+		if (body.eyes != nullptr && !stoned(body))
+		{
+			placeEyes(body, [](uint32_t /*range*/) -> uint32_t { return 0; });
+		}
+	});
+	for (const auto& body : bodies)
+	{
+		if (stoned(body))
+		{
+			placeEyes(body, [this](uint32_t range) { return _random.LocalRand(static_cast<int32_t>(range)); });
+		}
+	}
 
 	// The glows on the creatures' bodies follow their poses. Their textures slide by the real time and the circling glow
 	// turns by the game's time, at most once a frame of the screen's refresh.

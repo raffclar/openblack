@@ -13,6 +13,7 @@
 
 #include <algorithm>
 #include <optional>
+#include <vector>
 
 #include <glm/geometric.hpp>
 #include <glm/gtx/transform.hpp>
@@ -72,25 +73,31 @@ std::optional<creature_hair::Root> RootOf(const CreatureRig::HairStrand& strand,
 	return creature_hair::Root {.position = point.position, .inwardNormal = point.normal, .direction = direction};
 }
 
-/// Moves the hair of a body for a number of seconds: the body has a species, a shape, a pose, a place and a size
-void StepBodyHair(const resources::CreatureRigManager& rigs, CreatureType species, const creature_morph::Morph& morph,
-                  const CreatureAnimation& animation, const Transform& transform, float size, CreatureHair& hair, float seconds)
+/// The rig of a species, or none. Only the main thread can ask the resources.
+const CreatureRig* RigOf(const resources::CreatureRigManager& rigs, CreatureType species)
 {
 	const auto rigId = creature::GetRigId(species);
-	if (!rigs.Contains(rigId) || animation.boneMatrices.empty())
+	return rigs.Contains(rigId) ? &*rigs.Handle(rigId) : nullptr;
+}
+
+/// Moves the hair of a body for a number of seconds: the body has the rig of its species, a shape, a pose, a place and
+/// a size
+void StepBodyHair(const CreatureRig* found, const creature_morph::Morph& morph, const CreatureAnimation& animation,
+                  const Transform& transform, float size, CreatureHair& hair, float seconds)
+{
+	if (found == nullptr || animation.boneMatrices.empty())
 	{
 		hair.groups.clear();
 		return;
 	}
-	const auto& rig = *rigs.Handle(rigId);
+	const auto& rig = *found;
 	// The hair takes the look of the alignment the body is drawn with
 	const auto alignment = morph.evilGood;
 	const auto scale = creature_hair::HairScale(size);
 	// The hair grows from the body where the frame draws it
 	const auto drawn = DrawnTransform(transform, &animation);
 	// The strands of the body share its bones, so each bone is placed in the world one time
-	creature::PosedBones posed(animation.boneMatrices,
-	                           creature::PlacementMatrix(drawn.position, drawn.rotation, drawn.scale));
+	creature::PosedBones posed(animation.boneMatrices, creature::PlacementMatrix(drawn.position, drawn.rotation, drawn.scale));
 	StepHair(
 	    hair, rig.hairGroups.size(),
 	    [&](size_t g) {
@@ -134,11 +141,42 @@ void CreatureHairSystem::Update(std::chrono::duration<float, std::milli> gameTim
 	const auto& rigs = Locator::resources::value().GetCreatureRigs();
 	const auto seconds = creature_hair::StepSeconds(std::chrono::duration<float, std::milli>(gameTime).count());
 
+	// The hair of each body moves only from that body, so the bodies move their hair on the threads at the same time.
+	// Each body gives the same hair as on one thread.
+	struct Body
+	{
+		const CreatureRig* rig;
+		const Creature* creature;
+		const CreatureMorph* morph;
+		const CreatureAnimation* animation;
+		const Transform* transform;
+		CreatureHair* hair;
+	};
+	std::vector<Body> bodies;
 	registry.Each<const Creature, const CreatureMorph, const CreatureAnimation, const Transform, CreatureHair>(
-	    [&](const Creature& creature, const CreatureMorph& morph, const CreatureAnimation& animation,
-	        const Transform& transform, CreatureHair& hair) {
-		    StepBodyHair(rigs, creature.species, morph.drawn, animation, transform, ShownSize(creature), hair, seconds);
+	    [&bodies, &rigs](const Creature& creature, const CreatureMorph& morph, const CreatureAnimation& animation,
+	                     const Transform& transform, CreatureHair& hair) {
+		    bodies.push_back({.rig = RigOf(rigs, creature.species),
+		                      .creature = &creature,
+		                      .morph = &morph,
+		                      .animation = &animation,
+		                      .transform = &transform,
+		                      .hair = &hair});
 	    });
+	Workers().ForEach(bodies.size(), [&](size_t index, size_t /*lane*/) {
+		const auto& body = bodies[index];
+		StepBodyHair(body.rig, body.morph->drawn, *body.animation, *body.transform, ShownSize(*body.creature), *body.hair,
+		             seconds);
+	});
+}
+
+WorkerPool& CreatureHairSystem::Workers()
+{
+	if (_workers == nullptr)
+	{
+		_workers = std::make_unique<WorkerPool>(WorkerPool::DefaultThreadCount());
+	}
+	return *_workers;
 }
 
 void CreatureHairSystem::StepCopy(Registry& copies, entt::entity copy, std::chrono::duration<float, std::milli> frameTime,
@@ -164,6 +202,6 @@ void CreatureHairSystem::StepCopy(Registry& copies, entt::entity copy, std::chro
 	}
 	// A copy's hair moves by the time of the frame, as the game is paused while the copy is shown
 	const auto seconds = creature_hair::StepSeconds(frameTime.count());
-	StepBodyHair(Locator::resources::value().GetCreatureRigs(), creature->species, morph->drawn, *animation, *transform,
+	StepBodyHair(RigOf(Locator::resources::value().GetCreatureRigs(), creature->species), morph->drawn, *animation, *transform,
 	             body->size, *hair, seconds);
 }
