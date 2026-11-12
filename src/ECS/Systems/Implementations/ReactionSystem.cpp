@@ -1258,11 +1258,11 @@ void ReactionSystem::SpreadInCell(Active& reaction, const std::vector<entt::enti
 	for (const auto entity : mobiles)
 	{
 		// The shields' villagers take up the shields' own reactions through the shields.
-		// A creature also weighs a reaction that it made, as it weighs all other reactions. Thus a burning creature takes
-		// up its own fire, an evil creature can take up the fainting of its own fart, and a creature that reacts weighs
-		// what it reacts to when its own reaction reaches it.
+		// A living thing also weighs a reaction that it made, as it weighs all other reactions. Thus a burning creature
+		// takes up its own fire, and an evil creature can take up the fainting of its own fart. The rule of each kind
+		// refuses most villagers and animals: a villager in flight, a disciple and a hunter do not heed their own
+		// reactions.
 		if (!registry.Valid(entity) || entity == notInMap || !registry.AllOf<Transform>(entity) ||
-		    (entity == reaction.source.initiator && !registry.AllOf<Creature>(entity)) ||
 		    !Reaches(registry, entity, reaction.source.type) ||
 		    (registry.AllOf<Villager>(entity) && ShieldKind(reaction.source.type)) ||
 		    !Available(registry, entity, reaction.source.type))
@@ -1329,11 +1329,12 @@ void ReactionSystem::SpreadInCell(Active& reaction, const std::vector<entt::enti
 		if (differs && magic::ChangesReaction(state->type, currentPriority, priority, seconds))
 		{
 			memory.Record(type, _turn);
-			// A villager keeps what it reacts to rather than change to a kind it never takes up
-			// TODO(raffclar): the game also drops the villager from the list of the reaction it keeps, so that reaction
-			// ending doesn't send it back; it still goes back once its own time with it is over
+			// A villager keeps what it reacts to rather than change to a kind it never takes up. It leaves the group of the
+			// reaction that it keeps. Thus the end of that reaction does not stop it: it stops when it next finds the
+			// reaction gone.
 			if (registry.AllOf<Villager>(entity) && !villager_reaction::TakesUp(reaction.source.type))
 			{
+				state->left = state->reaction;
 				continue;
 			}
 			// A creature heeds the new one, but keeps what it reacts to rather than change to one it does not keep. It
@@ -1345,10 +1346,13 @@ void ReactionSystem::SpreadInCell(Active& reaction, const std::vector<entt::enti
 				Start(reaction, entity, *state, true);
 				continue;
 			}
-			// A creature keeps the old reaction until a plan that the new reaction forces stops it
+			// A villager or an animal leaves the group of the old reaction, with no stop. Thus its memory of the old kind
+			// stays as it is, unless the state that it leaves for the new reaction stops the old reaction. If it does not
+			// take up the new reaction, it keeps the old reaction out of its group. A creature keeps the old reaction until
+			// a plan that the new reaction forces stops it.
 			if (!registry.AllOf<Creature>(entity))
 			{
-				Stop(entity, *state, false);
+				state->left = state->reaction;
 			}
 			Start(reaction, entity, *state, true);
 		}
@@ -1684,6 +1688,15 @@ void ReactionSystem::Start(Active& reaction, entt::entity living, LivingReaction
 void ReactionSystem::StartVillager(const Active& reaction, entt::entity living, LivingReaction& state, bool wasReacting)
 {
 	auto& registry = Locator::entitiesRegistry::value();
+	// The villager goes into the state of the new reaction before it holds the new reaction. Thus, when the state that it
+	// leaves stops a reaction, the stop ends the reaction that it held before.
+	const auto outer = _heldBefore;
+	_heldBefore = HeldBefore {.living = living,
+	                          .reaction = state.reaction,
+	                          .type = state.type,
+	                          .startTurn = state.startTurn,
+	                          .joined = state.joined,
+	                          .left = state.left};
 	state.reaction = reaction.id;
 	state.type = reaction.source.type;
 	state.startTurn = _turn;
@@ -1691,10 +1704,17 @@ void ReactionSystem::StartVillager(const Active& reaction, entt::entity living, 
 	state.left = 0;
 	// A villager is impressed only by what it takes up the usual way: not joining a dance round the thing
 	const auto taken = villager_reactions::Start(living, reaction.source.type, state, wasReacting);
+	const auto before = *_heldBefore;
+	_heldBefore = outer;
 	if (taken == villager_reactions::Taken::No)
 	{
-		state.reaction = 0;
-		state.type = Reaction::None;
+		// It keeps the reaction that it held before, if that reaction did not stop
+		const bool keeps = !before.stopped && before.reaction != 0;
+		state.reaction = keeps ? before.reaction : 0;
+		state.type = keeps ? before.type : Reaction::None;
+		state.startTurn = keeps ? before.startTurn : state.startTurn;
+		state.joined = keeps ? before.joined : state.joined;
+		state.left = keeps ? before.left : 0;
 	}
 	else if (taken == villager_reactions::Taken::Impressed)
 	{
@@ -1754,6 +1774,16 @@ void ReactionSystem::StopReacting(entt::entity living)
 	auto* state = registry.TryGet<LivingReaction>(living);
 	if (state == nullptr || state->reaction == 0)
 	{
+		return;
+	}
+	// A villager that goes into the state of a new reaction stops the reaction that it held before, not the new one
+	if (_heldBefore.has_value() && _heldBefore->living == living)
+	{
+		if (_heldBefore->reaction != 0 && !_heldBefore->stopped)
+		{
+			MemoryOf(registry, living, *state).Refresh(static_cast<uint32_t>(_heldBefore->type), _turn);
+		}
+		_heldBefore->stopped = true;
 		return;
 	}
 	// Its memory of the kind is brought up to now, so it waits its time before taking up that kind again

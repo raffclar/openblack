@@ -90,8 +90,9 @@ uint8_t villager_mourning::Priority(entt::entity living, entt::entity dead, uint
 	const auto* person = registry.TryGet<const Villager>(living);
 	const bool graveyard = person != nullptr && graveyards::HasWorkingGraveyard(person->town);
 	uint32_t reacting = 0;
+	// Only the group of the reaction counts: not a living thing that left it for a reaction that it did not take up
 	registry.Each<const LivingReaction>([&reacting, reaction](entt::entity, const LivingReaction& state) {
-		if (state.reaction == reaction)
+		if (state.reaction == reaction && state.left != reaction)
 		{
 			++reacting;
 		}

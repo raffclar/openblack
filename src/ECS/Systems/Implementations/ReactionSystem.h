@@ -134,6 +134,20 @@ private:
 	uint32_t _turn {0};
 	/// How many times villagers have taken up a reaction, which orders those holding the same one
 	uint32_t _joins {0};
+	/// The reaction that a villager held before the reaction that it takes up now. While the villager goes into the state
+	/// of the new reaction, a stop from the state that it leaves ends this reaction, not the new reaction.
+	struct HeldBefore
+	{
+		entt::entity living {entt::null};
+		uint32_t reaction {0};
+		Reaction type {Reaction::None};
+		uint32_t startTurn {0};
+		uint32_t joined {0};
+		uint32_t left {0};
+		/// The state that the villager left stopped this reaction
+		bool stopped {false};
+	};
+	std::optional<HeldBefore> _heldBefore;
 	/// The things' and the miracles' balances of impressiveness
 	std::array<float, 3> _landBalances {1.0f, 1.0f, 1.0f};
 	/// For each player, the number for the belief that the towns gained, which the hand shows at this turn

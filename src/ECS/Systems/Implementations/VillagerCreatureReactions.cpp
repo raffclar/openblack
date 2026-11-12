@@ -200,24 +200,21 @@ std::optional<float> Wanted(entt::entity villager, entt::entity town)
 	       info.townDesireWeight;
 }
 
-/// The villager walks to a point on its way to or from the creature, then goes into a state
+/// The villager walks to a point on its way to or from the creature, then goes into a state. It goes into the state of
+/// the walk towards the creature also when its states refuse the walk. Then it has no new goal and no new final state.
 void MoveTowards(LivingAction& action, glm::vec2 point, VillagerStates then)
 {
-	if (ecs::villager_home::SetupMoveTo(action, point, then))
-	{
-		Locator::livingActionSystem::value().VillagerSetState(action, LivingAction::Index::Top,
-		                                                      VillagerStates::MoveTowardsCreatureReaction, true);
-	}
+	ecs::villager_home::SetupMoveTo(action, point, then);
+	Locator::livingActionSystem::value().VillagerSetState(action, LivingAction::Index::Top,
+	                                                      VillagerStates::MoveTowardsCreatureReaction, true);
 }
 
 /// The same for a goal with a height above the land, which the walk keeps
 void MoveTowards(LivingAction& action, const map_coords::MapCoords& goal, VillagerStates then)
 {
-	if (ecs::villager_home::SetupMoveTo(action, goal, then))
-	{
-		Locator::livingActionSystem::value().VillagerSetState(action, LivingAction::Index::Top,
-		                                                      VillagerStates::MoveTowardsCreatureReaction, true);
-	}
+	ecs::villager_home::SetupMoveTo(action, goal, then);
+	Locator::livingActionSystem::value().VillagerSetState(action, LivingAction::Index::Top,
+	                                                      VillagerStates::MoveTowardsCreatureReaction, true);
 }
 
 uint32_t StopReacting(LivingAction& action)

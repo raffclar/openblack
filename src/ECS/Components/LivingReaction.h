@@ -32,8 +32,8 @@ struct LivingReaction
 	/// When a living thing took up the reaction it holds, in the order every living thing took one up: the living things
 	/// that hold the same reaction are ordered by it, the last to join first
 	uint32_t joined {0};
-	/// The reaction that a creature still holds but whose group it left, for a reaction that it did not keep. The end of
-	/// that reaction does not stop the creature. The creature stops when it next finds the reaction gone. 0 for none
+	/// The reaction that a living thing still holds but whose group it left, for a reaction that it did not take up. The
+	/// end of that reaction does not stop the living thing. It stops when it next finds the reaction gone. 0 for none
 	uint32_t left {0};
 	/// A creature's memory of the kinds it reacted to lately; a villager's is its VillagerReactionMemory, which the
 	/// shields' reactions share
