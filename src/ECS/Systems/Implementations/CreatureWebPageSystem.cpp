@@ -295,7 +295,10 @@ void CreatureWebPageSystem::WritePage(entt::entity creature)
 		facts.animalsKilled = tallies->meals.animalsKilled;
 		facts.creaturesKilled = tallies->meals.creaturesKilled;
 		facts.poos = tallies->poos;
-		facts.mushrooms = tallies->mushroomsEaten;
+	}
+	if (const auto* body = registry.TryGet<const Creature>(creature))
+	{
+		facts.mushrooms = body->magicMushroomsEaten;
 	}
 	if (const auto* record = registry.TryGet<const CreatureFightRecord>(creature))
 	{

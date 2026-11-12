@@ -179,11 +179,27 @@ void HighDetailSystem::Release(entt::entity thing)
 
 void HighDetailSystem::RemakeModelsAfterLoad()
 {
-	// Each thing in high detail goes back to its usual model and takes its detailed model again
+	// The save keeps each thing in high detail as it was: its models, its draw orders, its grip and its eyes. The save
+	// keeps the ids of the models, but not the models. Thus the detailed models and the pieces of the eyes load again.
 	auto& registry = Locator::entitiesRegistry::value();
-	std::vector<entt::entity> things;
-	registry.Each<const HighDetail>([&things](entt::entity thing, const HighDetail&) { things.push_back(thing); });
-	for (const auto thing : things)
+	bool any = false;
+	registry.Each<const HighDetail>([&any](entt::entity /*thing*/, const HighDetail& /*detail*/) { any = true; });
+	if (!any || !Locator::resources::has_value())
+	{
+		return;
+	}
+	LoadModels();
+	// A thing whose detailed model did not load goes back to its usual model, and then takes its detailed model again
+	const auto& meshes = Locator::resources::value().GetMeshes();
+	std::vector<entt::entity> missing;
+	registry.Each<const HighDetail, const Mesh>(
+	    [&meshes, &missing](entt::entity thing, const HighDetail& detail, const Mesh& mesh) {
+		    if (detail.usualModel.has_value() && !meshes.Contains(mesh.id))
+		    {
+			    missing.push_back(thing);
+		    }
+	    });
+	for (const auto thing : missing)
 	{
 		Release(thing);
 		Make(thing);

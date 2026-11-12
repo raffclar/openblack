@@ -465,11 +465,6 @@ statistics::BoxFigures player_statistics::Box()
 	return box;
 }
 
-void player_statistics::CountCreatureMushroom(ecs::Registry& registry, entt::entity creature)
-{
-	Tally(registry, creature, [](CreatureTallies& tallies) { ++tallies.mushroomsEaten; });
-}
-
 void player_statistics::CountCreaturePoo(ecs::Registry& registry, entt::entity creature)
 {
 	Tally(registry, creature, [](CreatureTallies& tallies) { ++tallies.poos; });
@@ -494,7 +489,11 @@ statistics::CreatureTallies player_statistics::CreatureTalliesOf(PlayerNames pla
 		tallies.animalsKilled = kept->meals.animalsKilled;
 		tallies.creaturesKilled = kept->meals.creaturesKilled;
 		tallies.poos = kept->poos;
-		tallies.mushroomsEaten = kept->mushroomsEaten;
+	}
+	// The creature keeps one count of the mushrooms that it ate: its mind reads the count too
+	if (const auto* body = registry.TryGet<const Creature>(*creature))
+	{
+		tallies.mushroomsEaten = body->magicMushroomsEaten;
 	}
 	if (const auto* record = registry.TryGet<const CreatureFightRecord>(*creature))
 	{
