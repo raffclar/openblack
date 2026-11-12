@@ -48,6 +48,7 @@
 #include "ECS/Systems/EffectRequestSystemInterface.h"
 #include "ECS/Systems/FightTranscriptNote.h"
 #include "ECS/Systems/GuidanceSystemInterface.h"
+#include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/ThingCircles.h"
 #include "ECS/ThingMapPlace.h"
 #include "ECS/ThingModel.h"
@@ -174,7 +175,7 @@ void CreatureFightSystem::UpdateView(float seconds)
 			}
 			return;
 		}
-		_lookSeconds = 0.0f;
+		_lookMilliseconds = 0;
 		if (_view->lingerSeconds.has_value())
 		{
 			*_view->lingerSeconds -= seconds;
@@ -215,7 +216,7 @@ void CreatureFightSystem::UpdateView(float seconds)
 	// and the look starts again when the player's camera comes back
 	if (dynamic_cast<const DefaultWorldCameraModel*>(&camera.GetModel()) == nullptr)
 	{
-		_lookSeconds = 0.0f;
+		_lookMilliseconds = 0;
 		return;
 	}
 	// A double click that sends the camera into the arena of a fight shows that fight at once. Only the first arena that
@@ -266,8 +267,9 @@ void CreatureFightSystem::UpdateView(float seconds)
 	{
 		return;
 	}
-	_lookSeconds += seconds;
-	if (_lookSeconds > fight_view::k_LookSeconds)
+	// The look counts the real time of the frame, so it also counts while the game pauses or the player is in the temple
+	_lookMilliseconds += look->milliseconds;
+	if (_lookMilliseconds > fight_view::k_LookMilliseconds)
 	{
 		TryStartView(found->first, found->second, foundArena, "look");
 	}
@@ -319,7 +321,7 @@ void CreatureFightSystem::TryStartView(entt::entity first, entt::entity second, 
 	view->SetPlayerModel(camera.SetModel(std::move(model)));
 	camera.SetModelSeconds(modelSeconds);
 	_view = Watched {.first = first, .second = second, .lingerSeconds = std::nullopt};
-	_lookSeconds = 0.0f;
+	_lookMilliseconds = 0;
 }
 
 bool CreatureFightSystem::DraggedAway(const FightCameraModel& model) const
@@ -412,6 +414,8 @@ void CreatureFightSystem::NoteLook()
 	    .eye = camera.GetOrigin(Camera::Interpolation::Target),
 	    .looking = camera.GetFocus(Camera::Interpolation::Target),
 	    .centreShowsLand = ScreenCentreShowsLand(),
+	    .milliseconds =
+	        Locator::time::has_value() ? static_cast<int32_t>(Locator::time::value().GetFrameRealTime().count()) : 0,
 	};
 }
 
