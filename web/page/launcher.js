@@ -124,10 +124,137 @@ globalThis.openblackLogText = () => logLines.join('\n');
 globalThis.openblackChecksums = (from = 0) => ({ count: checksumLines.length, lines: checksumLines.slice(from) });
 logElement.parentElement.addEventListener('toggle', showLog);
 
-/** Show a message on the page. The game calls this too, for an error that stops it. Each file gets a download link. */
-function showMessage(title, text, files = []) {
+// ------------------------------------------------------------------------------------------------ diagnostics
+
+// The page writes its own lines for the diagnostics with this tag. The game writes the lines of its connection log with
+// the tag "net: " (src/Online/ConnectionLog.h).
+const k_PageTag = 'page: ';
+const k_NetTag = 'net: ';
+/** The most lines of the connection log in the report of "Copy diagnostics" */
+const k_DiagnosticLines = 300;
+/** The most other lines of the game log at the end of the report, for the context of a crash */
+const k_DiagnosticTail = 40;
+
+// What the page found out for the report: the renderer and its adapter, and the size of the canvas
+const diagnostics = { renderer: 'not chosen', adapter: 'not known', canvas: 'not known' };
+
+/** Write a line of the page to the game log, with the tag of the page */
+function pageLog(text) {
+  log(k_PageTag + text);
+}
+globalThis.openblackPageLog = pageLog;
+
+/** The text with each secret in it replaced by a mark, as the game does (MaskSecrets) */
+function maskSecrets(text) {
+  return text
+    .replace(/v4\.(public|local)\.[A-Za-z0-9_\-.=+/]+/g, '<hidden>')
+    .replace(/Bearer [A-Za-z0-9_\-.=+/]+/g, '<hidden>')
+    .replace(/(\w*(?:ticket|password|token|session|secret)\w*"?\s*[=:]\s*"?)([^"\s,;&]+)/gi, '$1<hidden>');
+}
+
+/** The text of the report of "Copy diagnostics": the build, the browser, the renderer and the last lines of the logs */
+async function diagnosticsReport() {
+  const version = await buildVersion;
+  const memory = globalThis.Module && Module.HEAP8 ? `${Math.round(Module.HEAP8.length / (1024 * 1024))} MB` : 'not known';
+  const net = logLines.filter((line) => line.includes(k_NetTag) || line.startsWith(k_PageTag)).slice(-k_DiagnosticLines);
+  const header = [
+    'openblack diagnostics (web)',
+    `Time: ${new Date().toISOString()}`,
+    `Build: ${version.text}`,
+    `Browser: ${navigator.userAgent}`,
+    `Renderer: ${diagnostics.renderer}`,
+    `Adapter: ${diagnostics.adapter}`,
+    `Canvas: ${diagnostics.canvas}`,
+    `Page: ${document.visibilityState}, ${document.hasFocus() ? 'with' : 'without'} the focus`,
+    `WebAssembly memory: ${memory}`,
+    `Cross-origin isolated: ${globalThis.crossOriginIsolated ? 'yes' : 'no'}`,
+    '',
+    `The last ${net.length} lines of the connection log:`,
+    ...net,
+    '',
+    `The last ${k_DiagnosticTail} lines of the game log:`,
+    ...logLines.slice(-k_DiagnosticTail),
+  ];
+  return maskSecrets(header.join('\n'));
+}
+
+/** Put the report of "Copy diagnostics" on the clipboard. When the browser refuses the clipboard, the page gives a file. */
+async function copyDiagnostics(button) {
+  const report = await diagnosticsReport();
+  let copied = false;
+  try {
+    await navigator.clipboard.writeText(report);
+    copied = true;
+  } catch (error) {
+    // The clipboard needs the focus of the page: an older way works from the press of a button
+    const area = document.createElement('textarea');
+    area.value = report;
+    area.setAttribute('readonly', '');
+    area.style.position = 'fixed';
+    area.style.opacity = '0';
+    document.body.append(area);
+    area.select();
+    try {
+      copied = document.execCommand('copy');
+    } catch {
+      copied = false;
+    }
+    area.remove();
+  }
+  if (!copied) {
+    download(`openblack_diagnostics_${fileTime()}.txt`, report);
+  }
+  pageLog(copied ? `The diagnostics went to the clipboard (${report.length} characters)`
+    : 'The browser refused the clipboard: the page gives the diagnostics as a file');
+  if (button) {
+    const label = button.textContent;
+    button.textContent = copied ? 'Copied' : 'Saved as a file';
+    setTimeout(() => { button.textContent = label; }, 2000);
+  }
+}
+globalThis.openblackCopyDiagnostics = copyDiagnostics;
+
+/** A button of a message box */
+function messageButton(label, action) {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.textContent = label;
+  button.addEventListener('click', (event) => action(event.currentTarget));
+  return button;
+}
+
+/** Close a message box. The keys go to the game again. */
+function closeMessage(box) {
+  box.remove();
+  const canvas = element('canvas');
+  if (document.body.classList.contains('playing') && canvas) {
+    canvas.focus();
+  }
+}
+
+// Escape closes the newest message box that tells of a stop of the game. While the game plays, Escape is a key of the
+// game, thus Escape closes only a message of a game that stopped.
+window.addEventListener('keydown', (event) => {
+  if (event.key !== 'Escape') {
+    return;
+  }
+  const stops = element('messages').querySelectorAll('.message.stop');
+  if (stops.length > 0) {
+    event.preventDefault();
+    event.stopPropagation();
+    closeMessage(stops[stops.length - 1]);
+  }
+}, true);
+
+/**
+ * Show a message on the page. The game calls this too, for an error that stops it. Each file gets a download link. The
+ * player can close each message. A message of a stop of the game also has the buttons that copy the diagnostics and that
+ * load the page again, and Escape closes it.
+ */
+function showMessage(title, text, files = [], { stop = false } = {}) {
   const box = document.createElement('div');
-  box.className = 'message';
+  box.className = stop ? 'message stop' : 'message';
+  box.setAttribute('role', stop ? 'alertdialog' : 'status');
   const heading = document.createElement('strong');
   heading.textContent = title;
   box.append(heading, document.createTextNode(text));
@@ -144,6 +271,14 @@ function showMessage(title, text, files = []) {
     }
     box.append(list);
   }
+  const buttons = document.createElement('div');
+  buttons.className = 'message-buttons';
+  if (stop) {
+    buttons.append(messageButton('Copy diagnostics', copyDiagnostics),
+      messageButton('Reload the page', () => location.reload()));
+  }
+  buttons.append(messageButton(stop ? 'Close (Esc)' : 'Close', () => closeMessage(box)));
+  box.append(buttons);
   element('messages').append(box);
   console.error(`openblack: ${title}: ${text}`);
 }
@@ -335,11 +470,14 @@ async function crashReports() {
   return reports.sort((a, b) => b.lastModified - a.lastModified).slice(0, k_CrashReportsShown);
 }
 
-/** Show the crash reports that the private storage keeps, with links to download them. Gives the count shown. */
-async function showCrashReports(title, text) {
+/**
+ * Show the crash reports that the private storage keeps, with links to download them. Gives the count shown. A stop of
+ * the game shows them as a message of a stop.
+ */
+async function showCrashReports(title, text, stop = false) {
   const reports = await crashReports();
   if (reports.length > 0) {
-    showMessage(title, text, reports);
+    showMessage(title, text, reports, { stop });
   }
   return reports.length;
 }
@@ -372,13 +510,15 @@ async function gameCrashed(name) {
     const reports = await crashReports();
     if (reports.some((report) => report.name === name)) {
       showMessage('The game stopped after a crash',
-        'The browser keeps the crash reports below. The "Save log" button gives the whole game log.', reports);
+        'The browser keeps the crash reports below. The "Save log" button gives the whole game log.', reports,
+        { stop: true });
       return;
     }
     await new Promise((resolve) => setTimeout(resolve, k_CrashReportWaitMs));
   }
   showMessage('The game stopped after a crash',
-    `The private storage of the browser does not have the report ${name}. The "Save log" button gives the game log.`);
+    `The private storage of the browser does not have the report ${name}. The "Save log" button gives the game log.`, [],
+    { stop: true });
 }
 
 // The time without a game frame, while the page shows its display frames, after which the page tells the player that
@@ -418,8 +558,8 @@ async function gameFailed(reason) {
   log(`The game stopped on an error: ${reason}`);
   const kept = await keepPageCrashReport(reason);
   if (!kept || (await showCrashReports('The game stopped on an error',
-    'The browser keeps the crash reports below. The "Save log" button gives the whole game log.')) === 0) {
-    showMessage('The game stopped on an error', `${reason} The "Save log" button gives the game log.`);
+    'The browser keeps the crash reports below. The "Save log" button gives the whole game log.', true)) === 0) {
+    showMessage('The game stopped on an error', `${reason} The "Save log" button gives the game log.`, [], { stop: true });
   }
 }
 
@@ -523,6 +663,73 @@ function setPlayEnabled(enabled) {
 // The game draws with WebGPU, and with WebGL 2 when the browser has no WebGPU. The page asks the browser for a WebGPU
 // adapter before the game starts. When it gets none, the game starts with WebGL 2 at once. The page parameter
 // "renderer" (webgpu or webgl2) selects the renderer, and a renderer on the game's command line ("args") wins.
+/** The adapter of WebGPU in a few words, from the information that the browser gives */
+function describeGpuAdapter(adapter) {
+  const info = adapter.info || {};
+  const part = (value) => value || 'not given';
+  return `WebGPU: vendor ${part(info.vendor)}, architecture ${part(info.architecture)}, device ${part(info.device)}, ` +
+    `description ${part(info.description)}`;
+}
+
+/** The renderer of WebGL 2 in a few words. The browser gives the names of the GPU only with its debug extension. */
+function describeWebGl() {
+  try {
+    const context = document.createElement('canvas').getContext('webgl2');
+    if (!context) {
+      return 'WebGL 2: no context';
+    }
+    const debug = context.getExtension('WEBGL_debug_renderer_info');
+    const vendor = context.getParameter(debug ? debug.UNMASKED_VENDOR_WEBGL : context.VENDOR);
+    const renderer = context.getParameter(debug ? debug.UNMASKED_RENDERER_WEBGL : context.RENDERER);
+    const lose = context.getExtension('WEBGL_lose_context');
+    if (lose) {
+      lose.loseContext();
+    }
+    return `WebGL 2: vendor ${vendor}, renderer ${renderer}`;
+  } catch (error) {
+    return `WebGL 2: no information (${error})`;
+  }
+}
+
+/** Find the adapter of the renderer for the diagnostics, and write it to the log */
+async function describeAdapter(backend) {
+  if (backend === 'WebGPU' && navigator.gpu) {
+    try {
+      const adapter = await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' });
+      diagnostics.adapter = adapter ? describeGpuAdapter(adapter) : 'WebGPU: no adapter';
+    } catch (error) {
+      diagnostics.adapter = `WebGPU: the adapter request failed (${error})`;
+    }
+  } else {
+    diagnostics.adapter = describeWebGl();
+  }
+  pageLog(`Adapter: ${diagnostics.adapter}`);
+}
+
+/** Write the size of the game canvas to the log */
+function logCanvasSize() {
+  const canvas = element('canvas');
+  const box = canvas.getBoundingClientRect();
+  diagnostics.canvas = `${Math.round(box.width)} x ${Math.round(box.height)} CSS pixels, device pixel ratio ` +
+    `${window.devicePixelRatio}, window ${window.innerWidth} x ${window.innerHeight}`;
+  pageLog(`Canvas: ${diagnostics.canvas}`);
+}
+
+/** The page writes the changes of its size, of its visibility and of its life to the log, for the diagnostics */
+function watchPage() {
+  logCanvasSize();
+  let resizeTimer;
+  window.addEventListener('resize', () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(logCanvasSize, 1000);
+  });
+  // A hidden tab gets few timers and display frames, thus the game sends no pings and the server can close the socket
+  document.addEventListener('visibilitychange', () => pageLog(`The page is ${document.visibilityState}`));
+  document.addEventListener('freeze', () => pageLog('The browser froze the page'));
+  document.addEventListener('resume', () => pageLog('The browser resumed the page'));
+  window.addEventListener('pagehide', () => pageLog('The page goes away'));
+}
+
 async function chooseRenderer(parameters, gameArguments) {
   if (gameArguments.some((argument) => argument === '-b' || argument.startsWith('--backend-type'))) {
     return { backend: undefined, reason: 'the game arguments select the renderer' };
@@ -603,13 +810,16 @@ async function start(online = false) {
     gameArguments.push('--backend-type', renderer.backend);
   }
   log(`The game gets the arguments: ${gameArguments.join(' ') || '(none)'}`);
-  log(`Renderer: ${renderer.backend === 'OpenGLES' ? 'WebGL 2' : renderer.backend ?? 'from the game arguments'}, ` +
-    `because ${renderer.reason}.`);
+  diagnostics.renderer = `${renderer.backend === 'OpenGLES' ? 'WebGL 2' : renderer.backend ?? 'from the game arguments'}, ` +
+    `because ${renderer.reason}`;
+  log(`Renderer: ${diagnostics.renderer}.`);
+  describeAdapter(renderer.backend);
   const version = await buildVersion;
   element('chooser').hidden = true;
   element('game').hidden = false;
   element('build-badge').hidden = false;
   document.body.classList.add('playing');
+  watchPage();
   const canvas = element('canvas');
   canvas.addEventListener('contextmenu', (event) => event.preventDefault());
   // SDL takes the size of a window that the player can change from the size of the canvas on the page. The canvas fills
@@ -690,6 +900,13 @@ async function main() {
     download(`openblack_log_${fileTime()}.txt`, logLines.join('\n'));
     // The keys go to the game again, not to the button
     event.currentTarget.blur();
+  });
+  // The report of the connection log for a bug report, also while the game plays
+  element('copy-diagnostics').addEventListener('click', (event) => {
+    const button = event.currentTarget;
+    copyDiagnostics(button);
+    // The keys go to the game again, not to the button
+    button.blur();
   });
   element('log-toggle').addEventListener('click', (event) => {
     const open = document.body.classList.toggle('log-open');
