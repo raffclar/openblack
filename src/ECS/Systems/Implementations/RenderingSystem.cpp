@@ -49,6 +49,7 @@
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureObjectAction.h"
 #include "ECS/Components/CreatureSpells.h"
+#include "ECS/Components/DeadTree.h"
 #include "ECS/Components/DetailMeshes.h"
 #include "ECS/Components/FallingRoots.h"
 #include "ECS/Components/Feature.h"
@@ -90,6 +91,7 @@
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/DrawnPlace.h"
 #include "ECS/DrawnRegistry.h"
+#include "ECS/FelledTreeDrawRules.h"
 #include "ECS/GamePlayers.h"
 #include "ECS/Graveyards.h"
 #include "ECS/ObjectDetail.h"
@@ -120,6 +122,7 @@
 #include "Graphics/GroundBlobs.h"
 #include "Graphics/InstanceLightPoint.h"
 #include "Graphics/MeshDetail.h"
+#include "Graphics/ObjectLandLight.h"
 #include "Graphics/ObjectTint.h"
 #include "Graphics/ShaderManager.h"
 #include "Graphics/TempleHeartLook.h"
@@ -206,6 +209,14 @@ bool PartsDifferByLevel(entt::id_type meshId)
 		return !subMesh->IsPhysics() && flags.isWindow == 0 &&
 		       openblack::graphics::mesh_detail::PartsDifferByLevel(static_cast<uint8_t>(flags.lodMask));
 	});
+}
+
+/// Whether a thing is a tree that a forester felled, on the land and not held. The game draws it two times in each
+/// frame (see ecs::felled_tree_draw). A held one is drawn one time, as any held thing.
+bool FelledOnTheLand(const openblack::ecs::Registry& registry, entt::entity entity)
+{
+	const auto* deadTree = registry.TryGet<const DeadTree>(entity);
+	return deadTree != nullptr && deadTree->felled && !registry.AnyOf<InHand, HeldByCreature>(entity);
 }
 
 /// Whether a thing is a village centre
@@ -389,7 +400,9 @@ void RenderingSystem::PrepareDrawDescs(bool drawBoundingBox)
 		                                                                     .film = true,
 		                                                                     .environmentMapped = true,
 		                                                                     .changedMaterials = std::nullopt}));
-		count.first->second.count++;
+		// A felled tree has room for both of its draws
+		const uint32_t room = FelledOnTheLand(from, entity) ? openblack::ecs::felled_tree_draw::k_Draws : 1;
+		count.first->second.count += room;
 		count.first->second.unlit |= from.AnyOf<Unlit>(entity);
 		// The creatures and the animals are each posed as they are
 		count.first->second.perEntity |= from.AnyOf<CreatureMorph, AnimalPose, VillagerPose, AnimatedStaticPose>(entity);
@@ -422,7 +435,7 @@ void RenderingSystem::PrepareDrawDescs(bool drawBoundingBox)
 			count.first->second.instanceAlpha = true;
 			count.first->second.changedMaterials = changed->properties;
 		}
-		instanceCount++;
+		instanceCount += room;
 	};
 	auto prep = [&registry, &prepMesh, &fadingCounts, &instanceCount](entt::entity entity, const Mesh& mesh,
 	                                                                  bool morphWithTerrain) {
@@ -434,8 +447,10 @@ void RenderingSystem::PrepareDrawDescs(bool drawBoundingBox)
 			// A thing drawn in less detail further off has room among those fading out too
 			if (detail == nullptr && openblack::ecs::object_detail::Banded(registry, entity))
 			{
-				++fadingCounts[drawnMesh];
-				++instanceCount;
+				// A felled tree has room for both of its draws
+				const uint32_t room = FelledOnTheLand(registry, entity) ? openblack::ecs::felled_tree_draw::k_Draws : 1;
+				fadingCounts[drawnMesh] += room;
+				instanceCount += room;
 			}
 			return;
 		}
@@ -749,6 +764,9 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 	_renderContext.filmReflections.clear();
 	auto lastFilmBoats = std::exchange(_filmReflectionBoats, {});
 	_renderContext.inHandDraws.clear();
+	_renderContext.seeThroughRefs.clear();
+	_renderContext.mapPlaceLitInstances.clear();
+	_renderContext.drawnOverInstances.clear();
 	_renderContext.bonePalette.clear();
 	_heldThings.clear();
 	const auto& meshes = entt::locator<resources::ResourcesInterface>::value().GetMeshes();
@@ -1122,6 +1140,9 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 				    added = graphics::object_tint::SumAdded(added, poison->added);
 			    }
 		    }
+		    // The look with no charring and no glow of a fire, which the second draw of a felled tree has
+		    const float usualTint = look.y;
+		    const uint32_t usualAdded = added;
 		    // Something charred by fire is drawn grey. Only a thing with a fire can be charred.
 		    if (look.y == 0.0f && onFire && Locator::fireSystem::has_value())
 		    {
@@ -1278,11 +1299,40 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		    {
 			    graphics::instance_light::SetLightOffset(instanceModel, *lightOffset);
 		    }
-		    _renderContext.instanceUniforms[idx] = {.model = instanceModel, .look = look};
+		    // A felled tree on the land is drawn two times at the same place: as it burns, then with the usual look over it
+		    const bool drawnTwice = FelledOnTheLand(registry, entity);
+		    if (drawnTwice && slots->second.filled + slots->second.gone + 1 >= slots->second.count)
+		    {
+			    fits = false;
+			    return;
+		    }
+		    auto usualLook = look;
+		    usualLook.y = usualTint;
+		    if (abode == nullptr)
+		    {
+			    usualLook.x = graphics::object_tint::PackAdded(usualAdded, grainFlow);
+		    }
+		    const auto lookOf = [&look, &usualLook](openblack::ecs::felled_tree_draw::Look drawnLook) {
+			    return drawnLook == openblack::ecs::felled_tree_draw::Look::Usual ? usualLook : look;
+		    };
+		    const auto& felledLooks = openblack::ecs::felled_tree_draw::k_Looks;
+		    _renderContext.instanceUniforms[idx] = {.model = instanceModel,
+		                                            .look = drawnTwice ? lookOf(felledLooks.front()) : look};
 		    _renderContext.instanceLevels[idx] = graphics::mesh_detail::LevelBit(level);
+		    if (drawnTwice)
+		    {
+			    _renderContext.instanceUniforms[idx + 1] = {.model = instanceModel, .look = lookOf(felledLooks.back())};
+			    _renderContext.instanceLevels[idx + 1] = graphics::mesh_detail::LevelBit(level);
+			    _renderContext.drawnOverInstances.insert(idx + 1);
+		    }
 		    if (seeThroughRef.has_value())
 		    {
 			    _renderContext.seeThroughRefs.emplace(idx, *seeThroughRef);
+		    }
+		    // The phantom building and the yard copy of a scaffold take the land's light of their place on the map
+		    if (graphics::object_land_light::Of(ghosts.Has(entity)) == graphics::object_land_light::Rule::AtMapPlace)
+		    {
+			    _renderContext.mapPlaceLitInstances.insert(idx);
 		    }
 		    // A villager's bones go into the palette, as its clip poses it or as its model rests, and its instance says
 		    // where they start
@@ -1388,8 +1438,13 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 			    auto box = l3dMesh->GetBoundingBox();
 			    auto boxMatrix = modelMatrix * glm::translate(box.Center()) * glm::scale(box.Size());
 			    _renderContext.instanceUniforms[idx + (_renderContext.instanceUniforms.size() / 2)] = {.model = boxMatrix};
+			    if (drawnTwice)
+			    {
+				    _renderContext.instanceUniforms[idx + 1 + (_renderContext.instanceUniforms.size() / 2)] = {.model =
+				                                                                                                   boxMatrix};
+			    }
 		    }
-		    ++slots->second.filled;
+		    slots->second.filled += drawnTwice ? 2 : 1;
 	    },
 	    SegmentPasses {.registry = registry, .placed = segmentPlaced, .last = lastSegment});
 	std::ranges::copy(drawnPicks, std::back_inserter(_renderContext.drawnObjects));

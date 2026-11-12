@@ -217,6 +217,31 @@ void AddFire(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "nature.burning_felled_trees_by_distance",
+	    .name = "Burning felled trees near and far",
+	    .facet = Facet::Nature,
+	    .description = "Four oaks lie felled as a forester fells them and catch fire, in the line of "
+	                   "nature.burning_dead_trees_by_distance, about 50, 120, 195 and 275 m from the camera. Beside each "
+	                   "one, 12 m to the west, a felled oak that does not burn. The camera looks along the line from one "
+	                   "side.",
+	    .expected = "The game draws a felled tree two times in each frame: first charred and with the glow of its fire "
+	                "when it burns, then with the usual look over it at the same depth. Thus a near burning felled tree "
+	                "shows the usual look of a felled tree with its flames on it, not charred and with no glow. Where a "
+	                "felled tree fades out in the distance, both draws blend, so it fades less than a dead tree, and a "
+	                "burning one shows a little of its charred look through the second draw.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {40.0f, 14.0f, -90.0f}, .look = {80.0f, 6.0f, 60.0f}},
+	    .objects = {{.type = TreeInfo::Oak, .offset = {80.0f, -60.0f}, .alight = true, .dead = true, .felled = true},
+	                {.type = TreeInfo::Oak, .offset = {80.0f, 20.0f}, .alight = true, .dead = true, .felled = true},
+	                {.type = TreeInfo::Oak, .offset = {80.0f, 100.0f}, .alight = true, .dead = true, .felled = true},
+	                {.type = TreeInfo::Oak, .offset = {80.0f, 180.0f}, .alight = true, .dead = true, .felled = true},
+	                {.type = TreeInfo::Oak, .offset = {68.0f, -60.0f}, .dead = true, .felled = true},
+	                {.type = TreeInfo::Oak, .offset = {68.0f, 20.0f}, .dead = true, .felled = true},
+	                {.type = TreeInfo::Oak, .offset = {68.0f, 100.0f}, .dead = true, .felled = true},
+	                {.type = TreeInfo::Oak, .offset = {68.0f, 180.0f}, .dead = true, .felled = true}},
+	});
+
+	all.push_back({
 	    .id = "miracles.burnt_buildings",
 	    .name = "Huts burnt down, two of them held by a script",
 	    .facet = Facet::Miracles,

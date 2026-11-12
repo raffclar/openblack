@@ -29,6 +29,7 @@
 #include "InstanceDesc.h"
 #include "InterfaceCreatures.h"
 #include "MaterialStages.h"
+#include "ObjectLandLight.h"
 #include "ScreenshotCapture.h"
 #include "Visual/RenderModes.h"
 #include "Visual/RenderPass.h"
@@ -216,6 +217,9 @@ public:
 		/// The mesh is shaded as the game shades the models it lights as it poses them, the glow over a hand holding a
 		/// miracle among them: 1.3 n.l + 0.4, from 0.4 to 1, in place of the usual model light
 		bool posedModelLight {false};
+		/// The mesh takes the land's light of its place on the map with the weights of whole cells, and no distance haze,
+		/// as the game lights the phantom building of a scaffold (see graphics::object_land_light)
+		graphics::object_land_light::Rule landLightRule {graphics::object_land_light::Rule::AtPoint};
 		/// Where the model light is for this mesh in place of where it is this frame, as the creature in the temple's
 		/// creature room is lit from the room's fire
 		std::optional<glm::vec3> modelLight;

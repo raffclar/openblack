@@ -827,8 +827,10 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 			}
 			if (has(MeshUniform::LightRule))
 			{
-				// x: 1 for the light the game gives the models it lights as it poses them
-				const glm::vec4 u_lightRule {desc.posedModelLight ? 1.0f : 0.0f, 0.0f, 0.0f, 0.0f};
+				// x: 1 for the light the game gives the models it lights as it poses them. y: 1 for the land's light of
+				// the place on the map, with no distance haze.
+				const glm::vec4 u_lightRule {desc.posedModelLight ? 1.0f : 0.0f,
+				                             graphics::object_land_light::UniformValue(desc.landLightRule), 0.0f, 0.0f};
 				setUniform(MeshUniform::LightRule, &u_lightRule);
 			}
 			if (has(MeshUniform::ObjectLook))
