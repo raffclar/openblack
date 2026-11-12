@@ -1314,13 +1314,53 @@ def box_kept_keys(box, server_commands):
             and not any(command[0] <= checked for command in server_commands))
 
 
+# The L presses that can take a leash off: a tied leash goes back to the hand first, then the next L takes it off
+LEASH_OFF_PRESSES = 3
+
+
+def take_off_worn_leash(pid, tap, state=None, press=None, wait=None):
+    """Takes the leash off the creature of a desktop client with the L key when the creature wears one. Each press
+    waits until the leash changes. Gives the presses, as dicts of the leash before and after; empty when the creature
+    wore no leash."""
+    state = state or leash_state
+    press = press or press_key
+    wait = wait or wait_for
+    presses = []
+    for _ in range(LEASH_OFF_PRESSES):
+        before = state(pid)
+        if not isinstance(before, dict) or not before.get("leashed"):
+            break
+        press(pid, "L", tap)
+        after = wait(lambda: (lambda now: now if isinstance(now, dict) and now != before else None)(state(pid)), 5)
+        presses.append({"before": before, "after": after})
+    return presses
+
+
+def leash_keys_done(leashes, leash_done, index):
+    """Whether every leash check of a desktop client pressed all of its keys. Another step of the hand on the same
+    client waits for this: the run does one step at a time, and a long step would keep the leash keys back."""
+    return all(len(leash_done.get(number, [])) >= len(leash_key_presses(leash))
+               for number, leash in enumerate(leashes) if leash["client"] == index)
+
+
+def leash_press_turn(presses, done, turn_of_first):
+    """The turn at which the next key of a leash check can go. The first key goes at its own turn. Another step of the
+    run (the hold of a creature) can keep the first key back; then each later key keeps its distance in turns from the
+    turn at which the first key went."""
+    turns = presses[len(done)][0]
+    if not done or turn_of_first is None:
+        return turns
+    return max(turns, turn_of_first + turns - presses[0][0])
+
+
 def desktop_leash_step(leash, done, pid, log):
-    """Presses the next keys of a leash check on a desktop client once its log tells the turns of the key. Gives True
-    when the check pressed every key."""
+    """Presses the next keys of a leash check on a desktop client once the client reached the turn of the key. Gives
+    True when the check pressed every key."""
     presses = leash_key_presses(leash)
     while len(done) < len(presses):
         turns, key, before = presses[len(done)]
-        if not lines_with(log, [f"Network game: {turns} turns compared"]):
+        turn = leash_press_turn(presses, done, done[0].get("at_turn") if done else None)
+        if not (lines_with(log, [f"Network game: {turns} turns compared"]) and reached_turn(log, pid, turn)):
             return False
         time.sleep(before)
         if not done:
@@ -1336,8 +1376,16 @@ def desktop_leash_step(leash, done, pid, log):
                       f"{json.dumps(leash['box'])[:400]}")
                 press_key(pid, "Escape", leash.get("tap", False))
                 time.sleep(1.0)
+        if not done and key == "L":
+            # Another step of the run (the hold clicks the creature) can put the leash on before the check. Then the
+            # first L takes it off, so the check takes it off first and the next L puts it on.
+            leash["took_off_first"] = take_off_worn_leash(pid, leash.get("tap", False))
+            if leash["took_off_first"]:
+                print(f"leash: the creature of the client with pid {pid} wore a leash before the check: "
+                      f"{json.dumps(leash['took_off_first'])[:400]}")
+        at_turn = client_turn(pid)
         pressed = press_key(pid, key, leash.get("tap", False))
-        done.append({"turns": turns, "key": key, "pressed": pressed, "leash": leash_state(pid)})
+        done.append({"turns": turns, "at_turn": at_turn, "key": key, "pressed": pressed, "leash": leash_state(pid)})
         print(f"leash: client with pid {pid} pressed {key} after {turns} turns: {json.dumps(done[-1])[:400]}")
     return True
 
@@ -1351,8 +1399,9 @@ def leash_result(leash, server_log, logs):
     on = [command for command in server if command[0] >= leash["turn"] and command[2] == "presses the leash key"
           and " wears leash " in command[3]]
     off_words = "goes into the temple" if leash["off"] == "temple" else "presses the leash key"
+    # The leash comes off after the key put it on: a key that took off a leash of another step comes before
     off = [command for command in server if command[0] >= leash["turn"] + leash["hold"] and command[2] == off_words
-           and command[3].endswith("wears no leash")]
+           and command[3].endswith("wears no leash") and on and command[0] > on[0][0]]
     result = {"client": "web" if leash["client"] == "web" else leash["client"] + 1, "slot": slot,
               "server": [list(command) for command in server], "on": bool(on), "off": bool(off),
               "held_turns": off[0][0] - on[0][0] if on and off else None, "clients": {},
@@ -2330,7 +2379,9 @@ def main():
                     desktop_leash_step(leashes[number], done, clients[index].pid,
                                        os.path.join(client_dirs[index], "client.log"))
             giver = (options.give or 0) - 1
-            if (give_done is None and 0 <= giver < len(clients) and clients[giver].poll() is None and reached_turn(
+            # The gift waits for the leash keys of its client: it can take some hundreds of turns
+            if (give_done is None and 0 <= giver < len(clients) and clients[giver].poll() is None
+                    and leash_keys_done(leashes, leash_done, giver) and reached_turn(
                     os.path.join(client_dirs[giver], "client.log"), clients[giver].pid, options.hold_after)):
                 give_done = give_to_creature(clients[giver].pid, os.path.join(client_dirs[giver], "client.log"))
             if (options.stop_second_after is not None and not stopped_second and len(clients) > 1
@@ -2550,6 +2601,7 @@ def main():
         for number, leash in enumerate(leashes):
             result = leash_result(leash, server_log, logs)
             result["keys"] = leash_done.get(number)
+            result["took_off_first"] = leash.get("took_off_first")
             summary["leash"].append(result)
             if not result["same"]:
                 print(f"the leash check of client {result['client']} failed: on {result['on']}, off {result['off']}, "

@@ -174,5 +174,110 @@ class ShiftedInput(unittest.TestCase):
                          [net_check.INPUT_OFFSET_FRAMES + 10, net_check.INPUT_OFFSET_FRAMES + 70])
 
 
+@unittest.skipIf(net_check is None, "net_check needs the cryptography package")
+class LeashAfterHold(unittest.TestCase):
+    """The hold clicks the creature, and the click puts the leash on before the leash check presses its keys"""
+
+    @staticmethod
+    def fake_leash(states):
+        """A fake creature: each L press goes to the next leash in the list"""
+        presses = []
+
+        def state(_pid):
+            return states[min(len(presses), len(states) - 1)]
+
+        def press(_pid, key, _tap):
+            presses.append(key)
+
+        return state, press, presses
+
+    @staticmethod
+    def wait(test, _seconds):
+        return test()
+
+    def test_a_worn_leash_comes_off_before_the_check(self):
+        state, press, presses = self.fake_leash([{"id": 134, "leashed": True}, {"id": 134, "leashed": False}])
+        taken = net_check.take_off_worn_leash(1, False, state, press, self.wait)
+        self.assertEqual(presses, ["L"])
+        self.assertEqual(taken, [{"before": {"id": 134, "leashed": True}, "after": {"id": 134, "leashed": False}}])
+
+    def test_a_tied_leash_goes_to_the_hand_and_then_comes_off(self):
+        tied = {"id": 134, "leashed": True, "tied_to": 7}
+        held = {"id": 134, "leashed": True, "tied_to": None}
+        state, press, presses = self.fake_leash([tied, held, {"id": 134, "leashed": False}])
+        self.assertEqual(len(net_check.take_off_worn_leash(1, False, state, press, self.wait)), 2)
+        self.assertEqual(presses, ["L", "L"])
+
+    def test_no_leash_needs_no_press(self):
+        state, press, presses = self.fake_leash([{"id": 134, "leashed": False}])
+        self.assertEqual(net_check.take_off_worn_leash(1, False, state, press, self.wait), [])
+        state, press, presses = self.fake_leash([None])
+        self.assertEqual(net_check.take_off_worn_leash(1, False, state, press, self.wait), [])
+        self.assertEqual(presses, [])
+
+    def test_a_leash_that_stays_on_stops_after_the_limit(self):
+        state, press, presses = self.fake_leash([{"id": 134, "leashed": True}])
+        taken = net_check.take_off_worn_leash(1, False, state, press, lambda test, _seconds: None)
+        self.assertEqual(len(presses), net_check.LEASH_OFF_PRESSES)
+        self.assertTrue(all(press["after"] is None for press in taken))
+
+    def test_the_gift_waits_for_the_leash_keys_of_its_client(self):
+        leashes = [{"client": 1, "slot": 1, "turn": 900, "hold": 200, "off": "key"},
+                   {"client": "web", "slot": 2, "turn": 300, "hold": 100, "off": "key"}]
+        self.assertFalse(net_check.leash_keys_done(leashes, {0: []}, 1))
+        self.assertFalse(net_check.leash_keys_done(leashes, {0: [{"key": "L"}]}, 1))
+        self.assertTrue(net_check.leash_keys_done(leashes, {0: [{"key": "L"}, {"key": "L"}]}, 1))
+        # A client with no leash check, and the web god, keep nothing back
+        self.assertTrue(net_check.leash_keys_done(leashes, {0: []}, 0))
+
+    def test_the_tap_of_the_hold_and_the_keys_pass_the_check(self):
+        # The run of creature-audit2-network: the hold put the leash on at turn 871; the check took it off and put
+        # it on with L at turn 900, and took it off with L after the hold
+        leash = {"client": 1, "slot": 1, "turn": 900, "hold": 200, "off": "key"}
+        lines = [(871, "taps a creature", "creature 134 wears leash 2 of player 1, held in the hand"),
+                 (905, "presses the leash key", "creature 134 wears no leash"),
+                 (912, "presses the leash key", "creature 134 wears leash 2 of player 1, held in the hand"),
+                 (1103, "presses the leash key", "creature 134 wears no leash")]
+        with tempfile.TemporaryDirectory() as folder:
+            server = os.path.join(folder, "server.log")
+            with open(server, "w", encoding="utf-8") as file:
+                for turn, words, after in lines:
+                    file.write(f"[game] [info] [PlayerCommandSystem.cpp:176] Leash command: player 1 {words} at turn "
+                               f"{turn}: {after}\n")
+            result = net_check.leash_result(leash, server, [("1", server, 0, None), ("2", server, 0, None)])
+        self.assertTrue(result["on"])
+        self.assertTrue(result["off"])
+        self.assertTrue(result["same"])
+
+    def test_a_late_first_key_keeps_the_hold_of_the_later_keys(self):
+        presses = [(900, "L", 0.0), (1100, "L", 0.0)]
+        self.assertEqual(net_check.leash_press_turn(presses, [], None), 900)
+        # The hold of the other client kept the first key back until turn 1440
+        self.assertEqual(net_check.leash_press_turn(presses, [{"at_turn": 1440}], 1440), 1640)
+        self.assertEqual(net_check.leash_press_turn(presses, [{"at_turn": 900}], 900), 1100)
+        self.assertEqual(net_check.leash_press_turn(presses, [{"at_turn": None}], None), 1100)
+        # The temple keys: Escape keeps the turn of F4
+        temple = [(900, "L", 0.0), (1100, "F4", 0.0), (1100, "Escape", 8.0)]
+        self.assertEqual(net_check.leash_press_turn(temple, [{}, {}], 1440), 1640)
+
+    def test_a_key_that_took_off_the_leash_of_the_hold_is_not_the_end_of_the_check(self):
+        # The keys came late: the key that took off the leash of the hold is after the planned end of the hold, but
+        # before the key that put the leash on
+        leash = {"client": 1, "slot": 1, "turn": 900, "hold": 200, "off": "key"}
+        lines = [(1415, "taps a creature", "creature 134 wears leash 2 of player 1, held in the hand"),
+                 (1445, "presses the leash key", "creature 134 wears no leash"),
+                 (1465, "presses the leash key", "creature 134 wears leash 2 of player 1, held in the hand")]
+        with tempfile.TemporaryDirectory() as folder:
+            server = os.path.join(folder, "server.log")
+            with open(server, "w", encoding="utf-8") as file:
+                for turn, words, after in lines:
+                    file.write(f"[game] [info] [PlayerCommandSystem.cpp:176] Leash command: player 1 {words} at turn "
+                               f"{turn}: {after}\n")
+            result = net_check.leash_result(leash, server, [])
+        self.assertTrue(result["on"])
+        self.assertFalse(result["off"])
+        self.assertFalse(result["same"])
+
+
 if __name__ == "__main__":
     unittest.main()
