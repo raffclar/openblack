@@ -113,6 +113,22 @@ void testbed_scenarios::AddNatureScenarios(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "nature.chroma_tree_edges",
+	    .name = "The edges of a near tree's leaves blend over the sky",
+	    .facet = Facet::Nature,
+	    .description = "An oak stands close to the camera, and a beech and a hut stand behind it. The camera is low and "
+	                   "looks up, so that the oak's leaves are against the sky and the beech's leaves are against the hut.",
+	    .expected = "At the edges of the leaves, the texels that are almost solid let a little of the sky (or of the land "
+	                "behind) show through: they blend by the texture's alpha. The texels under the material's reference "
+	                "are cut. The beech behind the oak does not show through the oak's leaves where the oak is in front.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 3.0f, 16.0f}, .look = {k_Tree.x, 9.0f, k_Tree.y}},
+	    .objects = {{.type = TreeInfo::Oak, .offset = k_Tree},
+	                {.type = TreeInfo::Beech, .offset = k_Tree + glm::vec2(6.0f, 12.0f)},
+	                {.type = AbodeInfo::NorseHut, .offset = k_Tree + glm::vec2(-8.0f, 20.0f), .yawDegrees = 180.0f}},
+	});
+
+	all.push_back({
 	    .id = "nature.tree_roots",
 	    .name = "A tree pulled up shows its roots until it is planted again",
 	    .facet = Facet::Nature,

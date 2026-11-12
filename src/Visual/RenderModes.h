@@ -91,6 +91,13 @@ inline constexpr std::array<ModeDesc, k_ModeCount> k_Modes = {{
 	return k_Modes.at(static_cast<uint8_t>(mode));
 }
 
+/// Whether a texel passes the alpha test of a mode that has one. The game keeps the texels whose alpha is the
+/// reference or more, and drops the others.
+[[nodiscard]] constexpr bool PassesAlphaTest(uint8_t alpha, uint8_t reference)
+{
+	return alpha >= reference;
+}
+
 /// The mode that a material draws in when its whole object is see-through: the game's second table of modes. The opaque
 /// modes become their blended forms, and the chroma mode becomes the blended chroma mode. The other modes stay.
 [[nodiscard]] constexpr Mode SeeThrough(Mode mode)

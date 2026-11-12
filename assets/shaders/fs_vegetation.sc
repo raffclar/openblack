@@ -2,6 +2,7 @@ $input v_position, v_texcoord0, v_normal, v_color0, v_haze, v_snow, v_snowLight
 
 #include <bgfx_shader.sh>
 
+#include "alpha_test.sh"
 #include "snow_object.sh"
 
 SAMPLER2D(s_diffuse, 0);
@@ -16,7 +17,7 @@ void main()
 
 	vec4 diffuseTex = texture2D(s_diffuse, v_texcoord0.xy);
 	diffuseTex.rgb = diffuseTex.rgb * light;
-	if (diffuseTex.a <= alphaThreshold)
+	if (FailsAlphaTest(diffuseTex.a, alphaThreshold))
 	{
 		discard;
 	}
