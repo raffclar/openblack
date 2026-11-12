@@ -261,7 +261,13 @@ private:
 	[[nodiscard]] std::optional<glm::ivec2> OpponentOnScreen(size_t creature, glm::vec2 size) const;
 	/// The middle of the body of a creature on the screen
 	[[nodiscard]] static std::optional<glm::ivec2> BodyOnScreen(entt::entity creature, glm::vec2 size);
-	[[nodiscard]] std::optional<glm::ivec2> RopeOnScreen(size_t creature, glm::vec2 size) const;
+	/// The pixels that touch the rope of the creature's tied leash on a screen of a size, from the middle of the rope out
+	[[nodiscard]] std::vector<glm::ivec2> RopeOnScreen(size_t creature, glm::vec2 size) const;
+	/// The middle of the help's tip bubble on a screen of a size, when the bubble shows
+	[[nodiscard]] static std::optional<glm::ivec2> TipBubbleOnScreen(glm::vec2 size);
+	/// Moves the pointer to the next pixel of the rope, after a pick that was not the rope. Gives false when no pixel is
+	/// left.
+	bool NextRopePixel();
 	/// Where the middle of the foot of the scenario's town's worship site altar, or of the site's food pot, is on the
 	/// screen
 	[[nodiscard]] std::optional<glm::ivec2> AltarOnScreen(glm::vec2 size, bool foodPot) const;
@@ -447,6 +453,13 @@ private:
 	uint64_t _framesSincePointerMoved {1000};
 	/// A press that came too soon after the pointer moved, made once the game knows what the pointer is over
 	std::optional<Command> _pressWaiting;
+	/// The pixels of the rope that the pointer tries until the pick of the hand is the rope
+	struct RopeSearch
+	{
+		size_t creature {0};
+		size_t next {0};
+	};
+	std::optional<RopeSearch> _ropeSearch;
 
 	/// The crowd laid out, the next of it to spawn, its homes and towns as they have spawned, and how long it took
 	std::vector<CrowdCreature> _crowdCreatures;

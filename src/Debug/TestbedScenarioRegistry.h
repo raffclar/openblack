@@ -994,8 +994,9 @@ struct Command
 		/// The pointer moves onto the scenario's town's worship site on the screen, as the mouse moves it: onto the middle
 		/// of the foot of its altar (value 0), or onto the middle of its food pot (value 1). Needs no creature
 		PointerOnAltar,
-		/// The pointer moves onto the rope of the leash of the creature, tied to a thing, a quarter of the way from the
-		/// thing, as the mouse moves it
+		/// The pointer moves onto the rope of the leash of the creature, tied to a thing, as the mouse moves it. It tries
+		/// points along the rope from its middle out, one each few frames, until the pick of the hand is the rope. A
+		/// press waits until a point is found or the points end.
 		PointerOnRope,
 		/// The pointer moves onto the scenario's object (object) at a height (amount) over its place on the screen, as
 		/// the mouse moves it. For a storage pit, a value of 1 to 5 moves it onto that wood pile of the pit, and 6 onto
@@ -1304,6 +1305,12 @@ struct Command
 		/// The living near the scenario's object react to it as to a kind of reaction (value, by its number), as a
 		/// script's "create reaction" makes it. It belongs to no player. Needs no creature
 		CreateReaction,
+		/// The pointer moves onto the middle of the help's tip bubble on the screen, as the mouse moves it. Needs no
+		/// creature
+		PointerOnTipBubble,
+		/// The pointer moves onto the totem of the scenario's object (object), a town centre, at a height (amount) over
+		/// the place of the totem on the screen, as the mouse moves it. Needs no creature
+		PointerOnTotem,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures

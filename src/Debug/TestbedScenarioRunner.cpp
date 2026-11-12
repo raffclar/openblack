@@ -128,17 +128,20 @@
 #include "ECS/Systems/InspectorLoading.h"
 #include "ECS/Systems/InspectorSystemInterface.h"
 #include "ECS/Systems/LandSystemInterface.h"
+#include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/ParticleRuleSystemInterface.h"
 #include "ECS/Systems/PlayerCommandSystemInterface.h"
 #include "ECS/Systems/PlayerProfileSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
+#include "ECS/Systems/PuzzleTotemSystemInterface.h"
 #include "ECS/Systems/ResourceStoreSystemInterface.h"
 #include "ECS/Systems/RewardSystemInterface.h"
 #include "ECS/Systems/SaveGameSystemInterface.h"
 #include "ECS/Systems/SkyClockSystemInterface.h"
 #include "ECS/Systems/TeleportSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/Systems/TipBubbleSystemInterface.h"
 #include "ECS/Systems/VillageTotemSystemInterface.h"
 #include "ECS/Systems/VortexSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
@@ -1327,6 +1330,26 @@ std::optional<double> Runner::ReadCheck(const checks::Check& check) const
 		}
 		const auto* state = registry.TryGet<const ecs::components::LivingReaction>(*creature);
 		return state != nullptr && state->reaction != 0 ? static_cast<double>(state->type) : 0.0;
+	}
+	case checks::Quantity::RopeHeld:
+		if (!Locator::leashSystem::has_value())
+		{
+			return std::nullopt;
+		}
+		return Locator::leashSystem::value().RopeHand(PlayerNames::PLAYER_ONE) == leash_snap::Hand::Holding ? 1.0 : 0.0;
+	case checks::Quantity::TipBubbleGripped:
+		if (!Locator::tipBubbleSystem::has_value())
+		{
+			return std::nullopt;
+		}
+		return Locator::tipBubbleSystem::value().IsGripped() ? 1.0 : 0.0;
+	case checks::Quantity::TotemGripped:
+	{
+		const bool town =
+		    Locator::villageTotemSystem::has_value() && Locator::villageTotemSystem::value().GetGripped().has_value();
+		const bool puzzle =
+		    Locator::puzzleTotemSystem::has_value() && Locator::puzzleTotemSystem::value().GetGripped().has_value();
+		return town || puzzle ? 1.0 : 0.0;
 	}
 	}
 	return std::nullopt;
