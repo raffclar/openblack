@@ -663,6 +663,27 @@ TEST(CreatureIdleMind, AStepPullsItsFaceOnItsFirstTryEvenWhileItWaitsForTheBody)
 	EXPECT_FALSE(commands.face.has_value());
 }
 
+TEST(CreatureIdleMind, TheStepsThatUseUpAThingStartWhileTheBodyIsBusy)
+{
+	using Step = creature_mind::Step;
+	constexpr uint32_t k_Held = 7;
+	constexpr uint32_t k_Tree = 9;
+	creature_mind::IdleMind mind;
+	creature_mind::Plan(mind, creature_mind::Activity::Told,
+	                    {Step {.kind = Step::Kind::UseUpHeld}, Step {.kind = Step::Kind::UseUp, .object = k_Tree},
+	                     Step {.kind = Step::Kind::Wait, .seconds = 1.0f}});
+	creature_mind::Senses senses {.seconds = k_Turn, .bodyBusy = true, .held = k_Held};
+	// The thing in the hand goes on the first turn, also when the body plays an action
+	auto commands = creature_mind::Think(mind, senses, Always(1));
+	EXPECT_TRUE(commands.useUpHeld);
+	EXPECT_EQ(mind.step, 1u);
+	// The thing that the next step uses goes on the next turn, also when the body is busy
+	senses.held.reset();
+	commands = creature_mind::Think(mind, senses, Always(1));
+	EXPECT_EQ(commands.useUp, k_Tree);
+	EXPECT_EQ(mind.step, 2u);
+}
+
 // A step pulls its face again on the forty-second turn after the turn that pulled it, as the fight steps do too
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
 TEST(CreatureIdleMind, AStepPullsItsFaceAgainEveryFortyTwoTurns)

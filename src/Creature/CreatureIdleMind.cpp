@@ -1823,10 +1823,12 @@ Commands TurnOfThought(IdleMind& mind, const Senses& senses, const Random& rando
 		// faint starts at once. The steps of a teleport also start at once. A walk to a point or to a thing starts
 		// while the body only moves: the new walk takes the place of the old one at once. A step that tries to start its
 		// clip tries again on each turn. A follow of the camera and a step with nothing to do start at once: the body
-		// is not examined until the turn after the start.
+		// is not examined until the turn after the start. A step that uses up a thing, in the hand or not, also starts
+		// at once, because it does not examine the body.
 		const bool teleportStep = step.kind == Step::Kind::Teleport || step.kind == Step::Kind::Transported ||
 		                          step.kind == Step::Kind::StopTeleportControl;
-		const bool startsAtOnce = step.kind == Step::Kind::FollowCamera || step.kind == Step::Kind::Empty;
+		const bool startsAtOnce = step.kind == Step::Kind::FollowCamera || step.kind == Step::Kind::Empty ||
+		                          step.kind == Step::Kind::UseUp || step.kind == Step::Kind::UseUpHeld;
 		const bool walkOnTheWay =
 		    StartsOnTheWay(step) && senses.onlyMoves && !(handsChecked && senses.hands == HandsState::Busy);
 		if (step.kind != Step::Kind::Wait && step.kind != Step::Kind::WatchCamera && step.kind != Step::Kind::StopMoving &&
