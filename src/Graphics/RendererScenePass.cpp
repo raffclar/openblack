@@ -1280,8 +1280,9 @@ void Renderer::DrawPassTranslucent(const DrawSceneDesc& desc, const ScenePass& p
 	// It is not drawn here, because it would show again in the model's own pose.
 	for (const auto& [meshId, placers] : renderCtx.instancedDrawDescs)
 	{
-		if (graphics::posed_draws::BlendedPassDrawsAllPlaced(
-		        {.translucent = placers.translucent, .perEntity = placers.perEntity}) &&
+		if (graphics::posed_draws::BlendedPassDrawsAllPlaced({.translucent = placers.translucent,
+		                                                      .perEntity = placers.perEntity,
+		                                                      .hand = meshId == ecs::components::Hand::k_MeshId}) &&
 		    !(desc.viewId == RenderPass::Reflection && placers.hiddenFromReflection))
 		{
 			for (uint32_t instance = placers.offset; instance < placers.offset + placers.filled; ++instance)
