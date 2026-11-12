@@ -74,6 +74,7 @@
 #include "Gui/EscapeKeyRules.h"
 #include "Gui/GameInterface.h"
 #include "Gui/JoinOnlineEntry.h"
+#include "Gui/LobbyScreenRules.h"
 #include "Gui/MultiplayerFrontEnd.h"
 #include "Gui/OnlineMapTexts.h"
 #include "Gui/StartupRules.h"
@@ -157,6 +158,11 @@ void Game::UpdateOnline()
 		{
 			// The words "Resynchronising..." show while the world resynchronises (user decision MI-4)
 			Locator::gameInterface::value().ShowResync(session != nullptr && network.InGame() && session->ShowsResync());
+			// The turns of a lobby game wait for the players that still load the world. The camera stays free.
+			const auto loadWait = session != nullptr && network.InGame() ? session->LoadWait() : std::nullopt;
+			Locator::gameInterface::value().ShowLoadWait(
+			    loadWait.has_value() ? gui::lobby_screens::LoadPauseLines(loadWait->loading, loadWait->secondsLeft)
+			                         : std::vector<std::u16string> {});
 			// After the last try the game asks whether the player plays on, as the game asks when the checksums differ
 			// A run of the tools asks nothing: the game stops as its network game ends
 			const bool toolRun = Locator::simulation::value().GetSettings().untilTurn.has_value();

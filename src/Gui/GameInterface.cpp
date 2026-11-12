@@ -127,6 +127,9 @@ constexpr std::string_view k_KickedText = "HELP_TEXT_MPFER_KICKEDYOUGAME";
 constexpr std::u16string_view k_ResyncText = u"Resynchronising...";
 /// The words stand in the middle of the top of the dialog space, in the dialogs' middle text size
 constexpr int k_ResyncTop = 20;
+/// The lines of the wait for the loads of the players, under the place of "Resynchronising..."
+constexpr int k_LoadWaitTop = 50;
+constexpr int k_LoadWaitLineHeight = 28;
 /// The tooltip "Zoom In (%s)" of the save game room, which shows the name of a saved game
 constexpr uint32_t k_NamedZoomToolTip = 0xEE6 - 0xE73;
 /// The dialogs' font, the first of the game's fonts
@@ -2055,6 +2058,13 @@ void GameInterface::Draw(glm::u16vec2 resolution, glm::ivec2 mouse, uint32_t mil
 			_painter.DrawText({DialogPainter::k_Size.x / 2, k_ResyncTop}, DialogPainter::k_Size.x,
 			                  DialogPainter::Justify::Centre, k_ResyncText, DialogPainter::k_MidTextSize,
 			                  DialogPainter::k_TextColour);
+		}
+		for (size_t i = 0; i < _loadWaitLines.size(); ++i)
+		{
+			_painter.DrawText({DialogPainter::k_Size.x / 2, k_LoadWaitTop + (static_cast<int>(i) * k_LoadWaitLineHeight)},
+			                  DialogPainter::k_Size.x, DialogPainter::Justify::Centre, _loadWaitLines[i],
+			                  DialogPainter::k_MidTextSize,
+			                  i == 0 ? DialogPainter::k_FocusColour : DialogPainter::k_TextColour);
 		}
 		_saveGameBoxes->Draw(_painter);
 		_staffQuestionBox->Draw(_painter);

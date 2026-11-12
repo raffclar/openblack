@@ -214,6 +214,8 @@ inline constexpr std::u16string_view k_LoadPauseText = u"The game is paused: wai
 /// same time (user, 2026-11-12). The times are milliseconds since 1970 (UTC). No lines when no player loads.
 [[nodiscard]] std::vector<std::u16string> LoadPauseLines(std::span<const std::string> loadingNames, int64_t deadlineMs,
                                                          int64_t nowMs);
+/// The lines of the load pause with the seconds to its end that the game server gives
+[[nodiscard]] std::vector<std::u16string> LoadPauseLines(std::span<const std::string> loadingNames, int64_t secondsLeft);
 /// The whole seconds to the end of the pause, rounded up, and 0 after the end
 [[nodiscard]] int64_t LoadPauseSecondsLeft(int64_t deadlineMs, int64_t nowMs) noexcept;
 /// The kinds of the slots after the host sets the kind of an empty slot

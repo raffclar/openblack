@@ -370,4 +370,6 @@ TEST(LobbyScreenRules, TheLoadPauseNamesThePlayersThatLoad)
 	EXPECT_EQ(Utf8(LoadPauseLines(names, k_Deadline, k_Deadline + 5'000)[0]),
 	          "The game is paused: waiting for remaining players to load (0:00)");
 	EXPECT_EQ(LoadPauseSecondsLeft(k_Deadline, k_Deadline - 59'500), 60);
+	// The game server gives the seconds left
+	EXPECT_EQ(Utf8(LoadPauseLines(names, int64_t {75})[0]), "The game is paused: waiting for remaining players to load (1:15)");
 }

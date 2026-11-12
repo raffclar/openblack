@@ -612,6 +612,11 @@ int64_t LoadPauseSecondsLeft(int64_t deadlineMs, int64_t nowMs) noexcept
 
 std::vector<std::u16string> LoadPauseLines(std::span<const std::string> loadingNames, int64_t deadlineMs, int64_t nowMs)
 {
+	return LoadPauseLines(loadingNames, LoadPauseSecondsLeft(deadlineMs, nowMs));
+}
+
+std::vector<std::u16string> LoadPauseLines(std::span<const std::string> loadingNames, int64_t secondsLeft)
+{
 	if (loadingNames.empty())
 	{
 		return {};
@@ -625,7 +630,7 @@ std::vector<std::u16string> LoadPauseLines(std::span<const std::string> loadingN
 		}
 		names += name;
 	}
-	const auto seconds = LoadPauseSecondsLeft(deadlineMs, nowMs);
+	const auto seconds = std::max<int64_t>(secondsLeft, 0);
 	return {std::u16string(k_LoadPauseText) + Utf16(fmt::format(" ({}:{:02})", seconds / 60, seconds % 60)), Utf16(names)};
 }
 
