@@ -128,11 +128,6 @@ float magic::GetChantsRequiredToCreate(const InfoConstants& info, MagicType type
 	return GetMagicEffectInfo(info, type).costToCreate;
 }
 
-float magic::GetTimerWhenOneShot(const InfoConstants& info, MagicType type)
-{
-	return GetMagicEffectInfo(info, type).timerWhenOneShot;
-}
-
 float magic::GetTimerWhenPlayerCasting(const InfoConstants& info, MagicType type)
 {
 	return GetMagicEffectInfo(info, type).timerWhenPlayerCasting;

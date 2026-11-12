@@ -97,7 +97,4 @@ ecs::VillagerStateEntry EnterPlayAnim(components::LivingAction& action, Villager
 /// The villager keeps in mind its script's work: the script state `returnTo` that it goes back to later, the goal of its
 /// walk (or where it stands) and what its script gave it
 void KeepScriptWorkInMind(entt::entity villager, VillagerStates returnTo);
-/// A script lets go of what the villager keeps in mind of its work
-void ForgetScriptWork(entt::entity villager);
-
 } // namespace openblack::ecs::villager_script
