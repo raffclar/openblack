@@ -539,7 +539,10 @@ bool CreatureMindSystem::HasPlayed(entt::entity creature)
 	}
 	// A creature with no plan, or with a plan that is not valid, has played, also while steps of its agenda are left
 	const bool planValid = mind->planner.current.has_value() && IsPlanValid(*mind->planner.current);
-	return creature_script_play::Played(mind->idle, planValid, registry.AllOf<CreatureKnockedOut>(creature));
+	// The steps of a knock-out end before the creature is up when it gets up with no rest
+	const auto* knockedOut = registry.TryGet<const CreatureKnockedOut>(creature);
+	const bool outCold = knockedOut != nullptr && knockedOut->steps != CreatureKnockedOut::Steps::Over;
+	return creature_script_play::Played(mind->idle, planValid, outCold);
 }
 
 void CreatureMindSystem::ClearAfterPlayed(entt::entity creature)

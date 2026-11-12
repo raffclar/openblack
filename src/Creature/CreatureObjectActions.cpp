@@ -149,6 +149,11 @@ Hands creature_object_actions::HandsFor(Kind kind)
 	return Hands::Either;
 }
 
+bool creature_object_actions::NeedsCarried(Kind kind)
+{
+	return kind == Kind::Throw || kind == Kind::Eat;
+}
+
 bool creature_object_actions::SharesByStand(Kind kind)
 {
 	switch (kind)

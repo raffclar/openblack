@@ -119,6 +119,9 @@ enum class Hands : uint8_t
 	Either,
 };
 [[nodiscard]] Hands HandsFor(Kind kind);
+/// Whether an action needs a thing that the creature carries, not only a thing in its hand. A throw that ended before
+/// the hand let go keeps the thing in the hand, but the creature does not carry it. Then a throw and an eat of it fail.
+[[nodiscard]] bool NeedsCarried(Kind kind);
 
 /// How an action is going
 enum class Status : uint8_t

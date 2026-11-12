@@ -947,6 +947,49 @@ TEST_F(Reactions, AnAnimalWhoseReactionShutsDownGoesIntoTheStateAfterTheReaction
 	Locator::animalSystem::reset();
 }
 
+// Two cows go to the food of a pot. The stop of the food reaction lets both go, and the pot can go after it.
+TEST_F(Reactions, TheStopOfAFoodReactionThatCowsHoldLetsThemGo)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	ReactToEverything(_info->animal.at(static_cast<size_t>(AnimalInfo::Cow)));
+	Locator::infoConstants::emplace(*_info);
+	auto& animals = static_cast<FakeAnimals&>(Locator::animalSystem::emplace<FakeAnimals>());
+	animals.available = true;
+	animals.foodInterests = true;
+	std::vector<entt::entity> cows;
+	for (const float x : {10.0f, 30.0f})
+	{
+		const auto cow = registry.Create();
+		registry.Assign<Transform>(cow, k_Here + glm::vec3(x, 0.0f, 0.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+		auto& animal = registry.Assign<Animal>(cow);
+		animal.type = AnimalInfo::Cow;
+		animal.move.position = {map_coords::ToFixed(k_Here.x + x), map_coords::ToFixed(k_Here.z)};
+		cows.push_back(cow);
+	}
+	const auto pot = registry.Create();
+	registry.Assign<Transform>(pot, k_Here, glm::mat3(1.0f), glm::vec3(1.0f));
+	registry.Assign<Pot>(pot, Pot {.amount = 10, .maxAmount = 100, .type = PotInfo::FoodPot});
+	Locator::entitiesMap::value().Sync();
+	auto source = Miracle(Reaction::ReactToFood);
+	source.initiator = pot;
+	const auto id = _reactions.Create(source);
+	for (const auto cow : cows)
+	{
+		ASSERT_EQ(registry.Get<const LivingReaction>(cow).reaction, id);
+	}
+	_reactions.ProcessTurn();
+	_reactions.Remove(id);
+	EXPECT_EQ(animals.stops, (std::vector<bool> {true, true}));
+	for (const auto cow : cows)
+	{
+		EXPECT_EQ(registry.Get<const LivingReaction>(cow).reaction, 0u);
+	}
+	registry.Destroy(pot);
+	_reactions.ProcessTurn();
+	EXPECT_FALSE(_reactions.IsActive(id));
+	Locator::animalSystem::reset();
+}
+
 TEST_F(Reactions, AVillagerKeepsTheFireReactionItTookUpAndLetsGoOfItLeavingTheFire)
 {
 	// The fire's reaction is spread as soon as it is made, before the fire knows it: the villager keeps the one it took

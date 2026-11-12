@@ -835,6 +835,19 @@ TEST(CreatureObjectActions, TheHandsThatEachActionNeeds)
 	EXPECT_EQ(creature_object_actions::HandsFor(Kind::Throw), creature_object_actions::Hands::Holding);
 }
 
+// A thing that a throw kept in the hand is not carried. A throw and an eat of it fail. A keep of it and a let-go of it by
+// the rules of the hands work on the hand.
+TEST(CreatureObjectActions, TheActionsThatNeedAThingThatTheCreatureCarries)
+{
+	using creature_object_actions::Kind;
+	using creature_object_actions::NeedsCarried;
+	EXPECT_TRUE(NeedsCarried(Kind::Throw));
+	EXPECT_TRUE(NeedsCarried(Kind::Eat));
+	EXPECT_FALSE(NeedsCarried(Kind::Keep));
+	EXPECT_FALSE(NeedsCarried(Kind::Discard));
+	EXPECT_FALSE(NeedsCarried(Kind::PutDown));
+}
+
 TEST(CreatureDesires, FeedbackPushesEverySourceOfAType)
 {
 	creature_desires::Desires desires;
