@@ -248,13 +248,6 @@ bool IsTownCentre(const openblack::ecs::Registry& registry, entt::entity entity)
 	return type < infos.size() && infos.at(type).abodeType == openblack::AbodeType::TownCentre;
 }
 
-/// Whether a thing is drawn as a paper cut-out turned to the camera when far off: a field's crop, unless it moves in
-/// the physics
-bool IsPaper(const openblack::ecs::Registry& registry, entt::entity entity)
-{
-	return registry.AllOf<Field>(entity) && !registry.AllOf<InPhysics>(entity);
-}
-
 /// The model of the roots drawn under the trees out of the land
 entt::id_type RootsMesh()
 {
@@ -1103,14 +1096,9 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 				    const auto cropMesh = entt::locator<resources::ResourcesInterface>::value().GetMeshes().Handle(mesh.id);
 				    const float cropHeight = cropMesh->GetBoundingBox().Size().y * transform.scale.y;
 				    modelMatrix[3].y += field_crop::Sink(field->height.position) * cropHeight;
-				    // Far off, drawn in its least detail, a crop is a paper cut-out standing turned to the camera, which
-				    // doesn't sway
-				    if (level == graphics::mesh_detail::Mesh::Low && IsPaper(registry, entity) && camera != nullptr)
-				    {
-					    modelMatrix = graphics::mesh_detail::PaperMatrix(glm::vec3(modelMatrix[3]), transform.scale.x,
-					                                                     camera->GetOrigin(), camera->GetFocus());
-				    }
-				    else if (const auto* swayable = stores.TryGet<Swayable>(entity); swayable != nullptr && crop->sways)
+				    // The crop follows the land at each detail level. It is never a paper cut-out turned to the camera, and
+				    // it sways at each detail level when it is ripe.
+				    if (const auto* swayable = stores.TryGet<Swayable>(entity); swayable != nullptr && crop->sways)
 				    {
 					    modelMatrix = vegetation.GetFieldMatrix(modelMatrix, transform.scale.y, swayable->swaySlot);
 				    }
