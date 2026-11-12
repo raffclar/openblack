@@ -264,6 +264,9 @@ struct Sources
 	std::function<float(glm::vec2)> landHeight;
 	/// Where an object stands, which a shell over its model takes its place among what blends by; none once it has gone
 	std::function<std::optional<glm::vec3>(entt::entity)> objectPosition;
+	/// Where the frame draws the origin of an object's model, which a shower of sparks rises from; none once it has gone.
+	/// A thing in the hand or in flight is drawn there between the turns.
+	std::function<std::optional<glm::vec3>(entt::entity)> objectDrawnOrigin;
 	/// The game's milliseconds now, by which the glowing shells' textures slide
 	uint64_t gameMilliseconds {0};
 	/// The squares in a row of the players' symbols sheet: 4 on a land, more in a network game with more gods
