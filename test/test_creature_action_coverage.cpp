@@ -74,12 +74,17 @@ constexpr std::array<std::string_view, 28> k_ScriptActions {
 
 // The actions that nothing in the game starts: no desire list, no copy of a deed, no script and no part of the game
 // itself. The creature must not do them.
-constexpr std::array<std::string_view, 28> k_ActionsThatNeverStart {
-    "PutOutFire",      "DestroyAggressor", "SleepAtPos",        "RunToObject",          "HelpBuildHouse",   "BuildHome",
-    "RunAwayFromPos",  "WatchTelly",       "HurlObjectInHand",  "StealSpell",           "StealScaffolding", "SteaSpellSeed",
-    "StealAnimal",     "StealVillager",    "GestureFullCircle", "GestureStar",          "GestureSpiral",    "GestureSquareWave",
-    "GestureScribble", "GestureSquare",    "GestureTriangle",   "GestureS-Shape",       "GestureV-Ball",    "GestureMoon",
-    "GestureHeart",    "GestureBowTie",    "CastTeleport",      "CastTeleportAndUseIt",
+constexpr std::array<std::string_view, 16> k_ActionsThatNeverStart {
+    "PutOutFire",     "DestroyAggressor", "SleepAtPos",       "RunToObject",          "HelpBuildHouse",   "BuildHome",
+    "RunAwayFromPos", "WatchTelly",       "HurlObjectInHand", "StealSpell",           "StealScaffolding", "SteaSpellSeed",
+    "StealAnimal",    "StealVillager",    "CastTeleport",     "CastTeleportAndUseIt",
+};
+
+// The gesture actions. No desire and no shipped script starts them, but a script that forces one gets the drawing of
+// the circle.
+constexpr std::array<std::string_view, 12> k_GestureActions {
+    "GestureFullCircle", "GestureStar",    "GestureSpiral", "GestureSquareWave", "GestureScribble", "GestureSquare",
+    "GestureTriangle",   "GestureS-Shape", "GestureV-Ball", "GestureMoon",       "GestureHeart",    "GestureBowTie",
 };
 } // namespace
 
@@ -109,5 +114,16 @@ TEST(CreatureActionCoverage, ActionsThatNothingStartsHaveNoSteps)
 	for (const auto action : k_ActionsThatNeverStart)
 	{
 		EXPECT_EQ(creature_plan_actions::For(action), nullptr) << action;
+	}
+}
+
+TEST(CreatureActionCoverage, EveryGestureActionHasTheStepsOfTheCircle)
+{
+	for (const auto action : k_GestureActions)
+	{
+		const auto* executor = creature_plan_actions::For(action);
+		ASSERT_NE(executor, nullptr) << action;
+		EXPECT_EQ(executor->build, creature_plan_actions::Build::Gesture) << action;
+		EXPECT_EQ(executor->target, creature_plan_actions::Target::None) << action;
 	}
 }
