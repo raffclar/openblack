@@ -96,9 +96,13 @@ private:
 	[[nodiscard]] creature_blends::Stores& BlendStores();
 	/// The threads that make the blends, made the first time that the system has many blends to make
 	[[nodiscard]] WorkerPool& Workers();
+	/// The threads that draw the bodies in each frame, made at the first frame
+	[[nodiscard]] WorkerPool& FrameWorkers();
 
 	/// The threads that make the blends, made the first time that the system has many blends to make
 	std::unique_ptr<WorkerPool> _workers;
+	/// The threads that draw the bodies in each frame. The threads above can make blends while a frame draws.
+	std::unique_ptr<WorkerPool> _frameWorkers;
 	/// The game's random numbers: the blinks and the eye movements draw on the local seed, the dance moves on the synced seed
 	GameRandomSource _random;
 	/// The animations adjusted to the variants' stands, made the first time that a creature of the species wants them,

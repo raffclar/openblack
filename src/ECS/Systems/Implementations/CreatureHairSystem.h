@@ -9,6 +9,9 @@
 
 #pragma once
 
+#include <memory>
+
+#include "Common/WorkerPool.h"
 #include "ECS/Systems/CreatureHairSystemInterface.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
@@ -28,7 +31,11 @@ public:
 	void SetShown(bool shown) override;
 
 private:
+	/// The threads that move the hair of many bodies at the same time, made at the first frame
+	[[nodiscard]] WorkerPool& Workers();
+
 	bool _shown {true};
+	std::unique_ptr<WorkerPool> _workers;
 };
 
 } // namespace openblack::ecs::systems
