@@ -3178,6 +3178,17 @@ namespace
 {
 /// Game turns in ten seconds: a living thing changes to a more urgent reaction of another kind only after this time
 constexpr int k_TenSeconds = 100;
+
+/// Makes the states of a look and of a flight final states, as in the game's data. Thus a villager in them is free
+/// for a reaction.
+void MakeReactionStatesFinal(InfoConstants& info)
+{
+	for (const auto state : {VillagerStates::FleeingFromObjectReaction, VillagerStates::LookingAtObjectReaction})
+	{
+		info.villagerStateTable.at(static_cast<size_t>(state)).isFinalState = 1;
+	}
+	Locator::infoConstants::emplace(info);
+}
 } // namespace
 
 // A villager weighs a reaction that it made, as it weighs every other reaction
@@ -3200,6 +3211,7 @@ TEST_F(Reactions, AVillagerWeighsAReactionThatItMadeItself)
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
 TEST_F(Reactions, AVillagerThatChangesToAMoreUrgentReactionKeepsItsMemoryOfTheOldKind)
 {
+	MakeReactionStatesFinal(*_info);
 	Locator::reactionSystem::emplace<ecs::systems::ReactionSystem>();
 	auto& reactions = Locator::reactionSystem::value();
 	auto& registry = Locator::entitiesRegistry::value();
@@ -3230,6 +3242,7 @@ TEST_F(Reactions, AVillagerThatChangesToAMoreUrgentReactionKeepsItsMemoryOfTheOl
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
 TEST_F(Reactions, AVillagerWhoseOldStateStopsTheOldReactionHoldsTheNewOne)
 {
+	MakeReactionStatesFinal(*_info);
 	// The state of the flight is not a state of a reaction here. Thus the look leaves its reaction when it goes into it
 	_info->villagerStateTable.at(static_cast<size_t>(VillagerStates::FleeingFromObjectReaction)).isReactionState = 0;
 	Locator::infoConstants::emplace(*_info);
@@ -3259,6 +3272,7 @@ TEST_F(Reactions, AVillagerWhoseOldStateStopsTheOldReactionHoldsTheNewOne)
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
 TEST_F(Reactions, AVillagerThatChangesToAKindItNeverTakesUpLeavesTheGroupOfItsReaction)
 {
+	MakeReactionStatesFinal(*_info);
 	_info->reaction.at(static_cast<size_t>(Reaction::ReactToHandPickUp)).priority = 200;
 	Locator::infoConstants::emplace(*_info);
 	auto& registry = Locator::entitiesRegistry::value();
