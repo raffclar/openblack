@@ -71,19 +71,15 @@ TEST(FrontEndPointer, ControlsWithNoBoxTakeTheMouseOnlyUnderThePointer)
 	EXPECT_FALSE(IsOn({.boxUp = false, .controlsTakeMouse = false}));
 }
 
-TEST(HandVisibility, TheFrontEndsPointerPutsItAwayInTheLandAndInTheTemple)
+TEST(HandVisibility, TheFrontEndsPointerPutsItAway)
 {
 	using openblack::gui::front_end_pointer::IsOn;
-	for (const bool insideTemple : {false, true})
-	{
-		// Under the tattoo editor over the cave, or a question of the save game room
-		EXPECT_FALSE(IsShown({.dialogOpen = IsOn({.boxUp = true}), .interfaceActive = true, .insideTemple = insideTemple}));
-		// With the pointer over a button of the story history, or over the incoming message
-		EXPECT_FALSE(
-		    IsShown({.dialogOpen = IsOn({.controlsTakeMouse = true}), .interfaceActive = true, .insideTemple = insideTemple}));
-		// The pointer moves off the buttons: the hand comes back
-		EXPECT_TRUE(IsShown({.dialogOpen = IsOn({}), .interfaceActive = true, .insideTemple = insideTemple}));
-	}
+	// Under the tattoo editor over the cave, or a question of the save game room
+	EXPECT_FALSE(IsShown({.dialogOpen = IsOn({.boxUp = true}), .interfaceActive = true}));
+	// With the pointer over a button of the story history, or over the incoming message
+	EXPECT_FALSE(IsShown({.dialogOpen = IsOn({.controlsTakeMouse = true}), .interfaceActive = true}));
+	// The pointer moves off the buttons: the hand comes back
+	EXPECT_TRUE(IsShown({.dialogOpen = IsOn({}), .interfaceActive = true}));
 }
 
 TEST(HandVisibility, TheHandTakesPressesInPlay)
