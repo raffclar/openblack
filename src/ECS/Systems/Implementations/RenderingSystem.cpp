@@ -592,8 +592,10 @@ void RenderingSystem::PrepareDrawDescs(bool drawBoundingBox)
 		drawDesc->second.bonePalette = desc.villagers;
 		// The sea doesn't reflect villagers, nor the explorers' boat film, which it mirrors in a look of its own
 		drawDesc->second.hiddenFromReflection = desc.villagers || desc.film;
-		// Blended by its materials, over the opaque things
-		drawDesc->second.materialBlending = desc.translucent;
+		// Each primitive is drawn in the mode of its material. A standing thing blends the texels of its blended
+		// materials over what is behind them, and writes the depth where its material says.
+		drawDesc->second.materialBlending = true;
+		drawDesc->second.materialCulling = desc.translucent;
 		drawDesc->second.translucent = desc.translucent;
 		drawDesc->second.alphaTexturedAdditive = desc.alphaTexturedAdditive;
 		drawDesc->second.shineColour = desc.shineColour;

@@ -1659,7 +1659,7 @@ void Renderer::DrawPassEntities(const DrawSceneDesc& desc, const ScenePass& pass
 		sd.onlyJoints = placers.onlyJoints;
 		sd.hideShutJoints = placers.hideShutJoints;
 		// The temple's meshes and the creatures, which are drawn as their materials say
-		sd.useMaterialCulling = placers.materialBlending || creatureMaterials;
+		sd.useMaterialCulling = placers.materialCulling || creatureMaterials;
 		sd.useMaterialAddressing = creatureMaterials;
 		sd.mirrored = desc.cullBack;
 		sd.uvOffset = placers.uvOffset;
@@ -2334,6 +2334,8 @@ void Renderer::DrawPassVegetation(const DrawSceneDesc& desc, const ScenePass& pa
 			submitDesc.detailLevel = run.level;
 			submitDesc.viewId = run.fading ? TranslucentView(desc.viewId) : desc.viewId;
 			submitDesc.state = run.fading ? opaqueState | BGFX_STATE_BLEND_ALPHA : opaqueState;
+			// A standing tree blends the texels of its chroma material over what is behind them, and writes the depth
+			submitDesc.useMaterialBlending = !run.fading;
 			submitDesc.sortDepth = run.fading ? zsort::Depth(glm::vec3(renderCtx.treeInstanceData.at(run.first).modelMatrix[3]),
 			                                                 desc.camera->GetOrigin())
 			                                  : 0;
@@ -2393,6 +2395,7 @@ void Renderer::DrawPassVegetation(const DrawSceneDesc& desc, const ScenePass& pa
 				submitDesc.viewId = RenderPass::ReflectionMirrored;
 				submitDesc.sortDepth = hand_reflection::SortKey(hand_reflection::MirroredThing::Held);
 				submitDesc.state = opaqueState;
+				submitDesc.useMaterialBlending = true;
 				submitDesc.snow = false;
 				submitDesc.landLightScale = _before.treeBrightness.Or(_treeBrightness);
 				submitDesc.shadeAt = glm::vec4(held.heldLight->point, hand_reflection::k_HeldShade);
@@ -2408,6 +2411,7 @@ void Renderer::DrawPassVegetation(const DrawSceneDesc& desc, const ScenePass& pa
 		submitDesc.viewId = desc.viewId;
 		submitDesc.state = opaqueState;
 		submitDesc.sortDepth = 0;
+		submitDesc.useMaterialBlending = false;
 
 		// Draw tree bounding boxes if enabled
 		if (renderCtx.boundingBox && renderCtx.treeInstanceCount > 0)

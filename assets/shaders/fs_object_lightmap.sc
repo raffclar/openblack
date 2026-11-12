@@ -2,6 +2,8 @@ $input v_position, v_texcoord0, v_normal, v_color0, v_haze, v_snow, v_snowLight
 
 #include <bgfx_shader.sh>
 
+#include "alpha_test.sh"
+
 SAMPLER2D(s_diffuse, 0);
 SAMPLER2D(s_lightmap, 3);
 #ifdef USE_REFLECTION
@@ -27,7 +29,7 @@ void main()
 	gl_FragColor = vec4(mix(reflection, colour, diffuseTex.a), 1.0f);
 #else
 	float alphaThreshold = u_skyAlphaThreshold.y;
-	if (diffuseTex.a <= alphaThreshold)
+	if (FailsAlphaTest(diffuseTex.a, alphaThreshold))
 	{
 		discard;
 	}
