@@ -262,11 +262,6 @@ void CreatureMindSystem::Situate(entt::entity creature, creature_plan_actions::S
 	{
 		situation.eye = camera->origin;
 	}
-	// The steps that look, turn or walk to the camera need a creature with a player
-	if (const auto camera = openblack::ecs::ReportedCameraOfItsPlayer(creature))
-	{
-		situation.camera = glm::vec2(camera->origin.x, camera->origin.z);
-	}
 	const auto* body = registry.TryGet<const Creature>(creature);
 	situation.hasPlayer = body != nullptr && body->owner != PlayerNames::NEUTRAL;
 	situation.controlledByScript = registry.AllOf<ScriptControlled>(creature);

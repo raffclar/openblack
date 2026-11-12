@@ -314,14 +314,19 @@ TEST(LeashOrders, Agendas)
 	EXPECT_NEAR(thrown[0].movement.maxDistance, 40.0f, k_Tolerance);
 	EXPECT_EQ(thrown[1].order.kind, ObjectOrder::Kind::Throw);
 
-	const auto hold = Hold(k_Cow, false, {0.0f, 0.0f}, 2u, 40.0f);
+	const auto hold = Hold(k_Cow, false, 2u, 40.0f);
 	ASSERT_EQ(hold.size(), 4u);
 	EXPECT_EQ(hold[0].order.kind, ObjectOrder::Kind::PickUp);
-	EXPECT_EQ(hold[1].movement.kind, Movement::Kind::TurnToFace);
+	// It turns to the camera with its head on the camera and a face that shows its attitude to the player
+	EXPECT_EQ(hold[1].movement.kind, Movement::Kind::TurnToFaceCamera);
+	EXPECT_TRUE(hold[1].main);
+	ASSERT_TRUE(hold[1].gaze.has_value());
+	EXPECT_TRUE(hold[1].gaze->camera);
+	EXPECT_EQ(hold[1].face, creature_face::Cue::AttitudeToPlayer);
 	EXPECT_EQ(hold[2].order.kind, ObjectOrder::Kind::Keep);
 	EXPECT_EQ(hold[2].order.animation, 102u);
 	EXPECT_EQ(hold[3].kind, Step::Kind::Wait);
-	EXPECT_EQ(Hold(k_Cow, true, {0.0f, 0.0f}, std::nullopt, 40.0f).size(), 2u);
+	EXPECT_EQ(Hold(k_Cow, true, std::nullopt, 40.0f).size(), 2u);
 
 	// Home to sleep: the yawn first, then the walk, then the sleep
 	const std::vector<Step> sleep {{.kind = Step::Kind::Action, .animation = 57},

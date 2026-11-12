@@ -47,11 +47,10 @@ TEST(CreatureOddAgendas, ShowLearntLessonScratchesWithASmile)
 // It turns to the camera, then scratches its head and looks confused, puzzled, with its eyes on the camera
 TEST(CreatureOddAgendas, LookConfusedFacesTheCamera)
 {
-	const auto agenda = odd::LookConfused(glm::vec2 {3.0f, 4.0f});
+	const auto agenda = odd::LookConfused();
 	ASSERT_EQ(agenda.size(), 3u);
 	EXPECT_EQ(agenda[0].kind, Step::Kind::Move);
-	EXPECT_EQ(agenda[0].movement.kind, Movement::Kind::TurnToFace);
-	EXPECT_EQ(agenda[0].movement.point, glm::vec2(3.0f, 4.0f));
+	EXPECT_EQ(agenda[0].movement.kind, Movement::Kind::TurnToFaceCamera);
 	EXPECT_EQ(agenda[1].animation, animations::k_Scratch);
 	EXPECT_EQ(agenda[2].animation, animations::k_Confused);
 	for (const auto& step : agenda)
@@ -61,15 +60,6 @@ TEST(CreatureOddAgendas, LookConfusedFacesTheCamera)
 	}
 	EXPECT_EQ(agenda[1].face, creature_face::Cue::Puzzled);
 	EXPECT_EQ(agenda[2].face, creature_face::Cue::Puzzled);
-}
-
-// Without a camera it does not turn first
-TEST(CreatureOddAgendas, LookConfusedWithoutACameraDoesNotTurn)
-{
-	const auto agenda = odd::LookConfused(std::nullopt);
-	ASSERT_EQ(agenda.size(), 2u);
-	EXPECT_EQ(agenda[0].animation, animations::k_Scratch);
-	EXPECT_EQ(agenda[1].animation, animations::k_Confused);
 }
 
 // One time in two it faints, lies still for five seconds and more, and gets up with four tenths of its life
@@ -129,8 +119,7 @@ TEST(CreatureOddAgendas, PlansCanCarryOutTheOddActions)
 	{
 		const auto* action = plan_actions::For(name);
 		ASSERT_NE(action, nullptr) << name;
-		const auto agenda =
-		    plan_actions::Agenda(*action, std::nullopt, {0.0f, 0.0f}, {.camera = glm::vec2 {1.0f, 1.0f}}, First);
+		const auto agenda = plan_actions::Agenda(*action, std::nullopt, {0.0f, 0.0f}, {}, First);
 		ASSERT_TRUE(agenda.has_value()) << name;
 		EXPECT_FALSE(agenda->empty()) << name;
 	}

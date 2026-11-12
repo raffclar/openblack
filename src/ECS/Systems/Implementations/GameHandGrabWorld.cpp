@@ -86,7 +86,6 @@
 #include "ECS/PlayerRelations.h"
 #include "ECS/Registry.h"
 #include "ECS/RegistryContext.h"
-#include "ECS/ReportedCamera.h"
 #include "ECS/ScriptHighlightRules.h"
 #include "ECS/Systems/AbodeKnockSystemInterface.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
@@ -929,9 +928,7 @@ bool GameHandGrabWorld::GiveTo(entt::entity creature, entt::entity held, bool le
 	{
 		return false;
 	}
-	const auto camera = openblack::ecs::ReportedPlayerCamera(HandPlayer());
-	const auto eye = camera.has_value() ? camera->origin : glm::vec3(0.0f);
-	return Locator::creatureMindSystem::value().TakeFromHand(creature, held, leftHand, glm::vec2(eye.x, eye.z));
+	return Locator::creatureMindSystem::value().TakeFromHand(creature, held, leftHand, HandPlayer());
 }
 
 std::optional<hand_grab::HandGrabWorldInterface::Taking> GameHandGrabWorld::TakingOf(entt::entity creature) const

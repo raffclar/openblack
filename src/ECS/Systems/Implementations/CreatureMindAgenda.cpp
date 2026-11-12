@@ -404,6 +404,8 @@ bool Move(entt::entity creature, const creature_mind::Commands& commands)
 	case Kind::TurnToFaceAwayFromObject:
 	case Kind::ToThrowPosition:
 	case Kind::ToThrowAtPoint:
+	case Kind::TurnToFaceCamera:
+	case Kind::TurnToFaceGiverCamera:
 		// Overseen turn by turn by the mind as it casts (StartSubMove)
 		break;
 	}
@@ -414,7 +416,8 @@ bool IsSubMove(creature_mind::Movement::Kind kind)
 {
 	using Kind = creature_mind::Movement::Kind;
 	return kind == Kind::GoNearObject || kind == Kind::GetAwayFromObject || kind == Kind::TurnToFaceObject ||
-	       kind == Kind::TurnToFaceAwayFromObject || kind == Kind::ToThrowPosition || kind == Kind::ToThrowAtPoint;
+	       kind == Kind::TurnToFaceAwayFromObject || kind == Kind::ToThrowPosition || kind == Kind::ToThrowAtPoint ||
+	       kind == Kind::TurnToFaceCamera || kind == Kind::TurnToFaceGiverCamera;
 }
 
 /// The creature heals itself: its life becomes full, and its wounds and blood age as if much time went by

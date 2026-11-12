@@ -173,16 +173,15 @@ TEST(CreatureScriptAgendas, PointingAtAThingOrTheCamera)
 	EXPECT_EQ(thing[0].order.seconds, 5.0f);
 	EXPECT_EQ(thing[0].face, creature_face::Cue::Amazed);
 
+	// The turn to the camera reads the camera of its player on each turn. A creature without a player does not turn.
 	const glm::vec3 camera {10.0f, 40.0f, 20.0f};
-	const auto unowned = PointAtCamera(false, camera);
-	ASSERT_EQ(unowned.size(), 1);
-	EXPECT_EQ(unowned[0].order.kind, ObjectOrder::Kind::PointAt);
-	EXPECT_EQ(unowned[0].order.point, glm::vec2(10.0f, 20.0f));
-	EXPECT_EQ(unowned[0].order.pointHeight, 40.0f);
-	EXPECT_EQ(unowned[0].order.seconds, 1.0f);
-	const auto owned = PointAtCamera(true, camera);
-	ASSERT_EQ(owned.size(), 2);
-	EXPECT_EQ(owned[0].movement.kind, Movement::Kind::TurnToFace);
+	const auto point = PointAtCamera(camera);
+	ASSERT_EQ(point.size(), 2);
+	EXPECT_EQ(point[0].movement.kind, Movement::Kind::TurnToFaceCamera);
+	EXPECT_EQ(point[1].order.kind, ObjectOrder::Kind::PointAt);
+	EXPECT_EQ(point[1].order.point, glm::vec2(10.0f, 20.0f));
+	EXPECT_EQ(point[1].order.pointHeight, 40.0f);
+	EXPECT_EQ(point[1].order.seconds, 1.0f);
 }
 
 // "force CreatureTiger CREATURE_SIT TigerBasePos": walks there, faces the place, then down the slope, and sits

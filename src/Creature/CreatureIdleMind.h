@@ -239,6 +239,13 @@ struct Movement
 		/// Going to where it can throw at a point: nearer than the step's distance it backs away to that distance, further
 		/// than eight times its height it walks up to eight times its height from the point
 		ToThrowAtPoint,
+		/// Turning to face the camera of its player, where the camera is on each turn (see creature_camera_turn). The
+		/// step starts also while the body is busy. A creature without a player does not turn, and the step takes two
+		/// turns.
+		TurnToFaceCamera,
+		/// Turning to face the camera of the player that last gave it a thing, where the camera is on each turn (see
+		/// creature_camera_turn). The step starts also while the body is busy. Without a giver, the step fails.
+		TurnToFaceGiverCamera,
 	};
 	Kind kind {Kind::ToPoint};
 	glm::vec2 point {0.0f};
@@ -558,8 +565,8 @@ struct Step
 		Transported,
 		/// The stone no longer controls the creature. The step is done as it starts.
 		StopTeleportControl,
-		/// A step with nothing to do, as the turn to the camera of a creature that has no player. The step starts also
-		/// while the body plays an action, and it is done on the turn after the turn that it starts.
+		/// A step with nothing to do. The step starts also while the body plays an action, and it is done on the turn
+		/// after the turn that it starts.
 		Empty,
 	};
 	Kind kind {Kind::Wait};
@@ -1195,7 +1202,7 @@ struct PooBy
 [[nodiscard]] std::vector<Step> EatHeld();
 /// Taking a thing the player's hand gives it: turning to the player's camera, then reaching out to take it from the
 /// hand, looking at it and curious all along
-[[nodiscard]] std::vector<Step> TakeFromHand(uint32_t object, glm::vec2 camera, bool leftHand);
+[[nodiscard]] std::vector<Step> TakeFromHand(uint32_t object, bool leftHand);
 /// What it does with a thing it was given and holds: looks it over, curious; eats it; or throws it at the player's
 /// camera, looking at the camera
 [[nodiscard]] std::vector<Step> ExamineGiven(uint32_t object);
@@ -1203,11 +1210,14 @@ struct PooBy
 [[nodiscard]] std::vector<Step> ThrowGiven(glm::vec3 camera);
 /// Playing an action once on the spot
 [[nodiscard]] std::vector<Step> Emote(size_t animation);
+/// A step that turns the creature to face the camera of its player, where the camera is on each turn. Its head looks at
+/// the camera.
+[[nodiscard]] Step TurnToCamera();
 /// Communicating its state to the player: turning to face the camera, then showing what it feels. Its head looks at
 /// the camera all the time.
-[[nodiscard]] std::vector<Step> Communicate(glm::vec2 camera);
-/// Turning to face a point, then playing an action
-[[nodiscard]] std::vector<Step> FaceAndEmote(glm::vec2 point, size_t animation);
+[[nodiscard]] std::vector<Step> Communicate();
+/// Turning to face the camera, then playing an action. Its head looks at the camera all the time.
+[[nodiscard]] std::vector<Step> FaceAndEmote(size_t animation);
 /// Walking up to something, then playing an action at it
 [[nodiscard]] std::vector<Step> ApproachAndEmote(uint32_t object, size_t animation);
 /// Turning to face something and watching it for some seconds

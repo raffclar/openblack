@@ -206,9 +206,9 @@ TEST(CreaturePlayerAgendas, GoingToTheHandFollowsItThenIsHappyOneTimeInTwo)
 
 TEST(CreaturePlayerAgendas, PointingAtTheHandTurnsToTheCameraThenPointsWhereTheHandIs)
 {
-	const auto agenda = PointAtHand({5.0f, 6.0f}, {1.0f, 2.0f, 3.0f});
+	const auto agenda = PointAtHand({1.0f, 2.0f, 3.0f});
 	ASSERT_EQ(agenda.size(), 2u);
-	EXPECT_EQ(agenda[0].movement.kind, creature_mind::Movement::Kind::TurnToFace);
+	EXPECT_EQ(agenda[0].movement.kind, creature_mind::Movement::Kind::TurnToFaceCamera);
 	EXPECT_TRUE(agenda[0].gaze->camera);
 	EXPECT_EQ(agenda[1].order.kind, ObjectOrder::Kind::PointAt);
 	EXPECT_EQ(agenda[1].order.point, glm::vec2(1.0f, 3.0f));
@@ -218,54 +218,52 @@ TEST(CreaturePlayerAgendas, PointingAtTheHandTurnsToTheCameraThenPointsWhereTheH
 
 TEST(CreaturePlayerAgendas, HowNiceItThinksThePlayerIsIsAWaveOrTheSadClip)
 {
-	EXPECT_EQ(ShowHowNice({}, 0.1f)[1].animation, k_FriendlyWaveAnimation);
-	EXPECT_EQ(ShowHowNice({}, 0.0f)[1].animation, k_SadAnimation);
-	EXPECT_EQ(PrayToPlayer({})[1].animation, k_PrayAnimation);
+	EXPECT_EQ(ShowHowNice(0.1f)[1].animation, k_FriendlyWaveAnimation);
+	EXPECT_EQ(ShowHowNice(0.0f)[1].animation, k_SadAnimation);
+	EXPECT_EQ(PrayToPlayer()[1].animation, k_PrayAnimation);
 }
 
 TEST(CreaturePlayerAgendas, BeingCrossFollowsTheCameraThenMakesARudeSignOrTaunts)
 {
-	const auto rude = BeCrossWithPlayer(glm::vec2 {}, 10.0f, NeverFirst);
+	const auto rude = BeCrossWithPlayer(10.0f, NeverFirst);
 	ASSERT_EQ(rude.size(), 3u);
 	EXPECT_EQ(rude[0].kind, Step::Kind::FollowCamera);
 	EXPECT_EQ(rude[2].animation, k_RudeSignAnimation);
-	EXPECT_EQ(BeCrossWithPlayer(glm::vec2 {}, 10.0f, AlwaysFirst)[2].animation, k_TauntAnimation);
-	// Without a camera the game still draws for the sign first. The turn to the camera has nothing to do, but it keeps
-	// its place in the agenda.
+	EXPECT_EQ(BeCrossWithPlayer(10.0f, AlwaysFirst)[2].animation, k_TauntAnimation);
+	// The game draws for the sign with no test of the camera. The turn to the camera reads the camera on each turn.
 	std::vector<uint32_t> draws;
-	const auto noCamera = BeCrossWithPlayer(std::nullopt, 10.0f, [&draws](uint32_t range) {
+	const auto drawn = BeCrossWithPlayer(10.0f, [&draws](uint32_t range) {
 		draws.push_back(range);
 		return NeverFirst(range);
 	});
 	EXPECT_EQ(draws, std::vector<uint32_t> {2});
-	ASSERT_EQ(noCamera.size(), 3u);
-	EXPECT_EQ(noCamera[0].kind, Step::Kind::FollowCamera);
-	EXPECT_EQ(noCamera[1].kind, Step::Kind::Empty);
-	EXPECT_EQ(noCamera[2].animation, k_RudeSignAnimation);
-	EXPECT_EQ(FollowPlayer({}, 10.0f)[2].animation, k_LookAtMeAnimation);
-	EXPECT_EQ(GoToMiddleOfScreen({}, 10.0f).size(), 2u);
+	ASSERT_EQ(drawn.size(), 3u);
+	EXPECT_EQ(drawn[1].kind, Step::Kind::Move);
+	EXPECT_EQ(drawn[1].movement.kind, creature_mind::Movement::Kind::TurnToFaceCamera);
+	EXPECT_EQ(FollowPlayer(10.0f)[2].animation, k_LookAtMeAnimation);
+	EXPECT_EQ(GoToMiddleOfScreen(10.0f).size(), 2u);
 }
 
 TEST(CreaturePlayerAgendas, ShowingAThingPicksItUpUnlessHeldThenPutsItDown)
 {
-	const auto agenda = ShowPlayerAnObject(7u, {}, 10.0f);
+	const auto agenda = ShowPlayerAnObject(7u, 10.0f);
 	ASSERT_EQ(agenda.size(), 4u);
 	EXPECT_EQ(agenda[0].order.kind, ObjectOrder::Kind::PickUp);
 	EXPECT_EQ(agenda[1].kind, Step::Kind::FollowCamera);
 	EXPECT_EQ(agenda[2].face, creature_face::Cue::AttitudeToPlayer);
 	EXPECT_EQ(agenda[3].order.kind, ObjectOrder::Kind::Discard);
 	EXPECT_EQ(agenda[3].order.animation, k_PutDownAnimation);
-	EXPECT_EQ(ShowPlayerAnObject(std::nullopt, {}, 10.0f).size(), 3u);
+	EXPECT_EQ(ShowPlayerAnObject(std::nullopt, 10.0f).size(), 3u);
 }
 
 // Each of the four rounds draws three in four, then one in two, then the face
 TEST(CreaturePlayerAgendas, BeingSillyDoesFourRoundsOfTalkPlayLaughAndAFace)
 {
 	Scripted random {.values = {1, 0, 0, 0, 1, 9, 2, 1, 0, 3, 0, 5}};
-	const auto agenda = BeSillyWithPlayer({}, std::ref(random));
+	const auto agenda = BeSillyWithPlayer(std::ref(random));
 	EXPECT_EQ(random.ranges, (std::vector<uint32_t> {4, 2, 10, 4, 2, 10, 4, 2, 10, 4, 2, 10}));
 	// Round one: turn, talk, playful, laugh, talk, face 16
-	EXPECT_EQ(agenda[0].movement.kind, creature_mind::Movement::Kind::TurnToFace);
+	EXPECT_EQ(agenda[0].movement.kind, creature_mind::Movement::Kind::TurnToFaceCamera);
 	EXPECT_EQ(agenda[1].kind, Step::Kind::Overlay);
 	EXPECT_TRUE(agenda[1].flutterEyelids);
 	EXPECT_EQ(agenda[2].animation, k_FeelPlayfulAnimation);
@@ -326,22 +324,24 @@ TEST(CreaturePlayerAttention, TheIdleMindFollowsTheHandUntilNear)
 }
 
 // Without a camera, the follow of the camera takes its turn to start and is done on the next turn. The turn to the
-// camera has nothing to do, but it also takes two turns. Thus the sign starts on the fifth turn. Neither of the two
-// steps waits for the body.
+// camera starts on the third turn, and the movement tells the mind on the fourth turn that a creature with no player is
+// done. Thus the sign starts on the fifth turn. Neither of the two steps waits for the body.
 TEST(CreaturePlayerAttention, BeingCrossWithNoCameraStartsTheSignOnTheFifthTurn)
 {
 	creature_mind::IdleMind mind;
-	creature_mind::Plan(mind, creature_mind::Activity::Planned, BeCrossWithPlayer(std::nullopt, 10.0f, NeverFirst));
+	creature_mind::Plan(mind, creature_mind::Activity::Planned, BeCrossWithPlayer(10.0f, NeverFirst));
 	creature_mind::Senses senses {.seconds = 0.1f, .bodyBusy = true};
 	// The step and whether it has started, after each of the first four turns
 	const std::vector<std::pair<size_t, bool>> afterTurn {{0, true}, {1, false}, {1, true}, {2, false}};
 	for (const auto& [step, started] : afterTurn)
 	{
+		senses.subMove = step == 2 ? creature_mind::SubMove::Done : creature_mind::SubMove::Running;
 		const auto commands = creature_mind::Think(mind, senses, AlwaysFirst);
 		EXPECT_FALSE(commands.playOnce.has_value());
 		EXPECT_EQ(mind.step, step);
 		EXPECT_EQ(mind.stepStarted, started);
 	}
+	senses.subMove = creature_mind::SubMove::Running;
 	senses.bodyBusy = false;
 	const auto commands = creature_mind::Think(mind, senses, AlwaysFirst);
 	EXPECT_EQ(commands.playOnce, std::optional<size_t>(k_RudeSignAnimation));

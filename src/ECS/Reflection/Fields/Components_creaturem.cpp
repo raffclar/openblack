@@ -126,6 +126,7 @@ void openblack::ecs::reflection::RegisterFields_Components_creaturem(entt::meta_
 	    .Field<&components::CreatureMindState::desireSeenTo>("desireSeenTo")
 	    .Field<&components::CreatureMindState::observedKinds>("observedKinds")
 	    .Field<&components::CreatureMindState::keptPlan>("keptPlan")
+	    .Field<&components::CreatureMindState::giver>("giver")
 	    .Field<&components::CreatureMindState::refusedFoodSorts>("refusedFoodSorts")
 	    .Field<&components::CreatureMindState::takenFood>("takenFood")
 	    .Field<&components::CreatureMindState::takenFrom>("takenFrom")

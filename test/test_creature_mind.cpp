@@ -1046,20 +1046,21 @@ TEST(CreatureIdleMind, SometimesItSitsForAWhile)
 TEST(CreatureIdleMind, CommunicatingTurnsToTheCameraThenShowsWhatItFeels)
 {
 	creature_mind::IdleMind mind;
-	creature_mind::Plan(mind, creature_mind::Activity::ShowDesire, creature_mind::Communicate({30.0f, 40.0f}));
+	creature_mind::Plan(mind, creature_mind::Activity::ShowDesire, creature_mind::Communicate());
 	ASSERT_EQ(mind.agenda.size(), 2u);
 	auto senses = FakeBody {}.Senses();
 	senses.communication = {.animation = animations::k_Hungry, .desire = Desire::Hunger};
 	// It turns to the camera first, and its head looks at the camera all the time
 	const auto turn = creature_mind::Think(mind, senses, Always(0));
 	ASSERT_TRUE(turn.move.has_value());
-	EXPECT_EQ(turn.move->kind, creature_mind::Movement::Kind::TurnToFace);
-	EXPECT_EQ(turn.move->point, glm::vec2(30.0f, 40.0f));
+	EXPECT_EQ(turn.move->kind, creature_mind::Movement::Kind::TurnToFaceCamera);
 	ASSERT_TRUE(turn.gaze.has_value());
 	EXPECT_TRUE(turn.gaze->camera);
 	EXPECT_FALSE(turn.communicated.has_value());
 	// Turned, it shows what it feels as the step starts
+	senses.subMove = creature_mind::SubMove::Done;
 	EXPECT_FALSE(creature_mind::Think(mind, senses, Always(0)).communicated.has_value());
+	senses.subMove = creature_mind::SubMove::Running;
 	const auto shown = creature_mind::Think(mind, senses, Always(0));
 	ASSERT_TRUE(shown.communicated.has_value());
 	EXPECT_EQ(shown.playOnce, animations::k_Hungry);
@@ -1889,7 +1890,7 @@ TEST(CreatureIdleMind, WavingAtAFriendGoesUpPlayfullyAndTurnsWithASmile)
 	EXPECT_EQ(wave[1].face, Cue::Smile);
 	EXPECT_EQ(wave[2].face, Cue::None);
 	// Waving at the player, the head stays on the camera and no face is pulled
-	for (const auto& step : creature_mind::FaceAndEmote({}, animations::k_FriendlyWave))
+	for (const auto& step : creature_mind::FaceAndEmote(animations::k_FriendlyWave))
 	{
 		EXPECT_TRUE(step.gaze->camera);
 		EXPECT_EQ(step.face, Cue::None);

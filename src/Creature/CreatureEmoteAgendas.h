@@ -37,7 +37,7 @@ constexpr size_t k_StrokeAnimation = 100;
 constexpr size_t k_PutDownAnimation = 97;
 
 /// Howling at the player: turning to face the camera with the head on it, then the howl. No face is pulled.
-[[nodiscard]] std::vector<Step> HowlAtPlayer(glm::vec2 camera);
+[[nodiscard]] std::vector<Step> HowlAtPlayer();
 
 /// Being sad: waiting two seconds and up to three more, in whole turns, with a sad face and the head down at its own
 /// feet; then, in equal shares, the sad clip or the cry
@@ -58,7 +58,7 @@ constexpr float k_SillyFaceSeconds = 5.0f;
 
 /// Being pathetic to the player: following the camera's point of focus, turning to face the camera, then the pick-me
 /// clip. The head looks at the camera while it follows and turns. No face is pulled.
-[[nodiscard]] std::vector<Step> BePathetic(glm::vec2 camera, float height);
+[[nodiscard]] std::vector<Step> BePathetic(float height);
 /// Following the camera lasts thirty seconds at most. The creature arrives within twice one more than its height.
 constexpr float k_FollowCameraSeconds = 30.0f;
 [[nodiscard]] float FollowCameraReach(float height);

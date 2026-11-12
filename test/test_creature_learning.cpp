@@ -1726,8 +1726,8 @@ TEST(CreaturePlanActions, BuildsAgendas)
 	EXPECT_FALSE(creature_plan_actions::Agenda(*drink, std::nullopt, {}, {}, random).has_value());
 	const auto* wave = creature_plan_actions::For("WaveAtPlayer");
 	ASSERT_NE(wave, nullptr);
-	creature_plan_actions::Situation situation {.camera = glm::vec2(0.0f, -100.0f)};
-	EXPECT_EQ(creature_plan_actions::Agenda(*wave, std::nullopt, {}, situation, random)->size(), 2u);
+	// The wave needs no camera: its turn to the camera reads the camera on each turn
+	EXPECT_EQ(creature_plan_actions::Agenda(*wave, std::nullopt, {}, {}, random)->size(), 2u);
 	EXPECT_EQ(creature_plan_actions::For("CastWarmingSpellOnCreature"), nullptr);
 }
 

@@ -76,8 +76,9 @@ constexpr uint32_t k_CutSceneTalkLots = 2;
 constexpr uint32_t k_CutSceneConfusedLots = 3;
 /// Pointing at a thing for five seconds wherever it goes, amazed
 [[nodiscard]] std::vector<Step> PointAtThing(uint32_t thing);
-/// Pointing at the camera for a second, amazed, having turned to face it first when it has a player
-[[nodiscard]] std::vector<Step> PointAtCamera(bool hasPlayer, glm::vec3 camera);
+/// Pointing at the camera for a second, amazed, having turned to face it first. A creature without a player does not
+/// turn, but the turn step still takes its two turns.
+[[nodiscard]] std::vector<Step> PointAtCamera(glm::vec3 camera);
 /// Sitting down where a script says: it walks there until within its own radius, turns to face the place, turns to
 /// face down the slope, then sits for ten seconds and a draw of up to five more (upTo, GameFloatRand in the game)
 [[nodiscard]] std::vector<Step> SitDownAt(uint32_t place, glm::vec2 point, float radius,

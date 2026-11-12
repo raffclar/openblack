@@ -460,8 +460,7 @@ std::optional<NoticeKind> creature_mind::NoticeKindOf(std::string_view action)
 	return found != k_Notices.end() ? std::optional(found->second) : std::nullopt;
 }
 
-std::vector<Step> creature_mind::Notice(NoticeKind kind, uint32_t thing, bool handFull, bool hasPlayer, glm::vec3 camera,
-                                        const Random& random)
+std::vector<Step> creature_mind::Notice(NoticeKind kind, uint32_t thing, bool handFull, const Random& random)
 {
 	using creature_face::Cue;
 	const Gaze atCamera {.camera = true};
@@ -478,13 +477,8 @@ std::vector<Step> creature_mind::Notice(NoticeKind kind, uint32_t thing, bool ha
 		                  .face = Cue::Amazed,
 		                  .gaze = Gaze {.object = thing, .itself = true}});
 	}
-	// A creature without a player has no camera of its own to turn to
-	if (hasPlayer)
-	{
-		agenda.push_back({.kind = Step::Kind::Move,
-		                  .movement = {.kind = Movement::Kind::TurnToFace, .point = {camera.x, camera.z}},
-		                  .gaze = atCamera});
-	}
+	// A creature without a player also gets the turn to the camera, but it does not turn
+	agenda.push_back(TurnToCamera());
 	switch (kind)
 	{
 	case NoticeKind::Helpful:

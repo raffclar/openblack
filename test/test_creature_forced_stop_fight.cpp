@@ -212,7 +212,7 @@ TEST_F(CreatureForcedStopFightTest, TheTakeOfAGiftStopsTheFightForThePlan)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto gift = registry.Create();
-	static_cast<void>(minds.TakeFromHand(creature, gift, true, glm::vec2(0.0f)));
+	static_cast<void>(minds.TakeFromHand(creature, gift, true, PlayerNames::PLAYER_ONE));
 	EXPECT_EQ(fights->calledOffForPlan, (std::vector<entt::entity> {creature}));
 	EXPECT_TRUE(fights->calledOff.empty());
 }

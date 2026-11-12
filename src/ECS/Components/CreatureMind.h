@@ -167,6 +167,9 @@ struct CreatureMindState
 	/// The plan that it did when it last started a reaction, or when the hand last gave it a thing while it had no
 	/// reaction. When it takes a thing from the hand, it continues this plan with the thing if the thing suits the plan.
 	std::optional<creature_planner::Plan> keptPlan;
+	/// The player whose hand last gave the creature a thing. The creature turns to the camera of this player before it
+	/// takes a thing from the hand. It keeps the giver until the next giving.
+	std::optional<PlayerNames> giver;
 	/// The sorts of object (by the object type of their info) that it brought up after it ate one. It does not eat
 	/// these again.
 	std::set<uint32_t> refusedFoodSorts;

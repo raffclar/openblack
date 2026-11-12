@@ -1085,7 +1085,7 @@ void CreatureMindSystem::ForceCatch(entt::entity creature, entt::entity object)
 	creature_learning::SuppressOpposed(*mind->desires, Desire::Play, tables->dependencies, k_TurnsPerSecond);
 }
 
-bool CreatureMindSystem::TakeFromHand(entt::entity creature, entt::entity object, bool leftHand, glm::vec2 camera)
+bool CreatureMindSystem::TakeFromHand(entt::entity creature, entt::entity object, bool leftHand, PlayerNames giver)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	auto* mind = registry.Valid(creature) ? registry.TryGet<CreatureMindState>(creature) : nullptr;
@@ -1116,12 +1116,13 @@ bool CreatureMindSystem::TakeFromHand(entt::entity creature, entt::entity object
 	{
 		mind->keptPlan = mind->planner.current;
 	}
+	// The creature keeps the giver until the next giving. The turn before the take reads the giver's camera.
+	mind->giver = giver;
 	// The take stops a fight out of its duel. After a fight that is over, it ends the fight of the body again.
 	EndFightForPlan(creature, true);
 	Abandon(creature, *mind);
 	ReleaseCast(creature);
-	if (!Replan(creature, creature_mind::Activity::Planned,
-	            creature_mind::TakeFromHand(entt::to_integral(object), camera, leftHand)))
+	if (!Replan(creature, creature_mind::Activity::Planned, creature_mind::TakeFromHand(entt::to_integral(object), leftHand)))
 	{
 		return false;
 	}

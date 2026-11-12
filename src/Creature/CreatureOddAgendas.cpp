@@ -18,7 +18,6 @@ using creature_face::Cue;
 using creature_mind::Effect;
 using creature_mind::Eyes;
 using creature_mind::Gaze;
-using creature_mind::Movement;
 namespace animations = openblack::creature_layers::animations;
 
 std::vector<Step> creature_odd::ShowLearntLesson()
@@ -26,15 +25,10 @@ std::vector<Step> creature_odd::ShowLearntLesson()
 	return {{.kind = Step::Kind::Action, .animation = animations::k_Scratch, .face = Cue::Smile}};
 }
 
-std::vector<Step> creature_odd::LookConfused(std::optional<glm::vec2> camera)
+std::vector<Step> creature_odd::LookConfused()
 {
 	const Gaze atCamera {.camera = true};
-	std::vector<Step> agenda;
-	if (camera.has_value())
-	{
-		agenda.push_back(
-		    {.kind = Step::Kind::Move, .movement = {.kind = Movement::Kind::TurnToFace, .point = *camera}, .gaze = atCamera});
-	}
+	std::vector<Step> agenda {creature_mind::TurnToCamera()};
 	agenda.push_back({.kind = Step::Kind::Action, .animation = animations::k_Scratch, .face = Cue::Puzzled, .gaze = atCamera});
 	agenda.push_back({.kind = Step::Kind::Action, .animation = animations::k_Confused, .face = Cue::Puzzled, .gaze = atCamera});
 	return agenda;

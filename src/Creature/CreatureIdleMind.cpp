@@ -42,7 +42,8 @@ bool IsSubMove(Movement::Kind kind)
 {
 	return kind == Movement::Kind::GoNearObject || kind == Movement::Kind::GetAwayFromObject ||
 	       kind == Movement::Kind::TurnToFaceObject || kind == Movement::Kind::TurnToFaceAwayFromObject ||
-	       kind == Movement::Kind::ToThrowPosition || kind == Movement::Kind::ToThrowAtPoint;
+	       kind == Movement::Kind::ToThrowPosition || kind == Movement::Kind::ToThrowAtPoint ||
+	       kind == Movement::Kind::TurnToFaceCamera || kind == Movement::Kind::TurnToFaceGiverCamera;
 }
 
 /// A sleep and a faint close the eyes only when the body first lies still in the loop
@@ -583,10 +584,9 @@ std::vector<Step> creature_mind::EatHeld()
 	return WithFace({Object({.kind = ObjectOrder::Kind::Eat}, Effect::Eat)}, creature_face::Cue::Curiosity);
 }
 
-std::vector<Step> creature_mind::TakeFromHand(uint32_t object, glm::vec2 camera, bool leftHand)
+std::vector<Step> creature_mind::TakeFromHand(uint32_t object, bool leftHand)
 {
-	Step turn {.kind = Step::Kind::Move};
-	turn.movement = {.kind = Movement::Kind::TurnToFace, .point = camera};
+	const Step turn {.kind = Step::Kind::Move, .movement = {.kind = Movement::Kind::TurnToFaceGiverCamera}};
 	auto take = Object({.kind = ObjectOrder::Kind::TakeFromHand, .object = object, .mirrored = leftHand}, Effect::TookFromHand);
 	std::vector<Step> agenda {turn, take};
 	// Its head looks at the player's hand as it turns and as it takes the thing
@@ -623,23 +623,23 @@ std::vector<Step> creature_mind::Emote(size_t animation)
 	return {Action(animation, false)};
 }
 
-std::vector<Step> creature_mind::Communicate(glm::vec2 camera)
+Step creature_mind::TurnToCamera()
 {
-	const Gaze gaze {.camera = true};
-	Step turn {.kind = Step::Kind::Move, .gaze = gaze};
-	turn.movement = {.kind = Movement::Kind::TurnToFace, .point = camera};
-	return WithFace({turn, {.kind = Step::Kind::Communicate, .gaze = gaze}}, creature_face::Cue::AttitudeToPlayer);
+	return {.kind = Step::Kind::Move, .movement = {.kind = Movement::Kind::TurnToFaceCamera}, .gaze = Gaze {.camera = true}};
 }
 
-std::vector<Step> creature_mind::FaceAndEmote(glm::vec2 point, size_t animation)
+std::vector<Step> creature_mind::Communicate()
+{
+	return WithFace({TurnToCamera(), {.kind = Step::Kind::Communicate, .gaze = Gaze {.camera = true}}},
+	                creature_face::Cue::AttitudeToPlayer);
+}
+
+std::vector<Step> creature_mind::FaceAndEmote(size_t animation)
 {
 	// Its head looks at the camera as it turns and as it plays the action
-	const Gaze atCamera {.camera = true};
-	Step turn {.kind = Step::Kind::Move, .gaze = atCamera};
-	turn.movement = {.kind = Movement::Kind::TurnToFace, .point = point};
 	auto emote = Action(animation, false);
-	emote.gaze = atCamera;
-	return {turn, emote};
+	emote.gaze = Gaze {.camera = true};
+	return {TurnToCamera(), emote};
 }
 
 std::vector<Step> creature_mind::ApproachAndEmote(uint32_t object, size_t animation)
@@ -1413,6 +1413,10 @@ SubState SubStateOfMove(const Movement& movement)
 		return SubState::MoveToThrowAtPos;
 	case Movement::Kind::FaceDownSlope:
 		return SubState::FaceDownSlope;
+	case Movement::Kind::TurnToFaceCamera:
+		return SubState::TurnToFaceCamera;
+	case Movement::Kind::TurnToFaceGiverCamera:
+		return SubState::TurnToFaceOtherPlayersCamera;
 	}
 	return SubState::MoveToPos;
 }
@@ -1821,11 +1825,15 @@ Commands TurnOfThought(IdleMind& mind, const Senses& senses, const Random& rando
 		// Nothing starts while the body still plays an action. A stop starts while the body moves, to stop it, and a
 		// faint starts at once. The steps of a teleport also start at once. A walk to a point or to a thing starts
 		// while the body only moves: the new walk takes the place of the old one at once. A step that tries to start its
-		// clip tries again on each turn. A follow of the camera and a step with nothing to do start at once: the body
-		// is not examined until the turn after the start.
+		// clip tries again on each turn. A follow of the camera, a turn to the camera and a step with nothing to do
+		// start at once: the body is not examined until the turn after the start. The start of the turn to the camera
+		// asks the body to turn, and the body can refuse.
 		const bool teleportStep = step.kind == Step::Kind::Teleport || step.kind == Step::Kind::Transported ||
 		                          step.kind == Step::Kind::StopTeleportControl;
-		const bool startsAtOnce = step.kind == Step::Kind::FollowCamera || step.kind == Step::Kind::Empty;
+		const bool startsAtOnce =
+		    step.kind == Step::Kind::FollowCamera || step.kind == Step::Kind::Empty ||
+		    (step.kind == Step::Kind::Move && (step.movement.kind == Movement::Kind::TurnToFaceCamera ||
+		                                       step.movement.kind == Movement::Kind::TurnToFaceGiverCamera));
 		const bool walkOnTheWay =
 		    StartsOnTheWay(step) && senses.onlyMoves && !(handsChecked && senses.hands == HandsState::Busy);
 		if (step.kind != Step::Kind::Wait && step.kind != Step::Kind::WatchCamera && step.kind != Step::Kind::StopMoving &&
