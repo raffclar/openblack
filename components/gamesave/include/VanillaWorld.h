@@ -251,6 +251,19 @@ struct VanillaWorldResult
 [[nodiscard]] std::optional<VanillaWorld> ReadVanillaRecords(std::span<const uint8_t> bytes, StreamStart start,
                                                              std::string* error = nullptr);
 
+/// Where the record of one new object stops in a stream, and the objects and the running sum there
+struct VanillaRecordEnd
+{
+	size_t end {0};
+	StreamStart after {};
+};
+
+/// Reads the reference at the place and the record of the new object that follows it, with the layout of its type.
+/// The stream had the objects and the running sum of the start before the reference. Gives nothing when the reference
+/// is not to a new object or the record does not read.
+[[nodiscard]] std::optional<VanillaRecordEnd> ReadVanillaRecordEnd(std::span<const uint8_t> bytes, size_t at,
+                                                                   StreamStart start);
+
 /// True when openblack knows the layout of the type
 [[nodiscard]] bool KnowsVanillaType(uint32_t type);
 
