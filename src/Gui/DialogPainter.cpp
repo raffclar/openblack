@@ -21,6 +21,7 @@
 #include "Common/GameLanguage.h"
 #include "EngineConfig.h"
 #include "GameFont.h"
+#include "Graphics/AlphaTest.h"
 #include "Graphics/Texture2D.h"
 #include "Locator.h"
 #include "ScreenFit.h"
@@ -496,6 +497,8 @@ void DialogPainter::DrawString(glm::vec2 screen, std::u16string_view text, float
 	const auto topColour = glm::vec4(glm::vec3(top), top.a * _alpha);
 	const auto bottomColour = glm::vec4(glm::vec3(bottom), bottom.a * _alpha);
 	const auto start = glm::floor(screen);
+	// The game draws all text with the alpha test of the font pages: the faintest pixels of the glyphs do not show
+	const Canvas::AlphaReferenceScope alphaTest(_canvas, graphics::alpha_test::k_FontPageReference);
 	float pen = 0.0f;
 	for (const auto c : text)
 	{
@@ -533,6 +536,8 @@ void DialogPainter::DrawGlyphs(glm::vec2 screen, std::u16string_view text, float
 	const auto* texture = full ? _fullFontTexture : &_fontTexture;
 	const auto drawnColour = glm::vec4(glm::vec3(colour), colour.a * _alpha);
 	const auto start = glm::floor(screen);
+	// The game draws all text with the alpha test of the font pages: the faintest pixels of the glyphs do not show
+	const Canvas::AlphaReferenceScope alphaTest(_canvas, graphics::alpha_test::k_FontPageReference);
 	float pen = 0.0f;
 	for (const auto c : text)
 	{

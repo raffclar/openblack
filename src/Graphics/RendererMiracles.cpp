@@ -52,8 +52,12 @@
 #include "ECS/Systems/ObjectDrawListSystemInterface.h"
 #include "ECS/Systems/RenderingSystemInterface.h"
 #include "ECS/WorldObjects.h"
+#include "EngineConfig.h"
 #include "FileSystem/FileSystemInterface.h"
+#include "Graphics/AlphaTest.h"
 #include "Graphics/InstanceDesc.h"
+#include "Graphics/MeshDetail.h"
+#include "Graphics/ObjectDrawWay.h"
 #include "Graphics/ShaderManager.h"
 #include "Graphics/Texture2D.h"
 #include "Graphics/ViewFrustum.h"
@@ -145,8 +149,8 @@ void Renderer::DrawSeedModel(const DrawSceneDesc& desc, const SeedModelDraw& sho
 		const float pulse = visuals::PhialPulse(shown.phialPhase);
 		// A seed that is not a phial takes the light of the land, unless it is drawn at once. A seed drawn at once has the
 		// alpha that it is drawn at. A phial is lit and faded in the same way when it is drawn at once.
-		const uint8_t seedAlpha = shown.drawnAtOnce ? shown.phialAlpha : std::numeric_limits<uint8_t>::max();
-		const std::array<visuals::PhialDraw, 1> wholeDraw {{{.size = 1.0f, .alpha = seedAlpha, .landLit = !shown.drawnAtOnce}}};
+		const uint8_t seedAlpha = shown.unlitWhite ? shown.phialAlpha : std::numeric_limits<uint8_t>::max();
+		const std::array<visuals::PhialDraw, 1> wholeDraw {{{.size = 1.0f, .alpha = seedAlpha, .landLit = !shown.unlitWhite}}};
 		const auto phialDraws = phial ? visuals::PhialDraws(receiveType, shown.phialPhase, pulse, shown.phialAlpha)
 		                              : std::vector<visuals::PhialDraw> {};
 		const auto draws =
@@ -160,14 +164,47 @@ void Renderer::DrawSeedModel(const DrawSceneDesc& desc, const SeedModelDraw& sho
 		// draw out of the view puts no pixel on the screen.
 		const auto box = mesh->GetBoundingBox();
 		const bool testsView = seenBy != nullptr && !mesh->IsBoned();
-		for (const auto& draw : draws)
+		const bool sortedWhole = object_draw::SortedWhole(mesh->GetFlags());
+		const float halfDiagonal = mesh_detail::HalfDiagonal(box.Size());
+		const auto forward = desc.camera->GetForward();
+		const float modelDetail = Locator::config::value().detail.modelDetail;
+		for (size_t index = 0; index < draws.size(); ++index)
 		{
+			const auto& draw = draws[index];
+			const float objectScale = seed.scale * shown.scale * draw.size;
 			const auto model = glm::translate(glm::mat4(1.0f), at) * glm::eulerAngleY(shown.spin) *
-			                   glm::scale(glm::mat4(1.0f), seed.scale * shown.scale * draw.size * shape);
+			                   glm::scale(glm::mat4(1.0f), objectScale * shape);
 			if (testsView && !view_frustum::SeesBox(*seenBy, model, box.minima, box.maxima))
 			{
 				continue;
 			}
+			// A phial draws each copy before its last at once. Its last draw, and the draw of any other seed, goes the
+			// way of the seed.
+			const auto way = index + 1 == draws.size() ? shown.way : object_draw::Way::AtOnce;
+			uint8_t alpha = draw.alpha;
+			auto detailLevel = mesh_detail::LevelBit(mesh_detail::Mesh::High);
+			// The warm-up draws each model at no size, which no cull may cut
+			if (!_warmingUp && way == object_draw::Way::AtOnce && object_draw::FarCulled(halfDiagonal, objectScale, at, eye))
+			{
+				continue;
+			}
+			if (!_warmingUp && way == object_draw::Way::Banded)
+			{
+				// The bands go by the middle of the model's box. The last draw of a phial and a seed of less than full
+				// alpha keep their own alpha in the fade.
+				const auto centre = glm::vec3(model * glm::vec4(box.Center(), 1.0f));
+				const float reach = mesh_detail::Reach(0.0f, mesh_detail::ScaledRadius(box.Size(), objectScale), modelDetail);
+				const auto banded =
+				    object_draw::DrawBanded(mesh_detail::Choose(mesh_detail::ViewDepth(centre, eye, forward), reach, true),
+				                            draw.alpha, phial || draw.alpha != std::numeric_limits<uint8_t>::max());
+				if (!banded.has_value())
+				{
+					continue;
+				}
+				alpha = banded->alpha;
+				detailLevel = mesh_detail::LevelBit(banded->mesh);
+			}
+			const bool amongSorted = object_draw::AmongSorted(way, sortedWhole);
 			// A model of several bones (the flocks' birds and wolves) has each placed by its rest matrix
 			std::vector<glm::mat4> bones;
 			if (mesh->IsBoned() && !mesh->GetBoneMatrices().empty())
@@ -188,8 +225,9 @@ void Renderer::DrawSeedModel(const DrawSceneDesc& desc, const SeedModelDraw& sho
 			// the phial shines with the environment map, so its liquid shows its first frame
 			submitDesc.uvOffset = phial ? visuals::PhialUvOffset(shown.phialFrame) : glm::vec2(0.0f);
 			submitDesc.uvOffsetByMaterial = phial;
-			submitDesc.sortDepth = zsort::Depth(at, eye);
-			const float alpha = static_cast<float>(draw.alpha) / k_ByteMax;
+			submitDesc.sortDepth = object_draw::BlendDepth(way, sortedWhole, at, eye);
+			submitDesc.detailLevel = detailLevel;
+			const float alphaShare = static_cast<float>(alpha) / k_ByteMax;
 			if (added)
 			{
 				// Added by its own alpha without writing depth, lit as the rest
@@ -200,22 +238,23 @@ void Renderer::DrawSeedModel(const DrawSceneDesc& desc, const SeedModelDraw& sho
 			{
 				// Lit in white by the sun with none of the land's colour, at its alpha: blended by its materials over
 				// what is behind, or as they say when whole
-				submitDesc.viewId = draw.alpha < 255 ? translucent : desc.viewId;
+				submitDesc.viewId = (alpha < 255 || amongSorted) ? translucent : desc.viewId;
 				submitDesc.state = k_BlendedState | BGFX_STATE_WRITE_A | BGFX_STATE_WRITE_Z;
 				submitDesc.useMaterialBlending = true;
-				submitDesc.objectLook = L3DMeshSubmitDesc::ObjectLook {.colour = glm::vec3(k_ByteMax), .alpha = alpha};
+				submitDesc.objectLook = L3DMeshSubmitDesc::ObjectLook {.colour = glm::vec3(k_ByteMax), .alpha = alphaShare};
 				submitDesc.landColourAdded = false;
 			}
-			else if (draw.alpha < 255)
+			else if (alpha < 255)
 			{
 				// Lit, faded by its alpha
 				submitDesc.viewId = translucent;
 				submitDesc.state = k_BlendedState | BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_FACTOR, BGFX_STATE_BLEND_INV_FACTOR);
-				submitDesc.rgba = static_cast<uint32_t>(draw.alpha) * 0x01010101u;
+				submitDesc.rgba = static_cast<uint32_t>(alpha) * 0x01010101u;
 			}
 			else
 			{
-				submitDesc.viewId = desc.viewId;
+				// Whole: with the solid models, or among the sorted things when its mesh is sorted whole
+				submitDesc.viewId = amongSorted ? translucent : desc.viewId;
 				submitDesc.state = k_BlendedState | BGFX_STATE_WRITE_A | BGFX_STATE_WRITE_Z;
 				submitDesc.useMaterialBlending = true;
 			}
@@ -262,7 +301,8 @@ void Renderer::DrawCaveSeeds(const DrawSceneDesc& desc) const
 		                     .phialPhase = seed.phialPhase,
 		                     .phialFrame = seed.phialFrame,
 		                     .phialAlpha = std::numeric_limits<uint8_t>::max(),
-		                     .ownerAlignment = alignment});
+		                     .ownerAlignment = alignment,
+		                     .way = object_draw::Way::AtOnce});
 	}
 }
 
@@ -283,7 +323,8 @@ void Renderer::DrawMapSpellSeeds(const DrawSceneDesc& desc) const
 		                     .phialPhase = seed.phialPhase,
 		                     .phialFrame = seed.phialFrame,
 		                     .phialAlpha = std::numeric_limits<uint8_t>::max(),
-		                     .ownerAlignment = seed.ownerAlignment});
+		                     .ownerAlignment = seed.ownerAlignment,
+		                     .way = object_draw::Way::AtOnce});
 	}
 }
 
@@ -329,14 +370,12 @@ void Renderer::DrawGlobes(const DrawSceneDesc& desc) const
 		// The globe, added at 150 of 255 by its texture's alpha and writing its depth, turned to face the camera about its
 		// middle, its glint running over its dome. It is drawn where it is, round its seed; only where it comes among the
 		// blended things is taken from its middle pushed towards the camera by its radius, so that it comes after what is
-		// inside it.
+		// inside it. The sort uses the key of a placed model.
 		if (haveBubble)
 		{
 			const auto bubble = meshes.Handle(OneOffSpellSeed::k_MeshId.value());
 			const auto halfExtent = bubble->GetBoundingBox().Size() * 0.5f;
 			const float radius = std::max(halfExtent.x, halfExtent.z) * transform.scale.x;
-			const auto towards = eye - globe.middle;
-			const auto push = glm::length(towards) > 0.0f ? glm::normalize(towards) * radius : glm::vec3(0.0f);
 			glm::mat4 model = globe.drawnModel.value_or(glm::mat4(1.0f));
 			if (!globe.drawnModel.has_value())
 			{
@@ -353,32 +392,22 @@ void Renderer::DrawGlobes(const DrawSceneDesc& desc) const
 			submitDesc.state = k_AddedState | BGFX_STATE_WRITE_Z;
 			submitDesc.tint = glm::vec4(1.0f, 1.0f, 1.0f, static_cast<float>(visuals::k_GlobeAlpha) / k_ByteMax);
 			submitDesc.uvOffset = visuals::GlintUvOffset(globe.glintFrame);
-			submitDesc.sortDepth = zsort::Depth(globe.middle + push, eye);
+			submitDesc.sortDepth = zsort::ModelDepth(visuals::GlobeSortPoint(globe.middle, eye, radius), eye);
 			DrawMesh(*bubble, submitDesc, std::numeric_limits<uint8_t>::max());
 		}
 
-		// An extreme miracle's rings, each drawn twice over, added without writing depth, in the player's colour with a
-		// grey specular
-		const int rings = visuals::RingCount(globe.powerUp);
-		if (haveRing && rings > 0)
+		// An extreme miracle's rings, in the player's colour with a grey specular
+		if (haveRing)
 		{
-			const auto ring = meshes.Handle(OneOffSpellSeed::k_RingMeshId.value());
-			const float alpha = static_cast<float>(visuals::RingAlpha(visuals::k_GlobeAlpha)) / k_ByteMax;
-			for (int i = 0; i < rings; ++i)
-			{
-				const auto model = visuals::RingModel(i, globe.ringSpin, globe.middle, scale, eye);
-				L3DMeshSubmitDesc submitDesc = {};
-				submitDesc.viewId = translucent;
-				submitDesc.program = objectProgram;
-				submitDesc.modelMatrices = &model;
-				submitDesc.matrixCount = 1;
-				submitDesc.state = k_AddedState;
-				submitDesc.tint = glm::vec4(ringColour, alpha);
-				submitDesc.lightAdd = ColourOf(visuals::k_RingSpecular);
-				submitDesc.sortDepth = zsort::Depth(globe.middle, eye);
-				DrawMesh(*ring, submitDesc, std::numeric_limits<uint8_t>::max());
-				DrawMesh(*ring, submitDesc, std::numeric_limits<uint8_t>::max());
-			}
+			DrawPowerUpRings(desc, {.mesh = &*meshes.Handle(OneOffSpellSeed::k_RingMeshId.value()),
+			                        .rings = visuals::RingCount(globe.powerUp),
+			                        .spin = globe.ringSpin,
+			                        .middle = globe.middle,
+			                        .scale = scale,
+			                        .colour = ringColour,
+			                        .alpha = visuals::RingAlpha(visuals::k_GlobeAlpha),
+			                        .way = object_draw::Way::Banded,
+			                        .mirrored = false});
 		}
 	};
 	desc.entities.Each<const OneOffSpellSeed, const Transform>(drawGlobe);
@@ -424,15 +453,9 @@ void Renderer::DrawIconSeeds(const DrawSceneDesc& desc) const
 	const auto& registry = desc.entities;
 	const auto& meshes = Locator::resources::value().GetMeshes();
 	const bool haveRing = meshes.Contains(ecs::components::OneOffSpellSeed::k_RingMeshId.value());
-	const auto eye = desc.camera->GetOrigin();
-	const auto* objectProgram = _shaderManager->GetShader("Object");
-	const auto translucent = TranslucentPassOf(desc.viewId);
 	// The view of this pass, as the pass sets it. The function does not draw the seeds and the rings out of it.
 	const auto seenBy = view_frustum::FromViewProjection(desc.camera->GetProjectionMatrix() *
 	                                                     desc.camera->GetViewMatrix(Camera::Interpolation::Current));
-	const auto ringBox =
-	    haveRing ? std::optional(meshes.Handle(ecs::components::OneOffSpellSeed::k_RingMeshId.value())->GetBoundingBox())
-	             : std::nullopt;
 	// A warm-up draws the model of each kind of seed at no size, for a good and an evil player, as the first seeds of
 	// each kind draw them
 	if (_warmingUp)
@@ -502,36 +525,88 @@ void Renderer::DrawIconSeeds(const DrawSceneDesc& desc) const
 		               .phialAlpha = std::numeric_limits<uint8_t>::max(),
 		               .ownerAlignment = alignment},
 		              &seenBy, &to, &looks);
-		// A power-up level shown has its rings, each drawn twice over, added without writing depth, in the player's colour
-		const int rings = magic::visuals::RingCount(shown->powerUp);
-		if (ring == nullptr || rings <= 0)
+		// A power-up level shown has its rings, in the player's colour
+		if (ring != nullptr)
 		{
-			return;
-		}
-		const auto colour = ColourOf(ecs::game_players::Colour(player));
-		const float alpha = static_cast<float>(magic::visuals::RingAlpha(std::numeric_limits<uint8_t>::max())) / k_ByteMax;
-		for (int i = 0; i < rings; ++i)
-		{
-			const auto model = magic::visuals::RingModel(i, shown->ringSpin, shown->middle, 1.0f, eye);
-			if (!ring->IsBoned() && !view_frustum::SeesBox(seenBy, model, ringBox->minima, ringBox->maxima))
-			{
-				continue;
-			}
-			L3DMeshSubmitDesc submitDesc = {};
-			submitDesc.encoder = &to;
-			submitDesc.viewId = translucent;
-			submitDesc.program = objectProgram;
-			submitDesc.modelMatrices = &model;
-			submitDesc.matrixCount = 1;
-			submitDesc.mirrored = reflection;
-			submitDesc.state = k_AddedState;
-			submitDesc.tint = glm::vec4(colour, alpha);
-			submitDesc.lightAdd = ColourOf(magic::visuals::k_RingSpecular);
-			submitDesc.sortDepth = zsort::Depth(shown->middle, eye);
-			DrawMesh(*ring, submitDesc, std::numeric_limits<uint8_t>::max());
-			DrawMesh(*ring, submitDesc, std::numeric_limits<uint8_t>::max());
+			DrawPowerUpRings(desc,
+			                 {.mesh = ring,
+			                  .rings = magic::visuals::RingCount(shown->powerUp),
+			                  .spin = shown->ringSpin,
+			                  .middle = shown->middle,
+			                  .scale = 1.0f,
+			                  .colour = ColourOf(ecs::game_players::Colour(player)),
+			                  .alpha = magic::visuals::RingAlpha(std::numeric_limits<uint8_t>::max()),
+			                  .way = object_draw::Way::Banded,
+			                  .mirrored = reflection},
+			                 &seenBy, &to);
 		}
 	});
+}
+
+void Renderer::DrawPowerUpRings(const DrawSceneDesc& desc, const PowerUpRingsDraw& shown, const view_frustum::Frustum* seenBy,
+                                DrawEncoder* encoder) const
+{
+	if (shown.mesh == nullptr || shown.rings <= 0)
+	{
+		return;
+	}
+	const auto eye = desc.camera->GetOrigin();
+	const auto box = shown.mesh->GetBoundingBox();
+	const bool sortedWhole = object_draw::SortedWhole(shown.mesh->GetFlags());
+	// Each ring stands at the seed's point, at its share of the seed's size
+	const float ringScale = visuals::k_RingScale * shown.scale;
+	const bool farCulled = object_draw::FarCulled(mesh_detail::HalfDiagonal(box.Size()), ringScale, shown.middle, eye);
+	const auto* objectProgram = _shaderManager->GetShader("Object");
+	const auto translucent = TranslucentView(desc.viewId);
+	for (int i = 0; i < shown.rings; ++i)
+	{
+		const auto model = visuals::RingModel(i, shown.spin, shown.middle, shown.scale, eye);
+		if (seenBy != nullptr && !shown.mesh->IsBoned() && !view_frustum::SeesBox(*seenBy, model, box.minima, box.maxima))
+		{
+			continue;
+		}
+		// Added without writing depth, with a grey specular. A draw at once comes after the solid models and before
+		// every sorted thing.
+		L3DMeshSubmitDesc submitDesc = {};
+		submitDesc.encoder = encoder;
+		submitDesc.viewId = translucent;
+		submitDesc.program = objectProgram;
+		submitDesc.modelMatrices = &model;
+		submitDesc.matrixCount = 1;
+		submitDesc.mirrored = shown.mirrored;
+		submitDesc.state = k_AddedState;
+		submitDesc.tint = glm::vec4(shown.colour, static_cast<float>(shown.alpha) / k_ByteMax);
+		submitDesc.lightAdd = ColourOf(visuals::k_RingSpecular);
+		submitDesc.sortDepth = zsort::k_AfterSolidBeforeSorted;
+		if (!farCulled)
+		{
+			DrawMesh(*shown.mesh, submitDesc, std::numeric_limits<uint8_t>::max());
+		}
+		// The second draw of the last ring goes through the object draw when the object draw draws the seed. Its fade
+		// gives the ring its alpha in place of the ring's own alpha.
+		if (i + 1 != shown.rings || shown.way != object_draw::Way::Banded)
+		{
+			if (!farCulled)
+			{
+				DrawMesh(*shown.mesh, submitDesc, std::numeric_limits<uint8_t>::max());
+			}
+			continue;
+		}
+		const auto centre = glm::vec3(model * glm::vec4(box.Center(), 1.0f));
+		const float reach = mesh_detail::Reach(0.0f, mesh_detail::ScaledRadius(box.Size(), ringScale),
+		                                       Locator::config::value().detail.modelDetail);
+		const auto banded = object_draw::DrawBanded(
+		    mesh_detail::Choose(mesh_detail::ViewDepth(centre, eye, desc.camera->GetForward()), reach, true), shown.alpha,
+		    false);
+		if (!banded.has_value())
+		{
+			continue;
+		}
+		submitDesc.detailLevel = mesh_detail::LevelBit(banded->mesh);
+		submitDesc.tint.a = static_cast<float>(banded->alpha) / k_ByteMax;
+		submitDesc.sortDepth = object_draw::BlendDepth(shown.way, sortedWhole, shown.middle, eye);
+		DrawMesh(*shown.mesh, submitDesc, std::numeric_limits<uint8_t>::max());
+	}
 }
 
 namespace
@@ -697,6 +772,9 @@ void Renderer::DrawTribalPower(const DrawSceneDesc& desc) const
 	shader->SetTextureSampler("s_texture", 0, *texture);
 	bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A | BGFX_STATE_DEPTH_TEST_GREATER | BGFX_STATE_MSAA |
 	               BGFX_STATE_BLEND_ALPHA);
+	// The game draws all text with the alpha test of the font pages: the faintest pixels of the glyphs do not show
+	const auto alphaTest = alpha_test::Uniform(alpha_test::k_FontPageReference);
+	shader->SetUniformValue("u_alphaRef", alphaTest.data());
 	shader->Submit(static_cast<bgfx::ViewId>(desc.viewId));
 }
 

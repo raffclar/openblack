@@ -363,3 +363,18 @@ TEST(MiracleVisuals, APulseFliesFasterAndBrighterWithMoreCharge)
 	// Each pulse takes the next place along the hand
 	EXPECT_EQ(bands.flying[3].index, 3);
 }
+
+// The globe's dome is sorted from its middle moved towards the camera by its radius, as far as the engine's inverse
+// square root gets it
+TEST(MiracleVisuals, TheGlobeIsSortedFromItsMiddleMovedTowardsTheCameraByItsRadius)
+{
+	const glm::vec3 middle {100.0f, 20.0f, 50.0f};
+	const glm::vec3 camera {100.0f, 20.0f, 60.0f};
+	const auto point = GlobeSortPoint(middle, camera, 2.0f);
+	EXPECT_EQ(point.x, middle.x);
+	EXPECT_EQ(point.y, middle.y);
+	EXPECT_NEAR(point.z, 52.0f, 1e-3f);
+	EXPECT_NEAR(glm::length(point - middle), 2.0f, 1e-3f);
+	// A camera in the middle of the globe does not move the point
+	EXPECT_EQ(GlobeSortPoint(middle, middle, 2.0f), middle);
+}
