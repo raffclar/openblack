@@ -296,6 +296,7 @@ void MultiplayerBoxes::Build()
 	_takeSlot = nullptr;
 	_passwordButton = nullptr;
 	_closeButton = nullptr;
+	_settingsButton = nullptr;
 	_privateBox = nullptr;
 	_sessionName = nullptr;
 	_shownRevision.reset();

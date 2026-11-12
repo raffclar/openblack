@@ -372,6 +372,20 @@ void DemoLobbyRoom::Change(lobby_api::LobbyChangeRequest request, LobbyCallback<
 	if (request.slotKinds.has_value())
 	{
 		lobby.slotKinds = *request.slotKinds;
+		lobby.godSlots = static_cast<int32_t>(lobby.slotKinds.size());
+	}
+	if (request.visibility.has_value())
+	{
+		lobby.visibility = *request.visibility;
+	}
+	if (request.settings.has_value())
+	{
+		lobby.settings = *request.settings;
+	}
+	// A change of the settings clears the ready of each member, as the service does
+	for (auto& member : lobby.members)
+	{
+		member.ready = false;
 	}
 	if (request.password.has_value())
 	{

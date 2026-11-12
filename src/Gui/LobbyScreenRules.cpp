@@ -563,6 +563,80 @@ int32_t PlayersOfRoom(const online::lobby::LobbyRoom& room)
 	    members, [](const lobby_api::LobbyMember& member) { return member.role == lobby_api::MemberRole::God; }));
 }
 
+CreateForm FormOfLobby(const lobby_api::Lobby& lobby, std::optional<size_t> map)
+{
+	return {
+	    .name = Utf16(lobby.name),
+	    .map = map,
+	    .godSlots = lobby.godSlots,
+	    .isPrivate = lobby.visibility == lobby_api::LobbyVisibility::Private,
+	    .password = {},
+	    .timeLimitMinutes = lobby.settings.timeLimitMinutes,
+	};
+}
+
+std::optional<std::string> ChangeProblem(const CreateForm& form, int32_t mapPlaces, int32_t players)
+{
+	if (auto problem = CreateProblem(form); problem.has_value())
+	{
+		return problem;
+	}
+	if (!MapFitsRoom(mapPlaces, players) || !MapFitsRoom(form.godSlots, players))
+	{
+		return TooManyPlayersText(MapFitsRoom(mapPlaces, players) ? form.godSlots : mapPlaces);
+	}
+	return std::nullopt;
+}
+
+lobby_api::LobbyChangeRequest ChangeRequestOf(const lobby_api::Lobby& lobby, const CreateForm& form,
+                                              const lobby_api::LobbyMap& map)
+{
+	lobby_api::LobbyChangeRequest change;
+	if (const auto name = ToUtf8(form.name); name != lobby.name)
+	{
+		change.name = name;
+	}
+	if (map.file != lobby.map.file || map.sha256 != lobby.map.sha256)
+	{
+		change.map = map;
+	}
+	if (form.godSlots != lobby.godSlots)
+	{
+		const auto slots =
+		    static_cast<size_t>(std::clamp(form.godSlots, lobby_api::k_LeastGodSlots, lobby_api::k_MostGodSlots));
+		auto kinds = lobby.slotKinds;
+		kinds.resize(slots, lobby_api::SlotKind::Open);
+		change.slotKinds = std::move(kinds);
+	}
+	const auto visibility = form.isPrivate ? lobby_api::LobbyVisibility::Private : lobby_api::LobbyVisibility::Public;
+	if (visibility != lobby.visibility)
+	{
+		change.visibility = visibility;
+	}
+	if (!form.password.empty())
+	{
+		change.password = ToUtf8(form.password);
+	}
+	if (const auto minutes = ClampTimeLimit(form.timeLimitMinutes); minutes != lobby.settings.timeLimitMinutes)
+	{
+		auto settings = lobby.settings;
+		settings.timeLimitMinutes = minutes;
+		change.settings = settings;
+	}
+	return change;
+}
+
+bool IsEmptyChange(const lobby_api::LobbyChangeRequest& change) noexcept
+{
+	return !change.name.has_value() && !change.map.has_value() && !change.slotKinds.has_value() &&
+	       !change.visibility.has_value() && !change.password.has_value() && !change.settings.has_value();
+}
+
+bool SettingsOpen(const online::lobby::LobbyRoom& room)
+{
+	return room.IsHost() && room.Phase() == online::lobby::RoomPhase::Open;
+}
+
 bool MapFitsRoom(int32_t mapPlaces, int32_t players) noexcept
 {
 	return mapPlaces >= players;

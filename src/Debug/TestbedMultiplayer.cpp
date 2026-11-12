@@ -607,7 +607,7 @@ struct DemoServices
 
 [[nodiscard]] bool IsLobbyStage(Stage stage) noexcept
 {
-	return stage >= Stage::LobbyList && stage <= Stage::LobbyMapTooSmall;
+	return stage >= Stage::LobbyList && stage <= Stage::LobbySettings;
 }
 
 /// The steps of a stage of the lobby sessions, after the login
@@ -626,6 +626,7 @@ void BeginLobby(MultiplayerFrontEnd& frontEnd, DemoServices& demo)
 	case Stage::LobbyRoomHost:
 	case Stage::LobbyQueue:
 	case Stage::LobbyMapTooSmall:
+	case Stage::LobbySettings:
 		frontEnd.OpenCreateLobby();
 		frontEnd.SubmitCreateLobby();
 		frontEnd.SendLobbyChat(u"Welcome to my game!");
@@ -645,6 +646,10 @@ void BeginLobby(MultiplayerFrontEnd& frontEnd, DemoServices& demo)
 			{
 				frontEnd.ChangeLobbyMap(static_cast<size_t>(std::distance(maps.begin(), small)));
 			}
+		}
+		if (demo.stage == Stage::LobbySettings)
+		{
+			frontEnd.OpenLobbySettings();
 		}
 		break;
 	case Stage::LobbyRoomPlayer:

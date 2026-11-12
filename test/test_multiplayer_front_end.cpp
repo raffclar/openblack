@@ -903,6 +903,26 @@ TEST_F(FrontEndTest, TheLobbySessionsGoFromTheListToTheRoomAndBack)
 	frontEnd->AnswerMessage(MultiplayerFrontEnd::Answer::Ok);
 	EXPECT_EQ(frontEnd->GetLobbyRoom()->Data().map.file, "mpm_3p_1");
 
+	// The host changes the settings in the box of the settings, and Back goes to the room
+	frontEnd->OpenLobbySettings();
+	ASSERT_EQ(frontEnd->GetBox(), Box::CreateLobby);
+	EXPECT_TRUE(frontEnd->EditsLobbySettings());
+	frontEnd->Update();
+	EXPECT_EQ(frontEnd->GetBox(), Box::CreateLobby);
+	frontEnd->Back();
+	EXPECT_EQ(frontEnd->GetBox(), Box::LobbyRoom);
+	frontEnd->OpenLobbySettings();
+	auto settings = frontEnd->GetCreateForm();
+	EXPECT_EQ(settings.name, u"Alice's game");
+	settings.name = u"Renamed";
+	settings.timeLimitMinutes += 10;
+	frontEnd->SetCreateForm(settings);
+	frontEnd->SubmitCreateLobby();
+	frontEnd->Update();
+	EXPECT_EQ(frontEnd->GetBox(), Box::LobbyRoom);
+	EXPECT_FALSE(frontEnd->EditsLobbySettings());
+	EXPECT_EQ(frontEnd->GetLobbyRoom()->Data().name, "Renamed");
+
 	// The host closes the session after a question
 	frontEnd->CloseLobby();
 	ASSERT_EQ(frontEnd->GetMessage(), Message::LobbyQuestion);

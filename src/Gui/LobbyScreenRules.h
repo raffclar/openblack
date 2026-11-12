@@ -157,6 +157,22 @@ inline constexpr int32_t k_TimeLimitStep = 10;
 /// The request of the box. The map is the land of the game, or a map of the service with its SHA-256.
 [[nodiscard]] lobby_api::LobbyCreateRequest CreateRequestOf(const CreateForm& form, const lobby_api::LobbyMap& map);
 
+// The settings of a session that the host changes before the start (user, 2026-11-12)
+/// The box of the settings starts with the settings of the session. The password box starts empty: an empty box keeps the
+/// password.
+[[nodiscard]] CreateForm FormOfLobby(const lobby_api::Lobby& lobby, std::optional<size_t> map);
+/// Why the host cannot change the settings: none when the host can. A map or a number of god slots smaller than the
+/// players of the room gives "Remove players first: this land has N places."
+[[nodiscard]] std::optional<std::string> ChangeProblem(const CreateForm& form, int32_t mapPlaces, int32_t players);
+/// The change of the settings: only the settings that are different. A new number of god slots keeps the kinds of the
+/// slots that stay and adds open slots.
+[[nodiscard]] lobby_api::LobbyChangeRequest ChangeRequestOf(const lobby_api::Lobby& lobby, const CreateForm& form,
+                                                            const lobby_api::LobbyMap& map);
+/// True when the change has no setting
+[[nodiscard]] bool IsEmptyChange(const lobby_api::LobbyChangeRequest& change) noexcept;
+/// The host changes the settings only before the start
+[[nodiscard]] bool SettingsOpen(const online::lobby::LobbyRoom& room);
+
 /// The texts of a line of the slots of the room
 struct SlotTexts
 {

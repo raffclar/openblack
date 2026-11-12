@@ -214,6 +214,54 @@ TEST(LobbyScreenRules, AMapWithTooFewPlacesNeedsKicksFirst)
 	EXPECT_EQ(lobby_api::ParseProblem(R"({"status":409,"code":"too_many_players","members":3,"slots":2})")->slots, 2);
 }
 
+TEST(LobbyScreenRules, TheHostChangesTheSettingsBeforeTheStart)
+{
+	const LobbyRoom room(TestLobby(), k_Host);
+	const auto& lobby = room.Data();
+	EXPECT_TRUE(SettingsOpen(room));
+	EXPECT_FALSE(SettingsOpen(LobbyRoom(TestLobby(), k_Me)));
+
+	// The box starts with the settings of the session and an empty password, and gives no change
+	auto form = FormOfLobby(lobby, size_t {0});
+	EXPECT_EQ(Utf8(form.name), lobby.name);
+	EXPECT_EQ(form.godSlots, lobby.godSlots);
+	EXPECT_TRUE(form.password.empty());
+	EXPECT_TRUE(IsEmptyChange(ChangeRequestOf(lobby, form, lobby.map)));
+
+	// Only the changed settings go to the service
+	form.name = u"New name";
+	form.isPrivate = true;
+	form.timeLimitMinutes = lobby.settings.timeLimitMinutes + k_TimeLimitStep;
+	form.password = u"pw";
+	auto change = ChangeRequestOf(lobby, form, lobby.map);
+	EXPECT_EQ(change.name, std::optional<std::string>("New name"));
+	EXPECT_EQ(change.visibility, std::optional(lobby_api::LobbyVisibility::Private));
+	EXPECT_EQ(change.password, std::optional<std::string>("pw"));
+	ASSERT_TRUE(change.settings.has_value());
+	EXPECT_EQ(change.settings->timeLimitMinutes, lobby.settings.timeLimitMinutes + k_TimeLimitStep);
+	EXPECT_FALSE(change.map.has_value());
+	EXPECT_FALSE(change.slotKinds.has_value());
+
+	// More slots keep the kinds of the old slots and add open slots
+	form = FormOfLobby(lobby, size_t {0});
+	form.godSlots = lobby.godSlots + 2;
+	change = ChangeRequestOf(lobby, form, lobby_api::LobbyMap {.file = "other", .name = "Other", .sha256 = {}, .size = 0});
+	ASSERT_TRUE(change.slotKinds.has_value());
+	EXPECT_EQ(change.slotKinds->size(), static_cast<size_t>(lobby.godSlots + 2));
+	EXPECT_EQ(change.slotKinds->back(), lobby_api::SlotKind::Open);
+	ASSERT_TRUE(change.map.has_value());
+	EXPECT_EQ(change.map->file, "other");
+
+	// Fewer places than the players of the room need kicks first (user, 2026-11-12)
+	form.godSlots = 2;
+	EXPECT_EQ(ChangeProblem(form, 8, PlayersOfRoom(room)),
+	          std::optional<std::string>("Remove players first: this land has 2 places."));
+	form.godSlots = 4;
+	EXPECT_EQ(ChangeProblem(form, 2, PlayersOfRoom(room)),
+	          std::optional<std::string>("Remove players first: this land has 2 places."));
+	EXPECT_EQ(ChangeProblem(form, 4, PlayersOfRoom(room)), std::nullopt);
+}
+
 TEST(LobbyScreenRules, AWarningMarksEachPlayerWithoutTheMap)
 {
 	LobbyRoom room(TestLobby(), k_Me);

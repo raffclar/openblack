@@ -49,7 +49,7 @@ void testbed_scenarios::AddMultiplayerFrontEndScenarios(std::vector<Scenario>& a
 {
 	using Kind = Command::Kind;
 	using Stage = testbed_multiplayer::Stage;
-	const std::array<BoxScenario, 30> boxes = {{
+	const std::array<BoxScenario, 31> boxes = {{
 	    {"multiplayer.choose_connection", "The multiplayer front end: choose a connection", Stage::ChooseConnection,
 	     "The multiplayer front end opens with the demonstration lobby. The player goes straight into the temple's "
 	     "future room.",
@@ -205,6 +205,11 @@ void testbed_scenarios::AddMultiplayerFrontEndScenarios(std::vector<Scenario>& a
 	     "The player makes a session with three players, and then picks a land of two places.",
 	     "The box tells \"Remove players first: this land has 2 places.\" and OK. The map of the room does not change. "
 	     "The lands with too few places are grey in the list of the maps."},
+	    {"multiplayer.lobby_settings", "The lobby sessions: the host changes the settings", Stage::LobbySettings,
+	     "The player makes a session with three players, and then clicks Settings in the room.",
+	     "The box \"Session settings\" shows the name, the map, the gods, the time limit, Private and a new password. "
+	     "\"Change settings\" sends the changes and goes back to the room, where the ready ticks are clear. Back keeps "
+	     "the old settings. Two gods or a land of two places gives \"Remove players first: this land has 2 places.\"."},
 	}};
 	for (const auto& box : boxes)
 	{

@@ -185,30 +185,6 @@ bool ReadMapMember(const Json& object, std::string_view key, LobbyMap& out)
 	return member != nullptr && member->is_object() && ReadMap(*member, out);
 }
 
-bool ReadSlotKinds(const Json& object, std::string_view key, std::vector<SlotKind>& out)
-{
-	const auto* member = Member(object, key);
-	if (member == nullptr || !member->is_array() || member->size() > static_cast<size_t>(k_MostGodSlots))
-	{
-		return false;
-	}
-	out.clear();
-	for (const auto& each : *member)
-	{
-		if (!each.is_string())
-		{
-			return false;
-		}
-		const auto kind = SlotKindOf(each.get_ref<const std::string&>());
-		if (!kind.has_value())
-		{
-			return false;
-		}
-		out.push_back(*kind);
-	}
-	return true;
-}
-
 bool ReadSettings(const Json& object, LobbySettings& out)
 {
 	if (!ReadInteger(object, "time_limit_minutes", out.timeLimitMinutes, false) ||

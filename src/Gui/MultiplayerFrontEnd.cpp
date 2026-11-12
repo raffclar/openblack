@@ -390,6 +390,13 @@ void MultiplayerFrontEnd::Back()
 		multiplayer::Back(_flow);
 		break;
 	case Box::CreateLobby:
+		// Back from the settings of the room goes to the room and keeps the settings
+		if (_editsLobby)
+		{
+			_editsLobby = false;
+			_flow.box = Box::LobbyRoom;
+			break;
+		}
 		EnterLobbyList();
 		break;
 	case Box::LobbyRoom:

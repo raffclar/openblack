@@ -274,6 +274,11 @@ public:
 	[[nodiscard]] const lobby_screens::CreateForm& GetCreateForm() const noexcept { return _createForm; }
 	void SetCreateForm(lobby_screens::CreateForm form) { _createForm = std::move(form); }
 	void SubmitCreateLobby();
+	/// The host opens the box of the settings of the session before the start. The box is the box "Create session" with
+	/// the settings of the session, and its Next sends only the changes (user, 2026-11-12).
+	void OpenLobbySettings();
+	/// True while the box "Create session" changes the settings of the room of the host
+	[[nodiscard]] bool EditsLobbySettings() const noexcept { return _editsLobby; }
 	/// The room of the lobby session, none outside a room
 	[[nodiscard]] const online::lobby::LobbyRoom* GetLobbyRoom() const;
 	void ToggleLobbyReady();
@@ -357,6 +362,7 @@ private:
 	[[nodiscard]] ecs::systems::LobbyCallback<ecs::systems::LobbyDone> LobbyDoneCallback();
 	void JoinLobby(std::string id, std::optional<std::string> password);
 	void ForgetLobbyRoom();
+	void SubmitLobbySettings(const SessionMap& map);
 	void AnswerLobbyMessage(multiplayer::Message message, Answer answer);
 
 	Services _services;
@@ -417,6 +423,7 @@ private:
 	lobby_screens::Sort _listSort;
 	std::string _selectedLobby;
 	lobby_screens::CreateForm _createForm;
+	bool _editsLobby {false};
 	std::u16string _lobbyMessageText;
 	/// What Yes does on a LobbyQuestion
 	enum class LobbyQuestionKind : uint8_t

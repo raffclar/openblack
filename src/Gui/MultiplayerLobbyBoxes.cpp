@@ -274,9 +274,12 @@ void MultiplayerBoxes::BuildCreateLobby(Dialog& dialog)
 {
 	dialog.Add<BigButton>(_font, k_BackPosition, k_ArrowSize, Text(k_BackText), LabelSide::Right, Look::LeftArrow).onClick =
 	    [this] { _frontEnd->Back(); };
-	_next = &dialog.Add<BigButton>(_font, k_NextPosition, k_ArrowSize, u"Create session", LabelSide::Left, Look::RightArrow);
+	// The host changes the settings of the room in the same box before the start (user, 2026-11-12)
+	const bool edits = _frontEnd->EditsLobbySettings();
+	_next = &dialog.Add<BigButton>(_font, k_NextPosition, k_ArrowSize, edits ? u"Change settings" : u"Create session",
+	                               LabelSide::Left, Look::RightArrow);
 	_next->onClick = [this] { _frontEnd->SubmitCreateLobby(); };
-	dialog.Add<StaticText>(k_Title, u"Create session", Layout::Centre, k_Big);
+	dialog.Add<StaticText>(k_Title, edits ? u"Session settings" : u"Create session", Layout::Centre, k_Big);
 
 	const auto& form = _frontEnd->GetCreateForm();
 	dialog.Add<StaticText>(DialogRect {.min = {40, 112}, .max = {290, 142}}, Text(k_GameNameText), Layout::Right, Mid());
@@ -341,7 +344,8 @@ void MultiplayerBoxes::BuildCreateLobby(Dialog& dialog)
 		_frontEnd->SetCreateForm(std::move(changed));
 	};
 
-	dialog.Add<StaticText>(DialogRect {.min = {40, 425}, .max = {290, 455}}, Text(k_GamePasswordText), Layout::Right, Mid());
+	dialog.Add<StaticText>(DialogRect {.min = {40, 425}, .max = {290, 455}},
+	                       edits ? std::u16string(u"New password:") : Text(k_GamePasswordText), Layout::Right, Mid());
 	_password = &dialog.Add<EditBox>(_font, DialogRect {.min = {300, 425}, .max = {640, 455}}, form.password,
 	                                 lobby_api::k_MostLobbyPasswordCharacters, Mid());
 	_password->masked = true;
@@ -352,6 +356,12 @@ void MultiplayerBoxes::BuildCreateLobby(Dialog& dialog)
 	};
 	_help =
 	    &dialog.Add<StaticText>(DialogRect {.min = {40, 462}, .max = {760, 488}}, std::u16string(), Layout::Centre, Small());
+	if (edits)
+	{
+		dialog.Add<StaticText>(DialogRect {.min = {40, 488}, .max = {760, 514}},
+		                       u"An empty password keeps the password. A change clears the ready of each player.",
+		                       Layout::Centre, Small());
+	}
 	dialog.SetFocus(_sessionName);
 }
 
@@ -359,10 +369,18 @@ void MultiplayerBoxes::SyncCreateLobby()
 {
 	const auto& form = _frontEnd->GetCreateForm();
 	const auto maps = _frontEnd->GetSessionMaps();
+	// In the settings of a room, a map with too few places for the players is grey (user, 2026-11-12)
+	const auto* room = _frontEnd->EditsLobbySettings() ? _frontEnd->GetLobbyRoom() : nullptr;
+	const auto players = room != nullptr ? screens::PlayersOfRoom(*room) : 0;
 	std::vector<List::Item> items;
 	for (const auto& map : maps)
 	{
-		items.push_back({.text = MapLine(map)});
+		const bool fits = screens::MapFitsRoom(map.places, players);
+		items.push_back(
+		    {.text = MapLine(map),
+		     .mouseCell = std::nullopt,
+		     .mouseMirrored = false,
+		     .colour = fits ? std::nullopt : std::optional(DialogPainter::k_TextColour * glm::vec4(0.5f, 0.5f, 0.5f, 1.0f))});
 	}
 	SetItemsIfChanged(*_mapList, std::move(items));
 	if (!_dialog->IsHolding())
@@ -438,9 +456,12 @@ void MultiplayerBoxes::BuildLobbyRoom(Dialog& dialog)
 			_frontEnd->ChangeLobbyMap(*line);
 		}
 	};
-	_passwordButton = &dialog.Add<Button>(DialogRect {.min = {490, 306}, .max = {620, 336}}, u"Password", Mid());
+	// The host changes each setting of the session before the start (user, 2026-11-12)
+	_settingsButton = &dialog.Add<Button>(DialogRect {.min = {490, 306}, .max = {580, 336}}, u"Settings", Mid());
+	_settingsButton->onClick = [this] { _frontEnd->OpenLobbySettings(); };
+	_passwordButton = &dialog.Add<Button>(DialogRect {.min = {585, 306}, .max = {675, 336}}, u"Password", Mid());
 	_passwordButton->onClick = [this] { _frontEnd->AskLobbyPassword(); };
-	_closeButton = &dialog.Add<Button>(DialogRect {.min = {630, 306}, .max = {760, 336}}, u"Close", Mid());
+	_closeButton = &dialog.Add<Button>(DialogRect {.min = {680, 306}, .max = {760, 336}}, u"Close", Mid());
 	_closeButton->onClick = [this] { _frontEnd->CloseLobby(); };
 
 	// The actions of the picked slot
@@ -552,7 +573,9 @@ void MultiplayerBoxes::SyncLobbyRoom()
 			_mapList->SetSelection(current);
 		}
 	}
-	_passwordButton->visible = room->IsHost() && room->Phase() != RoomPhase::Ended;
+	// A start locks the settings
+	_passwordButton->visible = hostBeforeStart;
+	_settingsButton->visible = hostBeforeStart;
 	// No Close after the start (user, 2026-11-12)
 	_closeButton->visible = hostBeforeStart;
 

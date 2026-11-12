@@ -221,6 +221,7 @@ private:
 	Button* _takeSlot {nullptr};
 	Button* _passwordButton {nullptr};
 	Button* _closeButton {nullptr};
+	Button* _settingsButton {nullptr};
 	CheckBox* _privateBox {nullptr};
 	EditBox* _sessionName {nullptr};
 	/// The revision of the room that the controls show

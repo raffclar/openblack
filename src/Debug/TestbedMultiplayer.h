@@ -75,6 +75,8 @@ enum class Stage : uint8_t
 	LobbyPassword,
 	/// The host tries a map with too few places for the players of the room
 	LobbyMapTooSmall,
+	/// The host opens the box of the settings of the session before the start
+	LobbySettings,
 	_Count
 };
 

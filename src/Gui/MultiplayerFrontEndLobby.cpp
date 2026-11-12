@@ -227,6 +227,8 @@ void MultiplayerFrontEnd::OpenCreateLobby()
 		return;
 	}
 	_flow.box = Box::CreateLobby;
+	_editsLobby = false;
+	_createForm.password.clear();
 	const auto maps = GetSessionMaps();
 	if (_createForm.name.empty())
 	{
@@ -284,8 +286,57 @@ void MultiplayerFrontEnd::SubmitCreateLobby()
 	}
 	const auto& map = maps[*_createForm.map];
 	_createForm.godSlots = screens::ClampGodSlots(_createForm.godSlots, map.places);
+	if (_editsLobby)
+	{
+		SubmitLobbySettings(map);
+		return;
+	}
 	++_generation;
 	_services.lobbyRoom->Create(screens::CreateRequestOf(_createForm, map.map), LobbyDoneCallback());
+}
+
+void MultiplayerFrontEnd::OpenLobbySettings()
+{
+	const auto* room = GetLobbyRoom();
+	if (room == nullptr || !screens::SettingsOpen(*room) || _busy || _message != Message::None)
+	{
+		return;
+	}
+	const auto maps = GetSessionMaps();
+	const auto& lobby = room->Data();
+	const auto current = std::ranges::find_if(maps, [&lobby](const SessionMap& map) { return map.map.file == lobby.map.file; });
+	_createForm = screens::FormOfLobby(lobby, current != maps.end() ? std::optional(static_cast<size_t>(current - maps.begin()))
+	                                                                : std::nullopt);
+	_editsLobby = true;
+	_flow.box = Box::CreateLobby;
+}
+
+void MultiplayerFrontEnd::SubmitLobbySettings(const SessionMap& map)
+{
+	const auto* room = GetLobbyRoom();
+	if (room == nullptr || !screens::SettingsOpen(*room))
+	{
+		// The settings are locked after the start
+		_editsLobby = false;
+		_flow.box = Box::LobbyRoom;
+		return;
+	}
+	// The host must kick players before a map or a number of slots with fewer places (user, 2026-11-12)
+	if (const auto problem = screens::ChangeProblem(_createForm, map.places, screens::PlayersOfRoom(*room));
+	    problem.has_value())
+	{
+		ShowLobbyNotice(ToUtf16(*problem));
+		return;
+	}
+	auto change = screens::ChangeRequestOf(room->Data(), _createForm, map.map);
+	_editsLobby = false;
+	_createForm.password.clear();
+	_flow.box = Box::LobbyRoom;
+	if (screens::IsEmptyChange(change))
+	{
+		return;
+	}
+	_services.lobbyRoom->Change(std::move(change), LobbyDoneCallback());
 }
 
 const openblack::online::lobby::LobbyRoom* MultiplayerFrontEnd::GetLobbyRoom() const
@@ -434,7 +485,7 @@ void MultiplayerFrontEnd::ChangeLobbyMap(size_t map)
 void MultiplayerFrontEnd::AskLobbyPassword()
 {
 	const auto* room = GetLobbyRoom();
-	if (room == nullptr || !room->IsHost() || _busy || _message != Message::None)
+	if (room == nullptr || !screens::SettingsOpen(*room) || _busy || _message != Message::None)
 	{
 		return;
 	}
@@ -586,6 +637,7 @@ void MultiplayerFrontEnd::ForgetLobbyRoom()
 		LeaveRoom();
 	}
 	_reportedMap.reset();
+	_editsLobby = false;
 	_ticketGame.clear();
 	_roomMapHash.clear();
 	if (_mapDownload != nullptr)
@@ -637,6 +689,16 @@ void MultiplayerFrontEnd::FollowLobbySession()
 			ShowLobbyNotice(ToUtf16(*text));
 		}
 		return;
+	}
+	// The box of the settings stays open while the host can change the settings. A start locks them.
+	if (_editsLobby && _flow.box == Box::CreateLobby)
+	{
+		if (screens::SettingsOpen(*room))
+		{
+			FollowLobbyMap(*room);
+			return;
+		}
+		_editsLobby = false;
 	}
 	// A create, a join or a quick join opened the room
 	if (_flow.box != Box::LobbyRoom)
