@@ -550,6 +550,34 @@ void testbed_scenarios::AddLeash(std::vector<Scenario>& all)
 	                 {.kind = Kind::PointerSweep, .delaySeconds = 1.5f, .point = {0.03f, 0.0f}, .amount = 0.5f}},
 	});
 
+	// The select button goes down while the hand holds the rope of the tied leash. Both buttons end the hold, and the
+	// hand grips the land at once.
+	all.push_back({
+	    .id = "hand.rope_hold_both_buttons",
+	    .name = "Both buttons while the hand holds the rope of the tied leash",
+	    .facet = Facet::Hand,
+	    .description = "Your tiger's leash is tied to a tree, and the tiger lies down to sleep. The pointer goes onto the "
+	                   "rope and the Action button takes hold of it. Then the select button goes down, the pointer moves "
+	                   "across the lake, and both buttons come up.",
+	    .expected = "At the press of the select button the hand lets the rope fall. The rope goes back to one line from "
+	                "the collar to the tree, and the tiger gets no order. The hand grips the land at once with the grip "
+	                "sound, and both buttons turn and zoom the camera.",
+	    .framing = {.shot = Shot::Placed, .eye = {-20.0f, 40.0f, 20.0f}, .look = {-20.0f, 0.0f, 120.0f}},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, 75.0f})},
+	    .objects = {{.type = TreeInfo::Oak, .offset = {-40.0f, 100.0f}}},
+	    .commands = {Leash(0, LeashType::Rope, 1.0f),
+	                 OnObject(Kind::TieLeash, 0, 0, 1.0f, false),
+	                 Act(Kind::Sleep, 0, 0.5f),
+	                 {.kind = Kind::PointerOnRope, .creature = 0, .delaySeconds = 5.0f},
+	                 {.kind = Kind::PointerOnRope, .creature = 0, .delaySeconds = 0.5f},
+	                 {.kind = Kind::PointerPress, .delaySeconds = 0.05f, .value = 3},
+	                 {.kind = Kind::PointerSweep, .delaySeconds = 0.5f, .point = {0.05f, -0.1f}, .amount = 1.0f},
+	                 {.kind = Kind::PointerPress, .delaySeconds = 1.5f, .value = 1},
+	                 {.kind = Kind::PointerSweep, .delaySeconds = 0.2f, .point = {0.12f, -0.2f}, .amount = 3.0f},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 3.5f, .value = 1},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 0.1f, .value = 3}},
+	});
+
 	all.push_back({
 	    .id = "leash.hand",
 	    .name = "Leash your creature with the hand",
