@@ -469,6 +469,39 @@ void testbed_scenarios::AddWorkshopScenarios(std::vector<Scenario>& all)
 	                 {.kind = Kind::HandPour, .delaySeconds = 3.0f, .point = k_LooseScaffold, .value = 300}},
 	});
 
+	// A tree given to the new site of a scaffold, and a tree given to a hut that its builders have part built
+	constexpr glm::vec2 k_HutBeingBuilt {-47.0f, 30.0f};
+	constexpr glm::vec2 k_TreeHold {-36.0f, 30.0f};
+	constexpr float k_HutPartBuilt = 0.4f;
+	all.push_back({
+	    .id = "objects.tree_given_to_sites",
+	    .name = "The hand gives a tree to the new site of a scaffold and a tree to a building that is part built",
+	    .facet = Facet::Objects,
+	    .description = "The town and the scaffold of objects.scaffold_starts_building, and a hut of the town west of the "
+	                   "scaffold that is 40 percent built. The hand stays between the scaffold and the hut. After one "
+	                   "second the scaffold starts its building, and shows the phantom of the building. After two seconds "
+	                   "more, the hand takes an oak and uses it on the scaffold. After three seconds more, the hand takes "
+	                   "a second oak and uses it on the hut.",
+	    .expected = "Each oak goes into its site as wood, and a sound of breaking wood plays. The oak stays in the hand in "
+	                "its own colours, and breaks up through a pattern that moves. Holes come in the oak, and it is gone "
+	                "after half a second of game time.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_TreeHold.x, 40.0f, k_TreeHold.y - 55.0f},
+	                .look = {k_TreeHold.x, 8.0f, k_TreeHold.y}},
+	    .objects = {{.type = AbodeInfo::CelticTownCentre, .offset = {0.0f, 50.0f}},
+	                {.type = ScaffoldInfo::Normal, .offset = k_LooseScaffold, .scale = 0.7f},
+	                {.type = AbodeInfo::CelticHut, .offset = k_HutBeingBuilt, .yawDegrees = 180.0f, .built = k_HutPartBuilt},
+	                {.type = TreeInfo::Oak, .offset = {-80.0f, 45.0f}},
+	                {.type = TreeInfo::Oak, .offset = {-80.0f, 55.0f}}},
+	    .commands = {{.kind = Kind::ScaffoldStartsSite, .delaySeconds = 1.0f, .object = 1},
+	                 {.kind = Kind::HandTake, .delaySeconds = 2.0f, .object = 3},
+	                 {.kind = Kind::HandApply, .delaySeconds = 1.0f, .object = 1},
+	                 {.kind = Kind::HandTake, .delaySeconds = 2.0f, .object = 4},
+	                 {.kind = Kind::HandApply, .delaySeconds = 1.0f, .object = 2}},
+	    .hand = HandHold {.offset = k_TreeHold, .height = 6.0f},
+	});
+
 	all.push_back({
 	    .id = "objects.scaffold_founds_town",
 	    .name = "A scaffold put down away from every town founds a new town",

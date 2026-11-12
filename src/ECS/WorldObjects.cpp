@@ -73,6 +73,7 @@
 #include "ECS/Components/Workshop.h"
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/Creches.h"
+#include "ECS/DrawnPlace.h"
 #include "ECS/GameEndConditions.h"
 #include "ECS/Graveyards.h"
 #include "ECS/MobileObjectRecord.h"
@@ -955,8 +956,10 @@ void world_objects::LeaveGhost(entt::entity object)
 	{
 		return;
 	}
-	auto model = glm::translate(glm::mat4(1.0f), transform->position) * glm::mat4(transform->rotation);
-	model = glm::scale(model, transform->scale);
+	// The ghost copies the thing as the last frame drew it: a thing in the hand is where the drawn hand is
+	const auto drawn = drawn_place::DrawnTransformOf(registry, object, *transform);
+	auto model = glm::translate(glm::mat4(1.0f), drawn.position) * glm::mat4(drawn.rotation);
+	model = glm::scale(model, drawn.scale);
 	if (const auto* globe = registry.TryGet<const OneOffSpellSeed>(object))
 	{
 		// The ghost of a one-shot globe is its dome, turned as the last frame drew it
