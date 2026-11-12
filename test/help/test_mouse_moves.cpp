@@ -215,3 +215,30 @@ TEST(MouseMoves, AStillMouseSendsTwentyFivePlacesASecond)
 	}
 	EXPECT_EQ(moves.TakePlaces().size(), 25u);
 }
+
+TEST(MouseMoves, AReplayedPlaceGoesToTheInterfaceAtOnce)
+{
+	MouseMoves moves;
+	// Each place of a hand demonstration goes at once, also when no message time came before it
+	moves.Place({10, 0});
+	moves.Place({20, 0});
+	moves.Place({20, 0});
+	const auto places = moves.TakePlaces();
+	ASSERT_EQ(places.size(), 3u);
+	EXPECT_EQ(places.at(0), glm::ivec2(10, 0));
+	EXPECT_EQ(places.at(1), glm::ivec2(20, 0));
+	// The help counts the places that moved, as for the player's own mouse
+	EXPECT_EQ(moves.CountMoves(places), 2u);
+}
+
+TEST(MouseMoves, AReplayedPlaceDoesNotChangeTheTimeOfTheMessages)
+{
+	MouseMoves moves;
+	moves.Message(0, {0, 0});
+	moves.Place({5, 0});
+	// The replayed place adds no time: the next message still needs more than 28 milliseconds
+	moves.Message(28, {6, 0});
+	EXPECT_EQ(moves.TakePlaces().size(), 1u);
+	moves.Message(29, {7, 0});
+	EXPECT_EQ(moves.TakePlaces().size(), 1u);
+}

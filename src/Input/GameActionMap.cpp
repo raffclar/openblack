@@ -809,6 +809,11 @@ void GameActionMap::DrawnMouseMessage(glm::ivec2 position)
 	_helpMouseMoves.Message(HelpClockNow(), position);
 }
 
+void GameActionMap::ReplayedMousePlace(glm::ivec2 position)
+{
+	_helpMouseMoves.Place(position);
+}
+
 float GameActionMap::GetMouseWheelDelta() const
 {
 	return _inputStep.has_value() ? _stepMice.at(*_inputStep).wheel : _mouseWheelDelta;
@@ -1379,7 +1384,7 @@ void GameActionMap::ProcessEvent(const SDL_Event& event)
 	{
 		// Several moves can come in a frame, and the frame's delta is all of them
 		_mouseMotion.Moved({event.motion.xrel, event.motion.yrel});
-		// The help counts the player's own movements of the mouse, not the moves of a hand demonstration
+		// The player's own movements of the mouse send the messages. A hand demonstration sends its places itself.
 		if (!_playerMouseBlocked && !_cursorFreeze.IsFrozen())
 		{
 			const bool fixedFrameTime = Locator::time::has_value() && Locator::time::value().GetFixedFrameTime().has_value();

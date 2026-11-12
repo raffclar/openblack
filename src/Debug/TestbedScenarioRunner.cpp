@@ -692,6 +692,10 @@ void Runner::Stop()
 		}
 		_ownsPointer = false;
 	}
+	if (std::exchange(_demoOwnsPointer, false))
+	{
+		KeepDebugWindowsOffTheMouse(false);
+	}
 	// Its particle effects die away
 	if (Locator::particleRuleSystem::has_value())
 	{

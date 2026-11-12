@@ -357,6 +357,39 @@ void testbed_scenarios::AddGestureScenarios(std::vector<Scenario>& all)
 	    .commands = {HoldSeed(SpellSeedType::Water, 1.0f), Draw(GestureType::Circle, 2.0f)},
 	    .repeatFrom = 0,
 	});
+	// The worship town stands where the camera of the gestures demonstration looks: the demonstration puts the camera
+	// where its recording had it on the second land
+	constexpr glm::vec2 k_DemoView {488.0f, 788.0f};
+	auto demoTown = WorshipTown();
+	for (auto& object : demoTown)
+	{
+		object.offset += k_DemoView;
+	}
+	all.push_back({
+	    .id = "story.l2_gesture_demo",
+	    .name = "Story: the hand demonstration of the miracle gestures",
+	    .facet = Facet::Story,
+	    .description = "The worship town of the player, counted as the second land, has the grain miracle. Its worship "
+	                   "site gets the prayer power for two grain miracles, as the second land's gesture lesson gives it. "
+	                   "Then the gestures hand demonstration of that lesson plays through the player's hand and camera. "
+	                   "The camera goes where the recording had it, which looks at the town.",
+	    .expected = "The hand draws a spiral, and the miracle selection opens. The hand draws the gestures of the grain "
+	                "miracle: the grain comes from the worship site into the hand, with its sound and its effect in the "
+	                "hand. Then the hand draws a scribble: the hand shakes, and the grain goes back to the site.",
+	    .environment = {.dispenserGrid = false, .landNumber = 2},
+	    .framing = {.shot = Shot::Testbed},
+	    .objects = demoTown,
+	    .temples = {{.offset = k_WorshipTemple + k_DemoView}},
+	    .commands = {{.kind = Kind::BuildWorshipSites, .delaySeconds = 1.0f},
+	                 // The tap fills the site's battery; the start of the demonstration stops the charge of the icon
+	                 {.kind = Kind::TapSiteIcon,
+	                  .delaySeconds = 1.0f,
+	                  .value = static_cast<size_t>(SpellSeedType::Food),
+	                  .amount = 2.0f},
+	                 {.kind = Kind::PlayHandDemo, .delaySeconds = 0.5f, .handDemo = "Gestures"}},
+	    .townBeliefInPlayer = k_WorshipTownBelief,
+	    .townMiracles = {MagicType::Food},
+	});
 	all.push_back({
 	    .id = "story.hidden_phone_box",
 	    .name = "The square wave starts the hidden phone box",

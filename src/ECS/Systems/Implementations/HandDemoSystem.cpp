@@ -358,11 +358,13 @@ void HandDemoSystem::Apply(const std::vector<hand_demo::Played>& played)
 	{
 		if (record->message == hnd::HNDMessage::Move)
 		{
-			// The cursor moves, and the hand with it
+			// The cursor moves, and the hand with it. The recorded move is a message to the interface, as a move of the
+			// player's mouse is: the hand draws its gestures with it, and the help counts it.
 			const auto to = hand_demo::CursorPixel(record->cursor, screen, bars);
 			const auto moved = to - pointer.position;
 			pointer.position = to;
 			actions.SetScriptedPointer(pointer);
+			actions.ReplayedMousePlace(to);
 			SDL_Event event {};
 			event.type = SDL_MOUSEMOTION;
 			event.motion.state = pointer.buttons;
