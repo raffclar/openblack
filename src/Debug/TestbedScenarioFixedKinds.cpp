@@ -297,27 +297,26 @@ void openblack::testbed_scenarios::AddFixedKindScenarios(std::vector<Scenario>& 
 	});
 
 	std::vector<ObjectSetup> beatenSiteTown {
-	    {.type = AbodeInfo::NorseTownCentre, .offset = k_Gathering - k_BuildingGap},
-	    {.type = AbodeInfo::NorseStoragePit, .offset = k_Gathering + k_BuildingGap, .yawDegrees = 180.0f},
-	    {.type = VillagerInfo::NorseForesterMale, .offset = k_Gathering + glm::vec2(0.0f, 15.0f), .joinTown = true},
-	    {.type = VillagerInfo::NorseHousewifeFemale, .offset = k_Gathering + glm::vec2(5.0f, 15.0f), .joinTown = true},
-	    {.type = VillagerInfo::NorseFarmerMale, .offset = k_Gathering + glm::vec2(-5.0f, 15.0f), .joinTown = true},
-	    {.type = VillagerInfo::NorseShepherdMale, .offset = k_Gathering + glm::vec2(0.0f, 20.0f), .joinTown = true}};
+	    {.type = AbodeInfo::NorseTownCentre, .offset = k_Gathering + glm::vec2(-60.0f, 60.0f)},
+	    {.type = AbodeInfo::NorseStoragePit, .offset = k_Gathering + glm::vec2(60.0f, 60.0f), .yawDegrees = 180.0f},
+	    {.type = VillagerInfo::NorseForesterMale, .offset = k_Gathering + glm::vec2(0.0f, 8.0f), .joinTown = true},
+	    {.type = VillagerInfo::NorseHousewifeFemale, .offset = k_Gathering + glm::vec2(5.0f, 8.0f), .joinTown = true},
+	    {.type = VillagerInfo::NorseFarmerMale, .offset = k_Gathering + glm::vec2(-5.0f, 8.0f), .joinTown = true},
+	    {.type = VillagerInfo::NorseShepherdMale, .offset = k_Gathering + glm::vec2(0.0f, 12.0f), .joinTown = true}};
 	all.push_back({
 	    .id = "villagers.beat_burning_worship_site",
 	    .name = "The beat of a burning worship site goes to what the temple's heart chooses",
 	    .facet = Facet::Appearance,
-	    .description =
-	        "A Norse town of the player with a village centre, a storage pit and four villagers. The town's worship site "
-	        "goes up by the temple and is built at once. After two seconds the site catches fire at the most heat of its "
-	        "fire.",
+	    .description = "A Norse town of the player with four villagers, and a village centre and a storage pit far away. The "
+	                   "town's worship site goes up by the temple and is built at once. After two seconds the site catches "
+	                   "fire at the most heat of its fire.",
 	    .expected = "The villagers of the town come to beat the fire on the site. Each beat goes to what the temple's heart "
 	                "chooses, the village centre, and the heart fires a beam at the village centre. The beats do not "
 	                "cool the site. Before, each beat cooled the site itself and no beam came.",
 	    .environment = {.dispenserGrid = false},
 	    .framing = {.shot = Shot::Placed,
-	                .eye = {k_Altar.x + 60.0f, 40.0f, k_Altar.y + 40.0f},
-	                .look = {k_Altar.x - 5.0f, 2.0f, k_Altar.y - 10.0f}},
+	                .eye = {k_Gathering.x + 50.0f, 70.0f, k_Gathering.y - 50.0f},
+	                .look = {k_Gathering.x - 25.0f, 0.0f, k_Gathering.y + 25.0f}},
 	    .objects = std::move(beatenSiteTown),
 	    .temples = {{.offset = k_PileTemple}},
 	    .commands = {{.kind = Kind::BuildWorshipSites, .delaySeconds = 0.5f},
