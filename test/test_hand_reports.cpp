@@ -35,6 +35,7 @@
 #include "ECS/Components/CreatureSpells.h"
 #include "ECS/Components/GodHand.h"
 #include "ECS/Components/Hand.h"
+#include "ECS/Components/HandCreaturePose.h"
 #include "ECS/Components/HandCreaturePress.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/HandLockEndSent.h"
