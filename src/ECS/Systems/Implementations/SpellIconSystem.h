@@ -89,7 +89,6 @@ public:
 	[[nodiscard]] std::vector<magic::WorshipIconCharge> ChargesAt(entt::entity site) const override;
 	void ChargedAt(entt::entity site, std::span<const magic::WorshipIconCharge> charges) override;
 
-	void Update(float seconds) override;
 	void UpdateChargeLooks(int32_t gameMilliseconds, bool landDrawn) override;
 	[[nodiscard]] uint32_t ShownTint(entt::entity icon) const override;
 	[[nodiscard]] std::vector<ChargePulse> ChargePulses() const override;
@@ -163,6 +162,8 @@ private:
 	/// The effect of the holder of an icon's seed: made once for its seed, and shown and moved on when the frame draws
 	/// the icon, at the alpha of the icon's model
 	void StepHolderEffect(entt::entity icon, bool drawn, std::optional<float> step, uint8_t alpha);
+	/// The seed above an icon turns by the game time of the frame, only in a frame that draws the icon on the screen
+	void TurnSeedOf(entt::entity icon, float gameSeconds, bool drawn);
 
 	/// A worship site's icon that is on the screen shows its charge in this frame
 	void ShowCharge(entt::entity entity, const components::WorshipIcon& icon, int32_t gameMilliseconds);

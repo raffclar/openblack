@@ -11,6 +11,7 @@
 
 #include <cstdint>
 
+#include <chrono>
 #include <optional>
 #include <vector>
 
@@ -195,22 +196,25 @@ void SpellIconSystem::UpdateHolderEffects(std::chrono::milliseconds frameRealTim
                                           bool landDrawn)
 {
 	const auto step = particles::drawn_steps::StepSeconds(_holderPace, frameRealTime, frameGameTime, landDrawn);
-	if (!Locator::particleRuleSystem::has_value() || !Locator::infoConstants::has_value())
+	if (!Locator::infoConstants::has_value())
 	{
 		return;
 	}
 	auto& registry = Locator::entitiesRegistry::value();
-	auto& particles = Locator::particleRuleSystem::value();
+	auto* particles = Locator::particleRuleSystem::has_value() ? &Locator::particleRuleSystem::value() : nullptr;
 	// An icon that went, or that shows another seed, loses the effect of its old seed
-	std::erase_if(_holderEffects, [&registry, &particles](const auto& entry) {
-		const auto* shown = registry.Valid(entry.first) ? registry.TryGet<const IconSeed>(entry.first) : nullptr;
-		if (shown != nullptr && shown->seed == entry.second.seed)
-		{
-			return false;
-		}
-		particles.Delete(entry.second.effect);
-		return true;
-	});
+	if (particles != nullptr)
+	{
+		std::erase_if(_holderEffects, [&registry, particles](const auto& entry) {
+			const auto* shown = registry.Valid(entry.first) ? registry.TryGet<const IconSeed>(entry.first) : nullptr;
+			if (shown != nullptr && shown->seed == entry.second.seed)
+			{
+				return false;
+			}
+			particles->Delete(entry.second.effect);
+			return true;
+		});
+	}
 	// The frame draws the village centres and the icons of the worship sites in the order of the land's draw list. Each
 	// centre draws its hands in turn.
 	std::vector<entt::entity> drawers;
@@ -224,6 +228,15 @@ void SpellIconSystem::UpdateHolderEffects(std::chrono::milliseconds frameRealTim
 	                             [&registry, drawList](entt::entity entity) { return drawList->Decides(registry, entity); })
 	                       : drawers;
 	const auto* sites = Locator::worshipSiteSystem::has_value() ? &Locator::worshipSiteSystem::value() : nullptr;
+	const float gameSeconds = std::chrono::duration<float>(frameGameTime).count();
+	// The seed turns, and the effect of its holder continues, only in a frame that draws the seed
+	const auto drawSeed = [this, particles, step, gameSeconds](entt::entity seed, bool drawn, uint8_t alpha) {
+		TurnSeedOf(seed, gameSeconds, drawn);
+		if (particles != nullptr)
+		{
+			StepHolderEffect(seed, drawn, step, alpha);
+		}
+	};
 	for (const auto drawer : order)
 	{
 		// The icon of a worship site draws its seed only while its site is built and the icon is on the screen. The
@@ -231,8 +244,7 @@ void SpellIconSystem::UpdateHolderEffects(std::chrono::milliseconds frameRealTim
 		if (const auto* icon = registry.TryGet<const WorshipIcon>(drawer))
 		{
 			const bool built = sites != nullptr && sites->IsBuilt(icon->site);
-			StepHolderEffect(drawer, landDrawn && built && ecs::DrawnOnScreen(registry, drawer), step,
-			                 looks::HolderAlpha(ShownTint(drawer)));
+			drawSeed(drawer, landDrawn && built && ecs::DrawnOnScreen(registry, drawer), looks::HolderAlpha(ShownTint(drawer)));
 			continue;
 		}
 		// A centre draws its hands only while the list draws it and while it has life
@@ -243,10 +255,32 @@ void SpellIconSystem::UpdateHolderEffects(std::chrono::milliseconds frameRealTim
 		{
 			if (registry.Valid(hand) && registry.AllOf<IconSeed>(hand))
 			{
-				StepHolderEffect(hand, centreDrawn && ecs::DrawnOnScreen(registry, hand), step, k_HandHolderAlpha);
+				drawSeed(hand, centreDrawn && ecs::DrawnOnScreen(registry, hand), k_HandHolderAlpha);
 			}
 		}
 	}
+}
+
+void SpellIconSystem::TurnSeedOf(entt::entity icon, float gameSeconds, bool drawn)
+{
+	auto& shown = Locator::entitiesRegistry::value().Get<IconSeed>(icon);
+	// A creature spell's phial pulses at the speed of how its creature takes the spell
+	std::optional<int> phialReceiveType;
+	if (drawn && magic::visuals::IsPhialSeed(shown.seed))
+	{
+		const auto& info = Locator::infoConstants::value();
+		const auto* spell =
+		    magic::GetMagicInfoAs<GMagicCreatureSpellInfo>(info, magic::GetSpellSeedInfo(info, shown.seed).magicTypes[0]);
+		phialReceiveType = spell != nullptr ? static_cast<int>(spell->creatureReceiveSpellType) : 0;
+	}
+	const auto turned = magic::visuals::TurnIconSeed(
+	    {.seed = {.spin = shown.spin, .phialFrame = shown.phialFrame, .phialPhase = shown.phialPhase},
+	     .ringSpin = shown.ringSpin},
+	    phialReceiveType, gameSeconds, drawn);
+	shown.spin = turned.seed.spin;
+	shown.ringSpin = turned.ringSpin;
+	shown.phialFrame = turned.seed.phialFrame;
+	shown.phialPhase = turned.seed.phialPhase;
 }
 
 void SpellIconSystem::StepHolderEffect(entt::entity icon, bool drawn, std::optional<float> step, uint8_t alpha)

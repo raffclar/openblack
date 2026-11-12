@@ -1454,28 +1454,6 @@ void SpellIconSystem::ChargedAt(entt::entity site, std::span<const magic::Worshi
 	}
 }
 
-void SpellIconSystem::Update(float seconds)
-{
-	if (!Locator::infoConstants::has_value())
-	{
-		return;
-	}
-	const auto& info = Locator::infoConstants::value();
-	// The seeds spin as a globe's do, their rings round them, and their phials pulse
-	Entities().Each<IconSeed>([&](IconSeed& shown) {
-		shown.spin = std::fmod(shown.spin + (magic::k_OrbSeedSpin * seconds), glm::two_pi<float>());
-		shown.ringSpin = std::fmod(shown.ringSpin + (magic::visuals::k_RingSpin * seconds), glm::two_pi<float>());
-		if (magic::visuals::IsPhialSeed(shown.seed))
-		{
-			const auto* spell =
-			    magic::GetMagicInfoAs<GMagicCreatureSpellInfo>(info, magic::GetSpellSeedInfo(info, shown.seed).magicTypes[0]);
-			const int receiveType = spell != nullptr ? static_cast<int>(spell->creatureReceiveSpellType) : 0;
-			shown.phialFrame = magic::visuals::StepPhialFrame(shown.phialFrame, seconds);
-			shown.phialPhase = std::fmod(shown.phialPhase + (magic::visuals::PhialPulseSpeed(receiveType) * seconds), 1.0f);
-		}
-	});
-}
-
 void SpellIconSystem::Reset()
 {
 	// The icons are entities of the land and go with it, and so do their looks. The clock of the shines and the pulses

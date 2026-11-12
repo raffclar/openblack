@@ -115,9 +115,12 @@ void AddSecondLandIconScenarios(std::vector<Scenario>& all)
 	                   "miracles. The town's worship site goes up by the temple as the scenario starts, and it stays a "
 	                   "scaffold for six seconds. Then the site is built at once.",
 	    .expected = "While the site is a scaffold, its places for the icons are empty: no hand, no miracle above a hand, "
-	                "and the cursor finds no icon there. When the site is built, the hands of the heal icon and the water "
-	                "icon show with their miracles above them. Before, the hands and their miracles stood by the "
-	                "scaffold before the site was built.",
+	                "and the cursor finds no icon there. The land under the places keeps the same look when the site is "
+	                "built: the game gives an icon its land shadow from the time it makes the icon. When the site is "
+	                "built, the hands of the heal icon and the water icon show with their miracles above them. The "
+	                "miracles start to turn from where they were made: a miracle turns only while the land shows it. "
+	                "Before, the hands and their miracles stood by the scaffold before the site was built, and the "
+	                "miracles turned when nothing showed them.",
 	    .environment = {.dispenserGrid = false, .landNumber = k_SecondLand},
 	    // The camera looks across the site at its places for the icons, from the side away from the temple
 	    .framing = {.shot = Shot::Placed, .eye = {-9.0f, 20.0f, -3.0f}, .look = {-20.0f, 2.0f, -35.0f}},

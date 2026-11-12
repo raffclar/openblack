@@ -168,9 +168,6 @@ public:
 	/// sets the power-up level of its held seed, or else sends its miracle to the hand that asked for it.
 	virtual void ChargedAt(entt::entity site, std::span<const magic::WorshipIconCharge> charges) = 0;
 
-	/// Once a frame: the seeds above the icons spin
-	virtual void Update(float seconds) = 0;
-
 	/// The pulse model that a charging icon shows in a frame: where it is drawn, and its colour and alpha as 0xAARRGGBB
 	struct ChargePulse
 	{
@@ -181,8 +178,8 @@ public:
 	/// Its ring of light fills and moves on, its shine changes, and its pulse model shrinks into it while it charges.
 	virtual void UpdateChargeLooks(int32_t /*gameMilliseconds*/, bool /*landDrawn*/) {}
 	/// Once a frame: the stone hands of the village centres and the icons at the worship sites show the effect of the
-	/// holder of their seeds. The effect of an icon shows and moves on, by the game time of the frame, only in a frame that
-	/// draws the icon on the screen.
+	/// holder of their seeds, and their seeds turn. The effect of an icon shows and continues, and its seed turns, by the
+	/// game time of the frame, only in a frame that draws the icon on the screen.
 	virtual void UpdateHolderEffects(std::chrono::milliseconds /*frameRealTime*/, std::chrono::milliseconds /*frameGameTime*/,
 	                                 bool /*landDrawn*/)
 	{
