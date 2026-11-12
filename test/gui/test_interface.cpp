@@ -1421,3 +1421,89 @@ TEST(ListControl, APressOnTheScrollBarHidesTheSelectionUntilTheButtonComesUp)
 	list.Release(bar);
 	EXPECT_EQ(list.GetSelection(), std::optional<size_t> {1});
 }
+
+TEST(GameMenu, TheTabOfThePageThatShowsClosesAllTheBoxesAndShowsThePageAgain)
+{
+	MenuFixture f;
+	int closes = 0;
+	f.menu.SetAllBoxesClosedHandler([&closes] { ++closes; });
+	Click(f.menu, ButtonCentre(3));
+	ASSERT_EQ(f.menu.GetPage(), Page::Options);
+	(void)f.menu.TakeMainMenuShownAgain();
+	// Each page of the options: the main menu shows again under the page, and the page shows again from the start
+	for (const auto [tab, page] :
+	     {std::pair {1u, Page::Options}, std::pair {3u, Page::Advanced}, std::pair {4u, Page::Controls}})
+	{
+		f.menu.ShowPage(page);
+		(void)f.menu.TakeControlsToKeep();
+		const int before = closes;
+		Click(f.menu, TabCentre(tab));
+		EXPECT_EQ(f.menu.GetPage(), page);
+		EXPECT_EQ(closes, before + 1);
+		EXPECT_TRUE(f.menu.TakeMainMenuShownAgain());
+		// The Controls page keeps the bindings as it closes
+		EXPECT_EQ(f.menu.TakeControlsToKeep(), page == Page::Controls);
+	}
+
+	// After a change of the detail, the tab of the Options page does nothing, and the change stays untold
+	f.menu.ShowPage(Page::Options);
+	Click(f.menu, {400, 365});
+	ASSERT_TRUE(f.menu.IsDetailUntold());
+	Click(f.menu, TabCentre(1));
+	EXPECT_EQ(closes, 3);
+	EXPECT_TRUE(f.menu.GetQuestionText().empty());
+	EXPECT_TRUE(f.menu.IsDetailUntold());
+	EXPECT_FALSE(f.menu.TakeMainMenuShownAgain());
+
+	// Inside the temple the tab shows the page again, with no main menu under it
+	MenuFixture temple;
+	temple.menu.SetInsideTemple(true);
+	temple.menu.SetAllBoxesClosedHandler([&closes] { ++closes; });
+	temple.menu.ShowPage(Page::Advanced);
+	Click(temple.menu, TabCentre(3));
+	EXPECT_EQ(temple.menu.GetPage(), Page::Advanced);
+	EXPECT_EQ(closes, 4);
+	EXPECT_FALSE(temple.menu.TakeMainMenuShownAgain());
+}
+
+TEST(GameMenu, TheTabOfThePlayersPageShowsItAgainOnlyWithNoRestartPending)
+{
+	PlayersFixture f;
+	int closes = 0;
+	f.menu.SetAllBoxesClosedHandler([&closes] { ++closes; });
+	(void)f.menu.TakePlayerEdits();
+	// The page closes, which keeps the edits, and shows again
+	Click(f.menu, TabCentre(2));
+	EXPECT_EQ(f.menu.GetPage(), Page::Players);
+	EXPECT_EQ(closes, 1);
+	EXPECT_TRUE(f.menu.TakePlayerEdits().has_value());
+
+	// With a restart pending, the tab does nothing: no question, and the boxes stay
+	EXPECT_EQ(Click(f.menu, PlayerRow(f.menu, 0)), Action::PickPlayer);
+	ASSERT_TRUE(f.menu.IsRestartPending());
+	Click(f.menu, TabCentre(2));
+	EXPECT_EQ(closes, 1);
+	EXPECT_TRUE(f.menu.GetQuestionText().empty());
+	EXPECT_TRUE(f.menu.IsRestartPending());
+	EXPECT_EQ(f.menu.GetPlayersBackLabel(), u"Restart");
+	// Another tab asks first, and closes the boxes only when it acts
+	Click(f.menu, TabCentre(3));
+	EXPECT_EQ(f.menu.GetQuestionText(), u"Restart?");
+	EXPECT_EQ(closes, 1);
+}
+
+TEST(GameMenu, TheControlsListKeepsItsSelectionEachTimeThePageShows)
+{
+	MenuFixture f;
+	f.menu.ShowPage(Page::Controls);
+	EXPECT_FALSE(f.menu.GetControls().GetSelection().has_value());
+	Click(f.menu, ControlRow(f.menu, 3));
+	EXPECT_EQ(f.menu.GetControls().GetSelection(), std::optional<size_t> {3});
+	// Another page, then the Controls page again
+	Click(f.menu, TabCentre(1));
+	Click(f.menu, TabCentre(4));
+	EXPECT_EQ(f.menu.GetControls().GetSelection(), std::optional<size_t> {3});
+	// The tab of the Controls page shows it again, with the same selection
+	Click(f.menu, TabCentre(4));
+	EXPECT_EQ(f.menu.GetControls().GetSelection(), std::optional<size_t> {3});
+}

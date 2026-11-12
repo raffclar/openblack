@@ -383,14 +383,12 @@ void Game::HandleInterfaceAction()
 	}
 	_mainMenuWasActive = mainMenuActive;
 
-	// The menu pauses the game while it is open
+	// The menu pauses the game while it is open. The menu that closes from another page does not start the wait of
+	// Escape again: only the main menu starts it, as it stops taking the input (above). Inside the temple the options
+	// show alone, and close with no main menu under them.
 	if (const auto pause = _menuPause.Follow(Locator::gameInterface::value().GetMenu().IsOpen()); pause.has_value())
 	{
 		Locator::time::value().SetPlayerPause(*pause);
-		if (!_menuPause.IsHeld())
-		{
-			Locator::gameKeysSystem::value().MenuClosed();
-		}
 	}
 	// The main menu comes back under each page that the menu shows, and pauses the game again. This is important after
 	// the question of the trip unpaused the game over another page. Inside the temple, the options show alone.

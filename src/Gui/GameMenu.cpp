@@ -254,19 +254,22 @@ std::vector<Dialog::Tab> GameMenu::OptionsTabs(const TextDatabase& texts, Page s
 	// The options' tabs: Main Menu, Options, Players, Advanced and Controls. Inside the temple the first is the World
 	// Room, which goes back as Back does.
 	(void)selected;
-	// A click on a tab closes all the boxes of the game first
-	const auto pick = [this](Page page) {
-		return [this, page] {
-			CloseAllBoxesForTab();
-			PickTab(page);
-		};
-	};
+	// The tab of the page that shows also takes a click (PickTab)
+	const auto pick = [this](Page page) { return [this, page] { PickTab(page); }; };
 	return {
-	    {.label = _insideTemple ? _worldRoomTab : _mainMenuTab, .onSelect = pick(Page::Main)},
-	    {.label = std::u16string(texts.Get("HELP_TEXT_DIALOG_OPTIONS")), .onSelect = pick(Page::Options)},
-	    {.label = std::u16string(texts.Get("HELP_TEXT_DIALOG_PLAYERLIST")), .onSelect = pick(Page::Players)},
-	    {.label = std::u16string(texts.Get("HELP_TEXT_FRONT_END_06")), .onSelect = pick(Page::Advanced)},
-	    {.label = std::u16string(texts.Get("HELP_TEXT_DIALOG_CONTROLOPTIONS")), .onSelect = pick(Page::Controls)},
+	    {.label = _insideTemple ? _worldRoomTab : _mainMenuTab, .onSelect = pick(Page::Main), .clickWhenSelected = true},
+	    {.label = std::u16string(texts.Get("HELP_TEXT_DIALOG_OPTIONS")),
+	     .onSelect = pick(Page::Options),
+	     .clickWhenSelected = true},
+	    {.label = std::u16string(texts.Get("HELP_TEXT_DIALOG_PLAYERLIST")),
+	     .onSelect = pick(Page::Players),
+	     .clickWhenSelected = true},
+	    {.label = std::u16string(texts.Get("HELP_TEXT_FRONT_END_06")),
+	     .onSelect = pick(Page::Advanced),
+	     .clickWhenSelected = true},
+	    {.label = std::u16string(texts.Get("HELP_TEXT_DIALOG_CONTROLOPTIONS")),
+	     .onSelect = pick(Page::Controls),
+	     .clickWhenSelected = true},
 	};
 }
 
@@ -667,25 +670,40 @@ void GameMenu::CloseAllBoxesForTab() const
 
 void GameMenu::PickTab(Page page)
 {
-	if (_page == Page::Players && page != Page::Players && IsRestartPending())
+	const bool again = page == _page;
+	// While a restart is pending, a tab asks about the restart first. The tab of the Players page does nothing then.
+	if (_page == Page::Players && IsRestartPending())
 	{
-		KeepPlayerEdits();
-		Ask(_restartQuestion, Action::Restart);
+		if (!again)
+		{
+			KeepPlayerEdits();
+			Ask(_restartQuestion, Action::Restart);
+		}
 		return;
 	}
-	// Away from the Options page after a change of the detail, the player is told first; OK then picks the tab
-	if (_page == Page::Options && page != Page::Options && TellDetailChange([this, page] { PickTab(page); }))
+	// Away from the Options page after a change of the detail, the player is told first; OK then picks the tab. The tab
+	// of the Options page does nothing then.
+	if (_page == Page::Options && IsDetailUntold())
 	{
+		if (!again)
+		{
+			TellDetailChange([this, page] { PickTab(page); });
+		}
 		return;
 	}
+	// The tab closes all the boxes. Out of the temple, the main menu shows again under the page of the tab.
+	CloseAllBoxesForTab();
 	if (page == Page::Main)
 	{
 		Back();
+		return;
 	}
-	else
+	if (!_insideTemple)
 	{
-		ShowPage(page);
+		_mainMenuShownAgain = true;
 	}
+	// The tab of the page that shows closes the page and shows it again from the start
+	ShowPage(page, again);
 }
 
 bool GameMenu::TellDetailChange(std::function<void()> then)
@@ -1120,13 +1138,25 @@ void GameMenu::OpenStatistics()
 
 void GameMenu::ShowPage(Page page)
 {
+	ShowPage(page, false);
+}
+
+void GameMenu::ShowPage(Page page, bool again)
+{
 	CurrentDialog().Reset();
 	_pageShown = true;
-	if (_page == Page::Players && page != Page::Players)
+	// The page closes and shows from the start when the menu goes to another page, or shows the same page again
+	const bool afresh = again || page != _page;
+	if (afresh && _page == Page::Players)
 	{
 		KeepPlayerEdits();
 	}
-	if (page == Page::Players && _page != Page::Players)
+	// The Controls page keeps the bindings with the player's profile as it closes
+	if (afresh && _page == Page::Controls)
+	{
+		_keepControls = true;
+	}
+	if (afresh && page == Page::Players)
 	{
 		// Shown afresh, the page starts from the profile played
 		_originalPlayer = _currentPlayer;
@@ -1135,15 +1165,15 @@ void GameMenu::ShowPage(Page page)
 		_previousProfile = _originalName;
 		UpdatePlayersPage();
 	}
-	if (page == Page::Options && _page != Page::Options)
+	if (afresh && page == Page::Options)
 	{
 		// Shown afresh, the page tells of a change of the detail made from now on
 		_detailTold = _settings.detail;
 	}
-	if (page == Page::Controls && _page != Page::Controls)
+	if (afresh && page == Page::Controls)
 	{
-		// Shown afresh, the page picks its first row and shows the bindings as they are now
-		_controls->SetSelection(0);
+		// Shown afresh, the page shows the bindings as they are now. The list keeps its selection from the last time
+		// that the page showed, and has none the first time.
 		RefreshControls();
 	}
 	_page = page;

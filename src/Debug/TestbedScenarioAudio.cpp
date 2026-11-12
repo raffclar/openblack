@@ -1051,6 +1051,20 @@ void testbed_scenarios::AddAudio(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "interface.options_own_tab",
+	    .name = "A click on the tab of the options page that shows",
+	    .facet = Facet::Interface,
+	    .description = "After a second the menu opens on its Controls page. Click a row of the list. Click the Options "
+	                   "tab, then the Controls tab, then the Controls tab again. On the Options page, change the detail "
+	                   "and click the Options tab.",
+	    .expected = "Each click on the tab of the page that shows closes the page and shows it again. The list of the "
+	                "Controls page keeps the row that you clicked. After a change of the detail, the Options tab does "
+	                "nothing and no message shows.",
+	    .framing = {.shot = Shot::Overview},
+	    .commands = {{.kind = Kind::OpenMenuPage, .delaySeconds = 1.0f, .value = 4}},
+	});
+
+	all.push_back({
 	    .id = "interface.read_speed_slider",
 	    .name = "The help text speed slider of a game with no sound",
 	    .facet = Facet::Interface,
