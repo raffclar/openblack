@@ -14,10 +14,10 @@ using namespace openblack::magic;
 
 namespace
 {
-void Lock(CastInput& input, bool onObject, uint32_t turn)
+void Lock(CastInput& input, uint32_t turn)
 {
 	input.state = CastInput::State::Locked;
-	input.onObject = onObject;
+	input.onObject = false;
 	input.lockTurn = turn;
 	input.lastApplyTurn = turn;
 }
@@ -47,10 +47,9 @@ CastActions magic::Press(CastInput& input, const CastProfile& profile, const Pre
 			actions.restartGesturePath = true;
 			break;
 		case SpellCastType::SpellCastInHand:
-			Lock(input, true, context.turn);
-			actions.cast = CastTarget::Object;
-			break;
 		case SpellCastType::SpellCastHandPosition:
+			// On a thing, a miracle that runs in the hand does not lock on: the hand casts it once, and the let go of
+			// the button does nothing
 			actions.cast = CastTarget::Object;
 			break;
 		}
@@ -77,7 +76,7 @@ CastActions magic::Press(CastInput& input, const CastProfile& profile, const Pre
 		actions.restartGesturePath = true;
 		break;
 	case SpellCastType::SpellCastInHand:
-		Lock(input, false, context.turn);
+		Lock(input, context.turn);
 		actions.cast = CastTarget::Point;
 		break;
 	case SpellCastType::SpellCastHandPosition:
