@@ -27,6 +27,10 @@ namespace
 /// as the renderer gives them: 0 to 1
 bool ShaderFailsAlphaTest(float alpha, float threshold)
 {
+	if (threshold < 0.0f)
+	{
+		return false;
+	}
 	const float reference = std::floor(threshold * 255.0f + 0.5f);
 	if (reference < 0.5f)
 	{
@@ -65,6 +69,22 @@ TEST(RenderModes, AMaterialWithNoTestDropsOnlyTheTexelsWithNoAlpha)
 {
 	EXPECT_TRUE(ShaderFailsAlphaTest(0.0f, 0.0f));
 	EXPECT_FALSE(ShaderFailsAlphaTest(1.0f / 255.0f, 0.0f));
+}
+
+TEST(RenderModes, TheAlphaTexturedModeKeepsItsTexelsWithNoAlphaAndTheirDepth)
+{
+	using graphics::render_modes::Desc;
+	using graphics::render_modes::KeepsTexelsWithNoAlpha;
+	EXPECT_TRUE(KeepsTexelsWithNoAlpha(Desc(Mode::AlphaTextured)));
+	EXPECT_TRUE(KeepsTexelsWithNoAlpha(Desc(Mode::TexturedAlpha)));
+	EXPECT_TRUE(KeepsTexelsWithNoAlpha(Desc(Mode::AlphaTexturedAlpha)));
+	// The chroma modes have a test, the opaque modes do not blend, and the modes without depth write show nothing there
+	EXPECT_FALSE(KeepsTexelsWithNoAlpha(Desc(Mode::TexturedChroma)));
+	EXPECT_FALSE(KeepsTexelsWithNoAlpha(Desc(Mode::Textured)));
+	EXPECT_FALSE(KeepsTexelsWithNoAlpha(Desc(Mode::AlphaTexturedAlphaNz)));
+	EXPECT_FALSE(KeepsTexelsWithNoAlpha(Desc(Mode::AlphaTexturedAlphaAdditive)));
+	// The renderer gives such a material a reference below 0, so the shader keeps every texel and writes its depth
+	EXPECT_FALSE(ShaderFailsAlphaTest(0.0f, -1.0f));
 }
 
 TEST(RenderModes, TheChromaModeBlendsByTheTextureAlphaAfterItsTestAndWritesTheDepth)

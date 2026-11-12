@@ -873,10 +873,17 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 					seeThroughRef = desc.seeThroughRef.has_value() ? static_cast<float>(*desc.seeThroughRef)
 					                                               : std::round(prim.alphaCutoutThreshold * 255.0f);
 				}
+				// A blended material with no alpha test that writes the depth keeps its texels with no alpha, as the
+				// game does: a reference below 0 tells the shader
+				const bool keepsNoAlpha =
+				    materialBlending && !seeThrough && !addedAlphaTextured && !desc.materialAlphaTest &&
+				    render_modes::KeepsTexelsWithNoAlpha(render_modes::Desc(
+				        static_cast<render_modes::Mode>(std::min(prim.materialType, render_modes::k_ModeCount - 1))));
+				const float noTest = keepsNoAlpha ? -1.0f : 0.0f;
 				const glm::vec4 u_skyAlphaThreshold = {
 				    Locator::skyClockSystem::value().GetCurrentSkyType(),
 				    desc.alphaThreshold.value_or(prim.thresholdAlpha || desc.materialAlphaTest ? prim.alphaCutoutThreshold
-				                                                                               : 0.0f),
+				                                                                               : noTest),
 				    seeThroughTest,
 				    seeThroughRef,
 				};
