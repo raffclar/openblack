@@ -2345,13 +2345,6 @@ void Game::UpdateMagicHand(const glm::vec3& handPosition, float deltaSeconds)
 	magic.UpdateHand(frame, Locator::time::value().GetInputSteps());
 	magic.Update(deltaSeconds);
 	Locator::magicShieldSystem::value().Update(deltaSeconds);
-	// The seeds above the stone hands and worship icons spin as the globes' do, by the game time of the frame: they stand
-	// still while the game is paused
-	if (Locator::spellIconSystem::has_value())
-	{
-		Locator::spellIconSystem::value().Update(
-		    std::chrono::duration<float>(Locator::time::value().GetFrameGameTime()).count());
-	}
 }
 
 void Game::PlayHandGrabSound()
