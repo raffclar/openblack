@@ -89,7 +89,8 @@ tattoo_sites::Found tattoo_sites::Find(const graphics::L3DMesh& mesh, CreatureTy
 std::vector<creature_tattoo_editor::SiteOnScreen> tattoo_sites::OnScreen(const Registry& registry, entt::entity creature,
                                                                          const graphics::L3DMesh& mesh, const glm::mat4& model,
                                                                          std::span<const glm::mat4> bones, const Found& found,
-                                                                         const screen_pick::View& view, glm::ivec2 origin)
+                                                                         const screen_pick::View& view, glm::ivec2 origin,
+                                                                         const creature_morph::Morph* shape)
 {
 	std::vector<creature_tattoo_editor::SiteOnScreen> onScreen;
 	for (size_t i = 0; i < found.size(); ++i)
@@ -99,7 +100,7 @@ std::vector<creature_tattoo_editor::SiteOnScreen> tattoo_sites::OnScreen(const R
 		{
 			continue;
 		}
-		const auto corners = posed_model::CornersOnSkin(registry, creature, mesh, model, bones, *point);
+		const auto corners = posed_model::CornersOnSkin(registry, creature, mesh, model, bones, *point, shape);
 		if (!corners.has_value())
 		{
 			continue;

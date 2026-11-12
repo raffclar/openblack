@@ -41,9 +41,10 @@ using openblack::creature::CreatureRig;
 namespace
 {
 /// Where a strand is rooted this frame and which way it grows out, or none where its triangle has no area. The root
-/// is sunk along the triangle's normal as it comes, unnormalised.
+/// is sunk along the triangle's normal as it comes, unnormalised. The hair takes its turn from the evil to good value
+/// of its look.
 std::optional<creature_hair::Root> RootOf(const CreatureRig::HairStrand& strand, const creature_morph::Morph& morph,
-                                          creature::PosedBones& posed)
+                                          float alignment, creature::PosedBones& posed)
 {
 	const auto triangle = creature::PosedTriangle(strand.vertices, strand.bones, morph, posed,
 	                                              strand.turned ? creature::k_TurnedHairOrder : creature::k_SkinPointOrder);
@@ -61,10 +62,10 @@ std::optional<creature_hair::Root> RootOf(const CreatureRig::HairStrand& strand,
 		{
 			frames.at(i) = glm::mat3(posed.At(strand.bones.at(i)));
 		}
-		// Each angle moves with the alignment the body is drawn with
-		const auto angle = [&strand, &morph](glm::length_t axis) {
+		// Each angle moves with the evil to good value of the look of the hair
+		const auto angle = [&strand, alignment](glm::length_t axis) {
 			return creature_hair::ByAlignment(
-			    std::array {strand.angles[0][axis], strand.angles[1][axis], strand.angles[2][axis]}, morph.evilGood);
+			    std::array {strand.angles[0][axis], strand.angles[1][axis], strand.angles[2][axis]}, alignment);
 		};
 		const glm::vec3 turn {angle(0), angle(1), angle(2)};
 		direction = creature_hair::GrowthDirection(point.normal, creature_hair::BoneFrame(frames), turn);
@@ -72,9 +73,11 @@ std::optional<creature_hair::Root> RootOf(const CreatureRig::HairStrand& strand,
 	return creature_hair::Root {.position = point.position, .inwardNormal = point.normal, .direction = direction};
 }
 
-/// Moves the hair of a body for a number of seconds: the body has a species, a shape, a pose, a place and a size
+/// Moves the hair of a body for a number of seconds: the body has a species, a shape, a pose, a place and a size. The
+/// hair takes its look from an evil to good value.
 void StepBodyHair(const resources::CreatureRigManager& rigs, CreatureType species, const creature_morph::Morph& morph,
-                  const CreatureAnimation& animation, const Transform& transform, float size, CreatureHair& hair, float seconds)
+                  float alignment, const CreatureAnimation& animation, const Transform& transform, float size,
+                  CreatureHair& hair, float seconds)
 {
 	const auto rigId = creature::GetRigId(species);
 	if (!rigs.Contains(rigId) || animation.boneMatrices.empty())
@@ -83,14 +86,11 @@ void StepBodyHair(const resources::CreatureRigManager& rigs, CreatureType specie
 		return;
 	}
 	const auto& rig = *rigs.Handle(rigId);
-	// The hair takes the look of the alignment the body is drawn with
-	const auto alignment = morph.evilGood;
 	const auto scale = creature_hair::HairScale(size);
 	// The hair grows from the body where the frame draws it
 	const auto drawn = DrawnTransform(transform, &animation);
 	// The strands of the body share its bones, so each bone is placed in the world one time
-	creature::PosedBones posed(animation.boneMatrices,
-	                           creature::PlacementMatrix(drawn.position, drawn.rotation, drawn.scale));
+	creature::PosedBones posed(animation.boneMatrices, creature::PlacementMatrix(drawn.position, drawn.rotation, drawn.scale));
 	StepHair(
 	    hair, rig.hairGroups.size(),
 	    [&](size_t g) {
@@ -102,7 +102,7 @@ void StepBodyHair(const resources::CreatureRigManager& rigs, CreatureType specie
 		                           .colour = look.colour,
 		                           .textured = source.textured};
 	    },
-	    [&](size_t g, size_t s) { return RootOf(rig.hairGroups[g].strands[s], morph, posed); }, seconds);
+	    [&](size_t g, size_t s) { return RootOf(rig.hairGroups[g].strands[s], morph, alignment, posed); }, seconds);
 }
 } // namespace
 
@@ -137,7 +137,9 @@ void CreatureHairSystem::Update(std::chrono::duration<float, std::milli> gameTim
 	registry.Each<const Creature, const CreatureMorph, const CreatureAnimation, const Transform, CreatureHair>(
 	    [&](const Creature& creature, const CreatureMorph& morph, const CreatureAnimation& animation,
 	        const Transform& transform, CreatureHair& hair) {
-		    StepBodyHair(rigs, creature.species, morph.drawn, animation, transform, ShownSize(creature), hair, seconds);
+		    // The hair takes the look of the alignment the body is drawn with
+		    StepBodyHair(rigs, creature.species, morph.drawn, morph.drawn.evilGood, animation, transform, ShownSize(creature),
+		                 hair, seconds);
 	    });
 }
 
@@ -157,13 +159,14 @@ void CreatureHairSystem::StepCopy(Registry& copies, entt::entity copy, std::chro
 		return;
 	}
 	const auto* creature = bodies.TryGet<const Creature>(body->creature);
-	const auto* morph = bodies.TryGet<const CreatureMorph>(body->creature);
+	const auto* morph = ShapeOfCopy(copies, copy, bodies);
 	if (creature == nullptr || morph == nullptr)
 	{
 		return;
 	}
-	// A copy's hair moves by the time of the frame, as the game is paused while the copy is shown
+	// A copy's hair moves by the time of the frame, as the game is paused while the copy is shown. A copy with looks of
+	// its own takes the look of its hair from the alignment that it was painted with last.
 	const auto seconds = creature_hair::StepSeconds(frameTime.count());
-	StepBodyHair(Locator::resources::value().GetCreatureRigs(), creature->species, morph->drawn, *animation, *transform,
-	             body->size, *hair, seconds);
+	StepBodyHair(Locator::resources::value().GetCreatureRigs(), creature->species, morph->drawn,
+	             HairAlignmentOfCopy(*body, *morph), *animation, *transform, body->size, *hair, seconds);
 }

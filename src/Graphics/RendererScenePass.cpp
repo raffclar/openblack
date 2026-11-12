@@ -54,6 +54,7 @@
 #include "ECS/Components/CameraBookmark.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
+#include "ECS/Components/CreatureCopy.h"
 #include "ECS/Components/CreatureHair.h"
 #include "ECS/Components/CreatureHandGlows.h"
 #include "ECS/Components/CreatureLeash.h"
@@ -798,7 +799,9 @@ void Renderer::DrawPassCreatures(const DrawSceneDesc& desc, const ScenePass& pas
 		const auto& posers = copy && Locator::temple::has_value() ? Locator::temple::value().GetRooms() : desc.entities;
 		const auto* mesh = desc.entities.TryGet<const ecs::components::Mesh>(entity);
 		const auto* creature = desc.entities.TryGet<const ecs::components::Creature>(entity);
-		const auto* morph = desc.entities.TryGet<const ecs::components::CreatureMorph>(entity);
+		// A copy with a shape of its own is drawn with that shape
+		const auto* morph = copy && posers.Valid(poser) ? ecs::components::ShapeOfCopy(posers, poser, desc.entities)
+		                                                : desc.entities.TryGet<const ecs::components::CreatureMorph>(entity);
 		const auto* animation = posers.Valid(poser) ? posers.TryGet<const ecs::components::CreatureAnimation>(poser) : nullptr;
 		if (mesh == nullptr || !meshManager.Contains(mesh->id) || !posers.Valid(poser))
 		{
