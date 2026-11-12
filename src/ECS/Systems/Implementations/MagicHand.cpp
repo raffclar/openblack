@@ -17,6 +17,7 @@
 
 #include <glm/gtx/euler_angles.hpp>
 
+#include "ECS/Components/Creature.h"
 #include "ECS/Components/ScriptHighlight.h"
 #include "ECS/Components/Spell.h"
 #include "ECS/Components/SpellDispenser.h"
@@ -214,22 +215,47 @@ std::optional<entt::entity> MagicSystem::HeldSeedTarget() const
 	// The player's own dispenser comes first: it takes a seed that did not cast before, and is no target for any other
 	if (const auto picked = PickedUnderHand(); picked.has_value() && IsOwnDispenser(*picked, seed.player))
 	{
-		if (seed.lastCastType != MagicType::None || EntityRegistry().AllOf<ScriptHighlight>(*picked))
-		{
-			return std::nullopt;
-		}
-		return picked;
+		return IsHeldSeedTarget(*picked) ? picked : std::nullopt;
 	}
-	if (magic::GetSpellSeedInfo(Info(), seed.seedType).castOnObject == 0 || !Locator::creatureHandSystem::has_value())
+	if (!Locator::creatureHandSystem::has_value())
 	{
 		return std::nullopt;
 	}
 	const auto target = Locator::creatureHandSystem::value().CreatureUnderCursor();
-	if (!target.has_value() || !CanCastOn(HeldMagicType(), *target))
+	if (!target.has_value() || !IsHeldSeedTarget(*target))
 	{
 		return std::nullopt;
 	}
 	return target;
+}
+
+bool MagicSystem::IsHeldSeedTarget(entt::entity object) const
+{
+	const auto& registry = EntityRegistry();
+	if (!Held().has_value() || !registry.Valid(*Held()) || !registry.Valid(object))
+	{
+		return false;
+	}
+	const auto& seed = registry.Get<const SpellSeed>(*Held());
+	// The player's own dispenser takes a seed that did not cast before
+	if (IsOwnDispenser(object, seed.player))
+	{
+		return seed.lastCastType == MagicType::None && !registry.AllOf<ScriptHighlight>(object);
+	}
+	// Any other target is a creature, for a seed that is cast on things
+	return magic::GetSpellSeedInfo(Info(), seed.seedType).castOnObject != 0 && registry.AllOf<Creature>(object) &&
+	       CanCastOn(HeldMagicType(), object);
+}
+
+bool MagicSystem::PressThingGone() const
+{
+	if (_pressThing == entt::null || _input.state != magic::CastInput::State::Armed)
+	{
+		return false;
+	}
+	const auto& registry = EntityRegistry();
+	return !registry.Valid(_pressThing) ||
+	       (!registry.AllOf<Creature>(_pressThing) && !registry.AllOf<SpellDispenser>(_pressThing));
 }
 
 void MagicSystem::LetGoIfOutsideCastRule()

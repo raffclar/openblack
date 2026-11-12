@@ -469,9 +469,62 @@ void CreatureHandSystem::StopActionAtLockEnd()
 		return;
 	}
 	const auto hand = PlayerHand();
-	if (registry.Valid(hand))
+	if (!registry.Valid(hand))
 	{
-		registry.Remove<HandCreaturePress>(hand);
+		return;
+	}
+	registry.Remove<HandCreaturePress>(hand);
+	StopHoldAtLockEnd(hand);
+}
+
+void CreatureHandSystem::StopHoldAtLockEnd(entt::entity hand)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto* contact = registry.TryGet<const HandOnCreature>(hand);
+	const auto* locked = registry.TryGet<const HandLockedCreature>(hand);
+	const auto* sent = registry.TryGet<const HandLockEndSent>(hand);
+	// A hold that a debug command started is not an action of the hand
+	if (contact != nullptr && contact->byCommand)
+	{
+		return;
+	}
+	auto stage = creature_hand::HoldStage::None;
+	auto creature = entt::entity {entt::null};
+	if (contact != nullptr)
+	{
+		stage = creature_hand::HoldStage::Held;
+		creature = contact->creature;
+	}
+	else if (locked != nullptr)
+	{
+		creature = locked->creature;
+		const bool stopped = sent != nullptr && sent->atLockEnd && sent->creature == creature;
+		stage = stopped ? creature_hand::HoldStage::Stopped : creature_hand::HoldStage::LetGo;
+	}
+	if (stage == creature_hand::HoldStage::None || stage == creature_hand::HoldStage::Stopped)
+	{
+		return;
+	}
+	const bool inWorld = registry.Valid(creature) && registry.AllOf<Creature>(creature);
+	const auto sends = creature_hand::SendsAtLockEnd(stage, inWorld);
+	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The end of the interface lock stops the hold of creature {}",
+	                   entt::to_integral(creature));
+	// The hand lets go of the creature at once. The camera comes back, and the draw sends the leash tap and the feedback.
+	LetGoOfHold(hand);
+	if (!Locator::playerCommandSystem::has_value())
+	{
+		DoUnlock(OwnPlayer(), creature);
+		return;
+	}
+	auto& commands = Locator::playerCommandSystem::value();
+	if (sends.release)
+	{
+		commands.Submit(player_commands::HandLockRelease {.creature = creature});
+	}
+	if (sends.unlock)
+	{
+		commands.Submit(player_commands::HandUnlock {.object = creature});
+		registry.AssignOrReplace<HandLockEndSent>(hand, HandLockEndSent {.creature = creature, .atLockEnd = true});
 	}
 }
 
@@ -544,6 +597,12 @@ void CreatureHandSystem::DoUnlock(PlayerNames player, entt::entity creature)
 	{
 		return;
 	}
+	// The hand forgets an end that the end of the interface lock sent for this creature
+	if (const auto* sent = registry.TryGet<const HandLockEndSent>(*hand);
+	    sent != nullptr && sent->atLockEnd && sent->creature == creature)
+	{
+		registry.Remove<HandLockEndSent>(*hand);
+	}
 	if (const auto* locked = registry.TryGet<const HandLockedCreature>(*hand);
 	    locked != nullptr && locked->creature == creature)
 	{
@@ -598,7 +657,13 @@ bool CreatureHandSystem::WaitsForLockEnd() const
 	}
 	const auto hand = PlayerHand();
 	const auto* locked = registry.Valid(hand) ? registry.TryGet<const HandLockedCreature>(hand) : nullptr;
-	return locked != nullptr && locked->released;
+	if (locked == nullptr || !locked->released)
+	{
+		return false;
+	}
+	// After the end of the interface lock stopped the hold, the hand is free
+	const auto* sent = registry.TryGet<const HandLockEndSent>(hand);
+	return sent == nullptr || !sent->atLockEnd || sent->creature != locked->creature;
 }
 
 void CreatureHandSystem::WaitForLockEnd(entt::entity hand)
@@ -606,8 +671,10 @@ void CreatureHandSystem::WaitForLockEnd(entt::entity hand)
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto* locked = registry.TryGet<const HandLockedCreature>(hand);
 	// The world ended the lock, or has a new lock: the hand forgets the end that it sent
+	// An end that the end of the interface lock sent stays until the turn ends the lock, or until the creature goes
 	if (const auto* sent = registry.TryGet<const HandLockEndSent>(hand);
-	    sent != nullptr && (locked == nullptr || !locked->released || locked->creature != sent->creature))
+	    sent != nullptr && (sent->atLockEnd ? !registry.Valid(sent->creature)
+	                                        : (locked == nullptr || !locked->released || locked->creature != sent->creature)))
 	{
 		registry.Remove<HandLockEndSent>(hand);
 	}
@@ -1197,24 +1264,8 @@ void CreatureHandSystem::Release()
 		}
 	}
 	const auto creature = contact->creature;
-	const auto sum = contact->sum;
 	const bool byCommand = contact->byCommand;
-	const bool click = IsClick();
-	registry.Remove<HandOnCreature>(hand);
-	registry.Remove<HandCreaturePose>(hand);
-	registry.AssignOrReplace<HandLastFeedback>(hand, HandLastFeedback {.sum = sum});
-	GiveCameraBack();
-	// In a network game the hand sends the leash tap of a click and the feedback from the input of the release (deviation
-	// MI-2). In a game alone the draw of the hand sends them in this frame (see DrawFrame). The release of a hold that a
-	// debug command started sends the feedback at once, because the draw possibly did not see that hold.
-	if (!SendsFromDraw() || byCommand)
-	{
-		if (click && Locator::playerCommandSystem::has_value())
-		{
-			Locator::playerCommandSystem::value().Submit(player_commands::LeashTap {.creature = creature});
-		}
-		SendFeedback(creature, sum);
-	}
+	LetGoOfHold(hand);
 	// The world sees the release of the button at the start of a later turn, as a command of the player. The creature then
 	// stops its look at the hand, but the world keeps the lock. The hand sends the end of the lock when the creature is
 	// still (see WaitForLockEnd). A hold that a command started ends at once.
@@ -1225,6 +1276,38 @@ void CreatureHandSystem::Release()
 	else
 	{
 		DoUnlock(OwnPlayer(), creature);
+	}
+}
+
+void CreatureHandSystem::LetGoOfHold(entt::entity hand)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto* contact = registry.TryGet<const HandOnCreature>(hand);
+	if (contact == nullptr)
+	{
+		return;
+	}
+	const auto creature = contact->creature;
+	const auto sum = contact->sum;
+	const bool byCommand = contact->byCommand;
+	const bool click = IsClick();
+	// The leash tap and the feedback come only after the camera of the hold turned to the creature
+	const auto* pose = registry.TryGet<const HandCreaturePose>(hand);
+	const bool seen = byCommand || pose == nullptr || pose->cameraTaken;
+	registry.Remove<HandOnCreature>(hand);
+	registry.Remove<HandCreaturePose>(hand);
+	registry.AssignOrReplace<HandLastFeedback>(hand, HandLastFeedback {.sum = sum});
+	GiveCameraBack();
+	// In a network game the hand sends the leash tap of a click and the feedback from the input of the release (deviation
+	// MI-2). In a game alone the draw of the hand sends them in this frame (see DrawFrame). The release of a hold that a
+	// debug command started sends the feedback at once, because the draw possibly did not see that hold.
+	if (seen && (!SendsFromDraw() || byCommand))
+	{
+		if (click && Locator::playerCommandSystem::has_value())
+		{
+			Locator::playerCommandSystem::value().Submit(player_commands::LeashTap {.creature = creature});
+		}
+		SendFeedback(creature, sum);
 	}
 }
 

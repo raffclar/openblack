@@ -321,7 +321,14 @@ bool MagicSystem::PressAction()
 	    .pointValid = HandPointValid() || seedInfo.sizingGesture == GestureType::Circle,
 	    .turn = _turn,
 	};
+	// A seed armed on a thing keeps the thing of the press, and casts at it at the let go
+	const auto target = HeldSeedTarget();
+	_pressThing = entt::null;
 	Do(magic::Press(_input, {.castType = seedInfo.castType, .castOnObject = seedInfo.castOnObject != 0}, context));
+	if (_input.state == magic::CastInput::State::Armed && _input.onObject && target.has_value())
+	{
+		_pressThing = *target;
+	}
 	return true;
 }
 
@@ -339,6 +346,7 @@ void MagicSystem::StopActionAtLockEnd()
 	// The press of the hand of this computer stops
 	const ActingAs acting(*this, OwnPlayer());
 	Do(magic::Cancel(_input));
+	_pressThing = entt::null;
 }
 
 void MagicSystem::UnlockHeldMiracle()

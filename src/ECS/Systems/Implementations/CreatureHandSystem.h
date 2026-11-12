@@ -92,6 +92,12 @@ private:
 	/// After the button let go of a creature that the world still holds, the hand sends the end of the lock once the
 	/// creature is still
 	static void WaitForLockEnd(entt::entity hand);
+	/// The end of the interface lock stops a hold of a creature at once: the hand lets go and sends the end of the lock.
+	/// The hand does not wait until the creature is still.
+	void StopHoldAtLockEnd(entt::entity hand);
+	/// The hand lets go of the creature that the button holds: the camera comes back, and the hand sends the leash tap
+	/// and the feedback when the draw does not send them
+	void LetGoOfHold(entt::entity hand);
 	/// The creature feels the strokes and the slaps that the hand let go with, as a command of the player, if it is not
 	/// still
 	void SendFeedback(entt::entity creature, float sum);

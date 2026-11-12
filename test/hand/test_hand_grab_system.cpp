@@ -3767,6 +3767,28 @@ TEST_F(HandGrabSystemWithWorld, TheEndOfTheInterfaceLockStopsAPullAndThePressIsN
 	EXPECT_FALSE(system->GetHeld().has_value());
 }
 
+// The end of the interface lock after the hand sent a take lets go of the thing at once. The turn still puts the thing
+// in the hand, and this take does not end the interface lock again.
+TEST_F(HandGrabSystemWithWorld, TheEndOfTheInterfaceLockAfterTheTakeLetsGoOfTheThingUntilTheTurn)
+{
+	const auto rock = world->AddRock({0.0f, 5.0f, 0.0f});
+	world->underCursor = rock;
+	world->flying.insert(rock);
+	deferCommands = true;
+	ASSERT_TRUE(Press());
+	Frame(230);
+	ASSERT_EQ(system->GetTaking(), std::optional(rock));
+	ASSERT_EQ(waiting.size(), 1u);
+	system->StopActionAtLockEnd();
+	EXPECT_EQ(system->GetTaking(), std::nullopt);
+	EXPECT_FALSE(system->GetHeld().has_value());
+	EXPECT_EQ(Release(), std::nullopt);
+	EXPECT_TRUE(world->tapped.empty());
+	RunWaiting();
+	EXPECT_EQ(system->GetHeld(), std::optional(rock));
+	EXPECT_EQ(world->lockEnds, 0);
+}
+
 // The end of the interface lock in a hand that is ready to throw keeps the thing in the hand. The spring lets go of the
 // hand, and the let go of the button throws nothing.
 TEST_F(HandGrabSystemWithWorld, TheEndOfTheInterfaceLockKeepsAThingThatTheHandWasReadyToThrow)

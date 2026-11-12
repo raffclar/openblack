@@ -143,4 +143,29 @@ struct LockAfterRelease
 /// not make the hand wait.
 [[nodiscard]] bool SendsLockEnd(const LockAfterRelease& lock);
 
+/// How far the hold of a creature by the hand of this computer is when the interface lock ends
+enum class HoldStage : uint8_t
+{
+	/// The hand does not hold a creature
+	None,
+	/// The button holds the creature. The world possibly does not hold it yet.
+	Held,
+	/// The button let go of the creature, and the world did not end the lock yet
+	LetGo,
+	/// An earlier end of the interface lock stopped the hold. The hand is free.
+	Stopped,
+};
+/// What the hand sends when the interface lock ends in a hold of a creature
+struct LockEndSends
+{
+	/// The release of the button (player_commands::HandLockRelease): the creature stops its look at the hand
+	bool release {false};
+	/// The end of the lock (player_commands::HandUnlock)
+	bool unlock {false};
+};
+/// The end of the interface lock stops the hold of a creature at once, and the hand is free. The hand does not wait
+/// until the creature is still. It sends the end of the lock again also when it sent the end before. It sends nothing
+/// for a creature that is not in the world any more.
+[[nodiscard]] LockEndSends SendsAtLockEnd(HoldStage stage, bool inWorld);
+
 } // namespace openblack::creature_hand

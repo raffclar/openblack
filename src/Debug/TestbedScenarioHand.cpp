@@ -302,6 +302,29 @@ void testbed_scenarios::AddHand(std::vector<Scenario>& all)
 	    .commands = poseThenTouch,
 	});
 
+	// The real button holds the creature, and then the other button goes down too. Both buttons end the interface lock,
+	// which stops the hold at once.
+	all.push_back({
+	    .id = "hand.creature_hold_both_buttons",
+	    .name = "Both buttons stop the hold of a creature",
+	    .facet = Facet::Hand,
+	    .description = "Your tiger faces the camera in the middle of the screen. The action button holds the tiger, and the "
+	                   "hand strokes it up and down two times. Then the select button goes down too, and then both buttons "
+	                   "let go.",
+	    .expected = "The hold stops when the second button goes down. The camera flies back at once, and the hand is free. "
+	                "The tiger does not have to be still first. The log shows \"The end of the interface lock stops the "
+	                "hold\".",
+	    .environment = {.dispenserGrid = false, .cursor = glm::vec2(0.5f, 0.5f)},
+	    .framing = {.shot = Shot::Follow, .distance = 1.2f},
+	    .creatures = {Posed(CreatureType::Tiger, {0.0f, 0.0f})},
+	    .commands = {{.kind = Kind::PointerPress, .delaySeconds = 1.0f, .value = 3},
+	                 {.kind = Kind::PointerSweep, .delaySeconds = 1.5f, .point = {0.0f, 0.08f}, .amount = 1.2f},
+	                 {.kind = Kind::PointerSweep, .delaySeconds = 1.5f, .point = {0.0f, -0.08f}, .amount = 1.2f},
+	                 {.kind = Kind::PointerPress, .delaySeconds = 1.5f, .value = 1},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 1.5f, .value = 1},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 0.1f, .value = 3}},
+	});
+
 	// The real button on the own creature while the leash is held loose: a short press is a tap, a long one holds
 	all.push_back({
 	    .id = "hand.loose_leash_tap_then_hold",

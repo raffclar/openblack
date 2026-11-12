@@ -218,6 +218,7 @@ public:
 	[[nodiscard]] bool IsHandBusyOf(PlayerNames player) const override { return HeldOf(player).has_value(); }
 	[[nodiscard]] magic::PourPose GetHandPour(float fraction) const override { return magic::PourPoseAt(_pour, fraction); }
 	[[nodiscard]] HandCastState GetHandCastState() const override;
+	[[nodiscard]] bool PressThingGone() const override;
 	[[nodiscard]] std::optional<entt::entity> GetHeldSeed() const override { return HeldOf(OwnPlayer()); }
 	[[nodiscard]] std::optional<entt::entity> GetHeldSeedOf(PlayerNames player) const override { return HeldOf(player); }
 	/// The nearest fireball the ray passes through that the hand may hold now, if any
@@ -351,6 +352,8 @@ private:
 	[[nodiscard]] MagicType HeldMagicType() const;
 	/// The object under the hand the held seed may be cast on: a creature for a creature spell
 	[[nodiscard]] std::optional<entt::entity> HeldSeedTarget() const;
+	/// Whether the held seed may be cast on this thing: the player's own dispenser, or a creature for a creature spell
+	[[nodiscard]] bool IsHeldSeedTarget(entt::entity object) const;
 	/// Whether the object is a miracle dispenser of a town of the player
 	[[nodiscard]] bool IsOwnDispenser(entt::entity object, PlayerNames player) const;
 	/// Where a dispenser floats its globes: above it by its height times the share
@@ -371,7 +374,7 @@ private:
 	void Do(const magic::CastActions& actions);
 	/// The cast of the held seed as the hand of this computer finds it: on the thing under the hand, at the circle drawn
 	/// or at the hand's point. None when the hand may not cast there.
-	[[nodiscard]] std::optional<player_commands::HandCast> MakeCast(magic::CastTarget target);
+	[[nodiscard]] std::optional<player_commands::HandCast> MakeCast(magic::CastTarget target, entt::entity pressThing);
 	/// The hand of this computer casts the held seed: the cast goes as a command of the player (DoCast)
 	void SendCast(magic::CastTarget target);
 	/// The let go of the miracle locked on in the hand goes as a command of the player (DoCastUnlock)
@@ -561,6 +564,8 @@ private:
 	std::optional<PlayerNames> _acting;
 	/// The input of the hand of this computer
 	magic::CastInput _input;
+	/// The thing that the press of a seed armed on a thing was on. The cast at the let go goes to this thing.
+	entt::entity _pressThing {entt::null};
 	/// The action button is down
 	bool _actionDown {false};
 	/// A fireball the action button went down on, and when
