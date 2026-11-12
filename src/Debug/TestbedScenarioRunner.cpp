@@ -148,7 +148,6 @@
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "ECS/WorldObjects.h"
 #include "FileSystem/FileSystemInterface.h"
-#include "Gui/GameInterface.h"
 #include "Hand/HandVisibility.h"
 #include "Help/Spirits.h"
 #include "Input/GameActionMapInterface.h"
@@ -1343,7 +1342,7 @@ std::optional<double> Runner::ReadCheck(const checks::Check& check) const
 		{
 			return std::nullopt;
 		}
-		const bool dialogOpen = Locator::gameInterface::has_value() && Locator::gameInterface::value().IsDialogOpen();
+		const bool dialogOpen = _stage != nullptr && _stage->IsDialogOpen();
 		return hand_visibility::IsShown(dialogOpen, Locator::cinematicDirectorSystem::value().IsInterfaceActive()) ? 1.0 : 0.0;
 	}
 	case checks::Quantity::RopeHeld:

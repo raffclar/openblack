@@ -39,6 +39,11 @@ bool TestbedGameStage::HasInterface() const
 	return Locator::gameInterface::has_value();
 }
 
+bool TestbedGameStage::IsDialogOpen() const
+{
+	return HasInterface() && Locator::gameInterface::value().IsDialogOpen();
+}
+
 const gui::TextDatabase* TestbedGameStage::GetTexts() const
 {
 	return HasInterface() ? &Locator::gameInterface::value().GetTexts() : nullptr;
