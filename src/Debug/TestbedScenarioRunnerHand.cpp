@@ -87,6 +87,7 @@
 #include "ECS/Systems/FootprintSystemInterface.h"
 #include "ECS/Systems/GestureEventsInterface.h"
 #include "ECS/Systems/GestureSystemInterface.h"
+#include "ECS/Systems/HandDemoSystemInterface.h"
 #include "ECS/Systems/HandGrabSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/Implementations/VillagerDisciples.h"
@@ -1115,6 +1116,15 @@ void Runner::UpdatePointer(float seconds)
 			SPDLOG_LOGGER_INFO(spdlog::get("game"), "Testbed {}", line);
 			Log(line);
 			_ropeSearch.reset();
+		}
+	}
+	// The debug windows get the mouse again when the scenario's hand demonstration ends
+	if (_demoOwnsPointer && (!Locator::handDemoSystem::has_value() || !Locator::handDemoSystem::value().IsReplaying()))
+	{
+		_demoOwnsPointer = false;
+		if (!_ownsPointer)
+		{
+			KeepDebugWindowsOffTheMouse(false);
 		}
 	}
 	if (_pressWaiting.has_value() && !_ropeSearch.has_value() && input::pointer_settle::PressMayStart(_framesSincePointerMoved))

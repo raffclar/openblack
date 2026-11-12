@@ -61,6 +61,7 @@ public:
 	[[nodiscard]] uint32_t GetButtonMessages() const final;
 	[[nodiscard]] std::span<const glm::ivec2> GetMousePlaces() const final;
 	void DrawnMouseMessage(glm::ivec2 position) final;
+	void ReplayedMousePlace(glm::ivec2 position) final;
 	[[nodiscard]] float GetMouseWheelDelta() const final;
 	[[nodiscard]] std::array<std::optional<glm::vec3>, 2> GetHandPositions() const final;
 	void SplitInput(const input_steps::Steps& steps) final;

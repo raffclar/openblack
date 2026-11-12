@@ -449,6 +449,8 @@ private:
 	float _handWatchSeconds {0.0f};
 	/// The testbed took the pointer, and gives it back when it is done; a pointer the debug inspector holds it leaves be
 	bool _ownsPointer {false};
+	/// A hand demonstration of the scenario plays, and the debug windows leave its pointer alone
+	bool _demoOwnsPointer {false};
 	/// The frames since the pointer last moved, for a press, which waits for the game to know what the pointer is over
 	uint64_t _framesSincePointerMoved {1000};
 	/// A press that came too soon after the pointer moved, made once the game knows what the pointer is over
