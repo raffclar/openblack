@@ -275,6 +275,22 @@ void AddGlobes(std::vector<Scenario>& all)
 	                   {.type = MagicType::Forest, .offset = {-2.0f, 32.0f}, .bubbleHeight = 5.0f}},
 	});
 
+	all.push_back({
+	    .id = "miracles.globe_over_fading_building",
+	    .name = "A globe over a building that fades out in the distance",
+	    .facet = Facet::Miracles,
+	    .description =
+	        "A heal globe floats over a creche far from the camera, a little beyond the middle of the creche. "
+	        "At the lowest detail level the creche is so far off that it fades out. Turn the camera slowly round the "
+	        "creche and look at the globe close up.",
+	    .expected = "The game draws the fading creche before the globe. Where the dome's texture has no alpha, the creche "
+	                "shows through the dome as round it. The dome cuts no hole in the creche that shows the land behind.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 60.0f, -190.0f}, .look = {0.0f, 24.0f, 40.0f}},
+	    .objects = {{.type = AbodeInfo::CelticCreche, .offset = {0.0f, 40.0f}}},
+	    .dispensers = {{.type = MagicType::Heal, .offset = {0.0f, 43.0f}, .bubbleHeight = 3.0f}},
+	});
+
 	auto extreme = GlobeRow({MagicType::Fireball, MagicType::FireballPowerUpOne, MagicType::FireballPowerUpTwo}, 34.0f);
 	for (auto& row :
 	     {GlobeRow({MagicType::LightningBolt, MagicType::LightningBoltPowerUpOne, MagicType::LightningBoltPowerUpTwo}, 27.0f),
