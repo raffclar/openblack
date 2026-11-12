@@ -676,6 +676,7 @@ void CreatureFightSystem::Reset()
 	_markHeld = false;
 	EndView("new_land");
 	_lookSeconds = 0.0f;
+	_look.reset();
 	_seen.clear();
 	_actionCause.clear();
 	_flightPlace.reset();

@@ -22,6 +22,7 @@
 #include <vector>
 
 #include <MindFile.h>
+#include <glm/geometric.hpp>
 #include <gtest/gtest.h>
 
 #include "Camera/Camera.h"
@@ -62,6 +63,7 @@
 #define LOCATOR_IMPLEMENTATIONS
 #include "ECS/Systems/Implementations/CreatureFightSystem.h"
 #include "camera/scenarios/FakeTemple.h"
+#include "camera/scenarios/Mock.h"
 
 using namespace openblack;
 using namespace openblack::ecs;
@@ -514,6 +516,7 @@ protected:
 	void TearDown() override
 	{
 		fights.Reset();
+		Locator::pickingSystem::reset();
 		Locator::handSystem::reset();
 		Locator::playerSystem::reset();
 		Locator::time::reset();
@@ -3168,4 +3171,111 @@ TEST_F(CreatureFightSystemTest, TheMoveHomeAfterAFaintCutsTheFaintAndTheBodyStan
 	EXPECT_EQ(registry.Get<const CreatureKnockedOut>(first).stage, CreatureKnockedOut::Stage::FadingIn);
 	EXPECT_EQ(registry.Get<const Transform>(first).position.x, 40.0f);
 	EXPECT_EQ(animation.body.kind, creature_layers::BodyAction::Kind::Stand);
+}
+
+namespace
+{
+/// The middle of the screen shows land only to an eye at one place
+class CentrePicking final: public MockPickingSystem
+{
+public:
+	[[nodiscard]] std::optional<glm::vec2> LandAtPixel(glm::u16vec2 /*screenCoord*/) const override { return std::nullopt; }
+	[[nodiscard]] std::optional<glm::vec3> LandUnderPixel(glm::vec3 eye, glm::vec3 /*nearPoint*/, Sea /*sea*/) const override
+	{
+		if (landSeenFrom.has_value() && glm::distance(eye, *landSeenFrom) < 1.0f)
+		{
+			return glm::vec3(0.0f);
+		}
+		return std::nullopt;
+	}
+
+	std::optional<glm::vec3> landSeenFrom;
+};
+
+constexpr glm::vec3 k_EyeInArena {0.0f, 30.0f, 20.0f};
+/// A place of the temple's camera, far from the camera of the world
+constexpr glm::vec3 k_TempleEye {0.0f, 10.0f, 600.0f};
+
+/// The camera of the world looks at the arena from within it
+void LookFromWithinTheArena(Camera& camera)
+{
+	camera.SetOrigin(k_EyeInArena);
+	camera.SetFocus({0.0f, 0.0f, 0.0f});
+}
+
+/// Frames of the game that last 0.6 s each
+void LookFor(ecs::systems::CreatureFightSystem& fights, int frames)
+{
+	for (int frame = 0; frame < frames; ++frame)
+	{
+		fights.NoteLook();
+		fights.Update(std::chrono::duration<float, std::milli>(600.0f));
+	}
+}
+} // namespace
+
+TEST_F(CreatureFightSystemTest, TheLookAtAFightCountsOnlyWhileTheMiddleOfTheScreenShowsLand)
+{
+	auto* picking = new CentrePicking();
+	Locator::pickingSystem::reset<MockPickingSystem>(picking);
+	fights.Reset();
+	LookFromWithinTheArena(Locator::camera::value());
+	// The middle of the screen shows the sky: the look does not count
+	LookFor(fights, 4);
+	EXPECT_FALSE(fights.IsCameraOnFight());
+	// The middle of the screen shows land: after more than a second the fight view starts
+	picking->landSeenFrom = k_EyeInArena;
+	LookFor(fights, 1);
+	EXPECT_FALSE(fights.IsCameraOnFight());
+	LookFor(fights, 1);
+	EXPECT_TRUE(fights.IsCameraOnFight());
+	Locator::pickingSystem::reset();
+}
+
+TEST_F(CreatureFightSystemTest, InTheTempleTheLineToTheMiddleOfTheScreenStartsFromTheViewOfTheTemple)
+{
+	auto* picking = new CentrePicking();
+	Locator::pickingSystem::reset<MockPickingSystem>(picking);
+	fights.Reset();
+	LookFromWithinTheArena(Locator::camera::value());
+	auto& temple = static_cast<FakeTemple&>(Locator::temple::emplace<FakeTemple>());
+	auto behind = GoIntoTemple(temple);
+	LookFromWithinTheArena(*behind);
+	Locator::camera::value().SetOrigin(k_TempleEye).SetFocus(k_TempleEye + glm::vec3(0.0f, 0.0f, 10.0f));
+	// Only the camera of the world behind the temple sees land in the middle of the screen: the look does not count
+	picking->landSeenFrom = k_EyeInArena;
+	LookFor(fights, 4);
+	EXPECT_FALSE(fights.IsCameraOnFight());
+	// The view of the temple sees land: the look counts and the fight view starts behind the temple
+	picking->landSeenFrom = k_TempleEye;
+	LookFor(fights, 2);
+	EXPECT_TRUE(fights.IsCameraOnFight());
+	EXPECT_NE(dynamic_cast<const FightCameraModel*>(&behind->GetModel()), nullptr);
+	ComeOutOfTemple(temple, behind);
+	Locator::temple::reset();
+	Locator::pickingSystem::reset();
+}
+
+TEST_F(CreatureFightSystemTest, TheLookUsesTheCameraFromBeforeItMovedInTheFrame)
+{
+	auto* picking = new CentrePicking();
+	Locator::pickingSystem::reset<MockPickingSystem>(picking);
+	picking->landSeenFrom = k_EyeInArena;
+	fights.Reset();
+	auto& camera = Locator::camera::value();
+	// Before it moves in each frame the camera is far from the arena, and then it moves into the arena
+	for (int frame = 0; frame < 4; ++frame)
+	{
+		camera.SetOrigin({0.0f, 30.0f, 2000.0f}).SetFocus({0.0f, 0.0f, 1900.0f});
+		fights.NoteLook();
+		LookFromWithinTheArena(camera);
+		fights.Update(std::chrono::duration<float, std::milli>(600.0f));
+	}
+	EXPECT_FALSE(fights.IsCameraOnFight());
+	// An update with no look kept before it does not count
+	for (int frame = 0; frame < 4; ++frame)
+	{
+		fights.Update(std::chrono::duration<float, std::milli>(600.0f));
+	}
+	EXPECT_FALSE(fights.IsCameraOnFight());
 }
