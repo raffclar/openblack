@@ -64,6 +64,7 @@ public:
 	void ZoomToCaveTarget(size_t /*target*/) override {}
 	[[nodiscard]] bool IsRoomAvailable(TempleRoom /*room*/) const override { return {}; }
 	void TellRoomNotAvailable() override {}
+	void AskNewGame() override {}
 	[[nodiscard]] bool IsRoomDrawn(TempleRoom /*room*/) const override { return {}; }
 	[[nodiscard]] std::optional<float> GetWayOutSeconds() const override { return {}; }
 	[[nodiscard]] TempleDoors& GetDoors() override { std::abort(); }

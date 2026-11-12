@@ -973,6 +973,8 @@ private:
 	gui::MenuPause _menuPause;
 	/// Whether the menu was open in the last frame
 	bool _menuWasOpen {false};
+	/// Whether the main menu was the box that took the input in the last frame
+	bool _mainMenuWasActive {false};
 	/// The menu asked for this game to end and the next one to start: a new game, or a continue as the profile played
 	std::optional<game_session::End> _gameEndAsked;
 	/// The game ends and waits for the picture of its save on exit before the next game starts

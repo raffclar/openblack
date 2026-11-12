@@ -110,6 +110,8 @@ public:
 
 	/// True while a box of the save game room is up
 	[[nodiscard]] virtual bool IsSaveBoxActive() const noexcept = 0;
+	/// Asks "Are you sure you want to start a completely new game?" with the answers yes and no
+	virtual void AskNewGameQuestion() = 0;
 	/// Asks the player a question with the answers yes and no
 	virtual void AskSaveQuestion(std::u16string question) = 0;
 	/// Asks the player for the name of a save, which starts as the name given

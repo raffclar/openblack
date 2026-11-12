@@ -68,4 +68,36 @@ struct EscapeFacts
 	return facts.gameOver && !facts.scriptBars;
 }
 
+/// What a press in a room of pictures depends on
+struct PictureRoomPressFacts
+{
+	/// The game is over: the temple of the player is in its destruction
+	bool gameOver {false};
+	/// A box, such as the menu or a question, is on the screen
+	bool boxUp {false};
+};
+
+/// Whether the camera of a room of pictures gets the press of the player. Once the game is over, the room ignores the
+/// press while a box is on the screen.
+[[nodiscard]] constexpr bool PictureRoomTakesPress(const PictureRoomPressFacts& facts) noexcept
+{
+	return !(facts.gameOver && facts.boxUp);
+}
+
+/// What a click on the door of a room of pictures does
+enum class PictureDoorClick
+{
+	/// The camera walks back through the door to the main room
+	WalkBack,
+	/// The player gets the question "Are you sure you want to start a completely new game?"
+	AskNewGame
+};
+
+/// What a click on the door of a room of pictures does. Once the game is over, the click asks about a new game, and the
+/// player stays in the room.
+[[nodiscard]] constexpr PictureDoorClick PictureDoorClickOutcome(bool gameOver) noexcept
+{
+	return gameOver ? PictureDoorClick::AskNewGame : PictureDoorClick::WalkBack;
+}
+
 } // namespace openblack::temple::keys

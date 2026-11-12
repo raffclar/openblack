@@ -843,6 +843,14 @@ std::optional<CameraModel::CameraInterpolationUpdateInfo> TempleCameraModel::Upd
 
 void TempleCameraModel::Step(float dt, const Input& input)
 {
+	// Once the game is over, a room of pictures ignores the press while a box is on the screen
+	if (input.button != 0 && IsPictureRoom(GetRoom()) && !temple::keys::PictureRoomTakesPress(_pressFacts))
+	{
+		auto withoutPress = input;
+		withoutPress.button = 0;
+		Step(dt, withoutPress);
+		return;
+	}
 	// The room's camera aims, then the camera eases after its aim
 	_originTime = 0.5f;
 	_focusTime = 0.5f;
@@ -1521,10 +1529,18 @@ void TempleCameraModel::UpdatePictureOrbit(float dt, const Input& input)
 		_focusTime = _originTime;
 	}
 
-	// Clicking the room's door walks back through it, from halfway between the camera and the door
+	// Clicking the room's door walks back through it, from halfway between the camera and the door. Once the game is
+	// over, the click asks about a new game, and the player stays in the room.
 	if (input.button != 0 && !_wasPressed && input.doorBack == pictureRoom.door)
 	{
-		WalkBackThrough(static_cast<int32_t>(pictureRoom.door), _target);
+		if (temple::keys::PictureDoorClickOutcome(_pressFacts.gameOver) == temple::keys::PictureDoorClick::AskNewGame)
+		{
+			Locator::temple::value().AskNewGame();
+		}
+		else
+		{
+			WalkBackThrough(static_cast<int32_t>(pictureRoom.door), _target);
+		}
 	}
 	// TODO(raffclar): a room of pictures can also look at its pictures
 }
