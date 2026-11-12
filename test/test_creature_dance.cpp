@@ -274,6 +274,26 @@ TEST(CreatureDance, TheLastDanceGoesTheTurnBeforeTheNewOneComes)
 	EXPECT_EQ(mind.step, 1U);
 }
 
+// The step that stops the looking sends only its order to the world: no look about, move, face or clip
+TEST(CreatureDance, TheStopLookingStepSendsOnlyItsOrder)
+{
+	creature_mind::IdleMind mind;
+	creature_mind::Plan(
+	    mind, creature_mind::Activity::Planned,
+	    {{.kind = Step::Kind::Dance, .dance = {.kind = DanceOrder::Kind::StopLooking}}, {.kind = Step::Kind::Wait}});
+	const auto commands = creature_mind::Think(mind, Free(), NoRandom());
+	ASSERT_TRUE(commands.dance.has_value());
+	EXPECT_EQ(commands.dance->kind, DanceOrder::Kind::StopLooking);
+	EXPECT_FALSE(commands.lookAbout);
+	EXPECT_FALSE(commands.move.has_value());
+	EXPECT_FALSE(commands.stopMoving);
+	EXPECT_FALSE(commands.face.has_value());
+	EXPECT_FALSE(commands.playOnce.has_value());
+	EXPECT_FALSE(commands.startSequence.has_value());
+	creature_mind::DanceOrderDone(mind, true);
+	EXPECT_EQ(mind.step, 1U);
+}
+
 TEST(CreatureDance, AStageThatFailsGivesUpTheAgenda)
 {
 	creature_mind::IdleMind mind;
