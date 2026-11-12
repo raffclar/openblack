@@ -106,6 +106,10 @@ constexpr float k_FollowDistance = 10.0f;
 /// Each position is first taken as the game keeps it, in map units, and back to metres
 [[nodiscard]] float SpreadDistance(glm::vec2 villager, glm::vec2 reaction);
 
+/// Whether a living thing can get a priority for a reaction at a distance: its kind reacts to the reaction, and the
+/// distance is not more than the reach. This test comes before the rule of the kind, which thus does not run otherwise
+[[nodiscard]] bool PassesReachGate(bool kindReacts, float maxDistance, float at);
+
 /// How urgent a reaction is to a villager at a distance, 0 to 255: its kind's priority to the villager, up to half as
 /// much again by its nearness; none beyond its reach or when the villager's kind doesn't react to it
 [[nodiscard]] uint8_t Priority(uint8_t kindPriority, bool kindReacts, const Distance& distance, float at);

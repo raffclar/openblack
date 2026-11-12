@@ -283,6 +283,28 @@ void openblack::testbed_scenarios::AddCreatureReactionKindScenarios(std::vector<
 	     .creature = 1,
 	     .turns = {40 * k_Turns, 60 * k_Turns}});
 
+	// One evil tiger farts by its own wish, as its planner makes the fart
+	AddWithNoticeOnAndOff(
+	    all,
+	    {
+	        .id = "creatures.reaction_fainting_own",
+	        .name = "Reactions: an evil creature goes to sleep after its own fart",
+	        .facet = Facet::Senses,
+	        .description = "A small evil tiger of the player stands alone and wants only to scratch. Thirty seconds in, it "
+	                       "farts by its own wish, as its planner makes the fart. The fart is not a forced plan.",
+	        .expected = "The fart makes a fainting reaction at the tiger. The tiger takes up its own reaction and keeps it. "
+	                    "It stops when the fart ends and goes to sleep at its home, the place where it was made.",
+	        .environment = {.dispenserGrid = false},
+	        .framing = {.shot = Shot::Overview, .include = {{-5.0f, 0.0f}, {10.0f, 10.0f}}, .distance = 0.7f},
+	        .creatures = {EvilAtRest({2.0f, 5.0f})},
+	        .commands = {{.kind = Kind::Fart, .creature = 0, .delaySeconds = 30.0f, .value = 1}},
+	        .checks = {Keeps("it keeps the fainting reaction", 0, Reaction::Fainting, 30 * k_Turns, 45 * k_Turns)},
+	    },
+	    {.id = "creatures.reaction_fainting_own_ignored",
+	     .name = "Reactions: an evil creature that takes no notice farts by its own wish",
+	     .expected = "A script tells the tiger to take no notice of reactions. It takes no notice of its own fart.",
+	     .turns = {35 * k_Turns, 45 * k_Turns}});
+
 	// The arena of a fight makes the reaction of the fight. The arena is not a creature, so no creature watches.
 	AddWithNoticeOnAndOff(
 	    all,
