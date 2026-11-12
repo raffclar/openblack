@@ -104,6 +104,7 @@
 #include "ECS/Components/Vortex.h"
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/CreatureExplorationLand.h"
+#include "ECS/CreatureSight.h"
 #include "ECS/GamePlayers.h"
 #include "ECS/Map.h"
 #include "ECS/PhysicsClasses.h"
@@ -335,16 +336,6 @@ creature_look::Interest mind_detail::LookInterestOf(const ecs::Registry& registr
 		return Interest::None;
 	}
 	return Interest::Fixed;
-}
-
-uint16_t mind_detail::LookingAngle(const Transform& transform, const std::optional<glm::vec3>& lookAt)
-{
-	const auto ahead = -(transform.rotation * glm::vec3(0.0f, 0.0f, 1.0f));
-	const auto direction = lookAt.has_value() && *lookAt != transform.position ? *lookAt - transform.position : ahead;
-	// Turned as the game keeps a creature's turn, a quarter turn on from the map's, and nothing for no direction across
-	// the land
-	const float scawen = x87::RoundToFloat(x87::GameHeadingOf(direction.x, direction.z));
-	return static_cast<uint16_t>(gutils::ConvertScawenAngleToGameAngle(scawen));
 }
 
 std::optional<uint32_t> mind_detail::ObjectSortOf(const ecs::Registry& registry, entt::entity thing)
@@ -933,8 +924,8 @@ void CreatureMindSystem::SweepEyes(entt::entity entity, const Creature& creature
 	const auto& map = Locator::entitiesMap::value();
 	const auto from = map_coords::FromMetres(glm::xz(transform.position));
 	const auto centre = map_coords::Cell(from);
-	const auto looking = mind_detail::LookingAngle(transform, animation.lookAt);
-	const auto facing = mind_detail::LookingAngle(transform, std::nullopt);
+	const auto looking = ecs::creature_sight::LookHeading(registry, entity).GameAngle();
+	const auto facing = ecs::creature_sight::FacingHeading(registry, entity).GameAngle();
 	const auto range = creature_look::LookRange(ShownSize(creature));
 	// How much things, mountains and water catch its own eye, which its personality spreads from its species' weights
 	const auto weights = LookWeightsOf(mind);

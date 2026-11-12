@@ -68,6 +68,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/VillagerPose.h"
 #include "ECS/Components/WallHug.h"
+#include "ECS/CreatureSight.h"
 #include "ECS/Dances.h"
 #include "ECS/FollowHeadingThing.h"
 #include "ECS/PlacedTurn.h"
@@ -297,26 +298,6 @@ void PosFieldOfView() // 012 POS_FIELD_OF_VIEW
 	const auto position = PopVec();
 	const auto view = ecs::thing_on_screen::ScreenView(PlayerNames::PLAYER_ONE);
 	Pushb(!PlayerInsideTemple() && view.has_value() && screen_pick::PointOnScreen(*view, position));
-}
-
-/// The way a creature's head looks: towards the point that it looks at, when it looks at a point that is not where it
-/// stands; else the way its body faces
-static GameHeading CreatureLookHeading(entt::entity creature, const Transform& transform)
-{
-	const auto& registry = Locator::entitiesRegistry::value();
-	const auto* animation = registry.TryGet<const ecs::components::CreatureAnimation>(creature);
-	if (animation != nullptr && animation->lookAt.has_value() && *animation->lookAt != transform.position)
-	{
-		const float dx = animation->lookAt->x - transform.position.x;
-		const float dz = animation->lookAt->z - transform.position.z;
-		return GameHeading::Of(dx, dz);
-	}
-	if (const auto* locomotion = registry.TryGet<const ecs::components::CreatureLocomotion>(creature);
-	    locomotion != nullptr && locomotion->started)
-	{
-		return locomotion->heading;
-	}
-	return GameHeading(script::property_rules::PlacedAngles(transform.rotation).y);
 }
 
 void StartCameraControl() // 030 START_CAMERA_CONTROL
@@ -992,7 +973,7 @@ void GameThingCanViewCamera() // 339 GAME_THING_CAN_VIEW_CAMERA
 	if (registry.AllOf<ecs::components::Creature>(object))
 	{
 		// A creature looks with its head, not with the way its body faces
-		const auto look = CreatureLookHeading(object, *transform);
+		const auto look = ecs::creature_sight::LookHeading(registry, object);
 		const auto at = map_coords::FromMetres(glm::vec2(transform->position.x, transform->position.z));
 		Pushb(script::lesson_natives::CreatureSeesCamera(at, map_coords::FromMetres(glm::vec2(eye.x, eye.z)), look.GameAngle(),
 		                                                 degrees));

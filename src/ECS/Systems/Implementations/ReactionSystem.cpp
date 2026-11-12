@@ -67,6 +67,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/WallHug.h"
+#include "ECS/CreatureSight.h"
 #include "ECS/FightWatchRules.h"
 #include "ECS/GamePlayers.h"
 #include "ECS/ListOrder.h"
@@ -356,25 +357,11 @@ bool PlanIs(const ecs::Registry& registry, entt::entity creature, std::string_vi
 	return tables != nullptr && plan->action < tables->actions.size() && tables->actions[plan->action].name == action;
 }
 
-/// Whether a creature sees a point: near enough the way its head looks, or the way it faces when it looks at nothing, or
-/// in its own map cell
+/// Whether a creature sees a point: near enough the way its head looks, or the way its body faces when it looks at
+/// nothing, or in its own map cell
 bool CreatureSees(const ecs::Registry& registry, entt::entity creature, const glm::vec3& point)
 {
-	const auto& at = registry.Get<const Transform>(creature).position;
-	glm::vec2 way {0.0f};
-	const auto* body = registry.TryGet<const CreatureAnimation>(creature);
-	if (body != nullptr && body->lookAt.has_value() && glm::vec2(body->lookAt->x, body->lookAt->z) != glm::vec2(at.x, at.z))
-	{
-		way = {body->lookAt->x - at.x, body->lookAt->z - at.z};
-	}
-	else if (const auto* walker = registry.TryGet<const CreatureLocomotion>(creature))
-	{
-		way = creature_locomotion::DirectionOf(walker->heading);
-	}
-	const glm::vec2 from(at.x, at.z);
-	const glm::vec2 to(point.x, point.z);
-	const bool sameCell = map_coords::Cell(map_coords::FromMetres(from)) == map_coords::Cell(map_coords::FromMetres(to));
-	return creature_reaction::CanSee(creature_reaction::LookAngle(way), gutils::GetAngleFromXZ(from, to), sameCell);
+	return ecs::creature_sight::CanSeePos(registry, creature, glm::vec2(point.x, point.z));
 }
 
 /// Whether the player of a reaction is an ally of the player of a creature, by the strength of the alliance that the

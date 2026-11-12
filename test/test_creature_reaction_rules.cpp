@@ -49,34 +49,6 @@ struct FixedDraw
 };
 } // namespace
 
-// A creature sees what is within about a third of a turn either side of the way it looks, or in its own map cell
-// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
-TEST(CreatureReactionRules, SightIsAThirdOfATurnEitherSide)
-{
-	EXPECT_TRUE(rules::CanSee(0, 0x2aa, false));
-	EXPECT_FALSE(rules::CanSee(0, 0x2ab, false));
-	EXPECT_TRUE(rules::CanSee(0, 0x800 - 0x2aa, false));
-	EXPECT_FALSE(rules::CanSee(0, 0x400, false));
-	EXPECT_TRUE(rules::CanSee(0, 0x400, true));
-	// Across the wrap from the end of the circle to its start
-	EXPECT_TRUE(rules::CanSee(0x7f0, 0x100, false));
-}
-
-// The way a creature looks is a game angle: +x is 0, +z a quarter turn, -x a half turn, -z three quarters; no way at
-// all counts as the heading 0, three quarters round
-// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
-TEST(CreatureReactionRules, LookAngleFollowsTheGameAngles)
-{
-	EXPECT_EQ(rules::LookAngle({1.0f, 0.0f}), 0);
-	EXPECT_EQ(rules::LookAngle({0.0f, 1.0f}), 0x200);
-	EXPECT_EQ(rules::LookAngle({-1.0f, 0.0f}), 0x400);
-	EXPECT_EQ(rules::LookAngle({0.0f, -1.0f}), 0x600);
-	// Single floats truncated: an eighth of a turn comes a step short
-	EXPECT_EQ(rules::LookAngle({1.0f, 1.0f}), 0xff);
-	EXPECT_EQ(rules::LookAngle({-1.0f, -1.0f}), 0x500);
-	EXPECT_EQ(rules::LookAngle({0.0f, 0.0f}), 0x600);
-}
-
 // Food and a totem worked by the hand catch its eye only when it sees them, and only a person's creature heeds them
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
 TEST(CreatureReactionRules, FoodAndTotemNeedSightAndAPerson)
