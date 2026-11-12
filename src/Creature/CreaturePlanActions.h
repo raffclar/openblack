@@ -229,6 +229,13 @@ enum class Build : uint8_t
 	PlayThrowingGameWithFriend,
 	GiveFriendToy,
 	ShowFriendCitadel,
+	/// Showing a friend its home, a miracle that attacks or a miracle that makes something; confusing a friend; showing
+	/// another creature how nice it thinks that creature is (see creature_mind::ShowFriendHome and the others)
+	ShowFriendHome,
+	ShowFriendAttackMiracle,
+	ShowFriendMakingMiracle,
+	ConfuseFriend,
+	ShowCreatureHowNice,
 	RunFromObject,
 	RunFromPlayer,
 	LookAbout,
@@ -691,6 +698,12 @@ struct Situation
 	/// Where the head of the creature is, and where its home is on the ground
 	std::optional<glm::vec3> head;
 	std::optional<glm::vec3> homePlace;
+	/// The thing on which the creature shows a friend a miracle, by its entity's number: the nearest thing that it
+	/// believes in and that the miracle suits (see creature_mind::CanBeSetOnFire and CanBeHelpedByCreature). None when
+	/// no thing suits it.
+	std::optional<uint32_t> shownThing;
+	/// How nice the creature thinks the other creature is, from -1 to 1
+	float howNiceOther {0.0f};
 	/// For the football actions: the ball of the pitch where the villager plays, the goal that the creature's side
 	/// attacks, and the first player of the other team (none when that team has no player). None when the villager
 	/// plays on no pitch.

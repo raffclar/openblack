@@ -14,6 +14,8 @@
 #include <optional>
 #include <span>
 
+#include "Creature/CreatureActionAgendas.h"
+#include "Creature/CreatureCastAgenda.h"
 #include "Creature/CreatureEmoteAgendas.h"
 #include "Creature/CreatureKiss.h"
 #include "Creature/CreatureLayers.h"
@@ -778,6 +780,179 @@ std::vector<Step> creature_mind::ShowFriendCitadel(const Friends& friends, const
 	                   Order(friends.friendly, WaitFor(friendWaits), Cue::Puzzled),
 	                   WaitFor(waits, Cue::Compassion, Gaze {.feet = true}),
 	               });
+	return agenda;
+}
+
+std::vector<Step> creature_mind::ShowFriendHome(const Friends& friends, glm::vec3 home, glm::vec3 head, bool seesFriend,
+                                                const Random& random)
+{
+	std::vector<Step> agenda;
+	if (!seesFriend)
+	{
+		agenda.push_back(GoNearLooking(friends.friendly, k_ShowHomeNearHeights * friends.height, Cue::Compassion));
+	}
+	const glm::vec2 place {home.x, home.z};
+	auto wait = WaitForStill(friends.friendly);
+	wait.face = Cue::Grimace;
+	// The wait of the friend draws its time first
+	const float friendWaits = k_ShowCitadelWaitSeconds + creature_emote::FloatRandom(random, k_ShowCitadelWaitExtraSeconds);
+	const float waits = k_ShowCitadelWaitSeconds + creature_emote::FloatRandom(random, k_ShowCitadelWaitExtraSeconds);
+	Append(agenda, std::array {
+	                   FaceThing(friends.friendly, k_FaceFriendSeconds, Cue::Compassion, Gaze {.object = friends.friendly}),
+	                   Ask(friends.friendly, creature_friendship::RequestKind::BeShown),
+	                   Order(friends.friendly, GoTo(place, friends.friendHeight * k_ShowHomeNearHeights), Cue::Puzzled,
+	                         GoingLook(place)),
+	                   GoTo(place, friends.height * k_ShowHomeNearHeights, GoingLook(place)),
+	                   wait,
+	                   Main(PointAtPlace(home, k_PointAtHomeToShowSeconds, Cue::Grimace)),
+	                   Order(friends.friendly, TurnToFacePlace(head), Cue::None, LookAtPlace(head)),
+	                   WaitForFree(friends.friendly),
+	                   Order(friends.friendly, TurnToFacePlace(home), Cue::None, LookAtPlace(home)),
+	                   Order(friends.friendly, WaitFor(friendWaits), Cue::Puzzled),
+	                   WaitFor(waits, Cue::Compassion, Gaze {.feet = true}),
+	               });
+	return agenda;
+}
+
+namespace
+{
+/// The cast of a miracle at a thing that a creature shows its friend, from the casting pose. This is the main step.
+Step CastToShow(uint32_t magicType, uint32_t thing, Cue face)
+{
+	return Main({.kind = Step::Kind::Cast,
+	             .seconds = k_CastHoldSeconds,
+	             .animation = k_CastPose[1],
+	             .sequence = k_CastPose,
+	             .cast = {.magicType = magicType, .object = thing},
+	             .face = face});
+}
+} // namespace
+
+std::vector<Step> creature_mind::ShowFriendAttackMiracle(const Friends& friends, uint32_t magicType,
+                                                         std::optional<uint32_t> thing, glm::vec3 head, bool seesFriend)
+{
+	std::vector<Step> agenda;
+	if (!seesFriend)
+	{
+		agenda.push_back(GoNearLooking(friends.friendly, k_ShowAttackFriendNearHeights * friends.height));
+	}
+	agenda.push_back(FaceThing(friends.friendly, k_FaceFriendSeconds, Cue::None, Gaze {.object = friends.friendly}));
+	if (!thing.has_value())
+	{
+		return agenda;
+	}
+	const auto shown = *thing;
+	Append(agenda, std::array {
+	                   Ask(friends.friendly, creature_friendship::RequestKind::BeShown, Cue::Playfulness),
+	                   Order(friends.friendly, GoNear(shown, friends.height * k_ShowAttackFriendToThingHeights), Cue::None,
+	                         Gaze {.object = shown, .whileGoing = true}),
+	                   GoNearLooking(shown, friends.height * k_ShowAttackThingNearHeights),
+	                   Step {.kind = Step::Kind::Move,
+	                         .movement = {.kind = Movement::Kind::GetAwayFromObject,
+	                                      .object = shown,
+	                                      .maxDistance = k_ShowAttackBackOffHeights * friends.height},
+	                         .gaze = Gaze {.object = shown}},
+	                   FaceThing(shown, k_FaceFriendSeconds, Cue::Fear, Gaze {.object = shown}),
+	                   PointAt(shown, k_PointAtShownThingSeconds, Cue::Grimace),
+	                   Order(friends.friendly, TurnToFacePlace(head), Cue::None, LookAtPlace(head)),
+	                   WaitForFree(friends.friendly),
+	                   Order(friends.friendly, FaceThing(shown, k_FaceFriendSeconds), Cue::None, Gaze {.object = shown}),
+	                   CastToShow(magicType, shown, Cue::Grimace),
+	                   Order(friends.friendly, FaceThing(friends.self, k_FaceFriendSeconds), Cue::Amazed,
+	                         Gaze {.object = friends.self}),
+	               });
+	return agenda;
+}
+
+std::vector<Step> creature_mind::ShowFriendMakingMiracle(const Friends& friends, uint32_t magicType,
+                                                         std::optional<uint32_t> thing, glm::vec3 head, bool seesFriend)
+{
+	std::vector<Step> agenda;
+	if (!seesFriend)
+	{
+		agenda.push_back(GoNearLooking(friends.friendly, k_ShowMakingFriendNearHeights * friends.height, Cue::Compassion));
+	}
+	agenda.push_back(FaceThing(friends.friendly, k_FaceFriendSeconds, Cue::Compassion, Gaze {.object = friends.friendly}));
+	if (!thing.has_value())
+	{
+		return agenda;
+	}
+	const auto shown = *thing;
+	auto wait = WaitForStill(friends.friendly);
+	wait.face = Cue::Grimace;
+	Append(agenda, std::array {
+	                   Ask(friends.friendly, creature_friendship::RequestKind::BeShown),
+	                   Order(friends.friendly, GoNear(shown, friends.height * k_ShowMakingThingNearHeights), Cue::None,
+	                         Gaze {.object = shown, .whileGoing = true}),
+	                   GoNearLooking(shown, friends.height * k_ShowMakingThingNearHeights),
+	                   wait,
+	                   Order(friends.friendly, FaceThing(shown, k_FaceFriendSeconds), Cue::None, Gaze {.object = shown}),
+	                   FaceThing(shown, k_FaceFriendSeconds, Cue::Compassion, Gaze {.object = shown}),
+	                   PointAt(shown, k_PointAtShownThingSeconds, Cue::Grimace),
+	                   Order(friends.friendly, TurnToFacePlace(head), Cue::None, LookAtPlace(head)),
+	                   WaitForFree(friends.friendly),
+	                   Order(friends.friendly, FaceThing(shown, k_FaceFriendSeconds), Cue::None, Gaze {.object = shown}),
+	                   CastToShow(magicType, shown, Cue::Compassion),
+	                   Order(friends.friendly, FaceThing(friends.self, k_FaceFriendSeconds), Cue::Amazed,
+	                         Gaze {.object = friends.self}),
+	               });
+	return agenda;
+}
+
+bool creature_mind::CanBeSetOnFire(ShownThingKind kind, bool fireproof)
+{
+	return kind == ShownThingKind::SetIntoLand && !fireproof;
+}
+
+bool creature_mind::CanBeHelpedByCreature(ShownThingKind kind, bool villagerPickable)
+{
+	switch (kind)
+	{
+	case ShownThingKind::NotAnObject:
+		return false;
+	case ShownThingKind::Villager:
+		return villagerPickable;
+	case ShownThingKind::LooseObject:
+	case ShownThingKind::SetIntoLand:
+	case ShownThingKind::SetIntoLandNeverBurns:
+		return true;
+	}
+	return false;
+}
+
+std::vector<Step> creature_mind::ConfuseFriend(uint32_t self, uint32_t friendly, float height, glm::vec3 home,
+                                               const Random& random)
+{
+	auto agenda = ComeTogether(self, friendly, height, Cue::Smile, random);
+	const float seconds = k_FaceTogetherSeconds + creature_emote::FloatRandom(random, k_FaceTogetherExtraSeconds);
+	Append(agenda, std::array {
+	                   FaceThing(friendly, seconds, Cue::Smile, Gaze {.object = friendly}),
+	                   Main(PointAtPlace(home, k_PointAtHomeSeconds, Cue::Grimace)),
+	                   Order(friendly, TurnToFacePlace(home), Cue::Puzzled),
+	                   Fluttering(PointAt(friendly, k_PointAtFriendSeconds, Cue::Sad), friendly),
+	                   Order(friendly, PlayOnce(animations::k_Confused), Cue::Puzzled),
+	               });
+	return agenda;
+}
+
+std::vector<Step> creature_mind::ShowCreatureHowNice(uint32_t other, float howNice, const Random& random)
+{
+	const Gaze look {.object = other};
+	std::vector<Step> agenda {FaceThing(other, k_FaceToShowHowNiceSeconds, Cue::None, look)};
+	if (howNice > 0.0f)
+	{
+		agenda.push_back(Main(PlayOnce(animations::k_Happy)));
+	}
+	else if (howNice < 0.0f)
+	{
+		agenda.push_back(Main(PlayOnce(random(2) != 0 ? k_HateTaunt : animations::k_Taunt)));
+	}
+	else
+	{
+		// Zero, or not a number: it holds the smile face
+		agenda.push_back(
+		    Main({.kind = Step::Kind::Face, .seconds = k_HeldFaceSeconds, .animation = animations::k_FirstFace, .gaze = look}));
+	}
 	return agenda;
 }
 
