@@ -560,7 +560,9 @@ GAME_START_CONTEXT_BYTES = GAME_START["context_bytes"]
 
 # Each load of a saved game makes each creature again from its record and its mind file, as the game does (user
 # question CAS2-1, branch creature-audit2-saves). Each load, also the second, then changes these values only:
-# - the mind chooses again from idle with a new plan, and it has one more lesson after each load;
+# - the mind chooses again from idle with a new plan. Its actions get new random times since they were done. As in
+#   the game, the new mind learns the starting lesson and then adds the examples of the file, so each load adds one
+#   more copy of the lesson until the tree has 16 examples (vanilla-bugs 279);
 # - the marks, the morph and the tattoos come back from the mind file, so their counts of changes go up;
 # - the animation and the walk start again, and the object that the creature acted on goes;
 # - the mind takes numbers from the synced stream as it starts, so the seed and the count of the draws change;
