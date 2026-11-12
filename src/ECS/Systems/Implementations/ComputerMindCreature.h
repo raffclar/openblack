@@ -31,8 +31,6 @@ namespace openblack::ecs::systems::computer_world
 [[nodiscard]] entt::entity CreatureOf(PlayerNames player);
 /// The desire of the plan that the creature made last, if any
 [[nodiscard]] std::optional<creature_desires::Desire> PlanDesireOf(entt::entity creature);
-/// The player holds the creature on the leash of the player
-[[nodiscard]] bool LeashedBy(PlayerNames player, entt::entity creature);
 /// How free the creature is for the god. On the god's leash, the creature is not free for a time after the leash is tied.
 [[nodiscard]] float FreedomOf(PlayerNames player, entt::entity creature);
 

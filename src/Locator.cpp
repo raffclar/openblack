@@ -891,8 +891,9 @@ namespace
 template <typename MakeLand>
 void InitializeLevelWith(MakeLand&& makeLand)
 {
-	// Both seeds go to 0 with every map, as the game clears them
-	Locator::gameRandom::value().SetSeeds({0, 0});
+	// Both seeds go to 0 with every map, as the game clears them. Only a tool run can start the synced seed at another
+	// value.
+	Locator::gameRandom::value().SetSeeds({.synced = Locator::gameRandom::value().GetMapStartSeed(), .local = 0});
 	// The game's own streams start again from the run's seed with every map too, so that the same land loaded with the
 	// same seed draws the same numbers
 	auto& rng = Locator::rng::value();

@@ -59,10 +59,11 @@ std::vector<Step> creature_player_attention::BeCrossWithPlayer(std::optional<glm
 {
 	const auto animation = random(k_CrossLots) != 0 ? k_RudeSignAnimation : k_TauntAnimation;
 	const Step sign {.kind = Step::Kind::Action, .animation = animation};
-	// With no camera, the follow ends at once, and the turn to the camera ends at once too
+	// With no camera, the follow ends on the turn after it starts. The turn to the camera has nothing to do, but it
+	// takes its two turns before the sign starts.
 	if (!camera.has_value())
 	{
-		return {FollowCamera(height), sign};
+		return {FollowCamera(height), {.kind = Step::Kind::Empty, .gaze = Gaze {.camera = true}}, sign};
 	}
 	return {FollowCamera(height), FaceCamera(*camera), sign};
 }

@@ -596,6 +596,24 @@ TEST(CreatureActionAgendas, SleepingByAThingFallsBackToHome)
 	EXPECT_EQ(byThing->front().movement.point, glm::vec2(10.0f, 20.0f));
 }
 
+// A script that tells a creature to sleep by a thing gets the agenda also when the creature has no clear place by the
+// thing and no home. The game does not examine the action before it makes the agenda for a script.
+TEST(CreatureActionAgendas, AScriptSleepByAThingNeedsNoClearPlaceOrHome)
+{
+	const auto* sleep = plan_actions::For("SleepByObject");
+	ASSERT_NE(sleep, nullptr);
+	const plan_actions::Situation situation {.controlledByScript = true, .radius = 6.0f, .height = 15.0f};
+	EXPECT_TRUE(plan_actions::Possible(*sleep, situation));
+	std::vector<uint32_t> draws;
+	const auto agenda = plan_actions::Agenda(*sleep, 3, {}, situation, [&draws](uint32_t range) {
+		draws.push_back(range);
+		return NeverFirst(range);
+	});
+	ASSERT_TRUE(agenda.has_value());
+	EXPECT_EQ(draws, std::vector<uint32_t> {2});
+	EXPECT_TRUE(std::ranges::any_of(*agenda, [](const Step& step) { return step.effect == Effect::Slept; }));
+}
+
 // Left to itself, it sleeps by a thing only on the leash or far from home, with nothing frightening near it
 TEST(CreatureActionAgendas, SleepingByAThingIsPlannedOnTheLeashOrFarFromHome)
 {
@@ -801,7 +819,7 @@ TEST(CreatureActionAgendas, WatchingAVillagerFollowsItThenScratchesItsHead)
 	ASSERT_EQ(agenda.size(), 2);
 	EXPECT_EQ(agenda[0].kind, Step::Kind::FollowWatching);
 	EXPECT_EQ(agenda[0].object, 9u);
-	EXPECT_FLOAT_EQ(agenda[0].seconds, 30.0f);
+	EXPECT_FLOAT_EQ(agenda[0].seconds, 60.0f);
 	EXPECT_FLOAT_EQ(agenda[0].movement.maxDistance, 15.0f);
 	EXPECT_EQ(agenda[0].face, creature_face::Cue::Amazed);
 	ASSERT_TRUE(agenda[0].gaze.has_value());
@@ -831,8 +849,8 @@ TEST(CreatureActionAgendas, WatchingAVillagerKeepsWithinFifteenOfIt)
 	EXPECT_EQ(mind.step, 0u);
 }
 
-// It watches up to thirty whole seconds, then holds one to four seconds before it scratches its head
-TEST(CreatureActionAgendas, WatchingAVillagerLastsThirtySecondsThenHolds)
+// It watches up to sixty whole seconds, then holds one to four seconds before it scratches its head
+TEST(CreatureActionAgendas, WatchingAVillagerLastsSixtySecondsThenHolds)
 {
 	for (const auto& [draw, hold] : {std::pair {0u, 10u}, std::pair {0xfffeu, 39u}})
 	{
@@ -848,8 +866,8 @@ TEST(CreatureActionAgendas, WatchingAVillagerLastsThirtySecondsThenHolds)
 			(void)Think(mind, senses, random);
 			++turns;
 		}
-		// Turn 310 is the first of 31 whole seconds
-		EXPECT_EQ(turns, 310u);
+		// Turn 610 is the first of 61 whole seconds
+		EXPECT_EQ(turns, 610u);
 		EXPECT_EQ(mind.followHoldTurns, hold);
 		uint32_t held = 0;
 		while (mind.step == 0 && held < 1000)

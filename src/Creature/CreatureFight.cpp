@@ -376,11 +376,6 @@ Move creature_fight::BlockMove()
 	return {.kind = Move::Kind::Block};
 }
 
-bool creature_fight::IsBlow(Move::Kind kind)
-{
-	return kind == Move::Kind::High || kind == Move::Kind::Mid || kind == Move::Kind::Low;
-}
-
 bool creature_fight::HandGives(const Move& move, std::span<const MagicType> knownMiracles)
 {
 	switch (move.kind)
@@ -611,6 +606,16 @@ creature_fight::FaintWait creature_fight::LyingTurn(FaintWait wait, const FaintB
 		return {.seconds = notStartedSeconds, .started = false};
 	}
 	return {.seconds = WaitTurnCounts(body) ? wait.seconds + turnSeconds : wait.seconds, .started = true};
+}
+
+creature_fight::FaintCount creature_fight::LyingTurn(FaintCount wait, const FaintBody& body, int32_t notStartedTurns)
+{
+	// The fall of the faint ends only when the body lies still in its loop
+	if (!wait.started && !(body.faintStarted && body.lies))
+	{
+		return {.turns = notStartedTurns, .started = false};
+	}
+	return {.turns = WaitTurnCounts(body) ? wait.turns + 1 : wait.turns, .started = true};
 }
 
 float creature_fight::DamageFactor(const Blow& blow)
@@ -1033,11 +1038,6 @@ bool creature_fight::IsBlocking(State state, float timeMs, float startBlockDurat
 	default:
 		return false;
 	}
-}
-
-bool creature_fight::TakesMoves(State state)
-{
-	return state == State::Stance || state == State::Block;
 }
 
 bool creature_fight::FacesOpponentEachTurn(State state, size_t animation, bool turning)

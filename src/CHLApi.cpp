@@ -23,11 +23,9 @@
 #include <numbers>
 #include <optional>
 #include <ranges>
-#include <sstream>
 #include <string>
 #include <string_view>
 #include <tuple>
-#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -183,18 +181,6 @@ using openblack::script::ObjectType;
 const std::vector<lhvm::NativeFunction>& CHLApi::GetFunctionsTable()
 {
 	return _functionsTable;
-}
-
-std::unordered_set<std::string> GetUniqueWords(const std::string& strings)
-{
-	std::unordered_set<std::string> result;
-	std::istringstream iss(strings);
-	std::string word;
-	while (std::getline(iss, word, ' '))
-	{
-		result.insert(word);
-	}
-	return result;
 }
 
 /// The task running the native now, 0 between tasks

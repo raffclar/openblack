@@ -249,7 +249,6 @@ struct Move
 [[nodiscard]] Move AttackMove(Band band);
 [[nodiscard]] Move StepMove(Step step);
 [[nodiscard]] Move BlockMove();
-[[nodiscard]] bool IsBlow(Move::Kind kind);
 /// Whether the hand or a gesture of a player gives the move to the fighting creature of the player:
 /// - A press on a creature gives a blow at a band of the body, or a block.
 /// - A gesture gives the special move, or a fight miracle that the creature knows (knownMiracles).
@@ -468,6 +467,17 @@ struct FaintBody
 /// faint for the first time, the wait has not started and its seconds are notStartedSeconds. After that, the wait counts
 /// each turn that WaitTurnCounts lets it count, also when something moves the creature and its body stands.
 [[nodiscard]] FaintWait LyingTurn(FaintWait wait, const FaintBody& body, float turnSeconds, float notStartedSeconds);
+/// The wait of a creature that lies in a faint, as a count of whole turns. A long wait, such as a death for ever, needs
+/// an exact count: a float sum of many turns does not stay exact.
+struct FaintCount
+{
+	int32_t turns {0};
+	/// The creature lay still in its faint at least one time. Then its wait started.
+	bool started {false};
+};
+/// The same turn as LyingTurn above, but the wait counts whole turns. Before the creature lies still in its faint for the
+/// first time, the count is notStartedTurns. After that, each turn that WaitTurnCounts lets it count adds one turn.
+[[nodiscard]] FaintCount LyingTurn(FaintCount wait, const FaintBody& body, int32_t notStartedTurns);
 
 // Blows
 
@@ -612,8 +622,6 @@ constexpr float k_CastHoldMs = 2.0f;
 /// Whether the creature is blocking: while blocking, once half way into starting to block, and until half way out of
 /// it again. Both halves are half of the duration of the start of the block, cut down to a whole millisecond.
 [[nodiscard]] bool IsBlocking(State state, float timeMs, float startBlockDurationMs);
-/// Whether a creature in a state can be told to make a move
-[[nodiscard]] bool TakesMoves(State state);
 /// Whether a creature in a state turns at once to face its opponent on each game turn. It does this in its start after
 /// its first turn on the spot, in its stance, in its block and in its actions that are not blows. In all other states
 /// it keeps its heading.

@@ -75,6 +75,12 @@ inline constexpr float k_TurnLimit = 0.4712389409542084f;
 /// turns in a second, rounds the product to a float and cuts it towards zero. It keeps the count in 16 bits, thus a count
 /// of zero becomes the largest count after the first turn.
 [[nodiscard]] uint16_t HoldTurns(float seconds, uint32_t turnsPerSecond);
+/// A point at a place holds for this many turns at least
+inline constexpr int16_t k_PlaceHoldMinimumTurns = 10;
+/// The turns that the arm holds a point at a place. This is the count of HoldTurns, but a count less than the minimum
+/// becomes the minimum. The game compares the count as a signed 16-bit number, thus a count of 32768 or more also
+/// becomes the minimum.
+[[nodiscard]] uint16_t PlaceHoldTurns(float seconds, uint32_t turnsPerSecond);
 /// One turn of the hold, on each turn after the turn that the point starts. Returns true when the hold ends in this turn.
 [[nodiscard]] bool CountHoldTurn(uint16_t& turnsLeft);
 

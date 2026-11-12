@@ -818,6 +818,12 @@ void Approach(entt::entity creature, CreatureObjectAction& action, const Creatur
 			// The arm plays in the time of the first pointing animation
 			action.durationMs = DurationOf(creature, creature_pointing::k_Animations.front());
 		}
+		else
+		{
+			// The throw ends when its step gets to the end of the flat throw. The length of the high throw has no effect.
+			action.durationMs = DurationOf(creature, creature_throw::k_HurlFlat);
+			action.eventMs = std::min(action.eventMs, std::max(action.durationMs - 1.0f, 0.0f));
+		}
 		return;
 	}
 
@@ -948,11 +954,13 @@ bool CreatureObjectActionSystem::Start(entt::entity creature, CreatureObjectActi
 	const auto* held = registry.TryGet<const CreatureHeldObject>(creature);
 	action.status = Status::Running;
 	action.phase = Phase::Approach;
-	// The hold of a point counts its turns from the turn that the point starts, before a turn to the point
+	// The hold of a point counts its turns from the turn that the point starts, before a turn to the point. A point at a
+	// place holds for a minimum number of turns. A point at a thing has no minimum.
 	if (action.kind == Kind::Point && !action.pointsUntilTold)
 	{
-		action.holdTurns = creature_pointing::HoldTurns(action.pointSeconds.value_or(creature_object_actions::k_PointSeconds),
-		                                                k_PointTurnsPerSecond);
+		const float seconds = action.pointSeconds.value_or(creature_object_actions::k_PointSeconds);
+		action.holdTurns = action.target.has_value() ? creature_pointing::HoldTurns(seconds, k_PointTurnsPerSecond)
+		                                             : creature_pointing::PlaceHoldTurns(seconds, k_PointTurnsPerSecond);
 		action.holdCounting = false;
 	}
 	switch (creature_object_actions::HandsFor(action.kind))
