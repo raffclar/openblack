@@ -906,8 +906,8 @@ struct Command
 		/// A script tells the creature to play an animation (value) some times (amount, rounded), as "play 47 loop 1"
 		/// does: a static action's start, loop and end, or an individual action
 		ScriptPlay,
-		/// A help text (value, by the scripts' number) shown in the dialogue box, as a script's RUN_TEXT shows one. Needs
-		/// no creature
+		/// A help text (value, by the scripts' number) shown in the dialogue box, as a script's RUN_TEXT shows one. With
+		/// waitsForClick, the text waits for a click. Needs no creature
 		RunText,
 		/// A hand demonstration (handDemo, by its file's name) played through the player's hand and camera, as a
 		/// tutorial's script plays one. Needs no creature
@@ -1354,6 +1354,8 @@ struct Command
 	float amount {1.0f};
 	/// The camera's keys are held with Ctrl rather than Shift
 	bool ctrl {false};
+	/// A help text waits for a click
+	bool waitsForClick {false};
 	/// The creature a miracle is cast at, or that a script's action is done to in place of the object, by its place in
 	/// the scenario's creatures
 	std::optional<size_t> atCreature;
