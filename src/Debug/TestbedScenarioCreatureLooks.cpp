@@ -1483,6 +1483,20 @@ void testbed_scenarios::AddLight(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "light.coarse_first_paint",
+	    .name = "Far land blocks show their painted coarse texture from the first frame",
+	    .facet = Facet::Light,
+	    .description = "The first land at noon with the clock stopped. The camera is 350 units above the middle of the "
+	                   "land and looks north over the hills to the far coast, where the land shows its coarse texture.",
+	    .expected = "From the first frame, each far square of the land shows the colours of its painted texture, with "
+	                "the shadows. No far square shows the flat colours of the landscape file's page, and no square "
+	                "changes when the camera moves north.",
+	    .environment =
+	        {.land = Land::Story, .storyLand = "Land1.txt", .hour = 12.0f, .clockRuns = false, .dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 350.0f, -440.0f}, .look = {0.0f, 0.0f, 760.0f}},
+	});
+
+	all.push_back({
 	    .id = "light.snow_repaint_melt",
 	    .name = "Snow melts off the land block by block",
 	    .facet = Facet::Light,

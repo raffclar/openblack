@@ -397,3 +397,15 @@ TEST(CoarseEdges, PaintOrderPutsTheLaterRequestFirstAtTheSameDistance)
 	                                          {.block = 0, .centre = {80.0f, 240.0f}}};
 	EXPECT_EQ(PaintOrder(requests, {0.0f, 50.0f, 0.0f}), (std::vector<size_t> {1, 0}));
 }
+
+TEST(CoarseEdges, ABlockShowsItsFilePageUntilItsFirstPaint)
+{
+	EXPECT_EQ(CoarseTextureOf(false, true, false), CoarseTexture::FilePage);
+	EXPECT_EQ(CoarseTextureOf(false, true, true), CoarseTexture::Samples);
+	// A land without pages samples the block's painted texture
+	EXPECT_EQ(CoarseTextureOf(false, false, false), CoarseTexture::Samples);
+	// The coarse land draws every block from its page
+	EXPECT_EQ(CoarseTextureOf(true, true, false), CoarseTexture::CoarseLand);
+	EXPECT_EQ(CoarseTextureOf(true, true, true), CoarseTexture::CoarseLand);
+	EXPECT_EQ(CoarseTextureOf(true, false, true), CoarseTexture::Samples);
+}

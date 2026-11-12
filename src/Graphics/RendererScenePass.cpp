@@ -603,9 +603,11 @@ void Renderer::DrawPassLand(const DrawSceneDesc& desc, const ScenePass& pass) co
 			const glm::vec4 u_blockNeighbours =
 			    index < _landDetail.neighbours.size() ? _landDetail.neighbours[index] : glm::vec4(-1.0f);
 			blockNeighboursUniform.Set(&u_blockNeighbours);
-			// The coarse land draws every block from the landscape file's pages, where it has them
+			// The coarse land draws every block from the landscape file's pages, where it has them. Other blocks show
+			// their square of the page until their first paint.
 			glm::vec4 u_coarsePage = island.GetCoarsePageSlot(index);
-			u_coarsePage.w = coarseLand && island.GetCoarsePages() != nullptr ? u_coarsePage.w : 0.0f;
+			const bool hasPage = island.GetCoarsePages() != nullptr && u_coarsePage.w > 0.5f;
+			u_coarsePage.w = static_cast<float>(coarse_edges::CoarseTextureOf(coarseLand, hasPage, coarseEdges));
 			coarsePageUniform.Set(&u_coarsePage);
 			glm::vec4 vortexGround {0.0f, 0.0f, 0.0f, -1.0f};
 			const GroundTextures* blockGround = sharedGround;
