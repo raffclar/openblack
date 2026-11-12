@@ -2235,6 +2235,7 @@ openblack_setup_and_add_test(test_creature_catch_give_kinds test_creature_catch_
 openblack_setup_and_add_test(test_things_made test_things_made.cpp)
 openblack_setup_and_add_test(test_object_snow graphics/test_object_snow.cpp)
 openblack_setup_and_add_test(test_creature_turn_to_face test_creature_turn_to_face.cpp)
+openblack_setup_and_add_test(test_creature_camera_turn test_creature_camera_turn.cpp)
 openblack_setup_and_add_test(test_vanilla_world_import test_vanilla_world_import.cpp)
 add_test(NAME test_guard_sweep
          COMMAND ${Python3_EXECUTABLE}

@@ -30,6 +30,7 @@
 #include "Common/GUtilsDistance.h"
 #include "Common/GameHeading.h"
 #include "Common/GameRandom.h"
+#include "Creature/CreatureCameraTurn.h"
 #include "Creature/CreatureCastAgenda.h"
 #include "Creature/CreatureCastMoves.h"
 #include "Creature/CreatureGiving.h"
@@ -79,6 +80,7 @@
 #include "ECS/CreatureObstacleThings.h"
 #include "ECS/Map.h"
 #include "ECS/Registry.h"
+#include "ECS/ReportedCamera.h"
 #include "ECS/Systems/CreatureHelpSystemInterface.h"
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
 #include "ECS/Systems/CreatureObjectActionSystemInterface.h"
@@ -127,6 +129,17 @@ GameHeading HeadingOf(const ecs::Registry& registry, entt::entity creature, cons
 	}
 	const auto ahead = -(transform.rotation * glm::vec3(0.0f, 0.0f, 1.0f));
 	return GameHeading::Of(ahead.x, ahead.z);
+}
+
+/// The camera of the player that last gave the creature a thing. None when no player gave it a thing.
+std::optional<HandSystemInterface::ReportedCamera> GiverCamera(const ecs::Registry& registry, entt::entity creature)
+{
+	const auto* mind = registry.TryGet<const CreatureMindState>(creature);
+	if (mind == nullptr || !mind->giver.has_value())
+	{
+		return std::nullopt;
+	}
+	return openblack::ecs::PlayerCameraOf(*mind->giver);
 }
 
 /// The map position of a point across the land
@@ -849,6 +862,12 @@ void CreatureMindSystem::StartSubMove(entt::entity creature, const creature_mind
 	case Kind::ToThrowAtPoint:
 		casting.move = CreatureCasting::Move::ToThrowAtPoint;
 		break;
+	case Kind::TurnToFaceCamera:
+		casting.move = CreatureCasting::Move::TurnToCamera;
+		break;
+	case Kind::TurnToFaceGiverCamera:
+		casting.move = CreatureCasting::Move::TurnToGiverCamera;
+		break;
 	default:
 		casting.move = CreatureCasting::Move::None;
 		return;
@@ -1231,6 +1250,43 @@ void CreatureMindSystem::StepSubMove(entt::entity creature, bool animating)
 		{
 			done();
 		}
+		break;
+	}
+	case CreatureCasting::Move::TurnToCamera:
+	case CreatureCasting::Move::TurnToGiverCamera:
+	{
+		// The place of the camera is read again on each turn. A creature without a player, or without a giver, has no
+		// camera to turn to.
+		const bool toGiver = casting->move == CreatureCasting::Move::TurnToGiverCamera;
+		const auto camera = toGiver ? GiverCamera(registry, creature) : openblack::ecs::ReportedCameraOfItsPlayer(creature);
+		const creature_camera_turn::View view {
+		    .camera = camera.has_value() ? std::optional(glm::vec2(camera->origin.x, camera->origin.z)) : std::nullopt,
+		    .creature = here,
+		    .heading = HeadingOf(registry, creature, *transform),
+		    .bodyBusy = bodyBusy,
+		};
+		auto phase = casting->phase == 0 ? creature_camera_turn::Phase::Start : creature_camera_turn::Phase::Check;
+		// The body stops, then turns on the spot
+		const auto startTurn = [&](GameHeading heading) { return locomotion.TurnToHeading(creature, heading); };
+		const auto endPoint = [creature] {
+			if (Locator::creatureObjectActionSystem::has_value())
+			{
+				Locator::creatureObjectActionSystem::value().EndPoint(creature);
+			}
+		};
+		const auto watcher = toGiver ? creature_camera_turn::Watcher::Giver : creature_camera_turn::Watcher::ItsPlayer;
+		switch (creature_camera_turn::Step(watcher, phase, view, startTurn, endPoint))
+		{
+		case creature_camera_turn::Outcome::Running:
+			break;
+		case creature_camera_turn::Outcome::Done:
+			done();
+			break;
+		case creature_camera_turn::Outcome::Failed:
+			fail();
+			break;
+		}
+		casting->phase = phase == creature_camera_turn::Phase::Start ? 0 : 1;
 		break;
 	}
 	case CreatureCasting::Move::None:

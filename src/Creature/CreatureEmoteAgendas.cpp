@@ -34,13 +34,6 @@ Step PlayOnce(size_t animation)
 	return {.kind = Step::Kind::Action, .animation = animation};
 }
 
-Step TurnToCamera(glm::vec2 camera)
-{
-	return {.kind = Step::Kind::Move,
-	        .movement = {.kind = Movement::Kind::TurnToFace, .point = camera},
-	        .gaze = Gaze {.camera = true}};
-}
-
 /// A frightened start: the eyes go wide and stay so until the creature takes up something else, and the head looks
 /// about
 Step FrightenedStart()
@@ -61,9 +54,9 @@ float creature_emote::WholeTurnSeconds(float seconds, float turnsPerSecond)
 	return std::trunc(seconds * turnsPerSecond) / turnsPerSecond;
 }
 
-std::vector<Step> creature_emote::HowlAtPlayer(glm::vec2 camera)
+std::vector<Step> creature_emote::HowlAtPlayer()
 {
-	return {TurnToCamera(camera), PlayOnce(k_HowlAnimation)};
+	return {creature_mind::TurnToCamera(), PlayOnce(k_HowlAnimation)};
 }
 
 std::vector<Step> creature_emote::BeSad(uint32_t self, float turnsPerSecond, const Random& random)
@@ -109,14 +102,14 @@ float creature_emote::FollowCameraReach(float height)
 	return (height + 1.0f) * 2.0f;
 }
 
-std::vector<Step> creature_emote::BePathetic(glm::vec2 camera, float height)
+std::vector<Step> creature_emote::BePathetic(float height)
 {
 	return {
 	    {.kind = Step::Kind::FollowCamera,
 	     .seconds = k_FollowCameraSeconds,
 	     .movement = {.maxDistance = FollowCameraReach(height)},
 	     .gaze = Gaze {.camera = true}},
-	    TurnToCamera(camera),
+	    creature_mind::TurnToCamera(),
 	    PlayOnce(k_PickMeAnimation),
 	};
 }

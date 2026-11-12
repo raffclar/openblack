@@ -99,7 +99,7 @@ TEST(CreatureEmoteAgendas, TheFollowStepCountsWholeTurnsAndMovesShortOfTheReach)
 	creature_mind::IdleMind mind;
 	const float reach = FollowCameraReach(10.0f);
 	EXPECT_FLOAT_EQ(reach, 22.0f);
-	creature_mind::Plan(mind, creature_mind::Activity::Planned, BePathetic({0.0f, 50.0f}, 10.0f));
+	creature_mind::Plan(mind, creature_mind::Activity::Planned, BePathetic(10.0f));
 	auto senses = StandingSenses();
 	senses.cameraFocus = glm::vec3(200.0f, 0.0f, 0.0f);
 	// The first turn sets the time: thirty seconds of turns
@@ -119,12 +119,12 @@ TEST(CreatureEmoteAgendas, TheFollowStepCountsWholeTurnsAndMovesShortOfTheReach)
 
 TEST(CreatureEmoteAgendas, PatheticFollowsTurnsAndPlaysPickMe)
 {
-	const auto agenda = BePathetic({3.0f, 4.0f}, 5.0f);
+	const auto agenda = BePathetic(5.0f);
 	ASSERT_EQ(agenda.size(), 3u);
 	EXPECT_EQ(agenda[0].kind, Step::Kind::FollowCamera);
 	ASSERT_TRUE(agenda[0].gaze.has_value());
 	EXPECT_TRUE(agenda[0].gaze->camera);
-	EXPECT_EQ(agenda[1].movement.kind, Movement::Kind::TurnToFace);
+	EXPECT_EQ(agenda[1].movement.kind, Movement::Kind::TurnToFaceCamera);
 	EXPECT_EQ(agenda[2].animation, k_PickMeAnimation);
 	for (const auto& step : agenda)
 	{
@@ -134,10 +134,9 @@ TEST(CreatureEmoteAgendas, PatheticFollowsTurnsAndPlaysPickMe)
 
 TEST(CreatureEmoteAgendas, HowlTurnsToTheCameraAndHowls)
 {
-	const auto agenda = HowlAtPlayer({3.0f, 4.0f});
+	const auto agenda = HowlAtPlayer();
 	ASSERT_EQ(agenda.size(), 2u);
-	EXPECT_EQ(agenda[0].movement.kind, Movement::Kind::TurnToFace);
-	EXPECT_EQ(agenda[0].movement.point, glm::vec2(3.0f, 4.0f));
+	EXPECT_EQ(agenda[0].movement.kind, Movement::Kind::TurnToFaceCamera);
 	EXPECT_EQ(agenda[1].kind, Step::Kind::Action);
 	EXPECT_EQ(agenda[1].animation, 217u);
 	EXPECT_EQ(agenda[1].face, creature_face::Cue::None);

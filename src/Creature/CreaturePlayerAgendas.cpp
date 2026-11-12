@@ -15,19 +15,11 @@
 using namespace openblack;
 using namespace openblack::creature_player_attention;
 using creature_mind::Gaze;
-using creature_mind::Movement;
 using creature_mind::ObjectOrder;
 using creature_mind::Step;
 
 namespace
 {
-/// A step that turns the creature to the camera, and looks at the camera
-Step FaceCamera(glm::vec2 camera)
-{
-	return {.kind = Step::Kind::Move,
-	        .movement = {.kind = Movement::Kind::TurnToFace, .point = camera},
-	        .gaze = Gaze {.camera = true}};
-}
 /// A step that follows the point of focus of the camera, and looks at the camera
 Step FollowCamera(float height)
 {
@@ -44,31 +36,24 @@ Step Talk()
 }
 } // namespace
 
-std::vector<Step> creature_player_attention::GoToMiddleOfScreen(glm::vec2 camera, float height)
+std::vector<Step> creature_player_attention::GoToMiddleOfScreen(float height)
 {
-	return {FollowCamera(height), FaceCamera(camera)};
+	return {FollowCamera(height), creature_mind::TurnToCamera()};
 }
 
-std::vector<Step> creature_player_attention::FollowPlayer(glm::vec2 camera, float height)
+std::vector<Step> creature_player_attention::FollowPlayer(float height)
 {
-	return {FollowCamera(height), FaceCamera(camera), {.kind = Step::Kind::Action, .animation = k_LookAtMeAnimation}};
+	return {
+	    FollowCamera(height), creature_mind::TurnToCamera(), {.kind = Step::Kind::Action, .animation = k_LookAtMeAnimation}};
 }
 
-std::vector<Step> creature_player_attention::BeCrossWithPlayer(std::optional<glm::vec2> camera, float height,
-                                                               const creature_mind::Random& random)
+std::vector<Step> creature_player_attention::BeCrossWithPlayer(float height, const creature_mind::Random& random)
 {
 	const auto animation = random(k_CrossLots) != 0 ? k_RudeSignAnimation : k_TauntAnimation;
-	const Step sign {.kind = Step::Kind::Action, .animation = animation};
-	// With no camera, the follow ends on the turn after it starts. The turn to the camera has nothing to do, but it
-	// takes its two turns before the sign starts.
-	if (!camera.has_value())
-	{
-		return {FollowCamera(height), {.kind = Step::Kind::Empty, .gaze = Gaze {.camera = true}}, sign};
-	}
-	return {FollowCamera(height), FaceCamera(*camera), sign};
+	return {FollowCamera(height), creature_mind::TurnToCamera(), {.kind = Step::Kind::Action, .animation = animation}};
 }
 
-std::vector<Step> creature_player_attention::ShowPlayerAnObject(std::optional<uint32_t> pickUp, glm::vec2 camera, float height)
+std::vector<Step> creature_player_attention::ShowPlayerAnObject(std::optional<uint32_t> pickUp, float height)
 {
 	std::vector<Step> agenda;
 	if (pickUp.has_value())
@@ -78,7 +63,7 @@ std::vector<Step> creature_player_attention::ShowPlayerAnObject(std::optional<ui
 		                  .gaze = Gaze {.object = pickUp}});
 	}
 	agenda.push_back(FollowCamera(height));
-	auto turn = FaceCamera(camera);
+	auto turn = creature_mind::TurnToCamera();
 	turn.face = creature_face::Cue::AttitudeToPlayer;
 	turn.main = true;
 	agenda.push_back(turn);
@@ -88,12 +73,12 @@ std::vector<Step> creature_player_attention::ShowPlayerAnObject(std::optional<ui
 	return agenda;
 }
 
-std::vector<Step> creature_player_attention::BeSillyWithPlayer(glm::vec2 camera, const creature_mind::Random& random)
+std::vector<Step> creature_player_attention::BeSillyWithPlayer(const creature_mind::Random& random)
 {
 	std::vector<Step> agenda;
 	for (int round = 0; round < k_SillyRounds; ++round)
 	{
-		agenda.push_back(FaceCamera(camera));
+		agenda.push_back(creature_mind::TurnToCamera());
 		agenda.push_back(Talk());
 		if (random(k_SillyPlayfulLots) != 0)
 		{
@@ -122,10 +107,10 @@ std::vector<Step> creature_player_attention::GoToHand(const creature_mind::Rando
 	return agenda;
 }
 
-std::vector<Step> creature_player_attention::PointAtHand(glm::vec2 camera, glm::vec3 hand)
+std::vector<Step> creature_player_attention::PointAtHand(glm::vec3 hand)
 {
 	return {
-	    FaceCamera(camera),
+	    creature_mind::TurnToCamera(),
 	    {.kind = Step::Kind::Object,
 	     .order = {.kind = ObjectOrder::Kind::PointAt,
 	               .point = {hand.x, hand.z},
@@ -136,15 +121,15 @@ std::vector<Step> creature_player_attention::PointAtHand(glm::vec2 camera, glm::
 	};
 }
 
-std::vector<Step> creature_player_attention::ShowHowNice(glm::vec2 camera, float attitudeToPlayer)
+std::vector<Step> creature_player_attention::ShowHowNice(float attitudeToPlayer)
 {
 	const auto animation = attitudeToPlayer > 0.0f ? k_FriendlyWaveAnimation : k_SadAnimation;
-	return {FaceCamera(camera), {.kind = Step::Kind::Action, .animation = animation, .gaze = Gaze {.camera = true}}};
+	return {creature_mind::TurnToCamera(), {.kind = Step::Kind::Action, .animation = animation, .gaze = Gaze {.camera = true}}};
 }
 
-std::vector<Step> creature_player_attention::PrayToPlayer(glm::vec2 camera)
+std::vector<Step> creature_player_attention::PrayToPlayer()
 {
-	return {FaceCamera(camera), {.kind = Step::Kind::Action, .animation = k_PrayAnimation}};
+	return {creature_mind::TurnToCamera(), {.kind = Step::Kind::Action, .animation = k_PrayAnimation}};
 }
 
 std::vector<Step> creature_player_attention::ThrowAtCamera(std::optional<uint32_t> pickUp, glm::vec3 camera)

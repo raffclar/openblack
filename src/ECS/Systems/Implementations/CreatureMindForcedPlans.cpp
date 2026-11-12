@@ -150,7 +150,6 @@
 #include "ECS/LearningMarker.h"
 #include "ECS/PlayerTowns.h"
 #include "ECS/Registry.h"
-#include "ECS/ReportedCamera.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/CreatureHandSystemInterface.h"
@@ -353,10 +352,8 @@ bool CreatureMindSystem::ForcePlan(entt::entity creature, const ForcedPlan& plan
 			}
 			const bool alreadyHeld = Locator::creatureObjectActionSystem::has_value() &&
 			                         Locator::creatureObjectActionSystem::value().GetCarried(creature) == plan.object;
-			const auto camera = openblack::ecs::ReportedCameraOfItsPlayer(creature);
-			const auto eye = camera.has_value() ? camera->origin : transform->position;
 			agenda = creature_leash_orders::Hold(
-			    entt::to_integral(*plan.object), alreadyHeld, glm::vec2(eye.x, eye.z), playWith,
+			    entt::to_integral(*plan.object), alreadyHeld, playWith,
 			    creature_leash_orders::HoldSeconds(_random.GameFloatRand(creature_leash_orders::k_HoldExtraSeconds),
 			                                       k_TurnsPerSecond));
 		}

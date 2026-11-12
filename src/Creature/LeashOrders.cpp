@@ -318,16 +318,17 @@ std::vector<Step> creature_leash_orders::ThrowAt(glm::vec2 point, float height)
 	return {move, Hands({.kind = ObjectOrder::Kind::Throw, .point = point})};
 }
 
-std::vector<Step> creature_leash_orders::Hold(uint32_t object, bool alreadyHeld, glm::vec2 camera,
-                                              std::optional<uint32_t> playWith, float waitSeconds)
+std::vector<Step> creature_leash_orders::Hold(uint32_t object, bool alreadyHeld, std::optional<uint32_t> playWith,
+                                              float waitSeconds)
 {
 	std::vector<Step> agenda;
 	if (!alreadyHeld)
 	{
 		agenda.push_back(Hands({.kind = ObjectOrder::Kind::PickUp, .object = object}));
 	}
-	Step face {.kind = Step::Kind::Move};
-	face.movement = {.kind = Movement::Kind::TurnToFace, .point = camera};
+	// It looks at the camera as it turns, with a face that shows its attitude to the player
+	auto face = creature_mind::TurnToCamera();
+	face.face = creature_face::Cue::AttitudeToPlayer;
 	face.main = true;
 	agenda.push_back(face);
 	if (playWith.has_value())
