@@ -948,11 +948,13 @@ bool CreatureObjectActionSystem::Start(entt::entity creature, CreatureObjectActi
 	const auto* held = registry.TryGet<const CreatureHeldObject>(creature);
 	action.status = Status::Running;
 	action.phase = Phase::Approach;
-	// The hold of a point counts its turns from the turn that the point starts, before a turn to the point
+	// The hold of a point counts its turns from the turn that the point starts, before a turn to the point. A point at a
+	// place holds for a minimum number of turns. A point at a thing has no minimum.
 	if (action.kind == Kind::Point && !action.pointsUntilTold)
 	{
-		action.holdTurns = creature_pointing::HoldTurns(action.pointSeconds.value_or(creature_object_actions::k_PointSeconds),
-		                                                k_PointTurnsPerSecond);
+		const float seconds = action.pointSeconds.value_or(creature_object_actions::k_PointSeconds);
+		action.holdTurns = action.target.has_value() ? creature_pointing::HoldTurns(seconds, k_PointTurnsPerSecond)
+		                                             : creature_pointing::PlaceHoldTurns(seconds, k_PointTurnsPerSecond);
 		action.holdCounting = false;
 	}
 	switch (creature_object_actions::HandsFor(action.kind))

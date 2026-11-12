@@ -274,6 +274,7 @@ TEST(DeveloperTools, TheSoakOptionsOfTheGameAndTheServerAreDeveloperOptions)
 {
 	EXPECT_TRUE(IsDeveloperOption("sim-all-computer-gods", k_DeveloperOptions));
 	EXPECT_TRUE(IsDeveloperOption("sim-ai-seed", k_DeveloperOptions));
+	EXPECT_TRUE(IsDeveloperOption("sim-world-seed", k_DeveloperOptions));
 	EXPECT_TRUE(IsDeveloperOption("all-computer-gods", k_ServerDeveloperOptions));
 	EXPECT_TRUE(IsDeveloperOption("ai-seed", k_ServerDeveloperOptions));
 	const std::vector<std::string_view> arguments {"openblack-server", "--all-computer-gods", "--ai-seed", "5", "-g", "path"};

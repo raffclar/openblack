@@ -129,6 +129,9 @@ def game_arguments(options, record, log, until_turn, fast, driven):
         args.append("--sim-all-computer-gods")
     if getattr(options, "ai_seed", None) is not None:
         args += ["--sim-ai-seed", str(options.ai_seed)]
+    # A story land starts its synced seed at 0, as the game does; the world seed starts it at another value
+    if getattr(options, "world_seed", None) is not None:
+        args += ["--sim-world-seed", str(options.world_seed)]
     if getattr(options, "throw_lead_latency_ms", None) is not None:
         args += ["--throw-lead-latency-ms", str(options.throw_lead_latency_ms)]
     args += options.extra
@@ -793,6 +796,10 @@ def parse(argv):
         sub.add_argument("--all-computer-gods", action="store_true",
                          help="every god with a citadel is a computer god, also the god of this computer (the AI soak)")
         sub.add_argument("--ai-seed", type=int, help="the seed of the personalities of the computer gods (the AI soak)")
+        sub.add_argument("--world-seed", type=int,
+                         help="tools: each map starts its synced seed at this value, in place of the 0 of the game, "
+                              "so that a story land has another life for each value (--seed changes only the "
+                              "testbed; developer builds)")
         sub.add_argument("--network-game", action="store_true",
                          help="play the world as a network game does: no pause, and the turns read no part of a frame")
         sub.add_argument("--throw-lead-latency-ms", type=int, help="a fixed latency in ms for the reports of the hand, so that the lead of each throw is the same in each run")

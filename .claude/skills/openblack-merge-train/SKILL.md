@@ -78,6 +78,9 @@ Handovers (`paths.handovers`): `merge-train_handover.md` (one section for each c
    Then the train merges them with no hand merge.
 5. Start ONE merge agent (a cheaper model is fine) for the batch file with the brief below. Only one run_queue may
    run at a time.
+   **Batches overlap.** Start the next batch's merge agent as soon as the previous batch's PR merges. Do not wait
+   for its checks after the merge or its clean-up: they run at the same time as the next build. If those checks
+   fail, the next batch may already be on top of the fault: find the fault with one build of each merge.
 6. When it reports: tell the maintainer the PR numbers, the new main hash, the checks and anything left out. Say if
    `src/Inspector` changed (then the inspector MCP server must reconnect, `/mcp`). Delete finished lanes' worktrees
    and builds, and run `check_lost.sh` again.
@@ -97,7 +100,9 @@ main hash. Its steps:
 3. nc3 (3-client) failure: run `nc3_check.sh` again by hand once. If it fails again, stop and report. Extra check
    failed: an outage (unreachable, timeout) runs again by hand, then finishes; a real failure stops. A test failure:
    find the branch (build without it), drop it from the line, run the rest again, and report it.
-4. Post-merge checks ONCE per batch on the new main branch: `uz_shots.py` pixels old against new (name the car that
+4. As soon as the PR merges, release the merge build lock and tell the lead the PR number and the new main hash, so
+   the next batch can build. Do not touch the next batch's worktree or builds.
+   Post-merge checks ONCE per batch on the new main branch: `uz_shots.py` pixels old against new (name the car that
    explains each changed scene), server_check Land 1 100/100, net_check mpm_2p_1 with 2 clients for 2000 turns, a
    TwoGods all-computer net_check with 2 observers, plus any car-specific check from its queue line.
 5. Write one "Batch <n>" section in `merge-train_handover.md`. Remove the merge worktree, its build and the local
@@ -118,4 +123,5 @@ Never take a number another open branch holds (for example a deviation signed on
 - Visual changes need an approved look before their car runs; deviations need the maintainer's sign-off.
   Vanilla-faithful choices need no ask (record "ANSWERED by the lead").
 - Games run with `--background` and `-n`; stop processes only by their own PID.
-- Keep the machine inside its load limits (`load` in the settings).
+- Keep the machine inside its load limits (`load` in the settings). Builds and checks continue while memory use is
+  below 95%; at 95% or more, wait before the next step.

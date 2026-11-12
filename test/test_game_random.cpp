@@ -184,3 +184,21 @@ TEST(GameRandom, ARestartIsTheStateOfANewProgram)
 	EXPECT_EQ(used.CrtRand(), fresh.CrtRand());
 	EXPECT_EQ(used.GameRand(1000), fresh.GameRand(1000));
 }
+
+TEST(GameRandom, EachMapStartsTheSyncedSeedAtZero)
+{
+	const GameRandomProduction random;
+	EXPECT_EQ(random.GetMapStartSeed(), 0u);
+}
+
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
+TEST(GameRandom, AToolRunKeepsItsMapStartSeedThroughARestart)
+{
+	GameRandomProduction random;
+	random.SetMapStartSeed(7);
+	random.Restart();
+	EXPECT_EQ(random.GetMapStartSeed(), 7u);
+	// The seeds of a restart are the seeds of a new program: only a map uses the start seed
+	EXPECT_EQ(random.GetSeeds(), GameRandomProduction {}.GetSeeds());
+}
+#endif

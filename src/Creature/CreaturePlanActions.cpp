@@ -1015,9 +1015,6 @@ bool creature_plan_actions::Possible(const Executor& executor, const Situation& 
 	case Build::PooAtHome:
 		return situation.home.has_value() &&
 		       !(gutils::GetDistanceInMetres(situation.position, *situation.home) > creature_mind::k_NearHomeToPoo);
-	case Build::SleepByObject:
-		// Told by a script, it needs a clear place by the thing or a home. Left to itself, the conditions are below.
-		return !situation.controlledByScript || situation.clearArea.has_value() || situation.home.has_value();
 	case Build::FaceCameraEmote:
 	case Build::ShowDesire:
 	case Build::Howl:

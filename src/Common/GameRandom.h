@@ -137,6 +137,10 @@ public:
 	/// game server does. A source that keeps no state does nothing.
 	virtual void Restart() {}
 
+	/// The synced seed that each map starts with. The game starts each map with 0. Only a tool run can give it another
+	/// value, so that a land can have a different life in each run.
+	[[nodiscard]] virtual uint32_t GetMapStartSeed() const { return 0; }
+
 	[[nodiscard]] virtual ParticleRandomStream GetParticleStream() const = 0;
 	virtual void SetParticleStream(ParticleRandomStream stream) = 0;
 
@@ -146,6 +150,9 @@ public:
 	virtual void SetDrawTrace([[maybe_unused]] std::shared_ptr<draw_trace::DrawTrace> trace) {}
 	/// The trace of the synced draws, or none
 	[[nodiscard]] virtual draw_trace::DrawTrace* GetDrawTrace() const { return nullptr; }
+	/// The developer tools: the synced seed that each map starts with from now on. A restart keeps it. A source that
+	/// keeps no state ignores it.
+	virtual void SetMapStartSeed([[maybe_unused]] uint32_t seed) {}
 #endif
 
 	/// GameFloatRand(b - a) + a, b - a rounded to a float first
