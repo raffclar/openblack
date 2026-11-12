@@ -706,8 +706,8 @@ void AddPauseInFlight(std::vector<Scenario>& all)
 
 void AddScriptMadeThingsOverRocks(std::vector<Scenario>& all)
 {
-	// A script makes things of six kinds, each on a rock. Each kind but the mushroom starts in the physics, and the
-	// physics lifts it clear of the rock.
+	// A script makes things of six kinds, each on a rock. The physics lifts each thing that starts in it clear of the
+	// rock. The pile and the champignon do not start in the physics.
 	using Kind = Command::Kind;
 	using Argument = ScriptArgument;
 	constexpr float k_Gap = 8.0f;
@@ -741,9 +741,11 @@ void AddScriptMadeThingsOverRocks(std::vector<Scenario>& all)
 	    .description = "Six rocks stand in a row 8 metres apart. One second in, a script makes one thing at the middle "
 	                   "of each rock, from west to east: an Egyptian barrel, a lump of poo, a ball, a pile of wood, a "
 	                   "scaffold and a champignon.",
-	    .expected = "The barrel, the poo, the ball, the pile and the scaffold each appear on top of their rock, not in "
-	                "it. Each stays at rest there. The champignon appears at the height of the land, inside its rock. The "
-	                "inspector query game_find_objects gives the first five a height above the land under them.",
+	    .expected = "The barrel, the poo, the ball and the scaffold each appear on top of their rock, not in it. The "
+	                "barrel stays on its rock. The poo, the ball and the scaffold can then slide or roll off the rock. The "
+	                "pile and the champignon appear at the height of the land, inside their rocks: the row of the pile "
+	                "keeps it out of the physics, and a champignon only stands on the land. The inspector query "
+	                "physics_bodies gives a body to the first four only.",
 	    .environment = {.dispenserGrid = false},
 	    .framing = {.shot = Shot::Placed, .eye = {k_Field.x, 10.0f, k_Field.y + 30.0f}, .look = {k_Field.x, 0.0f, k_Field.y}},
 	    .objects = std::move(rocks),
