@@ -1818,7 +1818,7 @@ def web_join_plan(options, join_url, ticket, turns):
             "seconds": seconds}
 
 
-def run_web_plan(plan, folder, page, chrome, game_path, processes):
+def run_web_plan(plan, folder, page, chrome, game_path, processes, size=f"{WEB_WIDTH}x1024", gpu=False):
     """One web client in headless Chrome: a server for the web page on 127.0.0.1, and cdp-run.mjs, which starts the Chrome
     with its own profile folder in the folder of the run. The server of the page has a test certificate of its own and
     passes the game socket of the page to the game server of the plan. The page writes the checksum of each turn
@@ -1842,7 +1842,9 @@ def run_web_plan(plan, folder, page, chrome, game_path, processes):
     url = f"https://127.0.0.1:{port}/index.html?{query}"
     command = [DEFAULT_NODE, os.path.join(ROOT, "web", "scripts", "cdp-run.mjs"), chrome, url, str(plan["seconds"]),
                folder, "--game-folder", game_path, "--checksums", checksums, "--checksum-turns", str(plan["turns"]),
-               "--trust-spki", spki_hash(certs["server.pem"]), "--size", f"{WEB_WIDTH}x1024"]
+               "--trust-spki", spki_hash(certs["server.pem"]), "--size", size]
+    if gpu:
+        command.append("--gpu")
     if plan["actions"]:
         actions = os.path.join(folder, "web_actions.json")
         with open(actions, "w", encoding="utf-8") as file:
@@ -1861,7 +1863,8 @@ def start_web_client(options, out, join_url, ticket, certs, turns, processes):
     os.makedirs(folder, exist_ok=True)
     plan = web_join_plan(options, join_url, ticket, turns)
     if not options.web_remote:
-        return folder, run_web_plan(plan, folder, web_page_of(options), options.chrome, options.game_path, processes)
+        return folder, run_web_plan(plan, folder, web_page_of(options), options.chrome, options.game_path, processes,
+                                    size=options.web_size, gpu=options.web_gpu)
     for name in ("done", "checksums.jsonl", "console.log", "page-log.txt"):
         if os.path.exists(os.path.join(folder, name)):
             os.remove(os.path.join(folder, name))
@@ -2032,6 +2035,10 @@ def main():
                         help="one more observer: the web build in headless Chrome (cdp-run.mjs). Needs the web build of "
                              "this tree (--web-page, tools/build/ob-web build)")
     parser.add_argument("--web-page", help="the folder of the web page (the web build's bin/Release)")
+    parser.add_argument("--web-size", default=f"{WEB_WIDTH}x1024",
+                        help="WIDTHxHEIGHT of the window of the web client, such as 5120x1190 for a wide screen")
+    parser.add_argument("--web-gpu", action="store_true",
+                        help="the web client draws with the graphics card (cdp-run --gpu), not with the software renderer")
     parser.add_argument("--web-god", action="store_true",
                         help="with --web-client, the web client plays the god of the slot after the desktop gods")
     parser.add_argument("--web-chat", action="append", default=[],
