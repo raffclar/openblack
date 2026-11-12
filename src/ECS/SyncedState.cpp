@@ -317,6 +317,7 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     {.component = "HandGrab", .field = "scoopSource", .marker = ""},
     {.component = "HandGrab", .field = "scoopTurns", .marker = ""},
     {.component = "HandGrab", .field = "locking", .marker = ""},
+    {.component = "HandGrab", .field = "scoopEnd", .marker = ""},
     // The frames hold the hand to a creature; the world has the hold from the lock (HandLockedCreature)
     {.component = "HandOnCreature", .field = "", .marker = ""},
     // The draw of the hand sees the hold of a creature in the frames. It only sends commands of the player.

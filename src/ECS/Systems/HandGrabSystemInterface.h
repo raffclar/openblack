@@ -74,6 +74,13 @@ public:
 	virtual glm::vec3 UpdateFrame(const Frame& frame) = 0;
 	/// Each game turn: what it holds stays where the hand is for the game, and is dropped once it is gone
 	virtual void ProcessTurn() = 0;
+	/// The interface lock of the hand of this computer ends: the action of the hand stops at once (see
+	/// hand_send_wait::LockEnd).
+	/// - A take that waits or pulls stops. The thing stays where the turns put it, and the press is not a tap.
+	/// - A hand that is ready to throw keeps hold, and its spring lets go of it.
+	/// - A lock on a pile, a field or a fish farm sends its end, and the stream and the sound of the scoop stop.
+	/// A take that the hand sent continues, because the turn still does it.
+	virtual void StopActionAtLockEnd() {}
 	/// Each game turn in the input of the players, for each god right after the share of influence of its hand: the scoop
 	/// of the god's hand continues or stops, the hand forgets the things that it last took and let go once they are gone,
 	/// and a held thing that is gone leaves the hand

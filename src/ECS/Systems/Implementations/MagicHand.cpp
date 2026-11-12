@@ -249,14 +249,14 @@ void MagicSystem::LetGoIfOutsideCastRule()
 	{
 		return;
 	}
-	// The interface lock of the hand ends, also when the button is not down
+	// The interface lock of the hand ends, also when the button is not down. The end lets go of the locked miracle.
 	if (Locator::handSystem::has_value())
 	{
 		Locator::handSystem::value().EndOwnInterfaceLock();
 	}
-	if (_input.state == magic::CastInput::State::Locked)
+	else
 	{
-		Do(magic::Cancel(_input));
+		StopActionAtLockEnd();
 	}
 }
 
