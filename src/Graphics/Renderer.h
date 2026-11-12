@@ -436,6 +436,7 @@ private:
 		EnvironmentStage,
 		LightRule,
 		Shine,
+		SkinAlpha,
 
 		_count
 	};
@@ -478,6 +479,7 @@ private:
 	    "u_environmentStage",  //
 	    "u_lightRule",         //
 	    "u_shine",             //
+	    "s_skinAlpha",         //
 	};
 	using MeshUniforms = std::array<std::optional<UniformHandle>, static_cast<size_t>(MeshUniform::_count)>;
 	/// A program's handles of the mesh uniforms it has, looked up by name the first time it draws a mesh
