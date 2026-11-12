@@ -1343,7 +1343,10 @@ std::optional<double> Runner::ReadCheck(const checks::Check& check) const
 			return std::nullopt;
 		}
 		const bool dialogOpen = _stage != nullptr && _stage->IsDialogOpen();
-		return hand_visibility::IsShown(dialogOpen, Locator::cinematicDirectorSystem::value().IsInterfaceActive()) ? 1.0 : 0.0;
+		return hand_visibility::IsShown(
+		           {.dialogOpen = dialogOpen, .interfaceActive = Locator::cinematicDirectorSystem::value().IsInterfaceActive()})
+		           ? 1.0
+		           : 0.0;
 	}
 	case checks::Quantity::RopeHeld:
 		if (!Locator::leashSystem::has_value())
