@@ -450,6 +450,31 @@ std::optional<entt::entity> CreatureHandSystem::ReleaseWait()
 	return creature;
 }
 
+bool CreatureHandSystem::WaitsForTap() const
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	if (!Locator::handSystem::has_value())
+	{
+		return false;
+	}
+	const auto hand = PlayerHand();
+	return registry.Valid(hand) && registry.AllOf<HandCreaturePress>(hand);
+}
+
+void CreatureHandSystem::StopActionAtLockEnd()
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	if (!Locator::handSystem::has_value())
+	{
+		return;
+	}
+	const auto hand = PlayerHand();
+	if (registry.Valid(hand))
+	{
+		registry.Remove<HandCreaturePress>(hand);
+	}
+}
+
 std::optional<entt::entity> CreatureHandSystem::GetLockedCreature(PlayerNames player) const
 {
 	const auto& registry = Locator::entitiesRegistry::value();

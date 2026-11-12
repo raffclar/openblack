@@ -118,6 +118,7 @@ void openblack::ecs::reflection::RegisterFields_Components_h(entt::meta_ctx& con
 	    .Field<&components::HandGrab::scoopSource>("scoopSource")
 	    .Field<&components::HandGrab::scoopTurns>("scoopTurns")
 	    .Field<&components::HandGrab::locking>("locking")
+	    .Field<&components::HandGrab::scoopEnd>("scoopEnd")
 	    .Field<&components::HandGrab::scoopStream>("scoopStream")
 	    .Field<&components::HandGrab::scoopSound>("scoopSound")
 	    .Field<&components::HandGrab::scoopAnchor>("scoopAnchor")

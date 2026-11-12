@@ -36,6 +36,8 @@ public:
 	void WaitForTap(entt::entity creature, uint32_t nowMs, uint32_t turn) override;
 	void WaitFrame(uint32_t nowMs, uint32_t turn) override;
 	std::optional<entt::entity> ReleaseWait() override;
+	[[nodiscard]] bool WaitsForTap() const override;
+	void StopActionAtLockEnd() override;
 	[[nodiscard]] bool MayHold(entt::entity creature) const override;
 	[[nodiscard]] creature_hand::InteractTip InteractTipOver(entt::entity creature, bool handInInfluence) const override;
 	[[nodiscard]] bool IsClick() const override;

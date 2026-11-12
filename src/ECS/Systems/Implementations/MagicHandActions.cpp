@@ -334,6 +334,13 @@ void MagicSystem::ReleaseAction()
 	}
 }
 
+void MagicSystem::StopActionAtLockEnd()
+{
+	// The press of the hand of this computer stops
+	const ActingAs acting(*this, OwnPlayer());
+	Do(magic::Cancel(_input));
+}
+
 void MagicSystem::UnlockHeldMiracle()
 {
 	auto& registry = EntityRegistry();

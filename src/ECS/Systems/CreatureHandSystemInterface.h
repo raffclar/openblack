@@ -67,6 +67,11 @@ public:
 	virtual void WaitFrame(uint32_t /*nowMs*/, uint32_t /*turn*/) {}
 	/// The button was let go while its press waits for a tap: the press ends. Returns the creature that the press taps.
 	virtual std::optional<entt::entity> ReleaseWait() { return std::nullopt; }
+	/// Whether a press of the hand of this computer waits for a tap on a creature
+	[[nodiscard]] virtual bool WaitsForTap() const { return false; }
+	/// The interface lock of the hand of this computer ends (see hand_send_wait::LockEnd): a press that waits for a tap
+	/// stops, with no tap and no hold
+	virtual void StopActionAtLockEnd() {}
 	/// Whether the player's hand may take hold of the creature to stroke and slap it
 	[[nodiscard]] virtual bool MayHold(entt::entity creature) const = 0;
 	/// How the empty hand over the creature offers to interact with it, given whether the hand is within the player's

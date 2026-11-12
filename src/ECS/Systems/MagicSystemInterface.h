@@ -326,6 +326,9 @@ public:
 	virtual bool PressAction() = 0;
 	/// The action button came up: an armed miracle is cast, a locked one let go
 	virtual void ReleaseAction() = 0;
+	/// The interface lock of the hand of this computer ends (see hand_send_wait::LockEnd). An armed miracle stops with no
+	/// cast, and a locked miracle is let go as the button would let it go.
+	virtual void StopActionAtLockEnd() {}
 	/// Whether the hand of this computer holds a miracle, so it doesn't take hold of creatures or things
 	[[nodiscard]] virtual bool IsHandBusy() const = 0;
 	/// Whether the hand of a player holds a miracle. The turns read this, because it is the same on every computer.
