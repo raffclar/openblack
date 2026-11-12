@@ -1659,6 +1659,30 @@ bool creature_mind::StartsOnTheWay(const Step& step)
 
 namespace
 {
+/// Whether the step starts while the body is busy, because it does not examine the body. Each of these steps is done
+/// on its first turn: it uses up a thing, puts water on a thing, cools, shatters, mends or heals, pulls a face, takes
+/// in a thing or acts on itself.
+bool StartsWhileBodyIsBusy(const Step& step)
+{
+	switch (step.kind)
+	{
+	case Step::Kind::UseUp:
+	case Step::Kind::UseUpHeld:
+	case Step::Kind::Douse:
+	case Step::Kind::CoolDown:
+	case Step::Kind::Shatter:
+	case Step::Kind::Repair:
+	case Step::Kind::Observe:
+	case Step::Kind::Face:
+	case Step::Kind::Heal:
+	case Step::Kind::HealItself:
+	case Step::Kind::ActOnItself:
+		return true;
+	default:
+		return false;
+	}
+}
+
 /// Whether the step starts its clip with a try that the body can refuse. A refused try comes again on each turn. A
 /// faint is not refused, and a communication with no clip starts no clip.
 bool TriesToStartClip(const Step& step, const Senses& senses)
@@ -1823,12 +1847,11 @@ Commands TurnOfThought(IdleMind& mind, const Senses& senses, const Random& rando
 		// faint starts at once. The steps of a teleport also start at once. A walk to a point or to a thing starts
 		// while the body only moves: the new walk takes the place of the old one at once. A step that tries to start its
 		// clip tries again on each turn. A follow of the camera and a step with nothing to do start at once: the body
-		// is not examined until the turn after the start. A step that uses up a thing, in the hand or not, also starts
-		// at once, because it does not examine the body.
+		// is not examined until the turn after the start. The steps that are done on their first turn start at once too.
 		const bool teleportStep = step.kind == Step::Kind::Teleport || step.kind == Step::Kind::Transported ||
 		                          step.kind == Step::Kind::StopTeleportControl;
-		const bool startsAtOnce = step.kind == Step::Kind::FollowCamera || step.kind == Step::Kind::Empty ||
-		                          step.kind == Step::Kind::UseUp || step.kind == Step::Kind::UseUpHeld;
+		const bool startsAtOnce =
+		    step.kind == Step::Kind::FollowCamera || step.kind == Step::Kind::Empty || StartsWhileBodyIsBusy(step);
 		const bool walkOnTheWay =
 		    StartsOnTheWay(step) && senses.onlyMoves && !(handsChecked && senses.hands == HandsState::Busy);
 		if (step.kind != Step::Kind::Wait && step.kind != Step::Kind::WatchCamera && step.kind != Step::Kind::StopMoving &&
