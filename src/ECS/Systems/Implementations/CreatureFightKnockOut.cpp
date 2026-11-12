@@ -167,6 +167,8 @@ void CreatureFightSystem::Faint(entt::entity creature, Leash leash)
 	if (Locator::creatureMindSystem::has_value())
 	{
 		Locator::creatureMindSystem::value().AbandonAction(creature);
+		// Its new plan is to lie dead. A script that asks if it played gets no until it gets up.
+		Locator::creatureMindSystem::value().PlanDeath(creature);
 	}
 	// Fainting drops the leash, but not when a script orders the creature dead
 	if (leash == Leash::TakeOff && Locator::leashSystem::has_value() && Locator::leashSystem::value().IsLeashed(creature))

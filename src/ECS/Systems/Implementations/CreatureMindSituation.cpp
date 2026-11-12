@@ -529,11 +529,17 @@ creature_mind::HangAroundPlaces CreatureMindSystem::HangAroundPlacesOf(entt::ent
 	return places;
 }
 
-bool CreatureMindSystem::HasPlayed(entt::entity creature) const
+bool CreatureMindSystem::HasPlayed(entt::entity creature)
 {
 	const auto& registry = Locator::entitiesRegistry::value();
 	const auto* mind = registry.Valid(creature) ? registry.TryGet<const CreatureMindState>(creature) : nullptr;
-	return mind == nullptr || creature_script_play::Played(mind->idle);
+	if (mind == nullptr)
+	{
+		return true;
+	}
+	// A creature with no plan, or with a plan that is not valid, has played, also while steps of its agenda are left
+	const bool planValid = mind->planner.current.has_value() && IsPlanValid(*mind->planner.current);
+	return creature_script_play::Played(mind->idle, planValid, registry.AllOf<CreatureKnockedOut>(creature));
 }
 
 void CreatureMindSystem::ClearAfterPlayed(entt::entity creature)

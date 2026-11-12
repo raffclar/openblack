@@ -34,6 +34,9 @@ struct CreatureObjectAction
 		Approach,
 		/// Playing the animations
 		Playing,
+		/// The throw ended before the hand let go. The body is free, but the hand keeps the thing and the creature
+		/// carries nothing. The action waits while the hand holds the thing.
+		KeptInHand,
 	};
 	creature_object_actions::Kind kind {creature_object_actions::Kind::PickUp};
 	Phase phase {Phase::Approach};
@@ -152,6 +155,9 @@ struct CreatureHeldObject
 	bool mirrored {false};
 	/// The hand bone that holds it. It turns with this bone and hangs below the finger ends of the bone.
 	uint32_t bone {0};
+	/// Whether the creature carries it. A throw that ended before the hand let go leaves the thing in the hand, but the
+	/// creature does not carry it. The hand keeps the thing until the creature lets go of it.
+	bool carried {true};
 };
 
 /// A catch the creature is to make once what its body is doing is over

@@ -15,6 +15,7 @@
 
 #include "Creature/CreatureIdleMind.h"
 #include "Creature/CreatureObjectActions.h"
+#include "Creature/CreatureThrow.h"
 #include "ECS/Components/CreatureObjectAction.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/CreatureCarried.h"
@@ -173,6 +174,43 @@ TEST_F(CreatureCarriedTest, AThingThatTheCreatureDoesNotCarryStaysWhereItIs)
 	registry.Remove<CreatureHeldObject>(creature);
 	creature_carried::FollowCarrier(registry, creature);
 	EXPECT_EQ(registry.Get<const Transform>(thing).position, where);
+}
+
+// A throw that ended before the hand let go leaves the thing in the hand. The creature does not carry it, also when the
+// throw is over, and the thing stays where it was.
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(CreatureCarriedTest, AThrowThatEndedBeforeTheReleaseLeavesTheThingInTheHandButNotCarried)
+{
+	const glm::vec3 where {1200.0f, 20.0f, 2300.0f};
+	registry.Assign<Transform>(creature, glm::vec3(1234.5f, 17.25f, 2345.75f), glm::mat3(1.0f), glm::vec3(1.0f));
+	registry.Assign<Transform>(thing, where, glm::mat3(1.0f), glm::vec3(1.0f));
+	registry.Get<CreatureHeldObject>(creature).carried = false;
+	EXPECT_EQ(creature_carried::InHandOf(registry, creature), thing);
+	EXPECT_FALSE(creature_carried::CarriedBy(registry, creature).has_value());
+	EXPECT_FALSE(creature_carried::CarrierOf(registry, thing).has_value());
+	Act(actions::Kind::Throw, actions::Status::Done, false);
+	EXPECT_FALSE(creature_carried::CarriedBy(registry, creature).has_value());
+	registry.Remove<CreatureObjectAction>(creature);
+	EXPECT_FALSE(creature_carried::CarriedBy(registry, creature).has_value());
+	creature_carried::FollowCarrier(registry, creature);
+	EXPECT_EQ(registry.Get<const Transform>(thing).position, where);
+}
+
+// The body ends the throw when the time and the step get to the length of the flat throw, before the step that lets
+// go. A step that goes past the throw time and the end in one turn keeps the thing in the hand.
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST(CreatureThrowEnd, TheThrowEndsBeforeTheReleaseWhenTheStepGetsToTheEndFirst)
+{
+	constexpr int32_t k_Length = 1600;
+	// A step that stops short of the end lets go at the throw time as usual
+	EXPECT_FALSE(creature_throw::EndsBeforeRelease(1400, 199, k_Length, false));
+	// A step that gets to the end exactly ends the throw first
+	EXPECT_TRUE(creature_throw::EndsBeforeRelease(1400, 200, k_Length, false));
+	EXPECT_TRUE(creature_throw::EndsBeforeRelease(1000, 900, k_Length, false));
+	// A throw time at or after the end never lets go
+	EXPECT_TRUE(creature_throw::EndsBeforeRelease(k_Length - 1, 1, k_Length, false));
+	// A throw that let go already ends as usual
+	EXPECT_FALSE(creature_throw::EndsBeforeRelease(1500, 200, k_Length, true));
 }
 
 // After the blow, the stomp crushes the thing on each turn until the body has played the stomp. Only a last step

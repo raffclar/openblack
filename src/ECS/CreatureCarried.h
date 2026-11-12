@@ -31,7 +31,7 @@ namespace openblack::ecs::creature_carried
 [[nodiscard]] std::optional<entt::entity> CarrierOf(const Registry& registry, entt::entity thing);
 
 /// The thing in the hand of the creature, none when the hand is empty. While the creature prepares a throw, the thing
-/// is in its hand, but the creature does not carry it.
+/// is in its hand, but the creature does not carry it. This is also so after a throw that ended before the hand let go.
 [[nodiscard]] std::optional<entt::entity> InHandOf(const Registry& registry, entt::entity creature);
 
 /// Whether the creature carries the thing
