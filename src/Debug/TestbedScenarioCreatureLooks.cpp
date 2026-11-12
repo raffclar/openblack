@@ -1497,6 +1497,30 @@ void testbed_scenarios::AddLight(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "light.coarse_repaint_on_use",
+	    .name = "A far land block keeps its old coarse texture until the land draws it nearer",
+	    .facet = Facet::Light,
+	    .description = "The first land at noon with the clock stopped. A wonder, two creches, two storage pits and a "
+	                   "ring of oaks are new on the grass east of the village. The camera is 500 units high and 1100 "
+	                   "units south of them, so the land there shows only its coarse texture.",
+	    .expected = "The far squares of the land under the new buildings and oaks show no new footprints and no new "
+	                "shadows, at their middle and at their edges. Move the camera north. When the land draws these "
+	                "squares with their full texture, the footprints and the shadows show in one step.",
+	    .environment =
+	        {.land = Land::Story, .storyLand = "Land1.txt", .hour = 12.0f, .clockRuns = false, .dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {330.0f, 500.0f, -1193.0f}, .look = {330.0f, 0.0f, -93.0f}},
+	    .objects = {{.type = AbodeInfo::CelticWonder, .offset = {330.0f, -93.0f}},
+	                {.type = AbodeInfo::CelticCreche, .offset = {270.0f, -93.0f}},
+	                {.type = AbodeInfo::CelticCreche, .offset = {330.0f, -33.0f}},
+	                {.type = AbodeInfo::CelticStoragePit, .offset = {390.0f, -93.0f}},
+	                {.type = AbodeInfo::CelticStoragePit, .offset = {330.0f, -153.0f}},
+	                {.type = TreeInfo::Oak, .offset = {240.0f, -183.0f}},
+	                {.type = TreeInfo::Oak, .offset = {420.0f, -183.0f}},
+	                {.type = TreeInfo::Oak, .offset = {240.0f, -3.0f}},
+	                {.type = TreeInfo::Oak, .offset = {420.0f, -3.0f}}},
+	});
+
+	all.push_back({
 	    .id = "light.snow_repaint_melt",
 	    .name = "Snow melts off the land block by block",
 	    .facet = Facet::Light,

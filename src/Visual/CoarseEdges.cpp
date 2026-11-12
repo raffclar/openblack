@@ -51,6 +51,32 @@ std::vector<size_t> PaintOrder(std::span<const PaintRequest> requests, glm::vec3
 	return blocks;
 }
 
+std::vector<size_t> PaintsDue(const std::vector<bool>& waiting, std::span<const size_t> drawn,
+                              const std::function<bool(size_t)>& painted, const std::function<bool(size_t)>& busy)
+{
+	std::vector<size_t> due;
+	std::vector<bool> taken(waiting.size(), false);
+	const auto take = [&](size_t block) {
+		if (block < waiting.size() && waiting[block] && !taken[block] && !busy(block))
+		{
+			taken[block] = true;
+			due.push_back(block);
+		}
+	};
+	for (size_t block = 0; block < waiting.size(); ++block)
+	{
+		if (waiting[block] && !painted(block))
+		{
+			take(block);
+		}
+	}
+	for (const auto block : drawn)
+	{
+		take(block);
+	}
+	return due;
+}
+
 FramePaints MakeFramePaints(std::span<const glm::ivec2> places, std::span<const size_t> order,
                             const std::bitset<k_Blocks>& paintedBefore)
 {

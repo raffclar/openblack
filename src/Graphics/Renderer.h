@@ -144,12 +144,14 @@ private:
 	/// Paints the snow again into the blocks in `drawn` that wait for a paint, and gives the snow that each block's texture
 	/// shows; none without snow
 	const Texture2D* PaintLandSnow(std::span<const glm::ivec2> drawn) const;
-	/// Paints the coarse textures of the blocks that the land, the snow and the shadow bake painted since the last time,
-	/// in the game's order from the camera at `camera`. A pass on the GPU mixes the edges that each painted block shares
-	/// with its neighbours (see coarse_edges). paintedSnow is the snow that the blocks' textures show, none without snow.
-	void PaintCoarseEdges(glm::vec3 camera, const Texture2D* paintedSnow) const;
-	/// The texture that keeps the edges of the blocks' coarse textures, none before the first paint
-	[[nodiscard]] const Texture2D* GetCoarseEdges() const;
+	/// Paints the coarse textures of the blocks that the land, the snow and the shadow bake asked to paint, in the game's
+	/// order from the camera at `camera`. A block paints again only when the land draws it with its own texture: `drawn`
+	/// gives these blocks by their index, in the order of the draws. A pass on the GPU mixes the edges that each painted
+	/// block shares with its neighbours (see coarse_edges), and a second pass keeps the coarse textures that the paints
+	/// made. paintedSnow is the snow that the blocks' textures show, none without snow.
+	void PaintCoarseEdges(glm::vec3 camera, std::span<const size_t> drawn, const Texture2D* paintedSnow) const;
+	/// The texture that keeps the blocks' coarse textures as their last paints made them, none before the first paint
+	[[nodiscard]] const Texture2D* GetCoarseTextures() const;
 	/// Whether the block at a place of the map got a paint of its coarse texture
 	[[nodiscard]] bool CoarseEdgesPainted(glm::ivec2 block) const;
 	/// The rivers' beds or channels, a footprint for each stretch of river
@@ -838,11 +840,15 @@ private:
 	/// that PaintLandSnow painted for it since the coarse textures last caught up
 	mutable std::bitset<snow_cover::k_Blocks> _snowRepaints;
 	mutable std::vector<glm::ivec2> _snowPaintedBlocks;
-	/// The edges of the blocks' coarse textures, which a pass on the GPU makes again at each frame with paints
+	/// The edges of the blocks' coarse textures, which a pass on the GPU makes again at each frame with paints, and the
+	/// coarse textures that the paints made
 	struct CoarseEdges
 	{
 		/// The views that the passes of a frame draw in
 		static constexpr std::array<RenderPass, 2> k_Views {RenderPass::LandCoarseEdges0, RenderPass::LandCoarseEdges1};
+		/// The views that write the coarse textures after the pass of the edges with the same index
+		static constexpr std::array<RenderPass, 2> k_TextureViews {RenderPass::LandCoarseTextures0,
+		                                                           RenderPass::LandCoarseTextures1};
 		/// Two textures of the edges: each pass reads the edges from one and writes them to the other
 		std::array<std::unique_ptr<FrameBuffer>, 2> targets;
 		/// The texture that keeps the edges now
@@ -851,11 +857,13 @@ private:
 		std::array<std::unique_ptr<Texture2D>, k_Views.size()> paints;
 		/// The passes of this frame
 		size_t passes {0};
+		/// The blocks' coarse textures as their last paints made them (see coarse_edges::CoarseTexel)
+		std::unique_ptr<FrameBuffer> textures;
 		/// The places whose blocks got a paint
 		std::bitset<coarse_edges::k_Blocks> painted;
-		/// The blocks whose paint waits for the paint of their snow or for the bake of their shadows, in the order of
-		/// the requests
-		std::vector<size_t> held;
+		/// The blocks, by their index, with a request for a paint. A block that got a paint before waits until the land
+		/// draws it with its own texture.
+		std::vector<bool> waiting;
 		/// The coarse samples along a side of a block when the edges were made
 		int32_t samples {0};
 		/// The edges are lost (no land yet, or a restore of the graphics device) and every block paints again
