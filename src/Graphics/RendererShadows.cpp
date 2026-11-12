@@ -307,54 +307,61 @@ Renderer::GroundShadowLevels(const GroundShadow::Footprint& footprint, uint8_t a
 }
 
 std::array<uint8_t, GroundShadow::k_Texels * GroundShadow::k_Texels>
-Renderer::ShadowTextureLevels(const GroundShadowBody& body, const GroundShadow::Footprint& footprint,
+Renderer::ShadowTextureLevels(std::span<const GroundShadowBody> bodies, const GroundShadow::Footprint& footprint,
                               const GroundShadow::Cast& cast, uint8_t alpha) const
 {
 	// Each triangle of the nearest detail, without the parts that bones move, through the alpha of its texture: the
 	// model's own skin, or a texture of the pack that its models share. A triangle without a mask casts nothing.
 	const auto& textures = Locator::resources::value().GetTextures();
 	shadow_texture::Canvas canvas;
-	for (const auto& subMesh : body.mesh->GetSubMeshes())
+	for (const auto& body : bodies)
 	{
-		const auto flags = subMesh->GetFlags();
-		if ((flags.lodMask & 1U) == 0 || flags.hasBones != 0U)
+		if (!body.throughAlpha)
 		{
 			continue;
 		}
-		const auto& geometry = subMesh->GetBodyGeometry();
-		for (const auto& primitive : subMesh->GetPrimitives())
+		for (const auto& subMesh : body.mesh->GetSubMeshes())
 		{
-			const auto* mask = body.mesh->GetSkinAlpha(primitive.skinID);
-			if (mask == nullptr)
-			{
-				if (const auto* shared = textures.Find(primitive.skinID); shared != nullptr)
-				{
-					mask = shared->GetAlphaMask();
-				}
-			}
-			if (mask == nullptr)
+			const auto flags = subMesh->GetFlags();
+			if ((flags.lodMask & 1U) == 0 || flags.hasBones != 0U)
 			{
 				continue;
 			}
-			const auto end = std::min<size_t>(primitive.indicesOffset + primitive.indicesCount, geometry.indices.size());
-			for (size_t i = primitive.indicesOffset; i + 2 < end; i += 3)
+			const auto& geometry = subMesh->GetBodyGeometry();
+			for (const auto& primitive : subMesh->GetPrimitives())
 			{
-				std::array<shadow_texture::Corner, 3> corners {};
-				bool valid = true;
-				for (size_t k = 0; k < corners.size(); ++k)
+				const auto* mask = body.mesh->GetSkinAlpha(primitive.skinID);
+				if (mask == nullptr)
 				{
-					const auto vertex = geometry.indices[i + k];
-					if (vertex >= geometry.positions.size() || vertex >= geometry.uvs.size())
+					if (const auto* shared = textures.Find(primitive.skinID); shared != nullptr)
 					{
-						valid = false;
-						break;
+						mask = shared->GetAlphaMask();
 					}
-					corners.at(k) =
-					    shadow_texture::CornerOf(geometry.positions[vertex], geometry.uvs[vertex], body.model, footprint, cast);
 				}
-				if (valid)
+				if (mask == nullptr)
 				{
-					shadow_texture::Fill(canvas, *mask, corners);
+					continue;
+				}
+				const auto end = std::min<size_t>(primitive.indicesOffset + primitive.indicesCount, geometry.indices.size());
+				for (size_t i = primitive.indicesOffset; i + 2 < end; i += 3)
+				{
+					std::array<shadow_texture::Corner, 3> corners {};
+					bool valid = true;
+					for (size_t k = 0; k < corners.size(); ++k)
+					{
+						const auto vertex = geometry.indices[i + k];
+						if (vertex >= geometry.positions.size() || vertex >= geometry.uvs.size())
+						{
+							valid = false;
+							break;
+						}
+						corners.at(k) = shadow_texture::CornerOf(geometry.positions[vertex], geometry.uvs[vertex], body.model,
+						                                         footprint, cast);
+					}
+					if (valid)
+					{
+						shadow_texture::Fill(canvas, *mask, corners);
+					}
 				}
 			}
 		}
@@ -439,12 +446,23 @@ void Renderer::StartGroundShadows(const DrawSceneDesc& drawDesc) const
 					    .morph = handMorph,
 					    .secondRowsOnly = true,
 					};
-					// What the hand holds counts every sample
-					const auto held = std::ranges::find_if(renderCtx.inHandDraws, [&registry, handEntity](const auto& draw) {
+					// What the hand holds counts every sample. A tree, a pot or a crop fills the shadow through its
+					// textures' alpha instead, as its moving shadow does. The trees have a draw of their own, thus a
+					// held tree is in a list of its own.
+					const auto heldByThisHand = [&registry, handEntity](const auto& draw) {
 						const auto* inHand = registry.TryGet<const ecs::components::InHand>(draw.entity);
 						return inHand != nullptr && inHand->hand == handEntity;
-					});
-					if (held != renderCtx.inHandDraws.end() && meshManager.Contains(held->mesh))
+					};
+					const ecs::systems::RenderContext::HighDetailDraw* held = nullptr;
+					for (const auto* draws : {&renderCtx.inHandDraws, &renderCtx.heldTreeDraws})
+					{
+						if (const auto found = std::ranges::find_if(*draws, heldByThisHand);
+						    held == nullptr && found != draws->end())
+						{
+							held = &*found;
+						}
+					}
+					if (held != nullptr && meshManager.Contains(held->mesh))
 					{
 						const auto* heldMesh = &*meshManager.Handle(held->mesh);
 						std::span<const glm::mat4> pose = heldMesh->GetBoneMatrices();
@@ -453,8 +471,13 @@ void Renderer::StartGroundShadows(const DrawSceneDesc& drawDesc) const
 						{
 							pose = villagerPose->bones;
 						}
-						caster.bodies.at(1) = {
-						    .mesh = heldMesh, .model = held->model, .pose = pose, .morph = nullptr, .secondRowsOnly = false};
+						caster.bodies.at(1) = {.mesh = heldMesh,
+						                       .model = held->model,
+						                       .pose = pose,
+						                       .morph = nullptr,
+						                       .secondRowsOnly = false,
+						                       .throughAlpha =
+						                           ecs::MovingShadowOf(registry, held->entity) == ecs::MovingShadow::Texture};
 						caster.bodyCount = 2;
 					}
 					casters.push_back(caster);
@@ -635,10 +658,14 @@ void Renderer::StartGroundShadows(const DrawSceneDesc& drawDesc) const
 			        .cast = {.light = shadow_texture::LightAbove(drawn.origin), .level = drawn.origin.y, .ground = ground},
 			        .alpha = alpha,
 			        .onObjects = false,
-			        .throughAlpha = kind == ecs::MovingShadow::Texture,
 			        .kept = entity,
 			    };
-			    caster.bodies.at(0) = {.mesh = body, .model = model, .pose = pose, .morph = nullptr, .secondRowsOnly = false};
+			    caster.bodies.at(0) = {.mesh = body,
+			                           .model = model,
+			                           .pose = pose,
+			                           .morph = nullptr,
+			                           .secondRowsOnly = false,
+			                           .throughAlpha = kind == ecs::MovingShadow::Texture};
 			    casters.push_back(caster);
 		    });
 	}
@@ -656,15 +683,25 @@ void Renderer::StartGroundShadows(const DrawSceneDesc& drawDesc) const
 		auto& made = _groundShadowMade[index];
 		scratch.points.clear();
 		scratch.parts.clear();
-		for (uint8_t i = 0; i < caster.bodyCount; ++i)
+		// Every body counts for where the shadow lies. The samples count only the bodies that do not fill through
+		// their textures' alpha: the main thread fills those later.
+		const auto bodies = std::span(caster.bodies).first(caster.bodyCount);
+		for (const auto& body : bodies)
 		{
-			AddGroundShadowBody(caster.bodies.at(i), scratch);
+			const auto counted = scratch.parts.size();
+			AddGroundShadowBody(body, scratch);
+			if (body.throughAlpha)
+			{
+				scratch.parts.resize(counted);
+			}
 		}
 		scratch.flattened.resize(scratch.points.size());
 		made.footprint = GroundShadow::Measure(scratch.points, caster.standsAt, caster.cast, scratch.flattened);
-		if (made.footprint && !caster.throughAlpha)
+		// A shadow with a part that fills through the alpha joins its two parts at full opacity first
+		const bool filled = std::ranges::any_of(bodies, &GroundShadowBody::throughAlpha);
+		if (made.footprint && !std::ranges::all_of(bodies, &GroundShadowBody::throughAlpha))
 		{
-			made.levels = GroundShadowLevels(*made.footprint, caster.alpha, scratch);
+			made.levels = GroundShadowLevels(*made.footprint, filled ? GroundShadow::k_Opaque : caster.alpha, scratch);
 		}
 	};
 	_workers->Start(casters.size(), make);
@@ -697,9 +734,17 @@ void Renderer::DrawGroundShadowPass(const DrawSceneDesc& drawDesc) const
 		{
 			continue;
 		}
-		const auto& levels = caster.throughAlpha
-		                         ? ShadowTextureLevels(caster.bodies.at(0), *footprint, caster.cast, caster.alpha)
-		                         : _groundShadowMade[index].levels;
+		const auto bodies = std::span(caster.bodies).first(caster.bodyCount);
+		auto levels = _groundShadowMade[index].levels;
+		if (std::ranges::all_of(bodies, &GroundShadowBody::throughAlpha))
+		{
+			levels = ShadowTextureLevels(bodies, *footprint, caster.cast, caster.alpha);
+		}
+		else if (std::ranges::any_of(bodies, &GroundShadowBody::throughAlpha))
+		{
+			levels = GroundShadow::Joined(levels, ShadowTextureLevels(bodies, *footprint, caster.cast, GroundShadow::k_Opaque),
+			                              caster.alpha);
+		}
 		const auto first = _groundShadowTexels.size();
 		const auto way = GroundShadow::LightWay(caster.standsAt, caster.cast.light);
 		_groundShadowTexels.push_back(GroundShadow::Receiver(*footprint, caster.cast));

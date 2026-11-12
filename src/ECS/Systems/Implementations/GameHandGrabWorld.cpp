@@ -444,6 +444,12 @@ void GameHandGrabWorld::LeavePhysicsAndMap(entt::entity object)
 	{
 		Locator::dynamicsSystem::value().RemoveObject(object, false, false);
 	}
+	// A thing made in this turn, such as the tree that a big forest gives, goes into its cell first, as each new thing
+	// does. Then it comes out with the rest, thus it does not go into its cell later while the hand holds it.
+	if (Locator::entitiesMap::has_value())
+	{
+		Locator::entitiesMap::value().FileNew();
+	}
 	Locator::entitiesRegistry::value().Remove<MapCellResident, MapCellMover, InPhysics>(object);
 }
 

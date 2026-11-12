@@ -42,6 +42,7 @@
 #include "ECS/Archetypes/AbodeArchetype.h"
 #include "ECS/Archetypes/AnimalArchetype.h"
 #include "ECS/Archetypes/AnimatedStaticArchetype.h"
+#include "ECS/Archetypes/BigForestArchetype.h"
 #include "ECS/Archetypes/CitadelArchetype.h"
 #include "ECS/Archetypes/CreatureArchetype.h"
 #include "ECS/Archetypes/DeadTreeArchetype.h"
@@ -825,6 +826,10 @@ void Runner::PlaceObjects(const Scenario& scenario, glm::vec2 middle)
 			    else if constexpr (std::is_same_v<T, FlowersInfo>)
 			    {
 				    return ecs::archetypes::FlowersArchetype::Create(position, type, yaw, object.scale);
+			    }
+			    else if constexpr (std::is_same_v<T, BigForestInfo>)
+			    {
+				    return ecs::archetypes::BigForestArchetype::Create(position, type, 0, yaw, object.scale);
 			    }
 			    else if constexpr (std::is_same_v<T, ScaffoldInfo>)
 			    {
