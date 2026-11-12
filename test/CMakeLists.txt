@@ -277,6 +277,7 @@ openblack_setup_and_add_test(test_script_flocks test_script_flocks.cpp)
 openblack_setup_and_add_test(test_dances test_dances.cpp)
 target_link_libraries(test_dances PRIVATE dance)
 openblack_setup_and_add_test(test_sky_system test_sky_system.cpp)
+openblack_setup_and_add_test(test_high_detail_load test_high_detail_load.cpp)
 openblack_setup_and_add_test(test_near_clipping test_near_clipping.cpp)
 openblack_setup_and_add_test(test_ground_blobs test_ground_blobs.cpp)
 openblack_setup_and_add_test(test_zsort test_zsort.cpp)
@@ -1086,6 +1087,7 @@ openblack_setup_and_add_test(
   test_creature_odd_agendas test_creature_odd_agendas.cpp
 )
 openblack_setup_and_add_test(test_statistics_box test_statistics_box.cpp)
+openblack_setup_and_add_test(test_creature_mushroom_count test_creature_mushroom_count.cpp)
 openblack_setup_and_add_test(
   test_creature_stats_records test_creature_stats_records.cpp
 )

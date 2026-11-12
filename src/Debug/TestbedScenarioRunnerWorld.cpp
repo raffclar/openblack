@@ -918,7 +918,10 @@ void Runner::SetUpStatistics(const Scenario& scenario)
 			tallies.meals.animalsKilled = wanted.animalsKilled;
 			tallies.meals.creaturesKilled = wanted.creaturesKilled;
 			tallies.poos = wanted.poos;
-			tallies.mushroomsEaten = wanted.mushroomsEaten;
+			if (auto* body = registry.TryGet<ecs::components::Creature>(*creature))
+			{
+				body->magicMushroomsEaten = wanted.mushroomsEaten;
+			}
 		}
 	}
 }
