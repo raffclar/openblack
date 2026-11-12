@@ -501,6 +501,29 @@ TEST(CreatureFight, TheWaitOfAFaintStartsWhenTheBodyFirstLiesStill)
 	EXPECT_FALSE(WaitTurnCounts(falling));
 }
 
+// The faint of the mind counts its wait in whole turns, with the same rules as the wait of a knock-out
+TEST(CreatureFight, TheWholeTurnCountOfAFaintStartsWhenTheBodyFirstLiesStill)
+{
+	constexpr int32_t k_NotStarted = -3;
+	const FaintBody falling {.faintStarted = true, .acts = true, .lies = false};
+	const FaintBody lying {.faintStarted = true, .acts = true, .lies = true};
+	const FaintBody standing {.faintStarted = true, .acts = false, .lies = false};
+
+	auto wait = LyingTurn(FaintCount {}, {.faintStarted = false, .acts = false, .lies = false}, k_NotStarted);
+	EXPECT_FALSE(wait.started);
+	EXPECT_EQ(wait.turns, k_NotStarted);
+	wait = LyingTurn(wait, falling, k_NotStarted);
+	EXPECT_FALSE(wait.started);
+	EXPECT_FALSE(LyingTurn(wait, standing, k_NotStarted).started);
+	wait = LyingTurn(wait, lying, k_NotStarted);
+	EXPECT_TRUE(wait.started);
+	EXPECT_EQ(wait.turns, k_NotStarted + 1);
+	EXPECT_EQ(LyingTurn(wait, standing, k_NotStarted).turns, wait.turns + 1);
+	EXPECT_EQ(LyingTurn(wait, falling, k_NotStarted).turns, wait.turns);
+	// The count stays exact far past the turns where a float sum of 0.1 a turn drifts
+	EXPECT_EQ(LyingTurn(FaintCount {.turns = 9'999'989, .started = true}, lying, k_NotStarted).turns, 9'999'990);
+}
+
 TEST(CreatureFight, DamageFollowsTheFormula)
 {
 	// Even creatures at normal speed: high 0.05, middle and low 0.03

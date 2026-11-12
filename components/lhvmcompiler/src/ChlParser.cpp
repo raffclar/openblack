@@ -1163,14 +1163,4 @@ ParsedFile ParseFile(std::string_view text, std::string_view fileName, ParseEnvi
 	return parser::Parser(std::move(tokens), fileName, environment, sink).Run();
 }
 
-std::vector<std::string> DescribeFormsOf(const ParseEnvironment& environment, std::string_view native)
-{
-	std::vector<std::string> result;
-	for (const auto* form : environment.Forms().FormsOf(native))
-	{
-		result.emplace_back(form->source->pattern);
-	}
-	return result;
-}
-
 } // namespace openblack::lhvm::chl

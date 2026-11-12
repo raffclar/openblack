@@ -435,11 +435,6 @@ bool IsNight()
 	return Locator::skyClockSystem::has_value() && Locator::skyClockSystem::value().GetClock().IsVisualNight();
 }
 
-float DesireValue(const creature_desires::Desires& desires, Desire desire)
-{
-	return desires.IsActivated(desire) ? desires[desire].value : 0.0f;
-}
-
 /// The least a creature's desires are lessened to by its actions, by its species
 float DesireFloorOf(entt::entity creature)
 {
