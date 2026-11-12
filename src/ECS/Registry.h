@@ -285,17 +285,17 @@ private:
 	template <typename Component>
 	[[nodiscard]] const entt::storage_for_t<std::remove_const_t<Component>>* StoreOf() const
 	{
-		using Kind = std::remove_const_t<Component>;
-		using Store = entt::storage_for_t<Kind>;
-		const auto index = entt::type_index<Kind>::value();
+		using StoredComponent = std::remove_const_t<Component>;
+		using ComponentStore = entt::storage_for_t<StoredComponent>;
+		const auto index = entt::type_index<StoredComponent>::value();
 		if (index < k_KeptStores)
 		{
 			if (const auto* kept = (*_stores)[index].load(std::memory_order_acquire); kept != nullptr)
 			{
-				return static_cast<const Store*>(kept);
+				return static_cast<const ComponentStore*>(kept);
 			}
 		}
-		const Store* found = _registry.storage<Kind>();
+		const ComponentStore* found = _registry.storage<StoredComponent>();
 		if (found != nullptr && index < k_KeptStores)
 		{
 			(*_stores)[index].store(found, std::memory_order_release);
