@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 
 #include <vector>
@@ -27,6 +28,9 @@ namespace openblack::creature_script_play
 constexpr int32_t k_LastStaticAction = 51;
 /// A static action's loop ends this long after its start begins
 constexpr float k_StaticActionSeconds = 10.0f;
+/// The agenda of a creature has 32 slots. The plays and the wait after them fill at most these slots.
+constexpr size_t k_AgendaSlots = 32;
+constexpr size_t k_MostPlays = k_AgendaSlots - 1;
 
 /// What a script last gave a creature to play
 struct Request
@@ -35,20 +39,23 @@ struct Request
 	uint32_t plays {0};
 };
 
-/// The agenda for what the script gave: the action that many times, then waiting until its body is free. An individual
-/// action is played through each time; a static action starts (left to right half the time), loops until
-/// k_StaticActionSeconds after it started and ends. With no plays it only waits. An action whose clip the body does not
-/// have (static action 0, or a number below 0) never begins, so the agenda never ends.
+/// The agenda for what the script gave: the action that many times, then a step that waits until its body is free. An
+/// individual action is played through each time; a static action starts (left to right half the time), loops until
+/// k_StaticActionSeconds after it started and ends. With no plays it only waits. The last step has no end stage, so the
+/// agenda is over one turn after the body is free. More than k_MostPlays plays give k_MostPlays plays. An action whose clip the
+/// body does not have (static action 0, or a number below 0) never begins, so the agenda never ends.
 [[nodiscard]] std::vector<creature_mind::Step> Agenda(const Request& request);
 
 /// Whether a creature has played what it was doing: its agenda is over, or it is only being idle. A creature busy with
-/// any agenda, its own or a script's, hasn't.
+/// any agenda, its own or a script's, has not. When the last step ends with empty last stages, the agenda is over only on
+/// the next turn, when it goes past those stages.
 [[nodiscard]] bool Played(const creature_mind::IdleMind& mind);
 
 /// When a script asks and the creature has played, the creature stops the remaining steps of its agenda. An idle
 /// creature thus stops its idle steps. The creature does not complete these steps, so they do not count as done. The
 /// plan stays with no steps: the creature does nothing until it chooses a new plan or a script gives it an order. An
-/// agenda that is already at its end does not change.
+/// agenda that waits to go past the empty last stages of its last step also stops, and does not complete. An agenda that
+/// is already over does not change.
 void ClearAfterPlayed(creature_mind::IdleMind& mind);
 
 } // namespace openblack::creature_script_play

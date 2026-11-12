@@ -496,28 +496,54 @@ TEST(CreatureIdleMind, AStaticPoseEndsAfterTheWholeTurnsOfItsSeconds)
 	EXPECT_TRUE(creature_mind::StaticTimeUp(65536, 0.05f));
 }
 
-// The wait of a faint ends after the whole turns of its seconds, also when the float sum of its turns is a little short
+// The wait of a faint ends after the whole turns of its seconds. The count of turns is a whole number, so a long wait
+// is also exact.
 TEST(CreatureIdleMind, AFaintWaitEndsAfterTheWholeTurnsOfItsSeconds)
 {
-	const auto sum = [](int turns) {
-		float seconds = 0.0f;
-		for (int turn = 0; turn < turns; ++turn)
-		{
-			seconds += k_Turn;
-		}
-		return seconds;
-	};
-	// The sum of 73 turns is less than 7.3 seconds, but the wait of 7.3 seconds is 73 turns
-	ASSERT_LT(sum(73), 7.3f);
-	EXPECT_FALSE(creature_mind::FaintWaitDone(sum(72), k_Turn, 7.3f));
-	EXPECT_TRUE(creature_mind::FaintWaitDone(sum(73), k_Turn, 7.3f));
+	EXPECT_FALSE(creature_mind::FaintWaitDone(72, 7.3f));
+	EXPECT_TRUE(creature_mind::FaintWaitDone(73, 7.3f));
 	// A faint of a creature of size 1.234 waits 4 x 1.234 + 8 seconds: 129 whole turns, the fraction cut off
 	const float seconds = (4.0f * 1.234f) + 8.0f;
-	EXPECT_FALSE(creature_mind::FaintWaitDone(sum(128), k_Turn, seconds));
-	EXPECT_TRUE(creature_mind::FaintWaitDone(sum(129), k_Turn, seconds));
-	// Before the creature lies still, the sum is below 0
-	EXPECT_FALSE(creature_mind::FaintWaitDone(-2.0f * k_Turn, k_Turn, seconds));
-	EXPECT_FALSE(creature_mind::FaintWaitDone(sum(1000), k_Turn, std::numeric_limits<float>::infinity()));
+	EXPECT_FALSE(creature_mind::FaintWaitDone(128, seconds));
+	EXPECT_TRUE(creature_mind::FaintWaitDone(129, seconds));
+	// Before the creature lies still, the count is below 0
+	EXPECT_FALSE(creature_mind::FaintWaitDone(-2, seconds));
+	EXPECT_FALSE(creature_mind::FaintWaitDone(1000, std::numeric_limits<float>::infinity()));
+	// A death for ever waits 9,999,990 turns, and a float sum of turns does not stay exact for so long
+	EXPECT_FALSE(creature_mind::FaintWaitDone(9'999'989, creature_mind::k_DiePermanentlySeconds));
+	EXPECT_TRUE(creature_mind::FaintWaitDone(9'999'990, creature_mind::k_DiePermanentlySeconds));
+	EXPECT_FALSE(creature_mind::FaintWaitDone(8'639'999, creature_mind::k_DeadForeverSeconds));
+	EXPECT_TRUE(creature_mind::FaintWaitDone(8'640'000, creature_mind::k_DeadForeverSeconds));
+}
+
+// A death for ever ends on the exact turn of its whole count, also after millions of turns
+TEST(CreatureNeedsMind, DyingForGoodGetsUpOnTheExactTurnOfItsWholeCount)
+{
+	creature_mind::IdleMind mind;
+	creature_mind::Plan(mind, creature_mind::Activity::Planned, creature_mind::DiePermanently());
+	FakeBody body;
+	for (int turn = 0; turn < 100; ++turn)
+	{
+		body.Obey(creature_mind::Think(mind, body.Senses(), Always(1)), 1);
+	}
+	ASSERT_TRUE(mind.faintLay);
+	// Move the count to some turns before the end of the wait, as after 999,999 seconds of lying still
+	constexpr int32_t k_WholeCount = 9'999'990;
+	constexpr int32_t k_TurnsLeft = 5;
+	mind.faintTurns = k_WholeCount - k_TurnsLeft;
+	std::optional<int> endTurn;
+	for (int turn = 1; turn <= 20 && !endTurn; ++turn)
+	{
+		const auto commands = creature_mind::Think(mind, body.Senses(), Always(1));
+		if (commands.endSit)
+		{
+			endTurn = turn;
+		}
+		body.Obey(commands, 1);
+	}
+	ASSERT_TRUE(endTurn.has_value());
+	EXPECT_EQ(*endTurn, k_TurnsLeft);
+	EXPECT_EQ(mind.faintTurns, k_WholeCount);
 }
 
 // The game counts a wait from the first turn of the step, and the count stops while the body does an action or moves

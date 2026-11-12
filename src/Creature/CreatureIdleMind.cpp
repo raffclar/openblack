@@ -74,6 +74,7 @@ void MoveOn(IdleMind& mind)
 	mind.stepSeconds = 0.0f;
 	mind.sitEnding = false;
 	mind.faintLay = false;
+	mind.faintTurns = 0;
 }
 
 /// The step did its work. A last stage with no code holds the step for one more turn:
@@ -791,6 +792,7 @@ void creature_mind::Plan(IdleMind& mind, Activity activity, std::vector<Step> ag
 	mind.stepSeconds = 0.0f;
 	mind.sitEnding = false;
 	mind.faintLay = false;
+	mind.faintTurns = 0;
 	mind.wakeWanted = false;
 	mind.gaveUp = false;
 	mind.stoppedByScript = false;
@@ -844,16 +846,14 @@ bool creature_mind::StaticTimeUp(uint32_t countedTurns, float seconds)
 	return countedTurns >= (count == 0 ? k_CountRange : count);
 }
 
-bool creature_mind::FaintWaitDone(float countedSeconds, float turnSeconds, float seconds)
+bool creature_mind::FaintWaitDone(int32_t countedTurns, float seconds)
 {
 	const auto turns = WaitTurns(seconds);
-	if (!turns.has_value() || !(turnSeconds > 0.0f))
+	if (!turns.has_value())
 	{
 		return false;
 	}
-	// The same count of whole turns as the wait of a fight's knock-out
-	const auto counted = creature_fight::TurnsCounted(countedSeconds, turnSeconds);
-	return static_cast<int64_t>(*turns) - static_cast<int64_t>(counted) <= 0;
+	return static_cast<int64_t>(*turns) - static_cast<int64_t>(countedTurns) <= 0;
 }
 
 bool creature_mind::FaceAgainDue(float& seconds, float turnSeconds)
@@ -1114,6 +1114,7 @@ HandsNeed creature_mind::HandsNeededFor(const Step& step)
 	case Step::Kind::Remobilise:
 	case Step::Kind::WaitForStill:
 	case Step::Kind::WaitForFree:
+	case Step::Kind::WaitUntilFree:
 	case Step::Kind::ApplyDesire:
 	case Step::Kind::Teleport:
 	case Step::Kind::Transported:
@@ -1198,7 +1199,7 @@ void StartDanceStep(IdleMind& mind, const Step& step, const Senses& senses, Comm
 		WaitForDancers(mind, senses);
 		return;
 	case DanceOrder::Kind::StopLooking:
-		// The world stops the sweep of the eyes. The head turns to the look of each later step.
+		// The order only stops the sweep of the eyes. The step does nothing else to the creature.
 		break;
 	case DanceOrder::Kind::Set:
 		// The last dance goes first, and the new one comes the turn after
@@ -1600,6 +1601,8 @@ creature_sub_states::SubState creature_mind::SubStateOf(const Step& step)
 		return SubState::ApplyDesireToObject;
 	case Step::Kind::WaitForFree:
 		return SubState::WaitForCreatureToBeFree;
+	case Step::Kind::WaitUntilFree:
+		return SubState::WaitUntilFree;
 	case Step::Kind::Teleport:
 		return SubState::DoTeleport;
 	case Step::Kind::Transported:
@@ -1853,6 +1856,7 @@ Commands TurnOfThought(IdleMind& mind, const Senses& senses, const Random& rando
 		mind.movedOn = mind.step;
 		mind.stepSeconds = 0.0f;
 		mind.faintLay = false;
+		mind.faintTurns = 0;
 		switch (step.kind)
 		{
 		case Step::Kind::Action:
@@ -2075,6 +2079,13 @@ Commands TurnOfThought(IdleMind& mind, const Senses& senses, const Random& rando
 			// The count of turns starts on the next turn
 			mind.watchTurns = 0;
 			break;
+		case Step::Kind::WaitUntilFree:
+			// The step looks at the body on the turn that it starts too
+			if (!senses.bodyBusy)
+			{
+				FinishStep(mind);
+			}
+			break;
 		case Step::Kind::Teleport:
 			// The step does not end by itself: a refused jump gives up the agenda, and a jump gives a new plan
 			commands.teleport = step.object;
@@ -2168,10 +2179,10 @@ Commands TurnOfThought(IdleMind& mind, const Senses& senses, const Random& rando
 		if (step.faint && !mind.sitEnding)
 		{
 			const auto wait = creature_fight::LyingTurn(
-			    {.seconds = mind.stepSeconds - senses.seconds, .started = mind.faintLay},
+			    creature_fight::FaintCount {.turns = mind.faintTurns, .started = mind.faintLay},
 			    {.faintStarted = true, .acts = senses.bodyBusy && !senses.bodyLooping, .lies = senses.bodyLooping},
-			    senses.seconds, -k_FaintWaitTurnsLate * senses.seconds);
-			mind.stepSeconds = wait.seconds;
+			    -static_cast<int32_t>(k_FaintWaitTurnsLate));
+			mind.faintTurns = wait.turns;
 			mind.faintLay = wait.started;
 		}
 		// The eyes of a sleep or a faint close when the body first lies still in the loop
@@ -2195,7 +2206,7 @@ Commands TurnOfThought(IdleMind& mind, const Senses& senses, const Random& rando
 		{
 			if (step.faint)
 			{
-				timeUp = FaintWaitDone(mind.stepSeconds, senses.seconds, step.seconds);
+				timeUp = FaintWaitDone(mind.faintTurns, step.seconds);
 			}
 			else
 			{
@@ -2450,6 +2461,12 @@ Commands TurnOfThought(IdleMind& mind, const Senses& senses, const Random& rando
 		break;
 	case Step::Kind::WaitForStill:
 		if (!senses.objectMoving)
+		{
+			FinishStep(mind);
+		}
+		break;
+	case Step::Kind::WaitUntilFree:
+		if (!senses.bodyBusy)
 		{
 			FinishStep(mind);
 		}

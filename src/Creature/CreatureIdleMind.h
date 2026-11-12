@@ -549,6 +549,9 @@ struct Step
 		/// that the step starts. Then the step is done on a turn when the body of the object plays no action and does
 		/// not move.
 		WaitForFree,
+		/// Waiting until the body of the creature plays no action. The step looks at the body on the turn that it
+		/// starts too. It is done on a turn when the body is free.
+		WaitUntilFree,
 		/// Asking the step's object, a teleport stone, for a jump to another stone, as the step starts. When the stone
 		/// refuses the jump, the rest of the agenda is given up. When the stone takes the creature, a new plan replaces
 		/// the agenda. The step starts also while the body plays an action.
@@ -640,6 +643,9 @@ struct IdleMind
 	bool sitEnding {false};
 	/// The creature lay still in the faint of this step at least one time. Then the wait of the faint started.
 	bool faintLay {false};
+	/// The whole turns that the wait of the faint of this step counted. Before the creature lies still, the count is below
+	/// 0.
+	int32_t faintTurns {0};
 	/// Seconds until the step's face is pulled again, and the count that varies the faces it pulls
 	float faceSeconds {0.0f};
 	/// It stopped what it did: its eyes look as a rested creature's eyes do again (see Commands::restEyes)
@@ -1119,10 +1125,9 @@ constexpr int32_t k_WaitTurnsPerSecond = 10;
 /// game keeps the turns of the pose in a 16-bit count and stops the loop when the count goes down to 0. A count that
 /// starts at 0 goes round to 65535 first.
 [[nodiscard]] bool StaticTimeUp(uint32_t countedTurns, float seconds);
-/// Whether the wait of a faint is done. The wait adds the seconds of a turn on each turn that it counts, so the sum
-/// changes to the nearest whole number of turns first. The wait is done when it counted the turns of WaitTurns. Before the
-/// creature lies still, the sum is below 0.
-[[nodiscard]] bool FaintWaitDone(float countedSeconds, float turnSeconds, float seconds);
+/// Whether the wait of a faint is done. The wait adds one turn to its count on each turn that it counts. The wait is done
+/// when it counted the turns of WaitTurns. Before the creature lies still, the count is below 0.
+[[nodiscard]] bool FaintWaitDone(int32_t countedTurns, float seconds);
 
 /// Fluttering its eyelids, the creature blinks every 0.625 to 1.875 seconds
 constexpr int32_t k_FlutterBlinkIntervalMs = 1250;
