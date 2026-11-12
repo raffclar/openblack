@@ -54,13 +54,30 @@ struct ScriptPhysicsStart
 	bool settlesOnLand;
 };
 
-/// Whether a thing that a script makes starts in the physics, and how it starts.
+/// What the info table tells about the row of a thing that a script makes
+struct ScriptRowKind
+{
+	/// The info table puts the row of a mobile static in the rock kind
+	bool rock {false};
+	/// The kind that the info table gives the row of a mobile object, a lump of poo or an ark
+	MobileObjectInfo mobileObject {MobileObjectInfo::None};
+};
+
+/// Whether a thing that a script makes starts in the physics, and how it starts. The physics then also refuses a thing
+/// that can not become a physics object at that time, such as a pile that its row keeps out of the physics.
 /// - A mobile static or a rock starts in the physics when the info table puts its row in the rock kind. The holder of
 ///   a singing stone, the lanterns and the bonfire never do, because the physics can not move them.
 /// - A one-shot miracle globe always starts in the physics. Thus the physics keeps the globe on the land, also when a
 ///   script then gives the globe a height.
-/// `rockKind` tells if the info table puts the row in the rock kind.
-[[nodiscard]] std::optional<ScriptPhysicsStart> PhysicsStartOf(ObjectType type, uint32_t subtype, bool rockKind);
+/// - A mobile object, a lump of poo, an ark, a ball, a pile of food or wood and a scaffold start in the physics, on
+///   the land.
+/// - A mobile object of the crop kind or of the creed kind does not start in the physics.
+/// - The three mushroom rows (champignon, magic mushroom and toadstool) do not start in the physics. They only stand on
+///   the land.
+/// - A dead tree starts in the physics on the land.
+/// - A globe that a script puts in the hand, and all other types, do not start in the physics.
+[[nodiscard]] std::optional<ScriptPhysicsStart> PhysicsStartOf(ObjectType type, uint32_t subtype,
+                                                               const ScriptRowKind& row = {});
 
 /// Whether a thing a script creates takes no notice of reactions until a script tells it to. Only a creature does: it
 /// does not react to what happens near it, and it does not catch what flies to it.

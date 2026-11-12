@@ -704,6 +704,55 @@ void AddPauseInFlight(std::vector<Scenario>& all)
 	});
 }
 
+void AddScriptMadeThingsOverRocks(std::vector<Scenario>& all)
+{
+	// A script makes things of six kinds, each on a rock. Each kind but the mushroom starts in the physics, and the
+	// physics lifts it clear of the rock.
+	using Kind = Command::Kind;
+	using Argument = ScriptArgument;
+	constexpr float k_Gap = 8.0f;
+	const auto place = [](size_t index) { return k_Field + glm::vec2 {(static_cast<float>(index) - 2.5f) * k_Gap, 0.0f}; };
+	const auto create = [&place](float delay, int32_t type, int32_t subtype, size_t index) {
+		return Command {.kind = Kind::CallNative,
+		                .delaySeconds = delay,
+		                .script = "CREATE",
+		                .scriptArguments = {{.kind = Argument::Kind::Integer, .number = static_cast<float>(type)},
+		                                    {.kind = Argument::Kind::Integer, .number = static_cast<float>(subtype)},
+		                                    {.kind = Argument::Kind::Position, .point = place(index)}}};
+	};
+	// The script types and rows: a mobile object (an Egyptian barrel), a lump of poo, a ball, a pile of wood, a
+	// scaffold and a mobile object of the champignon row
+	constexpr int32_t k_MobileObject = 20;
+	constexpr int32_t k_Poo = 25;
+	constexpr int32_t k_Ball = 28;
+	constexpr int32_t k_Store = 16;
+	constexpr int32_t k_Scaffold = 39;
+	constexpr int32_t k_Wood = 1;
+	constexpr auto k_Champi = static_cast<int32_t>(MobileObjectInfo::Champi);
+	std::vector<ObjectSetup> rocks;
+	for (size_t index = 0; index < 6; ++index)
+	{
+		rocks.push_back({.type = MobileStaticInfo::RockChalk, .offset = place(index)});
+	}
+	all.push_back({
+	    .id = "physics.script_made_things_over_rocks",
+	    .name = "Things that a script makes on rocks",
+	    .facet = Facet::Physics,
+	    .description = "Six rocks stand in a row 8 metres apart. One second in, a script makes one thing at the middle "
+	                   "of each rock, from west to east: an Egyptian barrel, a lump of poo, a ball, a pile of wood, a "
+	                   "scaffold and a champignon.",
+	    .expected = "The barrel, the poo, the ball, the pile and the scaffold each appear on top of their rock, not in "
+	                "it. Each stays at rest there. The champignon appears at the height of the land, inside its rock. The "
+	                "inspector query game_find_objects gives the first five a height above the land under them.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {k_Field.x, 10.0f, k_Field.y + 30.0f}, .look = {k_Field.x, 0.0f, k_Field.y}},
+	    .objects = std::move(rocks),
+	    .commands = {create(1.0f, k_MobileObject, 0, 0), create(0.0f, k_Poo, 0, 1), create(0.0f, k_Ball, 0, 2),
+	                 create(0.0f, k_Store, k_Wood, 3), create(0.0f, k_Scaffold, 0, 4),
+	                 create(0.0f, k_MobileObject, k_Champi, 5)},
+	});
+}
+
 } // namespace
 
 void testbed_scenarios::AddPhysicsScenarios(std::vector<Scenario>& all)
@@ -725,4 +774,5 @@ void testbed_scenarios::AddPhysicsScenarios(std::vector<Scenario>& all)
 	AddSinking(all);
 	AddTempleStruck(all);
 	AddPauseInFlight(all);
+	AddScriptMadeThingsOverRocks(all);
 }
