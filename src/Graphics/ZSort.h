@@ -50,6 +50,13 @@ namespace openblack::graphics::zsort
 	return std::bit_cast<uint32_t>(ModelKey(point, camera));
 }
 
+/// The depth of the see-through copy of a scaffold at its yard place. The game sorts all of the copies of a workshop's
+/// yard as one thing, by the key of the workshop's model. The sum of this key adds the height second, as Key does.
+[[nodiscard]] inline uint32_t YardCopyDepth(const glm::vec3& workshop, const glm::vec3& camera) noexcept
+{
+	return Depth(workshop, camera);
+}
+
 /// The key of a number that floats up from a thing. The game adds the first axis last.
 [[nodiscard]] inline float FloatingNumberKey(const glm::vec3& point, const glm::vec3& camera) noexcept
 {
