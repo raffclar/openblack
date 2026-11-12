@@ -1593,7 +1593,7 @@ std::optional<std::vector<creature_mind::Step>> creature_plan_actions::Agenda(co
 	case Build::PointAtCamera:
 		return creature_mind::PointAtCamera(*situation.eye);
 	case Build::Gesture:
-		return creature_mind::DrawGestureForPlayer(situation.hasPlayer, situation.eye.value_or(glm::vec3(0.0f)));
+		return creature_mind::DrawGestureForPlayer();
 	case Build::CastOneShotInHand:
 		return creature_mind::CastOneShotAt({.magicType = situation.heldOneShot->magicType,
 		                                     .target = *object,
