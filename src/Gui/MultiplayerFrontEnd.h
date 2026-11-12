@@ -245,6 +245,8 @@ private:
 	void LeaveRoom();
 	void HandleEvent(const lobby_api::PushEvent& event);
 	void RequestTicket(const lobby_api::ServerEntry& server, game_socket::Role role, std::u16string password);
+	/// Writes a line to the connection log of the network game
+	void LogConnection(std::string_view text) const;
 	void RoomOpened(std::string ticket, std::u16string password);
 	/// Gets the lobby's list of the lands of network games. The function then gets true when the list is current.
 	void GetLobbyMaps(std::function<void(bool ok)> then);

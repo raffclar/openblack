@@ -10,10 +10,12 @@
 #include "MultiplayerFrontEnd.h"
 
 #include <algorithm>
+#include <chrono>
 #include <iterator>
 #include <utility>
 
 #include <LobbyApiJson.h>
+#include <fmt/format.h>
 #include <spdlog/spdlog.h>
 
 #include "ECS/Systems/ClanCreatureSystemInterface.h"
@@ -726,16 +728,23 @@ void MultiplayerFrontEnd::Join(std::u16string password)
 void MultiplayerFrontEnd::RequestTicket(const lobby_api::ServerEntry& server, game_socket::Role role, std::u16string password)
 {
 	const auto generation = _generation;
+	const auto asked = std::chrono::steady_clock::now();
+	LogConnection(fmt::format("The client asks the lobby for a ticket of the {} for game server {}",
+	                          game_socket::RoleName(role), server.id));
 	_services.lobby->RequestJoinTicket(
 	    server.id, role,
-	    [this, generation, server, role,
+	    [this, generation, server, role, asked,
 	     password = std::move(password)](ecs::systems::LobbyResult<lobby_api::JoinTicket>&& result) mutable {
 		    if (generation != _generation)
 		    {
 			    return;
 		    }
+		    const auto milliseconds =
+		        std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - asked).count();
 		    if (!result.Ok())
 		    {
+			    LogConnection(fmt::format("The lobby gave no ticket after {} ms: HTTP status {}, problem \"{}\"", milliseconds,
+			                              result.error.status, result.error.code));
 			    // The gods fill the room, or the game started and the account has no god in it: the player joins as an
 			    // observer (MP-Q12)
 			    if (role == game_socket::Role::God && (result.error.code == lobby_api::problems::k_ServerFull ||
@@ -748,10 +757,19 @@ void MultiplayerFrontEnd::RequestTicket(const lobby_api::ServerEntry& server, ga
 			    Show(TicketFailureMessage(result.error.kind, result.error.code));
 			    return;
 		    }
+		    LogConnection(fmt::format("The lobby gave a ticket after {} ms", milliseconds));
 		    _room = server;
 		    _room->url = result.value->url;
 		    RoomOpened(std::move(result.value->ticket), std::move(password));
 	    });
+}
+
+void MultiplayerFrontEnd::LogConnection(std::string_view text) const
+{
+	if (_services.network != nullptr)
+	{
+		_services.network->LogConnection(text);
+	}
 }
 
 void MultiplayerFrontEnd::RoomOpened(std::string ticket, std::u16string password)
