@@ -625,7 +625,9 @@ void testbed_scenarios::AddCreatureActionTownScenarios(std::vector<Scenario>& al
 			thrower.species = k_Species.at(i);
 			thrower.offset = {x, 0.0f};
 			throwers.push_back(thrower);
-			rocks.push_back({.type = MobileStaticInfo::Rock, .offset = {x, -12.0f}});
+			// The reach of a tortoise of size 1 is too short for a rock of scale 1, so its rock is smaller
+			const float rockScale = k_Species.at(i) == CreatureType::Tortoise ? 0.9f : 1.0f;
+			rocks.push_back({.type = MobileStaticInfo::Rock, .offset = {x, -12.0f}, .scale = rockScale});
 			auto practice = Do("PracticeThrow", 0.5f, i);
 			practice.creature = i;
 			throws.push_back(practice);
@@ -635,7 +637,8 @@ void testbed_scenarios::AddCreatureActionTownScenarios(std::vector<Scenario>& al
 		    .name = "Each species practises a throw with a rock",
 		    .facet = Facet::Objects,
 		    .description = "One grown creature of each species stands in a row, each with a rock 12 metres in front of it. "
-		                   "Each is told to practise a throw with its rock.",
+		                   "The tortoise has a smaller rock: it cannot reach round a full rock. Each is told to practise a "
+		                   "throw with its rock.",
 		    .expected = "Each creature picks its rock up and throws it. The inspector shows the hand of each throw.",
 		    .environment = {.dispenserGrid = false},
 		    .framing = {.shot = Shot::Overview, .include = {{-340.0f, -60.0f}, {340.0f, 20.0f}}},
