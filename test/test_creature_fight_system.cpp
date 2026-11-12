@@ -375,7 +375,7 @@ public:
 	std::set<PlayerNames> computers;
 };
 
-/// A clock that only tells if the game is a network game
+/// A clock that only tells if the game is a network game, and the real time of the frame
 class FakeTime final: public ecs::systems::TimeSystemInterface
 {
 public:
@@ -397,7 +397,7 @@ public:
 	[[nodiscard]] uint32_t GetTurn() const override { return 0; }
 	[[nodiscard]] float GetTurnFraction() const override { return 0.0f; }
 	[[nodiscard]] std::chrono::milliseconds GetFrameGameTime() const override { return {}; }
-	[[nodiscard]] std::chrono::milliseconds GetFrameRealTime() const override { return {}; }
+	[[nodiscard]] std::chrono::milliseconds GetFrameRealTime() const override { return realTime; }
 	void SetPaused(bool /*paused*/) override {}
 	[[nodiscard]] bool IsPaused() const override { return false; }
 	void SetPlayerPause(bool /*paused*/) override {}
@@ -413,6 +413,7 @@ public:
 	[[nodiscard]] std::optional<int64_t> GetPinnedDate() const override { return std::nullopt; }
 
 	bool networkGame {false};
+	std::chrono::milliseconds realTime {0};
 	input_steps::Steps inputSteps {};
 };
 
@@ -3157,13 +3158,16 @@ void LookFromWithinTheArena(Camera& camera)
 	camera.SetFocus({0.0f, 0.0f, 0.0f});
 }
 
-/// Frames of the game that last 0.6 s each
-void LookFor(ecs::systems::CreatureFightSystem& fights, int frames)
+/// Frames that last 0.6 s each of real time. The game time does not move, as in the temple or while the game pauses.
+void LookFor(ecs::systems::CreatureFightSystem& fights, int frames,
+             std::chrono::milliseconds frameTime = std::chrono::milliseconds(600))
 {
+	auto& time = static_cast<FakeTime&>(Locator::time::emplace<FakeTime>());
+	time.realTime = frameTime;
 	for (int frame = 0; frame < frames; ++frame)
 	{
 		fights.NoteLook();
-		fights.Update(std::chrono::duration<float, std::milli>(600.0f));
+		fights.Update(std::chrono::duration<float, std::milli>(0.0f));
 	}
 }
 } // namespace
@@ -3217,6 +3221,8 @@ TEST_F(CreatureFightSystemTest, TheLookUsesTheCameraFromBeforeItMovedInTheFrame)
 	picking->landSeenFrom = k_EyeInArena;
 	fights.Reset();
 	auto& camera = Locator::camera::value();
+	auto& time = static_cast<FakeTime&>(Locator::time::emplace<FakeTime>());
+	time.realTime = std::chrono::milliseconds(600);
 	// Before it moves in each frame the camera is far from the arena, and then it moves into the arena
 	for (int frame = 0; frame < 4; ++frame)
 	{
@@ -3232,4 +3238,20 @@ TEST_F(CreatureFightSystemTest, TheLookUsesTheCameraFromBeforeItMovedInTheFrame)
 		fights.Update(std::chrono::duration<float, std::milli>(600.0f));
 	}
 	EXPECT_FALSE(fights.IsCameraOnFight());
+}
+
+TEST_F(CreatureFightSystemTest, TheLookCountsWholeMillisecondsOfRealTimeAndStartsTheViewAfterMoreThan1000)
+{
+	auto* picking = new CentrePicking();
+	Locator::pickingSystem::reset<MockPickingSystem>(picking);
+	picking->landSeenFrom = k_EyeInArena;
+	fights.Reset();
+	LookFromWithinTheArena(Locator::camera::value());
+	// Two frames of 500 ms make 1000 ms: this is not more than 1000, so the view does not start
+	LookFor(fights, 2, std::chrono::milliseconds(500));
+	EXPECT_FALSE(fights.IsCameraOnFight());
+	// One more millisecond starts the view, also with no game time
+	LookFor(fights, 1, std::chrono::milliseconds(1));
+	EXPECT_TRUE(fights.IsCameraOnFight());
+	Locator::pickingSystem::reset();
 }

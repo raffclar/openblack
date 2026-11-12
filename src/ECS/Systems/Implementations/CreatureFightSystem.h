@@ -272,14 +272,16 @@ private:
 		std::optional<float> lingerSeconds;
 	};
 	std::optional<Watched> _view;
-	/// How long the camera has looked at an arena from within it
-	float _lookSeconds {0.0f};
+	/// How long the camera has looked at an arena from within it, in whole milliseconds of real time
+	int32_t _lookMilliseconds {0};
 	/// What the look at a fight uses, kept before the camera moves, until the next update of the view
 	struct Look
 	{
 		glm::vec3 eye;
 		glm::vec3 looking;
 		bool centreShowsLand;
+		/// The real time that the camera steps by in this frame: the whole milliseconds of the last draw
+		int32_t milliseconds;
 	};
 	std::optional<Look> _look;
 	/// Where the camera is now, as the screen shows it, and the land in the middle of the screen. When the middle of the

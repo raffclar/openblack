@@ -675,7 +675,7 @@ void CreatureFightSystem::Reset()
 	_bodyPressHeld = false;
 	_markHeld = false;
 	EndView("new_land");
-	_lookSeconds = 0.0f;
+	_lookMilliseconds = 0;
 	_look.reset();
 	_seen.clear();
 	_actionCause.clear();
