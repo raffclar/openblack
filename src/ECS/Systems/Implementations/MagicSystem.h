@@ -291,6 +291,7 @@ private:
 	bool PlantForest(components::Spell& spell) override;
 	[[nodiscard]] bool ForestCanGrowAt(glm::vec3 point) const override;
 	[[nodiscard]] entt::entity SpellEntity(const components::Spell& spell) const override;
+	[[nodiscard]] uint32_t ForestTrees(const components::Spell& spell) const override;
 	/// The caster player's creature, if it can see where a miracle is cast, takes it that the player wants the desires
 	/// the miracle's table says it answers
 	void Empathise(MagicType type, PlayerNames player, glm::vec3 point);

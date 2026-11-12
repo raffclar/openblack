@@ -72,6 +72,16 @@ bool MagicSystem::HasWorldObjects(const Spell& spell) const
 	return false;
 }
 
+uint32_t MagicSystem::ForestTrees(const Spell& spell) const
+{
+	// The forest's trees at this moment. A tree that went since the last turn of the forest does not count.
+	if (!Locator::forestSystem::has_value())
+	{
+		return spell.objectCount;
+	}
+	return Locator::forestSystem::value().StandingTrees(EntityRegistry().ToEntity(spell));
+}
+
 bool MagicSystem::PlantForest(Spell& spell)
 {
 	return Locator::forestSystem::has_value() &&
@@ -207,7 +217,7 @@ std::vector<MagicSystemInterface::SpellInfo> MagicSystem::GetSpells() const
 		    .chants = spell->chants.chants,
 		    .initialChants = spell->chants.initialChants,
 		    .strength = magic::spells::StrengthOf(self, *spell),
-		    .upkeep = magic::spells::CostToMaintain(Info(), *spell),
+		    .upkeep = magic::spells::CostToMaintain(*this, *spell),
 		    .closing = spell->closedDown,
 		    .fromHand = spell->castFromHand,
 		    .effect = spell->effect,
