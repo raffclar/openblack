@@ -290,27 +290,6 @@ bool MagicSystem::PressAction()
 		return false;
 	}
 	_actionDown = true;
-	// A ready fire seed put to a fireball, anyone's, takes it in: the seed grows stronger and stays in the hand. The hand
-	// sends the use of the seed on the ball, which the turn does.
-	if (const auto ball = PickedUnderHand();
-	    ball.has_value() && EntityRegistry().AllOf<MagicFireBall>(*ball) && AbsorbsFireBalls())
-	{
-		// While the hand waits for its last send, the press does nothing more
-		if (OwnSendWaits())
-		{
-			return true;
-		}
-		if (Locator::playerCommandSystem::has_value())
-		{
-			Locator::playerCommandSystem::value().Submit(player_commands::HandApply {.target = *ball});
-			MarkOwnSend();
-		}
-		else
-		{
-			AbsorbFireBall(*ball);
-		}
-		return true;
-	}
 	const auto& seed = EntityRegistry().Get<const SpellSeed>(*Held());
 	const auto& seedInfo = magic::GetSpellSeedInfo(Info(), seed.seedType);
 	// Outside the player's influence a press does nothing at all

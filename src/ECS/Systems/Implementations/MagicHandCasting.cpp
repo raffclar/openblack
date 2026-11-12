@@ -17,6 +17,7 @@
 
 #include <glm/gtx/euler_angles.hpp>
 
+#include "ECS/Components/MagicFireBall.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/ScriptHighlight.h"
 #include "ECS/Components/Spell.h"
@@ -225,6 +226,12 @@ void MagicSystem::DoCast(PlayerNames player, const player_commands::HandCast& ca
 	auto& registry = EntityRegistry();
 	if (!registry.Valid(*Held()) || !Locator::infoConstants::has_value())
 	{
+		return;
+	}
+	// A fire seed put to a fireball takes it in: the seed grows stronger and stays in the hand. The hand does not cast it.
+	if (cast.object != entt::null && registry.Valid(cast.object) && registry.AllOf<MagicFireBall>(cast.object))
+	{
+		AbsorbFireBall(cast.object);
 		return;
 	}
 	// A miracle put to the player's own dispenser goes into it as a one-shot globe. The hand does not cast it.
