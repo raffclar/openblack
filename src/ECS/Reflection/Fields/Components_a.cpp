@@ -156,4 +156,5 @@ void openblack::ecs::reflection::RegisterFields_Components_a(entt::meta_ctx& con
 	    .Field<&components::AudioEmitter::follows>("follows")
 	    .Field<&components::AudioEmitter::bank>("bank")
 	    .Field<&components::AudioEmitter::group>("group");
+	Reflect<components::SoundOwner>(context).Field<&components::SoundOwner::listenerLeft>("listenerLeft");
 }
