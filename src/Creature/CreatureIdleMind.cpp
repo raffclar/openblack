@@ -1199,8 +1199,7 @@ void StartDanceStep(IdleMind& mind, const Step& step, const Senses& senses, Comm
 		WaitForDancers(mind, senses);
 		return;
 	case DanceOrder::Kind::StopLooking:
-		// This turn the eyes look about for things of interest. The head turns to the look of each later step.
-		commands.lookAbout = true;
+		// The order only stops the sweep of the eyes. The step does nothing else to the creature.
 		break;
 	case DanceOrder::Kind::Set:
 		// The last dance goes first, and the new one comes the turn after
@@ -1774,7 +1773,6 @@ Commands TurnOfThought(IdleMind& mind, const Senses& senses, const Random& rando
 
 	if (!mind.stepStarted)
 	{
-		commands.lookAbout = step.kind == Step::Kind::Wait && !step.gaze.has_value();
 		const auto need = HandsNeededFor(step);
 		const bool handsChecked =
 		    mind.handsChecked.has_value() && mind.handsChecked->serial == mind.serial && mind.handsChecked->step == mind.step;
@@ -2155,7 +2153,6 @@ Commands TurnOfThought(IdleMind& mind, const Senses& senses, const Random& rando
 	switch (step.kind)
 	{
 	case Step::Kind::Wait:
-		commands.lookAbout = !step.gaze.has_value();
 		CountWaitTurn(mind, step, senses);
 		break;
 	case Step::Kind::Communicate:
@@ -2176,7 +2173,6 @@ Commands TurnOfThought(IdleMind& mind, const Senses& senses, const Random& rando
 		break;
 	case Step::Kind::Static:
 	{
-		commands.lookAbout = senses.bodyLooping && !step.closedEyes;
 		// A faint counts its time only from when the creature first lies still. Its wait starts on the turn after that,
 		// and the creature gets up on the turn after the wait ends. After that, the wait stops only while the body plays
 		// an action that is not the loop of the faint.

@@ -56,8 +56,6 @@ struct CreatureMindState
 	/// The last moving thing that it noticed as it came across things, for the look while it walks. The turn is a turn of
 	/// this mind.
 	std::optional<creature_look::NoticedMover> noticedMover;
-	/// Whether the head turns to what it watches this turn
-	bool lookingAbout {false};
 	/// What the head of a creature that thinks looks at this turn, from the agenda as the last turn left it (see
 	/// creature_mind::TurnLook). Without a look, the head looks about.
 	std::optional<creature_mind::Gaze> turnLook;
