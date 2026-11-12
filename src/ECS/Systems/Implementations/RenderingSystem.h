@@ -120,6 +120,8 @@ private:
 		Group group;
 		/// The segment of the land's draw list that it is drawn in
 		uint32_t segment {0};
+		/// Its place in the land's draw list, which orders it among the blended things while it fades
+		uint32_t listPlace {graphics::zsort::k_Unlisted};
 		RenderContext::TreeInstanceData data;
 		glm::mat4 box;
 		/// The tree, and whether it is in a hand
@@ -147,6 +149,10 @@ private:
 	/// The things drawn by the distance bands that are fading out this frame, by how opaque, and those too far off to be
 	/// drawn at all: their other draws (a building's part built, a graveyard's graves) follow them
 	std::unordered_map<entt::entity, uint8_t> _fadingThings;
+	/// The place of each thing in the land's draw list as it was last made, the nearest blocks first
+	std::unordered_map<entt::entity, uint32_t> _listPlaces;
+	/// The place of a thing in the land's draw list, zsort::k_Unlisted for a thing not in it
+	[[nodiscard]] uint32_t ListPlace(entt::entity entity) const;
 	entt::sparse_set _goneThings;
 	/// The detail the explorers' boat was last drawn at (kept while it is too far off to be drawn) and its place, which the
 	/// sea mirrors it with on the frame after

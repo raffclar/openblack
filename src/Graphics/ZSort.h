@@ -11,12 +11,14 @@
 
 #include <cstdint>
 
+#include <algorithm>
 #include <bit>
 
 #include <glm/vec3.hpp>
 
-/// The order the game draws the things that blend in the world: all of them together, the farthest from the camera
-/// first, whatever they are. Models that fade or have alpha, sprites, mists and clouds, and the hand all go through it.
+/// The order in which the game draws the things that it sorts: all of them together, after the land's draw list, the
+/// farthest from the camera first, whatever they are. Sprites, mists and clouds, the hand and the models marked to be
+/// sorted go through it. A model that fades or has alpha and is not marked comes at once, at its place in the list.
 namespace openblack::graphics::zsort
 {
 
@@ -73,5 +75,19 @@ namespace openblack::graphics::zsort
 /// before everything it sorts. As a bgfx depth: under every key of BeforeSorted and above every sorted key. Draws of
 /// this depth keep the order that the canvas gets them in.
 constexpr uint32_t k_AfterSolidBeforeSorted = 0x80000000u;
+
+/// The most places of the land's draw list that get a depth of their own. The list of the game holds fewer things.
+constexpr uint32_t k_ListPlaces = 0x10000u;
+/// The place of a thing that is not in the land's draw list
+constexpr uint32_t k_Unlisted = k_ListPlaces;
+
+/// The game draws a model that blends and is not sorted at once, at its place in the land's draw list: a model that fades
+/// out in the distance, or a see-through copy. Thus it comes after the solid models and before every sorted thing, such
+/// as the dome of a globe. As a bgfx depth: above k_AfterSolidBeforeSorted and under every key of BeforeSorted, the
+/// first place the greatest. A thing that is not in the list comes after the things of the list.
+[[nodiscard]] constexpr uint32_t AtOnce(uint32_t listPlace) noexcept
+{
+	return k_AfterSolidBeforeSorted + 1u + (k_ListPlaces - std::min(listPlace, k_ListPlaces));
+}
 
 } // namespace openblack::graphics::zsort
