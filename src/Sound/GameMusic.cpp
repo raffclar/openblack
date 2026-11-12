@@ -468,6 +468,8 @@ bool GameMusic::ProcessCitadel(const TurnInputs& inputs)
 	// music and not the atmosphere. It does this also when the temple's music has no bank.
 	if (!_citadelStoppedSounds)
 	{
+		// A looping particle sound plays again when the player leaves the temple (deviation 235)
+		audio.MarkListenerLeftPlacedSounds();
 		audio.StopAllSoundEffects();
 		_citadelStoppedSounds = true;
 	}
