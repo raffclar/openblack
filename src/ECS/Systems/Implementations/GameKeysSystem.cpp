@@ -319,6 +319,11 @@ void GameKeysSystem::UpdateTempleRoomKeys()
 		}
 		if (temple.Active())
 		{
+			// The player is in the temple already: all the boxes close first, also for the same room
+			if (Locator::cinematicDirectorSystem::has_value())
+			{
+				Locator::cinematicDirectorSystem::value().AllBoxesClosed();
+			}
 			temple.GoToRoom(room);
 		}
 		else

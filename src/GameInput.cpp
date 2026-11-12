@@ -282,23 +282,27 @@ bool Game::UpdateDebugGui()
 	return true;
 }
 
+bool Game::CameraReadsKeys()
+{
+	const bool interfaceActive =
+	    !Locator::cinematicDirectorSystem::has_value() || Locator::cinematicDirectorSystem::value().IsInterfaceActive();
+	return game_frame::CameraReadsKeys({
+	    .inTemple = Locator::temple::has_value() && Locator::temple::value().Active(),
+	    .interfaceActive = interfaceActive,
+	    .boxHasKeyboard = Locator::gameActionSystem::value().BoxHasKeyboard(),
+	});
+}
+
 void Game::UpdateCameraKeys(std::chrono::microseconds deltaTime)
 {
 	// From the end of the frame that goes into the temple or that opens a box of the front end, the player's camera of the
 	// world takes no controls of the player
 	world_camera::EndFrameControls(FrontEndBoxShows());
-	// In the temple, without the interface or while a box has the keyboard, the camera does not read its keys
-	auto& actions = Locator::gameActionSystem::value();
-	const bool interfaceActive =
-	    !Locator::cinematicDirectorSystem::has_value() || Locator::cinematicDirectorSystem::value().IsInterfaceActive();
-	if (!game_frame::CameraReadsKeys({
-	        .inTemple = Locator::temple::has_value() && Locator::temple::value().Active(),
-	        .interfaceActive = interfaceActive,
-	        .boxHasKeyboard = actions.BoxHasKeyboard(),
-	    }))
+	if (!CameraReadsKeys())
 	{
 		return;
 	}
+	auto& actions = Locator::gameActionSystem::value();
 	auto& camera = Locator::camera::value();
 	// The keys of the camera act after the camera moved, so that their steps move it in the next frame
 	// A miracle's camera path keeps the camera until the player moves it with the movement keys or grips the land,
@@ -479,6 +483,16 @@ void Game::SendDialogueClick()
 	const bool skipKey = !demoPlaying && DialogueSkipKeyDown();
 	if (!click && !skipKey)
 	{
+		return;
+	}
+	// The interface went off or came back while a press of the select button held the land. Then the next click or key
+	// on a text that takes it is the help's: the action of the hand ends, and the dialogue does not get the click.
+	if (Locator::helpTextSystem::has_value() && Locator::helpTextSystem::value().TakeKeptSelectPress(click, skipKey))
+	{
+		if (Locator::handSystem::has_value())
+		{
+			Locator::handSystem::value().EndOwnInterfaceLock();
+		}
 		return;
 	}
 	// A click or a key that cuts the help text short takes the hand too: the interface lock of the hand ends

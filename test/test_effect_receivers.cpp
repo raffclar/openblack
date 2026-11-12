@@ -15,26 +15,34 @@
 
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
+#include "ECS/Components/AtHome.h"
 #include "ECS/Components/Ball.h"
 #include "ECS/Components/Construction.h"
 #include "ECS/Components/CreatureNeeds.h"
+#include "ECS/Components/Field.h"
 #include "ECS/Components/Fire.h"
 #include "ECS/Components/Firefly.h"
 #include "ECS/Components/FishFarm.h"
+#include "ECS/Components/HandGrab.h"
 #include "ECS/Components/Indestructible.h"
+#include "ECS/Components/LivingAction.h"
 #include "ECS/Components/Physics.h"
+#include "ECS/Components/Pot.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/StreetLantern.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/TownDesireFlag.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/VillageTotem.h"
+#include "ECS/Components/Villager.h"
+#include "ECS/Components/VillagerDeath.h"
 #include "ECS/Components/Vortex.h"
 #include "ECS/Registry.h"
 #include "ECS/StreetLanternRules.h"
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
 #include "Locator.h"
+#include "Magic/AreaEffect.h"
 
 using namespace openblack;
 using namespace openblack::ecs::components;
@@ -324,4 +332,114 @@ TEST_F(EffectReceivers, ABuiltFootballPitchTakesNoDamage)
 	registry.Assign<BuildProgress>(unfinished, BuildProgress {.built = 0.5f});
 	ecs::world_objects::ReduceLife(unfinished, 0.25f);
 	EXPECT_FLOAT_EQ(registry.Get<const BuildProgress>(unfinished).built, 0.25f);
+}
+
+TEST_F(EffectReceivers, APotTakesEffectsOnlyWhileItHoldsSomething)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto pot = Made();
+	registry.Assign<Pot>(pot, Pot {.amount = 0, .maxAmount = 100});
+	EXPECT_FALSE(ecs::world_objects::TakesEffect(pot, 0.0f, 0.0f));
+	EXPECT_FALSE(ecs::world_objects::TakesEffect(pot, 50.0f, 0.0f));
+	registry.Get<Pot>(pot).amount = 1;
+	EXPECT_TRUE(ecs::world_objects::TakesEffect(pot, 50.0f, 0.0f));
+}
+
+TEST_F(EffectReceivers, AFieldWithoutFoodTakesNoEffectThatBurns)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto field = Made();
+	auto& crop = registry.Assign<Field>(field).crop;
+	// No age and no food: only an effect that does not burn
+	EXPECT_FALSE(ecs::world_objects::TakesEffect(field, 10.0f, 0.0f));
+	EXPECT_TRUE(ecs::world_objects::TakesEffect(field, 0.0f, 0.0f));
+	EXPECT_TRUE(ecs::world_objects::TakesEffect(field, -10.0f, 0.0f));
+	// Food but no age is not enough, and an age without food is not enough
+	crop.food = 5.0f;
+	EXPECT_FALSE(ecs::world_objects::TakesEffect(field, 10.0f, 0.0f));
+	crop.food = 0.0f;
+	crop.age = 1.0f;
+	EXPECT_FALSE(ecs::world_objects::TakesEffect(field, 10.0f, 0.0f));
+	crop.food = 5.0f;
+	EXPECT_TRUE(ecs::world_objects::TakesEffect(field, 10.0f, 0.0f));
+}
+
+TEST_F(EffectReceivers, EveryOtherThingTakesEveryEffect)
+{
+	const auto thing = Made();
+	EXPECT_TRUE(ecs::world_objects::TakesEffect(thing, 10.0f, 0.0f));
+	EXPECT_TRUE(ecs::world_objects::TakesEffect(thing, 0.0f, 0.0f));
+}
+
+TEST_F(EffectReceivers, AVillagerInItsHomeInAHandOrOnItsWayToHideTakesOnlyAHeal)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto villager = Made();
+	registry.Assign<Villager>(villager);
+	auto& action = registry.Assign<LivingAction>(villager);
+	const auto set = [&action](LivingAction::Index index, VillagerStates state) {
+		action.states.at(static_cast<size_t>(index)) = static_cast<uint8_t>(state);
+	};
+	set(LivingAction::Index::Top, VillagerStates::MoveToPos);
+	set(LivingAction::Index::Final, VillagerStates::MoveToPos);
+	EXPECT_TRUE(ecs::world_objects::IsAvailable(villager));
+	EXPECT_TRUE(ecs::world_objects::TakesEffect(villager, 10.0f, 0.0f));
+	EXPECT_TRUE(ecs::world_objects::TakesEffect(villager, 0.0f, 0.5f));
+	registry.Assign<AtHome>(villager);
+	EXPECT_FALSE(ecs::world_objects::TakesEffect(villager, 10.0f, 0.0f));
+	EXPECT_TRUE(ecs::world_objects::TakesEffect(villager, 0.0f, 0.5f));
+	registry.Remove<AtHome>(villager);
+	registry.Assign<InHand>(villager);
+	EXPECT_FALSE(ecs::world_objects::TakesEffect(villager, 10.0f, 0.0f));
+	EXPECT_TRUE(ecs::world_objects::TakesEffect(villager, 0.0f, 0.5f));
+	registry.Remove<InHand>(villager);
+	set(LivingAction::Index::Top, VillagerStates::GoAndHideInNearbyBuilding);
+	EXPECT_FALSE(ecs::world_objects::TakesEffect(villager, 10.0f, 0.0f));
+	EXPECT_TRUE(ecs::world_objects::TakesEffect(villager, 0.0f, 0.5f));
+	// A villager stays available in these places
+	EXPECT_TRUE(ecs::world_objects::IsAvailable(villager));
+}
+
+TEST_F(EffectReceivers, ADyingVillagerIsNotAvailableAndADeadOneIsNotHealed)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto villager = Made();
+	registry.Assign<Villager>(villager);
+	auto& action = registry.Assign<LivingAction>(villager);
+	const auto set = [&action](LivingAction::Index index, VillagerStates state) {
+		action.states.at(static_cast<size_t>(index)) = static_cast<uint8_t>(state);
+	};
+	set(LivingAction::Index::Top, VillagerStates::MoveToPos);
+	set(LivingAction::Index::Final, VillagerStates::Dying);
+	EXPECT_FALSE(ecs::world_objects::IsAvailable(villager));
+	EXPECT_FALSE(ecs::world_objects::TakesEffect(villager, 10.0f, 0.0f));
+	EXPECT_FALSE(ecs::world_objects::TakesEffect(villager, 0.0f, 0.5f));
+	// In the dead state it is available again, but it is dead: harm reaches it and a heal does not
+	set(LivingAction::Index::Top, VillagerStates::Dead);
+	set(LivingAction::Index::Final, VillagerStates::Dead);
+	EXPECT_TRUE(ecs::world_objects::IsAvailable(villager));
+	EXPECT_TRUE(ecs::world_objects::TakesEffect(villager, 10.0f, 0.0f));
+	EXPECT_FALSE(ecs::world_objects::TakesEffect(villager, 0.0f, 0.5f));
+	// The death mark makes it dead in any state
+	set(LivingAction::Index::Top, VillagerStates::MoveToPos);
+	set(LivingAction::Index::Final, VillagerStates::MoveToPos);
+	EXPECT_TRUE(ecs::world_objects::TakesEffect(villager, 0.0f, 0.5f));
+	registry.Assign<VillagerDeath>(villager);
+	EXPECT_FALSE(ecs::world_objects::TakesEffect(villager, 0.0f, 0.5f));
+}
+
+TEST(VillagerReceiver, AHealNeedsALiveVillagerAndEveryOtherEffectAReachableOne)
+{
+	using magic::VillagerReceiverFacts;
+	EXPECT_TRUE(magic::VillagerTakesEffect({}, 0.0f));
+	EXPECT_TRUE(magic::VillagerTakesEffect({}, 1.0f));
+	// A heal of no strength counts as another effect
+	EXPECT_FALSE(magic::VillagerTakesEffect(VillagerReceiverFacts {.atHome = true}, 0.0f));
+	EXPECT_TRUE(magic::VillagerTakesEffect(VillagerReceiverFacts {.atHome = true}, 0.1f));
+	EXPECT_FALSE(magic::VillagerTakesEffect(VillagerReceiverFacts {.dead = true}, 0.1f));
+	// A dead villager that is not dying, not in its home, not in a hand and not on its way to hide takes harm
+	EXPECT_TRUE(magic::VillagerTakesEffect(VillagerReceiverFacts {.dead = true}, -1.0f));
+	EXPECT_FALSE(magic::VillagerTakesEffect(VillagerReceiverFacts {.goesToDying = true}, 0.0f));
+	EXPECT_FALSE(magic::VillagerAvailable(VillagerReceiverFacts {.goesToDying = true}));
+	EXPECT_TRUE(magic::VillagerAvailable(VillagerReceiverFacts {.dead = true, .atHome = true, .inHand = true, .hiding = true}));
 }

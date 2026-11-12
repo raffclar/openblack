@@ -22,6 +22,11 @@ namespace openblack::ecs::components
 struct LivingAction;
 }
 
+namespace openblack::ecs::physics_hooks
+{
+class World;
+}
+
 /// The villagers and fire: those near a blaze react, their own town's come to beat it out when it needs them and the
 /// rest go round it; a villager the heat reaches runs from it until it is out of reach, and one that burns to death dies
 /// and leaves its skeleton. The state functions are the living action system's.
@@ -37,8 +42,6 @@ void SetupReactToFire(entt::entity villager, entt::entity object, uint32_t react
 void SetupOnFire(entt::entity villager, entt::entity fire);
 /// Whether a villager is running from a fire
 [[nodiscard]] bool IsRunningOnFire(entt::entity villager);
-/// Whether a fire can take hold of a villager: not one dying, at home, held, or hiding in a building
-[[nodiscard]] bool CanCatchFire(entt::entity villager);
 /// Whether a villager is fighting a fire or reacting to one, which keeps the fire's heat off it
 [[nodiscard]] bool IsFireMan(entt::entity villager);
 /// A fireman stops fighting and goes back to what it was doing
@@ -56,6 +59,10 @@ void EndReaction(components::LivingAction& action);
 }
 /// The fire a villager fights or runs from, none for anybody else
 [[nodiscard]] entt::entity FireOf(entt::entity villager);
+/// The object that takes a villager's beat of the fire on this object. The beat goes where an effect that destroys goes:
+/// a temple's heart or a worship site gives it to what the heart chooses, and the heart can fire a beam at that thing.
+/// Every other object takes the beat itself.
+[[nodiscard]] entt::entity BeatTaker(physics_hooks::World& world, entt::entity object);
 /// What a death is put down to: what killed the villager, the player who did it (none for nobody, counted as the neutral
 /// player), and how much the death weighs with its town against that player
 struct DeathCause

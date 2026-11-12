@@ -639,18 +639,12 @@ std::optional<entt::entity> HandGrabSystem::Release(uint32_t nowMs, uint32_t tur
 		return std::nullopt;
 	}
 	case HandGrab::State::Holding:
-		// Letting go of the button sends the end of the lock, which ends the scoop at the turn
-		if (grab->scoopSource != entt::null)
+		// Letting go of the button sends the end of the lock, which ends the scoop at the turn. After the end of the
+		// interface lock, the let go sends nothing.
+		if (grab->scoopSource != entt::null && grab->scoopEnd == HandGrab::ScoopEnd::None)
 		{
-			// First, on this computer only, a field of the local player shows the amount that the hand holds
-			if (const auto* handful = _world->Entities().TryGet<const Pot>(grab->object);
-			    handful != nullptr && Exists(grab->scoopSource) &&
-			    hand_grab::FieldShowsHeldAtLetGo(_world->FieldFactsOf(grab->scoopSource).has_value(),
-			                                     _world->PlayerOf(grab->scoopSource), _world->HandPlayer()))
-			{
-				_amountToolTip = handful->amount;
-			}
-			_world->SendCommand(player_commands::HandUnlock {.object = grab->scoopSource});
+			SendScoopEnd(*grab);
+			grab->scoopEnd = HandGrab::ScoopEnd::LetGo;
 		}
 		break;
 	case HandGrab::State::Empty:
@@ -806,6 +800,7 @@ bool HandGrabSystem::StartScoop(HandGrab& grab, entt::entity source)
 	grab.scoopSource = source;
 	_world->NoteTakenFromOwnerOf(source);
 	grab.scoopTurns = 0;
+	grab.scoopEnd = HandGrab::ScoopEnd::None;
 	grab.scoopAnchor = hand;
 	// What is scooped streams from the source into the hand
 	grab.scoopStreamSeconds = 0.0f;
@@ -851,6 +846,7 @@ bool HandGrabSystem::StartFieldScoop(HandGrab& grab, entt::entity field, const F
 	grab.scoopSource = field;
 	_world->NoteTakenAt(_world->PoseOf(field).origin);
 	grab.scoopTurns = 0;
+	grab.scoopEnd = HandGrab::ScoopEnd::None;
 	grab.scoopAnchor = hand;
 	grab.scoopStreamSeconds = 0.0f;
 	// Only the hand of this computer pins the cursor and shows the stream
@@ -920,6 +916,7 @@ bool HandGrabSystem::StartFishFarmScoop(HandGrab& grab, entt::entity farm, const
 	grab.scoopSource = farm;
 	_world->NoteTakenFromOwnerOf(farm);
 	grab.scoopTurns = 0;
+	grab.scoopEnd = HandGrab::ScoopEnd::None;
 	grab.scoopAnchor = hand;
 	grab.scoopStreamSeconds = 0.0f;
 	// Only the hand of this computer pins the cursor and shows the stream
@@ -1041,6 +1038,74 @@ void HandGrabSystem::EndScoop(HandGrab& grab)
 	}
 	grab.scoopSource = entt::null;
 	grab.scoopTurns = 0;
+	grab.scoopEnd = HandGrab::ScoopEnd::None;
+}
+
+void HandGrabSystem::SendScoopEnd(HandGrab& grab)
+{
+	// On this computer only, a field of the local player shows the amount that the hand holds
+	if (const auto* handful = _world->Entities().TryGet<const Pot>(grab.object);
+	    handful != nullptr && Exists(grab.scoopSource) &&
+	    hand_grab::FieldShowsHeldAtLetGo(_world->FieldFactsOf(grab.scoopSource).has_value(), _world->PlayerOf(grab.scoopSource),
+	                                     _world->HandPlayer()))
+	{
+		_amountToolTip = handful->amount;
+	}
+	_world->SendCommand(player_commands::HandUnlock {.object = grab.scoopSource});
+}
+
+void HandGrabSystem::StopActionAtLockEnd()
+{
+	// The interface acts with the hand of this computer
+	const hand_grab::HandGrabWorldInterface::ActingPlayer own(*_world, _world->OwnHandPlayer());
+	auto* grab = Grab();
+	if (grab == nullptr)
+	{
+		return;
+	}
+	switch (grab->state)
+	{
+	case HandGrab::State::Grabbing:
+	case HandGrab::State::Taking:
+	{
+		// The take stops before the thing came free, or before the turn put it in the hand. The hand lets go of the thing,
+		// which stays where the turns put it. The thing becomes the thing last let go, as at a let go of the button, but
+		// the press is not a tap. A take that the hand sent stays, and its turn still puts the thing in the hand.
+		const auto object = grab->object;
+		Empty(*grab);
+		grab->released = object;
+		return;
+	}
+	case HandGrab::State::ReadyToThrow:
+		// The hand keeps hold, and its spring lets go of it
+		grab->state = HandGrab::State::Holding;
+		grab->springOn = false;
+		grab->springPending = false;
+		return;
+	case HandGrab::State::Holding:
+		// A lock on a scoop source sends its end, also after the let go of the button sent it. The local stream and sound
+		// of the scoop stop at once. The next ends of the interface lock do not send it again.
+		if (grab->scoopSource != entt::null && grab->scoopEnd != HandGrab::ScoopEnd::LockEnd)
+		{
+			SendScoopEnd(*grab);
+			grab->scoopEnd = HandGrab::ScoopEnd::LockEnd;
+			if (_world->IsLocalHand())
+			{
+				StopScoopEffects(*grab);
+			}
+		}
+		return;
+	case HandGrab::State::Empty:
+		// A lock that the hand sent and that no turn did yet ends
+		if (grab->locking != entt::null)
+		{
+			_world->SendCommand(player_commands::HandUnlock {.object = grab->locking});
+			grab->locking = entt::null;
+		}
+		return;
+	case HandGrab::State::LettingGo:
+		return;
+	}
 }
 
 bool HandGrabSystem::AppliesTo(const HandGrab& grab, entt::entity target) const
@@ -1634,6 +1699,7 @@ void HandGrabSystem::Empty(HandGrab& grab)
 	grab.springPending = false;
 	grab.scoopSource = entt::null;
 	grab.scoopTurns = 0;
+	grab.scoopEnd = HandGrab::ScoopEnd::None;
 	grab.locking = entt::null;
 	grab.predicted.reset();
 }

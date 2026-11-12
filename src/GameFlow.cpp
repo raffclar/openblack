@@ -59,6 +59,7 @@
 #include "ECS/Statistics.h"
 #include "ECS/Systems/BoatLaunchSystemInterface.h"
 #include "ECS/Systems/ChatSystemInterface.h"
+#include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/ClanCreatureSystemInterface.h"
 #include "ECS/Systems/CreatureHandSystemInterface.h"
 #include "ECS/Systems/CreatureObjectActionSystemInterface.h"
@@ -221,6 +222,12 @@ void Game::FollowGameEnd()
 	// does not draw its band (vanilla-bugs 470).
 	const auto landNumber = Locator::entitiesRegistry::value().Context().mapScriptGlobals.landNumber;
 	const auto colour = looksOn ? glm::vec4(0.0f) : gui::statistics_box::PlayerColour(local, landNumber);
+	// Before the end box of a game end opens, all the boxes of the game close, and the interface comes back
+	Locator::gameInterface::value().CloseBoxesForGameEnd();
+	if (Locator::cinematicDirectorSystem::has_value())
+	{
+		Locator::cinematicDirectorSystem::value().AllBoxesClosed();
+	}
 	Locator::gameInterface::value().OpenEndGameBox({.box = *opened.endBox, .title = title, .colour = colour});
 	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The end box opens for player {}: {}", static_cast<int>(local), gui::ToUtf8(title));
 	// In a game on the internet, an end box of a decided game or of a god that is out sends the clan creature of the god

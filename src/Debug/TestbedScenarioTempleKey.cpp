@@ -126,6 +126,24 @@ void testbed_scenarios::AddTempleKeyScenarios(std::vector<Scenario>& all)
 	         {.kind = Kind::BindMouseButton, .delaySeconds = 3.0f, .value = 0}},
 	});
 	all.push_back({
+	    .id = "hand.follow_under_cinema_bars",
+	    .name = "The cinema bars of a script do not end the follow camera",
+	    .facet = Facet::Hand,
+	    .description = "The player's tiger stands 60 metres east of the middle of the testbed. After 2 seconds the "
+	                   "scenario presses Zoom To Creature. After 2 more seconds a script slides the cinema bars in, and "
+	                   "the tiger walks 60 metres north. After 8 more seconds the bars slide out.",
+	    .expected = "The camera locks onto the tiger. The bars and the removal of the interface do not stop the follow "
+	                "camera: the camera follows the tiger while it walks under the bars, and it continues to follow the "
+	                "tiger after the bars go.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Testbed},
+	    .creatures = {Content(CreatureType::Tiger, {60.0f, 0.0f}, 0.0f, "tiger")},
+	    .commands = {press(2.0f, k_Creature),
+	                 {.kind = Kind::WideScreen, .delaySeconds = 2.0f, .value = 1},
+	                 Go(Kind::WalkTo, 0, {60.0f, 60.0f}, 0.5f, false),
+	                 {.kind = Kind::WideScreen, .delaySeconds = 8.0f, .value = 0}},
+	});
+	all.push_back({
 	    .id = "hand.front_end_box_wheel",
 	    .name = "While the game's menu shows, the wheel does not move the camera",
 	    .facet = Facet::Hand,

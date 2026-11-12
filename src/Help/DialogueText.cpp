@@ -291,9 +291,14 @@ void DialogueText::ProcessClick(bool click, bool skipKey)
 	_clickCueSeconds = 0.0f;
 }
 
+bool DialogueText::TakesInput(bool click, bool skipKey) const
+{
+	return !_noClick && (click || skipKey) && !IsTextRead() && (ShownLongEnough() || skipKey);
+}
+
 bool DialogueText::CutsShort(bool click, bool skipKey) const
 {
-	if (_noClick || (!click && !skipKey) || IsTextRead() || (!ShownLongEnough() && !skipKey))
+	if (!TakesInput(click, skipKey))
 	{
 		return false;
 	}

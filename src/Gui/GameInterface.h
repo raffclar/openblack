@@ -220,6 +220,9 @@ public:
 	[[nodiscard]] const LandInfoBox& GetLandInfoBox() const noexcept { return *_landInfoBox; }
 	/// The end box of a skirmish or a network game opens. It closes the game's menu and a message with an OK.
 	void OpenEndGameBox(EndGameBox::Contents contents);
+	/// All the boxes of the game close before the end box of a game end opens: the tattoo editor lets go of its creature,
+	/// and the land information box, the menu and a message with an OK close
+	void CloseBoxesForGameEnd();
 	/// The end box of a skirmish or a network game
 	[[nodiscard]] EndGameBox& GetEndGameBox() noexcept { return *_endGameBox; }
 	[[nodiscard]] const EndGameBox& GetEndGameBox() const noexcept { return *_endGameBox; }

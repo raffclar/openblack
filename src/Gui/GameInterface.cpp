@@ -712,6 +712,24 @@ void GameInterface::OpenEndGameBox(EndGameBox::Contents contents)
 	_endGameBox->Open(std::move(contents));
 }
 
+void GameInterface::CloseBoxesForGameEnd()
+{
+	if (Locator::tattooEditorSystem::has_value() && Locator::tattooEditorSystem::value().IsOpen())
+	{
+		// The dialog of the editor closes in the next update, because the editor is not open
+		Locator::tattooEditorSystem::value().Close();
+	}
+	if (_landInfoBox->IsActive())
+	{
+		_landInfoBox->Close();
+	}
+	if (_menu->IsOpen())
+	{
+		_menu->Close();
+	}
+	_saveGameBoxes->WithdrawMessage();
+}
+
 void GameInterface::ShowGodOut(std::u16string_view name)
 {
 	const std::array words {name};

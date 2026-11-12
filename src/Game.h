@@ -398,6 +398,9 @@ public:
 	void UpdateEntitiesFrame(std::chrono::microseconds deltaTime);
 	/// The keys of the camera, after the camera moved. They move the camera in the next frame.
 	void UpdateCameraKeys(std::chrono::microseconds deltaTime);
+	/// Whether the camera reads its keys in this frame. In the temple, without the interface or while a box has the
+	/// keyboard, it does not.
+	[[nodiscard]] static bool CameraReadsKeys();
 	/// The paused, slower and quicker words at the top of the screen, a frame on by the real time
 	void UpdatePauseText();
 	bool Update() noexcept;

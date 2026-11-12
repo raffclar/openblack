@@ -513,6 +513,38 @@ TEST(GameMenu, ButtonsActWhenLetGoOverTheOneTheyWentDownOn)
 	EXPECT_EQ(Click(f.menu, ButtonCentre(0)), Action::None);
 }
 
+TEST(GameMenu, AClickOnATabClosesAllTheBoxesBeforeItsPageShows)
+{
+	MenuFixture f;
+	int closes = 0;
+	f.menu.SetAllBoxesClosedHandler([&closes] { ++closes; });
+	// The buttons and Back close only their own box
+	Click(f.menu, ButtonCentre(3));
+	EXPECT_EQ(f.menu.GetPage(), Page::Options);
+	EXPECT_EQ(closes, 0);
+	Click(f.menu, k_Back);
+	EXPECT_EQ(f.menu.GetPage(), Page::Main);
+	EXPECT_EQ(closes, 0);
+	// The Statistics tab closes all the boxes. The first tab of the statistics box closes only that box.
+	Click(f.menu, TabCentre(1));
+	EXPECT_EQ(f.menu.GetPage(), Page::Statistics);
+	EXPECT_EQ(closes, 1);
+	Click(f.menu, {75, 30});
+	EXPECT_EQ(f.menu.GetPage(), Page::Main);
+	EXPECT_EQ(closes, 1);
+	// Each tab of the options closes all the boxes, also the Main Menu tab
+	Click(f.menu, ButtonCentre(3));
+	Click(f.menu, TabCentre(2));
+	EXPECT_EQ(f.menu.GetPage(), Page::Players);
+	EXPECT_EQ(closes, 2);
+	Click(f.menu, TabCentre(0));
+	EXPECT_EQ(f.menu.GetPage(), Page::Main);
+	EXPECT_EQ(closes, 3);
+	// A tab with no label takes no click
+	Click(f.menu, TabCentre(3));
+	EXPECT_EQ(closes, 3);
+}
+
 TEST(GameMenu, OptionsOpenTheOptionsTabs)
 {
 	MenuFixture f;

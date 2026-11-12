@@ -162,6 +162,18 @@ struct HandGrab
 	uint32_t scoopTurns {0};
 	/// What the hand sent a lock on to, which it scoops from once a turn does the lock
 	entt::entity locking {entt::null};
+	/// What sent the end of the lock on the scoop source
+	enum class ScoopEnd : uint8_t
+	{
+		/// Nothing sent it yet
+		None,
+		/// The let go of the button sent it
+		LetGo,
+		/// The end of the interface lock sent it. The let go of the button and other ends of the interface lock do not
+		/// send it again.
+		LockEnd,
+	};
+	ScoopEnd scoopEnd {ScoopEnd::None};
 	std::optional<uint32_t> scoopStream;
 	/// The scooping sound's loop while it plays
 	entt::entity scoopSound {entt::null};

@@ -3745,3 +3745,147 @@ TEST_F(HandGrabSystemGiving, WhileTheHandWaitsForItsLastSendAPressSendsNoGive)
 	EXPECT_TRUE(std::holds_alternative<player_commands::HandGive>(waiting.front()));
 	EXPECT_EQ(world->sendMarks, 1);
 }
+
+// The end of the interface lock stops a take that pulls at once. The thing stays where it stands, nothing is taken, and
+// the later let go of the button is not a tap.
+TEST_F(HandGrabSystemWithWorld, TheEndOfTheInterfaceLockStopsAPullAndThePressIsNoTap)
+{
+	const auto tree = world->AddTree({0.0f, 0.0f, 0.0f}, 1.0e6f);
+	world->underCursor = tree;
+	ASSERT_TRUE(Press());
+	Frame(10);
+	Frame(10);
+	ASSERT_EQ(system->GetTaking(), std::optional(tree));
+	world->sent.clear();
+	system->StopActionAtLockEnd();
+	EXPECT_EQ(system->GetTaking(), std::nullopt);
+	EXPECT_FALSE(system->IsPulling());
+	EXPECT_TRUE(world->sent.empty());
+	EXPECT_EQ(Release(), std::nullopt);
+	EXPECT_TRUE(world->tapped.empty());
+	EXPECT_TRUE(world->sent.empty());
+	EXPECT_FALSE(system->GetHeld().has_value());
+}
+
+// The end of the interface lock after the hand sent a take lets go of the thing at once. The turn still puts the thing
+// in the hand, and this take does not end the interface lock again.
+TEST_F(HandGrabSystemWithWorld, TheEndOfTheInterfaceLockAfterTheTakeLetsGoOfTheThingUntilTheTurn)
+{
+	const auto rock = world->AddRock({0.0f, 5.0f, 0.0f});
+	world->underCursor = rock;
+	world->flying.insert(rock);
+	deferCommands = true;
+	ASSERT_TRUE(Press());
+	Frame(230);
+	ASSERT_EQ(system->GetTaking(), std::optional(rock));
+	ASSERT_EQ(waiting.size(), 1u);
+	system->StopActionAtLockEnd();
+	EXPECT_EQ(system->GetTaking(), std::nullopt);
+	EXPECT_FALSE(system->GetHeld().has_value());
+	EXPECT_EQ(Release(), std::nullopt);
+	EXPECT_TRUE(world->tapped.empty());
+	RunWaiting();
+	EXPECT_EQ(system->GetHeld(), std::optional(rock));
+	EXPECT_EQ(world->lockEnds, 0);
+}
+
+// The end of the interface lock in a hand that is ready to throw keeps the thing in the hand. The spring lets go of the
+// hand, and the let go of the button throws nothing.
+TEST_F(HandGrabSystemWithWorld, TheEndOfTheInterfaceLockKeepsAThingThatTheHandWasReadyToThrow)
+{
+	const auto rock = world->AddRock({0.0f, 0.0f, 0.0f});
+	world->underCursor = rock;
+	Press();
+	for (int i = 0; i < 20 && !system->GetHeld().has_value(); ++i)
+	{
+		Frame(10);
+	}
+	Release();
+	ASSERT_EQ(system->GetHeld(), std::optional(rock));
+	world->sent.clear();
+	Press();
+	ASSERT_TRUE(system->IsAboutToThrow());
+	system->StopActionAtLockEnd();
+	EXPECT_FALSE(system->IsAboutToThrow());
+	EXPECT_EQ(system->GetHeld(), std::optional(rock));
+	Frame(10, {5.0f, 0.0f, 0.0f});
+	Release();
+	EXPECT_TRUE(world->sent.empty());
+	EXPECT_EQ(system->GetHeld(), std::optional(rock));
+}
+
+namespace
+{
+size_t UnlocksIn(const std::vector<player_commands::Action>& sent)
+{
+	return static_cast<size_t>(std::ranges::count_if(
+	    sent, [](const auto& action) { return std::holds_alternative<player_commands::HandUnlock>(action); }));
+}
+} // namespace
+
+// The end of the interface lock in a scoop sends the end of the lock on the pile one time, and the stream of the scoop
+// stops at once. The turn ends the scoop. The let go of the button and the next ends of the lock send nothing more.
+TEST_F(HandGrabSystemWithWorld, TheEndOfTheInterfaceLockSendsTheEndOfAScoopOneTime)
+{
+	const auto pile = world->registry.Create();
+	world->registry.Assign<Transform>(pile, glm::vec3(0.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+	world->registry.Assign<Pot>(pile, Pot {.amount = 1000, .maxAmount = 2000, .type = PotInfo::FoodPile});
+	world->sizes[pile] = {.radius = 2.0f, .height = 3.0f};
+	world->underCursor = pile;
+	deferCommands = true;
+	ASSERT_TRUE(Press());
+	RunWaiting();
+	ASSERT_EQ(system->GetLockedOn(), std::optional(pile));
+	ASSERT_EQ(world->streams, 1u);
+	world->sent.clear();
+	system->StopActionAtLockEnd();
+	EXPECT_EQ(UnlocksIn(world->sent), 1u);
+	EXPECT_EQ(world->stopped, std::vector<uint32_t> {1u});
+	system->StopActionAtLockEnd();
+	Release();
+	EXPECT_EQ(UnlocksIn(world->sent), 1u);
+	RunWaiting();
+	EXPECT_EQ(system->GetLockedOn(), std::nullopt);
+	EXPECT_TRUE(system->GetHeld().has_value());
+}
+
+// After the let go of the button sent the end of the scoop, the end of the interface lock sends it one more time
+TEST_F(HandGrabSystemWithWorld, TheEndOfTheInterfaceLockAfterTheLetGoSendsTheEndOfTheScoopAgain)
+{
+	const auto pile = world->registry.Create();
+	world->registry.Assign<Transform>(pile, glm::vec3(0.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+	world->registry.Assign<Pot>(pile, Pot {.amount = 1000, .maxAmount = 2000, .type = PotInfo::FoodPile});
+	world->sizes[pile] = {.radius = 2.0f, .height = 3.0f};
+	world->underCursor = pile;
+	deferCommands = true;
+	ASSERT_TRUE(Press());
+	RunWaiting();
+	world->sent.clear();
+	Release();
+	EXPECT_EQ(UnlocksIn(world->sent), 1u);
+	system->StopActionAtLockEnd();
+	EXPECT_EQ(UnlocksIn(world->sent), 2u);
+	system->StopActionAtLockEnd();
+	EXPECT_EQ(UnlocksIn(world->sent), 2u);
+}
+
+// A lock on a pile that no turn did yet sends its end at the end of the interface lock. The let go sends nothing more.
+TEST_F(HandGrabSystemWithWorld, TheEndOfTheInterfaceLockEndsALockThatNoTurnDidYet)
+{
+	const auto pile = world->registry.Create();
+	world->registry.Assign<Transform>(pile, glm::vec3(0.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+	world->registry.Assign<Pot>(pile, Pot {.amount = 1000, .maxAmount = 2000, .type = PotInfo::FoodPile});
+	world->sizes[pile] = {.radius = 2.0f, .height = 3.0f};
+	world->underCursor = pile;
+	deferCommands = true;
+	ASSERT_TRUE(Press());
+	ASSERT_EQ(waiting.size(), 1u);
+	world->sent.clear();
+	system->StopActionAtLockEnd();
+	EXPECT_EQ(UnlocksIn(world->sent), 1u);
+	Release();
+	EXPECT_EQ(UnlocksIn(world->sent), 1u);
+	// The turn does the lock and then its end
+	RunWaiting();
+	EXPECT_EQ(system->GetLockedOn(), std::nullopt);
+}

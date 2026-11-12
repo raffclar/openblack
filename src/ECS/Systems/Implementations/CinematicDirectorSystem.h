@@ -39,6 +39,8 @@ public:
 	[[nodiscard]] float GetWideScreenFraction() const override;
 	[[nodiscard]] bool IsInterfaceActive() const override;
 	void SetInterfaceActive(bool active) override;
+	void AllBoxesClosed() override;
+	void KeepInterfaceAwayForScriptBars(bool demonstrationPlays) override;
 	[[nodiscard]] bool TakeHideDialogs() override;
 
 	void WriteText(std::u16string_view words, glm::vec2 corner, glm::vec2 extent, float size, float fadeSeconds) override;

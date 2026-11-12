@@ -273,20 +273,21 @@ TEST(ShieldRules, OtherPlayersCreaturesWalkRoundAShield)
 
 TEST(ShieldRules, ADestroyedShieldImpressesFourTimesAndAnAttackersShieldNotAtAll)
 {
-	EXPECT_FLOAT_EQ(shield::ImpressiveMultiplier(Reaction::ReactToMagicShieldDestroyed, false, false), 4.0f);
-	EXPECT_FLOAT_EQ(shield::ImpressiveMultiplier(Reaction::ReactToMagicShieldDestroyed, false, true), 1.0f);
-	EXPECT_FLOAT_EQ(shield::ImpressiveMultiplier(Reaction::ReactToMagicShield, true, true), 0.0f);
-	EXPECT_FLOAT_EQ(shield::ImpressiveMultiplier(Reaction::ReactToMagicShieldStruck, true, false), 0.0f);
-	EXPECT_FLOAT_EQ(shield::ImpressiveMultiplier(Reaction::ReactToMagicShieldStruck, true, true), 1.0f);
+	EXPECT_FLOAT_EQ(shield::ImpressiveMultiplier(Reaction::ReactToMagicShieldDestroyed, false), 4.0f);
+	EXPECT_FLOAT_EQ(shield::ImpressiveMultiplier(Reaction::ReactToMagicShieldDestroyed, true), 4.0f);
+	EXPECT_FLOAT_EQ(shield::ImpressiveMultiplier(Reaction::ReactToMagicShield, false), 1.0f);
+	EXPECT_FLOAT_EQ(shield::ImpressiveMultiplier(Reaction::ReactToMagicShield, true), 0.0f);
+	EXPECT_FLOAT_EQ(shield::ImpressiveMultiplier(Reaction::ReactToMagicShieldStruck, true), 0.0f);
+	EXPECT_FLOAT_EQ(shield::ImpressiveMultiplier(Reaction::ReactToMagicShieldStruck, false), 1.0f);
 }
 
 TEST(ShieldRules, ATownThatTheShieldsPlayerAttackedLastIgnoresTheShield)
 {
-	EXPECT_TRUE(shield::TownIgnoresShield(Reaction::ReactToMagicShield, true, false));
-	EXPECT_TRUE(shield::TownIgnoresShield(Reaction::ReactToMagicShieldStruck, true, false));
-	EXPECT_FALSE(shield::TownIgnoresShield(Reaction::ReactToMagicShieldStruck, true, true));
-	EXPECT_FALSE(shield::TownIgnoresShield(Reaction::ReactToMagicShieldDestroyed, true, false));
-	EXPECT_FALSE(shield::TownIgnoresShield(Reaction::ReactToMagicShield, false, false));
+	EXPECT_TRUE(shield::TownIgnoresShield(Reaction::ReactToMagicShield, true));
+	EXPECT_TRUE(shield::TownIgnoresShield(Reaction::ReactToMagicShieldStruck, true));
+	EXPECT_FALSE(shield::TownIgnoresShield(Reaction::ReactToMagicShieldDestroyed, true));
+	EXPECT_FALSE(shield::TownIgnoresShield(Reaction::ReactToMagicShield, false));
+	EXPECT_FALSE(shield::TownIgnoresShield(Reaction::ReactToMagicShieldStruck, false));
 }
 
 // The forest

@@ -23,7 +23,6 @@
 #include "ECS/Components/Creature.h"
 #include "ECS/FollowHeadingThing.h"
 #include "ECS/Registry.h"
-#include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
@@ -104,12 +103,8 @@ bool CreatureModeSystem::ThingThere() const
 
 bool CreatureModeSystem::StillValid() const
 {
-	if (!ThingThere())
-	{
-		return false;
-	}
-	// A script's cinema bars take the camera
-	return !Locator::cinematicDirectorSystem::has_value() || Locator::cinematicDirectorSystem::value().IsInterfaceActive();
+	// Only the thing ends the mode. The cinema bars and the interface do not: a script that takes the camera ends it.
+	return ThingThere();
 }
 
 bool CreatureModeSystem::Enter(entt::entity creature, creature_follow::StartDistance start)
@@ -279,9 +274,9 @@ void CreatureModeSystem::Update(std::chrono::microseconds dt, const Frame& frame
 	{
 		return;
 	}
-	// The cursor keys alone, or the hand taking a fresh grip of the land, give the player the camera back. Inside the
-	// temple the camera does not read them.
-	const bool gripped = !inTemple && frame.handGripping && !_wasGripping;
+	// The cursor keys alone, or the hand taking a fresh grip of the land, give the player the camera back. In the
+	// temple, without the interface or while a box has the keyboard, the camera does not read them.
+	const bool gripped = frame.readsKeys && frame.handGripping && !_wasGripping;
 	_wasGripping = frame.handGripping;
 	if (!StillValid() || _model->WantsToLeave() || gripped)
 	{

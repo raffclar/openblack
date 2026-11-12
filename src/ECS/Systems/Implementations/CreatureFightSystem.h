@@ -48,6 +48,7 @@ public:
 	void Reset() override;
 	void PrepareLand() override;
 	void Update(std::chrono::duration<float, std::milli> gameTime) override;
+	void NoteLook() override;
 
 	StartResult StartFight(entt::entity creature, entt::entity opponent) override;
 	StartResult StartPlannedFight(entt::entity creature, entt::entity opponent, bool agreed) override;
@@ -271,11 +272,24 @@ private:
 		std::optional<float> lingerSeconds;
 	};
 	std::optional<Watched> _view;
-	/// How long the camera has looked at an arena from within it
-	float _lookSeconds {0.0f};
+	/// How long the camera has looked at an arena from within it, in whole milliseconds of real time
+	int32_t _lookMilliseconds {0};
+	/// What the look at a fight uses, kept before the camera moves, until the next update of the view
+	struct Look
+	{
+		glm::vec3 eye;
+		glm::vec3 looking;
+		bool centreShowsLand;
+		/// The real time that the camera steps by in this frame: the whole milliseconds of the last draw
+		int32_t milliseconds;
+	};
+	std::optional<Look> _look;
 	/// Where the camera is now, as the screen shows it, and the land in the middle of the screen. When the middle of the
 	/// screen shows no land, the land it last showed, or the point that the camera looks at before it showed any land.
 	[[nodiscard]] std::pair<glm::vec3, glm::vec3> ViewNow();
+	/// Whether the line from the view on the screen through the middle of the screen meets the land. The look at a fight
+	/// counts only while it does.
+	[[nodiscard]] static bool ScreenCentreShowsLand();
 	std::optional<glm::vec3> _screenCentre;
 	/// The place on the land that a double click sent the world camera to, until the next update of the view, with the
 	/// camera's place and the land in the middle of the screen before the flight

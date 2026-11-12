@@ -2167,9 +2167,7 @@ void ReactionSystem::Impress(const Active& reaction, entt::entity living, const 
 		                               : nullptr;
 		const auto* aggression = registry.TryGet<const TownAggression>(villager->town);
 		const bool attackedByShieldPlayer = aggression != nullptr && aggression->record.lastAggressor == source.player;
-		const bool ignored =
-		    shieldObject != nullptr && magic::shield::TownIgnoresShield(source.type, attackedByShieldPlayer,
-		                                                                shieldObject->kind == MagicShield::Kind::Physical);
+		const bool ignored = shieldObject != nullptr && magic::shield::TownIgnoresShield(source.type, attackedByShieldPlayer);
 		const float belief = ignored ? 0.0f : creature.value_or(value(boredom, villager->town)) * share;
 		magic::town_belief::Add(impression->belief, source.player, belief);
 		impression->lastImpression = belief;

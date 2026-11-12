@@ -163,8 +163,11 @@ TEST(CastInput, AnObjectUnderTheHandComesFirst)
 	onObject.onValidObject = true;
 	EXPECT_TRUE(Press(input, k_Gesture, onObject).startHoldLoop);
 	EXPECT_EQ(Release(input).cast, CastTarget::Object);
+	// A miracle that runs in the hand is cast on the thing one time. It does not lock on, so the let go does nothing.
 	EXPECT_EQ(Press(input, k_InHand, onObject).cast, CastTarget::Object);
-	EXPECT_TRUE(input.onObject);
+	EXPECT_EQ(input.state, CastInput::State::Idle);
+	EXPECT_EQ(Tick(input, 5, true), CastActions {});
+	EXPECT_EQ(Release(input), CastActions {});
 }
 
 TEST(CastInput, OnlyThePressThatArmsAGestureSeedStartsTheGesturePathAgain)

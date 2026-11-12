@@ -292,17 +292,17 @@ glm::vec2 shield::AwayFrom(glm::vec2 centre, glm::vec2 villager, float turn, flo
 	return StepAlong(villager, angle, metres);
 }
 
-bool shield::TownIgnoresShield(Reaction reaction, bool townAttackedByShieldPlayer, bool physical)
+bool shield::TownIgnoresShield(Reaction reaction, bool townAttackedByShieldPlayer)
 {
 	return townAttackedByShieldPlayer &&
-	       (reaction == Reaction::ReactToMagicShield || (!physical && reaction == Reaction::ReactToMagicShieldStruck));
+	       (reaction == Reaction::ReactToMagicShield || reaction == Reaction::ReactToMagicShieldStruck);
 }
 
-float shield::ImpressiveMultiplier(Reaction reaction, bool townAttackedByShieldPlayer, bool physical)
+float shield::ImpressiveMultiplier(Reaction reaction, bool townAttackedByShieldPlayer)
 {
-	if (TownIgnoresShield(reaction, townAttackedByShieldPlayer, physical))
+	if (TownIgnoresShield(reaction, townAttackedByShieldPlayer))
 	{
 		return 0.0f;
 	}
-	return !physical && reaction == Reaction::ReactToMagicShieldDestroyed ? k_DestroyedImpressiveness : 1.0f;
+	return reaction == Reaction::ReactToMagicShieldDestroyed ? k_DestroyedImpressiveness : 1.0f;
 }

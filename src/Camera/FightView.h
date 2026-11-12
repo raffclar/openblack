@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include <cstdint>
+
 #include <functional>
 #include <numbers>
 #include <optional>
@@ -47,8 +49,9 @@ constexpr float k_TurnPerScreen = std::numbers::pi_v<float>;
 constexpr float k_TiltPerInput = 0.002f;
 /// The fight view stays this long once the fight is over
 constexpr float k_EndSoonSeconds = 3.0f;
-/// Looking at an arena from within its radius this long starts the fight view
-constexpr float k_LookSeconds = 1.0f;
+/// The fight view starts when the camera looks at an arena from within its radius for more than this many whole
+/// milliseconds of real time
+constexpr int32_t k_LookMilliseconds = 1000;
 
 /// A zoom's distance, from the camera's zoom input and its height above where it looks: zooming speeds up with height
 [[nodiscard]] float ZoomDistance(float zoomInput, float heightAboveFocus);

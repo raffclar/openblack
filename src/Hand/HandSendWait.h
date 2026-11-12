@@ -129,7 +129,8 @@ enum class FrameAction : uint8_t
 	/// The hand takes a thing: from the press on the thing, while it waits or pulls, until the turn puts the thing in the
 	/// hand. The action needs the thing, and both buttons end it.
 	Takes,
-	/// The hand does another action: a lock on a creature, a pile, a field or a fish farm. Both buttons end it.
+	/// The hand does another action: a lock on a creature, a pile, a field or a fish farm, or a press that waits for a
+	/// tap on a creature. Both buttons end it.
 	Other,
 };
 
@@ -150,12 +151,15 @@ struct FrameFacts
 	bool heldThere {false};
 	/// The thing that the hand takes is in the world and not on its way out of it
 	bool takenThere {false};
+	/// The action keeps the thing of its press, and that thing is not in the world any more
+	bool pressThingGone {false};
 };
 
 /// Whether the interface lock of the hand ends in this frame, before the hand acts on the input of the frame:
 /// - The interface is off, and the hand does not grip a totem.
 /// - The action needs the held thing, and the thing is not there.
 /// - The hand takes a thing, and the thing is not there.
+/// - The action keeps the thing of its press, and the thing is not there.
 /// - A front-end box takes the interface.
 /// - Both buttons are down in an action that both buttons end.
 [[nodiscard]] constexpr bool FrameEndsLock(const FrameFacts& facts)
@@ -169,6 +173,10 @@ struct FrameFacts
 		return true;
 	}
 	if (facts.action == FrameAction::Takes && !facts.takenThere)
+	{
+		return true;
+	}
+	if (facts.pressThingGone)
 	{
 		return true;
 	}

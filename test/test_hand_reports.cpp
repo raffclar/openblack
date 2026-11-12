@@ -35,6 +35,7 @@
 #include "ECS/Components/CreatureSpells.h"
 #include "ECS/Components/GodHand.h"
 #include "ECS/Components/Hand.h"
+#include "ECS/Components/HandCreaturePose.h"
 #include "ECS/Components/HandCreaturePress.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/HandLockEndSent.h"
@@ -1075,6 +1076,115 @@ TEST_F(ReportedHands, TheHandSendsTheEndOfTheLockAtOnceForAGoneCreature)
 	creatures.InterfaceFrame();
 	ASSERT_EQ(commands.sent.size(), 1u);
 	EXPECT_EQ(std::get<player_commands::HandUnlock>(commands.sent.front()).object, creature);
+	Locator::playerCommandSystem::reset();
+	Locator::handSystem::reset();
+	if (log != nullptr)
+	{
+		spdlog::drop("game");
+	}
+}
+
+// The end of the interface lock in a hold of a creature stops the hold at once. The hand sends the release of the
+// button and the end of the lock in the same frame, and it does not wait until the creature is still. The hand is free.
+TEST_F(ReportedHands, TheEndOfTheInterfaceLockStopsTheHoldOfACreatureAtOnce)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	Locator::handSystem::reset(&_hands, [](ecs::systems::HandSystemInterface* /*unowned*/) {});
+	SentCommands commands;
+	Locator::playerCommandSystem::reset(&commands, [](ecs::systems::PlayerCommandSystemInterface* /*unowned*/) {});
+	const auto log = spdlog::get("game") != nullptr ? nullptr : spdlog::null_logger_mt("game");
+	const auto creature = registry.Create();
+	registry.Assign<ecs::components::Creature>(creature, ecs::components::Creature {.owner = PlayerNames::PLAYER_ONE});
+	registry.Assign<ecs::components::CreatureAnimation>(creature).yaw.angle = 0.5f;
+	ecs::systems::CreatureHandSystem creatures;
+	// The press holds the creature after the wait for a tap, and the turn does the hold
+	creatures.WaitForTap(creature, 1000, 10);
+	creatures.WaitFrame(1226, 12);
+	ASSERT_EQ(commands.sent.size(), 1u);
+	ASSERT_TRUE(std::holds_alternative<player_commands::HandLock>(commands.sent.front()));
+	creatures.DoLock(PlayerNames::PLAYER_ONE, creature);
+	commands.sent.clear();
+
+	// The creature is not still, but the hand sends the release and the end of the lock at once
+	creatures.StopActionAtLockEnd();
+	ASSERT_EQ(commands.sent.size(), 2u);
+	ASSERT_TRUE(std::holds_alternative<player_commands::HandLockRelease>(commands.sent[0]));
+	EXPECT_EQ(std::get<player_commands::HandLockRelease>(commands.sent[0]).creature, creature);
+	ASSERT_TRUE(std::holds_alternative<player_commands::HandUnlock>(commands.sent[1]));
+	EXPECT_EQ(std::get<player_commands::HandUnlock>(commands.sent[1]).object, creature);
+	EXPECT_FALSE(creatures.GetCreature().has_value());
+	EXPECT_FALSE(registry.AllOf<ecs::components::HandCreaturePose>(_hand));
+
+	// The hand is free: the next ends of the interface lock and the next frames send nothing
+	creatures.StopActionAtLockEnd();
+	creatures.InterfaceFrame();
+	EXPECT_EQ(commands.sent.size(), 2u);
+
+	// The turn does the release: the hand stays free, and it does not wait for the creature to be still
+	creatures.DoLockRelease(PlayerNames::PLAYER_ONE, creature);
+	EXPECT_FALSE(creatures.WaitsForLockEnd());
+	registry.Get<ecs::components::CreatureAnimation>(creature).yaw.angle = 0.0f;
+	creatures.InterfaceFrame();
+	creatures.StopActionAtLockEnd();
+	EXPECT_EQ(commands.sent.size(), 2u);
+
+	// The turn ends the lock, and the hand forgets the end that it sent
+	creatures.DoUnlock(PlayerNames::PLAYER_ONE, creature);
+	EXPECT_FALSE(creatures.IsLocked(creature));
+	EXPECT_FALSE(registry.AllOf<ecs::components::HandLockEndSent>(_hand));
+
+	Locator::playerCommandSystem::reset();
+	Locator::handSystem::reset();
+	if (log != nullptr)
+	{
+		spdlog::drop("game");
+	}
+}
+
+// After the button let go, the end of the interface lock sends the end of the lock at once, also when the hand sent it
+// before because the creature was still. It sends it one time.
+TEST_F(ReportedHands, TheEndOfTheInterfaceLockAfterTheReleaseSendsTheEndOfTheLockAtOnce)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	Locator::handSystem::reset(&_hands, [](ecs::systems::HandSystemInterface* /*unowned*/) {});
+	SentCommands commands;
+	Locator::playerCommandSystem::reset(&commands, [](ecs::systems::PlayerCommandSystemInterface* /*unowned*/) {});
+	const auto log = spdlog::get("game") != nullptr ? nullptr : spdlog::null_logger_mt("game");
+	const auto creature = registry.Create();
+	registry.Assign<ecs::components::Creature>(creature, ecs::components::Creature {.owner = PlayerNames::PLAYER_ONE});
+	registry.Assign<ecs::components::CreatureAnimation>(creature).yaw.angle = 0.5f;
+	ecs::systems::CreatureHandSystem creatures;
+
+	// The creature is not still: the hand waits, then the end of the interface lock sends the end at once
+	creatures.DoLock(PlayerNames::PLAYER_ONE, creature);
+	creatures.DoLockRelease(PlayerNames::PLAYER_ONE, creature);
+	EXPECT_TRUE(creatures.WaitsForLockEnd());
+	creatures.InterfaceFrame();
+	EXPECT_TRUE(commands.sent.empty());
+	creatures.StopActionAtLockEnd();
+	ASSERT_EQ(commands.sent.size(), 1u);
+	EXPECT_EQ(std::get<player_commands::HandUnlock>(commands.sent.front()).object, creature);
+	EXPECT_FALSE(creatures.WaitsForLockEnd());
+	creatures.StopActionAtLockEnd();
+	creatures.InterfaceFrame();
+	EXPECT_EQ(commands.sent.size(), 1u);
+	creatures.DoUnlock(PlayerNames::PLAYER_ONE, creature);
+	commands.sent.clear();
+
+	// The creature is still: the hand sends the end, and the end of the interface lock sends it again, one time
+	creatures.DoLock(PlayerNames::PLAYER_ONE, creature);
+	creatures.DoLockRelease(PlayerNames::PLAYER_ONE, creature);
+	registry.Get<ecs::components::CreatureAnimation>(creature).yaw.angle = 0.0f;
+	creatures.InterfaceFrame();
+	ASSERT_EQ(commands.sent.size(), 1u);
+	EXPECT_TRUE(creatures.WaitsForLockEnd());
+	creatures.StopActionAtLockEnd();
+	creatures.StopActionAtLockEnd();
+	creatures.InterfaceFrame();
+	ASSERT_EQ(commands.sent.size(), 2u);
+	EXPECT_EQ(std::get<player_commands::HandUnlock>(commands.sent.back()).object, creature);
+	EXPECT_FALSE(creatures.WaitsForLockEnd());
+
 	Locator::playerCommandSystem::reset();
 	Locator::handSystem::reset();
 	if (log != nullptr)

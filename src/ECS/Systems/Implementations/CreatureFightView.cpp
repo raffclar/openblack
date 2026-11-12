@@ -48,6 +48,7 @@
 #include "ECS/Systems/EffectRequestSystemInterface.h"
 #include "ECS/Systems/FightTranscriptNote.h"
 #include "ECS/Systems/GuidanceSystemInterface.h"
+#include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/ThingCircles.h"
 #include "ECS/ThingMapPlace.h"
 #include "ECS/ThingModel.h"
@@ -150,8 +151,9 @@ void CreatureFightSystem::DrawMarks(float realMs, const glm::vec3& eye)
 
 void CreatureFightSystem::UpdateView(float seconds)
 {
-	// Only this update uses the double click
+	// Only this update uses the double click and the look kept before the camera moved
 	const auto flightPlace = std::exchange(_flightPlace, std::nullopt);
+	const auto look = std::exchange(_look, std::nullopt);
 	if (!Locator::camera::has_value())
 	{
 		return;
@@ -173,7 +175,7 @@ void CreatureFightSystem::UpdateView(float seconds)
 			}
 			return;
 		}
-		_lookSeconds = 0.0f;
+		_lookMilliseconds = 0;
 		if (_view->lingerSeconds.has_value())
 		{
 			*_view->lingerSeconds -= seconds;
@@ -214,7 +216,7 @@ void CreatureFightSystem::UpdateView(float seconds)
 	// and the look starts again when the player's camera comes back
 	if (dynamic_cast<const DefaultWorldCameraModel*>(&camera.GetModel()) == nullptr)
 	{
-		_lookSeconds = 0.0f;
+		_lookMilliseconds = 0;
 		return;
 	}
 	// A double click that sends the camera into the arena of a fight shows that fight at once. Only the first arena that
@@ -240,9 +242,14 @@ void CreatureFightSystem::UpdateView(float seconds)
 			return;
 		}
 	}
-	// Looking at an arena with a fight on from within it for a while starts the fight view
-	const auto eye = camera.GetOrigin(Camera::Interpolation::Target);
-	const auto looking = camera.GetFocus(Camera::Interpolation::Target);
+	// The camera looks at an arena with a fight on from within it. When it does this for a while, and the middle of the
+	// screen shows land, the fight view starts. The look uses the camera as it was before it moved in this frame.
+	if (!look.has_value() || !look->centreShowsLand)
+	{
+		return;
+	}
+	const auto eye = look->eye;
+	const auto looking = look->looking;
 	std::optional<std::pair<entt::entity, entt::entity>> found;
 	fight::Arena foundArena;
 	registry.Each<const CreatureFighting>([&](entt::entity entity, const CreatureFighting& fighting) {
@@ -260,8 +267,9 @@ void CreatureFightSystem::UpdateView(float seconds)
 	{
 		return;
 	}
-	_lookSeconds += seconds;
-	if (_lookSeconds > fight_view::k_LookSeconds)
+	// The look counts the real time of the frame, so it also counts while the game pauses or the player is in the temple
+	_lookMilliseconds += look->milliseconds;
+	if (_lookMilliseconds > fight_view::k_LookMilliseconds)
 	{
 		TryStartView(found->first, found->second, foundArena, "look");
 	}
@@ -313,7 +321,7 @@ void CreatureFightSystem::TryStartView(entt::entity first, entt::entity second, 
 	view->SetPlayerModel(camera.SetModel(std::move(model)));
 	camera.SetModelSeconds(modelSeconds);
 	_view = Watched {.first = first, .second = second, .lingerSeconds = std::nullopt};
-	_lookSeconds = 0.0f;
+	_lookMilliseconds = 0;
 }
 
 bool CreatureFightSystem::DraggedAway(const FightCameraModel& model) const
@@ -392,6 +400,31 @@ void CreatureFightSystem::ComeOutOfTemple(bool placePicked)
 		return;
 	}
 	EndView(placePicked ? "temple_map_pick" : "temple_fight_over");
+}
+
+void CreatureFightSystem::NoteLook()
+{
+	if (!Locator::camera::has_value())
+	{
+		_look.reset();
+		return;
+	}
+	const auto& camera = world_camera::Get();
+	_look = Look {
+	    .eye = camera.GetOrigin(Camera::Interpolation::Target),
+	    .looking = camera.GetFocus(Camera::Interpolation::Target),
+	    .centreShowsLand = ScreenCentreShowsLand(),
+	    .milliseconds =
+	        Locator::time::has_value() ? static_cast<int32_t>(Locator::time::value().GetFrameRealTime().count()) : 0,
+	};
+}
+
+bool CreatureFightSystem::ScreenCentreShowsLand()
+{
+	// The line starts from the view on the screen. In the temple, this is the view of the temple, not the view of the
+	// camera of the world behind it.
+	const auto& shown = Locator::camera::value();
+	return shown.RaycastScreenCoordToLand({0.5f, 0.5f}, true, Camera::Interpolation::Drawn).has_value();
 }
 
 std::pair<glm::vec3, glm::vec3> CreatureFightSystem::ViewNow()

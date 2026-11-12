@@ -73,6 +73,7 @@ public:
 	[[nodiscard]] std::optional<uint32_t> TakeAmountToolTip() override { return std::exchange(_amountToolTip, std::nullopt); }
 	void Reset() override;
 	void InterfaceTurn(uint32_t nowMs, uint32_t turn) override;
+	void StopActionAtLockEnd() override;
 	void DoTake(PlayerNames player, entt::entity object) override;
 	void DoComputerTake(PlayerNames player, entt::entity object) override;
 	void DoLetGo(PlayerNames player, const player_commands::HandLetGo& letGo) override;
@@ -173,6 +174,9 @@ private:
 	/// Shows the amount that the hand holds, for the hand of this computer only
 	void ShowHeldAmount(uint32_t amount);
 	void EndScoop(components::HandGrab& grab);
+	/// The hand sends the end of the lock on the scoop source. First, a field of the local player shows the amount that
+	/// the hand holds.
+	void SendScoopEnd(components::HandGrab& grab);
 	/// The second press with the pointer on something the held thing is used on (a store, a pile of the same): it is
 	/// given to it at once, without being thrown. Whether it was.
 	bool ApplyTo(components::HandGrab& grab, entt::entity target);

@@ -226,11 +226,12 @@ inline constexpr int32_t k_LookStep = 0x40;
 }
 
 /// How impressive a reaction to a shield is, times its miracle's usual value: nothing to the people of a town the
-/// shield's own player attacked as it went up or was struck, four times as much as it is destroyed
-[[nodiscard]] float ImpressiveMultiplier(Reaction reaction, bool townAttackedByShieldPlayer, bool physical);
+/// shield's own player attacked as it went up or was struck, four times as much as it is destroyed. The two kinds of
+/// shield are the same miracle, so the rule is the same for each kind.
+[[nodiscard]] float ImpressiveMultiplier(Reaction reaction, bool townAttackedByShieldPlayer);
 /// Whether a villager takes no belief from a reaction to a shield: its town was last attacked by the shield's player, and
-/// it sees the shield go up or a shield of magic be struck. Each villager's town is tested as the villager reacts.
-[[nodiscard]] bool TownIgnoresShield(Reaction reaction, bool townAttackedByShieldPlayer, bool physical);
+/// it sees the shield go up or be struck. Each villager's town is tested as the villager reacts.
+[[nodiscard]] bool TownIgnoresShield(Reaction reaction, bool townAttackedByShieldPlayer);
 inline constexpr float k_DestroyedImpressiveness = 4.0f;
 
 } // namespace openblack::magic::shield
