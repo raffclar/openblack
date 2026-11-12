@@ -15,6 +15,8 @@
 #include <glm/geometric.hpp>
 #include <gtest/gtest.h>
 
+#include "3D/MapCoords.h"
+#include "Common/GUtilsAngle.h"
 #include "ECS/VillagerRoutine.h"
 
 using namespace openblack;
@@ -76,15 +78,35 @@ TEST(VillagerRoutine, OutOfTheDoorTheDistanceIsDrawnBeforeTheAngle)
 TEST(VillagerRoutine, SittingAboutTownIsWithinTheChillOutDistance)
 {
 	FakeFloats random {.answers = {k_EighthPi, 0.0f}};
-	const glm::vec2 congregation {200.0f, 200.0f};
-	const glm::vec2 villager {200.0f, 260.0f};
+	const auto congregation = map_coords::FromMetres({200.0f, 200.0f});
+	const auto villager = map_coords::FromMetres({200.0f, 260.0f});
 	const auto spot = ChillOutPos(congregation, villager, 30.0f, random.Random());
 	ASSERT_EQ(random.limits.size(), 2u);
 	EXPECT_FLOAT_EQ(random.limits[0], k_QuarterPi);
 	EXPECT_FLOAT_EQ(random.limits[1], 27.0f);
 	// The least distance, a tenth of the chill-out distance, on the villager's side
-	EXPECT_NEAR(glm::distance(spot, congregation), 3.0f, k_GridLeeway);
-	EXPECT_LT(glm::distance(spot, villager), glm::distance(congregation, villager));
+	const auto metres = map_coords::ToMetres(spot);
+	EXPECT_NEAR(glm::distance(metres, map_coords::ToMetres(congregation)), 3.0f, k_GridLeeway);
+	EXPECT_LT(glm::distance(metres, map_coords::ToMetres(villager)),
+	          glm::distance(map_coords::ToMetres(congregation), map_coords::ToMetres(villager)));
+}
+
+TEST(VillagerRoutine, SittingAboutTownAddsItsStepToTheGatheringPlaceInWholeMapUnits)
+{
+	// A gathering place that does not come back from metres to the same map units
+	int32_t unit = 13107200;
+	while (map_coords::ToFixed(map_coords::ToMetres(unit)) == unit)
+	{
+		++unit;
+	}
+	const map_coords::MapCoords congregation {.x = unit, .z = unit, .altitude = 0.0f};
+	const map_coords::MapCoords villager {.x = unit, .z = unit + 393216, .altitude = 0.0f};
+	FakeFloats random {.answers = {k_EighthPi, 0.0f}};
+	const auto spot = ChillOutPos(congregation, villager, 30.0f, random.Random());
+	// The step is cut to whole map units first and then added, so the gathering place keeps its last unit
+	const auto step = gutils::GetPosFromAngle(gutils::Get3DAngleFromXZ(congregation, villager), 3.0f);
+	EXPECT_EQ(spot.x, unit + step.x);
+	EXPECT_EQ(spot.z, unit + step.z);
 }
 
 TEST(VillagerRoutine, NothingToDoIsOneInNineHomeThreeOutsideFiveInTown)

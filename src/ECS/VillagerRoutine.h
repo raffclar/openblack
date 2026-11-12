@@ -17,6 +17,7 @@
 
 #include <glm/vec2.hpp>
 
+#include "3D/MapCoords.h"
 #include "Enums.h"
 
 /// The rules of a villager's day around its home, as the game has them: where it steps out of its door, where it sits
@@ -55,9 +56,11 @@ constexpr float k_ChillOutRadiusShare = 0.1f;
 /// They sit within this many of those tenths past it
 constexpr float k_ChillOutRadiusSpan = 9.0f;
 /// Where a villager goes to sit about its town: on its own side of the gathering place, give or take an eighth of a
-/// turn, from a tenth of the town's chill-out distance to the whole of it. The angle's jitter is drawn first.
-[[nodiscard]] glm::vec2 ChillOutPos(glm::vec2 congregation, glm::vec2 villager, float chillOutDistance,
-                                    const FloatRandom& random);
+/// turn, from a tenth of the town's chill-out distance to the whole of it. The angle's jitter is drawn first. The
+/// offset is added to the gathering place in whole map units.
+[[nodiscard]] map_coords::MapCoords ChillOutPos(const map_coords::MapCoords& congregation,
+                                                const map_coords::MapCoords& villager, float chillOutDistance,
+                                                const FloatRandom& random);
 
 /// What a villager with nothing to do does
 enum class Idle : uint8_t

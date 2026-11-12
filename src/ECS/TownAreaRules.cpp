@@ -11,6 +11,7 @@
 
 #include <array>
 
+#include "Common/GUtilsAngle.h"
 #include "Common/X87.h"
 
 using namespace openblack;
@@ -105,4 +106,12 @@ map_coords::MapCoords town_area::GatheringMiddle(std::span<const map_coords::Map
 	return {.x = map_coords::FtoL(x87::Div(static_cast<double>(x), count)),
 	        .z = map_coords::FtoL(x87::Div(static_cast<double>(z), count)),
 	        .altitude = 0.0f};
+}
+
+map_coords::MapCoords town_area::GatheringPlaceNear(const map_coords::MapCoords& base,
+                                                    const std::function<float(float)>& random)
+{
+	const float distance = random(k_GatheringNearRange) + k_GatheringNearLeast;
+	const float angle = random(k_GatheringNearTurn);
+	return base + gutils::GetPosFromAngle(angle, distance);
 }

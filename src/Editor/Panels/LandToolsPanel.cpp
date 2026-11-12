@@ -411,7 +411,7 @@ land_save::TownLine TownLineOf(const ecs::Registry& registry, entt::entity entit
 	}
 	if (town.congregationPos.has_value())
 	{
-		line.congregation = paths::PlaceOf(glm::vec3(town.congregationPos->x, 0.0f, town.congregationPos->y));
+		line.congregation = glm::ivec2(town.congregationPos->x, town.congregationPos->z);
 	}
 	return line;
 }
