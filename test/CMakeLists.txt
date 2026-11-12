@@ -2574,3 +2574,15 @@ set_tests_properties(
   PROPERTIES ENVIRONMENT
              "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
 )
+openblack_setup_and_add_test(test_landgen_shape landgen/test_landgen_shape.cpp)
+target_link_libraries(test_landgen_shape PRIVATE landgen)
+openblack_setup_and_add_test(
+  test_landgen_climate landgen/test_landgen_climate.cpp
+)
+target_link_libraries(test_landgen_climate PRIVATE landgen)
+openblack_setup_and_add_test(
+  test_landgen_generator landgen/test_landgen_generator.cpp
+)
+target_link_libraries(test_landgen_generator PRIVATE landgen)
+openblack_setup_and_add_test(test_generated_land test_generated_land.cpp)
+target_link_libraries(test_generated_land PRIVATE landgen lnd)

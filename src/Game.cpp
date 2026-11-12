@@ -47,6 +47,7 @@
 #if defined(OPENBLACK_DEVELOPER_TOOLS)
 #include "Common/DrawTrace.h"
 #endif
+#include "Common/DeveloperToolsGate.h"
 #include "Common/EventManager.h"
 #include "Common/FatalMessage.h"
 #include "Common/GameRandom.h"
@@ -289,8 +290,10 @@ Game::Game(Arguments&& args) noexcept
     , _newGameAsked(args.newGame || launch_switches::FirstGameOf(args.launchSwitches) == launch_switches::FirstGame::NewGame)
     , _continueAsked(args.continueGame)
     , _launchSwitches(args.launchSwitches)
-    , _startTestbed(args.startTestbed || args.startGodsRingMap || args.scenario.has_value())
+    , _startTestbed(args.startTestbed || args.startGodsRingMap || args.scenario.has_value() ||
+                    args.startGeneratedLand.has_value())
     , _startGodsRingMap(args.startGodsRingMap)
+    , _startGeneratedLand(args.startGeneratedLand)
     , _scenarioRequest(args.scenario)
     , _inspectPort(args.inspectPort)
     , _simulation(args.simulation)
@@ -931,6 +934,15 @@ Game::RunStart Game::StartRun() noexcept
 	{
 		// The map for 32 gods, as a network game plays it
 		if (!LoadGodsRingMap())
+		{
+			return RunStart::Failed;
+		}
+	}
+	else if (_startGeneratedLand.has_value())
+	{
+		// A generated land is a developer tool for now, as the testbed is
+		if (!developer_tools::Allowed(developer_tools::Action::ScenarioLoad) ||
+		    !Locator::landSystem::value().LoadGeneratedLand(*_startGeneratedLand))
 		{
 			return RunStart::Failed;
 		}

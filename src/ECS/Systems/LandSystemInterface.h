@@ -132,6 +132,10 @@ public:
 	/// Loads the testbed: a flat land over the whole map with a lake, a dispenser of each miracle and no script. Gives
 	/// false, and loads nothing, in a build without the developer tools.
 	virtual bool LoadTestbed() = 0;
+	/// Loads a land that the land generator makes from the seed: an island with mountains, rivers, lakes and biomes,
+	/// with its trees and rocks and no script. Gives false, and loads nothing, in a build without the developer tools or
+	/// when the game folder does not have the landscapes whose materials the land takes.
+	virtual bool LoadGeneratedLand([[maybe_unused]] uint64_t seed) { return false; }
 	/// Loads the network map for 32 gods on this computer alone, for tests: a round island with a citadel and a village in
 	/// each slot. The village comes from a land of the game for network play. Gives false when that land is not there.
 	/// The game makes the file of the map and loads it as LoadGodsRingMapFile does.

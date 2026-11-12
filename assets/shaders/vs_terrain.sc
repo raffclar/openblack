@@ -38,8 +38,8 @@ void main()
 
 	// The corner as it is drawn this frame, when its block morphs or cross-fades
 	vec2 corner = floor(a_position.xz / 10.0f + 0.5f);
-	vec2 square = vec2(mod(u_block.x, 16.0f), floor(u_block.x / 16.0f)) * 17.0f;
-	vec2 drawn = floor(texture2DLod(s8_landCorners, (square + corner + 0.5f) / 272.0f, 0.0f).rg * 255.0f + 0.5f);
+	vec2 square = vec2(mod(u_block.x, 32.0f), floor(u_block.x / 32.0f)) * 17.0f;
+	vec2 drawn = floor(texture2DLod(s8_landCorners, (square + corner + 0.5f) / 544.0f, 0.0f).rg * 255.0f + 0.5f);
 	// z: how opaque the block's coarse texture is over its full one at the corner: clear before the texture line's band,
 	// opaque beyond it, in 255ths across it
 	float coarseFade = u_block.z > 0.5f && u_block.z < 1.5f ? drawn.y / 255.0f : 1.0f;
