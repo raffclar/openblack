@@ -20,6 +20,7 @@
 #include <glm/vec3.hpp>
 
 #include "Enums.h"
+#include "Visual/RenderModes.h"
 
 /// How the miracles look outside their effects: the one-shot globes and the miracle floating in each, the rings round
 /// an extreme miracle, the bands and bracelets on the hand that holds a miracle and its glow. Pure rules, which the
@@ -37,6 +38,14 @@ inline constexpr int k_GlintCells = 16;
 inline constexpr uint8_t k_GlobeOwnAlpha = 150;
 inline constexpr uint8_t k_GlobeAlpha = static_cast<uint8_t>((255u * k_GlobeOwnAlpha) >> 8u);
 static_assert(k_GlobeAlpha == 149);
+/// The game changes the materials of the globe's dome when it makes the globe. The dome adds its texture by the alpha of
+/// the texture and writes its depth, also where the texture has no alpha. It shows only its front faces.
+inline constexpr graphics::render_modes::Properties k_GlobeMaterials {
+    .additive = true,
+    .writesDepth = true,
+    .bothSides = false,
+    .textureAlpha = true,
+};
 /// The miracle in a globe is drawn at this share of the globe's size
 inline constexpr float k_GlobeSeedScale = 0.6f;
 

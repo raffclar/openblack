@@ -368,9 +368,9 @@ void Renderer::DrawGlobes(const DrawSceneDesc& desc) const
 		                     .ownerAlignment = 0.0f});
 
 		// The globe, added at 150 of 255 by its texture's alpha and writing its depth, turned to face the camera about its
-		// middle, its glint running over its dome. It is drawn where it is, round its seed; only where it comes among the
-		// blended things is taken from its middle pushed towards the camera by its radius, so that it comes after what is
-		// inside it. The sort uses the key of a placed model.
+		// middle, its glint running over its dome. Its materials are those that the game changes when it makes the globe. It is
+		// drawn where it is, round its seed; only where it comes among the blended things is taken from its middle pushed
+		// towards the camera by its radius, so that it comes after what is inside it. The sort uses the key of a placed model.
 		if (haveBubble)
 		{
 			const auto bubble = meshes.Handle(OneOffSpellSeed::k_MeshId.value());
@@ -389,7 +389,9 @@ void Renderer::DrawGlobes(const DrawSceneDesc& desc) const
 			submitDesc.matrixCount = 1;
 			submitDesc.mirrored = reflection;
 			submitDesc.useMaterialCulling = true;
-			submitDesc.state = k_AddedState | BGFX_STATE_WRITE_Z;
+			submitDesc.useMaterialBlending = true;
+			submitDesc.changedMaterials = visuals::k_GlobeMaterials;
+			submitDesc.state = k_BlendedState | BGFX_STATE_WRITE_Z;
 			submitDesc.tint = glm::vec4(1.0f, 1.0f, 1.0f, static_cast<float>(visuals::k_GlobeAlpha) / k_ByteMax);
 			submitDesc.uvOffset = visuals::GlintUvOffset(globe.glintFrame);
 			submitDesc.sortDepth = zsort::ModelDepth(visuals::GlobeSortPoint(globe.middle, eye, radius), eye);
