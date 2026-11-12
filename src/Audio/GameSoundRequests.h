@@ -69,6 +69,8 @@ public:
 
 	[[nodiscard]] entt::entity CreateSoundOwner() override;
 	void DestroySoundOwner(entt::entity owner) override;
+	[[nodiscard]] bool TakeListenerLeft(entt::entity owner) override;
+	void MarkListenerLeftPlacedSounds() override;
 
 	void StopAllSounds() override;
 	void ProcessAtmosphere(bool active) override;

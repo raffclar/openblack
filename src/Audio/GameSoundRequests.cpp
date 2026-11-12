@@ -325,7 +325,47 @@ entt::entity GameSoundRequests::CreateSoundOwner()
 {
 	auto* const audio = Manager();
 	auto* const emitters = audio != nullptr ? audio->Emitters() : nullptr;
-	return emitters != nullptr ? emitters->Create() : entt::null;
+	if (emitters == nullptr)
+	{
+		return entt::null;
+	}
+	const auto owner = emitters->Create();
+	emitters->Assign<ecs::components::SoundOwner>(owner);
+	return owner;
+}
+
+bool GameSoundRequests::TakeListenerLeft(entt::entity owner)
+{
+	auto* const audio = Manager();
+	auto* const emitters = audio != nullptr ? audio->Emitters() : nullptr;
+	if (owner == entt::null || emitters == nullptr || !emitters->Valid(owner))
+	{
+		return false;
+	}
+	auto* const record = emitters->TryGet<ecs::components::SoundOwner>(owner);
+	return record != nullptr && std::exchange(record->listenerLeft, false);
+}
+
+void GameSoundRequests::MarkListenerLeftPlacedSounds()
+{
+	auto* const audio = Manager();
+	auto* const emitters = audio != nullptr ? audio->Emitters() : nullptr;
+	if (emitters == nullptr)
+	{
+		return;
+	}
+	emitters->Each<const ecs::components::AudioEmitter>(
+	    [emitters](entt::entity /*entity*/, const ecs::components::AudioEmitter& emitter) {
+		    if (emitter.follows != Follows::Place || emitter.state == AudioStatus::Stopped || emitter.owner == entt::null ||
+		        !emitters->Valid(emitter.owner))
+		    {
+			    return;
+		    }
+		    if (auto* const owner = emitters->TryGet<ecs::components::SoundOwner>(emitter.owner); owner != nullptr)
+		    {
+			    owner->listenerLeft = true;
+		    }
+	    });
 }
 
 void GameSoundRequests::DestroySoundOwner(entt::entity owner)
