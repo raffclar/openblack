@@ -57,6 +57,7 @@ if (typeof WorkerGlobalScope === 'undefined' || !(self instanceof WorkerGlobalSc
       openblackWeb: {
         folder: openblackWeb.folder, storage: openblackWeb.storage, version: openblackWeb.version,
         requests: openblackWeb.requests, displayFrames: openblackWeb.displayFrames,
+        gameFrames: openblackWeb.gameFrames,
       },
     });
     if (!listened.has(worker)) {
