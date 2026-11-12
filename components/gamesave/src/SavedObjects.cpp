@@ -9,6 +9,10 @@
 
 #include "SavedObjects.h"
 
+#include <cstring>
+
+#include "VanillaWorld.h"
+
 using namespace openblack::gamesave;
 
 namespace
@@ -238,6 +242,20 @@ std::shared_ptr<SavedObject> ReadLeashStatus(StreamReader& reader, uint32_t extr
 	leash.leash = std::move(*record);
 	return std::make_shared<SavedObject>(SavedObject {.value = std::move(leash)});
 }
+
+/// True when the record that follows is of a class that the creature part does not read
+bool IsOtherClass(const StreamReader& reader)
+{
+	const auto bytes = reader.Stream();
+	const auto at = reader.Position();
+	if (bytes.size() - at < sizeof(uint32_t))
+	{
+		return false;
+	}
+	uint32_t type = 0;
+	std::memcpy(&type, bytes.data() + at, sizeof(type));
+	return type != k_CreatureType && type != k_LeashStatusType && KnowsVanillaType(type);
+}
 } // namespace
 
 bool ObjectRef::operator==(const ObjectRef& other) const
@@ -255,7 +273,16 @@ void openblack::gamesave::Write(StreamWriter& writer, const ObjectRef& ref)
 	{
 		return;
 	}
-	if (ref.record != nullptr)
+	const auto* other = ref.record != nullptr ? std::get_if<OtherObject>(&ref.record->value) : nullptr;
+	if (other != nullptr)
+	{
+		// At another place than the record's place, the object has no record in the stream
+		if (!writer.PutRecorded(other->start, other->bytes, other->after))
+		{
+			writer.MarkForeign(ref.key);
+		}
+	}
+	else if (ref.record != nullptr)
 	{
 		Write(writer, *ref.record);
 	}
@@ -268,6 +295,8 @@ void openblack::gamesave::Write(StreamWriter& writer, const ObjectRef& ref)
 bool openblack::gamesave::Read(StreamReader& reader, ObjectRef& ref)
 {
 	ref.record = nullptr;
+	const auto at = reader.Position();
+	const StreamStart before {.objects = reader.Objects(), .checksum = reader.Checksum()};
 	switch (reader.GetReference(ref.key))
 	{
 	case ReferenceKind::None:
@@ -275,6 +304,26 @@ bool openblack::gamesave::Read(StreamReader& reader, ObjectRef& ref)
 	case ReferenceKind::Foreign:
 		return true;
 	case ReferenceKind::New:
+		if (IsOtherClass(reader))
+		{
+			// The read takes a record of another class, such as the spell that a creature holds, with the layout of the
+			// game's world file. The reference keeps the bytes of the record.
+			const auto read = ReadVanillaRecordEnd(reader.Stream(), at, before);
+			if (!read.has_value())
+			{
+				uint32_t type = 0;
+				reader.Get(type);
+				reader.SetUnknownType(type);
+				return false;
+			}
+			const auto bytes = reader.Stream().subspan(reader.Position(), read->end - reader.Position());
+			OtherObject other {.start = {.objects = reader.Objects(), .checksum = reader.Checksum()},
+			                   .after = read->after,
+			                   .bytes = std::vector<uint8_t>(bytes.begin(), bytes.end())};
+			reader.Continue(read->end, read->after);
+			ref.record = std::make_shared<SavedObject>(SavedObject {.value = std::move(other)});
+			return true;
+		}
 		ref.record = ReadObject(reader);
 		return ref.record != nullptr;
 	case ReferenceKind::Bad:
@@ -296,6 +345,14 @@ void openblack::gamesave::Write(StreamWriter& writer, const LeashStatusObject& l
 {
 	Put(writer, k_LeashStatusType, leash.thing);
 	Write(writer, leash.leash);
+}
+
+void openblack::gamesave::Write(StreamWriter& writer, const OtherObject& other)
+{
+	if (!writer.PutRecorded(other.start, other.bytes, other.after))
+	{
+		writer.Fail();
+	}
 }
 
 void openblack::gamesave::Write(StreamWriter& writer, const SavedObject& object)
