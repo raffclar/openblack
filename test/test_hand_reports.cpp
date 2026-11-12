@@ -1193,6 +1193,55 @@ TEST_F(ReportedHands, TheEndOfTheInterfaceLockAfterTheReleaseSendsTheEndOfTheLoc
 	}
 }
 
+// The action of the hand keeps the creature of its press: in the press that waits for a tap, in the hold, and while the
+// lock waits for its end. A creature that goes from the world stays the creature of the press, so that the frame ends
+// the interface lock. The end of the interface lock forgets the creature.
+TEST_F(ReportedHands, TheHandKeepsTheCreatureOfThePressUntilTheEndOfTheInterfaceLock)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	Locator::handSystem::reset(&_hands, [](ecs::systems::HandSystemInterface* /*unowned*/) {});
+	SentCommands commands;
+	Locator::playerCommandSystem::reset(&commands, [](ecs::systems::PlayerCommandSystemInterface* /*unowned*/) {});
+	const auto log = spdlog::get("game") != nullptr ? nullptr : spdlog::null_logger_mt("game");
+	const auto creature = registry.Create();
+	registry.Assign<ecs::components::Creature>(creature, ecs::components::Creature {.owner = PlayerNames::PLAYER_ONE});
+	registry.Assign<ecs::components::CreatureAnimation>(creature).yaw.angle = 0.5f;
+	ecs::systems::CreatureHandSystem creatures;
+	EXPECT_EQ(creatures.GetPressCreature(), entt::entity {entt::null});
+
+	// The press waits for a tap, then the hand holds the creature
+	creatures.WaitForTap(creature, 1000, 10);
+	EXPECT_EQ(creatures.GetPressCreature(), creature);
+	creatures.WaitFrame(1226, 12);
+	creatures.DoLock(PlayerNames::PLAYER_ONE, creature);
+	EXPECT_EQ(creatures.GetPressCreature(), creature);
+	creatures.StopActionAtLockEnd();
+	EXPECT_EQ(creatures.GetPressCreature(), entt::entity {entt::null});
+	creatures.DoUnlock(PlayerNames::PLAYER_ONE, creature);
+
+	// The button let go, and the lock waits for its end. The creature goes from the world.
+	creatures.DoLock(PlayerNames::PLAYER_ONE, creature);
+	creatures.DoLockRelease(PlayerNames::PLAYER_ONE, creature);
+	EXPECT_EQ(creatures.GetPressCreature(), creature);
+	registry.Destroy(creature);
+	EXPECT_EQ(creatures.GetPressCreature(), creature);
+	// The end of the interface lock sends nothing for the creature, and the hand stays free while the world keeps the lock
+	commands.sent.clear();
+	creatures.StopActionAtLockEnd();
+	EXPECT_TRUE(commands.sent.empty());
+	EXPECT_EQ(creatures.GetPressCreature(), entt::entity {entt::null});
+	creatures.InterfaceFrame();
+	EXPECT_FALSE(creatures.WaitsForLockEnd());
+	EXPECT_EQ(creatures.GetPressCreature(), entt::entity {entt::null});
+
+	Locator::playerCommandSystem::reset();
+	Locator::handSystem::reset();
+	if (log != nullptr)
+	{
+		spdlog::drop("game");
+	}
+}
+
 // The world save keeps the release of the button on the lock. The hand of this computer does not save the end that it
 // sent, so after a load it sends the end again.
 TEST_F(ReportedHands, TheSaveKeepsTheReleaseOfTheLockButNotTheSentEnd)

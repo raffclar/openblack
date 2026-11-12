@@ -127,6 +127,10 @@ public:
 	/// Whether the hand of this computer's player waits for the end of the lock on a creature: the button let go of it,
 	/// and the world did not end the lock yet
 	[[nodiscard]] virtual bool WaitsForLockEnd() const { return false; }
+	/// The creature that the action of the hand of this computer keeps from its press: the creature that the hand holds,
+	/// the creature of a press that waits for a tap, or the creature of a lock that waits for its end. Null when the hand
+	/// does none of these.
+	[[nodiscard]] virtual entt::entity GetPressCreature() const { return entt::null; }
 	/// At the turn: a hard slap bruised a creature (player_commands::CreatureBruise)
 	virtual void DoBruise(PlayerNames /*player*/, const player_commands::CreatureBruise& /*bruise*/) {}
 	/// The turn of a stroke or a slap that a player sent in a network game: the creature plays its reaction

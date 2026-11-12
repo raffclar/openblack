@@ -219,7 +219,7 @@ public:
 	[[nodiscard]] bool IsHandBusyOf(PlayerNames player) const override { return HeldOf(player).has_value(); }
 	[[nodiscard]] magic::PourPose GetHandPour(float fraction) const override { return magic::PourPoseAt(_pour, fraction); }
 	[[nodiscard]] HandCastState GetHandCastState() const override;
-	[[nodiscard]] bool PressThingGone() const override;
+	[[nodiscard]] entt::entity GetPressThing() const override;
 	[[nodiscard]] std::optional<entt::entity> GetHeldSeed() const override { return HeldOf(OwnPlayer()); }
 	[[nodiscard]] std::optional<entt::entity> GetHeldSeedOf(PlayerNames player) const override { return HeldOf(player); }
 	/// The nearest fireball the ray passes through that the hand may hold now, if any
@@ -567,6 +567,8 @@ private:
 	magic::CastInput _input;
 	/// The thing that the press of a seed armed on a thing was on. The cast at the let go goes to this thing.
 	entt::entity _pressThing {entt::null};
+	/// The thing that was under the hand at the press of a seed that is armed or locked at a point
+	entt::entity _pressPick {entt::null};
 	/// The action button is down
 	bool _actionDown {false};
 	/// A fireball the action button went down on, and when
