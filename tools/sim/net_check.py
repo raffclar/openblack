@@ -177,6 +177,14 @@ DEFAULT_GAME_PATH = sim_paths.DEFAULT_GAME_PATH
 CHECKSUM_LINE = re.compile(r"turn (\d+) checksum ([0-9a-f]{16})")
 LISTEN_LINE = re.compile(r"The game server listens on [0-9.]+:(\d+)")
 SERVER_ID = "net-check-1"
+# The id of the lobby of a lobby game (--lobby-game). Each join ticket then names it.
+LOBBY_ID = "net-check-lobby"
+# The account of the client of another build (--wrong-build-client): a member of the lobby, so that only its build is wrong
+WRONG_BUILD_ACCOUNT = 199
+# The build id that the client of another build gives
+WRONG_BUILD_ID = "0.0.0+000000000000/codec0"
+# The ticket names the lobby when the run plays a lobby game
+TICKET_LOBBY = {"lobby": None}
 # The input of the first client starts after this many frames (50 s at 20 ms), when both clients loaded and the game
 # started
 INPUT_OFFSET_FRAMES = 2500
@@ -261,6 +269,8 @@ def make_ticket(key, kid, account, name, role, lifetime):
         "exp": (now + datetime.timedelta(seconds=lifetime)).isoformat(),
         "jti": b64(os.urandom(16)), "name": name, "clans": [], "admin": False, "role": role,
     }
+    if TICKET_LOBBY["lobby"] is not None:
+        claims["lobby"] = TICKET_LOBBY["lobby"]
     message = json.dumps(claims, separators=(",", ":")).encode("utf-8")
     footer = json.dumps({"kid": kid}, separators=(",", ":")).encode("utf-8")
     header = b"v4.public."
@@ -1818,7 +1828,7 @@ def web_join_plan(options, join_url, ticket, turns):
             "seconds": seconds}
 
 
-def run_web_plan(plan, folder, page, chrome, game_path, processes):
+def run_web_plan(plan, folder, page, chrome, game_path, processes, size=f"{WEB_WIDTH}x1024", gpu=False):
     """One web client in headless Chrome: a server for the web page on 127.0.0.1, and cdp-run.mjs, which starts the Chrome
     with its own profile folder in the folder of the run. The server of the page has a test certificate of its own and
     passes the game socket of the page to the game server of the plan. The page writes the checksum of each turn
@@ -1842,7 +1852,9 @@ def run_web_plan(plan, folder, page, chrome, game_path, processes):
     url = f"https://127.0.0.1:{port}/index.html?{query}"
     command = [DEFAULT_NODE, os.path.join(ROOT, "web", "scripts", "cdp-run.mjs"), chrome, url, str(plan["seconds"]),
                folder, "--game-folder", game_path, "--checksums", checksums, "--checksum-turns", str(plan["turns"]),
-               "--trust-spki", spki_hash(certs["server.pem"]), "--size", f"{WEB_WIDTH}x1024"]
+               "--trust-spki", spki_hash(certs["server.pem"]), "--size", size]
+    if gpu:
+        command.append("--gpu")
     if plan["actions"]:
         actions = os.path.join(folder, "web_actions.json")
         with open(actions, "w", encoding="utf-8") as file:
@@ -1861,7 +1873,8 @@ def start_web_client(options, out, join_url, ticket, certs, turns, processes):
     os.makedirs(folder, exist_ok=True)
     plan = web_join_plan(options, join_url, ticket, turns)
     if not options.web_remote:
-        return folder, run_web_plan(plan, folder, web_page_of(options), options.chrome, options.game_path, processes)
+        return folder, run_web_plan(plan, folder, web_page_of(options), options.chrome, options.game_path, processes,
+                                    size=options.web_size, gpu=options.web_gpu)
     for name in ("done", "checksums.jsonl", "console.log", "page-log.txt"):
         if os.path.exists(os.path.join(folder, name)):
             os.remove(os.path.join(folder, name))
@@ -2012,6 +2025,14 @@ def main():
                              "give the option more times for more arguments")
     parser.add_argument("--stop-second-after", type=float, help="stop the second client after this many seconds")
     parser.add_argument("--come-back-seconds", type=int, default=10)
+    parser.add_argument("--lobby-game", action="store_true",
+                        help="the server plays the game of one lobby, as a server of the pool: it takes only the members "
+                             "of the lobby (each client in its slot), and each ticket names the lobby")
+    parser.add_argument("--join-window", type=int, default=120,
+                        help="with --lobby-game, the seconds in which the members join")
+    parser.add_argument("--wrong-build-client", action="store_true",
+                        help="before the clients join, a client of another build id tries to join, and the server must "
+                             "refuse it with \"version\"")
     parser.add_argument("--restart-server-at", type=int,
                         help="stop the server by its process id after this turn, and start it again from its snapshots")
     parser.add_argument("--ban-account", type=int,
@@ -2032,6 +2053,10 @@ def main():
                         help="one more observer: the web build in headless Chrome (cdp-run.mjs). Needs the web build of "
                              "this tree (--web-page, tools/build/ob-web build)")
     parser.add_argument("--web-page", help="the folder of the web page (the web build's bin/Release)")
+    parser.add_argument("--web-size", default=f"{WEB_WIDTH}x1024",
+                        help="WIDTHxHEIGHT of the window of the web client, such as 5120x1190 for a wide screen")
+    parser.add_argument("--web-gpu", action="store_true",
+                        help="the web client draws with the graphics card (cdp-run --gpu), not with the software renderer")
     parser.add_argument("--web-god", action="store_true",
                         help="with --web-client, the web client plays the god of the slot after the desktop gods")
     parser.add_argument("--web-chat", action="append", default=[],
@@ -2213,6 +2238,19 @@ def main():
     # A land with no temple at the start (a story land, the testbed) would end the game at its first turn
     land_kind = {"land": options.land, "testbed": options.testbed, "gods_ring_map": options.gods_ring_map}
     server_command += sim_report.gods_need_no_temple_args(True, **land_kind)
+    if options.lobby_game:
+        if options.web_client or options.all_computer_gods or options.scenario:
+            parser.error("--lobby-game does not go with --web-client, --all-computer-gods or --scenario")
+        TICKET_LOBBY["lobby"] = LOBBY_ID
+        members = [{"account": str(100 + index), "role": "god", "slot": index} for index in range(options.clients)]
+        members += [{"account": str(100 + options.clients + index), "role": "observer"}
+                    for index in range(options.observers)]
+        members.append({"account": str(WRONG_BUILD_ACCOUNT), "role": "observer"})
+        members_file = os.path.join(keys_dir, "members.json")
+        with open(members_file, "w", encoding="utf-8") as file:
+            json.dump({"members": members}, file)
+        server_command += ["--lobby-id", LOBBY_ID, "--expect-members", members_file, "--game-id", SERVER_ID,
+                           "--join-window", str(options.join_window)]
     lobby = None
     if options.ban_account is not None or options.lobby_results:
         if options.ban_account is not None and 100 <= options.ban_account < 100 + options.clients:
@@ -2225,6 +2263,7 @@ def main():
         server_command += ["--lobby-api", lobby.address, "--client-cert", certs["client.pem"],
                            "--client-key", certs["client.key"], "--lobby-test-ca", certs["ca.pem"]]
     banned_result = None
+    wrong_build = None
     if options.trace_draws:
         server_command += ["--trace-draws", server_trace]
     if options.temple_loss:
@@ -2265,6 +2304,9 @@ def main():
             time.sleep(options.room_wait)
         if options.leave_room_first and not leave_room(game_exe, options, url, key, kid, certs, out, server_log):
             return 1
+        if options.wrong_build_client:
+            wrong_build = try_wrong_build_join(options, game_exe, url, (key, kid), certs, server_log, processes,
+                                               os.path.join(out, "wrong_build"))
         if options.ban_account is not None:
             banned_result = try_banned_join(options, game_exe, url, (key, kid), certs, server_log, server,
                                             os.path.join(out, "banned"), processes)
@@ -2758,6 +2800,20 @@ def main():
         banned_result["bans_with_each_report"] = lobby.counts["status"] > 0 and lobby.counts["bans"] >= lobby.counts["status"] - 1
         summary["banned"] = banned_result
         all_same = all_same and banned_result["refused"] and banned_result["bans_with_each_report"]
+    if wrong_build is not None:
+        summary["wrong_build"] = wrong_build
+        if not wrong_build["refused"]:
+            print(f"the server did not refuse the client of another build: {json.dumps(wrong_build)}")
+            all_same = False
+    if options.lobby_game:
+        # The server of a lobby game ends by itself after its game, with the exit code of its end
+        ends = lines_with(server_log, ["The game server ends:"])
+        summary["lobby_game"] = {"exit_code": server.returncode, "end": ends,
+                                 "members": lines_with(server_log, ["of the lobby", "refuses the account",
+                                                                    "The time to join ended"])}
+        if server.returncode is None or not ends:
+            print(f"the server of the lobby game did not end by itself with its line: {json.dumps(summary['lobby_game'])}")
+            all_same = False
     if options.same_server_as:
         summary["server_against_runs"] = []
         for other in options.same_server_as:
@@ -2781,6 +2837,32 @@ def main():
         json.dump(summary, file, indent=2)
     print(json.dumps(summary, indent=2))
     return 0 if all_same else 1
+
+
+def try_wrong_build_join(options, game_exe, url, signer, certs, server_log, processes, folder):
+    """A client of another build id tries to join. Gives whether the server refused it with "version", and the lines of
+    the client and the server."""
+    os.makedirs(folder, exist_ok=True)
+    log = os.path.join(folder, "client.log")
+    if os.path.exists(log):
+        os.remove(log)
+    ticket = make_ticket(signer[0], signer[1], WRONG_BUILD_ACCOUNT, "WrongBuild", "observer", 600)
+    command = [game_exe, "-g", options.game_path, "--skip-logos", "--sim-frame-ms", "20", "--sim-until-turn", "10",
+               "--sim-still-hand", "-n", "4000000000", "--background", "-l", log,
+               "--join", url, "--join-ticket-file", ticket_file(folder, ticket), "--join-test-ca", certs["ca.pem"],
+               "--join-build-id", WRONG_BUILD_ID]
+    client = start(command, folder)
+    processes.append(client)
+    refused = wait_for_line(log, "The game server refused the client: version", client, limit=180) or bool(
+        lines_with(log, ["The game server refused the client: version"]))
+    end = time.monotonic() + 60
+    while client.poll() is None and time.monotonic() < end:
+        time.sleep(0.5)
+    stopped_by_itself = client.poll() is not None
+    stop(client)
+    return {"build": WRONG_BUILD_ID, "refused": bool(refused), "stopped_by_itself": stopped_by_itself,
+            "client": lines_with(log, ["refused the client", "Joined the game server"]),
+            "server": lines_with(server_log, ["has the build", "refuses connection"])}
 
 
 def try_banned_join(options, game_exe, url, signer, certs, server_log, server, banned_dir, processes):

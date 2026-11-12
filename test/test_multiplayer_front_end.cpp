@@ -41,7 +41,7 @@
 #include "Gui/ScreenFit.h"
 #include "Gui/TextDatabase.h"
 #include "Online/LanDiscoveryInterface.h"
-#include "Online/LobbyBuild.h"
+#include "Online/GameBuildId.h"
 #include "Online/MapDownload.h"
 #include "Online/NetworkSession.h"
 #include "Online/OnlineMapStoreInterface.h"
@@ -902,7 +902,7 @@ TEST_F(FrontEndTest, JoinTakesATicketThenOpensTheGameSocket)
 	ASSERT_EQ(socket.sent.size(), 1u);
 	// The join gives the build id of the game to the server
 	EXPECT_EQ(socket.sent[0].Text(),
-	          R"({"build":")" + online::ThisBuildId() + R"(","ticket":"v4.public.t","type":"room.join"})");
+	          R"({"build":")" + online::build_id::Own() + R"(","ticket":"v4.public.t","type":"room.join"})");
 	// The network game joins for the front end: the server's land loads only after the start
 	ASSERT_EQ(network.joins.size(), 1u);
 	EXPECT_FALSE(network.joins[0].fromCommandLine);
@@ -1520,7 +1520,7 @@ TEST_F(FrontEndTest, TheLanListComesFromTheSearch)
 	sockets.Accept(sockets.order.back());
 	Step();
 	EXPECT_EQ(sockets.sockets.at(sockets.order.back()).sent[0].Text(),
-	          R"({"build":")" + online::ThisBuildId() + R"(","name":"Alice","type":"room.join"})");
+	          R"({"build":")" + online::build_id::Own() + R"(","name":"Alice","type":"room.join"})");
 	ServerJoins();
 	EXPECT_EQ(frontEnd->GetBox(), Box::Room);
 	frontEnd->Back();

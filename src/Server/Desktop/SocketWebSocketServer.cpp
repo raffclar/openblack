@@ -70,6 +70,17 @@ bool MakeNonBlocking(Socket socket)
 	u_long on = 1;
 	return ioctlsocket(socket, FIONBIO, &on) == 0;
 }
+bool PrepareListener(Socket socket)
+{
+	// On Windows, the address of a closed socket is free at once. This option stops other programs from taking the port
+	// of the server.
+	BOOL on = TRUE;
+	return setsockopt(socket, SOL_SOCKET, SO_EXCLUSIVEADDRUSE, reinterpret_cast<const char*>(&on), sizeof(on)) == 0;
+}
+int LastError()
+{
+	return WSAGetLastError();
+}
 #else
 using Socket = int;
 constexpr Socket k_NoSocket = -1;
@@ -90,6 +101,17 @@ bool MakeNonBlocking(Socket socket)
 #endif
 	const auto flags = fcntl(socket, F_GETFL, 0);
 	return flags >= 0 && fcntl(socket, F_SETFL, flags | O_NONBLOCK) == 0;
+}
+bool PrepareListener(Socket socket)
+{
+	// The connections of a server that stopped can stay in the system for minutes after the process ends. A new server
+	// on the same port must listen at once, so the listener can use the address of these old connections.
+	int on = 1;
+	return setsockopt(socket, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on)) == 0;
+}
+int LastError()
+{
+	return errno;
 }
 #endif
 
@@ -387,11 +409,13 @@ std::optional<std::string> SocketWebSocketServer::Listen(const ListenSettings& s
 		CloseSocket(listener);
 		return "the address is not an IPv4 address";
 	}
-	if (bind(listener, reinterpret_cast<const sockaddr*>(&address), sizeof(address)) != 0 || listen(listener, 64) != 0 ||
-	    !MakeNonBlocking(listener))
+	if (!PrepareListener(listener) || bind(listener, reinterpret_cast<const sockaddr*>(&address), sizeof(address)) != 0 ||
+	    listen(listener, 64) != 0 || !MakeNonBlocking(listener))
 	{
+		// The log gives the code of the system, so that the cause is clear, for example a port that a process holds
+		const auto error = LastError();
 		CloseSocket(listener);
-		return "the server cannot listen on that address and port";
+		return "the server cannot listen on that address and port (system error " + std::to_string(error) + ")";
 	}
 	socklen_t length = sizeof(address);
 	getsockname(listener, reinterpret_cast<sockaddr*>(&address), &length);

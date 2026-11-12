@@ -143,7 +143,8 @@ void NetworkSession::Open(bool resume)
 			            _stream->SendText(game_socket::ToJson(game_socket::Join {.ticket = _settings.ticket,
 			                                                                     .gamePassword = _settings.gamePassword,
 			                                                                     .name = _settings.name,
-			                                                                     .build = _settings.build}));
+			                                                                     .build = _settings.build,
+			                                                                     .map = _settings.map}));
 			            _state = State::Joining;
 		            }
 	            },

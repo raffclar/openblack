@@ -7,24 +7,25 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
-#include "LobbyBuild.h"
-
-#include <fmt/format.h>
+#include "GameBuildId.h"
 
 #include "Commands/TurnCodec.h"
 #include "Common/BuildVersion.h"
 
-namespace openblack::online
+namespace openblack::online::build_id
 {
 
-std::string BuildIdOf(std::string_view versionText, uint32_t codecVersion)
+std::string Compose(std::string_view version, uint8_t codec)
 {
-	return fmt::format("{}/codec{}", versionText, codecVersion);
+	std::string id(version);
+	id += k_CodecWord;
+	id += std::to_string(codec);
+	return id;
 }
 
-std::string ThisBuildId()
+std::string Own()
 {
-	return BuildIdOf(build_version::Text(), turn_codec::k_Version);
+	return Compose(build_version::Text(), turn_codec::k_Version);
 }
 
-} // namespace openblack::online
+} // namespace openblack::online::build_id

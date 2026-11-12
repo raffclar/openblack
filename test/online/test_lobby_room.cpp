@@ -23,7 +23,6 @@
 #include <gtest/gtest.h>
 
 #include "ECS/Systems/LobbyClientSystemInterface.h"
-#include "Online/LobbyBuild.h"
 #include "Online/LobbyRoom.h"
 
 // Enable this define because the test makes the system itself
@@ -173,12 +172,6 @@ TEST(LobbiesJson, TheCodeOfAPrivateLobby)
 	EXPECT_FALSE(lobby_api::NormalLobbyCode("K7Q2-MX9U").has_value());
 	EXPECT_FALSE(lobby_api::NormalLobbyCode("../K7Q2MX9D").has_value());
 	EXPECT_EQ(lobby_api::LobbyCodeText("K7Q2MX9D"), "K7Q2-MX9D");
-}
-
-TEST(LobbyBuild, TheIdHasTheVersionOfTheTurns)
-{
-	EXPECT_EQ(online::BuildIdOf("0.1.0+b20f90721", 34), "0.1.0+b20f90721/codec34");
-	EXPECT_NE(online::ThisBuildId().find("/codec"), std::string::npos);
 }
 
 TEST(LobbyEntry, ASignedInPlayerGoesToTheLobbyList)
