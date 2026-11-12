@@ -19,8 +19,8 @@
 #include "ECS/Components/CreatureFight.h"
 #include "ECS/Components/CreatureNeeds.h"
 #include "ECS/Components/CreatureSkin.h"
-#include "ECS/Components/CreatureTallies.h"
 #include "ECS/Components/CreatureSpells.h"
+#include "ECS/Components/CreatureTallies.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureSkinSystemInterface.h"
@@ -93,21 +93,28 @@ void creature_body_file::Apply(Registry& registry, entt::entity creature, const 
 	if (auto* self = registry.TryGet<Creature>(creature))
 	{
 		// The load does not change the pending alignment. A file older than version 11 has no alignment, and its load
-		// sets the alignment to 0. A nice spell, else a nasty spell, holds the alignment: the file's alignment is what the
-		// spell puts back.
-		const float alignment = body.alignment.value_or(0.0f);
-		auto* spells = registry.TryGet<CreatureSpells>(creature);
-		if (spells != nullptr && spells->spells.IsActive(creature_spells::Spell::Nice))
+		// sets the alignment to 0 also while a spell is on. A nice spell, else a nasty spell, keeps the file's value as
+		// it is, and the spell puts it back at its end. With no spell on, the load holds the value to -1..1.
+		if (!body.alignment.has_value())
 		{
-			spells->spells[creature_spells::Spell::Nice].before = alignment;
-		}
-		else if (spells != nullptr && spells->spells.IsActive(creature_spells::Spell::Nasty))
-		{
-			spells->spells[creature_spells::Spell::Nasty].before = alignment;
+			self->alignment = 0.0f;
 		}
 		else
 		{
-			self->alignment = alignment;
+			const float alignment = body.fileAlignment.value_or(*body.alignment);
+			auto* spells = registry.TryGet<CreatureSpells>(creature);
+			if (spells != nullptr && spells->spells.IsActive(creature_spells::Spell::Nice))
+			{
+				spells->spells[creature_spells::Spell::Nice].before = alignment;
+			}
+			else if (spells != nullptr && spells->spells.IsActive(creature_spells::Spell::Nasty))
+			{
+				spells->spells[creature_spells::Spell::Nasty].before = alignment;
+			}
+			else
+			{
+				self->alignment = creature_mind_body::AlignmentFromFile(alignment);
+			}
 		}
 		self->strength = body.strength;
 		self->fatness = body.fatness;

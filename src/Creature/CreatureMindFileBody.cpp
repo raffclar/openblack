@@ -80,6 +80,7 @@ std::optional<Body> creature_mind_body::FromMindFile(const creaturemind::MindFil
 	const auto finite = [](float value) { return std::isfinite(value); };
 	if (file.alignment.has_value())
 	{
+		body.fileAlignment = file.alignment;
 		body.alignment = AlignmentFromFile(*file.alignment);
 	}
 	if (finite(file.physique.strength))
