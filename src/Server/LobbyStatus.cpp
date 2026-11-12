@@ -104,8 +104,13 @@ std::string MapAddress(std::string_view api, std::string_view serverId, const Cu
 	{
 		base.pop_back();
 	}
-	return base + "/servers/" + PercentEncoded(serverId) + "/map?file=" + PercentEncoded(map.file) +
-	       "&name=" + PercentEncoded(map.name) + "&players=" + std::to_string(map.players);
+	auto address = base + "/servers/" + PercentEncoded(serverId) + "/map?file=" + PercentEncoded(map.file) +
+	               "&name=" + PercentEncoded(map.name) + "&players=" + std::to_string(map.players);
+	if (!map.packageSha256.empty())
+	{
+		address += "&package=" + PercentEncoded(map.packageSha256) + "&package_size=" + std::to_string(map.packageSize);
+	}
+	return address;
 }
 
 } // namespace openblack::server::lobby_status

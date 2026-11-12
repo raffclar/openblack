@@ -237,7 +237,17 @@ struct OnlineMap
 	int64_t size {0};
 	/// "url": the path of the file on the lobby, /api/v1/maps/<sha256>
 	std::string url;
+	/// "package_sha256": the SHA-256 of the map package of the land, as 64 hex digits (deviation 249). Empty for a land
+	/// with no package. The player's game makes the file from the package and its own game data.
+	std::string packageSha256;
+	/// "package_size": the bytes of the package
+	int64_t packageSize {0};
+	/// "package_url": the path of the package on the site, /maps/<package sha256>.obmap
+	std::string packageUrl;
 };
+
+/// The start of the path of a map package on the site
+inline constexpr std::string_view k_MapPackagePath = "/maps/";
 
 /// GET /api/v1/maps: {"maps": [...]}
 struct MapList

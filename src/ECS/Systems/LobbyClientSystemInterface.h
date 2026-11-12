@@ -155,6 +155,12 @@ public:
 	{
 		callback({.value = std::nullopt, .error = {.kind = LobbyErrorKind::NotConfigured}});
 	}
+	/// The bytes of the map package of a land of the list (deviation 249), from the site's folder of maps. The site
+	/// gives the package only to a player that signed in and may play.
+	virtual void DownloadMapPackage(const lobby_api::OnlineMap& /*map*/, LobbyCallback<std::vector<uint8_t>> callback)
+	{
+		callback({.value = std::nullopt, .error = {.kind = LobbyErrorKind::NotConfigured}});
+	}
 	/// A ticket to join a game server, as a god or as an observer. The address of the game socket must be a WSS
 	/// address.
 	virtual void RequestJoinTicket(std::string serverId, game_socket::Role role,

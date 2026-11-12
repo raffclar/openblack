@@ -23,6 +23,10 @@ namespace openblack::server
 [[nodiscard]] std::optional<std::string> WriteGodsRingMap(const std::filesystem::path& gamePath,
                                                           const std::filesystem::path& out);
 
+/// Writes the map package of the network map for 32 gods (deviation 249) to a folder, as <SHA-256>.obmap. The package has
+/// no game data, so it needs no game folder. Gives the path of the file, or the error.
+[[nodiscard]] std::variant<std::filesystem::path, std::string> WriteMapPackage(const std::filesystem::path& folder);
+
 /// Writes the land of the map download test (download_test_map), as the tool makes it from the game folder, to a file.
 /// Gives the error, or none.
 [[nodiscard]] std::optional<std::string> WriteDownloadTestMap(const std::filesystem::path& gamePath,

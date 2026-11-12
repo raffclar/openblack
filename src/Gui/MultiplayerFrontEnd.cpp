@@ -19,6 +19,8 @@
 #include "ECS/Systems/ClanCreatureSystemInterface.h"
 #include "ECS/Systems/LobbyClientSystemInterface.h"
 #include "ECS/Systems/NetworkGameSystemInterface.h"
+#include "Online/GodsRingMap.h"
+#include "Online/GodsRingMapPackage.h"
 #include "Online/LanDiscoveryInterface.h"
 #include "Online/MapDownload.h"
 #include "Online/NetworkSession.h"
@@ -656,12 +658,38 @@ void MultiplayerFrontEnd::FetchRoomMap(std::string sha256)
 		if (_mapDownload == nullptr)
 		{
 			auto* lobby = _services.lobby;
-			_mapDownload = std::make_unique<online::MapDownload>(*_services.maps, [lobby](const lobby_api::OnlineMap& wanted,
-			                                                                              auto done) {
-				lobby->DownloadMap(wanted, [done = std::move(done)](ecs::systems::LobbyResult<std::vector<uint8_t>>&& bytes) {
-					done(std::move(bytes.value));
-				});
-			});
+			_mapDownload = std::make_unique<online::MapDownload>(
+			    *_services.maps, [lobby, read = _services.readGameFile](const lobby_api::OnlineMap& wanted, auto done) {
+				    if (wanted.packageSha256.empty())
+				    {
+					    lobby->DownloadMap(wanted,
+					                       [done = std::move(done)](ecs::systems::LobbyResult<std::vector<uint8_t>>&& bytes) {
+						                       done(std::move(bytes.value));
+					                       });
+					    return;
+				    }
+				    // The map has a package: the game adds the village of its own game data to the package (deviation 249)
+				    lobby->DownloadMapPackage(wanted, [wanted, read, done = std::move(done)](
+				                                          ecs::systems::LobbyResult<std::vector<uint8_t>>&& package) {
+					    if (!package.value.has_value())
+					    {
+						    done(std::nullopt);
+						    return;
+					    }
+					    const auto templateMap = read ? read(gods_ring_map::k_TemplateMap) : std::nullopt;
+					    auto map = gods_ring_map_package::AssembleDownloaded(
+					        wanted, *package.value,
+					        templateMap.has_value() ? std::optional<std::span<const uint8_t>>(*templateMap) : std::nullopt);
+					    if (const auto* failure = std::get_if<gods_ring_map_package::Failure>(&map); failure != nullptr)
+					    {
+						    SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The map {} does not come from its package: {}",
+						                        wanted.file, gods_ring_map_package::TextOf(*failure));
+						    done(std::nullopt);
+						    return;
+					    }
+					    done(std::move(std::get<std::vector<uint8_t>>(map)));
+				    });
+			    });
 		}
 		_mapDownload->Start(*map);
 	});

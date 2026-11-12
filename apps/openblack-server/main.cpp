@@ -105,6 +105,7 @@ int main(int argc, char* argv[])
 		("gods-ring-map", "The network map for 32 gods in place of a land.")
 		("write-gods-ring-map", "Write the file of the network map for 32 gods, which the players get from the lobby, to this file, then stop.", cxxopts::value<std::string>())
 		("custom-map", "Play the land of a network game in this .map file outside the game folder. The server names it Online Maps/<file>.map and sends it to the lobby, so that the players get it.", cxxopts::value<std::string>())
+		("write-map-package", "Write the map package of the network map for 32 gods to this folder as <SHA-256>.obmap, then stop. The package has no game data, so the server needs no game folder for it.", cxxopts::value<std::string>())
 		("write-download-test-map", "Write the land of the map download test, which the tool makes from Online Maps/mpm_3p_1.map, to this file, then stop. The game folder does not change.", cxxopts::value<std::string>())
 		("profile-folder", "The folder of the server's own profile. With none, the profile of a tool's run in the working folder.", cxxopts::value<std::string>())
 		("time-limit", "The time limit of the network game in minutes, from 10 to 1440 (24 hours) as the host picks it, in place of the default 30. A build with the developer tools also accepts 1 to 9 minutes for tests. The start sends it to every client.", cxxopts::value<uint32_t>())
@@ -194,6 +195,18 @@ int main(int argc, char* argv[])
 		if (result.count("version") != 0)
 		{
 			std::cout << "openblack-server " << openblack::build_version::Text() << std::endl;
+			return EXIT_SUCCESS;
+		}
+		if (result.count("write-map-package") != 0)
+		{
+			const std::filesystem::path folder(result["write-map-package"].as<std::string>());
+			const auto written = openblack::server::WriteMapPackage(folder);
+			if (const auto* error = std::get_if<std::string>(&written); error != nullptr)
+			{
+				std::cerr << "openblack-server: " << *error << '\n';
+				return EXIT_FAILURE;
+			}
+			std::cout << std::get<std::filesystem::path>(written).generic_string() << '\n';
 			return EXIT_SUCCESS;
 		}
 #if defined(OPENBLACK_DEVELOPER_TOOLS)
