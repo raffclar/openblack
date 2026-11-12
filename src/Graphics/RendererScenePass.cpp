@@ -1191,6 +1191,15 @@ void Renderer::DrawPassTranslucent(const DrawSceneDesc& desc, const ScenePass& p
 	auto& drawRootsPiles = draws.drawRootsPiles;
 	// The translucent meshes blend over the opaque ones, each in its own place in the sort
 	submitDesc.viewId = translucentViewId;
+	// A thing that the game draws at once comes at its place in the land's draw list, before every sorted thing. Any
+	// other thing comes by the key of a placed model at its place.
+	const auto blendDepth = [&renderCtx, cameraOrigin](uint32_t instance) {
+		if (const auto atOnce = renderCtx.atOnceInstances.find(instance); atOnce != renderCtx.atOnceInstances.end())
+		{
+			return zsort::AtOnce(atOnce->second);
+		}
+		return zsort::ModelDepth(glm::vec3(renderCtx.instanceUniforms.at(instance).model[3]), cameraOrigin);
+	};
 	// The things fading out in the distance, each blended by its alpha in its own place in the sort: the
 	// villagers posed from the bone palette, the things posed one by one with them
 	{
@@ -1209,8 +1218,7 @@ void Renderer::DrawPassTranslucent(const DrawSceneDesc& desc, const ScenePass& p
 				{
 					continue;
 				}
-				const auto position = glm::vec3(renderCtx.instanceUniforms.at(instance).model[3]);
-				submitDesc.sortDepth = zsort::ModelDepth(position, cameraOrigin);
+				submitDesc.sortDepth = blendDepth(instance);
 				if (placers.partsByLevel)
 				{
 					submitDesc.detailLevel = renderCtx.instanceLevels.at(instance);
@@ -1231,8 +1239,7 @@ void Renderer::DrawPassTranslucent(const DrawSceneDesc& desc, const ScenePass& p
 		{
 			if (build.fading && build.instance < renderCtx.partialBuildInstances.size())
 			{
-				submitDesc.sortDepth =
-				    zsort::ModelDepth(glm::vec3(renderCtx.partialBuildInstances.at(build.instance).model[3]), cameraOrigin);
+				submitDesc.sortDepth = zsort::AtOnce(build.listPlace);
 				drawPartialBuild(build);
 			}
 		}
@@ -1283,8 +1290,7 @@ void Renderer::DrawPassTranslucent(const DrawSceneDesc& desc, const ScenePass& p
 				{
 					continue;
 				}
-				const auto position = glm::vec3(renderCtx.instanceUniforms.at(instance).model[3]);
-				submitDesc.sortDepth = zsort::ModelDepth(position, cameraOrigin);
+				submitDesc.sortDepth = blendDepth(instance);
 				drawInstances(meshId, placers, true, instance, 1);
 			}
 		}
@@ -1293,8 +1299,7 @@ void Renderer::DrawPassTranslucent(const DrawSceneDesc& desc, const ScenePass& p
 	{
 		if (instance < renderCtx.instanceUniforms.size() && !mirroredWithHand(instance))
 		{
-			const auto position = glm::vec3(renderCtx.instanceUniforms.at(instance).model[3]);
-			submitDesc.sortDepth = zsort::ModelDepth(position, cameraOrigin);
+			submitDesc.sortDepth = blendDepth(instance);
 			drawAnimal(entity, instance, true);
 		}
 	}
@@ -2404,9 +2409,30 @@ void Renderer::DrawPassVegetation(const DrawSceneDesc& desc, const ScenePass& pa
 			// A tree shows only the front faces of its one-sided materials. The mirrored reflection turns its faces round.
 			submitDesc.useMaterialCulling = true;
 			submitDesc.mirrored = desc.cullBack;
-			submitDesc.sortDepth = run.fading ? zsort::Depth(glm::vec3(renderCtx.treeInstanceData.at(run.first).modelMatrix[3]),
-			                                                 desc.camera->GetOrigin())
-			                                  : 0;
+			submitDesc.sortDepth = 0;
+			// Each tree that fades out is drawn alone, at its place in the land's draw list, before every sorted thing. A
+			// tree that the sea mirrors with the hand is not drawn here.
+			if (run.fading)
+			{
+				for (uint32_t instance = run.first; instance < run.first + run.count; ++instance)
+				{
+					if (desc.viewId == RenderPass::Reflection &&
+					    std::ranges::any_of(renderCtx.heldTreeDraws,
+					                        [instance](const auto& held) { return held.instance == instance; }))
+					{
+						continue;
+					}
+					const auto atOnce = renderCtx.atOnceTrees.find(instance);
+					submitDesc.sortDepth = atOnce != renderCtx.atOnceTrees.end()
+					                           ? zsort::AtOnce(atOnce->second)
+					                           : zsort::Depth(glm::vec3(renderCtx.treeInstanceData.at(instance).modelMatrix[3]),
+					                                          desc.camera->GetOrigin());
+					submitDesc.instanceDesc =
+					    std::make_unique<graphics::InstanceDesc>(renderCtx.treeInstanceUniformBuffer, instance, 1);
+					DrawMesh(*mesh, submitDesc, std::numeric_limits<uint8_t>::max());
+				}
+				continue;
+			}
 			// The solid trees after a fizzing creature in the land's draw list come after the passes of the
 			// creature
 			if (!run.fading && run.segment > 0 && desc.viewId == RenderPass::Main &&

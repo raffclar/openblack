@@ -1024,8 +1024,11 @@ void Renderer::PaintCoarseEdges(glm::vec3 camera, std::span<const size_t> drawn,
 	const auto blockTexels = island.GetBlockTextureSide();
 	const auto samples = static_cast<int32_t>(land_detail::CoarseSamplingFor(blockTexels).samples);
 	// A new land, a new size of the textures or a restore of the device starts the edges again: every block gets its
-	// first paint now
-	const bool fresh = repaints.newLand || edges.lost || edges.samples != samples;
+	// first paint now. A change of the casters from the debug menu also paints every block again, because the coarse
+	// textures must not keep the shadows of the trees after their moving shadows start.
+	const auto castersChanges = _landShadowBake ? _landShadowBake->GetCastersChanges() : edges.bakeCastersChanges;
+	const bool castersChanged = castersChanges != std::exchange(edges.bakeCastersChanges, castersChanges);
+	const bool fresh = repaints.newLand || edges.lost || edges.samples != samples || castersChanged;
 	if (fresh)
 	{
 		edges.painted.reset();

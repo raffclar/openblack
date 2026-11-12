@@ -87,4 +87,23 @@ struct Banded
 	return AmongSorted(way, sortedWhole) ? zsort::ModelDepth(place, camera) : zsort::k_AfterSolidBeforeSorted;
 }
 
+/// What decides where a standing model of the land that blends goes among the things that blend
+struct StandingBlend
+{
+	/// It fades out in the distance, or it is a see-through copy, blended by its own alpha
+	bool blended {false};
+	/// Its mesh is marked to be sorted whole
+	bool sortedWhole {false};
+	/// Its own draw puts it among the sorted things: a hand or a creature holds it, or it is a phantom building, a yard
+	/// copy, a reward chest, posed scenery of all models but one, or a model with changed materials
+	bool sortedByItsDraw {false};
+};
+
+/// Whether the game draws a standing model that blends at once, at its place in the land's draw list, and not among
+/// the sorted things (see zsort::AtOnce)
+[[nodiscard]] constexpr bool BlendsAtOnce(const StandingBlend& thing) noexcept
+{
+	return thing.blended && !thing.sortedWhole && !thing.sortedByItsDraw;
+}
+
 } // namespace openblack::graphics::object_draw

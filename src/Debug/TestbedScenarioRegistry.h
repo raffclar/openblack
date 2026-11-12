@@ -184,6 +184,9 @@ struct Environment
 	bool dispenserGrid {true};
 	/// The footpaths are drawn as lines, as the debug menu's Footpaths box draws them
 	bool drawFootpaths {false};
+	/// The trees' shadows are drawn each frame and move with the trees, as the debug menu's Dynamic Tree Shadows box
+	/// draws them
+	bool dynamicTreeShadows {false};
 	/// Push scrolling is on, and works in the testbed's window as in full screen
 	bool pushScrolling {false};
 	/// The switch of the Soccer Add-On is on while the scenario runs, so that the towns play football
