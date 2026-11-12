@@ -3091,6 +3091,7 @@ TEST_F(CreatureFightSystemTest, TheRestAfterAFaintTriesThePoseEachTurnWhileTheBo
 	auto& needs = registry.Get<CreatureNeeds>(first);
 	needs.needs.life = 1.0f;
 	needs.needs.exhaustion = 0.0f;
+	needs.fainted = true;
 	// Better, it gets up on the 31st turn of the rest, from the end of the sleep pose
 	for (int turn = 6; turn < 30; ++turn)
 	{
@@ -3101,20 +3102,28 @@ TEST_F(CreatureFightSystemTest, TheRestAfterAFaintTriesThePoseEachTurnWhileTheBo
 	EXPECT_EQ(registry.Get<const CreatureKnockedOut>(first).stage, CreatureKnockedOut::Stage::GettingUp);
 	EXPECT_TRUE(animation.body.endWanted);
 	EXPECT_EQ(needs.rest, CreatureNeeds::Rest::Awake);
-	// After a rest, the steps end only when the body is free
+	// After a rest, the knock-out ends only when the body is free. The mark of the faint stays until a turn with no plan.
 	fights.FightTurn(first);
+	EXPECT_TRUE(registry.AllOf<CreatureKnockedOut>(first));
 	EXPECT_EQ(registry.Get<const CreatureKnockedOut>(first).steps, CreatureKnockedOut::Steps::Running);
+	animation.body = {};
+	fights.FightTurn(first);
+	EXPECT_FALSE(registry.AllOf<CreatureKnockedOut>(first));
+	EXPECT_TRUE(needs.fainted);
 	Locator::gameRandom::reset();
 }
 
-// A creature that nobody takes home and that does not rest gets up from where it lies after the wait for the spells.
-// Its steps end on the next turn, as the game ends the empty last stage of the wait. The body still gets up then.
-TEST_F(CreatureFightSystemTest, TheStepsOfAKnockOutWithNoRestEndOnTheTurnAfterTheWaitForTheSpells)
+// A creature that nobody takes home and that does not rest lies until the turn after the wait for the spells, as the
+// game ends the empty last stage of the wait then. On that turn the knock-out ends, and the body starts to get up. The
+// mind is free while the body gets up, and the mark of the faint stays until a turn with no plan.
+TEST_F(CreatureFightSystemTest, AKnockOutWithNoRestEndsOnTheTurnAfterTheWaitForTheSpellsAndTheBodyGetsUpThen)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	registry.Remove<CreatureFighting>(first);
 	registry.Remove<CreatureFighting>(second);
-	registry.Assign<CreatureNeeds>(first).needs.life = 1.0f;
+	auto& needs = registry.Assign<CreatureNeeds>(first);
+	needs.needs.life = 1.0f;
+	needs.fainted = true;
 	registry.AssignOrReplace<CreatureKnockedOut>(first, CreatureKnockedOut {
 	                                                        .stage = CreatureKnockedOut::Stage::WaitingForSpells,
 	                                                        .fainting = false,
@@ -3125,14 +3134,20 @@ TEST_F(CreatureFightSystemTest, TheStepsOfAKnockOutWithNoRestEndOnTheTurnAfterTh
 	                  .phase = creature_layers::BodyAction::Phase::Loop,
 	                  .animations = {105, 105, 107},
 	                  .holdLoop = true};
-	// No spell is on it: it starts to get up, and its steps end on the next turn
-	fights.FightTurn(first);
-	ASSERT_EQ(registry.Get<const CreatureKnockedOut>(first).stage, CreatureKnockedOut::Stage::GettingUp);
-	EXPECT_EQ(registry.Get<const CreatureKnockedOut>(first).steps, CreatureKnockedOut::Steps::EndNextTurn);
+	// No spell is on it: the wait ends, and the body still lies
 	fights.FightTurn(first);
 	ASSERT_TRUE(registry.AllOf<CreatureKnockedOut>(first));
+	EXPECT_EQ(registry.Get<const CreatureKnockedOut>(first).stage, CreatureKnockedOut::Stage::WaitingForSpells);
+	EXPECT_EQ(registry.Get<const CreatureKnockedOut>(first).steps, CreatureKnockedOut::Steps::EndNextTurn);
+	EXPECT_FALSE(animation.body.endWanted);
+	EXPECT_EQ(registry.Get<const CreatureNeeds>(first).rest, CreatureNeeds::Rest::Unconscious);
+	// On the next turn the knock-out ends, and the body starts to get up
+	fights.FightTurn(first);
+	EXPECT_FALSE(registry.AllOf<CreatureKnockedOut>(first));
 	EXPECT_TRUE(creature_layers::IsPlaying(animation.body));
-	EXPECT_EQ(registry.Get<const CreatureKnockedOut>(first).steps, CreatureKnockedOut::Steps::Over);
+	EXPECT_TRUE(animation.body.endWanted);
+	EXPECT_EQ(registry.Get<const CreatureNeeds>(first).rest, CreatureNeeds::Rest::Awake);
+	EXPECT_TRUE(registry.Get<const CreatureNeeds>(first).fainted);
 }
 
 TEST_F(CreatureFightSystemTest, TheMoveHomeAfterAFaintCutsTheFaintAndTheBodyStands)

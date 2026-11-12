@@ -674,8 +674,8 @@ void CreatureMindSystem::DesiresTurn(entt::entity entity)
 		registry.Remove<CreatureAfterFight>(entity);
 	}
 	auto* eyes = registry.TryGet<CreatureEyes>(entity);
-	// A creature that fainted, and did not get up from that faint or have a turn with no plan since, does not faint
-	// again. The advisor still tells of it.
+	// A creature that fainted, and since then did not come back to life and did not have a turn with no plan, does not
+	// faint again. The advisor still tells of it.
 	if (needs != nullptr && needs->faint.has_value() && needs->fainted)
 	{
 		TellFainting(entity);

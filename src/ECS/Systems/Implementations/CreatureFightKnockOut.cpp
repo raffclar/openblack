@@ -71,8 +71,8 @@ using namespace openblack::ecs::systems::fight_detail;
 
 namespace
 {
-/// Whether the creature fainted and did not get up from that faint or have a turn with no plan since. Such a creature
-/// does not faint again.
+/// Whether the creature fainted, and since then did not come back to life and did not have a turn with no plan. Such a
+/// creature does not faint again.
 bool StillFainted(const ecs::Registry& registry, entt::entity creature)
 {
 	const auto* needs = registry.TryGet<const CreatureNeeds>(creature);
@@ -378,13 +378,9 @@ void CreatureFightSystem::KnockedOutTurn(entt::entity entity)
 		knockedOut.stage = stage;
 		knockedOut.seconds = 0.0f;
 	};
+	// The mark of the faint stays: only a turn with no plan after the knock-out lets the creature faint again
 	const auto getUp = [&] {
 		next(CreatureKnockedOut::Stage::GettingUp);
-		// When it starts to get up, it can faint again
-		if (needs != nullptr)
-		{
-			needs->fainted = false;
-		}
 		animation.body = creature_layers::EndLoop(animation.body);
 		SetEyes(registry, entity, creature_eyes::Mode::Calm);
 	};
@@ -469,6 +465,20 @@ void CreatureFightSystem::KnockedOutTurn(entt::entity entity)
 		break;
 	case CreatureKnockedOut::Stage::WaitingForSpells:
 	{
+		// With no rest, the knock-out ends on the turn after the wait for the spells. A body that lies where it fell
+		// starts to get up now. The mind is free while the body gets up.
+		if (knockedOut.steps == CreatureKnockedOut::Steps::EndNextTurn)
+		{
+			animation.body = creature_layers::EndLoop(animation.body);
+			SetEyes(registry, entity, creature_eyes::Mode::Calm);
+			if (needs != nullptr)
+			{
+				needs->rest = CreatureNeeds::Rest::Awake;
+			}
+			fight_transcript::Note(entity, "got_up", [&] { return Levels(registry, entity); });
+			registry.Remove<CreatureKnockedOut>(entity);
+			return;
+		}
 		// The spells on it are brought to their end each turn until none is left
 		auto* spells = registry.TryGet<CreatureSpells>(entity);
 		if (spells == nullptr || creature_spells::TryFinishAll(spells->spells))
@@ -479,7 +489,6 @@ void CreatureFightSystem::KnockedOutTurn(entt::entity entity)
 			}
 			else
 			{
-				getUp();
 				knockedOut.steps = CreatureKnockedOut::Steps::EndNextTurn;
 			}
 		}
@@ -521,11 +530,6 @@ void CreatureFightSystem::KnockedOutTurn(entt::entity entity)
 		break;
 	}
 	case CreatureKnockedOut::Stage::GettingUp:
-		// The steps with no rest end on the turn after the wait for the spells, also while the body gets up
-		if (knockedOut.steps == CreatureKnockedOut::Steps::EndNextTurn)
-		{
-			knockedOut.steps = CreatureKnockedOut::Steps::Over;
-		}
 		if (!creature_layers::IsPlaying(animation.body))
 		{
 			if (needs != nullptr)
