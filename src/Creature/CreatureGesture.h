@@ -11,6 +11,7 @@
 
 #include <cstdint>
 
+#include <optional>
 #include <span>
 
 #include <glm/vec3.hpp>
@@ -77,5 +78,22 @@ enum class Outcome : uint8_t
 [[nodiscard]] constexpr float ChainMagnitude(float grownSize)
 {
 	return grownSize;
+}
+
+/// What a frame does with the chain of a creature that draws a gesture
+struct ChainFrame
+{
+	/// The chain shows only in a frame that draws the creature
+	bool shown {false};
+	/// The game time in seconds by which the chain moves on in this frame; none when it does not step
+	std::optional<float> seconds;
+};
+
+/// The chain of a creature steps and shows only in the frames that draw the creature. Then it moves on by the game time
+/// that the frames give it, also after the drawing ends, until it fades out. A creature that the frame does not draw
+/// keeps its chain as it is.
+[[nodiscard]] constexpr ChainFrame ChainFrameStep(bool creatureDrawn, std::optional<float> stepSeconds)
+{
+	return {.shown = creatureDrawn, .seconds = creatureDrawn ? stepSeconds : std::nullopt};
 }
 } // namespace openblack::creature_gesture

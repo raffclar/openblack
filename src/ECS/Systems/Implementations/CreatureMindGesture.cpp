@@ -33,9 +33,12 @@
 #include "ECS/Systems/CreatureObjectActionSystemInterface.h"
 #include "ECS/Systems/EffectRequestSystemInterface.h"
 #include "ECS/Systems/GestureSystemInterface.h"
+#include "ECS/Systems/ObjectDrawListSystemInterface.h"
+#include "ECS/Systems/ParticleRuleSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "Locator.h"
 #include "ObjectMeasures.h"
+#include "Particles/DrawnEffectSteps.h"
 
 using namespace openblack;
 using namespace openblack::ecs::systems;
@@ -109,11 +112,81 @@ void StartChain(const ecs::Registry& registry, entt::entity creature, CreatureGe
 	    .position = start,
 	    .magnitude = creature_gesture::ChainMagnitude(body.size),
 	    .synced = false,
+	    .step = EffectStep::Frame,
 	    .player = static_cast<int>(body.owner),
 	    .processInfo = particles::ProcessInfo {.handPosition = glm::vec3(0.0f), .enabled = false},
 	});
 }
 } // namespace
+
+void CreatureMindSystem::WatchGestureChainOwners()
+{
+	auto& registry = Entities();
+	if (_gestureChainOwners == &registry)
+	{
+		return;
+	}
+	_gestureChainOwners = &registry;
+	_gestureChainOwnersGo = registry.OnDestroying().connect<&CreatureMindSystem::GestureChainOwnerGoes>(*this);
+}
+
+void CreatureMindSystem::GestureChainOwnerGoes(entt::entity creature)
+{
+	const auto* drawing = Entities().TryGet<const CreatureGestureDrawing>(creature);
+	if (drawing != nullptr && drawing->chain != k_NoEffectHandle && Locator::effectRequestSystem::has_value())
+	{
+		Locator::effectRequestSystem::value().Remove(drawing->chain);
+	}
+}
+
+void CreatureMindSystem::UpdateDrawnGestureChains(const ObjectDrawListSystemInterface& drawList,
+                                                  std::chrono::milliseconds frameRealTime,
+                                                  std::chrono::milliseconds frameGameTime, bool landDrawn)
+{
+	WatchGestureChainOwners();
+	const auto seconds = particles::drawn_steps::StepSeconds(_gestureChainPace, frameRealTime, frameGameTime, landDrawn);
+	if (!Locator::particleRuleSystem::has_value())
+	{
+		return;
+	}
+	auto& particles = Locator::particleRuleSystem::value();
+	auto& registry = Entities();
+	std::vector<entt::entity> creatures;
+	registry.Each<const CreatureGestureDrawing>([&creatures](entt::entity entity, const CreatureGestureDrawing& drawing) {
+		if (drawing.chain != k_NoEffectHandle)
+		{
+			creatures.push_back(entity);
+		}
+	});
+	const auto order = particles::drawn_steps::DrawOrder(
+	    drawList.GetList(), creatures, drawList.GetView().has_value(),
+	    [&registry, &drawList](entt::entity entity) { return drawList.Decides(registry, entity); });
+	const auto stepChain = [&](entt::entity creature, bool drawn) {
+		auto& drawing = registry.Get<CreatureGestureDrawing>(creature);
+		const auto frame = creature_gesture::ChainFrameStep(drawn, seconds);
+		particles.SetShown(drawing.chain, frame.shown);
+		if (!frame.seconds.has_value())
+		{
+			return;
+		}
+		// The chain shows all of its last step, with no blend from the step before
+		particles.SetDrawnAtLastStep(drawing.chain);
+		// A chain that faded out is gone
+		if (!particles.ProcessByFrame(drawing.chain, *frame.seconds))
+		{
+			drawing.chain = k_NoEffectHandle;
+		}
+	};
+	for (const auto creature : order)
+	{
+		stepChain(creature, drawList.Drawn(registry, creature));
+	}
+	// A creature that is not on the land's list is not drawn, so its chain does not show
+	for (const auto creature : particles::drawn_steps::LeftOut(creatures, order))
+	{
+		stepChain(creature, false);
+	}
+}
 
 bool CreatureMindSystem::DrawGesture(entt::entity creature, uint32_t gesture)
 {
@@ -136,6 +209,7 @@ bool CreatureMindSystem::StartGesture(entt::entity creature, uint32_t gesture, b
 		    creature, CreatureGestureDrawing {.drawing = {.drawn = 0.0f, .turns = creature_gesture::k_HoldTurns},
 		                                      .countedTurn = GameTurn()});
 	}
+	WatchGestureChainOwners();
 	if (drawing->stage != Stage::None)
 	{
 		return false;

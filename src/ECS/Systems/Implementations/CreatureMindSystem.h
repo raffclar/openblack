@@ -11,6 +11,7 @@
 
 #include <cstdint>
 
+#include <chrono>
 #include <functional>
 #include <optional>
 #include <random>
@@ -18,6 +19,9 @@
 #include <utility>
 #include <vector>
 
+#include <entt/signal/sigh.hpp>
+
+#include "Common/FramePace.h"
 #include "Common/GameRandom.h"
 #include "Creature/CreatureActivity.h"
 #include "Creature/CreatureCastMoves.h"
@@ -37,6 +41,11 @@
 #if !defined(LOCATOR_IMPLEMENTATIONS)
 #error "ECS System implementations should only be included in Locator.cpp"
 #endif
+
+namespace openblack::ecs
+{
+class Registry;
+}
 
 namespace openblack::ecs::systems
 {
@@ -80,6 +89,8 @@ public:
 	bool PlayAction(entt::entity creature, size_t animation) override;
 	bool PlayGesture(entt::entity creature, size_t animation) override;
 	bool DrawGesture(entt::entity creature, uint32_t gesture) override;
+	void UpdateDrawnGestureChains(const ObjectDrawListSystemInterface& drawList, std::chrono::milliseconds frameRealTime,
+	                              std::chrono::milliseconds frameGameTime, bool landDrawn) override;
 	void PullFace(entt::entity creature, size_t animation) override;
 	std::optional<creature_face::Request> ShowFeeling(entt::entity creature, creature_face::Cue cue) override;
 	bool SitDown(entt::entity creature) override;
@@ -639,6 +650,9 @@ private:
 	void StepGesture(entt::entity creature);
 	/// A move of a dance that is not a gesture ends the arm's point
 	void EndDanceGesturePoint(entt::entity creature);
+	/// The chain of a creature that the game removes goes at once with the creature
+	void WatchGestureChainOwners();
+	void GestureChainOwnerGoes(entt::entity creature);
 	/// The game's random numbers, which the minds draw on the synced seed
 	GameRandomSource _random;
 	/// The average of the feedback given to all creatures
@@ -666,6 +680,11 @@ private:
 	uint32_t _comeAcrossDepth {0};
 	/// While the tests of the beliefs run, the things that they come across, in their sequence
 	std::vector<entt::entity>* _comeAcrossLog {nullptr};
+	/// When the chains of the gestures step in the frames that draw their creatures
+	frame_pace::Pace _gestureChainPace;
+	/// The registry whose removals remove the chains of the gestures
+	const Registry* _gestureChainOwners {nullptr};
+	entt::scoped_connection _gestureChainOwnersGo;
 };
 
 } // namespace openblack::ecs::systems
