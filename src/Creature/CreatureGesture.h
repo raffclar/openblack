@@ -70,4 +70,12 @@ enum class Outcome : uint8_t
 /// the counter is at k_HoldTurns or more. Each turn adds a share of the shape. The counter goes back to 0 until the
 /// shape is complete. When the counter is more than k_HoldTurns, the drawing is done.
 [[nodiscard]] Outcome Advance(Drawing& drawing, uint32_t gesture, bool armPoints, float sharePerTurn);
+
+/// The size of the chain that the hand of the creature draws. It is the size that the creature has grown to, not its
+/// height and not the smaller size of the pen. The particle file multiplies it to get the width of the chain and the size
+/// of its sparks.
+[[nodiscard]] constexpr float ChainMagnitude(float grownSize)
+{
+	return grownSize;
+}
 } // namespace openblack::creature_gesture

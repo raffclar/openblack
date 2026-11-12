@@ -17,7 +17,6 @@
 #include <glm/gtx/vec_swizzle.hpp>
 #include <spdlog/spdlog.h>
 
-#include "Creature/CreatureCastMoves.h"
 #include "Creature/CreatureDance.h"
 #include "Creature/CreatureGesture.h"
 #include "CreatureBodyBusy.h"
@@ -70,13 +69,16 @@ glm::vec3 TargetOf(const ecs::Registry& registry, entt::entity creature, const C
 	                                    object_measures::TwoDRadius(registry, creature), point);
 }
 
-/// The chain follows the hand while the arm points; else it waits at the creature's feet, and makes nothing
-void FeedChain(const CreatureGestureDrawing& drawing, const std::optional<glm::vec3>& hand, glm::vec3 feet)
+/// The chain follows the hand while the arm points; else it waits at the creature's feet, and makes nothing. Its size
+/// follows the size that the creature has grown to.
+void FeedChain(const CreatureGestureDrawing& drawing, const Creature& body, const std::optional<glm::vec3>& hand,
+               glm::vec3 feet)
 {
 	if (Locator::effectRequestSystem::has_value())
 	{
-		Locator::effectRequestSystem::value().SetProcessInfo(
-		    drawing.chain, {.handPosition = hand.value_or(feet), .enabled = hand.has_value()});
+		auto& effects = Locator::effectRequestSystem::value();
+		effects.SetMagnitude(drawing.chain, creature_gesture::ChainMagnitude(body.size));
+		effects.SetProcessInfo(drawing.chain, {.handPosition = hand.value_or(feet), .enabled = hand.has_value()});
 	}
 }
 
@@ -91,8 +93,8 @@ void StopChain(CreatureGestureDrawing& drawing)
 	effects.Stop(drawing.chain);
 }
 
-/// The chain starts at the start of the shape as the arm starts to point: as big as the creature is tall, in its
-/// player's colour. A chain that the last drawing left goes first.
+/// The chain starts at the start of the shape as the arm starts to point, in its player's colour. Its size is the size
+/// that the creature has grown to. A chain that the last drawing left goes first.
 void StartChain(const ecs::Registry& registry, entt::entity creature, CreatureGestureDrawing& drawing, glm::vec3 start)
 {
 	if (!Locator::effectRequestSystem::has_value())
@@ -105,7 +107,7 @@ void StartChain(const ecs::Registry& registry, entt::entity creature, CreatureGe
 	drawing.chain = effects.Start({
 	    .type = ParticleType::CreatureGesture,
 	    .position = start,
-	    .magnitude = creature_cast_moves::k_HeightOfSizeOne * ShownSize(body),
+	    .magnitude = creature_gesture::ChainMagnitude(body.size),
 	    .synced = false,
 	    .player = static_cast<int>(body.owner),
 	    .processInfo = particles::ProcessInfo {.handPosition = glm::vec3(0.0f), .enabled = false},
@@ -223,7 +225,7 @@ void CreatureMindSystem::StepGesture(entt::entity creature)
 			drawing->stage = Stage::End;
 			return;
 		}
-		FeedChain(*drawing, hand, registry.Get<const Transform>(creature).position);
+		FeedChain(*drawing, registry.Get<const Creature>(creature), hand, registry.Get<const Transform>(creature).position);
 		break;
 	}
 	case Stage::End:

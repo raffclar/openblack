@@ -272,6 +272,16 @@ TEST(CreatureGesture, AGesturePastTheLastFails)
 	EXPECT_EQ(Advance(drawing, k_LastGesture + 1, true, 0.1f), Outcome::Failed);
 }
 
+// The chain of a creature that draws a shape is as big as the size that the creature has grown to, not as its height
+TEST(CreatureGesture, TheChainHasTheSizeThatTheCreatureGrewTo)
+{
+	using namespace creature_gesture;
+	EXPECT_FLOAT_EQ(ChainMagnitude(1.0f), 1.0f);
+	EXPECT_FLOAT_EQ(ChainMagnitude(0.3f), 0.3f);
+	EXPECT_FLOAT_EQ(ChainMagnitude(2.0f), 2.0f);
+	static_assert(ChainMagnitude(1.5f) == 1.5f);
+}
+
 // In the turn that the point at the route ends, the events of the end animation from the arm's time to the end sound
 TEST(CreaturePointing, TheEndOfAPointAtTheRouteSoundsTheRestOfItsLastAnimation)
 {
