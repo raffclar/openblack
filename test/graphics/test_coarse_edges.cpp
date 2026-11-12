@@ -409,3 +409,57 @@ TEST(CoarseEdges, ABlockShowsItsFilePageUntilItsFirstPaint)
 	EXPECT_EQ(CoarseTextureOf(true, true, true), CoarseTexture::CoarseLand);
 	EXPECT_EQ(CoarseTextureOf(true, false, true), CoarseTexture::Samples);
 }
+
+TEST(CoarseEdges, ARepaintWaitsUntilTheLandDrawsTheBlockWithItsTexture)
+{
+	// Blocks 0 to 3 got a paint before. Blocks 1 and 3 have a request; the land draws block 3 and block 0 with their
+	// own textures.
+	const std::vector<bool> waiting {false, true, false, true};
+	const auto painted = [](size_t) { return true; };
+	const auto idle = [](size_t) { return false; };
+	EXPECT_EQ(PaintsDue(waiting, std::vector<size_t> {3, 0}, painted, idle), (std::vector<size_t> {3}));
+	// A block that the land draws with its coarse texture alone keeps waiting
+	EXPECT_TRUE(PaintsDue(waiting, std::vector<size_t> {}, painted, idle).empty());
+}
+
+TEST(CoarseEdges, ABlockWithNoPaintPaintsAtOnce)
+{
+	const std::vector<bool> waiting {true, true, true};
+	const auto painted = [](size_t block) { return block == 1; };
+	const auto idle = [](size_t) { return false; };
+	// The blocks with no paint come first, in the order of their indices, then the drawn blocks in the order of the draws
+	EXPECT_EQ(PaintsDue(waiting, std::vector<size_t> {1, 2}, painted, idle), (std::vector<size_t> {0, 2, 1}));
+}
+
+TEST(CoarseEdges, ABlockWhoseShadowsBakeWaits)
+{
+	const std::vector<bool> waiting {true, true};
+	const auto painted = [](size_t) { return true; };
+	const auto bakes = [](size_t block) { return block == 0; };
+	EXPECT_EQ(PaintsDue(waiting, std::vector<size_t> {0, 1, 1}, painted, bakes), (std::vector<size_t> {1}));
+}
+
+TEST(CoarseEdges, EachCellOfEachBlockHasItsOwnCoarseTexel)
+{
+	std::set<std::pair<int32_t, int32_t>> seen;
+	for (int32_t x = 0; x < k_BlocksPerSide; x += 31)
+	{
+		for (int32_t z = 0; z < k_BlocksPerSide; z += 31)
+		{
+			for (int32_t cz = 0; cz < k_SideTexels; ++cz)
+			{
+				for (int32_t cx = 0; cx < k_SideTexels; ++cx)
+				{
+					const auto texel = CoarseTexel({x, z}, {cz, cx});
+					EXPECT_GE(texel.x, 0);
+					EXPECT_GE(texel.y, 0);
+					EXPECT_LT(texel.x, k_CoarseTexturesSide);
+					EXPECT_LT(texel.y, k_CoarseTexturesSide);
+					EXPECT_TRUE(seen.emplace(texel.x, texel.y).second);
+				}
+			}
+		}
+	}
+	// A column of squares for each z and a row of squares for each x
+	EXPECT_EQ(CoarseTexel({1, 2}, {3, 4}), glm::ivec2(2 * 64 + 3, 1 * 64 + 4));
+}
