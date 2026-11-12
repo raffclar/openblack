@@ -276,6 +276,8 @@ void NetworkGameSystem::BeginPlay()
 	}
 	_awaitingLand = false;
 	Attach();
+	// The server of a lobby game starts the turns when each god's player loaded the world
+	_session->ReportLoaded();
 	if (_fromCommandLine)
 	{
 		// The land of the server loaded: the player is ready, and the world waits for the server's start

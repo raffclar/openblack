@@ -42,6 +42,10 @@ constexpr std::string_view k_StopRequest = "game.stop_request";
 constexpr std::string_view k_GameStop = "game.stop";
 constexpr std::string_view k_RoomChat = "room.chat";
 constexpr std::string_view k_ObserverLeft = "observer.left";
+constexpr std::string_view k_Loaded = "game.loaded";
+constexpr std::string_view k_LoadWait = "game.wait";
+/// The longest wait for the loads that a frame can give: the 6 hours of a lobby game
+constexpr uint64_t k_MostLoadWaitSeconds = 6ULL * 60 * 60;
 
 /// The most god slots that a frame can name
 constexpr uint64_t k_MostSlots = 32;
@@ -543,6 +547,34 @@ std::optional<Frame> ParseObject(const Json& object, std::string_view type)
 	{
 		return StopRequest {};
 	}
+	if (type == k_Loaded)
+	{
+		return Loaded {};
+	}
+	if (type == k_LoadWait)
+	{
+		const auto* names = Member(object, "loading");
+		if (names == nullptr || !names->is_array() || names->size() > k_MostSlots)
+		{
+			return std::nullopt;
+		}
+		LoadWait wait;
+		uint64_t secondsLeft = 0;
+		if (!ReadUnsigned(object, "seconds_left", k_MostLoadWaitSeconds, secondsLeft))
+		{
+			return std::nullopt;
+		}
+		wait.secondsLeft = static_cast<uint32_t>(secondsLeft);
+		for (const auto& name : *names)
+		{
+			if (!name.is_string())
+			{
+				return std::nullopt;
+			}
+			wait.loading.push_back(name.get<std::string>());
+		}
+		return wait;
+	}
 	if (type == k_GameStop)
 	{
 		uint64_t turn = 0;
@@ -724,6 +756,14 @@ std::string ToJson(const Frame& frame)
 		    else if constexpr (std::is_same_v<Kind, ObserverLeft>)
 		    {
 			    object = Json {{"type", k_ObserverLeft}, {"name", value.name}};
+		    }
+		    else if constexpr (std::is_same_v<Kind, Loaded>)
+		    {
+			    object = Json {{"type", k_Loaded}};
+		    }
+		    else if constexpr (std::is_same_v<Kind, LoadWait>)
+		    {
+			    object = Json {{"type", k_LoadWait}, {"loading", value.loading}, {"seconds_left", value.secondsLeft}};
 		    }
 		    else
 		    {

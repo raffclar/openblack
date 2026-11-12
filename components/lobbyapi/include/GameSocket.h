@@ -152,7 +152,8 @@ struct Joined
 struct Refused
 {
 	/// A short word for the reason: "ticket", "full", "started", "closed", "protocol", "resync", "kicked", "version" (the
-	/// client has another build than the server), "map" (the client has another file of the land)
+	/// client has another build than the server), "map" (the client has another file of the land), "load" (the client did
+	/// not load the world of a lobby game in time)
 	std::string reason;
 };
 
@@ -277,8 +278,30 @@ struct ObserverLeft
 	std::string name;
 };
 
-using Frame = std::variant<Join, Resume, Ready, Leave, Joined, Refused, Start, Resumed, PlayerState, StartQuery, StartReply,
-                           StartCancel, StartStop, StartTransfer, StartCreature, StopRequest, GameStop, RoomChat, ObserverLeft>;
+/// Client to server: "game.loaded". The player's computer has the land and loaded the world of the started game. The
+/// client sends it once after game.start, and again after it comes back if the server did not get it.
+struct Loaded
+{
+};
+
+/// Server to client: "game.wait". In a lobby game, the turns of the game do not start until each god's player loaded the
+/// world (deviation 254). The server sends this frame each time the list of these players changes. The players who
+/// loaded can move the camera, but the world does not change. When the list is empty, the pause ended and the turns
+/// come.
+struct LoadWait
+{
+	/// The names of the gods' players who did not load the world yet
+	std::vector<std::string> loading;
+	/// The seconds until the server stops the wait, when the frame went. Then each player who did not load leaves the
+	/// game. Each client counts down from this value. 0 in the frame that ends the wait.
+	uint32_t secondsLeft {0};
+
+	[[nodiscard]] bool operator==(const LoadWait&) const = default;
+};
+
+using Frame =
+    std::variant<Join, Resume, Ready, Leave, Joined, Refused, Start, Resumed, PlayerState, StartQuery, StartReply, StartCancel,
+                 StartStop, StartTransfer, StartCreature, StopRequest, GameStop, RoomChat, ObserverLeft, Loaded, LoadWait>;
 
 [[nodiscard]] std::string ToJson(const Frame& frame);
 [[nodiscard]] std::optional<Frame> Parse(std::string_view text);

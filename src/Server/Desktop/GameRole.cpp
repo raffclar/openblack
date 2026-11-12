@@ -464,7 +464,8 @@ std::optional<std::string> GameRole::Start(const NetworkSettings& settings, game
 	                  .relaysCreature = creature_file_load::ServerRelays,
 	                  .lobby = settings.lobby,
 	                  .buildId = online::build_id::Own(),
-	                  .mapSha256 = std::move(landSha256)});
+	                  .mapSha256 = std::move(landSha256),
+	                  .loadWindowMicroseconds = settings.joinWindowSeconds * 1'000'000});
 	return std::nullopt;
 }
 

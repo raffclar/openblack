@@ -202,6 +202,20 @@ public:
 	[[nodiscard]] const std::map<uint8_t, std::vector<uint8_t>>& StartCreatures() const { return _startCreatures; }
 	/// The reason that the server gave for a refusal
 	[[nodiscard]] const std::string& RefusedReason() const { return _refusedReason; }
+	/// The computer loaded the world of the network game. The session tells the server after the start (game.loaded), as
+	/// the turns of a lobby game wait for each god's player to load (deviation 254).
+	void ReportLoaded();
+	/// The wait of a lobby game for the loads of the players, as the computer sees it now
+	struct LoadWaitView
+	{
+		/// The names of the players who did not load the world yet
+		std::vector<std::string> loading;
+		/// The whole seconds until the server stops the wait, counted down from the server's frame
+		uint32_t secondsLeft {0};
+	};
+	/// The wait for the loads, while the turns wait. None when the turns do not wait. The screen shows "The game is
+	/// paused: waiting for remaining players to load" with these names and the seconds left.
+	[[nodiscard]] std::optional<LoadWaitView> LoadWait() const;
 	[[nodiscard]] const ResyncRule& Resync() const { return _resync; }
 	/// True while the game shows "Resynchronising..." (MI-4)
 	[[nodiscard]] bool ShowsResync() const
@@ -275,6 +289,17 @@ private:
 	std::vector<StartEvent> _startEvents;
 	std::vector<game_socket::RoomChat> _roomChat;
 	std::vector<std::string> _observersLeft;
+	/// The computer loaded the world (ReportLoaded)
+	bool _loaded {false};
+	/// The session sent game.loaded on its socket
+	bool _loadedSent {false};
+	/// The last game.wait of the server with names, and the time when it came
+	std::optional<game_socket::LoadWait> _loadWait;
+	int64_t _loadWaitAt {0};
+	/// The commands that the session did not send during the wait for the loads
+	uint32_t _commandsInLoadWait {0};
+	/// Sends game.loaded when the computer loaded, the game started and the socket is open
+	void SendLoaded();
 	std::map<uint8_t, std::vector<uint8_t>> _startCreatures;
 	std::map<uint8_t, float> _startAlignments;
 	bool _ownGodPlaysForClan {false};

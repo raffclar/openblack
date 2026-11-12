@@ -261,7 +261,7 @@ protected:
 
 	/// The room of the game of one lobby: the members of the lobby, the build of the server and the SHA-256 of its land
 	void MakeLobbyHost(std::vector<lobby_members::Member> members, uint32_t minGods, std::string build = "0.1.0+a/codec1",
-	                   std::string map = {})
+	                   std::string map = {}, int64_t loadWindow = 120LL * 1'000'000)
 	{
 		host = std::make_unique<LockstepHost>(
 		    network, CheckFakeTicket, [this] { return now; }, [this] { return "secret-" + std::to_string(++secrets); },
@@ -279,7 +279,8 @@ protected:
 		        .relaysCreature = {},
 		        .lobby = server::lobby_game::Lobby {.id = "lobby1", .members = std::move(members)},
 		        .buildId = std::move(build),
-		        .mapSha256 = std::move(map)});
+		        .mapSha256 = std::move(map),
+		        .loadWindowMicroseconds = loadWindow});
 	}
 
 	/// A room with no human god (tools): the game starts at once, and the world turns when this many observers joined
@@ -2740,4 +2741,126 @@ TEST_F(LockstepTest, TheRoomOfALobbyStartsWhenEachGodOfTheLobbyJoined)
 	Frames({&alice, &bob}, 10);
 	EXPECT_TRUE(host->Started());
 	EXPECT_EQ(bob.session.GetJoined()->slot, 0);
+}
+
+TEST_F(LockstepTest, TheTurnsOfALobbyGameWaitUntilEachGodsPlayerLoadedTheWorld)
+{
+	MakeLobbyHost(TwoGodsAndAnObserver(), 2);
+	const std::string build(k_ServerBuild);
+	Computer alice(network, now, "god:alice@lobby1", k_LandFile, {'C'}, 0.0f, {}, build);
+	Computer bob(network, now, "god:bob@lobby1", k_LandFile, {'C'}, 0.0f, {}, build);
+	Frames({&alice, &bob}, 10);
+	ASSERT_TRUE(host->Started());
+	// No turn runs: the game is paused for every computer, and each sees the players who load
+	EXPECT_TRUE(host->WaitsForLoads());
+	EXPECT_EQ(serverWorld.turns, 0u);
+	EXPECT_EQ(alice.world.turns, 0u);
+	ASSERT_TRUE(alice.session.LoadWait().has_value());
+	EXPECT_EQ(alice.session.LoadWait()->loading.size(), 2u);
+	// The seconds count down from the server's end of the wait, 120 seconds after the room was made
+	EXPECT_GT(alice.session.LoadWait()->secondsLeft, 110u);
+	EXPECT_LE(alice.session.LoadWait()->secondsLeft, 120u);
+	const auto before = alice.session.LoadWait()->secondsLeft;
+	Frames({&alice, &bob}, 20);
+	EXPECT_EQ(alice.session.LoadWait()->secondsLeft, before - 2);
+	// A command of the world does not go during the pause
+	alice.session.Send(HandTap {.object = Entity(5)});
+
+	// Alice loaded: the turns still wait for bob, and both computers see only bob's name
+	alice.session.ReportLoaded();
+	Frames({&alice, &bob}, 5);
+	EXPECT_EQ(serverWorld.turns, 0u);
+	ASSERT_TRUE(bob.session.LoadWait().has_value());
+	EXPECT_EQ(bob.session.LoadWait()->loading, (std::vector<std::string> {"bob"}));
+	EXPECT_EQ(alice.session.LoadWait()->loading, (std::vector<std::string> {"bob"}));
+
+	// Bob loaded: the pause ends for all, and the turns run
+	bob.session.ReportLoaded();
+	Frames({&alice, &bob}, 10);
+	EXPECT_FALSE(host->WaitsForLoads());
+	EXPECT_FALSE(alice.session.LoadWait().has_value());
+	EXPECT_FALSE(bob.session.LoadWait().has_value());
+	EXPECT_GT(serverWorld.turns, 5u);
+	EXPECT_GT(alice.world.turns, 5u);
+	EXPECT_EQ(alice.session.GetState(), NetworkSession::State::Playing);
+	// The tap of the pause did not go into a turn
+	EXPECT_TRUE(host->Seats()[2].commands.empty());
+}
+
+TEST_F(LockstepTest, AGodWhosePlayerLeavesDuringTheLoadsLeavesAndTheTurnsStartWithTheOthers)
+{
+	MakeLobbyHost(TwoGodsAndAnObserver(), 2);
+	const std::string build(k_ServerBuild);
+	Computer alice(network, now, "god:alice@lobby1", k_LandFile, {'C'}, 0.0f, {}, build);
+	Computer bob(network, now, "god:bob@lobby1", k_LandFile, {'C'}, 0.0f, {}, build);
+	Frames({&alice, &bob}, 10);
+	ASSERT_TRUE(host->Started());
+	alice.session.ReportLoaded();
+	Frames({&alice, &bob}, 5);
+	EXPECT_EQ(serverWorld.turns, 0u);
+	// Bob leaves before his world loaded: his god leaves the game, and the game goes on with alice
+	bob.session.Leave();
+	Frames({&alice, &bob}, 10);
+	EXPECT_EQ(host->Seats()[0].state, LockstepHost::SeatState::Closed);
+	EXPECT_FALSE(host->WaitsForLoads());
+	EXPECT_FALSE(alice.session.LoadWait().has_value());
+	EXPECT_GT(serverWorld.turns, 5u);
+	EXPECT_FALSE(host->GameOver());
+}
+
+TEST_F(LockstepTest, AGodWhosePlayerDoesNotLoadInTimeLeavesTheGame)
+{
+	MakeLobbyHost(TwoGodsAndAnObserver(), 2, std::string(k_ServerBuild), {}, 5LL * 1'000'000);
+	const std::string build(k_ServerBuild);
+	Computer alice(network, now, "god:alice@lobby1", k_LandFile, {'C'}, 0.0f, {}, build);
+	Computer bob(network, now, "god:bob@lobby1", k_LandFile, {'C'}, 0.0f, {}, build);
+	Frames({&alice, &bob}, 10);
+	ASSERT_TRUE(host->Started());
+	alice.session.ReportLoaded();
+	// The time to load counts 5 seconds from the time when the room was made
+	Frames({&alice, &bob}, 30);
+	EXPECT_TRUE(host->WaitsForLoads());
+	EXPECT_EQ(serverWorld.turns, 0u);
+	Frames({&alice, &bob}, 30);
+	// Bob did not load in time: the server closes his socket with "load", and his god leaves as a player who leaves
+	EXPECT_EQ(bob.session.GetEnd(), NetworkSession::End::Refused);
+	EXPECT_EQ(bob.session.RefusedReason(), "load");
+	EXPECT_EQ(host->Seats()[0].state, LockstepHost::SeatState::Closed);
+	EXPECT_FALSE(host->WaitsForLoads());
+	EXPECT_GT(serverWorld.turns, 5u);
+	EXPECT_EQ(alice.session.GetState(), NetworkSession::State::Playing);
+}
+
+TEST_F(LockstepTest, ARoomWithNoLobbyDoesNotWaitForTheLoads)
+{
+	MakeHost(2);
+	Computer alice(network, now, "god:alice");
+	Computer bob(network, now, "god:bob");
+	Frames({&alice, &bob}, 20);
+	ASSERT_TRUE(host->Started());
+	EXPECT_FALSE(host->WaitsForLoads());
+	EXPECT_FALSE(alice.session.LoadWait().has_value());
+	EXPECT_GT(serverWorld.turns, 5u);
+}
+
+TEST_F(LockstepTest, AGameThatStartsAfterTheTimeToLoadGetsTheWholeTimeFromItsStart)
+{
+	MakeLobbyHost(TwoGodsAndAnObserver(), 2, std::string(k_ServerBuild), {}, 5LL * 1'000'000);
+	// 6 seconds go by before the players join
+	Frames({}, 60);
+	const std::string build(k_ServerBuild);
+	Computer alice(network, now, "god:alice@lobby1", k_LandFile, {'C'}, 0.0f, {}, build);
+	Computer bob(network, now, "god:bob@lobby1", k_LandFile, {'C'}, 0.0f, {}, build);
+	Frames({&alice, &bob}, 10);
+	ASSERT_TRUE(host->Started());
+	ASSERT_TRUE(alice.session.LoadWait().has_value());
+	// The wait gives the whole 5 seconds from the start
+	EXPECT_GE(alice.session.LoadWait()->secondsLeft, 4u);
+	EXPECT_LE(alice.session.LoadWait()->secondsLeft, 5u);
+	Frames({&alice, &bob}, 30);
+	EXPECT_TRUE(host->WaitsForLoads());
+	Frames({&alice, &bob}, 30);
+	EXPECT_FALSE(host->WaitsForLoads());
+	EXPECT_EQ(alice.session.RefusedReason(), "load");
+	EXPECT_EQ(bob.session.RefusedReason(), "load");
 }
