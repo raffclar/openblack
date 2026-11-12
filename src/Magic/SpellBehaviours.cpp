@@ -391,7 +391,8 @@ bool spells::ApplyDefaultEffect(SpellServicesInterface& services, Spell& spell, 
 			if (event.type == SpellEventInfo::Type::Object && event.target != entt::null &&
 			    world.PositionOf(event.target).has_value())
 			{
-				if (world.ApplyEffect(event.target, values, source))
+				// The object takes the effect only when it is a receiver of the effect
+				if (world.TakesEffect(event.target, values) && world.ApplyEffect(event.target, values, source))
 				{
 					reached = event.target;
 				}

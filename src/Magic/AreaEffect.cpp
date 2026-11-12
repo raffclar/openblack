@@ -62,6 +62,20 @@ bool magic::Reaches(const EffectValues& values, glm::vec3 point, const EffectRec
 	       std::abs(point.y - receiver.position.y) <= receiver.height + values.radius;
 }
 
+bool magic::VillagerAvailable(const VillagerReceiverFacts& facts) noexcept
+{
+	return !facts.goesToDying;
+}
+
+bool magic::VillagerTakesEffect(const VillagerReceiverFacts& facts, float heal) noexcept
+{
+	if (heal > 0.0f)
+	{
+		return !facts.dead;
+	}
+	return VillagerAvailable(facts) && !facts.atHome && !facts.inHand && !facts.hiding;
+}
+
 EffectValues magic::EventEffectValues(EffectValues values, float paidStrength, float tribalPower, float eventStrength)
 {
 	values.Scale(paidStrength * tribalPower * eventStrength);

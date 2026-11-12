@@ -63,6 +63,7 @@ public:
 	void HeldThingUsedOnLand(PlayerNames player) override;
 	[[nodiscard]] std::optional<glm::vec3> PositionOf(entt::entity object) const override;
 	bool ApplyEffect(entt::entity object, const magic::EffectValues& values, const magic::EffectSource& source) override;
+	[[nodiscard]] bool TakesEffect(entt::entity object, const magic::EffectValues& values) const override;
 	std::vector<entt::entity> ApplyEffectAt(glm::vec3 point, const magic::EffectValues& values,
 	                                        const magic::EffectSource& source) override;
 	void Water(const magic::WaterDrop& drop) override;

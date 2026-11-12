@@ -524,12 +524,11 @@ Fire* FireSystem::FindOrCreate(entt::entity object, std::optional<PlayerNames> p
 	{
 		return nullptr;
 	}
-	// What can burn: what has a combustion temperature in its table and takes the burn of a fire. A villager doesn't
-	// while it is dying, at home or hiding in a building.
+	// What can burn: what has a combustion temperature in its table and takes the burn of a fire. A villager does not
+	// while it is dying, in its home, in a hand or on its way to hide in a building.
 	constexpr float k_FireBurn = 100.0f;
 	const auto material = MaterialOf(object);
-	if (!material.has_value() || material->combustion == 0.0f || !world_objects::TakesEffect(object, k_FireBurn) ||
-	    (world_objects::IsVillager(object) && !villager_fire::CanCatchFire(object)))
+	if (!material.has_value() || material->combustion == 0.0f || !world_objects::TakesEffect(object, k_FireBurn, 0.0f))
 	{
 		return nullptr;
 	}
@@ -580,7 +579,7 @@ Fire* FireSystem::FindOrCreate(entt::entity object, std::optional<PlayerNames> p
 
 void FireSystem::ApplyBurn(entt::entity object, float burn, std::optional<PlayerNames> player)
 {
-	if (burn == 0.0f || !Entities().Valid(object) || !world_objects::TakesEffect(object, burn))
+	if (burn == 0.0f || !Entities().Valid(object) || !world_objects::TakesEffect(object, burn, 0.0f))
 	{
 		return;
 	}

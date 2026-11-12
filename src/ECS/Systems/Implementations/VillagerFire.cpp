@@ -920,20 +920,6 @@ bool villager_fire::IsRunningOnFire(entt::entity villager)
 	return action != nullptr && Locator::livingActionSystem::has_value() && FinalState(*action) == VillagerStates::OnFire;
 }
 
-bool villager_fire::CanCatchFire(entt::entity villager)
-{
-	auto& registry = Entities();
-	const auto* action = registry.TryGet<const LivingAction>(villager);
-	if (action == nullptr || !Locator::livingActionSystem::has_value())
-	{
-		return true;
-	}
-	// Dying, inside its home, or gone to hide in a building nearby. (One held in the hand neither, but the hand doesn't
-	// hold villagers yet.)
-	return FinalState(*action) != VillagerStates::Dying && !registry.AllOf<AtHome>(villager) &&
-	       State(*action, LivingAction::Index::Top) != VillagerStates::GoAndHideInNearbyBuilding;
-}
-
 bool villager_fire::IsFireMan(entt::entity villager)
 {
 	const auto* action = Entities().TryGet<const LivingAction>(villager);

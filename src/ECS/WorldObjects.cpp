@@ -40,6 +40,7 @@
 #include "ECS/Components/FishFarm.h"
 #include "ECS/Components/Flowers.h"
 #include "ECS/Components/Forest.h"
+#include "ECS/Components/HandGrab.h"
 #include "ECS/Components/Indestructible.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/MagicFireBall.h"
@@ -66,6 +67,7 @@
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/VillageTotem.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/Components/VillagerDeath.h"
 #include "ECS/Components/Vortex.h"
 #include "ECS/Components/Weather.h"
 #include "ECS/Components/Workshop.h"
@@ -104,11 +106,13 @@
 #include "ECS/TownPlanning.h"
 #include "InfoConstants.h"
 #include "Locator.h"
+#include "Magic/AreaEffect.h"
 #include "Magic/ResourcePiles.h"
 #include "Magic/SpellSparing.h"
 #include "Physics/DamageMesh.h"
 #include "Physics/LivingRules.h"
 #include "Resources/ResourcesInterface.h"
+#include "ScriptHeaders/ScriptDeadLiving.h"
 #include "ScriptHeaders/ScriptPropertyRules.h"
 
 using namespace openblack;
@@ -1340,9 +1344,41 @@ float world_objects::IncreaseLife(entt::entity object, float amount)
 	return life.life;
 }
 
-bool world_objects::TakesEffect(entt::entity object, float burn)
+/// The facts about a villager that tell if the villager takes an effect
+static magic::VillagerReceiverFacts VillagerReceiverFactsOf(const Registry& registry, entt::entity villager)
+{
+	magic::VillagerReceiverFacts facts {.atHome = registry.AllOf<AtHome>(villager), .inHand = registry.AllOf<InHand>(villager)};
+	const auto* action = registry.TryGet<const LivingAction>(villager);
+	if (action == nullptr)
+	{
+		return facts;
+	}
+	const auto top = action->states.at(static_cast<size_t>(LivingAction::Index::Top));
+	const auto finalState = Locator::livingActionSystem::has_value()
+	                            ? static_cast<uint8_t>(Locator::livingActionSystem::value().VillagerGetFinalState(*action))
+	                            : action->states.at(static_cast<size_t>(LivingAction::Index::Final));
+	facts.goesToDying = finalState == static_cast<uint8_t>(VillagerStates::Dying);
+	facts.dead = script::dead_living::IsDead({.kind = script::dead_living::LivingFacts::Kind::Villager,
+	                                          .deathMark = registry.AllOf<VillagerDeath>(villager),
+	                                          .topState = top,
+	                                          .finalState = finalState});
+	facts.hiding = top == static_cast<uint8_t>(VillagerStates::GoAndHideInNearbyBuilding);
+	return facts;
+}
+
+bool world_objects::IsAvailable(entt::entity object)
 {
 	const auto& registry = Locator::entitiesRegistry::value();
+	return !registry.AllOf<Villager>(object) || magic::VillagerAvailable(VillagerReceiverFactsOf(registry, object));
+}
+
+bool world_objects::TakesEffect(entt::entity object, float burn, float heal)
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	if (registry.AllOf<Villager>(object))
+	{
+		return magic::VillagerTakesEffect(VillagerReceiverFactsOf(registry, object), heal);
+	}
 	if (const auto* pot = registry.TryGet<const Pot>(object))
 	{
 		return pot->amount != 0;

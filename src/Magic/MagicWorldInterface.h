@@ -105,6 +105,9 @@ public:
 	/// An effect on one object, which heals and hurts it by how it stands up to each kind, and moves the alignment of
 	/// whoever it comes from by what it did; whether it took it
 	virtual bool ApplyEffect(entt::entity object, const EffectValues& values, const EffectSource& source) = 0;
+	/// Whether an object takes an effect that a miracle aims at it. An empty pot, a field with no food under an effect
+	/// that burns, and a villager in its home do not.
+	[[nodiscard]] virtual bool TakesEffect(entt::entity object, const EffectValues& values) const = 0;
 	/// An effect at a point: every object it reaches takes it, found in the land's cells round the point (see
 	/// AreaEffect.h). The objects that took it.
 	virtual std::vector<entt::entity> ApplyEffectAt(glm::vec3 point, const EffectValues& values,
