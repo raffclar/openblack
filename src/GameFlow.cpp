@@ -223,6 +223,7 @@ void Game::FollowGameEnd()
 	const auto landNumber = Locator::entitiesRegistry::value().Context().mapScriptGlobals.landNumber;
 	const auto colour = looksOn ? glm::vec4(0.0f) : gui::statistics_box::PlayerColour(local, landNumber);
 	// Before the end box of a game end opens, all the boxes of the game close, and the interface comes back
+	Locator::gameInterface::value().CloseBoxesForGameEnd();
 	if (Locator::cinematicDirectorSystem::has_value())
 	{
 		Locator::cinematicDirectorSystem::value().AllBoxesClosed();
