@@ -133,6 +133,8 @@ public:
 	/// Opens the box of the winning conditions with the figures as they are now
 	void OpenConditions();
 	[[nodiscard]] const ConditionsBox& GetConditions() const noexcept { return *_conditions; }
+	/// Called when a click on a tab of the menu closes all the boxes of the game. Then the tab shows its page.
+	void SetAllBoxesClosedHandler(std::function<void()> handler) { _onAllBoxesClosed = std::move(handler); }
 	/// In a network game, the main menu has no Start Skirmish Game, its third button is Exit Online Game, and its
 	/// buttons are 100 apart. Its Multiplayer tab opens the box of the winning conditions. The Quit arrow of the
 	/// options asks to leave the game.
@@ -300,6 +302,8 @@ private:
 	/// A tab of the options was picked: from the Players page, while leaving it starts the game again, the player is
 	/// asked first
 	void PickTab(Page page);
+	/// A click on a tab first closes all the boxes of the game
+	void CloseAllBoxesForTab() const;
 	/// The Players page's arrow: Back, or the game starting again
 	void PlayersBack();
 	void PickPlayer(size_t index);
@@ -354,6 +358,7 @@ private:
 	/// The box of the winning conditions, its own page's dialog
 	std::unique_ptr<ConditionsBox> _conditions;
 	ConditionsSource _conditionsSource;
+	std::function<void()> _onAllBoxesClosed;
 	/// The buttons of the main menu, the label of the third in a network game and the label of the second in a skirmish
 	std::array<Button*, k_ButtonCount> _mainButtons {};
 	std::u16string _exitOnlineLabel;

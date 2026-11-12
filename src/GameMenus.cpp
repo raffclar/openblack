@@ -63,6 +63,7 @@
 #include "ECS/Statistics.h"
 #include "ECS/Systems/AdvisorSystemInterface.h"
 #include "ECS/Systems/ChatSystemInterface.h"
+#include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/ComputerSettingsSystemInterface.h"
 #include "ECS/Systems/CreatureCaveSystemInterface.h"
 #include "ECS/Systems/CreatureModeSystemInterface.h"
@@ -232,6 +233,15 @@ const gui::TextDatabase* Game::MakeInterface()
 				Locator::guidanceSystem::value().SayOneOff(guidance::OneOff::NotVeryGood);
 			}
 		});
+		// A click on a tab of the menu or of the end box closes all the boxes of the game, and the interface comes back
+		const auto allBoxesClosed = [] {
+			if (Locator::cinematicDirectorSystem::has_value())
+			{
+				Locator::cinematicDirectorSystem::value().AllBoxesClosed();
+			}
+		};
+		Locator::gameInterface::value().GetMenu().SetAllBoxesClosedHandler(allBoxesClosed);
+		Locator::gameInterface::value().GetEndGameBox().SetAllBoxesClosedHandler(allBoxesClosed);
 		if (Locator::temple::has_value())
 		{
 			Locator::temple::value().SetInterface(&Locator::gameInterface::value());
