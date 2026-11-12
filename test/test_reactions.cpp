@@ -88,6 +88,7 @@
 #include "ECS/Systems/Implementations/MagicShieldSystem.h"
 #include "ECS/Systems/Implementations/ReactionSystem.h"
 #include "ECS/Systems/Implementations/TimeSystem.h"
+#include "ECS/Systems/Implementations/VillagerCreatureReactions.h"
 #include "ECS/Systems/Implementations/VillagerDisciples.h"
 #include "ECS/Systems/Implementations/VillagerFire.h"
 #include "ECS/Systems/Implementations/VillagerHome.h"
@@ -3171,4 +3172,177 @@ TEST_F(Reactions, AGameTurnMakesNoReactionForACreatureThatHasNone)
 	EXPECT_FALSE(std::ranges::any_of(_reactions.GetReactions(), [this](const auto& reaction) {
 		return reaction.source.initiator == _creature && reaction.source.type == Reaction::ReactToCreature;
 	}));
+}
+
+namespace
+{
+/// Game turns in ten seconds: a living thing changes to a more urgent reaction of another kind only after this time
+constexpr int k_TenSeconds = 100;
+} // namespace
+
+// A villager weighs a reaction that it made, as it weighs every other reaction
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(Reactions, AVillagerWeighsAReactionThatItMadeItself)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto villager = _villagers[0];
+	const auto id = _reactions.Create({.initiator = villager,
+	                                   .type = Reaction::FleeFromObject,
+	                                   .player = PlayerNames::NEUTRAL,
+	                                   .position = k_Here,
+	                                   .playerless = true});
+	EXPECT_EQ(registry.Get<const LivingReaction>(villager).reaction, id);
+	EXPECT_EQ(StateOf(villager), VillagerStates::FleeingFromObjectReaction);
+}
+
+// A villager that changes to a more urgent reaction leaves the group of the old reaction with no stop. Its memory of the
+// old kind stays as it was, and the end of the old reaction does not stop it.
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(Reactions, AVillagerThatChangesToAMoreUrgentReactionKeepsItsMemoryOfTheOldKind)
+{
+	Locator::reactionSystem::emplace<ecs::systems::ReactionSystem>();
+	auto& reactions = Locator::reactionSystem::value();
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto villager = _villagers[0];
+	reactions.StartTurn();
+	const auto old = reactions.Create(Miracle(Reaction::LookAtObject));
+	ASSERT_EQ(registry.Get<const LivingReaction>(villager).reaction, old);
+	const auto& memory = registry.Get<const VillagerReactionMemory>(villager).memory;
+	const auto lookedAt = memory.LastReacted(static_cast<uint32_t>(Reaction::LookAtObject));
+	for (int turn = 0; turn < k_TenSeconds; ++turn)
+	{
+		reactions.StartTurn();
+	}
+	const auto urgent = reactions.Create(Miracle(Reaction::FleeFromSpell));
+	const auto& state = registry.Get<const LivingReaction>(villager);
+	EXPECT_EQ(state.reaction, urgent);
+	EXPECT_EQ(state.left, 0u);
+	EXPECT_EQ(StateOf(villager), VillagerStates::FleeingFromObjectReaction);
+	EXPECT_EQ(memory.LastReacted(static_cast<uint32_t>(Reaction::LookAtObject)), lookedAt);
+	reactions.Remove(old);
+	EXPECT_EQ(registry.Get<const LivingReaction>(villager).reaction, urgent);
+	EXPECT_EQ(StateOf(villager), VillagerStates::FleeingFromObjectReaction);
+	Locator::reactionSystem::reset();
+}
+
+// When the state that the villager leaves for the new reaction stops the old reaction, the memory of the old kind comes
+// up to now. The villager holds the new reaction.
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(Reactions, AVillagerWhoseOldStateStopsTheOldReactionHoldsTheNewOne)
+{
+	// The state of the flight is not a state of a reaction here. Thus the look leaves its reaction when it goes into it
+	_info->villagerStateTable.at(static_cast<size_t>(VillagerStates::FleeingFromObjectReaction)).isReactionState = 0;
+	Locator::infoConstants::emplace(*_info);
+	Locator::reactionSystem::emplace<ecs::systems::ReactionSystem>();
+	auto& reactions = Locator::reactionSystem::value();
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto villager = _villagers[0];
+	reactions.StartTurn();
+	const auto old = reactions.Create(Miracle(Reaction::LookAtObject));
+	ASSERT_EQ(registry.Get<const LivingReaction>(villager).reaction, old);
+	for (int turn = 0; turn < k_TenSeconds; ++turn)
+	{
+		reactions.StartTurn();
+	}
+	const auto urgent = reactions.Create(Miracle(Reaction::FleeFromSpell));
+	const auto& state = registry.Get<const LivingReaction>(villager);
+	EXPECT_EQ(state.reaction, urgent);
+	EXPECT_EQ(state.type, Reaction::FleeFromSpell);
+	EXPECT_EQ(StateOf(villager), VillagerStates::FleeingFromObjectReaction);
+	const auto& memory = registry.Get<const VillagerReactionMemory>(villager).memory;
+	EXPECT_EQ(memory.LastReacted(static_cast<uint32_t>(Reaction::LookAtObject)), reactions.CurrentTurn());
+	Locator::reactionSystem::reset();
+}
+
+// A villager that changes to a kind that it never takes up keeps its reaction, but leaves the group of that reaction.
+// The end of the reaction does not stop it. It stops, with no change of state, when it next finds the reaction gone.
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(Reactions, AVillagerThatChangesToAKindItNeverTakesUpLeavesTheGroupOfItsReaction)
+{
+	_info->reaction.at(static_cast<size_t>(Reaction::ReactToHandPickUp)).priority = 200;
+	Locator::infoConstants::emplace(*_info);
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto villager = _villagers[0];
+	PlayTurn();
+	const auto old = _reactions.Create(Miracle(Reaction::LookAtObject));
+	ASSERT_EQ(registry.Get<const LivingReaction>(villager).reaction, old);
+	for (int turn = 0; turn < k_TenSeconds; ++turn)
+	{
+		_reactions.StartTurn();
+	}
+	_reactions.Create(Miracle(Reaction::ReactToHandPickUp));
+	const auto& state = registry.Get<const LivingReaction>(villager);
+	EXPECT_EQ(state.reaction, old);
+	EXPECT_EQ(state.left, old);
+	const auto& memory = registry.Get<const VillagerReactionMemory>(villager).memory;
+	EXPECT_EQ(memory.LastReacted(static_cast<uint32_t>(Reaction::ReactToHandPickUp)), _reactions.CurrentTurn());
+	_reactions.Remove(old);
+	EXPECT_EQ(registry.Get<const LivingReaction>(villager).reaction, old);
+	EXPECT_EQ(StateOf(villager), VillagerStates::LookingAtObjectReaction);
+	PlayTurn();
+	EXPECT_EQ(registry.Get<const LivingReaction>(villager).reaction, 0u);
+	EXPECT_EQ(registry.Get<const LivingReaction>(villager).left, 0u);
+	EXPECT_EQ(StateOf(villager), VillagerStates::LookingAtObjectReaction);
+}
+
+// An animal that changes to a more urgent reaction does not stop the old reaction. When it does not take up the new
+// reaction, it keeps the old reaction out of its group.
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(Reactions, AnAnimalThatDoesNotTakeUpAMoreUrgentReactionKeepsTheOldOneOutOfItsGroup)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	ReactToEverything(_info->animal.at(static_cast<size_t>(AnimalInfo::Cow)));
+	Locator::infoConstants::emplace(*_info);
+	auto& animals = static_cast<FakeAnimals&>(Locator::animalSystem::emplace<FakeAnimals>());
+	animals.available = true;
+	const auto cow = registry.Create();
+	registry.Assign<Transform>(cow, k_Here + glm::vec3(10.0f, 0.0f, 0.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+	auto& animal = registry.Assign<Animal>(cow);
+	animal.type = AnimalInfo::Cow;
+	animal.move.position = {map_coords::ToFixed(k_Here.x + 10.0f), map_coords::ToFixed(k_Here.z)};
+	Locator::entitiesMap::value().Sync();
+	_reactions.StartTurn();
+	const auto old = _reactions.Create(Miracle(Reaction::LookAtObject));
+	ASSERT_EQ(registry.Get<const LivingReaction>(cow).reaction, old);
+	for (int turn = 0; turn < k_TenSeconds; ++turn)
+	{
+		_reactions.StartTurn();
+	}
+	// The fake animals take up no flight
+	_reactions.Create(Miracle(Reaction::FleeFromSpell));
+	const auto& state = registry.Get<const LivingReaction>(cow);
+	EXPECT_EQ(state.reaction, old);
+	EXPECT_EQ(state.left, old);
+	EXPECT_TRUE(animals.stopped.empty());
+	_reactions.Remove(old);
+	EXPECT_TRUE(animals.stopped.empty());
+	Locator::animalSystem::reset();
+}
+
+// A villager that goes to bow to a creature goes into the walk towards the creature also when its states refuse the
+// walk. Then it keeps the state that it works towards.
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(Reactions, AVillagerGoesIntoTheWalkTowardsTheCreatureAlsoWhenItsStatesRefuseTheWalk)
+{
+	Locator::reactionSystem::emplace<ecs::systems::ReactionSystem>();
+	auto& reactions = Locator::reactionSystem::value();
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto villager = _villagers[0];
+	registry.Get<Villager>(villager).town = entt::null;
+	// The creature's reaction is far from every villager, so that only the villager given it holds it
+	const auto id = reactions.Create({.initiator = _creature,
+	                                  .type = Reaction::ReactToCreature,
+	                                  .player = PlayerNames::PLAYER_ONE,
+	                                  .position = k_Here + glm::vec3(2000.0f, 0.0f, 0.0f)});
+	registry.AssignOrReplace<LivingReaction>(villager, LivingReaction {.reaction = id, .type = Reaction::ReactToCreature});
+	// In the air, the villager refuses every walk
+	auto& action = registry.Get<LivingAction>(villager);
+	action.states.at(static_cast<size_t>(LivingAction::Index::Top)) =
+	    static_cast<uint8_t>(VillagerStates::InitialiseRespectCreatureReaction);
+	action.states.at(static_cast<size_t>(LivingAction::Index::Final)) = static_cast<uint8_t>(VillagerStates::Flying);
+	villager_creature::InitialiseRespectCreatureReaction(action);
+	EXPECT_EQ(StateOf(villager), VillagerStates::MoveTowardsCreatureReaction);
+	EXPECT_EQ(static_cast<VillagerStates>(action.states.at(static_cast<size_t>(LivingAction::Index::Final))),
+	          VillagerStates::Flying);
+	Locator::reactionSystem::reset();
 }

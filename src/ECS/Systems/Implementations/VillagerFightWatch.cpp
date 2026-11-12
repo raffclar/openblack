@@ -74,7 +74,7 @@ entt::entity TownOf(entt::entity villager)
 	return component->town;
 }
 
-/// How many of the villagers holding the same reaction joined it after this one
+/// How many of the villagers in the group of the same reaction joined it after this one
 std::optional<uint32_t> PlaceIndexOf(entt::entity villager)
 {
 	auto& registry = EntityRegistry();
@@ -85,8 +85,8 @@ std::optional<uint32_t> PlaceIndexOf(entt::entity villager)
 	}
 	uint32_t later = 0;
 	registry.Each<const LivingReaction>([&](entt::entity other, const LivingReaction& state) {
-		if (other != villager && state.reaction == mine->reaction && state.joined > mine->joined &&
-		    registry.AllOf<Villager>(other))
+		if (other != villager && state.reaction == mine->reaction && state.left != mine->reaction &&
+		    state.joined > mine->joined && registry.AllOf<Villager>(other))
 		{
 			++later;
 		}
