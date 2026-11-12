@@ -16,6 +16,7 @@
 #include <map>
 #include <memory>
 #include <optional>
+#include <set>
 #include <vector>
 
 #include <entt/entity/entity.hpp>
@@ -149,6 +150,12 @@ struct RenderContext
 	/// By instance, the alpha reference that a see-through instance uses in place of the references of its materials:
 	/// the phantom building over a building site uses 10
 	std::map<uint32_t, uint8_t> seeThroughRefs;
+	/// The instances that take the land's light of their place on the map with the weights of whole cells, and no
+	/// distance haze: the phantom building and the yard copy of a scaffold (see graphics::object_land_light)
+	std::set<uint32_t> mapPlaceLitInstances;
+	/// The instances drawn a second time over the instance before them, at the same depth: the second draw of a felled
+	/// tree (see ecs::felled_tree_draw)
+	std::set<uint32_t> drawnOverInstances;
 	/// By instance, the detail it is drawn in this frame, as the bit its model's parts name it by (see
 	/// graphics::mesh_detail::LevelBit): only read for models whose parts differ by it
 	std::vector<uint8_t> instanceLevels;

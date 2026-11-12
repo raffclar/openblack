@@ -406,6 +406,27 @@ void testbed_scenarios::AddWorkshopScenarios(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "objects.scaffold_phantom_takes_no_haze",
+	    .name = "The phantom of the building on a scaffold's site takes the light of its place and no haze",
+	    .facet = Facet::Objects,
+	    .description = "The town and the scaffold of objects.scaffold_site_phantom_see_through. The camera is 250 m south "
+	                   "of the scaffold and 60 m above it. After one second the scaffold starts the building that the "
+	                   "town offers where it lies, as when the hand puts it down.",
+	    .expected = "A building site opens at the scaffold, with the phantom of its building. The village centre and the "
+	                "scaffold show the distance haze. The phantom shows no haze: it has the land's light and colour of "
+	                "its place on the map alone. The same is true for the phantom in the hand and for the copy of a "
+	                "scaffold at its place in a workshop's yard. Move the camera nearer and farther: only the haze on "
+	                "the solid things changes.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_LooseScaffold.x, 60.0f, k_LooseScaffold.y - 250.0f},
+	                .look = {k_LooseScaffold.x, 2.0f, k_LooseScaffold.y}},
+	    .objects = {{.type = AbodeInfo::CelticTownCentre, .offset = {0.0f, 50.0f}},
+	                {.type = ScaffoldInfo::Normal, .offset = k_LooseScaffold, .scale = 0.7f}},
+	    .commands = {{.kind = Kind::ScaffoldStartsSite, .delaySeconds = 1.0f, .object = 1}},
+	});
+
+	all.push_back({
 	    .id = "objects.scaffold_script_active",
 	    .name = "A script sets a scaffold active, and the scaffold starts its building at once",
 	    .facet = Facet::Objects,
