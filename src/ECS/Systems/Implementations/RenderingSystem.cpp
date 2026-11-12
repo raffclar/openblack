@@ -120,6 +120,7 @@
 #include "Graphics/GroundBlobs.h"
 #include "Graphics/InstanceLightPoint.h"
 #include "Graphics/MeshDetail.h"
+#include "Graphics/ObjectDrawWay.h"
 #include "Graphics/ObjectTint.h"
 #include "Graphics/ShaderManager.h"
 #include "Graphics/TempleHeartLook.h"
@@ -206,6 +207,14 @@ bool PartsDifferByLevel(entt::id_type meshId)
 		return !subMesh->IsPhysics() && flags.isWindow == 0 &&
 		       openblack::graphics::mesh_detail::PartsDifferByLevel(static_cast<uint8_t>(flags.lodMask));
 	});
+}
+
+/// Whether the model's mesh is marked to be sorted whole: the game then draws every placed thing of the model among the
+/// sorted things, by the key of a placed model at its place, whatever its alpha. These meshes all have parts that blend.
+bool SortedWhole(entt::id_type meshId)
+{
+	const auto& meshes = entt::locator<openblack::resources::ResourcesInterface>::value().GetMeshes();
+	return meshes.Contains(meshId) && openblack::graphics::object_draw::SortedWhole(meshes.Handle(meshId)->GetFlags());
 }
 
 /// Whether a thing is a village centre
@@ -389,6 +398,10 @@ void RenderingSystem::PrepareDrawDescs(bool drawBoundingBox)
 		                                                                     .film = true,
 		                                                                     .environmentMapped = true,
 		                                                                     .changedMaterials = std::nullopt}));
+		if (count.second)
+		{
+			count.first->second.translucent = SortedWhole(drawnMesh);
+		}
 		count.first->second.count++;
 		count.first->second.unlit |= from.AnyOf<Unlit>(entity);
 		// The creatures and the animals are each posed as they are

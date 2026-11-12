@@ -540,9 +540,17 @@ TEST(GameMenu, AClickOnATabClosesAllTheBoxesBeforeItsPageShows)
 	Click(f.menu, TabCentre(0));
 	EXPECT_EQ(f.menu.GetPage(), Page::Main);
 	EXPECT_EQ(closes, 3);
+	// The Main Menu tab of the main menu, which shows already, closes all the boxes and shows the main menu again
+	Click(f.menu, TabCentre(0));
+	EXPECT_EQ(f.menu.GetPage(), Page::Main);
+	EXPECT_TRUE(f.menu.IsOpen());
+	EXPECT_TRUE(f.menu.IsMainMenuActive());
+	EXPECT_EQ(closes, 4);
+	EXPECT_TRUE(f.menu.TakeMainMenuShownAgain());
+	EXPECT_FALSE(f.menu.TakeMainMenuShownAgain());
 	// A tab with no label takes no click
 	Click(f.menu, TabCentre(3));
-	EXPECT_EQ(closes, 3);
+	EXPECT_EQ(closes, 4);
 }
 
 TEST(GameMenu, OptionsOpenTheOptionsTabs)

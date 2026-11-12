@@ -869,6 +869,9 @@ openblack_setup_and_add_test(test_villager_work test_villager_work.cpp)
 openblack_setup_and_add_test(
   test_graphics_backend_names test_graphics_backend_names.cpp
 )
+openblack_setup_and_add_test(
+  test_engine_config_overlays test_engine_config_overlays.cpp
+)
 openblack_setup_and_add_test(test_villager_breeding test_villager_breeding.cpp)
 openblack_setup_and_add_test(test_worshipper_rules test_worshipper_rules.cpp)
 openblack_setup_and_add_test(test_villager_death test_villager_death.cpp)
@@ -2538,6 +2541,8 @@ openblack_setup_and_add_test(test_forest_map_places test_forest_map_places.cpp)
 openblack_setup_and_add_test(test_yard_copy_rules test_yard_copy_rules.cpp)
 openblack_setup_and_add_test(test_script_line_values test_script_line_values.cpp)
 openblack_setup_and_add_test(test_screen_pixels gui/test_screen_pixels.cpp)
+openblack_setup_and_add_test(test_alpha_test graphics/test_alpha_test.cpp)
+openblack_setup_and_add_test(test_object_draw_way graphics/test_object_draw_way.cpp)
 openblack_setup_and_add_test(test_temple_pool temple/test_temple_pool.cpp)
 # The mouse events that the debug windows take while the inspector or a scenario drives the pointer
 openblack_setup_and_add_test(test_debug_window_mouse debug/test_debug_window_mouse.cpp)
@@ -2569,3 +2574,15 @@ set_tests_properties(
   PROPERTIES ENVIRONMENT
              "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
 )
+openblack_setup_and_add_test(test_landgen_shape landgen/test_landgen_shape.cpp)
+target_link_libraries(test_landgen_shape PRIVATE landgen)
+openblack_setup_and_add_test(
+  test_landgen_climate landgen/test_landgen_climate.cpp
+)
+target_link_libraries(test_landgen_climate PRIVATE landgen)
+openblack_setup_and_add_test(
+  test_landgen_generator landgen/test_landgen_generator.cpp
+)
+target_link_libraries(test_landgen_generator PRIVATE landgen)
+openblack_setup_and_add_test(test_generated_land test_generated_land.cpp)
+target_link_libraries(test_generated_land PRIVATE landgen lnd)

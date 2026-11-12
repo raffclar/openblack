@@ -44,6 +44,7 @@
 #include "Graphics/GroundShadow.h"
 #include "Graphics/HandReflection.h"
 #include "Graphics/HandShadow.h"
+#include "Graphics/ObjectDrawWay.h"
 #include "Graphics/PaintedSkinStamp.h"
 #include "Graphics/PartialBuildCap.h"
 #include "Graphics/RendererInterface.h"
@@ -239,8 +240,11 @@ private:
 		uint8_t phialAlpha;
 		/// The alignment of the player it is shown for, which makes the flying flock's seed a bat or a dove
 		float ownerAlignment;
-		/// The seed is drawn at once in white, with no light from the land, as the seeds over the gestures' hints are
-		bool drawnAtOnce {false};
+		/// The seed is lit in white, with no light from the land, as the seeds over the gestures' hints are
+		bool unlitWhite {false};
+		/// How the game draws it: the object draw over an icon, in a globe and over a chest; at once in the temple, on the
+		/// temple's map and over a gesture's hint
+		object_draw::Way way {object_draw::Way::Banded};
 	};
 	/// The programs and the maps that each seed model can use. A draw of many seeds finds them one time.
 	struct SeedModelLooks
@@ -255,6 +259,25 @@ private:
 	/// encoder given, or into the game thread's encoder without one. Without `looks`, the function finds them.
 	void DrawSeedModel(const DrawSceneDesc& desc, const SeedModelDraw& shown, const view_frustum::Frustum* seenBy = nullptr,
 	                   DrawEncoder* encoder = nullptr, const SeedModelLooks* looks = nullptr) const;
+	/// The rings round a miracle of a power-up level, as its seed draws them
+	struct PowerUpRingsDraw
+	{
+		const L3DMesh* mesh;
+		int rings;
+		float spin;
+		/// The point of the seed, which is the place of each ring
+		glm::vec3 middle;
+		float scale;
+		glm::vec3 colour;
+		/// The alpha of the rings, of 255
+		uint8_t alpha;
+		/// How the seed is drawn. Each ring draws two times at once. When the object draw draws the seed, the object draw
+		/// does the second draw of the last ring.
+		object_draw::Way way;
+		bool mirrored;
+	};
+	void DrawPowerUpRings(const DrawSceneDesc& desc, const PowerUpRingsDraw& shown,
+	                      const view_frustum::Frustum* seenBy = nullptr, DrawEncoder* encoder = nullptr) const;
 	/// The pass what blends in a scene goes to: its own pass after the scene's, but in the temple the scene's own
 	[[nodiscard]] static RenderPass TranslucentView(RenderPass scene);
 	/// The seeds of the creature's best-learnt miracles hovering by the plinths in the creature's room
@@ -593,9 +616,12 @@ private:
 	/// colours
 	void DrawIconPulses(const DrawSceneDesc& desc) const;
 	/// A tall shaft of light standing at a point and turned to face the eye, added over the scene in a colour: the
-	/// columns over villages and temples, and the scrolls' beams. With a view, a shaft out of that view is not drawn.
+	/// columns over villages and temples, and the scrolls' beams. With a view, a shaft out of that view is not drawn. The
+	/// game draws each shaft through the object draw, and its mesh is sorted whole, so the shaft takes the key of a
+	/// placed model at its point among the sorted things. A shaft that `fades` does not draw after its distance bands
+	/// end, and it keeps its own strength in the fade band. The other shafts draw at any distance.
 	void DrawLightShaft(const DrawSceneDesc& desc, const L3DMesh& mesh, const glm::vec3& position, const glm::vec4& tint,
-	                    const view_frustum::Frustum* seenBy = nullptr) const;
+	                    const view_frustum::Frustum* seenBy = nullptr, bool fades = false) const;
 	/// The leashes' ropes, each a ribbon lit by the land beneath it, and their shadows on the land
 	void DrawLeashes(const DrawSceneDesc& desc) const;
 	/// The collars of the leashes the gestures' hints offer, each over its hint's square, seen through a camera of its

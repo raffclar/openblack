@@ -76,6 +76,9 @@ struct MeshCreator final: Creator
 	bool useGlobalAlpha {false};
 	/// Not drawn below the level of its effect's origin, as the shield's surface is cut off at the land it stands on
 	bool drawCutByPlane {false};
+	/// Drawn at any distance. Without it, the far cull of the game stops the draw of a model that is further than 300
+	/// of its radii from the camera (see object_draw::FarCulled). A model that is cut by the plane has no far cull.
+	bool neverClip {false};
 	/// Coloured by the land's light where it is, with the land's colour and the haze there added. Without it the model
 	/// takes none of them.
 	bool landscapeColour {false};

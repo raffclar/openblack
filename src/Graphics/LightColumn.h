@@ -30,6 +30,8 @@ inline constexpr float k_TempleAlphaLow = 55.0f;
 /// The column keeps its model's width and is stretched this much upright. The game also gives the column's object a
 /// size of 3, but its model is drawn by the turn and stretch alone, so that size changes nothing on screen.
 inline constexpr float k_UprightStretch = 3.0f;
+/// The size that the game gives the object of a column or of a scroll's beam. Only the distance bands use it.
+inline constexpr float k_ObjectSize = 3.0f;
 /// A temple being destroyed keeps its column for this long into its destruction
 inline constexpr float k_DestructionSeconds = 21.8f;
 

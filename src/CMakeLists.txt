@@ -321,6 +321,7 @@ target_link_libraries(
           hnd
           pack
           lnd
+          landgen
           anm
           glw
           morph

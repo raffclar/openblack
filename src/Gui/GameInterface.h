@@ -253,8 +253,8 @@ public:
 	/// The player's answer to the question of the trip, once: true for Yes
 	[[nodiscard]] std::optional<bool> TakeTripAnswer() { return std::exchange(_tripAnswer, std::nullopt); }
 	/// "Are you sure you want to start a completely new game?" in the box with a Yes and a No, which Escape asks once the
-	/// game is over. While the question is up, it stays as it is.
-	void AskNewGameQuestion();
+	/// game is over, as does a click on the door of a room of pictures. While the question is up, it stays as it is.
+	void AskNewGameQuestion() override;
 	/// The player's answer to the question about a new game, once: true for Yes
 	[[nodiscard]] std::optional<bool> TakeNewGameAnswer() { return std::exchange(_newGameAnswer, std::nullopt); }
 	/// The box of the menu that has the input now, for the question of the trip

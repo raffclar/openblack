@@ -21,6 +21,7 @@
 
 #include "3D/L3DSkinTexels.h"
 #include "EngineConfig.h"
+#include "Graphics/AlphaTest.h"
 #include "Graphics/PixelCentres.h"
 #include "Graphics/RendererInterface.h"
 #include "Graphics/ShaderManager.h"
@@ -213,6 +214,8 @@ void LogoEffectView::Draw(const Scene& scene)
 		bgfx::setIndexBuffer(&indices);
 		program->SetTextureSampler("s_texture", 0, *_skySkin);
 		bgfx::setState(k_SkyState);
+		const auto noAlphaTest = alpha_test::Uniform(0);
+		program->SetUniformValue("u_alphaTestRef", noAlphaTest.data());
 		program->Submit(pass);
 	}
 
@@ -253,6 +256,8 @@ void LogoEffectView::Draw(const Scene& scene)
 		bgfx::setVertexBuffer(0, &vertices);
 		program->SetTextureSampler("s_texture", 0, *scene.dotTexture);
 		bgfx::setState(k_DotState | (additive ? k_AdditiveBlend : k_AlphaBlend));
+		const auto noAlphaTest = alpha_test::Uniform(0);
+		program->SetUniformValue("u_alphaTestRef", noAlphaTest.data());
 		program->Submit(pass);
 		first = last;
 	}

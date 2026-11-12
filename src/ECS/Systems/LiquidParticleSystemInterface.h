@@ -65,8 +65,9 @@ public:
 	virtual void SetPlayerPoint([[maybe_unused]] liquid_particles::Interface interface, [[maybe_unused]] glm::vec3 point) {}
 	/// Once a frame, before the draw: whether each pool of another player that has particles shows the symbol of its god
 	/// over them (see player_sparkles::ShowsSymbol). Each symbol that shows turns the angle that all of them share by
-	/// the milliseconds of the frame's game time (see player_sparkles::SymbolAngle).
-	virtual void TurnPlayerSymbols([[maybe_unused]] int32_t milliseconds,
+	/// the milliseconds of the frame's game time (see player_sparkles::SymbolAngle), in the order that the symbols draw
+	/// in for a camera at `camera` (see player_sparkles::SymbolDrawOrder).
+	virtual void TurnPlayerSymbols([[maybe_unused]] int32_t milliseconds, [[maybe_unused]] const glm::vec3& camera,
 	                               [[maybe_unused]] const std::function<bool(liquid_particles::Interface)>& shows)
 	{
 	}

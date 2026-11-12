@@ -50,6 +50,10 @@ vcpkg_download_distfile(
 #   creature with its three variant meshes, wrote the instance layout after the end of the list, into other values
 #   of the function. The pipeline then got an incorrect instance layout, or the pipeline cache got an incorrect key
 #   and later stopped the program with a memory fault.
+# - webgpu-uniform-reuse: a draw whose uniform values are the same as the last uniform block of the frame uses that
+#   block again, and a draw does not set the bind group again when the pass has the same bind group and offsets.
+#   Before, each draw wrote two 256-byte aligned blocks to the scratch buffer, and the frame wrote all of them to the
+#   device. The values that the shaders read do not change.
 # A change to shaderc's ESSL output (the WebGL 2 shaders). It does not change the SPIR-V, WGSL, Metal or Direct3D
 # shaders:
 # - essl-no-inline: the ESSL shaders do not get the passes that inline functions. The inline of a function that
@@ -110,6 +114,7 @@ vcpkg_extract_source_archive(
     webgpu-prefetch-keep-pipelines.patch
     webgpu-pipeline-key-by-layout.patch
     gl-parallel-link.patch
+    webgpu-uniform-reuse.patch
 )
 
 # Replaces text in a file of the bgfx source. The build stops when the text is not there, so that a new bgfx

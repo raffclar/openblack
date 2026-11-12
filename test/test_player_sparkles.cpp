@@ -9,8 +9,10 @@
 
 #include <cstdint>
 
+#include <array>
 #include <bit>
 #include <optional>
+#include <vector>
 
 #include <glm/vec3.hpp>
 #include <gtest/gtest.h>
@@ -153,4 +155,15 @@ TEST(PlayerSparkles, TheSymbolTurnsByTheMillisecondsAndStaysBetweenMinusPiAndPi)
 	// A turn back stays in the same span
 	EXPECT_EQ(player_sparkles::SymbolAngle(-3.14f, -10), -10.0f * std::bit_cast<float>(0x3A03126Fu) - 3.14f + twoPi);
 	EXPECT_EQ(player_sparkles::SymbolAngle(1.0f, 0), 1.0f);
+}
+
+TEST(PlayerSparkles, TheSymbolsTurnInTheOrderTheyDrawTheFarthestFirst)
+{
+	const glm::vec3 camera {0.0f, 10.0f, 0.0f};
+	const std::array points {glm::vec3(5.0f, 10.0f, 0.0f), glm::vec3(50.0f, 10.0f, 0.0f), glm::vec3(0.0f, 10.0f, 20.0f)};
+	EXPECT_EQ(player_sparkles::SymbolDrawOrder(points, camera), (std::vector<size_t> {1, 2, 0}));
+	// Of two pools at the same distance, the pool of the later interface draws first
+	const std::array same {glm::vec3(5.0f, 10.0f, 0.0f), glm::vec3(-5.0f, 10.0f, 0.0f), glm::vec3(0.0f, 10.0f, 1.0f)};
+	EXPECT_EQ(player_sparkles::SymbolDrawOrder(same, camera), (std::vector<size_t> {1, 0, 2}));
+	EXPECT_TRUE(player_sparkles::SymbolDrawOrder({}, camera).empty());
 }

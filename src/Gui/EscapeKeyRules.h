@@ -68,6 +68,25 @@ struct Response
 	bool clearScreenFade {false};
 };
 
+/// The main menu as a box of the screen, from one frame to the next
+struct MainMenuChange
+{
+	/// The main menu was the box that takes the input in the last frame
+	bool wasActive {false};
+	/// The main menu is the box that takes the input now
+	bool active {false};
+	/// A click on the tab of the main menu closed all the boxes and showed the main menu again
+	bool shownAgain {false};
+};
+
+/// Whether the time from which Escape waits to open the menu starts again. It starts each time that the main menu stops
+/// being the box that takes the input: the menu closes, another page or a question shows over it, or the tab of the
+/// main menu closes all the boxes and shows the main menu again.
+[[nodiscard]] constexpr bool MainMenuLeft(const MainMenuChange& change) noexcept
+{
+	return (change.wasActive && !change.active) || change.shownAgain;
+}
+
 /// Whether the menu may open, given how long ago it last closed
 [[nodiscard]] bool MenuMayOpen(std::optional<std::chrono::milliseconds> sinceMenuClosed) noexcept;
 

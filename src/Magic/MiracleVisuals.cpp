@@ -19,6 +19,7 @@
 #include <glm/gtc/constants.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
+#include "Common/ModelInverseSquareRoot.h"
 #include "Common/PortableRotations.h"
 #include "Magic/DispenserRules.h"
 
@@ -149,6 +150,17 @@ glm::mat3 visuals::RingTurn(int ring, float spin)
 	Tip(rows, k_RingSecondTip);
 	// The rows are where each of the ring's axes goes: they are the columns of the turn
 	return glm::transpose(glm::mat3(rows[0], rows[1], rows[2]));
+}
+
+glm::vec3 visuals::GlobeSortPoint(const glm::vec3& middle, const glm::vec3& camera, float radius)
+{
+	// Each step is a float, in the order of the game: the square of the length adds the height first and the first axis
+	// last, and the way is the unit vector times the radius, added to the middle
+	const glm::vec3 way = camera - middle;
+	const float lengthSquared = ((way.y * way.y) + (way.z * way.z)) + (way.x * way.x);
+	const float inverse = gutils::ModelInverseSquareRoot(lengthSquared);
+	const glm::vec3 unit = way * inverse;
+	return (unit * radius) + middle;
 }
 
 glm::mat3 visuals::FacingCamera(const glm::vec3& point, const glm::vec3& camera, Facing facing)

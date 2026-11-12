@@ -42,6 +42,7 @@
 #include "ECS/Components/Temple.h"
 #include "EngineConfig.h"
 #include "FileSystem/FileSystemInterface.h"
+#include "Graphics/AlphaTest.h"
 #include "Graphics/CreatureReflection.h"
 #include "Graphics/DebugLines.h"
 #include "Graphics/FrameBuffer.h"
@@ -112,6 +113,9 @@ void Renderer::DrawTempleText(const DrawSceneDesc& desc) const
 	shader->SetTextureSampler("s_texture", 0, *texture);
 	bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A | BGFX_STATE_DEPTH_TEST_GREATER | BGFX_STATE_MSAA |
 	               BGFX_STATE_BLEND_ALPHA);
+	// The game draws all text with the alpha test of the font pages: the faintest pixels of the glyphs do not show
+	const auto alphaTest = alpha_test::Uniform(alpha_test::k_FontPageReference);
+	shader->SetUniformValue("u_alphaTestRef", alphaTest.data());
 	shader->Submit(static_cast<bgfx::ViewId>(desc.viewId));
 }
 
@@ -361,6 +365,8 @@ void Renderer::HalveTempleMap() const
 	}
 	bgfx::setVertexBuffer(0, &buffer);
 	bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A);
+	const auto noAlphaTest = alpha_test::Uniform(0);
+	shader->SetUniformValue("u_alphaTestRef", noAlphaTest.data());
 	shader->Submit(viewId);
 	_shaderManager->DiscardBindings();
 }
@@ -409,6 +415,8 @@ void Renderer::DrawTempleUnderside(const DrawSceneDesc& desc) const
 	shader->SetTextureSampler("s_texture", 0, *_whiteTexture);
 	bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A | BGFX_STATE_WRITE_Z | BGFX_STATE_DEPTH_TEST_GREATER |
 	               BGFX_STATE_MSAA);
+	const auto noAlphaTest = alpha_test::Uniform(0);
+	shader->SetUniformValue("u_alphaTestRef", noAlphaTest.data());
 	shader->Submit(static_cast<bgfx::ViewId>(desc.viewId));
 }
 
@@ -452,6 +460,8 @@ void Renderer::DrawTempleMap(const DrawSceneDesc& desc) const
 	shader->SetTextureSampler("s_texture", 0, map.GetColorAttachment());
 	bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A | BGFX_STATE_WRITE_Z | BGFX_STATE_DEPTH_TEST_GREATER |
 	               BGFX_STATE_MSAA | BGFX_STATE_BLEND_ALPHA);
+	const auto noAlphaTest = alpha_test::Uniform(0);
+	shader->SetUniformValue("u_alphaTestRef", noAlphaTest.data());
 	shader->Submit(static_cast<bgfx::ViewId>(desc.viewId));
 }
 

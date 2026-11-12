@@ -279,6 +279,25 @@ void AddGlobes(std::vector<Scenario>& all)
 	    .framing = {.shot = Shot::Overview, .include = {{-8.0f, 18.0f}, {8.0f, 36.0f}}, .distance = 0.5f},
 	    .dispensers = extreme,
 	});
+
+	// The seeds of every kind, with a row of extreme globes behind them, seen from far off
+	auto farOff = everySeed;
+	const auto extremeRow =
+	    GlobeRow({MagicType::FireballPowerUpTwo, MagicType::LightningBoltPowerUpTwo, MagicType::Tornado}, 41.0f);
+	farOff.insert(farOff.end(), extremeRow.begin(), extremeRow.end());
+	all.push_back({
+	    .id = "miracles.globes_far_off",
+	    .name = "Globes seen from far off",
+	    .facet = Facet::Miracles,
+	    .description = "The globes of every seed and a row of extreme globes, seen from far off. Move the camera back "
+	                   "and forward to see the seeds and the rings go and come back.",
+	    .expected = "Far off, the seeds in the globes go, and they keep their alpha until they go. The second draw of the "
+	                "last ring of an extreme globe shows brighter while it fades, then goes before the other rings. The "
+	                "other rings go when they are 300 of their radii away.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 40.0f, -150.0f}, .look = {0.0f, 5.0f, 30.0f}},
+	    .dispensers = farOff,
+	});
 }
 
 void AddHand(std::vector<Scenario>& all)

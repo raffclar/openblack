@@ -9,8 +9,12 @@
 
 #include "PlayerSparkles.h"
 
+#include <algorithm>
 #include <array>
 #include <bit>
+#include <numeric>
+
+#include "Graphics/ZSort.h"
 
 namespace openblack::player_sparkles
 {
@@ -99,6 +103,16 @@ bool ShowsSymbol(const Watched& watched)
 		break;
 	}
 	return true;
+}
+
+std::vector<size_t> SymbolDrawOrder(std::span<const glm::vec3> points, const glm::vec3& camera)
+{
+	std::vector<size_t> order(points.size());
+	std::iota(order.rbegin(), order.rend(), size_t {0});
+	// The later interfaces come first, and a stable sort keeps them first among equal distances
+	std::ranges::stable_sort(order, std::ranges::greater {},
+	                         [&](size_t index) { return graphics::zsort::Key(points[index], camera); });
+	return order;
 }
 
 float SymbolAngle(float angle, int32_t milliseconds)

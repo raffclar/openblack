@@ -1324,11 +1324,12 @@ void testbed_scenarios::AddStory(std::vector<Scenario>& all)
 	    .facet = Facet::Story,
 	    .description = "The player's temple stands west of the middle; two seconds in it starts being destroyed, and the "
 	                   "game's GameOver script plays. Once the script has taken the player into the save game room, press "
-	                   "Escape, then Shift and Escape.",
+	                   "Escape, then Shift and Escape. Then click the door of the room.",
 	    .expected = "Each Escape, with Shift, Ctrl or Alt too, shows \"Are you sure you want to start a completely new "
 	                "game?\" in the box with a Yes and a No. Escape does not answer it and does not close it, and the "
-	                "player stays in the room. No closes the box. Yes ends the game, and a new game starts on the "
-	                "first land. Under a script's cinema bars, Escape does nothing.",
+	                "player stays in the room. No closes the box. A click on the door of the room shows the same box, and "
+	                "the camera does not go back through the door. While the box shows, the room takes no press. Yes ends "
+	                "the game, and a new game starts on the first land. Under a script's cinema bars, Escape does nothing.",
 	    .environment = {.dispenserGrid = false},
 	    .framing = {.shot = Shot::Overview,
 	                .include = {k_Temple - glm::vec2 {40.0f}, k_Temple + glm::vec2 {40.0f}},

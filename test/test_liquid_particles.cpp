@@ -236,7 +236,7 @@ TEST(LiquidParticleSystem, ThePoolOfAnotherPlayerShowsTheSymbolOfItsGodLast)
 	const float turn = 20.0f * std::bit_cast<float>(0x3A03126Fu);
 
 	// Lethys shows no symbol; Khazar's symbol is drawn after the two motes, as one thing at the point
-	pool.TurnPlayerSymbols(20, [&](liquid_particles::Interface interface) { return interface == khazar; });
+	pool.TurnPlayerSymbols(20, glm::vec3(0.0f), [&](liquid_particles::Interface interface) { return interface == khazar; });
 	particles::draw::Frame frame;
 	pool.CollectDrawFrame(frame);
 	ASSERT_EQ(frame.groups.size(), 2u);
@@ -253,17 +253,26 @@ TEST(LiquidParticleSystem, ThePoolOfAnotherPlayerShowsTheSymbolOfItsGodLast)
 	EXPECT_EQ(material.alphaTexture, entt::hashed_string("raw/PlayersSymbolsa").value());
 	EXPECT_EQ(material.mode, graphics::render_modes::Mode::AlphaTexturedAlphaNz);
 
-	// When both show it, they share one angle that turns once for each
-	pool.TurnPlayerSymbols(20, [](liquid_particles::Interface /*interface*/) { return true; });
+	// When both show it, they share one angle that turns once for each, in the order they draw: Lethys's pool is
+	// farther from the camera, so it draws and turns first
+	pool.TurnPlayerSymbols(20, glm::vec3(0.0f), [](liquid_particles::Interface /*interface*/) { return true; });
 	frame.Clear();
 	pool.CollectDrawFrame(frame);
 	ASSERT_EQ(frame.sprites.size(), 5u);
-	EXPECT_EQ(frame.sprites[2].shape.y, turn + turn);
-	EXPECT_EQ(frame.sprites[4].shape.y, turn + turn + turn);
+	EXPECT_EQ(frame.sprites[2].shape.y, turn + turn + turn);
+	EXPECT_EQ(frame.sprites[4].shape.y, turn + turn);
+
+	// From the other side, Khazar's pool is the farther one and turns first
+	pool.TurnPlayerSymbols(20, glm::vec3(20.0f), [](liquid_particles::Interface /*interface*/) { return true; });
+	frame.Clear();
+	pool.CollectDrawFrame(frame);
+	ASSERT_EQ(frame.sprites.size(), 5u);
+	EXPECT_EQ(frame.sprites[2].shape.y, turn + turn + turn + turn);
+	EXPECT_EQ(frame.sprites[4].shape.y, turn + turn + turn + turn + turn);
 
 	// A pool with no particles left shows no symbol
 	pool.UpdateFrame(2.5f, false);
-	pool.TurnPlayerSymbols(20, [](liquid_particles::Interface /*interface*/) { return true; });
+	pool.TurnPlayerSymbols(20, glm::vec3(0.0f), [](liquid_particles::Interface /*interface*/) { return true; });
 	frame.Clear();
 	pool.CollectDrawFrame(frame);
 	EXPECT_TRUE(frame.sprites.empty());
