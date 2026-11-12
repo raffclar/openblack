@@ -18,6 +18,7 @@
 #include <glm/gtx/euler_angles.hpp>
 
 #include "ECS/Components/Creature.h"
+#include "ECS/Components/MagicFireBall.h"
 #include "ECS/Components/ScriptHighlight.h"
 #include "ECS/Components/Spell.h"
 #include "ECS/Components/SpellDispenser.h"
@@ -213,7 +214,13 @@ std::optional<entt::entity> MagicSystem::HeldSeedTarget() const
 	}
 	const auto& seed = EntityRegistry().Get<const SpellSeed>(*Held());
 	// The player's own dispenser comes first: it takes a seed that did not cast before, and is no target for any other
-	if (const auto picked = PickedUnderHand(); picked.has_value() && IsOwnDispenser(*picked, seed.player))
+	const auto picked = PickedUnderHand();
+	if (picked.has_value() && IsOwnDispenser(*picked, seed.player))
+	{
+		return IsHeldSeedTarget(*picked) ? picked : std::nullopt;
+	}
+	// Then a fireball under the hand, which a ready fire seed takes in
+	if (picked.has_value() && EntityRegistry().AllOf<MagicFireBall>(*picked))
 	{
 		return IsHeldSeedTarget(*picked) ? picked : std::nullopt;
 	}
@@ -241,6 +248,11 @@ bool MagicSystem::IsHeldSeedTarget(entt::entity object) const
 	if (IsOwnDispenser(object, seed.player))
 	{
 		return seed.lastCastType == MagicType::None && !registry.AllOf<ScriptHighlight>(object);
+	}
+	// A ready fire seed takes in a fireball, anyone's, that no script made a highlight
+	if (registry.AllOf<MagicFireBall>(object))
+	{
+		return seed.ready && seed.seedType == SpellSeedType::Fire && !registry.AllOf<ScriptHighlight>(object);
 	}
 	// Any other target is a creature, for a seed that is cast on things
 	return magic::GetSpellSeedInfo(Info(), seed.seedType).castOnObject != 0 && registry.AllOf<Creature>(object) &&

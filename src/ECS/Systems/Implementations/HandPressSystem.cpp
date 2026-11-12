@@ -165,6 +165,16 @@ public:
 	}
 	void GrabClickReleased() final { Locator::handGrabSystem::value().ClickReleased(); }
 	void GrabClickThing(entt::entity thing) final { Locator::handGrabSystem::value().ClickThing(thing); }
+	[[nodiscard]] bool WaitIgnoresPresses() const final
+	{
+		if (Locator::handGrabSystem::has_value() &&
+		    (Locator::handGrabSystem::value().GetGiveWait().has_value() || Locator::handGrabSystem::value().WaitsForUseLetGo()))
+		{
+			return true;
+		}
+		const auto useWait = Locator::magicSystem::has_value() ? Locator::magicSystem::value().GetUseWait() : std::nullopt;
+		return useWait.has_value() && !useWait->letGo;
+	}
 
 	[[nodiscard]] bool MagicHandBusy() const final { return Locator::magicSystem::value().IsHandBusy(); }
 	bool MagicPressAction() final { return Locator::magicSystem::value().PressAction(); }
@@ -277,9 +287,16 @@ void HandPressSystem::Press(const SDL_Event& event, const PressContext& context)
 	// stop an empty hand from acting on anything but a highlight that a script made.
 	const auto interfaceLimits = _world->Limits();
 	const bool mayHold = script::interface_levels::MayHold(interfaceLimits);
+	// While the interface waits after a gift or after a use on a thing, the presses of the buttons do nothing. A press
+	// of the select button in the wait grips nothing until the player lets go of it. Both buttons still end the wait.
+	const bool waitIgnoresPresses = _world->WaitIgnoresPresses();
+	if (waitIgnoresPresses && handTakesPresses && event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_LEFT)
+	{
+		_landGripStopped = true;
+	}
 	ActionLetGo(event, rightLetGo, inTemple, handTakesPresses, hasGrab, handHoldsThing);
-	ActionPress(event, inTemple, handTakesPresses, hasGrab, handHoldsThing, interfaceLimits, mayHold);
-	MovePress(event, inTemple, handTakesPresses, context);
+	ActionPress(event, inTemple, handTakesPresses, waitIgnoresPresses, hasGrab, handHoldsThing, interfaceLimits, mayHold);
+	MovePress(event, inTemple, handTakesPresses, waitIgnoresPresses, context);
 	// When the player releases the button of the press, the blow that the press queued gets its charge. The fight
 	// system also gets the release when the fight ended before it, because the hold of a press on a body continues.
 	if (_fightButton.has_value() && ((*_fightButton == creature_fight::Button::Move && !_buttons.left) ||
@@ -306,9 +323,15 @@ void HandPressSystem::Press(const SDL_Event& event, const PressContext& context)
 	{
 		_landGripStopped = false;
 	}
+	// When both buttons end the interface lock, the select button grips the land at once. The hand then holds no
+	// creature.
+	const bool fightPressed = _world->FightPressed();
+	_gripAgainButtons = input::HandButtonsOf(_buttons, inTemple, false, fightPressed);
 	auto gripButtons = _buttons;
 	gripButtons.left = gripButtons.left && !_landGripStopped;
-	_handButtons = input::HandButtonsOf(gripButtons, inTemple, onCreature, _world->FightPressed());
+	_handButtons = input::HandButtonsOf(gripButtons, inTemple, onCreature, fightPressed);
+	// The grip of the land that both buttons started keeps no thing until the grip ends
+	_gripKeepsNoThing = _gripKeepsNoThing && _handButtons.selectGrip;
 	_selectPress = input::select_press::Next(_selectPress, {
 	                                                           .event = SelectPressEvent(event),
 	                                                           .interfaceOn = handTakesPresses,
@@ -374,12 +397,19 @@ void HandPressSystem::ActionLetGo(const SDL_Event& event, bool rightLetGo, bool 
 	}
 }
 
-void HandPressSystem::ActionPress(const SDL_Event& event, bool inTemple, bool handTakesPresses, bool hasGrab,
-                                  bool handHoldsThing, const components::InterfaceLimits& interfaceLimits, bool mayHold)
+void HandPressSystem::ActionPress(const SDL_Event& event, bool inTemple, bool handTakesPresses, bool waitIgnoresPresses,
+                                  bool hasGrab, bool handHoldsThing, const components::InterfaceLimits& interfaceLimits,
+                                  bool mayHold)
 {
 	if (!handTakesPresses || inTemple || event.type != SDL_MOUSEBUTTONDOWN || event.button.button != SDL_BUTTON_RIGHT ||
 	    _world->MouseOverDebugWindow())
 	{
+		return;
+	}
+	// In a wait of the interface the press does nothing, and its let go clicks nothing
+	if (waitIgnoresPresses)
+	{
+		_actionPressTaken = true;
 		return;
 	}
 	const auto cursor = glm::vec2(event.button.x, event.button.y);
@@ -509,7 +539,8 @@ void HandPressSystem::ActionPress(const SDL_Event& event, bool inTemple, bool ha
 	}
 }
 
-void HandPressSystem::MovePress(const SDL_Event& event, bool inTemple, bool handTakesPresses, const PressContext& context)
+void HandPressSystem::MovePress(const SDL_Event& event, bool inTemple, bool handTakesPresses, bool waitIgnoresPresses,
+                                const PressContext& context)
 {
 	if (!handTakesPresses || _world->MagicHandBusy() || inTemple || event.type != SDL_MOUSEBUTTONDOWN ||
 	    event.button.button != SDL_BUTTON_LEFT || _buttons.middle)
@@ -529,7 +560,8 @@ void HandPressSystem::MovePress(const SDL_Event& event, bool inTemple, bool hand
 	{
 		_fightButton = creature_fight::Button::Move;
 	}
-	else if (!doubleClicked && context.playGrabSound)
+	// In a wait of the interface the press grips no land, so the hand makes no sound and no dust
+	else if (!doubleClicked && !waitIgnoresPresses && context.playGrabSound)
 	{
 		context.playGrabSound();
 	}
@@ -542,21 +574,22 @@ void HandPressSystem::StopLandGrip()
 		return;
 	}
 	// The grip of the land by the select button stops. The middle button still grips and turns.
-	_beforeGripStop = _handButtons;
 	_landGripStopped = true;
 	_handButtons.selectGrip = false;
 	_handButtons.gripping = _buttons.middle;
 	_handButtons.rotating = _buttons.middle;
 }
 
-void HandPressSystem::GripLandAgain()
+bool HandPressSystem::GripLandAgain()
 {
-	if (!_landGripStopped)
+	if (!_gripAgainButtons.selectGrip)
 	{
-		return;
+		return false;
 	}
 	_landGripStopped = false;
-	_handButtons = _beforeGripStop;
+	_handButtons = _gripAgainButtons;
+	_gripKeepsNoThing = true;
+	return true;
 }
 
 bool HandPressSystem::TakeActionPress()
