@@ -112,6 +112,8 @@ TEST(HandSendWait, TheFrameEndsTheLockForABoxAnInterfaceThatIsOffBothButtonsOrAH
 	using hand_send_wait::FrameEndsLock;
 	// A hand with no action keeps the lock, also with both buttons down
 	EXPECT_FALSE(FrameEndsLock({}));
+	// The action keeps the thing of its press, and the thing went
+	EXPECT_TRUE(FrameEndsLock({.action = FrameAction::UsesHeld, .heldThere = true, .pressThingGone = true}));
 	EXPECT_FALSE(FrameEndsLock({.action = FrameAction::Free, .bothButtons = true}));
 	// A front-end box ends it in every action
 	EXPECT_TRUE(FrameEndsLock({.frontEndBox = true}));

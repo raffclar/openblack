@@ -336,6 +336,9 @@ public:
 	/// How a pour of food or wood lifts and tips the hand now, a fraction of the way from the last turn to the next
 	[[nodiscard]] virtual magic::PourPose GetHandPour(float fraction) const = 0;
 	[[nodiscard]] virtual HandCastState GetHandCastState() const = 0;
+	/// Whether the hand of this computer has a seed armed on a thing, and the thing of the press is not in the world any
+	/// more
+	[[nodiscard]] virtual bool PressThingGone() const { return false; }
 	/// The miracle seed in the hand of this computer
 	[[nodiscard]] virtual std::optional<entt::entity> GetHeldSeed() const = 0;
 	/// The miracle seed in the hand of a player. The turns read this, because it is the same on every computer.

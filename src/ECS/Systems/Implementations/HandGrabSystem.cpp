@@ -1066,9 +1066,11 @@ void HandGrabSystem::StopActionAtLockEnd()
 	switch (grab->state)
 	{
 	case HandGrab::State::Grabbing:
+	case HandGrab::State::Taking:
 	{
-		// The take stops before the thing came free. The hand lets go of the thing, which stays where the turns put it.
-		// The thing becomes the thing last let go, as at a let go of the button, but the press is not a tap.
+		// The take stops before the thing came free, or before the turn put it in the hand. The hand lets go of the thing,
+		// which stays where the turns put it. The thing becomes the thing last let go, as at a let go of the button, but
+		// the press is not a tap. A take that the hand sent stays, and its turn still puts the thing in the hand.
 		const auto object = grab->object;
 		Empty(*grab);
 		grab->released = object;
@@ -1101,7 +1103,6 @@ void HandGrabSystem::StopActionAtLockEnd()
 			grab->locking = entt::null;
 		}
 		return;
-	case HandGrab::State::Taking:
 	case HandGrab::State::LettingGo:
 		return;
 	}

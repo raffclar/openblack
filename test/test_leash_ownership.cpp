@@ -304,6 +304,28 @@ TEST(CreatureHand, TheTurnRefusesOnlyAGoneCreatureOrAHeldOne)
 	EXPECT_FALSE(TurnTakesHold(false, true));
 }
 
+// The end of the interface lock stops a hold at once: the release and the end of the lock for a held creature, the end
+// of the lock after the release, and nothing for a creature that is not in the world any more
+TEST(CreatureHand, TheEndOfTheInterfaceLockSendsTheEndOfTheHoldAtOnce)
+{
+	using creature_hand::HoldStage;
+	using creature_hand::SendsAtLockEnd;
+	EXPECT_TRUE(SendsAtLockEnd(HoldStage::Held, true).release);
+	EXPECT_TRUE(SendsAtLockEnd(HoldStage::Held, true).unlock);
+	EXPECT_FALSE(SendsAtLockEnd(HoldStage::LetGo, true).release);
+	EXPECT_TRUE(SendsAtLockEnd(HoldStage::LetGo, true).unlock);
+	for (const auto stage : {HoldStage::None, HoldStage::Stopped})
+	{
+		EXPECT_FALSE(SendsAtLockEnd(stage, true).release);
+		EXPECT_FALSE(SendsAtLockEnd(stage, true).unlock);
+	}
+	for (const auto stage : {HoldStage::None, HoldStage::Held, HoldStage::LetGo, HoldStage::Stopped})
+	{
+		EXPECT_FALSE(SendsAtLockEnd(stage, false).release);
+		EXPECT_FALSE(SendsAtLockEnd(stage, false).unlock);
+	}
+}
+
 // After the button let go, the hand sends the end of the lock once, when the creature is still or not in the world
 TEST(CreatureHand, TheHandSendsTheEndOfTheLockOnceWhenTheCreatureIsStill)
 {

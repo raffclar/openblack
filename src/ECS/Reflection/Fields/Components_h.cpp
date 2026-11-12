@@ -137,7 +137,9 @@ void openblack::ecs::reflection::RegisterFields_Components_h(entt::meta_ctx& con
 	    .Field<&components::HandGrab::lastPickedUp>("lastPickedUp")
 	    .Field<&components::HandGrab::lastDropped>("lastDropped");
 	Reflect<components::HandHeldSeed>(context).Field<&components::HandHeldSeed::seed>("seed");
-	Reflect<components::HandLockEndSent>(context).Field<&components::HandLockEndSent::creature>("creature");
+	Reflect<components::HandLockEndSent>(context)
+	    .Field<&components::HandLockEndSent::creature>("creature")
+	    .Field<&components::HandLockEndSent::atLockEnd>("atLockEnd");
 	Reflect<components::HandLockedCreature>(context)
 	    .Field<&components::HandLockedCreature::creature>("creature")
 	    .Field<&components::HandLockedCreature::released>("released");
