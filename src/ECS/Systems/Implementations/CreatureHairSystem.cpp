@@ -137,8 +137,8 @@ void CreatureHairSystem::Update(std::chrono::duration<float, std::milli> gameTim
 	registry.Each<const Creature, const CreatureMorph, const CreatureAnimation, const Transform, CreatureHair>(
 	    [&](const Creature& creature, const CreatureMorph& morph, const CreatureAnimation& animation,
 	        const Transform& transform, CreatureHair& hair) {
-		    // The hair takes the look of the alignment the body is drawn with
-		    StepBodyHair(rigs, creature.species, morph.drawn, morph.drawn.evilGood, animation, transform, ShownSize(creature),
+		    // The hair takes its look from the evil to good target of the last paint of the skin
+		    StepBodyHair(rigs, creature.species, morph.drawn, morph.paintedAlignment, animation, transform, ShownSize(creature),
 		                 hair, seconds);
 	    });
 }

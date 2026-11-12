@@ -97,7 +97,10 @@ void TattooMenuSystem::Open()
 	                                          .mind = 0,
 	                                          .size = tattoo_menu::k_Size});
 	registry.Assign<Mesh>(body, creature::GetIdFromType(shown.species, creature::CreatureBody::Appearance::Base));
-	registry.Assign<CreatureMorph>(body, CreatureMorph {.shownFatness = 0.5f, .drawn = shown.morph, .revision = 0});
+	// Its skin and its hair take the evil to good value of its shape
+	registry.Assign<CreatureMorph>(
+	    body,
+	    CreatureMorph {.shownFatness = 0.5f, .drawn = shown.morph, .paintedAlignment = shown.morph.evilGood, .revision = 0});
 	registry.Assign<CreatureTattoos>(body);
 	auto& marks = registry.Assign<CreatureMarks>(body);
 	marks.marks.wounds = shown.wounds;

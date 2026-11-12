@@ -218,6 +218,9 @@ private:
 	/// Gives the player's camera back the world's camera as the player comes out of the temple, and puts it at the place
 	/// picked on the map, if there is one
 	void LeaveWorldCamera();
+	/// Paints the skin and the hair of the local player's creature again with its evil to good target, as the exit from
+	/// the temple does
+	static void PaintOwnCreature();
 	TempleCameraModel* _cameraModel {nullptr};
 	TempleDoors _doors;
 	/// The main room's buttons of what its map shows, which keep their state from one visit to the next

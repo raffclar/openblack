@@ -146,6 +146,17 @@ creature_morph::Morph CreatureArchetype::Targets(const Creature& creature, const
 	return targets;
 }
 
+void CreatureArchetype::PaintWithTarget(Registry& registry, entt::entity creature)
+{
+	const auto* body = registry.TryGet<const Creature>(creature);
+	auto* morph = registry.TryGet<CreatureMorph>(creature);
+	if (body == nullptr || morph == nullptr)
+	{
+		return;
+	}
+	morph->paintedAlignment = Targets(*body, *morph).evilGood;
+}
+
 entt::entity CreatureArchetype::Create(const glm::vec3& position, PlayerNames playerName, CreatureType creatureType,
                                        entt::id_type creatureMindId, float yAngleRadians, float scale, const Body& body)
 {

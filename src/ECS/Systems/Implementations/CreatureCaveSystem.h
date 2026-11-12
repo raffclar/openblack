@@ -20,6 +20,11 @@
 #include "Creature/CaveCreature.h"
 #include "ECS/Systems/CreatureCaveSystemInterface.h"
 
+namespace openblack::ecs
+{
+class Registry;
+} // namespace openblack::ecs
+
 namespace openblack::ecs::components
 {
 struct CreatureCopy;
@@ -66,6 +71,8 @@ private:
 	void DropCaveCreature();
 	/// The copy's frame: what it does, its turn, and its pose
 	void UpdateCaveCreature(float milliseconds);
+	/// One update of the copy: it makes its motes from its last pose, then it takes its new pose some milliseconds on
+	static void UpdateCopyBy(Registry& copies, entt::entity copy, float milliseconds);
 	/// While the tattoo editor shows the copy: which tattoo place is under the pointer, as the copy is posed now
 	void HoverTattooSites(entt::entity copy, glm::ivec2 pointer);
 	/// Starts the copy turning on the spot to face a heading

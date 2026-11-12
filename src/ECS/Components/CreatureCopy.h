@@ -64,7 +64,7 @@ struct CreatureCopy
 /// The evil to good value that the hair of a copy takes its look from: the value its skin was painted with last
 [[nodiscard]] inline float HairAlignmentOfCopy(const CreatureCopy& copy, const CreatureMorph& shape)
 {
-	return copy.targets.has_value() ? copy.paintedAlignment.value_or(0.0f) : shape.drawn.evilGood;
+	return copy.targets.has_value() ? copy.paintedAlignment.value_or(0.0f) : shape.paintedAlignment;
 }
 
 /// The copy of the player's creature that the Creature Cave shows by its fire

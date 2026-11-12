@@ -465,6 +465,28 @@ void CreatureCaveSystem::MakeCaveCreature(entt::entity creature)
 	}
 	registry.Assign<CreatureSkin>(copy);
 	_caveCreature = copy;
+
+	// As the cave makes the copy, it brings the copy up to date two times by 1 ms. The copy starts to rest between the
+	// two updates, so the second update makes motes from the pose of the first.
+	UpdateCopyBy(registry, copy, cave_creature::k_MadeUpdateMs);
+	auto& animation = registry.Get<CreatureAnimation>(copy);
+	cave_creature::Body settled {.body = animation.body, .gesture = animation.gesture, .lookAt = animation.lookAt};
+	cave_creature::Settle(registry.Get<CaveCreature>(copy).state, settled, places->fire,
+	                      [this](uint32_t range) { return _random.LocalRand(static_cast<int32_t>(range)); });
+	animation.body = settled.body;
+	animation.gesture = settled.gesture;
+	animation.lookAt = settled.lookAt;
+	UpdateCopyBy(registry, copy, cave_creature::k_MadeUpdateMs);
+}
+
+void CreatureCaveSystem::UpdateCopyBy(Registry& copies, entt::entity copy, float milliseconds)
+{
+	if (Locator::creatureAnimationSystem::has_value())
+	{
+		auto& animations = Locator::creatureAnimationSystem::value();
+		animations.AddAlignmentMotesOf(copies, copy);
+		animations.PoseCopy(copies, copy, milliseconds, Locator::entitiesRegistry::value());
+	}
 }
 
 void CreatureCaveSystem::DropCaveCreature()
@@ -568,12 +590,10 @@ void CreatureCaveSystem::UpdateCaveCreature(float milliseconds)
 	}
 	transform->rotation = glm::mat3(portable_math::EulerAngleY(state.heading.Yaw()));
 	// Each frame it makes its motes or its smoke from its last pose, then it takes its new pose
+	UpdateCopyBy(registry, *_caveCreature, frameMs);
 	if (Locator::creatureAnimationSystem::has_value())
 	{
-		auto& animations = Locator::creatureAnimationSystem::value();
-		animations.AddAlignmentMotesOf(registry, *_caveCreature);
-		animations.PoseCopy(registry, *_caveCreature, frameMs, Locator::entitiesRegistry::value());
-		animations.PlaceCopyEyes(registry, *_caveCreature, Locator::entitiesRegistry::value());
+		Locator::creatureAnimationSystem::value().PlaceCopyEyes(registry, *_caveCreature, Locator::entitiesRegistry::value());
 	}
 	// Its hair swings from the new pose, by the whole time of the frame
 	if (Locator::creatureHairSystem::has_value())

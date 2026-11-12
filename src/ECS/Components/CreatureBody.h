@@ -49,6 +49,11 @@ struct CreatureMorph
 	/// turn that the hand does not hold the creature. The alignment moves after this, so the look shows the alignment of
 	/// the turn before. The evil tests of the fights read this look. Without it, the body shows its alignment.
 	std::optional<float> alignmentLook {};
+	/// The evil to good target that the skin and the hair got at their last paint, -1 to 1. The skin blends towards the
+	/// evil or good skin by this value, and the hair takes its look and its angles from it. A new alignment paints them.
+	/// These also paint them: a heal step, a mind file, the end of a drag in the tattoo editor and the exit from the
+	/// temple. Thus the value can differ from the drawn evil to good axis by a small amount.
+	float paintedAlignment {0.0f};
 	/// Goes up each time the animations and rest pose have to follow the body anew
 	uint32_t revision {0};
 };
