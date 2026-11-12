@@ -78,13 +78,19 @@ struct CustomMap
 	int32_t players {0};
 	/// The bytes of the ".map" file
 	std::vector<uint8_t> bytes;
+	/// The SHA-256 of the map package that gives the same file with the player's game data (deviation 249), as 64 hex
+	/// digits. Empty for a land with no package.
+	std::string packageSha256;
+	/// The bytes of the map package
+	int64_t packageSize {0};
 };
 
 /// The time before the server sends the map again after the lobby did not take it
 constexpr auto k_MapAgainAfter = std::chrono::seconds(30);
 
 /// The address of the call that sends the map of the room to the lobby: PUT <api>/servers/<id>/map with the name of
-/// the file, the name of the land and its gods in the query. The text of each value is percent-encoded.
+/// the file, the name of the land and its gods in the query, and the hash and size of its map package when it has one.
+/// The text of each value is percent-encoded.
 [[nodiscard]] std::string MapAddress(std::string_view api, std::string_view serverId, const CustomMap& map);
 
 } // namespace openblack::server::lobby_status

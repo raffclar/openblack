@@ -22,6 +22,7 @@
 #include "Online/DownloadTestMap.h"
 #include "Online/GodsRingMap.h"
 #include "Online/GodsRingMapFile.h"
+#include "Online/GodsRingMapPackage.h"
 #include "Online/HttpClientInterface.h"
 #include "Online/OnlineMapLand.h"
 #include "Online/OnlineMapStoreInterface.h"
@@ -76,6 +77,27 @@ namespace
 	return std::nullopt;
 }
 } // namespace
+
+std::variant<std::filesystem::path, std::string> WriteMapPackage(const std::filesystem::path& folder)
+{
+	std::error_code error;
+	std::filesystem::create_directories(folder, error);
+	if (error)
+	{
+		return "the folder " + folder.generic_string() + " could not be made: " + error.message();
+	}
+	const auto package = gods_ring_map_package::Make();
+	if (package.empty())
+	{
+		return std::string("the map package could not be made");
+	}
+	auto out = folder / gods_ring_map_package::FileName(package);
+	if (const auto written = WriteBytes(out, package); written.has_value())
+	{
+		return *written;
+	}
+	return out;
+}
 
 std::optional<std::string> WriteDownloadTestMap(const std::filesystem::path& gamePath, const std::filesystem::path& out)
 {

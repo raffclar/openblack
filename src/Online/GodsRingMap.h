@@ -129,6 +129,21 @@ struct VillageTemplate
 /// The script of the whole map: the settings, a village in each slot, and the weather
 [[nodiscard]] std::string MapScript(const VillageTemplate& village, std::span<const Slot> slots);
 
+/// The lines of the frame of the map's script that FillFrame replaces with the lines of the land that gives the village
+inline constexpr std::string_view k_SettingsMark = "rem openblack: settings";
+inline constexpr std::string_view k_VillageMark = "rem openblack: village ";
+inline constexpr std::string_view k_WeatherMark = "rem openblack: weather";
+
+/// The frame of the map's script: the script of MapScript with a mark line in place of the settings, of the village of
+/// each slot and of the weather. The frame has no line of the land that gives the village, so that the map package can
+/// hold it (deviation 249).
+[[nodiscard]] std::string ScriptFrame(std::span<const Slot> slots);
+
+/// The script of the whole map from its frame: each mark line becomes the lines that MapScript puts there. Nothing when
+/// a mark line names a slot that is not in the slots.
+[[nodiscard]] std::optional<std::string> FillFrame(std::string_view frame, const VillageTemplate& village,
+                                                   std::span<const Slot> slots);
+
 /// The text of the list of the lands for network play (a localmaps.txt file), with a line for this map added at its
 /// end. The line has the next number of the list. A list that has the map already does not change.
 [[nodiscard]] std::string AddToLocalMaps(std::string_view localMaps);

@@ -73,6 +73,7 @@
 #include "Online/GameBuildId.h"
 #include "Online/GodsRingMap.h"
 #include "Online/GodsRingMapFile.h"
+#include "Online/GodsRingMapPackage.h"
 #include "Online/NetworkLand.h"
 #include "Online/OnlineMapLand.h"
 #include "Online/Sha256.h"
@@ -1097,10 +1098,14 @@ bool StartNetwork(const ServerSettings& settings, ServerWorld& world, std::uniqu
 	std::optional<lobby_status::CustomMap> customMap;
 	if (settings.godsRingMap)
 	{
+		// The players make the file from the map package and their own game data (deviation 249)
+		const auto package = gods_ring_map_package::Make();
 		customMap = lobby_status::CustomMap {.file = std::string(gods_ring_map::k_File),
 		                                     .name = std::string(gods_ring_map::k_Name),
 		                                     .players = static_cast<int32_t>(gods_ring_map::k_Slots),
-		                                     .bytes = world.GodsRingMapFile()};
+		                                     .bytes = world.GodsRingMapFile(),
+		                                     .packageSha256 = online::sha256::HexOf(package),
+		                                     .packageSize = static_cast<int64_t>(package.size())};
 	}
 	else if (settings.customMap.has_value())
 	{

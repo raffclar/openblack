@@ -116,7 +116,13 @@ bool ReadOnlineMap(const Json& object, OnlineMap& out)
 	       ReadString(object, "file", out.file) && !out.file.empty() && ReadInteger(object, "players", out.players) &&
 	       ReadString(object, "sha256", out.sha256) && IsSha256Text(out.sha256) &&
 	       ReadHex64(object, "checksum", out.checksum) && ReadInteger(object, "size", out.size) &&
-	       ReadString(object, "url", out.url) && !out.url.empty();
+	       ReadString(object, "url", out.url) && !out.url.empty() &&
+	       ReadString(object, "package_sha256", out.packageSha256, false) &&
+	       ReadInteger(object, "package_size", out.packageSize, false) &&
+	       ReadString(object, "package_url", out.packageUrl, false) &&
+	       // A map with a package names the package by its hash, at a path of the site's own folder of maps
+	       (out.packageSha256.empty() ||
+	        (IsSha256Text(out.packageSha256) && out.packageSize > 0 && out.packageUrl.starts_with(k_MapPackagePath)));
 }
 
 bool ReadPlayerRankingEntry(const Json& object, RankingEntry& out)
