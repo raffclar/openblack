@@ -301,3 +301,65 @@ TEST(SurfaceOfRevolution, TheLightIsTheAmbientFacingAwayAndMoreFacingIt)
 	EXPECT_EQ(Modulate(0xFFFFFFFFu, 0x6EFFFFFFu), 0x6DFEFEFEu);
 	EXPECT_EQ(ScaleRgb(0xFF808080u, 128), 0xFF404040u);
 }
+
+TEST(SurfaceOfRevolution, TheMaterialPropertiesChangeTheBlendedMode)
+{
+	using graphics::render_modes::Mode;
+	const auto modeOf = [](bool additive, bool writeDepth, bool textureAlpha) {
+		SurfaceCreator creator;
+		creator.additive = additive;
+		creator.writeDepth = writeDepth;
+		creator.textureAlpha = textureAlpha;
+		return SurfaceMode(creator);
+	};
+	EXPECT_EQ(modeOf(false, false, true), Mode::AlphaTexturedAlphaNz);
+	EXPECT_EQ(modeOf(false, true, true), Mode::AlphaTexturedAlpha);
+	EXPECT_EQ(modeOf(true, false, true), Mode::AlphaTexturedAlphaAdditiveNz);
+	EXPECT_EQ(modeOf(true, true, true), Mode::AlphaTexturedAlphaAdditive);
+	// The solid wall of the volcano and of the vortex: no texture alpha, with depth
+	EXPECT_EQ(modeOf(false, true, false), Mode::TexturedAlpha);
+	EXPECT_EQ(modeOf(false, false, false), Mode::TexturedAlphaNz);
+	// The additive property has priority over the texture alpha
+	EXPECT_EQ(modeOf(true, false, false), Mode::AlphaTexturedAlphaAdditiveNz);
+	// The textured mode blends by the texture's alpha as the blended mode does
+	EXPECT_EQ(graphics::render_modes::Desc(Mode::TexturedAlpha).alphaModulate,
+	          graphics::render_modes::Desc(Mode::AlphaTexturedAlpha).alphaModulate);
+}
+
+TEST(SurfaceOfRevolution, TheSurfaceReadsWhetherItUsesTheTextureAlpha)
+{
+	const auto classes = ParticleClassRegistry::WithAllClasses();
+	FlatWorld world;
+	FixedRandom random;
+	maths::ValueNoise noise;
+	auto text = k_Swirl;
+	const auto replace = [&text](const std::string& from, const std::string& to) {
+		const auto at = text.find(from);
+		ASSERT_NE(at, std::string::npos);
+		text.replace(at, from.size(), to);
+	};
+	replace("PROPERTY UseAdditiveAlpha BOOL 1", "PROPERTY UseAdditiveAlpha BOOL 0\nPROPERTY MaterialUseTextureAlpha BOOL 0");
+	replace("PROPERTY MaterialUpdateZBuffer BOOL 0", "PROPERTY MaterialUpdateZBuffer BOOL 1");
+	auto file = psys::ParticleFile::Parse(text);
+	ASSERT_TRUE(file.has_value());
+	Effect effect(std::make_shared<const psys::ParticleFile>(std::move(*file)), EffectServices {classes, world, random, noise},
+	              glm::vec3(0.0f), 1.0f, false);
+	for (int i = 0; i < 10; ++i)
+	{
+		effect.Step(0.1f);
+	}
+	Effect::DrawWalk walk;
+	effect.Walk(1.0f, walk);
+	draw::Frame frame;
+	const draw::Sources sources {
+	    .textures = [](std::string_view /*name*/) -> std::optional<std::pair<entt::id_type, entt::id_type>> {
+		    return std::pair<entt::id_type, entt::id_type>(1, 2);
+	    },
+	    .playerColour = {},
+	    .random = {},
+	    .landHeight = [&world](glm::vec2 xz) { return world.LandHeight(xz); },
+	};
+	draw::AddEffect(frame, walk, draw::DrawPath::Sorted, glm::vec3(0.0f), 0, sources);
+	ASSERT_EQ(frame.surfaces.size(), 1u);
+	EXPECT_EQ(frame.materials[frame.surfaces[0].material].mode, graphics::render_modes::Mode::TexturedAlpha);
+}
