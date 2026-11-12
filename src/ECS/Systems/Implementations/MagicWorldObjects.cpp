@@ -65,7 +65,9 @@ bool MagicSystem::HasWorldObjects(const Spell& spell) const
 	}
 	if (spell.spellClass == magic::SpellClass::Forest)
 	{
-		return Locator::forestSystem::has_value() && Locator::forestSystem::value().HasTrees(entity);
+		// A forest miracle stays while its forest is on the land, also with no trees in it
+		return Locator::forestSystem::has_value() &&
+		       magic::forest::TurnWithForest(Locator::forestSystem::value().ForestOf(entity)).keptByForest;
 	}
 	return false;
 }

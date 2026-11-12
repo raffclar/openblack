@@ -574,6 +574,17 @@ bool MagicSystem::Process(entt::entity entity, Spell& spell)
 		return false;
 	}
 	magic::spells::ProcessTurn(*this, *after);
+	// A forest miracle whose forest went from the land with its last tree lets go of it and closes down. Its seed then
+	// sinks under the land.
+	if (after->spellClass == magic::SpellClass::Forest && Locator::forestSystem::has_value())
+	{
+		auto& forests = Locator::forestSystem::value();
+		if (magic::forest::TurnWithForest(forests.ForestOf(entity)).closesDown)
+		{
+			forests.LetGoOfGoneForest(entity);
+			CloseDown(entity);
+		}
+	}
 	if (after->reaction != 0 && Locator::reactionSystem::has_value())
 	{
 		Locator::reactionSystem::value().Move(after->reaction, after->position, after->movement,
