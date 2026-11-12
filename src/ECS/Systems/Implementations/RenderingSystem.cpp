@@ -603,6 +603,7 @@ void RenderingSystem::PrepareDrawDescs(bool drawBoundingBox)
 	_renderContext.instancedDrawDescs.clear();
 	_instanceSlots.clear();
 	_renderContext.seeThroughRefs.clear();
+	_renderContext.sortPoints.clear();
 	for (const auto& [meshId, desc] : meshIds)
 	{
 		const auto [drawDesc, inserted] =
@@ -789,6 +790,7 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 	auto lastFilmBoats = std::exchange(_filmReflectionBoats, {});
 	_renderContext.inHandDraws.clear();
 	_renderContext.seeThroughRefs.clear();
+	_renderContext.sortPoints.clear();
 	_renderContext.mapPlaceLitInstances.clear();
 	_renderContext.drawnOverInstances.clear();
 	_renderContext.bonePalette.clear();
@@ -906,6 +908,7 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		    auto* slotMap = &_instanceSlots;
 		    std::optional<uint8_t> fade;
 		    std::optional<uint8_t> seeThroughRef;
+		    std::optional<glm::vec3> sortPoint;
 		    auto level = graphics::mesh_detail::Mesh::High;
 		    bool gone = false;
 		    const auto* detail = detailMeshes.TryGet(entity);
@@ -960,6 +963,13 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 			    fade = alpha;
 			    _fadingThings.emplace(entity, alpha);
 			    seeThroughRef = openblack::ecs::yard_copy::SeeThroughRef(ghost->alpha);
+			    // The copy sorts by the distance of its workshop, not by its own place
+			    if (const auto* workshop =
+			            registry.Valid(ghost->workshop) ? registry.TryGet<const Transform>(ghost->workshop) : nullptr;
+			        workshop != nullptr)
+			    {
+				    sortPoint = workshop->position;
+			    }
 		    }
 		    else if (openblack::ecs::high_detail_rules::DrawsHighMeshAtAnyDistance(detail != nullptr, highDetails.Has(entity),
 		                                                                           terrainMorphs.Has(entity)))
@@ -1382,6 +1392,10 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 					    _renderContext.atOnceInstances.emplace(idx + 1, place);
 				    }
 			    }
+		    }
+		    if (sortPoint.has_value())
+		    {
+			    _renderContext.sortPoints.emplace(idx, *sortPoint);
 		    }
 		    // The phantom building and the yard copy of a scaffold take the land's light of their place on the map
 		    if (graphics::object_land_light::Of(ghosts.Has(entity)) == graphics::object_land_light::Rule::AtMapPlace)

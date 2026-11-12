@@ -109,6 +109,27 @@ void testbed_scenarios::AddWorkshopScenarios(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "objects.workshop_yard_copy_sorts_by_workshop",
+	    .name = "The see-through copy at a workshop's yard place sorts by the distance of the workshop",
+	    .facet = Facet::Objects,
+	    .description = "The town and the workshop of objects.workshop_yard_copy_pulses. The camera is low, in front of the "
+	                   "yard. After 60 seconds the hand takes the scaffold from the first place and keeps it. One second "
+	                   "later the workshop catches fire.",
+	    .expected = "The copy of the scaffold pulses in the first place, in front of the burning workshop. The game sorts "
+	                "the copy by the distance of the workshop, which is further off than the flames on the front of the "
+	                "workshop. Thus the copy draws before these flames, and its depth cuts the flames behind it.",
+	    .environment = {.dispenserGrid = false, .cursor = glm::vec2(0.5f, 0.5f)},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_FirstPlace.x, 6.0f, k_FirstPlace.y - 14.0f},
+	                .look = {k_FirstPlace.x, 2.5f, k_FirstPlace.y + 2.0f}},
+	    .objects = {{.type = AbodeInfo::CelticTownCentre, .offset = {0.0f, 50.0f}},
+	                {.type = AbodeInfo::CelticWorkshop, .offset = k_Workshop, .yawDegrees = 180.0f, .storedWood = 2500}},
+	    .commands = {{.kind = Command::Kind::HandTakeNear, .delaySeconds = 60.0f, .point = k_FirstPlace},
+	                 {.kind = Command::Kind::SetAlight, .delaySeconds = 1.0f, .value = 1, .object = 1}},
+	    .townBeliefInPlayer = 1.0f,
+	});
+
+	all.push_back({
 	    .id = "objects.scaffold_tap_breaks",
 	    .name = "A tap breaks one scaffold off a scaffold, and a storage pit takes a scaffold as wood",
 	    .facet = Facet::Objects,

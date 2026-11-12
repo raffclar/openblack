@@ -83,7 +83,8 @@ void openblack::ecs::reflection::RegisterFields_Components_s(entt::meta_ctx& con
 	    .Field<&components::ScaffoldGhost::scaffold>("scaffold")
 	    .Field<&components::ScaffoldGhost::alpha>("alpha")
 	    .Field<&components::ScaffoldGhost::model>("model")
-	    .Field<&components::ScaffoldGhost::yard>("yard");
+	    .Field<&components::ScaffoldGhost::yard>("yard")
+	    .Field<&components::ScaffoldGhost::workshop>("workshop");
 	Reflect<components::ScaffoldDrawnScale>(context).Field<&components::ScaffoldDrawnScale::scale>("scale");
 	Reflect<components::ScriptAnimation>(context)
 	    .Field<&components::ScriptAnimation::clip>("clip")

@@ -154,6 +154,9 @@ struct RenderContext
 	/// By instance, the alpha reference that a see-through instance uses in place of the references of its materials:
 	/// the phantom building over a building site uses 10
 	std::map<uint32_t, uint8_t> seeThroughRefs;
+	/// By instance, the point whose distance from the camera sorts a blended instance in place of its own place: the
+	/// workshop of the copy of a scaffold at its yard place (see graphics::zsort::YardCopyDepth)
+	std::map<uint32_t, glm::vec3> sortPoints;
 	/// The instances that take the land's light of their place on the map with the weights of whole cells, and no
 	/// distance haze: the phantom building and the yard copy of a scaffold (see graphics::object_land_light)
 	std::set<uint32_t> mapPlaceLitInstances;

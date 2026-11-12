@@ -100,3 +100,18 @@ TEST(ZSort, AModelDrawnAtOnceComesAtItsPlaceInTheListBeforeEverythingSorted)
 	// After the segments of many fizzing creatures in the list
 	EXPECT_LT(zsort::AtOnce(0), fizz_draw_order::SegmentDepth(1000000));
 }
+
+TEST(ZSort, AYardCopySortsByTheKeyOfItsWorkshop)
+{
+	const glm::vec3 camera {0.0f, 0.0f, 0.0f};
+	// The sum of the workshop key adds the height second, so it is not the key of a placed model
+	const glm::vec3 workshop {1.3f, 7.9f, 2.1f};
+	EXPECT_EQ(zsort::YardCopyDepth(workshop, camera), std::bit_cast<uint32_t>(zsort::Key(workshop, camera)));
+	EXPECT_NE(zsort::YardCopyDepth(workshop, camera), zsort::ModelDepth(workshop, camera));
+	// A copy at a yard place nearer to the camera than a model comes before that model when its workshop is further off
+	const glm::vec3 model {0.0f, 0.0f, 20.0f};
+	const glm::vec3 copyPlace {0.0f, 0.0f, 18.0f};
+	const glm::vec3 farWorkshop {0.0f, 0.0f, 24.0f};
+	EXPECT_LT(zsort::ModelDepth(copyPlace, camera), zsort::ModelDepth(model, camera));
+	EXPECT_GT(zsort::YardCopyDepth(farWorkshop, camera), zsort::ModelDepth(model, camera));
+}
