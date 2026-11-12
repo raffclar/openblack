@@ -276,7 +276,8 @@ void Renderer::DrawGestureHintSeeds(const DrawSceneDesc& desc) const
 			                      .phialFrame = 0.0f,
 			                      .phialAlpha = std::numeric_limits<uint8_t>::max(),
 			                      .ownerAlignment = alignment,
-			                      .drawnAtOnce = true});
+			                      .unlitWhite = true,
+			                      .way = object_draw::Way::AtOnce});
 		}
 		return;
 	}
@@ -324,7 +325,8 @@ void Renderer::DrawGestureHintSeeds(const DrawSceneDesc& desc) const
 		                      .phialFrame = shown.phialFrame,
 		                      .phialAlpha = alpha,
 		                      .ownerAlignment = alignment,
-		                      .drawnAtOnce = true});
+		                      .unlitWhite = true,
+		                      .way = object_draw::Way::AtOnce});
 
 		// Then the effect of its holder, over the model
 		if (particles != nullptr && shown.holderEffect.has_value())

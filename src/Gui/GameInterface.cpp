@@ -63,6 +63,7 @@
 #include "ECS/Systems/TipBubbleSystemInterface.h"
 #include "ECS/Systems/VideoSystemInterface.h"
 #include "FileSystem/FileSystemInterface.h"
+#include "Graphics/AlphaTest.h"
 #include "Graphics/GraphicsDeviceInterface.h"
 #include "Graphics/Texture2D.h"
 #include "Graphics/VideoOverlay.h"
@@ -2861,6 +2862,8 @@ void GameInterface::DrawBubbleLine(Canvas& canvas, const help::tip_bubble::Line&
 {
 	const auto level = GameFont::ScreenGlyphLevel(line.size, false);
 	const auto atlasSize = glm::vec2(font.GetAtlasSize());
+	// The game draws all text with the alpha test of the font pages: the faintest pixels of the glyphs do not show
+	const Canvas::AlphaReferenceScope alphaTest(canvas, graphics::alpha_test::k_FontPageReference);
 	const float top = line.at.y;
 	const float bottom = line.at.y + line.size;
 	// The line fades from its top row to its bottom
@@ -3055,6 +3058,8 @@ void GameInterface::DrawDialogueRun(const help::TextRun& run)
 	const float clipTop = run.clipTop;
 	const float clipBottom = run.clipBottom + 1.0f;
 	const auto start = glm::floor(glm::vec2(run.x, run.y));
+	// The game draws all text with the alpha test of the font pages: the faintest pixels of the glyphs do not show
+	const Canvas::AlphaReferenceScope alphaTest(_canvas, graphics::alpha_test::k_FontPageReference);
 	float pen = 0.0f;
 	for (const auto c : run.text)
 	{

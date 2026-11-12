@@ -2204,24 +2204,20 @@ void Renderer::DrawPassEntities(const DrawSceneDesc& desc, const ScenePass& pass
 	// The piles of roots, which only this computer draws: the opaque piles here, the piles that fade with the
 	// blended things, each in its own place in the sort
 	const auto rootsPileMesh = resources::HashIdentifier(roots_pile::k_Mesh);
-	const auto drawRootsPiles = [&](bool fading) {
-		const auto first = fading ? renderCtx.rootsPileOpaqueCount : 0;
-		const auto end = fading ? static_cast<uint32_t>(renderCtx.rootsPileInstances.size()) : renderCtx.rootsPileOpaqueCount;
-		if (first == end || !meshManager.Contains(rootsPileMesh))
+	// The mesh of the piles is marked to be sorted whole, so the game draws every pile among the sorted things, by the
+	// key of a placed model at its place. The blended pass draws them all: the whole piles and then the fading ones.
+	const auto drawRootsPiles = [&](bool blendedPass) {
+		const auto end = static_cast<uint32_t>(renderCtx.rootsPileInstances.size());
+		if (!blendedPass || end == 0 || !meshManager.Contains(rootsPileMesh))
 		{
 			return;
 		}
-		RenderContext::InstancedDrawDesc placers {first, end - first, true};
-		placers.instanceAlpha = fading;
-		if (!fading)
+		for (uint32_t instance = 0; instance < end; ++instance)
 		{
-			drawInstances(rootsPileMesh, placers, false, first, end - first, nullptr, nullptr,
-			              renderCtx.rootsPileInstanceBuffer);
-			return;
-		}
-		for (uint32_t instance = first; instance < end; ++instance)
-		{
-			submitDesc.sortDepth = zsort::Depth(glm::vec3(renderCtx.rootsPileInstances.at(instance).model[3]), cameraOrigin);
+			RenderContext::InstancedDrawDesc placers {instance, 1, true};
+			placers.instanceAlpha = instance >= renderCtx.rootsPileOpaqueCount;
+			submitDesc.sortDepth =
+			    zsort::ModelDepth(glm::vec3(renderCtx.rootsPileInstances.at(instance).model[3]), cameraOrigin);
 			drawInstances(rootsPileMesh, placers, false, instance, 1, nullptr, nullptr, renderCtx.rootsPileInstanceBuffer);
 		}
 	};

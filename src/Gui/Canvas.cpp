@@ -19,6 +19,7 @@
 #include <bx/math.h>
 #include <glm/common.hpp>
 
+#include "Graphics/AlphaTest.h"
 #include "Graphics/GraphicsHandleBgfx.h"
 #include "Graphics/RendererInterface.h"
 #include "Graphics/ShaderManager.h"
@@ -95,11 +96,12 @@ void Canvas::StartBatch(const graphics::Texture2D* texture)
 {
 	const auto clip = ClipInPixels();
 	if (_batches.empty() || _batches.back().texture != texture || _batches.back().blend != _blend ||
-	    _batches.back().sortDepth != _sortDepth || _batches.back().clip != clip ||
-	    _batches.back().vertexCount + 6 > k_MaxBatchVertices)
+	    _batches.back().alphaReference != _alphaReference || _batches.back().sortDepth != _sortDepth ||
+	    _batches.back().clip != clip || _batches.back().vertexCount + 6 > k_MaxBatchVertices)
 	{
 		_batches.push_back({.texture = texture,
 		                    .blend = _blend,
+		                    .alphaReference = _alphaReference,
 		                    .firstVertex = static_cast<uint32_t>(_vertices.size()),
 		                    .vertexCount = 0,
 		                    .sortDepth = _sortDepth,
@@ -113,6 +115,7 @@ void Canvas::Begin(glm::u16vec2 resolution)
 	_vertices.clear();
 	_batches.clear();
 	_blend = Blend::Alpha;
+	_alphaReference = 0;
 	_depth = 0.0f;
 	_sortDepth = 0;
 	_origin = glm::vec2(0.0f);
@@ -246,6 +249,8 @@ void Canvas::End()
 		bgfx::setVertexBuffer(0, &vertices);
 		program->SetTextureSampler("s_texture", 0, *batch.texture);
 		bgfx::setState(StateOf(batch.blend, _depthTest));
+		const auto alphaReference = graphics::alpha_test::Uniform(batch.alphaReference);
+		program->SetUniformValue("u_alphaTestRef", alphaReference.data());
 		if (batch.clip.has_value())
 		{
 			bgfx::setScissor(batch.clip->x, batch.clip->y, batch.clip->width, batch.clip->height);
@@ -267,6 +272,7 @@ void Canvas::WarmUp(RenderPass view, DepthTest depthTest, bool sorted)
 	const auto* program = shaders != nullptr ? shaders->GetShader(sorted ? "InterfaceSorted" : "Interface") : nullptr;
 	auto& layout = GetLayout();
 	const std::array<float, 16> noProjection {};
+	const auto noAlphaTest = graphics::alpha_test::Uniform(0);
 	for (const auto blend : k_Blends)
 	{
 		if (bgfx::getAvailTransientVertexBuffer(k_Corners, layout) < k_Corners)
@@ -278,6 +284,7 @@ void Canvas::WarmUp(RenderPass view, DepthTest depthTest, bool sorted)
 		std::fill_n(reinterpret_cast<Vertex*>(vertices.data), k_Corners, Vertex {});
 		bgfx::setVertexBuffer(0, &vertices);
 		bgfx::setState(StateOf(blend, depthTest));
+		program->SetUniformValue("u_alphaTestRef", noAlphaTest.data());
 		if (sorted)
 		{
 			program->SetUniformValue("u_canvasProjection", noProjection.data());

@@ -84,7 +84,8 @@ void Renderer::DrawShieldDomes(const DrawSceneDesc& desc) const
 		submitDesc.program = _shaderManager->GetShader("Object");
 		submitDesc.modelMatrices = &model;
 		submitDesc.matrixCount = 1;
-		submitDesc.sortDepth = zsort::Depth(dome.position, origin);
+		// The dome's model is depth sorted whole, by the key of a placed model at its place
+		submitDesc.sortDepth = zsort::ModelDepth(dome.position, origin);
 		submitDesc.mirrored = reflection;
 		submitDesc.hiddenSubMeshes = hidden;
 		// Lit by the land's light where it stands, its materials as made, the alpha textured ones added over what is

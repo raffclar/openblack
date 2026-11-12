@@ -21,6 +21,7 @@
 #include "3D/OrientedText.h"
 #include "Camera/Camera.h"
 #include "ECS/Systems/PauseTextSystemInterface.h"
+#include "Graphics/AlphaTest.h"
 #include "Graphics/ShaderManager.h"
 #include "Graphics/Texture2D.h"
 #include "Locator.h"
@@ -67,6 +68,9 @@ void Renderer::DrawPauseText(const DrawSceneDesc& desc) const
 	shader->SetTextureSampler("s_texture", 0, *texture);
 	bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A | BGFX_STATE_DEPTH_TEST_GREATER | BGFX_STATE_MSAA |
 	               BGFX_STATE_BLEND_ALPHA);
+	// The game draws all text with the alpha test of the font pages: the faintest pixels of the glyphs do not show
+	const auto alphaTest = alpha_test::Uniform(alpha_test::k_FontPageReference);
+	shader->SetUniformValue("u_alphaTestRef", alphaTest.data());
 	// The nearest sort key of the pass that blends, which draws the farthest first, puts the words last
 	shader->Submit(static_cast<bgfx::ViewId>(TranslucentView(desc.viewId)), 0);
 }

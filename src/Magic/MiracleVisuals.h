@@ -40,6 +40,10 @@ static_assert(k_GlobeAlpha == 149);
 /// The miracle in a globe is drawn at this share of the globe's size
 inline constexpr float k_GlobeSeedScale = 0.6f;
 
+/// The point by which the globe's dome is sorted among the things that blend: the middle of the dome, moved towards
+/// the camera by the dome's radius. The game finds the way to the camera with the inverse square root of its 3D engine.
+[[nodiscard]] glm::vec3 GlobeSortPoint(const glm::vec3& middle, const glm::vec3& camera, float radius);
+
 /// The glint's frame after some seconds more
 [[nodiscard]] float StepGlint(float frame, float seconds);
 /// The corner of the glint's cell in the sheet: a quarter across for each of its column and row

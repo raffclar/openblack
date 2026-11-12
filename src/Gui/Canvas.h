@@ -94,6 +94,30 @@ public:
 	/// each frame
 	void SetCorners(screen_pixels::Corners corners) noexcept { _corners = corners; }
 	[[nodiscard]] screen_pixels::Corners GetCorners() const noexcept { return _corners; }
+	/// The alpha test of the draws from now on (see graphics::alpha_test): a pixel with less alpha than the reference does
+	/// not show. Back to 0, no test, with each frame
+	void SetAlphaReference(uint8_t reference) noexcept { _alphaReference = reference; }
+	[[nodiscard]] uint8_t GetAlphaReference() const noexcept { return _alphaReference; }
+	/// Gives the draws an alpha test reference until the end of a scope, then puts back the reference before it
+	class AlphaReferenceScope
+	{
+	public:
+		AlphaReferenceScope(Canvas& canvas, uint8_t reference) noexcept
+		    : _canvas(canvas)
+		    , _before(canvas.GetAlphaReference())
+		{
+			_canvas.SetAlphaReference(reference);
+		}
+		~AlphaReferenceScope() { _canvas.SetAlphaReference(_before); }
+		AlphaReferenceScope(const AlphaReferenceScope&) = delete;
+		AlphaReferenceScope& operator=(const AlphaReferenceScope&) = delete;
+		AlphaReferenceScope(AlphaReferenceScope&&) = delete;
+		AlphaReferenceScope& operator=(AlphaReferenceScope&&) = delete;
+
+	private:
+		Canvas& _canvas;
+		uint8_t _before;
+	};
 	/// Gives the draws a way to place their corners until the end of a scope, then puts back the way before it
 	class CornersScope
 	{
@@ -150,6 +174,7 @@ private:
 	{
 		const graphics::Texture2D* texture;
 		Blend blend;
+		uint8_t alphaReference;
 		uint32_t firstVertex;
 		uint32_t vertexCount;
 		uint32_t sortDepth;
@@ -166,6 +191,7 @@ private:
 	graphics::RenderPass _view;
 	glm::u16vec2 _resolution {0, 0};
 	Blend _blend {Blend::Alpha};
+	uint8_t _alphaReference {0};
 	DepthTest _depthTest {DepthTest::Off};
 	float _depth {0.0f};
 	std::optional<graphics::RenderPass> _sortedView;
