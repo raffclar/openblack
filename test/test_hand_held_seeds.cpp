@@ -481,6 +481,7 @@ TEST_F(ArmedOnThing, TheArmedSeedKeepsTheThingOfThePressUntilTheEndOfTheLock)
 TEST_F(ArmedOnThing, AMiracleThatRunsInTheHandKeepsTheThingOfThePressUntilTheFrameAfterTheLetGo)
 {
 	_info->spellSeed.at(static_cast<size_t>(SpellSeedType::Heal)).castType = SpellCastType::SpellCastInHand;
+	Locator::infoConstants::emplace(*_info);
 	EXPECT_FALSE(_magic->GetUseWait().has_value());
 	ASSERT_TRUE(_magic->PressAction());
 	EXPECT_EQ(_magic->GetHandCastState().state, magic::CastInput::State::Idle);
@@ -503,6 +504,7 @@ TEST_F(ArmedOnThing, AMiracleThatRunsInTheHandKeepsTheThingOfThePressUntilTheFra
 TEST_F(ArmedOnThing, AMiracleCastAtThePlaceOfTheHandWaitsForTheLetGoAndKeepsNoThing)
 {
 	_info->spellSeed.at(static_cast<size_t>(SpellSeedType::Heal)).castType = SpellCastType::SpellCastHandPosition;
+	Locator::infoConstants::emplace(*_info);
 	ASSERT_TRUE(_magic->PressAction());
 	ASSERT_TRUE(_magic->GetUseWait().has_value());
 	EXPECT_EQ(_magic->GetUseWait()->kept, entt::entity {entt::null});
