@@ -23,7 +23,6 @@ class TestbedGameStage final: public GameStageInterface
 {
 public:
 	[[nodiscard]] bool HasInterface() const override;
-	[[nodiscard]] bool IsDialogOpen() const override;
 	[[nodiscard]] const gui::TextDatabase* GetTexts() const override;
 
 	[[nodiscard]] std::string OpenTattooMenu() override;

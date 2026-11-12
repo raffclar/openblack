@@ -65,8 +65,6 @@ enum class Quantity : uint8_t
 	CreatureReaction,
 	/// 1 when the game draws the player's hand in this frame, else 0
 	HandShown,
-	/// 1 when the player's hand is out, else 0. A dialog and the cinema bars of a script put the hand away.
-	HandShown,
 	/// 1 when the hand of the player holds the rope of the tied leash, else 0
 	RopeHeld,
 	/// 1 when the hand of the player grips the help's tip bubble, else 0

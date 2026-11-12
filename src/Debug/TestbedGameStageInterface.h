@@ -50,8 +50,6 @@ public:
 	[[nodiscard]] virtual bool HasInterface() const = 0;
 	/// The texts of the interface, or null with no interface
 	[[nodiscard]] virtual const gui::TextDatabase* GetTexts() const = 0;
-	/// Whether a dialog of the interface is open: it shows its own pointer
-	[[nodiscard]] virtual bool IsDialogOpen() const = 0;
 
 	/// The game's menu opens on its Players page, and the tattoo editor over it
 	[[nodiscard]] virtual std::string OpenTattooMenu() = 0;
