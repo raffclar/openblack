@@ -616,9 +616,10 @@ private:
 	/// colours
 	void DrawIconPulses(const DrawSceneDesc& desc) const;
 	/// A tall shaft of light standing at a point and turned to face the eye, added over the scene in a colour: the
-	/// columns over villages and temples, and the scrolls' beams. With a view, a shaft out of that view is not drawn.
+	/// columns over villages and temples, and the scrolls' beams. With a view, a shaft out of that view is not drawn. A
+	/// shaft that `sortsAsPlacedModel` takes the key of a placed model at its point among the sorted things.
 	void DrawLightShaft(const DrawSceneDesc& desc, const L3DMesh& mesh, const glm::vec3& position, const glm::vec4& tint,
-	                    const view_frustum::Frustum* seenBy = nullptr) const;
+	                    const view_frustum::Frustum* seenBy = nullptr, bool sortsAsPlacedModel = false) const;
 	/// The leashes' ropes, each a ribbon lit by the land beneath it, and their shadows on the land
 	void DrawLeashes(const DrawSceneDesc& desc) const;
 	/// The collars of the leashes the gestures' hints offer, each over its hint's square, seen through a camera of its

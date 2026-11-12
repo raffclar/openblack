@@ -774,7 +774,7 @@ void Renderer::DrawTribalPower(const DrawSceneDesc& desc) const
 	               BGFX_STATE_BLEND_ALPHA);
 	// The game draws all text with the alpha test of the font pages: the faintest pixels of the glyphs do not show
 	const auto alphaTest = alpha_test::Uniform(alpha_test::k_FontPageReference);
-	shader->SetUniformValue("u_alphaRef", alphaTest.data());
+	shader->SetUniformValue("u_alphaTestRef", alphaTest.data());
 	shader->Submit(static_cast<bgfx::ViewId>(desc.viewId));
 }
 

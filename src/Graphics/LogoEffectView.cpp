@@ -215,7 +215,7 @@ void LogoEffectView::Draw(const Scene& scene)
 		program->SetTextureSampler("s_texture", 0, *_skySkin);
 		bgfx::setState(k_SkyState);
 		const auto noAlphaTest = alpha_test::Uniform(0);
-		program->SetUniformValue("u_alphaRef", noAlphaTest.data());
+		program->SetUniformValue("u_alphaTestRef", noAlphaTest.data());
 		program->Submit(pass);
 	}
 
@@ -257,7 +257,7 @@ void LogoEffectView::Draw(const Scene& scene)
 		program->SetTextureSampler("s_texture", 0, *scene.dotTexture);
 		bgfx::setState(k_DotState | (additive ? k_AdditiveBlend : k_AlphaBlend));
 		const auto noAlphaTest = alpha_test::Uniform(0);
-		program->SetUniformValue("u_alphaRef", noAlphaTest.data());
+		program->SetUniformValue("u_alphaTestRef", noAlphaTest.data());
 		program->Submit(pass);
 		first = last;
 	}

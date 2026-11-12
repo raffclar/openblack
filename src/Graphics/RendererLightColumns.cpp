@@ -85,8 +85,8 @@ void Renderer::DrawLightColumns(const DrawSceneDesc& desc) const
 	const auto seenBy = view_frustum::FromViewProjection(desc.camera->GetProjectionMatrix() *
 	                                                     desc.camera->GetViewMatrix(Camera::Interpolation::Current));
 	const auto* testedView = _warmingUp || column.IsBoned() ? nullptr : &seenBy;
-	const auto draw = [&](const glm::vec3& position, PlayerNames owner, uint8_t alpha) {
-		DrawLightShaft(desc, column, position, light_column::Tint(ColourOf(owner), alpha), testedView);
+	const auto draw = [&](const glm::vec3& position, PlayerNames owner, uint8_t alpha, bool sortsAsPlacedModel) {
+		DrawLightShaft(desc, column, position, light_column::Tint(ColourOf(owner), alpha), testedView, sortsAsPlacedModel);
 	};
 	// A warm-up draws a column that adds nothing, as the first column of a land draws it
 	if (_warmingUp)
@@ -111,7 +111,7 @@ void Renderer::DrawLightColumns(const DrawSceneDesc& desc) const
 		    }
 		    const auto centre = meshes.Handle(mesh.id)->GetBoundingBox().Center();
 		    const auto model = glm::translate(transform.position) * glm::mat4(transform.rotation) * glm::scale(transform.scale);
-		    draw(glm::vec3(model * glm::vec4(centre, 1.0f)), owner->second, light_column::k_TownAlpha);
+		    draw(glm::vec3(model * glm::vec4(centre, 1.0f)), owner->second, light_column::k_TownAlpha, false);
 	    });
 
 	// Over each temple, where it stands, beating with its player's heart. The temple's column is seen only from outside,
@@ -129,12 +129,13 @@ void Renderer::DrawLightColumns(const DrawSceneDesc& desc) const
 		}
 		const float pulse =
 		    Locator::heartbeatSystem::has_value() ? Locator::heartbeatSystem::value().Pulse(temple.owner, turnFraction) : 0.0f;
-		draw(transform.position, temple.owner, light_column::TempleAlpha(pulse));
+		// The temple's column goes through the object draw. Its mesh is sorted whole, so it takes the key of a placed model.
+		draw(transform.position, temple.owner, light_column::TempleAlpha(pulse), true);
 	});
 }
 
 void Renderer::DrawLightShaft(const DrawSceneDesc& desc, const L3DMesh& mesh, const glm::vec3& position, const glm::vec4& tint,
-                              const view_frustum::Frustum* seenBy) const
+                              const view_frustum::Frustum* seenBy, bool sortsAsPlacedModel) const
 {
 	const auto eye = desc.camera->GetOrigin();
 	const auto model = light_column::Model(position, eye);
@@ -158,7 +159,7 @@ void Renderer::DrawLightShaft(const DrawSceneDesc& desc, const L3DMesh& mesh, co
 	// creatures' and the hand's shadows don't fall on it
 	submitDesc.landLightAndHaze = false;
 	submitDesc.groundShadows = false;
-	submitDesc.sortDepth = zsort::Depth(position, eye);
+	submitDesc.sortDepth = sortsAsPlacedModel ? zsort::ModelDepth(position, eye) : zsort::Depth(position, eye);
 	DrawMesh(mesh, submitDesc, std::numeric_limits<uint8_t>::max());
 }
 
@@ -228,7 +229,8 @@ void Renderer::DrawIconPulses(const DrawSceneDesc& desc) const
 		// The pulse is its colour alone, as the light shafts are: no light, colour or haze of the land, and no shadows
 		submitDesc.landLightAndHaze = false;
 		submitDesc.groundShadows = false;
-		submitDesc.sortDepth = zsort::Depth(glm::vec3(pulse.model[3]), eye);
+		// The pulse goes through the object draw. Its mesh is sorted whole, so it takes the key of a placed model.
+		submitDesc.sortDepth = zsort::ModelDepth(glm::vec3(pulse.model[3]), eye);
 		DrawMesh(mesh, submitDesc, std::numeric_limits<uint8_t>::max());
 	}
 }

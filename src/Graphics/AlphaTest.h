@@ -31,7 +31,7 @@ constexpr float k_Margin = 1.0f / 128.0f;
 /// glyph shows only when the alpha of the glyph times the alpha of the text is 5 of 255 or more.
 constexpr uint8_t k_FontPageReference = 5;
 
-/// The value of the uniform u_alphaRef of the interface shaders for a reference
+/// The value of the uniform u_alphaTestRef of the interface shaders for a reference
 [[nodiscard]] constexpr std::array<float, 4> Uniform(uint8_t reference) noexcept
 {
 	return {static_cast<float>(reference), 0.0f, 0.0f, 0.0f};

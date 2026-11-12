@@ -250,7 +250,7 @@ void Canvas::End()
 		program->SetTextureSampler("s_texture", 0, *batch.texture);
 		bgfx::setState(StateOf(batch.blend, _depthTest));
 		const auto alphaReference = graphics::alpha_test::Uniform(batch.alphaReference);
-		program->SetUniformValue("u_alphaRef", alphaReference.data());
+		program->SetUniformValue("u_alphaTestRef", alphaReference.data());
 		if (batch.clip.has_value())
 		{
 			bgfx::setScissor(batch.clip->x, batch.clip->y, batch.clip->width, batch.clip->height);
@@ -284,7 +284,7 @@ void Canvas::WarmUp(RenderPass view, DepthTest depthTest, bool sorted)
 		std::fill_n(reinterpret_cast<Vertex*>(vertices.data), k_Corners, Vertex {});
 		bgfx::setVertexBuffer(0, &vertices);
 		bgfx::setState(StateOf(blend, depthTest));
-		program->SetUniformValue("u_alphaRef", noAlphaTest.data());
+		program->SetUniformValue("u_alphaTestRef", noAlphaTest.data());
 		if (sorted)
 		{
 			program->SetUniformValue("u_canvasProjection", noProjection.data());
