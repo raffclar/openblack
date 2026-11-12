@@ -134,6 +134,9 @@ constexpr float k_CellSize = 10.0f;
 constexpr int k_MostSpiralSteps = 99999;
 /// A fireball's sprite is this big for its miracle's magnitude; its heat capacity grows by its radius squared times this
 constexpr float k_FireBallCapacityScale = 0.0625f;
+/// The burn of the fire's own effect. A thing takes fire only when it takes this burn, also when the burn that
+/// heats it is different.
+constexpr float k_FireBurn = 100.0f;
 /// The weather's wind bytes are this many metres a second
 constexpr float k_WindByteSpeed = 0.125f;
 
@@ -526,7 +529,6 @@ Fire* FireSystem::FindOrCreate(entt::entity object, std::optional<PlayerNames> p
 	}
 	// What can burn: what has a combustion temperature in its table and takes the burn of a fire. A villager does not
 	// while it is dying, in its home, in a hand or on its way to hide in a building.
-	constexpr float k_FireBurn = 100.0f;
 	const auto material = MaterialOf(object);
 	if (!material.has_value() || material->combustion == 0.0f || !world_objects::TakesEffect(object, k_FireBurn, 0.0f))
 	{
@@ -579,7 +581,8 @@ Fire* FireSystem::FindOrCreate(entt::entity object, std::optional<PlayerNames> p
 
 void FireSystem::ApplyBurn(entt::entity object, float burn, std::optional<PlayerNames> player)
 {
-	if (burn == 0.0f || !Entities().Valid(object) || !world_objects::TakesEffect(object, burn, 0.0f))
+	// The burn itself has no test of what takes it. Only a new fire tests that the object takes the burn of a fire.
+	if (burn == 0.0f || !Entities().Valid(object))
 	{
 		return;
 	}
@@ -638,8 +641,13 @@ void FireSystem::PutOut(entt::entity object)
 
 void FireSystem::HeatHeldObject(entt::entity object)
 {
-	// Every fire in the held object's cell heats it, as a tree held over a bonfire catches
+	// Every fire in the held object's cell heats it, as a tree held over a bonfire catches. Only a thing that takes the
+	// burn of a fire is heated: a villager in the hand or an empty pot is not, also when it burns.
 	auto& registry = Entities();
+	if (!registry.Valid(object) || !world_objects::TakesEffect(object, k_FireBurn, 0.0f))
+	{
+		return;
+	}
 	const auto* transform = registry.TryGet<const Transform>(object);
 	if (transform == nullptr || !Locator::entitiesMap::has_value())
 	{
