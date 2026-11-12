@@ -134,6 +134,27 @@ enum class FrameAction : uint8_t
 	Other,
 };
 
+/// What the interface knows about the thing that the action keeps from its press
+struct PressThingFacts
+{
+	/// The thing is in the world
+	bool inWorld {true};
+	/// The thing is a villager on its way to die
+	bool villagerDying {false};
+	/// The thing is a building that has no part built
+	bool nothingBuilt {false};
+	/// The hand of a player holds the thing
+	bool inHand {false};
+};
+
+/// Whether the thing that the action keeps from its press ends the interface lock. The hand can do nothing with a thing
+/// that is not in the world, a villager on its way to die or a building that has no part built. A thing that the hand of
+/// a player holds also ends the lock.
+[[nodiscard]] constexpr bool PressThingEndsLock(const PressThingFacts& facts)
+{
+	return !facts.inWorld || facts.villagerDying || facts.nothingBuilt || facts.inHand;
+}
+
 /// What the interface of the hand of this computer knows at the start of a frame
 struct FrameFacts
 {
@@ -151,7 +172,7 @@ struct FrameFacts
 	bool heldThere {false};
 	/// The thing that the hand takes is in the world and not on its way out of it
 	bool takenThere {false};
-	/// The action keeps the thing of its press, and that thing is not in the world any more
+	/// The action keeps the thing of its press, and that thing ends the lock (`PressThingEndsLock`)
 	bool pressThingGone {false};
 };
 
@@ -159,7 +180,7 @@ struct FrameFacts
 /// - The interface is off, and the hand does not grip a totem.
 /// - The action needs the held thing, and the thing is not there.
 /// - The hand takes a thing, and the thing is not there.
-/// - The action keeps the thing of its press, and the thing is not there.
+/// - The action keeps the thing of its press, and the hand can do nothing with the thing, or a hand holds it.
 /// - A front-end box takes the interface.
 /// - Both buttons are down in an action that both buttons end.
 [[nodiscard]] constexpr bool FrameEndsLock(const FrameFacts& facts)

@@ -247,15 +247,13 @@ bool MagicSystem::IsHeldSeedTarget(entt::entity object) const
 	       CanCastOn(HeldMagicType(), object);
 }
 
-bool MagicSystem::PressThingGone() const
+entt::entity MagicSystem::GetPressThing() const
 {
-	if (_pressThing == entt::null || _input.state != magic::CastInput::State::Armed)
+	if (_input.state == magic::CastInput::State::Idle)
 	{
-		return false;
+		return entt::null;
 	}
-	const auto& registry = EntityRegistry();
-	return !registry.Valid(_pressThing) ||
-	       (!registry.AllOf<Creature>(_pressThing) && !registry.AllOf<SpellDispenser>(_pressThing));
+	return _input.onObject ? _pressThing : _pressPick;
 }
 
 void MagicSystem::LetGoIfOutsideCastRule()

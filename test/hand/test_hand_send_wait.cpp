@@ -135,3 +135,20 @@ TEST(HandSendWait, TheFrameEndsTheLockForABoxAnInterfaceThatIsOffBothButtonsOrAH
 	EXPECT_FALSE(FrameEndsLock({.action = FrameAction::Takes, .takenThere = true}));
 	EXPECT_FALSE(FrameEndsLock({.action = FrameAction::Other, .takenThere = false}));
 }
+
+TEST(HandSendWait, AThingOfThePressThatTheHandCannotUseOrThatAHandHoldsEndsTheLock)
+{
+	using hand_send_wait::PressThingEndsLock;
+	// A thing in the world that the hand can use keeps the lock
+	EXPECT_FALSE(PressThingEndsLock({}));
+	// A thing that went from the world, a villager on its way to die, or a building with no part built ends it
+	EXPECT_TRUE(PressThingEndsLock({.inWorld = false}));
+	EXPECT_TRUE(PressThingEndsLock({.villagerDying = true}));
+	EXPECT_TRUE(PressThingEndsLock({.nothingBuilt = true}));
+	// A thing that the hand of a player holds ends it
+	EXPECT_TRUE(PressThingEndsLock({.inHand = true}));
+	// The frame ends the lock for such a thing in each action that keeps the thing of its press
+	EXPECT_TRUE(hand_send_wait::FrameEndsLock({.action = hand_send_wait::FrameAction::Other, .pressThingGone = true}));
+	EXPECT_TRUE(hand_send_wait::FrameEndsLock(
+	    {.action = hand_send_wait::FrameAction::Takes, .takenThere = true, .pressThingGone = true}));
+}

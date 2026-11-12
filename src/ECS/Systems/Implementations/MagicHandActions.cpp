@@ -329,6 +329,9 @@ bool MagicSystem::PressAction()
 	{
 		_pressThing = *target;
 	}
+	// A press at a point keeps the thing that was under the hand. The interface lock ends when the hand can do nothing
+	// with that thing.
+	_pressPick = PickedUnderHand().value_or(entt::null);
 	return true;
 }
 
@@ -347,6 +350,7 @@ void MagicSystem::StopActionAtLockEnd()
 	const ActingAs acting(*this, OwnPlayer());
 	Do(magic::Cancel(_input));
 	_pressThing = entt::null;
+	_pressPick = entt::null;
 }
 
 void MagicSystem::UnlockHeldMiracle()

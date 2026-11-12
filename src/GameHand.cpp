@@ -79,6 +79,8 @@
 #include "ECS/Components/CreatureNeeds.h"
 #include "ECS/Components/DeadTree.h"
 #include "ECS/Components/Hand.h"
+#include "ECS/Components/HandGrab.h"
+#include "ECS/Components/LivingAction.h"
 #include "ECS/Components/MagicShield.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/OneOffSpellSeed.h"
@@ -320,6 +322,28 @@ void StepEase(Ease& ease)
 	}
 }
 
+/// What the interface knows about the thing that the action of the hand keeps from its press
+[[nodiscard]] hand_send_wait::PressThingFacts PressThingFactsOf(entt::entity thing)
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(thing))
+	{
+		return {.inWorld = false};
+	}
+	const auto* action = registry.AllOf<ecs::components::Villager>(thing)
+	                         ? registry.TryGet<const ecs::components::LivingAction>(thing)
+	                         : nullptr;
+	const bool dying = action != nullptr && Locator::livingActionSystem::has_value() &&
+	                   Locator::livingActionSystem::value().VillagerGetState(
+	                       *action, ecs::components::LivingAction::Index::Final) == VillagerStates::Dying;
+	return {
+	    .inWorld = true,
+	    .villagerDying = dying,
+	    .nothingBuilt = !gui::hand_tooltip::IsInteractable(thing),
+	    .inHand = registry.AllOf<ecs::components::InHand>(thing),
+	};
+}
+
 } // namespace
 
 namespace
@@ -554,9 +578,11 @@ void Game::EndHandLockForFrame()
 	{
 		return;
 	}
-	// The action of the hand of this computer, and the thing or the seed that the action needs
+	// The action of the hand of this computer, the thing or the seed that the action needs, and the thing that the
+	// action keeps from its press
 	auto action = hand_send_wait::FrameAction::Free;
 	std::optional<entt::entity> held;
+	auto pressThing = entt::entity {entt::null};
 	const bool hasGrab = Locator::handGrabSystem::has_value();
 	const auto taking = hasGrab ? Locator::handGrabSystem::value().GetTaking() : std::nullopt;
 	if (Locator::magicSystem::has_value() &&
@@ -564,6 +590,7 @@ void Game::EndHandLockForFrame()
 	{
 		action = hand_send_wait::FrameAction::UsesHeld;
 		held = Locator::magicSystem::value().GetHeldSeed();
+		pressThing = Locator::magicSystem::value().GetPressThing();
 	}
 	else if (hasGrab && Locator::handGrabSystem::value().IsAboutToThrow())
 	{
@@ -574,6 +601,7 @@ void Game::EndHandLockForFrame()
 	{
 		// The hand presses on a thing to take it, and waits, pulls or waits for the turn that puts it in the hand
 		action = hand_send_wait::FrameAction::Takes;
+		pressThing = *taking;
 	}
 	else if ((Locator::creatureHandSystem::has_value() &&
 	          (Locator::creatureHandSystem::value().GetCreature().has_value() ||
@@ -583,6 +611,10 @@ void Game::EndHandLockForFrame()
 		// A held creature, a creature that the button let go of while the lock stays, a press that waits for a tap on a
 		// creature, or a scoop lock
 		action = hand_send_wait::FrameAction::Other;
+		const auto lockedOn = hasGrab ? Locator::handGrabSystem::value().GetLockedOn() : std::nullopt;
+		pressThing = lockedOn.has_value()                       ? *lockedOn
+		             : Locator::creatureHandSystem::has_value() ? Locator::creatureHandSystem::value().GetPressCreature()
+		                                                        : entt::entity {entt::null};
 	}
 	const auto& buttons = Locator::handPressSystem::value().GetPointerButtons();
 	const hand_send_wait::FrameFacts facts {
@@ -594,7 +626,7 @@ void Game::EndHandLockForFrame()
 	    .bothButtons = buttons.left && buttons.right,
 	    .heldThere = held.has_value() && Locator::entitiesRegistry::value().Valid(*held),
 	    .takenThere = taking.has_value() && Locator::entitiesRegistry::value().Valid(*taking),
-	    .pressThingGone = Locator::magicSystem::has_value() && Locator::magicSystem::value().PressThingGone(),
+	    .pressThingGone = pressThing != entt::null && hand_send_wait::PressThingEndsLock(PressThingFactsOf(pressThing)),
 	};
 	if (hand_send_wait::FrameEndsLock(facts))
 	{
