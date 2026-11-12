@@ -37,8 +37,6 @@ void SetupReactToFire(entt::entity villager, entt::entity object, uint32_t react
 void SetupOnFire(entt::entity villager, entt::entity fire);
 /// Whether a villager is running from a fire
 [[nodiscard]] bool IsRunningOnFire(entt::entity villager);
-/// Whether a fire can take hold of a villager: not one dying, at home, held, or hiding in a building
-[[nodiscard]] bool CanCatchFire(entt::entity villager);
 /// Whether a villager is fighting a fire or reacting to one, which keeps the fire's heat off it
 [[nodiscard]] bool IsFireMan(entt::entity villager);
 /// A fireman stops fighting and goes back to what it was doing

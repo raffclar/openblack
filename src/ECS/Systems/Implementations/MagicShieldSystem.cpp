@@ -417,21 +417,19 @@ void MagicShieldSystem::ShieldStruck(entt::entity spell, bool destroyed)
 	const auto object = found->second;
 	auto& shieldObject = registry.Get<MagicShield>(object);
 	const auto position = registry.Get<const Transform>(object).position;
-	const bool physical = shieldObject.kind == MagicShield::Kind::Physical;
 	if (destroyed)
 	{
 		// Its people no longer react to it standing, but to its fall
 		RemoveReactions(object, Reaction::ReactToMagicShield);
 		shieldObject.reaction = 0;
 		CreateReaction(object, Reaction::ReactToMagicShieldDestroyed, position,
-		               shield::ImpressiveMultiplier(Reaction::ReactToMagicShieldDestroyed, false, physical));
+		               shield::ImpressiveMultiplier(Reaction::ReactToMagicShieldDestroyed, false));
 		return;
 	}
 	if (shieldObject.struckReaction == 0 || !_reactions.contains(shieldObject.struckReaction))
 	{
-		shieldObject.struckReaction =
-		    CreateReaction(object, Reaction::ReactToMagicShieldStruck, position,
-		                   shield::ImpressiveMultiplier(Reaction::ReactToMagicShieldStruck, false, physical));
+		shieldObject.struckReaction = CreateReaction(object, Reaction::ReactToMagicShieldStruck, position,
+		                                             shield::ImpressiveMultiplier(Reaction::ReactToMagicShieldStruck, false));
 		return;
 	}
 	// Struck again, its time runs from now

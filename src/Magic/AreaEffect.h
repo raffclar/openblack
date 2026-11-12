@@ -83,6 +83,28 @@ struct EffectReceiver
 /// height within the radius up and down from its position
 [[nodiscard]] bool Reaches(const EffectValues& values, glm::vec3 point, const EffectReceiver& receiver);
 
+/// The facts about a villager that tell if the villager takes an effect
+struct VillagerReceiverFacts
+{
+	/// The villager goes to the dying state at the end of its state
+	bool goesToDying {false};
+	/// The villager is dead: it has the death mark, it is in the dead state, or it cannot act
+	bool dead {false};
+	/// The villager is in its home
+	bool atHome {false};
+	/// The villager is in a hand
+	bool inHand {false};
+	/// The villager goes to hide in a building near it
+	bool hiding {false};
+};
+
+/// Whether an area effect can find a villager. A villager that goes to the dying state is not available.
+[[nodiscard]] bool VillagerAvailable(const VillagerReceiverFacts& facts) noexcept;
+/// Whether a villager takes an effect:
+/// - An effect that heals reaches each villager that is not dead.
+/// - Another effect reaches a villager that is available, not in its home, not in a hand and not on its way to hide.
+[[nodiscard]] bool VillagerTakesEffect(const VillagerReceiverFacts& facts, float heal) noexcept;
+
 /// A crush stronger than this makes the people nearby react to what was crushed
 inline constexpr float k_CrushReactionThreshold = 0.01f;
 

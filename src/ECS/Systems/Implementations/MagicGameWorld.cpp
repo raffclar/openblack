@@ -340,8 +340,7 @@ bool GameMagicWorld::ApplyEffect(entt::entity object, const magic::EffectValues&
 		return false;
 	}
 	const auto receiver = ReceiverOf(object);
-	// An empty pot, or a field without food under an effect that burns, does not take the effect
-	if (!receiver.has_value() || !ecs::world_objects::TakesEffect(object, values[magic::EffectKind::Burn]))
+	if (!receiver.has_value())
 	{
 		return false;
 	}
@@ -374,8 +373,9 @@ std::vector<entt::entity> GameMagicWorld::ApplyEffectAt(glm::vec3 point, const m
 	auto shared = values;
 	for (const auto& receiver : receivers)
 	{
-		// An empty pot, or a field without food under an effect that burns, does not take the effect
-		if (!ecs::world_objects::TakesEffect(receiver.entity, shared[magic::EffectKind::Burn]) ||
+		// The effect finds only an object that is available and that takes it, such as a pot that holds something or a
+		// villager that is not in its home
+		if (!ecs::world_objects::IsAvailable(receiver.entity) || !TakesEffect(receiver.entity, shared) ||
 		    !magic::Reaches(shared, point, receiver))
 		{
 			continue;
@@ -397,6 +397,12 @@ std::vector<entt::entity> GameMagicWorld::ApplyEffectAt(glm::vec3 point, const m
 		reached.push_back(taker);
 	}
 	return reached;
+}
+
+bool GameMagicWorld::TakesEffect(entt::entity object, const magic::EffectValues& values) const
+{
+	return EntityRegistry().Valid(object) &&
+	       ecs::world_objects::TakesEffect(object, values[magic::EffectKind::Burn], values[magic::EffectKind::Heal]);
 }
 
 std::vector<magic::EffectReceiver> GameMagicWorld::ReceiversIn(const magic::CellRange& cells)
