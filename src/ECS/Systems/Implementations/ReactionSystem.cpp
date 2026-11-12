@@ -67,19 +67,23 @@
 #include "ECS/Components/MiracleImpression.h"
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/Pot.h"
+#include "ECS/Components/PuzzleGame.h"
 #include "ECS/Components/ReportedHand.h"
 #include "ECS/Components/Scaffold.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/Spell.h"
 #include "ECS/Components/SpellDispenser.h"
+#include "ECS/Components/SpellIcon.h"
 #include "ECS/Components/SpellSeed.h"
 #include "ECS/Components/TeleportStone.h"
+#include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/TownAggression.h"
 #include "ECS/Components/TownDesire.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/VillageTotem.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/Components/Vortex.h"
 #include "ECS/Components/WallHug.h"
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/CreatureSight.h"
@@ -309,7 +313,8 @@ bool ThingGone(const ecs::Registry& registry, entt::entity thing)
 /// stop them as they go:
 /// - A creature.
 /// - A building, a field, a fish farm, a feature, a forest, a rock, a dead tree, a teleport stone, a totem, a football
-///   pitch, a spell dispenser and a worship site.
+///   pitch, a spell dispenser, a worship site and its altar.
+/// - A temple and its heart, a puzzle totem, a miracle icon of a town centre or a worship site, and a vortex.
 /// - A magic tree, a miracle, a shield and an arena.
 /// - A pot, for the reaction of its kind that calls the living to it.
 /// The reactions of any other thing go without a stop, such as those of a villager, an animal, a tree or a ball.
@@ -321,7 +326,8 @@ bool ThingGone(const ecs::Registry& registry, entt::entity thing)
 	}
 	if (registry.AnyOf<Creature, Abode, Field, FishFarm, Feature, Flowers, AnimatedStatic, BigForest, MobileStatic, Rock,
 	                   DeadTree, TeleportStone, VillageTotem, FootballPitch, SpellDispenser, WorshipSite>(thing) ||
-	    registry.AnyOf<MagicTree, Spell, MagicShield, CreatureArena>(thing))
+	    registry.AnyOf<MagicTree, Spell, MagicShield, CreatureArena>(thing) ||
+	    registry.AnyOf<WorshipAltar, Temple, TempleHeart, PuzzleTotem, TownCentreIcon, WorshipIcon, Vortex>(thing))
 	{
 		return true;
 	}

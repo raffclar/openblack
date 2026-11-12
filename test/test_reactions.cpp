@@ -12,8 +12,11 @@
 #include <algorithm>
 #include <bit>
 #include <chrono>
+#include <functional>
 #include <memory>
 #include <optional>
+#include <string_view>
+#include <utility>
 #include <vector>
 
 #include <gtest/gtest.h>
@@ -43,15 +46,19 @@
 #include "ECS/Components/MiracleImpression.h"
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/Pot.h"
+#include "ECS/Components/PuzzleGame.h"
 #include "ECS/Components/ReportedHand.h"
 #include "ECS/Components/Scaffold.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/Spell.h"
+#include "ECS/Components/SpellIcon.h"
 #include "ECS/Components/TeleportStone.h"
+#include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/TownDesire.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/Components/Vortex.h"
 #include "ECS/Components/WallHug.h"
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/Dances.h"
@@ -3057,6 +3064,40 @@ TEST_F(ReactionsOfAGoneThing, TheDeletionOfABuildingStopsTheGroupOfItsReactionAt
 	for (const auto cow : _cows)
 	{
 		EXPECT_EQ(registry.Get<const LivingReaction>(cow).reaction, 0u);
+	}
+}
+
+TEST_F(ReactionsOfAGoneThing, TheDeletionOfEachFixedThingStopsTheGroupOfItsReactionAtOnce)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const std::vector<std::pair<std::string_view, std::function<void(entt::entity)>>> kinds {
+	    {"temple", [&registry](entt::entity thing) { registry.Assign<Temple>(thing); }},
+	    {"temple heart", [&registry](entt::entity thing) { registry.Assign<TempleHeart>(thing, entt::entity {entt::null}); }},
+	    {"worship altar", [&registry](entt::entity thing) { registry.Assign<WorshipAltar>(thing); }},
+	    {"puzzle totem", [&registry](entt::entity thing) { registry.Assign<PuzzleTotem>(thing); }},
+	    {"town centre icon", [&registry](entt::entity thing) { registry.Assign<TownCentreIcon>(thing); }},
+	    {"worship icon", [&registry](entt::entity thing) { registry.Assign<WorshipIcon>(thing); }},
+	    {"vortex", [&registry](entt::entity thing) { registry.Assign<Vortex>(thing); }},
+	};
+	for (const auto& [name, assign] : kinds)
+	{
+		SCOPED_TRACE(name);
+		if (!registry.Valid(_thing))
+		{
+			_thing = registry.Create();
+			registry.Assign<Transform>(_thing, k_Here, glm::mat3(1.0f), glm::vec3(1.0f));
+		}
+		for (const auto cow : _cows)
+		{
+			registry.Remove<LivingReaction>(cow);
+		}
+		_animals->stops.clear();
+		assign(_thing);
+		const auto id = MakeReaction();
+		registry.Destroy(_thing);
+		_reactions.ProcessTurn();
+		EXPECT_FALSE(_reactions.IsActive(id));
+		EXPECT_EQ(_animals->stops, (std::vector<bool> {true, true}));
 	}
 }
 
