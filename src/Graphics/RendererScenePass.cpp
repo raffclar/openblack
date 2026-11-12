@@ -1658,7 +1658,7 @@ void Renderer::DrawPassEntities(const DrawSceneDesc& desc, const ScenePass& pass
 		sd.isSky = false;
 		sd.onlyJoints = placers.onlyJoints;
 		sd.hideShutJoints = placers.hideShutJoints;
-		// The temple's meshes and the creatures, which are drawn as their materials say
+		// The models show only the front faces of their one-sided materials, as their materials say
 		sd.useMaterialCulling = placers.materialCulling || creatureMaterials;
 		sd.useMaterialAddressing = creatureMaterials;
 		sd.mirrored = desc.cullBack;
@@ -1924,6 +1924,7 @@ void Renderer::DrawPassEntities(const DrawSceneDesc& desc, const ScenePass& pass
 		}
 		RenderContext::InstancedDrawDesc placers {0, 1, build.morphWithTerrain};
 		placers.instanceAlpha = build.fading;
+		placers.materialCulling = true;
 		// A model that follows the land is cut and capped where its corners rise to with the land
 		const auto& instances = renderCtx.partialBuildInstances;
 		const auto landPlacement = build.morphWithTerrain && !hidden.has_value() && build.instance < instances.size()
@@ -2194,6 +2195,7 @@ void Renderer::DrawPassEntities(const DrawSceneDesc& desc, const ScenePass& pass
 			}
 			RenderContext::InstancedDrawDesc placers {held.first, held.count, false};
 			placers.instanceAlpha = fading;
+			placers.materialCulling = true;
 			if (fading)
 			{
 				submitDesc.sortDepth = zsort::Depth(glm::vec3(renderCtx.heldInstances.at(held.first).model[3]), cameraOrigin);
@@ -2216,6 +2218,7 @@ void Renderer::DrawPassEntities(const DrawSceneDesc& desc, const ScenePass& pass
 		{
 			RenderContext::InstancedDrawDesc placers {instance, 1, true};
 			placers.instanceAlpha = instance >= renderCtx.rootsPileOpaqueCount;
+			placers.materialCulling = true;
 			submitDesc.sortDepth =
 			    zsort::ModelDepth(glm::vec3(renderCtx.rootsPileInstances.at(instance).model[3]), cameraOrigin);
 			drawInstances(rootsPileMesh, placers, false, instance, 1, nullptr, nullptr, renderCtx.rootsPileInstanceBuffer);
@@ -2336,6 +2339,9 @@ void Renderer::DrawPassVegetation(const DrawSceneDesc& desc, const ScenePass& pa
 			submitDesc.state = run.fading ? opaqueState | BGFX_STATE_BLEND_ALPHA : opaqueState;
 			// A standing tree blends the texels of its chroma material over what is behind them, and writes the depth
 			submitDesc.useMaterialBlending = !run.fading;
+			// A tree shows only the front faces of its one-sided materials. The mirrored reflection turns its faces round.
+			submitDesc.useMaterialCulling = true;
+			submitDesc.mirrored = desc.cullBack;
 			submitDesc.sortDepth = run.fading ? zsort::Depth(glm::vec3(renderCtx.treeInstanceData.at(run.first).modelMatrix[3]),
 			                                                 desc.camera->GetOrigin())
 			                                  : 0;
@@ -2396,6 +2402,8 @@ void Renderer::DrawPassVegetation(const DrawSceneDesc& desc, const ScenePass& pa
 				submitDesc.sortDepth = hand_reflection::SortKey(hand_reflection::MirroredThing::Held);
 				submitDesc.state = opaqueState;
 				submitDesc.useMaterialBlending = true;
+				// The mirrored tree in the hand shows both faces
+				submitDesc.useMaterialCulling = false;
 				submitDesc.snow = false;
 				submitDesc.landLightScale = _before.treeBrightness.Or(_treeBrightness);
 				submitDesc.shadeAt = glm::vec4(held.heldLight->point, hand_reflection::k_HeldShade);
@@ -2412,6 +2420,8 @@ void Renderer::DrawPassVegetation(const DrawSceneDesc& desc, const ScenePass& pa
 		submitDesc.state = opaqueState;
 		submitDesc.sortDepth = 0;
 		submitDesc.useMaterialBlending = false;
+		submitDesc.useMaterialCulling = false;
+		submitDesc.mirrored = false;
 
 		// Draw tree bounding boxes if enabled
 		if (renderCtx.boundingBox && renderCtx.treeInstanceCount > 0)
