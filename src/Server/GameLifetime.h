@@ -31,8 +31,9 @@ inline constexpr int64_t k_LongestLifeSeconds = 6LL * 60 * 60;
 inline constexpr int64_t k_DefaultJoinWindowSeconds = 120;
 /// The server writes a warning to its log this many seconds before its deadline
 inline constexpr int64_t k_WarningSeconds = 10LL * 60;
-/// The time in seconds that the players have to see the end of a decided game before the server ends
-inline constexpr int64_t k_AfterDecisionSeconds = 5LL * 60;
+/// The time in seconds that the players have to see the end of a decided game before the server ends. The server sends
+/// the result to each client at the decision. The server ends before this time when every god leaves.
+inline constexpr int64_t k_AfterDecisionSeconds = 30;
 
 /// Why a game server ends
 enum class End : uint8_t
@@ -47,7 +48,7 @@ enum class End : uint8_t
 	Deadline,
 	/// No game started in the time to join: too few gods joined, or the gods in the room were not ready
 	NoStart,
-	/// The winning conditions decided the game, and the time after the decision ended with a god still in the game
+	/// The winning conditions decided the game: then every god left, or the time after the decision ended
 	Decided,
 };
 
@@ -105,7 +106,8 @@ struct Room
 };
 
 /// Why the server ends now, or End::None. The rules, in this order:
-/// - Every god left the game: TimeLimit after a decision of the time limit, else AllGodsLeft.
+/// - Every god left the game: TimeLimit or Decided after a decision (at once, before the time to see the end), else
+///   AllGodsLeft.
 /// - The deadline came: Deadline.
 /// - No start at the end of the time to join with too few gods in the room, or no start at two times the time to join:
 ///   NoStart.

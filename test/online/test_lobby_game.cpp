@@ -208,6 +208,11 @@ TEST(GameLifetime, TheServerEndsForEachReasonInOrder)
 	room.decidedAt = 9'000;
 	room.decidedByTimeLimit = true;
 	EXPECT_EQ(game_lifetime::Check(limits, room), End::TimeLimit);
+	// Every god left before the time to see the end of a win: the server ends at once with the decision
+	room.decidedByTimeLimit = false;
+	room.now = 9'001;
+	EXPECT_EQ(game_lifetime::Check(limits, room), End::Decided);
+	room.decidedByTimeLimit = true;
 
 	// A decided game ends after the time to see the end
 	room.gameOver = false;
@@ -217,6 +222,8 @@ TEST(GameLifetime, TheServerEndsForEachReasonInOrder)
 	EXPECT_EQ(game_lifetime::Check(limits, room), End::TimeLimit);
 	room.decidedByTimeLimit = false;
 	EXPECT_EQ(game_lifetime::Check(limits, room), End::Decided);
+	// The players have 30 seconds to see the end
+	EXPECT_EQ(game_lifetime::k_AfterDecisionSeconds, 30);
 }
 
 TEST(GameLifetime, TheRoomWaitsForEachGodOfTheLobbyUntilTheTimeToJoinEnds)

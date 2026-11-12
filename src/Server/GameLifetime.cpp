@@ -87,7 +87,12 @@ End Check(const Limits& limits, const Room& room) noexcept
 {
 	if (room.gameOver)
 	{
-		return room.decidedAt.has_value() && room.decidedByTimeLimit ? End::TimeLimit : End::AllGodsLeft;
+		// Every god left after a decision: the server ends at once, with the end of the decision
+		if (room.decidedAt.has_value())
+		{
+			return room.decidedByTimeLimit ? End::TimeLimit : End::Decided;
+		}
+		return End::AllGodsLeft;
 	}
 	if (limits.deadline.has_value() && room.now >= *limits.deadline)
 	{
