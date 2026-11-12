@@ -83,7 +83,8 @@ EM_ASYNC_JS(void, openblack_wait_for_display_frame, (), {
 	});
 });
 // The render thread gives control back to the browser for one task. The browser then shows the frame that the canvas
-// has. A message on a channel does not wait for a display frame or for the minimum time of a timer.
+// has. A message on a channel does not wait for a display frame or for the minimum time of a timer. The thread keeps
+// the count of display frames of the page at this time (see openblack_wait_for_next_display_frame).
 EM_ASYNC_JS(void, openblack_yield_to_browser, (), {
 	if (!globalThis.openblackYieldChannel) {
 		globalThis.openblackYieldChannel = new MessageChannel();
@@ -93,6 +94,29 @@ EM_ASYNC_JS(void, openblack_yield_to_browser, (), {
 		channel.port1.onmessage = () => resolve();
 		channel.port2.postMessage(0);
 	});
+	const frames = globalThis.openblackWeb && globalThis.openblackWeb.displayFrames;
+	globalThis.openblackShownAt = frames ? Atomics.load(frames, 0) : undefined;
+});
+// The page shows one canvas frame in each display frame. When the render thread gave the browser a frame in this display
+// frame, it waits for the next display frame before it draws again. A loop of the game that does not wait for the
+// display, as the logo screens, thus gets one frame in each display frame. Without this wait, the thread gave the browser
+// about 1000 frames each second. Firefox keeps a canvas texture for each frame, and lost the device when its graphics
+// memory was full.
+EM_ASYNC_JS(void, openblack_wait_for_next_display_frame, (), {
+	const frames = globalThis.openblackWeb && globalThis.openblackWeb.displayFrames;
+	const shownAt = globalThis.openblackShownAt;
+	if (!frames || shownAt === undefined || Atomics.load(frames, 0) !== shownAt) {
+		return;
+	}
+	if (typeof Atomics.waitAsync === 'function') {
+		const wait = Atomics.waitAsync(frames, 0, shownAt);
+		if (wait.async) {
+			await wait.value;
+		}
+		return;
+	}
+	// The thread gave control back to the browser after the last frame, thus a wait that stops the thread is safe here
+	Atomics.wait(frames, 0, shownAt, 100);
 });
 // The text of the version file of the page (version.txt), which the page gives to the game threads. Null without it.
 EM_JS(char*, openblack_page_version, (), {
@@ -165,8 +189,14 @@ void* RenderThreadMain(void* /*unused*/)
 	renderThread.ready.store(true);
 	renderThread.ready.notify_all();
 	openblack_set_present(1);
-	while (bgfx::renderFrame() != bgfx::RenderFrame::Exiting)
+	while (true)
 	{
+		// One frame in each display frame of the page, at most
+		openblack_wait_for_next_display_frame();
+		if (bgfx::renderFrame() == bgfx::RenderFrame::Exiting)
+		{
+			break;
+		}
 		// The browser shows the frame when this thread gives control back
 		openblack_yield_to_browser();
 	}

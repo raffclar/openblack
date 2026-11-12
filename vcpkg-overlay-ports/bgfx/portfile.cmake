@@ -54,6 +54,8 @@ vcpkg_download_distfile(
 #   block again, and a draw does not set the bind group again when the pass has the same bind group and offsets.
 #   Before, each draw wrote two 256-byte aligned blocks to the scratch buffer, and the frame wrote all of them to the
 #   device. The values that the shaders read do not change.
+# - webgpu-lose-device: a request to lose the device, for the tests of the recovery, destroys the WebGPU device and marks
+#   the loss. The next frame then makes the device again, as after a loss that the browser reports.
 # A change to shaderc's ESSL output (the WebGL 2 shaders). It does not change the SPIR-V, WGSL, Metal or Direct3D
 # shaders:
 # - essl-no-inline: the ESSL shaders do not get the passes that inline functions. The inline of a function that
@@ -115,6 +117,7 @@ vcpkg_extract_source_archive(
     webgpu-pipeline-key-by-layout.patch
     gl-parallel-link.patch
     webgpu-uniform-reuse.patch
+    webgpu-lose-device.patch
 )
 
 # Replaces text in a file of the bgfx source. The build stops when the text is not there, so that a new bgfx
@@ -152,9 +155,14 @@ if(VCPKG_TARGET_IS_EMSCRIPTEN)
     )
     # emdawnwebgpu-timestamp-writes: the JavaScript bindings send "no timestamp write" as the number 4294967295. The
     # browser refuses it, and then loses each command buffer that has a timer query.
+    # emdawnwebgpu-one-canvas-context: a surface that the renderer makes again for the same canvas, as after a lost
+    # device, uses the WebGPU context that the canvas gave first. Firefox refuses a second getContext from a worker
+    # after the browser releases a transferred copy of the canvas, and the error stopped the game.
     vcpkg_extract_source_archive(EMDAWNWEBGPU_PATH
       ARCHIVE "${EMDAWNWEBGPU_ARCHIVE}"
-      PATCHES emdawnwebgpu-timestamp-writes.patch
+      PATCHES
+        emdawnwebgpu-timestamp-writes.patch
+        emdawnwebgpu-one-canvas-context.patch
     )
     openblack_bgfx_replace(cmake/bgfx/bgfx.cmake
       "target_link_options\\(bgfx PUBLIC \"--use-port=emdawnwebgpu\"\\)"

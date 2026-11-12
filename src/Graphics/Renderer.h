@@ -132,6 +132,7 @@ public:
 	void RequestDeviceRestore(device_restore::Request request) noexcept final;
 	[[nodiscard]] uint32_t GetDeviceRestores() const noexcept final;
 	[[nodiscard]] device_restore::Kept GetDeviceRestoreKept() const noexcept final;
+	[[nodiscard]] bool DeviceRecoveryFailed() const noexcept final { return _deviceRecoveryFailed; }
 	[[nodiscard]] uint32_t GetDrawsOfLastFrame() const noexcept final;
 	[[nodiscard]] bool GetProfile() const noexcept final { return _bgfxProfile; }
 	void SetProfile(bool value) noexcept final { _bgfxProfile = value; }
@@ -816,6 +817,11 @@ private:
 	mutable sky_dome::Picture _skyDomePicture;
 	/// Finds each new restore of the graphics device
 	device_restore::Watch _deviceRestores;
+	/// Finds a recovery from lost devices that does not succeed (web build only)
+	device_restore::RecoveryWatch _deviceRecovery;
+	/// The renderer that the graphics library started with
+	bgfx::RendererType::Enum _rendererType {bgfx::getRendererType()};
+	bool _deviceRecoveryFailed {false};
 	/// The glow lightning stamps on the land, made the first time it is drawn
 	mutable std::optional<TextureHandle> _lightningGlowTexture;
 	/// How strongly the sun glares, 0 to 255, easing towards how much of the sun shows
