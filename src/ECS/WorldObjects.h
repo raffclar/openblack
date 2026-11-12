@@ -150,5 +150,8 @@ float IncreaseLife(entt::entity object, float amount);
 /// Whether crushing an object makes the people nearby react to it: anything living, and anything fixed to the land, such
 /// as a building, a tree, a field or a rock, but not what can be picked up and moved
 [[nodiscard]] bool CanBeCrushed(entt::entity object);
+/// Whether an object takes an effect that burns by this much. A pot takes an effect only while it holds something. A
+/// field takes an effect that burns only while its crop has an age and food. Every other object takes every effect.
+[[nodiscard]] bool TakesEffect(entt::entity object, float burn);
 
 } // namespace openblack::ecs::world_objects

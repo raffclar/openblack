@@ -18,11 +18,13 @@
 #include "ECS/Components/Ball.h"
 #include "ECS/Components/Construction.h"
 #include "ECS/Components/CreatureNeeds.h"
+#include "ECS/Components/Field.h"
 #include "ECS/Components/Fire.h"
 #include "ECS/Components/Firefly.h"
 #include "ECS/Components/FishFarm.h"
 #include "ECS/Components/Indestructible.h"
 #include "ECS/Components/Physics.h"
+#include "ECS/Components/Pot.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/StreetLantern.h"
 #include "ECS/Components/Town.h"
@@ -324,4 +326,41 @@ TEST_F(EffectReceivers, ABuiltFootballPitchTakesNoDamage)
 	registry.Assign<BuildProgress>(unfinished, BuildProgress {.built = 0.5f});
 	ecs::world_objects::ReduceLife(unfinished, 0.25f);
 	EXPECT_FLOAT_EQ(registry.Get<const BuildProgress>(unfinished).built, 0.25f);
+}
+
+TEST_F(EffectReceivers, APotTakesEffectsOnlyWhileItHoldsSomething)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto pot = Made();
+	registry.Assign<Pot>(pot, Pot {.amount = 0, .maxAmount = 100});
+	EXPECT_FALSE(ecs::world_objects::TakesEffect(pot, 0.0f));
+	EXPECT_FALSE(ecs::world_objects::TakesEffect(pot, 50.0f));
+	registry.Get<Pot>(pot).amount = 1;
+	EXPECT_TRUE(ecs::world_objects::TakesEffect(pot, 50.0f));
+}
+
+TEST_F(EffectReceivers, AFieldWithoutFoodTakesNoEffectThatBurns)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto field = Made();
+	auto& crop = registry.Assign<Field>(field).crop;
+	// No age and no food: only an effect that does not burn
+	EXPECT_FALSE(ecs::world_objects::TakesEffect(field, 10.0f));
+	EXPECT_TRUE(ecs::world_objects::TakesEffect(field, 0.0f));
+	EXPECT_TRUE(ecs::world_objects::TakesEffect(field, -10.0f));
+	// Food but no age is not enough, and an age without food is not enough
+	crop.food = 5.0f;
+	EXPECT_FALSE(ecs::world_objects::TakesEffect(field, 10.0f));
+	crop.food = 0.0f;
+	crop.age = 1.0f;
+	EXPECT_FALSE(ecs::world_objects::TakesEffect(field, 10.0f));
+	crop.food = 5.0f;
+	EXPECT_TRUE(ecs::world_objects::TakesEffect(field, 10.0f));
+}
+
+TEST_F(EffectReceivers, EveryOtherThingTakesEveryEffect)
+{
+	const auto thing = Made();
+	EXPECT_TRUE(ecs::world_objects::TakesEffect(thing, 10.0f));
+	EXPECT_TRUE(ecs::world_objects::TakesEffect(thing, 0.0f));
 }
