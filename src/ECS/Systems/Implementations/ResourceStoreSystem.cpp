@@ -73,6 +73,7 @@
 #include "ECS/Map.h"
 #include "ECS/ObjectPhysics.h"
 #include "ECS/PhysicsClasses.h"
+#include "ECS/PotCall.h"
 #include "ECS/Registry.h"
 #include "ECS/StoreRules.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
@@ -106,6 +107,7 @@ using namespace openblack;
 using namespace openblack::ecs::components;
 using namespace openblack::ecs::systems;
 namespace piles = openblack::magic::piles;
+namespace pot_call = openblack::ecs::pot_call;
 
 namespace
 {
@@ -149,15 +151,15 @@ void Thud(entt::entity pile, ResourceType type, uint32_t amount, glm::vec3 posit
 	PlayInGame(piles::PileSoundSample(type, amount, TickMs()), position, pile);
 }
 
-/// A pile that a store or a building site keeps stays when it is empty. It loses its poison and stops calling people.
+/// A pile that a store or a building site keeps stays when it is empty. It loses its poison. The removal of its call ends
+/// all its reactions when it called the living before.
 void PileEmptied(entt::entity pile, Pot& pot)
 {
-	pot.poisoned = false;
-	const auto reaction = PotInfoOf(pot.type).associatedReaction;
-	if (reaction != Reaction::None && Locator::reactionSystem::has_value())
+	if (Locator::reactionSystem::has_value())
 	{
-		Locator::reactionSystem::value().RemoveFrom(pile, reaction);
+		pot_call::Remove(pile, pot, Locator::reactionSystem::value());
 	}
+	pot.poisoned = false;
 }
 
 /// A pot takes its size from what it holds each time this changes. A pot on the land that changes its size goes out of the
@@ -1129,18 +1131,19 @@ entt::entity ResourceStoreSystem::NewPile(ResourceType type, glm::vec3 point, ui
 			    {.type = SpotVisualType::PilefoodSpeedup, .position = point, .turns = -1, .owner = created});
 		}
 	}
-	// The people come to look at it: a new free pile always asks for the reaction of its kind
+	// The people come to look at it: a new free pile always calls them with the reaction of its kind
 	const auto reaction = PotInfoOf(potType).associatedReaction;
 	if (piles::ReactsWhenMade(PotInfoOf(potType).potType, reaction, true) && Locator::reactionSystem::has_value())
 	{
-		Locator::reactionSystem::value().Create({.initiator = created,
-		                                         .type = reaction,
-		                                         .player = player,
-		                                         .position = point,
-		                                         .impressiveValue = PotInfoOf(potType).impressiveValue,
-		                                         .power = 1.0f,
-		                                         .magicType = MagicType::None,
-		                                         .casterCreature = entt::null});
+		pot_call::Make(created, registry.Get<Pot>(created), Locator::reactionSystem::value(),
+		               {.initiator = created,
+		                .type = reaction,
+		                .player = player,
+		                .position = point,
+		                .impressiveValue = PotInfoOf(potType).impressiveValue,
+		                .power = 1.0f,
+		                .magicType = MagicType::None,
+		                .casterCreature = entt::null});
 	}
 	return created;
 }
@@ -1626,14 +1629,16 @@ void ResourceStoreSystem::StoreStopsWorking(entt::entity store)
 	}
 	auto& reactions = Locator::reactionSystem::value();
 	const auto player = ecs::world_objects::PlayerOf(store).value_or(PlayerNames::NEUTRAL);
+	// Each pile that holds something calls the living to it, when it did not call before
 	for (const auto pile : PitPiles(*pit))
 	{
-		const auto& pot = registry.Get<const Pot>(pile);
+		auto& pot = registry.Get<Pot>(pile);
 		const auto reaction = PotInfoOf(pot.type).associatedReaction;
 		const auto* transform = registry.TryGet<const Transform>(pile);
-		if (transform != nullptr && piles::CallsWhenStoreStops(pot.amount, reaction) && !reactions.HasReaction(pile))
+		if (transform != nullptr && piles::CallsWhenStoreStops(pot.amount, reaction))
 		{
-			reactions.Create({.initiator = pile, .type = reaction, .player = player, .position = transform->position});
+			pot_call::Make(pile, pot, reactions,
+			               {.initiator = pile, .type = reaction, .player = player, .position = transform->position});
 		}
 	}
 }
@@ -1646,12 +1651,9 @@ void ResourceStoreSystem::StoreWorksAgain(entt::entity store)
 	{
 		return;
 	}
+	// The call of each pile is removed, which ends all the reactions of a pile that called
 	for (const auto pile : PitPiles(*pit))
 	{
-		const auto reaction = PotInfoOf(registry.Get<const Pot>(pile).type).associatedReaction;
-		if (reaction != Reaction::None)
-		{
-			Locator::reactionSystem::value().RemoveFrom(pile, reaction);
-		}
+		pot_call::Remove(pile, registry.Get<Pot>(pile), Locator::reactionSystem::value());
 	}
 }

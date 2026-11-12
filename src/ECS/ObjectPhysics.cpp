@@ -58,6 +58,7 @@
 #include "ECS/PhysicsEntry.h"
 #include "ECS/PhysicsGround.h"
 #include "ECS/PlacedTurn.h"
+#include "ECS/PotCall.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/ArtefactSystemInterface.h"
@@ -395,14 +396,28 @@ entt::entity object_physics::EndPot(systems::DynamicsSystemInterface& dynamics, 
 		// In the water it floats on as a thing
 		return dynamics.EndPhysicsAsObject(pot, insert, entry != nullptr);
 	}
-	// On the land it flickers out and spills into the stores and piles round it, or makes a pile; it goes first, so
-	// that it can't take back what it spills
+	// On the land it first calls the living to it, when it did not call before. Then it flickers out and spills into the
+	// stores and piles round it, or makes a pile. It goes before the spill, so that it cannot take back what it spills.
+	bool calls = false;
+	if (auto* handful = registry.TryGet<Pot>(pot);
+	    handful != nullptr && Locator::reactionSystem::has_value() && Locator::infoConstants::has_value())
+	{
+		const auto call = Locator::infoConstants::value().pot.at(static_cast<size_t>(handful->type)).associatedReaction;
+		pot_call::Make(pot, *handful, Locator::reactionSystem::value(),
+		               {.initiator = pot, .type = call, .player = pot_call::FreePlayerOf(registry, pot), .position = position});
+		calls = handful->calling;
+	}
 	auto& stores = Locator::resourceStoreSystem::value();
 	const auto resource = stores.ResourceOf(pot);
 	const auto player = entry != nullptr ? entry->player.value_or(PlayerNames::NEUTRAL) : PlayerNames::NEUTRAL;
 	world_objects::LeaveGhost(pot);
 	world_objects::Remove(pot);
 	stores.PourAt(resource.type, position, resource.amount, false, player, resource.poisoned);
+	// After the spill, the end of the handful removes its call: all its reactions end, of each kind
+	if (calls)
+	{
+		Locator::reactionSystem::value().RemoveFrom(pot);
+	}
 	return pot;
 }
 

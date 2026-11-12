@@ -73,6 +73,7 @@
 #include "ECS/HandPlayer.h"
 #include "ECS/Map.h"
 #include "ECS/PosedModel.h"
+#include "ECS/PotCall.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
 #include "ECS/ScriptFind.h"
@@ -105,6 +106,7 @@ using namespace openblack;
 using namespace openblack::ecs::components;
 using namespace openblack::ecs::systems;
 namespace world_objects = openblack::ecs::world_objects;
+namespace pot_call = openblack::ecs::pot_call;
 namespace worship_site = openblack::ecs::worship_site;
 namespace temple_heart_pass_on = openblack::ecs::temple_heart_pass_on;
 
@@ -581,12 +583,16 @@ Fire* FireSystem::FindOrCreate(entt::entity object, std::optional<PlayerNames> p
 		registry.Assign<FireLook>(object, std::move(look));
 	}
 	// What the living thought of it before it burned is forgotten while it burns; a magic tree stops drawing its
-	// caster's people to look at it
-	if (registry.AnyOf<Abode, Feature, Field, BigForest, MobileStatic, AnimatedStatic, DeadTree, Pot, Flowers, SpellDispenser,
+	// caster's people to look at it. A pot does this only when it called the living, and its call is removed.
+	if (registry.AnyOf<Abode, Feature, Field, BigForest, MobileStatic, AnimatedStatic, DeadTree, Flowers, SpellDispenser,
 	                   WorshipSite, Temple, FishFarm>(object) &&
 	    Locator::reactionSystem::has_value())
 	{
 		Locator::reactionSystem::value().RemoveFrom(object);
+	}
+	if (auto* pot = registry.TryGet<Pot>(object); pot != nullptr && Locator::reactionSystem::has_value())
+	{
+		pot_call::Remove(object, *pot, Locator::reactionSystem::value());
 	}
 	if (registry.AllOf<MagicTree>(object) && Locator::reactionSystem::has_value())
 	{
@@ -1599,21 +1605,22 @@ void FireSystem::Delete(entt::entity object)
 			                                         .position = transform->position});
 		}
 	}
-	// A pot that stops burning calls its people again, when it holds something and is not one of a store's piles
-	if (const auto* pot = registry.TryGet<const Pot>(object);
+	// A pot that stops burning calls its people again, when it holds something, is not one of a store's piles, and did
+	// not call since the fire removed its call
+	if (auto* pot = registry.TryGet<Pot>(object);
 	    pot != nullptr && pot->amount > 0 && Locator::reactionSystem::has_value() && Locator::infoConstants::has_value())
 	{
 		const bool inStore =
 		    Locator::resourceStoreSystem::has_value() && Locator::resourceStoreSystem::value().StoreOf(object).has_value();
 		const auto reaction = Locator::infoConstants::value().pot.at(static_cast<size_t>(pot->type)).associatedReaction;
 		const auto* transform = registry.TryGet<const Transform>(object);
-		auto& reactions = Locator::reactionSystem::value();
-		if (!inStore && reaction != Reaction::None && transform != nullptr && !reactions.HasReaction(object))
+		if (!inStore && transform != nullptr)
 		{
-			reactions.Create({.initiator = object,
-			                  .type = reaction,
-			                  .player = world_objects::PlayerOf(object).value_or(PlayerNames::NEUTRAL),
-			                  .position = transform->position});
+			pot_call::Make(object, *pot, Locator::reactionSystem::value(),
+			               {.initiator = object,
+			                .type = reaction,
+			                .player = pot_call::FreePlayerOf(registry, object),
+			                .position = transform->position});
 		}
 	}
 	// A magic tree that stops burning draws its caster's people again

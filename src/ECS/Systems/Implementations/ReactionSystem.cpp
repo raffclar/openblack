@@ -316,9 +316,9 @@ bool ThingGone(const ecs::Registry& registry, entt::entity thing)
 ///   pitch, a spell dispenser, a worship site and its altar.
 /// - A temple and its heart, a puzzle totem, a miracle icon of a town centre or a worship site, and a vortex.
 /// - A magic tree, a miracle, a shield and an arena.
-/// - A pot, for the reaction of its kind that calls the living to it.
+/// - A pot that called the living to it, for all its reactions. This stays after the time of the call ends.
 /// The reactions of any other thing go without a stop, such as those of a villager, an animal, a tree or a ball.
-[[nodiscard]] bool DeletionStopsGroup(const ecs::Registry& registry, entt::entity thing, Reaction type)
+[[nodiscard]] bool DeletionStopsGroup(const ecs::Registry& registry, entt::entity thing)
 {
 	if (thing == entt::null || !registry.Valid(thing))
 	{
@@ -332,13 +332,7 @@ bool ThingGone(const ecs::Registry& registry, entt::entity thing)
 		return true;
 	}
 	const auto* pot = registry.TryGet<const Pot>(thing);
-	if (pot == nullptr || !Locator::infoConstants::has_value())
-	{
-		return false;
-	}
-	const auto& pots = Locator::infoConstants::value().pot;
-	const auto row = static_cast<size_t>(pot->type);
-	return row < pots.size() && pots.at(row).associatedReaction == type;
+	return pot != nullptr && pot->calling;
 }
 
 /// What a living weighs about a predator it reacts to
@@ -805,9 +799,19 @@ uint32_t ReactionSystem::Create(const Source& source, entt::entity notInMap)
 
 void ReactionSystem::SetStopsGroupWhenGone(Active& reaction) const
 {
-	reaction.stopsGroupWhenGone =
-	    Locator::entitiesRegistry::has_value() &&
-	    DeletionStopsGroup(Locator::entitiesRegistry::value(), reaction.source.initiator, reaction.source.type);
+	reaction.stopsGroupWhenGone = Locator::entitiesRegistry::has_value() &&
+	                              DeletionStopsGroup(Locator::entitiesRegistry::value(), reaction.source.initiator);
+}
+
+void ReactionSystem::UpdateDeletionStop(entt::entity initiator)
+{
+	for (auto& reaction : _reactions)
+	{
+		if (reaction.source.initiator == initiator)
+		{
+			SetStopsGroupWhenGone(reaction);
+		}
+	}
 }
 
 void ReactionSystem::Move(uint32_t id, const glm::vec3& position, const glm::vec3& velocity, float strength)
@@ -911,8 +915,9 @@ bool ReactionSystem::IsActive(uint32_t id) const
 
 void ReactionSystem::RemoveFrom(entt::entity initiator)
 {
+	// The newest goes first
 	std::vector<uint32_t> gone;
-	for (const auto& reaction : _reactions)
+	for (const auto& reaction : std::ranges::reverse_view(_reactions))
 	{
 		if (reaction.source.initiator == initiator)
 		{

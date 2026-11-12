@@ -1971,7 +1971,7 @@ TEST(VanillaWorldImport, ReadsThePilesOfAStoragePit)
 		    .Value("pileRise", rise);
 	};
 	pile(VanillaType::PileFood, PotInfo::StoragePitFoodPile, 3, 300, 1);
-	pile(VanillaType::PileResource, PotInfo::WoodPile_2, 3, 5000, 0);
+	pile(VanillaType::PileResource, PotInfo::WoodPile_2, 3, 5000, 2);
 	pile(VanillaType::PileResource, PotInfo::WoodPile_1, 7, 70, 0);
 	const auto imported = world_import::ReadTowns(fake.Make());
 	ASSERT_EQ(imported.abodes.size(), 1U);
@@ -1981,9 +1981,12 @@ TEST(VanillaWorldImport, ReadsThePilesOfAStoragePit)
 	EXPECT_EQ(piles[0].row, PotInfo::StoragePitFoodPile);
 	EXPECT_EQ(piles[0].amount, 300U);
 	EXPECT_TRUE(piles[0].poisoned);
+	EXPECT_FALSE(piles[0].calling);
 	EXPECT_EQ(piles[1].row, PotInfo::WoodPile_2);
 	EXPECT_EQ(piles[1].amount, 5000U);
 	EXPECT_FALSE(piles[1].poisoned);
+	// The second flag says that the pile called the living to it
+	EXPECT_TRUE(piles[1].calling);
 	EXPECT_EQ(piles[1].rise.offset, 0.5f);
 	EXPECT_EQ(piles[1].rise.target, 1.5f);
 	EXPECT_EQ(piles[1].rise.currentSpeed, 3.5f);

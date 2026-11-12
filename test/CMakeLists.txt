@@ -813,6 +813,7 @@ openblack_setup_and_add_test(
 openblack_setup_and_add_test(
   test_site_pile_reaction test_site_pile_reaction.cpp
 )
+openblack_setup_and_add_test(test_pot_call test_pot_call.cpp)
 openblack_setup_and_add_test(
   test_creature_action_agendas test_creature_action_agendas.cpp
 )

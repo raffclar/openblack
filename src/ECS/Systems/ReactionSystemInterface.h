@@ -100,8 +100,9 @@ public:
 		/// Whether it spreads to more living things in its turn. A hand that holds its initiator can stop it.
 		bool spreads {true};
 		/// Whether the deletion of its initiator stops the living things that react to it. The reactions of a creature,
-		/// a building, a magic tree, a miracle and of some other things stop in this way. The reactions of other things
-		/// go without a stop. A saved game does not keep this value, because the initiator gives it again.
+		/// a building, a magic tree, a miracle, a pot that called the living and of some other things stop in this way.
+		/// The reactions of other things go without a stop. A saved game does not keep this value, because the initiator
+		/// gives it again.
 		bool stopsGroupWhenGone {false};
 
 		/// Gives the values that a saved game keeps to a visitor
@@ -124,7 +125,8 @@ public:
 	virtual void Move(uint32_t id, const glm::vec3& position, const glm::vec3& velocity, float strength) = 0;
 	/// A reaction going on, by its id
 	[[nodiscard]] virtual std::optional<Active> Find(uint32_t id) const = 0;
-	/// Every reaction an initiator made goes, as when a miracle goes
+	/// Every reaction an initiator made goes, the newest first, as when a miracle goes. The living things that react to
+	/// them stop.
 	virtual void RemoveFrom(entt::entity initiator) = 0;
 	/// The reactions of one kind an initiator made go, as a magic tree that catches fire stops being looked at
 	virtual void RemoveFrom(entt::entity initiator, Reaction type) = 0;
@@ -137,6 +139,9 @@ public:
 	virtual void SpreadAgain(entt::entity /*initiator*/) {}
 	/// A reaction now comes from another object, as a fire's alarm follows the fire to what its object became
 	virtual void SetInitiator(uint32_t id, entt::entity initiator) = 0;
+	/// The initiator changed in a way that changes what its deletion does to the living things that react to it, as a
+	/// pot that calls the living. Each reaction of the initiator finds this again.
+	virtual void UpdateDeletionStop(entt::entity /*initiator*/) {}
 	/// The newest reaction that an initiator made now belongs to another player, as when a creature becomes a player's
 	virtual void SetPlayerOfNewest(entt::entity /*initiator*/, PlayerNames /*player*/) {}
 	/// The dance villagers taking a reaction up dance in, which goes when the reaction goes

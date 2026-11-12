@@ -253,10 +253,11 @@ public:
 	virtual void LeaveRootsHole(entt::entity tree, const glm::vec3& place, const glm::mat3& rotation, float scale) = 0;
 	/// Make the land's draw list again on the next frames, this number of frames
 	virtual void RemakeDrawList(uint32_t frames) = 0;
-	/// A pot taken stops calling the people to it
+	/// The call of a pot that the hand takes is removed. When the pot called the people, all its reactions end.
 	virtual void RemovePotReaction(entt::entity pot) = 0;
-	/// A pot let go over the land calls the people to it again, when it calls nobody yet, for the player letting it go
-	virtual void SetUpPotReaction(entt::entity pot, PlayerNames player) = 0;
+	/// A pot let go over the land calls the people to it again, when it has no reaction and its call was removed. The
+	/// call belongs to the player of the pot, not to the player that lets it go.
+	virtual void SetUpPotReaction(entt::entity pot) = 0;
 	/// Where a thing is drawn, its scaled axes and its origin
 	struct Pose
 	{

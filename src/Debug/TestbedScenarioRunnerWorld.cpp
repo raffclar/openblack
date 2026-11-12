@@ -102,6 +102,7 @@
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/CreatureFromFile.h"
 #include "ECS/Dances.h"
+#include "ECS/PotCall.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
@@ -873,6 +874,15 @@ void Runner::PlaceObjects(const Scenario& scenario, glm::vec2 middle)
 		if (object.alight && Locator::fireSystem::has_value())
 		{
 			Locator::fireSystem::value().SetOnFire(_objects.back(), 0.0f);
+		}
+		if (auto* pot = Locator::entitiesRegistry::value().TryGet<ecs::components::Pot>(_objects.back());
+		    object.potCall && pot != nullptr && Locator::reactionSystem::has_value() && Locator::infoConstants::has_value())
+		{
+			const auto& placed = Locator::entitiesRegistry::value().Get<const ecs::components::Transform>(_objects.back());
+			const auto call = Locator::infoConstants::value().pot.at(static_cast<size_t>(pot->type)).associatedReaction;
+			ecs::pot_call::Make(
+			    _objects.back(), *pot, Locator::reactionSystem::value(),
+			    {.initiator = _objects.back(), .type = call, .player = PlayerNames::NEUTRAL, .position = placed.position});
 		}
 		if (object.reaction.has_value() && Locator::reactionSystem::has_value())
 		{

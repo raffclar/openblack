@@ -49,6 +49,8 @@ uint32_t ReactionOf(const VanillaWorld& world, const VanillaRecord& record)
 
 /// The flag of a pot whose food is poisoned
 constexpr uint8_t k_PotPoisonedFlag = 0x01;
+/// The flag of a pot that called the living to it
+constexpr uint8_t k_PotCallingFlag = 0x02;
 
 /// The move states that the file gives a thing that does not walk: no state, arrived and the final step
 constexpr std::array<uint8_t, 3> k_StillMoveStates = {0x00, 0x01, 0x04};
@@ -712,6 +714,7 @@ std::optional<ImportedPile> ReadPile(const VanillaWorld& world, const VanillaRec
 	                     .heading = world.Float(record, "heading").value_or(0.0f),
 	                     .amount = *amount,
 	                     .poisoned = (world.Byte(record, "potFlags").value_or(0) & k_PotPoisonedFlag) != 0,
+	                     .calling = (world.Byte(record, "potFlags").value_or(0) & k_PotCallingFlag) != 0,
 	                     .rise = PileRiseOf(rise.first<k_PileRiseBytes>())};
 }
 

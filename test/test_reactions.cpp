@@ -63,6 +63,7 @@
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/Dances.h"
 #include "ECS/PhysicsEntry.h"
+#include "ECS/PotCall.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Reflection/ComponentReflection.h"
 #include "ECS/Registry.h"
@@ -3105,30 +3106,102 @@ TEST_F(ReactionsOfAGoneThing, APotStopsTheGroupsOfAllItsReactionsOnlyWhenItCalle
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	registry.Assign<Pot>(_thing, Pot {.amount = 10, .maxAmount = 100, .type = PotInfo::FoodPot});
-	// A reaction of another kind than the call of the pot does not stop its group
-	auto& callOfPot = _info->pot.at(static_cast<size_t>(PotInfo::FoodPot)).associatedReaction;
-	callOfPot = Reaction::ReactToFood;
-	Locator::infoConstants::emplace(*_info);
+	// A pot that did not call: its reaction goes without a stop of its group, also when it has the kind of the call
 	const auto other = MakeReaction(Reaction::LookAtObject);
 	registry.Destroy(_thing);
 	_reactions.ProcessTurn();
 	EXPECT_FALSE(_reactions.IsActive(other));
 	EXPECT_TRUE(_animals->stopped.empty());
-	// The call of a pot stops its group
-	callOfPot = Reaction::LookAtObject;
-	Locator::infoConstants::emplace(*_info);
+	// A pot that called: the deletion stops the group of each of its reactions
 	_thing = registry.Create();
 	registry.Assign<Transform>(_thing, k_Here, glm::mat3(1.0f), glm::vec3(1.0f));
-	registry.Assign<Pot>(_thing, Pot {.amount = 10, .maxAmount = 100, .type = PotInfo::FoodPot});
+	auto& pot = registry.Assign<Pot>(_thing, Pot {.amount = 10, .maxAmount = 100, .type = PotInfo::FoodPot});
 	for (const auto cow : _cows)
 	{
 		registry.Remove<LivingReaction>(cow);
 	}
-	const auto call = MakeReaction(Reaction::LookAtObject);
+	auto call = Miracle(Reaction::LookAtObject);
+	call.initiator = _thing;
+	const auto id = pot_call::Make(_thing, pot, _reactions, call);
+	ASSERT_TRUE(id.has_value());
+	for (const auto cow : _cows)
+	{
+		ASSERT_EQ(registry.Get<const LivingReaction>(cow).reaction, *id);
+	}
 	registry.Destroy(_thing);
 	_reactions.ProcessTurn();
-	EXPECT_FALSE(_reactions.IsActive(call));
+	EXPECT_FALSE(_reactions.IsActive(*id));
 	EXPECT_EQ(_animals->stops, (std::vector<bool> {true, true}));
+}
+
+TEST_F(ReactionsOfAGoneThing, TheDeletionOfAPotWhoseCallEndedStopsTheGroupsOfItsOtherReactions)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto& pot = registry.Assign<Pot>(_thing, Pot {.amount = 10, .maxAmount = 100, .type = PotInfo::FoodPot});
+	// The pot calls, and its call ends. The pot keeps that it called.
+	auto call = Miracle(Reaction::ReactToFood);
+	call.initiator = _thing;
+	const auto id = pot_call::Make(_thing, pot, _reactions, call);
+	ASSERT_TRUE(id.has_value());
+	_reactions.Remove(*id);
+	ASSERT_TRUE(pot.calling);
+	_animals->stopped.clear();
+	_animals->stops.clear();
+	for (const auto cow : _cows)
+	{
+		registry.Remove<LivingReaction>(cow);
+	}
+	// A later reaction of the pot of another kind, as when the pot flies
+	const auto other = MakeReaction(Reaction::LookAtObject);
+	registry.Destroy(_thing);
+	_reactions.ProcessTurn();
+	EXPECT_FALSE(_reactions.IsActive(other));
+	EXPECT_EQ(_animals->stops, (std::vector<bool> {true, true}));
+}
+
+TEST_F(ReactionsOfAGoneThing, TheCallOfAPotMakesItsEarlierReactionsStopTheirGroupWhenThePotGoes)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto& pot = registry.Assign<Pot>(_thing, Pot {.amount = 10, .maxAmount = 100, .type = PotInfo::FoodPot});
+	const auto other = MakeReaction(Reaction::LookAtObject);
+	const auto stopsOf = [this](uint32_t id) { return _reactions.Find(id).value().stopsGroupWhenGone; };
+	EXPECT_FALSE(stopsOf(other));
+	auto call = Miracle(Reaction::ReactToFood);
+	call.initiator = _thing;
+	ASSERT_TRUE(pot_call::Make(_thing, pot, _reactions, call).has_value());
+	EXPECT_TRUE(stopsOf(other));
+}
+
+TEST_F(ReactionsOfAGoneThing, TheRemovalOfTheCallOfAPotEndsAllItsReactionsOnlyWhenItCalled)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto& pot = registry.Assign<Pot>(_thing, Pot {.amount = 10, .maxAmount = 100, .type = PotInfo::FoodPot});
+	const auto other = MakeReaction(Reaction::LookAtObject);
+	// A pot that did not call keeps its reaction
+	pot_call::Remove(_thing, pot, _reactions);
+	EXPECT_TRUE(_reactions.IsActive(other));
+	EXPECT_TRUE(_animals->stopped.empty());
+	// A pot that called ends all its reactions, and their groups stop
+	pot.calling = true;
+	pot_call::Remove(_thing, pot, _reactions);
+	EXPECT_FALSE(pot.calling);
+	EXPECT_FALSE(_reactions.IsActive(other));
+	EXPECT_EQ(_animals->stops, (std::vector<bool> {true, true}));
+}
+
+TEST_F(ReactionsOfAGoneThing, TheRemovalOfAllTheReactionsOfAThingEndsTheNewestFirst)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto older = MakeReaction(Reaction::LookAtObject);
+	// Only the second cow takes the newer reaction
+	registry.Remove<LivingReaction>(_cows[1]);
+	auto source = Miracle(Reaction::LookAtObject);
+	source.initiator = _thing;
+	const auto newer = _reactions.Create(source);
+	ASSERT_EQ(registry.Get<const LivingReaction>(_cows[0]).reaction, older);
+	ASSERT_EQ(registry.Get<const LivingReaction>(_cows[1]).reaction, newer);
+	_reactions.RemoveFrom(_thing);
+	EXPECT_EQ(_animals->stopped, (std::vector<entt::entity> {_cows[1], _cows[0]}));
 }
 
 TEST_F(ReactionsOfAGoneThing, TheReactionOfAVillagerGoesWhenTheVillagerDies)

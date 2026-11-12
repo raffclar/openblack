@@ -438,6 +438,9 @@ struct ObjectSetup
 	/// The thing makes a reaction of this kind as it is made, as the game makes one about a thing (a thing coming to rest
 	/// makes one to look at it), by the scenario's player
 	std::optional<Reaction> reaction;
+	/// A pot calls the living to it as it is made, as a pile that the game makes, for the neutral player. The pot calls
+	/// one time, until the removal of its call.
+	bool potCall {false};
 	/// A tree lies dead, as a land's script makes a dead tree, rather than standing and growing
 	bool dead {false};
 	/// The lean of a dead tree or a mobile static about x and z, in degrees, as a land's script gives it

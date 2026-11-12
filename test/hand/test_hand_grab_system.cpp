@@ -298,7 +298,7 @@ public:
 		drawListFrames.push_back(frames);
 	}
 	void RemovePotReaction(entt::entity) override {}
-	void SetUpPotReaction(entt::entity pot, PlayerNames) override { potReactionsSetUp.push_back(pot); }
+	void SetUpPotReaction(entt::entity pot) override { potReactionsSetUp.push_back(pot); }
 	[[nodiscard]] Pose PoseOf(entt::entity object) const override
 	{
 		const auto& transform = registry.Get<const Transform>(object);

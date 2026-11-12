@@ -50,6 +50,7 @@
 #include "ECS/GameEndConditions.h"
 #include "ECS/Graveyards.h"
 #include "ECS/PlacedTurn.h"
+#include "ECS/PotCall.h"
 #include "ECS/Registry.h"
 #include "ECS/Statistics.h"
 #include "ECS/Systems/BuildingDamageSystemInterface.h"
@@ -189,17 +190,14 @@ void CallForLeftoverWood(entt::entity pile)
 	{
 		return;
 	}
-	auto& reactions = Locator::reactionSystem::value();
-	const auto type =
-	    Locator::infoConstants::value().pot.at(static_cast<size_t>(registry.Get<const Pot>(pile).type)).associatedReaction;
-	if (type == Reaction::None || reactions.HasReaction(pile))
-	{
-		return;
-	}
-	reactions.Create({.initiator = pile,
-	                  .type = type,
-	                  .player = PlayerNames::NEUTRAL,
-	                  .position = registry.Get<const Transform>(pile).position});
+	// The pile calls the living to it, when it did not call before or its call was removed
+	auto& pot = registry.Get<Pot>(pile);
+	const auto type = Locator::infoConstants::value().pot.at(static_cast<size_t>(pot.type)).associatedReaction;
+	pot_call::Make(pile, pot, Locator::reactionSystem::value(),
+	               {.initiator = pile,
+	                .type = type,
+	                .player = PlayerNames::NEUTRAL,
+	                .position = registry.Get<const Transform>(pile).position});
 }
 
 } // namespace

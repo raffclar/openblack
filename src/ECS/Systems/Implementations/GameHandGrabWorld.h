@@ -103,7 +103,7 @@ public:
 	void LeaveRootsHole(entt::entity tree, const glm::vec3& place, const glm::mat3& rotation, float scale) override;
 	void RemakeDrawList(uint32_t frames) override;
 	void RemovePotReaction(entt::entity pot) override;
-	void SetUpPotReaction(entt::entity pot, PlayerNames player) override;
+	void SetUpPotReaction(entt::entity pot) override;
 	[[nodiscard]] Pose PoseOf(entt::entity object) const override;
 	[[nodiscard]] Pose PullStartPoseOf(entt::entity object) const override;
 	[[nodiscard]] glm::vec3 ReportedHandPlace() const override;

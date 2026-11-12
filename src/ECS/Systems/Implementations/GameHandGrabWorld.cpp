@@ -84,6 +84,7 @@
 #include "ECS/PlacedTurn.h"
 #include "ECS/PlayerMiracles.h"
 #include "ECS/PlayerRelations.h"
+#include "ECS/PotCall.h"
 #include "ECS/Registry.h"
 #include "ECS/RegistryContext.h"
 #include "ECS/ReportedCamera.h"
@@ -1036,23 +1037,18 @@ void GameHandGrabWorld::LeaveRootsHole(entt::entity tree, const glm::vec3& place
 
 void GameHandGrabWorld::RemovePotReaction(entt::entity pot)
 {
-	const auto* data = Locator::entitiesRegistry::value().TryGet<const Pot>(pot);
-	const auto* info = Info();
-	if (data == nullptr || info == nullptr || !Locator::reactionSystem::has_value())
+	auto* data = Locator::entitiesRegistry::value().TryGet<Pot>(pot);
+	if (data == nullptr || !Locator::reactionSystem::has_value())
 	{
 		return;
 	}
-	const auto reaction = info->pot.at(static_cast<size_t>(data->type)).associatedReaction;
-	if (reaction != Reaction::None)
-	{
-		Locator::reactionSystem::value().RemoveFrom(pot, reaction);
-	}
+	pot_call::Remove(pot, *data, Locator::reactionSystem::value());
 }
 
-void GameHandGrabWorld::SetUpPotReaction(entt::entity pot, PlayerNames player)
+void GameHandGrabWorld::SetUpPotReaction(entt::entity pot)
 {
 	auto& registry = Locator::entitiesRegistry::value();
-	const auto* data = registry.TryGet<const Pot>(pot);
+	auto* data = registry.TryGet<Pot>(pot);
 	const auto* transform = registry.TryGet<const Transform>(pot);
 	const auto* info = Info();
 	if (data == nullptr || transform == nullptr || info == nullptr || !Locator::reactionSystem::has_value())
@@ -1063,7 +1059,11 @@ void GameHandGrabWorld::SetUpPotReaction(entt::entity pot, PlayerNames player)
 	const auto reaction = info->pot.at(static_cast<size_t>(data->type)).associatedReaction;
 	if (reaction != Reaction::None && !reactions.HasReaction(pot))
 	{
-		reactions.Create({.initiator = pot, .type = reaction, .player = player, .position = transform->position});
+		pot_call::Make(pot, *data, reactions,
+		               {.initiator = pot,
+		                .type = reaction,
+		                .player = pot_call::FreePlayerOf(registry, pot),
+		                .position = transform->position});
 	}
 }
 

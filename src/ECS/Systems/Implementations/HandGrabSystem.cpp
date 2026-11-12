@@ -1570,7 +1570,7 @@ void HandGrabSystem::LetGo(HandGrab& grab, glm::vec3 velocity, const std::option
 	if (!forced && registry.AllOf<Pot>(object))
 	{
 		// Let go over the land, a pot calls the people to it again before it is poured or thrown
-		_world->SetUpPotReaction(object, player);
+		_world->SetUpPotReaction(object);
 	}
 	// A pot let go slowly is poured out where it is, onto what takes it or into a pile
 	if (registry.AllOf<Pot>(object) && hand_grab::PotPours(velocity))

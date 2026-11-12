@@ -100,6 +100,7 @@ void openblack::ecs::reflection::RegisterFields_Components_p(entt::meta_ctx& con
 	    .Field<&components::Pot::maxAmount>("maxAmount")
 	    .Field<&components::Pot::type>("type")
 	    .Field<&components::Pot::poisoned>("poisoned")
+	    .Field<&components::Pot::calling>("calling")
 	    .Field<&components::Pot::town>("town");
 	Reflect<components::PrayerPower>(context)
 	    .Field<&components::PrayerPower::chants>("chants")

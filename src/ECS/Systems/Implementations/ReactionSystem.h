@@ -36,6 +36,7 @@ public:
 	[[nodiscard]] std::optional<Active> Find(uint32_t id) const override;
 	void RemoveFrom(entt::entity initiator) override;
 	void RemoveFrom(entt::entity initiator, Reaction type) override;
+	void UpdateDeletionStop(entt::entity initiator) override;
 	void StopSpreadInHand(entt::entity initiator) override;
 	void SpreadAgain(entt::entity initiator) override;
 	std::vector<uint32_t> Restore(std::span<const Restored> reactions, uint32_t turn) override;

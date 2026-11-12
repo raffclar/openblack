@@ -680,6 +680,27 @@ void openblack::testbed_scenarios::AddTownGrowthScenarios(std::vector<Scenario>&
 	    .commands = {{.kind = Command::Kind::RemoveObject, .delaySeconds = 6.0f, .object = 0}},
 	});
 
+	// Villagers that a pot calls, and the removal of the call as the hand takes the pot
+	all.push_back({
+	    .id = "villagers.pot_call_removed",
+	    .name = "Villagers called by a pot that the hand takes",
+	    .facet = Facet::Objects,
+	    .description = "A pot of food in the middle of open land calls the living to it, as a pile that the game makes. "
+	                   "Three villagers stand in a line east of it, 6, 12 and 18 metres away. Six seconds in, the hand "
+	                   "takes the pot.",
+	    .expected = "Each villager takes up the call and goes to the pot. When the hand takes the pot, the call is removed "
+	                "and all the reactions of the pot end: each villager stops at once and goes back to what it did. The "
+	                "inspector shows no reaction of the pot after the take. The villagers have no town, so each starts as "
+	                "a vagrant.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-4.0f, -6.0f}, {22.0f, 6.0f}}, .distance = 0.5f},
+	    .objects = {{.type = PotInfo::FoodPot, .offset = {0.0f, 0.0f}, .amount = 500, .potCall = true},
+	                {.type = VillagerInfo::CelticFarmerMale, .offset = {6.0f, 0.0f}, .yawDegrees = 0.0f},
+	                {.type = VillagerInfo::CelticForesterMale, .offset = {12.0f, 0.0f}, .yawDegrees = 0.0f},
+	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {18.0f, 0.0f}, .yawDegrees = 0.0f}},
+	    .commands = {{.kind = Command::Kind::HandTake, .delaySeconds = 6.0f, .object = 0}},
+	});
+
 	// A villager under the control of a script takes up no reaction until the script releases it
 	all.push_back({
 	    .id = "villagers.script_release_reacts",

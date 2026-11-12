@@ -63,6 +63,7 @@
 #include "ECS/MainStoragePitRules.h"
 #include "ECS/Map.h"
 #include "ECS/PlayerTowns.h"
+#include "ECS/PotCall.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
 #include "ECS/Statistics.h"
@@ -587,7 +588,7 @@ void TownSystem::SetStoragePit(entt::entity town, entt::entity pit)
 	for (size_t slot = 0; slot < temporary_store::k_Kinds; ++slot)
 	{
 		const auto pile = std::exchange(component->temporaryStores.at(slot), entt::null);
-		const auto* pot = pile != entt::null && registry.Valid(pile) ? registry.TryGet<const Pot>(pile) : nullptr;
+		auto* pot = pile != entt::null && registry.Valid(pile) ? registry.TryGet<Pot>(pile) : nullptr;
 		switch (temporary_store::OnNewStoragePit(pot != nullptr, pot != nullptr ? pot->amount : 0))
 		{
 		case temporary_store::NewPitStep::None:
@@ -597,14 +598,15 @@ void TownSystem::SetStoragePit(entt::entity town, entt::entity pit)
 			break;
 		case temporary_store::NewPitStep::Release:
 		{
-			// It calls those about to come for it, as a pile of the neutral player
+			// It calls those about to come for it, as a pile of the neutral player, when it did not call before
 			const auto reaction = Locator::infoConstants::value().pot.at(static_cast<size_t>(pot->type)).associatedReaction;
-			if (reaction != Reaction::None && Locator::reactionSystem::has_value())
+			if (Locator::reactionSystem::has_value())
 			{
-				Locator::reactionSystem::value().Create({.initiator = pile,
-				                                         .type = reaction,
-				                                         .player = PlayerNames::NEUTRAL,
-				                                         .position = registry.Get<const Transform>(pile).position});
+				pot_call::Make(pile, *pot, Locator::reactionSystem::value(),
+				               {.initiator = pile,
+				                .type = reaction,
+				                .player = PlayerNames::NEUTRAL,
+				                .position = registry.Get<const Transform>(pile).position});
 			}
 			break;
 		}

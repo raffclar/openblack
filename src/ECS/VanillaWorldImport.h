@@ -361,6 +361,8 @@ struct ImportedPile
 	float heading {0.0f};
 	uint32_t amount {0};
 	bool poisoned {false};
+	/// It called the living to it, and its call was not removed after that
+	bool calling {false};
 	/// How it rises out of the ground or sinks into it
 	magic::piles::Rise rise {};
 };

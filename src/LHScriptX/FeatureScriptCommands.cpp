@@ -63,6 +63,7 @@
 #include "ECS/Components/LandForest.h"
 #include "ECS/Components/MiracleImpression.h"
 #include "ECS/Components/Mobile.h"
+#include "ECS/Components/Pot.h"
 #include "ECS/Components/SpellDispenser.h"
 #include "ECS/Components/Stream.h"
 #include "ECS/Components/Temple.h"
@@ -75,6 +76,7 @@
 #include "ECS/GamePlayers.h"
 #include "ECS/MobileObjectRecord.h"
 #include "ECS/PlayerTowns.h"
+#include "ECS/PotCall.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
 #include "ECS/Systems/ArtefactSystemInterface.h"
@@ -899,7 +901,9 @@ void FeatureScriptCommands::CreatePot(glm::vec3 position, PotInfo type, int32_t 
 	const auto& info = Locator::infoConstants::value().pot.at(static_cast<size_t>(type));
 	if (magic::piles::ReactsWhenMade(info.potType, info.associatedReaction, true))
 	{
-		Locator::reactionSystem::value().Create(
+		auto& data = Locator::entitiesRegistry::value().Get<ecs::components::Pot>(pot);
+		ecs::pot_call::Make(
+		    pot, data, Locator::reactionSystem::value(),
 		    {.initiator = pot, .type = info.associatedReaction, .player = PlayerNames::NEUTRAL, .position = position});
 	}
 }

@@ -241,6 +241,7 @@ void PutPileValues(ecs::Registry& registry, entt::entity entity, const world_imp
 	auto& pot = registry.Get<Pot>(entity);
 	pot.amount = file.amount;
 	pot.poisoned = file.poisoned;
+	pot.calling = file.calling;
 	// The pile goes on from the rise of the file and does not rise again out of the ground
 	if (auto* pile = registry.TryGet<ResourcePile>(entity); pile != nullptr)
 	{
