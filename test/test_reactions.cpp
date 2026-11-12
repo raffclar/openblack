@@ -3139,7 +3139,7 @@ TEST_F(ReactionsOfAGoneThing, TheDeletionOfAPotWhoseCallEndedStopsTheGroupsOfIts
 	auto& registry = Locator::entitiesRegistry::value();
 	auto& pot = registry.Assign<Pot>(_thing, Pot {.amount = 10, .maxAmount = 100, .type = PotInfo::FoodPot});
 	// The pot calls, and its call ends. The pot keeps that it called.
-	auto call = Miracle(Reaction::ReactToFood);
+	auto call = Miracle(Reaction::LookAtObject);
 	call.initiator = _thing;
 	const auto id = pot_call::Make(_thing, pot, _reactions, call);
 	ASSERT_TRUE(id.has_value());

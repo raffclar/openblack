@@ -399,13 +399,13 @@ entt::entity object_physics::EndPot(systems::DynamicsSystemInterface& dynamics, 
 	// On the land it first calls the living to it, when it did not call before. Then it flickers out and spills into the
 	// stores and piles round it, or makes a pile. It goes before the spill, so that it cannot take back what it spills.
 	bool calls = false;
-	if (auto* handful = registry.TryGet<Pot>(pot);
-	    handful != nullptr && Locator::reactionSystem::has_value() && Locator::infoConstants::has_value())
+	if (auto* held = registry.TryGet<Pot>(pot);
+	    held != nullptr && Locator::reactionSystem::has_value() && Locator::infoConstants::has_value())
 	{
-		const auto call = Locator::infoConstants::value().pot.at(static_cast<size_t>(handful->type)).associatedReaction;
-		pot_call::Make(pot, *handful, Locator::reactionSystem::value(),
+		const auto call = Locator::infoConstants::value().pot.at(static_cast<size_t>(held->type)).associatedReaction;
+		pot_call::Make(pot, *held, Locator::reactionSystem::value(),
 		               {.initiator = pot, .type = call, .player = pot_call::FreePlayerOf(registry, pot), .position = position});
-		calls = handful->calling;
+		calls = held->calling;
 	}
 	auto& stores = Locator::resourceStoreSystem::value();
 	const auto resource = stores.ResourceOf(pot);
