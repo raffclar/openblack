@@ -973,8 +973,6 @@ struct Commands
 	/// creature_eyes::RestedOpenness). This comes before the eyes of this turn.
 	bool restEyes {false};
 	Eyes eyes {Eyes::Unchanged};
-	/// Whether the head turns to whatever is interesting this turn
-	bool lookAbout {false};
 	/// Where to go, or to stop going
 	std::optional<Movement> move;
 	bool stopMoving {false};

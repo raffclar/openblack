@@ -439,7 +439,6 @@ TEST(CreatureIdleMind, BeingIdleIsWaitingThenYawningTwice)
 			EXPECT_EQ(mind.agenda.size(), 4u);
 			ASSERT_TRUE(commands.face.has_value());
 			EXPECT_EQ(commands.face->face, creature_face::Face::Grimace);
-			EXPECT_TRUE(commands.lookAbout);
 		}
 		if (commands.playOnce.has_value())
 		{
@@ -1285,7 +1284,8 @@ TEST(CreatureIdleMind, HangingAroundStartsWithAWalkHome)
 	senses.bodyBusy = false;
 	EXPECT_FALSE(creature_mind::Think(mind, senses, random).move.has_value());
 	EXPECT_EQ(mind.step, 1u);
-	EXPECT_TRUE(creature_mind::Think(mind, senses, random).lookAbout);
+	// The wait has no look of its own, so the head looks about
+	EXPECT_FALSE(mind.agenda.at(1).gaze.has_value());
 }
 
 TEST(CreatureIdleMind, HangingAroundGoesOutFromHomeAwayFromTheTemple)
@@ -1509,7 +1509,6 @@ TEST(CreatureNeedsMind, ItSleepsWithItsEyesClosedUntilRested)
 			EXPECT_NE(commands.eyes, creature_mind::Eyes::Closed);
 		}
 		EXPECT_FALSE(commands.endSit);
-		EXPECT_FALSE(commands.lookAbout);
 		body.Obey(commands, 1);
 	}
 	auto senses = body.Senses();
