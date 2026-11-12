@@ -466,6 +466,10 @@ void LandShadowBake::Update(bool rowsFromFarEnd, Casters casters)
 	if (_texture == nullptr || texels != _texels || side != _side || extent.minimum != _extentMin ||
 	    rowsFromFarEnd != _rowsFromFarEnd || casters != _casters)
 	{
+		if (_texture != nullptr && casters != _casters)
+		{
+			++_castersChanges;
+		}
 		Reset();
 		_texels = texels;
 		_side = side;

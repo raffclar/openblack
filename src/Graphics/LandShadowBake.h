@@ -65,6 +65,8 @@ public:
 	/// Bakes again the blocks whose casters changed since the last time. Rows run along z as the island's other textures
 	/// do: from its far end down when the renderer's textures start at the top.
 	void Update(bool rowsFromFarEnd, Casters casters);
+	/// How many times an update got other casters than the update before it (the debug menu can change them)
+	[[nodiscard]] uint32_t GetCastersChanges() const noexcept { return _castersChanges; }
 	/// Forgets everything, so the next update bakes the whole island
 	void Reset();
 	/// Starts the test of the watched things on a thread of its own, before the next update needs its answer. The draw
@@ -189,6 +191,7 @@ private:
 	glm::vec2 _extentMin {0.0f};
 	bool _rowsFromFarEnd {false};
 	Casters _casters {};
+	uint32_t _castersChanges {0};
 	std::unordered_map<entt::entity, Baked> _baked;
 	/// The things that the last full look at the casters found, the count of the casters' changes and the number of
 	/// models then. While all stay the same, the bake does not look at the casters again.
