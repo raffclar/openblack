@@ -75,8 +75,7 @@ void ProcessGlobalTurn(uint32_t turn, int32_t frameRate);
 /// increases the lines of code on once more.
 [[nodiscard]] statistics::BoxFigures Box();
 
-/// A creature ate a magic mushroom or a toadstool, or dropped a lump of poo
-void CountCreatureMushroom(ecs::Registry& registry, entt::entity creature);
+/// A creature dropped a lump of poo
 void CountCreaturePoo(ecs::Registry& registry, entt::entity creature);
 /// What the player's creature, the first they got, counts of its life; its fights and the fights it won are its
 /// fight record's. Nothing without a creature.

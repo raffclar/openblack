@@ -691,6 +691,9 @@ bool LandSystem::LoadSavedLand(const std::filesystem::path& landPath, const std:
 	{
 		View().BeginLoadingScreen(loading::LoadingClock::Mode::Tips);
 	}
+	// The renderer keeps the picture of the sky's dome through the load, so the dome keeps how far it follows the sky.
+	// Keep the dome before the start of the land, because the start puts the clock at noon and builds the dome again.
+	Locator::skyClockSystem::value().KeepShownDome();
 	PrepareNewLand(land_change::Kind::SavedGame);
 	_landPath = landPath;
 	// The saved world gives the start place of the camera again. A save from an older version does not keep it, so the
@@ -756,8 +759,6 @@ bool LandSystem::LoadSavedLand(const std::filesystem::path& landPath, const std:
 	// The saved world takes the place of every entity that the land made, the hand and the sky included. The players
 	// that go with them are forgotten.
 	auto& registry = Locator::entitiesRegistry::value();
-	// The renderer keeps the picture of the sky's dome through the load, so the dome keeps how far it follows the sky
-	Locator::skyClockSystem::value().KeepShownDome();
 	registry.Reset();
 	// The things that only the frames make go with the things of the land that they go with. The sky's clouds stay, as
 	// the land laid them out when it loaded: a save does not keep the clouds.
