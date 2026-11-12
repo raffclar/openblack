@@ -1471,17 +1471,15 @@ void testbed_scenarios::AddLight(std::vector<Scenario>& all)
 	    .id = "light.coarse_edges_snow",
 	    .name = "The edges of far land blocks keep a mix of their old snow",
 	    .facet = Facet::Light,
-	    .description = "Snow 40 deep lies over the whole island and a blizzard falls on it at noon. The camera is high "
-	                   "and looks far over the land, to the band where the coarse texture of the land fades in. A tree "
-	                   "stands in the middle.",
-	    .expected = "In the band, a square of the land that turns whiter keeps edges that are a little less white than "
-	                "its middle. Each edge is a line about 5 units wide. The edge becomes as white as the middle only "
-	                "after more steps of the square or of the square next to it. A corner of a square can show a "
-	                "different white from both its edges.",
-	    .environment =
-	        {.hour = 12.0f, .clockRuns = false, .weather = Weather::Blizzard, .dispenserGrid = false, .snowDepth = 40.0f},
-	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 300.0f, -700.0f}, .look = {0.0f, 0.0f, 300.0f}},
-	    .objects = {{.type = TreeInfo::Conifer, .offset = {0.0f, 300.0f}, .scale = 1.5f}},
+	    .description = "Snow 120 deep lies over the whole island on a clear day at noon, and it melts. The camera is "
+	                   "high and looks far over the land, to the band where the coarse texture of the land fades in. A "
+	                   "tree stands in the middle.",
+	    .expected = "In the far band, the edges between the squares of the land show a thin line of snow. When a "
+	                "square loses some of its white, the line on its edge keeps a part of the old white. The line "
+	                "changes again only at the next step of the square or of the square next to it.",
+	    .environment = {.hour = 12.0f, .clockRuns = false, .dispenserGrid = false, .snowDepth = 120.0f},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 300.0f, -400.0f}, .look = {0.0f, 0.0f, 600.0f}},
+	    .objects = {{.type = TreeInfo::Conifer, .offset = {0.0f, 120.0f}, .scale = 1.5f}},
 	});
 
 	all.push_back({

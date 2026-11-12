@@ -190,9 +190,9 @@ const Texture2D* Renderer::PaintLandSnow(std::span<const glm::ivec2> drawn) cons
 	const auto requests = snow.TakePaintRequests();
 	if (requests.all())
 	{
-		// A new land: the first paint of each block's snow goes with the land's own first paint of the block
+		// Each block paints its snow again. On a new land, this paint is also the first paint of the block.
 		_paintedSnow.RequestAll();
-		_snowRepaints.reset();
+		_snowRepaints.set();
 	}
 	else if (requests.any())
 	{
@@ -1086,8 +1086,7 @@ void Renderer::PaintCoarseEdges(glm::vec3 camera, const Texture2D* paintedSnow) 
 			continue;
 		}
 		const auto at = places[index];
-		const bool snowWaits =
-		    !fresh && snowPainted && coarse_edges::OnMap(at) && _paintedSnow.Waits(snow_cover::BlockIndex(at));
+		const bool snowWaits = snowPainted && coarse_edges::OnMap(at) && _paintedSnow.Waits(snow_cover::BlockIndex(at));
 		if (snowWaits || (_landShadowBake && _landShadowBake->Bakes(at)))
 		{
 			hold(index);
