@@ -7,6 +7,8 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#define LOCATOR_IMPLEMENTATIONS
+
 #include <memory>
 
 #include <glm/mat3x3.hpp>
@@ -20,7 +22,6 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/MapProduction.h"
 #include "ECS/Registry.h"
-#define LOCATOR_IMPLEMENTATIONS
 #include "ECS/Systems/Implementations/FireSystem.h"
 #include "ECS/WorldObjects.h"
 #include "Fire/FireModel.h"
