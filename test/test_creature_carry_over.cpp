@@ -7,11 +7,13 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <cmath>
 #include <cstdint>
 
 #include <array>
 #include <filesystem>
 #include <functional>
+#include <limits>
 #include <memory>
 #include <optional>
 #include <span>
@@ -474,6 +476,70 @@ TEST_F(CreatureBodyFile, WhileANiceOrNastySpellIsOnTheFilesAlignmentIsWhatTheSpe
 	ecs::creature_body_file::Apply(registry, both, GrownBody());
 	EXPECT_EQ(spells.spells[creature_spells::Spell::Nice].before, -0.5f);
 	EXPECT_EQ(spells.spells[creature_spells::Spell::Nasty].before, 0.0f);
+}
+
+// A nice or nasty spell keeps the file's alignment as the file has it, also outside -1..1 or not a number. With no
+// spell on, the load holds the value to -1..1, and a value that is not a number becomes -1.
+TEST_F(CreatureBodyFile, WhileANiceOrNastySpellIsOnTheSpellKeepsTheFilesAlignmentAsItIs)
+{
+	using namespace ecs::components;
+	auto& registry = Locator::entitiesRegistry::value();
+	creaturemind::MindFileData file;
+	file.version = 11;
+	file.speciesRow = 1;
+	file.alignment = 3.0f;
+	const auto outside = creature_mind_body::FromMindFile(file);
+	ASSERT_TRUE(outside.has_value());
+	EXPECT_EQ(outside->alignment, 1.0f);
+	EXPECT_EQ(outside->fileAlignment, 3.0f);
+	file.alignment = std::numeric_limits<float>::quiet_NaN();
+	const auto notANumber = creature_mind_body::FromMindFile(file);
+	ASSERT_TRUE(notANumber.has_value());
+	EXPECT_EQ(notANumber->alignment, -1.0f);
+
+	for (const auto spell : {creature_spells::Spell::Nice, creature_spells::Spell::Nasty})
+	{
+		const auto creature = MakeCreature(true);
+		registry.Get<Creature>(creature).alignment = 0.9f;
+		auto& spells = registry.Assign<CreatureSpells>(creature);
+		spells.spells[spell].phase = creature_spells::Phase::Holding;
+		ecs::creature_body_file::Apply(registry, creature, *outside);
+		EXPECT_EQ(spells.spells[spell].before, 3.0f);
+		EXPECT_EQ(registry.Get<const Creature>(creature).alignment, 0.9f);
+		ecs::creature_body_file::Apply(registry, creature, *notANumber);
+		EXPECT_TRUE(std::isnan(spells.spells[spell].before));
+		EXPECT_EQ(registry.Get<const Creature>(creature).alignment, 0.9f);
+	}
+
+	const auto plain = MakeCreature(true);
+	ecs::creature_body_file::Apply(registry, plain, *outside);
+	EXPECT_EQ(registry.Get<const Creature>(plain).alignment, 1.0f);
+	ecs::creature_body_file::Apply(registry, plain, *notANumber);
+	EXPECT_EQ(registry.Get<const Creature>(plain).alignment, -1.0f);
+}
+
+// A file older than version 11 sets the alignment to 0 also while a nice or nasty spell is on. The spell keeps the
+// value that it puts back.
+TEST_F(CreatureBodyFile, AFileOlderThanVersion11SetsTheAlignmentTo0WhileASpellIsOn)
+{
+	using namespace ecs::components;
+	auto& registry = Locator::entitiesRegistry::value();
+	creaturemind::MindFileData old;
+	old.version = 10;
+	old.speciesRow = 1;
+	const auto before11 = creature_mind_body::FromMindFile(old);
+	ASSERT_TRUE(before11.has_value());
+	for (const auto spell : {creature_spells::Spell::Nice, creature_spells::Spell::Nasty})
+	{
+		const auto creature = MakeCreature(true);
+		registry.Get<Creature>(creature).alignment = 0.9f;
+		auto& spells = registry.Assign<CreatureSpells>(creature);
+		spells.spells[spell].phase = creature_spells::Phase::Holding;
+		spells.spells[spell].before = 0.2f;
+		ecs::creature_body_file::Apply(registry, creature, *before11);
+		EXPECT_EQ(registry.Get<const Creature>(creature).alignment, 0.0f);
+		EXPECT_EQ(spells.spells[spell].before, 0.2f);
+	}
 }
 
 class CreatureCarryOverSystem: public ::testing::Test
