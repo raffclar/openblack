@@ -9,18 +9,12 @@
 
 #pragma once
 
-#include <cstddef>
 #include <cstdint>
 
-#include <array>
-#include <atomic>
-#include <memory>
 #include <optional>
 #include <tuple>
 #include <type_traits>
-#include <utility>
 
-#include <entt/core/type_info.hpp>
 #include <entt/entity/entity.hpp>
 #include <entt/entity/helper.hpp>
 #include <entt/entity/registry.hpp>
@@ -119,61 +113,32 @@ public:
 	template <typename... Components>
 	[[nodiscard]] bool AllOf(entt::entity entity) const
 	{
-		return (Has<Components>(entity) && ...);
+		return _registry.all_of<Components...>(entity);
 	}
 	template <typename... Components>
 	[[nodiscard]] bool AnyOf(entt::entity entity) const
 	{
-		return (Has<Components>(entity) || ...);
+		return _registry.any_of<Components...>(entity);
 	}
 	template <typename... Components>
 	decltype(auto) Get(entt::entity entity)
 	{
-		if constexpr (sizeof...(Components) == 1u)
-		{
-			return (const_cast<Components&>(std::as_const(*this).template Get<Components>(entity)), ...);
-		}
-		else
-		{
-			return std::forward_as_tuple(Get<Components>(entity)...);
-		}
+		return _registry.get<Components...>(entity);
 	}
 	template <typename... Components>
 	[[nodiscard]] decltype(auto) Get(entt::entity entity) const
 	{
-		if constexpr (sizeof...(Components) == 1u)
-		{
-			return (StoreOf<Components>()->get(entity), ...);
-		}
-		else
-		{
-			return std::forward_as_tuple(Get<Components>(entity)...);
-		}
+		return _registry.get<Components...>(entity);
 	}
 	template <typename... Components>
 	decltype(auto) TryGet(entt::entity entity)
 	{
-		if constexpr (sizeof...(Components) == 1u)
-		{
-			return (const_cast<Components*>(std::as_const(*this).template TryGet<Components>(entity)), ...);
-		}
-		else
-		{
-			return std::make_tuple(TryGet<Components>(entity)...);
-		}
+		return _registry.try_get<Components...>(entity);
 	}
 	template <typename... Components>
 	[[nodiscard]] decltype(auto) TryGet(entt::entity entity) const
 	{
-		if constexpr (sizeof...(Components) == 1u)
-		{
-			const auto* store = StoreOf<Components...>();
-			return (store != nullptr && store->contains(entity)) ? std::addressof(store->get(entity)) : nullptr;
-		}
-		else
-		{
-			return std::make_tuple(TryGet<Components>(entity)...);
-		}
+		return _registry.try_get<Components...>(entity);
 	}
 	template <typename... Components>
 	[[nodiscard]] decltype(auto) Front() const
@@ -276,47 +241,11 @@ protected:
 	entt::registry _registry;
 
 private:
-	/// How many kinds of component the registry keeps the stores of. It finds the store of a later kind at each ask.
-	static constexpr size_t k_KeptStores = 1024;
-
-	/// The store of a kind of component, or none when no entity had the kind yet. The registry searches its stores the first
-	/// time and keeps the store that it finds. A store stays at the same place while the registry exists, and threads
-	/// that read the registry can ask at the same time.
-	template <typename Component>
-	[[nodiscard]] const entt::storage_for_t<std::remove_const_t<Component>>* StoreOf() const
-	{
-		using StoredComponent = std::remove_const_t<Component>;
-		using ComponentStore = entt::storage_for_t<StoredComponent>;
-		const auto index = entt::type_index<StoredComponent>::value();
-		if (index < k_KeptStores)
-		{
-			if (const auto* kept = (*_stores)[index].load(std::memory_order_acquire); kept != nullptr)
-			{
-				return static_cast<const ComponentStore*>(kept);
-			}
-		}
-		const ComponentStore* found = _registry.storage<StoredComponent>();
-		if (found != nullptr && index < k_KeptStores)
-		{
-			(*_stores)[index].store(found, std::memory_order_release);
-		}
-		return found;
-	}
-	template <typename Component>
-	[[nodiscard]] bool Has(entt::entity entity) const
-	{
-		const auto* store = StoreOf<Component>();
-		return store != nullptr && store->contains(entity);
-	}
-
 	void EntityMade(entt::registry& /*registry*/, entt::entity /*entity*/) { ++_entitiesMade; }
 	void EntityGone(entt::registry& /*registry*/, entt::entity /*entity*/) { ++_entitiesGone; }
 	/// A living that goes leaves its flock. A flock that it leaves with no members goes too.
 	void LivingGone(entt::registry& registry, entt::entity living);
 
-	/// The stores that StoreOf found, by the index of their kind
-	std::unique_ptr<std::array<std::atomic<const void*>, k_KeptStores>> _stores {
-	    std::make_unique<std::array<std::atomic<const void*>, k_KeptStores>>()};
 	Drawn _drawn {Drawn::Yes};
 	uint32_t _entitiesMade {0};
 	uint32_t _resets {0};
