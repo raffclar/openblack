@@ -595,7 +595,7 @@ bool CreatureMindSystem::CarryOutForScript(entt::entity creature, std::vector<cr
 	return true;
 }
 
-void CreatureMindSystem::PlanDeath(entt::entity creature, bool ordered)
+void CreatureMindSystem::PlanDeath(entt::entity creature)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	auto* mind = registry.Valid(creature) ? registry.TryGet<CreatureMindState>(creature) : nullptr;
@@ -615,8 +615,7 @@ void CreatureMindSystem::PlanDeath(entt::entity creature, bool ordered)
 	                                                .action = *action,
 	                                                .object = entt::to_integral(creature),
 	                                                .priority = std::numeric_limits<float>::max()};
-	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} lies dead by its {} plan", entt::to_integral(creature),
-	                    ordered ? "ordered" : "forced");
+	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} lies dead by its plan", entt::to_integral(creature));
 }
 
 void CreatureMindSystem::SetScriptFocus(entt::entity creature, std::optional<creature_mind::Gaze> focus)

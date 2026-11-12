@@ -250,8 +250,12 @@ void BeginPlaying(entt::entity creature, CreatureObjectAction& action, CreatureA
 	{
 		action.durationMs = std::max(action.durationMs, DurationOf(creature, action.animations.at(i)));
 	}
-	// Whatever it does at a moment happens by the end at the latest
-	action.eventMs = std::min(action.eventMs, std::max(action.durationMs - 1.0f, 0.0f));
+	// Whatever it does at a moment happens by the end at the latest. A throw keeps its throw time: a throw time at or
+	// after the end of the throw never lets go.
+	if (action.kind != Kind::Throw)
+	{
+		action.eventMs = std::min(action.eventMs, std::max(action.durationMs - 1.0f, 0.0f));
+	}
 }
 
 /// A person or an animal that a creature's hand closes on remembers what it did and goes into its state for the hand
