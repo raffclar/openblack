@@ -254,6 +254,23 @@ TEST(SavedSystemState, TheStateOfANewLandComesBack)
 	check(TeleportSystem {}, TeleportSystem {});
 }
 
+TEST(SavedSystemState, TheGuidanceAfterALoadGivesTheSameBytesAndDrawsTheStampsAgain)
+{
+	// The stamps of this land are drawn: a load starts the guidance again, but a save before the next turn is the same
+	GuidanceSystem saved;
+	saved.EndWaits();
+	ASSERT_FALSE(saved.StampsDue());
+	GuidanceSystem loaded;
+	LoadInto(loaded, StateOf(saved));
+	EXPECT_TRUE(loaded.StampsDue());
+
+	// A load of the loaded state asks for the stamps again too, and its bytes stay the same
+	GuidanceSystem again;
+	LoadInto(again, StateOf(loaded));
+	EXPECT_TRUE(again.StampsDue());
+	EXPECT_EQ(StateOf(again), StateOf(saved));
+}
+
 TEST(SavedSystemState, TheInfluenceStateKeepsTheOldPlaceOfTheRemovedTurnField)
 {
 	// A save from before the removal starts with the turn of the last share step, 4 bytes long. The state keeps that place,

@@ -12,6 +12,7 @@
 
 #include <gtest/gtest.h>
 
+#include "Common/GUtilsAngle.h"
 #include "ECS/TownAreaRules.h"
 
 using namespace openblack;
@@ -45,13 +46,19 @@ TEST(TownArea, ATownWithNothingInItHasAnEmptyBox)
 
 TEST(TownArea, AScriptGivesAGatheringPlaceAtItsMapPosition)
 {
-	// The place is kept at the map position of the text, so it is on the map grid
+	// The place is kept in the whole map units of the text
 	const auto place = map_coords::ScriptPlace(2208.89, 2978.04);
 	const auto gathering = town_area::GatheringPlaceFromScript(place);
 	ASSERT_TRUE(gathering.has_value());
-	EXPECT_EQ(gathering->x, map_coords::ToMetres(place.x));
-	EXPECT_EQ(gathering->y, map_coords::ToMetres(place.z));
-	EXPECT_EQ(map_coords::ToFixed(gathering->x), place.x);
+	EXPECT_EQ(*gathering, place);
+}
+
+TEST(TownArea, AKeptGatheringPlaceAtTheCornerWithNoAltitudeIsFoundAgain)
+{
+	EXPECT_FALSE(town_area::IsGatheringPlace({.x = 0, .z = 0, .altitude = 0.0f}));
+	EXPECT_TRUE(town_area::IsGatheringPlace({.x = 0, .z = 0, .altitude = 1.0f}));
+	EXPECT_TRUE(town_area::IsGatheringPlace({.x = 1, .z = 0, .altitude = 0.0f}));
+	EXPECT_TRUE(town_area::IsGatheringPlace({.x = 0, .z = 1, .altitude = 0.0f}));
 }
 
 TEST(TownArea, AScriptPlaceAtTheCornerOfTheMapIsNoGatheringPlace)
@@ -88,4 +95,22 @@ TEST(TownArea, TheGatheringMiddleCountsTheRingAgainPastAHundredBuildings)
 	// With no more buildings than the ring, it is the plain middle
 	buildings.pop_back();
 	EXPECT_EQ(town_area::GatheringMiddle(buildings).x, 50500);
+}
+
+TEST(TownArea, AGatheringPlaceWithNoClearAreaIsAStepFromItsBaseInWholeMapUnits)
+{
+	// The distance is drawn first, then the angle
+	std::vector<float> limits;
+	const auto random = [&limits](float limit) {
+		limits.push_back(limit);
+		return limits.size() == 1 ? 2.5f : 1.0f;
+	};
+	const map_coords::MapCoords base {.x = 13107203, .z = 6553607, .altitude = 0.0f};
+	const auto place = town_area::GatheringPlaceNear(base, random);
+	ASSERT_EQ(limits.size(), 2u);
+	EXPECT_FLOAT_EQ(limits[0], 10.0f);
+	EXPECT_FLOAT_EQ(limits[1], 6.2831855f);
+	const auto step = gutils::GetPosFromAngle(1.0f, 12.5f);
+	EXPECT_EQ(place.x, base.x + step.x);
+	EXPECT_EQ(place.z, base.z + step.z);
 }

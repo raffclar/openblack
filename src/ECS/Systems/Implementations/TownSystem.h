@@ -62,7 +62,12 @@ public:
 	                                     entt::entity ignore) const override;
 	[[nodiscard]] std::optional<glm::vec2> FindClearArea(glm::vec2 point, float searchRadius, float step, float radius,
 	                                                     ClearAreaFilter filter, entt::entity ignore) const override;
-	glm::vec2 GetCongregationPos(entt::entity town) override;
+	[[nodiscard]] bool CheckForClearAreaCoords(const map_coords::MapCoords& point, float radius, ClearAreaFilter filter,
+	                                           entt::entity ignore) const override;
+	[[nodiscard]] std::optional<map_coords::MapCoords> FindClearAreaCoords(map_coords::MapCoords coords, float searchRadius,
+	                                                                       float step, float radius, ClearAreaFilter filter,
+	                                                                       entt::entity ignore) const override;
+	map_coords::MapCoords GetCongregationPos(entt::entity town) override;
 	void BuildingCreated(entt::entity town, glm::vec2 position, float radius) override;
 	void StructuresChanged(entt::entity town) override;
 	[[nodiscard]] bool IsInStateOfEmergency(entt::entity town) const override;
@@ -103,9 +108,6 @@ private:
 	/// At the town's turn it forgets its temporary piles that have gone, and removes the empty ones once it has a
 	/// storage pit that works
 	static void TemporaryStoresTurn(entt::entity town);
-	/// FindClearArea from a place in whole map units, with no change to metres first
-	[[nodiscard]] std::optional<glm::vec2> FindClearAreaFrom(map_coords::MapCoords coords, float searchRadius, float step,
-	                                                         float radius, ClearAreaFilter filter, entt::entity ignore) const;
 
 	Registry* _registry {nullptr};
 	std::vector<entt::connection> _connections;

@@ -18,6 +18,7 @@
 #include <entt/entity/entity.hpp>
 #include <glm/vec2.hpp>
 
+#include "3D/MapCoords.h"
 #include "Enums.h"
 #include "PlayerSlots.h"
 
@@ -70,8 +71,9 @@ struct Town
 	/// each counted once
 	std::vector<entt::entity> worshippers;
 	std::vector<entt::entity> onWayToWorship;
-	/// Where its people gather, worked out the first time it is wanted and again once a new building stands on it
-	std::optional<glm::vec2> congregationPos;
+	/// Where its people gather, in whole map units, worked out the first time it is wanted and again once a new building
+	/// stands on it
+	std::optional<map_coords::MapCoords> congregationPos;
 	/// The turn its latest emergency was called, 0 when it is in none
 	uint32_t emergencyTurn {0};
 	/// Its worship share when an emergency stopped its worship, given back once the emergency is over; 0 when none

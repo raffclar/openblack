@@ -282,5 +282,82 @@ class SaveDiffTests(unittest.TestCase):
         self.assertEqual(save_diff.not_game_start(result), ["OBJS"])
 
 
+def creature_records(agenda_state=1, word08=0, health=b"\x00\x00\x80\x3f"):
+    """A records block (OBJS) and its keys block (KEYS) with one creature that keeps a plan, and no leash. The plan's
+    agenda has one step after its current step."""
+    record = u32(save_diff.CREATURE_TYPE) + u32(0)
+    record += u32(0) + u32(0) + b"\x00"                     # thing: checksum, destroyed, flags
+    record += b"\x00" * 12 + struct.pack("<H", 0)            # position and its flags: not in the physics
+    record += u32(0) + b"\x00" * 12 + u32(0) + b"\x00" * 12  # info, coords, creation index, life, scale, heading
+    record += u32(0)                                         # fire
+    record += b"\x00" * 8 + b"\x00"                          # move: four words, then the state
+    record += u32(0) + b"\x00" * 12 + u32(0) + b"\x00" * 12  # footpath, goal, target, step
+    record += u32(0) * 2 + b"\x00" * 6 + u32(0) + u32(0) * 2 + b"\x00" + u32(0) * 2 + b"\x00\x00"
+    record += u32(0) * 3 + u32(0) + b"\x00" * 4 + b"\x00" + u32(0) + b"\x00" + u32(0)  # living to its reactions
+    record += u32(33) + u32(0) + b"\x00\x01"                 # version, temple, index, owner
+    record += (u32(0) * 5 + u32(0)) * save_diff.CREATURE_SPELLS + u32(0)  # spells, then no queued spell
+    record += u32(1) + u32(0) * 2 + b"\x00\x00" + u32(0) * 5  # processing, sizes, vortex, fizzes, word
+    record += u32(0) * 5 + b"\x00" * 12 + u32(0) * 2 + b"\x00" + u32(0) + b"\x00" * 12  # effects to home
+    record += health + u32(0) + u32(0) + u32(0)              # fight health, auto fight, no partners, dance
+    record += u32(0) * 7 + u32(1)                            # canDie to autoScaleShare, then a kept plan
+    record += u32(24) + u32(64) + u32(0) * 3                 # desire, action, objects
+    record += u32(word08) + u32(0) + u32(agenda_state) + u32(1) + u32(0) * 3
+    record += u32(5) + u32(0) + u32(0) + b"\x00" * 12 + u32(0) * 3 + u32(0) + u32(0)  # the step
+    record += u32(2) + u32(0)                                # the agenda's creature (itself) and other
+    record += u32(0) * 2 * save_diff.CREED_POWERS
+    objects = u32(1) + u32(2) + record + u32(0) + u32(0) + struct.pack("<f", 1.5) + u32(0)
+    keys = u32(1) + u32(2) + struct.pack("<Q", 77) + u32(0)
+    return objects, keys
+
+
+class CreatureReloadTests(unittest.TestCase):
+    def test_the_records_block_names_each_field(self):
+        objects, keys = creature_records()
+        names = [name for name, _ in save_diff.read_records(objects, keys)]
+        self.assertIn("2:creature.plan.agenda.state", names)
+        self.assertIn("2:creature.plan.agenda.steps.0.action", names)
+        self.assertEqual(names[-1], "creatures.0.vanillaNumber")
+
+    def test_the_clock_and_the_records_name_the_values_that_differ(self):
+        objects_a, keys = creature_records(agenda_state=1, word08=0)
+        objects_b, _ = creature_records(agenda_state=0, word08=1)
+        result = save_diff.compare_files(
+            world([("OBJS", objects_a), ("KEYS", keys), ("TIME", clock_block(synced_seed=1, draws=10))]),
+            world([("OBJS", objects_b), ("KEYS", keys), ("TIME", clock_block(synced_seed=2, draws=20))]))
+        self.assertEqual(save_diff.differing_parts(result), [
+            "OBJS:2:creature.plan.agenda.word08", "OBJS:2:creature.plan.agenda.state", "TIME:syncedSeed",
+            "TIME:syncedDraws"])
+        self.assertEqual(save_diff.not_creature_reload(result), [])
+        self.assertEqual(save_diff.not_game_start_or_creature_reload(result), [])
+        self.assertEqual(save_diff.not_game_start(result), ["OBJS", "TIME"])
+
+    def test_the_new_creatures_explain_their_mind_their_looks_and_their_actions(self):
+        mind = ["idle", "learnt", "planSerial", "agendaSeen", "ownPlanSinceStop"]
+        first = entities_block([1], [("CreatureMindState", mind, [(1, [b"\x00"] * 5)]),
+                                     ("CreatureMarks", ["marks", "revision"], [(1, [b"\x90", b"\x01"])]),
+                                     ("CreatureObjectAction", ["object"], [(1, [b"\x00"])])])
+        second = entities_block([1], [("CreatureMindState", mind, [(1, [b"\x01"] * 5)]),
+                                      ("CreatureMarks", ["marks", "revision"], [(1, [b"\x00", b"\x02"])])])
+        result = save_diff.compare_files(world([("ECSW", first)]), world([("ECSW", second)]))
+        self.assertEqual(save_diff.not_creature_reload(result), [])
+        # The start of a game alone does not explain them
+        self.assertIn("ECSW:CreatureMindState", save_diff.not_game_start(result))
+
+    def test_the_new_creatures_do_not_explain_other_differences(self):
+        first = entities_block([1], [("CreatureMindState", ["idle", "drives"], [(1, [b"\x00", b"\x00"])])])
+        second = entities_block([1], [("CreatureMindState", ["idle", "drives"], [(1, [b"\x01", b"\x01"])])])
+        objects_a, keys = creature_records()
+        objects_b, _ = creature_records(health=b"\x00\x00\x00\x3f")
+        result = save_diff.compare_files(
+            world([("ECSW", first), ("OBJS", objects_a), ("KEYS", keys), ("TIME", clock_block(local_seed=3)),
+                   ("SYST", sections_block([("guidance", b"\x00")]))]),
+            world([("ECSW", second), ("OBJS", objects_b), ("KEYS", keys), ("TIME", clock_block(local_seed=4)),
+                   ("SYST", sections_block([("guidance", b"\x01")]))]))
+        self.assertEqual(save_diff.not_creature_reload(result), ["ECSW:CreatureMindState", "OBJS", "TIME", "SYST"])
+        # A records block that the tool cannot read is not explained
+        result = save_diff.compare_files(world([("OBJS", b"\x00")]), world([("OBJS", b"\x01")]))
+        self.assertEqual(save_diff.not_creature_reload(result), ["OBJS"])
+
+
 if __name__ == "__main__":
     unittest.main()

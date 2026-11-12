@@ -20,6 +20,7 @@
 #include <glm/fwd.hpp>
 #include <glm/vec2.hpp>
 
+#include "3D/MapCoords.h"
 #include "ECS/Systems/SavedStateInterface.h"
 #include "ECS/TownHomes.h"
 #include "Enums.h"
@@ -88,8 +89,16 @@ public:
 	/// The first clear area of a radius in a spiral out from a point in steps, as far as a search radius; none if none is
 	[[nodiscard]] virtual std::optional<glm::vec2> FindClearArea(glm::vec2 point, float searchRadius, float step, float radius,
 	                                                             ClearAreaFilter filter, entt::entity ignore) const = 0;
-	/// Where a town's people gather: worked out once, between its buildings or near one
-	virtual glm::vec2 GetCongregationPos(entt::entity town) = 0;
+	/// CheckForClearArea at a place in whole map units
+	[[nodiscard]] virtual bool CheckForClearAreaCoords(const map_coords::MapCoords& point, float radius, ClearAreaFilter filter,
+	                                                   entt::entity ignore) const = 0;
+	/// FindClearArea from a place in whole map units. It gives the clear place in whole map units.
+	[[nodiscard]] virtual std::optional<map_coords::MapCoords> FindClearAreaCoords(map_coords::MapCoords coords,
+	                                                                               float searchRadius, float step, float radius,
+	                                                                               ClearAreaFilter filter,
+	                                                                               entt::entity ignore) const = 0;
+	/// Where a town's people gather, in whole map units: worked out once, between its buildings or near one
+	virtual map_coords::MapCoords GetCongregationPos(entt::entity town) = 0;
 	/// A town's temporary pile for a resource, and its edge nearest a point
 	struct TemporaryStore
 	{
