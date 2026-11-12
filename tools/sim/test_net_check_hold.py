@@ -137,11 +137,77 @@ class HoldRetry(unittest.TestCase):
         self.assertEqual(buttons[0], "press")
         self.assertEqual(buttons.count("press"), 1)
 
-    def test_a_hand_that_never_holds_stops_after_8_tries(self):
-        buttons = self.run_hold(99)
-        self.assertEqual(buttons.count("press"), 8)
+    def test_a_hand_that_never_holds_stops_after_the_tries(self):
+        buttons = self.run_hold(999)
+        self.assertEqual(buttons.count("press"), net_check.HOLD_TRIES)
         self.assertNotIn("click", buttons)
 
+    def test_a_creature_that_walks_off_many_times_is_held_after_more_than_8_tries(self):
+        # The creature walks: in a run with two clients the press found it only on the 12th try
+        buttons = self.run_hold(12)
+        self.assertEqual(buttons.count("press"), 12)
+        self.assertIn("click", buttons)
+
+
+
+@unittest.skipIf(net_check is None, "net_check needs the cryptography package")
+class GiftVillagers(unittest.TestCase):
+    def run_gift(self, inside_ids):
+        """Runs give_to_creature against a fake inspector in which only the villagers with the ids are inside the
+        influence of the god. The hand takes a villager at once. Gives the result and the villagers that it pressed on."""
+        pressed = []
+        villagers = [{"id": number, "position": [10.0 * number, 0.0, 5.0]} for number in (1, 2, 3)]
+        target = []
+
+        def call(pid, query, request):
+            params = request.get("params", {})
+            if query == "players.list":
+                return {"items": [{"local": True, "primary_creature": 9, "player": 0}]}
+            if query == "ecs.entity":
+                number = params["id"]
+                return {"position": [10.0 * number, 0.0, 5.0] if number != 9 else [0.0, 0.0, 0.0]}
+            if query == "town.list":
+                return {"items": []}
+            if query == "objects.find":
+                return {"items": villagers}
+            if query == "influence.at":
+                return {"influence": 1.0 if int(params["position"][0] / 10) in inside_ids else 0.0}
+            if query == "input.pointer":
+                if "world" in params:
+                    target[:] = [round(params["world"][0] / 10)]
+                return {"pointer": [100, 200]}
+            if query == "input.state":
+                return {"pick": {"object": target[0] if target else None, "grab": {"takes": True}}}
+            if query == "players.pick":
+                return {"object": 9}
+            if query == "input.button" and params["action"] == "press" and target:
+                pressed.append(target[0])
+            return {}
+
+        saved = (net_check.inspector_call, net_check.time.sleep, net_check.lines_with, net_check.wait_for)
+        net_check.inspector_call = call
+        net_check.time.sleep = lambda _: None
+        net_check.lines_with = lambda log, words: ["took"]
+        net_check.wait_for = lambda test, seconds: test()
+        try:
+            done = net_check.give_to_creature(1, "no.log")
+        finally:
+            net_check.inspector_call, net_check.time.sleep, net_check.lines_with, net_check.wait_for = saved
+        return done, pressed
+
+    def test_the_hand_takes_only_a_villager_inside_the_influence(self):
+        done, pressed = self.run_gift({2})
+        self.assertEqual(done["villagers_in_influence"], 1)
+        self.assertEqual(done["object"], 2)
+        self.assertTrue(done["gave"])
+        self.assertNotIn(1, pressed)
+        self.assertNotIn(3, pressed)
+
+    def test_a_land_with_no_villager_inside_the_influence_gives_the_reason(self):
+        done, pressed = self.run_gift(set())
+        self.assertFalse(done["took"])
+        self.assertEqual(pressed, [])
+        self.assertIn("influence", done["why"])
 
 
 @unittest.skipIf(net_check is None, "net_check needs the cryptography package")

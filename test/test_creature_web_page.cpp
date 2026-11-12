@@ -179,6 +179,24 @@ TEST(CreatureWebPage, TakesAPictureOnlyWhenAllAgree)
 	EXPECT_FALSE(creature_web_page::TakesPicture(pictures, other));
 }
 
+TEST(CreatureWebPage, StopsAskingForPicturesWhenNoneComeBack)
+{
+	// A run that draws no frames gets no picture back, so the list of waiting pictures stops at the limit
+	size_t waiting = 0;
+	for (int ask = 0; ask < 100; ++ask)
+	{
+		if (creature_web_page::MayAskForPicture(waiting))
+		{
+			++waiting;
+		}
+	}
+	EXPECT_EQ(waiting, creature_web_page::k_MaxPicturesWaiting);
+	// A drawn game takes the pictures back, so it can ask again
+	EXPECT_TRUE(creature_web_page::MayAskForPicture(0));
+	EXPECT_TRUE(creature_web_page::MayAskForPicture(creature_web_page::k_MaxPicturesWaiting - 1));
+	EXPECT_FALSE(creature_web_page::MayAskForPicture(creature_web_page::k_MaxPicturesWaiting));
+}
+
 TEST(CreatureWebPage, ScoresByWorthPriorityAndAge)
 {
 	EXPECT_FLOAT_EQ(creature_web_page::Score(0.5f, 0.5f, 29), 0.25f);
