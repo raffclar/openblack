@@ -29,6 +29,7 @@
 
 #include "Commands/TurnCodec.h"
 #include "Common/BuildVersion.h"
+#include "Debug/TestbedLobbySessions.h"
 #include "ECS/Systems/LobbyClientSystemInterface.h"
 #include "ECS/Systems/NetworkGameSystemInterface.h"
 #include "Gui/MultiplayerFrontEnd.h"
@@ -53,6 +54,8 @@ constexpr int64_t k_PlayerId = 7;
 constexpr int64_t k_BigRoomOthers = 31;
 /// The time limit of the game of the demonstration server that picks winning conditions, in minutes
 constexpr uint32_t k_DemoTimeLimitMinutes = 90;
+/// The clock of the lobby sessions of the demonstration: 2026-11-12 10:00 (UTC)
+constexpr int64_t k_DemoNowMs = 1'762'941'600'000;
 
 lobby_api::RoomPlayer Player(int64_t id, std::string name, std::string role)
 {
@@ -303,8 +306,23 @@ public:
 		_givesMaps = true;
 		_servers.front().map = std::string(k_DemoMapHash);
 	}
+	/// The lobby gives a map of 8 places for the sessions, which the players download
+	void GiveSessionMaps() { _givesSessionMaps = true; }
 	void GetMaps(LobbyCallback<lobby_api::MapList> callback) override
 	{
+		if (_givesSessionMaps)
+		{
+			const lobby_api::OnlineMap ring {.number = 2,
+			                                 .name = "Ring of gods",
+			                                 .file = "Online Maps/obm_8p_ring.map",
+			                                 .players = 8,
+			                                 .sha256 = std::string(k_DemoMapHash),
+			                                 .checksum = 0,
+			                                 .size = 182'000,
+			                                 .url = "/api/v1/maps/" + std::string(k_DemoMapHash)};
+			callback({.value = lobby_api::MapList {.maps = {ring}}, .error = {}});
+			return;
+		}
 		if (!_givesMaps)
 		{
 			LobbyClientSystemInterface::GetMaps(std::move(callback));
@@ -359,6 +377,7 @@ private:
 	std::vector<lobby_api::PushEvent> _pending;
 	int64_t _seq {0};
 	bool _givesMaps {false};
+	bool _givesSessionMaps {false};
 };
 
 /// A store of the lands of network games that has no land and keeps none
@@ -580,10 +599,73 @@ struct DemoServices
 	DemoNetworkGame network {sockets};
 	DemoLan lan;
 	DemoMapStore maps;
+	DemoLobbyRoom lobbyRoom {lobby_api::AccountRef {.id = k_PlayerId, .name = "Alice"}, k_DemoNowMs};
 	Stage stage {Stage::ChooseConnection};
 	/// The steps after the join wait for the game socket to open
 	bool staged {false};
 };
+
+[[nodiscard]] bool IsLobbyStage(Stage stage) noexcept
+{
+	return stage >= Stage::LobbyList && stage <= Stage::LobbyMapTooSmall;
+}
+
+/// The steps of a stage of the lobby sessions, after the login
+void BeginLobby(MultiplayerFrontEnd& frontEnd, DemoServices& demo)
+{
+	demo.staged = true;
+	auto& lobbies = demo.lobbyRoom;
+	switch (demo.stage)
+	{
+	case Stage::LobbyList:
+		frontEnd.SelectLobby("d1");
+		break;
+	case Stage::LobbyCreate:
+		frontEnd.OpenCreateLobby();
+		break;
+	case Stage::LobbyRoomHost:
+	case Stage::LobbyQueue:
+	case Stage::LobbyMapTooSmall:
+		frontEnd.OpenCreateLobby();
+		frontEnd.SubmitCreateLobby();
+		frontEnd.SendLobbyChat(u"Welcome to my game!");
+		lobbies.SayInRoom(31, "Ready when you are.");
+		if (demo.stage == Stage::LobbyQueue)
+		{
+			lobbies.SetMemberMap(32, true);
+			lobbies.Queue(2);
+		}
+		if (demo.stage == Stage::LobbyMapTooSmall)
+		{
+			// A land of two places for the three players of the room: the box refuses it
+			const auto maps = frontEnd.GetSessionMaps();
+			const auto small =
+			    std::ranges::find_if(maps, [](const MultiplayerFrontEnd::SessionMap& map) { return map.places == 2; });
+			if (small != maps.end())
+			{
+				frontEnd.ChangeLobbyMap(static_cast<size_t>(std::distance(maps.begin(), small)));
+			}
+		}
+		break;
+	case Stage::LobbyRoomPlayer:
+		frontEnd.SelectLobby("d1");
+		frontEnd.JoinSelectedLobby();
+		frontEnd.ToggleLobbyReady();
+		lobbies.SayInRoom(31, "Hello, Alice.");
+		break;
+	case Stage::LobbyKicked:
+		frontEnd.SelectLobby("d1");
+		frontEnd.JoinSelectedLobby();
+		lobbies.KickPlayer();
+		break;
+	case Stage::LobbyPassword:
+		frontEnd.SelectLobby("d2");
+		frontEnd.JoinSelectedLobby();
+		break;
+	default:
+		break;
+	}
+}
 
 /// The steps that go to a stage, from the first box
 void Begin(MultiplayerFrontEnd& frontEnd, DemoServices& demo)
@@ -622,6 +704,11 @@ void Begin(MultiplayerFrontEnd& frontEnd, DemoServices& demo)
 		return;
 	}
 	frontEnd.Login(u"Alice", u"secret");
+	if (IsLobbyStage(stage))
+	{
+		BeginLobby(frontEnd, demo);
+		return;
+	}
 	if (stage == Stage::GameList)
 	{
 		frontEnd.SelectGame(0);
@@ -724,6 +811,11 @@ std::unique_ptr<MultiplayerFrontEnd> testbed_multiplayer::MakeDemoFrontEnd(Stage
 	{
 		demo->lobby.GiveMaps();
 	}
+	const bool lobbySessions = IsLobbyStage(stage);
+	if (lobbySessions)
+	{
+		demo->lobby.GiveSessionMaps();
+	}
 	if (stage == Stage::ConditionsPicked)
 	{
 		// The server picked three winning conditions in the limits of the land, and a time limit of an hour and a half
@@ -766,6 +858,10 @@ std::unique_ptr<MultiplayerFrontEnd> testbed_multiplayer::MakeDemoFrontEnd(Stage
 		        }
 	        },
 	    .maps = mapDownload ? &demo->maps : nullptr,
+	    .clanCreature = nullptr,
+	    .readGameFile = {},
+	    .lobbyRoom = lobbySessions ? &demo->lobbyRoom : nullptr,
+	    .nowMs = [] { return k_DemoNowMs; },
 	};
 	MultiplayerFrontEnd::Settings settings {
 	    .registerPage = {},

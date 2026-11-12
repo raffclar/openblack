@@ -58,6 +58,7 @@ public:
 	void Leave(LobbyCallback<LobbyDone> callback) override;
 	void SetReady(bool ready, LobbyCallback<LobbyDone> callback) override;
 	void PickSlot(int32_t slot, LobbyCallback<LobbyDone> callback) override;
+	void ReportMap(lobby_api::MapReport report, LobbyCallback<LobbyDone> callback) override;
 	void SendChat(std::string text, LobbyCallback<LobbyDone> callback) override;
 	void Kick(int64_t account, bool ban, LobbyCallback<LobbyDone> callback) override;
 	void MakeHost(int64_t account, LobbyCallback<LobbyDone> callback) override;
@@ -74,6 +75,8 @@ private:
 	/// after the channel opens, so that the room has the events that came before.
 	void OpenRoom(lobby_api::Lobby lobby, bool reload);
 	void ReloadRoom();
+	/// Uses the whole lobby that a call of the room gave back
+	void ReloadFrom(const online::HttpResponse& response);
 	/// Stops the events of the channel of a room that ended
 	void FollowRoomEnd();
 	/// A call of the room of the player. The function uses the answer before the callback runs.

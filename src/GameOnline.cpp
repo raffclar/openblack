@@ -268,6 +268,8 @@ std::unique_ptr<gui::MultiplayerFrontEnd> Game::MakeMultiplayerFrontEnd()
 		    }
 		    return std::nullopt;
 	    },
+	    .lobbyRoom = Locator::lobbyRoom::has_value() ? &Locator::lobbyRoom::value() : nullptr,
+	    .nowMs = {},
 	};
 	gui::MultiplayerFrontEnd::Settings settings;
 	// The registration page is on the lobby's site: Register on the site, then log in in the game

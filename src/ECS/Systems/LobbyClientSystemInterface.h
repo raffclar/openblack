@@ -66,6 +66,10 @@ struct LobbyError
 	std::string code;
 	/// The seconds to wait before the next call, for RateLimited
 	std::optional<int32_t> retryAfterSeconds;
+	/// The players of the lobby and the slots of the new map, for the code "too_many_players". 0 when the lobby did not
+	/// give them.
+	int32_t members {0};
+	int32_t slots {0};
 };
 
 /// The result of a call: a value, or an error

@@ -16,6 +16,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include <Lobbies.h>
@@ -115,6 +116,8 @@ enum class SystemLineKind : uint8_t
 	StartCancelled,
 	/// The game server did not start
 	CouldNotStart,
+	/// Too few gods joined the game server in the time to join
+	NotEnoughJoined,
 	/// The lobby waits in the line for a free game server
 	Queued,
 };
@@ -176,6 +179,8 @@ struct SlotView
 	/// The slot of the player of this computer
 	bool own {false};
 	bool away {false};
+	/// The player of the slot has the map of the lobby. False while the player downloads it.
+	bool haveMap {true};
 };
 
 /// The lobby room of the player
@@ -202,9 +207,12 @@ public:
 	[[nodiscard]] std::optional<int32_t> QueuePosition() const noexcept { return _lobby.queuePosition; }
 	[[nodiscard]] std::optional<int64_t> CountdownAt() const noexcept { return _lobby.countdownAt; }
 	[[nodiscard]] const std::string& GameId() const noexcept { return _lobby.gameId; }
+	/// The address of the game socket of "game.assigned", empty before it
+	[[nodiscard]] const std::string& GameUrl() const noexcept { return _gameUrl; }
 	/// The number of the members in god slots
 	[[nodiscard]] int32_t GodsInSlots() const;
-	/// The host can start when each other player in a god slot is ready. The ready of the host comes with the start.
+	/// The host can start when each other player in a god slot is ready, and the host has the map. The ready of the host
+	/// comes with the start.
 	[[nodiscard]] bool CanStart() const;
 	[[nodiscard]] bool CanReady() const;
 	/// The player can move to an open slot that nobody has, before the player is ready
@@ -214,6 +222,8 @@ public:
 
 	/// Uses an event of the push channel. The room ignores an event of a different lobby.
 	void Apply(const lobby_api::PushEvent& event);
+	/// A change of the lobby came, and the room needs the lobby again for the new values. The flag clears.
+	[[nodiscard]] bool TakeReloadWanted() noexcept { return std::exchange(_reloadWanted, false); }
 	/// Writes the line of each second of the countdown. The time is milliseconds since 1970 (UTC).
 	void Tick(int64_t nowMs);
 	/// Uses a new snapshot of the lobby, after the push channel lost events. The lines stay.
@@ -234,6 +244,8 @@ private:
 	void ApplyMemberEvent(std::string_view type, const lobby_api::MemberEvent& event);
 	void ApplyChange(const lobby_api::LobbyChange& change);
 	void ApplyStateEvent(std::string_view type, const lobby_api::LobbyStateEvent& event);
+	/// Writes the lines of the change of the lobby that the last reload shows
+	void WriteChangeLines(const lobby_api::LobbyMap& oldMap);
 	void StartCountdown(std::optional<int64_t> at);
 	void EnterQueue(std::optional<int32_t> position);
 	void Changed() noexcept { ++_revision; }
@@ -243,9 +255,16 @@ private:
 	RoomPhase _phase {RoomPhase::Open};
 	std::optional<RoomEnd> _end;
 	std::vector<RoomLine> _lines;
+	std::string _gameUrl;
 	/// The last second of the countdown that has a line
 	int32_t _announced {k_CountdownSeconds + 1};
 	uint32_t _revision {0};
+	/// A change of the lobby came: the room needs the lobby again
+	bool _reloadWanted {false};
+	/// The fields of the changes that have no line yet, until the next reload
+	std::vector<std::string> _changedFields;
+	/// A change cleared the ready of each member, and the line comes after the next reload
+	bool _readyClearedLine {false};
 };
 
 /// The choices of the lobby list. The screens keep them in the profile.

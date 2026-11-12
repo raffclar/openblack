@@ -59,6 +59,22 @@ enum class Stage : uint8_t
 	LanRoomChat,
 	/// The private lines of the chat of a room on the local network: the player picked a player in the roster
 	LanRoomPrivateChat,
+	/// The lobby list of the lobby sessions, with a session picked
+	LobbyList,
+	/// The box "Create session"
+	LobbyCreate,
+	/// The room of a session that the player made: the host's controls, the ready ticks, a player without the map
+	LobbyRoomHost,
+	/// The room of a session that the player joined, ready
+	LobbyRoomPlayer,
+	/// The room waits in the line for a free game server
+	LobbyQueue,
+	/// The host kicked the player: the box tells it over the lobby list
+	LobbyKicked,
+	/// The join of a session with a password asks for the password
+	LobbyPassword,
+	/// The host tries a map with too few places for the players of the room
+	LobbyMapTooSmall,
 	_Count
 };
 

@@ -25,7 +25,6 @@ namespace openblack::lobby_api
 [[nodiscard]] std::string ToJson(const LobbyChangeRequest& request);
 [[nodiscard]] std::string ToJson(const LobbyJoinRequest& request);
 [[nodiscard]] std::string ToJson(const MemberChangeRequest& request);
-[[nodiscard]] std::string ToJson(const HostRequest& request);
 [[nodiscard]] std::string ToJson(const QuickJoinRequest& request);
 
 [[nodiscard]] std::optional<LobbyList> ParseLobbyList(std::string_view text);
@@ -33,6 +32,7 @@ namespace openblack::lobby_api
 [[nodiscard]] std::optional<LobbyMember> ParseLobbyMember(std::string_view text);
 [[nodiscard]] std::optional<StartReply> ParseStartReply(std::string_view text);
 [[nodiscard]] std::optional<LobbyCodeReply> ParseLobbyCodeReply(std::string_view text);
+[[nodiscard]] std::optional<LobbyTicket> ParseLobbyTicket(std::string_view text);
 
 /// The data of "lobbies.changed" or of "lobbies.removed"
 [[nodiscard]] std::optional<LobbyListChange> ParseLobbyListChange(std::string_view type, std::string_view data);
@@ -44,6 +44,8 @@ namespace openblack::lobby_api
 [[nodiscard]] std::optional<LobbyChange> ParseLobbyChange(std::string_view data);
 /// The data of "start.*", "game.*" and "lobby.closed"
 [[nodiscard]] std::optional<LobbyStateEvent> ParseLobbyStateEvent(std::string_view data);
+/// The data of "lobby.kicked"
+[[nodiscard]] std::optional<LobbyKick> ParseLobbyKick(std::string_view data);
 
 /// The code of a private lobby as the player types it: the dash and the spaces go, and the letters become capitals.
 /// None when the code does not have 8 characters of Crockford base32.

@@ -141,6 +141,10 @@ struct LobbySummary
 	int32_t gods {0};
 	/// "god_slots"
 	int32_t godSlots {0};
+	/// "open_slots": the god slots that players can take, not the computer slots or the closed slots
+	std::optional<int32_t> openSlots;
+	/// "free_slots": the open god slots that have no player
+	std::optional<int32_t> freeSlots;
 	/// "observers"
 	int32_t observers {0};
 	/// "locked": the lobby needs a password
@@ -181,6 +185,10 @@ struct LobbyMember
 	std::optional<int64_t> joinedAt;
 	/// "away": the push channel of the member is closed
 	bool away {false};
+	/// "have_map": the member has the map of the lobby. False while the member downloads it.
+	bool haveMap {true};
+	/// "host": the member is the host of the lobby
+	bool host {false};
 };
 
 /// GET /api/v1/lobbies/{id}: the full lobby
@@ -202,7 +210,7 @@ struct Lobby
 	LobbyMap map;
 	/// "god_slots"
 	int32_t godSlots {0};
-	/// "slot_kinds": what each god slot holds when no player takes it
+	/// "slots": what each god slot holds when no player takes it, from the "kind" of each entry
 	std::vector<SlotKind> slotKinds;
 	/// "settings"
 	LobbySettings settings;
@@ -214,7 +222,9 @@ struct Lobby
 	std::optional<int32_t> queuePosition;
 	/// "countdown_at": the time of the start in milliseconds since 1970 (UTC), during the countdown
 	std::optional<int64_t> countdownAt;
-	/// "game_id": the game server of the lobby, after the service gave one
+	/// "started_at": milliseconds since 1970 (UTC), after the service gave a game server
+	std::optional<int64_t> startedAt;
+	/// The game server of the lobby, from "game.assigned" or from the ticket. The lobby itself does not give it.
 	std::string gameId;
 	/// "members"
 	std::vector<LobbyMember> members;
@@ -239,6 +249,8 @@ struct LobbyCreateRequest
 	LobbySettings settings;
 	/// "build_id"
 	std::string buildId;
+	/// "build_hash": the SHA-256 of the program file, empty when the game does not give it
+	std::string buildHash;
 };
 
 /// PATCH /api/v1/lobbies/{id}: the fields that the host changes. A change clears the ready of each member.
@@ -253,6 +265,16 @@ struct LobbyChangeRequest
 	std::optional<LobbySettings> settings;
 };
 
+/// The report of the map of the lobby that a member has: "have_map" and "map_sha256". The service lets a member be ready
+/// only when the member has the map. A map of the service needs its SHA-256. A land of the game needs only have_map.
+struct MapReport
+{
+	/// "have_map"
+	bool haveMap {false};
+	/// "map_sha256": the SHA-256 of the map file of the member, in lower-case hexadecimal, or empty
+	std::string sha256;
+};
+
 /// POST /api/v1/lobbies/{id}/members
 struct LobbyJoinRequest
 {
@@ -260,10 +282,14 @@ struct LobbyJoinRequest
 	std::optional<std::string> password;
 	/// "build_id"
 	std::string buildId;
+	/// "build_hash": the SHA-256 of the program file, empty when the game does not give it
+	std::string buildHash;
 	/// "role"
 	MemberRole role {MemberRole::God};
 	/// "slot"
 	std::optional<int32_t> slot;
+	/// "have_map" and "map_sha256"
+	std::optional<MapReport> map;
 };
 
 /// PUT /api/v1/lobbies/{id}/members/me
@@ -273,13 +299,8 @@ struct MemberChangeRequest
 	std::optional<bool> ready;
 	/// "slot"
 	std::optional<int32_t> slot;
-};
-
-/// POST /api/v1/lobbies/{id}/host
-struct HostRequest
-{
-	/// "account": the id of the account
-	int64_t account {0};
+	/// "have_map" and "map_sha256"
+	std::optional<MapReport> map;
 };
 
 /// POST /api/v1/lobbies/quick-join
@@ -287,6 +308,16 @@ struct QuickJoinRequest
 {
 	/// "build_id"
 	std::string buildId;
+	/// "build_hash"
+	std::string buildHash;
+};
+
+/// The answer of POST /api/v1/lobbies/{id}/tickets (201): a join ticket and "game_id"
+struct LobbyTicket
+{
+	JoinTicket ticket;
+	/// "game_id": the game server that the ticket opens
+	std::string gameId;
 };
 
 /// The answer of POST /api/v1/lobbies/{id}/start (202)
@@ -336,14 +367,18 @@ constexpr std::string_view k_GameAssigned = "game.assigned";
 constexpr std::string_view k_GameStarted = "game.started";
 constexpr std::string_view k_GameEnded = "game.ended";
 constexpr std::string_view k_LobbyClosed = "lobby.closed";
+// Only to the account that the host kicked or banned. That account is not on the channel of the lobby now.
+constexpr std::string_view k_LobbyKicked = "lobby.kicked";
 } // namespace lobby_events
 
-/// The data of "lobbies.changed" ({"id", "summary"}) and of "lobbies.removed" ({"id"})
+/// The data of "lobbies.changed" ({"lobby": entry}) and of "lobbies.removed" ({"id", "reason"})
 struct LobbyListChange
 {
 	std::string id;
 	/// None for a removal
 	std::optional<LobbySummary> summary;
+	/// "reason" of a removal, for example "host_closed" or "private"
+	std::string reason;
 };
 
 /// The data of the events of the members ("member.*") and of "host.changed"
@@ -361,22 +396,33 @@ struct MemberEvent
 	std::optional<int32_t> slot;
 	/// "ready", for "member.changed"
 	std::optional<bool> ready;
+	/// "have_map", for "member.joined" and "member.changed"
+	std::optional<bool> haveMap;
+	/// "reason", for "member.left"
+	std::string reason;
 };
 
-/// The data of "lobby.changed": {"fields": {...}, "ready_cleared": true}
+/// The data of "lobby.changed": {"fields": ["map", "settings"], "ready_cleared": true, "map_cleared": true}. The event
+/// names the fields that changed. The client gets the lobby again for their values.
 struct LobbyChange
 {
 	/// "lobby"
 	std::string lobby;
-	std::optional<std::string> name;
-	std::optional<LobbyMap> map;
-	std::optional<int32_t> godSlots;
-	std::optional<std::vector<SlotKind>> slotKinds;
-	std::optional<LobbyVisibility> visibility;
-	std::optional<bool> locked;
-	std::optional<LobbySettings> settings;
+	/// "fields": "name", "map", "slots", "visibility", "password" or "settings"
+	std::vector<std::string> fields;
 	/// "ready_cleared": the change cleared the ready of each member
 	bool readyCleared {false};
+	/// "map_cleared": the map changed, and each member must report the new map
+	bool mapCleared {false};
+};
+
+/// The data of "lobby.kicked": {"lobby", "by", "banned"}
+struct LobbyKick
+{
+	std::string lobby;
+	/// The host, none when an administrator removed the account
+	std::optional<AccountRef> by;
+	bool banned {false};
 };
 
 /// The data of the events of the start and of the end of a lobby: "start.countdown" {at}, "start.cancelled" {why,
@@ -395,8 +441,40 @@ struct LobbyStateEvent
 	std::optional<int32_t> position;
 	/// "game_id"
 	std::string gameId;
+	/// "url": the game socket of "game.assigned"
+	std::string url;
 	/// "reason": the reason of a close, for example "host_closed"
 	std::string reason;
 };
+
+/// The codes of the problems that the calls of the lobbies give ("code" of the problem)
+namespace lobby_problems
+{
+constexpr std::string_view k_NoSuchLobby = "no_such_lobby";
+constexpr std::string_view k_PasswordNeeded = "password_needed";
+constexpr std::string_view k_WrongPassword = "wrong_password";
+constexpr std::string_view k_TooManyTries = "too_many_tries";
+constexpr std::string_view k_Banned = "banned";
+constexpr std::string_view k_WrongVersion = "wrong_version";
+constexpr std::string_view k_Full = "full";
+constexpr std::string_view k_Started = "started";
+constexpr std::string_view k_SlotTaken = "slot_taken";
+constexpr std::string_view k_NoObservers = "no_observers";
+constexpr std::string_view k_InGame = "in_game";
+constexpr std::string_view k_AlreadyHosting = "already_hosting";
+constexpr std::string_view k_Closed = "closed";
+constexpr std::string_view k_MapMissing = "map_missing";
+constexpr std::string_view k_NotReady = "not_ready";
+constexpr std::string_view k_TooFewGods = "too_few_gods";
+constexpr std::string_view k_NoGameServers = "no_game_servers";
+constexpr std::string_view k_NameRefused = "name_refused";
+constexpr std::string_view k_Throttled = "throttled";
+constexpr std::string_view k_TooManyLobbies = "too_many_lobbies";
+constexpr std::string_view k_NoLobby = "none";
+constexpr std::string_view k_NotHost = "not_host";
+constexpr std::string_view k_NotOpen = "not_open";
+/// The new map of the host has fewer slots than the players of the lobby
+constexpr std::string_view k_TooManyPlayers = "too_many_players";
+} // namespace lobby_problems
 
 } // namespace openblack::lobby_api
