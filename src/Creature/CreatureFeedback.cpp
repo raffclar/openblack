@@ -256,19 +256,6 @@ std::vector<Capsule> creature_feedback::BodyCapsules(std::span<const uint32_t> p
 	return capsules;
 }
 
-float creature_feedback::DistanceOutside(const glm::vec3& point, std::span<const Capsule> capsules)
-{
-	float best = std::numeric_limits<float>::max();
-	for (const auto& capsule : capsules)
-	{
-		const auto axis = capsule.to - capsule.from;
-		const auto length = glm::dot(axis, axis);
-		const auto t = length > 0.0f ? std::clamp(glm::dot(point - capsule.from, axis) / length, 0.0f, 1.0f) : 0.0f;
-		best = std::min(best, glm::distance(point, capsule.from + (axis * t)) - capsule.radius);
-	}
-	return best;
-}
-
 float creature_feedback::HandStartDistance(float cameraToCreature, float size)
 {
 	return cameraToCreature - (size * k_HandStartsShortPerSize);

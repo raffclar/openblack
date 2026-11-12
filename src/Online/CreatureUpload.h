@@ -58,10 +58,6 @@ enum class Problem : uint8_t
                                                                       std::span<const uint8_t> userData);
 /// Whether the creature file of a clan creature that the lobby gave is a creature file of the game
 [[nodiscard]] bool IsValidClanCreature(const lobby_api::ClanCreature& creature);
-/// The clan creature of a god at the end of a clan game, from the world of this computer: the alignment of the god and
-/// the creature file of the creature as it is now. None when the god has no alignment or the creature has no mind.
-[[nodiscard]] std::optional<lobby_api::ClanCreature> ClanCreatureAtGameEnd(entt::entity god, entt::entity creature,
-                                                                           std::span<const uint8_t> userData);
 /// The start data of a god that plays for a clan, from the answer of the lobby:
 /// - a stored creature gives its creature file;
 /// - a new creature gives the order to make it;
