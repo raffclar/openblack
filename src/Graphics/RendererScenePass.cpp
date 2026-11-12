@@ -1200,7 +1200,15 @@ void Renderer::DrawPassTranslucent(const DrawSceneDesc& desc, const ScenePass& p
 				{
 					submitDesc.detailLevel = renderCtx.instanceLevels.at(instance);
 				}
+				// The second draw of a felled tree passes the depth test at the depth of the first, as the game's
+				// draws of the same model at the same place do
+				const auto state = submitDesc.state;
+				if (renderCtx.drawnOverInstances.contains(instance))
+				{
+					submitDesc.state = (state & ~BGFX_STATE_DEPTH_TEST_MASK) | BGFX_STATE_DEPTH_TEST_GEQUAL;
+				}
 				drawInstances(meshId, placers, false, instance, 1, placers.bonePalette ? &palettePose : nullptr);
+				submitDesc.state = state;
 			}
 			submitDesc.detailLevel = 1;
 		}
@@ -1295,6 +1303,18 @@ void Renderer::DrawPassTranslucent(const DrawSceneDesc& desc, const ScenePass& p
 			drawInstances(meshId, placers, true, 0, 1, pose, nullptr, *_warmUpInstances);
 			placers.instanceAlpha = true;
 			drawInstances(meshId, placers, false, 0, 1, pose, nullptr, *_warmUpInstances);
+			// The second draw of a felled tree, which passes the depth test at the same depth, standing and fading. Only
+			// the tree models have parts that differ by detail, and a felled tree has a tree model.
+			if (placers.partsByLevel)
+			{
+				const auto state = submitDesc.state;
+				submitDesc.state = (state & ~BGFX_STATE_DEPTH_TEST_MASK) | BGFX_STATE_DEPTH_TEST_GEQUAL;
+				drawInstances(meshId, placers, false, 0, 1, pose, nullptr, *_warmUpInstances);
+				placers.instanceAlpha = false;
+				submitDesc.viewId = desc.viewId;
+				drawInstances(meshId, placers, placers.materialBlending, 0, 1, pose, nullptr, *_warmUpInstances);
+				submitDesc.state = state;
+			}
 		};
 		for (const auto& [meshId, placers] : renderCtx.instancedDrawDescs)
 		{
@@ -1593,6 +1613,9 @@ void Renderer::DrawPassEntities(const DrawSceneDesc& desc, const ScenePass& pass
 		{
 			sd.seeThroughRef = ref->second;
 		}
+		// The phantom building and the yard copy of a scaffold take the land's light of their place on the map
+		const bool atMapPlace = count == 1 && !instances.has_value() && renderCtx.mapPlaceLitInstances.contains(first);
+		sd.landLightRule = graphics::object_land_light::Of(atMapPlace);
 		// The game gives the rooms the temple's light; the hand keeps its own
 		const bool templeLit =
 		    Locator::temple::has_value() && Locator::temple::value().Active() && meshId != ecs::components::Hand::k_MeshId;
@@ -1889,7 +1912,10 @@ void Renderer::DrawPassEntities(const DrawSceneDesc& desc, const ScenePass& pass
 	                            const RenderContext::InstancedDrawDesc& placers, bool useMaterialBlending) {
 		inSegmentsWith(sd, placers, [&](uint32_t first, uint32_t count) {
 			const auto seen = [&](uint32_t instance) { return instanceSeen(mesh, placers, instance); };
-			if (!placers.partsByLevel)
+			// An instance drawn over the instance before it is drawn by itself, after that instance
+			const auto over = renderCtx.drawnOverInstances.lower_bound(first);
+			const bool drawsOver = over != renderCtx.drawnOverInstances.end() && *over < first + count;
+			if (!placers.partsByLevel && !drawsOver)
 			{
 				const auto instances = std::views::iota(first, first + count);
 				const auto start = std::ranges::find_if(instances, seen);
@@ -1905,8 +1931,29 @@ void Renderer::DrawPassEntities(const DrawSceneDesc& desc, const ScenePass& pass
 			{
 				if (seen(instance))
 				{
-					sd.detailLevel = renderCtx.instanceLevels.at(instance);
+					if (placers.partsByLevel)
+					{
+						sd.detailLevel = renderCtx.instanceLevels.at(instance);
+					}
+					// The second draw of a felled tree passes the depth test at the depth of the first, as the game's
+					// draws of the same model at the same place do. The two draws have the same depth of their own, so
+					// the view keeps their order.
+					const auto state = sd.state;
+					const auto sortDepth = sd.sortDepth;
+					const bool drawnOver = renderCtx.drawnOverInstances.contains(instance);
+					if (drawnOver || renderCtx.drawnOverInstances.contains(instance + 1))
+					{
+						const auto pairFirst = drawnOver ? instance - 1 : instance;
+						const auto position = glm::vec3(renderCtx.instanceUniforms.at(pairFirst).model[3]);
+						sd.sortDepth = std::max(zsort::ModelDepth(position, cameraOrigin), 1u);
+					}
+					if (drawnOver)
+					{
+						sd.state = (state & ~BGFX_STATE_DEPTH_TEST_MASK) | BGFX_STATE_DEPTH_TEST_GEQUAL;
+					}
 					drawInstancesWith(sd, meshId, placers, useMaterialBlending, instance, 1);
+					sd.state = state;
+					sd.sortDepth = sortDepth;
 				}
 			}
 			sd.detailLevel = 1;

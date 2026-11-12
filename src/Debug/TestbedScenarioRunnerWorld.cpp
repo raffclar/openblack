@@ -69,6 +69,7 @@
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureTallies.h"
 #include "ECS/Components/Dance.h"
+#include "ECS/Components/DeadTree.h"
 #include "ECS/Components/Field.h"
 #include "ECS/Components/Fire.h"
 #include "ECS/Components/FishFarm.h"
@@ -721,9 +722,11 @@ void Runner::PlaceObjects(const Scenario& scenario, glm::vec2 middle)
 			    {
 				    if (object.dead)
 				    {
-					    return ecs::archetypes::DeadTreeArchetype::Create(position, type, glm::radians(object.leanDegrees.x),
-					                                                      yaw, glm::radians(object.leanDegrees.y),
-					                                                      object.scale);
+					    const auto deadTree =
+					        ecs::archetypes::DeadTreeArchetype::Create(position, type, glm::radians(object.leanDegrees.x), yaw,
+					                                                   glm::radians(object.leanDegrees.y), object.scale);
+					    Locator::entitiesRegistry::value().Get<ecs::components::DeadTree>(deadTree).felled = object.felled;
+					    return deadTree;
 				    }
 				    return ecs::archetypes::TreeArchetype::Create(object.forest, position, type, true, yaw,
 				                                                  object.fullSize.value_or(object.scale), object.scale);

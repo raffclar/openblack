@@ -48,7 +48,8 @@ uniform vec4 u_tint;
 // walls without a lightmap are fogged once each, at their first vertex. With w 2, x is the distance that sets the haze.
 uniform vec4 u_fogAt;
 // x: 1 for the light the game gives the models it lights as it poses them (the hand, the glow over it), in place of
-// the usual model light (see PosedModelLightFactor)
+// the usual model light (see PosedModelLightFactor). y: 1 for the land's light and colour of the model's place on the
+// map, with the weights of whole cells and no distance haze, as the phantom building of a scaffold takes them.
 uniform vec4 u_lightRule;
 // A light that shines in a colour of its own (u_objectLook's), as the light out of an opened reward chest: x 1 for such a
 // light, y the bone of its solid vertices (all others are clear), zw the cosine and sine of its texture's turn. Its
@@ -227,10 +228,12 @@ void main()
 		lightOrigin.xz = i_data3.xz + lightOffset;
 	}
 #endif // USE_INSTANCING
+	bool atMapPlace = u_lightRule.y > 0.5f;
 #ifndef USE_LIGHTMAP
 	if (u_landLight.x > 0.0f)
 	{
-		colour = min(floor(LandLightAt(lightOrigin.xz) * u_landLight.y), vec3_splat(255.0f));
+		vec3 landLight = atMapPlace ? LandLightMapAt(lightOrigin.xz) : LandLightAt(lightOrigin.xz);
+		colour = min(floor(landLight * u_landLight.y), vec3_splat(255.0f));
 	}
 #endif // USE_LIGHTMAP
 	// An object of a colour of its own, as the game colours some animals, takes it in place of the land's light
@@ -280,6 +283,11 @@ void main()
 		hazeT = 0.0f;
 	}
 #endif // USE_INSTANCING
+	// A model lit at its place on the map takes no distance haze
+	if (atMapPlace && !InTempleFog())
+	{
+		hazeT = 0.0f;
+	}
 	colour = HazeDiffuse(colour, HazeFactor(hazeT));
 	// The haze is added with the land's colour where the object stands, each channel at most white, unless the object is
 	// lit in a colour of its own that the land's colour doesn't reach (w)
@@ -292,7 +300,8 @@ void main()
 #endif // USE_INSTANCING
 	if (takesLandColour)
 	{
-		added = min(added + LandColourAt(lightOrigin.xz), vec3_splat(255.0f));
+		vec3 landColour = atMapPlace ? LandColourMapAt(lightOrigin.xz) : LandColourAt(lightOrigin.xz);
+		added = min(added + landColour, vec3_splat(255.0f));
 	}
 #endif // USE_LIGHTMAP
 	v_haze = vec4(added / 255.0f, 0.0f);

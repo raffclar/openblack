@@ -440,6 +440,8 @@ struct ObjectSetup
 	std::optional<Reaction> reaction;
 	/// A tree lies dead, as a land's script makes a dead tree, rather than standing and growing
 	bool dead {false};
+	/// A dead tree lies as a forester felled it: the game draws it two times in each frame
+	bool felled {false};
 	/// The lean of a dead tree or a mobile static about x and z, in degrees, as a land's script gives it
 	glm::vec2 leanDegrees {0.0f};
 };
