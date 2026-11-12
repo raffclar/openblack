@@ -71,6 +71,9 @@ public:
 
 	/// Whether a player's hand may tap an icon or a stone hand: the tap counts for the help, whatever it then does
 	[[nodiscard]] virtual bool ValidToTap(entt::entity icon, PlayerNames player) const = 0;
+	/// Whether the land shows an icon this frame: its hand, its seed and its charge. A worship site's icon shows only while
+	/// its site is built.
+	[[nodiscard]] virtual bool Shown(entt::entity /*icon*/) const { return true; }
 	/// The hand taps an icon: whether the tap counted
 	virtual bool Tap(entt::entity icon, PlayerNames player) = 0;
 	/// Whether a computer god's hand may make the worshippers of an icon's site chant for the miracle. The icon must not
