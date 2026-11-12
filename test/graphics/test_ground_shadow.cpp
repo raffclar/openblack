@@ -388,3 +388,28 @@ TEST(GroundShadow, TheListsOfTheBlocksKeepBlocksOffTheGrid)
 	ExpectSameLists(footprints, twoInACell);
 	ExpectSameLists(footprints, notFinite);
 }
+
+TEST(GroundShadow, AHeldTreeJoinsTheHandsShadowByTheBitsOfBothLevels)
+{
+	// The hand covers four samples of a texel and the held tree fills level 7 there: the bits together give 7. Where
+	// only one part lies, its own level stays.
+	std::array<uint8_t, GroundShadow::k_Texels * GroundShadow::k_Texels> covered {};
+	std::array<uint8_t, GroundShadow::k_Texels * GroundShadow::k_Texels> filled {};
+	covered.at(33) = 4;
+	filled.at(33) = 7;
+	covered.at(34) = 4;
+	filled.at(35) = 3;
+	covered.at(36) = 2;
+	filled.at(36) = 1;
+	const auto opaque = GroundShadow::Joined(covered, filled, GroundShadow::k_Opaque);
+	EXPECT_EQ(opaque.at(33), 7);
+	EXPECT_EQ(opaque.at(34), 4);
+	EXPECT_EQ(opaque.at(35), 3);
+	EXPECT_EQ(opaque.at(36), 3);
+	EXPECT_EQ(opaque.at(37), 0);
+
+	// The opacity cuts back the joined level, not each part on its own
+	const auto faded = GroundShadow::Joined(covered, filled, 128);
+	EXPECT_EQ(faded.at(33), GroundShadow::Level(7, 128));
+	EXPECT_EQ(faded.at(36), GroundShadow::Level(3, 128));
+}
