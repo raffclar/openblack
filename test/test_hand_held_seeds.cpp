@@ -475,3 +475,43 @@ TEST_F(ArmedOnThing, TheArmedSeedKeepsTheThingOfThePressUntilTheEndOfTheLock)
 	_magic->ReleaseAction();
 	EXPECT_TRUE(_commands->sent.empty());
 }
+
+// A miracle that runs in the hand, pressed on a thing, casts at once. The interface waits for the let go of the button
+// and keeps the thing of the press, also in the frame after the let go.
+TEST_F(ArmedOnThing, AMiracleThatRunsInTheHandKeepsTheThingOfThePressUntilTheFrameAfterTheLetGo)
+{
+	_info->spellSeed.at(static_cast<size_t>(SpellSeedType::Heal)).castType = SpellCastType::SpellCastInHand;
+	Locator::infoConstants::emplace(*_info);
+	EXPECT_FALSE(_magic->GetUseWait().has_value());
+	ASSERT_TRUE(_magic->PressAction());
+	EXPECT_EQ(_magic->GetHandCastState().state, magic::CastInput::State::Idle);
+	ASSERT_TRUE(_magic->GetUseWait().has_value());
+	EXPECT_EQ(_magic->GetUseWait()->kept, _creature);
+	EXPECT_FALSE(_magic->GetUseWait()->letGo);
+	// The frame before the let go keeps the wait
+	_magic->EndUseWaitAfterLetGo();
+	ASSERT_TRUE(_magic->GetUseWait().has_value());
+	_magic->ReleaseAction();
+	ASSERT_TRUE(_magic->GetUseWait().has_value());
+	EXPECT_TRUE(_magic->GetUseWait()->letGo);
+	EXPECT_EQ(_magic->GetUseWait()->kept, _creature);
+	_magic->EndUseWaitAfterLetGo();
+	EXPECT_FALSE(_magic->GetUseWait().has_value());
+}
+
+// A miracle cast at the hand's place, pressed on a thing, makes a wait that keeps no thing. The let go ends it at once,
+// and so does the end of the interface lock.
+TEST_F(ArmedOnThing, AMiracleCastAtThePlaceOfTheHandWaitsForTheLetGoAndKeepsNoThing)
+{
+	_info->spellSeed.at(static_cast<size_t>(SpellSeedType::Heal)).castType = SpellCastType::SpellCastHandPosition;
+	Locator::infoConstants::emplace(*_info);
+	ASSERT_TRUE(_magic->PressAction());
+	ASSERT_TRUE(_magic->GetUseWait().has_value());
+	EXPECT_EQ(_magic->GetUseWait()->kept, entt::entity {entt::null});
+	_magic->ReleaseAction();
+	EXPECT_FALSE(_magic->GetUseWait().has_value());
+	ASSERT_TRUE(_magic->PressAction());
+	ASSERT_TRUE(_magic->GetUseWait().has_value());
+	_magic->StopActionAtLockEnd();
+	EXPECT_FALSE(_magic->GetUseWait().has_value());
+}

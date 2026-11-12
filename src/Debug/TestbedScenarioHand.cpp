@@ -794,6 +794,29 @@ void testbed_scenarios::AddHand(std::vector<Scenario>& all)
 	                 {.kind = Kind::PointerTo, .delaySeconds = 1.0f, .point = {0.5f, 0.7f}}},
 	});
 
+	// The select button grips the land on a wood pile and drags the camera. The wood pile goes from the world during the
+	// drag, and the end of the interface lock stops the drag.
+	all.push_back({
+	    .id = "hand.land_grip_lock_end",
+	    .name = "The end of the interface lock stops the grip of the land",
+	    .facet = Facet::Hand,
+	    .description = "The pointer is on a wood pile in the middle of the screen. The select button grips the land there "
+	                   "and drags it to the left for two seconds. Then the wood pile goes from the world, and the pointer "
+	                   "moves to the left for two more seconds with the button down. Then the button lets go.",
+	    .expected = "The camera moves with the pointer while the wood pile is in the world. When the wood pile goes, the "
+	                "grip of the land stops and the camera stays where it is, also while the button is down. The hand "
+	                "grips the land again only after a new press of the select button.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {-34.5f, 20.0f, 4.5f}, .look = {0.0f, 0.0f, 0.0f}},
+	    .objects = {{.type = PotInfo::WoodPile_1, .offset = {0.0f, 0.0f}, .amount = 2000}},
+	    .commands = {{.kind = Kind::PointerTo, .delaySeconds = 1.0f, .point = {0.5f, 0.5f}},
+	                 {.kind = Kind::PointerPress, .delaySeconds = 1.0f, .value = 1},
+	                 {.kind = Kind::PointerSweep, .delaySeconds = 0.5f, .point = {-0.15f, 0.0f}, .amount = 2.0f},
+	                 {.kind = Kind::RemoveObject, .delaySeconds = 2.0f, .object = 0},
+	                 {.kind = Kind::PointerSweep, .delaySeconds = 0.5f, .point = {-0.15f, 0.0f}, .amount = 2.0f},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 2.5f, .value = 1}},
+	});
+
 	// The camera looks at a storage pit with wood in its first two wood piles. The hand scoops from its second wood pile
 	// for eight seconds.
 	all.push_back({

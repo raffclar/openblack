@@ -493,6 +493,56 @@ TEST(HandPress, APressOfTheSelectButtonThatDoesNotGripTheLandKeepsNoFlag)
 	EXPECT_FALSE(fixture.system->SelectPressHolds());
 }
 
+TEST(HandPress, TheEndOfTheInterfaceLockStopsTheGripOfTheLandUntilTheLetGoOfTheSelectButton)
+{
+	Fixture fixture;
+	fixture.Press(ButtonEvent(SDL_MOUSEBUTTONDOWN, SDL_BUTTON_LEFT));
+	ASSERT_TRUE(fixture.system->GetHandButtons().selectGrip);
+	fixture.system->StopLandGrip();
+	EXPECT_TRUE(fixture.system->LandGripStopped());
+	EXPECT_FALSE(fixture.system->GetHandButtons().selectGrip);
+	EXPECT_FALSE(fixture.system->GetHandButtons().gripping);
+	// A motion and the other button with the select button down grip and turn nothing
+	fixture.Press(Motion(SDL_BUTTON_LMASK));
+	fixture.Press(ButtonEvent(SDL_MOUSEBUTTONDOWN, SDL_BUTTON_RIGHT));
+	EXPECT_FALSE(fixture.system->GetHandButtons().gripping);
+	EXPECT_FALSE(fixture.system->GetHandButtons().rotating);
+	fixture.Press(ButtonEvent(SDL_MOUSEBUTTONUP, SDL_BUTTON_RIGHT));
+	// After the let go, the next press grips the land again
+	fixture.Press(ButtonEvent(SDL_MOUSEBUTTONUP, SDL_BUTTON_LEFT));
+	EXPECT_FALSE(fixture.system->LandGripStopped());
+	fixture.Press(ButtonEvent(SDL_MOUSEBUTTONDOWN, SDL_BUTTON_LEFT));
+	EXPECT_TRUE(fixture.system->GetHandButtons().selectGrip);
+}
+
+TEST(HandPress, BothButtonsThatEndTheInterfaceLockGripTheLandAgainAtOnce)
+{
+	Fixture fixture;
+	fixture.Press(ButtonEvent(SDL_MOUSEBUTTONDOWN, SDL_BUTTON_RIGHT));
+	fixture.Press(ButtonEvent(SDL_MOUSEBUTTONDOWN, SDL_BUTTON_LEFT));
+	ASSERT_TRUE(fixture.system->GetHandButtons().rotating);
+	fixture.system->StopLandGrip();
+	fixture.system->GripLandAgain();
+	EXPECT_FALSE(fixture.system->LandGripStopped());
+	EXPECT_TRUE(fixture.system->GetHandButtons().selectGrip);
+	EXPECT_TRUE(fixture.system->GetHandButtons().rotating);
+}
+
+TEST(HandPress, TheEndOfTheInterfaceLockStopsNoGripOfTheMiddleButtonOrOfAButtonThatGripsNoLand)
+{
+	Fixture fixture;
+	fixture.Press(ButtonEvent(SDL_MOUSEBUTTONDOWN, SDL_BUTTON_MIDDLE));
+	fixture.system->StopLandGrip();
+	EXPECT_FALSE(fixture.system->LandGripStopped());
+	EXPECT_TRUE(fixture.system->GetHandButtons().gripping);
+	fixture.Press(ButtonEvent(SDL_MOUSEBUTTONUP, SDL_BUTTON_MIDDLE));
+	// The hand holds a creature, which takes the select button
+	fixture.world->held = k_Creature;
+	fixture.Press(ButtonEvent(SDL_MOUSEBUTTONDOWN, SDL_BUTTON_LEFT));
+	fixture.system->StopLandGrip();
+	EXPECT_FALSE(fixture.system->LandGripStopped());
+}
+
 TEST(HandPress, TheHandFollowsTheGamesPointerUntilTheMouseMoves)
 {
 	Fixture fixture;

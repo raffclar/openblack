@@ -300,7 +300,15 @@ void HandPressSystem::Press(const SDL_Event& event, const PressContext& context)
 		_world->ReleaseCreature();
 	}
 	const bool onCreature = _world->HeldCreature().has_value();
-	_handButtons = input::HandButtonsOf(_buttons, inTemple, onCreature, _world->FightPressed());
+	// After the end of the interface lock stopped the grip of the land, the select button grips nothing until the player
+	// lets go of it
+	if (_landGripStopped && !_buttons.left)
+	{
+		_landGripStopped = false;
+	}
+	auto gripButtons = _buttons;
+	gripButtons.left = gripButtons.left && !_landGripStopped;
+	_handButtons = input::HandButtonsOf(gripButtons, inTemple, onCreature, _world->FightPressed());
 	_selectPress = input::select_press::Next(_selectPress, {
 	                                                           .event = SelectPressEvent(event),
 	                                                           .interfaceOn = handTakesPresses,
@@ -525,6 +533,30 @@ void HandPressSystem::MovePress(const SDL_Event& event, bool inTemple, bool hand
 	{
 		context.playGrabSound();
 	}
+}
+
+void HandPressSystem::StopLandGrip()
+{
+	if (!_handButtons.selectGrip)
+	{
+		return;
+	}
+	// The grip of the land by the select button stops. The middle button still grips and turns.
+	_beforeGripStop = _handButtons;
+	_landGripStopped = true;
+	_handButtons.selectGrip = false;
+	_handButtons.gripping = _buttons.middle;
+	_handButtons.rotating = _buttons.middle;
+}
+
+void HandPressSystem::GripLandAgain()
+{
+	if (!_landGripStopped)
+	{
+		return;
+	}
+	_landGripStopped = false;
+	_handButtons = _beforeGripStop;
 }
 
 bool HandPressSystem::TakeActionPress()

@@ -174,6 +174,20 @@ struct HandGrab
 		LockEnd,
 	};
 	ScoopEnd scoopEnd {ScoopEnd::None};
+	/// What the interface of the hand of this computer waits for after a press of the Action button on a thing while the
+	/// hand holds something
+	enum class PressWait : uint8_t
+	{
+		/// It waits for nothing
+		None,
+		/// The press used what the hand holds on the thing. The interface waits for the let go of the button.
+		Use,
+		/// The press sent the gift of what the hand holds. The interface waits until its lock ends.
+		Give,
+	};
+	PressWait pressWait {PressWait::None};
+	/// The thing that was under the hand at the press of a gift. The interface keeps it until its lock ends.
+	entt::entity pressWaitThing {entt::null};
 	std::optional<uint32_t> scoopStream;
 	/// The scooping sound's loop while it plays
 	entt::entity scoopSound {entt::null};

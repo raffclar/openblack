@@ -182,6 +182,13 @@ public:
 	/// The thing that the hand of this computer takes: from the press on the thing, while the hand waits or pulls, until
 	/// the turn puts the thing in the hand
 	[[nodiscard]] virtual std::optional<entt::entity> GetTaking() const { return std::nullopt; }
+	/// Whether the interface of the hand of this computer waits for the let go of the Action button, after a press that
+	/// used what the hand holds on a thing
+	[[nodiscard]] virtual bool WaitsForUseLetGo() const { return false; }
+	/// The interface of the hand of this computer waits until its lock ends, after a press that sent the gift of what the
+	/// hand holds. This is the thing that was under the hand at the press, or null. None when the interface does not
+	/// wait for this.
+	[[nodiscard]] virtual std::optional<entt::entity> GetGiveWait() const { return std::nullopt; }
 	/// Whether the hand's point on the land is in its player's influence
 	[[nodiscard]] virtual bool IsInInfluence() const = 0;
 	/// Whether the point of the hand of a player on the land is in the influence of that player

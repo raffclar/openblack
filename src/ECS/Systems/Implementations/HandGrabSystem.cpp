@@ -490,6 +490,8 @@ bool HandGrabSystem::Press(uint32_t nowMs, uint32_t turn)
 				_world->SendCommand(player_commands::HandApply {.target = *target});
 				_world->MarkSend();
 			}
+			// Also with no send, the interface waits for the let go of the button
+			grab->pressWait = HandGrab::PressWait::Use;
 			return true;
 		}
 		// Out of the player's influence the press does nothing: the hand keeps hold, and letting go of the button later,
@@ -559,6 +561,11 @@ std::optional<entt::entity> HandGrabSystem::Release(uint32_t nowMs, uint32_t tur
 	if (grab == nullptr)
 	{
 		return std::nullopt;
+	}
+	// The let go ends the wait of the interface after a use
+	if (grab->pressWait == HandGrab::PressWait::Use)
+	{
+		grab->pressWait = HandGrab::PressWait::None;
 	}
 	switch (grab->state)
 	{
@@ -1063,6 +1070,9 @@ void HandGrabSystem::StopActionAtLockEnd()
 	{
 		return;
 	}
+	// The interface waits no more after a use or a gift
+	grab->pressWait = HandGrab::PressWait::None;
+	grab->pressWaitThing = entt::null;
 	switch (grab->state)
 	{
 	case HandGrab::State::Grabbing:
@@ -1971,6 +1981,9 @@ bool HandGrabSystem::Give(HandGrab& grab, std::optional<entt::entity> under)
 	// The side of the hand of this computer goes with the give, as the turn of every computer reads it
 	_world->SendCommand(player_commands::HandGive {.creature = *creature, .object = held, .leftHand = !_world->RightHanded()});
 	_world->MarkSend();
+	// The interface waits until its lock ends. It keeps the thing that was under the hand at the press.
+	grab.pressWait = HandGrab::PressWait::Give;
+	grab.pressWaitThing = under.value_or(entt::entity {entt::null});
 	return true;
 }
 
@@ -2475,6 +2488,26 @@ std::optional<entt::entity> HandGrabSystem::GetTaking() const
 		return std::nullopt;
 	}
 	return grab->object;
+}
+
+bool HandGrabSystem::WaitsForUseLetGo() const
+{
+	// The input and the frames of this computer act with its own hand
+	const hand_grab::HandGrabWorldInterface::ActingPlayer own(*_world, _world->OwnHandPlayer());
+	const auto* grab = Grab();
+	return grab != nullptr && grab->pressWait == HandGrab::PressWait::Use;
+}
+
+std::optional<entt::entity> HandGrabSystem::GetGiveWait() const
+{
+	// The input and the frames of this computer act with its own hand
+	const hand_grab::HandGrabWorldInterface::ActingPlayer own(*_world, _world->OwnHandPlayer());
+	const auto* grab = Grab();
+	if (grab == nullptr || grab->pressWait != HandGrab::PressWait::Give)
+	{
+		return std::nullopt;
+	}
+	return grab->pressWaitThing;
 }
 
 bool HandGrabSystem::IsAboutToThrow() const

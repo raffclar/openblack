@@ -38,7 +38,8 @@ struct BuildingToolTips
 /// The tooltips of a building that is not fully built or not fully repaired, none for other things
 [[nodiscard]] std::optional<BuildingToolTips> BuildingOf(entt::entity object);
 
-/// Whether the hand can do something with a thing at all. A building with nothing built yet is not such a thing.
+/// Whether the hand can do something with a thing at all. A villager on its way to die and a building with nothing built
+/// yet are not such things.
 [[nodiscard]] bool IsInteractable(entt::entity object);
 
 /// Whether a thing flies, rolls or slides above the land

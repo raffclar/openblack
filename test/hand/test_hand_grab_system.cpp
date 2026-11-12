@@ -2594,6 +2594,36 @@ TEST_F(HandGrabSystemWithWorld, AHandfulPressedOntoAStoreGoesIntoIt)
 	EXPECT_TRUE(world->released.empty());
 }
 
+// The use of the held thing on a thing makes the interface wait for the let go of the button, also when the hand waits
+// for its last send. The let go and the end of the interface lock end the wait.
+TEST_F(HandGrabSystemWithWorld, TheUseOfTheHeldThingWaitsForTheLetGoOfTheButton)
+{
+	const auto tree = world->AddTree({0.0f, 0.0f, 0.0f}, 10.0f);
+	world->underCursor = tree;
+	Press();
+	for (int i = 0; i < 40 && !system->GetHeld().has_value(); ++i)
+	{
+		Frame(10);
+	}
+	ASSERT_TRUE(system->GetHeld().has_value());
+	Release();
+	EXPECT_FALSE(system->WaitsForUseLetGo());
+	const auto store = world->registry.Create();
+	world->stores.insert(store);
+	world->underCursor = store;
+	deferCommands = true;
+	ASSERT_TRUE(Press());
+	EXPECT_TRUE(system->WaitsForUseLetGo());
+	EXPECT_FALSE(system->GetGiveWait().has_value());
+	Release();
+	EXPECT_FALSE(system->WaitsForUseLetGo());
+	world->sendWaits = true;
+	ASSERT_TRUE(Press());
+	EXPECT_TRUE(system->WaitsForUseLetGo());
+	system->StopActionAtLockEnd();
+	EXPECT_FALSE(system->WaitsForUseLetGo());
+}
+
 TEST_F(HandGrabSystemWithWorld, ATreePressedOntoAStoreGoesIntoItWhole)
 {
 	const auto tree = world->AddTree({0.0f, 0.0f, 0.0f}, 10.0f);
@@ -3012,6 +3042,30 @@ TEST_F(HandGrabSystemGiving, TheGiveOfThePressIsACommandThatWaitsForItsTurn)
 	RunWaiting();
 	ASSERT_EQ(world->given.size(), 1u);
 	EXPECT_EQ(world->given.front().creature, creature);
+}
+
+// A sent gift makes the interface wait until its lock ends, also after the turn did the gift. The wait keeps the thing
+// that was under the hand at the press. A press that sends no gift makes no wait.
+TEST_F(HandGrabSystemGiving, TheSentGiftWaitsUntilTheEndOfTheInterfaceLock)
+{
+	HoldRock();
+	const auto creature = AddCreature(creature_giving::Verdict::Give);
+	world->underCursor = creature;
+	Frame(16);
+	deferCommands = true;
+	world->sendWaits = true;
+	EXPECT_TRUE(Press());
+	EXPECT_FALSE(system->GetGiveWait().has_value());
+	Release();
+	world->sendWaits = false;
+	EXPECT_TRUE(Press());
+	EXPECT_EQ(system->GetGiveWait(), std::optional(creature));
+	EXPECT_FALSE(system->WaitsForUseLetGo());
+	Release();
+	RunWaiting();
+	EXPECT_EQ(system->GetGiveWait(), std::optional(creature));
+	system->StopActionAtLockEnd();
+	EXPECT_FALSE(system->GetGiveWait().has_value());
 }
 
 TEST_F(HandGrabSystemGiving, TheTurnGivesWithTheSideOfTheHandOfTheComputerThatSentTheGive)

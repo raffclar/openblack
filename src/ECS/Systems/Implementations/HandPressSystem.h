@@ -40,6 +40,9 @@ public:
 	[[nodiscard]] bool TakeDialogueClick() final;
 	[[nodiscard]] bool SelectPressHolds() const final { return _selectPress; }
 	void EndSelectPress() final { _selectPress = false; }
+	void StopLandGrip() final;
+	void GripLandAgain() final;
+	[[nodiscard]] bool LandGripStopped() const final { return _landGripStopped; }
 	[[nodiscard]] const std::optional<glm::ivec2>& GetTotemPointer() const final { return _totemPointer; }
 	void SetTotemPointer(std::optional<glm::ivec2> pointer) final { _totemPointer = pointer; }
 	[[nodiscard]] glm::ivec2 GetMousePosition() const final { return _mousePosition; }
@@ -69,6 +72,10 @@ private:
 	bool _dialogueClick {false};
 	/// The flag of the interface for a press of the select button that holds the land
 	bool _selectPress {false};
+	/// The end of the interface lock stopped the grip of the land, until the player lets go of the select button. The flags
+	/// of the hand from before the stop come back when both buttons ended the lock.
+	bool _landGripStopped {false};
+	input::HandButtons _beforeGripStop;
 	std::optional<glm::ivec2> _totemPointer;
 	glm::ivec2 _mousePosition {0, 0};
 	/// Whether the hand follows the pointer that the window reports yet, or until the mouse first moves the game's own

@@ -91,6 +91,7 @@
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/DrawnPlace.h"
+#include "ECS/DyingVillager.h"
 #include "ECS/FloatingNumber.h"
 #include "ECS/LearningMarker.h"
 #include "ECS/Map.h"
@@ -330,15 +331,9 @@ void StepEase(Ease& ease)
 	{
 		return {.inWorld = false};
 	}
-	const auto* action = registry.AllOf<ecs::components::Villager>(thing)
-	                         ? registry.TryGet<const ecs::components::LivingAction>(thing)
-	                         : nullptr;
-	const bool dying = action != nullptr && Locator::livingActionSystem::has_value() &&
-	                   Locator::livingActionSystem::value().VillagerGetState(
-	                       *action, ecs::components::LivingAction::Index::Final) == VillagerStates::Dying;
 	return {
 	    .inWorld = true,
-	    .villagerDying = dying,
+	    .villagerDying = ecs::IsDyingVillager(registry, thing),
 	    .nothingBuilt = !gui::hand_tooltip::IsInteractable(thing),
 	    .inHand = registry.AllOf<ecs::components::InHand>(thing),
 	};
@@ -579,23 +574,50 @@ void Game::EndHandLockForFrame()
 		return;
 	}
 	// The action of the hand of this computer, the thing or the seed that the action needs, and the thing that the
-	// action keeps from its press
+	// action keeps from its press. An action that keeps no thing checks the thing under the hand in each frame.
 	auto action = hand_send_wait::FrameAction::Free;
 	std::optional<entt::entity> held;
 	auto pressThing = entt::entity {entt::null};
+	bool keepsThing = true;
+	const bool hasMagic = Locator::magicSystem::has_value();
 	const bool hasGrab = Locator::handGrabSystem::has_value();
 	const auto taking = hasGrab ? Locator::handGrabSystem::value().GetTaking() : std::nullopt;
-	if (Locator::magicSystem::has_value() &&
-	    Locator::magicSystem::value().GetHandCastState().state != magic::CastInput::State::Idle)
+	const auto useWait = hasMagic ? Locator::magicSystem::value().GetUseWait() : std::nullopt;
+	const auto giveWait = hasGrab ? Locator::handGrabSystem::value().GetGiveWait() : std::nullopt;
+	if (hasMagic && Locator::magicSystem::value().GetHandCastState().state != magic::CastInput::State::Idle)
 	{
 		action = hand_send_wait::FrameAction::UsesHeld;
 		held = Locator::magicSystem::value().GetHeldSeed();
 		pressThing = Locator::magicSystem::value().GetPressThing();
 	}
+	else if (useWait.has_value())
+	{
+		// The seed was used on a thing at the press, and the interface waits for the let go of the button. Both buttons end
+		// the wait. A miracle that runs in the hand keeps the thing of the press, also in the frame after the let go.
+		action = useWait->letGo ? hand_send_wait::FrameAction::Free : hand_send_wait::FrameAction::Other;
+		pressThing = useWait->kept;
+		keepsThing = useWait->kept != entt::null;
+	}
+	else if (giveWait.has_value())
+	{
+		// The hand sent a gift, and the interface waits until its lock ends. The wait needs the held thing, both buttons
+		// end it, and it keeps the thing that was under the hand at the press.
+		action = hand_send_wait::FrameAction::UsesHeld;
+		held = Locator::handGrabSystem::value().GetHeld();
+		pressThing = *giveWait;
+	}
 	else if (hasGrab && Locator::handGrabSystem::value().IsAboutToThrow())
 	{
 		action = hand_send_wait::FrameAction::UsesHeld;
 		held = Locator::handGrabSystem::value().GetHeld();
+		keepsThing = false;
+	}
+	else if (hasGrab && Locator::handGrabSystem::value().WaitsForUseLetGo())
+	{
+		// The hand used what it holds on a thing, and the interface waits for the let go of the button. Both buttons end
+		// the wait.
+		action = hand_send_wait::FrameAction::Other;
+		keepsThing = false;
 	}
 	else if (taking.has_value())
 	{
@@ -616,6 +638,18 @@ void Game::EndHandLockForFrame()
 		             : Locator::creatureHandSystem::has_value() ? Locator::creatureHandSystem::value().GetPressCreature()
 		                                                        : entt::entity {entt::null};
 	}
+	else if (!Locator::tipBubbleSystem::has_value() || !Locator::tipBubbleSystem::value().IsGripped())
+	{
+		// The hand does no action, or it grips the land, a totem or the fight. While the hand grips a tip bubble, the
+		// interface checks no thing.
+		keepsThing = false;
+	}
+	// The thing under the hand: the pick of the last frame drawn. While the hand grips the land, the pick keeps the thing
+	// that was under the hand at the grip.
+	if (!keepsThing && Locator::pickingSystem::has_value())
+	{
+		pressThing = Locator::pickingSystem::value().GetPick().object.value_or(entt::entity {entt::null});
+	}
 	const auto& buttons = Locator::handPressSystem::value().GetPointerButtons();
 	const hand_send_wait::FrameFacts facts {
 	    .frontEndBox = FrontEndBoxShows(),
@@ -631,6 +665,16 @@ void Game::EndHandLockForFrame()
 	if (hand_send_wait::FrameEndsLock(facts))
 	{
 		Locator::handSystem::value().EndOwnInterfaceLock();
+		// When only both buttons ended the lock, the grip of the land starts again at once, and the hand turns the camera
+		if (hand_send_wait::BothButtonsAloneEndLock(facts))
+		{
+			Locator::handPressSystem::value().GripLandAgain();
+		}
+	}
+	// The wait after a use on a thing ends in the frame after the let go of the button
+	if (hasMagic)
+	{
+		Locator::magicSystem::value().EndUseWaitAfterLetGo();
 	}
 }
 
