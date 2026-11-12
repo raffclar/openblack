@@ -19,6 +19,8 @@ SAMPLER2D(s4_groundShadowData, 4);
 #include "ground_shadow.sh"
 // The ring an open vortex lays over the land around its hole
 SAMPLER2D(s13_vortexRing, 13);
+// Where the trees' shadows cover the island when they are drawn moving, a texel for each texel of the blocks
+SAMPLER2D(s5_objectShadows, 5);
 // The blocks' coarse textures, as their last paints made them
 SAMPLER2D(s11_coarseTextures, 11);
 #define COARSE_TEXTURES s11_coarseTextures
