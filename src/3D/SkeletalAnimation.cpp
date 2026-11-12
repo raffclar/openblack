@@ -262,7 +262,8 @@ public:
 		if (turns != nullptr)
 		{
 			_fromTurns = turns->Of(animation, from, mirrored);
-			_toTurns = turns->Of(animation, to, mirrored);
+			// A pair of one frame, as the first frame of a layer, asks the store one time
+			_toTurns = to == from ? _fromTurns : turns->Of(animation, to, mirrored);
 		}
 	}
 
