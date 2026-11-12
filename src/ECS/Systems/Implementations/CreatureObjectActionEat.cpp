@@ -45,7 +45,6 @@
 #include "ECS/ObjectPhysics.h"
 #include "ECS/PhysicsClasses.h"
 #include "ECS/Registry.h"
-#include "ECS/Statistics.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
 #include "ECS/Systems/BuildingDamageSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
@@ -154,15 +153,6 @@ void KeepMealDown(entt::entity creature, float energy)
 			auto& hunger = desires[creature_desires::Desire::Hunger];
 			hunger.value = creature_meals::HungerAfterMeal(hunger.value, energy);
 		});
-	}
-}
-
-/// A magic mushroom or a toadstool that the creature eats counts among its mushrooms
-void CountMushroom(ecs::Registry& registry, entt::entity creature, const Meal& meal)
-{
-	if (meal.magicMushroom)
-	{
-		player_statistics::CountCreatureMushroom(registry, creature);
 	}
 }
 
@@ -284,7 +274,6 @@ void Swallow(entt::entity creature, CreatureObjectAction& action, std::optional<
 		Locator::creatureMindSystem::value().AteMagicMushroom(creature);
 	}
 	const auto meal = MealOf(registry, *food);
-	CountMushroom(registry, creature, meal);
 	Consume(registry, creature, *food);
 	const bool bringsUp =
 	    creature_object_actions::BringsMealBackUp(value.value_or(0.0f), meal.magicMushroom, meal.foodPile, meal.poisoned);

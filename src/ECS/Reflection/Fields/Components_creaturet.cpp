@@ -29,8 +29,7 @@ void openblack::ecs::reflection::RegisterFields_Components_creaturet(entt::meta_
 {
 	Reflect<components::CreatureTallies>(context)
 	    .Field<&components::CreatureTallies::meals>("meals")
-	    .Field<&components::CreatureTallies::poos>("poos")
-	    .Field<&components::CreatureTallies::mushroomsEaten>("mushroomsEaten");
+	    .Field<&components::CreatureTallies::poos>("poos");
 	Reflect<components::CreatureTarget>(context)
 	    .Field<&components::CreatureTarget::point>("point")
 	    .Field<&components::CreatureTarget::object>("object")

@@ -201,3 +201,26 @@ TEST_F(SkyClockSystemTest, ALoadWithNoShownDomeBuildsTheWholeDome)
 	EXPECT_EQ(frame.rows.at(0).first, 0);
 	EXPECT_EQ(frame.rows.at(0).count, sky_dome::k_Rows);
 }
+
+// A load keeps the dome before the land starts again. The start of the land puts the clock at noon and builds all of the
+// dome for noon. The dome after the load continues from the dome that the renderer showed, not from the noon dome.
+TEST_F(SkySystemTest, ALoadKeepsTheShownDomeFromBeforeTheStartOfTheLand)
+{
+	Clock().SetTime(0.0f);
+	const auto before = Entities().Get<components::SkyDome>(Sky().GetDome()).follow;
+	ASSERT_GT(before.Following(), 0.0f);
+
+	Clock().KeepShownDome();
+	// The start of the land
+	Clock().GetClock().Reset();
+	Clock().SetTime(Clock().GetClock().GetScriptTime());
+	ASSERT_EQ(Entities().Get<components::SkyDome>(Sky().GetDome()).follow.Following(), 0.0f);
+	// The saved world takes the place of the land's entities
+	Entities().Reset();
+	static_cast<void>(archetypes::SkyArchetype::Create());
+	Clock().FindAfterLoad();
+
+	const auto& dome = Entities().Get<components::SkyDome>(Sky().GetDome());
+	EXPECT_FLOAT_EQ(dome.follow.Following(), before.Following());
+	EXPECT_EQ(dome.follow.RowsDone(), before.RowsDone());
+}
