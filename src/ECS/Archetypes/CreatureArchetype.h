@@ -61,6 +61,11 @@ public:
 	/// The skin and the hair of the creature get the evil to good target that the creature has now, as each paint of
 	/// the skin does (see components::CreatureMorph::paintedAlignment)
 	static void PaintWithTarget(Registry& registry, entt::entity creature);
+	/// One morph step of the creature's body: each drawn axis that is far enough from its target moves to it (see
+	/// creature_morph::RefreshDrawn). A new alignment also paints the skin and the hair with the evil to good target.
+	/// The step occurs once in each creature turn, and once at the end of a swap of minds. It gives false when the
+	/// creature has no body to morph.
+	static bool MorphStep(Registry& registry, entt::entity creature);
 
 	static entt::entity Create(const glm::vec3& position, PlayerNames playerName, CreatureType creatureType,
 	                           entt::id_type creatureMindId, float yAngleRadians, float scale, const Body& body);

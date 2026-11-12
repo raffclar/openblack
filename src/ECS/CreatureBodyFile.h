@@ -9,6 +9,9 @@
 
 #pragma once
 
+#include <optional>
+#include <string>
+
 #include <entt/fwd.hpp>
 
 #include "Creature/CreatureMindFileBody.h"
@@ -29,7 +32,27 @@ namespace openblack::ecs::creature_body_file
 
 /// A creature takes up the body a file kept: its alignment, strength, fatness and size, the fatness its body shows, its
 /// tattoos and marks, how its body was doing, which its body starts from, the values that the body got when the game
-/// made it, and the environment map word
+/// made it, and the environment map word. While a nice or nasty spell is on the creature, the alignment of the file
+/// goes to the value that the spell puts back as it ends, and the alignment now stays.
 void Apply(Registry& registry, entt::entity creature, const creature_mind_body::Body& body);
+
+/// What a body keeps for itself in a swap of minds
+struct OwnBody
+{
+	std::u16string name;
+	float size {1.0f};
+	float alignment {0.0f};
+	float pendingAlignment {0.0f};
+};
+
+/// A body takes up the other mind in a swap of minds. The steps are:
+/// 1. The body takes up the body of the other mind's file, with the alignment of that mind. Thus the load paints the
+///    skin and the hair with the alignment of the other mind.
+/// 2. The body gets its own name, size and alignment back.
+/// 3. The body takes its looks once more and does one morph step. The step paints the skin and the hair again only when
+///    the evil to good target is far enough from the drawn axis.
+/// Without a body in the file, only steps 2 and 3 occur.
+void TakeUpSwappedMind(Registry& registry, entt::entity creature, const std::optional<creature_mind_body::Body>& body,
+                       const OwnBody& own);
 
 } // namespace openblack::ecs::creature_body_file

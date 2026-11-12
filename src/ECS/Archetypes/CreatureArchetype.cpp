@@ -157,6 +157,29 @@ void CreatureArchetype::PaintWithTarget(Registry& registry, entt::entity creatur
 	morph->paintedAlignment = Targets(*body, *morph).evilGood;
 }
 
+bool CreatureArchetype::MorphStep(Registry& registry, entt::entity creature)
+{
+	const auto* body = registry.TryGet<const Creature>(creature);
+	auto* morph = registry.TryGet<CreatureMorph>(creature);
+	if (body == nullptr || morph == nullptr)
+	{
+		return false;
+	}
+	const auto targets = Targets(*body, *morph);
+	const auto refresh = creature_morph::RefreshDrawn(morph->drawn, targets);
+	morph->drawn = refresh.drawn;
+	if (refresh.animations)
+	{
+		++morph->revision;
+	}
+	// A new alignment paints the skin and the hair with the evil to good target
+	if (refresh.skin)
+	{
+		morph->paintedAlignment = targets.evilGood;
+	}
+	return true;
+}
+
 entt::entity CreatureArchetype::Create(const glm::vec3& position, PlayerNames playerName, CreatureType creatureType,
                                        entt::id_type creatureMindId, float yAngleRadians, float scale, const Body& body)
 {

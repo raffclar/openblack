@@ -18,6 +18,7 @@
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureNeeds.h"
 #include "ECS/Components/CreatureSkin.h"
+#include "ECS/Components/CreatureSpells.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureSkinSystemInterface.h"
@@ -76,7 +77,20 @@ void creature_body_file::Apply(Registry& registry, entt::entity creature, const 
 	{
 		if (body.alignment.has_value())
 		{
-			self->alignment = *body.alignment;
+			// A nice spell, else a nasty spell, holds the alignment: the file's alignment is what the spell puts back
+			auto* spells = registry.TryGet<CreatureSpells>(creature);
+			if (spells != nullptr && spells->spells.IsActive(creature_spells::Spell::Nice))
+			{
+				spells->spells[creature_spells::Spell::Nice].before = *body.alignment;
+			}
+			else if (spells != nullptr && spells->spells.IsActive(creature_spells::Spell::Nasty))
+			{
+				spells->spells[creature_spells::Spell::Nasty].before = *body.alignment;
+			}
+			else
+			{
+				self->alignment = *body.alignment;
+			}
 			self->pendingAlignment = 0.0f;
 		}
 		self->strength = body.strength;
@@ -146,4 +160,26 @@ void creature_body_file::Apply(Registry& registry, entt::entity creature, const 
 		marks->marks = {.wounds = body.wounds, .blood = body.blood, .counts = 0};
 		++marks->revision;
 	}
+}
+
+void creature_body_file::TakeUpSwappedMind(Registry& registry, entt::entity creature,
+                                           const std::optional<creature_mind_body::Body>& body, const OwnBody& own)
+{
+	if (body.has_value())
+	{
+		// The body keeps its own size. The alignment is the other mind's, so the load paints with it.
+		auto loaded = *body;
+		loaded.size = own.size;
+		Apply(registry, creature, loaded);
+	}
+	if (auto* self = registry.TryGet<Creature>(creature))
+	{
+		self->name = own.name;
+		self->size = own.size;
+		self->alignment = own.alignment;
+		self->pendingAlignment = own.pendingAlignment;
+	}
+	// The body takes its looks with its own alignment, then one morph step paints again if the target moved far enough
+	archetypes::CreatureArchetype::TakeLooks(registry, creature);
+	archetypes::CreatureArchetype::MorphStep(registry, creature);
 }

@@ -43,6 +43,7 @@
 #include "ECS/Components/CreatureHandGlows.h"
 #include "ECS/Components/CreatureNeeds.h"
 #include "ECS/Components/CreatureSkin.h"
+#include "ECS/Components/CreatureSpells.h"
 #include "ECS/CreatureBodyFile.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
@@ -396,6 +397,83 @@ TEST_F(CreatureBodyFile, ACreatureMadeFromAFileTakesUpTheBodyItKept)
 	EXPECT_EQ(registry.Get<CreatureMarks>(loaded).marks.blood, GrownBody().blood);
 	// Its kept needs are still what it has, though its body hasn't started yet
 	EXPECT_EQ(ecs::creature_body_file::Capture(registry, loaded).needs, GrownBody().needs);
+}
+
+TEST_F(CreatureBodyFile, ASwapOfMindsPaintsWithTheOtherMindAndKeepsThatPaintNearTheOwnAlignment)
+{
+	using namespace ecs::components;
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto creature = MakeCreature(true);
+	registry.Get<Creature>(creature).alignment = 0.5f;
+	auto& morph = registry.Get<CreatureMorph>(creature);
+	morph.drawn.evilGood = 0.48f;
+	morph.paintedAlignment = 0.48f;
+	ecs::creature_body_file::TakeUpSwappedMind(registry, creature, GrownBody(),
+	                                           {.name = u"Own", .size = 1.2f, .alignment = 0.5f, .pendingAlignment = 0.1f});
+	const auto& body = registry.Get<const Creature>(creature);
+	EXPECT_EQ(body.name, u"Own");
+	EXPECT_EQ(body.size, 1.2f);
+	EXPECT_EQ(body.alignment, 0.5f);
+	EXPECT_EQ(body.pendingAlignment, 0.1f);
+	// The load painted with the other mind's alignment. The own target is under 0.03 from the drawn axis, so the paint
+	// stays.
+	EXPECT_EQ(morph.paintedAlignment, -0.5f);
+	EXPECT_EQ(morph.drawn.evilGood, 0.48f);
+	EXPECT_EQ(morph.alignmentLook, 0.5f);
+}
+
+TEST_F(CreatureBodyFile, ASwapOfMindsPaintsAgainWhenTheOwnAlignmentIsFarFromTheDrawnAxis)
+{
+	using namespace ecs::components;
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto creature = MakeCreature(true);
+	auto& morph = registry.Get<CreatureMorph>(creature);
+	morph.drawn.evilGood = 0.4f;
+	ecs::creature_body_file::TakeUpSwappedMind(registry, creature, GrownBody(),
+	                                           {.name = u"Own", .size = 1.0f, .alignment = 0.5f});
+	EXPECT_EQ(morph.drawn.evilGood, 0.5f);
+	EXPECT_EQ(morph.paintedAlignment, 0.5f);
+}
+
+TEST_F(CreatureBodyFile, AMindLoadOfANeutralCreaturePaintsNothing)
+{
+	using namespace ecs::components;
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto creature = MakeCreature(true);
+	registry.Get<Creature>(creature).owner = PlayerNames::NEUTRAL;
+	auto& morph = registry.Get<CreatureMorph>(creature);
+	morph.drawn.evilGood = 0.5f;
+	morph.paintedAlignment = 0.5f;
+	ecs::creature_body_file::TakeUpSwappedMind(registry, creature, GrownBody(),
+	                                           {.name = u"Own", .size = 1.0f, .alignment = 0.5f});
+	EXPECT_EQ(morph.paintedAlignment, 0.5f);
+}
+
+TEST_F(CreatureBodyFile, WhileANiceOrNastySpellIsOnTheFilesAlignmentIsWhatTheSpellPutsBack)
+{
+	using namespace ecs::components;
+	auto& registry = Locator::entitiesRegistry::value();
+	for (const auto spell : {creature_spells::Spell::Nice, creature_spells::Spell::Nasty})
+	{
+		const auto creature = MakeCreature(true);
+		registry.Get<Creature>(creature).alignment = 0.9f;
+		auto& spells = registry.Assign<CreatureSpells>(creature);
+		spells.spells[spell].phase = creature_spells::Phase::Holding;
+		spells.spells[spell].before = 0.2f;
+		ecs::creature_body_file::Apply(registry, creature, GrownBody());
+		EXPECT_EQ(registry.Get<const Creature>(creature).alignment, 0.9f);
+		EXPECT_EQ(spells.spells[spell].before, -0.5f);
+		// The load paints with the alignment now
+		EXPECT_EQ(registry.Get<const CreatureMorph>(creature).paintedAlignment, 0.9f);
+	}
+	// With both spells on, the nice spell takes the value
+	const auto both = MakeCreature(true);
+	auto& spells = registry.Assign<CreatureSpells>(both);
+	spells.spells[creature_spells::Spell::Nice].phase = creature_spells::Phase::Holding;
+	spells.spells[creature_spells::Spell::Nasty].phase = creature_spells::Phase::Holding;
+	ecs::creature_body_file::Apply(registry, both, GrownBody());
+	EXPECT_EQ(spells.spells[creature_spells::Spell::Nice].before, -0.5f);
+	EXPECT_EQ(spells.spells[creature_spells::Spell::Nasty].before, 0.0f);
 }
 
 class CreatureCarryOverSystem: public ::testing::Test

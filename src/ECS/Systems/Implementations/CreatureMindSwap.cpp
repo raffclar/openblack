@@ -208,7 +208,9 @@ bool CreatureMindSystem::SwapMinds(entt::entity from, entt::entity to)
 		return false;
 	}
 
-	// Each takes up the other's mind file at once, mind and body, then has its own name, size and alignment back
+	// Each takes up the other's mind file at once, mind and body. The body takes the other mind's alignment, which paints
+	// its skin and hair. Then it has its own name, size and alignment back, and one morph step paints again only when
+	// the alignment moved far enough from the drawn axis.
 	const auto takeUp = [this, &registry](entt::entity creature, creaturemind::MindFileData file, const Kept& kept) {
 		auto shared = std::make_shared<const creaturemind::MindFileData>(std::move(file));
 		auto& mind = registry.Get<CreatureMindState>(creature);
@@ -219,19 +221,9 @@ bool CreatureMindSystem::SwapMinds(entt::entity from, entt::entity to)
 		{
 			Locator::creatureHelpSystem::value().Raise(creature, {.kind = creature_help::StageMessage(mind.developmentPhase)});
 		}
-		if (auto body = creature_mind_body::FromMindFile(*shared); body.has_value())
-		{
-			body->size = kept.size;
-			body->alignment = kept.alignment;
-			ecs::creature_body_file::Apply(registry, creature, *body);
-		}
-		auto& self = registry.Get<Creature>(creature);
-		self.name = kept.name;
-		self.size = kept.size;
-		self.alignment = kept.alignment;
-		self.pendingAlignment = kept.pendingAlignment;
-		// Then the body takes its looks again, with its own alignment back
-		archetypes::CreatureArchetype::TakeLooks(registry, creature);
+		ecs::creature_body_file::TakeUpSwappedMind(
+		    registry, creature, creature_mind_body::FromMindFile(*shared),
+		    {.name = kept.name, .size = kept.size, .alignment = kept.alignment, .pendingAlignment = kept.pendingAlignment});
 	};
 	takeUp(from, std::move(*fileTo), keptFrom);
 	takeUp(to, std::move(*fileFrom), keptTo);

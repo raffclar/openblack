@@ -1853,6 +1853,27 @@ void testbed_scenarios::AddMind(std::vector<Scenario>& all)
 	                 {.kind = Kind::SwapMinds, .creature = 1, .delaySeconds = 20.0f, .value = 0}},
 	});
 
+	// The player's evil tiger swaps minds with a good gorilla of the second player. Each load paints the skin and the hair
+	// with the alignment of the mind that comes.
+	auto evilTiger = Content(CreatureType::Tiger, {-15.0f, 0.0f}, 90.0f, "player's evil tiger");
+	evilTiger.alignment = -0.9f;
+	auto goodGorilla = Content(CreatureType::Gorilla, {15.0f, 0.0f}, 270.0f, "second player's good gorilla");
+	goodGorilla.owner = PlayerNames::PLAYER_TWO;
+	goodGorilla.alignment = 0.9f;
+	all.push_back({
+	    .id = "mind.creature_swap_paint",
+	    .name = "The skins at a swap of minds",
+	    .facet = Facet::Mind,
+	    .description = "The player's evil tiger and the good gorilla of the second player face each other. Three seconds in, "
+	                   "a script swaps their minds.",
+	    .expected = "At the swap the tiger gets the good skin and hair at once, and the gorilla gets the evil skin and hair. "
+	                "Each body then turns from its own alignment towards the other's. The skin follows again when the "
+	                "alignment has moved by 0.03.",
+	    .framing = {.shot = Shot::Overview},
+	    .creatures = {evilTiger, goodGorilla},
+	    .commands = {{.kind = Kind::SwapMinds, .creature = 0, .delaySeconds = 3.0f, .value = 1}},
+	});
+
 	// The developer view of the mind opens on the tiger. A script makes it hungry and playful.
 	all.push_back({
 	    .id = "mind.debug_view",
