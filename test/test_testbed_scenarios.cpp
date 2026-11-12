@@ -15,6 +15,8 @@
 #include <optional>
 #include <set>
 #include <string>
+#include <string_view>
+#include <utility>
 #include <variant>
 #include <vector>
 
@@ -423,7 +425,7 @@ TEST(TestbedScenarios, MakingFriendsNeedsAnotherCreature)
 
 TEST(TestbedScenarios, EveryCommandHasAName)
 {
-	for (size_t i = 0; i <= static_cast<size_t>(Command::Kind::TieLeashToCreature); ++i)
+	for (size_t i = 0; i <= static_cast<size_t>(Command::Kind::PointerOnTotem); ++i)
 	{
 		EXPECT_FALSE(Name(static_cast<Command::Kind>(i)).empty()) << i;
 	}
@@ -483,6 +485,40 @@ TEST(TestbedScenarios, PointerCommandsAreChecked)
 	EXPECT_TRUE(Problems(mouse).empty());
 	EXPECT_TRUE(IsPointerCommand(Kind::WheelTurn));
 	EXPECT_FALSE(IsPointerCommand(Kind::WalkTo));
+
+	// The pointer on the tip bubble and on a totem need no creature, and the totem needs its town centre
+	mouse.commands = {{.kind = Kind::PointerOnTipBubble}, {.kind = Kind::PointerOnTotem, .object = 0}};
+	EXPECT_EQ(Problems(mouse).size(), 1u);
+	mouse.objects = {{.type = AbodeInfo::NorseTownCentre}};
+	EXPECT_TRUE(Problems(mouse).empty());
+	EXPECT_TRUE(IsPointerCommand(Kind::PointerOnTipBubble));
+	EXPECT_TRUE(IsPointerCommand(Kind::PointerOnTotem));
+}
+
+TEST(TestbedScenarios, TheBothButtonsScenariosCheckThatTheHoldStartsAndEnds)
+{
+	// Each scenario that stages the end of a hold by both buttons checks that the hand takes hold first, and that the
+	// hold ends after the press of the select button
+	const std::array<std::pair<std::string_view, checks::Quantity>, 3> staged {{
+	    {"hand.rope_hold_both_buttons", checks::Quantity::RopeHeld},
+	    {"hand.bubble_grip_both_buttons", checks::Quantity::TipBubbleGripped},
+	    {"hand.totem_hold_both_buttons", checks::Quantity::TotemGripped},
+	}};
+	for (const auto& [id, quantity] : staged)
+	{
+		const auto* scenario = Find(id);
+		ASSERT_NE(scenario, nullptr) << id;
+		ASSERT_EQ(scenario->checks.size(), 2u) << id;
+		const auto& holds = scenario->checks.at(0);
+		const auto& ends = scenario->checks.at(1);
+		EXPECT_EQ(holds.quantity, quantity) << id;
+		EXPECT_EQ(ends.quantity, quantity) << id;
+		EXPECT_EQ(holds.atLeast, 1.0) << id;
+		EXPECT_EQ(ends.atMost, 0.0) << id;
+		ASSERT_TRUE(holds.byTurn.has_value()) << id;
+		EXPECT_LT(*holds.byTurn, ends.afterTurns) << id;
+		EXPECT_FALSE(checks::Name(quantity).empty()) << id;
+	}
 }
 
 TEST(TestbedScenarios, CoversTheHandFindingItsWay)

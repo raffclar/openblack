@@ -293,10 +293,10 @@ void AddShell(Frame& frame, const Effect::DrawAtom& atom, const ObjectGlow& glow
 }
 
 /// The shower of sparks an atom sends up from its object, each spark as strong as the atom is seen; nothing once the object
-/// has gone
+/// has gone. The sparks rise from where the frame draws the object, so that they stay on a thing in the hand or in flight.
 void AddShower(GroupBuilder& builder, const Effect::DrawAtom& atom, const ObjectShower& shower, const Sources& sources)
 {
-	const auto from = sources.objectPosition ? sources.objectPosition(shower.object) : std::nullopt;
+	const auto from = sources.objectDrawnOrigin ? sources.objectDrawnOrigin(shower.object) : std::nullopt;
 	if (!shower.sparks.has_value() || !from.has_value())
 	{
 		return;

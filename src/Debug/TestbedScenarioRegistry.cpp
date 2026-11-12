@@ -353,7 +353,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 239> k_Names {
+	constexpr std::array<std::string_view, 241> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -593,6 +593,8 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "bind an action to a mouse button",
 	    "pick a place on the temple's map",
 	    "create a reaction at an object",
+	    "pointer on tip bubble",
+	    "pointer on totem",
 	};
 	return k_Names.at(static_cast<size_t>(kind));
 }
@@ -602,7 +604,8 @@ bool testbed_scenarios::IsPointerCommand(Command::Kind kind)
 	return kind == Kind::PointerTo || kind == Kind::PointerPress || kind == Kind::PointerRelease ||
 	       kind == Kind::PointerSweep || kind == Kind::WheelTurn || kind == Kind::PointerOnOpponent ||
 	       kind == Kind::PointerOnCaveCreature || kind == Kind::PointerOnCreature || kind == Kind::PointerOnAltar ||
-	       kind == Kind::PointerOnRope || kind == Kind::PointerOnObject;
+	       kind == Kind::PointerOnRope || kind == Kind::PointerOnObject || kind == Kind::PointerOnTipBubble ||
+	       kind == Kind::PointerOnTotem;
 }
 
 bool NeedOverrides::Empty() const
@@ -898,6 +901,7 @@ std::vector<std::string> testbed_scenarios::Problems(const Scenario& scenario)
 		                                     : command.object >= scenario.objects.size())) ||
 		    (command.kind == Kind::CreateReaction &&
 		     (command.object >= scenario.objects.size() || command.value > static_cast<size_t>(Reaction::ReactToFightWon))) ||
+		    (command.kind == Kind::PointerOnTotem && command.object >= scenario.objects.size()) ||
 		    ((command.kind == Kind::PlayerDid || command.kind == Kind::PlayerDidOn) && command.value >= k_Deeds) ||
 		    (command.kind == Kind::CameraKeys && (command.value >= 4 || command.amount <= 0.0f)) ||
 		    (command.kind == Kind::PointerTo &&

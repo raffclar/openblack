@@ -117,6 +117,9 @@ particles::draw::Sources ParticleSystem::DrawSources(const ParticleRuleSystemInt
 	    .objectPosition = [world](entt::entity object) -> std::optional<glm::vec3> {
 		    return world != nullptr ? world->ObjectPosition(object) : std::nullopt;
 	    },
+	    .objectDrawnOrigin = [world](entt::entity object) -> std::optional<glm::vec3> {
+		    return world != nullptr ? world->ObjectDrawnOrigin(object) : std::nullopt;
+	    },
 	    .gameMilliseconds = world != nullptr ? world->GameMilliseconds() : 0,
 	    .symbolsInARow = static_cast<int>(players_symbols::SquaresInARowFor(ecs::game_players::Count())),
 	};

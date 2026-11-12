@@ -53,6 +53,11 @@ void MouseMoves::Wait(uint32_t milliseconds, glm::ivec2 position, bool stillMess
 	}
 }
 
+void MouseMoves::Place(glm::ivec2 position)
+{
+	_sent.push_back(position);
+}
+
 uint32_t MouseMoves::TakeMoves()
 {
 	return CountMoves(TakePlaces());

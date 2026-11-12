@@ -1191,12 +1191,17 @@ void Renderer::DrawPassTranslucent(const DrawSceneDesc& desc, const ScenePass& p
 	auto& drawRootsPiles = draws.drawRootsPiles;
 	// The translucent meshes blend over the opaque ones, each in its own place in the sort
 	submitDesc.viewId = translucentViewId;
-	// A thing that the game draws at once comes at its place in the land's draw list, before every sorted thing. Any
-	// other thing comes by the key of a placed model at its place.
+	// A thing that the game draws at once comes at its place in the land's draw list, before every sorted thing. The
+	// copy of a scaffold at its yard place comes by the key of its workshop. Any other thing comes by the key of a placed
+	// model at its place.
 	const auto blendDepth = [&renderCtx, cameraOrigin](uint32_t instance) {
 		if (const auto atOnce = renderCtx.atOnceInstances.find(instance); atOnce != renderCtx.atOnceInstances.end())
 		{
 			return zsort::AtOnce(atOnce->second);
+		}
+		if (const auto sortPoint = renderCtx.sortPoints.find(instance); sortPoint != renderCtx.sortPoints.end())
+		{
+			return zsort::YardCopyDepth(sortPoint->second, cameraOrigin);
 		}
 		return zsort::ModelDepth(glm::vec3(renderCtx.instanceUniforms.at(instance).model[3]), cameraOrigin);
 	};
@@ -1280,8 +1285,9 @@ void Renderer::DrawPassTranslucent(const DrawSceneDesc& desc, const ScenePass& p
 	// It is not drawn here, because it would show again in the model's own pose.
 	for (const auto& [meshId, placers] : renderCtx.instancedDrawDescs)
 	{
-		if (graphics::posed_draws::BlendedPassDrawsAllPlaced(
-		        {.translucent = placers.translucent, .perEntity = placers.perEntity}) &&
+		if (graphics::posed_draws::BlendedPassDrawsAllPlaced({.translucent = placers.translucent,
+		                                                      .perEntity = placers.perEntity,
+		                                                      .hand = meshId == ecs::components::Hand::k_MeshId}) &&
 		    !(desc.viewId == RenderPass::Reflection && placers.hiddenFromReflection))
 		{
 			for (uint32_t instance = placers.offset; instance < placers.offset + placers.filled; ++instance)

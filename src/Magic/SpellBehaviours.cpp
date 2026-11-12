@@ -111,11 +111,16 @@ bool ApplyForestEvent(SpellServicesInterface& services, Spell& spell, const Spel
 }
 } // namespace
 
+uint32_t SpellServicesInterface::ForestTrees(const Spell& spell) const
+{
+	return spell.objectCount;
+}
+
 SpellChantRules spells::RulesOf(SpellServicesInterface& services, const Spell& spell)
 {
 	const auto& info = services.Info();
 	auto rules = ChantRulesFor(spell.magicType, GetMagicInfo(info, spell.magicType), GetMagicEffectInfo(info, spell.magicType));
-	rules.costToMaintain = CostToMaintain(info, spell);
+	rules.costToMaintain = CostToMaintain(services, spell);
 	rules.tribalPower = services.TribalPower(spell);
 	rules.seedPower = services.SeedPower(spell);
 	return rules;
@@ -126,14 +131,16 @@ float spells::StrengthOf(SpellServicesInterface& services, const Spell& spell)
 	return GetSpellStrength(spell.chants, RulesOf(services, spell), services.CasterOf(spell));
 }
 
-float spells::CostToMaintain(const InfoConstants& info, const Spell& spell)
+float spells::CostToMaintain(const SpellServicesInterface& services, const Spell& spell)
 {
+	const auto& info = services.Info();
 	const auto& effect = GetMagicEffectInfo(info, spell.magicType);
 	const float plain = effect.costPerGameTurn;
 	if (spell.spellClass == SpellClass::Forest)
 	{
-		// Each of its trees costs as much as an event
-		return forest::Upkeep(plain, effect.costPerEvent, spell.objectCount);
+		// Each tree that the forest has when it pays costs as much as an event. A tree that went since the last turn of
+		// the forest costs nothing.
+		return forest::Upkeep(plain, effect.costPerEvent, services.ForestTrees(spell));
 	}
 	if (const auto* shield = GetMagicInfoAs<GMagicShieldInfo>(info, spell.magicType))
 	{

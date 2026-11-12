@@ -63,6 +63,14 @@ enum class Quantity : uint8_t
 	RewardChestsInATown,
 	/// The kind of reaction, by its number, that the scenario's creature at the index keeps now; 0 when it keeps none
 	CreatureReaction,
+	/// 1 when the player's hand is out, else 0. A dialog and the cinema bars of a script put the hand away.
+	HandShown,
+	/// 1 when the hand of the player holds the rope of the tied leash, else 0
+	RopeHeld,
+	/// 1 when the hand of the player grips the help's tip bubble, else 0
+	TipBubbleGripped,
+	/// 1 when the hand of the player grips the totem of a town or of a puzzle, else 0
+	TotemGripped,
 };
 
 /// One statement about the world. It is read once at its turn; with byTurn it is read again at each frame from its

@@ -376,6 +376,8 @@ private:
 		const L3DMeshSubmitDesc::MorphTargets* morph;
 		/// It covers only the second row of each texel's pair of sample rows, as the hand itself does
 		bool secondRowsOnly;
+		/// It fills the shadow through its textures' alpha and the fill is softened, as a tree, a pot or a crop does
+		bool throughAlpha {false};
 	};
 	/// The memory in which one lane of the workers makes a shadow (see GroundShadowScratch below)
 	struct GroundShadowScratch;
@@ -384,10 +386,10 @@ private:
 	/// The levels of the texture of the shadow being made, from the coverage of its counted parts
 	[[nodiscard]] static std::array<uint8_t, GroundShadow::k_Texels * GroundShadow::k_Texels>
 	GroundShadowLevels(const GroundShadow::Footprint& footprint, uint8_t alpha, GroundShadowScratch& scratch);
-	/// The levels of the texture of a moving body's shadow, filled through its textures' alpha (see shadow_texture)
+	/// The levels of the part of a shadow that its bodies fill through their textures' alpha (see shadow_texture)
 	[[nodiscard]] std::array<uint8_t, GroundShadow::k_Texels * GroundShadow::k_Texels>
-	ShadowTextureLevels(const GroundShadowBody& body, const GroundShadow::Footprint& footprint, const GroundShadow::Cast& cast,
-	                    uint8_t alpha) const;
+	ShadowTextureLevels(std::span<const GroundShadowBody> bodies, const GroundShadow::Footprint& footprint,
+	                    const GroundShadow::Cast& cast, uint8_t alpha) const;
 	/// Hands the moving shadows to the land's program, or none where it isn't to receive them. Each block sets its own
 	/// u_groundShadowBlock, because bgfx accepts a uniform only once for each draw.
 	void SetGroundShadowUniforms(const ShaderProgram& program, bool receives) const;
@@ -436,6 +438,7 @@ private:
 		EnvironmentStage,
 		LightRule,
 		Shine,
+		SkinAlpha,
 
 		_count
 	};
@@ -478,6 +481,7 @@ private:
 	    "u_environmentStage",  //
 	    "u_lightRule",         //
 	    "u_shine",             //
+	    "s_skinAlpha",         //
 	};
 	using MeshUniforms = std::array<std::optional<UniformHandle>, static_cast<size_t>(MeshUniform::_count)>;
 	/// A program's handles of the mesh uniforms it has, looked up by name the first time it draws a mesh
@@ -762,8 +766,6 @@ private:
 		GroundShadow::Cast cast;
 		uint8_t alpha;
 		bool onObjects;
-		/// It is filled through its textures' alpha and softened, as the shadow of a moving tree is
-		bool throughAlpha {false};
 		/// The thing that the physics moves, whose shadow stays as it is while the thing is under the sea
 		entt::entity kept {entt::null};
 	};

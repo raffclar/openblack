@@ -366,6 +366,24 @@ TEST(CreatureTouch, AHeldThingTurnsWithTheHandAndHangsBelowTheFingerEnds)
 	EXPECT_EQ(creature_throw::HeldPlacement(hand, fingerEnds, false, 0.0f, 1.0f).position, fingerEnds);
 }
 
+TEST(CreatureTouch, AHandfulOfWheatHangsFromTheFingerEndsByTheTipsOfItsEars)
+{
+	// A wheat model with its origin at its tie: the stalks go 0.387 down and the ears go 0.964 up. A creature of size 2
+	// makes the handful 3.75 times its size. A pot hangs 0.7 of its height below the finger ends.
+	constexpr float k_Scale = 3.75f * 2.0f;
+	constexpr float k_Height = (0.964f + 0.387f) * k_Scale;
+	constexpr float k_Hang = 0.7f * k_Height;
+	const glm::mat3 hand(1.0f);
+	const glm::vec3 fingerEnds(5.0f, 20.0f, 7.0f);
+	const auto held = creature_throw::HeldPlacement(hand, fingerEnds, false, k_Hang, k_Scale);
+	// The model's up axis is the third axis of the hand bone, and the tie is the hang below the finger ends along it
+	EXPECT_NEAR(glm::distance(held.position, fingerEnds), k_Hang, 1e-4f);
+	EXPECT_NEAR(glm::dot(fingerEnds - held.position, held.rotation[1]), k_Hang, 1e-4f);
+	// Thus the finger ends hold the wheat at 0.946 up its model, near the tips of its ears
+	EXPECT_NEAR(k_Hang / k_Scale, 0.9457f, 1e-3f);
+	EXPECT_LT(k_Hang / k_Scale, 0.964f);
+}
+
 TEST(CreatureTouch, HeldTheCreatureLooksAtTheHandOrAtTheCameraWithTheHandNearItsMiddle)
 {
 	const glm::vec3 middle(0.0f, 5.0f, 0.0f);

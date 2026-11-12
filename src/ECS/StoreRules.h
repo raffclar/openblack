@@ -62,6 +62,19 @@ struct RockWoodTake
 
 /// A building going up stores only wood on its site, which the builders build with
 [[nodiscard]] bool BuildingSiteStores(ResourceType type);
+/// Where a building that has a site puts a resource that it gets
+enum class SiteGift : uint8_t
+{
+	/// The site takes it, for the builders
+	Site,
+	/// The building keeps it in its own store
+	OwnStore,
+	/// Nothing takes it
+	Refused,
+};
+/// The site takes wood. A storage pit keeps all other resources in its own piles, also while it goes up. Other buildings
+/// refuse them.
+[[nodiscard]] SiteGift WhereSiteGiftGoes(ResourceType type, bool storagePit);
 /// A scaffold stores wood for its building site while it is on a site. It stores no other resource, and it does not
 /// answer for any resource.
 [[nodiscard]] bool ScaffoldStores(ResourceType type, bool onSite);

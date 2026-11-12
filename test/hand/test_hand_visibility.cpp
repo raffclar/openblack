@@ -15,30 +15,43 @@ using openblack::hand_visibility::IsShown;
 using openblack::hand_visibility::ShowsMiracleEffects;
 using openblack::hand_visibility::TakesPresses;
 
+namespace
+{
+using openblack::hand_visibility::ShowFacts;
+
+constexpr ShowFacts k_InPlay {.dialogOpen = false, .interfaceActive = true};
+} // namespace
+
 TEST(HandVisibility, TheHandIsOutInPlay)
 {
-	static_assert(IsShown(false, true, false));
-	EXPECT_TRUE(IsShown(false, true, false));
+	static_assert(IsShown(k_InPlay));
+	EXPECT_TRUE(IsShown(k_InPlay));
 }
 
 TEST(HandVisibility, ADialogsPointerPutsItAway)
 {
-	EXPECT_FALSE(IsShown(true, true, false));
-	EXPECT_FALSE(IsShown(true, true, true));
+	EXPECT_FALSE(IsShown({.dialogOpen = true, .interfaceActive = true}));
 }
 
 TEST(HandVisibility, AScriptsCinemaBarsPutItAway)
 {
 	// Put away, it is still and bends no trees, so nothing near where it was moves for it
-	EXPECT_FALSE(IsShown(false, false, false));
-	EXPECT_FALSE(IsShown(true, false, false));
+	// The same rule applies inside the temple, while the advisors introduce a room
+	EXPECT_FALSE(IsShown({.dialogOpen = false, .interfaceActive = false}));
+	EXPECT_FALSE(IsShown({.dialogOpen = true, .interfaceActive = false}));
 }
 
-TEST(HandVisibility, InsideTheTempleTheCinemaBarsLeaveItOut)
+TEST(HandVisibility, TheOnlineFrontEndPutsItAwayInTheTemple)
 {
-	// While the advisors introduce the temple, the player still moves the hand about its rooms
-	EXPECT_TRUE(IsShown(false, false, true));
-	EXPECT_FALSE(IsShown(true, false, true));
+	// The boxes of the online front end show their own pointer over the future room, with or without cinema bars
+	EXPECT_FALSE(IsShown({.dialogOpen = false, .interfaceActive = true, .onlineFrontEnd = true}));
+	EXPECT_FALSE(IsShown({.dialogOpen = false, .interfaceActive = false, .onlineFrontEnd = true}));
+}
+
+TEST(HandVisibility, TheHandComesBackWhenTheOnlineFrontEndCloses)
+{
+	// The game starts on its land, with the hand out
+	EXPECT_TRUE(IsShown({.dialogOpen = false, .interfaceActive = true, .onlineFrontEnd = false}));
 }
 
 TEST(HandVisibility, TheHandTakesPressesInPlay)

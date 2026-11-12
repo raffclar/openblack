@@ -658,11 +658,19 @@ uint32_t ResourceStoreSystem::AddToStore(entt::entity store, ResourceType type, 
 		           ? AddResource(scaffold->site, ResourceType::Wood, amount, at)
 		           : 0u;
 	}
-	// A building going up takes wood onto its site, where the builders take it from. A workshop takes the wood itself,
-	// and its site uses the wood of the workshop.
+	// A building going up takes wood onto its site, where the builders take it from. A storage pit that goes up keeps
+	// its food in its own pile. A workshop takes the wood itself, and its site uses the wood of the workshop.
 	if (IsBuildingSite(store) && !registry.AllOf<Workshop>(store))
 	{
-		return ecs::store_rules::BuildingSiteStores(type) ? AddResource(store, ResourceType::Wood, amount, at) : 0u;
+		switch (ecs::store_rules::WhereSiteGiftGoes(type, registry.AllOf<StoragePit>(store)))
+		{
+		case ecs::store_rules::SiteGift::Site:
+			return AddResource(store, ResourceType::Wood, amount, at);
+		case ecs::store_rules::SiteGift::Refused:
+			return 0u;
+		case ecs::store_rules::SiteGift::OwnStore:
+			break;
+		}
 	}
 	auto* abode = registry.TryGet<Abode>(store);
 	const bool workshop = registry.AllOf<Workshop>(store);
