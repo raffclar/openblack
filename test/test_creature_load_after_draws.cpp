@@ -27,7 +27,9 @@
 #include "Creature/CreaturePhysiology.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
+#include "ECS/Components/CreatureFight.h"
 #include "ECS/Components/CreatureMind.h"
+#include "ECS/Components/CreatureTallies.h"
 #include "ECS/CreatureBodyFile.h"
 #include "ECS/Reflection/ComponentReflection.h"
 #include "ECS/Reflection/WorldArchive.h"
@@ -97,6 +99,62 @@ TEST(CreatureLoadAfterDraws, TheBodyOfTheFileReplacesTheDrawnBody)
 	EXPECT_EQ(body.strength, saved.strength);
 	EXPECT_EQ(body.fatness, saved.fatness);
 	EXPECT_EQ(body.alignment, *saved.alignment);
+}
+
+// The load of a mind file does not change the pending alignment. A file older than version 11 has no alignment, and its
+// load sets the alignment to 0.
+TEST(CreatureLoadAfterDraws, TheLoadKeepsThePendingAlignment)
+{
+	ecs::Registry registry;
+	const auto creature = registry.Create();
+	registry.Assign<ecs::components::Creature>(creature,
+	                                           ecs::components::Creature {.alignment = 0.5f, .pendingAlignment = 0.125f});
+	const auto& body = registry.Get<const ecs::components::Creature>(creature);
+
+	creature_mind_body::Body saved {.species = CreatureType::Tiger};
+	saved.alignment = -0.25f;
+	ecs::creature_body_file::Apply(registry, creature, saved);
+	EXPECT_EQ(body.alignment, -0.25f);
+	EXPECT_EQ(body.pendingAlignment, 0.125f);
+
+	creaturemind::MindFileData old;
+	old.version = 10;
+	old.speciesRow = 1;
+	const auto before11 = creature_mind_body::FromMindFile(old);
+	ASSERT_TRUE(before11.has_value());
+	ASSERT_FALSE(before11->alignment.has_value());
+	ecs::creature_body_file::Apply(registry, creature, *before11);
+	EXPECT_EQ(body.alignment, 0.0f);
+	EXPECT_EQ(body.pendingAlignment, 0.125f);
+}
+
+// The counts of the creature's life go into its tallies and its fight record, and the capture gives them back. A
+// creature with no counts above 0 gets no tallies and no fight record.
+TEST(CreatureLoadAfterDraws, TheBodyTakesTheCountsOfItsLife)
+{
+	ecs::Registry registry;
+	const auto creature = registry.Create();
+	registry.Assign<ecs::components::Creature>(creature);
+
+	creature_mind_body::Body saved {.species = CreatureType::Tiger};
+	saved.counts = creature_mind_body::LifeCounts {};
+	ecs::creature_body_file::Apply(registry, creature, saved);
+	EXPECT_FALSE(registry.AllOf<ecs::components::CreatureTallies>(creature));
+	EXPECT_FALSE(registry.AllOf<ecs::components::CreatureFightRecord>(creature));
+	EXPECT_EQ(ecs::creature_body_file::Capture(registry, creature).counts, saved.counts);
+
+	saved.counts = creature_mind_body::LifeCounts {
+	    .peopleKilled = 1, .animalsKilled = 2, .creaturesKilled = 3, .battlesFought = 4, .battlesWon = 5, .poos = 6};
+	ecs::creature_body_file::Apply(registry, creature, saved);
+	const auto& tallies = registry.Get<const ecs::components::CreatureTallies>(creature);
+	EXPECT_EQ(tallies.meals.peopleKilled, 1u);
+	EXPECT_EQ(tallies.meals.animalsKilled, 2u);
+	EXPECT_EQ(tallies.meals.creaturesKilled, 3u);
+	EXPECT_EQ(tallies.poos, 6u);
+	const auto& record = registry.Get<const ecs::components::CreatureFightRecord>(creature);
+	EXPECT_EQ(record.fights, 4u);
+	EXPECT_EQ(record.wins, 5u);
+	EXPECT_EQ(ecs::creature_body_file::Capture(registry, creature).counts, saved.counts);
 }
 
 // A creature takes the speeds, the facing and the environment map word of the file. A file with no environment map word

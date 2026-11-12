@@ -16,8 +16,10 @@
 #include "ECS/Archetypes/CreatureArchetype.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
+#include "ECS/Components/CreatureFight.h"
 #include "ECS/Components/CreatureNeeds.h"
 #include "ECS/Components/CreatureSkin.h"
+#include "ECS/Components/CreatureTallies.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureSkinSystemInterface.h"
@@ -67,6 +69,21 @@ creature_mind_body::Body creature_body_file::Capture(const Registry& registry, e
 		body.wounds = marks->marks.wounds;
 		body.blood = marks->marks.blood;
 	}
+	// A creature that has not yet counted a thing has the counts 0
+	creature_mind_body::LifeCounts counts;
+	if (const auto* tallies = registry.TryGet<const CreatureTallies>(creature))
+	{
+		counts.peopleKilled = tallies->meals.peopleKilled;
+		counts.animalsKilled = tallies->meals.animalsKilled;
+		counts.creaturesKilled = tallies->meals.creaturesKilled;
+		counts.poos = tallies->poos;
+	}
+	if (const auto* record = registry.TryGet<const CreatureFightRecord>(creature))
+	{
+		counts.battlesFought = record->fights;
+		counts.battlesWon = record->wins;
+	}
+	body.counts = counts;
 	return body;
 }
 
@@ -74,11 +91,9 @@ void creature_body_file::Apply(Registry& registry, entt::entity creature, const 
 {
 	if (auto* self = registry.TryGet<Creature>(creature))
 	{
-		if (body.alignment.has_value())
-		{
-			self->alignment = *body.alignment;
-			self->pendingAlignment = 0.0f;
-		}
+		// The load does not change the pending alignment. A file older than version 11 has no alignment, and its load
+		// sets the alignment to 0.
+		self->alignment = body.alignment.value_or(0.0f);
 		self->strength = body.strength;
 		self->fatness = body.fatness;
 		if (body.bornWith.has_value())
@@ -139,5 +154,33 @@ void creature_body_file::Apply(Registry& registry, entt::entity creature, const 
 		// The healing counted since the marks last aged isn't kept
 		marks->marks = {.wounds = body.wounds, .blood = body.blood, .counts = 0};
 		++marks->revision;
+	}
+	if (body.counts.has_value())
+	{
+		// A creature with no tallies or no fight record has the counts 0, so only a count above 0 needs one
+		const auto& counts = *body.counts;
+		auto* tallies = registry.TryGet<CreatureTallies>(creature);
+		if (tallies == nullptr &&
+		    (counts.peopleKilled != 0 || counts.animalsKilled != 0 || counts.creaturesKilled != 0 || counts.poos != 0))
+		{
+			tallies = &registry.Assign<CreatureTallies>(creature);
+		}
+		if (tallies != nullptr)
+		{
+			tallies->meals.peopleKilled = counts.peopleKilled;
+			tallies->meals.animalsKilled = counts.animalsKilled;
+			tallies->meals.creaturesKilled = counts.creaturesKilled;
+			tallies->poos = counts.poos;
+		}
+		auto* record = registry.TryGet<CreatureFightRecord>(creature);
+		if (record == nullptr && (counts.battlesFought != 0 || counts.battlesWon != 0))
+		{
+			record = &registry.Assign<CreatureFightRecord>(creature);
+		}
+		if (record != nullptr)
+		{
+			record->fights = counts.battlesFought;
+			record->wins = counts.battlesWon;
+		}
 	}
 }

@@ -123,6 +123,10 @@ public:
 	/// Keeps the last new number as an object that has no record in the stream. Only openblack's own file has these.
 	void MarkForeign(ObjectKey key);
 
+	/// Adds the bytes of a record that a stream had, when the writer has the objects and the running sum that the stream
+	/// had before them. The objects of the record keep their numbers. Gives false and adds nothing at another place.
+	[[nodiscard]] bool PutRecorded(StreamStart start, std::span<const uint8_t> bytes, StreamStart after);
+
 	/// Stops the writer. A writer that failed keeps the bytes that it has but they are not a complete stream.
 	void Fail() { _failed = true; }
 
@@ -203,6 +207,16 @@ public:
 	[[nodiscard]] size_t Left() const { return _failed ? 0 : _bytes.size() - _at; }
 	[[nodiscard]] uint32_t Checksum() const { return _checksum; }
 	[[nodiscard]] uint32_t Objects() const { return _objects; }
+	/// The bytes of the whole stream
+	[[nodiscard]] std::span<const uint8_t> Stream() const { return _bytes; }
+	/// Moves the reader past a record that another reader read: to the place where the record stops, with the objects
+	/// and the running sum there
+	void Continue(size_t at, StreamStart now)
+	{
+		_at = at;
+		_objects = now.objects;
+		_checksum = now.checksum;
+	}
 	/// The type of the object whose record the reader could not read, as the game numbers its classes
 	[[nodiscard]] std::optional<uint32_t> UnknownType() const { return _unknownType; }
 	void SetUnknownType(uint32_t type)
