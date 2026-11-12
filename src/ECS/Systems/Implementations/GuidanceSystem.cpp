@@ -259,8 +259,9 @@ bool GuidanceSystem::LoadState(reflection::BinaryReader& in)
 	reflection::Load(in, _moonWait);
 	reflection::Load(in, _remarks);
 	// A load starts the guidance again, as a new land does: each kind counts as last heard a random while before the
-	// turn of the load, and the scripts let the advisors talk about the creature
-	_stampsDue = true;
+	// turn of the load, and the scripts let the advisors talk about the creature. The loaded flag stays as it was, so a
+	// save before the next turn gives the same bytes.
+	_stampsDueAfterLoad = true;
 	_creatureRemarks = true;
 	return !in.Failed();
 }
@@ -294,6 +295,7 @@ GuidanceHeard* GuidanceSystem::Heard()
 void GuidanceSystem::Reset()
 {
 	_stampsDue = true;
+	_stampsDueAfterLoad = false;
 	_remarks.clear();
 	_nameDue = true;
 	_creatureRemarks = true;
@@ -302,7 +304,7 @@ void GuidanceSystem::Reset()
 void GuidanceSystem::ProcessTurn()
 {
 	// A new land's guidance counts each kind as last heard a random while before now, and nothing said once yet
-	if (_stampsDue && Locator::helpMessageSystem::has_value())
+	if (StampsDue() && Locator::helpMessageSystem::has_value())
 	{
 		if (auto* heard = Heard(); heard != nullptr)
 		{
@@ -318,6 +320,7 @@ void GuidanceSystem::ProcessTurn()
 			heard->lastDesireVoice = 0;
 			heard->seenThings.clear();
 			_stampsDue = false;
+			_stampsDueAfterLoad = false;
 		}
 	}
 	NightWhisper();
@@ -814,6 +817,7 @@ void GuidanceSystem::EndWaits()
 {
 	// The first stamps would undo it
 	_stampsDue = false;
+	_stampsDueAfterLoad = false;
 	if (auto* heard = Heard(); heard != nullptr)
 	{
 		// Half the turns there can be away, so that the turns since it count from half the most there can be on
