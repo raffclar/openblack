@@ -57,6 +57,7 @@
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/VillagerPose.h"
 #include "ECS/Components/Vortex.h"
+#include "ECS/DyingVillager.h"
 #include "ECS/PosedModel.h"
 #include "ECS/Registry.h"
 #include "ECS/RewardOpening.h"
@@ -411,6 +412,11 @@ void PickingSystem::PickUnderCursor(const Frame& frame)
 		}
 		if (const auto* progress = registry.TryGet<const BuildProgress>(entity);
 		    progress != nullptr && registry.AllOf<Abode>(entity) && progress->built == 0.0f)
+		{
+			continue;
+		}
+		// The hand can do nothing with a villager on its way to die, so the cursor does not pick it
+		if (ecs::IsDyingVillager(registry, entity))
 		{
 			continue;
 		}

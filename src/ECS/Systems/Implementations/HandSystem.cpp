@@ -359,10 +359,11 @@ void HandSystem::EndOwnInterfaceLock()
 	{
 		Locator::creatureHandSystem::value().StopActionAtLockEnd();
 	}
-	// The interface also clears the flag of a press of the select button
+	// The interface also clears the flag of a press of the select button, and a grip of the land stops
 	if (Locator::handPressSystem::has_value())
 	{
 		Locator::handPressSystem::value().EndSelectPress();
+		Locator::handPressSystem::value().StopLandGrip();
 	}
 	// Then the wait for the last send ends
 	auto& registry = Locator::entitiesRegistry::value();

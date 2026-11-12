@@ -90,6 +90,8 @@ public:
 	[[nodiscard]] bool IsBusyOf(PlayerNames player) const override;
 	[[nodiscard]] bool IsPulling() const override;
 	[[nodiscard]] std::optional<entt::entity> GetTaking() const override;
+	[[nodiscard]] bool WaitsForUseLetGo() const override;
+	[[nodiscard]] std::optional<entt::entity> GetGiveWait() const override;
 	[[nodiscard]] std::optional<HeldPose> GetHeldPose() const override;
 	[[nodiscard]] float GetCursorRaise() const override;
 	bool HandOver(entt::entity object) override;

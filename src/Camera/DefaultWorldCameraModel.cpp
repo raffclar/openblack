@@ -39,6 +39,7 @@
 #include "ECS/Systems/CameraZoneSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
+#include "ECS/Systems/HandPressSystemInterface.h"
 #include "ECS/Systems/HelpProfileSystemInterface.h"
 #include "ECS/Systems/PickingSystemInterface.h"
 #include "ECS/Systems/TurnCheerSystemInterface.h"
@@ -944,7 +945,11 @@ void DefaultWorldCameraModel::HandleActions(std::chrono::microseconds dt)
 	}
 	_rotateAroundDelta.z += wheelZoom;
 
-	const bool twoButtons = takesControls && aroundMouse && actionSystem.Get(input::UnbindableActionMap::TWO_BUTTON_CLICK);
+	// The end of the interface lock stops the grip of the land, and the turn of the camera by both buttons, until the
+	// player lets go of the select button
+	const bool gripStopped = Locator::handPressSystem::has_value() && Locator::handPressSystem::value().LandGripStopped();
+	const bool twoButtons =
+	    takesControls && !gripStopped && aroundMouse && actionSystem.Get(input::UnbindableActionMap::TWO_BUTTON_CLICK);
 	if (twoButtons)
 	{
 		_rotateAroundDelta.z += actionSystem.GetMouseDelta().y * k_TwoButtonZoomFactor;
@@ -971,7 +976,7 @@ void DefaultWorldCameraModel::HandleActions(std::chrono::microseconds dt)
 	// A drag starts with the hand on the land, and goes on for as long as the button is held, even once the cursor has
 	// gone past the land (over the sky, or the land far off): the land isn't dragged meanwhile, but the drag doesn't end
 	// and hand the camera back to the controls that turn or tilt it
-	const bool gripping = takesControls && actionSystem.Get(input::BindableActionMap::MOVE) &&
+	const bool gripping = takesControls && !gripStopped && actionSystem.Get(input::BindableActionMap::MOVE) &&
 	                      (_handPosition.has_value() || (_dragging && !rotateAroundMouse));
 	if (!gripping || rotateAroundMouse)
 	{

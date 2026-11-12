@@ -61,6 +61,14 @@ public:
 	[[nodiscard]] virtual bool SelectPressHolds() const { return false; }
 	/// The action of the hand ended, and the interface clears the flag of the select press
 	virtual void EndSelectPress() {}
+	/// The end of the interface lock stops a grip of the land by the select button. The select button grips nothing again
+	/// until the player lets go of it.
+	virtual void StopLandGrip() {}
+	/// Both buttons ended the interface lock: the grip of the land starts again at once, as the hand turns the camera
+	virtual void GripLandAgain() {}
+	/// Whether the end of the interface lock stopped the grip of the land, and the player did not let go of the select
+	/// button since
+	[[nodiscard]] virtual bool LandGripStopped() const { return false; }
 
 	/// The place of the pointer on the hand when the hand holds a totem, none when it holds no totem
 	[[nodiscard]] virtual const std::optional<glm::ivec2>& GetTotemPointer() const = 0;
