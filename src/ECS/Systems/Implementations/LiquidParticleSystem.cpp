@@ -15,6 +15,7 @@
 #include <optional>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 #include <entt/core/hashed_string.hpp>
 
@@ -119,9 +120,11 @@ void LiquidParticleSystem::SetPlayerPoint(liquid_particles::Interface interface,
 	_playerPools[interface].point = point;
 }
 
-void LiquidParticleSystem::TurnPlayerSymbols(int32_t milliseconds,
+void LiquidParticleSystem::TurnPlayerSymbols(int32_t milliseconds, const glm::vec3& camera,
                                              const std::function<bool(liquid_particles::Interface)>& shows)
 {
+	std::vector<PlayerPool*> shown;
+	std::vector<glm::vec3> points;
 	for (auto& [interface, pool] : _playerPools)
 	{
 		pool.symbolAngle.reset();
@@ -129,8 +132,14 @@ void LiquidParticleSystem::TurnPlayerSymbols(int32_t milliseconds,
 		{
 			continue;
 		}
+		shown.push_back(&pool);
+		points.push_back(pool.point);
+	}
+	// Each symbol turns the shared angle when it draws
+	for (const auto index : player_sparkles::SymbolDrawOrder(points, camera))
+	{
 		_symbolAngle = player_sparkles::SymbolAngle(_symbolAngle, milliseconds);
-		pool.symbolAngle = _symbolAngle;
+		shown[index]->symbolAngle = _symbolAngle;
 	}
 }
 

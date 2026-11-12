@@ -81,6 +81,7 @@ std::unique_ptr<Creator> MakeMesh(const psys::ParticleObject& object, CreatorRes
 	creator->dynamicLighting = object.Bool("UseDynamicLighting", animated);
 	creator->scriptHighlightPulse = object.Bool("UseScriptHightlightPulse", false);
 	creator->drawCutByPlane = object.Bool("DrawCutByPlane", false);
+	creator->neverClip = object.Bool("NeverClip", false);
 	creator->numFrames = 1;
 	if (creator->type == MeshCreator::Type::AnimTextured)
 	{

@@ -86,6 +86,8 @@ struct MeshDraw
 	/// Its axes, each scaled, and where it is. A model that faces the camera is turned to it where it is drawn.
 	glm::mat3 axes;
 	glm::vec3 position;
+	/// The atom's size, which the far cull multiplies the model's radius by
+	float scale {1.0f};
 	/// Its colour and alpha, 0..1
 	glm::vec4 colour;
 	/// The atom's specular colour, 0..1, added after the texture

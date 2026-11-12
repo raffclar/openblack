@@ -607,6 +607,26 @@ void openblack::testbed_scenarios::AddTownMiracleScenarios(std::vector<Scenario>
 	    .townMiracles = {MagicType::Heal, MagicType::Water},
 	});
 	all.push_back({
+	    .id = "miracles.icon_charge_far_off",
+	    .name = "The pulse of a charging icon seen from far off",
+	    .facet = Facet::Miracles,
+	    .description = "The site and the gestures of miracles.icon_charge_looks, seen from far off. Move the camera back "
+	                   "and forward to see the pulse fade and go.",
+	    .expected = "Near the icon, each pulse starts clear and gets stronger as it shrinks. Farther off, each pulse shows "
+	                "at one strength for all of its time, and that strength falls with the distance. After that, no pulse "
+	                "shows. The ring and the shine of the icon still show.",
+	    .environment = {.dispenserGrid = false, .landNumber = k_FirstLand},
+	    .framing = {.shot = Shot::Placed, .eye = {9.0f, 40.0f, -150.0f}, .look = {9.0f, 2.0f, -19.0f}},
+	    .objects = Town(),
+	    .temples = {{.offset = k_Temple}},
+	    .commands = {{.kind = Kind::BuildWorshipSites, .delaySeconds = 3.0f},
+	                 {.kind = Kind::FillSiteIcons, .delaySeconds = 0.5f, .amount = k_IconCharge},
+	                 {.kind = Kind::DrawGesture, .delaySeconds = 3.0f, .value = static_cast<size_t>(GestureType::Spiral)},
+	                 {.kind = Kind::DrawGesture, .delaySeconds = 7.0f, .value = static_cast<size_t>(GestureType::WShape)}},
+	    .townBeliefInPlayer = k_TownBelief,
+	    .townMiracles = {MagicType::Heal, MagicType::Water},
+	});
+	all.push_back({
 	    .id = "miracles.selection_request",
 	    .name = "A miracle asked for by gesture from a worship site's icon, then again by the R",
 	    .facet = Facet::Miracles,
