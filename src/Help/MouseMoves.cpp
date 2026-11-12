@@ -41,7 +41,9 @@ void MouseMoves::Wait(uint32_t milliseconds, glm::ivec2 position, bool stillMess
 		_lastWake = milliseconds;
 		return;
 	}
-	if (!_lastWake.has_value())
+	// The clock of the game starts again at zero when a network game starts. A clock that went back starts the wait
+	// again, because the unsigned time since the last wake is then almost the full range of the clock.
+	if (!_lastWake.has_value() || static_cast<int32_t>(milliseconds - *_lastWake) < 0)
 	{
 		_lastWake = milliseconds;
 		return;

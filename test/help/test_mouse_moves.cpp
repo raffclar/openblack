@@ -215,3 +215,31 @@ TEST(MouseMoves, AStillMouseSendsTwentyFivePlacesASecond)
 	}
 	EXPECT_EQ(moves.TakePlaces().size(), 25u);
 }
+
+TEST(MouseMoves, AClockThatStartsAgainAtZeroStartsTheWaitAgain)
+{
+	MouseMoves moves;
+	moves.Message(10000, {5, 5});
+	moves.Wait(10000, {5, 5}, true);
+	// A network game starts the clock of the game again at zero. The wait starts again, and no still message comes.
+	moves.Wait(5, {5, 5}, true);
+	EXPECT_TRUE(moves.TakePlaces().empty());
+	// The still messages then come each 40 milliseconds of the new clock. The first has no time before it, because the
+	// last message came at a later time of the old clock. Thus one second sends one place less than a normal second.
+	for (uint32_t frame = 1; frame <= 63; ++frame)
+	{
+		moves.Wait(5 + frame * 16, {5, 5}, true);
+	}
+	EXPECT_EQ(moves.TakePlaces().size(), 24u);
+}
+
+TEST(MouseMoves, AClockThatWrapsPastItsLargestValueSendsTheStillMessagesOfTheTimeBetween)
+{
+	MouseMoves moves;
+	constexpr uint32_t k_NearTheEnd = 0xFFFFFFFFu - 99u;
+	moves.Message(k_NearTheEnd, {5, 5});
+	moves.Wait(k_NearTheEnd, {5, 5}, true);
+	// 200 milliseconds pass, and the clock goes past its largest value: five still messages come, not millions
+	moves.Wait(k_NearTheEnd + 200u, {5, 5}, true);
+	EXPECT_LE(moves.TakePlaces().size(), 5u);
+}
