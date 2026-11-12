@@ -61,6 +61,7 @@
 #include "ECS/Systems/IntroSystemInterface.h"
 #include "ECS/Systems/LandSystemInterface.h"
 #include "ECS/Systems/LobbyClientSystemInterface.h"
+#include "ECS/Systems/LobbyRoomSystemInterface.h"
 #include "ECS/Systems/NetworkGameSystemInterface.h"
 #include "ECS/Systems/PlayerProfileSystemInterface.h"
 #include "ECS/Systems/RainSystemInterface.h"
@@ -136,6 +137,10 @@ void Game::UpdateOnline()
 	if (Locator::lobbyClient::has_value())
 	{
 		Locator::lobbyClient::value().Update();
+	}
+	if (Locator::lobbyRoom::has_value())
+	{
+		Locator::lobbyRoom::value().Update();
 	}
 	// The gathering box talks to the ping server with the time of the computer, not the time of the turns
 	if (Locator::gatheringBoxSystem::has_value())

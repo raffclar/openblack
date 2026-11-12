@@ -41,6 +41,7 @@
 #include "Gui/ScreenFit.h"
 #include "Gui/TextDatabase.h"
 #include "Online/LanDiscoveryInterface.h"
+#include "Online/LobbyBuild.h"
 #include "Online/MapDownload.h"
 #include "Online/NetworkSession.h"
 #include "Online/OnlineMapStoreInterface.h"
@@ -899,7 +900,9 @@ TEST_F(FrontEndTest, JoinTakesATicketThenOpensTheGameSocket)
 	const auto& socket = sockets.sockets.at(sockets.order.back());
 	EXPECT_EQ(socket.request.url, "wss://lobby.test/game/w1");
 	ASSERT_EQ(socket.sent.size(), 1u);
-	EXPECT_EQ(socket.sent[0].Text(), R"({"ticket":"v4.public.t","type":"room.join"})");
+	// The join gives the build id of the game to the server
+	EXPECT_EQ(socket.sent[0].Text(),
+	          R"({"build":")" + online::ThisBuildId() + R"(","ticket":"v4.public.t","type":"room.join"})");
 	// The network game joins for the front end: the server's land loads only after the start
 	ASSERT_EQ(network.joins.size(), 1u);
 	EXPECT_FALSE(network.joins[0].fromCommandLine);
@@ -1516,7 +1519,8 @@ TEST_F(FrontEndTest, TheLanListComesFromTheSearch)
 	ASSERT_FALSE(sockets.order.empty());
 	sockets.Accept(sockets.order.back());
 	Step();
-	EXPECT_EQ(sockets.sockets.at(sockets.order.back()).sent[0].Text(), R"({"name":"Alice","type":"room.join"})");
+	EXPECT_EQ(sockets.sockets.at(sockets.order.back()).sent[0].Text(),
+	          R"({"build":")" + online::ThisBuildId() + R"(","name":"Alice","type":"room.join"})");
 	ServerJoins();
 	EXPECT_EQ(frontEnd->GetBox(), Box::Room);
 	frontEnd->Back();

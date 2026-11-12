@@ -110,6 +110,9 @@ public:
 	void SendPing(std::vector<int64_t> friends, LobbyCallback<lobby_api::PingReply> callback) override;
 	void SendPersonLine(int64_t account, std::string text, LobbyCallback<LobbyDone> callback) override;
 
+	void SendApiCall(online::HttpMethod method, std::string path, std::string body, std::vector<online::HttpHeader> headers,
+	                 LobbyCallback<online::HttpResponse> callback) override;
+
 	uint32_t AddEventListener(LobbyEventListener listener) override;
 	void RemoveEventListener(uint32_t id) override;
 

@@ -340,7 +340,8 @@ std::optional<Frame> ParseObject(const Json& object, std::string_view type)
 	{
 		Join join;
 		if (!ReadString(object, "ticket", join.ticket, false) ||
-		    !ReadString(object, "game_password", join.gamePassword, false) || !ReadString(object, "name", join.name, false))
+		    !ReadString(object, "game_password", join.gamePassword, false) || !ReadString(object, "name", join.name, false) ||
+		    !ReadString(object, "build", join.build, false))
 		{
 			return std::nullopt;
 		}
@@ -605,6 +606,10 @@ std::string ToJson(const Frame& frame)
 			    if (!value.name.empty())
 			    {
 				    object["name"] = value.name;
+			    }
+			    if (!value.build.empty())
+			    {
+				    object["build"] = value.build;
 			    }
 		    }
 		    else if constexpr (std::is_same_v<Kind, Resume>)

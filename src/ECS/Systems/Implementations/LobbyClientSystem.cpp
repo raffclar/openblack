@@ -1018,6 +1018,42 @@ void LobbyClientSystem::SendSkirmishPing(LobbyCallback<LobbyDone> callback)
 	});
 }
 
+void LobbyClientSystem::SendApiCall(HttpMethod method, std::string path, std::string body,
+                                    std::vector<online::HttpHeader> headers, LobbyCallback<HttpResponse> callback)
+{
+	if (!_config.has_value())
+	{
+		Fail(callback, ErrorOfKind(LobbyErrorKind::NotConfigured));
+		return;
+	}
+	headers.emplace_back("Accept", std::string(k_JsonType));
+	if (!body.empty())
+	{
+		headers.emplace_back("Content-Type", std::string(k_JsonType));
+	}
+	Authorized(Call {
+	    .method = method,
+	    .path = std::move(path),
+	    .headers = std::move(headers),
+	    .body = BytesOf(body),
+	    .done =
+	        [callback = std::move(callback)](HttpResponse&& response) {
+		        // A 304 answer tells that the value of the tag that the call sent did not change
+		        if (response.error == online::HttpError::None && response.status == 304)
+		        {
+			        Succeed(callback, std::move(response));
+			        return;
+		        }
+		        if (auto error = LobbyErrorOf(response); error.kind != LobbyErrorKind::None)
+		        {
+			        Fail(callback, std::move(error));
+			        return;
+		        }
+		        Succeed(callback, std::move(response));
+	        },
+	});
+}
+
 uint32_t LobbyClientSystem::AddEventListener(LobbyEventListener listener)
 {
 	const auto id = _nextListener++;

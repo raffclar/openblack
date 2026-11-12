@@ -864,3 +864,53 @@ TEST(HttpLimits, ASmallerLimitOfTheRequestTakesThePlaceOfTheLimitOfItsKind)
 	request.mostBytes = 400;
 	EXPECT_EQ(online::MostAnswerBytes(request, 100), 100u);
 }
+
+TEST_F(LobbyClientTest, ApiCallsSendTheSessionAndGiveTheAnswer)
+{
+	Make();
+	LogIn();
+	std::optional<int32_t> status;
+	std::optional<LobbyError> error;
+	_client->SendApiCall(HttpMethod::Put, "/lobbies/l1/members/me", R"({"ready":true})", {{"If-None-Match", "\"t\""}},
+	                     [&](auto&& result) {
+		                     if (result.Ok())
+		                     {
+			                     status = result.value->status;
+		                     }
+		                     else
+		                     {
+			                     error = result.error;
+		                     }
+	                     });
+	ASSERT_EQ(_http.sent.size(), 1u);
+	EXPECT_EQ(_http.Next().method, HttpMethod::Put);
+	EXPECT_EQ(_http.Next().url, "https://bw.example/api/v1/lobbies/l1/members/me");
+	EXPECT_EQ(_http.NextBody(), R"({"ready":true})");
+	EXPECT_EQ(_http.NextHeader("Authorization"), "Bearer access1");
+	EXPECT_EQ(_http.NextHeader("Content-Type"), "application/json");
+	EXPECT_EQ(_http.NextHeader("If-None-Match"), "\"t\"");
+	_http.Answer(304, "");
+	EXPECT_EQ(status, 304);
+
+	// A refusal gives the code of the problem
+	_client->SendApiCall(HttpMethod::Post, "/lobbies/l1/members", "{}", {}, [&](auto&& result) {
+		if (!result.Ok())
+		{
+			error = result.error;
+		}
+	});
+	EXPECT_FALSE(_http.NextHeader("If-None-Match").has_value());
+	_http.Answer(403, R"({"title":"Forbidden","status":403,"code":"wrong_password"})");
+	ASSERT_TRUE(error.has_value());
+	EXPECT_EQ(error->kind, LobbyErrorKind::Refused);
+	EXPECT_EQ(error->code, "wrong_password");
+}
+
+TEST_F(LobbyClientTest, ApiCallsNeedALobby)
+{
+	Make(lobby_api::ClientKind::Desktop, false);
+	std::optional<LobbyErrorKind> kind;
+	_client->SendApiCall(HttpMethod::Get, "/lobbies", {}, {}, [&](auto&& result) { kind = result.error.kind; });
+	EXPECT_EQ(kind, LobbyErrorKind::NotConfigured);
+	EXPECT_TRUE(_http.sent.empty());
+}

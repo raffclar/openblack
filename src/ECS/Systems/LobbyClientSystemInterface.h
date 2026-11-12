@@ -20,6 +20,8 @@
 #include <GameSocket.h>
 #include <LobbyApi.h>
 
+#include "Online/HttpClientInterface.h"
+
 namespace openblack::ecs::systems
 {
 
@@ -209,6 +211,15 @@ public:
 	/// Sends a line of 1 to 254 characters to one account. The account gets it as a "ping.line" event. A line to a
 	/// number of the staff answers the question of that staff. A lobby with no ping server gives an error.
 	virtual void SendPersonLine(int64_t /*account*/, std::string /*text*/, LobbyCallback<LobbyDone> callback)
+	{
+		callback({.value = std::nullopt, .error = {.kind = LobbyErrorKind::NotConfigured}});
+	}
+
+	/// A call of the API with the session of the player, for the other systems of the lobby, such as the lobby rooms.
+	/// The path comes after the start of the API, for example "/lobbies". The callback gets the answer of a 2xx or a 304
+	/// status, or the error of a different answer.
+	virtual void SendApiCall(online::HttpMethod /*method*/, std::string /*path*/, std::string /*body*/,
+	                         std::vector<online::HttpHeader> /*headers*/, LobbyCallback<online::HttpResponse> callback)
 	{
 		callback({.value = std::nullopt, .error = {.kind = LobbyErrorKind::NotConfigured}});
 	}

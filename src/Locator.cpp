@@ -100,6 +100,7 @@
 #include "ECS/Systems/Implementations/IntroSystem.h"
 #include "ECS/Systems/Implementations/LandDetailSystem.h"
 #include "ECS/Systems/Implementations/LobbyClientSystem.h"
+#include "ECS/Systems/Implementations/LobbyRoomSystem.h"
 #include "ECS/Systems/Implementations/NetworkGameSystem.h"
 #include "ECS/Systems/Implementations/ObjectDrawListSystem.h"
 #include "ECS/Systems/Implementations/PlayerCommandSystem.h"
@@ -191,6 +192,7 @@
 #include "LHVM.h"
 #include "Online/FriendList.h"
 #include "Online/HttpClientInterface.h"
+#include "Online/LobbyBuild.h"
 #include "Online/LobbyPingServer.h"
 #include "Online/NetworkSession.h"
 #include "Online/OnlineMapStoreInterface.h"
@@ -298,6 +300,7 @@ using openblack::ecs::systems::LivingActionSystem;
 using openblack::ecs::systems::LobbyClientConfig;
 using openblack::ecs::systems::LobbyClientSystem;
 using openblack::ecs::systems::LobbyClientSystemInterface;
+using openblack::ecs::systems::LobbyRoomSystem;
 using openblack::ecs::systems::MagicShieldSystem;
 using openblack::ecs::systems::MagicSystem;
 using openblack::ecs::systems::MiracleFxSystem;
@@ -476,6 +479,10 @@ void InitializeOnline(const player_profiles::Store& profiles)
 	    std::make_unique<online::WebSocketPushChannel>(Locator::webSocketClient::value(), k_PushAuth),
 	    online::MakeTokenStore(Locator::filesystem::value(), profiles.folder),
 	    []() { return std::chrono::system_clock::now(); });
+	Locator::lobbyRoom::emplace<LobbyRoomSystem>(Locator::lobbyClient::value(), online::ThisBuildId(), []() {
+		return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch())
+		    .count();
+	});
 	Locator::clanCreatureSystem::emplace<ClanCreatureSystem>([]() -> LobbyClientSystemInterface* {
 		return Locator::lobbyClient::has_value() ? &Locator::lobbyClient::value() : nullptr;
 	});
@@ -1013,6 +1020,7 @@ void openblack::ShutDownServices()
 	// The lobby client goes before the web client that it uses, and the real-world weather before the lobby client
 	Locator::realWeatherSystem::reset();
 	Locator::clanCreatureSystem::reset();
+	Locator::lobbyRoom::reset();
 	Locator::lobbyClient::reset();
 	Locator::onlineMapStore::reset();
 	Locator::networkGame::reset();
