@@ -74,6 +74,7 @@ void openblack::ecs::reflection::RegisterFields_Values_creaturem(entt::meta_ctx&
 	    .Field<&openblack::creature_mind::IdleMind::stepSeconds>("stepSeconds")
 	    .Field<&openblack::creature_mind::IdleMind::sitEnding>("sitEnding")
 	    .Field<&openblack::creature_mind::IdleMind::faintLay>("faintLay")
+	    .Field<&openblack::creature_mind::IdleMind::faintTurns>("faintTurns")
 	    .Field<&openblack::creature_mind::IdleMind::faceSeconds>("faceSeconds")
 	    .Field<&openblack::creature_mind::IdleMind::eyesToClear>("eyesToClear")
 	    .Field<&openblack::creature_mind::IdleMind::faceVariety>("faceVariety")

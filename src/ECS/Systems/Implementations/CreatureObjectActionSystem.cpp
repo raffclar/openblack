@@ -821,6 +821,12 @@ void Approach(entt::entity creature, CreatureObjectAction& action, const Creatur
 			// The arm plays in the time of the first pointing animation
 			action.durationMs = DurationOf(creature, creature_pointing::k_Animations.front());
 		}
+		else
+		{
+			// The throw ends when its step gets to the end of the flat throw. The length of the high throw has no effect.
+			action.durationMs = DurationOf(creature, creature_throw::k_HurlFlat);
+			action.eventMs = std::min(action.eventMs, std::max(action.durationMs - 1.0f, 0.0f));
+		}
 		return;
 	}
 

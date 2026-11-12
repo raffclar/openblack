@@ -467,6 +467,17 @@ struct FaintBody
 /// faint for the first time, the wait has not started and its seconds are notStartedSeconds. After that, the wait counts
 /// each turn that WaitTurnCounts lets it count, also when something moves the creature and its body stands.
 [[nodiscard]] FaintWait LyingTurn(FaintWait wait, const FaintBody& body, float turnSeconds, float notStartedSeconds);
+/// The wait of a creature that lies in a faint, as a count of whole turns. A long wait, such as a death for ever, needs
+/// an exact count: a float sum of many turns does not stay exact.
+struct FaintCount
+{
+	int32_t turns {0};
+	/// The creature lay still in its faint at least one time. Then its wait started.
+	bool started {false};
+};
+/// The same turn as LyingTurn above, but the wait counts whole turns. Before the creature lies still in its faint for the
+/// first time, the count is notStartedTurns. After that, each turn that WaitTurnCounts lets it count adds one turn.
+[[nodiscard]] FaintCount LyingTurn(FaintCount wait, const FaintBody& body, int32_t notStartedTurns);
 
 // Blows
 
