@@ -1943,8 +1943,8 @@ void Renderer::DrawPassEntities(const DrawSceneDesc& desc, const ScenePass& pass
 					const bool drawnOver = renderCtx.drawnOverInstances.contains(instance);
 					if (drawnOver || renderCtx.drawnOverInstances.contains(instance + 1))
 					{
-						const auto first = drawnOver ? instance - 1 : instance;
-						const auto position = glm::vec3(renderCtx.instanceUniforms.at(first).model[3]);
+						const auto pairFirst = drawnOver ? instance - 1 : instance;
+						const auto position = glm::vec3(renderCtx.instanceUniforms.at(pairFirst).model[3]);
 						sd.sortDepth = std::max(zsort::ModelDepth(position, cameraOrigin), 1u);
 					}
 					if (drawnOver)
