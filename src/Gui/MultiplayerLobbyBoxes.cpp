@@ -10,6 +10,8 @@
 // The boxes of the lobby sessions: the lobby list, the box that makes a session and the room of a session. They use
 // the controls, the frame and the fonts of the vanilla boxes of the multiplayer front end.
 
+#include <cmath>
+
 #include <algorithm>
 #include <array>
 #include <string>
@@ -84,7 +86,7 @@ constexpr glm::ivec2 k_NoPosition {568, 338};
 constexpr int k_AnswerArrowSize = 32;
 
 // The lobby list: the columns of the list, from their left
-constexpr DialogRect k_ListRect {.min = {40, 150}, .max = {760, 405}};
+constexpr DialogRect k_ListRect {.min = {40, 162}, .max = {760, 405}};
 constexpr std::array<int, screens::k_ColumnCount + 1> k_ColumnLeft {44, 300, 420, 560, 625, 736};
 constexpr std::array<std::u16string_view, screens::k_ColumnCount> k_Headings {u"Name", u"Host", u"Map", u"Gods", u"Status"};
 
@@ -164,7 +166,7 @@ void MultiplayerBoxes::BuildLobbyList(Dialog& dialog)
 	for (size_t i = 0; i < screens::k_ColumnCount; ++i)
 	{
 		auto& heading =
-		    dialog.Add<Button>(DialogRect {.min = {k_ColumnLeft.at(i) - 4, 136}, .max = {k_ColumnLeft.at(i + 1) - 4, 150}},
+		    dialog.Add<Button>(DialogRect {.min = {k_ColumnLeft.at(i) - 4, 137}, .max = {k_ColumnLeft.at(i + 1) - 4, 158}},
 		                       std::u16string(), Small());
 		heading.onClick = [this, i] { _frontEnd->ClickListHeading(static_cast<screens::Column>(i)); };
 		_headings.at(i) = &heading;
@@ -409,15 +411,16 @@ void MultiplayerBoxes::BuildLobbyRoom(Dialog& dialog)
 			const DialogRect mark {.min = {right - k_MarkSize, middle - (k_MarkSize / 2)},
 			                       .max = {right, middle + (k_MarkSize / 2)}};
 			painter.DrawBevelBox(mark, 1, DialogPainter::All, k_WarningColour);
-			painter.DrawText({mark.min.x, mark.min.y - 2}, k_MarkSize, Justify::Centre, u"!", Mid(), k_WarningColour);
+			painter.DrawText({(mark.min.x + mark.max.x) / 2, mark.min.y - 2}, k_MarkSize, Justify::Centre, u"!", Mid(),
+			                 k_WarningColour);
 			_warningRects.push_back(mark);
 			right -= k_MarkSize + 6;
 		}
 		const auto note = screens::SlotNote(slot);
 		if (!note.empty())
 		{
-			const auto width = static_cast<int>(painter.GetTextWidth(note, Small()));
-			painter.DrawText({right - width, middle - (Small() / 2)}, width, Justify::Left, note, Small(),
+			const auto width = static_cast<int>(std::ceil(painter.GetTextWidth(note, Small()))) + 1;
+			painter.DrawText({right - 4, middle - (Small() / 2)}, width, Justify::Right, note, Small(),
 			                 DialogPainter::k_HoverColour);
 		}
 	};
