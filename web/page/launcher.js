@@ -381,6 +381,33 @@ async function gameCrashed(name) {
     `The private storage of the browser does not have the report ${name}. The "Save log" button gives the game log.`);
 }
 
+// The time without a game frame, while the page shows its display frames, after which the page tells the player that
+// the game does not answer. A load of a land or of a saved world draws its loading screen, so it counts frames too.
+const k_GameStallMs = 60000;
+const k_GameStallCheckMs = 5000;
+
+/** Tells the player one time when the game thread draws no frame for k_GameStallMs while the page is shown. */
+function watchGameFrames(gameFrames, displayFrames) {
+  let lastGame = Atomics.load(gameFrames, 0);
+  let lastDisplay = Atomics.load(displayFrames, 0);
+  let stalledMs = 0;
+  const timer = setInterval(() => {
+    const game = Atomics.load(gameFrames, 0);
+    const display = Atomics.load(displayFrames, 0);
+    // A page that is not shown gets no display frames, and the game waits for them: that is not a stop
+    const stalled = game === lastGame && display !== lastDisplay && game > 0;
+    stalledMs = stalled ? stalledMs + k_GameStallCheckMs : 0;
+    lastGame = game;
+    lastDisplay = display;
+    if (stalledMs >= k_GameStallMs && !pageCrashKept) {
+      clearInterval(timer);
+      log(`The game drew no frame for ${k_GameStallMs / 1000} s: it does not answer.`);
+      showMessage('The game does not answer',
+        'The game drew no frame for one minute. Load the page again. The "Save log" button gives the game log.');
+    }
+  }, k_GameStallCheckMs);
+}
+
 // The game stopped on an error of the browser: the page keeps one report, then shows the reports
 let pageCrashKept = false;
 async function gameFailed(reason) {
@@ -616,6 +643,10 @@ async function start(online = false) {
     requestAnimationFrame(countDisplayFrame);
   };
   requestAnimationFrame(countDisplayFrame);
+  // The game thread counts its frames in a shared array. A game that draws no frame for a long time while the page
+  // shows its display frames does not answer. The page then tells the player, so that the page does not only stop.
+  const gameFrames = new Int32Array(new SharedArrayBuffer(Int32Array.BYTES_PER_ELEMENT));
+  watchGameFrames(gameFrames, displayFrames);
   globalThis.Module = {
     canvas,
     arguments: gameArguments,
@@ -623,7 +654,7 @@ async function start(online = false) {
     printErr: log,
     openblackWeb: {
       folder: { list, files: chosen.map((entry) => entry.file) }, storage, version: version.file, showFrame, setPresent,
-      requests, displayFrames,
+      requests, displayFrames, gameFrames,
     },
     onExit: (code) => log(`The game stopped with the code ${code}.`),
     onAbort: (reason) => gameFailed(String(reason)),
@@ -631,8 +662,14 @@ async function start(online = false) {
   // An error on a game thread that the game does not catch, such as a WebAssembly trap, comes to the page as an error.
   // The page ignores the error of the size watch of the browser, which is harmless.
   window.addEventListener('error', (event) => {
-    // A game thread error comes as an error event, which has the message of the error
-    const reason = (event.error && event.error.message) || event.message || String(event.error);
+    // A game thread error comes as an error event, which has the message of the error. A worker that cannot load the
+    // program gives an event with no message. This occurs when the game starts a new thread and the browser cannot get
+    // the files of the game, for example after the network stopped.
+    const loadFailed = event.error instanceof Event && !event.error.message;
+    const reason = loadFailed
+      ? 'A game thread could not start, because the browser could not load the files of the game. ' +
+        'Make sure that the network works, then load the page again.'
+      : (event.error && event.error.message) || event.message || String(event.error);
     if (!reason.includes('ResizeObserver')) {
       gameFailed(reason);
     }

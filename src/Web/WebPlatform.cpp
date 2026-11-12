@@ -65,7 +65,12 @@ EM_JS(void, openblack_set_present, (int canvas), {
 // changes. The display frames of a worker thread do not always follow the display: in Safari 27 they come about each
 // 20 ms on a 60 Hz display, thus the game ran at 50 frames each second. Without the shared count, the thread waits for
 // its own display frame.
+// Each wait adds one to the count of game frames in a shared array, so that the page can see a game that stopped.
 EM_ASYNC_JS(void, openblack_wait_for_display_frame, (), {
+	const gameFrames = globalThis.openblackWeb && globalThis.openblackWeb.gameFrames;
+	if (gameFrames) {
+		Atomics.add(gameFrames, 0, 1);
+	}
 	const frames = globalThis.openblackWeb && globalThis.openblackWeb.displayFrames;
 	if (frames && typeof Atomics.waitAsync === 'function') {
 		const wait = Atomics.waitAsync(frames, 0, Atomics.load(frames, 0));
