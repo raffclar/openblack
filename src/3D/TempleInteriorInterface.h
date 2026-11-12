@@ -146,6 +146,8 @@ public:
 	[[nodiscard]] virtual bool IsRoomAvailable(TempleRoom room) const = 0;
 	/// The player clicked the door of a room that is not open to them: the help that tells them so starts
 	virtual void TellRoomNotAvailable() = 0;
+	/// The player clicked the door of a room of pictures once the game is over: the box asks about a new game
+	virtual void AskNewGame() = 0;
 	/// Whether a room is drawn whole: the room the player is in, the room the camera is on its way into, and the main
 	/// room from the others while one of its doors is open
 	[[nodiscard]] virtual bool IsRoomDrawn(TempleRoom room) const = 0;

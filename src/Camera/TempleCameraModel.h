@@ -24,6 +24,7 @@
 #include "3D/TempleInteriorInterface.h"
 #include "CameraModel.h"
 #include "Common/Zoomer.h"
+#include "Temple/TempleKeys.h"
 #include "TemplePress.h"
 
 namespace openblack
@@ -239,6 +240,8 @@ public:
 	/// Whether a dialog is up over the temple, as the game's options are in the Game Options room, which takes the rooms
 	/// of pictures' cameras from the player
 	void SetDialogOpen(bool open) { _dialogOpen = open; }
+	/// Whether the game is over and whether a box is on the screen, for the presses in the rooms of pictures
+	void SetPressFacts(temple::keys::PictureRoomPressFacts facts) { _pressFacts = facts; }
 	/// How much a room of pictures turns by itself this frame, or nothing when the arrow keys turn it instead
 	/// @param turnTime How long the room has turned by itself, which the turn speeds up over. It goes on by dt.
 	/// @param aroundPathEnd The room turns about where its path ends, as the library does, which keeps still
@@ -415,6 +418,7 @@ private:
 	temple_press::DoubleClickHold _doubleClickHold;
 	temple_press::PressWatch _pressWatch;
 	bool _dialogOpen {false};
+	temple::keys::PictureRoomPressFacts _pressFacts;
 	bool _futureWordsShown {false};
 	bool _overPool {false};
 	bool _pressingPool {false};

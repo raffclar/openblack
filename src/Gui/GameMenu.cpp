@@ -280,7 +280,13 @@ void GameMenu::BuildMain(const TextDatabase& texts)
 	// The main menu's tabs: the third, Multiplayer, only has a label in a network game (SetNetworkGame). A tab with no
 	// label takes no click.
 	std::vector<Dialog::Tab> tabs {
-	    {.label = std::u16string(texts.Get("HELP_TEXT_DIALOG_ADDITION_88")), .onSelect = {}},
+	    // A click on the tab of the main menu, which shows already, closes all the boxes and shows the main menu again
+	    {.label = std::u16string(texts.Get("HELP_TEXT_DIALOG_ADDITION_88")),
+	     .onSelect =
+	         [this] {
+		         CloseAllBoxesForTab();
+		         ShowPage(Page::Main);
+	         }},
 	    {.label = std::u16string(texts.Get("HELP_TEXT_PAUSE_STATS_151")),
 	     .onSelect =
 	         [this] {

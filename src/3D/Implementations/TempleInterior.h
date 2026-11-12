@@ -84,6 +84,7 @@ public:
 	[[nodiscard]] std::optional<float> GetWayOutSeconds() const override;
 	[[nodiscard]] bool IsRoomAvailable(TempleRoom room) const override;
 	void TellRoomNotAvailable() override;
+	void AskNewGame() override;
 	[[nodiscard]] TempleDoors& GetDoors() override { return _doors; }
 	[[nodiscard]] const TempleDoors& GetDoors() const override { return _doors; }
 	[[nodiscard]] std::optional<TempleCursorHit> GetCursorHit() const override;
