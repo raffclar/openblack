@@ -82,3 +82,10 @@ TEST(ConnectionLost, TheNextNetworkSessionCanShowTheBoxAgain)
 	EXPECT_FALSE(notice.Told());
 	EXPECT_TRUE(notice.Update(EndedWith(NetworkSession::End::Lost)));
 }
+
+TEST(ConnectionLost, AKickOfTheLobbysHostShowsTheBoxOfTheKick)
+{
+	EXPECT_TRUE(openblack::online::KickedFromGame(NetworkSession::End::Refused, "kicked"));
+	EXPECT_FALSE(openblack::online::KickedFromGame(NetworkSession::End::Refused, "resume"));
+	EXPECT_FALSE(openblack::online::KickedFromGame(NetworkSession::End::Lost, "kicked"));
+}

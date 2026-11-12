@@ -181,10 +181,20 @@ void Game::UpdateOnline()
 			        .toolRun = toolRun,
 			    }))
 			{
-				Locator::gameInterface::value().ShowConnectionLost();
-				SPDLOG_LOGGER_INFO(spdlog::get("game"),
-				                   "The connection to the network game is lost ({}): the box tells the player",
-				                   online::EndName(session->GetEnd()));
+				// The server took the player out of the game for the lobby's host (row 241)
+				if (online::KickedFromGame(session->GetEnd(), session->RefusedReason()))
+				{
+					Locator::gameInterface::value().ShowKicked(gui::ToUtf16(network.RoomName()));
+					SPDLOG_LOGGER_INFO(spdlog::get("game"),
+					                   "The host kicked the player from the network game: the box tells the player");
+				}
+				else
+				{
+					Locator::gameInterface::value().ShowConnectionLost();
+					SPDLOG_LOGGER_INFO(spdlog::get("game"),
+					                   "The connection to the network game is lost ({}): the box tells the player",
+					                   online::EndName(session->GetEnd()));
+				}
 			}
 			// The OK goes back to the network front end. A join from the command line has no front end: the game stops.
 			// A box with no lost network session (a testbed scenario) only closes.

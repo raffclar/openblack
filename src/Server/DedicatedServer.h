@@ -25,6 +25,8 @@
 #include "Common/DeveloperTools.h"
 #include "Debug/SimRun.h"
 #include "EngineConfig.h"
+#include "Server/GameLifetime.h"
+#include "Server/LobbyGame.h"
 #include "Server/ServerSnapshots.h"
 #include "Simulation/WorldStart.h"
 #include "Story/NewGameChoice.h"
@@ -98,6 +100,19 @@ struct NetworkSettings
 	std::optional<std::filesystem::path> lobbyTestAuthorities;
 	/// The snapshots of the shared world on the server's own disk (deviation 100)
 	snapshots::Settings snapshots;
+	/// The game of one lobby on a server of the pool (deviation 236): the lobby's id and members. The room takes only
+	/// these members, and the server ends after its game. None for a server with no lobby.
+	std::optional<lobby_game::Lobby> lobby;
+	/// The id of the game at the lobby, which the server's log and its results name. Empty: the server makes an id.
+	std::string gameId;
+	/// The time in seconds after the server started to listen in which the members of the lobby join
+	int64_t joinWindowSeconds {game_lifetime::k_DefaultJoinWindowSeconds};
+	/// The lobby's deadline of the game in seconds since 1970 (UTC). The server also ends 6 hours after it started to
+	/// listen at the latest.
+	std::optional<int64_t> deadline;
+	/// The SHA-256 of the file of the land that the lobby gives its members, as 64 hex digits in lower case. The server
+	/// does not start with another file. Empty: no check.
+	std::string mapSha256;
 };
 
 /// What the command line of the dedicated server gives

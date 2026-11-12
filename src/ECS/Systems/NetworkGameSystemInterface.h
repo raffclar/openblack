@@ -58,6 +58,10 @@ struct NetworkJoin
 	/// A game server on the local network with a certificate of its own: the pin of its public key, from its answer to
 	/// the search (deviation 113)
 	std::optional<online::server_key::Pin> serverKey;
+	/// Tests: the build id that the join gives in place of the build id of this build
+	std::optional<std::string> testBuildId;
+	/// The name of the room in the game list, for the box that tells that the host kicked the player
+	std::string roomName;
 };
 
 /// The network game of this computer: the session with the game server, which gives the turns of the world. A join
@@ -116,6 +120,8 @@ public:
 	[[nodiscard]] virtual std::optional<online::StartEvent> TakeStartEvent() = 0;
 	/// The names of the observers that left the game since the last call
 	[[nodiscard]] virtual std::vector<std::string> TakeObserversLeft() { return {}; }
+	/// The name of the room of the last join, empty for a join from the command line
+	[[nodiscard]] virtual std::string_view RoomName() const { return {}; }
 };
 
 } // namespace openblack::ecs::systems

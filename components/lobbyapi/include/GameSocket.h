@@ -42,6 +42,12 @@ struct Join
 	std::string gamePassword;
 	/// The name of the player's profile, on the local network only, where no ticket names the player
 	std::string name;
+	/// The build id of the client, such as "0.1.0+0123456789ab/codec34" ("build", optional). A server of another build
+	/// refuses the client with "version".
+	std::string build;
+	/// The SHA-256 of the client's file of the land of the game, as 64 hex digits ("map", optional). A server with another
+	/// file refuses the client with "map".
+	std::string map;
 };
 
 /// Client to server: "room.resume". A client that lost its socket opens a new one and sends this in place of a join. It
@@ -145,7 +151,8 @@ struct Joined
 /// Server to client: "room.refused". The server closes the socket after this frame.
 struct Refused
 {
-	/// A short word for the reason: "ticket", "full", "started", "closed", "protocol", "resync", "kicked"
+	/// A short word for the reason: "ticket", "full", "started", "closed", "protocol", "resync", "kicked", "version" (the
+	/// client has another build than the server), "map" (the client has another file of the land)
 	std::string reason;
 };
 

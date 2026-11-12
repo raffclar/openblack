@@ -773,6 +773,8 @@ void MultiplayerFrontEnd::RoomOpened(std::string ticket, std::u16string password
 	    .origin = _flow.kind == LobbyKind::Lan ? online::GameOrigin::Lan : online::GameOrigin::InternetLobby,
 	    // Only a room that the search of the local network found gives the key of its server
 	    .serverKey = _flow.kind == LobbyKind::Lan ? online::server_key::ParseHex(_room->key) : std::nullopt,
+	    .testBuildId = std::nullopt,
+	    .roomName = _room->hostname,
 	});
 	if (!_joining)
 	{

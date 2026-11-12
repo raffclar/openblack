@@ -121,6 +121,8 @@ constexpr std::string_view k_GodOutText = "HELP_TEXT_WIN_GAME_03";
 constexpr std::string_view k_PlayerLeftText = "HELP_TEXT_DIALOG_ADDITION_09";
 // "Connection to network game has been lost. Cannot continue."
 constexpr std::string_view k_ConnectionLostText = "HELP_TEXT_CONNECTION_LOST";
+/// "%s has kicked you from the game.", the text of the network front end
+constexpr std::string_view k_KickedText = "HELP_TEXT_MPFER_KICKEDYOUGAME";
 /// The words of a resynchronisation (user decision MI-4). The game has no text for them.
 constexpr std::u16string_view k_ResyncText = u"Resynchronising...";
 /// The words stand in the middle of the top of the dialog space, in the dialogs' middle text size
@@ -741,6 +743,13 @@ void GameInterface::ShowPlayerLeft(std::u16string_view name)
 {
 	const std::array words {name};
 	_saveGameBoxes->Tell(end_game_box::Format(_texts.Get(k_PlayerLeftText), words));
+}
+
+void GameInterface::ShowKicked(std::u16string_view roomName)
+{
+	const std::array words {roomName};
+	_saveGameBoxes->Tell(end_game_box::Format(_texts.Get(k_KickedText), words));
+	_connectionLostShown = true;
 }
 
 void GameInterface::ShowConnectionLost()
