@@ -114,7 +114,8 @@ public:
 	bool TakePageShown() noexcept { return std::exchange(_pageShown, false); }
 	/// The main menu is the box that takes the input: the menu is open on its main page, and no question is up over it
 	[[nodiscard]] bool IsMainMenuActive() const noexcept { return _open && _page == Page::Main && !_question.has_value(); }
-	/// Whether a click on the tab of the main menu showed the main menu again since last asked
+	/// Whether a tab showed the main menu again since last asked: the tab of the main menu, or a tab of the options out
+	/// of the temple, which shows the main menu under the page of the tab
 	bool TakeMainMenuShownAgain() noexcept { return std::exchange(_mainMenuShownAgain, false); }
 	/// Inside the temple the options are shown on their own, by the options room: their first tab is the World Room
 	/// rather than the Main Menu, Back and that tab close them rather than go back to the main menu, Escape closes them
@@ -306,6 +307,8 @@ private:
 	/// A tab of the options was picked: from the Players page, while leaving it starts the game again, the player is
 	/// asked first
 	void PickTab(Page page);
+	/// Show the page. With again set, the page that shows closes and shows again from the start.
+	void ShowPage(Page page, bool again);
 	/// A click on a tab first closes all the boxes of the game
 	void CloseAllBoxesForTab() const;
 	/// The Players page's arrow: Back, or the game starting again

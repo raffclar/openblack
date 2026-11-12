@@ -511,6 +511,15 @@ void CreatureHandSystem::StopHoldAtLockEnd(entt::entity hand)
 	                   entt::to_integral(creature));
 	// The hand lets go of the creature at once. The camera comes back, and the draw sends the leash tap and the feedback.
 	LetGoOfHold(hand);
+	// The hand sends nothing for a creature that is not in the world. The hand is free also when the world keeps the lock.
+	if (!inWorld)
+	{
+		if (locked != nullptr)
+		{
+			registry.AssignOrReplace<HandLockEndSent>(hand, HandLockEndSent {.creature = creature, .atLockEnd = true});
+		}
+		return;
+	}
 	if (!Locator::playerCommandSystem::has_value())
 	{
 		DoUnlock(OwnPlayer(), creature);
@@ -666,15 +675,48 @@ bool CreatureHandSystem::WaitsForLockEnd() const
 	return sent == nullptr || !sent->atLockEnd || sent->creature != locked->creature;
 }
 
+entt::entity CreatureHandSystem::GetPressCreature() const
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	if (!Locator::handSystem::has_value())
+	{
+		return entt::null;
+	}
+	const auto hand = PlayerHand();
+	if (!registry.Valid(hand))
+	{
+		return entt::null;
+	}
+	if (const auto* contact = registry.TryGet<const HandOnCreature>(hand))
+	{
+		return contact->creature;
+	}
+	if (const auto* press = registry.TryGet<const HandCreaturePress>(hand))
+	{
+		return press->creature;
+	}
+	if (WaitsForLockEnd())
+	{
+		return registry.Get<const HandLockedCreature>(hand).creature;
+	}
+	return entt::null;
+}
+
 void CreatureHandSystem::WaitForLockEnd(entt::entity hand)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto* locked = registry.TryGet<const HandLockedCreature>(hand);
-	// The world ended the lock, or has a new lock: the hand forgets the end that it sent
-	// An end that the end of the interface lock sent stays until the turn ends the lock, or until the creature goes
-	if (const auto* sent = registry.TryGet<const HandLockEndSent>(hand);
-	    sent != nullptr && (sent->atLockEnd ? !registry.Valid(sent->creature)
-	                                        : (locked == nullptr || !locked->released || locked->creature != sent->creature)))
+	// The world ended the lock, or has a new lock: the hand forgets the end that it sent. An end that the end of the
+	// interface lock sent stays until the turn ends the lock or locks another creature. When the creature went from the
+	// world, the end stays while the world keeps the lock, so that the hand stays free.
+	const auto forgets = [&registry, locked](const HandLockEndSent& sent) {
+		if (sent.atLockEnd)
+		{
+			return locked != nullptr ? locked->creature != sent.creature : !registry.Valid(sent.creature);
+		}
+		return locked == nullptr || !locked->released || locked->creature != sent.creature;
+	};
+	if (const auto* sent = registry.TryGet<const HandLockEndSent>(hand); sent != nullptr && forgets(*sent))
 	{
 		registry.Remove<HandLockEndSent>(hand);
 	}

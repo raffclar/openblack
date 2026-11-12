@@ -56,6 +56,7 @@ public:
 	void DoUnlock(PlayerNames player, entt::entity creature) override;
 	void DoLockRelease(PlayerNames player, entt::entity creature) override;
 	[[nodiscard]] bool WaitsForLockEnd() const override;
+	[[nodiscard]] entt::entity GetPressCreature() const override;
 	void DoBruise(PlayerNames player, const player_commands::CreatureBruise& bruise) override;
 	void DoReaction(PlayerNames player, const player_commands::CreatureReaction& reaction) override;
 	/// The held creature reacts to a stroke or a slap. This computer shows the face of a stroke at once. The body action

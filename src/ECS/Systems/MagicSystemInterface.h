@@ -336,9 +336,10 @@ public:
 	/// How a pour of food or wood lifts and tips the hand now, a fraction of the way from the last turn to the next
 	[[nodiscard]] virtual magic::PourPose GetHandPour(float fraction) const = 0;
 	[[nodiscard]] virtual HandCastState GetHandCastState() const = 0;
-	/// Whether the hand of this computer has a seed armed on a thing, and the thing of the press is not in the world any
-	/// more
-	[[nodiscard]] virtual bool PressThingGone() const { return false; }
+	/// The thing that the press of the hand of this computer keeps while a seed is armed or locked: the thing that the
+	/// seed is armed on, or else the thing that was under the hand at the press. Null when the press was on nothing, or
+	/// when no seed is armed or locked.
+	[[nodiscard]] virtual entt::entity GetPressThing() const { return entt::null; }
 	/// The miracle seed in the hand of this computer
 	[[nodiscard]] virtual std::optional<entt::entity> GetHeldSeed() const = 0;
 	/// The miracle seed in the hand of a player. The turns read this, because it is the same on every computer.
