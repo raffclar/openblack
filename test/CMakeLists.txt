@@ -199,11 +199,13 @@ openblack_setup_and_add_test(test_moon graphics/test_moon.cpp)
 openblack_setup_and_add_test(test_bone_budget graphics/test_bone_budget.cpp)
 openblack_setup_and_add_test(test_bone_palette graphics/test_bone_palette.cpp)
 openblack_setup_and_add_test(test_draw_order graphics/test_draw_order.cpp)
+openblack_setup_and_add_test(test_render_modes graphics/test_render_modes.cpp)
 openblack_setup_and_add_test(test_draw_encoder graphics/test_draw_encoder.cpp)
 openblack_setup_and_add_test(test_view_frustum graphics/test_view_frustum.cpp)
 openblack_setup_and_add_test(test_mesh_detail graphics/test_mesh_detail.cpp)
 openblack_setup_and_add_test(test_detail_level graphics/test_detail_level.cpp)
 openblack_setup_and_add_test(test_land_detail graphics/test_land_detail.cpp)
+openblack_setup_and_add_test(test_coarse_edges graphics/test_coarse_edges.cpp)
 target_link_libraries(test_land_detail PRIVATE lnd)
 openblack_setup_and_add_test(
   test_sea_reflection graphics/test_sea_reflection.cpp

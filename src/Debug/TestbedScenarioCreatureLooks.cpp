@@ -1468,6 +1468,21 @@ void testbed_scenarios::AddLight(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "light.coarse_edges_snow",
+	    .name = "The edges of far land blocks keep a mix of their old snow",
+	    .facet = Facet::Light,
+	    .description = "Snow 120 deep lies over the whole island on a clear day at noon, and it melts. The camera is "
+	                   "high and looks far over the land, to the band where the coarse texture of the land fades in. A "
+	                   "tree stands in the middle.",
+	    .expected = "In the far band, the edges between the squares of the land show a thin line of snow. When a "
+	                "square loses some of its white, the line on its edge keeps a part of the old white. The line "
+	                "changes again only at the next step of the square or of the square next to it.",
+	    .environment = {.hour = 12.0f, .clockRuns = false, .dispenserGrid = false, .snowDepth = 120.0f},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 300.0f, -400.0f}, .look = {0.0f, 0.0f, 600.0f}},
+	    .objects = {{.type = TreeInfo::Conifer, .offset = {0.0f, 120.0f}, .scale = 1.5f}},
+	});
+
+	all.push_back({
 	    .id = "light.snow_repaint_melt",
 	    .name = "Snow melts off the land block by block",
 	    .facet = Facet::Light,

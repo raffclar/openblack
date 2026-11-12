@@ -340,6 +340,18 @@ public:
 	/// seed is armed on, or else the thing that was under the hand at the press. Null when the press was on nothing, or
 	/// when no seed is armed or locked.
 	[[nodiscard]] virtual entt::entity GetPressThing() const { return entt::null; }
+	/// The interface of the hand of this computer waits for the let go of the Action button after a press that used the
+	/// seed on a thing at once
+	struct UseWait
+	{
+		/// The button is let go. The interface keeps the thing of the press for one more frame.
+		bool letGo {false};
+		/// The thing of the press. Only a miracle that runs in the hand keeps it. The wait of another seed keeps no thing.
+		entt::entity kept {entt::null};
+	};
+	[[nodiscard]] virtual std::optional<UseWait> GetUseWait() const { return std::nullopt; }
+	/// The frame after the let go of the button ends the wait
+	virtual void EndUseWaitAfterLetGo() {}
 	/// The miracle seed in the hand of this computer
 	[[nodiscard]] virtual std::optional<entt::entity> GetHeldSeed() const = 0;
 	/// The miracle seed in the hand of a player. The turns read this, because it is the same on every computer.

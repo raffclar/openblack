@@ -524,6 +524,11 @@ void Renderer::DrawPassLand(const DrawSceneDesc& desc, const ScenePass& pass) co
 			terrainShader->SetUniformValue("u_smallBump", &u_smallBump);
 			// The corners of the blocks that morph or cross-fade, as the game works them out this frame
 			terrainShader->SetTextureSampler("s8_landCorners", 8, GetLandCorners());
+			// The edges of the blocks' coarse textures, as the paints of the blocks mixed them
+			if (const auto* coarseEdges = GetCoarseEdges())
+			{
+				terrainShader->SetTextureSampler("s11_coarseEdges", 11, *coarseEdges);
+			}
 			// Without pages of its own the land binds its block textures in their place, never read
 			const auto* coarsePages = island.GetCoarsePages();
 			terrainShader->SetTextureSampler("s15_coarsePages", 15,
@@ -590,8 +595,10 @@ void Renderer::DrawPassLand(const DrawSceneDesc& desc, const ScenePass& pass) co
 			}
 			const glm::vec4 mapPositionAndSize = glm::vec4(block.GetMapPosition(), 160.0f, 160.0f);
 			blockPositionUniform.Set(&mapPositionAndSize);
+			// w: 1 when the edges of the block's coarse texture come from the paints of the blocks
+			const bool coarseEdges = GetCoarseEdges() != nullptr && CoarseEdgesPainted(block.GetBlockPosition());
 			const glm::vec4 u_block {static_cast<float>(index), static_cast<float>(detail.morph),
-			                         static_cast<float>(detail.texture), 0.0f};
+			                         static_cast<float>(detail.texture), coarseEdges ? 1.0f : 0.0f};
 			blockUniform.Set(&u_block);
 			const glm::vec4 u_blockNeighbours =
 			    index < _landDetail.neighbours.size() ? _landDetail.neighbours[index] : glm::vec4(-1.0f);
@@ -665,6 +672,9 @@ void Renderer::DrawPassLand(const DrawSceneDesc& desc, const ScenePass& pass) co
 					}
 				}
 				paintedSnow = PaintLandSnow(drawnWithTexture);
+				// The paints of this frame also paint the blocks' coarse textures, in the order from the game's camera
+				PaintCoarseEdges(Locator::camera::has_value() ? Locator::camera::value().GetOrigin() : desc.camera->GetOrigin(),
+				                 paintedSnow);
 			}
 			setTerrainUniforms();
 			for (const auto& entry : order)
@@ -1682,7 +1692,7 @@ void Renderer::DrawPassEntities(const DrawSceneDesc& desc, const ScenePass& pass
 		sd.onlyJoints = placers.onlyJoints;
 		sd.hideShutJoints = placers.hideShutJoints;
 		// The temple's meshes and the creatures, which are drawn as their materials say
-		sd.useMaterialCulling = placers.materialBlending || creatureMaterials;
+		sd.useMaterialCulling = placers.materialCulling || creatureMaterials;
 		sd.useMaterialAddressing = creatureMaterials;
 		sd.mirrored = desc.cullBack;
 		sd.uvOffset = placers.uvOffset;
@@ -2381,6 +2391,8 @@ void Renderer::DrawPassVegetation(const DrawSceneDesc& desc, const ScenePass& pa
 			submitDesc.detailLevel = run.level;
 			submitDesc.viewId = run.fading ? TranslucentView(desc.viewId) : desc.viewId;
 			submitDesc.state = run.fading ? opaqueState | BGFX_STATE_BLEND_ALPHA : opaqueState;
+			// A standing tree blends the texels of its chroma material over what is behind them, and writes the depth
+			submitDesc.useMaterialBlending = !run.fading;
 			submitDesc.sortDepth = run.fading ? zsort::Depth(glm::vec3(renderCtx.treeInstanceData.at(run.first).modelMatrix[3]),
 			                                                 desc.camera->GetOrigin())
 			                                  : 0;
@@ -2440,6 +2452,7 @@ void Renderer::DrawPassVegetation(const DrawSceneDesc& desc, const ScenePass& pa
 				submitDesc.viewId = RenderPass::ReflectionMirrored;
 				submitDesc.sortDepth = hand_reflection::SortKey(hand_reflection::MirroredThing::Held);
 				submitDesc.state = opaqueState;
+				submitDesc.useMaterialBlending = true;
 				submitDesc.snow = false;
 				submitDesc.landLightScale = _before.treeBrightness.Or(_treeBrightness);
 				submitDesc.shadeAt = glm::vec4(held.heldLight->point, hand_reflection::k_HeldShade);
@@ -2455,6 +2468,7 @@ void Renderer::DrawPassVegetation(const DrawSceneDesc& desc, const ScenePass& pa
 		submitDesc.viewId = desc.viewId;
 		submitDesc.state = opaqueState;
 		submitDesc.sortDepth = 0;
+		submitDesc.useMaterialBlending = false;
 
 		// Draw tree bounding boxes if enabled
 		if (renderCtx.boundingBox && renderCtx.treeInstanceCount > 0)

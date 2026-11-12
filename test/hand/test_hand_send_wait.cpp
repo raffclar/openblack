@@ -10,6 +10,11 @@
 #include <gtest/gtest.h>
 
 #include "ECS/Components/HandSendWait.h"
+#include "ECS/Components/LivingAction.h"
+#include "ECS/Components/Villager.h"
+#include "ECS/DyingVillager.h"
+#include "ECS/Registry.h"
+#include "Enums.h"
 #include "Hand/HandSendWait.h"
 
 using namespace openblack;
@@ -151,4 +156,42 @@ TEST(HandSendWait, AThingOfThePressThatTheHandCannotUseOrThatAHandHoldsEndsTheLo
 	EXPECT_TRUE(hand_send_wait::FrameEndsLock({.action = hand_send_wait::FrameAction::Other, .pressThingGone = true}));
 	EXPECT_TRUE(hand_send_wait::FrameEndsLock(
 	    {.action = hand_send_wait::FrameAction::Takes, .takenThere = true, .pressThingGone = true}));
+}
+
+TEST(HandSendWait, BothButtonsAloneEndTheLockOnlyWhenNoOtherEndComesFirst)
+{
+	using hand_send_wait::BothButtonsAloneEndLock;
+	using hand_send_wait::FrameAction;
+	EXPECT_TRUE(BothButtonsAloneEndLock({.action = FrameAction::Other, .bothButtons = true}));
+	EXPECT_TRUE(BothButtonsAloneEndLock({.action = FrameAction::UsesHeld, .bothButtons = true, .heldThere = true}));
+	// Both buttons do not end the lock of a hand that does no action
+	EXPECT_FALSE(BothButtonsAloneEndLock({.action = FrameAction::Free, .bothButtons = true}));
+	// Another end of the lock comes first: a box, the interface off, the held thing gone or the thing of the press
+	EXPECT_FALSE(BothButtonsAloneEndLock({.frontEndBox = true, .action = FrameAction::Other, .bothButtons = true}));
+	EXPECT_FALSE(BothButtonsAloneEndLock({.interfaceOff = true, .action = FrameAction::Other, .bothButtons = true}));
+	EXPECT_FALSE(BothButtonsAloneEndLock({.action = FrameAction::UsesHeld, .bothButtons = true, .heldThere = false}));
+	EXPECT_FALSE(BothButtonsAloneEndLock({.action = FrameAction::Other, .bothButtons = true, .pressThingGone = true}));
+	EXPECT_FALSE(BothButtonsAloneEndLock({.action = FrameAction::Other}));
+}
+
+TEST(HandSendWait, AVillagerOnItsWayToDieIsAThingThatTheHandCannotUse)
+{
+	using ecs::components::LivingAction;
+	ecs::Registry registry;
+	const auto villager = registry.Create();
+	registry.Assign<ecs::components::Villager>(villager);
+	auto& action = registry.Assign<LivingAction>(villager, VillagerStates::MoveToPos, uint16_t {0});
+	EXPECT_FALSE(ecs::IsDyingVillager(registry, villager));
+	// Only the final state counts: the top state of a villager that dies is not enough
+	action.states.at(static_cast<size_t>(LivingAction::Index::Top)) = static_cast<uint8_t>(VillagerStates::Dying);
+	EXPECT_FALSE(ecs::IsDyingVillager(registry, villager));
+	action.states.at(static_cast<size_t>(LivingAction::Index::Final)) = static_cast<uint8_t>(VillagerStates::Dying);
+	EXPECT_TRUE(ecs::IsDyingVillager(registry, villager));
+	// Another thing with the same state is no villager, and a thing that is gone is no villager
+	const auto animal = registry.Create();
+	registry.Assign<LivingAction>(animal, VillagerStates::Dying, uint16_t {0})
+	    .states.at(static_cast<size_t>(LivingAction::Index::Final)) = static_cast<uint8_t>(VillagerStates::Dying);
+	EXPECT_FALSE(ecs::IsDyingVillager(registry, animal));
+	registry.Destroy(villager);
+	EXPECT_FALSE(ecs::IsDyingVillager(registry, villager));
 }

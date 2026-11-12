@@ -73,6 +73,8 @@ struct RenderContext
 		bool behindCurrentRoom {false};
 		/// The instances are drawn as each primitive's material says: blended and writing depth or not
 		bool materialBlending {false};
+		/// The instances do not show the back faces of their one-sided materials
+		bool materialCulling {false};
 		/// The instances are all blended by their materials, so they are drawn after the opaque ones
 		bool translucent {false};
 		/// The instances' alpha-textured parts are added over what is behind them by their texture's alpha, without

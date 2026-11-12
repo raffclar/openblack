@@ -148,6 +148,7 @@ TEST(TestbedScenarios, CoversTheCreatureFeatures)
 	                       "light.snow_close",
 	                       "light.snow_repaint_lay",
 	                       "light.snow_repaint_melt",
+	                       "light.coarse_edges_snow",
 	                       "movement.course",
 	                       "movement.route_obstacles",
 	                       "movement.footstep_dust",

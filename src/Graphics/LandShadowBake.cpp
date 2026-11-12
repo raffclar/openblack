@@ -286,6 +286,8 @@ void LandShadowBake::Reset()
 	_texture.reset();
 	_texels = {0, 0};
 	_baked.clear();
+	_newlyBaked.clear();
+	_bakingBlocks.clear();
 	_watched.clear();
 	_castersVersion.reset();
 	_leaves.clear();
@@ -706,6 +708,7 @@ void LandShadowBake::Update(bool rowsFromFarEnd, Casters casters)
 		Apply(Bake(job));
 		return;
 	}
+	_bakingBlocks = std::move(baking);
 	_bake = std::async(std::launch::async, [job = std::move(job)] { return Bake(job); });
 }
 
@@ -782,6 +785,14 @@ void LandShadowBake::ApplyFinishedBake()
 		return;
 	}
 	Apply(_bake.get());
+	_bakingBlocks.clear();
+}
+
+bool LandShadowBake::Bakes(glm::ivec2 block) const
+{
+	return _bake.valid() && std::ranges::binary_search(_bakingBlocks, block, [](glm::ivec2 a, glm::ivec2 b) {
+		       return a.x != b.x ? a.x < b.x : a.y < b.y;
+	       });
 }
 
 void LandShadowBake::Apply(const std::vector<BlockShades>& results)
@@ -797,6 +808,7 @@ void LandShadowBake::Apply(const std::vector<BlockShades>& results)
 		const auto originRow = _rowsFromFarEnd ? _texels.y - _side - origin.y : origin.y;
 		_texture->UpdateLayerRegion(0, glm::u16vec2(origin.x, originRow), glm::u16vec2(static_cast<uint16_t>(_side)),
 		                            result.shades.data(), static_cast<uint32_t>(result.shades.size()));
+		_newlyBaked.push_back(result.position);
 	}
 }
 
@@ -846,6 +858,7 @@ std::vector<LandShadowBake::BlockShades> LandShadowBake::Bake(const BakeJob& job
 					    covered != 0 ? tree_shadows::Shade(covered, lowResolution) : 255;
 				}
 			}
+			results[i].position = block.position;
 			results[i].corner = block.corner;
 		}
 	};

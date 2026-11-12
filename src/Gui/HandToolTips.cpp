@@ -35,6 +35,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/WorshipSite.h"
+#include "ECS/DyingVillager.h"
 #include "ECS/ObjectPhysics.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CameraHelpSystemInterface.h"
@@ -148,6 +149,11 @@ bool IsInteractable(entt::entity object)
 {
 	const auto& registry = Locator::entitiesRegistry::value();
 	if (!registry.Valid(object))
+	{
+		return false;
+	}
+	// A villager on its way to die
+	if (ecs::IsDyingVillager(registry, object))
 	{
 		return false;
 	}

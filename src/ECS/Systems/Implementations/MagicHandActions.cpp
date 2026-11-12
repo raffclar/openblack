@@ -324,7 +324,17 @@ bool MagicSystem::PressAction()
 	// A seed armed on a thing keeps the thing of the press, and casts at it at the let go
 	const auto target = HeldSeedTarget();
 	_pressThing = entt::null;
-	Do(magic::Press(_input, {.castType = seedInfo.castType, .castOnObject = seedInfo.castOnObject != 0}, context));
+	_useWait.reset();
+	const auto actions =
+	    magic::Press(_input, {.castType = seedInfo.castType, .castOnObject = seedInfo.castOnObject != 0}, context);
+	// A press that uses the seed on a thing at once waits for the let go of the button. The wait of a miracle that runs
+	// in the hand keeps the thing of the press.
+	if (actions.cast == magic::CastTarget::Object)
+	{
+		const bool keeps = seedInfo.castType == SpellCastType::SpellCastInHand;
+		_useWait = UseWait {.kept = keeps ? target.value_or(entt::entity {entt::null}) : entt::entity {entt::null}};
+	}
+	Do(actions);
 	if (_input.state == magic::CastInput::State::Armed && _input.onObject && target.has_value())
 	{
 		_pressThing = *target;
@@ -338,6 +348,18 @@ bool MagicSystem::PressAction()
 void MagicSystem::ReleaseAction()
 {
 	_actionDown = false;
+	// The let go ends the wait after a use on a thing. A thing that the wait keeps stays for one more frame.
+	if (_useWait.has_value())
+	{
+		if (_useWait->kept == entt::null)
+		{
+			_useWait.reset();
+		}
+		else
+		{
+			_useWait->letGo = true;
+		}
+	}
 	if (Held().has_value())
 	{
 		Do(magic::Release(_input));
@@ -351,6 +373,15 @@ void MagicSystem::StopActionAtLockEnd()
 	Do(magic::Cancel(_input));
 	_pressThing = entt::null;
 	_pressPick = entt::null;
+	_useWait.reset();
+}
+
+void MagicSystem::EndUseWaitAfterLetGo()
+{
+	if (_useWait.has_value() && _useWait->letGo)
+	{
+		_useWait.reset();
+	}
 }
 
 void MagicSystem::UnlockHeldMiracle()

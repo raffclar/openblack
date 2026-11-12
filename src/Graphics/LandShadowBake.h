@@ -17,6 +17,7 @@
 #include <optional>
 #include <span>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include <entt/entity/entity.hpp>
@@ -76,6 +77,10 @@ public:
 	void BakeAgain();
 	/// The baked texture, none before the first update with an island
 	[[nodiscard]] const Texture2D* GetTexture() const { return _texture.get(); }
+	/// The blocks that the bakes put into the texture since the last call, by their index along x and z
+	[[nodiscard]] std::vector<glm::ivec2> TakeNewlyBaked() { return std::exchange(_newlyBaked, {}); }
+	/// Whether the bake on the other threads bakes the block now, by its index along x and z
+	[[nodiscard]] bool Bakes(glm::ivec2 block) const;
 
 	/// A triangle of a tree's model, in its own space, with its texture's alpha. The triangle keeps a copy of the alpha.
 	/// The bake on the other threads can then continue when the resource caches release the model and its textures, as
@@ -153,6 +158,7 @@ private:
 	/// The texels of a baked block
 	struct BlockShades
 	{
+		glm::ivec2 position {0};
 		glm::vec2 corner {0.0f};
 		std::vector<uint8_t> shades;
 	};
@@ -191,6 +197,10 @@ private:
 	size_t _meshCount {0};
 	std::unordered_map<entt::id_type, std::vector<LeafTriangle>> _leaves;
 	std::unordered_map<entt::id_type, std::vector<ShapeTriangle>> _shapes;
+	/// The blocks put into the texture since the last TakeNewlyBaked, and the blocks of the bake on the other threads in
+	/// order along x and then z
+	std::vector<glm::ivec2> _newlyBaked;
+	std::vector<glm::ivec2> _bakingBlocks;
 	/// The land blocks to bake again, by their index along x and z
 	std::vector<glm::ivec2> _dirty;
 	bool _bakeAll {true};

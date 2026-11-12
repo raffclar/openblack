@@ -1,14 +1,18 @@
 #ifndef SNOW_SH
 #define SNOW_SH
 
-// The snow lying on the island: how deep it is in each 40 unit cell of a 128 by 128 grid, point sampled
+// The snow lying on the island: how deep it is in each 40 unit cell of a 128 by 128 grid, point sampled. A shader that
+// defines SNOW_NO_DEPTH_GRID does not read it, and can use its stage for another texture.
+#ifndef SNOW_NO_DEPTH_GRID
 SAMPLER2D(s_snowDepth, 11);
+#endif
 // x: 1 when snow is drawn on what is drawn. y: 1 when an object's submesh has bones. z: 1 for the faces of a broken
 // shape, which read the snow by where they are in the world. w: 1 for a fence, which reads the snow by each face.
 uniform vec4 u_snow;
 // The distance from the front face of a broken shape to its back face
 #define BROKEN_FACE_DEPTH 0.45f
 
+#ifndef SNOW_NO_DEPTH_GRID
 // How deep the snow lies at a grid point; none off the grid
 float SnowDepthCell(vec2 cell)
 {
@@ -30,6 +34,7 @@ float SnowDepthAt(vec2 xz)
 	float far = mix(SnowDepthCell(cell + vec2(0.0f, 1.0f)), SnowDepthCell(cell + 1.0f), w.x);
 	return mix(near, far, w.y);
 }
+#endif // SNOW_NO_DEPTH_GRID
 
 // The snow that an object shows at its level of snow, 0 to 255: an object shows no snow below the level 5
 float SnowShownLevel(float level)

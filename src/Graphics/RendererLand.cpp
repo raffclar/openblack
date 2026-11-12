@@ -19,6 +19,7 @@
 #include <memory>
 #include <optional>
 #include <span>
+#include <utility>
 #include <vector>
 
 #include <LNDFile.h>
@@ -189,7 +190,9 @@ const Texture2D* Renderer::PaintLandSnow(std::span<const glm::ivec2> drawn) cons
 	const auto requests = snow.TakePaintRequests();
 	if (requests.all())
 	{
+		// Each block paints its snow again. On a new land, this paint is also the first paint of the block.
 		_paintedSnow.RequestAll();
+		_snowRepaints.set();
 	}
 	else if (requests.any())
 	{
@@ -198,7 +201,22 @@ const Texture2D* Renderer::PaintLandSnow(std::span<const glm::ivec2> drawn) cons
 			if (requests.test(block))
 			{
 				_paintedSnow.Request(block);
+				_snowRepaints.set(block);
 			}
+		}
+	}
+	// A paint for a change of the snow also paints the block's coarse texture
+	for (const auto block : drawn)
+	{
+		if (block.x < 0 || block.y < 0 || block.x >= snow_cover::k_BlocksPerSide || block.y >= snow_cover::k_BlocksPerSide)
+		{
+			continue;
+		}
+		const auto index = snow_cover::BlockIndex(block);
+		if (_paintedSnow.Waits(index) && _snowRepaints.test(index))
+		{
+			_snowRepaints.reset(index);
+			_snowPaintedBlocks.push_back(block);
 		}
 	}
 	const bool painted = _paintedSnow.PaintDrawn(drawn, snow.GetDepths());
@@ -981,6 +999,181 @@ const Texture2D& Renderer::GetLandCorners() const
 		_landCorners->Update(_landDetail.corners.data(), static_cast<uint32_t>(_landDetail.corners.size()));
 	}
 	return *_landCorners;
+}
+
+const Texture2D* Renderer::GetCoarseEdges() const
+{
+	const auto& target = _coarseEdges.targets.at(_coarseEdges.current);
+	return target ? &target->GetColorAttachment() : nullptr;
+}
+
+bool Renderer::CoarseEdgesPainted(glm::ivec2 block) const
+{
+	return !_coarseEdges.lost && coarse_edges::OnMap(block) && _coarseEdges.painted.test(coarse_edges::PlaceOf(block));
+}
+
+void Renderer::PaintCoarseEdges(glm::vec3 camera, const Texture2D* paintedSnow) const
+{
+	if (!Locator::terrainSystem::has_value())
+	{
+		return;
+	}
+	auto& island = Locator::terrainSystem::value();
+	const auto& blocks = island.GetBlocks();
+	auto& edges = _coarseEdges;
+	auto repaints = island.TakeCoarseRepaints();
+	const auto blockTexels = island.GetBlockTextureSide();
+	const auto samples = static_cast<int32_t>(land_detail::CoarseSamplingFor(blockTexels).samples);
+	// A new land, a new size of the textures or a restore of the device starts the edges again: every block gets its
+	// first paint now
+	const bool fresh = repaints.newLand || edges.lost || edges.samples != samples;
+	if (fresh)
+	{
+		edges.painted.reset();
+		edges.held.clear();
+		edges.samples = samples;
+		edges.lost = false;
+		repaints.blocks.resize(blocks.size());
+		std::ranges::generate(repaints.blocks, [i = size_t {0}]() mutable { return i++; });
+		_snowPaintedBlocks.clear();
+	}
+
+	// The place of each block, and the block at each place
+	std::vector<glm::ivec2> places(blocks.size());
+	std::ranges::transform(blocks, places.begin(), [](const auto& block) { return block.GetBlockPosition(); });
+	std::array<int32_t, coarse_edges::k_Blocks> blockAt {};
+	blockAt.fill(-1);
+	for (size_t i = 0; i < places.size(); ++i)
+	{
+		if (coarse_edges::OnMap(places[i]))
+		{
+			blockAt.at(coarse_edges::PlaceOf(places[i])) = static_cast<int32_t>(i);
+		}
+	}
+
+	// The paints that waited come first, then the paints of the block textures, of the snow and of the shadows. The
+	// game paints all three into a block at one time, thus a block that more than one of them painted gets one paint.
+	auto painted = std::exchange(edges.held, {});
+	painted.insert(painted.end(), repaints.blocks.begin(), repaints.blocks.end());
+	std::vector<glm::ivec2> otherPaints = std::exchange(_snowPaintedBlocks, {});
+	if (_landShadowBake)
+	{
+		const auto baked = _landShadowBake->TakeNewlyBaked();
+		otherPaints.insert(otherPaints.end(), baked.begin(), baked.end());
+	}
+	for (const auto at : otherPaints)
+	{
+		if (coarse_edges::OnMap(at) && blockAt.at(coarse_edges::PlaceOf(at)) >= 0)
+		{
+			painted.push_back(static_cast<size_t>(blockAt.at(coarse_edges::PlaceOf(at))));
+		}
+	}
+	// A block whose snow waits for its paint, or whose shadows the other threads bake now, waits too. Its paint then
+	// takes the new snow and shadows with the rest, as the game's one paint does.
+	const bool snowPainted = Locator::snowSystem::has_value();
+	const auto hold = [&edges](size_t index) {
+		if (std::ranges::find(edges.held, index) == edges.held.end())
+		{
+			edges.held.push_back(index);
+		}
+	};
+	std::vector<coarse_edges::PaintRequest> requests;
+	requests.reserve(painted.size());
+	for (const auto index : painted)
+	{
+		if (index >= blocks.size())
+		{
+			continue;
+		}
+		const auto at = places[index];
+		const bool snowWaits = snowPainted && coarse_edges::OnMap(at) && _paintedSnow.Waits(snow_cover::BlockIndex(at));
+		if (snowWaits || (_landShadowBake && _landShadowBake->Bakes(at)))
+		{
+			hold(index);
+			continue;
+		}
+		requests.push_back({.block = index, .centre = blocks[index].GetMapPosition() + glm::vec2(80.0f)});
+	}
+	if (requests.empty())
+	{
+		return;
+	}
+	// Each pass of a frame needs a view of its own. When the views of the frame are taken, the paints wait for the next
+	// frame.
+	if (edges.passes >= CoarseEdges::k_Views.size())
+	{
+		for (const auto& request : requests)
+		{
+			hold(request.block);
+		}
+		return;
+	}
+	const auto order = coarse_edges::PaintOrder(requests, camera);
+	const auto paints = coarse_edges::MakeFramePaints(places, order, edges.painted);
+
+	// The textures of the pass
+	constexpr glm::u16vec2 k_Size {coarse_edges::k_TextureWidth, coarse_edges::k_TextureHeight};
+	for (auto& target : edges.targets)
+	{
+		if (!target)
+		{
+			target = std::make_unique<FrameBuffer>("LandCoarseEdges", k_Size.x, k_Size.y, TextureFormat::RGBA8, std::nullopt, 1,
+			                                       Wrapping::ClampEdge);
+		}
+	}
+	auto& paintsTexture = edges.paints.at(edges.passes);
+	if (!paintsTexture)
+	{
+		constexpr auto k_Side = static_cast<uint16_t>(coarse_edges::k_BlocksPerSide);
+		paintsTexture = std::make_unique<Texture2D>("LandCoarsePaints");
+		paintsTexture->CreateWithinFrame(k_Side, k_Side, 1, TextureFormat::RGBA32F, Wrapping::ClampEdge, Filter::Nearest,
+		                                 nullptr);
+	}
+	const auto texels = coarse_edges::FramePaintTexels(paints);
+	paintsTexture->Update(texels.data(), static_cast<uint32_t>(texels.size() * sizeof(float)));
+
+	// The pass reads the edges as they are and writes them after the paints into the other texture
+	const auto& before = edges.targets.at(edges.current)->GetColorAttachment();
+	const auto& after = *edges.targets.at(edges.current ^ 1u);
+	const auto viewId = SetUpLandView(CoarseEdges::k_Views.at(edges.passes), after, k_Size);
+	const auto& program = *_shaderManager->GetShader("LandCoarseEdges");
+	program.SetTextureSampler("s1_coarseEdgesBefore", 1, before);
+	program.SetTextureSampler("s2_coarsePaints", 2, *paintsTexture);
+	program.SetTextureSampler("s0_blockTextures", 0, island.GetBlockTextures());
+	// The pass paints the blocks with the snow and the baked shadows, as the shader of the land paints them
+	const auto& textures = Locator::resources::value().GetTextures();
+	const bool snowed = paintedSnow != nullptr && textures.Contains(snow_cover::k_NoiseTextureId.value());
+	const glm::vec4 u_snow {snowed ? 1.0f : 0.0f, 0.0f, 0.0f, 0.0f};
+	program.SetUniformValue("u_snow", &u_snow);
+	if (snowed)
+	{
+		program.SetTextureSampler("s3_paintedSnow", 3, *paintedSnow);
+		program.SetTextureSampler("s12_snowNoise", 12, *textures.Handle(snow_cover::k_NoiseTextureId.value()));
+	}
+	// Each paint keeps the baked shadows. The land draws the moving shadows of the trees later, and the paint does not
+	// keep them.
+	const auto* baked = _landShadowsBaked && _landShadowBake ? _landShadowBake->GetTexture() : nullptr;
+	const glm::vec4 u_objectShadows {0.0f, 0.0f, 0.0f, baked != nullptr ? 1.0f : 0.0f};
+	program.SetUniformValue("u_objectShadows", &u_objectShadows);
+	if (baked != nullptr)
+	{
+		program.SetTextureSampler("s14_landShadows", 14, *baked);
+	}
+	const auto landTexels = LandTexelsUniform(blockTexels);
+	program.SetUniformValue("u_landTexels", &landTexels);
+	const auto islandExtent = glm::vec4(island.GetExtent().minimum, island.GetExtent().maximum);
+	program.SetUniformValue("u_islandExtent", &islandExtent);
+	const glm::vec4 blockSize {0.0f, 0.0f, 160.0f, 160.0f};
+	program.SetUniformValue("u_blockPositionAndSize", &blockSize);
+	const glm::vec2 corner {k_Size};
+	SubmitLandQuad(viewId, program, {0.0f, 0.0f}, corner, {0.0f, 0.0f}, corner, BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A);
+
+	for (const auto index : order)
+	{
+		edges.painted.set(coarse_edges::PlaceOf(places[index]));
+	}
+	edges.current ^= 1u;
+	++edges.passes;
 }
 
 void Renderer::BakeLandShadows(bool drawVegetation) const noexcept
