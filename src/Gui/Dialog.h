@@ -44,6 +44,8 @@ public:
 		std::function<void()> onSelect;
 		/// The size of the label's text
 		int textSize {DialogPainter::MidTextSize()};
+		/// The tab takes a click also while it is the selected tab, as the tab of the main menu does
+		bool clickWhenSelected {false};
 	};
 
 	/// MainMenu and the options' box: 780 by 500 in the middle of the dialog space, 40 deeper for its tabs

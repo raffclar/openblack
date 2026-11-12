@@ -286,7 +286,9 @@ void GameMenu::BuildMain(const TextDatabase& texts)
 	         [this] {
 		         CloseAllBoxesForTab();
 		         ShowPage(Page::Main);
-	         }},
+		         _mainMenuShownAgain = true;
+	         },
+	     .clickWhenSelected = true},
 	    {.label = std::u16string(texts.Get("HELP_TEXT_PAUSE_STATS_151")),
 	     .onSelect =
 	         [this] {
