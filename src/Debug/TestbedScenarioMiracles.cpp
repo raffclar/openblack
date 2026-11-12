@@ -51,7 +51,8 @@ void AddCasting(std::vector<Scenario>& all)
 	    .name = "Miracle dispensers",
 	    .facet = Facet::Miracles,
 	    .description = "The testbed's grid of a dispenser for every miracle, the creature spells among them, in front "
-	                   "of the camera, each labelled with its miracle.",
+	                   "of the camera. No text shows over a dispenser, as in vanilla (the Magic window's \"Label "
+	                   "dispensers\" box shows the names).",
 	    .expected = "Each dispenser floats a bubble with its seed spinning inside over a swirl of sparks (the grid "
 	                "starts charged, a testbed set-up step). Tapping a bubble "
 	                "with the hand puts its miracle in the hand; pressing over the land casts it (heal, forest), letting "

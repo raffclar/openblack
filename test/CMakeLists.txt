@@ -869,6 +869,9 @@ openblack_setup_and_add_test(test_villager_work test_villager_work.cpp)
 openblack_setup_and_add_test(
   test_graphics_backend_names test_graphics_backend_names.cpp
 )
+openblack_setup_and_add_test(
+  test_engine_config_overlays test_engine_config_overlays.cpp
+)
 openblack_setup_and_add_test(test_villager_breeding test_villager_breeding.cpp)
 openblack_setup_and_add_test(test_worshipper_rules test_worshipper_rules.cpp)
 openblack_setup_and_add_test(test_villager_death test_villager_death.cpp)
