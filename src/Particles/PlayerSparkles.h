@@ -12,6 +12,8 @@
 #include <cstdint>
 
 #include <optional>
+#include <span>
+#include <vector>
 
 #include <glm/vec3.hpp>
 
@@ -69,6 +71,13 @@ inline constexpr uint32_t k_SymbolColour = 0x30000000u;
 /// - A human player shows it only while the person is in the game.
 /// - A player that nobody plays shows it.
 [[nodiscard]] bool ShowsSymbol(const Watched& watched);
+
+/// The order that the symbols over the sparkles draw in, and thus turn the shared angle in. Each pool of sparkles is one
+/// thing among what blends, at its point (`points`, in the order of the interfaces), so the farthest from the camera
+/// draws first. Of two pools at the same distance, the pool of the later interface draws first: the game puts each new
+/// pool at the head of its list, and the sort keeps the order of the list for equal distances. Gives the indices of
+/// `points` in that order.
+[[nodiscard]] std::vector<size_t> SymbolDrawOrder(std::span<const glm::vec3> points, const glm::vec3& camera);
 
 /// The angle of the symbols over the sparkles after one more symbol is drawn. All the symbols share one angle. Each
 /// symbol that is drawn turns it by the milliseconds of the frame's game time, then the angle stays between minus pi and

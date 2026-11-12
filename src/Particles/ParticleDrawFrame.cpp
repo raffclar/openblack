@@ -371,6 +371,7 @@ void AddAtom(Frame& frame, GroupBuilder& builder, const Effect::DrawAtom& atom, 
 		    .mesh = *mesh.mesh,
 		    .axes = axes,
 		    .position = atom.position,
+		    .scale = atom.scale,
 		    .colour = glm::vec4(glm::vec3(atom.rgb[0], atom.rgb[1], atom.rgb[2]) / k_ByteMax,
 		                        std::clamp(atom.alpha / k_ByteMax, 0.0f, 1.0f)),
 		    .specular = glm::vec3(atom.specular[0], atom.specular[1], atom.specular[2]) / k_ByteMax,
@@ -734,6 +735,8 @@ void draw::AddLearningMarks(Frame& frame, std::span<const LearningMark> marks)
 		bulb.className = "LearningBulb";
 		bulb.changeMaterial = false;
 		bulb.dynamicLighting = true;
+		// The bulb is not an atom of the particles, thus the far cull of their models does not apply to it
+		bulb.neverClip = true;
 		return bulb;
 	}();
 	static constexpr auto k_Sheet = entt::hashed_string("raw/smoke");

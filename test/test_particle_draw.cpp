@@ -14,6 +14,7 @@
 #include <bit>
 #include <functional>
 #include <iterator>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -430,7 +431,7 @@ TEST(ParticleDraw, ModelsAndShellsAddTheirAtomsSpecularColour)
 	walk.atoms.push_back({.creator = &mesh,
 	                      .position = {1.0f, 2.0f, 3.0f},
 	                      .rotation = glm::mat3(1.0f),
-	                      .scale = 1.0f,
+	                      .scale = 2.0f,
 	                      .stretch = 1.0f,
 	                      .alpha = 255.0f,
 	                      .frame = 0.0f,
@@ -445,6 +446,8 @@ TEST(ParticleDraw, ModelsAndShellsAddTheirAtomsSpecularColour)
 	AddEffect(frame, walk, DrawPath::Sorted, glm::vec3(0.0f), 0, sources);
 	ASSERT_EQ(frame.meshes.size(), 1u);
 	ExpectNear(frame.meshes[0].specular, glm::vec3(0.2f, 0.4f, 1.0f));
+	// The far cull of the model goes by the size of its atom
+	EXPECT_EQ(frame.meshes[0].scale, 2.0f);
 	ASSERT_EQ(frame.shells.size(), 1u);
 	EXPECT_EQ(frame.shells[0].specularRgb, 0x2D2D2Du);
 }
@@ -640,6 +643,30 @@ TEST(ParticleDraw, OnlyThePlainModelsAreDrawnInTheLandsColour)
 	EXPECT_TRUE(make("ParticleMeshCreator").landscapeColour);
 	EXPECT_FALSE(make("ParticleMeshCreatorAnimTextured").landscapeColour);
 	EXPECT_FALSE(make("ParticleAnimCreator").landscapeColour);
+}
+
+TEST(ParticleDraw, EveryKindOfModelReadsWhetherItNeverClips)
+{
+	const auto registry = ParticleClassRegistry::WithAllClasses();
+	const auto make = [&registry](std::string_view className, std::optional<bool> neverClip) {
+		psys::ParticleObject object {.className = std::string(className), .name = "Creator", .properties = {}};
+		if (neverClip.has_value())
+		{
+			object.properties.insert_or_assign(
+			    "NeverClip", psys::Property {.type = psys::Property::Type::Bool, .integer = *neverClip ? 1 : 0});
+		}
+		const auto* factory = registry.FindCreator(className);
+		EXPECT_NE(factory, nullptr);
+		auto creator = (*factory)(object);
+		return static_cast<const MeshCreator*>(creator.get())->neverClip;
+	};
+	// A model has the far cull unless its file says that it never clips
+	for (const auto* className : {"ParticleMeshCreator", "ParticleMeshCreatorAnimTextured", "ParticleAnimCreator"})
+	{
+		EXPECT_FALSE(make(className, std::nullopt)) << className;
+		EXPECT_FALSE(make(className, false)) << className;
+		EXPECT_TRUE(make(className, true)) << className;
+	}
 }
 
 TEST(ParticleDraw, AModelThatFacesTheCameraBeatsWithTheScrolls)

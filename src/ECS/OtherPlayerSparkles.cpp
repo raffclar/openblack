@@ -162,7 +162,7 @@ void AddAtCameras()
 	}
 }
 
-void TurnSymbols(int32_t milliseconds)
+void TurnSymbols(int32_t milliseconds, const glm::vec3& camera)
 {
 	if (!Locator::liquidParticleSystem::has_value())
 	{
@@ -171,7 +171,7 @@ void TurnSymbols(int32_t milliseconds)
 	const bool directsFight = Locator::creatureFightSystem::has_value() && Locator::creatureFightSystem::value().DirectsFight();
 	const auto* registry = Locator::entitiesRegistry::has_value() ? &Locator::entitiesRegistry::value() : nullptr;
 	const auto* hands = Locator::handSystem::has_value() ? &Locator::handSystem::value() : nullptr;
-	Locator::liquidParticleSystem::value().TurnPlayerSymbols(milliseconds, [&](liquid_particles::Interface interface) {
+	Locator::liquidParticleSystem::value().TurnPlayerSymbols(milliseconds, camera, [&](liquid_particles::Interface interface) {
 		if (directsFight || registry == nullptr || hands == nullptr)
 		{
 			return false;

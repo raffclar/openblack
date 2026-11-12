@@ -11,6 +11,8 @@
 
 #include <cstdint>
 
+#include <glm/vec3.hpp>
+
 /// The sparkles at the cameras of the other players of a network game and of the computer gods (rules in
 /// player_sparkles)
 namespace openblack::ecs::other_player_sparkles
@@ -24,7 +26,8 @@ void AddAtCameras();
 
 /// Once a frame, before the draw: the symbol of the god shows over the sparkles of each other player that shows it
 /// (player_sparkles::ShowsSymbol), and turns by the milliseconds of the frame's game time. An observer of the god of the
-/// observers shows it. No symbol shows while this computer's hand directs a fight.
-void TurnSymbols(int32_t milliseconds);
+/// observers shows it. No symbol shows while this computer's hand directs a fight. The symbols turn in the order that
+/// they draw in for a camera at `camera`.
+void TurnSymbols(int32_t milliseconds, const glm::vec3& camera);
 
 } // namespace openblack::ecs::other_player_sparkles
