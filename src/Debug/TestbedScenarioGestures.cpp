@@ -386,7 +386,7 @@ void testbed_scenarios::AddGestureScenarios(std::vector<Scenario>& all)
 	                  .delaySeconds = 1.0f,
 	                  .value = static_cast<size_t>(SpellSeedType::Food),
 	                  .amount = 2.0f},
-	                 {.kind = Kind::PlayHandDemo, .delaySeconds = 0.5f, .handDemo = "Gestures"}},
+	                 {.kind = Kind::PlayHandDemo, .delaySeconds = 0.1f, .handDemo = "Gestures"}},
 	    .townBeliefInPlayer = k_WorshipTownBelief,
 	    .townMiracles = {MagicType::Food},
 	});
