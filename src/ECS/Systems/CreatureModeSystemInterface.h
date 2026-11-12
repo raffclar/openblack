@@ -24,7 +24,8 @@ namespace openblack::ecs::systems
 /// hungry and tired it is (see creature_mode and creature_follow). C locks onto the player's own creature and lets go of
 /// it again; a double click locks onto any creature, another god's too. While locked on, Shift and the cursor keys
 /// turn the camera round the creature, and Ctrl and Shift together swing it clear of the land in the way. The cursor
-/// keys alone, dragging the land, the editor or a script's cinema bars give the camera back.
+/// keys alone, dragging the land, the editor or a script that takes the camera give the camera back. The cinema bars
+/// alone do not.
 ///
 /// It takes the camera over from the player's camera and hands it back as it was, waiting while the editor has the
 /// camera. Inside the temple it has the player's camera of the world behind the temple. It continues there, and it stays
@@ -37,6 +38,9 @@ public:
 	{
 		/// The hand is gripping the land to drag or turn the camera
 		bool handGripping {false};
+		/// The camera reads its keys and the grip of the land. In the temple, without the interface or while a box has
+		/// the keyboard, it does not.
+		bool readsKeys {true};
 	};
 
 	virtual ~CreatureModeSystemInterface() = default;

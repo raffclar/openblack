@@ -37,6 +37,7 @@
 #include "ECS/Systems/CameraPathSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/CreatureCaveSystemInterface.h"
+#include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/CreatureModeSystemInterface.h"
 #include "ECS/Systems/EditorSystemInterface.h"
 #include "ECS/Systems/GameKeysSystemInterface.h"
@@ -96,7 +97,8 @@ void Game::UpdateCameraControllers(std::chrono::microseconds deltaTime)
 	{
 		auto creatureMode = profiler.BeginScoped(Profiler::Stage::CreatureModeUpdate);
 		Locator::creatureModeSystem::value().Update(
-		    deltaTime, {.handGripping = Locator::handPressSystem::value().GetHandButtons().gripping});
+		    deltaTime,
+		    {.handGripping = Locator::handPressSystem::value().GetHandButtons().gripping, .readsKeys = CameraReadsKeys()});
 	}
 	// The free camera of a saved game of the original game flies while the hand grips the land
 	if (auto* free =
@@ -119,6 +121,11 @@ void Game::UpdateCameraControllers(std::chrono::microseconds deltaTime)
 void Game::UpdateCamera()
 {
 	auto& camera = Locator::camera::value();
+	// The look at a fight uses the view that the last frame drew, and the camera before it moves
+	if (Locator::creatureFightSystem::has_value())
+	{
+		Locator::creatureFightSystem::value().NoteLook();
+	}
 	// While a miracle's camera path has the camera, the player's camera doesn't move it
 	// A hand demonstration has the camera exactly where its recording had it, and the camera's own moves wait
 	const auto demoCamera = Locator::handDemoSystem::has_value() ? Locator::handDemoSystem::value().GetCamera() : std::nullopt;
