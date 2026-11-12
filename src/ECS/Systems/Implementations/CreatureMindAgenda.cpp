@@ -1531,8 +1531,6 @@ void CreatureMindSystem::AgendaTurn(entt::entity entity)
 			needs->rest = rest;
 		}
 
-		// Looking about, the head turns to the most interesting thing in sight, or ahead
-		mind.lookingAbout = commands.lookAbout;
 		// The step's look comes from the agenda as the last turn left it
 		const auto& gaze = mind.turnLook;
 		const auto focus = ScriptFocusPoint(registry, entity, mind);
