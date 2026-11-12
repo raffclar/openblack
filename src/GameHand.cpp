@@ -543,6 +543,13 @@ void Game::UpdateHandInterface()
 
 void Game::EndHandLockForFrame()
 {
+	// First, while a script has the bars in, the interface goes away again if it came back, for example when all the
+	// boxes closed. A hand demonstration that plays keeps the interface.
+	if (Locator::cinematicDirectorSystem::has_value())
+	{
+		const bool demonstration = Locator::handDemoSystem::has_value() && Locator::handDemoSystem::value().IsPlaying(0);
+		Locator::cinematicDirectorSystem::value().KeepInterfaceAwayForScriptBars(demonstration);
+	}
 	if (!Locator::handSystem::has_value())
 	{
 		return;

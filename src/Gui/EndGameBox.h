@@ -78,6 +78,8 @@ public:
 	void SetStatisticsSource(StatisticsSource source) { _statisticsSource = std::move(source); }
 	void SetConditionsSource(ConditionsSource source) { _conditionsSource = std::move(source); }
 	void SetShownHandler(ShownHandler handler) { _onShown = std::move(handler); }
+	/// Called when a click on a tab of the box closes all the boxes of the game. Then the tab opens its box.
+	void SetAllBoxesClosedHandler(std::function<void()> handler) { _onAllBoxesClosed = std::move(handler); }
 	/// Opens the box, or shows other contents in the open box, on its Game Over tab
 	void Open(Contents contents);
 	/// Starts to fade out
@@ -130,6 +132,7 @@ private:
 	[[nodiscard]] Dialog& CurrentDialog() const;
 
 	StatisticsSource _statisticsSource;
+	std::function<void()> _onAllBoxesClosed;
 	ConditionsSource _conditionsSource;
 	ShownHandler _onShown;
 	std::unique_ptr<Dialog> _dialog;
