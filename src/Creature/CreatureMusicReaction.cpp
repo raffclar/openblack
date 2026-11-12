@@ -22,7 +22,6 @@ using namespace openblack::creature_music;
 using creature_desires::Desire;
 using creature_face::Cue;
 using creature_mind::Gaze;
-using creature_mind::Movement;
 using creature_mind::ObjectOrder;
 using creature_mind::Step;
 
@@ -64,13 +63,12 @@ constexpr float k_DanceMoodSeconds = 10.0f;
 constexpr float k_DanceExtraSeconds = 5.0f;
 constexpr float k_MostDanceSeconds = 60.0f;
 
-/// Turns to face the camera and looks at it, with the face of the round
-Step FaceCamera(const Camera& camera, Cue face)
+/// Turns to face the camera of its player and looks at it, with the face of the round
+Step FaceCamera(Cue face)
 {
-	return {.kind = Step::Kind::Move,
-	        .movement = {.kind = Movement::Kind::TurnToFace, .point = glm::vec2(camera.position.x, camera.position.z)},
-	        .face = face,
-	        .gaze = Gaze {.camera = true}};
+	auto turn = creature_mind::TurnToCamera();
+	turn.face = face;
+	return turn;
 }
 
 /// Points at where the camera is for a second, and looks at that point
@@ -123,13 +121,13 @@ Step MainFace(std::optional<Gaze> gaze)
 	return {.kind = Step::Kind::Face, .seconds = k_FaceSeconds, .animation = k_FirstFaceAnimation, .gaze = gaze, .main = true};
 }
 
-/// On the first round, and one round in two after it, the creature first turns to face the camera
-void MaybeFaceCamera(std::vector<Step>& agenda, uint32_t round, const creature_mind::Random& random, const Camera& camera,
-                     Cue face)
+/// On the first round, and one round in two after it, the creature first turns to face the camera. A creature without
+/// a player also gets the step, but it does not turn.
+void MaybeFaceCamera(std::vector<Step>& agenda, uint32_t round, const creature_mind::Random& random, Cue face)
 {
-	if ((round == 0 || random(2) == 0) && camera.known)
+	if (round == 0 || random(2) == 0)
 	{
-		agenda.push_back(FaceCamera(camera, face));
+		agenda.push_back(FaceCamera(face));
 	}
 }
 } // namespace
@@ -158,7 +156,7 @@ std::vector<Step> creature_music::NewTrack(const creature_mind::Random& random, 
 	const auto rounds = random(k_ExtraRounds) + k_FewestRounds;
 	for (uint32_t round = 0; round < rounds; ++round)
 	{
-		MaybeFaceCamera(agenda, round, random, camera, Cue::Curiosity);
+		MaybeFaceCamera(agenda, round, random, Cue::Curiosity);
 		switch (random(5))
 		{
 		case 0:
@@ -201,7 +199,7 @@ std::vector<Step> creature_music::NewTrack(const creature_mind::Random& random, 
 	return agenda;
 }
 
-std::vector<Step> creature_music::LikedTrack(const creature_mind::Random& random, float mood, const Camera& camera)
+std::vector<Step> creature_music::LikedTrack(const creature_mind::Random& random, float mood)
 {
 	constexpr std::array<Cue, 3> k_Faces {Cue::Smile, Cue::Amazed, Cue::Compassion};
 	const Gaze atCamera {.camera = true};
@@ -210,7 +208,7 @@ std::vector<Step> creature_music::LikedTrack(const creature_mind::Random& random
 	for (uint32_t round = 0; round < rounds; ++round)
 	{
 		const auto face = k_Faces.at(random(3));
-		MaybeFaceCamera(agenda, round, random, camera, face);
+		MaybeFaceCamera(agenda, round, random, face);
 		switch (random(12))
 		{
 		case 0:
@@ -252,7 +250,7 @@ std::vector<Step> creature_music::LikedTrack(const creature_mind::Random& random
 	return agenda;
 }
 
-std::vector<Step> creature_music::DislikedTrack(const creature_mind::Random& random, float alignment, const Camera& camera)
+std::vector<Step> creature_music::DislikedTrack(const creature_mind::Random& random, float alignment)
 {
 	constexpr std::array<Cue, 3> k_Faces {Cue::Anger, Cue::Fear, Cue::Sad};
 	std::vector<Step> agenda;
@@ -260,7 +258,7 @@ std::vector<Step> creature_music::DislikedTrack(const creature_mind::Random& ran
 	for (uint32_t round = 0; round < rounds; ++round)
 	{
 		const auto face = k_Faces.at(random(3));
-		MaybeFaceCamera(agenda, round, random, camera, face);
+		MaybeFaceCamera(agenda, round, random, face);
 		switch (random(9))
 		{
 		case 0:

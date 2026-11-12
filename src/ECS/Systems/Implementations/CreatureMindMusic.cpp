@@ -67,13 +67,13 @@ void CreatureMindSystem::ReactToMusic(entt::entity creature, float mood)
 		followUp = creature_follow_up::FollowUp::ScratchAfterNewMusic;
 		break;
 	case creature_music::Reaction::Liked:
-		agenda = creature_music::LikedTrack(random, mood, camera);
+		agenda = creature_music::LikedTrack(random, mood);
 		followUp = creature_music::ShowsHappyAfterLikedTrack(Random(100)) ? creature_follow_up::FollowUp::ShowHappy
 		                                                                  : creature_follow_up::FollowUp::DanceAfterLikedMusic;
 		help = creature_music::k_NiceMusicHelp;
 		break;
 	case creature_music::Reaction::Disliked:
-		agenda = creature_music::DislikedTrack(random, body->alignment, camera);
+		agenda = creature_music::DislikedTrack(random, body->alignment);
 		followUp = creature_follow_up::FollowUp::ShowSlapFeeling;
 		help = creature_music::k_NastyMusicHelp;
 		break;

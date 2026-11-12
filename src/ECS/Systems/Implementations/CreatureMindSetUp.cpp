@@ -231,17 +231,28 @@ const creature_plan_actions::Executor* CreatureMindSystem::ExecutorOf(uint32_t a
 
 void CreatureMindSystem::StartMind(entt::entity creature)
 {
+	SetUpNewMind(creature);
+	TakeUpPendingFile(creature);
+}
+
+void CreatureMindSystem::SetUpNewMind(entt::entity creature)
+{
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto* body = registry.TryGet<const Creature>(creature);
 	auto* mind = registry.TryGet<CreatureMindState>(creature);
 	if (body != nullptr && mind != nullptr)
 	{
 		SetUpMind(creature, *body, *mind);
-		// A creature that the game makes for a mind file reads the file at once, over the mind that it got
-		if (mind->pendingFile != nullptr)
-		{
-			TakeUpFile(creature, *mind);
-		}
+	}
+}
+
+void CreatureMindSystem::TakeUpPendingFile(entt::entity creature)
+{
+	// A creature that the game makes for a mind file reads the file at once, over the mind that it got
+	auto* mind = Locator::entitiesRegistry::value().TryGet<CreatureMindState>(creature);
+	if (mind != nullptr && mind->pendingFile != nullptr)
+	{
+		TakeUpFile(creature, *mind);
 	}
 }
 

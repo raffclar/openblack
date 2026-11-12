@@ -20,6 +20,7 @@
 #include "ECS/Components/CreatureNeeds.h"
 #include "ECS/Components/CreatureSkin.h"
 #include "ECS/Components/CreatureTallies.h"
+#include "ECS/Components/CreatureSpells.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureSkinSystemInterface.h"
@@ -92,8 +93,22 @@ void creature_body_file::Apply(Registry& registry, entt::entity creature, const 
 	if (auto* self = registry.TryGet<Creature>(creature))
 	{
 		// The load does not change the pending alignment. A file older than version 11 has no alignment, and its load
-		// sets the alignment to 0.
-		self->alignment = body.alignment.value_or(0.0f);
+		// sets the alignment to 0. A nice spell, else a nasty spell, holds the alignment: the file's alignment is what the
+		// spell puts back.
+		const float alignment = body.alignment.value_or(0.0f);
+		auto* spells = registry.TryGet<CreatureSpells>(creature);
+		if (spells != nullptr && spells->spells.IsActive(creature_spells::Spell::Nice))
+		{
+			spells->spells[creature_spells::Spell::Nice].before = alignment;
+		}
+		else if (spells != nullptr && spells->spells.IsActive(creature_spells::Spell::Nasty))
+		{
+			spells->spells[creature_spells::Spell::Nasty].before = alignment;
+		}
+		else
+		{
+			self->alignment = alignment;
+		}
 		self->strength = body.strength;
 		self->fatness = body.fatness;
 		if (body.bornWith.has_value())
@@ -189,4 +204,26 @@ void creature_body_file::Apply(Registry& registry, entt::entity creature, const 
 			record->wins = counts.battlesWon;
 		}
 	}
+}
+
+void creature_body_file::TakeUpSwappedMind(Registry& registry, entt::entity creature,
+                                           const std::optional<creature_mind_body::Body>& body, const OwnBody& own)
+{
+	if (body.has_value())
+	{
+		// The body keeps its own size. The alignment is the other mind's, so the load paints with it.
+		auto loaded = *body;
+		loaded.size = own.size;
+		Apply(registry, creature, loaded);
+	}
+	if (auto* self = registry.TryGet<Creature>(creature))
+	{
+		self->name = own.name;
+		self->size = own.size;
+		self->alignment = own.alignment;
+		self->pendingAlignment = own.pendingAlignment;
+	}
+	// The body takes its looks with its own alignment, then one morph step paints again if the target moved far enough
+	archetypes::CreatureArchetype::TakeLooks(registry, creature);
+	archetypes::CreatureArchetype::MorphStep(registry, creature);
 }

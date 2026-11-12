@@ -323,8 +323,8 @@ constexpr std::string_view k_FishAction = "FishAndEat";
 /// Holding something: picking it up if it doesn't hold it already, turning to face the player, playing with it once if
 /// it has hardly looked such a thing over before (by a random choice of how, 0 to 3), then waiting holding it, facing the
 /// player, for the seconds given
-[[nodiscard]] std::vector<creature_mind::Step> Hold(uint32_t object, bool alreadyHeld, glm::vec2 camera,
-                                                    std::optional<uint32_t> playWith, float waitSeconds);
+[[nodiscard]] std::vector<creature_mind::Step> Hold(uint32_t object, bool alreadyHeld, std::optional<uint32_t> playWith,
+                                                    float waitSeconds);
 /// Looking at its reflection: going to the water, looking down a second, a dazed look, looking down a while, over to
 /// the shore, a while there, the dazed look again, back to the water and looking down a while; each walk stops within
 /// twice its height. The waits are counted in whole game turns.

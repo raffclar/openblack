@@ -38,6 +38,10 @@ void FaceAngle(Registry& registry, entt::entity walker, float yAngle);
 /// such angle.
 [[nodiscard]] std::optional<float> KeptAngleOf(const Registry& registry, entt::entity thing);
 
+/// The game angle (2048 to the circle) that the walk of a walker keeps. The game turns a walker that looks at a point
+/// from this angle. A thing with no walk has no such angle.
+[[nodiscard]] std::optional<uint16_t> WalkGameAngleOf(const Registry& registry, entt::entity walker);
+
 /// The world axes of a villager or an animal from the angle that it keeps and its size, as the game makes them for a
 /// thing that stands upright. Then the axes turn a quarter about the up axis to the axes that the model has.
 /// The quarter turn does not change the up axis, which is the only axis that the pull of the hand uses.

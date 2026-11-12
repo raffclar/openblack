@@ -37,6 +37,10 @@ struct CreatureCasting
 		ToThrowPosition,
 		/// Going to where it can throw at a place from
 		ToThrowAtPoint,
+		/// Turning to face the camera of its player, where the camera is on each turn
+		TurnToCamera,
+		/// Turning to face the camera of the player that last gave it a thing, where the camera is on each turn
+		TurnToGiverCamera,
 	};
 	enum class Outcome : uint8_t
 	{

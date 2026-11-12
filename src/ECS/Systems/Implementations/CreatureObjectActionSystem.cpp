@@ -33,8 +33,6 @@
 #include "Common/GUtilsDistance.h"
 #include "Common/PortableMath.h"
 #include "Common/PortableRotations.h"
-#include "Common/X87.h"
-#include "Common/X87Vector.h"
 #include "Creature/CreatureCastMoves.h"
 #include "Creature/CreatureCatch.h"
 #include "Creature/CreatureFriendAgendas.h"
@@ -675,8 +673,7 @@ void AimWhileMoving(entt::entity creature, CreatureObjectAction& action, const C
 	const float dx = place.x - transform.position.x;
 	const float dz = place.z - transform.position.z;
 	const float flatDistance = std::sqrt((dx * dx) + (dz * dz));
-	const bool seen = creature_mind::CanSee(x87::Distance<x87::SumOrder::Zyx>(place, transform.position),
-	                                        object_measures::Height(registry, *action.target));
+	const bool seen = creature_mind::CanSeeObject(transform.position, place, object_measures::Height(registry, *action.target));
 	auto destination = glm::xz(place);
 	float arriveWithin = 0.0f;
 	if (!seen)
@@ -904,8 +901,7 @@ void Approach(entt::entity creature, CreatureObjectAction& action, const Creatur
 	const float dx = place.x - transform.position.x;
 	const float dz = place.z - transform.position.z;
 	const float flatDistance = std::sqrt((dx * dx) + (dz * dz));
-	const bool seen = creature_mind::CanSee(x87::Distance<x87::SumOrder::Zyx>(place, transform.position),
-	                                        object_measures::Height(registry, *action.target));
+	const bool seen = creature_mind::CanSeeObject(transform.position, place, object_measures::Height(registry, *action.target));
 	using Step = creature_object_actions::ApproachStep;
 	const auto step = creature_object_actions::NextApproachStep(seen, flatDistance, *straight, reach.blend.inRange);
 	if (step == Step::Begin)

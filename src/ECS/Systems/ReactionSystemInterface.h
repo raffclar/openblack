@@ -99,6 +99,10 @@ public:
 		entt::entity dance {entt::null};
 		/// Whether it spreads to more living things in its turn. A hand that holds its initiator can stop it.
 		bool spreads {true};
+		/// Whether the deletion of its initiator stops the living things that react to it. The reactions of a creature,
+		/// a building, a magic tree, a miracle and of some other things stop in this way. The reactions of other things
+		/// go without a stop. A saved game does not keep this value, because the initiator gives it again.
+		bool stopsGroupWhenGone {false};
 
 		/// Gives the values that a saved game keeps to a visitor
 		template <typename Self, typename Visitor>
@@ -112,6 +116,9 @@ public:
 
 	/// A new reaction, its id
 	virtual uint32_t Create(const Source& source) = 0;
+	/// The reaction that a new creature makes to itself as the game makes the creature. It spreads at once. The creature is
+	/// not in the map's cells yet, so the spread does not reach the creature itself.
+	virtual void CreateForNewCreature(entt::entity /*creature*/, PlayerNames /*owner*/, const glm::vec3& /*position*/) {}
 	/// A reaction follows its initiator, as a miracle moves to where its last event was, with how it moves and how strong
 	/// it is now, which sets how far it spreads
 	virtual void Move(uint32_t id, const glm::vec3& position, const glm::vec3& velocity, float strength) = 0;

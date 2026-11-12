@@ -123,6 +123,24 @@ void AddCreatureMode(std::vector<Scenario>& all)
 	                 CameraKeys(k_Down, 2.0f, true, 2.0f)},
 	});
 
+	all.push_back({
+	    .id = "creature_mode.turn_to_moving_camera",
+	    .name = "A turn to a camera that moves",
+	    .facet = Facet::CreatureMode,
+	    .description = "Locked onto the player's tiger, a script tells it to pray to the player. At the same time Shift "
+	                   "and left are held for four seconds, so the camera swings round the tiger.",
+	    .expected = "The tiger turns to the camera and keeps on turning while the camera swings: on each turn it reads "
+	                "where the camera is now. It prays only when it faces the camera where the camera stopped, not "
+	                "where the camera was when the plan started.",
+	    .framing = {.shot = Shot::Overview},
+	    .creatures = {Player({0.0f, 40.0f}, "yours")},
+	    // A script action needs a thing to act on, though this action does not use it
+	    .objects = {{.type = TreeInfo::Birch, .offset = {-15.0f, 65.0f}}},
+	    .commands = {Key(Kind::CreatureKey, 1.0f),
+	                 {.kind = Kind::DoAction, .creature = 0, .delaySeconds = 3.0f, .action = "PrayToPlayer"},
+	                 CameraKeys(k_Left, 4.0f, false, 0.2f)},
+	});
+
 	// A wall of trees between the camera and the tiger
 	std::vector<ObjectSetup> trees;
 	for (int i = -3; i <= 3; ++i)

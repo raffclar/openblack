@@ -31,6 +31,7 @@ class ReactionSystem final: public ReactionSystemInterface
 {
 public:
 	uint32_t Create(const Source& source) override;
+	void CreateForNewCreature(entt::entity creature, PlayerNames owner, const glm::vec3& position) override;
 	void Move(uint32_t id, const glm::vec3& position, const glm::vec3& velocity, float strength) override;
 	[[nodiscard]] std::optional<Active> Find(uint32_t id) const override;
 	void RemoveFrom(entt::entity initiator) override;
@@ -70,11 +71,16 @@ public:
 	[[nodiscard]] std::vector<Active> ReactionsAt(const glm::vec3& point) const override;
 
 private:
-	/// The reaction is spread to the villagers and creatures in its reach, which may take it up
-	void Spread(Active& reaction);
+	/// A new reaction that spreads at once. The spread does not reach the thing given as not in the map's cells yet.
+	uint32_t Create(const Source& source, entt::entity notInMap);
+	/// The reaction spreads to the villagers and creatures in its reach, which can take it up. The spread does not reach
+	/// the thing given as not in the map's cells yet.
+	void Spread(Active& reaction, entt::entity notInMap = entt::null);
 	/// The reaction reaches the living a map cell keeps, in its order: each takes it up, changes to it, or is impressed
 	/// by it without reacting, the last the reaction reaches in that cell
-	void SpreadInCell(Active& reaction, const std::vector<entt::entity>& mobiles);
+	void SpreadInCell(Active& reaction, const std::vector<entt::entity>& mobiles, entt::entity notInMap);
+	/// Sets from the initiator whether the deletion of the initiator stops the living things that react to the reaction
+	void SetStopsGroupWhenGone(Active& reaction) const;
 	/// How urgent a reaction is to a living thing where it stands now, by its distance to the reaction or one given
 	[[nodiscard]] uint32_t PriorityTo(const Active& reaction, entt::entity living, const glm::vec3& at) const;
 	[[nodiscard]] uint32_t PriorityTo(const Active& reaction, entt::entity living, const glm::vec3& at, float distance) const;
@@ -109,6 +115,12 @@ private:
 	                                                           float reactionMultiplier, float artefact) const;
 	/// Every living thing reacting to it stops, and it goes
 	void ShutDown(uint32_t id);
+	/// It goes, and the living things that react to it do not stop now. Each stops when it next finds the reaction gone.
+	void Drop(uint32_t id);
+	/// It leaves the list. If it spread last, the next older reaction spreads next. Gives its dance.
+	entt::entity Unlink(uint32_t id);
+	/// The dance of a reaction that went goes too
+	static void EndDance(entt::entity dance);
 
 	std::vector<Active> _reactions;
 	uint32_t _nextId {1};
@@ -122,6 +134,20 @@ private:
 	uint32_t _turn {0};
 	/// How many times villagers have taken up a reaction, which orders those holding the same one
 	uint32_t _joins {0};
+	/// The reaction that a villager held before the reaction that it takes up now. While the villager goes into the state
+	/// of the new reaction, a stop from the state that it leaves ends this reaction, not the new reaction.
+	struct HeldBefore
+	{
+		entt::entity living {entt::null};
+		uint32_t reaction {0};
+		Reaction type {Reaction::None};
+		uint32_t startTurn {0};
+		uint32_t joined {0};
+		uint32_t left {0};
+		/// The state that the villager left stopped this reaction
+		bool stopped {false};
+	};
+	std::optional<HeldBefore> _heldBefore;
 	/// The things' and the miracles' balances of impressiveness
 	std::array<float, 3> _landBalances {1.0f, 1.0f, 1.0f};
 	/// For each player, the number for the belief that the towns gained, which the hand shows at this turn

@@ -734,8 +734,7 @@ TEST(CreatureActionAgendas, BallGamesArePlayedWithToys)
 // A creature that copies a deed of its player first shows the player that it saw the deed
 TEST(CreatureActionAgendas, NoticingAHelpfulDeedPointsWatchesTheCameraThenShowsJoy)
 {
-	const glm::vec3 camera {10.0f, 50.0f, 20.0f};
-	const auto agenda = Notice(NoticeKind::Helpful, 7, false, true, camera, AlwaysFirst);
+	const auto agenda = Notice(NoticeKind::Helpful, 7, false, AlwaysFirst);
 	ASSERT_EQ(agenda.size(), 5);
 	EXPECT_EQ(agenda[0].order.kind, ObjectOrder::Kind::PointAt);
 	EXPECT_EQ(agenda[0].order.object, 7u);
@@ -743,55 +742,51 @@ TEST(CreatureActionAgendas, NoticingAHelpfulDeedPointsWatchesTheCameraThenShowsJ
 	EXPECT_EQ(agenda[0].face, creature_face::Cue::Amazed);
 	ASSERT_TRUE(agenda[0].gaze.has_value());
 	EXPECT_TRUE(agenda[0].gaze->itself);
-	EXPECT_EQ(agenda[1].movement.kind, Movement::Kind::TurnToFace);
-	EXPECT_EQ(agenda[1].movement.point, glm::vec2(10.0f, 20.0f));
+	EXPECT_EQ(agenda[1].movement.kind, Movement::Kind::TurnToFaceCamera);
 	EXPECT_EQ(agenda[2].kind, Step::Kind::WatchCamera);
 	EXPECT_FLOAT_EQ(agenda[2].seconds, 1.0f);
 	EXPECT_EQ(agenda[2].face, creature_face::Cue::Curiosity);
 	EXPECT_EQ(agenda[3].face, creature_face::Cue::Compassion);
 	EXPECT_EQ(agenda[4].kind, Step::Kind::Action);
 	EXPECT_EQ(agenda[4].animation, animations::k_Happy);
-	EXPECT_EQ(Notice(NoticeKind::Helpful, 7, false, true, camera, NeverFirst).back().animation, k_AhaAnimation);
+	EXPECT_EQ(Notice(NoticeKind::Helpful, 7, false, NeverFirst).back().animation, k_AhaAnimation);
 }
 
 TEST(CreatureActionAgendas, NoticingAnAggressiveDeedPointsBrieflyAndIsAngry)
 {
-	const auto agenda = Notice(NoticeKind::Aggressive, 7, false, true, {}, AlwaysFirst);
+	const auto agenda = Notice(NoticeKind::Aggressive, 7, false, AlwaysFirst);
 	ASSERT_EQ(agenda.size(), 5);
 	EXPECT_FLOAT_EQ(agenda[0].order.seconds.value_or(0.0f), 0.8f);
 	EXPECT_EQ(agenda[2].face, creature_face::Cue::Anger);
 	EXPECT_EQ(agenda[3].animation, k_LaughAnimation);
 	EXPECT_EQ(agenda[4].animation, animations::k_Angry);
 	// Two times in three it does not laugh
-	const auto noLaugh = Notice(NoticeKind::Aggressive, 7, false, true, {}, NeverFirst);
+	const auto noLaugh = Notice(NoticeKind::Aggressive, 7, false, NeverFirst);
 	ASSERT_EQ(noLaugh.size(), 4);
 	EXPECT_EQ(noLaugh[3].animation, animations::k_Angry);
 }
 
 TEST(CreatureActionAgendas, EachNoticeEndsWithItsOwnAction)
 {
-	EXPECT_EQ(Notice(NoticeKind::Plain, 7, false, true, {}, AlwaysFirst).back().animation, k_AhaAnimation);
-	EXPECT_EQ(Notice(NoticeKind::Stealing, 7, false, true, {}, AlwaysFirst).back().animation, animations::k_Scratch);
-	EXPECT_EQ(Notice(NoticeKind::Playful, 7, false, true, {}, AlwaysFirst).back().animation, animations::k_Happy);
+	EXPECT_EQ(Notice(NoticeKind::Plain, 7, false, AlwaysFirst).back().animation, k_AhaAnimation);
+	EXPECT_EQ(Notice(NoticeKind::Stealing, 7, false, AlwaysFirst).back().animation, animations::k_Scratch);
+	EXPECT_EQ(Notice(NoticeKind::Playful, 7, false, AlwaysFirst).back().animation, animations::k_Happy);
 	for (const auto kind : {NoticeKind::Plain, NoticeKind::Stealing, NoticeKind::Playful})
 	{
-		const auto agenda = Notice(kind, 7, false, true, {}, AlwaysFirst);
+		const auto agenda = Notice(kind, 7, false, AlwaysFirst);
 		ASSERT_EQ(agenda.size(), 5);
 		EXPECT_EQ(agenda[2].face, creature_face::Cue::Curiosity);
 		EXPECT_EQ(agenda[3].face, creature_face::Cue::Curiosity);
 	}
 }
 
-TEST(CreatureActionAgendas, NoticingWithAFullHandOrNoPlayerLeavesStepsOut)
+TEST(CreatureActionAgendas, NoticingWithAFullHandLeavesThePointOut)
 {
-	// With something in its hand it does not point
-	const auto holding = Notice(NoticeKind::Plain, 7, true, true, {}, AlwaysFirst);
+	// With something in its hand it does not point. The turn to the camera is always there: a creature without a player
+	// does not turn, but the step still takes its turns.
+	const auto holding = Notice(NoticeKind::Plain, 7, true, AlwaysFirst);
 	ASSERT_EQ(holding.size(), 4);
-	EXPECT_EQ(holding[0].movement.kind, Movement::Kind::TurnToFace);
-	// Without a player it does not turn to the camera
-	const auto alone = Notice(NoticeKind::Plain, 7, false, false, {}, AlwaysFirst);
-	ASSERT_EQ(alone.size(), 4);
-	EXPECT_EQ(alone[1].kind, Step::Kind::WatchCamera);
+	EXPECT_EQ(holding[0].movement.kind, Movement::Kind::TurnToFaceCamera);
 }
 
 TEST(CreatureActionAgendas, TheFiveNoticeActionsCanBeCarriedOut)
@@ -803,11 +798,10 @@ TEST(CreatureActionAgendas, TheFiveNoticeActionsCanBeCarriedOut)
 		const auto* notice = plan_actions::For(name);
 		ASSERT_NE(notice, nullptr);
 		EXPECT_TRUE(NoticeKindOf(name).has_value());
-		// It needs a thing, and a camera when it has a player
+		// It needs a thing. The turn to the camera reads the camera on each turn, so the agenda does not need a camera.
 		EXPECT_FALSE(plan_actions::Agenda(*notice, std::nullopt, {}, {}, NeverFirst).has_value());
 		EXPECT_TRUE(plan_actions::Agenda(*notice, 3, {}, {}, NeverFirst).has_value());
-		EXPECT_FALSE(plan_actions::Agenda(*notice, 3, {}, {.hasPlayer = true}, NeverFirst).has_value());
-		EXPECT_TRUE(plan_actions::Agenda(*notice, 3, {}, {.eye = glm::vec3(0.0f), .hasPlayer = true}, NeverFirst).has_value());
+		EXPECT_TRUE(plan_actions::Agenda(*notice, 3, {}, {.hasPlayer = true}, NeverFirst).has_value());
 	}
 	EXPECT_FALSE(NoticeKindOf("PointAtObject").has_value());
 }

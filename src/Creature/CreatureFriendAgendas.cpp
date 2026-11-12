@@ -14,6 +14,8 @@
 #include <optional>
 #include <span>
 
+#include "3D/MapCoords.h"
+#include "Common/X87Vector.h"
 #include "Creature/CreatureActionAgendas.h"
 #include "Creature/CreatureCastAgenda.h"
 #include "Creature/CreatureEmoteAgendas.h"
@@ -958,5 +960,16 @@ std::vector<Step> creature_mind::ShowCreatureHowNice(uint32_t other, float howNi
 
 bool creature_mind::CanSee(float distance, float objectHeight)
 {
-	return distance < k_SeenWithinMetres || distance < objectHeight * k_SeenWithinHeights;
+	return !(distance >= k_SeenWithinMetres) || objectHeight * k_SeenWithinHeights > distance;
+}
+
+bool creature_mind::CanSeeObject(glm::vec3 creature, glm::vec3 object, float objectHeight)
+{
+	const auto coords = map_coords::FromMetres(glm::vec2(object.x, object.z));
+	if (!map_coords::InBounds(coords))
+	{
+		return false;
+	}
+	const glm::vec3 point {map_coords::ToMetres(coords.x), object.y, map_coords::ToMetres(coords.z)};
+	return CanSee(x87::Distance<x87::SumOrder::Zyx>(point, creature), objectHeight);
 }

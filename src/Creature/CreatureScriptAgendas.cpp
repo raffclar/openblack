@@ -152,15 +152,10 @@ std::vector<Step> openblack::creature_mind::PointAtThing(uint32_t thing)
 	return {Point({.object = thing}, k_PointAtThingSeconds, {.object = thing, .itself = true})};
 }
 
-std::vector<Step> openblack::creature_mind::PointAtCamera(bool hasPlayer, glm::vec3 camera)
+std::vector<Step> openblack::creature_mind::PointAtCamera(glm::vec3 camera)
 {
-	std::vector<Step> agenda;
-	if (hasPlayer)
-	{
-		agenda.push_back({.kind = Step::Kind::Move,
-		                  .movement = {.kind = Movement::Kind::TurnToFace, .point = {camera.x, camera.z}},
-		                  .gaze = Gaze {.camera = true}});
-	}
+	// A creature without a player also gets the turn to the camera, but it does not turn
+	std::vector<Step> agenda {TurnToCamera()};
 	agenda.push_back(
 	    Point({.point = {camera.x, camera.z}, .pointHeight = camera.y}, k_PointAtCameraSeconds, {.point = camera}));
 	return agenda;

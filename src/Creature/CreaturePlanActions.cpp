@@ -1077,17 +1077,11 @@ bool creature_plan_actions::Possible(const Executor& executor, const Situation& 
 	case Build::PooAtHome:
 		return situation.home.has_value() &&
 		       !(gutils::GetDistanceInMetres(situation.position, *situation.home) > creature_mind::k_NearHomeToPoo);
-	case Build::FaceCameraEmote:
-	case Build::ShowDesire:
-	case Build::Howl:
-	case Build::BePathetic:
-		return situation.camera.has_value();
 	case Build::RunFromPlayer:
 		return situation.playerHand.has_value();
 	case Build::PointAtCamera:
 	case Build::PointOutHighlight:
 		return situation.eye.has_value();
-	case Build::Notice:
 	case Build::Gesture:
 		// It turns to the camera only when it has a player
 		return !situation.hasPlayer || situation.eye.has_value();
@@ -1390,8 +1384,7 @@ std::optional<std::vector<creature_mind::Step>> creature_plan_actions::Agenda(co
 		{
 			return std::nullopt;
 		}
-		return creature_mind::Notice(*kind, *object, situation.handFull, situation.hasPlayer,
-		                             situation.eye.value_or(glm::vec3(0.0f)), random);
+		return creature_mind::Notice(*kind, *object, situation.handFull, random);
 	}
 	case Build::Destroy:
 		return creature_mind::DestroyThing(*object);
@@ -1427,11 +1420,11 @@ std::optional<std::vector<creature_mind::Step>> creature_plan_actions::Agenda(co
 	case Build::HangAround:
 		return creature_mind::HangAround(situation.hangAround, situation.turnSeconds, random);
 	case Build::ShowDesire:
-		return creature_mind::Communicate(*situation.camera);
+		return creature_mind::Communicate();
 	case Build::Emote:
 		return creature_mind::Emote(executor.animation);
 	case Build::FaceCameraEmote:
-		return creature_mind::FaceAndEmote(*situation.camera, executor.animation);
+		return creature_mind::FaceAndEmote(executor.animation);
 	case Build::ApproachEmote:
 		return creature_mind::ApproachAndEmote(*object, executor.animation);
 	case Build::WaveAtFriend:
@@ -1492,13 +1485,13 @@ std::optional<std::vector<creature_mind::Step>> creature_plan_actions::Agenda(co
 	case Build::RunFromPlayer:
 		return creature_emote::RunAway({.point = {situation.playerHand->x, situation.playerHand->z}}, random);
 	case Build::Howl:
-		return creature_emote::HowlAtPlayer(*situation.camera);
+		return creature_emote::HowlAtPlayer();
 	case Build::BeSad:
 		return creature_emote::BeSad(situation.self, situation.turnsPerSecond, random);
 	case Build::PullSillyFaces:
 		return creature_emote::PullSillyFaces(*object, situation.height, random);
 	case Build::BePathetic:
-		return creature_emote::BePathetic(*situation.camera, situation.height);
+		return creature_emote::BePathetic(situation.height);
 	case Build::StrokeAndHeal:
 		return creature_emote::StrokeAndHeal(*object, situation.holdingStrokeable);
 	case Build::LookAtSun:
@@ -1598,7 +1591,7 @@ std::optional<std::vector<creature_mind::Step>> creature_plan_actions::Agenda(co
 	case Build::LookAtCameraInCutScene:
 		return creature_mind::LookAtCameraInCutScene(situation.eye, random);
 	case Build::PointAtCamera:
-		return creature_mind::PointAtCamera(situation.hasPlayer, *situation.eye);
+		return creature_mind::PointAtCamera(*situation.eye);
 	case Build::Gesture:
 		return creature_mind::DrawGestureForPlayer(situation.hasPlayer, situation.eye.value_or(glm::vec3(0.0f)));
 	case Build::CastOneShotInHand:
@@ -1627,24 +1620,16 @@ std::optional<std::vector<creature_mind::Step>> creature_plan_actions::Agenda(co
 	case Build::GoToHand:
 		return creature_player_attention::GoToHand(random);
 	case Build::PointAtHand:
-		// Without a hand of its player, or a camera, the action fails
-		if (!situation.playerHand.has_value() || !situation.camera.has_value())
+		// Without a hand of its player, the action fails
+		if (!situation.playerHand.has_value())
 		{
 			return std::nullopt;
 		}
-		return creature_player_attention::PointAtHand(*situation.camera, *situation.playerHand);
+		return creature_player_attention::PointAtHand(*situation.playerHand);
 	case Build::ShowHowNice:
-		if (!situation.camera.has_value())
-		{
-			return std::nullopt;
-		}
-		return creature_player_attention::ShowHowNice(*situation.camera, situation.attitudeToPlayer);
+		return creature_player_attention::ShowHowNice(situation.attitudeToPlayer);
 	case Build::PrayToPlayer:
-		if (!situation.camera.has_value())
-		{
-			return std::nullopt;
-		}
-		return creature_player_attention::PrayToPlayer(*situation.camera);
+		return creature_player_attention::PrayToPlayer();
 	case Build::ThrowAtCamera:
 		// Without a camera of its player, or a thing to throw, the action fails
 		if (!situation.eye.has_value() || !situation.hasPlayer || !situation.instrument.has_value())
@@ -1657,32 +1642,28 @@ std::optional<std::vector<creature_mind::Step>> creature_plan_actions::Agenda(co
 		return creature_player_attention::WatchPlayer();
 	case Build::BeCrossWithPlayer:
 		// The game builds this agenda with no test of the camera, thus the draw for the sign comes first
-		return creature_player_attention::BeCrossWithPlayer(situation.camera, situation.height, random);
+		return creature_player_attention::BeCrossWithPlayer(situation.height, random);
 	case Build::GoToMiddleOfScreen:
 	case Build::FollowPlayer:
 	case Build::BeSillyWithPlayer:
-		// The creature needs the camera to turn to it
-		if (!situation.camera.has_value())
-		{
-			return std::nullopt;
-		}
+		// The turn to the camera reads the camera on each turn, so the agenda does not need the camera now
 		switch (executor.build)
 		{
 		case Build::GoToMiddleOfScreen:
-			return creature_player_attention::GoToMiddleOfScreen(*situation.camera, situation.height);
+			return creature_player_attention::GoToMiddleOfScreen(situation.height);
 		case Build::FollowPlayer:
-			return creature_player_attention::FollowPlayer(*situation.camera, situation.height);
+			return creature_player_attention::FollowPlayer(situation.height);
 		default:
-			return creature_player_attention::BeSillyWithPlayer(*situation.camera, random);
+			return creature_player_attention::BeSillyWithPlayer(random);
 		}
 	case Build::ShowPlayerAnObject:
-		// Without a camera, or a thing to show, the action fails
-		if (!situation.camera.has_value() || !situation.instrument.has_value())
+		// Without a thing to show, the action fails
+		if (!situation.instrument.has_value())
 		{
 			return std::nullopt;
 		}
 		return creature_player_attention::ShowPlayerAnObject(situation.handFull ? std::nullopt : situation.instrument,
-		                                                     *situation.camera, situation.height);
+		                                                     situation.height);
 	case Build::RestToGetBetter:
 		return creature_mind::RestToGetBetter();
 	case Build::GoHomeToRecover:
@@ -1745,7 +1726,7 @@ std::optional<std::vector<creature_mind::Step>> creature_plan_actions::Agenda(co
 	case Build::ShowLearntLesson:
 		return creature_odd::ShowLearntLesson();
 	case Build::LookConfused:
-		return creature_odd::LookConfused(situation.camera);
+		return creature_odd::LookConfused();
 	case Build::BehaveStrangely:
 		return creature_odd::BehaveStrangely(situation.turnsPerSecond, random);
 	case Build::Sacrifice:

@@ -988,18 +988,7 @@ void CreatureAnimationSystem::MorphTurn(entt::entity entity)
 	{
 		return;
 	}
-	const auto targets = TargetMorph(*creature, *morph);
-	const auto refresh = creature_morph::RefreshDrawn(morph->drawn, targets);
-	morph->drawn = refresh.drawn;
-	if (refresh.animations)
-	{
-		++morph->revision;
-	}
-	// A new alignment paints the skin and the hair with the evil to good target
-	if (refresh.skin)
-	{
-		morph->paintedAlignment = targets.evilGood;
-	}
+	ecs::archetypes::CreatureArchetype::MorphStep(registry, entity);
 	BuildSkeleton(*creature, *morph, *animation);
 }
 

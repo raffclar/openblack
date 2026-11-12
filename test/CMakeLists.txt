@@ -951,6 +951,7 @@ openblack_setup_and_add_test(test_shepherd_rules test_shepherd_rules.cpp)
 openblack_setup_and_add_test(
   test_creature_object_beliefs test_creature_object_beliefs.cpp
 )
+openblack_setup_and_add_test(test_creature_sight test_creature_sight.cpp)
 openblack_setup_and_add_test(test_script_texts gui/test_script_texts.cpp)
 openblack_setup_and_add_test(test_temple_game_over test_temple_game_over.cpp)
 openblack_setup_and_add_test(
@@ -2235,6 +2236,7 @@ openblack_setup_and_add_test(test_creature_catch_give_kinds test_creature_catch_
 openblack_setup_and_add_test(test_things_made test_things_made.cpp)
 openblack_setup_and_add_test(test_object_snow graphics/test_object_snow.cpp)
 openblack_setup_and_add_test(test_creature_turn_to_face test_creature_turn_to_face.cpp)
+openblack_setup_and_add_test(test_creature_camera_turn test_creature_camera_turn.cpp)
 openblack_setup_and_add_test(test_vanilla_world_import test_vanilla_world_import.cpp)
 add_test(NAME test_guard_sweep
          COMMAND ${Python3_EXECUTABLE}

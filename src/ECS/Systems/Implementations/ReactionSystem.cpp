@@ -17,6 +17,7 @@
 #include <array>
 #include <iterator>
 #include <optional>
+#include <ranges>
 #include <span>
 #include <string_view>
 #include <utility>
@@ -38,6 +39,7 @@
 #include "Creature/CreatureTeleportAgendas.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
+#include "ECS/Components/AnimatedStatic.h"
 #include "ECS/Components/AtHome.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureArena.h"
@@ -47,26 +49,44 @@
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureNeeds.h"
 #include "ECS/Components/Dance.h"
+#include "ECS/Components/DeadTree.h"
 #include "ECS/Components/Disciple.h"
+#include "ECS/Components/Feature.h"
+#include "ECS/Components/Field.h"
 #include "ECS/Components/Fire.h"
+#include "ECS/Components/FishFarm.h"
+#include "ECS/Components/Flowers.h"
+#include "ECS/Components/Football.h"
+#include "ECS/Components/Forest.h"
 #include "ECS/Components/Hand.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/LivingReaction.h"
+#include "ECS/Components/MagicForest.h"
 #include "ECS/Components/MagicShield.h"
 #include "ECS/Components/MiracleImpression.h"
+#include "ECS/Components/Mobile.h"
+#include "ECS/Components/Pot.h"
+#include "ECS/Components/PuzzleGame.h"
 #include "ECS/Components/ReportedHand.h"
 #include "ECS/Components/Scaffold.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/Spell.h"
+#include "ECS/Components/SpellDispenser.h"
+#include "ECS/Components/SpellIcon.h"
 #include "ECS/Components/SpellSeed.h"
 #include "ECS/Components/TeleportStone.h"
+#include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/TownAggression.h"
 #include "ECS/Components/TownDesire.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/Components/VillageTotem.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/Components/Vortex.h"
 #include "ECS/Components/WallHug.h"
+#include "ECS/Components/WorshipSite.h"
+#include "ECS/CreatureSight.h"
 #include "ECS/FightWatchRules.h"
 #include "ECS/GamePlayers.h"
 #include "ECS/ListOrder.h"
@@ -289,6 +309,38 @@ bool ThingGone(const ecs::Registry& registry, entt::entity thing)
 	       Locator::livingActionSystem::value().VillagerGetState(*action, LivingAction::Index::Final) == VillagerStates::Dying;
 }
 
+/// Whether the deletion of a thing stops the living things that react to the reactions that the thing made. These things
+/// stop them as they go:
+/// - A creature.
+/// - A building, a field, a fish farm, a feature, a forest, a rock, a dead tree, a teleport stone, a totem, a football
+///   pitch, a spell dispenser, a worship site and its altar.
+/// - A temple and its heart, a puzzle totem, a miracle icon of a town centre or a worship site, and a vortex.
+/// - A magic tree, a miracle, a shield and an arena.
+/// - A pot, for the reaction of its kind that calls the living to it.
+/// The reactions of any other thing go without a stop, such as those of a villager, an animal, a tree or a ball.
+[[nodiscard]] bool DeletionStopsGroup(const ecs::Registry& registry, entt::entity thing, Reaction type)
+{
+	if (thing == entt::null || !registry.Valid(thing))
+	{
+		return false;
+	}
+	if (registry.AnyOf<Creature, Abode, Field, FishFarm, Feature, Flowers, AnimatedStatic, BigForest, MobileStatic, Rock,
+	                   DeadTree, TeleportStone, VillageTotem, FootballPitch, SpellDispenser, WorshipSite>(thing) ||
+	    registry.AnyOf<MagicTree, Spell, MagicShield, CreatureArena>(thing) ||
+	    registry.AnyOf<WorshipAltar, Temple, TempleHeart, PuzzleTotem, TownCentreIcon, WorshipIcon, Vortex>(thing))
+	{
+		return true;
+	}
+	const auto* pot = registry.TryGet<const Pot>(thing);
+	if (pot == nullptr || !Locator::infoConstants::has_value())
+	{
+		return false;
+	}
+	const auto& pots = Locator::infoConstants::value().pot;
+	const auto row = static_cast<size_t>(pot->type);
+	return row < pots.size() && pots.at(row).associatedReaction == type;
+}
+
 /// What a living weighs about a predator it reacts to
 reaction_timing::PredatorWatch PredatorWatchOf(const ecs::Registry& registry, entt::entity living, entt::entity predator,
                                                const ReactionInfo& info)
@@ -356,25 +408,11 @@ bool PlanIs(const ecs::Registry& registry, entt::entity creature, std::string_vi
 	return tables != nullptr && plan->action < tables->actions.size() && tables->actions[plan->action].name == action;
 }
 
-/// Whether a creature sees a point: near enough the way its head looks, or the way it faces when it looks at nothing, or
-/// in its own map cell
+/// Whether a creature sees a point: near enough the way its head looks, or the way its body faces when it looks at
+/// nothing, or in its own map cell
 bool CreatureSees(const ecs::Registry& registry, entt::entity creature, const glm::vec3& point)
 {
-	const auto& at = registry.Get<const Transform>(creature).position;
-	glm::vec2 way {0.0f};
-	const auto* body = registry.TryGet<const CreatureAnimation>(creature);
-	if (body != nullptr && body->lookAt.has_value() && glm::vec2(body->lookAt->x, body->lookAt->z) != glm::vec2(at.x, at.z))
-	{
-		way = {body->lookAt->x - at.x, body->lookAt->z - at.z};
-	}
-	else if (const auto* walker = registry.TryGet<const CreatureLocomotion>(creature))
-	{
-		way = creature_locomotion::DirectionOf(walker->heading);
-	}
-	const glm::vec2 from(at.x, at.z);
-	const glm::vec2 to(point.x, point.z);
-	const bool sameCell = map_coords::Cell(map_coords::FromMetres(from)) == map_coords::Cell(map_coords::FromMetres(to));
-	return creature_reaction::CanSee(creature_reaction::LookAngle(way), gutils::GetAngleFromXZ(from, to), sameCell);
+	return ecs::creature_sight::CanSeePos(registry, creature, glm::vec2(point.x, point.z));
 }
 
 /// Whether the player of a reaction is an ally of the player of a creature, by the strength of the alliance that the
@@ -740,6 +778,16 @@ std::array<float, magic::town_belief::k_DesireCount> DesireWithBoosts(const Town
 
 uint32_t ReactionSystem::Create(const Source& source)
 {
+	return Create(source, entt::null);
+}
+
+void ReactionSystem::CreateForNewCreature(entt::entity creature, PlayerNames owner, const glm::vec3& position)
+{
+	Create({.initiator = creature, .type = Reaction::ReactToCreature, .player = owner, .position = position}, creature);
+}
+
+uint32_t ReactionSystem::Create(const Source& source, entt::entity notInMap)
+{
 	const auto* info = InfoOf(source.type);
 	const uint32_t id = _nextId++;
 	_reactions.push_back(
@@ -749,9 +797,17 @@ uint32_t ReactionSystem::Create(const Source& source)
 	     .reach = source.reach.value_or(
 	         info != nullptr ? magic::StartingReach(info->whetherReactionGrows != 0, info->maxReactionDistance) : 0.0f),
 	     .firstTaken = source.onCast ? std::optional<uint32_t>(0) : std::nullopt});
+	SetStopsGroupWhenGone(_reactions.back());
 	// It is spread at once
-	Spread(_reactions.back());
+	Spread(_reactions.back(), notInMap);
 	return id;
+}
+
+void ReactionSystem::SetStopsGroupWhenGone(Active& reaction) const
+{
+	reaction.stopsGroupWhenGone =
+	    Locator::entitiesRegistry::has_value() &&
+	    DeletionStopsGroup(Locator::entitiesRegistry::value(), reaction.source.initiator, reaction.source.type);
 }
 
 void ReactionSystem::Move(uint32_t id, const glm::vec3& position, const glm::vec3& velocity, float strength)
@@ -771,6 +827,7 @@ void ReactionSystem::SetInitiator(uint32_t id, entt::entity initiator)
 	if (found != _reactions.end())
 	{
 		found->source.initiator = initiator;
+		SetStopsGroupWhenGone(*found);
 	}
 }
 
@@ -871,13 +928,7 @@ void ReactionSystem::RemoveFrom(entt::entity initiator)
 void ReactionSystem::ShutDown(uint32_t id)
 {
 	// It ends before those reacting to it are let go, so a state they go back to already finds it over
-	const auto found = std::ranges::find(_reactions, id, &Active::id);
-	const auto dance = found != _reactions.end() ? found->dance : entt::null;
-	// When it is the one that spread again last, the next older one takes its place
-	const auto ids = Ids();
-	const auto cursor = _cursor != 0 ? std::optional(static_cast<uint32_t>(_cursor)) : std::nullopt;
-	_cursor = ecs::list_order::CursorAfterLeave(std::span<const uint32_t>(ids), cursor, id).value_or(0);
-	std::erase_if(_reactions, [id](const Active& reaction) { return reaction.id == id; });
+	const auto dance = Unlink(id);
 	if (Locator::entitiesRegistry::has_value())
 	{
 		auto& registry = Locator::entitiesRegistry::value();
@@ -902,6 +953,28 @@ void ReactionSystem::ShutDown(uint32_t id)
 		}
 	}
 	// Its dance goes with it, once its dancers have gone back
+	EndDance(dance);
+}
+
+void ReactionSystem::Drop(uint32_t id)
+{
+	EndDance(Unlink(id));
+}
+
+entt::entity ReactionSystem::Unlink(uint32_t id)
+{
+	const auto found = std::ranges::find(_reactions, id, &Active::id);
+	const auto dance = found != _reactions.end() ? found->dance : entt::null;
+	// When it is the one that spread again last, the next older one takes its place
+	const auto ids = Ids();
+	const auto cursor = _cursor != 0 ? std::optional(static_cast<uint32_t>(_cursor)) : std::nullopt;
+	_cursor = ecs::list_order::CursorAfterLeave(std::span<const uint32_t>(ids), cursor, id).value_or(0);
+	std::erase_if(_reactions, [id](const Active& reaction) { return reaction.id == id; });
+	return dance;
+}
+
+void ReactionSystem::EndDance(entt::entity dance)
+{
 	if (dance != entt::null && Locator::danceSystem::has_value() && Locator::entitiesRegistry::has_value() &&
 	    Locator::entitiesRegistry::value().Valid(dance))
 	{
@@ -1146,7 +1219,7 @@ uint32_t ReactionSystem::PriorityTo(const Active& reaction, entt::entity living,
 	                                   Reacts(*livingInfo, reaction.source.type), DistanceOf(*info), distance);
 }
 
-void ReactionSystem::Spread(Active& reaction)
+void ReactionSystem::Spread(Active& reaction, entt::entity notInMap)
 {
 	const auto* info = InfoOf(reaction.source.type);
 	if (info == nullptr || !Locator::entitiesRegistry::has_value() || !Locator::entitiesMap::has_value())
@@ -1174,22 +1247,22 @@ void ReactionSystem::Spread(Active& reaction)
 		}
 		const auto id = ecs::MapInterface::CellId(map_coords::Cell(cell));
 		const auto& mobiles = map.GetMobileInGridCell(id);
-		SpreadInCell(reaction, std::vector<entt::entity>(mobiles.begin(), mobiles.end()));
+		SpreadInCell(reaction, std::vector<entt::entity>(mobiles.begin(), mobiles.end()), notInMap);
 	}
 }
 
-void ReactionSystem::SpreadInCell(Active& reaction, const std::vector<entt::entity>& mobiles)
+void ReactionSystem::SpreadInCell(Active& reaction, const std::vector<entt::entity>& mobiles, entt::entity notInMap)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto type = static_cast<uint32_t>(reaction.source.type);
 	for (const auto entity : mobiles)
 	{
 		// The shields' villagers take up the shields' own reactions through the shields.
-		// A creature also weighs a reaction that it made, as it weighs all other reactions. Thus a burning creature takes
-		// up its own fire, an evil creature can take up the fainting of its own fart, and a creature that reacts weighs
-		// what it reacts to when its own reaction reaches it.
-		if (!registry.Valid(entity) || !registry.AllOf<Transform>(entity) ||
-		    (entity == reaction.source.initiator && !registry.AllOf<Creature>(entity)) ||
+		// A living thing also weighs a reaction that it made, as it weighs all other reactions. Thus a burning creature
+		// takes up its own fire, and an evil creature can take up the fainting of its own fart. The rule of each kind
+		// refuses most villagers and animals: a villager in flight, a disciple and a hunter do not heed their own
+		// reactions.
+		if (!registry.Valid(entity) || entity == notInMap || !registry.AllOf<Transform>(entity) ||
 		    !Reaches(registry, entity, reaction.source.type) ||
 		    (registry.AllOf<Villager>(entity) && ShieldKind(reaction.source.type)) ||
 		    !Available(registry, entity, reaction.source.type))
@@ -1256,11 +1329,12 @@ void ReactionSystem::SpreadInCell(Active& reaction, const std::vector<entt::enti
 		if (differs && magic::ChangesReaction(state->type, currentPriority, priority, seconds))
 		{
 			memory.Record(type, _turn);
-			// A villager keeps what it reacts to rather than change to a kind it never takes up
-			// TODO(raffclar): the game also drops the villager from the list of the reaction it keeps, so that reaction
-			// ending doesn't send it back; it still goes back once its own time with it is over
+			// A villager keeps what it reacts to rather than change to a kind it never takes up. It leaves the group of the
+			// reaction that it keeps. Thus the end of that reaction does not stop it: it stops when it next finds the
+			// reaction gone.
 			if (registry.AllOf<Villager>(entity) && !villager_reaction::TakesUp(reaction.source.type))
 			{
+				state->left = state->reaction;
 				continue;
 			}
 			// A creature heeds the new one, but keeps what it reacts to rather than change to one it does not keep. It
@@ -1272,10 +1346,13 @@ void ReactionSystem::SpreadInCell(Active& reaction, const std::vector<entt::enti
 				Start(reaction, entity, *state, true);
 				continue;
 			}
-			// A creature keeps the old reaction until a plan that the new reaction forces stops it
+			// A villager or an animal leaves the group of the old reaction, with no stop. Thus its memory of the old kind
+			// stays as it is, unless the state that it leaves for the new reaction stops the old reaction. If it does not
+			// take up the new reaction, it keeps the old reaction out of its group. A creature keeps the old reaction until
+			// a plan that the new reaction forces stops it.
 			if (!registry.AllOf<Creature>(entity))
 			{
-				Stop(entity, *state, false);
+				state->left = state->reaction;
 			}
 			Start(reaction, entity, *state, true);
 		}
@@ -1611,6 +1688,15 @@ void ReactionSystem::Start(Active& reaction, entt::entity living, LivingReaction
 void ReactionSystem::StartVillager(const Active& reaction, entt::entity living, LivingReaction& state, bool wasReacting)
 {
 	auto& registry = Locator::entitiesRegistry::value();
+	// The villager goes into the state of the new reaction before it holds the new reaction. Thus, when the state that it
+	// leaves stops a reaction, the stop ends the reaction that it held before.
+	const auto outer = _heldBefore;
+	_heldBefore = HeldBefore {.living = living,
+	                          .reaction = state.reaction,
+	                          .type = state.type,
+	                          .startTurn = state.startTurn,
+	                          .joined = state.joined,
+	                          .left = state.left};
 	state.reaction = reaction.id;
 	state.type = reaction.source.type;
 	state.startTurn = _turn;
@@ -1618,10 +1704,17 @@ void ReactionSystem::StartVillager(const Active& reaction, entt::entity living, 
 	state.left = 0;
 	// A villager is impressed only by what it takes up the usual way: not joining a dance round the thing
 	const auto taken = villager_reactions::Start(living, reaction.source.type, state, wasReacting);
+	const auto before = *_heldBefore;
+	_heldBefore = outer;
 	if (taken == villager_reactions::Taken::No)
 	{
-		state.reaction = 0;
-		state.type = Reaction::None;
+		// It keeps the reaction that it held before, if that reaction did not stop
+		const bool keeps = !before.stopped && before.reaction != 0;
+		state.reaction = keeps ? before.reaction : 0;
+		state.type = keeps ? before.type : Reaction::None;
+		state.startTurn = keeps ? before.startTurn : state.startTurn;
+		state.joined = keeps ? before.joined : state.joined;
+		state.left = keeps ? before.left : 0;
 	}
 	else if (taken == villager_reactions::Taken::Impressed)
 	{
@@ -1681,6 +1774,16 @@ void ReactionSystem::StopReacting(entt::entity living)
 	auto* state = registry.TryGet<LivingReaction>(living);
 	if (state == nullptr || state->reaction == 0)
 	{
+		return;
+	}
+	// A villager that goes into the state of a new reaction stops the reaction that it held before, not the new one
+	if (_heldBefore.has_value() && _heldBefore->living == living)
+	{
+		if (_heldBefore->reaction != 0 && !_heldBefore->stopped)
+		{
+			MemoryOf(registry, living, *state).Refresh(static_cast<uint32_t>(_heldBefore->type), _turn);
+		}
+		_heldBefore->stopped = true;
 		return;
 	}
 	// Its memory of the kind is brought up to now, so it waits its time before taking up that kind again
@@ -1743,38 +1846,37 @@ void ReactionSystem::ProcessTurn()
 	{
 		++reaction.age;
 	}
-	// A reaction goes once what made it has
+	// A reaction goes once what made it is deleted, or is a villager that dies. The newest goes first. When the deletion of
+	// the thing stops the living that react to its reactions, they stop now and go back to what they did. Else they stop
+	// when they next find the reaction gone, and keep what they do.
 	auto& registry = Locator::entitiesRegistry::value();
-	std::vector<uint32_t> gone;
-	for (const auto& reaction : _reactions)
+	std::vector<std::pair<uint32_t, bool>> gone;
+	for (const auto& reaction : std::ranges::reverse_view(_reactions))
 	{
-		if (reaction.source.initiator != entt::null && !registry.Valid(reaction.source.initiator))
+		const auto thing = reaction.source.initiator;
+		if (thing != entt::null && ThingGone(registry, thing))
 		{
-			gone.push_back(reaction.id);
+			const bool stops = std::ranges::any_of(_reactions, [thing](const Active& other) {
+				return other.source.initiator == thing && other.stopsGroupWhenGone;
+			});
+			gone.emplace_back(reaction.id, stops);
 		}
 	}
-	for (const auto id : gone)
+	for (const auto& [id, stops] : gone)
 	{
-		ShutDown(id);
+		if (stops)
+		{
+			ShutDown(id);
+		}
+		else
+		{
+			Drop(id);
+		}
 	}
-	// Every creature has a reaction of its own, which follows it for as long as it lives
-	std::vector<Source> creatures;
-	registry.Each<const Creature, const Transform>(
-	    [this, &creatures](entt::entity creature, const Creature& component, const Transform& transform) {
-		    const bool has = std::ranges::any_of(_reactions, [creature](const Active& reaction) {
-			    return reaction.source.initiator == creature && reaction.source.type == Reaction::ReactToCreature;
-		    });
-		    if (!has)
-		    {
-			    creatures.push_back({.initiator = creature,
-			                         .type = Reaction::ReactToCreature,
-			                         .player = component.owner,
-			                         .position = transform.position});
-		    }
-	    });
-	// Every hunter has one too, which belongs to no player
+	// Every hunter has a reaction of its own, which belongs to no player
+	std::vector<Source> hunters;
 	registry.Each<const Animal, const Transform>(
-	    [this, &creatures](entt::entity hunter, const Animal& animal, const Transform& transform) {
+	    [this, &hunters](entt::entity hunter, const Animal& animal, const Transform& transform) {
 		    if (!animals::predators::IsPredator(animal.type))
 		    {
 			    return;
@@ -1784,13 +1886,13 @@ void ReactionSystem::ProcessTurn()
 		    });
 		    if (!has)
 		    {
-			    creatures.push_back({.initiator = hunter,
-			                         .type = Reaction::FleeFromPredator,
-			                         .player = PlayerNames::NEUTRAL,
-			                         .position = transform.position});
+			    hunters.push_back({.initiator = hunter,
+			                       .type = Reaction::FleeFromPredator,
+			                       .player = PlayerNames::NEUTRAL,
+			                       .position = transform.position});
 		    }
 	    });
-	for (const auto& source : creatures)
+	for (const auto& source : hunters)
 	{
 		Create(source);
 	}
@@ -2212,6 +2314,10 @@ void ReactionSystem::SaveState(reflection::BinaryWriter& out) const
 bool ReactionSystem::LoadState(reflection::BinaryReader& in)
 {
 	reflection::Load(in, _reactions);
+	for (auto& reaction : _reactions)
+	{
+		SetStopsGroupWhenGone(reaction);
+	}
 	reflection::Load(in, _nextId);
 	reflection::Load(in, _cursor);
 	reflection::Load(in, _turn);
@@ -2251,6 +2357,7 @@ std::vector<uint32_t> ReactionSystem::Restore(std::span<const Restored> reaction
 	{
 		auto& reaction = _reactions.emplace_back(restored.reaction);
 		reaction.id = _nextId++;
+		SetStopsGroupWhenGone(reaction);
 		ids.push_back(reaction.id);
 		for (const auto living : restored.takers)
 		{

@@ -61,6 +61,8 @@ public:
 	void RestoreMind(entt::entity creature, std::shared_ptr<const creaturemind::MindFileData> mind,
 	                 const std::optional<RestoredPlan>& plan) override;
 	void StartMind(entt::entity creature) override;
+	void SetUpNewMind(entt::entity creature) override;
+	void TakeUpPendingFile(entt::entity creature) override;
 	void ClearLearning(entt::entity creature) override;
 	void SeeSkill(const glm::vec3& point, size_t skill) override;
 	void SeeMiracle(const glm::vec3& point, size_t miracle) override;
@@ -114,7 +116,7 @@ public:
 	void FailAction(entt::entity creature) override;
 	bool ForceDesireOn(entt::entity creature, creature_desires::Desire desire, entt::entity thing) override;
 	void ForceCatch(entt::entity creature, entt::entity object) override;
-	bool TakeFromHand(entt::entity creature, entt::entity object, bool leftHand, glm::vec2 camera) override;
+	bool TakeFromHand(entt::entity creature, entt::entity object, bool leftHand, PlayerNames giver) override;
 	[[nodiscard]] bool IsTakingFromHand(entt::entity creature) const override;
 	[[nodiscard]] bool IsActing(entt::entity creature) const override;
 	[[nodiscard]] bool IsLyingDead(entt::entity creature) override;

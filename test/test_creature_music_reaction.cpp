@@ -71,6 +71,7 @@ TEST(CreatureMusicReaction, ANewTrackMakesAGoodCreaturePullFacesAtTheCamera)
 	const auto agenda = NewTrack(fake.Function(), 0.5f, k_Camera);
 	ASSERT_EQ(agenda.size(), 18u);
 	EXPECT_EQ(agenda.at(0).kind, Step::Kind::Move);
+	EXPECT_EQ(agenda.at(0).movement.kind, creature_mind::Movement::Kind::TurnToFaceCamera);
 	EXPECT_EQ(agenda.at(0).face, creature_face::Cue::Curiosity);
 	EXPECT_EQ(agenda.at(1).kind, Step::Kind::Face);
 	EXPECT_EQ(agenda.at(1).animation, 16u);
@@ -104,7 +105,7 @@ TEST(CreatureMusicReaction, ANewTrackMakesAnEvilCreatureAmazedAndMayDanceASecond
 TEST(CreatureMusicReaction, ALikedTrackEndsWithAStaticActionAndADance)
 {
 	FakeRolls fake {.rolls = {0}};
-	const auto agenda = LikedTrack(fake.Function(), 0.3f, k_Camera);
+	const auto agenda = LikedTrack(fake.Function(), 0.3f);
 	ASSERT_GE(agenda.size(), 2u);
 	const auto& still = agenda.at(agenda.size() - 2);
 	EXPECT_EQ(still.kind, Step::Kind::Static);
@@ -125,14 +126,14 @@ TEST(CreatureMusicReaction, ALikedTrackEndsWithAStaticActionAndADance)
 TEST(CreatureMusicReaction, ALikedTrackDancesAtMostAMinute)
 {
 	FakeRolls fake {.rolls = {0}};
-	EXPECT_FLOAT_EQ(LikedTrack(fake.Function(), 10.0f, k_Camera).back().seconds, 60.0f);
+	EXPECT_FLOAT_EQ(LikedTrack(fake.Function(), 10.0f).back().seconds, 60.0f);
 }
 
 TEST(CreatureMusicReaction, ADislikedTrackMakesAnEvilCreatureRudeOrAngry)
 {
 	// Eight rounds; round 0: face anger, turn, choice 5 (by alignment), roll 30: the rude gesture
 	FakeRolls fake {.rolls = {0, 0, 5, 30, 1, 1, 8, 31}, .after = 1};
-	const auto agenda = DislikedTrack(fake.Function(), -0.5f, k_Camera);
+	const auto agenda = DislikedTrack(fake.Function(), -0.5f);
 	EXPECT_EQ(agenda.at(0).kind, Step::Kind::Move);
 	EXPECT_EQ(agenda.at(0).face, creature_face::Cue::Anger);
 	EXPECT_EQ(agenda.at(1).animation, 222u);
@@ -145,18 +146,21 @@ TEST(CreatureMusicReaction, ADislikedTrackMakesAnEvilCreatureRudeOrAngry)
 TEST(CreatureMusicReaction, ADislikedTrackMakesAGoodCreatureCry)
 {
 	FakeRolls fake {.rolls = {0, 2, 6}, .after = 1};
-	const auto agenda = DislikedTrack(fake.Function(), 0.0f, k_Camera);
+	const auto agenda = DislikedTrack(fake.Function(), 0.0f);
 	EXPECT_EQ(agenda.at(1).animation, 219u);
 	EXPECT_EQ(agenda.at(1).face, creature_face::Cue::Sad);
 }
 
-TEST(CreatureMusicReaction, WithoutACameraItNeitherTurnsNorPoints)
+TEST(CreatureMusicReaction, WithoutACameraItDoesNotPointButKeepsTheTurnStep)
 {
+	// The turn step reads the camera of its player on each turn, so the agenda keeps it. Without a camera the creature
+	// does not point.
 	FakeRolls fake {.rolls = {0, 1}, .after = 2};
 	const auto agenda = NewTrack(fake.Function(), 0.5f, Camera {});
+	ASSERT_FALSE(agenda.empty());
+	EXPECT_EQ(agenda.front().movement.kind, creature_mind::Movement::Kind::TurnToFaceCamera);
 	for (const auto& step : agenda)
 	{
-		EXPECT_NE(step.kind, Step::Kind::Move);
 		EXPECT_NE(step.kind, Step::Kind::Object);
 	}
 }

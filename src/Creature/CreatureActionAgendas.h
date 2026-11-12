@@ -191,11 +191,10 @@ enum class NoticeKind : uint8_t
 [[nodiscard]] std::optional<NoticeKind> NoticeKindOf(std::string_view action);
 /// The creature shows the player that it saw a deed. The agenda has these steps:
 /// 1. With its hand empty, it points at the thing of the deed, amazed, and its head follows the thing.
-/// 2. With a player, it turns to face the camera.
+/// 2. It turns to face the camera. A creature without a player does not turn.
 /// 3. It watches the camera for one or two seconds, with a face for the kind of deed.
 /// 4. It plays one or two actions for the kind of deed.
-[[nodiscard]] std::vector<Step> Notice(NoticeKind kind, uint32_t thing, bool handFull, bool hasPlayer, glm::vec3 camera,
-                                       const Random& random);
+[[nodiscard]] std::vector<Step> Notice(NoticeKind kind, uint32_t thing, bool handFull, const Random& random);
 /// The creature points for two seconds, or for 0.8 of a second at an aggressive deed
 constexpr float k_NoticePointSeconds = 2.0f;
 constexpr float k_NoticeAggressivePointSeconds = 0.8f;

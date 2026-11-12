@@ -531,8 +531,6 @@ constexpr float k_TeleportFromHomeMetres = 150.0f;
 /// What the agenda needs to know of where the creature is
 struct Situation
 {
-	/// Where the player looks from
-	std::optional<glm::vec2> camera;
 	/// Where the creature drinks, none when it finds no place to drink
 	std::optional<creature_drink::Place> drink;
 	/// Fishing at the nearest fish farm: its shoal (the farm itself without one), where the creature would stand to fish

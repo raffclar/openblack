@@ -47,7 +47,7 @@ struct Plan
 /// roll is from 0 to 2.
 [[nodiscard]] Plan PlanFor(float mood, uint32_t roll);
 
-/// Where the camera is, for the steps that turn to it and point at it. With no camera, the creature points at nothing.
+/// Where the camera is, for the steps that point at it. With no camera, the creature points at nothing.
 struct Camera
 {
 	glm::vec3 position {0.0f};
@@ -58,11 +58,9 @@ struct Camera
 [[nodiscard]] std::vector<creature_mind::Step> NewTrack(const creature_mind::Random& random, float alignment,
                                                         const Camera& camera);
 /// The steps for a track that it likes
-[[nodiscard]] std::vector<creature_mind::Step> LikedTrack(const creature_mind::Random& random, float mood,
-                                                          const Camera& camera);
+[[nodiscard]] std::vector<creature_mind::Step> LikedTrack(const creature_mind::Random& random, float mood);
 /// The steps for a track that it does not like
-[[nodiscard]] std::vector<creature_mind::Step> DislikedTrack(const creature_mind::Random& random, float alignment,
-                                                             const Camera& camera);
+[[nodiscard]] std::vector<creature_mind::Step> DislikedTrack(const creature_mind::Random& random, float alignment);
 
 /// The number kept for what the creature does next: ten times the mood, the fraction cut off
 [[nodiscard]] int32_t FollowUpValue(float mood);

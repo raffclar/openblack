@@ -99,10 +99,15 @@ public:
 	/// Loads a mind file over the mind of the creature at once, as for a creature that a script makes from a file. The
 	/// creature keeps its examples and adds the examples of the file. The help gives the message of the new stage.
 	virtual void TakeUpMindFile(entt::entity /*creature*/, std::shared_ptr<const creaturemind::MindFileData> /*file*/) {}
-	/// Forgets everything learnt: the desires start again as the species' do, with no opinions or examples
 	/// Gives a new creature its desires, its traits and its learning at once, as the creature is made. The draws of the
-	/// random numbers then come in the order of the game
+	/// random numbers then come in the order of the game. A creature made for a mind file then reads the file.
 	virtual void StartMind(entt::entity /*creature*/) {}
+	/// Gives a new creature its desires, its traits and its learning, as StartMind does, but does not read its mind file
+	virtual void SetUpNewMind(entt::entity /*creature*/) {}
+	/// A new creature made for a mind file reads the file now, over the mind that it got. The game reads the file after
+	/// it made the creature.
+	virtual void TakeUpPendingFile(entt::entity /*creature*/) {}
+	/// Forgets everything learnt: the desires start again as the species' do, with no opinions or examples
 	virtual void ClearLearning(entt::entity creature) = 0;
 	/// Creatures that can see the point watch an ordinary skill practised (by its row in the game's table), or a miracle
 	/// cast
@@ -284,10 +289,10 @@ public:
 	/// carried out is remembered for the player's feedback (unless nothing says why it wants it), and the desires the
 	/// plan's desire opposes are held back.
 	virtual bool ForceActivity(entt::entity /*creature*/, const ForcedActivity& /*plan*/) { return false; }
-	/// The player's hand gives the creature a thing: it drops what it was doing, turns to the camera at a point on the
-	/// ground looking curious, and reaches to take the thing from the hand, with its left hand when asked; then its
-	/// desires choose what to do with it. Whether it took the giving.
-	virtual bool TakeFromHand(entt::entity /*creature*/, entt::entity /*object*/, bool /*leftHand*/, glm::vec2 /*camera*/)
+	/// The hand of a player gives the creature a thing: it drops what it was doing and keeps the player as its giver.
+	/// It turns to the camera of the giver, curious, and reaches to take the thing from the hand, with its left hand
+	/// when asked. Then its desires choose what to do with it. Whether it took the giving.
+	virtual bool TakeFromHand(entt::entity /*creature*/, entt::entity /*object*/, bool /*leftHand*/, PlayerNames /*giver*/)
 	{
 		return false;
 	}

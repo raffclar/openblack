@@ -27,8 +27,8 @@ using creature_mind::Step;
 [[nodiscard]] std::vector<Step> ShowLearntLesson();
 
 /// The creature turns to the camera, scratches its head and then looks confused, puzzled and with its eyes on the
-/// camera. Without a camera the creature does not turn.
-[[nodiscard]] std::vector<Step> LookConfused(std::optional<glm::vec2> camera);
+/// camera. A creature without a player does not turn, but the turn step still takes its two turns.
+[[nodiscard]] std::vector<Step> LookConfused();
 
 /// The seconds that a creature that behaves strangely stares at the camera, and the seconds that it lies in a faint
 /// at the least and the seconds more that it can lie at random
