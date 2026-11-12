@@ -15,6 +15,7 @@
 
 #include "ParticleEffect.h"
 #include "SurfaceOfRevolution.h"
+#include "Visual/RenderModes.h"
 
 namespace openblack::particles
 {
@@ -36,6 +37,9 @@ struct SurfaceCreator final: Creator
 	/// Lit by the light, each point by its normal
 	bool lit {true};
 	bool doubleSided {false};
+	/// The material uses the alpha of its texture. When this is false, the game changes the mode to the textured mode.
+	/// That mode also blends by the alpha of the texture, thus the look does not change.
+	bool textureAlpha {true};
 	/// The texture's offset wraps by this much each way: the sheet's width and height over 256
 	glm::vec2 wrap {1.0f};
 };
@@ -54,6 +58,10 @@ struct SurfaceInstance
 /// How far a surface's texture has slid when drawn a fraction of the way between its last two steps: back by the wrap
 /// while beyond it
 [[nodiscard]] glm::vec2 SurfaceUvOffset(const SurfaceInstance& instance, const SurfaceCreator& creator, float fraction);
+
+/// The render mode of a surface: the game makes the material in the blended mode without depth, then changes it by the
+/// properties of the creator
+[[nodiscard]] graphics::render_modes::Mode SurfaceMode(const SurfaceCreator& creator);
 
 /// The rules that draw an atom as a surface
 void RegisterSurfaceRules(ParticleClassRegistry& registry);
