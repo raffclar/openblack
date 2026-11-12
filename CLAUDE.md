@@ -95,3 +95,13 @@ Write unit tests for components and systems. Use mocks for dependencies. Don't t
 - If Claude Code stops a process for low memory, do not start it again without the user's word.
 - Merge-train batches overlap: the next batch builds as soon as the previous batch's PR merges. The previous batch's
   checks after the merge run at the same time.
+
+## Deploys
+
+- The game service and the web game for bw.zanidrak.com deploy only through the GitHub Actions workflows in
+  raffclar/bwgame-service: **Deploy service** (`deploy-service.yml`) and **Deploy game** (`deploy-game.yml`).
+- Start a deploy only when the user asks for it, with `gh workflow run <workflow> -R raffclar/bwgame-service`.
+- Do not use SSH to the droplet, `scripts/deploy.sh`, docker or Terraform against production.
+- The workflows test first and then wait for the user's approval on the `production` environment. That approval
+  belongs to the user.
+- The workflows do not run Terraform. When `infra/` changes, tell the user that Terraform must run first.
