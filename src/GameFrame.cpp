@@ -83,6 +83,7 @@
 #include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/CreatureFizzSystemInterface.h"
 #include "ECS/Systems/CreatureHandSystemInterface.h"
+#include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/CreatureModeSystemInterface.h"
 #include "ECS/Systems/CreatureWebPageSystemInterface.h"
 #include "ECS/Systems/DesignedWaterfallSystemInterface.h"
@@ -1015,6 +1016,12 @@ void Game::UpdateEntitiesFrame(std::chrono::microseconds deltaTime)
 					{
 						Locator::vortexSystem::value().UpdateDrawnFrame(drawList, clock.GetFrameRealTime(),
 						                                                clock.GetFrameGameTime(), landDrawn);
+					}
+					// The chains of the creatures that draw a gesture move on only in the frames that draw the creatures
+					if (Locator::creatureMindSystem::has_value())
+					{
+						Locator::creatureMindSystem::value().UpdateDrawnGestureChains(drawList, clock.GetFrameRealTime(),
+						                                                              clock.GetFrameGameTime(), landDrawn);
 					}
 					// The globes that the list draws run their glint on
 					if (Locator::miracleFxSystem::has_value())

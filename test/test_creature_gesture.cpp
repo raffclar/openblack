@@ -272,6 +272,40 @@ TEST(CreatureGesture, AGesturePastTheLastFails)
 	EXPECT_EQ(Advance(drawing, k_LastGesture + 1, true, 0.1f), Outcome::Failed);
 }
 
+// The chain of a creature that draws a shape is as big as the size that the creature has grown to, not as its height
+TEST(CreatureGesture, TheChainHasTheSizeThatTheCreatureGrewTo)
+{
+	using namespace creature_gesture;
+	EXPECT_FLOAT_EQ(ChainMagnitude(1.0f), 1.0f);
+	EXPECT_FLOAT_EQ(ChainMagnitude(0.3f), 0.3f);
+	EXPECT_FLOAT_EQ(ChainMagnitude(2.0f), 2.0f);
+	static_assert(ChainMagnitude(1.5f) == 1.5f);
+}
+
+// The chain steps and shows only in the frames that draw the creature, by the game time that the frame gives
+TEST(CreatureGesture, TheChainStepsOnlyInTheFramesThatDrawTheCreature)
+{
+	using namespace creature_gesture;
+	const auto drawn = ChainFrameStep(true, 0.016f);
+	EXPECT_TRUE(drawn.shown);
+	ASSERT_TRUE(drawn.seconds.has_value());
+	EXPECT_FLOAT_EQ(*drawn.seconds, 0.016f);
+
+	const auto notDrawn = ChainFrameStep(false, 0.016f);
+	EXPECT_FALSE(notDrawn.shown);
+	EXPECT_FALSE(notDrawn.seconds.has_value());
+
+	// A frame between two steps shows the chain as its last step left it
+	const auto betweenSteps = ChainFrameStep(true, std::nullopt);
+	EXPECT_TRUE(betweenSteps.shown);
+	EXPECT_FALSE(betweenSteps.seconds.has_value());
+
+	// In a frame of a paused game, the step of the chain takes no game time
+	const auto paused = ChainFrameStep(true, 0.0f);
+	ASSERT_TRUE(paused.seconds.has_value());
+	EXPECT_FLOAT_EQ(*paused.seconds, 0.0f);
+}
+
 // In the turn that the point at the route ends, the events of the end animation from the arm's time to the end sound
 TEST(CreaturePointing, TheEndOfAPointAtTheRouteSoundsTheRestOfItsLastAnimation)
 {

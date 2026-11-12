@@ -11,6 +11,7 @@
 
 #include <cstddef>
 
+#include <chrono>
 #include <functional>
 #include <memory>
 #include <optional>
@@ -41,6 +42,7 @@ struct Tables;
 
 namespace openblack::ecs::systems
 {
+class ObjectDrawListSystemInterface;
 
 /// The creatures' minds: once a game turn their desires grow and fade, and each decides what its body does while it
 /// has nothing better to do, and what it looks at (see components::CreatureMindState). Creatures can also be told to
@@ -164,6 +166,14 @@ public:
 	virtual bool PlayGesture(entt::entity creature, size_t animation) = 0;
 	/// Draws a gesture in the air with the hand, by the gesture's number, unless it draws one already
 	virtual bool DrawGesture(entt::entity /*creature*/, uint32_t /*gesture*/) { return false; }
+	/// Once a frame, after the frame makes the land's draw list: the chains of the creatures that the frame draws show and
+	/// move on, and the other chains do not show. They step no more often than 60 times a second, by the game time since
+	/// the last step.
+	virtual void UpdateDrawnGestureChains(const ObjectDrawListSystemInterface& /*drawList*/,
+	                                      std::chrono::milliseconds /*frameRealTime*/,
+	                                      std::chrono::milliseconds /*frameGameTime*/, bool /*landDrawn*/)
+	{
+	}
 	/// Pulls a face for a few seconds, as told to by hand
 	virtual void PullFace(entt::entity creature, size_t animation) = 0;
 	/// Pulls the face a feeling or what it is doing calls for, as the creature's mind would; returns the face pulled
