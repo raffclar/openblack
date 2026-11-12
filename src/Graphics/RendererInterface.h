@@ -359,6 +359,9 @@ public:
 	[[nodiscard]] virtual uint32_t GetDeviceRestores() const noexcept = 0;
 	/// The bytes of data of the textures, buffers and shaders that the renderer keeps to make its device again
 	[[nodiscard]] virtual graphics::device_restore::Kept GetDeviceRestoreKept() const noexcept = 0;
+	/// True when the recovery from a lost device failed and the game cannot draw again. Only the web build stops for
+	/// this: the desktop renderer tries again until it gets a device.
+	[[nodiscard]] virtual bool DeviceRecoveryFailed() const noexcept = 0;
 	virtual void SetDebug(bool value) noexcept = 0;
 	virtual void SetProfile(bool value) noexcept = 0;
 

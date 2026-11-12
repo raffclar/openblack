@@ -551,6 +551,14 @@ bool Game::Update() noexcept
 		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The network game ended: the game stops");
 		return false;
 	}
+	// The browser gave no device that stays after a loss: the game stops with a message on the page
+	if (Locator::rendererInterface::has_value() && Locator::rendererInterface::value().DeviceRecoveryFailed())
+	{
+		ShowFatalMessage("The graphics device is lost",
+		                 "The browser lost the graphics device and did not give a new device that the game can use. "
+		                 "Reload the page to start the game again.");
+		return false;
+	}
 	const auto& config = Locator::config::value();
 	return config.numFramesToSimulate == 0 || _frameCount < config.numFramesToSimulate;
 }
