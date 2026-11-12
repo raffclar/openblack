@@ -1198,8 +1198,7 @@ void StartDanceStep(IdleMind& mind, const Step& step, const Senses& senses, Comm
 		WaitForDancers(mind, senses);
 		return;
 	case DanceOrder::Kind::StopLooking:
-		// This turn the eyes look about for things of interest. The head turns to the look of each later step.
-		commands.lookAbout = true;
+		// The order only stops the sweep of the eyes. The step does nothing else to the creature.
 		break;
 	case DanceOrder::Kind::Set:
 		// The last dance goes first, and the new one comes the turn after
