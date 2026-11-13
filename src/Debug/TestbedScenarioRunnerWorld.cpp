@@ -751,6 +751,11 @@ void Runner::PlaceObjects(const Scenario& scenario, glm::vec2 middle)
 			    }
 			    else if constexpr (std::is_same_v<T, PotInfo>)
 			    {
+				    // A pot that holds nothing, such as a creature's handful from a field that it put down
+				    if (object.amount == 0)
+				    {
+					    return ecs::archetypes::PotArchetype::CreateEmpty(position, yaw, type);
+				    }
 				    return ecs::archetypes::PotArchetype::Create(position, yaw, type, object.amount);
 			    }
 			    else if constexpr (std::is_same_v<T, AbodeInfo>)
