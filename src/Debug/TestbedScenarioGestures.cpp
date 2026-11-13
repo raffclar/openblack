@@ -10,6 +10,8 @@
 // The testbed's scenarios of the gestures drawn with the hand: each gesture is drawn as a path through the same
 // recogniser the cursor goes through, so the debug window's gesture overlay shows it being drawn and matched
 
+#include <utility>
+
 #include "TestbedScenarioRegistry.h"
 
 using namespace openblack;
@@ -448,6 +450,27 @@ void testbed_scenarios::AddGestureScenarios(std::vector<Scenario>& all)
 	                .afterTurns = 200,
 	                .atMost = 0.0}},
 	});
+	// The same demonstration on the second land of the story, where the land around the hut is not flat to the
+	// horizon. On a wide screen a cursor that goes outside the screen's 4:3 middle points at other places.
+	{
+		auto onTheLand = all.back();
+		onTheLand.id = "story.l2_shield_demo_land";
+		onTheLand.name = "Story: Khazar's hand demonstration of the shield on the second land";
+		onTheLand.description =
+		    "The second land of the story. A circle of influence of radius 40 goes about the hut of Khazar's "
+		    "shield challenge, as the challenge makes it. The shield demonstration starts. Then a script puts "
+		    "a shield miracle in the hand with the strength of seven shields. The camera goes where the recording had "
+		    "it. Use it with a window of any shape, such as 5120 by 1190.";
+		onTheLand.expected = "The hand holds the Action button and draws a circle about the hut, as on a 4:3 screen. "
+		                     "When it lets go of the button, the shield goes up over the hut and the hand is empty. At "
+		                     "the end of the demonstration the hand holds no miracle.";
+		onTheLand.environment = {.land = Land::Story, .storyLand = "Land2.txt", .dispenserGrid = false};
+		// The ring of influence goes about the hut of the challenge, which stands this far from the middle of the land
+		constexpr glm::vec2 k_HutOnTheLand {1379.57f, 737.72f};
+		onTheLand.commands.front().scriptArguments.front().point = k_HutOnTheLand;
+		onTheLand.debugWindow = {};
+		all.push_back(std::move(onTheLand));
+	}
 	all.push_back({
 	    .id = "miracles.hand_demo_shakes_off_seed",
 	    .name = "A hand demonstration shakes the miracle off the hand",
