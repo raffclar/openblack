@@ -43,8 +43,10 @@ namespace
 {
 
 /// The names of the multiplayer front end's boxes, for gui.windows
-constexpr std::array<std::string_view, 6> k_MultiplayerBoxes = {"choose_connection", "find_games", "login",
-                                                                "game_list",         "room",       "conditions"};
+constexpr std::array<std::string_view, 9> k_MultiplayerBoxes = {
+    "choose_connection", "find_games", "login", "game_list", "room", "conditions", "lobby_list", "create_lobby", "lobby_room"};
+// Each box of the front end must have a name here, else gui.windows reads past the end of the list
+static_assert(k_MultiplayerBoxes.size() == static_cast<size_t>(gui::multiplayer::Box::LobbyRoom) + 1);
 
 std::string_view PageName(gui::GameMenu::Page page)
 {
