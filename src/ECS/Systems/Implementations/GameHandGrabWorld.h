@@ -74,6 +74,8 @@ public:
 	void GlobeIntoHand(entt::entity globe, PlayerNames player) override;
 	void ScaffoldIntoHand(entt::entity scaffold, PlayerNames player) override;
 	void PuzzlePieceIntoHand(entt::entity piece) override;
+	[[nodiscard]] bool GivesInItsPlace(entt::entity object) const override;
+	entt::entity GiveInItsPlace(entt::entity object) override;
 	[[nodiscard]] std::optional<hand_grab::HoldFacts> SeedHoldOf(entt::entity seed) const override;
 	bool SeedIntoHand(entt::entity seed, PlayerNames player) override;
 	[[nodiscard]] std::optional<creature_giving::Verdict> GiveVerdict(entt::entity target, entt::entity held) const override;

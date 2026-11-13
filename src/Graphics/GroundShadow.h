@@ -51,6 +51,8 @@ struct GroundShadow
 	static constexpr uint16_t k_SampleRows = k_Texels * k_SamplesDown;
 	/// The levels of the texture's alpha, of which a fully covered texel reaches k_SamplesAcross * k_SamplesDown
 	static constexpr uint8_t k_Levels = 15;
+	/// The opacity of a shadow that is not cut back
+	static constexpr uint8_t k_Opaque = 255;
 	/// Camera distance from the ground beneath the body, in its radii, beyond which the shadow starts fading and where
 	/// it has gone
 	static constexpr float k_FadeStart = 50.0f;
@@ -154,6 +156,12 @@ struct GroundShadow
 	[[nodiscard]] static std::array<uint8_t, k_Texels * k_Texels> Levels(const Coverage& coverage, uint8_t alpha);
 	/// A texel's level of alpha, 0 to k_Levels, from how many of its samples are covered and the shadow's opacity
 	[[nodiscard]] static uint8_t Level(uint8_t covered, uint8_t alpha);
+	/// The levels of a shadow that has a part counted by its samples and a part filled through its textures' alpha, as
+	/// the hand's shadow has while the hand holds a tree. Both sets of levels come at full opacity. Each texel takes the
+	/// bits of the two levels together, then the shadow's opacity cuts it back as Level does.
+	[[nodiscard]] static std::array<uint8_t, k_Texels * k_Texels>
+	Joined(const std::array<uint8_t, k_Texels * k_Texels>& covered, const std::array<uint8_t, k_Texels * k_Texels>& filled,
+	       uint8_t alpha);
 	/// Whether a texel is in the ring around the texture that is always clear
 	[[nodiscard]] static bool OnBorder(uint8_t column, uint8_t row);
 	/// Takes a point of the land to where it falls on the texture, 0 to 1 across and down, ignoring its height:

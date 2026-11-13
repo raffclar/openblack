@@ -11,6 +11,7 @@
 
 #include <algorithm>
 
+#include "Camera/CameraLens.h"
 #include "Common/GUtilsDistance.h"
 
 namespace openblack::hand_demo
@@ -32,11 +33,15 @@ uint32_t GameHundredths(uint32_t turn, float turnFraction)
 
 glm::ivec2 CursorPixel(std::span<const float, 2> cursor, glm::ivec2 screen, float wideScreenFraction)
 {
-	const auto width = static_cast<float>(screen.x);
 	const auto height = static_cast<float>(screen.y);
+	// A screen wider than 4:3 shows the view of a 4:3 screen in its middle. The cursor goes across that middle, so it
+	// points at the same place in the world as on a 4:3 screen.
+	const auto middleWidth = height * camera_lens::k_ReferenceAspect;
+	const auto width = std::min(middleWidth, static_cast<float>(screen.x));
+	const auto left = (static_cast<float>(screen.x) - width) * 0.5f;
 	const auto bar = static_cast<int>((height - (k_WideScreenShape * width)) * wideScreenFraction) / 2;
 	const auto barF = static_cast<float>(bar);
-	return {static_cast<int>((width * cursor[0]) + 0.5f),
+	return {static_cast<int>(left + (width * cursor[0]) + 0.5f),
 	        static_cast<int>(((height - (2.0f * barF)) * cursor[1]) + barF + 0.5f)};
 }
 

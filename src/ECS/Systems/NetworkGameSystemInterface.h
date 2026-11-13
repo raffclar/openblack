@@ -13,6 +13,7 @@
 
 #include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include <GameSocket.h>
@@ -120,6 +121,11 @@ public:
 	[[nodiscard]] virtual std::optional<online::StartEvent> TakeStartEvent() = 0;
 	/// The names of the observers that left the game since the last call
 	[[nodiscard]] virtual std::vector<std::string> TakeObserversLeft() { return {}; }
+	/// Writes a line to the connection log of the network games, such as a step of the request of a ticket
+	virtual void LogConnection(std::string_view /*text*/) {}
+	/// The text of the "Copy diagnostics" report: the build, the renderer, the state of the session and the last lines of
+	/// the connection log. It holds no ticket, password or secret.
+	[[nodiscard]] virtual std::string DiagnosticsReport() const { return {}; }
 	/// The name of the room of the last join, empty for a join from the command line
 	[[nodiscard]] virtual std::string_view RoomName() const { return {}; }
 };

@@ -687,6 +687,17 @@ void Runner::GiveCreatureCommand(const Command& command)
 		ecs::creature_reaction_notice::SetTakesNotice(Locator::entitiesRegistry::value(), *entity, command.value != 0);
 		result = command.value != 0 ? "takes notice" : "takes no notice";
 		break;
+	case Kind::PauseMind:
+		if (auto* mind = Locator::entitiesRegistry::value().TryGet<CreatureMindState>(*entity); mind != nullptr)
+		{
+			mind->paused = command.value != 0;
+			result = mind->paused ? "mind stopped" : "mind started";
+		}
+		else
+		{
+			result = "no mind";
+		}
+		break;
 	case Kind::SwapMinds:
 		if (const auto other = CreatureAt(command.value))
 		{
@@ -1062,6 +1073,7 @@ void Runner::GiveCreatureCommand(const Command& command)
 	case Kind::ClickCreatureAt:
 	case Kind::CameraLooksAt:
 	case Kind::HandTakeNear:
+	case Kind::TapScaffoldNear:
 	case Kind::ClickCreatureNear:
 	case Kind::TapRewardNear:
 	case Kind::RunScript:
@@ -1089,6 +1101,8 @@ void Runner::GiveCreatureCommand(const Command& command)
 	case Kind::PointerOnAltar:
 	case Kind::PointerOnRope:
 	case Kind::PointerOnObject:
+	case Kind::PointerOnTipBubble:
+	case Kind::PointerOnTotem:
 		break;
 	case Kind::SetDesire:
 	case Kind::SetPhase:

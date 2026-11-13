@@ -28,6 +28,7 @@ public:
 	                    entt::entity town) override;
 	void Destroy(entt::entity dance) override;
 	[[nodiscard]] std::shared_ptr<const dance::DanceFile> FileOf(DanceInfo type) override;
+	void LoadAllFiles() override;
 	void ProcessTurn() override;
 	void ProcessCameraKeys(bool gripsLand) override;
 	void CheckCamera() override;

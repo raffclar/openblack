@@ -130,6 +130,7 @@ public:
 	void ThrowOutOfVortex(entt::entity object, float angle, float scale) override;
 	[[nodiscard]] std::vector<glm::vec3> TargetExtraPoints(entt::entity target) const override;
 	[[nodiscard]] std::optional<glm::vec3> ObjectPosition(entt::entity object) const override;
+	[[nodiscard]] std::optional<glm::vec3> ObjectDrawnOrigin(entt::entity object) const override;
 	[[nodiscard]] uint64_t GameMilliseconds() const override;
 	[[nodiscard]] SurfacePoint RandomSurfacePoint(entt::entity object, particles::Effect& effect) const override;
 	[[nodiscard]] float PlayerAlignment(int player) const override;
@@ -201,6 +202,10 @@ private:
 		float wait {0.0f};
 		/// Where the listener hears the sound start: where its particle was when it started the sound
 		glm::vec3 start {0.0f};
+		/// The maximum distance of the sample that plays, and whether the distance stopped the sound or did not let it
+		/// start (see particles::sound_resume). These values come from the listener of this computer.
+		float maxDistance {0.0f};
+		bool far {false};
 	};
 	/// How a save keeps a sound
 	enum class SoundRecord : uint8_t

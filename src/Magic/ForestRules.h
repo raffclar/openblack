@@ -100,4 +100,37 @@ template <typename IsInWorld>
 	return static_cast<uint32_t>(std::ranges::count_if(trees, isInWorld));
 }
 
+/// Whether a forest goes from the land at the moment that one of its trees goes from the world. Only a tree that the
+/// forest miracle planted takes its forest with it, and only when the forest has no other tree. A tree in the hand
+/// counts. A forest that loses its last tree in another way goes some while later, as an empty forest of the land does.
+[[nodiscard]] constexpr bool GoesWithTree(bool magicTree, size_t treesLeft)
+{
+	return magicTree && treesLeft == 0;
+}
+
+/// The forest of a forest miracle at the miracle's turn
+enum class MiracleForest : uint8_t
+{
+	/// It planted no forest, or it let go of the forest that went
+	None,
+	/// Its forest is on the land
+	Standing,
+	/// Its forest went from the land since the miracle's last turn
+	Gone,
+};
+
+/// What a forest miracle does at its turn by its forest
+struct ForestMiracleTurn
+{
+	/// It closes down and lets go of the forest: its seed then sinks under the land
+	bool closesDown;
+	/// It stays while its forest is on the land, also after its effect has ended
+	bool keptByForest;
+};
+
+[[nodiscard]] constexpr ForestMiracleTurn TurnWithForest(MiracleForest forest)
+{
+	return {.closesDown = forest == MiracleForest::Gone, .keptByForest = forest == MiracleForest::Standing};
+}
+
 } // namespace openblack::magic::forest

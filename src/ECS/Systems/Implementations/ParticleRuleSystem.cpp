@@ -85,6 +85,7 @@
 #include "Particles/ParticleImport.h"
 #include "Particles/ParticleMiracleMaths.h"
 #include "Particles/ParticleSoundRelease.h"
+#include "Particles/ParticleSoundResume.h"
 #include "Particles/ParticleTurnOrder.h"
 #include "Particles/ParticleTypes.h"
 #include "Particles/VolumeGlow.h"
@@ -373,6 +374,10 @@ void GameParticleWorld::Play(PlayingSound& sound) const
 	auto& sounds = Locator::sounds::value();
 	const auto result = sounds.PlayAnimEffect(std::string(k_SpellSoundBank), keys, sound.owner, sound.start,
 	                                          audio::CurrentSoundEffectConditions());
+	sound.maxDistance = result.maxDistance;
+	// A sound that does not start because the listener is too far away plays when the listener comes nearer (see
+	// ProcessSounds)
+	sound.far = result.outcome == audio::AnimEffectPlay::Outcome::TooFar;
 	if (result.emitter != entt::null)
 	{
 		sound.emitter = result.emitter;
@@ -418,8 +423,22 @@ void GameParticleWorld::ProcessSounds()
 			{
 				sounds->SetEmitterPosition(sound.emitter, link.position);
 			}
-			// The sound stays with its particle. It does not start again when the audio stops it, for example when
-			// the camera goes past its maximum distance or when it could not start.
+			// The sound stays with its particle. The audio can stop a looping sound because the listener left it: the
+			// listener went to its maximum distance or more, or into the temple. Then the sound plays again when the
+			// listener comes back nearer. The game does not start it again (deviation 235).
+			const bool listenerLeft = sounds != nullptr && sounds->TakeListenerLeft(sound.owner);
+			const auto distance = sounds != nullptr ? sounds->ListenerDistance(link.position) : std::nullopt;
+			const auto step = particles::sound_resume::Next(sound.far, {.looping = link.sound.action.looping,
+			                                                            .playing = playing(sound),
+			                                                            .listenerLeft = listenerLeft,
+			                                                            .distance = distance,
+			                                                            .maxDistance = sound.maxDistance});
+			sound.far = step.far;
+			if (step.replay)
+			{
+				sound.start = link.position;
+				Play(sound);
+			}
 			return false;
 		}
 		if (!sound.letGo)
@@ -763,6 +782,17 @@ std::optional<glm::vec3> GameParticleWorld::ObjectPosition(entt::entity object) 
 	const auto& registry = Locator::entitiesRegistry::value();
 	const auto* transform = registry.Valid(object) ? registry.TryGet<const ecs::components::Transform>(object) : nullptr;
 	return transform != nullptr ? std::optional(transform->position) : std::nullopt;
+}
+
+std::optional<glm::vec3> GameParticleWorld::ObjectDrawnOrigin(entt::entity object) const
+{
+	if (!Locator::entitiesRegistry::has_value())
+	{
+		return std::nullopt;
+	}
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* transform = registry.Valid(object) ? registry.TryGet<const ecs::components::Transform>(object) : nullptr;
+	return transform != nullptr ? std::optional(ecs::drawn_place::ModelOriginOf(registry, object, *transform)) : std::nullopt;
 }
 
 GameParticleWorld::SurfacePoint GameParticleWorld::RandomSurfacePoint(entt::entity object, particles::Effect& effect) const

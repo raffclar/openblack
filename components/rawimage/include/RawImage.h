@@ -37,8 +37,6 @@ struct GreyImage
 	uint32_t width {0};
 	uint32_t height {0};
 	std::vector<uint8_t> pixels;
-
-	[[nodiscard]] uint8_t At(uint32_t x, uint32_t y) const { return pixels.at((y * width) + x); }
 };
 
 /// An image of three bytes a pixel, or none when the bytes aren't exactly that many

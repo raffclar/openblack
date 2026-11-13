@@ -53,6 +53,15 @@ glm::ivec2 openblack::input::RestingPointer(glm::ivec2 windowSize)
 	return glm::max(windowSize, glm::ivec2(1)) / 2;
 }
 
+bool openblack::input::PlayerCursorSeen(Platform platform, bool background, bool windowHasMouse, bool pageMouseMoved)
+{
+	if (background || !windowHasMouse)
+	{
+		return false;
+	}
+	return platform != Platform::Web || pageMouseMoved;
+}
+
 SDL_Event openblack::input::PumpedMotion(glm::ivec2 by, uint32_t windowId)
 {
 	SDL_Event motion {};

@@ -946,6 +946,7 @@ int main(int argc, char* argv[]) noexcept
 		case openblack::Game::RunStart::Failed:
 			return EXIT_FAILURE;
 		case openblack::Game::RunStart::Done:
+			openblack::web::ExitToHomepage();
 			return EXIT_SUCCESS;
 		case openblack::Game::RunStart::Play:
 			break;
@@ -953,6 +954,7 @@ int main(int argc, char* argv[]) noexcept
 		return openblack::web::RunFrames([&game]() { return game->RunFrame(); },
 		                                 [&game]() {
 			                                 game->EndRun();
+			                                 openblack::web::ExitToHomepage();
 			                                 return EXIT_SUCCESS;
 		                                 });
 #else

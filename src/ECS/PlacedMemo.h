@@ -123,7 +123,6 @@ public:
 
 	[[nodiscard]] size_t Size() const { return _entries.size(); }
 	[[nodiscard]] uint64_t Hits() const { return _hits; }
-	[[nodiscard]] uint64_t Misses() const { return _misses; }
 
 private:
 	struct Entry

@@ -167,6 +167,16 @@ physics_classes::ClassFacts MobileObjectFacts(MobileObjectInfo type)
 		// Never thrown, always in the way
 		facts.canBecomePhysicsObject = false;
 		break;
+	case MobileObjectInfo::Crop:
+		// A crop can fly, but flying things do not hit it. Its body is the body of a standing tree: a rooted spindle of the
+		// tree material that always moves, with the full weight of the crop.
+		facts.body = physics_classes::BodyKind::Tree;
+		facts.row = MaterialRow::Tree;
+		facts.interacts = false;
+		facts.rooted = true;
+		facts.dynamic = true;
+		facts.unclampedMass = true;
+		break;
 	case MobileObjectInfo::Creed:
 		facts.canBecomePhysicsObject = false;
 		facts.interacts = false;
@@ -351,7 +361,9 @@ physics_classes::ClassFacts ClassifyKind(const Registry& registry, entt::entity 
 	}
 	if (const auto* mobile = registry.TryGet<const MobileObject>(entity))
 	{
-		auto facts = MobileObjectFacts(mobile->type);
+		const auto* row = Row<GMobileObjectInfo>(info.mobileObject, mobile->type);
+		auto facts = MobileObjectFacts(
+		    physics_classes::MobileObjectPhysicsRow(mobile->type, row != nullptr ? row->mobileType : MobileObjectInfo::None));
 		// A ring of the beach temple puzzle that rests on a piece stays where it is
 		if (const auto* block = registry.TryGet<const HanoiBlock>(entity); block != nullptr && block->below != entt::null)
 		{
@@ -424,6 +436,19 @@ physics_classes::ClassFacts ClassifyKind(const Registry& registry, entt::entity 
 	return {};
 }
 } // namespace
+
+MobileObjectInfo physics_classes::MobileObjectPhysicsRow(MobileObjectInfo row, MobileObjectInfo kind)
+{
+	if (row == MobileObjectInfo::LumpOfPoo)
+	{
+		return row;
+	}
+	if (kind == MobileObjectInfo::Crop || kind == MobileObjectInfo::Creed)
+	{
+		return kind;
+	}
+	return row;
+}
 
 physics_classes::ClassFacts physics_classes::Classify(const Registry& registry, entt::entity entity, const InfoConstants& info,
                                                       const ClassInputs& inputs)

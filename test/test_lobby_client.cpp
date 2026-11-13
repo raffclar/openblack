@@ -25,6 +25,7 @@
 
 #include "Online/HttpClientInterface.h"
 #include "Online/PushChannelInterface.h"
+#include "Online/SiteSessionInterface.h"
 #include "Online/TokenStoreInterface.h"
 
 // Enable this define because the test makes the system itself
@@ -160,6 +161,48 @@ private:
 	std::optional<std::string>& _kept;
 };
 
+/// A page of the site that keeps each question until the test answers it
+class FakeSite final: public online::SiteSessionInterface
+{
+public:
+	void Request(online::HttpCallback callback) override { asked.push_back(std::move(callback)); }
+	void Poll() override { ++polls; }
+
+	/// Answers the oldest question
+	void Answer(int32_t status, std::string_view body)
+	{
+		ASSERT_FALSE(asked.empty());
+		auto next = std::move(asked.front());
+		asked.pop_front();
+		next(HttpResponse {
+		    .error = online::HttpError::None, .status = status, .headers = {}, .body = {body.begin(), body.end()}});
+	}
+	void Fail()
+	{
+		ASSERT_FALSE(asked.empty());
+		auto next = std::move(asked.front());
+		asked.pop_front();
+		next(HttpResponse {.error = online::HttpError::Network});
+	}
+
+	std::deque<online::HttpCallback> asked;
+	int polls {0};
+};
+
+/// The answers of the site: an access token and no refresh token
+constexpr std::string_view k_SiteSession =
+    R"({"token_type":"Bearer","access_token":"site1","access_token_expires":"2026-10-22T10:15:00Z",)"
+    R"("account":{"id":7,"name":"abc"},"email_required":false,"second_factor":"not_needed"})";
+constexpr std::string_view k_SiteRenewed =
+    R"({"token_type":"Bearer","access_token":"site2","access_token_expires":"2026-10-22T10:30:00Z",)"
+    R"("account":{"id":7,"name":"abc"},"email_required":false,"second_factor":"not_needed"})";
+constexpr std::string_view k_SiteOtherAccount =
+    R"({"token_type":"Bearer","access_token":"site3","access_token_expires":"2026-10-22T10:30:00Z",)"
+    R"("account":{"id":8,"name":"xyz"},"email_required":false,"second_factor":"not_needed"})";
+constexpr std::string_view k_NotSignedIn =
+    R"({"type":"about:blank","title":"Unauthorized","status":401,"detail":"Nobody is signed in on the site.",)"
+    R"("code":"not_signed_in"})";
+
 /// The test starts at 10:00, and the access token of the login lasts until 10:15
 constexpr std::string_view k_Session =
     R"({"token_type":"Bearer","access_token":"access1","access_token_expires":"2026-10-22T10:15:00.000Z",)"
@@ -185,8 +228,25 @@ constexpr std::string_view k_Origin = "https://bw.example";
 class LobbyClientTest: public ::testing::Test
 {
 protected:
-	void Make(lobby_api::ClientKind client = lobby_api::ClientKind::Desktop, bool configured = true)
+	/// A browser client with a page of the site
+	void MakeWithSite()
 	{
+		Make(lobby_api::ClientKind::Browser, true, true);
+		_client->SignInFromSite([](auto&& /*result*/) {});
+		_site->Answer(200, k_SiteSession);
+		_push->Accept();
+		_push->Deliver(k_Hello);
+	}
+
+	void Make(lobby_api::ClientKind client = lobby_api::ClientKind::Desktop, bool configured = true, bool withSite = false)
+	{
+		std::unique_ptr<FakeSite> site;
+		_site = nullptr;
+		if (withSite)
+		{
+			site = std::make_unique<FakeSite>();
+			_site = site.get();
+		}
 		auto push = std::make_unique<FakePush>();
 		_push = push.get();
 		std::optional<LobbyClientConfig> config;
@@ -197,8 +257,8 @@ protected:
 			    .client = client,
 			};
 		}
-		_client = std::make_unique<LobbyClientSystem>(config, _http, std::move(push), std::make_unique<FakeTokens>(_kept),
-		                                              [this]() { return _now; });
+		_client = std::make_unique<LobbyClientSystem>(
+		    config, _http, std::move(push), std::make_unique<FakeTokens>(_kept), [this]() { return _now; }, std::move(site));
 	}
 
 	/// Logs in and opens the push channel
@@ -212,6 +272,7 @@ protected:
 
 	FakeHttp _http;
 	FakePush* _push {nullptr};
+	FakeSite* _site {nullptr};
 	std::optional<std::string> _kept;
 	/// 2026-10-22T10:00:00Z
 	std::chrono::system_clock::time_point _now {std::chrono::seconds {1792663200}};
@@ -863,4 +924,165 @@ TEST(HttpLimits, ASmallerLimitOfTheRequestTakesThePlaceOfTheLimitOfItsKind)
 	// A limit of the request cannot make the limit of its kind larger
 	request.mostBytes = 400;
 	EXPECT_EQ(online::MostAnswerBytes(request, 100), 100u);
+}
+
+TEST_F(LobbyClientTest, TheSiteGivesASessionWithNoNameAndNoPassword)
+{
+	Make(lobby_api::ClientKind::Browser, true, true);
+	EXPECT_TRUE(_client->CanSignInFromSite());
+	std::optional<lobby_api::AccountRef> account;
+	_client->SignInFromSite([&](auto&& result) { account = result.value; });
+	EXPECT_EQ(_client->GetState(), LobbySessionState::LoggingIn);
+	EXPECT_TRUE(_http.sent.empty());
+	ASSERT_EQ(_site->asked.size(), 1u);
+	_site->Answer(200, k_SiteSession);
+	ASSERT_TRUE(account.has_value());
+	EXPECT_EQ(account->id, 7);
+	EXPECT_EQ(_client->GetState(), LobbySessionState::LoggedIn);
+	EXPECT_TRUE(_client->IsSignedInFromSite());
+	// The game keeps no token in a store, and the push channel uses the access token of the site
+	EXPECT_FALSE(_kept.has_value());
+	EXPECT_EQ(_push->opens, 1);
+	EXPECT_EQ(_push->lastToken, "site1");
+	// A second sign-in while the session lives asks nothing
+	_client->SignInFromSite([&](auto&& result) { account = result.value; });
+	EXPECT_TRUE(_site->asked.empty());
+	_client->Update();
+	EXPECT_EQ(_site->polls, 1);
+}
+
+TEST_F(LobbyClientTest, WithNoPageOfTheSiteTheClientDoesNotAskIt)
+{
+	Make();
+	EXPECT_FALSE(_client->CanSignInFromSite());
+	std::optional<LobbyErrorKind> kind;
+	_client->SignInFromSite([&](auto&& result) { kind = result.error.kind; });
+	EXPECT_EQ(kind, LobbyErrorKind::NotConfigured);
+	EXPECT_TRUE(_http.sent.empty());
+	EXPECT_EQ(_client->GetState(), LobbySessionState::LoggedOut);
+}
+
+TEST_F(LobbyClientTest, NobodySignedInOnTheSiteGivesNotLoggedIn)
+{
+	Make(lobby_api::ClientKind::Browser, true, true);
+	std::optional<LobbyErrorKind> kind;
+	_client->SignInFromSite([&](auto&& result) { kind = result.error.kind; });
+	_site->Answer(401, k_NotSignedIn);
+	EXPECT_EQ(kind, LobbyErrorKind::NotLoggedIn);
+	EXPECT_EQ(_client->GetState(), LobbySessionState::LoggedOut);
+	EXPECT_EQ(_push->opens, 0);
+	// A page with no site around it gives a failure of the network
+	_client->SignInFromSite([&](auto&& result) { kind = result.error.kind; });
+	_site->Fail();
+	EXPECT_EQ(kind, LobbyErrorKind::Network);
+	EXPECT_EQ(_client->GetState(), LobbySessionState::LoggedOut);
+	// The site can still answer later
+	EXPECT_TRUE(_client->CanSignInFromSite());
+}
+
+TEST_F(LobbyClientTest, ASiteAnswerWithARefreshTokenIsRefused)
+{
+	Make(lobby_api::ClientKind::Browser, true, true);
+	std::optional<LobbyErrorKind> kind;
+	_client->SignInFromSite([&](auto&& result) { kind = result.error.kind; });
+	_site->Answer(200, k_Session);
+	EXPECT_EQ(kind, LobbyErrorKind::BadAnswer);
+	EXPECT_EQ(_client->GetState(), LobbySessionState::LoggedOut);
+	EXPECT_FALSE(_kept.has_value());
+}
+
+TEST_F(LobbyClientTest, AnOldSiteTokenIsRenewedFromTheSite)
+{
+	MakeWithSite();
+	_now += 15min;
+	int answers = 0;
+	_client->GetMe([&](auto&& result) { answers += result.Ok() ? 1 : 0; });
+	_client->GetMyClans([&](auto&& result) { answers += result.Ok() ? 1 : 0; });
+	// One question to the site, no refresh call, and the two calls wait for it
+	EXPECT_TRUE(_http.sent.empty());
+	ASSERT_EQ(_site->asked.size(), 1u);
+	_site->Answer(200, k_SiteRenewed);
+	ASSERT_EQ(_http.sent.size(), 2u);
+	EXPECT_EQ(_http.NextHeader("Authorization"), "Bearer site2");
+	_http.Answer(200, R"({"id":7,"name":"abc"})");
+	_http.Answer(200, R"({"clans":[]})");
+	EXPECT_EQ(answers, 2);
+	EXPECT_TRUE(_client->IsSignedInFromSite());
+}
+
+TEST_F(LobbyClientTest, ARefusedSiteTokenGetsANewOneFromTheSite)
+{
+	MakeWithSite();
+	_client->GetMe([](auto&& /*result*/) {});
+	EXPECT_EQ(_http.NextHeader("Authorization"), "Bearer site1");
+	_http.Answer(401, "");
+	ASSERT_EQ(_site->asked.size(), 1u);
+	_site->Answer(200, k_SiteRenewed);
+	EXPECT_EQ(_http.NextHeader("Authorization"), "Bearer site2");
+}
+
+TEST_F(LobbyClientTest, ASignOutOnTheSiteEndsTheSessionAtTheRenewal)
+{
+	MakeWithSite();
+	_now += 15min;
+	std::optional<LobbyErrorKind> kind;
+	_client->GetMe([&](auto&& result) { kind = result.error.kind; });
+	_site->Answer(401, k_NotSignedIn);
+	EXPECT_EQ(kind, LobbyErrorKind::NotLoggedIn);
+	EXPECT_EQ(_client->GetState(), LobbySessionState::LoggedOut);
+	EXPECT_FALSE(_client->IsSignedInFromSite());
+	EXPECT_FALSE(_push->IsOpen());
+	EXPECT_TRUE(_http.sent.empty());
+}
+
+TEST_F(LobbyClientTest, AnotherAccountOnTheSiteEndsTheSession)
+{
+	MakeWithSite();
+	_now += 15min;
+	std::optional<LobbyErrorKind> kind;
+	_client->GetMe([&](auto&& result) { kind = result.error.kind; });
+	_site->Answer(200, k_SiteOtherAccount);
+	EXPECT_EQ(kind, LobbyErrorKind::NotLoggedIn);
+	EXPECT_EQ(_client->GetState(), LobbySessionState::LoggedOut);
+	EXPECT_TRUE(_http.sent.empty());
+}
+
+TEST_F(LobbyClientTest, ANetworkFailureOfTheSiteKeepsTheSession)
+{
+	MakeWithSite();
+	_now += 15min;
+	std::optional<LobbyErrorKind> kind;
+	_client->GetMe([&](auto&& result) { kind = result.error.kind; });
+	_site->Fail();
+	EXPECT_EQ(kind, LobbyErrorKind::Network);
+	EXPECT_EQ(_client->GetState(), LobbySessionState::LoggedIn);
+}
+
+TEST_F(LobbyClientTest, ALogoutStopsTheSignInFromTheSiteForTheRun)
+{
+	MakeWithSite();
+	_client->Logout(false, [](auto&& /*result*/) {});
+	EXPECT_EQ(_http.Next().url, "/api/v1/sessions/current");
+	_http.Answer(204, "");
+	EXPECT_EQ(_client->GetState(), LobbySessionState::LoggedOut);
+	EXPECT_FALSE(_client->CanSignInFromSite());
+	std::optional<LobbyErrorKind> kind;
+	_client->SignInFromSite([&](auto&& result) { kind = result.error.kind; });
+	EXPECT_EQ(kind, LobbyErrorKind::NotLoggedIn);
+	EXPECT_TRUE(_site->asked.empty());
+}
+
+TEST_F(LobbyClientTest, ALoginWithAPasswordIsNotASessionOfTheSite)
+{
+	MakeWithSite();
+	_client->Login("abc", "pw", [](auto&& /*result*/) {});
+	_http.Answer(201, R"({"access_token":"a","access_token_expires":"2026-10-22T10:15:00Z","refresh_token":null,)"
+	                  R"("refresh_token_expires":"2026-11-21T10:00:00Z","account":{"id":7,"name":"abc"}})");
+	EXPECT_EQ(_client->GetState(), LobbySessionState::LoggedIn);
+	EXPECT_FALSE(_client->IsSignedInFromSite());
+	// Its renewal uses the cookie of the refresh token, not the site
+	_now += 15min;
+	_client->GetMe([](auto&& /*result*/) {});
+	EXPECT_EQ(_http.Next().url, "/api/v1/sessions/refresh");
+	EXPECT_TRUE(_site->asked.empty());
 }

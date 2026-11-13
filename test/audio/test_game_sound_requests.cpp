@@ -252,3 +252,46 @@ TEST_F(GameSoundRequestsTest, AnOwnerOfSoundsIsAnEntityOfTheAudio)
 	requests.DestroySoundOwner(entt::null);
 	EXPECT_TRUE(audio.calls.empty());
 }
+
+// The audio records on the owner that it stopped a sound of the owner for the distance. The owner's system reads the
+// record once, and the record is then clear.
+TEST_F(GameSoundRequestsTest, TheOwnerTellsOnceThatTheDistanceStoppedItsSound)
+{
+	GameSoundRequests requests;
+	EXPECT_FALSE(requests.TakeListenerLeft(k_Placed));
+	auto& audio = static_cast<RecordingAudio&>(Locator::audio::emplace<RecordingAudio>());
+	const auto owner = requests.CreateSoundOwner();
+	ASSERT_TRUE(owner != entt::null);
+	EXPECT_FALSE(requests.TakeListenerLeft(owner));
+	audio.emitters.Get<openblack::ecs::components::SoundOwner>(owner).listenerLeft = true;
+	EXPECT_TRUE(requests.TakeListenerLeft(owner));
+	EXPECT_FALSE(requests.TakeListenerLeft(owner));
+	requests.DestroySoundOwner(owner);
+	EXPECT_FALSE(requests.TakeListenerLeft(owner));
+	EXPECT_FALSE(requests.TakeListenerLeft(entt::null));
+}
+
+// Before the temple stops the sound effects, the owner of each placed sound that plays gets the record. A sound that
+// follows its owner, or that stopped, gives no record.
+TEST_F(GameSoundRequestsTest, TheTempleMarksTheOwnersOfThePlacedSoundsThatPlay)
+{
+	using openblack::ecs::components::AudioEmitter;
+	GameSoundRequests requests;
+	requests.MarkListenerLeftPlacedSounds();
+	auto& audio = static_cast<RecordingAudio&>(Locator::audio::emplace<RecordingAudio>());
+	const auto placed = requests.CreateSoundOwner();
+	const auto following = requests.CreateSoundOwner();
+	const auto stopped = requests.CreateSoundOwner();
+	const auto addSound = [&audio](entt::entity owner, Follows follows, AudioStatus state) {
+		const auto sound = audio.emitters.Create();
+		audio.emitters.Assign<AudioEmitter>(sound,
+		                                    AudioEmitter {.spatial = true, .state = state, .owner = owner, .follows = follows});
+	};
+	addSound(placed, Follows::Place, AudioStatus::Playing);
+	addSound(following, Follows::Owner, AudioStatus::Playing);
+	addSound(stopped, Follows::Place, AudioStatus::Stopped);
+	requests.MarkListenerLeftPlacedSounds();
+	EXPECT_TRUE(requests.TakeListenerLeft(placed));
+	EXPECT_FALSE(requests.TakeListenerLeft(following));
+	EXPECT_FALSE(requests.TakeListenerLeft(stopped));
+}

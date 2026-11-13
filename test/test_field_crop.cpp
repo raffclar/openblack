@@ -8,6 +8,7 @@
  *******************************************************************************/
 
 #include <algorithm>
+#include <array>
 #include <optional>
 
 #include <gtest/gtest.h>
@@ -88,6 +89,27 @@ TEST(FieldCrop, APassGrowsTheCropOnlyOnTheFieldsTurnOfGrowth)
 	EXPECT_FLOAT_EQ(crop.age, 0.0f);
 	field_crop::Pass(crop, k_Type, 13, 7, 0.0f, false);
 	EXPECT_FLOAT_EQ(crop.age, 2.0f);
+}
+
+TEST(FieldCrop, OnlyAPassThatGrowsTheCropUsesTheAlignmentAndTheWeather)
+{
+	// Each crop and turn: a pass that does not grow the crop gives the same crop for each alignment and weather
+	const std::array crops {field_crop::Crop {}, field_crop::Crop {.timesSown = 4},
+	                        field_crop::Crop {.timesSown = 4, .age = 100.0f},
+	                        field_crop::Crop {.timesSown = 4, .age = k_Type.ageRipe},
+	                        field_crop::Crop {.timesSown = 4, .age = k_Type.ageRipe + 1.0f}};
+	for (const auto& start : crops)
+	{
+		for (uint32_t turn = 0; turn < 20; ++turn)
+		{
+			auto evil = start;
+			auto good = start;
+			field_crop::Pass(evil, k_Type, turn, 3, -1.0f, false);
+			field_crop::Pass(good, k_Type, turn, 3, 1.0f, true);
+			const bool changed = evil.age != start.age || good.age != start.age || good.food != start.food;
+			EXPECT_EQ(field_crop::GrowsInPass(start, k_Type, turn, 3), changed) << "turn " << turn << " age " << start.age;
+		}
+	}
 }
 
 TEST(FieldCrop, TheTwoPassesOverATownsFieldGrowItTwiceInItsTurn)

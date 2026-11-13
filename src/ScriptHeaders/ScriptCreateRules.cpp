@@ -110,13 +110,55 @@ bool KeepsScriptHeight(ObjectType type, uint32_t subtype, bool rockKind)
 	return IsFixedInPhysics(subtype) || rockKind;
 }
 
-std::optional<ScriptRockStart> RockStartOf(ObjectType type, uint32_t subtype, bool rockKind)
+std::optional<ScriptPhysicsStart> PhysicsStartOf(ObjectType type, uint32_t subtype, const ScriptRowKind& row)
 {
-	if ((type != ObjectType::MobileStatic && type != ObjectType::Rock) || !rockKind || IsFixedInPhysics(subtype))
+	constexpr ScriptPhysicsStart k_OnTheLand {.settlesOnLand = true};
+	switch (type)
 	{
+	case ObjectType::MobileStatic:
+	case ObjectType::Rock:
+		if (!row.rock || IsFixedInPhysics(subtype))
+		{
+			return std::nullopt;
+		}
+		// A mobile static is not put on the land first
+		return ScriptPhysicsStart {.settlesOnLand = type == ObjectType::Rock};
+	case ObjectType::MobileObject:
+	case ObjectType::Poo:
+	case ObjectType::Ark:
+	{
+		const auto made = MobileObjectRowOf(type, subtype);
+		if (!made.has_value())
+		{
+			return std::nullopt;
+		}
+		// The row of the lump of poo always makes poo, whatever kind the table gives the row
+		if (*made == MobileObjectInfo::LumpOfPoo)
+		{
+			return k_OnTheLand;
+		}
+		// A crop does nothing at the start, and a creed can never become a physics object
+		if (row.mobileObject == MobileObjectInfo::Crop || row.mobileObject == MobileObjectInfo::Creed)
+		{
+			return std::nullopt;
+		}
+		// The mushrooms only stand on the land
+		if (*made == MobileObjectInfo::Champi || *made == MobileObjectInfo::MagicMushroom ||
+		    *made == MobileObjectInfo::Toadstool)
+		{
+			return std::nullopt;
+		}
+		return k_OnTheLand;
+	}
+	case ObjectType::OneShotSpell:
+	case ObjectType::Ball:
+	case ObjectType::Store:
+	case ObjectType::Scaffold:
+	case ObjectType::DeadTree:
+		return k_OnTheLand;
+	default:
 		return std::nullopt;
 	}
-	return ScriptRockStart {.settlesOnLand = type == ObjectType::Rock};
 }
 
 bool IgnoresReactions(ObjectType type)

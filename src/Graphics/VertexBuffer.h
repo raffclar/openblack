@@ -96,7 +96,6 @@ public:
 
 	[[nodiscard]] uint32_t GetCount() const noexcept;
 	[[nodiscard]] uint32_t GetStrideBytes() const noexcept;
-	[[nodiscard]] uint32_t GetSizeInBytes() const noexcept;
 	/// Whether Update can change the vertices
 	[[nodiscard]] bool IsDynamic() const noexcept { return _dynamic; }
 	/// Whether the vertices are in the shared buffer of bgfx

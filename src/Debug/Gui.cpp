@@ -1391,6 +1391,12 @@ void Gui::KeepOffTheMouse(bool off) noexcept
 	ApplyWindowMouse();
 }
 
+void Gui::SetHandDemoPlaying(bool plays) noexcept
+{
+	_handDemoPlays = plays;
+	ApplyWindowMouse();
+}
+
 void Gui::FollowDrivenPointer(bool follow) noexcept
 {
 	_followsDrivenPointer = follow;
@@ -1411,7 +1417,12 @@ void Gui::ApplyWindowMouse() noexcept
 	}
 	ImGui::SetCurrentContext(_imgui);
 	auto& io = ImGui::GetIO();
-	const auto mouse = ChooseWindowMouse(_mouseKeptOff, _followsDrivenPointer, _inputLocked);
+	const auto mouse = ChooseWindowMouse({
+	    .scenarioDrivesHand = _mouseKeptOff,
+	    .handDemoPlays = _handDemoPlays,
+	    .pointerDriven = _followsDrivenPointer,
+	    .inputLocked = _inputLocked,
+	});
 	// Kept off the mouse, Dear ImGui does not use the mouse at all
 	io.ConfigFlags = mouse == WindowMouse::KeptOff ? (io.ConfigFlags | ImGuiConfigFlags_NoMouse)
 	                                               : (io.ConfigFlags & ~ImGuiConfigFlags_NoMouse);

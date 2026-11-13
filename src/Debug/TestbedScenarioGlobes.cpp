@@ -291,6 +291,28 @@ void AddGlobes(std::vector<Scenario>& all)
 	    .dispensers = {{.type = MagicType::Heal, .offset = {0.0f, 43.0f}, .bubbleHeight = 3.0f}},
 	});
 
+	all.push_back({
+	    .id = "miracles.fading_building_before_fizzing_creature",
+	    .name = "A building that fades out in front of a creature that fizzes",
+	    .facet = Facet::Miracles,
+	    .description = "The creche of miracles.globe_over_fading_building, far from the camera, and the player's tiger 15 m "
+	                   "behind it. After one second the tiger fizzes a third of the way out of sight over two seconds, and "
+	                   "stays there. Start the game at the lowest detail level, so that the creche fades out.",
+	    .expected = "The land's draw list has the creche before the tiger, so the game draws the fading creche before the "
+	                "passes of the tiger. The creche writes its depth, thus the tiger does not show through the creche. "
+	                "The land behind the creche shows through it.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 60.0f, -190.0f}, .look = {0.0f, 24.0f, 40.0f}},
+	    .creatures = {CreatureSetup {.label = "yours",
+	                                 .species = CreatureType::Tiger,
+	                                 .offset = {0.0f, 55.0f},
+	                                 .facingDegrees = 90.0f,
+	                                 .owner = PlayerNames::PLAYER_ONE,
+	                                 .needs = {.energy = 0.8f, .exhaustion = 0.0f, .dehydration = 0.0f, .poo = 0.0f}}},
+	    .objects = {{.type = AbodeInfo::CelticCreche, .offset = {0.0f, 40.0f}}},
+	    .commands = {{.kind = Command::Kind::SetFizz, .creature = 0, .delaySeconds = 1.0f, .value = 2000, .amount = 0.3f}},
+	});
+
 	auto extreme = GlobeRow({MagicType::Fireball, MagicType::FireballPowerUpOne, MagicType::FireballPowerUpTwo}, 34.0f);
 	for (auto& row :
 	     {GlobeRow({MagicType::LightningBolt, MagicType::LightningBoltPowerUpOne, MagicType::LightningBoltPowerUpTwo}, 27.0f),
@@ -622,6 +644,32 @@ void AddScriptDeletes(std::vector<Scenario>& all)
 	    .commands = {create(1.0f, {-3.0f, 25.0f}), create(0.1f, {3.0f, 25.0f}), remove(3.0f, 0, 1.0f), remove(3.0f, 1, 2.0f)},
 	});
 }
+
+void AddLandTwoGifts(std::vector<Scenario>& all)
+{
+	// The second land's own script gives the player Khazar's eleven one-shot globes. The offsets on this story land start
+	// at the middle of the land.
+	constexpr glm::vec2 k_LandTwoMiddle {2240.0f, 2720.0f};
+	constexpr glm::vec2 k_GiftPlace = glm::vec2(3367.0625f, 3333.7722f) - k_LandTwoMiddle;
+	// The camera stands back along the line of the script's own shot, so that it sees the land and the sky over it
+	constexpr glm::vec2 k_Eye = k_GiftPlace + glm::vec2(-120.0f, 72.0f);
+	all.push_back({
+	    .id = "miracles.l2_khazar_one_shot_gifts",
+	    .name = "Khazar's one-shot globes at the start of the second land",
+	    .facet = Facet::Miracles,
+	    .description = "The second land of the story. One second in, the land's script GiveOneShots runs as it runs when "
+	                   "Khazar shows the player his scroll. It makes three food, three wood, three water and two heal "
+	                   "globes within 5 metres of its place, and it sets the height of each globe to 75. Each globe starts "
+	                   "in the physics, so the height does not lift it. The camera stands about 140 metres away and "
+	                   "looks at a point 40 metres over the place.",
+	    .expected = "The eleven globes appear at once on the land near the place, and they stay there. They do not "
+	                "float in the air. The inspector query game_find_objects for one-off spell seeds gives each globe a "
+	                "height near the land at its place.",
+	    .environment = {.land = Land::Story, .storyLand = "Land2.txt", .dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {k_Eye.x, 25.0f, k_Eye.y}, .look = {k_GiftPlace.x, 40.0f, k_GiftPlace.y}},
+	    .commands = {{.kind = Command::Kind::RunScript, .delaySeconds = 1.0f, .script = "GiveOneShots"}},
+	});
+}
 } // namespace
 
 void testbed_scenarios::AddGlobeScenarios(std::vector<Scenario>& all)
@@ -633,4 +681,5 @@ void testbed_scenarios::AddGlobeScenarios(std::vector<Scenario>& all)
 	AddHand(all);
 	AddPiles(all);
 	AddScriptDeletes(all);
+	AddLandTwoGifts(all);
 }

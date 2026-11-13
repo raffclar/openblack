@@ -31,14 +31,6 @@ constexpr uint32_t k_KeptChecksums = 600;
 /// The client writes a line of the compares to the log after this many turns
 constexpr uint32_t k_CompareLogEvery = 100;
 
-void Log(spdlog::level::level_enum level, std::string_view text)
-{
-	if (auto logger = spdlog::get("game"))
-	{
-		logger->log(level, "{}", text);
-	}
-}
-
 /// The name of the land of a start, when the start loads a land of a file. The testbed and the map for 32 gods have no
 /// file.
 [[nodiscard]] std::optional<std::string_view> LandFileOf(const game_socket::Start& start)
@@ -78,10 +70,16 @@ void Log(spdlog::level::level_enum level, std::string_view text)
 
 } // namespace
 
-NetworkSession::NetworkSession(WebSocketClientInterface& sockets, Clock clock)
+NetworkSession::NetworkSession(WebSocketClientInterface& sockets, Clock clock, std::shared_ptr<ConnectionLog> log)
     : _sockets(sockets)
     , _clock(std::move(clock))
+    , _log(log != nullptr ? std::move(log) : std::make_shared<ConnectionLog>(_clock))
 {
+}
+
+int64_t NetworkSession::MillisecondsSince(int64_t time) const
+{
+	return (_clock() - time) / 1000;
 }
 
 NetworkSession::~NetworkSession()
@@ -119,6 +117,9 @@ void NetworkSession::Join(NetworkSessionSettings settings)
 	_commandsInLoadWait = 0;
 	// A new session counts its blocks of commands from 0
 	_sent.Reset();
+	_attempts = 0;
+	_partedTurn.reset();
+	_pingsWarned = false;
 	Open(false);
 }
 
@@ -128,6 +129,10 @@ void NetworkSession::Open(bool resume)
 	const auto generation = _generation;
 	_stream = std::make_unique<TurnStream>(_sockets, [this] { return static_cast<uint64_t>(_clock()); });
 	_state = resume ? State::Reconnecting : State::Connecting;
+	_connectAt = _clock();
+	++_attempts;
+	_log->Info(fmt::format("The game socket opens to {} for a {} (attempt {})", _settings.request.url,
+	                       resume ? "resume" : "join", _attempts));
 	_stream->Open(
 	    _settings.request,
 	    TurnStreamHandlers {
@@ -137,10 +142,14 @@ void NetworkSession::Open(bool resume)
 		            {
 			            return;
 		            }
+		            _openedAt = _clock();
+		            _log->Info(fmt::format("The game socket is open after {} ms", MillisecondsSince(_connectAt)));
 		            if (resume && _joined.has_value())
 		            {
 			            _stream->SendText(game_socket::ToJson(
 			                game_socket::Resume {.session = _joined->session, .turn = _turnsDone, .world = _wantsWorld}));
+			            _log->Info(fmt::format("The client asks to resume from turn {}{}", _turnsDone,
+			                                   _wantsWorld ? ", with the server's world" : ""));
 		            }
 		            else
 		            {
@@ -150,6 +159,9 @@ void NetworkSession::Open(bool resume)
 			                                                                     .build = _settings.build,
 			                                                                     .map = _settings.map}));
 			            _state = State::Joining;
+			            _log->Info(fmt::format("The client sends its join ({}{})",
+			                                   _settings.ticket.empty() ? "no ticket" : "with a ticket",
+			                                   _settings.gamePassword.empty() ? "" : " and a game password"));
 		            }
 	            },
 	        .turn =
@@ -247,7 +259,8 @@ void NetworkSession::DropStream()
 
 void NetworkSession::BreaksLimit(std::string_view what)
 {
-	Log(spdlog::level::err, fmt::format("The game server breaks a limit of the client: {}. The client leaves the game.", what));
+	_log->Write(spdlog::level::err,
+	            fmt::format("The game server breaks a limit of the client: {}. The client leaves the game.", what));
 	FinishWith(End::ServerLimit);
 }
 
@@ -295,8 +308,12 @@ void NetworkSession::Text(std::string_view text)
 		_joined = *joined;
 		_state = State::Waiting;
 		_backoff.Reset();
-		Log(spdlog::level::info, fmt::format("Joined the game server as {} {}", game_socket::RoleName(joined->role),
-		                                     joined->slot.has_value() ? fmt::format("in slot {}", *joined->slot) : ""));
+		_attempts = 0;
+		_log->Info(fmt::format("The server accepted the join after {} ms", MillisecondsSince(_openedAt)));
+		// The test tools find the words "Joined the game server as", and a line that ends with the slot
+		_log->Info(fmt::format("Joined the game server as {}{}{}", game_socket::RoleName(joined->role),
+		                       joined->observer != 0 ? fmt::format(" (observer {})", joined->observer) : "",
+		                       joined->slot.has_value() ? fmt::format(" in slot {}", *joined->slot) : ""));
 		if (_ready)
 		{
 			_stream->SendText(game_socket::ToJson(game_socket::Ready {.ready = true}));
@@ -306,7 +323,9 @@ void NetworkSession::Text(std::string_view text)
 	{
 		_start = *start;
 		_state = State::Playing;
-		Log(spdlog::level::info, fmt::format("The network game starts at turn {}", start->turn));
+		_log->Write(spdlog::level::info, fmt::format("The network game starts at turn {}", start->turn));
+		_firstTurnDue = true;
+		_firstTurnFrom = _clock();
 		SendWaiting();
 		SendLoaded();
 	}
@@ -315,12 +334,16 @@ void NetworkSession::Text(std::string_view text)
 		_state = _start.has_value() ? State::Playing : State::Waiting;
 		_backoff.Reset();
 		++_resumes;
+		_attempts = 0;
+		_firstTurnDue = true;
+		_firstTurnFrom = _clock();
 		if (_resync.GetState() == ResyncRule::State::Resyncing)
 		{
 			_resync.Rejoined();
 		}
-		Log(spdlog::level::info,
-		    fmt::format("Back in the game at turn {}; the server is at turn {}", _turnsDone, resumed->turn));
+		_log->Write(spdlog::level::info,
+		            fmt::format("Back in the game at turn {}; the server is at turn {} ({} ms after the loss)", _turnsDone,
+		                        resumed->turn, MillisecondsSince(_lostAt)));
 		// The server may not have the report of the load from before the loss. It takes a second report as one.
 		_loadedSent = false;
 		SendLoaded();
@@ -330,6 +353,9 @@ void NetworkSession::Text(std::string_view text)
 			_wantsWorld = false;
 			_worldTurn = resumed->turn;
 			_worldParts.clear();
+			_worldBytes = 0;
+			_worldQuartersLogged = 0;
+			_worldStartedAt = _clock();
 			_world.reset();
 			_turns.clear();
 			_waitingCommands = 0;
@@ -337,37 +363,56 @@ void NetworkSession::Text(std::string_view text)
 		}
 		SendKeptAgain();
 		SendWaiting();
+		SendPartedParts();
 	}
 	else if (const auto* stop = std::get_if<game_socket::GameStop>(&*frame))
 	{
 		_stoppedAfter = stop->turn;
-		Log(spdlog::level::info, fmt::format("The game server stopped the turns of the game after turn {}", stop->turn));
+		_log->Write(spdlog::level::info,
+		            fmt::format("The game server stopped the turns of the game after turn {}", stop->turn));
 	}
 	else if (const auto* wait = std::get_if<game_socket::LoadWait>(&*frame))
 	{
 		if (wait->loading.empty())
 		{
 			_loadWait.reset();
-			Log(spdlog::level::info, "Each player loaded the world: the turns start");
+			_log->Write(spdlog::level::info, "Each player loaded the world: the turns start");
 		}
 		else
 		{
 			_loadWait = *wait;
 			_loadWaitAt = _clock();
-			Log(spdlog::level::info, fmt::format("The game is paused: {} players load the world, {} seconds left",
-			                                     wait->loading.size(), wait->secondsLeft));
+			_log->Write(spdlog::level::info, fmt::format("The game is paused: {} players load the world, {} seconds left",
+			                                             wait->loading.size(), wait->secondsLeft));
 		}
 	}
 	else if (const auto* left = std::get_if<game_socket::ObserverLeft>(&*frame))
 	{
 		_observersLeft.push_back(left->name);
-		Log(spdlog::level::info, fmt::format("The observer {} left the game", left->name));
+		_log->Write(spdlog::level::info, fmt::format("The observer {} left the game", left->name));
 	}
 	else if (const auto* refused = std::get_if<game_socket::Refused>(&*frame))
 	{
 		_refusedReason = refused->reason;
-		Log(spdlog::level::warn, fmt::format("The game server refused the client: {}", refused->reason));
+		_log->Write(spdlog::level::warn,
+		            fmt::format("The game server refused the client: {} (state {}, {} ms after the socket opened)",
+		                        refused->reason, StateName(_state), MillisecondsSince(_openedAt)));
 		FinishWith(End::Refused);
+	}
+	else if (const auto* parts = std::get_if<game_socket::SyncParts>(&*frame))
+	{
+		// The server's parts of the turn at which the worlds parted: the log names the parts that differ
+		const auto local = _settings.localParts ? _settings.localParts(parts->turn) : PartHashes {};
+		if (local.empty())
+		{
+			_log->Warn(
+			    fmt::format("The server sent its parts of turn {}; this computer no longer keeps that turn", parts->turn));
+		}
+		else
+		{
+			_log->Warn(fmt::format("The worlds parted at turn {}: {}", parts->turn,
+			                       DescribeParts(DifferentParts(local, parts->parts), "this", "server")));
+		}
 	}
 	else if (const auto* chat = std::get_if<game_socket::RoomChat>(&*frame))
 	{
@@ -394,8 +439,8 @@ void NetworkSession::StartFrame(const game_socket::Frame& frame)
 			landFile = _settings.readLand(query->land);
 		}
 		const auto reply = start_rules::Reply(*query, landFile);
-		Log(spdlog::level::info, reply.have ? fmt::format("This computer has the land of the game ({})", query->land)
-		                                    : fmt::format("This computer does not have the land {}", query->land));
+		_log->Write(spdlog::level::info, reply.have ? fmt::format("This computer has the land of the game ({})", query->land)
+		                                            : fmt::format("This computer does not have the land {}", query->land));
 		_stream->SendText(game_socket::ToJson(reply));
 		if (!reply.have)
 		{
@@ -414,14 +459,15 @@ void NetworkSession::StartFrame(const game_socket::Frame& frame)
 			auto file = _settings.readCreature ? _settings.readCreature() : std::vector<uint8_t> {};
 			if (file.size() > game_socket::k_MostCreatureFileBytes)
 			{
-				Log(spdlog::level::warn, fmt::format("The creature file of {} bytes is too large to send", file.size()));
+				_log->Write(spdlog::level::warn,
+				            fmt::format("The creature file of {} bytes is too large to send", file.size()));
 				file.clear();
 			}
 			// The god starts the game at the alignment of the player's profile
 			const auto alignment = _settings.readAlignment ? _settings.readAlignment() : 0.0f;
 			_ownGodPlaysForClan = _settings.readPlaysForClan && _settings.readPlaysForClan();
-			Log(spdlog::level::info,
-			    fmt::format("This computer sends a creature file of {} bytes and the alignment {}", file.size(), alignment));
+			_log->Write(spdlog::level::info, fmt::format("This computer sends a creature file of {} bytes and the alignment {}",
+			                                             file.size(), alignment));
 			_stream->SendText(game_socket::ToJson(
 			    game_socket::StartCreature {.slot = std::nullopt, .file = std::move(file), .alignment = alignment}));
 		}
@@ -437,14 +483,14 @@ void NetworkSession::StartFrame(const game_socket::Frame& frame)
 	}
 	else if (std::holds_alternative<game_socket::StartCancel>(frame))
 	{
-		Log(spdlog::level::info, "A player does not have the land: the start stops");
+		_log->Write(spdlog::level::info, "A player does not have the land: the start stops");
 		_startCreatures.clear();
 		_startAlignments.clear();
 		_startEvents.push_back(StartEvent::Cancelled);
 	}
 	else if (std::holds_alternative<game_socket::StartStop>(frame))
 	{
-		Log(spdlog::level::info, "A player left during the start: the start stops");
+		_log->Write(spdlog::level::info, "A player left during the start: the start stops");
 		_startCreatures.clear();
 		_startAlignments.clear();
 		_startEvents.push_back(StartEvent::Stopped);
@@ -501,7 +547,15 @@ std::optional<StartEvent> NetworkSession::TakeStartEvent()
 
 void NetworkSession::Closed(const WebSocketClosed& closed)
 {
-	Log(spdlog::level::info, fmt::format("The game socket closed (code {}, HTTP status {})", closed.code, closed.httpStatus));
+	const auto lastFrame = _stream ? _stream->LastReceived() : std::nullopt;
+	const auto unanswered = _stream ? _stream->UnansweredPings() : 0;
+	_log->Write(_state == State::Playing ? spdlog::level::warn : spdlog::level::info,
+	            fmt::format("The game socket closed: {}. State {}, open for {} s{}{}", DescribeClosed(closed),
+	                        StateName(_state), _openedAt != 0 ? MillisecondsSince(_openedAt) / 1000 : 0,
+	                        lastFrame.has_value()
+	                            ? fmt::format(", last frame {} ms before", MillisecondsSince(static_cast<int64_t>(*lastFrame)))
+	                            : std::string(", no frame came"),
+	                        unanswered > 1 ? fmt::format(", {} pings with no answer", unanswered - 1) : std::string()));
 	if (_joined.has_value() && _state != State::Ended)
 	{
 		// The client keeps its world and tries to come back
@@ -510,10 +564,13 @@ void NetworkSession::Closed(const WebSocketClosed& closed)
 			_lostAt = _clock();
 		}
 		_state = State::Reconnecting;
-		_nextAttempt = _clock() + std::chrono::duration_cast<std::chrono::microseconds>(_backoff.Next()).count();
+		const auto wait = std::chrono::duration_cast<std::chrono::microseconds>(_backoff.Next()).count();
+		_nextAttempt = _clock() + wait;
+		_log->Info(fmt::format("The client tries to come back in {} ms", wait / 1000));
 		DropStream();
 		return;
 	}
+	_log->Warn(fmt::format("The socket closed before the server accepted the client (state {})", StateName(_state)));
 	FinishWith(End::NoConnection);
 }
 
@@ -521,7 +578,8 @@ void NetworkSession::ComeBack(bool resync)
 {
 	if (resync)
 	{
-		Log(spdlog::level::warn, fmt::format("Resynchronising... (try {} of {})", _resync.Tries(), ResyncRule::k_MostTries));
+		_log->Write(spdlog::level::warn,
+		            fmt::format("Resynchronising... (try {} of {})", _resync.Tries(), ResyncRule::k_MostTries));
 		_wantsWorld = true;
 	}
 	DropStream();
@@ -542,7 +600,9 @@ void NetworkSession::Update()
 	{
 		if (now - _lostAt > _settings.comeBackMicroseconds)
 		{
-			Log(spdlog::level::warn, "The client did not come back to the game server in time");
+			_log->Write(spdlog::level::warn,
+			            fmt::format("The client did not come back to the game server in {} s ({} attempts)",
+			                        _settings.comeBackMicroseconds / 1'000'000, _attempts));
 			FinishWith(End::Lost);
 			return;
 		}
@@ -561,6 +621,60 @@ void NetworkSession::Update()
 		_stream->SendPing();
 		_nextPing = now + k_PingMicroseconds;
 	}
+	LogHealth(now);
+}
+
+void NetworkSession::LogHealth(int64_t now)
+{
+	if (_state != State::Playing || !_stream || !_stream->IsOpen())
+	{
+		return;
+	}
+	// The ping that went last has had no time for its answer
+	const auto unanswered = _stream->UnansweredPings();
+	const auto missed = unanswered > 0 ? unanswered - 1 : 0;
+	if (missed >= k_MissedPingsWarning && !_pingsWarned)
+	{
+		_pingsWarned = true;
+		_log->Warn(fmt::format("{} pings in a row have no answer from the server", missed));
+	}
+	else if (missed == 0)
+	{
+		_pingsWarned = false;
+	}
+	if (now < _nextHealthLog)
+	{
+		return;
+	}
+	_nextHealthLog = now + k_HealthLogMicroseconds;
+	const auto received = LastTurnReceived();
+	const auto roundTrip = RoundTrip();
+	const auto lag = received.has_value() ? static_cast<int64_t>(*received) + 1 - static_cast<int64_t>(_turnsDone) : 0;
+	_log->Info(
+	    fmt::format("Health: turn {} done, server turn {} (lag {}), {} turns wait, round trip {}, {} pings with no answer",
+	                _turnsDone, received.has_value() ? std::to_string(*received) : std::string("none"), lag, _turns.size(),
+	                roundTrip.has_value() ? fmt::format("{} ms", *roundTrip / 1000) : std::string("none"), missed));
+}
+
+void NetworkSession::SendPartedParts()
+{
+	if (!_partedTurn.has_value() || !_stream || !_stream->IsOpen())
+	{
+		return;
+	}
+	const auto turn = *std::exchange(_partedTurn, std::nullopt);
+	auto parts = _settings.localParts ? _settings.localParts(turn) : PartHashes {};
+	if (parts.empty())
+	{
+		_log->Info(fmt::format("This computer does not keep the parts of turn {}: it sends no parts", turn));
+		return;
+	}
+	if (parts.size() > game_socket::k_MostSyncParts)
+	{
+		parts.resize(game_socket::k_MostSyncParts);
+	}
+	_log->Info(fmt::format("The client sends the {} parts of its world at turn {} to the server", parts.size(), turn));
+	_stream->SendText(game_socket::ToJson(game_socket::SyncParts {.turn = turn, .parts = std::move(parts)}));
 }
 
 void NetworkSession::SendWaiting()
@@ -604,8 +718,9 @@ void NetworkSession::SendKeptAgain()
 			++sent;
 		}
 	}
-	Log(spdlog::level::info, fmt::format("The client sends again {} blocks of commands that no turn holds (blocks {} to {})",
-	                                     sent, kept.front().sequence, kept.back().sequence));
+	_log->Write(spdlog::level::info,
+	            fmt::format("The client sends again {} blocks of commands that no turn holds (blocks {} to {})", sent,
+	                        kept.front().sequence, kept.back().sequence));
 }
 
 void NetworkSession::ReportLoaded()
@@ -620,7 +735,7 @@ void NetworkSession::SendLoaded()
 	{
 		_loadedSent = true;
 		_stream->SendText(game_socket::ToJson(game_socket::Loaded {}));
-		Log(spdlog::level::info, "The world of the network game loaded: the session tells the server");
+		_log->Write(spdlog::level::info, "The world of the network game loaded: the session tells the server");
 	}
 }
 
@@ -643,7 +758,8 @@ void NetworkSession::Send(const player_commands::Action& action)
 	{
 		if (_commandsInLoadWait++ == 0)
 		{
-			Log(spdlog::level::info, "The game is paused for the loads: the session does not send the commands of the player");
+			_log->Write(spdlog::level::info,
+			            "The game is paused for the loads: the session does not send the commands of the player");
 		}
 		return;
 	}
@@ -705,6 +821,11 @@ std::vector<player_commands::Command> NetworkSession::TakeTurn(uint32_t turn)
 	_turns.erase(_turns.begin(), std::next(found));
 	_playout.Done(turn);
 	_turnsDone = turn + 1;
+	if (std::exchange(_firstTurnDue, false))
+	{
+		_log->Info(fmt::format("The world did turn {}, the first turn {} ms after the {}", turn,
+		                       MillisecondsSince(_firstTurnFrom), _resumes > 0 ? "resume" : "start"));
+	}
 	return commands;
 }
 
@@ -749,6 +870,9 @@ void NetworkSession::WorldPart(const turn_codec::WorldPart& part)
 	if (part.part == 0)
 	{
 		_worldPartCount = part.parts;
+		_log->Info(fmt::format("The world state of turn {} starts to come: {} parts, {} ms after the resume", part.turn,
+		                       part.parts, MillisecondsSince(_worldStartedAt)));
+		_worldStartedAt = _clock();
 	}
 	if (part.parts != _worldPartCount || static_cast<size_t>(part.parts) * turn_codec::k_WorldPartBytes > k_MostWorldBytes)
 	{
@@ -757,6 +881,14 @@ void NetworkSession::WorldPart(const turn_codec::WorldPart& part)
 		return;
 	}
 	_worldParts.push_back(part.bytes);
+	_worldBytes += part.bytes.size();
+	// A line at each quarter of the parts, so that a stop in the middle of the world shows where it stopped
+	if (const auto quarter = _worldParts.size() * 4 / part.parts; quarter > _worldQuartersLogged && quarter < 4)
+	{
+		_worldQuartersLogged = quarter;
+		_log->Info(fmt::format("World state: {} of {} parts, {} bytes, {} ms", _worldParts.size(), part.parts, _worldBytes,
+		                       MillisecondsSince(_worldStartedAt)));
+	}
 	if (_worldParts.size() < part.parts)
 	{
 		return;
@@ -767,8 +899,9 @@ void NetworkSession::WorldPart(const turn_codec::WorldPart& part)
 		world.bytes.insert(world.bytes.end(), bytes.begin(), bytes.end());
 	}
 	_worldParts.clear();
-	Log(spdlog::level::info,
-	    fmt::format("The world state of turn {} came from the game server ({} bytes)", world.turn, world.bytes.size()));
+	_log->Write(spdlog::level::info, fmt::format("The world state of turn {} came from the game server ({} bytes in {} ms)",
+	                                             world.turn, world.bytes.size(), MillisecondsSince(_worldStartedAt)));
+	_worldCameAt = _clock();
 	_world = std::move(world);
 }
 
@@ -786,7 +919,10 @@ void NetworkSession::WorldLoaded(uint32_t turn)
 	// The checksums of the parted world are of no use
 	_localChecksums.clear();
 	std::erase_if(_serverChecksums, [turn](const auto& entry) { return entry.first <= turn; });
-	Log(spdlog::level::info, fmt::format("The world goes on from the server's world of turn {}", turn));
+	_log->Write(spdlog::level::info, fmt::format("The world goes on from the server's world of turn {} ({} ms after it came)",
+	                                             turn, MillisecondsSince(_worldCameAt)));
+	_firstTurnDue = true;
+	_firstTurnFrom = _clock();
 }
 
 void NetworkSession::LocalChecksum(uint32_t turn, uint64_t checksum)
@@ -813,7 +949,9 @@ void NetworkSession::Compare(uint32_t turn)
 	{
 		return;
 	}
-	const bool same = local->second == server->second;
+	const auto localChecksum = local->second;
+	const auto serverChecksum = server->second;
+	const bool same = localChecksum == serverChecksum;
 	++_compares.compared;
 	_localChecksums.erase(_localChecksums.begin(), std::next(local));
 	_serverChecksums.erase(_serverChecksums.begin(), std::next(server));
@@ -830,7 +968,10 @@ void NetworkSession::Compare(uint32_t turn)
 	else
 	{
 		_compares.firstDifferent = _compares.firstDifferent.value_or(turn);
-		Log(spdlog::level::warn, fmt::format("The world parts from the server's world at turn {}", turn));
+		_log->Write(spdlog::level::warn,
+		            fmt::format("The world parts from the server's world at turn {} (this {:016x}, server {:016x})", turn,
+		                        localChecksum, serverChecksum));
+		_partedTurn = turn;
 		if (_settings.parts)
 		{
 			_settings.parts(turn);
@@ -841,7 +982,7 @@ void NetworkSession::Compare(uint32_t turn)
 			ComeBack(true);
 			break;
 		case ResyncRule::Action::GiveUp:
-			Log(spdlog::level::err, "The resyncs did not work: the client leaves the game (out of sync)");
+			_log->Write(spdlog::level::err, "The resyncs did not work: the client leaves the game (out of sync)");
 			FinishWith(End::OutOfSync);
 			break;
 		case ResyncRule::Action::None:
@@ -850,8 +991,8 @@ void NetworkSession::Compare(uint32_t turn)
 	}
 	if (_compares.compared % k_CompareLogEvery == 0)
 	{
-		Log(spdlog::level::info,
-		    fmt::format("Network game: {} turns compared with the server, {} the same", _compares.compared, _compares.same));
+		_log->Write(spdlog::level::info, fmt::format("Network game: {} turns compared with the server, {} the same",
+		                                             _compares.compared, _compares.same));
 	}
 }
 

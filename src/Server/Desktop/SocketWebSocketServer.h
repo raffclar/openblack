@@ -16,6 +16,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <string_view>
 
 #include "Online/ServerKeyPin.h"
 #include "Server/ConnectionLimits.h"
@@ -71,6 +72,10 @@ private:
 	void Accept();
 	/// Moves one connection on. Gives false when the connection ended.
 	bool Service(ConnectionId id, Connection& connection);
+	/// Writes the time that a client took to get a large number of queued bytes, once the queue is empty
+	static void LogBurst(ConnectionId id, Connection& connection);
+	/// Writes why a connection ends, how long it was open and the bytes that did not go
+	static void LogEnd(ConnectionId id, const Connection& connection, std::string_view cause);
 	bool Send(ConnectionId id, uint8_t opcode, std::span<const uint8_t> bytes);
 
 	ServerSocketHandlers _handlers;

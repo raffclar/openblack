@@ -49,8 +49,6 @@ public:
 	/// answer also names the game it came from ("game": its pid, port and worktree), so that a tool talking to several
 	/// games can tell when an answer isn't from the one it meant.
 	void SetIdentity(Json identity);
-	/// The members of the identity every answer carries as "game"
-	[[nodiscard]] const Json& Tag() const { return _tag; }
 
 	/// Whether a request's line takes control of the game: everything but a ping does, so that tools can look for
 	/// running games without keeping their players out

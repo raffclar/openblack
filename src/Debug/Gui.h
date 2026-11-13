@@ -44,6 +44,7 @@ public:
 	void OpenWindow(std::string_view name) noexcept override;
 	void SetInputLock(bool locked) noexcept override;
 	void KeepOffTheMouse(bool off) noexcept override;
+	void SetHandDemoPlaying(bool plays) noexcept override;
 	void FollowDrivenPointer(bool follow) noexcept override;
 	[[nodiscard]] std::vector<WindowState> ListWindows() const noexcept override;
 	void CloseWindow(std::string_view name) noexcept override;
@@ -97,6 +98,8 @@ private:
 	bool _inputLocked = false;
 	/// A scenario drives the hand: the debug windows take no press of the mouse
 	bool _mouseKeptOff = false;
+	/// A hand demonstration plays: the debug windows take no press of the mouse
+	bool _handDemoPlays = false;
 	/// The inspector drives the pointer: the debug windows follow the driven pointer
 	bool _followsDrivenPointer = false;
 	/// The mouse events that the debug windows take now

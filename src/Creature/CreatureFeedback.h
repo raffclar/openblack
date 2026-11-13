@@ -250,8 +250,6 @@ struct Capsule
 };
 /// A creature of size 1 is about this many units tall
 constexpr float k_HeightAtSizeOne = 15.0f;
-/// The body is taken as capsules round its bones this thick, as shares of its height
-constexpr float k_BodyRadiusShare = 0.12f;
 /// The body as posed: a capsule from each bone to its parent, the bones' matrices in the mesh's space placed in the world
 [[nodiscard]] std::vector<Capsule> BodyCapsules(std::span<const uint32_t> parents, std::span<const glm::mat4> boneMatrices,
                                                 const glm::mat4& placement, float radius);
