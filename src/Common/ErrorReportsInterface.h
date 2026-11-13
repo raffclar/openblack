@@ -11,6 +11,8 @@
 
 #include <cstdint>
 
+#include <string>
+
 namespace openblack::error_reports
 {
 
@@ -21,6 +23,20 @@ enum class Role : uint8_t
 	Client,
 	/// The dedicated game server
 	Server,
+};
+
+/// What the service tells about itself, for the tools. It never holds the DSN.
+struct ErrorReportsState
+{
+	/// Whether the service has a DSN
+	bool hasDestination {false};
+	/// Whether the service sends reports now
+	bool running {false};
+	/// The last value that SetEnabled got: for the game, the option of the player
+	bool enabled {false};
+	Role role {Role::Client};
+	std::string release;
+	std::string environment;
 };
 
 /// The error and crash reports of this program to Sentry. The service has no effect until it starts, and it starts only
@@ -38,6 +54,8 @@ public:
 	/// Starts the service when it is on and has a DSN. Stops the service when it is off. Stop sends the reports that
 	/// wait first.
 	virtual void SetEnabled(bool enabled) = 0;
+	/// The state of the service, with no DSN
+	[[nodiscard]] virtual ErrorReportsState GetState() const = 0;
 };
 
 } // namespace openblack::error_reports

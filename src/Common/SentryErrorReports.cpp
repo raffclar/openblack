@@ -150,6 +150,7 @@ SentryErrorReports::~SentryErrorReports()
 
 void SentryErrorReports::SetEnabled(bool enabled)
 {
+	_enabled = enabled;
 	if (enabled)
 	{
 		Start();
