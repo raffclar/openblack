@@ -10,11 +10,14 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
 
+#include <optional>
 #include <vector>
 
 #include "ECS/Systems/ParticleRuleSystemInterface.h"
 #include "Particles/ParticleDrawFrame.h"
+#include "Particles/ParticleSymbolLayout.h"
 
 namespace openblack::ecs::systems
 {
@@ -51,6 +54,11 @@ public:
 	virtual void CollectDrawFrame(float turnFraction, particles::draw::Frame& frame, bool inTemple) const = 0;
 	/// Clears the frame and fills it with what one effect draws, none if the effect does not run or is hidden
 	virtual void CollectEffectDrawFrame(EffectId id, float turnFraction, particles::draw::Frame& frame) const = 0;
+	/// The same as CollectEffectDrawFrame, but an effect that draws only symbols goes into the layout of the symbols, and
+	/// the frame stays clear. Gives the run of the effect in the layout then, else none.
+	virtual std::optional<uint32_t> CollectEffectSymbols(EffectId id, float turnFraction,
+	                                                     particles::draw::SymbolLayout& symbols,
+	                                                     particles::draw::Frame& frame) const = 0;
 	[[nodiscard]] virtual DrawStats GetDrawStats() const = 0;
 };
 

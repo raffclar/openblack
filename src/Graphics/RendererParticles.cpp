@@ -18,6 +18,7 @@
 #include <cstring>
 
 #include <algorithm>
+#include <functional>
 #include <iterator>
 #include <optional>
 #include <span>
@@ -250,6 +251,8 @@ void Renderer::CollectTownBeliefParticles() const
 	const auto& particles = Locator::particleSystem::value();
 	const float turnFraction = Locator::time::value().GetTurnFraction();
 	// Each village centre's symbols of belief go in a frame of their own. The frames keep their room from frame to frame.
+	// The effects that draw only symbols go into one layout for all the centres.
+	_townBeliefSymbols.Clear();
 	Locator::entitiesRegistry::value().Each<const ecs::components::Abode>(
 	    [&](entt::entity entity, const ecs::components::Abode& abode) {
 		    if (abode.type != AbodeNumber::TownCentre)
@@ -266,7 +269,18 @@ void Renderer::CollectTownBeliefParticles() const
 			    _townBeliefFrames.emplace_back();
 		    }
 		    auto& entry = _townBeliefFrames[_townBeliefFrameCount];
-		    particles.CollectEffectDrawFrame(*effect, turnFraction, entry.frame);
+		    entry.symbolRun = particles.CollectEffectSymbols(*effect, turnFraction, _townBeliefSymbols, entry.frame);
+		    if (entry.symbolRun.has_value())
+		    {
+			    if (!_townBeliefSymbols.Draws(*entry.symbolRun))
+			    {
+				    return;
+			    }
+			    entry.centre = entity;
+			    entry.spriteBox = _townBeliefSymbols.Run(*entry.symbolRun).spriteBox;
+			    ++_townBeliefFrameCount;
+			    return;
+		    }
 		    if (entry.frame.Empty())
 		    {
 			    return;
@@ -968,6 +982,146 @@ void Renderer::DrawTownBeliefParticles(const DrawSceneDesc& desc, entt::entity c
 	particles::draw::Order(found->frame, origin, reflection ? std::nullopt : HandPoint(), _townBeliefCommands,
 	                       _townBeliefSpriteOrder, _townBeliefOrderLists);
 	SubmitParticleFrame(desc, found->frame, _townBeliefCommands, _townBeliefSpriteOrder, {}, origin);
+}
+
+void Renderer::DrawTownBeliefCentres(const DrawSceneDesc& desc, std::span<const entt::entity> centres,
+                                     const view_frustum::Frustum* seenBy, const std::function<void(size_t)>& drawColumn) const
+{
+	const bool reflection = desc.viewId == RenderPass::Reflection;
+	const bool drawsSymbols = desc.viewId == RenderPass::Main || reflection;
+	const auto frames = std::span(_townBeliefFrames).first(_townBeliefFrameCount);
+	const auto origin = desc.camera->GetOrigin();
+	const auto hand = drawsSymbols && !reflection ? HandPoint() : std::nullopt;
+
+	// The draws of each centre whose symbols are in the layout, in turn. Symbols that are all out of the view put no
+	// pixel on the screen. Only the symbols that the pass draws get their sprites.
+	auto& draws = _townBeliefSymbolDraws;
+	auto& commands = _townBeliefSymbolCommands;
+	auto& places = _townBeliefSymbolSprites;
+	draws.clear();
+	commands.clear();
+	places.clear();
+	for (const auto centre : centres)
+	{
+		TownBeliefSymbolDraw draw {};
+		const auto found = drawsSymbols ? std::ranges::find(frames, centre, &TownBeliefFrame::centre) : frames.end();
+		if (found != frames.end() && found->symbolRun.has_value())
+		{
+			draw.laid = true;
+			draw.run = *found->symbolRun;
+			draw.firstCommand = static_cast<uint32_t>(commands.size());
+			draw.firstSprite = static_cast<uint32_t>(places.size());
+			const auto& box = found->spriteBox;
+			if (seenBy == nullptr || !box.has_value() || view_frustum::SeesWorldBox(*seenBy, box->first, box->second))
+			{
+				_townBeliefSymbols.MakeSprites(draw.run);
+				particles::draw::OrderSymbols(_townBeliefSymbols, draw.run, origin, hand, commands, places,
+				                              _townBeliefSymbolLists);
+			}
+			draw.commandCount = static_cast<uint32_t>(commands.size()) - draw.firstCommand;
+			draw.spriteCount = static_cast<uint32_t>(places.size()) - draw.firstSprite;
+		}
+		draws.push_back(draw);
+	}
+
+	// All the sprites of the pass in one buffer of instances, in the order drawn. When the buffer has no room for all of
+	// them, each centre asks for its own sprites, as a frame of its own does.
+	constexpr auto k_Stride = static_cast<uint16_t>(sizeof(particles::sprites::SpriteInstance));
+	const auto fill = [this, &places](bgfx::InstanceDataBuffer& instances, uint32_t first, uint32_t count) {
+		bgfx::allocInstanceDataBuffer(&instances, count, k_Stride);
+		auto* out = reinterpret_cast<particles::sprites::SpriteInstance*>(instances.data);
+		for (uint32_t i = first; i < first + count; ++i)
+		{
+			*out++ = _townBeliefSymbols.Sprite(places[i]);
+		}
+	};
+	const auto total = static_cast<uint32_t>(places.size());
+	bgfx::InstanceDataBuffer passInstances {};
+	const bool onePass = total > 0 && bgfx::getAvailInstanceDataBuffer(total, k_Stride) >= total;
+	if (onePass)
+	{
+		fill(passInstances, 0, total);
+	}
+
+	const auto& textures = Locator::resources::value().GetTextures();
+	glm::vec4 islandExtent(0.0f);
+	if (Locator::terrainSystem::has_value())
+	{
+		const auto extent = Locator::terrainSystem::value().GetExtent();
+		islandExtent = glm::vec4(extent.minimum, extent.maximum);
+	}
+	const auto* program = _shaderManager->GetShader("ParticleInstanced");
+	// The uniforms of the program, found by name one time for all the centres of the pass
+	std::optional<ProgramUniform> diffuse;
+	std::optional<ProgramUniform> alpha;
+	std::optional<ProgramUniform> landLuminosity;
+	std::optional<ProgramUniform> landLight;
+	std::optional<ProgramUniform> islandExtentUniform;
+	if (program != nullptr)
+	{
+		diffuse.emplace(*program, "s_diffuse");
+		alpha.emplace(*program, "s_alpha");
+		landLuminosity.emplace(*program, "s_landLuminosity");
+		landLight.emplace(*program, "s_landLight");
+		islandExtentUniform.emplace(*program, "u_islandExtent");
+	}
+	const auto viewId = static_cast<bgfx::ViewId>(TranslucentView(desc.viewId));
+	// Each run of sprites makes the same calls as in the draw of a frame of its own
+	const auto submit = [&](const TownBeliefSymbolDraw& draw) {
+		if (draw.spriteCount == 0 || program == nullptr)
+		{
+			return;
+		}
+		bgfx::InstanceDataBuffer ownInstances {};
+		uint32_t base = 0;
+		if (!onePass)
+		{
+			if (bgfx::getAvailInstanceDataBuffer(draw.spriteCount, k_Stride) < draw.spriteCount)
+			{
+				return;
+			}
+			fill(ownInstances, draw.firstSprite, draw.spriteCount);
+			base = draw.firstSprite;
+		}
+		const auto& instances = onePass ? passInstances : ownInstances;
+		const auto& run = _townBeliefSymbols.Run(draw.run);
+		for (const auto& command : std::span(commands).subspan(draw.firstCommand, draw.commandCount))
+		{
+			const auto& material = *run.materials.at(command.material);
+			if (!textures.Contains(material.texture))
+			{
+				continue;
+			}
+			const auto texture = textures.Handle(material.texture);
+			// A sheet without an alpha of its own takes its alpha from its red
+			const auto alphaTexture =
+			    textures.Contains(material.alphaTexture) ? textures.Handle(material.alphaTexture) : texture;
+			diffuse->Set(0, *texture);
+			alpha->Set(1, *alphaTexture);
+			bgfx::setState(BlendState(material.mode));
+			// The sprites tinted by the land read its light
+			landLuminosity->Set(6, GetLandLuminosity());
+			landLight->Set(7, GetLandLightTexture());
+			islandExtentUniform->Set(&islandExtent);
+			_plane->GetVertexBuffer().Bind();
+			bgfx::setInstanceDataBuffer(&instances, command.first - base, command.count);
+			program->Submit(viewId, command.depth);
+		}
+	};
+
+	for (size_t place = 0; place < centres.size(); ++place)
+	{
+		drawColumn(place);
+		const auto& draw = draws[place];
+		if (draw.laid)
+		{
+			submit(draw);
+		}
+		else
+		{
+			DrawTownBeliefParticles(desc, centres[place], seenBy);
+		}
+	}
 }
 
 void Renderer::SubmitParticleFrame(const DrawSceneDesc& desc, const particles::draw::Frame& frame,
