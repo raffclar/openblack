@@ -54,8 +54,8 @@ struct NetworkSessionSettings
 	std::string map;
 	/// How long the client tries to come back after it lost the socket. The server keeps the god for 5 minutes.
 	int64_t comeBackMicroseconds {5LL * 60 * 1'000'000};
-	/// How long the client tries again to open the socket of its first join. A pool server listens some seconds after
-	/// the lobby gives it to the game.
+	/// How long the client tries again to open the socket of its first join to a game of the internet lobby. A pool
+	/// server listens some seconds after the lobby gives it to the game.
 	int64_t joinRetryMicroseconds {60LL * 1'000'000};
 	/// Reads the file of a land in the Scripts folder of the game, for the check of the land before the start. None when
 	/// the land is not on this computer. With no reader, the client has no land but the testbed.

@@ -9,11 +9,13 @@
 
 #include <cstdint>
 
+#include <utility>
+
 #include <gtest/gtest.h>
 
+#include "FakeWebSocketClient.h"
 #include "Online/JoinRetryRule.h"
 #include "Online/NetworkSession.h"
-#include "online/FakeWebSocketClient.h"
 
 using namespace openblack;
 using online::NetworkSession;
@@ -33,13 +35,15 @@ WebSocketClosed Refused(int32_t status)
 /// A client that joins a server behind a proxy, with a clock that the test moves
 struct Client
 {
-	Client()
+	explicit Client(online::GameOrigin origin = online::GameOrigin::InternetLobby)
 	    : session(sockets, [this] { return now; })
 	{
-		session.Join(online::NetworkSessionSettings {
+		online::NetworkSessionSettings settings {
 		    .request = {.url = "wss://localhost/game/s1/x", .headers = {}, .subprotocols = {}, .serverKey = std::nullopt},
 		    .ticket = "ticket",
-		});
+		};
+		settings.origin = origin;
+		session.Join(std::move(settings));
 	}
 
 	void Step(int64_t microseconds)
@@ -116,4 +120,13 @@ TEST(JoinRetry, ARefusalOfTheServerEndsTheJoinAtOnce)
 	EXPECT_EQ(client.session.GetState(), NetworkSession::State::Ended);
 	EXPECT_EQ(client.session.GetEnd(), NetworkSession::End::NoConnection);
 	EXPECT_EQ(client.sockets.order.size(), 1U);
+}
+
+TEST(JoinRetry, AGameOnTheLocalNetworkDoesNotTryAgain)
+{
+	Client client(online::GameOrigin::Lan);
+	client.sockets.End(client.sockets.Last(), Refused(502));
+	client.Step(0);
+	EXPECT_EQ(client.session.GetState(), NetworkSession::State::Ended);
+	EXPECT_EQ(client.session.GetEnd(), NetworkSession::End::NoConnection);
 }

@@ -518,7 +518,10 @@ void NetworkSession::Closed(const WebSocketClosed& closed)
 		DropStream();
 		return;
 	}
-	if (_state == State::Connecting && join_retry::TryAgain(closed, _clock() - _joinStartedAt, _settings.joinRetryMicroseconds))
+	// Only a pool server of the lobby can listen after the client has its ticket. A server on the local network listens
+	// before the search finds it.
+	if (_state == State::Connecting && _settings.origin == GameOrigin::InternetLobby &&
+	    join_retry::TryAgain(closed, _clock() - _joinStartedAt, _settings.joinRetryMicroseconds))
 	{
 		const auto wait = std::chrono::duration_cast<std::chrono::microseconds>(_backoff.Next()).count();
 		_joinRetryAt = _clock() + wait;
