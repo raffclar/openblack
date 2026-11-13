@@ -165,7 +165,8 @@ void ParticleSystem::CollectEffectDrawFrame(EffectId id, float turnFraction, par
 		return;
 	}
 	ResolveTextures(*rules);
-	if (const auto drawn = rules->FindDrawn(id); drawn.has_value() && drawn->effect != nullptr)
+	// A hidden effect continues to step but does not draw
+	if (const auto drawn = rules->FindDrawn(id); drawn.has_value() && drawn->effect != nullptr && drawn->shown)
 	{
 		AddDrawn(*drawn, turnFraction, frame, DrawSources(*rules));
 	}

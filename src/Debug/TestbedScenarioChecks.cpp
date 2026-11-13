@@ -80,6 +80,10 @@ std::string_view Name(Quantity quantity)
 		return "the hand grips the tip bubble";
 	case Quantity::TotemGripped:
 		return "the hand grips a totem";
+	case Quantity::HandMiracle:
+		return "the hand holds a miracle";
+	case Quantity::PhysicalShields:
+		return "the number of physical shields";
 	}
 	return "";
 }

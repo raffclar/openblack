@@ -75,7 +75,8 @@ struct ScriptRowKind
 /// - The three mushroom rows (champignon, magic mushroom and toadstool) do not start in the physics. They only stand on
 ///   the land.
 /// - A dead tree starts in the physics on the land.
-/// - A globe that a script puts in the hand, and all other types, do not start in the physics.
+/// - A globe that a script puts in the hand, and all other types, do not start in the physics. The hand holds the seed
+///   of the globe, and a seed can never become a physics object.
 [[nodiscard]] std::optional<ScriptPhysicsStart> PhysicsStartOf(ObjectType type, uint32_t subtype,
                                                                const ScriptRowKind& row = {});
 
@@ -87,6 +88,9 @@ struct ScriptRowKind
 /// make a mobile object. A mobile object takes the row that the script gives. A lump of poo and an ark always take
 /// their own rows.
 [[nodiscard]] std::optional<MobileObjectInfo> MobileObjectRowOf(ObjectType type, uint32_t subtype);
+
+/// A dead tree that a script makes is always at the size of its model, whatever scale the script gives
+inline constexpr float k_DeadTreeScale = 1.0f;
 
 /// CREATE_WITH_ANGLE_AND_SCALE gives its angle in degrees; things are turned in radians
 [[nodiscard]] float AngleFromDegrees(float degrees);

@@ -385,7 +385,8 @@ struct LeashPick
 };
 
 /// A scribble of the hand shakes off the thing that the hand holds. The thing falls from where the hand holds it, with
-/// no speed, and the turn does not plant it again.
+/// no speed, and the turn does not plant it again. A miracle in the hand goes, and what its seed still holds goes back to
+/// the player's worship.
 struct HandShakeOff
 {
 };

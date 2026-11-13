@@ -194,6 +194,7 @@ public:
 	entt::entity TakeIconSeed(entt::entity site, PlayerNames holder, SpellSeedType seed, int powerUp, float chants) override;
 	void DiscardHeldSeed() override;
 	void DiscardHeldSeedOf(PlayerNames player) override;
+	void ShakeOffHeldSeedOf(PlayerNames player) override;
 	void DeleteSeed(entt::entity seed) override;
 	void SetIconSeedPowerUp(entt::entity seed, int powerUp) override;
 	bool TakeSeedBack(PlayerNames player, entt::entity seed) override;
@@ -393,6 +394,9 @@ private:
 	void FailCast();
 	/// The seed has gone from the hand, kept or not
 	void LetGoOfSeed(bool destroy);
+	/// The hand drops the miracle that it holds, and what the seed still holds goes back to the player's worship. When
+	/// the hand shakes, its sound plays and a band flies off the hand.
+	void DropHeldSeed(bool handShakes);
 	/// Once a turn: the seed in the hand of the player that the miracles of the hand act on waits until it is ready
 	void HeldSeedTurn();
 	/// A locked miracle was let go: the seed keeps what is left for another go, if enough

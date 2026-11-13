@@ -10,6 +10,8 @@
 // The testbed's scenarios of the gestures drawn with the hand: each gesture is drawn as a path through the same
 // recogniser the cursor goes through, so the debug window's gesture overlay shows it being drawn and matched
 
+#include <utility>
+
 #include "TestbedScenarioRegistry.h"
 
 using namespace openblack;
@@ -389,6 +391,107 @@ void testbed_scenarios::AddGestureScenarios(std::vector<Scenario>& all)
 	                 {.kind = Kind::PlayHandDemo, .delaySeconds = 0.1f, .handDemo = "Gestures"}},
 	    .townBeliefInPlayer = k_WorshipTownBelief,
 	    .townMiracles = {MagicType::Food},
+	});
+	// Where the shield demonstration of the second land looks: its camera stays still at its recorded place, which
+	// looks at the hut of Khazar's shield challenge
+	using Argument = ScriptArgument;
+	constexpr glm::vec2 k_ShieldDemoView {1052.0f, 899.0f};
+	constexpr float k_ShieldInfluenceRadius = 40.0f;
+	constexpr float k_OneShotSpellInHand = 31.0f;
+	constexpr float k_ShieldStrength = 7.0f;
+	constexpr float k_SeedPowerProperty = 17.0f;
+	all.push_back({
+	    .id = "story.l2_shield_demo",
+	    .name = "Story: Khazar's hand demonstration of the shield",
+	    .facet = Facet::Story,
+	    .description = "The start of the hand demonstration of Khazar's shield challenge on the second land. A circle of "
+	                   "influence of radius 40 goes about the place of the hut, as the challenge makes it. The shield "
+	                   "demonstration starts. Then a script puts a shield miracle in the hand with the strength of seven "
+	                   "shields. The camera goes where the recording had it. The Magic debug window is open under the "
+	                   "place where the recorded hand presses the Action button.",
+	    .expected = "The hand holds the Action button and draws a circle about the place of the hut. When it lets go of "
+	                "the button, the shield goes up there and the hand is empty. At the end of the demonstration the "
+	                "hand holds no miracle.",
+	    .environment = {.dispenserGrid = false, .landNumber = 2},
+	    .framing = {.shot = Shot::Testbed},
+	    .commands = {{.kind = Kind::CallNative,
+	                  .delaySeconds = 1.0f,
+	                  .script = "INFLUENCE_POSITION",
+	                  .scriptArguments = {{.kind = Argument::Kind::Position, .point = k_ShieldDemoView},
+	                                      {.number = k_ShieldInfluenceRadius},
+	                                      {.number = 0.0f},
+	                                      {.number = 0.0f}}},
+	                 {.kind = Kind::PlayHandDemo, .delaySeconds = 0.5f, .handDemo = "shield"},
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 0.1f,
+	                  .script = "CREATE",
+	                  .scriptArguments = {{.kind = Argument::Kind::Integer, .number = k_OneShotSpellInHand},
+	                                      {.kind = Argument::Kind::Integer,
+	                                       .number = static_cast<float>(SpellSeedType::PhysicalShield)},
+	                                      {.kind = Argument::Kind::Position, .point = {0.0f, 0.0f}}}},
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 0.1f,
+	                  .script = "SET_PROPERTY",
+	                  .scriptArguments = {{.kind = Argument::Kind::Integer, .number = k_SeedPowerProperty},
+	                                      {.kind = Argument::Kind::LastResult},
+	                                      {.number = k_ShieldStrength}}}},
+	    .debugWindow = "Magic",
+	    .checks = {{.label = "the hand holds the shield miracle at the start of the demonstration",
+	                .quantity = checks::Quantity::HandMiracle,
+	                .afterTurns = 25,
+	                .atLeast = 1.0},
+	               {.label = "the demonstration casts the shield",
+	                .quantity = checks::Quantity::PhysicalShields,
+	                .afterTurns = 25,
+	                .byTurn = 200,
+	                .atLeast = 1.0},
+	               {.label = "the hand holds no miracle after the demonstration",
+	                .quantity = checks::Quantity::HandMiracle,
+	                .afterTurns = 200,
+	                .atMost = 0.0}},
+	});
+	// The same demonstration on the second land of the story, where the land around the hut is not flat to the
+	// horizon. On a wide screen a cursor that goes outside the screen's 4:3 middle points at other places.
+	{
+		auto onTheLand = all.back();
+		onTheLand.id = "story.l2_shield_demo_land";
+		onTheLand.name = "Story: Khazar's hand demonstration of the shield on the second land";
+		onTheLand.description =
+		    "The second land of the story. A circle of influence of radius 40 goes about the hut of Khazar's "
+		    "shield challenge, as the challenge makes it. The shield demonstration starts. Then a script puts "
+		    "a shield miracle in the hand with the strength of seven shields. The camera goes where the recording had "
+		    "it. Use it with a window of any shape, such as 5120 by 1190.";
+		onTheLand.expected = "The hand holds the Action button and draws a circle about the hut, as on a 4:3 screen. "
+		                     "When it lets go of the button, the shield goes up over the hut and the hand is empty. At "
+		                     "the end of the demonstration the hand holds no miracle.";
+		onTheLand.environment = {.land = Land::Story, .storyLand = "Land2.txt", .dispenserGrid = false};
+		// The ring of influence goes about the hut of the challenge, which stands this far from the middle of the land
+		constexpr glm::vec2 k_HutOnTheLand {1379.57f, 737.72f};
+		onTheLand.commands.front().scriptArguments.front().point = k_HutOnTheLand;
+		onTheLand.debugWindow = {};
+		all.push_back(std::move(onTheLand));
+	}
+	all.push_back({
+	    .id = "miracles.hand_demo_shakes_off_seed",
+	    .name = "A hand demonstration shakes the miracle off the hand",
+	    .facet = Facet::Miracles,
+	    .description = "A water miracle is put in the hand. Two seconds later the gestures hand demonstration starts. It "
+	                   "starts as a script starts it, without the option that keeps the hand as it is.",
+	    .expected = "The hand holds the water miracle, with its bracelet and glow. When the demonstration starts, the "
+	                "miracle goes from the hand at once: the bracelet and the glow go. The hand does not shake: no shake "
+	                "sound plays and no band flies off the hand. Then the hand draws the gestures of the demonstration.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Testbed},
+	    .commands = {HoldSeed(SpellSeedType::Water, 1.0f),
+	                 {.kind = Kind::PlayHandDemo, .delaySeconds = 2.0f, .handDemo = "Gestures"}},
+	    .checks = {{.label = "the hand holds the miracle before the demonstration",
+	                .quantity = checks::Quantity::HandMiracle,
+	                .afterTurns = 20,
+	                .atLeast = 1.0},
+	               {.label = "the start of the demonstration shakes the miracle off the hand",
+	                .quantity = checks::Quantity::HandMiracle,
+	                .afterTurns = 40,
+	                .atMost = 0.0}},
 	});
 	all.push_back({
 	    .id = "story.hidden_phone_box",

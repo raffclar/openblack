@@ -76,6 +76,7 @@
 #include "ECS/DrawnPlace.h"
 #include "ECS/GameEndConditions.h"
 #include "ECS/Graveyards.h"
+#include "ECS/MobileObjectClassRules.h"
 #include "ECS/MobileObjectRecord.h"
 #include "ECS/Registry.h"
 #include "ECS/Statistics.h"
@@ -101,6 +102,7 @@
 #include "ECS/Systems/WonderSystemInterface.h"
 #include "ECS/Systems/WorkshopSystemInterface.h"
 #include "ECS/TempleConstruction.h"
+#include "ECS/ThingMapPlace.h"
 #include "ECS/ThingModel.h"
 #include "ECS/TownAggression.h"
 #include "ECS/TownAreaRules.h"
@@ -597,6 +599,47 @@ float world_objects::LifeOf(entt::entity object)
 	return 1.0f;
 }
 
+namespace
+{
+/// Whether the object is a loose object that the game makes as a crop
+bool IsCrop(const Registry& registry, entt::entity object)
+{
+	const auto* mobile = registry.TryGet<const MobileObject>(object);
+	return mobile != nullptr && Locator::infoConstants::has_value() &&
+	       mobile_object_record::ClassOf(Locator::infoConstants::value(), *mobile) == mobile_object_record::Class::Crop;
+}
+
+/// A crop set to a life: with no life it goes from the world, also when it is protected. Otherwise it takes the life
+/// unless the life is not allowed. Then it takes the size of the life that it has.
+void SetCropLife(Registry& registry, entt::entity object, float life, bool allowed)
+{
+	if (mobile_object_class::CropGoes(life))
+	{
+		world_objects::Remove(object);
+		return;
+	}
+	if (allowed)
+	{
+		registry.AssignOrReplace<ObjectLife>(object, ObjectLife {.life = life});
+	}
+	const auto* record = mobile_object_record::Of(Locator::infoConstants::value(), registry.Get<const MobileObject>(object));
+	auto* transform = registry.TryGet<Transform>(object);
+	if (record == nullptr || transform == nullptr)
+	{
+		return;
+	}
+	// A crop that changes its size comes out of the map's cells and goes in again
+	const float scale = mobile_object_class::CropScale(world_objects::LifeOf(object), record->finalScale);
+	const bool resized = transform->scale.x != scale;
+	transform->scale = glm::vec3(scale);
+	registry.SetDirty();
+	if (resized)
+	{
+		thing_map_place::Reinsert(object);
+	}
+}
+} // namespace
+
 void world_objects::SetLife(entt::entity object, float life, bool allowed)
 {
 	auto& registry = Locator::entitiesRegistry::value();
@@ -633,6 +676,11 @@ void world_objects::SetLife(entt::entity object, float life, bool allowed)
 	if (registry.AllOf<Tree>(object) && life <= 0.0f)
 	{
 		Remove(object);
+		return;
+	}
+	if (IsCrop(registry, object))
+	{
+		SetCropLife(registry, object, life, allowed);
 		return;
 	}
 	// A pile set to a life gains or loses what that life holds
@@ -804,6 +852,14 @@ float world_objects::ReduceLife(entt::entity object, float damage, std::optional
 		const float life = std::max(before - damage, 0.0f);
 		SetLife(object, life,
 		        script::property_rules::CanSetLife(life, HeldDuringCutscene(object), registry.AllOf<Indestructible>(object)));
+		return LifeOf(object);
+	}
+	// A crop loses life as a script sets it, so it shrinks with its life and goes with none
+	if (IsCrop(registry, object))
+	{
+		const float after = std::max(before - damage, 0.0f);
+		SetLife(object, after,
+		        script::property_rules::CanSetLife(after, HeldDuringCutscene(object), registry.AllOf<Indestructible>(object)));
 		return LifeOf(object);
 	}
 	auto& life = registry.AllOf<ObjectLife>(object) ? registry.Get<ObjectLife>(object)
@@ -1324,6 +1380,14 @@ float world_objects::IncreaseLife(entt::entity object, float amount)
 	const TotemsTakeCentreLife totems(registry, object);
 	// A villager or an animal gains life as a script sets it
 	if (registry.AnyOf<Villager, Animal>(object))
+	{
+		const float life = std::min(before + amount, 1.0f);
+		SetLife(object, life,
+		        script::property_rules::CanSetLife(life, HeldDuringCutscene(object), registry.AllOf<Indestructible>(object)));
+		return LifeOf(object);
+	}
+	// A crop gains life as a script sets it, so it grows with its life
+	if (IsCrop(registry, object))
 	{
 		const float life = std::min(before + amount, 1.0f);
 		SetLife(object, life,

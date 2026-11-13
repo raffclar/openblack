@@ -34,6 +34,7 @@
 #include "EndGameBox.h"
 #include "GameFont.h"
 #include "GameMenu.h"
+#include "Graphics/WorldLabelGroup.h"
 #include "Hand/HandTricons.h"
 #include "Help/ControlIcons.h"
 #include "Help/SingAlong.h"
@@ -115,6 +116,11 @@ public:
 	/// The open dialogs and, over them, the pointer at the mouse. The pointer also shows over the debug windows, which
 	/// hide the hand, and is drawn over them.
 	void Draw(glm::u16vec2 resolution, glm::ivec2 mouse, uint32_t milliseconds, bool overDebugWindow);
+	/// Submits a group of the labels in the world that the last Draw drew, at its point in the scene. A group submits
+	/// one time in a frame.
+	void SubmitWorldLabels(graphics::WorldLabelGroup group);
+	/// Submits each group of the labels in the world that the scene did not submit, in the order of the groups
+	void SubmitWaitingWorldLabels();
 	/// The box that shows while the game saves or loads, drawn alone as a frame of its own over the last picture
 	void DrawSavingBox(glm::u16vec2 resolution, bool loading, bool darken);
 
@@ -558,8 +564,23 @@ private:
 	std::optional<FontFace> _evilAdvisorFont;
 	Canvas _canvas;
 	Canvas _pointerCanvas {graphics::RenderPass::Cursor};
-	/// The villagers' labels, which the world in front of them hides
+	/// The labels in the world that the world in front of them hides, and that go before the scene: the learning texts,
+	/// the chat bubbles and the temple scroll's pictures
 	Canvas _worldLabelsCanvas {graphics::RenderPass::WorldLabels, Canvas::DepthTest::NearerIsGreater};
+	/// The labels in the world that the scene's main pass submits at the points where the game adds them to its sort:
+	/// the floating numbers, the villagers' names and the tip bubble, in the order of graphics::WorldLabelGroup
+	std::array<Canvas, graphics::k_WorldLabelGroupCount> _groupedLabelCanvases {
+	    Canvas {graphics::RenderPass::WorldLabels, Canvas::DepthTest::NearerIsGreater},
+	    Canvas {graphics::RenderPass::WorldLabels, Canvas::DepthTest::NearerIsGreater},
+	    Canvas {graphics::RenderPass::WorldLabels, Canvas::DepthTest::NearerIsGreater},
+	};
+	/// The groups of labels that this frame drew and that are not submitted yet
+	graphics::WorldLabelSubmits _groupedLabelsWaiting;
+	/// The canvas of a group of the labels in the world
+	[[nodiscard]] Canvas& GroupedLabelCanvas(graphics::WorldLabelGroup group)
+	{
+		return _groupedLabelCanvases.at(static_cast<size_t>(group));
+	}
 	/// The cinema bars, under the advisors near the screen
 	Canvas _cinemaBarsCanvas {graphics::RenderPass::CinemaBars};
 	/// What the tattoo editor draws over the creature that it shows from the main menu
