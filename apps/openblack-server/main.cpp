@@ -22,6 +22,7 @@
 #include <filesystem>
 #include <iostream>
 #include <iterator>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <thread>
@@ -34,7 +35,10 @@
 #include "Common/BuildVersion.h"
 #include "Common/CrashHandler.h"
 #include "Common/DeveloperTools.h"
+#include "Common/ErrorReportsInterface.h"
+#include "Common/ErrorReportsRules.h"
 #include "ECS/GameEndConditions.h"
+#include "Locator.h"
 #include "Online/Desktop/UdpLanDiscovery.h"
 #include "Server/DedicatedServer.h"
 #include "Server/MapExport.h"
@@ -161,11 +165,13 @@ int main(int argc, char* argv[])
 		("row-dump-keep", "Tools: with --row-dump, the count of the last turns of which the dump keeps the rows.", cxxopts::value<uint32_t>()->default_value("64"))
 		("world-states", "Tools: write the world state of the server to this folder at the end of each turn of --world-state-turns, with a map of its synced bytes (tools/sim/save_diff.py --synced compares two computers).", cxxopts::value<std::string>())
 		("world-state-turns", "Tools: with --world-states, the turns, such as 250 or 100,250,400.", cxxopts::value<std::string>())
+		("sentry-test-error", "Developers: after the start of the error reports, throw an exception with the message \"Sentry test error\" and the time, to test the reports. The server needs a DSN in SENTRY_DSN.")
 		("lan-search", "Tests: search the local network for game servers for this number of seconds, as the game's LAN list does. Write each room and stop. Needs no -g.", cxxopts::value<uint32_t>());
 #endif
 	// clang-format on
 
 	openblack::server::ServerSettings settings;
+	[[maybe_unused]] bool sentryTestError = false;
 	try
 	{
 		// A build without the developer tools ignores the options of the tools and keeps those of a deployed server
@@ -201,6 +207,7 @@ int main(int argc, char* argv[])
 		{
 			return SearchLocalNetwork(result["lan-search"].as<uint32_t>());
 		}
+		sentryTestError = result.count("sentry-test-error") != 0;
 #endif
 		if (result.count("game-path") == 0)
 		{
@@ -445,8 +452,22 @@ int main(int argc, char* argv[])
 	std::signal(SIGPIPE, SIG_IGN);
 #endif
 
+	// The game server sends error and crash reports when it has a DSN, with no option
+	const openblack::ErrorReportsScope errorReports(openblack::error_reports::Role::Server, settings.logFile);
+	if (openblack::Locator::errorReports::has_value())
+	{
+		openblack::Locator::errorReports::value().SetEnabled(true);
+	}
+
 	try
 	{
+		// A developer test of the error reports. The exception goes to the crash handler as an uncaught exception.
+		if (sentryTestError)
+		{
+			const auto now = std::chrono::system_clock::now().time_since_epoch();
+			throw std::runtime_error(
+			    openblack::error_reports::TestErrorMessage(std::chrono::duration_cast<std::chrono::seconds>(now).count()));
+		}
 		return openblack::server::Run(settings, g_StopAsked, {});
 	}
 	catch (const std::exception& error)

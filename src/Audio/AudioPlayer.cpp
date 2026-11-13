@@ -162,6 +162,12 @@ void AudioPlayer::QueueBuffer(SourceId sourceId, BufferId bufferId)
 	alCheckCall(alSourceQueueBuffers(sourceId, 1, &bufferId));
 }
 
+void AudioPlayer::AttachBuffer(SourceId sourceId, BufferId bufferId)
+{
+	// A static source: the mixer uses the loop points of its buffer only for this kind of source
+	alCheckCall(alSourcei(sourceId, AL_BUFFER, static_cast<ALint>(bufferId)));
+}
+
 void AudioPlayer::DeleteBuffer(BufferId id)
 {
 	alCheckCall(alDeleteBuffers(1, &id));

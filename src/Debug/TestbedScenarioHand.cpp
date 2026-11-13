@@ -794,6 +794,27 @@ void testbed_scenarios::AddHand(std::vector<Scenario>& all)
 	                 {.kind = Kind::PointerTo, .delaySeconds = 1.0f, .point = {0.5f, 0.7f}}},
 	});
 
+	// The camera looks at a wood pile on flat land from 35 m. The hand scoops wood from it. Then the camera flies far
+	// from the pile, and the hand carries the handful there.
+	all.push_back({
+	    .id = "hand.scoop_pile_carry",
+	    .name = "Carrying a scooped handful far from the pile",
+	    .facet = Facet::Hand,
+	    .description = "The hand takes wood from a wood pile and keeps the button down for two seconds. Then it lets go "
+	                   "of the button. The camera flies to a bookmark more than 200 m from the pile, and the hand moves "
+	                   "to the land in front of the camera with the handful.",
+	    .expected = "The hand holds the wood logs below it all the time, also after the camera flies away from the pile. "
+	                "The logs do not go when the pile is out of the view.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {-34.5f, 9.0f, 4.5f}, .look = {0.0f, 0.0f, 0.0f}},
+	    .objects = {{.type = PotInfo::WoodPile_1, .offset = {0.0f, 0.0f}, .amount = 2000}},
+	    .commands = {{.kind = Kind::PointerTo, .delaySeconds = 1.0f, .point = {0.5f, 0.5f}},
+	                 {.kind = Kind::PointerPress, .delaySeconds = 1.0f, .value = 3},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 2.0f, .value = 3},
+	                 {.kind = Kind::FlyToBookmark, .delaySeconds = 1.0f, .point = {150.0f, 150.0f}, .value = 0},
+	                 {.kind = Kind::PointerTo, .delaySeconds = 0.5f, .point = {0.5f, 0.6f}}},
+	});
+
 	// The select button grips the land on a wood pile and drags the camera. The wood pile goes from the world during the
 	// drag, and the end of the interface lock stops the drag.
 	all.push_back({
@@ -837,6 +858,28 @@ void testbed_scenarios::AddHand(std::vector<Scenario>& all)
 	    .commands = {{.kind = Kind::PointerOnObject, .delaySeconds = 2.0f, .value = 2, .object = 1, .amount = 0.5f},
 	                 {.kind = Kind::PointerPress, .delaySeconds = 1.0f, .value = 3},
 	                 {.kind = Kind::PointerRelease, .delaySeconds = 8.0f, .value = 3},
+	                 {.kind = Kind::PointerTo, .delaySeconds = 1.0f, .point = {0.5f, 0.7f}}},
+	});
+
+	// The camera looks at a storage pit with food. The hand scoops from its food pile for twelve seconds, so that the
+	// sound of the scoop loops more than one time.
+	all.push_back({
+	    .id = "hand.scoop_store_food",
+	    .name = "The sound of a food scoop from a storage pit",
+	    .facet = Facet::Hand,
+	    .description = "A Celtic town of the player's with a village centre and a storage pit with 20000 food. The hand "
+	                   "takes food from the food pile of the storage pit and keeps the button down for twelve seconds. "
+	                   "Then it releases the button and moves away with the handful.",
+	    .expected = "The sound of the food that pours plays one time from its start. Then it loops over its last part "
+	                "with no gap, and the start of the sound does not play again. The sound becomes higher while the "
+	                "scoop continues. It stops when the button goes up.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-42.0f, 18.0f}, {-18.0f, 42.0f}}},
+	    .objects = {{.type = AbodeInfo::CelticTownCentre, .offset = {0.0f, 50.0f}},
+	                {.type = AbodeInfo::CelticStoragePit, .offset = {-30.0f, 30.0f}, .storedFood = 20000}},
+	    .commands = {{.kind = Kind::PointerOnObject, .delaySeconds = 2.0f, .value = 6, .object = 1, .amount = 0.5f},
+	                 {.kind = Kind::PointerPress, .delaySeconds = 1.0f, .value = 3},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 12.0f, .value = 3},
 	                 {.kind = Kind::PointerTo, .delaySeconds = 1.0f, .point = {0.5f, 0.7f}}},
 	});
 

@@ -754,6 +754,8 @@ void CreatureMindSystem::DesiresTurn(entt::entity entity)
 		}
 		if (!mind.planActive && creature_mind::AgendaOver(mind.idle))
 		{
+			// The plan that it keeps has priority 0 from now, so the next choice can take any plan
+			creature_planner::NoPlanRuns(mind.planner);
 			++mind.thinksWithoutPlan;
 			// A turn with no plan lets it faint again
 			if (needs != nullptr)

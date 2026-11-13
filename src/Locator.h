@@ -15,6 +15,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <string_view>
 
 #include <entt/locator/locator.hpp>
 
@@ -61,6 +62,12 @@ namespace chlapi
 {
 class CHLApi;
 }
+
+namespace error_reports
+{
+class ErrorReportsInterface;
+enum class Role : uint8_t;
+} // namespace error_reports
 
 namespace online
 {
@@ -338,6 +345,24 @@ void InitializeLevelOnOpenLand(OpenLandAltitudes altitudes = OpenLandAltitudes::
 /// The settings of this computer, read from the file when there is one (see computer_settings)
 void InitializeComputerSettings(std::optional<std::filesystem::path> file);
 void ShutDownServices();
+/// Makes the error and crash reports of this program (Locator::errorReports), with the log file that each report
+/// attaches. The service does not start here: the game starts it when the player turns on the option, and the game
+/// server starts it at once. A build with no reports makes no service.
+void InitializeErrorReports(error_reports::Role role, std::string_view logFile);
+/// Stops the error reports, sends the reports that wait, and removes the service
+void ShutDownErrorReports();
+/// Keeps the error reports from its construction to its destruction. ShutDownServices does not remove them, so that
+/// a crash or an exception while the services stop still gives a report.
+class ErrorReportsScope
+{
+public:
+	ErrorReportsScope(error_reports::Role role, std::string_view logFile) { InitializeErrorReports(role, logFile); }
+	~ErrorReportsScope() { ShutDownErrorReports(); }
+	ErrorReportsScope(const ErrorReportsScope&) = delete;
+	ErrorReportsScope& operator=(const ErrorReportsScope&) = delete;
+	ErrorReportsScope(ErrorReportsScope&&) = delete;
+	ErrorReportsScope& operator=(ErrorReportsScope&&) = delete;
+};
 /// Starts the debug inspector's server on a port of 127.0.0.1 (any free one for 0): false, with why in the log, if it
 /// can't listen. Only in builds with the inspector. The inspector has no parts of the game on the player's computer, as
 /// on the dedicated server.
@@ -356,6 +381,8 @@ struct Locator
 	using config = entt::locator<EngineConfig>;
 	using infoConstants = entt::locator<const InfoConstants>;
 	using profiler = entt::locator<Profiler>;
+	/// The error and crash reports to Sentry. Only in builds with the reports (OPENBLACK_SENTRY).
+	using errorReports = entt::locator<error_reports::ErrorReportsInterface>;
 	/// The work that a game turn gives to the main thread: the graphics, the renderer and the audio
 	using mainThreadQueue = entt::locator<MainThreadQueue>;
 	using events = entt::locator<EventManager>;

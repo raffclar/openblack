@@ -1372,6 +1372,12 @@
   "query": "engine.tool_run"
  },
  {
+  "description": "The error and crash reports to Sentry: whether the program has a DSN, whether the reports go now, the option of the player, the role, the release and the environment. The answer never holds the DSN.",
+  "kind": "object",
+  "parameters": [],
+  "query": "engine.error_reports"
+ },
+ {
   "description": "Which of the engine's services are there, the game's random seeds, the game's path, the debug windows' focus and the inspector's port",
   "kind": "object",
   "parameters": [],

@@ -11,8 +11,10 @@
 
 #include <cstdint>
 
+#include <algorithm>
 #include <array>
 #include <optional>
+#include <span>
 #include <unordered_map>
 #include <vector>
 
@@ -153,11 +155,26 @@ struct CreatureAnimation
 	return {.position = animation->drawnPlace->position, .rotation = animation->drawnPlace->rotation, .scale = transform.scale};
 }
 
+/// Whether two lists of slots play the same animations with the same weights, mirrors and pairs. The times can differ.
+[[nodiscard]] inline bool PlaySameAnimations(std::span<const CreatureAnimation::Slot> left,
+                                             std::span<const CreatureAnimation::Slot> right)
+{
+	return std::ranges::equal(left, right, [](const auto& a, const auto& b) {
+		return a.animation == b.animation && a.weight == b.weight && a.mirrored == b.mirrored &&
+		       a.blendedWith == b.blendedWith && a.blendWeight == b.blendWeight;
+	});
+}
+
 /// The animations that the frame draws a creature's body with: those of its walk at the frame's part of the turn, or
-/// those of the turn
+/// those of the turn. The frame uses the animations of the walk only when the turn plays them. An action with a thing,
+/// a blow or a spell plays other animations in the turn. The frame keeps these animations, so that their sounds play.
 [[nodiscard]] inline const std::vector<CreatureAnimation::Slot>& DrawnSlots(const CreatureAnimation& animation)
 {
-	return animation.drawnPlace.has_value() ? animation.drawnPlace->slots : animation.slots;
+	if (animation.drawnPlace.has_value() && PlaySameAnimations(animation.drawnPlace->slots, animation.slots))
+	{
+		return animation.drawnPlace->slots;
+	}
+	return animation.slots;
 }
 
 /// A creature's eyes: where they look and blink, and where each eyeball and eyelid is drawn this frame

@@ -21,6 +21,7 @@
 #include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/CreatureDrawnWalk.h"
+#include "ECS/CreatureTurnSteps.h"
 
 using namespace openblack;
 using namespace openblack::ecs;
@@ -146,9 +147,60 @@ TEST(CreatureDrawnWalk, TheDrawnTransformIsTheDrawnPlaceWhenThereIsOne)
 	EXPECT_EQ(drawn.rotation, animation.drawnPlace->rotation);
 	// The scale is the creature's own
 	EXPECT_EQ(drawn.scale, transform.scale);
-	EXPECT_EQ(components::DrawnSlots(animation).front().animation, 7u);
 	// The turn's slots stay as the turn left them
 	EXPECT_EQ(animation.slots.front().animation, 3u);
+}
+
+TEST(CreatureDrawnWalk, TheFrameUsesTheAnimationsOfTheWalkWhenTheTurnPlaysThem)
+{
+	const auto walk = Walking();
+	CreatureAnimation animation;
+	// The end of the turn puts the animations of the walk on the body
+	animation.slots = creature_drawn_walk::PlaceAt(walk, 0.0f, 1.0f).slots;
+	animation.drawnPlace = creature_drawn_walk::PlaceAt(walk, 0.0f, 0.25f);
+	const auto& drawn = components::DrawnSlots(animation);
+	ASSERT_EQ(drawn.size(), 2u);
+	EXPECT_EQ(drawn[0].animation, 7u);
+	// The frame plays the walk at its part of the turn
+	EXPECT_EQ(drawn[0].timeMs, 270.0f);
+}
+
+TEST(CreatureDrawnWalk, TheFrameUsesTheAnimationsOfAnActionThatTheTurnPlays)
+{
+	// After a walk, the creature stands and eats what it holds. The walk has no animations, and the turn plays the eat.
+	auto walk = Walking();
+	walk.tracks.clear();
+	CreatureAnimation animation;
+	animation.slots.push_back({.animation = 96, .timeMs = 1170.0f, .weight = 1.0f, .mirrored = false});
+	animation.drawnPlace = creature_drawn_walk::PlaceAt(walk, 0.0f, 0.5f);
+	const auto& drawn = components::DrawnSlots(animation);
+	ASSERT_EQ(drawn.size(), 1u);
+	EXPECT_EQ(drawn[0].animation, 96u);
+	EXPECT_EQ(drawn[0].timeMs, 1170.0f);
+
+	// A walk that stands and breathes keeps the action of the turn too
+	walk.tracks.push_back({.animation = 0,
+	                       .fromMs = 0.0f,
+	                       .advanceMs = 0.0f,
+	                       .durationMs = 2208.0f,
+	                       .weight = 1.0f,
+	                       .looping = false,
+	                       .breathing = true});
+	animation.drawnPlace = creature_drawn_walk::PlaceAt(walk, 0.4f, 0.5f);
+	EXPECT_EQ(components::DrawnSlots(animation).front().animation, 96u);
+}
+
+TEST(CreatureDrawnWalk, TheSoundsOfAnActionAfterAWalkComeFromTheAction)
+{
+	auto walk = Walking();
+	walk.tracks.clear();
+	CreatureAnimation animation;
+	animation.slots.push_back({.animation = 96, .timeMs = 1170.0f, .weight = 1.0f, .mirrored = false});
+	animation.drawnPlace = creature_drawn_walk::PlaceAt(walk, 0.0f, 0.5f);
+	const auto layers = creature_turn_steps::LayersOf(animation, components::DrawnSlots(animation), animation.face);
+	ASSERT_EQ(layers.slots.size(), 1u);
+	EXPECT_EQ(layers.slots[0].animation, 96u);
+	EXPECT_EQ(layers.soundingSlot, std::optional<size_t>(0));
 }
 
 TEST(CreatureDrawnWalk, AFightActionEndsAtTheSameTurnAtAnyFrameRate)

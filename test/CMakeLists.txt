@@ -1904,6 +1904,7 @@ openblack_setup_and_add_test(test_registry_fresh_ids test_registry_fresh_ids.cpp
 openblack_setup_and_add_test(test_particle_turn_order test_particle_turn_order.cpp)
 openblack_setup_and_add_test(test_start_rules online/test_start_rules.cpp)
 openblack_setup_and_add_test(test_developer_tools test_developer_tools.cpp)
+openblack_setup_and_add_test(test_error_reports test_error_reports.cpp)
 openblack_setup_and_add_inspector_test(
   test_inspector_network_gate inspector/test_inspector_network_gate.cpp
 )
@@ -2539,6 +2540,7 @@ openblack_setup_and_add_test(
 openblack_setup_and_add_test(test_main_storage_pit test_main_storage_pit.cpp)
 openblack_setup_and_add_test(test_storm_fade test_storm_fade.cpp)
 openblack_setup_and_add_test(test_mix_volume audio/test_mix_volume.cpp)
+openblack_setup_and_add_test(test_sample_feed audio/test_sample_feed.cpp)
 openblack_setup_and_add_test(
   test_oracle_hand_tug_lean oracle/test_oracle_hand_tug_lean.cpp
 )

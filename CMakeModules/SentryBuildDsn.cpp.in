@@ -1,0 +1,23 @@
+/******************************************************************************
+ * Copyright (c) 2018-2026 openblack developers
+ *
+ * For a complete list of all authors, please refer to contributors.md
+ * Interested in contributing? Visit https://github.com/openblack/openblack
+ *
+ * openblack is licensed under the GNU General Public License version 3.
+ *******************************************************************************/
+
+// The configure step writes this file into the build folder from the cache value OPENBLACK_SENTRY_DSN. Do not keep
+// the written file in the repository.
+
+#include <string_view>
+
+namespace openblack::error_reports
+{
+
+std::string_view BuildDsn() noexcept
+{
+	return "@OPENBLACK_SENTRY_DSN@";
+}
+
+} // namespace openblack::error_reports

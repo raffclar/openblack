@@ -51,6 +51,7 @@
 #include "CHLApi.h"
 #include "Camera/CameraZones.h"
 #include "Common/BufferedLogSink.h"
+#include "Common/ErrorReportsInterface.h"
 #include "Common/GameRandom.h"
 #include "Common/RandomNumberManager.h"
 #include "Common/StringUtils.h"
@@ -1119,6 +1120,8 @@ ProfileMenu ProfileMenuSettings()
 	// The settings the menu starts with are the game's
 	gui::MenuSettings settings;
 	settings.leftHandedHand = !Locator::config::value().rightHandedHand;
+	// The crash reports box shows only when this program can send the reports
+	settings.crashReportsAvailable = Locator::errorReports::has_value() && Locator::errorReports::value().HasDestination();
 	// The options the player keeps with their profile, the game's own without one
 	if (const auto profile = Locator::playerProfileSystem::value().GetCurrentProfile(); profile.has_value())
 	{
