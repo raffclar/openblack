@@ -219,7 +219,7 @@ enum class HostAction : uint8_t
 /// The text that shows when the pointer is on the warning symbol of a player without the custom map. The words are
 /// the user's words (2026-11-12).
 inline constexpr std::u16string_view k_MapWarningText =
-    u"This players needs to download the custom map first and may delay the start of play.";
+    u"This player needs to download the custom map first and may delay the start of play.";
 /// Whether the slot shows the warning symbol: the room plays a custom map, and the player of the slot does not have it
 /// yet. The host and all the players see the symbol.
 [[nodiscard]] bool ShowsMapWarning(const online::lobby::LobbyRoom& room, const online::lobby::SlotView& slot);

@@ -117,6 +117,34 @@ HttpResponse ResponseOf(const LobbyError& error)
 
 } // namespace
 
+namespace
+{
+/// The piece that an answer to the request of a range of a map file gives. The answer 206 must give the range that the
+/// request asked for, or a shorter range at the end of the file. The answer 200 gives the full file. The size of the
+/// list must agree when the list gives one.
+std::optional<lobby_api::FilePiece> MapPieceOf(online::HttpResponse& response, uint64_t offset, uint64_t count, uint64_t size)
+{
+	constexpr int32_t k_PartialContent = 206;
+	const auto received = static_cast<uint64_t>(response.body.size());
+	if (response.status == k_PartialContent)
+	{
+		const auto header = response.Header("content-range");
+		const auto range = header.has_value() ? lobby_api::ParseContentRange(*header) : std::nullopt;
+		if (!range.has_value() || range->first != offset || received != range->last - range->first + 1 || received > count ||
+		    (size != 0 && range->total != size) || (received < count && range->last + 1 != range->total))
+		{
+			return std::nullopt;
+		}
+		return lobby_api::FilePiece {.offset = offset, .total = range->total, .bytes = std::move(response.body)};
+	}
+	if (response.status != 200 || (size != 0 && received != size))
+	{
+		return std::nullopt;
+	}
+	return lobby_api::FilePiece {.offset = 0, .total = received, .bytes = std::move(response.body)};
+}
+} // namespace
+
 LobbyError LobbyErrorOf(const online::HttpResponse& response)
 {
 	switch (response.error)
@@ -889,6 +917,48 @@ void LobbyClientSystem::DownloadMapPackage(const lobby_api::OnlineMap& map, Lobb
 	    .large = true,
 	    .mostBytes = size,
 	    .site = true,
+	});
+}
+
+void LobbyClientSystem::DownloadMapPiece(const lobby_api::OnlineMap& map, uint64_t offset, uint64_t count,
+                                         LobbyCallback<lobby_api::FilePiece> callback)
+{
+	if (!_config.has_value())
+	{
+		Fail(callback, ErrorOfKind(LobbyErrorKind::NotConfigured));
+		return;
+	}
+	// A land with a package comes as its package from the site. Any other land comes from the lobby by its hash.
+	const bool package = !map.packageSha256.empty();
+	if (count == 0 || (package && (!map.packageUrl.starts_with(lobby_api::k_MapPackagePath) || map.packageSize <= 0)))
+	{
+		Fail(callback, LobbyError {.kind = LobbyErrorKind::BadAnswer});
+		return;
+	}
+	const auto size = static_cast<uint64_t>(std::max<int64_t>(package ? map.packageSize : map.size, 0));
+	// A server that does not give ranges gives the full file. The transfer then stops at the size that the list gave.
+	Authorized(Call {
+	    .method = HttpMethod::Get,
+	    .path = package ? map.packageUrl : "/maps/" + map.sha256,
+	    .headers = {{"Accept", "application/octet-stream"}, {"Range", lobby_api::RangeHeaderOf(offset, offset + count - 1)}},
+	    .done =
+	        [callback = std::move(callback), size, offset, count](HttpResponse&& response) {
+		        if (auto error = LobbyErrorOf(response); error.kind != LobbyErrorKind::None)
+		        {
+			        Fail(callback, std::move(error));
+			        return;
+		        }
+		        auto piece = MapPieceOf(response, offset, count, size);
+		        if (!piece.has_value())
+		        {
+			        Fail(callback, LobbyError {.kind = LobbyErrorKind::BadAnswer, .status = response.status});
+			        return;
+		        }
+		        Succeed(callback, std::move(*piece));
+	        },
+	    .large = true,
+	    .mostBytes = static_cast<size_t>(size),
+	    .site = package,
 	});
 }
 

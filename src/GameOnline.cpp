@@ -306,6 +306,7 @@ std::unique_ptr<gui::MultiplayerFrontEnd> Game::MakeMultiplayerFrontEnd()
 	settings.localMaps = std::move(maps.localMaps);
 	settings.conditionTemplate = std::move(maps.conditionTemplate);
 	settings.showPing = Locator::config::value().showPing;
+	settings.mapPieceDelayMs = Locator::config::value().mapPieceDelayMs;
 	return std::make_unique<gui::MultiplayerFrontEnd>(std::move(services), std::move(settings));
 }
 

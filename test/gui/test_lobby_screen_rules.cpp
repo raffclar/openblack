@@ -187,6 +187,11 @@ TEST(LobbyScreenRules, EachProblemHasItsOwnBox)
 	EXPECT_EQ(of("wrong_password", 403).box, ProblemBox::IncorrectPassword);
 	EXPECT_EQ(of("banned", 403).text, "You cannot join this game.");
 	EXPECT_EQ(of("full").text, "This game is full.");
+	// A full session also refuses an observer, with the same box (user, 2026-11-13)
+	EXPECT_EQ(ProblemOf(LobbyError {.status = 409, .detail = "This game has all the observers it takes.", .code = "full"},
+	                    lobby_api::ClientKind::Desktop)
+	              .text,
+	          "This game is full.");
 	EXPECT_EQ(of("none", 404).box, ProblemBox::AskCreate);
 	EXPECT_EQ(of("", 404).text, "There is no such game.");
 	// Only a problem of the network shows the vanilla box
@@ -276,7 +281,7 @@ TEST(LobbyScreenRules, AWarningMarksEachPlayerWithoutTheMap)
 	EXPECT_EQ(Utf8(SlotNote(room.Slots()[1])), "downloading map");
 	EXPECT_FALSE(ShowsMapWarning(room, room.Slots()[3]));
 	EXPECT_EQ(Utf8(std::u16string(k_MapWarningText)),
-	          "This players needs to download the custom map first and may delay the start of play.");
+	          "This player needs to download the custom map first and may delay the start of play.");
 	room.Apply(
 	    {.seq = 2, .type = "member.changed", .time = {}, .data = R"({"account":{"id":2,"name":"owl"},"have_map":true})"});
 	room.Apply(

@@ -255,6 +255,26 @@ struct MapList
 	std::vector<OnlineMap> maps;
 };
 
+/// The bytes from first to last of a file, both included, as the header Content-Range of an answer gives them
+struct ByteRange
+{
+	uint64_t first {0};
+	uint64_t last {0};
+	/// The bytes of the full file
+	uint64_t total {0};
+};
+
+/// A piece of the file of a map or of its package. An answer to the request of a range gives that range. An answer that
+/// gives the full file gives a piece at offset 0 with all the bytes.
+struct FilePiece
+{
+	/// The place of the first byte in the file
+	uint64_t offset {0};
+	/// The bytes of the full file
+	uint64_t total {0};
+	std::vector<uint8_t> bytes;
+};
+
 /// A god or an observer in the status report of a game server
 struct ServerStatusPlayer
 {

@@ -246,6 +246,16 @@ void DemoLobbyRoom::Join(std::string lobbyId, std::optional<std::string> passwor
 		callback({.value = std::nullopt, .error = {.kind = LobbyErrorKind::Refused, .status = 403, .code = std::string(code)}});
 		return;
 	}
+	// A full session refuses a god and an observer, as the service does (user, 2026-11-13)
+	if (online::lobby::IsFull(*summary))
+	{
+		callback({.value = std::nullopt,
+		          .error = {.kind = LobbyErrorKind::Refused,
+		                    .status = 409,
+		                    .detail = "This game is full.",
+		                    .code = std::string(lobby_api::lobby_problems::k_Full)}});
+		return;
+	}
 	_room = std::make_unique<online::lobby::LobbyRoom>(JoinedLobby(*summary), _self);
 	callback({.value = LobbyDone {}, .error = {}});
 }

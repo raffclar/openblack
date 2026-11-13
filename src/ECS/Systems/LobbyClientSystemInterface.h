@@ -167,6 +167,31 @@ public:
 	{
 		callback({.value = std::nullopt, .error = {.kind = LobbyErrorKind::NotConfigured}});
 	}
+	/// A piece of the file of a land of the list, or of its map package when the land has one (deviation 257). The
+	/// request asks for at most count bytes from the offset. A lobby that gives only full files gives the full file as a
+	/// piece at offset 0.
+	virtual void DownloadMapPiece(const lobby_api::OnlineMap& map, uint64_t /*offset*/, uint64_t /*count*/,
+	                              LobbyCallback<lobby_api::FilePiece> callback)
+	{
+		auto whole = [callback = std::move(callback)](LobbyResult<std::vector<uint8_t>>&& result) {
+			if (!result.value.has_value())
+			{
+				callback({.value = std::nullopt, .error = std::move(result.error)});
+				return;
+			}
+			const auto total = static_cast<uint64_t>(result.value->size());
+			callback(
+			    {.value = lobby_api::FilePiece {.offset = 0, .total = total, .bytes = std::move(*result.value)}, .error = {}});
+		};
+		if (map.packageSha256.empty())
+		{
+			DownloadMap(map, std::move(whole));
+		}
+		else
+		{
+			DownloadMapPackage(map, std::move(whole));
+		}
+	}
 	/// A ticket to join a game server, as a god or as an observer. The address of the game socket must be a WSS
 	/// address.
 	virtual void RequestJoinTicket(std::string serverId, game_socket::Role role,

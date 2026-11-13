@@ -98,6 +98,8 @@ public:
 	void GetMaps(LobbyCallback<lobby_api::MapList> callback) override;
 	void DownloadMap(const lobby_api::OnlineMap& map, LobbyCallback<std::vector<uint8_t>> callback) override;
 	void DownloadMapPackage(const lobby_api::OnlineMap& map, LobbyCallback<std::vector<uint8_t>> callback) override;
+	void DownloadMapPiece(const lobby_api::OnlineMap& map, uint64_t offset, uint64_t count,
+	                      LobbyCallback<lobby_api::FilePiece> callback) override;
 
 	void GetPlayerRanking(lobby_api::RankingQuery query, LobbyCallback<lobby_api::RankingPage> callback) override;
 	void GetClanRanking(lobby_api::RankingQuery query, LobbyCallback<lobby_api::RankingPage> callback) override;

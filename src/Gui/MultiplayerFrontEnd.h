@@ -18,6 +18,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include <LobbyApi.h>
@@ -107,6 +108,8 @@ public:
 		std::string conditionTemplate;
 		/// The room's player list shows the ping after the player's own name (deviation 143, --show-ping)
 		bool showPing {false};
+		/// Tests: the wait in milliseconds before each request of a piece of a map (--map-piece-delay-ms)
+		uint32_t mapPieceDelayMs {0};
 	};
 
 	/// How the player answers a message box
@@ -327,6 +330,8 @@ private:
 	void FetchRoomMap(std::string sha256);
 	/// Starts the download when the room gets a land of the lobby, and shows the box of a download that failed
 	void FollowMapDownload();
+	/// Tests: sends each request of a map piece whose wait ended
+	void SendDelayedPieces();
 	/// Follows the session of the network game: the join, a refusal, a loss
 	void FollowSession();
 	/// Shows the steps of the start that the server makes
@@ -404,6 +409,8 @@ private:
 	uint32_t _roomMapSets {0};
 	/// The lobby's list did not have the room's land, or the list did not come
 	bool _mapFailed {false};
+	/// Tests: the requests of map pieces that wait for the time of --map-piece-delay-ms, with the time to send each
+	std::vector<std::pair<int64_t, std::function<void()>>> _delayedPieces;
 	std::optional<size_t> _shownLand;
 
 	std::vector<lobby_api::ClanSummary> _myClans;
