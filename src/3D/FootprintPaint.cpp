@@ -15,10 +15,7 @@
 #include <algorithm>
 #include <utility>
 
-#if defined(_M_X64) || defined(__x86_64__) || defined(__SSE2__)
-#include <xmmintrin.h>
-#define OPENBLACK_FOOTPRINT_SSE 1
-#endif
+#include "Common/NearestWhole.h"
 
 namespace openblack::footprint_paint
 {
@@ -74,18 +71,10 @@ struct Spans
 	int last {-1};
 };
 
-/// A value to the nearest whole number, a half to the even one, as the game's processor rounds it. The processor's
-/// own conversion gives the same number as the library for each value that fits in an int with room to spare.
+/// A value to the nearest whole number, a half to the even one, as the game's processor rounds it
 [[nodiscard]] int Nearest(float value)
 {
-#if defined(OPENBLACK_FOOTPRINT_SSE)
-	constexpr float k_Fits = 1073741824.0f;
-	if (value > -k_Fits && value < k_Fits)
-	{
-		return _mm_cvt_ss2si(_mm_set_ss(value));
-	}
-#endif
-	return static_cast<int>(std::lrint(value));
+	return NearestWhole(value);
 }
 
 /// Widens the span of a row to a column an edge reached. A column below the span becomes its low end, else a column

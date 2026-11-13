@@ -725,6 +725,8 @@ private:
 		std::vector<bool> inView;
 		/// The texels of the corner texture (see GetLandCorners), two bytes each
 		std::vector<uint8_t> corners;
+		/// For each block, the values from which its texels in corners came. A block with the same values keeps them.
+		std::vector<std::optional<land_detail::BlockCornerInputs>> cornersFrom;
 	};
 	mutable LandDetailFrame _landDetail;
 	mutable std::unique_ptr<Texture2D> _landCorners;
