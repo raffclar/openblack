@@ -96,6 +96,8 @@ public:
 	virtual void ReportChecks(checks::Report report, bool quit) = 0;
 	/// Whether the game draws the player's hand in this frame. None with no game.
 	[[nodiscard]] virtual std::optional<bool> IsHandShown() const = 0;
+	/// Whether the player's hand shows a tooltip. None with no interface.
+	[[nodiscard]] virtual std::optional<bool> IsHandToolTipShown() const = 0;
 	/// Closes the boxes that an earlier scenario left open, such as the tattoo editor
 	virtual void CloseBoxes() = 0;
 };

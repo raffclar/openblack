@@ -126,7 +126,7 @@ WorkerPool& LandFootprints::Workers()
 const L3DMesh::Footprint* LandFootprints::FoundFootprintOf(entt::id_type mesh) const
 {
 	const auto found = _footprints.find(mesh);
-	return found != _footprints.end() ? found->second : nullptr;
+	return found != _footprints.end() ? found->second.footprint : nullptr;
 }
 
 const L3DMesh::Footprint* LandFootprints::FootprintOf(entt::id_type mesh)
@@ -138,22 +138,23 @@ const L3DMesh::Footprint* LandFootprints::FootprintOf(entt::id_type mesh)
 	const auto found = _footprints.find(mesh);
 	if (found != _footprints.end())
 	{
-		_lastFootprint = *found;
-		return found->second;
+		_lastFootprint = std::pair(mesh, found->second.footprint);
+		return found->second.footprint;
 	}
 	const auto& meshes = Locator::resources::value().GetMeshes();
-	const L3DMesh::Footprint* footprint = nullptr;
+	FoundFootprint kept;
 	if (meshes.Contains(mesh))
 	{
-		const auto handle = meshes.Handle(mesh);
+		kept.mesh = meshes.Handle(mesh);
 		// The game paints the first footprint of the model of a landscape feature
-		if (handle->ContainsLandscapeFeature() && !handle->GetFootprints().empty() &&
-		    !handle->GetFootprints().front().triangles.empty())
+		if (kept.mesh && kept.mesh->ContainsLandscapeFeature() && !kept.mesh->GetFootprints().empty() &&
+		    !kept.mesh->GetFootprints().front().triangles.empty())
 		{
-			footprint = &handle->GetFootprints().front();
+			kept.footprint = &kept.mesh->GetFootprints().front();
 		}
 	}
-	_footprints.emplace(mesh, footprint);
+	const auto* footprint = kept.footprint;
+	_footprints.emplace(mesh, std::move(kept));
 	_lastFootprint = std::pair(mesh, footprint);
 	return footprint;
 }
