@@ -9,7 +9,6 @@
 
 #include "SASFile.h"
 
-#include <fstream>
 #include <sstream>
 #include <string_view>
 
@@ -49,15 +48,5 @@ std::optional<SASFile> openblack::sas::Parse(std::istream& stream)
 std::optional<SASFile> openblack::sas::Parse(std::span<const uint8_t> buffer)
 {
 	std::istringstream stream(std::string(reinterpret_cast<const char*>(buffer.data()), buffer.size()));
-	return Parse(stream);
-}
-
-std::optional<SASFile> openblack::sas::Open(const std::filesystem::path& path)
-{
-	std::ifstream stream(path);
-	if (!stream)
-	{
-		return std::nullopt;
-	}
 	return Parse(stream);
 }

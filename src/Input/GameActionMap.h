@@ -61,6 +61,7 @@ public:
 	[[nodiscard]] uint32_t GetButtonMessages() const final;
 	[[nodiscard]] std::span<const glm::ivec2> GetMousePlaces() const final;
 	void DrawnMouseMessage(glm::ivec2 position) final;
+	void ReplayedMousePlace(glm::ivec2 position) final;
 	[[nodiscard]] float GetMouseWheelDelta() const final;
 	[[nodiscard]] std::array<std::optional<glm::vec3>, 2> GetHandPositions() const final;
 	void SplitInput(const input_steps::Steps& steps) final;
@@ -229,6 +230,8 @@ private:
 	std::optional<ScriptedPointer> _scriptedPointer;
 	/// Whether the window has had the player's cursor over it: until then SDL knows nothing of where it is
 	bool _playerCursorSeen {false};
+	/// Whether the mouse of the player moved over the page. A web browser tells the position of the cursor only then.
+	bool _pageMouseMoved {false};
 	bool _playerMouseBlocked {false};
 	std::optional<glm::ivec2> _cursorWarp;
 	BindableActionMap _blocked = BindableActionMap::NONE;

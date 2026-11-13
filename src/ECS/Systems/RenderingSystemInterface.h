@@ -154,6 +154,17 @@ struct RenderContext
 	/// By instance, the alpha reference that a see-through instance uses in place of the references of its materials:
 	/// the phantom building over a building site uses 10
 	std::map<uint32_t, uint8_t> seeThroughRefs;
+	/// The point whose distance from the camera sorts a blended instance in place of its own place, and the order of the
+	/// instances that share the point
+	struct SortPoint
+	{
+		/// The workshop of the copy of a scaffold at its yard place (see graphics::zsort::YardCopyDepth)
+		glm::vec3 point {0.0f};
+		/// The order of the copy among the copies of the same depth (see graphics::zsort::YardCopyOrder)
+		uint64_t order {0};
+	};
+	/// By instance, the sort point of a blended instance
+	std::map<uint32_t, SortPoint> sortPoints;
 	/// The instances that take the land's light of their place on the map with the weights of whole cells, and no
 	/// distance haze: the phantom building and the yard copy of a scaffold (see graphics::object_land_light)
 	std::set<uint32_t> mapPlaceLitInstances;
@@ -267,6 +278,16 @@ struct RenderContext
 		glm::mat4 model;
 	};
 	std::vector<AnimalDraw> animalDraws;
+	/// The glows of the creed objects drawn this frame (see components::CreedObject): the matrix of the creed model, how
+	/// far the shell reaches out, how far its texture has slid, and where the object stands
+	struct CreedGlowDraw
+	{
+		glm::mat4 model;
+		float zoom;
+		glm::vec2 slide;
+		glm::vec3 position;
+	};
+	std::vector<CreedGlowDraw> creedGlowDraws;
 	/// The villagers a script draws in high detail this frame, with the model each wears and the matrix it is drawn by:
 	/// each casts a shadow on the land while it is, by the matrix of the villager as it turns before its body's easing
 	struct HighDetailDraw

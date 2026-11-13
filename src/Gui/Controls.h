@@ -201,7 +201,6 @@ public:
 	[[nodiscard]] bool HitTest(glm::ivec2 point) const override;
 	[[nodiscard]] std::string_view GetKind() const override { return "check box"; }
 
-	[[nodiscard]] bool IsChecked() const noexcept { return _checked; }
 	void SetChecked(bool checked) noexcept { _checked = checked; }
 	std::function<void(bool)> onChange;
 
@@ -300,7 +299,6 @@ public:
 	int scrollBarWidth {k_ScrollBarWidth};
 	/// Shows the scroll bar, or hides it
 	void SetScrollBar(bool scrollBar) noexcept { _scrollBar = scrollBar; }
-	[[nodiscard]] bool HasScrollBar() const noexcept { return _scrollBar; }
 	/// The height of all the items
 	[[nodiscard]] int GetContentHeight() const;
 	/// Right of the box the items are in, left of the scroll bar

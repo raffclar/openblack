@@ -185,6 +185,21 @@ void testbed_scenarios::AddMultiplayerFrontEndScenarios(std::vector<Scenario>& a
 		};
 		all.push_back(std::move(scenario));
 	}
+	// The pointer rests over the room of the online front end, where the temple does not draw the hand
+	all.push_back({
+	    .id = "hand.hidden_in_online_room",
+	    .name = "The hand stays out of view in the online front end's game room",
+	    .facet = Facet::Hand,
+	    .description = "The pointer rests in the middle of the screen. After one second, the player joins Bob's game, and "
+	                   "the game room shows over the temple's future room. The pointer then goes to the left of the room.",
+	    .expected = "Before the room opens, the hand shows under the pointer. While the room is up, no part of the hand "
+	                "shows: only the turning arrow of the front end shows at the pointer. A click on the room does nothing "
+	                "to the temple.",
+	    .framing = {.shot = Shot::Overview},
+	    .commands = {{.kind = Kind::PointerTo, .delaySeconds = 0.0f, .point = {0.5f, 0.5f}},
+	                 {.kind = Kind::OpenMultiplayerBox, .delaySeconds = 1.0f, .value = static_cast<size_t>(Stage::RoomChat)},
+	                 {.kind = Kind::PointerTo, .delaySeconds = 2.0f, .point = {0.2f, 0.6f}}},
+	});
 }
 
 void testbed_scenarios::AddJoinOnlineScenarios(std::vector<Scenario>& all)

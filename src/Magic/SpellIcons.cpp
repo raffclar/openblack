@@ -210,6 +210,11 @@ bool Functional(float life, bool built)
 	return built && life > k_FunctionalLife;
 }
 
+bool Shown(std::optional<bool> siteBuilt)
+{
+	return siteBuilt.value_or(true);
+}
+
 bool TapsFor(PlayerNames iconPlayer, PlayerNames tapper, bool influenceEverywhere)
 {
 	return (influenceEverywhere && iconPlayer == PlayerNames::NEUTRAL) || iconPlayer == tapper;

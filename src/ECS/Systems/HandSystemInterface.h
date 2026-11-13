@@ -22,6 +22,7 @@
 
 #include "3D/MapCoords.h"
 #include "Enums.h"
+#include "Hand/HandSendWait.h"
 
 namespace openblack::player_commands
 {
@@ -210,6 +211,9 @@ public:
 	/// The interface lock of the hand of this computer ends (see hand_send_wait::LockEnd). The action of the hand stops
 	/// at once in the miracles, the grab, the fight and the creature hand. Then the wait for the last send ends.
 	virtual void EndOwnInterfaceLock() {}
+	/// The action of the hand of this computer now, from the miracles, the grab, the creature hand, the tip bubble, the
+	/// leash and the totems. The action is free when the hand does no action.
+	[[nodiscard]] virtual hand_send_wait::OwnAction GetOwnAction() const { return {}; }
 	/// The game turns since the hand of a player last moved (see hand_stillness::Step). Zero for a player with no
 	/// hands.
 	[[nodiscard]] virtual uint32_t GetHandStillTurnsOf([[maybe_unused]] PlayerNames player) const noexcept { return 0; }

@@ -36,6 +36,28 @@ using Matrix = std::array<std::array<float, 3>, 3>;
 constexpr Matrix k_Identity {{{1.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f, 1.0f}}};
 constexpr uint32_t k_NoParent = 0xFFFFFFFF;
 
+/// The mark that ContentMarks gives to the contents of an animation. Zero is no mark. A copy, a move or an assignment
+/// gives no mark, because the code can change the new contents.
+struct ContentMark
+{
+	uint64_t value {0};
+
+	ContentMark() = default;
+	ContentMark(const ContentMark& /*other*/) {}
+	ContentMark(ContentMark&& /*other*/) noexcept {}
+	ContentMark& operator=(const ContentMark& /*other*/)
+	{
+		value = 0;
+		return *this;
+	}
+	ContentMark& operator=(ContentMark&& /*other*/) noexcept
+	{
+		value = 0;
+		return *this;
+	}
+	~ContentMark() = default;
+};
+
 /// A keyframe animation: per bone YXZ Euler angles and translations of the bones it moves
 struct Animation
 {
@@ -54,6 +76,28 @@ struct Animation
 	glm::vec3 displacement {0.0f};
 	/// How far the root moves over one cycle, as the file gives it: the length of the displacement
 	float strideLength {0.0f};
+	/// The mark of the contents, from ContentMarks. Do not change the contents after they get a mark.
+	ContentMark mark;
+};
+
+/// Gives each marked contents of an animation a mark that no other contents get. Use one ContentMarks for all the
+/// animations that go to one store of keyframe turns.
+class ContentMarks
+{
+public:
+	ContentMarks() = default;
+	/// A copy would give the same marks again
+	ContentMarks(const ContentMarks&) = delete;
+	ContentMarks& operator=(const ContentMarks&) = delete;
+	ContentMarks(ContentMarks&&) = delete;
+	ContentMarks& operator=(ContentMarks&&) = delete;
+	~ContentMarks() = default;
+
+	/// Gives a new mark to the contents of the animation. Do not change the contents after this call.
+	void Mark(Animation& animation) { animation.mark.value = ++_last; }
+
+private:
+	uint64_t _last {0};
 };
 
 /// A bone's pose relative to its parent: a row-major rotation and a translation, used with row vectors
@@ -92,7 +136,8 @@ struct Skeleton
 /// The keyframe turns of animations, each turn made one time. A turn comes only from its three angles, thus a kept turn
 /// has the same bits as a new one. The store keeps the turns of a frame while the angles of the frame stay the same. It
 /// compares the bits of the angles each time, so an animation that changes or that takes the memory of another animation
-/// gets new turns.
+/// gets new turns. The contents of an animation with a mark do not change, so the store does not compare the angles of a
+/// frame again while the mark stays the same.
 class KeyframeTurns
 {
 public:
@@ -113,17 +158,22 @@ private:
 	{
 		/// The angles of the frame when the store made its turns
 		std::vector<glm::vec3> angles;
+		/// The mark of the animation when the store last found these angles in it, zero for no mark
+		uint64_t mark {0};
 		std::vector<Matrix> turns;
 		std::vector<Matrix> mirroredTurns;
 	};
 	std::unordered_map<const Animation*, std::vector<FrameTurns>> _animations;
-	/// The animation of the last call and its frames in the store
-	struct Last
+	/// An animation of a recent call and its frames in the store
+	struct Recent
 	{
 		const Animation* animation {nullptr};
 		std::vector<FrameTurns>* frames {nullptr};
 	};
-	Last _last;
+	/// The animations of the last calls, the most recent first. A pose asks for its animation and the stand animation in
+	/// turn, thus one place is not sufficient.
+	static constexpr size_t k_RecentCount = 4;
+	std::array<Recent, k_RecentCount> _recent {};
 };
 
 /// The two keyframes around a time and how far between them it is. Cycles wrap from their last frame to the first,

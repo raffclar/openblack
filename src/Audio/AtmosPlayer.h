@@ -85,7 +85,6 @@ class AtmosPlayer
 {
 public:
 	using BankId = uint32_t;
-	static constexpr BankId k_InvalidBank = 0;
 	static constexpr uint32_t k_MaxVolume = 127;
 
 	/// Seconds since the epoch, seeds the random generator
@@ -105,8 +104,6 @@ public:
 	void Process(bool active);
 	/// LHAtmosSetBankVolume
 	void SetBankVolume(BankId id, int32_t volume);
-	/// LHAtmosGetBankVolume
-	[[nodiscard]] uint32_t GetBankVolume(BankId id) const;
 	/// LHAtmosSetGroup
 	void SetGroup(BankId id, uint32_t group);
 

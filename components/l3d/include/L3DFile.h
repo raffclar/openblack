@@ -458,8 +458,6 @@ public:
 	[[nodiscard]] const std::vector<L3DVertex>& GetVertices() const noexcept { return _vertices; }
 	/// The vertices to change in place, all of the submeshes' in turn
 	[[nodiscard]] std::span<L3DVertex> EditVertices() noexcept { return _vertices; }
-	/// The skins to change in place
-	[[nodiscard]] std::span<L3DTexture> EditSkins() noexcept { return _skins; }
 	/// The primitives' headers to change in place, as to draw them with another skin
 	[[nodiscard]] std::span<L3DPrimitiveHeader> EditPrimitiveHeaders() noexcept { return _primitiveHeaders; }
 	[[nodiscard]] const std::vector<uint16_t>& GetIndices() const noexcept { return _indices; }
@@ -473,8 +471,6 @@ public:
 	[[nodiscard]] const std::vector<L3DLightmap>& GetLightmaps() const noexcept { return _lightmaps; }
 	[[nodiscard]] const std::optional<L3DEBone>& GetEBone() const noexcept { return _eBone; }
 	[[nodiscard]] const std::vector<L3DNewEffectPoint>& GetNewEffectPoints() const noexcept { return _newEffectPoints; }
-	void SetFootprint(const L3DFootprint& footprint) noexcept { _footprint = footprint; }
-	void SetExtraMetrics(const std::vector<std::array<float, 3 * 4>>& metrics) noexcept { _extraMetrics = metrics; }
 	void SetUv2Data(std::vector<uint8_t>& uv2Data) noexcept { _uv2Data = uv2Data; }
 	void SetNameData(std::string& nameData) noexcept { _nameData = nameData; }
 	[[nodiscard]] const std::string& GetNameData() const noexcept { return _nameData; }

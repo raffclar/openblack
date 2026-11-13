@@ -11,14 +11,17 @@
 
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <deque>
 #include <mutex>
 #include <string>
+#include <string_view>
 #include <thread>
 #include <utility>
 #include <variant>
 
 #include <curl/curl.h>
+#include <fmt/format.h>
 #include <spdlog/spdlog.h>
 
 #include "Online/Desktop/CurlTls.h"
@@ -111,6 +114,16 @@ struct Link
 	/// The events that the thread did not give to the game yet
 	std::deque<Event> events;
 
+	/// Writes why the client ends a connection that was open, with the time since the last data from the server
+	void LogEnd(std::string_view cause) const
+	{
+		if (const auto logger = spdlog::get("game"))
+		{
+			const auto silence = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - lastReceived).count();
+			logger->info("net: The client ends the WSS connection: {}. The last data came {} ms before.", cause, silence);
+		}
+	}
+
 	void End(WebSocketClosed closed)
 	{
 		if (state == WebSocketState::None)
@@ -171,6 +184,7 @@ struct Link
 			}
 			if (result != CURLE_OK || meta == nullptr)
 			{
+				LogEnd(fmt::format("a read failed: {}", curl_easy_strerror(result)));
 				End({.end = WebSocketEnd::Network, .code = 0, .httpStatus = 0});
 				return;
 			}
@@ -222,6 +236,8 @@ struct Link
 		const auto now = Clock::now();
 		if (now - lastReceived > websocket_settings::k_SilenceTimeout)
 		{
+			LogEnd(fmt::format("no data from the server for {} s",
+			                   std::chrono::duration_cast<std::chrono::seconds>(websocket_settings::k_SilenceTimeout).count()));
 			End({.end = WebSocketEnd::Timeout, .code = 0, .httpStatus = 0});
 			return;
 		}
@@ -456,7 +472,7 @@ private:
 			}
 			if (const auto logger = spdlog::get("game"))
 			{
-				SPDLOG_LOGGER_DEBUG(logger, "A WSS connection failed: {} (HTTP {})", curl_easy_strerror(code), status);
+				logger->info("net: A WSS connection did not open: {} (HTTP status {})", curl_easy_strerror(code), status);
 			}
 			Release(*link);
 		}
@@ -469,6 +485,12 @@ private:
 		{
 			if (link->state == WebSocketState::Connecting && now - link->started > websocket_settings::k_HandshakeTimeout)
 			{
+				if (const auto logger = spdlog::get("game"))
+				{
+					logger->info(
+					    "net: A WSS connection did not open in {} s",
+					    std::chrono::duration_cast<std::chrono::seconds>(websocket_settings::k_HandshakeTimeout).count());
+				}
 				link->End({.end = WebSocketEnd::Timeout, .code = 0, .httpStatus = 0});
 			}
 			if (link->state == WebSocketState::Open)
@@ -481,6 +503,7 @@ private:
 			}
 			if (link->state == WebSocketState::Open && !link->Flush())
 			{
+				link->LogEnd("a write failed");
 				link->End({.end = WebSocketEnd::Network, .code = 0, .httpStatus = 0});
 			}
 			if (link->state == WebSocketState::None)

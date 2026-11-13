@@ -17,6 +17,7 @@
 #include <glm/common.hpp>
 #include <glm/geometric.hpp>
 
+#include "Camera/CameraLens.h"
 #include "Common/X87.h"
 
 using namespace openblack;
@@ -72,7 +73,8 @@ bool BoxFits(const gestures::GestureTemplate& gestureTemplate, std::span<const K
 float gesture::AspectOf(const ScreenBox& box, float screenAspect)
 {
 	const auto size = box.Size();
-	return size.x / std::max(screenAspect * size.y, 1.0f);
+	const auto aspect = std::min(screenAspect, camera_lens::k_ReferenceAspect);
+	return size.x / std::max(aspect * size.y, 1.0f);
 }
 
 bool gesture::AspectFits(float pathAspect, float templateAspect)

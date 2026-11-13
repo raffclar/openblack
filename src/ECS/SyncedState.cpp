@@ -169,6 +169,9 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     {.component = "CreatureHandGlows", .field = "turnPace", .marker = ""},
     {.component = "CreatureHandGlows", .field = "placed", .marker = ""},
     {.component = "CreatureHandGlows", .field = "motion", .marker = ""},
+    // The glow of a creed object slides in the frames
+    {.component = "CreedObject", .field = "slidePace", .marker = ""},
+    {.component = "CreedObject", .field = "motion", .marker = ""},
     // The snow on a thing comes and goes in the frames that draw the thing. Only the draw reads it.
     {.component = "SnowLevel", .field = "", .marker = ""},
     // The picture of a challenge comes from the screen of this computer, or from its profile's files, in the frames. The

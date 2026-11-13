@@ -182,6 +182,8 @@ void LoadFinishSystem::PrepareFirstFrames()
 	if (Locator::danceSystem::has_value())
 	{
 		[[maybe_unused]] const auto& shapes = Locator::danceSystem::value().Shapes();
+		// The first dance of each kind reads its file. A file read in a turn can take more than 100 ms.
+		Locator::danceSystem::value().LoadAllFiles();
 	}
 	for (auto& map : landMaps)
 	{

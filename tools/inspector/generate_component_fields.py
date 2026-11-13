@@ -62,6 +62,10 @@ RUN_ONLY = {
     "CreatureArena": {"ring"},
     # The game does not save the mark of a town that a scaffold founded: a load gives the town its base reach again
     "Town": {"zeroBaseInfluence"},
+    # Values, by their full names. The packed kinds of the regions come from the regions again after a load
+    "openblack::creature_exploration::RegionMap": {"regionKinds"},
+    # The mark of the contents of an animation has a meaning only for the marks of this run
+    "openblack::skeletal_animation::Animation": {"mark"},
 }
 
 # Fields of values that only the frames or the local random numbers of a computer change, and that no turn reads. A
@@ -697,7 +701,8 @@ def main():
         text = f"\tReflect<{name}>(context, ValueOnly {{}})"
         used = set()
         for member, levels in registered_members(definition, [member for member, _ in definition.members]):
-            text += field_line(name, member, levels, presentation=member in PRESENTATION.get(name, set()))
+            text += field_line(name, member, levels, run_only=member in RUN_ONLY.get(name, set()),
+                               presentation=member in PRESENTATION.get(name, set()))
             used.update(level for level in levels if level is not None)
         text += ";\n"
         header = definition.header

@@ -129,6 +129,15 @@ TEST(GameTurnOrder, TheHandDoesItsOwnWorkAfterTheCommandsOfTheTurn)
 	EXPECT_TRUE(recorder.Before(Step::HandInterface, Step::Clock));
 }
 
+TEST(GameTurnOrder, TheHandTakesAThingBeforeACreatureCanPickItUpInTheSameTurn)
+{
+	const auto recorder = PlayOneTurn();
+	// The take of the hand is a command of the turn. It runs before the creatures take their turns, so a creature that
+	// gets to the moment of its pick-up in the same turn finds the thing out of the map and does not get it.
+	EXPECT_TRUE(recorder.Before(Step::PlayerCommands, Step::CreaturesTurnStart));
+	EXPECT_TRUE(recorder.Before(Step::PlayerCommands, Step::Living));
+}
+
 // The share of influence that each hand keeps past the border is part of the input of the players: after the reports of
 // the hands and their stillness, before the hand's own work and before the players and the computer minds act
 TEST(GameTurnOrder, TheHandsKeepTheirShareOfInfluenceInTheInputOfThePlayers)

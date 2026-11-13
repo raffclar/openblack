@@ -199,3 +199,33 @@ TEST(TestbedScenarioChecks, AReportOfADecidedRunGivesItsVerdict)
 	EXPECT_EQ(report.lines.size(), 2u);
 	EXPECT_EQ(ExitCodeOf(report.verdict), 1);
 }
+
+TEST(TestbedScenarioChecks, TheClockCountsTheWorldsTurns)
+{
+	Clock clock;
+	clock.Start(100);
+	clock.Advance(103, false, 0.05f);
+	EXPECT_EQ(clock.Elapsed(103), 3u);
+}
+
+TEST(TestbedScenarioChecks, TheClockCountsTheTimeThatTheTempleHoldsTheWorld)
+{
+	Clock clock;
+	clock.Start(100);
+	// The world plays no turn in these frames, so a second is ten turns
+	for (int frame = 0; frame < 100; ++frame)
+	{
+		clock.Advance(100, true, 0.01f);
+	}
+	EXPECT_EQ(clock.Elapsed(100), 10u);
+}
+
+TEST(TestbedScenarioChecks, TheClockNeverCountsATurnAndItsTimeTwice)
+{
+	Clock clock;
+	clock.Start(100);
+	// The world plays a turn in this frame, so its time is already in the turn
+	clock.Advance(101, true, 1.0f);
+	clock.Advance(101, false, 1.0f);
+	EXPECT_EQ(clock.Elapsed(101), 1u);
+}

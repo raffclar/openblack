@@ -40,6 +40,12 @@ inline constexpr float k_LeastShown = 0.05f;
 /// the ground instead: none for a pile.
 [[nodiscard]] std::optional<float> SizeAfterChange(PotType type, uint32_t amount, uint32_t scaleEvery);
 
+/// Whether the frame draws a pot that holds an amount:
+/// - A pot that holds nothing is not drawn in a hand. This applies to the hand of a god and the hand of a creature.
+/// - On the land, a plain pot that holds nothing is not drawn either. A pile on the land is drawn for its rise.
+/// A handful that a creature pulls from a field holds no food, so the creature's hand shows nothing.
+[[nodiscard]] bool PotDrawn(PotType type, uint32_t amount, bool held);
+
 /// How far under the ground a pile sits for the share of its height it shows
 [[nodiscard]] float SunkOffset(float proportion, float height);
 

@@ -148,6 +148,17 @@ void SaveGameBoxes::WithdrawMessage()
 	}
 }
 
+void SaveGameBoxes::WithdrawAll()
+{
+	_question.reset();
+	_answer.reset();
+	_holdingFade.Reset(0.0f);
+	_questionFade.Reset(0.0f);
+	_nameActive = false;
+	_nameDialog.Reset();
+	_nameFade.Reset(0.0f);
+}
+
 void SaveGameBoxes::SubmitName()
 {
 	_nameActive = false;

@@ -829,6 +829,17 @@ std::optional<glm::vec3> GameParticleWorld::ObjectPosition(entt::entity object) 
 	return transform != nullptr ? std::optional(transform->position) : std::nullopt;
 }
 
+std::optional<glm::vec3> GameParticleWorld::ObjectDrawnOrigin(entt::entity object) const
+{
+	if (!Locator::entitiesRegistry::has_value())
+	{
+		return std::nullopt;
+	}
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* transform = registry.Valid(object) ? registry.TryGet<const ecs::components::Transform>(object) : nullptr;
+	return transform != nullptr ? std::optional(ecs::drawn_place::ModelOriginOf(registry, object, *transform)) : std::nullopt;
+}
+
 GameParticleWorld::SurfacePoint GameParticleWorld::RandomSurfacePoint(entt::entity object, particles::Effect& effect) const
 {
 	if (!Locator::entitiesRegistry::has_value() || !Locator::resources::has_value())

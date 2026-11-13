@@ -150,11 +150,6 @@ uint32_t VertexBuffer::GetStrideBytes() const noexcept
 	return _strideBytes;
 }
 
-uint32_t VertexBuffer::GetSizeInBytes() const noexcept
-{
-	return _vertexCount * _strideBytes;
-}
-
 bool VertexBuffer::IsValid() const noexcept
 {
 	return _shared ? IsValidHandle(_dynamicHandle) : IsValidHandle(_handle);

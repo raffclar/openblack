@@ -11,8 +11,8 @@
 // its miracle when it was made at an icon of the player's worship: its model, at its own size and unturned, sitting on
 // top of the tallest still thing beneath it. Any other such seed vanishes as it lands, inside its falling effect. The
 // forest miracle's shown seed is hidden under the land until the forest is planted, then rides over the tallest of its
-// trees as they grow. Out of its player's influence such a seed's miracle closes down. The hand of the seed's player can
-// take the shown seed back.
+// trees as they grow. It sinks under the land again when the forest goes with its last tree. Out of its player's influence such
+// a seed's miracle closes down. The hand of the seed's player can take the shown seed back.
 
 #define LOCATOR_IMPLEMENTATIONS
 

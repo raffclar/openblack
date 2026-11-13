@@ -180,6 +180,16 @@ TEST(GestureMatcher, AspectBands)
 	EXPECT_FALSE(AspectFits(9.0f, 0.05f));
 	// A square on a 4:3 screen is three quarters wide against tall, as the game measures it
 	EXPECT_NEAR(AspectOf({.min = {0.0f, 0.0f}, .max = {99.0f, 99.0f}}, k_ScreenAspect), 0.75f, 1e-5f);
+	// A screen narrower than 4:3 scales the height by its own shape
+	EXPECT_NEAR(AspectOf({.min = {0.0f, 0.0f}, .max = {99.0f, 99.0f}}, 1.25f), 0.8f, 1e-5f);
+}
+
+TEST(GestureMatcher, AShapeHasTheSameAspectOnAWideScreenAsOnA4By3Screen)
+{
+	const ScreenBox box {.min = {10.0f, 20.0f}, .max = {109.0f, 69.0f}};
+	const auto fourByThree = AspectOf(box, k_ScreenAspect);
+	EXPECT_EQ(AspectOf(box, 16.0f / 9.0f), fourByThree);
+	EXPECT_EQ(AspectOf(box, 5120.0f / 1190.0f), fourByThree);
 }
 
 TEST(GestureMatcher, RecognisesACircleAnywhereAtAnySize)

@@ -57,12 +57,6 @@ public:
 	/// Where the camera is a time into the path, between the points either side of it, holding the last once the path
 	/// is done, as the temple's InnerCamera follows its paths
 	[[nodiscard]] Sample SampleAt(std::chrono::milliseconds time) const;
-	/// Creates ECS entities for each camera path node. Assigns a camera-vertex component to each entity
-	void CreatePathEntities(glm::vec3 position);
-	/// Creates an ECS entity for the first camera path node
-	void CreatePathStartEntity(glm::vec3 position);
-	/// The position of the first camera path node. This is not a world position
-	[[nodiscard]] glm::vec3 GetPathStartPosition() const { return _points.front().position; }
 	[[nodiscard]] const std::string& GetDebugName() const { return _debugName; }
 
 private:

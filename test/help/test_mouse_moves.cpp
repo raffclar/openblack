@@ -215,3 +215,58 @@ TEST(MouseMoves, AStillMouseSendsTwentyFivePlacesASecond)
 	}
 	EXPECT_EQ(moves.TakePlaces().size(), 25u);
 }
+
+TEST(MouseMoves, AClockThatStartsAgainAtZeroStartsTheWaitAgain)
+{
+	MouseMoves moves;
+	moves.Message(10000, {5, 5});
+	moves.Wait(10000, {5, 5}, true);
+	// A network game starts the clock of the game again at zero. The wait starts again, and no still message comes.
+	moves.Wait(5, {5, 5}, true);
+	EXPECT_TRUE(moves.TakePlaces().empty());
+	// The still messages then come each 40 milliseconds of the new clock. The first has no time before it, because the
+	// last message came at a later time of the old clock. Thus one second sends one place less than a normal second.
+	for (uint32_t frame = 1; frame <= 63; ++frame)
+	{
+		moves.Wait(5 + frame * 16, {5, 5}, true);
+	}
+	EXPECT_EQ(moves.TakePlaces().size(), 24u);
+}
+
+TEST(MouseMoves, AClockThatWrapsPastItsLargestValueSendsTheStillMessagesOfTheTimeBetween)
+{
+	MouseMoves moves;
+	constexpr uint32_t k_NearTheEnd = 0xFFFFFFFFu - 99u;
+	moves.Message(k_NearTheEnd, {5, 5});
+	moves.Wait(k_NearTheEnd, {5, 5}, true);
+	// 200 milliseconds pass, and the clock goes past its largest value: five still messages come, not millions
+	moves.Wait(k_NearTheEnd + 200u, {5, 5}, true);
+	EXPECT_LE(moves.TakePlaces().size(), 5u);
+}
+
+TEST(MouseMoves, AReplayedPlaceGoesToTheInterfaceAtOnce)
+{
+	MouseMoves moves;
+	// Each place of a hand demonstration goes at once, also when no message time came before it
+	moves.Place({10, 0});
+	moves.Place({20, 0});
+	moves.Place({20, 0});
+	const auto places = moves.TakePlaces();
+	ASSERT_EQ(places.size(), 3u);
+	EXPECT_EQ(places.at(0), glm::ivec2(10, 0));
+	EXPECT_EQ(places.at(1), glm::ivec2(20, 0));
+	// The help counts the places that moved, as for the player's own mouse
+	EXPECT_EQ(moves.CountMoves(places), 2u);
+}
+
+TEST(MouseMoves, AReplayedPlaceDoesNotChangeTheTimeOfTheMessages)
+{
+	MouseMoves moves;
+	moves.Message(0, {0, 0});
+	moves.Place({5, 0});
+	// The replayed place adds no time: the next message still needs more than 28 milliseconds
+	moves.Message(28, {6, 0});
+	EXPECT_EQ(moves.TakePlaces().size(), 1u);
+	moves.Message(29, {7, 0});
+	EXPECT_EQ(moves.TakePlaces().size(), 1u);
+}

@@ -40,10 +40,13 @@ void openblack::ecs::reflection::RegisterFields_Values_s(entt::meta_ctx& context
 	    .Field<&openblack::skeletal_animation::Animation::translatedJoints>("translatedJoints")
 	    .Field<&openblack::skeletal_animation::Animation::frames>("frames")
 	    .Field<&openblack::skeletal_animation::Animation::displacement>("displacement")
-	    .Field<&openblack::skeletal_animation::Animation::strideLength>("strideLength");
+	    .Field<&openblack::skeletal_animation::Animation::strideLength>("strideLength")
+	    .RunField<&openblack::skeletal_animation::Animation::mark>("mark");
 	Reflect<openblack::skeletal_animation::Animation::Frame>(context, ValueOnly {})
 	    .Field<&openblack::skeletal_animation::Animation::Frame::eulerAngles>("eulerAngles")
 	    .Field<&openblack::skeletal_animation::Animation::Frame::translations>("translations");
+	Reflect<openblack::skeletal_animation::ContentMark>(context, ValueOnly {})
+	    .Field<&openblack::skeletal_animation::ContentMark::value>("value");
 	Reflect<openblack::skeletal_animation::Skeleton>(context, ValueOnly {})
 	    .Field<&openblack::skeletal_animation::Skeleton::parents>("parents")
 	    .Field<&openblack::skeletal_animation::Skeleton::restRotations>("restRotations")

@@ -978,8 +978,8 @@ void Game::UpdateEntitiesFrame(std::chrono::microseconds deltaTime)
 					Locator::highDetailSystem::value().LeaveSwimmingRings(
 					    static_cast<uint32_t>(clock.GetFrameGameTime().count()));
 				}
-				// The trees out of the land are drawn with their roots, as each now is
-				ecs::tree_roots::Show(Locator::entitiesRegistry::value());
+				// The trees out of the land and the crops that move in the physics show their roots, as each now is
+				ecs::tree_roots::Show(Locator::entitiesRegistry::value(), Locator::infoConstants::value());
 				// The land's draw list, from the camera the frame is drawn from, is made again when it is due: what stands
 				// on the blocks beyond it isn't drawn. A frame that does not draw the land keeps the list.
 				if (Locator::objectDrawListSystem::has_value())

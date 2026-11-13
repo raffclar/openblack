@@ -16,6 +16,7 @@
 #include <optional>
 #include <random>
 #include <span>
+#include <utility>
 #include <vector>
 
 #include <glm/geometric.hpp>
@@ -880,6 +881,70 @@ TEST(KeyframeTurns, TheStoreMakesTheTurnsAgainWhenTheAnglesChange)
 	EXPECT_EQ(turns.Of(fixture.animation, 0, false).size(), fixture.animation.rotatedJoints.size());
 }
 
+TEST(KeyframeTurns, ACopyOrAMoveOfAnAnimationHasNoMark)
+{
+	TurnsFixture fixture(5);
+	skeletal_animation::ContentMarks marks;
+	marks.Mark(fixture.animation);
+	ASSERT_NE(fixture.animation.mark.value, 0u);
+	const Animation copy = fixture.animation;
+	EXPECT_EQ(copy.mark.value, 0u);
+	Animation assigned;
+	assigned = fixture.animation;
+	EXPECT_EQ(assigned.mark.value, 0u);
+	Animation moved = std::move(assigned);
+	EXPECT_EQ(moved.mark.value, 0u);
+	auto other = fixture.animation;
+	marks.Mark(other);
+	EXPECT_NE(other.mark.value, fixture.animation.mark.value);
+	// An assignment of new contents removes the mark of the animation that takes them
+	fixture.animation = copy;
+	EXPECT_EQ(fixture.animation.mark.value, 0u);
+}
+
+TEST(KeyframeTurns, AMarkedAnimationGivesTheBitsOfANewTurn)
+{
+	TurnsFixture fixture(9);
+	skeletal_animation::ContentMarks marks;
+	skeletal_animation::KeyframeTurns turns;
+	marks.Mark(fixture.animation);
+	for (int round = 0; round < 2; ++round)
+	{
+		for (size_t frame = 0; frame < fixture.animation.frames.size(); ++frame)
+		{
+			const auto kept = turns.Of(fixture.animation, frame, false);
+			ASSERT_EQ(kept.size(), fixture.animation.rotatedJoints.size());
+			for (size_t slot = 0; slot < kept.size(); ++slot)
+			{
+				const auto made = skeletal_animation::RotationYXZ(fixture.animation.frames[frame].eulerAngles[slot]);
+				EXPECT_EQ(std::memcmp(&kept[slot], &made, sizeof(made)), 0) << round << " " << frame << " " << slot;
+			}
+		}
+	}
+}
+
+TEST(KeyframeTurns, NewContentsAtThePlaceOfAMarkedAnimationGetNewTurns)
+{
+	TurnsFixture fixture(13);
+	skeletal_animation::ContentMarks marks;
+	skeletal_animation::KeyframeTurns turns;
+	marks.Mark(fixture.animation);
+	static_cast<void>(turns.Of(fixture.animation, 2, false));
+	// A new pair takes the place of the last pair, as a creature's turn blend does, and gets a new mark
+	auto changed = fixture.animation;
+	changed.frames[2].eulerAngles[0] = glm::vec3(0.5f, 1.0f, -1.5f);
+	fixture.animation = changed;
+	const auto unmarked = turns.Of(fixture.animation, 2, false)[0];
+	const auto made = skeletal_animation::RotationYXZ(glm::vec3(0.5f, 1.0f, -1.5f));
+	EXPECT_EQ(std::memcmp(&unmarked, &made, sizeof(made)), 0);
+	changed.frames[2].eulerAngles[0] = glm::vec3(-0.25f, 0.75f, 2.0f);
+	fixture.animation = changed;
+	marks.Mark(fixture.animation);
+	const auto marked = turns.Of(fixture.animation, 2, false)[0];
+	const auto madeMarked = skeletal_animation::RotationYXZ(glm::vec3(-0.25f, 0.75f, 2.0f));
+	EXPECT_EQ(std::memcmp(&marked, &madeMarked, sizeof(madeMarked)), 0);
+}
+
 TEST(KeyframeTurns, TrimRemovesTheTurnsOnlyAboveTheLimit)
 {
 	const TurnsFixture fixture(3);
@@ -918,6 +983,30 @@ TEST(KeyframeTurns, CallsForTwoAnimationsInTurnGiveTheTurnsOfEach)
 		EXPECT_EQ(std::memcmp(&c, &cMade, sizeof(c)), 0) << round;
 	}
 	EXPECT_EQ(turns.Size(), 2u);
+}
+
+TEST(KeyframeTurns, CallsForMoreAnimationsThanTheRecentPlacesGiveTheTurnsOfEach)
+{
+	// Six animations in turn are more than the store keeps as recent. Each call must still give the turns of its own
+	// animation.
+	const TurnsFixture fixture(13);
+	std::vector<Animation> animations(6, fixture.animation);
+	for (size_t i = 0; i < animations.size(); ++i)
+	{
+		animations[i].frames[1].eulerAngles[0] = glm::vec3(0.1f * static_cast<float>(i + 1), 0.2f, -0.3f);
+	}
+	skeletal_animation::KeyframeTurns turns;
+	for (size_t round = 0; round < 3; ++round)
+	{
+		for (size_t i = 0; i < animations.size(); ++i)
+		{
+			const auto index = (round % 2 == 0) ? i : animations.size() - 1 - i;
+			const auto kept = turns.Of(animations[index], 1, false)[0];
+			const auto made = skeletal_animation::RotationYXZ(animations[index].frames[1].eulerAngles[0]);
+			EXPECT_EQ(std::memcmp(&kept, &made, sizeof(made)), 0) << round << " " << index;
+		}
+	}
+	EXPECT_EQ(turns.Size(), animations.size());
 }
 
 TEST(KeyframeTurns, TheStoreGivesTheTurnsAfterTrimRemovesThem)

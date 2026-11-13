@@ -55,6 +55,7 @@
 #include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureNeeds.h"
+#include "ECS/Components/CreatureObjectAction.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/MagicFireBall.h"
 #include "ECS/Components/Mesh.h"
@@ -86,19 +87,24 @@
 #include "ECS/Systems/FootprintSystemInterface.h"
 #include "ECS/Systems/GestureEventsInterface.h"
 #include "ECS/Systems/GestureSystemInterface.h"
+#include "ECS/Systems/HandDemoSystemInterface.h"
 #include "ECS/Systems/HandGrabSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/Implementations/VillagerDisciples.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/ParticleRuleSystemInterface.h"
+#include "ECS/Systems/PickingSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/RewardSystemInterface.h"
 #include "ECS/Systems/ScriptHighlightSystemInterface.h"
 #include "ECS/Systems/SpellIconSystemInterface.h"
+#include "ECS/Systems/TipBubbleSystemInterface.h"
 #include "ECS/Systems/WorkshopSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "Gestures/GesturePaths.h"
+#include "Gui/ScreenFit.h"
+#include "Help/TipBubble.h"
 #include "InfoConstants.h"
 #include "Input/GameActionMapInterface.h"
 #include "Input/InjectedInput.h"
@@ -309,6 +315,42 @@ std::string Runner::HandTakeNear(const Command& command)
 	const auto why = hand.WhyNotTake(nearest);
 	return hand.TakeIntoHand(nearest) ? fmt::format("took the mobile object {} m from the point", best)
 	                                  : fmt::format("the hand can't take it: {}", why);
+}
+
+std::string Runner::TapScaffoldNear(const Command& command)
+{
+	if (!Locator::workshopSystem::has_value())
+	{
+		return "no workshops";
+	}
+	// The scaffold nearest the point, as the player taps the one under the pointer
+	constexpr float k_Reach = 10.0f;
+	const auto at = MapPoint(_middle, command.point);
+	auto& registry = Locator::entitiesRegistry::value();
+	auto nearest = entt::entity {entt::null};
+	float best = k_Reach;
+	glm::vec3 place {0.0f};
+	registry.Each<const ecs::components::Scaffold, const ecs::components::Transform>(
+	    [&](entt::entity entity, const ecs::components::Scaffold&, const ecs::components::Transform& transform) {
+		    const auto distance = glm::distance(glm::vec2(transform.position.x, transform.position.z), at);
+		    if (distance < best)
+		    {
+			    best = distance;
+			    nearest = entity;
+			    place = transform.position;
+		    }
+	    });
+	if (nearest == entt::null)
+	{
+		return "no scaffold near the point";
+	}
+	auto& workshops = Locator::workshopSystem::value();
+	if (!workshops.ValidToTap(nearest))
+	{
+		return "the hand can't tap the scaffold";
+	}
+	return workshops.Tap(nearest, place) ? fmt::format("tapped the scaffold {} m from the point", best)
+	                                     : "the tap did not break the scaffold";
 }
 
 std::string Runner::HandTapObject(size_t index)
@@ -713,36 +755,45 @@ std::optional<glm::ivec2> Runner::ObjectOnScreen(size_t object, float height, gl
 		}
 		entity = pile <= pit->woodPiles.size() ? pit->woodPiles.at(pile - 1) : pit->foodPile;
 	}
-	const auto* transform = Locator::entitiesRegistry::value().TryGet<const ecs::components::Transform>(*entity);
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* transform = registry.TryGet<const ecs::components::Transform>(*entity);
 	if (transform == nullptr)
 	{
 		return std::nullopt;
 	}
+	// A thing in a creature's hand is where the last frame drew it in the hand, not where its place stays
+	auto position = transform->position;
+	if (const auto* held = registry.TryGet<const ecs::components::HeldByCreature>(*entity);
+	    held != nullptr && held->drawn.has_value())
+	{
+		position = held->drawn->position;
+	}
 	glm::vec3 screen;
-	if (!Locator::camera::value().ProjectWorldToScreen(transform->position + glm::vec3(0.0f, height, 0.0f),
-	                                                   {0.0f, 0.0f, size.x, size.y}, screen))
+	if (!Locator::camera::value().ProjectWorldToScreen(position + glm::vec3(0.0f, height, 0.0f), {0.0f, 0.0f, size.x, size.y},
+	                                                   screen))
 	{
 		return std::nullopt;
 	}
 	return glm::ivec2(glm::round(glm::vec2(screen)));
 }
 
-std::optional<glm::ivec2> Runner::RopeOnScreen(size_t creature, glm::vec2 size) const
+std::vector<glm::ivec2> Runner::RopeOnScreen(size_t creature, glm::vec2 size) const
 {
+	std::vector<glm::ivec2> pixels;
 	const auto entity = CreatureAt(creature);
 	if (!entity.has_value() || !Locator::camera::has_value() || !Locator::leashSystem::has_value())
 	{
-		return std::nullopt;
+		return pixels;
 	}
 	const auto* leash = Locator::entitiesRegistry::value().TryGet<const ecs::components::CreatureLeash>(*entity);
 	const auto* drawn = Locator::entitiesRegistry::value().TryGet<const ecs::components::CreatureLeashRope>(*entity);
 	if (leash == nullptr || !leash->worn.has_value() || drawn == nullptr)
 	{
-		return std::nullopt;
+		return pixels;
 	}
 	// The rope runs from the collar to the thing it is tied to, and it sags below the straight line between them. The
 	// points of the straight line are tried from its middle out, away from the collar and the thing. Below each point
-	// on the screen, the first pixel that touches the rope is taken.
+	// on the screen, the middle of the first run of pixels that touch the rope is taken.
 	const auto& camera = Locator::camera::value();
 	const auto& rope = drawn->rope;
 	auto& leashes = Locator::leashSystem::value();
@@ -758,17 +809,80 @@ std::optional<glm::ivec2> Runner::RopeOnScreen(size_t creature, glm::vec2 size) 
 			continue;
 		}
 		const auto pixel = glm::ivec2(glm::round(glm::vec2(screen)));
+		std::optional<int> first;
+		int last = 0;
 		for (int below = 0; below < k_MostPixelsBelow; ++below)
 		{
 			const ecs::systems::LeashSystemInterface::RopeFrame frame {
 			    .viewProjection = camera.GetViewProjectionMatrix(), .screenSize = size, .cursor = pixel + glm::ivec2(0, below)};
-			if (leashes.RopeUnderCursor(PlayerNames::PLAYER_ONE, frame).has_value())
+			const bool touches = leashes.RopeUnderCursor(PlayerNames::PLAYER_ONE, frame).has_value();
+			if (touches)
 			{
-				return frame.cursor;
+				first = first.value_or(below);
+				last = below;
+			}
+			else if (first.has_value())
+			{
+				break;
 			}
 		}
+		if (first.has_value())
+		{
+			pixels.push_back(pixel + glm::ivec2(0, (*first + last) / 2));
+		}
 	}
-	return std::nullopt;
+	return pixels;
+}
+
+std::optional<glm::ivec2> Runner::TipBubbleOnScreen(glm::vec2 size)
+{
+	if (!Locator::tipBubbleSystem::has_value() || !Locator::camera::has_value())
+	{
+		return std::nullopt;
+	}
+	const auto& bubble = Locator::tipBubbleSystem::value();
+	const auto anchor = bubble.GetAnchor();
+	if (!bubble.IsUp() || !anchor.has_value())
+	{
+		return std::nullopt;
+	}
+	// The bubble is placed on the screen as the interface draws it
+	const auto clip = Locator::camera::value().GetViewProjectionMatrix() * glm::vec4(*anchor, 1.0f);
+	if (clip.w <= 0.0f)
+	{
+		return std::nullopt;
+	}
+	const glm::vec2 pixel {(clip.x / clip.w + 1.0f) * size.x * 0.5f, (1.0f - clip.y / clip.w) * size.y * 0.5f};
+	const auto placement = help::tip_bubble::Place(
+	    pixel, clip.w, size.x, gui::ReferenceScale(static_cast<int32_t>(size.x), static_cast<int32_t>(size.y)));
+	if (!placement.has_value())
+	{
+		return std::nullopt;
+	}
+	return glm::ivec2(glm::round((placement->min + placement->max) * 0.5f));
+}
+
+bool Runner::NextRopePixel()
+{
+	if (!_ropeSearch.has_value() || !Locator::gameActionSystem::has_value())
+	{
+		return false;
+	}
+	const auto pixels = RopeOnScreen(_ropeSearch->creature, WindowSize());
+	if (_ropeSearch->next >= pixels.size())
+	{
+		return false;
+	}
+	auto& actions = Locator::gameActionSystem::value();
+	auto pointer = actions.GetScriptedPointer().value_or(input::GameActionInterface::ScriptedPointer {});
+	const auto to = pixels.at(_ropeSearch->next);
+	++_ropeSearch->next;
+	const auto moved = to - pointer.position;
+	pointer.position = to;
+	_framesSincePointerMoved = 0;
+	actions.SetScriptedPointer(pointer);
+	PushMotion(pointer, moved);
+	return true;
 }
 
 std::optional<glm::ivec2> Runner::CaveCreatureOnScreen(glm::vec2 size)
@@ -892,10 +1006,43 @@ std::string Runner::GivePointerCommand(const Command& command)
 	}
 	case Kind::PointerOnRope:
 	{
-		const auto to = RopeOnScreen(command.creature, size);
+		// The thing that the rope is tied to, or the creature, can hide a pixel of the rope from the pick of the hand. The
+		// pointer tries the pixels in turn until the pick is the rope.
+		actions.SetScriptedPointer(pointer);
+		_ropeSearch = RopeSearch {.creature = command.creature, .next = 0};
+		if (!NextRopePixel())
+		{
+			_ropeSearch.reset();
+			return "no tied rope on the screen";
+		}
+		break;
+	}
+	case Kind::PointerOnTotem:
+	{
+		const auto totem = TotemAt(command.object);
+		const auto* transform =
+		    totem.has_value() ? Locator::entitiesRegistry::value().TryGet<const ecs::components::Transform>(*totem) : nullptr;
+		glm::vec3 screen;
+		if (transform == nullptr || !Locator::camera::has_value() ||
+		    !Locator::camera::value().ProjectWorldToScreen(transform->position + glm::vec3(0.0f, command.amount, 0.0f),
+		                                                   {0.0f, 0.0f, size.x, size.y}, screen))
+		{
+			return "no totem on the screen";
+		}
+		const auto to = glm::ivec2(glm::round(glm::vec2(screen)));
+		const auto moved = to - pointer.position;
+		pointer.position = to;
+		_framesSincePointerMoved = 0;
+		actions.SetScriptedPointer(pointer);
+		PushMotion(pointer, moved);
+		break;
+	}
+	case Kind::PointerOnTipBubble:
+	{
+		const auto to = TipBubbleOnScreen(size);
 		if (!to.has_value())
 		{
-			return "no tied rope on the screen";
+			return "no tip bubble on the screen";
 		}
 		const auto moved = *to - pointer.position;
 		pointer.position = *to;
@@ -947,7 +1094,7 @@ std::string Runner::GivePointerCommand(const Command& command)
 	{
 		const bool press = command.kind == Kind::PointerPress;
 		// A press waits for the game to know what the pointer is over, so it acts as a press of a hand at rest
-		if (press && !input::pointer_settle::PressMayStart(_framesSincePointerMoved))
+		if (press && (!input::pointer_settle::PressMayStart(_framesSincePointerMoved) || _ropeSearch.has_value()))
 		{
 			_pressWaiting = command;
 			break;
@@ -994,7 +1141,29 @@ std::string Runner::GivePointerCommand(const Command& command)
 void Runner::UpdatePointer(float seconds)
 {
 	++_framesSincePointerMoved;
-	if (_pressWaiting.has_value() && input::pointer_settle::PressMayStart(_framesSincePointerMoved))
+	if (_ropeSearch.has_value() && input::pointer_settle::PressMayStart(_framesSincePointerMoved))
+	{
+		const bool onRope = Locator::pickingSystem::has_value() && Locator::pickingSystem::value().GetPick().rope;
+		if (onRope || !NextRopePixel())
+		{
+			const auto line = fmt::format("{:.2f}s: {}: {}", _seconds,
+			                              onRope ? "the pick of the hand is the rope" : "no pixel of the rope takes the pick",
+			                              HandOnScreen());
+			SPDLOG_LOGGER_INFO(spdlog::get("game"), "Testbed {}", line);
+			Log(line);
+			_ropeSearch.reset();
+		}
+	}
+	// The debug windows get the mouse again when the scenario's hand demonstration ends
+	if (_demoOwnsPointer && (!Locator::handDemoSystem::has_value() || !Locator::handDemoSystem::value().IsReplaying()))
+	{
+		_demoOwnsPointer = false;
+		if (!_ownsPointer)
+		{
+			KeepDebugWindowsOffTheMouse(false);
+		}
+	}
+	if (_pressWaiting.has_value() && !_ropeSearch.has_value() && input::pointer_settle::PressMayStart(_framesSincePointerMoved))
 	{
 		const auto waiting = std::exchange(_pressWaiting, std::nullopt);
 		static_cast<void>(GivePointerCommand(*waiting));

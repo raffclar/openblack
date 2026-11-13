@@ -57,8 +57,6 @@ class LandIslandInterface;
 class LandBlock
 {
 public:
-	// 16*16 cells, drawn from their 17*17 corners
-	static constexpr auto k_Resolution = glm::u8vec2(16, 16);
 	static constexpr uint16_t k_VertexCount = graphics::land_detail::k_CornerCount;
 
 	LandBlock();

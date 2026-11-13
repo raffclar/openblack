@@ -10,7 +10,6 @@
 #include "PhysicsConstantsFile.h"
 
 #include <algorithm>
-#include <fstream>
 #include <sstream>
 #include <string>
 
@@ -44,15 +43,5 @@ std::optional<PhysicsConstantsFile> openblack::physconst::Parse(std::istream& st
 std::optional<PhysicsConstantsFile> openblack::physconst::Parse(std::span<const uint8_t> buffer, std::size_t maxRows)
 {
 	std::istringstream stream(std::string(buffer.begin(), buffer.end()));
-	return Parse(stream, maxRows);
-}
-
-std::optional<PhysicsConstantsFile> openblack::physconst::Open(const std::filesystem::path& path, std::size_t maxRows)
-{
-	std::ifstream stream(path);
-	if (!stream)
-	{
-		return std::nullopt;
-	}
 	return Parse(stream, maxRows);
 }

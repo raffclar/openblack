@@ -132,6 +132,9 @@ struct FieldInfo
 	uint32_t plainSize {0};
 	/// Reads the value of the field of the instance from the binary archive
 	void (*load)(const entt::meta_data& data, entt::meta_any& instance, BinaryReader& in) {nullptr};
+	/// A field that means something only in the run that set it: the archive does not keep it, and the list of unsaved
+	/// values does not name it
+	bool runOnly {false};
 #if defined(OPENBLACK_INSPECTOR)
 	/// The value as JSON, none when the generic writing through fields must do
 	std::optional<Json> (*encode)(const entt::meta_any& value) {nullptr};
@@ -513,7 +516,7 @@ public:
 	{
 		using Value = std::remove_cvref_t<decltype(std::declval<Type&>().*Member)>;
 		_factory.template data<Member, entt::as_ref_t>(entt::hashed_string::value(name.data(), name.size()));
-		FieldInfo info {.name = std::string(name), .refersTo = RefersToFunction<Value>()};
+		FieldInfo info {.name = std::string(name), .refersTo = RefersToFunction<Value>(), .runOnly = true};
 #if defined(OPENBLACK_INSPECTOR)
 		info.encode = [](const entt::meta_any& any) -> std::optional<Json> {
 			if (const auto* value = any.try_cast<const Value>(); value != nullptr)

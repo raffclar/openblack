@@ -453,6 +453,9 @@ bool Runner::GiveStoryCommand(const Command& command)
 		if (Locator::handDemoSystem::has_value())
 		{
 			Locator::handDemoSystem::value().Play(command.handDemo, 0, false, false);
+			// The demonstration's pointer is not over the debug windows of the testbed: they would take its moves
+			KeepDebugWindowsOffTheMouse(true);
+			_demoOwnsPointer = true;
 		}
 		Log(fmt::format("{:.1f}s: the hand demonstration {} plays", _seconds, command.handDemo));
 		return true;

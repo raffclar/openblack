@@ -42,7 +42,7 @@ std::unique_ptr<Mesh> Primitive::CreatePlane()
 	const auto* mem = bgfx::makeRef(vertices.data(), static_cast<uint32_t>(vertices.size() * sizeof(vertices[0])));
 	auto* vertexBuffer = new VertexBuffer("Plane", mem, decl);
 	bgfx::frame();
-	auto mesh = std::make_unique<Mesh>(vertexBuffer, nullptr, Mesh::Topology::TriangleList);
+	auto mesh = std::make_unique<Mesh>(vertexBuffer, nullptr);
 	bgfx::frame();
 	// The mesh gives its fixed data again after a restore of the graphics device, thus the device keeps no copy
 	const auto* first = reinterpret_cast<const uint8_t*>(vertices.data());

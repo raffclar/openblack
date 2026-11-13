@@ -41,3 +41,31 @@ const GMobileObjectInfo* mobile_object_record::Of(const InfoConstants& info, con
 	const auto row = static_cast<size_t>(mobile.type);
 	return row < info.mobileObject.size() ? &info.mobileObject.at(row) : nullptr;
 }
+
+mobile_object_record::Class mobile_object_record::ClassOf(MobileObjectInfo row, MobileObjectInfo kind)
+{
+	if (row == MobileObjectInfo::LumpOfPoo)
+	{
+		return Class::Poo;
+	}
+	switch (kind)
+	{
+	case MobileObjectInfo::Crop:
+		return Class::Crop;
+	case MobileObjectInfo::Creed:
+		return Class::Creed;
+	default:
+		return Class::Plain;
+	}
+}
+
+mobile_object_record::Class mobile_object_record::ClassOf(const InfoConstants& info, const components::MobileObject& mobile)
+{
+	const auto* record = Of(info, mobile);
+	if (record == nullptr)
+	{
+		return Class::Plain;
+	}
+	// The poo is known by its row, so the record of the football is never poo
+	return ClassOf(mobile.footballRecord ? MobileObjectInfo::None : mobile.type, record->mobileType);
+}

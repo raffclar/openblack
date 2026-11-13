@@ -117,6 +117,9 @@ particles::draw::Sources ParticleSystem::DrawSources(const ParticleRuleSystemInt
 	    .objectPosition = [world](entt::entity object) -> std::optional<glm::vec3> {
 		    return world != nullptr ? world->ObjectPosition(object) : std::nullopt;
 	    },
+	    .objectDrawnOrigin = [world](entt::entity object) -> std::optional<glm::vec3> {
+		    return world != nullptr ? world->ObjectDrawnOrigin(object) : std::nullopt;
+	    },
 	    .gameMilliseconds = world != nullptr ? world->GameMilliseconds() : 0,
 	    .symbolsInARow = static_cast<int>(players_symbols::SquaresInARowFor(ecs::game_players::Count())),
 	};
@@ -162,7 +165,8 @@ void ParticleSystem::CollectEffectDrawFrame(EffectId id, float turnFraction, par
 		return;
 	}
 	ResolveTextures(*rules);
-	if (const auto drawn = rules->FindDrawn(id); drawn.has_value() && drawn->effect != nullptr)
+	// A hidden effect continues to step but does not draw
+	if (const auto drawn = rules->FindDrawn(id); drawn.has_value() && drawn->effect != nullptr && drawn->shown)
 	{
 		AddDrawn(*drawn, turnFraction, frame, DrawSources(*rules));
 	}

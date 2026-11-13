@@ -70,6 +70,10 @@ public:
 	[[nodiscard]] object_draw_list::Frame GetFrame() const override { return {}; }
 	[[nodiscard]] const std::optional<object_draw_list::View>& GetView() const override { return view; }
 	[[nodiscard]] bool Listed(entt::entity entity) const override { return std::ranges::find(list, entity) != list.end(); }
+	[[nodiscard]] bool LandCallsOwnDraw(const ecs::Registry& /*unused*/, entt::entity entity) const override
+	{
+		return Listed(entity);
+	}
 	[[nodiscard]] bool Drawn(const ecs::Registry& /*unused*/, entt::entity entity) const override { return Listed(entity); }
 	void NoteFullFrame(entt::entity /*unused*/, bool /*unused*/) override {}
 	[[nodiscard]] std::span<const entt::entity> GetList() const override { return list; }

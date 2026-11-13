@@ -9,6 +9,9 @@
 
 #pragma once
 
+#include <entt/entity/registry.hpp>
+#include <entt/signal/sigh.hpp>
+
 #include "ECS/Systems/ForestSystemInterface.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
@@ -21,9 +24,13 @@ namespace openblack::ecs::systems
 class ForestSystem final: public ForestSystemInterface
 {
 public:
+	ForestSystem();
+
 	uint32_t Plant(entt::entity spell, components::Spell& miracle, float tribalPower) override;
 	[[nodiscard]] bool CanGrowAt(glm::vec3 point) const override;
 	[[nodiscard]] bool HasTrees(entt::entity spell) const override;
+	[[nodiscard]] magic::forest::MiracleForest ForestOf(entt::entity spell) const override;
+	void LetGoOfGoneForest(entt::entity spell) override;
 	[[nodiscard]] uint32_t StandingTrees(entt::entity spell) const override;
 	[[nodiscard]] std::optional<float> TallestTreeOf(entt::entity spell) const override;
 	std::optional<entt::entity> AddTreeNear(entt::entity tree) override;
@@ -56,6 +63,10 @@ public:
 private:
 	/// The forest miracles' forests' turn: growing while their miracles last, withering once they have gone
 	void ProcessForests();
+	/// A tree of a forest miracle goes from the world. Its forest goes when no other tree is left in it.
+	void OnMagicTreeGone(entt::registry& registry, entt::entity tree);
+	/// The forests of the land whose miracle's forest went go from the land
+	void RemoveGoneLandForests();
 	/// A young tree of a tree's kind is planted at the first free spot of up to 160 tried round it, in its forest; none
 	/// when no spot is free
 	std::optional<entt::entity> PlantBeside(entt::entity tree);
@@ -73,6 +84,8 @@ private:
 	uint32_t _forestsMade {0};
 	/// How many times a tree has joined a forest's growing or grown trees
 	uint32_t _treesListed {0};
+	/// Told when a tree of a forest miracle goes
+	entt::scoped_connection _magicTreeGone;
 };
 
 } // namespace openblack::ecs::systems
