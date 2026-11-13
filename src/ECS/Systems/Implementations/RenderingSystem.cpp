@@ -320,6 +320,44 @@ void EachBySegment(const Place& place, SegmentPasses passes)
 	} while (passes.placed++ < passes.last);
 }
 
+/// The things with a model that can show a part of it: a broken building, one with a site for its repair or one with
+/// an amount built. They come in the order in which a walk over the things with a model and a place meets them. The
+/// stores of those kinds are small, thus the walk over all the things with a model is not necessary.
+std::vector<entt::entity> PartialBuildCandidates(const openblack::ecs::Registry& registry)
+{
+	using namespace openblack::ecs::components;
+	const auto& underlying = registry.Underlying();
+	const auto view = underlying.view<const Mesh, const Transform>();
+	std::vector<entt::entity> found;
+	const auto take = [&view, &found](const entt::sparse_set* storage) {
+		if (storage == nullptr)
+		{
+			return;
+		}
+		for (const auto entity : *storage)
+		{
+			if (view.contains(entity))
+			{
+				found.push_back(entity);
+			}
+		}
+	};
+	take(underlying.storage<BuildingDamage>());
+	take(underlying.storage<RepairSite>());
+	take(underlying.storage<BuildProgress>());
+	// A walk over the view goes over the store that leads it from its last place to its first
+	const auto* leading = view.handle();
+	if (leading == nullptr)
+	{
+		return {};
+	}
+	std::ranges::sort(
+	    found, [leading](entt::entity left, entt::entity right) { return leading->index(left) > leading->index(right); });
+	const auto [first, last] = std::ranges::unique(found);
+	found.erase(first, last);
+	return found;
+}
+
 /// Uploads the instances that changed since the last upload into the buffer
 template <typename Instance>
 void UploadChanged(bgfx::DynamicVertexBufferHandle buffer, std::span<const Instance> instances,
@@ -342,7 +380,8 @@ bool HiddenHighlight(const openblack::ecs::Registry& registry, entt::entity enti
 	return highlight != nullptr && highlight->hidden;
 }
 
-/// The plinths and the icons of the village totems that show nothing: the totems with no life
+/// The plinths and the icons of the village totems that show nothing: the totems with no life. The list is sorted, for a
+/// binary search.
 std::vector<entt::entity> LifelessTotemParts(const openblack::ecs::Registry& registry)
 {
 	using openblack::ecs::components::VillageTotem;
@@ -354,6 +393,7 @@ std::vector<entt::entity> LifelessTotemParts(const openblack::ecs::Registry& reg
 			parts.push_back(component.icon);
 		}
 	});
+	std::ranges::sort(parts);
 	return parts;
 }
 
@@ -878,7 +918,7 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 			    return;
 		    }
 		    // A village totem with no life shows nothing. It stays drawn while the camera does not move.
-		    if (std::ranges::find(lifelessTotemParts, entity) != lifelessTotemParts.end())
+		    if (std::ranges::binary_search(lifelessTotemParts, entity))
 		    {
 			    if (drawList != nullptr && drawList->GetFrame().drawAll && drawList->NotesKept(entity))
 			    {
@@ -889,6 +929,21 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		    const auto segment = fizzOrder.SegmentOf(entity);
 		    lastSegment = std::max(lastSegment, segment);
 		    if (segment != segmentPlaced)
+		    {
+			    return;
+		    }
+		    // Whether the land's draw list draws the thing. The walk finds it one time for each thing.
+		    std::optional<bool> listedMemo;
+		    const auto listed = [&listedMemo, drawList, &registry, entity, &drawnStores] {
+			    if (!listedMemo.has_value())
+			    {
+				    listedMemo = drawList == nullptr || drawList->DrawnWith(registry, entity, drawnStores);
+			    }
+			    return *listedMemo;
+		    };
+		    // A thing of several meshes or a creature that the land's draw list leaves out is not drawn and leaves
+		    // nothing. A creed object is noted first. Thus the walk does not find the place of the others.
+		    if (!creeds.Has(entity) && (detailMeshes.Has(entity) || creatureMorphs.Has(entity)) && !listed())
 		    {
 			    return;
 		    }
@@ -920,7 +975,7 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 			    {
 				    NoteKept(*drawList, registry, entity, modelMatrix, transform.scale.x, mesh.id, false);
 			    }
-			    if ((drawList == nullptr || drawList->DrawnWith(registry, entity, drawnStores)) && placed.has_value())
+			    if (listed() && placed.has_value())
 			    {
 				    _renderContext.drawnObjects.push_back({.entity = entity, .model = modelMatrix});
 				    _renderContext.creedGlowDraws.push_back({
@@ -958,7 +1013,7 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		    const auto keptBox =
 		        detail != nullptr ? detail->meshes.at(static_cast<size_t>(graphics::mesh_detail::Mesh::Standard)) : mesh.id;
 		    bool noted = false;
-		    if (drawList != nullptr && !drawList->DrawnWith(registry, entity, drawnStores))
+		    if (!listed())
 		    {
 			    // Of the things on the land's blocks only those in the land's draw list are drawn. One left out leaves
 			    // what it stands on painted, as one too far off does; the living and the creatures leave nothing.
@@ -1967,12 +2022,7 @@ void RenderingSystem::UploadPartialBuilds()
 	const auto& buildings = Locator::buildingDamageSystem::value();
 	const auto& meshes = Locator::resources::value().GetMeshes();
 	// Only a broken building, one with a site for its repair or one with an amount built can show a part of its model
-	const openblack::ecs::ComponentLookups<BuildingDamage, RepairSite, BuildProgress> partialKinds(registry);
-	registry.Each<const Mesh, const Transform>([&](entt::entity entity, const Mesh& mesh, const Transform& transform) {
-		if (!partialKinds.AnyOf<BuildingDamage, RepairSite, BuildProgress>(entity))
-		{
-			return;
-		}
+	const auto addPartial = [&](entt::entity entity, const Mesh& mesh, const Transform& transform) {
 		const auto share = buildings.PartialShare(entity);
 		if (!share.has_value() || !meshes.Contains(mesh.id) || _goneThings.contains(entity))
 		{
@@ -2038,7 +2088,12 @@ void RenderingSystem::UploadPartialBuilds()
 		draw.segment = _renderContext.fizzOrder.SegmentOf(entity);
 		draw.listPlace = ListPlace(entity);
 		_renderContext.partialBuilds.push_back(draw);
-	});
+	};
+	// The few things of those kinds come from their own stores, in the order of a walk over the things with a model
+	for (const auto entity : PartialBuildCandidates(registry))
+	{
+		addPartial(entity, registry.Get<const Mesh>(entity), registry.Get<const Transform>(entity));
+	}
 	// A standing building shows its model's numbered parts up to a number over its model drawn with the others; one going
 	// up or broken shows none
 	const auto showParts = [&](entt::entity entity, const Mesh& mesh, const Transform& transform, uint32_t parts) {

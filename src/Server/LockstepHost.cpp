@@ -10,6 +10,7 @@
 #include "LockstepHost.h"
 
 #include <algorithm>
+#include <iterator>
 #include <limits>
 #include <ranges>
 #include <utility>
@@ -19,9 +20,11 @@
 
 #include "Gui/TextDatabase.h"
 #include "Online/ConnectionLog.h"
+#include "Online/GameBuildId.h"
 #include "Online/StartRules.h"
 #include "PlayerSlots.h"
 #include "Server/ConnectionLimits.h"
+#include "Server/GameLifetime.h"
 #include "Server/LobbyBans.h"
 #include "Server/LobbyStatus.h"
 
@@ -40,29 +43,61 @@ constexpr uint32_t k_RefusedLogEvery = 100;
 constexpr size_t k_MostGodBytesInTurn =
     turn_codec::k_MostFrameBytes - turn_codec::sizes::k_Header - turn_codec::sizes::k_TurnBody;
 
-/// The value of the "type" member of a JSON text frame, for the log. At most 32 characters; empty when the text has none.
-[[nodiscard]] std::string FrameType(std::string_view text)
+/// A text for the log, with at most a number of characters. Each character that the log cannot show becomes '?'.
+[[nodiscard]] std::string Printable(std::string_view text, size_t mostCharacters)
 {
-	constexpr std::string_view k_Key = "\"type\"";
-	constexpr size_t k_MostCharacters = 32;
-	auto at = text.find(k_Key);
+	std::string printable;
+	for (const char c : text.substr(0, mostCharacters))
+	{
+		printable += c >= 0x20 && c < 0x7F ? c : '?';
+	}
+	return printable;
+}
+
+/// The text of a string member of a JSON text that the server could not read, for the log. It has at most a number of
+/// characters. Empty when the text has no such member.
+[[nodiscard]] std::string StringMember(std::string_view text, std::string_view name, size_t mostCharacters)
+{
+	const auto key = fmt::format("\"{}\"", name);
+	auto at = text.find(key);
 	if (at == std::string_view::npos)
 	{
 		return {};
 	}
-	at = text.find('"', at + k_Key.size());
+	at = text.find('"', at + key.size());
 	if (at == std::string_view::npos)
 	{
 		return {};
 	}
 	const auto end = text.find('"', at + 1);
-	auto type = text.substr(at + 1, end == std::string_view::npos ? std::string_view::npos : end - at - 1);
-	std::string printable;
-	for (const char c : type.substr(0, k_MostCharacters))
-	{
-		printable += c >= 0x20 && c < 0x7F ? c : '?';
-	}
-	return printable;
+	return Printable(text.substr(at + 1, end == std::string_view::npos ? std::string_view::npos : end - at - 1),
+	                 mostCharacters);
+}
+
+/// The value of the "type" member of a JSON text frame, for the log. At most 32 characters; empty when the text has none.
+[[nodiscard]] std::string FrameType(std::string_view text)
+{
+	constexpr size_t k_MostCharacters = 32;
+	return StringMember(text, "type", k_MostCharacters);
+}
+
+/// The most characters of a build id of a client in the log
+constexpr size_t k_MostBuildCharacters = 64;
+
+/// The refusals that name the build of the client and of the server: the client cannot talk with this server
+[[nodiscard]] bool NamesBuilds(std::string_view reason) noexcept
+{
+	return reason == "protocol" || reason == "version";
+}
+
+/// The builds of a client and of the server for the log of a refusal
+[[nodiscard]] std::string BuildsText(std::string_view client, std::string_view server)
+{
+	const auto printable = Printable(client, k_MostBuildCharacters);
+	return fmt::format("{}, the server has the build \"{}\"",
+	                   printable.empty() ? std::string("the client gave no build id")
+	                                     : fmt::format("the client has the build \"{}\"", printable),
+	                   server);
 }
 
 void Log(spdlog::level::level_enum level, std::string_view text)
@@ -183,6 +218,10 @@ LockstepHost::LockstepHost(WebSocketServerInterface& sockets, CheckTicket checkT
     , _makeSecret(std::move(makeSecret))
     , _settings(std::move(settings))
     , _seats(std::min<size_t>(_settings.godSlots, player_slots::k_MaxPlayers))
+    , _godsToWaitFor(_settings.lobby.has_value()
+                         ? game_lifetime::GodsToWaitFor(_settings.lobby->Gods(), _settings.minGods, false)
+                         : _settings.minGods)
+    , _createdAt(_clock())
 {
 	_sockets.SetHandlers(ServerSocketHandlers {
 	    .opened = [this](ConnectionId connection) { Opened(connection); },
@@ -199,8 +238,13 @@ LockstepHost::~LockstepHost()
 
 void LockstepHost::Opened(ConnectionId connection)
 {
-	_peers[connection] =
-	    Peer {.joined = false, .role = game_socket::Role::God, .seat = std::nullopt, .openedAt = _clock(), .name = {}};
+	_peers[connection] = Peer {.joined = false,
+	                           .role = game_socket::Role::God,
+	                           .seat = std::nullopt,
+	                           .openedAt = _clock(),
+	                           .name = {},
+	                           .observer = 0,
+	                           .account = {}};
 }
 
 void LockstepHost::SendTo(ConnectionId connection, const game_socket::Frame& frame)
@@ -252,9 +296,20 @@ std::string LockstepHost::WhoIs(ConnectionId connection) const
 
 void LockstepHost::Refuse(ConnectionId connection, std::string_view reason, std::string_view detail)
 {
+	// A refusal for the protocol or the version names the two builds, in the log and in the frame to the client
+	std::string text(detail);
+	std::string serverBuild;
+	if (NamesBuilds(reason))
+	{
+		serverBuild = online::build_id::Own();
+		const auto found = _peers.find(connection);
+		const auto builds =
+		    BuildsText(found != _peers.end() ? std::string_view(found->second.build) : std::string_view(), serverBuild);
+		text = text.empty() ? builds : text + "; " + builds;
+	}
 	Log(spdlog::level::info, fmt::format("The server refuses connection {} ({}): {}{}{}", connection, WhoIs(connection), reason,
-	                                     detail.empty() ? "" : ": ", detail));
-	SendTo(connection, game_socket::Refused {.reason = std::string(reason)});
+	                                     text.empty() ? "" : ": ", text));
+	SendTo(connection, game_socket::Refused {.reason = std::string(reason), .build = std::move(serverBuild)});
 	_sockets.Close(connection, server_close::k_Refused);
 	std::optional<std::string> observer;
 	if (const auto found = _peers.find(connection);
@@ -271,6 +326,17 @@ void LockstepHost::Refuse(ConnectionId connection, std::string_view reason, std:
 	}
 }
 
+void LockstepHost::EndRoom(std::string_view reason)
+{
+	std::vector<ConnectionId> connections;
+	connections.reserve(_peers.size());
+	std::ranges::copy(_peers | std::views::keys, std::back_inserter(connections));
+	for (const auto connection : connections)
+	{
+		Refuse(connection, reason);
+	}
+}
+
 void LockstepHost::Text(ConnectionId connection, std::string_view text)
 {
 	const auto found = _peers.find(connection);
@@ -282,6 +348,11 @@ void LockstepHost::Text(ConnectionId connection, std::string_view text)
 	const auto frame = game_socket::Parse(text);
 	if (!frame.has_value())
 	{
+		// A client of another build can send a join that this server cannot read. The log then names its build.
+		if (peer.build.empty())
+		{
+			peer.build = StringMember(text, "build", k_MostBuildCharacters);
+		}
 		// The game server closes a connection that sends a message that it does not know
 		Refuse(connection, "protocol",
 		       fmt::format("a text frame that the server does not know ({} bytes, type \"{}\")", text.size(), FrameType(text)));
@@ -300,6 +371,15 @@ void LockstepHost::Text(ConnectionId connection, std::string_view text)
 		if (peer.seat.has_value())
 		{
 			_seats[*peer.seat].ready = ready->ready;
+		}
+	}
+	else if (std::holds_alternative<game_socket::Loaded>(*frame))
+	{
+		if (_started && peer.seat.has_value() && !_seats[*peer.seat].loaded)
+		{
+			_seats[*peer.seat].loaded = true;
+			Log(spdlog::level::info, fmt::format("The player of slot {} loaded the world", *peer.seat));
+			UpdateLoadWait();
 		}
 	}
 	else if (std::holds_alternative<game_socket::Leave>(*frame))
@@ -458,6 +538,7 @@ void LockstepHost::Join(ConnectionId connection, Peer& peer, const game_socket::
 		Refuse(connection, "protocol", "a second join on a connection that joined");
 		return;
 	}
+	peer.build = Printable(join.build, k_MostBuildCharacters);
 	// On the local network, a join with no ticket gives the name of the player's profile
 	const bool lan = _settings.lanNames && join.ticket.empty();
 	join_ticket::Claims claims;
@@ -480,6 +561,42 @@ void LockstepHost::Join(ConnectionId connection, Peer& peer, const game_socket::
 			return;
 		}
 		claims = std::move(*result.claims);
+	}
+	// The room takes only a client of its own build, with the same file of the land (deviation 248)
+	if (const auto refusal = lobby_game::BuildRefusal(_settings.buildId, join.build, _settings.lobby.has_value());
+	    refusal.has_value())
+	{
+		Log(spdlog::level::info, fmt::format("{} has the build \"{}\", not the build \"{}\" of the server", claims.name,
+		                                     join.build, _settings.buildId));
+		Refuse(connection, *refusal);
+		return;
+	}
+	if (const auto refusal = lobby_game::MapRefusal(_settings.mapSha256, join.map); refusal.has_value())
+	{
+		Log(spdlog::level::info, fmt::format("{} has another file of the land: SHA-256 {}", claims.name, join.map));
+		Refuse(connection, *refusal);
+		return;
+	}
+	// The game of a lobby takes only the members of the lobby, in the role that the lobby gave them (deviation 236)
+	const auto* member = _settings.lobby.has_value() && !lan ? _settings.lobby->MemberOf(claims.subject) : nullptr;
+	if (_settings.lobby.has_value())
+	{
+		const auto admission = lan ? lobby_game::Admission::NotMember
+		                           : lobby_game::Admit(*_settings.lobby, claims.lobby, claims.subject, claims.role);
+		if (admission != lobby_game::Admission::Member)
+		{
+			Log(spdlog::level::info,
+			    fmt::format("The server refuses the account {}: {}", claims.subject, lobby_game::AdmissionName(admission)));
+			Refuse(connection, "ticket");
+			return;
+		}
+	}
+	// The lobby's host can kick or ban an account also after the start: the server refuses the account in every role
+	if (!lan && lobby_bans::IsBanned(claims.subject, _bans))
+	{
+		Log(spdlog::level::info, fmt::format("The lobby removed the account {}: the server refuses it", claims.subject));
+		Refuse(connection, "kicked");
+		return;
 	}
 	// The room takes nobody new during the start
 	if (Starting())
@@ -515,6 +632,14 @@ void LockstepHost::Join(ConnectionId connection, Peer& peer, const game_socket::
 			Refuse(connection, "full", fmt::format("{} finds each of the {} god slots taken", claims.name, _seats.size()));
 			return;
 		}
+		// A member of the lobby with a slot takes that slot
+		if (member != nullptr && member->slot.has_value() &&
+		    (*member->slot >= _seats.size() || _seats.at(*member->slot).state != SeatState::Open))
+		{
+			Log(spdlog::level::info, fmt::format("The slot {} of {} is not free in the room", *member->slot, claims.name));
+			Refuse(connection, "full");
+			return;
+		}
 		// On the local network, a player who finds no free slot watches the game, as the game puts that player with the
 		// observers
 		if (free == _seats.end())
@@ -525,7 +650,9 @@ void LockstepHost::Join(ConnectionId connection, Peer& peer, const game_socket::
 	}
 	if (claims.role == game_socket::Role::God)
 	{
-		const auto free = std::ranges::find(_seats, SeatState::Open, &Seat::state);
+		const auto free = member != nullptr && member->slot.has_value()
+		                      ? _seats.begin() + *member->slot
+		                      : std::ranges::find(_seats, SeatState::Open, &Seat::state);
 		const auto seat = static_cast<uint8_t>(free - _seats.begin());
 		*free = Seat {.state = SeatState::Taken,
 		              .connection = connection,
@@ -564,6 +691,7 @@ void LockstepHost::Join(ConnectionId connection, Peer& peer, const game_socket::
 	peer.joined = true;
 	peer.role = claims.role;
 	peer.name = claims.name;
+	peer.account = lan ? std::string() : claims.subject;
 	SendTo(connection, joined);
 }
 
@@ -707,6 +835,16 @@ void LockstepHost::SendKeptTurns(ConnectionId connection, uint32_t from)
 	if (_stoppedAfter.has_value())
 	{
 		SendTo(connection, game_socket::GameStop {.turn = *_stoppedAfter});
+	}
+	SendLoadWait(connection);
+}
+
+void LockstepHost::SendLoadWait(ConnectionId connection)
+{
+	// A player who comes back or joins during the wait for the loads gets the wait, and counts down from the same end
+	if (_loadWait && !_loadingSent.empty())
+	{
+		SendTo(connection, game_socket::LoadWait {.loading = _loadingSent, .secondsLeft = LoadSecondsLeft()});
 	}
 }
 
@@ -914,6 +1052,7 @@ bool LockstepHost::SendWorld(ConnectionId connection)
 	{
 		SendTo(connection, game_socket::GameStop {.turn = *_stoppedAfter});
 	}
+	SendLoadWait(connection);
 	return true;
 }
 
@@ -992,6 +1131,7 @@ void LockstepHost::JoinRunning(ConnectionId connection, Peer& peer, const join_t
 	}
 	peer.joined = true;
 	peer.name = claims.name;
+	peer.account = byName ? std::string() : claims.subject;
 	SendTo(connection, joined);
 	SendTo(connection, start);
 	SendWorld(connection);
@@ -1006,6 +1146,15 @@ void LockstepHost::Binary(ConnectionId connection, std::span<const uint8_t> byte
 	}
 	const auto& peer = found->second;
 	auto decoded = turn_codec::Decode(bytes);
+	// A client with another version of the format of the turns cannot play in this game. The server closes it.
+	if (decoded.error == turn_codec::DecodeError::Version)
+	{
+		++_refusedBlocks;
+		Refuse(connection, "version",
+		       fmt::format("a binary frame of version {} of the format of the turns, not version {}",
+		                   static_cast<unsigned>(bytes.front()), static_cast<unsigned>(turn_codec::k_Version)));
+		return;
+	}
 	if (!decoded.frame.has_value())
 	{
 		++_refusedBlocks;
@@ -1233,7 +1382,7 @@ void LockstepHost::Update()
 		const auto inRoom = std::ranges::count(_seats, SeatState::Taken, &Seat::state);
 		const auto ready =
 		    std::ranges::count_if(_seats, [](const Seat& seat) { return seat.state == SeatState::Taken && seat.ready; });
-		if (!Starting() && RoomStarts(static_cast<size_t>(inRoom), static_cast<size_t>(ready), _settings.minGods))
+		if (!Starting() && RoomStarts(static_cast<size_t>(inRoom), static_cast<size_t>(ready), _godsToWaitFor))
 		{
 			QueryLands();
 		}
@@ -1248,6 +1397,13 @@ void LockstepHost::Update()
 			CloseSeat(static_cast<uint8_t>(i));
 		}
 	}
+	// A god who left or did not come back no longer holds the wait for the loads. At the end of the time to load, each
+	// god whose player did not load leaves the game.
+	if (_loadWait && now >= _loadWaitEndsAt)
+	{
+		EndLoadWait();
+	}
+	UpdateLoadWait();
 	const bool paused = Paused();
 	if (paused != _pausedBefore)
 	{
@@ -1380,6 +1536,92 @@ void LockstepHost::StartGame()
 		}
 	}
 	Broadcast(start);
+	// The turns of a lobby game wait until each god's player loaded the world (deviation 254)
+	if (_settings.lobby.has_value() && !AllComputerGods())
+	{
+		_loadWait = true;
+		// The time to load counts from the time when the room was made. A start after that time gets the whole time from
+		// the start, so that the players can load.
+		const auto now = _clock();
+		const auto fromCreation = _createdAt + _settings.loadWindowMicroseconds;
+		_loadWaitEndsAt = now < fromCreation ? fromCreation : now + _settings.loadWindowMicroseconds;
+		UpdateLoadWait();
+	}
+}
+
+std::vector<uint8_t> LockstepHost::LoadingSeats() const
+{
+	std::vector<uint8_t> loading;
+	if (!_loadWait)
+	{
+		return loading;
+	}
+	for (size_t i = 0; i < _seats.size(); ++i)
+	{
+		const auto& seat = _seats[i];
+		if ((seat.state == SeatState::Taken || seat.state == SeatState::Away) && !seat.loaded)
+		{
+			loading.push_back(static_cast<uint8_t>(i));
+		}
+	}
+	return loading;
+}
+
+uint32_t LockstepHost::LoadSecondsLeft() const
+{
+	if (!_loadWait)
+	{
+		return 0;
+	}
+	const auto left = std::max<int64_t>(_loadWaitEndsAt - _clock(), 0);
+	return static_cast<uint32_t>((left + 999'999) / 1'000'000);
+}
+
+void LockstepHost::UpdateLoadWait()
+{
+	if (!_loadWait)
+	{
+		return;
+	}
+	std::vector<std::string> names;
+	for (const auto seat : LoadingSeats())
+	{
+		names.push_back(_seats[seat].name);
+	}
+	if (names.empty())
+	{
+		_loadWait = false;
+		Log(spdlog::level::info, "Each god's player loaded the world: the turns of the game start");
+	}
+	else if (names != _loadingSent)
+	{
+		Log(spdlog::level::info, fmt::format("The turns wait for {} players to load the world", names.size()));
+	}
+	if (names != _loadingSent || names.empty())
+	{
+		_loadingSent = names;
+		Broadcast(game_socket::LoadWait {.loading = std::move(names), .secondsLeft = LoadSecondsLeft()});
+	}
+}
+
+void LockstepHost::EndLoadWait()
+{
+	for (const auto seat : LoadingSeats())
+	{
+		Log(spdlog::level::info,
+		    fmt::format("The player of slot {} did not load the world in time: the god leaves the game", seat));
+		const auto connection = _seats[seat].connection;
+		if (const auto peer = connection.has_value() ? _peers.find(*connection) : _peers.end(); peer != _peers.end())
+		{
+			peer->second.seat.reset();
+		}
+		CloseSeat(seat);
+		if (connection.has_value())
+		{
+			Refuse(*connection, "load");
+		}
+	}
+	UpdateLoadWait();
 }
 
 std::vector<game_socket::God> LockstepHost::Gods() const
@@ -1402,6 +1644,7 @@ void LockstepHost::SetBans(std::set<int64_t> accounts)
 	_bans = std::move(accounts);
 	if (_started)
 	{
+		RemoveBannedFromGame();
 		return;
 	}
 	const auto banned = lobby_bans::BannedSeats(_seats, _bans);
@@ -1420,6 +1663,42 @@ void LockstepHost::SetBans(std::set<int64_t> accounts)
 	if (!banned.empty() && Starting())
 	{
 		StopStart(game_socket::StartStop {});
+	}
+}
+
+void LockstepHost::RemoveBannedFromGame()
+{
+	// The lobby's host kicked or banned a player after the start: the server closes the player's socket at once with
+	// "kicked", and the god leaves the game as a player who leaves. The closed seat takes no resume and no join.
+	for (const auto seat : lobby_bans::BannedSeats(_seats, _bans))
+	{
+		Log(spdlog::level::info,
+		    fmt::format("The lobby removed the player of slot {} from the game: the god leaves the game", seat));
+		const auto connection = _seats[seat].connection;
+		if (const auto peer = connection.has_value() ? _peers.find(*connection) : _peers.end(); peer != _peers.end())
+		{
+			peer->second.seat.reset();
+		}
+		CloseSeat(seat);
+		if (connection.has_value())
+		{
+			Refuse(*connection, "kicked");
+		}
+	}
+	// An observer of a removed account leaves the game too
+	std::vector<ConnectionId> observers;
+	for (const auto& [connection, peer] : _peers)
+	{
+		if (peer.joined && peer.role == game_socket::Role::Observer && !peer.account.empty() &&
+		    lobby_bans::IsBanned(peer.account, _bans))
+		{
+			observers.push_back(connection);
+		}
+	}
+	for (const auto connection : observers)
+	{
+		Log(spdlog::level::info, fmt::format("The lobby removed the observer of connection {} from the game", connection));
+		Refuse(connection, "kicked");
 	}
 }
 
@@ -1472,6 +1751,23 @@ void LockstepHost::StopTurns()
 	Broadcast(game_socket::GameStop {.turn = *_stoppedAfter});
 }
 
+void LockstepHost::EndJoinWindow()
+{
+	if (!_settings.lobby.has_value() || _godsToWaitFor == _settings.minGods)
+	{
+		return;
+	}
+	_godsToWaitFor = _settings.minGods;
+	Log(spdlog::level::info,
+	    fmt::format("The time to join ended with {} gods in the room: the room starts with {} gods at least", GodsInRoom(),
+	                _settings.minGods));
+}
+
+size_t LockstepHost::GodsInRoom() const
+{
+	return static_cast<size_t>(std::ranges::count(_seats, SeatState::Taken, &Seat::state));
+}
+
 bool LockstepHost::GameOver() const
 {
 	if (AllComputerGods())
@@ -1498,6 +1794,12 @@ bool LockstepHost::HasTurn(uint32_t turn) const
 	if (AllComputerGods())
 	{
 		return _started && _observersJoined && !_stoppedAfter.has_value();
+	}
+	// The turns of a lobby game wait for the loads of the gods' players. A god who leaves in this time leaves in the
+	// first turn after the wait.
+	if (_loadWait)
+	{
+		return false;
 	}
 	return _started && !_stoppedAfter.has_value() && (AnyGodConnected() || !_leaving.empty());
 }

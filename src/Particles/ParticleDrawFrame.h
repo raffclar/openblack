@@ -324,6 +324,35 @@ struct SymbolSprites
 };
 [[nodiscard]] SymbolSprites SymbolOf(const Effect::DrawAtom& atom, uint32_t playerRgb, int player,
                                      int symbolsInARow = k_LandSymbolsInARow);
+/// The values of an atom that its symbol's three sprites use
+struct SymbolAtom
+{
+	glm::vec3 position;
+	float scale;
+	float alpha;
+	/// Seconds it has lived, at the drawn time
+	float age;
+	std::array<uint8_t, 3> rgb;
+};
+[[nodiscard]] SymbolAtom SymbolAtomOf(const Effect::DrawAtom& atom);
+/// The same sprites as SymbolOf gives for the drawn atom
+[[nodiscard]] SymbolSprites SymbolOf(const SymbolAtom& atom, uint32_t playerRgb, int player,
+                                     int symbolsInARow = k_LandSymbolsInARow);
+/// Half the width of each glow and half the width of the symbol, for an atom of this size
+[[nodiscard]] std::pair<float, float> SymbolHalfWidths(float atomScale);
+/// The material of a symbol's glows and the material of the symbol, in the sheets that the sources give. Each is none
+/// when the sources do not know its sheet.
+[[nodiscard]] std::pair<std::optional<Material>, std::optional<Material>> SymbolMaterials(const Sources& sources);
+/// True when each step of the walk is a symbol or an atom that draws nothing: no ribbon, no shell over a model, no shower
+/// of sparks and no other kind of drawn atom
+[[nodiscard]] bool OnlySymbols(const Effect::DrawWalk& walk);
+/// True when the atom draws a symbol and nothing more
+[[nodiscard]] bool IsLaidSymbol(const Effect::DrawAtom& atom);
+/// True when the atom puts nothing in a frame: an atom that only carries collections or marks a point, a joint of a
+/// ribbon, or a kind that the game does not draw
+[[nodiscard]] bool DrawsNothing(const Effect::DrawAtom& atom);
+/// The player whose symbol an atom shows: its own player, else the player of its effect
+[[nodiscard]] int SymbolPlayer(const Effect::DrawAtom& atom, int effectPlayer);
 
 /// A player's symbol drawn by itself, between its two glows, as over a worthy artefact
 struct PlayerSymbol
@@ -384,6 +413,24 @@ struct Command
 /// a material at a time.
 void Order(const Frame& frame, const glm::vec3& camera, std::optional<glm::vec3> hand, std::vector<Command>& commands,
            std::vector<uint32_t>& spriteOrder);
+/// The lists that Order works in. A caller that keeps them from one frame to the next keeps their memory.
+struct OrderLists
+{
+	std::vector<uint32_t> come;
+	std::vector<uint64_t> keys;
+	std::vector<uint64_t> scratch;
+	std::vector<uint32_t> items;
+	std::vector<uint8_t> commutes;
+	std::vector<uint32_t> order;
+	std::vector<uint32_t> counts;
+	std::vector<std::pair<uint32_t, uint32_t>> ranked;
+};
+/// The same order as Order gives, made in the caller's lists
+void Order(const Frame& frame, const glm::vec3& camera, std::optional<glm::vec3> hand, std::vector<Command>& commands,
+           std::vector<uint32_t>& spriteOrder, OrderLists& lists);
+/// The lowest and the highest corners of a box that holds each corner of each sprite that the frame draws, as the
+/// sprite shader puts the corners. It is none when the frame draws nothing or more than sprites.
+[[nodiscard]] std::optional<std::pair<glm::vec3, glm::vec3>> SpriteBox(const Frame& frame);
 /// The order the effects drawn before the land are drawn in, each in its own order, the sprites as for Order. The view
 /// they are drawn in keeps the order they are given.
 void OrderBeforeLand(const Frame& frame, std::vector<Command>& commands, std::vector<uint32_t>& spriteOrder);

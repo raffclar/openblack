@@ -101,10 +101,21 @@ public:
 	};
 
 private:
+	/// The values of a caster that its shadow comes from, other than its cells. The bake compares them by their bits.
+	struct BakedFrom
+	{
+		uint32_t shadow;
+		uint32_t mesh;
+		uint32_t meshReady;
+		glm::vec3 position;
+		glm::mat3 rotation;
+		glm::vec3 scale;
+	};
+
 	/// What a caster's shadow was last baked from, to tell when it changes
 	struct Baked
 	{
-		uint64_t signature;
+		BakedFrom from;
 		std::vector<uint32_t> cells;
 		bool seen;
 		/// A solid thing's triangles flattened where they fall in the world, kept until it changes, and the corners of

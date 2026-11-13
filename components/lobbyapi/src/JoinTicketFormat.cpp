@@ -305,7 +305,8 @@ std::optional<Claims> ParseClaims(std::string_view message)
 	std::string role;
 	if (!ReadString(value, "iss", claims.issuer) || !ReadString(value, "sub", claims.subject) ||
 	    !ReadString(value, "aud", claims.audience) || !ReadString(value, "jti", claims.id) ||
-	    !ReadString(value, "name", claims.name, false) || !ReadString(value, "role", role, false))
+	    !ReadString(value, "name", claims.name, false) || !ReadString(value, "role", role, false) ||
+	    !ReadString(value, "lobby", claims.lobby, false))
 	{
 		return std::nullopt;
 	}

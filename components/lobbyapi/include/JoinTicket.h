@@ -98,6 +98,8 @@ struct Claims
 	/// The account has the admin right on this server
 	bool admin {false};
 	game_socket::Role role {game_socket::Role::God};
+	/// The id of the lobby whose game the ticket is for ("lobby", optional). Empty for a ticket of a server with no lobby.
+	std::string lobby;
 };
 
 /// The claims of a ticket's message. None when a claim is missing, has the wrong type or names a role that is not known.

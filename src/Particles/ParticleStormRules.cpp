@@ -101,7 +101,7 @@ struct Gathering
 	/// The cloud carrying the bolt, and the bolt's collection while no cloud carries it
 	const Atom* boltCloud {nullptr};
 	Collection* bolt {nullptr};
-	std::unique_ptr<Collection> spareBolt;
+	CollectionPtr spareBolt;
 	/// The first core's clouds own the storm's weather
 	bool ownsStorm {false};
 	std::shared_ptr<RainStormLease> storm;

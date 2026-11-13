@@ -19,6 +19,7 @@
 #include <iterator>
 #include <map>
 #include <memory>
+#include <memory_resource>
 #include <numbers>
 #include <optional>
 #include <set>
@@ -1419,4 +1420,95 @@ TEST_F(ParticleEffectTest, ASavedAtomOnAnObjectKeepsItsObjectAndItsShower)
 	std::vector<entt::entity> showers;
 	effect->ForEachDrawnShower([&showers](ObjectShower& shower) { showers.push_back(shower.object); });
 	EXPECT_EQ(showers, std::vector<entt::entity> {static_cast<entt::entity>(42)});
+}
+
+TEST(AtomRuleStore, EachRuleFindsItsOwnDataInTheOrderThatTheRulesCame)
+{
+	// The rules are only keys of the store. The test uses the addresses of plain values as the rules.
+	std::array<int, 5> places {};
+	const auto rule = [&places](size_t index) { return reinterpret_cast<const Modifier*>(&places.at(index)); };
+	AtomRuleStore store;
+	EXPECT_TRUE(store.empty());
+	EXPECT_EQ(store.find(rule(0)), store.end());
+	// More rules than the store keeps in the atom: the data of the first rules moves with them
+	for (size_t i = 0; i < places.size(); ++i)
+	{
+		store[rule(i)].a.x = static_cast<float>(i);
+		store[rule(i)].object = static_cast<entt::entity>(i);
+		ASSERT_EQ(store.size(), i + 1);
+		for (size_t j = 0; j <= i; ++j)
+		{
+			const auto found = store.find(rule(j));
+			ASSERT_NE(found, store.end());
+			EXPECT_EQ(found->second.a.x, static_cast<float>(j));
+			EXPECT_EQ(found->second.object, static_cast<entt::entity>(j));
+		}
+	}
+	std::vector<const Modifier*> order;
+	for (const auto& [modifier, data] : store)
+	{
+		order.push_back(modifier);
+	}
+	EXPECT_EQ(order, (std::vector<const Modifier*> {rule(0), rule(1), rule(2), rule(3), rule(4)}));
+	// A known rule gets new data in its place, and the store does not grow
+	store.insert_or_assign(rule(1), AtomRuleData {.started = true});
+	EXPECT_EQ(store.size(), places.size());
+	EXPECT_TRUE(store.find(rule(1))->second.started);
+	EXPECT_EQ(store.find(rule(1))->second.a.x, 0.0f);
+}
+
+TEST(AtomRuleStore, ANewRuleAfterAnEmptyStoreGetsEmptyData)
+{
+	std::array<int, 2> places {};
+	AtomRuleStore store;
+	const auto* first = reinterpret_cast<const Modifier*>(&places[0]);
+	const auto* second = reinterpret_cast<const Modifier*>(&places[1]);
+	store.insert_or_assign(second, AtomRuleData {.started = true, .a = glm::vec4(2.0f)});
+	const auto& data = store[first];
+	EXPECT_FALSE(data.started);
+	EXPECT_EQ(data.object, entt::entity {entt::null});
+	EXPECT_EQ(data.held, nullptr);
+	EXPECT_EQ(data.a, glm::vec4(0.0f));
+	EXPECT_EQ(store.size(), 2u);
+	EXPECT_EQ(store.begin()->first, second);
+}
+
+namespace
+{
+/// A store that counts the bytes that it gives and gets back
+class CountingStore final: public std::pmr::memory_resource
+{
+public:
+	size_t given {0};
+	size_t taken {0};
+
+private:
+	void* do_allocate(size_t bytes, size_t alignment) override
+	{
+		given += bytes;
+		return std::pmr::new_delete_resource()->allocate(bytes, alignment);
+	}
+	void do_deallocate(void* pointer, size_t bytes, size_t alignment) override
+	{
+		taken += bytes;
+		std::pmr::new_delete_resource()->deallocate(pointer, bytes, alignment);
+	}
+	[[nodiscard]] bool do_is_equal(const std::pmr::memory_resource& other) const noexcept override { return this == &other; }
+};
+} // namespace
+
+TEST(ParticleStore, AnAtomAndItsListsGoBackToTheStoreThatTheyCameFrom)
+{
+	CountingStore store;
+	{
+		std::pmr::polymorphic_allocator<Collection> allocator(&store);
+		CollectionPtr collection(allocator.new_object<Collection>(&store), StoreDelete {.store = &store});
+		std::pmr::polymorphic_allocator<Atom> atoms(&store);
+		auto& atom = *collection->atoms.emplace_back(atoms.new_object<Atom>(&store), StoreDelete {.store = &store});
+		atom.subCollections.emplace_back(allocator.new_object<Collection>(&store), StoreDelete {.store = &store});
+		collection->modifiers.emplace_back();
+		EXPECT_GE(store.given, sizeof(Collection) * 2 + sizeof(Atom));
+		EXPECT_EQ(store.taken, 0u);
+	}
+	EXPECT_EQ(store.taken, store.given);
 }

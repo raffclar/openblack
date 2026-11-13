@@ -11,6 +11,7 @@
 // checksum of the synced world at the end of each turn. With --listen it is the game server of a network game: the
 // clients join with a ticket of the lobby, and the server orders their commands into its turns.
 
+#include <cctype>
 #include <csignal>
 #include <cstdint>
 #include <cstdlib>
@@ -20,8 +21,10 @@
 #include <chrono>
 #include <exception>
 #include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <iterator>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -30,6 +33,8 @@
 #include <variant>
 #include <vector>
 
+#include <JoinTicket.h>
+#include <LobbyMembers.h>
 #include <cxxopts.hpp>
 
 #include "Common/BuildVersion.h"
@@ -40,6 +45,7 @@
 #include "ECS/GameEndConditions.h"
 #include "Locator.h"
 #include "Online/Desktop/UdpLanDiscovery.h"
+#include "Online/GameBuildId.h"
 #include "Server/DedicatedServer.h"
 #include "Server/MapExport.h"
 
@@ -94,6 +100,76 @@ int SearchLocalNetwork(uint32_t seconds)
 }
 #endif
 
+/// Reads the options of the game of one lobby. Gives the error, or none.
+std::optional<std::string> ReadLobbyGame(const cxxopts::ParseResult& result, const openblack::server::ServerSettings& settings,
+                                         openblack::server::NetworkSettings& network)
+{
+	const bool lobbyGame = result.count("lobby-id") != 0;
+	for (const auto* option : {"expect-members", "game-id", "deadline", "map-sha256"})
+	{
+		if (!lobbyGame && result.count(option) != 0)
+		{
+			return std::string("--") + option + " needs --lobby-id";
+		}
+	}
+	if (!lobbyGame)
+	{
+		return std::nullopt;
+	}
+	if (network.lan)
+	{
+		return std::string("a lobby game (--lobby-id) is not a room of the local network (--lan)");
+	}
+	if (result.count("expect-members") == 0 || result.count("game-id") == 0)
+	{
+		return std::string("a lobby game (--lobby-id) needs --expect-members and --game-id");
+	}
+	if (settings.timeLimit.value_or(openblack::game_end::k_DefaultTimeLimitMinutes) >
+	    openblack::server::game_lifetime::k_LongestLobbyTimeLimitMinutes)
+	{
+		return std::string("the time limit of a lobby game must be 360 minutes (6 hours) or less");
+	}
+	const std::filesystem::path membersPath(result["expect-members"].as<std::string>());
+	std::ifstream file(membersPath, std::ios::binary);
+	if (!file)
+	{
+		return "the file of the members does not open: " + membersPath.generic_string();
+	}
+	const std::string text((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+	auto members = openblack::lobby_members::ParseMembers(text);
+	if (const auto* error = std::get_if<std::string>(&members); error != nullptr)
+	{
+		return *error;
+	}
+	network.lobby = openblack::server::lobby_game::Lobby {
+	    .id = result["lobby-id"].as<std::string>(),
+	    .members = std::move(std::get<std::vector<openblack::lobby_members::Member>>(members))};
+	network.gameId = result["game-id"].as<std::string>();
+	network.joinWindowSeconds = result["join-window"].as<uint32_t>();
+	if (result.count("deadline") != 0)
+	{
+		const auto deadline = openblack::join_ticket::ParseIsoTime(result["deadline"].as<std::string>());
+		if (!deadline.has_value())
+		{
+			return "the deadline is not a time in ISO 8601 with an offset: " + result["deadline"].as<std::string>();
+		}
+		network.deadline = *deadline;
+	}
+	if (result.count("map-sha256") != 0)
+	{
+		auto hex = result["map-sha256"].as<std::string>();
+		std::ranges::transform(hex, hex.begin(),
+		                       [](char c) { return static_cast<char>(std::tolower(static_cast<unsigned char>(c))); });
+		if (hex.size() != 64 ||
+		    !std::ranges::all_of(hex, [](char c) { return std::isxdigit(static_cast<unsigned char>(c)) != 0; }))
+		{
+			return "the SHA-256 of the land is not 64 hex digits: " + hex;
+		}
+		network.mapSha256 = std::move(hex);
+	}
+	return std::nullopt;
+}
+
 } // namespace
 
 int main(int argc, char* argv[])
@@ -109,6 +185,7 @@ int main(int argc, char* argv[])
 		("gods-ring-map", "The network map for 32 gods in place of a land.")
 		("write-gods-ring-map", "Write the file of the network map for 32 gods, which the players get from the lobby, to this file, then stop.", cxxopts::value<std::string>())
 		("custom-map", "Play the land of a network game in this .map file outside the game folder. The server names it Online Maps/<file>.map and sends it to the lobby, so that the players get it.", cxxopts::value<std::string>())
+		("write-map-package", "Write the map package of the network map for 32 gods to this folder as <SHA-256>.obmap, then stop. The package has no game data, so the server needs no game folder for it.", cxxopts::value<std::string>())
 		("write-download-test-map", "Write the land of the map download test, which the tool makes from Online Maps/mpm_3p_1.map, to this file, then stop. The game folder does not change.", cxxopts::value<std::string>())
 		("profile-folder", "The folder of the server's own profile. With none, the profile of a tool's run in the working folder.", cxxopts::value<std::string>())
 		("time-limit", "The time limit of the network game in minutes, from 10 to 1440 (24 hours) as the host picks it, in place of the default 30. A build with the developer tools also accepts 1 to 9 minutes for tests. The start sends it to every client.", cxxopts::value<uint32_t>())
@@ -133,6 +210,13 @@ int main(int argc, char* argv[])
 		("snapshot-keep", "The snapshots that the folder keeps, at least 1.", cxxopts::value<uint32_t>()->default_value(std::to_string(openblack::server::snapshots::k_DefaultKeep)))
 		("resume-snapshot", "At its start, the game server continues the game of the newest snapshot that reads. With no snapshot, it starts a new game.")
 		("come-back-seconds", "How long a god's player can be away before the god is defeated.", cxxopts::value<uint32_t>()->default_value("300"))
+		("lobby-id", "The game of one lobby on a server of the pool: the id of the lobby, which each join ticket must name. It needs --expect-members and --game-id. The time limit is then 360 minutes (6 hours) at most, and the server ends after its game.", cxxopts::value<std::string>())
+		("expect-members", "With --lobby-id, the JSON file of the members of the lobby: {\"members\": [{\"account\": \"101\", \"role\": \"god\", \"slot\": 0}, ...]}. The server takes only these accounts, each in its role and god slot.", cxxopts::value<std::string>())
+		("game-id", "With --lobby-id, the id of the game at the lobby, which the log and the results of the game name.", cxxopts::value<std::string>())
+		("join-window", "With --lobby-id, the seconds in which the members join after the server listens. The room waits for each god of the lobby until then. With fewer gods than --min-gods at its end, or no start at two times its length, the server ends with exit code 12.", cxxopts::value<uint32_t>()->default_value(std::to_string(openblack::server::game_lifetime::k_DefaultJoinWindowSeconds)))
+		("deadline", "With --lobby-id, the time (UTC, ISO 8601 such as 2026-11-12T18:00:00+00:00) at which the server ends with exit code 11. The server also ends 6 hours after it starts to listen at the latest.", cxxopts::value<std::string>())
+		("build-id", "The build id that the lobby gave the game, such as 0.1.0+0123456789ab/codec34. The server does not start when its own build id is another.", cxxopts::value<std::string>())
+		("map-sha256", "The SHA-256 of the file of the land that the lobby gave its members, as 64 hex digits. The server does not start with another file.", cxxopts::value<std::string>())
 		("l,log-file", "The file of the log, or stdout.", cxxopts::value<std::string>()->default_value("stdout"))
 		("version", "Write the version of openblack (the semantic version and the git commit) and exit.")
 		("h,help", "Show this help.");
@@ -199,7 +283,26 @@ int main(int argc, char* argv[])
 		}
 		if (result.count("version") != 0)
 		{
-			std::cout << "openblack-server " << openblack::build_version::Text() << std::endl;
+			std::cout << "openblack-server " << openblack::build_version::Text() << " (build id "
+			          << openblack::online::build_id::Own() << ")" << std::endl;
+			return EXIT_SUCCESS;
+		}
+		if (result.count("build-id") != 0 && result["build-id"].as<std::string>() != openblack::online::build_id::Own())
+		{
+			std::cerr << "openblack-server: the lobby gave the build " << result["build-id"].as<std::string>()
+			          << ", but this server is the build " << openblack::online::build_id::Own() << std::endl;
+			return EXIT_FAILURE;
+		}
+		if (result.count("write-map-package") != 0)
+		{
+			const std::filesystem::path folder(result["write-map-package"].as<std::string>());
+			const auto written = openblack::server::WriteMapPackage(folder);
+			if (const auto* error = std::get_if<std::string>(&written); error != nullptr)
+			{
+				std::cerr << "openblack-server: " << *error << '\n';
+				return EXIT_FAILURE;
+			}
+			std::cout << std::get<std::filesystem::path>(written).generic_string() << '\n';
 			return EXIT_SUCCESS;
 		}
 #if defined(OPENBLACK_DEVELOPER_TOOLS)
@@ -293,7 +396,11 @@ int main(int argc, char* argv[])
 		if (result.count("time-limit") != 0)
 		{
 			const auto minutes = result["time-limit"].as<uint32_t>();
-			if (const auto refusal = openblack::game_end::TimeLimitRefusal(minutes, openblack::developer_tools::k_Built);
+			const bool lobbyGame = result.count("lobby-id") != 0;
+			if (const auto refusal =
+			        lobbyGame
+			            ? openblack::server::game_lifetime::LobbyTimeLimitRefusal(minutes, openblack::developer_tools::k_Built)
+			            : openblack::game_end::TimeLimitRefusal(minutes, openblack::developer_tools::k_Built);
 			    refusal.has_value())
 			{
 				std::cerr << "The time limit of --time-limit is " << minutes << " minutes, but " << *refusal << "."
@@ -428,6 +535,11 @@ int main(int argc, char* argv[])
 			if (result.count("lobby-test-ca") != 0)
 			{
 				network.lobbyTestAuthorities = std::filesystem::path(result["lobby-test-ca"].as<std::string>());
+			}
+			if (const auto error = ReadLobbyGame(result, settings, network); error.has_value())
+			{
+				std::cerr << "openblack-server: " << *error << std::endl;
+				return EXIT_FAILURE;
 			}
 			settings.network = std::move(network);
 		}

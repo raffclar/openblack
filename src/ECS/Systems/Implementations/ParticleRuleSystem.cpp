@@ -71,7 +71,9 @@
 #include "ECS/Systems/PickingSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/Systems/TownSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
+#include "ECS/TownCentreLinks.h"
 #include "ECS/WorldObjects.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "InfoConstants.h"
@@ -185,20 +187,27 @@ std::optional<particles::TownCentreBelief> GameParticleWorld::TownCentreBeliefOf
 	}
 	// Its totem's top, over the icon on the plinth, where the frames draw it as it rises with the worship
 	std::optional<glm::vec3> totemTop;
-	registry.Each<const VillageTotem, const Transform>(
-	    [&registry, &totemTop, centre](entt::entity totem, const VillageTotem& standing, const Transform& plinth) {
-		    if (totemTop.has_value() || standing.townCentre != centre)
-		    {
-			    return;
-		    }
-		    const auto* icon = registry.Valid(standing.icon) ? registry.TryGet<const Transform>(standing.icon) : nullptr;
-		    auto top = icon != nullptr ? ecs::drawn_place::DrawnTransformOf(registry, standing.icon, *icon).position
-		                               : ecs::drawn_place::DrawnTransformOf(registry, totem, plinth).position +
-		                                     glm::vec3(0.0f, ecs::village_totem::k_IconAbovePlinth, 0.0f);
-		    const float iconHeight = icon != nullptr ? ecs::world_objects::SizeOf(standing.icon).height : 0.0f;
-		    top.y = ecs::village_totem::TopY(top.y, iconHeight);
-		    totemTop = top;
-	    });
+	const auto topOf = [&registry](entt::entity totem, const VillageTotem& standing, const Transform& plinth) {
+		const auto* icon = registry.Valid(standing.icon) ? registry.TryGet<const Transform>(standing.icon) : nullptr;
+		auto top = icon != nullptr ? ecs::drawn_place::DrawnTransformOf(registry, standing.icon, *icon).position
+		                           : ecs::drawn_place::DrawnTransformOf(registry, totem, plinth).position +
+		                                 glm::vec3(0.0f, ecs::village_totem::k_IconAbovePlinth, 0.0f);
+		const float iconHeight = icon != nullptr ? ecs::world_objects::SizeOf(standing.icon).height : 0.0f;
+		top.y = ecs::village_totem::TopY(top.y, iconHeight);
+		return top;
+	};
+	// The totem on the centre and the town of the centre's number. While the symbols of the frame take their step, the
+	// town system keeps the links of all the centres. At other times one walk of the stores finds them.
+	std::optional<ecs::town_centre_links::Links> ownLinks;
+	const auto* links = Locator::townSystem::has_value() ? Locator::townSystem::value().FrameLinks() : nullptr;
+	if (links == nullptr)
+	{
+		links = &ownLinks.emplace(ecs::town_centre_links::Links::Of(registry));
+	}
+	if (const auto totem = links->TotemOf(centre); totem != entt::null)
+	{
+		totemTop = topOf(totem, registry.Get<const VillageTotem>(totem), registry.Get<const Transform>(totem));
+	}
 	if (!totemTop.has_value())
 	{
 		return std::nullopt;
@@ -208,14 +217,15 @@ std::optional<particles::TownCentreBelief> GameParticleWorld::TownCentreBeliefOf
 	              "The symbols of belief count the player numbers of the game");
 	// The symbols show each player of the game: the 8 players of a land, or more in a network game with more gods
 	particles::TownCentreBelief belief {.totemTop = *totemTop, .players = ecs::game_players::Count()};
-	registry.Each<const Town, const TownImpression>([&belief, abode](const Town& town, const TownImpression& impression) {
-		if (town.id == abode->townId)
-		{
-			static_assert(std::tuple_size_v<decltype(impression.belief.belief)> == std::tuple_size_v<decltype(belief.beliefs)>,
-			              "The town and its symbols have a place for each player number");
-			std::ranges::copy(impression.belief.belief, belief.beliefs.begin());
-		}
-	});
+	const auto copyBelief = [&belief](const TownImpression& impression) {
+		static_assert(std::tuple_size_v<decltype(impression.belief.belief)> == std::tuple_size_v<decltype(belief.beliefs)>,
+		              "The town and its symbols have a place for each player number");
+		std::ranges::copy(impression.belief.belief, belief.beliefs.begin());
+	};
+	if (const auto town = links->TownOf(abode->townId); town != entt::null)
+	{
+		copyBelief(registry.Get<const TownImpression>(town));
+	}
 	return belief;
 }
 

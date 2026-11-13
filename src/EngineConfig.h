@@ -206,5 +206,7 @@ struct EngineConfig
 	/// A network game shows the round trip of this computer's game socket (deviation 143). It is off unless the player
 	/// turns it on.
 	bool showPing {false};
+	/// Tests: the wait in milliseconds before each request of a piece of a map that the lobby room downloads
+	uint32_t mapPieceDelayMs {0};
 };
 } // namespace openblack

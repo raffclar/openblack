@@ -30,6 +30,7 @@
 #include "ParticleArchive.h"
 #include "ParticleClassRegistry.h"
 #include "ParticleCreators.h"
+#include "ParticlePrefetch.h"
 #include "ParticleSounds.h"
 #include "TownBeliefMaths.h"
 
@@ -248,8 +249,10 @@ public:
 		// The village's beliefs and the rank of each player are the same for each symbol
 		const auto beliefs = belief->OfPlayers();
 		const auto ranks = town_belief::Ranks(beliefs);
-		for (auto& atom : collection.atoms)
+		for (size_t a = 0; a < collection.atoms.size(); ++a)
 		{
+			prefetch::AtomsAhead(collection.atoms, a, 1, prefetch::Reach::Collections);
+			auto& atom = collection.atoms[a];
 			const auto found = atom->data.find(this);
 			if (found == atom->data.end() || atom->player < 0 || static_cast<size_t>(atom->player) >= beliefs.size())
 			{

@@ -157,6 +157,7 @@ MessageButtons ButtonsOf(Message message) noexcept
 	{
 	case Message::NotRegistered:
 	case Message::EmailRequired:
+	case Message::LobbyQuestion:
 		return MessageButtons::YesNo;
 	case Message::WaitingForTransfer:
 	case Message::SendingStartData:
@@ -819,6 +820,9 @@ void Next(Flow& flow)
 	case Box::Login:
 	case Box::GameList:
 	case Box::Conditions:
+	case Box::LobbyList:
+	case Box::CreateLobby:
+	case Box::LobbyRoom:
 		break;
 	}
 }
@@ -842,6 +846,14 @@ void Back(Flow& flow)
 	case Box::Room:
 	case Box::Conditions:
 		flow.box = Box::GameList;
+		break;
+	case Box::LobbyList:
+		// The player stays logged in: the box of the choice of the internet or the local network opens
+		flow.box = Box::FindGames;
+		break;
+	case Box::CreateLobby:
+	case Box::LobbyRoom:
+		flow.box = Box::LobbyList;
 		break;
 	}
 }

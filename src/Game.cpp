@@ -358,6 +358,7 @@ Game::Game(Arguments&& args) noexcept
 	config.lobbyTestAuthorities = args.lobbyTestAuthorities;
 	config.useInternetWeather = args.useInternetWeather;
 	config.showPing = args.showPing;
+	config.mapPieceDelayMs = args.mapPieceDelayMs;
 	config.dynamicTreeShadows = args.dynamicTreeShadows;
 	config.unlockedBonusCreatures = args.unlockedBonusCreatures;
 	config.footballAddOn = args.footballAddOn;

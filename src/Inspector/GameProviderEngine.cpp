@@ -8,6 +8,7 @@
  *******************************************************************************/
 
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <string>
 #include <utility>
@@ -26,6 +27,7 @@
 #include "ECS/Systems/GatheringBoxSystemInterface.h"
 #include "ECS/Systems/InspectorSystemInterface.h"
 #include "ECS/Systems/LobbyClientSystemInterface.h"
+#include "ECS/Systems/LobbyRoomSystemInterface.h"
 #include "ECS/Systems/NetworkGameSystemInterface.h"
 #include "ECS/Systems/RenderingSystemInterface.h"
 #include "ECS/Systems/ToolRunSystemInterface.h"
@@ -34,6 +36,7 @@
 #include "GameProviderShared.h"
 #include "Locator.h"
 #include "Online/HttpClientInterface.h"
+#include "Online/LobbyRoom.h"
 #include "Online/NetworkSession.h"
 #include "Online/WebSocketInterface.h"
 #include "Profiler.h"
@@ -70,12 +73,48 @@ Json UnlockedBonusCreatureNames(const creature_swap::Unlocked& unlocked)
 namespace openblack::inspector::game_providers
 {
 
+namespace
+{
+
+/// The lobby list and the room of the lobby service, or null when the game has no lobby room system
+[[nodiscard]] Json LobbyRoomJson()
+{
+	if (!Locator::lobbyRoom::has_value())
+	{
+		return nullptr;
+	}
+	const auto& system = Locator::lobbyRoom::value();
+	Json room = nullptr;
+	if (const auto* joined = system.Room(); joined != nullptr)
+	{
+		constexpr std::array<std::string_view, 6> k_PhaseNames {"open", "countdown", "queued", "assigned", "in_game", "ended"};
+		const auto phase = static_cast<size_t>(joined->Phase());
+		room = Json {
+		    {"id", joined->Data().id},
+		    {"name", joined->Data().name},
+		    {"phase", phase < k_PhaseNames.size() ? Json(k_PhaseNames[phase]) : Json(phase)},
+		    {"host", joined->IsHost()},
+		    {"members", joined->Data().members.size()},
+		    {"revision", joined->Revision()},
+		};
+	}
+	return Json {
+	    {"build_id", system.BuildId()},
+	    {"listed", system.List().Entries().size()},
+	    {"list_revision", system.List().Revision()},
+	    {"room", std::move(room)},
+	};
+}
+
+} // namespace
+
 std::unique_ptr<ProviderInterface> EngineProvider()
 {
 	auto provider = std::make_unique<FunctionProvider>("engine");
 	provider->Add(
-	    Query("online", "The web client, the WSS client, the lobby client and the network game: the requests that wait, "
-	                    "the open sockets, the session, the push channel, and the turns and checksums of the game server"),
+	    Query("online",
+	          "The web client, the WSS client, the lobby client, the lobby room and the network game: the requests that wait, "
+	          "the open sockets, the session, the push channel, and the turns and checksums of the game server"),
 	    [](const QueryContext& /*context*/) {
 		    Json result {
 		        {"http_pending", Locator::httpClient::has_value() ? Locator::httpClient::value().Pending() : 0},
@@ -126,6 +165,7 @@ std::unique_ptr<ProviderInterface> EngineProvider()
 		    {
 			    result["clan_creature"] = nullptr;
 		    }
+		    result["lobby_room"] = LobbyRoomJson();
 		    if (!Locator::lobbyClient::has_value())
 		    {
 			    result["lobby"] = nullptr;

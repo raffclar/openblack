@@ -61,6 +61,7 @@
 #include "ECS/Systems/IntroSystemInterface.h"
 #include "ECS/Systems/LandSystemInterface.h"
 #include "ECS/Systems/LobbyClientSystemInterface.h"
+#include "ECS/Systems/LobbyRoomSystemInterface.h"
 #include "ECS/Systems/NetworkGameSystemInterface.h"
 #include "ECS/Systems/PlayerProfileSystemInterface.h"
 #include "ECS/Systems/RainSystemInterface.h"
@@ -73,6 +74,7 @@
 #include "Gui/EscapeKeyRules.h"
 #include "Gui/GameInterface.h"
 #include "Gui/JoinOnlineEntry.h"
+#include "Gui/LobbyScreenRules.h"
 #include "Gui/MultiplayerFrontEnd.h"
 #include "Gui/OnlineMapTexts.h"
 #include "Gui/StartupRules.h"
@@ -137,6 +139,10 @@ void Game::UpdateOnline()
 	{
 		Locator::lobbyClient::value().Update();
 	}
+	if (Locator::lobbyRoom::has_value())
+	{
+		Locator::lobbyRoom::value().Update();
+	}
 	// The gathering box talks to the ping server with the time of the computer, not the time of the turns
 	if (Locator::gatheringBoxSystem::has_value())
 	{
@@ -152,6 +158,11 @@ void Game::UpdateOnline()
 		{
 			// The words "Resynchronising..." show while the world resynchronises (user decision MI-4)
 			Locator::gameInterface::value().ShowResync(session != nullptr && network.InGame() && session->ShowsResync());
+			// The turns of a lobby game wait for the players that still load the world. The camera stays free.
+			const auto loadWait = session != nullptr && network.InGame() ? session->LoadWait() : std::nullopt;
+			Locator::gameInterface::value().ShowLoadWait(
+			    loadWait.has_value() ? gui::lobby_screens::LoadPauseLines(loadWait->loading, loadWait->secondsLeft)
+			                         : std::vector<std::u16string> {});
 			// After the last try the game asks whether the player plays on, as the game asks when the checksums differ
 			// A run of the tools asks nothing: the game stops as its network game ends
 			const bool toolRun = Locator::simulation::value().GetSettings().untilTurn.has_value();
@@ -181,10 +192,20 @@ void Game::UpdateOnline()
 			        .toolRun = toolRun,
 			    }))
 			{
-				Locator::gameInterface::value().ShowConnectionLost();
-				SPDLOG_LOGGER_INFO(spdlog::get("game"),
-				                   "The connection to the network game is lost ({}): the box tells the player",
-				                   online::EndName(session->GetEnd()));
+				// The server took the player out of the game for the lobby's host (row 241)
+				if (online::KickedFromGame(session->GetEnd(), session->RefusedReason()))
+				{
+					Locator::gameInterface::value().ShowKicked(gui::ToUtf16(network.RoomName()));
+					SPDLOG_LOGGER_INFO(spdlog::get("game"),
+					                   "The host kicked the player from the network game: the box tells the player");
+				}
+				else
+				{
+					Locator::gameInterface::value().ShowConnectionLost();
+					SPDLOG_LOGGER_INFO(spdlog::get("game"),
+					                   "The connection to the network game is lost ({}): the box tells the player",
+					                   online::EndName(session->GetEnd()));
+				}
 			}
 			// The OK goes back to the network front end. A join from the command line has no front end: the game stops.
 			// A box with no lost network session (a testbed scenario) only closes.
@@ -237,6 +258,25 @@ std::unique_ptr<gui::MultiplayerFrontEnd> Game::MakeMultiplayerFrontEnd()
 	    .poll = {},
 	    .maps = Locator::onlineMapStore::has_value() ? &Locator::onlineMapStore::value() : nullptr,
 	    .clanCreature = Locator::clanCreatureSystem::has_value() ? &Locator::clanCreatureSystem::value() : nullptr,
+	    .readGameFile = [](std::string_view path) -> std::optional<std::vector<uint8_t>> {
+		    try
+		    {
+			    auto& files = Locator::filesystem::value();
+			    const std::filesystem::path file(path);
+			    if (files.Exists(file))
+			    {
+				    return files.ReadAll(file);
+			    }
+		    }
+		    catch (const std::exception& e)
+		    {
+			    SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The file {} of the game folder does not read: {}", path, e.what());
+		    }
+		    return std::nullopt;
+	    },
+	    .lobbyRoom = Locator::lobbyRoom::has_value() ? &Locator::lobbyRoom::value() : nullptr,
+	    .nowMs = {},
+	    .notice = gui::GiveLobbyNotice,
 	};
 	gui::MultiplayerFrontEnd::Settings settings;
 	// The registration page is on the lobby's site: Register on the site, then log in in the game
@@ -267,6 +307,7 @@ std::unique_ptr<gui::MultiplayerFrontEnd> Game::MakeMultiplayerFrontEnd()
 	settings.localMaps = std::move(maps.localMaps);
 	settings.conditionTemplate = std::move(maps.conditionTemplate);
 	settings.showPing = Locator::config::value().showPing;
+	settings.mapPieceDelayMs = Locator::config::value().mapPieceDelayMs;
 	return std::make_unique<gui::MultiplayerFrontEnd>(std::move(services), std::move(settings));
 }
 

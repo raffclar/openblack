@@ -16,12 +16,15 @@
 #include <any>
 #include <array>
 #include <functional>
+#include <iterator>
 #include <memory>
+#include <memory_resource>
 #include <optional>
 #include <span>
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include <ParticleFile.h>
@@ -645,6 +648,78 @@ struct AtomRuleData
 	glm::vec4 b {0.0f};
 };
 
+/// What each rule keeps for one atom, by the rule. An atom has the data of few rules. Thus the store keeps them in the
+/// order that they come, in the atom while there are few, and does a search of them. Then a rule finds its data with no
+/// look into memory other than the atom. The store never removes the data of a rule. The data of a new rule can move the
+/// data of the other rules.
+class AtomRuleStore
+{
+public:
+	using value_type = std::pair<const Modifier*, AtomRuleData>;
+	using iterator = value_type*;
+	using const_iterator = const value_type*;
+
+	[[nodiscard]] iterator begin() { return _heap.empty() ? _inAtom.data() : _heap.data(); }
+	[[nodiscard]] iterator end() { return begin() + _size; }
+	[[nodiscard]] const_iterator begin() const { return _heap.empty() ? _inAtom.data() : _heap.data(); }
+	[[nodiscard]] const_iterator end() const { return begin() + _size; }
+	[[nodiscard]] size_t size() const { return _size; }
+	[[nodiscard]] bool empty() const { return _size == 0; }
+
+	[[nodiscard]] iterator find(const Modifier* modifier)
+	{
+		return std::ranges::find(begin(), end(), modifier, &value_type::first);
+	}
+	[[nodiscard]] const_iterator find(const Modifier* modifier) const
+	{
+		return std::ranges::find(begin(), end(), modifier, &value_type::first);
+	}
+	/// The data of the rule. A rule with no data gets new data.
+	AtomRuleData& operator[](const Modifier* modifier)
+	{
+		if (const auto found = find(modifier); found != end())
+		{
+			return found->second;
+		}
+		return Add(modifier, {});
+	}
+	/// Gives this data to the rule, in place of the data that it had
+	void insert_or_assign(const Modifier* modifier, AtomRuleData&& data)
+	{
+		if (const auto found = find(modifier); found != end())
+		{
+			found->second = std::move(data);
+			return;
+		}
+		Add(modifier, std::move(data));
+	}
+
+private:
+	static constexpr size_t k_InAtom = 2;
+
+	AtomRuleData& Add(const Modifier* modifier, AtomRuleData&& data)
+	{
+		if (_heap.empty() && _size < k_InAtom)
+		{
+			_inAtom.at(_size) = {modifier, std::move(data)};
+			return _inAtom.at(_size++).second;
+		}
+		if (_heap.empty())
+		{
+			_heap.reserve(k_InAtom * 2);
+			std::ranges::move(_inAtom, std::back_inserter(_heap));
+			_inAtom = {};
+		}
+		_heap.emplace_back(modifier, std::move(data));
+		++_size;
+		return _heap.back().second;
+	}
+
+	std::array<value_type, k_InAtom> _inAtom {};
+	std::vector<value_type> _heap;
+	size_t _size {0};
+};
+
 /// The glowing shell an atom lays over the model of an object it is kept on (see volume_glow), as the rule set it this
 /// step
 struct ObjectGlow
@@ -695,10 +770,33 @@ struct HandOffset
 	return (hand - offset.reference) * offset.weight;
 }
 
+/// Gives an atom or a collection back to the store that it came from. The atoms and the collections of an effect come
+/// from the store of the effect. Thus the walks of the effect find them near each other in memory.
+struct StoreDelete
+{
+	std::pmr::memory_resource* store {std::pmr::get_default_resource()};
+
+	template <typename T>
+	void operator()(T* object) const
+	{
+		std::pmr::polymorphic_allocator<T>(store).delete_object(object);
+	}
+};
+
+using AtomPtr = std::unique_ptr<Atom, StoreDelete>;
+using CollectionPtr = std::unique_ptr<Collection, StoreDelete>;
+using AtomList = std::pmr::vector<AtomPtr>;
+using CollectionList = std::pmr::vector<CollectionPtr>;
+
 /// A particle
 struct Atom
 {
 	Atom() = default;
+	/// Its lists come from this store
+	explicit Atom(std::pmr::memory_resource* store)
+	    : subCollections(store)
+	{
+	}
 	Atom(const Atom&) = delete;
 	Atom(Atom&&) = delete;
 	Atom& operator=(const Atom&) = delete;
@@ -738,12 +836,6 @@ struct Atom
 	/// How much of its effect's draw offset it takes, as the start of a bolt from the hand keeps up with the hand between
 	/// steps while its forks stay where they were laid
 	float drawWeight {1.0f};
-	/// The sounds it keeps going, the newest first
-	std::vector<std::shared_ptr<ParticleSoundLink>> sounds;
-	/// A game object it carries, if any
-	std::shared_ptr<CarriedObject> carried;
-	/// The triangles of a piece of a broken model it is drawn as
-	std::shared_ptr<const blast::MeshFragment> fragment;
 	DrawState previous;
 	DrawState current;
 	/// It has been through a step's end, so it has somewhere to be drawn
@@ -752,6 +844,22 @@ struct Atom
 	/// the rule that made it asks.
 	uint8_t steps {0};
 	bool drawOnFirstUpdate {false};
+	/// It uses the draw offset of its parent atom, the same one, as the rain cone keeps with its cloud
+	bool sharesParentOffset {false};
+	/// The shower of sparks it sends up from an object, when a rule keeps it on one and asks for it; it needs no creator
+	std::shared_ptr<ObjectShower> shower;
+	/// The surface it is drawn as, its own, when a rule draws it as a surface of revolution
+	std::shared_ptr<SurfaceInstance> surface;
+	/// The triangles of a piece of a broken model it is drawn as
+	std::shared_ptr<const blast::MeshFragment> fragment;
+	/// The camera path that it takes its caster's camera along, when its creator places one
+	std::shared_ptr<CameraPathLink> cameraPath;
+	CollectionList subCollections;
+	AtomRuleStore data;
+	/// The sounds it keeps going, the newest first
+	std::vector<std::shared_ptr<ParticleSoundLink>> sounds;
+	/// A game object it carries, if any
+	std::shared_ptr<CarriedObject> carried;
 	/// Drawn this far from where it is, the shift running out evenly over two seconds from when it was made, at the
 	/// effect's age then: a wisp let out of this computer's hand starts at the hand
 	std::optional<glm::vec3> drawOffset;
@@ -759,18 +867,8 @@ struct Atom
 	/// It keeps the atom at the live hand of this computer's cast between steps. An atom has only one draw offset: this one,
 	/// the shift above, or the one of its parent atom.
 	std::optional<HandOffset> handOffset;
-	/// It uses the draw offset of its parent atom, the same one, as the rain cone keeps with its cloud
-	bool sharesParentOffset {false};
-	/// The surface it is drawn as, its own, when a rule draws it as a surface of revolution
-	std::shared_ptr<SurfaceInstance> surface;
 	/// The shell it lays over an object's model, when a rule keeps it on one
 	std::optional<ObjectGlow> objectGlow;
-	/// The shower of sparks it sends up from an object, when a rule keeps it on one and asks for it; it needs no creator
-	std::shared_ptr<ObjectShower> shower;
-	/// The camera path that it takes its caster's camera along, when its creator places one
-	std::shared_ptr<CameraPathLink> cameraPath;
-	std::vector<std::unique_ptr<Collection>> subCollections;
-	std::unordered_map<const Modifier*, AtomRuleData> data;
 };
 
 /// One live instance of a group
@@ -791,6 +889,14 @@ struct Collection
 		std::any data;
 	};
 
+	Collection() = default;
+	/// Its lists come from this store
+	explicit Collection(std::pmr::memory_resource* store)
+	    : atoms(store)
+	    , modifiers(store)
+	{
+	}
+
 	int group {0};
 	Atom* parent {nullptr};
 	float birth {0.0f};
@@ -809,8 +915,8 @@ struct Collection
 	/// How far its ribbon's texture has slid along it, in sheet heights, wrapped round at one repeat of the frame. It moves
 	/// on only on the frames that draw the ribbon.
 	float textureScroll {0.0f};
-	std::vector<std::unique_ptr<Atom>> atoms;
-	std::vector<Slot> modifiers;
+	AtomList atoms;
+	std::pmr::vector<Slot> modifiers;
 };
 
 /// The atom whose draw offset an atom uses: the atom itself, or the parent atom whose offset it shares
@@ -836,6 +942,8 @@ public:
 	virtual ~Modifier() = default;
 
 	int group {-1};
+	/// Its place in the rules of its effect, -1 for a rule of no effect
+	int ruleNumber {-1};
 	/// Let go when the effect closes down
 	bool removeOnCloseDown {false};
 	/// The name of the condition object that must hold for it to run, empty for always
@@ -1089,14 +1197,17 @@ public:
 	bool Load(EffectReader& in);
 	/// A collection that a rule keeps outside the tree of the effect, with everything under it and the state of its rules
 	void SaveSubtree(const Collection& collection, EffectWriter& out) const;
-	[[nodiscard]] std::unique_ptr<Collection> LoadSubtree(EffectReader& in, Atom* parent);
+	/// A new atom or collection from the store of the effect
+	[[nodiscard]] AtomPtr MakeAtom() const;
+	[[nodiscard]] CollectionPtr MakeCollection() const;
+	[[nodiscard]] CollectionPtr LoadSubtree(EffectReader& in, Atom* parent);
 	/// Takes the state that a saved game of the game keeps, in place of its first collections, so that it continues
 	/// from where the save stopped. Gives false, and changes nothing, when the state does not agree with the file.
 	bool Adopt(const RestoredEffect& saved);
 
 private:
 	void StepOnce(float dt);
-	void CreateCollection(int group, Atom* parent, std::vector<std::unique_ptr<Collection>>& into);
+	void CreateCollection(int group, Atom* parent, CollectionList& into);
 	void UpdateCollection(Collection& collection);
 	void PostUpdate(Collection& collection, const glm::vec3& parentPosition, const glm::mat3& parentRotation,
 	                const glm::vec3& parentScale);
@@ -1109,13 +1220,25 @@ private:
 	// The parts of a save
 	void SaveStructure(const Collection& collection, EffectWriter& out) const;
 	void SaveRuleState(const Collection& collection, EffectWriter& out) const;
-	[[nodiscard]] std::unique_ptr<Collection> LoadStructure(EffectReader& in, Atom* parent);
+	[[nodiscard]] CollectionPtr LoadStructure(EffectReader& in, Atom* parent);
 	void LoadRuleState(Collection& collection, EffectReader& in);
 	[[nodiscard]] int ModifierNumber(const Modifier* modifier) const;
-	[[nodiscard]] std::unique_ptr<Collection> AdoptCollection(const RestoredCollection& saved, Atom* parent) const;
+	[[nodiscard]] CollectionPtr AdoptCollection(const RestoredCollection& saved, Atom* parent) const;
 	/// The creator of the points of a group: the creator that the rules of the group name, when they name only one
 	[[nodiscard]] const Creator* PointCreatorOfGroup(int group) const;
 	[[nodiscard]] const Modifier* ModifierAt(int number) const;
+	/// The answer of a rule's condition over its collection, as ConditionForCollection gives it for the name of the
+	/// rule's condition
+	[[nodiscard]] bool ConditionForSlot(const Modifier& modifier, const Collection& collection) const;
+
+	/// A rule's condition over a collection, found one time in the file and in the classes. A condition with no object
+	/// in the file, or with a class that the game does not run, holds.
+	struct CollectionTest
+	{
+		const psys::ParticleObject* object {nullptr};
+		const std::function<bool(const Effect&, const psys::ParticleObject&, const Collection&)>* test {nullptr};
+		bool invert {false};
+	};
 
 	std::shared_ptr<const psys::ParticleFile> _file;
 	EffectServices _services;
@@ -1124,9 +1247,16 @@ private:
 	std::vector<int> _objectModifiers;
 	std::array<std::vector<const Modifier*>, k_GroupCount> _groups;
 	std::array<bool, k_GroupCount> _hierarchies {};
+	/// The condition of each rule of the effect that tested its collection, by the number of the rule
+	mutable std::vector<std::optional<CollectionTest>> _ownCollectionTests;
+	/// The condition of each other rule that tested its collection, by the rule
+	mutable std::unordered_map<const Modifier*, CollectionTest> _collectionTests;
 	std::unordered_map<std::string, std::unique_ptr<Creator>> _creators;
 	std::unordered_map<std::string, float> _floatValues;
-	std::vector<std::unique_ptr<Collection>> _roots;
+	/// The memory of the atoms and the collections of the effect, and of their lists. The store keeps the objects of one
+	/// size together. It must stay after all the atoms and the collections go.
+	mutable std::pmr::unsynchronized_pool_resource _store;
+	CollectionList _roots {&_store};
 	std::vector<std::string> _unported;
 	glm::vec3 _origin;
 	float _magnitude;

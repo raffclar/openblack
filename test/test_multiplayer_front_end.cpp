@@ -29,6 +29,7 @@
 
 #include "ColourDifference.h"
 #include "Commands/TurnCodec.h"
+#include "Debug/TestbedLobbySessions.h"
 #include "ECS/PlayerColour.h"
 #include "ECS/Systems/ClanCreatureSystemInterface.h"
 #include "ECS/Systems/LobbyClientSystemInterface.h"
@@ -40,6 +41,7 @@
 #include "Gui/PingDisplay.h"
 #include "Gui/ScreenFit.h"
 #include "Gui/TextDatabase.h"
+#include "Online/GameBuildId.h"
 #include "Online/LanDiscoveryInterface.h"
 #include "Online/MapDownload.h"
 #include "Online/NetworkSession.h"
@@ -268,6 +270,8 @@ public:
 		    .ticket = join.ticket,
 		    .gamePassword = join.gamePassword,
 		    .name = join.name,
+		    // The network game gives the build id of the client, as the game's network game does
+		    .build = online::build_id::Own(),
 		});
 		return true;
 	}
@@ -345,7 +349,14 @@ struct FrontEndTest: public ::testing::Test
 	FakeMapStore store;
 	/// The store of the lands of network games, none when the test does not give one
 	online::OnlineMapStoreInterface* mapStore {nullptr};
+	/// The fake lobby sessions of the testbed, for the tests of the lobby list and the room; none for the game list
+	std::unique_ptr<testbed_multiplayer::DemoLobbyRoom> lobbySessions;
 	FakeClanCreature clanCreature;
+	/// The notices of the lobby room that the front end gave
+	std::vector<online::lobby::LobbyNotice> notices;
+
+	/// The front end goes first, because it still uses the fake lobby sessions when it closes
+	void TearDown() override { frontEnd.reset(); }
 
 	void Make(bool withLan = false)
 	{
@@ -358,6 +369,10 @@ struct FrontEndTest: public ::testing::Test
 		    .poll = {},
 		    .maps = mapStore,
 		    .clanCreature = &clanCreature,
+		    .readGameFile = {},
+		    .lobbyRoom = lobbySessions.get(),
+		    .nowMs = [] { return int64_t {0}; },
+		    .notice = [this](const online::lobby::LobbyNotice& notice) { notices.push_back(notice); },
 		};
 		MultiplayerFrontEnd::Settings settings {
 		    .registerPage = "https://lobby.test/register/",
@@ -852,6 +867,101 @@ TEST_F(FrontEndTest, LoginGoesToTheGameList)
 	EXPECT_FALSE(lobby.watchingServers);
 }
 
+TEST_F(FrontEndTest, TheLobbySessionsGoFromTheListToTheRoomAndBack)
+{
+	// The fake service of the testbed gives the lobby list and the rooms
+	lobbySessions = std::make_unique<testbed_multiplayer::DemoLobbyRoom>(lobby_api::AccountRef {.id = 7, .name = "Alice"}, 0);
+	Make();
+	frontEnd->Next();
+	frontEnd->SetLobbyKind(LobbyKind::Internet);
+	frontEnd->Next();
+	frontEnd->Login(u"Alice", u"secret");
+	lobby.account = lobby_api::AccountRef {.id = 7, .name = "Alice"};
+	FakeLobby::Give(lobby.login, *lobby.account);
+	ASSERT_EQ(frontEnd->GetBox(), Box::LobbyList);
+	EXPECT_FALSE(frontEnd->GetShownLobbies().empty());
+
+	// A session with a password asks for it, and a wrong password shows the vanilla box
+	frontEnd->SelectLobby("d2");
+	frontEnd->JoinSelectedLobby();
+	ASSERT_EQ(frontEnd->GetMessage(), Message::LobbyPassword);
+	frontEnd->AnswerLobbyText(u"wrong");
+	EXPECT_EQ(frontEnd->GetMessage(), Message::IncorrectPassword);
+	frontEnd->AnswerMessage(MultiplayerFrontEnd::Answer::Ok);
+	frontEnd->JoinSelectedLobby();
+	frontEnd->AnswerLobbyText(u"secret");
+	frontEnd->Update();
+	ASSERT_EQ(frontEnd->GetBox(), Box::LobbyRoom);
+
+	// Ready, then Leave asks first because the player is ready
+	frontEnd->ToggleLobbyReady();
+	ASSERT_NE(frontEnd->GetLobbyRoom(), nullptr);
+	EXPECT_TRUE(frontEnd->GetLobbyRoom()->OwnMember()->ready);
+	frontEnd->Back();
+	ASSERT_EQ(frontEnd->GetMessage(), Message::LobbyQuestion);
+	frontEnd->AnswerMessage(MultiplayerFrontEnd::Answer::Yes);
+	EXPECT_EQ(frontEnd->GetBox(), Box::LobbyList);
+	EXPECT_EQ(frontEnd->GetLobbyRoom(), nullptr);
+
+	// The host cannot pick a land with fewer places than the players of the room
+	frontEnd->OpenCreateLobby();
+	ASSERT_EQ(frontEnd->GetBox(), Box::CreateLobby);
+	EXPECT_EQ(frontEnd->GetCreateForm().name, u"Alice's game");
+	auto form = frontEnd->GetCreateForm();
+	form.map = 1;
+	form.godSlots = 3;
+	frontEnd->SetCreateForm(form);
+	frontEnd->SubmitCreateLobby();
+	frontEnd->Update();
+	ASSERT_EQ(frontEnd->GetBox(), Box::LobbyRoom);
+	EXPECT_TRUE(frontEnd->GetLobbyRoom()->IsHost());
+	frontEnd->ChangeLobbyMap(0);
+	ASSERT_EQ(frontEnd->GetMessage(), Message::LobbyNotice);
+	EXPECT_EQ(frontEnd->GetLobbyMessageText(), u"Remove players first: this land has 2 places.");
+	frontEnd->AnswerMessage(MultiplayerFrontEnd::Answer::Ok);
+	EXPECT_EQ(frontEnd->GetLobbyRoom()->Data().map.file, "mpm_3p_1");
+
+	// The host changes the settings in the box of the settings, and Back goes to the room
+	frontEnd->OpenLobbySettings();
+	ASSERT_EQ(frontEnd->GetBox(), Box::CreateLobby);
+	EXPECT_TRUE(frontEnd->EditsLobbySettings());
+	frontEnd->Update();
+	EXPECT_EQ(frontEnd->GetBox(), Box::CreateLobby);
+	frontEnd->Back();
+	EXPECT_EQ(frontEnd->GetBox(), Box::LobbyRoom);
+	frontEnd->OpenLobbySettings();
+	auto settings = frontEnd->GetCreateForm();
+	EXPECT_EQ(settings.name, u"Alice's game");
+	settings.name = u"Renamed";
+	settings.timeLimitMinutes += 10;
+	frontEnd->SetCreateForm(settings);
+	frontEnd->SubmitCreateLobby();
+	frontEnd->Update();
+	EXPECT_EQ(frontEnd->GetBox(), Box::LobbyRoom);
+	EXPECT_FALSE(frontEnd->EditsLobbySettings());
+	EXPECT_EQ(frontEnd->GetLobbyRoom()->Data().name, "Renamed");
+
+	// The host closes the session after a question
+	frontEnd->CloseLobby();
+	ASSERT_EQ(frontEnd->GetMessage(), Message::LobbyQuestion);
+	frontEnd->AnswerMessage(MultiplayerFrontEnd::Answer::Yes);
+	frontEnd->Update();
+	EXPECT_EQ(frontEnd->GetBox(), Box::LobbyList);
+	if (frontEnd->GetMessage() == Message::LobbyNotice)
+	{
+		frontEnd->AnswerMessage(MultiplayerFrontEnd::Answer::Ok);
+	}
+
+	// A kick shows its own box over the list, not "Connection Failed."
+	frontEnd->SelectLobby("d1");
+	frontEnd->JoinSelectedLobby();
+	lobbySessions->KickPlayer();
+	frontEnd->Update();
+	EXPECT_EQ(frontEnd->GetBox(), Box::LobbyList);
+	ASSERT_EQ(frontEnd->GetMessage(), Message::LobbyNotice);
+	EXPECT_EQ(frontEnd->GetLobbyMessageText(), u"Bob has kicked you from the game.");
+}
+
 TEST_F(FrontEndTest, AWrongLoginAsksAboutTheName)
 {
 	Make();
@@ -911,7 +1021,9 @@ TEST_F(FrontEndTest, JoinTakesATicketThenOpensTheGameSocket)
 	const auto& socket = sockets.sockets.at(sockets.order.back());
 	EXPECT_EQ(socket.request.url, "wss://lobby.test/game/w1");
 	ASSERT_EQ(socket.sent.size(), 1u);
-	EXPECT_EQ(socket.sent[0].Text(), R"({"ticket":"v4.public.t","type":"room.join"})");
+	// The join gives the build id of the game to the server
+	EXPECT_EQ(socket.sent[0].Text(),
+	          R"({"build":")" + online::build_id::Own() + R"(","ticket":"v4.public.t","type":"room.join"})");
 	// The network game joins for the front end: the server's land loads only after the start
 	ASSERT_EQ(network.joins.size(), 1u);
 	EXPECT_FALSE(network.joins[0].fromCommandLine);
@@ -1108,6 +1220,39 @@ TEST_F(FrontEndTest, AnAccountWithNoEmailIsSentToTheAccountPage)
 	EXPECT_FALSE(lobby.servers);
 	frontEnd->AnswerMessage(MultiplayerFrontEnd::Answer::Yes);
 	EXPECT_EQ(opened, (std::vector<std::string> {"https://lobby.test/account/"}));
+}
+
+TEST_F(FrontEndTest, TheEventsOfTheLobbyRoomGiveTheirNotices)
+{
+	lobbySessions = std::make_unique<testbed_multiplayer::DemoLobbyRoom>(lobby_api::AccountRef {.id = 7, .name = "Alice"}, 0);
+	Make();
+	frontEnd->Next();
+	frontEnd->SetLobbyKind(LobbyKind::Internet);
+	frontEnd->Next();
+	frontEnd->Login(u"Alice", u"secret");
+	lobby.account = lobby_api::AccountRef {.id = 7, .name = "Alice"};
+	FakeLobby::Give(lobby.login, *lobby.account);
+	frontEnd->SelectLobby("d1");
+	frontEnd->JoinSelectedLobby();
+	frontEnd->Update();
+	ASSERT_EQ(frontEnd->GetBox(), Box::LobbyRoom);
+	// The room as it opens gives no notice
+	frontEnd->Update();
+	EXPECT_TRUE(notices.empty());
+
+	constexpr online::lobby::LobbyNotice k_Sound {.sound = true, .flash = false};
+	constexpr online::lobby::LobbyNotice k_SoundAndFlash {.sound = true, .flash = true};
+	lobbySessions->MemberJoins({.id = 34, .name = "Dave"}, 4);
+	frontEnd->Update();
+	lobbySessions->MemberReady(34);
+	frontEnd->Update();
+	lobbySessions->StartCountdown();
+	frontEnd->Update();
+	lobbySessions->KickPlayer();
+	frontEnd->Update();
+	frontEnd->Update();
+	EXPECT_EQ(notices, (std::vector<online::lobby::LobbyNotice> {k_Sound, k_Sound, k_SoundAndFlash, k_SoundAndFlash}));
+	EXPECT_EQ(frontEnd->GetBox(), Box::LobbyList);
 }
 
 TEST_F(FrontEndTest, ALostLobbySessionGoesBackToTheLogin)
@@ -1613,7 +1758,8 @@ TEST_F(FrontEndTest, TheLanListComesFromTheSearch)
 	ASSERT_FALSE(sockets.order.empty());
 	sockets.Accept(sockets.order.back());
 	Step();
-	EXPECT_EQ(sockets.sockets.at(sockets.order.back()).sent[0].Text(), R"({"name":"Alice","type":"room.join"})");
+	EXPECT_EQ(sockets.sockets.at(sockets.order.back()).sent[0].Text(),
+	          R"({"build":")" + online::build_id::Own() + R"(","name":"Alice","type":"room.join"})");
 	ServerJoins();
 	EXPECT_EQ(frontEnd->GetBox(), Box::Room);
 	frontEnd->Back();
@@ -2159,6 +2305,75 @@ TEST_F(FrontEndTest, TheRoomGetsALandThatThePlayerDoesNotHaveFromTheLobby)
 	// The land is asked for one time only
 	Step();
 	EXPECT_EQ(lobby.downloads.size(), 1u);
+}
+
+TEST_F(FrontEndTest, AFullSessionRefusesAGodAndAnObserverWithTheSameBox)
+{
+	lobbySessions = std::make_unique<testbed_multiplayer::DemoLobbyRoom>(lobby_api::AccountRef {.id = 7, .name = "Alice"}, 0);
+	Make();
+	frontEnd->Next();
+	frontEnd->SetLobbyKind(LobbyKind::Internet);
+	frontEnd->Next();
+	frontEnd->Login(u"Alice", u"secret");
+	lobby.account = lobby_api::AccountRef {.id = 7, .name = "Alice"};
+	FakeLobby::Give(lobby.login, *lobby.account);
+	ASSERT_EQ(frontEnd->GetBox(), Box::LobbyList);
+	// The session of 32 gods has no free slot
+	frontEnd->SelectLobby("d3");
+	frontEnd->JoinSelectedLobby();
+	ASSERT_EQ(frontEnd->GetMessage(), Message::LobbyNotice);
+	EXPECT_EQ(frontEnd->GetLobbyMessageText(), u"This game is full.");
+	// The service refuses an observer of a full session with the same code (user, 2026-11-13)
+	std::optional<ecs::systems::LobbyError> error;
+	lobbySessions->Join("d3", std::nullopt, lobby_api::MemberRole::Observer, std::nullopt,
+	                    [&error](auto&& result) { error = result.error; });
+	ASSERT_TRUE(error.has_value());
+	EXPECT_EQ(error->code, "full");
+	EXPECT_EQ(frontEnd->GetLobbyRoom(), nullptr);
+}
+
+TEST_F(FrontEndTest, TheMapOfASessionDownloadsInTheRoomAndContinuesAfterTheBoxOfAFailure)
+{
+	lobbySessions = std::make_unique<testbed_multiplayer::DemoLobbyRoom>(lobby_api::AccountRef {.id = 7, .name = "Alice"}, 0);
+	mapStore = &store;
+	Make();
+	frontEnd->Next();
+	frontEnd->SetLobbyKind(LobbyKind::Internet);
+	frontEnd->Next();
+	frontEnd->Login(u"Alice", u"secret");
+	lobby.account = lobby_api::AccountRef {.id = 7, .name = "Alice"};
+	FakeLobby::Give(lobby.login, *lobby.account);
+	ASSERT_EQ(frontEnd->GetBox(), Box::LobbyList);
+	frontEnd->SelectLobby("d1");
+	frontEnd->JoinSelectedLobby();
+	frontEnd->Update();
+	ASSERT_EQ(frontEnd->GetBox(), Box::LobbyRoom);
+	// The host sets a map of the service: the download starts in the room, before the start
+	const auto map = RoomMap();
+	lobby_api::LobbyChangeRequest change;
+	change.map = lobby_api::LobbyMap {.file = "Online Maps/obm_32p_1.map", .name = map.name, .sha256 = map.sha256, .size = 3};
+	lobbySessions->Change(std::move(change), [](auto&&) {});
+	frontEnd->Update();
+	ASSERT_EQ(frontEnd->GetLobbyRoom()->Data().map.sha256, map.sha256);
+	ASSERT_TRUE(lobby.maps);
+	FakeLobby::Give(lobby.maps, lobby_api::MapList {.maps = {map}});
+	ASSERT_EQ(lobby.downloads.size(), 1u);
+	FakeLobby::Fail(lobby.download, LobbyErrorKind::Network);
+	FakeLobby::Fail(lobby.download, LobbyErrorKind::Network);
+	frontEnd->Update();
+	ASSERT_EQ(frontEnd->GetMessage(), Message::CouldNotDownloadMap);
+	EXPECT_FALSE(frontEnd->GetLobbyRoom()->CanReady());
+	// OK closes the box, and the download continues with no new map set of the host (deviation 257)
+	frontEnd->AnswerMessage(MultiplayerFrontEnd::Answer::Ok);
+	frontEnd->Update();
+	ASSERT_TRUE(lobby.maps);
+	FakeLobby::Give(lobby.maps, lobby_api::MapList {.maps = {map}});
+	ASSERT_EQ(lobby.downloads.size(), 3u);
+	FakeLobby::Give(lobby.download, std::vector<uint8_t> {1, 2, 3});
+	EXPECT_EQ(frontEnd->GetMapDownload()->GetState(), online::MapDownload::State::Ready);
+	frontEnd->Update();
+	EXPECT_EQ(frontEnd->GetMessage(), Message::None);
+	EXPECT_TRUE(frontEnd->GetLobbyRoom()->CanReady());
 }
 
 TEST_F(FrontEndTest, ALandThatTheLobbyDoesNotGiveShowsTheBoxOfTheRoom)

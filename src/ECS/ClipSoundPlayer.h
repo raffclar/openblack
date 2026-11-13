@@ -11,6 +11,7 @@
 
 #include <cstdint>
 
+#include <memory>
 #include <optional>
 #include <span>
 #include <string_view>
@@ -99,7 +100,15 @@ struct RefreshPace
 void Play(World& world, entt::entity entity, AnimId clipId, ClipTiming clip, uint32_t place, uint32_t played,
           const glm::vec3& position, bool refresh = false);
 
-/// The same in the game's own world
+/// The game's own world. Make one for the clips of a frame: it finds the game's sound conditions one time, at the first
+/// sound that the sample rules play. The clips of a frame do not change these conditions.
+[[nodiscard]] std::unique_ptr<World> MakeGameWorld();
+
+/// The same with a clip of the game's resources
+void Play(World& world, entt::entity entity, AnimId clipId, const L3DAnim& clip, uint32_t place, uint32_t played,
+          const glm::vec3& position, bool refresh = false);
+
+/// The same in a new world of the game's own
 void Play(entt::entity entity, AnimId clipId, const L3DAnim& clip, uint32_t place, uint32_t played, const glm::vec3& position,
           bool refresh = false);
 

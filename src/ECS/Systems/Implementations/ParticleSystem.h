@@ -49,6 +49,8 @@ public:
 	void SetLearningMarks(std::vector<particles::draw::LearningMark> marks) override { _learningMarks = std::move(marks); }
 	void CollectDrawFrame(float turnFraction, particles::draw::Frame& frame, bool inTemple) const override;
 	void CollectEffectDrawFrame(EffectId id, float turnFraction, particles::draw::Frame& frame) const override;
+	std::optional<uint32_t> CollectEffectSymbols(EffectId id, float turnFraction, particles::draw::SymbolLayout& symbols,
+	                                             particles::draw::Frame& frame) const override;
 	[[nodiscard]] DrawStats GetDrawStats() const override { return _drawStats; }
 
 private:
@@ -59,6 +61,8 @@ private:
 	/// Adds what a running effect draws to a frame
 	void AddDrawn(const DrawnEffect& drawn, float turnFraction, particles::draw::Frame& frame,
 	              const particles::draw::Sources& sources) const;
+	/// Walks what a running effect draws into the walk of the system, moved by its offset and by the live hand
+	void WalkDrawn(const DrawnEffect& drawn, float turnFraction) const;
 	/// Finds the sheets of the names that the rules added since the last frame
 	void ResolveTextures(const ParticleRuleSystemInterface& rules) const;
 	/// The sheets of light of the land, each in its place among the things that blend

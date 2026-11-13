@@ -243,6 +243,9 @@ public:
 	/// The connection to the network game is lost: the box tells the player "Connection to network game has been lost.
 	/// Cannot continue." with an OK
 	void ShowConnectionLost();
+	/// The game server took the player out of the game for the lobby's host: the box tells the player "<name> has kicked
+	/// you from the game." with an OK, with the name of the room. The OK goes as the OK of the lost connection does.
+	void ShowKicked(std::u16string_view roomName);
 	/// The box of the lost connection went since this was last asked: true once. The OK goes back to the network front
 	/// end.
 	[[nodiscard]] bool TakeConnectionLostOk() { return std::exchange(_connectionLostOk, false); }
@@ -251,6 +254,9 @@ public:
 	/// A network game resynchronises this computer's world with the server's: the words "Resynchronising..." show at the
 	/// top of the screen while it does
 	void ShowResync(bool shown) noexcept { _resyncShown = shown; }
+	/// A lobby game waits for the players that still load the world: the lines show at the top of the screen, under the
+	/// place of "Resynchronising...". No lines when the game does not wait.
+	void ShowLoadWait(std::vector<std::u16string> lines) { _loadWaitLines = std::move(lines); }
 	/// The world stayed out of step with the server's after the last try: the box asks "Warning. The game may not be
 	/// synchronised on your machine. Continue?" with a Yes and a No
 	void AskOutOfSync();
@@ -611,6 +617,7 @@ private:
 	std::unique_ptr<StaffQuestionBox> _staffQuestionBox;
 	std::unique_ptr<EndGameBox> _endGameBox;
 	bool _resyncShown {false};
+	std::vector<std::u16string> _loadWaitLines;
 	/// The out-of-sync box is up and waits for its answer
 	bool _outOfSyncAsked {false};
 	bool _connectionLostShown {false};

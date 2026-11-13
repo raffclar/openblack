@@ -164,29 +164,6 @@ void GatherCasters(const ecs::Registry& registry, LandShadowBake::Casters wanted
 	    });
 }
 
-/// Folds bytes into a running FNV-1a hash
-void Fold(uint64_t& hash, std::span<const std::byte> bytes)
-{
-	for (const auto byte : bytes)
-	{
-		hash ^= static_cast<uint64_t>(byte);
-		hash *= 0x100000001B3ull;
-	}
-}
-
-uint64_t SignatureOf(const Caster& caster, bool meshReady)
-{
-	uint64_t hash = 0xCBF29CE484222325ull;
-	Fold(hash, std::as_bytes(std::span(&caster.shadow, 1)));
-	Fold(hash, std::as_bytes(std::span(&caster.mesh->id, 1)));
-	Fold(hash, std::as_bytes(std::span(&meshReady, 1)));
-	Fold(hash, std::as_bytes(std::span(&caster.transform->position, 1)));
-	Fold(hash, std::as_bytes(std::span(&caster.transform->rotation, 1)));
-	Fold(hash, std::as_bytes(std::span(&caster.transform->scale, 1)));
-	Fold(hash, std::as_bytes(caster.Cells()));
-	return hash;
-}
-
 glm::ivec2 CellOf(uint32_t index)
 {
 	return {static_cast<int>(index / map_coords::k_MapCells), static_cast<int>(index % map_coords::k_MapCells)};
@@ -532,23 +509,30 @@ void LandShadowBake::Update(bool rowsFromFarEnd, Casters casters)
 	}
 	for (const auto& caster : found)
 	{
-		const auto signature = SignatureOf(caster, meshes.Contains(caster.mesh->id));
+		const BakedFrom from {
+		    .shadow = static_cast<uint32_t>(caster.shadow),
+		    .mesh = caster.mesh->id,
+		    .meshReady = meshes.Contains(caster.mesh->id) ? 1u : 0u,
+		    .position = caster.transform->position,
+		    .rotation = caster.transform->rotation,
+		    .scale = caster.transform->scale,
+		};
 		const auto cells = caster.Cells();
 		auto previous = _baked.find(caster.entity);
 		if (previous == _baked.end())
 		{
 			MarkBlocksOf(cells);
-			_baked.emplace(
-			    caster.entity,
-			    Baked {.signature = signature, .cells = std::vector<uint32_t>(cells.begin(), cells.end()), .seen = true});
+			_baked.emplace(caster.entity,
+			               Baked {.from = from, .cells = std::vector<uint32_t>(cells.begin(), cells.end()), .seen = true});
 			continue;
 		}
 		previous->second.seen = true;
-		if (previous->second.signature != signature)
+		// A change of any bit, or of a cell, bakes again the blocks of the old and the new place
+		if (!same_bits::SameBits(previous->second.from, from) || !same_bits::SameWords(previous->second.cells, cells))
 		{
 			MarkBlocksOf(previous->second.cells);
 			MarkBlocksOf(cells);
-			previous->second.signature = signature;
+			previous->second.from = from;
 			previous->second.cells.assign(cells.begin(), cells.end());
 			previous->second.cast.reset();
 		}

@@ -115,32 +115,40 @@ void Renderer::DrawTownColumns(const DrawSceneDesc& desc) const
 		DrawLightShaft(desc, *column, glm::vec3(model * glm::vec4(centre, 1.0f)),
 		               light_column::Tint(ColourOf(owner->second), light_column::k_TownAlpha), testedView);
 	};
-	// The game draws each centre's symbols of belief just after its column, also where the column does not show
-	const auto drawCentre = [&](entt::entity entity, const Abode& abode) {
-		if (abode.type != AbodeNumber::TownCentre)
-		{
-			return;
-		}
-		if (column != nullptr)
-		{
-			drawColumn(entity, abode);
-		}
-		DrawTownBeliefParticles(desc, entity);
-	};
 	// The centres draw in the game's order, the newest first
+	auto& centres = _townColumnCentres;
+	auto& abodes = _townColumnAbodes;
+	centres.clear();
+	abodes.clear();
+	const auto addCentre = [&](entt::entity entity, const Abode& abode) {
+		if (abode.type == AbodeNumber::TownCentre)
+		{
+			centres.push_back(entity);
+			abodes.push_back(&abode);
+		}
+	};
 	if (!Locator::townSystem::has_value())
 	{
-		desc.entities.Each<const Abode>(drawCentre);
-		return;
+		desc.entities.Each<const Abode>(addCentre);
 	}
-	for (const auto entity : Locator::townSystem::value().CentresInDrawOrder())
+	else
 	{
-		if (const auto* abode = desc.entities.Valid(entity) ? desc.entities.TryGet<const Abode>(entity) : nullptr;
-		    abode != nullptr)
+		for (const auto entity : Locator::townSystem::value().CentresInDrawOrder())
 		{
-			drawCentre(entity, *abode);
+			if (const auto* abode = desc.entities.Valid(entity) ? desc.entities.TryGet<const Abode>(entity) : nullptr;
+			    abode != nullptr)
+			{
+				addCentre(entity, *abode);
+			}
 		}
 	}
+	// The game draws each centre's symbols of belief just after its column, also where the column does not show
+	DrawTownBeliefCentres(desc, centres, _warmingUp ? nullptr : &seenBy, [&](size_t place) {
+		if (column != nullptr)
+		{
+			drawColumn(centres[place], *abodes[place]);
+		}
+	});
 }
 
 void Renderer::DrawTempleColumns(const DrawSceneDesc& desc) const

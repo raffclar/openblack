@@ -13,11 +13,14 @@
 #include <array>
 #include <chrono>
 #include <span>
+#include <string>
+#include <string_view>
 #include <type_traits>
 #include <utility>
 
 #include <spdlog/spdlog.h>
 
+#include "Online/JoinRetryRule.h"
 #include "Online/StartRules.h"
 #include "PlayerSlots.h"
 
@@ -30,6 +33,19 @@ namespace
 constexpr uint32_t k_KeptChecksums = 600;
 /// The client writes a line of the compares to the log after this many turns
 constexpr uint32_t k_CompareLogEvery = 100;
+
+/// The build id that a server gave, for the log: at most 64 characters. Each character that the log cannot show becomes
+/// '?'.
+[[nodiscard]] std::string Printable(std::string_view build)
+{
+	constexpr size_t k_MostCharacters = 64;
+	std::string printable;
+	for (const char c : build.substr(0, k_MostCharacters))
+	{
+		printable += c >= 0x20 && c < 0x7F ? c : '?';
+	}
+	return printable;
+}
 
 /// The name of the land of a start, when the start loads a land of a file. The testbed and the map for 32 gods have no
 /// file.
@@ -111,8 +127,16 @@ void NetworkSession::Join(NetworkSessionSettings settings)
 	_waitingCommands = 0;
 	_playout.Reset();
 	_turnsDone = 0;
+	_loaded = false;
+	_loadedSent = false;
+	_loadedDueAt.reset();
+	_loadWait.reset();
+	_commandsInLoadWait = 0;
 	// A new session counts its blocks of commands from 0
 	_sent.Reset();
+	_joinStartedAt = _clock();
+	_joinRetryAt.reset();
+	_backoff.Reset();
 	_attempts = 0;
 	_partedTurn.reset();
 	_pingsWarned = false;
@@ -149,8 +173,11 @@ void NetworkSession::Open(bool resume)
 		            }
 		            else
 		            {
-			            _stream->SendText(game_socket::ToJson(game_socket::Join {
-			                .ticket = _settings.ticket, .gamePassword = _settings.gamePassword, .name = _settings.name}));
+			            _stream->SendText(game_socket::ToJson(game_socket::Join {.ticket = _settings.ticket,
+			                                                                     .gamePassword = _settings.gamePassword,
+			                                                                     .name = _settings.name,
+			                                                                     .build = _settings.build,
+			                                                                     .map = _settings.map}));
 			            _state = State::Joining;
 			            _log->Info(fmt::format("The client sends its join ({}{})",
 			                                   _settings.ticket.empty() ? "no ticket" : "with a ticket",
@@ -320,6 +347,7 @@ void NetworkSession::Text(std::string_view text)
 		_firstTurnDue = true;
 		_firstTurnFrom = _clock();
 		SendWaiting();
+		SendLoaded();
 	}
 	else if (const auto* resumed = std::get_if<game_socket::Resumed>(&*frame))
 	{
@@ -336,6 +364,9 @@ void NetworkSession::Text(std::string_view text)
 		_log->Write(spdlog::level::info,
 		            fmt::format("Back in the game at turn {}; the server is at turn {} ({} ms after the loss)", _turnsDone,
 		                        resumed->turn, MillisecondsSince(_lostAt)));
+		// The server may not have the report of the load from before the loss. It takes a second report as one.
+		_loadedSent = false;
+		SendLoaded();
 		if (resumed->world)
 		{
 			// The server's world state of its turn comes first, and the turns from there
@@ -360,6 +391,21 @@ void NetworkSession::Text(std::string_view text)
 		_log->Write(spdlog::level::info,
 		            fmt::format("The game server stopped the turns of the game after turn {}", stop->turn));
 	}
+	else if (const auto* wait = std::get_if<game_socket::LoadWait>(&*frame))
+	{
+		if (wait->loading.empty())
+		{
+			_loadWait.reset();
+			_log->Write(spdlog::level::info, "Each player loaded the world: the turns start");
+		}
+		else
+		{
+			_loadWait = *wait;
+			_loadWaitAt = _clock();
+			_log->Write(spdlog::level::info, fmt::format("The game is paused: {} players load the world, {} seconds left",
+			                                             wait->loading.size(), wait->secondsLeft));
+		}
+	}
 	else if (const auto* left = std::get_if<game_socket::ObserverLeft>(&*frame))
 	{
 		_observersLeft.push_back(left->name);
@@ -368,9 +414,17 @@ void NetworkSession::Text(std::string_view text)
 	else if (const auto* refused = std::get_if<game_socket::Refused>(&*frame))
 	{
 		_refusedReason = refused->reason;
+		// A refusal for the protocol or the version gives the build of the server: the log names the two builds
+		const auto builds =
+		    refused->build.empty()
+		        ? std::string()
+		        : fmt::format("; {}, the server has the build \"{}\"",
+		                      _settings.build.empty() ? std::string("the client has no build id")
+		                                              : fmt::format("the client has the build \"{}\"", _settings.build),
+		                      Printable(refused->build));
 		_log->Write(spdlog::level::warn,
-		            fmt::format("The game server refused the client: {} (state {}, {} ms after the socket opened)",
-		                        refused->reason, StateName(_state), MillisecondsSince(_openedAt)));
+		            fmt::format("The game server refused the client: {} (state {}, {} ms after the socket opened){}",
+		                        refused->reason, StateName(_state), MillisecondsSince(_openedAt), builds));
 		FinishWith(End::Refused);
 	}
 	else if (const auto* parts = std::get_if<game_socket::SyncParts>(&*frame))
@@ -544,6 +598,17 @@ void NetworkSession::Closed(const WebSocketClosed& closed)
 		DropStream();
 		return;
 	}
+	// Only a pool server of the lobby can listen after the client has its ticket. A server on the local network listens
+	// before the search finds it.
+	if (_state == State::Connecting && _settings.origin == GameOrigin::InternetLobby &&
+	    join_retry::TryAgain(closed, _clock() - _joinStartedAt, _settings.joinRetryMicroseconds))
+	{
+		const auto wait = std::chrono::duration_cast<std::chrono::microseconds>(_backoff.Next()).count();
+		_joinRetryAt = _clock() + wait;
+		_log->Info(fmt::format("The game server does not listen yet: the client tries again in {} ms", wait / 1000));
+		DropStream();
+		return;
+	}
 	_log->Warn(fmt::format("The socket closed before the server accepted the client (state {})", StateName(_state)));
 	FinishWith(End::NoConnection);
 }
@@ -570,6 +635,15 @@ void NetworkSession::Update()
 		_stream.reset();
 	}
 	const auto now = _clock();
+	if (_state == State::Connecting && !_stream && _joinRetryAt.has_value())
+	{
+		if (now >= *_joinRetryAt)
+		{
+			_joinRetryAt.reset();
+			Open(false);
+		}
+		return;
+	}
 	if (_state == State::Reconnecting && !_stream)
 	{
 		if (now - _lostAt > _settings.comeBackMicroseconds)
@@ -590,6 +664,8 @@ void NetworkSession::Update()
 		}
 		return;
 	}
+	// A report of the load that the tests delay goes when its time comes
+	SendLoaded();
 	if (_stream && _stream->IsOpen() && now >= _nextPing)
 	{
 		_stream->SendPing();
@@ -697,8 +773,59 @@ void NetworkSession::SendKeptAgain()
 	                        kept.front().sequence, kept.back().sequence));
 }
 
+void NetworkSession::ReportLoaded()
+{
+	_loaded = true;
+	SendLoaded();
+}
+
+void NetworkSession::SendLoaded()
+{
+	if (!_loaded || _loadedSent || !_start.has_value())
+	{
+		return;
+	}
+	if (!_loadedDueAt.has_value())
+	{
+		_loadedDueAt = _clock() + _settings.testLoadDelayMicroseconds;
+		if (_settings.testLoadDelayMicroseconds > 0)
+		{
+			_log->Write(spdlog::level::info, fmt::format("Tests: the session tells the server about the load {} ms late",
+			                                             _settings.testLoadDelayMicroseconds / 1000));
+		}
+	}
+	if (_clock() >= *_loadedDueAt && _stream && _stream->IsOpen())
+	{
+		_loadedSent = true;
+		_stream->SendText(game_socket::ToJson(game_socket::Loaded {}));
+		_log->Write(spdlog::level::info, "The world of the network game loaded: the session tells the server");
+	}
+}
+
+std::optional<NetworkSession::LoadWaitView> NetworkSession::LoadWait() const
+{
+	if (!_loadWait.has_value())
+	{
+		return std::nullopt;
+	}
+	const auto passed = std::max<int64_t>(_clock() - _loadWaitAt, 0) / 1'000'000;
+	const auto left = static_cast<int64_t>(_loadWait->secondsLeft) - passed;
+	return LoadWaitView {.loading = _loadWait->loading, .secondsLeft = static_cast<uint32_t>(std::max<int64_t>(left, 0))};
+}
+
 void NetworkSession::Send(const player_commands::Action& action)
 {
+	// While the turns wait for the loads, the world does not change: the session sends only what an observer sends (the
+	// reports of the hand and the camera, and the chat)
+	if (_loadWait.has_value() && !player_commands::ObserverSends(action))
+	{
+		if (_commandsInLoadWait++ == 0)
+		{
+			_log->Write(spdlog::level::info,
+			            "The game is paused for the loads: the session does not send the commands of the player");
+		}
+		return;
+	}
 	// An observer sends only the report of its hand and camera and the lines of the chat. An observer with no number of
 	// an observer sends no commands.
 	if (_joined.has_value() &&

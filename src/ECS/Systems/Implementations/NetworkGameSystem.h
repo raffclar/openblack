@@ -78,6 +78,7 @@ public:
 	}
 	void LogConnection(std::string_view text) override { _log->Info(text); }
 	[[nodiscard]] std::string DiagnosticsReport() const override;
+	[[nodiscard]] std::string_view RoomName() const override { return _roomName; }
 
 private:
 	void Detach();
@@ -90,6 +91,8 @@ private:
 	MakeTestClient _makeTestClient;
 	ReadCreature _readCreature;
 	bool _playsForClan {false};
+	/// The name of the room of the last join
+	std::string _roomName;
 	/// The WSS client of a test join, which only the session uses
 	std::unique_ptr<online::WebSocketClientInterface> _testClient;
 	std::unique_ptr<online::NetworkSession> _session;

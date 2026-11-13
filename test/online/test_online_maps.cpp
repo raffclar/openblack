@@ -67,10 +67,13 @@ lobby_api::OnlineMap Map(uint64_t checksum = 0, std::string_view hash = k_Hash)
 	        .url = "/api/v1/maps/" + std::string(hash)};
 }
 
-/// The map of the list for a file of this text: its start checksum and its SHA-256
-lobby_api::OnlineMap MapOf(std::string_view text)
+/// The map of the list for a file of this text: its start checksum, its SHA-256 and its size
+lobby_api::OnlineMap MapOf(std::string_view text, std::string_view file = "obm_32p_1")
 {
-	return Map(online::start_rules::LandChecksum(Bytes(text)), online::sha256::HexOf(Bytes(text)));
+	auto map = Map(online::start_rules::LandChecksum(Bytes(text)), online::sha256::HexOf(Bytes(text)));
+	map.size = static_cast<int64_t>(text.size());
+	map.file = std::string(file);
+	return map;
 }
 
 /// A store in memory, which answers when the test lets it
@@ -102,24 +105,55 @@ public:
 	bool refuses {false};
 };
 
-/// The lobby of the download: it keeps each call, and the test answers it
+/// The lobby of the download: it keeps each call, and the test answers the calls in their order
 struct FakeFetch
 {
+	struct Call
+	{
+		std::string sha256;
+		uint64_t offset;
+		uint64_t count;
+	};
+	using Done = std::function<void(std::optional<lobby_api::FilePiece>)>;
+
 	std::vector<std::string> asked;
-	std::function<void(std::optional<std::vector<uint8_t>>)> done;
+	std::vector<Call> calls;
+	std::vector<Done> waiting;
 
 	online::MapDownload::Fetch Function()
 	{
-		return [this](const lobby_api::OnlineMap& map, std::function<void(std::optional<std::vector<uint8_t>>)> callback) {
+		return [this](const lobby_api::OnlineMap& map, uint64_t offset, uint64_t count, Done callback) {
 			asked.push_back(map.sha256);
-			done = std::move(callback);
+			calls.push_back({.sha256 = map.sha256, .offset = offset, .count = count});
+			waiting.push_back(std::move(callback));
 		};
 	}
+	/// Answers the oldest call with a full file, as a lobby that gives no ranges
 	void Answer(std::optional<std::vector<uint8_t>> bytes)
 	{
-		auto callback = std::move(done);
-		done = {};
-		callback(std::move(bytes));
+		if (!bytes.has_value())
+		{
+			Give(std::nullopt);
+			return;
+		}
+		const auto total = static_cast<uint64_t>(bytes->size());
+		Give(lobby_api::FilePiece {.offset = 0, .total = total, .bytes = std::move(*bytes)});
+	}
+	/// Answers the oldest call with the range that it asked for
+	void AnswerRange(const std::vector<uint8_t>& file)
+	{
+		const auto call = calls.at(calls.size() - waiting.size());
+		const auto end = std::min<uint64_t>(call.offset + call.count, file.size());
+		Give(lobby_api::FilePiece {.offset = call.offset,
+		                           .total = file.size(),
+		                           .bytes = {file.begin() + static_cast<std::ptrdiff_t>(call.offset),
+		                                     file.begin() + static_cast<std::ptrdiff_t>(end)}});
+	}
+	void Give(std::optional<lobby_api::FilePiece> piece)
+	{
+		auto callback = std::move(waiting.front());
+		waiting.erase(waiting.begin());
+		callback(std::move(piece));
 	}
 };
 
@@ -344,12 +378,258 @@ TEST(MapDownload, AnAnswerAfterTheStopDoesNothing)
 	FakeStore store;
 	FakeFetch fetch;
 	online::MapDownload download(store, fetch.Function());
-	download.Start(Map());
+	download.Start(MapOf("abc"));
 	download.Stop();
 	EXPECT_EQ(download.GetState(), online::MapDownload::State::Idle);
-	fetch.Answer(Bytes("x"));
+	fetch.Answer(Bytes("abc"));
 	EXPECT_EQ(download.GetState(), online::MapDownload::State::Idle);
 	EXPECT_TRUE(store.files.empty());
+	EXPECT_EQ(fetch.calls.size(), 1u);
+}
+
+TEST(MapDownload, TheMapComesInPiecesInTheirOrder)
+{
+	const std::string text = "abcdefghij";
+	FakeStore store;
+	FakeFetch fetch;
+	online::MapDownload download(store, fetch.Function(), {}, 4);
+	download.Start(MapOf(text));
+	for (const uint64_t offset : {0u, 4u, 8u})
+	{
+		ASSERT_EQ(fetch.waiting.size(), 1u);
+		EXPECT_EQ(fetch.calls.back().offset, offset);
+		EXPECT_EQ(fetch.calls.back().count, offset == 8 ? 2u : 4u);
+		EXPECT_EQ(download.GetState(), online::MapDownload::State::Downloading);
+		fetch.AnswerRange(Bytes(text));
+	}
+	EXPECT_EQ(download.GetState(), online::MapDownload::State::Ready);
+	EXPECT_EQ(store.files.at("obm_32p_1.map"), Bytes(text));
+	// The store has the file, so the download keeps no bytes
+	EXPECT_EQ(download.KeptBytes(MapOf(text).sha256), 0u);
+}
+
+TEST(MapDownload, AnotherMapPausesTheDownloadAndKeepsItsBytes)
+{
+	const std::string first = "aaaaaaaaaa";
+	const std::string second = "bbbbbbbb";
+	FakeStore store;
+	FakeFetch fetch;
+	online::MapDownload download(store, fetch.Function(), {}, 4);
+	download.Start(MapOf(first, "first"));
+	fetch.AnswerRange(Bytes(first));
+	EXPECT_EQ(download.KeptBytes(MapOf(first).sha256), 4u);
+	// The host sets another map while the second piece of the first map comes
+	download.Start(MapOf(second, "second"));
+	ASSERT_EQ(fetch.calls.size(), 3u);
+	EXPECT_EQ(fetch.calls[2].sha256, MapOf(second).sha256);
+	EXPECT_EQ(fetch.calls[2].offset, 0u);
+	// The piece of the paused map goes in its part, and the download asks for no more of it
+	fetch.AnswerRange(Bytes(first));
+	EXPECT_EQ(download.KeptBytes(MapOf(first).sha256), 8u);
+	EXPECT_EQ(fetch.calls.size(), 3u);
+	EXPECT_EQ(download.GetState(), online::MapDownload::State::Downloading);
+	EXPECT_EQ(download.GetMap()->sha256, MapOf(second).sha256);
+}
+
+TEST(MapDownload, ThePausedMapContinuesFromItsBytes)
+{
+	const std::string first = "aaaaaaaaaa";
+	const std::string second = "bbbbbbbb";
+	FakeStore store;
+	FakeFetch fetch;
+	online::MapDownload download(store, fetch.Function(), {}, 4);
+	download.Start(MapOf(first, "first"));
+	fetch.AnswerRange(Bytes(first));
+	download.Start(MapOf(second, "second"));
+	fetch.AnswerRange(Bytes(first));
+	fetch.AnswerRange(Bytes(second));
+	EXPECT_EQ(download.KeptBytes(MapOf(second).sha256), 4u);
+	// The host sets the first map again: the download asks only for the bytes that it does not have
+	download.Start(MapOf(first, "first"));
+	ASSERT_EQ(fetch.waiting.size(), 2u);
+	EXPECT_EQ(fetch.calls.back().sha256, MapOf(first).sha256);
+	EXPECT_EQ(fetch.calls.back().offset, 8u);
+	EXPECT_EQ(fetch.calls.back().count, 2u);
+	// The answer of the second map comes first and only goes in its part
+	fetch.AnswerRange(Bytes(second));
+	EXPECT_EQ(download.KeptBytes(MapOf(second).sha256), 8u);
+	fetch.AnswerRange(Bytes(first));
+	EXPECT_EQ(download.GetState(), online::MapDownload::State::Ready);
+	EXPECT_EQ(store.files.at("first.map"), Bytes(first));
+	EXPECT_TRUE(fetch.waiting.empty());
+}
+
+TEST(MapDownload, AStartOfAPausedMapWaitsForItsRequestThatRuns)
+{
+	const std::string first = "aaaaaaaaaa";
+	FakeStore store;
+	FakeFetch fetch;
+	online::MapDownload download(store, fetch.Function(), {}, 4);
+	download.Start(MapOf(first, "first"));
+	download.Start(MapOf("bbbb", "second"));
+	download.Start(MapOf(first, "first"));
+	// The request of the first map still runs, so the start asks for no second copy of the same piece
+	ASSERT_EQ(fetch.calls.size(), 2u);
+	fetch.AnswerRange(Bytes(first));
+	ASSERT_EQ(fetch.calls.size(), 3u);
+	EXPECT_EQ(fetch.calls.back().offset, 4u);
+}
+
+TEST(MapDownload, AMapThatTheStoreHasIsNotDownloadedAgain)
+{
+	FakeStore store;
+	FakeFetch fetch;
+	online::MapDownload download(store, fetch.Function());
+	download.Start(MapOf("abc", "first"));
+	fetch.Answer(Bytes("abc"));
+	ASSERT_EQ(download.GetState(), online::MapDownload::State::Ready);
+	download.Start(MapOf("xyz", "second"));
+	download.Start(MapOf("abc", "first"));
+	EXPECT_EQ(download.GetState(), online::MapDownload::State::Ready);
+	EXPECT_EQ(fetch.calls.size(), 2u);
+}
+
+TEST(MapDownload, AStartOfTheMapThatComesNowDoesNotStartAgain)
+{
+	FakeStore store;
+	FakeFetch fetch;
+	online::MapDownload download(store, fetch.Function());
+	download.Start(MapOf("abc"));
+	download.Start(MapOf("abc"));
+	EXPECT_EQ(fetch.calls.size(), 1u);
+}
+
+TEST(MapDownload, ABadFileAtTheEndRemovesTheBytesAndStartsAgain)
+{
+	const std::string right = "abcdefgh";
+	const std::string wrong = "abcdefgX";
+	FakeStore store;
+	FakeFetch fetch;
+	online::MapDownload download(store, fetch.Function(), {}, 4);
+	download.Start(MapOf(right));
+	fetch.AnswerRange(Bytes(right));
+	fetch.AnswerRange(Bytes(wrong));
+	// The file has the wrong hash: the bytes go, and the download asks again from the first byte
+	EXPECT_EQ(download.GetState(), online::MapDownload::State::Downloading);
+	EXPECT_EQ(download.KeptBytes(MapOf(right).sha256), 0u);
+	EXPECT_EQ(fetch.calls.back().offset, 0u);
+	EXPECT_TRUE(store.files.empty());
+	fetch.AnswerRange(Bytes(right));
+	fetch.AnswerRange(Bytes(right));
+	EXPECT_EQ(download.GetState(), online::MapDownload::State::Ready);
+	EXPECT_EQ(store.files.at("obm_32p_1.map"), Bytes(right));
+}
+
+TEST(MapDownload, TwoBadFilesEndTheDownload)
+{
+	FakeStore store;
+	FakeFetch fetch;
+	online::MapDownload download(store, fetch.Function());
+	download.Start(MapOf("abcd"));
+	fetch.Answer(Bytes("abcX"));
+	fetch.Answer(Bytes("abcX"));
+	EXPECT_EQ(download.GetState(), online::MapDownload::State::Failed);
+	EXPECT_TRUE(store.files.empty());
+	EXPECT_EQ(download.KeptBytes(MapOf("abcd").sha256), 0u);
+}
+
+TEST(MapDownload, AFailedDownloadKeepsItsBytesAndContinuesAtTheNextStart)
+{
+	const std::string text = "abcdefgh";
+	FakeStore store;
+	FakeFetch fetch;
+	online::MapDownload download(store, fetch.Function(), {}, 4);
+	download.Start(MapOf(text));
+	fetch.AnswerRange(Bytes(text));
+	fetch.Answer(std::nullopt);
+	fetch.Answer(std::nullopt);
+	ASSERT_EQ(download.GetState(), online::MapDownload::State::Failed);
+	EXPECT_EQ(download.KeptBytes(MapOf(text).sha256), 4u);
+	download.Start(MapOf(text));
+	EXPECT_EQ(fetch.calls.back().offset, 4u);
+	fetch.AnswerRange(Bytes(text));
+	EXPECT_EQ(download.GetState(), online::MapDownload::State::Ready);
+}
+
+TEST(MapDownload, AFullFileForTheRequestOfARangeTakesThePlaceOfTheBytes)
+{
+	const std::string text = "abcdefgh";
+	FakeStore store;
+	FakeFetch fetch;
+	online::MapDownload download(store, fetch.Function(), {}, 4);
+	download.Start(MapOf(text));
+	fetch.AnswerRange(Bytes(text));
+	// A server that gives no ranges gives the full file
+	fetch.Answer(Bytes(text));
+	EXPECT_EQ(download.GetState(), online::MapDownload::State::Ready);
+	EXPECT_EQ(store.files.at("obm_32p_1.map"), Bytes(text));
+}
+
+TEST(MapDownload, APieceAtAnotherPlaceOrOfAnotherSizeIsABadAnswer)
+{
+	const std::string text = "abcdefgh";
+	FakeStore store;
+	FakeFetch fetch;
+	online::MapDownload download(store, fetch.Function(), {}, 4);
+	download.Start(MapOf(text));
+	fetch.AnswerRange(Bytes(text));
+	fetch.Give(lobby_api::FilePiece {.offset = 2, .total = 8, .bytes = Bytes("cdef")});
+	EXPECT_EQ(download.GetState(), online::MapDownload::State::Downloading);
+	EXPECT_EQ(download.KeptBytes(MapOf(text).sha256), 4u);
+	fetch.Give(lobby_api::FilePiece {.offset = 4, .total = 9, .bytes = Bytes("efgh")});
+	EXPECT_EQ(download.GetState(), online::MapDownload::State::Failed);
+	EXPECT_EQ(download.KeptBytes(MapOf(text).sha256), 4u);
+}
+
+TEST(MapDownload, TheBytesOfAPackageMakeTheMap)
+{
+	auto map = MapOf("map");
+	map.packageSha256 = std::string(64, 'b');
+	map.packageSize = 7;
+	EXPECT_EQ(online::MapDownload::TransferSizeOf(map), 7u);
+	FakeStore store;
+	FakeFetch fetch;
+	std::vector<uint8_t> assembled;
+	online::MapDownload download(store, fetch.Function(), [&](const lobby_api::OnlineMap&, std::vector<uint8_t> bytes) {
+		assembled = std::move(bytes);
+		return std::optional(Bytes("map"));
+	});
+	download.Start(map);
+	EXPECT_EQ(fetch.calls.back().count, 7u);
+	fetch.Answer(Bytes("package"));
+	EXPECT_EQ(assembled, Bytes("package"));
+	EXPECT_EQ(download.GetState(), online::MapDownload::State::Ready);
+	EXPECT_EQ(store.files.at("obm_32p_1.map"), Bytes("map"));
+}
+
+TEST(MapDownload, TheOldestPausedPartGoesWhenTheKeptBytesAreTooMany)
+{
+	constexpr uint64_t k_Piece = online::MapDownload::k_MostKeptBytes / 2;
+	auto big = [](std::string_view hash) {
+		auto map = Map(0, hash);
+		map.size = static_cast<int64_t>(online::MapDownload::k_MostKeptBytes);
+		return map;
+	};
+	const auto first = big(std::string(64, '1'));
+	const auto second = big(std::string(64, '2'));
+	const auto third = big(std::string(64, '3'));
+	FakeStore store;
+	FakeFetch fetch;
+	online::MapDownload download(store, fetch.Function(), {}, k_Piece);
+	const auto give = [&fetch](uint64_t total) {
+		fetch.Give(lobby_api::FilePiece {.offset = 0, .total = total, .bytes = std::vector<uint8_t>(k_Piece, 1)});
+	};
+	download.Start(first);
+	give(online::MapDownload::k_MostKeptBytes);
+	download.Start(second);
+	fetch.waiting.erase(fetch.waiting.begin());
+	give(online::MapDownload::k_MostKeptBytes);
+	download.Start(third);
+	fetch.waiting.erase(fetch.waiting.begin());
+	give(online::MapDownload::k_MostKeptBytes);
+	EXPECT_EQ(download.KeptBytes(first.sha256), 0u);
+	EXPECT_EQ(download.KeptBytes(second.sha256), k_Piece);
+	EXPECT_EQ(download.KeptBytes(third.sha256), k_Piece);
 }
 
 TEST(MapDownload, TheRoomsMapIsFoundByItsHash)
@@ -568,7 +848,8 @@ TEST(MapDownload, AMapWithANameThatTheStoreCannotKeepFailsAndLeavesNoFile)
 TEST(MapDownload, ABadAnswerKeepsNoFileAndAGoodSecondAnswerIsKept)
 {
 	const auto file = SmallMapFile();
-	const auto map = Map(online::start_rules::LandChecksum(file), online::sha256::HexOf(file));
+	auto map = Map(online::start_rules::LandChecksum(file), online::sha256::HexOf(file));
+	map.size = static_cast<int64_t>(file.size());
 	// A changed byte, a part of the file and no answer are each a bad answer
 	auto changed = file;
 	changed.at(changed.size() / 2) ^= 0x01u;

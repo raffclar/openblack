@@ -31,6 +31,7 @@
 #include "Creature/CreatureFileLoad.h"
 #include "Online/Desktop/CurlHttpClient.h"
 #include "Online/Desktop/UdpLanDiscovery.h"
+#include "Online/GameBuildId.h"
 #include "Online/LanDiscovery.h"
 #include "Online/ServerKeyPin.h"
 #include "Server/Desktop/Sha256SessionHasher.h"
@@ -300,7 +301,8 @@ uint16_t GameRole::Port() const
 }
 
 std::optional<std::string> GameRole::Start(const NetworkSettings& settings, game_socket::Start start, uint64_t landChecksum,
-                                           uint8_t godSlots, std::optional<lobby_status::CustomMap> customMap)
+                                           uint8_t godSlots, std::optional<lobby_status::CustomMap> customMap,
+                                           std::string landSha256)
 {
 	auto& parts = *_parts;
 	if (settings.serverId.empty() && !settings.lan)
@@ -459,7 +461,11 @@ std::optional<std::string> GameRole::Start(const NetworkSettings& settings, game
 	                  .testCommands = settings.testCommands,
 	                  .sessionHasher = std::make_shared<Sha256SessionHasher>(),
 	                  .lanNames = settings.lan,
-	                  .relaysCreature = creature_file_load::ServerRelays});
+	                  .relaysCreature = creature_file_load::ServerRelays,
+	                  .lobby = settings.lobby,
+	                  .buildId = online::build_id::Own(),
+	                  .mapSha256 = std::move(landSha256),
+	                  .loadWindowMicroseconds = settings.joinWindowSeconds * 1'000'000});
 	return std::nullopt;
 }
 

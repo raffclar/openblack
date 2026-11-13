@@ -70,10 +70,13 @@
 #include "Gui/TextDatabase.h"
 #include "Locator.h"
 #include "Online/DownloadTestMap.h"
+#include "Online/GameBuildId.h"
 #include "Online/GodsRingMap.h"
 #include "Online/GodsRingMapFile.h"
+#include "Online/GodsRingMapPackage.h"
 #include "Online/NetworkLand.h"
 #include "Online/OnlineMapLand.h"
+#include "Online/Sha256.h"
 #include "PlayerSlots.h"
 #include "Profiler.h"
 #include "Resources/ResourcesInterface.h"
@@ -88,6 +91,7 @@
 #define OPENBLACK_GAME_ROLE 1
 #include "Online/StartRules.h"
 #include "Server/Desktop/GameRole.h"
+#include "Server/LobbyGame.h"
 #include "Server/LobbyHostReport.h"
 #include "Server/LobbyResults.h"
 #include "Server/ServerAdmin.h"
@@ -722,6 +726,106 @@ bool ServerWorld::LoadSnapshot(const snapshots::Snapshot& snapshot)
 	return true;
 }
 
+/// The seconds since 1970 (UTC) on the clock of the computer
+int64_t UtcSeconds()
+{
+	return std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+}
+
+/// Watches the limits of the life of the server of a lobby game (deviations 236 and 247): the time to join, the
+/// deadline, and the time after the decision of the game. A server with no lobby ends only when every god left.
+class LifetimeWatch
+{
+public:
+	explicit LifetimeWatch(const ServerSettings& settings)
+	    : _lobbyGame(settings.network.has_value() && settings.network->lobby.has_value())
+	{
+		if (_lobbyGame)
+		{
+			_joinWindowSeconds = settings.network->joinWindowSeconds;
+			_lobbyDeadline = settings.network->deadline;
+		}
+	}
+
+	/// The server started to listen: the time to join and the longest life of the server start now
+	void Listened()
+	{
+		_listened = std::chrono::steady_clock::now();
+		if (!_lobbyGame)
+		{
+			return;
+		}
+		_limits = game_lifetime::Limits {.joinWindowSeconds = _joinWindowSeconds,
+		                                 .deadline = game_lifetime::DeadlineOf(_lobbyDeadline, UtcSeconds())};
+		SPDLOG_LOGGER_INFO(spdlog::get("game"),
+		                   "The lobby game: the members have {} seconds to join, and the server ends {} seconds from now at "
+		                   "the latest",
+		                   _joinWindowSeconds, *_limits.deadline - UtcSeconds());
+	}
+
+#if defined(OPENBLACK_GAME_ROLE)
+	/// True when the server ends now. The reason is then in Why().
+	[[nodiscard]] bool Ends(LockstepHost& host)
+	{
+		if (!_lobbyGame)
+		{
+			if (host.GameOver())
+			{
+				_end = game_lifetime::End::AllGodsLeft;
+			}
+			return _end != game_lifetime::End::None;
+		}
+		const auto now = UtcSeconds();
+		const auto sinceListen =
+		    std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - _listened).count();
+		if (!_windowOver && sinceListen >= _joinWindowSeconds)
+		{
+			_windowOver = true;
+			host.EndJoinWindow();
+		}
+		const auto* gameEnd = Locator::gameEndSystem::has_value() ? &Locator::gameEndSystem::value() : nullptr;
+		if (!_decidedAt.has_value() && gameEnd != nullptr && gameEnd->IsDecided())
+		{
+			_decidedAt = now;
+			_decidedByTimeLimit = Locator::time::value().GetTurn() >= game_end::TimeLimitTurn(gameEnd->GetTimeLimit());
+			SPDLOG_LOGGER_INFO(spdlog::get("game"), "The {} decided the game: the server ends in {} seconds at the latest",
+			                   _decidedByTimeLimit ? "time limit" : "winning conditions",
+			                   game_lifetime::k_AfterDecisionSeconds);
+		}
+		if (!_warned && game_lifetime::WarningDue(_limits.deadline, now))
+		{
+			_warned = true;
+			SPDLOG_LOGGER_WARN(spdlog::get("game"), "The game server ends in {} seconds: its deadline comes",
+			                   *_limits.deadline - now);
+		}
+		_end = game_lifetime::Check(_limits, game_lifetime::Room {.secondsSinceListen = sinceListen,
+		                                                          .now = now,
+		                                                          .started = host.Started() || host.Starting(),
+		                                                          .godsInRoom = host.GodsInRoom(),
+		                                                          .minGods = host.GodsToWaitFor(),
+		                                                          .gameOver = host.GameOver(),
+		                                                          .decidedAt = _decidedAt,
+		                                                          .decidedByTimeLimit = _decidedByTimeLimit});
+		return _end != game_lifetime::End::None;
+	}
+#endif
+
+	/// Why the server ends, or End::None
+	[[nodiscard]] game_lifetime::End Why() const { return _end; }
+
+private:
+	bool _lobbyGame {false};
+	int64_t _joinWindowSeconds {game_lifetime::k_DefaultJoinWindowSeconds};
+	std::optional<int64_t> _lobbyDeadline;
+	game_lifetime::Limits _limits;
+	std::chrono::steady_clock::time_point _listened;
+	bool _windowOver {false};
+	bool _warned {false};
+	std::optional<int64_t> _decidedAt;
+	bool _decidedByTimeLimit {false};
+	game_lifetime::End _end {game_lifetime::End::None};
+};
+
 #if defined(OPENBLACK_GAME_ROLE)
 /// Keeps the snapshots of a network game on the server's disk (deviation 100). The game thread takes copies of the world
 /// at the start of a turn, and a writer thread makes the bytes and writes the file. Thus the turns do not wait for the
@@ -872,6 +976,11 @@ std::vector<lobby_results::GodFigures> GodFiguresOfWorld()
 /// it continues after a restart has the same id. A new game gets a new random id.
 std::string GameIdFor(const NetworkSettings& settings, bool restored)
 {
+	// A game of the lobby has the id that the lobby gave
+	if (!settings.gameId.empty())
+	{
+		return settings.gameId;
+	}
 	const auto& folder = settings.snapshots.folder;
 	const bool kept = settings.snapshots.everyTurns > 0;
 	if (kept && restored)
@@ -896,7 +1005,7 @@ std::string GameIdFor(const NetworkSettings& settings, bool restored)
 /// continues a game from a snapshot restores the room of the game.
 bool StartNetwork(const ServerSettings& settings, ServerWorld& world, std::unique_ptr<GameRole>& network,
                   const std::function<void(uint32_t turn, uint64_t checksum)>& onTurn, SnapshotKeeper* keeper,
-                  const std::optional<snapshots::Restored>& restored)
+                  const std::optional<snapshots::Restored>& restored, LifetimeWatch& lifetime)
 {
 	network = std::make_unique<GameRole>();
 	// The land goes as its path under the Scripts folder, so that each client finds it in its own game folder, and the
@@ -906,14 +1015,19 @@ bool StartNetwork(const ServerSettings& settings, ServerWorld& world, std::uniqu
 	const bool scriptLand = !settings.testbed && !settings.godsRingMap;
 	const auto landPath = Locator::landSystem::value().GetLandPath();
 	uint64_t landChecksum = online::start_rules::LandChecksum({});
+	// The SHA-256 of the file of the land, which the lobby gives its members and which a client can give in its join
+	std::string landSha256;
 	if (settings.customMap.has_value())
 	{
 		// The clients compare the checksum of the file that they got from the lobby
 		landChecksum = online::start_rules::LandChecksum(settings.customMap->bytes);
+		landSha256 = online::sha256::HexOf(settings.customMap->bytes);
 	}
 	else if (scriptLand && fileSystem.Exists(landPath))
 	{
-		landChecksum = online::start_rules::LandChecksum(fileSystem.ReadAll(landPath));
+		const auto bytes = fileSystem.ReadAll(landPath);
+		landChecksum = online::start_rules::LandChecksum(bytes);
+		landSha256 = online::sha256::HexOf(bytes);
 	}
 	// The map for 32 gods is a file that the players get from the lobby, so the clients compare its checksum too
 	std::string landName = scriptLand ? network_land::WireName(landPath) : std::string();
@@ -921,6 +1035,15 @@ bool StartNetwork(const ServerSettings& settings, ServerWorld& world, std::uniqu
 	{
 		landName = gods_ring_map_file::WireName();
 		landChecksum = online::start_rules::LandChecksum(world.GodsRingMapFile());
+		landSha256 = online::sha256::HexOf(world.GodsRingMapFile());
+	}
+	// The server of a lobby game plays only the file of the land that the lobby gave its members
+	if (!settings.network->mapSha256.empty() && settings.network->mapSha256 != landSha256)
+	{
+		SPDLOG_LOGGER_CRITICAL(spdlog::get("game"),
+		                       "The file of the land has the SHA-256 {}, but the lobby gave its members the file {}",
+		                       landSha256.empty() ? std::string("of no file") : landSha256, settings.network->mapSha256);
+		return false;
 	}
 	game_socket::Start start {
 	    .land = std::move(landName),
@@ -976,10 +1099,14 @@ bool StartNetwork(const ServerSettings& settings, ServerWorld& world, std::uniqu
 	std::optional<lobby_status::CustomMap> customMap;
 	if (settings.godsRingMap)
 	{
+		// The players make the file from the map package and their own game data (deviation 249)
+		const auto package = gods_ring_map_package::Make();
 		customMap = lobby_status::CustomMap {.file = std::string(gods_ring_map::k_File),
 		                                     .name = std::string(gods_ring_map::k_Name),
 		                                     .players = static_cast<int32_t>(gods_ring_map::k_Slots),
-		                                     .bytes = world.GodsRingMapFile()};
+		                                     .bytes = world.GodsRingMapFile(),
+		                                     .packageSha256 = online::sha256::HexOf(package),
+		                                     .packageSize = static_cast<int64_t>(package.size())};
 	}
 	else if (settings.customMap.has_value())
 	{
@@ -993,7 +1120,9 @@ bool StartNetwork(const ServerSettings& settings, ServerWorld& world, std::uniqu
 		    .bytes = settings.customMap->bytes,
 		};
 	}
-	if (const auto error = network->Start(*settings.network, start, landChecksum, godSlots, std::move(customMap));
+	const auto landSha256Logged = landSha256;
+	if (const auto error =
+	        network->Start(*settings.network, start, landChecksum, godSlots, std::move(customMap), std::move(landSha256));
 	    error.has_value())
 	{
 		SPDLOG_LOGGER_CRITICAL(spdlog::get("game"), "The game role cannot start: {}", *error);
@@ -1026,7 +1155,20 @@ bool StartNetwork(const ServerSettings& settings, ServerWorld& world, std::uniqu
 	host.SetWorldState([] {
 		return Locator::saveGameSystem::has_value() ? Locator::saveGameSystem::value().WorldState() : std::vector<uint8_t> {};
 	});
-	world.SetNetwork([&host, role = network.get(), keeper] {
+	if (const auto& lobby = settings.network->lobby; lobby.has_value())
+	{
+		std::string members;
+		for (const auto& member : lobby->members)
+		{
+			members +=
+			    fmt::format("{}{} ({}{})", members.empty() ? "" : ", ", member.account, game_socket::RoleName(member.role),
+			                member.slot.has_value() ? fmt::format(" of slot {}", *member.slot) : std::string());
+		}
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The game {} of the lobby {}, build {}, land {} (SHA-256 {}): members {}",
+		                   settings.network->gameId, lobby->id, online::build_id::Own(), start.land, landSha256Logged, members);
+	}
+	lifetime.Listened();
+	world.SetNetwork([&host, role = network.get(), keeper, &lifetime] {
 		// After a restart, the world first does again the turns that the server sent. The server reads no socket until then.
 		if (host.Replaying())
 		{
@@ -1040,6 +1182,9 @@ bool StartNetwork(const ServerSettings& settings, ServerWorld& world, std::uniqu
 		if (host.GameOver())
 		{
 			SPDLOG_LOGGER_INFO(spdlog::get("game"), "Every god left the game: the game ends");
+		}
+		if (lifetime.Ends(host))
+		{
 			if (keeper != nullptr)
 			{
 				keeper->GameOver();
@@ -1097,7 +1242,7 @@ public:
 
 bool StartNetwork(const ServerSettings& /*settings*/, ServerWorld& /*world*/, std::unique_ptr<int>& /*network*/,
                   const std::function<void(uint32_t turn, uint64_t checksum)>& /*onTurn*/, SnapshotKeeper* /*keeper*/,
-                  const std::optional<snapshots::Restored>& /*restored*/)
+                  const std::optional<snapshots::Restored>& /*restored*/, LifetimeWatch& /*lifetime*/)
 {
 	SPDLOG_LOGGER_CRITICAL(spdlog::get("game"), "This build has no game role");
 	return false;
@@ -1273,6 +1418,8 @@ int RunWithDevices(const ServerSettings& settings, const std::atomic<bool>& stop
 	// The game server keeps snapshots of its world, and can continue the game of the newest snapshot
 	std::unique_ptr<SnapshotKeeper> keeper;
 	std::optional<snapshots::Restored> restored;
+	// The limits of the life of the server of a lobby game
+	LifetimeWatch lifetime(settings);
 	if (settings.network.has_value() && settings.network->snapshots.everyTurns > 0)
 	{
 		keeper = std::make_unique<SnapshotKeeper>(settings.network->snapshots);
@@ -1286,7 +1433,7 @@ int RunWithDevices(const ServerSettings& settings, const std::atomic<bool>& stop
 	{
 		exitCode = EXIT_FAILURE;
 	}
-	else if (settings.network.has_value() && !StartNetwork(settings, *world, network, onTurn, keeper.get(), restored))
+	else if (settings.network.has_value() && !StartNetwork(settings, *world, network, onTurn, keeper.get(), restored, lifetime))
 	{
 		exitCode = EXIT_FAILURE;
 	}
@@ -1299,6 +1446,11 @@ int RunWithDevices(const ServerSettings& settings, const std::atomic<bool>& stop
 		{
 			SPDLOG_LOGGER_INFO(spdlog::get("game"), "The server stops on a signal");
 		}
+		else if (lifetime.Why() != game_lifetime::End::None)
+		{
+			exitCode = game_lifetime::ExitCodeOf(lifetime.Why());
+			SPDLOG_LOGGER_INFO(spdlog::get("game"), "{}", game_lifetime::LineOf(lifetime.Why()));
+		}
 		LogGraphicsLibrary();
 	}
 	checksums.SetTurnListener({});
@@ -1307,6 +1459,11 @@ int RunWithDevices(const ServerSettings& settings, const std::atomic<bool>& stop
 #if defined(OPENBLACK_GAME_ROLE)
 	if (network)
 	{
+		// A room that the server ends before the start tells each client, so that no client tries to come back
+		if (lifetime.Why() != game_lifetime::End::None && !network->Host().Started())
+		{
+			network->Host().EndRoom(lobby_game::k_EndedRefusal);
+		}
 		for (const auto& line : network->Host().SummaryLines())
 		{
 			SPDLOG_LOGGER_INFO(spdlog::get("game"), "Network game: {}", line);

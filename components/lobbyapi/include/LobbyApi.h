@@ -237,12 +237,42 @@ struct OnlineMap
 	int64_t size {0};
 	/// "url": the path of the file on the lobby, /api/v1/maps/<sha256>
 	std::string url;
+	/// "package_sha256": the SHA-256 of the map package of the land, as 64 hex digits (deviation 249). Empty for a land
+	/// with no package. The player's game makes the file from the package and its own game data.
+	std::string packageSha256;
+	/// "package_size": the bytes of the package
+	int64_t packageSize {0};
+	/// "package_url": the path of the package on the site, /maps/<package sha256>.obmap
+	std::string packageUrl;
 };
+
+/// The start of the path of a map package on the site
+inline constexpr std::string_view k_MapPackagePath = "/maps/";
 
 /// GET /api/v1/maps: {"maps": [...]}
 struct MapList
 {
 	std::vector<OnlineMap> maps;
+};
+
+/// The bytes from first to last of a file, both included, as the header Content-Range of an answer gives them
+struct ByteRange
+{
+	uint64_t first {0};
+	uint64_t last {0};
+	/// The bytes of the full file
+	uint64_t total {0};
+};
+
+/// A piece of the file of a map or of its package. An answer to the request of a range gives that range. An answer that
+/// gives the full file gives a piece at offset 0 with all the bytes.
+struct FilePiece
+{
+	/// The place of the first byte in the file
+	uint64_t offset {0};
+	/// The bytes of the full file
+	uint64_t total {0};
+	std::vector<uint8_t> bytes;
 };
 
 /// A god or an observer in the status report of a game server
@@ -599,6 +629,10 @@ struct Problem
 	std::string detail;
 	/// "code": the code of the error that a program can read
 	std::string code;
+	/// "members" and "slots" of the problem "too_many_players": the players of the lobby and the slots of the new map. 0
+	/// when the problem does not give them.
+	int32_t members {0};
+	int32_t slots {0};
 };
 
 /// A frame of the push channel. An event: {"seq": n, "type": "...", "time": "...", "data": {...}}. A control frame

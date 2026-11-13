@@ -9,12 +9,14 @@
 
 #include <array>
 #include <memory>
+#include <tuple>
 #include <vector>
 
 #include <gtest/gtest.h>
 
 #include "3D/MapCoords.h"
 #include "ECS/Components/Influence.h"
+#include "ECS/Components/MagicShield.h"
 #include "ECS/Components/Player.h"
 #include "ECS/Components/PlayerRelations.h"
 #include "ECS/Components/PlayerStatistics.h"
@@ -22,6 +24,7 @@
 #include "ECS/Components/TempleExterior.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/GamePlayers.h"
 #include "ECS/Registry.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -401,4 +404,51 @@ TEST_F(CitadelReach, TheTurnOfAPlayerGivesItsTemplesTwiceItsShareOfTheInfluenceA
 	registry.Context().mapScriptGlobals.landNumber = 1;
 	exterior.NoteSizeTarget(PlayerNames::PLAYER_TWO, 0.3f);
 	EXPECT_FLOAT_EQ(registry.Get<const components::TempleExterior>(_temples.at(1)).sizeTarget, 0.02f);
+}
+
+TEST_F(CitadelReach, TheAnswersForAllPlayersAtOnceAreTheAnswersForEachPlayer)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto one = registry.Create();
+	registry.Assign<components::Player>(one, components::Player {.name = PlayerNames::PLAYER_ONE});
+	registry.Assign<components::PlayerAllies>(one).strength.at(static_cast<size_t>(PlayerNames::PLAYER_THREE)) = 1.0f;
+	const auto at = [&registry](entt::entity entity, float x, float z) {
+		registry.Assign<components::Transform>(entity, glm::vec3(x, 0.0f, z), glm::mat3(1.0f), glm::vec3(1.0f));
+	};
+	// Towns of two players that overlap, a town of the neutral player, sources, an anti-influence and a shield
+	const std::array towns {std::tuple {PlayerNames::PLAYER_ONE, 1100.0f, 1050.0f, 80.0f, 2U},
+	                        std::tuple {PlayerNames::PLAYER_ONE, 1150.0f, 1000.0f, 60.0f, 1U},
+	                        std::tuple {PlayerNames::PLAYER_TWO, 1450.0f, 1050.0f, 90.0f, 1U},
+	                        std::tuple {PlayerNames::NEUTRAL, 1300.0f, 1000.0f, 100.0f, 1U}};
+	for (const auto& [owner, x, z, radius, gained] : towns)
+	{
+		const auto town = registry.Create();
+		auto& record = registry.Assign<components::Town>(town);
+		record.owner = owner;
+		record.gained = gained;
+		registry.Assign<components::TownInfluence>(town, radius, radius);
+		at(town, x, z);
+	}
+	const auto source = registry.Create();
+	registry.Assign<components::InfluenceSource>(source, PlayerNames::PLAYER_TWO, 120.0f, false, entt::null);
+	at(source, 1250.0f, 1100.0f);
+	const auto anti = registry.Create();
+	registry.Assign<components::InfluenceSource>(anti, PlayerNames::PLAYER_ONE, 40.0f, true, entt::null);
+	at(anti, 1000.0f, 1000.0f);
+	const auto shield = registry.Create();
+	registry.Assign<components::AntiInfluence>(shield, PlayerNames::PLAYER_THREE, 70.0f);
+	at(shield, 2000.0f, 1000.0f);
+	for (float x = 900.0f; x <= 2200.0f; x += 25.0f)
+	{
+		for (float z = 900.0f; z <= 1200.0f; z += 25.0f)
+		{
+			const auto position = map_coords::FromMetres({x, z});
+			const auto all = _influence.PlayerInfluences(position);
+			for (const auto player : game_players::All())
+			{
+				EXPECT_EQ(all.at(static_cast<size_t>(player)), _influence.PlayerInfluence(player, position))
+				    << "player " << static_cast<int>(player) << " at " << x << ", " << z;
+			}
+		}
+	}
 }
