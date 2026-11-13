@@ -2211,6 +2211,93 @@
   "query": "creatures.route"
  },
  {
+  "description": "The editor of this computer: whether it is open, whether a network game is live, whether the player of this computer is staff, and the debug cheats of that player",
+  "kind": "object",
+  "parameters": [],
+  "query": "editor.state"
+ },
+ {
+  "description": "Opens the editor of this computer on a tab (Palette, Cheats, Log, ...), as the player does. It changes only the windows of this computer, and the editor opens only when its rule lets it.",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The name of the tab",
+    "name": "tab",
+    "required": true,
+    "type": "string"
+   }
+  ],
+  "query": "editor.show_tab"
+ },
+ {
+  "description": "Sends an edit of the editor as a command of the turns, as the editor of a network game sends it: each computer does it at the same turn, and the game server takes it only from a staff player. force sends it also when the editor of this computer is refused, so that a test sees the refusal of the server.",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "move, turn, place or remove",
+    "name": "kind",
+    "required": true,
+    "type": "string"
+   },
+   {
+    "description": "The thing of a move, a turn or a removal",
+    "name": "id",
+    "type": "integer"
+   },
+   {
+    "description": "[x, z] or [x, y, z] of a move or a placement",
+    "name": "position",
+    "type": "point"
+   },
+   {
+    "description": "The angle of a turn or a placement",
+    "name": "radians",
+    "type": "number"
+   },
+   {
+    "description": "The kind of the palette item (place)",
+    "name": "place_kind",
+    "type": "integer"
+   },
+   {
+    "description": "The type of the palette item (place)",
+    "name": "place_type",
+    "type": "integer"
+   },
+   {
+    "description": "Send also when the editor is refused",
+    "name": "force",
+    "type": "boolean"
+   }
+  ],
+  "query": "editor.network_edit",
+  "writes": true
+ },
+ {
+  "description": "Sends a debug cheat of the player of this computer as a command of the turns, as the cheats tab of the editor does. The game server takes it only from a staff player. force sends it also when the editor of this computer is refused.",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The name of the cheat",
+    "name": "cheat",
+    "required": true,
+    "type": "string"
+   },
+   {
+    "description": "On (the default) or off",
+    "name": "on",
+    "type": "boolean"
+   },
+   {
+    "description": "Send also when the editor is refused",
+    "name": "force",
+    "type": "boolean"
+   }
+  ],
+  "query": "editor.cheat",
+  "writes": true
+ },
+ {
   "description": "The script machine: its scripts, tasks, globals and the task running",
   "kind": "object",
   "parameters": [],
