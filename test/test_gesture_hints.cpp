@@ -190,6 +190,20 @@ TEST(GestureHints, TheRowFadesOutWhileTheAdvisorsSpeakAndBackAfter)
 	EXPECT_EQ(Fade(1.0f, 0.25f, false), 1.0f);
 }
 
+TEST(GestureHints, TheRowShowsOnlyOverTheLand)
+{
+	Row row;
+	row.hints.push_back({.gesture = GestureType::SquareSpirial, .path = {glm::vec3(0.0f), glm::vec3(1.0f)}});
+	EXPECT_TRUE(Shows(row, false));
+	// In the temple the row does not show, also with hints at full opacity
+	EXPECT_FALSE(Shows(row, true));
+	row.alpha = 0.0f;
+	EXPECT_FALSE(Shows(row, false));
+	row.alpha = 0.5f;
+	row.hints.clear();
+	EXPECT_FALSE(Shows(row, false));
+}
+
 TEST(GestureHints, TheDotWrapsBackOverlappingTheStart)
 {
 	EXPECT_NEAR(StepDot(0.0f, 0.5f, 2.0f), 0.25f, k_Tolerance);

@@ -9,6 +9,7 @@
 
 #include <array>
 
+#include "3D/TempleInteriorInterface.h"
 #include "Camera/Camera.h"
 #include "ECS/Components/Player.h"
 #include "ECS/GamePlayers.h"
@@ -45,7 +46,8 @@ void GameInterface::DrawGestureHints(glm::u16vec2 resolution)
 		return;
 	}
 	const auto& row = Locator::gestureSystem::value().GetHints();
-	if (row.hints.empty() || row.alpha <= 0.0f)
+	const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
+	if (!hints::Shows(row, inTemple))
 	{
 		return;
 	}

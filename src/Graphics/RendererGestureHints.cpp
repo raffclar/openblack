@@ -19,6 +19,7 @@
 #include <glm/gtc/type_ptr.hpp>
 
 #include "3D/L3DMesh.h"
+#include "3D/TempleInteriorInterface.h"
 #include "Camera/Camera.h"
 #include "Creature/TempleLeashes.h"
 #include "ECS/Components/CreatureLeash.h"
@@ -111,7 +112,8 @@ void Renderer::DrawGestureHintCollars(const DrawSceneDesc& desc) const
 		return;
 	}
 	const auto& row = Locator::gestureSystem::value().GetHints();
-	if (!_warmingUp && (row.hints.empty() || row.alpha <= 0.0f))
+	const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
+	if (!_warmingUp && !hints::Shows(row, inTemple))
 	{
 		return;
 	}
@@ -202,7 +204,8 @@ void Renderer::DrawGestureHintSeeds(const DrawSceneDesc& desc) const
 		return;
 	}
 	const auto& row = Locator::gestureSystem::value().GetHints();
-	if (!_warmingUp && (row.hints.empty() || row.alpha <= 0.0f))
+	const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
+	if (!_warmingUp && !hints::Shows(row, inTemple))
 	{
 		return;
 	}
