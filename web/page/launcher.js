@@ -284,6 +284,19 @@ function showMessage(title, text, files = [], { stop = false } = {}) {
 }
 globalThis.openblackShowMessage = showMessage;
 
+// The end of a normal game run sends the browser to the homepage. A crash keeps its message and stays on the page.
+let leftForHome = false;
+function leaveForHome(code) {
+  if (leftForHome || !exitGoesHome(code, pageCrashKept)) {
+    return;
+  }
+  leftForHome = true;
+  log('The game ended: the browser goes to the homepage.');
+  exitToHome(window);
+}
+// The game calls this when it ends with no error. The exit code of the program is zero then.
+globalThis.openblackExitToHome = () => leaveForHome(0);
+
 /** A debug file that the game wrote outside the Profiles folder (a screenshot, a saved mind) gets a download link */
 globalThis.openblackOfferDownload = (name, bytes) => {
   const type = name.toLowerCase().endsWith('.png') ? 'image/png' : 'application/octet-stream';
@@ -866,7 +879,10 @@ async function start(online = false) {
       folder: { list, files: chosen.map((entry) => entry.file) }, storage, version: version.file, showFrame, setPresent,
       requests, displayFrames, gameFrames,
     },
-    onExit: (code) => log(`The game stopped with the code ${code}.`),
+    onExit: (code) => {
+      log(`The game stopped with the code ${code}.`);
+      leaveForHome(code);
+    },
     onAbort: (reason) => gameFailed(String(reason)),
   };
   // An error on a game thread that the game does not catch, such as a WebAssembly trap, comes to the page as an error.
