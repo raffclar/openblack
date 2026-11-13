@@ -18,6 +18,7 @@
 
 #include <spdlog/spdlog.h>
 
+#include "Online/JoinRetryRule.h"
 #include "Online/StartRules.h"
 #include "PlayerSlots.h"
 
@@ -119,6 +120,9 @@ void NetworkSession::Join(NetworkSessionSettings settings)
 	_commandsInLoadWait = 0;
 	// A new session counts its blocks of commands from 0
 	_sent.Reset();
+	_joinStartedAt = _clock();
+	_joinRetryAt.reset();
+	_backoff.Reset();
 	Open(false);
 }
 
@@ -514,6 +518,15 @@ void NetworkSession::Closed(const WebSocketClosed& closed)
 		DropStream();
 		return;
 	}
+	if (_state == State::Connecting && join_retry::TryAgain(closed, _clock() - _joinStartedAt, _settings.joinRetryMicroseconds))
+	{
+		const auto wait = std::chrono::duration_cast<std::chrono::microseconds>(_backoff.Next()).count();
+		_joinRetryAt = _clock() + wait;
+		Log(spdlog::level::info,
+		    fmt::format("The game server does not listen yet: the client tries again in {} ms", wait / 1000));
+		DropStream();
+		return;
+	}
 	FinishWith(End::NoConnection);
 }
 
@@ -538,6 +551,15 @@ void NetworkSession::Update()
 		_stream.reset();
 	}
 	const auto now = _clock();
+	if (_state == State::Connecting && !_stream && _joinRetryAt.has_value())
+	{
+		if (now >= *_joinRetryAt)
+		{
+			_joinRetryAt.reset();
+			Open(false);
+		}
+		return;
+	}
 	if (_state == State::Reconnecting && !_stream)
 	{
 		if (now - _lostAt > _settings.comeBackMicroseconds)
