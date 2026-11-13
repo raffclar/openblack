@@ -807,8 +807,9 @@ void draw::AddLightSheet(Frame& frame, std::span<const LightSheet::Vertex> verti
 	    .lit = false,
 	    .worldToAtom = glm::mat4(1.0f),
 	});
-	// The force field is drawn after everything that is sorted; a gesture's sheet takes its place among them
-	frame.groups.push_back({.path = forceField ? DrawPath::AfterSorted : DrawPath::Sorted,
+	// The force field is drawn at once before everything that is sorted. The other sheets take their places among the
+	// sorted things.
+	frame.groups.push_back({.path = forceField ? DrawPath::AtOnceAfterLand : DrawPath::Sorted,
 	                        .origin = sortPoint,
 	                        .firstItem = firstItem,
 	                        .itemCount = 1});
@@ -900,10 +901,12 @@ void draw::Order(const Frame& frame, const glm::vec3& camera, std::optional<glm:
 			items.push_back(i);
 		}
 		GatherCommutingRuns(gathering, items);
-		// Just after the hand, which draws itself at its own place. After everything sorted is the nearest place.
+		// Just after the hand, which draws itself at its own place. The force field takes the place after the land and
+		// before every sorted key.
 		const bool afterHand = group.path == DrawPath::Immediate && hand.has_value();
 		const auto base = graphics::zsort::Depth(afterHand ? *hand : group.origin, camera);
-		const uint32_t depth = group.path == DrawPath::AfterSorted ? 0u : (afterHand && base > 0 ? base - 1 : base);
+		const uint32_t depth = group.path == DrawPath::AtOnceAfterLand ? graphics::zsort::k_AtOnceAfterLand
+		                                                               : (afterHand && base > 0 ? base - 1 : base);
 		emit(items, [depth](const Item&) { return depth; });
 	}
 }

@@ -2714,7 +2714,7 @@ void GameInterface::DrawChatBubbles(glm::u16vec2 resolution, glm::ivec2 mouse)
 		const GameFont& words = *face;
 
 		// The box, the arrows and the words are at depths in the world as for the tip bubble
-		auto& canvas = _worldLabelsCanvas;
+		auto& canvas = GroupedLabelCanvas(graphics::WorldLabelGroup::ChatBubbles);
 		const auto view = PrepareWorldTextCanvas(canvas);
 		const float boxDepth = world_text::DrawnDepth(placement->depth, view.pitch, view.nearClip);
 		const float shadowWordsBuffer =
@@ -3402,7 +3402,7 @@ void GameInterface::DrawLearningTexts(glm::u16vec2 resolution)
 	const float shadow = ecs::learning_marker::k_ShadowOffset * scale;
 	// The words are flat on the screen, but the world in front of their point hides them. The game draws them after the
 	// solid models and before the see-through things.
-	auto& canvas = _worldLabelsCanvas;
+	auto& canvas = GroupedLabelCanvas(graphics::WorldLabelGroup::LearningWords);
 	const auto view = PrepareWorldTextCanvas(canvas);
 	for (const auto& text : _learningTexts)
 	{

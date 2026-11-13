@@ -22,6 +22,11 @@ namespace openblack::graphics
 /// before it.
 enum class WorldLabelGroup : uint8_t
 {
+	/// The bubbles of the chat over the creatures. Each creature adds its bubble to the sort when the land draws it.
+	ChatBubbles,
+	/// The words over the learning marks. The game draws them at once at the end of the land's objects, after the reward
+	/// chests and before the mists, the globes and the icons of the village centres.
+	LearningWords,
 	/// The numbers that float up from the things that change, added after the columns over the village centres and
 	/// before the rain
 	FloatingNumbers,
@@ -32,7 +37,7 @@ enum class WorldLabelGroup : uint8_t
 };
 
 /// How many groups of labels there are
-inline constexpr std::size_t k_WorldLabelGroupCount = 3;
+inline constexpr std::size_t k_WorldLabelGroupCount = 5;
 
 /// The groups of labels that a frame drew and that are not submitted yet. Each group submits one time in a frame.
 class WorldLabelSubmits
