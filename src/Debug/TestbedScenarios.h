@@ -75,6 +75,9 @@ private:
 	std::string _savedTo;
 	/// Whether the game lays out the scenarios that are asked for through this window
 	bool _stagerSet {false};
+	/// The time that the running scenario counts, never less than the time of the turns that passed
+	testbed_scenarios::TurnClock _turnClock;
+	const testbed_scenarios::Scenario* _clockScenario {nullptr};
 };
 
 } // namespace openblack::debug::gui

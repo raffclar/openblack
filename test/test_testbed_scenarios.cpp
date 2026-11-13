@@ -16,6 +16,7 @@
 #include <set>
 #include <string>
 #include <string_view>
+#include <tuple>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -639,6 +640,48 @@ TEST(TestbedScenarios, AScenarioOfANetworkGameStepsByTheTurnsFromTheSecondTurnAf
 	EXPECT_EQ(TurnStepOf(40u, 40), TurnStep::Wait);
 	EXPECT_EQ(TurnStepOf(40u, 41), TurnStep::Update);
 	EXPECT_EQ(TurnStepOf(40u, 2000), TurnStep::Update);
+}
+
+// A game that plays its turns fast, or ten turns in one frame, gives a frame time that is less than the time of its turns.
+// The scenario still counts the time of the turns, so that each command comes at its turn.
+TEST(TestbedScenarios, AScenarioCountsAtLeastTheTimeOfTheTurnsThatPassed)
+{
+	constexpr float k_Turn = 0.1f;
+	TurnClock clock;
+	EXPECT_NEAR(clock.Advance(0.0f, 5, k_Turn), 0.0f, k_Epsilon);
+	// Ten turns in a frame that took 20 milliseconds
+	EXPECT_NEAR(clock.Advance(0.02f, 15, k_Turn), 1.0f, k_Epsilon);
+	// A paused game plays no turn and the frame gives no time
+	EXPECT_NEAR(clock.Advance(0.0f, 15, k_Turn), 0.0f, k_Epsilon);
+}
+
+TEST(TestbedScenarios, AScenarioCountsTheTimeOfTheFramesWhenTheyGiveMoreThanTheTurns)
+{
+	constexpr float k_Turn = 0.1f;
+	TurnClock clock;
+	std::ignore = clock.Advance(0.0f, 0, k_Turn);
+	// A game that plays one turn in each five frames of 20 milliseconds, for 50 turns
+	float total = 0.0f;
+	for (uint32_t turn = 1; turn <= 50; ++turn)
+	{
+		for (int frame = 0; frame < 5; ++frame)
+		{
+			total += clock.Advance(0.02f, turn, k_Turn);
+		}
+	}
+	// The clock counts the time of the frames, with at most one turn more
+	EXPECT_GE(total, 5.0f - k_Epsilon);
+	EXPECT_LE(total, 5.1f + k_Epsilon);
+}
+
+TEST(TestbedScenarios, AScenarioClockStartsAgainWhenTheTurnCountGoesBack)
+{
+	constexpr float k_Turn = 0.1f;
+	TurnClock clock;
+	std::ignore = clock.Advance(0.0f, 100, k_Turn);
+	std::ignore = clock.Advance(0.0f, 110, k_Turn);
+	std::ignore = clock.Advance(0.0f, 2, k_Turn);
+	EXPECT_NEAR(clock.Advance(0.0f, 4, k_Turn), 0.2f, k_Epsilon);
 }
 
 TEST(TestbedScenarios, BoundsTakeInEveryPoint)
