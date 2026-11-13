@@ -350,6 +350,8 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 	{
 		DrawSunGlare(*desc.camera);
 	}
+	// The game draws the words of the pause and the speed after the glare, at the end of the frame
+	DrawPauseText(desc);
 
 	// The hand's glow lies on the water, under the sea that is blended over it
 	if (desc.viewId == RenderPass::Reflection && (desc.drawHand || _warmingUp))
@@ -1399,27 +1401,33 @@ void Renderer::DrawPassEffects(const DrawSceneDesc& desc) const
 	DrawGlobes(desc);
 	DrawIconSeeds(desc);
 	DrawRewardSeeds(desc);
-	DrawHandMiracleBands(desc);
 	DrawTribalPower(desc);
-	DrawLightColumns(desc);
+	DrawTempleColumns(desc);
 	DrawScrollBeams(desc);
 	DrawIconPulses(desc);
-	DrawLeashes(desc);
 	DrawWaterRings(desc);
-	DrawRain(desc);
-	DrawSnowfall(desc);
 	DrawKnockReadout(desc);
 	DrawChimneySmoke(desc);
-	DrawShieldDomes(desc);
 	DrawDestructionGhosts(desc);
 	DrawFilmReflections(desc);
 	// The mists blend over the rest, the farthest first. The game adds them to its sort as it draws the land, before
 	// the hand and the particles, so a mist comes before them at an equal distance.
 	DrawMists(desc);
+	// The game adds the leashes to its sort after the land's draw
+	DrawLeashes(desc);
 	DrawIntroLight(desc);
 	DrawInfluenceBorder(desc);
 	DrawInfluenceRipples(desc);
-	DrawPauseText(desc);
+}
+
+void Renderer::DrawPassEffectsAfterParticles(const DrawSceneDesc& desc) const
+{
+	// The game adds these to its sort after the particles, in this order: the spells, then the village centres, then the
+	// weather. Thus at an equal distance each comes after the things before it.
+	DrawShieldDomes(desc);
+	DrawTownColumns(desc);
+	DrawRain(desc);
+	DrawSnowfall(desc);
 }
 
 void Renderer::DrawPassHand(const DrawSceneDesc& desc, const ScenePass& pass, auto& draws) const
@@ -1510,6 +1518,11 @@ void Renderer::DrawPassHand(const DrawSceneDesc& desc, const ScenePass& pass, au
 			submitDesc.objectLook.reset();
 			submitDesc.uvScale = 1.0f;
 			submitDesc.skinTexture = nullptr;
+		}
+		// Then the bands and the bracelets of a miracle in the hand, at the place of the hand
+		if (hand->second.count > 0)
+		{
+			DrawHandMiracleBands(desc, submitDesc.sortDepth);
 		}
 		// A warm-up draws the hand again at no size in each other way that the frames draw it: turned round, as a
 		// mirrored hand is, and glowing with a miracle
@@ -2382,6 +2395,7 @@ void Renderer::DrawPassEntities(const DrawSceneDesc& desc, const ScenePass& pass
 	DrawPassHand(desc, pass, draws);
 	// The game adds the particles to its sort after the hand, so a particle comes after the hand at an equal distance
 	DrawParticles(desc);
+	DrawPassEffectsAfterParticles(desc);
 
 	DrawPassDebugLines(desc, draws);
 }
