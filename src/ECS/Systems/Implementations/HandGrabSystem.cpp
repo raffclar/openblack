@@ -1481,10 +1481,13 @@ void HandGrabSystem::Take(HandGrab& grab, entt::entity object, bool fromTheWorld
 	const auto kind = KindOf(object);
 	const auto player = _world->HandPlayer();
 
-	// Out of the physics without landing, and out of the map's cells; it no longer flies past anyone
+	// The thing leaves the physics without a landing, and it leaves the map's cells. A new handful of a scoop also
+	// leaves the cells, because a search of the map can put it there before the hand holds it. The hand draws what it
+	// holds at all places, not only where the land draws the things of its cells.
+	_world->LeavePhysicsAndMap(object);
 	if (fromTheWorld)
 	{
-		_world->LeavePhysicsAndMap(object);
+		// It no longer flies past anyone
 		_world->RemoveReactions(object, Reaction::ReactToFlyingObject);
 	}
 	const auto position = _world->PoseOf(object).origin;
