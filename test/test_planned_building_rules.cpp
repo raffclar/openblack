@@ -214,18 +214,14 @@ TEST(PlannedBuildingRules, APlaceWithinTheNearestOtherTownPasses)
 	EXPECT_FALSE(WithinNearestOtherTown({100, 100}, {}));
 }
 
-TEST(PlannedBuildingRules, ANewHouseNeedsDryLandAndRoomFromTheBuildingsAboutIt)
+TEST(PlannedBuildingRules, ABuildingStopsANewHouseOnlyWhenItIsNearerThanTheirRadiiTogether)
 {
-	// A house with no footprint passes, wet or not
-	EXPECT_TRUE(IsClearToBuild({}, false, 6.0f));
-	const std::array<BuildingNearby, 1> clear {BuildingNearby {.distance = 10.0f, .radius = 4.0f}};
-	const std::array<BuildingNearby, 1> inTheWay {BuildingNearby {.distance = 9.9f, .radius = 4.0f}};
-	const std::array<FootprintCell, 2> open {FootprintCell {}, FootprintCell {.buildings = clear}};
-	const std::array<FootprintCell, 2> blocked {FootprintCell {.buildings = clear}, FootprintCell {.buildings = inTheWay}};
-	EXPECT_TRUE(IsClearToBuild(open, true, 6.0f));
-	EXPECT_FALSE(IsClearToBuild(open, false, 6.0f));
-	EXPECT_FALSE(IsClearToBuild(blocked, true, 6.0f));
-	EXPECT_TRUE(IsClearToBuild(blocked, true, 5.9f));
+	// The radii together are 4 + 6 = 10 metres. A building at exactly that distance does not stop the house.
+	EXPECT_FALSE(StopsNewBuilding({.distance = 10.0f, .radius = 4.0f}, 6.0f));
+	EXPECT_TRUE(StopsNewBuilding({.distance = 9.9f, .radius = 4.0f}, 6.0f));
+	EXPECT_FALSE(StopsNewBuilding({.distance = 9.9f, .radius = 4.0f}, 5.9f));
+	// The sum is a float sum: as floats, 0.1 + 0.2 is equal to 0.3, thus a building at 0.3 does not stop the house
+	EXPECT_FALSE(StopsNewBuilding({.distance = 0.3f, .radius = 0.1f}, 0.2f));
 }
 
 TEST(PlannedBuildingRules, AScriptNamingAPlaceHasEachTownStartItsOwnNearestPlan)
