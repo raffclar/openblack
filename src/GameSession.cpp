@@ -25,6 +25,11 @@ ExitSave ExitSaveFor(const ExitSaveFacts& facts)
 	{
 		return ExitSave::None;
 	}
+	// Not in the original game: a player who leaves before the answer gets the question at the next start
+	if (facts.startQuestionWaits)
+	{
+		return ExitSave::Remove;
+	}
 	// With no previous profile (an empty name is none), the save goes to the profile played. A restart as the same profile is
 	// the only case with a previous profile that is the same and no save.
 	if (!facts.previousProfile.has_value() || facts.previousProfile->empty() ||

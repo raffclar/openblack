@@ -154,3 +154,21 @@ TEST(GameSession, AStoryLeftForTheSkirmishBoxSaves)
 	facts.skirmish = true;
 	EXPECT_EQ(ExitSaveFor(facts), ExitSave::None);
 }
+
+// A player who leaves before the answer to the start-of-game question gets the question at the next start
+TEST(GameSession, AQuestionThatWaitsRemovesTheSaveOnExit)
+{
+	auto facts = PlainQuit();
+	facts.startQuestionWaits = true;
+	EXPECT_EQ(ExitSaveFor(facts), ExitSave::Remove);
+	// The next start has no save on exit to continue from, so it starts a new game, which asks the question
+	EXPECT_EQ(Resolve(Start::Continue, false), Start::NewGame);
+	// A previous profile does not change the removal
+	facts.previousProfile = u"Ann";
+	facts.currentProfile = u"Bob";
+	facts.previousExists = true;
+	EXPECT_EQ(ExitSaveFor(facts), ExitSave::Remove);
+	// Games with no save keep the save on exit as it is
+	facts.multiplayer = true;
+	EXPECT_EQ(ExitSaveFor(facts), ExitSave::None);
+}
