@@ -58,6 +58,23 @@ struct ContentMark
 	~ContentMark() = default;
 };
 
+/// The place where a store of keyframe turns keeps the turns of an animation. The store finds the turns at this place
+/// without a search. A new animation, a copy and a move get no place. An assignment keeps the place of the animation that
+/// takes the new contents, and the store then compares the angles as for any changed contents.
+struct TurnsPlace
+{
+	static constexpr uint32_t k_None = 0xFFFFFFFF;
+	/// The store changes the place when it reads the animation, thus a constant animation can get a place
+	mutable uint32_t index {k_None};
+
+	TurnsPlace() = default;
+	TurnsPlace(const TurnsPlace& /*other*/) {}
+	TurnsPlace(TurnsPlace&& /*other*/) noexcept {}
+	TurnsPlace& operator=(const TurnsPlace& /*other*/) { return *this; }
+	TurnsPlace& operator=(TurnsPlace&& /*other*/) noexcept { return *this; }
+	~TurnsPlace() = default;
+};
+
 /// A keyframe animation: per bone YXZ Euler angles and translations of the bones it moves
 struct Animation
 {
@@ -78,6 +95,8 @@ struct Animation
 	float strideLength {0.0f};
 	/// The mark of the contents, from ContentMarks. Do not change the contents after they get a mark.
 	ContentMark mark;
+	/// The place of the turns of the animation in the store of keyframe turns
+	TurnsPlace turnsPlace;
 };
 
 /// Gives each marked contents of an animation a mark that no other contents get. Use one ContentMarks for all the
@@ -163,17 +182,16 @@ private:
 		std::vector<Matrix> turns;
 		std::vector<Matrix> mirroredTurns;
 	};
-	std::unordered_map<const Animation*, std::vector<FrameTurns>> _animations;
-	/// An animation of a recent call and its frames in the store
-	struct Recent
+	/// The turns of one animation, at the place that the animation keeps
+	struct AnimationTurns
 	{
+		/// The address of the animation that has this place
 		const Animation* animation {nullptr};
-		std::vector<FrameTurns>* frames {nullptr};
+		std::vector<FrameTurns> frames;
 	};
-	/// The animations of the last calls, the most recent first. A pose of a creature asks for its animation, the stand
-	/// animation, the head, the sway, the face and the gesture in turn, thus a few places are not sufficient.
-	static constexpr size_t k_RecentCount = 8;
-	std::array<Recent, k_RecentCount> _recent {};
+	std::vector<AnimationTurns> _animations;
+	/// The place of each address. The store looks here only for an animation that does not know its place.
+	std::unordered_map<const Animation*, uint32_t> _placeOf;
 };
 
 /// The two keyframes around a time and how far between them it is. Cycles wrap from their last frame to the first,

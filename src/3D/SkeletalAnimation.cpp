@@ -302,16 +302,20 @@ private:
 
 std::span<const Matrix> KeyframeTurns::Of(const Animation& animation, size_t frame, bool mirrored)
 {
-	// The calls for the frames of a few animations come one after another, thus the store keeps the last places that it
-	// found. The map does not move its values when it grows, so a kept place stays valid until Trim.
-	auto recent = std::ranges::find(_recent, &animation, &Recent::animation);
-	if (recent == _recent.end())
+	// The animation keeps the place of its turns. An animation with no place, or with the place of another animation,
+	// gets the place of its address, so that the store keeps one place for each address. When the list grows, the frames
+	// move with their memory, thus the spans stay valid.
+	auto& place = animation.turnsPlace.index;
+	if (place >= _animations.size() || _animations[place].animation != &animation)
 	{
-		recent = std::prev(_recent.end());
-		*recent = {.animation = &animation, .frames = &_animations[&animation]};
+		const auto [found, added] = _placeOf.try_emplace(&animation, static_cast<uint32_t>(_animations.size()));
+		if (added)
+		{
+			_animations.push_back({.animation = &animation});
+		}
+		place = found->second;
 	}
-	std::rotate(_recent.begin(), recent, std::next(recent));
-	auto& frames = *_recent.front().frames;
+	auto& frames = _animations[place].frames;
 	if (frames.size() != animation.frames.size())
 	{
 		frames.assign(animation.frames.size(), {});
@@ -350,7 +354,7 @@ void KeyframeTurns::Trim()
 	if (_animations.size() > k_MostAnimations)
 	{
 		_animations.clear();
-		_recent = {};
+		_placeOf.clear();
 	}
 }
 

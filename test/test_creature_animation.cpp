@@ -986,10 +986,9 @@ TEST(KeyframeTurns, CallsForTwoAnimationsInTurnGiveTheTurnsOfEach)
 	EXPECT_EQ(turns.Size(), 2u);
 }
 
-TEST(KeyframeTurns, CallsForMoreAnimationsThanTheRecentPlacesGiveTheTurnsOfEach)
+TEST(KeyframeTurns, CallsForManyAnimationsGiveTheTurnsOfEach)
 {
-	// Twelve animations in turn are more than the store keeps as recent. Each call must still give the turns of its own
-	// animation.
+	// Each of twelve animations in turn must give the turns of its own animation
 	const TurnsFixture fixture(13);
 	std::vector<Animation> animations(12, fixture.animation);
 	for (size_t i = 0; i < animations.size(); ++i)
@@ -1026,6 +1025,55 @@ TEST(KeyframeTurns, TheStoreGivesTheTurnsAfterTrimRemovesThem)
 	const auto made = skeletal_animation::RotationYXZ(fixture.animation.frames[3].eulerAngles[1]);
 	EXPECT_EQ(std::memcmp(&kept, &made, sizeof(made)), 0);
 	EXPECT_EQ(turns.Size(), 1u);
+}
+
+TEST(KeyframeTurns, ACopyOrAMoveOfAnAnimationHasNoPlaceAndAnAssignmentKeepsThePlace)
+{
+	TurnsFixture fixture(7);
+	skeletal_animation::KeyframeTurns turns;
+	static_cast<void>(turns.Of(fixture.animation, 0, false));
+	const auto place = fixture.animation.turnsPlace.index;
+	ASSERT_NE(place, skeletal_animation::TurnsPlace::k_None);
+	const Animation copy = fixture.animation;
+	EXPECT_EQ(copy.turnsPlace.index, skeletal_animation::TurnsPlace::k_None);
+	auto source = fixture.animation;
+	static_cast<void>(turns.Of(source, 0, false));
+	ASSERT_NE(source.turnsPlace.index, skeletal_animation::TurnsPlace::k_None);
+	const Animation moved = std::move(source);
+	EXPECT_EQ(moved.turnsPlace.index, skeletal_animation::TurnsPlace::k_None);
+	// New contents in the same animation keep its place, and the store compares the angles
+	auto changed = fixture.animation;
+	changed.frames[0].eulerAngles[0] = glm::vec3(0.5f, 1.0f, -1.5f);
+	fixture.animation = changed;
+	EXPECT_EQ(fixture.animation.turnsPlace.index, place);
+	const auto kept = turns.Of(fixture.animation, 0, false)[0];
+	const auto made = skeletal_animation::RotationYXZ(glm::vec3(0.5f, 1.0f, -1.5f));
+	EXPECT_EQ(std::memcmp(&kept, &made, sizeof(made)), 0);
+	EXPECT_EQ(turns.Size(), 2u);
+}
+
+TEST(KeyframeTurns, ANewAnimationAtTheAddressOfAnOldOneUsesThePlaceOfTheAddress)
+{
+	const TurnsFixture fixture(5);
+	std::optional<Animation> slot = fixture.animation;
+	skeletal_animation::KeyframeTurns turns;
+	static_cast<void>(turns.Of(*slot, 1, false));
+	const auto* address = &*slot;
+	// A new animation with other angles at the same address gets no place. The store finds the place of the address and
+	// makes the turns of the new angles.
+	auto other = fixture.animation;
+	other.frames[1].eulerAngles[0] = glm::vec3(-0.25f, 0.75f, 2.0f);
+	slot.reset();
+	slot.emplace(other);
+	ASSERT_EQ(&*slot, address);
+	ASSERT_EQ(slot->turnsPlace.index, skeletal_animation::TurnsPlace::k_None);
+	const auto kept = turns.Of(*slot, 1, false)[0];
+	const auto made = skeletal_animation::RotationYXZ(glm::vec3(-0.25f, 0.75f, 2.0f));
+	EXPECT_EQ(std::memcmp(&kept, &made, sizeof(made)), 0);
+	EXPECT_EQ(turns.Size(), 1u);
+	// Another animation gets a place of its own
+	static_cast<void>(turns.Of(fixture.animation, 1, false));
+	EXPECT_EQ(turns.Size(), 2u);
 }
 
 TEST(KeyframeTurns, PosesHaveTheSameBitsWithTheStore)
