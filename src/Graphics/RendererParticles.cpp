@@ -905,6 +905,19 @@ void Renderer::DrawParticles(const DrawSceneDesc& desc) const
 	SubmitParticleFrame(desc, _particleFrame, _particleCommands, _particleSpriteOrder, _particleBeforeLandCommands, origin);
 }
 
+void Renderer::DrawLearningBulbs(const DrawSceneDesc& desc) const
+{
+	if ((desc.viewId != RenderPass::Main && desc.viewId != RenderPass::Reflection) || _particleFrame.meshes.empty())
+	{
+		return;
+	}
+	particles::draw::MeshesWithLearningWords(_particleFrame, _learningBulbMeshes);
+	for (const auto index : _learningBulbMeshes)
+	{
+		DrawParticleMesh(desc, _particleFrame.meshes[index], graphics::zsort::k_AfterSolidBeforeSorted);
+	}
+}
+
 void Renderer::DrawTownBeliefParticles(const DrawSceneDesc& desc, entt::entity centre) const
 {
 	const bool reflection = desc.viewId == RenderPass::Reflection;

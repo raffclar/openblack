@@ -902,6 +902,33 @@ void testbed_scenarios::AddAudio(std::vector<Scenario>& all)
 	                 {.kind = Kind::Chat, .delaySeconds = 1.5f, .value = k_ChatTypes, .action = "Shall we trade"}},
 	});
 
+	// A speech bubble over a creature that the hand holds to stroke it
+	all.push_back({
+	    .id = "interface.chat_bubble_held_creature",
+	    .name = "The speech bubble of a creature that the hand holds",
+	    .facet = Facet::Interface,
+	    .description = "The hand holds Alice's tiger, as the player holds it to stroke it. Then Alice, the god of this "
+	                   "computer, says a line in the chat. Four seconds later the hand lets go.",
+	    .expected = "The tiger stays on the land while the hand holds it. A bubble with the line comes over the tiger, "
+	                "at the height of the tiger above the land under it, as over a tiger that the hand does not hold. "
+	                "The bubble stays when the hand lets go, and fades after some seconds.",
+	    .environment = {.players = {PlayerNames::PLAYER_TWO}},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 30.0f, -45.0f}, .look = {0.0f, 8.0f, 0.0f}},
+	    .creatures = {{.label = "Alice's tiger",
+	                   .species = CreatureType::Tiger,
+	                   .offset = {0.0f, 0.0f},
+	                   .owner = PlayerNames::PLAYER_ONE,
+	                   .size = 0.5f,
+	                   .pauseMind = true}},
+	    .commands = {{.kind = Kind::HandLock, .creature = 0, .delaySeconds = 1.0f},
+	                 {.kind = Kind::Chat,
+	                  .player = PlayerNames::PLAYER_ONE,
+	                  .delaySeconds = 1.0f,
+	                  .value = k_ChatSays,
+	                  .action = "Hello from the hand"},
+	                 {.kind = Kind::HandLetGo, .creature = 0, .delaySeconds = 4.0f}},
+	});
+
 	all.push_back({
 	    .id = "multiplayer.chat_friends",
 	    .name = "Friends and others in the list of people of the chat",

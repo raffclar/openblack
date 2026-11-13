@@ -1399,10 +1399,12 @@ void Renderer::DrawPassEffects(const DrawSceneDesc& desc) const
 	DrawGroundBlobs(desc);
 	DrawFarVillagerSmudges(desc);
 	DrawVillagerEyes(desc);
-	// The land draws the reward chests with their seeds, then the learning words at once. The game draws the globes and
-	// the icons of the village centres after the land. A seed that the game draws at once comes in this order.
+	// The land draws the reward chests with their seeds, then the learning words and the bulbs of the learning marks at
+	// once. The game draws the globes and the icons of the village centres after the land. A seed that the game draws at
+	// once comes in this order.
 	DrawRewardSeeds(desc);
 	SubmitWorldLabels(desc, WorldLabelGroup::LearningWords);
+	DrawLearningBulbs(desc);
 	DrawGlobes(desc);
 	DrawIconSeeds(desc);
 	DrawTribalPower(desc);
