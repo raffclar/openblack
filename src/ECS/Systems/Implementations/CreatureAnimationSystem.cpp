@@ -238,6 +238,11 @@ const Animation* AnimationOf(AnimationStores& stores, CreatureAnimation& animati
 		}
 		found = animation.animations.emplace(index, std::move(blended).value_or(Animation {})).first;
 	}
+	// The body keeps the animation unchanged until it clears its animations. A loaded animation gets its mark here too.
+	if (found->second.mark.value == 0)
+	{
+		stores.marks.Mark(found->second);
+	}
 	return found->second.frames.empty() ? nullptr : &found->second;
 }
 
@@ -260,6 +265,11 @@ const Animation* PairAnimationOf(AnimationStores& stores, CreatureAnimation& ani
 		                                     .to = to,
 		                                     .weight = weight,
 		                                     .animation = creature_animation::BlendPair(*first, *second, *stand, weight)};
+	}
+	// The pair stays unchanged until another pair takes its place
+	if (pair->animation.mark.value == 0)
+	{
+		stores.marks.Mark(pair->animation);
 	}
 	return &pair->animation;
 }

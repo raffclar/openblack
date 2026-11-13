@@ -96,10 +96,17 @@ struct RegionMap
 	[[nodiscard]] const Region& At(glm::ivec2 region) const;
 	/// The height of the highest region of the land
 	[[nodiscard]] float Highest() const { return highest; }
+	/// Copies the kinds of each region into the packed list that the search reads
+	void PackKinds();
+	/// Whether the packed list holds the kinds of all the regions
+	[[nodiscard]] bool KindsPacked() const { return regionKinds.size() == regions.size(); }
 
 	/// The regions, by their index
 	std::vector<Region> regions;
 	float highest {0.0f};
+	/// The kinds of each region, by the index of the region. The search reads this short list in place of the regions. A
+	/// save does not keep the list, so the game makes it again after a load.
+	std::vector<uint8_t> regionKinds;
 };
 
 /// Whether a region is on the map

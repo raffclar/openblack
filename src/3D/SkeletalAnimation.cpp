@@ -318,15 +318,21 @@ std::span<const Matrix> KeyframeTurns::Of(const Animation& animation, size_t fra
 	}
 	auto& kept = frames[frame];
 	const auto& angles = animation.frames[frame].eulerAngles;
-	// The bits of the angles must be the same. Thus the store does not give the turn of minus zero for plus zero.
-	const bool same =
-	    kept.angles.size() == angles.size() &&
-	    (angles.empty() || std::memcmp(kept.angles.data(), angles.data(), angles.size() * sizeof(glm::vec3)) == 0);
-	if (!same)
+	// The marked contents that the store found last time have the same angles
+	const auto mark = animation.mark.value;
+	if (mark == 0 || kept.mark != mark)
 	{
-		kept.angles = angles;
-		kept.turns.clear();
-		kept.mirroredTurns.clear();
+		// The bits of the angles must be the same. Thus the store does not give the turn of minus zero for plus zero.
+		const bool same =
+		    kept.angles.size() == angles.size() &&
+		    (angles.empty() || std::memcmp(kept.angles.data(), angles.data(), angles.size() * sizeof(glm::vec3)) == 0);
+		if (!same)
+		{
+			kept.angles = angles;
+			kept.turns.clear();
+			kept.mirroredTurns.clear();
+		}
+		kept.mark = mark;
 	}
 	auto& turns = mirrored ? kept.mirroredTurns : kept.turns;
 	if (turns.size() != angles.size())

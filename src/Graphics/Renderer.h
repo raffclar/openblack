@@ -311,8 +311,9 @@ private:
 	/// The glow while the hand holds a miracle, none otherwise
 	[[nodiscard]] std::optional<HandGlowLook> HandGlowOf(const DrawSceneDesc& desc) const;
 	[[nodiscard]] const Texture2D* HandFlowTexture() const;
-	/// The bands flying onto and off the hand that holds a miracle and the bracelets it wears, in the main view
-	void DrawHandMiracleBands(const DrawSceneDesc& desc) const;
+	/// The bands flying onto and off the hand that holds a miracle and the bracelets it wears, in the main view. They
+	/// take the place of the hand among what blends.
+	void DrawHandMiracleBands(const DrawSceneDesc& desc, uint32_t handDepth) const;
 	/// A tribe's power behind a miracle: its name's letters spinning round the hand or rising where it was cast
 	void DrawTribalPower(const DrawSceneDesc& desc) const;
 	/// The words of the game's pause and speed, after the rest of the scene
@@ -538,9 +539,12 @@ private:
 	void DrawPassPaletteVillagers(const DrawSceneDesc& desc, auto& draws) const;
 	/// Draws the things that blend over the solid models
 	void DrawPassTranslucent(const DrawSceneDesc& desc, const ScenePass& pass, auto& draws) const;
-	/// Draws the temple's pool and map, the seeds, the weather, the mists and the other effects. The particles come after
-	/// the hand.
+	/// Draws the temple's pool and map, the seeds, the mists, the leashes and the other effects that the game adds before
+	/// the hand
 	void DrawPassEffects(const DrawSceneDesc& desc) const;
+	/// Draws the effects that the game adds after the hand and its particles: the shields' domes, the columns over the
+	/// village centres, then the rain and the snowfall
+	void DrawPassEffectsAfterParticles(const DrawSceneDesc& desc) const;
 	/// Draws the hand mirrored in the sea, then the hand
 	void DrawPassHand(const DrawSceneDesc& desc, const ScenePass& pass, auto& draws) const;
 	/// Draws the debug lines of the main view: the bounding boxes, the footpaths and the streams
@@ -626,8 +630,10 @@ private:
 	void DrawInterfaceCreatures(const DrawSceneDesc& desc, const InterfaceCreatureBody& drawBody) const;
 	/// The creature that the main menu's tattoo editor asked to show last, in its view of its own
 	void DrawMenuCreature(const DrawSceneDesc& desc, const InterfaceCreatureBody& drawBody) const;
-	/// The columns of light over the village centres and temples of the players whose borders show
-	void DrawLightColumns(const DrawSceneDesc& desc) const;
+	/// The columns of light over the village centres of the players whose borders show
+	void DrawTownColumns(const DrawSceneDesc& desc) const;
+	/// The columns of light over the temples of the players whose borders show
+	void DrawTempleColumns(const DrawSceneDesc& desc) const;
 	/// The beams of light the started scrolls stand in
 	void DrawScrollBeams(const DrawSceneDesc& desc) const;
 	/// The pulse models that shrink into the charging icons at the worship sites, added over the scene in their players'

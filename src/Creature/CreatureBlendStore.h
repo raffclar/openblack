@@ -96,6 +96,8 @@ struct Stores
 	std::unordered_map<BlendKey, PreparedBlend, BlendKeyHash> prepared;
 	/// The count of the shapes of the bodies now
 	uint32_t shaping {0};
+	/// The marks of the animations that the bodies keep, so that the store of keyframe turns trusts their angles
+	skeletal_animation::ContentMarks marks;
 };
 
 /// A blend that the threads make: the species, the drawn body and the animation
