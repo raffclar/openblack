@@ -208,6 +208,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"httpClient", "engine.online"},
     LocatorCoverage {"webSocketClient", "engine.online"},
     LocatorCoverage {"lobbyClient", "engine.online"},
+    LocatorCoverage {"lobbyRoom", "engine.online"},
     LocatorCoverage {"clanCreatureSystem", "engine.online"},
     LocatorCoverage {"onlineMapStore", "engine.online"},
     LocatorCoverage {"networkGame", "engine.online"},
