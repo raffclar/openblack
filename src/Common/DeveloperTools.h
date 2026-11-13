@@ -145,6 +145,7 @@ inline constexpr std::array k_DeveloperOptions {
     DeveloperOption {.name = "join-creature", .takesValue = true},
     DeveloperOption {.name = "join-build-id", .takesValue = true},
     DeveloperOption {.name = "join-load-delay", .takesValue = true},
+    DeveloperOption {.name = "map-piece-delay-ms", .takesValue = true},
     DeveloperOption {.name = "sim-network-game"},
     DeveloperOption {.name = "throw-lead-latency-ms", .takesValue = true},
     DeveloperOption {.name = "sim-still-hand"},

@@ -1038,4 +1038,45 @@ std::string MultipartBoundary(std::span<const FormPart> parts, uint64_t seed)
 	}
 }
 
+std::string RangeHeaderOf(uint64_t first, uint64_t last)
+{
+	return fmt::format("bytes={}-{}", first, last);
+}
+
+std::optional<ByteRange> ParseContentRange(std::string_view text)
+{
+	constexpr std::string_view k_Unit = "bytes ";
+	if (!text.starts_with(k_Unit))
+	{
+		return std::nullopt;
+	}
+	text.remove_prefix(k_Unit.size());
+	// Reads a decimal number up to the character that follows it, or up to the end when the stop is 0
+	const auto number = [&text](char stop) -> std::optional<uint64_t> {
+		const auto end = stop != '\0' ? text.find(stop) : text.size();
+		if (end == 0 || end == std::string_view::npos)
+		{
+			return std::nullopt;
+		}
+		uint64_t value = 0;
+		const auto* first = text.data();
+		const auto* last = text.data() + end;
+		const auto [ptr, error] = std::from_chars(first, last, value);
+		if (error != std::errc {} || ptr != last)
+		{
+			return std::nullopt;
+		}
+		text.remove_prefix(stop != '\0' ? end + 1 : end);
+		return value;
+	};
+	const auto first = number('-');
+	const auto last = first.has_value() ? number('/') : std::nullopt;
+	const auto total = last.has_value() ? number('\0') : std::nullopt;
+	if (!total.has_value() || *first > *last || *last >= *total)
+	{
+		return std::nullopt;
+	}
+	return ByteRange {.first = *first, .last = *last, .total = *total};
+}
+
 } // namespace openblack::lobby_api

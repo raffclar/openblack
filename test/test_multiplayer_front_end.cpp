@@ -2268,6 +2268,75 @@ TEST_F(FrontEndTest, TheRoomGetsALandThatThePlayerDoesNotHaveFromTheLobby)
 	EXPECT_EQ(lobby.downloads.size(), 1u);
 }
 
+TEST_F(FrontEndTest, AFullSessionRefusesAGodAndAnObserverWithTheSameBox)
+{
+	lobbySessions = std::make_unique<testbed_multiplayer::DemoLobbyRoom>(lobby_api::AccountRef {.id = 7, .name = "Alice"}, 0);
+	Make();
+	frontEnd->Next();
+	frontEnd->SetLobbyKind(LobbyKind::Internet);
+	frontEnd->Next();
+	frontEnd->Login(u"Alice", u"secret");
+	lobby.account = lobby_api::AccountRef {.id = 7, .name = "Alice"};
+	FakeLobby::Give(lobby.login, *lobby.account);
+	ASSERT_EQ(frontEnd->GetBox(), Box::LobbyList);
+	// The session of 32 gods has no free slot
+	frontEnd->SelectLobby("d3");
+	frontEnd->JoinSelectedLobby();
+	ASSERT_EQ(frontEnd->GetMessage(), Message::LobbyNotice);
+	EXPECT_EQ(frontEnd->GetLobbyMessageText(), u"This game is full.");
+	// The service refuses an observer of a full session with the same code (user, 2026-11-13)
+	std::optional<ecs::systems::LobbyError> error;
+	lobbySessions->Join("d3", std::nullopt, lobby_api::MemberRole::Observer, std::nullopt,
+	                    [&error](auto&& result) { error = result.error; });
+	ASSERT_TRUE(error.has_value());
+	EXPECT_EQ(error->code, "full");
+	EXPECT_EQ(frontEnd->GetLobbyRoom(), nullptr);
+}
+
+TEST_F(FrontEndTest, TheMapOfASessionDownloadsInTheRoomAndContinuesAfterTheBoxOfAFailure)
+{
+	lobbySessions = std::make_unique<testbed_multiplayer::DemoLobbyRoom>(lobby_api::AccountRef {.id = 7, .name = "Alice"}, 0);
+	mapStore = &store;
+	Make();
+	frontEnd->Next();
+	frontEnd->SetLobbyKind(LobbyKind::Internet);
+	frontEnd->Next();
+	frontEnd->Login(u"Alice", u"secret");
+	lobby.account = lobby_api::AccountRef {.id = 7, .name = "Alice"};
+	FakeLobby::Give(lobby.login, *lobby.account);
+	ASSERT_EQ(frontEnd->GetBox(), Box::LobbyList);
+	frontEnd->SelectLobby("d1");
+	frontEnd->JoinSelectedLobby();
+	frontEnd->Update();
+	ASSERT_EQ(frontEnd->GetBox(), Box::LobbyRoom);
+	// The host sets a map of the service: the download starts in the room, before the start
+	const auto map = RoomMap();
+	lobby_api::LobbyChangeRequest change;
+	change.map = lobby_api::LobbyMap {.file = "Online Maps/obm_32p_1.map", .name = map.name, .sha256 = map.sha256, .size = 3};
+	lobbySessions->Change(std::move(change), [](auto&&) {});
+	frontEnd->Update();
+	ASSERT_EQ(frontEnd->GetLobbyRoom()->Data().map.sha256, map.sha256);
+	ASSERT_TRUE(lobby.maps);
+	FakeLobby::Give(lobby.maps, lobby_api::MapList {.maps = {map}});
+	ASSERT_EQ(lobby.downloads.size(), 1u);
+	FakeLobby::Fail(lobby.download, LobbyErrorKind::Network);
+	FakeLobby::Fail(lobby.download, LobbyErrorKind::Network);
+	frontEnd->Update();
+	ASSERT_EQ(frontEnd->GetMessage(), Message::CouldNotDownloadMap);
+	EXPECT_FALSE(frontEnd->GetLobbyRoom()->CanReady());
+	// OK closes the box, and the download continues with no new map set of the host (deviation 257)
+	frontEnd->AnswerMessage(MultiplayerFrontEnd::Answer::Ok);
+	frontEnd->Update();
+	ASSERT_TRUE(lobby.maps);
+	FakeLobby::Give(lobby.maps, lobby_api::MapList {.maps = {map}});
+	ASSERT_EQ(lobby.downloads.size(), 3u);
+	FakeLobby::Give(lobby.download, std::vector<uint8_t> {1, 2, 3});
+	EXPECT_EQ(frontEnd->GetMapDownload()->GetState(), online::MapDownload::State::Ready);
+	frontEnd->Update();
+	EXPECT_EQ(frontEnd->GetMessage(), Message::None);
+	EXPECT_TRUE(frontEnd->GetLobbyRoom()->CanReady());
+}
+
 TEST_F(FrontEndTest, ALandThatTheLobbyDoesNotGiveShowsTheBoxOfTheRoom)
 {
 	mapStore = &store;

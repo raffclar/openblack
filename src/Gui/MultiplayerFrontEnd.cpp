@@ -100,6 +100,7 @@ void MultiplayerFrontEnd::Update()
 	{
 		_services.poll(*this);
 	}
+	SendDelayedPieces();
 	const bool inLanRoom = _room.has_value() && (_flow.box == Box::Room || _flow.box == Box::Conditions);
 	if (_services.lan != nullptr && _flow.kind == LobbyKind::Lan && (_flow.box == Box::GameList || inLanRoom))
 	{
@@ -451,6 +452,14 @@ void MultiplayerFrontEnd::AnswerMessage(Answer answer)
 		_flow.box = Box::GameList;
 		EnterGameList();
 		break;
+	case Message::CouldNotDownloadMap:
+		// In the room of a lobby session, the download of the room's map continues from its kept bytes after the box
+		// (deviation 257). The host does not have to set the map again.
+		if (_flow.box == Box::LobbyRoom || _flow.box == Box::CreateLobby)
+		{
+			_roomMapHash.clear();
+		}
+		break;
 	case Message::LobbyNotice:
 	case Message::LobbyQuestion:
 	case Message::LobbyPassword:
@@ -775,41 +784,78 @@ void MultiplayerFrontEnd::FetchRoomMap(std::string sha256)
 		if (_mapDownload == nullptr)
 		{
 			auto* lobby = _services.lobby;
-			_mapDownload = std::make_unique<online::MapDownload>(
-			    *_services.maps, [lobby, read = _services.readGameFile](const lobby_api::OnlineMap& wanted, auto done) {
-				    if (wanted.packageSha256.empty())
-				    {
-					    lobby->DownloadMap(wanted,
-					                       [done = std::move(done)](ecs::systems::LobbyResult<std::vector<uint8_t>>&& bytes) {
-						                       done(std::move(bytes.value));
-					                       });
-					    return;
-				    }
-				    // The map has a package: the game adds the village of its own game data to the package (deviation 249)
-				    lobby->DownloadMapPackage(wanted, [wanted, read, done = std::move(done)](
-				                                          ecs::systems::LobbyResult<std::vector<uint8_t>>&& package) {
-					    if (!package.value.has_value())
-					    {
-						    done(std::nullopt);
-						    return;
-					    }
-					    const auto templateMap = read ? read(gods_ring_map::k_TemplateMap) : std::nullopt;
-					    auto map = gods_ring_map_package::AssembleDownloaded(
-					        wanted, *package.value,
-					        templateMap.has_value() ? std::optional<std::span<const uint8_t>>(*templateMap) : std::nullopt);
-					    if (const auto* failure = std::get_if<gods_ring_map_package::Failure>(&map); failure != nullptr)
-					    {
-						    SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The map {} does not come from its package: {}",
-						                        wanted.file, gods_ring_map_package::TextOf(*failure));
-						    done(std::nullopt);
-						    return;
-					    }
-					    done(std::move(std::get<std::vector<uint8_t>>(map)));
-				    });
-			    });
+			// The pieces come from the lobby, or from the site for a map with a package (deviation 257)
+			auto fetch = [this, lobby](const lobby_api::OnlineMap& wanted, uint64_t offset, uint64_t count, auto done) {
+				// The tests have no game log
+				if (const auto log = spdlog::get("game"); log != nullptr)
+				{
+					SPDLOG_LOGGER_INFO(log, "The map download asks for {} bytes from byte {} of {}", count, offset,
+					                   wanted.file);
+				}
+				auto send = [lobby, wanted, offset, count, done = std::move(done)]() mutable {
+					lobby->DownloadMapPiece(
+					    wanted, offset, count,
+					    [done = std::move(done)](ecs::systems::LobbyResult<lobby_api::FilePiece>&& piece) mutable {
+						    done(std::move(piece.value));
+					    });
+				};
+				if (_settings.mapPieceDelayMs == 0 || !_services.nowMs)
+				{
+					send();
+					return;
+				}
+				_delayedPieces.emplace_back(_services.nowMs() + _settings.mapPieceDelayMs, std::move(send));
+			};
+			// A map with a package: the game adds the village of its own game data to the package (deviation 249)
+			auto assemble = [read = _services.readGameFile](const lobby_api::OnlineMap& wanted,
+			                                                std::vector<uint8_t> bytes) -> std::optional<std::vector<uint8_t>> {
+				if (wanted.packageSha256.empty())
+				{
+					return bytes;
+				}
+				const auto templateMap = read ? read(gods_ring_map::k_TemplateMap) : std::nullopt;
+				auto map = gods_ring_map_package::AssembleDownloaded(
+				    wanted, bytes,
+				    templateMap.has_value() ? std::optional<std::span<const uint8_t>>(*templateMap) : std::nullopt);
+				if (const auto* failure = std::get_if<gods_ring_map_package::Failure>(&map); failure != nullptr)
+				{
+					SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The map {} does not come from its package: {}", wanted.file,
+					                    gods_ring_map_package::TextOf(*failure));
+					return std::nullopt;
+				}
+				return std::move(std::get<std::vector<uint8_t>>(map));
+			};
+			_mapDownload = std::make_unique<online::MapDownload>(*_services.maps, std::move(fetch), std::move(assemble));
+		}
+		if (const auto log = spdlog::get("game"); log != nullptr)
+		{
+			SPDLOG_LOGGER_INFO(log, "The map download starts or continues: {} ({}), {} bytes kept", map->file, map->sha256,
+			                   _mapDownload->KeptBytes(map->sha256));
 		}
 		_mapDownload->Start(*map);
 	});
+}
+
+void MultiplayerFrontEnd::SendDelayedPieces()
+{
+	if (_delayedPieces.empty() || !_services.nowMs)
+	{
+		return;
+	}
+	const auto now = _services.nowMs();
+	std::vector<std::function<void()>> due;
+	std::erase_if(_delayedPieces, [now, &due](auto& delayed) {
+		if (delayed.first > now)
+		{
+			return false;
+		}
+		due.push_back(std::move(delayed.second));
+		return true;
+	});
+	for (auto& send : due)
+	{
+		send();
+	}
 }
 
 void MultiplayerFrontEnd::FollowMapDownload()

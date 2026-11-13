@@ -53,6 +53,11 @@ namespace openblack::lobby_api
 [[nodiscard]] std::optional<Me> ParseMe(std::string_view text);
 [[nodiscard]] std::optional<ServerList> ParseServerList(std::string_view text);
 [[nodiscard]] std::optional<MapList> ParseMapList(std::string_view text);
+/// The value of the header Range for the bytes from first to last, both included: "bytes=first-last"
+[[nodiscard]] std::string RangeHeaderOf(uint64_t first, uint64_t last);
+/// Reads the value of the header Content-Range: "bytes first-last/total". None for any other text, for an unknown total
+/// ("*"), and for a range that is not inside the file.
+[[nodiscard]] std::optional<ByteRange> ParseContentRange(std::string_view text);
 [[nodiscard]] std::optional<ServerBanList> ParseServerBanList(std::string_view text);
 [[nodiscard]] std::string ToJson(const ResultReport& report);
 [[nodiscard]] std::optional<ResultAnswer> ParseResultAnswer(std::string_view text);

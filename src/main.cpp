@@ -241,6 +241,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		("join-creature", "Tests: with --join, send this creature file before the start in place of the creature of the player's profile.", cxxopts::value<std::string>())
 		("join-build-id", "Tests: with --join, give this build id in the join in place of the build id of this build, so that the game server refuses the join with \"version\".", cxxopts::value<std::string>())
 		("join-part-again", "Tests: with --join-part-at, the world parts again after each load of the server's world, so that the resyncs do not work and the game shows the out-of-sync box.")
+		("map-piece-delay-ms", "Tests: wait this many milliseconds before each request of a piece of a map that the lobby room downloads, so that a test can change the map while the download runs.", cxxopts::value<uint32_t>())
 		("join-load-delay", "Tests: with --join, tell the game server this many seconds late that the world loaded, as a slow computer does. The other players of a lobby game then see the pause for the loads.", cxxopts::value<uint32_t>())
 		("sim-network-game", "Tools: play the world as a network game does, with no network: the P key, the menu, the temple and the films do not stop the game's clock, and the turns read no part of a frame.")
 		("throw-lead-latency-ms", "Tools: a fixed latency in milliseconds for the reports of the hand. A throw moves its start along the flight by one turn for each 100 ms, at most 5 turns. Without it the game measures the latency on its clock.", cxxopts::value<uint32_t>())
@@ -717,6 +718,10 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		}
 		args.useInternetWeather = result["internet-weather"].as<bool>();
 		args.showPing = result.count("show-ping") != 0;
+		if (result.count("map-piece-delay-ms") != 0)
+		{
+			args.mapPieceDelayMs = result["map-piece-delay-ms"].as<uint32_t>();
+		}
 		args.dynamicTreeShadows = result.count("dynamic-tree-shadows") != 0;
 		args.noDraw = result.count("no-draw") != 0;
 		args.background = result.count("background") != 0;

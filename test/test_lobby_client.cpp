@@ -20,6 +20,7 @@
 #include <vector>
 
 #include <LobbyApi.h>
+#include <LobbyApiJson.h>
 #include <fmt/format.h>
 #include <gtest/gtest.h>
 
@@ -913,6 +914,86 @@ TEST_F(LobbyClientTest, AMapDownloadStopsAtTheSizeOfTheListAndRefusesAnotherSize
 	_http.Answer(200, "abcdef");
 	ASSERT_TRUE(file.has_value());
 	EXPECT_EQ(file->size(), 6u);
+}
+
+TEST_F(LobbyClientTest, AMapPieceAsksForARangeAndTakesTheRangeOrTheFullFile)
+{
+	Make();
+	LogIn();
+	lobby_api::OnlineMap map;
+	map.sha256 = std::string(64, 'a');
+	map.size = 10;
+	std::optional<lobby_api::FilePiece> piece;
+	_client->DownloadMapPiece(map, 4, 4, [&](auto&& result) { piece = result.value; });
+	EXPECT_EQ(_http.Next().url, "https://bw.example/api/v1/maps/" + map.sha256);
+	EXPECT_EQ(_http.NextHeader("Range"), "bytes=4-7");
+	EXPECT_TRUE(_http.Next().large);
+	_http.Answer(206, "efgh", {{"content-range", "bytes 4-7/10"}});
+	ASSERT_TRUE(piece.has_value());
+	EXPECT_EQ(piece->offset, 4u);
+	EXPECT_EQ(piece->total, 10u);
+	EXPECT_EQ(piece->bytes.size(), 4u);
+
+	// A server that gives no ranges gives the full file at offset 0
+	piece.reset();
+	_client->DownloadMapPiece(map, 4, 4, [&](auto&& result) { piece = result.value; });
+	_http.Answer(200, "abcdefghij");
+	ASSERT_TRUE(piece.has_value());
+	EXPECT_EQ(piece->offset, 0u);
+	EXPECT_EQ(piece->bytes.size(), 10u);
+
+	// The last piece can be shorter than the request
+	piece.reset();
+	_client->DownloadMapPiece(map, 8, 4, [&](auto&& result) { piece = result.value; });
+	_http.Answer(206, "ij", {{"content-range", "bytes 8-9/10"}});
+	ASSERT_TRUE(piece.has_value());
+	EXPECT_EQ(piece->bytes.size(), 2u);
+
+	// A range at another place, of another file size, or with no header is a bad answer
+	for (const auto& [range, body] : std::vector<std::pair<std::string, std::string>> {
+	         {"bytes 5-8/10", "fghi"}, {"bytes 4-7/11", "efgh"}, {"", "efgh"}, {"bytes 4-5/10", "ef"}})
+	{
+		std::optional<LobbyErrorKind> kind;
+		_client->DownloadMapPiece(map, 4, 4, [&](auto&& result) { kind = result.error.kind; });
+		_http.Answer(206, body,
+		             range.empty() ? std::vector<online::HttpHeader> {}
+		                           : std::vector<online::HttpHeader> {{"content-range", range}});
+		EXPECT_EQ(kind, LobbyErrorKind::BadAnswer) << range;
+	}
+}
+
+TEST_F(LobbyClientTest, APieceOfAMapWithAPackageComesFromTheSite)
+{
+	Make();
+	LogIn();
+	lobby_api::OnlineMap map;
+	map.sha256 = std::string(64, 'a');
+	map.size = 100;
+	map.packageSha256 = std::string(64, 'b');
+	map.packageSize = 6;
+	map.packageUrl = "/maps/" + map.packageSha256 + ".obmap";
+	std::optional<lobby_api::FilePiece> piece;
+	_client->DownloadMapPiece(map, 0, 4, [&](auto&& result) { piece = result.value; });
+	EXPECT_TRUE(_http.Next().url.ends_with(map.packageUrl));
+	EXPECT_EQ(_http.NextHeader("Range"), "bytes=0-3");
+	_http.Answer(206, "pack", {{"content-range", "bytes 0-3/6"}});
+	ASSERT_TRUE(piece.has_value());
+	EXPECT_EQ(piece->total, 6u);
+}
+
+TEST(LobbyApiRange, TheHeadersOfARange)
+{
+	EXPECT_EQ(lobby_api::RangeHeaderOf(0, 262143), "bytes=0-262143");
+	const auto range = lobby_api::ParseContentRange("bytes 4-7/10");
+	ASSERT_TRUE(range.has_value());
+	EXPECT_EQ(range->first, 4u);
+	EXPECT_EQ(range->last, 7u);
+	EXPECT_EQ(range->total, 10u);
+	for (const auto* bad : {"bytes 4-7/*", "bytes */10", "bytes 7-4/10", "bytes 4-10/10", "items 4-7/10", "bytes 4-7/10x",
+	                        "bytes -7/10", "bytes 4-/10", "bytes 4-7"})
+	{
+		EXPECT_FALSE(lobby_api::ParseContentRange(bad).has_value()) << bad;
+	}
 }
 
 TEST(HttpLimits, ASmallerLimitOfTheRequestTakesThePlaceOfTheLimitOfItsKind)
