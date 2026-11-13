@@ -349,6 +349,8 @@ public:
 	void UpdateCameraControllers(std::chrono::microseconds deltaTime);
 	/// The step of the camera after the turns, and the views that put it
 	void UpdateCamera();
+	/// Writes a log line when the eye of the camera jumped since `from`, with the part of the frame that moved it
+	static void NoteCameraJump(const glm::vec3& from, const glm::vec3& to, std::string_view mover);
 	/// The temple, whose camera can take the player out of it
 	void UpdateTemple(std::chrono::microseconds deltaTime);
 	/// The menus and the dialogs of the interface take the input of the frame
@@ -761,6 +763,8 @@ private:
 	/// The cursor's point at the furthest the hand may be this frame, which the hand stands towards the camera's focus
 	/// from when it offers to turn the camera
 	std::optional<glm::vec3> _handLimitPoint;
+	/// The eye of the camera at the end of the last camera update, for the log of a jump of the camera
+	std::optional<glm::vec3> _cameraEyeAfterUpdate;
 	/// Where the hand is and how it is posed while it is held to a creature
 	std::optional<ecs::systems::CreatureHandSystemInterface::HandPose> _handOnCreature;
 	/// The creature the hand is over this frame, if any

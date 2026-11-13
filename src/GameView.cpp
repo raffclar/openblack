@@ -13,8 +13,11 @@
 #include <chrono>
 #include <filesystem>
 #include <optional>
+#include <string_view>
+#include <typeinfo>
 #include <utility>
 
+#include <glm/geometric.hpp>
 #include <spdlog/spdlog.h>
 
 #include "3D/DayNightClock.h"
@@ -24,6 +27,7 @@
 #include "3D/SkyDome.h"
 #include "3D/TempleInteriorInterface.h"
 #include "Camera/Camera.h"
+#include "Camera/CameraJump.h"
 #include "Camera/DefaultWorldCameraModel.h"
 #include "Camera/FightCameraModel.h"
 #include "Camera/FreeCameraModel.h"
@@ -118,9 +122,27 @@ void Game::UpdateCameraControllers(std::chrono::microseconds deltaTime)
 	}
 }
 
+void Game::NoteCameraJump(const glm::vec3& from, const glm::vec3& to, std::string_view mover)
+{
+	if (!camera_jump::IsJump(from, to))
+	{
+		return;
+	}
+	SPDLOG_LOGGER_WARN(spdlog::get("game"),
+	                   "The camera jumped {:.1f} m in one frame, from ({:.1f}, {:.1f}, {:.1f}) to "
+	                   "({:.1f}, {:.1f}, {:.1f}): {}",
+	                   glm::distance(from, to), from.x, from.y, from.z, to.x, to.y, to.z, mover);
+}
+
 void Game::UpdateCamera()
 {
 	auto& camera = Locator::camera::value();
+	// A jump of the eye between two camera updates comes from a part of the game outside the camera
+	const auto eyeAtStart = camera.GetOrigin();
+	if (_cameraEyeAfterUpdate.has_value())
+	{
+		NoteCameraJump(*_cameraEyeAfterUpdate, eyeAtStart, "a part of the game outside the camera's update");
+	}
 	// The look at a fight uses the view that the last frame drew, and the camera before it moves
 	if (Locator::creatureFightSystem::has_value())
 	{
@@ -138,6 +160,8 @@ void Game::UpdateCamera()
 			scriptCamera->PassGameTime(Locator::time::value().GetFrameGameTime());
 		}
 		camera.Update(Locator::time::value().GetInputSteps());
+		const auto& model = camera.GetModel();
+		NoteCameraJump(eyeAtStart, camera.GetOrigin(), typeid(model).name());
 	}
 	// The world's camera continues behind the temple, with its own view. It does not read the keys there.
 	if (auto* world = world_camera::BehindTemple(); world != nullptr)
@@ -171,6 +195,7 @@ void Game::UpdateCamera()
 	}
 	// The near plane follows the height of the eye that the game drew last, with its lift above the land and its shake
 	FitNearClip(camera.GetOrigin(Camera::Interpolation::Drawn));
+	_cameraEyeAfterUpdate = camera.GetOrigin();
 }
 
 bool Game::ScriptHoldsCamera() const
