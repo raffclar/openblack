@@ -65,7 +65,7 @@ RUN_ONLY = {
     # Values, by their full names. The packed kinds of the regions come from the regions again after a load
     "openblack::creature_exploration::RegionMap": {"regionKinds"},
     # The mark of the contents of an animation has a meaning only for the marks of this run
-    "openblack::skeletal_animation::Animation": {"mark"},
+    "openblack::skeletal_animation::Animation": {"mark", "turnsPlace"},
 }
 
 # Fields of values that only the frames or the local random numbers of a computer change, and that no turn reads. A

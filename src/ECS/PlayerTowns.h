@@ -11,6 +11,7 @@
 
 #include <cstddef>
 
+#include <functional>
 #include <span>
 #include <vector>
 
@@ -37,6 +38,11 @@ namespace openblack::ecs::player_towns
 /// The towns of all players: the list of each player in turn, from the first player, and the list of the neutral
 /// player last
 [[nodiscard]] std::vector<entt::entity> AllInOrder(const Registry& registry);
+/// Calls the function for each town in the order of AllInOrder. It makes no list: for up to k_InlineTowns towns, it gets no
+/// memory from the heap. The function must not add, remove or change a town.
+void ForEachInOrder(const Registry& registry, const std::function<void(entt::entity)>& visit);
+/// The most towns that ForEachInOrder sorts with no memory from the heap
+constexpr size_t k_InlineTowns = 256;
 
 /// The game's own list of all the towns, not a list of a player: the town that the game made last comes first. A new
 /// player does not change this order.

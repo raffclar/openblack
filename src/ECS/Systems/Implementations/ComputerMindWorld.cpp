@@ -290,9 +290,13 @@ namespace
 class GameSeenWorld final: public computer_mind::SeenWorld
 {
 public:
-	void ThingsIn(glm::ivec2 cell, std::vector<entt::entity>& out) const override
+	[[nodiscard]] std::array<std::span<const entt::entity>, 2> ThingsIn(glm::ivec2 cell) const override
 	{
-		Locator::entitiesMap::value().AllInCellInto(cell, out);
+		const auto& map = Locator::entitiesMap::value();
+		const ecs::MapInterface::CellId id(cell);
+		// The fixed things come before the moving things, as a search of the cell meets them
+		const auto fixed = map.GetFixedInGridCell(id);
+		return {fixed, map.GetMobileInGridCell(id)};
 	}
 
 	[[nodiscard]] entt::entity SeenAs(entt::entity thing) const override

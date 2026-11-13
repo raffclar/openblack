@@ -191,6 +191,7 @@ town_desire::DesireInputs GatherInputs(entt::entity townEntity, const Town& town
 	});
 	// Each of its buildings as worn as it is, by how much its kind wants mending, in the order of the town's own list
 	// (the newest first), so that the sum of their wants rounds as in the game. Nobody lives in a miracle dispenser.
+	in.abodes.reserve(town.abodes.size());
 	for (const auto building : town.abodes)
 	{
 		if (!registry.Valid(building))
@@ -220,6 +221,7 @@ town_desire::DesireInputs GatherInputs(entt::entity townEntity, const Town& town
 		}
 	}
 	// Its plans, those of finished buildings that went wanting repair
+	in.planRepairDesires.reserve(town.planned.size());
 	for (const auto plan : town.planned)
 	{
 		if (registry.Valid(plan))
@@ -232,7 +234,11 @@ town_desire::DesireInputs GatherInputs(entt::entity townEntity, const Town& town
 	in.onWayToWorship = static_cast<int32_t>(town.onWayToWorship.size());
 
 	// Its building sites: how much each wants villagers, the builders at it and the most it takes
-	for (const auto building : construction::SitesOfTown(townEntity))
+	const auto sites = construction::SitesOfTown(townEntity);
+	in.siteDesires.reserve(sites.size());
+	in.siteBuilders.reserve(sites.size());
+	in.sitePlaces.reserve(sites.size());
+	for (const auto building : sites)
 	{
 		in.siteDesires.push_back(construction::DesireForVillagers(townEntity, building));
 		in.siteBuilders.push_back(static_cast<uint32_t>(construction::SiteOf(townEntity, building)->workerCount));
