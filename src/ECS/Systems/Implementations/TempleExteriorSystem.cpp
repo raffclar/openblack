@@ -207,6 +207,8 @@ void TempleExteriorSystem::ForgetLand()
 		}
 	}
 	_blends.clear();
+	_spareShapes.clear();
+	_spareShapesSource.reset();
 }
 
 void TempleExteriorSystem::Morph(entt::entity entity, Mesh& mesh, const TempleExterior& exterior, PlayerNames owner,
@@ -227,7 +229,18 @@ void TempleExteriorSystem::Morph(entt::entity entity, Mesh& mesh, const TempleEx
 	auto shape = std::ranges::find_if(made.shapes, [&look](const auto& kept) { return kept.first == look; });
 	if (shape == made.shapes.end())
 	{
-		auto blended = *files.Handle(firstTemple);
+		// A spare copy of the first temple has its data, and the blend writes all its vertices
+		const auto firstShape = files.Handle(firstTemple).handle();
+		if (_spareShapesSource != firstShape)
+		{
+			_spareShapes.clear();
+			_spareShapesSource = firstShape;
+		}
+		auto blended = _spareShapes.empty() ? *firstShape : std::move(_spareShapes.back());
+		if (!_spareShapes.empty())
+		{
+			_spareShapes.pop_back();
+		}
 		auto vertices = blended.EditVertices();
 		std::vector<l3d::L3DVertex> sum(vertices.size());
 		for (const auto& corner : Corners(exterior.size, exterior.alignment))
@@ -487,6 +500,12 @@ void TempleExteriorSystem::FinishMorphs(MadeBlends& made)
 		jobs.get();
 	}
 	made.changes.clear();
+	// The shapes are spare for the next call, as no thread reads them now
+	for (auto& shape : made.shapes)
+	{
+		_spareShapes.push_back(std::move(shape.second));
+	}
+	made.shapes.clear();
 }
 
 void TempleExteriorSystem::Unbind(entt::id_type id)

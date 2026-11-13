@@ -607,6 +607,22 @@ void testbed_scenarios::AddAudio(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "temple.exterior_grows",
+	    .name = "The temple grows and changes with the alignment",
+	    .facet = Facet::Story,
+	    .description = "The player's temple stands new in the middle of the land, and the player is wholly good. After "
+	                   "eight seconds the player becomes wholly evil, and ten seconds after that wholly good again.",
+	    .expected = "Each turn the temple grows a small step from no size toward its size on the land, and its shape and "
+	                "colours move a small step toward the look of its player's alignment. It changes smoothly, with no "
+	                "jumps and no holes.",
+	    .environment = {.playerAlignment = 1.0f, .temple = glm::vec2(0.0f)},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 60.0f, -150.0f}, .look = {0.0f, 15.0f, 0.0f}},
+	    .commands = {{.kind = Kind::SetAlignment, .delaySeconds = 8.0f, .alignment = -1.0f},
+	                 {.kind = Kind::SetAlignment, .delaySeconds = 10.0f, .alignment = 1.0f}},
+	    .repeatFrom = 0,
+	});
+
+	all.push_back({
 	    .id = "temple.pictures_unlit",
 	    .name = "The temple's pictures drawn in one colour with no lightmap",
 	    .facet = Facet::Story,
