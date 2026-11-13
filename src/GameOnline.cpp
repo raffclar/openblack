@@ -655,6 +655,8 @@ void Game::UpdateMultiplayerFrontEnd()
 	const bool templeGone = !Locator::temple::has_value() || !Locator::temple::value().IsMultiplayerFrontEnd();
 	if (boxes.TakeLeft() || templeGone)
 	{
+		SPDLOG_LOGGER_INFO(spdlog::get("game"),
+		                   "The multiplayer front end closes: the player goes back to the screen before it");
 		boxes.Close();
 		if (Locator::temple::has_value())
 		{
