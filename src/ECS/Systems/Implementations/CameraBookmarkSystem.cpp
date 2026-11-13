@@ -255,6 +255,26 @@ bool CameraBookmarkSystem::LoadState(reflection::BinaryReader& in)
 	return true;
 }
 
+PlayerCameraBookmarks CameraBookmarkSystem::GetPlayerBookmarks() const
+{
+	return {
+	    .slots = _slots, .back = _back, .townKey = _townKey, .lastTown = _lastTown, .current = _current, .followed = _followed};
+}
+
+void CameraBookmarkSystem::KeepPlayerBookmarks(const PlayerCameraBookmarks& bookmarks)
+{
+	_slots = bookmarks.slots;
+	_back = bookmarks.back;
+	_townKey = bookmarks.townKey;
+	_lastTown = bookmarks.lastTown;
+	_current = bookmarks.current;
+	_followed = bookmarks.followed;
+	for (size_t slot = 0; slot < _slots.size(); ++slot)
+	{
+		ShowMarker(slot);
+	}
+}
+
 void CameraBookmarkSystem::Update(std::chrono::milliseconds frameGameTime, bool landDrawn)
 {
 	// The throb moves on only on a frame that draws the land

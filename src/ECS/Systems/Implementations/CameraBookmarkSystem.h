@@ -51,16 +51,13 @@ public:
 	/// What a new land does to the bookmarks, with no change to their markers
 	void ForgetLand();
 	[[nodiscard]] bool IsEnabled() const override { return _enabled; }
+	[[nodiscard]] PlayerCameraBookmarks GetPlayerBookmarks() const override;
+	void KeepPlayerBookmarks(const PlayerCameraBookmarks& bookmarks) override;
 	void SaveState(reflection::BinaryWriter& out) const override;
 	bool LoadState(reflection::BinaryReader& in) override;
 
 private:
-	/// A place that the camera can jump to: a point and the camera's position less the point
-	struct View
-	{
-		glm::vec3 point;
-		glm::vec3 cameraOffset;
-	};
+	using View = CameraBookmarkView;
 	/// The view of a set slot, the slot of the go-back key included
 	[[nodiscard]] std::optional<View> ViewOf(size_t slot) const;
 	/// The Tab keys look at the slots of the number keys

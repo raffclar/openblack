@@ -18,10 +18,30 @@
 #include <glm/vec3.hpp>
 
 #include "Camera/CameraBookmarks.h"
+#include "ECS/Components/CameraBookmark.h"
 #include "ECS/Systems/SavedStateInterface.h"
 
 namespace openblack::ecs::systems
 {
+
+/// A place that the camera can jump to: a point and the camera's position less the point
+struct CameraBookmarkView
+{
+	glm::vec3 point;
+	glm::vec3 cameraOffset;
+};
+
+/// The bookmarks that the player at this computer keeps with the keys. Only the keys of this computer write them. The
+/// switch of the scripts is not a part of them, because the scripts on all computers write it.
+struct PlayerCameraBookmarks
+{
+	std::array<components::CameraBookmark, camera_bookmarks::k_KeySlots> slots {};
+	std::optional<CameraBookmarkView> back;
+	std::optional<CameraBookmarkView> townKey;
+	std::optional<uint32_t> lastTown;
+	size_t current {0};
+	std::optional<size_t> followed;
+};
 
 /// The camera's bookmarks: the number keys keep places on the land or on things, and the camera jumps back to them. A
 /// marker on the land shows each set bookmark. The bookmarks are a part of the camera of this computer, so the synced
@@ -66,6 +86,10 @@ public:
 	/// A script puts the bookmarks away, neither shown nor taken by their keys, or brings them back
 	virtual void SetEnabled(bool enabled) = 0;
 	[[nodiscard]] virtual bool IsEnabled() const = 0;
+	[[nodiscard]] virtual PlayerCameraBookmarks GetPlayerBookmarks() const = 0;
+	/// The load of a world state from the game server gives back the bookmarks of the player at this computer. The
+	/// switch of the scripts stays as the world state has it. The markers show the bookmarks again.
+	virtual void KeepPlayerBookmarks(const PlayerCameraBookmarks& bookmarks) = 0;
 };
 
 } // namespace openblack::ecs::systems
