@@ -153,6 +153,7 @@ TEST(TestbedScenarios, CoversTheCreatureFeatures)
 	                       "light.snow_repaint_melt",
 	                       "light.coarse_edges_snow",
 	                       "light.coarse_first_paint",
+	                       "light.coarse_far_ring",
 	                       "light.coarse_repaint_on_use",
 	                       "light.moving_tree_shadow_over_baked",
 	                       "movement.course",

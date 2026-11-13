@@ -905,6 +905,10 @@ private:
 		std::unique_ptr<FrameBuffer> textures;
 		/// The places whose blocks got a paint
 		std::bitset<coarse_edges::k_Blocks> painted;
+		/// The places whose blocks have only the paint of the load (see coarse_edges::CountsAsPainted)
+		std::bitset<coarse_edges::k_Blocks> loadPaintOnly;
+		/// The next paint is the paint of the load
+		bool loadPaint {false};
 		/// The blocks, by their index, with a request for a paint. A block that got a paint before waits until the land
 		/// draws it with its own texture.
 		std::vector<bool> waiting;

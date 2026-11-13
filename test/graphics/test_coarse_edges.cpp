@@ -439,6 +439,25 @@ TEST(CoarseEdges, ABlockWhoseShadowsBakeWaits)
 	EXPECT_EQ(PaintsDue(waiting, std::vector<size_t> {0, 1, 1}, painted, bakes), (std::vector<size_t> {1}));
 }
 
+TEST(CoarseEdges, TheFirstRepaintAfterTheLoadPaintsAtOnce)
+{
+	// A block with only the paint of the load and a request counts as a block with no paint
+	static_assert(!CountsAsPainted(true, true, true));
+	// With no request, the block keeps its paint of the load
+	static_assert(CountsAsPainted(true, true, false));
+	// A block with a later paint waits until the land draws it with its own texture
+	static_assert(CountsAsPainted(true, false, true));
+	static_assert(!CountsAsPainted(false, false, true));
+
+	// Block 0 has only the paint of the load, block 1 has a later paint. The land draws the two blocks with their
+	// coarse textures alone.
+	const std::vector<bool> waiting {true, true};
+	const std::vector<bool> loadPaintOnly {true, false};
+	const auto painted = [&](size_t block) { return CountsAsPainted(true, loadPaintOnly[block], waiting[block]); };
+	const auto idle = [](size_t) { return false; };
+	EXPECT_EQ(PaintsDue(waiting, std::vector<size_t> {}, painted, idle), (std::vector<size_t> {0}));
+}
+
 TEST(CoarseEdges, EachCellOfEachBlockHasItsOwnCoarseTexel)
 {
 	std::set<std::pair<int32_t, int32_t>> seen;
