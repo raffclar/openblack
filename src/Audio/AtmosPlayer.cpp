@@ -250,12 +250,6 @@ void AtmosPlayer::SetBankVolume(BankId id, int32_t volume)
 	}
 }
 
-uint32_t AtmosPlayer::GetBankVolume(BankId id) const
-{
-	const auto* bank = FindBank(id);
-	return bank != nullptr ? bank->volume : 0;
-}
-
 void AtmosPlayer::SetGroup(BankId id, uint32_t group)
 {
 	if (auto* bank = FindBank(id))
