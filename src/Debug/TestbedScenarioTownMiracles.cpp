@@ -630,6 +630,32 @@ void openblack::testbed_scenarios::AddTownMiracleScenarios(std::vector<Scenario>
 	    .townMiracles = {MagicType::Heal, MagicType::Water},
 	});
 	all.push_back({
+	    .id = "town.stone_hand_charge_looks",
+	    .name = "The ring, the shine and the pulse of a village centre's stone hand as its miracle charges",
+	    .facet = Facet::Miracles,
+	    .description =
+	        "The town and temple of town.miracle_debug_given. When the site has its heal and water icons, the site is "
+	        "built and each icon holds 45% of the charge of its miracle. Then the hand taps the water stone hand on the "
+	        "village centre, so that the water icon at the site starts to charge for the hand. The camera looks at the "
+	        "village centre from near.",
+	    .expected = "A ring of light in red stands round the foot of each stone hand. The ring of the heal hand is 45% "
+	                "full, and the heal hand does not shine. When the tap starts the charge, the ring of the water hand "
+	                "falls to a part of its height and rises again. The water hand flashes red for 1.5 seconds, then "
+	                "shines a dim red. Once in each 3.33 seconds, a large red pulse model shrinks into the water hand over "
+	                "one second. The icons at the site show the same charge.",
+	    .environment = {.dispenserGrid = false, .landNumber = k_FirstLand},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_Centre.x + 6.0f, 14.0f, k_Centre.y - 30.0f},
+	                .look = {k_Centre.x, 5.0f, k_Centre.y}},
+	    .objects = Town(),
+	    .temples = {{.offset = k_Temple}},
+	    .commands = {{.kind = Kind::BuildWorshipSites, .delaySeconds = 3.0f},
+	                 {.kind = Kind::FillSiteIcons, .delaySeconds = 0.5f, .amount = k_IconCharge},
+	                 {.kind = Kind::TapStoneHand, .delaySeconds = 3.0f, .value = static_cast<size_t>(SpellSeedType::Water)}},
+	    .townBeliefInPlayer = k_TownBelief,
+	    .townMiracles = {MagicType::Heal, MagicType::Water},
+	});
+	all.push_back({
 	    .id = "miracles.icon_charge_far_off",
 	    .name = "The pulse of a charging icon seen from far off",
 	    .facet = Facet::Miracles,

@@ -908,15 +908,16 @@ void Runner::Give(const Command& command)
 	    command.kind == Kind::BuildWorshipSites || command.kind == Kind::ScriptBuildsWorshipSites ||
 	    command.kind == Kind::PressPlainKey || command.kind == Kind::PlainKeyDown || command.kind == Kind::PlainKeyRepeat ||
 	    command.kind == Kind::PlainKeyUp || command.kind == Kind::ChargeIconWithSeedHeld ||
-	    command.kind == Kind::TakeIconSeed || command.kind == Kind::TapSiteIcon || command.kind == Kind::TapTempleEntrance ||
-	    command.kind == Kind::FinishBuilding || command.kind == Kind::ScaffoldStartsSite ||
-	    command.kind == Kind::DestroyScaffoldSite || command.kind == Kind::ScaffoldClearsGround ||
-	    command.kind == Kind::FillBuiltAmount || command.kind == Kind::PauseGame || command.kind == Kind::SetGameSpeed ||
-	    command.kind == Kind::RemoveTeleportStone || command.kind == Kind::MakeDance || command.kind == Kind::OtherGodHand ||
-	    command.kind == Kind::ObserverCamera || command.kind == Kind::OwnGod || command.kind == Kind::BringCreature ||
-	    command.kind == Kind::ComputerPersonality || command.kind == Kind::ComputerUntaughtSends ||
-	    command.kind == Kind::HandCastOnDispenser || command.kind == Kind::HandCastOnCreature ||
-	    command.kind == Kind::CloseHeldMiracle || command.kind == Kind::JoinFootball)
+	    command.kind == Kind::TakeIconSeed || command.kind == Kind::TapSiteIcon || command.kind == Kind::TapStoneHand ||
+	    command.kind == Kind::TapTempleEntrance || command.kind == Kind::FinishBuilding ||
+	    command.kind == Kind::ScaffoldStartsSite || command.kind == Kind::DestroyScaffoldSite ||
+	    command.kind == Kind::ScaffoldClearsGround || command.kind == Kind::FillBuiltAmount ||
+	    command.kind == Kind::PauseGame || command.kind == Kind::SetGameSpeed || command.kind == Kind::RemoveTeleportStone ||
+	    command.kind == Kind::MakeDance || command.kind == Kind::OtherGodHand || command.kind == Kind::ObserverCamera ||
+	    command.kind == Kind::OwnGod || command.kind == Kind::BringCreature || command.kind == Kind::ComputerPersonality ||
+	    command.kind == Kind::ComputerUntaughtSends || command.kind == Kind::HandCastOnDispenser ||
+	    command.kind == Kind::HandCastOnCreature || command.kind == Kind::CloseHeldMiracle ||
+	    command.kind == Kind::JoinFootball)
 	{
 		const auto result = GivePlayerCommand(command);
 		Log(fmt::format("{:.1f}s: {}{}{}", _seconds, Name(command.kind), result.empty() ? "" : ": ", result));

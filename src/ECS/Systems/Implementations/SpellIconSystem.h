@@ -31,11 +31,21 @@ namespace openblack::particles
 class LightSheet;
 } // namespace openblack::particles
 
+namespace openblack::ecs
+{
+class Registry;
+} // namespace openblack::ecs
+
 namespace openblack::ecs::components
 {
 struct SpellSeed;
 struct WorshipIcon;
 } // namespace openblack::ecs::components
+
+namespace openblack::ecs::systems
+{
+class ObjectDrawListSystemInterface;
+} // namespace openblack::ecs::systems
 
 namespace openblack::ecs::systems
 {
@@ -165,8 +175,15 @@ private:
 	/// The seed above an icon turns by the game time of the frame, only in a frame that draws the icon on the screen
 	void TurnSeedOf(entt::entity icon, float gameSeconds, bool drawn);
 
-	/// A worship site's icon that is on the screen shows its charge in this frame
-	void ShowCharge(entt::entity entity, const components::WorshipIcon& icon, int32_t gameMilliseconds);
+	/// A worship site's icon or a stone hand that is on the screen shows the charge of a site's icon in this frame, in
+	/// the colour of a player. A stone hand with no such icon keeps its shine and shows no ring.
+	void ShowCharge(entt::entity entity, const components::WorshipIcon* source, PlayerNames player, int32_t gameMilliseconds);
+	/// The ring of an icon does not show in this frame
+	void HideRing(entt::entity icon);
+	/// Whether this frame draws a stone hand: the land shows, the list draws its centre, the centre has life and the hand
+	/// is on the screen
+	[[nodiscard]] static bool StoneHandDrawn(const ecs::Registry& registry, const ObjectDrawListSystemInterface* drawList,
+	                                         entt::entity centre, entt::entity hand, bool landDrawn);
 
 	/// What the frames keep of an icon's look. A saved game does not keep these.
 	struct IconLook

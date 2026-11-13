@@ -133,6 +133,7 @@
 #include "Graphics/Texture2D.h"
 #include "InfoConstants.h"
 #include "Locator.h"
+#include "Magic/IconChargeLooks.h"
 #include "Physics/DamageMesh.h"
 #include "Physics/ObjectRules.h"
 #include "Profiler.h"
@@ -891,7 +892,7 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 	const openblack::ecs::ComponentLookups<Abode, Field, Swayable, ResourcePile, InHand, Pot, CreatureSpells, Fire, ObjectGlow,
 	                                       SeeThrough, WorshipIcon, Temple, ChangedMaterials, TownDesireFlag, WorkshopFlag,
 	                                       WorshipSiteFlag, GateLantern, BuildProgress, Feature, AnimalPose, HeldByCreature,
-	                                       Villager, Animal, InPhysics, SnowLevel, BuildingDamage, Creature>
+	                                       Villager, Animal, InPhysics, SnowLevel, BuildingDamage, Creature, TownCentreIcon>
 	    stores(registry);
 	const openblack::ecs::object_detail::Stores detailStores(registry);
 	const openblack::ecs::systems::DrawnStores drawnStores(registry);
@@ -1306,10 +1307,12 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 				    }
 			    }
 		    }
-		    // An icon at a worship site that shows its charge is lit through white, and it shines in its player's colour
-		    if (Locator::spellIconSystem::has_value() && stores.AllOf<WorshipIcon>(entity))
+		    // An icon at a worship site that shows its charge is lit through white, and it shines in its player's colour. A
+		    // stone hand of a village centre is always lit through white, and it shows the shine of its miracle's site icon.
+		    if (Locator::spellIconSystem::has_value() && stores.AnyOf<WorshipIcon, TownCentreIcon>(entity))
 		    {
-			    if (const auto shine = Locator::spellIconSystem::value().ShownTint(entity); shine != 0)
+			    const auto shine = Locator::spellIconSystem::value().ShownTint(entity);
+			    if (openblack::magic::icon_charge_looks::LitThroughWhite(stores.AllOf<TownCentreIcon>(entity), shine))
 			    {
 				    look.y = static_cast<float>(k_IconLitColour);
 				    added = graphics::object_tint::SumAdded(added, shine);

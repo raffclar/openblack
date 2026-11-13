@@ -102,6 +102,7 @@
 #include "ECS/Systems/TipBubbleSystemInterface.h"
 #include "ECS/Systems/WorkshopSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
+#include "ECS/WorldObjects.h"
 #include "Gestures/GesturePaths.h"
 #include "Gui/ScreenFit.h"
 #include "Help/TipBubble.h"
@@ -513,6 +514,39 @@ std::string Runner::TapSiteIcon(const Command& command)
 	}
 	const bool counted = Locator::spellIconSystem::value().Tap(*found, command.player);
 	return fmt::format("tapped the icon in place {}: {}", icon.place, counted ? "it counts" : "it does not count");
+}
+
+std::string Runner::TapStoneHand(const Command& command)
+{
+	if (!Locator::infoConstants::has_value() || !Locator::spellIconSystem::has_value() ||
+	    !Locator::worshipSiteSystem::has_value())
+	{
+		return "no miracles";
+	}
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto seedType = static_cast<SpellSeedType>(command.value);
+	std::optional<entt::entity> found;
+	registry.Each<const ecs::components::TownCentreIcon>([&](entt::entity entity, const ecs::components::TownCentreIcon& hand) {
+		if (!found.has_value() && hand.seed == seedType && ecs::world_objects::IconPlayer(registry, entity) == command.player)
+		{
+			found = entity;
+		}
+	});
+	if (!found.has_value())
+	{
+		return "no such stone hand";
+	}
+	const auto& hand = registry.Get<const ecs::components::TownCentreIcon>(*found);
+	if (const auto* town = registry.Valid(hand.town) ? registry.TryGet<const ecs::components::Town>(hand.town) : nullptr;
+	    command.amount > 0.0f && town != nullptr && registry.Valid(town->worshipSite))
+	{
+		const auto& info = Locator::infoConstants::value();
+		const float cost = magic::GetChantsRequiredToCreate(
+		    info, magic::GetMagicTypeFromPowerUpLevel(magic::GetSpellSeedInfo(info, seedType), magic::k_BasePowerUpLevel));
+		Locator::worshipSiteSystem::value().ReturnChants(town->worshipSite, cost * command.amount);
+	}
+	const bool counted = Locator::spellIconSystem::value().Tap(*found, command.player);
+	return fmt::format("tapped the stone hand {}: {}", hand.hand, counted ? "it counts" : "it does not count");
 }
 
 std::string Runner::HandTakeFireBall()

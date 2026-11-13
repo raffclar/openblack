@@ -175,7 +175,8 @@ public:
 		uint32_t argb {0};
 	};
 	/// Once a frame, while the frame draws the land: each icon at a worship site that is on the screen shows its charge.
-	/// Its ring of light fills and moves on, its shine changes, and its pulse model shrinks into it while it charges.
+	/// Its ring of light fills and moves on, its shine changes, and its pulse model shrinks into it while it charges. Each
+	/// stone hand of a village centre that the frame draws shows the charge of its miracle's icon at its town's site too.
 	virtual void UpdateChargeLooks(int32_t /*gameMilliseconds*/, bool /*landDrawn*/) {}
 	/// Once a frame: the stone hands of the village centres and the icons at the worship sites show the effect of the
 	/// holder of their seeds, and their seeds turn. The effect of an icon shows and continues, and its seed turns, by the
