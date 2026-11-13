@@ -54,15 +54,6 @@ struct TemplatePoint
 };
 static_assert(sizeof(TemplatePoint) == 20);
 
-/// How a recognised gesture's position on the land is taken
-enum class PositionMode : uint8_t
-{
-	/// Where the gesture started
-	Start = 0,
-	/// The middle of the box round the gesture, with its size from the box (every template in the game's file)
-	Centre = 2,
-};
-
 struct GestureTemplate
 {
 	static constexpr size_t k_MaxPoints = 80;
