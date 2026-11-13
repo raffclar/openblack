@@ -732,6 +732,13 @@ void GameInterface::CloseBoxesForGameEnd()
 	_saveGameBoxes->WithdrawMessage();
 }
 
+void GameInterface::CloseBoxesForScenario()
+{
+	CloseBoxesForGameEnd();
+	_staffQuestionBox->Withdraw();
+	_saveGameBoxes->WithdrawAll();
+}
+
 void GameInterface::ShowGodOut(std::u16string_view name)
 {
 	const std::array words {name};

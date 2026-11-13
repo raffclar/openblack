@@ -142,6 +142,29 @@ void Evaluator::Start(std::span<const Check> checks)
 	_decided.assign(checks.size(), false);
 }
 
+void Clock::Start(uint32_t worldTurn)
+{
+	_startTurn = worldTurn;
+	_lastTurn = worldTurn;
+	_heldSeconds = 0.0;
+}
+
+void Clock::Advance(uint32_t worldTurn, bool templeHoldsWorld, float seconds)
+{
+	// A turn is a tenth of a second. Time counts only in a frame with no world turn, so that no time counts twice.
+	if (templeHoldsWorld && worldTurn == _lastTurn && seconds > 0.0f)
+	{
+		_heldSeconds += seconds;
+	}
+	_lastTurn = worldTurn;
+}
+
+uint32_t Clock::Elapsed(uint32_t worldTurn) const
+{
+	// The small addition keeps a sum of frame times that is a hair under a whole turn from losing the turn
+	return (worldTurn - _startTurn) + static_cast<uint32_t>(_heldSeconds * 10.0 + 1e-3);
+}
+
 void Evaluator::Update(uint32_t turnsSinceStart, const Probe& probe)
 {
 	for (size_t i = 0; i < _checks.size(); ++i)

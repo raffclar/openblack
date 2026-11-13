@@ -226,6 +226,9 @@ public:
 	/// All the boxes of the game close before the end box of a game end opens: the tattoo editor lets go of its creature,
 	/// and the land information box, the menu and a message with an OK close
 	void CloseBoxesForGameEnd();
+	/// Closes the boxes before a testbed scenario loads: the boxes of a game end, and any question of the staff or of the
+	/// save game room, with no answer
+	void CloseBoxesForScenario();
 	/// The end box of a skirmish or a network game
 	[[nodiscard]] EndGameBox& GetEndGameBox() noexcept { return *_endGameBox; }
 	[[nodiscard]] const EndGameBox& GetEndGameBox() const noexcept { return *_endGameBox; }

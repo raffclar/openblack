@@ -48,6 +48,7 @@ public:
 	void RequestQuit() override;
 	void ReportChecks(checks::Report report, bool quit) override;
 	[[nodiscard]] std::optional<bool> IsHandShown() const override;
+	void CloseBoxes() override;
 
 private:
 	/// The messages of the ping server of the testbed, once a scenario uses it

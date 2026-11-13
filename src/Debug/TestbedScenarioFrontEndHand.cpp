@@ -9,7 +9,8 @@
 
 // The testbed scenarios of the hand under the boxes of the front end. While a box takes the mouse, the front end's
 // pointer shows and the hand is away. Each scenario in the land checks that the hand shows before the box, and not
-// under it. The temple holds the turns of the world, so the scenarios in the temple have no checks.
+// under it. The temple holds the turns of the world, and the checks count the time of the frames then as turns. The
+// save room scenario has no checks, because the click on its delete button is by hand.
 
 #include <string_view>
 #include <vector>
@@ -106,6 +107,8 @@ void testbed_scenarios::AddFrontEndHandScenarios(std::vector<Scenario>& all)
 	                 {.kind = Kind::LookAtTempleScroll, .delaySeconds = 4.0f, .value = 6},
 	                 {.kind = Kind::PointerTo, .delaySeconds = 2.0f, .point = {0.5f, 0.842f}},
 	                 {.kind = Kind::PointerTo, .delaySeconds = 1.0f, .point = {0.5f, 0.5f}}},
+	    .checks = {HandShownCheck("the hand is away on the button", false, 85, 89),
+	               HandShownCheck("the hand shows again off the button", true, 95, 160)},
 	});
 	all.push_back({
 	    .id = "hand.away_under_save_room_question",
