@@ -220,6 +220,8 @@ private:
 	/// The particle effects in the order the camera of the pass draws them, among the other things that blend: runs of
 	/// sprites that share a sheet as one instanced draw, ribbons, models and mists
 	void DrawParticles(const DrawSceneDesc& desc) const;
+	/// Draws the light bulbs of the learning marks at once, after the solid models and before everything that is sorted
+	void DrawLearningBulbs(const DrawSceneDesc& desc) const;
 	/// Draws what a frame of particles holds, in the order of its commands, seen from a point
 	void SubmitParticleFrame(const DrawSceneDesc& desc, const particles::draw::Frame& frame,
 	                         std::span<const particles::draw::Command> commands, std::span<const uint32_t> spriteOrder,
@@ -551,9 +553,11 @@ private:
 	void DrawPassPaletteVillagers(const DrawSceneDesc& desc, auto& draws) const;
 	/// Draws the things that blend over the solid models
 	void DrawPassTranslucent(const DrawSceneDesc& desc, const ScenePass& pass, auto& draws) const;
-	/// Draws the temple's pool and map, the seeds, the mists, the leashes and the other effects that the game adds before
-	/// the hand
+	/// Draws the temple's pool and map, the seeds, the learning words, the mists, the leashes and the other effects that
+	/// the game adds before the hand
 	void DrawPassEffects(const DrawSceneDesc& desc) const;
+	/// Submits a group of the labels in the world at this point of the main pass. The other passes do not show the labels.
+	void SubmitWorldLabels(const DrawSceneDesc& desc, WorldLabelGroup group) const;
 	/// Draws the effects that the game adds after the hand and its particles: the shields' domes, the columns over the
 	/// village centres with their symbols of belief, the floating numbers, the rain and the snowfall, the villagers'
 	/// names and the tip bubble
@@ -745,6 +749,8 @@ private:
 		std::vector<bool> inView;
 		/// The texels of the corner texture (see GetLandCorners), two bytes each
 		std::vector<uint8_t> corners;
+		/// For each block, the values from which its texels in corners came. A block with the same values keeps them.
+		std::vector<std::optional<land_detail::BlockCornerInputs>> cornersFrom;
 	};
 	mutable LandDetailFrame _landDetail;
 	mutable std::unique_ptr<Texture2D> _landCorners;
@@ -1083,6 +1089,7 @@ private:
 	mutable std::vector<uint32_t> _townBeliefSpriteOrder;
 	mutable std::vector<particles::draw::Command> _particleBeforeLandCommands;
 	mutable std::vector<uint32_t> _particleBeforeLandSprites;
+	mutable std::vector<uint32_t> _learningBulbMeshes;
 	/// What the falling spell's film draws of the particles this frame, and their order
 	mutable particles::draw::Frame _filmParticleFrame;
 	mutable std::vector<particles::draw::Command> _filmParticleCommands;

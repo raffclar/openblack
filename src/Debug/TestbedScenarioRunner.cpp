@@ -132,6 +132,7 @@
 #include "ECS/Systems/MagicShieldSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/ParticleRuleSystemInterface.h"
+#include "ECS/Systems/PickingSystemInterface.h"
 #include "ECS/Systems/PlayerCommandSystemInterface.h"
 #include "ECS/Systems/PlayerProfileSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
@@ -1371,6 +1372,20 @@ std::optional<double> Runner::ReadCheck(const checks::Check& check) const
 		const bool puzzle =
 		    Locator::puzzleTotemSystem::has_value() && Locator::puzzleTotemSystem::value().GetGripped().has_value();
 		return town || puzzle ? 1.0 : 0.0;
+	}
+	case checks::Quantity::ObjectPicked:
+	{
+		const auto object = ObjectAt(check.index);
+		if (!object.has_value() || !Locator::pickingSystem::has_value())
+		{
+			return std::nullopt;
+		}
+		return Locator::pickingSystem::value().GetPick().object == object ? 1.0 : 0.0;
+	}
+	case checks::Quantity::HandToolTipShown:
+	{
+		const auto shown = _stage != nullptr ? _stage->IsHandToolTipShown() : std::nullopt;
+		return shown.has_value() ? std::optional(*shown ? 1.0 : 0.0) : std::nullopt;
 	}
 	case checks::Quantity::HandMiracle:
 		if (!Locator::magicSystem::has_value())

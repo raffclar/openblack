@@ -48,6 +48,7 @@ public:
 	void RequestQuit() override;
 	void ReportChecks(checks::Report report, bool quit) override;
 	[[nodiscard]] std::optional<bool> IsHandShown() const override;
+	[[nodiscard]] std::optional<bool> IsHandToolTipShown() const override;
 	void CloseBoxes() override;
 
 private:

@@ -43,8 +43,6 @@ public:
 	/// The value of a named constant
 	[[nodiscard]] std::optional<int32_t> ValueOf(std::string_view name) const;
 
-	[[nodiscard]] bool Empty() const { return _values.empty(); }
-
 private:
 	/// enum name -> value -> member names in declaration order
 	std::map<std::string, std::map<int32_t, std::vector<std::string>>, std::less<>> _enums;

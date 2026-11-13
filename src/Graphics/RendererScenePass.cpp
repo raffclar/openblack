@@ -1402,9 +1402,14 @@ void Renderer::DrawPassEffects(const DrawSceneDesc& desc) const
 	DrawGroundBlobs(desc);
 	DrawFarVillagerSmudges(desc);
 	DrawVillagerEyes(desc);
+	// The land draws the reward chests with their seeds, then the learning words and the bulbs of the learning marks at
+	// once. The game draws the globes and the icons of the village centres after the land. A seed that the game draws at
+	// once comes in this order.
+	DrawRewardSeeds(desc);
+	SubmitWorldLabels(desc, WorldLabelGroup::LearningWords);
+	DrawLearningBulbs(desc);
 	DrawGlobes(desc);
 	DrawIconSeeds(desc);
-	DrawRewardSeeds(desc);
 	DrawTribalPower(desc);
 	DrawTempleColumns(desc);
 	DrawScrollBeams(desc);
@@ -1432,11 +1437,7 @@ void Renderer::DrawPassEffectsAfterParticles(const DrawSceneDesc& desc) const
 	{
 		if (const auto labels = effects_after_particles::LabelsOf(step); labels.has_value())
 		{
-			// Only the main pass shows the labels
-			if (desc.viewId == RenderPass::Main && desc.submitWorldLabels)
-			{
-				desc.submitWorldLabels(*labels);
-			}
+			SubmitWorldLabels(desc, *labels);
 			continue;
 		}
 		switch (step)
@@ -1456,6 +1457,15 @@ void Renderer::DrawPassEffectsAfterParticles(const DrawSceneDesc& desc) const
 		default:
 			break;
 		}
+	}
+}
+
+void Renderer::SubmitWorldLabels(const DrawSceneDesc& desc, WorldLabelGroup group) const
+{
+	// Only the main pass shows the labels
+	if (desc.viewId == RenderPass::Main && desc.submitWorldLabels)
+	{
+		desc.submitWorldLabels(group);
 	}
 }
 
@@ -2412,6 +2422,8 @@ void Renderer::DrawPassEntities(const DrawSceneDesc& desc, const ScenePass& pass
 		}
 	}
 	DrawPassCreatures(desc, pass, draws);
+	// Each creature adds its chat bubble to the sort when the land draws it
+	SubmitWorldLabels(desc, WorldLabelGroup::ChatBubbles);
 	DrawPassAnimals(desc, draws);
 	DrawPassMirroredHeld(desc, pass, draws);
 	DrawPassPaletteVillagers(desc, draws);

@@ -564,12 +564,15 @@ private:
 	std::optional<FontFace> _evilAdvisorFont;
 	Canvas _canvas;
 	Canvas _pointerCanvas {graphics::RenderPass::Cursor};
-	/// The labels in the world that the world in front of them hides, and that go before the scene: the learning texts,
-	/// the chat bubbles and the temple scroll's pictures
+	/// The labels in the world that the world in front of them hides, and that go before the scene: the temple scroll's
+	/// pictures
 	Canvas _worldLabelsCanvas {graphics::RenderPass::WorldLabels, Canvas::DepthTest::NearerIsGreater};
-	/// The labels in the world that the scene's main pass submits at the points where the game adds them to its sort:
-	/// the floating numbers, the villagers' names and the tip bubble, in the order of graphics::WorldLabelGroup
+	/// The labels in the world that the scene's main pass submits at the points where the game adds them: the chat
+	/// bubbles, the learning words, the floating numbers, the villagers' names and the tip bubble, in the order of
+	/// graphics::WorldLabelGroup
 	std::array<Canvas, graphics::k_WorldLabelGroupCount> _groupedLabelCanvases {
+	    Canvas {graphics::RenderPass::WorldLabels, Canvas::DepthTest::NearerIsGreater},
+	    Canvas {graphics::RenderPass::WorldLabels, Canvas::DepthTest::NearerIsGreater},
 	    Canvas {graphics::RenderPass::WorldLabels, Canvas::DepthTest::NearerIsGreater},
 	    Canvas {graphics::RenderPass::WorldLabels, Canvas::DepthTest::NearerIsGreater},
 	    Canvas {graphics::RenderPass::WorldLabels, Canvas::DepthTest::NearerIsGreater},
