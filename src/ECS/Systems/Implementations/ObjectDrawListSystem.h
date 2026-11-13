@@ -48,6 +48,7 @@ public:
 	[[nodiscard]] object_draw_list::Frame GetFrame() const override { return _frame; }
 	[[nodiscard]] const std::optional<object_draw_list::View>& GetView() const override { return _view; }
 	[[nodiscard]] bool Listed(entt::entity entity) const override;
+	[[nodiscard]] bool LandCallsOwnDraw(const Registry& registry, entt::entity entity) const override;
 	[[nodiscard]] bool Drawn(const Registry& registry, entt::entity entity) const override;
 	[[nodiscard]] bool DrawnWith(const Registry& registry, entt::entity entity, const DrawnStores& stores) const override;
 	[[nodiscard]] bool Decides(const Registry& registry, entt::entity entity) const override;

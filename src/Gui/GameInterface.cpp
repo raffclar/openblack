@@ -27,6 +27,7 @@
 #include <entt/core/hashed_string.hpp>
 #include <spdlog/spdlog.h>
 
+#include "3D/LandIslandInterface.h"
 #include "3D/TempleInteriorInterface.h"
 #include "Audio/AudioManagerInterface.h"
 #include "Camera/Camera.h"
@@ -56,6 +57,7 @@
 #include "ECS/Systems/IncomingMessageSystemInterface.h"
 #include "ECS/Systems/MusicMoodSystemInterface.h"
 #include "ECS/Systems/NetworkGameSystemInterface.h"
+#include "ECS/Systems/ObjectDrawListSystemInterface.h"
 #include "ECS/Systems/PickingSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/TattooEditorSystemInterface.h"
@@ -2656,6 +2658,8 @@ void GameInterface::DrawChatBubbles(glm::u16vec2 resolution, glm::ivec2 mouse)
 		return ecs::components::Player::k_Colours.at(index);
 	};
 	const auto pointer = glm::vec2(mouse);
+	const auto* drawList = Locator::objectDrawListSystem::has_value() ? &Locator::objectDrawListSystem::value() : nullptr;
+	const auto* land = Locator::terrainSystem::has_value() ? &Locator::terrainSystem::value() : nullptr;
 	constexpr tip::Sizes k_NearSizes {.width = bubbles::k_NearWidth,
 	                                  .height = bubbles::k_NearHeight,
 	                                  .margin = bubbles::k_NearMargin,
@@ -2672,9 +2676,18 @@ void GameInterface::DrawChatBubbles(glm::u16vec2 resolution, glm::ivec2 mouse)
 		{
 			continue;
 		}
-		// The bubble points at the top of the creature's head
-		const auto anchor = transform->position +
-		                    glm::vec3(0.0f, script::property_rules::CreatureHeight(ecs::components::ShownSize(*body)), 0.0f);
+		// The creature adds its bubble in its own draw, which the land calls. A creature that the hand holds to stroke it
+		// stays on the land, and the land draws it as before.
+		if (drawList != nullptr && !drawList->LandCallsOwnDraw(registry, creature))
+		{
+			continue;
+		}
+		// The bubble points at the creature's height above the land under it
+		const float ground =
+		    land != nullptr ? land->GetHeightAt({transform->position.x, transform->position.z}) : transform->position.y;
+		const glm::vec3 anchor {transform->position.x,
+		                        ground + script::property_rules::CreatureHeight(ecs::components::ShownSize(*body)),
+		                        transform->position.z};
 		const auto clip = viewProjection * glm::vec4(anchor, 1.0f);
 		if (clip.w <= 0.0f)
 		{

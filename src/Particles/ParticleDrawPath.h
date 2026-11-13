@@ -24,7 +24,9 @@ namespace openblack::particles::draw
 /// and is drawn there all at once in the order its collections hold it. The miracle in the hand is drawn at once, in
 /// that order, just after the hand. A vortex's swirl is drawn before the land, over the sea alone, in the order its
 /// collections hold it: the land and everything drawn after it cover it. The force field of the fence is drawn at once
-/// after the land and the other things that the game draws at once, before everything that is sorted.
+/// after the land and the other things that the game draws at once, before everything that is sorted. The light bulb of
+/// a learning mark is drawn at once just after the words of the learning marks, after the solid models and before
+/// everything that is sorted.
 enum class DrawPath : uint8_t
 {
 	Sorted,
@@ -32,11 +34,12 @@ enum class DrawPath : uint8_t
 	Immediate,
 	BeforeLand,
 	AtOnceAfterLand,
+	WithLearningWords,
 
 	_Count
 };
 
 constexpr std::array<std::string_view, static_cast<size_t>(DrawPath::_Count)> k_DrawPathNames {
-    "Sorted", "Queued", "Immediate", "Before land", "At once after land"};
+    "Sorted", "Queued", "Immediate", "Before land", "At once after land", "With the learning words"};
 
 } // namespace openblack::particles::draw

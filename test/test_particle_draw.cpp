@@ -715,3 +715,31 @@ TEST(ParticleDraw, TheForceFieldIsBeforeTheFarthestDistance)
 	const glm::vec3 far(std::numeric_limits<float>::max(), 0.0f, 0.0f);
 	EXPECT_GT(graphics::zsort::k_AtOnceAfterLand, graphics::zsort::Depth(far, glm::vec3(0.0f)));
 }
+
+TEST(ParticleDraw, TheLearningBulbIsDrawnWithTheWordsAndItsGlowIsSorted)
+{
+	auto frame = MakeFrame();
+	const std::array<LearningMark, 1> marks {{{.glow = {0.0f, 2.0f, 50.0f},
+	                                           .glowHalfSize = 1.0f,
+	                                           .glowColour = glm::vec4(1.0f),
+	                                           .bulb = {0.0f, 0.0f, 50.0f},
+	                                           .bulbScale = 0.25f,
+	                                           .bulbColour = glm::vec4(1.0f),
+	                                           .bulbMesh = 7}}};
+	AddLearningMarks(frame, marks);
+	// Only the glow goes among the sorted things
+	std::vector<Command> commands;
+	std::vector<uint32_t> order;
+	Order(frame, glm::vec3(0.0f), std::nullopt, commands, order);
+	ASSERT_EQ(commands.size(), 1u);
+	EXPECT_EQ(commands[0].kind, ItemKind::Sprite);
+	EXPECT_EQ(commands[0].depth, graphics::zsort::Depth({0.0f, 2.0f, 50.0f}, glm::vec3(0.0f)));
+	// The bulb is drawn at once with the words, and the far cull goes by its scale
+	std::vector<uint32_t> meshes;
+	MeshesWithLearningWords(frame, meshes);
+	ASSERT_EQ(meshes, (std::vector<uint32_t> {0}));
+	const auto& bulb = frame.meshes[meshes[0]];
+	EXPECT_EQ(bulb.mesh, 7u);
+	EXPECT_EQ(bulb.scale, 0.25f);
+	EXPECT_FALSE(static_cast<const MeshCreator&>(*bulb.creator).neverClip);
+}

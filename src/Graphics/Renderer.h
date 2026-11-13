@@ -220,6 +220,8 @@ private:
 	/// The particle effects in the order the camera of the pass draws them, among the other things that blend: runs of
 	/// sprites that share a sheet as one instanced draw, ribbons, models and mists
 	void DrawParticles(const DrawSceneDesc& desc) const;
+	/// Draws the light bulbs of the learning marks at once, after the solid models and before everything that is sorted
+	void DrawLearningBulbs(const DrawSceneDesc& desc) const;
 	/// Draws what a frame of particles holds, in the order of its commands, seen from a point
 	void SubmitParticleFrame(const DrawSceneDesc& desc, const particles::draw::Frame& frame,
 	                         std::span<const particles::draw::Command> commands, std::span<const uint32_t> spriteOrder,
@@ -1087,6 +1089,7 @@ private:
 	mutable std::vector<uint32_t> _townBeliefSpriteOrder;
 	mutable std::vector<particles::draw::Command> _particleBeforeLandCommands;
 	mutable std::vector<uint32_t> _particleBeforeLandSprites;
+	mutable std::vector<uint32_t> _learningBulbMeshes;
 	/// What the falling spell's film draws of the particles this frame, and their order
 	mutable particles::draw::Frame _filmParticleFrame;
 	mutable std::vector<particles::draw::Command> _filmParticleCommands;

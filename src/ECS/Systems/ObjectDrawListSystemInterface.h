@@ -109,6 +109,9 @@ public:
 	[[nodiscard]] virtual const std::optional<object_draw_list::View>& GetView() const = 0;
 	/// Whether a thing is in the list as it was last made
 	[[nodiscard]] virtual bool Listed(entt::entity entity) const = 0;
+	/// Whether the land's draw calls the own draw of a thing on this frame (see object_draw_list::LandCallsOwnDraw).
+	/// False with no camera or land. A creature adds its chat bubble in its own draw.
+	[[nodiscard]] virtual bool LandCallsOwnDraw(const Registry& registry, entt::entity entity) const = 0;
 	/// Whether the list lets a thing be drawn: true for anything it doesn't decide. A frame that does not draw all of
 	/// the list draws only the listed things that the last full frame kept (see NoteFullFrame).
 	[[nodiscard]] virtual bool Drawn(const Registry& registry, entt::entity entity) const = 0;
