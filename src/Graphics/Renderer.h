@@ -77,6 +77,10 @@ class WorkerPool;
 namespace ecs
 {
 class Registry;
+namespace systems
+{
+struct RenderContext;
+}
 namespace components
 {
 struct CreatureEyes;
@@ -332,6 +336,9 @@ private:
 	/// The glows on a creature's body where its pose put them, in a view (a bgfx view id)
 	void DrawCreatureHandGlows(uint16_t viewId, const ecs::components::CreatureHandGlows& glows, const glm::mat4& projection,
 	                           bool reflection, uint32_t depth) const;
+	/// The glows of the creed objects, each sorted by the distance of its object from the camera, in a view (a bgfx view id)
+	void DrawCreedGlows(uint16_t viewId, const ecs::systems::RenderContext& context, const glm::mat4& projection,
+	                    bool reflection, const glm::vec3& cameraOrigin) const;
 	/// The band of a glowing shell over a part of a model, made when first drawn; nullptr for a part without one
 	[[nodiscard]] const VolumeGlowShell* GlowShellOf(entt::id_type mesh, uint32_t subMesh) const;
 	/// A frame of a particle light map as a texture of its colours, made when first stamped

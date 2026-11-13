@@ -67,6 +67,7 @@
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureNeeds.h"
 #include "ECS/Components/CreatureSpells.h"
+#include "ECS/Components/CreedObject.h"
 #include "ECS/Components/Field.h"
 #include "ECS/Components/Flock.h"
 #include "ECS/Components/HandGrab.h"
@@ -1197,6 +1198,12 @@ static void SetPropertyOf(entt::entity object, script::ObjectPropertyType prop, 
 			{
 				Locator::effectRequestSystem::value().SetMagnitude(*effect, value);
 			}
+			return;
+		}
+		// A creed object gives the size to its glow and keeps its own size
+		if (auto* creed = registry.TryGet<ecs::components::CreedObject>(object); creed != nullptr)
+		{
+			creed->glowScale = value;
 			return;
 		}
 		// The thing is drawn at this size, the same along every axis. A thing in the map's cells that changes its size
