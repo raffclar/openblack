@@ -481,3 +481,15 @@ void openblack::web::ShowPageMessage(std::string_view title, std::string_view te
 	}, titleText.c_str(), bodyText.c_str());
 	// clang-format on
 }
+
+void openblack::web::ExitToHomepage()
+{
+	// The page moves the browser on its main thread
+	// clang-format off
+	MAIN_THREAD_EM_ASM({
+		if (globalThis.openblackExitToHome) {
+			globalThis.openblackExitToHome();
+		}
+	});
+	// clang-format on
+}
