@@ -270,6 +270,16 @@ struct RenderContext
 		glm::mat4 model;
 	};
 	std::vector<AnimalDraw> animalDraws;
+	/// The glows of the creed objects drawn this frame (see components::CreedObject): the matrix of the creed model, how
+	/// far the shell reaches out, how far its texture has slid, and where the object stands
+	struct CreedGlowDraw
+	{
+		glm::mat4 model;
+		float zoom;
+		glm::vec2 slide;
+		glm::vec3 position;
+	};
+	std::vector<CreedGlowDraw> creedGlowDraws;
 	/// The villagers a script draws in high detail this frame, with the model each wears and the matrix it is drawn by:
 	/// each casts a shadow on the land while it is, by the matrix of the villager as it turns before its body's easing
 	struct HighDetailDraw

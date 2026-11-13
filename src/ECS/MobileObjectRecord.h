@@ -45,4 +45,26 @@ constexpr int32_t k_FootballRow = -3324;
 /// The record that the loose object takes its values from. None when its type is outside the loose objects' table.
 [[nodiscard]] const GMobileObjectInfo* Of(const InfoConstants& info, const components::MobileObject& mobile);
 
+/// The kind of thing that the game makes for a loose object. Each kind has rules of its own for its look, its sound,
+/// the hand and the creatures.
+enum class Class : uint8_t
+{
+	/// A loose object with no rules of its own
+	Plain,
+	/// The lump of poo
+	Poo,
+	/// A crop: the hand takes a handful of food in its place
+	Crop,
+	/// A creed: only its glow shows, and it hums
+	Creed,
+};
+
+/// The kind of thing that the game makes for a loose object of a row, from the kind of the row's record. The row of
+/// the poo makes poo. Any other row makes a crop or a creed when its record is of that kind, and a plain object if not.
+/// The kind of the row's record decides, not the row: the eyes are a creed.
+[[nodiscard]] Class ClassOf(MobileObjectInfo row, MobileObjectInfo kind);
+/// The kind of thing that the game makes for the loose object. An object outside the loose objects' table is plain.
+/// An object with the record of the football takes the kind of that record.
+[[nodiscard]] Class ClassOf(const InfoConstants& info, const components::MobileObject& mobile);
+
 } // namespace openblack::ecs::mobile_object_record

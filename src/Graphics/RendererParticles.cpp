@@ -679,6 +679,29 @@ void Renderer::DrawCreatureHandGlows(uint16_t viewId, const ecs::components::Cre
 	}
 }
 
+void Renderer::DrawCreedGlows(uint16_t viewId, const ecs::systems::RenderContext& context, const glm::mat4& projection,
+                              bool reflection, const glm::vec3& cameraOrigin) const
+{
+	// Each glow is the shell over the creed model, in white, with its texture, as the glow of a creature's creed power
+	const auto name = std::string("raw/") + std::string(particles::volume_glow::k_Textures.at(creature_hand_glow::k_Texture));
+	const auto texture = entt::hashed_string(name.c_str()).value();
+	const auto alpha = entt::hashed_string((name + "a").c_str()).value();
+	for (const auto& glow : context.creedGlowDraws)
+	{
+		const particles::draw::ShellDraw shell {
+		    .object = entt::null,
+		    .zoom = glow.zoom,
+		    .argb = creature_hand_glow::k_Argb,
+		    .texture = texture,
+		    .alphaTexture = alpha,
+		    .uvOffset = glow.slide,
+		    .textureFraction = creature_hand_glow::k_TextureFraction,
+		};
+		SubmitGlowShell(viewId, resources::HashIdentifier(MeshId::Creed), glow.model, shell, projection, reflection,
+		                zsort::Depth(glow.position, cameraOrigin));
+	}
+}
+
 void Renderer::DrawFilmEffects(const interface_creatures::FilmCreature& film) const
 {
 	const auto viewId = static_cast<bgfx::ViewId>(RenderPass::FilmCreature);

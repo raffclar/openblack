@@ -952,6 +952,9 @@ void Renderer::DrawPassCreatures(const DrawSceneDesc& desc, const ScenePass& pas
 			                      zsort::Depth(transform->position, cameraOrigin));
 		}
 	}
+	// The glows of the creed objects, which show no model of their own
+	DrawCreedGlows(static_cast<uint16_t>(TranslucentView(desc.viewId)), renderCtx, desc.camera->GetProjectionMatrix(),
+	               desc.viewId == RenderPass::Reflection, cameraOrigin);
 	// The creatures that the interface shows over itself, each moved for its draw to its place before the
 	// interface's own camera, in a view of their own
 	if (desc.viewId == RenderPass::Main && _interfaceCreatures.has_value())
