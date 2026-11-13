@@ -300,6 +300,14 @@ PlayerNames MostInfluentialPlayerAt(const ecs::Registry& registry, glm::vec3 poi
 }
 } // namespace
 
+ForestSystem::ForestSystem()
+{
+	if (Locator::entitiesRegistry::has_value())
+	{
+		_magicTreeGone = EntityRegistry().OnDestroy<MagicTree>().connect<&ForestSystem::OnMagicTreeGone>(*this);
+	}
+}
+
 void ForestSystem::SaveState(reflection::BinaryWriter& out) const
 {
 	reflection::Save(out, _lastTreeAddedTurn);
@@ -392,7 +400,9 @@ uint32_t ForestSystem::Plant(entt::entity spell, Spell& miracle, float tribalPow
 	}
 	if (forestEntity != entt::null)
 	{
-		registry.Get<MagicForest>(forestEntity).trees = planted;
+		auto& forest = registry.Get<MagicForest>(forestEntity);
+		forest.trees = planted;
+		forest.landForest = LandForestOf(forestId).value_or(entt::null);
 	}
 	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Magic: a forest planted {} of {} trees on material {}", planted.size(), count,
 	                    MaterialAt(centre));
@@ -432,6 +442,102 @@ bool ForestSystem::HasTrees(entt::entity spell) const
 	EntityRegistry().Each<const MagicForest>(
 	    [&found, spell](const MagicForest& forest) { found = found || (forest.spell == spell && !forest.trees.empty()); });
 	return found;
+}
+
+magic::forest::MiracleForest ForestSystem::ForestOf(entt::entity spell) const
+{
+	auto state = magic::forest::MiracleForest::None;
+	EntityRegistry().Each<const MagicForest>([&state, spell](const MagicForest& forest) {
+		if (forest.spell == spell && state == magic::forest::MiracleForest::None)
+		{
+			state = forest.gone ? magic::forest::MiracleForest::Gone : magic::forest::MiracleForest::Standing;
+		}
+	});
+	return state;
+}
+
+void ForestSystem::LetGoOfGoneForest(entt::entity spell)
+{
+	auto& registry = EntityRegistry();
+	std::vector<entt::entity> gone;
+	registry.Each<const MagicForest>([&gone, spell](entt::entity entity, const MagicForest& forest) {
+		if (forest.spell == spell && forest.gone)
+		{
+			gone.push_back(entity);
+		}
+	});
+	for (const auto entity : gone)
+	{
+		const auto land = registry.Get<const MagicForest>(entity).landForest;
+		if (land != entt::null && registry.Valid(land))
+		{
+			registry.Destroy(land);
+		}
+		registry.Destroy(entity);
+	}
+}
+
+void ForestSystem::OnMagicTreeGone(entt::registry& registry, entt::entity tree)
+{
+	const auto* magic = registry.try_get<const MagicTree>(tree);
+	if (magic == nullptr || magic->forest == entt::null || !registry.valid(magic->forest))
+	{
+		return;
+	}
+	auto* forest = registry.try_get<MagicForest>(magic->forest);
+	if (forest == nullptr || forest->gone)
+	{
+		return;
+	}
+	// The trees that are left in the forest of the land, a tree in the hand among them, or else in the miracle's list
+	size_t left = 0;
+	const auto* land = forest->landForest != entt::null && registry.valid(forest->landForest)
+	                       ? registry.try_get<const LandForest>(forest->landForest)
+	                       : nullptr;
+	if (land != nullptr)
+	{
+		const auto id = land->id;
+		EntityRegistry().Each<const Tree, const ForestMember>(
+		    [&left, id, tree](entt::entity other, const Tree& /*unused*/, const ForestMember& member) {
+			    if (other != tree && member.forest == id)
+			    {
+				    ++left;
+			    }
+		    });
+	}
+	else
+	{
+		left = static_cast<size_t>(std::ranges::count_if(
+		    forest->trees, [&registry, tree](entt::entity other) { return other != tree && registry.valid(other); }));
+	}
+	if (!magic::forest::GoesWithTree(true, left))
+	{
+		return;
+	}
+	// The forest goes with its last tree. Its miracle sees this at its next turn and closes down.
+	forest->gone = true;
+	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Forest: the last tree #{} of a forest miracle went, and its forest goes",
+	                    entt::to_integral(tree));
+}
+
+void ForestSystem::RemoveGoneLandForests()
+{
+	auto& registry = EntityRegistry();
+	std::vector<entt::entity> lands;
+	registry.Each<MagicForest>([&lands, &registry](MagicForest& forest) {
+		if (forest.gone && forest.landForest != entt::null)
+		{
+			if (registry.Valid(forest.landForest))
+			{
+				lands.push_back(forest.landForest);
+			}
+			forest.landForest = entt::null;
+		}
+	});
+	for (const auto land : lands)
+	{
+		registry.Destroy(land);
+	}
 }
 
 uint32_t ForestSystem::StandingTrees(entt::entity spell) const
@@ -571,6 +677,8 @@ void ForestSystem::GrowForests()
 	{
 		return;
 	}
+	// A forest that went with the last tree of its forest miracle is no longer on the land
+	RemoveGoneLandForests();
 	auto& registry = EntityRegistry();
 	auto& random = Locator::gameRandom::value();
 	const auto& kinds = Locator::infoConstants::value().tree;
@@ -742,8 +850,22 @@ void ForestSystem::ProcessForests()
 		{
 			spell->objectCount = static_cast<uint32_t>(forest.trees.size());
 		}
-		// A forest left with no trees goes as any forest does, some while later
 	});
+	// A forest that went with its last tree goes from the land at once. With no miracle left to see this, its record
+	// goes too. A miracle that is still there lets go of the record at its next turn.
+	std::vector<entt::entity> records;
+	registry.Each<const MagicForest>([&records, &registry](entt::entity entity, const MagicForest& forest) {
+		if (forest.gone &&
+		    (forest.spell == entt::null || !registry.Valid(forest.spell) || !registry.AllOf<Spell>(forest.spell)))
+		{
+			records.push_back(entity);
+		}
+	});
+	RemoveGoneLandForests();
+	for (const auto record : records)
+	{
+		registry.Destroy(record);
+	}
 	if (resized)
 	{
 		registry.SetDirty();

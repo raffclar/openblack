@@ -33,6 +33,7 @@
 #include <unistd.h>
 #endif
 
+#include <fmt/format.h>
 #include <openssl/bio.h>
 #include <openssl/crypto.h>
 #include <openssl/err.h>
@@ -70,6 +71,17 @@ bool MakeNonBlocking(Socket socket)
 	u_long on = 1;
 	return ioctlsocket(socket, FIONBIO, &on) == 0;
 }
+bool PrepareListener(Socket socket)
+{
+	// On Windows, the address of a closed socket is free at once. This option stops other programs from taking the port
+	// of the server.
+	BOOL on = TRUE;
+	return setsockopt(socket, SOL_SOCKET, SO_EXCLUSIVEADDRUSE, reinterpret_cast<const char*>(&on), sizeof(on)) == 0;
+}
+int LastError()
+{
+	return WSAGetLastError();
+}
 #else
 using Socket = int;
 constexpr Socket k_NoSocket = -1;
@@ -91,6 +103,17 @@ bool MakeNonBlocking(Socket socket)
 	const auto flags = fcntl(socket, F_GETFL, 0);
 	return flags >= 0 && fcntl(socket, F_SETFL, flags | O_NONBLOCK) == 0;
 }
+bool PrepareListener(Socket socket)
+{
+	// The connections of a server that stopped can stay in the system for minutes after the process ends. A new server
+	// on the same port must listen at once, so the listener can use the address of these old connections.
+	int on = 1;
+	return setsockopt(socket, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on)) == 0;
+}
+int LastError()
+{
+	return errno;
+}
 #endif
 
 #if defined(MSG_NOSIGNAL)
@@ -111,6 +134,11 @@ constexpr auto k_IdleLimit = std::chrono::seconds(60);
 /// A connection must finish the TLS and WebSocket handshakes in this time
 constexpr auto k_HandshakeLimit = std::chrono::seconds(15);
 constexpr size_t k_ReadChunk = 16 * 1024;
+/// The log tells how long a client took to get the bytes that the server queued for it, from this many bytes, such as a
+/// world state
+constexpr size_t k_LoggedBurstBytes = 256 * 1024;
+// Sends with less time between them than this are one burst, such as the parts of a world state
+constexpr auto k_BurstGap = std::chrono::milliseconds(100);
 /// The TLS 1.2 cipher suites: ECDHE with AES-GCM or ChaCha20-Poly1305 only, as the game's clients
 constexpr const char* k_Tls12Suites = "ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:"
                                       "ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:"
@@ -235,6 +263,11 @@ struct SocketWebSocketServer::Connection
 	bool overflow {false};
 	std::chrono::steady_clock::time_point started;
 	std::chrono::steady_clock::time_point lastHeard;
+	/// The bytes that the server queued since the queue was last empty, and the time that the first of them was queued
+	size_t burstBytes {0};
+	std::chrono::steady_clock::time_point burstStart;
+	/// The time at which the queue of the burst became empty: the client got the last byte
+	std::chrono::steady_clock::time_point burstLast;
 
 	~Connection()
 	{
@@ -387,11 +420,13 @@ std::optional<std::string> SocketWebSocketServer::Listen(const ListenSettings& s
 		CloseSocket(listener);
 		return "the address is not an IPv4 address";
 	}
-	if (bind(listener, reinterpret_cast<const sockaddr*>(&address), sizeof(address)) != 0 || listen(listener, 64) != 0 ||
-	    !MakeNonBlocking(listener))
+	if (!PrepareListener(listener) || bind(listener, reinterpret_cast<const sockaddr*>(&address), sizeof(address)) != 0 ||
+	    listen(listener, 64) != 0 || !MakeNonBlocking(listener))
 	{
+		// The log gives the code of the system, so that the cause is clear, for example a port that a process holds
+		const auto error = LastError();
 		CloseSocket(listener);
-		return "the server cannot listen on that address and port";
+		return "the server cannot listen on that address and port (system error " + std::to_string(error) + ")";
 	}
 	socklen_t length = sizeof(address);
 	getsockname(listener, reinterpret_cast<sockaddr*>(&address), &length);
@@ -456,6 +491,37 @@ void SocketWebSocketServer::Accept()
 		}
 		_connections.emplace(_nextId++, std::move(connection));
 	}
+}
+
+namespace
+{
+/// The seconds from a time to now, for the log
+[[nodiscard]] int64_t SecondsSince(std::chrono::steady_clock::time_point time, std::chrono::steady_clock::time_point now)
+{
+	return std::chrono::duration_cast<std::chrono::seconds>(now - time).count();
+}
+} // namespace
+
+void SocketWebSocketServer::LogBurst(ConnectionId id, Connection& connection)
+{
+	const auto now = std::chrono::steady_clock::now();
+	if (!connection.out.Empty() || connection.burstBytes < k_LoggedBurstBytes || now - connection.burstLast < k_BurstGap)
+	{
+		return;
+	}
+	const auto milliseconds =
+	    std::chrono::duration_cast<std::chrono::milliseconds>(connection.burstLast - connection.burstStart).count();
+	SPDLOG_LOGGER_INFO(spdlog::get("game"), "Game socket {}: the client got {} bytes in {} ms", id, connection.burstBytes,
+	                   milliseconds);
+	connection.burstBytes = 0;
+}
+
+void SocketWebSocketServer::LogEnd(ConnectionId id, const Connection& connection, std::string_view cause)
+{
+	const auto now = std::chrono::steady_clock::now();
+	SPDLOG_LOGGER_INFO(spdlog::get("game"), "Game socket {} ends: {}. It was open for {} s, the last data came {} s before{}",
+	                   id, cause, SecondsSince(connection.started, now), SecondsSince(connection.lastHeard, now),
+	                   connection.out.Empty() ? std::string() : fmt::format(", {} bytes did not go", connection.out.Size()));
 }
 
 bool SocketWebSocketServer::Service(ConnectionId id, Connection& connection)
@@ -591,6 +657,9 @@ bool SocketWebSocketServer::Service(ConnectionId id, Connection& connection)
 		{
 			const auto code = connection.reader.GetError() == frames::FrameReader::Error::TooLarge ? server_close::k_TooLarge
 			                                                                                       : server_close::k_Protocol;
+			LogEnd(id, connection,
+			       code == server_close::k_TooLarge ? "the client sent a message that is too large"
+			                                        : "the client sent a frame that breaks the WebSocket protocol");
 			const auto reply = frames::EncodeClose(code);
 			std::ignore = connection.out.Add(reply.data(), reply.size(), limits::k_MostQueuedBytes + reply.size());
 			connection.Flush();
@@ -605,7 +674,7 @@ bool SocketWebSocketServer::Service(ConnectionId id, Connection& connection)
 	// A client that does not read what the server sends ends, so that its queue does not use the memory of the server
 	if (connection.overflow && connection.stage == Stage::Open)
 	{
-		SPDLOG_LOGGER_INFO(spdlog::get("game"), "Game socket {} does not read what the server sends: it closes", id);
+		LogEnd(id, connection, "the client does not read what the server sends, and the queue is full");
 		connection.stage = Stage::Ended;
 		if (_handlers.closed)
 		{
@@ -614,13 +683,27 @@ bool SocketWebSocketServer::Service(ConnectionId id, Connection& connection)
 		return false;
 	}
 
+	const bool hadQueue = !connection.out.Empty();
 	const bool flushed = connection.Flush();
+	if (hadQueue && connection.out.Empty())
+	{
+		connection.burstLast = std::chrono::steady_clock::now();
+	}
+	LogBurst(id, connection);
 	if (connection.stage == Stage::Closing)
 	{
 		return flushed && !connection.out.Empty() && now - connection.lastHeard < k_HandshakeLimit;
 	}
 	if (!alive || !flushed || now - connection.lastHeard > k_IdleLimit)
 	{
+		if (connection.stage == Stage::Open)
+		{
+			LogEnd(id, connection,
+			       !alive     ? "the client or the network ended the connection with no close frame"
+			       : !flushed ? "a write to the client failed"
+			                  : fmt::format("the server ended it: no data from the client for {} s",
+			                                std::chrono::duration_cast<std::chrono::seconds>(k_IdleLimit).count()));
+		}
 		if (connection.stage == Stage::Open && _handlers.closed)
 		{
 			connection.stage = Stage::Ended;
@@ -675,14 +758,25 @@ bool SocketWebSocketServer::Send(ConnectionId id, uint8_t opcode, std::span<cons
 		return false;
 	}
 	const auto frame = frames::EncodeFrame(static_cast<frames::Opcode>(opcode), bytes);
+	const auto sentAt = std::chrono::steady_clock::now();
+	if (connection.out.Empty() && sentAt - connection.burstLast >= k_BurstGap)
+	{
+		connection.burstBytes = 0;
+		connection.burstStart = sentAt;
+	}
 	if (!connection.out.Add(frame.data(), frame.size()))
 	{
 		// The connection ends at the next poll, never inside a handler of the game
 		connection.overflow = true;
 		return false;
 	}
+	connection.burstBytes += frame.size();
 	// The frame goes at once when the socket takes it
 	connection.Flush();
+	if (connection.out.Empty())
+	{
+		connection.burstLast = std::chrono::steady_clock::now();
+	}
 	ERR_clear_error();
 	return true;
 }

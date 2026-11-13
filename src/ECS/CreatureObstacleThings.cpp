@@ -53,6 +53,7 @@
 #include "ECS/Components/Vortex.h"
 #include "ECS/Components/Workshop.h"
 #include "ECS/Components/WorshipSite.h"
+#include "ECS/MobileObjectRecord.h"
 #include "ECS/Registry.h"
 #include "ECS/ScriptHighlightRules.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
@@ -254,6 +255,13 @@ std::optional<obstacles::Thing> creature_obstacle_things::ThingOf(const Registry
 	else if (registry.AnyOf<Mobile, Ball, ScriptHighlight>(entity))
 	{
 		thing.shape = obstacles::Shape::AtPlace;
+		// A crop is walked round only while it burns, and never by a creature that a script controls
+		if (const auto* mobile = registry.TryGet<const MobileObject>(entity);
+		    mobile != nullptr && Locator::infoConstants::has_value() &&
+		    mobile_object_record::ClassOf(Locator::infoConstants::value(), *mobile) == mobile_object_record::Class::Crop)
+		{
+			thing.avoidance = obstacles::Avoidance::BurningUnlessScripted;
+		}
 	}
 	else if (const auto* abode = registry.TryGet<const Abode>(entity);
 	         abode != nullptr && abode->type == AbodeNumber::FootballPitch)

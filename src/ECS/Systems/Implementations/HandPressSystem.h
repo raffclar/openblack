@@ -60,8 +60,7 @@ private:
 	                 bool handHoldsThing);
 	void ActionPress(const SDL_Event& event, bool inTemple, bool handTakesPresses, bool waitIgnoresPresses, bool hasGrab,
 	                 bool handHoldsThing, const components::InterfaceLimits& interfaceLimits, bool mayHold);
-	void MovePress(const SDL_Event& event, bool inTemple, bool handTakesPresses, bool waitIgnoresPresses,
-	               const PressContext& context);
+	void MovePress(const SDL_Event& event, bool inTemple, bool handTakesPresses, const PressContext& context);
 
 	std::unique_ptr<HandPressWorld> _world;
 	input::PointerButtons _buttons;
@@ -74,9 +73,11 @@ private:
 	bool _dialogueClick {false};
 	/// The flag of the interface for a press of the select button that holds the land
 	bool _selectPress {false};
-	/// The end of the interface lock, or a press in a wait of the interface, stopped the grip of the land, until the player
-	/// lets go of the select button
+	/// The end of the interface lock, or a press in an action other than the normal one, stopped the grip of the land,
+	/// until the player lets go of the select button
 	bool _landGripStopped {false};
+	/// The event is a press of the select button in an action other than the normal one
+	bool _selectPressInAction {false};
 	/// The flags of the hand when both buttons end the interface lock and the select button grips the land at once
 	input::HandButtons _gripAgainButtons;
 	/// The grip of the land that both buttons started keeps no thing, until the grip ends

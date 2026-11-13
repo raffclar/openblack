@@ -23,6 +23,7 @@
 #include "Online/Backoff.h"
 #include "Online/HttpClientInterface.h"
 #include "Online/PushChannelInterface.h"
+#include "Online/SiteSessionInterface.h"
 #include "Online/TokenStoreInterface.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
@@ -57,10 +58,11 @@ public:
 	/// The clock of the computer. The lobby gives the end of each token as a time of the calendar.
 	using Clock = std::function<std::chrono::system_clock::time_point()>;
 
-	/// With no config, the game has no lobby, and each call fails with NotConfigured
+	/// With no config, the game has no lobby, and each call fails with NotConfigured. With no site, the game cannot get a
+	/// session from the sign-in of the lobby site.
 	LobbyClientSystem(std::optional<LobbyClientConfig> config, online::HttpClientInterface& http,
 	                  std::unique_ptr<online::PushChannelInterface> push, std::unique_ptr<online::TokenStoreInterface> tokens,
-	                  Clock clock);
+	                  Clock clock, std::unique_ptr<online::SiteSessionInterface> site = nullptr);
 	~LobbyClientSystem() override;
 	LobbyClientSystem(const LobbyClientSystem&) = delete;
 	LobbyClientSystem& operator=(const LobbyClientSystem&) = delete;
@@ -77,6 +79,9 @@ public:
 
 	void Login(std::string name, std::string password, LobbyCallback<lobby_api::AccountRef> callback) override;
 	void ResumeSession(LobbyCallback<lobby_api::AccountRef> callback) override;
+	[[nodiscard]] bool CanSignInFromSite() const override { return _config.has_value() && _site != nullptr && !_siteDeclined; }
+	[[nodiscard]] bool IsSignedInFromSite() const override { return _state == LobbySessionState::LoggedIn && _fromSite; }
+	void SignInFromSite(LobbyCallback<lobby_api::AccountRef> callback) override;
 	void Logout(bool everywhere, LobbyCallback<LobbyDone> callback) override;
 
 	void GetMe(LobbyCallback<lobby_api::Me> callback) override;
@@ -139,8 +144,11 @@ private:
 	/// Sends the call with the access token, after a refresh of the tokens when the access token is old
 	void Authorized(Call call);
 	void Dispatch(Call call);
-	/// Gets a new pair of tokens. The function runs after it, with the error or with None.
+	/// Gets a new pair of tokens, or a new access token from the site for a session of the site. The function runs after
+	/// it, with the error or with None.
 	void Refresh(std::function<void(const LobbyError&)> after);
+	/// Asks the site for a new access token of a session of the site
+	void RefreshFromSite(const std::function<void(const LobbyError&)>& finish);
 	void ApplySession(const lobby_api::Session& session);
 	/// Forgets the session and the tokens here and in the store
 	void EndSession();
@@ -159,8 +167,13 @@ private:
 	std::unique_ptr<online::PushChannelInterface> _push;
 	std::unique_ptr<online::TokenStoreInterface> _tokens;
 	Clock _clock;
+	std::unique_ptr<online::SiteSessionInterface> _site;
 
 	LobbySessionState _state {LobbySessionState::LoggedOut};
+	/// The session came from the sign-in of the site. It has no refresh token: the site gives each new access token.
+	bool _fromSite {false};
+	/// The player logged out of a session of the site in this run. The client then does not use the site again.
+	bool _siteDeclined {false};
 	std::optional<lobby_api::AccountRef> _account;
 	bool _emailRequired {false};
 	std::string _accessToken;

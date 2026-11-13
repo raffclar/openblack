@@ -486,24 +486,15 @@ public:
 	[[nodiscard]] int32_t AlphaByte() const { return _alphaByte; }
 	[[nodiscard]] float InWorld() const { return _inWorld; }
 	void SetInWorld(float blend) { _inWorld = blend; }
-	[[nodiscard]] float InWorldTarget() const { return _inWorldTarget; }
 	void SetInWorldTarget(float target) { _inWorldTarget = target; }
-	[[nodiscard]] glm::vec3 WorldTarget() const { return _worldTarget.GetValue(); }
-	[[nodiscard]] float WorldSide() const { return _worldSide; }
-	[[nodiscard]] float WorldHeight() const { return _worldHeight; }
 	[[nodiscard]] const glm::mat3& Rows() const { return _rows; }
 	[[nodiscard]] const glm::vec3& Position() const { return _position; }
 	/// Where the land's light is sampled for the advisor in the world
 	[[nodiscard]] const glm::vec3& LightPosition() const { return _lightPosition; }
-	[[nodiscard]] float Roll() const { return _roll; }
 	[[nodiscard]] Edge ClingEdge() const { return _edge; }
 	[[nodiscard]] glm::vec2 ClingTarget() const { return {_clingX, _clingY}; }
-	[[nodiscard]] glm::vec2 PointTarget() const { return {_pointX, _pointY}; }
-	[[nodiscard]] bool PointOffScreen() const { return _pointOffScreen; }
 	[[nodiscard]] bool PuffRunning() const { return _puffRunning; }
-	/// The puff's time (its draw side)
-	[[nodiscard]] float PuffTime() const { return _puffTime; }
-	/// clamp(PuffTime() x 4, 0, 1) of this frame's draw
+	/// The puff time times 4, held between 0 and 1, of this frame's draw
 	[[nodiscard]] float PuffFade() const { return _puffFade; }
 	/// nullopt until the first draw of a puff makes them
 	[[nodiscard]] const std::optional<std::array<PuffParticle, k_PuffParticles>>& PuffParticles() const
@@ -515,19 +506,9 @@ public:
 	[[nodiscard]] uint32_t EmotionTarget() const { return _emotionTarget; }
 	[[nodiscard]] float EmotionWeight() const { return _emotionWeight; }
 	[[nodiscard]] float EmotionPeak() const { return _emotionPeak; }
-	[[nodiscard]] int32_t LookMode() const { return _lookMode; }
-	[[nodiscard]] int32_t TagLookMode() const { return _tagLookMode; }
-	[[nodiscard]] const std::optional<glm::vec3>& LookTarget() const { return _lookTarget; }
 	[[nodiscard]] glm::vec2 HeadAngles() const { return {_head.x, _head.y}; }
 	[[nodiscard]] const std::array<float, 16>& Face() const { return _face; }
-	[[nodiscard]] uint32_t ActiveFlags() const { return _activeFlags; }
 	[[nodiscard]] int32_t SlotMode(size_t i) const { return _slotMode[i]; }
-	[[nodiscard]] float SlotPhase(size_t i) const { return _slotPhase[i]; }
-	void SetSlot(size_t i, int32_t mode, float phase)
-	{
-		_slotMode[i] = mode;
-		_slotPhase[i] = phase;
-	}
 	[[nodiscard]] const std::vector<AnimLayer>& Layers() const { return _layers; }
 	/// The gesture tags of the line being said that have not fired yet
 	[[nodiscard]] size_t TagsLeft() const { return _tags.size() - _nextTag; }
@@ -538,10 +519,6 @@ public:
 	{
 		return _pupilsSet ? std::optional(_pupils) : std::nullopt;
 	}
-	/// During this frame's GoInvisible windows
-	[[nodiscard]] bool Flicker() const { return _flicker; }
-	[[nodiscard]] float PartnerDistance() const { return _partnerDistance; }
-	[[nodiscard]] float HoverZoneStrength(size_t zone) const { return _zones[zone].strength; }
 
 	/// Zone::Feel summed over the 6 zones minus 250 e^2
 	[[nodiscard]] float Feel(float x, float y) const;
@@ -643,7 +620,6 @@ private:
 	float _mouseInterest {0.0f};
 	bool _lookToggle {false};
 	float _lookTimer {0.0f};
-	int32_t _lookMode {0}; ///< The mode UpdateLookTarget chose this frame
 	int32_t _tagLookMode {0};
 	int32_t _savedLookMode {0};
 	std::optional<glm::vec3> _lookTarget;
@@ -757,7 +733,6 @@ public:
 	[[nodiscard]] ControlState State(int dude) const { return _state[dude]; }
 	[[nodiscard]] float Timer(int dude) const { return _timer[dude]; }
 	[[nodiscard]] int Focus() const { return _focus; }
-	[[nodiscard]] int32_t PointMode(int dude) const { return _pointMode[dude]; }
 	[[nodiscard]] bool LookOn(int dude) const { return _lookOn[dude]; }
 	[[nodiscard]] const Screen& GetScreen() const { return _frame.screen; }
 	[[nodiscard]] const FrameInput& Frame() const { return _frame; }

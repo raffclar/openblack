@@ -439,10 +439,11 @@ private:
 		/// them again in the same sequence, as the tests do.
 		std::vector<entt::entity> comeAcross;
 	};
-	/// The same, with the facts kept from the last action of the same desire when they are still true
-	[[nodiscard]] std::vector<creature_planner::ObjectCandidate>
-	BelievedThingsToActOn(entt::entity creature, components::CreatureMindState& mind, creature_desires::Desire desire,
-	                      const std::function<bool(entt::entity)>& suitsAction, BelievedFacts& kept);
+	/// The same, with the facts kept from the last action of the same desire when they are still true. The things go into
+	/// the list, which loses what it held before.
+	void BelievedThingsToActOn(entt::entity creature, components::CreatureMindState& mind, creature_desires::Desire desire,
+	                           const std::function<bool(entt::entity)>& suitsAction, BelievedFacts& kept,
+	                           std::vector<creature_planner::ObjectCandidate>& found);
 	/// The whole thing that a thing shown to the creature is part of. The creature comes across the thing and the whole
 	/// thing. A creature is part of no whole thing.
 	[[nodiscard]] std::optional<entt::entity> WholeOfShownThing(entt::entity creature, components::CreatureMindState& mind,
@@ -675,6 +676,9 @@ private:
 	std::vector<entt::entity> _acting;
 	/// The things that the agenda of a creature that another creature sees uses, kept from sighting to sighting
 	std::vector<std::optional<uint32_t>> _agendaThings;
+	/// The cells of the towns that a creature looks far about at, kept from look to look so that a look gets no memory
+	/// from the heap
+	std::vector<creature_object_beliefs::TownCell> _farTowns;
 	/// How many times a creature came across a thing and this changed what the tests of the beliefs read: a new belief,
 	/// a new place or new attributes, a noticed mover, a first sighting in the turn, a villager or a creature seen again.
 	/// Facts kept about beliefs stay true while this does not change.

@@ -166,8 +166,17 @@ enum class TreePlace : uint8_t
 /// The roots a moving tree has drawn where it has got to between turns are this share of its model's half width
 inline constexpr float k_MovingRootsScale = 0.2f;
 
-/// The sizes of the roots drawn under a tree in a place, as shares of its model's half width: none in the land
-[[nodiscard]] std::span<const float> ShownRootsScales(TreePlace place);
+/// The kinds of object that the game roots in the land
+enum class RootedKind : uint8_t
+{
+	/// A tree draws its roots when it is out of the land, and again where it moves to between turns
+	Tree,
+	/// A crop draws roots only where it moves to between turns. Its own draw out of the land has no roots.
+	Crop,
+};
+
+/// The sizes of the roots drawn under a rooted object in a place, as shares of its model's half width: none in the land
+[[nodiscard]] std::span<const float> ShownRootsScales(TreePlace place, RootedKind kind = RootedKind::Tree);
 /// Where the roots drawn under a tree go: at its base, turned and stretched with it, the share of its model's half
 /// width as big as the tree is
 [[nodiscard]] glm::mat4 ShownRootsModel(const glm::mat4& treeModel, float scale, float treeHalfWidth);

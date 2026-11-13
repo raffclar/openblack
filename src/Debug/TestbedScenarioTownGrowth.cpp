@@ -1153,4 +1153,35 @@ void openblack::testbed_scenarios::AddTownGrowthScenarios(std::vector<Scenario>&
 	    .objects = {{.type = AbodeInfo::CelticHut, .offset = k_Hut, .yawDegrees = 180.0f, .built = k_HutHalfBuilt}},
 	    .commands = {{.kind = Command::Kind::FillBuiltAmount, .delaySeconds = 3.0f, .object = 0}},
 	});
+	// The hand gives food and wood to a storage pit that goes up
+	all.push_back({
+	    .id = "town.storage_pit_going_up_takes_food",
+	    .name = "The hand gives food and wood to a storage pit that goes up",
+	    .facet = Facet::Objects,
+	    .description = "A Celtic town of the player's with a village centre and a storage pit that is half built, with "
+	                   "no builders. Two piles lie beside the pit: 5000 food and 300 wood. The hand takes the food "
+	                   "and uses it on the pit. Then the hand takes the wood and uses it on the pit.",
+	    .expected = "The pit takes the 5000 food into its food pile, which comes up from the ground. Its store holds "
+	                "5000 food. The 300 wood goes onto the wood pile of the site, for the builders, and not into the store "
+	                "of the pit. Both piles in the hand go.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {k_Centre, k_Pit}, .distance = 0.4f},
+	    .objects =
+	        {{.type = AbodeInfo::CelticTownCentre, .offset = k_Centre},
+	         {.type = AbodeInfo::CelticStoragePit, .offset = k_Pit, .storedFood = 0, .storedWood = 0, .built = k_HutHalfBuilt},
+	         {.type = PotInfo::HandFood, .offset = k_Pit + glm::vec2(20.0f, -10.0f), .amount = 5000},
+	         {.type = PotInfo::HandWood, .offset = k_Pit + glm::vec2(25.0f, -10.0f), .amount = 300}},
+	    .commands = {{.kind = Command::Kind::HandTake, .delaySeconds = 2.0f, .object = 2},
+	                 {.kind = Command::Kind::HandApply, .delaySeconds = 3.0f, .object = 1},
+	                 {.kind = Command::Kind::HandTake, .delaySeconds = 5.0f, .object = 3},
+	                 {.kind = Command::Kind::HandApply, .delaySeconds = 6.0f, .object = 1}},
+	    .hand = HandHold {.offset = k_Pit, .height = 8.0f},
+	    .townBeliefInPlayer = 1.0f,
+	    .checks = {{.label = "the pit holds the 5000 food of the hand and none of the wood",
+	                .quantity = checks::Quantity::ObjectResource,
+	                .index = 1,
+	                .afterTurns = 80,
+	                .atLeast = 5000.0,
+	                .atMost = 5000.0}},
+	});
 }

@@ -82,6 +82,9 @@ public:
 	/// The interface waits after a gift of the held thing, or after a use of the held thing or the miracle on a thing,
 	/// until the button is let go. In these waits the presses of the buttons do nothing.
 	[[nodiscard]] virtual bool WaitIgnoresPresses() const = 0;
+	/// The hand does an action other than the normal one, for example a take, a lock, a wait, a throw, a grip of a totem
+	/// or of the tip bubble, or a hold of the rope. A press of the select button then grips no land.
+	[[nodiscard]] virtual bool DoesAction() const = 0;
 
 	// The miracles in the hand
 	[[nodiscard]] virtual bool MagicHandBusy() const = 0;

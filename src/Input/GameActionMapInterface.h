@@ -173,6 +173,9 @@ public:
 	/// A message of the mouse from a path that the testbed draws as if with the hand, at the place in window pixels. The
 	/// message comes at the time of the clock that the help reads, as a message of the player's mouse does.
 	virtual void DrawnMouseMessage(glm::ivec2 /*position*/) {}
+	/// A place of the mouse that a hand demonstration replays, at the place in window pixels. The interface gets the
+	/// place at once, as each recorded move is one message of its own.
+	virtual void ReplayedMousePlace(glm::ivec2 /*position*/) {}
 	/// Mouse wheel notches turned this frame, positive away from the user
 	[[nodiscard]] virtual float GetMouseWheelDelta() const = 0;
 	[[nodiscard]] virtual std::array<std::optional<glm::vec3>, 2> GetHandPositions() const = 0;

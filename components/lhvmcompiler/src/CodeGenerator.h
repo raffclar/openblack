@@ -26,12 +26,6 @@ namespace openblack::lhvm::chl
 class CodeGenerator
 {
 public:
-	struct ScriptRecord
-	{
-		VMScript script;
-		ScriptKind kind {ScriptKind::Script};
-	};
-
 	CodeGenerator(const ParseEnvironment& environment, DiagnosticSink& sink, uint32_t firstScriptId);
 
 	/// Start from an existing program's tables (for recompiling scripts into it)

@@ -59,15 +59,12 @@ public:
 	[[nodiscard]] bool IsKeyword(std::string_view word) const;
 	/// Forms of a native function
 	[[nodiscard]] std::vector<const CompiledForm*> FormsOf(std::string_view native) const;
-	/// Patterns that failed to load, for tests
-	[[nodiscard]] const std::vector<std::string>& Rejected() const { return _rejected; }
 
 private:
 	std::vector<CompiledForm> _forms;
 	std::map<std::string, std::vector<const CompiledForm*>, std::less<>> _prefix;
 	std::vector<const CompiledForm*> _postfix;
 	std::set<std::string, std::less<>> _keywords;
-	std::vector<std::string> _rejected;
 };
 
 } // namespace openblack::lhvm::chl

@@ -9,7 +9,10 @@
 
 // Testbed scenarios for the looks of the creature: growth, appearance and light.
 
+#include <algorithm>
 #include <array>
+#include <iterator>
+#include <vector>
 
 #include "Creature/CreatureCave.h"
 #include "Creature/CreatureFight.h"
@@ -1534,6 +1537,43 @@ void testbed_scenarios::AddLight(std::vector<Scenario>& all)
 	    .framing = {.shot = Shot::Placed, .eye = {50.0f, 40.0f, -15.0f}, .look = {0.0f, 0.0f, 25.0f}},
 	    .objects = {{.type = AbodeInfo::CelticStoragePit, .offset = {5.0f, 25.0f}},
 	                {.type = TreeInfo::Oak, .offset = {-8.0f, 12.0f}, .scale = 1.5f}},
+	});
+
+	// The hand takes a tree from a big forest, a tree of a forest and a lone tree, one after the other, with the default
+	// shadows
+	const auto holdAndPutDown = [](size_t object) {
+		return std::vector<Command> {
+		    Command {.kind = Kind::PointerTo, .delaySeconds = 1.0f, .point = {0.5f, 0.6f}},
+		    Command {.kind = Kind::HandTake, .delaySeconds = 1.0f, .object = object},
+		    Command {.kind = Kind::PointerTo, .delaySeconds = 1.5f, .point = {0.35f, 0.65f}},
+		    Command {.kind = Kind::PointerTo, .delaySeconds = 2.0f, .point = {0.6f, 0.65f}},
+		    Command {.kind = Kind::HandRelease, .delaySeconds = 2.0f},
+		};
+	};
+	std::vector<Command> plucks;
+	for (const auto object : std::array<size_t, 3> {0, 1, 2})
+	{
+		std::ranges::copy(holdAndPutDown(object), std::back_inserter(plucks));
+	}
+	all.push_back({
+	    .id = "light.plucked_tree_shadows",
+	    .name = "Trees that the hand takes from a big forest, from a forest and from the ground",
+	    .facet = Facet::Light,
+	    .description = "A big forest stands on the left, a conifer of a forest stands in the middle and a lone conifer "
+	                   "stands on the right, at noon with the clock stopped. The hand takes a tree from the big forest, "
+	                   "moves it left and right, and puts it down. Then the hand does the same with the conifer of the "
+	                   "forest, and then with the lone conifer.",
+	    .expected = "Each held tree shows in the hand from each angle and distance of the camera, also far from the "
+	                "place where it stood. The three held trees cast the same shadow, which moves with the hand as part "
+	                "of the shadow of the hand. No baked shadow comes onto the land under a held tree. The big forest "
+	                "keeps its shadow on the land. The land where a conifer stood shows no shadow of it after the hand "
+	                "takes it.",
+	    .environment = {.hour = 12.0f, .clockRuns = false, .dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 45.0f, -30.0f}, .look = {0.0f, 0.0f, 35.0f}},
+	    .objects = {{.type = BigForestInfo::Info1, .offset = {-35.0f, 50.0f}},
+	                {.type = TreeInfo::Conifer, .offset = {0.0f, 55.0f}, .forest = 1},
+	                {.type = TreeInfo::Conifer, .offset = {30.0f, 45.0f}}},
+	    .commands = plucks,
 	});
 
 	all.push_back({

@@ -207,6 +207,7 @@
 #include "Web/BrowserWebSocketClient.h"
 #include "Web/FetchHttpClient.h"
 #include "Web/IndexedDbMapStore.h"
+#include "Web/PageSiteSession.h"
 #else
 #include "Online/Desktop/CurlHttpClient.h"
 #include "Online/Desktop/CurlWebSocketClient.h"
@@ -478,7 +479,13 @@ void InitializeOnline(const player_profiles::Store& profiles)
 	    LobbyConfig(), Locator::httpClient::value(),
 	    std::make_unique<online::WebSocketPushChannel>(Locator::webSocketClient::value(), k_PushAuth),
 	    online::MakeTokenStore(Locator::filesystem::value(), profiles.folder),
-	    []() { return std::chrono::system_clock::now(); });
+	    []() { return std::chrono::system_clock::now(); },
+#if defined(__EMSCRIPTEN__)
+	    // The browser game logs in as the account that is signed in on the site of the page
+	    std::make_unique<web::PageSiteSession>());
+#else
+	    nullptr);
+#endif
 	Locator::lobbyRoom::emplace<LobbyRoomSystem>(Locator::lobbyClient::value(), online::ThisBuildId(), []() {
 		return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch())
 		    .count();

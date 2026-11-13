@@ -101,7 +101,18 @@ void MagicSystem::DiscardHeldSeedOf(PlayerNames player)
 	DiscardHeldSeed();
 }
 
+void MagicSystem::ShakeOffHeldSeedOf(PlayerNames player)
+{
+	const ActingAs acting(*this, player);
+	DropHeldSeed(false);
+}
+
 void MagicSystem::DiscardHeldSeed()
+{
+	DropHeldSeed(true);
+}
+
+void MagicSystem::DropHeldSeed(bool handShakes)
 {
 	if (!Held().has_value())
 	{
@@ -125,8 +136,8 @@ void MagicSystem::DiscardHeldSeed()
 		const auto& seed = registry.Get<const SpellSeed>(*Held());
 		ReturnFromSeed(seed, magic::SeedRefund(seed.hasIcon, seed.chantStore));
 	}
-	// The hand shakes: its sound plays and a band flies off the hand
-	if (own && Locator::miracleFxSystem::has_value())
+	// When the hand shakes, its sound plays and a band flies off the hand
+	if (handShakes && own && Locator::miracleFxSystem::has_value())
 	{
 		Locator::miracleFxSystem::value().HandShaken();
 	}

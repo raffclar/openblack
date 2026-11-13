@@ -98,6 +98,47 @@ void openblack::testbed_scenarios::AddVillageTotemScenarios(std::vector<Scenario
 	    .townBeliefInPlayer = k_TownBelief,
 	    .worshipShare = 0.0f,
 	});
+	// The select button goes down while the hand grips the totem. Both buttons end the grip as the let go of the Action
+	// button does, and the hand grips the land at once.
+	all.push_back({
+	    .id = "hand.totem_hold_both_buttons",
+	    .name = "Both buttons while the hand grips a totem",
+	    .facet = Facet::Hand,
+	    .description = "The Norse town centre of the player's town, with the player's temple and the town's worship site "
+	                   "built. The pointer goes onto the totem, and the Action button takes hold of it. The pointer moves up "
+	                   "the screen. Then the select button goes down, the pointer moves down the screen, and both buttons "
+	                   "come up.",
+	    .expected = "Holding the totem, the hand raises it as the pointer moves up. At the press of the select button the "
+	                "hand lets go of the totem, as at the let go of the Action button: the share floats up over it and it "
+	                "eases there. The hand grips the land at once with the grip sound, and both buttons turn and zoom the "
+	                "camera.",
+	    .framing = {.shot = Shot::Overview,
+	                .include = {k_Centre - glm::vec2(15.0f), k_Centre + glm::vec2(15.0f)},
+	                .distance = 0.5f},
+	    .objects = {{.type = AbodeInfo::NorseTownCentre, .offset = k_Centre},
+	                {.type = VillagerInfo::NorseHousewifeFemale,
+	                 .offset = k_Centre + glm::vec2(10.0f, -10.0f),
+	                 .joinTown = true}},
+	    .temples = {{.offset = k_Temple}},
+	    .commands = {{.kind = Command::Kind::PointerOnTotem, .delaySeconds = 4.0f, .object = 0, .amount = 3.0f},
+	                 {.kind = Command::Kind::PointerPress, .delaySeconds = 0.5f, .value = 3},
+	                 {.kind = Command::Kind::PointerSweep, .delaySeconds = 0.5f, .point = {0.0f, -0.1f}, .amount = 1.0f},
+	                 {.kind = Command::Kind::PointerPress, .delaySeconds = 1.5f, .value = 1},
+	                 {.kind = Command::Kind::PointerSweep, .delaySeconds = 0.5f, .point = {0.0f, 0.1f}, .amount = 2.0f},
+	                 {.kind = Command::Kind::PointerRelease, .delaySeconds = 2.5f, .value = 1},
+	                 {.kind = Command::Kind::PointerRelease, .delaySeconds = 0.1f, .value = 3}},
+	    .townBeliefInPlayer = k_TownBelief,
+	    .worshipShare = 0.0f,
+	    .checks = {{.label = "the hand grips the totem",
+	                .quantity = checks::Quantity::TotemGripped,
+	                .afterTurns = 45,
+	                .byTurn = 60,
+	                .atLeast = 1.0},
+	               {.label = "both buttons end the grip of the totem",
+	                .quantity = checks::Quantity::TotemGripped,
+	                .afterTurns = 80,
+	                .atMost = 0.0}},
+	});
 	// The creature stands under the hand, so that it sees the hand, and the camera follows it
 	const glm::vec2 watcher = k_Centre + glm::vec2(0.0f, -20.0f);
 	all.push_back({

@@ -22,6 +22,7 @@
 #include <entt/core/fwd.hpp>
 #include <entt/entity/entity.hpp>
 #include <entt/entity/storage.hpp>
+#include <entt/resource/resource.hpp>
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
@@ -129,7 +130,15 @@ private:
 	[[nodiscard]] WorkerPool& Workers();
 	void Reset(size_t blockCount);
 
-	std::unordered_map<entt::id_type, const L3DMesh::Footprint*> _footprints;
+	/// The footprint of each model that the search found, with the model. The game can make a model again with the same
+	/// id, for example a damaged building, and remove the old model from the resources. The kept model keeps its
+	/// footprint alive until the land is new.
+	struct FoundFootprint
+	{
+		entt::resource<const L3DMesh> mesh;
+		const L3DMesh::Footprint* footprint {nullptr};
+	};
+	std::unordered_map<entt::id_type, FoundFootprint> _footprints;
 	/// The known things by their entities. A look-up by an entity costs little, as the walk of the things does it for each
 	/// thing in each frame.
 	entt::storage<Known> _known;

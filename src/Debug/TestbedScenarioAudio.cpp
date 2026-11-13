@@ -607,6 +607,22 @@ void testbed_scenarios::AddAudio(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "temple.exterior_grows",
+	    .name = "The temple grows and changes with the alignment",
+	    .facet = Facet::Story,
+	    .description = "The player's temple stands new in the middle of the land, and the player is wholly good. After "
+	                   "eight seconds the player becomes wholly evil, and ten seconds after that wholly good again.",
+	    .expected = "Each turn the temple grows a small step from no size toward its size on the land, and its shape and "
+	                "colours move a small step toward the look of its player's alignment. It changes smoothly, with no "
+	                "jumps and no holes.",
+	    .environment = {.playerAlignment = 1.0f, .temple = glm::vec2(0.0f)},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 60.0f, -150.0f}, .look = {0.0f, 15.0f, 0.0f}},
+	    .commands = {{.kind = Kind::SetAlignment, .delaySeconds = 8.0f, .alignment = -1.0f},
+	                 {.kind = Kind::SetAlignment, .delaySeconds = 10.0f, .alignment = 1.0f}},
+	    .repeatFrom = 0,
+	});
+
+	all.push_back({
 	    .id = "temple.pictures_unlit",
 	    .name = "The temple's pictures drawn in one colour with no lightmap",
 	    .facet = Facet::Story,
@@ -777,6 +793,21 @@ void testbed_scenarios::AddAudio(std::vector<Scenario>& all)
 	    .commands = {{.kind = Kind::PauseGame, .delaySeconds = 1.0f, .value = 1}},
 	});
 
+	// The words of the pause over the sun's glare, which the game draws before the words
+	all.push_back({
+	    .id = "interface.pause_text_over_glare",
+	    .name = "The words of the pause over the sun's glare",
+	    .facet = Facet::Interface,
+	    .description = "The clock stands at noon under a clear sky. The camera is low on the land and looks below the sun "
+	                   "in the north west, so the sun shows at the top middle of the screen. After a second the game "
+	                   "pauses.",
+	    .expected = "Game Paused shows in white at the top middle of the screen, over the sun and its orange glare. The "
+	                "glare does not lie over the letters: the white of the letters is not made orange where the glare is.",
+	    .environment = {.hour = 12.0f, .clockRuns = false, .dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 40.0f, 0.0f}, .look = {-100.0f, -6.0f, -100.0f}},
+	    .commands = {{.kind = Kind::PauseGame, .delaySeconds = 1.0f, .value = 1}},
+	});
+
 	// The message of the real weather in the list of incoming messages, then a second one after it
 	all.push_back({
 	    .id = "interface.real_weather_message",
@@ -885,6 +916,39 @@ void testbed_scenarios::AddAudio(std::vector<Scenario>& all)
 	                  .value = k_ChatSays,
 	                  .action = "Hello Bob"},
 	                 {.kind = Kind::Chat, .delaySeconds = 1.5f, .value = k_ChatTypes, .action = "Shall we trade"}},
+	});
+
+	// A speech bubble over a creature that the hand holds to stroke it
+	all.push_back({
+	    .id = "interface.chat_bubble_held_creature",
+	    .name = "The speech bubble of a creature that the hand holds",
+	    .facet = Facet::Interface,
+	    .description = "The hand holds Alice's tiger, as the player holds it to stroke it. Bob, the god of the second "
+	                   "player, says a line in the chat. Then Alice, the god of this computer, says a line to Bob. Four "
+	                   "seconds later the hand lets go.",
+	    .expected = "The tiger stays on the land while the hand holds it. A bubble with the line comes over the tiger, "
+	                "at the height of the tiger above the land under it, as over a tiger that the hand does not hold. "
+	                "The bubble stays when the hand lets go, and fades after some seconds.",
+	    .environment = {.players = {PlayerNames::PLAYER_TWO}},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 30.0f, -45.0f}, .look = {0.0f, 8.0f, 0.0f}},
+	    .creatures = {{.label = "Alice's tiger",
+	                   .species = CreatureType::Tiger,
+	                   .offset = {0.0f, 0.0f},
+	                   .owner = PlayerNames::PLAYER_ONE,
+	                   .size = 0.5f,
+	                   .pauseMind = true}},
+	    .commands = {{.kind = Kind::HandLock, .creature = 0, .delaySeconds = 1.0f},
+	                 {.kind = Kind::Chat,
+	                  .player = PlayerNames::PLAYER_TWO,
+	                  .delaySeconds = 0.5f,
+	                  .value = k_ChatSays,
+	                  .action = "Hello Alice"},
+	                 {.kind = Kind::Chat,
+	                  .player = PlayerNames::PLAYER_ONE,
+	                  .delaySeconds = 1.0f,
+	                  .value = k_ChatSays,
+	                  .action = "Hello from the hand"},
+	                 {.kind = Kind::HandLetGo, .creature = 0, .delaySeconds = 4.0f}},
 	});
 
 	all.push_back({

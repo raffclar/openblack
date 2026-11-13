@@ -119,9 +119,9 @@ inline constexpr uint8_t k_EveryLevel = 0b111;
 	return (partLevels & k_EveryLevel) != 0 && (partLevels & k_EveryLevel) != k_EveryLevel;
 }
 
-/// The matrix a paper thing (a tree, a field's crop) is drawn by as its low mesh: standing upright where it stands, at
-/// its scale, and turned with the camera so that its face looks back along the way the camera looks. Every paper thing
-/// turns the same way at once, by the camera's heading alone.
+/// The matrix a paper thing (a tree) is drawn by as its low mesh: standing upright where it stands, at its scale, and
+/// turned with the camera so that its face looks back along the way the camera looks. Every paper thing turns the same
+/// way at once, by the camera's heading alone.
 [[nodiscard]] glm::mat4 PaperMatrix(const glm::vec3& position, float scale, const glm::vec3& eye,
                                     const glm::vec3& focus) noexcept;
 /// The turn every paper thing takes for a camera, worked out once a frame (see PaperMatrix)

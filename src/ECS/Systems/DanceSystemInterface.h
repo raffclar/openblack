@@ -43,6 +43,8 @@ public:
 	virtual void Destroy(entt::entity dance) = 0;
 	/// The file of a row of the dances' table; none when the row is out of the table or its file can't be read
 	[[nodiscard]] virtual std::shared_ptr<const dance::DanceFile> FileOf(DanceInfo /*type*/) { return nullptr; }
+	/// Reads the file of each row of the dances' table into the cache. The first dance of a row then reads no file.
+	virtual void LoadAllFiles() {}
 	/// Each turn, after the players and before the living: each dance's turn
 	virtual void ProcessTurn() = 0;
 	/// Each frame that the camera reads the keys: a grip of the land ends the camera of a dance

@@ -1410,9 +1410,11 @@ void HandGrabSystem::TakeAtTurn(PlayerNames player, entt::entity object, bool as
 	// The hand pressed on this thing to take it
 	const bool pressed =
 	    (grab->state == HandGrab::State::Grabbing || grab->state == HandGrab::State::Taking) && grab->object == object;
+	// A thing that gives another thing in its place ends the interface lock after the take, whatever the hand took
+	const bool givesInItsPlace = _world->GivesInItsPlace(object);
 	Take(*grab, object, true, false, askInfluence);
 	// The miracles, not the grab, hold a seed that the hand took back
-	if (!Holds(*grab) && !_world->HoldsSeed(player))
+	if (givesInItsPlace || (!Holds(*grab) && !_world->HoldsSeed(player)))
 	{
 		_world->EndInterfaceLock(player);
 	}
@@ -1459,6 +1461,20 @@ void HandGrabSystem::Take(HandGrab& grab, entt::entity object, bool fromTheWorld
 	if (KindOf(object) == GrabKind::SpellSeed)
 	{
 		TakeSeedBack(grab, object);
+		return;
+	}
+	// A crop is never held itself: it gives a handful of food, which the hand takes as a thing of the world, and goes.
+	// The crop's own pick-up sound is the only sound. The crop goes also when the hand cannot take the handful.
+	if (_world->GivesInItsPlace(object))
+	{
+		if (const auto given = _world->GiveInItsPlace(object); Exists(given))
+		{
+			Take(grab, given, true, false, false);
+		}
+		else
+		{
+			Empty(grab);
+		}
 		return;
 	}
 	const bool wasFlying = _world->IsFlying(object);

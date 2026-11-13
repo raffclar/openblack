@@ -41,9 +41,6 @@ enum class DataType : uint32_t
 	_Count
 };
 
-static const std::array<std::string, static_cast<size_t>(DataType::_Count)> k_DataTypeNames = {
-    "NONE", "INT", "FLOAT", "VECTOR", "OBJECT", "UNK2", "BOOLEAN", "UNK4"};
-
 static const std::array<std::string, static_cast<size_t>(DataType::_Count)> k_DataTypeChars = {"",  "I", "F", "V",
                                                                                                "O", "",  "B", ""};
 

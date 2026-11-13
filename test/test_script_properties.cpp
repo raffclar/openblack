@@ -245,7 +245,8 @@ TEST(ScriptProperties, AThingFacesAPointByTheWayAcrossTheGroundFromTheXAxis)
 
 TEST(ScriptProperties, AHeightPutsTheThingThatHighAboveTheLandUnderIt)
 {
-	// The ally's gifts on the second land go 75 above the land, the guide's globe on the first land 50
+	// The scripts give the ally's gifts on the second land a height of 75 and the guide's globe on the first land 50.
+	// The globes are in the physics, which puts them back on the land in the next turn.
 	EXPECT_EQ(HeightAboveLand(48.6902f, 75.0f), 48.6902f + 75.0f);
 	EXPECT_EQ(HeightAboveLand(41.469f, 50.0f), 41.469f + 50.0f);
 	// A height of 0 puts the thing back on the land

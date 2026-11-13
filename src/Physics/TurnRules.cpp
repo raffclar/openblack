@@ -33,8 +33,6 @@ constexpr int32_t k_MapCells = 512;
 /// A softer knock than this many weights sounds soft, a harder one than the other hard
 constexpr float k_SoftLoad = 1.25f;
 constexpr float k_HardLoad = 3.0f;
-/// The collision sound type of grain
-constexpr int32_t k_Grain = 11;
 /// The camera hears things pass within this distance, faster than this
 constexpr float k_WhooshDistanceSquared = 100.0f;
 constexpr float k_WhooshSpeedSquared = 400.0f;

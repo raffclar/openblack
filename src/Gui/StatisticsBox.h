@@ -96,7 +96,6 @@ public:
 	[[nodiscard]] const Dialog& GetDialog() const noexcept { return *_dialog; }
 	[[nodiscard]] statistics_box::Tab GetTab() const noexcept { return _tab; }
 	[[nodiscard]] const statistics_box::Page& GetPage() const noexcept { return _page; }
-	[[nodiscard]] bool IsGraphic() const noexcept { return _graphic; }
 	[[nodiscard]] GodWindow& GetGodWindow() noexcept { return *_window; }
 
 private:

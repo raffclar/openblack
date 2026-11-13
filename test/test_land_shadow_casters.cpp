@@ -21,6 +21,7 @@
 #include "ECS/Components/NoLandShadow.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Pot.h"
+#include "ECS/Components/SpellIcon.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
@@ -118,6 +119,18 @@ TEST(LandShadowCasters, AWorshipSiteCastsWhileItGoesUp)
 	registry.Assign<components::WorshipSite>(site);
 	registry.Assign<components::BuildProgress>(site, 0.0f);
 	EXPECT_EQ(LandShadowOf(registry, site), LandShadow::Shape);
+}
+
+TEST(LandShadowCasters, AWorshipIconCastsWhileItsSiteGoesUp)
+{
+	// The icon casts its shadow from the time the game makes it, also at a site that is not built
+	Registry registry;
+	const auto site = registry.Create();
+	registry.Assign<components::WorshipSite>(site);
+	registry.Assign<components::BuildProgress>(site, 0.0f);
+	const auto icon = registry.Create();
+	registry.Assign<components::WorshipIcon>(icon).site = site;
+	EXPECT_EQ(LandShadowOf(registry, icon), LandShadow::Shape);
 }
 
 TEST(LandShadowCasters, TreesCastThroughTheirLeaves)
