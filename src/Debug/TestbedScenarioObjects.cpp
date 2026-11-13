@@ -1246,6 +1246,34 @@ void testbed_scenarios::AddObjects(std::vector<Scenario>& all)
 	    .hand = offering,
 	});
 
+	// The hand gives the food to a curious tiger that is not hungry. Its mind takes the food and looks it over. Then the
+	// mind stops, and the tiger tosses the food away.
+	// The time from the gift until the mind stops: the take and a part of the look are done then
+	constexpr float k_GiftHeldSeconds = 6.0f;
+	auto curiousThinking = Posed(CreatureType::Tiger, {0.0f, 0.0f});
+	curiousThinking.pauseMind = false;
+	curiousThinking.hold = true;
+	curiousThinking.needs = {.energy = 1.0f};
+	curiousThinking.desires = {{.desire = Desire::Curiosity, .fraction = 1.0f}};
+	auto tossingTheGift = giving;
+	tossingTheGift.push_back({.kind = Kind::PauseMind, .creature = 0, .delaySeconds = k_GiftHeldSeconds, .value = 1});
+	tossingTheGift.push_back({.kind = Kind::Discard, .creature = 0, .delaySeconds = 0.5f, .waitUntilFree = false});
+	all.push_back({
+	    .id = "creature.gift_tossed_away",
+	    .name = "A creature tosses away a gift",
+	    .facet = Facet::Objects,
+	    .description = "The player's hand gives a pile of food to a curious tiger that is not hungry. The tiger takes the "
+	                   "food and looks it over. Then its mind stops, and the tiger tosses the food away.",
+	    .expected = "The tiger takes the food from the hand. The toss lets go of the food, which falls to the land as a "
+	                "whole thing and stays there. The player's hand holds nothing.",
+	    .environment = {.cursor = glm::vec2(0.5f, 0.6f), .temple = glm::vec2(0.0f, 80.0f)},
+	    .framing = {.shot = Shot::Follow, .distance = 1.3f},
+	    .creatures = {curiousThinking},
+	    .objects = {{.type = MobileObjectInfo::MagicFood, .offset = {-15.0f, -15.0f}}},
+	    .commands = tossingTheGift,
+	    .hand = offering,
+	});
+
 	// The hand gives the food, then moves far away while the creature reaches for it
 	constexpr float k_CallOffSweepDelay = 0.3f;
 	constexpr float k_CallOffSweepSeconds = 0.2f;
