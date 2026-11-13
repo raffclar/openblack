@@ -335,9 +335,45 @@ void testbed_scenarios::AddHandLookScenarios(std::vector<Scenario>& all)
 	    .commands = {{.kind = Kind::PointerTo, .delaySeconds = 1.0f, .point = {0.5f, 0.46f}},
 	                 {.kind = Kind::PointerPress, .delaySeconds = 1.0f, .value = k_ActionButton},
 	                 {.kind = Kind::PointerRelease, .delaySeconds = 0.1f, .value = k_ActionButton},
-	                 {.kind = Kind::PointerTo, .delaySeconds = 2.5f, .point = {0.625f, 0.225f}},
+	                 {.kind = Kind::PointerOnTipBubble, .delaySeconds = 2.5f},
 	                 {.kind = Kind::PointerTo, .delaySeconds = 3.0f, .point = {0.2f, 0.8f}},
-	                 {.kind = Kind::PointerTo, .delaySeconds = 3.0f, .point = {0.625f, 0.225f}}},
+	                 {.kind = Kind::PointerOnTipBubble, .delaySeconds = 3.0f}},
+	});
+
+	// The select button goes down while the hand grips the help's text bubble. Both buttons end the grip, and the hand
+	// grips the land at once.
+	all.push_back({
+	    .id = "hand.bubble_grip_both_buttons",
+	    .name = "Both buttons while the hand grips the help's text bubble",
+	    .facet = Facet::Hand,
+	    .description = "A \"did you know\" sign near the camera. The pointer taps the sign, so that its tip opens in the "
+	                   "blue bubble. The pointer moves onto the bubble, and the Action button grips it. The pointer moves a "
+	                   "little. Then the select button goes down, the pointer moves up the screen, and both buttons come up.",
+	    .expected = "While the hand grips the bubble, the words of the tip move with the hand. At the press of the select "
+	                "button the hand lets go of the bubble. The hand grips the land at once with the grip sound, and both "
+	                "buttons turn and zoom the camera.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 6.0f, -15.0f}, .look = {0.0f, 2.0f, 0.0f}},
+	    .highlights = {{.kind = 1, .offset = {0.0f, 0.0f}, .challenge = 0, .tip = std::pair {4128u, 3u}}},
+	    .commands = {{.kind = Kind::PointerTo, .delaySeconds = 1.0f, .point = {0.5f, 0.46f}},
+	                 {.kind = Kind::PointerPress, .delaySeconds = 1.0f, .value = k_ActionButton},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 0.1f, .value = k_ActionButton},
+	                 {.kind = Kind::PointerOnTipBubble, .delaySeconds = 2.5f},
+	                 {.kind = Kind::PointerPress, .delaySeconds = 0.5f, .value = k_ActionButton},
+	                 {.kind = Kind::PointerSweep, .delaySeconds = 0.5f, .point = {0.0f, 0.05f}, .amount = 1.0f},
+	                 {.kind = Kind::PointerPress, .delaySeconds = 1.5f, .value = 1},
+	                 {.kind = Kind::PointerSweep, .delaySeconds = 0.5f, .point = {0.0f, -0.1f}, .amount = 2.0f},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 2.5f, .value = 1},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 0.1f, .value = k_ActionButton}},
+	    .checks = {{.label = "the hand grips the tip bubble",
+	                .quantity = checks::Quantity::TipBubbleGripped,
+	                .afterTurns = 50,
+	                .byTurn = 65,
+	                .atLeast = 1.0},
+	               {.label = "both buttons end the grip of the tip bubble",
+	                .quantity = checks::Quantity::TipBubbleGripped,
+	                .afterTurns = 85,
+	                .atMost = 0.0}},
 	});
 
 	// A pour tips the hand that holds the miracle; once the seed goes, the empty hand keeps the tipped up until the

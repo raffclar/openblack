@@ -1,0 +1,29 @@
+diff --git a/webgpu/src/library_webgpu.js b/webgpu/src/library_webgpu.js
+--- a/webgpu/src/library_webgpu.js
++++ b/webgpu/src/library_webgpu.js
+@@ -2013,11 +2013,20 @@
+ #if OFFSCREENCANVAS_SUPPORT
+     if (canvas.offscreenCanvas) canvas = canvas.offscreenCanvas;
+ #endif
+-    var context = canvas.getContext('webgpu');
+-#if ASSERTIONS
+-    assert(context);
+-#endif
+-    if (!context) return {{{ gpu.NULLPTR }}};
++    // A canvas has one WebGPU context for all of its life. A surface that the program makes again for the same canvas,
++    // as after a lost device, uses the context that the canvas gave first, and configures it for the new device.
++    // Firefox refuses a second getContext from a worker after the browser releases a transferred copy of the canvas.
++    var context = canvas.emwgpuContext;
++    if (!context) {
++      try {
++        context = canvas.getContext('webgpu');
++      } catch (ex) {
++        err('The canvas gave no WebGPU context: ' + ex);
++        return {{{ gpu.NULLPTR }}};
++      }
++      if (!context) return {{{ gpu.NULLPTR }}};
++      canvas.emwgpuContext = context;
++    }
+ 
+     context.surfaceLabelWebGPU = WebGPU.makeStringFromOptionalStringView(
+       descriptor + {{{ C_STRUCTS.WGPUSurfaceDescriptor.label }}}

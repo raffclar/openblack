@@ -203,28 +203,31 @@ constexpr float k_HeightOfSizeOne = 15.0f;
 /// place around the player's temple that has a site. None when the player has no temple, or the temple has no site.
 std::optional<glm::vec3> SacrificeAltarOf(const ecs::Registry& registry, PlayerNames player)
 {
+	// The search stops at the first temple that gives an altar
 	std::optional<glm::vec3> altar;
-	registry.Each<const Temple, const CitadelWorship>([&](const Temple& temple, const CitadelWorship& worship) {
-		if (temple.owner != player || altar.has_value())
-		{
-			return;
-		}
-		std::array<bool, CitadelWorship::k_Places> placeHasSite {};
-		std::ranges::transform(worship.sites, placeHasSite.begin(),
-		                       [&registry](entt::entity site) { return site != entt::null && registry.Valid(site); });
-		const auto place = creature_sacrifice::SitePlace(placeHasSite);
-		if (!place.has_value())
-		{
-			return;
-		}
-		const auto* site = registry.TryGet<const WorshipSite>(worship.sites.at(*place));
-		const auto* at =
-		    site != nullptr && registry.Valid(site->altar) ? registry.TryGet<const Transform>(site->altar) : nullptr;
-		if (at != nullptr)
-		{
-			altar = at->position;
-		}
-	});
+	[[maybe_unused]] const auto found = registry.FindFirst<const Temple, const CitadelWorship>(
+	    [&](entt::entity, const Temple& temple, const CitadelWorship& worship) {
+		    if (temple.owner != player)
+		    {
+			    return false;
+		    }
+		    std::array<bool, CitadelWorship::k_Places> placeHasSite {};
+		    std::ranges::transform(worship.sites, placeHasSite.begin(),
+		                           [&registry](entt::entity site) { return site != entt::null && registry.Valid(site); });
+		    const auto place = creature_sacrifice::SitePlace(placeHasSite);
+		    if (!place.has_value())
+		    {
+			    return false;
+		    }
+		    const auto* site = registry.TryGet<const WorshipSite>(worship.sites.at(*place));
+		    const auto* at =
+		        site != nullptr && registry.Valid(site->altar) ? registry.TryGet<const Transform>(site->altar) : nullptr;
+		    if (at != nullptr)
+		    {
+			    altar = at->position;
+		    }
+		    return altar.has_value();
+	    });
 	return altar;
 }
 
@@ -459,21 +462,25 @@ void CreatureMindSystem::SituateHome(entt::entity creature, creature_plan_action
 	{
 		situation.homeCellDistance = creature_plan_actions::HomeCellDistance(map_coords::FromMetres(situation.position), *home);
 	}
-	// The heart of its player's temple is the temple itself, on the ground
-	registry.Each<const Temple, const Transform>([&](entt::entity temple, const Temple& building, const Transform& place) {
-		if (building.owner != body->owner || situation.templeHeart.has_value())
-		{
-			return;
-		}
+	// The heart of its player's temple is the temple itself, on the ground. The first temple of its player counts.
+	const auto temple = situation.templeHeart.has_value()
+	                        ? std::nullopt
+	                        : registry.FindFirst<const Temple, const Transform>(
+	                              [owner = body->owner](entt::entity, const Temple& building, const Transform&) {
+		                              return building.owner == owner;
+	                              });
+	if (temple.has_value())
+	{
+		const auto& place = registry.Get<const Transform>(*temple);
 		const auto ground = Locator::terrainSystem::has_value()
 		                        ? Locator::terrainSystem::value().GetHeightAt({place.position.x, place.position.z})
 		                        : place.position.y;
 		situation.templeHeart = creature_plan_actions::Situation::TempleHeart {
-		    .temple = entt::to_integral(temple),
+		    .temple = entt::to_integral(*temple),
 		    .point = {place.position.x, ground, place.position.z},
-		    .radius = object_measures::TwoDRadius(registry, temple),
+		    .radius = object_measures::TwoDRadius(registry, *temple),
 		};
-	});
+	}
 	situation.hasTemple = situation.templeHeart.has_value();
 	// Every other creature counts, of any player, dead or alive
 	std::vector<float> others;
@@ -514,12 +521,13 @@ creature_mind::HangAroundPlaces CreatureMindSystem::HangAroundPlacesOf(entt::ent
 	}
 	if (body != nullptr)
 	{
-		registry.Each<const Temple, const Transform>([&](entt::entity, const Temple& temple, const Transform& transform) {
-			if (temple.owner == body->owner && !places.temple.has_value())
-			{
-				places.temple = onGround(transform.position);
-			}
-		});
+		// The first temple of its player. The search stops there.
+		const auto temple = registry.FindFirst<const Temple, const Transform>(
+		    [owner = body->owner](entt::entity, const Temple& each, const Transform&) { return each.owner == owner; });
+		if (temple.has_value())
+		{
+			places.temple = onGround(registry.Get<const Transform>(*temple).position);
+		}
 	}
 	return places;
 }

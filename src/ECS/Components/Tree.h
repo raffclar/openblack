@@ -16,10 +16,6 @@
 namespace openblack::ecs::components
 {
 
-enum class MagicTreeType
-{
-};
-
 struct Tree
 {
 	TreeInfo type;

@@ -105,8 +105,8 @@ private:
 	                                         uint32_t skipFrames);
 	/// Queues a decoded chunk on the stream's source; false if it has nothing to play
 	bool QueueDecoded(StreamState& state, DecodedChunk decoded);
-	/// Queues the chunks that other threads finished, in their sequence
-	void QueueFinishedDecodes(StreamState& state);
+	/// Queues the chunks that other threads finished, in their sequence. Returns the number of buffers that it queued.
+	size_t QueueFinishedDecodes(StreamState& state);
 
 	AudioPlayerInterface& _player;
 	Decoder _decoder;

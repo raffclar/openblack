@@ -196,6 +196,9 @@ public:
 	/// The Action button is let go while the hand holds the rope: the leash's length becomes how far the hand is from what
 	/// it is tied to, and the creature is sent to the place under the hand, if there is one
 	virtual void LetGoOfRope(PlayerNames player, std::optional<glm::vec3> place) = 0;
+	/// The end of the interface lock lets the rope of the tied leash fall from the hand. The leash keeps its length, and
+	/// the creature gets no order.
+	virtual void DropRope([[maybe_unused]] PlayerNames player) {}
 
 	/// The tooltip the hand shows for the leash over something, or over nothing, by its place among the game's tooltips
 	[[nodiscard]] virtual std::optional<uint32_t> ToolTip(PlayerNames player, std::optional<entt::entity> hovered) const = 0;

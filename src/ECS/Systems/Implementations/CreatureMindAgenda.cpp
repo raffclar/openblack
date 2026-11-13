@@ -698,12 +698,11 @@ entt::entity NearestTown(const ecs::Registry& registry, glm::vec3 point)
 	entt::entity nearest = entt::null;
 	auto best = std::numeric_limits<float>::max();
 	// Each player's town list in turn and the neutral list last: the first met wins a tie
-	for (const auto entity : ecs::player_towns::AllInOrder(registry))
-	{
+	ecs::player_towns::ForEachInOrder(registry, [&](entt::entity entity) {
 		const auto* at = registry.TryGet<const Transform>(entity);
 		if (at == nullptr)
 		{
-			continue;
+			return;
 		}
 		// The table distance between the two map positions
 		const float distance = gutils::GetDistanceInMetres(point, at->position);
@@ -712,7 +711,7 @@ entt::entity NearestTown(const ecs::Registry& registry, glm::vec3 point)
 			best = distance;
 			nearest = entity;
 		}
-	}
+	});
 	return nearest;
 }
 

@@ -145,6 +145,19 @@ struct SeedTurn
 /// gives 0 seconds, so the picture does not move.
 [[nodiscard]] SeedTurn TurnSeed(SeedTurn turn, std::optional<int> phialReceiveType, float gameSeconds);
 
+// The seed above a stone hand of a village centre or above an icon at a worship site
+
+/// How far the seed above an icon has turned, and the rings round it
+struct IconSeedTurn
+{
+	SeedTurn seed;
+	float ringSpin {0.0f};
+};
+/// The seed above an icon after a frame of the game's time. The seed turns as a seed's picture does, and its rings turn
+/// at 10.3 radians a second. They move only in a frame that draws the icon's hand on the screen. In other frames, the
+/// seed and its rings stay as they are.
+[[nodiscard]] IconSeedTurn TurnIconSeed(IconSeedTurn turn, std::optional<int> phialReceiveType, float gameSeconds, bool drawn);
+
 // The hand that holds a miracle
 
 /// The bands that fly onto the hand, the bracelets that stay on it and the one that flies off

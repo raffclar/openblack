@@ -11,6 +11,10 @@
 
 #include <cstdint>
 
+#include <optional>
+
+#include <entt/entity/entity.hpp>
+
 #include "ECS/Components/HandSendWait.h"
 
 /// The wait of the player's hand for its last send. These commands start the wait: the let go of the thing in the hand,
@@ -121,7 +125,8 @@ struct TurnFacts
 /// The kind of the action of the hand in a frame, for the ends of the interface lock
 enum class FrameAction : uint8_t
 {
-	/// The hand does no action, or it is in the fight or on a totem. Both buttons do not end these.
+	/// The hand does no action, or it grips the land, or it is in the fight. Both buttons do not end these. Only in
+	/// these does a press of the select button grip the land.
 	Free,
 	/// The hand holds a thing or a seed for a use at the let go or for a pour, or it waits after the gift of the held
 	/// thing. The action needs the held thing, and both buttons end it.
@@ -129,9 +134,23 @@ enum class FrameAction : uint8_t
 	/// The hand takes a thing: from the press on the thing, while it waits or pulls, until the turn puts the thing in the
 	/// hand. The action needs the thing, and both buttons end it.
 	Takes,
-	/// The hand does another action: a lock on a creature, a pile, a field or a fish farm, a press that waits for a tap
-	/// on a creature, or a wait for the let go of the button after a use on a thing. Both buttons end it.
+	/// The hand does another action: a lock on a creature, a pile, a field, a fish farm or a totem, a press that waits
+	/// for a tap on a creature, a wait for the let go of the button after a use on a thing, a grip of the tip bubble or
+	/// a hold of the rope of the tied leash. Both buttons end it.
 	Other,
+};
+
+/// The action of the hand of this computer, with what the interface keeps for the action
+struct OwnAction
+{
+	FrameAction action {FrameAction::Free};
+	/// The thing or the seed that the action needs
+	std::optional<entt::entity> held;
+	/// The thing that the action keeps from its press
+	entt::entity pressThing {entt::null};
+	/// The action keeps a thing from its press. An action that keeps no thing checks the thing under the hand in each
+	/// frame.
+	bool keepsThing {true};
 };
 
 /// What the interface knows about the thing that the action keeps from its press

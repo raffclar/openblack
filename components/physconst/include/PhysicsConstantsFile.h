@@ -12,7 +12,6 @@
 #include <cstdint>
 
 #include <array>
-#include <filesystem>
 #include <istream>
 #include <optional>
 #include <span>
@@ -50,7 +49,5 @@ struct PhysicsConstantsFile
 [[nodiscard]] std::optional<PhysicsConstantsFile> Parse(std::istream& stream, std::size_t maxRows);
 /// Reads the text held in a buffer
 [[nodiscard]] std::optional<PhysicsConstantsFile> Parse(std::span<const uint8_t> buffer, std::size_t maxRows);
-/// Reads a file; none when it can't be opened or read
-[[nodiscard]] std::optional<PhysicsConstantsFile> Open(const std::filesystem::path& path, std::size_t maxRows);
 
 } // namespace openblack::physconst

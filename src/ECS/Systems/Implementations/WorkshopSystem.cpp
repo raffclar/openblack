@@ -1777,6 +1777,7 @@ void WorkshopSystem::PlaceYardCopies(int32_t frameMs)
 			auto& ghost = registry.Get<ScaffoldGhost>(copy);
 			ghost.alpha = alpha;
 			ghost.model = *mesh;
+			ghost.workshop = workshopEntity;
 		}
 	}
 }

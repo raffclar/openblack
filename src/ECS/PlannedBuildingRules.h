@@ -113,16 +113,12 @@ struct BuildingNearby
 	float radius {0.0f};
 };
 
-/// One cell of a new house's footprint, with the buildings filed in it
-struct FootprintCell
-{
-	std::span<const BuildingNearby> buildings;
-};
-
-/// Whether a planned house may go up where it was planned: for each cell of its footprint in turn, the land at its own
-/// place must be dry, and no building filed in the cell may stand nearer it than their radii together (the house's
-/// being the larger half side of its model's box). A footprint with no cell passes.
-[[nodiscard]] bool IsClearToBuild(std::span<const FootprintCell> footprint, bool dryLandAtPlace, float reach);
+/// Whether a building filed in a cell of a new house's footprint stops the house: it stands nearer the house than their
+/// radii together. The radius of the house is the larger half side of the box of its model.
+///
+/// The game can build a planned house at its place when, for each cell of its footprint in turn, the land at the place
+/// is dry and no building in the cell stops the house. A footprint with no cell passes.
+[[nodiscard]] bool StopsNewBuilding(const BuildingNearby& building, float reach);
 
 /// Which of its plans each town starts when a script names a place, the towns in the order given: each town looks only
 /// at its own plans and starts the one nearest the place within a metre beyond its model's reach (the later on a tie),

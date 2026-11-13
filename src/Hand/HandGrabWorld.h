@@ -236,6 +236,12 @@ public:
 	virtual void ScaffoldIntoHand(entt::entity /*scaffold*/, PlayerNames /*player*/) {}
 	/// A piece of a puzzle game goes into the hand: it comes off the piece that it rested on
 	virtual void PuzzlePieceIntoHand(entt::entity /*piece*/) {}
+	/// Whether the hand never holds the thing itself, but takes a thing that the thing gives in its place: a crop gives a
+	/// handful of food
+	[[nodiscard]] virtual bool GivesInItsPlace(entt::entity /*object*/) const { return false; }
+	/// The thing that GivesInItsPlace names makes the thing that the hand takes in its place, at its own place, and goes.
+	/// The new thing, or null for none.
+	virtual entt::entity GiveInItsPlace(entt::entity /*object*/) { return entt::null; }
 	/// How the hand holds a miracle's seed that it takes back from the world, from the record of the seed. None for
 	/// other things.
 	[[nodiscard]] virtual std::optional<HoldFacts> SeedHoldOf(entt::entity /*seed*/) const { return std::nullopt; }

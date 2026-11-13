@@ -32,11 +32,7 @@ namespace openblack::magic
 inline constexpr float k_OrbHeightShare = 1.2f;
 /// A bubble stays on its dispenser while the gap between their ground circles is this size or less, in metres
 inline constexpr float k_OrbTouchGap = 0.001f;
-/// The seed inside a bubble is drawn at this share of its size, and spins this many radians a second
-inline constexpr float k_OrbSeedScale = 0.6f;
 inline constexpr float k_OrbSeedSpin = 2.0f;
-/// A bubble is added over what is behind it at this share of its colour
-inline constexpr float k_OrbShare = 149.0f / 255.0f;
 
 /// Every miracle a dispenser can give the player, in the tables' order. The creature spells that do nothing in the
 /// game are left out.

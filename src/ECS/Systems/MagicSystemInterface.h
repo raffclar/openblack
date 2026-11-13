@@ -281,6 +281,9 @@ public:
 	/// The hand of the player drops the miracle that it holds, as DiscardHeldSeed does for the player of this computer.
 	/// The result is the same on each computer, so a tool can use it before the same turn on each computer.
 	virtual void DiscardHeldSeedOf(PlayerNames player) = 0;
+	/// The hand of the player lets go of the miracle that it holds, as a shake off command does at the turn. This is the
+	/// same as DiscardHeldSeedOf, but the hand does not shake: no sound plays and no band flies off the hand.
+	virtual void ShakeOffHeldSeedOf([[maybe_unused]] PlayerNames player) {}
 	/// A seed goes with the icon that made it: out of the hand if it is held, and a miracle still running from it closes
 	/// down. What it holds is lost.
 	virtual void DeleteSeed(entt::entity seed) = 0;

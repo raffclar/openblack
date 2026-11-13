@@ -85,13 +85,15 @@ std::optional<openblack::map_coords::MapCoords> creature_home::HomeOnMapOf(const
 
 std::optional<glm::vec3> creature_home::TemplePenOf(const Registry& registry, PlayerNames owner)
 {
+	// The pen of the first temple of the player that has a pen, in the order of the walk. The search stops there.
 	std::optional<glm::vec3> pen;
-	registry.Each<const Temple, const Transform>(
+	[[maybe_unused]] const auto temple = registry.FindFirst<const Temple, const Transform>(
 	    [&registry, &pen, owner](entt::entity entity, const Temple& building, const Transform& transform) {
-		    if (building.owner == owner && !pen.has_value())
+		    if (building.owner == owner)
 		    {
 			    pen = PenOfTempleMesh(transform, building.yAngle, registry.TryGet<const Mesh>(entity));
 		    }
+		    return pen.has_value();
 	    });
 	return pen;
 }

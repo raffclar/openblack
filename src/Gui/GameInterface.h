@@ -34,6 +34,7 @@
 #include "EndGameBox.h"
 #include "GameFont.h"
 #include "GameMenu.h"
+#include "Graphics/WorldLabelGroup.h"
 #include "Hand/HandTricons.h"
 #include "Help/ControlIcons.h"
 #include "Help/SingAlong.h"
@@ -115,6 +116,11 @@ public:
 	/// The open dialogs and, over them, the pointer at the mouse. The pointer also shows over the debug windows, which
 	/// hide the hand, and is drawn over them.
 	void Draw(glm::u16vec2 resolution, glm::ivec2 mouse, uint32_t milliseconds, bool overDebugWindow);
+	/// Submits a group of the labels in the world that the last Draw drew, at its point in the scene. A group submits
+	/// one time in a frame.
+	void SubmitWorldLabels(graphics::WorldLabelGroup group);
+	/// Submits each group of the labels in the world that the scene did not submit, in the order of the groups
+	void SubmitWaitingWorldLabels();
 	/// The box that shows while the game saves or loads, drawn alone as a frame of its own over the last picture
 	void DrawSavingBox(glm::u16vec2 resolution, bool loading, bool darken);
 
@@ -169,6 +175,9 @@ public:
 	{
 		return _menu->IsOpen() || _skipBox->IsActive() || _endGameBox->IsOpen() || _landInfoBox->IsActive();
 	}
+	/// Whether the front end's pointer shows: a box of the front end takes the mouse. The player's hand is away while it
+	/// shows, also in the temple.
+	[[nodiscard]] bool FrontEndPointerOn() const;
 	/// Whether the active box has a background: the menu and its questions, the start-of-game question, the new
 	/// player's box, the save game room's boxes, or the tattoo editor in its own frame
 	[[nodiscard]] bool IsBoxWithBackgroundActive() const noexcept
@@ -207,8 +216,6 @@ public:
 	[[nodiscard]] bool ShowsBoxOverGame() const noexcept { return _boxOverGameFade.has_value(); }
 	/// The save game room's question and name box, over the temple
 	[[nodiscard]] SaveGameBoxes& GetSaveGameBoxes() noexcept { return *_saveGameBoxes; }
-	/// The box that asks a question of the staff of the game
-	[[nodiscard]] StaffQuestionBox& GetStaffQuestionBox() noexcept { return *_staffQuestionBox; }
 	/// A save did not write its world files completely: the box tells the player "An error has occurred!" with an OK
 	void ShowSaveProblem();
 	/// The script of the land gives a command for the land information box: a title that shows the box with an empty
@@ -223,6 +230,9 @@ public:
 	/// All the boxes of the game close before the end box of a game end opens: the tattoo editor lets go of its creature,
 	/// and the land information box, the menu and a message with an OK close
 	void CloseBoxesForGameEnd();
+	/// Closes the boxes before a testbed scenario loads: the boxes of a game end, and any question of the staff or of the
+	/// save game room, with no answer
+	void CloseBoxesForScenario();
 	/// The end box of a skirmish or a network game
 	[[nodiscard]] EndGameBox& GetEndGameBox() noexcept { return *_endGameBox; }
 	[[nodiscard]] const EndGameBox& GetEndGameBox() const noexcept { return *_endGameBox; }
@@ -554,8 +564,26 @@ private:
 	std::optional<FontFace> _evilAdvisorFont;
 	Canvas _canvas;
 	Canvas _pointerCanvas {graphics::RenderPass::Cursor};
-	/// The villagers' labels, which the world in front of them hides
+	/// The labels in the world that the world in front of them hides, and that go before the scene: the temple scroll's
+	/// pictures
 	Canvas _worldLabelsCanvas {graphics::RenderPass::WorldLabels, Canvas::DepthTest::NearerIsGreater};
+	/// The labels in the world that the scene's main pass submits at the points where the game adds them: the chat
+	/// bubbles, the learning words, the floating numbers, the villagers' names and the tip bubble, in the order of
+	/// graphics::WorldLabelGroup
+	std::array<Canvas, graphics::k_WorldLabelGroupCount> _groupedLabelCanvases {
+	    Canvas {graphics::RenderPass::WorldLabels, Canvas::DepthTest::NearerIsGreater},
+	    Canvas {graphics::RenderPass::WorldLabels, Canvas::DepthTest::NearerIsGreater},
+	    Canvas {graphics::RenderPass::WorldLabels, Canvas::DepthTest::NearerIsGreater},
+	    Canvas {graphics::RenderPass::WorldLabels, Canvas::DepthTest::NearerIsGreater},
+	    Canvas {graphics::RenderPass::WorldLabels, Canvas::DepthTest::NearerIsGreater},
+	};
+	/// The groups of labels that this frame drew and that are not submitted yet
+	graphics::WorldLabelSubmits _groupedLabelsWaiting;
+	/// The canvas of a group of the labels in the world
+	[[nodiscard]] Canvas& GroupedLabelCanvas(graphics::WorldLabelGroup group)
+	{
+		return _groupedLabelCanvases.at(static_cast<size_t>(group));
+	}
 	/// The cinema bars, under the advisors near the screen
 	Canvas _cinemaBarsCanvas {graphics::RenderPass::CinemaBars};
 	/// What the tattoo editor draws over the creature that it shows from the main menu

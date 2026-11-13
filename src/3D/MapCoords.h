@@ -201,9 +201,6 @@ constexpr void AddCells(MapCoords& coords, JustMapXZ step)
 
 /// The 4 neighbours, +x, +z, -x, -z: the spiral's steps, also used on their own
 constexpr std::array<JustMapXZ, 4> k_Neighbours4 {{{1, 0}, {0, 1}, {-1, 0}, {0, -1}}};
-/// The 8 neighbours and the cell itself, anticlockwise from +x, then (0, 0)
-constexpr std::array<JustMapXZ, 9> k_Neighbours8 {
-    {{1, 0}, {1, 1}, {0, 1}, {-1, 1}, {-1, 0}, {-1, -1}, {0, -1}, {1, -1}, {0, 0}}};
 
 /// The game's spiral search: every search does the centre cell first and then steps by Next(), checking each cell is on
 /// the map. The steps from the start are (-1, 0), (0, -1), (+1, 0) x 2, (0, +1) x 2, (-1, 0) x 3, ...: a square growing

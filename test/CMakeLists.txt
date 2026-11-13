@@ -199,6 +199,7 @@ openblack_setup_and_add_test(test_moon graphics/test_moon.cpp)
 openblack_setup_and_add_test(test_bone_budget graphics/test_bone_budget.cpp)
 openblack_setup_and_add_test(test_bone_palette graphics/test_bone_palette.cpp)
 openblack_setup_and_add_test(test_draw_order graphics/test_draw_order.cpp)
+openblack_setup_and_add_test(test_effects_after_particles graphics/test_effects_after_particles.cpp)
 openblack_setup_and_add_test(test_render_modes graphics/test_render_modes.cpp)
 openblack_setup_and_add_test(test_draw_encoder graphics/test_draw_encoder.cpp)
 openblack_setup_and_add_test(test_view_frustum graphics/test_view_frustum.cpp)
@@ -575,6 +576,7 @@ openblack_setup_and_add_test(
   test_physics_game_hooks test_physics_game_hooks.cpp
 )
 openblack_setup_and_add_test(test_town_homes test_town_homes.cpp)
+openblack_setup_and_add_test(test_town_centre_order test_town_centre_order.cpp)
 openblack_setup_and_add_test(test_reward test_reward.cpp)
 openblack_setup_and_add_test(test_scenic_forest test_scenic_forest.cpp)
 openblack_setup_and_add_test(test_nearest_search test_nearest_search.cpp)
@@ -1891,6 +1893,7 @@ openblack_setup_and_add_test(test_join_ticket online/test_join_ticket.cpp)
 openblack_setup_and_add_test(test_websocket_frames online/test_websocket_frames.cpp)
 openblack_setup_and_add_test(test_turn_playout online/test_turn_playout.cpp)
 openblack_setup_and_add_test(test_lockstep online/test_lockstep.cpp)
+openblack_setup_and_add_test(test_connection_log online/test_connection_log.cpp)
 openblack_setup_and_add_test(test_network_commands test_network_commands.cpp)
 target_link_libraries(test_network_commands PRIVATE psys)
 openblack_setup_and_add_test(test_lobby_status online/test_lobby_status.cpp)
@@ -1956,6 +1959,7 @@ openblack_setup_and_add_test(test_computer_mind test_computer_mind.cpp)
 openblack_setup_and_add_test(test_computer_hand test_computer_hand.cpp)
 openblack_setup_and_add_test(test_influence_citadel_reach test_influence_citadel_reach.cpp)
 openblack_setup_and_add_test(test_drawn_hand graphics/test_drawn_hand.cpp)
+openblack_setup_and_add_test(test_hand_faces graphics/test_hand_faces.cpp)
 openblack_setup_and_add_test(test_player_kind test_player_kind.cpp)
 openblack_setup_and_add_test(
   test_computer_hand_moves test_computer_hand_moves.cpp
@@ -2077,6 +2081,10 @@ if (NODE_EXECUTABLE)
   add_test(NAME test_web_launcher_arguments
            COMMAND ${NODE_EXECUTABLE}
                    ${CMAKE_CURRENT_SOURCE_DIR}/web_launcher_arguments.test.js
+  )
+  add_test(NAME test_web_launcher_exit
+           COMMAND ${NODE_EXECUTABLE}
+                   ${CMAKE_CURRENT_SOURCE_DIR}/web_launcher_exit.test.js
   )
 endif ()
 openblack_setup_and_add_test(test_main_thread_queue test_main_thread_queue.cpp)
@@ -2454,6 +2462,7 @@ openblack_setup_and_add_test(test_gathering_box test_gathering_box.cpp)
 openblack_setup_and_add_test(test_lobby_ping_server online/test_lobby_ping_server.cpp)
 openblack_setup_and_add_test(test_observer_interfaces test_observer_interfaces.cpp)
 openblack_setup_and_add_test(test_lan_server_key online/test_lan_server_key.cpp)
+openblack_setup_and_add_test(test_server_listen online/test_server_listen.cpp)
 openblack_setup_and_add_test(test_join_name online/test_join_name.cpp)
 openblack_setup_and_add_test(test_device_restore graphics/test_device_restore.cpp)
 openblack_setup_and_add_test(
@@ -2477,6 +2486,7 @@ openblack_setup_and_add_test(test_registry_draw_marks test_registry_draw_marks.c
 openblack_setup_and_add_test(test_script_natives_rows_7 test_script_natives_rows_7.cpp)
 openblack_setup_and_add_test(test_world_turn camera/test_world_turn.cpp)
 openblack_setup_and_add_test(test_mobile_object_record test_mobile_object_record.cpp)
+openblack_setup_and_add_test(test_mobile_object_class_rules test_mobile_object_class_rules.cpp)
 openblack_setup_and_add_test(test_connection_lost online/test_connection_lost.cpp)
 openblack_setup_and_add_test(test_script_natives_rows_8 test_script_natives_rows_8.cpp)
 openblack_setup_and_add_test(test_lobby_results online/test_lobby_results.cpp)
@@ -2542,6 +2552,7 @@ set_tests_properties(
 openblack_setup_and_add_test(test_temple_signs temple/test_temple_signs.cpp)
 openblack_setup_and_add_test(test_game_firefly_world test_game_firefly_world.cpp)
 openblack_setup_and_add_test(test_forest_map_places test_forest_map_places.cpp)
+openblack_setup_and_add_test(test_forest_miracle_empty test_forest_miracle_empty.cpp)
 openblack_setup_and_add_test(test_yard_copy_rules test_yard_copy_rules.cpp)
 openblack_setup_and_add_test(test_felled_tree_draw_rules test_felled_tree_draw_rules.cpp)
 openblack_setup_and_add_test(test_script_line_values test_script_line_values.cpp)

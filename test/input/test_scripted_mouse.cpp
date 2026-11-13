@@ -265,6 +265,20 @@ TEST_F(ScriptedMouse, ThePointerStartsInTheMiddleOfTheWindow)
 	EXPECT_EQ(Frame().readAtFrameStart, k_Window / 2);
 }
 
+// On the desktop the window has the cursor when the cursor goes over it. A browser tells the position only with the
+// first movement over the page, thus the pointer rests in the middle until then.
+TEST(PlayerCursorSeen, WaitsForTheFirstMovementOnThePage)
+{
+	using input::PlayerCursorSeen;
+	EXPECT_TRUE(PlayerCursorSeen(Platform::Desktop, false, true, false));
+	EXPECT_FALSE(PlayerCursorSeen(Platform::Desktop, false, false, true));
+	EXPECT_FALSE(PlayerCursorSeen(Platform::Desktop, true, true, true));
+	EXPECT_FALSE(PlayerCursorSeen(Platform::Web, false, true, false));
+	EXPECT_TRUE(PlayerCursorSeen(Platform::Web, false, true, true));
+	EXPECT_FALSE(PlayerCursorSeen(Platform::Web, false, false, true));
+	EXPECT_FALSE(PlayerCursorSeen(Platform::Web, true, true, true));
+}
+
 // The inspector's first press, before any move, lands where the pointer rests, and a step goes on from there
 TEST_F(ScriptedMouse, TheInspectorTakesThePointerWhereItRests)
 {

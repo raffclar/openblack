@@ -323,9 +323,6 @@ public:
 	/// Write pack file to path on the filesystem
 	PackResult Write(const std::filesystem::path& filepath) noexcept;
 
-	/// Create Texture Blocks from textures
-	PackResult CreateTextureBlocks() noexcept;
-
 	/// Create Data Block from Raw Data
 	PackResult CreateRawBlock(const std::string& name, std::vector<uint8_t>&& data) noexcept;
 

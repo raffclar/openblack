@@ -1,0 +1,24 @@
+diff --git a/bgfx/src/renderer_webgpu.cpp b/bgfx/src/renderer_webgpu.cpp
+--- a/bgfx/src/renderer_webgpu.cpp
++++ b/bgfx/src/renderer_webgpu.cpp
+@@ -1649,6 +1649,20 @@
+ 			return 0 != m_lost;
+ 		}
+ 
++		// Loses the device, to test the recovery. The renderer destroys the device, as the browser does when it
++		// loses the device. The lost callback ignores a destroyed device, thus the renderer marks the loss itself.
++		bool loseDevice() override
++		{
++			if (NULL == m_device)
++			{
++				return false;
++			}
++
++			bx::atomicCompareAndSwap<uint32_t>(&m_lost, 0, 1);
++			wgpuDeviceDestroy(m_device);
++			return true;
++		}
++
+ 		void flip() override
+ 		{
+ 			if (0 != m_lost)

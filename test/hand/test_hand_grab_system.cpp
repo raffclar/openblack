@@ -81,6 +81,16 @@ public:
 		return globe;
 	}
 
+	entt::entity AddCrop(glm::vec3 position)
+	{
+		const auto crop = registry.Create();
+		registry.Assign<Transform>(crop, position, glm::mat3(1.0f), glm::vec3(1.0f));
+		registry.Assign<MobileObject>(crop, MobileObject {.type = MobileObjectInfo::Crop});
+		sizes[crop] = {.radius = 1.0f, .height = 2.0f};
+		crops.insert(crop);
+		return crop;
+	}
+
 	entt::entity AddScaffold(glm::vec3 position)
 	{
 		const auto scaffold = registry.Create();
@@ -398,6 +408,17 @@ public:
 	{
 		return fish_farm::Take(fishFarms.at(farm), amount);
 	}
+	[[nodiscard]] bool GivesInItsPlace(entt::entity object) const override { return crops.contains(object); }
+	entt::entity GiveInItsPlace(entt::entity object) override
+	{
+		const auto position = registry.Get<const Transform>(object).position;
+		crops.erase(object);
+		registry.Destroy(object);
+		return MakeHandful(PotInfo::HandFood, position, cropFood, false);
+	}
+	/// The crops, which give a handful of food in their place, and the food in that handful
+	std::set<entt::entity> crops;
+	uint32_t cropFood {16};
 	[[nodiscard]] std::optional<PotFacts> PotFactsOf(entt::entity pot) const override
 	{
 		const auto* data = registry.TryGet<const Pot>(pot);
@@ -1231,6 +1252,26 @@ TEST_F(HandGrabSystemWithWorld, ATakeThatTheTurnCannotDoEndsTheInterfaceLock)
 	world->registry.Destroy(outside);
 	system->DoTake(world->HandPlayer(), outside);
 	EXPECT_EQ(world->lockEnds, 3);
+}
+
+// A crop is never held: the take puts a handful of food in the hand in its place, the crop goes, and the interface lock
+// ends
+TEST_F(HandGrabSystemWithWorld, ACropGivesAHandfulOfFoodInItsPlace)
+{
+	const auto crop = world->AddCrop({4.0f, 0.0f, 0.0f});
+	world->reportedCollide = glm::vec3(4.0f, 0.0f, 0.0f);
+	system->DoTake(world->HandPlayer(), crop);
+	EXPECT_FALSE(world->registry.Valid(crop));
+	const auto held = system->GetHeld();
+	ASSERT_TRUE(held.has_value());
+	const auto* pot = world->registry.TryGet<const Pot>(*held);
+	ASSERT_NE(pot, nullptr);
+	EXPECT_EQ(pot->type, PotInfo::HandFood);
+	EXPECT_EQ(pot->amount, 16u);
+	EXPECT_EQ(world->lockEnds, 1);
+	// The hand picks the handful up as a thing of the world, with a pick-up reaction
+	EXPECT_EQ(std::ranges::count(world->reactions, Reaction::ReactToHandPickUp, &decltype(world->reactions)::value_type::type),
+	          1);
 }
 
 // The steps of a computer god take a thing also outside the influence of its player

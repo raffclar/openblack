@@ -27,6 +27,7 @@
 #include <entt/core/hashed_string.hpp>
 #include <spdlog/spdlog.h>
 
+#include "3D/LandIslandInterface.h"
 #include "3D/TempleInteriorInterface.h"
 #include "Audio/AudioManagerInterface.h"
 #include "Camera/Camera.h"
@@ -56,6 +57,7 @@
 #include "ECS/Systems/IncomingMessageSystemInterface.h"
 #include "ECS/Systems/MusicMoodSystemInterface.h"
 #include "ECS/Systems/NetworkGameSystemInterface.h"
+#include "ECS/Systems/ObjectDrawListSystemInterface.h"
 #include "ECS/Systems/PickingSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/TattooEditorSystemInterface.h"
@@ -71,6 +73,7 @@
 #include "Gui/ChatControlsRules.h"
 #include "Gui/CinemaBars.h"
 #include "Gui/CinemaHides.h"
+#include "Gui/FrontEndPointerRules.h"
 #include "Gui/GameTexts.h"
 #include "Gui/GlyphTexture.h"
 #include "Gui/IncomingMessageStripRules.h"
@@ -729,6 +732,13 @@ void GameInterface::CloseBoxesForGameEnd()
 		_menu->Close();
 	}
 	_saveGameBoxes->WithdrawMessage();
+}
+
+void GameInterface::CloseBoxesForScenario()
+{
+	CloseBoxesForGameEnd();
+	_staffQuestionBox->Withdraw();
+	_saveGameBoxes->WithdrawAll();
 }
 
 void GameInterface::ShowGodOut(std::u16string_view name)
@@ -1930,6 +1940,22 @@ void GameInterface::UpdateTattooEditor(float deltaSeconds)
 	_menu->SetCovered((_tattooEditor->IsOpen() && _tattooEditor->IsFramed()) || (_tripAsked && _saveGameBoxes->IsActive()));
 }
 
+void GameInterface::SubmitWorldLabels(graphics::WorldLabelGroup group)
+{
+	if (_groupedLabelsWaiting.Take(group))
+	{
+		GroupedLabelCanvas(group).End();
+	}
+}
+
+void GameInterface::SubmitWaitingWorldLabels()
+{
+	for (size_t index = 0; index < _groupedLabelCanvases.size(); ++index)
+	{
+		SubmitWorldLabels(static_cast<graphics::WorldLabelGroup>(index));
+	}
+}
+
 void GameInterface::DrawSavingBox(glm::u16vec2 resolution, bool loading, bool darken)
 {
 	_canvas.Begin(resolution);
@@ -1943,6 +1969,10 @@ void GameInterface::Draw(glm::u16vec2 resolution, glm::ivec2 mouse, uint32_t mil
 	_canvas.Begin(resolution);
 	_pointerCanvas.Begin(resolution);
 	_worldLabelsCanvas.Begin(resolution);
+	for (auto& canvas : _groupedLabelCanvases)
+	{
+		canvas.Begin(resolution);
+	}
 	_menuCreatureCanvas.Begin(resolution);
 	_filmOverlayCanvas.Begin(resolution);
 	_painter.Begin(resolution);
@@ -2057,7 +2087,9 @@ void GameInterface::Draw(glm::u16vec2 resolution, glm::ivec2 mouse, uint32_t mil
 			_menu->Draw(_painter);
 		}
 		_skipBox->Draw(_painter);
-		if (menuOpen || overDebugWindow)
+		// The front end's pointer shows while a box takes the mouse: under a box, or over the chat, the custom music
+		// controls, the incoming message or the buttons of the story history
+		if (FrontEndPointerOn() || overDebugWindow)
 		{
 			_painter.DrawPointer(_pointerCanvas, mouse, milliseconds);
 		}
@@ -2123,6 +2155,8 @@ void GameInterface::Draw(glm::u16vec2 resolution, glm::ivec2 mouse, uint32_t mil
 	}
 	_canvas.End();
 	_worldLabelsCanvas.End();
+	// The scene submits the other labels in the world among its draws (see SubmitWorldLabels)
+	_groupedLabelsWaiting.Drawn();
 	_menuCreatureCanvas.End();
 	_filmOverlayCanvas.End();
 	_pointerCanvas.End();
@@ -2239,6 +2273,16 @@ bool GameInterface::DialogBoxOpen() const
 	return (_menu->IsVisible() && _menu->IsOpen()) || _skipBox->IsActive() || _tattooEditor->IsOpen() ||
 	       _newPlayerBox->IsActive() || _skirmishBox->IsActive() || _saveGameBoxes->IsActive() ||
 	       _staffQuestionBox->IsActive() || _multiplayerBoxes->IsActive() || _endGameBox->IsOpen() || _landInfoBox->IsActive();
+}
+
+bool GameInterface::FrontEndPointerOn() const
+{
+	const auto mouseButtonDown = (SDL_GetMouseState(nullptr, nullptr) & (SDL_BUTTON_LMASK | SDL_BUTTON_RMASK)) != 0;
+	return front_end_pointer::IsOn({
+	    .boxUp = DialogBoxOpen(),
+	    .controlsTakeMouse = _chatControls->WantsMouse(mouseButtonDown) || _musicControls->WantsMouse(mouseButtonDown) ||
+	                         _incomingMessages->WantsMouse(mouseButtonDown) || _storyHistoryBox->WantsMouse(),
+	});
 }
 
 void GameInterface::DrawDialogue(glm::u16vec2 resolution, int barPixels)
@@ -2424,7 +2468,7 @@ void GameInterface::DrawTipBubble(glm::u16vec2 resolution, glm::ivec2 mouse)
 	// The bubble is flat on the screen, but the world in front of it hides its box, its words and its gestures, as with
 	// the villagers' labels. The shadows of the words are one nearer than the box, and the words two nearer. The arrows
 	// and the pictures of the controls go over all of the world.
-	auto& canvas = _worldLabelsCanvas;
+	auto& canvas = GroupedLabelCanvas(graphics::WorldLabelGroup::TipBubble);
 	const auto view = PrepareWorldTextCanvas(canvas);
 	const float boxDepth = world_text::DrawnDepth(placement->depth, view.pitch, view.nearClip);
 	const float boxBuffer = world_text::BufferDepth(view.projection, boxDepth);
@@ -2614,6 +2658,8 @@ void GameInterface::DrawChatBubbles(glm::u16vec2 resolution, glm::ivec2 mouse)
 		return ecs::components::Player::k_Colours.at(index);
 	};
 	const auto pointer = glm::vec2(mouse);
+	const auto* drawList = Locator::objectDrawListSystem::has_value() ? &Locator::objectDrawListSystem::value() : nullptr;
+	const auto* land = Locator::terrainSystem::has_value() ? &Locator::terrainSystem::value() : nullptr;
 	constexpr tip::Sizes k_NearSizes {.width = bubbles::k_NearWidth,
 	                                  .height = bubbles::k_NearHeight,
 	                                  .margin = bubbles::k_NearMargin,
@@ -2630,9 +2676,18 @@ void GameInterface::DrawChatBubbles(glm::u16vec2 resolution, glm::ivec2 mouse)
 		{
 			continue;
 		}
-		// The bubble points at the top of the creature's head
-		const auto anchor = transform->position +
-		                    glm::vec3(0.0f, script::property_rules::CreatureHeight(ecs::components::ShownSize(*body)), 0.0f);
+		// The creature adds its bubble in its own draw, which the land calls. A creature that the hand holds to stroke it
+		// stays on the land, and the land draws it as before.
+		if (drawList != nullptr && !drawList->LandCallsOwnDraw(registry, creature))
+		{
+			continue;
+		}
+		// The bubble points at the creature's height above the land under it
+		const float ground =
+		    land != nullptr ? land->GetHeightAt({transform->position.x, transform->position.z}) : transform->position.y;
+		const glm::vec3 anchor {transform->position.x,
+		                        ground + script::property_rules::CreatureHeight(ecs::components::ShownSize(*body)),
+		                        transform->position.z};
 		const auto clip = viewProjection * glm::vec4(anchor, 1.0f);
 		if (clip.w <= 0.0f)
 		{
@@ -2672,7 +2727,7 @@ void GameInterface::DrawChatBubbles(glm::u16vec2 resolution, glm::ivec2 mouse)
 		const GameFont& words = *face;
 
 		// The box, the arrows and the words are at depths in the world as for the tip bubble
-		auto& canvas = _worldLabelsCanvas;
+		auto& canvas = GroupedLabelCanvas(graphics::WorldLabelGroup::ChatBubbles);
 		const auto view = PrepareWorldTextCanvas(canvas);
 		const float boxDepth = world_text::DrawnDepth(placement->depth, view.pitch, view.nearClip);
 		const float shadowWordsBuffer =
@@ -2799,7 +2854,7 @@ void GameInterface::DrawVillagerLabels(glm::u16vec2 resolution)
 	}
 	// The labels are flat on the screen, but the world in front of each one hides it. Each label is at a depth a little
 	// nearer to the camera than its point, and the more the camera looks down, the nearer it is.
-	auto& canvas = _worldLabelsCanvas;
+	auto& canvas = GroupedLabelCanvas(graphics::WorldLabelGroup::VillagerNames);
 	const auto view = PrepareWorldTextCanvas(canvas);
 	const auto draw = [&canvas, this](const labels::Quad& quad, glm::vec4 colour) {
 		canvas.DrawShape({quad[0].position, quad[1].position, quad[2].position, quad[3].position},
@@ -3320,7 +3375,7 @@ void GameInterface::DrawFloatingNumbers(glm::u16vec2 resolution)
 	const float shadow = ecs::floating_number::k_ShadowOffset * scale;
 	// Each number is flat on the screen, but the world in front of its point hides it. Each number takes its place
 	// among the see-through things by its point.
-	auto& canvas = _worldLabelsCanvas;
+	auto& canvas = GroupedLabelCanvas(graphics::WorldLabelGroup::FloatingNumbers);
 	const auto view = PrepareWorldTextCanvas(canvas);
 	const auto lineAt = [&resolution, textSize](const std::u16string& text, glm::vec2 at, float alpha) {
 		return help::tip_bubble::Line {
@@ -3360,7 +3415,7 @@ void GameInterface::DrawLearningTexts(glm::u16vec2 resolution)
 	const float shadow = ecs::learning_marker::k_ShadowOffset * scale;
 	// The words are flat on the screen, but the world in front of their point hides them. The game draws them after the
 	// solid models and before the see-through things.
-	auto& canvas = _worldLabelsCanvas;
+	auto& canvas = GroupedLabelCanvas(graphics::WorldLabelGroup::LearningWords);
 	const auto view = PrepareWorldTextCanvas(canvas);
 	for (const auto& text : _learningTexts)
 	{

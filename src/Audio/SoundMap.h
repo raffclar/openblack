@@ -128,7 +128,6 @@ public:
 	[[nodiscard]] const std::array<float, k_AtmosTypeCount>& GetVolumes() const { return _volumes; }
 	[[nodiscard]] const std::array<TypeScan, k_AtmosTypeCount>& GetScans() const { return _scans; }
 	[[nodiscard]] float GetHeightAboveLand() const { return _heightAboveLand; }
-	[[nodiscard]] float GetReceiverHeight() const { return _receiverHeight; }
 
 	/// Interpolated land height at a map position in 1/65536 cell units
 	[[nodiscard]] static float GetAltitude(const LandIslandInterface& island, int32_t x, int32_t z);

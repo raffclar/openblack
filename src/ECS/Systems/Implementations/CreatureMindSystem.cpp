@@ -178,8 +178,6 @@ constexpr float k_ToldFaceMs = 3000.0f;
 
 /// A creature looks for food and water this far away at most
 constexpr float k_FoodSearchDistance = 200.0f;
-/// Food further than this from its mouth, for its size, has got away by the time it eats
-constexpr float k_EatReach = 15.0f;
 
 constexpr std::string_view k_PukeAction = "Puke";
 

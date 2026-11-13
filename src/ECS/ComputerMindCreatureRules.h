@@ -58,8 +58,6 @@ constexpr float k_FitShare = 0.5f;
 [[nodiscard]] int32_t StarvingAmount(float wish);
 /// At this share of its life or less, the creature is badly hurt
 constexpr float k_DamagedLife = 0.2f;
-/// At this share of illness or more, the creature is ill
-constexpr float k_IllShare = 0.5f;
 /// The wish to make the creature warmer or cooler is its desire times this
 constexpr float k_WarmerShare = 0.5f;
 constexpr float k_CoolerShare = 0.1f;

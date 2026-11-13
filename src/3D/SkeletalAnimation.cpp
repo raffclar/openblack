@@ -302,27 +302,41 @@ private:
 
 std::span<const Matrix> KeyframeTurns::Of(const Animation& animation, size_t frame, bool mirrored)
 {
-	// The calls for the frames of one animation come one after another, thus the store keeps the last place that it found
-	if (_last.animation != &animation)
+	// The animation keeps the place of its turns. An animation with no place, or with the place of another animation,
+	// gets the place of its address, so that the store keeps one place for each address. When the list grows, the frames
+	// move with their memory, thus the spans stay valid.
+	auto& place = animation.turnsPlace.index;
+	if (place >= _animations.size() || _animations[place].animation != &animation)
 	{
-		_last = {.animation = &animation, .frames = &_animations[&animation]};
+		const auto [found, added] = _placeOf.try_emplace(&animation, static_cast<uint32_t>(_animations.size()));
+		if (added)
+		{
+			_animations.push_back({.animation = &animation});
+		}
+		place = found->second;
 	}
-	auto& frames = *_last.frames;
+	auto& frames = _animations[place].frames;
 	if (frames.size() != animation.frames.size())
 	{
 		frames.assign(animation.frames.size(), {});
 	}
 	auto& kept = frames[frame];
 	const auto& angles = animation.frames[frame].eulerAngles;
-	// The bits of the angles must be the same. Thus the store does not give the turn of minus zero for plus zero.
-	const bool same =
-	    kept.angles.size() == angles.size() &&
-	    (angles.empty() || std::memcmp(kept.angles.data(), angles.data(), angles.size() * sizeof(glm::vec3)) == 0);
-	if (!same)
+	// The marked contents that the store found last time have the same angles
+	const auto mark = animation.mark.value;
+	if (mark == 0 || kept.mark != mark)
 	{
-		kept.angles = angles;
-		kept.turns.clear();
-		kept.mirroredTurns.clear();
+		// The bits of the angles must be the same. Thus the store does not give the turn of minus zero for plus zero.
+		const bool same =
+		    kept.angles.size() == angles.size() &&
+		    (angles.empty() || std::memcmp(kept.angles.data(), angles.data(), angles.size() * sizeof(glm::vec3)) == 0);
+		if (!same)
+		{
+			kept.angles = angles;
+			kept.turns.clear();
+			kept.mirroredTurns.clear();
+		}
+		kept.mark = mark;
 	}
 	auto& turns = mirrored ? kept.mirroredTurns : kept.turns;
 	if (turns.size() != angles.size())
@@ -340,7 +354,7 @@ void KeyframeTurns::Trim()
 	if (_animations.size() > k_MostAnimations)
 	{
 		_animations.clear();
-		_last = {};
+		_placeOf.clear();
 	}
 }
 
@@ -376,14 +390,24 @@ Matrix Reflected(Matrix m)
 
 std::vector<Pose> MirrorPoses(std::span<const Pose> poses, const Skeleton& skeleton, std::span<const uint32_t> mirror)
 {
+	std::vector<Pose> mirrored(poses.begin(), poses.end());
+	PoseBuffers buffers;
+	MirrorPoses(mirrored, skeleton, mirror, buffers);
+	return mirrored;
+}
+
+void MirrorPoses(std::span<Pose> poses, const Skeleton& skeleton, std::span<const uint32_t> mirror, PoseBuffers& buffers)
+{
 	const auto count = std::min(poses.size(), skeleton.parents.size());
 	if (mirror.empty() || count == 0)
 	{
-		return {poses.begin(), poses.end()};
+		return;
 	}
 	// Each bone's turn and place in the mesh's space as posed
-	std::vector<Matrix> world(count);
-	std::vector<glm::vec3> place(count);
+	auto& world = buffers.world;
+	auto& place = buffers.place;
+	world.assign(count, Matrix {});
+	place.assign(count, glm::vec3(0.0f));
 	for (size_t i = 0; i < count; ++i)
 	{
 		const auto parent = skeleton.parents[i];
@@ -398,9 +422,12 @@ std::vector<Pose> MirrorPoses(std::span<const Pose> poses, const Skeleton& skele
 			place[i] = poses[i].translation;
 		}
 	}
-	// Each bone takes its mirror bone's bending away from the rest pose and its place, reflected
-	std::vector<Matrix> mirroredWorld(count);
-	std::vector<glm::vec3> mirroredPlace(count);
+	// Each bone takes its mirror bone's bending away from the rest pose and its place, reflected. A bone that is no
+	// bone's mirror keeps zeros.
+	auto& mirroredWorld = buffers.mirroredWorld;
+	auto& mirroredPlace = buffers.mirroredPlace;
+	mirroredWorld.assign(count, Matrix {});
+	mirroredPlace.assign(count, glm::vec3(0.0f));
 	for (size_t i = 0; i < count; ++i)
 	{
 		const auto destination = std::min(Destination(mirror, static_cast<uint32_t>(i)), static_cast<uint32_t>(count - 1));
@@ -408,24 +435,22 @@ std::vector<Pose> MirrorPoses(std::span<const Pose> poses, const Skeleton& skele
 		mirroredWorld[destination] = Multiply(skeleton.restRotations[destination], Reflected(bend));
 		mirroredPlace[destination] = glm::vec3(-place[i].x, place[i].y, place[i].z);
 	}
-	// Back into poses relative to the parents
-	std::vector<Pose> mirrored(poses.begin(), poses.end());
+	// Back into poses relative to the parents. The steps above read all the poses before this step writes them.
 	for (size_t i = 0; i < count; ++i)
 	{
 		const auto parent = skeleton.parents[i];
 		if (parent != k_NoParent && parent < i)
 		{
 			const auto inverseParent = Inverse(mirroredWorld[parent]);
-			mirrored[i].rotation = Multiply(mirroredWorld[i], inverseParent);
-			mirrored[i].translation = Times(mirroredPlace[i] - mirroredPlace[parent], inverseParent);
+			poses[i].rotation = Multiply(mirroredWorld[i], inverseParent);
+			poses[i].translation = Times(mirroredPlace[i] - mirroredPlace[parent], inverseParent);
 		}
 		else
 		{
-			mirrored[i].rotation = mirroredWorld[i];
-			mirrored[i].translation = mirroredPlace[i];
+			poses[i].rotation = mirroredWorld[i];
+			poses[i].translation = mirroredPlace[i];
 		}
 	}
-	return mirrored;
 }
 
 namespace
@@ -526,23 +551,30 @@ std::optional<uint32_t> ComposedParent(std::span<const uint32_t> parents, size_t
 std::vector<Pose> SampleCycle(const Animation& animation, const Animation& stand, uint32_t timeMs, const Skeleton& skeleton,
                               std::span<const uint32_t> mirror, KeyframeTurns* turns)
 {
+	std::vector<Pose> poses;
+	PoseBuffers buffers;
+	SampleCycle(poses, animation, stand, timeMs, skeleton, mirror, turns, buffers);
+	return poses;
+}
+
+void SampleCycle(std::vector<Pose>& poses, const Animation& animation, const Animation& stand, uint32_t timeMs,
+                 const Skeleton& skeleton, std::span<const uint32_t> mirror, KeyframeTurns* turns, PoseBuffers& buffers)
+{
+	const auto count = skeleton.parents.size();
+	poses.assign(count, Pose {.rotation = k_Identity, .translation = glm::vec3(0.0f)});
+	if (!animation.frames.empty() && count != 0)
+	{
+		const CycleSampler sampler(animation, stand, timeMs, skeleton, turns);
+		for (uint32_t joint = 0; joint < count; ++joint)
+		{
+			poses[joint] = sampler.Sample(joint);
+		}
+	}
 	// Played left to right, the pose is the animation's reflected across the body
 	if (!mirror.empty())
 	{
-		return MirrorPoses(SampleCycle(animation, stand, timeMs, skeleton, {}, turns), skeleton, mirror);
+		MirrorPoses(poses, skeleton, mirror, buffers);
 	}
-	const auto count = skeleton.parents.size();
-	std::vector<Pose> poses(count, Pose {.rotation = k_Identity, .translation = glm::vec3(0.0f)});
-	if (animation.frames.empty() || count == 0)
-	{
-		return poses;
-	}
-	const CycleSampler sampler(animation, stand, timeMs, skeleton, turns);
-	for (uint32_t joint = 0; joint < count; ++joint)
-	{
-		poses[joint] = sampler.Sample(joint);
-	}
-	return poses;
 }
 
 std::vector<std::optional<glm::vec3>> BonePlacesInCycle(const Animation& animation, const Animation& stand, uint32_t timeMs,
@@ -710,7 +742,14 @@ void BlendLayers(std::vector<Pose>& poses, const Animation& first, uint32_t firs
 
 std::vector<Pose> PosesFromBoneMatrices(std::span<const glm::mat4> matrices, std::span<const uint32_t> parents)
 {
-	std::vector<Pose> poses(matrices.size());
+	std::vector<Pose> poses;
+	PosesFromBoneMatrices(matrices, parents, poses);
+	return poses;
+}
+
+void PosesFromBoneMatrices(std::span<const glm::mat4> matrices, std::span<const uint32_t> parents, std::vector<Pose>& poses)
+{
+	poses.resize(matrices.size());
 	for (size_t i = 0; i < matrices.size(); ++i)
 	{
 		const auto parent = i < parents.size() ? parents[i] : k_NoParent;
@@ -724,7 +763,6 @@ std::vector<Pose> PosesFromBoneMatrices(std::span<const glm::mat4> matrices, std
 		}
 		poses[i].translation = glm::vec3(local[3]);
 	}
-	return poses;
 }
 
 std::vector<Pose> WeightedSum(std::span<const std::vector<Pose>> poses, std::span<const float> weights)
@@ -755,21 +793,32 @@ std::vector<Pose> WeightedSum(std::span<const std::vector<Pose>> poses, std::spa
 std::vector<Pose> WeightedSumInMeshSpace(std::span<const std::vector<Pose>> poses, std::span<const float> weights,
                                          std::span<const uint32_t> parents)
 {
+	std::vector<Pose> sum;
+	PoseBuffers buffers;
+	WeightedSumInMeshSpace(sum, poses, weights, parents, buffers);
+	return sum;
+}
+
+void WeightedSumInMeshSpace(std::vector<Pose>& sum, std::span<const std::vector<Pose>> poses, std::span<const float> weights,
+                            std::span<const uint32_t> parents, PoseBuffers& buffers)
+{
 	if (poses.empty())
 	{
-		return {};
+		sum.clear();
+		return;
 	}
 	// Each animation's bones placed in the mesh's space, summed there by weight, then made relative to their parents
-	std::vector<glm::mat4> sum(poses.front().size(), glm::mat4(0.0f));
+	auto& matrices = buffers.sum;
+	matrices.assign(poses.front().size(), glm::mat4(0.0f));
 	for (size_t i = 0; i < poses.size() && i < weights.size(); ++i)
 	{
-		const auto placed = ComposeBoneMatrices(poses[i], parents);
-		for (size_t bone = 0; bone < sum.size() && bone < placed.size(); ++bone)
+		ComposeBoneMatrices(poses[i], parents, buffers.placed);
+		for (size_t bone = 0; bone < matrices.size() && bone < buffers.placed.size(); ++bone)
 		{
-			sum[bone] += weights[i] * placed[bone];
+			matrices[bone] += weights[i] * buffers.placed[bone];
 		}
 	}
-	return PosesFromBoneMatrices(sum, parents);
+	PosesFromBoneMatrices(matrices, parents, sum);
 }
 
 void AddLayer(std::vector<Pose>& poses, const Animation& layer, uint32_t timeMs, size_t referenceFrame,

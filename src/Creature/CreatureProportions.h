@@ -11,6 +11,7 @@
 
 #include <cstdint>
 
+#include <array>
 #include <optional>
 #include <span>
 #include <vector>
@@ -59,9 +60,26 @@ struct BoneScale
 	float factor;
 };
 
+/// A list of the bones to scale that keeps its items in place, with no memory from the heap
+class ScaledBoneList
+{
+public:
+	/// The head, then each of the three right bones and its mirror bone
+	static constexpr size_t k_MostBones = 7;
+
+	void Add(BoneScale scale) { _items.at(_count++) = scale; }
+	[[nodiscard]] size_t size() const { return _count; }
+	[[nodiscard]] const BoneScale& operator[](size_t index) const { return _items.at(index); }
+	[[nodiscard]] std::span<const BoneScale> Span() const { return std::span(_items).first(_count); }
+
+private:
+	std::array<BoneScale, k_MostBones> _items {};
+	size_t _count {0};
+};
+
 /// The bones to scale for a creature of a size, and their factors. The list has each bone on the right side and then
 /// its mirror bone. A bone that is its own mirror is in the list two times, and it gets the factor two times.
-[[nodiscard]] std::vector<BoneScale> ScaledBones(const Bones& bones, std::span<const uint32_t> mirror, float size);
+[[nodiscard]] ScaledBoneList ScaledBones(const Bones& bones, std::span<const uint32_t> mirror, float size);
 
 /// Scale the rotation of each listed bone, relative to its parent, by its factor. The bones below it grow with it. The
 /// position of the bone itself does not change.

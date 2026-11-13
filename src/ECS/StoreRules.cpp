@@ -104,6 +104,15 @@ bool store_rules::BuildingSiteStores(ResourceType type)
 	return type == ResourceType::Wood || type == ResourceType::Any;
 }
 
+store_rules::SiteGift store_rules::WhereSiteGiftGoes(ResourceType type, bool storagePit)
+{
+	if (BuildingSiteStores(type))
+	{
+		return SiteGift::Site;
+	}
+	return storagePit ? SiteGift::OwnStore : SiteGift::Refused;
+}
+
 bool store_rules::ScaffoldStores(ResourceType type, bool onSite)
 {
 	return onSite && type == ResourceType::Wood;

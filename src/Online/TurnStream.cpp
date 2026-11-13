@@ -127,6 +127,7 @@ bool TurnStream::SendText(std::string_view text)
 
 void TurnStream::Received(std::span<const uint8_t> bytes)
 {
+	_lastReceived = _clock();
 	auto decoded = turn_codec::Decode(bytes);
 	if (!decoded.frame.has_value())
 	{
@@ -166,6 +167,11 @@ void TurnStream::Received(std::span<const uint8_t> bytes)
 		if (now >= pong->time)
 		{
 			_roundTrip = now - pong->time;
+		}
+		// The ids go up from 0, so the answer of a ping answers each ping before it too
+		if (pong->id < _nextPing && pong->id + 1 > _answeredPings)
+		{
+			_answeredPings = pong->id + 1;
 		}
 	}
 	else

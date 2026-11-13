@@ -1031,7 +1031,9 @@ TEST_F(ParticleEffectTest, ASparkShowerRisesFromItsObjectAsStrongAsItsAtom)
 	});
 	Effect::DrawWalk walk;
 	effect->Walk(1.0f, walk);
+	// The turn keeps the stone in the hand at one place, and the frame draws it at the hand at another
 	const glm::vec3 stone {10.0f, 20.0f, 30.0f};
+	const glm::vec3 turnPlace {-50.0f, 5.0f, 70.0f};
 	std::vector<std::string> sheets;
 	const draw::Sources sources {
 	    .textures =
@@ -1041,7 +1043,9 @@ TEST_F(ParticleEffectTest, ASparkShowerRisesFromItsObjectAsStrongAsItsAtom)
 	        },
 	    .playerColour = [](int) { return 0xFFFFFFu; },
 	    .random = [](float) { return 0.0f; },
-	    .objectPosition = [&stone](entt::entity object) { return object == k_Stone ? std::optional(stone) : std::nullopt; },
+	    .objectPosition =
+	        [&turnPlace](entt::entity object) { return object == k_Stone ? std::optional(turnPlace) : std::nullopt; },
+	    .objectDrawnOrigin = [&stone](entt::entity object) { return object == k_Stone ? std::optional(stone) : std::nullopt; },
 	};
 	draw::Frame frame;
 	draw::AddEffect(frame, walk, draw::DrawPath::Sorted, glm::vec3(0.0f), 0, sources);
@@ -1049,7 +1053,7 @@ TEST_F(ParticleEffectTest, ASparkShowerRisesFromItsObjectAsStrongAsItsAtom)
 	ASSERT_EQ(frame.sprites.size(), 13u);
 	EXPECT_TRUE(std::ranges::all_of(sheets, [](const std::string& sheet) { return sheet == "S_SpriteSheet1"; }));
 	// The first is 5 seconds old: fully faded in, but only as strong as the atom's 100 of 255; it has risen
-	// 20 * (5/8)^2 metres straight up from where the stone stands
+	// 20 * (5/8)^2 metres straight up from where the frame draws the stone, not from the place of the turn
 	const auto& first = frame.sprites.front();
 	EXPECT_NEAR(first.colour.a, 100.0f / 255.0f, 1e-6f);
 	EXPECT_NEAR(first.positionHalfWidth.x, 10.0f, k_Epsilon);
@@ -1061,6 +1065,7 @@ TEST_F(ParticleEffectTest, ASparkShowerRisesFromItsObjectAsStrongAsItsAtom)
 	    .playerColour = sources.playerColour,
 	    .random = sources.random,
 	    .objectPosition = [](entt::entity) { return std::optional<glm::vec3>(); },
+	    .objectDrawnOrigin = [](entt::entity) { return std::optional<glm::vec3>(); },
 	};
 	frame.Clear();
 	draw::AddEffect(frame, walk, draw::DrawPath::Sorted, glm::vec3(0.0f), 0, gone);

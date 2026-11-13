@@ -161,6 +161,11 @@ constexpr float k_FunctionalLife = 0.75f;
 /// icon is built when its site is built.
 [[nodiscard]] bool Functional(float life, bool built);
 
+/// Whether the land shows an icon: its hand, the seed above the hand and the look of its charge. A worship site's icon
+/// shows only while its site is built, so an icon at a site that is not built shows nothing. A stone hand of a village
+/// centre, and an icon with no site, always show.
+[[nodiscard]] bool Shown(std::optional<bool> siteBuilt);
+
 /// Whether the hand of a player may tap an icon or a stone hand of a player: only the hand of the player that owns it.
 /// While every player's influence covers the whole land (the Gods' Playground), the hand of any player also taps a
 /// neutral icon.

@@ -356,21 +356,15 @@ public:
 	[[nodiscard]] bool IsBoned() const { return static_cast<bool>(_flags & l3d::L3DMeshFlags::HasBones); }
 	[[nodiscard]] bool HasDoorPosition() const { return static_cast<bool>(_flags & l3d::L3DMeshFlags::HasDoorPosition); }
 	[[nodiscard]] bool HasChimney() const { return static_cast<bool>(_flags & l3d::L3DMeshFlags::HasChimney); }
-	[[nodiscard]] bool IsPacked() const { return static_cast<bool>(_flags & l3d::L3DMeshFlags::Packed); }
-	[[nodiscard]] bool IsNoDraw() const { return static_cast<bool>(_flags & l3d::L3DMeshFlags::NoDraw); }
 	[[nodiscard]] bool ContainsLandscapeFeature() const
 	{
 		return static_cast<bool>(_flags & l3d::L3DMeshFlags::ContainsLandscapeFeature);
 	}
-	[[nodiscard]] bool IsContainsUV2() const { return static_cast<bool>(_flags & l3d::L3DMeshFlags::ContainsUV2); }
-	[[nodiscard]] bool IsContainsNameData() const { return static_cast<bool>(_flags & l3d::L3DMeshFlags::ContainsNameData); }
 	[[nodiscard]] bool ContainsExtraMetrics() const
 	{
 		return static_cast<bool>(_flags & l3d::L3DMeshFlags::ContainsExtraMetrics);
 	}
 	[[nodiscard]] bool IsContainsEBone() const { return static_cast<bool>(_flags & l3d::L3DMeshFlags::ContainsEBone); }
-	[[nodiscard]] bool IsContainsTnLData() const { return static_cast<bool>(_flags & l3d::L3DMeshFlags::ContainsTnLData); }
-	[[nodiscard]] bool IsContainsNewEP() const { return static_cast<bool>(_flags & l3d::L3DMeshFlags::ContainsNewEP); }
 	// const bool IsContainsNewData() const { return _flags & 0xFC8000; } // ???
 };
 

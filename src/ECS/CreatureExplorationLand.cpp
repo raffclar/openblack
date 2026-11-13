@@ -94,6 +94,11 @@ const explore::RegionMap* creature_exploration_land::Map()
 	{
 		MakeMap();
 	}
+	// A save does not keep the packed kinds of the regions, so the first search after a load makes them again
+	if (context.explorationMap.has_value() && !context.explorationMap->KindsPacked())
+	{
+		context.explorationMap->PackKinds();
+	}
 	return context.explorationMap.has_value() ? &*context.explorationMap : nullptr;
 }
 

@@ -33,24 +33,12 @@ class VertexBuffer;
 class Mesh
 {
 public:
-	enum class Topology
-	{
-		PointList,
-		LineList,
-		LineStrip,
-		TriangleList,
-		TriangleStrip,
-	};
-
-	explicit Mesh(VertexBuffer* vertexBuffer, IndexBuffer* indexBuffer = nullptr,
-	              Topology topology = Topology::TriangleList) noexcept;
+	explicit Mesh(VertexBuffer* vertexBuffer, IndexBuffer* indexBuffer = nullptr) noexcept;
 	~Mesh() noexcept;
 
 	[[nodiscard]] const VertexBuffer& GetVertexBuffer() const;
 	[[nodiscard]] const IndexBuffer& GetIndexBuffer() const;
 	[[nodiscard]] bool IsIndexed() const;
-
-	[[nodiscard]] Topology GetTopology() const noexcept;
 
 	/// For a small mesh of fixed data: the mesh keeps a copy of its vertices and indices, and gives them to the graphics
 	/// device again after a restore. The device then keeps no copy.
@@ -87,7 +75,6 @@ protected:
 	std::unique_ptr<graphics::IndexBuffer> _indexBuffer;
 
 private:
-	Topology _topology;
 	/// Whether the mesh is one of the owners that give their data to the graphics device again
 	bool _givesContentsAgain {false};
 };

@@ -158,6 +158,7 @@
 #include "Gestures/GestureTrailBuilder.h"
 #include "Graphics/FrameBuffer.h"
 #include "Gui/GameInterface.h"
+#include "Gui/HandToolTipRules.h"
 #include "Gui/HandToolTips.h"
 #include "Gui/MultiplayerFrontEnd.h"
 #include "Gui/ScreenFit.h"
@@ -575,75 +576,13 @@ void Game::EndHandLockForFrame()
 	}
 	// The action of the hand of this computer, the thing or the seed that the action needs, and the thing that the
 	// action keeps from its press. An action that keeps no thing checks the thing under the hand in each frame.
-	auto action = hand_send_wait::FrameAction::Free;
-	std::optional<entt::entity> held;
-	auto pressThing = entt::entity {entt::null};
-	bool keepsThing = true;
+	const auto own = Locator::handSystem::value().GetOwnAction();
+	const auto action = own.action;
+	const auto held = own.held;
+	const auto taking = Locator::handGrabSystem::has_value() ? Locator::handGrabSystem::value().GetTaking() : std::nullopt;
+	auto pressThing = own.pressThing;
+	const bool keepsThing = own.keepsThing;
 	const bool hasMagic = Locator::magicSystem::has_value();
-	const bool hasGrab = Locator::handGrabSystem::has_value();
-	const auto taking = hasGrab ? Locator::handGrabSystem::value().GetTaking() : std::nullopt;
-	const auto useWait = hasMagic ? Locator::magicSystem::value().GetUseWait() : std::nullopt;
-	const auto giveWait = hasGrab ? Locator::handGrabSystem::value().GetGiveWait() : std::nullopt;
-	if (hasMagic && Locator::magicSystem::value().GetHandCastState().state != magic::CastInput::State::Idle)
-	{
-		action = hand_send_wait::FrameAction::UsesHeld;
-		held = Locator::magicSystem::value().GetHeldSeed();
-		pressThing = Locator::magicSystem::value().GetPressThing();
-	}
-	else if (useWait.has_value())
-	{
-		// The seed was used on a thing at the press, and the interface waits for the let go of the button. Both buttons end
-		// the wait. A miracle that runs in the hand keeps the thing of the press, also in the frame after the let go.
-		action = useWait->letGo ? hand_send_wait::FrameAction::Free : hand_send_wait::FrameAction::Other;
-		pressThing = useWait->kept;
-		keepsThing = useWait->kept != entt::null;
-	}
-	else if (giveWait.has_value())
-	{
-		// The hand sent a gift, and the interface waits until its lock ends. The wait needs the held thing, both buttons
-		// end it, and it keeps the thing that was under the hand at the press.
-		action = hand_send_wait::FrameAction::UsesHeld;
-		held = Locator::handGrabSystem::value().GetHeld();
-		pressThing = *giveWait;
-	}
-	else if (hasGrab && Locator::handGrabSystem::value().IsAboutToThrow())
-	{
-		action = hand_send_wait::FrameAction::UsesHeld;
-		held = Locator::handGrabSystem::value().GetHeld();
-		keepsThing = false;
-	}
-	else if (hasGrab && Locator::handGrabSystem::value().WaitsForUseLetGo())
-	{
-		// The hand used what it holds on a thing, and the interface waits for the let go of the button. Both buttons end
-		// the wait.
-		action = hand_send_wait::FrameAction::Other;
-		keepsThing = false;
-	}
-	else if (taking.has_value())
-	{
-		// The hand presses on a thing to take it, and waits, pulls or waits for the turn that puts it in the hand
-		action = hand_send_wait::FrameAction::Takes;
-		pressThing = *taking;
-	}
-	else if ((Locator::creatureHandSystem::has_value() &&
-	          (Locator::creatureHandSystem::value().GetCreature().has_value() ||
-	           Locator::creatureHandSystem::value().WaitsForTap() || Locator::creatureHandSystem::value().WaitsForLockEnd())) ||
-	         (hasGrab && Locator::handGrabSystem::value().GetLockedOn().has_value()))
-	{
-		// A held creature, a creature that the button let go of while the lock stays, a press that waits for a tap on a
-		// creature, or a scoop lock
-		action = hand_send_wait::FrameAction::Other;
-		const auto lockedOn = hasGrab ? Locator::handGrabSystem::value().GetLockedOn() : std::nullopt;
-		pressThing = lockedOn.has_value()                       ? *lockedOn
-		             : Locator::creatureHandSystem::has_value() ? Locator::creatureHandSystem::value().GetPressCreature()
-		                                                        : entt::entity {entt::null};
-	}
-	else if (!Locator::tipBubbleSystem::has_value() || !Locator::tipBubbleSystem::value().IsGripped())
-	{
-		// The hand does no action, or it grips the land, a totem or the fight. While the hand grips a tip bubble, the
-		// interface checks no thing.
-		keepsThing = false;
-	}
 	// The thing under the hand: the pick of the last frame drawn. While the hand grips the land, the pick keeps the thing
 	// that was under the hand at the grip. The grip that both buttons started keeps no thing.
 	if (!keepsThing && Locator::pickingSystem::has_value() && !Locator::handPressSystem::value().LandGripKeepsNoThing())
@@ -762,8 +701,8 @@ void Game::ProcessHandToolTipTurn()
 		}
 	}
 	const auto pointed = Locator::pickingSystem::has_value() ? Locator::pickingSystem::value().GetPick().object : std::nullopt;
-	const bool shown =
-	    !Locator::gameInterface::value().IsDialogOpen() && Locator::cinematicDirectorSystem::value().IsInterfaceActive();
+	const bool shown = gui::hand_tooltip::OffersToolTips(Locator::gameInterface::value().FrontEndPointerOn(),
+	                                                     Locator::cinematicDirectorSystem::value().IsInterfaceActive());
 	if (shown)
 	{
 		SubmitHandToolTips(toolTips, pointed);
@@ -2345,13 +2284,6 @@ void Game::UpdateMagicHand(const glm::vec3& handPosition, float deltaSeconds)
 	magic.UpdateHand(frame, Locator::time::value().GetInputSteps());
 	magic.Update(deltaSeconds);
 	Locator::magicShieldSystem::value().Update(deltaSeconds);
-	// The seeds above the stone hands and worship icons spin as the globes' do, by the game time of the frame: they stand
-	// still while the game is paused
-	if (Locator::spellIconSystem::has_value())
-	{
-		Locator::spellIconSystem::value().Update(
-		    std::chrono::duration<float>(Locator::time::value().GetFrameGameTime()).count());
-	}
 }
 
 void Game::PlayHandGrabSound()
@@ -2420,7 +2352,9 @@ void Game::PlayHandGrabSound()
 
 bool Game::IsHandDrawn() const
 {
-	return hand_visibility::IsShown(Locator::gameInterface::has_value() && Locator::gameInterface::value().IsDialogOpen(),
-	                                Locator::cinematicDirectorSystem::value().IsInterfaceActive(),
-	                                Locator::temple::has_value() && Locator::temple::value().Active());
+	return hand_visibility::IsShown({
+	    .dialogOpen = Locator::gameInterface::has_value() && Locator::gameInterface::value().FrontEndPointerOn(),
+	    .interfaceActive = Locator::cinematicDirectorSystem::value().IsInterfaceActive(),
+	    .onlineFrontEnd = Locator::temple::has_value() && Locator::temple::value().IsMultiplayerFrontEnd(),
+	});
 }

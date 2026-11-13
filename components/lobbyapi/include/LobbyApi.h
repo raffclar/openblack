@@ -363,7 +363,6 @@ struct ResultAnswer
 
 /// The roles of a join ticket
 constexpr std::string_view k_GodRole = "god";
-constexpr std::string_view k_ObserverRole = "observer";
 
 /// The body of POST /api/v1/servers/{id}/tickets
 struct TicketRequest
@@ -392,12 +391,9 @@ namespace problems
 constexpr std::string_view k_EmailRequired = "email_required";
 /// The gods fill the room of the server. An observer ticket can still join (409).
 constexpr std::string_view k_ServerFull = "server_full";
-/// The admins of the server banned the account (403)
-constexpr std::string_view k_BannedFromServer = "banned_from_server";
 /// The game of the server started (409)
 constexpr std::string_view k_GameStarted = "game_started";
 /// The room of the server is locked (409)
-constexpr std::string_view k_ServerLocked = "server_locked";
 } // namespace problems
 
 /// A clan in a list. Not in the contract of the lobby yet: the shape of the plan.
@@ -635,26 +631,15 @@ namespace events
 {
 // The control frames
 constexpr std::string_view k_Hello = "hello";
-constexpr std::string_view k_Subscribed = "subscribed";
-constexpr std::string_view k_Unsubscribed = "unsubscribed";
 constexpr std::string_view k_Resumed = "resumed";
 constexpr std::string_view k_Resync = "resync";
-constexpr std::string_view k_Error = "error";
 // The events
 constexpr std::string_view k_ChatLine = "chat.line";
-constexpr std::string_view k_ChatJoined = "chat.joined";
-constexpr std::string_view k_ChatLeft = "chat.left";
-constexpr std::string_view k_PresenceChanged = "presence.changed";
 constexpr std::string_view k_ServersChanged = "servers.changed";
 constexpr std::string_view k_ServersRemoved = "servers.removed";
 constexpr std::string_view k_RoomChanged = "room.changed";
-constexpr std::string_view k_ClanInvited = "clan.invited";
-constexpr std::string_view k_ClanRequest = "clan.request";
 constexpr std::string_view k_ServerBanned = "server.banned";
-constexpr std::string_view k_ServerUnbanned = "server.unbanned";
-constexpr std::string_view k_AccountMuted = "account.muted";
 constexpr std::string_view k_AccountBanned = "account.banned";
-constexpr std::string_view k_PointsChanged = "points.changed";
 constexpr std::string_view k_RoomClanChosen = "room.clan_chosen";
 constexpr std::string_view k_PingLine = "ping.line";
 constexpr std::string_view k_PingHere = "ping.here";
@@ -827,20 +812,12 @@ struct Ban
 };
 
 /// The channels of the push channel
-constexpr std::string_view k_LobbyChannel = "lobby";
 constexpr std::string_view k_ServersChannel = "servers";
 /// The channel of the room of a game server is this text and the id of the server
 constexpr std::string_view k_ServerChannelPrefix = "server-";
 
-/// The handshake of the push channel. The desktop sends the header "Authorization: Bearer <access token>". A browser
-/// cannot send headers on a WebSocket, so it asks for the subprotocols "bwgame.v1" and "bearer.<access token>". The
-/// lobby answers with "bwgame.v1".
-constexpr std::string_view k_PushSubprotocol = "bwgame.v1";
-constexpr std::string_view k_PushTokenSubprotocolPrefix = "bearer.";
-
 /// The close codes of the push channel
 constexpr uint16_t k_CloseSignedOut = 4001;
 constexpr uint16_t k_CloseBanned = 4003;
-constexpr uint16_t k_CloseTooManyFrames = 4008;
 
 } // namespace openblack::lobby_api
