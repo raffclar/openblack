@@ -1477,6 +1477,8 @@ struct ThrowSetup
 	bool reward {false};
 	/// It is lifted to this point, from the middle of the map, before it is thrown; none to throw it from where it lies
 	std::optional<glm::vec2> from;
+	/// The point is from where this creature of the scenario stands at the throw, not from the middle of the map
+	std::optional<size_t> fromCreature;
 	/// How high above the land it is let go
 	float height {6.0f};
 	glm::vec3 velocity {0.0f};

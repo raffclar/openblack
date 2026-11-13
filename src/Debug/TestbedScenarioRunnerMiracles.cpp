@@ -163,8 +163,18 @@ void Runner::UpdateThrows()
 			continue;
 		}
 		auto& transform = registry.Get<ecs::components::Transform>(object);
+		// The point can be from where a creature of the scenario stands now
+		auto origin = _middle;
+		if (setup.fromCreature.has_value() && *setup.fromCreature < _creatures.size() &&
+		    registry.Valid(_creatures.at(*setup.fromCreature)))
+		{
+			if (const auto* at = registry.TryGet<const ecs::components::Transform>(_creatures.at(*setup.fromCreature)))
+			{
+				origin = {at->position.x, at->position.z};
+			}
+		}
 		const auto point =
-		    setup.from.has_value() ? MapPoint(_middle, *setup.from) : glm::vec2(transform.position.x, transform.position.z);
+		    setup.from.has_value() ? MapPoint(origin, *setup.from) : glm::vec2(transform.position.x, transform.position.z);
 		transform.position = {point.x, Locator::terrainSystem::value().GetHeightAt(point) + setup.height, point.y};
 		registry.SetDirty();
 		const auto result = dynamics.LetGoFromHand(object, {.velocity = setup.velocity, .player = PlayerNames::PLAYER_ONE});
