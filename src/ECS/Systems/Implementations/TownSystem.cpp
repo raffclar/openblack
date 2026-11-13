@@ -91,6 +91,7 @@
 #include "ECS/TemporaryStoreRules.h"
 #include "ECS/TownAggression.h"
 #include "ECS/TownAreaRules.h"
+#include "ECS/TownCentreOrder.h"
 #include "ECS/TownCentreParts.h"
 #include "ECS/TownDesireAlignment.h"
 #include "ECS/TownEmpty.h"
@@ -1430,7 +1431,20 @@ void TownSystem::UpdateFrame(std::chrono::milliseconds frameRealTime, bool landD
 	// The symbols step by a whole turn's time at the pace of the screen's refresh
 	const auto step =
 	    particles::drawn_steps::TurnStepSeconds(_beliefPace, frameRealTime, TimeSystemInterface::k_TurnDuration, landDrawn);
-	if (!Locator::particleRuleSystem::has_value() || _registry == nullptr)
+	if (_registry == nullptr)
+	{
+		return;
+	}
+	// The order in which the village centres draw, the newest first
+	_presentCentres.clear();
+	_registry->Each<const Abode>([this](entt::entity entity, const Abode& abode) {
+		if (abode.type == AbodeNumber::TownCentre)
+		{
+			_presentCentres.push_back(entity);
+		}
+	});
+	town_centre_order::Update(_centreDrawOrder, _presentCentres);
+	if (!Locator::particleRuleSystem::has_value())
 	{
 		return;
 	}
@@ -1466,9 +1480,26 @@ void TownSystem::UpdateFrame(std::chrono::milliseconds frameRealTime, bool landD
 			particles.AddTarget(effect, entity);
 			found = _beliefSymbols.insert_or_assign(entity, effect).first;
 		}
+		// The world's particle draw leaves the symbols out, also after a load. The renderer draws them just after the
+		// centre's column.
+		particles.SetDrawnAlone(found->second);
 		if (step.has_value())
 		{
 			particles.ProcessByFrame(found->second, *step);
 		}
 	});
+}
+
+std::span<const entt::entity> TownSystem::CentresInDrawOrder() const
+{
+	return _centreDrawOrder;
+}
+
+std::optional<uint32_t> TownSystem::BeliefSymbolsOf(entt::entity centre) const
+{
+	if (const auto found = _beliefSymbols.find(centre); found != _beliefSymbols.end())
+	{
+		return found->second;
+	}
+	return std::nullopt;
 }

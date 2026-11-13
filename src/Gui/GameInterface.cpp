@@ -1938,6 +1938,22 @@ void GameInterface::UpdateTattooEditor(float deltaSeconds)
 	_menu->SetCovered((_tattooEditor->IsOpen() && _tattooEditor->IsFramed()) || (_tripAsked && _saveGameBoxes->IsActive()));
 }
 
+void GameInterface::SubmitWorldLabels(graphics::WorldLabelGroup group)
+{
+	if (_groupedLabelsWaiting.Take(group))
+	{
+		GroupedLabelCanvas(group).End();
+	}
+}
+
+void GameInterface::SubmitWaitingWorldLabels()
+{
+	for (size_t index = 0; index < _groupedLabelCanvases.size(); ++index)
+	{
+		SubmitWorldLabels(static_cast<graphics::WorldLabelGroup>(index));
+	}
+}
+
 void GameInterface::DrawSavingBox(glm::u16vec2 resolution, bool loading, bool darken)
 {
 	_canvas.Begin(resolution);
@@ -1951,6 +1967,10 @@ void GameInterface::Draw(glm::u16vec2 resolution, glm::ivec2 mouse, uint32_t mil
 	_canvas.Begin(resolution);
 	_pointerCanvas.Begin(resolution);
 	_worldLabelsCanvas.Begin(resolution);
+	for (auto& canvas : _groupedLabelCanvases)
+	{
+		canvas.Begin(resolution);
+	}
 	_menuCreatureCanvas.Begin(resolution);
 	_filmOverlayCanvas.Begin(resolution);
 	_painter.Begin(resolution);
@@ -2133,6 +2153,8 @@ void GameInterface::Draw(glm::u16vec2 resolution, glm::ivec2 mouse, uint32_t mil
 	}
 	_canvas.End();
 	_worldLabelsCanvas.End();
+	// The scene submits the other labels in the world among its draws (see SubmitWorldLabels)
+	_groupedLabelsWaiting.Drawn();
 	_menuCreatureCanvas.End();
 	_filmOverlayCanvas.End();
 	_pointerCanvas.End();
@@ -2444,7 +2466,7 @@ void GameInterface::DrawTipBubble(glm::u16vec2 resolution, glm::ivec2 mouse)
 	// The bubble is flat on the screen, but the world in front of it hides its box, its words and its gestures, as with
 	// the villagers' labels. The shadows of the words are one nearer than the box, and the words two nearer. The arrows
 	// and the pictures of the controls go over all of the world.
-	auto& canvas = _worldLabelsCanvas;
+	auto& canvas = GroupedLabelCanvas(graphics::WorldLabelGroup::TipBubble);
 	const auto view = PrepareWorldTextCanvas(canvas);
 	const float boxDepth = world_text::DrawnDepth(placement->depth, view.pitch, view.nearClip);
 	const float boxBuffer = world_text::BufferDepth(view.projection, boxDepth);
@@ -2819,7 +2841,7 @@ void GameInterface::DrawVillagerLabels(glm::u16vec2 resolution)
 	}
 	// The labels are flat on the screen, but the world in front of each one hides it. Each label is at a depth a little
 	// nearer to the camera than its point, and the more the camera looks down, the nearer it is.
-	auto& canvas = _worldLabelsCanvas;
+	auto& canvas = GroupedLabelCanvas(graphics::WorldLabelGroup::VillagerNames);
 	const auto view = PrepareWorldTextCanvas(canvas);
 	const auto draw = [&canvas, this](const labels::Quad& quad, glm::vec4 colour) {
 		canvas.DrawShape({quad[0].position, quad[1].position, quad[2].position, quad[3].position},
@@ -3340,7 +3362,7 @@ void GameInterface::DrawFloatingNumbers(glm::u16vec2 resolution)
 	const float shadow = ecs::floating_number::k_ShadowOffset * scale;
 	// Each number is flat on the screen, but the world in front of its point hides it. Each number takes its place
 	// among the see-through things by its point.
-	auto& canvas = _worldLabelsCanvas;
+	auto& canvas = GroupedLabelCanvas(graphics::WorldLabelGroup::FloatingNumbers);
 	const auto view = PrepareWorldTextCanvas(canvas);
 	const auto lineAt = [&resolution, textSize](const std::u16string& text, glm::vec2 at, float alpha) {
 		return help::tip_bubble::Line {
