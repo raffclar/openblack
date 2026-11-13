@@ -551,9 +551,11 @@ private:
 	void DrawPassPaletteVillagers(const DrawSceneDesc& desc, auto& draws) const;
 	/// Draws the things that blend over the solid models
 	void DrawPassTranslucent(const DrawSceneDesc& desc, const ScenePass& pass, auto& draws) const;
-	/// Draws the temple's pool and map, the seeds, the mists, the leashes and the other effects that the game adds before
-	/// the hand
+	/// Draws the temple's pool and map, the seeds, the learning words, the mists, the leashes and the other effects that
+	/// the game adds before the hand
 	void DrawPassEffects(const DrawSceneDesc& desc) const;
+	/// Submits a group of the labels in the world at this point of the main pass. The other passes do not show the labels.
+	void SubmitWorldLabels(const DrawSceneDesc& desc, WorldLabelGroup group) const;
 	/// Draws the effects that the game adds after the hand and its particles: the shields' domes, the columns over the
 	/// village centres with their symbols of belief, the floating numbers, the rain and the snowfall, the villagers'
 	/// names and the tip bubble

@@ -14,6 +14,7 @@
 #include <bit>
 #include <functional>
 #include <iterator>
+#include <limits>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -685,12 +686,12 @@ TEST(ParticleDraw, AModelThatFacesTheCameraBeatsWithTheScrolls)
 	EXPECT_EQ(creator.PulsedAlpha(180, 0.4f), 180);
 }
 
-TEST(ParticleDraw, TheForceFieldIsDrawnAfterEverythingSorted)
+TEST(ParticleDraw, TheForceFieldIsDrawnAtOnceBeforeEverythingSorted)
 {
 	auto frame = MakeFrame();
 	const glm::vec3 camera(0.0f);
-	// A sprite nearer than the sheet's middle, then the force field
-	AddSprite(frame, {0.0f, 0.0f, 5.0f}, 0);
+	// A sprite farther than the sheet's middle, then the force field
+	AddSprite(frame, {0.0f, 0.0f, 500.0f}, 0);
 	AddGroup(frame, DrawPath::Sorted, glm::vec3(0.0f), 0);
 	const std::vector<particles::LightSheet::Vertex> vertices(3);
 	const std::vector<uint32_t> triangles {0, 1, 2};
@@ -702,7 +703,15 @@ TEST(ParticleDraw, TheForceFieldIsDrawnAfterEverythingSorted)
 	ASSERT_EQ(commands.size(), 2u);
 	EXPECT_EQ(commands[0].kind, ItemKind::Sprite);
 	EXPECT_EQ(commands[1].kind, ItemKind::Surface);
-	// The nearest place of all, so the view draws it last
-	EXPECT_EQ(commands[1].depth, 0u);
-	EXPECT_GT(commands[0].depth, commands[1].depth);
+	// After the things that the game draws at once, and before the farthest sorted thing
+	EXPECT_EQ(commands[1].depth, graphics::zsort::k_AtOnceAfterLand);
+	EXPECT_LT(commands[1].depth, graphics::zsort::k_AfterSolidBeforeSorted);
+	EXPECT_GT(commands[1].depth, commands[0].depth);
+}
+
+TEST(ParticleDraw, TheForceFieldIsBeforeTheFarthestDistance)
+{
+	// A point so far that its distance is infinite
+	const glm::vec3 far(std::numeric_limits<float>::max(), 0.0f, 0.0f);
+	EXPECT_GT(graphics::zsort::k_AtOnceAfterLand, graphics::zsort::Depth(far, glm::vec3(0.0f)));
 }

@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <iterator>
+#include <optional>
 #include <vector>
 
 #include <gtest/gtest.h>
@@ -63,7 +64,30 @@ TEST(EffectsAfterParticles, EachGroupOfLabelsComesOneTimeInTheOrderOfTheGroups)
 	}
 	const std::vector expected {WorldLabelGroup::FloatingNumbers, WorldLabelGroup::VillagerNames, WorldLabelGroup::TipBubble};
 	EXPECT_EQ(groups, expected);
-	EXPECT_EQ(groups.size(), k_WorldLabelGroupCount);
+}
+
+TEST(WorldLabelGroups, TheLandsLabelsComeBeforeTheLabelsAfterTheParticles)
+{
+	// The creatures add their chat bubbles as the land draws them, and the land then draws the learning words
+	EXPECT_LT(WorldLabelGroup::ChatBubbles, WorldLabelGroup::LearningWords);
+	EXPECT_LT(WorldLabelGroup::LearningWords, WorldLabelGroup::FloatingNumbers);
+	EXPECT_EQ(static_cast<std::size_t>(WorldLabelGroup::TipBubble) + 1, k_WorldLabelGroupCount);
+	// The steps after the particles hold none of the land's labels
+	for (const auto step : k_Order)
+	{
+		const auto labels = effects_after_particles::LabelsOf(step);
+		EXPECT_NE(labels, std::optional {WorldLabelGroup::ChatBubbles});
+		EXPECT_NE(labels, std::optional {WorldLabelGroup::LearningWords});
+	}
+}
+
+TEST(WorldLabelSubmits, TheLandsLabelsWaitUntilTheScenePassSubmitsThem)
+{
+	WorldLabelSubmits submits;
+	submits.Drawn();
+	EXPECT_TRUE(submits.Take(WorldLabelGroup::ChatBubbles));
+	EXPECT_TRUE(submits.Take(WorldLabelGroup::LearningWords));
+	EXPECT_FALSE(submits.Take(WorldLabelGroup::LearningWords));
 }
 
 TEST(EffectsAfterParticles, TheEffectsAreNoGroupOfLabels)

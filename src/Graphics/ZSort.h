@@ -91,6 +91,12 @@ namespace openblack::graphics::zsort
 /// this depth keep the order that the canvas gets them in.
 constexpr uint32_t k_AfterSolidBeforeSorted = 0x80000000u;
 
+/// The game draws the force field of the camera's fence at once, after the land, the models, the effects and the labels
+/// that it draws at once, but before everything it sorts. As a bgfx depth: under k_AfterSolidBeforeSorted and above
+/// every sorted key. A sorted key holds the bits of a distance that is not negative, and these bits are less.
+constexpr uint32_t k_AtOnceAfterLand = 0x7FFFFFFFu;
+static_assert(k_AtOnceAfterLand < k_AfterSolidBeforeSorted);
+
 /// The most places of the land's draw list that get a depth of their own. The list of the game holds fewer things.
 constexpr uint32_t k_ListPlaces = 0x10000u;
 /// The place of a thing that is not in the land's draw list

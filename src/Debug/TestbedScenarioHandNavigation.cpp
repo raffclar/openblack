@@ -276,6 +276,24 @@ void testbed_scenarios::AddHandNavigationScenarios(std::vector<Scenario>& all)
 	                 KeyUp(SDL_SCANCODE_UP, 1.0f), KeyDown(SDL_SCANCODE_UP, 5.0f), KeyUp(SDL_SCANCODE_UP, 1.0f)},
 	});
 	all.push_back({
+	    .id = "hand.fence_force_field_rain",
+	    .name = "Light the fence in the rain",
+	    .facet = Facet::Hand,
+	    .description = "The camera zones of the first land's glade (Land1Choose.exc) are set, and rain falls at noon. The "
+	                   "camera stands high inside the fence near its north side and looks north. The up arrow key (Move "
+	                   "Forwards) goes down and stays down for two seconds, then comes up.",
+	    .expected = "The camera stops at the fence and the fence lights up near the camera as a grey wall of light. The "
+	                "game draws the wall before the rain, the clouds and the other things that blend. Thus the rain "
+	                "streaks and the clouds show over the wall, also where they are behind it.",
+	    .environment = {.hour = 12.0f,
+	                    .clockRuns = false,
+	                    .weather = Weather::Rain,
+	                    .dispenserGrid = false,
+	                    .cameraZone = "Land1Choose.exc"},
+	    .framing = {.shot = Shot::Placed, .eye = {-390.0f, 90.0f, 590.0f}, .look = {-390.0f, 70.0f, 700.0f}},
+	    .commands = {PointerTo({0.5f, 0.75f}, 0.5f), KeyDown(SDL_SCANCODE_UP, 0.5f), KeyUp(SDL_SCANCODE_UP, 2.0f)},
+	});
+	all.push_back({
 	    .id = "hand.fence_rotate_release",
 	    .name = "Turn the camera with the middle button while the fence holds it back",
 	    .facet = Facet::Hand,
