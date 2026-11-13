@@ -49,6 +49,11 @@
             "features": [ "openssl", "websockets" ],
             "platform": "!emscripten"
         },
+        {
+            "name": "sentry-native",
+            "platform": "!emscripten & !android & !ios",
+            "$reason": "Error and crash reports (OPENBLACK_SENTRY). sentry-native has no Emscripten port."
+        },
         "gtest"
     ],
     "vcpkg-configuration": {

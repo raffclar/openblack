@@ -164,6 +164,7 @@ inline constexpr std::array k_DeveloperOptions {
     DeveloperOption {.name = "sim-row-dump-keep", .takesValue = true},
     DeveloperOption {.name = "sim-world-states", .takesValue = true},
     DeveloperOption {.name = "sim-world-state-turns", .takesValue = true},
+    DeveloperOption {.name = "sentry-test-error"},
     DeveloperOption {.name = "turn-api-check", .takesValue = true},
     DeveloperOption {.name = "turn-beside-draw"},
     DeveloperOption {.name = "sim-record", .takesValue = true},
@@ -219,6 +220,7 @@ inline constexpr std::array k_ServerDeveloperOptions {
     DeveloperOption {.name = "gods-need-no-temple"},
     DeveloperOption {.name = "temple-loss", .takesValue = true},
     DeveloperOption {.name = "lan-search", .takesValue = true},
+    DeveloperOption {.name = "sentry-test-error"},
 };
 
 /// The tool modes of the AI soak: long games in which computer gods play every god. They exist only in builds with the

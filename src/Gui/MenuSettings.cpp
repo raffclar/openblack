@@ -19,7 +19,8 @@ openblack::player_profiles::Settings openblack::gui::ToProfileSettings(const Men
 	        .textFromBottom = settings.textFromBottom,
 	        .leftHanded = settings.leftHandedHand,
 	        .pushScrolling = settings.pushScrolling,
-	        .autoSave = settings.autoSave};
+	        .autoSave = settings.autoSave,
+	        .crashReports = settings.crashReports};
 }
 
 void openblack::gui::TakeProfileSettings(MenuSettings& settings, const openblack::player_profiles::Settings& kept)
@@ -33,4 +34,5 @@ void openblack::gui::TakeProfileSettings(MenuSettings& settings, const openblack
 	settings.leftHandedHand = kept.leftHanded;
 	settings.pushScrolling = kept.pushScrolling;
 	settings.autoSave = kept.autoSave;
+	settings.crashReports = kept.crashReports;
 }

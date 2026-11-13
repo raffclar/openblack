@@ -8,6 +8,7 @@
  *******************************************************************************/
 
 #include <algorithm>
+#include <chrono>
 #include <fstream>
 #include <iostream>
 #include <iterator>
@@ -15,6 +16,7 @@
 #include <memory>
 #include <optional>
 #include <span>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <typeinfo>
@@ -35,6 +37,8 @@
 #include "Common/BuildVersion.h"
 #include "Common/CrashHandler.h"
 #include "Common/DeveloperTools.h"
+#include "Common/ErrorReportsInterface.h"
+#include "Common/ErrorReportsRules.h"
 #include "Common/FatalMessage.h"
 #include "Common/MainThreadQueue.h"
 #include "Common/Platform.h"
@@ -44,6 +48,7 @@
 #include "EngineConfig.h"
 #include "Game.h"
 #include "LaunchSwitches.h"
+#include "Locator.h"
 #include "Online/GameOrigin.h"
 #include "Online/JoinName.h"
 #include "Online/ServerKeyPin.h"
@@ -277,6 +282,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		("sim-row-dump-keep", "Tools: with --sim-row-dump, the count of the last turns of which the dump keeps the rows.", cxxopts::value<uint32_t>()->default_value("8"))
 		("sim-world-states", "Tools: write the world state of this computer to this folder at the end of each turn of --sim-world-state-turns, with a map of its synced bytes (tools/sim/save_diff.py --synced compares two computers).", cxxopts::value<std::string>())
 		("sim-world-state-turns", "Tools: with --sim-world-states, the turns, such as 250 or 100,250,400.", cxxopts::value<std::string>())
+		("sentry-test-error", "Developers: after the start, throw an exception with the message \"Sentry test error\" and the time, to test the error reports. The player's option for the reports must be on.")
 		("turn-api-check", "Developers: find the turn code that uses the graphics, the renderer or the audio directly, not through the queue of the main thread. report: the log gets each place and its count as the game ends. fail: the first such call stops the game.", cxxopts::value<std::string>())
 		("turn-beside-draw", "Developers: the turns of the next frame play on another thread beside the end of the draw of this frame (deviation row 153). A pause, a speed change, an inspector edit or a hand click then acts one turn later.");
 #endif
@@ -722,6 +728,9 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		args.filmSurface = result["film-surface"].as<std::string>();
 		args.preIntro = result.count("pre-intro") != 0;
 		args.skipLogos = result.count("skip-logos") != 0;
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
+		args.sentryTestError = result.count("sentry-test-error") != 0;
+#endif
 		args.logoEffect = result.count("logo-effect") != 0;
 		args.newGame = result.count("new-game") != 0;
 		args.continueGame = result.count("continue") != 0;
@@ -918,6 +927,9 @@ int main(int argc, char* argv[]) noexcept
 	openblack::crash_handler::SetReportFolder(openblack::web::CrashReportFolder());
 #endif
 
+	// The error reports stay until the end of main, after the services stop, so that an exception that ends the game
+	// still gives a report
+	std::optional<openblack::ErrorReportsScope> errorReports;
 	try
 	{
 		openblack::Arguments args;
@@ -927,6 +939,8 @@ int main(int argc, char* argv[]) noexcept
 			return returnCode;
 		}
 		openblack::crash_handler::SetLogFile(args.logFile);
+		errorReports.emplace(openblack::error_reports::Role::Client, args.logFile);
+		const bool sentryTestError = args.sentryTestError;
 #if defined(__EMSCRIPTEN__)
 		// The page gives links to the crash reports that the private storage of the site keeps, also with a log file
 		openblack::crash_handler::SetReportFolder(openblack::web::CrashReportFolder());
@@ -935,6 +949,13 @@ int main(int argc, char* argv[]) noexcept
 		if (!game->Initialize())
 		{
 			return EXIT_FAILURE;
+		}
+		// A developer test of the error reports. The exception goes to the crash handler as an uncaught exception.
+		if (sentryTestError)
+		{
+			const auto now = std::chrono::system_clock::now().time_since_epoch();
+			throw std::runtime_error(
+			    openblack::error_reports::TestErrorMessage(std::chrono::duration_cast<std::chrono::seconds>(now).count()));
 		}
 #if defined(__EMSCRIPTEN__)
 		// In a web browser the game thread waits for the browser after each frame, so that the browser shows the frame

@@ -71,6 +71,8 @@ struct CrashInfo
 	std::tm time {};
 	/// Where the minidump went, empty when none was written
 	std::string_view dumpPath;
+	/// The crash came through the signal handler of a POSIX system
+	bool fromSignal = false;
 };
 
 [[nodiscard]] std::string_view KindName(CrashKind kind);

@@ -13,6 +13,8 @@
 #include <utility>
 
 #include "3D/L3DMesh.h"
+#include "Common/ErrorReportsInterface.h"
+#include "Common/ErrorReportsRules.h"
 #include "Common/EventManager.h"
 #include "Common/GameRandom.h"
 #include "Common/MainThreadQueue.h"
@@ -240,6 +242,16 @@ std::unique_ptr<ProviderInterface> EngineProvider()
 		                     {"checksum_log", state.checksumLog},       {"frame_guard", state.frameGuard},
 		                     {"fight_autopilot", state.fightAutopilot}, {"test_leave_done", state.testLeaveDone}};
 	        }));
+	provider->Add(Query("error_reports", "The error and crash reports to Sentry: whether the program has a DSN, whether "
+	                                     "the reports go now, the option of the player, the role, the release and the "
+	                                     "environment. The answer never holds the DSN."),
+	              Serve<Locator::errorReports>("the error reports", [](const error_reports::ErrorReportsInterface& reports,
+	                                                                   const QueryContext& /*c*/) {
+		              const auto state = reports.GetState();
+		              return Json {{"has_dsn", state.hasDestination}, {"running", state.running},
+		                           {"enabled", state.enabled},        {"role", std::string(error_reports::RoleTag(state.role))},
+		                           {"release", state.release},        {"environment", state.environment}};
+	              }));
 	provider->Add(Query("services", "Which of the engine's services are there, the game's random seeds, the game's path, the "
 	                                "debug windows' focus and the inspector's port"),
 	              [](const QueryContext& /*context*/) {

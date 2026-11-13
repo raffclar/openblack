@@ -202,7 +202,7 @@ TEST(PlayerProfiles, TheCreaturesNameIsThePlayersUntilOneIsGivenAndTheSymbolOneO
 TEST(PlayerProfiles, SettingsAreTheGamesOwnUntilKeptAndAreReadBackAsWritten)
 {
 	// The game's own: intelligent tooltips, the important texts, help level 3, creature help, middle reading speed, the
-	// newest text at the top, the right hand, no push scrolling, saving automatically
+	// newest text at the top, the right hand, no push scrolling, saving automatically, no crash reports
 	constexpr Settings k_Default;
 	EXPECT_EQ(k_Default.toolTips, 2);
 	EXPECT_EQ(k_Default.storyText, 1);
@@ -213,6 +213,7 @@ TEST(PlayerProfiles, SettingsAreTheGamesOwnUntilKeptAndAreReadBackAsWritten)
 	EXPECT_FALSE(k_Default.leftHanded);
 	EXPECT_FALSE(k_Default.pushScrolling);
 	EXPECT_TRUE(k_Default.autoSave);
+	EXPECT_FALSE(k_Default.crashReports);
 
 	Profiles profiles;
 	Add(profiles, u"Matt", u"", "C1.erc", 0);
@@ -226,7 +227,8 @@ TEST(PlayerProfiles, SettingsAreTheGamesOwnUntilKeptAndAreReadBackAsWritten)
 	                 .textFromBottom = true,
 	                 .leftHanded = true,
 	                 .pushScrolling = true,
-	                 .autoSave = false};
+	                 .autoSave = false,
+	                 .crashReports = true};
 	EXPECT_EQ(Read(Write(profiles)), profiles);
 	// A file kept before the settings were has the game's own; a value not understood is passed over
 	const auto read = Read("profile\tAnn\tC2.erc\t7\tRex\nsetting\tAnn\thelp_level\tlots\nsetting\tAnn\ttooltips\t3\n");

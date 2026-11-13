@@ -26,7 +26,8 @@ namespace openblack::player_profiles
 
 /// What the player sets in the options, kept with their profile. A profile that has never kept a setting has the
 /// game's own: intelligent tooltips, the important texts shown, all but the least help, the creature's help on, reading
-/// at middle speed, the newest text at the top, the right hand, no push scrolling and the land saved automatically
+/// at middle speed, the newest text at the top, the right hand, no push scrolling, the land saved automatically and no
+/// crash reports
 struct Settings
 {
 	/// None, minimum, intelligent or all
@@ -42,6 +43,8 @@ struct Settings
 	bool leftHanded {false};
 	bool pushScrolling {false};
 	bool autoSave {true};
+	/// The player lets the game send error and crash reports to Sentry. Vanilla has no such option (deviation 261).
+	bool crashReports {false};
 
 	bool operator==(const Settings&) const = default;
 };

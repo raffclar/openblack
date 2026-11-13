@@ -8,6 +8,7 @@ add_executable(openblack-server ${OPENBLACK_SERVER})
 # keeps exceptions on, as the library uses them.
 target_link_libraries(openblack-server PRIVATE openblack_headless openblack_sim)
 target_include_directories(openblack-server PRIVATE ${CXXOPTS_INCLUDE_DIRS})
+openblack_copy_crashpad_handler(openblack-server)
 
 # The server links neither the graphics library, the window system (SDL), the debug windows (Dear ImGui), the audio
 # device (OpenAL) nor the game's library, which has the renderer. This check reads every library that the server links, also through other libraries,

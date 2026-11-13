@@ -11,6 +11,7 @@
 
 #define LOCATOR_IMPLEMENTATIONS
 
+#include <cstdlib>
 #include <ctime>
 
 #include <chrono>
@@ -29,11 +30,18 @@
 #include "3D/Implementations/UnloadedIsland.h"
 #include "3D/LandData.h"
 #include "CHLApi.h"
+#include "Common/BuildVersion.h"
+#include "Common/DeveloperTools.h"
+#include "Common/ErrorReportsInterface.h"
+#include "Common/ErrorReportsRules.h"
 #include "Common/EventManager.h"
 #include "Common/GameRandomProduction.h"
 #include "Common/MainThreadQueue.h"
 #include "Common/PlayerProfiles.h"
 #include "Common/RandomNumberManagerProduction.h"
+#if defined(OPENBLACK_SENTRY)
+#include "Common/SentryErrorReports.h"
+#endif
 #include "ECS/Archetypes/PlayerArchetype.h"
 #include "ECS/DrawnRegistry.h"
 #include "ECS/MapProduction.h"
@@ -970,6 +978,43 @@ void openblack::InitializeLevelOnOpenLand(OpenLandAltitudes altitudes)
 void openblack::InitializeComputerSettings(std::optional<std::filesystem::path> file)
 {
 	Locator::computerSettingsSystem::emplace<ComputerSettingsSystem>(std::move(file));
+}
+
+namespace
+{
+/// The home folder of the user, from the environment, or empty
+std::string HomeFolder()
+{
+#if defined(_WIN32)
+	const char* home = std::getenv("USERPROFILE");
+#else
+	const char* home = std::getenv("HOME");
+#endif
+	return home != nullptr ? std::string(home) : std::string {};
+}
+} // namespace
+
+void openblack::InitializeErrorReports([[maybe_unused]] error_reports::Role role, [[maybe_unused]] std::string_view logFile)
+{
+#if defined(OPENBLACK_SENTRY)
+	using namespace error_reports;
+	const char* environment = std::getenv("SENTRY_DSN");
+	auto dsn = ChooseDsn(environment != nullptr ? std::optional<std::string_view>(environment) : std::nullopt, BuildDsn());
+	Locator::errorReports::emplace<SentryErrorReports>(SentrySettings {
+	    .dsn = dsn.value_or(std::string {}),
+	    .release = ReleaseName(build_version::Semantic(), build_version::Commit()),
+	    .environment = std::string(EnvironmentName(developer_tools::k_Built)),
+	    .role = role,
+	    .attachment = LogAttachment(logFile),
+	    .databaseFolder = DatabaseFolder(logFile),
+	    .homeFolder = HomeFolder(),
+	});
+#endif
+}
+
+void openblack::ShutDownErrorReports()
+{
+	Locator::errorReports::reset();
 }
 
 void openblack::ShutDownServices()
