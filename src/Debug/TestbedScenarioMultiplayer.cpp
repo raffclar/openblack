@@ -49,7 +49,7 @@ void testbed_scenarios::AddMultiplayerFrontEndScenarios(std::vector<Scenario>& a
 {
 	using Kind = Command::Kind;
 	using Stage = testbed_multiplayer::Stage;
-	const std::array<BoxScenario, 22> boxes = {{
+	const std::array<BoxScenario, 31> boxes = {{
 	    {"multiplayer.choose_connection", "The multiplayer front end: choose a connection", Stage::ChooseConnection,
 	     "The multiplayer front end opens with the demonstration lobby. The player goes straight into the temple's "
 	     "future room.",
@@ -170,6 +170,46 @@ void testbed_scenarios::AddMultiplayerFrontEndScenarios(std::vector<Scenario>& a
 	     "The roster shows Ian picked. The chat shows \"name> Only for you, Ian.\" in light grey, \"Ian: Hello from the "
 	     "office!\" in white and \"Ian: This line is only for you.\" in light red. A click under the roster removes the "
 	     "pick, and the next line goes to all the players."},
+	    {"multiplayer.lobby_list", "The lobby sessions: the lobby list", Stage::LobbyList,
+	     "The player logs in as Alice. The demonstration lobby gives six sessions, and the first is picked.",
+	     "The box lists the sessions in the columns Name, Host, Map, Gods and Status. \"# Clan practice\" has a password. "
+	     "The status column shows Open, Full, \"In game 0:42\", \"Waiting for a server (2)\" and \"(Wrong Version)\". "
+	     "The line under the list shows that all servers are in use. The buttons \"Create session\", \"Quick join\" "
+	     "and \"Join by code\" are under the filters."},
+	    {"multiplayer.lobby_create", "The lobby sessions: Create session", Stage::LobbyCreate,
+	     "The player opens the box \"Create session\" from the lobby list.",
+	     "The box has the name \"<profile>'s game\", the list of the maps with \"Ring of gods (8) - download\" picked, 8 "
+	     "gods, the time limit 0:30, the Private box and a password box that shows a # for each character."},
+	    {"multiplayer.lobby_room_host", "The lobby sessions: the room of the host", Stage::LobbyRoomHost,
+	     "The player makes a session. Bob and Carol come in. Bob is ready, and Carol does not have the map yet.",
+	     "The room shows the slots with Alice (HOST), Bob with a ready tick and Carol with a warning symbol and "
+	     "\"downloading map\". The pointer on the symbol shows the text of the user. The host has the maps, Password, "
+	     "Close and \"! Start\". The chat shows the line of Alice and the line of Bob."},
+	    {"multiplayer.lobby_room_player", "The lobby sessions: the room of a player", Stage::LobbyRoomPlayer,
+	     "The player joins \"Friday Ring\" and ticks Ready. Bob says a line.",
+	     "The slots show Bob (HOST) ready, Carol with the warning symbol, and Alice (CURRENT) ready. The player has no "
+	     "host controls and no Start. The chat shows the line of Bob."},
+	    {"multiplayer.lobby_queue", "The lobby sessions: the wait for a server", Stage::LobbyQueue,
+	     "The player makes a session. All the servers are in use, so the session waits in the line.",
+	     "The line under the caption shows \"Waiting for a server (2)\". The button at the bottom right is Cancel. The "
+	     "Ready box does not show."},
+	    {"multiplayer.lobby_kicked", "The lobby sessions: kicked", Stage::LobbyKicked,
+	     "The player joins \"Friday Ring\", and the host Bob kicks the player.",
+	     "The lobby list shows, with a box over it: \"Bob has kicked you from the game.\" and OK. The box is not the "
+	     "vanilla \"Connection Failed.\"."},
+	    {"multiplayer.lobby_password", "The lobby sessions: a session with a password", Stage::LobbyPassword,
+	     "The player picks \"Clan practice\", which has a password, and clicks Join Game.",
+	     "A box asks \"This game needs a password.\" with a box that shows a # for each character, and OK. The "
+	     "password \"secret\" opens the room; another password shows \"Incorrect password\"."},
+	    {"multiplayer.lobby_map_too_small", "The lobby sessions: a map with too few places", Stage::LobbyMapTooSmall,
+	     "The player makes a session with three players, and then picks a land of two places.",
+	     "The box tells \"Remove players first: this land has 2 places.\" and OK. The map of the room does not change. "
+	     "The lands with too few places are grey in the list of the maps."},
+	    {"multiplayer.lobby_settings", "The lobby sessions: the host changes the settings", Stage::LobbySettings,
+	     "The player makes a session with three players, and then clicks Settings in the room.",
+	     "The box \"Session settings\" shows the name, the map, the gods, the time limit, Private and a new password. "
+	     "\"Change settings\" sends the changes and goes back to the room, where the ready ticks are clear. Back keeps "
+	     "the old settings. Two gods or a land of two places gives \"Remove players first: this land has 2 places.\"."},
 	}};
 	for (const auto& box : boxes)
 	{

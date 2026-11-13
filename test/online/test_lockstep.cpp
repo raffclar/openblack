@@ -156,7 +156,7 @@ struct Computer
 {
 	Computer(LoopbackSockets& network, int64_t& now, std::string ticket,
 	         std::optional<std::vector<uint8_t>> landFile = k_LandFile, std::vector<uint8_t> creature = {'C'},
-	         float alignment = 0.0f, std::string name = {})
+	         float alignment = 0.0f, std::string name = {}, std::string build = {}, std::string map = {})
 	    : sockets(network.MakeClient())
 	    , session(*sockets, [&now] { return now; })
 	{
@@ -165,6 +165,8 @@ struct Computer
 		    .ticket = std::move(ticket),
 		    .gamePassword = {},
 		    .name = std::move(name),
+		    .build = std::move(build),
+		    .map = std::move(map),
 		    .comeBackMicroseconds = 5LL * 60 * 1'000'000,
 		    .readLand = [this](std::string_view land) -> std::optional<std::vector<uint8_t>> {
 			    askedLand = std::string(land);
@@ -217,7 +219,8 @@ struct Computer
 
 server::TicketCheck::Result CheckFakeTicket(std::string_view token)
 {
-	// "god:name" or "observer:name"; anything else is not a ticket
+	// "god:name" or "observer:name", with "@lobby" after the name for a ticket of a lobby's game; anything else is not a
+	// ticket
 	const auto colon = token.find(':');
 	if (colon == std::string_view::npos)
 	{
@@ -229,7 +232,13 @@ server::TicketCheck::Result CheckFakeTicket(std::string_view token)
 		return {.problem = server::TicketProblem::Format, .claims = std::nullopt};
 	}
 	join_ticket::Claims claims;
-	claims.subject = std::string(token.substr(colon + 1));
+	auto subject = token.substr(colon + 1);
+	if (const auto at = subject.find('@'); at != std::string_view::npos)
+	{
+		claims.lobby = std::string(subject.substr(at + 1));
+		subject = subject.substr(0, at);
+	}
+	claims.subject = std::string(subject);
 	claims.name = claims.subject;
 	claims.role = *role;
 	return {.problem = server::TicketProblem::None, .claims = claims};
@@ -254,6 +263,30 @@ protected:
 		        .testCommands = testCommands,
 		        .sessionHasher = hasher,
 		        .lanNames = lan});
+	}
+
+	/// The room of the game of one lobby: the members of the lobby, the build of the server and the SHA-256 of its land
+	void MakeLobbyHost(std::vector<lobby_members::Member> members, uint32_t minGods, std::string build = "0.1.0+a/codec1",
+	                   std::string map = {}, int64_t loadWindow = 120LL * 1'000'000)
+	{
+		host = std::make_unique<LockstepHost>(
+		    network, CheckFakeTicket, [this] { return now; }, [this] { return "secret-" + std::to_string(++secrets); },
+		    server::HostSettings {
+		        .start = {.land = "Land1.txt", .testbed = false, .seed = 1, .turn = 0, .opening = "cow", .godsRingMap = false},
+		        .landChecksum = online::start_rules::LandChecksum(k_LandFile),
+		        .minGods = minGods,
+		        .godSlots = 4,
+		        .comeBackMicroseconds = 5LL * 60 * 1'000'000,
+		        .keptTurns = 3200,
+		        .testCommands = false,
+		        .sessionHasher = hasher,
+		        .lanNames = false,
+		        .mostObservers = server::k_MostObservers,
+		        .relaysCreature = {},
+		        .lobby = server::lobby_game::Lobby {.id = "lobby1", .members = std::move(members)},
+		        .buildId = std::move(build),
+		        .mapSha256 = std::move(map),
+		        .loadWindowMicroseconds = loadWindow});
 	}
 
 	/// A room with no human god (tools): the game starts at once, and the world turns when this many observers joined
@@ -1387,22 +1420,65 @@ TEST_F(LockstepTest, ABanDuringTheStartStopsTheStart)
 	EXPECT_EQ(alice.session.GetState(), NetworkSession::State::Waiting);
 }
 
-TEST_F(LockstepTest, ABanAfterTheStartChangesNothing)
+TEST_F(LockstepTest, AnAwayGodThatTheLobbyKicksCannotComeBack)
 {
 	MakeHost(2);
+	GiveWorldState();
 	Computer alice(network, now, "god:100");
 	Computer bob(network, now, "god:101");
-	Frames({&alice, &bob}, 7);
+	Frames({&alice, &bob}, 10);
 	ASSERT_TRUE(host->Started());
+	// Bob's network stops, then the lobby's host kicks him while his god waits
+	network.Cut(bob.sockets->Ids().back());
+	Frames({&alice}, 1);
+	bob.Frame();
+	Frames({&alice}, 3);
+	ASSERT_EQ(host->Seats()[1].state, LockstepHost::SeatState::Away);
 	host->SetBans({101});
-	Frames({&alice, &bob}, 50);
-	EXPECT_EQ(host->Bans(), std::set<int64_t> {101});
-	EXPECT_EQ(bob.session.GetState(), NetworkSession::State::Playing);
-	EXPECT_EQ(host->Seats()[1].state, LockstepHost::SeatState::Taken);
-	EXPECT_GE(bob.world.turns + 3, serverWorld.turns);
-	// The banned god stays in step with the server
-	EXPECT_GT(host->Seats()[1].compares.compared, 40u);
-	EXPECT_EQ(host->Seats()[1].compares.same, host->Seats()[1].compares.compared);
+	EXPECT_EQ(host->Seats()[1].state, LockstepHost::SeatState::Closed);
+	// Bob's session tries to come back, and the server refuses it
+	Frames({&alice, &bob}, 10);
+	EXPECT_NE(bob.session.GetState(), NetworkSession::State::Playing);
+	EXPECT_EQ(host->Seats()[1].state, LockstepHost::SeatState::Closed);
+	EXPECT_EQ(host->Seats()[1].resumes, 0u);
+}
+
+TEST_F(LockstepTest, ABanAfterTheStartTakesThePlayerOutOfTheGame)
+{
+	MakeHost(2);
+	GiveWorldState();
+	Computer alice(network, now, "god:100");
+	Computer bob(network, now, "god:101");
+	Computer carol(network, now, "observer:102");
+	Frames({&alice, &bob, &carol}, 7);
+	ASSERT_TRUE(host->Started());
+	Frames({&alice, &bob, &carol}, 10);
+	// The lobby's host kicks the god of bob and the observer carol
+	host->SetBans({101, 102});
+	Frames({&alice, &bob, &carol}, 3);
+	EXPECT_EQ(host->Bans(), (std::set<int64_t> {101, 102}));
+	// The server closes the sockets at once with "kicked", and the god leaves as a player who leaves
+	EXPECT_EQ(bob.session.GetEnd(), NetworkSession::End::Refused);
+	EXPECT_EQ(bob.session.RefusedReason(), "kicked");
+	EXPECT_EQ(carol.session.RefusedReason(), "kicked");
+	EXPECT_EQ(host->Seats()[1].state, LockstepHost::SeatState::Closed);
+	EXPECT_EQ(host->Observers(), 0u);
+	// The other god plays on
+	Frames({&alice}, 10);
+	EXPECT_EQ(alice.session.GetState(), NetworkSession::State::Playing);
+	EXPECT_FALSE(host->GameOver());
+
+	// A new join of the kicked account gets "kicked" in every role, and the old session cannot come back
+	Computer again(network, now, "god:101");
+	Computer watch(network, now, "observer:101");
+	Frames({&alice, &again, &watch}, 3);
+	EXPECT_EQ(again.session.RefusedReason(), "kicked");
+	EXPECT_EQ(watch.session.RefusedReason(), "kicked");
+
+	// When the other god leaves too, the game is over
+	alice.session.Leave();
+	Frames({&alice}, 5);
+	EXPECT_TRUE(host->GameOver());
 }
 
 TEST_F(LockstepTest, AnObserverThatPartsLoadsTheWorldOfTheServerAndStaysInStep)
@@ -2623,4 +2699,243 @@ TEST_F(LockstepTest, AClientThatCannotComeBackInTimeShowsTheBoxOfTheLostConnecti
 	EXPECT_EQ(alice.session.GetEnd(), NetworkSession::End::Lost);
 	EXPECT_EQ(told, 1);
 	EXPECT_GT(toldAt - lostAt, 5LL * 60 * 1'000'000);
+}
+
+namespace
+{
+/// The members of the lobby of the tests: two gods with a slot each and an observer
+std::vector<lobby_members::Member> TwoGodsAndAnObserver()
+{
+	return {
+	    {.account = "alice", .role = game_socket::Role::God, .slot = 2},
+	    {.account = "bob", .role = game_socket::Role::God, .slot = 0},
+	    {.account = "carol", .role = game_socket::Role::Observer, .slot = std::nullopt},
+	};
+}
+
+constexpr std::string_view k_ServerBuild = "0.1.0+a/codec1";
+} // namespace
+
+TEST_F(LockstepTest, TheRoomOfALobbyTakesOnlyItsMembersInTheirRolesAndSlots)
+{
+	MakeLobbyHost(TwoGodsAndAnObserver(), 1);
+	const std::string build(k_ServerBuild);
+	Computer alice(network, now, "god:alice@lobby1", k_LandFile, {'C'}, 0.0f, {}, build);
+	Computer carol(network, now, "observer:carol@lobby1", k_LandFile, {'C'}, 0.0f, {}, build);
+	Computer dave(network, now, "god:dave@lobby1", k_LandFile, {'C'}, 0.0f, {}, build);
+	Computer other(network, now, "god:bob@lobby2", k_LandFile, {'C'}, 0.0f, {}, build);
+	Computer noLobby(network, now, "god:bob", k_LandFile, {'C'}, 0.0f, {}, build);
+	Computer wrongRole(network, now, "observer:bob@lobby1", k_LandFile, {'C'}, 0.0f, {}, build);
+	Frames({&alice, &carol, &dave, &other, &noLobby, &wrongRole}, 3);
+	// Each member takes the slot that the lobby gave, not the first free slot
+	ASSERT_TRUE(alice.session.GetJoined().has_value());
+	EXPECT_EQ(alice.session.GetJoined()->slot, 2);
+	ASSERT_TRUE(carol.session.GetJoined().has_value());
+	EXPECT_EQ(carol.session.GetJoined()->role, game_socket::Role::Observer);
+	// An account that is not a member, a ticket of another lobby or of no lobby, and a ticket of another role
+	for (const auto* refused : {&dave, &other, &noLobby, &wrongRole})
+	{
+		EXPECT_EQ(refused->session.GetEnd(), NetworkSession::End::Refused);
+		EXPECT_EQ(refused->session.RefusedReason(), "ticket");
+	}
+}
+
+TEST_F(LockstepTest, TheRoomOfALobbyRefusesAClientOfAnotherBuildOrWithNoBuild)
+{
+	MakeLobbyHost(TwoGodsAndAnObserver(), 1);
+	Computer other(network, now, "god:alice@lobby1", k_LandFile, {'C'}, 0.0f, {}, "0.1.0+b/codec1");
+	Computer none(network, now, "god:bob@lobby1");
+	Frames({&other, &none}, 3);
+	EXPECT_EQ(other.session.GetEnd(), NetworkSession::End::Refused);
+	EXPECT_EQ(other.session.RefusedReason(), "version");
+	EXPECT_EQ(none.session.RefusedReason(), "version");
+	EXPECT_EQ(host->GodsInRoom(), 0u);
+}
+
+TEST_F(LockstepTest, ARoomWithNoLobbyRefusesAnotherBuildAndTakesAClientWithNoBuild)
+{
+	MakeHost(2);
+	// A room with no build id of its own takes every build
+	Computer any(network, now, "god:alice", k_LandFile, {'C'}, 0.0f, {}, "0.1.0+b/codec1");
+	Frames({&any}, 3);
+	EXPECT_TRUE(any.session.GetJoined().has_value());
+
+	host.reset();
+	host = std::make_unique<LockstepHost>(
+	    network, CheckFakeTicket, [this] { return now; }, [this] { return "secret-" + std::to_string(++secrets); },
+	    server::HostSettings {.start = {.land = "Land1.txt", .testbed = false, .seed = 1, .turn = 0, .opening = "cow"},
+	                          .landChecksum = online::start_rules::LandChecksum(k_LandFile),
+	                          .minGods = 2,
+	                          .godSlots = 4,
+	                          .comeBackMicroseconds = 5LL * 60 * 1'000'000,
+	                          .keptTurns = 3200,
+	                          .sessionHasher = hasher,
+	                          .buildId = std::string(k_ServerBuild)});
+	Computer older(network, now, "god:bob");
+	Computer other(network, now, "god:carol", k_LandFile, {'C'}, 0.0f, {}, "0.1.0+b/codec1");
+	Frames({&older, &other}, 3);
+	EXPECT_TRUE(older.session.GetJoined().has_value());
+	EXPECT_EQ(other.session.RefusedReason(), "version");
+}
+
+TEST_F(LockstepTest, TheRoomOfALobbyRefusesAClientWithAnotherFileOfTheLand)
+{
+	const std::string map(64, 'a');
+	MakeLobbyHost(TwoGodsAndAnObserver(), 1, std::string(k_ServerBuild), map);
+	const std::string build(k_ServerBuild);
+	Computer same(network, now, "god:alice@lobby1", k_LandFile, {'C'}, 0.0f, {}, build, map);
+	Computer other(network, now, "god:bob@lobby1", k_LandFile, {'C'}, 0.0f, {}, build, std::string(64, 'b'));
+	Frames({&same, &other}, 3);
+	EXPECT_TRUE(same.session.GetJoined().has_value());
+	EXPECT_EQ(other.session.RefusedReason(), "map");
+}
+
+TEST_F(LockstepTest, TheRoomOfALobbyWaitsForEachGodUntilTheTimeToJoinEnds)
+{
+	MakeLobbyHost(TwoGodsAndAnObserver(), 1);
+	EXPECT_EQ(host->GodsToWaitFor(), 2u);
+	const std::string build(k_ServerBuild);
+	Computer alice(network, now, "god:alice@lobby1", k_LandFile, {'C'}, 0.0f, {}, build);
+	Frames({&alice}, 10);
+	// One god of two is ready: the room waits for the other god of the lobby
+	EXPECT_EQ(host->GodsInRoom(), 1u);
+	EXPECT_FALSE(host->Started());
+	EXPECT_FALSE(host->Starting());
+	host->EndJoinWindow();
+	EXPECT_EQ(host->GodsToWaitFor(), 1u);
+	Frames({&alice}, 10);
+	EXPECT_TRUE(host->Started());
+}
+
+TEST_F(LockstepTest, TheRoomOfALobbyStartsWhenEachGodOfTheLobbyJoined)
+{
+	MakeLobbyHost(TwoGodsAndAnObserver(), 1);
+	const std::string build(k_ServerBuild);
+	Computer alice(network, now, "god:alice@lobby1", k_LandFile, {'C'}, 0.0f, {}, build);
+	Computer bob(network, now, "god:bob@lobby1", k_LandFile, {'C'}, 0.0f, {}, build);
+	Frames({&alice, &bob}, 10);
+	EXPECT_TRUE(host->Started());
+	EXPECT_EQ(bob.session.GetJoined()->slot, 0);
+}
+
+TEST_F(LockstepTest, TheTurnsOfALobbyGameWaitUntilEachGodsPlayerLoadedTheWorld)
+{
+	MakeLobbyHost(TwoGodsAndAnObserver(), 2);
+	const std::string build(k_ServerBuild);
+	Computer alice(network, now, "god:alice@lobby1", k_LandFile, {'C'}, 0.0f, {}, build);
+	Computer bob(network, now, "god:bob@lobby1", k_LandFile, {'C'}, 0.0f, {}, build);
+	Frames({&alice, &bob}, 10);
+	ASSERT_TRUE(host->Started());
+	// No turn runs: the game is paused for every computer, and each sees the players who load
+	EXPECT_TRUE(host->WaitsForLoads());
+	EXPECT_EQ(serverWorld.turns, 0u);
+	EXPECT_EQ(alice.world.turns, 0u);
+	ASSERT_TRUE(alice.session.LoadWait().has_value());
+	EXPECT_EQ(alice.session.LoadWait()->loading.size(), 2u);
+	// The seconds count down from the server's end of the wait, 120 seconds after the room was made
+	EXPECT_GT(alice.session.LoadWait()->secondsLeft, 110u);
+	EXPECT_LE(alice.session.LoadWait()->secondsLeft, 120u);
+	const auto before = alice.session.LoadWait()->secondsLeft;
+	Frames({&alice, &bob}, 20);
+	EXPECT_EQ(alice.session.LoadWait()->secondsLeft, before - 2);
+	// A command of the world does not go during the pause
+	alice.session.Send(HandTap {.object = Entity(5)});
+
+	// Alice loaded: the turns still wait for bob, and both computers see only bob's name
+	alice.session.ReportLoaded();
+	Frames({&alice, &bob}, 5);
+	EXPECT_EQ(serverWorld.turns, 0u);
+	ASSERT_TRUE(bob.session.LoadWait().has_value());
+	EXPECT_EQ(bob.session.LoadWait()->loading, (std::vector<std::string> {"bob"}));
+	EXPECT_EQ(alice.session.LoadWait()->loading, (std::vector<std::string> {"bob"}));
+
+	// Bob loaded: the pause ends for all, and the turns run
+	bob.session.ReportLoaded();
+	Frames({&alice, &bob}, 10);
+	EXPECT_FALSE(host->WaitsForLoads());
+	EXPECT_FALSE(alice.session.LoadWait().has_value());
+	EXPECT_FALSE(bob.session.LoadWait().has_value());
+	EXPECT_GT(serverWorld.turns, 5u);
+	EXPECT_GT(alice.world.turns, 5u);
+	EXPECT_EQ(alice.session.GetState(), NetworkSession::State::Playing);
+	// The tap of the pause did not go into a turn
+	EXPECT_TRUE(host->Seats()[2].commands.empty());
+}
+
+TEST_F(LockstepTest, AGodWhosePlayerLeavesDuringTheLoadsLeavesAndTheTurnsStartWithTheOthers)
+{
+	MakeLobbyHost(TwoGodsAndAnObserver(), 2);
+	const std::string build(k_ServerBuild);
+	Computer alice(network, now, "god:alice@lobby1", k_LandFile, {'C'}, 0.0f, {}, build);
+	Computer bob(network, now, "god:bob@lobby1", k_LandFile, {'C'}, 0.0f, {}, build);
+	Frames({&alice, &bob}, 10);
+	ASSERT_TRUE(host->Started());
+	alice.session.ReportLoaded();
+	Frames({&alice, &bob}, 5);
+	EXPECT_EQ(serverWorld.turns, 0u);
+	// Bob leaves before his world loaded: his god leaves the game, and the game goes on with alice
+	bob.session.Leave();
+	Frames({&alice, &bob}, 10);
+	EXPECT_EQ(host->Seats()[0].state, LockstepHost::SeatState::Closed);
+	EXPECT_FALSE(host->WaitsForLoads());
+	EXPECT_FALSE(alice.session.LoadWait().has_value());
+	EXPECT_GT(serverWorld.turns, 5u);
+	EXPECT_FALSE(host->GameOver());
+}
+
+TEST_F(LockstepTest, AGodWhosePlayerDoesNotLoadInTimeLeavesTheGame)
+{
+	MakeLobbyHost(TwoGodsAndAnObserver(), 2, std::string(k_ServerBuild), {}, 5LL * 1'000'000);
+	const std::string build(k_ServerBuild);
+	Computer alice(network, now, "god:alice@lobby1", k_LandFile, {'C'}, 0.0f, {}, build);
+	Computer bob(network, now, "god:bob@lobby1", k_LandFile, {'C'}, 0.0f, {}, build);
+	Frames({&alice, &bob}, 10);
+	ASSERT_TRUE(host->Started());
+	alice.session.ReportLoaded();
+	// The time to load counts 5 seconds from the time when the room was made
+	Frames({&alice, &bob}, 30);
+	EXPECT_TRUE(host->WaitsForLoads());
+	EXPECT_EQ(serverWorld.turns, 0u);
+	Frames({&alice, &bob}, 30);
+	// Bob did not load in time: the server closes his socket with "load", and his god leaves as a player who leaves
+	EXPECT_EQ(bob.session.GetEnd(), NetworkSession::End::Refused);
+	EXPECT_EQ(bob.session.RefusedReason(), "load");
+	EXPECT_EQ(host->Seats()[0].state, LockstepHost::SeatState::Closed);
+	EXPECT_FALSE(host->WaitsForLoads());
+	EXPECT_GT(serverWorld.turns, 5u);
+	EXPECT_EQ(alice.session.GetState(), NetworkSession::State::Playing);
+}
+
+TEST_F(LockstepTest, ARoomWithNoLobbyDoesNotWaitForTheLoads)
+{
+	MakeHost(2);
+	Computer alice(network, now, "god:alice");
+	Computer bob(network, now, "god:bob");
+	Frames({&alice, &bob}, 20);
+	ASSERT_TRUE(host->Started());
+	EXPECT_FALSE(host->WaitsForLoads());
+	EXPECT_FALSE(alice.session.LoadWait().has_value());
+	EXPECT_GT(serverWorld.turns, 5u);
+}
+
+TEST_F(LockstepTest, AGameThatStartsAfterTheTimeToLoadGetsTheWholeTimeFromItsStart)
+{
+	MakeLobbyHost(TwoGodsAndAnObserver(), 2, std::string(k_ServerBuild), {}, 5LL * 1'000'000);
+	// 6 seconds go by before the players join
+	Frames({}, 60);
+	const std::string build(k_ServerBuild);
+	Computer alice(network, now, "god:alice@lobby1", k_LandFile, {'C'}, 0.0f, {}, build);
+	Computer bob(network, now, "god:bob@lobby1", k_LandFile, {'C'}, 0.0f, {}, build);
+	Frames({&alice, &bob}, 10);
+	ASSERT_TRUE(host->Started());
+	ASSERT_TRUE(alice.session.LoadWait().has_value());
+	// The wait gives the whole 5 seconds from the start
+	EXPECT_GE(alice.session.LoadWait()->secondsLeft, 4u);
+	EXPECT_LE(alice.session.LoadWait()->secondsLeft, 5u);
+	Frames({&alice, &bob}, 30);
+	EXPECT_TRUE(host->WaitsForLoads());
+	Frames({&alice, &bob}, 30);
+	EXPECT_FALSE(host->WaitsForLoads());
+	EXPECT_EQ(alice.session.RefusedReason(), "load");
+	EXPECT_EQ(bob.session.RefusedReason(), "load");
 }

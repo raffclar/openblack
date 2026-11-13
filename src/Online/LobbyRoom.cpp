@@ -121,6 +121,8 @@ std::string SystemLineText(const SystemLine& line)
 		return "The start was cancelled.";
 	case SystemLineKind::CouldNotStart:
 		return "The game could not start.";
+	case SystemLineKind::NotEnoughJoined:
+		return "Not enough players joined the server.";
 	case SystemLineKind::Queued:
 		return fmt::format("Waiting for a free server: you are number {} in the line.", line.number);
 	}
@@ -199,6 +201,7 @@ std::vector<SlotView> LobbyRoom::Slots() const
 			view.host = member->account.id == _lobby.host.id;
 			view.own = member->account.id == _self.id;
 			view.away = member->away;
+			view.haveMap = member->haveMap;
 		}
 		else
 		{
@@ -248,14 +251,17 @@ bool LobbyRoom::CanStart() const
 	}
 	return std::ranges::all_of(_lobby.members, [this](const auto& member) {
 		const bool god = member.role == lobby_api::MemberRole::God && member.slot.has_value();
-		return !god || member.ready || member.account.id == _self.id;
+		// The service sets the ready of the host at the start, and refuses a host with no map
+		return !god || member.ready || (member.account.id == _self.id && member.haveMap);
 	});
 }
 
 bool LobbyRoom::CanReady() const
 {
+	// The service lets a member be ready only with the map of the lobby
 	const auto* own = OwnMember();
-	return _phase == RoomPhase::Open && own != nullptr && own->role == lobby_api::MemberRole::God && own->slot.has_value();
+	return _phase == RoomPhase::Open && own != nullptr && own->role == lobby_api::MemberRole::God && own->slot.has_value() &&
+	       own->haveMap;
 }
 
 bool LobbyRoom::CanPickSlot(int32_t slot) const
@@ -304,6 +310,18 @@ void LobbyRoom::Apply(const lobby_api::PushEvent& event)
 		return;
 	}
 	const std::string_view type = event.type;
+	if (type == events::k_LobbyKicked)
+	{
+		// The host kicked or banned the player. The service sends this to the player only.
+		const auto kick = lobby_api::ParseLobbyKick(event.data);
+		if (kick.has_value() && kick->lobby == _lobby.id)
+		{
+			std::erase_if(_lobby.members, [this](const auto& member) { return member.account.id == _self.id; });
+			const auto by = kick->by.has_value() ? kick->by->name : std::string();
+			Finish(kick->banned ? EndReason::Banned : EndReason::Kicked, by);
+		}
+		return;
+	}
 	if (type == lobby_api::events::k_ChatLine)
 	{
 		const auto line = lobby_api::ParseChatLine(event.data);
@@ -364,6 +382,7 @@ void LobbyRoom::ApplyMemberEvent(std::string_view type, const lobby_api::MemberE
 		    .account = event.account,
 		    .role = event.role.value_or(lobby_api::MemberRole::God),
 		    .slot = event.slot,
+		    .haveMap = event.haveMap.value_or(true),
 		});
 		Changed();
 		if (!self)
@@ -403,6 +422,10 @@ void LobbyRoom::ApplyMemberEvent(std::string_view type, const lobby_api::MemberE
 	if (type == events::k_HostChanged)
 	{
 		_lobby.host = event.account;
+		for (auto& each : _lobby.members)
+		{
+			each.host = each.account.id == event.account.id;
+		}
 		AddSystemLine({.kind = SystemLineKind::NewHost, .subject = event.account.name});
 		return;
 	}
@@ -424,6 +447,10 @@ void LobbyRoom::ApplyMemberEvent(std::string_view type, const lobby_api::MemberE
 		{
 			member->role = *event.role;
 		}
+		if (event.haveMap.has_value())
+		{
+			member->haveMap = *event.haveMap;
+		}
 	}
 	else
 	{
@@ -434,55 +461,13 @@ void LobbyRoom::ApplyMemberEvent(std::string_view type, const lobby_api::MemberE
 
 void LobbyRoom::ApplyChange(const lobby_api::LobbyChange& change)
 {
-	bool mapChanged = false;
-	bool otherChanged = false;
-	if (change.map.has_value())
+	// The event names the fields only: the room gets the lobby again, and the lines come with the new values
+	for (const auto& field : change.fields)
 	{
-		mapChanged = change.map->file != _lobby.map.file || change.map->sha256 != _lobby.map.sha256;
-		_lobby.map = *change.map;
-	}
-	if (change.name.has_value())
-	{
-		otherChanged = otherChanged || *change.name != _lobby.name;
-		_lobby.name = *change.name;
-	}
-	if (change.godSlots.has_value())
-	{
-		otherChanged = otherChanged || *change.godSlots != _lobby.godSlots;
-		_lobby.godSlots = *change.godSlots;
-	}
-	if (change.slotKinds.has_value())
-	{
-		otherChanged = otherChanged || *change.slotKinds != _lobby.slotKinds;
-		_lobby.slotKinds = *change.slotKinds;
-	}
-	if (change.visibility.has_value())
-	{
-		otherChanged = otherChanged || *change.visibility != _lobby.visibility;
-		_lobby.visibility = *change.visibility;
-	}
-	if (change.locked.has_value())
-	{
-		otherChanged = otherChanged || *change.locked != _lobby.locked;
-		_lobby.locked = *change.locked;
-	}
-	if (change.settings.has_value())
-	{
-		const auto& next = *change.settings;
-		const auto& now = _lobby.settings;
-		otherChanged = otherChanged || next.timeLimitMinutes != now.timeLimitMinutes || next.conditions != now.conditions ||
-		               next.observersAllowed != now.observersAllowed;
-		_lobby.settings = next;
-	}
-	Changed();
-	if (mapChanged)
-	{
-		AddSystemLine(
-		    {.kind = SystemLineKind::MapChanged, .subject = !_lobby.map.name.empty() ? _lobby.map.name : _lobby.map.file});
-	}
-	else if (otherChanged)
-	{
-		AddSystemLine({.kind = SystemLineKind::SettingsChanged});
+		if (std::ranges::find(_changedFields, field) == _changedFields.end())
+		{
+			_changedFields.push_back(field);
+		}
 	}
 	if (change.readyCleared)
 	{
@@ -490,8 +475,38 @@ void LobbyRoom::ApplyChange(const lobby_api::LobbyChange& change)
 		{
 			member.ready = false;
 		}
+		_readyClearedLine = true;
+	}
+	if (change.mapCleared)
+	{
+		for (auto& member : _lobby.members)
+		{
+			member.haveMap = false;
+		}
+	}
+	_reloadWanted = true;
+	Changed();
+}
+
+void LobbyRoom::WriteChangeLines(const lobby_api::LobbyMap& oldMap)
+{
+	const bool mapChanged = oldMap.file != _lobby.map.file || oldMap.sha256 != _lobby.map.sha256;
+	const bool otherChanged = std::ranges::any_of(_changedFields, [](const auto& field) { return field != "map"; });
+	if (mapChanged)
+	{
+		AddSystemLine(
+		    {.kind = SystemLineKind::MapChanged, .subject = !_lobby.map.name.empty() ? _lobby.map.name : _lobby.map.file});
+	}
+	else if (otherChanged || !_changedFields.empty())
+	{
+		AddSystemLine({.kind = SystemLineKind::SettingsChanged});
+	}
+	if (_readyClearedLine)
+	{
 		AddSystemLine({.kind = SystemLineKind::ReadyCleared});
 	}
+	_changedFields.clear();
+	_readyClearedLine = false;
 }
 
 void LobbyRoom::StartCountdown(std::optional<int64_t> at)
@@ -534,9 +549,13 @@ void LobbyRoom::ApplyStateEvent(std::string_view type, const lobby_api::LobbySta
 		{
 			AddSystemLine({.kind = SystemLineKind::NotReady, .subject = event.account->name});
 		}
-		else if (event.why == "launch_failed")
+		else if (event.why == "server_failed")
 		{
 			AddSystemLine({.kind = SystemLineKind::CouldNotStart});
+		}
+		else if (event.why == "not_enough_joined")
+		{
+			AddSystemLine({.kind = SystemLineKind::NotEnoughJoined});
 		}
 		else
 		{
@@ -554,6 +573,7 @@ void LobbyRoom::ApplyStateEvent(std::string_view type, const lobby_api::LobbySta
 		_phase = RoomPhase::Assigned;
 		_lobby.state = lobby_api::LobbyState::Assigned;
 		_lobby.gameId = event.gameId;
+		_gameUrl = event.url;
 		_lobby.countdownAt.reset();
 		_lobby.queuePosition.reset();
 		Changed();
@@ -576,7 +596,7 @@ void LobbyRoom::ApplyStateEvent(std::string_view type, const lobby_api::LobbySta
 	{
 		Finish(IsHost() ? EndReason::OwnClose : EndReason::HostClosed);
 	}
-	else if (event.reason == "host_away")
+	else if (event.reason == "host_left" || event.reason == "host_away")
 	{
 		Finish(EndReason::HostLeft);
 	}
@@ -588,7 +608,7 @@ void LobbyRoom::ApplyStateEvent(std::string_view type, const lobby_api::LobbySta
 	{
 		Finish(EndReason::NewVersion);
 	}
-	else if (event.reason == "failed")
+	else if (event.reason == "server_stopped")
 	{
 		Finish(EndReason::GameFailed);
 	}
@@ -623,7 +643,14 @@ void LobbyRoom::Reload(lobby_api::Lobby lobby)
 		return;
 	}
 	const bool wasHost = IsHost();
+	const auto oldMap = _lobby.map;
+	// The lobby does not give its game server: the room keeps the one of "game.assigned"
+	auto gameId = std::move(_lobby.gameId);
 	_lobby = std::move(lobby);
+	if (_lobby.gameId.empty())
+	{
+		_lobby.gameId = std::move(gameId);
+	}
 	_phase = PhaseOf(_lobby.state);
 	Changed();
 	if (_phase == RoomPhase::Ended)
@@ -638,6 +665,7 @@ void LobbyRoom::Reload(lobby_api::Lobby lobby)
 		Finish(EndReason::Closed);
 		return;
 	}
+	WriteChangeLines(oldMap);
 	if (!wasHost && IsHost())
 	{
 		AddSystemLine({.kind = SystemLineKind::NewHost, .subject = _lobby.host.name});
@@ -684,7 +712,8 @@ bool IsWrongVersion(const lobby_api::LobbySummary& lobby, std::string_view ownBu
 
 bool IsFull(const lobby_api::LobbySummary& lobby)
 {
-	return lobby.gods >= lobby.godSlots;
+	// The computer slots and the closed slots take no player
+	return lobby.freeSlots.has_value() ? *lobby.freeSlots <= 0 : lobby.gods >= lobby.godSlots;
 }
 
 bool IsInGame(const lobby_api::LobbySummary& lobby)

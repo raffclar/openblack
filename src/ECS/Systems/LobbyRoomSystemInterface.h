@@ -66,6 +66,8 @@ public:
 	virtual void SetReady(bool ready, LobbyCallback<LobbyDone> callback) = 0;
 	/// Moves the player to a free god slot
 	virtual void PickSlot(int32_t slot, LobbyCallback<LobbyDone> callback) = 0;
+	/// Tells the lobby whether the player has the map of the lobby. The player can be ready only with the map.
+	virtual void ReportMap(lobby_api::MapReport report, LobbyCallback<LobbyDone> callback) = 0;
 	/// Sends a chat line to the room
 	virtual void SendChat(std::string text, LobbyCallback<LobbyDone> callback) = 0;
 

@@ -55,6 +55,30 @@ LobbyError BadAnswer(const HttpResponse& response)
 	return LobbyError {.kind = LobbyErrorKind::BadAnswer, .status = response.status};
 }
 
+/// The text of a value in the query of an address: the characters other than letters, digits and "-._~" go as %XX
+std::string QueryValue(std::string_view value)
+{
+	constexpr std::string_view k_Hex = "0123456789ABCDEF";
+	std::string out;
+	for (const auto character : value)
+	{
+		const auto byte = static_cast<unsigned char>(character);
+		const bool plain = (byte >= 'a' && byte <= 'z') || (byte >= 'A' && byte <= 'Z') || (byte >= '0' && byte <= '9') ||
+		                   byte == '-' || byte == '.' || byte == '_' || byte == '~';
+		if (plain)
+		{
+			out.push_back(character);
+		}
+		else
+		{
+			out.push_back('%');
+			out.push_back(k_Hex[byte >> 4U]);
+			out.push_back(k_Hex[byte & 0x0FU]);
+		}
+	}
+	return out;
+}
+
 /// The id of a lobby goes in the path of a call: only letters, digits and "-" can be in it
 bool IsPathId(std::string_view id)
 {
@@ -108,6 +132,11 @@ void LobbyRoomSystem::HandleEvent(const lobby_api::PushEvent& event)
 	if (_room != nullptr)
 	{
 		_room->Apply(event);
+		// A change of the lobby names its fields only: the room gets the lobby again
+		if (_room->TakeReloadWanted())
+		{
+			ReloadRoom();
+		}
 		FollowRoomEnd();
 	}
 }
@@ -119,8 +148,9 @@ void LobbyRoomSystem::RefreshList(LobbyCallback<LobbyDone> callback)
 	{
 		headers.emplace_back("If-None-Match", *_listTag);
 	}
-	_client.SendApiCall(HttpMethod::Get, "/lobbies", {}, std::move(headers),
-	                    [this, callback = std::move(callback)](LobbyResult<HttpResponse>&& result) {
+	// The list has the lobbies that started and the lobbies of other builds too. The screens filter them.
+	_client.SendApiCall(HttpMethod::Get, fmt::format("/lobbies?in_game=1&version=1&build={}", QueryValue(_buildId)), {},
+	                    std::move(headers), [this, callback = std::move(callback)](LobbyResult<HttpResponse>&& result) {
 		                    if (!result.Ok())
 		                    {
 			                    Fail(callback, std::move(result.error));
@@ -431,26 +461,31 @@ void LobbyRoomSystem::Leave(LobbyCallback<LobbyDone> callback)
 	         [this](const HttpResponse& /*response*/) { _room->Finish(online::lobby::EndReason::Left); });
 }
 
+void LobbyRoomSystem::ReloadFrom(const HttpResponse& response)
+{
+	// The calls of the room give the whole lobby back
+	if (auto lobby = lobby_api::ParseLobby(response.Text()); lobby.has_value())
+	{
+		_room->Reload(std::move(*lobby));
+	}
+}
+
 void LobbyRoomSystem::SetReady(bool ready, LobbyCallback<LobbyDone> callback)
 {
 	RoomCall(HttpMethod::Put, "/members/me", lobby_api::ToJson(lobby_api::MemberChangeRequest {.ready = ready}),
-	         std::move(callback), [this](const HttpResponse& response) {
-		         if (auto member = lobby_api::ParseLobbyMember(response.Text()); member.has_value())
-		         {
-			         _room->ApplyOwnMember(std::move(*member));
-		         }
-	         });
+	         std::move(callback), [this](const HttpResponse& response) { ReloadFrom(response); });
 }
 
 void LobbyRoomSystem::PickSlot(int32_t slot, LobbyCallback<LobbyDone> callback)
 {
 	RoomCall(HttpMethod::Put, "/members/me", lobby_api::ToJson(lobby_api::MemberChangeRequest {.slot = slot}),
-	         std::move(callback), [this](const HttpResponse& response) {
-		         if (auto member = lobby_api::ParseLobbyMember(response.Text()); member.has_value())
-		         {
-			         _room->ApplyOwnMember(std::move(*member));
-		         }
-	         });
+	         std::move(callback), [this](const HttpResponse& response) { ReloadFrom(response); });
+}
+
+void LobbyRoomSystem::ReportMap(lobby_api::MapReport report, LobbyCallback<LobbyDone> callback)
+{
+	RoomCall(HttpMethod::Put, "/members/me", lobby_api::ToJson(lobby_api::MemberChangeRequest {.map = std::move(report)}),
+	         std::move(callback), [this](const HttpResponse& response) { ReloadFrom(response); });
 }
 
 void LobbyRoomSystem::SendChat(std::string text, LobbyCallback<LobbyDone> callback)
@@ -470,12 +505,14 @@ void LobbyRoomSystem::Kick(int64_t account, bool ban, LobbyCallback<LobbyDone> c
 
 void LobbyRoomSystem::MakeHost(int64_t account, LobbyCallback<LobbyDone> callback)
 {
-	RoomCall(HttpMethod::Post, "/host", lobby_api::ToJson(lobby_api::HostRequest {.account = account}), std::move(callback));
+	RoomCall(HttpMethod::Post, fmt::format("/members/{}/make-host", account), {}, std::move(callback),
+	         [this](const HttpResponse& response) { ReloadFrom(response); });
 }
 
 void LobbyRoomSystem::Change(lobby_api::LobbyChangeRequest request, LobbyCallback<LobbyDone> callback)
 {
-	RoomCall(HttpMethod::Patch, "", lobby_api::ToJson(request), std::move(callback));
+	RoomCall(HttpMethod::Patch, "", lobby_api::ToJson(request), std::move(callback),
+	         [this](const HttpResponse& response) { ReloadFrom(response); });
 }
 
 void LobbyRoomSystem::Close(LobbyCallback<LobbyDone> callback)
@@ -513,20 +550,20 @@ void LobbyRoomSystem::RequestTicket(LobbyCallback<lobby_api::JoinTicket> callbac
 			                    Fail(callback, std::move(result.error));
 			                    return;
 		                    }
-		                    auto ticket = lobby_api::ParseJoinTicket(result.value->Text());
+		                    auto ticket = lobby_api::ParseLobbyTicket(result.value->Text());
 		                    if (!ticket.has_value())
 		                    {
 			                    Fail(callback, BadAnswer(*result.value));
 			                    return;
 		                    }
 		                    // The game socket is encrypted too
-		                    if (!online::http_policy::IsWssAddress(ticket->url))
+		                    if (!online::http_policy::IsWssAddress(ticket->ticket.url))
 		                    {
 			                    Fail(callback,
 			                         LobbyError {.kind = LobbyErrorKind::AddressRefused, .status = result.value->status});
 			                    return;
 		                    }
-		                    Succeed(callback, std::move(*ticket));
+		                    Succeed(callback, std::move(ticket->ticket));
 	                    });
 }
 

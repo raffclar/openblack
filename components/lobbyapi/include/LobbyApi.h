@@ -609,6 +609,10 @@ struct Problem
 	std::string detail;
 	/// "code": the code of the error that a program can read
 	std::string code;
+	/// "members" and "slots" of the problem "too_many_players": the players of the lobby and the slots of the new map. 0
+	/// when the problem does not give them.
+	int32_t members {0};
+	int32_t slots {0};
 };
 
 /// A frame of the push channel. An event: {"seq": n, "type": "...", "time": "...", "data": {...}}. A control frame

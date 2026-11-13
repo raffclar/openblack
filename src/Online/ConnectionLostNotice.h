@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include <string_view>
+
 #include "Online/NetworkSession.h"
 
 namespace openblack::online
@@ -45,6 +47,13 @@ struct ConnectionLostFacts
 		break;
 	}
 	return false;
+}
+
+/// The game server took the player out of the started game because the lobby's host kicked or banned the player (row
+/// 241). The box then tells the player that the host kicked the player, in place of the box of the lost connection.
+[[nodiscard]] constexpr bool KickedFromGame(NetworkSession::End end, std::string_view refusal) noexcept
+{
+	return end == NetworkSession::End::Refused && refusal == "kicked";
 }
 
 /// Tells when the box that the connection to the network game is lost shows: once for each network session, when a

@@ -185,30 +185,6 @@ bool ReadMapMember(const Json& object, std::string_view key, LobbyMap& out)
 	return member != nullptr && member->is_object() && ReadMap(*member, out);
 }
 
-bool ReadSlotKinds(const Json& object, std::string_view key, std::vector<SlotKind>& out)
-{
-	const auto* member = Member(object, key);
-	if (member == nullptr || !member->is_array() || member->size() > static_cast<size_t>(k_MostGodSlots))
-	{
-		return false;
-	}
-	out.clear();
-	for (const auto& each : *member)
-	{
-		if (!each.is_string())
-		{
-			return false;
-		}
-		const auto kind = SlotKindOf(each.get_ref<const std::string&>());
-		if (!kind.has_value())
-		{
-			return false;
-		}
-		out.push_back(*kind);
-	}
-	return true;
-}
-
 bool ReadSettings(const Json& object, LobbySettings& out)
 {
 	if (!ReadInteger(object, "time_limit_minutes", out.timeLimitMinutes, false) ||
@@ -252,8 +228,9 @@ bool ReadSummary(const Json& object, LobbySummary& out)
 	return ReadString(object, "id", out.id) && ReadString(object, "name", out.name) &&
 	       ReadAccountMember(object, "host", out.host) && ReadMapMember(object, "map", out.map) &&
 	       ReadInteger(object, "gods", out.gods) && ReadInteger(object, "god_slots", out.godSlots) &&
-	       ReadInteger(object, "observers", out.observers, false) && ReadBool(object, "locked", out.locked, false) &&
-	       ReadName(object, "state", out.state, LobbyStateOf) &&
+	       ReadOptionalInteger(object, "open_slots", out.openSlots) &&
+	       ReadOptionalInteger(object, "free_slots", out.freeSlots) && ReadInteger(object, "observers", out.observers, false) &&
+	       ReadBool(object, "locked", out.locked, false) && ReadName(object, "state", out.state, LobbyStateOf) &&
 	       ReadOptionalInteger(object, "queue_position", out.queuePosition) &&
 	       ReadOptionalTime(object, "started_at", out.startedAt) && ReadOptionalTime(object, "created", out.created) &&
 	       ReadString(object, "build_id", out.buildId, false);
@@ -268,7 +245,35 @@ bool ReadMember(const Json& object, LobbyMember& out)
 {
 	return ReadAccountMember(object, "account", out.account) && ReadName(object, "role", out.role, MemberRoleOf, false) &&
 	       ReadOptionalInteger(object, "slot", out.slot) && ReadBool(object, "ready", out.ready, false) &&
-	       ReadOptionalTime(object, "joined_at", out.joinedAt) && ReadBool(object, "away", out.away, false);
+	       ReadOptionalTime(object, "joined_at", out.joinedAt) && ReadBool(object, "away", out.away, false) &&
+	       ReadBool(object, "have_map", out.haveMap, false) && ReadBool(object, "host", out.host, false);
+}
+
+/// "slots": [{"index", "kind", "account"}], one entry for each god slot in the order of the slots
+bool ReadSlots(const Json& object, std::vector<SlotKind>& out)
+{
+	const auto* slots = Member(object, "slots");
+	if (slots == nullptr || slots->is_null())
+	{
+		return true;
+	}
+	if (!slots->is_array() || slots->size() > static_cast<size_t>(k_MostGodSlots))
+	{
+		return false;
+	}
+	out.assign(slots->size(), SlotKind::Open);
+	for (const auto& each : *slots)
+	{
+		int32_t index {0};
+		SlotKind kind {SlotKind::Open};
+		if (!each.is_object() || !ReadInteger(each, "index", index) || !ReadName(each, "kind", kind, SlotKindOf) || index < 0 ||
+		    static_cast<size_t>(index) >= out.size())
+		{
+			return false;
+		}
+		out[static_cast<size_t>(index)] = kind;
+	}
+	return true;
 }
 
 bool ReadLobby(const Json& object, Lobby& out)
@@ -280,25 +285,43 @@ bool ReadLobby(const Json& object, Lobby& out)
 	    !ReadInteger(object, "god_slots", out.godSlots) || !ReadSettingsMember(object, "settings", out.settings) ||
 	    !ReadString(object, "build_id", out.buildId, false) || !ReadName(object, "state", out.state, LobbyStateOf) ||
 	    !ReadOptionalInteger(object, "queue_position", out.queuePosition) ||
-	    !ReadOptionalTime(object, "countdown_at", out.countdownAt) || !ReadString(object, "game_id", out.gameId, false) ||
-	    !ReadArray(object, "members", out.members, ReadMember))
+	    !ReadOptionalTime(object, "countdown_at", out.countdownAt) || !ReadOptionalTime(object, "started_at", out.startedAt) ||
+	    !ReadArray(object, "members", out.members, ReadMember) || !ReadSlots(object, out.slotKinds))
 	{
 		return false;
 	}
-	if (out.godSlots < 0 || out.godSlots > k_MostGodSlots)
+	return out.godSlots >= 0 && out.godSlots <= k_MostGodSlots;
+}
+
+void WriteMapReport(Json& object, const std::optional<MapReport>& report)
+{
+	if (!report.has_value())
 	{
-		return false;
+		return;
 	}
-	if (const auto* kinds = Member(object, "slot_kinds"); kinds != nullptr && !kinds->is_null())
+	object["have_map"] = report->haveMap;
+	if (!report->sha256.empty())
 	{
-		return ReadSlotKinds(object, "slot_kinds", out.slotKinds);
+		object["map_sha256"] = report->sha256;
 	}
-	return true;
+}
+
+void WriteBuildHash(Json& object, const std::string& hash)
+{
+	if (!hash.empty())
+	{
+		object["build_hash"] = hash;
+	}
 }
 
 Json MapJson(const LobbyMap& map)
 {
-	return Json {{"file", map.file}, {"sha256", map.sha256}};
+	auto object = Json {{"file", map.file}, {"sha256", map.sha256}};
+	if (!map.name.empty())
+	{
+		object["name"] = map.name;
+	}
+	return object;
 }
 
 Json SlotKindsJson(const std::vector<SlotKind>& kinds)
@@ -318,61 +341,6 @@ Json SettingsJson(const LobbySettings& settings)
 	    {"conditions", settings.conditions},
 	    {"observers_allowed", settings.observersAllowed},
 	};
-}
-
-/// The members of "lobby.changed": in "fields", or in the data itself
-bool ReadChangeFields(const Json& object, LobbyChange& out)
-{
-	if (const auto* name = Member(object, "name"); name != nullptr && !name->is_null())
-	{
-		std::string text;
-		if (!ReadString(object, "name", text))
-		{
-			return false;
-		}
-		out.name = std::move(text);
-	}
-	if (const auto* map = Member(object, "map"); map != nullptr && !map->is_null())
-	{
-		LobbyMap value;
-		if (!map->is_object() || !ReadMap(*map, value))
-		{
-			return false;
-		}
-		out.map = std::move(value);
-	}
-	if (!ReadOptionalInteger(object, "god_slots", out.godSlots) || !ReadOptionalBool(object, "locked", out.locked))
-	{
-		return false;
-	}
-	if (const auto* kinds = Member(object, "slot_kinds"); kinds != nullptr && !kinds->is_null())
-	{
-		std::vector<SlotKind> value;
-		if (!ReadSlotKinds(object, "slot_kinds", value))
-		{
-			return false;
-		}
-		out.slotKinds = std::move(value);
-	}
-	if (const auto* visibility = Member(object, "visibility"); visibility != nullptr && !visibility->is_null())
-	{
-		LobbyVisibility value {LobbyVisibility::Public};
-		if (!ReadName(object, "visibility", value, VisibilityOf))
-		{
-			return false;
-		}
-		out.visibility = value;
-	}
-	if (const auto* settings = Member(object, "settings"); settings != nullptr && !settings->is_null())
-	{
-		LobbySettings value;
-		if (!settings->is_object() || !ReadSettings(*settings, value))
-		{
-			return false;
-		}
-		out.settings = std::move(value);
-	}
-	return true;
 }
 
 } // namespace
@@ -428,6 +396,7 @@ std::string ToJson(const LobbyCreateRequest& request)
 	    {"settings", SettingsJson(request.settings)},
 	    {"build_id", request.buildId},
 	};
+	WriteBuildHash(object, request.buildHash);
 	if (request.password.has_value() && !request.password->empty())
 	{
 		object["password"] = *request.password;
@@ -468,6 +437,7 @@ std::string ToJson(const LobbyChangeRequest& request)
 std::string ToJson(const LobbyJoinRequest& request)
 {
 	auto object = Json {{"build_id", request.buildId}, {"role", std::string(MemberRoleName(request.role))}};
+	WriteBuildHash(object, request.buildHash);
 	if (request.password.has_value() && !request.password->empty())
 	{
 		object["password"] = *request.password;
@@ -476,6 +446,7 @@ std::string ToJson(const LobbyJoinRequest& request)
 	{
 		object["slot"] = *request.slot;
 	}
+	WriteMapReport(object, request.map);
 	return Dump(object);
 }
 
@@ -490,17 +461,15 @@ std::string ToJson(const MemberChangeRequest& request)
 	{
 		object["slot"] = *request.slot;
 	}
+	WriteMapReport(object, request.map);
 	return Dump(object);
-}
-
-std::string ToJson(const HostRequest& request)
-{
-	return Dump(Json {{"account", request.account}});
 }
 
 std::string ToJson(const QuickJoinRequest& request)
 {
-	return Dump(Json {{"build_id", request.buildId}});
+	auto object = Json {{"build_id", request.buildId}};
+	WriteBuildHash(object, request.buildHash);
+	return Dump(object);
 }
 
 std::optional<LobbyList> ParseLobbyList(std::string_view text)
@@ -547,6 +516,15 @@ std::optional<LobbyCodeReply> ParseLobbyCodeReply(std::string_view text)
 	    text, [](const Json& object, LobbyCodeReply& out) { return ReadString(object, "id", out.id) && !out.id.empty(); });
 }
 
+std::optional<LobbyTicket> ParseLobbyTicket(std::string_view text)
+{
+	return ParseWith<LobbyTicket>(text, [](const Json& object, LobbyTicket& out) {
+		return ReadString(object, "url", out.ticket.url) && ReadString(object, "ticket", out.ticket.ticket) &&
+		       !out.ticket.ticket.empty() && ReadTime(object, "expires", out.ticket.expires) &&
+		       ReadString(object, "role", out.ticket.role, false) && ReadString(object, "game_id", out.gameId, false);
+	});
+}
+
 std::optional<LobbyListChange> ParseLobbyListChange(std::string_view type, std::string_view data)
 {
 	const bool removed = type == lobby_events::k_LobbiesRemoved;
@@ -555,16 +533,17 @@ std::optional<LobbyListChange> ParseLobbyListChange(std::string_view type, std::
 		return std::nullopt;
 	}
 	return ParseWith<LobbyListChange>(data, [removed](const Json& object, LobbyListChange& out) {
-		if (!ReadString(object, "id", out.id) || removed)
+		if (removed)
 		{
-			return !out.id.empty();
+			return ReadString(object, "id", out.id) && !out.id.empty() && ReadString(object, "reason", out.reason, false);
 		}
-		const auto* summary = Member(object, "summary");
+		const auto* summary = Member(object, "lobby");
 		LobbySummary value;
-		if (summary == nullptr || !summary->is_object() || !ReadSummary(*summary, value) || value.id != out.id)
+		if (summary == nullptr || !summary->is_object() || !ReadSummary(*summary, value) || value.id.empty())
 		{
 			return false;
 		}
+		out.id = value.id;
 		out.summary = std::move(value);
 		return true;
 	});
@@ -580,7 +559,8 @@ std::optional<MemberEvent> ParseMemberEvent(std::string_view data)
 	return ParseWith<MemberEvent>(data, [](const Json& object, MemberEvent& out) {
 		if (!ReadString(object, "lobby", out.lobby, false) || !ReadAccountMember(object, "account", out.account) ||
 		    !ReadOptionalAccount(object, "by", out.by) || !ReadOptionalInteger(object, "slot", out.slot) ||
-		    !ReadOptionalBool(object, "ready", out.ready))
+		    !ReadOptionalBool(object, "ready", out.ready) || !ReadOptionalBool(object, "have_map", out.haveMap) ||
+		    !ReadString(object, "reason", out.reason, false))
 		{
 			return false;
 		}
@@ -600,15 +580,29 @@ std::optional<MemberEvent> ParseMemberEvent(std::string_view data)
 std::optional<LobbyChange> ParseLobbyChange(std::string_view data)
 {
 	return ParseWith<LobbyChange>(data, [](const Json& object, LobbyChange& out) {
-		if (!ReadString(object, "lobby", out.lobby, false) || !ReadBool(object, "ready_cleared", out.readyCleared, false))
+		if (!ReadString(object, "lobby", out.lobby, false) || !ReadBool(object, "ready_cleared", out.readyCleared, false) ||
+		    !ReadBool(object, "map_cleared", out.mapCleared, false))
 		{
 			return false;
 		}
-		if (const auto* fields = Member(object, "fields"); fields != nullptr && !fields->is_null())
+		const auto* fields = Member(object, "fields");
+		if (fields == nullptr || fields->is_null())
 		{
-			return fields->is_object() && ReadChangeFields(*fields, out);
+			return true;
 		}
-		return ReadChangeFields(object, out);
+		if (!fields->is_array())
+		{
+			return false;
+		}
+		for (const auto& field : *fields)
+		{
+			if (!field.is_string())
+			{
+				return false;
+			}
+			out.fields.push_back(field.get<std::string>());
+		}
+		return true;
 	});
 }
 
@@ -618,7 +612,15 @@ std::optional<LobbyStateEvent> ParseLobbyStateEvent(std::string_view data)
 		return ReadString(object, "lobby", out.lobby, false) && ReadOptionalTime(object, "at", out.at) &&
 		       ReadString(object, "why", out.why, false) && ReadOptionalAccount(object, "account", out.account) &&
 		       ReadOptionalInteger(object, "position", out.position) && ReadString(object, "game_id", out.gameId, false) &&
-		       ReadString(object, "reason", out.reason, false);
+		       ReadString(object, "url", out.url, false) && ReadString(object, "reason", out.reason, false);
+	});
+}
+
+std::optional<LobbyKick> ParseLobbyKick(std::string_view data)
+{
+	return ParseWith<LobbyKick>(data, [](const Json& object, LobbyKick& out) {
+		return ReadString(object, "lobby", out.lobby) && ReadOptionalAccount(object, "by", out.by) &&
+		       ReadBool(object, "banned", out.banned, false);
 	});
 }
 

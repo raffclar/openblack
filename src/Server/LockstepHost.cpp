@@ -22,6 +22,7 @@
 #include "Online/StartRules.h"
 #include "PlayerSlots.h"
 #include "Server/ConnectionLimits.h"
+#include "Server/GameLifetime.h"
 #include "Server/LobbyBans.h"
 #include "Server/LobbyStatus.h"
 
@@ -183,6 +184,10 @@ LockstepHost::LockstepHost(WebSocketServerInterface& sockets, CheckTicket checkT
     , _makeSecret(std::move(makeSecret))
     , _settings(std::move(settings))
     , _seats(std::min<size_t>(_settings.godSlots, player_slots::k_MaxPlayers))
+    , _godsToWaitFor(_settings.lobby.has_value()
+                         ? game_lifetime::GodsToWaitFor(_settings.lobby->Gods(), _settings.minGods, false)
+                         : _settings.minGods)
+    , _createdAt(_clock())
 {
 	_sockets.SetHandlers(ServerSocketHandlers {
 	    .opened = [this](ConnectionId connection) { Opened(connection); },
@@ -199,8 +204,13 @@ LockstepHost::~LockstepHost()
 
 void LockstepHost::Opened(ConnectionId connection)
 {
-	_peers[connection] =
-	    Peer {.joined = false, .role = game_socket::Role::God, .seat = std::nullopt, .openedAt = _clock(), .name = {}};
+	_peers[connection] = Peer {.joined = false,
+	                           .role = game_socket::Role::God,
+	                           .seat = std::nullopt,
+	                           .openedAt = _clock(),
+	                           .name = {},
+	                           .observer = 0,
+	                           .account = {}};
 }
 
 void LockstepHost::SendTo(ConnectionId connection, const game_socket::Frame& frame)
@@ -300,6 +310,15 @@ void LockstepHost::Text(ConnectionId connection, std::string_view text)
 		if (peer.seat.has_value())
 		{
 			_seats[*peer.seat].ready = ready->ready;
+		}
+	}
+	else if (std::holds_alternative<game_socket::Loaded>(*frame))
+	{
+		if (_started && peer.seat.has_value() && !_seats[*peer.seat].loaded)
+		{
+			_seats[*peer.seat].loaded = true;
+			Log(spdlog::level::info, fmt::format("The player of slot {} loaded the world", *peer.seat));
+			UpdateLoadWait();
 		}
 	}
 	else if (std::holds_alternative<game_socket::Leave>(*frame))
@@ -481,6 +500,42 @@ void LockstepHost::Join(ConnectionId connection, Peer& peer, const game_socket::
 		}
 		claims = std::move(*result.claims);
 	}
+	// The room takes only a client of its own build, with the same file of the land (deviation 248)
+	if (const auto refusal = lobby_game::BuildRefusal(_settings.buildId, join.build, _settings.lobby.has_value());
+	    refusal.has_value())
+	{
+		Log(spdlog::level::info, fmt::format("{} has the build \"{}\", not the build \"{}\" of the server", claims.name,
+		                                     join.build, _settings.buildId));
+		Refuse(connection, *refusal);
+		return;
+	}
+	if (const auto refusal = lobby_game::MapRefusal(_settings.mapSha256, join.map); refusal.has_value())
+	{
+		Log(spdlog::level::info, fmt::format("{} has another file of the land: SHA-256 {}", claims.name, join.map));
+		Refuse(connection, *refusal);
+		return;
+	}
+	// The game of a lobby takes only the members of the lobby, in the role that the lobby gave them (deviation 236)
+	const auto* member = _settings.lobby.has_value() && !lan ? _settings.lobby->MemberOf(claims.subject) : nullptr;
+	if (_settings.lobby.has_value())
+	{
+		const auto admission = lan ? lobby_game::Admission::NotMember
+		                           : lobby_game::Admit(*_settings.lobby, claims.lobby, claims.subject, claims.role);
+		if (admission != lobby_game::Admission::Member)
+		{
+			Log(spdlog::level::info,
+			    fmt::format("The server refuses the account {}: {}", claims.subject, lobby_game::AdmissionName(admission)));
+			Refuse(connection, "ticket");
+			return;
+		}
+	}
+	// The lobby's host can kick or ban an account also after the start: the server refuses the account in every role
+	if (!lan && lobby_bans::IsBanned(claims.subject, _bans))
+	{
+		Log(spdlog::level::info, fmt::format("The lobby removed the account {}: the server refuses it", claims.subject));
+		Refuse(connection, "kicked");
+		return;
+	}
 	// The room takes nobody new during the start
 	if (Starting())
 	{
@@ -515,6 +570,14 @@ void LockstepHost::Join(ConnectionId connection, Peer& peer, const game_socket::
 			Refuse(connection, "full", fmt::format("{} finds each of the {} god slots taken", claims.name, _seats.size()));
 			return;
 		}
+		// A member of the lobby with a slot takes that slot
+		if (member != nullptr && member->slot.has_value() &&
+		    (*member->slot >= _seats.size() || _seats.at(*member->slot).state != SeatState::Open))
+		{
+			Log(spdlog::level::info, fmt::format("The slot {} of {} is not free in the room", *member->slot, claims.name));
+			Refuse(connection, "full");
+			return;
+		}
 		// On the local network, a player who finds no free slot watches the game, as the game puts that player with the
 		// observers
 		if (free == _seats.end())
@@ -525,7 +588,9 @@ void LockstepHost::Join(ConnectionId connection, Peer& peer, const game_socket::
 	}
 	if (claims.role == game_socket::Role::God)
 	{
-		const auto free = std::ranges::find(_seats, SeatState::Open, &Seat::state);
+		const auto free = member != nullptr && member->slot.has_value()
+		                      ? _seats.begin() + *member->slot
+		                      : std::ranges::find(_seats, SeatState::Open, &Seat::state);
 		const auto seat = static_cast<uint8_t>(free - _seats.begin());
 		*free = Seat {.state = SeatState::Taken,
 		              .connection = connection,
@@ -564,6 +629,7 @@ void LockstepHost::Join(ConnectionId connection, Peer& peer, const game_socket::
 	peer.joined = true;
 	peer.role = claims.role;
 	peer.name = claims.name;
+	peer.account = lan ? std::string() : claims.subject;
 	SendTo(connection, joined);
 }
 
@@ -707,6 +773,16 @@ void LockstepHost::SendKeptTurns(ConnectionId connection, uint32_t from)
 	if (_stoppedAfter.has_value())
 	{
 		SendTo(connection, game_socket::GameStop {.turn = *_stoppedAfter});
+	}
+	SendLoadWait(connection);
+}
+
+void LockstepHost::SendLoadWait(ConnectionId connection)
+{
+	// A player who comes back or joins during the wait for the loads gets the wait, and counts down from the same end
+	if (_loadWait && !_loadingSent.empty())
+	{
+		SendTo(connection, game_socket::LoadWait {.loading = _loadingSent, .secondsLeft = LoadSecondsLeft()});
 	}
 }
 
@@ -914,6 +990,7 @@ bool LockstepHost::SendWorld(ConnectionId connection)
 	{
 		SendTo(connection, game_socket::GameStop {.turn = *_stoppedAfter});
 	}
+	SendLoadWait(connection);
 	return true;
 }
 
@@ -992,6 +1069,7 @@ void LockstepHost::JoinRunning(ConnectionId connection, Peer& peer, const join_t
 	}
 	peer.joined = true;
 	peer.name = claims.name;
+	peer.account = byName ? std::string() : claims.subject;
 	SendTo(connection, joined);
 	SendTo(connection, start);
 	SendWorld(connection);
@@ -1233,7 +1311,7 @@ void LockstepHost::Update()
 		const auto inRoom = std::ranges::count(_seats, SeatState::Taken, &Seat::state);
 		const auto ready =
 		    std::ranges::count_if(_seats, [](const Seat& seat) { return seat.state == SeatState::Taken && seat.ready; });
-		if (!Starting() && RoomStarts(static_cast<size_t>(inRoom), static_cast<size_t>(ready), _settings.minGods))
+		if (!Starting() && RoomStarts(static_cast<size_t>(inRoom), static_cast<size_t>(ready), _godsToWaitFor))
 		{
 			QueryLands();
 		}
@@ -1248,6 +1326,13 @@ void LockstepHost::Update()
 			CloseSeat(static_cast<uint8_t>(i));
 		}
 	}
+	// A god who left or did not come back no longer holds the wait for the loads. At the end of the time to load, each
+	// god whose player did not load leaves the game.
+	if (_loadWait && now >= _loadWaitEndsAt)
+	{
+		EndLoadWait();
+	}
+	UpdateLoadWait();
 	const bool paused = Paused();
 	if (paused != _pausedBefore)
 	{
@@ -1380,6 +1465,92 @@ void LockstepHost::StartGame()
 		}
 	}
 	Broadcast(start);
+	// The turns of a lobby game wait until each god's player loaded the world (deviation 254)
+	if (_settings.lobby.has_value() && !AllComputerGods())
+	{
+		_loadWait = true;
+		// The time to load counts from the time when the room was made. A start after that time gets the whole time from
+		// the start, so that the players can load.
+		const auto now = _clock();
+		const auto fromCreation = _createdAt + _settings.loadWindowMicroseconds;
+		_loadWaitEndsAt = now < fromCreation ? fromCreation : now + _settings.loadWindowMicroseconds;
+		UpdateLoadWait();
+	}
+}
+
+std::vector<uint8_t> LockstepHost::LoadingSeats() const
+{
+	std::vector<uint8_t> loading;
+	if (!_loadWait)
+	{
+		return loading;
+	}
+	for (size_t i = 0; i < _seats.size(); ++i)
+	{
+		const auto& seat = _seats[i];
+		if ((seat.state == SeatState::Taken || seat.state == SeatState::Away) && !seat.loaded)
+		{
+			loading.push_back(static_cast<uint8_t>(i));
+		}
+	}
+	return loading;
+}
+
+uint32_t LockstepHost::LoadSecondsLeft() const
+{
+	if (!_loadWait)
+	{
+		return 0;
+	}
+	const auto left = std::max<int64_t>(_loadWaitEndsAt - _clock(), 0);
+	return static_cast<uint32_t>((left + 999'999) / 1'000'000);
+}
+
+void LockstepHost::UpdateLoadWait()
+{
+	if (!_loadWait)
+	{
+		return;
+	}
+	std::vector<std::string> names;
+	for (const auto seat : LoadingSeats())
+	{
+		names.push_back(_seats[seat].name);
+	}
+	if (names.empty())
+	{
+		_loadWait = false;
+		Log(spdlog::level::info, "Each god's player loaded the world: the turns of the game start");
+	}
+	else if (names != _loadingSent)
+	{
+		Log(spdlog::level::info, fmt::format("The turns wait for {} players to load the world", names.size()));
+	}
+	if (names != _loadingSent || names.empty())
+	{
+		_loadingSent = names;
+		Broadcast(game_socket::LoadWait {.loading = std::move(names), .secondsLeft = LoadSecondsLeft()});
+	}
+}
+
+void LockstepHost::EndLoadWait()
+{
+	for (const auto seat : LoadingSeats())
+	{
+		Log(spdlog::level::info,
+		    fmt::format("The player of slot {} did not load the world in time: the god leaves the game", seat));
+		const auto connection = _seats[seat].connection;
+		if (const auto peer = connection.has_value() ? _peers.find(*connection) : _peers.end(); peer != _peers.end())
+		{
+			peer->second.seat.reset();
+		}
+		CloseSeat(seat);
+		if (connection.has_value())
+		{
+			Refuse(*connection, "load");
+		}
+	}
+	UpdateLoadWait();
 }
 
 std::vector<game_socket::God> LockstepHost::Gods() const
@@ -1402,6 +1573,7 @@ void LockstepHost::SetBans(std::set<int64_t> accounts)
 	_bans = std::move(accounts);
 	if (_started)
 	{
+		RemoveBannedFromGame();
 		return;
 	}
 	const auto banned = lobby_bans::BannedSeats(_seats, _bans);
@@ -1420,6 +1592,42 @@ void LockstepHost::SetBans(std::set<int64_t> accounts)
 	if (!banned.empty() && Starting())
 	{
 		StopStart(game_socket::StartStop {});
+	}
+}
+
+void LockstepHost::RemoveBannedFromGame()
+{
+	// The lobby's host kicked or banned a player after the start: the server closes the player's socket at once with
+	// "kicked", and the god leaves the game as a player who leaves. The closed seat takes no resume and no join.
+	for (const auto seat : lobby_bans::BannedSeats(_seats, _bans))
+	{
+		Log(spdlog::level::info,
+		    fmt::format("The lobby removed the player of slot {} from the game: the god leaves the game", seat));
+		const auto connection = _seats[seat].connection;
+		if (const auto peer = connection.has_value() ? _peers.find(*connection) : _peers.end(); peer != _peers.end())
+		{
+			peer->second.seat.reset();
+		}
+		CloseSeat(seat);
+		if (connection.has_value())
+		{
+			Refuse(*connection, "kicked");
+		}
+	}
+	// An observer of a removed account leaves the game too
+	std::vector<ConnectionId> observers;
+	for (const auto& [connection, peer] : _peers)
+	{
+		if (peer.joined && peer.role == game_socket::Role::Observer && !peer.account.empty() &&
+		    lobby_bans::IsBanned(peer.account, _bans))
+		{
+			observers.push_back(connection);
+		}
+	}
+	for (const auto connection : observers)
+	{
+		Log(spdlog::level::info, fmt::format("The lobby removed the observer of connection {} from the game", connection));
+		Refuse(connection, "kicked");
 	}
 }
 
@@ -1472,6 +1680,23 @@ void LockstepHost::StopTurns()
 	Broadcast(game_socket::GameStop {.turn = *_stoppedAfter});
 }
 
+void LockstepHost::EndJoinWindow()
+{
+	if (!_settings.lobby.has_value() || _godsToWaitFor == _settings.minGods)
+	{
+		return;
+	}
+	_godsToWaitFor = _settings.minGods;
+	Log(spdlog::level::info,
+	    fmt::format("The time to join ended with {} gods in the room: the room starts with {} gods at least", GodsInRoom(),
+	                _settings.minGods));
+}
+
+size_t LockstepHost::GodsInRoom() const
+{
+	return static_cast<size_t>(std::ranges::count(_seats, SeatState::Taken, &Seat::state));
+}
+
 bool LockstepHost::GameOver() const
 {
 	if (AllComputerGods())
@@ -1498,6 +1723,12 @@ bool LockstepHost::HasTurn(uint32_t turn) const
 	if (AllComputerGods())
 	{
 		return _started && _observersJoined && !_stoppedAfter.has_value();
+	}
+	// The turns of a lobby game wait for the loads of the gods' players. A god who leaves in this time leaves in the
+	// first turn after the wait.
+	if (_loadWait)
+	{
+		return false;
 	}
 	return _started && !_stoppedAfter.has_value() && (AnyGodConnected() || !_leaving.empty());
 }

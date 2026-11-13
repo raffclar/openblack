@@ -23,7 +23,6 @@
 #include <gtest/gtest.h>
 
 #include "ECS/Systems/LobbyClientSystemInterface.h"
-#include "Online/LobbyBuild.h"
 #include "Online/LobbyRoom.h"
 
 // Enable this define because the test makes the system itself
@@ -49,17 +48,28 @@ const lobby_api::AccountRef k_Owl {.id = 2, .name = "owl"};
 const lobby_api::AccountRef k_Me {.id = 3, .name = "gavxn"};
 
 /// A lobby with the host in slot 0, owl in slot 1 and the player in slot 2. Slot 4 is for a computer god, and slot 5 is
-/// closed.
+/// closed. The text has the shape of the detail of the lobby that bwgame-service gives (LobbySerializer).
 constexpr std::string_view k_LobbyJson =
-    R"({"id":"l1","code":"K7Q2MX9D","name":"Friday Ring","host":{"id":1,"name":"marek"},"visibility":"public",)"
+    R"({"id":"l1","code":"K7Q2-MX9D","name":"Friday Ring","host":{"id":1,"name":"marek"},"visibility":"public",)"
     R"("locked":true,"map":{"file":"Online Maps/obm_32p_1.map","name":"Ring of gods","sha256":"ab","size":10},)"
-    R"("god_slots":6,"slot_kinds":["open","open","open","open","computer","closed"],)"
+    R"("gods":3,"god_slots":6,"open_slots":4,"free_slots":1,"observers":1,)"
+    R"("slots":[{"index":0,"kind":"open","account":{"id":1,"name":"marek"}},)"
+    R"({"index":1,"kind":"open","account":{"id":2,"name":"owl"}},{"index":2,"kind":"open","account":{"id":3,"name":"gavxn"}},)"
+    R"({"index":3,"kind":"open","account":null},{"index":4,"kind":"computer","account":null},)"
+    R"({"index":5,"kind":"closed","account":null}],)"
     R"("settings":{"time_limit_minutes":60,"conditions":[1,2,3],"observers_allowed":true},)"
-    R"("build_id":"0.1.0+abc/codec34","state":"open","queue_position":null,"countdown_at":null,"game_id":"",)"
-    R"("members":[{"account":{"id":1,"name":"marek"},"role":"god","slot":0,"ready":false,"joined_at":"2026-11-12T10:00:00Z"},)"
-    R"({"account":{"id":2,"name":"owl"},"role":"god","slot":1,"ready":true},)"
-    R"({"account":{"id":3,"name":"gavxn"},"role":"god","slot":2,"ready":false},)"
-    R"({"account":{"id":9,"name":"kim"},"role":"observer","slot":null}]})";
+    R"("build_id":"0.1.0+abc/codec34","state":"open","queue_position":null,"countdown_at":null,"started_at":null,)"
+    R"("created":"2026-11-12T09:59:00.123456Z",)"
+    R"("members":[{"account":{"id":1,"name":"marek"},"role":"god","slot":0,"ready":false,"have_map":true,"away":false,)"
+    R"("host":true,"joined_at":"2026-11-12T10:00:00Z"},)"
+    R"({"account":{"id":2,"name":"owl"},"role":"god","slot":1,"ready":true,"have_map":true,"away":false,"host":false,)"
+    R"("joined_at":"2026-11-12T10:00:01Z"},)"
+    R"({"account":{"id":3,"name":"gavxn"},"role":"god","slot":2,"ready":false,"have_map":true,"away":false,"host":false,)"
+    R"("joined_at":"2026-11-12T10:00:02Z"},)"
+    R"({"account":{"id":9,"name":"kim"},"role":"observer","slot":null,"ready":false,"have_map":false,"away":false,)"
+    R"("host":false,"joined_at":"2026-11-12T10:00:03Z"}],)"
+    R"("you":{"account":{"id":3,"name":"gavxn"},"role":"god","slot":2,"ready":false,"have_map":true,"away":false,)"
+    R"("host":false,"joined_at":"2026-11-12T10:00:02Z"}})";
 
 lobby_api::Lobby TestLobby()
 {
@@ -109,6 +119,13 @@ TEST(LobbiesJson, TheLobbyReads)
 	EXPECT_EQ(lobby.members[0].joinedAt, k_TenOClock);
 	EXPECT_EQ(lobby.members[3].role, lobby_api::MemberRole::Observer);
 	EXPECT_FALSE(lobby.members[3].slot.has_value());
+	EXPECT_TRUE(lobby.members[0].host);
+	EXPECT_FALSE(lobby.members[3].haveMap);
+	EXPECT_EQ(lobby.code, "K7Q2-MX9D");
+	// A slot entry with an index out of the slots is not a lobby
+	EXPECT_FALSE(lobby_api::ParseLobby(
+	                 std::string(k_LobbyJson).replace(std::string(k_LobbyJson).find(R"("index":5)"), 9, R"("index":6)"))
+	                 .has_value());
 	EXPECT_FALSE(lobby_api::ParseLobby(R"({"id":"l1"})").has_value());
 	EXPECT_FALSE(lobby_api::ParseLobby(std::string(k_LobbyJson).replace(0, 1, "[")).has_value());
 }
@@ -116,25 +133,73 @@ TEST(LobbiesJson, TheLobbyReads)
 TEST(LobbiesJson, TheListAndItsEventsRead)
 {
 	const auto list = lobby_api::ParseLobbyList(
-	    R"({"lobbies":[{"id":"a","name":"A","host":{"id":1,"name":"h"},"map":{"file":"m"},"gods":1,"god_slots":2,)"
-	    R"("state":"queued","queue_position":2,"build_id":"b"}],"pool":{"free":0,"total":1}})");
+	    R"({"lobbies":[{"id":"a","name":"A","host":{"id":1,"name":"h"},"map":{"file":"m","name":"","sha256":"","size":0},)"
+	    R"("gods":1,"god_slots":2,"open_slots":2,"free_slots":1,"observers":0,"locked":false,"state":"queued",)"
+	    R"("queue_position":2,"started_at":null,"build_id":"b","created":"2026-11-12T10:00:00+00:00"}],)"
+	    R"("pool":{"free":0,"total":1}})");
 	ASSERT_TRUE(list.has_value());
 	ASSERT_EQ(list->lobbies.size(), 1u);
 	EXPECT_EQ(list->lobbies[0].state, lobby_api::LobbyState::Queued);
 	EXPECT_EQ(list->lobbies[0].queuePosition, 2);
+	EXPECT_EQ(list->lobbies[0].freeSlots, 1);
+	EXPECT_EQ(list->lobbies[0].created, k_TenOClock);
 	ASSERT_TRUE(list->pool.has_value());
 	EXPECT_EQ(list->pool->total, 1);
 	EXPECT_FALSE(lobby_api::ParseLobbyList(R"({"lobbies":[{"id":"a"}]})").has_value());
 
-	const auto removed = lobby_api::ParseLobbyListChange(lobby_api::lobby_events::k_LobbiesRemoved, R"({"id":"a"})");
+	const auto removed =
+	    lobby_api::ParseLobbyListChange(lobby_api::lobby_events::k_LobbiesRemoved, R"({"id":"a","reason":"host_closed"})");
 	ASSERT_TRUE(removed.has_value());
 	EXPECT_FALSE(removed->summary.has_value());
-	// The summary of a change must have the id of the change
-	EXPECT_FALSE(lobby_api::ParseLobbyListChange(
-	                 lobby_api::lobby_events::k_LobbiesChanged,
-	                 R"({"id":"b","summary":{"id":"a","name":"A","host":{"id":1,"name":"h"},"map":{"file":"m"},)"
-	                 R"("gods":1,"god_slots":2,"state":"open"}})")
-	                 .has_value());
+	EXPECT_EQ(removed->reason, "host_closed");
+	// "lobbies.changed" holds the entry of the list in "lobby"
+	const auto changed = lobby_api::ParseLobbyListChange(
+	    lobby_api::lobby_events::k_LobbiesChanged,
+	    R"({"lobby":{"id":"a","name":"A","host":{"id":1,"name":"h"},"map":{"file":"m"},"gods":1,"god_slots":2,)"
+	    R"("state":"open"}})");
+	ASSERT_TRUE(changed.has_value());
+	EXPECT_EQ(changed->id, "a");
+	ASSERT_TRUE(changed->summary.has_value());
+	EXPECT_FALSE(lobby_api::ParseLobbyListChange(lobby_api::lobby_events::k_LobbiesChanged, R"({"id":"a"})").has_value());
+}
+
+TEST(LobbiesJson, TheEventsOfTheServiceRead)
+{
+	const auto change =
+	    lobby_api::ParseLobbyChange(R"({"lobby":"l1","fields":["map","settings"],"ready_cleared":true,"map_cleared":true})");
+	ASSERT_TRUE(change.has_value());
+	EXPECT_EQ(change->fields, (std::vector<std::string> {"map", "settings"}));
+	EXPECT_TRUE(change->readyCleared);
+	EXPECT_TRUE(change->mapCleared);
+	EXPECT_FALSE(lobby_api::ParseLobbyChange(R"({"lobby":"l1","fields":{"name":"x"}})").has_value());
+
+	const auto member = lobby_api::ParseMemberEvent(
+	    R"({"lobby":"l1","account":{"id":2,"name":"owl"},"ready":false,"slot":1,"have_map":false})");
+	ASSERT_TRUE(member.has_value());
+	EXPECT_EQ(member->haveMap, false);
+	const auto left = lobby_api::ParseMemberEvent(R"({"lobby":"l1","account":{"id":2,"name":"owl"},"reason":"left"})");
+	ASSERT_TRUE(left.has_value());
+	EXPECT_EQ(left->reason, "left");
+
+	const auto kick = lobby_api::ParseLobbyKick(R"({"lobby":"l1","by":{"id":1,"name":"marek"},"banned":true})");
+	ASSERT_TRUE(kick.has_value());
+	EXPECT_TRUE(kick->banned);
+	ASSERT_TRUE(kick->by.has_value());
+	EXPECT_EQ(kick->by->name, "marek");
+	// An administrator removes an account with no host
+	const auto byAdmin = lobby_api::ParseLobbyKick(R"({"lobby":"l1","by":null,"banned":false})");
+	ASSERT_TRUE(byAdmin.has_value());
+	EXPECT_FALSE(byAdmin->by.has_value());
+
+	const auto assigned = lobby_api::ParseLobbyStateEvent(R"({"lobby":"l1","game_id":"g7","url":"wss://x/game/g7"})");
+	ASSERT_TRUE(assigned.has_value());
+	EXPECT_EQ(assigned->url, "wss://x/game/g7");
+
+	const auto ticket = lobby_api::ParseLobbyTicket(
+	    R"({"url":"wss://x/game/g7","ticket":"v4.public.t","expires":"2026-11-12T10:01:00Z","role":"god","game_id":"g7"})");
+	ASSERT_TRUE(ticket.has_value());
+	EXPECT_EQ(ticket->gameId, "g7");
+	EXPECT_EQ(ticket->ticket.ticket, "v4.public.t");
 }
 
 TEST(LobbiesJson, TheRequestsWrite)
@@ -158,10 +223,16 @@ TEST(LobbiesJson, TheRequestsWrite)
 
 	EXPECT_EQ(lobby_api::ToJson(lobby_api::LobbyJoinRequest {.password = "pw", .buildId = "b", .slot = 3}),
 	          R"({"build_id":"b","password":"pw","role":"god","slot":3})");
+	EXPECT_EQ(lobby_api::ToJson(lobby_api::LobbyJoinRequest {
+	              .buildId = "b", .buildHash = "cd", .map = lobby_api::MapReport {.haveMap = true, .sha256 = "ab"}}),
+	          R"({"build_hash":"cd","build_id":"b","have_map":true,"map_sha256":"ab","role":"god"})");
 	EXPECT_EQ(lobby_api::ToJson(lobby_api::MemberChangeRequest {.ready = true}), R"({"ready":true})");
+	// A land of the game has no hash: the report has have_map only
+	EXPECT_EQ(lobby_api::ToJson(lobby_api::MemberChangeRequest {.map = lobby_api::MapReport {.haveMap = false}}),
+	          R"({"have_map":false})");
 	// A change with an empty password removes the password
 	EXPECT_EQ(lobby_api::ToJson(lobby_api::LobbyChangeRequest {.password = ""}), R"({"password":""})");
-	EXPECT_EQ(lobby_api::ToJson(lobby_api::HostRequest {.account = 7}), R"({"account":7})");
+	EXPECT_EQ(lobby_api::ToJson(lobby_api::QuickJoinRequest {.buildId = "b"}), R"({"build_id":"b"})");
 }
 
 TEST(LobbiesJson, TheCodeOfAPrivateLobby)
@@ -173,12 +244,6 @@ TEST(LobbiesJson, TheCodeOfAPrivateLobby)
 	EXPECT_FALSE(lobby_api::NormalLobbyCode("K7Q2-MX9U").has_value());
 	EXPECT_FALSE(lobby_api::NormalLobbyCode("../K7Q2MX9D").has_value());
 	EXPECT_EQ(lobby_api::LobbyCodeText("K7Q2MX9D"), "K7Q2-MX9D");
-}
-
-TEST(LobbyBuild, TheIdHasTheVersionOfTheTurns)
-{
-	EXPECT_EQ(online::BuildIdOf("0.1.0+b20f90721", 34), "0.1.0+b20f90721/codec34");
-	EXPECT_NE(online::ThisBuildId().find("/codec"), std::string::npos);
 }
 
 TEST(LobbyEntry, ASignedInPlayerGoesToTheLobbyList)
@@ -223,6 +288,26 @@ TEST(LobbyRoom, ReadyAndSlotRules)
 	EXPECT_FALSE(room.CanPickSlot(3));
 }
 
+TEST(LobbyRoom, ReadyNeedsTheMap)
+{
+	LobbyRoom room(TestLobby(), k_Me);
+	room.Apply(Event("member.changed", fmt::format(R"({{"account":{},"ready":false,"have_map":false}})", Account(k_Me))));
+	EXPECT_FALSE(room.CanReady());
+	EXPECT_FALSE(room.Slots()[2].haveMap);
+	room.Apply(Event("member.changed", fmt::format(R"({{"account":{},"have_map":true}})", Account(k_Me))));
+	EXPECT_TRUE(room.CanReady());
+	// A new map clears the map of each member
+	room.Apply(Event("lobby.changed", R"({"fields":["map"],"ready_cleared":true,"map_cleared":true})"));
+	EXPECT_FALSE(room.CanReady());
+	EXPECT_TRUE(room.TakeReloadWanted());
+	EXPECT_FALSE(room.TakeReloadWanted());
+	// A host with no map cannot start
+	LobbyRoom host(TestLobby(), k_Host);
+	host.Apply(Event("member.changed", fmt::format(R"({{"account":{},"ready":true}})", Account(k_Me))));
+	host.Apply(Event("member.changed", fmt::format(R"({{"account":{},"have_map":false}})", Account(k_Host))));
+	EXPECT_FALSE(host.CanStart());
+}
+
 TEST(LobbyRoom, TheHostStartsWhenEachOtherGodIsReady)
 {
 	LobbyRoom host(TestLobby(), k_Host);
@@ -246,8 +331,11 @@ TEST(LobbyRoom, MemberEventsWriteSystemLines)
 	EXPECT_EQ(room.FindMember(5), nullptr);
 	room.Apply(Event("member.left", fmt::format(R"({{"account":{}}})", Account(k_Owl))));
 	room.Apply(Event("member.banned", R"({"account":{"id":9,"name":"kim"}})"));
-	room.Apply(Event("host.changed", fmt::format(R"({{"account":{}}})", Account(k_Me))));
+	room.Apply(Event("host.changed", fmt::format(R"({{"account":{},"by":{},"line":"gavxn is now the host."}})", Account(k_Me),
+	                                             Account(k_Host))));
 	EXPECT_TRUE(room.IsHost());
+	EXPECT_TRUE(room.OwnMember()->host);
+	EXPECT_FALSE(room.FindMember(k_Host.id)->host);
 	EXPECT_EQ(LineTexts(room), (std::vector<std::string> {
 	                               "Sunfish joined the game.",
 	                               "Sunfish was kicked by marek.",
@@ -274,6 +362,9 @@ TEST(LobbyRoom, TheLobbyEndsWhenTheHostGoesBeforeTheStart)
 	LobbyRoom closed(TestLobby(), k_Me);
 	closed.Apply(Event("lobby.closed", R"({"reason":"host_away"})"));
 	EXPECT_EQ(closed.End()->reason, EndReason::HostLeft);
+	LobbyRoom left(TestLobby(), k_Me);
+	left.Apply(Event("lobby.closed", R"({"lobby":"l1","reason":"host_left"})"));
+	EXPECT_EQ(left.End()->reason, EndReason::HostLeft);
 }
 
 TEST(LobbyRoom, AfterTheStartTheHostLeavesAsAnyPlayer)
@@ -296,6 +387,18 @@ TEST(LobbyRoom, AKickedPlayerGoesBackWithTheVanillaText)
 	ASSERT_EQ(room.Phase(), RoomPhase::Ended);
 	EXPECT_EQ(room.End()->reason, EndReason::Kicked);
 	EXPECT_EQ(EndMessage(*room.End(), lobby_api::ClientKind::Browser), "marek has kicked you from the game.");
+
+	// The service tells the kicked account with "lobby.kicked", also after the start
+	LobbyRoom inGame(TestLobby(), k_Me);
+	inGame.Apply(Event("game.assigned", R"({"lobby":"l1","game_id":"g1","url":"wss://x/game/g1"})"));
+	EXPECT_EQ(inGame.GameUrl(), "wss://x/game/g1");
+	inGame.Apply(Event("lobby.kicked", R"({"lobby":"l2","by":{"id":1,"name":"marek"},"banned":true})"));
+	EXPECT_EQ(inGame.Phase(), RoomPhase::Assigned);
+	inGame.Apply(Event("lobby.kicked", R"({"lobby":"l1","by":{"id":1,"name":"marek"},"banned":true})"));
+	ASSERT_EQ(inGame.Phase(), RoomPhase::Ended);
+	EXPECT_EQ(inGame.End()->reason, EndReason::Banned);
+	EXPECT_EQ(inGame.End()->by, "marek");
+	EXPECT_EQ(inGame.OwnMember(), nullptr);
 }
 
 TEST(LobbyRoom, TheCloseReasons)
@@ -308,7 +411,8 @@ TEST(LobbyRoom, TheCloseReasons)
 	EXPECT_EQ(endOf("host_closed", k_Me), EndReason::HostClosed);
 	EXPECT_EQ(endOf("host_closed", k_Host), EndReason::OwnClose);
 	EXPECT_EQ(endOf("new_version", k_Me), EndReason::NewVersion);
-	EXPECT_EQ(endOf("failed", k_Me), EndReason::GameFailed);
+	EXPECT_EQ(endOf("server_stopped", k_Me), EndReason::GameFailed);
+	EXPECT_EQ(endOf("ended", k_Me), EndReason::GameEnded);
 	EXPECT_EQ(endOf("expired", k_Me), EndReason::Closed);
 	EXPECT_EQ(EndMessage({.reason = EndReason::HostClosed}, lobby_api::ClientKind::Desktop), "The host closed the game.");
 	EXPECT_EQ(EndMessage({.reason = EndReason::NewVersion}, lobby_api::ClientKind::Browser),
@@ -323,14 +427,25 @@ TEST(LobbyRoom, TheCloseReasons)
 TEST(LobbyRoom, ChangesClearTheReady)
 {
 	LobbyRoom room(TestLobby(), k_Me);
-	room.Apply(Event("lobby.changed",
-	                 R"({"fields":{"map":{"file":"Online Maps/mpm_2p_1.map","name":"Two Gods"}},"ready_cleared":true})"));
-	EXPECT_EQ(room.Data().map.name, "Two Gods");
+	// The event names the fields: the ready clears at once, and the lines come with the lobby that the room gets again
+	room.Apply(Event("lobby.changed", R"({"lobby":"l1","fields":["map"],"ready_cleared":true,"map_cleared":true})"));
 	EXPECT_FALSE(room.FindMember(2)->ready);
-	room.Apply(Event("lobby.changed", R"({"fields":{"settings":{"time_limit_minutes":90}},"ready_cleared":true})"));
+	EXPECT_TRUE(LineTexts(room).empty());
+	ASSERT_TRUE(room.TakeReloadWanted());
+	auto lobby = TestLobby();
+	lobby.map = {.file = "Online Maps/mpm_2p_1.map", .name = "Two Gods"};
+	room.Reload(lobby);
+	EXPECT_EQ(room.Data().map.name, "Two Gods");
+	room.Apply(Event("lobby.changed", R"({"lobby":"l1","fields":["settings"],"ready_cleared":true,"map_cleared":false})"));
+	lobby.settings.timeLimitMinutes = 90;
+	room.Reload(lobby);
 	EXPECT_EQ(room.Data().settings.timeLimitMinutes, 90);
-	room.Apply(Event("lobby.changed", R"({"locked":false})"));
+	room.Apply(Event("lobby.changed", R"({"lobby":"l1","fields":["password"],"ready_cleared":false})"));
+	lobby.locked = false;
+	room.Reload(lobby);
 	EXPECT_FALSE(room.Data().locked);
+	// A reload with no change writes no line
+	room.Reload(lobby);
 	EXPECT_EQ(LineTexts(room), (std::vector<std::string> {
 	                               "The host changed the map to Two Gods.",
 	                               "Ready was cleared.",
@@ -363,8 +478,12 @@ TEST(LobbyRoom, TheCountdownWritesEachSecond)
 	EXPECT_EQ(room.Phase(), RoomPhase::Open);
 	EXPECT_FALSE(room.CountdownAt().has_value());
 	EXPECT_EQ(LineTexts(room).back(), "The start was cancelled: owl is not ready.");
-	room.Apply(Event("start.cancelled", R"({"why":"launch_failed"})"));
+	room.Apply(Event("start.cancelled", R"({"why":"server_failed"})"));
 	EXPECT_EQ(LineTexts(room).back(), "The game could not start.");
+	room.Apply(Event("start.cancelled", R"({"why":"not_enough_joined"})"));
+	EXPECT_EQ(LineTexts(room).back(), "Not enough players joined the server.");
+	room.Apply(Event("start.cancelled", R"({"why":"host_cancelled"})"));
+	EXPECT_EQ(LineTexts(room).back(), "The start was cancelled.");
 }
 
 TEST(LobbyRoom, TheQueueShowsThePlace)
@@ -464,6 +583,10 @@ TEST(LobbyList, TheFilterAndTheOrder)
 	EXPECT_FALSE(CanJoin(lobbies[5], k_Build));
 	EXPECT_FALSE(CanJoin(lobbies[1], k_Build));
 	EXPECT_TRUE(CanJoin(lobbies[0], k_Build));
+	// The computer slots and the closed slots take no player: the service gives the free slots
+	auto computers = lobbies[0];
+	computers.freeSlots = 0;
+	EXPECT_TRUE(IsFull(computers));
 }
 
 TEST(LobbyList, TheEventsChangeTheList)
@@ -472,7 +595,7 @@ TEST(LobbyList, TheEventsChangeTheList)
 	list.Replace({.lobbies = {Summary("a", 1, 2, lobby_api::LobbyState::Open, 1)}});
 	const auto summary = R"({"id":"b","name":"B","host":{"id":1,"name":"h"},"map":{"file":"m"},"gods":1,)"
 	                     R"("god_slots":2,"state":"open"})";
-	EXPECT_TRUE(list.Apply(Event("lobbies.changed", fmt::format(R"({{"id":"b","summary":{}}})", summary))));
+	EXPECT_TRUE(list.Apply(Event("lobbies.changed", fmt::format(R"({{"lobby":{}}})", summary))));
 	EXPECT_EQ(list.Entries().size(), 2u);
 	EXPECT_TRUE(list.Apply(Event("lobbies.removed", R"({"id":"a"})")));
 	EXPECT_EQ(list.Find("a"), nullptr);
@@ -661,8 +784,16 @@ TEST_F(LobbyRoomSystemTest, TheRoomCallsGoToTheLobby)
 	EXPECT_EQ(_client.calls.back().method, HttpMethod::Put);
 	EXPECT_EQ(_client.calls.back().path, "/lobbies/l1/members/me");
 	EXPECT_EQ(_client.calls.back().body, R"({"ready":true})");
-	_client.Answer(200, R"({"account":{"id":3,"name":"gavxn"},"role":"god","slot":2,"ready":true})");
+	// The service gives the whole lobby back
+	auto ready = std::string(k_LobbyJson);
+	const auto own = ready.find(R"("id":3,"name":"gavxn"},"role":"god","slot":2,"ready":false)");
+	ready.replace(ready.find(R"("ready":false)", own), 13, R"("ready":true)");
+	_client.Answer(200, ready);
 	EXPECT_TRUE(_system.Room()->OwnMember()->ready);
+
+	_system.ReportMap({.haveMap = true, .sha256 = "ab"}, {});
+	EXPECT_EQ(_client.calls.back().body, R"({"have_map":true,"map_sha256":"ab"})");
+	_client.Answer(200, k_LobbyJson);
 
 	_system.PickSlot(3, {});
 	EXPECT_EQ(_client.calls.back().body, R"({"slot":3})");
@@ -675,8 +806,9 @@ TEST_F(LobbyRoomSystemTest, TheRoomCallsGoToTheLobby)
 	EXPECT_EQ(_client.calls.back().path, "/lobbies/l1/members/2");
 	_client.Answer(204, "");
 	_system.MakeHost(2, {});
-	EXPECT_EQ(_client.calls.back().path, "/lobbies/l1/host");
-	EXPECT_EQ(_client.calls.back().body, R"({"account":2})");
+	EXPECT_EQ(_client.calls.back().method, HttpMethod::Post);
+	EXPECT_EQ(_client.calls.back().path, "/lobbies/l1/members/2/make-host");
+	EXPECT_TRUE(_client.calls.back().body.empty());
 	_client.Answer(200, "{}");
 	_system.Change({.name = "New"}, {});
 	EXPECT_EQ(_client.calls.back().method, HttpMethod::Patch);
@@ -710,11 +842,13 @@ TEST_F(LobbyRoomSystemTest, TheStartAndTheCountdown)
 		kind = result.error.kind;
 	});
 	EXPECT_EQ(_client.calls.back().path, "/lobbies/l1/tickets");
-	_client.Answer(200, R"({"url":"https://bw.example/game/s1/g1","ticket":"v4.public.x","expires":"2026-11-12T10:01:00Z"})");
+	_client.Answer(201, R"({"url":"https://bw.example/game/s1/g1","ticket":"v4.public.x","expires":"2026-11-12T10:01:00Z",)"
+	                    R"("role":"god","game_id":"g1"})");
 	// The game socket must be encrypted
 	EXPECT_EQ(kind, LobbyErrorKind::AddressRefused);
 	_system.RequestTicket([&](auto&& result) { ticket = result.value; });
-	_client.Answer(200, R"({"url":"wss://bw.example/game/s1/g1","ticket":"v4.public.x","expires":"2026-11-12T10:01:00Z"})");
+	_client.Answer(201, R"({"url":"wss://bw.example/game/s1/g1","ticket":"v4.public.x","expires":"2026-11-12T10:01:00Z",)"
+	                    R"("role":"god","game_id":"g1"})");
 	ASSERT_TRUE(ticket.has_value());
 	EXPECT_EQ(ticket->url, "wss://bw.example/game/s1/g1");
 }
@@ -722,6 +856,12 @@ TEST_F(LobbyRoomSystemTest, TheStartAndTheCountdown)
 TEST_F(LobbyRoomSystemTest, TheEndStopsTheChannelOfTheRoom)
 {
 	JoinTestLobby();
+	// A change of the lobby gets the lobby again
+	_client.Deliver(Event("lobby.changed", R"({"lobby":"l1","fields":["name"],"ready_cleared":true})"));
+	ASSERT_FALSE(_client.calls.empty());
+	EXPECT_EQ(_client.calls.back().path, "/lobbies/l1");
+	_client.Answer(200, k_LobbyJson);
+	EXPECT_EQ(RoomLineText(_system.Room()->Lines().back()), "Ready was cleared.");
 	_client.Deliver(Event("lobby.closed", R"({"reason":"host_closed"})"));
 	ASSERT_NE(_system.Room(), nullptr);
 	EXPECT_EQ(_system.Room()->End()->reason, EndReason::HostClosed);
@@ -772,7 +912,8 @@ TEST_F(LobbyRoomSystemTest, TheListUsesItsTagAndItsEvents)
 	_system.WatchList(true);
 	EXPECT_EQ(_client.channels, (std::vector<std::string> {"lobbies"}));
 	_system.RefreshList({});
-	EXPECT_EQ(_client.calls.back().path, "/lobbies");
+	// The list asks for the started lobbies and the other builds too, for the filters of the screen
+	EXPECT_EQ(_client.calls.back().path, "/lobbies?in_game=1&version=1&build=0.1.0%2Babc%2Fcodec34");
 	EXPECT_TRUE(_client.calls.back().headers.empty());
 	_client.Answer(200,
 	               R"({"lobbies":[{"id":"a","name":"A","host":{"id":1,"name":"h"},"map":{"file":"m"},"gods":1,)"

@@ -41,10 +41,11 @@ public:
 	GameRole& operator=(GameRole&&) = delete;
 
 	/// Gets the keys of the tickets and starts to listen. The room has the god slots of the land. A land that the players
-	/// do not have goes to the lobby, which gives it to the players of the room. Gives the error, or none.
+	/// do not have goes to the lobby, which gives it to the players of the room. The room refuses a client that gives
+	/// another SHA-256 of the file of the land than landSha256. Gives the error, or none.
 	[[nodiscard]] std::optional<std::string> Start(const NetworkSettings& settings, game_socket::Start start,
 	                                               uint64_t landChecksum, uint8_t godSlots,
-	                                               std::optional<lobby_status::CustomMap> customMap);
+	                                               std::optional<lobby_status::CustomMap> customMap, std::string landSha256);
 	/// Once a frame, before the turns: the sockets, the joins, the start and the defeat of the gods that did not come back
 	void Update();
 	/// The winning conditions in the report of the host

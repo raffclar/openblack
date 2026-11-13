@@ -155,6 +155,8 @@ LobbyError LobbyErrorOf(const online::HttpResponse& response)
 	{
 		error.detail = !problem->detail.empty() ? problem->detail : problem->title;
 		error.code = problem->code;
+		error.members = problem->members;
+		error.slots = problem->slots;
 	}
 	if (response.status == 401)
 	{

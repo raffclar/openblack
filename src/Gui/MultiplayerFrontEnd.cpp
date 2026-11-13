@@ -20,6 +20,7 @@
 
 #include "ECS/Systems/ClanCreatureSystemInterface.h"
 #include "ECS/Systems/LobbyClientSystemInterface.h"
+#include "ECS/Systems/LobbyRoomSystemInterface.h"
 #include "ECS/Systems/NetworkGameSystemInterface.h"
 #include "Online/GodsRingMap.h"
 #include "Online/GodsRingMapPackage.h"
@@ -75,6 +76,10 @@ MultiplayerFrontEnd::MultiplayerFrontEnd(Services services, Settings settings)
 MultiplayerFrontEnd::~MultiplayerFrontEnd()
 {
 	LeaveRoom();
+	if (_services.lobbyRoom != nullptr)
+	{
+		_services.lobbyRoom->WatchList(false);
+	}
 	if (_services.lobby != nullptr)
 	{
 		_services.lobby->WatchServers(false);
@@ -108,6 +113,7 @@ void MultiplayerFrontEnd::Update()
 	FollowLanChat();
 	FollowStart();
 	FollowMapDownload();
+	FollowLobbySession();
 	if (_flow.box == Box::GameList)
 	{
 		FollowSelectedGame();
@@ -117,11 +123,13 @@ void MultiplayerFrontEnd::Update()
 	    _services.lobby->GetState() == ecs::systems::LobbySessionState::LoggedOut && !IsStarted())
 	{
 		_loggedIn = false;
-		if (_flow.box == Box::GameList || _flow.box == Box::Room || _flow.box == Box::Conditions)
+		const bool lobbyBox = _flow.box == Box::LobbyList || _flow.box == Box::CreateLobby || _flow.box == Box::LobbyRoom;
+		if (_flow.box == Box::GameList || _flow.box == Box::Room || _flow.box == Box::Conditions || lobbyBox)
 		{
 			++_generation;
 			_busy = false;
 			LeaveRoom();
+			ForgetLobbyRoom();
 			_services.lobby->WatchServers(false);
 			_flow.box = Box::Login;
 			_message = Message::ConnectionFailed;
@@ -159,6 +167,15 @@ void MultiplayerFrontEnd::FollowSession()
 	}
 	using State = online::NetworkSession::State;
 	const auto state = session->GetState();
+	if (!_joined && session->GetJoined().has_value() && state != State::Ended && _lobbyGame)
+	{
+		// The game of a lobby session starts when its players joined: the room of the session stays on its box
+		_busy = false;
+		_joined = true;
+		_observer = session->GetJoined()->role == game_socket::Role::Observer;
+		TakeHostPicks(session->GetJoined()->start);
+		return;
+	}
 	if (!_joined && session->GetJoined().has_value() && state != State::Ended)
 	{
 		// The server let the player in: the room opens
@@ -179,6 +196,17 @@ void MultiplayerFrontEnd::FollowSession()
 	}
 	_joining = false;
 	_busy = false;
+	if (_lobbyGame)
+	{
+		// The game server of a lobby session refused the player, or the connection went: the box tells why
+		_lobbyGame = false;
+		_joined = false;
+		const auto refusal =
+		    session->GetEnd() == online::NetworkSession::End::Refused ? session->RefusedReason() : std::string();
+		ShowLobbyNotice(ToUtf16(lobby_screens::GameRefusalText(refusal, _settings.browser ? lobby_api::ClientKind::Browser
+		                                                                                  : lobby_api::ClientKind::Desktop)));
+		return;
+	}
 	if (_joined)
 	{
 		// The server removed the player, the room's server went, or the player could not come back to it
@@ -303,6 +331,13 @@ void MultiplayerFrontEnd::Next()
 		break;
 	case Box::FindGames:
 		multiplayer::Next(_flow);
+		// A player with a session goes to the list at once
+		if (_flow.box == Box::Login && UsesLobbySessions() &&
+		    _services.lobby->GetState() == ecs::systems::LobbySessionState::LoggedIn && !_services.lobby->IsEmailRequired())
+		{
+			_loggedIn = true;
+			EnterGameList();
+		}
 		if (_flow.box == Box::GameList)
 		{
 			EnterGameList();
@@ -318,6 +353,9 @@ void MultiplayerFrontEnd::Next()
 	case Box::Login:
 	case Box::GameList:
 	case Box::Conditions:
+	case Box::LobbyList:
+	case Box::CreateLobby:
+	case Box::LobbyRoom:
 		break;
 	}
 }
@@ -355,6 +393,26 @@ void MultiplayerFrontEnd::Back()
 		multiplayer::Back(_flow);
 		EnterGameList();
 		break;
+	case Box::LobbyList:
+		if (_services.lobbyRoom != nullptr)
+		{
+			_services.lobbyRoom->WatchList(false);
+		}
+		multiplayer::Back(_flow);
+		break;
+	case Box::CreateLobby:
+		// Back from the settings of the room goes to the room and keeps the settings
+		if (_editsLobby)
+		{
+			_editsLobby = false;
+			_flow.box = Box::LobbyRoom;
+			break;
+		}
+		EnterLobbyList();
+		break;
+	case Box::LobbyRoom:
+		LeaveLobby();
+		break;
 	default:
 		multiplayer::Back(_flow);
 		_left = _flow.left;
@@ -387,6 +445,13 @@ void MultiplayerFrontEnd::AnswerMessage(Answer answer)
 		LeaveRoom();
 		_flow.box = Box::GameList;
 		EnterGameList();
+		break;
+	case Message::LobbyNotice:
+	case Message::LobbyQuestion:
+	case Message::LobbyPassword:
+	case Message::LobbyCode:
+	case Message::LobbyNewPassword:
+		AnswerLobbyMessage(message, answer);
 		break;
 	default:
 		break;
@@ -595,6 +660,11 @@ void MultiplayerFrontEnd::FollowLanChat()
 
 void MultiplayerFrontEnd::EnterGameList()
 {
+	if (_flow.kind == LobbyKind::Internet && UsesLobbySessions())
+	{
+		EnterLobbyList();
+		return;
+	}
 	_flow.box = Box::GameList;
 	_selectedGame.reset();
 	_selectedId.clear();
@@ -859,6 +929,8 @@ void MultiplayerFrontEnd::RoomOpened(std::string ticket, std::u16string password
 	    .origin = _flow.kind == LobbyKind::Lan ? online::GameOrigin::Lan : online::GameOrigin::InternetLobby,
 	    // Only a room that the search of the local network found gives the key of its server
 	    .serverKey = _flow.kind == LobbyKind::Lan ? online::server_key::ParseHex(_room->key) : std::nullopt,
+	    .testBuildId = std::nullopt,
+	    .roomName = _room->hostname,
 	});
 	if (!_joining)
 	{
@@ -1277,7 +1349,7 @@ void MultiplayerFrontEnd::ShowBox(Box box, LobbyKind kind)
 	_busy = false;
 	++_generation;
 	_flow = {.box = box, .kind = kind};
-	if (box == Box::GameList)
+	if (box == Box::GameList || box == Box::LobbyList)
 	{
 		EnterGameList();
 	}

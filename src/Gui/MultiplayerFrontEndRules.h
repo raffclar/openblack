@@ -41,6 +41,12 @@ enum class Box : uint8_t
 	Room,
 	/// The page of the game room behind Next: the winning conditions, the time limit and Ready
 	Conditions,
+	/// The list of the lobby sessions of the lobby service, in place of the game list on the internet
+	LobbyList,
+	/// The box that makes a lobby session with the player as its host
+	CreateLobby,
+	/// The room of a lobby session: the slots, the ready ticks, the chat and the controls of the host
+	LobbyRoom,
 };
 
 /// How the player finds the games
@@ -110,6 +116,16 @@ enum class Message : uint8_t
 	/// "ERROR: Could not download map from Internet. Please check your Internet connection.", with OK: the lobby did not
 	/// give the land of the room
 	CouldNotDownloadMap,
+	/// A text of the lobby sessions with OK. The front end gives the text.
+	LobbyNotice,
+	/// A question of the lobby sessions with Yes and No. The front end gives the text.
+	LobbyQuestion,
+	/// The box asks for the password of a lobby session, with an edit box and OK
+	LobbyPassword,
+	/// The box asks for the code of a private lobby session, with an edit box and OK
+	LobbyCode,
+	/// The host types a new password for the lobby session, with an edit box and OK. An empty password removes it.
+	LobbyNewPassword,
 };
 
 /// The buttons of a message box, as the game's message boxes have them

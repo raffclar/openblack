@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <array>
 #include <functional>
 #include <memory>
 #include <optional>
@@ -107,6 +108,8 @@ private:
 		std::u16string text;
 		Dialog answers;
 		StaticText* textControl {nullptr};
+		/// The box that takes the text of a question of the lobby sessions: a password or a code
+		EditBox* edit {nullptr};
 	};
 
 	[[nodiscard]] std::u16string Text(std::string_view name) const;
@@ -125,6 +128,21 @@ private:
 	void DrawPictures(const DialogPainter& painter) const;
 	void SendChat();
 	void Join();
+
+	// The lobby sessions (MultiplayerLobbyBoxes.cpp)
+	void BuildLobbyList(Dialog& dialog);
+	void BuildCreateLobby(Dialog& dialog);
+	void BuildLobbyRoom(Dialog& dialog);
+	void SyncLobbyList();
+	void SyncCreateLobby();
+	void SyncLobbyRoom();
+	/// The controls of a message of the lobby sessions: the text, and an edit box for a question that takes a text
+	void BuildLobbyMessage(MessageShown& shown);
+	/// The keys of the boxes of the lobby sessions. True when the key did something.
+	bool LobbyKeyDown(int key);
+	/// The text that shows when the pointer is on a warning symbol, drawn over the box
+	void DrawWarningTip(const DialogPainter& painter) const;
+	[[nodiscard]] bool IsLobbyBox() const;
 	[[nodiscard]] Dialog* Active() const { return _dialog.get(); }
 
 	const TextDatabase& _texts;
@@ -181,6 +199,36 @@ private:
 	CheckBox* _ready {nullptr};
 	size_t _chatLines {0};
 	std::optional<size_t> _shownTab;
+
+	// The boxes of the lobby sessions
+	/// The sessions in the lines of the lobby list
+	std::vector<lobby_api::LobbySummary> _shownLobbies;
+	std::array<Button*, lobby_screens::k_ColumnCount> _headings {};
+	EditBox* _search {nullptr};
+	CheckBox* _showFull {nullptr};
+	CheckBox* _showLocked {nullptr};
+	CheckBox* _showInGame {nullptr};
+	CheckBox* _showOtherVersions {nullptr};
+	StaticText* _detail {nullptr};
+	StaticText* _servers {nullptr};
+	StaticText* _status {nullptr};
+	StaticText* _mapLine {nullptr};
+	StaticText* _countValue {nullptr};
+	StaticText* _timeValue {nullptr};
+	List* _slots {nullptr};
+	List* _mapList {nullptr};
+	std::vector<Button*> _hostButtons;
+	Button* _takeSlot {nullptr};
+	Button* _passwordButton {nullptr};
+	Button* _closeButton {nullptr};
+	Button* _settingsButton {nullptr};
+	CheckBox* _privateBox {nullptr};
+	EditBox* _sessionName {nullptr};
+	/// The revision of the room that the controls show
+	std::optional<uint32_t> _shownRevision;
+	glm::ivec2 _pointer {-1, -1};
+	/// The places of the warning symbols of the last draw, for the text under the pointer
+	mutable std::vector<DialogRect> _warningRects;
 
 	// The pictures of the game room
 	ThumbnailSource _thumbnailSource;
