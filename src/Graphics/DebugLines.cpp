@@ -30,27 +30,13 @@ std::unique_ptr<Mesh> DebugLines::CreateDebugLines(const Vertex* data, uint32_t 
 	const auto* mem = bgfx::makeRef(data, static_cast<uint32_t>(vertexCount * sizeof(data[0])));
 	auto* vertexBuffer = new VertexBuffer("DebugLines", mem, decl);
 	bgfx::frame();
-	auto mesh = std::make_unique<Mesh>(vertexBuffer, nullptr, Mesh::Topology::LineList);
+	auto mesh = std::make_unique<Mesh>(vertexBuffer, nullptr);
 	bgfx::frame();
 	// The mesh gives its lines again after a restore of the graphics device, thus the device keeps no copy
 	const auto* first = reinterpret_cast<const uint8_t*>(data);
 	mesh->KeepContentsForRestore(std::vector<uint8_t>(first, first + (vertexCount * sizeof(data[0]))));
 
 	return mesh;
-}
-
-std::unique_ptr<Mesh> DebugLines::CreateCross()
-{
-	static const std::array<Vertex, 6> cross = {
-	    Vertex {glm::vec4(0.5f, 0.0f, 0.0f, 1.0f), glm::vec4(1.0f, 0.0f, 0.0f, 1.0f)},
-	    Vertex {glm::vec4(-0.5f, 0.0f, 0.0f, 1.0f), glm::vec4(1.0f, 0.0f, 0.0f, 1.0f)},
-	    Vertex {glm::vec4(0.0f, 0.5f, 0.0f, 1.0f), glm::vec4(0.0f, 1.0f, 0.0f, 1.0f)},
-	    Vertex {glm::vec4(0.0f, -0.5f, 0.0f, 1.0f), glm::vec4(0.0f, 1.0f, 0.0f, 1.0f)},
-	    Vertex {glm::vec4(0.0f, 0.0f, 0.5f, 1.0f), glm::vec4(0.0f, 0.0f, 1.0f, 1.0f)},
-	    Vertex {glm::vec4(0.0f, 0.0f, -0.5f, 1.0f), glm::vec4(0.0f, 0.0f, 1.0f, 1.0f)},
-	};
-
-	return CreateDebugLines(cross.data(), static_cast<uint32_t>(cross.size()));
 }
 
 std::unique_ptr<Mesh> DebugLines::CreateBox(const glm::vec4& color)
@@ -73,14 +59,4 @@ std::unique_ptr<Mesh> DebugLines::CreateBox(const glm::vec4& color)
 	};
 
 	return CreateDebugLines(box.data(), static_cast<uint32_t>(box.size()));
-}
-
-std::unique_ptr<Mesh> DebugLines::CreateLine(const glm::vec4& from, const glm::vec4& to, const glm::vec4& color)
-{
-	std::array<Vertex, 2> line = {
-	    Vertex {from, color},
-	    Vertex {to, color},
-	};
-
-	return CreateDebugLines(line.data(), static_cast<uint32_t>(line.size()));
 }

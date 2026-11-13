@@ -1279,6 +1279,9 @@ struct Command
 		/// within 10 metres) at once, as if picked up from where it lies, such as a pile of dung that a script made.
 		/// Needs no creature
 		HandTakeNear,
+		/// The player's hand taps the scaffold nearest a point (point, from the middle of the map, within 10 metres), as a
+		/// short press of the Action button on it does: one scaffold breaks off it. Needs no creature
+		TapScaffoldNear,
 		/// The player clicks the creature nearest a point (point, from the middle of the map), as the Action button pressed
 		/// and let go on it does, such as to answer a creature swap offer. Needs no creature of the scenario
 		ClickCreatureNear,

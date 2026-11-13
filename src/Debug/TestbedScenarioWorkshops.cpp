@@ -130,6 +130,33 @@ void testbed_scenarios::AddWorkshopScenarios(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "objects.workshop_yard_copies_in_scaffold_order",
+	    .name = "The see-through copies at the yard places of one workshop draw in the order of its scaffolds",
+	    .facet = Facet::Objects,
+	    .description = "A Celtic town of the player's with a village centre, a workshop with no wood, its yard towards the "
+	                   "camera, and a loose scaffold that is worth three scaffolds. After one second the scaffold is let go "
+	                   "near the first place of the yard and goes into it. After four seconds and after five seconds the "
+	                   "hand taps the scaffold.",
+	    .expected = "Each tap breaks one small scaffold off, and the parts move apart. The workshop counts the three "
+	                "scaffolds and keeps a place of the yard for each. A see-through copy pulses in each place while its "
+	                "scaffold is away from it. The game draws the copies of one workshop in the order of its scaffolds, "
+	                "the newest first.",
+	    .environment = {.dispenserGrid = false, .cursor = glm::vec2(0.5f, 0.5f)},
+	    .framing = {.shot = Shot::Overview, .include = {k_Workshop - glm::vec2 {12.0f}, k_Workshop + glm::vec2 {12.0f}}},
+	    .objects = {{.type = AbodeInfo::CelticTownCentre, .offset = {0.0f, 50.0f}},
+	                {.type = AbodeInfo::CelticWorkshop, .offset = k_Workshop, .yawDegrees = 180.0f, .storedWood = 0},
+	                {.type = ScaffoldInfo::Normal, .offset = k_Workshop + glm::vec2 {10.0f, 10.0f}, .scale = 1.1f}},
+	    .commands = {{.kind = Command::Kind::TapScaffoldNear, .delaySeconds = 4.0f, .point = k_FirstPlace},
+	                 {.kind = Command::Kind::TapScaffoldNear, .delaySeconds = 1.0f, .point = k_FirstPlace}},
+	    .townBeliefInPlayer = 1.0f,
+	    .throws = {{.object = 2,
+	                .from = k_FirstPlace + glm::vec2 {0.7f, -0.7f},
+	                .height = 1.0f,
+	                .velocity = {0.0f, -1.0f, 0.0f},
+	                .delaySeconds = 1.0f}},
+	});
+
+	all.push_back({
 	    .id = "objects.scaffold_tap_breaks",
 	    .name = "A tap breaks one scaffold off a scaffold, and a storage pit takes a scaffold as wood",
 	    .facet = Facet::Objects,

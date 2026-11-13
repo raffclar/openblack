@@ -66,8 +66,6 @@ constexpr float k_TurnSeconds = std::chrono::duration<float>(TimeSystemInterface
 constexpr float k_TurnsPerSecond = 1.0f / k_TurnSeconds;
 constexpr auto k_TurnMilliseconds = static_cast<uint32_t>(TimeSystemInterface::k_TurnDuration.count());
 
-/// The hand's speed is smoothed over about this many seconds
-constexpr float k_HandSpeedSmoothing = 0.1f;
 /// How far round a point a struck shield is looked for, to show its spark
 constexpr float k_ShieldStrikeMargin = 2.0f;
 

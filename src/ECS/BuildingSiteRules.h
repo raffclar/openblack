@@ -120,9 +120,6 @@ inline constexpr float k_FootHeight = 2.5f;
 /// The places round a round building: a circle of its reach about the middle of its box, each at the land's height
 [[nodiscard]] Places CirclePlaces(glm::vec3 centre, float reach, const std::function<float(glm::vec2)>& landHeight);
 
-/// A temple's site keeps six piles of wood round it, each a set distance out from the heart, a seventh of a turn apart
-/// from where its worship sites start, less a turn's offset
-inline constexpr size_t k_TemplePiles = 6;
 inline constexpr float k_TemplePileDistance = 22.0f;
 [[nodiscard]] float TemplePileAngle(float heartYAngle, size_t pile);
 

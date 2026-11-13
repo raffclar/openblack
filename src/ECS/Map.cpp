@@ -32,11 +32,6 @@ MapInterface::CellId MapInterface::GetGridCell(const glm::vec3& pos)
 	return GetGridCell(glm::xz(pos));
 }
 
-glm::vec2 MapInterface::GetCellCenter(const MapInterface::CellId& cellId)
-{
-	return glm::vec2(cellId.x << 0x10, cellId.y << 0x10) / k_PositionToGridFactor + 5.0f;
-}
-
 bool openblack::ecs::InMapCells(const Registry& registry, entt::entity entity)
 {
 	if (Locator::entitiesMap::has_value())

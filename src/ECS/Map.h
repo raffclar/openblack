@@ -36,7 +36,6 @@ public:
 
 	static CellId GetGridCell(const glm::vec2& pos);
 	static CellId GetGridCell(const glm::vec3& pos);
-	static glm::vec2 GetCellCenter(const CellId& cellId);
 
 	virtual ~MapInterface() = default;
 

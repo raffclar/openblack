@@ -2288,8 +2288,6 @@ void AdvisorSpirit::UpdateLookTarget(float dt, bool engaged, bool partnerOut, bo
 	{
 		mode = 2;
 	}
-	_lookMode = mode;
-
 	switch (mode)
 	{
 	case 1: // the partner's model point

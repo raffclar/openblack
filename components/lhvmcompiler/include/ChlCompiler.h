@@ -61,8 +61,6 @@ struct CompileResult
 	/// The program, unless there were errors
 	std::optional<LHVMFile> program;
 	std::vector<CompileDiagnostic> diagnostics;
-
-	[[nodiscard]] bool Succeeded() const { return program.has_value(); }
 };
 
 /// Compile source files into a program

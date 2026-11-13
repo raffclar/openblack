@@ -40,7 +40,6 @@ public:
 	FilmCameraPath() = default;
 	explicit FilmCameraPath(const cam::CM2Path& path);
 
-	[[nodiscard]] uint32_t GetDurationMs() const { return _durationMs; }
 	[[nodiscard]] const std::vector<Point>& GetPoints() const { return _points; }
 
 	/// The camera at a time into the path, in milliseconds. A time past the end takes the last millisecond. The

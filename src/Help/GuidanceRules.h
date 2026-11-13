@@ -113,7 +113,6 @@ template <typename Draw>
 /// The advisors' remarks a kind says, its texts in the game's info (one row of 34, ended by a 0)
 constexpr size_t k_RemarkSlots = 34;
 using RemarkTexts = std::array<uint32_t, k_RemarkSlots>;
-constexpr size_t k_RemarkRows = 22;
 /// The remarks' row of a kind, for the kinds of advisors' remarks
 [[nodiscard]] std::optional<size_t> RemarkRow(Kind kind);
 /// How many of a row's texts may be picked: those before its first 0, but never the 34th, which is never said even in a

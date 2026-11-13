@@ -64,8 +64,4 @@ enum class Problem : uint8_t
 /// - no clan creature gives none, and the god brings the creature file of its player.
 [[nodiscard]] std::optional<std::vector<uint8_t>> StartData(const lobby_api::ClanCreatureReply& reply);
 
-/// The files of the creature of the profile picked now, from the services of the game. None without a profile or a
-/// folder for the files.
-[[nodiscard]] std::optional<Paths> PlayersCreaturePaths();
-
 } // namespace openblack::creature_upload

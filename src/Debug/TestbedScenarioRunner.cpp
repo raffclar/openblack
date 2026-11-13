@@ -964,6 +964,11 @@ void Runner::Give(const Command& command)
 		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), HandTakeNear(command)));
 		return;
 	}
+	if (command.kind == Kind::TapScaffoldNear)
+	{
+		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), TapScaffoldNear(command)));
+		return;
+	}
 	if (command.kind == Kind::RunScript)
 	{
 		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), RunScript(command)));

@@ -82,7 +82,6 @@ public:
 	[[nodiscard]] bool IsActive() const noexcept { return _question.has_value() || _nameActive; }
 	/// The question being asked or the message shown, empty while there is none
 	[[nodiscard]] std::u16string_view GetQuestion() const noexcept;
-	[[nodiscard]] bool IsAskingName() const noexcept { return _nameActive; }
 
 	void MouseMove(glm::ivec2 point);
 	void MouseDown(glm::ivec2 point);

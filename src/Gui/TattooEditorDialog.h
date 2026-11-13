@@ -86,8 +86,6 @@ public:
 	/// Whether it has a frame of its own, as from the main menu
 	[[nodiscard]] bool IsFramed() const noexcept { return _framed; }
 
-	/// The symbols' colour
-	[[nodiscard]] glm::u8vec4 GetTint() const noexcept { return _tint; }
 	[[nodiscard]] const DraggedSymbol& GetSymbol(size_t index) const { return *_symbols.at(index); }
 
 	/// Where the controls are, for hit tests
@@ -120,7 +118,6 @@ private:
 	ColourPicker* _palette {nullptr};
 	ColourPicker* _brightness {nullptr};
 	std::array<DraggedSymbol*, 16> _symbols {};
-	glm::u8vec4 _tint {255, 255, 255, 255};
 	std::span<const std::array<uint8_t, 3>> _paletteColours;
 	/// What the held controls want of the editor this frame
 	ecs::systems::TattooEditorSystemInterface* _editor {nullptr};

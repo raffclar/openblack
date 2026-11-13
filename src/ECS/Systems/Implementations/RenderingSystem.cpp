@@ -919,7 +919,7 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		    auto* slotMap = &_instanceSlots;
 		    std::optional<uint8_t> fade;
 		    std::optional<uint8_t> seeThroughRef;
-		    std::optional<glm::vec3> sortPoint;
+		    std::optional<RenderContext::SortPoint> sortPoint;
 		    auto level = graphics::mesh_detail::Mesh::High;
 		    bool gone = false;
 		    const auto* detail = detailMeshes.TryGet(entity);
@@ -974,12 +974,18 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 			    fade = alpha;
 			    _fadingThings.emplace(entity, alpha);
 			    seeThroughRef = openblack::ecs::yard_copy::SeeThroughRef(ghost->alpha);
-			    // The copy sorts by the distance of its workshop, not by its own place
+			    // The copy sorts by the distance of its workshop, not by its own place. The copies of one workshop come in
+			    // the order of its scaffold list.
 			    if (const auto* workshop =
 			            registry.Valid(ghost->workshop) ? registry.TryGet<const Transform>(ghost->workshop) : nullptr;
 			        workshop != nullptr)
 			    {
-				    sortPoint = workshop->position;
+				    const auto* yard = registry.TryGet<const Workshop>(ghost->workshop);
+				    const auto index =
+				        yard != nullptr ? std::ranges::find(yard->scaffolds, ghost->scaffold) - yard->scaffolds.begin() : 0;
+				    sortPoint = RenderContext::SortPoint {
+				        .point = workshop->position,
+				        .order = graphics::zsort::YardCopyOrder(ListPlace(ghost->workshop), static_cast<uint32_t>(index))};
 			    }
 		    }
 		    else if (openblack::ecs::high_detail_rules::DrawsHighMeshAtAnyDistance(detail != nullptr, highDetails.Has(entity),

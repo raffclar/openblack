@@ -34,8 +34,6 @@ inline constexpr float k_PullRadius = 50.0f;
 inline constexpr float k_FadeDelaySeconds = 2.0f;
 /// Then it eases open or shut over this long
 inline constexpr float k_FadeSeconds = 5.0f;
-/// A fade is over, and the vortex fully open or gone, once more than this much time has passed
-inline constexpr float k_FadeOverSeconds = k_FadeDelaySeconds + k_FadeSeconds;
 
 /// The levelled ground's reach: the land is pulled fully to the average within the inner radius, less and less out to
 /// the outer one, and not at all beyond it
