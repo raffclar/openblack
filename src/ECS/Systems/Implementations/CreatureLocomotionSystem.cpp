@@ -222,11 +222,6 @@ struct Moves
 		const auto* animation = Get(index);
 		return animation != nullptr ? static_cast<float>(std::max(animation->duration, 1u)) : 1.0f;
 	}
-	[[nodiscard]] glm::vec2 Displacement(size_t index) const
-	{
-		const auto* animation = Get(index);
-		return animation != nullptr ? glm::vec2(animation->displacement.x, animation->displacement.z) : glm::vec2(0.0f);
-	}
 	[[nodiscard]] bool CanWalk() const { return Has(locomotion::animations::k_Walk) && Has(locomotion::animations::k_Run); }
 	[[nodiscard]] bool HasAll(size_t first) const { return Has(first) && Has(first + 1) && Has(first + 2); }
 	/// The pair blended into one animation lasts between their lengths, to the nearest millisecond

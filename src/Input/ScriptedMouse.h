@@ -16,6 +16,7 @@
 
 #include <glm/vec2.hpp>
 
+#include "Common/Platform.h"
 #include "GameActionMapInterface.h"
 
 union SDL_Event;
@@ -39,6 +40,13 @@ using ScriptedPointer = GameActionInterface::ScriptedPointer;
 /// turning and tilting and start them on the next press. The middle offers neither, and is the same whatever the
 /// player's own mouse is doing, so an agent's runs start alike.
 [[nodiscard]] glm::ivec2 RestingPointer(glm::ivec2 windowSize);
+
+/// Whether the game can read the player's cursor from the window, rather than rest the pointer in the middle.
+///
+/// A background run never reads the cursor of the desk. On the desktop, SDL knows where the cursor is as soon as the
+/// cursor goes over the window. A web browser gives the window the mouse when the page opens, but tells the position
+/// only with the first movement of the mouse over the page. Until then, SDL reports the top left corner.
+[[nodiscard]] bool PlayerCursorSeen(Platform platform, bool background, bool windowHasMouse, bool pageMouseMoved);
 
 /// Whether the event is a move, a button or a wheel turn of the mouse of the desk, not of the inspector's mouse
 [[nodiscard]] bool IsDeskMouseEvent(const SDL_Event& event);

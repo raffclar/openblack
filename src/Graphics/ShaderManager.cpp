@@ -164,7 +164,7 @@
 #include "ShaderIncluder.h"
 #define SHADER_NAME vs_fragment
 #include "ShaderIncluder.h"
-#define SHADER_NAME fs_ghost_depth
+#define SHADER_NAME fs_ghost_pattern
 #include "ShaderIncluder.h"
 #define SHADER_NAME fs_fragment
 #include "ShaderIncluder.h"
@@ -270,7 +270,7 @@ const std::array<bgfx::EmbeddedShader, 74> k_EmbeddedShaders = {{
     BGFX_EMBEDDED_SHADER(fs_advisor),              //
     BGFX_EMBEDDED_SHADER(fs_advisor_quad),         //
     BGFX_EMBEDDED_SHADER(vs_fragment),             //
-    BGFX_EMBEDDED_SHADER(fs_ghost_depth),          //
+    BGFX_EMBEDDED_SHADER(fs_ghost_pattern),        //
     BGFX_EMBEDDED_SHADER(fs_fragment),             //
     BGFX_EMBEDDED_SHADER(vs_vegetation),
     BGFX_EMBEDDED_SHADER(vs_vegetation_hm_instanced),
@@ -329,7 +329,7 @@ constexpr std::array k_Shaders {
     ShaderDefinition {"Advisor", "vs_advisor", "fs_advisor"},
     ShaderDefinition {"AdvisorQuad", "vs_blob", "fs_advisor_quad"},
     ShaderDefinition {"Fragment", "vs_fragment", "fs_fragment"},
-    ShaderDefinition {"GhostDepth", "vs_object", "fs_ghost_depth"},
+    ShaderDefinition {"GhostPattern", "vs_object", "fs_ghost_pattern"},
     ShaderDefinition {"Vegetation", "vs_vegetation", "fs_vegetation"},
     ShaderDefinition {"VegetationHeightMapInstanced", "vs_vegetation_hm_instanced", "fs_vegetation"},
     ShaderDefinition {"ShadowCaster", "vs_object", "fs_shadow_caster"},
@@ -349,8 +349,8 @@ constexpr std::array k_Shaders {
     ShaderDefinition {"ReflectionFewBones", "vs_object_few_bones", "fs_reflection"},
     ShaderDefinition {"SkySingleBone", "vs_object_single_bone", "fs_sky"},
     ShaderDefinition {"SkyFewBones", "vs_object_few_bones", "fs_sky"},
-    ShaderDefinition {"GhostDepthSingleBone", "vs_object_single_bone", "fs_ghost_depth"},
-    ShaderDefinition {"GhostDepthFewBones", "vs_object_few_bones", "fs_ghost_depth"},
+    ShaderDefinition {"GhostPatternSingleBone", "vs_object_single_bone", "fs_ghost_pattern"},
+    ShaderDefinition {"GhostPatternFewBones", "vs_object_few_bones", "fs_ghost_pattern"},
     ShaderDefinition {"ShadowCasterSingleBone", "vs_object_single_bone", "fs_shadow_caster"},
     ShaderDefinition {"ShadowCasterFewBones", "vs_object_few_bones", "fs_shadow_caster"},
 };
@@ -368,7 +368,7 @@ constexpr std::array k_BoneVariants {
     BoneVariants {.program = "Object", .singleBone = "ObjectSingleBone", .fewBones = "ObjectFewBones"},
     BoneVariants {.program = "Reflection", .singleBone = "ReflectionSingleBone", .fewBones = "ReflectionFewBones"},
     BoneVariants {.program = "Sky", .singleBone = "SkySingleBone", .fewBones = "SkyFewBones"},
-    BoneVariants {.program = "GhostDepth", .singleBone = "GhostDepthSingleBone", .fewBones = "GhostDepthFewBones"},
+    BoneVariants {.program = "GhostPattern", .singleBone = "GhostPatternSingleBone", .fewBones = "GhostPatternFewBones"},
     BoneVariants {.program = "ShadowCaster", .singleBone = "ShadowCasterSingleBone", .fewBones = "ShadowCasterFewBones"},
 };
 
@@ -531,6 +531,7 @@ void ShaderManager::SetViewOrder(uint16_t viewId, ViewOrder order) const
 	    bgfx::ViewMode::DepthDescending,
 	};
 	bgfx::setViewMode(static_cast<bgfx::ViewId>(viewId), k_Modes.at(static_cast<size_t>(order)));
+	bgfx::setViewDepthTies(static_cast<bgfx::ViewId>(viewId), TiesInSubmitOrder(order));
 }
 
 void ShaderManager::SetCamera(graphics::RenderPass viewId, const Camera& camera, glm::vec2 target)

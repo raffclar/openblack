@@ -306,6 +306,17 @@ bool ObjectDrawListSystem::Listed(entt::entity entity) const
 	return index < _listedByIndex.size() && _listedByIndex[index] == entity;
 }
 
+bool ObjectDrawListSystem::LandCallsOwnDraw(const Registry& registry, entt::entity entity) const
+{
+	if (!_view.has_value())
+	{
+		return false;
+	}
+	const bool listed = Listed(entity);
+	return object_draw_list::LandCallsOwnDraw(_frame, registry.AllOf<WalkPath>(entity), listed,
+	                                          listed && _keptByIndex[static_cast<size_t>(entt::to_entity(entity))]);
+}
+
 bool ObjectDrawListSystem::Decides(const Registry& registry, entt::entity entity) const
 {
 	if (const auto part = _parts.Of(entity))

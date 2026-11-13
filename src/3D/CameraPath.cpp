@@ -114,30 +114,3 @@ bool CameraPath::LoadFromBuffer(const std::vector<uint8_t>& data)
 	Load(file);
 	return true;
 }
-
-void CameraPath::CreatePathEntities(glm::vec3 position)
-{
-	auto& registry = Locator::entitiesRegistry::value();
-	auto points = GetPoints();
-	auto entities = std::vector<entt::entity>(points.size());
-	registry.Create(entities.begin(), entities.end());
-	// Add a null entity for the last point offset
-	entities.emplace_back(entt::null);
-
-	for (size_t i = 0; i < points.size(); i++)
-	{
-		points[i].next = entities[i + 1];
-		points[i].position += position;
-		registry.Assign<CameraPoint>(entities[i], points[i]);
-	}
-}
-
-void CameraPath::CreatePathStartEntity(glm::vec3 position)
-{
-	auto& registry = Locator::entitiesRegistry::value();
-	auto firstPoint = GetPoints().front();
-	firstPoint.position += position;
-
-	auto entity = registry.Create();
-	registry.Assign<CameraPoint>(entity, firstPoint);
-}

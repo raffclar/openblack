@@ -17,12 +17,6 @@
 
 using namespace openblack::lhscriptx;
 
-// alias parameter types for signature list readability
-const constexpr ParameterType k_TString = ParameterType::String;
-const constexpr ParameterType k_TNumber = ParameterType::Number;
-const constexpr ParameterType k_TFloat = ParameterType::Float;
-const constexpr ParameterType k_TVector = ParameterType::Vector;
-
 const std::array<const ScriptCommandSignature, 20> MapScriptCommands::k_Signatures = {{
     CREATE_COMMAND_BINDING("SET_NO_PLAYERS", MapScriptCommands::SetNoPlayers),
     CREATE_COMMAND_BINDING("LOAD_TRIBE_DANCE", MapScriptCommands::LoadTribeDance),

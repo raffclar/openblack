@@ -11,7 +11,6 @@
 
 #include <cstdint>
 
-#include <filesystem>
 #include <istream>
 #include <optional>
 #include <span>
@@ -51,7 +50,5 @@ struct SASFile
 [[nodiscard]] std::optional<SASFile> Parse(std::istream& stream);
 /// Reads the text held in a buffer
 [[nodiscard]] std::optional<SASFile> Parse(std::span<const uint8_t> buffer);
-/// Reads a file; none when it can't be opened or read
-[[nodiscard]] std::optional<SASFile> Open(const std::filesystem::path& path);
 
 } // namespace openblack::sas

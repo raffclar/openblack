@@ -37,6 +37,7 @@
 #include "3D/TempleInteriorInterface.h"
 #include "Camera/Camera.h"
 #include "Creature/CreatureHandGlow.h"
+#include "ECS/Components/Abode.h"
 #include "ECS/Components/CreatureHandGlows.h"
 #include "ECS/Components/Hand.h"
 #include "ECS/Components/Mesh.h"
@@ -54,6 +55,7 @@
 #include "ECS/Systems/RewardSystemInterface.h"
 #include "ECS/Systems/ScriptHighlightSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/Systems/TownSystemInterface.h"
 #include "Graphics/GraphicsHandleBgfx.h"
 #include "Graphics/IndexBuffer.h"
 #include "Graphics/InterfaceCreatures.h"
@@ -192,6 +194,7 @@ void Renderer::CollectParticles() const
 	auto section = Locator::profiler::value().BeginScoped(Profiler::Stage::ParticlesGather);
 	// The light maps and shadows of the frame that ended stamp the land in this frame
 	_landStamps.swap(_particleFrame.lightStamps);
+	_townBeliefFrameCount = 0;
 	if (!Locator::particleSystem::has_value() || !Locator::time::has_value())
 	{
 		_particleFrame.Clear();
@@ -232,6 +235,46 @@ void Renderer::CollectParticles() const
 	{
 		Locator::boatLaunchSystem::value().CollectDrawFrame(_particleFrame);
 	}
+	CollectTownBeliefParticles();
+}
+
+void Renderer::CollectTownBeliefParticles() const
+{
+	if (!Locator::townSystem::has_value() || !Locator::entitiesRegistry::has_value())
+	{
+		return;
+	}
+	const auto& towns = Locator::townSystem::value();
+	const auto& particles = Locator::particleSystem::value();
+	const float turnFraction = Locator::time::value().GetTurnFraction();
+	// Each village centre's symbols of belief go in a frame of their own. The frames keep their room from frame to frame.
+	Locator::entitiesRegistry::value().Each<const ecs::components::Abode>(
+	    [&](entt::entity entity, const ecs::components::Abode& abode) {
+		    if (abode.type != AbodeNumber::TownCentre)
+		    {
+			    return;
+		    }
+		    const auto effect = towns.BeliefSymbolsOf(entity);
+		    if (!effect.has_value())
+		    {
+			    return;
+		    }
+		    if (_townBeliefFrameCount == _townBeliefFrames.size())
+		    {
+			    _townBeliefFrames.emplace_back();
+		    }
+		    auto& entry = _townBeliefFrames[_townBeliefFrameCount];
+		    particles.CollectEffectDrawFrame(*effect, turnFraction, entry.frame);
+		    if (entry.frame.Empty())
+		    {
+			    return;
+		    }
+		    entry.centre = entity;
+		    ++_townBeliefFrameCount;
+		    // The light maps and shadows of the symbols stamp the land with those of the other effects
+		    _particleFrame.lightStamps.insert(_particleFrame.lightStamps.end(), entry.frame.lightStamps.begin(),
+		                                      entry.frame.lightStamps.end());
+	    });
 }
 
 const Texture2D* Renderer::ParticleLightMap(entt::id_type bitmap, int frame) const
@@ -679,6 +722,29 @@ void Renderer::DrawCreatureHandGlows(uint16_t viewId, const ecs::components::Cre
 	}
 }
 
+void Renderer::DrawCreedGlows(uint16_t viewId, const ecs::systems::RenderContext& context, const glm::mat4& projection,
+                              bool reflection, const glm::vec3& cameraOrigin) const
+{
+	// Each glow is the shell over the creed model, in white, with its texture, as the glow of a creature's creed power
+	const auto name = std::string("raw/") + std::string(particles::volume_glow::k_Textures.at(creature_hand_glow::k_Texture));
+	const auto texture = entt::hashed_string(name.c_str()).value();
+	const auto alpha = entt::hashed_string((name + "a").c_str()).value();
+	for (const auto& glow : context.creedGlowDraws)
+	{
+		const particles::draw::ShellDraw shell {
+		    .object = entt::null,
+		    .zoom = glow.zoom,
+		    .argb = creature_hand_glow::k_Argb,
+		    .texture = texture,
+		    .alphaTexture = alpha,
+		    .uvOffset = glow.slide,
+		    .textureFraction = creature_hand_glow::k_TextureFraction,
+		};
+		SubmitGlowShell(viewId, resources::HashIdentifier(MeshId::Creed), glow.model, shell, projection, reflection,
+		                zsort::Depth(glow.position, cameraOrigin));
+	}
+}
+
 void Renderer::DrawFilmEffects(const interface_creatures::FilmCreature& film) const
 {
 	const auto viewId = static_cast<bgfx::ViewId>(RenderPass::FilmCreature);
@@ -860,6 +926,38 @@ void Renderer::DrawParticles(const DrawSceneDesc& desc) const
 		                            _particleBeforeLandSprites.end());
 	}
 	SubmitParticleFrame(desc, _particleFrame, _particleCommands, _particleSpriteOrder, _particleBeforeLandCommands, origin);
+}
+
+void Renderer::DrawLearningBulbs(const DrawSceneDesc& desc) const
+{
+	if ((desc.viewId != RenderPass::Main && desc.viewId != RenderPass::Reflection) || _particleFrame.meshes.empty())
+	{
+		return;
+	}
+	particles::draw::MeshesWithLearningWords(_particleFrame, _learningBulbMeshes);
+	for (const auto index : _learningBulbMeshes)
+	{
+		DrawParticleMesh(desc, _particleFrame.meshes[index], graphics::zsort::k_AfterSolidBeforeSorted);
+	}
+}
+
+void Renderer::DrawTownBeliefParticles(const DrawSceneDesc& desc, entt::entity centre) const
+{
+	const bool reflection = desc.viewId == RenderPass::Reflection;
+	if (desc.viewId != RenderPass::Main && !reflection)
+	{
+		return;
+	}
+	const auto frames = std::span(_townBeliefFrames).first(_townBeliefFrameCount);
+	const auto found = std::ranges::find(frames, centre, &TownBeliefFrame::centre);
+	if (found == frames.end() || found->frame.items.empty())
+	{
+		return;
+	}
+	const auto origin = desc.camera->GetOrigin();
+	particles::draw::Order(found->frame, origin, reflection ? std::nullopt : HandPoint(), _townBeliefCommands,
+	                       _townBeliefSpriteOrder);
+	SubmitParticleFrame(desc, found->frame, _townBeliefCommands, _townBeliefSpriteOrder, {}, origin);
 }
 
 void Renderer::SubmitParticleFrame(const DrawSceneDesc& desc, const particles::draw::Frame& frame,

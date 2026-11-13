@@ -212,6 +212,17 @@ void SyncChecksumSystem::Finish(const TurnValues& values, synced_state::Hash has
 	{
 		_last->parts = hash.parts;
 	}
+	// The history keeps the parts of the world and the synced values that the checksum mixes, so that a part of the
+	// worlds of two computers shows which value differs. The values go after the parts of the world for this call only.
+	const auto worldParts = hash.parts.size();
+	hash.parts.emplace_back("synced seed", values.seed);
+	hash.parts.emplace_back("synced draws", values.draws);
+	if (values.music.has_value())
+	{
+		hash.parts.emplace_back("music", synced_state::MixValues(0, *values.music));
+	}
+	_partHistory.Keep(values.turn, hash.parts);
+	hash.parts.resize(worldParts);
 	if (_listener)
 	{
 		_listener(*_last);

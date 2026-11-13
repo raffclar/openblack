@@ -94,6 +94,12 @@ public:
 	/// Keeps the verdict of the scenario for the inspector. With quit, the game also ends, with an exit code that tells the
 	/// verdict (0 passed, 1 failed, 2 no checks).
 	virtual void ReportChecks(checks::Report report, bool quit) = 0;
+	/// Whether the game draws the player's hand in this frame. None with no game.
+	[[nodiscard]] virtual std::optional<bool> IsHandShown() const = 0;
+	/// Whether the player's hand shows a tooltip. None with no interface.
+	[[nodiscard]] virtual std::optional<bool> IsHandToolTipShown() const = 0;
+	/// Closes the boxes that an earlier scenario left open, such as the tattoo editor
+	virtual void CloseBoxes() = 0;
 };
 
 } // namespace openblack::testbed_scenarios

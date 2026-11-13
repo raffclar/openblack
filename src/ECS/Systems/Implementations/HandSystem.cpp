@@ -48,9 +48,13 @@
 #include "ECS/Systems/HandGrabSystemInterface.h"
 #include "ECS/Systems/HandPressSystemInterface.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
+#include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
+#include "ECS/Systems/PuzzleTotemSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/Systems/TipBubbleSystemInterface.h"
+#include "ECS/Systems/VillageTotemSystemInterface.h"
 #include "EngineConfig.h"
 #include "Hand/GodHand.h"
 #include "Hand/HandSendWait.h"
@@ -359,6 +363,24 @@ void HandSystem::EndOwnInterfaceLock()
 	{
 		Locator::creatureHandSystem::value().StopActionAtLockEnd();
 	}
+	// The hand lets go of a totem as the let go of the button does. It lets go of the tip bubble. The rope of the tied
+	// leash falls from the hand, and the creature gets no order.
+	if (Locator::villageTotemSystem::has_value() && Locator::villageTotemSystem::value().GetGripped().has_value())
+	{
+		Locator::villageTotemSystem::value().LetGo();
+	}
+	if (Locator::puzzleTotemSystem::has_value() && Locator::puzzleTotemSystem::value().GetGripped().has_value())
+	{
+		Locator::puzzleTotemSystem::value().LetGo();
+	}
+	if (Locator::tipBubbleSystem::has_value() && Locator::tipBubbleSystem::value().IsGripped())
+	{
+		Locator::tipBubbleSystem::value().LetGo();
+	}
+	if (Locator::leashSystem::has_value())
+	{
+		Locator::leashSystem::value().DropRope(*_ownPlayer);
+	}
 	// The interface also clears the flag of a press of the select button, and a grip of the land stops
 	if (Locator::handPressSystem::has_value())
 	{
@@ -376,6 +398,98 @@ void HandSystem::EndOwnInterfaceLock()
 	{
 		hand_send_wait::LockEnd(*wait);
 	}
+}
+
+hand_send_wait::OwnAction HandSystem::GetOwnAction() const
+{
+	hand_send_wait::OwnAction own;
+	const bool hasMagic = Locator::magicSystem::has_value();
+	const bool hasGrab = Locator::handGrabSystem::has_value();
+	const auto taking = hasGrab ? Locator::handGrabSystem::value().GetTaking() : std::nullopt;
+	const auto useWait = hasMagic ? Locator::magicSystem::value().GetUseWait() : std::nullopt;
+	const auto giveWait = hasGrab ? Locator::handGrabSystem::value().GetGiveWait() : std::nullopt;
+	const auto townTotem =
+	    Locator::villageTotemSystem::has_value() ? Locator::villageTotemSystem::value().GetGripped() : std::nullopt;
+	const auto puzzleTotem =
+	    Locator::puzzleTotemSystem::has_value() ? Locator::puzzleTotemSystem::value().GetGripped() : std::nullopt;
+	if (hasMagic && Locator::magicSystem::value().GetHandCastState().state != magic::CastInput::State::Idle)
+	{
+		own.action = hand_send_wait::FrameAction::UsesHeld;
+		own.held = Locator::magicSystem::value().GetHeldSeed();
+		own.pressThing = Locator::magicSystem::value().GetPressThing();
+	}
+	else if (useWait.has_value())
+	{
+		// The seed was used on a thing at the press, and the interface waits for the let go of the button. Both buttons end
+		// the wait. A miracle that runs in the hand keeps the thing of the press, also in the frame after the let go.
+		own.action = useWait->letGo ? hand_send_wait::FrameAction::Free : hand_send_wait::FrameAction::Other;
+		own.pressThing = useWait->kept;
+		own.keepsThing = useWait->kept != entt::null;
+	}
+	else if (giveWait.has_value())
+	{
+		// The hand sent a gift, and the interface waits until its lock ends. The wait needs the held thing, both buttons
+		// end it, and it keeps the thing that was under the hand at the press.
+		own.action = hand_send_wait::FrameAction::UsesHeld;
+		own.held = Locator::handGrabSystem::value().GetHeld();
+		own.pressThing = *giveWait;
+	}
+	else if (hasGrab && Locator::handGrabSystem::value().IsAboutToThrow())
+	{
+		own.action = hand_send_wait::FrameAction::UsesHeld;
+		own.held = Locator::handGrabSystem::value().GetHeld();
+		own.keepsThing = false;
+	}
+	else if (hasGrab && Locator::handGrabSystem::value().WaitsForUseLetGo())
+	{
+		// The hand used what it holds on a thing, and the interface waits for the let go of the button. Both buttons end
+		// the wait.
+		own.action = hand_send_wait::FrameAction::Other;
+		own.keepsThing = false;
+	}
+	else if (taking.has_value())
+	{
+		// The hand presses on a thing to take it, and waits, pulls or waits for the turn that puts it in the hand
+		own.action = hand_send_wait::FrameAction::Takes;
+		own.pressThing = *taking;
+	}
+	else if ((Locator::creatureHandSystem::has_value() &&
+	          (Locator::creatureHandSystem::value().GetCreature().has_value() ||
+	           Locator::creatureHandSystem::value().WaitsForTap() || Locator::creatureHandSystem::value().WaitsForLockEnd())) ||
+	         (hasGrab && Locator::handGrabSystem::value().GetLockedOn().has_value()))
+	{
+		// A held creature, a creature that the button let go of while the lock stays, a press that waits for a tap on a
+		// creature, or a scoop lock
+		own.action = hand_send_wait::FrameAction::Other;
+		const auto lockedOn = hasGrab ? Locator::handGrabSystem::value().GetLockedOn() : std::nullopt;
+		own.pressThing = lockedOn.has_value()                       ? *lockedOn
+		                 : Locator::creatureHandSystem::has_value() ? Locator::creatureHandSystem::value().GetPressCreature()
+		                                                            : entt::entity {entt::null};
+	}
+	else if (townTotem.has_value() || puzzleTotem.has_value())
+	{
+		// The hand holds a totem, and the lock keeps the totem
+		own.action = hand_send_wait::FrameAction::Other;
+		own.pressThing = townTotem.has_value() ? *townTotem : *puzzleTotem;
+	}
+	else if (Locator::tipBubbleSystem::has_value() && Locator::tipBubbleSystem::value().IsGripped())
+	{
+		// While the hand grips the tip bubble, the interface checks no thing
+		own.action = hand_send_wait::FrameAction::Other;
+	}
+	else if (_ownPlayer.has_value() && Locator::leashSystem::has_value() &&
+	         Locator::leashSystem::value().RopeHand(*_ownPlayer) == leash_snap::Hand::Holding)
+	{
+		// The hand holds the rope of the tied leash. The interface checks the thing under the hand in each frame.
+		own.action = hand_send_wait::FrameAction::Other;
+		own.keepsThing = false;
+	}
+	else
+	{
+		// The hand does no action, or it grips the land or the fight
+		own.keepsThing = false;
+	}
+	return own;
 }
 
 void HandSystem::ProcessTurn()

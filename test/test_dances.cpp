@@ -282,6 +282,24 @@ TEST(Dances, ADanceIsMadeStoppedAtAQuarterSpeedWithItsFilesGroups)
 	EXPECT_EQ(dance.groups.all[1].name, "W");
 }
 
+TEST(Dances, EachDancerComesInTheOrderOfTheListOfDancers)
+{
+	Registry registry;
+	auto file = std::make_shared<dance::DanceFile>();
+	ASSERT_EQ(file->Open(TwoGroupDance()), dance::DanceResult::Success);
+	const auto entity = dances::Create(registry, {.type = DanceInfo::NewDanceAroundPerson, .autostart = true}, file);
+	for (int i = 0; i < 5; ++i)
+	{
+		ASSERT_TRUE(
+		    dances::AddDancer(registry, entity, registry.Create(), i % 2 == 0 ? DanceGroup::k_Men : DanceGroup::k_Women));
+	}
+	std::vector<entt::entity> visited;
+	dances::ForEachDancer(registry, entity, [&visited](entt::entity dancer) { visited.push_back(dancer); });
+	EXPECT_EQ(visited, dances::Dancers(registry, entity));
+	EXPECT_EQ(dances::DancerCount(registry, entity), 5u);
+	EXPECT_EQ(dances::DancerCount(registry, registry.Create()), 0u);
+}
+
 TEST(Dances, ADanceStopsForATurnWhenItsTimeIsUp)
 {
 	Registry registry;

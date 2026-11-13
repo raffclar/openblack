@@ -27,6 +27,7 @@
 #include "Commands/TurnCodec.h"
 #include "Commands/TurnCommandSource.h"
 #include "Online/Backoff.h"
+#include "Online/ConnectionLog.h"
 #include "Online/GameOrigin.h"
 #include "Online/ResyncRule.h"
 #include "Online/SentBlocks.h"
@@ -62,6 +63,10 @@ struct NetworkSessionSettings
 	std::function<bool()> readPlaysForClan;
 	/// Tools: gets each turn at which the world of this computer differs from the server's world
 	std::function<void(uint32_t turn)> parts;
+	/// Reads the hash of each part of this computer's world at a turn. When the world parts from the server's world, the
+	/// client sends the parts of that turn to the server after it comes back, and both logs name the parts that differ.
+	/// With no reader, or for a turn that it does not keep, no parts go.
+	std::function<PartHashes(uint32_t turn)> localParts;
 	/// Where the game came from: the lobby on the internet or the local network
 	GameOrigin origin {GameOrigin::Lan};
 };
@@ -139,7 +144,8 @@ public:
 		std::optional<uint32_t> firstDifferent;
 	};
 
-	NetworkSession(WebSocketClientInterface& sockets, Clock clock);
+	/// With no connection log, the session makes its own
+	NetworkSession(WebSocketClientInterface& sockets, Clock clock, std::shared_ptr<ConnectionLog> log = {});
 	~NetworkSession() override;
 	NetworkSession(const NetworkSession&) = delete;
 	NetworkSession& operator=(const NetworkSession&) = delete;
@@ -229,6 +235,13 @@ public:
 
 	/// The time between pings
 	static constexpr int64_t k_PingMicroseconds = 1'000'000;
+	/// The time between the lines of the health of the connection in the log, while the game plays
+	static constexpr int64_t k_HealthLogMicroseconds = 30'000'000;
+	/// The log warns once when this many pings in a row have no answer
+	static constexpr uint32_t k_MissedPingsWarning = 3;
+
+	/// The connection log of the session: each step of the connection, for the "Copy diagnostics" report
+	[[nodiscard]] ConnectionLog& Log() const { return *_log; }
 
 private:
 	void Open(bool resume);
@@ -256,9 +269,18 @@ private:
 	void SendKeptAgain();
 	/// Closes the socket and starts the attempts to come back
 	void ComeBack(bool resync);
+	/// After the client came back from a part of the worlds: sends the hash of each part of its world at the turn of the
+	/// part, once
+	void SendPartedParts();
+	/// Once a frame while the game plays: a line of the health of the connection now and then, and a warning when the
+	/// pings get no answer
+	void LogHealth(int64_t now);
+	/// The milliseconds from a time of the clock to now
+	[[nodiscard]] int64_t MillisecondsSince(int64_t time) const;
 
 	WebSocketClientInterface& _sockets;
 	Clock _clock;
+	std::shared_ptr<ConnectionLog> _log;
 	std::unique_ptr<TurnStream> _stream;
 	NetworkSessionSettings _settings;
 	State _state {State::Idle};
@@ -308,6 +330,25 @@ private:
 	std::optional<WorldState> _world;
 	/// The client asked the server to stop the turns of the game
 	bool _stopAsked {false};
+	/// The time that the socket started to open, and the time that it opened
+	int64_t _connectAt {0};
+	int64_t _openedAt {0};
+	/// The attempts to open a socket since the last socket that the server accepted
+	uint32_t _attempts {0};
+	/// The time that the first part of the world state came, and the bytes so far
+	int64_t _worldStartedAt {0};
+	size_t _worldBytes {0};
+	/// The quarters of the world state that the log told of
+	size_t _worldQuartersLogged {0};
+	/// The time that the world state came whole, for the time of its load
+	int64_t _worldCameAt {0};
+	/// The first turn after the start or after a resume is not done yet: the log tells of it
+	bool _firstTurnDue {false};
+	int64_t _firstTurnFrom {0};
+	/// The turn at which the world parted, whose parts go to the server after the client comes back
+	std::optional<uint32_t> _partedTurn;
+	int64_t _nextHealthLog {0};
+	bool _pingsWarned {false};
 	std::optional<uint32_t> _stoppedAfter;
 };
 

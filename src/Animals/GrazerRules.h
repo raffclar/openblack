@@ -174,8 +174,6 @@ enum class Need : uint8_t
 /// A grazer eats this many clips' worth, and up to this many more
 inline constexpr uint32_t k_MealsMin = 20;
 inline constexpr uint32_t k_MealsRange = 15;
-/// The game draws for the common animal's meal before a grazer's own: 15 and up to 10 more
-inline constexpr uint32_t k_CommonMealsMin = 15;
 inline constexpr uint32_t k_CommonMealsRange = 10;
 
 } // namespace openblack::animals::grazers

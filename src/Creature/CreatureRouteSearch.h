@@ -106,8 +106,6 @@ public:
 	void SetBlockGatherer(BlockGatherer gatherer) { _blockGatherer = std::move(gatherer); }
 	/// Where the creature walking is now: circles added later are kept clear of it
 	void SetWalker(glm::vec2 walker) { _walker = walker; }
-	[[nodiscard]] glm::vec2 GetWalker() const { return _walker.value_or(glm::vec2(0.0f)); }
-	[[nodiscard]] float GetMargin() const { return _margin; }
 
 	/// Adds a circle. One that holds a point given to LeaveOutCirclesHolding is left out. One about a point within a
 	/// tenth of the walker is left out and one the walker stands in reaches just to it; one inside a circle already kept
@@ -257,7 +255,6 @@ public:
 	/// Where the route that the last step chose as the best has got to, if that route is still searched
 	[[nodiscard]] std::optional<glm::vec2> GetBestHead() const;
 	[[nodiscard]] std::vector<Leg> TakeBest();
-	[[nodiscard]] size_t GetRouteCount() const { return _routes.size(); }
 	[[nodiscard]] glm::vec2 GetStart() const { return _start.point; }
 	[[nodiscard]] glm::vec2 GetGoal() const { return _goal.point; }
 	/// The things whose circles were met, and the most a route coming back to a point already reached had cost

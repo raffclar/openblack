@@ -66,7 +66,6 @@ public:
 	{
 		SetUniformArray(_main, uniformName, values, count);
 	}
-	[[nodiscard]] bool HasUniform(const char* uniformName) const { return _uniforms.Contains(uniformName); }
 	/// A uniform's handle, for the draws that set it again and again without looking it up by name each time
 	[[nodiscard]] std::optional<UniformHandle> FindUniform(std::string_view uniformName) const
 	{

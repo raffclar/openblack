@@ -41,3 +41,56 @@ TEST(DeviceRestore, TheKeptBytesAddUpToTheTotal)
 	static_assert(k_Kept.Total() == 54321);
 	EXPECT_EQ(device_restore::Kept {}.Total(), 0u);
 }
+
+TEST(DeviceRestore, ARecoveryWithAWorkingDeviceContinues)
+{
+	device_restore::RecoveryWatch watch;
+	for (uint32_t ms = 0; ms < 100'000; ms += 16)
+	{
+		EXPECT_EQ(watch.Step(false, 0, ms), device_restore::Recovery::Continues);
+	}
+}
+
+TEST(DeviceRestore, AShortWaitForANewDeviceContinues)
+{
+	device_restore::RecoveryWatch watch;
+	EXPECT_EQ(watch.Step(true, 0, 1000), device_restore::Recovery::Continues);
+	EXPECT_EQ(watch.Step(true, 0, 1000 + device_restore::k_LongestWaitMs - 1), device_restore::Recovery::Continues);
+	// The new device comes and the wait starts again at the next loss
+	EXPECT_EQ(watch.Step(false, 1, 12'000), device_restore::Recovery::Continues);
+	EXPECT_EQ(watch.Step(true, 1, 13'000), device_restore::Recovery::Continues);
+	EXPECT_EQ(watch.Step(true, 1, 13'000 + device_restore::k_LongestWaitMs - 1), device_restore::Recovery::Continues);
+}
+
+TEST(DeviceRestore, ALongWaitForANewDeviceFails)
+{
+	device_restore::RecoveryWatch watch;
+	EXPECT_EQ(watch.Step(true, 0, 500), device_restore::Recovery::Continues);
+	EXPECT_EQ(watch.Step(true, 0, 500 + device_restore::k_LongestWaitMs), device_restore::Recovery::Failed);
+}
+
+TEST(DeviceRestore, RestoresFarApartContinue)
+{
+	device_restore::RecoveryWatch watch;
+	uint32_t restores = 0;
+	for (uint32_t ms = 0; ms < 10 * device_restore::k_BurstMs; ms += device_restore::k_BurstMs / 2)
+	{
+		EXPECT_EQ(watch.Step(false, ++restores, ms), device_restore::Recovery::Continues);
+	}
+}
+
+TEST(DeviceRestore, ABurstOfRestoresFails)
+{
+	// Each new device is lost again half a second after the restore
+	device_restore::RecoveryWatch watch;
+	EXPECT_EQ(watch.Step(false, 1, 1000), device_restore::Recovery::Continues);
+	EXPECT_EQ(watch.Step(false, 2, 1500), device_restore::Recovery::Continues);
+	EXPECT_EQ(watch.Step(false, 3, 2000), device_restore::Recovery::Failed);
+}
+
+TEST(DeviceRestore, ManyRestoresBetweenTwoFramesFail)
+{
+	device_restore::RecoveryWatch watch;
+	EXPECT_EQ(watch.Step(false, 0, 0), device_restore::Recovery::Continues);
+	EXPECT_EQ(watch.Step(false, device_restore::k_RestoresInBurst, 100), device_restore::Recovery::Failed);
+}

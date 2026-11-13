@@ -13,9 +13,11 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "ECS/Systems/NetworkGameSystemInterface.h"
+#include "Online/ConnectionLog.h"
 #include "Online/NetworkSession.h"
 #include "Online/WebSocketInterface.h"
 
@@ -74,6 +76,8 @@ public:
 	{
 		return _session ? _session->TakeObserversLeft() : std::vector<std::string>();
 	}
+	void LogConnection(std::string_view text) override { _log->Info(text); }
+	[[nodiscard]] std::string DiagnosticsReport() const override;
 
 private:
 	void Detach();
@@ -89,6 +93,9 @@ private:
 	/// The WSS client of a test join, which only the session uses
 	std::unique_ptr<online::WebSocketClientInterface> _testClient;
 	std::unique_ptr<online::NetworkSession> _session;
+	/// The connection log of the network games of this computer. It lives longer than a session, so that the report
+	/// after the end of a session has the lines of the session.
+	std::shared_ptr<online::ConnectionLog> _log;
 	bool _started {false};
 	/// The game loads the server's land, and calls BeginPlay once it loaded
 	bool _awaitingLand {false};

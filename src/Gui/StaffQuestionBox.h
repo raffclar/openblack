@@ -51,6 +51,8 @@ public:
 	~StaffQuestionBox();
 
 	void Ask(gathering_box::question::Question question);
+	/// Takes the box away at once, with no answer, as when a testbed scenario loads
+	void Withdraw();
 	[[nodiscard]] bool IsActive() const noexcept { return _question.has_value(); }
 	[[nodiscard]] const std::optional<gathering_box::question::Question>& GetQuestion() const noexcept { return _question; }
 

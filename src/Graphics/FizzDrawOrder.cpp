@@ -17,8 +17,9 @@ namespace openblack::graphics::fizz_draw_order
 Order Order::Of(std::span<const entt::entity> list, const std::function<bool(entt::entity)>& fizzing)
 {
 	Order order;
-	for (const auto entity : list)
+	for (uint32_t place = 0; place < static_cast<uint32_t>(list.size()); ++place)
 	{
+		const auto entity = list[place];
 		if (entity == entt::null)
 		{
 			continue;
@@ -32,6 +33,7 @@ Order Order::Of(std::span<const entt::entity> list, const std::function<bool(ent
 		if (segment < k_MaxRanked && fizzing(entity))
 		{
 			order._fizzing.push_back(entity);
+			order._places.push_back(place);
 		}
 	}
 	return order;
@@ -51,6 +53,21 @@ std::optional<uint32_t> Order::RankOf(entt::entity entity) const
 		return std::nullopt;
 	}
 	return static_cast<uint32_t>(std::distance(_fizzing.begin(), found));
+}
+
+uint32_t Order::AtOnceDepth(uint32_t listPlace) const
+{
+	if (listPlace >= zsort::k_ListPlaces)
+	{
+		return zsort::AtOnce(listPlace);
+	}
+	// The segment of a place is the count of the fizzing creatures before it
+	const auto segment = static_cast<uint32_t>(std::ranges::lower_bound(_places, listPlace) - _places.begin());
+	if (segment < _places.size())
+	{
+		return FadingDepth(segment, listPlace);
+	}
+	return zsort::AtOnce(listPlace);
 }
 
 void NoteSegment(std::vector<uint32_t>& starts, uint32_t filled, uint32_t segment)

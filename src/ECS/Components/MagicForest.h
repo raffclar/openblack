@@ -31,6 +31,10 @@ struct MagicForest
 	/// Where the miracle was cast, the middle of its spiral
 	glm::vec3 centre {0.0f};
 	std::vector<entt::entity> trees;
+	/// The forest of the land that its trees are in. It goes from the land with the last of the trees.
+	entt::entity landForest {entt::null};
+	/// Set when its last tree went from the world, until the miracle sees this at its next turn and closes down
+	bool gone {false};
 };
 
 /// On a tree a forest miracle planted: its forest, and what its wood is worth against an ordinary tree's

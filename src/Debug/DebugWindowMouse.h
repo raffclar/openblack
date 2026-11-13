@@ -26,19 +26,32 @@ enum class WindowMouse : uint8_t
 	/// The windows take only the mouse events that the game or a tool sends. The inspector drives the pointer, or the
 	/// input of the player is locked.
 	DrivenOnly,
-	/// The windows take no press and no turn of the wheel, because a scenario drives the hand
+	/// The windows take no press and no turn of the wheel, because a scenario or a hand demonstration drives the hand
 	KeptOff,
 };
 
-/// The mouse events that the debug windows take. A scenario that drives the hand has priority over the inspector and
-/// the lock.
-[[nodiscard]] constexpr WindowMouse ChooseWindowMouse(bool keptOff, bool pointerDriven, bool inputLocked) noexcept
+/// The sources that can drive the mouse of the debug windows
+struct WindowMouseDrivers
 {
-	if (keptOff)
+	/// A scenario drives the hand
+	bool scenarioDrivesHand;
+	/// A hand demonstration plays its recorded mouse
+	bool handDemoPlays;
+	/// The inspector drives the pointer
+	bool pointerDriven;
+	/// The input of the player is locked
+	bool inputLocked;
+};
+
+/// The mouse events that the debug windows take. A scenario that drives the hand and a hand demonstration have priority
+/// over the inspector and the lock. Then a debug window under the pointer does not take the presses of the hand.
+[[nodiscard]] constexpr WindowMouse ChooseWindowMouse(const WindowMouseDrivers& drivers) noexcept
+{
+	if (drivers.scenarioDrivesHand || drivers.handDemoPlays)
 	{
 		return WindowMouse::KeptOff;
 	}
-	return pointerDriven || inputLocked ? WindowMouse::DrivenOnly : WindowMouse::Player;
+	return drivers.pointerDriven || drivers.inputLocked ? WindowMouse::DrivenOnly : WindowMouse::Player;
 }
 
 /// Whether the event comes from the mouse, or tells that the pointer of the system went into or out of the window

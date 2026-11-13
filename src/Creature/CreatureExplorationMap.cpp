@@ -165,7 +165,14 @@ RegionMap RegionMap::Make(const CellAt& cellAt, const TownAt& townAt)
 			}
 		}
 	}
+	map.PackKinds();
 	return map;
+}
+
+void RegionMap::PackKinds()
+{
+	regionKinds.resize(regions.size());
+	std::ranges::transform(regions, regionKinds.begin(), &Region::kinds);
 }
 
 const Region& RegionMap::At(glm::ivec2 region) const
@@ -200,12 +207,16 @@ bool creature_exploration::WasVisited(const Visited& visited, glm::ivec2 region)
 
 std::optional<glm::ivec2> creature_exploration::FindNearest(const RegionMap& map, const Visited& visited, const Search& search)
 {
+	// A map with no packed list gives the kinds from its regions
+	const bool packed = map.KindsPacked();
+	const auto kindOf = [&map, packed](size_t index) { return packed ? map.regionKinds[index] : map.regions.at(index).kinds; };
+	const auto bit = Bit(search.kind);
 	std::optional<glm::ivec2> found;
 	Spiral spiral;
 	auto region = search.from;
 	for (uint32_t step = 0; step < k_SpiralSteps; ++step)
 	{
-		if (OnMap(region) && map.At(region).Is(search.kind) && (search.includeStart || region != search.from))
+		if (OnMap(region) && (kindOf(IndexOf(region)) & bit) != 0 && (search.includeStart || region != search.from))
 		{
 			found = region;
 			if (!search.preferUnvisited || !WasVisited(visited, region))
