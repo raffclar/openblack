@@ -50,6 +50,7 @@
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureObjectAction.h"
 #include "ECS/Components/CreatureSpells.h"
+#include "ECS/Components/CreedObject.h"
 #include "ECS/Components/DeadTree.h"
 #include "ECS/Components/DetailMeshes.h"
 #include "ECS/Components/FallingRoots.h"
@@ -95,6 +96,7 @@
 #include "ECS/FelledTreeDrawRules.h"
 #include "ECS/GamePlayers.h"
 #include "ECS/Graveyards.h"
+#include "ECS/MobileObjectClassRules.h"
 #include "ECS/ObjectDetail.h"
 #include "ECS/PlayerColour.h"
 #include "ECS/Registry.h"
@@ -235,6 +237,18 @@ bool FelledOnTheLand(const openblack::ecs::Registry& registry, entt::entity enti
 	return deadTree != nullptr && deadTree->felled && !registry.AnyOf<InHand, HeldByCreature>(entity);
 }
 
+/// Whether the frame draws a pot for what it holds, and whether a hand holds it (see magic::piles::PotDrawn)
+bool PotShown(const Pot& pot, bool held)
+{
+	if (!openblack::Locator::infoConstants::has_value())
+	{
+		return true;
+	}
+	const auto& infos = openblack::Locator::infoConstants::value().pot;
+	const auto type = static_cast<size_t>(pot.type);
+	return type >= infos.size() || openblack::magic::piles::PotDrawn(infos.at(type).potType, pot.amount, held);
+}
+
 /// Whether a thing is a village centre
 bool IsTownCentre(const openblack::ecs::Registry& registry, entt::entity entity)
 {
@@ -246,13 +260,6 @@ bool IsTownCentre(const openblack::ecs::Registry& registry, entt::entity entity)
 	const auto& infos = openblack::Locator::infoConstants::value().abode;
 	const auto type = static_cast<size_t>(abode->type);
 	return type < infos.size() && infos.at(type).abodeType == openblack::AbodeType::TownCentre;
-}
-
-/// Whether a thing is drawn as a paper cut-out turned to the camera when far off: a field's crop, unless it moves in
-/// the physics
-bool IsPaper(const openblack::ecs::Registry& registry, entt::entity entity)
-{
-	return registry.AllOf<Field>(entity) && !registry.AllOf<InPhysics>(entity);
 }
 
 /// The model of the roots drawn under the trees out of the land
@@ -561,15 +568,15 @@ void RenderingSystem::PrepareDrawDescs(bool drawBoundingBox)
 			instanceCount += 2;
 		}
 	}
-	// A tree out of the land has its roots drawn under it: once, or twice while it moves in the physics
+	// A tree out of the land has its roots drawn under it: once, or twice while it moves in the physics. A crop that
+	// moves in the physics has its roots drawn once.
 	const Mesh roots {.id = RootsMesh(), .submeshId = 0, .bbSubmeshId = 0};
-	registry.Each<const Tree, const ShownRoots>(
-	    [&registry, &prepMesh, &roots](entt::entity tree, const Tree& /*unused*/, const ShownRoots& shown) {
-		    for (size_t copy = 0; copy < openblack::physics::objects::ShownRootsScales(shown.place).size(); ++copy)
-		    {
-			    prepMesh(registry, tree, roots.id, roots, false);
-		    }
-	    });
+	registry.Each<const ShownRoots>([&registry, &prepMesh, &roots](entt::entity rooted, const ShownRoots& shown) {
+		for (size_t copy = 0; copy < openblack::ecs::tree_roots::ShownScales(registry, rooted, shown).size(); ++copy)
+		{
+			prepMesh(registry, rooted, roots.id, roots, false);
+		}
+	});
 
 	if (drawBoundingBox)
 	{
@@ -603,6 +610,7 @@ void RenderingSystem::PrepareDrawDescs(bool drawBoundingBox)
 	_renderContext.instancedDrawDescs.clear();
 	_instanceSlots.clear();
 	_renderContext.seeThroughRefs.clear();
+	_renderContext.sortPoints.clear();
 	for (const auto& [meshId, desc] : meshIds)
 	{
 		const auto [drawDesc, inserted] =
@@ -783,12 +791,14 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 	_renderContext.drawnEntityDraws.clear();
 	_renderContext.drawnObjects.clear();
 	_renderContext.animalDraws.clear();
+	_renderContext.creedGlowDraws.clear();
 	_renderContext.highDetailDraws.clear();
 	_renderContext.filmShadowDraws.clear();
 	_renderContext.filmReflections.clear();
 	auto lastFilmBoats = std::exchange(_filmReflectionBoats, {});
 	_renderContext.inHandDraws.clear();
 	_renderContext.seeThroughRefs.clear();
+	_renderContext.sortPoints.clear();
 	_renderContext.mapPlaceLitInstances.clear();
 	_renderContext.drawnOverInstances.clear();
 	_renderContext.bonePalette.clear();
@@ -837,6 +847,7 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 	const openblack::ecs::ComponentLookup<CreatureMorph> creatureMorphs(registry);
 	const openblack::ecs::ComponentLookup<MorphWithTerrain> terrainMorphs(registry);
 	const openblack::ecs::ComponentLookup<ScaffoldGhost> ghosts(registry);
+	const openblack::ecs::ComponentLookup<CreedObject> creeds(registry);
 	const openblack::ecs::ComponentLookups<Abode, Field, Swayable, ResourcePile, InHand, Pot, CreatureSpells, Fire, ObjectGlow,
 	                                       SeeThrough, WorshipIcon, Temple, ChangedMaterials, TownDesireFlag, WorkshopFlag,
 	                                       WorshipSiteFlag, GateLantern, BuildProgress, Feature, AnimalPose, HeldByCreature,
@@ -848,7 +859,7 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 	EachBySegment(
 	    [this, &registry, &vegetation, &meshes, &fits, &fizzOrder, &segmentPlaced, &lastSegment, drawBoundingBox, camera, &view,
 	     modelDetail, drawList, drawnHand, &drawnPlaces, &villagerPoses, &highDetails, &drawnScales, &physicsPoses,
-	     &detailMeshes, &lifelessTotemParts, &hands, &highlights, &creatureMorphs, &terrainMorphs, &ghosts, &stores,
+	     &detailMeshes, &lifelessTotemParts, &hands, &highlights, &creatureMorphs, &terrainMorphs, &ghosts, &creeds, &stores,
 	     &detailStores, &drawnStores](entt::entity entity, const Mesh& mesh, const Transform& transform) {
 		    // The hands of the other gods and the right hands have no model on the screen
 		    if (!graphics::drawn_hand::Drawn(hands.Has(entity), entity, drawnHand))
@@ -857,6 +868,12 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		    }
 		    // A script highlight that its draw list did not select in this frame is not drawn
 		    if (const auto* highlight = highlights.TryGet(entity); highlight != nullptr && highlight->hidden)
+		    {
+			    return;
+		    }
+		    // A pot that holds nothing is not drawn in a hand, and a plain pot that holds nothing is not drawn at all
+		    if (const auto* pot = stores.TryGet<Pot>(entity);
+		        pot != nullptr && !PotShown(*pot, stores.AnyOf<InHand, HeldByCreature>(entity)))
 		    {
 			    return;
 		    }
@@ -894,6 +911,29 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		    const auto placed = physics_draw::ModelMatrix(modelMatrix, drawn);
 		    modelMatrix = placed.value_or(glm::mat4(0.0f));
 
+		    // A creed object draws only its glow when the land's draw list has it. Its own model is never drawn, but the
+		    // cursor finds it there.
+		    if (const auto* creed = creeds.TryGet(entity); creed != nullptr)
+		    {
+			    // On a frame that draws all of the draw list, note whether the creed stays drawn, as for other things
+			    if (drawList != nullptr && drawList->GetFrame().drawAll && drawList->NotesKept(entity))
+			    {
+				    NoteKept(*drawList, registry, entity, modelMatrix, transform.scale.x, mesh.id, false);
+			    }
+			    if ((drawList == nullptr || drawList->DrawnWith(registry, entity, drawnStores)) && placed.has_value())
+			    {
+				    _renderContext.drawnObjects.push_back({.entity = entity, .model = modelMatrix});
+				    _renderContext.creedGlowDraws.push_back({
+				        .model = openblack::ecs::mobile_object_class::CreedGlowModel(modelMatrix, creed->glowScale),
+				        .zoom = creature_hand_glow::Zoom(
+				            {.power = openblack::ecs::mobile_object_class::k_CreedGlowPower, .scale = creed->glowScale}),
+				        .slide = creed->motion.slide,
+				        .position = glm::vec3(modelMatrix[3]),
+				    });
+			    }
+			    return;
+		    }
+
 		    // A thing on the land is drawn in less detail the further off it is, fades out, then isn't drawn; a villager
 		    // then shows only as a smudge on a blob while it stands above the sea. One flying in the physics or one that
 		    // is kept in view never fades, and one a script draws in high detail is drawn in full however far off.
@@ -906,6 +946,7 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		    auto* slotMap = &_instanceSlots;
 		    std::optional<uint8_t> fade;
 		    std::optional<uint8_t> seeThroughRef;
+		    std::optional<RenderContext::SortPoint> sortPoint;
 		    auto level = graphics::mesh_detail::Mesh::High;
 		    bool gone = false;
 		    const auto* detail = detailMeshes.TryGet(entity);
@@ -960,6 +1001,19 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 			    fade = alpha;
 			    _fadingThings.emplace(entity, alpha);
 			    seeThroughRef = openblack::ecs::yard_copy::SeeThroughRef(ghost->alpha);
+			    // The copy sorts by the distance of its workshop, not by its own place. The copies of one workshop come in
+			    // the order of its scaffold list.
+			    if (const auto* workshop =
+			            registry.Valid(ghost->workshop) ? registry.TryGet<const Transform>(ghost->workshop) : nullptr;
+			        workshop != nullptr)
+			    {
+				    const auto* yard = registry.TryGet<const Workshop>(ghost->workshop);
+				    const auto index =
+				        yard != nullptr ? std::ranges::find(yard->scaffolds, ghost->scaffold) - yard->scaffolds.begin() : 0;
+				    sortPoint = RenderContext::SortPoint {
+				        .point = workshop->position,
+				        .order = graphics::zsort::YardCopyOrder(ListPlace(ghost->workshop), static_cast<uint32_t>(index))};
+			    }
 		    }
 		    else if (openblack::ecs::high_detail_rules::DrawsHighMeshAtAnyDistance(detail != nullptr, highDetails.Has(entity),
 		                                                                           terrainMorphs.Has(entity)))
@@ -1103,14 +1157,9 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 				    const auto cropMesh = entt::locator<resources::ResourcesInterface>::value().GetMeshes().Handle(mesh.id);
 				    const float cropHeight = cropMesh->GetBoundingBox().Size().y * transform.scale.y;
 				    modelMatrix[3].y += field_crop::Sink(field->height.position) * cropHeight;
-				    // Far off, drawn in its least detail, a crop is a paper cut-out standing turned to the camera, which
-				    // doesn't sway
-				    if (level == graphics::mesh_detail::Mesh::Low && IsPaper(registry, entity) && camera != nullptr)
-				    {
-					    modelMatrix = graphics::mesh_detail::PaperMatrix(glm::vec3(modelMatrix[3]), transform.scale.x,
-					                                                     camera->GetOrigin(), camera->GetFocus());
-				    }
-				    else if (const auto* swayable = stores.TryGet<Swayable>(entity); swayable != nullptr && crop->sways)
+				    // The crop follows the land at each detail level. It is never a paper cut-out turned to the camera, and
+				    // it sways at each detail level when it is ripe.
+				    if (const auto* swayable = stores.TryGet<Swayable>(entity); swayable != nullptr && crop->sways)
 				    {
 					    modelMatrix = vegetation.GetFieldMatrix(modelMatrix, transform.scale.y, swayable->swaySlot);
 				    }
@@ -1290,8 +1339,10 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 			    }
 		    }
 
-		    // A body sunk wholly under the sea isn't drawn in any pass, its shadow included
-		    if (!placed.has_value())
+		    // A body sunk wholly under the sea isn't drawn in any pass, its shadow included. Also an icon at a worship site
+		    // that is not built is not drawn, and the cursor does not find it.
+		    if (!placed.has_value() || (stores.AllOf<WorshipIcon>(entity) && Locator::spellIconSystem::has_value() &&
+		                                !Locator::spellIconSystem::value().Shown(entity)))
 		    {
 			    look.z = 1.0f;
 			    modelMatrix = glm::mat4(0.0f);
@@ -1382,6 +1433,10 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 					    _renderContext.atOnceInstances.emplace(idx + 1, place);
 				    }
 			    }
+		    }
+		    if (sortPoint.has_value())
+		    {
+			    _renderContext.sortPoints.emplace(idx, *sortPoint);
 		    }
 		    // The phantom building and the yard copy of a scaffold take the land's light of their place on the map
 		    if (graphics::object_land_light::Of(ghosts.Has(entity)) == graphics::object_land_light::Rule::AtMapPlace)
@@ -1579,12 +1634,12 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		}
 	}
 
-	// The roots under a tree out of the land, at its base, turned and stretched as the tree is placed
+	// The roots under a tree or a crop with shown roots, at its base, turned and stretched as the object is placed
 	const auto rootsSlots = _instanceSlots.find(RootsMesh());
-	registry.Each<const Mesh, const Transform, const Tree, const ShownRoots>(
-	    [this, &registry, &meshes, &fits, &rootsSlots, drawBoundingBox](
-	        entt::entity tree, const Mesh& mesh, const Transform& transform, const Tree& /*unused*/, const ShownRoots& shown) {
-		    const auto scales = openblack::physics::objects::ShownRootsScales(shown.place);
+	registry.Each<const Mesh, const Transform, const ShownRoots>(
+	    [this, &registry, &meshes, &fits, &rootsSlots, drawBoundingBox](entt::entity tree, const Mesh& mesh,
+	                                                                    const Transform& transform, const ShownRoots& shown) {
+		    const auto scales = openblack::ecs::tree_roots::ShownScales(registry, tree, shown);
 		    if (!fits || rootsSlots == _instanceSlots.end() ||
 		        rootsSlots->second.filled + scales.size() > rootsSlots->second.count)
 		    {

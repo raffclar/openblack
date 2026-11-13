@@ -1,0 +1,153 @@
+diff --git a/bgfx/include/bgfx/bgfx.h b/bgfx/include/bgfx/bgfx.h
+index 0e63cc2..e816318 100644
+--- a/bgfx/include/bgfx/bgfx.h
++++ b/bgfx/include/bgfx/bgfx.h
+@@ -4396,6 +4396,21 @@ namespace bgfx
+ 		, ViewMode::Enum _mode = ViewMode::Default
+ 		);
+ 
++	/// Sets how a view sorted by depth orders draws of equal depth.
++	///
++	/// @param[in] _id View id.
++	/// @param[in] _submitOrder When true, draws of equal depth render in submit order. When false (the default),
++	///   they render in the order of their blend state and program, as before. The program index depends on the
++	///   order in which the programs were made, thus it can differ from one build to the next.
++	///
++	/// @remarks
++	///   Only the views of `ViewMode::DepthAscending` and `ViewMode::DepthDescending` use it.
++	///
++	void setViewDepthTies(
++		  ViewId _id
++		, bool _submitOrder
++		);
++
+ 	/// Set view frame buffer.
+ 	///
+ 	/// @param[in] _id View id.
+diff --git a/bgfx/src/bgfx.cpp b/bgfx/src/bgfx.cpp
+index f8686b5..0c6fc28 100644
+--- a/bgfx/src/bgfx.cpp
++++ b/bgfx/src/bgfx.cpp
+@@ -1840,9 +1840,15 @@ namespace bgfx
+ 
+ 		const FrameArenaT<uint64_t, kDrawCallBlock>& submitKeys = m_submitKeys;
+ 
++		bool depthTies = false;
++		for (uint32_t ww = 0; ww < kViewUsedWords; ++ww)
++		{
++			depthTies |= 0 != m_viewDepthTies[ww];
++		}
++
+ 		for (uint32_t ii = 0, num = m_numRenderItems; ii < num; ++ii)
+ 		{
+-			m_sortKeys[ii]   = SortKey::remapView(submitKeys[ii], m_viewOrder);
++			m_sortKeys[ii]   = depthTies ? sortKey(submitKeys[ii]) : SortKey::remapView(submitKeys[ii], m_viewOrder);
+ 			m_sortValues[ii] = RenderItemCount(ii);
+ 		}
+ 
+@@ -1867,7 +1873,7 @@ namespace bgfx
+ 			// fixed order with many encoders. Those keys sort by their view alone, thus in submit order.
+ 			for (uint32_t ii = 0, num = m_numRenderItems; ii < num; ++ii)
+ 			{
+-				const uint64_t key = SortKey::remapView(submitKeys[m_sortValues[ii] ], m_viewOrder);
++				const uint64_t key = sortKey(submitKeys[m_sortValues[ii] ]);
+ 				const bool isDraw = 0 != (key & kSortKeyDrawBit);
+ 				const bool isSequence = isDraw && kSortKeyDrawTypeSequence == (key & kSortKeyDrawTypeMask);
+ 				m_sortKeys[ii] = !isDraw ? key & (kSortKeyViewMask | kSortKeyDrawBit)
+@@ -1887,6 +1893,15 @@ namespace bgfx
+ 		else
+ 		{
+ 			bx::radixSort(m_sortKeys, s_ctx->m_tempKeys, m_sortValues, s_ctx->m_tempValues, m_numRenderItems);
++
++			// The renderers read the whole keys. The radix sort keeps the submit order among equal keys.
++			if (depthTies)
++			{
++				for (uint32_t ii = 0, num = m_numRenderItems; ii < num; ++ii)
++				{
++					m_sortKeys[ii] = SortKey::remapView(submitKeys[m_sortValues[ii] ], m_viewOrder);
++				}
++			}
+ 		}
+ 
+ 		reserveBlitKeys(m_numBlitItems);
+@@ -3302,6 +3317,7 @@ namespace bgfx
+ 		m_init.reset &= ~BGFX_RESET_INTERNAL_FORCE;
+ 		m_submit->m_debug            = m_debug;
+ 		m_submit->m_pipelinePrefetch = m_pipelinePrefetch;
++		bx::memCopy(m_submit->m_viewDepthTies, m_viewDepthTies, sizeof(m_viewDepthTies) );
+ 		m_submit->m_debugFrameBuffer = m_debugFrameBuffer;
+ 		m_submit->m_debugTextScale   = m_debugTextScale;
+ 		m_submit->m_perfStats.numViews = 0;
+@@ -7562,6 +7578,12 @@ namespace bgfx
+ 		s_ctx->setViewMode(_id, _mode);
+ 	}
+ 
++	void setViewDepthTies(ViewId _id, bool _submitOrder)
++	{
++		BX_ASSERT(checkView(_id), "Invalid view id: %d", _id);
++		s_ctx->setViewDepthTies(_id, _submitOrder);
++	}
++
+ 	void setViewFrameBuffer(ViewId _id, FrameBufferHandle _handle)
+ 	{
+ 		BX_ASSERT(checkView(_id), "Invalid view id: %d", _id);
+diff --git a/bgfx/src/bgfx_p.h b/bgfx/src/bgfx_p.h
+index 9b19ec5..3dee0c7 100644
+--- a/bgfx/src/bgfx_p.h
++++ b/bgfx/src/bgfx_p.h
+@@ -4418,6 +4418,25 @@ namespace bgfx
+ 		}
+ 
+ 		void sort();
++
++		/// The key that sorts a render item: its submit key with the view remapped. In a view whose draws of equal
++		/// depth keep their submit order, a draw sorted by depth sorts by its depth alone.
++		uint64_t sortKey(uint64_t _submitKey) const
++		{
++			const uint64_t key = SortKey::remapView(_submitKey, const_cast<ViewId*>(m_viewOrder) );
++			if ( (kSortKeyDrawBit | kSortKeyDrawTypeDepth) != (key & (kSortKeyDrawBit | kSortKeyDrawTypeMask) ) )
++			{
++				return key;
++			}
++
++			const ViewId id = SortKey::decodeView(_submitKey);
++			if (0 == (m_viewDepthTies[uint32_t(id) >> 6] & (uint64_t(1) << (id & 0x3f) ) ) )
++			{
++				return key;
++			}
++
++			return key & (kSortKeyViewMask | kSortKeyDrawBit | kSortKeyDrawTypeMask | kSortKeyDraw1DepthMask);
++		}
+ 		void dedupBind();
+ 
+ 		uint32_t getAvailTransientIndexBuffer(uint32_t _num, uint16_t _indexSize)
+@@ -4512,6 +4531,7 @@ namespace bgfx
+ 
+ 		ViewId m_viewRemap[BGFX_CONFIG_MAX_VIEWS];
+ 		ViewId m_viewOrder[BGFX_CONFIG_MAX_VIEWS+1]; //!< Inverse of m_viewRemap.
++		uint64_t m_viewDepthTies[kViewUsedWords] = {}; //!< Views whose draws of equal depth keep submit order.
+ 		float m_colorPalette[BGFX_CONFIG_MAX_COLOR_PALETTE][4];
+ 		FrameArenaT<View, kViewBlock> m_view;
+ 
+@@ -8809,6 +8829,13 @@ namespace bgfx
+ 			m_view[_id].m_mode = uint8_t(_mode);
+ 		}
+ 
++		BGFX_API_FUNC(void setViewDepthTies(ViewId _id, bool _submitOrder) )
++		{
++			const uint64_t bit = uint64_t(1) << (_id & 0x3f);
++			uint64_t& word = m_viewDepthTies[uint32_t(_id) >> 6];
++			word = _submitOrder ? word | bit : word & ~bit;
++		}
++
+ 		BGFX_API_FUNC(void setViewFrameBuffer(ViewId _id, FrameBufferHandle _handle) )
+ 		{
+ 			BGFX_CHECK_HANDLE_INVALID_OK("setViewFrameBuffer", m_frameBufferHandle, _handle);
+@@ -9091,6 +9118,7 @@ namespace bgfx
+ 
+ 		ViewId m_viewRemap[BGFX_CONFIG_MAX_VIEWS];
+ 		ViewId m_viewOrder[BGFX_CONFIG_MAX_VIEWS];
++		uint64_t m_viewDepthTies[kViewUsedWords] = {}; //!< Views whose draws of equal depth keep submit order.
+ 		ViewArena m_view;
+ 		ViewNameArena m_viewNames;
+ 		uint32_t m_viewObserve;

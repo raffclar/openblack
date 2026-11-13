@@ -72,7 +72,6 @@ public:
 	[[nodiscard]] uint32_t GotoCount() const { return _gotoCount; }
 	[[nodiscard]] uint32_t FallbackCount() const { return _fallbackCount; }
 	[[nodiscard]] uint32_t UnsupportedCount() const { return _unsupportedCount; }
-	void CountFallback() { ++_fallbackCount; }
 	[[nodiscard]] const std::set<uint32_t>& WantedLabels() const { return _wantedLabels; }
 	[[nodiscard]] const std::set<uint32_t>& EmittedLabels() const { return _emittedLabels; }
 

@@ -20,6 +20,7 @@
 #include "Creature/CreatureIdleMind.h"
 #include "Creature/CreatureLayers.h"
 #include "Creature/CreatureObjectActions.h"
+#include "ScriptHeaders/ScriptEnums.h"
 #include "TestbedScenarioBuilders.h"
 #include "TestbedScenarioRegistry.h"
 
@@ -1246,6 +1247,34 @@ void testbed_scenarios::AddObjects(std::vector<Scenario>& all)
 	    .hand = offering,
 	});
 
+	// The hand gives the food to a curious tiger that is not hungry. Its mind takes the food and looks it over. Then the
+	// mind stops, and the tiger tosses the food away.
+	// The time from the gift until the mind stops: the take and a part of the look are done then
+	constexpr float k_GiftHeldSeconds = 6.0f;
+	auto curiousThinking = Posed(CreatureType::Tiger, {0.0f, 0.0f});
+	curiousThinking.pauseMind = false;
+	curiousThinking.hold = true;
+	curiousThinking.needs = {.energy = 1.0f};
+	curiousThinking.desires = {{.desire = Desire::Curiosity, .fraction = 1.0f}};
+	auto tossingTheGift = giving;
+	tossingTheGift.push_back({.kind = Kind::PauseMind, .creature = 0, .delaySeconds = k_GiftHeldSeconds, .value = 1});
+	tossingTheGift.push_back({.kind = Kind::Discard, .creature = 0, .delaySeconds = 0.5f, .waitUntilFree = false});
+	all.push_back({
+	    .id = "creature.gift_tossed_away",
+	    .name = "A creature tosses away a gift",
+	    .facet = Facet::Objects,
+	    .description = "The player's hand gives a pile of food to a curious tiger that is not hungry. The tiger takes the "
+	                   "food and looks it over. Then its mind stops, and the tiger tosses the food away.",
+	    .expected = "The tiger takes the food from the hand. The toss lets go of the food, which falls to the land as a "
+	                "whole thing and stays there. The player's hand holds nothing.",
+	    .environment = {.cursor = glm::vec2(0.5f, 0.6f), .temple = glm::vec2(0.0f, 80.0f)},
+	    .framing = {.shot = Shot::Follow, .distance = 1.3f},
+	    .creatures = {curiousThinking},
+	    .objects = {{.type = MobileObjectInfo::MagicFood, .offset = {-15.0f, -15.0f}}},
+	    .commands = tossingTheGift,
+	    .hand = offering,
+	});
+
 	// The hand gives the food, then moves far away while the creature reaches for it
 	constexpr float k_CallOffSweepDelay = 0.3f;
 	constexpr float k_CallOffSweepSeconds = 0.2f;
@@ -1291,6 +1320,29 @@ void testbed_scenarios::AddObjects(std::vector<Scenario>& all)
 	    .objects = {{.type = MobileObjectInfo::MagicFood, .offset = {-15.0f, -15.0f}}},
 	    .commands = pressesInTheWait,
 	    .hand = offering,
+	});
+
+	// The tiger holds the food, and the pointer moves onto the food in its hand. The Action button goes down there, goes
+	// up a second later, and then the tiger eats what it holds.
+	const std::vector<Command> reachForHeld {
+	    OnObject(Kind::PickUp, 0, 0, 1.0f),
+	    {.kind = Kind::PointerOnObject, .delaySeconds = 1.0f, .waitUntilFree = true, .object = 0},
+	    {.kind = Kind::PointerPress, .delaySeconds = 0.3f, .value = 3},
+	    {.kind = Kind::PointerRelease, .delaySeconds = 1.0f, .value = 3},
+	    Act(Kind::EatHeld, 0, 1.0f, true)};
+	all.push_back({
+	    .id = "creature.hand_presses_on_held_food",
+	    .name = "The hand presses on food that a creature holds",
+	    .facet = Facet::Objects,
+	    .description = "A hungry tiger picks up a pile of food and holds it. The pointer moves onto the food in the "
+	                   "tiger's hand, and the Action button goes down and up. Then the tiger eats what it holds.",
+	    .expected = "The cursor does not find the food in the tiger's hand, so the player's hand does not take it. The "
+	                "food stays in the tiger's hand, and only the tiger holds it. The tiger eats the food.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Follow, .distance = 1.3f},
+	    .creatures = {hungry},
+	    .objects = {{.type = MobileObjectInfo::MagicFood, .offset = {0.0f, -k_Reach}}},
+	    .commands = reachForHeld,
 	});
 
 	all.push_back({
@@ -1675,5 +1727,36 @@ void testbed_scenarios::AddObjects(std::vector<Scenario>& all)
 	    .landScript = R"(CREATE_STREET_LANTERN("-4.0,0.0", 7)
 CREATE_STREET_LIGHT("4.0,0.0")
 )",
+	});
+
+	// A creed, a pair of eyes and a crop lie on the land. A script sets the scale of the eyes, and the hand takes the crop.
+	constexpr glm::vec2 k_CreedsAt {0.0f, 40.0f};
+	all.push_back({
+	    .id = "objects.creed_eyes_and_crop",
+	    .name = "A creed, eyes and a crop as loose objects",
+	    .facet = Facet::Objects,
+	    .description = "Three loose objects lie in a row on the land: a creed 8 metres west, a pair of eyes in the middle "
+	                   "and a crop 8 metres east. At 3 seconds a script sets the scale of the eyes to 2. At 5 seconds the "
+	                   "hand takes the crop.",
+	    .expected = "The creed and the eyes show no model of their own: each shows only a white glow over the creed "
+	                "model, and its texture slides. Each hums. At 3 seconds the glow of the eyes becomes twice as large, "
+	                "and the eyes keep their own size. At 5 seconds the crop goes, and the hand holds a handful of food "
+	                "in its place.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_CreedsAt.x, 12.0f, k_CreedsAt.y - 30.0f},
+	                .look = {k_CreedsAt.x, 0.0f, k_CreedsAt.y}},
+	    .objects = {{.type = MobileObjectInfo::Creed, .offset = k_CreedsAt + glm::vec2(-8.0f, 0.0f)},
+	                {.type = MobileObjectInfo::Eyes, .offset = k_CreedsAt},
+	                {.type = MobileObjectInfo::Crop, .offset = k_CreedsAt + glm::vec2(8.0f, 0.0f)}},
+	    .commands = {{.kind = Kind::CallNative,
+	                  .delaySeconds = 3.0f,
+	                  .script = "SET_PROPERTY",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Integer,
+	                                       .number = static_cast<float>(script::ObjectPropertyType::Scale)},
+	                                      {.kind = ScriptArgument::Kind::Object, .index = 1},
+	                                      {.kind = ScriptArgument::Kind::Number, .number = 2.0f}}},
+	                 {.kind = Kind::HandTake, .delaySeconds = 2.0f, .object = 2}},
+	    .hand = HandHold {.offset = k_CreedsAt + glm::vec2(8.0f, 0.0f), .height = 6.0f},
 	});
 }

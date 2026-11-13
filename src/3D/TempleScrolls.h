@@ -199,8 +199,6 @@ public:
 	void ShowLatestHistory() noexcept { _historyStart = 0; }
 	/// A button of the story history turns its first line, kept between the newest and the oldest line
 	void TurnHistory(help::StoryTurn turn, const Facts& facts);
-	/// The line of the story history that the scroll starts at, 0 for the newest line
-	[[nodiscard]] int32_t GetHistoryStart() const noexcept { return _historyStart; }
 	/// Whether the camera is close to the story history scroll, which then shows its buttons
 	[[nodiscard]] bool IsHistoryOpen() const { return IsWrittenInFront(Content::LibraryHistory); }
 	/// Whether the scroll of some content is the one the camera is close to, its text written in front of it each frame

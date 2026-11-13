@@ -12,6 +12,7 @@
 
 #include <algorithm>
 #include <array>
+#include <functional>
 #include <initializer_list>
 #include <iterator>
 #include <map>
@@ -26,6 +27,8 @@
 #include <vector>
 
 #include <gtest/gtest.h>
+#include <spdlog/sinks/ringbuffer_sink.h>
+#include <spdlog/spdlog.h>
 
 #include "Commands/TurnCodec.h"
 #include "LoopbackSockets.h"
@@ -172,6 +175,7 @@ struct Computer
 		    },
 		    .readCreature = [this] { return this->creature; },
 		    .readAlignment = [alignment] { return alignment; },
+		    .localParts = [this](uint32_t turn) { return parts ? parts(turn) : online::PartHashes {}; },
 		    .testLoadDelayMicroseconds = loadDelayMicroseconds,
 		});
 		this->landFile = std::move(landFile);
@@ -207,6 +211,8 @@ struct Computer
 	std::vector<uint8_t> creature;
 	std::string askedLand;
 	std::unique_ptr<LoopbackSockets::Client> sockets;
+	/// The parts of the world of this computer at a turn, for the log of a part. None by default.
+	std::function<online::PartHashes(uint32_t turn)> parts;
 	NetworkSession session;
 	FakeWorld world;
 	std::vector<size_t> played;
@@ -789,6 +795,75 @@ TEST_F(LockstepTest, AClientThatPartsLoadsTheWorldOfTheServerAndStaysInStep)
 	EXPECT_EQ(alice.world.turns, serverWorld.turns);
 	EXPECT_GT(alice.session.GetCompares().same, 90u);
 	EXPECT_EQ(alice.session.GetCompares().compared, alice.session.GetCompares().same + 1);
+}
+
+TEST_F(LockstepTest, AClientThatPartsSendsItsPartsAndBothLogsNameThePartThatDiffers)
+{
+	// The server's log goes to a sink that the test reads
+	auto sink = std::make_shared<spdlog::sinks::ringbuffer_sink_mt>(256);
+	auto logger = std::make_shared<spdlog::logger>("game", sink);
+	spdlog::drop("game");
+	spdlog::register_logger(logger);
+	MakeHost(1);
+	GiveWorldState();
+	// The two worlds differ only in the part "Transform" from the turn of the part on
+	host->SetPartsOfTurn(
+	    [](uint32_t turn) { return online::PartHashes {{"entities", 1}, {"Transform", 10 + turn}, {"synced seed", 7}}; });
+	Computer alice(network, now, "god:alice");
+	// The world of the computer keeps the hashes of its parts as they were at each turn, also after it loads the server's
+	// world
+	constexpr uint32_t k_PartsAfter = 20;
+	alice.parts = [](uint32_t turn) {
+		const bool parted = turn > k_PartsAfter;
+		return online::PartHashes {{"entities", 1}, {"Transform", 10 + turn + (parted ? 1 : 0)}, {"synced seed", 7}};
+	};
+	alice.world.partsAfter = k_PartsAfter;
+	Frames({&alice}, 60);
+	spdlog::drop("game");
+
+	const auto serverLines = sink->last_formatted();
+	const auto serverPart = std::ranges::find_if(serverLines, [](const std::string& line) {
+		return line.find("parted at turn") != std::string::npos && line.find("1 parts differ: Transform") != std::string::npos;
+	});
+	ASSERT_NE(serverPart, serverLines.end());
+	EXPECT_NE(serverPart->find("(alice, slot 0)"), std::string::npos) << *serverPart;
+	// The checksums of the part are in the line of the compare
+	EXPECT_TRUE(std::ranges::any_of(serverLines, [](const std::string& line) {
+		return line.find("parts from the server's world at turn") != std::string::npos &&
+		       line.find("client ") != std::string::npos;
+	}));
+	const auto& lines = alice.session.Log().Lines();
+	EXPECT_TRUE(std::ranges::any_of(lines, [](const std::string& line) {
+		return line.find("The worlds parted at turn") != std::string::npos &&
+		       line.find("1 parts differ: Transform (this ") != std::string::npos;
+	}));
+	EXPECT_TRUE(std::ranges::any_of(
+	    lines, [](const std::string& line) { return line.find("The client asks to resume from turn") != std::string::npos; }));
+	EXPECT_EQ(alice.loads, 1u);
+}
+
+TEST_F(LockstepTest, TheServerLogTellsWhyItRefusesAResume)
+{
+	auto sink = std::make_shared<spdlog::sinks::ringbuffer_sink_mt>(64);
+	auto logger = std::make_shared<spdlog::logger>("game", sink);
+	spdlog::drop("game");
+	spdlog::register_logger(logger);
+	MakeHost(1);
+	Computer alice(network, now, "god:alice");
+	Frames({&alice}, 5);
+	auto client = network.MakeClient();
+	const auto id =
+	    client->Connect({.url = "wss://127.0.0.1/game/1", .headers = {}, .subprotocols = {}, .serverKey = std::nullopt}, {});
+	Frames({&alice}, 1);
+	client->Poll();
+	client->SendText(id, game_socket::ToJson(game_socket::Resume {.session = "not-a-secret", .turn = 0, .world = false}));
+	Frames({&alice}, 2);
+	spdlog::drop("game");
+	const auto lines = sink->last_formatted();
+	EXPECT_TRUE(std::ranges::any_of(lines, [](const std::string& line) {
+		return line.find("refuses connection") != std::string::npos &&
+		       line.find("resume: no god or observer") != std::string::npos;
+	}));
 }
 
 TEST_F(LockstepTest, TheGodsSendTheirCreaturesToAllPlayersBeforeTheStart)

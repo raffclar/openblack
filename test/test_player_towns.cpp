@@ -7,6 +7,8 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <algorithm>
+#include <tuple>
 #include <vector>
 
 #include <gtest/gtest.h>
@@ -71,6 +73,43 @@ TEST(PlayerTowns, AllTheTownsComeInTheListOfEachPlayerInTurnAndTheNeutralListLas
 	const auto oneFirst = MakeTown(registry, 5, PlayerNames::PLAYER_ONE, 2);
 	EXPECT_EQ(openblack::ecs::player_towns::AllInOrder(registry),
 	          (std::vector<entt::entity> {oneFirst, oneWon, twoFirst, twoWon, neutral}));
+}
+
+TEST(PlayerTowns, TownsWithTheSameOwnerAndGainKeepTheOrderOfTheWalk)
+{
+	// Many towns share an owner and a gain turn. Each group must keep the order in which the registry walks its towns.
+	Registry registry;
+	std::vector<entt::entity> walked;
+	for (uint32_t i = 0; i < 60; ++i)
+	{
+		const auto owner = static_cast<PlayerNames>((i * 7U) % 3U);
+		MakeTown(registry, i, owner, (i * 5U) % 2U);
+	}
+	registry.Each<const Town>([&walked](entt::entity entity, const Town&) { walked.push_back(entity); });
+	std::vector<entt::entity> expected = walked;
+	std::ranges::stable_sort(expected, [&registry](entt::entity a, entt::entity b) {
+		const auto& first = registry.Get<const Town>(a);
+		const auto& second = registry.Get<const Town>(b);
+		return std::tie(first.owner, first.gained) < std::tie(second.owner, second.gained);
+	});
+	EXPECT_EQ(openblack::ecs::player_towns::AllInOrder(registry), expected);
+}
+
+TEST(PlayerTowns, EachTownInOrderComesInTheOrderOfTheList)
+{
+	// More towns than the list on the stack holds use the heap, with the same order
+	for (const uint32_t count : {0U, 5U, 60U, static_cast<uint32_t>(openblack::ecs::player_towns::k_InlineTowns) + 40U})
+	{
+		Registry registry;
+		for (uint32_t i = 0; i < count; ++i)
+		{
+			MakeTown(registry, i, static_cast<PlayerNames>((i * 7U) % 4U), (i * 5U) % 3U);
+		}
+		std::vector<entt::entity> visited;
+		openblack::ecs::player_towns::ForEachInOrder(registry, [&visited](entt::entity town) { visited.push_back(town); });
+		EXPECT_EQ(visited, openblack::ecs::player_towns::AllInOrder(registry)) << count;
+		EXPECT_EQ(visited.size(), count);
+	}
 }
 
 TEST(PlayerTowns, ATownWonLaterComesAfterATownMadeLater)

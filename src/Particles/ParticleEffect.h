@@ -452,6 +452,12 @@ public:
 	[[nodiscard]] virtual std::vector<glm::vec3> TargetExtraPoints(entt::entity /*target*/) const { return {}; }
 	/// Where an object a rule follows stands, none once it is no longer there
 	[[nodiscard]] virtual std::optional<glm::vec3> ObjectPosition(entt::entity /*object*/) const { return std::nullopt; }
+	/// Where the frame draws the origin of the model of an object that a rule follows, none once it is no longer there.
+	/// A thing in the hand or in flight is drawn there between the turns.
+	[[nodiscard]] virtual std::optional<glm::vec3> ObjectDrawnOrigin(entt::entity object) const
+	{
+		return ObjectPosition(object);
+	}
 	/// The game's time in milliseconds now: a tenth of a second for each turn played, and the milliseconds into the next
 	/// turn (at most 99); it follows the game's speed and stands still while the game is paused
 	[[nodiscard]] virtual uint64_t GameMilliseconds() const { return 0; }
@@ -940,7 +946,6 @@ public:
 	[[nodiscard]] int GetPlayer() const { return _player; }
 	/// The whole effect's drawn alpha, 0..255
 	void SetGlobalAlpha(float alpha) { _globalAlpha = alpha; }
-	[[nodiscard]] float GetGlobalAlpha() const { return _globalAlpha; }
 	/// A hidden effect steps as usual but draws nothing, as the miracle in the hand does until its seed is ready
 	void SetHidden(bool hidden) { _hidden = hidden; }
 	[[nodiscard]] bool IsHidden() const { return _hidden; }

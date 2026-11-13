@@ -198,6 +198,17 @@ uint8_t GroundShadow::Level(uint8_t covered, uint8_t alpha)
 	return static_cast<uint8_t>(((texel * alpha) / 255U) >> 12U);
 }
 
+std::array<uint8_t, GroundShadow::k_Texels * GroundShadow::k_Texels>
+GroundShadow::Joined(const std::array<uint8_t, k_Texels * k_Texels>& covered,
+                     const std::array<uint8_t, k_Texels * k_Texels>& filled, uint8_t alpha)
+{
+	std::array<uint8_t, k_Texels * k_Texels> levels {};
+	std::ranges::transform(covered, filled, levels.begin(), [alpha](uint8_t counted, uint8_t through) {
+		return Level(static_cast<uint8_t>(counted | through), alpha);
+	});
+	return levels;
+}
+
 bool GroundShadow::OnBorder(uint8_t column, uint8_t row)
 {
 	return column == 0 || row == 0 || column >= k_Texels - 1 || row >= k_Texels - 1;

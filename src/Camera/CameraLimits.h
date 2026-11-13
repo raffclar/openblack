@@ -43,8 +43,6 @@ inline constexpr float k_ClosestZoom = k_Clearance + 0.1f;
 /// there over three seconds and arriving still. So the camera rises no higher than 3500 over the middle of the map, less
 /// further out, and never reaches the map's corners. Nothing when it is inside.
 inline constexpr glm::vec3 k_WorldCentre {2560.0f, 0.0f, 2560.0f};
-inline constexpr float k_WorldReach = 3500.0f;
-inline constexpr float k_WorldHoldRadius = 3499.0f;
 inline constexpr float k_WorldHoldSeconds = 3.0f;
 [[nodiscard]] std::optional<glm::vec3> KeepInsideTheWorld(const glm::vec3& destination);
 

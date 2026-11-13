@@ -220,6 +220,11 @@ float magic::piles::PotScale(uint32_t amount, uint32_t scaleEvery)
 	return std::min(static_cast<float>(amount) / static_cast<float>(scaleEvery) + k_Least, k_Most);
 }
 
+bool magic::piles::PotDrawn(PotType type, uint32_t amount, bool held)
+{
+	return amount != 0 || (!held && type != PotType::Pot);
+}
+
 std::optional<float> magic::piles::SizeAfterChange(PotType type, uint32_t amount, uint32_t scaleEvery)
 {
 	if (type != PotType::Pot)

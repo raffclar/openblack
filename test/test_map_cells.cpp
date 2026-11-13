@@ -69,6 +69,28 @@ TEST(MapCells, AListFilledWithACellHoldsWhatAllGivesAndNothingElse)
 	EXPECT_TRUE(out.empty());
 }
 
+TEST(MapCells, ACellGivesItsThingsAfterAClearAndARestoreOfTheCells)
+{
+	CellLists lists(8);
+	const auto cell = *lists.IndexOf({3, 4});
+	const auto other = *lists.IndexOf({4, 3});
+	lists.Insert(cell, E(1), Placement::FixedFront);
+	lists.Insert(cell, E(10), Placement::MobileFront);
+	lists.Remove(cell, E(1));
+	EXPECT_TRUE(lists.Fixed(cell).empty());
+	EXPECT_EQ(ToVector(lists.Mobile(cell)), (std::vector {E(10)}));
+	EXPECT_TRUE(lists.All(other).empty());
+	const auto saved = lists.SavedCells();
+	lists.Clear();
+	EXPECT_TRUE(lists.All(cell).empty());
+	// A cell that takes things again after the clear gives them
+	lists.Insert(other, E(2), Placement::FixedFront);
+	EXPECT_EQ(lists.All(other), (std::vector {E(2)}));
+	ASSERT_TRUE(lists.RestoreCells(saved));
+	EXPECT_TRUE(lists.All(other).empty());
+	EXPECT_EQ(lists.All(cell), (std::vector {E(10)}));
+}
+
 TEST(MapCells, TakingOneOutKeepsTheOthersInOrderAndMovingPutsItInFront)
 {
 	CellLists lists(8);

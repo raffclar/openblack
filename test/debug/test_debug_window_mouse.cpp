@@ -49,12 +49,33 @@ SDL_Event WindowEvent(SDL_WindowEventID id)
 // A scenario that drives the hand has priority. The inspector and the lock make the windows follow the driven pointer.
 TEST(DebugWindowMouse, AScenarioHasPriorityOverTheInspectorAndTheLock)
 {
-	EXPECT_EQ(ChooseWindowMouse(false, false, false), WindowMouse::Player);
-	EXPECT_EQ(ChooseWindowMouse(false, true, false), WindowMouse::DrivenOnly);
-	EXPECT_EQ(ChooseWindowMouse(false, false, true), WindowMouse::DrivenOnly);
-	EXPECT_EQ(ChooseWindowMouse(false, true, true), WindowMouse::DrivenOnly);
-	EXPECT_EQ(ChooseWindowMouse(true, true, true), WindowMouse::KeptOff);
-	EXPECT_EQ(ChooseWindowMouse(true, false, false), WindowMouse::KeptOff);
+	const auto choose = [](bool scenario, bool driven, bool locked) {
+		return ChooseWindowMouse(
+		    {.scenarioDrivesHand = scenario, .handDemoPlays = false, .pointerDriven = driven, .inputLocked = locked});
+	};
+	EXPECT_EQ(choose(false, false, false), WindowMouse::Player);
+	EXPECT_EQ(choose(false, true, false), WindowMouse::DrivenOnly);
+	EXPECT_EQ(choose(false, false, true), WindowMouse::DrivenOnly);
+	EXPECT_EQ(choose(false, true, true), WindowMouse::DrivenOnly);
+	EXPECT_EQ(choose(true, true, true), WindowMouse::KeptOff);
+	EXPECT_EQ(choose(true, false, false), WindowMouse::KeptOff);
+}
+
+// While a hand demonstration plays, the windows take no press. A debug window under the recorded pointer then does not
+// stop the cast of the demonstration.
+TEST(DebugWindowMouse, AHandDemonstrationKeepsTheWindowsOffTheMouse)
+{
+	for (const bool driven : {false, true})
+	{
+		for (const bool locked : {false, true})
+		{
+			EXPECT_EQ(ChooseWindowMouse(
+			              {.scenarioDrivesHand = false, .handDemoPlays = true, .pointerDriven = driven, .inputLocked = locked}),
+			          WindowMouse::KeptOff);
+		}
+	}
+	EXPECT_FALSE(WindowsTakeEvent(MouseEvent(SDL_MOUSEBUTTONDOWN, true), WindowMouse::KeptOff));
+	EXPECT_TRUE(WindowsTakeEvent(MouseEvent(SDL_MOUSEBUTTONUP, true), WindowMouse::KeptOff));
 }
 
 // With the mouse of the player, the windows take all the mouse events

@@ -127,11 +127,6 @@ std::string_view openblack::dance::ResultToStr(DanceResult result)
 	return "Unknown";
 }
 
-float DanceAction::Float(std::size_t index) const
-{
-	return std::bit_cast<float>(arguments.at(index));
-}
-
 DanceResult DanceFile::Open(std::span<const uint8_t> buffer)
 {
 	Reader reader(buffer);

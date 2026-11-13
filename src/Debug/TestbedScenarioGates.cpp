@@ -9,7 +9,7 @@
 
 // The testbed's scenarios of the creatures' gate on the first land: the Norse gate and the gate stone plinth beside it,
 // placed as the land's script places them, the three carved stones laid in the plinth as the hand gives them, and the
-// plinth and the gate opened and closed as the choosing script does
+// plinth and the gate opened and closed as the choosing script does, and the sparkle that a script puts on a gate stone
 
 #include <vector>
 
@@ -58,6 +58,19 @@ Command OpenClose(size_t object, bool open, float delay)
 {
 	return {.kind = Kind::SetOpenClose, .delaySeconds = delay, .value = open ? size_t {1} : size_t {0}, .object = object};
 }
+
+/// The land's script starts the sparkle on a gate stone as the first gold scroll does: the effect that marks an object,
+/// on the stone, with no end
+Command SparkleOn(size_t stone, float delay)
+{
+	constexpr float k_HighlightOnObject = 34.0f;
+	return {.kind = Kind::CallNative,
+	        .delaySeconds = delay,
+	        .script = "SPECIAL_EFFECT_OBJECT",
+	        .scriptArguments = {{.kind = ScriptArgument::Kind::Integer, .number = k_HighlightOnObject},
+	                            {.kind = ScriptArgument::Kind::Object, .index = stone},
+	                            {.kind = ScriptArgument::Kind::Number, .number = -1.0f}}};
+}
 } // namespace
 
 void testbed_scenarios::AddGateScenarios(std::vector<Scenario>& all)
@@ -104,5 +117,39 @@ void testbed_scenarios::AddGateScenarios(std::vector<Scenario>& all)
 	    .objects = GateAndStones(),
 	    .commands = {Lay(k_TigerStone, 1.0f), OpenClose(k_PlinthObject, true, 1.0f), OpenClose(k_GateObject, true, 0.0f),
 	                 OpenClose(k_PlinthObject, false, 12.0f), OpenClose(k_GateObject, false, 0.0f)},
+	});
+
+	all.push_back({
+	    .id = "objects.gate_stone_sparkle_thrown",
+	    .name = "The sparkle on a gate stone that flies",
+	    .facet = Facet::Objects,
+	    .description = "A script starts the sparkle on the tiger gate stone, as the first gold scroll does. Then the hand "
+	                   "throws the stone across the land from the west, again every six seconds.",
+	    .expected = "The sparks rise from the foot of the stone in each frame, also while it flies. They do not stay "
+	                "behind the stone or jump after it.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 18.0f, -40.0f}, .look = {0.0f, 6.0f, 0.0f}},
+	    .objects = {{.type = MobileStaticInfo::GateTotemTiger, .offset = {-12.0f, 0.0f}}},
+	    .commands = {SparkleOn(0, 1.0f)},
+	    .throws = {{.object = 0,
+	                .from = glm::vec2(-12.0f, 0.0f),
+	                .height = 4.0f,
+	                .velocity = {8.0f, 9.0f, 0.0f},
+	                .delaySeconds = 3.0f,
+	                .repeatSeconds = 6.0f}},
+	});
+
+	all.push_back({
+	    .id = "objects.gate_stone_sparkle_held",
+	    .name = "The sparkle on a gate stone in the hand",
+	    .facet = Facet::Objects,
+	    .description = "A script starts the sparkle on the tiger gate stone, as the first gold scroll does. Then the "
+	                   "player's hand takes the stone. Move the hand to carry the stone across the land.",
+	    .expected = "The sparks rise from the foot of the stone in the hand in each frame. They do not stay behind the "
+	                "stone or jump after it while the hand moves.",
+	    .environment = {.dispenserGrid = false, .cursor = glm::vec2(0.5f, 0.5f)},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 25.0f, -45.0f}, .look = {0.0f, 4.0f, 0.0f}},
+	    .objects = {{.type = MobileStaticInfo::GateTotemTiger}},
+	    .commands = {SparkleOn(0, 1.0f), {.kind = Kind::HandTake, .delaySeconds = 2.0f, .object = 0}},
 	});
 }

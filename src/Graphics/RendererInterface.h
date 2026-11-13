@@ -13,6 +13,7 @@
 
 #include <array>
 #include <filesystem>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <span>
@@ -34,6 +35,7 @@
 #include "Visual/RenderModes.h"
 #include "Visual/RenderPass.h"
 #include "Visual/RendererRequestsInterface.h"
+#include "WorldLabelGroup.h"
 
 #include "../EngineConfig.h"
 
@@ -85,6 +87,9 @@ public:
 		bool drawHand = true;
 		/// The glow, the bands and the bracelets of the miracle in the hand. The hand does not show them inside the temple.
 		bool drawHandEffects = true;
+		/// Submits a group of the labels in the world. The main pass calls it at the point where the game adds or draws the
+		/// group. With no function, the caller submits the labels.
+		std::function<void(WorldLabelGroup)> submitWorldLabels;
 	};
 
 	struct L3DMeshSubmitDesc
@@ -109,6 +114,8 @@ public:
 		std::optional<float> alphaThreshold;
 		/// Every primitive drops its fragments under its material's alpha threshold, even where its material doesn't
 		bool materialAlphaTest {false};
+		/// Every primitive whose mode has an alpha test uses this reference, of 255, in place of its material's, when given
+		std::optional<uint8_t> alphaTestRef;
 		const graphics::ShaderProgram* program;
 		/// Draws the submeshes that have a lightmap, with it bound to s_lightmap, when set
 		const graphics::ShaderProgram* lightmapProgram;
@@ -154,6 +161,8 @@ public:
 		/// A texture every primitive with a skin is drawn with in place of it, when set, as the game gives the creature
 		/// room's icons
 		const TextureHandle* skinTexture;
+		/// The alpha of the texture in place of the skins, for a program that reads it apart (s_skinAlpha)
+		const Texture2D* skinAlpha {nullptr};
 		/// The environment map the mesh is drawn with where its program takes one (s_environment), each primitive taking
 		/// it as its material says
 		const Texture2D* environment;
@@ -359,6 +368,9 @@ public:
 	[[nodiscard]] virtual uint32_t GetDeviceRestores() const noexcept = 0;
 	/// The bytes of data of the textures, buffers and shaders that the renderer keeps to make its device again
 	[[nodiscard]] virtual graphics::device_restore::Kept GetDeviceRestoreKept() const noexcept = 0;
+	/// True when the recovery from a lost device failed and the game cannot draw again. Only the web build stops for
+	/// this: the desktop renderer tries again until it gets a device.
+	[[nodiscard]] virtual bool DeviceRecoveryFailed() const noexcept = 0;
 	virtual void SetDebug(bool value) noexcept = 0;
 	virtual void SetProfile(bool value) noexcept = 0;
 

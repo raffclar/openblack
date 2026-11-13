@@ -224,6 +224,18 @@ visuals::SeedTurn visuals::TurnSeed(SeedTurn turn, std::optional<int> phialRecei
 	return turn;
 }
 
+visuals::IconSeedTurn visuals::TurnIconSeed(IconSeedTurn turn, std::optional<int> phialReceiveType, float gameSeconds,
+                                            bool drawn)
+{
+	if (!drawn)
+	{
+		return turn;
+	}
+	turn.seed = TurnSeed(turn.seed, phialReceiveType, gameSeconds);
+	turn.ringSpin = std::fmod(turn.ringSpin + (k_RingSpin * gameSeconds), glm::two_pi<float>());
+	return turn;
+}
+
 float visuals::PhialPulse(float phase)
 {
 	return (openblack::portable_math::Sin(phase * k_TwoPi) + 1.0f) * 0.5f;

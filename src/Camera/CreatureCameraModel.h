@@ -50,11 +50,6 @@ public:
 	[[nodiscard]] const creature_follow::View& GetView() const { return _view; }
 	/// The share of the follow's own glide time that the glides take
 	[[nodiscard]] float GetTimeScale() const { return _timeScale; }
-	/// Whether Ctrl and Shift together swing the camera clear
-	[[nodiscard]] bool AutoRepositions() const { return _autoReposition; }
-	[[nodiscard]] float GetSecondsInMode() const { return _seconds; }
-	/// Whether the heading turns with the thing
-	[[nodiscard]] bool TurnsWithThing() const { return _relativeHeading; }
 	/// The offsets of the camera from its thing, until the cursor keys stop them
 	[[nodiscard]] const std::optional<creature_follow::Offsets>& GetOffsets() const { return _offsets; }
 	/// Whether the player has asked for their camera back with the cursor keys

@@ -217,6 +217,7 @@ public:
 		}
 	}
 	[[nodiscard]] bool HasWorldObjects(const Spell& /*spell*/) const override { return worldObjects; }
+	[[nodiscard]] uint32_t ForestTrees(const Spell& spell) const override { return forestTrees.value_or(spell.objectCount); }
 	bool PlantForest(Spell& spell) override
 	{
 		++planted;
@@ -241,6 +242,7 @@ public:
 	std::vector<bool> syncedCastEffects;
 	std::vector<std::pair<entt::entity, bool>> struck;
 	bool worldObjects {false};
+	std::optional<uint32_t> forestTrees;
 	int planted {0};
 	bool forestGrows {true};
 	bool stoneFits {true};
@@ -948,12 +950,36 @@ TEST(SpellBehaviours, TheForestPlantsOnceAsItsSeedLandsAndPaysForEachTree)
 	EXPECT_EQ(services.planted, 1);
 	// Its upkeep is its own and one event's cost for each tree
 	forest.objectCount = 18;
-	EXPECT_FLOAT_EQ(spells::CostToMaintain(*info, forest), 23.0f);
+	EXPECT_FLOAT_EQ(spells::CostToMaintain(services, forest), 23.0f);
 	// It lives on while its trees stand
 	services.worldObjects = true;
 	EXPECT_TRUE(spells::KeptByKind(services, forest));
 	services.worldObjects = false;
 	EXPECT_FALSE(spells::KeptByKind(services, forest));
+}
+
+TEST(SpellBehaviours, AForestPaysForTheTreesThatItsForestHasWhenItPays)
+{
+	auto info = MakeTables();
+	auto& nature = Effect(*info, MagicType::Forest);
+	nature.costPerEvent = 1.0f;
+	nature.costPerGameTurn = 5.0f;
+	FakeServices services(*info);
+	auto forest = MakeSpell(MagicType::Forest, 10000.0f);
+	forest.forestPlanted = true;
+	// The last turn of the forest counted eighteen trees. Two went after that turn, so the forest pays for sixteen.
+	forest.objectCount = 18;
+	services.forestTrees = 16;
+	EXPECT_FLOAT_EQ(spells::CostToMaintain(services, forest), 21.0f);
+	EXPECT_FLOAT_EQ(spells::RulesOf(services, forest).costToMaintain, 21.0f);
+	// With no tree left, or no forest, it pays only its own upkeep
+	services.forestTrees = 0;
+	EXPECT_FLOAT_EQ(spells::CostToMaintain(services, forest), 5.0f);
+	// The turn pays the upkeep of this moment
+	const float before = forest.chants.chants;
+	services.forestTrees = 3;
+	PayForOneTurn(forest.chants, spells::RulesOf(services, forest), services.CasterOf(forest));
+	EXPECT_FLOAT_EQ(before - forest.chants.chants, 8.0f);
 }
 
 TEST(SpellBehaviours, AForestCastAgainFromItsSeedMakesOnlyTheTreesThatItHasNow)
@@ -1003,7 +1029,7 @@ TEST(SpellBehaviours, AShieldsUpkeepGrowsWithItsSize)
 	spells::Prepare(services, shield);
 	EXPECT_FLOAT_EQ(shield.magnitude, 5.0f);
 	shield.magnitude = 60.0f;
-	EXPECT_FLOAT_EQ(spells::CostToMaintain(*info, shield), 80.0f);
+	EXPECT_FLOAT_EQ(spells::CostToMaintain(services, shield), 80.0f);
 }
 
 TEST(SpellBehaviours, AStormIsAsWideAsItsCircleWithinItsLimitsAndCostsByItsArea)
@@ -1023,9 +1049,9 @@ TEST(SpellBehaviours, AStormIsAsWideAsItsCircleWithinItsLimitsAndCostsByItsArea)
 	spells::Prepare(services, spell);
 	EXPECT_FLOAT_EQ(spell.magnitude, 1000.0f);
 	spell.magnitude = 40.0f;
-	EXPECT_FLOAT_EQ(spells::CostToMaintain(*info, spell), 25.0f);
+	EXPECT_FLOAT_EQ(spells::CostToMaintain(services, spell), 25.0f);
 	spell.magnitude = 120.0f;
-	EXPECT_FLOAT_EQ(spells::CostToMaintain(*info, spell), 225.0f);
+	EXPECT_FLOAT_EQ(spells::CostToMaintain(services, spell), 225.0f);
 	// Its swirl plays where it is cast
 	EXPECT_TRUE(spells::Start(services, spell));
 	ASSERT_EQ(services.castEffects.size(), 1u);

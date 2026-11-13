@@ -17,9 +17,11 @@
 #include <array>
 #include <string>
 #include <string_view>
+#include <utility>
 
 #include <LobbyApiJson.h>
 #include <fmt/format.h>
+#include <spdlog/spdlog.h>
 
 namespace openblack::ecs::systems
 {
@@ -36,6 +38,16 @@ constexpr std::string_view k_JsonType = "application/json";
 std::string_view TextOf(const HttpResponse& response)
 {
 	return response.Text();
+}
+
+/// Writes a line of the session to the game log, when the game has the log
+template <typename... Args>
+void LogSession(fmt::format_string<Args...> text, Args&&... args)
+{
+	if (const auto logger = spdlog::get("game"))
+	{
+		logger->info(text, std::forward<Args>(args)...);
+	}
 }
 
 std::vector<uint8_t> BytesOf(std::string_view text)
@@ -208,12 +220,14 @@ LobbyError LobbyErrorOf(const online::HttpResponse& response)
 
 LobbyClientSystem::LobbyClientSystem(std::optional<LobbyClientConfig> config, online::HttpClientInterface& http,
                                      std::unique_ptr<online::PushChannelInterface> push,
-                                     std::unique_ptr<online::TokenStoreInterface> tokens, Clock clock)
+                                     std::unique_ptr<online::TokenStoreInterface> tokens, Clock clock,
+                                     std::unique_ptr<online::SiteSessionInterface> site)
     : _config(std::move(config))
     , _http(http)
     , _push(std::move(push))
     , _tokens(std::move(tokens))
     , _clock(std::move(clock))
+    , _site(std::move(site))
 {
 }
 
@@ -239,6 +253,10 @@ bool LobbyClientSystem::AccessTokenValid() const
 
 void LobbyClientSystem::Update()
 {
+	if (_site != nullptr)
+	{
+		_site->Poll();
+	}
 	_push->Poll();
 	if (_reconnectAt.has_value() && _clock() >= *_reconnectAt)
 	{
@@ -314,6 +332,7 @@ void LobbyClientSystem::Login(std::string name, std::string password, LobbyCallb
 			return;
 		}
 		ApplySession(*session);
+		_fromSite = false;
 		OpenPush();
 		Succeed(callback, session->account);
 	});
@@ -352,6 +371,96 @@ void LobbyClientSystem::ResumeSession(LobbyCallback<lobby_api::AccountRef> callb
 	});
 }
 
+void LobbyClientSystem::SignInFromSite(LobbyCallback<lobby_api::AccountRef> callback)
+{
+	if (!CanSignInFromSite())
+	{
+		Fail(callback, ErrorOfKind(_siteDeclined ? LobbyErrorKind::NotLoggedIn : LobbyErrorKind::NotConfigured));
+		return;
+	}
+	if (_state == LobbySessionState::LoggedIn && _account.has_value())
+	{
+		Succeed(callback, *_account);
+		return;
+	}
+	if (_state == LobbySessionState::LoggingIn || _loggingOut)
+	{
+		Fail(callback, ErrorOfKind(LobbyErrorKind::Busy));
+		return;
+	}
+	_state = LobbySessionState::LoggingIn;
+	const auto generation = ++_generation;
+	_site->Request([this, generation, callback = std::move(callback)](HttpResponse&& response) {
+		if (generation != _generation)
+		{
+			Fail(callback, ErrorOfKind(LobbyErrorKind::Cancelled));
+			return;
+		}
+		_state = LobbySessionState::LoggedOut;
+		if (auto error = LobbyErrorOf(response); error.kind != LobbyErrorKind::None)
+		{
+			// Nobody is signed in on the site, or the page cannot ask: the player logs in with a name and a password
+			if (error.kind == LobbyErrorKind::Refused)
+			{
+				error.kind = LobbyErrorKind::NotLoggedIn;
+			}
+			LogSession("The site gives no lobby session (status {}): the login box stays", response.status);
+			Fail(callback, std::move(error));
+			return;
+		}
+		const auto session = lobby_api::ParseSession(TextOf(response));
+		if (!session.has_value() || session->refreshToken.has_value())
+		{
+			Fail(callback, LobbyError {.kind = LobbyErrorKind::BadAnswer, .status = response.status});
+			return;
+		}
+		ApplySession(*session);
+		_fromSite = true;
+		LogSession("The lobby session comes from the sign-in of the site, as {}", session->account.name);
+		OpenPush();
+		Succeed(callback, session->account);
+	});
+}
+
+void LobbyClientSystem::RefreshFromSite(const std::function<void(const LobbyError&)>& finish)
+{
+	_refreshing = true;
+	const auto generation = _generation;
+	_site->Request([this, generation, finish](HttpResponse&& response) {
+		if (generation != _generation)
+		{
+			finish(ErrorOfKind(LobbyErrorKind::Cancelled));
+			return;
+		}
+		auto error = LobbyErrorOf(response);
+		if (error.kind == LobbyErrorKind::NotLoggedIn || error.kind == LobbyErrorKind::Refused)
+		{
+			// The player signed out on the site, or the sign-in of the site ended: the session of the game ends too
+			LogSession("The site ended the lobby session (status {})", response.status);
+			EndSession();
+			finish(ErrorOfKind(LobbyErrorKind::NotLoggedIn));
+			return;
+		}
+		if (error.kind != LobbyErrorKind::None)
+		{
+			finish(error);
+			return;
+		}
+		const auto session = lobby_api::ParseSession(TextOf(response));
+		if (!session.has_value() || session->refreshToken.has_value() || !_account.has_value() ||
+		    session->account.id != _account->id)
+		{
+			// The site now has another account: the session of the game ends, and the player logs in again
+			EndSession();
+			finish(ErrorOfKind(LobbyErrorKind::NotLoggedIn));
+			return;
+		}
+		ApplySession(*session);
+		_fromSite = true;
+		finish({});
+	});
+}
+
 void LobbyClientSystem::Refresh(std::function<void(const LobbyError&)> after)
 {
 	_afterRefresh.push_back(std::move(after));
@@ -368,6 +477,12 @@ void LobbyClientSystem::Refresh(std::function<void(const LobbyError&)> after)
 			function(error);
 		}
 	};
+
+	if (_fromSite && _site != nullptr)
+	{
+		RefreshFromSite(finish);
+		return;
+	}
 
 	// The desktop sends the refresh token. The browser sends none, because the cookie holds it.
 	lobby_api::RefreshRequest refresh;
@@ -446,6 +561,7 @@ void LobbyClientSystem::EndSession()
 	_accessToken.clear();
 	_accessExpiry = {};
 	_refreshToken.reset();
+	_fromSite = false;
 	_tokens->Clear();
 	_pushWanted = false;
 	_reconnectAt.reset();
@@ -458,6 +574,11 @@ void LobbyClientSystem::Logout(bool everywhere, LobbyCallback<LobbyDone> callbac
 	{
 		Fail(callback, ErrorOfKind(LobbyErrorKind::NotConfigured));
 		return;
+	}
+	if (_fromSite)
+	{
+		// The player chose to leave the session of the site: the client does not sign in from the site again
+		_siteDeclined = true;
 	}
 	if (_state != LobbySessionState::LoggedIn)
 	{

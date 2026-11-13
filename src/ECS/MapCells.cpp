@@ -111,6 +111,7 @@ void BlockLists::Clear()
 CellLists::CellLists(uint32_t cellsPerSide)
     : _cellsPerSide(cellsPerSide)
     , _cells(static_cast<size_t>(cellsPerSide) * cellsPerSide)
+    , _cellUsed(_cells.size(), 0)
 {
 }
 
@@ -150,10 +151,10 @@ void CellLists::Insert(uint32_t cell, entt::entity entity, Placement placement)
 void CellLists::MarkUsed(uint32_t cell)
 {
 	// A cell that becomes empty and then takes a thing again stays in its first place in the list
-	auto& lists = _cells.at(cell);
-	if (!lists.used)
+	auto& used = _cellUsed.at(cell);
+	if (used == 0)
 	{
-		lists.used = true;
+		used = 1;
 		_used.push_back(cell);
 	}
 }
@@ -175,12 +176,12 @@ void CellLists::Remove(uint32_t cell, entt::entity entity)
 
 std::span<const entt::entity> CellLists::Fixed(uint32_t cell) const
 {
-	return _cells.at(cell).fixed;
+	return _cellUsed.at(cell) != 0 ? std::span<const entt::entity>(_cells[cell].fixed) : std::span<const entt::entity> {};
 }
 
 std::span<const entt::entity> CellLists::Mobile(uint32_t cell) const
 {
-	return _cells.at(cell).mobile;
+	return _cellUsed.at(cell) != 0 ? std::span<const entt::entity>(_cells[cell].mobile) : std::span<const entt::entity> {};
 }
 
 std::vector<entt::entity> CellLists::All(uint32_t cell) const
@@ -192,8 +193,12 @@ std::vector<entt::entity> CellLists::All(uint32_t cell) const
 
 void CellLists::AllInto(uint32_t cell, std::vector<entt::entity>& out) const
 {
-	const auto& lists = _cells.at(cell);
 	out.clear();
+	if (_cellUsed.at(cell) == 0)
+	{
+		return;
+	}
+	const auto& lists = _cells[cell];
 	out.reserve(lists.fixed.size() + lists.mobile.size());
 	out.insert(out.end(), lists.fixed.begin(), lists.fixed.end());
 	out.insert(out.end(), lists.mobile.begin(), lists.mobile.end());
@@ -220,6 +225,7 @@ bool CellLists::RestoreCells(std::span<const SavedCell> cells)
 	for (const auto cell : _used)
 	{
 		_cells.at(cell) = {};
+		_cellUsed.at(cell) = 0;
 	}
 	_used.clear();
 	// An older save can have a cell more than one time, each time with the same lists.
@@ -237,6 +243,7 @@ void CellLists::Clear()
 	for (const auto cell : _used)
 	{
 		_cells.at(cell) = {};
+		_cellUsed.at(cell) = 0;
 	}
 	_used.clear();
 	_blocks.Clear();

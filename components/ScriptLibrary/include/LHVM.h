@@ -134,7 +134,6 @@ protected:
 	[[nodiscard]] static uint32_t GetExceptionHandlersCount(const VMTask& task);
 	[[nodiscard]] static uint32_t GetCurrentExceptionHandlerIp(const VMTask& task, uint32_t index);
 
-	void PrintInstruction(const VMTask& task, const VMInstruction& instruction);
 	void CpuLoop(VMTask& task);
 	/// Whether the debugger stops the task before its next instruction: held, or reaching a breakpoint
 	bool DebuggerStops(VMTask& task);
@@ -194,9 +193,6 @@ public:
 	void Pushb(bool value);
 
 	void Reboot();
-
-	/// Write CHL file to filesystem
-	int SaveBinary(const std::filesystem::path& filepath);
 
 	/// Write SAV file to filesystem
 	int SaveState(const std::filesystem::path& filepath);

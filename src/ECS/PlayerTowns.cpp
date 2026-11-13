@@ -12,6 +12,7 @@
 #include <cstdint>
 
 #include <algorithm>
+#include <array>
 #include <iterator>
 #include <ranges>
 #include <tuple>
@@ -54,26 +55,65 @@ size_t player_towns::Total(const Registry& registry, PlayerNames player)
 	return total;
 }
 
-std::vector<entt::entity> player_towns::AllInOrder(const Registry& registry)
+namespace
 {
-	struct Entry
+/// A town and the key of its place in the order of all the towns
+struct OrderEntry
+{
+	PlayerNames owner;
+	uint32_t gained;
+	/// The place of the town in the walk, which keeps the order of towns with the same owner and the same gain turn
+	uint32_t walked;
+	entt::entity town;
+};
+
+/// Sorts the towns into the order of all the players' lists, then calls the function with the sorted entries. Up to
+/// k_InlineTowns entries stay on the stack.
+void SortedTowns(const Registry& registry, const std::function<void(std::span<const OrderEntry>)>& use)
+{
+	const auto count = registry.Size<const components::Town>();
+	std::array<OrderEntry, player_towns::k_InlineTowns> inline_ {};
+	std::vector<OrderEntry> onHeap;
+	if (count > inline_.size())
 	{
-		PlayerNames owner;
-		uint32_t gained;
-		entt::entity town;
-	};
-	std::vector<Entry> towns;
+		onHeap.resize(count);
+	}
+	const std::span<OrderEntry> all = count > inline_.size() ? std::span<OrderEntry>(onHeap) : std::span<OrderEntry>(inline_);
+	size_t walked = 0;
 	registry.Each<const components::Town>([&](entt::entity entity, const components::Town& town) {
-		towns.push_back({.owner = town.owner, .gained = town.gained, .town = entity});
+		all[walked] = {.owner = town.owner, .gained = town.gained, .walked = static_cast<uint32_t>(walked), .town = entity};
+		++walked;
 	});
+	const auto towns = all.first(walked);
 	// The neutral player has the last number, so its list comes after the lists of all the other players
 	static_assert(PlayerNames::NEUTRAL == static_cast<PlayerNames>(static_cast<uint8_t>(PlayerNames::_COUNT) - 1));
-	std::ranges::stable_sort(
-	    towns, [](const Entry& a, const Entry& b) { return std::tie(a.owner, a.gained) < std::tie(b.owner, b.gained); });
+	// The place in the walk makes each key different. Thus this sort gives the order of a stable sort, with no memory
+	// from the heap.
+	std::ranges::sort(towns, [](const OrderEntry& a, const OrderEntry& b) {
+		return std::tie(a.owner, a.gained, a.walked) < std::tie(b.owner, b.gained, b.walked);
+	});
+	use(towns);
+}
+} // namespace
+
+std::vector<entt::entity> player_towns::AllInOrder(const Registry& registry)
+{
 	std::vector<entt::entity> result;
-	result.reserve(towns.size());
-	std::ranges::transform(towns, std::back_inserter(result), &Entry::town);
+	SortedTowns(registry, [&result](std::span<const OrderEntry> towns) {
+		result.reserve(towns.size());
+		std::ranges::transform(towns, std::back_inserter(result), &OrderEntry::town);
+	});
 	return result;
+}
+
+void player_towns::ForEachInOrder(const Registry& registry, const std::function<void(entt::entity)>& visit)
+{
+	SortedTowns(registry, [&visit](std::span<const OrderEntry> towns) {
+		for (const auto& entry : towns)
+		{
+			visit(entry.town);
+		}
+	});
 }
 
 std::vector<entt::entity> player_towns::AllMadeNewestFirst(const Registry& registry)

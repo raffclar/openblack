@@ -107,6 +107,8 @@ struct ScaffoldGhost
 	/// The copy shows the scaffold at its empty place in the yard of its workshop, not a phantom building. This copy
 	/// fades out in the distance as other things do.
 	bool yard {false};
+	/// The workshop whose yard holds the copy. The copy sorts among the blended things by the distance of this workshop.
+	entt::entity workshop {entt::null};
 };
 
 /// The size that a scaffold on a building site shows in the frames, which becomes small as the building grows

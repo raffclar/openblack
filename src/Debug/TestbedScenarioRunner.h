@@ -99,8 +99,6 @@ public:
 	/// and not as its own timeline has them. A server that plays the commands of a game thus gives each command of the
 	/// scenario with the game, also a command that waits for what only the computer of the game knows.
 	void FollowGives(std::map<uint32_t, std::vector<size_t>> gives) { _followedGives = std::move(gives); }
-	/// The turn count at which the last scenario was laid out, or none before the first scenario
-	[[nodiscard]] std::optional<uint32_t> GetLayoutTurn() const { return _layoutTurn; }
 
 	[[nodiscard]] bool IsRunning() const { return _running; }
 	/// The scenario running, or last run
@@ -185,7 +183,7 @@ private:
 	void UpdateTurnsAsked();
 	/// Asks the renderer to make the graphics device again once the dome of the sky is part way through a follow
 	void UpdateDeviceRestore();
-	void UpdateChecks();
+	void UpdateChecks(float seconds);
 	/// Gives the report of the checks to the stage. With quit, the game also ends with the exit code of the verdict.
 	void PublishChecks(bool quit);
 	[[nodiscard]] std::optional<double> ReadCheck(const checks::Check& check) const;
@@ -227,6 +225,7 @@ private:
 	/// Puts an arena of a loaded file of the game midway between two creatures of the scenario
 	[[nodiscard]] std::string PutLoadedArena(const Command& command);
 	[[nodiscard]] std::string HandTakeNear(const Command& command);
+	[[nodiscard]] std::string TapScaffoldNear(const Command& command);
 	[[nodiscard]] std::string ClickCreatureNear(const Command& command);
 	[[nodiscard]] std::string TapRewardNear(const Command& command);
 	[[nodiscard]] std::string RunScript(const Command& command);
@@ -261,7 +260,13 @@ private:
 	[[nodiscard]] std::optional<glm::ivec2> OpponentOnScreen(size_t creature, glm::vec2 size) const;
 	/// The middle of the body of a creature on the screen
 	[[nodiscard]] static std::optional<glm::ivec2> BodyOnScreen(entt::entity creature, glm::vec2 size);
-	[[nodiscard]] std::optional<glm::ivec2> RopeOnScreen(size_t creature, glm::vec2 size) const;
+	/// The pixels that touch the rope of the creature's tied leash on a screen of a size, from the middle of the rope out
+	[[nodiscard]] std::vector<glm::ivec2> RopeOnScreen(size_t creature, glm::vec2 size) const;
+	/// The middle of the help's tip bubble on a screen of a size, when the bubble shows
+	[[nodiscard]] static std::optional<glm::ivec2> TipBubbleOnScreen(glm::vec2 size);
+	/// Moves the pointer to the next pixel of the rope, after a pick that was not the rope. Gives false when no pixel is
+	/// left.
+	bool NextRopePixel();
 	/// Where the middle of the foot of the scenario's town's worship site altar, or of the site's food pot, is on the
 	/// screen
 	[[nodiscard]] std::optional<glm::ivec2> AltarOnScreen(glm::vec2 size, bool foodPot) const;
@@ -416,6 +421,7 @@ private:
 
 	std::deque<std::string> _log;
 	checks::Evaluator _checks;
+	checks::Clock _checksClock;
 	bool _checksReported {false};
 	/// The turn of the last progress report, so that the report is made once for each turn
 	std::optional<uint32_t> _checksProgressTurn;
@@ -443,10 +449,19 @@ private:
 	float _handWatchSeconds {0.0f};
 	/// The testbed took the pointer, and gives it back when it is done; a pointer the debug inspector holds it leaves be
 	bool _ownsPointer {false};
+	/// A hand demonstration of the scenario plays, and the debug windows leave its pointer alone
+	bool _demoOwnsPointer {false};
 	/// The frames since the pointer last moved, for a press, which waits for the game to know what the pointer is over
 	uint64_t _framesSincePointerMoved {1000};
 	/// A press that came too soon after the pointer moved, made once the game knows what the pointer is over
 	std::optional<Command> _pressWaiting;
+	/// The pixels of the rope that the pointer tries until the pick of the hand is the rope
+	struct RopeSearch
+	{
+		size_t creature {0};
+		size_t next {0};
+	};
+	std::optional<RopeSearch> _ropeSearch;
 
 	/// The crowd laid out, the next of it to spawn, its homes and towns as they have spawned, and how long it took
 	std::vector<CrowdCreature> _crowdCreatures;

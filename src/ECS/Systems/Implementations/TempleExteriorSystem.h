@@ -112,6 +112,11 @@ private:
 
 	/// Of each temple's own mesh in the cache, by its id, the blend that this computer last made for it
 	std::unordered_map<entt::id_type, TempleExteriorMorph::Blend> _blends;
+	/// Copies of the first temple's shape that the blends of earlier calls used. A new blend takes one and writes all
+	/// its vertices, so it does not copy the whole shape again.
+	std::vector<l3d::L3DFile> _spareShapes;
+	/// The first temple's shape that the spare shapes are copies of
+	std::shared_ptr<const l3d::L3DFile> _spareShapesSource;
 };
 
 } // namespace openblack::ecs::systems
