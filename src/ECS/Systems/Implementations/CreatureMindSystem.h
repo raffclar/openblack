@@ -439,10 +439,11 @@ private:
 		/// them again in the same sequence, as the tests do.
 		std::vector<entt::entity> comeAcross;
 	};
-	/// The same, with the facts kept from the last action of the same desire when they are still true
-	[[nodiscard]] std::vector<creature_planner::ObjectCandidate>
-	BelievedThingsToActOn(entt::entity creature, components::CreatureMindState& mind, creature_desires::Desire desire,
-	                      const std::function<bool(entt::entity)>& suitsAction, BelievedFacts& kept);
+	/// The same, with the facts kept from the last action of the same desire when they are still true. The things go into
+	/// the list, which loses what it held before.
+	void BelievedThingsToActOn(entt::entity creature, components::CreatureMindState& mind, creature_desires::Desire desire,
+	                           const std::function<bool(entt::entity)>& suitsAction, BelievedFacts& kept,
+	                           std::vector<creature_planner::ObjectCandidate>& found);
 	/// The whole thing that a thing shown to the creature is part of. The creature comes across the thing and the whole
 	/// thing. A creature is part of no whole thing.
 	[[nodiscard]] std::optional<entt::entity> WholeOfShownThing(entt::entity creature, components::CreatureMindState& mind,
