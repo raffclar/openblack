@@ -95,6 +95,14 @@ enum class LoadKind : uint8_t
 	WorldState,
 };
 
+/// Whether a load puts the camera where the file keeps it. A saved game does. A world state does not: it is the world
+/// that all computers share, and the camera is of this computer only. Thus the camera stays where the player has it
+/// when the world of the game server comes, after a resynchronisation, a return or a join.
+[[nodiscard]] constexpr bool LoadsCamera(LoadKind kind)
+{
+	return kind == LoadKind::SavedGame;
+}
+
 /// The saved state of each system that a save keeps, by the name of the system. Each section also keeps the bytes of
 /// its presentation values. With valueEnds, each section also keeps where each value ends, for tools.
 [[nodiscard]] std::vector<reflection::NamedSection> SavedSystemSections(const entt::meta_ctx& reflection,
@@ -128,9 +136,10 @@ void TakeBlowHeightsFromTheMesh(entt::registry& registry);
 void TakeDanceFilesAgain(entt::registry& registry,
                          const std::function<std::shared_ptr<const dance::DanceFile>(DanceInfo)>& fileOf);
 
-/// After the land starts again: puts back the game clock at the turn, the streams of random numbers, the camera, the
-/// scripts, the table of the objects that they hold and the running state of the systems. Returns whether every block
-/// that the file has read.
-bool LoadRunningState(const entt::meta_ctx& reflection, const gamesave::WorldFile& file, uint32_t turn);
+/// After the land starts again: puts back the game clock at the turn, the streams of random numbers, the camera (only
+/// when the kind of load takes it), the scripts, the table of the objects that they hold and the running state of the
+/// systems. Returns whether every block that the file has read.
+bool LoadRunningState(const entt::meta_ctx& reflection, const gamesave::WorldFile& file, uint32_t turn,
+                      LoadKind kind = LoadKind::SavedGame);
 
 } // namespace openblack::ecs::world_save
