@@ -58,6 +58,23 @@ struct ContentMark
 	~ContentMark() = default;
 };
 
+/// The place where a store of keyframe turns keeps the turns of an animation. The store finds the turns at this place
+/// without a search. A new animation, a copy and a move get no place. An assignment keeps the place of the animation that
+/// takes the new contents, and the store then compares the angles as for any changed contents.
+struct TurnsPlace
+{
+	static constexpr uint32_t k_None = 0xFFFFFFFF;
+	/// The store changes the place when it reads the animation, thus a constant animation can get a place
+	mutable uint32_t index {k_None};
+
+	TurnsPlace() = default;
+	TurnsPlace(const TurnsPlace& /*other*/) {}
+	TurnsPlace(TurnsPlace&& /*other*/) noexcept {}
+	TurnsPlace& operator=(const TurnsPlace& /*other*/) { return *this; }
+	TurnsPlace& operator=(TurnsPlace&& /*other*/) noexcept { return *this; }
+	~TurnsPlace() = default;
+};
+
 /// A keyframe animation: per bone YXZ Euler angles and translations of the bones it moves
 struct Animation
 {
@@ -78,6 +95,8 @@ struct Animation
 	float strideLength {0.0f};
 	/// The mark of the contents, from ContentMarks. Do not change the contents after they get a mark.
 	ContentMark mark;
+	/// The place of the turns of the animation in the store of keyframe turns
+	TurnsPlace turnsPlace;
 };
 
 /// Gives each marked contents of an animation a mark that no other contents get. Use one ContentMarks for all the
@@ -163,17 +182,16 @@ private:
 		std::vector<Matrix> turns;
 		std::vector<Matrix> mirroredTurns;
 	};
-	std::unordered_map<const Animation*, std::vector<FrameTurns>> _animations;
-	/// An animation of a recent call and its frames in the store
-	struct Recent
+	/// The turns of one animation, at the place that the animation keeps
+	struct AnimationTurns
 	{
+		/// The address of the animation that has this place
 		const Animation* animation {nullptr};
-		std::vector<FrameTurns>* frames {nullptr};
+		std::vector<FrameTurns> frames;
 	};
-	/// The animations of the last calls, the most recent first. A pose asks for its animation and the stand animation in
-	/// turn, thus one place is not sufficient.
-	static constexpr size_t k_RecentCount = 4;
-	std::array<Recent, k_RecentCount> _recent {};
+	std::vector<AnimationTurns> _animations;
+	/// The place of each address. The store looks here only for an animation that does not know its place.
+	std::unordered_map<const Animation*, uint32_t> _placeOf;
 };
 
 /// The two keyframes around a time and how far between them it is. Cycles wrap from their last frame to the first,
@@ -198,6 +216,22 @@ struct FrameSpan
                                             const Skeleton& skeleton, std::span<const uint32_t> mirror = {},
                                             KeyframeTurns* turns = nullptr);
 
+/// The memory that the pose functions use for their steps. Give the same buffers to each call, so that a call after the
+/// first gets no memory from the heap.
+struct PoseBuffers
+{
+	std::vector<Matrix> world;
+	std::vector<glm::vec3> place;
+	std::vector<Matrix> mirroredWorld;
+	std::vector<glm::vec3> mirroredPlace;
+	std::vector<glm::mat4> placed;
+	std::vector<glm::mat4> sum;
+};
+
+/// The same pose as SampleCycle gives, written into poses. The buffers keep the memory of the steps.
+void SampleCycle(std::vector<Pose>& poses, const Animation& animation, const Animation& stand, uint32_t timeMs,
+                 const Skeleton& skeleton, std::span<const uint32_t> mirror, KeyframeTurns* turns, PoseBuffers& buffers);
+
 /// The places in the mesh's space of some bones at a time of a cycle, with the same bits as SampleCycle and
 /// ComposeBoneMatrices give them with no mirror. It finds only the poses of these bones and the bones that they hang
 /// from. None for a bone that is not in the skeleton.
@@ -211,6 +245,8 @@ struct FrameSpan
 /// body as drawn is the exact mirror image of the unmirrored one, for a skeleton whose rest pose is symmetric.
 [[nodiscard]] std::vector<Pose> MirrorPoses(std::span<const Pose> poses, const Skeleton& skeleton,
                                             std::span<const uint32_t> mirror);
+/// The same reflection as MirrorPoses, done on the poses in place. The buffers keep the memory of the steps.
+void MirrorPoses(std::span<Pose> poses, const Skeleton& skeleton, std::span<const uint32_t> mirror, PoseBuffers& buffers);
 
 /// Poses summed by weight, rotation matrices and translations element by element, as animations playing together
 /// (walking into running, say) are. The weights are expected to add up to 1.
@@ -222,6 +258,9 @@ struct FrameSpan
 /// to 1.
 [[nodiscard]] std::vector<Pose> WeightedSumInMeshSpace(std::span<const std::vector<Pose>> poses, std::span<const float> weights,
                                                        std::span<const uint32_t> parents);
+/// The same sum as WeightedSumInMeshSpace, written into sum. The buffers keep the memory of the steps.
+void WeightedSumInMeshSpace(std::vector<Pose>& sum, std::span<const std::vector<Pose>> poses, std::span<const float> weights,
+                            std::span<const uint32_t> parents, PoseBuffers& buffers);
 
 /// Plays an animation on top of poses: each bone it moves is turned and moved by how far its keyframes at the time are
 /// from a reference keyframe of the same animation. Turning the head to look about, the face's expressions and
@@ -243,6 +282,8 @@ void BlendLayers(std::vector<Pose>& poses, const Animation& first, uint32_t firs
 
 /// Poses relative to their parents again from bone matrices in the mesh's space, as ComposeBoneMatrices gives them
 [[nodiscard]] std::vector<Pose> PosesFromBoneMatrices(std::span<const glm::mat4> matrices, std::span<const uint32_t> parents);
+/// The same, written into poses that the caller keeps
+void PosesFromBoneMatrices(std::span<const glm::mat4> matrices, std::span<const uint32_t> parents, std::vector<Pose>& poses);
 
 /// Each bone's mirror bone across the body's x = 0 plane in the rest pose: a left leg's right leg, a bone along the
 /// middle itself. Bones are paired when each is where the other would be reflected; any without a clear partner keep

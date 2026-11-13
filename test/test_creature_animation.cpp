@@ -13,6 +13,7 @@
 #include <algorithm>
 #include <array>
 #include <iterator>
+#include <limits>
 #include <optional>
 #include <random>
 #include <span>
@@ -985,12 +986,11 @@ TEST(KeyframeTurns, CallsForTwoAnimationsInTurnGiveTheTurnsOfEach)
 	EXPECT_EQ(turns.Size(), 2u);
 }
 
-TEST(KeyframeTurns, CallsForMoreAnimationsThanTheRecentPlacesGiveTheTurnsOfEach)
+TEST(KeyframeTurns, CallsForManyAnimationsGiveTheTurnsOfEach)
 {
-	// Six animations in turn are more than the store keeps as recent. Each call must still give the turns of its own
-	// animation.
+	// Each of twelve animations in turn must give the turns of its own animation
 	const TurnsFixture fixture(13);
-	std::vector<Animation> animations(6, fixture.animation);
+	std::vector<Animation> animations(12, fixture.animation);
 	for (size_t i = 0; i < animations.size(); ++i)
 	{
 		animations[i].frames[1].eulerAngles[0] = glm::vec3(0.1f * static_cast<float>(i + 1), 0.2f, -0.3f);
@@ -1027,6 +1027,55 @@ TEST(KeyframeTurns, TheStoreGivesTheTurnsAfterTrimRemovesThem)
 	EXPECT_EQ(turns.Size(), 1u);
 }
 
+TEST(KeyframeTurns, ACopyOrAMoveOfAnAnimationHasNoPlaceAndAnAssignmentKeepsThePlace)
+{
+	TurnsFixture fixture(7);
+	skeletal_animation::KeyframeTurns turns;
+	static_cast<void>(turns.Of(fixture.animation, 0, false));
+	const auto place = fixture.animation.turnsPlace.index;
+	ASSERT_NE(place, skeletal_animation::TurnsPlace::k_None);
+	const Animation copy = fixture.animation;
+	EXPECT_EQ(copy.turnsPlace.index, skeletal_animation::TurnsPlace::k_None);
+	auto source = fixture.animation;
+	static_cast<void>(turns.Of(source, 0, false));
+	ASSERT_NE(source.turnsPlace.index, skeletal_animation::TurnsPlace::k_None);
+	const Animation moved = std::move(source);
+	EXPECT_EQ(moved.turnsPlace.index, skeletal_animation::TurnsPlace::k_None);
+	// New contents in the same animation keep its place, and the store compares the angles
+	auto changed = fixture.animation;
+	changed.frames[0].eulerAngles[0] = glm::vec3(0.5f, 1.0f, -1.5f);
+	fixture.animation = changed;
+	EXPECT_EQ(fixture.animation.turnsPlace.index, place);
+	const auto kept = turns.Of(fixture.animation, 0, false)[0];
+	const auto made = skeletal_animation::RotationYXZ(glm::vec3(0.5f, 1.0f, -1.5f));
+	EXPECT_EQ(std::memcmp(&kept, &made, sizeof(made)), 0);
+	EXPECT_EQ(turns.Size(), 2u);
+}
+
+TEST(KeyframeTurns, ANewAnimationAtTheAddressOfAnOldOneUsesThePlaceOfTheAddress)
+{
+	const TurnsFixture fixture(5);
+	std::optional<Animation> slot = fixture.animation;
+	skeletal_animation::KeyframeTurns turns;
+	static_cast<void>(turns.Of(*slot, 1, false));
+	const auto* address = &*slot;
+	// A new animation with other angles at the same address gets no place. The store finds the place of the address and
+	// makes the turns of the new angles.
+	auto other = fixture.animation;
+	other.frames[1].eulerAngles[0] = glm::vec3(-0.25f, 0.75f, 2.0f);
+	slot.reset();
+	slot.emplace(other);
+	ASSERT_EQ(&*slot, address);
+	ASSERT_EQ(slot->turnsPlace.index, skeletal_animation::TurnsPlace::k_None);
+	const auto kept = turns.Of(*slot, 1, false)[0];
+	const auto made = skeletal_animation::RotationYXZ(glm::vec3(-0.25f, 0.75f, 2.0f));
+	EXPECT_EQ(std::memcmp(&kept, &made, sizeof(made)), 0);
+	EXPECT_EQ(turns.Size(), 1u);
+	// Another animation gets a place of its own
+	static_cast<void>(turns.Of(fixture.animation, 1, false));
+	EXPECT_EQ(turns.Size(), 2u);
+}
+
 TEST(KeyframeTurns, PosesHaveTheSameBitsWithTheStore)
 {
 	for (const uint32_t seed : {1u, 2u, 3u, 4u})
@@ -1060,6 +1109,56 @@ TEST(KeyframeTurns, PosesHaveTheSameBitsWithTheStore)
 					                             &turns);
 					EXPECT_TRUE(SameBits(set, setKept)) << seed << " set " << time << " " << mirrored;
 				}
+			}
+		}
+	}
+}
+
+TEST(SkeletalAnimation, PosesWithKeptBuffersHaveTheBitsOfNewPoses)
+{
+	// The buffers start too large and full of numbers that are not numbers. A pose must not read them.
+	skeletal_animation::PoseBuffers buffers;
+	constexpr float k_NaN = std::numeric_limits<float>::quiet_NaN();
+	const skeletal_animation::Matrix bad {{{k_NaN, k_NaN, k_NaN}, {k_NaN, k_NaN, k_NaN}, {k_NaN, k_NaN, k_NaN}}};
+	buffers.world.assign(9, bad);
+	buffers.mirroredWorld.assign(9, bad);
+	buffers.place.assign(9, glm::vec3(k_NaN));
+	buffers.mirroredPlace.assign(9, glm::vec3(k_NaN));
+	buffers.placed.assign(9, glm::mat4(k_NaN));
+	buffers.sum.assign(9, glm::mat4(k_NaN));
+	std::vector<skeletal_animation::Pose> kept(9, skeletal_animation::Pose {.rotation = bad, .translation = glm::vec3(k_NaN)});
+	std::vector<std::vector<skeletal_animation::Pose>> keptSamples(2, kept);
+	std::vector<skeletal_animation::Pose> keptSum = kept;
+	// A mirror that is not a swap of bones leaves some bones with no mirror bone
+	const std::vector<uint32_t> uneven {1, 1, 3, 3};
+	for (const uint32_t seed : {1u, 2u, 3u})
+	{
+		const TurnsFixture fixture(seed);
+		for (uint32_t time = 0; time < 1000; time += 53)
+		{
+			for (const auto& mirror :
+			     {std::span<const uint32_t> {}, std::span<const uint32_t>(fixture.mirror), std::span<const uint32_t>(uneven)})
+			{
+				const auto made =
+				    skeletal_animation::SampleCycle(fixture.animation, fixture.stand, time, fixture.skeleton, mirror);
+				skeletal_animation::SampleCycle(kept, fixture.animation, fixture.stand, time, fixture.skeleton, mirror, nullptr,
+				                                buffers);
+				EXPECT_TRUE(SameBits(made, kept)) << seed << " sample " << time;
+
+				auto mirrored = made;
+				skeletal_animation::MirrorPoses(mirrored, fixture.skeleton, mirror, buffers);
+				EXPECT_TRUE(SameBits(skeletal_animation::MirrorPoses(made, fixture.skeleton, mirror), mirrored))
+				    << seed << " mirror " << time;
+
+				const std::vector<std::vector<skeletal_animation::Pose>> samples {
+				    made, skeletal_animation::SampleCycle(fixture.stand, fixture.stand, time, fixture.skeleton)};
+				const std::array weights {0.3f, 0.7f};
+				keptSamples[0] = samples[0];
+				keptSamples[1] = samples[1];
+				skeletal_animation::WeightedSumInMeshSpace(keptSum, keptSamples, weights, fixture.skeleton.parents, buffers);
+				EXPECT_TRUE(
+				    SameBits(skeletal_animation::WeightedSumInMeshSpace(samples, weights, fixture.skeleton.parents), keptSum))
+				    << seed << " sum " << time;
 			}
 		}
 	}

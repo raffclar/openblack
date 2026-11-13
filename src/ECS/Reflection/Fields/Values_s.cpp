@@ -41,7 +41,8 @@ void openblack::ecs::reflection::RegisterFields_Values_s(entt::meta_ctx& context
 	    .Field<&openblack::skeletal_animation::Animation::frames>("frames")
 	    .Field<&openblack::skeletal_animation::Animation::displacement>("displacement")
 	    .Field<&openblack::skeletal_animation::Animation::strideLength>("strideLength")
-	    .RunField<&openblack::skeletal_animation::Animation::mark>("mark");
+	    .RunField<&openblack::skeletal_animation::Animation::mark>("mark")
+	    .RunField<&openblack::skeletal_animation::Animation::turnsPlace>("turnsPlace");
 	Reflect<openblack::skeletal_animation::Animation::Frame>(context, ValueOnly {})
 	    .Field<&openblack::skeletal_animation::Animation::Frame::eulerAngles>("eulerAngles")
 	    .Field<&openblack::skeletal_animation::Animation::Frame::translations>("translations");
@@ -51,6 +52,8 @@ void openblack::ecs::reflection::RegisterFields_Values_s(entt::meta_ctx& context
 	    .Field<&openblack::skeletal_animation::Skeleton::parents>("parents")
 	    .Field<&openblack::skeletal_animation::Skeleton::restRotations>("restRotations")
 	    .Field<&openblack::skeletal_animation::Skeleton::inverseRestRotations>("inverseRestRotations");
+	Reflect<openblack::skeletal_animation::TurnsPlace>(context, ValueOnly {})
+	    .Field<&openblack::skeletal_animation::TurnsPlace::index>("index");
 	Reflect<openblack::sky_dome::FrameRows>(context, ValueOnly {})
 	    .Field<&openblack::sky_dome::FrameRows::rows>("rows")
 	    .Field<&openblack::sky_dome::FrameRows::count>("count");
