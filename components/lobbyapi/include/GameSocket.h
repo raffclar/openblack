@@ -153,9 +153,12 @@ struct Joined
 struct Refused
 {
 	/// A short word for the reason: "ticket", "full", "started", "closed", "protocol", "resync", "kicked", "version" (the
-	/// client has another build than the server), "map" (the client has another file of the land), "load" (the client did
-	/// not load the world of a lobby game in time)
+	/// client has another build than the server, or sent a binary frame of another version of the format of the turns),
+	/// "map" (the client has another file of the land), "load" (the client did not load the world of a lobby game in time)
 	std::string reason;
+	/// The build id of the server ("build", optional), with the refusals "protocol" and "version". The client log names
+	/// it beside the build id of the client. An older client does not read it.
+	std::string build;
 };
 
 /// Server to client: "room.resumed". The server accepted the resume. The turns after the client's turn follow.

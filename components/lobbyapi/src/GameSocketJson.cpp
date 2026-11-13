@@ -484,7 +484,7 @@ std::optional<Frame> ParseObject(const Json& object, std::string_view type)
 	if (type == k_Refused)
 	{
 		Refused refused;
-		if (!ReadString(object, "reason", refused.reason))
+		if (!ReadString(object, "reason", refused.reason) || !ReadString(object, "build", refused.build, false))
 		{
 			return std::nullopt;
 		}
@@ -753,6 +753,10 @@ std::string ToJson(const Frame& frame)
 		    else if constexpr (std::is_same_v<Kind, Refused>)
 		    {
 			    object = Json {{"type", k_Refused}, {"reason", value.reason}};
+			    if (!value.build.empty())
+			    {
+				    object["build"] = value.build;
+			    }
 		    }
 		    else if constexpr (std::is_same_v<Kind, Start>)
 		    {

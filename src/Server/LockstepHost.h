@@ -316,6 +316,9 @@ private:
 		std::string account;
 		/// The "sync.parts" frames that the connection sent. The server answers only the first few.
 		uint32_t partReports {0};
+		/// The build id that the client gave in its join, or in a text frame that the server could not read. Empty when
+		/// the client gave none.
+		std::string build;
 	};
 
 	/// The most "sync.parts" frames of one connection that the server answers

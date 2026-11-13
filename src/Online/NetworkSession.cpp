@@ -13,6 +13,8 @@
 #include <array>
 #include <chrono>
 #include <span>
+#include <string>
+#include <string_view>
 #include <type_traits>
 #include <utility>
 
@@ -31,6 +33,19 @@ namespace
 constexpr uint32_t k_KeptChecksums = 600;
 /// The client writes a line of the compares to the log after this many turns
 constexpr uint32_t k_CompareLogEvery = 100;
+
+/// The build id that a server gave, for the log: at most 64 characters. Each character that the log cannot show becomes
+/// '?'.
+[[nodiscard]] std::string Printable(std::string_view build)
+{
+	constexpr size_t k_MostCharacters = 64;
+	std::string printable;
+	for (const char c : build.substr(0, k_MostCharacters))
+	{
+		printable += c >= 0x20 && c < 0x7F ? c : '?';
+	}
+	return printable;
+}
 
 /// The name of the land of a start, when the start loads a land of a file. The testbed and the map for 32 gods have no
 /// file.
@@ -399,9 +414,17 @@ void NetworkSession::Text(std::string_view text)
 	else if (const auto* refused = std::get_if<game_socket::Refused>(&*frame))
 	{
 		_refusedReason = refused->reason;
+		// A refusal for the protocol or the version gives the build of the server: the log names the two builds
+		const auto builds =
+		    refused->build.empty()
+		        ? std::string()
+		        : fmt::format("; {}, the server has the build \"{}\"",
+		                      _settings.build.empty() ? std::string("the client has no build id")
+		                                              : fmt::format("the client has the build \"{}\"", _settings.build),
+		                      Printable(refused->build));
 		_log->Write(spdlog::level::warn,
-		            fmt::format("The game server refused the client: {} (state {}, {} ms after the socket opened)",
-		                        refused->reason, StateName(_state), MillisecondsSince(_openedAt)));
+		            fmt::format("The game server refused the client: {} (state {}, {} ms after the socket opened){}",
+		                        refused->reason, StateName(_state), MillisecondsSince(_openedAt), builds));
 		FinishWith(End::Refused);
 	}
 	else if (const auto* parts = std::get_if<game_socket::SyncParts>(&*frame))
