@@ -22,6 +22,7 @@
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Player.h"
 #include "ECS/Components/SpellIcon.h"
+#include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/DrawnOnScreen.h"
@@ -79,7 +80,7 @@ void SpellIconSystem::UpdateChargeLooks(int32_t gameMilliseconds, bool landDrawn
 	_pulses.clear();
 	// An icon that went loses its look
 	std::erase_if(_looks, [&registry](auto& entry) {
-		const bool gone = !registry.Valid(entry.first) || !registry.AllOf<WorshipIcon>(entry.first);
+		const bool gone = !registry.Valid(entry.first) || !registry.AnyOf<WorshipIcon, TownCentreIcon>(entry.first);
 		if (gone && entry.second.ring != nullptr)
 		{
 			entry.second.ring->SetHidden(true);
@@ -101,30 +102,64 @@ void SpellIconSystem::UpdateChargeLooks(int32_t gameMilliseconds, bool landDrawn
 	registry.Each<const WorshipIcon, const Transform, const Mesh>(
 	    [this, &registry, gameMilliseconds](entt::entity entity, const WorshipIcon& icon, const Transform&, const Mesh&) {
 		    // An icon at a worship site that is not built shows no charge
-		    if (Shown(entity) && ecs::DrawnOnScreen(registry, entity))
+		    const auto* site = registry.Valid(icon.site) ? registry.TryGet<const WorshipSite>(icon.site) : nullptr;
+		    if (site != nullptr && Shown(entity) && ecs::DrawnOnScreen(registry, entity))
 		    {
-			    ShowCharge(entity, icon, gameMilliseconds);
+			    ShowCharge(entity, &icon, site->player, gameMilliseconds);
 		    }
-		    else if (auto found = _looks.find(entity); found != _looks.end() && found->second.ring != nullptr)
+		    else
 		    {
-			    found->second.ring->SetHidden(true);
+			    HideRing(entity);
 		    }
+	    });
+	// A stone hand of a village centre shows the charge of the icon of its miracle at its town's worship site, in the
+	// colour of its town's player. It shows it only in a frame that draws the hand.
+	const auto* drawList = Locator::objectDrawListSystem::has_value() ? &Locator::objectDrawListSystem::value() : nullptr;
+	registry.Each<const TownCentreIcon, const Transform, const Mesh>(
+	    [this, &registry, drawList, landDrawn, gameMilliseconds](entt::entity entity, const TownCentreIcon& hand,
+	                                                             const Transform&, const Mesh&) {
+		    if (!StoneHandDrawn(registry, drawList, hand.centre, entity, landDrawn))
+		    {
+			    HideRing(entity);
+			    return;
+		    }
+		    const auto* town = registry.Valid(hand.town) ? registry.TryGet<const Town>(hand.town) : nullptr;
+		    const auto siteIcon = town != nullptr ? SiteIconOf(town->worshipSite, hand.seed) : entt::null;
+		    const auto* source = siteIcon != entt::null ? registry.TryGet<const WorshipIcon>(siteIcon) : nullptr;
+		    ShowCharge(entity, source, world_objects::IconPlayer(registry, entity), gameMilliseconds);
 	    });
 	// The clock moves on after the icons used it
 	_decayClock = looks::Advance(_decayClock, gameMilliseconds);
 }
 
-void SpellIconSystem::ShowCharge(entt::entity entity, const WorshipIcon& icon, int32_t gameMilliseconds)
+bool SpellIconSystem::StoneHandDrawn(const ecs::Registry& registry, const ObjectDrawListSystemInterface* drawList,
+                                     entt::entity centre, entt::entity hand, bool landDrawn)
+{
+	// A centre draws its hands only while the list draws it and while it has life
+	if (!landDrawn || !registry.Valid(centre))
+	{
+		return false;
+	}
+	const auto* life = registry.TryGet<const ObjectLife>(centre);
+	const bool centreDrawn =
+	    (drawList == nullptr || drawList->Drawn(registry, centre)) && (life == nullptr || life->life > 0.0f);
+	return centreDrawn && ecs::DrawnOnScreen(registry, hand);
+}
+
+void SpellIconSystem::HideRing(entt::entity icon)
+{
+	if (auto found = _looks.find(icon); found != _looks.end() && found->second.ring != nullptr)
+	{
+		found->second.ring->SetHidden(true);
+	}
+}
+
+void SpellIconSystem::ShowCharge(entt::entity entity, const WorshipIcon* source, PlayerNames player, int32_t gameMilliseconds)
 {
 	auto& registry = Locator::entitiesRegistry::value();
-	const auto* site = registry.Valid(icon.site) ? registry.TryGet<const WorshipSite>(icon.site) : nullptr;
-	if (site == nullptr)
-	{
-		return;
-	}
 	const auto& transform = registry.Get<const Transform>(entity);
 	const auto model = PlacedMatrix(transform.position, transform.rotation, transform.scale);
-	const auto playerRgb = ecs::game_players::Colour(site->player) & k_RgbMask;
+	const auto playerRgb = ecs::game_players::Colour(player) & k_RgbMask;
 	auto& look = _looks[entity];
 
 	// The game draws the model with the shine of the last frame that drew it, then works out the new shine
@@ -134,6 +169,13 @@ void SpellIconSystem::ShowCharge(entt::entity entity, const WorshipIcon& icon, i
 		look.shownTint = look.tint;
 		registry.SetDirty();
 	}
+	// A stone hand whose town's site has no icon of its miracle keeps the shine that it had, and shows no ring
+	if (source == nullptr)
+	{
+		HideRing(entity);
+		return;
+	}
+	const auto& icon = *source;
 	const looks::IconState state {
 	    .seedHeld = HeldSeedOf(icon) != entt::null,
 	    .store = icon.store,
@@ -247,15 +289,11 @@ void SpellIconSystem::UpdateHolderEffects(std::chrono::milliseconds frameRealTim
 			drawSeed(drawer, landDrawn && built && ecs::DrawnOnScreen(registry, drawer), looks::HolderAlpha(ShownTint(drawer)));
 			continue;
 		}
-		// A centre draws its hands only while the list draws it and while it has life
-		const auto* life = registry.TryGet<const ObjectLife>(drawer);
-		const bool centreDrawn =
-		    landDrawn && (drawList == nullptr || drawList->Drawn(registry, drawer)) && (life == nullptr || life->life > 0.0f);
 		for (const auto hand : registry.Get<const CentreHands>(drawer).hands)
 		{
 			if (registry.Valid(hand) && registry.AllOf<IconSeed>(hand))
 			{
-				drawSeed(hand, centreDrawn && ecs::DrawnOnScreen(registry, hand), k_HandHolderAlpha);
+				drawSeed(hand, StoneHandDrawn(registry, drawList, drawer, hand, landDrawn), k_HandHolderAlpha);
 			}
 		}
 	}

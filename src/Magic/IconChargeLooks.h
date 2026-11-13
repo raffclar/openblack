@@ -109,4 +109,11 @@ inline constexpr float k_PulseMark = 0.1f;
 	return static_cast<uint8_t>(shownTint != 0 ? k_TintedAlpha : k_LightAlpha);
 }
 
+/// Whether the model of an icon is lit through white (255 in 256ths of the land's light) and adds its shine. A stone
+/// hand of a village centre always is, also with no shine. An icon at a worship site is only while it shows a shine.
+[[nodiscard]] constexpr bool LitThroughWhite(bool stoneHand, uint32_t shownTint)
+{
+	return stoneHand || shownTint != 0;
+}
+
 } // namespace openblack::magic::icon_charge_looks

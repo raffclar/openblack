@@ -1241,6 +1241,10 @@ struct Command
 		/// With an amount, the battery of the site first gets that much of the cost of the plain miracle. Needs no
 		/// creature.
 		TapSiteIcon,
+		/// The player's hand taps the stone hand of a seed (value, a SpellSeedType) on the village centre of a town of
+		/// the player, as the Action button does. With an amount, the battery of the town's site first gets that much
+		/// of the cost of the plain miracle. Needs no creature.
+		TapStoneHand,
 		/// The creature's alignment (value 0) or fatness (value 1) jumps to an amount. Its body takes the new look at
 		/// the end of its next game turn, and its animations then follow the new shape.
 		SetBodyLook,

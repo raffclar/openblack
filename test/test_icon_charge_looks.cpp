@@ -156,3 +156,14 @@ TEST(IconChargeLooks, TheEffectOfTheHolderTakesTheAlphaOfTheModelOfTheIcon)
 	EXPECT_EQ(HolderAlpha(0x00FF0000u), 254);
 	EXPECT_EQ(HolderAlpha(0x00000001u), 254);
 }
+
+TEST(IconChargeLooks, AStoneHandIsAlwaysLitThroughWhiteAndASiteIconOnlyWhileItShines)
+{
+	// The village centre always draws its stone hands through white with the shine added, also a shine of 0
+	static_assert(LitThroughWhite(true, 0));
+	EXPECT_TRUE(LitThroughWhite(true, 0));
+	EXPECT_TRUE(LitThroughWhite(true, 0x00320000u));
+	// An icon at a worship site takes the light of the land until it shines
+	EXPECT_FALSE(LitThroughWhite(false, 0));
+	EXPECT_TRUE(LitThroughWhite(false, 0x00000001u));
+}
