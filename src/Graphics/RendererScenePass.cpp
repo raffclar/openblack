@@ -19,6 +19,7 @@
 #include <optional>
 #include <ranges>
 #include <span>
+#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -1198,11 +1199,11 @@ void Renderer::DrawPassTranslucent(const DrawSceneDesc& desc, const ScenePass& p
 	const auto blendDepth = [&renderCtx, cameraOrigin](uint32_t instance) {
 		if (const auto atOnce = renderCtx.atOnceInstances.find(instance); atOnce != renderCtx.atOnceInstances.end())
 		{
-			return zsort::AtOnce(atOnce->second);
+			return renderCtx.fizzOrder.AtOnceDepth(atOnce->second);
 		}
 		if (const auto sortPoint = renderCtx.sortPoints.find(instance); sortPoint != renderCtx.sortPoints.end())
 		{
-			return zsort::YardCopyDepth(sortPoint->second, cameraOrigin);
+			return zsort::YardCopyDepth(sortPoint->second.point, cameraOrigin);
 		}
 		return zsort::ModelDepth(glm::vec3(renderCtx.instanceUniforms.at(instance).model[3]), cameraOrigin);
 	};
@@ -1210,6 +1211,26 @@ void Renderer::DrawPassTranslucent(const DrawSceneDesc& desc, const ScenePass& p
 	// villagers posed from the bone palette, the things posed one by one with them
 	{
 		const EntityPose palettePose {.bones = {}, .morphTargets = nullptr, .bonePalette = true};
+		const auto drawFading = [&](entt::id_type meshId, const RenderContext::InstancedDrawDesc& placers, uint32_t instance) {
+			submitDesc.sortDepth = blendDepth(instance);
+			if (placers.partsByLevel)
+			{
+				submitDesc.detailLevel = renderCtx.instanceLevels.at(instance);
+			}
+			// The second draw of a felled tree passes the depth test at the depth of the first, as the game's draws of
+			// the same model at the same place do
+			const auto state = submitDesc.state;
+			if (renderCtx.drawnOverInstances.contains(instance))
+			{
+				submitDesc.state = (state & ~BGFX_STATE_DEPTH_TEST_MASK) | BGFX_STATE_DEPTH_TEST_GEQUAL;
+			}
+			drawInstances(meshId, placers, false, instance, 1, placers.bonePalette ? &palettePose : nullptr);
+			submitDesc.state = state;
+			submitDesc.detailLevel = 1;
+		};
+		// The copies at the yard places of a workshop have one depth. They come after the other fading things, in the
+		// order of the scaffold list, because the view keeps the submit order of equal depths.
+		std::vector<std::tuple<uint64_t, entt::id_type, uint32_t>> yardCopies;
 		for (const auto& [meshId, placers] : renderCtx.fadingDrawDescs)
 		{
 			if (placers.filled == 0 || (desc.viewId == RenderPass::Reflection && placers.hiddenFromReflection) ||
@@ -1224,28 +1245,24 @@ void Renderer::DrawPassTranslucent(const DrawSceneDesc& desc, const ScenePass& p
 				{
 					continue;
 				}
-				submitDesc.sortDepth = blendDepth(instance);
-				if (placers.partsByLevel)
+				if (const auto sortPoint = renderCtx.sortPoints.find(instance); sortPoint != renderCtx.sortPoints.end())
 				{
-					submitDesc.detailLevel = renderCtx.instanceLevels.at(instance);
+					yardCopies.emplace_back(sortPoint->second.order, meshId, instance);
+					continue;
 				}
-				// The second draw of a felled tree passes the depth test at the depth of the first, as the game's
-				// draws of the same model at the same place do
-				const auto state = submitDesc.state;
-				if (renderCtx.drawnOverInstances.contains(instance))
-				{
-					submitDesc.state = (state & ~BGFX_STATE_DEPTH_TEST_MASK) | BGFX_STATE_DEPTH_TEST_GEQUAL;
-				}
-				drawInstances(meshId, placers, false, instance, 1, placers.bonePalette ? &palettePose : nullptr);
-				submitDesc.state = state;
+				drawFading(meshId, placers, instance);
 			}
-			submitDesc.detailLevel = 1;
+		}
+		std::ranges::sort(yardCopies);
+		for (const auto& [order, meshId, instance] : yardCopies)
+		{
+			drawFading(meshId, renderCtx.fadingDrawDescs.at(meshId), instance);
 		}
 		for (const auto& build : renderCtx.partialBuilds)
 		{
 			if (build.fading && build.instance < renderCtx.partialBuildInstances.size())
 			{
-				submitDesc.sortDepth = zsort::AtOnce(build.listPlace);
+				submitDesc.sortDepth = renderCtx.fizzOrder.AtOnceDepth(build.listPlace);
 				drawPartialBuild(build);
 			}
 		}
@@ -1396,12 +1413,12 @@ void Renderer::DrawPassEffects(const DrawSceneDesc& desc) const
 	DrawShieldDomes(desc);
 	DrawDestructionGhosts(desc);
 	DrawFilmReflections(desc);
-	DrawParticles(desc);
+	// The mists blend over the rest, the farthest first. The game adds them to its sort as it draws the land, before
+	// the hand and the particles, so a mist comes before them at an equal distance.
+	DrawMists(desc);
 	DrawIntroLight(desc);
 	DrawInfluenceBorder(desc);
 	DrawInfluenceRipples(desc);
-	// The mists blend over the rest, the farthest first
-	DrawMists(desc);
 	DrawPauseText(desc);
 }
 
@@ -2363,6 +2380,8 @@ void Renderer::DrawPassEntities(const DrawSceneDesc& desc, const ScenePass& pass
 	DrawPassEffects(desc);
 
 	DrawPassHand(desc, pass, draws);
+	// The game adds the particles to its sort after the hand, so a particle comes after the hand at an equal distance
+	DrawParticles(desc);
 
 	DrawPassDebugLines(desc, draws);
 }
@@ -2433,7 +2452,7 @@ void Renderer::DrawPassVegetation(const DrawSceneDesc& desc, const ScenePass& pa
 					}
 					const auto atOnce = renderCtx.atOnceTrees.find(instance);
 					submitDesc.sortDepth = atOnce != renderCtx.atOnceTrees.end()
-					                           ? zsort::AtOnce(atOnce->second)
+					                           ? renderCtx.fizzOrder.AtOnceDepth(atOnce->second)
 					                           : zsort::Depth(glm::vec3(renderCtx.treeInstanceData.at(instance).modelMatrix[3]),
 					                                          desc.camera->GetOrigin());
 					submitDesc.instanceDesc =

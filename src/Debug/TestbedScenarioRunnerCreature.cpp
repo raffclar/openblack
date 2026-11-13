@@ -1073,6 +1073,7 @@ void Runner::GiveCreatureCommand(const Command& command)
 	case Kind::ClickCreatureAt:
 	case Kind::CameraLooksAt:
 	case Kind::HandTakeNear:
+	case Kind::TapScaffoldNear:
 	case Kind::ClickCreatureNear:
 	case Kind::TapRewardNear:
 	case Kind::RunScript:

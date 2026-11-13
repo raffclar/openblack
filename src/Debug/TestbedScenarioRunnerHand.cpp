@@ -317,6 +317,42 @@ std::string Runner::HandTakeNear(const Command& command)
 	                                  : fmt::format("the hand can't take it: {}", why);
 }
 
+std::string Runner::TapScaffoldNear(const Command& command)
+{
+	if (!Locator::workshopSystem::has_value())
+	{
+		return "no workshops";
+	}
+	// The scaffold nearest the point, as the player taps the one under the pointer
+	constexpr float k_Reach = 10.0f;
+	const auto at = MapPoint(_middle, command.point);
+	auto& registry = Locator::entitiesRegistry::value();
+	auto nearest = entt::entity {entt::null};
+	float best = k_Reach;
+	glm::vec3 place {0.0f};
+	registry.Each<const ecs::components::Scaffold, const ecs::components::Transform>(
+	    [&](entt::entity entity, const ecs::components::Scaffold&, const ecs::components::Transform& transform) {
+		    const auto distance = glm::distance(glm::vec2(transform.position.x, transform.position.z), at);
+		    if (distance < best)
+		    {
+			    best = distance;
+			    nearest = entity;
+			    place = transform.position;
+		    }
+	    });
+	if (nearest == entt::null)
+	{
+		return "no scaffold near the point";
+	}
+	auto& workshops = Locator::workshopSystem::value();
+	if (!workshops.ValidToTap(nearest))
+	{
+		return "the hand can't tap the scaffold";
+	}
+	return workshops.Tap(nearest, place) ? fmt::format("tapped the scaffold {} m from the point", best)
+	                                     : "the tap did not break the scaffold";
+}
+
 std::string Runner::HandTapObject(size_t index)
 {
 	const auto object = ObjectAt(index);
