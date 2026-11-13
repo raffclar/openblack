@@ -220,12 +220,13 @@ SWITCH_IN_PATH = re.compile(r"[-/\\]multiplayer", re.IGNORECASE)
 
 
 def copy_programs(folder, out):
-    """The server, the game and their libraries, in a folder whose path has no switch of the game"""
+    """The server, the game, their libraries and the crash handler of the error reports, in a folder whose path has no
+    switch of the game"""
     target = os.path.join(out, "bin")
     os.makedirs(target, exist_ok=True)
     for name in os.listdir(folder):
         if name.lower().endswith(".dll") or name in ("openblack.exe", "openblack-server.exe", "openblack",
-                                                       "openblack-server"):
+                                                       "openblack-server", "crashpad_handler.exe", "crashpad_handler"):
             shutil.copy2(os.path.join(folder, name), os.path.join(target, name))
     return target
 

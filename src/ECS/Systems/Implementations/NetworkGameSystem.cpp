@@ -14,6 +14,9 @@
 #include <chrono>
 #include <filesystem>
 #include <optional>
+#include <random>
+#include <span>
+#include <string>
 #include <string_view>
 #include <tuple>
 #include <utility>
@@ -25,6 +28,7 @@
 #include <emscripten/heap.h>
 #endif
 
+#include "Commands/TurnCodec.h"
 #include "Common/BuildVersion.h"
 #include "Common/GameRandom.h"
 #include "Common/RandomNumberManager.h"
@@ -153,8 +157,22 @@ NetworkGameSystem::~NetworkGameSystem()
 	Detach();
 }
 
+void NetworkGameSystem::FinishDesyncs()
+{
+	if (!_desyncs)
+	{
+		return;
+	}
+	if (const auto summary = _desyncs->Finish(_desyncBudget); summary.has_value())
+	{
+		SendDesyncReport(*summary);
+	}
+	_desyncs.reset();
+}
+
 void NetworkGameSystem::Detach()
 {
+	FinishDesyncs();
 	if (!_session)
 	{
 		return;
@@ -200,6 +218,9 @@ bool NetworkGameSystem::Join(NetworkJoin join)
 		sockets = _testClient.get();
 	}
 	_session = std::make_unique<online::NetworkSession>(*sockets, Microseconds, _log);
+	// Each network game has its own id in the desync events. The id is random, so it tells nothing about the player.
+	std::random_device random;
+	_desyncs.emplace(error_reports::ClientGameId((static_cast<uint64_t>(random()) << 32U) | random()), turn_codec::k_Version);
 	// A land that loads after the join gets its humans from the session at the start of the game
 	if (Locator::landSystem::has_value())
 	{
@@ -283,6 +304,21 @@ bool NetworkGameSystem::Join(NetworkJoin join)
 		                                                        : online::PartHashes {};
 	        },
 	    .origin = join.origin,
+	    .desynced =
+	        [this](uint32_t turn, uint64_t local, uint64_t server) {
+		        if (_desyncs)
+		        {
+			        _desyncs->Detected(0, {.turn = turn, .ownChecksum = local, .otherChecksum = server, .slot = std::nullopt},
+			                           Microseconds() / 1000);
+		        }
+	        },
+	    .partedParts =
+	        [this](std::span<const std::string> parts) {
+		        if (_desyncs)
+		        {
+			        _desyncs->Parted(0, parts, Microseconds() / 1000);
+		        }
+	        },
 	});
 	return true;
 }
@@ -412,6 +448,14 @@ void NetworkGameSystem::Update()
 		_testClient->Poll();
 	}
 	_session->Update();
+	// The desync events that the flood limits let go now
+	if (_desyncs)
+	{
+		for (const auto& report : _desyncs->Update(Microseconds() / 1000, _desyncBudget))
+		{
+			SendDesyncReport(report);
+		}
+	}
 
 	// A test parts this computer's world from the server's once
 	if (_partAt.has_value() && Locator::time::value().GetTurn() >= *_partAt)
@@ -537,6 +581,7 @@ void NetworkGameSystem::Update()
 		const auto& compares = _session->GetCompares();
 		_log->Info(fmt::format("The network game ended ({}): {} turns compared with the server, {} the same, {} resumes",
 		                       online::EndName(_session->GetEnd()), compares.compared, compares.same, _session->Resumes()));
+		FinishDesyncs();
 	}
 }
 

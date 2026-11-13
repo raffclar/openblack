@@ -24,6 +24,7 @@
 #include <spdlog/spdlog.h>
 
 #include "CrashHandler.h"
+#include "DesyncReports.h"
 #include "ErrorReportsRules.h"
 
 namespace openblack::error_reports
@@ -159,6 +160,37 @@ void SentryErrorReports::SetEnabled(bool enabled)
 	{
 		Stop();
 	}
+}
+
+void SentryErrorReports::SendDesync(const DesyncReport& report)
+{
+	if (!_running)
+	{
+		return;
+	}
+	const auto fields = DesyncEventFieldsOf(report);
+	const auto level = fields.level == "info" ? SENTRY_LEVEL_INFO : SENTRY_LEVEL_WARNING;
+	auto event = sentry_value_new_message_event(level, "desync", fields.message.c_str());
+	auto fingerprint = sentry_value_new_list();
+	for (const auto& part : fields.fingerprint)
+	{
+		sentry_value_append(fingerprint, sentry_value_new_string(part.c_str()));
+	}
+	sentry_value_set_by_key(event, "fingerprint", fingerprint);
+	auto tags = sentry_value_new_object();
+	for (const auto& [key, value] : fields.tags)
+	{
+		sentry_value_set_by_key(tags, key.c_str(), sentry_value_new_string(value.c_str()));
+	}
+	sentry_value_set_by_key(event, "tags", tags);
+	auto extra = sentry_value_new_object();
+	for (const auto& [key, value] : fields.extras)
+	{
+		sentry_value_set_by_key(extra, key.c_str(), sentry_value_new_string(value.c_str()));
+	}
+	sentry_value_set_by_key(event, "extra", extra);
+	sentry_capture_event(event);
+	++_desyncEvents;
 }
 
 void SentryErrorReports::Start()

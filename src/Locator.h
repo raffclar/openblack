@@ -67,6 +67,7 @@ namespace error_reports
 {
 class ErrorReportsInterface;
 enum class Role : uint8_t;
+struct DesyncReport;
 } // namespace error_reports
 
 namespace online
@@ -351,6 +352,8 @@ void ShutDownServices();
 void InitializeErrorReports(error_reports::Role role, std::string_view logFile);
 /// Stops the error reports, sends the reports that wait, and removes the service
 void ShutDownErrorReports();
+/// Writes a line for a desync event in the game log, and gives the event to the error reports when there are reports
+void SendDesyncReport(const error_reports::DesyncReport& report);
 /// Keeps the error reports from its construction to its destruction. ShutDownServices does not remove them, so that
 /// a crash or an exception while the services stop still gives a report.
 class ErrorReportsScope

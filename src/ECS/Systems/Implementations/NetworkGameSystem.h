@@ -16,6 +16,7 @@
 #include <string_view>
 #include <vector>
 
+#include "Common/DesyncReports.h"
 #include "ECS/Systems/NetworkGameSystemInterface.h"
 #include "Online/ConnectionLog.h"
 #include "Online/NetworkSession.h"
@@ -85,6 +86,8 @@ private:
 	void Attach();
 	/// Loads the world state that the server sent after a resync
 	void LoadWorld(const online::NetworkSession::WorldState& world);
+	/// The game ended or the session goes: the summary of the desyncs, once
+	void FinishDesyncs();
 
 	online::WebSocketClientInterface& _sockets;
 	MakeTestClient _makeTestClient;
@@ -112,6 +115,10 @@ private:
 	bool _partAgain {false};
 	/// The turn of a loaded world state, until it is here and the world goes on
 	std::optional<uint32_t> _resumeTurn;
+	/// The desync events that this run of the game can still send, for all its network games
+	error_reports::DesyncRunBudget _desyncBudget;
+	/// The desyncs of the network game, from the join to the end of the game
+	std::optional<error_reports::DesyncReportRule> _desyncs;
 };
 
 } // namespace openblack::ecs::systems

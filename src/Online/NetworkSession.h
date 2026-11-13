@@ -69,6 +69,11 @@ struct NetworkSessionSettings
 	std::function<PartHashes(uint32_t turn)> localParts;
 	/// Where the game came from: the lobby on the internet or the local network
 	GameOrigin origin {GameOrigin::Lan};
+	/// Gets each desync: the checksums of a turn differ, and the client starts a resync or leaves the game. The
+	/// differences in a resync that is in progress do not count.
+	std::function<void(uint32_t turn, uint64_t local, uint64_t server)> desynced;
+	/// Gets the names of the parts that differ, in the order of the checksum, when the server's parts came
+	std::function<void(std::span<const std::string> parts)> partedParts;
 };
 
 /// A step of the start of the game that the front end shows to the player
