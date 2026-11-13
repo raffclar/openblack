@@ -400,6 +400,8 @@ private:
 	std::unique_ptr<online::MapDownload> _mapDownload;
 	/// The hash of the room's land that the front end asked for
 	std::string _roomMapHash;
+	/// The count of the map sets of the lobby room (LobbyRoom::MapSets) at the last start of the download of its map
+	uint32_t _roomMapSets {0};
 	/// The lobby's list did not have the room's land, or the list did not come
 	bool _mapFailed {false};
 	std::optional<size_t> _shownLand;

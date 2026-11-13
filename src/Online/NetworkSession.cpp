@@ -116,6 +116,7 @@ void NetworkSession::Join(NetworkSessionSettings settings)
 	_turnsDone = 0;
 	_loaded = false;
 	_loadedSent = false;
+	_loadedDueAt.reset();
 	_loadWait.reset();
 	_commandsInLoadWait = 0;
 	// A new session counts its blocks of commands from 0
@@ -581,6 +582,8 @@ void NetworkSession::Update()
 		}
 		return;
 	}
+	// A report of the load that the tests delay goes when its time comes
+	SendLoaded();
 	if (_stream && _stream->IsOpen() && now >= _nextPing)
 	{
 		_stream->SendPing();
@@ -641,7 +644,20 @@ void NetworkSession::ReportLoaded()
 
 void NetworkSession::SendLoaded()
 {
-	if (_loaded && !_loadedSent && _start.has_value() && _stream && _stream->IsOpen())
+	if (!_loaded || _loadedSent || !_start.has_value())
+	{
+		return;
+	}
+	if (!_loadedDueAt.has_value())
+	{
+		_loadedDueAt = _clock() + _settings.testLoadDelayMicroseconds;
+		if (_settings.testLoadDelayMicroseconds > 0)
+		{
+			Log(spdlog::level::info, fmt::format("Tests: the session tells the server about the load {} ms late",
+			                                     _settings.testLoadDelayMicroseconds / 1000));
+		}
+	}
+	if (_clock() >= *_loadedDueAt && _stream && _stream->IsOpen())
 	{
 		_loadedSent = true;
 		_stream->SendText(game_socket::ToJson(game_socket::Loaded {}));

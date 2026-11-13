@@ -73,6 +73,9 @@ struct NetworkSessionSettings
 	std::function<void(uint32_t turn)> parts;
 	/// Where the game came from: the lobby on the internet or the local network
 	GameOrigin origin {GameOrigin::Lan};
+	/// Tests: the client tells the server this many microseconds late that its world loaded. The other players then see
+	/// the pause for the loads (deviation 254) as for a slow computer.
+	int64_t testLoadDelayMicroseconds {0};
 };
 
 /// A step of the start of the game that the front end shows to the player
@@ -296,6 +299,8 @@ private:
 	bool _loaded {false};
 	/// The session sent game.loaded on its socket
 	bool _loadedSent {false};
+	/// When the report of the load can go to the server: the load and the start, plus the delay of the tests
+	std::optional<int64_t> _loadedDueAt;
 	/// The last game.wait of the server with names, and the time when it came
 	std::optional<game_socket::LoadWait> _loadWait;
 	int64_t _loadWaitAt {0};

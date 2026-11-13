@@ -455,6 +455,20 @@ TEST(LobbyRoom, ChangesClearTheReady)
 	                           }));
 }
 
+TEST(LobbyRoom, EachChangeThatSetsTheMapCountsAsAMapSet)
+{
+	LobbyRoom room(TestLobby(), k_Me);
+	EXPECT_EQ(room.MapSets(), 0u);
+	// A failed download starts again at the next map set: a new map, or the same map that the service sets again
+	room.Apply(Event("lobby.changed", R"({"lobby":"l1","fields":["map","slots"],"ready_cleared":true,"map_cleared":false})"));
+	EXPECT_EQ(room.MapSets(), 1u);
+	room.Apply(Event("lobby.changed", R"({"lobby":"l1","fields":["map"],"ready_cleared":true,"map_cleared":true})"));
+	EXPECT_EQ(room.MapSets(), 2u);
+	// A change of other settings does not set the map
+	room.Apply(Event("lobby.changed", R"({"lobby":"l1","fields":["settings"],"ready_cleared":true})"));
+	EXPECT_EQ(room.MapSets(), 2u);
+}
+
 TEST(LobbyRoom, TheCountdownWritesEachSecond)
 {
 	LobbyRoom room(TestLobby(), k_Me);

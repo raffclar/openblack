@@ -10,6 +10,7 @@
 #include "LockstepHost.h"
 
 #include <algorithm>
+#include <iterator>
 #include <limits>
 #include <ranges>
 #include <utility>
@@ -232,6 +233,17 @@ void LockstepHost::Refuse(ConnectionId connection, std::string_view reason)
 	if (observer.has_value())
 	{
 		ObserverLeft(*observer);
+	}
+}
+
+void LockstepHost::EndRoom(std::string_view reason)
+{
+	std::vector<ConnectionId> connections;
+	connections.reserve(_peers.size());
+	std::ranges::copy(_peers | std::views::keys, std::back_inserter(connections));
+	for (const auto connection : connections)
+	{
+		Refuse(connection, reason);
 	}
 }
 

@@ -64,6 +64,8 @@ enum class Admission : uint8_t
 inline constexpr std::string_view k_VersionRefusal = "version";
 /// The word of the refusal of a client with another file of the land
 inline constexpr std::string_view k_MapRefusal = "map";
+/// The word of the refusal that each client gets when the server ends its room before the start
+inline constexpr std::string_view k_EndedRefusal = "ended";
 
 /// Why the server refuses the build of a client, or none. A client that gives no build is refused only by a server that
 /// needs one: the server of a lobby game. Each other server takes it, as an older client gives no build. A server with

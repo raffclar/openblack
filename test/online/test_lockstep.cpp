@@ -153,7 +153,8 @@ struct Computer
 {
 	Computer(LoopbackSockets& network, int64_t& now, std::string ticket,
 	         std::optional<std::vector<uint8_t>> landFile = k_LandFile, std::vector<uint8_t> creature = {'C'},
-	         float alignment = 0.0f, std::string name = {}, std::string build = {}, std::string map = {})
+	         float alignment = 0.0f, std::string name = {}, std::string build = {}, std::string map = {},
+	         int64_t loadDelayMicroseconds = 0)
 	    : sockets(network.MakeClient())
 	    , session(*sockets, [&now] { return now; })
 	{
@@ -171,6 +172,7 @@ struct Computer
 		    },
 		    .readCreature = [this] { return this->creature; },
 		    .readAlignment = [alignment] { return alignment; },
+		    .testLoadDelayMicroseconds = loadDelayMicroseconds,
 		});
 		this->landFile = std::move(landFile);
 		this->creature = std::move(creature);
@@ -2785,6 +2787,44 @@ TEST_F(LockstepTest, TheTurnsOfALobbyGameWaitUntilEachGodsPlayerLoadedTheWorld)
 	EXPECT_EQ(alice.session.GetState(), NetworkSession::State::Playing);
 	// The tap of the pause did not go into a turn
 	EXPECT_TRUE(host->Seats()[2].commands.empty());
+}
+
+TEST_F(LockstepTest, AReportOfTheLoadThatTheTestsDelayGoesLateAndTheTurnsWaitForIt)
+{
+	MakeLobbyHost(TwoGodsAndAnObserver(), 2);
+	const std::string build(k_ServerBuild);
+	Computer alice(network, now, "god:alice@lobby1", k_LandFile, {'C'}, 0.0f, {}, build);
+	Computer bob(network, now, "god:bob@lobby1", k_LandFile, {'C'}, 0.0f, {}, build, {}, 3LL * 1'000'000);
+	Frames({&alice, &bob}, 10);
+	ASSERT_TRUE(host->Started());
+	alice.session.ReportLoaded();
+	bob.session.ReportLoaded();
+	// Bob's computer loaded, but it tells the server 3 seconds late: alice sees the pause with bob's name
+	Frames({&alice, &bob}, 20);
+	EXPECT_TRUE(host->WaitsForLoads());
+	EXPECT_EQ(serverWorld.turns, 0u);
+	ASSERT_TRUE(alice.session.LoadWait().has_value());
+	EXPECT_EQ(alice.session.LoadWait()->loading, (std::vector<std::string> {"bob"}));
+	// After the delay the report goes, and the turns run
+	Frames({&alice, &bob}, 20);
+	EXPECT_FALSE(host->WaitsForLoads());
+	EXPECT_FALSE(alice.session.LoadWait().has_value());
+	EXPECT_GT(serverWorld.turns, 5u);
+}
+
+TEST_F(LockstepTest, AClientOfARoomThatTheServerEndsBeforeTheStartDoesNotTryToComeBack)
+{
+	MakeLobbyHost(TwoGodsAndAnObserver(), 2);
+	const std::string build(k_ServerBuild);
+	Computer alice(network, now, "god:alice@lobby1", k_LandFile, {'C'}, 0.0f, {}, build);
+	Frames({&alice}, 10);
+	ASSERT_FALSE(host->Started());
+	ASSERT_TRUE(alice.session.GetJoined().has_value());
+	host->EndRoom("ended");
+	Frames({&alice}, 10);
+	EXPECT_EQ(alice.session.GetState(), NetworkSession::State::Ended);
+	EXPECT_EQ(alice.session.GetEnd(), NetworkSession::End::Refused);
+	EXPECT_EQ(alice.session.RefusedReason(), "ended");
 }
 
 TEST_F(LockstepTest, AGodWhosePlayerLeavesDuringTheLoadsLeavesAndTheTurnsStartWithTheOthers)

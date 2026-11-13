@@ -469,6 +469,10 @@ void LobbyRoom::ApplyChange(const lobby_api::LobbyChange& change)
 			_changedFields.push_back(field);
 		}
 	}
+	if (std::ranges::find(change.fields, "map") != change.fields.end())
+	{
+		++_mapSets;
+	}
 	if (change.readyCleared)
 	{
 		for (auto& member : _lobby.members)

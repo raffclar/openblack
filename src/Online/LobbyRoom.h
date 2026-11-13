@@ -219,6 +219,10 @@ public:
 	[[nodiscard]] bool CanPickSlot(int32_t slot) const;
 	/// The number of the changes. The screens compare it to see a change.
 	[[nodiscard]] uint32_t Revision() const noexcept { return _revision; }
+	/// The number of the times that the host set the map, also when the host set the same map again. A failed download
+	/// of the map starts again at the next time, as the download of the original game starts again at each map that the
+	/// host sets.
+	[[nodiscard]] uint32_t MapSets() const noexcept { return _mapSets; }
 
 	/// Uses an event of the push channel. The room ignores an event of a different lobby.
 	void Apply(const lobby_api::PushEvent& event);
@@ -259,6 +263,7 @@ private:
 	/// The last second of the countdown that has a line
 	int32_t _announced {k_CountdownSeconds + 1};
 	uint32_t _revision {0};
+	uint32_t _mapSets {0};
 	/// A change of the lobby came: the room needs the lobby again
 	bool _reloadWanted {false};
 	/// The fields of the changes that have no line yet, until the next reload

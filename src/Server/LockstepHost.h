@@ -253,6 +253,9 @@ public:
 	void TurnChecksum(uint32_t turn, uint64_t checksum);
 
 	[[nodiscard]] bool Started() const { return _started; }
+	/// The server ends its room before the start: each client gets the refusal with this word, and its socket closes. A
+	/// client of a refused session does not try to come back.
+	void EndRoom(std::string_view reason);
 	/// True from the query of the lands until the start of the game or a stop of the start
 	[[nodiscard]] bool Starting() const { return _startStep != StartStep::None; }
 	/// True when the game started and no god's player is connected

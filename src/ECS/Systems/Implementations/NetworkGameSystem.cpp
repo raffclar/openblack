@@ -226,6 +226,7 @@ bool NetworkGameSystem::Join(NetworkJoin join)
 	    .parts = {},
 #endif
 	    .origin = join.origin,
+	    .testLoadDelayMicroseconds = static_cast<int64_t>(join.testLoadDelaySeconds.value_or(0)) * 1'000'000,
 	});
 	return true;
 }
