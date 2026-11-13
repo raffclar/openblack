@@ -1500,6 +1500,19 @@ void testbed_scenarios::AddLight(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "light.coarse_far_ring",
+	    .name = "The far land of a map with no landscape pages shows all of its blocks",
+	    .facet = Facet::Light,
+	    .description = "The network map for 32 gods with the clock stopped. The landscape file of this map has no pages, "
+	                   "thus each far block shows only the coarse texture that the land paints for it. The camera is "
+	                   "6000 units high and looks down over the ring of the citadels to the far land.",
+	    .expected = "All of the land shows from the first frame, with no holes and no squares in a check pattern. Each "
+	                "far block shows the colours of its painted texture. The sea shows only at the edge of the land.",
+	    .environment = {.land = Land::GodsRingMap, .clockRuns = false, .dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 6000.0f, -5000.0f}, .look = {0.0f, 0.0f, 0.0f}},
+	});
+
+	all.push_back({
 	    .id = "light.coarse_repaint_on_use",
 	    .name = "A far land block keeps its old coarse texture until the land draws it nearer",
 	    .facet = Facet::Light,

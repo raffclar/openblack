@@ -98,6 +98,20 @@ struct PaintRequest
                                             const std::function<bool(size_t)>& painted,
                                             const std::function<bool(size_t)>& busy);
 
+/// Whether a block counts as a block with a paint for PaintsDue. The game paints each block at the load with all of its
+/// texture, the footprints too, and then makes its coarse texture. The land here paints the footprints into the blocks
+/// after the first paint of the coarse textures. Thus the first new paint of a block's texture after the load also
+/// paints its coarse texture at once, also when the land draws the block with its coarse texture alone.
+///
+/// The arguments are as follows:
+/// - painted: the block got a paint before.
+/// - loadPaintOnly: the block's coarse texture has only the paint of the load.
+/// - waits: the block has a request for a paint.
+[[nodiscard]] constexpr bool CountsAsPainted(bool painted, bool loadPaintOnly, bool waits)
+{
+	return painted && !(loadPaintOnly && waits);
+}
+
 /// The paint of a place of the map in a frame
 struct FramePaint
 {
