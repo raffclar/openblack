@@ -339,5 +339,9 @@ void KeepRefusedPlan(PlannerState& state, creature_desires::Desire desire);
 [[nodiscard]] std::optional<Plan> Best(const PlannerState& state);
 /// The plan to change to now, if the best is pressing enough against what the creature carries out (nothing counts as 0)
 [[nodiscard]] std::optional<Plan> Choose(const PlannerState& state);
+/// After the choice of a turn in which no agenda runs, the plan that the creature keeps gets a priority of 0. Thus the
+/// choice of the next turn can take any plan. The plan to lie dead after a faint has the highest priority and no agenda
+/// in the mind, so this rule lets the creature choose again after the knock-out.
+void NoPlanRuns(PlannerState& state);
 
 } // namespace openblack::creature_planner

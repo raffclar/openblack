@@ -15,6 +15,7 @@
 #include <array>
 #include <bit>
 #include <functional>
+#include <limits>
 #include <optional>
 #include <vector>
 
@@ -999,6 +1000,28 @@ TEST(CreaturePlanner, ChoosesOnlyWhatIsPressingEnough)
 	EXPECT_FALSE(creature_planner::Choose(state).has_value());
 	state.best.at(0)->priority = 41.0f;
 	EXPECT_TRUE(creature_planner::Choose(state).has_value());
+}
+
+TEST(CreaturePlanner, APlanKeptWhenNoAgendaRunsLetsTheNextChoiceTakeAnyPlan)
+{
+	// After a faint, the plan to lie dead stays with the highest priority and no agenda in the mind
+	creature_planner::PlannerState state;
+	state.current =
+	    creature_planner::Plan {.desire = Desire::ObeyPlayer, .action = 9, .priority = std::numeric_limits<float>::max()};
+	state.best.at(static_cast<size_t>(Desire::Hunger)) =
+	    creature_planner::Plan {.desire = Desire::Hunger, .action = 2, .priority = 0.0001f};
+	EXPECT_FALSE(creature_planner::Choose(state).has_value());
+	// The turn with no agenda ends: the kept plan has priority 0, and the eat plan is taken next
+	creature_planner::NoPlanRuns(state);
+	ASSERT_TRUE(state.current.has_value());
+	EXPECT_EQ(state.current->priority, 0.0f);
+	const auto choice = creature_planner::Choose(state);
+	ASSERT_TRUE(choice.has_value());
+	EXPECT_EQ(choice->desire, Desire::Hunger);
+	// With no kept plan, nothing changes
+	creature_planner::PlannerState empty;
+	creature_planner::NoPlanRuns(empty);
+	EXPECT_FALSE(empty.current.has_value());
 }
 
 // Learning from feedback
