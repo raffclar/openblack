@@ -565,6 +565,8 @@ game_session::ExitSave Game::ExitSaveAsGameEnds(game_session::End end) const
 	if (Locator::gameInterface::has_value())
 	{
 		facts.previousProfile = Locator::gameInterface::value().GetMenu().GetPreviousProfile();
+		facts.startQuestionWaits =
+		    Locator::gameInterface::value().GetSkipBox().IsActive() || _startQuestionAfterFrontEnd.has_value();
 	}
 	if (Locator::playerProfileSystem::has_value())
 	{
@@ -595,6 +597,15 @@ bool Game::SaveAsGameEnds(game_session::End end, bool quitting)
 		return saves.SaveOnExit(quitting);
 	case game_session::ExitSave::Previous:
 		break;
+	case game_session::ExitSave::Remove:
+		// The next start of the profile is a new game, with the start-of-game question
+		if (saves.HasExitSave())
+		{
+			saves.Delete(gamesave::k_ExitSlot);
+		}
+		SPDLOG_LOGGER_INFO(spdlog::get("game"),
+		                   "The game ends before the answer to the start-of-game question: no save on exit");
+		return false;
 	}
 	// The save goes to the profile that the player played before they picked another one. The game plays as that
 	// profile while it saves, and then plays as the profile picked again.

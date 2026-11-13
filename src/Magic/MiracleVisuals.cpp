@@ -270,28 +270,31 @@ uint32_t visuals::FreezeTint(float pulse)
 	return tint;
 }
 
-std::vector<PhialDraw> visuals::PhialDraws(int receiveType, float phase, float pulse, uint8_t globeAlpha)
+visuals::PhialDrawList visuals::PhialDraws(int receiveType, float phase, float pulse, uint8_t globeAlpha)
 {
 	const auto alpha = static_cast<uint32_t>(globeAlpha);
 	switch (receiveType)
 	{
 	case k_SmallReceiveType:
 		// Shrinking away from the full phial, with a faint full one over it
-		return {{.size = 1.0f - phase, .alpha = globeAlpha, .landLit = false},
-		        {.size = 1.0f, .alpha = static_cast<uint8_t>((alpha * 5u) >> 4u), .landLit = false}};
+		return {.draws = {{{.size = 1.0f - phase, .alpha = globeAlpha, .landLit = false},
+		                   {.size = 1.0f, .alpha = static_cast<uint8_t>((alpha * 5u) >> 4u), .landLit = false}}},
+		        .count = 2};
 	case k_BigReceiveType:
 	{
 		// The full phial, with a fading one growing out of it
 		const auto fading = static_cast<uint32_t>(static_cast<int32_t>(255.0f - 255.0f * phase));
-		return {{.size = 1.0f, .alpha = globeAlpha, .landLit = false},
-		        {.size = 1.0f + phase, .alpha = static_cast<uint8_t>((fading * alpha) >> 8u), .landLit = false}};
+		return {.draws = {{{.size = 1.0f, .alpha = globeAlpha, .landLit = false},
+		                   {.size = 1.0f + phase, .alpha = static_cast<uint8_t>((fading * alpha) >> 8u), .landLit = false}}},
+		        .count = 2};
 	}
 	case k_InvisibleReceiveType:
-		return {{.size = 1.0f,
-		         .alpha = static_cast<uint8_t>(static_cast<int32_t>(static_cast<float>(alpha) * pulse)),
-		         .landLit = true}};
+		return {.draws = {{{.size = 1.0f,
+		                    .alpha = static_cast<uint8_t>(static_cast<int32_t>(static_cast<float>(alpha) * pulse)),
+		                    .landLit = true}}},
+		        .count = 1};
 	default:
-		return {{.size = 1.0f, .alpha = 255, .landLit = true}};
+		return {.draws = {{{.size = 1.0f, .alpha = 255, .landLit = true}}}, .count = 1};
 	}
 }
 

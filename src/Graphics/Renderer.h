@@ -286,6 +286,8 @@ private:
 		const ShaderProgram* environment;
 		const Texture2D* environmentMap;
 		const Texture2D* iceMap;
+		/// The forward direction of the camera of the pass, or none for the function to ask the camera
+		std::optional<glm::vec3> forward;
 	};
 	[[nodiscard]] SeedModelLooks FindSeedModelLooks() const;
 	/// With `seenBy`, the function does not send a draw of the model that is out of that view. The draws go into the
@@ -905,6 +907,10 @@ private:
 		std::unique_ptr<FrameBuffer> textures;
 		/// The places whose blocks got a paint
 		std::bitset<coarse_edges::k_Blocks> painted;
+		/// The places whose blocks have only the paint of the load (see coarse_edges::CountsAsPainted)
+		std::bitset<coarse_edges::k_Blocks> loadPaintOnly;
+		/// The next paint is the paint of the load
+		bool loadPaint {false};
 		/// The blocks, by their index, with a request for a paint. A block that got a paint before waits until the land
 		/// draws it with its own texture.
 		std::vector<bool> waiting;

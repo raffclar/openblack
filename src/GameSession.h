@@ -153,6 +153,9 @@ enum class ExitSave
 	Current,
 	/// The save goes to the profile that the player played before they picked another one on the Players page
 	Previous,
+	/// The game removes the save on exit of the profile that the player plays now. The start-of-game question of a new
+	/// game waits for its answer, so the next start is a new game that asks the question again.
+	Remove,
 };
 
 /// What the game knows as it ends
@@ -170,6 +173,9 @@ struct ExitSaveFacts
 	std::u16string currentProfile;
 	/// The previous profile is still there: the player did not delete it
 	bool previousExists {false};
+	/// The start-of-game question of the new game waits for the answer of the player: it shows, or it shows when the
+	/// player leaves the multiplayer front end
+	bool startQuestionWaits {false};
 };
 
 /// Two profile names are the same when only the case of their plain letters is not the same
@@ -178,7 +184,8 @@ struct ExitSaveFacts
 /// The save as a game ends, into the slot of the save on exit. A game that is over, a game on the network, a skirmish, a
 /// load of a saved game and the Gods' Playground have no save. When the player picked another profile, the save goes
 /// to the profile that they played before. When the game starts again as the same profile, it has no save, and the
-/// next game continues from the last save on exit.
+/// next game continues from the last save on exit. When the start-of-game question waits for its answer, the game
+/// removes the save on exit, so that the next start asks the question (not in the original game).
 [[nodiscard]] ExitSave ExitSaveFor(const ExitSaveFacts& facts);
 
 } // namespace openblack::game_session
