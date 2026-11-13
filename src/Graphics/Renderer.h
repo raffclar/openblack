@@ -212,6 +212,11 @@ private:
 	void DrawChimneySmoke(const DrawSceneDesc& desc) const;
 	/// Gathers what the particle effects draw this frame, once for every pass
 	void CollectParticles() const;
+	/// Gathers the symbols of belief of each village centre into a frame of its own, as the game draws them after the
+	/// centre's column and not with the other effects
+	void CollectTownBeliefParticles() const;
+	/// The symbols of belief of one village centre, among the other things that blend
+	void DrawTownBeliefParticles(const DrawSceneDesc& desc, entt::entity centre) const;
 	/// The particle effects in the order the camera of the pass draws them, among the other things that blend: runs of
 	/// sprites that share a sheet as one instanced draw, ribbons, models and mists
 	void DrawParticles(const DrawSceneDesc& desc) const;
@@ -550,7 +555,8 @@ private:
 	/// the hand
 	void DrawPassEffects(const DrawSceneDesc& desc) const;
 	/// Draws the effects that the game adds after the hand and its particles: the shields' domes, the columns over the
-	/// village centres, then the rain and the snowfall
+	/// village centres with their symbols of belief, the floating numbers, the rain and the snowfall, the villagers'
+	/// names and the tip bubble
 	void DrawPassEffectsAfterParticles(const DrawSceneDesc& desc) const;
 	/// Draws the hand mirrored in the sea, then the hand
 	void DrawPassHand(const DrawSceneDesc& desc, const ScenePass& pass, auto& draws) const;
@@ -637,7 +643,8 @@ private:
 	void DrawInterfaceCreatures(const DrawSceneDesc& desc, const InterfaceCreatureBody& drawBody) const;
 	/// The creature that the main menu's tattoo editor asked to show last, in its view of its own
 	void DrawMenuCreature(const DrawSceneDesc& desc, const InterfaceCreatureBody& drawBody) const;
-	/// The columns of light over the village centres of the players whose borders show
+	/// The columns of light over the village centres of the players whose borders show. Each centre's symbols of belief
+	/// come just after its column, also in the reflection.
 	void DrawTownColumns(const DrawSceneDesc& desc) const;
 	/// The columns of light over the temples of the players whose borders show
 	void DrawTempleColumns(const DrawSceneDesc& desc) const;
@@ -1063,6 +1070,17 @@ private:
 	mutable std::unique_ptr<Camera> _hintCamera;
 	mutable std::vector<particles::draw::Command> _hintParticleCommands;
 	mutable std::vector<uint32_t> _hintParticleSpriteOrder;
+	/// What the symbols of belief of one village centre draw this frame
+	struct TownBeliefFrame
+	{
+		entt::entity centre {entt::null};
+		particles::draw::Frame frame;
+	};
+	/// The frames of the village centres' symbols of belief. Only the first _townBeliefFrameCount are of this frame.
+	mutable std::vector<TownBeliefFrame> _townBeliefFrames;
+	mutable size_t _townBeliefFrameCount {0};
+	mutable std::vector<particles::draw::Command> _townBeliefCommands;
+	mutable std::vector<uint32_t> _townBeliefSpriteOrder;
 	mutable std::vector<particles::draw::Command> _particleBeforeLandCommands;
 	mutable std::vector<uint32_t> _particleBeforeLandSprites;
 	/// What the falling spell's film draws of the particles this frame, and their order

@@ -1238,7 +1238,14 @@ bool Game::RunFrame() noexcept
 		if (drawsFrame)
 		{
 			auto section = profiler.BeginScoped(Profiler::Stage::SceneDraw);
-			const auto drawDesc = SceneDrawDesc(config, drawMs, IsHandDrawn());
+			auto drawDesc = SceneDrawDesc(config, drawMs, IsHandDrawn());
+			// The main pass submits the labels in the world among its draws, at the points where the game adds them
+			if (Locator::gameInterface::has_value())
+			{
+				drawDesc.submitWorldLabels = [](graphics::WorldLabelGroup group) {
+					Locator::gameInterface::value().SubmitWorldLabels(group);
+				};
+			}
 			// The sun, the moon and the dome's blend of this frame, for drawing it
 			if (Locator::skySystem::has_value())
 			{
@@ -1257,6 +1264,11 @@ bool Game::RunFrame() noexcept
 			{
 				Locator::syncChecksumSystem::value().StartHashBesideDraw();
 				Locator::rendererInterface::value().DrawScene(drawDesc);
+			}
+			// The labels that the scene did not draw, such as in the temple, go after it
+			if (Locator::gameInterface::has_value())
+			{
+				Locator::gameInterface::value().SubmitWaitingWorldLabels();
 			}
 		}
 		// The checksum of the turns of this frame is complete before anything changes the world again

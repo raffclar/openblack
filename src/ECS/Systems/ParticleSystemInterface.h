@@ -49,7 +49,7 @@ public:
 	/// The frame does not depend on the camera: each pass orders it for its own (particles::draw::Order). In the temple
 	/// only the effects of the temple draw, and outside it only the effects of the world.
 	virtual void CollectDrawFrame(float turnFraction, particles::draw::Frame& frame, bool inTemple) const = 0;
-	/// Clears the frame and fills it with what one effect draws, none if the effect does not run
+	/// Clears the frame and fills it with what one effect draws, none if the effect does not run or is hidden
 	virtual void CollectEffectDrawFrame(EffectId id, float turnFraction, particles::draw::Frame& frame) const = 0;
 	[[nodiscard]] virtual DrawStats GetDrawStats() const = 0;
 };
