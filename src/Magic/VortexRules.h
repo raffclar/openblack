@@ -91,6 +91,20 @@ enum class Step
 /// with its x, the vortex in the middle, a whole texture spanning 160 units times the kind's base size
 [[nodiscard]] glm::vec2 GroundTextureCoordinates(glm::vec2 point, glm::vec2 centre, float baseScale);
 
+/// A land block's side, in land units
+inline constexpr float k_BlockSide = 160.0f;
+/// A block's coarse texture starts a 255th of its page in from the corner of its square
+inline constexpr float k_CoarseTextureInset = 1.0f / 255.0f;
+/// A block's coarse texture spans this part of its page along each side: 62 of 256 texels
+inline constexpr float k_CoarseTextureSpan = 0.2421875f;
+
+/// The point of the land whose place on the hole's texture a point of a block takes. The game finds the hole's place
+/// from the coordinates of the block's own texture. A block drawn with its full texture, or with the coarse one faded
+/// in, takes its own point. A block drawn with its coarse texture alone uses its coordinates on its coarse page. Thus
+/// the hole moves away from the vortex and becomes about four times larger, or goes off the block. The ring always
+/// takes the point's own place. The slot is where the block's square starts on its page: x along z, y along x.
+[[nodiscard]] glm::vec2 HoleTexturePoint(glm::vec2 point, glm::vec2 blockCorner, glm::vec2 coarseSlot, bool coarseAlone);
+
 /// How far below the ground the swirl drawn under the land sits: 2.5 while the levelling hasn't begun, rising to 0.3
 [[nodiscard]] float SwirlDepth(float levelAmount);
 
