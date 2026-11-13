@@ -18,6 +18,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 
 #include "3D/L3DMesh.h"
+#include "3D/LandLightFrame.h"
 #include "ECS/Components/Fire.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Player.h"
@@ -59,8 +60,6 @@ constexpr uint32_t k_RgbMask = 0xFFFFFFu;
 constexpr uint32_t k_AlphaShift = 24;
 /// The seed over a village centre's stone hand or the icon of a worship site has its full size
 constexpr float k_HandSeedScale = 1.0f;
-/// The stone hand is white, so the effect of the holder of its seed has the full alpha
-constexpr uint8_t k_HandHolderAlpha = 0xFF;
 
 /// The height of the box of a thing's model, none without the model
 [[nodiscard]] float ModelHeight(const Mesh& mesh)
@@ -279,6 +278,20 @@ void SpellIconSystem::UpdateHolderEffects(std::chrono::milliseconds frameRealTim
 			StepHolderEffect(seed, drawn, step, alpha);
 		}
 	};
+	// The light of the land of this frame, made once for all the stone hands that the frame draws
+	std::optional<FrameLightTable> handLight;
+	const auto handHolderAlpha = [&registry, &handLight](entt::entity hand) {
+		const auto* transform = registry.TryGet<const Transform>(hand);
+		if (transform == nullptr || !Locator::resources::has_value())
+		{
+			return looks::StoneHandHolderAlpha(looks::k_ThroughWhite);
+		}
+		if (!handLight.has_value())
+		{
+			handLight = FrameLandLightTable();
+		}
+		return looks::StoneHandHolderAlpha(FrameDrawnLightAt(*handLight, transform->position, looks::k_ThroughWhite));
+	};
 	for (const auto drawer : order)
 	{
 		// The icon of a worship site draws its seed only while its site is built and the icon is on the screen. The
@@ -293,7 +306,10 @@ void SpellIconSystem::UpdateHolderEffects(std::chrono::milliseconds frameRealTim
 		{
 			if (registry.Valid(hand) && registry.AllOf<IconSeed>(hand))
 			{
-				drawSeed(hand, StoneHandDrawn(registry, drawList, drawer, hand, landDrawn), k_HandHolderAlpha);
+				// The effect has the alpha that the centre gives it from the colour of the hand's model. The effect of a
+				// hand that the frame does not draw does not use the alpha.
+				const bool drawn = StoneHandDrawn(registry, drawList, drawer, hand, landDrawn);
+				drawSeed(hand, drawn, drawn ? handHolderAlpha(hand) : uint8_t {0});
 			}
 		}
 	}

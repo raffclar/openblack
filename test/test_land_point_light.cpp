@@ -66,6 +66,13 @@ TEST(LandPointLight, TheLightBlendsTheCornersAlongZThenX)
 	EXPECT_EQ(land_point_light::LightAt({5.0f, 0.0f, 5.0f}, table, NoLand), table[255]);
 }
 
+TEST(LandPointLight, ATintMultipliesEachChannelIn256ths)
+{
+	EXPECT_EQ(land_point_light::Multiplied(0xFFFFFFFFu, 0xFFFFFFFFu), 0xFEFEFEFEu);
+	EXPECT_EQ(land_point_light::Multiplied(0xFF804020u, 0x80FF0080u), 0x7F7F0010u);
+	EXPECT_EQ(land_point_light::Multiplied(0x12345678u, 0u), 0u);
+}
+
 TEST(LandPointLight, TheHazeScalesTheColourDownToKAtTheFarDepth)
 {
 	const land_point_light::Haze haze {.on = true, .nearDepth = 100.0f, .farDepth = 300.0f, .k = 64};

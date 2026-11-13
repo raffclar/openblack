@@ -13,8 +13,10 @@
 #include <glm/mat4x4.hpp>
 #include <gtest/gtest.h>
 
+#include "3D/LandPointLight.h"
 #include "Magic/IconChargeLooks.h"
 
+using namespace openblack;
 using namespace openblack::magic::icon_charge_looks;
 
 namespace
@@ -155,6 +157,20 @@ TEST(IconChargeLooks, TheEffectOfTheHolderTakesTheAlphaOfTheModelOfTheIcon)
 	EXPECT_EQ(HolderAlpha(0), 255);
 	EXPECT_EQ(HolderAlpha(0x00FF0000u), 254);
 	EXPECT_EQ(HolderAlpha(0x00000001u), 254);
+}
+
+TEST(IconChargeLooks, TheEffectOverAStoneHandTakesTheBlueOfTheDrawnColourOfTheHand)
+{
+	// The centre gives the lowest byte of the colour, not its alpha
+	static_assert(StoneHandHolderAlpha(0xFE000000u) == 0);
+	EXPECT_EQ(StoneHandHolderAlpha(0xFE102030u), 0x30);
+	// A land light of full white through white gives 254, not 255
+	EXPECT_EQ(StoneHandHolderAlpha(land_point_light::Multiplied(0xFFFFFFFFu, k_ThroughWhite)), 254);
+	// Less blue in the land's light gives less alpha, and the distance haze takes more
+	EXPECT_EQ(StoneHandHolderAlpha(land_point_light::Multiplied(0xFFFFE080u, k_ThroughWhite)), 0x7F);
+	const land_point_light::Haze haze {.on = true, .nearDepth = 100.0f, .farDepth = 300.0f, .k = 64};
+	const auto hazed = land_point_light::Hazed(land_point_light::Multiplied(0xFFFFFFFFu, k_ThroughWhite), 200.0f, haze);
+	EXPECT_EQ(StoneHandHolderAlpha(hazed), (254u * 160u) >> 8u);
 }
 
 TEST(IconChargeLooks, AStoneHandIsAlwaysLitThroughWhiteAndASiteIconOnlyWhileItShines)
