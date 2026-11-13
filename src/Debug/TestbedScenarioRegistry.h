@@ -1038,6 +1038,9 @@ struct Command
 		/// A script tells the creature to take notice of reactions (value 1) or to take no notice (value 0), as
 		/// a script's "enable ... reaction" and "disable ... reaction" do
 		ScriptReaction,
+		/// The mind of the creature stops (value 1) or starts again (value 0), as the scenario's paused mind does. A stopped
+		/// mind leaves the body alone and keeps what the creature holds.
+		PauseMind,
 		/// A script puts the creature at the point at once (from the middle of the map), as SET_POSITION does. Its walk,
 		/// body action, face and head look stop there.
 		ScriptPlace,

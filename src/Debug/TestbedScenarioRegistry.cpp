@@ -354,7 +354,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 241> k_Names {
+	constexpr std::array<std::string_view, 242> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -513,6 +513,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "save the game",
 	    "load the game",
 	    "script reaction",
+	    "pause mind",
 	    "script place",
 	    "stop script",
 	    "pointer on creature",
