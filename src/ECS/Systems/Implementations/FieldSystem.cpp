@@ -123,8 +123,14 @@ void FieldSystem::ProcessField(entt::entity field, uint32_t turn)
 	{
 		return;
 	}
-	field_crop::Pass(data->crop, TypeOf(data->type), turn, data->growthTurn, LandAlignment(transform->position),
-	                 IsRaining(transform->position));
+	// The weather is asked in each pass, because its cells fill when a question first reads them. The alignment of the
+	// land is a sum over each player's influence and changes nothing, thus only a pass that grows the crop measures it.
+	const auto type = TypeOf(data->type);
+	const bool raining = IsRaining(transform->position);
+	if (field_crop::GrowsInPass(data->crop, type, turn, data->growthTurn))
+	{
+		field_crop::Pass(data->crop, type, turn, data->growthTurn, LandAlignment(transform->position), raining);
+	}
 }
 
 void FieldSystem::Update(std::chrono::duration<float, std::milli> gameTime)

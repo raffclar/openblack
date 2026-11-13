@@ -124,6 +124,27 @@ TEST(HandDemo, TheCursorIsDownThePictureBetweenTheBars)
 	EXPECT_EQ(CursorPixel(cursor, {1280, 960}, 1.0f), glm::ivec2(640, 300));
 	const std::array corner {0.0f, 1.0f};
 	EXPECT_EQ(CursorPixel(corner, {1280, 960}, 1.0f), glm::ivec2(0, 840));
+	// A screen narrower than 4:3 also takes the cursor across its whole width
+	EXPECT_EQ(CursorPixel(cursor, {1280, 1024}, 0.0f), glm::ivec2(640, 256));
+}
+
+TEST(HandDemo, OnAWideScreenTheCursorIsInTheFourByThreeMiddle)
+{
+	// The 4:3 middle of a 3840 by 1200 screen is 1600 wide and starts 1120 from the left
+	constexpr glm::ivec2 k_Margin {1120, 0};
+	const std::array<std::array<float, 2>, 4> cursors {{{0.5f, 0.25f}, {0.0f, 1.0f}, {0.126f, 0.47f}, {1.0f, 0.0f}}};
+	for (const auto& cursor : cursors)
+	{
+		for (const float bars : {0.0f, 0.5f, 1.0f})
+		{
+			EXPECT_EQ(CursorPixel(cursor, {3840, 1200}, bars), CursorPixel(cursor, {1600, 1200}, bars) + k_Margin);
+		}
+	}
+	// A very wide screen: the bars are those of the 4:3 middle, so the cursor stays on the screen
+	const std::array middle {0.5f, 0.25f};
+	EXPECT_EQ(CursorPixel(middle, {5120, 1190}, 1.0f), glm::ivec2(2560, 372));
+	const std::array corner {0.0f, 1.0f};
+	EXPECT_EQ(CursorPixel(corner, {5120, 1190}, 1.0f), glm::ivec2(1767, 1042));
 }
 
 TEST(HandDemo, TheFirstRecordPlaysAtOnceAndTheRestByTheirTimes)
@@ -419,6 +440,14 @@ TEST(HandDemo, TheClickMovesToAThingOfTheKindWithinThreeMetres)
 	any.objectSubtype = ecs::script_find::k_AnySubtype;
 	EXPECT_TRUE(TakesRecordedClick(any, Store(2), At(1830.0f, 2642.0f)));
 	EXPECT_TRUE(TakesRecordedClick(any, {.type = script::ObjectType::Store}, At(1830.0f, 2642.0f)));
+}
+
+TEST(HandDemo, AStartShakesOffWhatTheHandHoldsUnlessItKeepsTheHand)
+{
+	EXPECT_TRUE(hand_demo::ShakesOffHeld(false, true));
+	EXPECT_FALSE(hand_demo::ShakesOffHeld(false, false));
+	// A demonstration without hand modify keeps what the hand holds
+	EXPECT_FALSE(hand_demo::ShakesOffHeld(true, true));
 }
 
 TEST(HandDemo, AStartStopsTheChargesUnlessItKeepsTheHand)

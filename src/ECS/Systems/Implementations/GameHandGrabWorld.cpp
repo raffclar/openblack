@@ -78,6 +78,7 @@
 #include "ECS/LivingFacing.h"
 #include "ECS/Map.h"
 #include "ECS/MazePuzzleRules.h"
+#include "ECS/MobileObjectRecord.h"
 #include "ECS/ObjectPhysics.h"
 #include "ECS/PhysicsClasses.h"
 #include "ECS/PhysicsEntry.h"
@@ -444,6 +445,12 @@ void GameHandGrabWorld::LeavePhysicsAndMap(entt::entity object)
 	{
 		Locator::dynamicsSystem::value().RemoveObject(object, false, false);
 	}
+	// A thing made in this turn, such as the tree that a big forest gives, goes into its cell first, as each new thing
+	// does. Then it comes out with the rest, thus it does not go into its cell later while the hand holds it.
+	if (Locator::entitiesMap::has_value())
+	{
+		Locator::entitiesMap::value().FileNew();
+	}
 	Locator::entitiesRegistry::value().Remove<MapCellResident, MapCellMover, InPhysics>(object);
 }
 
@@ -695,6 +702,32 @@ void GameHandGrabWorld::PuzzlePieceIntoHand(entt::entity piece)
 	{
 		Locator::puzzleGameSystem::value().TakenInHand(piece);
 	}
+}
+
+bool GameHandGrabWorld::GivesInItsPlace(entt::entity object) const
+{
+	const auto* info = Info();
+	const auto* mobile = Locator::entitiesRegistry::value().TryGet<const MobileObject>(object);
+	return info != nullptr && mobile != nullptr &&
+	       mobile_object_record::ClassOf(*info, *mobile) == mobile_object_record::Class::Crop;
+}
+
+entt::entity GameHandGrabWorld::GiveInItsPlace(entt::entity object)
+{
+	const auto* info = Info();
+	if (info == nullptr || !GivesInItsPlace(object))
+	{
+		return entt::null;
+	}
+	// A crop gives a handful of food that holds the food value of the handful's record, made whole towards zero. The
+	// handful belongs to no town. The crop goes.
+	const auto& handful = info->pot.at(static_cast<size_t>(PotInfo::HandFood));
+	const auto amount = static_cast<uint32_t>(static_cast<int32_t>(handful.foodValue));
+	const auto* transform = Locator::entitiesRegistry::value().TryGet<const Transform>(object);
+	const auto pot =
+	    MakeHandful(PotInfo::HandFood, transform != nullptr ? transform->position : glm::vec3(0.0f), amount, false);
+	world_objects::Remove(object);
+	return pot;
 }
 
 std::optional<hand_grab::HoldFacts> GameHandGrabWorld::SeedHoldOf(entt::entity seed) const

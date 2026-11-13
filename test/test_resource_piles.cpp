@@ -193,6 +193,22 @@ TEST(ResourcePiles, APotIsDrawnAtTheSizeOfWhatItHolds)
 	EXPECT_FLOAT_EQ(PotScale(1000, 20), 5.0f);
 }
 
+TEST(ResourcePiles, APotThatHoldsNothingIsNotDrawnInAHandNorAPlainPotOnTheLand)
+{
+	// A pot that holds something is drawn on the land and in a hand
+	EXPECT_TRUE(PotDrawn(PotType::Pot, 1, false));
+	EXPECT_TRUE(PotDrawn(PotType::Pot, 1, true));
+	EXPECT_TRUE(PotDrawn(PotType::PileFood, 600, true));
+	// A handful of wheat from a field holds no food: the hand of the creature shows nothing, and the land shows nothing
+	EXPECT_FALSE(PotDrawn(PotType::Pot, 0, true));
+	EXPECT_FALSE(PotDrawn(PotType::Pot, 0, false));
+	// An empty pile on the land is drawn for its rise, but a hand that holds an empty pile shows nothing
+	EXPECT_TRUE(PotDrawn(PotType::PileFood, 0, false));
+	EXPECT_TRUE(PotDrawn(PotType::PileWood, 0, false));
+	EXPECT_FALSE(PotDrawn(PotType::PileFood, 0, true));
+	EXPECT_FALSE(PotDrawn(PotType::PileWood, 0, true));
+}
+
 TEST(ResourcePiles, AHandfulInTheHandIsDrawnWholeWhereItIsHeld)
 {
 	auto rise = SunkRise(3.6f);

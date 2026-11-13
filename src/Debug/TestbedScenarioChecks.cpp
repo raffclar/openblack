@@ -72,6 +72,22 @@ std::string_view Name(Quantity quantity)
 		return "reward chests in a town";
 	case Quantity::CreatureReaction:
 		return "kind of reaction kept";
+	case Quantity::HandShown:
+		return "hand shown";
+	case Quantity::RopeHeld:
+		return "the hand holds the rope";
+	case Quantity::TipBubbleGripped:
+		return "the hand grips the tip bubble";
+	case Quantity::TotemGripped:
+		return "the hand grips a totem";
+	case Quantity::ObjectPicked:
+		return "the cursor picks the object";
+	case Quantity::HandToolTipShown:
+		return "the hand shows a tooltip";
+	case Quantity::HandMiracle:
+		return "the hand holds a miracle";
+	case Quantity::PhysicalShields:
+		return "the number of physical shields";
 	}
 	return "";
 }
@@ -132,6 +148,29 @@ void Evaluator::Start(std::span<const Check> checks)
 		_results[i].check = i;
 	}
 	_decided.assign(checks.size(), false);
+}
+
+void Clock::Start(uint32_t worldTurn)
+{
+	_startTurn = worldTurn;
+	_lastTurn = worldTurn;
+	_heldSeconds = 0.0;
+}
+
+void Clock::Advance(uint32_t worldTurn, bool templeHoldsWorld, float seconds)
+{
+	// A turn is a tenth of a second. Time counts only in a frame with no world turn, so that no time counts twice.
+	if (templeHoldsWorld && worldTurn == _lastTurn && seconds > 0.0f)
+	{
+		_heldSeconds += seconds;
+	}
+	_lastTurn = worldTurn;
+}
+
+uint32_t Clock::Elapsed(uint32_t worldTurn) const
+{
+	// The small addition keeps a sum of frame times that is a hair under a whole turn from losing the turn
+	return (worldTurn - _startTurn) + static_cast<uint32_t>(_heldSeconds * 10.0 + 1e-3);
 }
 
 void Evaluator::Update(uint32_t turnsSinceStart, const Probe& probe)

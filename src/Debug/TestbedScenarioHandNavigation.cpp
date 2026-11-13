@@ -276,6 +276,24 @@ void testbed_scenarios::AddHandNavigationScenarios(std::vector<Scenario>& all)
 	                 KeyUp(SDL_SCANCODE_UP, 1.0f), KeyDown(SDL_SCANCODE_UP, 5.0f), KeyUp(SDL_SCANCODE_UP, 1.0f)},
 	});
 	all.push_back({
+	    .id = "hand.fence_force_field_rain",
+	    .name = "Light the fence in the rain",
+	    .facet = Facet::Hand,
+	    .description = "The camera zones of the first land's glade (Land1Choose.exc) are set, and rain falls at noon. The "
+	                   "camera stands high inside the fence near its north side and looks north. The up arrow key (Move "
+	                   "Forwards) goes down and stays down for two seconds, then comes up.",
+	    .expected = "The camera stops at the fence and the fence lights up near the camera as a grey wall of light. The "
+	                "game draws the wall before the rain, the clouds and the other things that blend. Thus the rain "
+	                "streaks and the clouds show over the wall, also where they are behind it.",
+	    .environment = {.hour = 12.0f,
+	                    .clockRuns = false,
+	                    .weather = Weather::Rain,
+	                    .dispenserGrid = false,
+	                    .cameraZone = "Land1Choose.exc"},
+	    .framing = {.shot = Shot::Placed, .eye = {-390.0f, 90.0f, 590.0f}, .look = {-390.0f, 70.0f, 700.0f}},
+	    .commands = {PointerTo({0.5f, 0.75f}, 0.5f), KeyDown(SDL_SCANCODE_UP, 0.5f), KeyUp(SDL_SCANCODE_UP, 2.0f)},
+	});
+	all.push_back({
 	    .id = "hand.fence_rotate_release",
 	    .name = "Turn the camera with the middle button while the fence holds it back",
 	    .facet = Facet::Hand,
@@ -385,5 +403,61 @@ void testbed_scenarios::AddHandNavigationScenarios(std::vector<Scenario>& all)
 	                 {.kind = Kind::WideScreen, .delaySeconds = 1.0f, .value = 1},
 	                 PointerTo({0.5f, 0.35f}, 1.0f),
 	                 {.kind = Kind::WideScreen, .delaySeconds = 1.0f, .value = 0}},
+	});
+	all.push_back({
+	    .id = "hand.hidden_under_cinema_bars",
+	    .name = "The hand stays out of view while a script's cut scene shows",
+	    .facet = Facet::Hand,
+	    .description = "The camera looks down at the middle of the map, and the pointer rests in the middle of the land. "
+	                   "After one second, a script's cinema bars slide in and stay for six seconds. The camera does not "
+	                   "move. This is what a gold or silver scroll does when the player clicks it.",
+	    .expected = "The hand shows before the bars come. While the bars are in, no part of the hand shows: not the "
+	                "posed hand and not a flat open hand. The hand comes back when the bars are gone.",
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 30.0f, -40.0f}, .look = {0.0f, 0.0f, 0.0f}},
+	    .commands = {PointerTo({0.5f, 0.55f}, 0.5f),
+	                 {.kind = Kind::WideScreen, .delaySeconds = 1.0f, .value = 1},
+	                 {.kind = Kind::WideScreen, .delaySeconds = 6.0f, .value = 0}},
+	    .checks = {{.label = "the hand is out before the bars come",
+	                .quantity = checks::Quantity::HandShown,
+	                .afterTurns = 5,
+	                .atLeast = 1.0},
+	               {.label = "the hand is away under the cinema bars",
+	                .quantity = checks::Quantity::HandShown,
+	                .afterTurns = 20,
+	                .byTurn = 60,
+	                .atMost = 0.0},
+	               {.label = "the hand comes back when the bars go",
+	                .quantity = checks::Quantity::HandShown,
+	                .afterTurns = 80,
+	                .byTurn = 150,
+	                .atLeast = 1.0}},
+	});
+	all.push_back({
+	    .id = "hand.shown_in_demo_under_cinema_bars",
+	    .name = "The hand shows for a hand demonstration in a script's cut scene",
+	    .facet = Facet::Hand,
+	    .description = "After one second, a script's cinema bars slide in and stay. Two seconds later, the hand demonstration "
+	                   "of the miracle gestures plays under the bars, as it does in the gold scroll of the second land.",
+	    .expected = "The hand goes away when the bars come. The hand comes back for the demonstration and draws its "
+	                "gestures. The hand goes away again when the demonstration ends, because the bars stay.",
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 30.0f, -40.0f}, .look = {0.0f, 0.0f, 0.0f}},
+	    .commands = {PointerTo({0.5f, 0.55f}, 0.5f),
+	                 {.kind = Kind::WideScreen, .delaySeconds = 0.5f, .value = 1},
+	                 {.kind = Kind::PlayHandDemo, .delaySeconds = 2.0f, .handDemo = "Gestures"}},
+	    .checks = {{.label = "the hand is away under the cinema bars",
+	                .quantity = checks::Quantity::HandShown,
+	                .afterTurns = 15,
+	                .byTurn = 28,
+	                .atMost = 0.0},
+	               {.label = "the hand shows for the demonstration",
+	                .quantity = checks::Quantity::HandShown,
+	                .afterTurns = 35,
+	                .byTurn = 80,
+	                .atLeast = 1.0},
+	               {.label = "the hand is away again when the demonstration ends",
+	                .quantity = checks::Quantity::HandShown,
+	                .afterTurns = 120,
+	                .byTurn = 900,
+	                .atMost = 0.0}},
 	});
 }

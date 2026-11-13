@@ -61,7 +61,6 @@ public:
 	[[nodiscard]] Result Update(bool freeze, glm::ivec2 pointer);
 
 	[[nodiscard]] bool IsFrozen() const { return _frozenAt.has_value(); }
-	[[nodiscard]] std::optional<glm::ivec2> GetFrozenAt() const { return _frozenAt; }
 
 private:
 	std::optional<glm::ivec2> _frozenAt;

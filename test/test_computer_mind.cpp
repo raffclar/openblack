@@ -502,11 +502,18 @@ namespace
 class FakeSeenWorld final: public SeenWorld
 {
 public:
-	void ThingsIn(glm::ivec2 cell, std::vector<entt::entity>& out) const override
+	[[nodiscard]] std::array<std::span<const entt::entity>, 2> ThingsIn(glm::ivec2 cell) const override
 	{
 		++looked;
 		const auto found = cells.find({cell.x, cell.y});
-		out = found != cells.end() ? found->second : std::vector<entt::entity> {};
+		if (found == cells.end())
+		{
+			return {};
+		}
+		// The first list holds the first half of the things of the cell, and the second list holds the remainder
+		const std::span<const entt::entity> all = found->second;
+		const auto half = all.size() / 2;
+		return {all.first(half), all.subspan(half)};
 	}
 	[[nodiscard]] entt::entity SeenAs(entt::entity thing) const override
 	{

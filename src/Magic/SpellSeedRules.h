@@ -133,10 +133,11 @@ struct ThingUnderSeed
 /// meet its own (counted when the square of the distance between them is less than the sum of the squares of their
 /// radii), on the land with none
 [[nodiscard]] float TopUnderSeed(float seedRadius, std::span<const ThingUnderSeed> things);
-/// Before the forest miracle has planted its forest its seed is hidden this far under the land
+/// While the forest miracle has no forest its seed is hidden this far under the land: before it planted the forest,
+/// and after the forest went with its last tree
 inline constexpr float k_UnplantedForestSeedHeight = -5.0f;
-/// The forest miracle's seed: over the tallest of its forest's trees once it has planted it, or over whatever it sits
-/// on if that is taller; hidden under the land until then (no forest)
+/// The forest miracle's seed: over the tallest of its forest's trees while it has the forest, or over whatever it sits
+/// on if that is taller; hidden under the land while it has no forest
 [[nodiscard]] float ForestSeedHeight(float topUnder, std::optional<float> tallestTree);
 
 } // namespace openblack::magic

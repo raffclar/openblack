@@ -70,6 +70,10 @@ public:
 	/// when the last checksum was for another turn or of the other kind. A tool that records the same world at the same
 	/// turn uses it and does not hash the world again.
 	[[nodiscard]] virtual const synced_state::Hash* GetHashOfTurn(uint32_t turn, bool byField) const = 0;
+	/// The hash of each part of the synced world at one of the last turns, with the synced seed, the count of the synced
+	/// draws and the music as parts too. Empty when the system does not keep the turn. The log of a network game compares
+	/// the parts of two computers at the turn at which their worlds parted.
+	[[nodiscard]] virtual std::vector<std::pair<std::string, uint64_t>> PartsOfTurn(uint32_t turn) const = 0;
 	/// A function that gets the checksum of each turn as the system makes it, as the dedicated server logs it. An empty
 	/// function removes it.
 	virtual void SetTurnListener(std::function<void(const TurnChecksum&)> listener) = 0;

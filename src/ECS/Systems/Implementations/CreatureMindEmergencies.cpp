@@ -21,6 +21,7 @@
 #include <spdlog/spdlog.h>
 
 #include "3D/MapCoords.h"
+#include "Common/GUtilsDistance.h"
 #include "Creature/CreatureEmergencies.h"
 #include "CreatureMindSystem.h"
 #include "CreatureMindSystemDetail.h"
@@ -59,15 +60,23 @@ constexpr std::string_view k_PutOutFireAction = "PutOutFireWithMagicWater";
 /// towns last. The first town that it finds wins a tie.
 entt::entity NearestTownWithin(const ecs::Registry& registry, glm::vec3 point, float reach)
 {
-	std::vector<ecs::script_find::Candidate> ordered;
-	for (const auto town : ecs::player_towns::AllInOrder(registry))
-	{
+	// The same search as script_find::FindNearestTown, with no list of the towns
+	const auto from = map_coords::FromMetres({point.x, point.z});
+	entt::entity nearest = entt::null;
+	float best = reach;
+	ecs::player_towns::ForEachInOrder(registry, [&](entt::entity town) {
 		if (const auto* transform = registry.TryGet<const Transform>(town))
 		{
-			ordered.push_back({.entity = town, .at = map_coords::FromMetres({transform->position.x, transform->position.z})});
+			const float distance =
+			    gutils::GetDistanceInMetres(from, map_coords::FromMetres({transform->position.x, transform->position.z}));
+			if (distance < best)
+			{
+				best = distance;
+				nearest = town;
+			}
 		}
-	}
-	return ecs::script_find::FindNearestTown(map_coords::FromMetres({point.x, point.z}), reach, ordered);
+	});
+	return nearest;
 }
 
 /// The burning building of a town that the creature goes to, if a building burns

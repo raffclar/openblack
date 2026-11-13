@@ -18,14 +18,14 @@ float creature_proportions::Factor(Growth growth, float size)
 	return growth.atSizeZero - (growth.perSize * std::clamp(size, 0.0f, k_MaxSizeEffect));
 }
 
-std::vector<creature_proportions::BoneScale> creature_proportions::ScaledBones(const Bones& bones,
-                                                                               std::span<const uint32_t> mirror, float size)
+creature_proportions::ScaledBoneList creature_proportions::ScaledBones(const Bones& bones, std::span<const uint32_t> mirror,
+                                                                       float size)
 {
-	std::vector<BoneScale> scales;
+	ScaledBoneList scales;
 	const auto add = [&scales](std::optional<uint32_t> bone, float factor) {
 		if (bone.has_value())
 		{
-			scales.push_back({.bone = *bone, .factor = factor});
+			scales.Add({.bone = *bone, .factor = factor});
 		}
 	};
 	const auto mirrorOf = [&mirror](std::optional<uint32_t> bone) -> std::optional<uint32_t> {

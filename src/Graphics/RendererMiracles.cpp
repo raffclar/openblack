@@ -51,6 +51,7 @@
 #include "ECS/Systems/MiracleFxSystemInterface.h"
 #include "ECS/Systems/ObjectDrawListSystemInterface.h"
 #include "ECS/Systems/RenderingSystemInterface.h"
+#include "ECS/Systems/SpellIconSystemInterface.h"
 #include "ECS/WorldObjects.h"
 #include "EngineConfig.h"
 #include "FileSystem/FileSystemInterface.h"
@@ -501,7 +502,13 @@ void Renderer::DrawIconSeeds(const DrawSceneDesc& desc) const
 		}
 		return *kept;
 	};
+	const auto* iconSystem = Locator::spellIconSystem::has_value() ? &Locator::spellIconSystem::value() : nullptr;
 	registry.Each<const IconSeed>([&](entt::entity icon, const IconSeed& shown) {
+		// The seed of an icon at a worship site that is not built does not show
+		if (iconSystem != nullptr && !iconSystem->Shown(icon))
+		{
+			return;
+		}
 		const auto player = ecs::world_objects::IconPlayer(registry, icon);
 		const float alignment = alignmentOf(player);
 		icons.push_back({.shown = &shown, .player = player, .alignment = alignment});
@@ -780,7 +787,7 @@ void Renderer::DrawTribalPower(const DrawSceneDesc& desc) const
 	shader->Submit(static_cast<bgfx::ViewId>(desc.viewId));
 }
 
-void Renderer::DrawHandMiracleBands(const DrawSceneDesc& desc) const
+void Renderer::DrawHandMiracleBands(const DrawSceneDesc& desc, uint32_t handDepth) const
 {
 	using ecs::components::Hand;
 	using ecs::components::HandMiracleFx;
@@ -833,7 +840,8 @@ void Renderer::DrawHandMiracleBands(const DrawSceneDesc& desc) const
 		submitDesc.matrixCount = 1;
 		submitDesc.state = k_AddedState;
 		submitDesc.tint = glm::vec4(colour, std::max(static_cast<float>(pose.alpha) / k_ByteMax, 1.0f / k_ByteMax));
-		submitDesc.sortDepth = zsort::Depth(glm::vec3(model[3]), camera.GetOrigin());
+		// The game draws the bands in the draw of the hand, just after the hand and its glow, thus at the place of the hand
+		submitDesc.sortDepth = handDepth;
 		DrawMesh(*ring, submitDesc, std::numeric_limits<uint8_t>::max());
 	};
 	std::ranges::for_each(fx->bands.bracelets, draw);

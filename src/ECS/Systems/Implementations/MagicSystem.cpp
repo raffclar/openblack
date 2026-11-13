@@ -66,8 +66,6 @@ constexpr float k_TurnSeconds = std::chrono::duration<float>(TimeSystemInterface
 constexpr float k_TurnsPerSecond = 1.0f / k_TurnSeconds;
 constexpr auto k_TurnMilliseconds = static_cast<uint32_t>(TimeSystemInterface::k_TurnDuration.count());
 
-/// The hand's speed is smoothed over about this many seconds
-constexpr float k_HandSpeedSmoothing = 0.1f;
 /// How far round a point a struck shield is looked for, to show its spark
 constexpr float k_ShieldStrikeMargin = 2.0f;
 
@@ -574,6 +572,17 @@ bool MagicSystem::Process(entt::entity entity, Spell& spell)
 		return false;
 	}
 	magic::spells::ProcessTurn(*this, *after);
+	// A forest miracle whose forest went from the land with its last tree lets go of it and closes down. Its seed then
+	// sinks under the land.
+	if (after->spellClass == magic::SpellClass::Forest && Locator::forestSystem::has_value())
+	{
+		auto& forests = Locator::forestSystem::value();
+		if (magic::forest::TurnWithForest(forests.ForestOf(entity)).closesDown)
+		{
+			forests.LetGoOfGoneForest(entity);
+			CloseDown(entity);
+		}
+	}
 	if (after->reaction != 0 && Locator::reactionSystem::has_value())
 	{
 		Locator::reactionSystem::value().Move(after->reaction, after->position, after->movement,

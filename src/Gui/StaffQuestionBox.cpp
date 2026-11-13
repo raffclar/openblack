@@ -61,6 +61,14 @@ void StaffQuestionBox::Ask(question::Question asked)
 	_fade.SetDestination(1.0f, k_FadeInSeconds);
 }
 
+void StaffQuestionBox::Withdraw()
+{
+	_question.reset();
+	_answer.reset();
+	_dialog.Reset();
+	_fade.Reset(0.0f);
+}
+
 void StaffQuestionBox::Pushed(question::Push push)
 {
 	if (!_question.has_value())

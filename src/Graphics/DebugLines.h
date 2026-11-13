@@ -30,9 +30,7 @@ public:
 		glm::vec4 col;
 	};
 
-	static std::unique_ptr<Mesh> CreateCross();
 	static std::unique_ptr<Mesh> CreateBox(const glm::vec4& color);
-	static std::unique_ptr<Mesh> CreateLine(const glm::vec4& from, const glm::vec4& to, const glm::vec4& color);
 	static std::unique_ptr<Mesh> CreateDebugLines(const Vertex* data, uint32_t vertexCount);
 };
 

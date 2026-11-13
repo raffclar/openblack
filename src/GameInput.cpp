@@ -271,6 +271,9 @@ bool Game::UpdateDebugGui()
 		// While the input of the player is locked, the debug windows take only the mouse events of the game and the tools.
 		// A notice shows the lock.
 		Locator::debugGui::value().SetInputLock(Locator::gameActionSystem::value().IsPlayerInputBlocked());
+		// The recorded mouse of a hand demonstration goes to the hand only, also when a debug window is under it
+		Locator::debugGui::value().SetHandDemoPlaying(Locator::handDemoSystem::has_value() &&
+		                                              Locator::handDemoSystem::value().IsReplaying());
 		// The debug menu bar comes up with the game's menu, or always without it
 		Locator::debugGui::value().SetMenuBarVisible(!Locator::gameInterface::has_value() ||
 		                                             Locator::gameInterface::value().GetMenu().IsOpen());

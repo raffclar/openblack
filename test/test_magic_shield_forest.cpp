@@ -364,6 +364,29 @@ TEST(ForestRules, AForestHasTheTreesThatAreInTheWorldAtThisMoment)
 	EXPECT_EQ(forest::StandingTrees({}, inWorld), 0u);
 }
 
+TEST(ForestRules, OnlyTheLastMagicTreeTakesItsForestWithIt)
+{
+	// A magic tree that goes and leaves other trees in its forest leaves the forest on the land
+	EXPECT_FALSE(forest::GoesWithTree(true, 1));
+	EXPECT_TRUE(forest::GoesWithTree(true, 0));
+	// The last tree of a forest of the land leaves the forest empty, and it goes some while later
+	EXPECT_FALSE(forest::GoesWithTree(false, 0));
+}
+
+TEST(ForestRules, AForestMiracleClosesDownWhenItsForestGoes)
+{
+	const auto standing = forest::TurnWithForest(forest::MiracleForest::Standing);
+	EXPECT_FALSE(standing.closesDown);
+	EXPECT_TRUE(standing.keptByForest);
+	const auto gone = forest::TurnWithForest(forest::MiracleForest::Gone);
+	EXPECT_TRUE(gone.closesDown);
+	EXPECT_FALSE(gone.keptByForest);
+	// With no forest, before it planted one or after it let go of one, only its effect keeps it
+	const auto none = forest::TurnWithForest(forest::MiracleForest::None);
+	EXPECT_FALSE(none.closesDown);
+	EXPECT_FALSE(none.keptByForest);
+}
+
 TEST(ForestRules, TheGroundsKindsOfTreeAreRolledFor)
 {
 	const std::array kinds {TreeInfo::Palm, TreeInfo::PalmA, TreeInfo::PalmB, TreeInfo::PalmC};

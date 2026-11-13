@@ -35,6 +35,7 @@
 #include "ECS/Systems/ScriptHighlightSystemInterface.h"
 #include "ECS/Systems/SpellIconSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/Systems/TownSystemInterface.h"
 #include "EngineConfig.h"
 #include "Graphics/LightColumn.h"
 #include "Graphics/MeshDetail.h"
@@ -68,9 +69,85 @@ uint32_t ColourOf(PlayerNames player)
 }
 } // namespace
 
-void Renderer::DrawLightColumns(const DrawSceneDesc& desc) const
+void Renderer::DrawTownColumns(const DrawSceneDesc& desc) const
 {
-	if (desc.viewId != RenderPass::Main || !Locator::influenceSystem::has_value())
+	if (desc.viewId != RenderPass::Main && desc.viewId != RenderPass::Reflection)
+	{
+		return;
+	}
+	using namespace ecs::components;
+	// Only the main pass draws the columns. The reflection draws only the symbols of belief.
+	const auto& meshes = Locator::resources::value().GetMeshes();
+	const auto columnId = resources::HashIdentifier(MeshId::SpellColumn);
+	const auto* column = desc.viewId == RenderPass::Main && Locator::influenceSystem::has_value() && meshes.Contains(columnId)
+	                         ? &*meshes.Handle(columnId)
+	                         : nullptr;
+	// The view of the main pass. A column out of it puts no pixel on the screen, so it is not drawn. A warm-up draws all
+	// of them.
+	const auto seenBy = view_frustum::FromViewProjection(desc.camera->GetProjectionMatrix() *
+	                                                     desc.camera->GetViewMatrix(Camera::Interpolation::Current));
+	const auto* testedView = _warmingUp || (column != nullptr && column->IsBoned()) ? nullptr : &seenBy;
+	// A warm-up draws a column that adds nothing, as the first column of a land draws it
+	if (_warmingUp && column != nullptr)
+	{
+		DrawLightShaft(desc, *column, desc.camera->GetOrigin(), glm::vec4(0.0f));
+	}
+
+	// Over each village centre, at the middle of its model, in its town's player's colour. The columns never fade: the
+	// game turns off the fade of their objects when it makes them.
+	std::unordered_map<uint32_t, PlayerNames> owners;
+	if (column != nullptr)
+	{
+		desc.entities.Each<const Town>([&owners](const Town& town) { owners.emplace(town.id, town.owner); });
+	}
+	const auto drawColumn = [&](entt::entity entity, const Abode& abode) {
+		const auto owner = owners.find(abode.townId);
+		const auto* transform = desc.entities.TryGet<const Transform>(entity);
+		const auto* mesh = desc.entities.TryGet<const ecs::components::Mesh>(entity);
+		if (owner == owners.end() || transform == nullptr || mesh == nullptr ||
+		    !light_column::Shown(owner->second, Locator::influenceSystem::value().IsBorderShown(owner->second)) ||
+		    !meshes.Contains(mesh->id))
+		{
+			return;
+		}
+		const auto centre = meshes.Handle(mesh->id)->GetBoundingBox().Center();
+		const auto model = glm::translate(transform->position) * glm::mat4(transform->rotation) * glm::scale(transform->scale);
+		DrawLightShaft(desc, *column, glm::vec3(model * glm::vec4(centre, 1.0f)),
+		               light_column::Tint(ColourOf(owner->second), light_column::k_TownAlpha), testedView);
+	};
+	// The game draws each centre's symbols of belief just after its column, also where the column does not show
+	const auto drawCentre = [&](entt::entity entity, const Abode& abode) {
+		if (abode.type != AbodeNumber::TownCentre)
+		{
+			return;
+		}
+		if (column != nullptr)
+		{
+			drawColumn(entity, abode);
+		}
+		DrawTownBeliefParticles(desc, entity);
+	};
+	// The centres draw in the game's order, the newest first
+	if (!Locator::townSystem::has_value())
+	{
+		desc.entities.Each<const Abode>(drawCentre);
+		return;
+	}
+	for (const auto entity : Locator::townSystem::value().CentresInDrawOrder())
+	{
+		if (const auto* abode = desc.entities.Valid(entity) ? desc.entities.TryGet<const Abode>(entity) : nullptr;
+		    abode != nullptr)
+		{
+			drawCentre(entity, *abode);
+		}
+	}
+}
+
+void Renderer::DrawTempleColumns(const DrawSceneDesc& desc) const
+{
+	// The temple's column is seen only from outside, so it is not drawn while the player is inside the temple
+	if (desc.viewId != RenderPass::Main || !Locator::influenceSystem::has_value() ||
+	    (Locator::temple::has_value() && Locator::temple::value().Active()))
 	{
 		return;
 	}
@@ -83,47 +160,10 @@ void Renderer::DrawLightColumns(const DrawSceneDesc& desc) const
 	using namespace ecs::components;
 	const auto& column = *meshes.Handle(columnId);
 	const auto& influence = Locator::influenceSystem::value();
-	// The view of the main pass. A column out of it puts no pixel on the screen, so it is not drawn. A warm-up draws all
-	// of them.
 	const auto seenBy = view_frustum::FromViewProjection(desc.camera->GetProjectionMatrix() *
 	                                                     desc.camera->GetViewMatrix(Camera::Interpolation::Current));
 	const auto* testedView = _warmingUp || column.IsBoned() ? nullptr : &seenBy;
-	// The columns never fade: the game turns off the fade of their objects when it makes them
-	const auto draw = [&](const glm::vec3& position, PlayerNames owner, uint8_t alpha) {
-		DrawLightShaft(desc, column, position, light_column::Tint(ColourOf(owner), alpha), testedView);
-	};
-	// A warm-up draws a column that adds nothing, as the first column of a land draws it
-	if (_warmingUp)
-	{
-		DrawLightShaft(desc, column, desc.camera->GetOrigin(), glm::vec4(0.0f));
-	}
-
-	// Over each village centre, at the middle of its model, in its town's player's colour
-	std::unordered_map<uint32_t, PlayerNames> owners;
-	desc.entities.Each<const Town>([&owners](const Town& town) { owners.emplace(town.id, town.owner); });
-	desc.entities.Each<const Abode, const Transform, const ecs::components::Mesh>(
-	    [&](const Abode& abode, const Transform& transform, const ecs::components::Mesh& mesh) {
-		    if (abode.type != AbodeNumber::TownCentre)
-		    {
-			    return;
-		    }
-		    const auto owner = owners.find(abode.townId);
-		    if (owner == owners.end() || !light_column::Shown(owner->second, influence.IsBorderShown(owner->second)) ||
-		        !meshes.Contains(mesh.id))
-		    {
-			    return;
-		    }
-		    const auto centre = meshes.Handle(mesh.id)->GetBoundingBox().Center();
-		    const auto model = glm::translate(transform.position) * glm::mat4(transform.rotation) * glm::scale(transform.scale);
-		    draw(glm::vec3(model * glm::vec4(centre, 1.0f)), owner->second, light_column::k_TownAlpha);
-	    });
-
-	// Over each temple, where it stands, beating with its player's heart. The temple's column is seen only from outside,
-	// so it isn't drawn while the player is inside the temple
-	if (Locator::temple::has_value() && Locator::temple::value().Active())
-	{
-		return;
-	}
+	// Over each temple, where it stands, beating with its player's heart
 	const float turnFraction = Locator::time::has_value() ? Locator::time::value().GetTurnFraction() : 0.0f;
 	desc.entities.Each<const Temple, const Transform>([&](const Temple& temple, const Transform& transform) {
 		if (!light_column::Shown(temple.owner, influence.IsBorderShown(temple.owner)) ||
@@ -133,7 +173,8 @@ void Renderer::DrawLightColumns(const DrawSceneDesc& desc) const
 		}
 		const float pulse =
 		    Locator::heartbeatSystem::has_value() ? Locator::heartbeatSystem::value().Pulse(temple.owner, turnFraction) : 0.0f;
-		draw(transform.position, temple.owner, light_column::TempleAlpha(pulse));
+		DrawLightShaft(desc, column, transform.position,
+		               light_column::Tint(ColourOf(temple.owner), light_column::TempleAlpha(pulse)), testedView);
 	});
 }
 

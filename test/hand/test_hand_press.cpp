@@ -59,6 +59,7 @@ struct FakeWorld final: public HandPressWorld
 	std::optional<entt::entity> held;
 	bool mayHoldCreature {true};
 	bool waitIgnoresPresses {false};
+	bool doesAction {false};
 
 	std::vector<std::string> calls;
 
@@ -105,6 +106,7 @@ struct FakeWorld final: public HandPressWorld
 	void GrabClickReleased() final { calls.emplace_back("GrabClickReleased"); }
 	void GrabClickThing(entt::entity /*thing*/) final { calls.emplace_back("GrabClickThing"); }
 	[[nodiscard]] bool WaitIgnoresPresses() const final { return waitIgnoresPresses; }
+	[[nodiscard]] bool DoesAction() const final { return doesAction; }
 
 	[[nodiscard]] bool MagicHandBusy() const final { return magicBusy; }
 	bool MagicPressAction() final
@@ -600,6 +602,58 @@ TEST(HandPress, BothButtonsEndTheWaitAndGripTheLandWithNoThing)
 	fixture.Press(ButtonEvent(SDL_MOUSEBUTTONDOWN, SDL_BUTTON_LEFT));
 	EXPECT_TRUE(fixture.system->GetHandButtons().selectGrip);
 	EXPECT_FALSE(fixture.system->LandGripKeepsNoThing());
+}
+
+// In an action other than the normal one, for example a take, a throw, a grip of the tip bubble or a hold of the rope,
+// the select press grips no land and makes no sound. The Action press still goes to the action. The select button grips
+// nothing until the player lets go of it, also after the action ends.
+TEST(HandPress, ASelectPressInAnActionOtherThanTheNormalOneGripsNoLand)
+{
+	Fixture fixture;
+	fixture.world->doesAction = true;
+	fixture.Press(ButtonEvent(SDL_MOUSEBUTTONDOWN, SDL_BUTTON_LEFT));
+	EXPECT_FALSE(fixture.system->GetHandButtons().selectGrip);
+	EXPECT_FALSE(fixture.system->GetHandButtons().gripping);
+	EXPECT_TRUE(fixture.system->LandGripStopped());
+	EXPECT_EQ(fixture.grabSounds, 0);
+	// The action ends, and the select button that stays down grips nothing until the player lets go of it
+	fixture.world->doesAction = false;
+	fixture.Press(Motion(SDL_BUTTON_LMASK));
+	EXPECT_FALSE(fixture.system->GetHandButtons().selectGrip);
+	fixture.Press(ButtonEvent(SDL_MOUSEBUTTONUP, SDL_BUTTON_LEFT));
+	fixture.Press(ButtonEvent(SDL_MOUSEBUTTONDOWN, SDL_BUTTON_LEFT));
+	EXPECT_TRUE(fixture.system->GetHandButtons().selectGrip);
+	EXPECT_EQ(fixture.grabSounds, 1);
+}
+
+// The select press that comes before the action grips the land, and the action that starts after it does not stop the
+// grip
+TEST(HandPress, AnActionThatStartsAfterTheSelectPressDoesNotStopTheGrip)
+{
+	Fixture fixture;
+	fixture.Press(ButtonEvent(SDL_MOUSEBUTTONDOWN, SDL_BUTTON_LEFT));
+	ASSERT_TRUE(fixture.system->GetHandButtons().selectGrip);
+	fixture.world->doesAction = true;
+	fixture.Press(Motion(SDL_BUTTON_LMASK));
+	EXPECT_TRUE(fixture.system->GetHandButtons().selectGrip);
+	EXPECT_FALSE(fixture.system->LandGripStopped());
+}
+
+// A select press in an action with the Action button down: both buttons end the action, and the select button grips
+// the land at once
+TEST(HandPress, BothButtonsInAnActionGripTheLandAgainAtOnce)
+{
+	Fixture fixture;
+	fixture.world->doesAction = true;
+	fixture.Press(ButtonEvent(SDL_MOUSEBUTTONDOWN, SDL_BUTTON_RIGHT));
+	fixture.Press(ButtonEvent(SDL_MOUSEBUTTONDOWN, SDL_BUTTON_LEFT));
+	ASSERT_FALSE(fixture.system->GetHandButtons().selectGrip);
+	EXPECT_EQ(fixture.grabSounds, 0);
+	fixture.system->StopLandGrip();
+	fixture.world->doesAction = false;
+	EXPECT_TRUE(fixture.system->GripLandAgain());
+	EXPECT_TRUE(fixture.system->GetHandButtons().selectGrip);
+	EXPECT_TRUE(fixture.system->LandGripKeepsNoThing());
 }
 
 // Both buttons that end the interface lock while the hand holds a creature grip the land at once, as the hand lets go

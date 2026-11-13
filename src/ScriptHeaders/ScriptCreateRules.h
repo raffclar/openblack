@@ -46,18 +46,39 @@ inline constexpr int32_t k_LastCreateType = static_cast<int32_t>(ObjectType::Ani
 /// `rockKind` tells if the info table puts the row in the rock kind.
 [[nodiscard]] bool KeepsScriptHeight(ObjectType type, uint32_t subtype = 0, bool rockKind = false);
 
-/// How a rock that a script makes starts in the physics. The rock starts at rest with no thrower and no player.
-struct ScriptRockStart
+/// How a thing that a script makes starts in the physics. The thing starts at rest with no thrower and no player.
+struct ScriptPhysicsStart
 {
 	/// The physics puts the body on the land and turns it to the slope before it lifts the body clear of things.
-	/// Only a rock that the script asks for by the rock type does this.
+	/// All things do this, but a mobile static does not.
 	bool settlesOnLand;
 };
 
-/// Whether a thing that a script makes is a rock that starts in the physics, and how it starts. A mobile static or a
-/// rock does this when the info table puts its row in the rock kind. The holder of a singing stone, the lanterns and
-/// the bonfire never do, because the physics can not move them.
-[[nodiscard]] std::optional<ScriptRockStart> RockStartOf(ObjectType type, uint32_t subtype, bool rockKind);
+/// What the info table tells about the row of a thing that a script makes
+struct ScriptRowKind
+{
+	/// The info table puts the row of a mobile static in the rock kind
+	bool rock {false};
+	/// The kind that the info table gives the row of a mobile object, a lump of poo or an ark
+	MobileObjectInfo mobileObject {MobileObjectInfo::None};
+};
+
+/// Whether a thing that a script makes starts in the physics, and how it starts. The physics then also refuses a thing
+/// that can not become a physics object at that time, such as a pile that its row keeps out of the physics.
+/// - A mobile static or a rock starts in the physics when the info table puts its row in the rock kind. The holder of
+///   a singing stone, the lanterns and the bonfire never do, because the physics can not move them.
+/// - A one-shot miracle globe always starts in the physics. Thus the physics keeps the globe on the land, also when a
+///   script then gives the globe a height.
+/// - A mobile object, a lump of poo, an ark, a ball, a pile of food or wood and a scaffold start in the physics, on
+///   the land.
+/// - A mobile object of the crop kind or of the creed kind does not start in the physics.
+/// - The three mushroom rows (champignon, magic mushroom and toadstool) do not start in the physics. They only stand on
+///   the land.
+/// - A dead tree starts in the physics on the land.
+/// - A globe that a script puts in the hand, and all other types, do not start in the physics. The hand holds the seed
+///   of the globe, and a seed can never become a physics object.
+[[nodiscard]] std::optional<ScriptPhysicsStart> PhysicsStartOf(ObjectType type, uint32_t subtype,
+                                                               const ScriptRowKind& row = {});
 
 /// Whether a thing a script creates takes no notice of reactions until a script tells it to. Only a creature does: it
 /// does not react to what happens near it, and it does not catch what flies to it.
@@ -67,6 +88,9 @@ struct ScriptRockStart
 /// make a mobile object. A mobile object takes the row that the script gives. A lump of poo and an ark always take
 /// their own rows.
 [[nodiscard]] std::optional<MobileObjectInfo> MobileObjectRowOf(ObjectType type, uint32_t subtype);
+
+/// A dead tree that a script makes is always at the size of its model, whatever scale the script gives
+inline constexpr float k_DeadTreeScale = 1.0f;
 
 /// CREATE_WITH_ANGLE_AND_SCALE gives its angle in degrees; things are turned in radians
 [[nodiscard]] float AngleFromDegrees(float degrees);

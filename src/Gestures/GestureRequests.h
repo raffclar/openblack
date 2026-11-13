@@ -81,8 +81,6 @@ enum class Purpose : uint8_t
 [[nodiscard]] bool RestsAfter(Purpose purpose);
 /// A recognised gesture is shown once at least this many of its points lie on the land
 inline constexpr size_t k_RecognitionShownPoints = 2;
-/// A point of the path lies on the land once any of its coordinates is further than this from 0
-inline constexpr float k_OnLandEpsilon = 1e-4f;
 /// A gesture's name, as the game's debug messages give it
 [[nodiscard]] std::string_view Name(GestureType gesture);
 

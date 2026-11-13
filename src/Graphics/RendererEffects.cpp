@@ -922,20 +922,19 @@ void Renderer::DrawDestructionGhosts(const DrawSceneDesc& desc) const
 	{
 		return;
 	}
+	// The pattern that moves over a ghost: its colours, and its alpha in a picture of its own
 	const auto& textures = Locator::resources::value().GetTextures();
-	const auto pattern = entt::hashed_string("raw/cool_effecta").value();
-	if (!textures.Contains(pattern))
+	const auto pattern = entt::hashed_string("raw/cool_effect").value();
+	const auto patternAlpha = entt::hashed_string("raw/cool_effecta").value();
+	if (!textures.Contains(pattern) || !textures.Contains(patternAlpha))
 	{
 		return;
 	}
 	const auto& patternTexture = textures.Handle(pattern)->GetNativeHandle();
+	const auto& patternAlphaTexture = *textures.Handle(patternAlpha);
 	const auto& meshes = Locator::resources::value().GetMeshes();
 	const auto camera = desc.camera->GetOrigin();
 	const auto translucent = TranslucentView(desc.viewId);
-	// The game's whole span of a ghost, in milliseconds, and its pattern's scroll
-	constexpr int k_GhostMilliseconds = 500;
-	constexpr double k_ScrollRate = 0.7;
-	constexpr double k_ScrollHeight = 1.7000000476837158;
 	if (!Locator::explosionSystem::has_value())
 	{
 		return;
@@ -963,36 +962,34 @@ void Renderer::DrawDestructionGhosts(const DrawSceneDesc& desc) const
 		}
 		const auto& mesh = *meshes.Handle(ghost.mesh);
 		const auto depth = zsort::Depth(ecs::components::SortPoint(ghost), camera);
-		// The pattern must pass an alpha that rises as the ghost runs out, so less and less of it lays its depth
-		const auto passed =
-		    static_cast<int32_t>(static_cast<float>(ghost.millisecondsLeft) * 255.0f / static_cast<float>(k_GhostMilliseconds));
-		const auto threshold = static_cast<uint8_t>(0xFF - static_cast<uint8_t>(passed));
-		const double share = static_cast<float>(ghost.millisecondsLeft) / static_cast<float>(k_GhostMilliseconds);
-		const glm::vec2 scroll {static_cast<float>(std::cos(share) + std::cos(share)),
-		                        static_cast<float>(std::sin(share * k_ScrollRate) * k_ScrollHeight)};
-
 		L3DMeshSubmitDesc submitDesc = {};
 		submitDesc.viewId = translucent;
 		submitDesc.modelMatrices = &ghost.model;
 		submitDesc.matrixCount = 1;
 		submitDesc.sortDepth = depth;
-		// First its depth alone, from both sides, through the scrolling pattern
-		submitDesc.program = _shaderManager->GetShader("GhostDepth");
-		submitDesc.state = BGFX_STATE_WRITE_Z | BGFX_STATE_DEPTH_TEST_GREATER | BGFX_STATE_MSAA;
-		submitDesc.skinTexture = &patternTexture;
-		submitDesc.uvOffset = scroll;
-		submitDesc.alphaThreshold = static_cast<float>(threshold) / 255.0f;
-		DrawMesh(mesh, submitDesc, std::numeric_limits<uint8_t>::max());
-		// Then itself, added and tested against its materials' alpha, only where that depth was laid
-		submitDesc.program = _shaderManager->GetShader("Object");
-		submitDesc.state = BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_Z | BGFX_STATE_DEPTH_TEST_EQUAL | BGFX_STATE_MSAA |
+		// First the pattern, from both sides. Its texels at the reference or more add their colour and lay the depth. The
+		// reference rises as the ghost runs out, so less and less of the pattern shows.
+		submitDesc.program = _shaderManager->GetShader("GhostPattern");
+		submitDesc.state = BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_Z | BGFX_STATE_DEPTH_TEST_GREATER | BGFX_STATE_MSAA |
 		                   BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_SRC_ALPHA, BGFX_STATE_BLEND_ONE);
+		submitDesc.skinTexture = &patternTexture;
+		submitDesc.skinAlpha = &patternAlphaTexture;
+		submitDesc.uvOffset = ecs::destruction_ghost::PatternScroll(ghost.millisecondsLeft);
+		submitDesc.alphaThreshold =
+		    static_cast<float>(ecs::destruction_ghost::PatternAlphaRef(ghost.millisecondsLeft)) / 255.0f;
+		DrawMesh(mesh, submitDesc, std::numeric_limits<uint8_t>::max());
+		// Then the thing in its own materials, only where the pattern laid the depth. The materials with an alpha test use
+		// a low reference of their own.
+		submitDesc.program = _shaderManager->GetShader("Object");
+		submitDesc.state = BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_Z | BGFX_STATE_DEPTH_TEST_EQUAL | BGFX_STATE_MSAA;
+		submitDesc.useMaterialBlending = true;
 		submitDesc.useMaterialCulling = true;
 		submitDesc.skinTexture = nullptr;
+		submitDesc.skinAlpha = nullptr;
 		submitDesc.uvOffset = glm::vec2(0.0f);
 		submitDesc.alphaThreshold.reset();
-		submitDesc.materialAlphaTest = true;
-		// Just after its depth, in the sort
+		submitDesc.alphaTestRef = ecs::destruction_ghost::k_OwnMaterialsAlphaRef;
+		// Just after its pattern, in the sort
 		submitDesc.sortDepth = depth > 0 ? depth - 1 : 0;
 		DrawMesh(mesh, submitDesc, std::numeric_limits<uint8_t>::max());
 	});

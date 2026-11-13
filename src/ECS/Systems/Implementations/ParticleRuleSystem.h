@@ -130,6 +130,7 @@ public:
 	void ThrowOutOfVortex(entt::entity object, float angle, float scale) override;
 	[[nodiscard]] std::vector<glm::vec3> TargetExtraPoints(entt::entity target) const override;
 	[[nodiscard]] std::optional<glm::vec3> ObjectPosition(entt::entity object) const override;
+	[[nodiscard]] std::optional<glm::vec3> ObjectDrawnOrigin(entt::entity object) const override;
 	[[nodiscard]] uint64_t GameMilliseconds() const override;
 	[[nodiscard]] SurfacePoint RandomSurfacePoint(entt::entity object, particles::Effect& effect) const override;
 	[[nodiscard]] float PlayerAlignment(int player) const override;

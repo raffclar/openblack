@@ -14,6 +14,7 @@
 #include <chrono>
 #include <functional>
 #include <optional>
+#include <span>
 #include <vector>
 
 #include <entt/fwd.hpp>
@@ -167,5 +168,11 @@ public:
 	/// the centre. They move on by a whole turn's time in each frame that draws the land, no more often than 60 times a
 	/// second, also while the game is paused.
 	virtual void UpdateFrame(std::chrono::milliseconds /*frameRealTime*/, bool /*landDrawn*/) {}
+	/// The particle effect of the symbols of belief over a village centre, none if the centre shows no symbols. The world's
+	/// particle draw does not show this effect: the renderer draws it just after the column of the centre.
+	[[nodiscard]] virtual std::optional<uint32_t> BeliefSymbolsOf(entt::entity /*centre*/) const { return std::nullopt; }
+	/// The village centres in the order that the game draws them: the newest first. A centre that goes keeps the order of
+	/// the others. The order follows the centres at each frame.
+	[[nodiscard]] virtual std::span<const entt::entity> CentresInDrawOrder() const { return {}; }
 };
 } // namespace openblack::ecs::systems

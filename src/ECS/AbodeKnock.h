@@ -61,7 +61,6 @@ constexpr uint32_t k_ReadoutShrinkMs = 1000;
 /// house shows a single teal one
 constexpr uint32_t k_LivedInColour = 0xFFF8D235u;
 constexpr uint32_t k_FreePlaceColour = 0xFF5C822Fu;
-constexpr uint32_t k_FollowerColour = 0xFF4995A9u;
 /// The markers stand this far apart along the screen's sideways line, and are this big at full size
 constexpr float k_MarkerSpacing = 1.0f / 1.3f;
 /// They are never drawn smaller than this

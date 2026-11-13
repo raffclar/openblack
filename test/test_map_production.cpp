@@ -26,6 +26,7 @@
 #include "ECS/Components/FishFarm.h"
 #include "ECS/Components/Flowers.h"
 #include "ECS/Components/Forest.h"
+#include "ECS/Components/HandGrab.h"
 #include "ECS/Components/MagicShield.h"
 #include "ECS/Components/MapCellResident.h"
 #include "ECS/Components/Mesh.h"
@@ -473,6 +474,26 @@ TEST_F(MapProductionFiling, AThingMadeBeforeAnotherGoesIsInTheCellsBeforeTheOthe
 	const auto born = MakeVillager(registry, {500.0f, 0.0f, 500.0f});
 	registry.Destroy(old);
 	EXPECT_TRUE(registry.AllOf<MapCellResident>(born));
+}
+
+// A big forest gives the hand a new tree in the same turn. The hand puts the new things in their cells, then takes the
+// tree out. Thus the tree stays out of the cells while the hand holds it, as a tree from the ground does.
+TEST_F(MapProductionFiling, ATreeThatIsMadeAndTakenInOneTurnStaysOutOfTheCellsWhileHeld)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto& map = Locator::entitiesMap::value();
+	const auto place = glm::vec3(500.0f, 0.0f, 500.0f);
+	const auto tree = registry.Create();
+	registry.Assign<Transform>(tree, place, glm::mat3(1.0f), glm::vec3(1.0f));
+	registry.Assign<Tree>(tree, TreeInfo::Conifer, 1.0f);
+	map.FileNew();
+	ASSERT_TRUE(registry.AllOf<MapCellResident>(tree));
+	registry.Remove<MapCellResident>(tree);
+	registry.Assign<InHand>(tree, InHand {.hand = registry.Create()});
+	map.Sync();
+	map.FileNew();
+	EXPECT_FALSE(registry.AllOf<MapCellResident>(tree));
+	EXPECT_EQ(std::ranges::count(map.GetAllInCell(map_coords::CellOf(place)), tree), 0);
 }
 
 TEST_F(MapProductionFiling, AMoveOutsideTheTurnWaitsForTheSync)

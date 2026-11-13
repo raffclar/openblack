@@ -129,6 +129,17 @@ public:
 	/// Continues the session of an earlier run with the refresh token that the store keeps, or that the cookie holds in
 	/// the browser
 	virtual void ResumeSession(LobbyCallback<lobby_api::AccountRef> callback) = 0;
+	/// Whether the game can get a session from the sign-in of the lobby site. Only the browser game can.
+	[[nodiscard]] virtual bool CanSignInFromSite() const { return false; }
+	/// Whether the session of the player came from the sign-in of the lobby site
+	[[nodiscard]] virtual bool IsSignedInFromSite() const { return false; }
+	/// Logs in as the account that is signed in on the lobby site, with no name and no password. The callback gets
+	/// NotLoggedIn when nobody is signed in on the site. After a logout in the game, the client does not use the site
+	/// again in this run.
+	virtual void SignInFromSite(LobbyCallback<lobby_api::AccountRef> callback)
+	{
+		callback({.value = std::nullopt, .error = {.kind = LobbyErrorKind::NotConfigured}});
+	}
 	/// Ends the session here, or every session of the account. The client forgets the tokens also when the lobby does
 	/// not answer.
 	virtual void Logout(bool everywhere, LobbyCallback<LobbyDone> callback) = 0;

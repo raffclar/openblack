@@ -477,6 +477,36 @@ void AddForests(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "miracles.forest_emptied",
+	    .name = "Forest: the forest goes with its last tree",
+	    .facet = Facet::Miracles,
+	    .description = "A forest seed summoned from the player's worship and cast by hand on grass north of the middle, as "
+	                   "in the forest seed scenario. A storage pit with no wood stands east of the forest. At 25 seconds "
+	                   "the hand puts seventeen of the eighteen trees into the pit, one at a time. Three seconds later it "
+	                   "puts the last tree into the pit. Two seconds later the hand presses where the seed sat.",
+	    .expected = "While one tree stands, the seed sits on top of it. When the last tree goes into the pit, the forest "
+	                "goes from the land at once. At the next turn the forest miracle closes down, and its seed sinks out "
+	                "of sight under the land, as in the original game. The press finds no seed: the hand grips the land. "
+	                "The inspector (objects.find) shows no MagicForest and no forest of the land there.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 14.0f, 18.0f}, .look = {0.0f, 1.0f, 40.0f}},
+	    .objects = {{.type = AbodeInfo::CelticStoragePit, .offset = {30.0f, 40.0f}, .storedFood = 0, .storedWood = 0}},
+	    .miracles = {{.type = MagicType::Forest,
+	                  .point = {0.0f, 40.0f},
+	                  .handOffset = {0.0f, 40.0f},
+	                  .delaySeconds = 0.5f,
+	                  .byHand = true,
+	                  .fromWorship = true,
+	                  .holdBeforePress = 2.0f}},
+	    .commands = {{.kind = Kind::Reframe, .delaySeconds = 22.0f},
+	                 {.kind = Kind::GiveMagicTreesToStore, .delaySeconds = 3.0f, .value = 1, .object = 0},
+	                 {.kind = Kind::GiveMagicTreesToStore, .delaySeconds = 3.0f, .value = 0, .object = 0},
+	                 {.kind = Kind::PointerTo, .delaySeconds = 2.0f, .point = {0.5f, 0.5f}},
+	                 {.kind = Kind::PointerPress, .delaySeconds = 0.5f, .value = k_Action},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 0.5f, .value = k_Action}},
+	});
+
+	all.push_back({
 	    .id = "miracles.forest_camera_path",
 	    .name = "Forest: the camera follows the miracle's path",
 	    .facet = Facet::Miracles,

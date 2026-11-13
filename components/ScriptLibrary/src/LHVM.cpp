@@ -431,13 +431,6 @@ void LHVM::Reboot()
 	_currentStack = &_mainStack;
 }
 
-int LHVM::SaveBinary(const std::filesystem::path& filepath)
-{
-	LHVMFile file(LHVMVersion::BlackAndWhite, _variablesNames, _instructions, _auto, _scripts, _data);
-	file.Write(filepath);
-	return EXIT_SUCCESS;
-}
-
 LHVMFile LHVM::StateFile() const
 {
 	return StateFile(*ProgramFile(), CopyRunningState());
@@ -915,67 +908,6 @@ uint32_t LHVM::GetCurrentExceptionHandlerIp(const VMTask& task, const uint32_t i
 	return task.exceptionHandlerIps.at(task.exceptionHandlerIps.size() - index - 1);
 }
 
-void LHVM::PrintInstruction(const VMTask& task, const VMInstruction& instruction)
-{
-	// TODO(Daniels118): improve this
-	std::string opcode = k_OpcodeNames.at(static_cast<int>(instruction.code));
-	std::string arg;
-	if (instruction.code == Opcode::Run)
-	{
-		if (instruction.mode == VMMode::Async)
-		{
-			arg = "async ";
-		}
-		arg += _scripts.at(instruction.data.intVal - 1).name;
-	}
-	else if (instruction.code == Opcode::Sys)
-	{
-		arg += _functions->at(instruction.data.intVal).name;
-	}
-	else
-	{
-		if (instruction.code == Opcode::Push || instruction.code == Opcode::Pop || instruction.code == Opcode::Cast ||
-		    instruction.code == Opcode::Add || instruction.code == Opcode::Sub || instruction.code == Opcode::Mul ||
-		    instruction.code == Opcode::Div || instruction.code == Opcode::Mod)
-		{
-			opcode += k_DataTypeChars.at(static_cast<int>(instruction.type));
-		}
-		if ((instruction.code == Opcode::Push || instruction.code == Opcode::Pop) && instruction.mode == VMMode::Reference)
-		{
-			if (instruction.data.intVal > task.variablesOffset)
-			{
-				arg = task.localVars[instruction.data.intVal - task.variablesOffset - 1].name;
-			}
-			else
-			{
-				arg = _variables.at(instruction.data.intVal).name;
-			}
-		}
-		else if (instruction.code == Opcode::Push && instruction.mode == VMMode::Immediate)
-		{
-			if (instruction.type == DataType::Float || instruction.type == DataType::Vector)
-			{
-				arg = std::to_string(instruction.data.floatVal);
-			}
-			else
-			{
-				arg = std::to_string(instruction.data.intVal);
-			}
-		}
-		else if (instruction.code == Opcode::Jmp || instruction.code == Opcode::Wait || instruction.code == Opcode::Swap)
-		{
-			arg = std::to_string(instruction.data.intVal);
-		}
-		if (instruction.code == Opcode::Wait)
-		{
-			const bool val = task.stack.values.at(task.stack.count - 1).intVal != 0;
-			arg += val ? " [true] -> continue" : " [false] -> JUMP";
-		}
-	}
-	printf("%s:%d %s[%d] %s %s\n", task.filename.c_str(), instruction.line, task.name.c_str(), task.id, opcode.c_str(),
-	       arg.c_str());
-}
-
 void LHVM::CpuLoop(VMTask& task)
 {
 	const auto wasExceptionHandler = task.inExceptionHandler;
@@ -1000,8 +932,6 @@ void LHVM::CpuLoop(VMTask& task)
 		_currentTask = &task;
 		_executedInstructions++;
 		const auto& instruction = _instructions.at(task.instructionAddress);
-
-		// PrintInstruction(task, instruction); // just for debug purposes
 
 		_repeatsCutNative = std::exchange(repeatsCutNative, false);
 		(this->*_opcodesImpl.at(static_cast<int>(instruction.code)))(task, instruction);

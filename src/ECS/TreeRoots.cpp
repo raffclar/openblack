@@ -16,13 +16,16 @@
 #include "ECS/Components/CreatureObjectAction.h"
 #include "ECS/Components/FallingRoots.h"
 #include "ECS/Components/HandGrab.h"
+#include "ECS/Components/Mobile.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Tree.h"
+#include "ECS/MobileObjectRecord.h"
 #include "ECS/Registry.h"
 
 using namespace openblack;
 using namespace openblack::ecs;
 using namespace openblack::ecs::components;
+using physics::objects::RootedKind;
 using physics::objects::TreePlace;
 
 namespace
@@ -55,7 +58,7 @@ TreePlace tree_roots::PlaceOf(const Registry& registry, entt::entity tree)
 	return TreePlace::InTheLand;
 }
 
-void tree_roots::Show(Registry& registry)
+void tree_roots::Show(Registry& registry, const InfoConstants& info)
 {
 	// The trees that may be out of the land, and those drawn with their roots last frame
 	std::vector<entt::entity> trees;
@@ -72,6 +75,17 @@ void tree_roots::Show(Registry& registry)
 			trees.push_back(grab.object);
 		}
 	});
+	// A crop is rooted too, and has roots drawn while it moves in the physics
+	const auto isCrop = [&registry, &info](entt::entity object) {
+		const auto* mobile = registry.TryGet<const MobileObject>(object);
+		return mobile != nullptr && mobile_object_record::ClassOf(info, *mobile) == mobile_object_record::Class::Crop;
+	};
+	registry.Each<const MobileObject, const InPhysics>([&trees, &isCrop](entt::entity object, const MobileObject&) {
+		if (isCrop(object))
+		{
+			trees.push_back(object);
+		}
+	});
 	registry.Each<const ShownRoots>([&trees](entt::entity tree, const ShownRoots&) { trees.push_back(tree); });
 	std::ranges::sort(trees);
 	const auto [first, last] = std::ranges::unique(trees);
@@ -84,8 +98,18 @@ void tree_roots::Show(Registry& registry)
 		{
 			continue;
 		}
-		const auto place = registry.AllOf<Tree>(tree) ? PlaceOf(registry, tree) : TreePlace::InTheLand;
-		const bool drawn = !physics::objects::ShownRootsScales(place).empty();
+		auto place = TreePlace::InTheLand;
+		auto kind = RootedKind::Tree;
+		if (registry.AllOf<Tree>(tree))
+		{
+			place = PlaceOf(registry, tree);
+		}
+		else if (isCrop(tree))
+		{
+			place = PlaceOf(registry, tree);
+			kind = RootedKind::Crop;
+		}
+		const bool drawn = !physics::objects::ShownRootsScales(place, kind).empty();
 		const auto* shown = registry.TryGet<const ShownRoots>(tree);
 		if (!drawn)
 		{
@@ -99,4 +123,10 @@ void tree_roots::Show(Registry& registry)
 			registry.AssignOrReplace<ShownRoots>(tree, ShownRoots {.place = place});
 		}
 	}
+}
+
+std::span<const float> tree_roots::ShownScales(const Registry& registry, entt::entity rooted, const ShownRoots& shown)
+{
+	// Only trees and crops have shown roots, and a crop draws fewer of them
+	return physics::objects::ShownRootsScales(shown.place, registry.AllOf<Tree>(rooted) ? RootedKind::Tree : RootedKind::Crop);
 }

@@ -50,7 +50,9 @@ void openblack::ecs::reflection::RegisterFields_Components_m(entt::meta_ctx& con
 	    .Field<&components::MagicForest::spell>("spell")
 	    .Field<&components::MagicForest::player>("player")
 	    .Field<&components::MagicForest::centre>("centre")
-	    .Field<&components::MagicForest::trees>("trees");
+	    .Field<&components::MagicForest::trees>("trees")
+	    .Field<&components::MagicForest::landForest>("landForest")
+	    .Field<&components::MagicForest::gone>("gone");
 	Reflect<components::MagicTree>(context)
 	    .Field<&components::MagicTree::forest>("forest")
 	    .Field<&components::MagicTree::woodMultiplier>("woodMultiplier")

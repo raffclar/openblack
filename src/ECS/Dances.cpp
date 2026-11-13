@@ -119,6 +119,34 @@ std::vector<entt::entity> dances::Dancers(const Registry& registry, entt::entity
 	return dancers;
 }
 
+size_t dances::DancerCount(const Registry& registry, entt::entity dance)
+{
+	size_t count = 0;
+	if (IsDance(registry, dance))
+	{
+		for (const auto& group : registry.Get<const Dance>(dance).groups.all)
+		{
+			count += group.dancers.size();
+		}
+	}
+	return count;
+}
+
+void dances::ForEachDancer(const Registry& registry, entt::entity dance, const std::function<void(entt::entity)>& visit)
+{
+	if (!IsDance(registry, dance))
+	{
+		return;
+	}
+	for (const auto& group : registry.Get<const Dance>(dance).groups.all)
+	{
+		for (const auto dancer : group.dancers)
+		{
+			visit(dancer);
+		}
+	}
+}
+
 void dances::Destroy(Registry& registry, entt::entity dance, const std::function<void(entt::entity)>& finished)
 {
 	if (!IsDance(registry, dance))

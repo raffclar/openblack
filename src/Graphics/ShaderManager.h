@@ -24,6 +24,7 @@
 #include "DrawEncoder.h"
 #include "DrawWindow.h"
 #include "ShaderProgram.h"
+#include "ViewOrder.h"
 #include "Visual/RenderPass.h"
 
 namespace openblack
@@ -35,19 +36,6 @@ namespace graphics
 {
 
 class SamplerDefaults;
-
-/// How a view orders its draws, as bgfx's view modes do
-enum class ViewOrder : uint8_t
-{
-	/// By program, then by depth, ties in the order they came
-	ByProgram,
-	/// In the order they came
-	Sequential,
-	/// The nearest (smallest depth) first
-	DepthAscending,
-	/// The farthest (greatest depth) first
-	DepthDescending,
-};
 
 class ShaderManager
 {

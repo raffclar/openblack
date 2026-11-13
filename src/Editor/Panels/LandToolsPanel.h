@@ -48,9 +48,7 @@ public:
 
 	/// The brush is the editor's, so that the land script can set it
 	[[nodiscard]] static land_brush::Brush& GetBrush() noexcept;
-	[[nodiscard]] paths::Kind GetPathKind() const noexcept { return _pathKind; }
 	void SetPathKind(paths::Kind kind) noexcept;
-	[[nodiscard]] const paths::Draft& GetDraft() const noexcept { return _draft; }
 
 	/// Saves the land's changed cells as a landscape file, what the editor placed and drew as a land script, the
 	/// footpaths of the world as a footpath file, and the whole world as a world file, into the editor's folder in the

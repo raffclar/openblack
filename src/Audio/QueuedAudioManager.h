@@ -40,9 +40,6 @@ public:
 	QueuedAudioManager& operator=(const QueuedAudioManager&) = delete;
 	~QueuedAudioManager() override;
 
-	/// The audio of the machine that the calls go to
-	[[nodiscard]] AudioManagerInterface& GetAudio() { return *_audio; }
-
 	[[nodiscard]] bool IsInstalled() const override;
 	[[nodiscard]] bool IsDeviceLost() const override;
 	void SimulateDeviceLoss(bool lost) override;

@@ -186,4 +186,12 @@ struct BuildingWords
 /// The percentage that "Building Completed" shows: of the repair for a built building, else of the building's build
 [[nodiscard]] float BuildingCompleted(bool built, float builtShare, float life);
 
+/// Whether the hand offers its tooltips in this turn. It offers none while a script's cinema bars have taken the
+/// interface, or while a box of the front end takes the mouse and its pointer shows. Then the hand offers nothing, the
+/// shown tooltip stays for its linger time, and then it goes. The tooltip stays at the place where the hand went away.
+[[nodiscard]] constexpr bool OffersToolTips(bool frontEndPointerOn, bool interfaceActive)
+{
+	return interfaceActive && !frontEndPointerOn;
+}
+
 } // namespace openblack::gui::hand_tooltip
