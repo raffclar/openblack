@@ -49,7 +49,7 @@ void testbed_scenarios::AddMultiplayerFrontEndScenarios(std::vector<Scenario>& a
 {
 	using Kind = Command::Kind;
 	using Stage = testbed_multiplayer::Stage;
-	const std::array<BoxScenario, 31> boxes = {{
+	const std::array<BoxScenario, 32> boxes = {{
 	    {"multiplayer.choose_connection", "The multiplayer front end: choose a connection", Stage::ChooseConnection,
 	     "The multiplayer front end opens with the demonstration lobby. The player goes straight into the temple's "
 	     "future room.",
@@ -210,6 +210,13 @@ void testbed_scenarios::AddMultiplayerFrontEndScenarios(std::vector<Scenario>& a
 	     "The box \"Session settings\" shows the name, the map, the gods, the time limit, Private and a new password. "
 	     "\"Change settings\" sends the changes and goes back to the room, where the ready ticks are clear. Back keeps "
 	     "the old settings. Two gods or a land of two places gives \"Remove players first: this land has 2 places.\"."},
+	    {"multiplayer.lobby_notices", "The lobby sessions: the notices of the room", Stage::LobbyNotices,
+	     "The player joins \"Friday Ring\". Each two seconds an event occurs: Dave joins, Dave is ready, Bob starts the "
+	     "countdown, and Bob kicks the player. Run the game in the background, so that the window does not have the "
+	     "focus.",
+	     "Each event plays the click sound of the front end. The start of the countdown and the kick flash the window "
+	     "on the taskbar until it gets the focus. In a browser, the tab shows \"(!) openblack\" in place of its title. "
+	     "With the focus, the window does not flash, but the sounds play."},
 	}};
 	for (const auto& box : boxes)
 	{

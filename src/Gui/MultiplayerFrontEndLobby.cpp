@@ -14,13 +14,19 @@
 #include <chrono>
 #include <utility>
 
+#include <spdlog/spdlog.h>
+
 #include "ECS/Systems/LobbyClientSystemInterface.h"
 #include "ECS/Systems/LobbyRoomSystemInterface.h"
 #include "ECS/Systems/NetworkGameSystemInterface.h"
+#include "Locator.h"
 #include "MultiplayerFrontEnd.h"
 #include "Online/MapDownload.h"
 #include "Online/NetworkSession.h"
+#include "Sound/GameSoundEffects.h"
+#include "Sound/SoundId.h"
 #include "TextDatabase.h"
+#include "Windowing/WindowingInterface.h"
 
 using namespace openblack::gui;
 using namespace openblack::gui::multiplayer;
@@ -663,6 +669,7 @@ void MultiplayerFrontEnd::FollowLobbySession()
 		return;
 	}
 	const auto* room = _services.lobbyRoom->Room();
+	FollowLobbyNotices(room);
 	if (room == nullptr)
 	{
 		// The room went without an end, for example after a leave
@@ -708,6 +715,25 @@ void MultiplayerFrontEnd::FollowLobbySession()
 	}
 	FollowLobbyMap(*room);
 	FollowLobbyGame(*room);
+}
+
+void MultiplayerFrontEnd::FollowLobbyNotices(const online::lobby::LobbyRoom* room)
+{
+	if (room == nullptr)
+	{
+		_noticeSnapshot.reset();
+		return;
+	}
+	auto snapshot = online::lobby::SnapshotOf(*room);
+	if (_noticeSnapshot.has_value() && _services.notice)
+	{
+		const auto notice = online::lobby::NoticeBetween(*_noticeSnapshot, snapshot);
+		if (notice.Any())
+		{
+			_services.notice(notice);
+		}
+	}
+	_noticeSnapshot = std::move(snapshot);
 }
 
 void MultiplayerFrontEnd::FollowLobbyMap(const online::lobby::LobbyRoom& room)
@@ -808,4 +834,24 @@ void MultiplayerFrontEnd::FollowLobbyGame(const online::lobby::LobbyRoom& room)
 		_busy = true;
 		RoomOpened(std::move(result.value->ticket), {});
 	});
+}
+
+void openblack::gui::GiveLobbyNotice(const online::lobby::LobbyNotice& notice)
+{
+	if (notice.sound)
+	{
+		audio::PlayGameSoundEffect(static_cast<entt::id_type>(audio::SoundId::G_MenuButton), std::nullopt);
+	}
+	bool flashed = false;
+	if (Locator::windowing::has_value())
+	{
+		auto& window = Locator::windowing::value();
+		if (online::lobby::FlashesWindow(notice, window.HasFocus()))
+		{
+			window.AskForAttention();
+			flashed = true;
+		}
+	}
+	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The lobby room gives a notice: sound {}, flash {}, window flashed {}",
+	                   notice.sound, notice.flash, flashed);
 }

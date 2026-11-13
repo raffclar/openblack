@@ -289,6 +289,7 @@ void LobbyRoom::AddLine(RoomLine line)
 
 void LobbyRoom::AddSystemLine(SystemLine line)
 {
+	++_systemLineCounts.at(static_cast<size_t>(line.kind));
 	AddLine(RoomLine {.kind = RoomLineKind::System, .system = std::move(line)});
 }
 

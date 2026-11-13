@@ -48,6 +48,8 @@ public:
 	[[nodiscard]] float GetAspectRatio() const final;
 	[[nodiscard]] bool IsMinimised() const final;
 	[[nodiscard]] bool IsWindowed() const final;
+	[[nodiscard]] bool HasFocus() const final;
+	void AskForAttention() final;
 
 	WindowingInterface& SetDisplayMode(DisplayMode mode) final { return SetFullscreen(mode != DisplayMode::Windowed); }
 

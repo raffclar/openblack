@@ -12,6 +12,7 @@
 #include <cstddef>
 #include <cstdint>
 
+#include <array>
 #include <optional>
 #include <span>
 #include <string>
@@ -122,6 +123,9 @@ enum class SystemLineKind : uint8_t
 	Queued,
 };
 
+/// The number of the kinds of the system lines
+constexpr size_t k_SystemLineKinds = static_cast<size_t>(SystemLineKind::Queued) + 1;
+
 struct SystemLine
 {
 	SystemLineKind kind {SystemLineKind::Joined};
@@ -223,6 +227,12 @@ public:
 	/// of the map starts again at the next time, as the download of the original game starts again at each map that the
 	/// host sets.
 	[[nodiscard]] uint32_t MapSets() const noexcept { return _mapSets; }
+	/// The number of the system lines of this kind that the room wrote. The count does not go down when the room
+	/// removes its oldest lines.
+	[[nodiscard]] uint32_t SystemLineCount(SystemLineKind kind) const
+	{
+		return _systemLineCounts.at(static_cast<size_t>(kind));
+	}
 
 	/// Uses an event of the push channel. The room ignores an event of a different lobby.
 	void Apply(const lobby_api::PushEvent& event);
@@ -264,6 +274,7 @@ private:
 	int32_t _announced {k_CountdownSeconds + 1};
 	uint32_t _revision {0};
 	uint32_t _mapSets {0};
+	std::array<uint32_t, k_SystemLineKinds> _systemLineCounts {};
 	/// A change of the lobby came: the room needs the lobby again
 	bool _reloadWanted {false};
 	/// The fields of the changes that have no line yet, until the next reload

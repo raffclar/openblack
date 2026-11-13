@@ -25,6 +25,7 @@
 
 #include "LobbyScreenRules.h"
 #include "MultiplayerFrontEndRules.h"
+#include "Online/LobbyNotices.h"
 
 namespace openblack::ecs::systems
 {
@@ -86,6 +87,9 @@ public:
 		/// The time in milliseconds since 1970 (UTC), for the countdown and the time of a game. The clock of the system
 		/// when it is empty.
 		std::function<int64_t()> nowMs;
+		/// Gives the notice of the events of the lobby room: a sound, or a flash of the window (deviation 251). When this
+		/// function is empty, the room gives no notices.
+		std::function<void(const online::lobby::LobbyNotice& notice)> notice;
 	};
 
 	struct Settings
@@ -356,6 +360,8 @@ private:
 	void EnterLobbyList();
 	/// Follows the room of the lobby session: the box of the room, its map, its game server and its end
 	void FollowLobbySession();
+	/// Compares the room to the room of the frame before, and gives the notice of the events between them
+	void FollowLobbyNotices(const online::lobby::LobbyRoom* room);
 	/// The map of the room: the download of a map of the service, then the report to the session
 	void FollowLobbyMap(const online::lobby::LobbyRoom& room);
 	/// After the session gets a game server: a ticket, then the network game joins the server
@@ -407,6 +413,8 @@ private:
 	std::string _roomMapHash;
 	/// The count of the map sets of the lobby room (LobbyRoom::MapSets) at the last start of the download of its map
 	uint32_t _roomMapSets {0};
+	/// The lobby room of the frame before, for the notices
+	std::optional<online::lobby::NoticeSnapshot> _noticeSnapshot;
 	/// The lobby's list did not have the room's land, or the list did not come
 	bool _mapFailed {false};
 	/// Tests: the requests of map pieces that wait for the time of --map-piece-delay-ms, with the time to send each
@@ -463,5 +471,9 @@ private:
 	std::vector<game_end::ConditionPick> _conditionPicks;
 	bool _ready {false};
 };
+
+/// The notice of the game: the click sound of the front end, and a flash of the window or of the browser tab when the
+/// window does not have the focus
+void GiveLobbyNotice(const online::lobby::LobbyNotice& notice);
 
 } // namespace openblack::gui
