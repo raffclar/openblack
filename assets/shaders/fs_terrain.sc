@@ -209,12 +209,16 @@ void main()
 	vec4 ring = vec4_splat(0.0f);
 	if (vortex)
 	{
-		vec2 vortexUv = VortexGroundUv(v_texcoord1.zw);
-		if (InVortexHole(texture2D(s6_vortexHole, vortexUv)))
+		// A block drawn with its coarse texture alone finds its hole from its place on its coarse page. The ring always
+		// takes the point's own place.
+		vec2 holeGround = u_block.z > 1.5f
+		                      ? VortexCoarseHoleGround(v_texcoord1.zw, u_blockPositionAndSize.xy, u_coarsePage.yz)
+		                      : v_texcoord1.zw;
+		if (InVortexHole(texture2D(s6_vortexHole, VortexGroundUv(holeGround))))
 		{
 			discard;
 		}
-		ring = texture2D(s13_vortexRing, vortexUv);
+		ring = texture2D(s13_vortexRing, VortexGroundUv(v_texcoord1.zw));
 	}
 
 	col.rgb = col.rgb * v_lightColour;

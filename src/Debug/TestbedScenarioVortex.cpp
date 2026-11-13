@@ -460,6 +460,29 @@ void testbed_scenarios::AddVortexScenarios(std::vector<Scenario>& all)
 	                 {.kind = Command::Kind::Reframe, .delaySeconds = 6.0f}},
 	});
 
+	// The first land's way out, where its script opens it, from the middle of the land
+	static constexpr glm::vec2 k_LandOneVortex = glm::vec2(1700.2f, 2520.2f) - glm::vec2(2240.0f, 2640.0f);
+	all.push_back({
+	    .id = "story.vortex_far_flat_ring",
+	    .name = "Story: far from the camera, the first land's vortex shows as a flat ring",
+	    .facet = Facet::Miracles,
+	    .description = "The first land loads with its own scripts. Its way out opens where the land's script opens it, "
+	                   "after a second, seen from 1000 m away. After 10 seconds the camera comes near the vortex, and "
+	                   "after 8 more seconds it goes back to 1000 m. Past the land's texture line, the game draws the "
+	                   "vortex's block with its coarse texture alone, and finds the hole from that texture's coordinates.",
+	    .expected = "Near the vortex, the funnel spins down through the hole in the land, under the ring and the stars. "
+	                "From 1000 m the hole is not under the vortex: the land covers the funnel and the flat ring of the "
+	                "vortex shows on it. Where the coarse page puts it, a part of a larger hole can show elsewhere on "
+	                "the block. The game does the same (vanilla-bugs row 2230, kept).",
+	    .environment = {.land = Land::Story, .storyLand = "Land1.txt", .dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_LandOneVortex.x, 350.0f, k_LandOneVortex.y - 950.0f},
+	                .look = {k_LandOneVortex.x, 0.0f, k_LandOneVortex.y}},
+	    .vortices = {{.type = VortexType::In, .offset = k_LandOneVortex, .delaySeconds = 1.0f}},
+	    .commands = {{.kind = Command::Kind::CameraLooksAt, .delaySeconds = 10.0f, .point = k_LandOneVortex},
+	                 {.kind = Command::Kind::Reframe, .delaySeconds = 8.0f}},
+	});
+
 	all.push_back({
 	    .id = "story.volcano_vortex_keeps_the_land",
 	    .name = "The volcano's mouth leaves the land as it is",

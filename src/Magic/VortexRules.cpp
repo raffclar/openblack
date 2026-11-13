@@ -127,6 +127,18 @@ glm::vec2 GroundTextureCoordinates(glm::vec2 point, glm::vec2 centre, float base
 	return glm::vec2(offset.y, offset.x) + 0.5f;
 }
 
+glm::vec2 HoleTexturePoint(glm::vec2 point, glm::vec2 blockCorner, glm::vec2 coarseSlot, bool coarseAlone)
+{
+	if (!coarseAlone)
+	{
+		return point;
+	}
+	// The point's coordinates on the coarse page, put back on the block from its corner as full coordinates would be
+	const glm::vec2 fraction = (point - blockCorner) / k_BlockSide;
+	const glm::vec2 slot {coarseSlot.y, coarseSlot.x};
+	return blockCorner + ((slot + k_CoarseTextureInset) + fraction * k_CoarseTextureSpan) * k_BlockSide;
+}
+
 float SwirlDepth(float levelAmount)
 {
 	// The difference is a float: 0.3 less 2.5 is -2.2 as a float, a little less than the true difference

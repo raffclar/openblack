@@ -130,6 +130,50 @@ TEST(VortexRules, TheHoleAndRingTexturesAreCentredOnTheVortexAcrossZAndDownX)
 	EXPECT_NEAR(GroundTextureCoordinates(centre + glm::vec2(60.0f, 0.0f), centre, 0.75f).y, 1.0f, 1e-5f);
 }
 
+namespace
+{
+/// The game's place on the hole's texture for a block drawn with its coarse texture alone: the coarse page's
+/// coordinates of the point (u along z, v along x), through the matrix that the vortex gives the block
+glm::vec2 GameCoarseHoleCoordinates(glm::vec2 point, glm::vec2 blockCorner, glm::vec2 slot, glm::vec2 centre, float baseScale)
+{
+	const float scale = 1.0f / baseScale;
+	const float u = slot.x + (1.0f / 255.0f) + ((point.y - blockCorner.y) / 160.0f) * 0.2421875f;
+	const float v = slot.y + (1.0f / 255.0f) + ((point.x - blockCorner.x) / 160.0f) * 0.2421875f;
+	return {(u * scale) + ((blockCorner.y - centre.y) * 0.00625f * scale) + 0.5f,
+	        (v * scale) + ((blockCorner.x - centre.x) * 0.00625f * scale) + 0.5f};
+}
+} // namespace
+
+TEST(VortexRules, ABlockDrawnWithItsFullTextureFindsTheHoleAtThePointItself)
+{
+	const glm::vec2 point {1690.0f, 2455.0f};
+	const glm::vec2 corner {1600.0f, 2400.0f};
+	EXPECT_EQ(HoleTexturePoint(point, corner, glm::vec2(0.25f, 0.5f), false), point);
+}
+
+TEST(VortexRules, ABlockDrawnWithItsCoarseTextureAloneFindsTheHoleFromItsCoarsePage)
+{
+	const glm::vec2 corner {1600.0f, 2400.0f};
+	const glm::vec2 centre {1680.0f, 2470.0f};
+	for (const auto slot : {glm::vec2(0.0f, 0.0f), glm::vec2(0.25f, 0.5f), glm::vec2(0.75f, 0.25f)})
+	{
+		for (const auto point : {corner, centre, glm::vec2(1759.0f, 2401.0f), glm::vec2(1612.5f, 2555.0f)})
+		{
+			const auto ours = GroundTextureCoordinates(HoleTexturePoint(point, corner, slot, true), centre, 0.28f);
+			const auto game = GameCoarseHoleCoordinates(point, corner, slot, centre, 0.28f);
+			EXPECT_NEAR(ours.x, game.x, 1e-4f);
+			EXPECT_NEAR(ours.y, game.y, 1e-4f);
+		}
+	}
+	// The vortex's middle is no longer at the middle of the texture, and the texture is about four times larger
+	const auto middle = GroundTextureCoordinates(HoleTexturePoint(centre, corner, {0.25f, 0.5f}, true), centre, 0.28f);
+	EXPECT_NEAR(middle.x, 0.22278f, 1e-4f);
+	EXPECT_NEAR(middle.y, 0.94648f, 1e-4f);
+	const auto across =
+	    GroundTextureCoordinates(HoleTexturePoint(centre + glm::vec2(0.0f, 44.8f), corner, {0.25f, 0.5f}, true), centre, 0.28f);
+	EXPECT_NEAR(across.x - middle.x, 0.2421875f, 1e-4f);
+}
+
 TEST(VortexRules, TheSwirlRisesTowardsTheGroundAsTheLandIsLevelled)
 {
 	EXPECT_FLOAT_EQ(SwirlDepth(0.0f), 2.5f);
