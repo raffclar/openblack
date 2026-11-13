@@ -43,6 +43,9 @@ struct Join
 	std::string gamePassword;
 	/// The name of the player's profile, on the local network only, where no ticket names the player
 	std::string name;
+	/// The build of the game ("build", optional): the version, the commit and the version of the turns. A server of
+	/// another build refuses the client.
+	std::string build;
 };
 
 /// Client to server: "room.resume". A client that lost its socket opens a new one and sends this in place of a join. It

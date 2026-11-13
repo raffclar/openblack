@@ -149,8 +149,10 @@ void NetworkSession::Open(bool resume)
 		            }
 		            else
 		            {
-			            _stream->SendText(game_socket::ToJson(game_socket::Join {
-			                .ticket = _settings.ticket, .gamePassword = _settings.gamePassword, .name = _settings.name}));
+			            _stream->SendText(game_socket::ToJson(game_socket::Join {.ticket = _settings.ticket,
+			                                                                     .gamePassword = _settings.gamePassword,
+			                                                                     .name = _settings.name,
+			                                                                     .build = _settings.build}));
 			            _state = State::Joining;
 			            _log->Info(fmt::format("The client sends its join ({}{})",
 			                                   _settings.ticket.empty() ? "no ticket" : "with a ticket",

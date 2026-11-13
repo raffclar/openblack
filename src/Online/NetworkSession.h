@@ -29,6 +29,7 @@
 #include "Online/Backoff.h"
 #include "Online/ConnectionLog.h"
 #include "Online/GameOrigin.h"
+#include "Online/LobbyBuild.h"
 #include "Online/ResyncRule.h"
 #include "Online/SentBlocks.h"
 #include "Online/TurnPlayout.h"
@@ -47,6 +48,8 @@ struct NetworkSessionSettings
 	std::string gamePassword;
 	/// The name of the player's profile, on the local network only
 	std::string name;
+	/// The build id of the game, which the join frame gives to the server
+	std::string build {ThisBuildId()};
 	/// How long the client tries to come back after it lost the socket. The server keeps the god for 5 minutes.
 	int64_t comeBackMicroseconds {5LL * 60 * 1'000'000};
 	/// Reads the file of a land in the Scripts folder of the game, for the check of the land before the start. None when
