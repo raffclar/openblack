@@ -84,6 +84,10 @@ vcpkg_download_distfile(
 # - submit-order: an encoder can set the submit order of its next draws. Draws with equal sort keys and the draws of a
 #   sequential view then render in that order, also when many encoders submit at the same time. Without it, that
 #   order follows the thread that submits first. A frame in which no encoder sets an order sorts as before.
+# - depth-ties-submit-order: a new call, setViewDepthTies, makes the draws of equal depth in a view sorted by depth
+#   render in submit order. Without it, bgfx orders them by their blend state and program. The program indices
+#   follow the order in which the programs were made, and that order is not the same in the web build. A view
+#   without the call sorts as before.
 # A change to the recovery from a lost device, for all renderers:
 # - device-restore: when the device is lost, or when the application asks, the render thread makes the same
 #   renderer again on the same window, and makes each live resource again with its handle. It keeps the data of
@@ -118,6 +122,7 @@ vcpkg_extract_source_archive(
     gl-parallel-link.patch
     webgpu-uniform-reuse.patch
     webgpu-lose-device.patch
+    depth-ties-submit-order.patch
 )
 
 # Replaces text in a file of the bgfx source. The build stops when the text is not there, so that a new bgfx
