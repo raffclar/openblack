@@ -2586,6 +2586,21 @@ TEST_F(HandGrabSystemWithWorld, APileIsScoopedIntoAHandfulThatGrowsWhileTheButto
 	EXPECT_TRUE(system->GetHeld().has_value());
 }
 
+// The new handful of a scoop leaves the map's cells as the hand takes it, as a thing taken from the world does. The
+// pile stays in its cells.
+TEST_F(HandGrabSystemWithWorld, AScoopedHandfulLeavesTheMapCells)
+{
+	const auto pile = world->registry.Create();
+	world->registry.Assign<Transform>(pile, glm::vec3(0.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+	world->registry.Assign<Pot>(pile, Pot {.amount = 1000, .maxAmount = 2000, .type = PotInfo::FoodPile});
+	world->sizes[pile] = {.radius = 2.0f, .height = 3.0f};
+	world->underCursor = pile;
+	EXPECT_TRUE(Press());
+	const auto handful = system->GetHeld();
+	ASSERT_TRUE(handful.has_value());
+	EXPECT_EQ(world->leftWorld, std::vector<entt::entity> {*handful});
+}
+
 // The scoop of another player's hand takes from the pile on every computer, but only the computer of that hand pins
 // its cursor, shows the stream, plays the scooping sound and shows the amount that the hand holds
 TEST_F(HandGrabSystemWithWorld, TheScoopOfAHandThatIsNotTheLocalOneShowsAndSoundsNothing)
