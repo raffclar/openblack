@@ -14,6 +14,7 @@
 #include <set>
 #include <vector>
 
+#include <Common/NearestWhole.h>
 #include <LNDFile.h>
 #include <Visual/LandDetail.h>
 #include <gtest/gtest.h>
@@ -516,4 +517,48 @@ TEST(LandDetail, TheCornerTextureHasASquareForEachBlockOfTheMap)
 	EXPECT_EQ(CornerTexel(1023, k_CornersPerSide - 1, k_CornersPerSide - 1), (k_CornerTextureSide * k_CornerTextureSide) - 1);
 	// Block 256 starts a new row of squares after the first 32, not in the place of block 0
 	EXPECT_EQ(CornerTexel(256, 0, 0), size_t {8} * k_CornersPerSide * k_CornerTextureSide);
+}
+
+TEST(LandDetail, NearestWholeIsTheSameAsTheLibrary)
+{
+	// The halves round to the even number, and the values near a half keep their side
+	for (const float value : {0.0f, 0.5f, 1.5f, 2.5f, 127.5f, 128.5f, 255.5f, 256.0f, -0.5f, -1.5f, 0.49999997f, 0.50000006f,
+	                          1073741824.0f, -1073741824.0f, 3.0e9f, -3.0e9f})
+	{
+		EXPECT_EQ(openblack::NearestWhole(value), static_cast<int32_t>(std::lrint(value))) << value;
+	}
+	// The shares of a morph and of a cross-fade, in steps much smaller than one
+	for (int step = 0; step <= 256 * 64; ++step)
+	{
+		const float value = static_cast<float>(step) / 64.0f;
+		ASSERT_EQ(openblack::NearestWhole(value), static_cast<int32_t>(std::nearbyint(value))) << value;
+	}
+}
+
+TEST(LandDetail, CornerInputsAreTheSameOnlyWithTheSameBits)
+{
+	const BlockCornerInputs inputs {.morph = Morph::ToHalf,
+	                                .fades = true,
+	                                .meshLine = {.along = {0.6f, 0.8f}, .point = {100.0f, 200.0f}},
+	                                .meshWidth = 20.0f,
+	                                .textureLine = {.along = {0.6f, 0.8f}, .point = {150.0f, 250.0f}},
+	                                .textureWidth = 40.0f,
+	                                .textureBand = 20.0f,
+	                                .blockCorner = {160.0f, 320.0f}};
+	EXPECT_TRUE(SameCornerInputs(inputs, inputs));
+	auto other = inputs;
+	other.altitudes.at(100) = 1;
+	EXPECT_FALSE(SameCornerInputs(inputs, other));
+	other = inputs;
+	other.meshLine.point.x = std::nextafter(100.0f, 200.0f);
+	EXPECT_FALSE(SameCornerInputs(inputs, other));
+	// A zero with the other sign is not the same value
+	other = inputs;
+	other.blockCorner.x = 0.0f;
+	auto negative = other;
+	negative.blockCorner.x = -0.0f;
+	EXPECT_FALSE(SameCornerInputs(other, negative));
+	other = inputs;
+	other.fades = false;
+	EXPECT_FALSE(SameCornerInputs(inputs, other));
 }
