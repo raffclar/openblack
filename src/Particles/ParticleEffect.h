@@ -946,7 +946,6 @@ public:
 	[[nodiscard]] int GetPlayer() const { return _player; }
 	/// The whole effect's drawn alpha, 0..255
 	void SetGlobalAlpha(float alpha) { _globalAlpha = alpha; }
-	[[nodiscard]] float GetGlobalAlpha() const { return _globalAlpha; }
 	/// A hidden effect steps as usual but draws nothing, as the miracle in the hand does until its seed is ready
 	void SetHidden(bool hidden) { _hidden = hidden; }
 	[[nodiscard]] bool IsHidden() const { return _hidden; }

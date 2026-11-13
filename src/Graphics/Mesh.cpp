@@ -18,10 +18,9 @@
 
 using namespace openblack::graphics;
 
-Mesh::Mesh(VertexBuffer* vertexBuffer, IndexBuffer* indexBuffer, Topology topology) noexcept
+Mesh::Mesh(VertexBuffer* vertexBuffer, IndexBuffer* indexBuffer) noexcept
     : _vertexBuffer(vertexBuffer)
     , _indexBuffer(indexBuffer)
-    , _topology(topology)
 {
 }
 
@@ -69,9 +68,4 @@ const IndexBuffer& Mesh::GetIndexBuffer() const
 bool Mesh::IsIndexed() const
 {
 	return _indexBuffer != nullptr && _indexBuffer->GetCount() > 0;
-}
-
-Mesh::Topology Mesh::GetTopology() const noexcept
-{
-	return _topology;
 }

@@ -47,7 +47,6 @@ constexpr float k_MaxReach = 0.2f;
 /// weight and its maximum
 constexpr float k_MinIncreaseSeconds = 1.0f;
 constexpr float k_MaxIncreaseSeconds = 1200.0f;
-constexpr float k_MaxThreshold = 1.0f;
 constexpr float k_MinWeight = 1.0f;
 constexpr float k_MaxWeight = 8.0f;
 constexpr float k_MaxMax = 2.0f;

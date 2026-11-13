@@ -99,8 +99,6 @@ public:
 	/// and not as its own timeline has them. A server that plays the commands of a game thus gives each command of the
 	/// scenario with the game, also a command that waits for what only the computer of the game knows.
 	void FollowGives(std::map<uint32_t, std::vector<size_t>> gives) { _followedGives = std::move(gives); }
-	/// The turn count at which the last scenario was laid out, or none before the first scenario
-	[[nodiscard]] std::optional<uint32_t> GetLayoutTurn() const { return _layoutTurn; }
 
 	[[nodiscard]] bool IsRunning() const { return _running; }
 	/// The scenario running, or last run

@@ -122,9 +122,6 @@ public:
 	/// The lightmap skin the game multiplies the submesh by, twice over, with the vertices' second texture
 	/// coordinates. Submeshes without one are drawn as they are.
 	[[nodiscard]] std::optional<uint32_t> GetLightmapSkinID() const { return _data.lightmapSkinID; }
-	/// Whether the vertices carry the lightmap coordinates of the mesh, which all of its submeshes do when any has a
-	/// lightmap
-	[[nodiscard]] bool HasLightmapCoordinates() const { return _data.hasLightmapCoordinates; }
 	/// The matrix of the table of joints the submesh turns by, about its pivot, when it has one
 	struct Joint
 	{

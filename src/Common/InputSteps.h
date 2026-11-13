@@ -26,7 +26,6 @@ namespace openblack::input_steps
 constexpr uint32_t k_StepsPerSecond = 60;
 constexpr float k_StepSeconds = 1.0f / static_cast<float>(k_StepsPerSecond);
 constexpr float k_StepMs = 1000.0f / static_cast<float>(k_StepsPerSecond);
-constexpr std::chrono::microseconds k_StepTime {16'667};
 /// A frame takes no more steps than this, a tenth of a second. The time of a longer frame after that is not used.
 constexpr uint32_t k_MostSteps = 6;
 

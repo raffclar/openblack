@@ -222,8 +222,6 @@ struct WaitStep
 
 /// An idle disciple looks for work again this many game turns after finding none
 inline constexpr int32_t k_IdleRetryTurns = 300;
-/// The turns before it looks again when its town's wants have just changed: random below this
-inline constexpr uint32_t k_IdleRetryWhenChanged = 10;
 
 /// A villager made a disciple walks up to the thing it was put by when farther than this from its edge
 inline constexpr float k_InspectReach = 5.0f;
