@@ -718,6 +718,30 @@ TEST(GameMenu, TheOptionsShowThePlayersPushScrolling)
 	EXPECT_TRUE(menu.GetSettings().pushScrolling);
 }
 
+TEST(GameMenu, TheOptionsHaveACrashReportsBoxOnlyWhenTheGameCanSendReports)
+{
+	// Deviation 261: the Send Crash Reports box continues the row of Auto Save and Push Scrolling. It is clear for a new
+	// profile, and a click turns the reports on and off.
+	const TextDatabase texts = MenuTexts();
+	const GameFont font = LoadFont();
+	GameMenu menu {texts, font, u"aaa", MenuSettings {.crashReportsAvailable = true}};
+	menu.Open();
+	Click(menu, ButtonCentre(3));
+	EXPECT_FALSE(menu.GetSettings().crashReports);
+	// The square at 685, 450
+	Click(menu, {697, 462});
+	EXPECT_TRUE(menu.GetSettings().crashReports);
+	Click(menu, {697, 462});
+	EXPECT_FALSE(menu.GetSettings().crashReports);
+
+	// With no reports in the build or no DSN, the box does not show and a click there does nothing
+	GameMenu without {texts, font, u"aaa", MenuSettings {}};
+	without.Open();
+	Click(without, ButtonCentre(3));
+	Click(without, {697, 462});
+	EXPECT_FALSE(without.GetSettings().crashReports);
+}
+
 TEST(GameMenu, PlayersNameTheirCreatureAndPickASymbol)
 {
 	MenuFixture f;

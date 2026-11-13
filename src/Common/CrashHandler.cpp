@@ -78,6 +78,8 @@ struct HandlerState
 	std::array<char, 1024> message {};
 	std::array<char, 512> detail {};
 	std::array<char, 512> file {};
+	/// Gets each crash after the report and the log
+	std::atomic<ReportForwarder> forwarder {nullptr};
 };
 
 HandlerState& State()
@@ -448,6 +450,12 @@ std::span<const StackFrame> CaptureStack()
 	}
 	spdlog::apply_all([](const std::shared_ptr<spdlog::logger>& logger) { logger->flush(); });
 
+	// The forwarder comes after the log, because it can end the process itself
+	if (const auto forwarder = state.forwarder.load())
+	{
+		forwarder(info, state.report, exceptionPointers);
+	}
+
 	std::_Exit(exitCode);
 }
 
@@ -625,6 +633,7 @@ void OnSignal(int signal, siginfo_t* signalInfo, void* /*context*/)
 	    .kind = signal == SIGABRT ? CrashKind::Abort : CrashKind::Signal,
 	    .detail = crash_report::SignalName(signal),
 	    .code = static_cast<uint32_t>(signal),
+	    .fromSignal = true,
 	};
 	if (signalInfo != nullptr && (signal == SIGSEGV || signal == SIGBUS || signal == SIGILL || signal == SIGFPE))
 	{
@@ -720,6 +729,21 @@ void SetLogFile(std::string_view logFile)
 		state.reportDirectory = absolute.parent_path() / "crashes";
 	}
 	state.copyToLog = true;
+}
+
+void SetReportForwarder(ReportForwarder forwarder)
+{
+	State().forwarder.store(forwarder);
+}
+
+void ReclaimSystemHooks()
+{
+#ifdef _WIN32
+	if (State().installed)
+	{
+		SetUnhandledExceptionFilter(OnUnhandledException);
+	}
+#endif
 }
 
 void SetReportFolder(const std::filesystem::path& folder)

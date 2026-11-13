@@ -60,6 +60,11 @@ if (EMSCRIPTEN OR ANDROID)
   list(FILTER OPENBLACK_SOURCES EXCLUDE REGEX "/Server/Desktop/")
   list(FILTER OPENBLACK_HEADERS EXCLUDE REGEX "/Server/Desktop/")
 endif ()
+# The reports to Sentry are built only with the option
+if (NOT OPENBLACK_SENTRY)
+  list(FILTER OPENBLACK_SOURCES EXCLUDE REGEX "/Common/SentryErrorReports[.]cpp$")
+  list(FILTER OPENBLACK_HEADERS EXCLUDE REGEX "/Common/SentryErrorReports[.]h$")
+endif ()
 if (APPLE)
   file(GLOB_RECURSE OPENBLACK_OBJC_SOURCES "${CMAKE_CURRENT_LIST_DIR}/*.mm")
   list(APPEND OPENBLACK_SOURCES "${OPENBLACK_OBJC_SOURCES}")
@@ -366,6 +371,13 @@ if (EMSCRIPTEN)
   )
 endif ()
 
+if (OPENBLACK_SENTRY)
+  # The error and crash reports. The simulation libraries take this link and the definition, so the game server has
+  # them too.
+  target_link_libraries(openblack_lib PRIVATE sentry::sentry)
+  target_compile_definitions(openblack_lib PUBLIC OPENBLACK_SENTRY)
+endif ()
+
 if (NOT EMSCRIPTEN)
   # The HTTPS client of the desktop: libcurl with OpenSSL, for TLS 1.3 and its cipher suites on every platform
   find_package(CURL CONFIG REQUIRED)
@@ -578,6 +590,18 @@ if (NOT ANDROID)
   set_property(TARGET openblack_lib PROPERTY SOURCES ${OPENBLACK_LIB_SOURCES})
   target_sources(openblack_sim PRIVATE ${OPENBLACK_BUILD_VERSION_SOURCE})
   add_dependencies(openblack_sim openblack_build_version)
+  # The DSN of the build goes only into a file of the build folder, so that no command line and no file of the
+  # repository holds it
+  if (OPENBLACK_SENTRY)
+    set(OPENBLACK_SENTRY_DSN_SOURCE
+        ${CMAKE_BINARY_DIR}/include/generated/SentryBuildDsn.cpp
+    )
+    configure_file(
+      ${CMAKE_SOURCE_DIR}/CMakeModules/SentryBuildDsn.cpp.in
+      ${OPENBLACK_SENTRY_DSN_SOURCE} @ONLY
+    )
+    target_sources(openblack_sim PRIVATE ${OPENBLACK_SENTRY_DSN_SOURCE})
+  endif ()
   foreach (target ${OPENBLACK_SIM_LIBRARIES} openblack_headless)
     foreach (
       property
@@ -687,6 +711,7 @@ else ()
     VERBATIM
   )
   add_dependencies(openblack openblack_version_file)
+  openblack_copy_crashpad_handler(openblack)
 
   if (MSVC)
     # Debug builds create a debug console

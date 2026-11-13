@@ -45,6 +45,17 @@ void SetLogFile(std::string_view logFile);
 /// them and gives links to download them.
 void SetReportFolder(const std::filesystem::path& folder);
 
+/// Receives each crash after the handler wrote the report and the log. info and report hold the data of the crash.
+/// exceptionPointers holds the system exception on Windows, or null when the crash did not come from one.
+using ReportForwarder = void (*)(const crash_report::CrashInfo& info, std::string_view report, void* exceptionPointers);
+
+/// Gives each crash to the forwarder too, such as the reports to Sentry. A null forwarder stops this.
+void SetReportForwarder(ReportForwarder forwarder);
+
+/// Makes the handler of the unhandled system exceptions this handler again on Windows, after a library replaced it.
+/// Does nothing on the other systems.
+void ReclaimSystemHooks();
+
 /// Reports a fatal error the game detected itself, such as the renderer losing its device, and exits
 [[noreturn]] void ReportFatal(crash_report::CrashKind kind, std::string_view message, std::string_view file = {},
                               uint32_t line = 0, std::string_view detail = {});

@@ -1904,6 +1904,7 @@ openblack_setup_and_add_test(test_registry_fresh_ids test_registry_fresh_ids.cpp
 openblack_setup_and_add_test(test_particle_turn_order test_particle_turn_order.cpp)
 openblack_setup_and_add_test(test_start_rules online/test_start_rules.cpp)
 openblack_setup_and_add_test(test_developer_tools test_developer_tools.cpp)
+openblack_setup_and_add_test(test_error_reports test_error_reports.cpp)
 openblack_setup_and_add_inspector_test(
   test_inspector_network_gate inspector/test_inspector_network_gate.cpp
 )

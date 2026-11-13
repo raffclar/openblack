@@ -117,6 +117,7 @@ constexpr std::array k_SettingFields = {
     SettingField {"left_handed", [](const Settings& s) { return std::to_string(static_cast<int>(s.leftHanded)); }, [](Settings& s, std::string_view t) { return ParseFlag(t, s.leftHanded); }},
     SettingField {"push_scrolling", [](const Settings& s) { return std::to_string(static_cast<int>(s.pushScrolling)); }, [](Settings& s, std::string_view t) { return ParseFlag(t, s.pushScrolling); }},
     SettingField {"auto_save", [](const Settings& s) { return std::to_string(static_cast<int>(s.autoSave)); }, [](Settings& s, std::string_view t) { return ParseFlag(t, s.autoSave); }},
+    SettingField {"crash_reports", [](const Settings& s) { return std::to_string(static_cast<int>(s.crashReports)); }, [](Settings& s, std::string_view t) { return ParseFlag(t, s.crashReports); }},
 };
 // clang-format on
 

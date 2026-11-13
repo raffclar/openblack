@@ -144,6 +144,29 @@ elseif (OPENBLACK_INSPECTOR)
         FORCE
   )
 endif ()
+# The error and crash reports to Sentry (sentry-native with the crashpad backend). The game sends reports only when the
+# player turns on the option. The game server sends reports when it has a DSN. sentry-native has no port for the web
+# (Emscripten), so the web build has no reports. OPENBLACK_SENTRY_DSN gives a DSN to the build. Keep it in the cache of
+# the build only, and never in a file of the repository. The SENTRY_DSN environment variable comes first.
+if (EMSCRIPTEN
+    OR ANDROID
+    OR IOS
+)
+  set(OPENBLACK_SENTRY_DEFAULT OFF)
+else ()
+  set(OPENBLACK_SENTRY_DEFAULT ON)
+endif ()
+option(OPENBLACK_SENTRY "Send error and crash reports to Sentry"
+       ${OPENBLACK_SENTRY_DEFAULT}
+)
+set(OPENBLACK_SENTRY_DSN
+    ""
+    CACHE STRING
+          "The Sentry DSN of the build. Keep it out of the repository."
+)
+if (OPENBLACK_SENTRY AND EMSCRIPTEN)
+  message(FATAL_ERROR "OPENBLACK_SENTRY: sentry-native has no web build")
+endif ()
 # The web build uses the 128-bit vector instructions of WebAssembly, which all current desktop browsers have. The
 # compiler uses them only where the results stay the same.
 if (EMSCRIPTEN)
@@ -220,6 +243,49 @@ find_package(imgui REQUIRED)
 find_package(spdlog 1.3.0 REQUIRED)
 find_package(EnTT 3.7.0 CONFIG REQUIRED) # only available as a config
 find_path(CXXOPTS_INCLUDE_DIRS "cxxopts.hpp")
+if (OPENBLACK_SENTRY)
+  find_package(sentry CONFIG REQUIRED)
+  # The crashpad backend starts crashpad_handler, which must be next to the program. vcpkg keeps it with the tools of
+  # the port.
+  find_program(
+    OPENBLACK_CRASHPAD_HANDLER crashpad_handler
+    PATHS "${sentry_DIR}/../../tools/sentry-native"
+    NO_DEFAULT_PATH
+  )
+  if (NOT OPENBLACK_CRASHPAD_HANDLER)
+    message(FATAL_ERROR "OPENBLACK_SENTRY: no crashpad_handler next to ${sentry_DIR}")
+  endif ()
+  # On Windows, the module of Windows Error Reporting for crashpad goes next to the handler too. No library loads it,
+  # so the copy of the vcpkg libraries does not find it.
+  if (WIN32)
+    find_file(
+      OPENBLACK_CRASHPAD_WER crashpad_wer.dll
+      PATHS "${sentry_DIR}/../../bin"
+      NO_DEFAULT_PATH
+    )
+  endif ()
+endif ()
+# Copies crashpad_handler next to the program of the target, after each build, when the build has the reports
+function (openblack_copy_crashpad_handler target)
+  if (OPENBLACK_SENTRY)
+    add_custom_command(
+      TARGET ${target}
+      POST_BUILD
+      COMMAND ${CMAKE_COMMAND} -E copy_if_different
+              "${OPENBLACK_CRASHPAD_HANDLER}" $<TARGET_FILE_DIR:${target}>
+      COMMENT "Copy crashpad_handler next to ${target}"
+    )
+    if (OPENBLACK_CRASHPAD_WER)
+      add_custom_command(
+        TARGET ${target}
+        POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${OPENBLACK_CRASHPAD_WER}" $<TARGET_FILE_DIR:${target}>
+        COMMENT "Copy crashpad_wer.dll next to ${target}"
+      )
+    endif ()
+  endif ()
+endfunction ()
 
 include(ClangFormat)
 

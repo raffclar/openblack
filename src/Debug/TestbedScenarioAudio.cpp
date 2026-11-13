@@ -1154,6 +1154,31 @@ void testbed_scenarios::AddAudio(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "interface.crash_reports_box",
+	    .name = "The Send Crash Reports box of the Options page",
+	    .facet = Facet::Interface,
+	    .description = "After a second the menu opens on its Options page. Then Tab moves the focus eight times, to the "
+	                   "Send Crash Reports box. Return checks the box, Shift and Tab move the focus back to it, and Return "
+	                   "clears the box. The box shows only when the game has a DSN for the reports (SENTRY_DSN).",
+	    .expected = "A Send Crash Reports box shows to the right of Push Scrolling, on the same row as Auto Save and Push "
+	                "Scrolling. The box starts clear. The first Return puts a check mark in it, and the second Return "
+	                "removes the check mark. Deviation 261: vanilla has no such box.",
+	    .framing = {.shot = Shot::Overview},
+	    .commands = {{.kind = Kind::OpenMenuPage, .delaySeconds = 1.0f, .value = 1},
+	                 {.kind = Kind::PressMenuKey, .delaySeconds = 1.0f, .value = 9},
+	                 {.kind = Kind::PressMenuKey, .delaySeconds = 0.2f, .value = 9},
+	                 {.kind = Kind::PressMenuKey, .delaySeconds = 0.2f, .value = 9},
+	                 {.kind = Kind::PressMenuKey, .delaySeconds = 0.2f, .value = 9},
+	                 {.kind = Kind::PressMenuKey, .delaySeconds = 0.2f, .value = 9},
+	                 {.kind = Kind::PressMenuKey, .delaySeconds = 0.2f, .value = 9},
+	                 {.kind = Kind::PressMenuKey, .delaySeconds = 0.2f, .value = 9},
+	                 {.kind = Kind::PressMenuKey, .delaySeconds = 0.2f, .value = 9},
+	                 {.kind = Kind::PressMenuKey, .delaySeconds = 1.0f, .value = 13},
+	                 {.kind = Kind::PressMenuKey, .delaySeconds = 1.0f, .value = 9, .ctrl = true},
+	                 {.kind = Kind::PressMenuKey, .delaySeconds = 1.0f, .value = 13}},
+	});
+
+	all.push_back({
 	    .id = "interface.speed_text",
 	    .name = "The words of the game's speed",
 	    .facet = Facet::Interface,

@@ -66,6 +66,10 @@ constexpr int k_SelectorLeftArrow = 260;
 constexpr int k_SelectorRightArrow = 508;
 constexpr int k_ArrowSize = 32;
 constexpr int k_CheckBoxTop = 450;
+// The crash reports box of the Options page (deviation 261) continues the row of Auto Save and Push Scrolling, which
+// are 200 pixels apart
+constexpr int k_CrashReportsLeft = 685;
+constexpr std::u16string_view k_CrashReportsLabel = u"Send Crash Reports";
 
 constexpr std::array k_DetailTexts = {"HELP_TEXT_DIALOG_DETAIL_00", "HELP_TEXT_DIALOG_DETAIL_01", "HELP_TEXT_DIALOG_DETAIL_02",
                                       "HELP_TEXT_DIALOG_DETAIL_03", "HELP_TEXT_DIALOG_DETAIL_04", "HELP_TEXT_DIALOG_DETAIL_05",
@@ -394,6 +398,15 @@ void GameMenu::BuildOptions(const TextDatabase& texts)
 	                       _settings.pushScrolling);
 	pushScrolling.onChange = [this](bool checked) {
 		_settings.pushScrolling = checked;
+		SettingsChanged();
+	};
+	// Deviation 261: the player lets the game send error and crash reports. Vanilla has no such option and no text for
+	// it. The box is clear for a new profile, and shows only when the game can send the reports.
+	auto& crashReports = page.Add<CheckBox>(_font, glm::ivec2(k_CrashReportsLeft, k_CheckBoxTop),
+	                                        std::u16string(k_CrashReportsLabel), _settings.crashReports);
+	crashReports.visible = _settings.crashReportsAvailable;
+	crashReports.onChange = [this](bool checked) {
+		_settings.crashReports = checked;
 		SettingsChanged();
 	};
 

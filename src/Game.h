@@ -195,6 +195,8 @@ struct Arguments
 	bool preIntro {false};
 	/// Leave out the logo pictures at start-up
 	bool skipLogos {false};
+	/// Developers: throw a test error after the start, to test the error reports
+	bool sentryTestError {false};
 	/// Play the logo effect of the first game, a run of a developer or a tool too
 	bool logoEffect {false};
 	/// Start a new game rather than continue from the save on exit

@@ -43,6 +43,7 @@
 #if defined(OPENBLACK_DEVELOPER_TOOLS)
 #include "Common/DrawTrace.h"
 #endif
+#include "Common/ErrorReportsInterface.h"
 #include "Common/EventManager.h"
 #include "Common/GameRandom.h"
 #include "Common/MainThreadQueue.h"
@@ -679,6 +680,11 @@ void Game::ShowMenuOnStart()
 void Game::ApplyPlayerSettings(const player_profiles::Settings& settings)
 {
 	simulation::ApplyPlayerSettings(settings);
+	// The error reports run only while the player's option is on (deviation 261)
+	if (Locator::errorReports::has_value())
+	{
+		Locator::errorReports::value().SetEnabled(settings.crashReports);
+	}
 	if (Locator::gameInterface::has_value())
 	{
 		constexpr int k_Levels = 4;
