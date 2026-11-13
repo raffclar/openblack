@@ -144,7 +144,7 @@ TEST(GodsRingMapPackage, ThePackageHasNoLineOfTheGameData)
 	ASSERT_EQ(package->manifest.needs.size(), 1u);
 	EXPECT_EQ(package->manifest.needs.front().file, "Online Maps/mpm_4p_1.map");
 	EXPECT_EQ(package->manifest.needs.front().god, "PLAYER_ONE");
-	// The frame has only lines that openblack writes: the mark lines and the slot lines
+	// The frame has only lines that openblack writes: the mark lines, and the lines of the slots, the gaps and the middle
 	size_t start = 0;
 	size_t lines = 0;
 	while (start < package->frame.size())
@@ -155,7 +155,7 @@ TEST(GodsRingMapPackage, ThePackageHasNoLineOfTheGameData)
 		++lines;
 		EXPECT_TRUE(line.empty() || line.starts_with("rem ")) << line;
 	}
-	EXPECT_EQ(lines, 1 + (32 * 3) + 2);
+	EXPECT_EQ(lines, 1 + (32 * 3) + (32 * 3) + 3 + 2);
 	// The same code gives the same package, and the name of the file is its hash
 	EXPECT_EQ(gods_ring_map_package::Make(), Package());
 	EXPECT_EQ(gods_ring_map_package::FileName(Package()), online::sha256::HexOf(Package()) + ".obmap");
@@ -220,6 +220,7 @@ TEST(GodsRingMapPackage, AFrameWithASlotThatIsNotOnTheMapGivesNoScript)
 	          gods_ring_map::MapScript(village, slots));
 	EXPECT_FALSE(gods_ring_map::FillFrame("rem openblack: village 99\n", village, slots).has_value());
 	EXPECT_FALSE(gods_ring_map::FillFrame("rem openblack: village x\n", village, slots).has_value());
+	EXPECT_FALSE(gods_ring_map::FillFrame("rem openblack: gap 99\n", village, slots).has_value());
 }
 
 TEST(GodsRingMapPackage, TheListGivesThePackageOfAMap)
