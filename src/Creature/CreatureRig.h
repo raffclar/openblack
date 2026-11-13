@@ -260,7 +260,6 @@ public:
 	/// The world matrix of a bone, the same as `PosedBone(bone, boneMatrices, placement)`
 	[[nodiscard]] glm::mat4 At(uint32_t bone);
 
-	[[nodiscard]] std::span<const glm::mat4> BoneMatrices() const { return _boneMatrices; }
 	[[nodiscard]] const glm::mat4& Placement() const { return _placement; }
 
 private:

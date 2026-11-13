@@ -30,8 +30,6 @@ inline constexpr uint32_t k_ReferenceGesture = 4;
 inline constexpr float k_ReferenceTurns = 30.0f;
 /// The turns that the counter must pass at the end of the shape before the drawing is done, and at the start
 inline constexpr uint32_t k_HoldTurns = 8;
-/// The square is this many times the creature's radius in front of its head
-inline constexpr float k_AheadRadii = 2.0f;
 /// The side of the square is this many times the creature's radius
 inline constexpr float k_SizePerRadius = 1.3f;
 /// A quarter turn, as the game keeps it
