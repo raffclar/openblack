@@ -438,8 +438,9 @@ QueryResult RegistryProvider::Hash(const ecs::Registry& registry, const Json& pa
 		mix(&transform.scale, sizeof(transform.scale));
 		if (extra != nullptr && extra->contains(entity))
 		{
-			const auto fields =
-			    Dump(reflection::ComponentToJson(_context, reflection::StorageType(*extra), extra->value(entity)));
+			// A field that has a meaning only in one run stays out, as two runs compare this hash
+			const auto fields = Dump(reflection::ComponentToJson(_context, reflection::StorageType(*extra),
+			                                                     extra->value(entity), reflection::RunFields::Leave));
 			mix(fields.data(), fields.size());
 		}
 		if (!withIds)

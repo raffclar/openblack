@@ -569,6 +569,44 @@ TEST(InspectorReflection, ContainersAreWrittenAsWhatTheyHold)
 	EXPECT_EQ(many["first"].size(), reflection::k_MostElements);
 }
 
+namespace
+{
+struct Clip
+{
+	uint32_t duration {0};
+	/// A place in a store that only this run has
+	uint32_t place {0};
+};
+struct Clips
+{
+	std::map<uint32_t, Clip> clips;
+	uint32_t place {0};
+};
+} // namespace
+
+// A field with a meaning only in one run shows in the inspector, but stays out of the JSON that two runs compare. This
+// is also true for a field in a value in a map of the component.
+TEST(InspectorReflection, RunFieldsStayOutOfTheJsonThatRunsCompare)
+{
+	entt::meta_ctx context;
+	reflection::Reflect<Clip>(context, reflection::ValueOnly {})
+	    .Field<&Clip::duration>("duration")
+	    .RunField<&Clip::place>("place");
+	reflection::Reflect<Clips>(context).Field<&Clips::clips>("clips").RunField<&Clips::place>("place");
+	Clips first {.clips = {{4, Clip {.duration = 625, .place = 45}}}, .place = 3};
+	Clips second {.clips = {{4, Clip {.duration = 625, .place = 42}}}, .place = 9};
+
+	const auto shown = reflection::ComponentToJson(context, entt::type_id<Clips>(), &first);
+	EXPECT_EQ(shown, Json::parse(R"({"clips": {"4": {"duration": 625, "place": 45}}, "place": 3})"));
+
+	const auto firstCompared =
+	    reflection::ComponentToJson(context, entt::type_id<Clips>(), &first, reflection::RunFields::Leave);
+	const auto secondCompared =
+	    reflection::ComponentToJson(context, entt::type_id<Clips>(), &second, reflection::RunFields::Leave);
+	EXPECT_EQ(firstCompared, Json::parse(R"({"clips": {"4": {"duration": 625}}})"));
+	EXPECT_EQ(Dump(firstCompared), Dump(secondCompared));
+}
+
 TEST(InspectorReflection, ShortTypeNames)
 {
 	EXPECT_EQ(reflection::ShortTypeName(entt::type_id<Transform>()), "Transform");
