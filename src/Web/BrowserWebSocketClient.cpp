@@ -9,6 +9,8 @@
 
 #include "BrowserWebSocketClient.h"
 
+#include <cstdlib>
+
 #include <algorithm>
 #include <deque>
 #include <string>
@@ -16,6 +18,7 @@
 #include <variant>
 
 #include <emscripten/em_js.h>
+#include <spdlog/spdlog.h>
 
 // The sockets live in the worker thread of the game. Each socket keeps its events in a list until the game takes them.
 // The kinds of the events: 1 open, 2 text message, 3 binary message, 4 error, 5 close.
@@ -43,7 +46,7 @@ EM_JS(int, openblack_ws_open, (const char* path, const char* protocols), {
 		}
 	};
 	socket.onerror = () => entry.events.push({kind: 4});
-	socket.onclose = (event) => entry.events.push({kind: 5, code: event.code});
+	socket.onclose = (event) => entry.events.push({kind: 5, code: event.code, reason: event.reason || '', clean: event.wasClean});
 	const id = sockets.next++;
 	sockets.open[id] = entry;
 	return id;
@@ -57,6 +60,16 @@ EM_JS(int, openblack_ws_peek, (int id, int* value), {
 	const event = entry.events[0];
 	HEAP32[value >> 2] = event.kind === 5 ? event.code : (event.bytes ? event.bytes.length : 0);
 	return event.kind;
+});
+
+// The reason text and whether the close was clean, of the close event at the front of the list, for the log
+EM_JS(char*, openblack_ws_close_detail, (int id), {
+	const entry = globalThis.openblackSockets && globalThis.openblackSockets.open[id];
+	const event = entry && entry.events[0];
+	if (!event || event.kind !== 5) {
+		return 0;
+	}
+	return stringToNewUTF8((event.clean ? 'clean' : 'not clean') + ', reason "' + String(event.reason).slice(0, 120) + '"');
 });
 
 EM_JS(void, openblack_ws_pop, (int id, uint8_t* buffer), {
@@ -95,7 +108,7 @@ EM_JS(void, openblack_ws_close, (int id, int code), {
 	} catch (error) {
 	}
 });
-EM_JS_DEPS(openblack_websocket, "$UTF8ToString");
+EM_JS_DEPS(openblack_websocket, "$UTF8ToString,$stringToNewUTF8");
 // clang-format on
 
 namespace openblack::web
@@ -289,8 +302,14 @@ void BrowserWebSocketClient::Take(Connection& connection)
 			break;
 		case EventKind::Close:
 		{
-			openblack_ws_pop(connection.socket, nullptr);
 			const auto code = static_cast<uint16_t>(value);
+			if (char* detail = openblack_ws_close_detail(connection.socket); detail != nullptr)
+			{
+				SPDLOG_LOGGER_INFO(spdlog::get("game"), "net: The browser closed the WebSocket: code {}, {}{}", code, detail,
+				                   connection.failed ? ", after an error event" : "");
+				std::free(detail);
+			}
+			openblack_ws_pop(connection.socket, nullptr);
 			// The browser does not tell the HTTP status of a refused handshake, or why a connection failed
 			if (code == k_Abnormal || connection.failed || connection.state == WebSocketState::Connecting)
 			{

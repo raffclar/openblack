@@ -1020,6 +1020,8 @@ bool StartNetwork(const ServerSettings& settings, ServerWorld& world, std::uniqu
 		Locator::syncChecksumSystem::value().DumpPart(turn, fmt::format("slot {} parts", seat), seat);
 	});
 #endif
+	// The log names the parts that differ when a client sends its parts of the turn at which its world parted
+	host.SetPartsOfTurn([](uint32_t turn) { return Locator::syncChecksumSystem::value().PartsOfTurn(turn); });
 	// A client whose world parted gets the world of the server, at the start of the next turn
 	host.SetWorldState([] {
 		return Locator::saveGameSystem::has_value() ? Locator::saveGameSystem::value().WorldState() : std::vector<uint8_t> {};

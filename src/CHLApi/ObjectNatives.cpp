@@ -303,16 +303,28 @@ bool IsRockKindRow(uint32_t subtype)
 	return script::create_rules::IsRow(subtype, rows.size()) && rows.at(subtype).mobileType == MobileStaticInfo::Rock;
 }
 
-/// A rock that a script made starts in the physics at rest. The physics puts it on the land when the start asks for
-/// it, and then lifts it clear of the things under it. A rock above the land falls in the next turns.
-void StartScriptRock(entt::entity rock, const script::create_rules::ScriptRockStart& start)
+/// The kind that the info table gives a row of the mobile objects, none when there is no table
+MobileObjectInfo MobileObjectKindOf(MobileObjectInfo row)
 {
-	if (rock == entt::null || !Locator::dynamicsSystem::has_value())
+	if (!Locator::infoConstants::has_value())
+	{
+		return MobileObjectInfo::None;
+	}
+	const auto& rows = Locator::infoConstants::value().mobileObject;
+	const auto index = static_cast<uint32_t>(row);
+	return script::create_rules::IsRow(index, rows.size()) ? rows.at(index).mobileType : MobileObjectInfo::None;
+}
+
+/// A thing that a script made starts in the physics at rest. The physics puts it on the land when the start asks for
+/// it, and then lifts it clear of the things under it. A rock above the land falls in the next turns.
+void StartScriptPhysics(entt::entity thing, const script::create_rules::ScriptPhysicsStart& start)
+{
+	if (thing == entt::null || !Locator::dynamicsSystem::has_value())
 	{
 		return;
 	}
 	auto& dynamics = Locator::dynamicsSystem::value();
-	const auto started = dynamics.InitialisePhysics(rock, {.add = true});
+	const auto started = dynamics.InitialisePhysics(thing, {.add = true});
 	if (started.entry == nullptr)
 	{
 		return;
@@ -383,9 +395,9 @@ entt::entity CreateScriptObject(const ObjectType type, uint32_t subtype, const g
 		{
 			MarkGroundPrint(made);
 		}
-		if (const auto start = script::create_rules::RockStartOf(type, subtype, rockKind))
+		if (const auto start = script::create_rules::PhysicsStartOf(type, subtype, {.rock = rockKind}))
 		{
-			StartScriptRock(made, *start);
+			StartScriptPhysics(made, *start);
 		}
 		return made;
 	}
@@ -394,16 +406,29 @@ entt::entity CreateScriptObject(const ObjectType type, uint32_t subtype, const g
 	case ObjectType::Ark:
 	{
 		// A mobile object of the row that the type gives, on the land under the place asked for. It belongs to nobody.
+		// Then it starts in the physics as the kind of its row tells.
 		const auto row = script::create_rules::MobileObjectRowOf(type, subtype);
 		if (!row.has_value())
 		{
 			return entt::null;
 		}
-		return MobileObjectArchetype::Create(OnGround(position), *row, yAngleRadians, scale);
+		const auto made = MobileObjectArchetype::Create(OnGround(position), *row, yAngleRadians, scale);
+		if (const auto start = script::create_rules::PhysicsStartOf(type, subtype, {.mobileObject = MobileObjectKindOf(*row)}))
+		{
+			StartScriptPhysics(made, *start);
+		}
+		return made;
 	}
 	case ObjectType::Ball:
-		// On the land under the place asked for, even when that is the hand up in the air
-		return CreateScriptBall(OnGround(position));
+	{
+		// On the land under the place asked for, even when that is the hand up in the air. It then starts in the physics.
+		const auto ball = CreateScriptBall(OnGround(position));
+		if (const auto start = script::create_rules::PhysicsStartOf(type, subtype))
+		{
+			StartScriptPhysics(ball, *start);
+		}
+		return ball;
+	}
 	case ObjectType::Marker:
 	{
 		// A marker stands at the map position of the point and keeps the height of the point above the land
@@ -431,8 +456,16 @@ entt::entity CreateScriptObject(const ObjectType type, uint32_t subtype, const g
 		{
 			break;
 		}
-		return Locator::workshopSystem::value().CreateScaffold(OnGround(position), entt::null, entt::null, yAngleRadians,
-		                                                       scale);
+		{
+			const auto scaffold = Locator::workshopSystem::value().CreateScaffold(OnGround(position), entt::null, entt::null,
+			                                                                      yAngleRadians, scale);
+			// It starts in the physics, because it is in no yard and on no building site
+			if (const auto start = script::create_rules::PhysicsStartOf(type, subtype))
+			{
+				StartScriptPhysics(scaffold, *start);
+			}
+			return scaffold;
+		}
 	case ObjectType::Villager:
 	case ObjectType::VillagerChild:
 		// Made standing on the land under the place asked for, whatever height the script gave
@@ -544,12 +577,26 @@ entt::entity CreateScriptObject(const ObjectType type, uint32_t subtype, const g
 		{
 			break;
 		}
-		return Locator::resourceStoreSystem::value().MakePile(*resource, position, 1);
+		const auto pile = Locator::resourceStoreSystem::value().MakePile(*resource, position, 1);
+		// The pile starts in the physics when its row lets it become a physics object
+		if (const auto start = script::create_rules::PhysicsStartOf(type, subtype))
+		{
+			StartScriptPhysics(pile, *start);
+		}
+		return pile;
 	}
 	case ObjectType::OneShotSpell:
-		// A globe of a seed at its plain miracle, lying on the ground
-		return Locator::magicSystem::value().CreateOneOffSeed(OnGround(position), static_cast<SpellSeedType>(subtype),
-		                                                      magic::k_BasePowerUpLevel, 1.0f);
+	{
+		// A globe of a seed at its plain miracle, lying on the ground. The globe starts in the physics, and the physics
+		// keeps it on the land. A height that the script gives later thus does not lift the globe.
+		const auto globe = Locator::magicSystem::value().CreateOneOffSeed(
+		    OnGround(position), static_cast<SpellSeedType>(subtype), magic::k_BasePowerUpLevel, 1.0f);
+		if (const auto start = script::create_rules::PhysicsStartOf(type, subtype))
+		{
+			StartScriptPhysics(globe, *start);
+		}
+		return globe;
+	}
 	case ObjectType::OneShotSpellInHand:
 		return CreateScriptSeedInHand(subtype);
 	case ObjectType::SpellDispenser:

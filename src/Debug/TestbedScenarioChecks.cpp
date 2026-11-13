@@ -73,7 +73,7 @@ std::string_view Name(Quantity quantity)
 	case Quantity::CreatureReaction:
 		return "kind of reaction kept";
 	case Quantity::HandShown:
-		return "hand out";
+		return "hand shown";
 	case Quantity::RopeHeld:
 		return "the hand holds the rope";
 	case Quantity::TipBubbleGripped:

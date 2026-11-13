@@ -148,7 +148,6 @@
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "ECS/WorldObjects.h"
 #include "FileSystem/FileSystemInterface.h"
-#include "Hand/HandVisibility.h"
 #include "Help/Spirits.h"
 #include "Input/GameActionMapInterface.h"
 #include "LHScriptX/FeatureScriptCommands.h"
@@ -1338,15 +1337,8 @@ std::optional<double> Runner::ReadCheck(const checks::Check& check) const
 	}
 	case checks::Quantity::HandShown:
 	{
-		if (!Locator::cinematicDirectorSystem::has_value())
-		{
-			return std::nullopt;
-		}
-		const bool dialogOpen = _stage != nullptr && _stage->IsDialogOpen();
-		return hand_visibility::IsShown(
-		           {.dialogOpen = dialogOpen, .interfaceActive = Locator::cinematicDirectorSystem::value().IsInterfaceActive()})
-		           ? 1.0
-		           : 0.0;
+		const auto shown = _stage != nullptr ? _stage->IsHandShown() : std::nullopt;
+		return shown.has_value() ? std::optional(*shown ? 1.0 : 0.0) : std::nullopt;
 	}
 	case checks::Quantity::RopeHeld:
 		if (!Locator::leashSystem::has_value())

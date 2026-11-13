@@ -39,11 +39,6 @@ bool TestbedGameStage::HasInterface() const
 	return Locator::gameInterface::has_value();
 }
 
-bool TestbedGameStage::IsDialogOpen() const
-{
-	return HasInterface() && Locator::gameInterface::value().IsDialogOpen();
-}
-
 const gui::TextDatabase* TestbedGameStage::GetTexts() const
 {
 	return HasInterface() ? &Locator::gameInterface::value().GetTexts() : nullptr;
@@ -343,6 +338,12 @@ void TestbedGameStage::RequestQuit()
 	{
 		game->RequestQuit();
 	}
+}
+
+std::optional<bool> TestbedGameStage::IsHandShown() const
+{
+	const auto* game = Game::Instance();
+	return game != nullptr ? std::optional(game->IsHandDrawn()) : std::nullopt;
 }
 
 void TestbedGameStage::ReportChecks(checks::Report report, bool quit)

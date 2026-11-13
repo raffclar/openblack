@@ -2352,7 +2352,7 @@ void Game::PlayHandGrabSound()
 bool Game::IsHandDrawn() const
 {
 	return hand_visibility::IsShown({
-	    .dialogOpen = Locator::gameInterface::has_value() && Locator::gameInterface::value().IsDialogOpen(),
+	    .dialogOpen = Locator::gameInterface::has_value() && Locator::gameInterface::value().FrontEndPointerOn(),
 	    .interfaceActive = Locator::cinematicDirectorSystem::value().IsInterfaceActive(),
 	    .onlineFrontEnd = Locator::temple::has_value() && Locator::temple::value().IsMultiplayerFrontEnd(),
 	});

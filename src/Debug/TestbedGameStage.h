@@ -23,7 +23,6 @@ class TestbedGameStage final: public GameStageInterface
 {
 public:
 	[[nodiscard]] bool HasInterface() const override;
-	[[nodiscard]] bool IsDialogOpen() const override;
 	[[nodiscard]] const gui::TextDatabase* GetTexts() const override;
 
 	[[nodiscard]] std::string OpenTattooMenu() override;
@@ -48,6 +47,7 @@ public:
 	[[nodiscard]] bool ContinueFromExitSave() override;
 	void RequestQuit() override;
 	void ReportChecks(checks::Report report, bool quit) override;
+	[[nodiscard]] std::optional<bool> IsHandShown() const override;
 
 private:
 	/// The messages of the ping server of the testbed, once a scenario uses it
