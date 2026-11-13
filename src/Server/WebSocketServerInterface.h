@@ -65,8 +65,6 @@ constexpr uint16_t k_NoCloseFrame = 1006;
 constexpr uint16_t k_TooLarge = 1009;
 /// The ticket or the join was refused
 constexpr uint16_t k_Refused = 4003;
-/// The world of the client parted from the server's world and the resyncs did not work
-constexpr uint16_t k_OutOfSync = 4010;
 } // namespace server_close
 
 } // namespace openblack::server

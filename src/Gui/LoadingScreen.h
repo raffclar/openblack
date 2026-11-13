@@ -59,8 +59,6 @@ public:
 	[[nodiscard]] bool HasTipPicture() const noexcept { return _picture.has_value(); }
 	/// The tip's picture goes once the game starts or a film plays; the next load picks another tip
 	void ClearTip() noexcept { _picture.reset(); }
-	[[nodiscard]] int32_t GetTip() const noexcept { return _tip; }
-	[[nodiscard]] const std::u16string& GetTipText() const noexcept { return _tipText; }
 
 	/// The tips screen at a fade from 0 to 1, its bar along by `progress` bar periods. Nothing at no fade
 	void DrawTips(glm::u16vec2 resolution, float fade, float progress);

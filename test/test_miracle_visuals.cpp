@@ -120,6 +120,26 @@ TEST(MiracleVisuals, ATempleSeedTurnsByTheGameTimeOnly)
 	EXPECT_NEAR(phial.phialPhase, 0.25f + (0.35f * 0.2f), k_Epsilon);
 }
 
+TEST(MiracleVisuals, AnIconSeedTurnsOnlyInAFrameThatDrawsIt)
+{
+	const IconSeedTurn start {.seed = {.spin = 1.0f, .phialFrame = 9.0f, .phialPhase = 0.25f}, .ringSpin = 2.0f};
+	// A frame that does not draw the icon on the screen does not move the seed, its rings or its phial
+	const auto hidden = TurnIconSeed(start, 0, 0.2f, false);
+	EXPECT_EQ(hidden.seed.spin, start.seed.spin);
+	EXPECT_EQ(hidden.ringSpin, start.ringSpin);
+	EXPECT_EQ(hidden.seed.phialFrame, start.seed.phialFrame);
+	EXPECT_EQ(hidden.seed.phialPhase, start.seed.phialPhase);
+	// A frame that draws it turns the seed as a seed's picture and the rings at 10.3 radians a second
+	const auto drawn = TurnIconSeed(start, 0, 0.2f, true);
+	EXPECT_NEAR(drawn.seed.spin, 1.4f, k_Epsilon);
+	EXPECT_NEAR(drawn.ringSpin, std::fmod(2.0f + (10.3f * 0.2f), 2.0f * 3.14159265f), 1e-5f);
+	EXPECT_NEAR(drawn.seed.phialFrame, 6.0f, k_Epsilon);
+	EXPECT_NEAR(drawn.seed.phialPhase, 0.25f + (0.35f * 0.2f), k_Epsilon);
+	// The time of the hidden frames is lost: the seed does not catch up when the next frame draws it
+	const auto later = TurnIconSeed(hidden, 0, 0.2f, true);
+	EXPECT_EQ(later.seed.spin, drawn.seed.spin);
+}
+
 TEST(MiracleVisuals, ShrinkingAndGrowingPhialsAreLitInWhiteTheOthersByTheLand)
 {
 	// The big phial: the whole one at the globe's alpha and a fading copy growing out of it, both lit in white

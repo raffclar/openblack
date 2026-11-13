@@ -41,8 +41,6 @@ constexpr uint32_t k_TauntCount = 31;
 constexpr uint32_t k_LastTaunt = 50;
 /// The most characters that the player types into the line of the chat
 constexpr size_t k_MostTypedCharacters = 254;
-/// The text of the advisors' one-off remark on the chat: "Quit the yacking..."
-constexpr uint32_t k_YackingText = 3321;
 /// The heading of the players in the list of players: "Players"
 constexpr uint32_t k_PlayersText = 3543;
 

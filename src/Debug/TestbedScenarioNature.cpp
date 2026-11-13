@@ -92,6 +92,27 @@ void testbed_scenarios::AddNatureScenarios(std::vector<Scenario>& all)
 	    .temples = {{.offset = {0.0f, 120.0f}}},
 	});
 
+	// Ripe fields on the south bank of the lake: one on the slope, one turned on the slope, one over the edge at the top
+	// of the bank and one over the corner of the bank
+	all.push_back({
+	    .id = "nature.fields_follow_land",
+	    .name = "Fields follow the land under them",
+	    .facet = Facet::Nature,
+	    .description = "Four ripe wheat fields stand on the south bank of the lake. One is on the slope and one is on "
+	                   "the slope, turned 45 degrees. One is over the edge at the top of the bank, half on the flat land. "
+	                   "One is over the south-west corner of the bank. The camera looks west along the bank.",
+	    .expected = "Each field follows the land under it. Each corner of a field is at the same height over the land, "
+	                "and no edge of a field floats over the land or goes into it. The field over the top edge bends "
+	                "there: half of it is flat and half of it goes down the slope. The fields sway and do not turn when "
+	                "the camera turns.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {45.0f, 18.0f, 120.0f}, .look = {-35.0f, 2.0f, 138.0f}},
+	    .objects = {{.type = FieldTypeInfo::Wheat, .offset = {-15.0f, 140.0f}, .ripeCrop = true},
+	                {.type = FieldTypeInfo::Wheat, .offset = {5.0f, 145.0f}, .yawDegrees = 45.0f, .ripeCrop = true},
+	                {.type = FieldTypeInfo::Wheat, .offset = {-35.0f, 120.0f}, .ripeCrop = true},
+	                {.type = FieldTypeInfo::Wheat, .offset = {-65.0f, 140.0f}, .ripeCrop = true}},
+	});
+
 	all.push_back({
 	    .id = "nature.roots_hole",
 	    .name = "A tree pulled up leaves its roots",

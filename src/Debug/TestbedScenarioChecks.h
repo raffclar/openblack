@@ -63,6 +63,22 @@ enum class Quantity : uint8_t
 	RewardChestsInATown,
 	/// The kind of reaction, by its number, that the scenario's creature at the index keeps now; 0 when it keeps none
 	CreatureReaction,
+	/// 1 when the game draws the player's hand in this frame, else 0
+	HandShown,
+	/// 1 when the hand of the player holds the rope of the tied leash, else 0
+	RopeHeld,
+	/// 1 when the hand of the player grips the help's tip bubble, else 0
+	TipBubbleGripped,
+	/// 1 when the hand of the player grips the totem of a town or of a puzzle, else 0
+	TotemGripped,
+	/// 1 when the cursor picks the scenario's object at the index, else 0
+	ObjectPicked,
+	/// 1 when the hand of the player shows a tooltip, else 0
+	HandToolTipShown,
+	/// 1 when the hand of the player holds a miracle, else 0
+	HandMiracle,
+	/// The number of physical shields on the land
+	PhysicalShields,
 };
 
 /// One statement about the world. It is read once at its turn; with byTurn it is read again at each frame from its
@@ -148,6 +164,24 @@ private:
 	std::span<const Check> _checks;
 	std::vector<Result> _results;
 	std::vector<bool> _decided;
+};
+
+/// Counts the turns that a scenario's checks wait for. A frame in which the world plays no turn while the temple holds
+/// the world adds its time as turns, so that a check on the temple's rooms and their boxes can run.
+class Clock
+{
+public:
+	/// Begins a scenario at the world's turn
+	void Start(uint32_t worldTurn);
+	/// Takes one frame. templeHoldsWorld is true while the player is in the temple of a game alone.
+	void Advance(uint32_t worldTurn, bool templeHoldsWorld, float seconds);
+	/// The turns since the start: the world's turns and the turns of the time that the temple held the world
+	[[nodiscard]] uint32_t Elapsed(uint32_t worldTurn) const;
+
+private:
+	uint32_t _startTurn {0};
+	uint32_t _lastTurn {0};
+	double _heldSeconds {0.0};
 };
 
 /// What the game keeps of the scenario that ran last, for the inspector

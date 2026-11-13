@@ -18,8 +18,14 @@
 #include <tuple>
 #include <utility>
 
+#include <fmt/format.h>
 #include <spdlog/spdlog.h>
 
+#if defined(__EMSCRIPTEN__)
+#include <emscripten/heap.h>
+#endif
+
+#include "Common/BuildVersion.h"
 #include "Common/GameRandom.h"
 #include "Common/RandomNumberManager.h"
 #include "ECS/ProfileAlignment.h"
@@ -68,6 +74,16 @@ std::string_view HostOf(std::string_view url)
 	return url.substr(0, end);
 }
 
+/// The size of the memory of the WebAssembly program in the browser build, as a part of a log line. Empty on the desktop.
+std::string MemoryText()
+{
+#if defined(__EMSCRIPTEN__)
+	return fmt::format(", the WebAssembly memory is {} MB", emscripten_get_heap_size() / (1024 * 1024));
+#else
+	return {};
+#endif
+}
+
 int64_t Microseconds()
 {
 	return std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
@@ -80,7 +96,48 @@ NetworkGameSystem::NetworkGameSystem(online::WebSocketClientInterface& sockets, 
     : _sockets(sockets)
     , _makeTestClient(std::move(makeTestClient))
     , _readCreature(std::move(readCreature))
+    , _log(std::make_shared<online::ConnectionLog>(Microseconds))
 {
+}
+
+std::string NetworkGameSystem::DiagnosticsReport() const
+{
+	std::vector<std::string> header {
+	    "openblack diagnostics",
+	    fmt::format("Build: {}", build_version::Text()),
+	};
+	if (_session)
+	{
+		const auto& joined = _session->GetJoined();
+		const auto received = _session->LastTurnReceived();
+		const auto roundTrip = _session->RoundTrip();
+		const auto& compares = _session->GetCompares();
+		header.push_back(fmt::format(
+		    "Session: state {}, end {}, {}", online::StateName(_session->GetState()), online::EndName(_session->GetEnd()),
+		    joined.has_value()
+		        ? fmt::format("{}{}", game_socket::RoleName(joined->role),
+		                      joined->slot.has_value() ? fmt::format(" in slot {}", *joined->slot) : std::string())
+		        : std::string("not joined")));
+		header.push_back(fmt::format(
+		    "Turns: {} done, server turn {}, round trip {}, {} resumes, {} compared, {} the same, first different {}",
+		    _session->TurnsDone(), received.has_value() ? std::to_string(*received) : std::string("none"),
+		    roundTrip.has_value() ? fmt::format("{} ms", *roundTrip / 1000) : std::string("none"), _session->Resumes(),
+		    compares.compared, compares.same,
+		    compares.firstDifferent.has_value() ? std::to_string(*compares.firstDifferent) : std::string("none")));
+		if (!_session->RefusedReason().empty())
+		{
+			header.push_back(fmt::format("Refused: {}", _session->RefusedReason()));
+		}
+	}
+	else
+	{
+		header.emplace_back("Session: none");
+	}
+	if (const auto memory = MemoryText(); !memory.empty())
+	{
+		header.push_back(memory.substr(2));
+	}
+	return _log->Report(header);
 }
 
 NetworkGameSystem::~NetworkGameSystem()
@@ -144,7 +201,7 @@ bool NetworkGameSystem::Join(NetworkJoin join)
 		}
 		sockets = _testClient.get();
 	}
-	_session = std::make_unique<online::NetworkSession>(*sockets, Microseconds);
+	_session = std::make_unique<online::NetworkSession>(*sockets, Microseconds, _log);
 	// A land that loads after the join gets its humans from the session at the start of the game
 	if (Locator::landSystem::has_value())
 	{
@@ -166,7 +223,7 @@ bool NetworkGameSystem::Join(NetworkJoin join)
 		Locator::time::value().SetPaused(true);
 	}
 
-	SPDLOG_LOGGER_INFO(spdlog::get("game"), "Joining the game server at {}", join.url);
+	_log->Info(fmt::format("Joining the game server at {} with build {}", join.url, build_version::Text()));
 	auto readCreature = _readCreature;
 	if (join.testCreatureFile.has_value())
 	{
@@ -225,6 +282,11 @@ bool NetworkGameSystem::Join(NetworkJoin join)
 #else
 	    .parts = {},
 #endif
+	    .localParts =
+	        [](uint32_t turn) {
+		        return Locator::syncChecksumSystem::has_value() ? Locator::syncChecksumSystem::value().PartsOfTurn(turn)
+		                                                        : online::PartHashes {};
+	        },
 	    .origin = join.origin,
 	    .testLoadDelayMicroseconds = static_cast<int64_t>(join.testLoadDelaySeconds.value_or(0)) * 1'000'000,
 	});
@@ -481,9 +543,8 @@ void NetworkGameSystem::Update()
 	{
 		_endLogged = true;
 		const auto& compares = _session->GetCompares();
-		SPDLOG_LOGGER_INFO(spdlog::get("game"),
-		                   "The network game ended ({}): {} turns compared with the server, {} the same, {} resumes",
-		                   online::EndName(_session->GetEnd()), compares.compared, compares.same, _session->Resumes());
+		_log->Info(fmt::format("The network game ended ({}): {} turns compared with the server, {} the same, {} resumes",
+		                       online::EndName(_session->GetEnd()), compares.compared, compares.same, _session->Resumes()));
 	}
 }
 
@@ -498,10 +559,11 @@ void NetworkGameSystem::LoadWorld(const online::NetworkSession::WorldState& worl
 		_session->Leave();
 		return;
 	}
-	// The log gives the time of the load, so that the tools can see how long a client stops when it comes back in step
-	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The world state of turn {} ({} bytes) loaded in {:.2f} ms", world.turn,
-	                   world.bytes.size(),
-	                   std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count());
+	// The log gives the time of the load, so that the tools can see how long a client stops when it comes back in step.
+	// The tools find the line by its words.
+	_log->Info(fmt::format("The world state of turn {} ({} bytes) loaded in {:.2f} ms{}", world.turn, world.bytes.size(),
+	                       std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count(),
+	                       MemoryText()));
 	// The load starts the land again: the world is still the world of a network game, which turns with the server
 	auto& clock = Locator::time::value();
 	clock.SetNetworkGame(true);

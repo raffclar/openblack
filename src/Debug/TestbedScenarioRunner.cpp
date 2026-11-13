@@ -128,17 +128,22 @@
 #include "ECS/Systems/InspectorLoading.h"
 #include "ECS/Systems/InspectorSystemInterface.h"
 #include "ECS/Systems/LandSystemInterface.h"
+#include "ECS/Systems/LeashSystemInterface.h"
+#include "ECS/Systems/MagicShieldSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/ParticleRuleSystemInterface.h"
+#include "ECS/Systems/PickingSystemInterface.h"
 #include "ECS/Systems/PlayerCommandSystemInterface.h"
 #include "ECS/Systems/PlayerProfileSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
+#include "ECS/Systems/PuzzleTotemSystemInterface.h"
 #include "ECS/Systems/ResourceStoreSystemInterface.h"
 #include "ECS/Systems/RewardSystemInterface.h"
 #include "ECS/Systems/SaveGameSystemInterface.h"
 #include "ECS/Systems/SkyClockSystemInterface.h"
 #include "ECS/Systems/TeleportSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/Systems/TipBubbleSystemInterface.h"
 #include "ECS/Systems/VillageTotemSystemInterface.h"
 #include "ECS/Systems/VortexSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
@@ -232,6 +237,11 @@ void Runner::Start(const Scenario& scenario)
 	// without them
 	const ecs::systems::InspectorLoading loading("scenario " + std::string(scenario.id));
 	Stop();
+	// The boxes of the scenario before close, so that none stays open over the new testbed
+	if (_stage != nullptr)
+	{
+		_stage->CloseBoxes();
+	}
 	// The camera is the player's again before the scenario frames it, and the cave closes
 	if (Locator::creatureModeSystem::has_value())
 	{
@@ -271,6 +281,7 @@ void Runner::Start(const Scenario& scenario)
 	_started.clear();
 	_log.clear();
 	_checks.Start(scenario.checks);
+	_checksClock.Start(Locator::time::has_value() ? Locator::time::value().GetTurn() : 0);
 	_checksReported = false;
 	_checksProgressTurn.reset();
 	_shot.reset();
@@ -692,6 +703,10 @@ void Runner::Stop()
 		}
 		_ownsPointer = false;
 	}
+	if (std::exchange(_demoOwnsPointer, false))
+	{
+		KeepDebugWindowsOffTheMouse(false);
+	}
 	// Its particle effects die away
 	if (Locator::particleRuleSystem::has_value())
 	{
@@ -951,6 +966,11 @@ void Runner::Give(const Command& command)
 		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), HandTakeNear(command)));
 		return;
 	}
+	if (command.kind == Kind::TapScaffoldNear)
+	{
+		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), TapScaffoldNear(command)));
+		return;
+	}
 	if (command.kind == Kind::RunScript)
 	{
 		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), RunScript(command)));
@@ -1104,7 +1124,7 @@ void Runner::Update(float seconds)
 	{
 		return;
 	}
-	UpdateChecks();
+	UpdateChecks(seconds);
 	// Another land was loaded over the testbed
 	const auto gone = [](entt::entity entity) { return !Locator::entitiesRegistry::value().Valid(entity); };
 	if ((!_creatures.empty() && std::ranges::none_of(std::views::iota(size_t {0}, _creatures.size()),
@@ -1328,11 +1348,62 @@ std::optional<double> Runner::ReadCheck(const checks::Check& check) const
 		const auto* state = registry.TryGet<const ecs::components::LivingReaction>(*creature);
 		return state != nullptr && state->reaction != 0 ? static_cast<double>(state->type) : 0.0;
 	}
+	case checks::Quantity::HandShown:
+	{
+		const auto shown = _stage != nullptr ? _stage->IsHandShown() : std::nullopt;
+		return shown.has_value() ? std::optional(*shown ? 1.0 : 0.0) : std::nullopt;
+	}
+	case checks::Quantity::RopeHeld:
+		if (!Locator::leashSystem::has_value())
+		{
+			return std::nullopt;
+		}
+		return Locator::leashSystem::value().RopeHand(PlayerNames::PLAYER_ONE) == leash_snap::Hand::Holding ? 1.0 : 0.0;
+	case checks::Quantity::TipBubbleGripped:
+		if (!Locator::tipBubbleSystem::has_value())
+		{
+			return std::nullopt;
+		}
+		return Locator::tipBubbleSystem::value().IsGripped() ? 1.0 : 0.0;
+	case checks::Quantity::TotemGripped:
+	{
+		const bool town =
+		    Locator::villageTotemSystem::has_value() && Locator::villageTotemSystem::value().GetGripped().has_value();
+		const bool puzzle =
+		    Locator::puzzleTotemSystem::has_value() && Locator::puzzleTotemSystem::value().GetGripped().has_value();
+		return town || puzzle ? 1.0 : 0.0;
+	}
+	case checks::Quantity::ObjectPicked:
+	{
+		const auto object = ObjectAt(check.index);
+		if (!object.has_value() || !Locator::pickingSystem::has_value())
+		{
+			return std::nullopt;
+		}
+		return Locator::pickingSystem::value().GetPick().object == object ? 1.0 : 0.0;
+	}
+	case checks::Quantity::HandToolTipShown:
+	{
+		const auto shown = _stage != nullptr ? _stage->IsHandToolTipShown() : std::nullopt;
+		return shown.has_value() ? std::optional(*shown ? 1.0 : 0.0) : std::nullopt;
+	}
+	case checks::Quantity::HandMiracle:
+		if (!Locator::magicSystem::has_value())
+		{
+			return std::nullopt;
+		}
+		return Locator::magicSystem::value().IsHandBusyOf(PlayerNames::PLAYER_ONE) ? 1.0 : 0.0;
+	case checks::Quantity::PhysicalShields:
+		if (!Locator::magicShieldSystem::has_value())
+		{
+			return std::nullopt;
+		}
+		return static_cast<double>(Locator::magicShieldSystem::value().GetDomes(0.0f).size());
 	}
 	return std::nullopt;
 }
 
-void Runner::UpdateChecks()
+void Runner::UpdateChecks(float seconds)
 {
 	if (_scenario == nullptr || _checksReported || !Locator::time::has_value())
 	{
@@ -1345,8 +1416,11 @@ void Runner::UpdateChecks()
 	}
 	if (!_checks.Done())
 	{
-		const auto turns = Locator::time::value().GetTurn() - _startTurn;
-		_checks.Update(turns, [this](const checks::Check& check) { return ReadCheck(check); });
+		const auto& time = Locator::time::value();
+		_checksClock.Advance(time.GetTurn(),
+		                     !time.IsNetworkGame() && Locator::temple::has_value() && Locator::temple::value().Active(),
+		                     seconds);
+		_checks.Update(_checksClock.Elapsed(time.GetTurn()), [this](const checks::Check& check) { return ReadCheck(check); });
 	}
 	if (_checks.GetVerdict() == checks::Verdict::Waiting)
 	{
@@ -1388,7 +1462,7 @@ void Runner::EndChecks()
 	}
 	if (!_checks.Done())
 	{
-		const auto turns = Locator::time::value().GetTurn() - _startTurn;
+		const auto turns = _checksClock.Elapsed(Locator::time::value().GetTurn());
 		_checks.Update(turns, [this](const checks::Check& check) { return ReadCheck(check); });
 	}
 	PublishChecks(_benchmark.reportChecks);

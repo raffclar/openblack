@@ -12,8 +12,11 @@
 #include <cmath>
 
 #include <algorithm>
+#include <bit>
 
 #include <glm/geometric.hpp>
+
+#include "Common/NearestWhole.h"
 
 namespace openblack::graphics::land_detail
 {
@@ -374,7 +377,7 @@ uint8_t MorphedAltitude(uint8_t own, uint8_t target, float side, float width)
 	}
 	// The share of the target, rounded to the nearest whole number and to the even one at a half
 	const float scaled = (half - side) * scale;
-	const auto share = static_cast<uint32_t>(std::nearbyint(scaled));
+	const auto share = static_cast<uint32_t>(NearestWhole(scaled));
 	return static_cast<uint8_t>(((256u - share) * own + share * target) >> 8);
 }
 
@@ -441,6 +444,20 @@ std::array<uint8_t, k_CornerCount> MorphedCorners(std::span<const uint8_t, k_Cor
 	return drawn;
 }
 
+bool SameCornerInputs(const BlockCornerInputs& a, const BlockCornerInputs& b)
+{
+	const auto bits = [](float value) { return std::bit_cast<uint32_t>(value); };
+	const auto sameLine = [&bits](const GroundLine& x, const GroundLine& y) {
+		return bits(x.along.x) == bits(y.along.x) && bits(x.along.y) == bits(y.along.y) && bits(x.point.x) == bits(y.point.x) &&
+		       bits(x.point.y) == bits(y.point.y);
+	};
+	return a.morph == b.morph && a.fades == b.fades && sameLine(a.meshLine, b.meshLine) &&
+	       bits(a.meshWidth) == bits(b.meshWidth) && sameLine(a.textureLine, b.textureLine) &&
+	       bits(a.textureWidth) == bits(b.textureWidth) && bits(a.textureBand) == bits(b.textureBand) &&
+	       bits(a.blockCorner.x) == bits(b.blockCorner.x) && bits(a.blockCorner.y) == bits(b.blockCorner.y) &&
+	       a.altitudes == b.altitudes;
+}
+
 uint8_t CrossFadeAlpha(float side, float width, float band)
 {
 	const float scale = 255.0f / width;
@@ -452,7 +469,7 @@ uint8_t CrossFadeAlpha(float side, float width, float band)
 	{
 		// Rounded to the nearest whole number and to the even one at a half
 		const float scaled = (band - side) * scale;
-		return static_cast<uint8_t>(std::nearbyint(scaled));
+		return static_cast<uint8_t>(NearestWhole(scaled));
 	}
 	return 255;
 }

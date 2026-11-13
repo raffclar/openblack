@@ -30,8 +30,9 @@ namespace openblack::hand_demo
 /// The game's time as the recordings count it: a hundredth of a turn, the part into the turn held under a whole turn
 [[nodiscard]] uint32_t GameHundredths(uint32_t turn, float turnFraction);
 
-/// Where a recorded cursor is on a screen: across the whole width, and down the 16:9 picture between the cinema bars
-/// as far in as they are
+/// Where a recorded cursor is on a screen. The recordings come from 4:3 screens. The cursor goes across the whole width
+/// of a 4:3 or narrower screen, and across the 4:3 middle of a wider screen. It goes down the 16:9 picture of that
+/// width between the cinema bars, as far in as they are.
 [[nodiscard]] glm::ivec2 CursorPixel(std::span<const float, 2> cursor, glm::ivec2 screen, float wideScreenFraction);
 
 /// A record played, with the camera hints it shows (none near the start and the end of the recording)
@@ -175,6 +176,13 @@ private:
 	uint32_t _marksRead {0};
 	uint32_t _frameMarks {0};
 };
+
+/// Whether a demonstration that starts shakes off what the player's hand holds, a thing or a miracle. It does so when
+/// the hand holds something, unless the demonstration keeps the hand as it is.
+[[nodiscard]] constexpr bool ShakesOffHeld(bool withoutHandModify, bool holdsSomething)
+{
+	return !withoutHandModify && holdsSomething;
+}
 
 /// Whether a demonstration that starts stops the miracles that charge for the player's hand at the worship sites of the
 /// player's temple. It does so unless the demonstration keeps the hand as it is.

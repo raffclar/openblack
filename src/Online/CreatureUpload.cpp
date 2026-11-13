@@ -135,31 +135,4 @@ std::optional<std::vector<uint8_t>> StartData(const lobby_api::ClanCreatureReply
 	return std::nullopt;
 }
 
-std::optional<Paths> PlayersCreaturePaths()
-{
-	if (!Locator::playerProfileSystem::has_value() || !Locator::profileFolderSystem::has_value() ||
-	    !Locator::creatureCarryOverSystem::has_value())
-	{
-		return std::nullopt;
-	}
-	const auto profile = Locator::playerProfileSystem::value().GetCurrentProfile();
-	if (!profile.has_value())
-	{
-		return std::nullopt;
-	}
-	const auto folder = Locator::profileFolderSystem::value().GetPlayerFolder(gui::ToUtf16(profile->name));
-	const auto& carryOver = Locator::creatureCarryOverSystem::value();
-	const auto mind = carryOver.ProfileMind();
-	const auto physique = carryOver.ProfilePhysique();
-	if (!folder.has_value() || !mind.has_value() || !physique.has_value())
-	{
-		return std::nullopt;
-	}
-	return Paths {
-	    .package = *folder / std::string(creature_web_page::k_UploadFile),
-	    .mind = *mind,
-	    .physique = *physique,
-	};
-}
-
 } // namespace openblack::creature_upload

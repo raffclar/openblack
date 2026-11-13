@@ -55,9 +55,6 @@ constexpr float k_RingSpread = 1.01f;
 constexpr float k_RingShiftSeconds = 0.03f;
 constexpr float k_RingStrength = 1.0f;
 
-/// The sound played as a fight takes its arena, from the game's own sounds
-constexpr uint32_t k_ArenaDrawnSample = 176;
-
 /// The distance within which an arena is taken: ten times the pace the starting creature runs at, from its species'
 /// running share and its size
 [[nodiscard]] float ReuseDistance(float runShare, float size);

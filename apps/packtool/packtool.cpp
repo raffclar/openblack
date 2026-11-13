@@ -366,7 +366,6 @@ int WriteMeshFile(const std::filesystem::path& outFilename, const std::vector<st
 	}
 
 	// TODO(bwrsandman): expand on this to create files with contents
-	// CreateTextureBlocks();  // TODO(bwrsandman): Implement CreateTextureBlocks
 	pack.CreateMeshBlock();
 	pack.CreateInfoBlock();
 	pack.Write(outFilename);

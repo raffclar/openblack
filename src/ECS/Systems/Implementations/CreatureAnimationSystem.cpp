@@ -238,6 +238,11 @@ const Animation* AnimationOf(AnimationStores& stores, CreatureAnimation& animati
 		}
 		found = animation.animations.emplace(index, std::move(blended).value_or(Animation {})).first;
 	}
+	// The body keeps the animation unchanged until it clears its animations. A loaded animation gets its mark here too.
+	if (found->second.mark.value == 0)
+	{
+		stores.marks.Mark(found->second);
+	}
 	return found->second.frames.empty() ? nullptr : &found->second;
 }
 
@@ -260,6 +265,11 @@ const Animation* PairAnimationOf(AnimationStores& stores, CreatureAnimation& ani
 		                                     .to = to,
 		                                     .weight = weight,
 		                                     .animation = creature_animation::BlendPair(*first, *second, *stand, weight)};
+	}
+	// The pair stays unchanged until another pair takes its place
+	if (pair->animation.mark.value == 0)
+	{
+		stores.marks.Mark(pair->animation);
 	}
 	return &pair->animation;
 }
@@ -418,11 +428,12 @@ creature_animation_log::Clip LogClip(creature_animation_log::Layer layer, size_t
 /// The body posed for this frame: its action or breathing, or its slots blended, then the arm that holds a thing, the
 /// head turned, the face and any gesture on top. The body's animations move on by bodyStepMs, the face by milliseconds.
 /// The head finds its look after the body, the face and the gestures move on, so the look sees what the body does now.
-void PoseBody(AnimationStores& stores, skeletal_animation::KeyframeTurns& turns, CreatureAnimation& animation,
-              const CreatureRig& rig, const creature_morph::Morph& morph, const Transform& transform, float size,
-              float milliseconds, float seconds, float bodyStepMs, const std::function<HeadLook()>& lookOf,
-              const std::function<uint32_t(uint32_t)>& random, std::optional<HoldingHand> holding = std::nullopt,
-              PoseReport* report = nullptr, const ShownFacePose* shown = nullptr)
+void PoseBody(AnimationStores& stores, skeletal_animation::KeyframeTurns& turns, CreaturePoseScratch& scratch,
+              CreatureAnimation& animation, const CreatureRig& rig, const creature_morph::Morph& morph,
+              const Transform& transform, float size, float milliseconds, float seconds, float bodyStepMs,
+              const std::function<HeadLook()>& lookOf, const std::function<uint32_t(uint32_t)>& random,
+              std::optional<HoldingHand> holding = std::nullopt, PoseReport* report = nullptr,
+              const ShownFacePose* shown = nullptr)
 {
 	const auto* stand = AnimationOf(stores, animation, rig, morph, creature_layers::animations::k_Stand);
 	if (stand == nullptr)
@@ -486,19 +497,27 @@ void PoseBody(AnimationStores& stores, skeletal_animation::KeyframeTurns& turns,
 	    creature_layers::TurnHead(animation.pitch, angles.pitch, look.acceleration, seconds, creature_layers::k_PitchLimit);
 
 	const std::span<const uint32_t> mirror = animation.body.mirrored ? animation.mirror : std::span<const uint32_t> {};
-	std::vector<skeletal_animation::Pose> poses;
+	auto& poses = scratch.poses;
 	if (!animation.slots.empty())
 	{
-		std::vector<std::vector<skeletal_animation::Pose>> sampled;
-		std::vector<float> weights;
-		for (const auto& slot : animation.slots)
+		// The list of poses only grows, so that the poses keep their memory
+		auto& sampled = scratch.sampled;
+		auto& weights = scratch.weights;
+		if (sampled.size() < animation.slots.size())
 		{
+			sampled.resize(animation.slots.size());
+		}
+		weights.clear();
+		for (size_t index = 0; index < animation.slots.size(); ++index)
+		{
+			const auto& slot = animation.slots[index];
 			const auto* played = slot.blendedWith.has_value() ? PairAnimationOf(stores, animation, rig, morph, slot.animation,
 			                                                                    *slot.blendedWith, slot.blendWeight)
 			                                                  : animationOf(slot.animation);
-			sampled.push_back(skeletal_animation::SampleCycle(
-			    played != nullptr ? *played : *stand, *stand, static_cast<uint32_t>(std::max(slot.timeMs, 0.0f)),
-			    animation.skeleton, slot.mirrored ? animation.mirror : std::span<const uint32_t> {}, &turns));
+			skeletal_animation::SampleCycle(sampled[index], played != nullptr ? *played : *stand, *stand,
+			                                static_cast<uint32_t>(std::max(slot.timeMs, 0.0f)), animation.skeleton,
+			                                slot.mirrored ? animation.mirror : std::span<const uint32_t> {}, &turns,
+			                                scratch.buffers);
 			weights.push_back(slot.weight);
 			if (report != nullptr)
 			{
@@ -510,7 +529,8 @@ void PoseBody(AnimationStores& stores, skeletal_animation::KeyframeTurns& turns,
 				report->clips.push_back(clip);
 			}
 		}
-		poses = skeletal_animation::WeightedSumInMeshSpace(sampled, weights, animation.skeleton.parents);
+		skeletal_animation::WeightedSumInMeshSpace(poses, std::span(sampled).first(animation.slots.size()), weights,
+		                                           animation.skeleton.parents, scratch.buffers);
 	}
 	else if (const auto* played =
 	             !creature_layers::IsPlaying(animation.body) ? nullptr
@@ -521,8 +541,8 @@ void PoseBody(AnimationStores& stores, skeletal_animation::KeyframeTurns& turns,
 	         played != nullptr)
 	{
 		const auto time = creature_layers::DanceMoveTime(animation.body, played->duration);
-		poses = skeletal_animation::SampleCycle(*played, *stand, static_cast<uint32_t>(std::max(time, 0.0f)),
-		                                        animation.skeleton, mirror, &turns);
+		skeletal_animation::SampleCycle(poses, *played, *stand, static_cast<uint32_t>(std::max(time, 0.0f)), animation.skeleton,
+		                                mirror, &turns, scratch.buffers);
 		if (report != nullptr)
 		{
 			auto clip =
@@ -536,7 +556,7 @@ void PoseBody(AnimationStores& stores, skeletal_animation::KeyframeTurns& turns,
 	else
 	{
 		const auto time = creature_animation::BreathTime(animation.breathPhase, stand->duration);
-		poses = skeletal_animation::SampleCycle(*stand, *stand, time, animation.skeleton, {}, &turns);
+		skeletal_animation::SampleCycle(poses, *stand, *stand, time, animation.skeleton, {}, &turns, scratch.buffers);
 		if (report != nullptr)
 		{
 			report->clips.push_back(LogClip(creature_animation_log::Layer::Body, creature_layers::animations::k_Stand,
@@ -545,7 +565,8 @@ void PoseBody(AnimationStores& stores, skeletal_animation::KeyframeTurns& turns,
 	}
 
 	// A small creature has a large head, large hands and feet and large eyes for its size
-	creature_proportions::Apply(poses, creature_proportions::ScaledBones(ProportionBonesOf(rig), animation.mirror, size));
+	creature_proportions::Apply(poses,
+	                            creature_proportions::ScaledBones(ProportionBonesOf(rig), animation.mirror, size).Span());
 	// The arm that holds a thing takes the last frame of the hold animation, on the side of the hand that holds it. The
 	// hand that holds the thing gets its size for the size of the creature again.
 	if (const auto* hold = holding.has_value() ? animationOf(creature_layers::animations::k_PickUpHold) : nullptr)
@@ -608,7 +629,8 @@ void PoseBody(AnimationStores& stores, skeletal_animation::KeyframeTurns& turns,
 	// change.
 	if (shown != nullptr)
 	{
-		auto drawn = poses;
+		auto& drawn = scratch.drawn;
+		drawn = poses;
 		addFace(drawn, shown->face, nullptr);
 		addGestures(drawn, nullptr);
 		skeletal_animation::ComposeBoneMatrices(drawn, animation.skeleton.parents, shown->boneMatrices);
@@ -917,14 +939,19 @@ void CreatureAnimationSystem::MotesTurn(entt::entity entity)
 	const bool fallingSpell = Locator::videoSystem::has_value() && Locator::videoSystem::value().HidesWorld();
 	// Each game turn, a creature whose body is to look good or evil makes motes or smoke near the bones of the pose of the
 	// turn before. The body takes the pose of this turn after the motes. Then a creature that pukes brings up its sick.
-	const auto placement = creature::PlacementMatrix(transform->position, transform->rotation, transform->scale);
-	std::vector<glm::vec3> bones(animation->boneMatrices.size());
-	for (uint32_t bone = 0; bone < bones.size(); ++bone)
-	{
-		bones[bone] = glm::vec3(creature::PosedBone(bone, animation->boneMatrices, placement)[3]);
-	}
 	// Before the first turn ends, the bones of this frame are the only pose there is
-	const auto& last = animation->lastTurnBones.size() == bones.size() ? animation->lastTurnBones : bones;
+	const bool turnPosed = animation->lastTurnBones.size() == animation->boneMatrices.size();
+	std::vector<glm::vec3> bones;
+	if (!turnPosed)
+	{
+		const auto placement = creature::PlacementMatrix(transform->position, transform->rotation, transform->scale);
+		bones.resize(animation->boneMatrices.size());
+		for (uint32_t bone = 0; bone < bones.size(); ++bone)
+		{
+			bones[bone] = glm::vec3(creature::PosedBone(bone, animation->boneMatrices, placement)[3]);
+		}
+	}
+	const auto& last = turnPosed ? animation->lastTurnBones : bones;
 	const auto alignment = TargetMorph(*creature, *morph).evilGood;
 	if (!fallingSpell && creature_alignment_motes::MakesAny(alignment))
 	{
@@ -1404,6 +1431,7 @@ void CreatureAnimationSystem::PoseForTurn(entt::entity entity, float millisecond
 		const auto& rig = *rigs.Handle(rigId);
 		// The body's animations move on by the turn's milliseconds at the rate of its size, cut to whole milliseconds
 		const auto stepMs = creature_layers::TurnStepMs(turnMs, ShownSize(*creature), animation->realTime);
+		// The function of the pose refers to this function, so that it gets no memory from the heap
 		const auto lookOf = [&]() {
 			return HeadLookOf(BlendStores(), registry, entity, *animation, &rig, morph->drawn, *transform, *creature, turnMs);
 		};
@@ -1421,15 +1449,17 @@ void CreatureAnimationSystem::PoseForTurn(entt::entity entity, float millisecond
 		{
 			shown->face = creature_shown_face::AfterWorldWrites(shown->face, shown->worldFace, animation->face);
 		}
-		std::vector<glm::mat4> shownMatrices;
+		// The bones of the shown face stay empty when the body takes no pose
+		auto& shownMatrices = _poseScratch.shownMatrices;
+		shownMatrices.clear();
 		const auto shownPose =
 		    shown != nullptr ? std::optional<ShownFacePose>(ShownFacePose {.face = shown->face, .boneMatrices = shownMatrices})
 		                     : std::nullopt;
 		// The store of keyframe turns forgets its turns only here, when no pose uses them
 		_keyframeTurns.Trim();
 		PoseBody(
-		    BlendStores(), _keyframeTurns, *animation, rig, morph->drawn, *transform, ShownSize(*creature),
-		    static_cast<float>(turnMs), creature_layers::TurnSeconds(turnMs), static_cast<float>(stepMs), lookOf,
+		    BlendStores(), _keyframeTurns, _poseScratch, *animation, rig, morph->drawn, *transform, ShownSize(*creature),
+		    static_cast<float>(turnMs), creature_layers::TurnSeconds(turnMs), static_cast<float>(stepMs), std::cref(lookOf),
 		    [this](uint32_t range) { return _random.GameRand(range); }, HoldingHandOf(registry, entity),
 		    report.has_value() ? &*report : nullptr, shownPose.has_value() ? &*shownPose : nullptr);
 		if (shown != nullptr && !creature_shown_face::StaysAfterPose(shown->face, animation->face))
@@ -1472,10 +1502,18 @@ void CreatureAnimationSystem::PoseForTurn(entt::entity entity, float millisecond
 	}
 	// The pose of the last turn becomes the older pose. The first pose is both poses. The body of the turn leans with the
 	// slope of the land under it.
-	auto pose = creature_turn_pose::ToWorld(animation->boneMatrices,
-	                                        ecs::creature_placement::PlacementOf(registry, entity, *transform));
-	animation->olderTurnPose = animation->newerTurnPose.empty() ? pose : std::move(animation->newerTurnPose);
-	animation->newerTurnPose = std::move(pose);
+	// The older pose gives its memory to the new pose.
+	const auto placement = ecs::creature_placement::PlacementOf(registry, entity, *transform);
+	if (animation->newerTurnPose.empty())
+	{
+		creature_turn_pose::ToWorld(animation->boneMatrices, placement, animation->newerTurnPose);
+		animation->olderTurnPose = animation->newerTurnPose;
+	}
+	else
+	{
+		std::swap(animation->olderTurnPose, animation->newerTurnPose);
+		creature_turn_pose::ToWorld(animation->boneMatrices, placement, animation->newerTurnPose);
+	}
 	animation->lastTurnBones.resize(animation->newerTurnPose.size());
 	std::ranges::transform(animation->newerTurnPose, animation->lastTurnBones.begin(),
 	                       [](const glm::mat4& bone) { return glm::vec3(bone[3]); });
@@ -1631,8 +1669,8 @@ void CreatureAnimationSystem::PoseCopy(Registry& copies, entt::entity copy, floa
 	{
 		_keyframeTurns.Trim();
 		PoseBody(
-		    BlendStores(), _keyframeTurns, *animation, *rig, morph->drawn, *transform, self->size, milliseconds, seconds,
-		    milliseconds * creature_layers::BodyRate(self->size, animation->realTime),
+		    BlendStores(), _keyframeTurns, _poseScratch, *animation, *rig, morph->drawn, *transform, self->size, milliseconds,
+		    seconds, milliseconds * creature_layers::BodyRate(self->size, animation->realTime),
 		    [&]() { return HeadLookOfCopy(*animation, *transform, creature->species, self->size); },
 		    [this](uint32_t range) { return _random.GameRand(range); });
 	}

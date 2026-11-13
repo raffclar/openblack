@@ -14,6 +14,7 @@
 #include "3D/TempleInteriorInterface.h"
 #include "Camera/Camera.h"
 #include "ECS/Archetypes/VillageLightArchetype.h"
+#include "ECS/MobileObjectClassRules.h"
 #include "ECS/OtherPlayerSparkles.h"
 #include "ECS/Systems/AdvisorVoiceSystemInterface.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
@@ -128,6 +129,8 @@ void PlayFrameEffects(FrameViewInterface& view)
 	auto& clock = Locator::time::value();
 	const auto gameTime = std::chrono::duration<float, std::milli>(clock.GetFrameGameTime());
 	Locator::alignmentSystem::value().Update(gameTime);
+	// The glows of the creed objects slide with the real time, as the glows of the creatures do
+	ecs::mobile_object_class::SlideCreedGlows(Locator::entitiesRegistry::value(), clock.GetFrameRealTime());
 	{
 		auto actions = profiler.BeginScoped(Profiler::Stage::VegetationUpdate);
 		Locator::vegetation::value().Update(gameTime);

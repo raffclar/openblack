@@ -337,7 +337,7 @@ struct CreatureSetup
 struct ObjectSetup
 {
 	std::variant<MobileObjectInfo, TreeInfo, FeatureInfo, VillagerInfo, PotInfo, AbodeInfo, FieldTypeInfo, AnimalInfo,
-	             MobileStaticInfo, AnimatedStaticInfo, FishFarmInfo, FlowersInfo, ScaffoldInfo>
+	             MobileStaticInfo, AnimatedStaticInfo, FishFarmInfo, FlowersInfo, ScaffoldInfo, BigForestInfo>
 	    type;
 	glm::vec2 offset {0.0f};
 	float scale {1.0f};
@@ -994,8 +994,9 @@ struct Command
 		/// The pointer moves onto the scenario's town's worship site on the screen, as the mouse moves it: onto the middle
 		/// of the foot of its altar (value 0), or onto the middle of its food pot (value 1). Needs no creature
 		PointerOnAltar,
-		/// The pointer moves onto the rope of the leash of the creature, tied to a thing, a quarter of the way from the
-		/// thing, as the mouse moves it
+		/// The pointer moves onto the rope of the leash of the creature, tied to a thing, as the mouse moves it. It tries
+		/// points along the rope from its middle out, one each few frames, until the pick of the hand is the rope. A
+		/// press waits until a point is found or the points end.
 		PointerOnRope,
 		/// The pointer moves onto the scenario's object (object) at a height (amount) over its place on the screen, as
 		/// the mouse moves it. For a storage pit, a value of 1 to 5 moves it onto that wood pile of the pit, and 6 onto
@@ -1037,6 +1038,9 @@ struct Command
 		/// A script tells the creature to take notice of reactions (value 1) or to take no notice (value 0), as
 		/// a script's "enable ... reaction" and "disable ... reaction" do
 		ScriptReaction,
+		/// The mind of the creature stops (value 1) or starts again (value 0), as the scenario's paused mind does. A stopped
+		/// mind leaves the body alone and keeps what the creature holds.
+		PauseMind,
 		/// A script puts the creature at the point at once (from the middle of the map), as SET_POSITION does. Its walk,
 		/// body action, face and head look stop there.
 		ScriptPlace,
@@ -1275,6 +1279,9 @@ struct Command
 		/// within 10 metres) at once, as if picked up from where it lies, such as a pile of dung that a script made.
 		/// Needs no creature
 		HandTakeNear,
+		/// The player's hand taps the scaffold nearest a point (point, from the middle of the map, within 10 metres), as a
+		/// short press of the Action button on it does: one scaffold breaks off it. Needs no creature
+		TapScaffoldNear,
 		/// The player clicks the creature nearest a point (point, from the middle of the map), as the Action button pressed
 		/// and let go on it does, such as to answer a creature swap offer. Needs no creature of the scenario
 		ClickCreatureNear,
@@ -1304,6 +1311,12 @@ struct Command
 		/// The living near the scenario's object react to it as to a kind of reaction (value, by its number), as a
 		/// script's "create reaction" makes it. It belongs to no player. Needs no creature
 		CreateReaction,
+		/// The pointer moves onto the middle of the help's tip bubble on the screen, as the mouse moves it. Needs no
+		/// creature
+		PointerOnTipBubble,
+		/// The pointer moves onto the totem of the scenario's object (object), a town centre, at a height (amount) over
+		/// the place of the totem on the screen, as the mouse moves it. Needs no creature
+		PointerOnTotem,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures
@@ -1647,6 +1660,8 @@ void AddMultiplayerFrontEndScenarios(std::vector<Scenario>& all);
 void AddOtherGodScenarios(std::vector<Scenario>& all);
 /// The Join Online Game button of the browser page
 void AddJoinOnlineScenarios(std::vector<Scenario>& all);
+/// The hand under the boxes of the front end: away while a box takes the mouse
+void AddFrontEndHandScenarios(std::vector<Scenario>& all);
 /// The sounds of a village by day and by night: its buildings, its foresters and its animals
 void AddWorldSoundScenarios(std::vector<Scenario>& all);
 /// A town given miracles by the debug tool, and its worship site going up

@@ -104,6 +104,13 @@ public:
 		login = std::move(callback);
 	}
 	void ResumeSession(LobbyCallback<lobby_api::AccountRef>) override {}
+	[[nodiscard]] bool CanSignInFromSite() const override { return siteSignIn; }
+	[[nodiscard]] bool IsSignedInFromSite() const override { return fromSite && account.has_value(); }
+	void SignInFromSite(LobbyCallback<lobby_api::AccountRef> callback) override
+	{
+		++siteAsks;
+		site = std::move(callback);
+	}
 	void Logout(bool, LobbyCallback<LobbyDone>) override {}
 	void GetMe(LobbyCallback<lobby_api::Me>) override {}
 	void GetServers(LobbyCallback<lobby_api::ServerList> callback) override { servers = std::move(callback); }
@@ -189,6 +196,11 @@ public:
 		done(LobbyResult<Value> {.value = std::move(value), .error = {}});
 	}
 
+	/// The lobby can get a session from the sign-in of the site, as in the browser
+	bool siteSignIn {false};
+	bool fromSite {false};
+	int siteAsks {0};
+	LobbyCallback<lobby_api::AccountRef> site;
 	std::optional<lobby_api::AccountRef> account;
 	std::vector<lobby_api::ServerEntry> known;
 	std::string loginName;
@@ -1249,6 +1261,91 @@ TEST_F(FrontEndTest, ALostLobbySessionGoesBackToTheLogin)
 	EXPECT_EQ(frontEnd->GetBox(), Box::Login);
 	EXPECT_EQ(frontEnd->GetMessage(), Message::ConnectionFailed);
 	EXPECT_EQ(network.leaves, 1);
+}
+
+TEST_F(FrontEndTest, ASignInOnTheSiteGoesToTheGameListWithNoLogin)
+{
+	Make();
+	lobby.siteSignIn = true;
+	frontEnd->Next();
+	frontEnd->SetLobbyKind(LobbyKind::Internet);
+	frontEnd->Next();
+	// The login box waits for the site, and the player types nothing
+	EXPECT_EQ(lobby.siteAsks, 1);
+	EXPECT_TRUE(frontEnd->IsBusy());
+	EXPECT_EQ(frontEnd->GetBox(), Box::Login);
+	lobby.account = lobby_api::AccountRef {.id = 7, .name = "Alice"};
+	lobby.fromSite = true;
+	FakeLobby::Give(lobby.site, *lobby.account);
+	EXPECT_EQ(frontEnd->GetBox(), Box::GameList);
+	EXPECT_TRUE(lobby.servers);
+	EXPECT_FALSE(lobby.login);
+	EXPECT_EQ(frontEnd->GetMessage(), Message::None);
+	// Back skips the login box of a session of the site, and Next goes to the list again
+	frontEnd->Back();
+	EXPECT_EQ(frontEnd->GetBox(), Box::FindGames);
+	frontEnd->Next();
+	EXPECT_EQ(lobby.siteAsks, 2);
+	FakeLobby::Give(lobby.site, *lobby.account);
+	EXPECT_EQ(frontEnd->GetBox(), Box::GameList);
+}
+
+TEST_F(FrontEndTest, NobodySignedInOnTheSiteLeavesTheLoginBox)
+{
+	Make();
+	lobby.siteSignIn = true;
+	frontEnd->Next();
+	frontEnd->Next();
+	FakeLobby::Fail(lobby.site, LobbyErrorKind::NotLoggedIn);
+	EXPECT_FALSE(frontEnd->IsBusy());
+	EXPECT_EQ(frontEnd->GetBox(), Box::Login);
+	EXPECT_EQ(frontEnd->GetMessage(), Message::None);
+	// The name and the password still work
+	frontEnd->Login(u"Alice", u"secret");
+	lobby.account = lobby_api::AccountRef {.id = 7, .name = "Alice"};
+	FakeLobby::Give(lobby.login, *lobby.account);
+	EXPECT_EQ(frontEnd->GetBox(), Box::GameList);
+	// A session of a password keeps the login box on Back
+	frontEnd->Back();
+	EXPECT_EQ(frontEnd->GetBox(), Box::Login);
+}
+
+TEST_F(FrontEndTest, BackDuringTheSignInOnTheSiteDropsItsAnswer)
+{
+	Make();
+	lobby.siteSignIn = true;
+	frontEnd->Next();
+	frontEnd->Next();
+	frontEnd->Back();
+	EXPECT_EQ(frontEnd->GetBox(), Box::FindGames);
+	lobby.account = lobby_api::AccountRef {.id = 7, .name = "Alice"};
+	FakeLobby::Give(lobby.site, *lobby.account);
+	EXPECT_EQ(frontEnd->GetBox(), Box::FindGames);
+	EXPECT_FALSE(lobby.servers);
+}
+
+TEST_F(FrontEndTest, ASiteAccountWithNoEmailIsSentToTheAccountPage)
+{
+	Make();
+	lobby.siteSignIn = true;
+	frontEnd->Next();
+	frontEnd->Next();
+	lobby.account = lobby_api::AccountRef {.id = 7, .name = "Alice"};
+	lobby.emailRequired = true;
+	FakeLobby::Give(lobby.site, *lobby.account);
+	EXPECT_EQ(frontEnd->GetBox(), Box::Login);
+	EXPECT_EQ(frontEnd->GetMessage(), Message::EmailRequired);
+	EXPECT_FALSE(lobby.servers);
+}
+
+TEST_F(FrontEndTest, TheDesktopDoesNotAskTheSite)
+{
+	Make();
+	frontEnd->Next();
+	frontEnd->Next();
+	EXPECT_EQ(frontEnd->GetBox(), Box::Login);
+	EXPECT_EQ(lobby.siteAsks, 0);
+	EXPECT_FALSE(frontEnd->IsBusy());
 }
 
 TEST_F(FrontEndTest, TheStartGivesTheSessionToTheNetworkGame)

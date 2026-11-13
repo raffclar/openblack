@@ -264,6 +264,9 @@ struct Sources
 	std::function<float(glm::vec2)> landHeight;
 	/// Where an object stands, which a shell over its model takes its place among what blends by; none once it has gone
 	std::function<std::optional<glm::vec3>(entt::entity)> objectPosition;
+	/// Where the frame draws the origin of an object's model, which a shower of sparks rises from; none once it has gone.
+	/// A thing in the hand or in flight is drawn there between the turns.
+	std::function<std::optional<glm::vec3>(entt::entity)> objectDrawnOrigin;
 	/// The game's milliseconds now, by which the glowing shells' textures slide
 	uint64_t gameMilliseconds {0};
 	/// The squares in a row of the players' symbols sheet: 4 on a land, more in a network game with more gods
@@ -309,7 +312,8 @@ struct LearningMark
 	/// The light bulb's model
 	entt::id_type bulbMesh;
 };
-/// Adds the learning marks to the frame, each with its bulb and then its glow at the glow's place among what blends
+/// Adds the learning marks to the frame. The bulb of each is drawn at once with the learning words (see
+/// MeshesWithLearningWords), and its glow takes the glow's place among what blends.
 void AddLearningMarks(Frame& frame, std::span<const LearningMark> marks);
 
 /// The three sprites of a player's symbol, in the order drawn: a still glow, a turning glow, then the symbol. Their
@@ -383,5 +387,8 @@ void Order(const Frame& frame, const glm::vec3& camera, std::optional<glm::vec3>
 /// The order the effects drawn before the land are drawn in, each in its own order, the sprites as for Order. The view
 /// they are drawn in keeps the order they are given.
 void OrderBeforeLand(const Frame& frame, std::vector<Command>& commands, std::vector<uint32_t>& spriteOrder);
+/// The models that are drawn at once just after the words of the learning marks, as indices of the frame's models, in
+/// the order of their effects. Order leaves them out.
+void MeshesWithLearningWords(const Frame& frame, std::vector<uint32_t>& meshes);
 
 } // namespace openblack::particles::draw

@@ -460,8 +460,6 @@ void openblack::computer_mind::SeeNearHand(std::vector<SeenThing>& seen, const m
 	// The god looks at the cells in a spiral out from its hand. It stops at the first cell on the map that is too far.
 	auto coords = hand;
 	map_coords::Spiral spiral;
-	// One list for the things of all the cells
-	std::vector<entt::entity> things;
 	for (int32_t cells = k_SeenMostCells; cells != 0; --cells)
 	{
 		if (const glm::ivec2 cell = map_coords::Cell(coords); map_coords::InBounds(cell))
@@ -470,20 +468,23 @@ void openblack::computer_mind::SeeNearHand(std::vector<SeenThing>& seen, const m
 			{
 				return;
 			}
-			world.ThingsIn(cell, things);
-			for (const auto object : things)
+			// The god only looks at the things, thus the lists of the cell do not change while it looks
+			for (const auto& things : world.ThingsIn(cell))
 			{
-				if (!world.Available(object))
+				for (const auto object : things)
 				{
-					continue;
+					if (!world.Available(object))
+					{
+						continue;
+					}
+					const auto thing = world.SeenAs(object);
+					if (!world.Available(thing) ||
+					    std::ranges::any_of(seen, [thing](const SeenThing& old) { return old.thing == thing; }))
+					{
+						continue;
+					}
+					seen.insert(seen.begin(), {.thing = thing, .turn = turn});
 				}
-				const auto thing = world.SeenAs(object);
-				if (!world.Available(thing) ||
-				    std::ranges::any_of(seen, [thing](const SeenThing& old) { return old.thing == thing; }))
-				{
-					continue;
-				}
-				seen.insert(seen.begin(), {.thing = thing, .turn = turn});
 			}
 		}
 		map_coords::AddCells(coords, spiral.Next());

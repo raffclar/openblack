@@ -10,6 +10,7 @@
 #include "Console.h"
 
 #include <algorithm>
+#include <string>
 
 #include <SDL.h>
 #include <glm/gtc/constants.hpp>
@@ -20,6 +21,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/HandSystemInterface.h"
+#include "ECS/Systems/NetworkGameSystemInterface.h"
 #include "ECS/Systems/PickingSystemInterface.h"
 #include "Input/DeveloperKeys.h"
 #include "Input/GameActionMapInterface.h"
@@ -38,6 +40,7 @@ Console::Console() noexcept
           {"help", "    - Display list of possible commands."},
           {"history", " - Display previously executed commands."},
           {"clear", "   - Clear the output log."},
+          {"netdiag", " - Copy the diagnostics of the network game to the clipboard."},
       }
 {
 	// TODO(#478): Add custom spdlog sink here
@@ -431,6 +434,24 @@ void Console::ExecCommand(const std::string& commandLine) noexcept
 		for (auto& command : _commands)
 		{
 			AddLog("- %s%s", command.first.c_str(), command.second.c_str());
+		}
+	}
+	else if (commandLine == "netdiag")
+	{
+		// The report of the connection log, for a bug report about a network game
+		const auto report =
+		    Locator::networkGame::has_value() ? Locator::networkGame::value().DiagnosticsReport() : std::string();
+		if (report.empty())
+		{
+			AddLog("This game has no network game.");
+		}
+		else if (SDL_SetClipboardText(report.c_str()) == 0)
+		{
+			AddLog("The clipboard has the diagnostics of the network game (%zu characters).", report.size());
+		}
+		else
+		{
+			AddLog("[error]: The clipboard did not take the diagnostics: %s", SDL_GetError());
 		}
 	}
 	else if (commandLine == "history")

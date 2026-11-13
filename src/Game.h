@@ -279,7 +279,6 @@ public:
 	static constexpr float k_HandHeight = 3.2f;
 	/// The game's limits on how far the hand is from the camera
 	static constexpr float k_HandMinDistance = 2.0f;
-	static constexpr float k_HandMaxDistance = 1800.0f;
 	/// Inside the temple: how long the hand takes to turn to the surface the cursor is on
 	static constexpr float k_HandTempleTurnTime = 0.4f;
 	/// Land lower than this is the sea, which the hand rests on
@@ -507,7 +506,6 @@ public:
 	/// without the developer tools, and a live network game, refuse it: then the result is false.
 	bool RequestScenario(ScenarioRequest request);
 	[[nodiscard]] std::chrono::duration<float, std::milli> GetDeltaTime() const;
-	[[nodiscard]] const HandAnimation* GetHandAnimation() const { return _handAnimation.get(); }
 
 	/// The frame being made is written to a PNG once drawn, without the debug windows if asked
 	void RequestScreenshot(const std::filesystem::path& path, bool hideDebugGui = false) noexcept;

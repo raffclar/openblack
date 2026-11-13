@@ -41,9 +41,6 @@ struct DanceAction
 	uint32_t type {0};
 	/// What it is done with: 56 bytes the type reads as whole numbers or floats
 	std::array<uint32_t, 14> arguments {};
-
-	/// An argument read as a float
-	[[nodiscard]] float Float(std::size_t index) const;
 };
 
 /// What happens at a beat of the dance

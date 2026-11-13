@@ -76,6 +76,21 @@ TEST(StoreRules, ABuildingSiteStoresOnlyWood)
 	EXPECT_FALSE(store_rules::BuildingSiteStores(openblack::ResourceType::None));
 }
 
+TEST(StoreRules, AStoragePitThatGoesUpKeepsFoodAndGivesWoodToItsSite)
+{
+	using store_rules::SiteGift;
+	EXPECT_EQ(store_rules::WhereSiteGiftGoes(openblack::ResourceType::Food, true), SiteGift::OwnStore);
+	EXPECT_EQ(store_rules::WhereSiteGiftGoes(openblack::ResourceType::Wood, true), SiteGift::Site);
+	EXPECT_EQ(store_rules::WhereSiteGiftGoes(openblack::ResourceType::Any, true), SiteGift::Site);
+}
+
+TEST(StoreRules, AnotherBuildingThatGoesUpRefusesFood)
+{
+	using store_rules::SiteGift;
+	EXPECT_EQ(store_rules::WhereSiteGiftGoes(openblack::ResourceType::Food, false), SiteGift::Refused);
+	EXPECT_EQ(store_rules::WhereSiteGiftGoes(openblack::ResourceType::Wood, false), SiteGift::Site);
+}
+
 TEST(StoreRules, AScaffoldStoresOnlyWoodAndOnlyOnASite)
 {
 	EXPECT_TRUE(store_rules::ScaffoldStores(openblack::ResourceType::Wood, true));

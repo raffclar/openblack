@@ -344,20 +344,6 @@ bool Sdl2WindowingSystem::IsOpen() const
 	return _window != nullptr;
 }
 
-float Sdl2WindowingSystem::GetBrightness() const
-{
-	return SDL_GetWindowBrightness(_window.get());
-}
-
-Sdl2WindowingSystem& Sdl2WindowingSystem::SetBrightness(float brightness)
-{
-	if (SDL_SetWindowBrightness(_window.get(), brightness) != 0)
-	{
-		throw std::runtime_error("SDL_SetWindowBrightness Error: " + std::string(SDL_GetError()));
-	}
-	return *this;
-}
-
 uint32_t Sdl2WindowingSystem::GetID() const
 {
 	return SDL_GetWindowID(_window.get());
@@ -368,21 +354,10 @@ uint32_t Sdl2WindowingSystem::GetFlags() const
 	return SDL_GetWindowFlags(_window.get());
 }
 
-Sdl2WindowingSystem& Sdl2WindowingSystem::GrabInput(bool b)
-{
-	system_pointer::Grab(_window.get(), b, _background);
-	return *this;
-}
-
 Sdl2WindowingSystem& Sdl2WindowingSystem::SetMousePosition(glm::ivec2 position)
 {
 	system_pointer::Warp(_window.get(), position, _background);
 	return *this;
-}
-
-bool Sdl2WindowingSystem::IsInputGrabbed() const
-{
-	return SDL_GetWindowGrab(_window.get()) != SDL_FALSE;
 }
 
 std::string Sdl2WindowingSystem::GetTitle() const
@@ -412,32 +387,6 @@ glm::ivec2 Sdl2WindowingSystem::GetPosition() const
 {
 	glm::ivec2 result;
 	SDL_GetWindowPosition(_window.get(), &result.x, &result.y);
-	return result;
-}
-
-Sdl2WindowingSystem& Sdl2WindowingSystem::SetMinimumSize(glm::ivec2 size)
-{
-	SDL_SetWindowMinimumSize(_window.get(), size.x, size.y);
-	return *this;
-}
-
-glm::ivec2 Sdl2WindowingSystem::GetMinimumSize() const
-{
-	glm::ivec2 result;
-	SDL_GetWindowMinimumSize(_window.get(), &result.x, &result.y);
-	return result;
-}
-
-Sdl2WindowingSystem& Sdl2WindowingSystem::SetMaximumSize(glm::ivec2 size)
-{
-	SDL_SetWindowMaximumSize(_window.get(), size.x, size.y);
-	return *this;
-}
-
-glm::ivec2 Sdl2WindowingSystem::GetMaximumSize() const
-{
-	glm::ivec2 result;
-	SDL_GetWindowMaximumSize(_window.get(), &result.x, &result.y);
 	return result;
 }
 
@@ -548,18 +497,6 @@ Sdl2WindowingSystem& Sdl2WindowingSystem::Hide()
 	return *this;
 }
 
-Sdl2WindowingSystem& Sdl2WindowingSystem::Maximise()
-{
-	SDL_MaximizeWindow(_window.get());
-	return *this;
-}
-
-Sdl2WindowingSystem& Sdl2WindowingSystem::Minimise()
-{
-	SDL_MinimizeWindow(_window.get());
-	return *this;
-}
-
 Sdl2WindowingSystem& Sdl2WindowingSystem::Restore()
 {
 	SDL_RestoreWindow(_window.get());
@@ -569,12 +506,6 @@ Sdl2WindowingSystem& Sdl2WindowingSystem::Restore()
 Sdl2WindowingSystem& Sdl2WindowingSystem::Raise()
 {
 	SDL_RaiseWindow(_window.get());
-	return *this;
-}
-
-Sdl2WindowingSystem& Sdl2WindowingSystem::SetBordered(bool b)
-{
-	SDL_SetWindowBordered(_window.get(), b ? SDL_TRUE : SDL_FALSE);
 	return *this;
 }
 

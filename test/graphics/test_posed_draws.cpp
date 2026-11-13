@@ -60,3 +60,10 @@ TEST(PosedDraws, TranslucentMeshesNotPosedAreDrawnTogether)
 	EXPECT_TRUE(BlendedPassDrawsAllPlaced({.translucent = true, .perEntity = false}));
 	EXPECT_FALSE(BlendedPassDrawsAllPlaced({.translucent = false, .perEntity = false}));
 }
+
+TEST(PosedDraws, HandIsNeverDrawnWithThePlacedThings)
+{
+	// The hand's model blends, but only its own draw shows it, so a cinema that puts the hand away hides it
+	EXPECT_FALSE(BlendedPassDrawsAllPlaced({.translucent = true, .perEntity = false, .hand = true}));
+	EXPECT_FALSE(BlendedPassDrawsAllPlaced({.translucent = false, .perEntity = false, .hand = true}));
+}

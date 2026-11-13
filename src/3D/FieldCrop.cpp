@@ -127,6 +127,12 @@ void Pass(Crop& crop, const Type& type, uint32_t turn, uint32_t growthTurn, floa
 	Grow(crop, type, alignment, raining);
 }
 
+bool GrowsInPass(const Crop& crop, const Type& type, uint32_t turn, uint32_t growthTurn)
+{
+	// The same tests as Pass and Grow, in the same order
+	return (turn + growthTurn) % k_TurnsPerGrowth == 0 && IsSown(crop, type) && !(crop.age > type.ageRipe);
+}
+
 std::optional<Look> LookOf(const Crop& crop, const Type& type, uint32_t leastFood)
 {
 	if (type.ageGrowth * k_ShowsFrom > crop.age || static_cast<float>(leastFood) > crop.food)

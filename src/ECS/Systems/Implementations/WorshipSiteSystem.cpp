@@ -444,11 +444,11 @@ float WorshipSiteSystem::DesireForRest(entt::entity site) const
 	}
 	// Each dancer wants what it lacks of full life; one that is not a villager wants none, but counts
 	std::vector<float> desires;
-	for (const auto dancer : ecs::dances::Dancers(registry, dance))
-	{
+	desires.reserve(ecs::dances::DancerCount(registry, dance));
+	ecs::dances::ForEachDancer(registry, dance, [&registry, &desires](entt::entity dancer) {
 		const auto* person = registry.TryGet<const Villager>(dancer);
 		desires.push_back(person != nullptr ? computer_mind_rules::LifeDesire(person->life) : 0.0f);
-	}
+	});
 	return computer_mind_rules::DancersRestDesire(desires);
 }
 
@@ -1217,15 +1217,17 @@ float WorshipSiteSystem::DancersFoodNeed(entt::entity site) const
 	if (Locator::infoConstants::has_value() && ecs::dances::IsDance(registry, component.dance))
 	{
 		const auto& info = Locator::infoConstants::value().villager;
-		for (const auto dancer : ecs::dances::Dancers(registry, component.dance))
-		{
+		const auto count = ecs::dances::DancerCount(registry, component.dance);
+		bellies.reserve(count);
+		dinners.reserve(count);
+		ecs::dances::ForEachDancer(registry, component.dance, [&](entt::entity dancer) {
 			if (const auto* person = registry.TryGet<const Villager>(dancer))
 			{
 				bellies.push_back(person->food);
 				const auto& row = info.at(static_cast<size_t>(RowOf(*person, GVillagerInfo::Find)));
 				dinners.push_back(static_cast<int32_t>(row.foodReqiredForDinner));
 			}
-		}
+		});
 	}
 	return ecs::worshipper_rules::DancersFoodNeed(bellies, dinners);
 }

@@ -1626,10 +1626,12 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 		}
 	}
 
-	// The lists of the actions of each desire keep their memory from one desire to the next
+	// The lists of the actions of each desire keep their memory from one desire to the next. So does the list of the
+	// believed things that an action can act on.
 	std::vector<creature_planner::ActionCandidate> candidates;
 	std::vector<const creature_plan_actions::Executor*> executors;
 	BelievedFacts believed;
+	std::vector<creature_planner::ObjectCandidate> believedFound;
 	for (const auto desire : goals)
 	{
 		const auto d = static_cast<size_t>(desire);
@@ -1737,16 +1739,12 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 		const auto heldByItself = [&](entt::entity thing) { return ecs::creature_carried::Carries(registry, creature, thing); };
 		// The thing that an action can act on: the most useful, the first of equals, and only one that is worth more than
 		// nothing. An action that must not act on what the creature holds does not take a thing that it holds.
-		const auto mostUseful = [](const std::vector<creature_planner::ObjectCandidate>& found) {
-			std::optional<creature_planner::ObjectCandidate> best;
-			for (const auto& object : found)
+		const auto keepIfMoreUseful = [](std::optional<creature_planner::ObjectCandidate>& best,
+		                                 const creature_planner::ObjectCandidate& object) {
+			if (object.usefulness > (best.has_value() ? best->usefulness : 0.0f))
 			{
-				if (object.usefulness > (best.has_value() ? best->usefulness : 0.0f))
-				{
-					best = object;
-				}
+				best = object;
 			}
-			return best;
 		};
 		// Whether an action can act on a thing
 		const auto suitsPart = [&](const creature_planner::ActionCandidate& candidate, uint32_t part) {
@@ -1760,18 +1758,27 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 		const auto findObject =
 		    [&](const creature_planner::ActionCandidate& candidate) -> std::optional<creature_planner::ObjectCandidate> {
 			const auto suits = [&](entt::entity thing) { return suitsPart(candidate, entt::to_integral(thing)); };
-			std::vector<creature_planner::ObjectCandidate> found;
+			// The parts and the things are examined in their order, as when the function first makes the full list
+			std::optional<creature_planner::ObjectCandidate> best;
 			if (activity.has_value())
 			{
-				std::ranges::copy_if(parts, std::back_inserter(found), [&](const creature_planner::ObjectCandidate& part) {
-					return suits(static_cast<entt::entity>(part.id));
-				});
+				for (const auto& part : parts)
+				{
+					if (suits(static_cast<entt::entity>(part.id)))
+					{
+						keepIfMoreUseful(best, part);
+					}
+				}
 			}
 			else
 			{
-				found = BelievedThingsToActOn(creature, mind, desire, suits, believed);
+				BelievedThingsToActOn(creature, mind, desire, suits, believed, believedFound);
+				for (const auto& object : believedFound)
+				{
+					keepIfMoreUseful(best, object);
+				}
 			}
-			return mostUseful(found);
+			return best;
 		};
 		// For hurt people, each look at the first action of the list asks again whether the creature heals first
 		std::function<bool()> healsFirst;
@@ -1817,11 +1824,12 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 		    .order = order,
 		    .actions = candidates,
 		    .activityUsefulness = activity.has_value() ? std::optional(activity->usefulness) : std::nullopt,
-		    .findObject = findObject,
-		    .findUsed = findUsed,
+		    // The functions live until the plan is made, thus the planner calls them through references
+		    .findObject = std::ref(findObject),
+		    .findUsed = std::ref(findUsed),
 		    .itself = entt::to_integral(creature),
 		    .parts = parts,
-		    .suits = suitsPart,
+		    .suits = std::ref(suitsPart),
 		    .onlyActsOnThings = leashTarget.has_value(),
 		    .healsFirst = healsFirst,
 		    .wholeActedOn = wholeActedOn,

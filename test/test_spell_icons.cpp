@@ -292,6 +292,15 @@ TEST(SpellIcons, AnIconWorksWhenBuiltWithMoreThanThreeQuartersOfItsLife)
 	EXPECT_FALSE(Functional(1.0f, false));
 }
 
+TEST(SpellIcons, AnIconAtASiteShowsOnlyWhileTheSiteIsBuilt)
+{
+	// An icon at a site that is not built shows no hand and no seed
+	EXPECT_FALSE(Shown(false));
+	EXPECT_TRUE(Shown(true));
+	// A stone hand of a village centre and an icon with no site always show
+	EXPECT_TRUE(Shown(std::nullopt));
+}
+
 TEST(SpellIcons, AWorshipIconShowsItsStoreAsAPercentOfItsMiracle)
 {
 	// A quarter of the charge shows as 25, worked out in float as store over need, then times 100

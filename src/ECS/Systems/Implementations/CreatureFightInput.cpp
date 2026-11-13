@@ -73,9 +73,6 @@ using namespace openblack::ecs::systems::fight_detail;
 
 namespace
 {
-/// A press on the ground counts as a step within this many of the arena's radii of its middle
-constexpr float k_GroundClickRadii = 1.5f;
-
 /// Where a line first meets a creature's skin as it is drawn, tested against every triangle of its nearest level of
 /// detail as posed this frame
 std::optional<posed_model::SkinHit> SkinHitOn(const ecs::Registry& registry, entt::entity creature, const glm::vec3& origin,

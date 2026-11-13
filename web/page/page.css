@@ -47,6 +47,10 @@ body.playing #messages { position: fixed; top: calc(var(--badge-bar) + 8px); lef
   width: min(760px, 100% - 32px); padding: 0; box-sizing: border-box; }
 .message { border-left: 4px solid var(--bad); background: var(--panel); padding: 8px 12px; width: 100%; box-sizing: border-box; }
 .message strong { display: block; }
+/* The buttons of a message: close it, and for a stop of the game, copy the diagnostics and load the page again */
+.message-buttons { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; margin-top: 8px; }
+.message-buttons button { padding: 4px 10px; }
+.message + .message { margin-top: 8px; }
 #log-box { max-width: 1280px; margin: 8px auto; padding: 0 16px; color: var(--muted); }
 #log { max-height: 30vh; overflow: auto; white-space: pre-wrap; font: 12px monospace; margin: 0; }
 /* While the game plays, the log is a panel over the game. The badge opens and closes it. */

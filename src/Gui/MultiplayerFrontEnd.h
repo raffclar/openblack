@@ -175,7 +175,6 @@ public:
 	void SelectGame(std::optional<size_t> game);
 	/// The filter of the game names, which the password's box holds while no game is picked
 	void SetFilter(std::u16string filter) { _filter = std::move(filter); }
-	[[nodiscard]] const std::u16string& GetFilter() const noexcept { return _filter; }
 	void RefreshGames();
 	/// Join game: a ticket from the lobby, then the game socket. The password is for a game that needs one.
 	void Join(std::u16string password);
@@ -324,9 +323,14 @@ private:
 	void KeepUsedClan(std::optional<int64_t> clan);
 	void Show(multiplayer::Message message) noexcept { _message = message; }
 	void EnterGameList();
+	/// In the login box: logs in as the account that is signed in on the lobby site, when the lobby client can. The login
+	/// box stays when nobody is signed in on the site.
+	void SignInFromSite();
 	void LeaveRoom();
 	void HandleEvent(const lobby_api::PushEvent& event);
 	void RequestTicket(const lobby_api::ServerEntry& server, game_socket::Role role, std::u16string password);
+	/// Writes a line to the connection log of the network game
+	void LogConnection(std::string_view text) const;
 	void RoomOpened(std::string ticket, std::u16string password);
 	/// Gets the lobby's list of the lands of network games. The function then gets true when the list is current.
 	void GetLobbyMaps(std::function<void(bool ok)> then);

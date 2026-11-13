@@ -35,6 +35,21 @@
 namespace openblack::ecs::systems
 {
 
+/// The memory that the pose of a body uses for its steps. The system uses the same memory for each pose, so that a pose
+/// gets no memory from the heap after the first poses.
+struct CreaturePoseScratch
+{
+	std::vector<skeletal_animation::Pose> poses;
+	/// The poses with the face that only this computer shows
+	std::vector<skeletal_animation::Pose> drawn;
+	/// The pose of each slot that the body blends, and its weight
+	std::vector<std::vector<skeletal_animation::Pose>> sampled;
+	std::vector<float> weights;
+	skeletal_animation::PoseBuffers buffers;
+	/// The bones of the face that only this computer shows
+	std::vector<glm::mat4> shownMatrices;
+};
+
 class CreatureAnimationSystem final: public CreatureAnimationSystemInterface
 {
 public:
@@ -110,6 +125,8 @@ private:
 	creature_blends::Stores _stores;
 	/// The turns of the keyframes that the poses use, each turn made one time. Only the time that a pose takes changes.
 	skeletal_animation::KeyframeTurns _keyframeTurns;
+	/// The memory of the poses
+	CreaturePoseScratch _poseScratch;
 	/// The first blends that the threads make while the turn does the steps before the creatures. It is the last member,
 	/// so that it waits for its job before the stores and the threads go.
 	creature_blends::BackgroundPrepare _background;

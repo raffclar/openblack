@@ -32,7 +32,6 @@ namespace openblack::snow_cover
 inline constexpr entt::hashed_string k_TextureId = entt::hashed_string("raw/SNOW");
 inline constexpr entt::hashed_string k_AlphaTextureId = entt::hashed_string("raw/SNOWA");
 inline constexpr entt::hashed_string k_NoiseTextureId = entt::hashed_string("raw/snowmap");
-inline constexpr float k_NoiseSpan = 160.0f;
 
 /// The grid's cells along each side, and their size
 inline constexpr int32_t k_GridSize = 128;
@@ -151,8 +150,6 @@ private:
 /// as it lies beyond that, scaled by `rate` of 256
 inline constexpr int32_t k_ObjectRate = 255;
 [[nodiscard]] int32_t ObjectLevel(float depth, int32_t rate, int32_t cap);
-/// Objects show snow from this much of it
-inline constexpr int32_t k_ObjectLevelShown = 5;
 /// A tree that the game drew out of the land one time carries less snow from then on: this rate of 256, and this
 /// maximum level
 inline constexpr int32_t k_OutOfLandTreeRate = 128;
