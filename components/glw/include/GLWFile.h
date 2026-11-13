@@ -102,9 +102,6 @@ public:
 	/// Read glw file from the filesystem
 	GLWResult Open(const std::filesystem::path& filepath) noexcept;
 
-	/// Read glw file from a buffer
-	GLWResult Open(const std::vector<uint8_t>& buffer) noexcept;
-
 	/// Read file from the input source
 	GLWResult ReadFile(std::istream& stream) noexcept;
 
