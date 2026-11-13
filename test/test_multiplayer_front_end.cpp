@@ -355,6 +355,9 @@ struct FrontEndTest: public ::testing::Test
 	/// The notices of the lobby room that the front end gave
 	std::vector<online::lobby::LobbyNotice> notices;
 
+	/// The front end goes first, because it still uses the fake lobby sessions when it closes
+	void TearDown() override { frontEnd.reset(); }
+
 	void Make(bool withLan = false)
 	{
 		MultiplayerFrontEnd::Services services {
