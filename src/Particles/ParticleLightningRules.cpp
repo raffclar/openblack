@@ -792,7 +792,7 @@ public:
 			thunder.size = maths::SkyStrikeThunderSize(effect.Random(1.0f));
 			StartAtomSound(effect, atom, thunder);
 		}
-		std::erase_if(collection.atoms, [&](const std::unique_ptr<Atom>& atom) {
+		std::erase_if(collection.atoms, [&](const AtomPtr& atom) {
 			const auto life = atom->data.find(this);
 			return life != atom->data.end() && effect.AtomAge(*atom) > life->second.a.x;
 		});

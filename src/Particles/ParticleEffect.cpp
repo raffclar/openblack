@@ -33,6 +33,7 @@
 #include "ParticleCreators.h"
 #include "ParticleImport.h"
 #include "ParticleMaths.h"
+#include "ParticlePrefetch.h"
 #include "ParticleSurfaces.h"
 
 using namespace openblack;
@@ -143,7 +144,7 @@ std::optional<int> RuleCreatorNumber(std::string_view name)
 
 bool Modifier::ModifyCollection(Effect& effect, Collection& collection, Collection::Slot& slot) const
 {
-	std::erase_if(collection.atoms, [&](const std::unique_ptr<Atom>& atom) {
+	std::erase_if(collection.atoms, [&](const AtomPtr& atom) {
 		return effect.ConditionForAtom(condition, *atom) && !ModifyAtom(effect, *atom, slot);
 	});
 	return true;
@@ -211,6 +212,7 @@ Effect::Effect(std::shared_ptr<const psys::ParticleFile> file, EffectServices se
 		{
 			_groups.at(static_cast<size_t>(modifier->group)).push_back(modifier.get());
 			_objectModifiers[index] = static_cast<int>(_modifiers.size());
+			modifier->ruleNumber = static_cast<int>(_modifiers.size());
 			_modifiers.push_back(std::move(modifier));
 		}
 	}
@@ -312,9 +314,12 @@ bool Effect::ConditionForCollection(const std::string& name, const Collection& c
 
 bool Effect::ConditionForSlot(const Modifier& modifier, const Collection& collection) const
 {
-	auto found = _collectionTests.find(&modifier);
-	if (found == _collectionTests.end())
+	// A rule with no condition has no object in the file, thus it always runs
+	if (modifier.condition.empty())
 	{
+		return true;
+	}
+	const auto find = [this, &modifier] {
 		CollectionTest test;
 		test.object = _file->Find(modifier.condition);
 		if (test.object != nullptr)
@@ -322,9 +327,31 @@ bool Effect::ConditionForSlot(const Modifier& modifier, const Collection& collec
 			test.test = _services.classes.FindCollectionCondition(test.object->className);
 			test.invert = test.object->Bool("InvertResponse", false);
 		}
-		found = _collectionTests.emplace(&modifier, test).first;
+		return test;
+	};
+	const CollectionTest* kept = nullptr;
+	// A rule of this effect keeps its condition by its number. Thus the step finds it with no search.
+	if (const auto number = static_cast<size_t>(modifier.ruleNumber);
+	    modifier.ruleNumber >= 0 && number < _modifiers.size() && _modifiers[number].get() == &modifier)
+	{
+		_ownCollectionTests.resize(_modifiers.size());
+		auto& own = _ownCollectionTests[number];
+		if (!own.has_value())
+		{
+			own = find();
+		}
+		kept = &*own;
 	}
-	const auto& test = found->second;
+	else
+	{
+		auto found = _collectionTests.find(&modifier);
+		if (found == _collectionTests.end())
+		{
+			found = _collectionTests.emplace(&modifier, find()).first;
+		}
+		kept = &found->second;
+	}
+	const auto& test = *kept;
 	if (test.object == nullptr || test.test == nullptr)
 	{
 		return true;
@@ -413,9 +440,21 @@ glm::vec3 Effect::SpawnPosition(const Collection& collection) const
 	return collection.parent->position;
 }
 
+AtomPtr Effect::MakeAtom() const
+{
+	std::pmr::polymorphic_allocator<Atom> allocator(&_store);
+	return AtomPtr(allocator.new_object<Atom>(&_store), StoreDelete {.store = &_store});
+}
+
+CollectionPtr Effect::MakeCollection() const
+{
+	std::pmr::polymorphic_allocator<Collection> allocator(&_store);
+	return CollectionPtr(allocator.new_object<Collection>(&_store), StoreDelete {.store = &_store});
+}
+
 Atom& Effect::NewAtom(Collection& collection, const Creator* creator, std::span<const int> nextGroups)
 {
-	auto atom = std::make_unique<Atom>();
+	auto atom = MakeAtom();
 	atom->collection = &collection;
 	atom->creator = creator;
 	atom->birth = _age;
@@ -516,9 +555,9 @@ void Effect::MoveToGroup(Atom& atom, int group)
 	(*into)->atoms.push_back(std::move(moved));
 }
 
-void Effect::CreateCollection(int group, Atom* parent, std::vector<std::unique_ptr<Collection>>& into)
+void Effect::CreateCollection(int group, Atom* parent, CollectionList& into)
 {
-	auto collection = std::make_unique<Collection>();
+	auto collection = MakeCollection();
 	collection->group = group;
 	collection->parent = parent;
 	collection->birth = _age;
@@ -556,6 +595,7 @@ void Effect::UpdateCollection(Collection& collection)
 	// By index: a rule may add a collection to an atom while they are walked, and it runs this step too
 	for (size_t a = 0; a < collection.atoms.size(); ++a)
 	{
+		prefetch::AtomsAhead(collection.atoms, a, 1, prefetch::Reach::Collections);
 		auto& atom = collection.atoms[a];
 		for (size_t s = 0; s < atom->subCollections.size(); ++s)
 		{
@@ -570,8 +610,11 @@ void Effect::PostUpdate(Collection& collection, const glm::vec3& parentPosition,
 	// The parent's frame is that of the nearest ancestor atom whose group is a hierarchy; its scale also scales the atoms
 	// drawn in it
 	const bool flagged = IsHierarchy(collection.group);
-	for (auto& atom : collection.atoms)
+	_atomCount += collection.atoms.size();
+	for (size_t a = 0; a < collection.atoms.size(); ++a)
 	{
+		prefetch::AtomsAhead(collection.atoms, a, 1, prefetch::Reach::Collections);
+		auto& atom = collection.atoms[a];
 		atom->previous = atom->current;
 		auto& draw = atom->current;
 		draw.rotation = collection.hierarchy ? parentRotation * atom->rotation : atom->rotation;
@@ -671,21 +714,11 @@ void Effect::StepOnce(float dt)
 	{
 		UpdateCollection(*_roots[r]);
 	}
+	// The end of the step also counts the atoms of each collection that it walks. It adds and removes no atom.
 	_atomCount = 0;
-	const auto count = [this](const auto& self, const Collection& c) -> void {
-		_atomCount += c.atoms.size();
-		for (const auto& atom : c.atoms)
-		{
-			for (const auto& sub : atom->subCollections)
-			{
-				self(self, *sub);
-			}
-		}
-	};
 	for (auto& root : _roots)
 	{
 		PostUpdate(*root, glm::vec3(0.0f), glm::mat3(1.0f), glm::vec3(1.0f));
-		count(count, *root);
 	}
 	_age += dt;
 }
@@ -848,8 +881,10 @@ void Effect::WalkCollection(const Collection& collection, float t, DrawWalk& out
 			out.atoms.push_back(std::move(*drawn));
 		}
 	};
-	for (const auto& atom : std::ranges::reverse_view(collection.atoms))
+	for (size_t a = collection.atoms.size(); a-- > 0;)
 	{
+		prefetch::AtomsAhead(collection.atoms, a, -1, prefetch::Reach::Atoms);
+		const auto& atom = collection.atoms[a];
 		if (!IsDrawn(*atom))
 		{
 			continue;
@@ -902,8 +937,10 @@ void Effect::WalkCollection(const Collection& collection, float t, DrawWalk& out
 		}
 	}
 	// Then what is under each atom in turn
-	for (const auto& atom : std::ranges::reverse_view(collection.atoms))
+	for (size_t a = collection.atoms.size(); a-- > 0;)
 	{
+		prefetch::AtomsAhead(collection.atoms, a, -1, prefetch::Reach::Collections);
+		const auto& atom = collection.atoms[a];
 		for (const auto& sub : std::ranges::reverse_view(atom->subCollections))
 		{
 			WalkCollection(*sub, t, out);
@@ -1432,7 +1469,7 @@ void Effect::SaveSubtree(const Collection& collection, EffectWriter& out) const
 	SaveRuleState(collection, out);
 }
 
-std::unique_ptr<Collection> Effect::LoadSubtree(EffectReader& in, Atom* parent)
+CollectionPtr Effect::LoadSubtree(EffectReader& in, Atom* parent)
 {
 	auto collection = LoadStructure(in, parent);
 	if (collection)
@@ -1445,7 +1482,7 @@ std::unique_ptr<Collection> Effect::LoadSubtree(EffectReader& in, Atom* parent)
 bool Effect::Adopt(const RestoredEffect& saved)
 {
 	// The new collections are made first, so that a state that does not agree with the file changes nothing
-	std::vector<std::unique_ptr<Collection>> roots;
+	CollectionList roots(&_store);
 	for (const auto& root : saved.roots)
 	{
 		auto collection = AdoptCollection(root, nullptr);
@@ -1497,13 +1534,13 @@ const Creator* Effect::PointCreatorOfGroup(int group) const
 	return found;
 }
 
-std::unique_ptr<Collection> Effect::AdoptCollection(const RestoredCollection& saved, Atom* parent) const
+CollectionPtr Effect::AdoptCollection(const RestoredCollection& saved, Atom* parent) const
 {
 	if (saved.group < 0 || saved.group >= static_cast<int>(k_GroupCount))
 	{
 		return nullptr;
 	}
-	auto collection = std::make_unique<Collection>();
+	auto collection = MakeCollection();
 	collection->group = saved.group;
 	collection->parent = parent;
 	collection->birth = saved.birth;
@@ -1542,7 +1579,7 @@ std::unique_ptr<Collection> Effect::AdoptCollection(const RestoredCollection& sa
 	}
 	for (const auto& savedAtom : saved.atoms)
 	{
-		auto& atom = *collection->atoms.emplace_back(std::make_unique<Atom>());
+		auto& atom = *collection->atoms.emplace_back(MakeAtom());
 		atom.collection = collection.get();
 		switch (savedAtom.look)
 		{
@@ -1744,9 +1781,9 @@ void Effect::SaveStructure(const Collection& collection, EffectWriter& out) cons
 	}
 }
 
-std::unique_ptr<Collection> Effect::LoadStructure(EffectReader& in, Atom* parent)
+CollectionPtr Effect::LoadStructure(EffectReader& in, Atom* parent)
 {
-	auto collection = std::make_unique<Collection>();
+	auto collection = MakeCollection();
 	in.NumberCollection(collection.get());
 	collection->parent = parent;
 	in.ReadValue(collection->group);
@@ -1793,7 +1830,7 @@ std::unique_ptr<Collection> Effect::LoadStructure(EffectReader& in, Atom* parent
 	}
 	for (size_t i = 0; i < *atoms && !in.Failed(); ++i)
 	{
-		auto& atom = *collection->atoms.emplace_back(std::make_unique<Atom>());
+		auto& atom = *collection->atoms.emplace_back(MakeAtom());
 		in.NumberAtom(&atom);
 		atom.collection = collection.get();
 		std::string creator;

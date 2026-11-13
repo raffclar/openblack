@@ -19,6 +19,7 @@
 #include <iterator>
 #include <map>
 #include <memory>
+#include <memory_resource>
 #include <numbers>
 #include <optional>
 #include <set>
@@ -1470,4 +1471,44 @@ TEST(AtomRuleStore, ANewRuleAfterAnEmptyStoreGetsEmptyData)
 	EXPECT_EQ(data.a, glm::vec4(0.0f));
 	EXPECT_EQ(store.size(), 2u);
 	EXPECT_EQ(store.begin()->first, second);
+}
+
+namespace
+{
+/// A store that counts the bytes that it gives and gets back
+class CountingStore final: public std::pmr::memory_resource
+{
+public:
+	size_t given {0};
+	size_t taken {0};
+
+private:
+	void* do_allocate(size_t bytes, size_t alignment) override
+	{
+		given += bytes;
+		return std::pmr::new_delete_resource()->allocate(bytes, alignment);
+	}
+	void do_deallocate(void* pointer, size_t bytes, size_t alignment) override
+	{
+		taken += bytes;
+		std::pmr::new_delete_resource()->deallocate(pointer, bytes, alignment);
+	}
+	[[nodiscard]] bool do_is_equal(const std::pmr::memory_resource& other) const noexcept override { return this == &other; }
+};
+} // namespace
+
+TEST(ParticleStore, AnAtomAndItsListsGoBackToTheStoreThatTheyCameFrom)
+{
+	CountingStore store;
+	{
+		std::pmr::polymorphic_allocator<Collection> allocator(&store);
+		CollectionPtr collection(allocator.new_object<Collection>(&store), StoreDelete {.store = &store});
+		std::pmr::polymorphic_allocator<Atom> atoms(&store);
+		auto& atom = *collection->atoms.emplace_back(atoms.new_object<Atom>(&store), StoreDelete {.store = &store});
+		atom.subCollections.emplace_back(allocator.new_object<Collection>(&store), StoreDelete {.store = &store});
+		collection->modifiers.emplace_back();
+		EXPECT_GE(store.given, sizeof(Collection) * 2 + sizeof(Atom));
+		EXPECT_EQ(store.taken, 0u);
+	}
+	EXPECT_EQ(store.taken, store.given);
 }
