@@ -29,6 +29,7 @@ public:
 	void UpdateListener(glm::vec3 pos, glm::vec3 front, glm::vec3 up) const override;
 	BufferId CreateBuffer(ChannelLayout layout, const std::vector<int16_t>& buffer, int sampleRate) override;
 	void QueueBuffer(SourceId sourceId, BufferId buffer) override;
+	void AttachBuffer(SourceId sourceId, BufferId buffer) override;
 	void SetLoopPoints(BufferId buffer, int32_t first, int32_t end) override;
 	void DeleteBuffer(BufferId id) override;
 	void DeleteSource(SourceId id) override;

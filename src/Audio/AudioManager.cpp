@@ -45,6 +45,7 @@
 #include "MixVolume.h"
 #include "PanPlace.h"
 #include "Resources/Resources.h"
+#include "SampleFeed.h"
 #include "Sound/EmitterFollow.h"
 #include "Sound/HeaderOverrides.h"
 #include "Sound/HearingRange.h"
@@ -608,12 +609,12 @@ void AudioManager::CreateBuffer(Sound& sound)
 	}
 	sound.decoded.reset();
 	sound.bufferId = CreateBuffer(sound.channelLayout, decodeBuffer, sampleRate);
-	// A loop over part of the sample, as the game's mixer plays it: from the start, round its loop while looping, and on
-	// to the end once let go
+	// The mixer plays a sample with a loop region from its start. It loops over the region while the voice loops, and
+	// continues to the end after the game releases the loop.
 	const auto frames = static_cast<int32_t>(decodeBuffer.size() / (sound.channelLayout == ChannelLayout::Stereo ? 2 : 1));
-	if (sound.loopStart >= 0 && sound.loopEnd > sound.loopStart && sound.loopStart < frames)
+	if (const auto region = LoopRegionOf(sound.loopStart, sound.loopEnd, frames))
 	{
-		_audioPlayer->SetLoopPoints(sound.bufferId, sound.loopStart, std::min(sound.loopEnd + 1, frames));
+		_audioPlayer->SetLoopPoints(sound.bufferId, region->first, region->end);
 	}
 	sound.duration = _audioPlayer->GetDuration(sound.bufferId);
 	sound.sizeInBytes = decodeBuffer.size() * sizeof(decodeBuffer[0]);
@@ -1286,14 +1287,18 @@ SourceId AudioManager::CreateSource(Sound& sound, const VoiceStart& start)
 
 	// Sources are positioned relative to the listener, in the game's listener frame
 	const auto source = _audioPlayer->CreateSource(start.pitch, true);
-	// QMixer plays a sample loopCount + 1 times
-	const auto loop = start.loopCount < 0;
-	const auto playCount = loop ? 1 : start.loopCount + 1;
-	for (int32_t i = 0; i < playCount; ++i)
+	// A voice that loops until it stops holds the sample as one buffer, so that it loops over the loop region of the
+	// sample. Other voices queue the sample once for each play.
+	const auto feed = SampleFeedOf(start.loopCount);
+	if (feed.attached)
+	{
+		_audioPlayer->AttachBuffer(source, sound.bufferId);
+	}
+	for (int32_t i = 0; i < feed.queued; ++i)
 	{
 		_audioPlayer->QueueBuffer(source, sound.bufferId);
 	}
-	_audioPlayer->SetLooping(source, loop);
+	_audioPlayer->SetLooping(source, feed.attached);
 	if (start.positional)
 	{
 		// Up to the maximum distance, the game's distance gain is OpenAL's inverse clamped model with the scale as
