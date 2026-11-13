@@ -13,6 +13,7 @@
 #include <algorithm>
 #include <array>
 #include <iterator>
+#include <limits>
 #include <optional>
 #include <random>
 #include <span>
@@ -987,10 +988,10 @@ TEST(KeyframeTurns, CallsForTwoAnimationsInTurnGiveTheTurnsOfEach)
 
 TEST(KeyframeTurns, CallsForMoreAnimationsThanTheRecentPlacesGiveTheTurnsOfEach)
 {
-	// Six animations in turn are more than the store keeps as recent. Each call must still give the turns of its own
+	// Twelve animations in turn are more than the store keeps as recent. Each call must still give the turns of its own
 	// animation.
 	const TurnsFixture fixture(13);
-	std::vector<Animation> animations(6, fixture.animation);
+	std::vector<Animation> animations(12, fixture.animation);
 	for (size_t i = 0; i < animations.size(); ++i)
 	{
 		animations[i].frames[1].eulerAngles[0] = glm::vec3(0.1f * static_cast<float>(i + 1), 0.2f, -0.3f);
@@ -1060,6 +1061,56 @@ TEST(KeyframeTurns, PosesHaveTheSameBitsWithTheStore)
 					                             &turns);
 					EXPECT_TRUE(SameBits(set, setKept)) << seed << " set " << time << " " << mirrored;
 				}
+			}
+		}
+	}
+}
+
+TEST(SkeletalAnimation, PosesWithKeptBuffersHaveTheBitsOfNewPoses)
+{
+	// The buffers start too large and full of numbers that are not numbers. A pose must not read them.
+	skeletal_animation::PoseBuffers buffers;
+	constexpr float k_NaN = std::numeric_limits<float>::quiet_NaN();
+	const skeletal_animation::Matrix bad {{{k_NaN, k_NaN, k_NaN}, {k_NaN, k_NaN, k_NaN}, {k_NaN, k_NaN, k_NaN}}};
+	buffers.world.assign(9, bad);
+	buffers.mirroredWorld.assign(9, bad);
+	buffers.place.assign(9, glm::vec3(k_NaN));
+	buffers.mirroredPlace.assign(9, glm::vec3(k_NaN));
+	buffers.placed.assign(9, glm::mat4(k_NaN));
+	buffers.sum.assign(9, glm::mat4(k_NaN));
+	std::vector<skeletal_animation::Pose> kept(9, skeletal_animation::Pose {.rotation = bad, .translation = glm::vec3(k_NaN)});
+	std::vector<std::vector<skeletal_animation::Pose>> keptSamples(2, kept);
+	std::vector<skeletal_animation::Pose> keptSum = kept;
+	// A mirror that is not a swap of bones leaves some bones with no mirror bone
+	const std::vector<uint32_t> uneven {1, 1, 3, 3};
+	for (const uint32_t seed : {1u, 2u, 3u})
+	{
+		const TurnsFixture fixture(seed);
+		for (uint32_t time = 0; time < 1000; time += 53)
+		{
+			for (const auto& mirror :
+			     {std::span<const uint32_t> {}, std::span<const uint32_t>(fixture.mirror), std::span<const uint32_t>(uneven)})
+			{
+				const auto made =
+				    skeletal_animation::SampleCycle(fixture.animation, fixture.stand, time, fixture.skeleton, mirror);
+				skeletal_animation::SampleCycle(kept, fixture.animation, fixture.stand, time, fixture.skeleton, mirror, nullptr,
+				                                buffers);
+				EXPECT_TRUE(SameBits(made, kept)) << seed << " sample " << time;
+
+				auto mirrored = made;
+				skeletal_animation::MirrorPoses(mirrored, fixture.skeleton, mirror, buffers);
+				EXPECT_TRUE(SameBits(skeletal_animation::MirrorPoses(made, fixture.skeleton, mirror), mirrored))
+				    << seed << " mirror " << time;
+
+				const std::vector<std::vector<skeletal_animation::Pose>> samples {
+				    made, skeletal_animation::SampleCycle(fixture.stand, fixture.stand, time, fixture.skeleton)};
+				const std::array weights {0.3f, 0.7f};
+				keptSamples[0] = samples[0];
+				keptSamples[1] = samples[1];
+				skeletal_animation::WeightedSumInMeshSpace(keptSum, keptSamples, weights, fixture.skeleton.parents, buffers);
+				EXPECT_TRUE(
+				    SameBits(skeletal_animation::WeightedSumInMeshSpace(samples, weights, fixture.skeleton.parents), keptSum))
+				    << seed << " sum " << time;
 			}
 		}
 	}

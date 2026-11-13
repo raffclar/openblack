@@ -791,15 +791,15 @@ void CreatureMindSystem::LookFarAbout(entt::entity creature, CreatureMindState& 
 	const auto from = map_coords::FromMetres(glm::xz(transform.position));
 	// The nearest town but the one it came across last, and that town's storage pit. The towns come in the order of each
 	// player's list in turn and the neutral list last, so the first of towns equally near counts.
-	std::vector<creature_object_beliefs::TownCell> towns;
-	for (const auto town : ecs::player_towns::AllInOrder(registry))
-	{
+	auto& towns = _farTowns;
+	towns.clear();
+	ecs::player_towns::ForEachInOrder(registry, [&registry, &towns](entt::entity town) {
 		if (const auto* at = registry.TryGet<const Transform>(town))
 		{
 			towns.push_back(
 			    {.id = entt::to_integral(town), .cell = map_coords::Cell(map_coords::FromMetres(glm::xz(at->position)))});
 		}
-	}
+	});
 	const auto last = mind.lastTown != entt::null ? std::optional(entt::to_integral(mind.lastTown)) : std::nullopt;
 	if (const auto town = creature_object_beliefs::NearestOtherTown(map_coords::Cell(from), towns, last); town.has_value())
 	{
