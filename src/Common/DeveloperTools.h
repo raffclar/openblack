@@ -87,6 +87,45 @@ enum class Action : uint8_t
 	return !RefusalOf(built, networkSessionLive).has_value();
 }
 
+/// Why the in-game editor cannot open or change the world, or none when it can. In a network game only a staff player
+/// opens the editor, in every build: the join ticket of the player has the staff claim, and the game server refuses the
+/// edits of every other player. Outside a network game the editor is a developer tool.
+[[nodiscard]] constexpr std::optional<std::string_view> EditorRefusalOf(bool built, bool networkSessionLive,
+                                                                        bool staff) noexcept
+{
+	if (networkSessionLive)
+	{
+		if (!staff)
+		{
+			return "only a staff player opens the editor in a network game";
+		}
+		return std::nullopt;
+	}
+	return RefusalOf(built, false);
+}
+
+/// What the debug windows show and take
+enum class GuiMode : uint8_t
+{
+	/// All the debug windows, the menu and the editor
+	Full,
+	/// Only the editor. The editor sends its edits and the debug cheats as commands of the turns.
+	EditorOnly,
+	/// No window and no menu, and the windows take no input
+	Dormant,
+};
+
+/// What the debug windows show: all of them in a developer build outside a network game, only the editor for a staff
+/// player in a network game, else nothing
+[[nodiscard]] constexpr GuiMode GuiModeOf(bool built, bool networkSessionLive, bool staff) noexcept
+{
+	if (networkSessionLive)
+	{
+		return staff ? GuiMode::EditorOnly : GuiMode::Dormant;
+	}
+	return built ? GuiMode::Full : GuiMode::Dormant;
+}
+
 /// An option of the command line that only developers and tools use
 struct DeveloperOption
 {

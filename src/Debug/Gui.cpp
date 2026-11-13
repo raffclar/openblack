@@ -91,7 +91,9 @@
 #include "StateHash.h"
 #include "Temple.h"
 #include "TempleVillagers.h"
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
 #include "TestbedScenarios.h"
+#endif
 #include "TextureViewer.h"
 #include "VideoViewer.h"
 #include "Weather.h"
@@ -130,6 +132,24 @@ const std::array<bgfx::EmbeddedShader, 5> k_EmbeddedShaders = {{
 
     BGFX_EMBEDDED_SHADER_END(),
 }};
+
+#if !defined(OPENBLACK_DEVELOPER_TOOLS)
+/// The window of the scenarios that the editor hosts, in a build without the testbed scenarios. It shows nothing.
+class NoScenariosWindow final: public Window
+{
+public:
+	NoScenariosWindow() noexcept
+	    : Window(std::string(k_TestbedScenariosWindow), ImVec2(0.0f, 0.0f))
+	{
+	}
+
+protected:
+	void Draw() noexcept override {}
+	void Update() noexcept override {}
+	void ProcessEventOpen([[maybe_unused]] const SDL_Event& event) noexcept override {}
+	void ProcessEventAlways([[maybe_unused]] const SDL_Event& event) noexcept override {}
+};
+#endif
 } // namespace
 
 std::unique_ptr<DebugGuiInterface> DebugGuiInterface::Create(graphics::RenderPass viewId) noexcept
@@ -144,6 +164,7 @@ std::unique_ptr<DebugGuiInterface> DebugGuiInterface::Create(graphics::RenderPas
 	}
 
 	std::vector<std::unique_ptr<Window>> debugWindows;
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
 	debugWindows.emplace_back(new Profiler);
 	debugWindows.emplace_back(new MeshViewer);
 	debugWindows.emplace_back(new TextureViewer);
@@ -173,6 +194,15 @@ std::unique_ptr<DebugGuiInterface> DebugGuiInterface::Create(graphics::RenderPas
 	debugWindows.emplace_back(std::make_unique<editor::EditorWindow>(*spawner, *scenarios));
 	debugWindows.emplace_back(std::move(scenarios));
 	debugWindows.emplace_back(std::move(spawner));
+#else
+	// A build without the developer tools has only the editor, which only a staff player opens in a network game. The
+	// editor hosts the creature tools, which it does not use in a network game.
+	auto spawner = std::make_unique<CreatureSpawner>();
+	auto scenarios = std::make_unique<NoScenariosWindow>();
+	debugWindows.emplace_back(std::make_unique<editor::EditorWindow>(*spawner, *scenarios));
+	debugWindows.emplace_back(std::move(scenarios));
+	debugWindows.emplace_back(std::move(spawner));
+#endif
 
 	auto gui = std::unique_ptr<DebugGuiInterface>(
 	    new Gui(imgui, static_cast<bgfx::ViewId>(viewId), std::move(debugWindows), !Locator::windowing::has_value()));
@@ -268,38 +298,53 @@ void Gui::SetScale(float scale) noexcept
 
 void Gui::FollowNetworkSession() noexcept
 {
-	const bool live = developer_tools::NetworkSessionLive();
-	if (live == _networkDormant)
+	using developer_tools::GuiMode;
+	const auto mode = developer_tools::CurrentGuiMode();
+	if (mode == _mode)
 	{
 		return;
 	}
-	_networkDormant = live;
-	if (live)
+	_mode = mode;
+	// The editor keeps the camera while it is open, thus it closes. It changes the world at once in a single player game
+	// and sends commands in a network game, so it opens again in the new mode. The other windows stay as they are.
+	for (auto& window : _debugWindows)
 	{
-		// The editor keeps the camera while it is open, thus it closes. The other windows stay as they are, hidden.
-		for (auto& window : _debugWindows)
+		if (window->GetName() == k_EditorWindow && window->IsOpen())
 		{
-			if (window->GetName() == "Editor" && window->IsOpen())
-			{
-				window->Close();
-			}
+			window->Close();
 		}
-		_stealsFocus = false;
 	}
+	_stealsFocus = false;
 	if (auto logger = spdlog::get("game"))
 	{
-		SPDLOG_LOGGER_INFO(logger, live ? "A network game is live: the debug windows and the editor stop"
-		                                : "The network game ended: the debug windows start again");
+		switch (mode)
+		{
+		case GuiMode::Full:
+			SPDLOG_LOGGER_INFO(logger, "The debug windows start again");
+			break;
+		case GuiMode::EditorOnly:
+			SPDLOG_LOGGER_INFO(logger, "A network game is live and the player is staff: only the editor shows");
+			break;
+		case GuiMode::Dormant:
+			SPDLOG_LOGGER_INFO(logger, "The debug windows and the editor stop");
+			break;
+		}
 	}
+}
+
+bool Gui::Shows(const Window& window) const noexcept
+{
+	using developer_tools::GuiMode;
+	return _mode == GuiMode::Full || (_mode == GuiMode::EditorOnly && window.GetName() == k_EditorWindow);
 }
 
 bool Gui::ProcessEvents(const SDL_Event& event) noexcept
 {
 	ImGui::SetCurrentContext(_imgui);
-	// While a network game is live, no debug window or editor tool takes an event, so that none changes the shared
-	// world
+	// While a network game is live, no debug window takes an event, so that none changes the shared world. Only the editor
+	// of a staff player takes events, and it sends its edits as commands of the turns.
 	FollowNetworkSession();
-	if (_networkDormant)
+	if (_mode == developer_tools::GuiMode::Dormant)
 	{
 		return false;
 	}
@@ -307,7 +352,10 @@ bool Gui::ProcessEvents(const SDL_Event& event) noexcept
 	auto takenByWindow = false;
 	for (auto& window : _debugWindows)
 	{
-		takenByWindow = window->WindowProcessEvent(event) || takenByWindow;
+		if (Shows(*window))
+		{
+			takenByWindow = window->WindowProcessEvent(event) || takenByWindow;
+		}
 	}
 
 	// The debug windows take only some mouse events while a scenario or the inspector drives the pointer, or while the
@@ -397,14 +445,14 @@ void Gui::CloseWindow(std::string_view name) noexcept
 
 std::string Gui::WindowTakingEvent(const SDL_Event& event) const noexcept
 {
-	// While a network game is live, no debug window takes an event
-	if (_networkDormant || _imgui == nullptr)
+	// While a network game is live, only the editor of a staff player takes an event
+	if (_mode == developer_tools::GuiMode::Dormant || _imgui == nullptr)
 	{
 		return {};
 	}
 	ImGui::SetCurrentContext(_imgui);
-	const auto taking =
-	    std::ranges::find_if(_debugWindows, [&event](const auto& window) { return window->WouldTakeEvent(event); });
+	const auto taking = std::ranges::find_if(
+	    _debugWindows, [this, &event](const auto& window) { return Shows(*window) && window->WouldTakeEvent(event); });
 	return taking == _debugWindows.end() ? std::string {} : (*taking)->GetName();
 }
 
@@ -543,14 +591,29 @@ void Gui::NewFrame() noexcept
 bool Gui::Loop() noexcept
 {
 	FollowNetworkSession();
-	if (_networkDormant)
+	if (_mode != developer_tools::GuiMode::Full)
 	{
-		// An empty frame: no menu, no window and no overlay. The tools that the game server asks for continue.
+		// No menu and no overlay. The tools that the game server asks for continue. Only the editor of a staff player
+		// shows.
 		for (auto& window : _debugWindows)
 		{
-			window->UpdateInNetworkGame();
+			if (Shows(*window))
+			{
+				window->WindowUpdate();
+			}
+			else
+			{
+				window->UpdateInNetworkGame();
+			}
 		}
 		NewFrame();
+		for (auto& window : _debugWindows)
+		{
+			if (Shows(*window))
+			{
+				window->WindowDraw();
+			}
+		}
 		ShowInputLockNotice();
 		ImGui::Render();
 		return false;

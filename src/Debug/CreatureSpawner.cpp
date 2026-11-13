@@ -25,6 +25,7 @@
 #include "3D/CreatureBody.h"
 #include "3D/LandIslandInterface.h"
 #include "Camera/Camera.h"
+#include "Common/DeveloperToolsGate.h"
 #include "Creature/CreatureDesires.h"
 #include "Creature/CreatureFace.h"
 #include "Creature/CreatureIdleMind.h"
@@ -191,7 +192,10 @@ void CreatureSpawner::UseSpeciesDefaults() noexcept
 	{
 		return;
 	}
-	const auto body = CreatureArchetype::StartBody(_species);
+	// The random spread of the body uses the synced random numbers of the game. In a network game the window must not
+	// change the synced world of this computer only, so it shows the body of the species without the spread.
+	const auto body =
+	    developer_tools::NetworkSessionLive() ? CreatureArchetype::BaseBody(_species) : CreatureArchetype::StartBody(_species);
 	_alignment = body.alignment;
 	_fatness = body.fatness;
 	_strength = body.strength;

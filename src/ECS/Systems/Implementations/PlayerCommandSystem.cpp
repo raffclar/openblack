@@ -23,6 +23,7 @@
 #include <spdlog/spdlog.h>
 
 #include "Commands/CommandOwnerRules.h"
+#include "Common/DebugCheats.h"
 #include "Creature/ClanCreatureOrder.h"
 #include "Creature/CreatureFileLoad.h"
 #include "Creature/CreatureHandRules.h"
@@ -49,6 +50,7 @@
 #include "ECS/Systems/CreatureHandSystemInterface.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/CreatureSkinSystemInterface.h"
+#include "ECS/Systems/DebugCheatSystemInterface.h"
 #include "ECS/Systems/EffectRequestSystemInterface.h"
 #include "ECS/Systems/GameEndSystemInterface.h"
 #include "ECS/Systems/HandGrabSystemInterface.h"
@@ -67,6 +69,7 @@
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/VillageTotemSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
+#include "Editor/EditorNetworkEdits.h"
 #include "Hand/HandSendWait.h"
 #include "Input/LocalPlayer.h"
 #include "Locator.h"
@@ -231,14 +234,42 @@ openblack::ecs::components::ObserverInterfaces* ObserversOf(openblack::PlayerNam
 	return &registry.Assign<openblack::ecs::components::ObserverInterfaces>(*player);
 }
 
+/// Do an edit of the editor at the turn. The game server takes the edits only from a staff player.
+void RunEditorEdit(openblack::PlayerNames player, const EditorEdit& edit, uint32_t turn)
+{
+	const bool done = openblack::editor::ApplyEdit(edit);
+	if (auto logger = spdlog::get("game"))
+	{
+		SPDLOG_LOGGER_INFO(logger, "Turn {}: the editor of player {} {} an edit of kind {} on thing {}", turn,
+		                   static_cast<int>(player), done ? "does" : "cannot do", static_cast<int>(edit.kind),
+		                   static_cast<uint32_t>(entt::to_integral(edit.object)));
+	}
+}
+
+/// Turn a debug cheat of the player on or off at the turn. The game server takes the cheats only from a staff player.
+void RunDebugCheat(openblack::PlayerNames player, const DebugCheat& command, uint32_t turn)
+{
+	const auto cheat = openblack::debug_cheats::CheatFrom(command.cheat);
+	if (!cheat.has_value() || !openblack::Locator::debugCheatSystem::has_value())
+	{
+		return;
+	}
+	const bool changed = openblack::Locator::debugCheatSystem::value().Set(player, *cheat, command.on);
+	if (auto logger = spdlog::get("game"); logger != nullptr && changed)
+	{
+		SPDLOG_LOGGER_INFO(logger, "Turn {}: the debug cheat {} of player {} is {}", turn,
+		                   openblack::debug_cheats::NameOf(*cheat), static_cast<int>(player), command.on ? "on" : "off");
+	}
+}
+
 /// Do one command of an observer at a turn. Each observer has its own hand and camera, so its report changes only the
 /// place of its own hand and camera, never the hand of the god. The game server sends only the commands that an observer
 /// sends (player_commands::ObserverSends), and the come and the go of an observer. The world leaves out any other
 /// command of an observer.
-void RunObserver(const Command& command)
+void RunObserver(const Command& command, uint32_t turn)
 {
 	std::visit(
-	    [&command](const auto& action) {
+	    [&command, turn](const auto& action) {
 		    using Kind = std::decay_t<decltype(action)>;
 		    if constexpr (std::is_same_v<Kind, ObserverIn>)
 		    {
@@ -260,6 +291,10 @@ void RunObserver(const Command& command)
 			    {
 				    openblack::observer_interfaces::Report(*observers, command.observer, action.handPoint, action.camera);
 			    }
+		    }
+		    else if constexpr (std::is_same_v<Kind, EditorEdit>)
+		    {
+			    RunEditorEdit(command.player, action, turn);
 		    }
 		    else if constexpr (std::is_same_v<Kind, ChatSpeech> || std::is_same_v<Kind, ChatTaunt>)
 		    {
@@ -402,7 +437,7 @@ void Run(const Command& command, uint32_t turn)
 {
 	if (command.observer != 0)
 	{
-		RunObserver(command);
+		RunObserver(command, turn);
 		return;
 	}
 	// The hand of the sender keeps the turn before the command acts, also when the command then does nothing
@@ -954,6 +989,14 @@ void Run(const Command& command, uint32_t turn)
 				    openblack::Locator::musicMoodSystem::value().DoMusicMood(action);
 			    }
 		    }
+		    else if constexpr (std::is_same_v<Kind, EditorEdit>)
+		    {
+			    RunEditorEdit(command.player, action, turn);
+		    }
+		    else if constexpr (std::is_same_v<Kind, DebugCheat>)
+		    {
+			    RunDebugCheat(command.player, action, turn);
+		    }
 	    },
 	    command.action);
 	if (const auto words = LeashCommandWords(command.action); words.has_value())
@@ -1021,6 +1064,11 @@ void PlayerCommandSystem::RunSent(uint32_t turn)
 		{
 			Run(command, turn);
 		}
+	}
+	// The worship sites and the prayer power of each player keep the flags that the debug cheats of the player give
+	if (openblack::Locator::debugCheatSystem::has_value())
+	{
+		openblack::Locator::debugCheatSystem::value().ProcessTurn();
 	}
 	StartGodsAtSentAlignments(joined);
 	BringCreatures(joined);

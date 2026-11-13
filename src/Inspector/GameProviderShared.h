@@ -172,6 +172,8 @@ template <typename Read>
 [[nodiscard]] std::unique_ptr<ProviderInterface> AdvisorsProvider();
 /// The creatures' other systems
 [[nodiscard]] std::unique_ptr<ProviderInterface> CreaturesProvider();
+/// The editor of a network game: the edits and the debug cheats as commands of the turns
+[[nodiscard]] std::unique_ptr<ProviderInterface> EditorProvider();
 /// The scripts
 [[nodiscard]] std::unique_ptr<ProviderInterface> ScriptProvider(ScriptTargetInterface& scripts);
 /// The saved games

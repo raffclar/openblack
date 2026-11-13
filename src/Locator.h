@@ -222,6 +222,7 @@ class PlaygroundTripSystemInterface;
 class PlayerProfileSystemInterface;
 class ProfileFolderSystemInterface;
 class MusicMoodSystemInterface;
+class DebugCheatSystemInterface;
 class ScriptMusicSystemInterface;
 class TempleExteriorSystemInterface;
 class TempleDestructionSystemInterface;
@@ -424,6 +425,8 @@ struct Locator
 	using playerProfileSystem = entt::locator<ecs::systems::PlayerProfileSystemInterface>;
 	using profileFolderSystem = entt::locator<ecs::systems::ProfileFolderSystemInterface>;
 	using musicMoodSystem = entt::locator<ecs::systems::MusicMoodSystemInterface>;
+	/// The debug cheats of the players, which the editor turns on and off
+	using debugCheatSystem = entt::locator<ecs::systems::DebugCheatSystemInterface>;
 	using scriptMusicSystem = entt::locator<ecs::systems::ScriptMusicSystemInterface>;
 	using templeExteriorSystem = entt::locator<ecs::systems::TempleExteriorSystemInterface>;
 	using templeDestructionSystem = entt::locator<ecs::systems::TempleDestructionSystemInterface>;

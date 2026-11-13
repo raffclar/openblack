@@ -23,6 +23,7 @@
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/DebugCheatSystemInterface.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 
@@ -401,4 +402,33 @@ TEST_F(CitadelReach, TheTurnOfAPlayerGivesItsTemplesTwiceItsShareOfTheInfluenceA
 	registry.Context().mapScriptGlobals.landNumber = 1;
 	exterior.NoteSizeTarget(PlayerNames::PLAYER_TWO, 0.3f);
 	EXPECT_FLOAT_EQ(registry.Get<const components::TempleExterior>(_temples.at(1)).sizeTarget, 0.02f);
+}
+
+namespace
+{
+/// The debug cheats of the players: the first player has the infinite influence
+class FakeCheats final: public systems::DebugCheatSystemInterface
+{
+public:
+	bool Set(PlayerNames /*player*/, debug_cheats::Cheat /*cheat*/, bool /*on*/) override { return false; }
+	[[nodiscard]] uint32_t CheatsOf(PlayerNames player) const override
+	{
+		return player == PlayerNames::PLAYER_ONE ? debug_cheats::BitOf(debug_cheats::Cheat::InfiniteInfluence) : 0u;
+	}
+	void ProcessTurn() override {}
+};
+} // namespace
+
+TEST_F(CitadelReach, TheInfluenceCheatGivesItsPlayerFullInfluenceAtEachPoint)
+{
+	Locator::debugCheatSystem::emplace<FakeCheats>();
+	const auto nowhere = map_coords::FromMetres({4000.0f, 4000.0f});
+	const auto atTwo = map_coords::FromMetres({1500.0f, 1000.0f});
+	EXPECT_FLOAT_EQ(_influence.PlayerRawInfluence(PlayerNames::PLAYER_ONE, nowhere), 1.0f);
+	EXPECT_FLOAT_EQ(_influence.PlayerOwnInfluence(PlayerNames::PLAYER_ONE, nowhere), 1.0f);
+	EXPECT_FLOAT_EQ(_influence.PlayerInfluence(PlayerNames::PLAYER_ONE, atTwo), 1.0f);
+	EXPECT_FLOAT_EQ(_influence.HandPointInfluence(PlayerNames::PLAYER_ONE, nowhere), 1.0f);
+	// The other players keep their own influence
+	EXPECT_FLOAT_EQ(_influence.PlayerRawInfluence(PlayerNames::PLAYER_TWO, nowhere), 0.0f);
+	Locator::debugCheatSystem::reset();
 }

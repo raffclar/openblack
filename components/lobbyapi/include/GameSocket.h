@@ -88,6 +88,9 @@ struct God
 	/// The id of the lobby account of the player ("account", optional). It is the lasting number of the player, for
 	/// example in the friend list. None on the local network, where no ticket names an account.
 	std::optional<int64_t> account;
+	/// The join ticket of the player has the staff claim ("staff", optional). Only a staff player opens the editor and
+	/// turns on the debug cheats in a network game.
+	bool staff {false};
 	bool operator==(const God&) const = default;
 };
 
@@ -141,6 +144,9 @@ struct Joined
 	/// The number of an observer in the game, from 1 ("observer", optional). The turns stamp the commands of the
 	/// observer with it. 0 for a god, and for an observer of an older server.
 	uint8_t observer {0};
+	/// The join ticket of the player has the staff claim ("staff", optional). Then the player can open the editor and
+	/// turn on the debug cheats. The server refuses the edits and the cheats of every other player.
+	bool staff {false};
 };
 
 /// Server to client: "room.refused". The server closes the socket after this frame.

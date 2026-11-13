@@ -25,6 +25,8 @@
 
 #include "Camera/Camera.h"
 #include "Camera/KeyboardMoveSpeed.h"
+#include "Common/DebugCheats.h"
+#include "Common/DeveloperToolsGate.h"
 #include "Debug/CreatureSpawner.h"
 #include "ECS/Archetypes/CreatureArchetype.h"
 #include "ECS/Components/Hand.h"
@@ -79,6 +81,7 @@ EditorWindow::EditorWindow(debug::gui::CreatureSpawner& spawner, debug::gui::Win
     : Window("Editor", ImVec2(800.0f, 600.0f))
     , _spawner(spawner)
     , _scenarios(scenarios)
+    , _writes(std::make_unique<LocalWrites>())
 {
 }
 
@@ -86,12 +89,49 @@ EditorWindow::~EditorWindow() noexcept = default;
 
 void EditorWindow::Open() noexcept
 {
+	// In a network game only a staff player opens the editor. Outside a network game it is a developer tool.
+	if (IsOpen() || !developer_tools::EditorAllowed())
+	{
+		return;
+	}
+	if (developer_tools::NetworkSessionLive())
+	{
+		_writes = MakeNetworkWrites();
+		// The land and the paths tools change the world of this computer only
+		if (auto* system = System(); system != nullptr && (system->GetTool() == Tool::Land || system->GetTool() == Tool::Paths))
+		{
+			system->SetTool(Tool::Select);
+		}
+	}
+	else
+	{
+		_writes = std::make_unique<LocalWrites>();
+	}
 	Window::Open();
 	if (auto* system = System())
 	{
 		system->SetOpen(true);
 	}
 	_outliner.Invalidate();
+}
+
+void EditorWindow::ShowTab(std::string_view tab) noexcept
+{
+	constexpr std::array<std::pair<std::string_view, BottomTab>, 7> k_Tabs {{
+	    {"Palette", BottomTab::Palette},
+	    {"Scenarios", BottomTab::Scenarios},
+	    {"Scripts", BottomTab::Scripts},
+	    {"Land script", BottomTab::LandScript},
+	    {"Land tools", BottomTab::LandTools},
+	    {"Cheats", BottomTab::Cheats},
+	    {"Log", BottomTab::Log},
+	}};
+	if (const auto found = std::ranges::find(k_Tabs, tab, &std::pair<std::string_view, BottomTab>::first);
+	    found != k_Tabs.end())
+	{
+		_showTab = found->second;
+		_showBottom = true;
+	}
 }
 
 void EditorWindow::Close() noexcept
@@ -129,6 +169,7 @@ std::optional<EditorContext> EditorWindow::Context() noexcept
 	    .names = *_names,
 	    .spawner = _spawner,
 	    .placement = _placement,
+	    .writes = *_writes,
 	};
 }
 
@@ -270,6 +311,19 @@ void EditorWindow::PlaceAt(EditorContext& context, glm::vec2 screen) noexcept
 	auto position = SnapPoint(*hit, context.system.GetSnapping());
 	position.y = LandHeight({position.x, position.z});
 	const auto& item = *_placement.item;
+	if (InNetworkGame())
+	{
+		// The creature tools of this computer make a creature, which the other computers do not have
+		if (item.kind == PlaceKind::Creature)
+		{
+			_placement.last = "The editor does not place a creature in a network game";
+			return;
+		}
+		static_cast<void>(context.writes.Place(item, position, _placement.yawRadians));
+		_placement.last = fmt::format("Sent {} to {:.0f}, {:.0f}: it comes at the next turn",
+		                              context.names.NameOf(item.kind, item.type), position.x, position.z);
+		return;
+	}
 	const auto entity = item.kind == PlaceKind::Creature ? _spawner.SpawnAt(position, _placement.yawRadians)
 	                                                     : Place(item, position, _placement.yawRadians);
 	if (entity == entt::null)
@@ -294,6 +348,8 @@ void EditorWindow::Update() noexcept
 	}
 	auto& system = context->system;
 	auto& selection = system.GetSelection();
+	// In a network game the moves and the turns of a drag go at most once for each turn
+	context->writes.Flush();
 
 	if (_placeAt.has_value())
 	{
@@ -446,7 +502,7 @@ void EditorWindow::UpdateDrag(EditorContext& context, entt::entity primary) noex
 			}
 			auto position = start + delta;
 			position.y = LandHeight({position.x, position.z});
-			MoveTo(entity, position);
+			context.writes.MoveTo(entity, position);
 		}
 	}
 	else if (_drag == Drag::Rotate)
@@ -467,12 +523,12 @@ void EditorWindow::UpdateDrag(EditorContext& context, entt::entity primary) noex
 			{
 				continue;
 			}
-			Turn(entity, wanted - _rotated);
+			context.writes.Turn(entity, wanted - _rotated);
 			if (_dragStarts.size() > 1)
 			{
 				auto position = TurnedAbout(start, middle, wanted);
 				position.y = LandHeight({position.x, position.z});
-				MoveTo(entity, position);
+				context.writes.MoveTo(entity, position);
 			}
 		}
 		_rotated = wanted;
@@ -630,6 +686,11 @@ void EditorWindow::HandleKey(const SDL_Event& event) noexcept
 		break;
 	case Action::Undo:
 	case Action::Redo:
+		// In a network game the editor keeps no history
+		if (InNetworkGame())
+		{
+			break;
+		}
 		// A drag that is not done becomes its step first
 		if (_drag == Drag::Move || _drag == Drag::Rotate)
 		{
@@ -662,7 +723,11 @@ void EditorWindow::HandleKey(const SDL_Event& event) noexcept
 		system.SetTool(Tool::GameHand);
 		break;
 	case Action::StepTurn:
-		system.StepTurn();
+		// The game server sets the time of a network game
+		if (!InNetworkGame())
+		{
+			system.StepTurn();
+		}
 		break;
 	case Action::TurnPlacementLeft:
 		_placement.yawRadians = WrapAngle(_placement.yawRadians - turn);
@@ -968,6 +1033,9 @@ void EditorWindow::DrawToolbar(EditorContext& context) noexcept
 		ImGui::SameLine();
 	};
 
+	// The game server sets the time of a network game, and the editor keeps no history there
+	const bool network = InNetworkGame();
+	ImGui::BeginDisabled(network);
 	if (Locator::time::has_value())
 	{
 		auto& time = Locator::time::value();
@@ -999,10 +1067,11 @@ void EditorWindow::DrawToolbar(EditorContext& context) noexcept
 		}
 		ImGui::SetItemTooltip("The game's speed: how long a game turn takes, as a multiple of its tenth of a second");
 	}
+	ImGui::EndDisabled();
 	separator();
 
 	auto& history = system.GetHistory();
-	ImGui::BeginDisabled(!history.CanUndo());
+	ImGui::BeginDisabled(network || !history.CanUndo());
 	if (ImGui::Button("Undo"))
 	{
 		_historyNote = UndoStep(context);
@@ -1011,7 +1080,7 @@ void EditorWindow::DrawToolbar(EditorContext& context) noexcept
 	ImGui::EndDisabled();
 	ImGui::SetItemTooltip("%s (Ctrl+[)", fmt::format("Undo {}", history.UndoLabel().value_or("")).c_str());
 	ImGui::SameLine();
-	ImGui::BeginDisabled(!history.CanRedo());
+	ImGui::BeginDisabled(network || !history.CanRedo());
 	if (ImGui::Button("Redo"))
 	{
 		_historyNote = RedoStep(context);
@@ -1036,6 +1105,11 @@ void EditorWindow::DrawToolbar(EditorContext& context) noexcept
 	}};
 	for (const auto& [label, tool] : k_Tools)
 	{
+		// The land and the paths tools change the world of this computer only
+		if (network && (tool == Tool::Land || tool == Tool::Paths))
+		{
+			continue;
+		}
 		if (ImGui::RadioButton(label, system.GetTool() == tool))
 		{
 			system.SetTool(tool);
@@ -1143,26 +1217,36 @@ void EditorWindow::DrawBottom(EditorContext& context) noexcept
 		_palette.Draw(context);
 		ImGui::EndTabItem();
 	}
-	if (ImGui::BeginTabItem("Scenarios", nullptr, flags(BottomTab::Scenarios)))
+	// The scenarios, the scripts and the land tools change the world of this computer only, so a network game does not
+	// have them
+	if (!InNetworkGame())
 	{
-		ImGui::BeginChild("Scenarios");
-		_scenarios.DrawContents();
-		ImGui::EndChild();
-		ImGui::EndTabItem();
+		if (ImGui::BeginTabItem("Scenarios", nullptr, flags(BottomTab::Scenarios)))
+		{
+			ImGui::BeginChild("Scenarios");
+			_scenarios.DrawContents();
+			ImGui::EndChild();
+			ImGui::EndTabItem();
+		}
+		if (ImGui::BeginTabItem("Scripts", nullptr, flags(BottomTab::Scripts)))
+		{
+			_scripts.Draw();
+			ImGui::EndTabItem();
+		}
+		if (ImGui::BeginTabItem("Land script", nullptr, flags(BottomTab::LandScript)))
+		{
+			_landScript.Draw();
+			ImGui::EndTabItem();
+		}
+		if (ImGui::BeginTabItem("Land tools", nullptr, flags(BottomTab::LandTools)))
+		{
+			_landTools.Draw(context);
+			ImGui::EndTabItem();
+		}
 	}
-	if (ImGui::BeginTabItem("Scripts", nullptr, flags(BottomTab::Scripts)))
+	if (ImGui::BeginTabItem("Cheats", nullptr, flags(BottomTab::Cheats)))
 	{
-		_scripts.Draw();
-		ImGui::EndTabItem();
-	}
-	if (ImGui::BeginTabItem("Land script", nullptr, flags(BottomTab::LandScript)))
-	{
-		_landScript.Draw();
-		ImGui::EndTabItem();
-	}
-	if (ImGui::BeginTabItem("Land tools", nullptr, flags(BottomTab::LandTools)))
-	{
-		_landTools.Draw(context);
+		DrawCheats();
 		ImGui::EndTabItem();
 	}
 	const auto errors = _log.Errors();
@@ -1180,6 +1264,22 @@ void EditorWindow::DrawBottom(EditorContext& context) noexcept
 		_bottomHeight = _bottomHeight < height * 0.5f ? height * 0.65f : height * 0.3f;
 	}
 	ImGui::EndTabBar();
+}
+
+void EditorWindow::DrawCheats() noexcept
+{
+	ImGui::TextColored(style::k_Muted, "Debug cheats of your god. Each change goes at the next turn to every computer.");
+	const auto cheats = OwnDebugCheats();
+	for (size_t index = 0; index < debug_cheats::k_CheatCount; ++index)
+	{
+		const auto cheat = static_cast<debug_cheats::Cheat>(index);
+		bool on = debug_cheats::Has(cheats, cheat);
+		const auto name = std::string(debug_cheats::NameOf(cheat));
+		if (ImGui::Checkbox(name.c_str(), &on))
+		{
+			SendDebugCheat(cheat, on);
+		}
+	}
 }
 
 void EditorWindow::DrawBox(const AxisAlignedBoundingBox& box, uint32_t colour, float thickness) noexcept

@@ -30,6 +30,7 @@ class CreatureSpawner;
 namespace openblack::editor
 {
 struct NameTables;
+class EditorWrites;
 
 /// Placing things from the palette: the item that follows the mouse until a click puts it down, and the way it faces
 struct Placement
@@ -48,6 +49,8 @@ struct EditorContext
 	const NameTables& names;
 	debug::gui::CreatureSpawner& spawner;
 	Placement& placement;
+	/// How the editor changes the world: at once, or with the commands of the turns in a network game
+	EditorWrites& writes;
 };
 
 } // namespace openblack::editor

@@ -12,13 +12,10 @@ if (NOT OPENBLACK_INSPECTOR)
        "/Inspector/|/InspectorSystem[.]h$"
   )
 endif ()
-# Without the developer tools, the game does not make the debug windows: a debug GUI that does nothing replaces them.
-# The windows, the editor and the editor system are then not in the program, because no part of the program uses them.
+# Without the developer tools, the debug GUI has only the in-game editor, which only a staff player opens in a network
+# game. The other debug windows are then not in the program, because no part of the program uses them.
 # The trace of the synced random draws is a developer tool too.
-if (OPENBLACK_DEVELOPER_TOOLS)
-  list(FILTER OPENBLACK_SOURCES EXCLUDE REGEX "/Debug/NoDebugGui[.]cpp$")
-else ()
-  list(FILTER OPENBLACK_SOURCES EXCLUDE REGEX "/Debug/Gui[.]cpp$")
+if (NOT OPENBLACK_DEVELOPER_TOOLS)
   list(FILTER OPENBLACK_SOURCES EXCLUDE REGEX "/Common/DrawTrace[.]cpp$")
   list(FILTER OPENBLACK_HEADERS EXCLUDE REGEX "/Common/DrawTrace[.]h$")
   # The dump of the rows of the synced world is a developer tool
@@ -85,7 +82,7 @@ set(OPENBLACK_SIM_IN_CLIENT_FOLDERS
     "Audio/(MpegAudioDecoder|WavAudioDecoder|AudioDecoderInterface)"
     "Debug/(SimRun|SimChecks|TempleVillagersSurvey|RowDump|ComputerGodTimes|ComputerActions|BenchmarkRecorder|FightAutopilotRules|TestbedCrowd|TestbedDispenserGrid|TestbedMultiplayer|TownMiracleRules|TownMiracles|TestbedScenarioRunner|NoScenarioPlayer|ScenarioPlayer|DebugGuiInterface|FightAutopilotInterface|TestbedGameStageInterface|TestbedHandSweep|StateHashWatch)"
     "Debug/TestbedScenario[A-Z][A-Za-z]*"
-    "Editor/(EditorMath|EditorEntities|EditorPalette|EditorSelection|EditorOutline|EditorHistory|EditorPaths|LandBrush|LandSave)"
+    "Editor/(EditorMath|EditorEntities|EditorNetworkEdits|EditorPalette|EditorSelection|EditorOutline|EditorHistory|EditorPaths|LandBrush|LandSave)"
     "Graphics/(HandLight|PixelCentres|InterfaceCreatures|MeshDetail|Moon|Sun|ViewFrustum|Texture2D|VertexBuffer|IndexBuffer|Mesh|TextureSize|GraphicsDeviceInterface|DeviceDataGivers|GraphicsHandle|FilmSurface|ZSort|FizzDrawOrder|HandReflection|ObjectTint|TempleHeartLook)"
     "Gui/(ChatControlsRules|ScreenPixels|CinemaBars|ConditionsBoxRules|CustomMusicControlsRules|DialogKeyRules|EndGameBoxRules|EscapeKeyRules|GameFont|GameTexts|GodWindowRules|HandToolTipRules|HandToolTips|IncomingMessageStripRules|JoinOnlineEntry|LandThumbnail|LoadingScreenRules|LogoEffect|MenuBackdrop|MenuSettings|MultiplayerFrontEnd|MultiplayerFrontEndRules|OnlineMapTexts|PauseText|PingDisplay|ScreenFade|ScreenFit|ScriptFade|ScriptTexts|SkirmishBoxRules|StartupRules|StatisticsBoxRules|TextDatabase|TextEditRules|TextWrap|ToolTips|VillagerLabels|WorldTextDepth|WorldToolTipRules|WorldToolTips|DialogRect|SavingBoxRules)"
     "Input/(AltHeldPresses|HandButtonMessages|InjectedInput|InputLock|KeyBindings|KeyRebinding|GameActionMap|CursorFreeze|PointerSpeed|ScriptedMouse|ShortcutKeys|WindowPointer|NoInputDevice|GameActionMapInterface|InputDeviceInterface|BindableActions|LocalPlayer|PointerSettle|BoxKeyboard|MouseMotion|PlatformKeys|DeveloperKeys|PointerButtons|HandPointer)"

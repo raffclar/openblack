@@ -18,6 +18,7 @@
 #include <glm/fwd.hpp>
 #include <imgui.h>
 
+#include "Common/DeveloperTools.h"
 #include "DebugGuiInterface.h"
 #include "DebugWindowMouse.h"
 #include "Graphics/GraphicsHandle.h"
@@ -104,9 +105,13 @@ private:
 	bool _followsDrivenPointer = false;
 	/// The mouse events that the debug windows take now
 	WindowMouse _windowMouse = WindowMouse::Player;
-	/// A network game was live last frame: the debug windows and the menu do not show and take no input
-	bool _networkDormant = false;
-	/// Closes the editor when a network game starts, and tells the log when the debug windows stop or start again
+	/// What the debug windows showed last frame. In a network game only a staff player has the editor, and the other
+	/// windows and the menu do not show and take no input. A build without the developer tools has only the editor.
+	developer_tools::GuiMode _mode =
+	    developer_tools::k_Built ? developer_tools::GuiMode::Full : developer_tools::GuiMode::Dormant;
+	/// Closes the editor when what the windows show changes, and tells the log
 	void FollowNetworkSession() noexcept;
+	/// The window may take the input and draw in the mode now
+	[[nodiscard]] bool Shows(const Window& window) const noexcept;
 };
 } // namespace openblack::debug::gui

@@ -652,6 +652,7 @@ GameProvider* openblack::inspector::AddGameProviders(Inspector& inspector, const
 	inspector.Add(ViewProvider(controls.seam));
 	inspector.Add(AdvisorsProvider());
 	inspector.Add(CreaturesProvider());
+	inspector.Add(EditorProvider());
 	inspector.Add(ScriptProvider(controls.scripts));
 	inspector.Add(HelpProvider());
 	inspector.Add(SavesProvider());

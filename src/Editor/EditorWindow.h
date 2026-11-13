@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -23,6 +24,7 @@
 #include "EditorActions.h"
 #include "EditorContext.h"
 #include "EditorEntities.h"
+#include "EditorNetworkEdits.h"
 #include "Panels/InspectorPanel.h"
 #include "Panels/LandScriptPanel.h"
 #include "Panels/LandToolsPanel.h"
@@ -44,6 +46,10 @@ namespace openblack::editor
 /// palette, the testbed's scenarios, the scripts and the scripts' log), round the view of the world, where the mouse
 /// picks, moves, turns and places things and drives the editor's cameras. Closed, it only listens for its key and the
 /// game is as without it.
+///
+/// In a network game only a staff player opens the editor. The editor then sends its moves, turns, placements and
+/// removals, and the debug cheats, as commands of the turns, and it has no history, no land tools, no scripts and no
+/// control of the time of the game.
 class EditorWindow final: public debug::gui::Window
 {
 public:
@@ -52,6 +58,9 @@ public:
 
 	void Open() noexcept override;
 	void Close() noexcept override;
+	/// Shows a tab of the strip along the bottom: "Palette", "Scenarios", "Scripts", "Land script", "Land tools", "Cheats"
+	/// or "Log"
+	void ShowTab(std::string_view tab) noexcept override;
 	void WindowDraw() noexcept override;
 
 protected:
@@ -81,12 +90,18 @@ private:
 		Scripts,
 		LandScript,
 		LandTools,
+		/// The debug cheats of the player of this computer
+		Cheats,
 		Log,
 	};
 
 	[[nodiscard]] std::optional<EditorContext> Context() noexcept;
 	void DrawToolbar(EditorContext& context) noexcept;
 	void DrawBottom(EditorContext& context) noexcept;
+	/// The debug cheats of the player of this computer, each one with a box to turn it on or off
+	static void DrawCheats() noexcept;
+	/// True while the editor is open in a network game
+	[[nodiscard]] bool InNetworkGame() const noexcept { return !_writes->ChangesAtOnce(); }
 	void DrawOverlays(EditorContext& context) noexcept;
 	/// The box round a thing, or round where an item would go, drawn over the world
 	static void DrawBox(const AxisAlignedBoundingBox& box, uint32_t colour, float thickness) noexcept;
@@ -112,6 +127,8 @@ private:
 	debug::gui::CreatureSpawner& _spawner;
 	debug::gui::Window& _scenarios;
 	std::optional<NameTables> _names;
+	/// How the editor changes the world: at once, or with the commands of the turns in a network game
+	std::unique_ptr<EditorWrites> _writes;
 	Placement _placement;
 	OutlinerPanel _outliner;
 	InspectorPanel _inspector;
