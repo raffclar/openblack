@@ -449,6 +449,28 @@ void testbed_scenarios::AddGestureScenarios(std::vector<Scenario>& all)
 	                .atMost = 0.0}},
 	});
 	all.push_back({
+	    .id = "miracles.hand_demo_shakes_off_seed",
+	    .name = "A hand demonstration shakes the miracle off the hand",
+	    .facet = Facet::Miracles,
+	    .description = "A water miracle is put in the hand. Two seconds later the gestures hand demonstration starts. It "
+	                   "starts as a script starts it, without the option that keeps the hand as it is.",
+	    .expected = "The hand holds the water miracle, with its bracelet and glow. When the demonstration starts, the "
+	                "miracle goes from the hand at once: the bracelet and the glow go. The hand does not shake: no shake "
+	                "sound plays and no band flies off the hand. Then the hand draws the gestures of the demonstration.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Testbed},
+	    .commands = {HoldSeed(SpellSeedType::Water, 1.0f),
+	                 {.kind = Kind::PlayHandDemo, .delaySeconds = 2.0f, .handDemo = "Gestures"}},
+	    .checks = {{.label = "the hand holds the miracle before the demonstration",
+	                .quantity = checks::Quantity::HandMiracle,
+	                .afterTurns = 20,
+	                .atLeast = 1.0},
+	               {.label = "the start of the demonstration shakes the miracle off the hand",
+	                .quantity = checks::Quantity::HandMiracle,
+	                .afterTurns = 40,
+	                .atMost = 0.0}},
+	});
+	all.push_back({
 	    .id = "story.hidden_phone_box",
 	    .name = "The square wave starts the hidden phone box",
 	    .facet = Facet::Story,

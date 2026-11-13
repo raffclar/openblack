@@ -421,6 +421,14 @@ TEST(HandDemo, TheClickMovesToAThingOfTheKindWithinThreeMetres)
 	EXPECT_TRUE(TakesRecordedClick(any, {.type = script::ObjectType::Store}, At(1830.0f, 2642.0f)));
 }
 
+TEST(HandDemo, AStartShakesOffWhatTheHandHoldsUnlessItKeepsTheHand)
+{
+	EXPECT_TRUE(hand_demo::ShakesOffHeld(false, true));
+	EXPECT_FALSE(hand_demo::ShakesOffHeld(false, false));
+	// A demonstration without hand modify keeps what the hand holds
+	EXPECT_FALSE(hand_demo::ShakesOffHeld(true, true));
+}
+
 TEST(HandDemo, AStartStopsTheChargesUnlessItKeepsTheHand)
 {
 	EXPECT_TRUE(hand_demo::StopsCharges(false));
