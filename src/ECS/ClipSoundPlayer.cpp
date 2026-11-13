@@ -77,7 +77,11 @@ public:
 	void PlaySound(std::string_view bank, std::span<const int32_t> keys, entt::entity owner, const glm::vec3& position,
 	               bool bySampleRules) override
 	{
-		const auto conditions = bySampleRules ? std::optional(audio::CurrentSoundEffectConditions()) : std::nullopt;
+		if (bySampleRules && !_conditions.has_value())
+		{
+			_conditions = audio::CurrentSoundEffectConditions();
+		}
+		const auto conditions = bySampleRules ? _conditions : std::nullopt;
 		auto& audio = Locator::sounds::value();
 		// The sound stays with its owner, and it stops when the owner goes or dies
 		const auto played = audio.PlayAnimEffect(std::string(bank), keys, owner, position, conditions);
@@ -90,6 +94,10 @@ public:
 		Locator::sounds::value().EndAnimEffect(std::string(bank), keys, owner, position, end,
 		                                       audio::AnimEffectMeasure::Straight);
 	}
+
+private:
+	/// The game's sound conditions, found at the first sound that the sample rules play
+	std::optional<audio::SoundEffectConditions> _conditions;
 };
 
 } // namespace
@@ -175,10 +183,21 @@ void clip_sound_player::Play(World& world, entt::entity entity, AnimId clipId, C
 	}
 }
 
+std::unique_ptr<clip_sound_player::World> clip_sound_player::MakeGameWorld()
+{
+	return std::make_unique<GameWorld>();
+}
+
+void clip_sound_player::Play(World& world, entt::entity entity, AnimId clipId, const L3DAnim& clip, uint32_t place,
+                             uint32_t played, const glm::vec3& position, bool refresh)
+{
+	Play(world, entity, clipId, {.duration = clip.GetPlayTime(), .looping = clip.IsLooping()}, place, played, position,
+	     refresh);
+}
+
 void clip_sound_player::Play(entt::entity entity, AnimId clipId, const L3DAnim& clip, uint32_t place, uint32_t played,
                              const glm::vec3& position, bool refresh)
 {
 	GameWorld world;
-	Play(world, entity, clipId, {.duration = clip.GetPlayTime(), .looping = clip.IsLooping()}, place, played, position,
-	     refresh);
+	Play(world, entity, clipId, clip, place, played, position, refresh);
 }

@@ -174,6 +174,8 @@ void LivingActionSystem::UpdatePoses(std::chrono::milliseconds frameGameTime, fl
 	const auto& states = Locator::infoConstants::value().villagerStateTable;
 	// The souls of the dead rise by the same clock
 	ecs::villager_after_death::MoveSouls(elapsed);
+	// One world plays the clips' sounds of all the villagers in this frame
+	const auto clipSounds = ecs::clip_sound_player::MakeGameWorld();
 
 	registry.Each<const Villager, const LivingAction, const Mesh, const Transform, VillagerPose>(
 	    [&](entt::entity entity, const Villager& /*unused*/, const LivingAction& action, const Mesh& mesh,
@@ -208,7 +210,7 @@ void LivingActionSystem::UpdatePoses(std::chrono::milliseconds frameGameTime, fl
 			    pose.groundCarry = carried.carry;
 		    }
 		    // The sounds on the clip's frames it passes play from the villager
-		    ecs::clip_sound_player::Play(entity, pose.clip, *clip, pose.place, static_cast<uint32_t>(played),
+		    ecs::clip_sound_player::Play(*clipSounds, entity, pose.clip, *clip, pose.place, static_cast<uint32_t>(played),
 		                                 transform.position, refresh);
 		    pose.place = animals::AdvanceClip(timing, pose.place, played);
 		    // While it walks with a clip that carries it along, it is drawn gliding from where it stood as the turn began

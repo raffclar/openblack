@@ -186,22 +186,52 @@ public:
 
 	void Sprite(const sprites::SpriteInstance& instance, std::string_view texture, Mode mode)
 	{
-		const auto ids = _sources.textures ? _sources.textures(texture) : std::nullopt;
-		if (!ids.has_value())
+		const auto material = MaterialOf(texture, mode);
+		if (!material.has_value())
 		{
 			return;
 		}
-		const auto material = _frame.MaterialIndex({.texture = ids->first, .alphaTexture = ids->second, .mode = mode});
 		_frame.items.push_back({.kind = ItemKind::Sprite,
 		                        .index = static_cast<uint32_t>(_frame.sprites.size()),
 		                        .sortPoint = glm::vec3(instance.positionHalfWidth)});
 		_frame.sprites.push_back(instance);
-		_frame.spriteMaterials.push_back(material);
+		_frame.spriteMaterials.push_back(*material);
 	}
 
 private:
+	/// A material that the builder found, by the name of its texture and its mode
+	struct Found
+	{
+		std::string_view texture;
+		Mode mode;
+		std::optional<uint32_t> material;
+	};
+
+	/// The material of a texture in a mode, none when the texture is not known. The builder keeps the last two that it
+	/// found: the sprites of an atom often take turns between two materials.
+	std::optional<uint32_t> MaterialOf(std::string_view texture, Mode mode)
+	{
+		for (const auto& found : _found)
+		{
+			if (found.has_value() && found->mode == mode && found->texture == texture)
+			{
+				return found->material;
+			}
+		}
+		const auto ids = _sources.textures ? _sources.textures(texture) : std::nullopt;
+		const auto material =
+		    ids.has_value()
+		        ? std::optional(_frame.MaterialIndex({.texture = ids->first, .alphaTexture = ids->second, .mode = mode}))
+		        : std::nullopt;
+		_found.at(_next) = Found {.texture = texture, .mode = mode, .material = material};
+		_next = (_next + 1) % _found.size();
+		return material;
+	}
+
 	Frame& _frame;
 	const Sources& _sources;
+	std::array<std::optional<Found>, 2> _found;
+	size_t _next {0};
 };
 
 /// A colour as the shader takes it, from the lowest byte: red, green, blue, alpha

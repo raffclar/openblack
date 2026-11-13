@@ -16,12 +16,14 @@
 #include <any>
 #include <array>
 #include <functional>
+#include <iterator>
 #include <memory>
 #include <optional>
 #include <span>
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include <ParticleFile.h>
@@ -639,6 +641,78 @@ struct AtomRuleData
 	glm::vec4 b {0.0f};
 };
 
+/// What each rule keeps for one atom, by the rule. An atom has the data of few rules. Thus the store keeps them in the
+/// order that they come, in the atom while there are few, and does a search of them. Then a rule finds its data with no
+/// look into memory other than the atom. The store never removes the data of a rule. The data of a new rule can move the
+/// data of the other rules.
+class AtomRuleStore
+{
+public:
+	using value_type = std::pair<const Modifier*, AtomRuleData>;
+	using iterator = value_type*;
+	using const_iterator = const value_type*;
+
+	[[nodiscard]] iterator begin() { return _heap.empty() ? _inAtom.data() : _heap.data(); }
+	[[nodiscard]] iterator end() { return begin() + _size; }
+	[[nodiscard]] const_iterator begin() const { return _heap.empty() ? _inAtom.data() : _heap.data(); }
+	[[nodiscard]] const_iterator end() const { return begin() + _size; }
+	[[nodiscard]] size_t size() const { return _size; }
+	[[nodiscard]] bool empty() const { return _size == 0; }
+
+	[[nodiscard]] iterator find(const Modifier* modifier)
+	{
+		return std::ranges::find(begin(), end(), modifier, &value_type::first);
+	}
+	[[nodiscard]] const_iterator find(const Modifier* modifier) const
+	{
+		return std::ranges::find(begin(), end(), modifier, &value_type::first);
+	}
+	/// The data of the rule. A rule with no data gets new data.
+	AtomRuleData& operator[](const Modifier* modifier)
+	{
+		if (const auto found = find(modifier); found != end())
+		{
+			return found->second;
+		}
+		return Add(modifier, {});
+	}
+	/// Gives this data to the rule, in place of the data that it had
+	void insert_or_assign(const Modifier* modifier, AtomRuleData&& data)
+	{
+		if (const auto found = find(modifier); found != end())
+		{
+			found->second = std::move(data);
+			return;
+		}
+		Add(modifier, std::move(data));
+	}
+
+private:
+	static constexpr size_t k_InAtom = 2;
+
+	AtomRuleData& Add(const Modifier* modifier, AtomRuleData&& data)
+	{
+		if (_heap.empty() && _size < k_InAtom)
+		{
+			_inAtom.at(_size) = {modifier, std::move(data)};
+			return _inAtom.at(_size++).second;
+		}
+		if (_heap.empty())
+		{
+			_heap.reserve(k_InAtom * 2);
+			std::ranges::move(_inAtom, std::back_inserter(_heap));
+			_inAtom = {};
+		}
+		_heap.emplace_back(modifier, std::move(data));
+		++_size;
+		return _heap.back().second;
+	}
+
+	std::array<value_type, k_InAtom> _inAtom {};
+	std::vector<value_type> _heap;
+	size_t _size {0};
+};
+
 /// The glowing shell an atom lays over the model of an object it is kept on (see volume_glow), as the rule set it this
 /// step
 struct ObjectGlow
@@ -732,12 +806,6 @@ struct Atom
 	/// How much of its effect's draw offset it takes, as the start of a bolt from the hand keeps up with the hand between
 	/// steps while its forks stay where they were laid
 	float drawWeight {1.0f};
-	/// The sounds it keeps going, the newest first
-	std::vector<std::shared_ptr<ParticleSoundLink>> sounds;
-	/// A game object it carries, if any
-	std::shared_ptr<CarriedObject> carried;
-	/// The triangles of a piece of a broken model it is drawn as
-	std::shared_ptr<const blast::MeshFragment> fragment;
 	DrawState previous;
 	DrawState current;
 	/// It has been through a step's end, so it has somewhere to be drawn
@@ -746,6 +814,22 @@ struct Atom
 	/// the rule that made it asks.
 	uint8_t steps {0};
 	bool drawOnFirstUpdate {false};
+	/// It uses the draw offset of its parent atom, the same one, as the rain cone keeps with its cloud
+	bool sharesParentOffset {false};
+	/// The shower of sparks it sends up from an object, when a rule keeps it on one and asks for it; it needs no creator
+	std::shared_ptr<ObjectShower> shower;
+	/// The surface it is drawn as, its own, when a rule draws it as a surface of revolution
+	std::shared_ptr<SurfaceInstance> surface;
+	/// The triangles of a piece of a broken model it is drawn as
+	std::shared_ptr<const blast::MeshFragment> fragment;
+	/// The camera path that it takes its caster's camera along, when its creator places one
+	std::shared_ptr<CameraPathLink> cameraPath;
+	std::vector<std::unique_ptr<Collection>> subCollections;
+	AtomRuleStore data;
+	/// The sounds it keeps going, the newest first
+	std::vector<std::shared_ptr<ParticleSoundLink>> sounds;
+	/// A game object it carries, if any
+	std::shared_ptr<CarriedObject> carried;
 	/// Drawn this far from where it is, the shift running out evenly over two seconds from when it was made, at the
 	/// effect's age then: a wisp let out of this computer's hand starts at the hand
 	std::optional<glm::vec3> drawOffset;
@@ -753,18 +837,8 @@ struct Atom
 	/// It keeps the atom at the live hand of this computer's cast between steps. An atom has only one draw offset: this one,
 	/// the shift above, or the one of its parent atom.
 	std::optional<HandOffset> handOffset;
-	/// It uses the draw offset of its parent atom, the same one, as the rain cone keeps with its cloud
-	bool sharesParentOffset {false};
-	/// The surface it is drawn as, its own, when a rule draws it as a surface of revolution
-	std::shared_ptr<SurfaceInstance> surface;
 	/// The shell it lays over an object's model, when a rule keeps it on one
 	std::optional<ObjectGlow> objectGlow;
-	/// The shower of sparks it sends up from an object, when a rule keeps it on one and asks for it; it needs no creator
-	std::shared_ptr<ObjectShower> shower;
-	/// The camera path that it takes its caster's camera along, when its creator places one
-	std::shared_ptr<CameraPathLink> cameraPath;
-	std::vector<std::unique_ptr<Collection>> subCollections;
-	std::unordered_map<const Modifier*, AtomRuleData> data;
 };
 
 /// One live instance of a group

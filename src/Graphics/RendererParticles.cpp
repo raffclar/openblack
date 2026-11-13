@@ -19,6 +19,7 @@
 
 #include <algorithm>
 #include <iterator>
+#include <optional>
 #include <span>
 #include <string>
 #include <vector>
@@ -966,7 +967,35 @@ void Renderer::SubmitParticleFrame(const DrawSceneDesc& desc, const particles::d
 
 	const auto* spriteProgram = _shaderManager->GetShader("ParticleInstanced");
 	const auto* chainProgram = _shaderManager->GetShader("ParticleChain");
-	const auto bindMaterial = [&](const ShaderProgram& program, uint32_t index) {
+	const auto* surfaceProgram = _shaderManager->GetShader("ParticleSurface");
+	// The uniforms of each program, found by name one time for all the draws of the pass
+	struct MaterialUniforms
+	{
+		ProgramUniform diffuse;
+		ProgramUniform alpha;
+	};
+	const auto materialUniformsOf = [](const ShaderProgram* program) {
+		std::optional<MaterialUniforms> uniforms;
+		if (program != nullptr)
+		{
+			uniforms.emplace(MaterialUniforms {.diffuse = ProgramUniform {*program, "s_diffuse"},
+			                                   .alpha = ProgramUniform {*program, "s_alpha"}});
+		}
+		return uniforms;
+	};
+	const auto spriteMaterial = materialUniformsOf(spriteProgram);
+	const auto chainMaterial = materialUniformsOf(chainProgram);
+	const auto surfaceMaterial = materialUniformsOf(surfaceProgram);
+	std::optional<ProgramUniform> spriteLandLuminosity;
+	std::optional<ProgramUniform> spriteLandLight;
+	std::optional<ProgramUniform> spriteIslandExtent;
+	if (spriteProgram != nullptr)
+	{
+		spriteLandLuminosity.emplace(*spriteProgram, "s_landLuminosity");
+		spriteLandLight.emplace(*spriteProgram, "s_landLight");
+		spriteIslandExtent.emplace(*spriteProgram, "u_islandExtent");
+	}
+	const auto bindMaterial = [&](const std::optional<MaterialUniforms>& uniforms, uint32_t index) {
 		const auto& material = frame.materials[index];
 		if (!textures.Contains(material.texture))
 		{
@@ -975,8 +1004,8 @@ void Renderer::SubmitParticleFrame(const DrawSceneDesc& desc, const particles::d
 		const auto texture = textures.Handle(material.texture);
 		// A sheet without an alpha of its own takes its alpha from its red
 		const auto alpha = textures.Contains(material.alphaTexture) ? textures.Handle(material.alphaTexture) : texture;
-		program.SetTextureSampler("s_diffuse", 0, *texture);
-		program.SetTextureSampler("s_alpha", 1, *alpha);
+		uniforms->diffuse.Set(0, *texture);
+		uniforms->alpha.Set(1, *alpha);
 		bgfx::setState(BlendState(material.mode));
 		return true;
 	};
@@ -984,12 +1013,12 @@ void Renderer::SubmitParticleFrame(const DrawSceneDesc& desc, const particles::d
 		switch (command.kind)
 		{
 		case ItemKind::Sprite:
-			if (haveSprites && bindMaterial(*spriteProgram, command.material))
+			if (haveSprites && bindMaterial(spriteMaterial, command.material))
 			{
 				// The sprites tinted by the land read its light
-				spriteProgram->SetTextureSampler("s_landLuminosity", 6, GetLandLuminosity());
-				spriteProgram->SetTextureSampler("s_landLight", 7, GetLandLightTexture());
-				spriteProgram->SetUniformValue("u_islandExtent", &islandExtent);
+				spriteLandLuminosity->Set(6, GetLandLuminosity());
+				spriteLandLight->Set(7, GetLandLightTexture());
+				spriteIslandExtent->Set(&islandExtent);
 				_plane->GetVertexBuffer().Bind();
 				bgfx::setInstanceDataBuffer(&instances, command.first, command.count);
 				spriteProgram->Submit(viewId, command.depth);
@@ -998,7 +1027,7 @@ void Renderer::SubmitParticleFrame(const DrawSceneDesc& desc, const particles::d
 		case ItemKind::Chain:
 		{
 			const auto& chain = frame.chains[command.first];
-			if (haveChains && bindMaterial(*chainProgram, command.material))
+			if (haveChains && bindMaterial(chainMaterial, command.material))
 			{
 				bgfx::setVertexBuffer(0, &chainVertices);
 				bgfx::setIndexBuffer(&chainIndices,
@@ -1017,8 +1046,7 @@ void Renderer::SubmitParticleFrame(const DrawSceneDesc& desc, const particles::d
 		case ItemKind::Surface:
 		{
 			const auto& surface = frame.surfaces[command.first];
-			const auto* surfaceProgram = _shaderManager->GetShader("ParticleSurface");
-			if (haveSurfaces && bindMaterial(*surfaceProgram, command.material))
+			if (haveSurfaces && bindMaterial(surfaceMaterial, command.material))
 			{
 				// Its points are in the world; the game's surfaces face clockwise, which the mirrored reflection turns
 				bgfx::setTransform(glm::value_ptr(glm::mat4(1.0f)));

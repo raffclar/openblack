@@ -914,15 +914,16 @@ const PlayerAllies* AlliesOf(PlayerNames player)
 }
 
 /// The influence that the allies of a player lend at a place. The first ally, in the order of the numbers, that lends
-/// its influence and has some of its own there lends it. Without one the answer is none.
-template <typename RawOf>
-float LentByAllies(const PlayerAllies* allies, const RawOf& rawOf)
+/// its influence and has some of its own there lends it. Without one the answer is none. `players` are the players of
+/// the game, in the order of their numbers.
+template <typename Players, typename RawOf>
+float LentByAllies(const PlayerAllies* allies, const Players& players, const RawOf& rawOf)
 {
 	if (allies == nullptr)
 	{
 		return 0.0f;
 	}
-	for (const auto ally : ecs::game_players::All())
+	for (const auto ally : players)
 	{
 		const auto index = static_cast<size_t>(ally);
 		if (index >= allies->strength.size() || !player_relations::LendsInfluence(allies->strength.at(index)))
@@ -971,7 +972,9 @@ std::array<float, player_slots::k_PlayerNumbers> InfluenceSystem::PlayerInfluenc
 		return allyIndex < k_Players ? near.raw.at(allyIndex) : PlayerRawInfluence(ally, position);
 	};
 	std::array<float, k_Players> influences {};
-	for (const auto player : game_players::All())
+	// The players of the game do not change while the function runs
+	const auto players = game_players::All();
+	for (const auto player : players)
 	{
 		const auto index = static_cast<size_t>(player);
 		if (index >= k_Players)
@@ -986,7 +989,7 @@ std::array<float, player_slots::k_PlayerNumbers> InfluenceSystem::PlayerInfluenc
 			const auto* state = virtualInfluence != nullptr ? &virtualInfluence->state : nullptr;
 			own = HandGrant(player, position, state, near.keptOut.at(index)).value_or(near.raw.at(index));
 		}
-		influences.at(index) = own > 0.0f ? own : LentByAllies(allies.at(index), rawOf);
+		influences.at(index) = own > 0.0f ? own : LentByAllies(allies.at(index), players, rawOf);
 	}
 	return influences;
 }
@@ -998,7 +1001,8 @@ float InfluenceSystem::WithAllies(PlayerNames player, const map_coords::MapCoord
 	{
 		return own;
 	}
-	return LentByAllies(AlliesOf(player), [this, &position](PlayerNames ally) { return PlayerRawInfluence(ally, position); });
+	return LentByAllies(AlliesOf(player), game_players::All(),
+	                    [this, &position](PlayerNames ally) { return PlayerRawInfluence(ally, position); });
 }
 
 std::optional<float> InfluenceSystem::HandGrant(PlayerNames player, const map_coords::MapCoords& position,

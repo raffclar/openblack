@@ -185,20 +185,44 @@ std::optional<particles::TownCentreBelief> GameParticleWorld::TownCentreBeliefOf
 	}
 	// Its totem's top, over the icon on the plinth, where the frames draw it as it rises with the worship
 	std::optional<glm::vec3> totemTop;
-	registry.Each<const VillageTotem, const Transform>(
-	    [&registry, &totemTop, centre](entt::entity totem, const VillageTotem& standing, const Transform& plinth) {
-		    if (totemTop.has_value() || standing.townCentre != centre)
-		    {
-			    return;
-		    }
-		    const auto* icon = registry.Valid(standing.icon) ? registry.TryGet<const Transform>(standing.icon) : nullptr;
-		    auto top = icon != nullptr ? ecs::drawn_place::DrawnTransformOf(registry, standing.icon, *icon).position
-		                               : ecs::drawn_place::DrawnTransformOf(registry, totem, plinth).position +
-		                                     glm::vec3(0.0f, ecs::village_totem::k_IconAbovePlinth, 0.0f);
-		    const float iconHeight = icon != nullptr ? ecs::world_objects::SizeOf(standing.icon).height : 0.0f;
-		    top.y = ecs::village_totem::TopY(top.y, iconHeight);
-		    totemTop = top;
-	    });
+	const auto topOf = [&registry](entt::entity totem, const VillageTotem& standing, const Transform& plinth) {
+		const auto* icon = registry.Valid(standing.icon) ? registry.TryGet<const Transform>(standing.icon) : nullptr;
+		auto top = icon != nullptr ? ecs::drawn_place::DrawnTransformOf(registry, standing.icon, *icon).position
+		                           : ecs::drawn_place::DrawnTransformOf(registry, totem, plinth).position +
+		                                 glm::vec3(0.0f, ecs::village_totem::k_IconAbovePlinth, 0.0f);
+		const float iconHeight = icon != nullptr ? ecs::world_objects::SizeOf(standing.icon).height : 0.0f;
+		top.y = ecs::village_totem::TopY(top.y, iconHeight);
+		return top;
+	};
+	// The first totem on the centre in the order of a walk of the totems with a transform. The walk of that order goes
+	// through the store of the totems when it is not larger than the store of the transforms. Then the walk tests the
+	// centre before it looks for the transform.
+	const auto& underlying = registry.Underlying();
+	const auto* totems = underlying.storage<VillageTotem>();
+	const auto* transforms = underlying.storage<Transform>();
+	if (totems != nullptr && transforms != nullptr && !(transforms->size() < totems->size()))
+	{
+		for (const auto [totem, standing] : underlying.view<const VillageTotem>().each())
+		{
+			if (standing.townCentre != centre || !transforms->contains(totem))
+			{
+				continue;
+			}
+			totemTop = topOf(totem, standing, transforms->get(totem));
+			break;
+		}
+	}
+	else
+	{
+		registry.Each<const VillageTotem, const Transform>(
+		    [&totemTop, &topOf, centre](entt::entity totem, const VillageTotem& standing, const Transform& plinth) {
+			    if (totemTop.has_value() || standing.townCentre != centre)
+			    {
+				    return;
+			    }
+			    totemTop = topOf(totem, standing, plinth);
+		    });
+	}
 	if (!totemTop.has_value())
 	{
 		return std::nullopt;
@@ -208,14 +232,35 @@ std::optional<particles::TownCentreBelief> GameParticleWorld::TownCentreBeliefOf
 	              "The symbols of belief count the player numbers of the game");
 	// The symbols show each player of the game: the 8 players of a land, or more in a network game with more gods
 	particles::TownCentreBelief belief {.totemTop = *totemTop, .players = ecs::game_players::Count()};
-	registry.Each<const Town, const TownImpression>([&belief, abode](const Town& town, const TownImpression& impression) {
-		if (town.id == abode->townId)
+	const auto copyBelief = [&belief](const TownImpression& impression) {
+		static_assert(std::tuple_size_v<decltype(impression.belief.belief)> == std::tuple_size_v<decltype(belief.beliefs)>,
+		              "The town and its symbols have a place for each player number");
+		std::ranges::copy(impression.belief.belief, belief.beliefs.begin());
+	};
+	// The last town of the centre in the order of a walk of the towns with an impression. As above, the walk tests the
+	// town's number before it looks for the impression.
+	const auto* towns = underlying.storage<Town>();
+	const auto* impressions = underlying.storage<TownImpression>();
+	if (towns != nullptr && impressions != nullptr && !(impressions->size() < towns->size()))
+	{
+		for (const auto [entity, town] : underlying.view<const Town>().each())
 		{
-			static_assert(std::tuple_size_v<decltype(impression.belief.belief)> == std::tuple_size_v<decltype(belief.beliefs)>,
-			              "The town and its symbols have a place for each player number");
-			std::ranges::copy(impression.belief.belief, belief.beliefs.begin());
+			if (town.id == abode->townId && impressions->contains(entity))
+			{
+				copyBelief(impressions->get(entity));
+			}
 		}
-	});
+	}
+	else
+	{
+		registry.Each<const Town, const TownImpression>(
+		    [&copyBelief, abode](const Town& town, const TownImpression& impression) {
+			    if (town.id == abode->townId)
+			    {
+				    copyBelief(impression);
+			    }
+		    });
+	}
 	return belief;
 }
 
