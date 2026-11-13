@@ -463,9 +463,16 @@ void LockstepHost::PartsFrom(ConnectionId connection, Peer& peer, const game_soc
 		                                     connection, WhoIs(connection), parts.turn));
 		return;
 	}
-	Log(spdlog::level::warn,
-	    fmt::format("The world of connection {} ({}) parted at turn {}: {}", connection, WhoIs(connection), parts.turn,
-	                online::DescribeParts(online::DifferentParts(own, parts.parts), "server", "client")));
+	const auto differences = online::DifferentParts(own, parts.parts);
+	Log(spdlog::level::warn, fmt::format("The world of connection {} ({}) parted at turn {}: {}", connection, WhoIs(connection),
+	                                     parts.turn, online::DescribeParts(differences, "server", "client")));
+	if (_partedListener && peer.seat.has_value())
+	{
+		std::vector<std::string> names;
+		names.reserve(differences.size());
+		std::ranges::transform(differences, std::back_inserter(names), &online::PartDifference::name);
+		_partedListener(*peer.seat, names);
+	}
 	if (own.size() > game_socket::k_MostSyncParts)
 	{
 		own.resize(game_socket::k_MostSyncParts);
@@ -764,6 +771,8 @@ void LockstepHost::Resume(ConnectionId connection, Peer& peer, const game_socket
 	{
 		// The checksums that the client sent for the turns of its parted world are no longer of use
 		std::erase_if(_early, [seat](const auto& early) { return early.first.first == seat; });
+		// The client loads the server's world, so the next checksum that differs starts a new desync
+		found->compares.differs = false;
 		Log(spdlog::level::info,
 		    fmt::format("The player of slot {} is back from turn {} with the world of turn {}", seat, resume.turn, _turnsDone));
 		if (wasAway)
@@ -2162,9 +2171,16 @@ void LockstepHost::CompareClient(uint8_t seat, uint32_t turn, uint64_t checksum)
 	auto& compares = _seats[seat].compares;
 	++compares.compared;
 	const bool differs = own->second != checksum;
-	if (differs && !compares.differs && _partListener)
+	if (differs && !compares.differs)
 	{
-		_partListener(seat, turn);
+		if (_partListener)
+		{
+			_partListener(seat, turn);
+		}
+		if (_desyncListener)
+		{
+			_desyncListener(seat, turn, own->second, checksum);
+		}
 	}
 	compares.differs = differs;
 	if (!differs)

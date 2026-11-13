@@ -177,7 +177,11 @@ struct Computer
 		    .readCreature = [this] { return this->creature; },
 		    .readAlignment = [alignment] { return alignment; },
 		    .localParts = [this](uint32_t turn) { return parts ? parts(turn) : online::PartHashes {}; },
+		    .origin = online::GameOrigin::Lan,
 		    .testLoadDelayMicroseconds = loadDelayMicroseconds,
+		    .desynced = [this](uint32_t turn, uint64_t local,
+		                       uint64_t server) { desyncs.push_back({.turn = turn, .local = local, .server = server}); },
+		    .partedParts = [this](std::span<const std::string> names) { partedNames.assign(names.begin(), names.end()); },
 		});
 		this->landFile = std::move(landFile);
 		this->creature = std::move(creature);
@@ -214,6 +218,15 @@ struct Computer
 	std::unique_ptr<LoopbackSockets::Client> sockets;
 	/// The parts of the world of this computer at a turn, for the log of a part. None by default.
 	std::function<online::PartHashes(uint32_t turn)> parts;
+	/// The desyncs that the session told, and the names of the parts that differ from the last parts of the server
+	struct Desync
+	{
+		uint32_t turn {0};
+		uint64_t local {0};
+		uint64_t server {0};
+	};
+	std::vector<Desync> desyncs;
+	std::vector<std::string> partedNames;
 	NetworkSession session;
 	FakeWorld world;
 	std::vector<size_t> played;
@@ -841,6 +854,52 @@ TEST_F(LockstepTest, AClientThatPartsSendsItsPartsAndBothLogsNameThePartThatDiff
 	EXPECT_TRUE(std::ranges::any_of(
 	    lines, [](const std::string& line) { return line.find("The client asks to resume from turn") != std::string::npos; }));
 	EXPECT_EQ(alice.loads, 1u);
+}
+
+TEST_F(LockstepTest, BothSidesTellTheDesyncWithItsChecksumsAndThePartsThatDiffer)
+{
+	MakeHost(1);
+	GiveWorldState();
+	host->SetPartsOfTurn(
+	    [](uint32_t turn) { return online::PartHashes {{"entities", 1}, {"Transform", 10 + turn}, {"synced seed", 7}}; });
+	struct HostDesync
+	{
+		uint8_t seat {0};
+		uint32_t turn {0};
+		uint64_t server {0};
+		uint64_t client {0};
+	};
+	std::vector<HostDesync> hostDesyncs;
+	host->SetDesyncListener([&hostDesyncs](uint8_t seat, uint32_t turn, uint64_t server, uint64_t client) {
+		hostDesyncs.push_back({.seat = seat, .turn = turn, .server = server, .client = client});
+	});
+	std::vector<std::pair<uint8_t, std::vector<std::string>>> hostParts;
+	host->SetPartedListener([&hostParts](uint8_t seat, std::span<const std::string> names) {
+		hostParts.emplace_back(seat, std::vector<std::string>(names.begin(), names.end()));
+	});
+	Computer alice(network, now, "god:alice");
+	constexpr uint32_t k_PartsAfter = 20;
+	alice.parts = [](uint32_t turn) {
+		const bool parted = turn > k_PartsAfter;
+		return online::PartHashes {{"entities", 1}, {"Transform", 10 + turn + (parted ? 1 : 0)}, {"synced seed", 7}};
+	};
+	alice.world.partsAfter = k_PartsAfter;
+	Frames({&alice}, 60);
+
+	// One desync on each side: the turns that differ until the resync do not count again
+	ASSERT_EQ(alice.desyncs.size(), 1u);
+	EXPECT_EQ(alice.desyncs[0].turn, k_PartsAfter + 1);
+	EXPECT_NE(alice.desyncs[0].local, alice.desyncs[0].server);
+	ASSERT_EQ(hostDesyncs.size(), 1u);
+	EXPECT_EQ(hostDesyncs[0].seat, 0u);
+	EXPECT_EQ(hostDesyncs[0].turn, k_PartsAfter + 1);
+	// The two sides see the same two checksums
+	EXPECT_EQ(hostDesyncs[0].server, alice.desyncs[0].server);
+	EXPECT_EQ(hostDesyncs[0].client, alice.desyncs[0].local);
+	EXPECT_EQ(alice.partedNames, (std::vector<std::string> {"Transform"}));
+	ASSERT_EQ(hostParts.size(), 1u);
+	EXPECT_EQ(hostParts[0].first, 0u);
+	EXPECT_EQ(hostParts[0].second, (std::vector<std::string> {"Transform"}));
 }
 
 TEST_F(LockstepTest, TheServerLogTellsWhyItRefusesAResume)

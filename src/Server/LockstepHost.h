@@ -236,6 +236,14 @@ public:
 	/// keep. When a client sends its parts of the turn at which its world parted, the log names the parts that differ.
 	using PartsOfTurn = std::function<std::vector<std::pair<std::string, uint64_t>>(uint32_t turn)>;
 	void SetPartsOfTurn(PartsOfTurn parts) { _partsOfTurn = std::move(parts); }
+	/// Gets each desync: the checksum of a client differs from the server's checksum of the turn, and the client was in
+	/// step before. Gives the god slot, the turn, the server's checksum and the client's checksum.
+	using DesyncListener = std::function<void(uint8_t seat, uint32_t turn, uint64_t server, uint64_t client)>;
+	void SetDesyncListener(DesyncListener listener) { _desyncListener = std::move(listener); }
+	/// Gets the names of the parts that differ, in the order of the server's checksum, when a god's client sent its parts
+	/// of the turn at which its world parted
+	using PartedListener = std::function<void(uint8_t seat, std::span<const std::string> parts)>;
+	void SetPartedListener(PartedListener listener) { _partedListener = std::move(listener); }
 	/// The account ids that the lobby banned from the server. Before the start, a banned god leaves the room at once with
 	/// "kicked", and the room refuses the join of a banned god. After the start, a ban changes nothing (deviation 146).
 	void SetBans(std::set<int64_t> accounts);
@@ -506,6 +514,8 @@ private:
 	WorldState _worldState;
 	PartListener _partListener;
 	PartsOfTurn _partsOfTurn;
+	DesyncListener _desyncListener;
+	PartedListener _partedListener;
 	TurnJournal _turnJournal;
 	/// The game continues from a snapshot of the server
 	bool _restored {false};

@@ -31,6 +31,7 @@
 #include "3D/LandData.h"
 #include "CHLApi.h"
 #include "Common/BuildVersion.h"
+#include "Common/DesyncReports.h"
 #include "Common/DeveloperTools.h"
 #include "Common/ErrorReportsInterface.h"
 #include "Common/ErrorReportsRules.h"
@@ -1022,6 +1023,28 @@ void openblack::InitializeErrorReports([[maybe_unused]] error_reports::Role role
 void openblack::ShutDownErrorReports()
 {
 	Locator::errorReports::reset();
+}
+
+void openblack::SendDesyncReport(const error_reports::DesyncReport& report)
+{
+	// The tools find the line by its words
+	if (auto logger = spdlog::get("game"))
+	{
+		if (report.kind == error_reports::DesyncReport::Kind::Summary)
+		{
+			logger->info("Desync report: summary of game {}, {} desyncs, {} not sent", report.game, report.desyncsInGame,
+			             report.notSent);
+		}
+		else
+		{
+			logger->info("Desync report: key {} of game {} at turn {}, desync {} of the game", report.key, report.game,
+			             report.facts.turn, report.desyncsInGame);
+		}
+	}
+	if (Locator::errorReports::has_value())
+	{
+		Locator::errorReports::value().SendDesync(report);
+	}
 }
 
 void openblack::ShutDownServices()

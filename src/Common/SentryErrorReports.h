@@ -58,6 +58,7 @@ public:
 	[[nodiscard]] bool HasDestination() const noexcept override { return !_settings.dsn.empty(); }
 	[[nodiscard]] bool IsRunning() const noexcept override { return _running; }
 	void SetEnabled(bool enabled) override;
+	void SendDesync(const DesyncReport& report) override;
 	[[nodiscard]] ErrorReportsState GetState() const override
 	{
 		return {.hasDestination = HasDestination(),
@@ -65,7 +66,8 @@ public:
 		        .enabled = _enabled,
 		        .role = _settings.role,
 		        .release = _settings.release,
-		        .environment = _settings.environment};
+		        .environment = _settings.environment,
+		        .desyncEvents = _desyncEvents};
 	}
 
 private:
@@ -75,6 +77,7 @@ private:
 	SentrySettings _settings;
 	bool _running {false};
 	bool _enabled {false};
+	uint32_t _desyncEvents {0};
 };
 
 } // namespace openblack::error_reports

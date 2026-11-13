@@ -81,6 +81,11 @@ struct NetworkSessionSettings
 	/// Tests: the client tells the server this many microseconds late that its world loaded. The other players then see
 	/// the pause for the loads (deviation 254) as for a slow computer.
 	int64_t testLoadDelayMicroseconds {0};
+	/// Gets each desync: the checksums of a turn differ, and the client starts a resync or leaves the game. The
+	/// differences in a resync that is in progress do not count.
+	std::function<void(uint32_t turn, uint64_t local, uint64_t server)> desynced;
+	/// Gets the names of the parts that differ, in the order of the checksum, when the server's parts came
+	std::function<void(std::span<const std::string> parts)> partedParts;
 };
 
 /// A step of the start of the game that the front end shows to the player

@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <array>
 #include <chrono>
+#include <iterator>
 #include <span>
 #include <string>
 #include <string_view>
@@ -438,8 +439,16 @@ void NetworkSession::Text(std::string_view text)
 		}
 		else
 		{
-			_log->Warn(fmt::format("The worlds parted at turn {}: {}", parts->turn,
-			                       DescribeParts(DifferentParts(local, parts->parts), "this", "server")));
+			const auto differences = DifferentParts(local, parts->parts);
+			_log->Warn(
+			    fmt::format("The worlds parted at turn {}: {}", parts->turn, DescribeParts(differences, "this", "server")));
+			if (_settings.partedParts)
+			{
+				std::vector<std::string> names;
+				names.reserve(differences.size());
+				std::ranges::transform(differences, std::back_inserter(names), &PartDifference::name);
+				_settings.partedParts(names);
+			}
 		}
 	}
 	else if (const auto* chat = std::get_if<game_socket::RoomChat>(&*frame))
@@ -1039,7 +1048,12 @@ void NetworkSession::Compare(uint32_t turn)
 		{
 			_settings.parts(turn);
 		}
-		switch (_resync.Differ(turn))
+		const auto action = _resync.Differ(turn);
+		if (action != ResyncRule::Action::None && _settings.desynced)
+		{
+			_settings.desynced(turn, localChecksum, serverChecksum);
+		}
+		switch (action)
 		{
 		case ResyncRule::Action::Rejoin:
 			ComeBack(true);
