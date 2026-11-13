@@ -633,15 +633,6 @@ PackResult PackFile::WriteBlocks(std::ostream& stream) const noexcept
 	return PackResult::Success;
 }
 
-PackResult PackFile::CreateTextureBlocks() noexcept
-{
-	// TODO(bwrsandman): Loop through every texture and create a block with
-	//                   their id. Then fill in the look-up table.
-	assert(_isLoaded);
-
-	return PackResult::ErrNotImplemented;
-}
-
 PackResult PackFile::CreateRawBlock(const std::string& name, std::vector<uint8_t>&& data) noexcept
 {
 	if (HasBlock(name))
