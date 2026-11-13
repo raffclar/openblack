@@ -157,6 +157,11 @@ std::string_view MessageTextName(Message message)
 		return "HELP_TEXT_MPFER_KICKEDYOUGAME";
 	case Message::CouldNotDownloadMap:
 		return "HELP_TEXT_MPFER_COULDNOTDOWNLOADMAP";
+	case Message::LobbyNotice:
+	case Message::LobbyQuestion:
+	case Message::LobbyPassword:
+	case Message::LobbyCode:
+	case Message::LobbyNewPassword:
 	case Message::None:
 		return {};
 	}
@@ -273,6 +278,29 @@ void MultiplayerBoxes::Build()
 	_timeLimit = nullptr;
 	_viewChat = nullptr;
 	_ready = nullptr;
+	_headings = {};
+	_search = nullptr;
+	_showFull = nullptr;
+	_showLocked = nullptr;
+	_showInGame = nullptr;
+	_showOtherVersions = nullptr;
+	_detail = nullptr;
+	_servers = nullptr;
+	_status = nullptr;
+	_mapLine = nullptr;
+	_countValue = nullptr;
+	_timeValue = nullptr;
+	_slots = nullptr;
+	_mapList = nullptr;
+	_hostButtons.clear();
+	_takeSlot = nullptr;
+	_passwordButton = nullptr;
+	_closeButton = nullptr;
+	_settingsButton = nullptr;
+	_privateBox = nullptr;
+	_sessionName = nullptr;
+	_shownRevision.reset();
+	_shownLobbies.clear();
 	_chatLines = 0;
 	_shownTab.reset();
 	_shownPick.reset();
@@ -309,6 +337,15 @@ void MultiplayerBoxes::Build()
 			break;
 		case Box::GameList:
 			BuildGameList(dialog);
+			break;
+		case Box::LobbyList:
+			BuildLobbyList(dialog);
+			break;
+		case Box::CreateLobby:
+			BuildCreateLobby(dialog);
+			break;
+		case Box::LobbyRoom:
+			BuildLobbyRoom(dialog);
 			break;
 		default:
 			break;
@@ -541,10 +578,23 @@ void MultiplayerBoxes::Sync()
 	case Box::Conditions:
 		SyncRoom();
 		break;
+	case Box::LobbyList:
+		SyncLobbyList();
+		break;
+	case Box::CreateLobby:
+		SyncCreateLobby();
+		break;
+	case Box::LobbyRoom:
+		SyncLobbyRoom();
+		break;
 	default:
 		break;
 	}
-	if (const auto message = _frontEnd->GetMessage(); message != (_message.has_value() ? _message->message : Message::None))
+	const auto message = _frontEnd->GetMessage();
+	const bool lobbyMessage = message == Message::LobbyNotice || message == Message::LobbyQuestion;
+	// Two notices of the lobby sessions can come one after the other with different texts
+	if (message != (_message.has_value() ? _message->message : Message::None) ||
+	    (lobbyMessage && _message.has_value() && _message->text != _frontEnd->GetLobbyMessageText()))
 	{
 		ShowMessage(message);
 	}
@@ -849,6 +899,14 @@ void MultiplayerBoxes::ShowMessage(Message message)
 		const std::array<TextArgument, 1> nameArgument = {std::u16string_view(name)};
 		shown.text = FormatText(shown.text, nameArgument);
 	}
+	if (message == Message::LobbyNotice || message == Message::LobbyQuestion || message == Message::LobbyPassword ||
+	    message == Message::LobbyCode || message == Message::LobbyNewPassword)
+	{
+		BuildLobbyMessage(shown);
+		_messageFade.Reset(0.0f);
+		_messageFade.SetDestination(1.0f, k_FadeInSeconds);
+		return;
+	}
 	shown.textControl = &shown.answers.Add<StaticText>(k_MessageText, shown.text, Layout::Wrapped);
 	shown.textControl->takesClicks = true;
 	switch (ButtonsOf(message))
@@ -881,7 +939,14 @@ void MultiplayerBoxes::SendChat()
 	// The box first holds its prompt: a click on it clears the prompt and sends nothing, as the game's box does
 	if (_chatEdit->GetText() != Text(k_TypeChatText))
 	{
-		_frontEnd->SendChat(_chatEdit->GetText());
+		if (_frontEnd->GetBox() == Box::LobbyRoom)
+		{
+			_frontEnd->SendLobbyChat(_chatEdit->GetText());
+		}
+		else
+		{
+			_frontEnd->SendChat(_chatEdit->GetText());
+		}
 	}
 	_chatEdit->SetText(std::u16string());
 	// The chat's box keeps the keyboard for the next line
@@ -902,6 +967,7 @@ void MultiplayerBoxes::Join()
 
 void MultiplayerBoxes::MouseMove(glm::ivec2 point)
 {
+	_pointer = point;
 	if (_message.has_value())
 	{
 		_message->answers.MouseMove(point);
@@ -943,6 +1009,11 @@ void MultiplayerBoxes::Wheel(glm::ivec2 point, int steps)
 
 void MultiplayerBoxes::TextInput(std::u16string_view text)
 {
+	if (_message.has_value() && _message->edit != nullptr)
+	{
+		_message->answers.TextInput(text);
+		return;
+	}
 	if (_message.has_value())
 	{
 		// The first letters of the words "yes" and "no" answer a question
@@ -973,6 +1044,23 @@ void MultiplayerBoxes::TextInput(std::u16string_view text)
 
 void MultiplayerBoxes::KeyDown(int key, bool shift)
 {
+	if (_message.has_value() && _message->edit != nullptr)
+	{
+		// Return gives the text, and Escape closes the box with no text
+		if (IsReturn(key))
+		{
+			_frontEnd->AnswerLobbyText(_message->edit->GetText());
+		}
+		else if (key == SDLK_ESCAPE)
+		{
+			_frontEnd->AnswerMessage(MultiplayerFrontEnd::Answer::No);
+		}
+		else
+		{
+			_message->answers.KeyDown(key, shift);
+		}
+		return;
+	}
 	if (_message.has_value())
 	{
 		// A message's OK answers Return and Escape
@@ -983,6 +1071,10 @@ void MultiplayerBoxes::KeyDown(int key, bool shift)
 		return;
 	}
 	if (_dialog == nullptr)
+	{
+		return;
+	}
+	if (IsLobbyBox() && LobbyKeyDown(key))
 	{
 		return;
 	}
@@ -1049,8 +1141,14 @@ void MultiplayerBoxes::Draw(const DialogPainter& painter) const
 		painter.DrawBackground(k_Box, glm::vec3(1.0f), false, DialogPainter::All);
 		painter.SetAlpha(alpha);
 	}
+	_warningRects.clear();
 	_dialog->Draw(painter, !_message.has_value() && !_frontEnd->IsBusy());
 	DrawPictures(painter);
+	if (!_message.has_value())
+	{
+		DrawWarningTip(painter);
+		painter.SetAlpha(alpha);
+	}
 	if (_message.has_value())
 	{
 		// The message's text starts as large as it fits in under 125 high

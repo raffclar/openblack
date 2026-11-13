@@ -337,6 +337,19 @@ TEST(GameSocket, TheLeaveOfAnObserverGoesToJsonAndBack)
 	EXPECT_FALSE(Parse(R"({"type":"observer.left","name":7})").has_value());
 }
 
+TEST(GameSocket, TheJoinCarriesTheBuild)
+{
+	const auto text = ToJson(Join {.ticket = "t", .build = "0.1.0+abc/codec34"});
+	EXPECT_EQ(text, R"({"build":"0.1.0+abc/codec34","ticket":"t","type":"room.join"})");
+	const auto parsed = Parse(text);
+	ASSERT_TRUE(parsed.has_value());
+	EXPECT_EQ(std::get<Join>(*parsed).build, "0.1.0+abc/codec34");
+	// An older client sends no build
+	const auto old = Parse(R"({"type":"room.join","ticket":"t"})");
+	ASSERT_TRUE(old.has_value());
+	EXPECT_TRUE(std::get<Join>(*old).build.empty());
+}
+
 // The join and a refusal for the protocol or the version give a build id. A frame of an older build has none, and
 // still reads.
 TEST(GameSocket, TheJoinAndTheRefusalCanGiveABuildId)

@@ -102,6 +102,7 @@ public:
 	void PutClanCreature(int64_t clanId, lobby_api::ClanCreature creature, LobbyCallback<LobbyDone> callback) override;
 	void GetMaps(LobbyCallback<lobby_api::MapList> callback) override;
 	void DownloadMap(const lobby_api::OnlineMap& map, LobbyCallback<std::vector<uint8_t>> callback) override;
+	void DownloadMapPackage(const lobby_api::OnlineMap& map, LobbyCallback<std::vector<uint8_t>> callback) override;
 
 	void GetPlayerRanking(lobby_api::RankingQuery query, LobbyCallback<lobby_api::RankingPage> callback) override;
 	void GetClanRanking(lobby_api::RankingQuery query, LobbyCallback<lobby_api::RankingPage> callback) override;
@@ -114,6 +115,9 @@ public:
 	void SendSkirmishPing(LobbyCallback<LobbyDone> callback) override;
 	void SendPing(std::vector<int64_t> friends, LobbyCallback<lobby_api::PingReply> callback) override;
 	void SendPersonLine(int64_t account, std::string text, LobbyCallback<LobbyDone> callback) override;
+
+	void SendApiCall(online::HttpMethod method, std::string path, std::string body, std::vector<online::HttpHeader> headers,
+	                 LobbyCallback<online::HttpResponse> callback) override;
 
 	uint32_t AddEventListener(LobbyEventListener listener) override;
 	void RemoveEventListener(uint32_t id) override;
@@ -134,9 +138,13 @@ private:
 		bool large {false};
 		/// A smaller limit of the answer (online::HttpRequest::mostBytes), 0 for none
 		size_t mostBytes {0};
+		/// The path is a path of the site, not a path after the start of the API
+		bool site {false};
 	};
 
 	[[nodiscard]] std::string Address(std::string_view apiPath) const;
+	/// The address of a path of the lobby's site, for example "/maps/<sha256>.obmap"
+	[[nodiscard]] std::string SiteAddress(std::string_view sitePath) const;
 	[[nodiscard]] bool AccessTokenValid() const;
 	/// Sends the call with the access token, after a refresh of the tokens when the access token is old
 	void Authorized(Call call);

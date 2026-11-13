@@ -22,12 +22,14 @@
 
 #include <LobbyApi.h>
 
+#include "LobbyScreenRules.h"
 #include "MultiplayerFrontEndRules.h"
 
 namespace openblack::ecs::systems
 {
 class ClanCreatureSystemInterface;
 class LobbyClientSystemInterface;
+class LobbyRoomSystemInterface;
 class NetworkGameSystemInterface;
 } // namespace openblack::ecs::systems
 
@@ -74,6 +76,15 @@ public:
 		online::OnlineMapStoreInterface* maps {nullptr};
 		/// The clan creature: the game asks the lobby for it when the player uses a clan in the room
 		ecs::systems::ClanCreatureSystemInterface* clanCreature {nullptr};
+		/// Reads a file of the game folder, for example the land that a map package needs (deviation 249). Nothing when
+		/// the game folder does not have the file.
+		std::function<std::optional<std::vector<uint8_t>>(std::string_view path)> readGameFile;
+		/// The lobby sessions of the lobby service. With them, the internet shows the lobby list in place of the game
+		/// list.
+		ecs::systems::LobbyRoomSystemInterface* lobbyRoom {nullptr};
+		/// The time in milliseconds since 1970 (UTC), for the countdown and the time of a game. The clock of the system
+		/// when it is empty.
+		std::function<int64_t()> nowMs;
 	};
 
 	struct Settings
@@ -227,6 +238,70 @@ public:
 	/// The Ready box: the player is ready for the start, which the server makes
 	void SetReady(bool ready);
 
+	// The lobby sessions (MultiplayerFrontEndLobby.cpp)
+	/// A map that the host can choose for a lobby session: a land of the game or a map of the lobby service
+	struct SessionMap
+	{
+		std::u16string name;
+		int32_t places {0};
+		lobby_api::LobbyMap map;
+	};
+	/// The internet uses the lobby sessions: the lobby list, the box that makes a session and the room of a session
+	[[nodiscard]] bool UsesLobbySessions() const noexcept;
+	/// The sessions that the list shows, after the filter and in the order of the sort
+	[[nodiscard]] std::vector<lobby_api::LobbySummary> GetShownLobbies() const;
+	[[nodiscard]] std::optional<lobby_api::PoolState> GetServerPool() const;
+	/// The build id of this game, which the list compares with the build of each session
+	[[nodiscard]] std::string GetLobbyBuild() const;
+	[[nodiscard]] const online::lobby::ListFilter& GetListFilter() const noexcept { return _listFilter; }
+	void SetListFilter(online::lobby::ListFilter filter) { _listFilter = std::move(filter); }
+	[[nodiscard]] lobby_screens::Sort GetListSort() const noexcept { return _listSort; }
+	void ClickListHeading(lobby_screens::Column column) { _listSort = lobby_screens::ClickHeading(_listSort, column); }
+	[[nodiscard]] const std::string& GetSelectedLobby() const noexcept { return _selectedLobby; }
+	void SelectLobby(std::string id) { _selectedLobby = std::move(id); }
+	/// The picked session, none when the list does not have it
+	[[nodiscard]] const lobby_api::LobbySummary* GetSelectedSummary() const;
+	void RefreshLobbies();
+	/// Join: the picked session opens its room, or the box asks for its password, or the box tells why it cannot
+	void JoinSelectedLobby();
+	void QuickJoinLobby();
+	/// The box asks for the code of a private session
+	void AskLobbyCode();
+	/// "Create session": the box that makes a session opens
+	void OpenCreateLobby();
+	[[nodiscard]] std::vector<SessionMap> GetSessionMaps() const;
+	[[nodiscard]] const lobby_screens::CreateForm& GetCreateForm() const noexcept { return _createForm; }
+	void SetCreateForm(lobby_screens::CreateForm form) { _createForm = std::move(form); }
+	void SubmitCreateLobby();
+	/// The host opens the box of the settings of the session before the start. The box is the box "Create session" with
+	/// the settings of the session, and its Next sends only the changes (user, 2026-11-12).
+	void OpenLobbySettings();
+	/// True while the box "Create session" changes the settings of the room of the host
+	[[nodiscard]] bool EditsLobbySettings() const noexcept { return _editsLobby; }
+	/// The room of the lobby session, none outside a room
+	[[nodiscard]] const online::lobby::LobbyRoom* GetLobbyRoom() const;
+	void ToggleLobbyReady();
+	void SendLobbyChat(std::u16string_view text);
+	void PickLobbySlot(int32_t slot);
+	void DoHostAction(int32_t slot, lobby_screens::HostAction action);
+	/// Start, or Cancel during the countdown and the wait in the line
+	void StartOrCancelLobby();
+	/// The host changes the map of the room. A map with fewer places than the players is refused.
+	void ChangeLobbyMap(size_t map);
+	/// The box asks the host for a new password of the session
+	void AskLobbyPassword();
+	/// The host closes the session: the box asks first
+	void CloseLobby();
+	/// Leave: the box asks first when the player is ready or is the host
+	void LeaveLobby();
+	/// The seconds to the start in the countdown, none outside the countdown
+	[[nodiscard]] std::optional<int32_t> GetCountdownSeconds() const;
+	/// The text of a LobbyNotice, a LobbyQuestion or a box that asks for a text
+	[[nodiscard]] const std::u16string& GetLobbyMessageText() const noexcept { return _lobbyMessageText; }
+	/// OK on a box that asks for a text: the text goes to the session
+	void AnswerLobbyText(std::u16string text);
+	[[nodiscard]] int64_t NowMs() const;
+
 	// For the testbed
 	/// The name in the message box of a message with a name: the room's server for KickedFromGame
 	[[nodiscard]] const std::u16string& GetMessageName() const noexcept { return _messageName; }
@@ -276,6 +351,23 @@ private:
 	/// On the local network, the room's game server sends the lines of the room's chat
 	void FollowLanChat();
 	[[nodiscard]] const online::NetworkSession* Session() const;
+	/// The lobby list opens in place of the game list
+	void EnterLobbyList();
+	/// Follows the room of the lobby session: the box of the room, its map, its game server and its end
+	void FollowLobbySession();
+	/// The map of the room: the download of a map of the service, then the report to the session
+	void FollowLobbyMap(const online::lobby::LobbyRoom& room);
+	/// After the session gets a game server: a ticket, then the network game joins the server
+	void FollowLobbyGame(const online::lobby::LobbyRoom& room);
+	/// The box for a problem of a call of the lobby sessions
+	void ShowLobbyProblem(const ecs::systems::LobbyError& error);
+	void ShowLobbyNotice(std::u16string text);
+	/// The answer of a call of the lobby sessions: the busy state ends, and a problem shows its box
+	[[nodiscard]] ecs::systems::LobbyCallback<ecs::systems::LobbyDone> LobbyDoneCallback();
+	void JoinLobby(std::string id, std::optional<std::string> password);
+	void ForgetLobbyRoom();
+	void SubmitLobbySettings(const SessionMap& map);
+	void AnswerLobbyMessage(multiplayer::Message message, Answer answer);
 
 	Services _services;
 	Settings _settings;
@@ -327,6 +419,37 @@ private:
 	/// The lines of the Player Details tab of each account in the room, which the lobby gave. An account in the map has a
 	/// request that the front end sent, so the front end does not ask again.
 	std::map<int64_t, std::vector<multiplayer::PlayerDetail>> _details;
+
+	// The lobby sessions
+	/// The list of the sessions does not come from this lobby, so the internet uses the game list
+	bool _noLobbySessions {false};
+	online::lobby::ListFilter _listFilter;
+	lobby_screens::Sort _listSort;
+	std::string _selectedLobby;
+	lobby_screens::CreateForm _createForm;
+	bool _editsLobby {false};
+	std::u16string _lobbyMessageText;
+	/// What Yes does on a LobbyQuestion
+	enum class LobbyQuestionKind : uint8_t
+	{
+		None,
+		Leave,
+		Close,
+		Create,
+		Kick,
+		Ban,
+	};
+	LobbyQuestionKind _lobbyQuestion {LobbyQuestionKind::None};
+	/// The account that a Kick or a Ban question names
+	int64_t _questionAccount {0};
+	/// The session that a LobbyPassword box joins
+	std::string _passwordLobby;
+	/// The map that the front end told the session about, by its hash, and whether the player has it
+	std::optional<std::pair<std::string, bool>> _reportedMap;
+	/// The front end asked for a ticket of the game of the room
+	std::string _ticketGame;
+	/// The network game joins the game of a lobby session: the room stays on its box
+	bool _lobbyGame {false};
 
 	std::optional<multiplayer::ConditionTemplate> _conditions;
 	/// The time limit and the winning conditions of the game. The game server is the host: it gives its picks when the

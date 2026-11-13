@@ -2,6 +2,7 @@ file(GLOB SOURCES "${CMAKE_CURRENT_LIST_DIR}/src/*.cpp")
 file(GLOB HEADERS "${CMAKE_CURRENT_LIST_DIR}/include/*.h")
 
 add_library(onlinemap STATIC ${SOURCES} ${HEADERS})
+target_link_libraries(onlinemap PRIVATE nlohmann_json)
 
 target_include_directories(
   onlinemap PUBLIC $<INSTALL_INTERFACE:include>

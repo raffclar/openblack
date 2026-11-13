@@ -155,6 +155,8 @@ LobbyError LobbyErrorOf(const online::HttpResponse& response)
 	{
 		error.detail = !problem->detail.empty() ? problem->detail : problem->title;
 		error.code = problem->code;
+		error.members = problem->members;
+		error.slots = problem->slots;
 	}
 	if (response.status == 401)
 	{
@@ -209,6 +211,11 @@ LobbyClientSystem::~LobbyClientSystem()
 std::string LobbyClientSystem::Address(std::string_view apiPath) const
 {
 	return fmt::format("{}{}{}", _config.has_value() ? _config->origin : std::string {}, lobby_api::k_ApiPrefix, apiPath);
+}
+
+std::string LobbyClientSystem::SiteAddress(std::string_view sitePath) const
+{
+	return fmt::format("{}{}", _config.has_value() ? _config->origin : std::string {}, sitePath);
 }
 
 bool LobbyClientSystem::AccessTokenValid() const
@@ -618,7 +625,7 @@ void LobbyClientSystem::Dispatch(Call call)
 {
 	online::HttpRequest request {
 	    .method = call.method,
-	    .url = Address(call.path),
+	    .url = call.site ? SiteAddress(call.path) : Address(call.path),
 	    .headers = call.headers,
 	    .body = call.body,
 	    .large = call.large,
@@ -967,6 +974,45 @@ void LobbyClientSystem::DownloadMap(const lobby_api::OnlineMap& map, LobbyCallba
 	    true, size);
 }
 
+void LobbyClientSystem::DownloadMapPackage(const lobby_api::OnlineMap& map, LobbyCallback<std::vector<uint8_t>> callback)
+{
+	if (!_config.has_value())
+	{
+		Fail(callback, ErrorOfKind(LobbyErrorKind::NotConfigured));
+		return;
+	}
+	// The list gave the path and the size of the package. The transfer stops at that size, and an answer of another size
+	// is a bad answer.
+	if (map.packageSha256.empty() || !map.packageUrl.starts_with(lobby_api::k_MapPackagePath) || map.packageSize <= 0)
+	{
+		Fail(callback, LobbyError {.kind = LobbyErrorKind::BadAnswer});
+		return;
+	}
+	const auto size = static_cast<size_t>(map.packageSize);
+	Authorized(Call {
+	    .method = HttpMethod::Get,
+	    .path = map.packageUrl,
+	    .headers = {{"Accept", "application/octet-stream"}},
+	    .done =
+	        [callback = std::move(callback), size](HttpResponse&& response) {
+		        if (auto error = LobbyErrorOf(response); error.kind != LobbyErrorKind::None)
+		        {
+			        Fail(callback, std::move(error));
+			        return;
+		        }
+		        if (response.body.size() != size)
+		        {
+			        Fail(callback, LobbyError {.kind = LobbyErrorKind::BadAnswer, .status = response.status});
+			        return;
+		        }
+		        Succeed(callback, std::move(response.body));
+	        },
+	    .large = true,
+	    .mostBytes = size,
+	    .site = true,
+	});
+}
+
 void LobbyClientSystem::GetPlayerRanking(lobby_api::RankingQuery query, LobbyCallback<lobby_api::RankingPage> callback)
 {
 	CallFor<lobby_api::RankingPage>(
@@ -1135,6 +1181,42 @@ void LobbyClientSystem::SendSkirmishPing(LobbyCallback<LobbyDone> callback)
 			        return;
 		        }
 		        Succeed(callback, LobbyDone {});
+	        },
+	});
+}
+
+void LobbyClientSystem::SendApiCall(HttpMethod method, std::string path, std::string body,
+                                    std::vector<online::HttpHeader> headers, LobbyCallback<HttpResponse> callback)
+{
+	if (!_config.has_value())
+	{
+		Fail(callback, ErrorOfKind(LobbyErrorKind::NotConfigured));
+		return;
+	}
+	headers.emplace_back("Accept", std::string(k_JsonType));
+	if (!body.empty())
+	{
+		headers.emplace_back("Content-Type", std::string(k_JsonType));
+	}
+	Authorized(Call {
+	    .method = method,
+	    .path = std::move(path),
+	    .headers = std::move(headers),
+	    .body = BytesOf(body),
+	    .done =
+	        [callback = std::move(callback)](HttpResponse&& response) {
+		        // A 304 answer tells that the value of the tag that the call sent did not change
+		        if (response.error == online::HttpError::None && response.status == 304)
+		        {
+			        Succeed(callback, std::move(response));
+			        return;
+		        }
+		        if (auto error = LobbyErrorOf(response); error.kind != LobbyErrorKind::None)
+		        {
+			        Fail(callback, std::move(error));
+			        return;
+		        }
+		        Succeed(callback, std::move(response));
 	        },
 	});
 }

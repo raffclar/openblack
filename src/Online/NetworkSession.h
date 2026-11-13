@@ -47,11 +47,17 @@ struct NetworkSessionSettings
 	std::string gamePassword;
 	/// The name of the player's profile, on the local network only
 	std::string name;
-	/// The build id of the client (online::build_id), which the join gives. A refusal for the protocol or the version
-	/// names it in the log of the server.
+	/// The build id of the client (online::build_id), which the join gives. A server of another build refuses the
+	/// client with "version".
 	std::string build;
+	/// The SHA-256 of the client's file of the land of the game, as 64 hex digits in lower case. Empty when the client
+	/// does not know the land before the join.
+	std::string map;
 	/// How long the client tries to come back after it lost the socket. The server keeps the god for 5 minutes.
 	int64_t comeBackMicroseconds {5LL * 60 * 1'000'000};
+	/// How long the client tries again to open the socket of its first join to a game of the internet lobby. A pool
+	/// server listens some seconds after the lobby gives it to the game.
+	int64_t joinRetryMicroseconds {60LL * 1'000'000};
 	/// Reads the file of a land in the Scripts folder of the game, for the check of the land before the start. None when
 	/// the land is not on this computer. With no reader, the client has no land but the testbed.
 	std::function<std::optional<std::vector<uint8_t>>(std::string_view land)> readLand;
@@ -205,6 +211,20 @@ public:
 	[[nodiscard]] const std::map<uint8_t, std::vector<uint8_t>>& StartCreatures() const { return _startCreatures; }
 	/// The reason that the server gave for a refusal
 	[[nodiscard]] const std::string& RefusedReason() const { return _refusedReason; }
+	/// The computer loaded the world of the network game. The session tells the server after the start (game.loaded), as
+	/// the turns of a lobby game wait for each god's player to load (deviation 254).
+	void ReportLoaded();
+	/// The wait of a lobby game for the loads of the players, as the computer sees it now
+	struct LoadWaitView
+	{
+		/// The names of the players who did not load the world yet
+		std::vector<std::string> loading;
+		/// The whole seconds until the server stops the wait, counted down from the server's frame
+		uint32_t secondsLeft {0};
+	};
+	/// The wait for the loads, while the turns wait. None when the turns do not wait. The screen shows "The game is
+	/// paused: waiting for remaining players to load" with these names and the seconds left.
+	[[nodiscard]] std::optional<LoadWaitView> LoadWait() const;
 	[[nodiscard]] const ResyncRule& Resync() const { return _resync; }
 	/// True while the game shows "Resynchronising..." (MI-4)
 	[[nodiscard]] bool ShowsResync() const
@@ -294,6 +314,17 @@ private:
 	std::vector<StartEvent> _startEvents;
 	std::vector<game_socket::RoomChat> _roomChat;
 	std::vector<std::string> _observersLeft;
+	/// The computer loaded the world (ReportLoaded)
+	bool _loaded {false};
+	/// The session sent game.loaded on its socket
+	bool _loadedSent {false};
+	/// The last game.wait of the server with names, and the time when it came
+	std::optional<game_socket::LoadWait> _loadWait;
+	int64_t _loadWaitAt {0};
+	/// The commands that the session did not send during the wait for the loads
+	uint32_t _commandsInLoadWait {0};
+	/// Sends game.loaded when the computer loaded, the game started and the socket is open
+	void SendLoaded();
 	std::map<uint8_t, std::vector<uint8_t>> _startCreatures;
 	std::map<uint8_t, float> _startAlignments;
 	bool _ownGodPlaysForClan {false};
@@ -315,6 +346,9 @@ private:
 	ReconnectBackoff _backoff {std::chrono::milliseconds(250), std::chrono::milliseconds(5000)};
 	int64_t _lostAt {0};
 	int64_t _nextAttempt {0};
+	/// When the first join started, and when the client opens the socket of the join again
+	int64_t _joinStartedAt {0};
+	std::optional<int64_t> _joinRetryAt;
 	int64_t _nextPing {0};
 	uint32_t _resumes {0};
 	/// The generation of the socket, so that the handlers of an old socket do nothing

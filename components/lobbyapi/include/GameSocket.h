@@ -43,9 +43,12 @@ struct Join
 	std::string gamePassword;
 	/// The name of the player's profile, on the local network only, where no ticket names the player
 	std::string name;
-	/// The build id of the client, such as "0.1.0+0123456789ab/codec34" ("build", optional). A refusal for the protocol
-	/// or the version names it in the server's log. An older client gives no build id.
+	/// The build id of the client, such as "0.1.0+0123456789ab/codec34" ("build", optional). A server of another build
+	/// refuses the client with "version".
 	std::string build;
+	/// The SHA-256 of the client's file of the land of the game, as 64 hex digits ("map", optional). A server with another
+	/// file refuses the client with "map".
+	std::string map;
 };
 
 /// Client to server: "room.resume". A client that lost its socket opens a new one and sends this in place of a join. It
@@ -150,7 +153,8 @@ struct Joined
 struct Refused
 {
 	/// A short word for the reason: "ticket", "full", "started", "closed", "protocol", "resync", "kicked", "version" (the
-	/// client sent a binary frame of another version of the format of the turns)
+	/// client has another build than the server, or sent a binary frame of another version of the format of the turns),
+	/// "map" (the client has another file of the land), "load" (the client did not load the world of a lobby game in time)
 	std::string reason;
 	/// The build id of the server ("build", optional), with the refusals "protocol" and "version". The client log names
 	/// it beside the build id of the client. An older client does not read it.
@@ -278,6 +282,27 @@ struct ObserverLeft
 	std::string name;
 };
 
+/// Client to server: "game.loaded". The player's computer has the land and loaded the world of the started game. The
+/// client sends it once after game.start, and again after it comes back if the server did not get it.
+struct Loaded
+{
+};
+
+/// Server to client: "game.wait". In a lobby game, the turns of the game do not start until each god's player loaded the
+/// world (deviation 254). The server sends this frame each time the list of these players changes. The players who
+/// loaded can move the camera, but the world does not change. When the list is empty, the pause ended and the turns
+/// come.
+struct LoadWait
+{
+	/// The names of the gods' players who did not load the world yet
+	std::vector<std::string> loading;
+	/// The seconds until the server stops the wait, when the frame went. Then each player who did not load leaves the
+	/// game. Each client counts down from this value. 0 in the frame that ends the wait.
+	uint32_t secondsLeft {0};
+
+	[[nodiscard]] bool operator==(const LoadWait&) const = default;
+};
+
 /// The most parts in a "sync.parts" frame
 inline constexpr size_t k_MostSyncParts = 4096;
 /// The most bytes of the name of a part in a "sync.parts" frame
@@ -295,9 +320,9 @@ struct SyncParts
 	[[nodiscard]] bool operator==(const SyncParts&) const = default;
 };
 
-using Frame =
-    std::variant<Join, Resume, Ready, Leave, Joined, Refused, Start, Resumed, PlayerState, StartQuery, StartReply, StartCancel,
-                 StartStop, StartTransfer, StartCreature, StopRequest, GameStop, RoomChat, ObserverLeft, SyncParts>;
+using Frame = std::variant<Join, Resume, Ready, Leave, Joined, Refused, Start, Resumed, PlayerState, StartQuery, StartReply,
+                           StartCancel, StartStop, StartTransfer, StartCreature, StopRequest, GameStop, RoomChat, ObserverLeft,
+                           SyncParts, Loaded, LoadWait>;
 
 [[nodiscard]] std::string ToJson(const Frame& frame);
 [[nodiscard]] std::optional<Frame> Parse(std::string_view text);

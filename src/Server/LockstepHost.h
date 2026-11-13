@@ -27,6 +27,8 @@
 
 #include "Commands/TurnCodec.h"
 #include "Commands/TurnCommandSource.h"
+#include "Server/GameLifetime.h"
+#include "Server/LobbyGame.h"
 #include "Server/ServerSnapshots.h"
 #include "Server/SessionHash.h"
 #include "Server/TicketCheck.h"
@@ -78,6 +80,18 @@ struct HostSettings
 	/// Whether the server sends the start data of a god (its creature file) to the players as it is. The server sends
 	/// empty data in place of data that this refuses. With none, the server sends all data as it is.
 	std::function<bool(std::span<const uint8_t> data)> relaysCreature;
+	/// The game of one lobby (deviation 236): the room takes only the members of the lobby, each in its role and slot,
+	/// and waits for every god of the lobby until the time to join ends. None for a room with no lobby.
+	std::optional<lobby_game::Lobby> lobby;
+	/// The build id of the server. The room refuses a client of another build with "version" (deviation 248). Empty: the
+	/// room takes every build.
+	std::string buildId;
+	/// The SHA-256 of the server's file of the land, as 64 hex digits in lower case. The room refuses a client that gives
+	/// another SHA-256 with "map". Empty: no check at the join.
+	std::string mapSha256;
+	/// A lobby game: the time that the gods' players have to load the world (deviation 254). The time counts from the
+	/// creation of the room (the server listens). When the game starts after that time, it counts from the start.
+	int64_t loadWindowMicroseconds {game_lifetime::k_DefaultJoinWindowSeconds * 1'000'000};
 };
 
 /// The claims of a player who joins a room on the local network by the name of the profile, as a god. None when the name
@@ -146,6 +160,8 @@ public:
 		std::string account;
 		std::string name;
 		bool ready {false};
+		/// The player's computer loaded the world of the started game (game.loaded)
+		bool loaded {false};
 		int64_t awaySince {0};
 		Compares compares;
 		uint32_t resumes {0};
@@ -248,6 +264,21 @@ public:
 	/// True when the game started and every god left or was defeated: no player can come back. A room with no human god
 	/// is over when no observer is connected and no observer can come back.
 	[[nodiscard]] bool GameOver() const;
+	/// The time to join of the lobby's members ended: the room then starts with the fewest gods of the room
+	void EndJoinWindow();
+	/// A lobby game: true while the turns wait for the players of the gods to load the world (deviation 254)
+	[[nodiscard]] bool WaitsForLoads() const { return _loadWait; }
+	/// The slots of the gods whose players did not load the world yet, while the turns wait for them
+	[[nodiscard]] std::vector<uint8_t> LoadingSeats() const;
+	/// The whole seconds until the wait for the loads ends, rounded up. 0 when the turns do not wait.
+	[[nodiscard]] uint32_t LoadSecondsLeft() const;
+	/// The time to load ended: each god whose player did not load the world leaves the game, and the turns start with
+	/// the other gods
+	void EndLoadWait();
+	/// The gods with a player in the room
+	[[nodiscard]] size_t GodsInRoom() const;
+	/// The gods for which the room waits before the start
+	[[nodiscard]] uint32_t GodsToWaitFor() const { return _godsToWaitFor; }
 	/// The last turn of the game, after a client asked the server to stop the turns of a decided game. None before.
 	[[nodiscard]] std::optional<uint32_t> StoppedAfter() const { return _stoppedAfter; }
 	[[nodiscard]] const std::vector<Seat>& Seats() const { return _seats; }
@@ -278,6 +309,8 @@ private:
 		std::string name;
 		/// The number of an observer in the game, from 1. 0 for a god, and for an observer that has no number yet.
 		uint8_t observer {0};
+		/// The account of the ticket. Empty for a player that joined by name or came back with a session.
+		std::string account;
 		/// The "sync.parts" frames that the connection sent. The server answers only the first few.
 		uint32_t partReports {0};
 		/// The build id that the client gave in its join, or in a text frame that the server could not read. Empty when
@@ -351,6 +384,8 @@ private:
 	bool SendWorld(ConnectionId connection);
 	/// Refuses a connection with the short reason that the client gets. The log also gets the detail.
 	void Refuse(ConnectionId connection, std::string_view reason, std::string_view detail = {});
+	/// Takes the players of the accounts that the lobby banned out of the started game
+	void RemoveBannedFromGame();
 	void StartReply(ConnectionId connection, const Peer& peer, const game_socket::StartReply& reply);
 	void StartCreature(ConnectionId connection, const Peer& peer, const game_socket::StartCreature& creature);
 	/// The gods are ready: the server asks the gods if they have the land
@@ -389,6 +424,21 @@ private:
 	std::map<ConnectionId, Peer> _peers;
 	std::vector<Watcher> _watchers;
 	bool _started {false};
+	/// The gods for which the room waits before the start: every god of the lobby until the time to join ends, then the
+	/// fewest gods of the room
+	uint32_t _godsToWaitFor {1};
+	/// A lobby game that started waits for the loads of the gods' players. The wait ends one time and does not come back.
+	bool _loadWait {false};
+	/// The names in the last game.wait that the server sent
+	std::vector<std::string> _loadingSent;
+	/// The time when the room was made, by the clock of the room
+	int64_t _createdAt {0};
+	/// The time when the wait for the loads ends, by the clock of the room
+	int64_t _loadWaitEndsAt {0};
+	/// Sends game.wait when the list of the players who load changed, and ends the wait when the list is empty
+	void UpdateLoadWait();
+	/// Sends the wait for the loads to one connection, while the turns wait
+	void SendLoadWait(ConnectionId connection);
 	enum class StartStep : uint8_t
 	{
 		None,

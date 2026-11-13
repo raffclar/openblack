@@ -184,6 +184,7 @@ void NetworkGameSystem::Detach()
 bool NetworkGameSystem::Join(NetworkJoin join)
 {
 	Detach();
+	_roomName = join.roomName;
 	online::WebSocketClientInterface* sockets = &_sockets;
 	if (join.testAuthorities.has_value())
 	{
@@ -248,7 +249,9 @@ bool NetworkGameSystem::Join(NetworkJoin join)
 	    .ticket = std::move(join.ticket),
 	    .gamePassword = std::move(join.gamePassword),
 	    .name = std::move(join.name),
-	    .build = online::build_id::Own(),
+	    // A game server of another build refuses the join (deviation 248)
+	    .build = join.testBuildId.value_or(online::build_id::Own()),
+	    .map = {},
 	    .readLand = [](std::string_view land) -> std::optional<std::vector<uint8_t>> {
 		    // The land of the start is a file in the Scripts folder of the game on this computer, or a map file that the
 		    // player got from the lobby, or a map file in the "Online Maps" folder of the game
@@ -335,6 +338,8 @@ void NetworkGameSystem::BeginPlay()
 	}
 	_awaitingLand = false;
 	Attach();
+	// The server of a lobby game starts the turns when each god's player loaded the world
+	_session->ReportLoaded();
 	if (_fromCommandLine)
 	{
 		// The land of the server loaded: the player is ready, and the world waits for the server's start

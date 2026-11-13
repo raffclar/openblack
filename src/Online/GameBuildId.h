@@ -15,8 +15,8 @@
 #include <string_view>
 
 /// The build id of a network game: the version of the build and the version of the format of the turns, such as
-/// "0.1.0+0123456789ab/codec34". The client sends it in its join. A refusal for the protocol or the version names the
-/// build id of the client and of the server.
+/// "0.1.0+0123456789ab/codec34". The client sends it in its join, and a game server of another build refuses the client
+/// (deviation 248). The lobby lists the build id of each game.
 namespace openblack::online::build_id
 {
 
