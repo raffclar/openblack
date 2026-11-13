@@ -71,7 +71,9 @@
 #include "ECS/Systems/PickingSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/Systems/TownSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
+#include "ECS/TownCentreLinks.h"
 #include "ECS/WorldObjects.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "InfoConstants.h"
@@ -194,34 +196,17 @@ std::optional<particles::TownCentreBelief> GameParticleWorld::TownCentreBeliefOf
 		top.y = ecs::village_totem::TopY(top.y, iconHeight);
 		return top;
 	};
-	// The first totem on the centre in the order of a walk of the totems with a transform. The walk of that order goes
-	// through the store of the totems when it is not larger than the store of the transforms. Then the walk tests the
-	// centre before it looks for the transform.
-	const auto& underlying = registry.Underlying();
-	const auto* totems = underlying.storage<VillageTotem>();
-	const auto* transforms = underlying.storage<Transform>();
-	if (totems != nullptr && transforms != nullptr && !(transforms->size() < totems->size()))
+	// The totem on the centre and the town of the centre's number. While the symbols of the frame take their step, the
+	// town system keeps the links of all the centres. At other times one walk of the stores finds them.
+	std::optional<ecs::town_centre_links::Links> ownLinks;
+	const auto* links = Locator::townSystem::has_value() ? Locator::townSystem::value().FrameLinks() : nullptr;
+	if (links == nullptr)
 	{
-		for (const auto [totem, standing] : underlying.view<const VillageTotem>().each())
-		{
-			if (standing.townCentre != centre || !transforms->contains(totem))
-			{
-				continue;
-			}
-			totemTop = topOf(totem, standing, transforms->get(totem));
-			break;
-		}
+		links = &ownLinks.emplace(ecs::town_centre_links::Links::Of(registry));
 	}
-	else
+	if (const auto totem = links->TotemOf(centre); totem != entt::null)
 	{
-		registry.Each<const VillageTotem, const Transform>(
-		    [&totemTop, &topOf, centre](entt::entity totem, const VillageTotem& standing, const Transform& plinth) {
-			    if (totemTop.has_value() || standing.townCentre != centre)
-			    {
-				    return;
-			    }
-			    totemTop = topOf(totem, standing, plinth);
-		    });
+		totemTop = topOf(totem, registry.Get<const VillageTotem>(totem), registry.Get<const Transform>(totem));
 	}
 	if (!totemTop.has_value())
 	{
@@ -237,29 +222,9 @@ std::optional<particles::TownCentreBelief> GameParticleWorld::TownCentreBeliefOf
 		              "The town and its symbols have a place for each player number");
 		std::ranges::copy(impression.belief.belief, belief.beliefs.begin());
 	};
-	// The last town of the centre in the order of a walk of the towns with an impression. As above, the walk tests the
-	// town's number before it looks for the impression.
-	const auto* towns = underlying.storage<Town>();
-	const auto* impressions = underlying.storage<TownImpression>();
-	if (towns != nullptr && impressions != nullptr && !(impressions->size() < towns->size()))
+	if (const auto town = links->TownOf(abode->townId); town != entt::null)
 	{
-		for (const auto [entity, town] : underlying.view<const Town>().each())
-		{
-			if (town.id == abode->townId && impressions->contains(entity))
-			{
-				copyBelief(impressions->get(entity));
-			}
-		}
-	}
-	else
-	{
-		registry.Each<const Town, const TownImpression>(
-		    [&copyBelief, abode](const Town& town, const TownImpression& impression) {
-			    if (town.id == abode->townId)
-			    {
-				    copyBelief(impression);
-			    }
-		    });
+		copyBelief(registry.Get<const TownImpression>(town));
 	}
 	return belief;
 }

@@ -65,3 +65,20 @@ TEST(RadixSort, SortsKeysThatDifferOnlyInTheirHighestByte)
 	radix_sort::Sort(keys, scratch);
 	EXPECT_EQ(keys, expected);
 }
+
+TEST(RadixSort, KeysInTheOrderOfTheirLowBytesNeedOnlyTheHighBytes)
+{
+	std::vector<uint64_t> scratch;
+	for (const size_t count : {size_t {0}, size_t {63}, size_t {64}, size_t {1000}, size_t {20000}})
+	{
+		for (const uint32_t range : {0u, 3u, 0xFFFFFFFFu})
+		{
+			// The low half of each key is its place, so the keys come in the order of their low half
+			auto keys = DepthKeys(count, static_cast<uint32_t>(count) + range, range);
+			auto expected = keys;
+			std::ranges::sort(expected);
+			radix_sort::Sort(keys, scratch, sizeof(uint32_t));
+			EXPECT_EQ(keys, expected) << count << " keys, depths up to " << range;
+		}
+	}
+}

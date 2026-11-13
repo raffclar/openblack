@@ -15,6 +15,7 @@
 #include <algorithm>
 #include <bit>
 #include <iterator>
+#include <limits>
 #include <numbers>
 #include <optional>
 #include <string>
@@ -22,6 +23,7 @@
 #include <vector>
 
 #include <entt/core/hashed_string.hpp>
+#include <glm/common.hpp>
 #include <glm/geometric.hpp>
 #include <glm/matrix.hpp>
 
@@ -40,6 +42,9 @@ using openblack::graphics::render_modes::Mode;
 
 namespace
 {
+/// The low bytes of a sort key of Order, which hold the place where the thing comes
+constexpr size_t k_KeyPlaceBytes = sizeof(uint32_t);
+
 /// A player's glows run through 32 frames of the sprite sheet backwards, one a little faster than the other, and the
 /// second turns, each by so much a millisecond
 constexpr float k_GlowFrames = 32.0f;
@@ -91,23 +96,29 @@ bool Commutes(const Frame& frame, const Item& item)
 	return mode.blend == graphics::render_modes::Blend::Additive && !mode.zWrite;
 }
 
-/// The lists that GatherCommutingRuns uses, made one time for all the runs of a frame's order
+/// The lists that GatherCommutingRuns uses, made one time for all the runs of a frame's order. They use the memory of
+/// the caller's lists.
 struct Gathering
 {
-	explicit Gathering(const Frame& frame)
+	Gathering(const Frame& frame, draw::OrderLists& lists)
 	    : frame(frame)
+	    , commutes(lists.commutes)
+	    , order(lists.order)
+	    , counts(lists.counts)
+	    , ranked(lists.ranked)
 	{
 		// Whether each item commutes, found one time for each item
+		commutes.clear();
 		commutes.reserve(frame.items.size());
 		std::ranges::transform(frame.items, std::back_inserter(commutes),
 		                       [&frame](const Item& item) { return static_cast<uint8_t>(Commutes(frame, item) ? 1 : 0); });
 	}
 
 	const Frame& frame;
-	std::vector<uint8_t> commutes;
-	std::vector<uint32_t> order;
-	std::vector<uint32_t> counts;
-	std::vector<std::pair<uint32_t, uint32_t>> ranked;
+	std::vector<uint8_t>& commutes;
+	std::vector<uint32_t>& order;
+	std::vector<uint32_t>& counts;
+	std::vector<std::pair<uint32_t, uint32_t>>& ranked;
 };
 
 /// Each run of items that commute is gathered by material, keeping their order otherwise, so that it takes a draw for
@@ -851,6 +862,13 @@ void draw::AddLightSheet(Frame& frame, std::span<const LightSheet::Vertex> verti
 void draw::Order(const Frame& frame, const glm::vec3& camera, std::optional<glm::vec3> hand, std::vector<Command>& commands,
                  std::vector<uint32_t>& spriteOrder)
 {
+	OrderLists lists;
+	Order(frame, camera, hand, commands, spriteOrder, lists);
+}
+
+void draw::Order(const Frame& frame, const glm::vec3& camera, std::optional<glm::vec3> hand, std::vector<Command>& commands,
+                 std::vector<uint32_t>& spriteOrder, OrderLists& lists)
+{
 	commands.clear();
 	spriteOrder.clear();
 	// Items in turn: runs of sprites that share a material join one command, and each command takes a place a little
@@ -896,8 +914,10 @@ void draw::Order(const Frame& frame, const glm::vec3& camera, std::optional<glm:
 	// come. A distance is a sum of squares, thus it is never negative and never negative zero, so its bits give the same
 	// order as its value. Each key holds the inverted bits of the distance above the place where the thing comes, so
 	// that a plain sort of the keys gives that order.
-	std::vector<uint32_t> come;
-	std::vector<uint64_t> keys;
+	auto& come = lists.come;
+	auto& keys = lists.keys;
+	come.clear();
+	keys.clear();
 	for (const auto& group : frame.groups)
 	{
 		if (group.path != DrawPath::Sorted)
@@ -911,13 +931,14 @@ void draw::Order(const Frame& frame, const glm::vec3& camera, std::optional<glm:
 			come.push_back(i);
 		}
 	}
-	// The keys differ in their low bits, so a sort by their bytes gives the same order as a sort by comparisons
-	std::vector<uint64_t> scratch;
-	openblack::radix_sort::Sort(keys, scratch);
-	std::vector<uint32_t> items;
+	// The keys differ in their low bits, so a sort by their bytes gives the same order as a sort by comparisons. The low
+	// half of the keys already comes in order, so the sort starts at the high half.
+	openblack::radix_sort::Sort(keys, lists.scratch, k_KeyPlaceBytes);
+	auto& items = lists.items;
+	items.clear();
 	items.reserve(keys.size());
 	std::ranges::transform(keys, std::back_inserter(items), [&come](uint64_t key) { return come[key & 0xFFFFFFFFu]; });
-	Gathering gathering(frame);
+	Gathering gathering(frame, lists);
 	GatherCommutingRuns(gathering, items);
 	emit(items, [&camera](const Item& item) { return graphics::zsort::Depth(item.sortPoint, camera); });
 
@@ -944,6 +965,29 @@ void draw::Order(const Frame& frame, const glm::vec3& camera, std::optional<glm:
 	}
 }
 
+std::optional<std::pair<glm::vec3, glm::vec3>> draw::SpriteBox(const Frame& frame)
+{
+	if (frame.items.empty() ||
+	    !std::ranges::all_of(frame.items, [](const Item& item) { return item.kind == ItemKind::Sprite; }))
+	{
+		return std::nullopt;
+	}
+	glm::vec3 lowest(std::numeric_limits<float>::max());
+	glm::vec3 highest(std::numeric_limits<float>::lowest());
+	for (const auto& item : frame.items)
+	{
+		// The shader moves a corner by half the width and the shift across on one axis, and by half the height and the
+		// shift up on a second axis at a right angle. The turn of the two axes does not make the distance longer.
+		const auto& sprite = frame.sprites[item.index];
+		const float reach = std::abs(sprite.positionHalfWidth.w) + std::abs(sprite.shape.z) + std::abs(sprite.shape.x) +
+		                    std::abs(sprite.shape.w);
+		const glm::vec3 position(sprite.positionHalfWidth);
+		lowest = glm::min(lowest, position - reach);
+		highest = glm::max(highest, position + reach);
+	}
+	return std::pair {lowest, highest};
+}
+
 void draw::MeshesWithLearningWords(const Frame& frame, std::vector<uint32_t>& meshes)
 {
 	meshes.clear();
@@ -968,6 +1012,7 @@ void draw::OrderBeforeLand(const Frame& frame, std::vector<Command>& commands, s
 	commands.clear();
 	spriteOrder.clear();
 	// Made only when a group is drawn before the land
+	OrderLists lists;
 	std::optional<Gathering> gathering;
 	for (const auto& group : frame.groups)
 	{
@@ -983,7 +1028,7 @@ void draw::OrderBeforeLand(const Frame& frame, std::vector<Command>& commands, s
 		}
 		if (!gathering.has_value())
 		{
-			gathering.emplace(frame);
+			gathering.emplace(frame, lists);
 		}
 		GatherCommutingRuns(*gathering, items);
 		for (const auto index : items)

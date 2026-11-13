@@ -215,8 +215,10 @@ private:
 	/// Gathers the symbols of belief of each village centre into a frame of its own, as the game draws them after the
 	/// centre's column and not with the other effects
 	void CollectTownBeliefParticles() const;
-	/// The symbols of belief of one village centre, among the other things that blend
-	void DrawTownBeliefParticles(const DrawSceneDesc& desc, entt::entity centre) const;
+	/// The symbols of belief of one village centre, among the other things that blend. When a view is given, the symbols
+	/// are not drawn when all of them are out of it: then they put no pixel on the screen.
+	void DrawTownBeliefParticles(const DrawSceneDesc& desc, entt::entity centre,
+	                             const view_frustum::Frustum* seenBy = nullptr) const;
 	/// The particle effects in the order the camera of the pass draws them, among the other things that blend: runs of
 	/// sprites that share a sheet as one instanced draw, ribbons, models and mists
 	void DrawParticles(const DrawSceneDesc& desc) const;
@@ -1081,12 +1083,18 @@ private:
 	{
 		entt::entity centre {entt::null};
 		particles::draw::Frame frame;
+		/// The lowest and the highest corners of a box that holds every corner of the frame's sprites. It is none when
+		/// the frame has more than sprites.
+		std::optional<std::pair<glm::vec3, glm::vec3>> spriteBox;
 	};
 	/// The frames of the village centres' symbols of belief. Only the first _townBeliefFrameCount are of this frame.
 	mutable std::vector<TownBeliefFrame> _townBeliefFrames;
 	mutable size_t _townBeliefFrameCount {0};
 	mutable std::vector<particles::draw::Command> _townBeliefCommands;
 	mutable std::vector<uint32_t> _townBeliefSpriteOrder;
+	/// The lists that the orders of the particles use, kept from frame to frame for their memory
+	mutable particles::draw::OrderLists _townBeliefOrderLists;
+	mutable particles::draw::OrderLists _particleOrderLists;
 	mutable std::vector<particles::draw::Command> _particleBeforeLandCommands;
 	mutable std::vector<uint32_t> _particleBeforeLandSprites;
 	mutable std::vector<uint32_t> _learningBulbMeshes;

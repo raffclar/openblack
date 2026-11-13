@@ -68,6 +68,7 @@
 #include "Graphics/ShaderProgram.h"
 #include "Graphics/Texture2D.h"
 #include "Graphics/VertexBuffer.h"
+#include "Graphics/ViewFrustum.h"
 #include "Graphics/ZSort.h"
 #include "Locator.h"
 #include "Particles/ParticleBlast.h"
@@ -271,6 +272,7 @@ void Renderer::CollectTownBeliefParticles() const
 			    return;
 		    }
 		    entry.centre = entity;
+		    entry.spriteBox = particles::draw::SpriteBox(entry.frame);
 		    ++_townBeliefFrameCount;
 		    // The light maps and shadows of the symbols stamp the land with those of the other effects
 		    _particleFrame.lightStamps.insert(_particleFrame.lightStamps.end(), entry.frame.lightStamps.begin(),
@@ -908,7 +910,7 @@ void Renderer::DrawParticles(const DrawSceneDesc& desc) const
 	                                                                 : Profiler::Stage::MainPassDrawParticles);
 	const auto origin = desc.camera->GetOrigin();
 	particles::draw::Order(_particleFrame, origin, reflection ? std::nullopt : HandPoint(), _particleCommands,
-	                       _particleSpriteOrder);
+	                       _particleSpriteOrder, _particleOrderLists);
 	// A vortex's swirl is drawn before the land, after the sea in the sky's pass, which keeps its order. Its sprites
 	// follow the others' in the one buffer of instances.
 	_particleBeforeLandCommands.clear();
@@ -942,7 +944,8 @@ void Renderer::DrawLearningBulbs(const DrawSceneDesc& desc) const
 	}
 }
 
-void Renderer::DrawTownBeliefParticles(const DrawSceneDesc& desc, entt::entity centre) const
+void Renderer::DrawTownBeliefParticles(const DrawSceneDesc& desc, entt::entity centre,
+                                       const view_frustum::Frustum* seenBy) const
 {
 	const bool reflection = desc.viewId == RenderPass::Reflection;
 	if (desc.viewId != RenderPass::Main && !reflection)
@@ -955,9 +958,15 @@ void Renderer::DrawTownBeliefParticles(const DrawSceneDesc& desc, entt::entity c
 	{
 		return;
 	}
+	// Symbols that are all out of the view put no pixel on the screen
+	if (seenBy != nullptr && found->spriteBox.has_value() &&
+	    !view_frustum::SeesWorldBox(*seenBy, found->spriteBox->first, found->spriteBox->second))
+	{
+		return;
+	}
 	const auto origin = desc.camera->GetOrigin();
 	particles::draw::Order(found->frame, origin, reflection ? std::nullopt : HandPoint(), _townBeliefCommands,
-	                       _townBeliefSpriteOrder);
+	                       _townBeliefSpriteOrder, _townBeliefOrderLists);
 	SubmitParticleFrame(desc, found->frame, _townBeliefCommands, _townBeliefSpriteOrder, {}, origin);
 }
 

@@ -310,6 +310,28 @@ bool Effect::ConditionForCollection(const std::string& name, const Collection& c
 	return (*test)(*this, *object, collection) != object->Bool("InvertResponse", false);
 }
 
+bool Effect::ConditionForSlot(const Modifier& modifier, const Collection& collection) const
+{
+	auto found = _collectionTests.find(&modifier);
+	if (found == _collectionTests.end())
+	{
+		CollectionTest test;
+		test.object = _file->Find(modifier.condition);
+		if (test.object != nullptr)
+		{
+			test.test = _services.classes.FindCollectionCondition(test.object->className);
+			test.invert = test.object->Bool("InvertResponse", false);
+		}
+		found = _collectionTests.emplace(&modifier, test).first;
+	}
+	const auto& test = found->second;
+	if (test.object == nullptr || test.test == nullptr)
+	{
+		return true;
+	}
+	return (*test.test)(*this, *test.object, collection) != test.invert;
+}
+
 bool Effect::ConditionForAtom(const std::string& name, const Atom& atom) const
 {
 	const auto* object = _file->Find(name);
@@ -522,7 +544,7 @@ void Effect::UpdateCollection(Collection& collection)
 			slot.attached = false;
 			continue;
 		}
-		if (!ConditionForCollection(slot.modifier->condition, collection))
+		if (!ConditionForSlot(*slot.modifier, collection))
 		{
 			continue;
 		}

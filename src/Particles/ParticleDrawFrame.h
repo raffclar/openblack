@@ -384,6 +384,24 @@ struct Command
 /// a material at a time.
 void Order(const Frame& frame, const glm::vec3& camera, std::optional<glm::vec3> hand, std::vector<Command>& commands,
            std::vector<uint32_t>& spriteOrder);
+/// The lists that Order works in. A caller that keeps them from one frame to the next keeps their memory.
+struct OrderLists
+{
+	std::vector<uint32_t> come;
+	std::vector<uint64_t> keys;
+	std::vector<uint64_t> scratch;
+	std::vector<uint32_t> items;
+	std::vector<uint8_t> commutes;
+	std::vector<uint32_t> order;
+	std::vector<uint32_t> counts;
+	std::vector<std::pair<uint32_t, uint32_t>> ranked;
+};
+/// The same order as Order gives, made in the caller's lists
+void Order(const Frame& frame, const glm::vec3& camera, std::optional<glm::vec3> hand, std::vector<Command>& commands,
+           std::vector<uint32_t>& spriteOrder, OrderLists& lists);
+/// The lowest and the highest corners of a box that holds each corner of each sprite that the frame draws, as the
+/// sprite shader puts the corners. It is none when the frame draws nothing or more than sprites.
+[[nodiscard]] std::optional<std::pair<glm::vec3, glm::vec3>> SpriteBox(const Frame& frame);
 /// The order the effects drawn before the land are drawn in, each in its own order, the sprites as for Order. The view
 /// they are drawn in keeps the order they are given.
 void OrderBeforeLand(const Frame& frame, std::vector<Command>& commands, std::vector<uint32_t>& spriteOrder);

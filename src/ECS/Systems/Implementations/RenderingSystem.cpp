@@ -380,7 +380,8 @@ bool HiddenHighlight(const openblack::ecs::Registry& registry, entt::entity enti
 	return highlight != nullptr && highlight->hidden;
 }
 
-/// The plinths and the icons of the village totems that show nothing: the totems with no life
+/// The plinths and the icons of the village totems that show nothing: the totems with no life. The list is sorted, for a
+/// binary search.
 std::vector<entt::entity> LifelessTotemParts(const openblack::ecs::Registry& registry)
 {
 	using openblack::ecs::components::VillageTotem;
@@ -392,6 +393,7 @@ std::vector<entt::entity> LifelessTotemParts(const openblack::ecs::Registry& reg
 			parts.push_back(component.icon);
 		}
 	});
+	std::ranges::sort(parts);
 	return parts;
 }
 
@@ -916,7 +918,7 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 			    return;
 		    }
 		    // A village totem with no life shows nothing. It stays drawn while the camera does not move.
-		    if (std::ranges::find(lifelessTotemParts, entity) != lifelessTotemParts.end())
+		    if (std::ranges::binary_search(lifelessTotemParts, entity))
 		    {
 			    if (drawList != nullptr && drawList->GetFrame().drawAll && drawList->NotesKept(entity))
 			    {

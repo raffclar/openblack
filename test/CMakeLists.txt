@@ -487,6 +487,7 @@ openblack_setup_and_add_test(
   test_creature_spell_casting test_creature_spell_casting.cpp
 )
 openblack_setup_and_add_test(test_town_belief test_town_belief.cpp)
+openblack_setup_and_add_test(test_town_centre_links test_town_centre_links.cpp)
 openblack_setup_and_add_test(test_town_owner test_town_owner.cpp)
 openblack_setup_and_add_test(test_villager_speed test_villager_speed.cpp)
 openblack_setup_and_add_test(test_wall_hug_rules test_wall_hug_rules.cpp)
