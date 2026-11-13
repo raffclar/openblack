@@ -194,6 +194,19 @@ std::shared_ptr<const dance::DanceFile> DanceSystem::FileOf(DanceInfo type)
 	return LoadDanceFile(std::string(field.substr(0, field.find('\0'))));
 }
 
+void DanceSystem::LoadAllFiles()
+{
+	if (!Locator::infoConstants::has_value())
+	{
+		return;
+	}
+	const auto rows = Locator::infoConstants::value().dance.size();
+	for (size_t row = 0; row < rows; ++row)
+	{
+		[[maybe_unused]] const auto file = FileOf(static_cast<DanceInfo>(row));
+	}
+}
+
 void DanceSystem::Destroy(entt::entity dance)
 {
 	dances::Destroy(Locator::entitiesRegistry::value(), dance, &FinishedDancing);

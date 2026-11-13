@@ -60,16 +60,23 @@ std::vector<entt::entity> player_towns::AllInOrder(const Registry& registry)
 	{
 		PlayerNames owner;
 		uint32_t gained;
+		/// The place of the town in the walk, which keeps the order of towns with the same owner and the same gain turn
+		uint32_t walked;
 		entt::entity town;
 	};
 	std::vector<Entry> towns;
+	towns.reserve(registry.Size<const components::Town>());
 	registry.Each<const components::Town>([&](entt::entity entity, const components::Town& town) {
-		towns.push_back({.owner = town.owner, .gained = town.gained, .town = entity});
+		towns.push_back(
+		    {.owner = town.owner, .gained = town.gained, .walked = static_cast<uint32_t>(towns.size()), .town = entity});
 	});
 	// The neutral player has the last number, so its list comes after the lists of all the other players
 	static_assert(PlayerNames::NEUTRAL == static_cast<PlayerNames>(static_cast<uint8_t>(PlayerNames::_COUNT) - 1));
-	std::ranges::stable_sort(
-	    towns, [](const Entry& a, const Entry& b) { return std::tie(a.owner, a.gained) < std::tie(b.owner, b.gained); });
+	// The place in the walk makes each key different. Thus this sort gives the order of a stable sort, with no memory
+	// from the heap.
+	std::ranges::sort(towns, [](const Entry& a, const Entry& b) {
+		return std::tie(a.owner, a.gained, a.walked) < std::tie(b.owner, b.gained, b.walked);
+	});
 	std::vector<entt::entity> result;
 	result.reserve(towns.size());
 	std::ranges::transform(towns, std::back_inserter(result), &Entry::town);

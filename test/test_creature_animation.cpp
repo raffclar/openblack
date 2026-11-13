@@ -920,6 +920,30 @@ TEST(KeyframeTurns, CallsForTwoAnimationsInTurnGiveTheTurnsOfEach)
 	EXPECT_EQ(turns.Size(), 2u);
 }
 
+TEST(KeyframeTurns, CallsForMoreAnimationsThanTheRecentPlacesGiveTheTurnsOfEach)
+{
+	// Six animations in turn are more than the store keeps as recent. Each call must still give the turns of its own
+	// animation.
+	const TurnsFixture fixture(13);
+	std::vector<Animation> animations(6, fixture.animation);
+	for (size_t i = 0; i < animations.size(); ++i)
+	{
+		animations[i].frames[1].eulerAngles[0] = glm::vec3(0.1f * static_cast<float>(i + 1), 0.2f, -0.3f);
+	}
+	skeletal_animation::KeyframeTurns turns;
+	for (size_t round = 0; round < 3; ++round)
+	{
+		for (size_t i = 0; i < animations.size(); ++i)
+		{
+			const auto index = (round % 2 == 0) ? i : animations.size() - 1 - i;
+			const auto kept = turns.Of(animations[index], 1, false)[0];
+			const auto made = skeletal_animation::RotationYXZ(animations[index].frames[1].eulerAngles[0]);
+			EXPECT_EQ(std::memcmp(&kept, &made, sizeof(made)), 0) << round << " " << index;
+		}
+	}
+	EXPECT_EQ(turns.Size(), animations.size());
+}
+
 TEST(KeyframeTurns, TheStoreGivesTheTurnsAfterTrimRemovesThem)
 {
 	const TurnsFixture fixture(9);
