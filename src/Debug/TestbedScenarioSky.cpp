@@ -107,6 +107,48 @@ void testbed_scenarios::AddSkyScenarios(std::vector<Scenario>& all)
 	    .objects = TreesToTheEast(),
 	});
 
+	// Two storms that do not move, with pale clouds on the line from the camera to the moon at midnight: the near
+	// storm is 900 east of the eye, nearer than the moon, and the far storm is 4500 east, farther than the moon.
+	// Each storm's clouds are at the height of that line where the storm stands.
+	all.push_back({
+	    .id = "sky.moon_clouds_cross",
+	    .name = "Clouds in front of and behind the moon",
+	    .facet = Facet::Sky,
+	    .description = "The clock stands at midnight. The eye is low on the land, 2200 west of the middle, and looks east "
+	                   "at the moon. A storm 900 east of the eye has 4 pale clouds at 225 up, on the line to the moon. A "
+	                   "second storm 4500 east of the eye has 16 pale clouds at 1080 up, farther away than the moon. "
+	                   "Neither storm moves or rains, and the clouds wander about each storm.",
+	    .expected = "The moon is about 4100 from the eye. A near cloud that passes in front of the moon covers it and its "
+	                "glow, and the moon shows dimly through it. A far cloud that passes behind the moon is hidden where "
+	                "the moon's half sphere is, also its dark part, but it shows over the glow.",
+	    .environment = {.hour = 0.0f, .clockRuns = false, .dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {-2200.0f, 10.0f, 0.0f}, .look = {-1800.0f, 105.0f, 0.0f}},
+	    .landStorms = {{.offset = {-1300.0f, 0.0f},
+	                    .destination = {-1300.0f, 0.0f},
+	                    .age = 70.0f,
+	                    .cloudCount = 4,
+	                    .shape = "160.00,176.00,10.00,2000000.00,1.00,1.10",
+	                    .clouds = "0.00,225.00,0.00,0.00,0.00,0.00",
+	                    .weather = "0,0,8,93,0,0",
+	                    .climate = LandClimateSetup {.index = 1,
+	                                                 .type = 5,
+	                                                 .offset = {-1300.0f, 0.0f},
+	                                                 .innerRadius = 330.294128f,
+	                                                 .outerRadius = 388.529419f}},
+	                   {.offset = {2300.0f, 0.0f},
+	                    .destination = {2300.0f, 0.0f},
+	                    .age = 70.0f,
+	                    .cloudCount = 16,
+	                    .shape = "160.00,176.00,10.00,2000000.00,1.00,1.10",
+	                    .clouds = "0.00,1080.00,0.00,0.00,0.00,0.00",
+	                    .weather = "0,0,8,93,0,0",
+	                    .climate = LandClimateSetup {.index = 2,
+	                                                 .type = 5,
+	                                                 .offset = {2300.0f, 0.0f},
+	                                                 .innerRadius = 330.294128f,
+	                                                 .outerRadius = 388.529419f}}},
+	});
+
 	all.push_back({
 	    .id = "sky.storm_bolts",
 	    .name = "A storm's forked bolts",
