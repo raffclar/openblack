@@ -66,7 +66,6 @@ public:
 	static constexpr size_t k_AudioTrackSize = 12;
 	static constexpr uint32_t k_KeyFrameFlag = 0x1;
 	static constexpr uint32_t k_VideoFlagAlpha = 0x00100000;
-	static constexpr uint32_t k_VideoFlagGrey = 0x00020000;
 
 	/// Reads a whole .bik held in memory and checks it: the "BIK" signature (Bink 1), a picture and a frame rate, the
 	/// tables inside the file, the frame offsets strictly increasing from the end of the tables with the last one at the
