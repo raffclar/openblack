@@ -43,6 +43,9 @@ struct Join
 	std::string gamePassword;
 	/// The name of the player's profile, on the local network only, where no ticket names the player
 	std::string name;
+	/// The build id of the client, such as "0.1.0+0123456789ab/codec34" ("build", optional). A refusal for the protocol
+	/// or the version names it in the server's log. An older client gives no build id.
+	std::string build;
 };
 
 /// Client to server: "room.resume". A client that lost its socket opens a new one and sends this in place of a join. It
@@ -146,8 +149,12 @@ struct Joined
 /// Server to client: "room.refused". The server closes the socket after this frame.
 struct Refused
 {
-	/// A short word for the reason: "ticket", "full", "started", "closed", "protocol", "resync", "kicked"
+	/// A short word for the reason: "ticket", "full", "started", "closed", "protocol", "resync", "kicked", "version" (the
+	/// client sent a binary frame of another version of the format of the turns)
 	std::string reason;
+	/// The build id of the server ("build", optional), with the refusals "protocol" and "version". The client log names
+	/// it beside the build id of the client. An older client does not read it.
+	std::string build;
 };
 
 /// Server to client: "room.resumed". The server accepted the resume. The turns after the client's turn follow.

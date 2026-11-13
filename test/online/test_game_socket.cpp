@@ -336,3 +336,22 @@ TEST(GameSocket, TheLeaveOfAnObserverGoesToJsonAndBack)
 	EXPECT_FALSE(Parse(R"({"type":"observer.left"})").has_value());
 	EXPECT_FALSE(Parse(R"({"type":"observer.left","name":7})").has_value());
 }
+
+// The join and a refusal for the protocol or the version give a build id. A frame of an older build has none, and
+// still reads.
+TEST(GameSocket, TheJoinAndTheRefusalCanGiveABuildId)
+{
+	const auto join = RoundTrip(Join {.ticket = "t", .gamePassword = {}, .name = {}, .build = "0.1.0+abc/codec34"});
+	EXPECT_EQ(join.build, "0.1.0+abc/codec34");
+	EXPECT_EQ(ToJson(Join {.ticket = "t", .gamePassword = {}, .name = {}}), R"({"ticket":"t","type":"room.join"})");
+	ASSERT_TRUE(Parse(R"({"type":"room.join","ticket":"t"})").has_value());
+	EXPECT_TRUE(std::get<Join>(*Parse(R"({"type":"room.join","ticket":"t"})")).build.empty());
+	EXPECT_FALSE(Parse(R"({"type":"room.join","ticket":"t","build":7})").has_value());
+
+	const auto refused = RoundTrip(Refused {.reason = "version", .build = "0.1.0+def/codec35"});
+	EXPECT_EQ(refused.reason, "version");
+	EXPECT_EQ(refused.build, "0.1.0+def/codec35");
+	EXPECT_EQ(ToJson(Refused {.reason = "full"}), R"({"reason":"full","type":"room.refused"})");
+	EXPECT_TRUE(RoundTrip(Refused {.reason = "full"}).build.empty());
+	EXPECT_FALSE(Parse(R"({"type":"room.refused","reason":"protocol","build":[]})").has_value());
+}

@@ -32,6 +32,7 @@
 #include "ECS/Systems/LobbyClientSystemInterface.h"
 #include "ECS/Systems/NetworkGameSystemInterface.h"
 #include "Gui/MultiplayerFrontEnd.h"
+#include "Online/GameBuildId.h"
 #include "Online/LanDiscoveryInterface.h"
 #include "Online/NetworkSession.h"
 #include "Online/OnlineMapStoreInterface.h"
@@ -529,6 +530,7 @@ public:
 		    .ticket = std::move(join.ticket),
 		    .gamePassword = std::move(join.gamePassword),
 		    .name = std::move(join.name),
+		    .build = online::build_id::Own(),
 		    .readLand = {},
 		    .readCreature = {},
 		    .readAlignment = {},

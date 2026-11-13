@@ -40,6 +40,7 @@
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Locator.h"
+#include "Online/GameBuildId.h"
 #include "Online/HttpClientInterface.h"
 #include "Online/NetworkLand.h"
 #include "Online/OnlineMapStoreInterface.h"
@@ -247,6 +248,7 @@ bool NetworkGameSystem::Join(NetworkJoin join)
 	    .ticket = std::move(join.ticket),
 	    .gamePassword = std::move(join.gamePassword),
 	    .name = std::move(join.name),
+	    .build = online::build_id::Own(),
 	    .readLand = [](std::string_view land) -> std::optional<std::vector<uint8_t>> {
 		    // The land of the start is a file in the Scripts folder of the game on this computer, or a map file that the
 		    // player got from the lobby, or a map file in the "Online Maps" folder of the game

@@ -33,6 +33,7 @@
 #include "Commands/TurnCodec.h"
 #include "LoopbackSockets.h"
 #include "Online/ConnectionLostNotice.h"
+#include "Online/GameBuildId.h"
 #include "Online/NetworkSession.h"
 #include "Online/StartRules.h"
 #include "Server/Desktop/Sha256SessionHasher.h"
@@ -156,7 +157,7 @@ struct Computer
 {
 	Computer(LoopbackSockets& network, int64_t& now, std::string ticket,
 	         std::optional<std::vector<uint8_t>> landFile = k_LandFile, std::vector<uint8_t> creature = {'C'},
-	         float alignment = 0.0f, std::string name = {})
+	         float alignment = 0.0f, std::string name = {}, std::string build = {})
 	    : sockets(network.MakeClient())
 	    , session(*sockets, [&now] { return now; })
 	{
@@ -165,6 +166,7 @@ struct Computer
 		    .ticket = std::move(ticket),
 		    .gamePassword = {},
 		    .name = std::move(name),
+		    .build = std::move(build),
 		    .comeBackMicroseconds = 5LL * 60 * 1'000'000,
 		    .readLand = [this](std::string_view land) -> std::optional<std::vector<uint8_t>> {
 			    askedLand = std::string(land);
@@ -829,6 +831,117 @@ TEST_F(LockstepTest, TheServerLogTellsWhyItRefusesAResume)
 		return line.find("refuses connection") != std::string::npos &&
 		       line.find("resume: no god or observer") != std::string::npos;
 	}));
+}
+
+namespace
+{
+
+/// The lines of the "game" log while a test runs
+struct GameLogLines
+{
+	GameLogLines()
+	{
+		spdlog::drop("game");
+		spdlog::register_logger(std::make_shared<spdlog::logger>("game", sink));
+	}
+	~GameLogLines() { spdlog::drop("game"); }
+	GameLogLines(const GameLogLines&) = delete;
+	GameLogLines& operator=(const GameLogLines&) = delete;
+
+	/// True when a line has each of the texts
+	[[nodiscard]] bool Has(std::initializer_list<std::string_view> texts) const
+	{
+		return std::ranges::any_of(sink->last_formatted(), [texts](const std::string& line) {
+			return std::ranges::all_of(texts, [&line](std::string_view text) { return line.find(text) != std::string::npos; });
+		});
+	}
+
+	std::shared_ptr<spdlog::sinks::ringbuffer_sink_mt> sink = std::make_shared<spdlog::sinks::ringbuffer_sink_mt>(256);
+};
+
+} // namespace
+
+// A client with another version of the format of the turns cannot play in the game. The server closes it with "version",
+// and the logs of the server and of the client name the two builds. The other god stays.
+TEST_F(LockstepTest, TheServerClosesAClientThatSendsAFrameOfAnotherVersionOfTheTurns)
+{
+	GameLogLines log;
+	MakeHost(2);
+	Computer alice(network, now, "god:alice", k_LandFile, {'C'}, 0.0f, {}, "0.0.1+old/codec1");
+	Computer bob(network, now, "god:bob");
+	Frames({&alice, &bob}, 7);
+	ASSERT_TRUE(host->Started());
+	const auto refused = host->RefusedBlocks();
+	const std::vector<uint8_t> block = {static_cast<uint8_t>(turn_codec::k_Version + 1), 0, 0, 0};
+	ASSERT_TRUE(alice.sockets->SendBinary(alice.sockets->Ids().back(), block));
+	Frames({&alice, &bob}, 3);
+	EXPECT_EQ(alice.session.GetEnd(), NetworkSession::End::Refused);
+	EXPECT_EQ(alice.session.RefusedReason(), "version");
+	EXPECT_EQ(host->RefusedBlocks(), refused + 1);
+	const auto server = online::build_id::Own();
+	const auto version = std::to_string(turn_codec::k_Version);
+	const auto other = std::to_string(turn_codec::k_Version + 1);
+	EXPECT_TRUE(log.Has({"refuses connection", ": version: a binary frame of version " + other, "not version " + version,
+	                     "the client has the build \"0.0.1+old/codec1\"", "the server has the build \"" + server + "\""}));
+	EXPECT_TRUE(log.Has({"refused the client: version", "the client has the build \"0.0.1+old/codec1\"",
+	                     "the server has the build \"" + server + "\""}));
+	EXPECT_EQ(bob.session.GetEnd(), NetworkSession::End::None);
+}
+
+// A frame of the turns that does not read for another cause is only left out: the client stays
+TEST_F(LockstepTest, ABinaryFrameThatDoesNotReadForAnotherCauseIsOnlyLeftOut)
+{
+	MakeHost(1);
+	Computer alice(network, now, "god:alice");
+	Frames({&alice}, 7);
+	ASSERT_TRUE(host->Started());
+	const std::vector<uint8_t> frame = {turn_codec::k_Version, 0xFF};
+	ASSERT_TRUE(alice.sockets->SendBinary(alice.sockets->Ids().back(), frame));
+	Frames({&alice}, 3);
+	EXPECT_EQ(alice.session.GetEnd(), NetworkSession::End::None);
+	EXPECT_EQ(host->Seats()[0].state, LockstepHost::SeatState::Taken);
+}
+
+// A client of another build can send a join that the server cannot read. The refusal for the protocol names the build of
+// the client, when the text gives one, and the build of the server.
+TEST_F(LockstepTest, ARefusalForTheProtocolNamesTheBuildsOfTheClientAndOfTheServer)
+{
+	GameLogLines log;
+	MakeHost(1);
+	const auto server = online::build_id::Own();
+	auto client = network.MakeClient();
+	const auto id =
+	    client->Connect({.url = "wss://127.0.0.1/game/1", .headers = {}, .subprotocols = {}, .serverKey = std::nullopt}, {});
+	Frames({}, 1);
+	client->Poll();
+	client->SendText(id, R"({"type":"room.join","ticket":5,"build":"0.0.1+old/codec1"})");
+	Frames({}, 2);
+	EXPECT_TRUE(log.Has({"refuses connection", ": protocol: a text frame that the server does not know",
+	                     "the client has the build \"0.0.1+old/codec1\"", "the server has the build \"" + server + "\""}));
+
+	auto older = network.MakeClient();
+	const auto olderId =
+	    older->Connect({.url = "wss://127.0.0.1/game/1", .headers = {}, .subprotocols = {}, .serverKey = std::nullopt}, {});
+	Frames({}, 1);
+	older->Poll();
+	older->SendText(olderId, R"({"type":"room.join","ticket":5})");
+	Frames({}, 2);
+	EXPECT_TRUE(log.Has({"refuses connection", ": protocol: a text frame that the server does not know",
+	                     "the client gave no build id", "the server has the build \"" + server + "\""}));
+}
+
+// A refusal for another cause does not name the builds
+TEST_F(LockstepTest, ARefusalForAnotherCauseDoesNotNameTheBuilds)
+{
+	GameLogLines log;
+	MakeHost(1);
+	Computer alice(network, now, "not-a-ticket", k_LandFile, {'C'}, 0.0f, {}, "0.1.0+abc/codec34");
+	Frames({&alice}, 3);
+	ASSERT_EQ(alice.session.GetEnd(), NetworkSession::End::Refused);
+	EXPECT_EQ(alice.session.RefusedReason(), "ticket");
+	EXPECT_TRUE(log.Has({"refuses connection", "ticket"}));
+	EXPECT_FALSE(log.Has({"refuses connection", "the server has the build"}));
+	EXPECT_FALSE(log.Has({"refused the client", "the server has the build"}));
 }
 
 TEST_F(LockstepTest, TheGodsSendTheirCreaturesToAllPlayersBeforeTheStart)

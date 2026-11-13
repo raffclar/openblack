@@ -19,6 +19,7 @@
 
 #include "Gui/TextDatabase.h"
 #include "Online/ConnectionLog.h"
+#include "Online/GameBuildId.h"
 #include "Online/StartRules.h"
 #include "PlayerSlots.h"
 #include "Server/ConnectionLimits.h"
@@ -40,29 +41,61 @@ constexpr uint32_t k_RefusedLogEvery = 100;
 constexpr size_t k_MostGodBytesInTurn =
     turn_codec::k_MostFrameBytes - turn_codec::sizes::k_Header - turn_codec::sizes::k_TurnBody;
 
-/// The value of the "type" member of a JSON text frame, for the log. At most 32 characters; empty when the text has none.
-[[nodiscard]] std::string FrameType(std::string_view text)
+/// A text for the log, with at most a number of characters. Each character that the log cannot show becomes '?'.
+[[nodiscard]] std::string Printable(std::string_view text, size_t mostCharacters)
 {
-	constexpr std::string_view k_Key = "\"type\"";
-	constexpr size_t k_MostCharacters = 32;
-	auto at = text.find(k_Key);
+	std::string printable;
+	for (const char c : text.substr(0, mostCharacters))
+	{
+		printable += c >= 0x20 && c < 0x7F ? c : '?';
+	}
+	return printable;
+}
+
+/// The text of a string member of a JSON text that the server could not read, for the log. It has at most a number of
+/// characters. Empty when the text has no such member.
+[[nodiscard]] std::string StringMember(std::string_view text, std::string_view name, size_t mostCharacters)
+{
+	const auto key = fmt::format("\"{}\"", name);
+	auto at = text.find(key);
 	if (at == std::string_view::npos)
 	{
 		return {};
 	}
-	at = text.find('"', at + k_Key.size());
+	at = text.find('"', at + key.size());
 	if (at == std::string_view::npos)
 	{
 		return {};
 	}
 	const auto end = text.find('"', at + 1);
-	auto type = text.substr(at + 1, end == std::string_view::npos ? std::string_view::npos : end - at - 1);
-	std::string printable;
-	for (const char c : type.substr(0, k_MostCharacters))
-	{
-		printable += c >= 0x20 && c < 0x7F ? c : '?';
-	}
-	return printable;
+	return Printable(text.substr(at + 1, end == std::string_view::npos ? std::string_view::npos : end - at - 1),
+	                 mostCharacters);
+}
+
+/// The value of the "type" member of a JSON text frame, for the log. At most 32 characters; empty when the text has none.
+[[nodiscard]] std::string FrameType(std::string_view text)
+{
+	constexpr size_t k_MostCharacters = 32;
+	return StringMember(text, "type", k_MostCharacters);
+}
+
+/// The most characters of a build id of a client in the log
+constexpr size_t k_MostBuildCharacters = 64;
+
+/// The refusals that name the build of the client and of the server: the client cannot talk with this server
+[[nodiscard]] bool NamesBuilds(std::string_view reason) noexcept
+{
+	return reason == "protocol" || reason == "version";
+}
+
+/// The builds of a client and of the server for the log of a refusal
+[[nodiscard]] std::string BuildsText(std::string_view client, std::string_view server)
+{
+	const auto printable = Printable(client, k_MostBuildCharacters);
+	return fmt::format("{}, the server has the build \"{}\"",
+	                   printable.empty() ? std::string("the client gave no build id")
+	                                     : fmt::format("the client has the build \"{}\"", printable),
+	                   server);
 }
 
 void Log(spdlog::level::level_enum level, std::string_view text)
@@ -252,9 +285,20 @@ std::string LockstepHost::WhoIs(ConnectionId connection) const
 
 void LockstepHost::Refuse(ConnectionId connection, std::string_view reason, std::string_view detail)
 {
+	// A refusal for the protocol or the version names the two builds, in the log and in the frame to the client
+	std::string text(detail);
+	std::string serverBuild;
+	if (NamesBuilds(reason))
+	{
+		serverBuild = online::build_id::Own();
+		const auto found = _peers.find(connection);
+		const auto builds =
+		    BuildsText(found != _peers.end() ? std::string_view(found->second.build) : std::string_view(), serverBuild);
+		text = text.empty() ? builds : text + "; " + builds;
+	}
 	Log(spdlog::level::info, fmt::format("The server refuses connection {} ({}): {}{}{}", connection, WhoIs(connection), reason,
-	                                     detail.empty() ? "" : ": ", detail));
-	SendTo(connection, game_socket::Refused {.reason = std::string(reason)});
+	                                     text.empty() ? "" : ": ", text));
+	SendTo(connection, game_socket::Refused {.reason = std::string(reason), .build = std::move(serverBuild)});
 	_sockets.Close(connection, server_close::k_Refused);
 	std::optional<std::string> observer;
 	if (const auto found = _peers.find(connection);
@@ -282,6 +326,11 @@ void LockstepHost::Text(ConnectionId connection, std::string_view text)
 	const auto frame = game_socket::Parse(text);
 	if (!frame.has_value())
 	{
+		// A client of another build can send a join that this server cannot read. The log then names its build.
+		if (peer.build.empty())
+		{
+			peer.build = StringMember(text, "build", k_MostBuildCharacters);
+		}
 		// The game server closes a connection that sends a message that it does not know
 		Refuse(connection, "protocol",
 		       fmt::format("a text frame that the server does not know ({} bytes, type \"{}\")", text.size(), FrameType(text)));
@@ -458,6 +507,7 @@ void LockstepHost::Join(ConnectionId connection, Peer& peer, const game_socket::
 		Refuse(connection, "protocol", "a second join on a connection that joined");
 		return;
 	}
+	peer.build = Printable(join.build, k_MostBuildCharacters);
 	// On the local network, a join with no ticket gives the name of the player's profile
 	const bool lan = _settings.lanNames && join.ticket.empty();
 	join_ticket::Claims claims;
@@ -1006,6 +1056,15 @@ void LockstepHost::Binary(ConnectionId connection, std::span<const uint8_t> byte
 	}
 	const auto& peer = found->second;
 	auto decoded = turn_codec::Decode(bytes);
+	// A client with another version of the format of the turns cannot play in this game. The server closes it.
+	if (decoded.error == turn_codec::DecodeError::Version)
+	{
+		++_refusedBlocks;
+		Refuse(connection, "version",
+		       fmt::format("a binary frame of version {} of the format of the turns, not version {}",
+		                   static_cast<unsigned>(bytes.front()), static_cast<unsigned>(turn_codec::k_Version)));
+		return;
+	}
 	if (!decoded.frame.has_value())
 	{
 		++_refusedBlocks;
