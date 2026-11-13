@@ -59,7 +59,6 @@ inline constexpr uint32_t k_PieceAge = 20;
 inline constexpr float k_LargePieceScale = 2.0f;
 /// An animal of a maze moves to its next cell at this speed, in metres a second, and then decides what to do
 inline constexpr float k_PieceMetresPerSecond = 4.0f;
-inline constexpr uint8_t k_PieceFinalState = 43;
 /// The top state of an animal that moves to a place
 inline constexpr uint8_t k_MoveToPosState = 1;
 
