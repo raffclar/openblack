@@ -733,8 +733,6 @@ void draw::AddLearningMarks(Frame& frame, std::span<const LearningMark> marks)
 		bulb.className = "LearningBulb";
 		bulb.changeMaterial = false;
 		bulb.dynamicLighting = true;
-		// The bulb is not an atom of the particles, thus the far cull of their models does not apply to it
-		bulb.neverClip = true;
 		return bulb;
 	}();
 	static constexpr auto k_Sheet = entt::hashed_string("raw/smoke");
@@ -745,16 +743,21 @@ void draw::AddLearningMarks(Frame& frame, std::span<const LearningMark> marks)
 	    {.texture = k_Sheet.value(), .alphaTexture = k_SheetAlpha.value(), .mode = Mode::AlphaTexturedAlphaNz});
 	for (const auto& mark : marks)
 	{
-		const auto firstItem = static_cast<uint32_t>(frame.items.size());
+		// The bulb is drawn at once with the words, and its far cull goes by its scale
+		const auto bulbItem = static_cast<uint32_t>(frame.items.size());
 		frame.items.push_back(
 		    {.kind = ItemKind::Mesh, .index = static_cast<uint32_t>(frame.meshes.size()), .sortPoint = mark.bulb});
 		frame.meshes.push_back({.creator = &k_Bulb,
 		                        .mesh = mark.bulbMesh,
 		                        .axes = glm::mat3(mark.bulbScale),
 		                        .position = mark.bulb,
+		                        .scale = mark.bulbScale,
 		                        .colour = mark.bulbColour,
 		                        .uvOffset = glm::vec2(0.0f),
 		                        .cutBelow = std::nullopt});
+		frame.groups.push_back(
+		    {.path = DrawPath::WithLearningWords, .origin = mark.bulb, .firstItem = bulbItem, .itemCount = 1});
+		const auto firstItem = static_cast<uint32_t>(frame.items.size());
 		frame.items.push_back(
 		    {.kind = ItemKind::Sprite, .index = static_cast<uint32_t>(frame.sprites.size()), .sortPoint = mark.glow});
 		frame.sprites.push_back({.positionHalfWidth = glm::vec4(mark.glow, mark.glowHalfSize),
@@ -763,7 +766,7 @@ void draw::AddLearningMarks(Frame& frame, std::span<const LearningMark> marks)
 		                         .colour = mark.glowColour,
 		                         .flags = glm::vec4(0.0f)});
 		frame.spriteMaterials.push_back(material);
-		frame.groups.push_back({.path = DrawPath::Sorted, .origin = mark.glow, .firstItem = firstItem, .itemCount = 2});
+		frame.groups.push_back({.path = DrawPath::Sorted, .origin = mark.glow, .firstItem = firstItem, .itemCount = 1});
 	}
 }
 
@@ -807,8 +810,9 @@ void draw::AddLightSheet(Frame& frame, std::span<const LightSheet::Vertex> verti
 	    .lit = false,
 	    .worldToAtom = glm::mat4(1.0f),
 	});
-	// The force field is drawn after everything that is sorted; a gesture's sheet takes its place among them
-	frame.groups.push_back({.path = forceField ? DrawPath::AfterSorted : DrawPath::Sorted,
+	// The force field is drawn at once before everything that is sorted. The other sheets take their places among the
+	// sorted things.
+	frame.groups.push_back({.path = forceField ? DrawPath::AtOnceAfterLand : DrawPath::Sorted,
 	                        .origin = sortPoint,
 	                        .firstItem = firstItem,
 	                        .itemCount = 1});
@@ -890,7 +894,7 @@ void draw::Order(const Frame& frame, const glm::vec3& camera, std::optional<glm:
 	// Each of the others at one place, in its own order
 	for (const auto& group : frame.groups)
 	{
-		if (group.path == DrawPath::Sorted || group.path == DrawPath::BeforeLand)
+		if (group.path == DrawPath::Sorted || group.path == DrawPath::BeforeLand || group.path == DrawPath::WithLearningWords)
 		{
 			continue;
 		}
@@ -900,11 +904,32 @@ void draw::Order(const Frame& frame, const glm::vec3& camera, std::optional<glm:
 			items.push_back(i);
 		}
 		GatherCommutingRuns(gathering, items);
-		// Just after the hand, which draws itself at its own place. After everything sorted is the nearest place.
+		// Just after the hand, which draws itself at its own place. The force field takes the place after the land and
+		// before every sorted key.
 		const bool afterHand = group.path == DrawPath::Immediate && hand.has_value();
 		const auto base = graphics::zsort::Depth(afterHand ? *hand : group.origin, camera);
-		const uint32_t depth = group.path == DrawPath::AfterSorted ? 0u : (afterHand && base > 0 ? base - 1 : base);
+		const uint32_t depth = group.path == DrawPath::AtOnceAfterLand ? graphics::zsort::k_AtOnceAfterLand
+		                                                               : (afterHand && base > 0 ? base - 1 : base);
 		emit(items, [depth](const Item&) { return depth; });
+	}
+}
+
+void draw::MeshesWithLearningWords(const Frame& frame, std::vector<uint32_t>& meshes)
+{
+	meshes.clear();
+	for (const auto& group : frame.groups)
+	{
+		if (group.path != DrawPath::WithLearningWords)
+		{
+			continue;
+		}
+		for (uint32_t i = group.firstItem; i < group.firstItem + group.itemCount; ++i)
+		{
+			if (frame.items[i].kind == ItemKind::Mesh)
+			{
+				meshes.push_back(frame.items[i].index);
+			}
+		}
 	}
 }
 

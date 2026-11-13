@@ -71,6 +71,14 @@ enum class Quantity : uint8_t
 	TipBubbleGripped,
 	/// 1 when the hand of the player grips the totem of a town or of a puzzle, else 0
 	TotemGripped,
+	/// 1 when the cursor picks the scenario's object at the index, else 0
+	ObjectPicked,
+	/// 1 when the hand of the player shows a tooltip, else 0
+	HandToolTipShown,
+	/// 1 when the hand of the player holds a miracle, else 0
+	HandMiracle,
+	/// The number of physical shields on the land
+	PhysicalShields,
 };
 
 /// One statement about the world. It is read once at its turn; with byTurn it is read again at each frame from its

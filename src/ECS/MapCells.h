@@ -167,8 +167,6 @@ private:
 	{
 		std::vector<entt::entity> fixed;
 		std::vector<entt::entity> mobile;
-		/// True when the cell is in the list of the used cells
-		bool used {false};
 	};
 
 	/// Adds the cell to the list of the used cells, once only
@@ -178,6 +176,9 @@ private:
 
 	uint32_t _cellsPerSide;
 	std::vector<Cell> _cells;
+	/// One for each cell that is in the list of the used cells. A cell that is not used has no things, so a read of the
+	/// cell looks only here. This list is small, thus a search of many cells reads less memory.
+	std::vector<uint8_t> _cellUsed;
 	BlockLists _blocks;
 	/// The cells that have had anything in them, the only ones there is anything to clear. Each cell is in it once, in
 	/// the order that the cells took their first things.

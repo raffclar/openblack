@@ -521,6 +521,27 @@ TEST(TestbedScenarios, TheBothButtonsScenariosCheckThatTheHoldStartsAndEnds)
 	}
 }
 
+TEST(TestbedScenarios, TheFrontEndHandScenariosCheckTheTooltipAndThePick)
+{
+	// Each scenario checks its quantity first one way and then the other way
+	const std::array<std::pair<std::string_view, checks::Quantity>, 2> staged {{
+	    {"hand.tooltip_goes_over_incoming_message", checks::Quantity::HandToolTipShown},
+	    {"hand.empty_handful_not_picked", checks::Quantity::ObjectPicked},
+	}};
+	for (const auto& [id, quantity] : staged)
+	{
+		const auto* scenario = Find(id);
+		ASSERT_NE(scenario, nullptr) << id;
+		ASSERT_GE(scenario->checks.size(), 2u) << id;
+		EXPECT_TRUE(std::ranges::all_of(scenario->checks, [quantity](const checks::Check& check) {
+			return check.quantity == quantity;
+		})) << id;
+		EXPECT_NE(scenario->checks.at(0).atLeast, scenario->checks.at(1).atLeast) << id;
+		EXPECT_FALSE(checks::Name(quantity).empty()) << id;
+		EXPECT_TRUE(Problems(*scenario).empty()) << id;
+	}
+}
+
 TEST(TestbedScenarios, CoversTheHandFindingItsWay)
 {
 	for (const auto* id : {"hand.rotate_release", "hand.two_buttons", "hand.drag", "hand.zoom", "hand.click", "hand.edge_hover",

@@ -75,6 +75,10 @@ public:
 	/// While a scenario moves the hand, the debug windows take no press of the mouse. Then a debug window under the
 	/// pointer does not take the presses of the scenario.
 	virtual void KeepOffTheMouse([[maybe_unused]] bool off) noexcept {}
+	/// While a hand demonstration plays, the debug windows take no press of the mouse. Then a debug window under the
+	/// recorded pointer does not take the presses of the demonstration, and the hand casts the miracle of the
+	/// demonstration.
+	virtual void SetHandDemoPlaying([[maybe_unused]] bool plays) noexcept {}
 	/// While the inspector drives the pointer, the debug windows follow the driven pointer and not the real pointer.
 	/// Then a click of the inspector on a debug window goes to that window, as a click of the player does.
 	virtual void FollowDrivenPointer([[maybe_unused]] bool follow) noexcept {}

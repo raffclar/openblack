@@ -206,22 +206,9 @@ bool planned_building::WithinNearestOtherTown(glm::ivec2 cell, std::span<const O
 	       z + margin >= static_cast<uint32_t>(nearest->areaMin->y) && z - margin <= static_cast<uint32_t>(nearest->areaMax->y);
 }
 
-bool planned_building::IsClearToBuild(std::span<const FootprintCell> footprint, bool dryLandAtPlace, float reach)
+bool planned_building::StopsNewBuilding(const BuildingNearby& building, float reach)
 {
-	for (const auto& cell : footprint)
-	{
-		if (!dryLandAtPlace)
-		{
-			return false;
-		}
-		const bool blocked = std::ranges::any_of(
-		    cell.buildings, [reach](const BuildingNearby& building) { return building.distance < building.radius + reach; });
-		if (blocked)
-		{
-			return false;
-		}
-	}
-	return true;
+	return building.distance < building.radius + reach;
 }
 
 std::vector<std::optional<size_t>>

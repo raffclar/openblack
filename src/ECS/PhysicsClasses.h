@@ -16,6 +16,7 @@
 #include <entt/entity/fwd.hpp>
 
 #include "3D/AllMeshes.h"
+#include "Enums.h"
 #include "Physics/Materials.h"
 
 namespace openblack
@@ -73,7 +74,7 @@ struct ClassFacts
 	bool alwaysStays {false};
 	/// Thrown, it breaks buildings: rocks and the bowling ball
 	bool physicallyDestroysAbodes {false};
-	/// A standing tree, whose centre of mass is lower and whose spindle reaches below its base
+	/// A standing tree or a crop, whose centre of mass is lower and whose spindle reaches below its base
 	bool rooted {false};
 	/// The weight of a kind whose body has a weight of its own, whatever its size: buildings, the temple's heart and the
 	/// creature
@@ -113,6 +114,13 @@ struct ClassInputs
 /// The kind of an object, from its components and its table row
 [[nodiscard]] ClassFacts Classify(const Registry& registry, entt::entity entity, const InfoConstants& info,
                                   const ClassInputs& inputs);
+
+/// The row whose physics a mobile object of a row takes. `kind` is the kind that the info table gives the row.
+/// - A lump of poo always takes the row of the poo.
+/// - The game makes a row of the crop kind as a crop, and a row of the creed kind as a creed. Thus the eyes row is a
+///   creed.
+/// - Every other row takes its own physics, whatever kind the table gives it.
+[[nodiscard]] MobileObjectInfo MobileObjectPhysicsRow(MobileObjectInfo row, MobileObjectInfo kind);
 
 /// Whether a static's model is one of the toys the hand plays with
 [[nodiscard]] bool IsToyModel(MeshId mesh);

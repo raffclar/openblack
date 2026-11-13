@@ -230,6 +230,8 @@ private:
 	std::optional<ScriptedPointer> _scriptedPointer;
 	/// Whether the window has had the player's cursor over it: until then SDL knows nothing of where it is
 	bool _playerCursorSeen {false};
+	/// Whether the mouse of the player moved over the page. A web browser tells the position of the cursor only then.
+	bool _pageMouseMoved {false};
 	bool _playerMouseBlocked {false};
 	std::optional<glm::ivec2> _cursorWarp;
 	BindableActionMap _blocked = BindableActionMap::NONE;

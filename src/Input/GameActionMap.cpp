@@ -398,7 +398,8 @@ void GameActionMap::RestPointerUntilCursorSeen()
 	{
 		const auto* window = Locator::windowing::value().GetHandle();
 		// A background run never takes the cursor of the desk, also when the cursor is over the window
-		_playerCursorSeen = !IsBackground() && window != nullptr && Device().MouseFocus() == window;
+		_playerCursorSeen =
+		    PlayerCursorSeen(k_Platform, IsBackground(), window != nullptr && Device().MouseFocus() == window, _pageMouseMoved);
 	}
 	if (!_playerCursorSeen && !_scriptedPointer.has_value())
 	{
@@ -1203,6 +1204,10 @@ bool GameActionMap::IsKeyHeld(int scancode) const
 
 void GameActionMap::ProcessEvent(const SDL_Event& event)
 {
+	if (event.type == SDL_MOUSEMOTION && IsDeskMouseEvent(event))
+	{
+		_pageMouseMoved = true;
+	}
 	if (event.type == SDL_KEYDOWN)
 	{
 		const auto key = event.key.keysym.scancode;

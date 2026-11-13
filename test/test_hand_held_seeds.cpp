@@ -12,6 +12,7 @@
 #include <cstdint>
 
 #include <array>
+#include <chrono>
 #include <map>
 #include <memory>
 #include <optional>
@@ -35,6 +36,7 @@
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/Implementations/MagicSystem.h"
 #include "ECS/Systems/Implementations/SpellIconSystem.h"
+#include "ECS/Systems/MiracleFxSystemInterface.h"
 #include "ECS/Systems/PickingSystemInterface.h"
 #include "ECS/Systems/PlayerCommandSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
@@ -160,6 +162,23 @@ public:
 	std::vector<Charge> charges;
 };
 
+/// The look of the miracles in the test: it counts the shakes of the hand and the miracles that leave it
+class FakeMiracleFx final: public ecs::systems::MiracleFxSystemInterface
+{
+public:
+	void Update(float, float, bool) override {}
+	void UpdateGlobes(std::chrono::milliseconds, std::chrono::milliseconds, bool) override {}
+	void SeedInHand(int, int) override {}
+	void SeedLeftHand() override { ++seedsLeft; }
+	void SeedShakenOff() override {}
+	void HandShaken() override { ++shakes; }
+	void Reset() override {}
+	[[nodiscard]] entt::id_type BubbleMesh() override { return 0; }
+	[[nodiscard]] entt::id_type BandMesh() override { return 0; }
+	int shakes {0};
+	int seedsLeft {0};
+};
+
 class HandHeldSeeds: public ::testing::Test
 {
 protected:
@@ -180,6 +199,7 @@ protected:
 	}
 	void TearDown() override
 	{
+		Locator::miracleFxSystem::reset();
 		Locator::spellIconSystem::reset();
 		Locator::playerSystem::reset();
 		Locator::magicSystem::reset();
@@ -313,6 +333,27 @@ TEST_F(HandHeldSeeds, ADropOfANamedPlayersSeedIsTheSameOnEachComputer)
 		_magic->DiscardHeldSeedOf(PlayerNames::PLAYER_TWO);
 		EXPECT_FALSE(_magic->IsHandBusyOf(PlayerNames::PLAYER_TWO));
 	}
+}
+
+// A hand demonstration or a shake off command takes the miracle from the hand of the player. The seed goes, but the
+// hand does not shake: no sound and no band. A scribble drop of the seed shakes the hand.
+TEST_F(HandHeldSeeds, AShakeOffTakesTheMiracleFromTheHandWithNoShakeOfTheHand)
+{
+	auto& fx = static_cast<FakeMiracleFx&>(Locator::miracleFxSystem::emplace<FakeMiracleFx>());
+	const auto seed = HoldSeed(PlayerNames::PLAYER_ONE);
+	const auto other = HoldSeed(PlayerNames::PLAYER_TWO);
+	_magic->ShakeOffHeldSeedOf(PlayerNames::PLAYER_ONE);
+	EXPECT_FALSE(_magic->IsHandBusyOf(PlayerNames::PLAYER_ONE));
+	EXPECT_FALSE(Locator::entitiesRegistry::value().Valid(seed));
+	EXPECT_EQ(fx.seedsLeft, 1);
+	EXPECT_EQ(fx.shakes, 0);
+	EXPECT_EQ(_magic->GetHeldSeedOf(PlayerNames::PLAYER_TWO), other);
+
+	// The scribble drop shakes the hand
+	HoldSeed(PlayerNames::PLAYER_ONE);
+	_magic->DiscardHeldSeed();
+	EXPECT_FALSE(_magic->IsHandBusyOf(PlayerNames::PLAYER_ONE));
+	EXPECT_EQ(fx.shakes, 1);
 }
 
 // A power-up gesture names the icon of the seed in the hand. At the turn, the icon of the gesture starts the charge,

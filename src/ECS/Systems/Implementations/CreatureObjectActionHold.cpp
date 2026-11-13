@@ -362,7 +362,14 @@ creature_object_actions::KindFacts CreatureObjectActionSystem::KindFactsOf(entt:
 		}
 		if (const auto* mobile = registry.TryGet<const MobileObject>(object))
 		{
-			return mobile->type == MobileObjectInfo::Creed ? Thing::Creed : Thing::MobileObject;
+			// The game makes a row of the creed kind as a creed: the eyes are one
+			const auto* record = Locator::infoConstants::has_value()
+			                         ? ecs::mobile_object_record::Of(Locator::infoConstants::value(), *mobile)
+			                         : nullptr;
+			const auto kind = record != nullptr ? record->mobileType : MobileObjectInfo::None;
+			return ecs::physics_classes::MobileObjectPhysicsRow(mobile->type, kind) == MobileObjectInfo::Creed
+			           ? Thing::Creed
+			           : Thing::MobileObject;
 		}
 		// A one-shot miracle's globe lies about as any other thing does
 		if (registry.AllOf<OneOffSpellSeed>(object))

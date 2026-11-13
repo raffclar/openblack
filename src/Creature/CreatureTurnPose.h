@@ -35,6 +35,8 @@ void Blend(std::span<const glm::mat4> older, std::span<const glm::mat4> newer, f
 
 /// The bones in the world of a body posed in the space of its mesh, at a placement in the world
 [[nodiscard]] std::vector<glm::mat4> ToWorld(std::span<const glm::mat4> bones, const glm::mat4& placement);
+/// The same, written into world. The list keeps its memory from the last pose.
+void ToWorld(std::span<const glm::mat4> bones, const glm::mat4& placement, std::vector<glm::mat4>& world);
 
 /// Moves the bones in the world of a body from one placement to a different placement. Each bone keeps its place and its
 /// turn relative to the placement. The editor uses this when it turns a body, thus the drawn body keeps its size.

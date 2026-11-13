@@ -20,6 +20,7 @@
 #include "Creature/CreatureIdleMind.h"
 #include "Creature/CreatureLayers.h"
 #include "Creature/CreatureObjectActions.h"
+#include "ScriptHeaders/ScriptEnums.h"
 #include "TestbedScenarioBuilders.h"
 #include "TestbedScenarioRegistry.h"
 
@@ -1726,5 +1727,36 @@ void testbed_scenarios::AddObjects(std::vector<Scenario>& all)
 	    .landScript = R"(CREATE_STREET_LANTERN("-4.0,0.0", 7)
 CREATE_STREET_LIGHT("4.0,0.0")
 )",
+	});
+
+	// A creed, a pair of eyes and a crop lie on the land. A script sets the scale of the eyes, and the hand takes the crop.
+	constexpr glm::vec2 k_CreedsAt {0.0f, 40.0f};
+	all.push_back({
+	    .id = "objects.creed_eyes_and_crop",
+	    .name = "A creed, eyes and a crop as loose objects",
+	    .facet = Facet::Objects,
+	    .description = "Three loose objects lie in a row on the land: a creed 8 metres west, a pair of eyes in the middle "
+	                   "and a crop 8 metres east. At 3 seconds a script sets the scale of the eyes to 2. At 5 seconds the "
+	                   "hand takes the crop.",
+	    .expected = "The creed and the eyes show no model of their own: each shows only a white glow over the creed "
+	                "model, and its texture slides. Each hums. At 3 seconds the glow of the eyes becomes twice as large, "
+	                "and the eyes keep their own size. At 5 seconds the crop goes, and the hand holds a handful of food "
+	                "in its place.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_CreedsAt.x, 12.0f, k_CreedsAt.y - 30.0f},
+	                .look = {k_CreedsAt.x, 0.0f, k_CreedsAt.y}},
+	    .objects = {{.type = MobileObjectInfo::Creed, .offset = k_CreedsAt + glm::vec2(-8.0f, 0.0f)},
+	                {.type = MobileObjectInfo::Eyes, .offset = k_CreedsAt},
+	                {.type = MobileObjectInfo::Crop, .offset = k_CreedsAt + glm::vec2(8.0f, 0.0f)}},
+	    .commands = {{.kind = Kind::CallNative,
+	                  .delaySeconds = 3.0f,
+	                  .script = "SET_PROPERTY",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Integer,
+	                                       .number = static_cast<float>(script::ObjectPropertyType::Scale)},
+	                                      {.kind = ScriptArgument::Kind::Object, .index = 1},
+	                                      {.kind = ScriptArgument::Kind::Number, .number = 2.0f}}},
+	                 {.kind = Kind::HandTake, .delaySeconds = 2.0f, .object = 2}},
+	    .hand = HandHold {.offset = k_CreedsAt + glm::vec2(8.0f, 0.0f), .height = 6.0f},
 	});
 }

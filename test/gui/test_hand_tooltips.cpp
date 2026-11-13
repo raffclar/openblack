@@ -281,3 +281,36 @@ TEST(HandToolTips, TheTipBubbleOffersToScrollItsWordsUpAndDown)
 {
 	EXPECT_EQ(BubbleOffer(), (Offer {.index = k_Scroll, .action = ToolTipAction::Apply, .arrows = ToolTipArrows::k_UpDown}));
 }
+
+TEST(HandToolTips, TheHandOffersNoToolTipWhileTheFrontEndsPointerShows)
+{
+	static_assert(OffersToolTips(false, true));
+	// A box of the front end, or the chat, the music controls, the incoming message or a story history button
+	EXPECT_FALSE(OffersToolTips(true, true));
+	// The cinema bars of a script
+	EXPECT_FALSE(OffersToolTips(false, false));
+	EXPECT_FALSE(OffersToolTips(true, false));
+}
+
+TEST(HandToolTips, TheToolTipStaysForItsLingerTimeAfterTheHandGoesAway)
+{
+	auto info = SameInfo();
+	info.at(k_Pitch).displayTimeAfterFocus = 1.0f;
+	ToolTips toolTips(info);
+	toolTips.Submit(k_Pitch, ToolTipAction::Select, ToolTipArrows::k_UpDown);
+	toolTips.ProcessTurn();
+	ASSERT_TRUE(toolTips.GetShown().has_value());
+	// The pointer goes onto the incoming message, and the hand offers nothing. The tooltip stays for one second of 25
+	// turns, then it goes.
+	int turns = 0;
+	while (toolTips.GetShown().has_value() && turns < 1000)
+	{
+		if (OffersToolTips(true, true))
+		{
+			toolTips.Submit(k_Pitch, ToolTipAction::Select, ToolTipArrows::k_UpDown);
+		}
+		toolTips.ProcessTurn();
+		++turns;
+	}
+	EXPECT_EQ(turns, 26);
+}

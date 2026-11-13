@@ -13,6 +13,7 @@
 
 #include <array>
 #include <filesystem>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <span>
@@ -34,6 +35,7 @@
 #include "Visual/RenderModes.h"
 #include "Visual/RenderPass.h"
 #include "Visual/RendererRequestsInterface.h"
+#include "WorldLabelGroup.h"
 
 #include "../EngineConfig.h"
 
@@ -85,6 +87,9 @@ public:
 		bool drawHand = true;
 		/// The glow, the bands and the bracelets of the miracle in the hand. The hand does not show them inside the temple.
 		bool drawHandEffects = true;
+		/// Submits a group of the labels in the world. The main pass calls it at the point where the game adds or draws the
+		/// group. With no function, the caller submits the labels.
+		std::function<void(WorldLabelGroup)> submitWorldLabels;
 	};
 
 	struct L3DMeshSubmitDesc
