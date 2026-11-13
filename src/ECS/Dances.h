@@ -77,6 +77,10 @@ void RemoveDancer(Registry& registry, entt::entity living);
 [[nodiscard]] entt::entity FirstDancer(const Registry& registry, entt::entity dance, entt::entity exclude);
 /// A dance's dancers, group by group
 [[nodiscard]] std::vector<entt::entity> Dancers(const Registry& registry, entt::entity dance);
+/// The count of a dance's dancers in all its groups
+[[nodiscard]] size_t DancerCount(const Registry& registry, entt::entity dance);
+/// Calls the function for each dancer of a dance, group by group, in the order of Dancers. It makes no list.
+void ForEachDancer(const Registry& registry, entt::entity dance, const std::function<void(entt::entity)>& visit);
 
 /// What a dance's turn needs to know of the game
 struct TurnContext

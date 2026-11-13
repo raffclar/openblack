@@ -95,6 +95,23 @@ TEST(PlayerTowns, TownsWithTheSameOwnerAndGainKeepTheOrderOfTheWalk)
 	EXPECT_EQ(openblack::ecs::player_towns::AllInOrder(registry), expected);
 }
 
+TEST(PlayerTowns, EachTownInOrderComesInTheOrderOfTheList)
+{
+	// More towns than the list on the stack holds use the heap, with the same order
+	for (const uint32_t count : {0U, 5U, 60U, static_cast<uint32_t>(openblack::ecs::player_towns::k_InlineTowns) + 40U})
+	{
+		Registry registry;
+		for (uint32_t i = 0; i < count; ++i)
+		{
+			MakeTown(registry, i, static_cast<PlayerNames>((i * 7U) % 4U), (i * 5U) % 3U);
+		}
+		std::vector<entt::entity> visited;
+		openblack::ecs::player_towns::ForEachInOrder(registry, [&visited](entt::entity town) { visited.push_back(town); });
+		EXPECT_EQ(visited, openblack::ecs::player_towns::AllInOrder(registry)) << count;
+		EXPECT_EQ(visited.size(), count);
+	}
+}
+
 TEST(PlayerTowns, ATownWonLaterComesAfterATownMadeLater)
 {
 	// The list order is the order of gain, not the order the land made the towns

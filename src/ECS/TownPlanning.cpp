@@ -256,17 +256,24 @@ const lnd::LNDCell* LandCellAt(glm::vec3 position)
 	return Locator::terrainSystem::value().FindCell(glm::u16vec2(cell));
 }
 
-/// The buildings that stand in each cell of an outline that covers new buildings, with their distances from a place
-std::vector<std::vector<planned_building::BuildingNearby>>
-BuildingsInOutline(const map_cells::Outline& outline, glm::vec3 place, entt::entity ignored = entt::null)
+/// Whether the game can build a new building at a place: for each cell of the outline in turn, the land at the place must be
+/// dry, and no building in the cell may stop it (see StopsNewBuilding). An outline with no cell passes. The test stops at the
+/// first cell or building that fails. The things that it does not examine change nothing, because the examination only
+/// reads them.
+bool ClearOfBuildings(const map_cells::Outline& outline, glm::vec3 place, bool dryLand, float reach,
+                      entt::entity ignored = entt::null)
 {
 	auto& registry = Entities();
 	const auto& map = Locator::entitiesMap::value();
-	std::vector<std::vector<planned_building::BuildingNearby>> nearby;
 	for (const auto covered : map_cells::CellsCovered(outline))
 	{
-		auto& buildings = nearby.emplace_back();
-		for (const auto thing : map.GetFixedInGridCell(MapInterface::CellId(covered)))
+		// The first look at a cell files the things made since the last look, also when the land is not dry
+		const auto things = map.GetFixedInGridCell(MapInterface::CellId(covered));
+		if (!dryLand)
+		{
+			return false;
+		}
+		for (const auto thing : things)
 		{
 			const auto* resident = registry.TryGet<const MapCellResident>(thing);
 			const auto* placed = registry.TryGet<const Transform>(thing);
@@ -279,24 +286,15 @@ BuildingsInOutline(const map_cells::Outline& outline, glm::vec3 place, entt::ent
 			{
 				continue;
 			}
-			buildings.push_back({.distance = gutils::GetDistanceInMetres(place, placed->position),
-			                     .radius = systems::object_measures::TwoDRadius(registry, thing)});
+			const planned_building::BuildingNearby building {.distance = gutils::GetDistanceInMetres(place, placed->position),
+			                                                 .radius = systems::object_measures::TwoDRadius(registry, thing)};
+			if (planned_building::StopsNewBuilding(building, reach))
+			{
+				return false;
+			}
 		}
 	}
-	return nearby;
-}
-
-/// The cells of a footprint, as views on the buildings in each cell
-std::vector<planned_building::FootprintCell>
-FootprintOf(const std::vector<std::vector<planned_building::BuildingNearby>>& nearby)
-{
-	std::vector<planned_building::FootprintCell> footprint;
-	footprint.reserve(nearby.size());
-	for (const auto& buildings : nearby)
-	{
-		footprint.push_back({.buildings = buildings});
-	}
-	return footprint;
+	return true;
 }
 
 bool DryLandAt(glm::vec3 position)
@@ -338,9 +336,7 @@ bool FitsAsTownBuilding(entt::entity town, MeshId mesh, glm::vec3 place, const g
 	const auto halfSize = box.Size() * 0.5f;
 	const float reach = std::max(halfSize.x, halfSize.z) * scale;
 	const auto outline = map_cells::OutlineOfBox(place, rotation, scale, box.Center(), halfSize);
-	const auto nearby = BuildingsInOutline(outline, place);
-	const auto footprint = FootprintOf(nearby);
-	return planned_building::IsClearToBuild(footprint, DryLandAt(place), reach);
+	return ClearOfBuildings(outline, place, DryLandAt(place), reach);
 }
 
 /// Whether a new house may go up where a plan has it
@@ -526,6 +522,8 @@ void town_planning::MendBest(entt::entity town)
 	const auto& data = registry.Get<const Town>(town);
 	std::vector<entt::entity> plans;
 	std::vector<float> planDesires;
+	plans.reserve(data.planned.size());
+	planDesires.reserve(data.planned.size());
 	for (const auto plan : data.planned)
 	{
 		if (registry.Valid(plan) && registry.AnyOf<PlannedAbode, PlannedTemple>(plan))
@@ -536,6 +534,8 @@ void town_planning::MendBest(entt::entity town)
 	}
 	std::vector<entt::entity> buildings;
 	std::vector<planned_building::MendCandidate> candidates;
+	buildings.reserve(data.abodes.size());
+	candidates.reserve(data.abodes.size());
 	for (const auto building : data.abodes)
 	{
 		// The town's buildings include its miracle dispensers
@@ -684,10 +684,9 @@ bool town_planning::FitsForScaffold(glm::vec3 place, MeshId mesh, float yAngle, 
 	const float reach = std::max(halfSize.x, halfSize.z) * scale;
 	const auto outline =
 	    map_cells::OutlineOfBox(place, glm::mat3(portable_math::EulerAngleY(-yAngle)), scale, box.Center(), halfSize);
-	const auto nearby = BuildingsInOutline(outline, place, ignored);
 	const auto* land = LandCellAt(place);
 	const bool dry = land != nullptr && land->properties.hasWater == 0 && land->properties.coastLine == 0;
-	return planned_building::IsClearToBuild(FootprintOf(nearby), dry, reach);
+	return ClearOfBuildings(outline, place, dry, reach, ignored);
 }
 
 entt::entity town_planning::StartForScaffold(entt::entity town, AbodeInfo info, glm::vec3 place, float yAngle, float scale)

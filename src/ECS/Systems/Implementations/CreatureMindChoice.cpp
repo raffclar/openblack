@@ -773,14 +773,16 @@ CreatureMindSystem::BelievedThingsToActOn(entt::entity creature, CreatureMindSta
                                           const std::function<bool(entt::entity)>& suitsAction)
 {
 	BelievedFacts unkept;
-	return BelievedThingsToActOn(creature, mind, desire, suitsAction, unkept);
+	std::vector<creature_planner::ObjectCandidate> found;
+	BelievedThingsToActOn(creature, mind, desire, suitsAction, unkept, found);
+	return found;
 }
 
-std::vector<creature_planner::ObjectCandidate>
-CreatureMindSystem::BelievedThingsToActOn(entt::entity creature, CreatureMindState& mind, Desire desire,
-                                          const std::function<bool(entt::entity)>& suitsAction, BelievedFacts& kept)
+void CreatureMindSystem::BelievedThingsToActOn(entt::entity creature, CreatureMindState& mind, Desire desire,
+                                               const std::function<bool(entt::entity)>& suitsAction, BelievedFacts& kept,
+                                               std::vector<creature_planner::ObjectCandidate>& found)
 {
-	std::vector<creature_planner::ObjectCandidate> found;
+	found.clear();
 	// The facts stay true while no come-across changes what the tests read. The test of a thing for the desire reads only
 	// the beliefs and the world, and nothing else in the planning of a desire changes them. The tests came across some
 	// things that changed nothing that they read. The creature comes across these things again in the same sequence, so
@@ -808,7 +810,7 @@ CreatureMindSystem::BelievedThingsToActOn(entt::entity creature, CreatureMindSta
 			}
 			found.push_back(*suiting.worth);
 		}
-		return found;
+		return;
 	}
 	// The tests come in the same sequence as without the kept facts
 	const auto startAt = _comeAcrossCount;
@@ -847,7 +849,6 @@ CreatureMindSystem::BelievedThingsToActOn(entt::entity creature, CreatureMindSta
 	{
 		outerLog->insert(outerLog->end(), kept.comeAcross.begin(), kept.comeAcross.end());
 	}
-	return found;
 }
 
 creature_planner::ObjectCandidate CreatureMindSystem::GoalWorth(entt::entity creature, const CreatureMindState& mind,
