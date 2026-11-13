@@ -286,6 +286,8 @@ private:
 		const ShaderProgram* environment;
 		const Texture2D* environmentMap;
 		const Texture2D* iceMap;
+		/// The forward direction of the camera of the pass, or none for the function to ask the camera
+		std::optional<glm::vec3> forward;
 	};
 	[[nodiscard]] SeedModelLooks FindSeedModelLooks() const;
 	/// With `seenBy`, the function does not send a draw of the model that is out of that view. The draws go into the

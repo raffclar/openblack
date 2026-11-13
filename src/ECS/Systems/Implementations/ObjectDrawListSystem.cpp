@@ -201,14 +201,15 @@ std::span<const uint16_t> ObjectDrawListSystem::TrianglesOf(LandBlock& block, gr
 {
 	const auto set =
 	    static_cast<uint16_t>((static_cast<unsigned>(mesh) * 16 + (coarserSides & 0xFu)) * 2 + (dropOpenSea ? 1u : 0u));
-	auto found = std::ranges::find(block.triangleSets, set, &std::pair<uint16_t, std::vector<uint16_t>>::first);
-	if (found == block.triangleSets.end())
+	// The block makes a set the first time that it needs it. Then it finds the set by its number.
+	auto& place = block.setPlaces.at(set);
+	if (place == 0)
 	{
 		block.triangleSets.emplace_back(set,
 		                                graphics::land_detail::BlockTriangles(mesh, coarserSides, dropOpenSea, block.cells));
-		found = std::prev(block.triangleSets.end());
+		place = static_cast<uint8_t>(block.triangleSets.size());
 	}
-	return found->second;
+	return block.triangleSets[place - 1].second;
 }
 
 bool ObjectDrawListSystem::Shows(LandBlock& block, const graphics::land_detail::FrameDetail* detail,
