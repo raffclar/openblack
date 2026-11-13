@@ -97,6 +97,7 @@
 #include "Graphics/FizzDrawOrder.h"
 #include "Graphics/FrameBuffer.h"
 #include "Graphics/GraphicsHandleBgfx.h"
+#include "Graphics/HandFaces.h"
 #include "Graphics/HandLight.h"
 #include "Graphics/HandReflection.h"
 #include "Graphics/HandWaterGlow.h"
@@ -1421,7 +1422,7 @@ void Renderer::DrawPassHand(const DrawSceneDesc& desc, const ScenePass& pass, au
 	    !hand->second.hiddenFromReflection && hand_reflection::Shown(hand->second.count > 0, meshManager.Contains(hand->first)))
 	{
 		// L3D meshes face clockwise, which the mirrored reflection pass and a mirrored hand each turn around
-		const bool facesTurned = desc.cullBack != renderCtx.handMirrored;
+		const bool facesTurned = hand_faces::FacesTurned(desc.cullBack, renderCtx.handMirrored);
 		const auto opaqueState = submitDesc.state;
 		submitDesc.viewId = mirroredViewId;
 		submitDesc.sortDepth = hand_reflection::SortKey(hand_reflection::MirroredThing::Hand);
@@ -1445,7 +1446,7 @@ void Renderer::DrawPassHand(const DrawSceneDesc& desc, const ScenePass& pass, au
 	    !(desc.viewId == RenderPass::Reflection && hand->second.hiddenFromReflection))
 	{
 		// L3D meshes face clockwise, which the mirrored reflection pass and a mirrored hand each turn around
-		const bool facesTurned = desc.cullBack != renderCtx.handMirrored;
+		const bool facesTurned = hand_faces::FacesTurned(desc.cullBack, renderCtx.handMirrored);
 		// It takes its place in the sort by where it is
 		submitDesc.viewId = translucentViewId;
 		if (hand->second.count > 0)
@@ -1710,7 +1711,9 @@ void Renderer::DrawPassEntities(const DrawSceneDesc& desc, const ScenePass& pass
 		// The models show only the front faces of their one-sided materials, as their materials say
 		sd.useMaterialCulling = placers.materialCulling || creatureMaterials;
 		sd.useMaterialAddressing = creatureMaterials;
-		sd.mirrored = desc.cullBack;
+		// The corners of a mirrored hand are in the opposite order, so that the hand shows its outer faces
+		sd.mirrored = meshId == ecs::components::Hand::k_MeshId ? hand_faces::FacesTurned(desc.cullBack, renderCtx.handMirrored)
+		                                                        : desc.cullBack;
 		sd.uvOffset = placers.uvOffset;
 		sd.uvOffsetByMaterial = placers.uvOffsetByMaterial;
 		sd.subMeshTextures = placers.subMeshTextures;
