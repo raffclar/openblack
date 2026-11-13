@@ -114,6 +114,8 @@ public:
 		bool showPing {false};
 		/// Tests: the wait in milliseconds before each request of a piece of a map (--map-piece-delay-ms)
 		uint32_t mapPieceDelayMs {0};
+		/// The box where the front end opens: the connection list, or the site's lobby in the browser build
+		multiplayer::FrontEndStart start {multiplayer::FrontEndStart::ConnectionList};
 	};
 
 	/// How the player answers a message box
@@ -326,6 +328,9 @@ private:
 	/// In the login box: logs in as the account that is signed in on the lobby site, when the lobby client can. The login
 	/// box stays when nobody is signed in on the site.
 	void SignInFromSite();
+	/// The login box opens on the internet: a player with a session of the lobby goes to the list at once, else the front
+	/// end asks the site for its session
+	void EnterLogin();
 	void LeaveRoom();
 	void HandleEvent(const lobby_api::PushEvent& event);
 	void RequestTicket(const lobby_api::ServerEntry& server, game_socket::Role role, std::u16string password);

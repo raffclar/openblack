@@ -71,6 +71,19 @@ MultiplayerFrontEnd::MultiplayerFrontEnd(Services services, Settings settings)
 	{
 		_connection = connections.size() - 1;
 	}
+	_flow = multiplayer::FirstFlow(_settings.start);
+	// The site's lobby opens the login box at once, as Next on the internet does. With no lobby, the box tells the player.
+	if (_flow.start == multiplayer::FrontEndStart::SiteLobby)
+	{
+		if (HasInternetConnection())
+		{
+			EnterLogin();
+		}
+		else
+		{
+			Show(Message::NoConnections);
+		}
+	}
 }
 
 MultiplayerFrontEnd::~MultiplayerFrontEnd()
@@ -337,20 +350,13 @@ void MultiplayerFrontEnd::Next()
 		break;
 	case Box::FindGames:
 		multiplayer::Next(_flow);
-		// A player with a session goes to the list at once
-		if (_flow.box == Box::Login && UsesLobbySessions() &&
-		    _services.lobby->GetState() == ecs::systems::LobbySessionState::LoggedIn && !_services.lobby->IsEmailRequired())
-		{
-			_loggedIn = true;
-			EnterGameList();
-		}
 		if (_flow.box == Box::GameList)
 		{
 			EnterGameList();
 		}
 		else if (_flow.box == Box::Login)
 		{
-			SignInFromSite();
+			EnterLogin();
 		}
 		break;
 	case Box::Room:
@@ -421,8 +427,12 @@ void MultiplayerFrontEnd::Back()
 		break;
 	default:
 		multiplayer::Back(_flow);
-		_left = _flow.left;
 		break;
+	}
+	// Back on a first box leaves the front end
+	if (_flow.left)
+	{
+		_left = true;
 	}
 }
 
@@ -444,6 +454,13 @@ void MultiplayerFrontEnd::AnswerMessage(Answer answer)
 		if (answer == Answer::Yes && _services.openPage && !_settings.accountPage.empty())
 		{
 			_services.openPage(_settings.accountPage);
+		}
+		break;
+	case Message::NoConnections:
+		// The site's lobby has no box before it: the front end closes
+		if (_flow.start == multiplayer::FrontEndStart::SiteLobby)
+		{
+			_left = true;
 		}
 		break;
 	case Message::HostLeft:
@@ -470,6 +487,19 @@ void MultiplayerFrontEnd::AnswerMessage(Answer answer)
 	default:
 		break;
 	}
+}
+
+void MultiplayerFrontEnd::EnterLogin()
+{
+	// A player with a session goes to the list at once
+	if (UsesLobbySessions() && _services.lobby->GetState() == ecs::systems::LobbySessionState::LoggedIn &&
+	    !_services.lobby->IsEmailRequired())
+	{
+		_loggedIn = true;
+		EnterGameList();
+		return;
+	}
+	SignInFromSite();
 }
 
 void MultiplayerFrontEnd::SignInFromSite()

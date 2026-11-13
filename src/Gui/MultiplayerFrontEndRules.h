@@ -457,6 +457,16 @@ using ConditionTemplate = std::array<ConditionLimits, k_ConditionCount>;
 /// The text of a line on the conditions page: the name of the condition and its value, "Number of houses built (20)"
 [[nodiscard]] std::u16string ConditionLineText(std::u16string_view name, int32_t value);
 
+/// The box where the front end opens
+enum class FrontEndStart : uint8_t
+{
+	/// The list of the connections, as the game does
+	ConnectionList,
+	/// The lobby of the site that serves the browser build (deviation 264). The front end shows no list of the
+	/// connections and no choice of the local network: it opens on the internet, at the login box.
+	SiteLobby,
+};
+
 /// The front end's flow from box to box. It knows nothing of the lobby: the controller tells it what happened.
 struct Flow
 {
@@ -464,14 +474,21 @@ struct Flow
 	LobbyKind kind {LobbyKind::Internet};
 	/// The front end ends: the player left it with Back on the first box
 	bool left {false};
+	FrontEndStart start {FrontEndStart::ConnectionList};
 };
+
+/// The flow when the front end opens. The connection list is the first box of the game. The site's lobby starts at the
+/// login box of the internet.
+[[nodiscard]] Flow FirstFlow(FrontEndStart start) noexcept;
 
 /// Next on the box: the connection goes to the find box, the find box to the login box (internet) or to the game list
 /// (LAN), and the game room to its conditions page. The login box and the game list move on only when the lobby or
 /// the server answers, so Next does not move them.
 void Next(Flow& flow);
 /// Back on the box: the first box leaves the front end. The game list goes back to the login box on the internet and
-/// to the find box on the LAN. The game room and its conditions page leave the room to the game list.
+/// to the find box on the LAN. The game room and its conditions page leave the room to the game list. When the front
+/// end starts at the site's lobby, the login box and the lobby list are first boxes, so Back on them leaves the front
+/// end.
 void Back(Flow& flow);
 
 } // namespace openblack::gui::multiplayer

@@ -804,6 +804,15 @@ std::optional<ConditionTemplate> FindConditions(std::string_view text, std::stri
 	return found;
 }
 
+Flow FirstFlow(FrontEndStart start) noexcept
+{
+	if (start == FrontEndStart::SiteLobby)
+	{
+		return {.box = Box::Login, .kind = LobbyKind::Internet, .left = false, .start = start};
+	}
+	return {.box = Box::ChooseConnection, .kind = LobbyKind::Internet, .left = false, .start = start};
+}
+
 void Next(Flow& flow)
 {
 	switch (flow.box)
@@ -829,6 +838,13 @@ void Next(Flow& flow)
 
 void Back(Flow& flow)
 {
+	// The site's lobby has no box before the login box and the lobby list: Back on them leaves the front end
+	if (flow.start == FrontEndStart::SiteLobby && (flow.box == Box::ChooseConnection || flow.box == Box::FindGames ||
+	                                               flow.box == Box::Login || flow.box == Box::LobbyList))
+	{
+		flow.left = true;
+		return;
+	}
 	switch (flow.box)
 	{
 	case Box::ChooseConnection:
