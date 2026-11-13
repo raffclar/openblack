@@ -17,6 +17,7 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/EditorSystemInterface.h"
 #include "EditorEntities.h"
+#include "EditorNetworkEdits.h"
 
 namespace openblack::editor
 {
@@ -63,9 +64,13 @@ void DeletePicked(EditorContext& context)
 		{
 			step.changes.emplace_back(RemoveChange {.ref = history.Track(entity), .recipe = *recipe});
 		}
-		Remove(entity);
+		context.writes.Remove(entity);
 	}
-	history.Push(std::move(step));
+	// In a network game the world changes at a later turn, and the editor keeps no history
+	if (context.writes.ChangesAtOnce())
+	{
+		history.Push(std::move(step));
+	}
 }
 
 void DuplicatePicked(EditorContext& context)
@@ -81,7 +86,7 @@ void DuplicatePicked(EditorContext& context)
 		{
 			continue;
 		}
-		const auto copy = Duplicate(entity, k_CopyOffset);
+		const auto copy = context.writes.Duplicate(entity, k_CopyOffset);
 		if (!copy.has_value())
 		{
 			continue;
@@ -96,11 +101,18 @@ void DuplicatePicked(EditorContext& context)
 	{
 		selection.SelectAll(copies);
 	}
-	history.Push(std::move(step));
+	if (context.writes.ChangesAtOnce())
+	{
+		history.Push(std::move(step));
+	}
 }
 
 void RecordMade(EditorContext& context, entt::entity entity, std::string label)
 {
+	if (!context.writes.ChangesAtOnce())
+	{
+		return;
+	}
 	auto& history = context.system.GetHistory();
 	if (const auto recipe = RecipeOf(context.registry, entity))
 	{
@@ -110,6 +122,10 @@ void RecordMade(EditorContext& context, entt::entity entity, std::string label)
 
 void RecordAllMade(EditorContext& context, std::span<const entt::entity> entities, std::string_view action)
 {
+	if (!context.writes.ChangesAtOnce())
+	{
+		return;
+	}
 	auto& history = context.system.GetHistory();
 	HistoryStep step {.label = StepLabel(action, entities.size())};
 	for (const auto entity : entities)
@@ -163,6 +179,13 @@ void PoseEdit::Begin(const ecs::Registry& registry, std::span<const entt::entity
 
 void PoseEdit::Finish(EditorContext& context, std::string_view action)
 {
+	// The editor sends the moves and the turns that wait, so that a drag ends with its last place
+	context.writes.FlushNow();
+	if (!context.writes.ChangesAtOnce())
+	{
+		_before.clear();
+		return;
+	}
 	auto& history = context.system.GetHistory();
 	HistoryStep step;
 	for (const auto& [entity, before] : _before)

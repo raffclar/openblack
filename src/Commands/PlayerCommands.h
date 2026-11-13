@@ -596,6 +596,48 @@ struct MusicMood
 	float mood {0.0f};
 };
 
+/// An edit of the editor in a network game. Only a staff player opens the editor there, and the game server refuses the
+/// edits of every other player. Each computer does the edit at the turn, so the world stays the same on each computer.
+struct EditorEdit
+{
+	enum class Kind : uint8_t
+	{
+		/// Put an item of the palette on the land at the position, facing the angle
+		Place,
+		/// Move the thing to the position
+		Move,
+		/// Turn the thing about the up axis by the angle
+		Turn,
+		/// Remove the thing from the land
+		Remove,
+	};
+	Kind kind {Kind::Move};
+	/// The thing of a move, a turn or a removal. None for a placement.
+	entt::entity object {entt::null};
+	/// The kind of the item of the palette of a placement (editor::PlaceKind)
+	uint8_t placeKind {0};
+	/// The type of the item within its kind
+	int32_t placeType {0};
+	/// The challenge of a scroll, or the text of a tip sign
+	uint32_t challenge {0};
+	/// The position of a placement or a move
+	glm::vec3 position {0.0f};
+	/// The angle of a placement or a turn, in radians
+	float radians {0.0f};
+
+	[[nodiscard]] bool operator==(const EditorEdit&) const = default;
+};
+
+/// A debug cheat of the player of the command goes on or off (debug_cheats::Cheat). Only a staff player sends it in a
+/// network game, and the game server refuses it from every other player.
+struct DebugCheat
+{
+	uint8_t cheat {0};
+	bool on {false};
+
+	[[nodiscard]] bool operator==(const DebugCheat&) const = default;
+};
+
 /// What a command does
 using Action =
     std::variant<LeashKey, LeashTap, CreatureFeedback, HandTake, HandLetGo, HandTap, HandGive, LeashOrder, LeashPostTap,
@@ -604,7 +646,7 @@ using Action =
                  MiracleRepeat, HandCast, HandCastUnlock, LeashPick, HandShakeOff, GripDust, HelpReport, HelpQuery,
                  CreatureFightCheat, ViewReport, TempleLeashOff, GiveCallOff, CreatureTattoo, LeashLength, ChatSpeech,
                  ChatTaunt, QuickSave, QuickLoad, MusicMood, IconChargeStop, DialogueClick, PuzzleTap, FishScare,
-                 ObserversJoined, ObserversLeft, ObserverIn, ObserverOut, HandLockRelease>;
+                 ObserversJoined, ObserversLeft, ObserverIn, ObserverOut, HandLockRelease, EditorEdit, DebugCheat>;
 
 /// A command and the player that sent it
 struct Command
@@ -623,6 +665,20 @@ struct Command
 {
 	return std::holds_alternative<HandReport>(action) || std::holds_alternative<ChatSpeech>(action) ||
 	       std::holds_alternative<ChatTaunt>(action);
+}
+
+/// Whether only a staff player sends the command: the edits of the editor and the debug cheats. The game server refuses
+/// these commands from a player whose join ticket has no staff claim.
+[[nodiscard]] constexpr bool OnlyStaffSends(const Action& action) noexcept
+{
+	return std::holds_alternative<EditorEdit>(action) || std::holds_alternative<DebugCheat>(action);
+}
+
+/// Whether the game server takes the command from an observer. A staff observer also sends the edits of the editor. The
+/// god of the observers has no citadel, so an observer sends no debug cheat.
+[[nodiscard]] constexpr bool ServerTakesFromObserver(const Action& action, bool staff) noexcept
+{
+	return ObserverSends(action) || (staff && std::holds_alternative<EditorEdit>(action));
 }
 
 /// The commands that the players made and that the world did not see yet. The queue keeps no other game state, so that

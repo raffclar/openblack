@@ -18,6 +18,7 @@
 #include <fmt/format.h>
 #include <spdlog/spdlog.h>
 
+#include "Common/DebugCheats.h"
 #include "Gui/TextDatabase.h"
 #include "Online/ConnectionLog.h"
 #include "Online/GameBuildId.h"
@@ -618,6 +619,7 @@ void LockstepHost::Join(ConnectionId connection, Peer& peer, const game_socket::
 	}
 	game_socket::Joined joined {
 	    .role = claims.role, .slot = std::nullopt, .session = {}, .name = claims.name, .start = _settings.start};
+	joined.staff = claims.staff;
 	if (claims.role == game_socket::Role::God)
 	{
 		// The room refuses a god that the lobby banned, as the host's channel refuses a banned player
@@ -676,7 +678,8 @@ void LockstepHost::Join(ConnectionId connection, Peer& peer, const game_socket::
 		              .lastBlock = std::nullopt,
 		              .lastBlockInTurn = std::nullopt,
 		              .blocksAgain = 0,
-		              .refusedBlocks = 0};
+		              .refusedBlocks = 0,
+		              .staff = claims.staff};
 		free->sessionHash = HashOf(free->session);
 		peer.seat = seat;
 		joined.slot = seat;
@@ -692,13 +695,20 @@ void LockstepHost::Join(ConnectionId connection, Peer& peer, const game_socket::
 		}
 		peer.observer = ObserverCame(claims.name);
 		joined.observer = peer.observer;
-		joined.session = NewWatcher(connection, claims.name, peer.observer);
+		joined.session = NewWatcher(connection, claims.name, peer.observer, claims.staff);
 		Log(spdlog::level::info, fmt::format("{} joins as observer {}", claims.name, peer.observer));
 	}
 	peer.joined = true;
 	peer.role = claims.role;
 	peer.name = claims.name;
 	peer.account = lan ? std::string() : claims.subject;
+	peer.staff = claims.staff;
+	if (claims.staff)
+	{
+		Log(spdlog::level::info, fmt::format("{} has the staff claim: the server takes the edits and the debug cheats of "
+		                                     "this player",
+		                                     claims.name));
+	}
 	SendTo(connection, joined);
 }
 
@@ -766,6 +776,7 @@ void LockstepHost::Resume(ConnectionId connection, Peer& peer, const game_socket
 	peer.joined = true;
 	peer.role = game_socket::Role::God;
 	peer.seat = seat;
+	peer.staff = found->staff;
 	// A client whose world parted gets the server's world at the start of the next turn, and then the turns from there
 	if (world && SendWorld(connection))
 	{
@@ -815,6 +826,7 @@ bool LockstepHost::ResumeObserver(ConnectionId connection, Peer& peer, const gam
 	peer.name = found->name;
 	peer.seat.reset();
 	peer.observer = found->number;
+	peer.staff = found->staff;
 	// An observer comes back as a god does: the world of the server when its world parted, else the turns that it missed.
 	// An observer has no god, so the other players get no message.
 	if (world && SendWorld(connection))
@@ -857,7 +869,7 @@ void LockstepHost::SendLoadWait(ConnectionId connection)
 	}
 }
 
-std::string LockstepHost::NewWatcher(ConnectionId connection, std::string name, uint8_t number)
+std::string LockstepHost::NewWatcher(ConnectionId connection, std::string name, uint8_t number, bool staff)
 {
 	if (!_makeSecret)
 	{
@@ -870,7 +882,8 @@ std::string LockstepHost::NewWatcher(ConnectionId connection, std::string name, 
 	                             .awaySince = 0,
 	                             .resumes = 0,
 	                             .name = std::move(name),
-	                             .number = number});
+	                             .number = number,
+	                             .staff = staff});
 	return session;
 }
 
@@ -923,6 +936,34 @@ std::vector<uint8_t> LockstepHost::ObserverNumbers() const
 	return numbers;
 }
 
+void LockstepHost::RefuseStaffCommands(const Peer& peer, std::vector<player_commands::Action>& actions)
+{
+	// The server refuses the edits of the editor and the debug cheats of a player with no staff claim, and the log tells
+	// each refusal
+	const auto refused =
+	    std::erase_if(actions, [&peer](const auto& action) { return player_commands::OnlyStaffSends(action) && !peer.staff; });
+	if (refused > 0)
+	{
+		_refusedStaffCommands += static_cast<uint32_t>(refused);
+		Log(spdlog::level::warn,
+		    fmt::format("The server refuses {} edit or cheat commands of {}: the join ticket has no staff claim", refused,
+		                peer.name));
+	}
+}
+
+void LockstepHost::LogDebugCheats(const Peer& peer, const std::vector<player_commands::Action>& actions)
+{
+	for (const auto& action : actions)
+	{
+		if (const auto* cheat = std::get_if<player_commands::DebugCheat>(&action))
+		{
+			Log(spdlog::level::info, fmt::format("The server takes the debug cheat {} {} of the staff player {}",
+			                                     debug_cheats::NameOf(static_cast<debug_cheats::Cheat>(cheat->cheat)),
+			                                     cheat->on ? "on" : "off", peer.name));
+		}
+	}
+}
+
 void LockstepHost::ObserverBlock(const Peer& peer, turn_codec::CommandBlock& block)
 {
 	const auto found = _observerBlocks.find(peer.observer);
@@ -931,8 +972,12 @@ void LockstepHost::ObserverBlock(const Peer& peer, turn_codec::CommandBlock& blo
 		++_refusedBlocks;
 		return;
 	}
-	// An observer sends only the report of its hand and camera and the lines of the chat
-	if (std::erase_if(block.actions, [](const auto& action) { return !player_commands::ObserverSends(action); }) > 0)
+	// An observer sends only the report of its hand and camera and the lines of the chat. A staff observer also sends the
+	// edits of the editor.
+	RefuseStaffCommands(peer, block.actions);
+	if (std::erase_if(block.actions, [&peer](const auto& action) {
+		    return !player_commands::ServerTakesFromObserver(action, peer.staff);
+	    }) > 0)
 	{
 		++_refusedBlocks;
 	}
@@ -1095,6 +1140,7 @@ void LockstepHost::JoinRunning(ConnectionId connection, Peer& peer, const join_t
 	start.gods = Gods();
 	game_socket::Joined joined {
 	    .role = game_socket::Role::Observer, .slot = std::nullopt, .session = {}, .name = claims.name, .start = start};
+	joined.staff = claims.staff;
 	if (own != _seats.end())
 	{
 		const auto seat = static_cast<uint8_t>(own - _seats.begin());
@@ -1115,6 +1161,7 @@ void LockstepHost::JoinRunning(ConnectionId connection, Peer& peer, const join_t
 		own->lastBlock.reset();
 		own->lastBlockInTurn.reset();
 		++own->resumes;
+		own->staff = claims.staff;
 		std::erase_if(_early, [seat](const auto& early) { return early.first.first == seat; });
 		peer.role = game_socket::Role::God;
 		peer.seat = seat;
@@ -1134,13 +1181,14 @@ void LockstepHost::JoinRunning(ConnectionId connection, Peer& peer, const join_t
 		peer.role = game_socket::Role::Observer;
 		peer.observer = ObserverCame(claims.name);
 		joined.observer = peer.observer;
-		joined.session = NewWatcher(connection, claims.name, peer.observer);
+		joined.session = NewWatcher(connection, claims.name, peer.observer, claims.staff);
 		Log(spdlog::level::info,
 		    fmt::format("{} joins the game at turn {} as observer {}", claims.name, _turnsDone, peer.observer));
 	}
 	peer.joined = true;
 	peer.name = claims.name;
 	peer.account = byName ? std::string() : claims.subject;
+	peer.staff = claims.staff;
 	SendTo(connection, joined);
 	SendTo(connection, start);
 	SendWorld(connection);
@@ -1188,7 +1236,9 @@ void LockstepHost::Binary(ConnectionId connection, std::span<const uint8_t> byte
 			return;
 		}
 		const auto before = block->actions.size();
+		RefuseStaffCommands(peer, block->actions);
 		std::erase_if(block->actions, [this](const auto& action) { return LeavesOut(action, _settings.testCommands); });
+		LogDebugCheats(peer, block->actions);
 		if (block->actions.size() != before)
 		{
 			++_refusedBlocks;
@@ -1642,7 +1692,8 @@ std::vector<game_socket::God> LockstepHost::Gods() const
 		{
 			gods.push_back({.slot = static_cast<uint8_t>(i),
 			                .name = _seats[i].name,
-			                .account = lobby_status::AccountId(_seats[i].account)});
+			                .account = lobby_status::AccountId(_seats[i].account),
+			                .staff = _seats[i].staff});
 		}
 	}
 	return gods;
@@ -2063,7 +2114,8 @@ void LockstepHost::Restore(const snapshots::Room& room, uint32_t turnsDone, std:
 		                  .lastBlock = std::nullopt,
 		                  .lastBlockInTurn = std::nullopt,
 		                  .blocksAgain = 0,
-		                  .refusedBlocks = 0};
+		                  .refusedBlocks = 0,
+		                  .staff = false};
 		// The server takes only the blocks after the last block that the sent turns hold
 		if (const auto last = blocks.find(static_cast<uint8_t>(i)); last != blocks.end())
 		{
@@ -2108,7 +2160,8 @@ void LockstepHost::Restore(const snapshots::Room& room, uint32_t turnsDone, std:
 		                             .awaySince = now,
 		                             .resumes = 0,
 		                             .name = std::move(name),
-		                             .number = number});
+		                             .number = number,
+		                             .staff = false});
 	}
 	// The server takes only the blocks of each observer after the last block that the sent turns hold
 	for (const auto& [key, sequence] : blocks)

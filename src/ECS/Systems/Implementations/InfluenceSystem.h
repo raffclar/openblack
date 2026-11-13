@@ -102,6 +102,8 @@ private:
 	                                             const virtual_influence::State* state, std::optional<bool> keptOut) const;
 	/// Whether every player's influence covers the whole land now
 	[[nodiscard]] static bool InfluenceEverywhere();
+	/// The player has the debug cheat of infinite influence
+	[[nodiscard]] static bool CheatEverywhere(PlayerNames player);
 	/// What a player's hand keeps of their influence past the border, if they have a hand
 	[[nodiscard]] static const virtual_influence::State* VirtualStateOf(PlayerNames player);
 

@@ -22,6 +22,7 @@
 #include <gtest/gtest.h>
 
 #include "Commands/TurnCodec.h"
+#include "Common/DebugCheats.h"
 #include "PlayerSlots.h"
 
 using namespace openblack;
@@ -138,6 +139,14 @@ std::vector<Action> EachCommand()
 	    ObserverIn {.name = u"Ann"},
 	    ObserverOut {},
 	    HandLockRelease {.creature = Entity(31)},
+	    EditorEdit {.kind = EditorEdit::Kind::Place,
+	                .object = entt::null,
+	                .placeKind = 3,
+	                .placeType = 12,
+	                .challenge = 7,
+	                .position = {1.0f, 2.0f, 3.0f},
+	                .radians = 0.5f},
+	    DebugCheat {.cheat = 1, .on = true},
 	};
 }
 
@@ -178,7 +187,7 @@ Action RandomAction(std::mt19937& random)
 		return value;
 	};
 	const auto vector = [&]() { return glm::vec3 {number(), number(), number()}; };
-	switch (bits(random) % 54)
+	switch (bits(random) % 56)
 	{
 	case 0:
 		return LeashKey {.key = static_cast<creature_leash::LeashKey>(bits(random) % 3)};
@@ -379,6 +388,17 @@ Action RandomAction(std::mt19937& random)
 		return ObserverOut {};
 	case 52:
 		return HandLockRelease {.creature = entity()};
+	case 53:
+		return EditorEdit {.kind = static_cast<EditorEdit::Kind>(bits(random) % 4),
+		                   .object = entity(),
+		                   .placeKind = static_cast<uint8_t>(bits(random)),
+		                   .placeType = static_cast<int32_t>(bits(random)),
+		                   .challenge = bits(random),
+		                   .position = vector(),
+		                   .radians = number()};
+	case 54:
+		return DebugCheat {.cheat = static_cast<uint8_t>(bits(random) % debug_cheats::k_CheatCount),
+		                   .on = (bits(random) % 2) == 1};
 	default:
 		return PlayerLeft {};
 	}
@@ -441,9 +461,9 @@ std::vector<Action> BusyCommands()
 
 TEST(TurnCodec, EachCommandHasItsSize)
 {
-	const std::vector<size_t> sizes {2,  5, 9,  5,  53, 5, 10, 18, 5,  49, 17, 5, 5,  5,  9,  12, 1, 18,
-	                                 11, 5, 19, 15, 7,  5, 1,  2,  1,  61, 5,  2, 1,  13, 10, 18, 1, 58,
-	                                 1,  5, 51, 5,  16, 7, 1,  1,  13, 1,  2,  9, 13, 1,  1,  8,  1, 5};
+	const std::vector<size_t> sizes {2,  5,  9,  5, 53, 5, 10, 18, 5,  49, 17, 5, 5,  5,  9,  12, 1,  18, 11,
+	                                 5,  19, 15, 7, 5,  1, 2,  1,  61, 5,  2,  1, 13, 10, 18, 1,  58, 1,  5,
+	                                 51, 5,  16, 7, 1,  1, 13, 1,  2,  9,  13, 1, 1,  8,  1,  5,  31, 3};
 	const auto commands = EachCommand();
 	ASSERT_EQ(commands.size(), sizes.size());
 	for (size_t i = 0; i < commands.size(); ++i)
@@ -469,8 +489,43 @@ TEST(TurnCodec, EachCommandHasItsSize)
 		{
 			tag = 54;
 		}
+		// The edit of the editor and the debug cheat have the tags 55 and 56
+		if (std::holds_alternative<EditorEdit>(commands[i]))
+		{
+			tag = 55;
+		}
+		if (std::holds_alternative<DebugCheat>(commands[i]))
+		{
+			tag = 56;
+		}
 		EXPECT_EQ(static_cast<size_t>(TagOf(commands[i])), tag) << i;
 	}
+}
+
+TEST(TurnCodec, TheDecoderRefusesABadEditOrCheat)
+{
+	const auto encode = [](Action action) {
+		return Encode(Frame {CommandBlock {.sequence = 0, .turn = 0, .actions = {std::move(action)}}});
+	};
+	// The command starts after the version, the kind, the sequence, the turn and the count. Its tag comes first.
+	constexpr size_t k_FirstField = 10;
+	auto edit = encode(EditorEdit {.kind = EditorEdit::Kind::Move, .object = Entity(4), .position = {1.0f, 0.0f, 2.0f}});
+	ASSERT_EQ(edit.size(), k_FirstField + 30);
+	ASSERT_EQ(Decode(edit).error, DecodeError::None);
+	edit[k_FirstField] = static_cast<uint8_t>(EditorEdit::Kind::Remove) + 1;
+	EXPECT_EQ(Decode(edit).error, DecodeError::Value);
+
+	auto cheat = encode(DebugCheat {.cheat = 0, .on = true});
+	ASSERT_EQ(cheat.size(), k_FirstField + 2);
+	const auto back = Decode(cheat);
+	ASSERT_EQ(back.error, DecodeError::None);
+	EXPECT_EQ(std::get<DebugCheat>(std::get<CommandBlock>(*back.frame).actions[0]), (DebugCheat {.cheat = 0, .on = true}));
+	auto unknown = cheat;
+	unknown[k_FirstField] = static_cast<uint8_t>(debug_cheats::k_CheatCount);
+	EXPECT_EQ(Decode(unknown).error, DecodeError::Value);
+	auto notBool = cheat;
+	notBool[k_FirstField + 1] = 2;
+	EXPECT_EQ(Decode(notBool).error, DecodeError::Value);
 }
 
 TEST(TurnCodec, TheBytesOfABlockAreLittleEndianWithTheRawBitsOfTheFloats)

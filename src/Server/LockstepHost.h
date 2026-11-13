@@ -178,6 +178,8 @@ public:
 		uint32_t blocksAgain {0};
 		/// The blocks whose commands the server refused because the commands of the god did not fit in the turn
 		uint32_t refusedBlocks {0};
+		/// The join ticket of the player has the staff claim. A seat that a snapshot gave back has no staff claim.
+		bool staff {false};
 	};
 
 	/// The session of an observer. An observer has no god, but it can come back with the secret of its session, as the
@@ -194,6 +196,8 @@ public:
 		std::string name;
 		/// The number of the observer in the game, from 1. The turns stamp the blocks of the observer with it.
 		uint8_t number {0};
+		/// The join ticket of the observer has the staff claim
+		bool staff {false};
 	};
 
 	LockstepHost(WebSocketServerInterface& sockets, CheckTicket checkTicket, Clock clock, MakeSecret makeSecret,
@@ -303,6 +307,8 @@ public:
 	/// The blocks of commands that the server did not accept: before the start, a command that only the server sends, or
 	/// a command that an observer does not send
 	[[nodiscard]] uint32_t RefusedBlocks() const { return _refusedBlocks; }
+	/// The edits of the editor and the debug cheats that the server refused because their player has no staff claim
+	[[nodiscard]] uint32_t RefusedStaffCommands() const { return _refusedStaffCommands; }
 	/// The numbers of the observers that the server gave and whose leave is not in a turn yet, in order
 	[[nodiscard]] std::vector<uint8_t> ObserverNumbers() const;
 	/// One line for each god slot that had a player: the checksums compared and the same ones
@@ -327,6 +333,9 @@ private:
 		/// The build id that the client gave in its join, or in a text frame that the server could not read. Empty when
 		/// the client gave none.
 		std::string build;
+		/// The join ticket of the player has the staff claim: the server takes the edits of the editor and the debug cheats
+		/// of the player
+		bool staff {false};
 	};
 
 	/// The most "sync.parts" frames of one connection that the server answers
@@ -358,7 +367,7 @@ private:
 	void SendKeptTurns(ConnectionId connection, uint32_t from);
 	/// Gives a new session to an observer on a connection, with the number of the observer, and returns its secret. With
 	/// no secrets, the observer cannot come back.
-	[[nodiscard]] std::string NewWatcher(ConnectionId connection, std::string name, uint8_t number);
+	[[nodiscard]] std::string NewWatcher(ConnectionId connection, std::string name, uint8_t number, bool staff);
 	/// A line of the room's chat from a player: it goes to every other player in a room on the local network, until the
 	/// start
 	void ChatInRoom(ConnectionId connection, const Peer& peer, const game_socket::RoomChat& chat);
@@ -374,6 +383,10 @@ private:
 	void ObserverGone(uint8_t number);
 	/// The lowest number that no observer has, none when every number is taken
 	[[nodiscard]] std::optional<uint8_t> FreeObserverNumber() const;
+	/// Removes the edits of the editor and the debug cheats of a player with no staff claim, and logs the refusal
+	void RefuseStaffCommands(const Peer& peer, std::vector<player_commands::Action>& actions);
+	/// Logs each debug cheat that the server takes into its turns, so that the log of the server tells each change
+	void LogDebugCheats(const Peer& peer, const std::vector<player_commands::Action>& actions);
 	/// Takes a block of commands from an observer into the next turn
 	void ObserverBlock(const Peer& peer, turn_codec::CommandBlock& block);
 	/// The blocks of the server that tell the worlds of the god of the observers and of the observers that came and left
@@ -511,6 +524,7 @@ private:
 	/// The clients' checksums of the turns that the server did not do yet, by seat
 	std::map<std::pair<uint8_t, uint32_t>, uint64_t> _early;
 	uint32_t _refusedBlocks {0};
+	uint32_t _refusedStaffCommands {0};
 	WorldState _worldState;
 	PartListener _partListener;
 	PartsOfTurn _partsOfTurn;

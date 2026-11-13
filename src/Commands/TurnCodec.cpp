@@ -18,6 +18,7 @@
 #include <type_traits>
 #include <utility>
 
+#include "Common/DebugCheats.h"
 #include "Creature/CreatureFace.h"
 #include "Creature/CreatureFight.h"
 #include "PlayerSlots.h"
@@ -368,6 +369,19 @@ void WriteAction(Writer& out, const Action& action)
 	               },
 	               [](const ObserverOut& /*command*/) {},
 	               [&out](const HandLockRelease& command) { out.Entity(command.creature); },
+	               [&out](const EditorEdit& command) {
+		               out.Byte(static_cast<uint8_t>(command.kind));
+		               out.Entity(command.object);
+		               out.Byte(command.placeKind);
+		               out.Number(static_cast<uint32_t>(command.placeType));
+		               out.Number(command.challenge);
+		               out.Vector(command.position);
+		               out.Float(command.radians);
+	               },
+	               [&out](const DebugCheat& command) {
+		               out.Byte(command.cheat);
+		               out.Byte(command.on ? 1 : 0);
+	               },
 	               [&out](const MusicMood& command) {
 		               out.Entity(command.creature);
 		               out.Number(command.track);
@@ -851,6 +865,34 @@ DecodeError ReadAction(Reader& in, Action& action)
 	case CommandTag::HandLockRelease:
 		action = HandLockRelease {.creature = in.Entity()};
 		return DecodeError::None;
+	case CommandTag::EditorEdit:
+	{
+		const auto kind = in.Byte();
+		if (kind > static_cast<uint8_t>(EditorEdit::Kind::Remove))
+		{
+			return DecodeError::Value;
+		}
+		EditorEdit edit {.kind = static_cast<EditorEdit::Kind>(kind)};
+		edit.object = in.Entity();
+		edit.placeKind = in.Byte();
+		edit.placeType = static_cast<int32_t>(in.Number<uint32_t>());
+		edit.challenge = in.Number<uint32_t>();
+		edit.position = in.Vector();
+		edit.radians = in.Float();
+		action = edit;
+		return DecodeError::None;
+	}
+	case CommandTag::DebugCheat:
+	{
+		const auto cheat = in.Byte();
+		const auto on = in.Byte();
+		if (!debug_cheats::CheatFrom(cheat).has_value() || on > 1)
+		{
+			return DecodeError::Value;
+		}
+		action = DebugCheat {.cheat = cheat, .on = on == 1};
+		return DecodeError::None;
+	}
 	case CommandTag::MusicMood:
 	{
 		const auto creature = in.Entity();
@@ -1022,6 +1064,8 @@ CommandTag TagOf(const Action& action) noexcept
 	                      [](const ObserverIn& /*command*/) { return CommandTag::ObserverIn; },
 	                      [](const ObserverOut& /*command*/) { return CommandTag::ObserverOut; },
 	                      [](const HandLockRelease& /*command*/) { return CommandTag::HandLockRelease; },
+	                      [](const EditorEdit& /*command*/) { return CommandTag::EditorEdit; },
+	                      [](const DebugCheat& /*command*/) { return CommandTag::DebugCheat; },
 	                  },
 	                  action);
 }
@@ -1091,6 +1135,8 @@ size_t SizeOf(const Action& action) noexcept
 	                   [](const ObserverIn& command) { return 1 + (2 * command.name.size()); },
 	                   [](const ObserverOut& /*command*/) { return size_t {0}; },
 	                   [](const HandLockRelease& /*command*/) { return k_Entity; },
+	                   [](const EditorEdit& /*command*/) { return 1 + k_Entity + 1 + 4 + 4 + k_Vector + 4; },
+	                   [](const DebugCheat& /*command*/) { return size_t {2}; },
 	               },
 	               action);
 	return 1 + fields;

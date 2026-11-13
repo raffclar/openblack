@@ -190,6 +190,44 @@ TEST(JoinTicket, TheClaimsAndTheTimesRead)
 	EXPECT_FALSE(ParseClaims(ClaimsText("game-1", "king")).has_value());
 }
 
+TEST(JoinTicket, OnlyATrueStaffClaimMakesAStaffPlayer)
+{
+	const auto text = ClaimsText();
+	const auto with = [&](std::string_view field) {
+		auto changed = text;
+		changed.insert(changed.size() - 1, std::string(",") + std::string(field));
+		return changed;
+	};
+	// A ticket without the claim, as from an older lobby, gives no staff player
+	const auto none = ParseClaims(text);
+	ASSERT_TRUE(none.has_value());
+	EXPECT_FALSE(none->staff);
+	const auto staff = ParseClaims(with(R"("staff":true)"));
+	ASSERT_TRUE(staff.has_value());
+	EXPECT_TRUE(staff->staff);
+	EXPECT_FALSE(staff->admin);
+	const auto notStaff = ParseClaims(with(R"("staff":false)"));
+	ASSERT_TRUE(notStaff.has_value());
+	EXPECT_FALSE(notStaff->staff);
+	// A claim that is not a boolean makes the ticket bad
+	EXPECT_FALSE(ParseClaims(with(R"("staff":"true")")).has_value());
+	EXPECT_FALSE(ParseClaims(with(R"("staff":1)")).has_value());
+}
+
+TEST(TicketCheck, TheStaffClaimComesOnlyFromASignedTicket)
+{
+	auto check = MakeCheck();
+	auto claims = ClaimsText();
+	claims.insert(claims.size() - 1, R"(,"staff":true)");
+	const auto good = check.Check(SignedTicket(claims), k_Now + 10);
+	ASSERT_EQ(good.problem, TicketProblem::None);
+	EXPECT_TRUE(good.claims->staff);
+	// The same claims with the key of another lobby give no player
+	auto other = ed25519::Seed {};
+	other.fill(9);
+	EXPECT_NE(check.Check(SignedTicket(claims, other), k_Now + 10).problem, TicketProblem::None);
+}
+
 TEST(TicketCheck, AGoodTicketWorksOnce)
 {
 	auto check = MakeCheck();

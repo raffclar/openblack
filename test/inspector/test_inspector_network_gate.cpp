@@ -138,7 +138,7 @@ TEST(InspectorNetworkGate, RefusedQueries)
 	}
 	for (const auto* query : {"input.key", "input.pointer", "camera.set", "screenshot.take", "sim.record", "sim.feedback",
 	                          "fights.transcript_folder", "fights.clear_transcripts", "audio.lose_device", "autopilot.start",
-	                          "autopilot.stop", "creatures.fight_cheat"})
+	                          "autopilot.stop", "creatures.fight_cheat", "editor.network_edit", "editor.cheat"})
 	{
 		EXPECT_FALSE(RefusedInNetworkGame(query, true)) << query;
 	}

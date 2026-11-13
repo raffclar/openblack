@@ -97,6 +97,9 @@ struct Claims
 	std::string name;
 	/// The account has the admin right on this server
 	bool admin {false};
+	/// The account is a staff account of the lobby, and its sign-in gave the second factor. Only such an account opens
+	/// the editor and turns on the cheats in a network game.
+	bool staff {false};
 	game_socket::Role role {game_socket::Role::God};
 	/// The id of the lobby whose game the ticket is for ("lobby", optional). Empty for a ticket of a server with no lobby.
 	std::string lobby;

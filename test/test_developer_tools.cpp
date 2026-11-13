@@ -59,6 +59,29 @@ TEST(DeveloperTools, ADeveloperBuildWithNoNetworkGameAllowsTheActions)
 	EXPECT_FALSE(RefusalOf(true, false).has_value());
 }
 
+TEST(DeveloperTools, InANetworkGameOnlyAStaffPlayerOpensTheEditorInEveryBuild)
+{
+	for (const bool built : {false, true})
+	{
+		EXPECT_FALSE(EditorRefusalOf(built, true, true).has_value()) << built;
+		EXPECT_EQ(EditorRefusalOf(built, true, false), "only a staff player opens the editor in a network game") << built;
+		EXPECT_EQ(GuiModeOf(built, true, true), GuiMode::EditorOnly) << built;
+		EXPECT_EQ(GuiModeOf(built, true, false), GuiMode::Dormant) << built;
+	}
+}
+
+TEST(DeveloperTools, OutsideANetworkGameTheEditorIsADeveloperTool)
+{
+	// The staff claim comes only from a network game, so it changes nothing here
+	for (const bool staff : {false, true})
+	{
+		EXPECT_FALSE(EditorRefusalOf(true, false, staff).has_value()) << staff;
+		EXPECT_EQ(EditorRefusalOf(false, false, staff), "the build has no developer tools") << staff;
+		EXPECT_EQ(GuiModeOf(true, false, staff), GuiMode::Full) << staff;
+		EXPECT_EQ(GuiModeOf(false, false, staff), GuiMode::Dormant) << staff;
+	}
+}
+
 TEST(DeveloperTools, EveryActionHasAName)
 {
 	for (const auto action :

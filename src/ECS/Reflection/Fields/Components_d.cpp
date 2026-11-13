@@ -15,6 +15,7 @@
 
 #include "ECS/Components/Dance.h"
 #include "ECS/Components/DeadTree.h"
+#include "ECS/Components/DebugCheats.h"
 #include "ECS/Components/DestructionGhost.h"
 #include "ECS/Components/DetailMeshes.h"
 #include "ECS/Components/Disciple.h"
@@ -102,6 +103,13 @@ void openblack::ecs::reflection::RegisterFields_Components_d(entt::meta_ctx& con
 	    .Field<&components::DeadTree::woodMultiplier>("woodMultiplier")
 	    .Field<&components::DeadTree::felled>("felled")
 	    .Field<&components::DeadTree::model>("model");
+	Reflect<components::DebugCheats>(context)
+	    .Field<&components::DebugCheats::on>("on")
+	    .Field<&components::DebugCheats::prayerWasInfinite>("prayerWasInfinite")
+	    .Field<&components::DebugCheats::prayerForced>("prayerForced");
+	Reflect<components::DebugCheatSite>(context)
+	    .Field<&components::DebugCheatSite::infinite>("infinite")
+	    .Field<&components::DebugCheatSite::freeMaintenance>("freeMaintenance");
 	Reflect<components::DestructionGhost>(context)
 	    .Field<&components::DestructionGhost::mesh>("mesh")
 	    .Field<&components::DestructionGhost::model>("model")

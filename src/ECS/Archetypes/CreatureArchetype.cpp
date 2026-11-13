@@ -100,7 +100,7 @@ CreatureArchetype::Body CreatureArchetype::StartBody(CreatureType species)
 	}
 	if (!Locator::gameRandom::has_value())
 	{
-		return {.alignment = 0.0f, .fatness = info->startFatness, .strength = info->strength};
+		return BaseBody(species);
 	}
 	// The first number of each living thing that the game makes comes before the numbers of the body
 	auto& random = Locator::gameRandom::value();
@@ -110,6 +110,16 @@ CreatureArchetype::Body CreatureArchetype::StartBody(CreatureType species)
 	const auto strength = creature_physiology::SpreadStart(info->strength, upTo);
 	const auto fatness = creature_physiology::SpreadStart(info->startFatness, upTo);
 	return {.alignment = 0.0f, .fatness = fatness, .strength = strength};
+}
+
+CreatureArchetype::Body CreatureArchetype::BaseBody(CreatureType species)
+{
+	const auto* info = SpeciesInfo(species);
+	if (info == nullptr)
+	{
+		return {};
+	}
+	return {.alignment = 0.0f, .fatness = info->startFatness, .strength = info->strength};
 }
 
 void CreatureArchetype::ShowStrength(entt::entity creature)
