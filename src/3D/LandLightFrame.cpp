@@ -15,6 +15,7 @@
 #include "3D/LandLightTable.h"
 #include "Camera/Camera.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
+#include "ECS/Systems/LandShadeSystemInterface.h"
 #include "ECS/Systems/SkyClockSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
 #include "EngineConfig.h"
@@ -24,6 +25,26 @@
 
 namespace openblack
 {
+namespace
+{
+/// The corners of a cell as the land was laid: its own luminosity and those of the cells after it in the block of land
+[[nodiscard]] land_point_light::CornersAt LaidCorners()
+{
+	const auto* island = Locator::terrainSystem::has_value() ? &Locator::terrainSystem::value() : nullptr;
+	return [island](int32_t x, int32_t z) -> std::optional<land_point_light::Corners> {
+		if (island == nullptr)
+		{
+			return std::nullopt;
+		}
+		const auto* cell = island->FindCell({static_cast<uint16_t>(x), static_cast<uint16_t>(z)});
+		if (cell == nullptr)
+		{
+			return std::nullopt;
+		}
+		return land_point_light::Corners {cell[0].luminosity, cell[1].luminosity, cell[17].luminosity, cell[18].luminosity};
+	};
+}
+} // namespace
 
 LandLightInputs FrameLandLightInputs()
 {
@@ -101,27 +122,30 @@ FrameLightTable FrameLandLightTable()
 uint32_t FrameLandLightAt(glm::vec3 point)
 {
 	const auto light = FrameLandLightTable();
-	const auto* island = Locator::terrainSystem::has_value() ? &Locator::terrainSystem::value() : nullptr;
-	// The corners of a cell are its own luminosity and those of the cells after it in the block of land
-	const land_point_light::CornersAt corners = [island](int32_t x, int32_t z) -> std::optional<land_point_light::Corners> {
-		if (island == nullptr)
-		{
-			return std::nullopt;
-		}
-		const auto* cell = island->FindCell({static_cast<uint16_t>(x), static_cast<uint16_t>(z)});
-		if (cell == nullptr)
-		{
-			return std::nullopt;
-		}
-		return land_point_light::Corners {cell[0].luminosity, cell[1].luminosity, cell[17].luminosity, cell[18].luminosity};
-	};
-	const auto lit = land_point_light::LightAt(point, light.colours, corners);
+	const auto lit = land_point_light::LightAt(point, light.colours, LaidCorners());
 	if (!Locator::camera::has_value())
 	{
 		return lit;
 	}
 	const auto depth = land_point_light::DepthOf(point, Locator::camera::value().GetViewProjectionMatrix());
 	return land_point_light::Hazed(lit, depth, light.haze);
+}
+
+uint32_t FrameDrawnLightAt(const FrameLightTable& light, glm::vec3 point, uint32_t multiply)
+{
+	// Before the first frame shades the land, the land has its laid luminosity
+	const auto* shade = Locator::landShadeSystem::has_value() ? &Locator::landShadeSystem::value() : nullptr;
+	const land_point_light::CornersAt corners =
+	    shade != nullptr && !shade->Land().Blocks().empty()
+	        ? land_point_light::CornersAt([shade](int32_t x, int32_t z) { return shade->Land().CornersAt(x, z); })
+	        : LaidCorners();
+	const auto tinted = land_point_light::Multiplied(land_point_light::LightAt(point, light.colours, corners), multiply);
+	if (!Locator::camera::has_value())
+	{
+		return tinted;
+	}
+	const auto depth = land_point_light::DepthOf(point, Locator::camera::value().GetViewProjectionMatrix());
+	return land_point_light::Hazed(tinted, depth, light.haze);
 }
 
 } // namespace openblack

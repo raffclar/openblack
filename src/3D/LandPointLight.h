@@ -58,6 +58,10 @@ struct Haze
 /// The depth of a point in front of the camera, from the matrix that takes the world to the screen
 [[nodiscard]] float DepthOf(glm::vec3 point, const glm::mat4& worldToClip);
 
+/// A colour multiplied by another, channel by channel in 256ths and rounded down. This is how the colour of a model
+/// takes its tint before the distance haze: a tint of white (0xFFFFFFFF) keeps 255 of 256 of each channel.
+[[nodiscard]] uint32_t Multiplied(uint32_t colour, uint32_t multiply);
+
 /// A colour as the distance haze dims it at a depth in front of the camera. The alpha does not change.
 [[nodiscard]] uint32_t Hazed(uint32_t colour, float depth, const Haze& haze);
 

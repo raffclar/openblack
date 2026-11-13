@@ -70,6 +70,14 @@ float DepthOf(glm::vec3 point, const glm::mat4& worldToClip)
 	       worldToClip[3][3];
 }
 
+uint32_t Multiplied(uint32_t colour, uint32_t multiply)
+{
+	const auto channel = [colour, multiply](uint32_t shift) {
+		return ((((colour >> shift) & 0xFFu) * ((multiply >> shift) & 0xFFu)) >> 8) << shift;
+	};
+	return channel(24) | channel(16) | channel(8) | channel(0);
+}
+
 uint32_t Hazed(uint32_t colour, float depth, const Haze& haze)
 {
 	if (!haze.on || depth < haze.nearDepth)
