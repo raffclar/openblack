@@ -414,3 +414,8 @@ void gesture_hints::Step(Row& row, float seconds, bool wordsShowing)
 		}
 	}
 }
+
+bool gesture_hints::Shows(const Row& row, bool inTemple)
+{
+	return !inTemple && !row.hints.empty() && row.alpha > 0.0f;
+}

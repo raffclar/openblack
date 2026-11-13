@@ -1126,6 +1126,36 @@ void testbed_scenarios::AddNeeds(std::vector<Scenario>& all)
 	    }},
 	});
 
+	// Another player's hand throws boulders hard at a creature that sleeps
+	all.push_back({
+	    .id = "needs.sleep_hit_by_boulders",
+	    .name = "Sleeping creature hit by boulders",
+	    .facet = Facet::Needs,
+	    .description = "Ten at night, the clock standing still: a worn out tiger of the second player, its desire to sleep "
+	                   "strong, lies down to sleep. From 12 seconds after the start, the first player's hand throws a "
+	                   "boulder hard at it from 50 metres south of where it lies, every 3 seconds.",
+	    .expected = "Each boulder that hits the tiger takes the same small part of its life as it would awake, and makes "
+	                "it a little more afraid and angry. The blow itself does not wake it, and a sleep heals more life in "
+	                "a second than a boulder takes. Now and then a boulder in the air catches its eye: it gets up to "
+	                "watch it, then lies down again.",
+	    .environment = {.hour = 22.0f, .clockRuns = false},
+	    .framing = {.shot = Shot::Follow},
+	    .creatures = {CreatureSetup {
+	        .species = CreatureType::Tiger,
+	        .owner = PlayerNames::PLAYER_TWO,
+	        .needs = {.energy = 1.0f, .exhaustion = 0.9f, .dehydration = 0.0f, .poo = 0.0f},
+	        .desires = {{.desire = Desire::Tiredness, .fraction = 1.0f}},
+	    }},
+	    .objects = {{.type = MobileStaticInfo::Boulder1Chalk, .offset = {0.0f, -25.0f}}},
+	    .throws = {{.object = 0,
+	                .from = glm::vec2 {0.0f, -50.0f},
+	                .fromCreature = 0,
+	                .height = 4.0f,
+	                .velocity = {0.0f, 3.0f, 40.0f},
+	                .delaySeconds = 12.0f,
+	                .repeatSeconds = 3.0f}},
+	});
+
 	all.push_back({
 	    .id = "needs.poo",
 	    .name = "Needs to poo",

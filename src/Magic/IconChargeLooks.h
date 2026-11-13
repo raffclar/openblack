@@ -109,4 +109,23 @@ inline constexpr float k_PulseMark = 0.1f;
 	return static_cast<uint8_t>(shownTint != 0 ? k_TintedAlpha : k_LightAlpha);
 }
 
+/// A village centre lights its stone hands through white: each channel of the land's light at 255 in 256ths
+inline constexpr uint32_t k_ThroughWhite = 0xFFFFFFFFu;
+
+/// The alpha of the effect of the seed's holder over a stone hand of a village centre, 0 to 255. The centre gives the
+/// lowest byte of the hand's model colour as the frame draws it, which is the blue of that colour and not its alpha.
+/// The colour is lit through white, so the value is at most 254. It is less where the land's light has less blue, and
+/// less again in the distance haze.
+[[nodiscard]] constexpr uint8_t StoneHandHolderAlpha(uint32_t drawnColour)
+{
+	return static_cast<uint8_t>(drawnColour & 0xFFu);
+}
+
+/// Whether the model of an icon is lit through white (255 in 256ths of the land's light) and adds its shine. A stone
+/// hand of a village centre always is, also with no shine. An icon at a worship site is only while it shows a shine.
+[[nodiscard]] constexpr bool LitThroughWhite(bool stoneHand, uint32_t shownTint)
+{
+	return stoneHand || shownTint != 0;
+}
+
 } // namespace openblack::magic::icon_charge_looks

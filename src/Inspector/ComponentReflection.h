@@ -24,8 +24,18 @@
 namespace openblack::ecs::reflection
 {
 
+/// What the JSON of a component does with the fields that have a meaning only in the run that set them
+enum class RunFields : uint8_t
+{
+	/// The JSON shows them, as the inspector shows all fields
+	Keep,
+	/// The JSON does not show them. Use this for a hash that two runs of the same game must agree on.
+	Leave,
+};
+
 /// A component of an entity as JSON: its registered fields, or null when it has none registered
-[[nodiscard]] Json ComponentToJson(const entt::meta_ctx& context, const entt::type_info& info, const void* component);
+[[nodiscard]] Json ComponentToJson(const entt::meta_ctx& context, const entt::type_info& info, const void* component,
+                                   RunFields runFields = RunFields::Keep);
 
 /// One field of a component as JSON, by a dotted path through nested registered values, what options hold and the
 /// elements of lists, by number or by the name of the enumeration indexing them ("position", "crop.age",

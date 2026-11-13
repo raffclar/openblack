@@ -759,7 +759,8 @@ void world_save::TakeDanceFilesAgain(entt::registry& registry,
 	}
 }
 
-bool world_save::LoadRunningState(const entt::meta_ctx& reflection, const gamesave::WorldFile& file, uint32_t turn)
+bool world_save::LoadRunningState(const entt::meta_ctx& reflection, const gamesave::WorldFile& file, uint32_t turn,
+                                  LoadKind kind)
 {
 	bool read = true;
 	if (const auto clock = gamesave::FindChunk(file, gamesave::k_ClockTag); clock.has_value())
@@ -767,7 +768,7 @@ bool world_save::LoadRunningState(const entt::meta_ctx& reflection, const gamesa
 		read = LoadClock(*clock, turn) && read;
 	}
 	if (const auto camera = gamesave::FindChunk(file, gamesave::k_CameraTag);
-	    camera.has_value() && Locator::camera::has_value())
+	    LoadsCamera(kind) && camera.has_value() && Locator::camera::has_value())
 	{
 		read = LoadCamera(*camera) && read;
 	}

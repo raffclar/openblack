@@ -685,6 +685,8 @@ std::string Runner::GivePlayerCommand(const Command& command)
 		return TakeIconSeed(command);
 	case Kind::TapSiteIcon:
 		return TapSiteIcon(command);
+	case Kind::TapStoneHand:
+		return TapStoneHand(command);
 	case Kind::TapTempleEntrance:
 	{
 		if (!Locator::playerCommandSystem::has_value())

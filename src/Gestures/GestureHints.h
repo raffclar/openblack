@@ -279,5 +279,9 @@ struct Row
 /// While it shows, each hint with a seed steps the seed picture of its miracle, if the row's seeds have it. Thus two
 /// hints of one miracle step it twice.
 void Step(Row& row, float seconds, bool wordsShowing);
+/// Whether the row shows in this frame. The row shows only while the camera is over the land, and only while it has
+/// hints and some opacity. In the temple, the row does not show and does not step: its fade, its dots, its collars and
+/// its seeds stay as they are until the camera comes out.
+[[nodiscard]] bool Shows(const Row& row, bool inTemple);
 
 } // namespace openblack::gesture_hints

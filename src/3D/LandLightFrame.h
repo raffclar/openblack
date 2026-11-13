@@ -56,4 +56,9 @@ struct FrameLightTable
 /// things in a turn, and the shadows and the lights are on the land only while a frame is drawn (see land_shade).
 [[nodiscard]] uint32_t FrameLandLightAt(glm::vec3 point);
 
+/// The colour of a model as the frame draws it at a point (0xAARRGGBB). The land's light at the point comes from the
+/// luminosity of the land as the frame shades it (see land_shade). The model's tint multiplies it, then the distance
+/// haze dims it.
+[[nodiscard]] uint32_t FrameDrawnLightAt(const FrameLightTable& light, glm::vec3 point, uint32_t multiply);
+
 } // namespace openblack

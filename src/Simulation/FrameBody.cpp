@@ -341,8 +341,8 @@ void PlayFrameEffects(FrameViewInterface& view)
 		view.UpdateSingAlong(inTemple);
 	}
 	// The gestures' hints fade while the advisors' words were drawn, and while shown their dots run and their collars
-	// turn, by the game's time
-	if (Locator::gestureSystem::has_value())
+	// turn, by the game's time. In the temple, the hints do not show and do not change.
+	if (Locator::gestureSystem::has_value() && !(Locator::temple::has_value() && Locator::temple::value().Active()))
 	{
 		const auto seconds = gesture_hints::FrameSeconds(clock.GetFrameGameTime().count());
 		Locator::gestureSystem::value().StepHints(seconds, view.DialogueWordsDrawn());

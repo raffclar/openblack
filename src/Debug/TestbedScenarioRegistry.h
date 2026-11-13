@@ -12,6 +12,7 @@
 #include <cstddef>
 #include <cstdint>
 
+#include <algorithm>
 #include <functional>
 #include <limits>
 #include <map>
@@ -1241,6 +1242,10 @@ struct Command
 		/// With an amount, the battery of the site first gets that much of the cost of the plain miracle. Needs no
 		/// creature.
 		TapSiteIcon,
+		/// The player's hand taps the stone hand of a seed (value, a SpellSeedType) on the village centre of a town of
+		/// the player, as the Action button does. With an amount, the battery of the town's site first gets that much
+		/// of the cost of the plain miracle. Needs no creature.
+		TapStoneHand,
 		/// The creature's alignment (value 0) or fatness (value 1) jumps to an amount. Its body takes the new look at
 		/// the end of its next game turn, and its animations then follow the new shape.
 		SetBodyLook,
@@ -1472,6 +1477,8 @@ struct ThrowSetup
 	bool reward {false};
 	/// It is lifted to this point, from the middle of the map, before it is thrown; none to throw it from where it lies
 	std::optional<glm::vec2> from;
+	/// The point is from where this creature of the scenario stands at the throw, not from the middle of the map
+	std::optional<size_t> fromCreature;
 	/// How high above the land it is let go
 	float height {6.0f};
 	glm::vec3 velocity {0.0f};
@@ -1891,5 +1898,42 @@ enum class TurnStep : uint8_t
 	}
 	return *startedAt == turn ? TurnStep::Wait : TurnStep::Update;
 }
+
+/// The time that a scenario of a single player game counts. The time of the frames gives the smooth steps. The time of
+/// the turns that the game played gives a floor, so that a scenario never counts less time than the turns that passed.
+/// Thus a game that plays its turns fast, or in a few frames, still gives each command at its turn.
+class TurnClock
+{
+public:
+	/// The seconds that the scenario counts for this frame. frameSeconds: the game time of the frame. turn: the turn
+	/// count now. turnSeconds: the time of one turn.
+	[[nodiscard]] float Advance(float frameSeconds, uint32_t turn, float turnSeconds) noexcept
+	{
+		// A new game counts its turns from the start, and the count starts again
+		if (_lastTurn.has_value() && turn < *_lastTurn)
+		{
+			Restart();
+		}
+		if (_lastTurn.has_value() && turn > *_lastTurn)
+		{
+			_owed += static_cast<float>(turn - *_lastTurn) * turnSeconds;
+		}
+		_lastTurn = turn;
+		const auto counted = std::max(_given + frameSeconds, _owed);
+		const auto step = counted - _given;
+		_given = counted;
+		return step;
+	}
+
+	/// Starts the count again, for a new scenario
+	void Restart() noexcept { *this = TurnClock {}; }
+
+private:
+	std::optional<uint32_t> _lastTurn;
+	/// The time of the turns that passed since the count started
+	float _owed {0.0f};
+	/// The time that the scenario counted since the count started
+	float _given {0.0f};
+};
 
 } // namespace openblack::testbed_scenarios

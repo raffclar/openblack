@@ -82,6 +82,7 @@
 #include "ECS/Registry.h"
 #include "ECS/SaveDateLabel.h"
 #include "ECS/SaveGameFiles.h"
+#include "ECS/Systems/CameraBookmarkSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/CreatureAnimationSystemInterface.h"
 #include "ECS/Systems/CreatureCarryOverSystemInterface.h"
@@ -1492,6 +1493,13 @@ bool SaveGameSystem::LoadWholeWorld(uint32_t slot, const gamesave::WorldFile& wo
 		return false;
 	}
 	const auto& reflection = Reflection();
+	// A world state keeps the bookmarks of the player at this computer, as it keeps the camera. The new land clears them,
+	// so the load takes a copy of them before the land goes.
+	std::optional<ecs::systems::PlayerCameraBookmarks> bookmarks;
+	if (!ecs::world_save::LoadsCamera(kind) && Locator::cameraBookmarkSystem::has_value())
+	{
+		bookmarks = Locator::cameraBookmarkSystem::value().GetPlayerBookmarks();
+	}
 	// The scripts of the game that runs now stop before its entities go, so that they let go of those entities and not
 	// of the saved ones
 	if (Locator::vm::has_value())
@@ -1513,9 +1521,13 @@ bool SaveGameSystem::LoadWholeWorld(uint32_t slot, const gamesave::WorldFile& wo
 		return false;
 	}
 	// The clock, the random numbers and the scripts go on from the saved turn once the land has started
-	if (!ecs::world_save::LoadRunningState(reflection, world, game.turn))
+	if (!ecs::world_save::LoadRunningState(reflection, world, game.turn, kind))
 	{
 		SPDLOG_LOGGER_WARN(Log(), "A part of the running state of slot {} did not read", slot);
+	}
+	if (bookmarks.has_value())
+	{
+		Locator::cameraBookmarkSystem::value().KeepPlayerBookmarks(*bookmarks);
 	}
 	// A load from a file of the game is not the origin of this world
 	_vanilla.reset();

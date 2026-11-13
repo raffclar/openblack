@@ -162,6 +162,14 @@ void TestbedScenarios::UpdateAlways() noexcept
 		                                           ? time.GetFixedFrameTime().value_or(time.GetFrameRealTime())
 		                                           : time.GetFrameGameTime())
 		              .count();
+		// The time of the turns is the least that the scenario counts, so that a stepped game gives each command at its turn
+		if (_clockScenario != _runner.GetScenario())
+		{
+			_clockScenario = _runner.GetScenario();
+			_turnClock.Restart();
+		}
+		seconds = _turnClock.Advance(seconds, time.GetTurn(),
+		                             std::chrono::duration<float>(ecs::systems::TimeSystemInterface::k_TurnDuration).count());
 	}
 	_runner.Update(seconds);
 }

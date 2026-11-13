@@ -1011,6 +1011,7 @@ void Runner::GiveCreatureCommand(const Command& command)
 	case Kind::ChargeIconWithSeedHeld:
 	case Kind::TakeIconSeed:
 	case Kind::TapSiteIcon:
+	case Kind::TapStoneHand:
 	case Kind::TapTempleEntrance:
 	case Kind::RemoveObject:
 	case Kind::CreateReaction:

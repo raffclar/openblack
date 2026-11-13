@@ -12,6 +12,8 @@
 // go into stores, an animal dropped in the sea teaches the dropper's creature, and the player's creature learns from
 // what the hand threw.
 
+#include <cmath>
+
 #include <algorithm>
 #include <bit>
 #include <map>
@@ -31,9 +33,11 @@
 #include "Common/ModelInverseSquareRoot.h"
 #include "Creature/CreatureDeeds.h"
 #include "Creature/CreatureDesires.h"
+#include "Creature/CreaturePlanner.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/Creature.h"
+#include "ECS/Components/CreatureNeeds.h"
 #include "ECS/Components/GodHand.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/MagicShield.h"
@@ -402,6 +406,52 @@ TEST(PhysicsGameHooks, AnotherPlayersBlowHurtsFrightensAndAngersACreatureButLeav
 	const std::vector<std::pair<uint32_t, float>> sources {{creature_desires::sources::k_FearFromDamage, *crush},
 	                                                       {creature_desires::sources::k_AngerFromDamage, *crush}};
 	EXPECT_EQ(f.world->desireSources, sources);
+}
+
+TEST(PhysicsGameHooks, ABlowHurtsASleepingCreatureAsMuchAsAnAwakeOneAndDoesNotWakeIt)
+{
+	constexpr float k_Knock = 1.0e6f;
+	const auto strike = [](CreatureNeeds::Rest rest) {
+		Fixture f;
+		const auto creature = f.world->registry.Create();
+		auto& body = f.world->registry.Assign<Creature>(creature);
+		body.owner = PlayerNames::PLAYER_TWO;
+		body.size = 1.0f;
+		f.world->registry.Assign<CreatureNeeds>(creature).rest = rest;
+		f.StrikeWithRock(creature, 100.0f, PlayerNames::PLAYER_ONE, k_Knock);
+		// The blow leaves the rest as it is: only the mind can make the creature get up
+		EXPECT_EQ(f.world->registry.Get<const CreatureNeeds>(creature).rest, rest);
+		return std::pair(f.world->effects, f.world->desireSources);
+	};
+	const auto [asleepEffects, asleepSources] = strike(CreatureNeeds::Rest::Asleep);
+	const auto [awakeEffects, awakeSources] = strike(CreatureNeeds::Rest::Awake);
+	ASSERT_EQ(asleepEffects.size(), 1U);
+	ASSERT_EQ(awakeEffects.size(), 1U);
+	EXPECT_FLOAT_EQ(asleepEffects[0].values[magic::EffectKind::Crush], awakeEffects[0].values[magic::EffectKind::Crush]);
+	EXPECT_EQ(asleepEffects[0].source.player, awakeEffects[0].source.player);
+	EXPECT_EQ(asleepSources, awakeSources);
+}
+
+TEST(PhysicsGameHooks, ABlowOfLessThanHalfTheWeightOfTheCreatureDoesNoHarm)
+{
+	// Below a crush of 0.005 the blow does nothing: half the creature's weight in force gives a crush of exactly 0.005
+	const float mass = living::CreatureMass(1.0f, 0.0f, 0.0f);
+	EXPECT_FALSE(living::CreatureCrush(0.4f * mass * 9.81f, mass).has_value());
+	EXPECT_TRUE(living::CreatureCrush(0.6f * mass * 9.81f, mass).has_value());
+}
+
+TEST(CreatureSleepUnderBlows, ASleepGivesWayOnlyToAPlanMoreThanTwiceAsStrong)
+{
+	using creature_desires::Desire;
+	creature_planner::PlannerState state;
+	state.current = creature_planner::Plan {.desire = Desire::Tiredness, .action = 1, .object = 1, .priority = 2.0f};
+	auto& anger = state.best.at(static_cast<size_t>(Desire::Anger));
+	anger = creature_planner::Plan {.desire = Desire::Anger, .action = 2, .object = 2, .priority = 4.0f};
+	EXPECT_FALSE(creature_planner::Choose(state).has_value());
+	anger->priority = std::nextafter(4.0f, 5.0f);
+	const auto chosen = creature_planner::Choose(state);
+	ASSERT_TRUE(chosen.has_value());
+	EXPECT_EQ(chosen->desire, Desire::Anger);
 }
 
 TEST(PhysicsGameHooks, AToyNeverHurtsACreatureNorDoesAnythingWhileAScriptControlsTheLocalOne)

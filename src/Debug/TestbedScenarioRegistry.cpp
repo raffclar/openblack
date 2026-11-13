@@ -314,20 +314,20 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::ContinueGame || kind == Kind::PlayLogoEffect || kind == Kind::PlayFallingSpellFilm ||
 	       kind == Kind::PlayIntroFilm || kind == Kind::SayLine || kind == Kind::PlayGuidanceVoice ||
 	       kind == Kind::ScriptRelease || kind == Kind::FillSiteIcons || kind == Kind::ChargeIconWithSeedHeld ||
-	       kind == Kind::TakeIconSeed || kind == Kind::TapSiteIcon || kind == Kind::TapTempleEntrance ||
-	       kind == Kind::FinishBuilding || kind == Kind::FillBuiltAmount || kind == Kind::ScaffoldStartsSite ||
-	       kind == Kind::DestroyScaffoldSite || kind == Kind::ScaffoldClearsGround || kind == Kind::CallNative ||
-	       kind == Kind::PauseGame || kind == Kind::SetGameSpeed || kind == Kind::RemoveTeleportStone ||
-	       kind == Kind::MakeDance || kind == Kind::OpenMultiplayerBox || kind == Kind::BuildWorshipSites ||
-	       kind == Kind::ScriptBuildsWorshipSites || kind == Kind::PressPlainKey || kind == Kind::PlainKeyDown ||
-	       kind == Kind::PlainKeyRepeat || kind == Kind::PlainKeyUp || kind == Kind::OtherGodHand ||
-	       kind == Kind::ObserverCamera || kind == Kind::OwnGod || kind == Kind::JoinOnline || kind == Kind::EndBox ||
-	       kind == Kind::BringCreature || kind == Kind::TattooEditorAsNetworkGame || kind == Kind::ShowDemoPing ||
-	       kind == Kind::AddIncomingMessage || kind == Kind::Chat || kind == Kind::ComputerPersonality ||
-	       kind == Kind::ComputerUntaughtSends || kind == Kind::SkirmishBox || kind == Kind::LookAtSaveGamePicture ||
-	       kind == Kind::ZoomToTempleCaveTarget || kind == Kind::HandCastOnDispenser || kind == Kind::HandCastOnCreature ||
-	       kind == Kind::CloseHeldMiracle || kind == Kind::JoinFootball || kind == Kind::GiveMagicTreesToStore ||
-	       kind == Kind::HandCastAtPoint || IsPointerCommand(kind);
+	       kind == Kind::TakeIconSeed || kind == Kind::TapSiteIcon || kind == Kind::TapStoneHand ||
+	       kind == Kind::TapTempleEntrance || kind == Kind::FinishBuilding || kind == Kind::FillBuiltAmount ||
+	       kind == Kind::ScaffoldStartsSite || kind == Kind::DestroyScaffoldSite || kind == Kind::ScaffoldClearsGround ||
+	       kind == Kind::CallNative || kind == Kind::PauseGame || kind == Kind::SetGameSpeed ||
+	       kind == Kind::RemoveTeleportStone || kind == Kind::MakeDance || kind == Kind::OpenMultiplayerBox ||
+	       kind == Kind::BuildWorshipSites || kind == Kind::ScriptBuildsWorshipSites || kind == Kind::PressPlainKey ||
+	       kind == Kind::PlainKeyDown || kind == Kind::PlainKeyRepeat || kind == Kind::PlainKeyUp ||
+	       kind == Kind::OtherGodHand || kind == Kind::ObserverCamera || kind == Kind::OwnGod || kind == Kind::JoinOnline ||
+	       kind == Kind::EndBox || kind == Kind::BringCreature || kind == Kind::TattooEditorAsNetworkGame ||
+	       kind == Kind::ShowDemoPing || kind == Kind::AddIncomingMessage || kind == Kind::Chat ||
+	       kind == Kind::ComputerPersonality || kind == Kind::ComputerUntaughtSends || kind == Kind::SkirmishBox ||
+	       kind == Kind::LookAtSaveGamePicture || kind == Kind::ZoomToTempleCaveTarget || kind == Kind::HandCastOnDispenser ||
+	       kind == Kind::HandCastOnCreature || kind == Kind::CloseHeldMiracle || kind == Kind::JoinFootball ||
+	       kind == Kind::GiveMagicTreesToStore || kind == Kind::HandCastAtPoint || IsPointerCommand(kind);
 }
 
 std::string_view testbed_scenarios::Name(Facet facet)
@@ -355,7 +355,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 243> k_Names {
+	constexpr std::array<std::string_view, 244> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -575,6 +575,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "a god orders its creature",
 	    "take a seed from its icon",
 	    "tap a worship site icon",
+	    "tap a stone hand of a village centre",
 	    "change the body's look",
 	    "tap the temple's entrance",
 	    "give a town of the land to the player",
