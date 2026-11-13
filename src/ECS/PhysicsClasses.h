@@ -74,7 +74,7 @@ struct ClassFacts
 	bool alwaysStays {false};
 	/// Thrown, it breaks buildings: rocks and the bowling ball
 	bool physicallyDestroysAbodes {false};
-	/// A standing tree, whose centre of mass is lower and whose spindle reaches below its base
+	/// A standing tree or a crop, whose centre of mass is lower and whose spindle reaches below its base
 	bool rooted {false};
 	/// The weight of a kind whose body has a weight of its own, whatever its size: buildings, the temple's heart and the
 	/// creature

@@ -9,13 +9,29 @@
 
 #pragma once
 
+#include <span>
+
 #include <entt/entity/entity.hpp>
 
 #include "Physics/ObjectRules.h"
 
+namespace openblack
+{
+namespace v120
+{
+struct InfoConstants;
+}
+using InfoConstants = v120::InfoConstants;
+} // namespace openblack
+
 namespace openblack::ecs
 {
 class Registry;
+}
+
+namespace openblack::ecs::components
+{
+struct ShownRoots;
 }
 
 /// The roots drawn under a tree that is out of the land: pulled at by the hand, held, carried off or moving in the
@@ -27,7 +43,11 @@ namespace openblack::ecs::tree_roots
 /// carries it; moving or still while it is in the physics; in the land otherwise
 [[nodiscard]] physics::objects::TreePlace PlaceOf(const Registry& registry, entt::entity tree);
 
-/// Has every tree out of the land drawn with its roots this frame, and no other, as each now is
-void Show(Registry& registry);
+/// Has every tree out of the land, and every crop that moves in the physics, drawn with its roots this frame, and no
+/// other, as each now is
+void Show(Registry& registry, const InfoConstants& info);
+/// The sizes of the roots that the draw gives a tree or a crop with shown roots
+[[nodiscard]] std::span<const float> ShownScales(const Registry& registry, entt::entity rooted,
+                                                 const components::ShownRoots& shown);
 
 } // namespace openblack::ecs::tree_roots

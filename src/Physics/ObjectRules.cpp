@@ -96,15 +96,24 @@ bool objects::RootsGone(float seconds)
 	return seconds > k_RootsLife;
 }
 
-std::span<const float> objects::ShownRootsScales(TreePlace place)
+std::span<const float> objects::ShownRootsScales(TreePlace place, RootedKind kind)
 {
 	static constexpr std::array k_OutOfTheLand {k_RootsScale};
 	static constexpr std::array k_Moving {k_RootsScale, k_MovingRootsScale};
+	static constexpr std::array k_CropMoving {k_MovingRootsScale};
 	switch (place)
 	{
 	case TreePlace::OutOfTheLand:
+		if (kind == RootedKind::Crop)
+		{
+			return {};
+		}
 		return k_OutOfTheLand;
 	case TreePlace::Moving:
+		if (kind == RootedKind::Crop)
+		{
+			return k_CropMoving;
+		}
 		return k_Moving;
 	case TreePlace::InTheLand:
 	case TreePlace::Still:

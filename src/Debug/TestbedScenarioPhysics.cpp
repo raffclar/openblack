@@ -796,6 +796,30 @@ void AddScriptMadeDeadTreeAndEyes(std::vector<Scenario>& all)
 	});
 }
 
+void AddCropFliesAsATree(std::vector<Scenario>& all)
+{
+	// A crop flies with the body of a standing tree, and shows roots while it moves. A barrel beside it flies as a plain
+	// thing, with no roots.
+	const glm::vec2 crop = k_Field + glm::vec2 {-4.0f, 0.0f};
+	const glm::vec2 barrel = k_Field + glm::vec2 {4.0f, 0.0f};
+	all.push_back({
+	    .id = "physics.crop_flies_as_a_tree",
+	    .name = "A crop flies as a rooted tree",
+	    .facet = Facet::Physics,
+	    .description = "A crop lies 4 metres west of the middle of the field, and a barrel lies 4 metres east of it. At "
+	                   "two seconds, and again every eight seconds, each is thrown up and to the east from 2 metres above "
+	                   "where it lies.",
+	    .expected = "While the crop moves, a small clump of roots shows at its base, and turns with it. The crop has the "
+	                "body of a standing tree: a spindle of the tree material, with its centre of mass low in it. It "
+	                "comes to rest on the land, and then it shows no roots. The barrel shows no roots at any time.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {k_Field.x, 6.0f, k_Field.y + 18.0f}, .look = {k_Field.x, 2.0f, k_Field.y}},
+	    .objects = {{.type = MobileObjectInfo::Crop, .offset = crop},
+	                {.type = MobileObjectInfo::EgyptBarrel, .offset = barrel}},
+	    .throws = {{.object = 0, .height = 2.0f, .velocity = {3.0f, 9.0f, 0.0f}, .delaySeconds = 2.0f, .repeatSeconds = 8.0f},
+	               {.object = 1, .height = 2.0f, .velocity = {3.0f, 9.0f, 0.0f}, .delaySeconds = 2.0f, .repeatSeconds = 8.0f}},
+	});
+}
 } // namespace
 
 void testbed_scenarios::AddPhysicsScenarios(std::vector<Scenario>& all)
@@ -819,4 +843,5 @@ void testbed_scenarios::AddPhysicsScenarios(std::vector<Scenario>& all)
 	AddPauseInFlight(all);
 	AddScriptMadeThingsOverRocks(all);
 	AddScriptMadeDeadTreeAndEyes(all);
+	AddCropFliesAsATree(all);
 }
