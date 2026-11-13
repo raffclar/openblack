@@ -107,7 +107,6 @@ FormTable::FormTable(std::span<const NativeSignature> natives, const std::multim
 		compiled.items = ParsePattern(form.pattern);
 		if (compiled.items.empty())
 		{
-			_rejected.emplace_back(form.pattern);
 			continue;
 		}
 		compiled.argumentCount = CountArguments(compiled.items);
@@ -125,7 +124,6 @@ FormTable::FormTable(std::span<const NativeSignature> natives, const std::multim
 		}
 		if (chosen == nullptr || chosen->params.size() < compiled.argumentCount)
 		{
-			_rejected.emplace_back(form.pattern);
 			continue;
 		}
 		compiled.signature = chosen;
