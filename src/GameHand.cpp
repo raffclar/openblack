@@ -158,6 +158,7 @@
 #include "Gestures/GestureTrailBuilder.h"
 #include "Graphics/FrameBuffer.h"
 #include "Gui/GameInterface.h"
+#include "Gui/HandToolTipRules.h"
 #include "Gui/HandToolTips.h"
 #include "Gui/MultiplayerFrontEnd.h"
 #include "Gui/ScreenFit.h"
@@ -700,8 +701,8 @@ void Game::ProcessHandToolTipTurn()
 		}
 	}
 	const auto pointed = Locator::pickingSystem::has_value() ? Locator::pickingSystem::value().GetPick().object : std::nullopt;
-	const bool shown =
-	    !Locator::gameInterface::value().IsDialogOpen() && Locator::cinematicDirectorSystem::value().IsInterfaceActive();
+	const bool shown = gui::hand_tooltip::OffersToolTips(Locator::gameInterface::value().FrontEndPointerOn(),
+	                                                     Locator::cinematicDirectorSystem::value().IsInterfaceActive());
 	if (shown)
 	{
 		SubmitHandToolTips(toolTips, pointed);

@@ -346,6 +346,15 @@ std::optional<bool> TestbedGameStage::IsHandShown() const
 	return game != nullptr ? std::optional(game->IsHandDrawn()) : std::nullopt;
 }
 
+std::optional<bool> TestbedGameStage::IsHandToolTipShown() const
+{
+	if (!Locator::gameInterface::has_value())
+	{
+		return std::nullopt;
+	}
+	return Locator::gameInterface::value().GetToolTips().GetShown().has_value();
+}
+
 void TestbedGameStage::CloseBoxes()
 {
 	if (Locator::gameInterface::has_value())

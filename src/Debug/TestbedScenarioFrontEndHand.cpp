@@ -36,6 +36,19 @@ checks::Check HandShownCheck(std::string_view label, bool shown, uint32_t afterT
 	        .atMost = shown ? 1.0 : 0.0};
 }
 
+/// A check that a quantity of 0 or 1 is 1, or is 0, from a turn until a later turn
+checks::Check OnOffCheck(std::string_view label, checks::Quantity quantity, bool on, uint32_t afterTurns, uint32_t byTurn,
+                         size_t index = 0)
+{
+	return {.label = label,
+	        .quantity = quantity,
+	        .index = index,
+	        .afterTurns = afterTurns,
+	        .byTurn = byTurn,
+	        .atLeast = on ? 1.0 : 0.0,
+	        .atMost = on ? 1.0 : 0.0};
+}
+
 } // namespace
 
 void testbed_scenarios::AddFrontEndHandScenarios(std::vector<Scenario>& all)
@@ -125,5 +138,48 @@ void testbed_scenarios::AddFrontEndHandScenarios(std::vector<Scenario>& all)
 	                 {.kind = Kind::EnterTemple, .delaySeconds = 1.0f, .value = 3},
 	                 {.kind = Kind::EnterTemple, .delaySeconds = 0.5f, .value = 6},
 	                 {.kind = Kind::LookAtSaveGamePicture, .delaySeconds = 4.0f, .value = 0}},
+	});
+	// The hand's tooltip while the pointer is on the incoming message. The hand is away and offers no tooltip, so the
+	// tooltip that it showed stays for its linger time, and then it goes.
+	all.push_back({
+	    .id = "hand.tooltip_goes_over_incoming_message",
+	    .name = "The hand's tooltip goes while the pointer is on the incoming message",
+	    .facet = Facet::Hand,
+	    .description = "The pointer rests in the middle of the screen, and the hand shows its tooltip. A message of the "
+	                   "real weather comes in after half a second. One second later the pointer goes onto its button at "
+	                   "the bottom left of the screen for six seconds. Then it goes back to the middle of the screen.",
+	    .expected = "While the pointer is on the button, the hand is away. Its tooltip stays at the place where the hand "
+	                "went away for a short time, and then it goes. In the middle of the screen the hand and its tooltip "
+	                "show again.",
+	    .framing = {.shot = Shot::Overview},
+	    .commands =
+	        {{.kind = Kind::PointerTo, .delaySeconds = 0.0f, .point = {0.5f, 0.5f}},
+	         {.kind = Kind::AddIncomingMessage, .delaySeconds = 0.5f, .value = 4, .action = "Guildford (Surrey,Great Britain)"},
+	         {.kind = Kind::PointerTo, .delaySeconds = 1.0f, .point = {0.01f, 0.98f}},
+	         {.kind = Kind::PointerTo, .delaySeconds = 6.0f, .point = {0.5f, 0.5f}}},
+	    .checks = {OnOffCheck("the hand shows a tooltip before the button", checks::Quantity::HandToolTipShown, true, 10, 14),
+	               OnOffCheck("the tooltip has gone on the button", checks::Quantity::HandToolTipShown, false, 70, 74),
+	               OnOffCheck("the tooltip shows again in the middle", checks::Quantity::HandToolTipShown, true, 80, 110)},
+	});
+	// A plain pot that holds nothing, such as a creature's handful from a field that it put down, is not drawn. The cursor
+	// picks only what the game draws, so it never points at such a pot or takes it.
+	all.push_back({
+	    .id = "hand.empty_handful_not_picked",
+	    .name = "The cursor does not pick an empty handful of wheat",
+	    .facet = Facet::Hand,
+	    .description = "Two handfuls of wheat lie on flat land, as a creature puts them down. The left one holds nothing, "
+	                   "the right one holds 300 food. The empty hand goes over the left one for four seconds, then over "
+	                   "the right one for four seconds.",
+	    .expected = "No pot shows at the left place, and the hand over it shows the tooltip of the land. The pot at the "
+	                "right place shows, and the hand over it offers to pick it up.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {-34.5f, 9.0f, 4.5f}, .look = {0.0f, 0.0f, 6.0f}},
+	    .objects = {{.type = PotInfo::WheatInHand, .offset = {0.0f, 0.0f}, .amount = 0},
+	                {.type = PotInfo::WheatInHand, .offset = {0.0f, 12.0f}, .amount = 300}},
+	    .commands = {{.kind = Kind::PointerOnObject, .delaySeconds = 2.0f, .object = 0, .amount = 0.3f},
+	                 {.kind = Kind::PointerOnObject, .delaySeconds = 4.0f, .object = 1, .amount = 0.3f},
+	                 {.kind = Kind::PointerTo, .delaySeconds = 4.0f, .point = {0.5f, 0.9f}}},
+	    .checks = {OnOffCheck("the cursor does not pick the empty handful", checks::Quantity::ObjectPicked, false, 30, 55, 0),
+	               OnOffCheck("the cursor picks the full handful", checks::Quantity::ObjectPicked, true, 70, 95, 1)},
 	});
 }
