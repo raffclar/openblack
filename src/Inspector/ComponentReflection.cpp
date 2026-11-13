@@ -30,7 +30,16 @@ using namespace openblack::inspector;
 namespace
 {
 
-Json AnyToJson(const entt::meta_any& any, int depth);
+/// How deep a value is in its component, and if the JSON keeps the fields that have a meaning only in one run
+struct Depth
+{
+	int level;
+	reflection::RunFields runFields;
+
+	[[nodiscard]] Depth Deeper() const { return {.level = level + 1, .runFields = runFields}; }
+};
+
+Json AnyToJson(const entt::meta_any& any, Depth depth);
 
 /// A registered field of a type by its name, and what is kept with it
 struct FoundField
@@ -71,7 +80,7 @@ using IndexNames = std::span<const std::span<const std::string_view>>;
 
 /// A list indexed by an enumeration as an object by its names, all of them (an enumeration is never long); its elements
 /// that are lists indexed by another as objects too
-Json NamedListToJson(const entt::meta_any& any, IndexNames names, int depth)
+Json NamedListToJson(const entt::meta_any& any, IndexNames names, Depth depth)
 {
 	auto list = any;
 	auto sequence = list.as_sequence_container();
@@ -85,7 +94,8 @@ Json NamedListToJson(const entt::meta_any& any, IndexNames names, int depth)
 	size_t index = 0;
 	for (auto element : sequence)
 	{
-		auto value = names.size() > 1 ? NamedListToJson(element, names.subspan(1), depth + 1) : AnyToJson(element, depth + 1);
+		auto value =
+		    names.size() > 1 ? NamedListToJson(element, names.subspan(1), depth.Deeper()) : AnyToJson(element, depth.Deeper());
 		if (level.empty())
 		{
 			written.push_back(std::move(value));
@@ -100,7 +110,7 @@ Json NamedListToJson(const entt::meta_any& any, IndexNames names, int depth)
 }
 
 /// A value with the index names of the lists it is, from its field: written by them, else as it is
-Json ValueToJson(const entt::meta_any& value, IndexNames names, int depth)
+Json ValueToJson(const entt::meta_any& value, IndexNames names, Depth depth)
 {
 	if (!names.empty() && std::ranges::any_of(names, [](const auto& level) { return !level.empty(); }))
 	{
@@ -109,12 +119,13 @@ Json ValueToJson(const entt::meta_any& value, IndexNames names, int depth)
 	return AnyToJson(value, depth);
 }
 
-Json FieldValueToJson(const entt::meta_data& data, const reflection::FieldInfo* info, const entt::meta_any& instance, int depth)
+Json FieldValueToJson(const entt::meta_data& data, const reflection::FieldInfo* info, const entt::meta_any& instance,
+                      Depth depth)
 {
 	const auto value = data.get(instance);
 	if (info != nullptr && !info->indexNames.empty())
 	{
-		return ValueToJson(value, info->indexNames, depth + 1);
+		return ValueToJson(value, info->indexNames, depth.Deeper());
 	}
 	if (info != nullptr && info->encode != nullptr)
 	{
@@ -123,7 +134,7 @@ Json FieldValueToJson(const entt::meta_data& data, const reflection::FieldInfo* 
 			return *std::move(encoded);
 		}
 	}
-	return AnyToJson(value, depth + 1);
+	return AnyToJson(value, depth.Deeper());
 }
 
 /// An element's place in a list by its number, or by its name in the enumeration indexing the list
@@ -160,12 +171,16 @@ std::string NotAnElement(std::string_view list, std::string_view segment, size_t
 	return why;
 }
 
-Json FieldsToJson(const entt::meta_any& any, int depth)
+Json FieldsToJson(const entt::meta_any& any, Depth depth)
 {
 	Json object = Json::object();
 	for (const auto& [id, data] : any.type().data())
 	{
 		const reflection::FieldInfo* info = data.custom();
+		if (info != nullptr && info->runOnly && depth.runFields == reflection::RunFields::Leave)
+		{
+			continue;
+		}
 		const auto key = info != nullptr ? info->name : std::to_string(id);
 		object[key] = FieldValueToJson(data, info, any, depth);
 	}
@@ -205,7 +220,7 @@ std::optional<std::string> KeyOf(const Json& key)
 	return std::nullopt;
 }
 
-Json AnyToJson(const entt::meta_any& any, int depth)
+Json AnyToJson(const entt::meta_any& any, Depth depth)
 {
 	if (!any)
 	{
@@ -234,7 +249,7 @@ Json AnyToJson(const entt::meta_any& any, int depth)
 		const auto held = value->unwrap(option);
 		return held ? AnyToJson(held, depth) : Json(nullptr);
 	}
-	if (depth >= reflection::k_DeepestNesting)
+	if (depth.level >= reflection::k_DeepestNesting)
 	{
 		return "...";
 	}
@@ -252,7 +267,7 @@ Json AnyToJson(const entt::meta_any& any, int depth)
 			{
 				break;
 			}
-			array.push_back(AnyToJson(element, depth + 1));
+			array.push_back(AnyToJson(element, depth.Deeper()));
 		}
 		if (sequence.size() <= reflection::k_MostElements)
 		{
@@ -274,8 +289,8 @@ Json AnyToJson(const entt::meta_any& any, int depth)
 			{
 				break;
 			}
-			auto keyJson = AnyToJson(key, depth + 1);
-			auto valueJson = value ? AnyToJson(value, depth + 1) : Json();
+			auto keyJson = AnyToJson(key, depth.Deeper());
+			auto valueJson = value ? AnyToJson(value, depth.Deeper()) : Json();
 			const auto name = value ? KeyOf(keyJson) : std::nullopt;
 			byName = byName && name.has_value();
 			if (name.has_value())
@@ -504,8 +519,10 @@ std::optional<Place> Reach(Place place, std::string_view path, std::string& why)
 
 } // namespace
 
-Json reflection::ComponentToJson(const entt::meta_ctx& context, const entt::type_info& info, const void* component)
+Json reflection::ComponentToJson(const entt::meta_ctx& context, const entt::type_info& info, const void* component,
+                                 RunFields runFields)
 {
+	const Depth top {.level = 0, .runFields = runFields};
 	const auto type = entt::resolve(context, info);
 	if (!type || component == nullptr)
 	{
@@ -514,9 +531,9 @@ Json reflection::ComponentToJson(const entt::meta_ctx& context, const entt::type
 	if (type.data().begin() == type.data().end())
 	{
 		// A component that is one number or one enumeration has no fields: it is written as that value
-		return type.is_enum() || type.is_arithmetic() ? AnyToJson(type.from_void(component), 0) : Json(nullptr);
+		return type.is_enum() || type.is_arithmetic() ? AnyToJson(type.from_void(component), top) : Json(nullptr);
 	}
-	return FieldsToJson(type.from_void(component), 0);
+	return FieldsToJson(type.from_void(component), top);
 }
 
 std::optional<Json> reflection::ReadField(const entt::meta_ctx& context, const entt::type_info& info, const void* component,
@@ -546,14 +563,14 @@ std::optional<Json> reflection::ReadField(const entt::meta_ctx& context, const e
 			why = "no field " + std::string(path);
 			return std::nullopt;
 		}
-		return FieldValueToJson(field->data, field->info, instance, 0);
+		return FieldValueToJson(field->data, field->info, instance, {.level = 0, .runFields = RunFields::Keep});
 	}
 	const auto found = Reach({.value = type.from_void(component)}, path, why);
 	if (!found.has_value())
 	{
 		return std::nullopt;
 	}
-	return ValueToJson(found->value, found->names, 1);
+	return ValueToJson(found->value, found->names, {.level = 1, .runFields = RunFields::Keep});
 }
 
 std::string reflection::SetField(const entt::meta_ctx& context, const entt::type_info& info, void* component,

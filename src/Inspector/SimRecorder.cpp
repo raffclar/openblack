@@ -1215,7 +1215,8 @@ Json SimProvider::CreatureRecord(uint32_t turn, bool track, std::vector<sim_chec
 		return creature;
 	}
 	std::map<std::string, size_t, std::less<>> lists;
-	// The hash of all the fields, to compare two runs
+	// The hash of all the fields, to compare two runs. A field that has a meaning only in one run, such as a place in a
+	// store of the renderer, stays out of the hash.
 	uint64_t stateHash = k_HashOffset;
 	for (const auto& [id, storage] : registry.Underlying().storage())
 	{
@@ -1228,7 +1229,7 @@ Json SimProvider::CreatureRecord(uint32_t turn, bool track, std::vector<sim_chec
 		{
 			continue;
 		}
-		const auto fields = reflection::ComponentToJson(_context, type, storage.value(*entity));
+		const auto fields = reflection::ComponentToJson(_context, type, storage.value(*entity), reflection::RunFields::Leave);
 		const auto text = Dump(fields);
 		Mix(stateHash, text.data(), text.size());
 		Walk(fields, std::string(reflection::ShortTypeName(type)), turn, flags, lists);
