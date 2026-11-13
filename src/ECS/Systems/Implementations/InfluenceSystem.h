@@ -46,6 +46,8 @@ public:
 
 	using InfluenceSystemInterface::PlayerInfluence;
 	[[nodiscard]] float PlayerInfluence(PlayerNames player, const map_coords::MapCoords& position) const override;
+	[[nodiscard]] std::array<float, player_slots::k_PlayerNumbers>
+	PlayerInfluences(const map_coords::MapCoords& position) const override;
 	[[nodiscard]] float PlayerOwnInfluence(PlayerNames player, const map_coords::MapCoords& position) const override;
 	[[nodiscard]] float HandPointInfluence(PlayerNames player, const map_coords::MapCoords& hand) const override;
 	using InfluenceSystemInterface::PlayerRawInfluence;
@@ -85,6 +87,19 @@ private:
 	void ProcessVirtualInfluence(entt::entity playerEntity, PlayerNames player, glm::vec3 hand, uint32_t turn);
 	/// The own influence of a player at a place, or where it is none or less, the influence that an ally lends there
 	[[nodiscard]] float WithAllies(PlayerNames player, const map_coords::MapCoords& position, float own) const;
+	/// The own influence of each player at a place without what their hands keep, and whether a shield or an
+	/// anti-influence keeps each player out of the place, by player number
+	struct NearInfluence
+	{
+		std::array<float, k_Players> raw {};
+		std::array<bool, k_Players> keptOut {};
+	};
+	[[nodiscard]] static NearInfluence RawInfluences(const map_coords::MapCoords& position);
+	/// What the hand of a player keeps of their influence at a place, if it keeps some there. The state is what the hand
+	/// keeps, none for a player with no hand. The hand keeps nothing at a place that the player is kept out of. With no
+	/// answer for that, the system finds it.
+	[[nodiscard]] std::optional<float> HandGrant(PlayerNames player, const map_coords::MapCoords& position,
+	                                             const virtual_influence::State* state, std::optional<bool> keptOut) const;
 	/// Whether every player's influence covers the whole land now
 	[[nodiscard]] static bool InfluenceEverywhere();
 	/// What a player's hand keeps of their influence past the border, if they have a hand

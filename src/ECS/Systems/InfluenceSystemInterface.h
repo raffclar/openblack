@@ -10,6 +10,7 @@
 #pragma once
 
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <optional>
 #include <span>
@@ -22,6 +23,7 @@
 #include "3D/MapCoords.h"
 #include "ECS/Systems/SavedStateInterface.h"
 #include "Enums.h"
+#include "PlayerSlots.h"
 
 namespace openblack::ecs::systems
 {
@@ -146,6 +148,17 @@ public:
 	/// influence (see PlayerOwnInfluence). Where that is none or less, it is the own influence of the first ally, in the
 	/// order of the player numbers, that lends its influence to the player and has some there, else none.
 	[[nodiscard]] virtual float PlayerInfluence(PlayerNames player, const map_coords::MapCoords& position) const = 0;
+	/// How much a place is in the influence of each player, by player number, as PlayerInfluence gives it
+	[[nodiscard]] virtual std::array<float, player_slots::k_PlayerNumbers>
+	PlayerInfluences(const map_coords::MapCoords& position) const
+	{
+		std::array<float, player_slots::k_PlayerNumbers> influences {};
+		for (size_t index = 0; index < influences.size(); ++index)
+		{
+			influences.at(index) = PlayerInfluence(static_cast<PlayerNames>(index), position);
+		}
+		return influences;
+	}
 	/// How much a place is in a player's influence without the influence of allies. Near their hand it is what the hand
 	/// keeps of their influence past the border, while it keeps any (see virtual_influence::Grant): the questions of a
 	/// game turn measure from where the hand was at the turn, those asked between turns from where this computer's hand

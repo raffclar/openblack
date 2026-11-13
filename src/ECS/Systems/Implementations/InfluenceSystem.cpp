@@ -14,6 +14,7 @@
 #include <cmath>
 
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <iterator>
 #include <optional>
@@ -895,45 +896,137 @@ bool InfluenceSystem::InfluenceEverywhere()
 	return Locator::playgroundTripSystem::has_value() && Locator::playgroundTripSystem::value().InfluenceEverywhere();
 }
 
-float InfluenceSystem::PlayerInfluence(PlayerNames player, const map_coords::MapCoords& position) const
+namespace
 {
-	return WithAllies(player, position, PlayerOwnInfluence(player, position));
-}
 
-float InfluenceSystem::WithAllies(PlayerNames player, const map_coords::MapCoords& position, float own) const
+/// The alliances of a player: those of the first entity of the player that has alliances, or none
+const PlayerAllies* AlliesOf(PlayerNames player)
 {
-	if (own > 0.0f)
-	{
-		return own;
-	}
-	// The first ally, in the order of the numbers, that lends its influence and has some of its own there lends it.
-	// Without one the answer is none, also where the player's own is below none.
-	const auto& registry = Locator::entitiesRegistry::value();
-	const components::PlayerAllies* allies = nullptr;
-	registry.Each<const components::Player, const components::PlayerAllies>(
-	    [player, &allies](const components::Player& owner, const components::PlayerAllies& found) {
+	const PlayerAllies* allies = nullptr;
+	Locator::entitiesRegistry::value().Each<const Player, const PlayerAllies>(
+	    [player, &allies](const Player& owner, const PlayerAllies& found) {
 		    if (owner.name == player && allies == nullptr)
 		    {
 			    allies = &found;
 		    }
 	    });
+	return allies;
+}
+
+/// The influence that the allies of a player lend at a place. The first ally, in the order of the numbers, that lends
+/// its influence and has some of its own there lends it. Without one the answer is none.
+template <typename RawOf>
+float LentByAllies(const PlayerAllies* allies, const RawOf& rawOf)
+{
 	if (allies == nullptr)
 	{
 		return 0.0f;
 	}
-	for (const auto ally : game_players::All())
+	for (const auto ally : ecs::game_players::All())
 	{
 		const auto index = static_cast<size_t>(ally);
 		if (index >= allies->strength.size() || !player_relations::LendsInfluence(allies->strength.at(index)))
 		{
 			continue;
 		}
-		if (const float lent = PlayerRawInfluence(ally, position); lent > 0.0f)
+		if (const float lent = rawOf(ally); lent > 0.0f)
 		{
 			return lent;
 		}
 	}
 	return 0.0f;
+}
+
+} // namespace
+
+float InfluenceSystem::PlayerInfluence(PlayerNames player, const map_coords::MapCoords& position) const
+{
+	return WithAllies(player, position, PlayerOwnInfluence(player, position));
+}
+
+std::array<float, player_slots::k_PlayerNumbers> InfluenceSystem::PlayerInfluences(const map_coords::MapCoords& position) const
+{
+	// One pass over the sources of all players gives the same values as a question for each player
+	const auto near = RawInfluences(position);
+	const bool everywhere = InfluenceEverywhere();
+	// The entity of each player (the last one, as VirtualStateOf finds it) and its alliances (the first, as AlliesOf
+	// finds them), each from one pass over the players
+	const auto& registry = Locator::entitiesRegistry::value();
+	std::array<std::optional<entt::entity>, k_Players> entities {};
+	registry.Each<const Player>([&entities](entt::entity entity, const Player& each) {
+		if (const auto index = static_cast<size_t>(each.name); index < k_Players)
+		{
+			entities.at(index) = entity;
+		}
+	});
+	std::array<const PlayerAllies*, k_Players> allies {};
+	registry.Each<const Player, const PlayerAllies>([&allies](const Player& owner, const PlayerAllies& found) {
+		if (const auto index = static_cast<size_t>(owner.name); index < k_Players && allies.at(index) == nullptr)
+		{
+			allies.at(index) = &found;
+		}
+	});
+	const auto rawOf = [&](PlayerNames ally) {
+		const auto allyIndex = static_cast<size_t>(ally);
+		return allyIndex < k_Players ? near.raw.at(allyIndex) : PlayerRawInfluence(ally, position);
+	};
+	std::array<float, k_Players> influences {};
+	for (const auto player : game_players::All())
+	{
+		const auto index = static_cast<size_t>(player);
+		if (index >= k_Players)
+		{
+			continue;
+		}
+		float own = 1.0f;
+		if (!everywhere)
+		{
+			const auto* virtualInfluence =
+			    entities.at(index).has_value() ? registry.TryGet<const VirtualInfluence>(*entities.at(index)) : nullptr;
+			const auto* state = virtualInfluence != nullptr ? &virtualInfluence->state : nullptr;
+			own = HandGrant(player, position, state, near.keptOut.at(index)).value_or(near.raw.at(index));
+		}
+		influences.at(index) = own > 0.0f ? own : LentByAllies(allies.at(index), rawOf);
+	}
+	return influences;
+}
+
+float InfluenceSystem::WithAllies(PlayerNames player, const map_coords::MapCoords& position, float own) const
+{
+	// Where the player's own influence is none or less, an ally can lend its influence
+	if (own > 0.0f)
+	{
+		return own;
+	}
+	return LentByAllies(AlliesOf(player), [this, &position](PlayerNames ally) { return PlayerRawInfluence(ally, position); });
+}
+
+std::optional<float> InfluenceSystem::HandGrant(PlayerNames player, const map_coords::MapCoords& position,
+                                                const virtual_influence::State* state, std::optional<bool> keptOut) const
+{
+	if (state == nullptr)
+	{
+		return std::nullopt;
+	}
+	// The questions of a game turn measure from where the hand was at the turn; between turns this computer's player's
+	// are measured from where their hand is now
+	auto hand = state->turnHand;
+	if (!_inGameTurn && player == OwnPlayer())
+	{
+		if (const auto live = HandPosition(); live.has_value())
+		{
+			hand = live;
+		}
+	}
+	if (!hand.has_value())
+	{
+		return std::nullopt;
+	}
+	if (keptOut.has_value() ? *keptOut : InAntiInfluence(player, position))
+	{
+		return std::nullopt;
+	}
+	return virtual_influence::Grant(*state, map_coords::FromMetres({hand->x, hand->z}), position);
 }
 
 float InfluenceSystem::PlayerOwnInfluence(PlayerNames player, const map_coords::MapCoords& position) const
@@ -942,28 +1035,117 @@ float InfluenceSystem::PlayerOwnInfluence(PlayerNames player, const map_coords::
 	{
 		return 1.0f;
 	}
-	if (const auto* state = VirtualStateOf(player); state != nullptr)
+	if (const auto granted = HandGrant(player, position, VirtualStateOf(player), std::nullopt); granted.has_value())
 	{
-		// The questions of a game turn measure from where the hand was at the turn; between turns this computer's
-		// player's are measured from where their hand is now
-		auto hand = state->turnHand;
-		if (!_inGameTurn && player == OwnPlayer())
-		{
-			if (const auto live = HandPosition(); live.has_value())
-			{
-				hand = live;
-			}
-		}
-		if (hand.has_value() && !InAntiInfluence(player, position))
-		{
-			if (const auto granted = virtual_influence::Grant(*state, map_coords::FromMetres({hand->x, hand->z}), position);
-			    granted.has_value())
-			{
-				return *granted;
-			}
-		}
+		return *granted;
 	}
 	return PlayerRawInfluence(player, position);
+}
+
+InfluenceSystem::NearInfluence InfluenceSystem::RawInfluences(const map_coords::MapCoords& position)
+{
+	// The same rules as PlayerRawInfluence, with each source measured once for all players
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto distanceTo = [&position](const glm::vec3& point) {
+		return gutils::GetDistanceInMetres(map_coords::FromMetres({point.x, point.z}), position);
+	};
+	NearInfluence near {};
+	const auto players = game_players::All();
+	const auto citadels = Citadels();
+	const bool network = Locator::time::has_value() && Locator::time::value().IsNetworkGame() &&
+	                     !(Locator::landSystem::has_value() && Locator::landSystem::value().OnTestbed());
+	const bool everywhere = InfluenceEverywhere();
+	const bool insideFence = !Locator::cameraZoneSystem::has_value() || [&position]() {
+		const auto& zones = Locator::cameraZoneSystem::value().GetZones();
+		const auto metres = map_coords::ToMetres(position);
+		return camera_zones::ScriptInfluenceCounts(zones.fence, zones.fenceOn, glm::vec3(metres.x, 0.0f, metres.y));
+	}();
+
+	// The shields that the place is in, by their owners. A place at the edge of a shield is in it.
+	std::vector<PlayerNames> shieldOwners;
+	registry.Each<const AntiInfluence, const Transform>([&](const AntiInfluence& ring, const Transform& transform) {
+		if (distanceTo(transform.position) <= ring.radius)
+		{
+			shieldOwners.push_back(ring.owner);
+		}
+	});
+	// The anti-influences that a script made, which keep their player out up to and at their edge, and the influence of
+	// each other source, in the order of the sources
+	std::array<bool, k_Players> anti {};
+	std::vector<std::pair<size_t, float>> sourceInfluence;
+	const auto range = Locator::infoConstants::has_value() ? Locator::infoConstants::value().influence : GInfluenceInfo {};
+	registry.Each<const InfluenceSource, const Transform>([&](const InfluenceSource& source, const Transform& transform) {
+		const auto index = static_cast<size_t>(source.player);
+		if (index >= k_Players)
+		{
+			return;
+		}
+		const float distance = distanceTo(SourcePosition(registry, source, transform));
+		if (source.anti)
+		{
+			anti.at(index) = anti.at(index) || distance <= source.radius;
+			return;
+		}
+		sourceInfluence.emplace_back(index,
+		                             influence::OnRange(distance, source.radius, range.percentageFullInfluence,
+		                                                range.percentageDistanceForDecreasingGradient, range.valueOfSmall));
+	});
+	// The towns that reach the place, in the order of each player's town list
+	std::array<std::vector<openblack::influence_rules::ReachingTown>, k_Players> reaching;
+	registry.Each<const Town, const TownInfluence, const Transform>(
+	    [&](const Town& town, const TownInfluence& influence, const Transform& transform) {
+		    const auto index = static_cast<size_t>(town.owner);
+		    if (index < k_Players && distanceTo(transform.position) < influence.radius)
+		    {
+			    reaching.at(index).push_back({.gained = town.gained, .radius = influence.radius});
+		    }
+	    });
+
+	for (const auto player : players)
+	{
+		const auto index = static_cast<size_t>(player);
+		if (index >= k_Players)
+		{
+			continue;
+		}
+		const bool shielded = std::ranges::any_of(shieldOwners, [player](PlayerNames owner) { return owner != player; });
+		near.keptOut.at(index) = shielded || anti.at(index);
+		const auto citadel = citadels.at(index);
+		const bool hasTemple = citadel != entt::null;
+		if (!openblack::influence_rules::CanHaveInfluence(network, hasTemple))
+		{
+			continue;
+		}
+		if (everywhere)
+		{
+			near.raw.at(index) = 1.0f;
+			continue;
+		}
+		if (shielded || !insideFence || anti.at(index))
+		{
+			continue;
+		}
+		float sum = 0.0f;
+		if (hasTemple)
+		{
+			const float reach = CitadelReach(citadel);
+			if (const auto* transform = registry.TryGet<const Transform>(citadel);
+			    transform != nullptr && distanceTo(transform->position) < reach)
+			{
+				sum = reach;
+			}
+		}
+		sum = openblack::influence_rules::AddReachingTowns(sum, reaching.at(index));
+		for (const auto& [owner, value] : sourceInfluence)
+		{
+			if (owner == index)
+			{
+				sum += value;
+			}
+		}
+		near.raw.at(index) = std::clamp(sum, -1.0f, 1.0f);
+	}
+	return near;
 }
 
 float InfluenceSystem::HandPointInfluence(PlayerNames player, const map_coords::MapCoords& hand) const
