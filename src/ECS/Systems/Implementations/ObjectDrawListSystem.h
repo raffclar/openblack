@@ -64,6 +64,9 @@ public:
 	void Reset() override;
 
 private:
+	/// The numbers of the sets of triangles: each mesh, each set of coarser sides and each open-sea rule
+	static constexpr size_t k_TriangleSetCount = 3 * 16 * 2;
+
 	struct LandBlock
 	{
 		object_draw_list::Block block;
@@ -79,6 +82,8 @@ private:
 		/// Its triangles for each mesh, set of coarser sides and open-sea rule that the land drew it with, three corner
 		/// indices each, by the number of the set (see TrianglesOf)
 		std::vector<std::pair<uint16_t, std::vector<uint16_t>>> triangleSets;
+		/// The place in triangleSets of each set by its number, counted from 1. Zero means that the set is not there yet.
+		std::array<uint8_t, k_TriangleSetCount> setPlaces {};
 	};
 
 	/// The land's blocks as the list sees them, read once a land

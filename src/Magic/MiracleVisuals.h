@@ -9,9 +9,12 @@
 
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 
+#include <array>
 #include <optional>
+#include <span>
 #include <vector>
 
 #include <glm/mat3x3.hpp>
@@ -120,7 +123,18 @@ struct PhialDraw
 	/// colour added, as a phial shrinking or growing is
 	bool landLit;
 };
-[[nodiscard]] std::vector<PhialDraw> PhialDraws(int receiveType, float phase, float pulse, uint8_t globeAlpha);
+/// The one or two draws of a phial, in an array of fixed size
+struct PhialDrawList
+{
+	std::array<PhialDraw, 2> draws {};
+	size_t count {0};
+
+	[[nodiscard]] size_t size() const { return count; }
+	[[nodiscard]] const PhialDraw& operator[](size_t index) const { return draws.at(index); }
+	[[nodiscard]] const PhialDraw& back() const { return draws.at(count - 1); }
+	[[nodiscard]] std::span<const PhialDraw> All() const { return std::span(draws).first(count); }
+};
+[[nodiscard]] PhialDrawList PhialDraws(int receiveType, float phase, float pulse, uint8_t globeAlpha);
 /// The size of a phial in its last draw, of its own size: the growing copy of the one kind that draws two phials, else the
 /// full phial
 [[nodiscard]] float PhialLastDrawSize(int receiveType, float phase);

@@ -152,10 +152,9 @@ void Renderer::DrawSeedModel(const DrawSceneDesc& desc, const SeedModelDraw& sho
 		// alpha that it is drawn at. A phial is lit and faded in the same way when it is drawn at once.
 		const uint8_t seedAlpha = shown.unlitWhite ? shown.phialAlpha : std::numeric_limits<uint8_t>::max();
 		const std::array<visuals::PhialDraw, 1> wholeDraw {{{.size = 1.0f, .alpha = seedAlpha, .landLit = !shown.unlitWhite}}};
-		const auto phialDraws = phial ? visuals::PhialDraws(receiveType, shown.phialPhase, pulse, shown.phialAlpha)
-		                              : std::vector<visuals::PhialDraw> {};
-		const auto draws =
-		    phial ? std::span<const visuals::PhialDraw>(phialDraws) : std::span<const visuals::PhialDraw>(wholeDraw);
+		const auto phialDraws =
+		    phial ? visuals::PhialDraws(receiveType, shown.phialPhase, pulse, shown.phialAlpha) : visuals::PhialDrawList {};
+		const auto draws = phial ? phialDraws.All() : std::span<const visuals::PhialDraw>(wholeDraw);
 		const auto shape = phial ? visuals::PhialScale(receiveType, shown.phialPhase) : glm::vec3(1.0f);
 		const bool environmentMapped = environment != nullptr && (phial || shown.seed == SpellSeedType::Food);
 		const bool added = shown.seed == k_AddedSeed;
@@ -167,7 +166,7 @@ void Renderer::DrawSeedModel(const DrawSceneDesc& desc, const SeedModelDraw& sho
 		const bool testsView = seenBy != nullptr && !mesh->IsBoned();
 		const bool sortedWhole = object_draw::SortedWhole(mesh->GetFlags());
 		const float halfDiagonal = mesh_detail::HalfDiagonal(box.Size());
-		const auto forward = desc.camera->GetForward();
+		const auto forward = looks != nullptr && looks->forward.has_value() ? *looks->forward : desc.camera->GetForward();
 		const float modelDetail = Locator::config::value().detail.modelDetail;
 		for (size_t index = 0; index < draws.size(); ++index)
 		{
@@ -487,6 +486,7 @@ void Renderer::DrawIconSeeds(const DrawSceneDesc& desc) const
 		float alignment;
 	};
 	std::vector<Icon> icons;
+	icons.reserve(registry.Size<IconSeed>());
 	const auto& info = Locator::infoConstants::value();
 	// The alignment of each player is found once for all of its icons, kept by the number of the player
 	std::array<std::optional<float>, std::numeric_limits<std::underlying_type_t<PlayerNames>>::max() + 1> alignments {};
@@ -521,7 +521,9 @@ void Renderer::DrawIconSeeds(const DrawSceneDesc& desc) const
 	static_cast<void>(textures.Find(entt::hashed_string("raw/envmap").value()));
 	static_cast<void>(textures.Find(entt::hashed_string("raw/S_IceEnvMap").value()));
 	const auto* ring = haveRing ? meshes.Find(ecs::components::OneOffSpellSeed::k_RingMeshId.value()) : nullptr;
-	const auto looks = FindSeedModelLooks();
+	// The camera does not move during the pass, so each seed takes the same forward direction
+	auto looks = FindSeedModelLooks();
+	looks.forward = desc.camera->GetForward();
 	EncodeInOrder(icons.size(), [&](size_t index, DrawEncoder& to) {
 		const auto& [shown, player, alignment] = icons[index];
 		DrawSeedModel(desc,
