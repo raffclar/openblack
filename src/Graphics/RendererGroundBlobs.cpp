@@ -210,13 +210,12 @@ void Renderer::DrawGroundBlobs(const DrawSceneDesc& desc) const
 	        const ecs::components::Mesh& mesh) {
 		    // A villager in a creature's hand is where the frame draws the hand
 		    const auto transform = drawnPlaces.Of(entity, placed);
-		    const auto* bodyMesh = transform.position.y > ground_blobs::k_LowestHeight ? meshes.Find(mesh.id) : nullptr;
-		    if (bodyMesh == nullptr || isFar(entity))
+		    if (transform.position.y <= ground_blobs::k_LowestHeight || !meshes.Contains(mesh.id) || isFar(entity))
 		    {
 			    return;
 		    }
 		    // From the feet as they are drawn this frame, in the pose of its clip
-		    const auto& rest = bodyMesh->GetBoneMatrices();
+		    const auto& rest = meshes.Handle(mesh.id)->GetBoneMatrices();
 		    const auto* pose = desc.entities.TryGet<const ecs::components::VillagerPose>(entity);
 		    const auto bones = ground_blobs::FootBones(
 		        pose != nullptr ? std::span<const glm::mat4>(pose->bones) : std::span<const glm::mat4> {}, rest);
