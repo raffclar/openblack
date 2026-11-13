@@ -526,3 +526,11 @@ std::optional<Plan> creature_planner::Choose(const PlannerState& state)
 	const auto current = state.current.has_value() ? state.current->priority : 0.0f;
 	return ShouldSwitch(best->priority, current) ? best : std::nullopt;
 }
+
+void creature_planner::NoPlanRuns(PlannerState& state)
+{
+	if (state.current.has_value())
+	{
+		state.current->priority = 0.0f;
+	}
+}

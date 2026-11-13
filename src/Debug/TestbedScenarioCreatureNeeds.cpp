@@ -562,6 +562,29 @@ void testbed_scenarios::AddNeeds(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "needs.eats_after_faint",
+	    .name = "A hungry creature eats after it gets up from a faint",
+	    .facet = Facet::Needs,
+	    .description = "A hungry player's tiger with a pot of food on the land in front of it. Half a second in, it is "
+	                   "knocked out as a fight's loser is.",
+	    .expected = "The tiger falls down and lies out cold. It is taken home and lies there for a short time. When it "
+	                "gets up, it chooses a new plan: it walks to the food and eats it, and its energy fills up. It does "
+	                "not stand with no plan until it faints again.",
+	    .framing = {.shot = Shot::Overview},
+	    .creatures = {CreatureSetup {
+	        .species = CreatureType::Tiger,
+	        .needs = {.energy = 0.3f, .dehydration = 0.0f, .poo = 0.0f},
+	        .desires = {{.desire = Desire::Hunger, .fraction = 0.9f}},
+	    }},
+	    .objects = {{.type = PotInfo::FoodPot, .offset = {0.0f, -50.0f}, .amount = 400}},
+	    .commands = {Act(Kind::KnockOut, 0, 0.5f)},
+	    .checks = {{.label = "it ate after it got up",
+	                .quantity = checks::Quantity::CreatureEnergy,
+	                .afterTurns = 1500,
+	                .atLeast = 0.5}},
+	});
+
+	all.push_back({
 	    .id = "needs.fart_by_hut",
 	    .name = "Creature poos or farts by a hut",
 	    .facet = Facet::Needs,
