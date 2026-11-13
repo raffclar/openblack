@@ -145,17 +145,23 @@ bool MusicStreamBackend::QueueDecoded(StreamState& state, DecodedChunk decoded)
 	return true;
 }
 
-void MusicStreamBackend::QueueFinishedDecodes(StreamState& state)
+size_t MusicStreamBackend::QueueFinishedDecodes(StreamState& state)
 {
+	size_t queued = 0;
 	while (!state.decoding.empty() && state.decoding.front().wait_for(std::chrono::seconds(0)) == std::future_status::ready)
 	{
 		auto decoded = state.decoding.front().get();
 		state.decoding.pop_front();
-		if (!QueueDecoded(state, std::move(decoded)))
+		if (QueueDecoded(state, std::move(decoded)))
+		{
+			++queued;
+		}
+		else
 		{
 			++state.failed;
 		}
 	}
+	return queued;
 }
 
 bool MusicStreamBackend::QueueChunk(Stream stream, const MusicBank& bank, uint32_t chunk, uint32_t skipFrames)
@@ -210,11 +216,23 @@ uint32_t MusicStreamBackend::ReleasePlayedChunks(Stream stream)
 		return 0;
 	}
 	auto& state = found->second;
-	QueueFinishedDecodes(state);
+	const auto added = QueueFinishedDecodes(state);
 	std::erase_if(_abandoned, [](const std::shared_future<DecodedChunk>& decode) {
 		return decode.wait_for(std::chrono::seconds(0)) == std::future_status::ready;
 	});
-	const auto played = _player.UnqueueProcessedBuffers(state.source);
+	auto played = _player.UnqueueProcessedBuffers(state.source);
+
+	// A source that played all of its buffers before the next chunks came has stopped. A stopped source gives all of
+	// its buffers as played, also the buffers that it got after it stopped. These buffers are the last ones that it
+	// gives. Put them back on the source and start it again, so that the music continues from them. If the source
+	// played on, it took the new buffers after the old ones and did not stop.
+	std::vector<BufferId> unheard;
+	if (added > 0 && _player.GetStatus(state.source) == AudioStatus::Stopped)
+	{
+		const auto count = std::min(added, played.size());
+		unheard.assign(played.end() - static_cast<std::ptrdiff_t>(count), played.end());
+		played.resize(played.size() - count);
+	}
 	for (const auto buffer : played)
 	{
 		_player.DeleteBuffer(buffer);
@@ -222,6 +240,19 @@ uint32_t MusicStreamBackend::ReleasePlayedChunks(Stream stream)
 		{
 			state.buffers.pop_front();
 		}
+	}
+	if (!unheard.empty())
+	{
+		for (const auto buffer : unheard)
+		{
+			_player.QueueBuffer(state.source, buffer);
+		}
+		if (const auto logger = spdlog::get("audio"); logger != nullptr)
+		{
+			SPDLOG_LOGGER_DEBUG(logger, "Music stream {} ran out of chunks and starts again", stream);
+		}
+		_player.SetVolume(state.source, state.volume * _outputVolume);
+		_player.StartSource(state.source);
 	}
 	// A chunk that could not be decoded counts as played, so that the player stops to wait for it
 	const auto failed = std::exchange(state.failed, 0u);
