@@ -333,6 +333,23 @@ TEST_F(PhysicsClassesTest, TheEyesAreACreedThatNeverFliesAndACropIsNotHit)
 	EXPECT_FALSE(crop.interacts);
 }
 
+TEST_F(PhysicsClassesTest, ACropFliesAsARootedTree)
+{
+	_info->mobileObject.at(static_cast<size_t>(MobileObjectInfo::Crop)).mobileType = MobileObjectInfo::Crop;
+	const auto crop = _registry.Create();
+	_registry.Assign<MobileObject>(crop, MobileObjectInfo::Crop);
+	// The crop has the body of a standing tree: the tree material, rooted, always moving, of its full weight
+	const auto facts = Classify(crop);
+	EXPECT_EQ(facts.body, BodyKind::Tree);
+	EXPECT_EQ(facts.row, MaterialRow::Tree);
+	EXPECT_TRUE(facts.rooted);
+	EXPECT_TRUE(facts.dynamic);
+	EXPECT_TRUE(facts.unclampedMass);
+	EXPECT_FALSE(facts.interacts);
+	// A script that holds the crop where it is does not stop its body from moving
+	EXPECT_TRUE(Classify(crop, {.immovable = true}).dynamic);
+}
+
 TEST_F(PhysicsClassesTest, LivingThings)
 {
 	const auto villager = _registry.Create();

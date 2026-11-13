@@ -568,15 +568,15 @@ void RenderingSystem::PrepareDrawDescs(bool drawBoundingBox)
 			instanceCount += 2;
 		}
 	}
-	// A tree out of the land has its roots drawn under it: once, or twice while it moves in the physics
+	// A tree out of the land has its roots drawn under it: once, or twice while it moves in the physics. A crop that
+	// moves in the physics has its roots drawn once.
 	const Mesh roots {.id = RootsMesh(), .submeshId = 0, .bbSubmeshId = 0};
-	registry.Each<const Tree, const ShownRoots>(
-	    [&registry, &prepMesh, &roots](entt::entity tree, const Tree& /*unused*/, const ShownRoots& shown) {
-		    for (size_t copy = 0; copy < openblack::physics::objects::ShownRootsScales(shown.place).size(); ++copy)
-		    {
-			    prepMesh(registry, tree, roots.id, roots, false);
-		    }
-	    });
+	registry.Each<const ShownRoots>([&registry, &prepMesh, &roots](entt::entity rooted, const ShownRoots& shown) {
+		for (size_t copy = 0; copy < openblack::ecs::tree_roots::ShownScales(registry, rooted, shown).size(); ++copy)
+		{
+			prepMesh(registry, rooted, roots.id, roots, false);
+		}
+	});
 
 	if (drawBoundingBox)
 	{
@@ -1628,12 +1628,12 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		}
 	}
 
-	// The roots under a tree out of the land, at its base, turned and stretched as the tree is placed
+	// The roots under a tree or a crop with shown roots, at its base, turned and stretched as the object is placed
 	const auto rootsSlots = _instanceSlots.find(RootsMesh());
-	registry.Each<const Mesh, const Transform, const Tree, const ShownRoots>(
-	    [this, &registry, &meshes, &fits, &rootsSlots, drawBoundingBox](
-	        entt::entity tree, const Mesh& mesh, const Transform& transform, const Tree& /*unused*/, const ShownRoots& shown) {
-		    const auto scales = openblack::physics::objects::ShownRootsScales(shown.place);
+	registry.Each<const Mesh, const Transform, const ShownRoots>(
+	    [this, &registry, &meshes, &fits, &rootsSlots, drawBoundingBox](entt::entity tree, const Mesh& mesh,
+	                                                                    const Transform& transform, const ShownRoots& shown) {
+		    const auto scales = openblack::ecs::tree_roots::ShownScales(registry, tree, shown);
 		    if (!fits || rootsSlots == _instanceSlots.end() ||
 		        rootsSlots->second.filled + scales.size() > rootsSlots->second.count)
 		    {

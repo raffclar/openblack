@@ -168,8 +168,14 @@ physics_classes::ClassFacts MobileObjectFacts(MobileObjectInfo type)
 		facts.canBecomePhysicsObject = false;
 		break;
 	case MobileObjectInfo::Crop:
-		// A crop can fly, but flying things do not hit it
+		// A crop can fly, but flying things do not hit it. Its body is the body of a standing tree: a rooted spindle of the
+		// tree material that always moves, with the full weight of the crop.
+		facts.body = physics_classes::BodyKind::Tree;
+		facts.row = MaterialRow::Tree;
 		facts.interacts = false;
+		facts.rooted = true;
+		facts.dynamic = true;
+		facts.unclampedMass = true;
 		break;
 	case MobileObjectInfo::Creed:
 		facts.canBecomePhysicsObject = false;
