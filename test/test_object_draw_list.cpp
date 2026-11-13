@@ -600,3 +600,20 @@ TEST(ObjectDrawList, TheMemoOfTheBlockTestGivesTheAnswersOfTheTestAndTestsEachBl
 	EXPECT_EQ(memo.InView(second, 1.0f, outside), BlockInView(second, 1.0f, outside));
 	EXPECT_EQ(memo.Tests(), 2u * 32u * 32u + 5u);
 }
+
+// The land's draw calls the own draw of each object that the list draws, then of each thing that a script walks along a
+// track.
+TEST(ObjectDrawList, TheLandCallsTheOwnDrawOfWhatTheListDrawsAndOfTheWalkingThings)
+{
+	const Frame full {.rebuilt = false, .drawAll = true, .landDrawn = true};
+	const Frame still {.rebuilt = false, .drawAll = false, .landDrawn = true};
+	EXPECT_TRUE(LandCallsOwnDraw(full, false, true, false));
+	EXPECT_FALSE(LandCallsOwnDraw(full, false, false, false));
+	EXPECT_TRUE(LandCallsOwnDraw(still, false, true, true));
+	EXPECT_FALSE(LandCallsOwnDraw(still, false, true, false));
+	// A thing on a walking track is drawn by its own list
+	EXPECT_TRUE(LandCallsOwnDraw(still, true, false, false));
+	// No call when the frame does not draw the land
+	EXPECT_FALSE(LandCallsOwnDraw(FrameWithoutLand(), true, true, true));
+	EXPECT_FALSE(LandCallsOwnDraw(FrameWithoutLand(), false, true, true));
+}

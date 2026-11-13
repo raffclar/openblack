@@ -1069,6 +1069,17 @@ bool SpellIconSystem::ValidToTap(entt::entity icon, PlayerNames player) const
 	return false;
 }
 
+bool SpellIconSystem::Shown(entt::entity icon) const
+{
+	const auto& registry = Entities();
+	const auto* worshipIcon = registry.Valid(icon) ? registry.TryGet<const WorshipIcon>(icon) : nullptr;
+	if (worshipIcon == nullptr || !registry.Valid(worshipIcon->site) || !Locator::worshipSiteSystem::has_value())
+	{
+		return icons::Shown(std::nullopt);
+	}
+	return icons::Shown(Locator::worshipSiteSystem::value().IsBuilt(worshipIcon->site));
+}
+
 bool SpellIconSystem::Tap(entt::entity icon, PlayerNames player)
 {
 	auto& registry = Entities();
@@ -1441,28 +1452,6 @@ void SpellIconSystem::ChargedAt(entt::entity site, std::span<const magic::Worshi
 		component.charger = PlayerNames::NEUTRAL;
 		component.powerUp = magic::k_BasePowerUpLevel;
 	}
-}
-
-void SpellIconSystem::Update(float seconds)
-{
-	if (!Locator::infoConstants::has_value())
-	{
-		return;
-	}
-	const auto& info = Locator::infoConstants::value();
-	// The seeds spin as a globe's do, their rings round them, and their phials pulse
-	Entities().Each<IconSeed>([&](IconSeed& shown) {
-		shown.spin = std::fmod(shown.spin + (magic::k_OrbSeedSpin * seconds), glm::two_pi<float>());
-		shown.ringSpin = std::fmod(shown.ringSpin + (magic::visuals::k_RingSpin * seconds), glm::two_pi<float>());
-		if (magic::visuals::IsPhialSeed(shown.seed))
-		{
-			const auto* spell =
-			    magic::GetMagicInfoAs<GMagicCreatureSpellInfo>(info, magic::GetSpellSeedInfo(info, shown.seed).magicTypes[0]);
-			const int receiveType = spell != nullptr ? static_cast<int>(spell->creatureReceiveSpellType) : 0;
-			shown.phialFrame = magic::visuals::StepPhialFrame(shown.phialFrame, seconds);
-			shown.phialPhase = std::fmod(shown.phialPhase + (magic::visuals::PhialPulseSpeed(receiveType) * seconds), 1.0f);
-		}
-	});
 }
 
 void SpellIconSystem::Reset()

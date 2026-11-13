@@ -723,6 +723,10 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 			{
 				setSampler(MeshUniform::Environment, 5, *desc.environment);
 			}
+			if (desc.skinAlpha != nullptr && has(MeshUniform::SkinAlpha))
+			{
+				setSampler(MeshUniform::SkinAlpha, 10, *desc.skinAlpha);
+			}
 			if (desc.bonePalette != nullptr && has(MeshUniform::BonePalette))
 			{
 				setSampler(MeshUniform::BonePalette, 2, *desc.bonePalette); // vs
@@ -884,10 +888,14 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 				                          !seeThrough && !addedAlphaTextured && !desc.materialAlphaTest &&
 				                          render_modes::KeepsTexelsWithNoAlpha(primMode);
 				const float noTest = keepsNoAlpha ? -1.0f : 0.0f;
+				const float ownThreshold = prim.thresholdAlpha || desc.materialAlphaTest ? prim.alphaCutoutThreshold : noTest;
+				// A draw can give its own reference to the modes that have an alpha test, as the game does for a ghost
+				const auto givenRef = desc.alphaTestRef.has_value() && primMode.alphaTest
+				                          ? std::optional(static_cast<float>(*desc.alphaTestRef) / 255.0f)
+				                          : std::nullopt;
 				const glm::vec4 u_skyAlphaThreshold = {
 				    Locator::skyClockSystem::value().GetCurrentSkyType(),
-				    desc.alphaThreshold.value_or(prim.thresholdAlpha || desc.materialAlphaTest ? prim.alphaCutoutThreshold
-				                                                                               : noTest),
+				    desc.alphaThreshold.value_or(givenRef.value_or(ownThreshold)),
 				    seeThroughTest,
 				    seeThroughRef,
 				};

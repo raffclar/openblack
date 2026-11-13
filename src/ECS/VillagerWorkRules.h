@@ -41,8 +41,6 @@ inline constexpr uint16_t k_WaitForWoodToLand = 10;
 inline constexpr float k_NearMovingWood = 0.5f;
 /// A big forest gives its wood at this share of its radius from its middle, on the villager's side
 inline constexpr float k_BigForestArriveShare = 0.5f;
-/// A creature watching a villager go to fish or fell feels this much of its town's want
-inline constexpr float k_EmpathyForWork = 0.5f;
 
 /// Where a villager stands to fell a tree: out from the trunk towards the villager, its own size and a little more
 [[nodiscard]] glm::vec2 TreeWorkingPosition(glm::vec2 tree, glm::vec2 villager, float villagerRadius);

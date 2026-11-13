@@ -111,7 +111,6 @@ public:
 	[[nodiscard]] std::optional<float> ShownCharge(entt::entity) const override { return std::nullopt; }
 	[[nodiscard]] std::vector<magic::WorshipIconCharge> ChargesAt(entt::entity) const override { return {}; }
 	void ChargedAt(entt::entity, std::span<const magic::WorshipIconCharge>) override {}
-	void Update(float) override {}
 	void Reset() override {}
 
 	entt::entity icon {entt::null};

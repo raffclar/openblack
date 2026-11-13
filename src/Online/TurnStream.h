@@ -75,6 +75,11 @@ public:
 	[[nodiscard]] std::optional<uint64_t> RoundTrip() const { return _roundTrip; }
 	/// The number of binary frames from the server that the client did not accept
 	[[nodiscard]] uint32_t RejectedFrames() const { return _rejected; }
+	/// The pings since the last ping that the server answered: each ping goes each second, thus this is about the seconds
+	/// with no answer
+	[[nodiscard]] uint32_t UnansweredPings() const { return _nextPing - _answeredPings; }
+	/// The time of the last binary frame from the server, by the clock of the stream. None before the first frame.
+	[[nodiscard]] std::optional<uint64_t> LastReceived() const { return _lastReceived; }
 
 private:
 	bool SendFrame(const turn_codec::Frame& frame);
@@ -88,6 +93,9 @@ private:
 	std::vector<uint8_t> _buffer;
 	uint16_t _nextSequence {0};
 	uint32_t _nextPing {0};
+	/// The pings up to the last ping that the server answered
+	uint32_t _answeredPings {0};
+	std::optional<uint64_t> _lastReceived;
 	std::optional<uint64_t> _roundTrip;
 	uint32_t _rejected {0};
 };

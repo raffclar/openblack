@@ -17,6 +17,7 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
+#include <chrono>
 #include <filesystem>
 #include <initializer_list>
 #include <memory>
@@ -896,6 +897,22 @@ void Renderer::Frame() noexcept
 	}
 	_shaderManager->FrameEnded();
 	_offscreenShots->FrameEnded(frame, _bgfxCallback->failures, _bgfxCallback->pictures);
+#if defined(__EMSCRIPTEN__)
+	// In the browser, a recovery that does not succeed stops the game with a message on the page. The graphics library
+	// draws with the noop renderer while it waits for a new device.
+	if (!_deviceRecoveryFailed && _rendererType != bgfx::RendererType::Noop)
+	{
+		const auto nowMs = static_cast<uint32_t>(
+		    std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count());
+		const bool waiting = bgfx::getRendererType() == bgfx::RendererType::Noop;
+		if (_deviceRecovery.Step(waiting, bgfx::getDeviceRestoreCount(), nowMs) == device_restore::Recovery::Failed)
+		{
+			_deviceRecoveryFailed = true;
+			SPDLOG_LOGGER_CRITICAL(spdlog::get("graphics"), "The recovery from a lost graphics device failed after {} restores",
+			                       bgfx::getDeviceRestoreCount());
+		}
+	}
+#endif
 	// After a restore of the device, the render targets that keep their pictures from frame to frame are empty. The
 	// next frames draw the sky's dome and the temple's map again.
 	if (_deviceRestores.Saw(bgfx::getDeviceRestoreCount()))

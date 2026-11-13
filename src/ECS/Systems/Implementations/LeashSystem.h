@@ -75,6 +75,7 @@ public:
 	[[nodiscard]] leash_snap::Hand RopeHand(PlayerNames player) const override;
 	bool PressRope(PlayerNames player) override;
 	void LetGoOfRope(PlayerNames player, std::optional<glm::vec3> place) override;
+	void DropRope(PlayerNames player) override;
 	[[nodiscard]] std::optional<uint32_t> ToolTip(PlayerNames player, std::optional<entt::entity> hovered) const override;
 	void PlacePosts(PlayerNames owner, const std::array<glm::vec3, 3>& points) override;
 	bool TapPost(PlayerNames player, entt::entity post) override;

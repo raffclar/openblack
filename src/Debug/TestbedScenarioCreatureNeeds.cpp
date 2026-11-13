@@ -721,6 +721,25 @@ void testbed_scenarios::AddNeeds(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "objects.holds_wheat",
+	    .name = "Creature holds a handful of wheat",
+	    .facet = Facet::Objects,
+	    .description = "A tiger of size 1.3 with its town's storage pit full of food in front of it, and a ripe wheat field "
+	                   "of its town to one side. A script tells it to eat from the pit, then to eat from the field. The "
+	                   "camera follows it closely.",
+	    .expected = "At the pit it takes a handful of wheat with food in it. The bundle is 3.75 times its size and turns "
+	                "with the hand. The hand holds it near the tips of its ears, and the tie hangs 0.7 of its height away "
+	                "along the bundle. At the field the handful holds no food, so the hand shows nothing, as in the game.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Follow, .distance = 1.3f},
+	    .creatures = {CreatureSetup {.species = CreatureType::Tiger, .size = 1.3f}},
+	    .objects = {{.type = AbodeInfo::CelticStoragePit, .offset = {0.0f, -50.0f}, .storedFood = 5000, .storedWood = 0},
+	                {.type = FieldTypeInfo::Wheat, .offset = {45.0f, -20.0f}, .ripeCrop = true}},
+	    .commands = {{.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 0, .action = "EatFromStoragePit"},
+	                 {.kind = Kind::DoAction, .delaySeconds = 25.0f, .object = 1, .action = "EatFromContainer"}},
+	});
+
+	all.push_back({
 	    .id = "needs.eats_from_tree",
 	    .name = "Creature eats from a tree",
 	    .facet = Facet::Needs,

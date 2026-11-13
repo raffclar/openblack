@@ -856,6 +856,11 @@ void Run(const Command& command, uint32_t turn)
 		    }
 		    else if constexpr (std::is_same_v<Kind, HandShakeOff>)
 		    {
+			    // A miracle in the hand goes, and what its seed still holds goes back to the player's worship
+			    if (openblack::Locator::magicSystem::has_value())
+			    {
+				    openblack::Locator::magicSystem::value().ShakeOffHeldSeedOf(command.player);
+			    }
 			    if (openblack::Locator::handGrabSystem::has_value())
 			    {
 				    openblack::Locator::handGrabSystem::value().DoShakeOff(command.player);

@@ -19,6 +19,7 @@
 
 #include "ECS/Systems/SavedStateInterface.h"
 #include "Enums.h"
+#include "Magic/ForestRules.h"
 
 namespace openblack::ecs::components
 {
@@ -33,7 +34,8 @@ namespace openblack::ecs::systems
 /// Every game turn each forest, the newest first, grows its growing trees and now and then spreads, planting a young tree
 /// beside one of its grown trees (see Nature/ForestGrowth.h); trees in no forest never grow. A forest miracle's forest
 /// is a forest like any other, and besides, while the miracle lasts all its trees grow a little each turn; once it has
-/// gone they wither away. A forest left with no trees goes some while later.
+/// gone they wither away. A forest left with no trees goes some while later. But when a tree of a forest miracle goes
+/// from the world and leaves its forest with no tree, the forest goes at once.
 class ForestSystemInterface: public SavedStateInterface
 {
 public:
@@ -45,10 +47,14 @@ public:
 	[[nodiscard]] virtual bool CanGrowAt(glm::vec3 point) const = 0;
 	/// Whether a forest miracle's forest still has trees
 	[[nodiscard]] virtual bool HasTrees(entt::entity spell) const = 0;
+	/// The forest of a forest miracle: none, on the land, or gone from the land since the miracle's last turn
+	[[nodiscard]] virtual magic::forest::MiracleForest ForestOf(entt::entity spell) const = 0;
+	/// A forest miracle lets go of its forest that went from the land
+	virtual void LetGoOfGoneForest(entt::entity spell) = 0;
 	/// How many trees a forest miracle's forest has at this moment, a tree in the hand among them
 	[[nodiscard]] virtual uint32_t StandingTrees(entt::entity spell) const = 0;
 	/// How tall the tallest tree of a forest miracle's forest stands (none tall with no trees left); none before the
-	/// miracle has planted it
+	/// miracle has planted it, and none after the miracle let go of its forest that went
 	[[nodiscard]] virtual std::optional<float> TallestTreeOf(entt::entity spell) const = 0;
 	/// A young tree of the same kind is planted near a tree of a forest, as the water miracle plants one by a full grown
 	/// tree: no sooner than 41 turns after the last tree any forest gained this way (none in a land's first 41 turns), at

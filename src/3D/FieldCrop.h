@@ -91,6 +91,10 @@ void Grow(Crop& crop, const Type& type, float alignment, bool raining);
 /// It makes one pass over a field with no town.
 void Pass(Crop& crop, const Type& type, uint32_t turn, uint32_t growthTurn, float alignment, bool raining);
 
+/// Whether a pass over a field in a turn grows its crop. Only such a pass uses the alignment of the land and the weather,
+/// thus the game can skip the measure of the alignment for each other pass.
+[[nodiscard]] bool GrowsInPass(const Crop& crop, const Type& type, uint32_t turn, uint32_t growthTurn);
+
 /// How the crop looks while it shows
 struct Look
 {

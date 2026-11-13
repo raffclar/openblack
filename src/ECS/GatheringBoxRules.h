@@ -147,8 +147,6 @@ constexpr size_t k_MostNameCharacters = 19;
 /// The announcements have at most this many lines, each with at most this many characters
 constexpr size_t k_MostAnnouncements = 15;
 constexpr size_t k_MostAnnouncementCharacters = 14;
-/// The ping server gets a line of the staff for this number
-constexpr UserId k_ServerUser = 0;
 
 struct Send
 {

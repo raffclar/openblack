@@ -57,6 +57,7 @@ public:
 	void RequestDeviceRestore(graphics::device_restore::Request /*request*/) noexcept override {}
 	[[nodiscard]] uint32_t GetDeviceRestores() const noexcept override { return 0; }
 	[[nodiscard]] graphics::device_restore::Kept GetDeviceRestoreKept() const noexcept override { return {}; }
+	[[nodiscard]] bool DeviceRecoveryFailed() const noexcept override { return false; }
 	[[nodiscard]] uint32_t GetDrawsOfLastFrame() const noexcept override { return 0; }
 	[[nodiscard]] bool GetDebug() const noexcept override { return _debug; }
 	void SetDebug(bool value) noexcept override { _debug = value; }

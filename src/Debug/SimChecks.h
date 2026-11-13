@@ -95,7 +95,6 @@ public:
 	/// The longest time that each key stayed the same, the longest first
 	[[nodiscard]] std::vector<Longest> LongestRuns() const;
 
-	void SetLimits(std::vector<StuckLimit> limits) { _limits = std::move(limits); }
 	[[nodiscard]] const std::vector<StuckLimit>& Limits() const { return _limits; }
 
 private:
@@ -133,8 +132,6 @@ public:
 	/// A list can have a limit: the maximum number of items that it can hold. A list in its limit cannot grow without a
 	/// bound, thus it does not flag. A list above its limit can flag.
 	std::optional<Flag> Observe(std::string_view what, size_t size, uint32_t turn, std::optional<size_t> limit = std::nullopt);
-
-	[[nodiscard]] size_t SeriesCount() const { return _series.size(); }
 
 private:
 	struct Series

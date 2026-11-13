@@ -78,9 +78,15 @@ void BlendToMesh(std::span<const glm::mat4> older, std::span<const glm::mat4> ne
 
 std::vector<glm::mat4> ToWorld(std::span<const glm::mat4> bones, const glm::mat4& placement)
 {
-	std::vector<glm::mat4> world(bones.size());
-	std::ranges::transform(bones, world.begin(), [&placement](const glm::mat4& bone) { return placement * bone; });
+	std::vector<glm::mat4> world;
+	ToWorld(bones, placement, world);
 	return world;
+}
+
+void ToWorld(std::span<const glm::mat4> bones, const glm::mat4& placement, std::vector<glm::mat4>& world)
+{
+	world.resize(bones.size());
+	std::ranges::transform(bones, world.begin(), [&placement](const glm::mat4& bone) { return placement * bone; });
 }
 
 void FollowPlacement(std::span<glm::mat4> world, const glm::mat4& from, const glm::mat4& to)

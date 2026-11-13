@@ -84,7 +84,7 @@ TEST(CreatureProportions, ABoneThatIsItsOwnMirrorGetsTheFactorTwoTimes)
 {
 	auto poses = std::vector(8, Identity({0.0f, 0.0f, 0.0f}));
 	const Bones bones {.rightEye = 7u};
-	Apply(poses, ScaledBones(bones, k_Mirror, 0.0f));
+	Apply(poses, ScaledBones(bones, k_Mirror, 0.0f).Span());
 	EXPECT_FLOAT_EQ(poses[7].rotation[0][0], 1.4f * 1.4f);
 }
 

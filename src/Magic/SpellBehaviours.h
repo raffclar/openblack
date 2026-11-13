@@ -89,6 +89,9 @@ public:
 	[[nodiscard]] virtual bool ForestCanGrowAt(glm::vec3 /*point*/) const { return true; }
 	/// The miracle's own entity, none where there are no entities
 	[[nodiscard]] virtual entt::entity SpellEntity(const ecs::components::Spell& /*spell*/) const { return entt::null; }
+	/// The trees that the forest of a forest miracle has at this moment, 0 when it has no forest. Without a forest
+	/// system, this is the count of the last turn of the forest.
+	[[nodiscard]] virtual uint32_t ForestTrees(const ecs::components::Spell& spell) const;
 };
 
 /// A player as a caster: the neutral player, whose miracles scripts cast, gives all the prayer power they ask for; any
@@ -139,8 +142,8 @@ namespace spells
 [[nodiscard]] SpellChantRules RulesOf(SpellServicesInterface& services, const ecs::components::Spell& spell);
 /// Its strength now, 0 to 1 times the multipliers
 [[nodiscard]] float StrengthOf(SpellServicesInterface& services, const ecs::components::Spell& spell);
-/// What it costs to keep each turn
-[[nodiscard]] float CostToMaintain(const InfoConstants& info, const ecs::components::Spell& spell);
+/// What it costs to keep each turn. A forest pays for the trees that its forest has at this moment.
+[[nodiscard]] float CostToMaintain(const SpellServicesInterface& services, const ecs::components::Spell& spell);
 
 /// Whether a miracle held in the hand may stay where the hand points: on the map, and its table's rule alone, land being
 /// a cell without water (influence counts unless ignored)

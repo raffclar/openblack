@@ -99,3 +99,34 @@ TEST(MobileObjectRecord, TheEditorCopiesALooseObjectByItsRow)
 	EXPECT_TRUE(made->footballRecord);
 	EXPECT_EQ(mobile_object_record::Of(*info, *made), &info->ball);
 }
+
+// The kind of the row's record decides what the game makes: a crop or a creed, and the eyes are a creed. The row of the
+// poo makes poo whatever its record says.
+TEST(MobileObjectRecord, TheKindOfTheRecordDecidesWhatTheGameMakes)
+{
+	using mobile_object_record::Class;
+	using mobile_object_record::ClassOf;
+	EXPECT_EQ(ClassOf(MobileObjectInfo::Crop, MobileObjectInfo::Crop), Class::Crop);
+	EXPECT_EQ(ClassOf(MobileObjectInfo::Creed, MobileObjectInfo::Creed), Class::Creed);
+	EXPECT_EQ(ClassOf(MobileObjectInfo::Eyes, MobileObjectInfo::Creed), Class::Creed);
+	EXPECT_EQ(ClassOf(MobileObjectInfo::LumpOfPoo, MobileObjectInfo::LumpOfPoo), Class::Poo);
+	EXPECT_EQ(ClassOf(MobileObjectInfo::LumpOfPoo, MobileObjectInfo::Creed), Class::Poo);
+	EXPECT_EQ(ClassOf(MobileObjectInfo::Ball, MobileObjectInfo::Ball), Class::Plain);
+	EXPECT_EQ(ClassOf(MobileObjectInfo::OldScaffold, MobileObjectInfo::Champi), Class::Plain);
+}
+
+// A loose object takes the kind of its record from the tables. One with the football's record is never poo.
+TEST(MobileObjectRecord, ALooseObjectTakesTheKindOfItsRecordFromTheTables)
+{
+	auto info = FakeInfo();
+	info->mobileObject.at(static_cast<size_t>(MobileObjectInfo::Eyes)).mobileType = MobileObjectInfo::Creed;
+	info->mobileObject.at(static_cast<size_t>(MobileObjectInfo::Crop)).mobileType = MobileObjectInfo::Crop;
+	info->ball.mobileType = MobileObjectInfo::LumpOfPoo;
+	using mobile_object_record::Class;
+	EXPECT_EQ(mobile_object_record::ClassOf(*info, MobileObject {.type = MobileObjectInfo::Eyes}), Class::Creed);
+	EXPECT_EQ(mobile_object_record::ClassOf(*info, MobileObject {.type = MobileObjectInfo::Crop}), Class::Crop);
+	EXPECT_EQ(mobile_object_record::ClassOf(*info, MobileObject {.type = MobileObjectInfo::Ball}), Class::Plain);
+	EXPECT_EQ(mobile_object_record::ClassOf(*info, MobileObject {.type = MobileObjectInfo::LumpOfPoo, .footballRecord = true}),
+	          Class::Plain);
+	EXPECT_EQ(mobile_object_record::ClassOf(*info, MobileObject {.type = MobileObjectInfo::_COUNT}), Class::Plain);
+}

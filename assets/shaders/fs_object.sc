@@ -57,7 +57,10 @@ uniform vec4 u_creatureSpellLook;
 vec3 IceSheen(vec3 position)
 {
 	vec3 face = normalize(cross(dFdx(position), dFdy(position)));
-	vec3 eye = u_invView[3].xyz;
+	// The position of the eye in the world. Multiply the matrix by the origin, and do not use an index into the matrix.
+	// An index gives a row on some renderers and a column on other renderers. Some browsers also refuse the WebGPU
+	// shader of an index.
+	vec3 eye = mul(u_invView, vec4(0.0f, 0.0f, 0.0f, 1.0f)).xyz;
 	face = dot(face, eye - position) < 0.0f ? -face : face;
 	vec3 viewFace = normalize(mul(u_view, vec4(face, 0.0f)).xyz);
 	vec2 iceUv = (viewFace.xy + 1.0f) * 0.498046875f;

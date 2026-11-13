@@ -116,6 +116,7 @@ std::vector<Scenario> Build()
 	AddMultiplayerFrontEndScenarios(all);
 	AddOtherGodScenarios(all);
 	AddJoinOnlineScenarios(all);
+	AddFrontEndHandScenarios(all);
 	AddTutorialScenarios(all);
 	AddCreatureDanceScenarios(all);
 	AddCreatureLearningScenarios(all);
@@ -302,30 +303,31 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::GiveLandTown || kind == Kind::RecordChallenge || kind == Kind::EnterTemple || kind == Kind::HandTake ||
 	       kind == Kind::HandApply || kind == Kind::HandTakeShownSeed || kind == Kind::RunScript || kind == Kind::ClickScroll ||
 	       kind == Kind::ClickCreatureAt || kind == Kind::CameraLooksAt || kind == Kind::HandTakeNear ||
-	       kind == Kind::ClickCreatureNear || kind == Kind::TapRewardNear || kind == Kind::PlayBoatFilm ||
-	       kind == Kind::HandPour || kind == Kind::HandRelease || kind == Kind::SetReportLatency ||
-	       kind == Kind::RemoveObject || kind == Kind::CreateReaction || kind == Kind::ReadTip ||
-	       kind == Kind::LookAtTempleScroll || kind == Kind::HandGripTotem || kind == Kind::ProfileFolderCheck ||
-	       kind == Kind::PlayCustomMusic || kind == Kind::ShowCustomMusicControls || kind == Kind::OwnTattooPicture ||
-	       kind == Kind::OpenTattooMenu || kind == Kind::OpenControlsBox || kind == Kind::OpenMenuPage ||
-	       kind == Kind::PressMenuKey || kind == Kind::StopScript || kind == Kind::StartScriptMusic || kind == Kind::SaveGame ||
-	       kind == Kind::LoadGame || kind == Kind::QuickSave || kind == Kind::ContinueGame || kind == Kind::PlayLogoEffect ||
-	       kind == Kind::PlayFallingSpellFilm || kind == Kind::PlayIntroFilm || kind == Kind::SayLine ||
-	       kind == Kind::PlayGuidanceVoice || kind == Kind::ScriptRelease || kind == Kind::FillSiteIcons ||
-	       kind == Kind::ChargeIconWithSeedHeld || kind == Kind::TakeIconSeed || kind == Kind::TapSiteIcon ||
-	       kind == Kind::TapTempleEntrance || kind == Kind::FinishBuilding || kind == Kind::FillBuiltAmount ||
-	       kind == Kind::ScaffoldStartsSite || kind == Kind::DestroyScaffoldSite || kind == Kind::ScaffoldClearsGround ||
-	       kind == Kind::CallNative || kind == Kind::PauseGame || kind == Kind::SetGameSpeed ||
-	       kind == Kind::RemoveTeleportStone || kind == Kind::MakeDance || kind == Kind::OpenMultiplayerBox ||
-	       kind == Kind::BuildWorshipSites || kind == Kind::ScriptBuildsWorshipSites || kind == Kind::PressPlainKey ||
-	       kind == Kind::PlainKeyDown || kind == Kind::PlainKeyRepeat || kind == Kind::PlainKeyUp ||
-	       kind == Kind::OtherGodHand || kind == Kind::ObserverCamera || kind == Kind::OwnGod || kind == Kind::JoinOnline ||
-	       kind == Kind::EndBox || kind == Kind::BringCreature || kind == Kind::TattooEditorAsNetworkGame ||
-	       kind == Kind::ShowDemoPing || kind == Kind::AddIncomingMessage || kind == Kind::Chat ||
-	       kind == Kind::ComputerPersonality || kind == Kind::ComputerUntaughtSends || kind == Kind::SkirmishBox ||
-	       kind == Kind::LookAtSaveGamePicture || kind == Kind::ZoomToTempleCaveTarget || kind == Kind::HandCastOnDispenser ||
-	       kind == Kind::HandCastOnCreature || kind == Kind::CloseHeldMiracle || kind == Kind::JoinFootball ||
-	       kind == Kind::GiveMagicTreesToStore || kind == Kind::HandCastAtPoint || IsPointerCommand(kind);
+	       kind == Kind::TapScaffoldNear || kind == Kind::ClickCreatureNear || kind == Kind::TapRewardNear ||
+	       kind == Kind::PlayBoatFilm || kind == Kind::HandPour || kind == Kind::HandRelease ||
+	       kind == Kind::SetReportLatency || kind == Kind::RemoveObject || kind == Kind::CreateReaction ||
+	       kind == Kind::ReadTip || kind == Kind::LookAtTempleScroll || kind == Kind::HandGripTotem ||
+	       kind == Kind::ProfileFolderCheck || kind == Kind::PlayCustomMusic || kind == Kind::ShowCustomMusicControls ||
+	       kind == Kind::OwnTattooPicture || kind == Kind::OpenTattooMenu || kind == Kind::OpenControlsBox ||
+	       kind == Kind::OpenMenuPage || kind == Kind::PressMenuKey || kind == Kind::StopScript ||
+	       kind == Kind::StartScriptMusic || kind == Kind::SaveGame || kind == Kind::LoadGame || kind == Kind::QuickSave ||
+	       kind == Kind::ContinueGame || kind == Kind::PlayLogoEffect || kind == Kind::PlayFallingSpellFilm ||
+	       kind == Kind::PlayIntroFilm || kind == Kind::SayLine || kind == Kind::PlayGuidanceVoice ||
+	       kind == Kind::ScriptRelease || kind == Kind::FillSiteIcons || kind == Kind::ChargeIconWithSeedHeld ||
+	       kind == Kind::TakeIconSeed || kind == Kind::TapSiteIcon || kind == Kind::TapTempleEntrance ||
+	       kind == Kind::FinishBuilding || kind == Kind::FillBuiltAmount || kind == Kind::ScaffoldStartsSite ||
+	       kind == Kind::DestroyScaffoldSite || kind == Kind::ScaffoldClearsGround || kind == Kind::CallNative ||
+	       kind == Kind::PauseGame || kind == Kind::SetGameSpeed || kind == Kind::RemoveTeleportStone ||
+	       kind == Kind::MakeDance || kind == Kind::OpenMultiplayerBox || kind == Kind::BuildWorshipSites ||
+	       kind == Kind::ScriptBuildsWorshipSites || kind == Kind::PressPlainKey || kind == Kind::PlainKeyDown ||
+	       kind == Kind::PlainKeyRepeat || kind == Kind::PlainKeyUp || kind == Kind::OtherGodHand ||
+	       kind == Kind::ObserverCamera || kind == Kind::OwnGod || kind == Kind::JoinOnline || kind == Kind::EndBox ||
+	       kind == Kind::BringCreature || kind == Kind::TattooEditorAsNetworkGame || kind == Kind::ShowDemoPing ||
+	       kind == Kind::AddIncomingMessage || kind == Kind::Chat || kind == Kind::ComputerPersonality ||
+	       kind == Kind::ComputerUntaughtSends || kind == Kind::SkirmishBox || kind == Kind::LookAtSaveGamePicture ||
+	       kind == Kind::ZoomToTempleCaveTarget || kind == Kind::HandCastOnDispenser || kind == Kind::HandCastOnCreature ||
+	       kind == Kind::CloseHeldMiracle || kind == Kind::JoinFootball || kind == Kind::GiveMagicTreesToStore ||
+	       kind == Kind::HandCastAtPoint || IsPointerCommand(kind);
 }
 
 std::string_view testbed_scenarios::Name(Facet facet)
@@ -353,7 +355,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 239> k_Names {
+	constexpr std::array<std::string_view, 243> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -512,6 +514,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "save the game",
 	    "load the game",
 	    "script reaction",
+	    "pause mind",
 	    "script place",
 	    "stop script",
 	    "pointer on creature",
@@ -583,6 +586,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "join the football of the town",
 	    "a script builds the worship sites",
 	    "take the mobile object nearest a point into the hand",
+	    "tap the scaffold nearest a point",
 	    "click the creature nearest a point",
 	    "tap the reward chest nearest a point",
 	    "click a creature",
@@ -593,6 +597,8 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "bind an action to a mouse button",
 	    "pick a place on the temple's map",
 	    "create a reaction at an object",
+	    "pointer on tip bubble",
+	    "pointer on totem",
 	};
 	return k_Names.at(static_cast<size_t>(kind));
 }
@@ -602,7 +608,8 @@ bool testbed_scenarios::IsPointerCommand(Command::Kind kind)
 	return kind == Kind::PointerTo || kind == Kind::PointerPress || kind == Kind::PointerRelease ||
 	       kind == Kind::PointerSweep || kind == Kind::WheelTurn || kind == Kind::PointerOnOpponent ||
 	       kind == Kind::PointerOnCaveCreature || kind == Kind::PointerOnCreature || kind == Kind::PointerOnAltar ||
-	       kind == Kind::PointerOnRope || kind == Kind::PointerOnObject;
+	       kind == Kind::PointerOnRope || kind == Kind::PointerOnObject || kind == Kind::PointerOnTipBubble ||
+	       kind == Kind::PointerOnTotem;
 }
 
 bool NeedOverrides::Empty() const
@@ -898,6 +905,7 @@ std::vector<std::string> testbed_scenarios::Problems(const Scenario& scenario)
 		                                     : command.object >= scenario.objects.size())) ||
 		    (command.kind == Kind::CreateReaction &&
 		     (command.object >= scenario.objects.size() || command.value > static_cast<size_t>(Reaction::ReactToFightWon))) ||
+		    (command.kind == Kind::PointerOnTotem && command.object >= scenario.objects.size()) ||
 		    ((command.kind == Kind::PlayerDid || command.kind == Kind::PlayerDidOn) && command.value >= k_Deeds) ||
 		    (command.kind == Kind::CameraKeys && (command.value >= 4 || command.amount <= 0.0f)) ||
 		    (command.kind == Kind::PointerTo &&

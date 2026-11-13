@@ -36,6 +36,7 @@
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureLeash.h"
+#include "ECS/Components/CreatureObjectAction.h"
 #include "ECS/Components/Hand.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/MagicFireBall.h"
@@ -400,7 +401,8 @@ void PickingSystem::PickUnderCursor(const Frame& frame)
 		const auto& drawnObject = drawnObjects[turn.drawnIndex];
 		const auto entity = drawnObject.entity;
 		const auto& model = drawnObject.model;
-		if (!registry.Valid(entity) || registry.AnyOf<Hand, InHand, SeeThrough, ScaffoldGhost>(entity) || heldSeed == entity)
+		if (!registry.Valid(entity) || registry.AnyOf<Hand, SeeThrough, ScaffoldGhost>(entity) || heldSeed == entity ||
+		    !ecs::pick_shapes::HeldThingTakesCursor(registry.AllOf<InHand>(entity), registry.AllOf<HeldByCreature>(entity)))
 		{
 			continue;
 		}
@@ -658,7 +660,12 @@ void PickingSystem::AddBubbles(glm::vec3 camera)
 	const auto* drawList = Locator::objectDrawListSystem::has_value() ? &Locator::objectDrawListSystem::value() : nullptr;
 	registry.Each<const OneOffSpellSeed, const Transform>(
 	    [&](entt::entity entity, const OneOffSpellSeed& globe, const Transform& transform) {
-		    if (registry.AnyOf<InHand, SeeThrough>(entity) || (drawList != nullptr && !drawList->Drawn(registry, entity)))
+		    if (registry.AllOf<SeeThrough>(entity) || (drawList != nullptr && !drawList->Drawn(registry, entity)))
+		    {
+			    return;
+		    }
+		    const bool inGodsHand = registry.AllOf<InHand>(entity);
+		    if (!ecs::pick_shapes::HeldThingTakesCursor(inGodsHand, registry.AllOf<HeldByCreature>(entity)))
 		    {
 			    return;
 		    }

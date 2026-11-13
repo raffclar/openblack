@@ -42,6 +42,7 @@ constexpr std::string_view k_StopRequest = "game.stop_request";
 constexpr std::string_view k_GameStop = "game.stop";
 constexpr std::string_view k_RoomChat = "room.chat";
 constexpr std::string_view k_ObserverLeft = "observer.left";
+constexpr std::string_view k_SyncParts = "sync.parts";
 constexpr std::string_view k_Loaded = "game.loaded";
 constexpr std::string_view k_LoadWait = "game.wait";
 /// The longest wait for the loads that a frame can give: the 6 hours of a lobby game
@@ -101,6 +102,61 @@ bool ReadUnsigned(const Json& object, std::string_view key, uint64_t most, uint6
 	}
 	out = value;
 	return true;
+}
+
+/// The parts of a "sync.parts" frame: an array of [name, hash] pairs, with the hash as 16 hexadecimal digits
+bool ReadParts(const Json& object, std::vector<std::pair<std::string, uint64_t>>& out)
+{
+	const auto* member = Member(object, "parts");
+	if (member == nullptr || !member->is_array() || member->size() > k_MostSyncParts)
+	{
+		return false;
+	}
+	for (const auto& entry : *member)
+	{
+		if (!entry.is_array() || entry.size() != 2 || !entry[0].is_string() || !entry[1].is_string())
+		{
+			return false;
+		}
+		const auto& name = entry[0].get_ref<const std::string&>();
+		const auto& hex = entry[1].get_ref<const std::string&>();
+		if (name.size() > k_MostSyncPartNameBytes || hex.empty() || hex.size() > 16)
+		{
+			return false;
+		}
+		uint64_t value = 0;
+		for (const char c : hex)
+		{
+			uint64_t digit = 0;
+			if (c >= '0' && c <= '9')
+			{
+				digit = static_cast<uint64_t>(c - '0');
+			}
+			else if (c >= 'a' && c <= 'f')
+			{
+				digit = static_cast<uint64_t>(c - 'a' + 10);
+			}
+			else
+			{
+				return false;
+			}
+			value = (value << 4U) | digit;
+		}
+		out.emplace_back(name, value);
+	}
+	return true;
+}
+
+/// A hash as 16 hexadecimal digits, which JSON keeps with no loss
+std::string HexOf(uint64_t value)
+{
+	constexpr std::string_view k_Digits = "0123456789abcdef";
+	std::string text(16, '0');
+	for (size_t i = 0; i < text.size(); ++i)
+	{
+		text[text.size() - 1 - i] = k_Digits[(value >> (4 * i)) & 0xFU];
+	}
+	return text;
 }
 
 bool ReadBool(const Json& object, std::string_view key, bool& out, bool required = true)
@@ -453,6 +509,17 @@ std::optional<Frame> ParseObject(const Json& object, std::string_view type)
 		}
 		return Resumed {.turn = static_cast<uint32_t>(turn), .world = world};
 	}
+	if (type == k_SyncParts)
+	{
+		SyncParts parts;
+		uint64_t turn = 0;
+		if (!ReadUnsigned(object, "turn", k_MostTurn, turn) || !ReadParts(object, parts.parts))
+		{
+			return std::nullopt;
+		}
+		parts.turn = static_cast<uint32_t>(turn);
+		return parts;
+	}
 	if (type == k_ObserverLeft)
 	{
 		ObserverLeft left;
@@ -756,6 +823,15 @@ std::string ToJson(const Frame& frame)
 		    else if constexpr (std::is_same_v<Kind, ObserverLeft>)
 		    {
 			    object = Json {{"type", k_ObserverLeft}, {"name", value.name}};
+		    }
+		    else if constexpr (std::is_same_v<Kind, SyncParts>)
+		    {
+			    auto parts = Json::array();
+			    for (const auto& [name, hash] : value.parts)
+			    {
+				    parts.push_back(Json::array({name, HexOf(hash)}));
+			    }
+			    object = Json {{"type", k_SyncParts}, {"turn", value.turn}, {"parts", std::move(parts)}};
 		    }
 		    else if constexpr (std::is_same_v<Kind, Loaded>)
 		    {

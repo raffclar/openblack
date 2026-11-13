@@ -19,6 +19,7 @@
 #include <optional>
 #include <ranges>
 #include <span>
+#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -94,9 +95,11 @@
 #include "Game.h"
 #include "Graphics/BoneBudget.h"
 #include "Graphics/CreatureReflection.h"
+#include "Graphics/EffectsAfterParticles.h"
 #include "Graphics/FizzDrawOrder.h"
 #include "Graphics/FrameBuffer.h"
 #include "Graphics/GraphicsHandleBgfx.h"
+#include "Graphics/HandFaces.h"
 #include "Graphics/HandLight.h"
 #include "Graphics/HandReflection.h"
 #include "Graphics/HandWaterGlow.h"
@@ -348,6 +351,8 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 	{
 		DrawSunGlare(*desc.camera);
 	}
+	// The game draws the words of the pause and the speed after the glare, at the end of the frame
+	DrawPauseText(desc);
 
 	// The hand's glow lies on the water, under the sea that is blended over it
 	if (desc.viewId == RenderPass::Reflection && (desc.drawHand || _warmingUp))
@@ -951,6 +956,9 @@ void Renderer::DrawPassCreatures(const DrawSceneDesc& desc, const ScenePass& pas
 			                      zsort::Depth(transform->position, cameraOrigin));
 		}
 	}
+	// The glows of the creed objects, which show no model of their own
+	DrawCreedGlows(static_cast<uint16_t>(TranslucentView(desc.viewId)), renderCtx, desc.camera->GetProjectionMatrix(),
+	               desc.viewId == RenderPass::Reflection, cameraOrigin);
 	// The creatures that the interface shows over itself, each moved for its draw to its place before the
 	// interface's own camera, in a view of their own
 	if (desc.viewId == RenderPass::Main && _interfaceCreatures.has_value())
@@ -1191,12 +1199,17 @@ void Renderer::DrawPassTranslucent(const DrawSceneDesc& desc, const ScenePass& p
 	auto& drawRootsPiles = draws.drawRootsPiles;
 	// The translucent meshes blend over the opaque ones, each in its own place in the sort
 	submitDesc.viewId = translucentViewId;
-	// A thing that the game draws at once comes at its place in the land's draw list, before every sorted thing. Any
-	// other thing comes by the key of a placed model at its place.
+	// A thing that the game draws at once comes at its place in the land's draw list, before every sorted thing. The
+	// copy of a scaffold at its yard place comes by the key of its workshop. Any other thing comes by the key of a placed
+	// model at its place.
 	const auto blendDepth = [&renderCtx, cameraOrigin](uint32_t instance) {
 		if (const auto atOnce = renderCtx.atOnceInstances.find(instance); atOnce != renderCtx.atOnceInstances.end())
 		{
-			return zsort::AtOnce(atOnce->second);
+			return renderCtx.fizzOrder.AtOnceDepth(atOnce->second);
+		}
+		if (const auto sortPoint = renderCtx.sortPoints.find(instance); sortPoint != renderCtx.sortPoints.end())
+		{
+			return zsort::YardCopyDepth(sortPoint->second.point, cameraOrigin);
 		}
 		return zsort::ModelDepth(glm::vec3(renderCtx.instanceUniforms.at(instance).model[3]), cameraOrigin);
 	};
@@ -1204,6 +1217,26 @@ void Renderer::DrawPassTranslucent(const DrawSceneDesc& desc, const ScenePass& p
 	// villagers posed from the bone palette, the things posed one by one with them
 	{
 		const EntityPose palettePose {.bones = {}, .morphTargets = nullptr, .bonePalette = true};
+		const auto drawFading = [&](entt::id_type meshId, const RenderContext::InstancedDrawDesc& placers, uint32_t instance) {
+			submitDesc.sortDepth = blendDepth(instance);
+			if (placers.partsByLevel)
+			{
+				submitDesc.detailLevel = renderCtx.instanceLevels.at(instance);
+			}
+			// The second draw of a felled tree passes the depth test at the depth of the first, as the game's draws of
+			// the same model at the same place do
+			const auto state = submitDesc.state;
+			if (renderCtx.drawnOverInstances.contains(instance))
+			{
+				submitDesc.state = (state & ~BGFX_STATE_DEPTH_TEST_MASK) | BGFX_STATE_DEPTH_TEST_GEQUAL;
+			}
+			drawInstances(meshId, placers, false, instance, 1, placers.bonePalette ? &palettePose : nullptr);
+			submitDesc.state = state;
+			submitDesc.detailLevel = 1;
+		};
+		// The copies at the yard places of a workshop have one depth. They come after the other fading things, in the
+		// order of the scaffold list, because the view keeps the submit order of equal depths.
+		std::vector<std::tuple<uint64_t, entt::id_type, uint32_t>> yardCopies;
 		for (const auto& [meshId, placers] : renderCtx.fadingDrawDescs)
 		{
 			if (placers.filled == 0 || (desc.viewId == RenderPass::Reflection && placers.hiddenFromReflection) ||
@@ -1218,28 +1251,24 @@ void Renderer::DrawPassTranslucent(const DrawSceneDesc& desc, const ScenePass& p
 				{
 					continue;
 				}
-				submitDesc.sortDepth = blendDepth(instance);
-				if (placers.partsByLevel)
+				if (const auto sortPoint = renderCtx.sortPoints.find(instance); sortPoint != renderCtx.sortPoints.end())
 				{
-					submitDesc.detailLevel = renderCtx.instanceLevels.at(instance);
+					yardCopies.emplace_back(sortPoint->second.order, meshId, instance);
+					continue;
 				}
-				// The second draw of a felled tree passes the depth test at the depth of the first, as the game's
-				// draws of the same model at the same place do
-				const auto state = submitDesc.state;
-				if (renderCtx.drawnOverInstances.contains(instance))
-				{
-					submitDesc.state = (state & ~BGFX_STATE_DEPTH_TEST_MASK) | BGFX_STATE_DEPTH_TEST_GEQUAL;
-				}
-				drawInstances(meshId, placers, false, instance, 1, placers.bonePalette ? &palettePose : nullptr);
-				submitDesc.state = state;
+				drawFading(meshId, placers, instance);
 			}
-			submitDesc.detailLevel = 1;
+		}
+		std::ranges::sort(yardCopies);
+		for (const auto& [order, meshId, instance] : yardCopies)
+		{
+			drawFading(meshId, renderCtx.fadingDrawDescs.at(meshId), instance);
 		}
 		for (const auto& build : renderCtx.partialBuilds)
 		{
 			if (build.fading && build.instance < renderCtx.partialBuildInstances.size())
 			{
-				submitDesc.sortDepth = zsort::AtOnce(build.listPlace);
+				submitDesc.sortDepth = renderCtx.fizzOrder.AtOnceDepth(build.listPlace);
 				drawPartialBuild(build);
 			}
 		}
@@ -1280,8 +1309,9 @@ void Renderer::DrawPassTranslucent(const DrawSceneDesc& desc, const ScenePass& p
 	// It is not drawn here, because it would show again in the model's own pose.
 	for (const auto& [meshId, placers] : renderCtx.instancedDrawDescs)
 	{
-		if (graphics::posed_draws::BlendedPassDrawsAllPlaced(
-		        {.translucent = placers.translucent, .perEntity = placers.perEntity}) &&
+		if (graphics::posed_draws::BlendedPassDrawsAllPlaced({.translucent = placers.translucent,
+		                                                      .perEntity = placers.perEntity,
+		                                                      .hand = meshId == ecs::components::Hand::k_MeshId}) &&
 		    !(desc.viewId == RenderPass::Reflection && placers.hiddenFromReflection))
 		{
 			for (uint32_t instance = placers.offset; instance < placers.offset + placers.filled; ++instance)
@@ -1372,30 +1402,71 @@ void Renderer::DrawPassEffects(const DrawSceneDesc& desc) const
 	DrawGroundBlobs(desc);
 	DrawFarVillagerSmudges(desc);
 	DrawVillagerEyes(desc);
+	// The land draws the reward chests with their seeds, then the learning words and the bulbs of the learning marks at
+	// once. The game draws the globes and the icons of the village centres after the land. A seed that the game draws at
+	// once comes in this order.
+	DrawRewardSeeds(desc);
+	SubmitWorldLabels(desc, WorldLabelGroup::LearningWords);
+	DrawLearningBulbs(desc);
 	DrawGlobes(desc);
 	DrawIconSeeds(desc);
-	DrawRewardSeeds(desc);
-	DrawHandMiracleBands(desc);
 	DrawTribalPower(desc);
-	DrawLightColumns(desc);
+	DrawTempleColumns(desc);
 	DrawScrollBeams(desc);
 	DrawIconPulses(desc);
-	DrawLeashes(desc);
 	DrawWaterRings(desc);
-	DrawRain(desc);
-	DrawSnowfall(desc);
 	DrawKnockReadout(desc);
 	DrawChimneySmoke(desc);
-	DrawShieldDomes(desc);
 	DrawDestructionGhosts(desc);
 	DrawFilmReflections(desc);
-	DrawParticles(desc);
+	// The mists blend over the rest, the farthest first. The game adds them to its sort as it draws the land, before
+	// the hand and the particles, so a mist comes before them at an equal distance.
+	DrawMists(desc);
+	// The game adds the leashes to its sort after the land's draw
+	DrawLeashes(desc);
 	DrawIntroLight(desc);
 	DrawInfluenceBorder(desc);
 	DrawInfluenceRipples(desc);
-	// The mists blend over the rest, the farthest first
-	DrawMists(desc);
-	DrawPauseText(desc);
+}
+
+void Renderer::DrawPassEffectsAfterParticles(const DrawSceneDesc& desc) const
+{
+	// The game adds these to its sort after the particles. Thus at an equal distance each comes after the things before it.
+	using effects_after_particles::Step;
+	for (const auto step : effects_after_particles::k_Order)
+	{
+		if (const auto labels = effects_after_particles::LabelsOf(step); labels.has_value())
+		{
+			SubmitWorldLabels(desc, *labels);
+			continue;
+		}
+		switch (step)
+		{
+		case Step::ShieldDomes:
+			DrawShieldDomes(desc);
+			break;
+		case Step::TownColumns:
+			DrawTownColumns(desc);
+			break;
+		case Step::Rain:
+			DrawRain(desc);
+			break;
+		case Step::Snowfall:
+			DrawSnowfall(desc);
+			break;
+		default:
+			break;
+		}
+	}
+}
+
+void Renderer::SubmitWorldLabels(const DrawSceneDesc& desc, WorldLabelGroup group) const
+{
+	// Only the main pass shows the labels
+	if (desc.viewId == RenderPass::Main && desc.submitWorldLabels)
+	{
+		desc.submitWorldLabels(group);
+	}
 }
 
 void Renderer::DrawPassHand(const DrawSceneDesc& desc, const ScenePass& pass, auto& draws) const
@@ -1415,7 +1486,7 @@ void Renderer::DrawPassHand(const DrawSceneDesc& desc, const ScenePass& pass, au
 	    !hand->second.hiddenFromReflection && hand_reflection::Shown(hand->second.count > 0, meshManager.Contains(hand->first)))
 	{
 		// L3D meshes face clockwise, which the mirrored reflection pass and a mirrored hand each turn around
-		const bool facesTurned = desc.cullBack != renderCtx.handMirrored;
+		const bool facesTurned = hand_faces::FacesTurned(desc.cullBack, renderCtx.handMirrored);
 		const auto opaqueState = submitDesc.state;
 		submitDesc.viewId = mirroredViewId;
 		submitDesc.sortDepth = hand_reflection::SortKey(hand_reflection::MirroredThing::Hand);
@@ -1439,7 +1510,7 @@ void Renderer::DrawPassHand(const DrawSceneDesc& desc, const ScenePass& pass, au
 	    !(desc.viewId == RenderPass::Reflection && hand->second.hiddenFromReflection))
 	{
 		// L3D meshes face clockwise, which the mirrored reflection pass and a mirrored hand each turn around
-		const bool facesTurned = desc.cullBack != renderCtx.handMirrored;
+		const bool facesTurned = hand_faces::FacesTurned(desc.cullBack, renderCtx.handMirrored);
 		// It takes its place in the sort by where it is
 		submitDesc.viewId = translucentViewId;
 		if (hand->second.count > 0)
@@ -1474,8 +1545,8 @@ void Renderer::DrawPassHand(const DrawSceneDesc& desc, const ScenePass& pass, au
 			glowPlacers.additiveShare.reset();
 			glowPlacers.instanceAlpha = false;
 			submitDesc.state = glowState(cullBack);
-			// Just after the hand in the sort
-			submitDesc.sortDepth = submitDesc.sortDepth > 0 ? submitDesc.sortDepth - 1 : 0;
+			// The glow has the depth of the hand. The view keeps the draws of one depth in the order that they come, thus the
+			// glow comes just after the hand, and before the particles that the game draws after the hand.
 			submitDesc.skinTexture = &glow->flow->GetNativeHandle();
 			submitDesc.uvScale = glow->uvScale;
 			submitDesc.objectLook = L3DMeshSubmitDesc::ObjectLook {.colour = glow->colour, .alpha = glow->alpha};
@@ -1486,6 +1557,11 @@ void Renderer::DrawPassHand(const DrawSceneDesc& desc, const ScenePass& pass, au
 			submitDesc.objectLook.reset();
 			submitDesc.uvScale = 1.0f;
 			submitDesc.skinTexture = nullptr;
+		}
+		// Then the bands and the bracelets of a miracle in the hand, at the place of the hand
+		if (hand->second.count > 0)
+		{
+			DrawHandMiracleBands(desc, submitDesc.sortDepth);
 		}
 		// A warm-up draws the hand again at no size in each other way that the frames draw it: turned round, as a
 		// mirrored hand is, and glowing with a miracle
@@ -1704,7 +1780,9 @@ void Renderer::DrawPassEntities(const DrawSceneDesc& desc, const ScenePass& pass
 		// The models show only the front faces of their one-sided materials, as their materials say
 		sd.useMaterialCulling = placers.materialCulling || creatureMaterials;
 		sd.useMaterialAddressing = creatureMaterials;
-		sd.mirrored = desc.cullBack;
+		// The corners of a mirrored hand are in the opposite order, so that the hand shows its outer faces
+		sd.mirrored = meshId == ecs::components::Hand::k_MeshId ? hand_faces::FacesTurned(desc.cullBack, renderCtx.handMirrored)
+		                                                        : desc.cullBack;
 		sd.uvOffset = placers.uvOffset;
 		sd.uvOffsetByMaterial = placers.uvOffsetByMaterial;
 		sd.subMeshTextures = placers.subMeshTextures;
@@ -2344,6 +2422,8 @@ void Renderer::DrawPassEntities(const DrawSceneDesc& desc, const ScenePass& pass
 		}
 	}
 	DrawPassCreatures(desc, pass, draws);
+	// Each creature adds its chat bubble to the sort when the land draws it
+	SubmitWorldLabels(desc, WorldLabelGroup::ChatBubbles);
 	DrawPassAnimals(desc, draws);
 	DrawPassMirroredHeld(desc, pass, draws);
 	DrawPassPaletteVillagers(desc, draws);
@@ -2354,6 +2434,9 @@ void Renderer::DrawPassEntities(const DrawSceneDesc& desc, const ScenePass& pass
 	DrawPassEffects(desc);
 
 	DrawPassHand(desc, pass, draws);
+	// The game adds the particles to its sort after the hand, so a particle comes after the hand at an equal distance
+	DrawParticles(desc);
+	DrawPassEffectsAfterParticles(desc);
 
 	DrawPassDebugLines(desc, draws);
 }
@@ -2424,7 +2507,7 @@ void Renderer::DrawPassVegetation(const DrawSceneDesc& desc, const ScenePass& pa
 					}
 					const auto atOnce = renderCtx.atOnceTrees.find(instance);
 					submitDesc.sortDepth = atOnce != renderCtx.atOnceTrees.end()
-					                           ? zsort::AtOnce(atOnce->second)
+					                           ? renderCtx.fizzOrder.AtOnceDepth(atOnce->second)
 					                           : zsort::Depth(glm::vec3(renderCtx.treeInstanceData.at(instance).modelMatrix[3]),
 					                                          desc.camera->GetOrigin());
 					submitDesc.instanceDesc =

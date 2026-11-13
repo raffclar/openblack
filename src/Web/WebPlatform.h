@@ -70,6 +70,9 @@ void WaitForRenderThreadStop();
 /// Show a message from the game on the page, under the game's picture
 void ShowPageMessage(std::string_view title, std::string_view text);
 
+/// The game ended with no error: the page sends the browser to the homepage of the site. A crash does not call this.
+void ExitToHomepage();
+
 /// Give the page a file that the game wrote, so that the page shows a link to download it. For the debug files that the
 /// game writes outside the Profiles folder. Call after the file is complete. Does nothing when the file is empty, too
 /// large, or cannot be read.
