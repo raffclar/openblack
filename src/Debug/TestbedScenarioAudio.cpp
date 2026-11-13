@@ -907,8 +907,9 @@ void testbed_scenarios::AddAudio(std::vector<Scenario>& all)
 	    .id = "interface.chat_bubble_held_creature",
 	    .name = "The speech bubble of a creature that the hand holds",
 	    .facet = Facet::Interface,
-	    .description = "The hand holds Alice's tiger, as the player holds it to stroke it. Then Alice, the god of this "
-	                   "computer, says a line in the chat. Four seconds later the hand lets go.",
+	    .description = "The hand holds Alice's tiger, as the player holds it to stroke it. Bob, the god of the second "
+	                   "player, says a line in the chat. Then Alice, the god of this computer, says a line to Bob. Four "
+	                   "seconds later the hand lets go.",
 	    .expected = "The tiger stays on the land while the hand holds it. A bubble with the line comes over the tiger, "
 	                "at the height of the tiger above the land under it, as over a tiger that the hand does not hold. "
 	                "The bubble stays when the hand lets go, and fades after some seconds.",
@@ -921,6 +922,11 @@ void testbed_scenarios::AddAudio(std::vector<Scenario>& all)
 	                   .size = 0.5f,
 	                   .pauseMind = true}},
 	    .commands = {{.kind = Kind::HandLock, .creature = 0, .delaySeconds = 1.0f},
+	                 {.kind = Kind::Chat,
+	                  .player = PlayerNames::PLAYER_TWO,
+	                  .delaySeconds = 0.5f,
+	                  .value = k_ChatSays,
+	                  .action = "Hello Alice"},
 	                 {.kind = Kind::Chat,
 	                  .player = PlayerNames::PLAYER_ONE,
 	                  .delaySeconds = 1.0f,
