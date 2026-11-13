@@ -97,7 +97,8 @@ enum class LoadKind : uint8_t
 
 /// Whether a load puts the camera where the file keeps it. A saved game does. A world state does not: it is the world
 /// that all computers share, and the camera is of this computer only. Thus the camera stays where the player has it
-/// when the world of the game server comes, after a resynchronisation, a return or a join.
+/// when the world of the game server comes, after a resynchronisation, a return or a join. The bookmarks of the camera
+/// stay too, but the switch of the bookmarks that the scripts write comes from the world state.
 [[nodiscard]] constexpr bool LoadsCamera(LoadKind kind)
 {
 	return kind == LoadKind::SavedGame;
