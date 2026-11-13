@@ -68,7 +68,7 @@ uint32_t ColourOf(PlayerNames player)
 }
 } // namespace
 
-void Renderer::DrawLightColumns(const DrawSceneDesc& desc) const
+void Renderer::DrawTownColumns(const DrawSceneDesc& desc) const
 {
 	if (desc.viewId != RenderPass::Main || !Locator::influenceSystem::has_value())
 	{
@@ -88,17 +88,14 @@ void Renderer::DrawLightColumns(const DrawSceneDesc& desc) const
 	const auto seenBy = view_frustum::FromViewProjection(desc.camera->GetProjectionMatrix() *
 	                                                     desc.camera->GetViewMatrix(Camera::Interpolation::Current));
 	const auto* testedView = _warmingUp || column.IsBoned() ? nullptr : &seenBy;
-	// The columns never fade: the game turns off the fade of their objects when it makes them
-	const auto draw = [&](const glm::vec3& position, PlayerNames owner, uint8_t alpha) {
-		DrawLightShaft(desc, column, position, light_column::Tint(ColourOf(owner), alpha), testedView);
-	};
 	// A warm-up draws a column that adds nothing, as the first column of a land draws it
 	if (_warmingUp)
 	{
 		DrawLightShaft(desc, column, desc.camera->GetOrigin(), glm::vec4(0.0f));
 	}
 
-	// Over each village centre, at the middle of its model, in its town's player's colour
+	// Over each village centre, at the middle of its model, in its town's player's colour. The columns never fade: the
+	// game turns off the fade of their objects when it makes them.
 	std::unordered_map<uint32_t, PlayerNames> owners;
 	desc.entities.Each<const Town>([&owners](const Town& town) { owners.emplace(town.id, town.owner); });
 	desc.entities.Each<const Abode, const Transform, const ecs::components::Mesh>(
@@ -115,15 +112,32 @@ void Renderer::DrawLightColumns(const DrawSceneDesc& desc) const
 		    }
 		    const auto centre = meshes.Handle(mesh.id)->GetBoundingBox().Center();
 		    const auto model = glm::translate(transform.position) * glm::mat4(transform.rotation) * glm::scale(transform.scale);
-		    draw(glm::vec3(model * glm::vec4(centre, 1.0f)), owner->second, light_column::k_TownAlpha);
+		    DrawLightShaft(desc, column, glm::vec3(model * glm::vec4(centre, 1.0f)),
+		                   light_column::Tint(ColourOf(owner->second), light_column::k_TownAlpha), testedView);
 	    });
+}
 
-	// Over each temple, where it stands, beating with its player's heart. The temple's column is seen only from outside,
-	// so it isn't drawn while the player is inside the temple
-	if (Locator::temple::has_value() && Locator::temple::value().Active())
+void Renderer::DrawTempleColumns(const DrawSceneDesc& desc) const
+{
+	// The temple's column is seen only from outside, so it is not drawn while the player is inside the temple
+	if (desc.viewId != RenderPass::Main || !Locator::influenceSystem::has_value() ||
+	    (Locator::temple::has_value() && Locator::temple::value().Active()))
 	{
 		return;
 	}
+	const auto& meshes = Locator::resources::value().GetMeshes();
+	const auto columnId = resources::HashIdentifier(MeshId::SpellColumn);
+	if (!meshes.Contains(columnId))
+	{
+		return;
+	}
+	using namespace ecs::components;
+	const auto& column = *meshes.Handle(columnId);
+	const auto& influence = Locator::influenceSystem::value();
+	const auto seenBy = view_frustum::FromViewProjection(desc.camera->GetProjectionMatrix() *
+	                                                     desc.camera->GetViewMatrix(Camera::Interpolation::Current));
+	const auto* testedView = _warmingUp || column.IsBoned() ? nullptr : &seenBy;
+	// Over each temple, where it stands, beating with its player's heart
 	const float turnFraction = Locator::time::has_value() ? Locator::time::value().GetTurnFraction() : 0.0f;
 	desc.entities.Each<const Temple, const Transform>([&](const Temple& temple, const Transform& transform) {
 		if (!light_column::Shown(temple.owner, influence.IsBorderShown(temple.owner)) ||
@@ -133,7 +147,8 @@ void Renderer::DrawLightColumns(const DrawSceneDesc& desc) const
 		}
 		const float pulse =
 		    Locator::heartbeatSystem::has_value() ? Locator::heartbeatSystem::value().Pulse(temple.owner, turnFraction) : 0.0f;
-		draw(transform.position, temple.owner, light_column::TempleAlpha(pulse));
+		DrawLightShaft(desc, column, transform.position,
+		               light_column::Tint(ColourOf(temple.owner), light_column::TempleAlpha(pulse)), testedView);
 	});
 }
 

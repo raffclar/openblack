@@ -777,6 +777,21 @@ void testbed_scenarios::AddAudio(std::vector<Scenario>& all)
 	    .commands = {{.kind = Kind::PauseGame, .delaySeconds = 1.0f, .value = 1}},
 	});
 
+	// The words of the pause over the sun's glare, which the game draws before the words
+	all.push_back({
+	    .id = "interface.pause_text_over_glare",
+	    .name = "The words of the pause over the sun's glare",
+	    .facet = Facet::Interface,
+	    .description = "The clock stands at noon under a clear sky. The camera is low on the land and looks below the sun "
+	                   "in the north west, so the sun shows at the top middle of the screen. After a second the game "
+	                   "pauses.",
+	    .expected = "Game Paused shows in white at the top middle of the screen, over the sun and its orange glare. The "
+	                "glare does not lie over the letters: the white of the letters is not made orange where the glare is.",
+	    .environment = {.hour = 12.0f, .clockRuns = false, .dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 40.0f, 0.0f}, .look = {-100.0f, -6.0f, -100.0f}},
+	    .commands = {{.kind = Kind::PauseGame, .delaySeconds = 1.0f, .value = 1}},
+	});
+
 	// The message of the real weather in the list of incoming messages, then a second one after it
 	all.push_back({
 	    .id = "interface.real_weather_message",
