@@ -66,9 +66,10 @@ constexpr int k_SelectorLeftArrow = 260;
 constexpr int k_SelectorRightArrow = 508;
 constexpr int k_ArrowSize = 32;
 constexpr int k_CheckBoxTop = 450;
-// The crash reports box of the Options page (deviation 261) continues the row of Auto Save and Push Scrolling, which
-// are 200 pixels apart
-constexpr int k_CrashReportsLeft = 685;
+// The left edges of the check boxes of the Options page. Vanilla has two boxes, centred on the page. With the crash
+// reports box (deviation 261), the three boxes are centred as the boxes of the Advanced page (deviation 262).
+constexpr std::array k_TwoOptionBoxesLeft = {285, 485};
+constexpr std::array k_ThreeOptionBoxesLeft = {185, 385, 585};
 constexpr std::u16string_view k_CrashReportsLabel = u"Send Crash Reports";
 
 constexpr std::array k_DetailTexts = {"HELP_TEXT_DIALOG_DETAIL_00", "HELP_TEXT_DIALOG_DETAIL_01", "HELP_TEXT_DIALOG_DETAIL_02",
@@ -386,7 +387,11 @@ void GameMenu::BuildOptions(const TextDatabase& texts)
 	page.Add<BigButton>(_font, glm::ivec2(k_SelectorRightArrow, 349), k_ArrowSize, u"", LabelSide::Right, Look::RightArrow)
 	    .onClick = [stepDetail] { stepDetail(1); };
 
-	auto& autoSave = page.Add<CheckBox>(_font, glm::ivec2(285, k_CheckBoxTop),
+	const bool crashReportsBox = _settings.crashReportsAvailable;
+	const auto boxLeft = [crashReportsBox](size_t index) {
+		return crashReportsBox ? k_ThreeOptionBoxesLeft.at(index) : k_TwoOptionBoxesLeft.at(index);
+	};
+	auto& autoSave = page.Add<CheckBox>(_font, glm::ivec2(boxLeft(0), k_CheckBoxTop),
 	                                    std::u16string(texts.Get("HELP_TEXT_DIALOG_AUTOSAVE")), _settings.autoSave);
 	autoSave.onChange = [this](bool checked) {
 		_settings.autoSave = checked;
@@ -394,17 +399,17 @@ void GameMenu::BuildOptions(const TextDatabase& texts)
 	};
 	// Deviation 228: the box shows the player's push scrolling. The game shows the box clear at each start.
 	auto& pushScrolling =
-	    page.Add<CheckBox>(_font, glm::ivec2(485, k_CheckBoxTop), std::u16string(texts.Get("HELP_TEXT_DIALOG_ADDITION_116")),
-	                       _settings.pushScrolling);
+	    page.Add<CheckBox>(_font, glm::ivec2(boxLeft(1), k_CheckBoxTop),
+	                       std::u16string(texts.Get("HELP_TEXT_DIALOG_ADDITION_116")), _settings.pushScrolling);
 	pushScrolling.onChange = [this](bool checked) {
 		_settings.pushScrolling = checked;
 		SettingsChanged();
 	};
 	// Deviation 261: the player lets the game send error and crash reports. Vanilla has no such option and no text for
 	// it. The box is clear for a new profile, and shows only when the game can send the reports.
-	auto& crashReports = page.Add<CheckBox>(_font, glm::ivec2(k_CrashReportsLeft, k_CheckBoxTop),
+	auto& crashReports = page.Add<CheckBox>(_font, glm::ivec2(k_ThreeOptionBoxesLeft.at(2), k_CheckBoxTop),
 	                                        std::u16string(k_CrashReportsLabel), _settings.crashReports);
-	crashReports.visible = _settings.crashReportsAvailable;
+	crashReports.visible = crashReportsBox;
 	crashReports.onChange = [this](bool checked) {
 		_settings.crashReports = checked;
 		SettingsChanged();
