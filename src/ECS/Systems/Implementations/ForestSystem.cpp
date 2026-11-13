@@ -247,10 +247,16 @@ float LandAlignmentAt(const glm::vec3& position)
 	}
 	const auto& influence = Locator::influenceSystem::value();
 	const auto& alignment = Locator::alignmentSystem::value();
+	// The influence of all players at the place comes from one pass over their sources
+	const auto influences = influence.PlayerInfluences(map_coords::FromMetres({position.x, position.z}));
 	float sum = 0.0f;
 	for (const auto player : ecs::game_players::All())
 	{
-		sum += alignment.GetPlayerAlignment(player) * influence.PlayerInfluence(player, position);
+		// A player with no influence at the place adds nothing to the sum
+		if (const float influenceHere = influences.at(static_cast<size_t>(player)); influenceHere != 0.0f)
+		{
+			sum += alignment.GetPlayerAlignment(player) * influenceHere;
+		}
 	}
 	return std::clamp(sum, -1.0f, 1.0f);
 }

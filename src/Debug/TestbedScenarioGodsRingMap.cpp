@@ -29,7 +29,8 @@ void testbed_scenarios::AddGodsRingMapScenarios(std::vector<Scenario>& all)
 	                   "village of a network land of the game. The map needs the game's Online Maps folder.",
 	    .expected = "A round island of checkerboard grass in the sea. 32 citadels stand in a ring, 2000 from the middle, "
 	                "at equal angles. Each citadel has the same village on its side toward the middle, turned with it. "
-	                "Each of the 32 slots has a god.",
+	                "Each of the 32 slots has a god. Between each two slots, a Japanese town and an Indian town stand "
+	                "nearer the middle, with their flocks and trees. A Tibetan town stands in the middle.",
 	    .environment = {.land = Land::GodsRingMap, .clockRuns = false, .dispenserGrid = false},
 	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 5500.0f, -2600.0f}, .look = {0.0f, 0.0f, -200.0f}},
 	});
@@ -47,8 +48,22 @@ void testbed_scenarios::AddGodsRingMapScenarios(std::vector<Scenario>& all)
 	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 300.0f, -2350.0f}, .look = {0.0f, 0.0f, -1850.0f}},
 	});
 
-	// A town centre in the middle of the island, clear of the villages of the slots
-	constexpr glm::vec2 k_Centre {0.0f, 40.0f};
+	all.push_back({
+	    .id = "multiplayer.gods_ring_gap",
+	    .name = "A gap between two slots of the map for 32 gods",
+	    .facet = Facet::Multiplayer,
+	    .description = "The network map for 32 gods loads on this computer alone. The camera looks along the line "
+	                   "between the first slot and the second slot, from beyond the citadels toward the middle of the "
+	                   "island (deviation 256).",
+	    .expected = "The villages of the two slots stand at the two sides. Between them and nearer the middle stands a "
+	                "Japanese town with its fields, its flock and its trees. Farther in stands an Indian town with its "
+	                "fish farms, its flock and its forest. No building of a town stands on a building of a village.",
+	    .environment = {.land = Land::GodsRingMap, .clockRuns = false, .dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {225.0f, 450.0f, -2290.0f}, .look = {150.0f, 0.0f, -1550.0f}},
+	});
+
+	// A town centre on the island, clear of the villages of the slots and of the towns between them
+	constexpr glm::vec2 k_Centre {0.0f, 600.0f};
 	all.push_back({
 	    .id = "multiplayer.later_gods_belief_symbols",
 	    .name = "The symbols of belief of the gods after the seventh",
