@@ -12,6 +12,7 @@
 #include <cstddef>
 #include <cstdint>
 
+#include <algorithm>
 #include <functional>
 #include <limits>
 #include <map>
@@ -1895,5 +1896,42 @@ enum class TurnStep : uint8_t
 	}
 	return *startedAt == turn ? TurnStep::Wait : TurnStep::Update;
 }
+
+/// The time that a scenario of a single player game counts. The time of the frames gives the smooth steps. The time of
+/// the turns that the game played gives a floor, so that a scenario never counts less time than the turns that passed.
+/// Thus a game that plays its turns fast, or in a few frames, still gives each command at its turn.
+class TurnClock
+{
+public:
+	/// The seconds that the scenario counts for this frame. frameSeconds: the game time of the frame. turn: the turn
+	/// count now. turnSeconds: the time of one turn.
+	[[nodiscard]] float Advance(float frameSeconds, uint32_t turn, float turnSeconds) noexcept
+	{
+		// A new game counts its turns from the start, and the count starts again
+		if (_lastTurn.has_value() && turn < *_lastTurn)
+		{
+			Restart();
+		}
+		if (_lastTurn.has_value() && turn > *_lastTurn)
+		{
+			_owed += static_cast<float>(turn - *_lastTurn) * turnSeconds;
+		}
+		_lastTurn = turn;
+		const auto counted = std::max(_given + frameSeconds, _owed);
+		const auto step = counted - _given;
+		_given = counted;
+		return step;
+	}
+
+	/// Starts the count again, for a new scenario
+	void Restart() noexcept { *this = TurnClock {}; }
+
+private:
+	std::optional<uint32_t> _lastTurn;
+	/// The time of the turns that passed since the count started
+	float _owed {0.0f};
+	/// The time that the scenario counted since the count started
+	float _given {0.0f};
+};
 
 } // namespace openblack::testbed_scenarios
